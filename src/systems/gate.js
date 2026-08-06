@@ -25,10 +25,15 @@ import { SYSTEMS, JUMP } from '../game/state.js';
  * centered 'JUMP' label naming the destination. The overlay div is created
  * once at init and hidden otherwise. Only the departing gate (the one whose
  * `to` matches ctx.gate.destination) intensifies its glow during charge.
+ * Wave-6 polish: the departing gate also swirls a preallocated particle
+ * ring (~200 THREE.Points, per-assembly buffers rebuilt with the assembly)
+ * around the bore, radius/opacity scaling with ctx.gate.progress — the
+ * charge tunnel. Suppressed entirely under ctx.settings.reducedMotion (the
+ * fade/label overlay remains, unchanged).
  *
  * update() performs zero allocations: gate assemblies are preallocated on
  * rebuild and iterated by index; overlay style/text are only touched on
- * state changes.
+ * state changes; the swirl mutates its position buffer in place.
  */
 
 // Lamplighter palette (§16): worn brass structure, lamplight amber glow.
@@ -41,6 +46,12 @@ const RING_RADIUS = 30;
 const RING_TUBE = 2.2;
 const CHEVRON_COUNT = 8;
 const SPIN_SPEED = 0.25; // rad/s, slow
+
+// Charge tunnel (wave-6): preallocated particle ring swirling in the bore
+// plane of the departing gate while ctx.gate.jumping.
+const TUNNEL_COUNT = 200;
+const TUNNEL_DEPTH = 24; // tunnel length along the bore axis (local Z)
+const TUNNEL_SIZE = 1.7; // point size
 
 /** Additive radial-gradient sprite texture for the gate glow/beacon. */
 function makeGlowTexture(inner, outer) {
@@ -137,13 +148,43 @@ export function initGate(ctx) {
     beacon.scale.setScalar(beaconBaseScale);
     group.add(beacon);
 
+    // Charge tunnel (wave-6): preallocated particle ring in the bore plane.
+    // swirlBase holds per-point { angle, radius fraction }; swirlZ holds the
+    // depth offset streamed along the bore. All buffers preallocated here —
+    // update() writes positions in place only while the gate is charging.
+    const swirlGeo = new THREE.BufferGeometry();
+    const swirlArr = new Float32Array(TUNNEL_COUNT * 3);
+    swirlGeo.setAttribute('position', new THREE.BufferAttribute(swirlArr, 3));
+    const swirlBase = new Float32Array(TUNNEL_COUNT * 2);
+    const swirlZ = new Float32Array(TUNNEL_COUNT);
+    for (let i = 0; i < TUNNEL_COUNT; i++) {
+      swirlBase[i * 2] = Math.random() * Math.PI * 2;
+      swirlBase[i * 2 + 1] = 0.55 + Math.random() * 0.5;
+      swirlZ[i] = Math.random() * TUNNEL_DEPTH;
+    }
+    const swirl = new THREE.Points(
+      swirlGeo,
+      new THREE.PointsMaterial({
+        map: glowMap,
+        color: AMBER_HOT,
+        size: TUNNEL_SIZE,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+    );
+    swirl.visible = false;
+    swirl.frustumCulled = false; // buffer rewritten in place; skip stale culling
+    group.add(swirl);
+
     const gp = gateDef.position;
     group.position.set(gp[0], gp[1], gp[2]);
     // Ring bore faces the system center (origin) — the arrival/departure lane.
     group.lookAt(0, 0, 0);
     root.add(group);
 
-    return { group, ring, chevrons, glow, beacon, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
+    return { group, ring, chevrons, glow, beacon, swirl, swirlArr, swirlBase, swirlZ, swirlPhase: 0, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
   }
 
   // --- Rebuild every assembly for the current system (on 'systemLoaded') ---
@@ -154,6 +195,8 @@ export function initGate(ctx) {
       a.ring.material.dispose();
       a.glow.material.dispose();
       a.beacon.material.dispose();
+      a.swirl.geometry.dispose();
+      a.swirl.material.dispose();
     }
     assemblies.length = 0;
     const gates = SYSTEMS[ctx.world.currentSystem].gates;
@@ -188,6 +231,7 @@ export function initGate(ctx) {
     }
 
     const jumping = ctx.gate.jumping;
+    const reducedMotion = ctx.settings?.reducedMotion === true;
 
     // Per-gate idle motion + glow; only the departing gate (the one whose
     // `to` matches ctx.gate.destination) intensifies during charge.
@@ -204,6 +248,30 @@ export function initGate(ctx) {
       const charge = charging ? 1 + ctx.gate.progress * 1.6 : 1;
       a.glow.scale.setScalar(glowBaseScale * (0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
       a.ring.material.emissiveIntensity = charging ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
+
+      // Charge tunnel (wave-6): swirl the particle ring while this gate
+      // charges — radius contracts and opacity rises with jump progress.
+      // reducedMotion → no swirl at all (fade/label overlay still runs).
+      const swirling = charging && !reducedMotion;
+      a.swirl.visible = swirling;
+      if (swirling) {
+        const prog = ctx.gate.progress;
+        a.swirlPhase += dt * (1.5 + prog * 4);
+        const zDrift = (ctx.elapsed * (20 + prog * 40)) % TUNNEL_DEPTH;
+        const radScale = RING_RADIUS * (1.15 - 0.55 * prog);
+        for (let j = 0; j < TUNNEL_COUNT; j++) {
+          const ang = a.swirlBase[j * 2] + a.swirlPhase;
+          const r = a.swirlBase[j * 2 + 1] * radScale;
+          let z = a.swirlZ[j] + zDrift;
+          if (z >= TUNNEL_DEPTH) z -= TUNNEL_DEPTH;
+          const j3 = j * 3;
+          a.swirlArr[j3] = Math.cos(ang) * r;
+          a.swirlArr[j3 + 1] = Math.sin(ang) * r;
+          a.swirlArr[j3 + 2] = z - TUNNEL_DEPTH * 0.5;
+        }
+        a.swirl.geometry.attributes.position.needsUpdate = true;
+        a.swirl.material.opacity = 0.25 + prog * 0.75;
+      }
     }
 
     // Zone check per gate (ignored while docked or mid-jump); the nearest

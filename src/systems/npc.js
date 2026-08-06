@@ -11,6 +11,7 @@ import {
   resolveBand,
   cargoValue,
 } from '../game/state.js';
+import { epicEffects } from '../game/epics.js';
 import { spawnPod } from '../game/pods.js';
 
 /**
@@ -196,6 +197,7 @@ function makeAi(ctx, record, startPos) {
     target: null, // 'player' | live ship
     intent: false, // hostile intent toward the player (drives ctx.flags.combat)
     commSent: false,
+    recognitionSent: false, // ace recognition/rematch line fires once per instance
     hailed: false,
     surrenderDone: false,
     band: 'defiant',
@@ -234,6 +236,21 @@ export function spawnLiveShip(ctx, record, position) {
     ...record,
     resolve: record.resolve ?? Math.round((record.resolveSeed ?? 0.5) * 100),
   });
+  // Illyx rematch: he fled a defeat once and came back harder. +15 resolve,
+  // once per record — the bump is written back onto record.resolve (JSON-plain,
+  // persisted), which createShipState prefers on every later instantiation, so
+  // despawn/re-instantiation reuses it instead of stacking another +15.
+  if (
+    record.name === 'Carver Illyx' &&
+    !record.rematchReady &&
+    (ctx.world.aceRivalry?.defeats ?? 0) > 0 &&
+    record.state !== 'dead' &&
+    record.state !== 'captured'
+  ) {
+    record.rematchReady = true;
+    state.resolve = Math.min(100, state.resolve + 15);
+    record.resolve = state.resolve;
+  }
   const live = {
     id: record.id ?? `npc-${nextShipId++}`,
     record,
@@ -310,6 +327,9 @@ function updateResolve(ctx, live, now) {
     const ownFrac = shieldFrac * 0.5 + (st.hull / st.hullMax) * 0.5;
     force = clamp01(0.5 + (playerFrac - ownFrac) * 0.5);
   }
+  // Pirate resolve gets the faction epic's pirateResolveMod as an additive
+  // nudge alongside personality (Red Ledger epic stage 3 = -10: they yield
+  // sooner). epicEffects is pure — reads ctx.world.epics, writes nothing.
   st.resolve = computeResolve(
     {
       defense: clamp01(defense),
@@ -318,7 +338,9 @@ function updateResolve(ctx, live, now) {
       cargoAtStake: clamp01(cargoValue(st.cargo, ctx.world.prices) / 2000),
       doctrine: FACTIONS[st.faction]?.doctrine ?? 0.5,
     },
-    st.personality,
+    ai.role === 'pirate'
+      ? st.personality + (epicEffects(ctx, live.record?.faction ?? st.faction).pirateResolveMod ?? 0)
+      : st.personality,
   );
   const band = resolveBand(st.resolve);
   if (band === ai.band) return;
@@ -338,6 +360,8 @@ function intentsFor(ctx, live) {
   if (st.cargo.length > 0) intents.push('demandCargo');
   intents.push('demandRansom');
   if (cargoValue(st.cargo, ctx.world.prices) > 0) intents.push('acceptTribute');
+  // Named-ace respect: a feared pilot can ask a Named Gun to stand down.
+  if ((live.record?.role ?? live.role) === 'ace' && ctx.world.fear >= 15) intents.push('respect');
   intents.push('letGo', 'keepFiring');
   return intents;
 }
@@ -638,7 +662,24 @@ function updateDuel(ctx, live, dt, now) {
   if (ai.phase === 'telegraph') {
     if (!ai.commSent) {
       ai.commSent = true;
-      say(ctx, live, 'Run if you like.');
+      // Recognition: a Named Gun acknowledges a known/hunted pilot. Priority:
+      // Sister Vane's first-ever encounter > Illyx rematch > fear recognition
+      // > the generic line.
+      let line = 'Run if you like.';
+      if (!ai.recognitionSent) {
+        ai.recognitionSent = true;
+        const recName = live.record?.name;
+        if (recName === 'Sister Vane') {
+          line = 'The Ledger bought my wing for you.';
+        } else if (recName === 'Carver Illyx' && (ctx.world.aceRivalry?.defeats ?? 0) > 0) {
+          line = 'Again.';
+        } else if (ctx.world.fear >= 25) {
+          line = 'They pay me to end you. Nothing personal, legend.';
+        } else if (ctx.world.fear >= 15) {
+          line = 'I know that hull. The whisper runs ahead of you.';
+        }
+      }
+      say(ctx, live, line);
     }
     glow.scale.setScalar(Math.max(0.3, 1 + 0.7 * Math.sin(now * 14)));
     if (now - ai.phaseStart >= TELEGRAPH_SECONDS) ai.phase = 'attack';

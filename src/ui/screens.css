@@ -6,6 +6,11 @@
    leaks into the page or the HUD. */
 
 .screen-overlay {
+  /* Accessibility state palette (wave 6): body.rw-colorblind / rw-contrast
+     override these at the bottom of this file. */
+  --rw-accent: #6fd2e0;
+  --rw-warm: #ffb454;
+  --rw-good: #7dd8a8;
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -39,7 +44,7 @@
 
 .screen-sub {
   margin: 2px 0 12px;
-  color: #6fd2e0;
+  color: var(--rw-accent);
   font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -82,20 +87,26 @@
 
 .screen-btn:hover,
 .screen-btn:focus-visible {
-  border-color: #6fd2e0;
-  color: #6fd2e0;
+  border-color: var(--rw-accent);
+  color: var(--rw-accent);
   background: #162437;
-  outline: none;
+}
+
+/* keyboard focus must be unmistakable (§20) */
+.screen-btn:focus-visible,
+.screen-overlay input:focus-visible {
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
 }
 
 .screen-btn-warm {
   border-color: #7a5326;
-  color: #ffb454;
+  color: var(--rw-warm);
 }
 
 .screen-btn-warm:hover,
 .screen-btn-warm:focus-visible {
-  border-color: #ffb454;
+  border-color: var(--rw-warm);
   color: #ffd28a;
   background: #241a10;
 }
@@ -114,7 +125,7 @@
 .station-title {
   font-size: 18px;
   letter-spacing: 0.3em;
-  color: #ffb454; /* sodium light on rust — Freehold frontier */
+  color: var(--rw-warm); /* sodium light on rust — Freehold frontier */
 }
 
 .station-faction {
@@ -159,7 +170,7 @@
 .station-notice {
   margin-top: 12px;
   padding: 8px 10px;
-  border-left: 2px solid #ffb454;
+  border-left: 2px solid var(--rw-warm);
   background: rgba(255, 180, 84, 0.07);
   color: #ffd28a;
 }
@@ -173,7 +184,7 @@
 }
 
 .market-head {
-  color: #6fd2e0;
+  color: var(--rw-accent);
   font-size: 11px;
   letter-spacing: 0.16em;
   border-bottom: 1px solid #22303f;
@@ -187,7 +198,7 @@
 
 .market-row-sel {
   background: rgba(111, 210, 224, 0.08);
-  box-shadow: inset 2px 0 0 #6fd2e0;
+  box-shadow: inset 2px 0 0 var(--rw-accent);
   padding-left: 6px;
 }
 
@@ -237,7 +248,7 @@
 }
 
 .job-reward {
-  color: #7dd8a8; /* salvage green for pay */
+  color: var(--rw-good); /* salvage green for pay */
   font-size: 12px;
   margin-bottom: 6px;
 }
@@ -253,11 +264,11 @@
 }
 
 .job-accepted {
-  color: #ffb454;
+  color: var(--rw-warm);
 }
 
 .job-done {
-  color: #7dd8a8;
+  color: var(--rw-good);
 }
 
 /* bar */
@@ -281,7 +292,7 @@
 
 .station-rank {
   margin-top: 12px;
-  color: #6fd2e0;
+  color: var(--rw-accent);
   font-size: 12px;
   letter-spacing: 0.14em;
 }
@@ -309,7 +320,7 @@
 
 .people-recognition {
   margin: 6px 0;
-  color: #ffb454;
+  color: var(--rw-warm);
   font-size: 13px;
   font-style: italic;
 }
@@ -363,4 +374,37 @@
 .death-overlay .screen-panel {
   pointer-events: auto;
   cursor: pointer;
+}
+
+/* ---------- accessibility overrides (settings.js toggles these classes) ---------- */
+
+/* Okabe-Ito colorblind-safe accent/warm/good */
+body.rw-colorblind .screen-overlay {
+  --rw-accent: #56B4E9;
+  --rw-warm: #E69F00;
+  --rw-good: #009E73;
+}
+
+/* High contrast: brighter foregrounds, darker/more opaque scrim + panels,
+   stronger borders (layout untouched) */
+body.rw-contrast .screen-overlay {
+  background: rgba(1, 3, 7, 0.88);
+  color: #ffffff;
+}
+
+body.rw-contrast .screen-panel {
+  background: #060b14;
+  border-color: #5a7699;
+}
+
+body.rw-contrast .screen-btn {
+  border-color: #5a7699;
+  color: #ffffff;
+}
+
+body.rw-contrast .screen-note,
+body.rw-contrast .job-detail,
+body.rw-contrast .people-meta,
+body.rw-contrast .bar-hint {
+  color: #c3d4e6;
 }

@@ -43,6 +43,7 @@ export const DEFENSE = {
   screenRechargeDelay: 3, // s after last hit
   screenRechargeTime: 12, // s to full
   shellRechargeDelay: 15, // s clean out-of-combat interval
+  shellRechargeTime: 20, // s to full — inner layer recovers slower than screen
   engineOutAt: 0.3, // engine integrity fraction
   aftEngineMult: 2, // aft hits ×2 engine damage
   disableAtHull: 0.15, // non-boss ships disable instead of exploding
@@ -367,6 +368,159 @@ export function rankFor(rep) {
   for (const rung of RANK_LADDER) if (rep >= rung.min) return rung;
   return RANK_LADDER[RANK_LADDER.length - 1];
 }
+
+// ---------- Wave 6: origins, faction epics, named aces, mystery convergence ----------
+
+/**
+ * ORIGINS (§25 narrative & agency: "origins create situations without imposing
+ * personalities"). Chosen once on a fresh boot (origins.js, only when no save
+ * was restored); the choice adjusts starting conditions only and is remembered
+ * in ctx.world.origin. Effects vocabulary:
+ *   setCredits/setFear — absolute set; addCredits — delta on the 350 default;
+ *   reputation — deltas merged into ctx.world.reputation;
+ *   setBond/setHunger — ctx.bio overrides; addCargo — pushed into ctx.cargo;
+ *   startSystem — restore-style rebind to another system (origins.js mirrors
+ *     save.js's restore path: currentSystem, prices rebind, ship placement at
+ *     that system's station, 'systemLoaded' emit);
+ *   cluesFound — ids pre-pushed into ctx.world.mystery.found.
+ */
+export const ORIGINS = {
+  greenhand: {
+    name: 'Freehold Greenhand',
+    line: 'A berth, a living ship, and no story yet.',
+    effects: {},
+  },
+  ledgerDebt: {
+    name: 'Ledger Debt',
+    line: 'The Red Ledger owns your hull papers. Fly it off.',
+    effects: { addCredits: -1500, reputation: { redledger: -10, freehold: 10 } },
+  },
+  marked: {
+    name: 'Marked',
+    line: 'Veridian space has your face on a board. Someone downstream taught them to be careful.',
+    effects: { setFear: 15, reputation: { veridian: -15, redledger: 10 } },
+  },
+  beautiful: {
+    name: 'Beautiful Ones Initiate',
+    line: 'You were raised among grown ships. Yours chose you back.',
+    effects: { setBond: 0.35, setHunger: 0.4, addCargo: [{ commodity: 'livingRock', units: 2 }] },
+  },
+  drifter: {
+    name: 'Rim Drifter',
+    line: 'You came in from the Redmarch with more questions than money.',
+    effects: { setCredits: 600, setFear: 5, startSystem: 'redmarch', cluesFound: ['rm_c_tally'] },
+  },
+};
+
+/**
+ * EPICS (ladder #10 faction epics, derived from §29 + glossary — the §1-24
+ * epic specs are truncated). One three-stage systemic arc per faction. Stages
+ * are NOT scripted quests: epics.js advances a stage the moment its
+ * requirements hold (rankTier via rankFor on ctx.world.reputation[faction],
+ * or cluesFound via ctx.world.mystery.found.length), emits 'epicStage', and
+ * records progress in ctx.world.epics = { [faction]: stageCount }.
+ * Effect vocabulary (all read live at transaction/AI time; nothing here is
+ * applied by mutating other modules' state):
+ *   sellMult/buyMult — station.js trade prices at stations of this faction
+ *   repairMult — station.js refit pricing at this faction's station
+ *   jobPayMult — station.js job payouts at this faction's station
+ *   restrictedSellMult — station.js restricted-components sales (stacks with
+ *     the wave-4 fixer markup)
+ *   pirateResolveMod — npc.js adds this to computeResolve's personality arg
+ *     for pirates of this faction (negative = they yield sooner)
+ */
+export const EPICS = {
+  freehold: {
+    faction: 'freehold',
+    name: "The Shepherd's Lane",
+    stages: [
+      { requires: { rankTier: 1 }, effect: { repairMult: 0.9 },
+        line: "The Compact posts your name under the Shepherd's old lane. Nobody has flown it in years; they are glad someone might." },
+      { requires: { rankTier: 2 }, effect: { jobPayMult: 1.15 },
+        line: 'Dock crews wave you into the short queue. The Shepherd blinks a little brighter when you pass. Nobody admits to maintaining it.' },
+      { requires: { rankTier: 3 }, effect: { sellMult: 1.1 },
+        line: 'The lane the Shepherd still broadcasts ends somewhere past the rim charts. The Compact swears you to it: when you find what is there, come home and tell them.' },
+    ],
+  },
+  redledger: {
+    faction: 'redledger',
+    name: 'The Unfinished Column',
+    stages: [
+      { requires: { rankTier: 1 }, effect: { restrictedSellMult: 1.1 },
+        line: "A Ledger clerk notes your name in a fresh column. 'Accounts in good standing,' she says, and doesn't smile." },
+      { requires: { rankTier: 2 }, effect: { buyMult: 0.9 },
+        line: "The Tithe Stone's unfinished column — a clerk asks, casual, what you would carve there. Every answer is written down." },
+      { requires: { rankTier: 3 }, effect: { pirateResolveMod: -10 },
+        line: "The Ledger strikes your tithe. Their pirates are told your hull is bad luck. The column stays unfinished, and now you know they are afraid to finish it." },
+    ],
+  },
+  veridian: {
+    faction: 'veridian',
+    name: 'The Sixth Berth',
+    stages: [
+      { requires: { rankTier: 1 }, effect: { sellMult: 1.1 },
+        line: "The Combine opens Hulk Row's manifests to you. Five hulls, no distress logs, and one berth scrubbed from every copy." },
+      { requires: { rankTier: 2 }, effect: { repairMult: 0.85 },
+        line: "Refinery crews leave a sixth bracket empty on the Row. 'Tradition,' they say. They won't say whose." },
+      { requires: { rankTier: 3 }, effect: { jobPayMult: 1.25 },
+        line: 'The Combine names you a partner of the Reach — and quietly asks you to stop asking about the sixth berth. The price of silence is excellent.' },
+    ],
+  },
+  hollow: {
+    faction: 'hollow',
+    name: 'What the Beacon Repeats',
+    stages: [
+      { requires: { cluesFound: 1 }, effect: { buyMult: 0.9 },
+        line: "The anchorage has no ranks to give. The keeper logs your name beside the Quiet Beacon's one-word message, like you are part of the answer." },
+      { requires: { cluesFound: 3 }, effect: { sellMult: 1.15 },
+        line: "Out here your ship's song carries further than it should. The keeper says the Beacon changed its interval the day you arrived." },
+      { requires: { cluesFound: 4 }, effect: { repairMult: 0.8 },
+        line: "Whatever the Beacon repeats, your ship has started harmonizing with it. The keeper won't translate. She says you are closer than the colonies ever got." },
+    ],
+  },
+};
+
+/**
+ * Named aces beyond Carver Illyx (glossary: Named ace / Named Gun). The hunter
+ * ace is NOT in any system's cast: world.js injects her record into the
+ * redmarch record bank once ctx.world.fear crosses fearThreshold (tracked in
+ * ctx.world.aceRivalry.hunterSpawned so the injection happens exactly once,
+ * persisted). She hunts the player like an ace and never migrates.
+ */
+export const ACES = {
+  hunter: {
+    name: 'Sister Vane',
+    system: 'redmarch',
+    faction: 'redledger',
+    classKey: 'ace',
+    bounty: 4000,
+    cargo: [{ commodity: 'restrictedComponents', units: 6 }],
+    fearThreshold: 25,
+  },
+};
+
+/**
+ * Mystery next rung (§25: "the mystery increases curiosity before it increases
+ * explanation" — this NEVER restates the buried truth). Once the player holds
+ * cluesNeeded clues, mystery.js voices hintLine once and the site becomes
+ * discoverable in its system (landmarks.js renders it only after the hint).
+ * Proximity discovery at radius fires milestone 'convergence', the site line,
+ * and 'songShift' — the §29 bio-path payoff: her song changes from here.
+ * Progress persists inside ctx.world.mystery {convergeHinted, converged}.
+ */
+export const CONVERGENCE = {
+  cluesNeeded: 3,
+  hintLine: 'The clues you carry pull the same way — rimward, and down. The ship keeps singing one note longer than she used to.',
+  site: {
+    id: 'convergence',
+    name: 'The Convergence',
+    system: 'hollowreach',
+    kind: 'anomaly',
+    position: [-400, 250, -150],
+    radius: 60,
+    line: 'The tally, the shanty, the garden — they were never scattered. They were a heading. Your ship hums the last note of it, and something in the dark hums back in the same key.',
+  },
+};
 
 /** Ransom offer for a disabled/bargaining target (§7.8). */
 export function ransomFor(state) {

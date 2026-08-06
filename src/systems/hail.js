@@ -14,13 +14,14 @@ import { spawnPod } from '../game/pods.js';
  *   demandRansom  → credits += ransomFor(state) (fear +3)
  *   acceptTribute → credits += ECON.tributeRate × cargo value (no fear)
  *   letGo         → target flees, no fear
+ *   respect       → a Named Gun (ace) stands down; flee + 60 s calm, no econ
  *   keepFiring    → close the card, nothing else changes
  * Every resolution emits 'hailClosed'. If the hail ship is destroyed,
  * disabled, or despawned while the card is open, the card closes (bargaining
  * timeout). Buttons carry number-key shortcuts (1..n).
  */
 
-const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'keepFiring'];
+const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'keepFiring', 'respect'];
 
 const _offset = new THREE.Vector3();
 
@@ -107,6 +108,17 @@ export function initHail(ctx) {
         ctx2.emit('commLine', { text: 'Running.', from: st.name });
         break;
       }
+      case 'respect': {
+        // Mutual respect: the Named Gun stands down. No fear, no econ — only
+        // a long calm so the encounter truly ends.
+        ai.mode = 'flee';
+        ai.phase = null;
+        ai.intent = false;
+        ai.target = null;
+        ai.calmUntil = ctx2.world.time + 60;
+        ctx2.emit('commLine', { text: 'Another time, then.', from: st.name });
+        break;
+      }
       case 'keepFiring':
       default:
         break; // close only; the fight continues
@@ -125,6 +137,8 @@ export function initHail(ctx) {
         return `Accept tribute — ${h.tribute} UU`;
       case 'letGo':
         return 'Let them go';
+      case 'respect':
+        return 'Mutual respect — stand down';
       case 'keepFiring':
         return 'Keep firing';
       default:

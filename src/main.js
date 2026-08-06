@@ -18,6 +18,7 @@ import { initBio } from './game/bio.js';
 import { initWorld } from './game/world.js';
 import { initContacts } from './game/contacts.js';
 import { initMystery } from './game/mystery.js';
+import { initEpics } from './game/epics.js';
 import { initTraffic } from './game/traffic.js';
 import { initNpc } from './systems/npc.js';
 import { initCombat } from './systems/combat.js';
@@ -25,6 +26,9 @@ import { initPods } from './game/pods.js';
 import { initGate } from './systems/gate.js';
 import { initJump } from './game/jump.js';
 import { initSave } from './game/save.js';
+import { initSettings } from './systems/settings.js';
+import { initOrigins } from './game/origins.js';
+import { initOnboarding } from './systems/onboarding.js';
 import { SYSTEMS } from './game/state.js';
 
 let renderer;
@@ -61,7 +65,11 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // gate before world (zone checks read records' lane); jump after world
 // (consumes jumpRequested same-frame, before traffic reacts); contacts
 // right after world (roster seed before save.js restores over it); mystery
-// right after contacts (lazy ctx.world.mystery default before save restore).
+// right after contacts (lazy ctx.world.mystery default before save restore);
+// epics after mystery (stage checks read mystery.found); settings right
+// after controls (input registered; DOM-only, everyone reads ctx.settings
+// live); origins after save (ctx.flags.saveRestored is final — a restore
+// means no origin pick); onboarding after origins, before HUD.
 const systems = [
   initStarfield,
   initSolarSystem,
@@ -70,11 +78,13 @@ const systems = [
   initLandmarks,
   initGate,
   initControls,
+  initSettings,
   initBio,
   initShip,
   initWorld,
   initContacts,
   initMystery,
+  initEpics,
   initJump,
   initTraffic,
   initNpc,
@@ -83,6 +93,8 @@ const systems = [
   initHail,
   initSong,
   initSave,
+  initOrigins,
+  initOnboarding,
   initHud,
 ].map((init) => init(ctx));
 

@@ -8,7 +8,14 @@ import * as THREE from 'three';
  *   the ship is negligible and the shells never need re-centering).
  * - Both layers sit inside the camera far plane (20000).
  * - Attached to ctx.scene (NOT the ship) so stars never inherit ship rotation.
- * - update() only advances a slow drift rotation; zero per-frame allocations.
+ * - Wave-6 polish: each layer also gets a SUBTLE parallax response — its
+ *   position accumulates a small negative fraction of ctx.ship.velocity
+ *   (nearer shell moves more), reset on 'systemLoaded'. Suppressed under
+ *   ctx.settings.reducedMotion (shells stay centered = base look). Rim-band
+ *   sparseness (§15 designed silence): star opacity scales with the current
+ *   system's band — 0 full, 1 ×0.8, 2 ×0.55 — via material opacity on band
+ *   change, no rebuilds.
+ * - update() writes layer positions/opacity in place; zero allocations.
  */
 
 const DRIFT_SPEED = 0.0005; // rad/s around Y — barely-there parallax life
@@ -82,40 +89,96 @@ function buildStarLayer({ count, minRadius, maxRadius, size, opacity, texture })
   return points;
 }
 
+// Rim-band sparseness (§15): opacity multiplier per band — the rim feels emptier.
+const BAND_OPACITY = [1.0, 0.8, 0.55];
+
 export function initStarfield(ctx) {
   const texture = createStarSprite();
 
   const group = new THREE.Group();
   group.name = 'starfield';
 
-  // Primary layer: bright, varied stars on a near shell.
-  group.add(buildStarLayer({
-    count: 4500,
-    minRadius: 8000,
-    maxRadius: 9000,
-    size: 2.4,
-    opacity: 1.0,
-    texture,
-  }));
-
-  // Depth layer: farther, fainter, smaller dust of stars.
-  group.add(buildStarLayer({
-    count: 2500,
-    minRadius: 12000,
-    maxRadius: 16000,
-    size: 1.4,
-    opacity: 0.45,
-    texture,
-  }));
+  // Depth layers with per-layer parallax response (wave-6): the nearer
+  // shell counters ship velocity more strongly. Layer positions are
+  // mutated in place — no allocation, no rebuilds.
+  const layers = [
+    {
+      // Primary layer: bright, varied stars on a near shell.
+      points: buildStarLayer({
+        count: 4500,
+        minRadius: 8000,
+        maxRadius: 9000,
+        size: 2.4,
+        opacity: 1.0,
+        texture,
+      }),
+      baseOpacity: 1.0,
+      parallax: 0.02,
+    },
+    {
+      // Depth layer: farther, fainter, smaller dust of stars.
+      points: buildStarLayer({
+        count: 2500,
+        minRadius: 12000,
+        maxRadius: 16000,
+        size: 1.4,
+        opacity: 0.45,
+        texture,
+      }),
+      baseOpacity: 0.45,
+      parallax: 0.008,
+    },
+  ];
+  for (let i = 0; i < layers.length; i++) group.add(layers[i].points);
 
   ctx.scene.add(group);
 
   // Faint ambient so unlit geometry faces aren't pure black.
   ctx.scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
+  let bandApplied = -1; // force the first opacity application
+
   return {
     update(dt) {
       group.rotation.y += DRIFT_SPEED * dt;
+
+      // System swap: reset parallax offsets (the old system's accumulated
+      // displacement is meaningless here) and re-apply band opacity.
+      for (let i = 0; i < ctx.lastEvents.length; i++) {
+        if (ctx.lastEvents[i].type === 'systemLoaded') {
+          for (let j = 0; j < layers.length; j++) layers[j].points.position.set(0, 0, 0);
+          bandApplied = -1;
+          break;
+        }
+      }
+
+      // Band-aware sparseness: scale star opacity on band change only.
+      const sys = ctx.systems?.[ctx.world.currentSystem];
+      const band = sys?.band ?? 0;
+      if (band !== bandApplied) {
+        bandApplied = band;
+        const mult = BAND_OPACITY[band] ?? 1;
+        for (let i = 0; i < layers.length; i++) {
+          layers[i].points.material.opacity = layers[i].baseOpacity * mult;
+        }
+      }
+
+      // Parallax: accumulate a small negative fraction of ship velocity
+      // into each shell's position (offset ∝ displacement from the system
+      // origin — proper, subtle backdrop parallax). reducedMotion → shells
+      // stay centered, i.e. the base look.
+      const reduced = ctx.settings?.reducedMotion === true;
+      const vel = ctx.ship?.velocity;
+      for (let i = 0; i < layers.length; i++) {
+        const pts = layers[i].points;
+        if (reduced || !vel) {
+          if (pts.position.x !== 0 || pts.position.y !== 0 || pts.position.z !== 0) {
+            pts.position.set(0, 0, 0);
+          }
+          continue;
+        }
+        pts.position.addScaledVector(vel, -layers[i].parallax * dt);
+      }
     },
   };
 }

@@ -14,11 +14,19 @@
  * only the sense that something is out there. The third clue overall also
  * fires the 'echoes-3' milestone.
  *
+ * Wave 6 rung: with CONVERGENCE.cluesNeeded clues held, Echo voices the
+ * fixed hintLine once (convergeHinted flag); approaching CONVERGENCE.site in
+ * its system after the hint then fires the 'convergence' milestone + event
+ * and 'songShift' once (converged flag). Both flags live on the mystery
+ * record so they persist; the copy never restates the buried truth.
+ *
  * Pure sim: no three.js/DOM imports. Ship position is read as plain x/y/z
  * properties off ctx.ship.object.position; distances via Math.hypot.
  * Per-frame cost: one pass over the current system's few entries, zero
  * allocations.
  */
+
+import { CONVERGENCE } from './state.js';
 
 const CLUE_RADIUS = 35; // u — clue discovery range
 const LANDMARK_RADIUS = 100; // u — landmark discovery range
@@ -41,6 +49,27 @@ export function initMystery(ctx) {
       const px = obj.position.x;
       const py = obj.position.y;
       const pz = obj.position.z;
+
+      // Convergence rung (wave 6): once enough clues are held, Echo voices
+      // the hint exactly once ever — the flag persists on the mystery record.
+      // Old saves lack these fields; missing reads falsy.
+      if (!mystery.convergeHinted && (mystery.found?.length ?? 0) >= CONVERGENCE.cluesNeeded) {
+        mystery.convergeHinted = true;
+        ctx.emit('commLine', { text: CONVERGENCE.hintLine, from: 'Echo' });
+      }
+
+      // Site discovery: hinted, in the site's system, within its radius.
+      // The converged flag is the permanence guard — fires exactly once ever.
+      if (mystery.convergeHinted && !mystery.converged
+        && ctx.world.currentSystem === CONVERGENCE.site.system) {
+        const sp = CONVERGENCE.site.position;
+        if (Math.hypot(px - sp[0], py - sp[1], pz - sp[2]) <= CONVERGENCE.site.radius) {
+          mystery.converged = true;
+          ctx.emit('milestone', { id: 'convergence', line: CONVERGENCE.site.line });
+          ctx.emit('convergence', { id: CONVERGENCE.site.id, line: CONVERGENCE.site.line });
+          ctx.emit('songShift', { reason: 'convergence' });
+        }
+      }
 
       const def = ctx.systems?.[ctx.world.currentSystem];
       if (!def) return;

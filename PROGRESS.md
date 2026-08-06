@@ -17,7 +17,7 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 | 7 | Broader world (more systems, factions, contacts, jobs, event variety) | DONE (waves 3-4: 3 systems, gate network, contacts/ranks, 5 job kinds, 6 event kinds) |
 | 8 | Rimward journey (distance bands, sparse travel, mystery clues, landmarks, silence) | DONE (wave 5: bands 0-2, Hollow Reach, clues/landmarks, band pacing) |
 | 9 | Living companion (visual/emotional/parity targets) | DONE (wave 5: mood bioluminescence, breathing, scars, growth, death tenderness) |
-| 10 | Content and polish (faction epics, origins, audio, visuals, accessibility, onboarding) | NOT STARTED |
+| 10 | Content and polish (faction epics, origins, audio, visuals, accessibility, onboarding) | DONE (wave 6: 4 faction epics + Standing service, 5 origins, 15-cue audio pass + adaptive beds, a11y settings, onboarding hints; plus mystery convergence + ace arc) |
 
 ## Wave 3 scope (historical)
 
@@ -81,14 +81,53 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   (random soak deaths were flaking the wave-4 favor section via death-restore
   roster swap). PASS.
 
-## Next round candidates (wave 6)
+- Wave 6: ladder #10 + the two queued candidates. state.js: ORIGINS (5,
+  situations-not-personalities), EPICS (4 factions × 3 stages, requirements
+  rankTier|cluesFound, effects sell/buy/repair/jobPay/restrictedSellMult +
+  pirateResolveMod), ACES.hunter (Sister Vane, fear-25 injected Red Ledger
+  Named Gun), CONVERGENCE (clues-3 hint → Hollow Reach anomaly site →
+  milestone + songShift), DEFENSE.shellRechargeTime 20 (latent wave-1 NaN —
+  tickShipState divided by an undefined constant, NaN'd shell + resolve).
+  ctx.js: ctx.settings (settings.js ONLY writes; everyone reads live),
+  flags.saveRestored, 4 new frozen events ('epicStage','originChosen',
+  'convergence','songShift'). save.js WORLD_FIELDS += epics/origin/
+  onboarding/aceRivalry. src/game/epics.js: one-stage-per-frame advance +
+  pure epicEffects(); station.js: 9th service 'Standing' (APPENDED after
+  launch — hotkey digits map to array order) + all transaction multipliers.
+  origins.js: fresh-boot origin overlay (pauses, Digit1-5/click, restore-
+  style startSystem rebind for drifter). onboarding.js: 8 one-time hints,
+  seen persisted, hints setting live. Mystery: convergeHinted/converged on
+  the mystery record, landmarks.js renders the anomaly post-hint and dims on
+  converged. Ace arc: aceRivalry {defeats,lastOutcome,hunterSpawned}, Illyx
+  rematch (+15 resolve, 'Again.'), recognition lines at fear 15/25, 'respect'
+  hail intent (peaceful stand-down, no econ), contacts crown-line ack.
+  song.js: 15 new cues, live masterVolume/muted, combat bed, dock ambience,
+  songShift answer-voice (the §29 last line). Visuals: burner trail, bolt
+  glow + impact sparks, gate charge swirl, starfield parallax + band
+  sparseness — all reducedMotion-aware. A11y: settings.js KeyO panel
+  (colorblind/contrast/reduced-motion/text-scale/volume/mute/hints,
+  localStorage 'rimward-settings-v1'), Okabe-Ito + contrast palettes via CSS
+  vars, aria-live toasts/banner, hull LOW/CRIT text flag, clue/landmark
+  toasts with Echo-commLine dedupe. Boot test: wave-6 section (origin pick
+  FIRST — its digit listener would eat wave-4 station keys — then
+  onboarding/epics/ace/convergence/audio/settings/WORLD_FIELDS roundtrip).
+  Fix folded in: epics.js/onboarding.js re-resolve their world records per
+  frame (save.js swaps fields wholesale on restore; init-time captures
+  orphaned — same discipline as mystery.js). PASS. Browser-verified: origin
+  overlay, settings panel live-apply + persistence, Standing service.
+## Next round candidates (wave 7)
 
-- Ladder #10 Content and polish: faction epics, origin variety, audio, visuals,
-  accessibility, onboarding. NOTE: goal doc §1-24 truncated — epic/origin specs
-  must be derived from glossary + §29 product test or a restored doc.
-- Mystery depth: clues currently terminate at the echoes-3 milestone; the chain
-  wants a next rung (a destination the clues point at) without restating the
-  buried truth (§27).
-- Named aces exist in cast data (ace: true); an ace duel/recognition arc would
-  feed the fear economy (ECON.fear.aceDefeated is already wired).
+- All ten ladder rungs are DONE. What remains is depth, not new rungs:
+- Band 3+: the glossary goes to "Band 0–3+" but the world stops at 2. A
+  fourth band (beyond Hollow Reach) is where the convergence heading points.
+- Post-convergence mystery: songShift changed her voice; the chain wants the
+  next rung WITHOUT restating the buried truth (§27 — reference, never copy).
+- Ace arc depth: Vane has no rematch/rivalry escalation of her own; Illyx's
+  rematch caps at one bump. Named-Gun lineage (a defeated ace's name passing
+  to a successor) is unbuilt.
+- Epic depth: stages are reputation/clue gates; none have a systemic capstone
+  (the Shepherd's lane endpoint, the sixth berth, the unfinished column all
+  tease destinations that don't exist yet).
+- Origin depth: origins set conditions but have no payoff arcs (Ledger debt
+  is just negative credits — no creditor come-due event).
 - Polish debt: none known; boot test is the gate.

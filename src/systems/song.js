@@ -47,7 +47,43 @@ const CUES = {
     ['sine', 415, 415, 0.5, 0.08, 0, 0],
   ],
   hailOpened: [['square', 1200, 1200, 0.06, 0.05, 2000, 0]], // comms blip
+  // — wave 6: audio replaces HUD clutter; every cue short and quiet, whalesong stays loudest.
+  jumpRequested: [['sine', 90, 320, 2.2, 0.07, 600, 0]], // rising charge hum (matches 2.5s gate charge)
+  systemLoaded: [ // arrival bloom: major-second swell + soft high chime
+    ['sine', 330, 495, 0.8, 0.08, 0, 0],
+    ['sine', 990, 990, 0.5, 0.04, 0, 0.3],
+  ],
+  undocked: [['triangle', 140, 70, 0.3, 0.12, 300, 0]], // departure thunk
+  hailClosed: [['square', 900, 600, 0.08, 0.04, 2000, 0]], // comms-off blip
+  npcSurrendered: [['sine', 440, 220, 0.5, 0.09, 0, 0]], // stand-down tone
+  worldEvent: [['sine', 70, 45, 1.6, 0.06, 200, 0]], // low rumble (phase start AND end)
+  marketShift: [['square', 1500, 1500, 0.03, 0.02, 3000, 0]], // tick
+  saveBlocked: [['sine', 220, 180, 0.15, 0.05, 0, 0]], // soft denial
+  clueFound: [['sine', 523, 784, 0.9, 0.06, 0, 0]], // mystery chime (minor-coloured)
+  landmarkFound: [ // bell with a fifth
+    ['sine', 660, 660, 1.2, 0.06, 0, 0],
+    ['sine', 990, 990, 1.0, 0.04, 0, 0.35],
+  ],
+  epicStage: [ // brass-ish standing sting
+    ['triangle', 330, 330, 0.4, 0.09, 0, 0],
+    ['triangle', 415, 415, 0.4, 0.07, 0, 0],
+    ['triangle', 660, 660, 0.5, 0.06, 0, 0.2],
+  ],
+  convergence: [ // the motif: three-note answer-call, generous reverb tail (spec[7]=wet)
+    ['sine', 392, 392, 0.6, 0.08, 0, 0, 1],
+    ['sine', 494, 494, 0.6, 0.08, 0, 0.35, 1],
+    ['sine', 587, 587, 0.9, 0.08, 0, 0.7, 1],
+  ],
+  originChosen: [['sine', 262, 392, 0.6, 0.07, 0, 0]], // confirm swell
+  fearChanged: [['sine', 90, 70, 0.4, 0.04, 250, 0]], // low pulse
+  engineOut: [['sawtooth', 120, 40, 0.4, 0.05, 500, 0]], // sputter
 };
+
+// Sparse station-ambience clank spec (module-scope: no per-frame alloc).
+const CLANK = ['square', 300, 300, 0.05, 0.03, 800, 0];
+const COMBAT_BED_GAIN = 0.05; // low drone target while in combat
+const DOCKED_HUM_GAIN = 0.02; // pad-level station hum
+const VOL_TC = 0.05; // master-volume retarget time constant (s)
 
 export function initSong(ctx) {
   let ac = null;
@@ -59,6 +95,12 @@ export function initSong(ctx) {
   let failed = false;
   let mood = 'serene';
   let nextPhraseAt = 0;
+  let answering = false; // songShift consumed: the dark hums back (§29)
+  let bedGain = null; // combat drone level (0 when at peace)
+  let humGain = null; // station ambience level (0 when undocked)
+  let combatOn = false;
+  let dockedOn = false;
+  let nextClankAt = 0;
 
   function unlock() {
     if (unlocked || failed) return;
@@ -111,6 +153,43 @@ export function initSong(ctx) {
       padOscB.connect(padGain);
       padOscA.start();
       padOscB.start();
+
+      // Adaptive combat bed: 55 Hz drone with slow tremolo, gain rides
+      // ctx.flags.combat (faded in update(); built once — no per-frame alloc).
+      const bedTrem = ac.createGain();
+      bedTrem.gain.value = 0.75;
+      const bedLfo = ac.createOscillator();
+      bedLfo.type = 'sine';
+      bedLfo.frequency.value = 0.5;
+      const bedLfoGain = ac.createGain();
+      bedLfoGain.gain.value = 0.25;
+      bedLfo.connect(bedLfoGain);
+      bedLfoGain.connect(bedTrem.gain);
+      bedGain = ac.createGain();
+      bedGain.gain.value = 0;
+      const bedOsc = ac.createOscillator();
+      bedOsc.type = 'sine';
+      bedOsc.frequency.value = 55;
+      bedOsc.connect(bedTrem);
+      bedTrem.connect(bedGain);
+      bedGain.connect(master);
+      bedGain.connect(convolver);
+      bedOsc.start();
+      bedLfo.start();
+
+      // Station ambience: soft filtered hum, level rides ctx.flags.docked.
+      const humFilter = ac.createBiquadFilter();
+      humFilter.type = 'lowpass';
+      humFilter.frequency.value = 400;
+      humGain = ac.createGain();
+      humGain.gain.value = 0;
+      const humOsc = ac.createOscillator();
+      humOsc.type = 'triangle';
+      humOsc.frequency.value = 110;
+      humOsc.connect(humFilter);
+      humFilter.connect(humGain);
+      humGain.connect(master);
+      humOsc.start();
 
       if (ac.state === 'suspended') ac.resume().catch(() => {});
       unlocked = true;
@@ -188,6 +267,9 @@ export function initSong(ctx) {
     }
   }
 
+  // Reused params for the answer voice (mutated at schedule time — no alloc).
+  const ANSWER_P = { gain: 0, vibRate: 0, vibDepth: 0, fall: 1 };
+
   /** A phrase: 1–3 notes on the mood's interval pattern. */
   function schedulePhrase(t) {
     const p = MOOD_SONG[mood];
@@ -199,9 +281,16 @@ export function initSong(ctx) {
       voice(p.base * ratio, at, dur, p);
       at += dur * (0.7 + Math.random() * 0.6);
     }
+    // §29 payoff after songShift: the dark hums back — one quiet answering
+    // voice a fifth above, riding the phrase (same band-stretched gaps).
+    if (answering) {
+      ANSWER_P.gain = p.gain * 0.35;
+      const dur = p.dur[0] + Math.random() * (p.dur[1] - p.dur[0]);
+      voice(p.base * 1.5, t + 2.5 + Math.random() * 1.5, dur, ANSWER_P);
+    }
   }
 
-  /** Short synth cue. Allocates only on (rare) events. */
+  /** Short synth cue. Allocates only on (rare) events. spec[7]=1 also sends wet. */
   function tone(spec, t) {
     const [type, f0, f1, dur, gain, lpf, delay] = spec;
     try {
@@ -215,15 +304,16 @@ export function initSong(ctx) {
       g.gain.exponentialRampToValueAtTime(gain, t0 + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
       o.connect(g);
+      let out = g;
       if (lpf > 0) {
         const f = ac.createBiquadFilter();
         f.type = 'lowpass';
         f.frequency.value = lpf;
         g.connect(f);
-        f.connect(master);
-      } else {
-        g.connect(master);
+        out = f;
       }
+      out.connect(master);
+      if (spec[7]) out.connect(convolver); // generous tail (the motif)
       o.start(t0);
       o.stop(t0 + dur + 0.05);
     } catch (err) {
@@ -255,6 +345,30 @@ export function initSong(ctx) {
       for (let i = 0; i < evs.length; i++) {
         const cue = CUES[evs[i].type];
         if (cue) for (let j = 0; j < cue.length; j++) tone(cue[j], t);
+        if (evs[i].type === 'songShift') answering = true; // she sings differently now
+      }
+
+      // Live master volume/mute (settings.js owns ctx.settings; read every frame).
+      const vol = MASTER_GAIN * (ctx.settings?.muted ? 0 : (ctx.settings?.masterVolume ?? 1));
+      master.gain.setTargetAtTime(vol, t, VOL_TC);
+
+      // Adaptive combat bed: fade in over ~2s, out over ~4s (change-only retarget).
+      const inCombat = !!ctx.flags.combat;
+      if (inCombat !== combatOn) {
+        combatOn = inCombat;
+        bedGain.gain.setTargetAtTime(inCombat ? COMBAT_BED_GAIN : 0, t, inCombat ? 0.6 : 1.3);
+      }
+
+      // Station ambience: filtered hum while docked + sparse distant clank.
+      const isDocked = !!ctx.flags.docked;
+      if (isDocked !== dockedOn) {
+        dockedOn = isDocked;
+        humGain.gain.setTargetAtTime(isDocked ? DOCKED_HUM_GAIN : 0, t, 0.8);
+        if (isDocked) nextClankAt = t + 7 + Math.random() * 8;
+      }
+      if (dockedOn && t >= nextClankAt) {
+        tone(CLANK, t);
+        nextClankAt = t + 7 + Math.random() * 8;
       }
 
       // Whalesong phrases via lookahead timer, every 6–20 s (mood-dependent).

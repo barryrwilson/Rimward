@@ -15,8 +15,14 @@ import { WEAPONS, HEAT, DEFENSE, U, applyHit, tickShipState } from '../game/stat
  * point } for asteroids.js (read next frame via ctx.lastEvents). Translates
  * applyHit() descriptors into the frozen ctx event vocabulary.
  *
- * Zero per-frame allocation: projectiles/flashes are pooled, all scratch
- * vectors are module-scope, the mining beam mutates its buffer in place.
+ * Zero per-frame allocation: projectiles/flashes/sparks are pooled, all
+ * scratch vectors are module-scope, the mining beam mutates its buffer in
+ * place. Wave-6 polish: every pooled projectile carries an additive glow
+ * sprite (attached at init, family-tinted, visible iff the bolt is live —
+ * it rides as a child of the bolt mesh), and every ship impact spawns a
+ * small spark burst from a pooled set of THREE.Points (per-burst material
+ * created at init, positions/velocities preallocated). Sparks animate, so
+ * they are suppressed under ctx.settings.reducedMotion.
  */
 
 // ---- module-scope scratch (reused every frame) ----
@@ -53,6 +59,28 @@ const GROUP_WEAPON = { 1: 'cannon', 2: 'disruptor', 3: 'mining' };
 // §6.3 family identity: cannon = cyan bolt, disruptor = violet, mining = salvage green.
 const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e };
 
+// Impact sparks (wave-6): pooled bursts riding the flash discipline.
+const SPARKS_PER_BURST = 6;
+const SPARK_TTL = 0.35; // s
+const SPARK_SPEED = 16; // u/s outward drift
+
+/** Soft radial dot sprite shared by projectile glows and spark points. */
+function makeGlowDot() {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export function initCombat(ctx) {
   const { scene } = ctx;
 
@@ -72,13 +100,38 @@ export function initCombat(ctx) {
       depthWrite: false,
     }),
   };
+  // Additive glow sprites: two shared family materials, one sprite child per
+  // pooled bolt (built at init; visible iff the bolt is live via the parent).
+  const glowTex = makeGlowDot();
+  const glowMats = {
+    energy: new THREE.SpriteMaterial({
+      map: glowTex,
+      color: FAMILY_COLORS.energy,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    }),
+    disruptor: new THREE.SpriteMaterial({
+      map: glowTex,
+      color: FAMILY_COLORS.disruptor,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    }),
+  };
   const pool = [];
   for (let i = 0; i < POOL_SIZE; i++) {
     const mesh = new THREE.Mesh(projGeo, projMats.energy);
     mesh.visible = false;
+    const glow = new THREE.Sprite(glowMats.energy);
+    glow.scale.set(2.4, 2.4, 1);
+    mesh.add(glow); // child: hides/shows with the bolt, zero extra bookkeeping
     scene.add(mesh);
     pool.push({
       mesh,
+      glow,
       active: false,
       vel: new THREE.Vector3(),
       shooterPos: new THREE.Vector3(), // for aft/fore facet at hit time
@@ -105,6 +158,29 @@ export function initCombat(ctx) {
     sprite.visible = false;
     scene.add(sprite);
     flashes.push({ sprite, t: 0, ttl: 0.18 });
+  }
+
+  // --- Impact spark pool (wave-6): one burst per flash, each a THREE.Points
+  // with preallocated position/velocity buffers and a per-burst material
+  // (opacity animated per burst). Built once; reused ring-style.
+  const sparks = [];
+  for (let i = 0; i < FLASH_POOL; i++) {
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(SPARKS_PER_BURST * 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const mat = new THREE.PointsMaterial({
+      color: FAMILY_COLORS.energy,
+      size: 0.6,
+      map: glowTex,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.visible = false;
+    pts.frustumCulled = false; // burst can sit anywhere; skip stale culling
+    scene.add(pts);
+    sparks.push({ pts, arr, vel: new Float32Array(SPARKS_PER_BURST * 3), t: 0, active: false });
   }
 
   // --- Mining beam: 2-vertex line, buffer mutated in place; glow at endpoint ---
@@ -166,6 +242,7 @@ export function initCombat(ctx) {
       p.vel.copy(dir).multiplyScalar(w.speed);
       p.shooterPos.copy(shooterPos);
       p.mesh.material = projMats[w.family] ?? projMats.energy;
+      p.glow.material = glowMats[w.family] ?? glowMats.energy;
       p.mesh.position.copy(origin);
       p.mesh.visible = true;
       return p;
@@ -178,7 +255,38 @@ export function initCombat(ctx) {
     p.mesh.visible = false;
   }
 
+  /** Spark burst at a hit point: random outward velocities, no allocation. */
+  function spawnSparks(pos, family) {
+    if (ctx.settings?.reducedMotion) return; // animated burst — hidden under reduced motion
+    for (let i = 0; i < sparks.length; i++) {
+      const s = sparks[i];
+      if (s.active) continue;
+      s.active = true;
+      s.t = 0;
+      s.pts.material.color.set(FAMILY_COLORS[family] ?? FAMILY_COLORS.energy);
+      s.pts.material.opacity = 1;
+      for (let j = 0; j < SPARKS_PER_BURST; j++) {
+        const j3 = j * 3;
+        s.arr[j3] = pos.x;
+        s.arr[j3 + 1] = pos.y;
+        s.arr[j3 + 2] = pos.z;
+        // Random direction on the sphere, written straight into the buffer.
+        const a = Math.random() * Math.PI * 2;
+        const b = Math.acos(2 * Math.random() - 1);
+        const sp = SPARK_SPEED * (0.5 + Math.random());
+        const sb = Math.sin(b);
+        s.vel[j3] = sb * Math.cos(a) * sp;
+        s.vel[j3 + 1] = Math.cos(b) * sp;
+        s.vel[j3 + 2] = sb * Math.sin(a) * sp;
+      }
+      s.pts.geometry.attributes.position.needsUpdate = true;
+      s.pts.visible = true;
+      return;
+    }
+  }
+
   function spawnFlash(pos, family) {
+    spawnSparks(pos, family); // independent pool — fires on every ship impact
     for (let i = 0; i < flashes.length; i++) {
       const f = flashes[i];
       if (f.sprite.visible) continue;
@@ -432,6 +540,29 @@ export function initCombat(ctx) {
         const s = 1.5 + 3 * k;
         f.sprite.scale.set(s, s, 1);
         f.sprite.material.opacity = 1 - k;
+      }
+
+      // 6. Impact sparks: ballistic drift + fade, in-place buffer writes.
+      // Suppressed under reducedMotion (they animate, so hide them).
+      const hideSparks = ctx.settings?.reducedMotion === true;
+      for (let i = 0; i < sparks.length; i++) {
+        const s = sparks[i];
+        if (!s.active) continue;
+        s.t += dt;
+        const k = s.t / SPARK_TTL;
+        if (k >= 1) {
+          s.active = false;
+          s.pts.visible = false;
+          continue;
+        }
+        if (hideSparks) {
+          s.pts.visible = false;
+          continue;
+        }
+        s.pts.visible = true;
+        for (let j = 0; j < s.arr.length; j++) s.arr[j] += s.vel[j] * dt;
+        s.pts.geometry.attributes.position.needsUpdate = true;
+        s.pts.material.opacity = 1 - k;
       }
     },
   };

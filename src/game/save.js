@@ -45,6 +45,9 @@ const WORLD_FIELDS = [
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
   'jumpGraceUntil', 'contacts', 'mystery',
+  // wave 6: epics {faction:stageCount} (epics.js), origin id (origins.js),
+  // onboarding {seen:[hintIds]} (onboarding.js), aceRivalry (world.js ace arc)
+  'epics', 'origin', 'onboarding', 'aceRivalry',
 ];
 
 function snapshot(ctx) {
@@ -135,6 +138,7 @@ function sanitizeRestored(ctx) {
 
 function restore(ctx, snap) {
   const fromSystem = ctx.world.currentSystem;
+  ctx.flags.saveRestored = true; // origins.js: a restore means no origin pick
   for (const k of WORLD_FIELDS) {
     if (snap.world[k] !== undefined) ctx.world[k] = snap.world[k];
   }

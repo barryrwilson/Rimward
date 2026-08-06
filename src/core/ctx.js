@@ -150,6 +150,20 @@ export function createCtx({ scene, camera, renderer }) {
       combat: false, // npc.js owns (hostile intent within bubble)
       paused: false,
       firstPerson: false,
+      saveRestored: false, // save.js sets true when a snapshot is restored
+    },
+
+    // --- client settings (settings.js ONLY writes; song/hud/gate/ship read) ---
+    // Persisted by settings.js under its own localStorage key — client-level,
+    // NOT world state, so it never rides save.js WORLD_FIELDS.
+    settings: {
+      colorblind: false, // colorblind-safe HUD palette (body.rw-colorblind)
+      highContrast: false, // high-contrast HUD (body.rw-contrast)
+      reducedMotion: false, // no shakes/pulses/trails (ship/gate/hud read)
+      textScale: 1, // 0.85|1|1.2|1.5 → --rw-text-scale on #hud
+      masterVolume: 1, // 0..1 multiplier song.js applies to every cue
+      muted: false, // song.js runs silent when true
+      hints: true, // onboarding.js one-time hint overlays on/off
     },
 
     // --- event queue. Frozen event types (payload documented at emit sites):
@@ -163,6 +177,8 @@ export function createCtx({ scene, camera, renderer }) {
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
     // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
     // 'clueFound' {id,line}  'landmarkFound' {id,name,line}   (mystery.js, wave 5)
+    // 'epicStage' {id,faction,stage,line}      'originChosen' {id,line}  (wave 6)
+    // 'convergence' {id,line} (mystery.js)     'songShift' {reason} (mystery→song)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

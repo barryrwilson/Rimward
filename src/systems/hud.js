@@ -65,7 +65,27 @@ function makeBar(parent, labelText, barClass) {
 function toastForEvent(e, ctx, mem) {
   switch (e.type) {
     case 'commLine':
+      // Dedupe (wave 6): mystery.js emits clueFound/landmarkFound and then a
+      // bare Echo 'commLine' with the same line in the SAME frame. The
+      // clue/landmark cases below record their lines in mem.frameLines
+      // (cleared each frame before the event loop); a commLine whose text
+      // matches an already-toasted line this frame is skipped, so each
+      // discovery line surfaces exactly once (with its ✧ glyph).
+      if (e.text && mem.frameLines.includes(e.text)) return null;
       return { text: e.text ?? e.line ?? '', cls: 'comm' };
+    case 'clueFound':
+      mem.frameLines.push(e.line ?? '');
+      return { text: '✧ ' + (e.line ?? 'An echo answers.'), cls: 'comm' };
+    case 'landmarkFound':
+      mem.frameLines.push(e.line ?? '');
+      return { text: '✧ ' + (e.name ? e.name + ' — ' : '') + (e.line ?? ''), cls: 'comm' };
+    case 'epicStage':
+      return { text: '◆ ' + (e.line ?? 'Word travels.'), cls: 'sting' };
+    case 'originChosen':
+      return { text: '✦ ' + (e.line ?? 'This is who you are.'), cls: 'sting' };
+    case 'convergence':
+      return { text: '◎ ' + (e.line ?? 'The song converges.'), cls: 'sting' };
+    // 'songShift' gets NO toast — it is heard, not read.
     case 'milestone':
       return { text: '★ ' + (e.line ?? e.id ?? 'A first.'), cls: 'sting' };
     case 'saveBlocked':
@@ -119,9 +139,10 @@ function toastForEvent(e, ctx, mem) {
 }
 
 /**
- * Wave 2 (gate/jump) styles. hud.css is read-only this wave, so the few new
- * classes are injected once here; they reuse the #hud palette variables and
- * mirror the existing toast/prompt/panel treatments (§13, §18.4).
+ * Wave 2 (gate/jump) styles. These few classes are injected once here (a
+ * wave-2 concession when hud.css was read-only); they reuse the #hud palette
+ * variables and mirror the existing toast/prompt/panel treatments (§13,
+ * §18.4). Font sizes scale with var(--rw-text-scale) like the rest of the HUD.
  */
 const W2_STYLE_ID = 'rw-hud-w2-styles';
 function ensureW2Styles() {
@@ -151,14 +172,14 @@ function ensureW2Styles() {
 }
 #hud .rw-banner.show { opacity: 1; transform: translate(-50%, 0); }
 #hud .rw-banner-name {
-  font-size: 22px;
+  font-size: calc(22px * var(--rw-text-scale, 1));
   letter-spacing: 0.34em;
   text-transform: uppercase;
   color: var(--cyan);
   text-shadow: 0 0 12px rgba(111, 242, 224, 0.45);
 }
 #hud .rw-banner-sub {
-  font-size: 11px;
+  font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--dim);
@@ -180,7 +201,7 @@ function ensureW2Styles() {
   pointer-events: none;
 }
 #hud .rw-jump-label {
-  font-size: 12px;
+  font-size: calc(12px * var(--rw-text-scale, 1));
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--cyan);
@@ -192,7 +213,7 @@ function ensureW2Styles() {
    display:flex would beat .is-hidden — pin the hidden state explicitly. */
 #hud .rw-jump.is-hidden { display: none; }
 #hud .rw-sysname {
-  font-size: 11px;
+  font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--cyan);
@@ -234,6 +255,9 @@ export function initHud(ctx) {
 
   // ---------- top-center toasts (comm lines + milestone stings) ----------
   const toasts = el('div', 'rw-toasts', root);
+  // screen readers announce toasts/banner as they appear (no focus moves)
+  toasts.setAttribute('role', 'status');
+  toasts.setAttribute('aria-live', 'polite');
   const toastSlots = [];
   for (let i = 0; i < TOAST_SLOTS; i++) {
     toastSlots.push({ el: el('div', 'rw-toast', toasts), until: 0, key: '' });
@@ -242,6 +266,7 @@ export function initHud(ctx) {
 
   // ---------- wave 2: arrival banner (fires on 'systemLoaded', ~4s) ----------
   const banner = el('div', 'rw-banner', root);
+  banner.setAttribute('aria-live', 'polite');
   const bannerName = el('div', 'rw-banner-name', banner);
   const bannerSub = el('div', 'rw-banner-sub', banner);
   let bannerUntil = 0; // ctx.elapsed when the banner fades
@@ -269,6 +294,9 @@ export function initHud(ctx) {
   const petals = el('div', 'rw-petals', hullRow);
   const petalSpans = [];
   for (let i = 0; i < HULL_PETALS; i++) petalSpans.push(el('span', 'rw-petal on', petals));
+  // legibility: petal color/blink alone must not carry hull state — small
+  // text flag mirrors the band (engine OK/DAMAGED/OUT sets the standard)
+  const hullFlag = el('div', 'rw-hull-flag', hullRow, '');
   const strainBar = makeBar(defense, 'STRAIN', 'rw-strain');
   const strainFlag = el('div', 'rw-strain-flag', strainBar.row, 'OVERHEAT');
   const engineRow = el('div', 'rw-meter rw-engine', defense);
@@ -380,7 +408,7 @@ export function initHud(ctx) {
     posX: NaN, posY: NaN, posZ: NaN,
     system: '', jumpShown: null, jumpPct: -1, jumpDest: null,
   };
-  const mem = { lastFear: Math.round(ctx.world.fear ?? 0) };
+  const mem = { lastFear: Math.round(ctx.world.fear ?? 0), frameLines: [] };
 
   let textAccum = TEXT_UPDATE_INTERVAL; // refresh text on first frame
 
@@ -416,6 +444,7 @@ export function initHud(ctx) {
 
       // --- consume this frame's events → toasts (hud runs last; queue is
       // cleared by main.js right after us) ---
+      mem.frameLines.length = 0; // per-frame clue/landmark dedupe scratch
       const evs = ctx.events;
       for (let i = 0; i < evs.length; i++) {
         const t = toastForEvent(evs[i], ctx, mem);
@@ -598,6 +627,9 @@ export function initHud(ctx) {
         if (hullBand !== last.hullBand) {
           last.hullBand = hullBand;
           petals.className = 'rw-petals h-' + hullBand;
+          hullFlag.textContent = hullBand === 'crit' ? 'CRIT' : hullBand === 'warn' ? 'LOW' : '';
+          hullFlag.dataset.state = hullBand;
+          hullFlag.style.display = hullBand === 'ok' ? 'none' : '';
         }
         strainBar.set((player.heat / HEAT.max) * 100);
         const oh = !!player.overheated;

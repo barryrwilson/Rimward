@@ -94,14 +94,26 @@ export function rumorFor(ctx, contact) {
 /**
  * A recognition line once trust >= 60: the contact knows the ship. Uses the
  * player-set shipName when present, else refers to the living hull (§12.5).
- * null below the threshold.
+ * Below the trust threshold, freehold/redmarch contacts instead acknowledge
+ * the player's first Named-ace defeat — once each (contact.aceAck rides the
+ * persisted contact record, same discipline as bumpTrust). null otherwise.
  */
 export function recognitionLine(ctx, contact) {
-  if (contact.trust < 60) return null;
-  const ship = ctx.world.shipName;
-  return ship
-    ? `${ship}, back on my pad. Good to see her in one piece.`
-    : `The living hull — we'd know that ship anywhere. Welcome back.`;
+  if (contact.trust >= 60) {
+    const ship = ctx.world.shipName;
+    return ship
+      ? `${ship}, back on my pad. Good to see her in one piece.`
+      : `The living hull — we'd know that ship anywhere. Welcome back.`;
+  }
+  if (
+    (ctx.world.aceRivalry?.defeats ?? 0) > 0 &&
+    !contact.aceAck &&
+    (contact.system === 'freehold' || contact.system === 'redmarch')
+  ) {
+    contact.aceAck = true;
+    return "Carver Illyx speaks your ship's name carefully now. Coming from him, that's a crown.";
+  }
+  return null;
 }
 
 /**

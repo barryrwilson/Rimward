@@ -6,20 +6,28 @@
    #hud is pointer-events:none except the controls collapse toggle. */
 
 #hud {
+  /* Accessibility state palette (wave 6): the four STATE colors are canonical
+     here; body.rw-colorblind / body.rw-contrast override them (see bottom). */
+  --rw-accent: #6ff2e0; /* beacon cyan — info/comm */
+  --rw-warn: #ffb454; /* threat amber — caution */
+  --rw-bad: #ff5252; /* danger red — critical */
+  --rw-good: #7dd87d; /* salvage green — positive */
   --void: #02060d;
   --panel: rgba(9, 16, 30, 0.78);
   --panel-edge: rgba(96, 150, 196, 0.28);
   --white: #dce8f4;
   --dim: #7d93ab;
-  --cyan: #6ff2e0; /* beacon cyan */
+  --cyan: var(--rw-accent);
   --blue: #4a9fd8; /* wake blue */
-  --amber: #ffb454; /* threat amber */
-  --red: #ff5252; /* danger red */
-  --green: #7dd87d; /* salvage green */
+  --amber: var(--rw-warn);
+  --red: var(--rw-bad);
+  --green: var(--rw-good);
   --vein: #5fe08a; /* bio vein green */
   --ember: #ff7a3c; /* feral ember */
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 12px;
+  /* --rw-text-scale (0.85|1|1.2|1.5) is set inline on #hud by settings.js;
+     the base and every readout below multiply by it. */
+  font-size: calc(12px * var(--rw-text-scale, 1));
   color: var(--white);
   user-select: none;
 }
@@ -40,7 +48,7 @@
 }
 
 .rw-panel-title {
-  font-size: 9px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--cyan);
@@ -50,7 +58,7 @@
 }
 
 .rw-label {
-  font-size: 9px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--dim);
@@ -58,13 +66,13 @@
 }
 
 .rw-value {
-  font-size: 12px;
+  font-size: calc(12px * var(--rw-text-scale, 1));
   letter-spacing: 0.06em;
   color: var(--white);
 }
 
 .rw-unit {
-  font-size: 9px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
   color: var(--dim);
   margin-left: 4px;
 }
@@ -113,7 +121,7 @@
 
 .rw-strain-flag {
   display: none;
-  font-size: 9px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
   letter-spacing: 0.2em;
   color: var(--red);
   animation: rw-blink 0.7s steps(2, start) infinite;
@@ -316,21 +324,21 @@
 }
 
 .rw-target-name {
-  font-size: 11px;
+  font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--white);
 }
 
 .rw-target-meta {
-  font-size: 9px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
 }
 
 .rw-target-resolve {
-  font-size: 10px;
+  font-size: calc(10px * var(--rw-text-scale, 1));
   letter-spacing: 0.2em;
   margin-top: 1px;
 }
@@ -391,7 +399,7 @@
 }
 
 .rw-toast {
-  font-size: 11px;
+  font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   padding: 4px 14px;
@@ -433,7 +441,7 @@
   min-width: 18px;
   text-align: center;
   padding: 2px 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--rw-text-scale, 1));
   color: var(--void);
   background: var(--cyan);
   border-radius: 2px;
@@ -441,7 +449,7 @@
 }
 
 .rw-prompt-verb {
-  font-size: 11px;
+  font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--cyan);
@@ -473,7 +481,7 @@
 .rw-pos { min-width: 0; }
 
 .rw-coords {
-  font-size: 10px;
+  font-size: calc(10px * var(--rw-text-scale, 1));
   letter-spacing: 0.1em;
   color: var(--dim);
   white-space: nowrap;
@@ -526,7 +534,7 @@
   border: none;
   padding: 0;
   font: inherit;
-  font-size: 9px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--cyan);
@@ -541,10 +549,66 @@
 }
 
 .rw-controls li {
-  font-size: 10px;
+  font-size: calc(10px * var(--rw-text-scale, 1));
   color: var(--dim);
   letter-spacing: 0.04em;
   margin: 2px 0;
 }
 
 .rw-controls.collapsed .rw-controls-body { display: none; }
+
+/* hull state text flag: redundant cue beside the petals (color/blink alone
+   never carries state, §18.4/§20) — hidden while hull is in the ok band */
+.rw-hull-flag {
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-left: 6px;
+  color: var(--amber);
+}
+
+.rw-hull-flag[data-state='crit'] {
+  color: var(--red);
+  animation: rw-blink 0.9s steps(2, start) infinite;
+}
+
+/* ---------- accessibility overrides (settings.js toggles these classes) ---------- */
+
+/* Okabe-Ito colorblind-safe state palette */
+body.rw-colorblind #hud {
+  --rw-accent: #56B4E9;
+  --rw-warn: #E69F00;
+  --rw-bad: #D55E00;
+  --rw-good: #009E73;
+}
+
+/* High contrast: brighter foregrounds, darker/more opaque panels, stronger
+   borders (layout untouched) */
+body.rw-contrast #hud {
+  --white: #ffffff;
+  --dim: #aec3d8;
+  --panel: rgba(4, 8, 17, 0.94);
+  --panel-edge: rgba(160, 205, 245, 0.6);
+}
+
+body.rw-contrast #hud .rw-bar {
+  border-color: rgba(160, 205, 245, 0.5);
+  background: rgba(0, 0, 0, 0.95);
+}
+
+body.rw-contrast #hud .rw-toast,
+body.rw-contrast #hud .rw-target-info,
+body.rw-contrast #hud .rw-prompt,
+body.rw-contrast #hud .rw-banner,
+body.rw-contrast #hud .rw-jump {
+  background: rgba(0, 2, 6, 0.94);
+  border-color: rgba(160, 205, 245, 0.6);
+}
+
+/* Reduced motion: kill every HUD animation/transition (banner slide, toast
+   fades, blinks, iris breathe/spin, bar tweens) */
+body.rw-reduced-motion #hud,
+body.rw-reduced-motion #hud * {
+  animation: none !important;
+  transition: none !important;
+}

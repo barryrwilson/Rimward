@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, rankFor, createShipState, SHIP_CLASSES } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES } from '../game/state.js';
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
+import { epicEffects } from '../game/epics.js';
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -34,13 +35,18 @@ import { spawnPod } from '../game/pods.js';
  * cost. Origin system/price are JSON-plain fields on the job entry.
  *
  * UI (§12.1: no more than two menu levels): full-screen dim + panel, world
- * keeps ticking behind. Keyboard: 1-8 service select, digit hotkeys inside
+ * keeps ticking behind. Keyboard: 1-9 service select, digit hotkeys inside
  * services, Esc/B launch (Esc backs out of a service first). Mouse: panel has
  * pointer-events auto. update() performs zero allocations.
+ *
+ * Faction epics (wave 6): the 'epics' service ("Standing") surfaces EPICS
+ * progress for this station's faction, and epicEffects(ctx, faction)
+ * multiplies trade prices, refit totals, restricted-component sales, and job
+ * payouts at transaction time (all read live; nothing cached per frame).
  */
 
 const RING_SPIN = 0.05; // rad/s
-const DOCK_KEY_SERVICES = ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch'];
+const DOCK_KEY_SERVICES = ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics'];
 
 const RESTRICTED_REP_GATE = -25; // a burned Compact name opens the locker
 
@@ -435,6 +441,41 @@ function boardJobs(ctx, sysId) {
   return out;
 }
 
+/**
+ * Epic standing (wave 6): job payouts scale by the current system faction's
+ * achieved jobPayMult. Called only at payout/render time, never per frame.
+ */
+function jobPay(ctx, base) {
+  const faction = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  const mult = epicEffects(ctx, faction).jobPayMult ?? 1;
+  return Math.round(base * mult);
+}
+
+/** Rank name for a ladder tier (epic requirement hints: 'Rank: Trusted'). */
+function rankNameForTier(tier) {
+  for (const rung of RANK_LADDER) if (rung.tier === tier) return rung.name;
+  return `tier ${tier}`;
+}
+
+/** Signed percent from a multiplier: 1.15 → '+15%', 0.9 → '-10%'. */
+function pctOf(mult) {
+  const pct = Math.round((mult - 1) * 100);
+  return `${pct >= 0 ? '+' : ''}${pct}%`;
+}
+
+/** Plain-terms line for one epic effect entry (Standing service). */
+function epicEffectLine(key, value) {
+  switch (key) {
+    case 'sellMult': return `Sales ${pctOf(value)}`;
+    case 'buyMult': return `Buy prices ${pctOf(value)}`;
+    case 'repairMult': return `Repairs ${pctOf(value)}`;
+    case 'jobPayMult': return `Jobs ${pctOf(value)}`;
+    case 'restrictedSellMult': return `Patent stock sales ${pctOf(value)}`;
+    case 'pirateResolveMod': return `Their pirates yield sooner (resolve ${value >= 0 ? '+' : ''}${value})`;
+    default: return null;
+  }
+}
+
 function completeJob(ctx, job, notice) {
   job.state = 'done';
   // Dockmaster trust grows with every finished contract; a bounty claim also
@@ -471,9 +512,10 @@ function tickPatrolJob(ctx) {
       if (role !== 'pirate') continue;
       job.progress += 1;
       if (job.progress >= job.need) {
-        ctx.world.credits += PATROL_REWARD;
         ctx.world.reputation.freehold += PATROL_REP;
-        completeJob(ctx, job, `Patrol contract fulfilled — ${PATROL_REWARD} UU posted.`);
+        const pay = jobPay(ctx, PATROL_REWARD);
+        ctx.world.credits += pay;
+        completeJob(ctx, job, `Patrol contract fulfilled — ${pay} UU posted.`);
         break; // one payout per contract, even for a multi-kill frame
       }
     }
@@ -493,16 +535,18 @@ function tickDeliveryJobs(ctx, ui) {
           (i) => i.name === ace.name && i.causer === 'player',
         );
         if (!claimed) continue;
-        ctx.world.credits += job.reward;
-        completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${job.reward} UU posted.`);
+        const acePay = jobPay(ctx, job.reward);
+        ctx.world.credits += acePay;
+        completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${acePay} UU posted.`);
       } else {
         // Pirate bounty: a witnessed, player-caused kill of the named reaver.
         const claimed = (ctx.world.incidents || []).some(
           (i) => i.kind === 'destroyed' && i.name === job.target && i.causer === 'player',
         );
         if (!claimed) continue;
-        ctx.world.credits += job.reward;
-        completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${job.reward} UU posted.`);
+        const bountyPay = jobPay(ctx, job.reward);
+        ctx.world.credits += bountyPay;
+        completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${bountyPay} UU posted.`);
       }
     } else if (job.kind === 'haul' && ctx.flags.docked) {
       const origin = job.originSystem ?? 'freehold';
@@ -510,7 +554,7 @@ function tickDeliveryJobs(ctx, ui) {
       if (holdUnits(ctx, 'provisions') < HAUL_UNITS) continue;
       removeCargo(ctx, 'provisions', HAUL_UNITS);
       const unitCost = job.originPrice || priceOf(ctx, 'provisions');
-      const reward = Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN);
+      const reward = jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
       ctx.world.credits += reward;
       const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
       completeJob(ctx, job, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
@@ -518,9 +562,10 @@ function tickDeliveryJobs(ctx, ui) {
       if (ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
       if (holdUnits(ctx, 'provisions') >= FERRY_UNITS) {
         removeCargo(ctx, 'provisions', FERRY_UNITS);
-        ctx.world.credits += job.reward;
+        const ferryPay = jobPay(ctx, job.reward);
+        ctx.world.credits += ferryPay;
         const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
-        completeJob(ctx, job, `Consignment landed intact — ${job.reward} UU from the factor at ${destName}.`);
+        completeJob(ctx, job, `Consignment landed intact — ${ferryPay} UU from the factor at ${destName}.`);
       } else if (ui) {
         // Fronted goods came up short: the contract stays open but unpaid.
         ui.notice = 'Consignment short — the manifest is watched.';
@@ -529,8 +574,9 @@ function tickDeliveryJobs(ctx, ui) {
       // job.collected is set per frame by tickRecoveryCollect (lastEvents is
       // single-frame; this throttled tick would miss it ~29 frames in 30).
       if (job.collected && ctx.flags.docked && ctx.world.currentSystem === job.originSystem) {
-        ctx.world.credits += job.reward;
-        completeJob(ctx, job, `Salvage accounted — ${job.reward} UU from the yard.`);
+        const salvagePay = jobPay(ctx, job.reward);
+        ctx.world.credits += salvagePay;
+        completeJob(ctx, job, `Salvage accounted — ${salvagePay} UU from the yard.`);
       }
     }
   }
@@ -684,12 +730,14 @@ export function initStation(ctx) {
   function tryTrade(key, qty, buying) {
     const com = COMMODITIES[key];
     const price = priceOf(ctx, key);
+    const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
     if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
       ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
       return;
     }
     if (buying) {
-      const cost = price * qty;
+      const unit = Math.round(price * (fx.buyMult ?? 1));
+      const cost = unit * qty;
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return; }
       if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return; }
       ctx.world.credits -= cost;
@@ -699,7 +747,9 @@ export function initStation(ctx) {
       if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return; }
       // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
       const tier = rankFor(ctx.world.reputation[currentDef.faction] ?? 0).tier;
-      let unit = price * (tier > 0 ? 1 + 0.02 * tier : 1);
+      let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
+      // Epic standing on patent stock stacks with the fixer's brokered rate.
+      if (key === 'restrictedComponents') unit *= fx.restrictedSellMult ?? 1;
       // Fixer brokered: at tradesRestricted stations a trusted fixer (30+)
       // skims a better rate on patent stock, and every sale buys trust (§12.x).
       let fixer = null;
@@ -719,6 +769,7 @@ export function initStation(ctx) {
 
   function renderMarket(panel) {
     h('div', 'screen-sub', panel, 'MARKET — posted prices, no spread');
+    const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
     const table = h('div', 'market-table', panel);
     h('div', 'market-head', table, 'COMMODITY');
     h('div', 'market-head', table, 'STATUS');
@@ -730,7 +781,7 @@ export function initStation(ctx) {
       const sel = i === ui.marketSel ? ' market-row-sel' : '';
       h('div', 'market-cell' + sel, table, com.name);
       h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
-      h('div', 'market-cell' + sel, table, `${priceOf(ctx, key)} UU`);
+      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1))} UU`);
       h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
       const actions = h('div', 'market-cell market-actions' + sel, table);
       if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
@@ -801,16 +852,16 @@ export function initStation(ctx) {
         const unitCost = job.state === 'accepted' && job.originPrice
           ? job.originPrice
           : priceOf(ctx, 'provisions');
-        const est = Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN);
+        const est = jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
       } else if (job.kind === 'ferry') {
         const destId = job.state === 'accepted' ? job.destSystem : otherSystemId(ctx, currentId);
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
-        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${job.reward} UU, no buy-in`;
+        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${jobPay(ctx, job.reward)} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
-        rewardLine = `Scoop the salvage pod, redock here — pays ${job.reward} UU`;
+        rewardLine = `Scoop the salvage pod, redock here — pays ${jobPay(ctx, job.reward)} UU`;
       } else {
-        rewardLine = `Reward: ${job.reward} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
+        rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
       h('div', 'job-reward', card, rewardLine);
       if (job.id === 'bounty-ace' && job.state !== 'done' && currentId !== aceHomeId) {
@@ -902,6 +953,7 @@ export function initStation(ctx) {
   // ---- repair ----
   function repairCost() {
     const p = ctx.player;
+    const repairMult = epicEffects(ctx, currentDef.faction).repairMult ?? 1; // wave-6 epic standing
     const parts = [];
     let missing = 0;
     let cost = 0;
@@ -916,7 +968,7 @@ export function initStation(ctx) {
         if (!Number.isFinite(max) || !Number.isFinite(cur)) { corrupt = true; continue; }
         const lack = Math.max(0, max - cur);
         if (lack < 1) continue;
-        const c = Math.ceil(lack * REPAIR_RATES[key]);
+        const c = Math.ceil(lack * REPAIR_RATES[key] * repairMult);
         parts.push({ key, lack: Math.round(lack), cost: c });
         missing += lack;
         cost += c;
@@ -994,6 +1046,42 @@ export function initStation(ctx) {
     }
   }
 
+  // ---- standing (faction epic progress for this dock's flag, wave 6) ----
+  function renderEpics(panel) {
+    const epic = EPICS[currentDef.faction];
+    h('div', 'screen-sub', panel, epic ? `STANDING — ${epic.name}` : 'STANDING');
+    if (!epic) { // independents keep no epic — guard anyway
+      h('div', 'screen-note', panel, 'No standing here.');
+      return;
+    }
+    const achieved = ctx.world.epics?.[currentDef.faction] ?? 0;
+    const clues = ctx.world.mystery?.found?.length ?? 0;
+    epic.stages.forEach((stage, i) => {
+      const n = i + 1;
+      if (n <= achieved) {
+        h('div', 'screen-note', panel, `✓ ${stage.line}`);
+      } else if (n === achieved + 1) {
+        const hint = stage.requires.rankTier != null
+          ? `Rank: ${rankNameForTier(stage.requires.rankTier)}`
+          : `Echoes found: ${clues}/${stage.requires.cluesFound}`;
+        h('div', 'screen-note', panel, `→ NEXT — ${hint}`);
+      } else {
+        h('div', 'screen-note', panel, '··· locked');
+      }
+    });
+    const fx = epicEffects(ctx, currentDef.faction);
+    const keys = Object.keys(fx);
+    if (keys.length === 0) {
+      h('div', 'screen-note', panel, 'No standing yet. The first stage is closer than it looks.');
+    } else {
+      h('div', 'screen-sub', panel, 'ACTIVE STANDING');
+      for (const key of keys) {
+        const line = epicEffectLine(key, fx[key]);
+        if (line) h('div', 'screen-note', panel, line);
+      }
+    }
+  }
+
   function renderLaunch(panel) {
     h('div', 'screen-sub', panel, 'LAUNCH');
     h('div', 'screen-note', panel, 'Berth clamps release on your word. The lane is yours.');
@@ -1009,6 +1097,7 @@ export function initStation(ctx) {
     outfitting: renderOutfitting,
     people: renderPeople,
     launch: renderLaunch,
+    epics: renderEpics,
   };
 
   function render() {
@@ -1026,7 +1115,7 @@ export function initStation(ctx) {
 
     if (ui.level === 1) {
       const menu = h('div', 'station-menu', panel);
-      const labels = ['Market', 'Jobs board', 'Bar', 'Feed & tend', 'Repair', 'Outfitting', 'People', 'Launch'];
+      const labels = ['Market', 'Jobs board', 'Bar', 'Feed & tend', 'Repair', 'Outfitting', 'People', 'Launch', 'Standing'];
       DOCK_KEY_SERVICES.forEach((key, i) => {
         btn(menu, `${i + 1} — ${labels[i]}`, () => selectService(key),
           key === 'launch' ? 'screen-btn screen-btn-warm' : 'screen-btn');
@@ -1035,7 +1124,7 @@ export function initStation(ctx) {
       const rep = ctx.world.reputation[currentDef.faction] ?? 0;
       h('div', 'station-rank', panel,
         `${factionName}: ${rankFor(rep).name} (${rep >= 0 ? '+' : ''}${Math.round(rep)} rep)`);
-      h('div', 'screen-legend', panel, '1-8 select service · Esc/B launch');
+      h('div', 'screen-legend', panel, '1-9 select service · Esc/B launch');
     } else {
       const back = h('div', 'station-back', panel);
       btn(back, '← Back (Esc)', () => { ui.level = 1; ui.service = null; ui.notice = ''; render(); });

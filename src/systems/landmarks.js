@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONVERGENCE } from '../game/state.js';
 
 /**
  * Authored landmarks + clue motes — per-system points of interest from
@@ -21,6 +22,13 @@ import * as THREE from 'three';
  * cheaply in update(): the found/visited arrays only ever grow, so their
  * lengths are cached and dimmables are re-applied in place (no rebuild)
  * only when a length changes.
+ *
+ * Wave 6: the CONVERGENCE site is a dynamic POI — not in any SYSTEMS list.
+ * It is built (anomaly visual) only in CONVERGENCE.site.system and only
+ * once mystery.convergeHinted is true; the hint flag is watched in update()
+ * and flips trigger a full rebuild. mystery.converged dims it like any
+ * discovered landmark (dimmable list 'converged' reads the flag, not an
+ * array).
  *
  * Ownership: adds/removes objects in ctx.scene, writes nothing shared.
  * update() performs zero allocations — pulse phases, base intensities, and
@@ -55,6 +63,8 @@ export function initLandmarks(ctx) {
   let lastFound = -1;
   let lastVisited = -1;
   let lastMystery = null; // identity watch: save-load may swap the object
+  let lastHinted = false;   // mystery.convergeHinted watch (site POI add)
+  let lastConverged = false; // mystery.converged watch (site dim)
 
   function ownMat(mat) {
     ownedMats.push(mat);
@@ -184,7 +194,6 @@ export function initLandmarks(ctx) {
     ownedMats = [];
     pulse = [];
     dimmables = [];
-    if (!def) return;
 
     const mystery = ctx.world.mystery ?? null;
     const found = mystery?.found ?? EMPTY;
@@ -192,6 +201,9 @@ export function initLandmarks(ctx) {
     lastFound = found.length;
     lastVisited = visited.length;
     lastMystery = mystery;
+    lastHinted = !!mystery?.convergeHinted;
+    lastConverged = !!mystery?.converged;
+    if (!def) return;
 
     const landmarks = def.landmarks ?? EMPTY;
     for (let i = 0; i < landmarks.length; i++) {
@@ -217,6 +229,18 @@ export function initLandmarks(ctx) {
       mote.position.fromArray(cl.position);
       group.add(mote);
       applyDim(dimmables[dimmables.length - 1], found.includes(cl.id));
+    }
+
+    // Wave 6: the convergence site is not in any SYSTEMS[].landmarks list —
+    // it exists only after Echo's hint, and only in its own system. Same
+    // anomaly visual, dimmed like a discovered landmark once converged.
+    if (systemId === CONVERGENCE.site.system && lastHinted) {
+      const site = buildAnomaly(CONVERGENCE.site);
+      site.position.fromArray(CONVERGENCE.site.position);
+      group.add(site);
+      const d = dimmables[dimmables.length - 1];
+      d.list = 'converged'; // membership is the converged flag, not an array
+      applyDim(d, lastConverged);
     }
   }
 
@@ -251,12 +275,20 @@ export function initLandmarks(ctx) {
     if (mystery) {
       const found = mystery.found ?? EMPTY;
       const visited = mystery.visited ?? EMPTY;
-      if (mystery !== lastMystery || found.length !== lastFound || visited.length !== lastVisited) {
-        lastMystery = mystery;
+      const hinted = !!mystery.convergeHinted;
+      const converged = !!mystery.converged;
+      if (mystery !== lastMystery || hinted !== lastHinted) {
+        // Record swap or hint flip can add/remove the site POI — full
+        // rebuild (same discipline as systemLoaded; disposes per-build mats).
+        rebuild(ctx.world.currentSystem);
+      } else if (found.length !== lastFound || visited.length !== lastVisited
+        || converged !== lastConverged) {
         lastFound = found.length;
         lastVisited = visited.length;
+        lastConverged = converged;
         for (let i = 0; i < dimmables.length; i++) {
           const d = dimmables[i];
+          if (d.list === 'converged') { applyDim(d, converged); continue; }
           const list = d.list === 'found' ? found : visited;
           applyDim(d, list.includes(d.id));
         }

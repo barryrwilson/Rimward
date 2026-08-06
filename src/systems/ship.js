@@ -31,6 +31,12 @@ import { createShipState } from '../game/state.js';
  * cooldown, velocity re-aligns to facing over 0.8 s on release). Lateral/
  * vertical strafe rides along the ship's right/up axes.
  *
+ * Afterburner trail (wave-6 polish): a pooled THREE.Points ring buffer
+ * (preallocated position/color buffers + per-point life array) emitted at
+ * the tail while ctx.ship.burnerActive, aged and faded in place via the
+ * color buffer (additive blending: black = gone). Hidden otherwise, and
+ * suppressed entirely under ctx.settings.reducedMotion.
+ *
  * Owns ctx.ship (object/velocity/speed/burner/drift state) and ctx.player
  * (state record via createShipState); positions ctx.camera every frame.
  * Ship nose points along local -Z; the chase cam sits behind at local
@@ -95,6 +101,17 @@ const MOOD_VISUALS = {
 };
 const ANXIOUS_JITTER_AMP = 0.05; // world units of idle flesh tremor
 
+// Afterburner trail (wave-6): pooled ring buffer, teal-white in the
+// bioluminescence family, faded via the color buffer (additive: black = gone).
+const TRAIL_COUNT = 120; // ring-buffer capacity
+const TRAIL_LIFE = 0.9; // s per point
+const TRAIL_EMIT = 2; // points emitted per frame while burning
+const TRAIL_TAIL = 2.3; // units behind ship center (nose = -Z)
+const TRAIL_SPREAD = 0.55; // emission jitter
+const TRAIL_R = 0.62; // teal-white tint (vein family)
+const TRAIL_G = 1.0;
+const TRAIL_B = 0.9;
+
 /** Bioluminescent vein texture: branching random-walk lines on dark flesh. */
 function makeVeinTexture() {
   const w = 512;
@@ -145,6 +162,23 @@ function makeVeinTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
+  return tex;
+}
+
+/** Small soft radial dot sprite for the afterburner trail points. */
+function makeSoftDotTexture() {
+  const size = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -273,6 +307,32 @@ export function initShip(ctx) {
   root.position.copy(config.world.shipSpawn);
   scene.add(root);
 
+  // --- Afterburner trail (wave-6): pooled Points ring buffer, built once.
+  // Positions/colors/life are preallocated; per-frame work is in-place
+  // buffer writes + needsUpdate. World-space (NOT parented to the ship) so
+  // the trail lingers along the flight path.
+  const trailGeo = new THREE.BufferGeometry();
+  const trailPos = new Float32Array(TRAIL_COUNT * 3);
+  const trailCol = new Float32Array(TRAIL_COUNT * 3); // starts black = gone
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+  trailGeo.setAttribute('color', new THREE.BufferAttribute(trailCol, 3));
+  const trailLife = new Float32Array(TRAIL_COUNT); // >0 = live
+  const trailPoints = new THREE.Points(
+    trailGeo,
+    new THREE.PointsMaterial({
+      size: 0.7,
+      map: makeSoftDotTexture(),
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  trailPoints.frustumCulled = false; // points roam; skip stale culling
+  trailPoints.visible = false;
+  scene.add(trailPoints);
+  let trailHead = 0; // ring-buffer write cursor
+
   ship.object = root;
   ship.velocity.set(0, 0, 0);
   ship.speed = 0;
@@ -297,7 +357,10 @@ export function initShip(ctx) {
     update(dt) {
       // Player destroyed: save.js owns the death/reload flow — emit nothing,
       // move nothing (combat.js emits 'playerDestroyed').
-      if (ctx.player?.destroyed) return;
+      if (ctx.player?.destroyed) {
+        trailPoints.visible = false; // no ghost trail frozen on the death frame
+        return;
+      }
 
       const time = ctx.world.time;
       const docked = ctx.flags.docked;
@@ -524,6 +587,47 @@ export function initShip(ctx) {
       fleshMat.emissiveIntensity += 0.6 * Math.min(thrust, 1);
       underLight.intensity = 5 + thrust * 22 + heart * 5;
       // ================================================
+
+      // --- Afterburner trail (wave-6): emit at the tail while burning;
+      // age + fade in place. reducedMotion → no emission, trail hidden.
+      const reducedMotion = ctx.settings?.reducedMotion === true;
+      let trailTouched = false;
+      if (!reducedMotion && ship.burnerActive && !docked) {
+        _delta.copy(root.position).addScaledVector(_forward, -TRAIL_TAIL);
+        for (let n = 0; n < TRAIL_EMIT; n++) {
+          const i = trailHead;
+          trailHead = (trailHead + 1) % TRAIL_COUNT;
+          const i3 = i * 3;
+          trailPos[i3] = _delta.x + (Math.random() - 0.5) * TRAIL_SPREAD;
+          trailPos[i3 + 1] = _delta.y + (Math.random() - 0.5) * TRAIL_SPREAD;
+          trailPos[i3 + 2] = _delta.z + (Math.random() - 0.5) * TRAIL_SPREAD;
+          trailLife[i] = TRAIL_LIFE;
+        }
+        trailTouched = true;
+      }
+      let trailLive = 0;
+      for (let i = 0; i < TRAIL_COUNT; i++) {
+        if (trailLife[i] <= 0) continue;
+        trailLife[i] -= dt;
+        const i3 = i * 3;
+        if (trailLife[i] <= 0) {
+          trailCol[i3] = 0;
+          trailCol[i3 + 1] = 0;
+          trailCol[i3 + 2] = 0;
+          trailTouched = true;
+          continue;
+        }
+        const f = trailLife[i] / TRAIL_LIFE;
+        trailCol[i3] = TRAIL_R * f;
+        trailCol[i3 + 1] = TRAIL_G * f;
+        trailCol[i3 + 2] = TRAIL_B * f;
+        trailLive++;
+      }
+      trailPoints.visible = trailLive > 0 && !reducedMotion;
+      if (trailTouched) {
+        trailGeo.attributes.position.needsUpdate = true;
+        trailGeo.attributes.color.needsUpdate = true;
+      }
 
       // --- Afterburner FOV kick (§5.4): +12° while burning, ease back after.
       const fovTarget = baseFov + (ship.burnerActive ? shipCfg.fovKick : 0);

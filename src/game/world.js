@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 
 /**
@@ -227,6 +227,42 @@ function ensureBank(ctx, sysId) {
 }
 
 /**
+ * Named-Gun hunter injection (glossary: Named ace / Named Gun). Once, when
+ * fear crosses ACES.hunter.fearThreshold, Sister Vane joins the redmarch
+ * record bank with the same jittered gate↔lane ace route Carver Illyx uses.
+ * Persisted via ctx.world.aceRivalry.hunterSpawned so old saves and reloads
+ * never double-spawn her. She is role 'ace' — pickMigrant moves traders
+ * only, so she never leaves the Redmarch. When the player is IN redmarch,
+ * ctx.world.records IS that bank, so the push suffices either way.
+ */
+function spawnHunterAce(ctx) {
+  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false });
+  if (rivalry.hunterSpawned) return;
+  const def = SYSTEMS[ACES.hunter.system];
+  if (!def) return;
+  rivalry.hunterSpawned = true;
+  const gate = gatePoint(def);
+  const planet = planetPoint(def);
+  const bank = ensureBank(ctx, ACES.hunter.system);
+  bank.push(
+    makeRecord(ctx, {
+      name: ACES.hunter.name,
+      classKey: ACES.hunter.classKey,
+      faction: ACES.hunter.faction,
+      role: 'ace',
+      route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
+      cargo: ACES.hunter.cargo.map((c) => ({ commodity: c.commodity, units: c.units })),
+      bounty: ACES.hunter.bounty,
+      system: ACES.hunter.system,
+    }),
+  );
+  ctx.emit('commLine', {
+    text: 'The Ledger has bought a Named Gun. Sister Vane flies the Redmarch now.',
+    from: 'Whisper',
+  });
+}
+
+/**
  * Abstract route position estimate (§8.2). Writes into `out` (Vector3) —
  * zero allocation. traffic.js uses this as the spawn point.
  */
@@ -395,6 +431,10 @@ export function initWorld(ctx) {
 
   // Player ship name for milestone lines; ship.js may overwrite later.
   ctx.world.shipName = ctx.world.shipName ?? 'she';
+
+  // Named-ace rivalry state (JSON-plain, persisted via WORLD_FIELDS
+  // 'aceRivalry'). Old saves lack it — same ??= discipline as recordBanks.
+  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false };
 
   let nextEventAt = rollEventGap(ctx);
   let nextMigrationAt = MIGRATION_INTERVAL * (0.5 + Math.random() * 0.5); // first pick ~45–90s in
@@ -569,6 +609,9 @@ export function initWorld(ctx) {
         });
         const entry = stageAftermath(ctx, incident);
         if (rec?.role === 'ace') {
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false });
+          rivalry.defeats++;
+          rivalry.lastOutcome = 'destroyed';
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
         }
         if (entry && causer !== 'player') {
@@ -593,6 +636,9 @@ export function initWorld(ctx) {
         fireMilestone(ctx, 'firstCapitulation', 'They yield. First capitulation.');
         if (outcome === 'tribute') fireMilestone(ctx, 'firstTribute', 'Tribute paid. The lane remembers.');
         if (rec?.role === 'ace') {
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false });
+          rivalry.defeats++;
+          rivalry.lastOutcome = outcome; // 'flee' | 'jettison' | 'ransom' | ...
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
         }
       }
@@ -699,6 +745,12 @@ export function initWorld(ctx) {
 
       // Witness Rule: incidents → aftermath, only from real events.
       consumeIncidents(ctx);
+
+      // Named-Gun hunter: fear crossing the threshold buys Sister Vane, once
+      // ever (cheap per-frame guard; spawn itself allocates once).
+      if (!ctx.world.aceRivalry?.hunterSpawned && ctx.world.fear >= ACES.hunter.fearThreshold) {
+        spawnHunterAce(ctx);
+      }
 
       // First Scare: any live ship pushed into the bargaining band §8.8.
       if (!ctx.world.milestones.includes('firstScare')) {

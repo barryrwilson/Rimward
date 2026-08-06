@@ -2,6 +2,9 @@
 // Replicates main.js wiring with a stub renderer + stub DOM, then ticks the
 // whole system graph with scripted inputs. Catches integration errors that
 // per-worker harnesses can't see.
+// Wave 6: origin pick at fresh boot, onboarding hints, faction epics +
+// Standing service, mystery convergence, Named-Gun ace arc, headless audio
+// cues, settings/a11y panel, and the extended save WORLD_FIELDS roundtrip.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -35,7 +38,7 @@ function makeEl(tag = 'div') {
     children: [],
     parent: null,
     _listeners: {},
-    style: {},
+    style: { setProperty(k, v) { this[k] = v; } },
     classList: {
       _s: new Set(),
       add(...c) { c.forEach((x) => this._s.add(x)); },
@@ -66,7 +69,14 @@ function makeEl(tag = 'div') {
     getContext(kind) { return kind === '2d' ? makeCtx2d() : null; },
     focus() {},
     // Fire registered click listeners (station.js buttons route game actions here).
-    click() { for (const fn of this._listeners.click ?? []) fn({ type: 'click', target: this }); },
+    click() {
+      for (const fn of this._listeners.click ?? []) fn({ type: 'click', target: this });
+      // Real checkboxes toggle + fire 'change' on click (settings.js panel).
+      if (this.type === 'checkbox') {
+        this.checked = !this.checked;
+        for (const fn of this._listeners.change ?? []) fn({ type: 'change', target: this });
+      }
+    },
   };
   // textContent mirrors real DOM: assigning '' clears children (render() relies on it).
   let text = '';
@@ -121,6 +131,7 @@ const { initAsteroids } = await import('../src/systems/asteroids.js');
 const { initStation } = await import('../src/systems/station.js');
 const { initLandmarks } = await import('../src/systems/landmarks.js');
 const { initControls } = await import('../src/systems/controls.js');
+const { initSettings } = await import('../src/systems/settings.js');
 const { initBio } = await import('../src/game/bio.js');
 const { initShip } = await import('../src/systems/ship.js');
 const { initWorld } = await import('../src/game/world.js');
@@ -128,6 +139,7 @@ const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
 } = await import('../src/game/contacts.js');
 const { initMystery } = await import('../src/game/mystery.js');
+const { initEpics, epicEffects } = await import('../src/game/epics.js');
 const { initGate } = await import('../src/systems/gate.js');
 const { initJump } = await import('../src/game/jump.js');
 const { initTraffic } = await import('../src/game/traffic.js');
@@ -137,21 +149,23 @@ const { initPods } = await import('../src/game/pods.js');
 const { initHail } = await import('../src/systems/hail.js');
 const { initSong } = await import('../src/systems/song.js');
 const { initSave } = await import('../src/game/save.js');
+const { initOrigins } = await import('../src/game/origins.js');
+const { initOnboarding } = await import('../src/systems/onboarding.js');
 const { initHud } = await import('../src/systems/hud.js');
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE } = await import('../src/game/state.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
   ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
-  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['bio', initBio],
-  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['jump', initJump], ['traffic', initTraffic],
+  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['settings', initSettings], ['bio', initBio],
+  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['traffic', initTraffic],
   ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['hail', initHail],
-  ['song', initSong], ['save', initSave], ['hud', initHud],
+  ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['hud', initHud],
 ];
 const systems = [];
 for (const [name, init] of inits) {
@@ -183,6 +197,30 @@ function tick(n, label) {
     ctx.events = [];
   }
 }
+
+// ---- Wave 6: origin pick at fresh boot (must precede every other section) --
+// A fresh boot (no save restored) opens the origin overlay and pauses; its
+// keydown listener consumes Digit1-5 until a choice is made, so the pick has
+// to happen before ANY section that dispatches digits (wave-4 station
+// services use the same codes). Greenhand ([1]) has empty effects — the run
+// below starts from the same baseline as before origins existed.
+const originOverlayShown = [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+const pausedAtOrigin = ctx.flags.paused === true;
+dispatchKey('Digit1'); // [1] Freehold Greenhand
+const originChosenEv = ctx.events.find((e) => e.type === 'originChosen') ?? null; // emit is synchronous
+const originOverlayGone = ![...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+const originChecks = {
+  overlayShown: originOverlayShown,
+  pausedWhileOpen: pausedAtOrigin,
+  originRecorded: ctx.world.origin === 'greenhand',
+  unpausedAfterPick: ctx.flags.paused === false,
+  originChosenEmitted: originChosenEv?.id === 'greenhand',
+  overlayRemoved: originOverlayGone,
+};
+console.log('wave6 origin pick:', JSON.stringify(originChecks));
+if (!Object.values(originChecks).every(Boolean)) { console.log('WAVE6 ORIGIN PICK FAIL'); errors++; }
 
 tick(120, 'boot idle');
 console.log(`after boot: ships=${ctx.ships.length} records=${ctx.world.records.length} prices=${Object.keys(ctx.world.prices).length} pods=${ctx.pods?.length ?? 0}`);
@@ -864,6 +902,283 @@ const healChecks = {
 console.log('save boundary heal:', JSON.stringify(healChecks));
 if (!Object.values(healChecks).every(Boolean)) { console.log('SAVE HEAL FAIL'); errors++; }
 tick(5, 'post-heal settle');
+
+// ---- Wave 6: onboarding / epics / ace arc / convergence / audio / settings / save fields ----
+// Section order keeps travel minimal: (a)+(b) at freehold, (c) works
+// anywhere, (d) hollowreach, (e)-(g) from hollowreach. Epic effects change
+// freehold repair/job pricing, so reputation is only raised AFTER every
+// pre-existing section has run.
+// Test SETUP: re-pin the hull huge (the hotfix repair section restored class
+// maxes) so random wave-6 combat can't kill the player mid-section — the
+// death overlay would eat later digit dispatches.
+ctx.player.hullMax = 1e9;
+ctx.player.hull = 1e9;
+
+// Travel: post-hotfix we are in hollowreach — chain back to freehold.
+ctx.ship.object.position.set(...SYSTEMS.hollowreach.gates[0].position); // → redmarch
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at redmarch gate (wave6 return)');
+ctx.emit('jumpRequested', { to: 'redmarch' });
+if (!tickUntilJumpDone('redmarch', 'wave6 hop to redmarch')) {
+  console.log('WAVE6 TRAVEL FAIL — never arrived at redmarch');
+  errors++;
+}
+ctx.ship.object.position.set(...SYSTEMS.redmarch.gates.find((g) => g.to === 'veridian').position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at veridian gate (wave6 return)');
+ctx.emit('jumpRequested', { to: 'veridian' });
+if (!tickUntilJumpDone('veridian', 'wave6 hop to veridian')) {
+  console.log('WAVE6 TRAVEL FAIL — never arrived at veridian');
+  errors++;
+}
+ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'freehold').position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at freehold gate (wave6 return)');
+ctx.emit('jumpRequested', { to: 'freehold' });
+if (!tickUntilJumpDone('freehold', 'wave6 hop to freehold')) {
+  console.log('WAVE6 TRAVEL FAIL — never arrived at freehold');
+  errors++;
+}
+
+// -- a. onboarding: one-time hint shows, key-dismisses, honors the setting ---
+// Test SETUP: replay the teaching pass from scratch — earlier waves already
+// showed (and banked) most hints. world.time is long past the 20s gate. The
+// module re-resolves ctx.world.onboarding every frame (save restores swap the
+// field wholesale), so resetting the current record's seen is enough.
+ctx.world.onboarding ??= { seen: [] };
+ctx.world.onboarding.seen.length = 0;
+tick(2, 'onboarding move hint');
+const hintCardVisible = (frag) => [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.includes(frag) && n.style?.display === 'block');
+const moveHintShown = hintCardVisible('throttle');
+const moveSeen = ctx.world.onboarding.seen.includes('move');
+dispatchKey('KeyZ'); // any key dismisses the visible hint; KeyZ is unbound
+tick(1, 'hint dismiss');
+const moveHintHidden = !hintCardVisible('throttle');
+// Suppression: hints off, fresh 'dock' condition (parked by the station) —
+// no card, no seen entry.
+ctx.settings.hints = false;
+ctx.ship.object.position.set(...SYSTEMS.freehold.station.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(3, 'hints suppressed');
+const dockHintSuppressed = !ctx.world.onboarding.seen.includes('dock') && !hintCardVisible('D — dock');
+ctx.settings.hints = true; // restore — later sections read settings live
+const w6onboardingChecks = {
+  moveHintShown,
+  moveSeenOnce: moveSeen && ctx.world.onboarding.seen.filter((id) => id === 'move').length === 1,
+  dismissedOnKey: moveHintHidden,
+  suppressionRespected: dockHintSuppressed,
+  hintsRestored: ctx.settings.hints === true,
+};
+console.log('wave6 onboarding:', JSON.stringify(w6onboardingChecks), `seen=${JSON.stringify(ctx.world.onboarding.seen)}`);
+if (!Object.values(w6onboardingChecks).every(Boolean)) { console.log('WAVE6 ONBOARDING FAIL'); errors++; }
+
+// -- b. faction epics: freehold stages, merged effects, Standing service -----
+// epics.js re-resolves ctx.world.epics every frame (save-restore safe), so the
+// stage advances, epicEffects, and the Standing render all read one object.
+ctx.world.epics ??= {};
+ctx.world.reputation.freehold = 60; // Sworn (tier 3) — all three stage reqs hold
+const epicStageEvs = [];
+for (let i = 0; i < 5; i++) { // one stage per faction per frame
+  tick(1, 'epic stage advance');
+  for (const ev of ctx.lastEvents) if (ev.type === 'epicStage') epicStageEvs.push(ev);
+}
+const freeholdStageEvs = epicStageEvs.filter((e) => e.faction === 'freehold');
+const freeholdFx = epicEffects(ctx, 'freehold');
+dockAtCurrentStation('dock freehold (standing)');
+dispatchKey('Digit9'); // Standing service (DOCK_KEY_SERVICES[8])
+tick(2, 'standing screen');
+const standingLines = [...walkDom(stationOverlay() ?? { children: [] })]
+  .map((n) => n.textContent).filter((t) => typeof t === 'string');
+const w6epicChecks = {
+  stagesRecorded: ctx.world.epics.freehold === 3,
+  stageEventsSeen: freeholdStageEvs.length >= 1,
+  stageLinesVoiced: freeholdStageEvs.every((e) => typeof e.line === 'string' && e.line.length > 0),
+  mergedEffects: JSON.stringify(freeholdFx) === JSON.stringify({ repairMult: 0.9, jobPayMult: 1.15, sellMult: 1.1 }),
+  standingShowsEpicName: standingLines.some((t) => t.includes("The Shepherd's Lane")),
+  standingShowsAchieved: standingLines.some((t) => t.startsWith('✓')),
+};
+console.log('wave6 epics:', JSON.stringify(w6epicChecks), `stages=${freeholdStageEvs.map((e) => e.stage)} fx=${JSON.stringify(freeholdFx)}`);
+if (!Object.values(w6epicChecks).every(Boolean)) { console.log('WAVE6 EPICS FAIL'); errors++; }
+undockStation();
+
+// -- c. ace arc: fear 25 buys the Named Gun ----------------------------------
+// Test SETUP: if an earlier soak already tripped the threshold, reset the
+// injection so the spawn path is exercised deterministically (remove any
+// existing Sister Vane record first — hunterSpawned is the only dup guard).
+{
+  const bank = ctx.world.recordBanks?.redmarch ?? [];
+  for (let i = bank.length - 1; i >= 0; i--) if (bank[i].name === 'Sister Vane') bank.splice(i, 1);
+  if (ctx.world.aceRivalry) ctx.world.aceRivalry.hunterSpawned = false;
+}
+ctx.world.fear = 25;
+let whisperLine = null;
+for (let i = 0; i < 3 && !whisperLine; i++) {
+  tick(1, 'named gun spawn');
+  for (const ev of ctx.lastEvents) {
+    if (ev.type === 'commLine' && /Named Gun/.test(ev.text ?? '')) whisperLine = ev.text;
+  }
+}
+const vaneRec = (ctx.world.recordBanks?.redmarch ?? []).find((r) => r.name === 'Sister Vane') ?? null;
+const w6aceChecks = {
+  hunterSpawned: ctx.world.aceRivalry?.hunterSpawned === true,
+  vaneInRedmarchBank: !!vaneRec,
+  roleAce: vaneRec?.role === 'ace',
+  bounty4000: vaneRec?.bounty === 4000,
+  whisperVoiced: !!whisperLine,
+};
+console.log('wave6 ace arc:', JSON.stringify(w6aceChecks), `line=${JSON.stringify(whisperLine)}`);
+if (!Object.values(w6aceChecks).every(Boolean)) { console.log('WAVE6 ACE ARC FAIL'); errors++; }
+
+// -- d. mystery convergence: 3 clues hint, the site converges ----------------
+// found already holds hr_c_answer (wave 5, restored through both deaths) —
+// push two more authored ids to reach CONVERGENCE.cluesNeeded.
+const mystery6 = ctx.world.mystery;
+for (const id of ['rm_c_tally', 'vd_c_shanty']) {
+  if (!mystery6.found.includes(id)) mystery6.found.push(id);
+}
+let convergeHintLine = null;
+for (let i = 0; i < 3 && !convergeHintLine; i++) {
+  tick(1, 'converge hint');
+  for (const ev of ctx.lastEvents) {
+    if (ev.type === 'commLine' && ev.text === CONVERGENCE.hintLine) convergeHintLine = ev.text;
+  }
+}
+const convergeHinted = mystery6.convergeHinted === true;
+// Travel: freehold → veridian → redmarch → hollowreach, then the site.
+ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at veridian gate (wave6 convergence)');
+ctx.emit('jumpRequested', { to: 'veridian' });
+if (!tickUntilJumpDone('veridian', 'wave6 hop to veridian (convergence)')) {
+  console.log('WAVE6 TRAVEL FAIL — never arrived at veridian (convergence)');
+  errors++;
+}
+ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'redmarch').position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at redmarch gate (wave6 convergence)');
+ctx.emit('jumpRequested', { to: 'redmarch' });
+if (!tickUntilJumpDone('redmarch', 'wave6 hop to redmarch (convergence)')) {
+  console.log('WAVE6 TRAVEL FAIL — never arrived at redmarch (convergence)');
+  errors++;
+}
+ctx.ship.object.position.set(...SYSTEMS.redmarch.gates.find((g) => g.to === 'hollowreach').position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hollowreach gate (wave6 convergence)');
+ctx.emit('jumpRequested', { to: 'hollowreach' });
+if (!tickUntilJumpDone('hollowreach', 'wave6 hop to hollowreach (convergence)')) {
+  console.log('WAVE6 TRAVEL FAIL — never arrived at hollowreach (convergence)');
+  errors++;
+}
+ctx.ship.object.position.set(...CONVERGENCE.site.position);
+ctx.ship.velocity.set(0, 0, 0);
+const convEvs = [];
+for (let i = 0; i < 5; i++) {
+  tick(1, 'convergence site');
+  convEvs.push(...ctx.lastEvents);
+}
+// landmarks.js builds the anomaly POI post-hint: a scene descendant at the
+// site position (group-local position; the site group is a scene root child).
+const sp6 = CONVERGENCE.site.position;
+let siteRendered = false;
+ctx.scene.traverse((o) => {
+  if (siteRendered) return;
+  if (Math.hypot(o.position.x - sp6[0], o.position.y - sp6[1], o.position.z - sp6[2]) < 5) siteRendered = true;
+});
+const w6convergenceChecks = {
+  hintFlagSet: convergeHinted,
+  hintLineVoiced: convergeHintLine === CONVERGENCE.hintLine,
+  converged: mystery6.converged === true,
+  milestoneEvent: convEvs.some((e) => e.type === 'milestone' && e.id === 'convergence'),
+  convergenceEvent: convEvs.some((e) => e.type === 'convergence' && e.id === CONVERGENCE.site.id),
+  songShiftEvent: convEvs.some((e) => e.type === 'songShift' && e.reason === 'convergence'),
+  siteRendered,
+};
+console.log('wave6 convergence:', JSON.stringify(w6convergenceChecks), `found=${JSON.stringify(mystery6.found)}`);
+if (!Object.values(w6convergenceChecks).every(Boolean)) { console.log('WAVE6 CONVERGENCE FAIL'); errors++; }
+
+// -- e. audio: every new cue type with no AudioContext — update must not throw
+// No AudioContext in this stub: song.js stays silent (unlock fails safe) and
+// every cue path must no-op. Payloads are minimal ({}): consumers are
+// null-safe, and jump.js ignores a jumpRequested with an unknown `to`.
+const errorsBeforeAudio = errors;
+const cueTypes = ['jumpRequested', 'undocked', 'hailClosed', 'npcSurrendered', 'worldEvent', 'marketShift',
+  'saveBlocked', 'clueFound', 'landmarkFound', 'epicStage', 'convergence', 'originChosen', 'fearChanged', 'engineOut'];
+for (const type of cueTypes) ctx.emit(type, {});
+ctx.flags.combat = true;
+ctx.flags.docked = true;
+ctx.settings.muted = true;
+tick(2, 'audio cues (flags on)');
+ctx.flags.combat = false;
+ctx.flags.docked = false;
+ctx.settings.muted = false;
+tick(2, 'audio cues (flags off)');
+for (const type of cueTypes) ctx.emit(type, {});
+tick(2, 'audio cues (second pass)');
+const w6audioChecks = {
+  noUpdateErrors: errors === errorsBeforeAudio,
+  bogusJumpIgnored: !ctx.gate.jumping && ctx.world.currentSystem === 'hollowreach',
+};
+console.log('wave6 audio:', JSON.stringify(w6audioChecks));
+if (!Object.values(w6audioChecks).every(Boolean)) { console.log('WAVE6 AUDIO FAIL'); errors++; }
+
+// -- f. settings panel: KeyO toggle, colorblind applies + persists, reset ----
+dispatchKey('KeyO');
+const settingsPanelRoot = (() => {
+  for (const n of walkDom(document.body)) {
+    if (n.textContent === 'SETTINGS') return n.parent?.parent ?? null; // title → panel → root
+  }
+  return null;
+})();
+const colorblindInput = (() => {
+  for (const n of walkDom(document.body)) {
+    if (n.tagName === 'INPUT' && n.type === 'checkbox' &&
+      (n.parent?.children ?? []).some((c) => typeof c.textContent === 'string' && c.textContent.includes('Colorblind'))) return n;
+  }
+  return null;
+})();
+colorblindInput?.click(); // stub checkbox click: toggles + fires 'change'
+const colorblindPersisted = (() => {
+  try { return JSON.parse(store.get('rimward-settings-v1') ?? 'null')?.colorblind === true; } catch { return false; }
+})();
+const w6settingsChecks = {
+  panelOpened: settingsPanelRoot?.style?.display === 'flex',
+  checkboxFound: !!colorblindInput,
+  bodyClassApplied: document.body.classList.contains('rw-colorblind'),
+  persisted: colorblindPersisted,
+};
+dispatchKey('Escape'); // close
+w6settingsChecks.panelClosed = settingsPanelRoot?.style?.display === 'none';
+colorblindInput?.click(); // reset: toggle back off — reapplies + repersists
+w6settingsChecks.resetClean = ctx.settings.colorblind === false &&
+  !document.body.classList.contains('rw-colorblind') &&
+  JSON.parse(store.get('rimward-settings-v1')).colorblind === false;
+console.log('wave6 settings:', JSON.stringify(w6settingsChecks));
+if (!Object.values(w6settingsChecks).every(Boolean)) { console.log('WAVE6 SETTINGS FAIL'); errors++; }
+
+// -- g. save roundtrip: wave-6 world fields ride the dock autosave -----------
+// Test SETUP: park live hostiles so the dock autosave can't be combat-blocked
+// (same pattern as the wave-5 mystery-save section).
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave6 save)');
+dockAtCurrentStation('dock hollowreach (wave6 save)');
+tick(3, 'wave6 save settle');
+const w6snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const w6saveChecks = {
+  saveWritten: !!w6snap?.world,
+  epicsPersisted: w6snap?.world?.epics?.freehold === 3,
+  originPersisted: w6snap?.world?.origin === 'greenhand',
+  onboardingPersisted: Array.isArray(w6snap?.world?.onboarding?.seen) &&
+    w6snap.world.onboarding.seen.includes('move'),
+  aceRivalryPersisted: w6snap?.world?.aceRivalry?.hunterSpawned === true,
+  convergedPersisted: w6snap?.world?.mystery?.converged === true,
+};
+console.log('wave6 save fields:', JSON.stringify(w6saveChecks));
+if (!Object.values(w6saveChecks).every(Boolean)) { console.log('WAVE6 SAVE FIELDS FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
