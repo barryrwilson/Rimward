@@ -1,5 +1,5 @@
 import '../ui/screens.css';
-import { createShipState, U, JUMP } from './state.js';
+import { createShipState, SHIP_CLASSES, U, JUMP } from './state.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -94,6 +94,45 @@ function rebindPrices(ctx) {
   if (markets[sys]) ctx.world.prices = markets[sys];
 }
 
+/**
+ * Boundary heal for restored snapshots. Saves cross builds and JSON cannot
+ * hold NaN — a NaN written by any past bug lands as null on the next load.
+ * Any non-finite numeric on the player record, credits/fear, bio, or the
+ * ship transform is reset to its baseline so a corrupt snapshot can never
+ * NaN the sim (repair bills, HUD, flight math) again. Same class of guard as
+ * the legacy currentSystem/markets handling above.
+ */
+function sanitizeRestored(ctx) {
+  const p = ctx.player;
+  if (p) {
+    const fresh = createShipState(SHIP_CLASSES[p.classKey] ? p.classKey : 'light', { name: p.name, faction: p.faction });
+    for (const k of ['hull', 'hullMax', 'screen', 'screenMax', 'shell', 'shellMax', 'engine', 'engineMax', 'heat', 'lastHitAt', 'lastCombatAt', 'disabledDamage']) {
+      if (!Number.isFinite(p[k])) p[k] = fresh[k];
+    }
+    for (const k of ['hull', 'screen', 'shell', 'engine']) p[k] = Math.min(p[k], p[k + 'Max']);
+    if (!Number.isFinite(p.heat) || p.heat < 0) p.heat = 0;
+  }
+  if (!Number.isFinite(ctx.world.credits)) ctx.world.credits = 350; // fresh-start purse §9
+  if (!Number.isFinite(ctx.world.fear)) ctx.world.fear = 0;
+  const bio = ctx.bio;
+  if (bio) {
+    if (!Number.isFinite(bio.hunger)) bio.hunger = 0.15;
+    if (!Number.isFinite(bio.wounds)) bio.wounds = 0;
+    if (!Number.isFinite(bio.bond)) bio.bond = 0.1;
+    if (!Number.isFinite(bio.growth)) bio.growth = 0;
+    if (!Number.isFinite(bio.fedCount)) bio.fedCount = 0;
+    if (!Number.isFinite(bio.speedFactor)) bio.speedFactor = 1;
+    if (!Number.isFinite(bio.turnFactor)) bio.turnFactor = 1;
+  }
+  const so = ctx.ship.object;
+  if (so && ![so.position.x, so.position.y, so.position.z, so.quaternion.x, so.quaternion.y, so.quaternion.z, so.quaternion.w].every(Number.isFinite)) {
+    so.position.copy(ctx.config.world.shipSpawn);
+    so.quaternion.identity();
+    ctx.ship.velocity.set(0, 0, 0);
+    ctx.ship.speed = 0;
+  }
+}
+
 function restore(ctx, snap) {
   const fromSystem = ctx.world.currentSystem;
   for (const k of WORLD_FIELDS) {
@@ -128,6 +167,7 @@ function restore(ctx, snap) {
   // boot (live is 'freehold') and death-recovery in either direction.
   const sys = ctx.world.currentSystem;
   if (sys && sys !== fromSystem) ctx.emit('systemLoaded', { to: sys });
+  sanitizeRestored(ctx);
 }
 
 /** Fresh start at the Freehold station when death finds no save (§4.4). */

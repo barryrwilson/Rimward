@@ -235,6 +235,15 @@ ctx.input.fullStop = false;
 tick(120, 'creep resume');
 console.log(`creep resumes: speed=${ctx.ship.speed.toFixed(1)} (expect ~30)`);
 
+// Test SETUP: everything from here on exercises world/jump/station/save
+// paths, not player lethality (the intentional deaths below are event-driven
+// via 'playerDestroyed'). Random soak combat can otherwise destroy the player
+// mid-run; the death overlay then eats a later Digit1 and its restore swaps
+// the contacts roster, flaking the wave-4 favor checks. Pin the hull huge so
+// random combat can't kill; the repair section restores class maxes first.
+ctx.player.hullMax = 1e9;
+ctx.player.hull = 1e9;
+
 // long soak: world events, traffic churn
 tick(60 * 60 * 3, 'soak 3min');
 console.log(`after soak: time=${ctx.world.time.toFixed(0)}s ships=${ctx.ships.length} incidents=${ctx.world.incidents.length} aftermath=${ctx.world.aftermath.length} event=${ctx.world.activeEvent?.kind ?? 'none'} milestones=${ctx.world.milestones.length}`);
@@ -788,6 +797,73 @@ const w5bioVisualChecks = {
 };
 console.log('wave5 bio visuals:', JSON.stringify(w5bioVisualChecks), `fleshScale=${flesh?.scale?.x?.toFixed(3)} scars=${scarMeshes.filter((m) => m.visible).length}/${scarMeshes.length} emissiveR=${emissiveR.toFixed(3)} (serene ${sereneR.toFixed(3)}, before ${emissiveRBefore.toFixed(3)})`);
 if (!Object.values(w5bioVisualChecks).every(Boolean)) { console.log('WAVE5 BIO VISUALS FAIL'); errors++; }
+
+// ---- Hotfix: itemized repair pricing + save boundary heal ----
+// 1. Priced repair via the real dock → service-key → button path. Damage is
+//    set explicitly so the itemized total is deterministic:
+//    hull 60×0.9=54, screen 30×0.3=9, shell 60×0.5=30, engine 50×0.6=30 ⇒ 123.
+dockAtCurrentStation('dock (repair pricing)');
+const rp = ctx.player;
+rp.hullMax = 100; rp.screenMax = 40; rp.shellMax = 60; rp.engineMax = 100; // class maxes (hull was pinned huge above)
+rp.hull = 40; rp.screen = 10; rp.shell = 0; rp.engine = 50;
+const creditsBeforeRepair = ctx.world.credits;
+dispatchKey('Digit5'); // repair service (DOCK_KEY_SERVICES[4])
+tick(2, 'repair screen');
+let repairBtn = null;
+{
+  const ov = stationOverlay();
+  if (ov) for (const n of walkDom(ov)) {
+    if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.startsWith('1 — Repair all')) { repairBtn = n; break; }
+  }
+}
+const expectedRepairCost = Math.ceil(60 * 0.9) + Math.ceil(30 * 0.3) + Math.ceil(60 * 0.5) + Math.ceil(50 * 0.6);
+const labelCost = repairBtn ? Number((repairBtn.textContent.match(/\((\d+) UU\)/) ?? [])[1]) : NaN;
+repairBtn?.click();
+const repairChecks = {
+  buttonFound: !!repairBtn,
+  itemizedCost: labelCost === expectedRepairCost,
+  chargedExactly: creditsBeforeRepair - ctx.world.credits === expectedRepairCost,
+  madeWhole: rp.hull === rp.hullMax && rp.screen === rp.screenMax && rp.shell === rp.shellMax && rp.engine === rp.engineMax,
+};
+console.log('repair pricing:', JSON.stringify(repairChecks), `cost=${labelCost} expect=${expectedRepairCost}`);
+if (!Object.values(repairChecks).every(Boolean)) { console.log('REPAIR PRICING FAIL'); errors++; }
+
+// 2. Corrupt record: NaN channels are re-trued against the class baseline by
+//    the refit, not billed and not copied back into the record.
+rp.screenMax = NaN; rp.shell = NaN;
+const creditsBeforeRefit = ctx.world.credits;
+dispatchKey('Digit1'); // repair all, still on the repair service
+tick(2, 'corrupt refit');
+const refitChecks = {
+  screenRetrued: rp.screenMax === 40 && rp.screen === 40,
+  shellRetrued: rp.shellMax === 60 && rp.shell === 60,
+  noCharge: ctx.world.credits === creditsBeforeRefit,
+  creditsFinite: Number.isFinite(ctx.world.credits),
+};
+console.log('repair refit:', JSON.stringify(refitChecks));
+if (!Object.values(refitChecks).every(Boolean)) { console.log('REPAIR REFIT FAIL'); errors++; }
+undockStation();
+
+// 3. Boundary heal: a snapshot carrying nulls (JSON's tombstones for NaN) is
+//    sanitized on restore, so a corrupted live save self-heals on next load.
+const healSnap = JSON.parse(localStorage.getItem('rimward-save-v1'));
+healSnap.world.credits = null;
+healSnap.player.hull = null;
+healSnap.player.engineMax = null;
+healSnap.bio.bond = null;
+localStorage.setItem('rimward-save-v1', JSON.stringify(healSnap));
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (save heal)');
+dispatchKey('Enter'); // recover() → restore(corrupted snap) → sanitizeRestored
+const healChecks = {
+  creditsRestored: ctx.world.credits === 350, // fresh-start purse fallback
+  hullFinite: Number.isFinite(ctx.player.hull) && ctx.player.hull <= ctx.player.hullMax,
+  engineMaxRetrued: ctx.player.engineMax === 100 && ctx.player.engine <= 100,
+  bondFinite: Number.isFinite(ctx.bio.bond),
+};
+console.log('save boundary heal:', JSON.stringify(healChecks));
+if (!Object.values(healChecks).every(Boolean)) { console.log('SAVE HEAL FAIL'); errors++; }
+tick(5, 'post-heal settle');
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

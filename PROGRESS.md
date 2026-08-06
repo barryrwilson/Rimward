@@ -69,6 +69,17 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   resetting. HUD: ECHOES tally. Boot test wave-5 section: 4-system jump chain,
   band pacing, clue/landmark discovery + permanence, mystery save roundtrip,
   death tenderness, feral/scar/growth visuals. PASS.
+- Hotfix: itemized repair pricing (REPAIR_RATES hull 0.9 / screen 0.3 /
+  shell 0.5 / engine 0.6 UU per point, per-part ceil, breakdown in the yard
+  UI) replaces flat REPAIR_RATE. NaN hardening: repairCost treats non-finite
+  channels as corrupt (unbillable) and repairAll re-trues them against the
+  class baseline instead of copying NaN back; save.js sanitizeRestored heals
+  non-finite/null numerics (player record, credits/fear, bio, ship transform)
+  at the restore boundary — corrupt live saves self-heal on next load.
+  Boot test: deterministic repair-cost check, corrupt refit check, boundary
+  heal check; harness pinned unkillable after wave-1 combat assertions
+  (random soak deaths were flaking the wave-4 favor section via death-restore
+  roster swap). PASS.
 
 ## Next round candidates (wave 6)
 

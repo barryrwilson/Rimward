@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, rankFor } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, rankFor, createShipState, SHIP_CLASSES } from '../game/state.js';
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 
@@ -47,7 +47,10 @@ const RESTRICTED_REP_GATE = -25; // a burned Compact name opens the locker
 const FEED_COST = 60;
 const TEND_COST = 25;
 const ROUND_COST = 5;
-const REPAIR_RATE = 0.6; // UU per integrity point restored
+// Itemized yard pricing, UU per integrity point restored (§12 repair bays).
+// Hull is structural and dear; screens are cheap laminate; shell and engine
+// sit between. Cost scales strictly with damage taken, per system.
+const REPAIR_RATES = { hull: 0.9, screen: 0.3, shell: 0.5, engine: 0.6 };
 const CARGO_UPGRADE_COST = 600;
 const CARGO_UPGRADE_STEP = 10;
 const CARGO_UPGRADE_MAX = 2;
@@ -637,15 +640,23 @@ export function initStation(ctx) {
       render();
     },
     repairAll() {
-      const { missing, cost } = repairCost();
-      if (missing < 1 || ctx.world.credits < cost) {
-        ui.notice = missing < 1 ? 'She reads whole on every channel.' : 'Not enough UU for the yard.';
+      const { missing, cost, corrupt } = repairCost();
+      if ((missing < 1 && !corrupt) || ctx.world.credits < cost) {
+        ui.notice = missing < 1 && !corrupt ? 'She reads whole on every channel.' : 'Not enough UU for the yard.';
         render();
         return;
       }
       ctx.world.credits -= cost;
       const p = ctx.player;
-      p.hull = p.hullMax; p.screen = p.screenMax; p.shell = p.shellMax; p.engine = p.engineMax;
+      // Re-true scrambled channels against the class baseline, then make her
+      // whole. Without this a NaN channel would be copied right back by the
+      // repair that was meant to fix it.
+      const fresh = createShipState(SHIP_CLASSES[p.classKey] ? p.classKey : 'light', { name: p.name, faction: p.faction });
+      for (const key of Object.keys(REPAIR_RATES)) {
+        const maxKey = key + 'Max';
+        if (!Number.isFinite(p[maxKey])) p[maxKey] = fresh[maxKey];
+        p[key] = p[maxKey];
+      }
       p.engineOut = false; p.disabled = false;
       ui.notice = 'Yard crews make her whole.';
       render();
@@ -891,20 +902,42 @@ export function initStation(ctx) {
   // ---- repair ----
   function repairCost() {
     const p = ctx.player;
-    if (!p) return { missing: 0, cost: 0 };
-    const missing =
-      (p.hullMax - p.hull) + (p.screenMax - p.screen) +
-      (p.shellMax - p.shell) + (p.engineMax - p.engine);
-    return { missing, cost: Math.ceil(missing * REPAIR_RATE) };
+    const parts = [];
+    let missing = 0;
+    let cost = 0;
+    let corrupt = false;
+    if (p) {
+      for (const key of Object.keys(REPAIR_RATES)) {
+        const max = p[key + 'Max'];
+        const cur = p[key];
+        // Non-finite reads mark a corrupt record (e.g. a save whose NaNs JSON
+        // stored as null). Corruption is not billable — repairAll re-trues
+        // those channels against the class baseline instead.
+        if (!Number.isFinite(max) || !Number.isFinite(cur)) { corrupt = true; continue; }
+        const lack = Math.max(0, max - cur);
+        if (lack < 1) continue;
+        const c = Math.ceil(lack * REPAIR_RATES[key]);
+        parts.push({ key, lack: Math.round(lack), cost: c });
+        missing += lack;
+        cost += c;
+      }
+    }
+    return { missing, cost, parts, corrupt };
   }
   function renderRepair(panel) {
     h('div', 'screen-sub', panel, 'REPAIR BAYS — hull & systems');
-    const { missing, cost } = repairCost();
-    if (missing < 1) {
+    const { missing, cost, parts, corrupt } = repairCost();
+    if (missing < 1 && !corrupt) {
       h('div', 'screen-note', panel, 'She reads whole on every channel. Nothing to fix.');
       return;
     }
-    h('div', 'screen-note', panel, `${Math.round(missing)} integrity points down across hull, screens, shell, and engine. Yard rate: ${cost} UU.`);
+    for (const part of parts) {
+      h('div', 'screen-note', panel, `${part.key} — ${part.lack} integrity down · ${part.cost} UU`);
+    }
+    if (corrupt) {
+      h('div', 'screen-note', panel, 'Yard diagnostic flags scrambled channels — the refit will re-true them, no charge.');
+    }
+    h('div', 'screen-note', panel, `Yard total: ${cost} UU.`);
     btn(panel, `1 — Repair all (${cost} UU)`, act.repairAll);
   }
 
