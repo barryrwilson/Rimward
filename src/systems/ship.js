@@ -49,6 +49,23 @@ const _camAnchor = new THREE.Vector3();
 const _camOffset = new THREE.Vector3(0, 4, 12); // ship-local: behind + above
 const _noseOffset = new THREE.Vector3(0, 0.35, -1.7); // first-person eye point
 const _lookTarget = new THREE.Vector3();
+const _moodColor = new THREE.Color(0x4fe0c8); // lerped toward the mood tint
+const _targetColor = new THREE.Color();
+
+// Bio-expression tuning (§14: alive before a status label).
+const COLOR_LERP_RATE = 3; // 1/s — mood color easing
+const GROWTH_SCALE_MAX = 0.15; // hull grows up to +15% with ctx.bio.growth
+const BREATH_SCALE_LERP = 4; // 1/s — smooths breath-depth pops on mood change
+const SCAR_THRESHOLD_STEP = 0.18; // wounds per revealed scar patch
+// Fixed scar anchor points on the hull (dorsal/ventral/flank), revealed by
+// wound severity. Meshes are built once; per-frame work is visibility only.
+const SCAR_ANCHORS = [
+  [1.15, 0.28, -0.9],
+  [-1.6, 0.22, 0.1],
+  [0.45, 0.34, 0.85],
+  [-0.75, -0.24, -0.5],
+  [2.05, 0.14, 0.45],
+];
 
 const CAMERA_LERP_RATE = 6; // 1/s — frame-rate independent smoothing
 const LOOK_AHEAD = 25; // units in front of the ship the camera aims at
@@ -67,13 +84,14 @@ const BREATH_HZ = 0.25; // ~4 s breath cycle
 const HEART_HZ = 1.1; // resting heartbeat
 
 // Mood visuals (§14.6): swim/flap rate multiplier, vein emissive tint +
-// intensity multiplier, idle jitter amplitude. Serene is the baseline look.
+// intensity multiplier, idle jitter amplitude, anxious flicker flag, and
+// whole-body breath rate/depth. Serene is the baseline look.
 const MOOD_VISUALS = {
-  serene: { rate: 1.0, tint: 0xffffff, glow: 1.0, jitter: 0 },
-  keen: { rate: 1.25, tint: 0xffffff, glow: 1.25, jitter: 0 }, // brighter, quicker
-  anxious: { rate: 1.0, tint: 0xffb35c, glow: 1.0, jitter: 1 }, // amber + jitters
-  pained: { rate: 0.6, tint: 0xffffff, glow: 0.6, jitter: 0 }, // slow, dim
-  feral: { rate: 1.5, tint: 0xff5533, glow: 1.1, jitter: 0 }, // ember-red, frantic
+  serene: { rate: 1.0, tint: 0x4fe0c8, glow: 1.0, jitter: 0, flicker: 0, breathHz: 0.2, breathDepth: 0.015 }, // warm teal, slow/deep
+  keen: { rate: 1.25, tint: 0xb8ffe8, glow: 1.25, jitter: 0, flicker: 0, breathHz: 0.35, breathDepth: 0.012 }, // bright, eager
+  anxious: { rate: 1.0, tint: 0xd8dce8, glow: 1.0, jitter: 1, flicker: 1, breathHz: 0.65, breathDepth: 0.006 }, // pale, flickering, fast/shallow
+  pained: { rate: 0.6, tint: 0x8a86a0, glow: 0.6, jitter: 0, flicker: 0, breathHz: 0.16, breathDepth: 0.008 }, // slow, dim
+  feral: { rate: 1.5, tint: 0xff2a66, glow: 1.1, jitter: 0, flicker: 0, breathHz: 0.55, breathDepth: 0.02 }, // hot red-violet, fast/deep
 };
 const ANXIOUS_JITTER_AMP = 0.05; // world units of idle flesh tremor
 
@@ -227,6 +245,31 @@ export function initShip(ctx) {
   underLight.position.set(0, -0.9, 0.4);
   flesh.add(underLight);
 
+  // Wound scars (§14.7): dark patches at fixed anchors, revealed one per
+  // severity threshold. Built once — per-frame we toggle visibility only.
+  // Built before root is positioned so local space == world space for the
+  // orientation lookAt.
+  const scarGeo = new THREE.PlaneGeometry(0.55, 0.34);
+  const scarMat = new THREE.MeshBasicMaterial({
+    color: 0x070410, // dead flesh
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  });
+  const scars = [];
+  for (let i = 0; i < SCAR_ANCHORS.length; i++) {
+    const a = SCAR_ANCHORS[i];
+    const scar = new THREE.Mesh(scarGeo, scarMat);
+    // Approximate outward normal of the flattened, elongated hull
+    // (radii ~ x 3.0 / y 0.4 / z 2.1 → gradient of the ellipsoid).
+    _delta.set(a[0] / 9, a[1] / 0.16, a[2] / 4.41).normalize();
+    scar.position.set(a[0], a[1], a[2]).addScaledVector(_delta, 0.05);
+    _targetVelocity.copy(scar.position).add(_delta);
+    scar.lookAt(_targetVelocity);
+    scar.visible = false;
+    flesh.add(scar);
+    scars.push(scar);
+  }
+
   root.position.copy(config.world.shipSpawn);
   scene.add(root);
 
@@ -245,7 +288,7 @@ export function initShip(ctx) {
   let driftEndsAt = 0; // ctx.world.time when vector-hold force-releases
   let realigning = false; // drift release: swinging velocity back to facing
   let realignT = 0; // seconds into the re-align window
-  let appliedMood = null; // last mood pushed into the material
+  let breathScale = 1; // smoothed whole-body breath + growth scale
 
   const posAttr = geo.attributes.position;
   const arr = posAttr.array;
@@ -258,7 +301,12 @@ export function initShip(ctx) {
 
       const time = ctx.world.time;
       const docked = ctx.flags.docked;
-      const mood = MOOD_VISUALS[ctx.bio.mood] ?? MOOD_VISUALS.serene;
+      // ctx.bio may briefly hold defaults before bio.js init — read with
+      // fallbacks so the visuals never crash and always mean something.
+      const bio = ctx.bio ?? {};
+      const mood = MOOD_VISUALS[bio.mood] ?? MOOD_VISUALS.serene;
+      const bioWounds = bio.wounds ?? 0;
+      const bioGrowth = bio.growth ?? 0;
 
       // Engine-out (§6.5): thrust capped at 30% while the engine is down.
       const engineOut = ctx.player?.engineOut === true;
@@ -424,14 +472,27 @@ export function initShip(ctx) {
       posAttr.needsUpdate = true;
       geo.computeVertexNormals();
 
-      // Vein tint follows mood (§14.6) — set only on change.
-      if (appliedMood !== ctx.bio.mood) {
-        appliedMood = ctx.bio.mood;
-        fleshMat.emissive.setHex(mood.tint);
-      }
+      // Bioluminescence follows mood (§14.6): the vein color EASES toward
+      // the mood target each frame, so a mood shift reads as a feeling
+      // washing over the hull, not a switch. Scratch colors — no allocation.
+      _targetColor.setHex(mood.tint);
+      const colorK = 1 - Math.exp(-COLOR_LERP_RATE * dt);
+      _moodColor.lerp(_targetColor, colorK);
+      fleshMat.emissive.copy(_moodColor);
+      underLight.color.lerp(_targetColor, colorK);
 
       // Veins brighten on the exhale, thump with the heartbeat (mood-scaled).
-      fleshMat.emissiveIntensity = (0.65 + 0.25 * breath + 0.35 * heart) * mood.glow;
+      // Anxious light is unsteady (flicker); wounds dim the whole network.
+      let glow = (0.65 + 0.25 * breath + 0.35 * heart) * mood.glow;
+      if (mood.flicker) {
+        glow *= 1 - 0.35 * (0.5 + 0.5 * Math.sin(t * 31.7) * Math.sin(t * 17.3));
+      }
+      fleshMat.emissiveIntensity = glow * (1 - 0.5 * bioWounds);
+
+      // Wound scars: reveal one dark patch per severity threshold.
+      for (let i = 0; i < scars.length; i++) {
+        scars[i].visible = bioWounds >= (i + 1) * SCAR_THRESHOLD_STEP;
+      }
 
       // Idle hover: gentle bob + sway while (nearly) stationary, fading out
       // with speed. Anxious adds a tremor (§14.6). Applied to the flesh child
@@ -443,6 +504,16 @@ export function initShip(ctx) {
       flesh.position.z = jitter * Math.sin(t * 29.1 + 1.3);
       flesh.rotation.z =
         bankAngle + Math.sin(t * 0.5) * 0.03 * idleWeight; // auto-bank + idle sway
+
+      // Whole-body breath + growth (§14): a subtle scale pulse whose rate
+      // and depth follow mood, composed over a hull that grows up to +15%
+      // with ctx.bio.growth. Applied to the flesh child only — flight
+      // transforms (root position/rotation) are never touched.
+      const breathTarget =
+        (1 + bioGrowth * GROWTH_SCALE_MAX) *
+        (1 + mood.breathDepth * Math.sin(t * Math.PI * 2 * mood.breathHz));
+      breathScale += (breathTarget - breathScale) * (1 - Math.exp(-BREATH_SCALE_LERP * dt));
+      flesh.scale.setScalar(breathScale);
 
       // Thrust feedback: the whole vein network surges brighter — propulsion
       // as metabolism, not machinery.

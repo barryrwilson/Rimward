@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 
 /**
@@ -246,6 +246,16 @@ const EVENT_GAP = [180, 360]; // 3–6 min between events
 const EVENT_DURATION = [120, 240]; // 2–4 min
 const BLOCKADE_KILL_INTERVAL = 45; // abstract lane casualties during blockade
 
+/**
+ * Roll the next dynamic-event gap, scaled by the CURRENT system's band
+ * (designed silence — the rim schedules events farther apart). Evaluated
+ * each time the gap is rolled so jumping changes cadence immediately.
+ */
+function rollEventGap(ctx) {
+  const mult = BANDS[ctx.systems[ctx.world.currentSystem].band ?? 0].eventGapMult;
+  return (EVENT_GAP[0] + Math.random() * (EVENT_GAP[1] - EVENT_GAP[0])) * mult;
+}
+
 // ---------- Inter-system migration §8.2 destinations ----------
 const MIGRATION_INTERVAL = 90; // ~s between departure picks
 const MIGRATION_ETA = [60, 120]; // s spent inTransit
@@ -386,7 +396,7 @@ export function initWorld(ctx) {
   // Player ship name for milestone lines; ship.js may overwrite later.
   ctx.world.shipName = ctx.world.shipName ?? 'she';
 
-  let nextEventAt = EVENT_GAP[0] + Math.random() * (EVENT_GAP[1] - EVENT_GAP[0]);
+  let nextEventAt = rollEventGap(ctx);
   let nextMigrationAt = MIGRATION_INTERVAL * (0.5 + Math.random() * 0.5); // first pick ~45–90s in
   let lastBlockadeKillAt = 0;
   let tickAccum = 0;
@@ -511,7 +521,7 @@ export function initWorld(ctx) {
     applyEventPressure(ctx, 'clear');
     if (kind) ctx.emit('worldEvent', { kind, phase: 'end' });
     const now = ctx.world.time;
-    nextEventAt = now + EVENT_GAP[0] + Math.random() * (EVENT_GAP[1] - EVENT_GAP[0]);
+    nextEventAt = now + rollEventGap(ctx);
   }
 
   // Abstract blockade casualty: the lane kills a trader the player never met.

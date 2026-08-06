@@ -119,6 +119,7 @@ const { initStarfield } = await import('../src/systems/starfield.js');
 const { initSolarSystem } = await import('../src/systems/solarsystem.js');
 const { initAsteroids } = await import('../src/systems/asteroids.js');
 const { initStation } = await import('../src/systems/station.js');
+const { initLandmarks } = await import('../src/systems/landmarks.js');
 const { initControls } = await import('../src/systems/controls.js');
 const { initBio } = await import('../src/game/bio.js');
 const { initShip } = await import('../src/systems/ship.js');
@@ -126,6 +127,7 @@ const { initWorld } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
 } = await import('../src/game/contacts.js');
+const { initMystery } = await import('../src/game/mystery.js');
 const { initGate } = await import('../src/systems/gate.js');
 const { initJump } = await import('../src/game/jump.js');
 const { initTraffic } = await import('../src/game/traffic.js');
@@ -141,13 +143,13 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS } = await import('../src/game/state.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
   ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
-  ['station', initStation], ['gate', initGate], ['controls', initControls], ['bio', initBio],
-  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['jump', initJump], ['traffic', initTraffic],
+  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['bio', initBio],
+  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['jump', initJump], ['traffic', initTraffic],
   ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['hail', initHail],
   ['song', initSong], ['save', initSave], ['hud', initHud],
 ];
@@ -281,8 +283,9 @@ tick(60 * 4, 'jump to redmarch');
 tick(60 * 30, 'redmarch soak 30s'); // let traffic respawn from the new cast
 let redPlanets = 0;
 ctx.scene.traverse((o) => {
-  // Planets: standard-material spheres (sun/eyes/beacons are basic, hull is physical).
-  if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.isMeshStandardMaterial && !o.material?.isMeshPhysicalMaterial) redPlanets++;
+  // Planets: standard-material spheres (sun/eyes are basic, hull is physical,
+  // wave-5 landmark/clue POIs carry userData.poiType and are excluded).
+  if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.isMeshStandardMaterial && !o.material?.isMeshPhysicalMaterial && !o.userData?.poiType) redPlanets++;
 });
 const roleCount = (role) => ctx.world.records.filter((r) => r.role === role).length;
 const redChecks = {
@@ -379,8 +382,9 @@ const holdCount = (commodity) => ctx.cargo.reduce((n, c) => n + (c.commodity ===
 const w4contacts = ctx.world.contacts ?? [];
 const contactRoleCt = (role) => w4contacts.filter((c) => c.role === role).length;
 const contactDataChecks = {
-  sixEntries: w4contacts.length === 6,
-  dockmasterX3: contactRoleCt('dockmaster') === 3,
+  // Wave 5 added the Hollow Reach dockmaster: 7 entries, 4 dockmasters.
+  sixEntries: w4contacts.length === 7,
+  dockmasterX3: contactRoleCt('dockmaster') === 4,
   fenceX1: contactRoleCt('fence') === 1,
   fixerX2: contactRoleCt('fixer') === 2,
   jsonRoundTrip: w4contacts.every((c) => {
@@ -575,6 +579,215 @@ const fenceChecks = {
 };
 console.log('wave4 fence favor:', JSON.stringify(fenceChecks), `fear=${ctx.world.fear} rep.freehold=${ctx.world.reputation.freehold}`);
 if (!Object.values(fenceChecks).every(Boolean)) { console.log('WAVE4 FENCE FAVOR FAIL'); errors++; }
+
+// ---- Wave 5: hollowreach / band pacing / mystery / death tenderness / bio visuals ----
+// -- 1. fourth-system jump: freehold → veridian → redmarch → hollowreach ----
+// Same scripted jump pattern as wave 3 (park on the gate, emit the request,
+// bounded-wait for arrival). The final leg captures 'systemLoaded' and the
+// band-aware arrival commLine frame-by-frame — both fire at the jump
+// midpoint, before ctx.gate.jumping clears.
+undockStation(); // leave Freehold Landing (wave-4 fence dock)
+ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at veridian gate (wave5 chain)');
+ctx.emit('jumpRequested', { to: 'veridian' });
+if (!tickUntilJumpDone('veridian', 'wave5 hop to veridian')) {
+  console.log('WAVE5 CHAIN FAIL — never arrived at veridian');
+  errors++;
+}
+ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'redmarch').position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at redmarch gate (wave5 chain)');
+ctx.emit('jumpRequested', { to: 'redmarch' });
+if (!tickUntilJumpDone('redmarch', 'wave5 hop to redmarch')) {
+  console.log('WAVE5 CHAIN FAIL — never arrived at redmarch');
+  errors++;
+}
+const hrGate = SYSTEMS.redmarch.gates.find((g) => g.to === 'hollowreach'); // [-800,50,-200]
+const hrReturnGate = SYSTEMS.hollowreach.gates[0]; // [0,70,1100] → redmarch
+ctx.ship.object.position.set(...hrGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hollowreach gate');
+const hrGateInZone = ctx.gate.inZone === true && ctx.gate.nearTo === 'hollowreach';
+ctx.emit('jumpRequested', { to: 'hollowreach' });
+let hrLoadedFired = false;
+let hrArrivalLine = null;
+let hrArrived = false;
+for (let i = 0; i < 60 * 10 && !hrArrived; i++) {
+  tick(1, 'jump to hollowreach');
+  for (const ev of ctx.lastEvents) {
+    if (ev.type === 'systemLoaded' && ev.to === 'hollowreach') hrLoadedFired = true;
+    if (ev.type === 'commLine' && ev.from === 'gate') hrArrivalLine = ev.text;
+  }
+  if (ctx.world.currentSystem === 'hollowreach' && !ctx.gate.jumping) hrArrived = true;
+}
+const hrp = ctx.ship.object.position;
+const w5jumpChecks = {
+  gateDefRoundTrip: hrGate.position.join(',') === '-800,50,-200' && hrReturnGate.to === 'redmarch',
+  inZoneAtGate: hrGateInZone,
+  arrived: hrArrived && ctx.world.currentSystem === 'hollowreach',
+  jumpingDone: !ctx.gate.jumping,
+  systemLoadedFired: hrLoadedFired,
+  band2SilentLine: hrArrivalLine === 'Hollow Reach. …no traffic on scope.',
+  nearReturnGate: Math.hypot(hrp.x - 0, hrp.y - 70, hrp.z - 1100) < 120,
+};
+console.log('wave5 hollowreach jump:', JSON.stringify(w5jumpChecks), `line=${JSON.stringify(hrArrivalLine)}`);
+if (!Object.values(w5jumpChecks).every(Boolean)) { console.log('WAVE5 HOLLOWREACH JUMP FAIL'); errors++; }
+
+// -- 2. band pacing data (§15): rim edge runs quieter ------------------------
+const w5bandChecks = {
+  freeholdBand0: SYSTEMS.freehold.band === 0,
+  veridianBand0: SYSTEMS.veridian.band === 0,
+  redmarchBand1: SYSTEMS.redmarch.band === 1,
+  hollowreachBand2: SYSTEMS.hollowreach.band === 2 && ctx.systems.hollowreach.band === 2,
+  eventGapStretches: BANDS[2].eventGapMult > BANDS[0].eventGapMult,
+  songGapStretches: BANDS[2].songGapMult > BANDS[0].songGapMult,
+};
+console.log('wave5 band pacing:', JSON.stringify(w5bandChecks));
+if (!Object.values(w5bandChecks).every(Boolean)) { console.log('WAVE5 BAND PACING FAIL'); errors++; }
+
+// -- 3. clue discovery: 35u proximity, permanent per id -----------------------
+const hrClue = SYSTEMS.hollowreach.clues[0];
+let clueFoundEv = null;
+ctx.ship.object.position.set(...hrClue.position);
+ctx.ship.velocity.set(0, 0, 0);
+for (let i = 0; i < 30 && !clueFoundEv; i++) {
+  tick(1, 'clue approach');
+  for (const ev of ctx.lastEvents) {
+    if (ev.type === 'clueFound' && ev.id === hrClue.id) clueFoundEv = ev;
+  }
+}
+const foundAfterClue = ctx.world.mystery?.found?.length ?? -1;
+// Revisit: leave past the radius, come back onto the clue — a permanent
+// discovery must not re-fire or grow the list.
+ctx.ship.object.position.set(2000, 2000, 2000);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'leave clue');
+ctx.ship.object.position.set(...hrClue.position);
+ctx.ship.velocity.set(0, 0, 0);
+let clueRefired = false;
+for (let i = 0; i < 10; i++) {
+  tick(1, 'clue revisit');
+  for (const ev of ctx.lastEvents) if (ev.type === 'clueFound') clueRefired = true;
+}
+const w5clueChecks = {
+  clueFound: ctx.world.mystery?.found?.includes(hrClue.id) === true,
+  eventFired: !!clueFoundEv,
+  eventCarriesLine: clueFoundEv?.line === hrClue.line,
+  permanentNoRefire: ctx.world.mystery?.found?.length === foundAfterClue && !clueRefired,
+};
+console.log('wave5 clue discovery:', JSON.stringify(w5clueChecks), `found=${JSON.stringify(ctx.world.mystery?.found)}`);
+if (!Object.values(w5clueChecks).every(Boolean)) { console.log('WAVE5 CLUE DISCOVERY FAIL'); errors++; }
+
+// -- 4. landmark discovery: 100u proximity -------------------------------------
+const hrLandmark = SYSTEMS.hollowreach.landmarks[0];
+let landmarkFoundEv = null;
+ctx.ship.object.position.set(...hrLandmark.position);
+ctx.ship.velocity.set(0, 0, 0);
+for (let i = 0; i < 30 && !landmarkFoundEv; i++) {
+  tick(1, 'landmark approach');
+  for (const ev of ctx.lastEvents) {
+    if (ev.type === 'landmarkFound' && ev.id === hrLandmark.id) landmarkFoundEv = ev;
+  }
+}
+const w5landmarkChecks = {
+  landmarkVisited: ctx.world.mystery?.visited?.includes(hrLandmark.id) === true,
+  eventFired: !!landmarkFoundEv,
+  eventCarriesNameAndLine: landmarkFoundEv?.name === hrLandmark.name && landmarkFoundEv?.line === hrLandmark.line,
+};
+console.log('wave5 landmark discovery:', JSON.stringify(w5landmarkChecks), `visited=${JSON.stringify(ctx.world.mystery?.visited)}`);
+if (!Object.values(w5landmarkChecks).every(Boolean)) { console.log('WAVE5 LANDMARK DISCOVERY FAIL'); errors++; }
+
+// -- 5. mystery persistence: dock-save banks found/visited, death restores them
+// Test SETUP: the docked/undocked autosaves must not be combat-blocked —
+// saveBlockReason refuses while a hostile live ship sits inside the encounter
+// bubble with the combat flag set, and the soak phases left live pirates
+// trailing the player. Park every live hostile far beyond de-instantiate
+// range (mirrors the wave-4 fear/rep pinning: this section tests the
+// save/death path, not the block gate).
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked');
+// Save with the discoveries banked: the real dock path fires 'docked' →
+// trySave, the same autosave wave 4 relies on.
+dockAtCurrentStation('dock hollowreach (mystery save)');
+tick(3, 'docked save settle');
+undockStation();
+tick(3, 'undocked save settle');
+const w5snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const bondSaved = w5snap?.bio?.bond;
+const hungerSaved = w5snap?.bio?.hunger;
+const w5saveChecks = {
+  saveWritten: !!w5snap?.world,
+  mysteryInSave: w5snap?.world?.mystery?.found?.includes(hrClue.id) === true &&
+    w5snap?.world?.mystery?.visited?.includes(hrLandmark.id) === true,
+  bioInSave: typeof bondSaved === 'number' && typeof hungerSaved === 'number',
+};
+console.log('wave5 mystery save:', JSON.stringify(w5saveChecks));
+if (!Object.values(w5saveChecks).every(Boolean)) { console.log('WAVE5 MYSTERY SAVE FAIL'); errors++; }
+
+// -- 6. bio death tenderness: corrupt mystery in memory, die, reload -----------
+// save.js consumes 'playerDestroyed' → 'Ship lost.' overlay → reload the last
+// save. The Enter dispatch skips the 2.5s hold synchronously, so the asserts
+// below read post-restore state before any bio.update can re-derive mood.
+ctx.ship.object.position.set(0, 0, 0); // far from every hollowreach POI — no re-discovery
+ctx.ship.velocity.set(0, 0, 0);
+ctx.world.mystery = { found: [], visited: [] };
+tick(2, 'mystery corrupted');
+const corruptedCleared = ctx.world.mystery.found.length === 0 && ctx.world.mystery.visited.length === 0;
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed'); // save.js sees it via lastEvents, overlay opens
+dispatchKey('Enter'); // recover(): restore(last save) + mood forced 'anxious'
+const w5deathChecks = {
+  corruptedFirst: corruptedCleared,
+  mysteryRestored: ctx.world.mystery?.found?.includes(hrClue.id) === true &&
+    ctx.world.mystery?.visited?.includes(hrLandmark.id) === true,
+  moodAnxious: ctx.bio.mood === 'anxious', // reload-from-save path (never the boot load)
+  bondPreserved: typeof bondSaved === 'number' && ctx.bio.bond === bondSaved,
+  hungerPreserved: typeof hungerSaved === 'number' && ctx.bio.hunger === hungerSaved,
+  bioNotDefaults: !(ctx.bio.bond === 0.1 && ctx.bio.hunger === 0.15 && ctx.bio.wounds === 0),
+};
+console.log('wave5 death tenderness:', JSON.stringify(w5deathChecks), `mood=${ctx.bio.mood} bond=${ctx.bio.bond} saved=${bondSaved} mystery=${JSON.stringify(ctx.world.mystery)}`);
+if (!Object.values(w5deathChecks).every(Boolean)) { console.log('WAVE5 DEATH TENDERNESS FAIL'); errors++; }
+tick(5, 'post-death settle');
+
+// -- 7. bio visuals on the ship mesh (headless observables) --------------------
+// bio.js owns mood/wounds/growth and re-derives them every frame, so a direct
+// ctx.bio.mood set would not survive a tick. The feral mood is driven through
+// its real input path — an 'npcDestroyed' atrocity on a surrendered ship sets
+// feralUntil (~60s of rage, priority over the wounds→pained band) — while
+// wounds and fedCount are the direct sim inputs for scar reveal and growth
+// (growth = bond*0.7 + fedCount*0.05, read by ship.js as hull scale).
+let hullMesh = null;
+const scarMeshes = [];
+ctx.ship.object.traverse((o) => {
+  if (o.isMesh && o.material?.isMeshPhysicalMaterial) hullMesh = o; // living hull (vein emissive)
+  if (o.isMesh && o.geometry?.type === 'PlaneGeometry' && o.material?.color?.getHex?.() === 0x070410) scarMeshes.push(o); // wound scar patches
+});
+const flesh = hullMesh?.parent ?? null; // breath/growth scale lives on this child of ctx.ship.object
+const sereneR = ((0x4fe0c8 >> 16) & 0xff) / 255;
+const emissiveRBefore = hullMesh?.material?.emissive?.r ?? 0;
+ctx.emit('npcDestroyed', { ship: { state: { surrendered: true } } }); // atrocity → feralUntil
+tick(2, 'atrocity onset');
+ctx.bio.wounds = 1; // all five scar thresholds (0.18 step) crossed
+ctx.bio.fedCount = 10; // growth resolves to >= 0.5 on the next bio.update
+tick(60, 'bio visuals settle');
+const emissiveR = hullMesh?.material?.emissive?.r ?? 0;
+const w5bioVisualChecks = {
+  moodIsFeral: ctx.bio.mood === 'feral',
+  growthResolved: ctx.bio.growth >= 0.5,
+  hullMeshFound: !!hullMesh && !!flesh,
+  fleshScaledUp: (flesh?.scale?.x ?? 0) > 1.03, // (1 + growth*0.15) * (1 ± breathDepth), lerped ~1s
+  scarsPresent: scarMeshes.length > 0,
+  scarVisible: scarMeshes.some((m) => m.visible),
+  redExceedsSerene: emissiveR > sereneR, // feral 0xff2a66 vs serene 0x4fe0c8
+  redMovedFeral: emissiveR > emissiveRBefore && emissiveR > 0.9,
+};
+console.log('wave5 bio visuals:', JSON.stringify(w5bioVisualChecks), `fleshScale=${flesh?.scale?.x?.toFixed(3)} scars=${scarMeshes.filter((m) => m.visible).length}/${scarMeshes.length} emissiveR=${emissiveR.toFixed(3)} (serene ${sereneR.toFixed(3)}, before ${emissiveRBefore.toFixed(3)})`);
+if (!Object.values(w5bioVisualChecks).every(Boolean)) { console.log('WAVE5 BIO VISUALS FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

@@ -1,3 +1,5 @@
+import { BANDS } from '../game/state.js';
+
 /**
  * RIMWARD web — bio whalesong (doc §19.2) + minimal combat/UI cues (§19.1).
  * Pure WebAudio synthesis, no external assets. The AudioContext is created
@@ -256,11 +258,14 @@ export function initSong(ctx) {
       }
 
       // Whalesong phrases via lookahead timer, every 6–20 s (mood-dependent).
+      // Gap scaled by the current system's band (designed silence — the ship
+      // sings less often in the deep rim; the pad stays untouched).
       if (nextPhraseAt === 0) nextPhraseAt = t + 2; // first call shortly after unlock
       if (t >= nextPhraseAt - PHRASE_LOOKAHEAD) {
         schedulePhrase(Math.max(t + 0.05, nextPhraseAt));
         const p = MOOD_SONG[mood];
-        nextPhraseAt = t + p.gap[0] + Math.random() * (p.gap[1] - p.gap[0]);
+        const mult = BANDS[ctx.systems[ctx.world.currentSystem].band ?? 0].songGapMult;
+        nextPhraseAt = t + (p.gap[0] + Math.random() * (p.gap[1] - p.gap[0])) * mult;
       }
     },
   };

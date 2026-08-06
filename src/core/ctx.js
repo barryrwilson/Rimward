@@ -99,6 +99,8 @@ export function createCtx({ scene, camera, renderer }) {
       hunger: 0.15, // 0..1, fed at station
       wounds: 0, // 0..1, from hull damage, heals out of combat
       bond: 0.1, // 0..1 grows with care/time
+      growth: 0, // 0..1 visible growth from bond + feedings (bio.js, wave 5)
+      fedCount: 0, // lifetime real feedings (bio.js, wave 5)
       speedFactor: 1, // mood-driven multipliers ship.js applies
       turnFactor: 1,
       songEvent: null, // set by bio.js on mood change, consumed by song.js
@@ -109,7 +111,7 @@ export function createCtx({ scene, camera, renderer }) {
       time: 0, // seconds of world time
       credits: 350, // UU
       fear: 0, // fear rating §7.7
-      reputation: { freehold: 0, redledger: 0, veridian: 0 }, // §11.1
+      reputation: { freehold: 0, redledger: 0, veridian: 0, hollow: 0 }, // §11.1
       currentSystem: 'freehold', // key into SYSTEMS (state.js); jump.js swaps
       shipName: null, // player-set later; hails use it when present §12.5
       records: [], // persistent NPC identities §8.2 (current system's cast)
@@ -160,6 +162,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'worldEvent' {kind}    'milestone' {id, line}  'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
     // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
+    // 'clueFound' {id,line}  'landmarkFound' {id,name,line}   (mystery.js, wave 5)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

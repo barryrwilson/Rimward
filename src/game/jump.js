@@ -2,6 +2,15 @@ import * as THREE from 'three';
 import { SYSTEMS, JUMP, FACTIONS } from '../game/state.js';
 import { removeLiveShip } from '../systems/npc.js';
 
+// Arrival hails by distance band (§13.5 + designed silence): band 0
+// warm/busy, band 1 sparse, band 2 near-silent. One line per band, chosen
+// at arrival from SYSTEMS[to].band.
+const ARRIVAL_LINES = [
+  (name, factionName) => name + '. ' + factionName + ' space. Welcome home, traffic control has you on scope.',
+  (name, factionName) => name + '. ' + factionName + ' space. Light traffic out this far.',
+  (name) => name + '. …no traffic on scope.',
+];
+
 /**
  * Jump — the system-swap orchestrator. No meshes.
  *
@@ -16,7 +25,8 @@ import { removeLiveShip } from '../systems/npc.js';
  *      player to the destination gate + JUMP.arrivalOffset toward the
  *      system center (origin); zero ctx.ship.velocity; set
  *      ctx.world.jumpGraceUntil = time + JUMP.graceSeconds; emit
- *      'systemLoaded' { to } and a terse arrival 'commLine' (§13.5).
+ *      'systemLoaded' { to } and a band-aware arrival 'commLine' (§13.5 +
+ *      designed silence: band 0 warm, band 1 sparse, band 2 near-silent).
  *      Gate-network arrival rule: the arrival gate is the one in
  *      SYSTEMS[to].gates whose `to` points back at the origin system
  *      (captured before the swap); fallback is gates[0] (the primary).
@@ -82,11 +92,13 @@ export function initJump(ctx) {
 
     ctx.emit('systemLoaded', { to });
 
-    // Terse arrival hail (§13.5): "<System>. <Faction> space."
+    // Arrival hail (§13.5), band-aware (designed silence — the rim greets
+    // you with quiet). One line per band, chosen from SYSTEMS[to].band.
     const def = SYSTEMS[to];
     const faction = FACTIONS[def.faction];
+    const band = def.band ?? 0;
     ctx.emit('commLine', {
-      text: def.name + '. ' + (faction ? faction.name : 'Independent') + ' space.',
+      text: (ARRIVAL_LINES[band] ?? ARRIVAL_LINES[0])(def.name, faction ? faction.name : 'Independent'),
       from: 'gate',
     });
   }

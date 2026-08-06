@@ -20,6 +20,7 @@ const CONTACT_NAMES = {
   freehold: { dockmaster: 'Mother Tarn', fence: 'Quiet Hollis' },
   veridian: { dockmaster: 'Adjutant Vey', fixer: 'Lias Corrow' },
   redmarch: { dockmaster: 'Dockhand Sorrow', fixer: 'Six-Finger Brack' },
+  hollowreach: { dockmaster: 'Keeper Voss' },
 };
 
 // Roster: dockmaster everywhere; fence at freehold; fixer off-freehold.
@@ -27,6 +28,7 @@ const CONTACT_ROLES = {
   freehold: ['dockmaster', 'fence'],
   veridian: ['dockmaster', 'fixer'],
   redmarch: ['dockmaster', 'fixer'],
+  hollowreach: ['dockmaster'],
 };
 
 function buildRoster() {

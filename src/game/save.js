@@ -22,7 +22,9 @@ import { createShipState, U, JUMP } from './state.js';
  * - DEATH (§4.4): consumes 'playerDestroyed' → 'Ship lost.' overlay → reload
  *   the last save (or a fresh start at the Freehold station with a new player
  *   state record when no save exists). No corpse run, no insurance. Emits the
- *   commLine 'She limped home.' on recovery.
+ *   commLine 'She limped home.' on recovery. The bio companion survives
+ *   either path (§ Bio companion): reload-from-save leaves her mood
+ *   'anxious'; freshStart keeps her, wounded +0.4, mood 'pained', bond +0.02.
  *
  * The snapshot is pure JSON: world.records/recordBanks/incidents/aftermath/
  * markets must stay JSON-plain (they are — world.js/market.js contract).
@@ -36,11 +38,13 @@ const DEATH_HOLD_MS = 2500; // 'Ship lost.' hold before recovery
 
 // Whitelist: only these world fields persist. Anything world.js adds for the
 // multi-system swap (recordBanks et al.) must stay JSON-plain to ride along.
+// 'mystery' ({found:[clueIds], visited:[landmarkIds]}) is created lazily by
+// the mystery module (§25) and persists once present.
 const WORLD_FIELDS = [
   'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets',
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
-  'jumpGraceUntil', 'contacts',
+  'jumpGraceUntil', 'contacts', 'mystery',
 ];
 
 function snapshot(ctx) {
@@ -134,7 +138,15 @@ function freshStart(ctx) {
     Object.assign(ctx.player, createShipState('light', { name }));
   }
   ctx.cargo.length = 0;
-  ctx.bio.wounds = 0; // she limped home; the companion survives
+  // The companion SURVIVES death wounded — never factory-reset (§ Bio
+  // companion: ordinary defeat creates recovery and tenderness, not
+  // surprise permanent loss). She carried you home; keep her bond and
+  // memories, add the wound.
+  const bio = ctx.bio;
+  bio.wounds = Math.min(1, (bio.wounds ?? 0) + 0.4);
+  bio.mood = 'pained';
+  bio.hunger = Math.max(0.4, bio.hunger ?? 0);
+  bio.bond = Math.min(1, (bio.bond ?? 0) + 0.02);
   const home = ctx.systems?.freehold?.station?.position ?? [120, 20, 620];
   if (ctx.ship.object) {
     ctx.ship.object.position.set(home[0], home[1] + 10, home[2] + 60);
@@ -177,8 +189,14 @@ export function initSave(ctx) {
     if (deathTimer) { clearTimeout(deathTimer); deathTimer = 0; }
     overlay.style.display = 'none';
     const snap = loadSnapshot();
-    if (snap) restore(ctx, snap);
-    else freshStart(ctx);
+    if (snap) {
+      restore(ctx, snap);
+      // Death-recovery aftermath: she remembers the dark (§ Bio companion).
+      // Guarded to this death reload — the boot-time load path never sets it.
+      ctx.bio.mood = 'anxious';
+    } else {
+      freshStart(ctx);
+    }
     idleAccum = 0;
     nextDue = IDLE_INTERVAL;
     ctx.emit('commLine', { text: 'She limped home.' });

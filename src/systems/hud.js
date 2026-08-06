@@ -312,6 +312,9 @@ export function initHud(ctx) {
   const moodLabel = el('div', 'rw-value', moodRow, 'SERENE');
   const hungerBar = makeBar(bio, 'HUNGER', 'rw-hunger');
   const woundsBar = makeBar(bio, 'WOUNDS', 'rw-wounds');
+  const echoesRow = el('div', 'rw-meter rw-echoes', bio);
+  el('div', 'rw-label', echoesRow, 'ECHOES');
+  const echoesValue = el('div', 'rw-value', echoesRow, '0');
 
   const posPanel = el('section', 'rw-panel rw-pos', sideCol);
   el('div', 'rw-label', posPanel, 'POS');
@@ -372,7 +375,7 @@ export function initHud(ctx) {
     burnerPct: -1, driftPct: -1,
     weapon: '', weaponStrain: '',
     credits: -1, fear: -1, cargo: '',
-    mood: '', combat: null,
+    mood: '', echoes: -1, combat: null,
     prompt: '',
     posX: NaN, posY: NaN, posZ: NaN,
     system: '', jumpShown: null, jumpPct: -1, jumpDest: null,
@@ -679,6 +682,8 @@ export function initHud(ctx) {
       hungerBar.set(ctx.bio.hunger * 100);
       woundsBar.set(ctx.bio.wounds * 100);
       woundsBar.row.classList.toggle('hurt', ctx.bio.wounds > 0.35);
+      const echoes = ctx.world.mystery ? ctx.world.mystery.found.length : 0;
+      if (echoes !== last.echoes) { last.echoes = echoes; echoesValue.textContent = String(echoes); }
 
       // position readout (bottom-right): current system name above coordinates
       const sysDef = SYSTEMS[ctx.world.currentSystem];

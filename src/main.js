@@ -6,6 +6,7 @@ import { initStarfield } from './systems/starfield.js';
 import { initSolarSystem } from './systems/solarsystem.js';
 import { initAsteroids } from './systems/asteroids.js';
 import { initStation } from './systems/station.js';
+import { initLandmarks } from './systems/landmarks.js';
 import { initShip } from './systems/ship.js';
 import { initHail } from './systems/hail.js';
 import { initHud } from './systems/hud.js';
@@ -16,6 +17,7 @@ import { initControls } from './systems/controls.js';
 import { initBio } from './game/bio.js';
 import { initWorld } from './game/world.js';
 import { initContacts } from './game/contacts.js';
+import { initMystery } from './game/mystery.js';
 import { initTraffic } from './game/traffic.js';
 import { initNpc } from './systems/npc.js';
 import { initCombat } from './systems/combat.js';
@@ -58,18 +60,21 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // (restores snapshots over live state) → HUD last so it sees every event.
 // gate before world (zone checks read records' lane); jump after world
 // (consumes jumpRequested same-frame, before traffic reacts); contacts
-// right after world (roster seed before save.js restores over it).
+// right after world (roster seed before save.js restores over it); mystery
+// right after contacts (lazy ctx.world.mystery default before save restore).
 const systems = [
   initStarfield,
   initSolarSystem,
   initAsteroids,
   initStation,
+  initLandmarks,
   initGate,
   initControls,
   initBio,
   initShip,
   initWorld,
   initContacts,
+  initMystery,
   initJump,
   initTraffic,
   initNpc,

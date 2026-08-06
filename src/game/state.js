@@ -224,6 +224,13 @@ export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
  * priceBase multipliers set each system's market baseline vs COMMODITIES.base,
  * creating deliberate arbitrage spreads (Freehold grows food, Veridian refines
  * metal): buy low here, sell high there (§10.1).
+ *
+ * band indexes BANDS (§15): 0 = core, 2 = rim edge. Pacing modules read it
+ * to stretch event/chatter/song gaps the farther out you fly.
+ * landmarks[] are authored POIs { id, name, kind, position, line } discovered
+ * at 100u; clues[] are mystery breadcrumbs { id, position, line } discovered
+ * at 35u (mystery.js owns discovery; ctx.world.mystery tracks found/visited).
+ * Both sit away from station/field/gates so finding them means traveling.
  */
 export const SYSTEMS = {
   freehold: {
@@ -239,6 +246,11 @@ export const SYSTEMS = {
     gates: [{ position: [0, 60, -900], to: 'veridian' }],
     priceBase: { provisions: 1.0, refinedMetals: 1.1, restrictedComponents: 1.0, rawOre: 1.0, livingRock: 0.9 },
     cast: { traders: 8, pirates: 4, patrols: 2, ace: true },
+    band: 0,
+    landmarks: [
+      { id: 'fh_shepherd', name: 'The Shepherd', kind: 'beacon', position: [750, 90, -100], line: 'A navigation beacon, older than the charts that cite it. Still broadcasting a lane nobody flies.' },
+    ],
+    clues: [],
   },
   veridian: {
     id: 'veridian',
@@ -257,6 +269,13 @@ export const SYSTEMS = {
     priceBase: { provisions: 1.35, refinedMetals: 0.75, restrictedComponents: 1.2, rawOre: 0.8, livingRock: 1.3 },
     cast: { traders: 7, pirates: 3, patrols: 3, ace: false },
     tradesRestricted: true,
+    band: 0,
+    landmarks: [
+      { id: 'vd_hulk_row', name: 'Hulk Row', kind: 'wreck', position: [-700, -60, 350], line: 'Five refinery hulls parked in a perfect line. No distress log on file for any of them.' },
+    ],
+    clues: [
+      { id: 'vd_c_shanty', position: [-600, 100, -100], line: 'A hull plate etched with a work-song verse. The last line was scratched out by hand.' },
+    ],
   },
   redmarch: {
     id: 'redmarch',
@@ -268,10 +287,44 @@ export const SYSTEMS = {
     planetCount: 4,
     station: { name: 'Ledger Anchorage', position: [200, 40, -480], palette: 0xa03434 },
     field: { center: [-380, -50, 380], radius: 140, count: 110, oreMult: 1.2 },
-    gates: [{ position: [0, 55, -850], to: 'veridian' }],
+    gates: [
+      { position: [0, 55, -850], to: 'veridian' },
+      { position: [-800, 50, -200], to: 'hollowreach' },
+    ],
     priceBase: { provisions: 1.3, refinedMetals: 0.9, restrictedComponents: 0.7, rawOre: 1.1, livingRock: 1.2 },
     cast: { traders: 5, pirates: 7, patrols: 1, ace: false },
     tradesRestricted: true,
+    band: 1,
+    landmarks: [
+      { id: 'rm_tithe_stone', name: 'The Tithe Stone', kind: 'monument', position: [600, -80, 500], line: 'A ledger carved in rock ten decks tall. The names stop mid-column, chisel marks still fresh.' },
+    ],
+    clues: [
+      { id: 'rm_c_tally', position: [-100, 140, 100], line: 'A drifter\'s tally-board, counting something in sevens. The count ends at a number no one round here will say aloud.' },
+    ],
+  },
+  hollowreach: {
+    id: 'hollowreach',
+    name: 'Hollow Reach',
+    faction: 'hollow',
+    worldSeed: 99,
+    sunColor: 0x8a7a9a,
+    sunRadius: 40,
+    planetCount: 2,
+    station: { name: 'Hollow Anchorage', position: [-300, 30, 500], palette: 0x7a6a8a },
+    field: { center: [420, -60, -320], radius: 100, count: 60, oreMult: 2.0 },
+    gates: [{ position: [0, 70, 1100], to: 'redmarch' }],
+    priceBase: { provisions: 1.6, refinedMetals: 1.2, restrictedComponents: 0.6, rawOre: 0.9, livingRock: 0.7 },
+    cast: { traders: 2, pirates: 3, patrols: 0, ace: false },
+    tradesRestricted: true,
+    band: 2,
+    landmarks: [
+      { id: 'hr_quiet_beacon', name: 'The Quiet Beacon', kind: 'beacon', position: [550, 150, 400], line: 'A beacon still transmitting to no one. Its message is one word, repeated, in a cipher the colonies never used.' },
+      { id: 'hr_first_wreck', name: 'The First Wreck', kind: 'wreck', position: [-550, -100, -450], line: 'A wreck field older than the colonies. The hull alloy doesn\'t match any foundry in the rim.' },
+    ],
+    clues: [
+      { id: 'hr_c_answer', position: [150, -20, 150], line: 'Your ship\'s song went out ahead of you — and something here answered in the same key.' },
+      { id: 'hr_c_garden', position: [-150, 200, -600], line: 'A ring of stones arranged like a garden. Whatever was planted here was dug up and taken rimward.' },
+    ],
   },
 };
 export const JUMP = {
@@ -285,7 +338,15 @@ export const FACTIONS = {
   freehold: { name: 'Freehold Compact', color: 0xb0703a, doctrine: 0.4 },
   redledger: { name: 'Red Ledger', color: 0xa03434, doctrine: 0.7 },
   veridian: { name: 'Veridian Combine', color: 0x6fd0e0, doctrine: 0.5 },
+  hollow: { name: 'Hollow Reach', color: 0x7a6a8a, doctrine: 0.3 },
   independent: { name: 'Independent', color: 0x9aa7b8, doctrine: 0.5 },
+};
+
+// §15 bands: pacing multipliers moving rimward — farther out, longer silences
+export const BANDS = {
+  0: { eventGapMult: 1.0, chatterMult: 1.0, songGapMult: 1.0 },
+  1: { eventGapMult: 1.4, chatterMult: 0.6, songGapMult: 1.5 },
+  2: { eventGapMult: 2.2, chatterMult: 0.25, songGapMult: 2.5 },
 };
 
 // ---------- Faction ranks (§12.x station depth) ----------

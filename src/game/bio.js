@@ -29,6 +29,11 @@ const BOND_HEAL_RATE = 0.003; // healing together
 const BOND_FED_BONUS = 0.1; // a real feeding (hunger drop ≥ threshold)
 const FED_DROP_THRESHOLD = 0.2;
 
+// --- Growth (§14: visibly reflects the player's history) ---
+// growth = f(bond, real feedings); ship.js renders it as hull scale.
+const GROWTH_BOND_WEIGHT = 0.7;
+const GROWTH_PER_FEEDING = 0.05;
+
 // Modest gameplay effects (§14.6): [speedFactor, turnFactor]
 const MOOD_FACTORS = {
   serene: [1.0, 1.0],
@@ -40,6 +45,10 @@ const MOOD_FACTORS = {
 
 export function initBio(ctx) {
   const bio = ctx.bio;
+  // Growth tracking (JSON-plain; save.js spreads ctx.bio). Defensive
+  // defaults — older saves/ctx stubs may lack these fields.
+  if (bio.fedCount == null) bio.fedCount = 0; // real feedings applied
+  if (bio.growth == null) bio.growth = 0; // 0..1, from bond + feedings
   let lastHitAt = -1e9;
   let lastCombatAt = -1e9;
   let lastBurnerAt = -1e9;
@@ -97,6 +106,7 @@ export function initBio(ctx) {
       }
       if (prevHunger - bio.hunger >= FED_DROP_THRESHOLD) {
         bio.bond = Math.min(1, bio.bond + BOND_FED_BONUS);
+        bio.fedCount += 1; // a real feeding — growth remembers it
       }
       prevHunger = bio.hunger;
 
@@ -142,6 +152,13 @@ export function initBio(ctx) {
       bio.turnFactor = f[1];
 
       if (mood === 'serene') bio.bond = Math.min(1, bio.bond + BOND_SERENE_RATE * dt);
+
+      // --- Growth: care made visible. Bond carries most of it; every real
+      // feeding adds a step. Read by ship.js as hull scale.
+      bio.growth = Math.min(
+        1,
+        bio.bond * GROWTH_BOND_WEIGHT + bio.fedCount * GROWTH_PER_FEEDING,
+      );
     },
   };
 }

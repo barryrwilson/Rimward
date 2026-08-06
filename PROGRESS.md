@@ -15,11 +15,11 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 | 5 | Sandbox in miniature (trade, mine, pirate, hunt, serve, dock, buy/sell, rep/fear) | DONE (wave 1: mining, bounty/patrol/haul jobs, restricted locker) |
 | 6 | Neighborhood (one authored system worth learning) | DONE (wave 2: freehold + veridian, jump gates, migration) |
 | 7 | Broader world (more systems, factions, contacts, jobs, event variety) | DONE (waves 3-4: 3 systems, gate network, contacts/ranks, 5 job kinds, 6 event kinds) |
-| 8 | Rimward journey (distance bands, sparse travel, mystery clues, landmarks, silence) | NOT STARTED |
-| 9 | Living companion (visual/emotional/parity targets) | PARTIAL (bio.js mood/wounds/song exist wave 1; parity pass pending) |
+| 8 | Rimward journey (distance bands, sparse travel, mystery clues, landmarks, silence) | DONE (wave 5: bands 0-2, Hollow Reach, clues/landmarks, band pacing) |
+| 9 | Living companion (visual/emotional/parity targets) | DONE (wave 5: mood bioluminescence, breathing, scars, growth, death tenderness) |
 | 10 | Content and polish (faction epics, origins, audio, visuals, accessibility, onboarding) | NOT STARTED |
 
-## Wave 3 scope (this round)
+## Wave 3 scope (historical)
 
 - Gate network: `SYSTEMS[id].gates = [{position, to}]` replaces single `.gate`.
 - Third system: `redmarch` ("The Redmarch"), home of the Red Ledger faction,
@@ -52,11 +52,32 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   restricted locker per-session, fixer markup on restricted sales, ferry job
   (350, fronted consignment) + recovery job (300, wreck salvage pod).
   Boot test wave-4 section drives real dock/UI/DOM paths. PASS.
+- Wave 5: ladder #8 + #9. state.js: band 0-2 per system + BANDS pacing table
+  (event/chatter/song gap multipliers), 4th system Hollow Reach (band 2, sparse
+  cast, gate redmarch↔hollowreach, FACTIONS.hollow), authored landmarks[]/clues[]
+  on all systems. src/game/mystery.js: proximity discovery (clue 35u, landmark
+  100u), permanent per id, ctx.world.mystery {found,visited} persisted via
+  WORLD_FIELDS, 'clueFound'/'landmarkFound' events, echoes-3 milestone.
+  src/systems/landmarks.js: per-system POI meshes (wreck/beacon/monument/anomaly
+  + clue motes), rebuild+dispose on systemLoaded, dim-when-discovered.
+  Designed silence: world event gap, song phrase gap, and band-aware arrival
+  commLine all scale by BANDS (npc.js had no ambient chatter to scale).
+  Bio parity: bio.js growth (bond+feedings→0..1) + fedCount; ship.js mood
+  bioluminescence (lerped emissive tints), breathing scale pulse, 5 wound
+  scars, +15% growth scale. save.js: 'mystery' persisted; death now wounds the
+  bio (freshStart keeps+pains her; reload leaves her anxious) instead of
+  resetting. HUD: ECHOES tally. Boot test wave-5 section: 4-system jump chain,
+  band pacing, clue/landmark discovery + permanence, mystery save roundtrip,
+  death tenderness, feral/scar/growth visuals. PASS.
 
-## Next round candidates (wave 5)
+## Next round candidates (wave 6)
 
-- Ladder #8 Rimward journey: distance bands, sparse travel, mystery clues,
-  landmarks, designed silence. NOTE: goal doc §1-24 truncated — band/mystery
-  specs must be derived from glossary + §29 product test or a restored doc.
-- Ladder #9 bio companion parity pass (visual/emotional targets vs mechanical ships).
+- Ladder #10 Content and polish: faction epics, origin variety, audio, visuals,
+  accessibility, onboarding. NOTE: goal doc §1-24 truncated — epic/origin specs
+  must be derived from glossary + §29 product test or a restored doc.
+- Mystery depth: clues currently terminate at the echoes-3 milestone; the chain
+  wants a next rung (a destination the clues point at) without restating the
+  buried truth (§27).
+- Named aces exist in cast data (ace: true); an ace duel/recognition arc would
+  feed the fear economy (ECON.fear.aceDefeated is already wired).
 - Polish debt: none known; boot test is the gate.
