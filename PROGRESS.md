@@ -14,7 +14,7 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 | 4 | Small living system (traffic identities/routes, market, incidents, persistence, aftermath) | DONE (wave 1: world.js, save.js, witness rule) |
 | 5 | Sandbox in miniature (trade, mine, pirate, hunt, serve, dock, buy/sell, rep/fear) | DONE (wave 1: mining, bounty/patrol/haul jobs, restricted locker) |
 | 6 | Neighborhood (one authored system worth learning) | DONE (wave 2: freehold + veridian, jump gates, migration) |
-| 7 | Broader world (more systems, factions, contacts, jobs, event variety) | PARTIAL (wave 3: 3rd system redmarch, gate network, pirate bounties, 2 new events; contacts/faction-depth remain) |
+| 7 | Broader world (more systems, factions, contacts, jobs, event variety) | DONE (waves 3-4: 3 systems, gate network, contacts/ranks, 5 job kinds, 6 event kinds) |
 | 8 | Rimward journey (distance bands, sparse travel, mystery clues, landmarks, silence) | NOT STARTED |
 | 9 | Living companion (visual/emotional/parity targets) | PARTIAL (bio.js mood/wounds/song exist wave 1; parity pass pending) |
 | 10 | Content and polish (faction epics, origins, audio, visuals, accessibility, onboarding) | NOT STARTED |
@@ -46,11 +46,17 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   (Red Ledger home, open restricted trade), bounty-pirate jobs, pirate record
   bounties, convoySurge + oreRush events, migration over random gate. Boot test
   extended to 3-system jump chain. PASS.
+- Wave 4 (commit e8b7342): contacts (src/game/contacts.js — 6 named station NPCs,
+  trust/favors/witness-rule rumors/recognition lines, persisted via WORLD_FIELDS),
+  RANK_LADDER + rankFor, station 'people' service, fence favor opens freehold
+  restricted locker per-session, fixer markup on restricted sales, ferry job
+  (350, fronted consignment) + recovery job (300, wreck salvage pod).
+  Boot test wave-4 section drives real dock/UI/DOM paths. PASS.
 
-## Next round candidates (wave 4)
+## Next round candidates (wave 5)
 
-- Ladder #7 remainder: contacts (named NPCs at stations who remember you),
-  more job kinds (ferry, scan, recovery), faction service ranks.
 - Ladder #8 Rimward journey: distance bands, sparse travel, mystery clues,
-  landmarks, designed silence.
+  landmarks, designed silence. NOTE: goal doc §1-24 truncated — band/mystery
+  specs must be derived from glossary + §29 product test or a restored doc.
 - Ladder #9 bio companion parity pass (visual/emotional targets vs mechanical ships).
+- Polish debt: none known; boot test is the gate.
