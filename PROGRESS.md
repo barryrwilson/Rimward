@@ -14,7 +14,7 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 | 4 | Small living system (traffic identities/routes, market, incidents, persistence, aftermath) | DONE (wave 1: world.js, save.js, witness rule) |
 | 5 | Sandbox in miniature (trade, mine, pirate, hunt, serve, dock, buy/sell, rep/fear) | DONE (wave 1: mining, bounty/patrol/haul jobs, restricted locker) |
 | 6 | Neighborhood (one authored system worth learning) | DONE (wave 2: freehold + veridian, jump gates, migration) |
-| 7 | Broader world (more systems, factions, contacts, jobs, event variety) | IN PROGRESS (wave 3) |
+| 7 | Broader world (more systems, factions, contacts, jobs, event variety) | PARTIAL (wave 3: 3rd system redmarch, gate network, pirate bounties, 2 new events; contacts/faction-depth remain) |
 | 8 | Rimward journey (distance bands, sparse travel, mystery clues, landmarks, silence) | NOT STARTED |
 | 9 | Living companion (visual/emotional/parity targets) | PARTIAL (bio.js mood/wounds/song exist wave 1; parity pass pending) |
 | 10 | Content and polish (faction epics, origins, audio, visuals, accessibility, onboarding) | NOT STARTED |
@@ -42,4 +42,15 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 - Wave 1 (commit f472903): full baseline — flight, combat, resolve/fear, traffic,
   market, jobs, bio companion, save, HUD. Boot test passing.
 - Wave 2 (in f472903): second system, gate/jump, migration, per-system rebuilds.
-- Wave 3: this round.
+- Wave 3 (commit 4d9c3af): gate network (SYSTEMS.gates[]), third system The Redmarch
+  (Red Ledger home, open restricted trade), bounty-pirate jobs, pirate record
+  bounties, convoySurge + oreRush events, migration over random gate. Boot test
+  extended to 3-system jump chain. PASS.
+
+## Next round candidates (wave 4)
+
+- Ladder #7 remainder: contacts (named NPCs at stations who remember you),
+  more job kinds (ferry, scan, recovery), faction service ranks.
+- Ladder #8 Rimward journey: distance bands, sparse travel, mystery clues,
+  landmarks, designed silence.
+- Ladder #9 bio companion parity pass (visual/emotional targets vs mechanical ships).
