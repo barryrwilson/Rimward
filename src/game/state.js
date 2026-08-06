@@ -288,6 +288,25 @@ export const FACTIONS = {
   independent: { name: 'Independent', color: 0x9aa7b8, doctrine: 0.5 },
 };
 
+// ---------- Faction ranks (§12.x station depth) ----------
+/**
+ * Reputation → named rank. First rung whose min <= rep wins, so the ladder
+ * is ordered best-to-worst. tier > 0 grants sell-price goodwill at stations
+ * flying that faction's flag (station.js applies the bonus).
+ */
+export const RANK_LADDER = [
+  { min: 50, name: 'Sworn', tier: 3 },
+  { min: 25, name: 'Trusted', tier: 2 },
+  { min: 10, name: 'Known', tier: 1 },
+  { min: -10, name: 'Stranger', tier: 0 },
+  { min: -25, name: 'Suspect', tier: -1 },
+  { min: -1000, name: 'Marked', tier: -2 },
+];
+export function rankFor(rep) {
+  for (const rung of RANK_LADDER) if (rep >= rung.min) return rung;
+  return RANK_LADDER[RANK_LADDER.length - 1];
+}
+
 /** Ransom offer for a disabled/bargaining target (§7.8). */
 export function ransomFor(state) {
   const [lo, hi] = ECON.ransomRate;

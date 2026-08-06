@@ -1,0 +1,128 @@
+/**
+ * Contacts — named station NPCs with trust + favors (doc §12.9).
+ *
+ * Pure simulation module: no three.js, no scene. One contact per
+ * (system, role): a dockmaster at every station, a fence at Freehold
+ * (restricted-locker access via favors), a fixer at Veridian and Redmarch
+ * (better restricted prices at high trust). station.js reads the roster and
+ * applies the mechanics; world.trust/favors persist via save.js.
+ *
+ * WITNESS RULE (§8.7): rumorFor voices ONLY what ctx.world.incidents
+ * records — contacts never invent events. recognitionLine keys off
+ * accumulated trust, not scripted beats.
+ *
+ * All entries are JSON-plain. update() allocates nothing per frame.
+ */
+
+// Fixed per-system name table (same convention as world.js record pools).
+// Freehold frontier-warm, Veridian corporate-cool, Redmarch outlaw.
+const CONTACT_NAMES = {
+  freehold: { dockmaster: 'Mother Tarn', fence: 'Quiet Hollis' },
+  veridian: { dockmaster: 'Adjutant Vey', fixer: 'Lias Corrow' },
+  redmarch: { dockmaster: 'Dockhand Sorrow', fixer: 'Six-Finger Brack' },
+};
+
+// Roster: dockmaster everywhere; fence at freehold; fixer off-freehold.
+const CONTACT_ROLES = {
+  freehold: ['dockmaster', 'fence'],
+  veridian: ['dockmaster', 'fixer'],
+  redmarch: ['dockmaster', 'fixer'],
+};
+
+function buildRoster() {
+  const roster = [];
+  for (const system of Object.keys(CONTACT_ROLES)) {
+    for (const role of CONTACT_ROLES[system]) {
+      roster.push({
+        id: `contact-${system}-${role}`,
+        name: CONTACT_NAMES[system][role],
+        role,
+        system,
+        trust: 0,
+        favors: 0,
+        metAt: null,
+        rumorIdx: 0,
+      });
+    }
+  }
+  return roster;
+}
+
+/** Contacts stationed in the given system (live refs — UI-time call). */
+export function contactsForSystem(ctx, sysId) {
+  return ctx.world.contacts.filter((c) => c.system === sysId);
+}
+
+/** Adjust trust, clamped 0..100. */
+export function bumpTrust(ctx, contact, delta) {
+  contact.trust = Math.max(0, Math.min(100, contact.trust + delta));
+}
+
+/** Grant n favors (default 1). */
+export function addFavor(ctx, contact, n = 1) {
+  contact.favors += n;
+}
+
+/** Spend one favor if any are banked; true when the call went through. */
+export function spendFavor(ctx, contact) {
+  if (contact.favors <= 0) return false;
+  contact.favors -= 1;
+  return true;
+}
+
+/**
+ * A voiced one-liner drawn ONLY from recorded incidents (Witness Rule §8.7),
+ * rotating through the log via contact.rumorIdx. null when nothing has
+ * happened yet.
+ */
+export function rumorFor(ctx, contact) {
+  const incidents = ctx.world.incidents;
+  if (incidents.length === 0) return null;
+  const inc = incidents[contact.rumorIdx % incidents.length];
+  contact.rumorIdx = (contact.rumorIdx + 1) % incidents.length;
+  if (inc.kind === 'destroyed') {
+    return inc.causer === 'player'
+      ? `Everyone saw what became of ${inc.name}. The ${inc.faction} won't forget it.`
+      : `${inc.name} came apart out in the drift. Happens more than it should.`;
+  }
+  // 'surrendered'
+  return `${inc.name} struck colors and paid to walk away. Smart, that one.`;
+}
+
+/**
+ * A recognition line once trust >= 60: the contact knows the ship. Uses the
+ * player-set shipName when present, else refers to the living hull (§12.5).
+ * null below the threshold.
+ */
+export function recognitionLine(ctx, contact) {
+  if (contact.trust < 60) return null;
+  const ship = ctx.world.shipName;
+  return ship
+    ? `${ship}, back on my pad. Good to see her in one piece.`
+    : `The living hull — we'd know that ship anywhere. Welcome back.`;
+}
+
+/**
+ * Populate ctx.world.contacts when empty (save.js restores over this roster
+ * afterward, same pattern as world records). update() stamps metAt on the
+ * current system's contacts when a 'docked' event lands.
+ */
+export function initContacts(ctx) {
+  if (ctx.world.contacts.length === 0) {
+    ctx.world.contacts = buildRoster();
+  }
+  return {
+    update() {
+      for (let i = 0; i < ctx.lastEvents.length; i++) {
+        if (ctx.lastEvents[i].type !== 'docked') continue;
+        const sysId = ctx.world.currentSystem;
+        const list = ctx.world.contacts;
+        for (let j = 0; j < list.length; j++) {
+          if (list[j].system === sysId && list[j].metAt === null) {
+            list[j].metAt = ctx.world.time;
+          }
+        }
+      }
+    },
+  };
+}

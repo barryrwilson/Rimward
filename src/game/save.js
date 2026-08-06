@@ -40,7 +40,7 @@ const WORLD_FIELDS = [
   'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets',
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
-  'jumpGraceUntil',
+  'jumpGraceUntil', 'contacts',
 ];
 
 function snapshot(ctx) {

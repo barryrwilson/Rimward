@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, rankFor } from '../game/state.js';
+import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine } from '../game/contacts.js';
+import { spawnPod } from '../game/pods.js';
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -32,13 +34,13 @@ import { U, COMMODITIES, ECON, FACTIONS } from '../game/state.js';
  * cost. Origin system/price are JSON-plain fields on the job entry.
  *
  * UI (§12.1: no more than two menu levels): full-screen dim + panel, world
- * keeps ticking behind. Keyboard: 1-7 service select, digit hotkeys inside
+ * keeps ticking behind. Keyboard: 1-8 service select, digit hotkeys inside
  * services, Esc/B launch (Esc backs out of a service first). Mouse: panel has
  * pointer-events auto. update() performs zero allocations.
  */
 
 const RING_SPIN = 0.05; // rad/s
-const DOCK_KEY_SERVICES = ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'launch'];
+const DOCK_KEY_SERVICES = ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch'];
 
 const RESTRICTED_REP_GATE = -25; // a burned Compact name opens the locker
 
@@ -56,12 +58,20 @@ const PATROL_REP = 5;
 const PATROL_NEED = 2;
 const HAUL_UNITS = 5;
 const HAUL_MARGIN = 1.4;
+const FERRY_UNITS = 4; // consignment is fronted on accept (§12.x)
+const FERRY_REWARD = 350;
+const RECOVERY_REWARD = 300;
+const FIXER_CUT_TRUST = 30; // fixer trust that earns the restricted-sale markup
+const FIXER_MARKUP = 1.10; // × on restrictedComponents sales the fixer brokers
+const FIXER_TRUST_PER_SALE = 2;
+const DOCKMASTER_TRUST_PER_JOB = 5;
 const DEFAULT_ACE_NAME = 'Carver Illyx';
 const DEFAULT_ACE_BOUNTY = 2500;
 const PIRATE_BOUNTY_CAP = 2; // max pirate bounty cards per system's board
 const PIRATE_BOUNTY_FALLBACK = 400; // UU, until world.js prices every pirate
 
 const _pulse = new THREE.Color();
+const _podPos = new THREE.Vector3(); // scratch for recovery-job pod spawns
 
 // ------------------------------------------------------------- palette ----
 
@@ -257,8 +267,9 @@ function findAceRecord(ctx) {
 function stationAlwaysTradesRestricted(ctx) {
   return ctx.systems?.[ctx.world.currentSystem]?.tradesRestricted === true;
 }
-function restrictedAllowed(ctx) {
+function restrictedAllowed(ctx, fenceUnlocked = false) {
   if (stationAlwaysTradesRestricted(ctx)) return true;
+  if (fenceUnlocked) return true; // the fence called ahead — locker opens this session
   return ctx.world.fear >= ECON.fear.tributeOpensAt || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
 }
 /** The system on the other side of the primary gate (haul jobs §10.1). */
@@ -299,6 +310,13 @@ function makeJobs(ctx) {
       detail: `Provisions are worth more a gate away. Accept here, buy ${HAUL_UNITS} Provisions, and dock at the other system's station — paid at ${Math.round(HAUL_MARGIN * 100)}% of your buy cost on delivery.`,
       reward: 0, state: 'offered', progress: 0, need: HAUL_UNITS,
       originSystem: null, originPrice: 0, // stamped on accept (JSON-plain)
+    },
+    {
+      id: 'ferry-consignment', kind: 'ferry',
+      title: 'Ferry a consignment',
+      detail: `A dockside factor fronts you ${FERRY_UNITS} Provisions — no buy-in, no questions — and pays ${FERRY_REWARD} UU when the consignment crosses the gate and lands intact at the far station. The manifest is watched: deliver short and the deal is off.`,
+      reward: FERRY_REWARD, state: 'offered', progress: 0, need: FERRY_UNITS,
+      originSystem: null, destSystem: null, // stamped on accept (JSON-plain)
     },
   ];
 }
@@ -366,12 +384,49 @@ function syncPirateBounties(ctx, sysId) {
   }
 }
 
+/**
+ * Post a recovery card while an unexpired wreck of the CURRENT system drifts
+ * unsalvaged (§12.x). Same render-time sync pattern as syncPirateBounties:
+ * offered cards whose wreck expired (or was never real — Witness Rule §8.7,
+ * wrecks only stage from real kills) are pulled. Never posts twice for one
+ * wreck id.
+ */
+function syncRecoveryJob(ctx, sysId) {
+  const jobs = ctx.world.jobs;
+  const aftermath = ctx.world.aftermath || [];
+  // Pull offered cards whose wreck is gone or expired.
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    if (j.kind !== 'recovery' || j.state !== 'offered') continue;
+    let live = false;
+    for (const a of aftermath) {
+      if (a.id === j.wreckId && a.kind === 'wreck' && a.expiresAt > ctx.world.time) { live = true; break; }
+    }
+    if (!live) jobs.splice(i, 1);
+  }
+  // Post for the first in-system wreck with no job yet (one card at a time).
+  for (const a of aftermath) {
+    if (a.kind !== 'wreck' || a.system !== sysId || !(a.expiresAt > ctx.world.time)) continue;
+    const id = `recovery-${a.id}`;
+    if (jobs.some((j) => j.id === id)) continue;
+    jobs.push({
+      id, kind: 'recovery', wreckId: a.id,
+      title: 'Recovery: wreck salvage',
+      detail: `A wreck drifts in the lanes and the yard wants its metallics back before the hulk goes cold. Accept and a salvage marker pod is cut loose at the site — scoop it, dock back here, collect ${RECOVERY_REWARD} UU.`,
+      reward: RECOVERY_REWARD, state: 'offered', progress: 0, need: 1,
+      originSystem: sysId, collected: false, // JSON-plain
+    });
+    break;
+  }
+}
+
 /** Board-visible jobs: offered pirate bounties post only at their home system. */
 function boardJobs(ctx, sysId) {
   const out = [];
   for (const j of ctx.world.jobs) {
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
       && j.state === 'offered' && j.system !== sysId) continue;
+    if (j.kind === 'recovery' && j.state === 'offered' && j.originSystem !== sysId) continue;
     out.push(j);
   }
   return out;
@@ -379,7 +434,28 @@ function boardJobs(ctx, sysId) {
 
 function completeJob(ctx, job, notice) {
   job.state = 'done';
+  // Dockmaster trust grows with every finished contract; a bounty claim also
+  // earns the local fence's favor where one works the dock (§12.x).
+  for (const c of contactsForSystem(ctx, ctx.world.currentSystem)) {
+    if (c.role === 'dockmaster') bumpTrust(ctx, c, DOCKMASTER_TRUST_PER_JOB);
+    if (job.kind === 'bounty' && c.role === 'fence') addFavor(ctx, c);
+  }
   if (notice) ctx.emit('commLine', { text: notice });
+}
+
+/**
+ * Every-frame event scan for active recovery contracts: lastEvents lives one
+ * frame, so the podCollected watch CANNOT sit in the throttled delivery tick.
+ * Any scooped pod counts while the recovery is active — pods carry no job
+ * tags (shared pods.js contract), so the abstraction is temporal.
+ */
+function tickRecoveryCollect(ctx) {
+  for (const job of ctx.world.jobs) {
+    if (job.kind !== 'recovery' || job.state !== 'accepted' || job.collected) continue;
+    for (const ev of ctx.lastEvents) {
+      if (ev.type === 'podCollected') { job.collected = true; break; }
+    }
+  }
 }
 
 /** Every-frame event scan for the patrol contract (cheap: few events). */
@@ -402,7 +478,7 @@ function tickPatrolJob(ctx) {
 }
 
 /** Throttled checks: bounty claim + cross-system provisions delivery. */
-function tickDeliveryJobs(ctx) {
+function tickDeliveryJobs(ctx, ui) {
   for (const job of ctx.world.jobs) {
     if (job.state !== 'accepted') continue;
     if (job.kind === 'bounty') {
@@ -435,6 +511,24 @@ function tickDeliveryJobs(ctx) {
       ctx.world.credits += reward;
       const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
       completeJob(ctx, job, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
+    } else if (job.kind === 'ferry' && ctx.flags.docked) {
+      if (ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
+      if (holdUnits(ctx, 'provisions') >= FERRY_UNITS) {
+        removeCargo(ctx, 'provisions', FERRY_UNITS);
+        ctx.world.credits += job.reward;
+        const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
+        completeJob(ctx, job, `Consignment landed intact — ${job.reward} UU from the factor at ${destName}.`);
+      } else if (ui) {
+        // Fronted goods came up short: the contract stays open but unpaid.
+        ui.notice = 'Consignment short — the manifest is watched.';
+      }
+    } else if (job.kind === 'recovery') {
+      // job.collected is set per frame by tickRecoveryCollect (lastEvents is
+      // single-frame; this throttled tick would miss it ~29 frames in 30).
+      if (job.collected && ctx.flags.docked && ctx.world.currentSystem === job.originSystem) {
+        ctx.world.credits += job.reward;
+        completeJob(ctx, job, `Salvage accounted — ${job.reward} UU from the yard.`);
+      }
     }
   }
 }
@@ -458,6 +552,7 @@ export function initStation(ctx) {
     name: currentDef.station.name,
     systemName: currentDef.name,
     inZone: false,
+    fenceUnlocked: false, // mirror of ui.fenceUnlocked for external readers/tests
   };
 
   /** Tear down and rebuild the station for a freshly loaded system. */
@@ -487,6 +582,7 @@ export function initStation(ctx) {
     marketSel: 0,
     barRound: 0,
     notice: '',
+    fenceUnlocked: false, // session-scoped: a called-in favor opens the locker
   };
 
   function h(tag, cls, parent, text) {
@@ -577,7 +673,7 @@ export function initStation(ctx) {
   function tryTrade(key, qty, buying) {
     const com = COMMODITIES[key];
     const price = priceOf(ctx, key);
-    if (!com.legal && !restrictedAllowed(ctx)) {
+    if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
       ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
       return;
     }
@@ -590,9 +686,23 @@ export function initStation(ctx) {
       ui.notice = `Bought ${qty} ${com.name} for ${cost} UU.`;
     } else {
       if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return; }
+      // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
+      const tier = rankFor(ctx.world.reputation[currentDef.faction] ?? 0).tier;
+      let unit = price * (tier > 0 ? 1 + 0.02 * tier : 1);
+      // Fixer brokered: at tradesRestricted stations a trusted fixer (30+)
+      // skims a better rate on patent stock, and every sale buys trust (§12.x).
+      let fixer = null;
+      if (key === 'restrictedComponents' && stationAlwaysTradesRestricted(ctx)) {
+        for (const c of contactsForSystem(ctx, currentId)) {
+          if (c.role === 'fixer') { fixer = c; break; }
+        }
+        if (fixer && fixer.trust >= FIXER_CUT_TRUST) unit *= FIXER_MARKUP;
+      }
+      const payout = Math.round(unit * qty);
       removeCargo(ctx, key, qty);
-      ctx.world.credits += price * qty;
-      ui.notice = `Sold ${qty} ${com.name} for ${price * qty} UU.`;
+      ctx.world.credits += payout;
+      if (fixer) bumpTrust(ctx, fixer, FIXER_TRUST_PER_SALE);
+      ui.notice = `Sold ${qty} ${com.name} for ${payout} UU.`;
     }
   }
 
@@ -612,7 +722,7 @@ export function initStation(ctx) {
       h('div', 'market-cell' + sel, table, `${priceOf(ctx, key)} UU`);
       h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
       const actions = h('div', 'market-cell market-actions' + sel, table);
-      if (!com.legal && !restrictedAllowed(ctx)) {
+      if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
         h('span', 'market-refusal', actions, 'trade refused');
       } else {
         btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
@@ -624,7 +734,7 @@ export function initStation(ctx) {
     if (stationAlwaysTradesRestricted(ctx)) {
       h('div', 'screen-note', panel,
         'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
-    } else if (!restrictedAllowed(ctx)) {
+    } else if (!restrictedAllowed(ctx, ui.fenceUnlocked)) {
       h('div', 'screen-note', panel,
         `The dockmaster keeps the restricted locker closed. Fear ${ECON.fear.tributeOpensAt}+ or a burned Compact name opens it.`);
     }
@@ -632,6 +742,26 @@ export function initStation(ctx) {
 
   // ---- jobs ----
   function acceptJob(job) {
+    if (job.kind === 'ferry') {
+      // The consignment is fronted FREE on accept — but only if it fits.
+      if (cargoUsed(ctx) + FERRY_UNITS > ctx.cargoCapacity) {
+        ui.notice = `No room for the consignment — free ${FERRY_UNITS} units of hold first.`;
+        render();
+        return;
+      }
+      job.originSystem = ctx.world.currentSystem;
+      job.destSystem = otherSystemId(ctx, job.originSystem);
+      addCargo(ctx, 'provisions', FERRY_UNITS);
+    } else if (job.kind === 'recovery') {
+      // Cut the salvage pod loose at the wreck site (world.js keeps aftermath
+      // positions JSON-plain; tolerate {x,y,z} or [x,y,z] here — live only).
+      const entry = (ctx.world.aftermath || []).find((a) => a.id === job.wreckId);
+      if (!entry) { ui.notice = 'The wreck has gone cold — nothing left to recover.'; render(); return; }
+      const p = entry.position;
+      _podPos.set(p.x ?? p[0] ?? 0, p.y ?? p[1] ?? 0, p.z ?? p[2] ?? 0);
+      spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
+      job.collected = false;
+    }
     job.state = 'accepted';
     if (job.kind === 'haul') {
       // Cross-system contract: stamp where (and at what price) it was taken.
@@ -646,6 +776,7 @@ export function initStation(ctx) {
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
     refreshBountyJob(ctx);
     syncPirateBounties(ctx, currentId);
+    syncRecoveryJob(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
     boardJobs(ctx, currentId).forEach((job, i) => {
       const card = h('div', 'job-card', panel);
@@ -661,6 +792,12 @@ export function initStation(ctx) {
           : priceOf(ctx, 'provisions');
         const est = Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN);
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
+      } else if (job.kind === 'ferry') {
+        const destId = job.state === 'accepted' ? job.destSystem : otherSystemId(ctx, currentId);
+        const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
+        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${job.reward} UU, no buy-in`;
+      } else if (job.kind === 'recovery') {
+        rewardLine = `Scoop the salvage pod, redock here — pays ${job.reward} UU`;
       } else {
         rewardLine = `Reward: ${job.reward} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
@@ -678,6 +815,13 @@ export function initStation(ctx) {
         } else if (job.kind === 'haul') {
           const destName = ctx.systems?.[otherSystemId(ctx, job.originSystem ?? currentId)]?.station?.name ?? 'the far station';
           stateLine = `ACCEPTED — deliver to ${destName}`;
+        } else if (job.kind === 'ferry') {
+          const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
+          stateLine = `ACCEPTED — consignment to ${destName} (${holdUnits(ctx, 'provisions')}/${FERRY_UNITS} aboard)`;
+        } else if (job.kind === 'recovery') {
+          stateLine = job.collected
+            ? 'ACCEPTED — salvage aboard, redock here'
+            : 'ACCEPTED — pod adrift at the wreck site';
         } else {
           stateLine = 'ACCEPTED';
         }
@@ -782,6 +926,41 @@ export function initStation(ctx) {
     }
   }
 
+  // ---- people (contacts: dockmaster/fence/fixer of this dock, §12.x) ----
+  function renderPeople(panel) {
+    h('div', 'screen-sub', panel, 'PEOPLE — who runs this dock');
+    const people = contactsForSystem(ctx, currentId);
+    if (people.length === 0) {
+      h('div', 'screen-note', panel, 'Faces blur past the berth lights. Nobody here knows you yet.');
+      return;
+    }
+    for (const contact of people) {
+      const card = h('div', 'people-card', panel);
+      h('div', 'people-name', card, contact.name);
+      h('div', 'people-meta', card,
+        `${contact.role} · trust ${Math.round(contact.trust)} · favors ${contact.favors}`);
+      const recognition = recognitionLine(ctx, contact);
+      if (recognition) h('div', 'people-recognition', card, `“${recognition}”`);
+      const row = h('div', 'screen-btnrow people-actions', card);
+      btn(row, 'Ask around', () => {
+        ui.notice = rumorFor(ctx, contact) ?? 'Nothing new reaches the bar.';
+        render();
+      });
+      if (contact.role === 'fence') {
+        btn(row, 'Call in a favor', () => {
+          if (contact.favors <= 0) {
+            ui.notice = `${contact.name} spreads their hands. “You hold no marker with me.”`;
+          } else if (spendFavor(ctx, contact)) {
+            ui.fenceUnlocked = true;
+            ctx.station.fenceUnlocked = true;
+            ui.notice = `${contact.name} makes one call. The restricted locker will be... open to you, this visit.`;
+          }
+          render();
+        });
+      }
+    }
+  }
+
   function renderLaunch(panel) {
     h('div', 'screen-sub', panel, 'LAUNCH');
     h('div', 'screen-note', panel, 'Berth clamps release on your word. The lane is yours.');
@@ -795,6 +974,7 @@ export function initStation(ctx) {
     feed: renderFeed,
     repair: renderRepair,
     outfitting: renderOutfitting,
+    people: renderPeople,
     launch: renderLaunch,
   };
 
@@ -813,12 +993,16 @@ export function initStation(ctx) {
 
     if (ui.level === 1) {
       const menu = h('div', 'station-menu', panel);
-      const labels = ['Market', 'Jobs board', 'Bar', 'Feed & tend', 'Repair', 'Outfitting', 'Launch'];
+      const labels = ['Market', 'Jobs board', 'Bar', 'Feed & tend', 'Repair', 'Outfitting', 'People', 'Launch'];
       DOCK_KEY_SERVICES.forEach((key, i) => {
         btn(menu, `${i + 1} — ${labels[i]}`, () => selectService(key),
           key === 'launch' ? 'screen-btn screen-btn-warm' : 'screen-btn');
       });
-      h('div', 'screen-legend', panel, '1-7 select service · Esc/B launch');
+      // Rank surface: how this dock's faction reads you right now (§12.x).
+      const rep = ctx.world.reputation[currentDef.faction] ?? 0;
+      h('div', 'station-rank', panel,
+        `${factionName}: ${rankFor(rep).name} (${rep >= 0 ? '+' : ''}${Math.round(rep)} rep)`);
+      h('div', 'screen-legend', panel, '1-8 select service · Esc/B launch');
     } else {
       const back = h('div', 'station-back', panel);
       btn(back, '← Back (Esc)', () => { ui.level = 1; ui.service = null; ui.notice = ''; render(); });
@@ -851,6 +1035,8 @@ export function initStation(ctx) {
   function undock() {
     ctx.flags.docked = false;
     ui.open = false;
+    ui.fenceUnlocked = false; // the fence's call only covers this berth visit
+    ctx.station.fenceUnlocked = false;
     overlay.style.display = 'none';
     ctx.emit('undocked');
   }
@@ -939,8 +1125,9 @@ export function initStation(ctx) {
 
       // Job tracking runs docked or not.
       tickPatrolJob(ctx);
+      tickRecoveryCollect(ctx);
       jobTick += dt;
-      if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx); }
+      if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx, ui); }
     },
   };
 }

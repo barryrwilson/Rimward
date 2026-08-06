@@ -15,6 +15,7 @@ import { initSong } from './systems/song.js';
 import { initControls } from './systems/controls.js';
 import { initBio } from './game/bio.js';
 import { initWorld } from './game/world.js';
+import { initContacts } from './game/contacts.js';
 import { initTraffic } from './game/traffic.js';
 import { initNpc } from './systems/npc.js';
 import { initCombat } from './systems/combat.js';
@@ -55,7 +56,8 @@ ctx.systems = SYSTEMS; // star system definitions (state.js), read-only
 // world → live traffic/AI → player weapons → pods → hail UI → audio → save
 // (restores snapshots over live state) → HUD last so it sees every event.
 // gate before world (zone checks read records' lane); jump after world
-// (consumes jumpRequested same-frame, before traffic reacts).
+// (consumes jumpRequested same-frame, before traffic reacts); contacts
+// right after world (roster seed before save.js restores over it).
 const systems = [
   initStarfield,
   initSolarSystem,
@@ -66,6 +68,7 @@ const systems = [
   initBio,
   initShip,
   initWorld,
+  initContacts,
   initJump,
   initTraffic,
   initNpc,

@@ -119,6 +119,7 @@ export function createCtx({ scene, camera, renderer }) {
       markets: {}, // systemId → price table (persisted across jumps)
       activeEvent: null, // current dynamic world event §8.5
       milestones: [], // first-time beats already fired §8.8
+      contacts: [], // named station NPCs §12.9 (contacts.js maintains)
     },
 
     // --- star system data + gate/jump surface ---

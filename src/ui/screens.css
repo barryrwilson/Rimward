@@ -277,6 +277,54 @@
   font-size: 12px;
 }
 
+/* people (station contacts) */
+
+.station-rank {
+  margin-top: 12px;
+  color: #6fd2e0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+.people-card {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #0d1522;
+  border: 1px solid #22303f;
+  border-left: 2px solid #31445c;
+}
+
+.people-name {
+  color: #e6eef7;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+
+.people-meta {
+  color: #8a9db2;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.people-recognition {
+  margin: 6px 0;
+  color: #ffb454;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.people-actions {
+  flex-direction: row;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.people-actions .screen-btn {
+  width: auto;
+  padding: 4px 10px;
+}
+
 /* ---------- death (danger red) ---------- */
 
 .death-overlay {
