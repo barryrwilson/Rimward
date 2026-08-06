@@ -50,6 +50,7 @@ const camera = new THREE.PerspectiveCamera(
 
 const ctx = createCtx({ scene, camera, renderer });
 ctx.systems = SYSTEMS; // star system definitions (state.js), read-only
+window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 
 // Init order is load-bearing:
 // backdrop → world furniture → input → bio state → player ship → persistent
