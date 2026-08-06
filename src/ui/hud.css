@@ -1,0 +1,550 @@
+/* RIMWARD HUD — cold frontier instrumentation around one warm object (§18.4).
+   Scoped to #hud. Palette roles: void black, raised navy panels, star white,
+   beacon cyan, wake blue, threat amber, danger red, salvage green, bio vein
+   green, feral ember. Color is ALWAYS paired with text, shape, or glyph.
+   Near-sharp panels, monospace, small uppercase labels. Everything under
+   #hud is pointer-events:none except the controls collapse toggle. */
+
+#hud {
+  --void: #02060d;
+  --panel: rgba(9, 16, 30, 0.78);
+  --panel-edge: rgba(96, 150, 196, 0.28);
+  --white: #dce8f4;
+  --dim: #7d93ab;
+  --cyan: #6ff2e0; /* beacon cyan */
+  --blue: #4a9fd8; /* wake blue */
+  --amber: #ffb454; /* threat amber */
+  --red: #ff5252; /* danger red */
+  --green: #7dd87d; /* salvage green */
+  --vein: #5fe08a; /* bio vein green */
+  --ember: #ff7a3c; /* feral ember */
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--white);
+  user-select: none;
+}
+
+#hud .is-hidden { display: none; }
+
+/* ---------- shared panel furniture ---------- */
+.rw-panel {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px; /* near-sharp */
+  padding: 8px 10px;
+  min-width: 148px;
+  box-shadow: 0 0 0 1px rgba(2, 6, 13, 0.6), 0 2px 10px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.5s ease;
+}
+
+.rw-panel-title {
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(111, 242, 224, 0.18);
+  padding-bottom: 3px;
+}
+
+.rw-label {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+  min-width: 52px;
+}
+
+.rw-value {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--white);
+}
+
+.rw-unit {
+  font-size: 9px;
+  color: var(--dim);
+  margin-left: 4px;
+}
+
+.rw-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+/* Non-critical information fades during combat (§13.2) — faded, not hidden. */
+#hud.in-combat .rw-fade { opacity: 0.14; }
+
+/* ---------- bars ---------- */
+.rw-bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  background: rgba(2, 6, 13, 0.85);
+  border: 1px solid rgba(96, 150, 196, 0.22);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.rw-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--cyan);
+  transition: width 0.18s linear;
+}
+
+.rw-bar.rw-mini { height: 4px; max-width: 74px; }
+
+/* Screen = thin outer layer (§6.4) */
+.rw-screen .rw-bar { height: 3px; }
+.rw-screen .rw-bar-fill { background: var(--cyan); box-shadow: 0 0 6px rgba(111, 242, 224, 0.5); }
+
+/* Shell = thick inner layer */
+.rw-shell .rw-bar { height: 9px; }
+.rw-shell .rw-bar-fill { background: var(--blue); box-shadow: 0 0 6px rgba(74, 159, 216, 0.45); }
+
+.rw-strain .rw-bar-fill { background: var(--amber); }
+.rw-strain.overheated .rw-bar-fill { background: var(--red); }
+.rw-strain.overheated .rw-label { color: var(--red); }
+
+.rw-strain-flag {
+  display: none;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--red);
+  animation: rw-blink 0.7s steps(2, start) infinite;
+}
+
+@keyframes rw-blink { 50% { opacity: 0.25; } }
+
+/* hull as a row of scale-petals (bio flavor §14.9): lost petals go hollow */
+.rw-petals { display: flex; gap: 3px; align-items: flex-end; }
+
+.rw-petal {
+  width: 8px;
+  height: 13px;
+  border-radius: 6px 6px 2px 2px;
+  border: 1px solid rgba(125, 216, 125, 0.35);
+  background: transparent;
+  transform: skewX(-6deg);
+}
+
+.rw-petal.on { background: var(--green); box-shadow: 0 0 5px rgba(125, 216, 125, 0.4); }
+.rw-petals.h-warn .rw-petal.on { background: var(--amber); border-color: rgba(255, 180, 84, 0.5); box-shadow: 0 0 5px rgba(255, 180, 84, 0.4); }
+.rw-petals.h-crit .rw-petal.on { background: var(--red); border-color: rgba(255, 82, 82, 0.5); box-shadow: 0 0 6px rgba(255, 82, 82, 0.5); }
+.rw-petals.h-crit .rw-petal { animation: rw-blink 0.9s steps(2, start) infinite; }
+
+/* engine state: text + shape (the little block before the word) */
+.rw-engine .rw-value::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 1px;
+  background: var(--green);
+}
+
+.rw-engine[data-state='DAMAGED'] .rw-value { color: var(--amber); }
+.rw-engine[data-state='DAMAGED'] .rw-value::before { background: var(--amber); border-radius: 50%; }
+.rw-engine[data-state='OUT'] .rw-value { color: var(--red); }
+.rw-engine[data-state='OUT'] .rw-value::before { background: var(--red); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+
+/* afterburner / drift state colors+text */
+.rw-burner[data-state='READY'] .rw-value { color: var(--green); }
+.rw-burner[data-state='BURNING'] .rw-value { color: var(--amber); }
+.rw-burner[data-state='BURNING'] .rw-bar-fill { background: var(--amber); }
+.rw-burner[data-state='COOLDOWN'] .rw-value { color: var(--dim); }
+.rw-burner .rw-bar-fill { background: var(--blue); }
+
+.rw-drift[data-state='READY'] .rw-value { color: var(--green); }
+.rw-drift[data-state='HOLD'] .rw-value { color: var(--cyan); }
+.rw-drift[data-state='HOLD'] .rw-bar-fill { background: var(--cyan); }
+.rw-drift[data-state='COOLDOWN'] .rw-value { color: var(--dim); }
+.rw-drift .rw-bar-fill { background: var(--blue); }
+
+.rw-flight.drift-active { border-color: rgba(111, 242, 224, 0.55); }
+
+/* ---------- center reticle: small alien iris (§14.9) ---------- */
+.rw-reticle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.rw-reticle::before { /* outer membrane ring */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(95, 224, 138, 0.55);
+  border-radius: 47% 53% 50% 50% / 52% 48% 52% 48%; /* slightly organic */
+  animation: rw-breathe 3.2s ease-in-out infinite;
+}
+
+.rw-reticle::after { /* inner iris ring */
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px dashed rgba(111, 242, 224, 0.6);
+  border-radius: 50%;
+  animation: rw-iris-spin 14s linear infinite;
+}
+
+@keyframes rw-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes rw-iris-spin { to { transform: rotate(360deg); } }
+
+.rw-reticle-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  background: var(--vein);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(95, 224, 138, 0.8);
+}
+
+.rw-reticle-cilia {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 7px;
+  background: rgba(95, 224, 138, 0.7);
+  transform-origin: 0 0;
+}
+
+.rw-reticle-cilia:nth-of-type(1) { transform: rotate(30deg) translateY(-23px); }
+.rw-reticle-cilia:nth-of-type(2) { transform: rotate(150deg) translateY(-23px); }
+.rw-reticle-cilia:nth-of-type(3) { transform: rotate(270deg) translateY(-23px); }
+
+/* subtle fixed center crosshair under the drifting iris */
+.rw-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  opacity: 0.45;
+}
+
+.rw-crosshair::before,
+.rw-crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--white);
+}
+
+.rw-crosshair::before { left: -8px; top: 0; width: 16px; height: 1px; }
+.rw-crosshair::after { left: 0; top: -8px; width: 1px; height: 16px; }
+
+.rw-crosshair-dot {
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  width: 2px;
+  height: 2px;
+  background: var(--white);
+  border-radius: 50%;
+}
+
+#hud.first-person .rw-crosshair { opacity: 0.2; }
+
+/* ---------- target bracket ---------- */
+.rw-target {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.rw-target-box {
+  position: absolute;
+  left: -30px;
+  top: -30px;
+  width: 60px;
+  height: 60px;
+}
+
+.rw-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 0 solid var(--cyan);
+  transition: border-color 0.25s ease;
+}
+
+.rw-c-tl { left: 0; top: 0; border-top-width: 2px; border-left-width: 2px; }
+.rw-c-tr { right: 0; top: 0; border-top-width: 2px; border-right-width: 2px; }
+.rw-c-bl { left: 0; bottom: 0; border-bottom-width: 2px; border-left-width: 2px; }
+.rw-c-br { right: 0; bottom: 0; border-bottom-width: 2px; border-right-width: 2px; }
+
+/* resolve band changes bracket SHAPE as well as color (§7.3) */
+.rw-target[data-band='defiant'] .rw-corner { border-color: var(--red); }
+.rw-target[data-band='shaken'] .rw-corner { border-color: var(--amber); border-style: solid; }
+.rw-target[data-band='bargaining'] .rw-corner { border-color: var(--amber); border-style: dashed; width: 15px; height: 15px; }
+.rw-target[data-band='capitulate'] .rw-corner { border-color: var(--green); border-style: dashed; width: 18px; height: 18px; }
+.rw-target[data-band='neutral'] .rw-corner { border-color: var(--cyan); }
+
+.rw-target-info {
+  position: absolute;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  background: rgba(2, 6, 13, 0.72); /* anti-bloom scrim */
+  border: 1px solid rgba(96, 150, 196, 0.2);
+  border-radius: 2px;
+  padding: 3px 8px;
+}
+
+.rw-target-name {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+
+.rw-target-meta {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.rw-target-resolve {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  margin-top: 1px;
+}
+
+.rw-target[data-band='defiant'] .rw-target-resolve { color: var(--red); }
+.rw-target[data-band='shaken'] .rw-target-resolve { color: var(--amber); }
+.rw-target[data-band='bargaining'] .rw-target-resolve { color: var(--amber); }
+.rw-target[data-band='capitulate'] .rw-target-resolve { color: var(--green); }
+
+/* lead indicator: small diamond pip */
+.rw-lead {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: transparent;
+  border: 1px solid var(--cyan);
+  transform-origin: center;
+  rotate: 45deg;
+  box-shadow: 0 0 5px rgba(111, 242, 224, 0.6);
+  will-change: transform;
+}
+
+/* off-screen edge arrow: triangle + direction of travel */
+.rw-edge-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.rw-edge-arrow::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: -7px;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 14px solid var(--amber);
+  filter: drop-shadow(0 0 4px rgba(255, 180, 84, 0.6));
+}
+
+/* ---------- toasts: comm lines + milestone stings (top-center) ---------- */
+.rw-toasts {
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.rw-toast {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  background: rgba(2, 6, 13, 0.78);
+  border: 1px solid rgba(96, 150, 196, 0.25);
+  border-left-width: 3px;
+  border-radius: 2px;
+  color: var(--white);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  white-space: nowrap;
+}
+
+.rw-toast.show { opacity: 1; transform: translateY(0); }
+.rw-toast.comm { border-left-color: var(--cyan); color: var(--cyan); }
+.rw-toast.sting { border-left-color: var(--amber); color: var(--amber); }
+.rw-toast.warn { border-left-color: var(--amber); }
+.rw-toast.danger { border-left-color: var(--red); color: var(--red); }
+.rw-toast.good { border-left-color: var(--green); color: var(--green); }
+
+/* ---------- context prompt (§13.4): one verb, bottom-center ---------- */
+.rw-prompt {
+  position: absolute;
+  bottom: 17%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: rgba(2, 6, 13, 0.8);
+  border: 1px solid rgba(111, 242, 224, 0.4);
+  border-radius: 2px;
+}
+
+.rw-prompt-key {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--void);
+  background: var(--cyan);
+  border-radius: 2px;
+  font-weight: bold;
+}
+
+.rw-prompt-verb {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+/* ---------- bottom strip layout ---------- */
+.rw-bottom {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.rw-bottom .rw-panel { position: relative; } /* flex children, not absolute */
+
+.rw-side-col {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.rw-side-col .rw-panel { position: relative; }
+
+.rw-pos { min-width: 0; }
+
+.rw-coords {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* ---------- bio companion (vein-green accents) ---------- */
+.rw-bio { border-color: rgba(95, 224, 138, 0.3); }
+.rw-bio-title { color: var(--vein); border-bottom-color: rgba(95, 224, 138, 0.2); }
+.rw-hunger .rw-bar-fill { background: var(--vein); }
+.rw-wounds .rw-bar-fill { background: var(--dim); }
+.rw-wounds.hurt .rw-bar-fill { background: var(--ember); }
+.rw-wounds.hurt .rw-label { color: var(--ember); }
+
+/* mood icon: shape AND color change per mood; the label text is beside it */
+.rw-bio-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  background: var(--vein);
+}
+
+.rw-bio-icon.m-serene { border-radius: 50%; background: var(--vein); }
+.rw-bio-icon.m-keen { rotate: 45deg; border-radius: 2px; background: var(--cyan); }
+.rw-bio-icon.m-anxious { clip-path: polygon(50% 0, 100% 100%, 0 100%); background: var(--amber); }
+.rw-bio-icon.m-pained { clip-path: polygon(0 0, 100% 0, 100% 60%, 55% 100%, 0 60%); background: var(--ember); }
+.rw-bio-icon.m-feral { clip-path: polygon(50% 0, 63% 35%, 100% 35%, 70% 57%, 82% 100%, 50% 72%, 18% 100%, 30% 57%, 0 35%, 37% 35%); background: var(--red); }
+
+.rw-mood .rw-value { color: var(--vein); }
+
+/* ---------- resources (top-right, fades in combat) ---------- */
+.rw-resources {
+  top: 14px;
+  right: 14px;
+  min-width: 132px;
+}
+
+/* ---------- controls help (top-left, collapsible, fades in combat) ---------- */
+.rw-controls {
+  top: 14px;
+  left: 14px;
+  max-width: 280px;
+  padding: 6px 10px;
+}
+
+.rw-controls-toggle {
+  pointer-events: auto; /* sole interactive HUD element */
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.rw-controls-toggle:hover { color: var(--white); }
+
+.rw-controls ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.rw-controls li {
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.04em;
+  margin: 2px 0;
+}
+
+.rw-controls.collapsed .rw-controls-body { display: none; }

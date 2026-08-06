@@ -1,0 +1,318 @@
+/* Full-screen menu surfaces — station services + death screen.
+   Cold frontier instrumentation (doc §18.4): void-black scrim, raised navy
+   panels, star-white text, beacon-cyan accents, threat-amber for warm/launch
+   actions, danger red for death. Near-sharp panels, monospace, subtle scrim.
+   Imported by station.js (and save.js); scoped to .screen-overlay so nothing
+   leaks into the page or the HUD. */
+
+.screen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 5, 11, 0.72);
+  pointer-events: none;
+  font-family: 'Consolas', 'Cascadia Mono', 'Courier New', monospace;
+  color: #e6eef7;
+}
+
+.screen-panel {
+  pointer-events: auto;
+  min-width: 560px;
+  max-width: 780px;
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 18px 22px 16px;
+  background: linear-gradient(180deg, #101826 0%, #0a101b 100%);
+  border: 1px solid #2c3d52;
+  border-radius: 2px; /* near-sharp */
+  box-shadow:
+    0 0 0 1px rgba(111, 210, 224, 0.06),
+    0 12px 48px rgba(0, 0, 0, 0.65);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ---------- shared widgets ---------- */
+
+.screen-sub {
+  margin: 2px 0 12px;
+  color: #6fd2e0;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #22303f;
+  padding-bottom: 6px;
+}
+
+.screen-note {
+  margin: 8px 0;
+  color: #9fb2c6;
+}
+
+.screen-legend {
+  margin-top: 14px;
+  color: #5f7185;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.screen-btnrow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.screen-btn {
+  display: block;
+  width: 100%;
+  padding: 7px 12px;
+  background: #131e2e;
+  color: #dfe9f4;
+  border: 1px solid #31445c;
+  border-radius: 2px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.screen-btn:hover,
+.screen-btn:focus-visible {
+  border-color: #6fd2e0;
+  color: #6fd2e0;
+  background: #162437;
+  outline: none;
+}
+
+.screen-btn-warm {
+  border-color: #7a5326;
+  color: #ffb454;
+}
+
+.screen-btn-warm:hover,
+.screen-btn-warm:focus-visible {
+  border-color: #ffb454;
+  color: #ffd28a;
+  background: #241a10;
+}
+
+/* ---------- station ---------- */
+
+.station-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 16px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #31445c;
+}
+
+.station-title {
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  color: #ffb454; /* sodium light on rust — Freehold frontier */
+}
+
+.station-faction {
+  grid-column: 1;
+  color: #8a9db2;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+}
+
+.station-ship {
+  grid-column: 1;
+  color: #5f7185;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.station-credits {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  color: #e6eef7;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.station-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.station-back {
+  margin-bottom: 10px;
+}
+
+.station-back .screen-btn {
+  width: auto;
+  display: inline-block;
+}
+
+.station-notice {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-left: 2px solid #ffb454;
+  background: rgba(255, 180, 84, 0.07);
+  color: #ffd28a;
+}
+
+/* market table: name / status / price / hold / trade actions */
+.market-table {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 0.7fr 0.5fr 1.6fr;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.market-head {
+  color: #6fd2e0;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  border-bottom: 1px solid #22303f;
+  padding-bottom: 4px;
+}
+
+.market-cell {
+  padding: 3px 0;
+  color: #dfe9f4;
+}
+
+.market-row-sel {
+  background: rgba(111, 210, 224, 0.08);
+  box-shadow: inset 2px 0 0 #6fd2e0;
+  padding-left: 6px;
+}
+
+.market-illegal {
+  color: #e06a5a;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+}
+
+.market-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.market-actions .screen-btn {
+  width: auto;
+  padding: 3px 9px;
+  text-align: center;
+}
+
+.market-refusal {
+  color: #e06a5a;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+/* jobs board */
+
+.job-card {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #0d1522;
+  border: 1px solid #22303f;
+  border-left: 2px solid #31445c;
+}
+
+.job-title {
+  color: #e6eef7;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.job-detail {
+  color: #9fb2c6;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.job-reward {
+  color: #7dd8a8; /* salvage green for pay */
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.job-card .screen-btn {
+  width: auto;
+  padding: 4px 10px;
+}
+
+.job-state {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+.job-accepted {
+  color: #ffb454;
+}
+
+.job-done {
+  color: #7dd8a8;
+}
+
+/* bar */
+
+.bar-rumor {
+  margin: 8px 0;
+  padding: 8px 10px;
+  color: #c8d6e4;
+  background: rgba(111, 210, 224, 0.04);
+  border-left: 2px solid #31445c;
+  font-style: italic;
+}
+
+.bar-hint {
+  margin: 12px 0;
+  color: #8a9db2;
+  font-size: 12px;
+}
+
+/* ---------- death (danger red) ---------- */
+
+.death-overlay {
+  z-index: 30;
+  background: rgba(8, 2, 2, 0.78);
+}
+
+.death-panel {
+  min-width: 420px;
+  max-width: 560px;
+  text-align: center;
+  border-color: #6e2f28;
+  box-shadow:
+    0 0 0 1px rgba(224, 106, 90, 0.12),
+    0 12px 48px rgba(0, 0, 0, 0.7);
+}
+
+.death-title {
+  font-size: 22px;
+  letter-spacing: 0.42em;
+  color: #e06a5a;
+  margin-bottom: 12px;
+}
+
+.death-line {
+  color: #c8b6b2;
+  margin-bottom: 14px;
+}
+
+.death-hint {
+  color: #7a6a66;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+.death-overlay .screen-panel {
+  pointer-events: auto;
+  cursor: pointer;
+}

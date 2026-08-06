@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIMWARD — A Living Frontier</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23071018' stroke='%236ff2e0'/><circle cx='8' cy='8' r='2' fill='%236ff2e0'/></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud"></div>
+    <div id="fatal" style="display:none;position:fixed;inset:0;z-index:99;background:#100;color:#f66;font:14px/1.5 monospace;padding:2rem;white-space:pre-wrap;"></div>
+    <script>
+      // Runtime error trap: vite's overlay only covers transform errors, not
+      // runtime failures (e.g. WebGL context creation). Surface those on screen.
+      window.__websimFatal = (msg) => {
+        const el = document.getElementById('fatal');
+        if (el.style.display === 'block') return; // keep the first (most specific) message
+        el.style.display = 'block';
+        el.textContent = 'WebSim failed to start:\n\n' + msg;
+      };
+      window.addEventListener('error', (e) => window.__websimFatal(e.message + (e.filename ? `\n${e.filename}:${e.lineno}` : '')));
+      window.addEventListener('unhandledrejection', (e) => window.__websimFatal(String(e.reason)));
+    </script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
