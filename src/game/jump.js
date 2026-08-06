@@ -17,6 +17,9 @@ import { removeLiveShip } from '../systems/npc.js';
  *      system center (origin); zero ctx.ship.velocity; set
  *      ctx.world.jumpGraceUntil = time + JUMP.graceSeconds; emit
  *      'systemLoaded' { to } and a terse arrival 'commLine' (§13.5).
+ *      Gate-network arrival rule: the arrival gate is the one in
+ *      SYSTEMS[to].gates whose `to` points back at the origin system
+ *      (captured before the swap); fallback is gates[0] (the primary).
  *   3. End: jumping = false, progress/destination reset.
  *
  * Ownership: writes ctx.gate.{jumping,progress,destination},
@@ -53,10 +56,19 @@ export function initJump(ctx) {
     // clear it so combat/hud never chase a phantom.
     ctx.targets.current = null;
 
+    // Capture the origin before the swap — the gate-network arrival rule
+    // picks the destination gate that points back here.
+    const origin = ctx.world.currentSystem;
     ctx.world.currentSystem = to;
 
-    // Arrive just past the destination gate, toward the system center.
-    const gp = SYSTEMS[to].gate.position;
+    // Arrive just past the return-pointing gate (fallback: the primary
+    // gate), offset toward the system center.
+    const gates = SYSTEMS[to].gates;
+    let gate = gates[0];
+    for (let i = 0; i < gates.length; i++) {
+      if (gates[i].to === origin) { gate = gates[i]; break; }
+    }
+    const gp = gate.position;
     gatePos.set(gp[0], gp[1], gp[2]);
     towardCenter.copy(gatePos).negate().normalize(); // origin - gatePos
     const shipObj = ctx.ship.object;

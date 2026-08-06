@@ -734,10 +734,9 @@ export function initHud(ctx) {
       let pKey = '', pVerb = '';
       if (ctx.station?.inZone && !ctx.flags.docked) {
         pKey = 'D'; pVerb = 'Dock';
-      } else if (ctx.gate.inZone && !ctx.flags.docked && !ctx.gate.jumping) {
-        const destId = sysDef && sysDef.gate ? sysDef.gate.to : null;
-        const destDef = SYSTEMS[destId];
-        pKey = 'D'; pVerb = 'Jump to ' + (destDef ? destDef.name : String(destId ?? '—'));
+      } else if (ctx.gate.inZone && ctx.gate.nearTo && !ctx.flags.docked && !ctx.gate.jumping) {
+        const destDef = SYSTEMS[ctx.gate.nearTo];
+        pKey = 'D'; pVerb = 'Jump to ' + (destDef ? destDef.name : String(ctx.gate.nearTo));
       } else if (target && target.state && !target.state.destroyed) {
         const band = resolveBand(target.state.resolve ?? 70);
         if (band === 'bargaining' || band === 'capitulate') { pKey = 'H'; pVerb = 'Hail'; }

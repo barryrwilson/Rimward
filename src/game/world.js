@@ -40,7 +40,8 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
 
 // ---------- Geography (per-system, from SYSTEMS defs §15.1/§15.3) ----------
 function gatePoint(def) {
-  const p = def.gate.position;
+  // Primary gate (gates[0]) anchors routes/planet layout for the system.
+  const p = def.gates[0].position;
   return new THREE.Vector3(p[0], p[1], p[2]);
 }
 function stationPoint(def) {
@@ -55,7 +56,7 @@ function planetPoint(def) {
   const len = g.length();
   const p = g.multiplyScalar((len + 350) / len);
   p.y = 10;
-  p.x += def.gate.position[2] < 0 ? -150 : 150;
+  p.x += def.gates[0].position[2] < 0 ? -150 : 150;
   return p;
 }
 function systemAnchor(sysId) {
@@ -153,7 +154,7 @@ function createRecords(ctx, sysId) {
   const station = stationPoint(def);
   const gate = gatePoint(def);
   const planet = planetPoint(def);
-  const otherFaction = SYSTEMS[def.gate.to]?.faction ?? 'independent';
+  const otherFaction = SYSTEMS[def.gates[0].to]?.faction ?? 'independent';
   const traderFactions = [def.faction, otherFaction, 'independent'];
   const cast = def.cast;
   const records = [];
@@ -183,6 +184,7 @@ function createRecords(ctx, sysId) {
         role: 'pirate',
         route: [jitter(gate.clone(), 90), laneMid, jitter(gate.clone(), 120)],
         cargo: [],
+        bounty: 300 + i * 75, // posted price — station.js bounty-pirate jobs read this
         system: sysId,
       }),
     );
@@ -239,7 +241,7 @@ export function recordPosition(rec, out) {
 }
 
 // ---------- Dynamic events §8.5 ----------
-const EVENT_KINDS = ['pirateBlockade', 'strikeRush', 'laborStrike', 'commodityGlut'];
+const EVENT_KINDS = ['pirateBlockade', 'strikeRush', 'laborStrike', 'commodityGlut', 'convoySurge', 'oreRush'];
 const EVENT_GAP = [180, 360]; // 3–6 min between events
 const EVENT_DURATION = [120, 240]; // 2–4 min
 const BLOCKADE_KILL_INTERVAL = 45; // abstract lane casualties during blockade
@@ -424,8 +426,10 @@ export function initWorld(ctx) {
 
   // ---------- Inter-system migration §8.2 ----------
   function pickMigrant(ctx) {
-    const dest = SYSTEMS[ctx.world.currentSystem]?.gate.to;
-    if (!dest) return;
+    // Uniform-random destination among the current system's gates.
+    const gates = SYSTEMS[ctx.world.currentSystem]?.gates;
+    if (!gates || gates.length === 0) return;
+    const dest = gates[(Math.random() * gates.length) | 0].to;
     let chosen = null;
     let count = 0;
     for (const rec of ctx.world.records) {

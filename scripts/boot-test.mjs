@@ -167,6 +167,16 @@ function tick(n, label) {
 tick(120, 'boot idle');
 console.log(`after boot: ships=${ctx.ships.length} records=${ctx.world.records.length} prices=${Object.keys(ctx.world.prices).length} pods=${ctx.pods?.length ?? 0}`);
 
+// ---- Wave 3: gate network data sanity (every system def) ----
+const gateDataOk = Object.values(SYSTEMS).every((def) =>
+  Array.isArray(def.gates) && def.gates.length > 0 && def.gates.every((g) =>
+    Array.isArray(g.position) && g.position.length === 3 && !!SYSTEMS[g.to]));
+console.log(`gate network: systems=${Object.keys(SYSTEMS).length} allDefsValid=${gateDataOk}`);
+if (!gateDataOk) {
+  console.log('GATE NETWORK DATA FAIL');
+  errors++;
+}
+
 // throttle up and fly
 ctx.input.throttle = 1;
 tick(600, 'cruise 10s');
@@ -213,7 +223,7 @@ console.log(`save present: ${store.has('rimward-save-v1')}`);
 
 // ---- Wave 2: gate jump round trip ----
 // Park at the freehold gate: zone check should flip.
-ctx.ship.object.position.set(...SYSTEMS.freehold.gate.position);
+ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at gate');
 console.log(`gate inZone (expect true): ${ctx.gate.inZone}`);
@@ -231,7 +241,7 @@ const jumpChecks = {
   priceRebound: ctx.world.prices.provisions !== provBefore,
   veridianSpread: ctx.world.prices.provisions > provBefore * 1.1, // 135 vs 100 baseline
   nearDestGate: (() => {
-    const g = SYSTEMS.veridian.gate.position;
+    const g = SYSTEMS.veridian.gates.find((gt) => gt.to === 'freehold').position;
     const p = ctx.ship.object.position;
     return Math.hypot(p.x - g[0], p.y - g[1], p.z - g[2]) < 400;
   })(),
@@ -240,6 +250,52 @@ console.log('jump checks:', JSON.stringify(jumpChecks));
 const jumpOk = Object.values(jumpChecks).every(Boolean);
 tick(60 * 30, 'veridian soak 30s');
 console.log(`veridian: ships=${ctx.ships.length} station=${ctx.station ? 'present' : 'missing'} prices.provisions=${ctx.world.prices.provisions.toFixed(0)}`);
+
+// ---- Wave 3: second hop veridian → redmarch ----
+// Park at the veridian → redmarch gate (850,45,100) and jump.
+const redGate = SYSTEMS.veridian.gates.find((g) => g.to === 'redmarch');
+ctx.ship.object.position.set(...redGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at redmarch gate');
+console.log(`gate inZone (expect true): ${ctx.gate.inZone} nearTo (expect redmarch): ${ctx.gate.nearTo}`);
+ctx.emit('jumpRequested', { to: 'redmarch' });
+tick(60 * 4, 'jump to redmarch');
+tick(60 * 30, 'redmarch soak 30s'); // let traffic respawn from the new cast
+let redPlanets = 0;
+ctx.scene.traverse((o) => {
+  // Planets: standard-material spheres (sun/eyes/beacons are basic, hull is physical).
+  if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.isMeshStandardMaterial && !o.material?.isMeshPhysicalMaterial) redPlanets++;
+});
+const roleCount = (role) => ctx.world.records.filter((r) => r.role === role).length;
+const redChecks = {
+  currentSystem: ctx.world.currentSystem === 'redmarch',
+  jumpingDone: !ctx.gate.jumping,
+  shipsRespawned: ctx.ships.length > 0 && ctx.ships.every((s) => ctx.world.records.some((r) => r.name === s.record?.name)),
+  castMatches: ctx.world.records.length === 13 && roleCount('trader') === 5 && roleCount('pirate') === 7 && roleCount('patrol') === 1 && roleCount('ace') === 0,
+  stationPresent: ctx.station?.name === 'Ledger Anchorage',
+  pricesTable: !!ctx.world.markets?.redmarch && ctx.world.prices === ctx.world.markets.redmarch,
+  provisionsSpread: ctx.world.prices.provisions > 100, // priceBase 1.3 × 100 baseline
+  tradesRestricted: SYSTEMS.redmarch.tradesRestricted === true,
+  planetsGenerated: redPlanets === 4,
+};
+console.log('redmarch checks:', JSON.stringify(redChecks));
+const redOk = Object.values(redChecks).every(Boolean);
+console.log(`redmarch: ships=${ctx.ships.length} records=${ctx.world.records.length} prices.provisions=${ctx.world.prices.provisions.toFixed(0)} planets=${redPlanets}`);
+// Jump back to veridian: arrival must be the return-pointing gate (850,45,100).
+ctx.emit('jumpRequested', { to: 'veridian' });
+tick(60 * 4, 'jump back to veridian');
+const p2 = ctx.ship.object.position;
+const nearReturnGate = Math.hypot(p2.x - 850, p2.y - 45, p2.z - 100) < 120;
+console.log(`back to veridian: currentSystem=${ctx.world.currentSystem} (expect veridian) nearReturnGate (expect true): ${nearReturnGate} pos=${p2.toArray().map((v) => v.toFixed(0))}`);
+if (!redOk || ctx.world.currentSystem !== 'veridian' || !nearReturnGate) {
+  console.log('REDMARCH TEST FAIL');
+  errors++;
+}
+
+// Park at the veridian → freehold gate for the round trip home.
+ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'freehold').position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at freehold gate');
 ctx.emit('jumpRequested', { to: 'freehold' });
 tick(60 * 4, 'jump back');
 console.log(`round trip: currentSystem=${ctx.world.currentSystem} (expect freehold), prices.provisions=${ctx.world.prices.provisions.toFixed(0)}`);

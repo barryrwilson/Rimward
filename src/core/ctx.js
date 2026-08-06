@@ -124,7 +124,8 @@ export function createCtx({ scene, camera, renderer }) {
     // --- star system data + gate/jump surface ---
     systems: null, // set to SYSTEMS at boot (main.js); read-only thereafter
     gate: {
-      inZone: false, // gate.js owns: player within JUMP.zone of current gate
+      inZone: false, // gate.js owns: player within JUMP.zone of any current-system gate
+      nearTo: null, // gate.js owns: system id of the in-range gate, else null
       jumping: false, // jump.js owns: sequence running (blocks save/combat/AI)
       progress: 0, // 0..1 charge progress for HUD
       destination: null, // system id while jumping

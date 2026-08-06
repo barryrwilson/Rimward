@@ -18,8 +18,14 @@ import { U, COMMODITIES, ECON, FACTIONS } from '../game/state.js';
  * ctx.station.inZone itself.
  *
  * Restricted components (§12/§16): Freehold Landing refuses unless fear ≥
- * ECON.fear.tributeOpensAt or rep.freehold < -25. Veridian Spire ALWAYS
- * trades them — corporate patents are their commodity (§16), flavor noted.
+ * ECON.fear.tributeOpensAt or rep.freehold < -25. A system whose def flies
+ * `tradesRestricted: true` (Veridian Spire, Redmarch) ALWAYS trades them —
+ * patent stock is their commodity (§16), flavor noted.
+ *
+ * Jobs: ctx.world.jobs is created once here (ace bounty, patrol, haul), then
+ * the board syncs pirate bounties on render — up to PIRATE_BOUNTY_CAP live,
+ * priced pirates of the CURRENT system, posted only at their home station.
+ * Every bounty claim needs a player-caused incident (Witness Rule §8.7).
  *
  * Haul job (§10.1): cross-system. Accept at either station, buy 5 Provisions,
  * deliver at the OTHER system's station for 140% of the stamped origin buy
@@ -52,6 +58,8 @@ const HAUL_UNITS = 5;
 const HAUL_MARGIN = 1.4;
 const DEFAULT_ACE_NAME = 'Carver Illyx';
 const DEFAULT_ACE_BOUNTY = 2500;
+const PIRATE_BOUNTY_CAP = 2; // max pirate bounty cards per system's board
+const PIRATE_BOUNTY_FALLBACK = 400; // UU, until world.js prices every pirate
 
 const _pulse = new THREE.Color();
 
@@ -245,18 +253,17 @@ function findAceRecord(ctx) {
   for (const r of recs) if (r.name === DEFAULT_ACE_NAME || r.bounty > 0) return r;
   return null;
 }
-/** Veridian Spire trades restricted components openly — corporate patents §16. */
+/** A system whose def flies tradesRestricted sells patent stock openly (§16). */
 function stationAlwaysTradesRestricted(ctx) {
-  return ctx.world.currentSystem === 'veridian';
+  return ctx.systems?.[ctx.world.currentSystem]?.tradesRestricted === true;
 }
 function restrictedAllowed(ctx) {
   if (stationAlwaysTradesRestricted(ctx)) return true;
   return ctx.world.fear >= ECON.fear.tributeOpensAt || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
 }
-/** The system on the other side of the gate (two-system verse §15.1). */
+/** The system on the other side of the primary gate (haul jobs §10.1). */
 function otherSystemId(ctx, id) {
-  for (const key of Object.keys(ctx.systems ?? {})) if (key !== id) return key;
-  return id;
+  return ctx.systems?.[id]?.gates?.[0]?.to ?? id;
 }
 /** Home system of the bounty ace (world.js keeps him there; §15 cast). */
 function aceHomeSystem(ctx) {
@@ -301,10 +308,10 @@ function ensureJobs(ctx) {
   if (ctx.world.jobs.length === 0) ctx.world.jobs = makeJobs(ctx);
 }
 
-/** Keep the bounty job pointed at the living ace record (name/reward drift). */
+/** Keep the ace contract pointed at the living ace record (name/reward drift). */
 function refreshBountyJob(ctx) {
   for (const j of ctx.world.jobs) {
-    if (j.kind !== 'bounty' || j.state === 'done') continue;
+    if (j.id !== 'bounty-ace' || j.state === 'done') continue;
     const ace = findAceRecord(ctx);
     if (ace) {
       j.target = ace.name;
@@ -312,6 +319,62 @@ function refreshBountyJob(ctx) {
       j.title = `Bounty: ${ace.name}`;
     }
   }
+}
+
+function pirateBountyId(name) {
+  return `bounty-pirate-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+/**
+ * Post a bounty card for each live, priced pirate of the current system
+ * (cap PIRATE_BOUNTY_CAP). Offered cards for quarries already dead or
+ * captured are pulled. Claims follow the same witness rule as the ace (§8.7).
+ */
+function syncPirateBounties(ctx, sysId) {
+  const jobs = ctx.world.jobs;
+  const recs = ctx.world.records || [];
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    if (j.kind !== 'bounty' || !j.id.startsWith('bounty-pirate-') || j.state !== 'offered') continue;
+    let live = false;
+    for (const r of recs) {
+      if (r.role === 'pirate' && pirateBountyId(r.name) === j.id
+        && r.state !== 'dead' && r.state !== 'captured') { live = true; break; }
+    }
+    if (!live) jobs.splice(i, 1);
+  }
+  let posted = 0;
+  for (const j of jobs) {
+    if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
+      && j.system === sysId && j.state !== 'done') posted++;
+  }
+  const sysName = ctx.systems?.[sysId]?.name ?? sysId;
+  for (const r of recs) {
+    if (posted >= PIRATE_BOUNTY_CAP) break;
+    if (r.system !== sysId || r.role !== 'pirate' || !(r.bounty > 0)) continue;
+    if (r.state === 'dead' || r.state === 'captured') continue;
+    const id = pirateBountyId(r.name);
+    if (jobs.some((j) => j.id === id)) continue;
+    jobs.push({
+      id, kind: 'bounty', target: r.name, system: sysId, // home board (JSON-plain)
+      title: `Bounty: ${r.name}`,
+      detail: `${r.name} runs with a reaver crew and bleeds the lanes of ${sysName} dry. The Compact pays on confirmation of the kill or capture — your guns, your name on the claim.`,
+      reward: r.bounty || PIRATE_BOUNTY_FALLBACK,
+      state: 'offered', progress: 0, need: 1,
+    });
+    posted++;
+  }
+}
+
+/** Board-visible jobs: offered pirate bounties post only at their home system. */
+function boardJobs(ctx, sysId) {
+  const out = [];
+  for (const j of ctx.world.jobs) {
+    if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
+      && j.state === 'offered' && j.system !== sysId) continue;
+    out.push(j);
+  }
+  return out;
 }
 
 function completeJob(ctx, job, notice) {
@@ -343,15 +406,25 @@ function tickDeliveryJobs(ctx) {
   for (const job of ctx.world.jobs) {
     if (job.state !== 'accepted') continue;
     if (job.kind === 'bounty') {
-      const ace = findAceRecord(ctx);
-      if (!ace || (ace.state !== 'dead' && ace.state !== 'captured')) continue;
-      // The claim is only yours if the record says your guns did it (§8.7).
-      const claimed = (ctx.world.incidents || []).some(
-        (i) => i.name === ace.name && i.causer === 'player',
-      );
-      if (!claimed) continue;
-      ctx.world.credits += job.reward;
-      completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${job.reward} UU posted.`);
+      if (job.id === 'bounty-ace') {
+        const ace = findAceRecord(ctx);
+        if (!ace || (ace.state !== 'dead' && ace.state !== 'captured')) continue;
+        // The claim is only yours if the record says your guns did it (§8.7).
+        const claimed = (ctx.world.incidents || []).some(
+          (i) => i.name === ace.name && i.causer === 'player',
+        );
+        if (!claimed) continue;
+        ctx.world.credits += job.reward;
+        completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${job.reward} UU posted.`);
+      } else {
+        // Pirate bounty: a witnessed, player-caused kill of the named reaver.
+        const claimed = (ctx.world.incidents || []).some(
+          (i) => i.kind === 'destroyed' && i.name === job.target && i.causer === 'player',
+        );
+        if (!claimed) continue;
+        ctx.world.credits += job.reward;
+        completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${job.reward} UU posted.`);
+      }
     } else if (job.kind === 'haul' && ctx.flags.docked) {
       const origin = job.originSystem ?? 'freehold';
       if (ctx.world.currentSystem === origin) continue; // must reach the OTHER system
@@ -572,8 +645,9 @@ export function initStation(ctx) {
   function renderJobs(panel) {
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
     refreshBountyJob(ctx);
+    syncPirateBounties(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
-    ctx.world.jobs.forEach((job, i) => {
+    boardJobs(ctx, currentId).forEach((job, i) => {
       const card = h('div', 'job-card', panel);
       h('div', 'job-title', card, `${i + 1}. ${job.title}`);
       h('div', 'job-detail', card, job.detail);
@@ -591,7 +665,7 @@ export function initStation(ctx) {
         rewardLine = `Reward: ${job.reward} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
       h('div', 'job-reward', card, rewardLine);
-      if (job.kind === 'bounty' && job.state !== 'done' && currentId !== aceHomeId) {
+      if (job.id === 'bounty-ace' && job.state !== 'done' && currentId !== aceHomeId) {
         h('div', 'job-state', card,
           `He hunts in ${ctx.systems?.[aceHomeId]?.name ?? 'Freehold Drift'} — take the gate.`);
       }
@@ -809,7 +883,7 @@ export function initStation(ctx) {
     if (!code.startsWith('Digit')) return;
     const n = Number(code.slice(5));
     if (ui.service === 'jobs') {
-      const job = ctx.world.jobs[n - 1];
+      const job = boardJobs(ctx, ctx.world.currentSystem)[n - 1];
       if (job && job.state === 'offered') acceptJob(job);
     } else if (ui.service === 'bar') {
       if (n === 1) act.buyRound();

@@ -214,6 +214,13 @@ export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
  * station) rebuild their content from SYSTEMS[ctx.world.currentSystem].
  * All positions are plain [x,y,z] arrays — JSON-serializable.
  *
+ * Each system has a GATE NETWORK: gates[] lists every transit ring in the
+ * system as { position, to }. gates[0] is the primary gate (the route anchor
+ * world.js geography helpers use); jump.js arrives at the destination gate
+ * whose `to` points back at the origin system (fallback gates[0]).
+ * tradesRestricted marks stations that always trade restricted components
+ * (station.js reads the flag; unflagged systems never do).
+ *
  * priceBase multipliers set each system's market baseline vs COMMODITIES.base,
  * creating deliberate arbitrage spreads (Freehold grows food, Veridian refines
  * metal): buy low here, sell high there (§10.1).
@@ -229,7 +236,7 @@ export const SYSTEMS = {
     planetCount: 5,
     station: { name: 'Freehold Landing', position: [120, 20, 620], palette: 0xb0703a },
     field: { center: [-450, -30, -250], radius: 160, count: 130, oreMult: 1 },
-    gate: { position: [0, 60, -900], to: 'veridian' },
+    gates: [{ position: [0, 60, -900], to: 'veridian' }],
     priceBase: { provisions: 1.0, refinedMetals: 1.1, restrictedComponents: 1.0, rawOre: 1.0, livingRock: 0.9 },
     cast: { traders: 8, pirates: 4, patrols: 2, ace: true },
   },
@@ -243,9 +250,28 @@ export const SYSTEMS = {
     planetCount: 3,
     station: { name: 'Veridian Spire', position: [-140, 30, -550], palette: 0x6fd0e0 },
     field: { center: [500, -40, 300], radius: 120, count: 90, oreMult: 1.5 },
-    gate: { position: [0, 50, 900], to: 'freehold' },
+    gates: [
+      { position: [0, 50, 900], to: 'freehold' },
+      { position: [850, 45, 100], to: 'redmarch' },
+    ],
     priceBase: { provisions: 1.35, refinedMetals: 0.75, restrictedComponents: 1.2, rawOre: 0.8, livingRock: 1.3 },
     cast: { traders: 7, pirates: 3, patrols: 3, ace: false },
+    tradesRestricted: true,
+  },
+  redmarch: {
+    id: 'redmarch',
+    name: 'The Redmarch',
+    faction: 'redledger',
+    worldSeed: 73,
+    sunColor: 0xff9a8a,
+    sunRadius: 50,
+    planetCount: 4,
+    station: { name: 'Ledger Anchorage', position: [200, 40, -480], palette: 0xa03434 },
+    field: { center: [-380, -50, 380], radius: 140, count: 110, oreMult: 1.2 },
+    gates: [{ position: [0, 55, -850], to: 'veridian' }],
+    priceBase: { provisions: 1.3, refinedMetals: 0.9, restrictedComponents: 0.7, rawOre: 1.1, livingRock: 1.2 },
+    cast: { traders: 5, pirates: 7, patrols: 1, ace: false },
+    tradesRestricted: true,
   },
 };
 export const JUMP = {

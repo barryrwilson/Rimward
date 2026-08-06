@@ -2,27 +2,33 @@ import * as THREE from 'three';
 import { SYSTEMS, JUMP } from '../game/state.js';
 
 /**
- * Jump gate — the Lamplighter Guild transit ring in the current system.
+ * Jump gates — the Lamplighter Guild transit rings of the current system's
+ * gate NETWORK. One ring assembly per entry in SYSTEMS[system].gates.
  *
- * Visual: a ~30u-radius rotating torus ring with inner chevron markers, an
- * additive amber/brass glow (Lamplighter palette: worn brass, lamplight
- * amber), and a pulsing beacon. Oriented so the ring faces the system
- * center. Distinct silhouette from 500+u.
+ * Visual: each gate is a ~30u-radius rotating torus ring with inner chevron
+ * markers, an additive amber/brass glow (Lamplighter palette: worn brass,
+ * lamplight amber), and a pulsing beacon. Oriented so the ring faces the
+ * system center. Distinct silhouette from 500+u.
  *
- * Ownership: writes ctx.gate.inZone only (jumping/progress/destination are
- * jump.js's). Emits 'jumpRequested' { to } when the player presses dock (D)
- * inside JUMP.zone while undocked and not already jumping. Reads
- * ctx.input.dockPressed, ctx.flags.docked, ctx.ship.object — never writes
- * them. On 'systemLoaded' (seen via ctx.lastEvents) the gate repositions
- * for the new current system.
+ * Ownership: writes ctx.gate.inZone and ctx.gate.nearTo only
+ * (jumping/progress/destination are jump.js's). The zone check runs per
+ * gate — nearest in-range gate wins: inZone = true and nearTo = that
+ * gate's destination id; out of all zones, inZone = false and nearTo =
+ * null. Emits 'jumpRequested' { to } with the near gate's destination when
+ * the player presses dock (D) inside JUMP.zone while undocked and not
+ * already jumping. Reads ctx.input.dockPressed, ctx.flags.docked,
+ * ctx.ship.object — never writes them. On 'systemLoaded' (seen via
+ * ctx.lastEvents) all gate assemblies rebuild for the new current system.
  *
  * Jump visual (driven by jump.js's ctx.gate fields): a full-screen black
  * fade — in over the first 40% of progress, out over the last 40% — plus a
  * centered 'JUMP' label naming the destination. The overlay div is created
- * once at init and hidden otherwise. Gate glow intensifies during charge.
+ * once at init and hidden otherwise. Only the departing gate (the one whose
+ * `to` matches ctx.gate.destination) intensifies its glow during charge.
  *
- * update() performs zero allocations: gate position is a preallocated
- * Vector3, overlay style/text are only touched on state changes.
+ * update() performs zero allocations: gate assemblies are preallocated on
+ * rebuild and iterated by index; overlay style/text are only touched on
+ * state changes.
  */
 
 // Lamplighter palette (§16): worn brass structure, lamplight amber glow.
@@ -57,21 +63,8 @@ export function initGate(ctx) {
   const root = new THREE.Group();
   ctx.scene.add(root);
 
-  // --- Ring (brass, slightly emissive so it reads against deep space) ---
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 12, 48),
-    new THREE.MeshStandardMaterial({
-      color: BRASS,
-      emissive: AMBER,
-      emissiveIntensity: 0.25,
-      roughness: 0.55,
-      metalness: 0.8,
-    }),
-  );
-  root.add(ring);
-
-  // --- Inner chevron markers: radial inward-pointing cones around the bore ---
-  const chevrons = new THREE.Group();
+  // --- Shared resources across every gate assembly in a system ---
+  const ringGeo = new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 12, 48);
   const chevronGeo = new THREE.ConeGeometry(1.6, 5, 4);
   const chevronMat = new THREE.MeshStandardMaterial({
     color: BRASS_DARK,
@@ -80,58 +73,93 @@ export function initGate(ctx) {
     roughness: 0.4,
     metalness: 0.6,
   });
+  const glowMap = makeGlowTexture('rgba(255,220,150,0.9)', 'rgba(255,170,70,0.35)');
+  const beaconMap = makeGlowTexture('rgba(255,240,200,1)', 'rgba(255,190,90,0.5)');
   const chevronRadius = RING_RADIUS - RING_TUBE - 3;
-  for (let i = 0; i < CHEVRON_COUNT; i++) {
-    const a = (i / CHEVRON_COUNT) * Math.PI * 2;
-    const c = new THREE.Mesh(chevronGeo, chevronMat);
-    c.position.set(Math.cos(a) * chevronRadius, Math.sin(a) * chevronRadius, 0);
-    // Cone +Y is the tip; rotate so the tip points at the ring center.
-    c.rotation.z = a + Math.PI / 2;
-    chevrons.add(c);
-  }
-  root.add(chevrons);
-
-  // --- Additive amber glow filling the bore (the "lamplight") ---
-  const glow = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: makeGlowTexture('rgba(255,220,150,0.9)', 'rgba(255,170,70,0.35)'),
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      depthWrite: false,
-    }),
-  );
   const glowBaseScale = RING_RADIUS * 3.2;
-  glow.scale.setScalar(glowBaseScale);
-  root.add(glow);
-
-  // --- Pulsing beacon riding the ring ---
-  const beacon = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: makeGlowTexture('rgba(255,240,200,1)', 'rgba(255,190,90,0.5)'),
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      depthWrite: false,
-    }),
-  );
   const beaconBaseScale = 10;
-  beacon.position.set(0, RING_RADIUS + RING_TUBE + 2, 0);
-  beacon.scale.setScalar(beaconBaseScale);
-  root.add(beacon);
 
-  // --- Placement (rebuilt on 'systemLoaded') ---
-  const gatePos = new THREE.Vector3(); // preallocated; per-frame distance checks
-  let destinationId = null; // current system's gate destination
+  // One preallocated assembly per gate: { group, ring, chevrons, glow,
+  // beacon, to, x, y, z }. Rebuilt only on 'systemLoaded'.
+  const assemblies = [];
 
-  function configure() {
-    const def = SYSTEMS[ctx.world.currentSystem];
-    const gp = def.gate.position;
-    gatePos.set(gp[0], gp[1], gp[2]);
-    root.position.copy(gatePos);
+  function buildAssembly(gateDef) {
+    const group = new THREE.Group();
+
+    // Ring (brass, slightly emissive so it reads against deep space). The
+    // material is per-gate: charge glow raises one ring's emissive only.
+    const ring = new THREE.Mesh(
+      ringGeo,
+      new THREE.MeshStandardMaterial({
+        color: BRASS,
+        emissive: AMBER,
+        emissiveIntensity: 0.25,
+        roughness: 0.55,
+        metalness: 0.8,
+      }),
+    );
+    group.add(ring);
+
+    // Inner chevron markers: radial inward-pointing cones around the bore.
+    const chevrons = new THREE.Group();
+    for (let i = 0; i < CHEVRON_COUNT; i++) {
+      const a = (i / CHEVRON_COUNT) * Math.PI * 2;
+      const c = new THREE.Mesh(chevronGeo, chevronMat);
+      c.position.set(Math.cos(a) * chevronRadius, Math.sin(a) * chevronRadius, 0);
+      // Cone +Y is the tip; rotate so the tip points at the ring center.
+      c.rotation.z = a + Math.PI / 2;
+      chevrons.add(c);
+    }
+    group.add(chevrons);
+
+    // Additive amber glow filling the bore (the "lamplight").
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowMap,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    glow.scale.setScalar(glowBaseScale);
+    group.add(glow);
+
+    // Pulsing beacon riding the ring.
+    const beacon = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: beaconMap,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    beacon.position.set(0, RING_RADIUS + RING_TUBE + 2, 0);
+    beacon.scale.setScalar(beaconBaseScale);
+    group.add(beacon);
+
+    const gp = gateDef.position;
+    group.position.set(gp[0], gp[1], gp[2]);
     // Ring bore faces the system center (origin) — the arrival/departure lane.
-    root.lookAt(0, 0, 0);
-    destinationId = def.gate.to;
+    group.lookAt(0, 0, 0);
+    root.add(group);
+
+    return { group, ring, chevrons, glow, beacon, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
   }
-  configure();
+
+  // --- Rebuild every assembly for the current system (on 'systemLoaded') ---
+  function rebuild() {
+    for (let i = 0; i < assemblies.length; i++) {
+      const a = assemblies[i];
+      root.remove(a.group);
+      a.ring.material.dispose();
+      a.glow.material.dispose();
+      a.beacon.material.dispose();
+    }
+    assemblies.length = 0;
+    const gates = SYSTEMS[ctx.world.currentSystem].gates;
+    for (let i = 0; i < gates.length; i++) assemblies.push(buildAssembly(gates[i]));
+  }
+  rebuild();
 
   // --- Jump overlay: full-screen fade + centered label, created once ---
   const overlay = document.createElement('div');
@@ -154,36 +182,50 @@ export function initGate(ctx) {
     for (let i = 0; i < ctx.lastEvents.length; i++) {
       const e = ctx.lastEvents[i];
       if (e.type === 'systemLoaded') {
-        configure();
+        rebuild();
         break;
       }
     }
 
-    // Slow spin of ring + chevrons around the bore axis.
-    ring.rotation.z += SPIN_SPEED * dt;
-    chevrons.rotation.z -= SPIN_SPEED * 0.6 * dt;
-
-    // Beacon pulse (~1.2 s period).
-    const pulse = 0.7 + 0.3 * Math.sin(ctx.elapsed * 5.2);
-    beacon.scale.setScalar(beaconBaseScale * pulse);
-
     const jumping = ctx.gate.jumping;
 
-    // Gate glow: gentle breathing at rest, intensifies during charge.
-    const charge = jumping ? 1 + ctx.gate.progress * 1.6 : 1;
-    glow.scale.setScalar(glowBaseScale * (0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
-    ring.material.emissiveIntensity = jumping ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
+    // Per-gate idle motion + glow; only the departing gate (the one whose
+    // `to` matches ctx.gate.destination) intensifies during charge.
+    for (let i = 0; i < assemblies.length; i++) {
+      const a = assemblies[i];
+      // Slow spin of ring + chevrons around the bore axis.
+      a.ring.rotation.z += SPIN_SPEED * dt;
+      a.chevrons.rotation.z -= SPIN_SPEED * 0.6 * dt;
+      // Beacon pulse (~1.2 s period).
+      const pulse = 0.7 + 0.3 * Math.sin(ctx.elapsed * 5.2);
+      a.beacon.scale.setScalar(beaconBaseScale * pulse);
+      // Glow: gentle breathing at rest, intensifies on the departing gate.
+      const charging = jumping && a.to === ctx.gate.destination;
+      const charge = charging ? 1 + ctx.gate.progress * 1.6 : 1;
+      a.glow.scale.setScalar(glowBaseScale * (0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
+      a.ring.material.emissiveIntensity = charging ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
+    }
 
-    // Zone check (ignored while docked or mid-jump).
+    // Zone check per gate (ignored while docked or mid-jump); the nearest
+    // in-range gate wins.
     const shipObj = ctx.ship.object;
-    const inZone =
-      !jumping && !ctx.flags.docked && shipObj
-        ? shipObj.position.distanceTo(gatePos) <= JUMP.zone
-        : false;
+    let nearIdx = -1;
+    let nearD2 = JUMP.zone * JUMP.zone;
+    if (!jumping && !ctx.flags.docked && shipObj) {
+      const p = shipObj.position;
+      for (let i = 0; i < assemblies.length; i++) {
+        const a = assemblies[i];
+        const dx = p.x - a.x, dy = p.y - a.y, dz = p.z - a.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 <= nearD2) { nearD2 = d2; nearIdx = i; }
+      }
+    }
+    const inZone = nearIdx >= 0;
     ctx.gate.inZone = inZone;
+    ctx.gate.nearTo = inZone ? assemblies[nearIdx].to : null;
 
     if (inZone && ctx.input.dockPressed) {
-      ctx.emit('jumpRequested', { to: destinationId });
+      ctx.emit('jumpRequested', { to: assemblies[nearIdx].to });
     }
 
     // Jump overlay: fade in over first 40% of progress, out over last 40%.

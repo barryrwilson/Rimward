@@ -117,6 +117,16 @@ export function applyEventPressure(ctx, kind) {
       pressure.provisions = 0.85;
       pressure.refinedMetals = -0.3;
       break;
+    case 'convoySurge':
+      // Convoy floods the market: staples cheap, metals dip on oversupply.
+      pressure.provisions = -0.5;
+      pressure.refinedMetals = -0.2;
+      break;
+    case 'oreRush':
+      // Miners flood the market: ore crashes, smelted metals ride the boom.
+      pressure.rawOre = -0.6;
+      pressure.refinedMetals = 0.35;
+      break;
     case 'commodityGlut': {
       // One commodity crashes toward the -40% floor; chosen at event start.
       pressure[COMMODITY_KEYS[(Math.random() * COMMODITY_KEYS.length) | 0]] = -1;
