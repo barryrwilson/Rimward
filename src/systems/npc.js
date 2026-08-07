@@ -666,8 +666,8 @@ function updateDuel(ctx, live, dt, now) {
     if (!ai.commSent) {
       ai.commSent = true;
       // Recognition: a Named Gun acknowledges a known/hunted pilot. Priority:
-      // Sister Vane's first-ever encounter > Illyx rematch > fear recognition
-      // > the generic line.
+      // Sister Vane's first-ever encounter > Illyx lineage/rematch > fear
+      // recognition > the generic line.
       let line = 'Run if you like.';
       if (!ai.recognitionSent) {
         ai.recognitionSent = true;
@@ -681,7 +681,11 @@ function updateDuel(ctx, live, dt, now) {
               ? 'You killed her. The name you will have to kill again.'
               : 'The Ledger bought my wing for you.';
         } else if (recName === 'Carver Illyx' && (ctx.world.aceRivalry?.defeats ?? 0) > 0) {
-          line = (live.record?.rematchCount ?? 0) < 2 ? 'Again.' : 'Again. Again.';
+          // Freehold lineage: the successor acknowledges the name he carries
+          // before any rematch talk.
+          line = (ctx.world.aceRivalry?.illyxGeneration ?? 0) >= 1
+            ? 'I fly his wing now. You know how this ends.'
+            : (live.record?.rematchCount ?? 0) < 2 ? 'Again.' : 'Again. Again.';
         } else if (ctx.world.fear >= 25) {
           line = 'They pay me to end you. Nothing personal, legend.';
         } else if (ctx.world.fear >= 15) {

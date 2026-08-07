@@ -141,19 +141,49 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   hud.js: toasts for the four new events. jump.js band-3 arrival line;
   starfield BAND_OPACITY[3]. Boot test wave-7 section: 5-system jump chain,
   deepening chain, lineage to namedGunBroken, Illyx ladder, all four
-  capstones, creditor arc + collector, payoff no-refire, save roundtrip.
+  creditor arc + collector, payoff no-refire, save roundtrip.
   PASS first run.
-## Next round candidates (wave 8)
+- Wave 8: band 4 + the two lineage/origin candidates. state.js:
+  SYSTEMS.verge ("The Verge", band 4, hollow faction, station The Vigil,
+  gate hush↔verge, landmarks vg_choir_stones monument + vg_unfinished
+  anomaly, clues: [] mandatory-empty — authored clue count stays 6),
+  BANDS[4] (eventGapMult 5.0, chatterMult 0.05, songGapMult 6.0 — the
+  quietest band), ACES.illyx.lineage (maxGenerations 2, respawnDelay 120,
+  +10 resolve/gen, bounty ×1.4^gen), ORIGIN_ARCS.ledgerDebt.round2
+  (reenteredDebt gate: 180 s calls ×2, −5 redledger rep each, creditorCall
+  stages 4–5, last call re-sends a fresh Collector Dresk into the current
+  bank + Whisper commLine, clear at credits ≥ 0 → milestone
+  'debtClearedAgain' +5 rep), ORIGIN_ARCS.beats (beautiful at growth 0.4/
+  0.75; marked at fear ≥ 25 with veridian rep < 0, then rep ≥ −5; each
+  fires once before the existing payoff). ctx.js froze 'originBeat' {id,
+  line} + vocabulary; aceRivalry gains illyxGeneration/illyxDownAt
+  (defaults 0/null with ??= guards at all four literal sites), originArc
+  gains calls2/lastCallAt2/collectorSent2/reenteredDebt/debtClearedAgain +
+  beautiful1/beautiful2/marked1/marked2 with a normalization ??= block for
+  old saves. world.js:
+  spawnIllyxSuccessor (gen-0 defeat stamps illyxDownAt; after 120 world-s a
+  new 'Carver Illyx' joins the freehold bank — resolve 65, bounty 3500,
+  rematchCount 0, cargo restrictedComponents ×4 — emitting 'lineagePassed'
+  {generation:1}); the successor's defeat fires milestone 'illyxLineBroken';
+  no third Illyx spawns. originArcTick: round-2 creditor branch + beat
+  checks. npc.js: illyxGeneration ≥ 1 switches his recognition to the kin
+  line, priority over the 'Again.' rematch lines; Vane path unchanged.
+  hud.js: ✧ sting toast for 'originBeat'. jump.js: 5th arrival line;
+  starfield BAND_OPACITY[4] 0.22. Boot test wave-8 section: verge jump leg
+  (band 4 + silent arrival line), verge content (clues stay 6, both
+  landmarks discovered), Illyx lineage to illyxLineBroken (no third
+  spawn), repeat-debtor round 2 (stages 4–5, second Dresk, no third
+  round), beautiful/marked beats no-refire on fresh harnesses, originArc/
+  aceRivalry round-2 + lineage save roundtrip. PASS.
+## Next round candidates (wave 9)
 
-- Wave 7 closed the depth queue. What remains:
-- Band 4+: the Hush is the deepest authored space; the deepening site's "not
-  finished becoming" teases further. No band-4 content designed yet.
-- Post-deepening mystery: her voice and the dark are one — the chain could
-  continue, but §25 (curiosity before explanation) argues for stopping here
-  or near it.
-- Lineage depth: Vane's line can be broken; Illyx has no lineage of his own
-  (freehold's Named Gun). Collectors are one-shot; a repeat-debtor path is
-  unbuilt.
-- Origin arcs: four of five are single payoffs; only ledgerDebt is a true
-  arc. Beautiful/marked could grow mid-game beats.
+- Wave 8 closed the queue again. Band 4 was the last spatial rung — no
+  band-5 content designed; the mystery chain deliberately stops at The
+  Answer per §25, and The Verge is the non-verbal continuation.
+- Origin arcs: greenhand/drifter are still single payoffs; beautiful/marked
+  grew beats this wave, they did not.
+- Named Guns: Vane's and Illyx's lines can both be broken, but nothing
+  systemic reacts to a rim with no Named Guns left.
+- Band-4 economy: one pirate, zero traders — a hermit-economy beat could
+  exist.
 - Polish debt: none known; boot test is the gate.

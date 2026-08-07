@@ -37,11 +37,18 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  * - WAVE 7 — NAMED-GUN LINEAGE + ORIGIN ARCS: defeating Sister Vane schedules
  *   a successor (same name, harder resolve, grown bounty) after
  *   ACES.hunter.lineage.respawnDelay world-seconds, until the last bearer
- *   falls and milestone 'namedGunBroken' ends the line. Origin payoff arcs
+ *   falls and milestone 'namedGunBroken' ends the line. Wave 8 gives the
+ *   Freehold's Carver Illyx a kin-carried lineage of the same shape —
+ *   exactly one successor, then milestone 'illyxLineBroken' ends his line.
+ *   Origin payoff arcs
  *   close the situations origins opened: ledgerDebt gets escalating creditor
- *   calls (and a collector) while credits < 0; the other four origins fire
- *   one-time 'originPayoff' beats. State lives in ctx.world.aceRivalry
- *   { hunterGeneration, hunterDownAt } and the flat JSON-plain
+ *   calls (and a collector) while credits < 0, and a colder second round
+ *   (Dresk again, milestone 'debtClearedAgain') if the player re-enters debt
+ *   after clearing; the other four origins fire one-time 'originPayoff'
+ *   beats, with beautiful and marked growing two 'originBeat' mid-beats
+ *   each ahead of the payoff. State lives in ctx.world.aceRivalry
+ *   { hunterGeneration, hunterDownAt, illyxGeneration, illyxDownAt } and
+ *   the flat JSON-plain
  *   ctx.world.originArc — both persisted via WORLD_FIELDS
  *   'aceRivalry'/'originArc' and re-resolved per frame (save.js swaps world
  *   fields wholesale on restore).
@@ -247,7 +254,7 @@ function ensureBank(ctx, sysId) {
  * ctx.world.records IS that bank, so the push suffices either way.
  */
 function spawnHunterAce(ctx) {
-  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
+  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
   if (rivalry.hunterSpawned) return;
   const def = SYSTEMS[ACES.hunter.system];
   if (!def) return;
@@ -312,6 +319,50 @@ function spawnHunterSuccessor(ctx) {
   rec.resolve = 55 + ACES.hunter.lineage.resolvePerGeneration * gen;
   bank.push(rec);
   ctx.emit('lineagePassed', { name: ACES.hunter.name, generation: gen, line: LINEAGE_LINES[gen - 1] });
+}
+
+// Freehold lineage lines, indexed generation - 1 (only generation 1 exists;
+// defeating the successor breaks the line instead — see the ace-defeat
+// handlers).
+const ILLYX_LINEAGE_LINES = [
+  'Carver Illyx is dead. His kin flies his wing, and his grudge. The Drift does not let a Gun stay buried.',
+];
+
+/**
+ * Freehold lineage (wave 8): the name is carried by kin. When a defeated
+ * Illyx's respawnDelay has elapsed, the next bearer takes up the name in
+ * the freehold bank — same jittered gate↔planet route and restrictedComponents
+ * cargo copy as the Freehold cast ace in createRecords, record.resolve seeded
+ * per generation (createShipState prefers the record field), bounty scaled
+ * by bountyGrowth^generation. The successor has not rematched, so
+ * rematchCount starts at 0. Caller bumps illyxGeneration and clears
+ * illyxDownAt first; the ace-defeat handlers decide whether the line
+ * continues at all.
+ */
+function spawnIllyxSuccessor(ctx) {
+  const rivalry = ctx.world.aceRivalry; // re-resolved per frame; save.js swaps wholesale
+  rivalry.illyxGeneration++;
+  rivalry.illyxDownAt = null;
+  const gen = rivalry.illyxGeneration;
+  const def = SYSTEMS[ACES.illyx.system];
+  if (!def) return;
+  const gate = gatePoint(def);
+  const planet = planetPoint(def);
+  const bank = ensureBank(ctx, ACES.illyx.system);
+  const rec = makeRecord(ctx, {
+    name: ACES.illyx.name,
+    classKey: ACES.illyx.classKey,
+    faction: ACES.illyx.faction,
+    role: 'ace',
+    route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
+    cargo: [{ commodity: 'restrictedComponents', units: 4 }],
+    bounty: Math.round(ACES.illyx.bounty * Math.pow(ACES.illyx.lineage.bountyGrowth, gen)),
+    system: ACES.illyx.system,
+  });
+  rec.resolve = 55 + ACES.illyx.lineage.resolvePerGeneration * gen;
+  rec.rematchCount = 0;
+  bank.push(rec);
+  ctx.emit('lineagePassed', { name: ACES.illyx.name, generation: gen, line: ILLYX_LINEAGE_LINES[gen - 1] });
 }
 
 /**
@@ -408,11 +459,30 @@ function originArcTick(ctx) {
     lastCallAt: 0,
     debtCleared: false,
     collectorSent: false,
+    calls2: 0,
+    lastCallAt2: 0,
+    collectorSent2: false,
+    reenteredDebt: false,
+    debtClearedAgain: false,
     marked: false,
     beautiful: false,
     drifter: false,
     greenhand: false,
+    beautiful1: false,
+    beautiful2: false,
+    marked1: false,
+    marked2: false,
   });
+  // Old saves predate round 2 and the mid-beats — normalize in place.
+  arc.calls2 ??= 0;
+  arc.lastCallAt2 ??= 0;
+  arc.collectorSent2 ??= false;
+  arc.reenteredDebt ??= false;
+  arc.debtClearedAgain ??= false;
+  arc.beautiful1 ??= false;
+  arc.beautiful2 ??= false;
+  arc.marked1 ??= false;
+  arc.marked2 ??= false;
 
   // a. Ledger come-due: while credits < 0 the Ledger calls every
   // callInterval world-seconds (max maxCalls, each costing redledger
@@ -435,7 +505,62 @@ function originArcTick(ctx) {
     }
   }
 
-  // b. One-time payoffs — each fires exactly once when its condition first
+  // a2. Repeat debtor (round 2): after the arc closed once, dipping negative
+  // again re-arms it — colder calls on round2's interval ('creditorCall'
+  // stage 4/5), the last one sending Dresk back out; climbing clear fires
+  // milestone 'debtClearedAgain'. reenteredDebt is the only gate for the
+  // second clearing — the calls themselves are optional. No third round.
+  if (origin === 'ledgerDebt' && arc.debtCleared && !arc.debtClearedAgain) {
+    const r2 = ORIGIN_ARCS.ledgerDebt.round2;
+    if (ctx.world.credits < 0) {
+      arc.reenteredDebt = true;
+      if (arc.calls2 < r2.maxCalls && ctx.world.time - arc.lastCallAt2 >= r2.callInterval) {
+        arc.calls2++;
+        arc.lastCallAt2 = ctx.world.time;
+        ctx.world.reputation.redledger = (ctx.world.reputation.redledger ?? 0) + r2.repPerCall;
+        ctx.emit('creditorCall', { stage: 3 + arc.calls2, line: r2.callLines[arc.calls2 - 1] });
+        if (arc.calls2 === r2.maxCalls && !arc.collectorSent2) {
+          arc.collectorSent2 = true;
+          injectCollector(ctx);
+          ctx.emit('commLine', {
+            from: 'Whisper',
+            text: 'Dresk kept your vector. The Ledger kept your name.',
+          });
+        }
+      }
+    } else if (arc.reenteredDebt) {
+      arc.debtClearedAgain = true;
+      ctx.world.reputation.redledger = (ctx.world.reputation.redledger ?? 0) + r2.clearRepBonus;
+      fireMilestone(ctx, 'debtClearedAgain', r2.clearLine);
+    }
+  }
+
+  // b. Mid-beats — beautiful and marked grow two 'originBeat' steps each
+  // ahead of their payoff; each fires exactly once.
+  if (origin === 'beautiful') {
+    const growth = ctx.bio?.growth ?? 0;
+    if (!arc.beautiful1 && growth >= 0.4) {
+      arc.beautiful1 = true;
+      ctx.emit('originBeat', { id: 'beautiful1', line: ORIGIN_ARCS.beats.beautiful[0].line });
+    }
+    if (!arc.beautiful2 && growth >= 0.75) {
+      arc.beautiful2 = true;
+      ctx.emit('originBeat', { id: 'beautiful2', line: ORIGIN_ARCS.beats.beautiful[1].line });
+    }
+  }
+  if (origin === 'marked') {
+    const veridian = ctx.world.reputation.veridian ?? 0;
+    if (!arc.marked1 && ctx.world.fear >= 25 && veridian < 0) {
+      arc.marked1 = true;
+      ctx.emit('originBeat', { id: 'marked1', line: ORIGIN_ARCS.beats.marked[0].line });
+    }
+    if (!arc.marked2 && veridian >= -5) {
+      arc.marked2 = true;
+      ctx.emit('originBeat', { id: 'marked2', line: ORIGIN_ARCS.beats.marked[1].line });
+    }
+  }
+
+  // c. One-time payoffs — each fires exactly once when its condition first
   // holds.
   if (origin === 'marked' && !arc.marked && (ctx.world.reputation.veridian ?? 0) >= 0) {
     arc.marked = true;
@@ -582,7 +707,7 @@ export function initWorld(ctx) {
 
   // Named-ace rivalry state (JSON-plain, persisted via WORLD_FIELDS
   // 'aceRivalry'). Old saves lack it — same ??= discipline as recordBanks.
-  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null };
+  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null };
 
   // Origin payoff arcs (wave 7): flat JSON-plain record persisted via
   // WORLD_FIELDS 'originArc'. Re-resolved per frame where used — save.js
@@ -592,10 +717,19 @@ export function initWorld(ctx) {
     lastCallAt: 0,
     debtCleared: false,
     collectorSent: false,
+    calls2: 0,
+    lastCallAt2: 0,
+    collectorSent2: false,
+    reenteredDebt: false,
+    debtClearedAgain: false,
     marked: false,
     beautiful: false,
     drifter: false,
     greenhand: false,
+    beautiful1: false,
+    beautiful2: false,
+    marked1: false,
+    marked2: false,
   };
 
   let nextEventAt = rollEventGap(ctx);
@@ -771,7 +905,7 @@ export function initWorld(ctx) {
         });
         const entry = stageAftermath(ctx, incident);
         if (rec?.role === 'ace') {
-          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
           rivalry.defeats++;
           rivalry.lastOutcome = 'destroyed';
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
@@ -783,6 +917,16 @@ export function initWorld(ctx) {
               fireMilestone(ctx, 'namedGunBroken', 'There will be no fourth Vane. Even the Ledger calls it enough.');
             } else {
               rivalry.hunterDownAt = ctx.world.time;
+            }
+          }
+          // Freehold lineage (wave 8): Illyx's name is carried by kin. One
+          // successor only — defeating him breaks the line for good.
+          if (rec.name === ACES.illyx.name && rec.role === 'ace' && rec.faction === ACES.illyx.faction) {
+            rivalry.illyxGeneration ??= 0; // pre-wave-8 saves lack the field
+            if (rivalry.illyxGeneration >= ACES.illyx.lineage.maxGenerations - 1) {
+              fireMilestone(ctx, 'illyxLineBroken', 'There will be no third Illyx. Freehold Landing leaves his berth lit.');
+            } else {
+              rivalry.illyxDownAt = ctx.world.time;
             }
           }
         }
@@ -808,7 +952,7 @@ export function initWorld(ctx) {
         fireMilestone(ctx, 'firstCapitulation', 'They yield. First capitulation.');
         if (outcome === 'tribute') fireMilestone(ctx, 'firstTribute', 'Tribute paid. The lane remembers.');
         if (rec?.role === 'ace') {
-          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
           rivalry.defeats++;
           rivalry.lastOutcome = outcome; // 'flee' | 'jettison' | 'ransom' | ...
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
@@ -820,6 +964,16 @@ export function initWorld(ctx) {
               fireMilestone(ctx, 'namedGunBroken', 'There will be no fourth Vane. Even the Ledger calls it enough.');
             } else {
               rivalry.hunterDownAt = ctx.world.time;
+            }
+          }
+          // Freehold lineage (wave 8): Illyx's name is carried by kin. One
+          // successor only — defeating him breaks the line for good.
+          if (rec.name === ACES.illyx.name && rec.role === 'ace' && rec.faction === ACES.illyx.faction) {
+            rivalry.illyxGeneration ??= 0; // pre-wave-8 saves lack the field
+            if (rivalry.illyxGeneration >= ACES.illyx.lineage.maxGenerations - 1) {
+              fireMilestone(ctx, 'illyxLineBroken', 'There will be no third Illyx. Freehold Landing leaves his berth lit.');
+            } else {
+              rivalry.illyxDownAt = ctx.world.time;
             }
           }
         }
@@ -939,6 +1093,11 @@ export function initWorld(ctx) {
       const rivalry = ctx.world.aceRivalry;
       if (rivalry && rivalry.hunterDownAt != null && now - rivalry.hunterDownAt >= ACES.hunter.lineage.respawnDelay) {
         spawnHunterSuccessor(ctx);
+      }
+      // Freehold lineage (wave 8): a defeated Illyx's kin takes up the name
+      // after respawnDelay world-seconds — one successor, then the line ends.
+      if (rivalry && rivalry.illyxDownAt != null && now - rivalry.illyxDownAt >= ACES.illyx.lineage.respawnDelay) {
+        spawnIllyxSuccessor(ctx);
       }
 
       // Origin payoff arcs (wave 7): creditor come-due + one-time payoffs.

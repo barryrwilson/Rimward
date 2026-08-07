@@ -8,6 +8,10 @@
 // Wave 7: the Hush jump leg (band 3), mystery deepening, Named-Gun lineage
 // successors, the Illyx rematch ladder, epic capstone stages, the ledgerDebt
 // creditor arc + one-time origin payoff, and the originArc save roundtrip.
+// Wave 8: the Verge jump leg (band 4) + its clue-free landmarks, the Illyx
+// kin lineage (one successor, then the line breaks), the ledgerDebt
+// repeat-debtor round, the beautiful/marked origin beats on fresh harness
+// boots, and the wave-8 originArc/aceRivalry save roundtrip.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -1491,6 +1495,372 @@ const w7restoreChecks = {
 };
 console.log('wave7 restore:', JSON.stringify(w7restoreChecks));
 if (!Object.values(w7restoreChecks).every(Boolean)) { console.log('WAVE7 RESTORE FAIL'); errors++; }
+
+// ---- Wave 8: the Verge / Illyx kin lineage / repeat-debtor round / beats / save ----
+// Order respects dependencies: the Verge leg leaves us in band 4 for the
+// landmark and second-collector-bank checks; the Illyx lineage CONTINUES
+// this run (the wave-7 ladder normalized his cast record and aceRivalry
+// rode the wave-7 save/restore); the repeat-debtor round CONTINUES the
+// wave-7 creditor state (same run, debtCleared already true — the origin id
+// was saved as 'marked', so the arc is re-armed by flipping it back); the
+// save roundtrip closes the continuing run; the two origin-beat arcs then
+// boot their OWN fresh harnesses (the overlay only opens when no save
+// restores, and its digit listener eats Digit1-5 until the pick — the
+// wave-6 lesson — so each beat run starts from an empty store and picks
+// first).
+
+// -- 1. jump leg: the Hush's SECOND gates entry reaches the Verge -----------
+undockStation(); // leave Threshold (wave-7 restore dock)
+const vergeGate = SYSTEMS.hush.gates.find((g) => g.to === 'verge'); // [750,90,-350]
+const vergeReturnGate = SYSTEMS.verge.gates.find((g) => g.to === 'hush'); // [0,90,-1250]
+ctx.ship.object.position.set(...vergeGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at verge gate');
+const vergeGateInZone = ctx.gate.inZone === true && ctx.gate.nearTo === 'verge';
+ctx.emit('jumpRequested', { to: 'verge' });
+let vergeLoadedFired = false;
+let vergeArrivalLine = null;
+let vergeArrived = false;
+for (let i = 0; i < 60 * 10 && !vergeArrived; i++) {
+  tick(1, 'wave8 jump to verge');
+  for (const ev of ctx.lastEvents) {
+    if (ev.type === 'systemLoaded' && ev.to === 'verge') vergeLoadedFired = true;
+    if (ev.type === 'commLine' && ev.from === 'gate') vergeArrivalLine = ev.text;
+  }
+  if (ctx.world.currentSystem === 'verge' && !ctx.gate.jumping) vergeArrived = true;
+}
+if (!vergeArrived) { console.log('WAVE8 CHAIN FAIL — never arrived at verge'); errors++; }
+const vp8 = ctx.ship.object.position;
+const w8jumpChecks = {
+  gateIsSecondEntry: SYSTEMS.hush.gates[1] === vergeGate,
+  inZoneAtGate: vergeGateInZone,
+  arrived: vergeArrived && ctx.world.currentSystem === 'verge',
+  jumpingDone: !ctx.gate.jumping,
+  systemLoadedFired: vergeLoadedFired,
+  band4: ctx.systems.verge.band === 4 && SYSTEMS.verge.band === 4,
+  bandTable4: !!BANDS[4] && BANDS[4].eventGapMult === 5.0 && BANDS[4].chatterMult === 0.05 && BANDS[4].songGapMult === 6.0,
+  band4SilentLine: vergeArrivalLine === 'The Verge. No hail. No echo of a hail. Out here even the quiet has stopped listening.',
+  stationTheVigil: ctx.station?.name === 'The Vigil',
+  nearArrivalGate: Math.hypot(vp8.x - 0, vp8.y - 90, vp8.z + 1250) < 120, // verge gate [0,90,-1250] + arrivalOffset
+};
+console.log('wave8 verge jump:', JSON.stringify(w8jumpChecks), `line=${JSON.stringify(vergeArrivalLine)}`);
+if (!Object.values(w8jumpChecks).every(Boolean)) { console.log('WAVE8 VERGE JUMP FAIL'); errors++; }
+
+// -- 2. Verge content: no authored clues, two proximity landmarks ------------
+// The Verge is the non-verbal continuation: clues stays empty so the
+// authored total across all systems holds at 6 (the convergence/deepening
+// math), and its two landmarks discover by the real 100u proximity path
+// (the wave-5 landmark pattern).
+const vergeLandmarkEvs = [];
+for (const lm of SYSTEMS.verge.landmarks) {
+  ctx.ship.object.position.set(...lm.position);
+  ctx.ship.velocity.set(0, 0, 0);
+  for (let i = 0; i < 30 && !ctx.world.mystery.visited.includes(lm.id); i++) {
+    tick(1, 'verge landmark approach');
+    vergeLandmarkEvs.push(...ctx.lastEvents.filter((e) => e.type === 'landmarkFound'));
+  }
+}
+const authoredClueTotal = Object.values(SYSTEMS).reduce((n, def) => n + (def.clues?.length ?? 0), 0);
+const choirEv = vergeLandmarkEvs.find((e) => e.id === 'vg_choir_stones') ?? null;
+const unfinishedEv = vergeLandmarkEvs.find((e) => e.id === 'vg_unfinished') ?? null;
+const w8vergeChecks = {
+  vergeCluesEmpty: SYSTEMS.verge.clues.length === 0,
+  authoredCluesStill6: authoredClueTotal === 6,
+  twoLandmarks: SYSTEMS.verge.landmarks.length === 2,
+  choirStonesVisited: ctx.world.mystery.visited.includes('vg_choir_stones'),
+  unfinishedVisited: ctx.world.mystery.visited.includes('vg_unfinished'),
+  choirEventCarriesLine: choirEv?.name === 'The Choir Stones' && choirEv?.line === SYSTEMS.verge.landmarks[0].line,
+  unfinishedEventCarriesLine: unfinishedEv?.name === 'The Unfinished' && unfinishedEv?.line === SYSTEMS.verge.landmarks[1].line,
+};
+console.log('wave8 verge content:', JSON.stringify(w8vergeChecks), `visited=${JSON.stringify(ctx.world.mystery?.visited)}`);
+if (!Object.values(w8vergeChecks).every(Boolean)) { console.log('WAVE8 VERGE CONTENT FAIL'); errors++; }
+
+// -- 3. Illyx kin lineage: defeat, backdate the wait, one successor, broken --
+// CONTINUING run: the wave-7 ladder normalized the freehold cast record and
+// the wave-7 save/restore carried aceRivalry forward. Test SETUP (mirrors
+// the wave-7 lineage normalize): exactly one living gen-0 bearer — revive
+// the cast record if random combat marked it dead, splice any duplicates,
+// and reset the lineage fields before the scripted defeats.
+const rivalry8 = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
+rivalry8.illyxGeneration = 0;
+rivalry8.illyxDownAt = null;
+{
+  const bank = ctx.world.recordBanks?.freehold ?? [];
+  let keeper = null;
+  for (let i = bank.length - 1; i >= 0; i--) {
+    const r = bank[i];
+    if (r.name !== ACES.illyx.name) continue;
+    if (!keeper) {
+      keeper = r;
+      if (r.state === 'dead' || r.state === 'captured') r.state = 'enroute';
+    } else {
+      bank.splice(i, 1);
+    }
+  }
+}
+const liveIllyx = () => (ctx.world.recordBanks?.freehold ?? [])
+  .find((r) => r.name === ACES.illyx.name && r.state !== 'dead' && r.state !== 'captured') ?? null;
+const expectIllyxResolve = (gen) => 55 + ACES.illyx.lineage.resolvePerGeneration * gen;
+const expectIllyxBounty = (gen) => Math.round(ACES.illyx.bounty * Math.pow(ACES.illyx.lineage.bountyGrowth, gen));
+const illyxEvs = [];
+const illyx0 = liveIllyx();
+if (illyx0) defeatAce(illyx0, 'defeat illyx gen0', illyxEvs); // the wave-7 'npcDestroyed' path
+const illyxDownAt0 = ctx.world.aceRivalry?.illyxDownAt ?? null;
+// Backdate instead of sleeping: the respawn check is world.time - illyxDownAt.
+ctx.world.aceRivalry.illyxDownAt = ctx.world.time - (ACES.illyx.lineage.respawnDelay + 1);
+for (let i = 0; i < 3; i++) { tick(1, 'illyx successor gen1'); illyxEvs.push(...ctx.lastEvents); }
+const illyx1 = liveIllyx();
+const illyxGenAfterFirst = ctx.world.aceRivalry?.illyxGeneration;
+if (illyx1) defeatAce(illyx1, 'defeat illyx gen1', illyxEvs);
+// No third bearer: the broken line never re-stamps illyxDownAt, so a full
+// respawn window spawns nothing.
+ctx.world.time += ACES.illyx.lineage.respawnDelay + 10;
+for (let i = 0; i < 3; i++) { tick(1, 'no third illyx'); illyxEvs.push(...ctx.lastEvents); }
+const w8illyxChecks = {
+  gen0Found: !!illyx0 && illyx0.bounty === ACES.illyx.bounty,
+  downStamped0: illyxDownAt0 != null,
+  gen1Successor: !!illyx1 && illyx1 !== illyx0 &&
+    illyx1.resolve === expectIllyxResolve(1) && illyx1.bounty === expectIllyxBounty(1), // 65 / 3500
+  successorFresh: illyx1?.rematchCount === 0 &&
+    JSON.stringify(illyx1?.cargo) === JSON.stringify([{ commodity: 'restrictedComponents', units: 4 }]),
+  generationBumped1: illyxGenAfterFirst === 1,
+  lineagePassed1: illyxEvs.some((e) => e.type === 'lineagePassed' && e.name === ACES.illyx.name && e.generation === 1),
+  lineBroken: ctx.world.milestones.includes('illyxLineBroken'),
+  lineBrokenEvent: illyxEvs.some((e) => e.type === 'milestone' && e.id === 'illyxLineBroken'),
+  downClearedAfterBreak: ctx.world.aceRivalry?.illyxDownAt == null,
+  noThirdIllyx: liveIllyx() === null && !illyxEvs.some((e) => e.type === 'lineagePassed' && e.generation === 2),
+};
+console.log('wave8 illyx lineage:', JSON.stringify(w8illyxChecks), `gen=${ctx.world.aceRivalry?.illyxGeneration}`);
+if (!Object.values(w8illyxChecks).every(Boolean)) { console.log('WAVE8 ILLYX LINEAGE FAIL'); errors++; }
+
+// -- 4. repeat-debtor round: the Ledger re-arms once, colder ------------------
+// CONTINUES the wave-7 creditor state: same run, debtCleared already true
+// (the wave-7 restore carried the arc forward). The saved origin id is
+// 'marked' (wave-7 section 7) — flip it back to re-arm the ledger arc.
+ctx.world.origin = 'ledgerDebt';
+const arc8 = ctx.world.originArc;
+const r2 = ORIGIN_ARCS.ledgerDebt.round2;
+ctx.world.credits = -100;
+const r2Evs = [];
+const repTrack2 = [];
+const repBeforeRound2 = ctx.world.reputation.redledger;
+// Call 4 fires immediately (lastCallAt2 starts at 0, world.time is long past
+// the interval); call 5 needs the time jump — deterministic, no sleeps.
+for (let stage = 4; stage <= 3 + r2.maxCalls; stage++) {
+  for (let i = 0; i < 2; i++) { tick(1, `round2 call ${stage}`); r2Evs.push(...ctx.lastEvents); }
+  repTrack2.push(ctx.world.reputation.redledger);
+  // Spacing guard: without the time jump no further call may arrive.
+  for (let i = 0; i < 3; i++) { tick(1, `round2 spacing ${stage}`); r2Evs.push(...ctx.lastEvents); }
+  if (stage < 3 + r2.maxCalls) ctx.world.time += r2.callInterval + 1;
+}
+const callStages8 = r2Evs.filter((e) => e.type === 'creditorCall').map((e) => e.stage);
+const dreskHere = (ctx.world.recordBanks?.[ctx.world.currentSystem] ?? [])
+  .filter((r) => r.name === ORIGIN_ARCS.ledgerDebt.collector.name);
+const dreskTotal = Object.values(ctx.world.recordBanks ?? {}).reduce(
+  (n, bank) => n + bank.filter((r) => r.name === ORIGIN_ARCS.ledgerDebt.collector.name).length, 0);
+const whisperRound2 = r2Evs.find((e) => e.type === 'commLine' && e.from === 'Whisper' && /Dresk kept your vector/.test(e.text ?? '')) ?? null;
+// Close the round: credits back above water.
+ctx.world.credits = 100;
+const clear2Evs = [];
+for (let i = 0; i < 3; i++) { tick(1, 'debt cleared again'); clear2Evs.push(...ctx.lastEvents); }
+// No third round: dip negative again, wait a full interval — nothing comes.
+ctx.world.credits = -50;
+ctx.world.time += r2.callInterval + 1;
+const thirdRoundEvs = [];
+for (let i = 0; i < 5; i++) { tick(1, 'no third round'); thirdRoundEvs.push(...ctx.lastEvents); }
+ctx.world.credits = 100;
+tick(2, 'round2 settle');
+const w8creditorChecks = {
+  reenteredDebtFlag: arc8.reenteredDebt === true,
+  stagesArrivedSpaced: JSON.stringify(callStages8) === JSON.stringify([4, 5]),
+  round2LinesMatch: r2Evs.filter((e) => e.type === 'creditorCall')
+    .every((e) => e.line === r2.callLines[e.stage - 4]),
+  repDropped5PerCall: repTrack2[0] === repBeforeRound2 - 5 && repTrack2[1] === repBeforeRound2 - 10,
+  collectorSent2Flag: arc8.collectorSent2 === true,
+  secondDreskInVerge: dreskHere.length === 1 && dreskHere[0].role === 'pirate' && dreskHere[0].faction === 'redledger',
+  dreskTotalTwo: dreskTotal === 2, // wave-7's Dresk (the Hush bank) + this one
+  whisperVoiced: !!whisperRound2,
+  debtClearedAgainFlag: arc8.debtClearedAgain === true,
+  debtClearedAgainMilestone: ctx.world.milestones.includes('debtClearedAgain') &&
+    clear2Evs.some((e) => e.type === 'milestone' && e.id === 'debtClearedAgain'),
+  clearRepBonus5: ctx.world.reputation.redledger === repBeforeRound2 - 10 + r2.clearRepBonus,
+  noThirdRound: !thirdRoundEvs.some((e) => e.type === 'creditorCall'),
+};
+console.log('wave8 repeat debtor:', JSON.stringify(w8creditorChecks), `calls2=${arc8.calls2} rep.redledger=${ctx.world.reputation.redledger}`);
+if (!Object.values(w8creditorChecks).every(Boolean)) { console.log('WAVE8 REPEAT DEBTOR FAIL'); errors++; }
+
+// -- 5. save roundtrip: wave-8 world fields survive save AND restore ---------
+// Test SETUP: park live hostiles so the dock autosave can't be combat-blocked
+// (same pattern as the wave-5/6/7 save sections — Dresk's second record and
+// the verge pirate are live somewhere in this system).
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave8 save)');
+dockAtCurrentStation('dock verge (wave8 save)'); // The Vigil — 'docked' fires trySave
+tick(3, 'wave8 save settle');
+const w8snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const w8saveChecks = {
+  saveWritten: !!w8snap?.world,
+  systemIsVerge: w8snap?.world?.currentSystem === 'verge',
+  round2Persisted: w8snap?.world?.originArc?.debtClearedAgain === true && w8snap?.world?.originArc?.calls2 === 2,
+  illyxGenerationPersisted: w8snap?.world?.aceRivalry?.illyxGeneration === 1,
+};
+console.log('wave8 save fields:', JSON.stringify(w8saveChecks));
+if (!Object.values(w8saveChecks).every(Boolean)) { console.log('WAVE8 SAVE FIELDS FAIL'); errors++; }
+
+// Restore half (the wave-7 pattern): corrupt the wave-8 fields in memory,
+// die, recover from the dock autosave. Credits stay negative and lastCallAt2
+// pins to now, so the corrupted arc can neither re-close nor re-call in the
+// two frames before the restore reads.
+ctx.world.originArc.debtClearedAgain = false;
+ctx.world.originArc.calls2 = 0;
+ctx.world.originArc.lastCallAt2 = ctx.world.time;
+ctx.world.credits = -50;
+ctx.world.aceRivalry.illyxGeneration = 0;
+tick(2, 'wave8 fields corrupted');
+const w8corrupted = ctx.world.originArc.debtClearedAgain === false && ctx.world.aceRivalry.illyxGeneration === 0;
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave8 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const w8restoreChecks = {
+  corruptedFirst: w8corrupted,
+  round2Restored: ctx.world.originArc?.debtClearedAgain === true && ctx.world.originArc?.calls2 === 2,
+  illyxGenerationRestored: ctx.world.aceRivalry?.illyxGeneration === 1,
+};
+console.log('wave8 restore:', JSON.stringify(w8restoreChecks));
+if (!Object.values(w8restoreChecks).every(Boolean)) { console.log('WAVE8 RESTORE FAIL'); errors++; }
+
+// -- 6/7. origin beats: each arc boots its OWN fresh harness ------------------
+// Same wiring as the top-of-file boot. The store must be empty first —
+// save.js's boot-time load would otherwise restore the continuing run and
+// origins.js would stay inert (no overlay, no pick). The main run's window
+// listeners share the window with these boots; its docked/paused flags gate
+// every one of them, so unpin both now that the continuing run is over.
+ctx.flags.docked = false;
+ctx.flags.paused = false;
+function bootFreshHarness(label) {
+  store.delete('rimward-save-v1');
+  const sceneN = new THREE.Scene();
+  const cameraN = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
+  const rendererN = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
+  const ctxN = createCtx({ scene: sceneN, camera: cameraN, renderer: rendererN });
+  ctxN.systems = SYSTEMS; // mirrors main.js boot line
+  const systemsN = [];
+  for (const [name, init] of inits) {
+    try {
+      systemsN.push([name, init(ctxN)]);
+      console.log(`INIT OK   ${name} (${label})`);
+    } catch (e) {
+      console.log(`INIT FAIL ${name} (${label}): ${e.message}`);
+      errors++;
+    }
+  }
+  const tickN = (n, tickLabel) => {
+    for (let i = 0; i < n; i++) {
+      frame++;
+      ctxN.elapsed += dt;
+      ctxN.world.time += dt;
+      try {
+        for (const [name, s] of systemsN) s?.update?.(dt, ctxN);
+      } catch (e) {
+        errors++;
+        if (errors <= 5) console.log(`UPDATE ERR frame ${frame} (${tickLabel}): ${e.message}\n${e.stack?.split('\n')[1]?.trim() ?? ''}`);
+      }
+      ctxN.lastEvents = ctxN.events;
+      ctxN.events = [];
+    }
+  };
+  return { ctx: ctxN, tick: tickN };
+}
+
+// -- 6. beautiful: growth 0.4 / 0.75 / 1.0 — two beats, then the payoff -------
+const beautifulBoot = bootFreshHarness('beautiful');
+const bctx = beautifulBoot.ctx;
+const btick = beautifulBoot.tick;
+const bOverlayShown = [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+dispatchKey('Digit4'); // [4] Beautiful Ones Initiate
+const bOriginEv = bctx.events.find((e) => e.type === 'originChosen') ?? null; // emit is synchronous
+// Same hull pin as the main run: random soak combat must not kill the fresh
+// pilot mid-section (the death overlay would eat later digit dispatches).
+bctx.player.hullMax = 1e9;
+bctx.player.hull = 1e9;
+const bEvs = [];
+// growth is re-derived every bio.update as bond*0.7 + fedCount*0.05 (the
+// wave-5 lesson: set the sim inputs, never ctx.bio.growth directly).
+bctx.bio.bond = 0.5; bctx.bio.fedCount = 1; // growth 0.40
+for (let i = 0; i < 3; i++) { btick(1, 'beautiful beat1'); bEvs.push(...bctx.lastEvents); }
+for (let i = 0; i < 30; i++) { btick(1, 'beautiful beat1 refire watch'); bEvs.push(...bctx.lastEvents); }
+bctx.bio.bond = 1; bctx.bio.fedCount = 1; // growth 0.75
+for (let i = 0; i < 3; i++) { btick(1, 'beautiful beat2'); bEvs.push(...bctx.lastEvents); }
+bctx.bio.bond = 1; bctx.bio.fedCount = 6; // growth 1.00
+for (let i = 0; i < 3; i++) { btick(1, 'beautiful payoff'); bEvs.push(...bctx.lastEvents); }
+for (let i = 0; i < 10; i++) { btick(1, 'beautiful payoff refire watch'); bEvs.push(...bctx.lastEvents); }
+const bBeat1 = bEvs.filter((e) => e.type === 'originBeat' && e.id === 'beautiful1');
+const bBeat2 = bEvs.filter((e) => e.type === 'originBeat' && e.id === 'beautiful2');
+const bPayoff = bEvs.filter((e) => e.type === 'originPayoff' && e.id === 'beautiful');
+const w8beautifulChecks = {
+  overlayShown: bOverlayShown,
+  originRecorded: bctx.world.origin === 'beautiful',
+  originChosenEmitted: bOriginEv?.id === 'beautiful',
+  growthReachedFull: bctx.bio.growth >= 1,
+  beat1Once: bBeat1.length === 1,
+  beat1Line: bBeat1[0]?.line === ORIGIN_ARCS.beats.beautiful[0].line,
+  beat2Once: bBeat2.length === 1,
+  beat2Line: bBeat2[0]?.line === ORIGIN_ARCS.beats.beautiful[1].line,
+  payoffOnce: bPayoff.length === 1,
+  payoffLine: bPayoff[0]?.line === ORIGIN_ARCS.payoffs.beautiful,
+  arcFlags: bctx.world.originArc?.beautiful1 === true &&
+    bctx.world.originArc?.beautiful2 === true && bctx.world.originArc?.beautiful === true,
+};
+console.log('wave8 beautiful beats:', JSON.stringify(w8beautifulChecks));
+if (!Object.values(w8beautifulChecks).every(Boolean)) { console.log('WAVE8 BEAUTIFUL BEATS FAIL'); errors++; }
+
+// -- 7. marked: fear 25 at negative rep, rep -5, rep 0 — beats then payoff ----
+const markedBoot = bootFreshHarness('marked');
+const mctx = markedBoot.ctx;
+const mtick = markedBoot.tick;
+const mOverlayShown = [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+dispatchKey('Digit3'); // [3] Marked
+const mOriginEv = mctx.events.find((e) => e.type === 'originChosen') ?? null;
+mctx.player.hullMax = 1e9;
+mctx.player.hull = 1e9;
+// Beat 1 needs fear >= 25 while veridian rep is still negative — set BOTH
+// before the first tick: marked's effects leave fear 15 / veridian -15, and
+// at the fresh-boot defaults marked2 (rep >= -5) and the payoff (rep >= 0)
+// would fire ahead of it.
+mctx.world.fear = 25;
+mctx.world.reputation.veridian = -10;
+const mEvs = [];
+for (let i = 0; i < 3; i++) { mtick(1, 'marked beat1'); mEvs.push(...mctx.lastEvents); }
+for (let i = 0; i < 30; i++) { mtick(1, 'marked beat1 refire watch'); mEvs.push(...mctx.lastEvents); }
+mctx.world.reputation.veridian = -5;
+for (let i = 0; i < 3; i++) { mtick(1, 'marked beat2'); mEvs.push(...mctx.lastEvents); }
+mctx.world.reputation.veridian = 0; // the threshold crossing itself
+for (let i = 0; i < 3; i++) { mtick(1, 'marked payoff'); mEvs.push(...mctx.lastEvents); }
+for (let i = 0; i < 10; i++) { mtick(1, 'marked payoff refire watch'); mEvs.push(...mctx.lastEvents); }
+const mBeat1 = mEvs.filter((e) => e.type === 'originBeat' && e.id === 'marked1');
+const mBeat2 = mEvs.filter((e) => e.type === 'originBeat' && e.id === 'marked2');
+const mPayoff = mEvs.filter((e) => e.type === 'originPayoff' && e.id === 'marked');
+const w8markedChecks = {
+  overlayShown: mOverlayShown,
+  originRecorded: mctx.world.origin === 'marked',
+  originChosenEmitted: mOriginEv?.id === 'marked',
+  beat1Once: mBeat1.length === 1,
+  beat1Line: mBeat1[0]?.line === ORIGIN_ARCS.beats.marked[0].line,
+  beat2Once: mBeat2.length === 1,
+  beat2Line: mBeat2[0]?.line === ORIGIN_ARCS.beats.marked[1].line,
+  payoffOnce: mPayoff.length === 1,
+  payoffLine: mPayoff[0]?.line === ORIGIN_ARCS.payoffs.marked,
+  arcFlags: mctx.world.originArc?.marked1 === true &&
+    mctx.world.originArc?.marked2 === true && mctx.world.originArc?.marked === true,
+};
+console.log('wave8 marked beats:', JSON.stringify(w8markedChecks));
+if (!Object.values(w8markedChecks).every(Boolean)) { console.log('WAVE8 MARKED BEATS FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

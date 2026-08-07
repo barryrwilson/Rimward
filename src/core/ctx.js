@@ -180,7 +180,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'epicStage' {id,faction,stage,line}      'originChosen' {id,line}  (wave 6)
     // 'convergence' {id,line} (mystery.js)     'songShift' {reason} (mystery→song)
     // 'deepening' {id,line} (mystery.js, wave 7)   'lineagePassed' {name,generation,line}
-    // 'creditorCall' {stage,line}  'originPayoff' {id,line}  (world.js origin arcs)
+    // 'creditorCall' {stage,line}  'originPayoff' {id,line}  'originBeat' {id,line}  (world.js origin arcs)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

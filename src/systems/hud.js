@@ -93,6 +93,8 @@ function toastForEvent(e, ctx, mem) {
       return { text: '▲ ' + (e.line ?? 'The Ledger calls.'), cls: 'warn' };
     case 'originPayoff':
       return { text: '✦ ' + (e.line ?? 'The situation closes.'), cls: 'sting' };
+    case 'originBeat':
+      return { text: '✧ ' + (e.line ?? 'She is becoming.'), cls: 'sting' };
     // 'songShift' gets NO toast — it is heard, not read.
     case 'milestone':
       return { text: '★ ' + (e.line ?? e.id ?? 'A first.'), cls: 'sting' };

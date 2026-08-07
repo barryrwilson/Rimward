@@ -226,7 +226,8 @@ export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
  * creating deliberate arbitrage spreads (Freehold grows food, Veridian refines
  * metal): buy low here, sell high there (§10.1).
  *
- * band indexes BANDS (§15): 0 = core, 3 = the deepest rim. Pacing modules read it
+ * band indexes BANDS (§15): 0 = core, 3 = the deepest rim, 4 = past the rim
+ * (the Verge). Pacing modules read it
  * to stretch event/chatter/song gaps the farther out you fly.
  * landmarks[] are authored POIs { id, name, kind, position, line } discovered
  * at 100u; clues[] are mystery breadcrumbs { id, position, line } discovered
@@ -342,7 +343,7 @@ export const SYSTEMS = {
     planetCount: 1,
     station: { name: 'Threshold', position: [260, 40, 420], palette: 0x5a4a6a },
     field: { center: [-350, -50, -280], radius: 90, count: 45, oreMult: 2.5 },
-    gates: [{ position: [0, 80, -1150], to: 'hollowreach' }],
+    gates: [{ position: [0, 80, -1150], to: 'hollowreach' }, { position: [750, 90, -350], to: 'verge' }],
     priceBase: { provisions: 1.9, refinedMetals: 1.3, restrictedComponents: 0.55, rawOre: 0.85, livingRock: 0.6 },
     cast: { traders: 1, pirates: 2, patrols: 0, ace: false },
     tradesRestricted: true,
@@ -355,6 +356,33 @@ export const SYSTEMS = {
       { id: 'th_c_keeper', position: [100, -60, -150], line: "The Threshold's keeper logs every arrival in two columns. The second column is arrivals that have not happened yet." },
       { id: 'th_c_song', position: [-250, 180, 550], line: 'Out here the answer is louder than the song. She has stopped leading the duet.' },
     ],
+  },
+  // Wave 8: band 4. Past the Hush, the authored space ends in a place, not
+  // an answer. One keeper gone quiet, one pirate, no one else.
+  verge: {
+    id: 'verge',
+    name: 'The Verge',
+    faction: 'hollow',
+    worldSeed: 151,
+    sunColor: 0x4a3a5a,
+    sunRadius: 28,
+    planetCount: 1,
+    station: { name: 'The Vigil', position: [180, 30, 360], palette: 0x4a3a5a },
+    field: { center: [-300, -40, -240], radius: 80, count: 35, oreMult: 3.0 },
+    gates: [{ position: [0, 90, -1250], to: 'hush' }],
+    priceBase: { provisions: 2.2, refinedMetals: 1.4, restrictedComponents: 0.5, rawOre: 0.8, livingRock: 0.5 },
+    cast: { traders: 0, pirates: 1, patrols: 0, ace: false },
+    tradesRestricted: true,
+    band: 4,
+    landmarks: [
+      { id: 'vg_choir_stones', name: 'The Choir Stones', kind: 'monument', position: [600, 110, -400], line: 'When your ship sings, the stones answer — a half-beat late, in a chord with more notes than there are stones.' },
+      { id: 'vg_unfinished', name: 'The Unfinished', kind: 'anomaly', position: [-550, -200, 500], line: 'Not a wreck, not a station, not a song. Whatever the correspondence was building toward, it has not finished becoming it — or it has, and this is what it looks like from outside.' },
+    ],
+    // MANDATORY empty: keeps the authored clue count at 6 so CONVERGENCE
+    // (cluesNeeded 3) and DEEPENING (cluesNeeded 5) math and the wave-7
+    // comments stay true. The mystery chain stops at 'The Answer' — the
+    // Verge is the non-verbal continuation, a place, not an explanation.
+    clues: [],
   },
 };
 export const JUMP = {
@@ -378,6 +406,7 @@ export const BANDS = {
   1: { eventGapMult: 1.4, chatterMult: 0.6, songGapMult: 1.5 },
   2: { eventGapMult: 2.2, chatterMult: 0.25, songGapMult: 2.5 },
   3: { eventGapMult: 3.5, chatterMult: 0.1, songGapMult: 4.0 }, // the Hush: near-total silence
+  4: { eventGapMult: 5.0, chatterMult: 0.05, songGapMult: 6.0 }, // the Verge: past silence — events almost never come
 };
 
 // ---------- Faction ranks (§12.x station depth) ----------
@@ -533,11 +562,13 @@ export const EPICS = {
 };
 
 /**
- * Named aces beyond Carver Illyx (glossary: Named ace / Named Gun). The hunter
- * ace is NOT in any system's cast: world.js injects her record into the
- * redmarch record bank once ctx.world.fear crosses fearThreshold (tracked in
- * ctx.world.aceRivalry.hunterSpawned so the injection happens exactly once,
- * persisted). She hunts the player like an ace and never migrates.
+ * Named aces with world.js-managed lineages (glossary: Named ace / Named
+ * Gun). The hunter ace is NOT in any system's cast: world.js injects her
+ * record into the redmarch record bank once ctx.world.fear crosses
+ * fearThreshold (tracked in ctx.world.aceRivalry.hunterSpawned so the
+ * injection happens exactly once, persisted). She hunts the player like an
+ * ace and never migrates. Carver Illyx IS authored in the Freehold cast
+ * (createRecords); his entry here exists so world.js can spawn his kin.
  */
 export const ACES = {
   hunter: {
@@ -556,6 +587,24 @@ export const ACES = {
     // defeating the last bearer fires milestone 'namedGunBroken'. Progress
     // lives on ctx.world.aceRivalry { hunterGeneration, hunterDownAt }.
     lineage: { maxGenerations: 3, respawnDelay: 90, resolvePerGeneration: 12, bountyGrowth: 1.5 },
+  },
+  illyx: {
+    name: 'Carver Illyx',
+    system: 'freehold',
+    faction: 'redledger',
+    classKey: 'ace',
+    bounty: 2500,
+    // Freehold lineage (wave 8): where the Ledger's Vane is an institutional
+    // mantle, Illyx's name is carried by kin. Each defeat lets the next
+    // bearer take up the name after lineage.respawnDelay world-seconds —
+    // same name, harder (record.resolve seeded base + resolvePerGeneration ×
+    // generation, bounty scaled by bountyGrowth^generation). maxGenerations
+    // 2 means exactly TWO bearers: Carver himself plus one successor —
+    // defeating the successor breaks the line (milestone 'illyxLineBroken').
+    // Progress lives on ctx.world.aceRivalry { illyxGeneration,
+    // illyxDownAt }. No cargo field: the successor copies the Freehold
+    // cast ace's restrictedComponents load in world.js.
+    lineage: { maxGenerations: 2, respawnDelay: 120, resolvePerGeneration: 10, bountyGrowth: 1.4 },
   },
 };
 
@@ -610,16 +659,27 @@ export const DEEPENING = {
  * world.js owns the checks; progress persists in ctx.world.originArc
  * (WORLD_FIELDS 'originArc'), a flat JSON-plain record:
  *   { calls, lastCallAt, debtCleared, collectorSent,
- *     marked, beautiful, drifter, greenhand }
- * ledgerDebt is the deep arc: while credits < 0 the Ledger calls every
- * callInterval world-seconds (escalating lines, 'creditorCall' {stage,line});
- * the maxCalls-th call also injects the collector (a named cutter, role
- * 'pirate', hunts the player) into the CURRENT system's record bank, once.
- * Reaching credits >= 0 closes it: milestone 'debtCleared', redledger
- * rep +10. The other four arcs are single one-time payoffs ('originPayoff'
- * {id, line}) firing on their condition:
- *   marked — veridian reputation climbs back to >= 0 (the board comes down)
- *   beautiful — ctx.bio.growth reaches 1 (she finishes becoming)
+ *     calls2, lastCallAt2, collectorSent2, reenteredDebt, debtClearedAgain,
+ *     marked, beautiful, drifter, greenhand,
+ *     beautiful1, beautiful2, marked1, marked2 }
+ * ledgerDebt is the deep arc, in two rounds. Round 1: while credits < 0 the
+ * Ledger calls every callInterval world-seconds (escalating lines,
+ * 'creditorCall' {stage,line}); the maxCalls-th call also injects the
+ * collector (a named cutter, role 'pirate', hunts the player) into the
+ * CURRENT system's record bank, once. Reaching credits >= 0 closes it:
+ * milestone 'debtCleared', redledger rep +clearRepBonus. Round 2 (repeat
+ * debtor): after debtCleared, dipping negative again sets reenteredDebt and
+ * re-arms the arc — round2.maxCalls colder calls on round2.callInterval
+ * ('creditorCall' stage 4/5), the last re-injecting Dresk once plus a
+ * Whisper 'commLine'; climbing back to >= 0 fires milestone
+ * 'debtClearedAgain' + round2.clearRepBonus. There is no third round. The
+ * other four arcs fire one-time payoffs ('originPayoff' {id, line}) on
+ * their condition; beautiful and marked also grow two mid-beats each
+ * ('originBeat' {id,line}, lines in beats) ahead of the payoff:
+ *   marked — beats at fear 25 (veridian rep < 0) and veridian rep >= -5;
+ *     payoff at veridian reputation >= 0 (the board comes down)
+ *   beautiful — beats at growth 0.4 and 0.75; payoff at growth 1 (she
+ *     finishes becoming)
  *   drifter — mystery.converged (the tally's question, stood inside)
  *   greenhand — any epic stage recorded (no story yet → a story)
  */
@@ -642,6 +702,29 @@ export const ORIGIN_ARCS = {
       bounty: 0,
     },
     clearLine: 'Ledger hail: account closed. The Column strikes your name in black. The clerk almost smiles.',
+    // Round 2 (repeat debtor): re-armed by dipping negative after
+    // debtCleared. Colder, shorter — and Dresk never lost the vector.
+    round2: {
+      callInterval: 180,
+      maxCalls: 2,
+      repPerCall: -5,
+      clearRepBonus: 5,
+      callLines: [
+        'Ledger hail: again. The Column noted the black ink; it notes the red twice as fast.',
+        'Ledger hail: no patience this time. Collector Dresk kept your vector — and your name.',
+      ],
+      clearLine: 'Ledger hail: account closed a second time. The clerk does not almost-smile. The Column does not extend a third.',
+    },
+  },
+  beats: {
+    beautiful: [
+      { id: 'beautiful1', line: 'She molts for the first time under your care — a slow hush of shed hull-skin drifting loose, and new growth beneath, soft and bright as morning.' },
+      { id: 'beautiful2', line: 'Her new growth has begun to answer the dark on its own — small chords, unsolicited, curious. She is listening to something out there, and learning its shape.' },
+    ],
+    marked: [
+      { id: 'marked1', line: 'The board in Veridian spacedock has a second sketch under your face now. Someone is paying to keep it current.' },
+      { id: 'marked2', line: "A Combine clerk quietly misfiles your dossier. The board's copy of your face has begun to blur." },
+    ],
   },
   payoffs: {
     marked: 'The board in Veridian spacedock comes down. No announcement; one morning your face simply is not there. The Combine does not apologize — it un-remembers.',
