@@ -462,22 +462,40 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   hush). Final independent review approved the diff. npm run
   test:boot PASS ×7 runs; npm run build clean (only the pre-existing
   >500 kB chunk warning). Uncommitted.
-## Next round candidates (wave 17)
+- Wave 17: the standing polish/gate debt (the pre-existing wave-4
+  recovery-board flake), reproduced before the fix in a seven-run
+  baseline — one run found no offered card for the test-seeded aft-test
+  wreck. Root cause was harness setup, not wreck expiry: random soak
+  combat can stage a real unexpired veridian wreck before the test
+  pushes aft-test, and station.js syncRecoveryJob posts one recovery
+  card for the first in-system live wreck in aftermath order, so the
+  soak wreck can occupy the board slot and starve the test card.
+  scripts/boot-test.mjs now expires current-veridian soak wrecks
+  through the real lifecycle before setup, then seeds a deterministic
+  stale aft-collision wreck + offered recovery card and lets the real
+  expiry/board-sync path clear both before pushing aft-test. The
+  wave-4 accept gate gains recoveryCollisionCleared /
+  recoveryCollisionPulled guards; the original offered/accept/pod/
+  delivery assertions stay intact. Production code untouched. npm run
+  test:boot PASS ×7 runs; npm run build clean (only the pre-existing
+  >500 kB chunk warning). Uncommitted.
+## Next round candidates (wave 18)
 
-- Wave 16 closed the docked-review gap: charted pages are readable
-  at dock as a chart note on the keeper's People card, so the mark
-  now surfaces both in flight (HUD, wave 15) and on the station.
-- The trust-60 comp tier still carries four privileges (the comp,
-  the vouch word on two surfaces, the narrowed page, the chart mark)
-  — wave 16 added none (the People-card note is keeper-gated, not
-  trust-gated). The pile-up note from wave 13 stands, still no
-  rebalancing action.
+- Wave 17 closed the known gate/polish debt: the recovery-board setup
+  is deterministic and the one-card collision has a regression guard.
+- The trust-60 comp tier still carries four privileges (the comp, the
+  vouch word on two surfaces, the narrowed page, the chart mark). The
+  wave-17 assessment found one zero-behavior cleanup worth taking
+  next: export KEEPER_COMP_TRUST = 60 from contacts.js beside
+  KEEPER_LEDGER_TRUST, replace the contacts.js trust-60 literals, and
+  consume the shared constant in station.js instead of keeping it on
+  the UI side. No numeric rebalance yet; every 60-gate also has an
+  independent system/milestone/ledger gate.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
   reset; vouchAck is a bool; mystery.charted grows by landmark id but
   is bounded by the authored landmark tables — self-limiting. The
-  long-campaign int-growth note from wave 12 stands.
-- Polish/gate debt: a pre-existing wave-4 recovery-board flake —
-  one run in an earlier seven-run verification batch found no
-  unexpired wreck after the soak; wave-16 code was not involved and
-  the subsequent final batch passed 7/7. Tracked as gate/polish
-  debt, not wave-16 behavior. Boot test remains the gate.
+  wave-17 assessment found no action worth taking: ledgerIdx is
+  modulo-bounded, charted is deduped by authored ids, vouchAck is one
+  bit per keeper, and the Callow cursors grow only +1 per real Verge
+  visit with exact arithmetic pinned by existing gates.
+- Polish debt: none known; boot test remains the gate.

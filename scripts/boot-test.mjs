@@ -560,6 +560,32 @@ console.log('wave4 ferry delivery:', JSON.stringify(ferryDoneChecks));
 if (!Object.values(ferryDoneChecks).every(Boolean)) { console.log('WAVE4 FERRY DELIVERY FAIL'); errors++; }
 
 // -- 5. recovery: seed a veridian wreck (test SETUP data), scoop, redock ----
+// Wave 17: the random soaks can stage a real veridian wreck before this
+// section. The board posts one recovery card at a time (first live wreck in
+// aftermath order), so expire those soak wrecks through the real lifecycle
+// before seeding the test wreck; otherwise they can occupy the card slot.
+for (const entry of ctx.world.aftermath) {
+  if (entry.kind === 'wreck' && entry.system === 'veridian') {
+    entry.expiresAt = Math.min(entry.expiresAt, ctx.world.time);
+  }
+}
+tick(1, 'expire soak wrecks (recovery setup)');
+// Deterministic regression for the old collision: a stale offered recovery
+// card must be pulled by the real board sync before aft-test can be posted.
+ctx.world.aftermath.push({
+  id: 'aft-collision', incidentId: 'inc-collision', kind: 'wreck',
+  position: { x: -30, y: 0, z: -60 }, system: 'veridian',
+  createdAt: ctx.world.time, expiresAt: ctx.world.time,
+});
+ctx.world.jobs.push({
+  id: 'recovery-aft-collision', kind: 'recovery', wreckId: 'aft-collision',
+  title: 'Recovery: wreck salvage',
+  detail: 'A wreck drifts in the lanes and the yard wants its metallics back.',
+  reward: 300, state: 'offered', progress: 0, need: 1,
+  originSystem: 'veridian', collected: false,
+});
+tick(1, 'expire seeded recovery collision');
+const recoveryCollisionCleared = !ctx.world.aftermath.some((a) => a.id === 'aft-collision');
 ctx.world.aftermath.push({
   id: 'aft-test', incidentId: 'inc-test', kind: 'wreck',
   position: { x: 30, y: 0, z: -60 }, system: 'veridian',
@@ -568,12 +594,15 @@ ctx.world.aftermath.push({
 // Still docked at veridian on the services level: open the jobs board so
 // renderJobs → syncRecoveryJob posts the card.
 dispatchKey('Digit2');
+const recoveryCollisionPulled = !ctx.world.jobs.some((j) => j.kind === 'recovery' && j.wreckId === 'aft-collision' && j.state === 'offered');
 const recoveryJob = ctx.world.jobs.find((j) => j.kind === 'recovery' && j.wreckId === 'aft-test') ?? null;
 const recoveryWasOffered = recoveryJob?.state === 'offered';
 const podsAtRecoveryAccept = ctx.pods.length;
 const recoveryBtn = recoveryWasOffered ? findAcceptButton('Recovery: wreck salvage') : null;
 recoveryBtn?.click(); // real accept path: spawns the salvage pod at the wreck
 const recoveryAcceptChecks = {
+  recoveryCollisionCleared,
+  recoveryCollisionPulled,
   recoveryOffered: recoveryWasOffered,
   acceptButtonFound: !!recoveryBtn,
   podSpawnedAtWreck: ctx.pods.length === podsAtRecoveryAccept + 1,
