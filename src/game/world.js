@@ -52,6 +52,10 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  *   and Old Callow remembers: each verge visit near him voices a rotating
  *   return line, and once he sells a single vouch into the keepers'
  *   second column ('callowVouch' hail intent, 'callowVouched' milestone).
+ *   Wave 12: the hermit keeps books on the player too — post-vouch visits
+ *   draw from CALLOW.vouchedReturnLines (same callowReturns cursor), and a
+ *   hail press near a vouched Callow is refused (rotating refuseLines, one
+ *   per verge visit, no hail card — he sold the word once).
  *   Wave 10 names the Verge's lone pirate ('Old Callow') and gives him a
  *   one-time proximity beat — the hermit who remembers the lane, his line
  *   gone cold if the rim already stands without Guns ('hermitPirateMet').
@@ -737,9 +741,12 @@ function callowReturnBeat(ctx) {
   if (!rec || rec.state === 'dead') return;
   if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > 350) return;
   rec.callowReturns ??= 0; // pre-wave-11 saves lack the field
+  // Wave 12: once the vouch stands, his books on the player change — same
+  // cursor, different page.
+  const lines = rec.vouched ? CALLOW.vouchedReturnLines : CALLOW.returnLines;
   ctx.emit('commLine', {
     from: rec.name,
-    text: CALLOW.returnLines[rec.callowReturns % CALLOW.returnLines.length],
+    text: lines[rec.callowReturns % lines.length],
   });
   rec.callowReturns++;
   callowVisitArmed = false;
@@ -753,6 +760,13 @@ function callowReturnBeat(ctx) {
  * intent (hail.js carries the purchase; he was never bargaining, so no
  * resolve/band machinery here). No live ship, no offer: silence is his
  * price of admission.
+ * Wave 12: he sells it once. The same hail gating against a VOUCHED record
+ * voices a rotating CALLOW.refuseLines entry instead — a commLine, never a
+ * hail card — throttled to one refusal per verge visit by the module
+ * callowRefusalArmed flag (armed beside callowVisitArmed on a real verge
+ * arrival, disarmed when it fires). rec.callowRefusals rotates the line and
+ * rides the record's persistence free; no credits move, no milestone — he
+ * was never bargaining.
  */
 function callowVouchOffer(ctx) {
   if (!ctx.input.hailPressed) return;
@@ -761,11 +775,23 @@ function callowVouchOffer(ctx) {
   if (!ctx.ship.object) return;
   const bank = ensureBank(ctx, 'verge');
   const rec = bank.find((r) => r.role === 'pirate');
-  if (!rec || rec.state === 'dead' || rec.vouched) return;
-  if (ctx.world.credits < CALLOW.vouchCost) return;
+  if (!rec || rec.state === 'dead') return;
   if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > CALLOW.hailRange) return;
   const live = ctx.ships.find((s) => s.record === rec && !s.state?.destroyed);
   if (!live) return; // no live ship — the offer stays silent
+  if (rec.vouched) {
+    // Wave 12: the column doesn't take seconds — one refusal per visit.
+    if (!callowRefusalArmed) return;
+    callowRefusalArmed = false;
+    rec.callowRefusals ??= 0; // pre-wave-12 saves lack the field
+    ctx.emit('commLine', {
+      from: rec.name,
+      text: CALLOW.refuseLines[rec.callowRefusals % CALLOW.refuseLines.length],
+    });
+    rec.callowRefusals++;
+    return;
+  }
+  if (ctx.world.credits < CALLOW.vouchCost) return;
   ctx.emit('hailOpened', { ship: live, intents: ['callowVouch', 'keepFiring'], line: CALLOW.offerLine });
 }
 
@@ -774,6 +800,9 @@ const wreckMeshes = new Map(); // aftermath.id → { group, emberMat }
 // Wave 11: armed per verge arrival (consumeSystemLoaded), disarmed when Old
 // Callow's return line fires — never serialized; a jump back in re-arms it.
 let callowVisitArmed = false;
+// Wave 12: same arm/disarm discipline for the post-vouch refusal — at most
+// one 'the column doesn't take seconds' per verge visit.
+let callowRefusalArmed = false;
 let debrisGeoBox = null;
 let debrisGeoTetra = null;
 let debrisMat = null;
@@ -963,6 +992,8 @@ export function initWorld(ctx) {
       // real jump in (a death-restore re-emitting the same system is no
       // return, and must not leak a line into docked/station-side ticks).
       if (ev.to === 'verge' && changed) callowVisitArmed = true;
+      // Wave 12: the post-vouch refusal re-arms on the same real arrival.
+      if (ev.to === 'verge' && changed) callowRefusalArmed = true;
     }
   }
 

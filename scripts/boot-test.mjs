@@ -27,6 +27,12 @@
 // UU, +15 trust and a favor to both keepers), the keeper ledger line, the
 // trust-60 hermit-markup waiver and the favor-comp repair at The Vigil,
 // and the callowReturns/vouched recordBanks save roundtrip.
+// Wave 12: Callow's books on the player (post-vouch verge visits voice
+// vouchedReturnLines on the same callowReturns cursor, and a hail press is
+// refused — one rotating refuseLines commLine per visit, never a card),
+// the keeper ledger's clue tier (naming the system holding an unfound
+// clue, rotating; a new closing line), and the restore-time live-record
+// heal (live ships re-pointed at the restored bank, live flags rebuilt).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -2761,6 +2767,7 @@ if (!Object.values(w11vouchChecks).every(Boolean)) { console.log('WAVE11 CALLOW 
 // restored before any further ticks so later sections aren't poisoned.
 const ledgerContact = vergeKeeper11;
 const visitedBefore11 = [...(ctx.world.mystery?.visited ?? [])];
+const foundBefore11 = [...(ctx.world.mystery?.found ?? [])]; // wave 12: the closing line is tier 3 — found matters too
 const trustBeforeLedger = ledgerContact?.trust;
 if (ledgerContact) ledgerContact.trust = KEEPER_LEDGER_TRUST - 1;
 const ledgerLineLow = ledgerContact ? keeperLedgerLine(ctx, ledgerContact) : undefined;
@@ -2785,9 +2792,19 @@ for (const def of Object.values(SYSTEMS)) {
     if (!ctx.world.mystery.visited.includes(lm.id)) ctx.world.mystery.visited.push(lm.id);
   }
 }
+// Wave 12: with every landmark witnessed but clues unfound, the ledger
+// answers the tier-2 clue-system line instead of closing — the closing
+// line is tier 3, so every authored clue id must ride mystery.found too.
+for (const def of Object.values(SYSTEMS)) {
+  for (const clue of def.clues ?? []) {
+    if (!ctx.world.mystery.found.includes(clue.id)) ctx.world.mystery.found.push(clue.id);
+  }
+}
 const ledgerClosing = ledgerContact ? keeperLedgerLine(ctx, ledgerContact) : null;
 ctx.world.mystery.visited.length = 0; // restore in place — landmarks.js change-detects on length
 ctx.world.mystery.visited.push(...visitedBefore11);
+ctx.world.mystery.found.length = 0; // same in-place discipline for the clue list
+ctx.world.mystery.found.push(...foundBefore11);
 if (ledgerContact) ledgerContact.trust = trustBeforeLedger;
 const w11ledgerChecks = {
   exportValue: KEEPER_LEDGER_TRUST === 30,
@@ -2797,7 +2814,7 @@ const w11ledgerChecks = {
   twoCallsRotate: typeof ledgerLine1 === 'string' && ledgerLine1 !== ledgerLine2,
   line1NamesUnvisited: !!ledgerLm1 && !visitedBefore11.includes(ledgerLm1.id),
   line2NamesUnvisited: !!ledgerLm2 && !visitedBefore11.includes(ledgerLm2.id),
-  closingExact: ledgerClosing === 'Both columns balanced. Nothing waits that you have not already witnessed.',
+  closingExact: ledgerClosing === 'Both columns balance at last — nothing waits, and nothing stays unread.',
 };
 console.log('wave11 keeper ledger:', JSON.stringify(w11ledgerChecks), `l1=${JSON.stringify(ledgerLine1)} l2=${JSON.stringify(ledgerLine2)}`);
 if (!Object.values(w11ledgerChecks).every(Boolean)) { console.log('WAVE11 KEEPER LEDGER FAIL'); errors++; }
@@ -2946,6 +2963,270 @@ const w11restoreChecks = {
 };
 console.log('wave11 restore:', JSON.stringify(w11restoreChecks));
 if (!Object.values(w11restoreChecks).every(Boolean)) { console.log('WAVE11 RESTORE FAIL'); errors++; }
+
+// ---- Wave 12: Callow's books / keeper clue tier / restore live-record heal ----
+// The continuing run sits DOCKED AT THE VIGIL IN THE VERGE (the wave-11 g
+// death-restore): the restored verge bank's Old Callow carries vouched ===
+// true and callowReturns === callowReturnsBase + 2. A hops verge → hush →
+// verge twice through the real sim — post-vouch returns voice
+// vouchedReturnLines on the SAME callowReturns cursor, and a hail press is
+// refused (one rotating refuseLines commLine per verge visit, never a
+// card, re-armed only by a real verge arrival). B exercises the keeper
+// ledger's clue tier with pure calls. C closes with the restore-time
+// live-record heal roundtrip. The hull is still pinned 1e9 from the
+// wave-11 setup, so random soak combat can't eat the digit dispatches.
+
+// -- a. Callow keeps books: vouched returns + the once-per-visit refusal ---
+if (ctx.flags.docked) undockStation(); // leave The Vigil (wave-11 restore dock)
+const rv12 = new THREE.Vector3();
+const callowRec12 = (ctx.world.recordBanks?.verge ?? []).find((r) => r.name === 'Old Callow') ?? null;
+if (callowRec12 && (callowRec12.state === 'dead' || callowRec12.state === 'captured')) callowRec12.state = 'enroute';
+// Baseline-relative, the wave-11 returns discipline: callowReturns rode the
+// record through the wave-11 g restore (callowReturnsBase + 2), and
+// callowRefusals already stands at 1 — the wave-11 c second-hail watch
+// pressed KeyH against a vouched Callow whose refusal flag was still armed
+// from the wave-11 b return-2 arrival, drawing refusal #1 there.
+const returnsBase12 = callowRec12?.callowReturns ?? 0;
+const refusalsBase12 = callowRec12?.callowRefusals ?? 0;
+// Round trip 1: verge → hush → verge arms one return line AND one refusal.
+ctx.ship.object.position.set(...vergeReturnGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hush gate (wave12 books 1)');
+ctx.emit('jumpRequested', { to: 'hush' });
+if (!tickUntilJumpDone('hush', 'wave12 hop to hush (books 1)')) {
+  console.log('WAVE12 TRAVEL FAIL — never arrived at hush');
+  errors++;
+}
+ctx.ship.object.position.set(...vergeGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at verge gate (wave12 books 1)');
+// Whole-leg collection — the return beat can fire AT THE ARRIVAL GATE
+// during the jump-settle ticks (his lane passes within 350u of it).
+const bookEvs1 = [];
+ctx.emit('jumpRequested', { to: 'verge' });
+let arrivedVerge12a = false;
+for (let i = 0; i < 60 * 10; i++) {
+  tick(1, 'wave12 hop to verge (books 1)');
+  bookEvs1.push(...ctx.lastEvents);
+  if (ctx.world.currentSystem === 'verge' && !ctx.gate.jumping) { arrivedVerge12a = true; break; }
+}
+if (!arrivedVerge12a) {
+  console.log('WAVE12 TRAVEL FAIL — never arrived at verge');
+  errors++;
+}
+if (callowRec12) {
+  recordPosition(callowRec12, rv12); // re-read — the route drifts
+  ctx.ship.object.position.copy(rv12);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+for (let i = 0; i < 3; i++) { tick(1, 'wave12 vouched return 1'); bookEvs1.push(...ctx.lastEvents); }
+const isVouchedReturnLine = (e) => e.type === 'commLine' && e.from === 'Old Callow' && CALLOW.vouchedReturnLines.includes(e.text);
+const isRefuseLine = (e) => e.type === 'commLine' && e.from === 'Old Callow' && CALLOW.refuseLines.includes(e.text);
+const vouchedLines1 = bookEvs1.filter(isVouchedReturnLine);
+for (let i = 0; i < 10; i++) { tick(1, 'wave12 vouched-return refire watch'); bookEvs1.push(...ctx.lastEvents); }
+const vouchedLines1All = bookEvs1.filter(isVouchedReturnLine);
+const returnsAfterVisit12a = callowRec12?.callowReturns; // snapshot BEFORE round trip 2 moves it
+// His live ship is range-instantiated: single ticks parked on the lane.
+let callowLive12 = ctx.ships.find((s) => s.record === callowRec12) ?? null;
+for (let i = 0; i < 30 && !callowLive12; i++) {
+  tick(1, 'wave12 callow instantiate');
+  callowLive12 = ctx.ships.find((s) => s.record === callowRec12) ?? null;
+}
+// Refusal 1: armed by this visit's arrival — one commLine, never a card.
+const refuseEvs1 = [];
+dispatchKey('KeyH');
+for (let i = 0; i < 3; i++) { tick(1, 'wave12 refusal 1'); refuseEvs1.push(...ctx.lastEvents); }
+const refuseLines1 = refuseEvs1.filter(isRefuseLine);
+const refusalsAfter12a = callowRec12?.callowRefusals;
+// Same visit, second press: the per-visit throttle holds — silence.
+const refuseEvsThrottle = [];
+dispatchKey('KeyH');
+for (let i = 0; i < 3; i++) { tick(1, 'wave12 refusal throttle'); refuseEvsThrottle.push(...ctx.lastEvents); }
+// Round trip 2: a real verge arrival re-arms both beats.
+ctx.ship.object.position.set(...vergeReturnGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hush gate (wave12 books 2)');
+ctx.emit('jumpRequested', { to: 'hush' });
+if (!tickUntilJumpDone('hush', 'wave12 hop to hush (books 2)')) {
+  console.log('WAVE12 TRAVEL FAIL — never arrived at hush');
+  errors++;
+}
+ctx.ship.object.position.set(...vergeGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at verge gate (wave12 books 2)');
+const bookEvs2 = []; // whole-leg collection, same as round 1
+ctx.emit('jumpRequested', { to: 'verge' });
+let arrivedVerge12b = false;
+for (let i = 0; i < 60 * 10; i++) {
+  tick(1, 'wave12 hop to verge (books 2)');
+  bookEvs2.push(...ctx.lastEvents);
+  if (ctx.world.currentSystem === 'verge' && !ctx.gate.jumping) { arrivedVerge12b = true; break; }
+}
+if (!arrivedVerge12b) {
+  console.log('WAVE12 TRAVEL FAIL — never arrived at verge');
+  errors++;
+}
+if (callowRec12) {
+  recordPosition(callowRec12, rv12); // re-read after the hops — the route drifts
+  ctx.ship.object.position.copy(rv12);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+for (let i = 0; i < 3; i++) { tick(1, 'wave12 vouched return 2'); bookEvs2.push(...ctx.lastEvents); }
+const vouchedLines2 = bookEvs2.filter(isVouchedReturnLine);
+// The jump emptied ctx.ships at the midpoint — poll for his live ship again.
+callowLive12 = ctx.ships.find((s) => s.record === callowRec12) ?? null;
+for (let i = 0; i < 30 && !callowLive12; i++) {
+  tick(1, 'wave12 callow re-instantiate');
+  callowLive12 = ctx.ships.find((s) => s.record === callowRec12) ?? null;
+}
+// Refusal 2: the re-armed flag fires the next rotating refuseLines entry.
+const refuseEvs2 = [];
+dispatchKey('KeyH');
+for (let i = 0; i < 3; i++) { tick(1, 'wave12 refusal 2'); refuseEvs2.push(...ctx.lastEvents); }
+const refuseLines2 = refuseEvs2.filter(isRefuseLine);
+const w12booksChecks = {
+  vouchedPrecondition: callowRec12?.vouched === true,
+  returnsBaseline: returnsBase12 === callowReturnsBase + 2, // rode the wave-11 g restore
+  refusalsBaselineFromWave11: refusalsBase12 === 1, // the wave-11 c second hail drew refusal #1
+  vouchedLinesShape: Array.isArray(CALLOW.vouchedReturnLines) && CALLOW.vouchedReturnLines.length === 3 &&
+    CALLOW.vouchedReturnLines.every((l) => typeof l === 'string' && l.length > 0 && !CALLOW.returnLines.includes(l)),
+  refuseLinesShape: Array.isArray(CALLOW.refuseLines) && CALLOW.refuseLines.length === 2 &&
+    CALLOW.refuseLines.every((l) => typeof l === 'string' && l.length > 0),
+  firstVouchedLineOnce: vouchedLines1.length === 1 && vouchedLines1[0]?.text === CALLOW.vouchedReturnLines[returnsBase12 % CALLOW.vouchedReturnLines.length],
+  noOldReturnLines: !bookEvs1.some((e) => e.type === 'commLine' && e.from === 'Old Callow' && CALLOW.returnLines.includes(e.text)),
+  noSecondLineSameVisit: vouchedLines1All.length === 1, // the per-visit guard holds across the refire watch
+  returnsCursorAfterFirst: returnsAfterVisit12a === returnsBase12 + 1,
+  liveShipFound: !!callowLive12,
+  refusalFiredOnce: refuseLines1.length === 1 && refuseLines1[0]?.text === CALLOW.refuseLines[refusalsBase12 % CALLOW.refuseLines.length],
+  refusalCursorAfterFirst: refusalsAfter12a === refusalsBase12 + 1,
+  refusalNoHailCard: !refuseEvs1.some((e) => e.type === 'hailOpened'),
+  secondPressSilent: !refuseEvsThrottle.some(isRefuseLine) && !refuseEvsThrottle.some((e) => e.type === 'hailOpened'),
+  secondVouchedLineOnce: vouchedLines2.length === 1 && vouchedLines2[0]?.text === CALLOW.vouchedReturnLines[(returnsBase12 + 1) % CALLOW.vouchedReturnLines.length],
+  refusalRearmedSecond: refuseLines2.length === 1 && refuseLines2[0]?.text === CALLOW.refuseLines[(refusalsBase12 + 1) % CALLOW.refuseLines.length],
+  refusal2NoHailCard: !refuseEvs2.some((e) => e.type === 'hailOpened'),
+  refusalsRotatedTwoTotal: callowRec12?.callowRefusals === refusalsBase12 + 2,
+  returnsCursorAfterSecond: callowRec12?.callowReturns === returnsBase12 + 2,
+};
+console.log('wave12 callow books:', JSON.stringify(w12booksChecks), `lines=${JSON.stringify(vouchedLines1All.map((e) => e.text))}|${JSON.stringify(vouchedLines2.map((e) => e.text))} refusals=${JSON.stringify(refuseLines1.map((e) => e.text))}|${JSON.stringify(refuseLines2.map((e) => e.text))}`);
+if (!Object.values(w12booksChecks).every(Boolean)) { console.log('WAVE12 CALLOW BOOKS FAIL'); errors++; }
+
+// -- b. keeper ledger tier 2: naming the systems with pages left open ------
+// Pure calls, the wave-11 d discipline: trust pinned at the gate, every
+// landmark witnessed, and mystery.found walked through one-unfound →
+// all-unfound → all-found. All mutations restored in place before any
+// further ticks so later sections aren't poisoned.
+const ledgerContact12 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const trustBeforeLedger12 = ledgerContact12?.trust;
+const visitedBefore12 = [...(ctx.world.mystery?.visited ?? [])];
+const foundBefore12 = [...(ctx.world.mystery?.found ?? [])];
+const ALL_CLUE_IDS = Object.values(SYSTEMS).flatMap((def) => (def.clues ?? []).map((c) => c.id));
+const LEDGER2_RE = /^The second column balances\. A page stays open in (.+) — something there waits to be read\.$/;
+const ledger2System = (line) => {
+  const m = typeof line === 'string' ? line.match(LEDGER2_RE) : null;
+  if (!m) return null;
+  return Object.values(SYSTEMS).find((def) => def.name === m[1]) ?? null;
+};
+if (ledgerContact12) ledgerContact12.trust = KEEPER_LEDGER_TRUST;
+for (const def of Object.values(SYSTEMS)) {
+  for (const lm of def.landmarks ?? []) {
+    if (!ctx.world.mystery.visited.includes(lm.id)) ctx.world.mystery.visited.push(lm.id);
+  }
+}
+// One clue short: 'th_c_keeper' stays unfound — The Hush holds the open page.
+const hushClue12 = (SYSTEMS.hush.clues ?? []).find((c) => c.id === 'th_c_keeper') ?? null;
+ctx.world.mystery.found.length = 0;
+ctx.world.mystery.found.push(...ALL_CLUE_IDS.filter((id) => id !== 'th_c_keeper'));
+const clueTierLine = ledgerContact12 ? keeperLedgerLine(ctx, ledgerContact12) : null;
+const clueTierSystem = ledger2System(clueTierLine);
+// Every clue unfound: four systems hold open pages, successive calls rotate.
+ctx.world.mystery.found.length = 0;
+const foundAtRotation = [...ctx.world.mystery.found]; // empty — every authored clue is unfound
+const rotLine1 = ledgerContact12 ? keeperLedgerLine(ctx, ledgerContact12) : null;
+const rotLine2 = ledgerContact12 ? keeperLedgerLine(ctx, ledgerContact12) : null;
+const rotSys1 = ledger2System(rotLine1);
+const rotSys2 = ledger2System(rotLine2);
+// All six found: the tier-3 closing line.
+ctx.world.mystery.found.push(...ALL_CLUE_IDS);
+const closingLine12 = ledgerContact12 ? keeperLedgerLine(ctx, ledgerContact12) : null;
+// Restore in place — landmarks.js change-detects on length.
+ctx.world.mystery.visited.length = 0;
+ctx.world.mystery.visited.push(...visitedBefore12);
+ctx.world.mystery.found.length = 0;
+ctx.world.mystery.found.push(...foundBefore12);
+if (ledgerContact12) ledgerContact12.trust = trustBeforeLedger12;
+const w12ledgerChecks = {
+  contactFound: !!ledgerContact12,
+  sixCluesAuthored: ALL_CLUE_IDS.length === 6,
+  clueTierShape: LEDGER2_RE.test(clueTierLine ?? ''),
+  clueTierNamesHush: clueTierSystem?.id === 'hush' && clueTierSystem?.name === 'The Hush',
+  clueTierNamesOnlySystem: typeof clueTierLine === 'string' && !clueTierLine.includes('th_c_keeper') &&
+    !!hushClue12 && !clueTierLine.includes(hushClue12.line),
+  rotationShape: LEDGER2_RE.test(rotLine1 ?? '') && LEDGER2_RE.test(rotLine2 ?? ''),
+  rotationDiffers: !!rotSys1 && !!rotSys2 && rotSys1.id !== rotSys2.id,
+  rotSys1HoldsUnfound: !!rotSys1 && (rotSys1.clues ?? []).some((c) => !foundAtRotation.includes(c.id)),
+  rotSys2HoldsUnfound: !!rotSys2 && (rotSys2.clues ?? []).some((c) => !foundAtRotation.includes(c.id)),
+  closingExact12: closingLine12 === 'Both columns balance at last — nothing waits, and nothing stays unread.',
+};
+console.log('wave12 keeper clue tier:', JSON.stringify(w12ledgerChecks), `clue=${JSON.stringify(clueTierLine)} rot=${JSON.stringify(rotLine1)}|${JSON.stringify(rotLine2)}`);
+if (!Object.values(w12ledgerChecks).every(Boolean)) { console.log('WAVE12 KEEPER CLUE TIER FAIL'); errors++; }
+
+// -- c. restore heal: live ships re-point at the restored bank -------------
+// A same-system restore (death recovery) emits no 'systemLoaded', so only
+// save.js healLiveRecords re-adopts the orphaned record refs and rebuilds
+// the live flags. Keep Callow's live ship inside the despawn hysteresis
+// (1400u) but OUTSIDE the encounter bubble (800u — a hostile any nearer
+// blocks the dock autosave), snapshot via the dock autosave, die, recover,
+// and read identity through ctx.world.recordBanks. Test SETUP: park every
+// OTHER hostile far (the wave-11 save discipline).
+for (const s of ctx.ships) {
+  if (s === callowLive12) continue;
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+const vergeStation12 = SYSTEMS.verge.station.position;
+if (callowLive12?.object) {
+  callowLive12.object.position.set(vergeStation12[0] + 1000, vergeStation12[1], vergeStation12[2]);
+  callowLive12.velocity?.set?.(0, 0, 0);
+}
+// No ticks between the teleport and the dock — the player jumps to the
+// station inside dockAtCurrentStation, so no despawn window opens.
+dockAtCurrentStation('dock verge (wave12 heal)'); // 'docked' fires trySave
+tick(3, 'wave12 heal save settle');
+const w12snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const callowSaved12 = (w12snap?.world?.recordBanks?.verge ?? []).find((r) => r.name === 'Old Callow') ?? null;
+const liveShipBefore12 = ctx.ships.includes(callowLive12) ? callowLive12 : null;
+const recordIdentityPre = !!liveShipBefore12 && liveShipBefore12.record === callowRec12;
+// Die and recover: restore() swaps recordBanks wholesale (JSON duplicates),
+// re-unifies the current-system bank, then heals the live ships' refs.
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave12 heal)');
+dispatchKey('Enter'); // recover(): restore(last save) — same system, no 'systemLoaded'
+const callowRestored12 = (ctx.world.recordBanks?.verge ?? []).find((r) => r.name === 'Old Callow') ?? null;
+const liveShipAfter12 = ctx.ships.includes(callowLive12) ? callowLive12 : null;
+// No record in ANY bank may carry live: true without a live ship referencing it.
+const referencedRecords12 = new Set((ctx.ships ?? []).map((s) => s.record).filter(Boolean));
+let orphanedLiveFlag12 = false;
+for (const k in (ctx.world.recordBanks ?? {})) {
+  const bank = ctx.world.recordBanks[k];
+  if (!Array.isArray(bank)) continue;
+  for (const rec of bank) {
+    if (rec.live === true && !referencedRecords12.has(rec)) orphanedLiveFlag12 = true;
+  }
+}
+const w12healChecks = {
+  saveWritten: !!w12snap?.world && w12snap?.world?.currentSystem === 'verge',
+  callowInSavedBank: !!callowSaved12,
+  liveShipPresentPreRestore: !!liveShipBefore12,
+  recordIdentityPreRestore: recordIdentityPre, // the live ship carried the in-memory bank record
+  liveShipSurvivedRestore: !!liveShipAfter12,
+  recordRepointed: !!liveShipAfter12 && !!callowRestored12 &&
+    liveShipAfter12.record === callowRestored12 && liveShipAfter12.record !== callowRec12,
+  restoredRecordLive: callowRestored12?.live === true,
+  noOrphanedLiveFlags: !orphanedLiveFlag12,
+};
+console.log('wave12 restore heal:', JSON.stringify(w12healChecks));
+if (!Object.values(w12healChecks).every(Boolean)) { console.log('WAVE12 RESTORE HEAL FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

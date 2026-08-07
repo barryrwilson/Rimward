@@ -18,7 +18,11 @@ import { createShipState, SHIP_CLASSES, U, JUMP } from './state.js';
  *   system differs from the live one, ctx.world.prices is rebound to that
  *   system's market table and 'systemLoaded' is emitted so every module
  *   (station, solarsystem, asteroids, world/traffic, hud) rebuilds into the
- *   saved system on the next frame.
+ *   saved system on the next frame. Restore also re-adopts any live ships'
+ *   record refs into the restored bank (healLiveRecords — live ships can
+ *   outlive a restore with orphaned pre-restore record objects) and heals
+ *   bank `live` flags, so same-system restores (death recovery, no
+ *   'systemLoaded' emit) can't strand a record as never-re-instantiable.
  * - DEATH (§4.4): consumes 'playerDestroyed' → 'Ship lost.' overlay → reload
  *   the last save (or a fresh start at the Freehold station with a new player
  *   state record when no save exists). No corpse run, no insurance. Emits the
@@ -139,6 +143,50 @@ function sanitizeRestored(ctx) {
   }
 }
 
+/**
+ * Boundary heal for live ships surviving a restore. ctx.ships entries
+ * instantiated BEFORE the restore (death recovery keeps NPCs running) still
+ * point at ORPHANED pre-restore record objects — mutations (state, vouched,
+ * callowReturns) never reach the bank, and traffic's despawn would write
+ * rec.live = false to the orphan while the restored bank record may carry a
+ * serialized stale live: true (snapshot taken while ships were live), which
+ * traffic's spawn pass would then refuse to re-instantiate. Traffic only
+ * heals stale live flags on 'systemLoaded'; a same-system restore emits no
+ * such event. Re-adopt each live ship's bank record by id, then rebuild the
+ * live flags: cleared on every record in every bank, set on exactly the
+ * records referenced by live ships in the current-system bank.
+ */
+function healLiveRecords(ctx) {
+  const records = ctx.world.records;
+  if (!Array.isArray(records)) return;
+  // Re-adopt: re-point each live ship's record ref at the restored bank
+  // record sharing its id (records carry stable string ids 'rec-N'). Ships
+  // whose record id is absent (cannot happen with a coherent snapshot;
+  // defensive) are left for traffic's range despawn to retire.
+  const byId = new Map();
+  for (const rec of records) byId.set(rec.id, rec);
+  for (const ship of ctx.ships ?? []) {
+    if (!ship.record) continue;
+    const bankRec = byId.get(ship.record.id);
+    if (bankRec !== undefined && bankRec !== ship.record) ship.record = bankRec;
+  }
+  // Rebuild live flags: exactly the records referenced by live ships carry
+  // live: true across every bank (clears stale serialized live: true).
+  const banks = ctx.world.recordBanks ?? { [ctx.world.currentSystem]: records };
+  for (const k in banks) {
+    const bank = banks[k];
+    if (!Array.isArray(bank)) continue;
+    for (const rec of bank) rec.live = false;
+  }
+  const currentBank = ctx.world.recordBanks?.[ctx.world.currentSystem] ?? records;
+  for (const ship of ctx.ships ?? []) {
+    if (!ship.record) continue;
+    let inBank = false;
+    for (const rec of currentBank) if (rec === ship.record) { inBank = true; break; }
+    if (inBank) ship.record.live = true;
+  }
+}
+
 function restore(ctx, snap) {
   const fromSystem = ctx.world.currentSystem;
   ctx.flags.saveRestored = true; // origins.js: a restore means no origin pick
@@ -157,6 +205,7 @@ function restore(ctx, snap) {
   if (ctx.world.recordBanks && ctx.world.records) {
     ctx.world.recordBanks[ctx.world.currentSystem] = ctx.world.records;
   }
+  healLiveRecords(ctx);
   // Legacy save (no markets envelope): adopt the restored prices as the
   // current system's table — otherwise the rebind below would rebind to the
   // fresh baseline table world init built and the restored drift is lost.

@@ -669,6 +669,12 @@ export const NAMED_GUNS = {
  * verge pirate record (persisted free through recordBanks). hailRange gates
  * the vouch OFFER: his live ship must be near, not just the record route.
  * The purchase itself lives in hail.js ('callowVouch' intent).
+ * Wave 12: he keeps books on the player too. Once the record's `vouched`
+ * flag stands (witness-rule safe §8.7 — recorded state, nothing invented),
+ * his return lines come from vouchedReturnLines instead (same
+ * rec.callowReturns cursor; he never asks how the word was spent, §25), and
+ * a second sale is refused — refuseLines rotate via rec.callowRefusals, one
+ * refusal per verge visit, no hail card, no price ('I sell it once').
  */
 export const CALLOW = {
   hailRange: 800, // vouch offer range (u) — his live ship must be near
@@ -681,6 +687,15 @@ export const CALLOW = {
     'Back again. The lane remembers you now — I keep its books.',
     "Nothing comes through here that I don't count. You're counted twice over.",
     "The quiet out here isn't empty. You know that better than most.",
+  ],
+  vouchedReturnLines: [
+    'Your name is in their column now. I keep the books that say so.',
+    'Back again. Some entries I balance in one column. Yours I balance in two.',
+    "The keepers hold a column for owed words. You're written in it — I checked the sum.",
+  ],
+  refuseLines: [
+    'One word is what I sold. The column doesn\'t take seconds.',
+    "It's entered. It's balanced. Books like mine don't sell the same line twice.",
   ],
 };
 

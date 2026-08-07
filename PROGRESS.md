@@ -295,21 +295,66 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   drags dev below equilibrium with a pinned-down random phase before
   measuring BOTH legs — deterministic driftV 4 / driftH 13.
   PASS ×7 runs.
-## Next round candidates (wave 12)
+- Wave 12: all three queued candidates (Callow's books on the player,
+  the keeper clue tier, restore live-record hardening). state.js:
+  CALLOW gains vouchedReturnLines ×3 (he knows the name sits in the
+  second column; he never asks how it was spent, §25) and refuseLines
+  ×2 ('I sell it once' — the column doesn't take seconds). world.js:
+  callowReturnBeat draws from vouchedReturnLines once rec.vouched
+  stands (SAME rec.callowReturns cursor, different page);
+  callowVouchOffer's post-vouch branch (same hail gating: hailPressed,
+  verge, met, live non-dead record within 800u, live ship carrying it)
+  voices ONE rotating refusal commLine per verge visit — module
+  callowRefusalArmed, armed beside callowVisitArmed on a real verge
+  arrival (changed systemLoaded), disarmed on fire, rotated via
+  rec.callowRefusals ??= 0 (rides recordBanks free); no hail card, no
+  credits, no milestone — he was never bargaining. contacts.js:
+  keeperLedgerLine becomes three tiers on the one ledgerIdx cursor —
+  landmarks awaiting → the wave-11 reading verbatim; landmark column
+  balanced + unfound clues → rotates the SYSTEMS holding an unfound
+  clue (clue id not in mystery.found), naming the system display name
+  ONLY (§25: never the clue's text or id; §8.7: recorded state only);
+  everything witnessed and found → 'Both columns balance at last —
+  nothing waits, and nothing stays unread.' save.js: restore() now
+  calls healLiveRecords after the recordBanks re-unification — live
+  ships instantiated pre-restore (death recovery keeps NPCs running)
+  held ORPHANED record refs whose mutations never reached the bank,
+  and a snapshot serialized with live ships could strand a restored
+  record behind a stale live: true (traffic heals flags only on
+  'systemLoaded', which a same-system restore never emits). The heal
+  re-points ship.record to the bank record sharing its id, then
+  rebuilds live flags: cleared on every record in every bank, set on
+  exactly the records referenced by live ships in the current bank.
+  Boot test wave-12 section: post-vouch return lines through the real
+  sim (verge hops, baseline-relative cursors — the wave-11 second-hail
+  watch deterministically consumes refusal #1, asserted as
+  refusalsBaselineFromWave11), the refusal throttle (one per visit,
+  re-arm on re-arrival, never a hail card), the keeper clue tier
+  (single-unfound names exactly The Hush; emptied found rotates
+  Veridian Reach → The Redmarch; no clue text/id leaks; new exact
+  closing line), and the restore heal (live Callow ship parked outside
+  the encounter bubble, dock autosave, playerDestroyed same-system
+  restore → record re-pointed by identity, live flags rebuilt, no
+  orphaned live flags in any bank). Wave-11 adaptations: the ledger
+  section fills mystery.found with all six clue ids before its
+  closing-line assertion (tier 3) with the new exact copy.
+  PASS ×7 runs.
+## Next round candidates (wave 13)
 
-- Wave 11 closed the queue again: the rim had its final word, the
-  hermit sells his memory, and the keepers open their books.
-- The vouch is one word in the second column, but Callow never learns
-  how it was spent: his return lines do not change once vouched. A
-  hermit who keeps the lane's books could keep books on the player
-  too — a second word priced differently, or refused.
-- The ledger reads only landmarks; the six authored clues are not in
-  either column. Once the landmark column balances, a keeper could name
-  an unfound clue's SYSTEM (never its text) — curiosity before
-  explanation (§25).
-- save.js restore now re-unifies the live bank; live ships instantiated
-  pre-restore keep orphaned record refs until despawn (traffic heals
-  stale live flags for jumps, not restores). No consumer keys
-  live.record back into banks today — worth a hardening pass if one
-  ever does.
+- Wave 12 closed the queue again: the hermit keeps books on the
+  player, the keepers read their open pages, and a restore can no
+  longer strand a record.
+- Callow refuses a second word for himself — but the keepers now hold
+  a name in their column that the player never wrote there. A keeper
+  who comps a trusted pilot's dock could acknowledge the vouch
+  directly (recognitionLine tier, or a favor-tier line), closing the
+  loop Callow opened.
+- The clue tier names a SYSTEM only. A keeper at higher trust (the
+  comp tier, 60) could narrow further — never the text, but a bearing
+  or a landmark pairing ('the page near The Tithe Stone') — one more
+  rung of curiosity before explanation (§25).
+- callowRefusals now persists on the record unbounded; the counters
+  (callowReturns, callowRefusals, ledgerIdx) never reset. Harmless
+  (modulo rotation), but a save from a long enough campaign carries
+  ever-growing ints — no action needed, noting the pattern.
 - Polish debt: none known; boot test is the gate.

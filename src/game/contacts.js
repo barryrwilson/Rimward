@@ -9,8 +9,11 @@
  * keepers acknowledge the mystery arc once per rung (converged, deepened),
  * and (wave 11) open the two-column ledger at trust >= KEEPER_LEDGER_TRUST —
  * a rotating, witness-rule-safe reading of undiscovered landmarks derived
- * from mystery.visited (recorded state, never invented) — and comp a
- * trusted pilot's dock at trust >= 60 (station.js applies the waive/comp).
+ * from mystery.visited (recorded state, never invented) — and (wave 12),
+ * once every landmark is witnessed, name the system of an unfound clue as
+ * a page left open (§25: the system's name only, never the clue's text) —
+ * and comp a trusted pilot's dock at trust >= 60 (station.js applies the
+ * waive/comp).
  * station.js reads the roster and applies the mechanics; world.trust/favors
  * persist via save.js.
  *
@@ -106,37 +109,57 @@ export function rumorFor(ctx, contact) {
 }
 
 // Wave 11: trust threshold at which a deep-rim keeper opens the second
-// column of the ledger to a pilot.
+// column of the ledger to a pilot (wave 12: and reads its open pages —
+// systems holding unfound clues — once the landmark column balances).
 export const KEEPER_LEDGER_TRUST = 30;
 
 /**
- * Wave 11: a keeper (hollowreach/hush/verge dockmaster) reads from the
- * two-column ledger at trust >= KEEPER_LEDGER_TRUST. Witness-rule safe
- * (§8.7): the reading rotates through authored landmarks NOT yet recorded
- * in ctx.world.mystery.visited — recorded discovery state, never invented
- * events. Rotates via contact.ledgerIdx (??= 0 for old saves, same
- * discipline as rumorIdx). null for non-keepers or below the threshold;
- * a closing line when every landmark has been witnessed.
+ * Waves 11–12: a keeper (hollowreach/hush/verge dockmaster) reads from the
+ * two-column ledger at trust >= KEEPER_LEDGER_TRUST, in three tiers.
+ * Witness-rule safe (§8.7): every tier derives from recorded discovery
+ * state (ctx.world.mystery.visited / .found), never invented events;
+ * §25 — an unfound clue is named by its SYSTEM only, never its text.
+ *   1. Landmarks await → rotates through authored landmarks NOT yet in
+ *      mystery.visited ('The second column holds: ...').
+ *   2. Landmarks all witnessed but unfound clues remain → rotates through
+ *      the SYSTEMS holding at least one unfound clue; the line names only
+ *      the system display name, a page left open.
+ *   3. Everything witnessed and found → the closing line; both columns
+ *      balance.
+ * One cursor (contact.ledgerIdx, ??= 0 for old saves, same discipline as
+ * rumorIdx) serves all tiers — the tier list length changes as discoveries
+ * land, and the modulo keeps it in range. null for non-keepers or below
+ * the threshold.
  */
 export function keeperLedgerLine(ctx, contact) {
   if (contact.role !== 'dockmaster') return null;
   if (contact.system !== 'hollowreach' && contact.system !== 'hush' && contact.system !== 'verge') return null;
   if (contact.trust < KEEPER_LEDGER_TRUST) return null;
   const visited = ctx.world.mystery?.visited ?? [];
+  const found = ctx.world.mystery?.found ?? [];
   const awaiting = [];
+  const openSystems = [];
   for (const sysId of Object.keys(SYSTEMS)) {
     const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
     for (const lm of def.landmarks ?? []) {
       if (!visited.includes(lm.id)) awaiting.push({ lm, systemName: def.name });
     }
-  }
-  if (awaiting.length === 0) {
-    return 'Both columns balanced. Nothing waits that you have not already witnessed.';
+    for (const clue of def.clues ?? []) {
+      if (!found.includes(clue.id)) { openSystems.push(def.name); break; }
+    }
   }
   contact.ledgerIdx ??= 0;
-  const entry = awaiting[contact.ledgerIdx % awaiting.length];
-  contact.ledgerIdx = (contact.ledgerIdx + 1) % awaiting.length;
-  return `The second column holds: ${entry.lm.name}, in ${entry.systemName}. Marked awaiting.`;
+  if (awaiting.length > 0) {
+    const entry = awaiting[contact.ledgerIdx % awaiting.length];
+    contact.ledgerIdx = (contact.ledgerIdx + 1) % awaiting.length;
+    return `The second column holds: ${entry.lm.name}, in ${entry.systemName}. Marked awaiting.`;
+  }
+  if (openSystems.length > 0) {
+    const systemName = openSystems[contact.ledgerIdx % openSystems.length];
+    contact.ledgerIdx = (contact.ledgerIdx + 1) % openSystems.length;
+    return `The second column balances. A page stays open in ${systemName} — something there waits to be read.`;
+  }
+  return 'Both columns balance at last — nothing waits, and nothing stays unread.';
 }
 
 /**
