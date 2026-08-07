@@ -33,6 +33,11 @@
 // the keeper ledger's clue tier (naming the system holding an unfound
 // clue, rotating; a new closing line), and the restore-time live-record
 // heal (live ships re-pointed at the restored bank, live flags rebuilt).
+// Wave 13: the keeper vouch acknowledgment (Callow's word — one
+// recognitionLine tier per hush/verge keeper, witnessed by the
+// callowVouched milestone, never at Hollowreach, never below the comp
+// tier), and the keeper ledger's comp-tier narrowing (at trust 60 the
+// tier-2 open page names the landmark nearest its first unfound clue).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -3227,6 +3232,175 @@ const w12healChecks = {
 };
 console.log('wave12 restore heal:', JSON.stringify(w12healChecks));
 if (!Object.values(w12healChecks).every(Boolean)) { console.log('WAVE12 RESTORE HEAL FAIL'); errors++; }
+
+// ---- Wave 13: keeper vouch acknowledgment / ledger comp-tier narrowing ----
+// The continuing run is wherever the wave-12 c death-restore left it (the
+// dock autosave at The Vigil in the Verge): 'callowVouched' stands (bought
+// in wave-11 c, carried through both restores). A exercises the new
+// recognitionLine vouch tier with pure calls — once per hush/verge keeper,
+// gated by the milestone and the comp tier, never at Hollowreach. B
+// narrows the keeper ledger's tier 2 at trust 60: the open page names the
+// landmark nearest its first unfound clue. Both subsections are pure
+// calls on the wave-12 b discipline — trust pinned, every mutation
+// restored in place before any further ticks so nothing downstream is
+// poisoned (the summary lines follow; no further travel).
+
+// -- a. keeper vouch acknowledgment: Callow's word, once per keeper -------
+const VOUCH_ACK_LINE = "Callow's word arrived ahead of you — your name sits in our second column. The yard is yours.";
+// The fall-through ship line is template-dependent: assert against the
+// living-hull or shipName variant per ctx.world.shipName's actual value.
+const shipLine13 = ctx.world.shipName
+  ? `${ctx.world.shipName}, back on my pad. Good to see her in one piece.`
+  : "The living hull — we'd know that ship anywhere. Welcome back.";
+const vergeKeeper13 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const hushKeeper13 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-hush-dockmaster') ?? null;
+const hollowKeeper13 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-hollowreach-dockmaster') ?? null;
+const milestonesBefore13 = [...(ctx.world.milestones ?? [])];
+// Snapshot every touched field, then clear any vouchAck an earlier render
+// may have voiced (the wave-10 c deepAck discipline) and pin trust at 60.
+const keeperSnap13 = [];
+for (const k of [vergeKeeper13, hushKeeper13, hollowKeeper13]) {
+  if (!k) continue;
+  keeperSnap13.push({ k, trust: k.trust, hadAck: 'vouchAck' in k, ack: k.vouchAck });
+  k.trust = 60;
+  delete k.vouchAck;
+}
+const vergeVouchLine = vergeKeeper13 ? recognitionLine(ctx, vergeKeeper13) : null;
+const vergeAckAfterFirst = vergeKeeper13?.vouchAck;
+const vergeSecondLine = vergeKeeper13 ? recognitionLine(ctx, vergeKeeper13) : null;
+const vergeAckAfterSecond = vergeKeeper13?.vouchAck;
+const hushVouchLine = hushKeeper13 ? recognitionLine(ctx, hushKeeper13) : null;
+const hushAckAfterFirst = hushKeeper13?.vouchAck;
+// Hollowreach's keeper never got the letter: the system gate answers the
+// ship line directly, vouchAck untouched.
+const hollowLine13 = hollowKeeper13 ? recognitionLine(ctx, hollowKeeper13) : null;
+const hollowAck13 = hollowKeeper13?.vouchAck;
+// Below the comp tier the vouch never fires.
+if (vergeKeeper13) { delete vergeKeeper13.vouchAck; vergeKeeper13.trust = KEEPER_LEDGER_TRUST; }
+const lowTrustLine13 = vergeKeeper13 ? recognitionLine(ctx, vergeKeeper13) : null;
+const lowTrustAck13 = vergeKeeper13?.vouchAck;
+// The milestone is the witness: splice it out and the tier stays silent.
+if (hushKeeper13) { delete hushKeeper13.vouchAck; hushKeeper13.trust = 60; }
+const vouchIdx13 = ctx.world.milestones.indexOf('callowVouched');
+if (vouchIdx13 >= 0) ctx.world.milestones.splice(vouchIdx13, 1);
+const noMilestoneLine13 = hushKeeper13 ? recognitionLine(ctx, hushKeeper13) : null;
+const noMilestoneAck13 = hushKeeper13?.vouchAck;
+// Restore everything in place — the milestone list first, then the keepers.
+ctx.world.milestones.length = 0;
+ctx.world.milestones.push(...milestonesBefore13);
+for (const s of keeperSnap13) {
+  s.k.trust = s.trust;
+  if (s.hadAck) s.k.vouchAck = s.ack; else delete s.k.vouchAck;
+}
+const w13vouchChecks = {
+  milestoneStands: milestonesBefore13.includes('callowVouched'),
+  keepersFound: !!vergeKeeper13 && !!hushKeeper13 && !!hollowKeeper13,
+  vergeVouchExact: vergeVouchLine === VOUCH_ACK_LINE,
+  vergeAckSet: vergeAckAfterFirst === true,
+  vergeSecondShipLine: vergeSecondLine === shipLine13,
+  vergeAckStaysTrue: vergeAckAfterSecond === true,
+  hushVouchIndependent: hushVouchLine === VOUCH_ACK_LINE && hushAckAfterFirst === true,
+  hollowShipLineDirect: hollowLine13 === shipLine13,
+  hollowAckStaysFalsy: !hollowAck13,
+  belowCompNoVouch: lowTrustLine13 !== VOUCH_ACK_LINE && !lowTrustAck13,
+  noMilestoneNoVouch: noMilestoneLine13 !== VOUCH_ACK_LINE && !noMilestoneAck13,
+};
+console.log('wave13 keeper vouch ack:', JSON.stringify(w13vouchChecks), `verge=${JSON.stringify(vergeVouchLine)}|${JSON.stringify(vergeSecondLine)} hush=${JSON.stringify(hushVouchLine)} hollow=${JSON.stringify(hollowLine13)}`);
+if (!Object.values(w13vouchChecks).every(Boolean)) { console.log('WAVE13 KEEPER VOUCH ACK FAIL'); errors++; }
+
+// -- b. keeper ledger tier 2 at the comp tier: the page names its landmark -
+// Same setup discipline as wave-12 b (it sits right above): the verge
+// dockmaster, trust pinned, every landmark witnessed, mystery.found
+// walked through one-unfound → all-unfound → all-found. The rotation
+// still rides the single contact.ledgerIdx cursor. ALL_CLUE_IDS,
+// LEDGER2_RE, and ledger2System are reused from wave-12 b.
+const ledgerContact13 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const trustBeforeLedger13 = ledgerContact13?.trust;
+const visitedBefore13 = [...(ctx.world.mystery?.visited ?? [])];
+const foundBefore13 = [...(ctx.world.mystery?.found ?? [])];
+const LEDGER2_NEAR_RE = /^The second column balances\. A page stays open in (.+) — the page near (.+) waits to be read\.$/;
+const ledger2Near = (line) => {
+  const m = typeof line === 'string' ? line.match(LEDGER2_NEAR_RE) : null;
+  if (!m) return null;
+  const def = Object.values(SYSTEMS).find((d) => d.name === m[1]) ?? null;
+  return def ? { def, lmName: m[2] } : null;
+};
+// Expectations are COMPUTED, never hardcoded: squared distance over the
+// position [x,y,z] arrays (first-wins on ties, the contacts.js order),
+// and the first unfound clue rides the def.clues order.
+const nearestLmName13 = (def, clue) => {
+  let best = null;
+  let bestD2 = Infinity;
+  for (const lm of def?.landmarks ?? []) {
+    const dx = lm.position[0] - clue.position[0];
+    const dy = lm.position[1] - clue.position[1];
+    const dz = lm.position[2] - clue.position[2];
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < bestD2) { bestD2 = d2; best = lm.name; }
+  }
+  return best;
+};
+const firstUnfound13 = (def, found) => (def?.clues ?? []).find((c) => !found.includes(c.id)) ?? null;
+if (ledgerContact13) ledgerContact13.trust = 60;
+for (const def of Object.values(SYSTEMS)) {
+  for (const lm of def.landmarks ?? []) {
+    if (!ctx.world.mystery.visited.includes(lm.id)) ctx.world.mystery.visited.push(lm.id);
+  }
+}
+// One clue short at the comp tier: 'th_c_keeper' stays unfound — the page
+// near The Hush's nearest landmark to that clue waits to be read.
+const hushClue13 = (SYSTEMS.hush.clues ?? []).find((c) => c.id === 'th_c_keeper') ?? null;
+ctx.world.mystery.found.length = 0;
+ctx.world.mystery.found.push(...ALL_CLUE_IDS.filter((id) => id !== 'th_c_keeper'));
+const nearLine13 = ledgerContact13 ? keeperLedgerLine(ctx, ledgerContact13) : null;
+const nearParsed13 = ledger2Near(nearLine13);
+const hushNearest13 = hushClue13 ? nearestLmName13(SYSTEMS.hush, hushClue13) : null;
+// Same single-unfound state at KEEPER_LEDGER_TRUST: the OLD tier-2 shape
+// still comes back — the narrowing is gated at 60.
+if (ledgerContact13) ledgerContact13.trust = KEEPER_LEDGER_TRUST;
+const lowTierLine13 = ledgerContact13 ? keeperLedgerLine(ctx, ledgerContact13) : null;
+const lowTierSystem13 = ledger2System(lowTierLine13);
+// Every clue unfound at the comp tier: successive calls rotate systems,
+// each naming its own nearest landmark to its first unfound clue.
+if (ledgerContact13) ledgerContact13.trust = 60;
+ctx.world.mystery.found.length = 0;
+const foundAtRotation13 = [...ctx.world.mystery.found]; // empty — every authored clue is unfound
+const rot13Line1 = ledgerContact13 ? keeperLedgerLine(ctx, ledgerContact13) : null;
+const rot13Line2 = ledgerContact13 ? keeperLedgerLine(ctx, ledgerContact13) : null;
+const rot13P1 = ledger2Near(rot13Line1);
+const rot13P2 = ledger2Near(rot13Line2);
+const rot13Clue1 = rot13P1 ? firstUnfound13(rot13P1.def, foundAtRotation13) : null;
+const rot13Clue2 = rot13P2 ? firstUnfound13(rot13P2.def, foundAtRotation13) : null;
+// All six found: the tier-3 closing line is unchanged.
+ctx.world.mystery.found.push(...ALL_CLUE_IDS);
+const closingLine13 = ledgerContact13 ? keeperLedgerLine(ctx, ledgerContact13) : null;
+// Restore in place — landmarks.js change-detects on length.
+ctx.world.mystery.visited.length = 0;
+ctx.world.mystery.visited.push(...visitedBefore13);
+ctx.world.mystery.found.length = 0;
+ctx.world.mystery.found.push(...foundBefore13);
+if (ledgerContact13) ledgerContact13.trust = trustBeforeLedger13;
+const w13ledgerChecks = {
+  contactFound: !!ledgerContact13,
+  hushClueAuthored: !!hushClue13 && Array.isArray(hushClue13?.position),
+  nearShape: LEDGER2_NEAR_RE.test(nearLine13 ?? ''),
+  nearNamesHush: nearParsed13?.def?.id === 'hush' && nearParsed13?.def?.name === 'The Hush',
+  nearNamesNearestLm: !!hushNearest13 && nearParsed13?.lmName === hushNearest13,
+  nearLmBelongsToHush: !!nearParsed13 && (SYSTEMS.hush.landmarks ?? []).some((l) => l.name === nearParsed13.lmName),
+  nearNoLeak: typeof nearLine13 === 'string' && !nearLine13.includes('th_c_keeper') &&
+    !!hushClue13 && !nearLine13.includes(hushClue13.line),
+  compGateOldShape: LEDGER2_RE.test(lowTierLine13 ?? ''),
+  compGateNamesHush: lowTierSystem13?.id === 'hush',
+  rotationShape: LEDGER2_NEAR_RE.test(rot13Line1 ?? '') && LEDGER2_NEAR_RE.test(rot13Line2 ?? ''),
+  rotationDiffers: !!rot13P1 && !!rot13P2 && rot13P1.def.id !== rot13P2.def.id,
+  rot1NearestInSystem: !!rot13P1 && !!rot13Clue1 && rot13P1.lmName === nearestLmName13(rot13P1.def, rot13Clue1) &&
+    (rot13P1.def.landmarks ?? []).some((l) => l.name === rot13P1.lmName),
+  rot2NearestInSystem: !!rot13P2 && !!rot13Clue2 && rot13P2.lmName === nearestLmName13(rot13P2.def, rot13Clue2) &&
+    (rot13P2.def.landmarks ?? []).some((l) => l.name === rot13P2.lmName),
+  closingExact13: closingLine13 === 'Both columns balance at last — nothing waits, and nothing stays unread.',
+};
+console.log('wave13 keeper ledger comp tier:', JSON.stringify(w13ledgerChecks), `near=${JSON.stringify(nearLine13)} low=${JSON.stringify(lowTierLine13)} rot=${JSON.stringify(rot13Line1)}|${JSON.stringify(rot13Line2)}`);
+if (!Object.values(w13ledgerChecks).every(Boolean)) { console.log('WAVE13 KEEPER LEDGER COMP TIER FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

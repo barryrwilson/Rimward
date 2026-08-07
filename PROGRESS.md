@@ -339,22 +339,50 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   section fills mystery.found with all six clue ids before its
   closing-line assertion (tier 3) with the new exact copy.
   PASS ×7 runs.
-## Next round candidates (wave 13)
+- Wave 13: both queued candidates (the keepers acknowledge the vouch,
+  the comp-tier page names its landmark). contacts.js:
+  recognitionLine's trust >= 60 branch opens with a once-per-keeper
+  vouch tier — hush/verge dockmasters (the two keepers hail.js's
+  'callowVouch' resolve actually writes to; Hollowreach's keeper never
+  got the letter, system gate) with milestone 'callowVouched' standing
+  and !contact.vouchAck set the flag and answer 'Callow's word arrived
+  ahead of you — your name sits in our second column. The yard is
+  yours.'; later docks fall through to the ship line (vouchAck rides
+  the persisted contact record, undefined reads falsy on old saves,
+  deepAck discipline). keeperLedgerLine tier 2 now collects
+  { systemName, lmName } open pages — lmName the landmark nearest
+  (squared distance over the authored position arrays) the system's
+  first unfound clue, null-guard for a landmark-less system — and at
+  the comp tier (60, station.js KEEPER_COMP_TRUST) narrows the reading
+  to 'the page near The Tithe Stone waits to be read' (§25: still
+  never the clue's text or id; the landmark name is authored,
+  already-spoken tier-1 state). Below 60 the system-only line is
+  byte-identical; tiers 1 and 3 untouched; same single ledgerIdx
+  cursor. Boot test wave-13 section: pure calls (wave-12 b discipline,
+  every mutation restored in place) — the vouch line byte-for-byte,
+  fire-once per keeper (independent flags), ship-line fall-through
+  computed from the live shipName, Hollowreach's system gate, the
+  below-comp gate, and the milestone as witness (spliced out → no
+  vouch line); the narrowed tier (nearest landmark computed from
+  SYSTEMS in-test, never hardcoded — The Hush pairs The First Garden),
+  the old shape at KEEPER_LEDGER_TRUST, no clue id/text leak, trust-60
+  rotation naming different systems with each landmark nearest in its
+  named system, and the unchanged closing line. PASS ×7 runs.
+## Next round candidates (wave 14)
 
-- Wave 12 closed the queue again: the hermit keeps books on the
-  player, the keepers read their open pages, and a restore can no
-  longer strand a record.
-- Callow refuses a second word for himself — but the keepers now hold
-  a name in their column that the player never wrote there. A keeper
-  who comps a trusted pilot's dock could acknowledge the vouch
-  directly (recognitionLine tier, or a favor-tier line), closing the
-  loop Callow opened.
-- The clue tier names a SYSTEM only. A keeper at higher trust (the
-  comp tier, 60) could narrow further — never the text, but a bearing
-  or a landmark pairing ('the page near The Tithe Stone') — one more
-  rung of curiosity before explanation (§25).
-- callowRefusals now persists on the record unbounded; the counters
-  (callowReturns, callowRefusals, ledgerIdx) never reset. Harmless
-  (modulo rotation), but a save from a long enough campaign carries
-  ever-growing ints — no action needed, noting the pattern.
+- Wave 13 closed the queue again: the keepers acknowledge Callow's
+  word, and their open pages point at a landmark now.
+- The narrowed page is still prose. A keeper at the comp tier could
+  mark the paired landmark on the pilot's charts once (a commLine on
+  dock, recorded state only) — turning the hint into a heading without
+  ever naming the clue (§25).
+- vouchAck fires at the people card — a docked-only surface. A keeper
+  could instead voice the acknowledgment once on the pilot's arrival
+  ('systemLoaded' commLine), so a fly-through hears it too.
+- The trust-60 comp tier now carries three privileges (the comp, the
+  vouch word, the narrowed page) — all once-or-cheap, no rebalancing
+  needed; noting the pile-up, not acting on it.
+- Counters (callowReturns, callowRefusals, ledgerIdx) still never
+  reset; vouchAck is a bool. The long-campaign int growth noted in
+  wave 12 stands — no action needed, noting the pattern.
 - Polish debt: none known; boot test is the gate.

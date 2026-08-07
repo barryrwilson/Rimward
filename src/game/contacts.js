@@ -13,7 +13,10 @@
  * once every landmark is witnessed, name the system of an unfound clue as
  * a page left open (§25: the system's name only, never the clue's text) —
  * and comp a trusted pilot's dock at trust >= 60 (station.js applies the
- * waive/comp).
+ * waive/comp). Wave 13: the two keepers Callow's vouch writes to (hush,
+ * verge) acknowledge his word once each (contact.vouchAck) before the
+ * ship line resumes, and at the comp tier an open ledger page narrows to
+ * the landmark nearest the unfound clue — still never the clue itself.
  * station.js reads the roster and applies the mechanics; world.trust/favors
  * persist via save.js.
  *
@@ -123,7 +126,11 @@ export const KEEPER_LEDGER_TRUST = 30;
  *      mystery.visited ('The second column holds: ...').
  *   2. Landmarks all witnessed but unfound clues remain → rotates through
  *      the SYSTEMS holding at least one unfound clue; the line names only
- *      the system display name, a page left open.
+ *      the system display name, a page left open. Wave 13: at the comp
+ *      tier (station.js KEEPER_COMP_TRUST) the keeper narrows the open
+ *      page to a landmark pairing — the landmark nearest that system's
+ *      first unfound clue (§25: still never the clue's text or id; the
+ *      landmark name is authored, already-spoken state from tier 1).
  *   3. Everything witnessed and found → the closing line; both columns
  *      balance.
  * One cursor (contact.ledgerIdx, ??= 0 for old saves, same discipline as
@@ -138,14 +145,30 @@ export function keeperLedgerLine(ctx, contact) {
   const visited = ctx.world.mystery?.visited ?? [];
   const found = ctx.world.mystery?.found ?? [];
   const awaiting = [];
-  const openSystems = [];
+  const openPages = []; // wave 13: { systemName, lmName } per system holding an unfound clue
   for (const sysId of Object.keys(SYSTEMS)) {
     const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
     for (const lm of def.landmarks ?? []) {
       if (!visited.includes(lm.id)) awaiting.push({ lm, systemName: def.name });
     }
     for (const clue of def.clues ?? []) {
-      if (!found.includes(clue.id)) { openSystems.push(def.name); break; }
+      if (!found.includes(clue.id)) {
+        // Wave 13: pair the open page with the landmark nearest the first
+        // unfound clue (squared distances over position [x,y,z] arrays);
+        // null when the system has no landmarks (guard kept — every
+        // clue-holding system currently has at least one).
+        let lmName = null;
+        let bestD2 = Infinity;
+        for (const lm of def.landmarks ?? []) {
+          const dx = lm.position[0] - clue.position[0];
+          const dy = lm.position[1] - clue.position[1];
+          const dz = lm.position[2] - clue.position[2];
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < bestD2) { bestD2 = d2; lmName = lm.name; }
+        }
+        openPages.push({ systemName: def.name, lmName });
+        break;
+      }
     }
   }
   contact.ledgerIdx ??= 0;
@@ -154,10 +177,18 @@ export function keeperLedgerLine(ctx, contact) {
     contact.ledgerIdx = (contact.ledgerIdx + 1) % awaiting.length;
     return `The second column holds: ${entry.lm.name}, in ${entry.systemName}. Marked awaiting.`;
   }
-  if (openSystems.length > 0) {
-    const systemName = openSystems[contact.ledgerIdx % openSystems.length];
-    contact.ledgerIdx = (contact.ledgerIdx + 1) % openSystems.length;
-    return `The second column balances. A page stays open in ${systemName} — something there waits to be read.`;
+  if (openPages.length > 0) {
+    const entry = openPages[contact.ledgerIdx % openPages.length];
+    contact.ledgerIdx = (contact.ledgerIdx + 1) % openPages.length;
+    // Wave 13: at the comp tier (station.js KEEPER_COMP_TRUST — literal
+    // 60, matching recognitionLine's convention) and with a landmark to
+    // pair, the keeper narrows the open page. §25: the landmark name is
+    // authored, already-spoken state from tier 1 — still never the
+    // clue's text or id.
+    if (contact.trust >= 60 && entry.lmName !== null) {
+      return `The second column balances. A page stays open in ${entry.systemName} — the page near ${entry.lmName} waits to be read.`;
+    }
+    return `The second column balances. A page stays open in ${entry.systemName} — something there waits to be read.`;
   }
   return 'Both columns balance at last — nothing waits, and nothing stays unread.';
 }
@@ -165,6 +196,11 @@ export function keeperLedgerLine(ctx, contact) {
 /**
  * A recognition line once trust >= 60: the contact knows the ship. Uses the
  * player-set shipName when present, else refers to the living hull (§12.5).
+ * Wave 13: at the top of that tier, the two keepers Callow's vouch writes
+ * to (hush/verge dockmasters) acknowledge the word once each
+ * (contact.vouchAck) before the ship line resumes — the flag rides the
+ * persisted contact record, undefined reads falsy on old saves, same
+ * discipline as deepAck.
  * Below the trust threshold, tiers in order: deep-rim keepers (hollowreach,
  * hush, verge) acknowledge the mystery arc once each — the deepened tier
  * (contact.deepAck2, which also marks deepAck1: the deeper word covers the
@@ -176,6 +212,21 @@ export function keeperLedgerLine(ctx, contact) {
  */
 export function recognitionLine(ctx, contact) {
   if (contact.trust >= 60) {
+    // Wave 13: closes the loop Callow's vouch opened — the two keepers
+    // his word actually writes to (hush/verge dockmasters; hail.js
+    // bumpTrust targets only them) acknowledge it once each, then the
+    // ship line resumes. vouchAck rides the persisted contact record,
+    // undefined reads falsy on old saves, same discipline as deepAck.
+    // Hollowreach's keeper never got the letter (system gate).
+    if (
+      contact.role === 'dockmaster' &&
+      (contact.system === 'hush' || contact.system === 'verge') &&
+      (ctx.world.milestones ?? []).includes('callowVouched') &&
+      !contact.vouchAck
+    ) {
+      contact.vouchAck = true;
+      return "Callow's word arrived ahead of you — your name sits in our second column. The yard is yours.";
+    }
     const ship = ctx.world.shipName;
     return ship
       ? `${ship}, back on my pad. Good to see her in one piece.`
