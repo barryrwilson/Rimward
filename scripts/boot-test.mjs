@@ -38,6 +38,13 @@
 // callowVouched milestone, never at Hollowreach, never below the comp
 // tier), and the keeper ledger's comp-tier narrowing (at trust 60 the
 // tier-2 open page names the landmark nearest its first unfound clue).
+// Wave 14: the vouch acknowledgment on the arrival comms (a CHANGED
+// 'systemLoaded' to the hush or verge voices Callow's word once — the
+// same vouchAck flag as the people card, once per keeper across both
+// surfaces, and a same-system re-emit is no arrival), and the comp-tier
+// chart mark (a docked keeper marks the narrowed page's nearest landmark
+// on the pilot's charts — mystery.charted, recorded state only, never
+// the clue).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -170,7 +177,7 @@ const { initShip } = await import('../src/systems/ship.js');
 const { initWorld, recordPosition } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
-  keeperLedgerLine, KEEPER_LEDGER_TRUST,
+  keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark,
 } = await import('../src/game/contacts.js');
 const { initMystery } = await import('../src/game/mystery.js');
 const { initEpics, epicEffects } = await import('../src/game/epics.js');
@@ -3401,6 +3408,331 @@ const w13ledgerChecks = {
 };
 console.log('wave13 keeper ledger comp tier:', JSON.stringify(w13ledgerChecks), `near=${JSON.stringify(nearLine13)} low=${JSON.stringify(lowTierLine13)} rot=${JSON.stringify(rot13Line1)}|${JSON.stringify(rot13Line2)}`);
 if (!Object.values(w13ledgerChecks).every(Boolean)) { console.log('WAVE13 KEEPER LEDGER COMP TIER FAIL'); errors++; }
+
+// ---- Wave 14: vouch arrival comms / keeper chart mark ----
+// The continuing run is docked at The Vigil in the Verge (the wave-12 c
+// death-restore; wave-13 was pure calls): 'callowVouched' stands, every
+// vouchAck flag was restored absent, and natural keeper trust is 15, so
+// nothing new fires before the pins below. A exercises keeperVouchArrival
+// pure (exactly the recognitionLine vouch tier's gates, the SAME flag).
+// B makes the real verge → hush jump and hears Keeper Ond voice Callow's
+// word on the arrival comms — the people card then falls through to the
+// ship line, and the verge keeper's flag stays his own. C proves a
+// same-system 'systemLoaded' re-emit is no arrival. D exercises
+// keeperChartMark pure (tier-2 only, comp tier only, §25 no-leak, any
+// ledger keeper, never a freehold dockmaster). E undocks/redocks at
+// Threshold for the real 'docked' wiring. VOUCH_ACK_LINE, nearestLmName13,
+// and ALL_CLUE_IDS ride from waves 12–13 — the same discipline throughout:
+// snapshot every touched field, restore every mutation in place before
+// further ticks.
+// Test SETUP: re-pin the hull huge — the wave-12 c death-restore returned
+// the class maxes, and random soak combat killing the player mid-section
+// would eat the dock/undock key dispatches (the wave-11 discipline).
+ctx.player.hullMax = 1e9;
+ctx.player.hull = 1e9;
+
+// -- a. vouch arrival, pure gates -------------------------------------------
+// keeperVouchArrival: a hush/verge dockmaster (Hollowreach NEVER — its
+// keeper never got the letter), the 'callowVouched' milestone standing,
+// the comp tier (literal 60), and !contact.vouchAck. On fire it sets the
+// flag and returns the shared VOUCH_ACK_LINE. Snapshot trust + vouchAck
+// on all three keepers and the milestone list; restore in place.
+const vergeKeeper14 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const hushKeeper14 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-hush-dockmaster') ?? null;
+const hollowKeeper14 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-hollowreach-dockmaster') ?? null;
+const milestonesBefore14 = [...(ctx.world.milestones ?? [])];
+const keeperSnap14 = [];
+for (const k of [vergeKeeper14, hushKeeper14, hollowKeeper14]) {
+  if (!k) continue;
+  keeperSnap14.push({ k, trust: k.trust, hadAck: 'vouchAck' in k, ack: k.vouchAck });
+  delete k.vouchAck; // clear any flag an earlier render may have voiced (wave-13 a)
+}
+// Hollowreach's keeper never got the letter: the system gate answers null,
+// flag untouched, even at the comp tier with the milestone standing.
+if (hollowKeeper14) hollowKeeper14.trust = 60;
+const hollowArrLine14 = hollowKeeper14 ? keeperVouchArrival(ctx, hollowKeeper14) : undefined;
+const hollowArrAck14 = hollowKeeper14?.vouchAck;
+// Below the comp tier the word never carries.
+if (hushKeeper14) hushKeeper14.trust = 59;
+const lowTrustArrLine14 = hushKeeper14 ? keeperVouchArrival(ctx, hushKeeper14) : undefined;
+const lowTrustArrAck14 = hushKeeper14?.vouchAck;
+// The milestone is the witness: splice it out and the comms stay silent.
+if (hushKeeper14) hushKeeper14.trust = 60;
+const vouchIdx14 = ctx.world.milestones.indexOf('callowVouched');
+if (vouchIdx14 >= 0) ctx.world.milestones.splice(vouchIdx14, 1);
+const noMilestoneArrLine14 = hushKeeper14 ? keeperVouchArrival(ctx, hushKeeper14) : undefined;
+const noMilestoneArrAck14 = hushKeeper14?.vouchAck;
+ctx.world.milestones.length = 0;
+ctx.world.milestones.push(...milestonesBefore14);
+// Milestone standing at the comp tier: the exact shared line, the flag
+// set — and the immediate second call reads the flag and stays silent.
+const hushArrLine14 = hushKeeper14 ? keeperVouchArrival(ctx, hushKeeper14) : null;
+const hushArrAckAfter14 = hushKeeper14?.vouchAck;
+const hushArrSecond14 = hushKeeper14 ? keeperVouchArrival(ctx, hushKeeper14) : undefined;
+const hushArrAckAfterSecond14 = hushKeeper14?.vouchAck;
+// Restore everything in place — the keepers (the milestone list rides above).
+for (const s of keeperSnap14) {
+  s.k.trust = s.trust;
+  if (s.hadAck) s.k.vouchAck = s.ack; else delete s.k.vouchAck;
+}
+const w14arrivalChecks = {
+  milestoneStands: milestonesBefore14.includes('callowVouched'),
+  keepersFound: !!vergeKeeper14 && !!hushKeeper14 && !!hollowKeeper14,
+  hollowNeverNull: hollowArrLine14 === null && !hollowArrAck14,
+  belowCompNull: lowTrustArrLine14 === null && !lowTrustArrAck14,
+  noMilestoneNull: noMilestoneArrLine14 === null && !noMilestoneArrAck14,
+  hushArrivalExact: hushArrLine14 === VOUCH_ACK_LINE,
+  hushAckSet: hushArrAckAfter14 === true,
+  secondCallSilent: hushArrSecond14 === null && hushArrAckAfterSecond14 === true,
+};
+console.log('wave14 vouch arrival gates:', JSON.stringify(w14arrivalChecks), `hollow=${JSON.stringify(hollowArrLine14)} low=${JSON.stringify(lowTrustArrLine14)} hush=${JSON.stringify(hushArrLine14)}|${JSON.stringify(hushArrSecond14)}`);
+if (!Object.values(w14arrivalChecks).every(Boolean)) { console.log('WAVE14 VOUCH ARRIVAL GATES FAIL'); errors++; }
+
+// -- b. real arrival comms: verge → hush voices Callow's word once ----------
+// The wave-11 B scripted-jump pattern: leave The Vigil, park on the verge
+// gate to the hush, emit the request, and collect ctx.lastEvents across
+// EVERY arrival frame — 'systemLoaded' fires at the jump midpoint and the
+// keeper's commLine lands a frame later (contacts.update reads lastEvents).
+// Trust pinned at the comp tier, vouchAck absent: the CHANGED
+// 'systemLoaded' to the hush fires keeperVouchArrival through the real
+// update() wiring. The people card then falls through to the ship line —
+// the arrival already spent the flag (template-dependent: computed from
+// ctx.world.shipName exactly as wave-13 a's shipLine13).
+const shipLine14 = ctx.world.shipName
+  ? `${ctx.world.shipName}, back on my pad. Good to see her in one piece.`
+  : "The living hull — we'd know that ship anywhere. Welcome back.";
+const isKeeperOndVouch14 = (e) => e.type === 'commLine' && e.from === 'Keeper Ond' && e.text === VOUCH_ACK_LINE;
+const hushTrustBeforeArr14 = hushKeeper14?.trust;
+const vergeTrustBeforeArr14 = vergeKeeper14?.trust;
+if (hushKeeper14) { hushKeeper14.trust = 60; delete hushKeeper14.vouchAck; }
+if (ctx.flags.docked) undockStation(); // leave The Vigil (wave-12 c restore dock)
+ctx.ship.object.position.set(...vergeReturnGate.position); // verge [0,90,-1250] → hush
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hush gate (wave14 arrival)');
+const arrEvs14 = [];
+ctx.emit('jumpRequested', { to: 'hush' });
+let arrivedHush14 = false;
+for (let i = 0; i < 60 * 10; i++) {
+  tick(1, 'wave14 hop to hush');
+  arrEvs14.push(...ctx.lastEvents);
+  if (ctx.world.currentSystem === 'hush' && !ctx.gate.jumping) { arrivedHush14 = true; break; }
+}
+if (!arrivedHush14) {
+  console.log('WAVE14 TRAVEL FAIL — never arrived at hush');
+  errors++;
+}
+const arrVouchLines14 = arrEvs14.filter(isKeeperOndVouch14);
+const arrAckAfter14 = hushKeeper14?.vouchAck;
+// Refire watch: the flag stands, no second word on later frames.
+const arrRefireEvs14 = [];
+for (let i = 0; i < 10; i++) { tick(1, 'wave14 arrival refire watch'); arrRefireEvs14.push(...ctx.lastEvents); }
+const arrRefireLines14 = arrRefireEvs14.filter(isKeeperOndVouch14);
+// Dock at Threshold: the people card no longer carries the word — the
+// recognition line is the plain ship line now. (The dock's keeperChartMark
+// stays silent here: landmarks still await, so tier 2 is shut.)
+dockAtCurrentStation('dock hush (wave14 arrival)');
+const hushPeopleLine14 = hushKeeper14 ? recognitionLine(ctx, hushKeeper14) : null;
+// Independence: the verge keeper's flag is his own — still falsy after the
+// hush arrival, and his people card still holds the word (pure call at the
+// pinned tier, restored right after).
+const vergeAckIndependent14 = vergeKeeper14?.vouchAck;
+if (vergeKeeper14) vergeKeeper14.trust = 60;
+const vergePeopleLine14 = vergeKeeper14 ? recognitionLine(ctx, vergeKeeper14) : null;
+// Restore both keepers in place — natural trust, flags absent.
+if (vergeKeeper14) { vergeKeeper14.trust = vergeTrustBeforeArr14; delete vergeKeeper14.vouchAck; }
+if (hushKeeper14) { hushKeeper14.trust = hushTrustBeforeArr14; delete hushKeeper14.vouchAck; }
+const w14arrivalCommChecks = {
+  arrivedHush: arrivedHush14 && ctx.world.currentSystem === 'hush',
+  keeperOndNamed: hushKeeper14?.name === 'Keeper Ond',
+  vouchCommLineOnce: arrVouchLines14.length === 1,
+  ackSetByArrival: arrAckAfter14 === true,
+  noRefire: arrRefireLines14.length === 0,
+  peopleCardShipLine: hushPeopleLine14 === shipLine14,
+  vergeFlagUntouched: !vergeAckIndependent14,
+  vergeCardStillHolds: vergePeopleLine14 === VOUCH_ACK_LINE,
+};
+console.log('wave14 arrival comms:', JSON.stringify(w14arrivalCommChecks), `lines=${JSON.stringify(arrVouchLines14.map((e) => e.text))} people=${JSON.stringify(hushPeopleLine14)} verge=${JSON.stringify(vergePeopleLine14)}`);
+if (!Object.values(w14arrivalCommChecks).every(Boolean)) { console.log('WAVE14 ARRIVAL COMMS FAIL'); errors++; }
+
+// -- c. a same-system 'systemLoaded' re-emit is no arrival ------------------
+// The module cursor (lastSystemId) answers the restore re-emit case: the
+// run IS in the hush after b, so a re-emitted 'systemLoaded' to the hush
+// is unchanged — the keeper stays silent and the flag stays falsy (the
+// wave-11 callowVisitArmed discipline). Armed again, then restored.
+const hushTrustBeforeReemit14 = hushKeeper14?.trust;
+if (hushKeeper14) { hushKeeper14.trust = 60; delete hushKeeper14.vouchAck; }
+const reemitEvs14 = [];
+ctx.emit('systemLoaded', { to: ctx.world.currentSystem }); // 'hush' — the same system
+for (let i = 0; i < 3; i++) { tick(1, 'wave14 same-system re-emit'); reemitEvs14.push(...ctx.lastEvents); }
+const reemitKeeperLines14 = reemitEvs14.filter((e) => e.type === 'commLine' && e.from === 'Keeper Ond');
+const reemitAck14 = hushKeeper14?.vouchAck;
+if (hushKeeper14) { hushKeeper14.trust = hushTrustBeforeReemit14; delete hushKeeper14.vouchAck; }
+const w14reemitChecks = {
+  stillInHush: ctx.world.currentSystem === 'hush',
+  noKeeperOndLine: reemitKeeperLines14.length === 0,
+  ackStaysFalsy: !reemitAck14,
+};
+console.log('wave14 same-system re-emit:', JSON.stringify(w14reemitChecks), `keeperLines=${reemitKeeperLines14.length}`);
+if (!Object.values(w14reemitChecks).every(Boolean)) { console.log('WAVE14 SAME-SYSTEM RE-EMIT FAIL'); errors++; }
+
+// -- d. chart mark, pure gates ----------------------------------------------
+// keeperChartMark turns the narrowed tier-2 page into a heading: only
+// while every landmark is witnessed and unfound clues remain, it marks
+// the FIRST open page (SYSTEMS key order) whose paired landmark id is not
+// yet in mystery.charted — recorded state only, §25: the landmark and
+// system names, never the clue's id or text. Pure calls on the hush
+// keeper; trust/visited/found/charted all snapshotted and restored in
+// place (charted via the hadCharted discipline — wave-13 a's hadAck).
+const freeholdDm14 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-freehold-dockmaster') ?? null;
+const mystery14 = ctx.world.mystery;
+const markSnap14 = [];
+for (const k of [hushKeeper14, hollowKeeper14, freeholdDm14]) {
+  if (!k) continue;
+  markSnap14.push({ k, trust: k.trust });
+}
+const visitedBefore14 = [...(mystery14?.visited ?? [])];
+const foundBefore14 = [...(mystery14?.found ?? [])];
+const hadCharted14 = mystery14 ? 'charted' in mystery14 : false;
+const chartedBefore14 = [...(mystery14?.charted ?? [])];
+// The expectation is COMPUTED, never hardcoded: the hush landmark nearest
+// 'th_c_keeper' by squared distance over the position arrays (first-wins —
+// nearestLmName13 rides from wave-13 b), the id read back off the authored
+// table. The Hush's page is the only open one once 'th_c_keeper' is the
+// single unfound clue.
+const hushLmName14 = hushClue13 ? nearestLmName13(SYSTEMS.hush, hushClue13) : null;
+const hushLm14 = (SYSTEMS.hush.landmarks ?? []).find((l) => l.name === hushLmName14) ?? null;
+const markExpected14 = hushLmName14
+  ? `A mark on your charts — ${hushLmName14}, in ${SYSTEMS.hush.name}. The page near it is yours to read.`
+  : null;
+// Natural state (landmarks still awaiting) at the comp tier: no mark, and
+// the charts stay untouched.
+if (hushKeeper14) hushKeeper14.trust = 60;
+const naturalMarkLine14 = hushKeeper14 ? keeperChartMark(ctx, hushKeeper14) : undefined;
+const naturalChartedUntouched14 = !!mystery14 && ('charted' in mystery14) === hadCharted14 &&
+  JSON.stringify(mystery14.charted ?? []) === JSON.stringify(chartedBefore14);
+// Every landmark witnessed and every clue found: tier 2 is shut — no open
+// page, no mark.
+for (const def of Object.values(SYSTEMS)) {
+  for (const lm of def.landmarks ?? []) {
+    if (!mystery14.visited.includes(lm.id)) mystery14.visited.push(lm.id);
+  }
+}
+mystery14.found.length = 0;
+mystery14.found.push(...ALL_CLUE_IDS);
+const allFoundMarkLine14 = hushKeeper14 ? keeperChartMark(ctx, hushKeeper14) : undefined;
+// One clue short ('th_c_keeper' — the wave-12/13 page) below the comp
+// tier: the mark waits for 60.
+mystery14.found.length = 0;
+mystery14.found.push(...ALL_CLUE_IDS.filter((id) => id !== 'th_c_keeper'));
+if (hushKeeper14) hushKeeper14.trust = 59;
+const lowTrustMarkLine14 = hushKeeper14 ? keeperChartMark(ctx, hushKeeper14) : undefined;
+// At the comp tier: the exact mark line, the landmark id lands on the
+// charts, and the second call reads the charted page and stays silent.
+if (hushKeeper14) hushKeeper14.trust = 60;
+const markLine14 = hushKeeper14 ? keeperChartMark(ctx, hushKeeper14) : null;
+const chartedAfterMark14 = [...(mystery14.charted ?? [])];
+const secondMarkLine14 = hushKeeper14 ? keeperChartMark(ctx, hushKeeper14) : undefined;
+// ANY ledger keeper can mark: with the charts restored blank, Hollowreach's
+// keeper (trust pinned) turns the same page into the same heading.
+if (hadCharted14) { mystery14.charted.length = 0; mystery14.charted.push(...chartedBefore14); }
+else delete mystery14.charted;
+if (hollowKeeper14) hollowKeeper14.trust = 60;
+const hollowMarkLine14 = hollowKeeper14 ? keeperChartMark(ctx, hollowKeeper14) : null;
+const chartedAfterHollow14 = [...(mystery14.charted ?? [])];
+// A freehold dockmaster is no keeper: the system gate answers null even
+// with tier-2 state standing, and the charts do not move.
+if (freeholdDm14) freeholdDm14.trust = 60;
+const freeholdMarkLine14 = freeholdDm14 ? keeperChartMark(ctx, freeholdDm14) : undefined;
+const chartedAfterFreehold14 = [...(mystery14.charted ?? [])];
+// Restore everything in place — landmarks.js change-detects on length.
+mystery14.visited.length = 0;
+mystery14.visited.push(...visitedBefore14);
+mystery14.found.length = 0;
+mystery14.found.push(...foundBefore14);
+if (hadCharted14) { mystery14.charted.length = 0; mystery14.charted.push(...chartedBefore14); }
+else delete mystery14.charted;
+for (const s of markSnap14) s.k.trust = s.trust;
+const w14markChecks = {
+  keepersFound: !!hushKeeper14 && !!hollowKeeper14 && !!freeholdDm14,
+  hushClueAuthored: !!hushClue13 && Array.isArray(hushClue13?.position),
+  nearestLmComputed: !!hushLm14 && hushLm14.name === hushLmName14 && typeof hushLm14.id === 'string',
+  naturalAwaitingNull: naturalMarkLine14 === null,
+  naturalChartedUntouched: naturalChartedUntouched14,
+  allFoundNull: allFoundMarkLine14 === null,
+  belowCompMarkNull: lowTrustMarkLine14 === null,
+  markExact: markLine14 === markExpected14,
+  markChartedId: !!hushLm14 && chartedAfterMark14.length === 1 && chartedAfterMark14.includes(hushLm14.id),
+  secondMarkNull: secondMarkLine14 === null,
+  markNoLeak: typeof markLine14 === 'string' && !markLine14.includes('th_c_keeper') &&
+    !!hushClue13 && !markLine14.includes(hushClue13.line),
+  hollowCanMark: hollowMarkLine14 === markExpected14 && !!hushLm14 && chartedAfterHollow14.includes(hushLm14.id),
+  freeholdNeverMarks: freeholdMarkLine14 === null &&
+    JSON.stringify(chartedAfterFreehold14) === JSON.stringify(chartedAfterHollow14),
+};
+console.log('wave14 chart mark gates:', JSON.stringify(w14markChecks), `mark=${JSON.stringify(markLine14)} hollow=${JSON.stringify(hollowMarkLine14)} freehold=${JSON.stringify(freeholdMarkLine14)}`);
+if (!Object.values(w14markChecks).every(Boolean)) { console.log('WAVE14 CHART MARK GATES FAIL'); errors++; }
+
+// -- e. docked event path: one mark commLine per open page ------------------
+// The real wiring: a 'docked' event makes the docked system's dockmaster
+// run keeperChartMark and voice the line as a commLine. Tier-2 state
+// pinned (every landmark witnessed, all clues but 'th_c_keeper' found,
+// comp-tier trust, charts absent) with the run already in the hush:
+// undock + redock at Threshold voices the mark exactly once and fills
+// mystery.charted; a second cycle reads the charted page and stays silent.
+// The cycle is inlined per tick (not the harness helpers) so EVERY frame's
+// lastEvents ride the sink — contacts.update emits a frame after 'docked'.
+const dockVisitedBefore14 = [...(mystery14?.visited ?? [])];
+const dockFoundBefore14 = [...(mystery14?.found ?? [])];
+const dockHadCharted14 = mystery14 ? 'charted' in mystery14 : false;
+const dockChartedBefore14 = [...(mystery14?.charted ?? [])];
+const dockTrustBefore14 = hushKeeper14?.trust;
+for (const def of Object.values(SYSTEMS)) {
+  for (const lm of def.landmarks ?? []) {
+    if (!mystery14.visited.includes(lm.id)) mystery14.visited.push(lm.id);
+  }
+}
+mystery14.found.length = 0;
+mystery14.found.push(...ALL_CLUE_IDS.filter((id) => id !== 'th_c_keeper'));
+delete mystery14.charted; // pin the charts blank — the dock must fill them
+if (hushKeeper14) hushKeeper14.trust = 60;
+const dockCycle14 = (label, sink) => {
+  dispatchKey('Escape'); // level 2 backs out to services; level 1 launches
+  if (ctx.flags.docked) dispatchKey('Escape');
+  tick(1, `${label} undock`); sink.push(...ctx.lastEvents);
+  tick(1, `${label} undock settle`); sink.push(...ctx.lastEvents);
+  ctx.ship.object.position.set(...SYSTEMS.hush.station.position);
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.input.dockPressed = true; // station.update reads the edge before controls clears it
+  tick(1, `${label} dock`); sink.push(...ctx.lastEvents);
+  ctx.input.dockPressed = false;
+  tick(1, `${label} dock settle`); sink.push(...ctx.lastEvents);
+  tick(1, `${label} dock settle 2`); sink.push(...ctx.lastEvents);
+};
+const dockEvs14a = [];
+dockCycle14('wave14 mark cycle 1', dockEvs14a);
+const dockKeeperLines14a = dockEvs14a.filter((e) => e.type === 'commLine' && e.from === 'Keeper Ond');
+const dockMarkLines14a = dockKeeperLines14a.filter((e) => e.text === markExpected14);
+const chartedAfterDock14 = [...(mystery14.charted ?? [])];
+const dockEvs14b = [];
+dockCycle14('wave14 mark cycle 2', dockEvs14b);
+const dockMarkLines14b = dockEvs14b.filter((e) => e.type === 'commLine' && e.from === 'Keeper Ond' && e.text === markExpected14);
+// Restore every pinned field in place before the final summary lines.
+mystery14.visited.length = 0;
+mystery14.visited.push(...dockVisitedBefore14);
+mystery14.found.length = 0;
+mystery14.found.push(...dockFoundBefore14);
+if (dockHadCharted14) { mystery14.charted.length = 0; mystery14.charted.push(...dockChartedBefore14); }
+else delete mystery14.charted;
+if (hushKeeper14) hushKeeper14.trust = dockTrustBefore14;
+const w14dockChecks = {
+  dockedInHush: ctx.flags.docked === true && ctx.world.currentSystem === 'hush',
+  markCommLineOnce: dockMarkLines14a.length === 1 && dockKeeperLines14a.length === 1,
+  markCommLineExact: dockMarkLines14a[0]?.text === markExpected14,
+  chartedGainedId: !!hushLm14 && chartedAfterDock14.includes(hushLm14.id),
+  secondCycleSilent: dockMarkLines14b.length === 0,
+};
+console.log('wave14 docked chart mark:', JSON.stringify(w14dockChecks), `lines=${JSON.stringify(dockMarkLines14a.map((e) => e.text))} charted=${JSON.stringify(chartedAfterDock14)}`);
+if (!Object.values(w14dockChecks).every(Boolean)) { console.log('WAVE14 DOCKED CHART MARK FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

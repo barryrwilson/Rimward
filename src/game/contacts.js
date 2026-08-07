@@ -13,10 +13,16 @@
  * once every landmark is witnessed, name the system of an unfound clue as
  * a page left open (§25: the system's name only, never the clue's text) —
  * and comp a trusted pilot's dock at trust >= 60 (station.js applies the
- * waive/comp). Wave 13: the two keepers Callow's vouch writes to (hush,
+ * Wave 13: the two keepers Callow's vouch writes to (hush,
  * verge) acknowledge his word once each (contact.vouchAck) before the
  * ship line resumes, and at the comp tier an open ledger page narrows to
  * the landmark nearest the unfound clue — still never the clue itself.
+ * Wave 14: the acknowledgment carries the arrival comms too — a changed
+ * 'systemLoaded' to the hush or verge voices Callow's word once, so a
+ * fly-through hears it without docking (the same vouchAck flag: once per
+ * keeper across both surfaces) — and a docked comp-tier keeper marks the
+ * narrowed page's landmark on the pilot's charts (mystery.charted,
+ * recorded state only): the hint becomes a heading, still never the clue.
  * station.js reads the roster and applies the mechanics; world.trust/favors
  * persist via save.js.
  *
@@ -138,14 +144,18 @@ export const KEEPER_LEDGER_TRUST = 30;
  * land, and the modulo keeps it in range. null for non-keepers or below
  * the threshold.
  */
-export function keeperLedgerLine(ctx, contact) {
-  if (contact.role !== 'dockmaster') return null;
-  if (contact.system !== 'hollowreach' && contact.system !== 'hush' && contact.system !== 'verge') return null;
-  if (contact.trust < KEEPER_LEDGER_TRUST) return null;
+// Shared ledger columns (waves 11–14): awaiting = authored landmarks not
+// yet in mystery.visited; openPages = one entry per system holding an
+// unfound clue, paired with the landmark nearest its first unfound clue
+// (squared distances over the position [x,y,z] arrays, first-wins on ties
+// — the contacts.js order). lmId rides for wave 14's chart mark; lmName
+// null-guards a landmark-less system (every clue-holding system currently
+// has at least one).
+function ledgerColumns(ctx) {
   const visited = ctx.world.mystery?.visited ?? [];
   const found = ctx.world.mystery?.found ?? [];
   const awaiting = [];
-  const openPages = []; // wave 13: { systemName, lmName } per system holding an unfound clue
+  const openPages = []; // { systemName, lmName, lmId } per system holding an unfound clue
   for (const sysId of Object.keys(SYSTEMS)) {
     const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
     for (const lm of def.landmarks ?? []) {
@@ -153,24 +163,29 @@ export function keeperLedgerLine(ctx, contact) {
     }
     for (const clue of def.clues ?? []) {
       if (!found.includes(clue.id)) {
-        // Wave 13: pair the open page with the landmark nearest the first
-        // unfound clue (squared distances over position [x,y,z] arrays);
-        // null when the system has no landmarks (guard kept — every
-        // clue-holding system currently has at least one).
         let lmName = null;
+        let lmId = null;
         let bestD2 = Infinity;
         for (const lm of def.landmarks ?? []) {
           const dx = lm.position[0] - clue.position[0];
           const dy = lm.position[1] - clue.position[1];
           const dz = lm.position[2] - clue.position[2];
           const d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 < bestD2) { bestD2 = d2; lmName = lm.name; }
+          if (d2 < bestD2) { bestD2 = d2; lmName = lm.name; lmId = lm.id; }
         }
-        openPages.push({ systemName: def.name, lmName });
+        openPages.push({ systemName: def.name, lmName, lmId });
         break;
       }
     }
   }
+  return { awaiting, openPages };
+}
+
+export function keeperLedgerLine(ctx, contact) {
+  if (contact.role !== 'dockmaster') return null;
+  if (contact.system !== 'hollowreach' && contact.system !== 'hush' && contact.system !== 'verge') return null;
+  if (contact.trust < KEEPER_LEDGER_TRUST) return null;
+  const { awaiting, openPages } = ledgerColumns(ctx);
   contact.ledgerIdx ??= 0;
   if (awaiting.length > 0) {
     const entry = awaiting[contact.ledgerIdx % awaiting.length];
@@ -191,6 +206,61 @@ export function keeperLedgerLine(ctx, contact) {
     return `The second column balances. A page stays open in ${entry.systemName} — something there waits to be read.`;
   }
   return 'Both columns balance at last — nothing waits, and nothing stays unread.';
+}
+
+// Wave 13/14: the single vouch-acknowledgment sentence, voiced from the
+// people card (recognitionLine) or the arrival comms (keeperVouchArrival) —
+// once per keeper across both surfaces via contact.vouchAck.
+const VOUCH_ACK_LINE = "Callow's word arrived ahead of you — your name sits in our second column. The yard is yours.";
+
+/**
+ * Wave 14: the vouch acknowledgment on the arrival comms. Exactly the
+ * gates of recognitionLine's vouch tier — a hush/verge dockmaster (the two
+ * keepers hail.js's 'callowVouch' resolve writes to; Hollowreach's keeper
+ * never got the letter), the 'callowVouched' milestone standing, the comp
+ * tier (literal 60), and !contact.vouchAck — so a fly-through hears
+ * Callow's word without ever docking. Sets contact.vouchAck, the SAME
+ * flag the people card uses: once per keeper across both surfaces, and
+ * undefined reads falsy on old saves (deepAck discipline). null otherwise.
+ */
+export function keeperVouchArrival(ctx, contact) {
+  if (contact.role !== 'dockmaster') return null;
+  if (contact.system !== 'hush' && contact.system !== 'verge') return null;
+  if (contact.trust < 60) return null;
+  if (!(ctx.world.milestones ?? []).includes('callowVouched')) return null;
+  if (contact.vouchAck) return null;
+  contact.vouchAck = true;
+  return VOUCH_ACK_LINE;
+}
+
+/**
+ * Wave 14: at the comp tier (literal 60, the recognitionLine convention) a
+ * docked keeper turns the narrowed page into a heading — the page's paired
+ * landmark is marked on the pilot's charts once (mystery.charted, a plain
+ * id list riding the persisted mystery record; undefined reads empty on
+ * old saves). Recorded state only: nothing is rendered or revealed, and
+ * §25 holds — the line names the authored landmark and its system, never
+ * the clue's text or id. Only while the ledger's tier 2 is open (every
+ * landmark witnessed, unfound clues remain); one mark per call, the first
+ * uncharted open page in SYSTEMS order. null for non-keepers, below the
+ * comp tier, while landmarks still await, or with nothing left to mark.
+ */
+export function keeperChartMark(ctx, contact) {
+  if (contact.role !== 'dockmaster') return null;
+  if (contact.system !== 'hollowreach' && contact.system !== 'hush' && contact.system !== 'verge') return null;
+  if (contact.trust < 60) return null;
+  const mystery = ctx.world.mystery;
+  const charted = mystery?.charted ?? [];
+  const { awaiting, openPages } = ledgerColumns(ctx);
+  if (awaiting.length > 0) return null;
+  for (const page of openPages) {
+    if (page.lmId === null || charted.includes(page.lmId)) continue;
+    // awaiting empty implies every landmark is in mystery.visited — the
+    // mystery record exists.
+    (mystery.charted ??= []).push(page.lmId);
+    return `A mark on your charts — ${page.lmName}, in ${page.systemName}. The page near it is yours to read.`;
+  }
+  return null;
 }
 
 /**
@@ -217,7 +287,9 @@ export function recognitionLine(ctx, contact) {
     // bumpTrust targets only them) acknowledge it once each, then the
     // ship line resumes. vouchAck rides the persisted contact record,
     // undefined reads falsy on old saves, same discipline as deepAck.
-    // Hollowreach's keeper never got the letter (system gate).
+    // Hollowreach's keeper never got the letter (system gate). The line is
+    // the shared VOUCH_ACK_LINE — the arrival comms (keeperVouchArrival,
+    // wave 14) voice the same word through the same flag.
     if (
       contact.role === 'dockmaster' &&
       (contact.system === 'hush' || contact.system === 'verge') &&
@@ -225,7 +297,7 @@ export function recognitionLine(ctx, contact) {
       !contact.vouchAck
     ) {
       contact.vouchAck = true;
-      return "Callow's word arrived ahead of you — your name sits in our second column. The yard is yours.";
+      return VOUCH_ACK_LINE;
     }
     const ship = ctx.world.shipName;
     return ship
@@ -257,16 +329,37 @@ export function recognitionLine(ctx, contact) {
 /**
  * Populate ctx.world.contacts when empty (save.js restores over this roster
  * afterward, same pattern as world records). update() stamps metAt on the
- * current system's contacts when a 'docked' event lands.
+ * current system's contacts when a 'docked' event lands. Wave 14: a docked
+ * comp-tier keeper marks the narrowed ledger page's landmark on the pilot's
+ * charts (one commLine per dock, recorded state only), and a changed
+ * 'systemLoaded' to the hush or verge voices the vouch acknowledgment on
+ * the arrival comms (once per keeper, shared vouchAck flag).
  */
 export function initContacts(ctx) {
   if (ctx.world.contacts.length === 0) {
     ctx.world.contacts = buildRoster();
   }
+  // Wave 14 arrival cursor: a same-system restore re-emits 'systemLoaded',
+  // and that is no arrival (the wave-11 callowVisitArmed discipline).
+  // initContacts runs before initSave, so a cross-system load's re-emit
+  // reads as a changed arrival — a load IS an arrival here.
+  let lastSystemId = ctx.world.currentSystem;
   return {
     update() {
       for (let i = 0; i < ctx.lastEvents.length; i++) {
-        if (ctx.lastEvents[i].type !== 'docked') continue;
+        const ev = ctx.lastEvents[i];
+        if (ev.type === 'systemLoaded') {
+          const changed = ev.to !== lastSystemId;
+          lastSystemId = ev.to;
+          if (!changed) continue;
+          if (ev.to !== 'hush' && ev.to !== 'verge') continue;
+          const keeper = ctx.world.contacts.find(
+            (c) => c.system === ev.to && c.role === 'dockmaster');
+          const line = keeper ? keeperVouchArrival(ctx, keeper) : null;
+          if (line) ctx.emit('commLine', { text: line, from: keeper.name });
+          continue;
+        }
+        if (ev.type !== 'docked') continue;
         const sysId = ctx.world.currentSystem;
         const list = ctx.world.contacts;
         for (let j = 0; j < list.length; j++) {
@@ -274,6 +367,11 @@ export function initContacts(ctx) {
             list[j].metAt = ctx.world.time;
           }
         }
+        // Wave 14: a docked comp-tier keeper turns the narrowed page into
+        // a heading — one mark per dock, recorded state only.
+        const keeper = list.find((c) => c.system === sysId && c.role === 'dockmaster');
+        const mark = keeper ? keeperChartMark(ctx, keeper) : null;
+        if (mark) ctx.emit('commLine', { text: mark, from: keeper.name });
       }
     },
   };

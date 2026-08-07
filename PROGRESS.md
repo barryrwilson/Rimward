@@ -368,21 +368,54 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   the old shape at KEEPER_LEDGER_TRUST, no clue id/text leak, trust-60
   rotation naming different systems with each landmark nearest in its
   named system, and the unchanged closing line. PASS ×7 runs.
-## Next round candidates (wave 14)
+- Wave 14: both queued candidates (the vouch word carries the arrival
+  comms, the narrowed page becomes a chart mark). contacts.js:
+  keeperVouchArrival — exactly recognitionLine's vouch-tier gates
+  (hush/verge dockmaster, 'callowVouched' standing, literal 60,
+  !vouchAck) — sets the SAME contact.vouchAck flag and returns the
+  shared VOUCH_ACK_LINE const (extracted module-level; recognitionLine
+  returns it too), once per keeper across both surfaces. initContacts
+  update() consumes 'systemLoaded' under a changed-system cursor
+  (module lastSystemId; a same-system restore re-emit is no arrival —
+  the wave-11 callowVisitArmed discipline; initContacts precedes
+  initSave, so a cross-system load reads as an arrival) and voices the
+  line as a commLine from the keeper's name — a fly-through hears
+  Callow's word without ever docking. keeperChartMark — a comp-tier
+  (literal 60) ledger keeper (all three, Hollowreach included) with
+  tier 2 open (every landmark witnessed, unfound clues remain) marks
+  the first uncharted open page's paired landmark: mystery.charted
+  ??= [] (plain id list riding the persisted mystery record, undefined
+  reads empty on old saves) gains the id, and a docked keeper emits the
+  mark as a commLine on 'docked' — 'A mark on your charts — The First
+  Garden, in The Hush. The page near it is yours to read.' Recorded
+  state only: nothing rendered or revealed; §25 holds (authored
+  landmark + system names, never the clue). The awaiting/openPages
+  computation is now the shared ledgerColumns() helper (openPages
+  entries gain lmId for the mark) — keeperLedgerLine's three tiers
+  byte-identical. Boot test wave-14 section: pure gates (Hollowreach
+  never, below-60 never, milestone spliced never, second call silent;
+  the mark gated on tier 2 open and the comp tier, §25 no-leak,
+  Hollowreach CAN mark, freehold never), a real verge→hush jump voicing
+  Keeper Ond exactly once (the people card then falls through to the
+  ship line; the verge keeper's flag untouched, its card still holds
+  the word), the same-system re-emit staying silent, and the docked
+  event path marking th_first_garden exactly once across two dock
+  cycles — every mutation restored in place (wave-12 b discipline).
+  PASS ×7 runs.
+## Next round candidates (wave 15)
 
-- Wave 13 closed the queue again: the keepers acknowledge Callow's
-  word, and their open pages point at a landmark now.
-- The narrowed page is still prose. A keeper at the comp tier could
-  mark the paired landmark on the pilot's charts once (a commLine on
-  dock, recorded state only) — turning the hint into a heading without
-  ever naming the clue (§25).
-- vouchAck fires at the people card — a docked-only surface. A keeper
-  could instead voice the acknowledgment once on the pilot's arrival
-  ('systemLoaded' commLine), so a fly-through hears it too.
-- The trust-60 comp tier now carries three privileges (the comp, the
-  vouch word, the narrowed page) — all once-or-cheap, no rebalancing
-  needed; noting the pile-up, not acting on it.
+- Wave 14 closed the queue again: a fly-through hears Callow's word,
+  and the narrowed page is a heading on the pilot's charts now.
+- mystery.charted is recorded state with no reader. A charted landmark
+  could surface somewhere (a HUD marker in its system, a station-screen
+  note), or the ledger could acknowledge a charted page ('the mark is
+  yours now') — the mark currently does nothing but persist.
+- The trust-60 comp tier now carries four privileges (the comp, the
+  vouch word on two surfaces, the narrowed page, the chart mark) — all
+  once-or-cheap; the pile-up noted in wave 13 grows, still no
+  rebalancing action.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
-  reset; vouchAck is a bool. The long-campaign int growth noted in
-  wave 12 stands — no action needed, noting the pattern.
+  reset; vouchAck is a bool; mystery.charted grows by landmark id but
+  is bounded by the authored landmark tables — self-limiting. The
+  long-campaign int-growth note from wave 12 stands.
 - Polish debt: none known; boot test is the gate.
