@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { ECON, FACTIONS, cargoValue, ransomFor } from '../game/state.js';
+import { ECON, FACTIONS, cargoValue, ransomFor, CALLOW } from '../game/state.js';
+import { bumpTrust, addFavor } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 
 /**
@@ -15,13 +16,17 @@ import { spawnPod } from '../game/pods.js';
  *   acceptTribute → credits += ECON.tributeRate × cargo value (no fear)
  *   letGo         → target flees, no fear
  *   respect       → a Named Gun (ace) stands down; flee + 60 s calm, no econ
+ *   callowVouch   → Old Callow sells a word in the keepers' second ledger column (credits, trust, favors; no econ fear)
  *   keepFiring    → close the card, nothing else changes
  * Every resolution emits 'hailClosed'. If the hail ship is destroyed,
  * disabled, or despawned while the card is open, the card closes (bargaining
  * timeout). Buttons carry number-key shortcuts (1..n).
  */
 
-const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'keepFiring', 'respect'];
+// NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
+// order, and the vouch hail offers the purchase as intent [1]. Combat hails
+// never include 'callowVouch', so their button order is unchanged.
+const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect'];
 
 const _offset = new THREE.Vector3();
 
@@ -119,6 +124,27 @@ export function initHail(ctx) {
         ctx2.emit('commLine', { text: 'Another time, then.', from: st.name });
         break;
       }
+      case 'callowVouch': {
+        // Wave 11: Old Callow sells a word in the keepers' two-column ledger.
+        // He was never bargaining, so NO fear change, NO surrender flag, NO ai
+        // mutation — the encounter is a purchase, not a capitulation. The vouch
+        // is witnessed by rec.vouched + keeper trust/favors + the milestone
+        // (§8.7: nothing is pushed to world.incidents).
+        ctx2.world.credits -= CALLOW.vouchCost;
+        live.record.vouched = true;
+        for (const c of ctx2.world.contacts) {
+          if (c.role === 'dockmaster' && (c.system === 'hush' || c.system === 'verge')) {
+            bumpTrust(ctx2, c, CALLOW.vouchTrust);
+            addFavor(ctx2, c);
+          }
+        }
+        if (!ctx2.world.milestones.includes('callowVouched')) {
+          ctx2.world.milestones.push('callowVouched');
+          ctx2.emit('milestone', { id: 'callowVouched', line: CALLOW.vouchMilestoneLine });
+        }
+        ctx2.emit('commLine', { text: CALLOW.vouchLine, from: st.name });
+        break;
+      }
       case 'keepFiring':
       default:
         break; // close only; the fight continues
@@ -139,6 +165,8 @@ export function initHail(ctx) {
         return 'Let them go';
       case 'respect':
         return 'Mutual respect — stand down';
+      case 'callowVouch':
+        return `Buy his vouch — ${CALLOW.vouchCost} UU`;
       case 'keepFiring':
         return 'Keep firing';
       default:

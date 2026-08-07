@@ -11,11 +11,13 @@ import { BANDS } from '../game/state.js';
  * lookahead timer in update() (no per-sample work, no per-frame allocs).
  * The ship's voice is the warmest sound in the game: keep it gentle.
  *
- * Two-stage song evolution (§29: she sings differently): the convergence
+ * Three-stage song evolution (§29: she sings differently): the convergence
  * songShift adds a quiet answering voice a fifth above the phrase root —
  * the dark hums back. The deepening songShift adds a low third voice a
  * fifth below the root, quieter still — the dark now leads the duet.
- * The chain continues; what it means is never said aloud.
+ * Wave 11: after the last aspirant name falls ('aftermath'), a barely-there
+ * octave voice joins — the rim's final word is sung, never said. The chain
+ * ends there; what it means is never said aloud.
  */
 
 const MASTER_GAIN = 0.15;
@@ -103,6 +105,7 @@ export function initSong(ctx) {
   let nextPhraseAt = 0;
   let answering = false; // songShift consumed: the dark hums back (§29)
   let deepened = false; // songShift{reason:'deepening'} consumed: the dark leads (§29)
+  let answered = false; // songShift{reason:'aftermath'} consumed: the rim's last word (wave 11)
   let bedGain = null; // combat drone level (0 when at peace)
   let humGain = null; // station ambience level (0 when undocked)
   let combatOn = false;
@@ -277,6 +280,7 @@ export function initSong(ctx) {
   // Reused params for the answer/deep voices (mutated at schedule time — no alloc).
   const ANSWER_P = { gain: 0, vibRate: 0, vibDepth: 0, fall: 1 };
   const DEEP_P = { gain: 0, vibRate: 0, vibDepth: 0, fall: 1 };
+  const AFTER_P = { gain: 0, vibRate: 0, vibDepth: 0, fall: 1 };
 
   /** A phrase: 1–3 notes on the mood's interval pattern. */
   function schedulePhrase(t) {
@@ -302,6 +306,14 @@ export function initSong(ctx) {
       DEEP_P.gain = p.gain * 0.3;
       const dur = p.dur[0] + Math.random() * (p.dur[1] - p.dur[0]);
       voice((p.base * 2) / 3, t + 1.0 + Math.random() * 1.5, dur, DEEP_P);
+    }
+    // Wave 11 aftermath: the last aspirant name has fallen — a barely-there
+    // octave voice, quietest of the three. The rim's final word is sung,
+    // never said; the chain ends here.
+    if (answered) {
+      AFTER_P.gain = p.gain * 0.2;
+      const dur = p.dur[0] + Math.random() * (p.dur[1] - p.dur[0]);
+      voice(p.base * 2, t + 4 + Math.random() * 2, dur, AFTER_P);
     }
   }
 
@@ -363,6 +375,7 @@ export function initSong(ctx) {
         if (evs[i].type === 'songShift') {
           answering = true; // she sings differently now
           if (evs[i].reason === 'deepening') deepened = true; // the dark leads the duet
+          if (evs[i].reason === 'aftermath') answered = true; // wave 11: the rim's final word
         }
       }
 

@@ -243,19 +243,73 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   on a fresh harness), wave-10 save roundtrip (aspirant fields, both
   milestones, deepAck flags, no post-restore rise); wave-4 roster counts
   updated 7→9 / 4→6. PASS ×4 runs.
-## Next round candidates (wave 11)
+- Wave 11: all three queued candidates (aspirant aftermath, Callow
+  returns + vouch, keeper value). state.js: CALLOW { hailRange 800,
+  vouchCost 600, vouchTrust 15, offer/vouch/milestone lines,
+  returnLines ×3 } after NAMED_GUNS. world.js: BOTH rec.aspirant defeat
+  branches fire milestone 'rimAnswered' once the last name is spent
+  (aspirantRisen >= names.length) and, on that first fire only, emit
+  'songShift' { reason: 'aftermath' } — the rim's final word, not an
+  ending (§25). Callow return beats: module callowVisitArmed arms ONLY
+  on a 'systemLoaded' to verge that actually changes the system (a
+  same-system restore re-emit is no return), disarms when the
+  first-meet fires (returns voice on LATER visits only), and
+  callowReturnBeat no-ops while docked; one rotating line per visit
+  (rec.callowReturns ??= 0 on the verge pirate record, zero-alloc
+  recordPosition into _v1). callowVouchOffer: hailPressed in the verge
+  (met, !rec.vouched, credits >= 600, record within 800u, live ship
+  carrying the record) emits 'hailOpened' { intents: ['callowVouch',
+  'keepFiring'], line: CALLOW.offerLine }. hail.js: INTENT_ORDER gains
+  'callowVouch' BEFORE 'keepFiring' (card buttons follow INTENT_ORDER —
+  the purchase must be intent [1]; combat hails never include it, so
+  their order is unchanged); the resolve deducts 600, sets
+  live.record.vouched, bumpTrust +15 + addFavor on the hush/verge
+  dockmasters, guard-push-emits milestone 'callowVouched', and answers
+  with CALLOW.vouchLine — no fear, no surrender, no ai mutation (he was
+  never bargaining). song.js: 'aftermath' sets answered → a barely-
+  there octave voice (p.base × 2, gain × 0.2) joins — three-stage
+  evolution, the chain ends there. contacts.js: KEEPER_LEDGER_TRUST 30
+  + keeperLedgerLine — keepers read the two-column ledger: a rotating
+  undiscovered-landmark reading derived from mystery.visited (witness-
+  rule safe), closing line when the column balances. station.js:
+  keeper trust >= 60 at a hermit station waives the ×1.25 buy markup
+  (charge and PRICE cell agree; sell premium untouched); keeper
+  'Call in a favor' comps the dock (repairs 0, 'Comped by the keepers',
+  session-scoped exactly like fenceUnlocked); 'Ask around' reads the
+  ledger before incidents. save.js: restore re-unifies
+  recordBanks[currentSystem] = records — JSON duplicated the shared
+  live-bank array into two copies, and a same-system restore (no
+  systemLoaded, no swapToSystem) never re-adopted; latent since wave 3,
+  first bitten by wave-11's record-identity consumers. Boot test
+  wave-11 section: aftermath fire-once + persistence, Callow returns
+  (whole-leg collection — his lane can cross the gate, and the meet can
+  fire as early as the wave-8 arrival, so assertions are
+  callowReturns-BASELINE-relative), the vouch through the real hail
+  card (poll for the button before Digit1), ledger rotation +
+  threshold + closing line, hermit markup waive via real market UI,
+  keeper comp via real repair UI, save roundtrip (vouched +
+  callowReturns). Gate hygiene (pre-existing flake, not wave-11 code):
+  the wave-9 hermit-walk check read driftV === 0 whenever the verge dev
+  history started above the hermit walk/mean-revert equilibrium (the
+  rounded price sits constant there, ~1-in-4 runs); measureDrift9 now
+  drags dev below equilibrium with a pinned-down random phase before
+  measuring BOTH legs — deterministic driftV 4 / driftH 13.
+  PASS ×7 runs.
+## Next round candidates (wave 12)
 
-- Wave 10 closed the queue again: the rim grows new names, the Verge's
-  pirate has a voice, and the keepers acknowledge the deep.
-- After the third aspirant falls the rim is quiet for good — the
-  milestone says 'the lanes have more where that came from' but nothing
-  more comes. Either the line becomes true (an endless slow cycle) or
-  the rim gets a final word (not an ending — §25: credits/endings do
-  not terminate the sandbox).
-- Old Callow remembers the lane but only speaks once: a hermit pirate
-  could sell what memory is worth (charts? a vouch? one favor, witness-
-  rule safe) or simply react when the player returns.
-- Deep-rim keepers acknowledge but offer nothing: no favors, no
-  services, no rumors from the two-column ledger. Trust past 60 at
-  Threshold/The Vigil currently buys the generic line only.
+- Wave 11 closed the queue again: the rim had its final word, the
+  hermit sells his memory, and the keepers open their books.
+- The vouch is one word in the second column, but Callow never learns
+  how it was spent: his return lines do not change once vouched. A
+  hermit who keeps the lane's books could keep books on the player
+  too — a second word priced differently, or refused.
+- The ledger reads only landmarks; the six authored clues are not in
+  either column. Once the landmark column balances, a keeper could name
+  an unfound clue's SYSTEM (never its text) — curiosity before
+  explanation (§25).
+- save.js restore now re-unifies the live bank; live ships instantiated
+  pre-restore keep orphaned record refs until despawn (traffic heals
+  stale live flags for jumps, not restores). No consumer keys
+  live.record back into banks today — worth a hardening pass if one
+  ever does.
 - Polish debt: none known; boot test is the gate.

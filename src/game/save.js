@@ -148,6 +148,15 @@ function restore(ctx, snap) {
   // A system id the current build doesn't know (stale/modded save) must not
   // propagate — every module indexes SYSTEMS with it.
   if (!ctx.systems?.[ctx.world.currentSystem]) ctx.world.currentSystem = 'freehold';
+  // JSON duplicated the live bank: pre-save ctx.world.records IS
+  // recordBanks[currentSystem] (one shared array, swapToSystem discipline),
+  // but the snapshot serializes them as two copies. Re-unify so consumers
+  // that key on bank-record identity (traffic instantiation, wave-11
+  // hermit-pirate beats/vouch) see ONE record set; without this a
+  // same-system restore never re-adopts (no systemLoaded → no swapToSystem).
+  if (ctx.world.recordBanks && ctx.world.records) {
+    ctx.world.recordBanks[ctx.world.currentSystem] = ctx.world.records;
+  }
   // Legacy save (no markets envelope): adopt the restored prices as the
   // current system's table — otherwise the rebind below would rebind to the
   // fresh baseline table world init built and the restored drift is lost.

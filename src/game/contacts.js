@@ -6,7 +6,11 @@
  * keeps (hush's Threshold, verge's Vigil — keepers, same family as Voss),
  * a fence at Freehold (restricted-locker access via favors), a fixer at
  * Veridian and Redmarch (better restricted prices at high trust). Deep-rim
- * keepers acknowledge the mystery arc once per rung (converged, deepened).
+ * keepers acknowledge the mystery arc once per rung (converged, deepened),
+ * and (wave 11) open the two-column ledger at trust >= KEEPER_LEDGER_TRUST —
+ * a rotating, witness-rule-safe reading of undiscovered landmarks derived
+ * from mystery.visited (recorded state, never invented) — and comp a
+ * trusted pilot's dock at trust >= 60 (station.js applies the waive/comp).
  * station.js reads the roster and applies the mechanics; world.trust/favors
  * persist via save.js.
  *
@@ -16,6 +20,8 @@
  *
  * All entries are JSON-plain. update() allocates nothing per frame.
  */
+
+import { SYSTEMS } from './state.js'; // landmark tables for the keeper ledger (wave 11)
 
 // Fixed per-system name table (same convention as world.js record pools).
 // Freehold frontier-warm, Veridian corporate-cool, Redmarch outlaw.
@@ -51,6 +57,7 @@ function buildRoster() {
         favors: 0,
         metAt: null,
         rumorIdx: 0,
+        ledgerIdx: 0, // wave 11: rotation cursor for keeperLedgerLine
       });
     }
   }
@@ -96,6 +103,40 @@ export function rumorFor(ctx, contact) {
   }
   // 'surrendered'
   return `${inc.name} struck colors and paid to walk away. Smart, that one.`;
+}
+
+// Wave 11: trust threshold at which a deep-rim keeper opens the second
+// column of the ledger to a pilot.
+export const KEEPER_LEDGER_TRUST = 30;
+
+/**
+ * Wave 11: a keeper (hollowreach/hush/verge dockmaster) reads from the
+ * two-column ledger at trust >= KEEPER_LEDGER_TRUST. Witness-rule safe
+ * (§8.7): the reading rotates through authored landmarks NOT yet recorded
+ * in ctx.world.mystery.visited — recorded discovery state, never invented
+ * events. Rotates via contact.ledgerIdx (??= 0 for old saves, same
+ * discipline as rumorIdx). null for non-keepers or below the threshold;
+ * a closing line when every landmark has been witnessed.
+ */
+export function keeperLedgerLine(ctx, contact) {
+  if (contact.role !== 'dockmaster') return null;
+  if (contact.system !== 'hollowreach' && contact.system !== 'hush' && contact.system !== 'verge') return null;
+  if (contact.trust < KEEPER_LEDGER_TRUST) return null;
+  const visited = ctx.world.mystery?.visited ?? [];
+  const awaiting = [];
+  for (const sysId of Object.keys(SYSTEMS)) {
+    const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
+    for (const lm of def.landmarks ?? []) {
+      if (!visited.includes(lm.id)) awaiting.push({ lm, systemName: def.name });
+    }
+  }
+  if (awaiting.length === 0) {
+    return 'Both columns balanced. Nothing waits that you have not already witnessed.';
+  }
+  contact.ledgerIdx ??= 0;
+  const entry = awaiting[contact.ledgerIdx % awaiting.length];
+  contact.ledgerIdx = (contact.ledgerIdx + 1) % awaiting.length;
+  return `The second column holds: ${entry.lm.name}, in ${entry.systemName}. Marked awaiting.`;
 }
 
 /**

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 
 /**
@@ -47,6 +47,11 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  *   maxed, new names rise to hunt the player — aspirants, not line-bearers,
  *   one at a time, three total ('gunRisen' per rise, milestone
  *   'aspirantBroken' on the first fall), then the rim stays quiet.
+ *   Wave 11: after the third aspirant falls the rim answers once —
+ *   milestone 'rimAnswered' plus a 'songShift' { reason: 'aftermath' } —
+ *   and Old Callow remembers: each verge visit near him voices a rotating
+ *   return line, and once he sells a single vouch into the keepers'
+ *   second column ('callowVouch' hail intent, 'callowVouched' milestone).
  *   Wave 10 names the Verge's lone pirate ('Old Callow') and gives him a
  *   one-time proximity beat — the hermit who remembers the lane, his line
  *   gone cold if the rim already stands without Guns ('hermitPirateMet').
@@ -689,7 +694,9 @@ function originArcTick(ctx) {
  * Witness-Rule-safe: he voices only himself. Dead records (state 'dead',
  * the defeat path) never voice it. Persisted via world.milestones
  * ('hermitPirateMet'), already a WORLD_FIELD; a colder line stands in if
- * 'rimWithoutGuns' has fired.
+ * 'rimWithoutGuns' has fired. The meet also DISARMS the wave-11 return
+ * flag: a return line on the same visit as the meeting would be no
+ * return at all — the next verge arrival re-arms it.
  */
 function hermitPirateBeat(ctx) {
   if (ctx.world.currentSystem !== 'verge') return;
@@ -700,6 +707,7 @@ function hermitPirateBeat(ctx) {
   if (!rec || rec.state === 'dead') return;
   if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > 350) return;
   ctx.world.milestones.push('hermitPirateMet');
+  callowVisitArmed = false; // wave 11: returns voice on LATER visits only
   ctx.emit('commLine', {
     from: rec.name,
     text: ctx.world.milestones.includes('rimWithoutGuns')
@@ -708,8 +716,64 @@ function hermitPirateBeat(ctx) {
   });
 }
 
+/**
+ * Callow return beats (wave 11): once 'hermitPirateMet' stands, the hermit
+ * remembers RETURNS — one rotating line per verge visit. consumeSystemLoaded
+ * arms the module flag on a 'systemLoaded' to 'verge'; the first time the
+ * player drifts within 350u of his RECORD position that visit, the line
+ * fires and the flag disarms (at most one line per visit — the flag never
+ * persists, so jumping back in re-arms it). rec.callowReturns rotates the
+ * line and rides the verge pirate record, persisted free through
+ * recordBanks. Same recordPosition-into-_v1 zero-allocation discipline as
+ * hermitPirateBeat; a dead Callow never speaks (Witness Rule §8.7).
+ */
+function callowReturnBeat(ctx) {
+  if (!callowVisitArmed) return;
+  if (!ctx.world.milestones.includes('hermitPirateMet')) return;
+  if (ctx.flags.docked) return; // no lane hails through the station wall
+  if (!ctx.ship.object) return;
+  const bank = ensureBank(ctx, 'verge');
+  const rec = bank.find((r) => r.role === 'pirate');
+  if (!rec || rec.state === 'dead') return;
+  if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > 350) return;
+  rec.callowReturns ??= 0; // pre-wave-11 saves lack the field
+  ctx.emit('commLine', {
+    from: rec.name,
+    text: CALLOW.returnLines[rec.callowReturns % CALLOW.returnLines.length],
+  });
+  rec.callowReturns++;
+  callowVisitArmed = false;
+}
+
+/**
+ * Callow vouch offer (wave 11): the one thing he SELLS. A hail
+ * (input.hailPressed) in the verge — hermit met, not yet vouched, credits
+ * covering CALLOW.vouchCost, his record within CALLOW.hailRange and a LIVE
+ * ship carrying that record — opens the hail card with the 'callowVouch'
+ * intent (hail.js carries the purchase; he was never bargaining, so no
+ * resolve/band machinery here). No live ship, no offer: silence is his
+ * price of admission.
+ */
+function callowVouchOffer(ctx) {
+  if (!ctx.input.hailPressed) return;
+  if (ctx.world.currentSystem !== 'verge') return;
+  if (!ctx.world.milestones.includes('hermitPirateMet')) return;
+  if (!ctx.ship.object) return;
+  const bank = ensureBank(ctx, 'verge');
+  const rec = bank.find((r) => r.role === 'pirate');
+  if (!rec || rec.state === 'dead' || rec.vouched) return;
+  if (ctx.world.credits < CALLOW.vouchCost) return;
+  if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > CALLOW.hailRange) return;
+  const live = ctx.ships.find((s) => s.record === rec && !s.state?.destroyed);
+  if (!live) return; // no live ship — the offer stays silent
+  ctx.emit('hailOpened', { ship: live, intents: ['callowVouch', 'keepFiring'], line: CALLOW.offerLine });
+}
+
 // ---------- Module state (never serialized) ----------
 const wreckMeshes = new Map(); // aftermath.id → { group, emberMat }
+// Wave 11: armed per verge arrival (consumeSystemLoaded), disarmed when Old
+// Callow's return line fires — never serialized; a jump back in re-arms it.
+let callowVisitArmed = false;
 let debrisGeoBox = null;
 let debrisGeoTetra = null;
 let debrisMat = null;
@@ -892,8 +956,13 @@ export function initWorld(ctx) {
   function consumeSystemLoaded(ctx) {
     for (const ev of ctx.lastEvents) {
       if (ev.type !== 'systemLoaded') continue;
+      const changed = ev.to !== activeSystemId; // restore re-emits same-system
       swapToSystem(ctx, ev.to);
       teardownWreckMeshes(ctx);
+      // Wave 11: a verge arrival arms Old Callow's return beat — only on a
+      // real jump in (a death-restore re-emitting the same system is no
+      // return, and must not leak a line into docked/station-side ticks).
+      if (ev.to === 'verge' && changed) callowVisitArmed = true;
     }
   }
 
@@ -1048,6 +1117,13 @@ export function initWorld(ctx) {
             rivalry.aspirantFlying = false;
             rivalry.aspirantDownAt = ctx.world.time;
             fireMilestone(ctx, 'aspirantBroken', 'A new name goes out. The lanes have more where that came from.');
+            // Wave 11: when the THIRD name falls the rim answers once — a
+            // final word and one shift in her song, not an ending (§25).
+            // fireMilestone guards the once-ever; the shift rides its
+            // first-fire return so it, too, sounds exactly once.
+            if (rivalry.aspirantRisen >= NAMED_GUNS.aspirants.names.length && fireMilestone(ctx, 'rimAnswered', 'The lanes are done sending names. The quiet after is yours to fly.')) {
+              ctx.emit('songShift', { reason: 'aftermath' });
+            }
           }
           // Named-Gun lineage (wave 7): the defeated ace is the hunter →
           // schedule the next generation, or break the line at the last.
@@ -1108,6 +1184,13 @@ export function initWorld(ctx) {
             rivalry.aspirantFlying = false;
             rivalry.aspirantDownAt = ctx.world.time;
             fireMilestone(ctx, 'aspirantBroken', 'A new name goes out. The lanes have more where that came from.');
+            // Wave 11: when the THIRD name falls the rim answers once — a
+            // final word and one shift in her song, not an ending (§25).
+            // fireMilestone guards the once-ever; the shift rides its
+            // first-fire return so it, too, sounds exactly once.
+            if (rivalry.aspirantRisen >= NAMED_GUNS.aspirants.names.length && fireMilestone(ctx, 'rimAnswered', 'The lanes are done sending names. The quiet after is yours to fly.')) {
+              ctx.emit('songShift', { reason: 'aftermath' });
+            }
           }
           // Named-Gun lineage (wave 7): the defeated ace is the hunter →
           // schedule the next generation, or break the line at the last.
@@ -1290,6 +1373,11 @@ export function initWorld(ctx) {
 
       // Hermit pirate (wave 10): the Verge's Old Callow hails once, near.
       hermitPirateBeat(ctx);
+      // Wave 11: he remembers returns (one line per verge visit, armed by
+      // the jump scan) and sells a single vouch into the keepers' second
+      // column (hail intent 'callowVouch').
+      callowReturnBeat(ctx);
+      callowVouchOffer(ctx);
 
       // First Scare: any live ship pushed into the bargaining band §8.8.
       if (!ctx.world.milestones.includes('firstScare')) {

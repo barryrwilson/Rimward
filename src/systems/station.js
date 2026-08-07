@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT } from '../game/state.js';
-import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine } from '../game/contacts.js';
+import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 
@@ -74,6 +74,9 @@ const FIXER_CUT_TRUST = 30; // fixer trust that earns the restricted-sale markup
 const FIXER_MARKUP = 1.10; // × on restrictedComponents sales the fixer brokers
 const FIXER_TRUST_PER_SALE = 2;
 const DOCKMASTER_TRUST_PER_JOB = 5;
+// Wave 11: keeper trust that comps a pilot at a deep-rim dock — the hermit
+// scarcity markup is waived and the keeper card shows the comp note.
+const KEEPER_COMP_TRUST = 60;
 const DEFAULT_ACE_NAME = 'Carver Illyx';
 const DEFAULT_ACE_BOUNTY = 2500;
 const PIRATE_BOUNTY_CAP = 2; // max pirate bounty cards per system's board
@@ -602,6 +605,7 @@ export function initStation(ctx) {
     systemName: currentDef.name,
     inZone: false,
     fenceUnlocked: false, // mirror of ui.fenceUnlocked for external readers/tests
+    keeperComp: false, // mirror of ui.keeperComp (wave 11)
   };
 
   /** Tear down and rebuild the station for a freshly loaded system. */
@@ -632,6 +636,7 @@ export function initStation(ctx) {
     barRound: 0,
     notice: '',
     fenceUnlocked: false, // session-scoped: a called-in favor opens the locker
+    keeperComp: false, // session-scoped (wave 11): a keeper's marker comps the yard
   };
 
   function h(tag, cls, parent, text) {
@@ -727,6 +732,22 @@ export function initStation(ctx) {
   };
 
   // ---- market ----
+  // Wave 11: deep-rim keepers (the two-column ledger family, contacts.js).
+  function isKeeper(contact) {
+    return contact.role === 'dockmaster'
+      && (contact.system === 'hollowreach' || contact.system === 'hush' || contact.system === 'verge');
+  }
+  /** Trust of this dock's dockmaster (0 when nobody here knows you). */
+  function keeperTrustHere() {
+    const dm = contactsForSystem(ctx, currentId).find((c) => c.role === 'dockmaster');
+    return dm ? dm.trust : 0;
+  }
+  // Wave 9/11: hermit scarcity markup, waived once the local keeper trusts
+  // the pilot. One helper so the PRICE cell and the charge in tryTrade can
+  // never disagree.
+  function hermitBuyMult() {
+    return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
+  }
   function tryTrade(key, qty, buying) {
     const com = COMMODITIES[key];
     const price = priceOf(ctx, key);
@@ -737,7 +758,8 @@ export function initStation(ctx) {
     }
     if (buying) {
       // Wave 9: hermit stations charge scarcity prices (HERMIT.buyMult).
-      const unit = Math.round(price * (fx.buyMult ?? 1) * (currentDef.hermit ? HERMIT.buyMult : 1));
+      // Wave 11: a keeper who trusts the pilot (60+) waives the markup.
+      const unit = Math.round(price * (fx.buyMult ?? 1) * hermitBuyMult());
       const cost = unit * qty;
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return; }
       if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return; }
@@ -781,6 +803,7 @@ export function initStation(ctx) {
   function renderMarket(panel) {
     h('div', 'screen-sub', panel, 'MARKET — posted prices, no spread');
     const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
+    const buyMult = hermitBuyMult(); // wave 11: same waived price the charge uses
     const table = h('div', 'market-table', panel);
     h('div', 'market-head', table, 'COMMODITY');
     h('div', 'market-head', table, 'STATUS');
@@ -792,7 +815,7 @@ export function initStation(ctx) {
       const sel = i === ui.marketSel ? ' market-row-sel' : '';
       h('div', 'market-cell' + sel, table, com.name);
       h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
-      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * (currentDef.hermit ? HERMIT.buyMult : 1))} UU`);
+      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * buyMult)} UU`);
       h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
       const actions = h('div', 'market-cell market-actions' + sel, table);
       if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
@@ -985,11 +1008,18 @@ export function initStation(ctx) {
         cost += c;
       }
     }
-    return { missing, cost, parts, corrupt };
+    // Wave 11: a keeper's called-in favor comps the yard for this berth
+    // visit — the itemized lines zero out and repairAll deducts nothing.
+    const comped = !!ctx.station.keeperComp;
+    if (comped) {
+      for (const part of parts) part.cost = 0;
+      cost = 0;
+    }
+    return { missing, cost, parts, corrupt, comped };
   }
   function renderRepair(panel) {
     h('div', 'screen-sub', panel, 'REPAIR BAYS — hull & systems');
-    const { missing, cost, parts, corrupt } = repairCost();
+    const { missing, cost, parts, corrupt, comped } = repairCost();
     if (missing < 1 && !corrupt) {
       h('div', 'screen-note', panel, 'She reads whole on every channel. Nothing to fix.');
       return;
@@ -997,6 +1027,7 @@ export function initStation(ctx) {
     for (const part of parts) {
       h('div', 'screen-note', panel, `${part.key} — ${part.lack} integrity down · ${part.cost} UU`);
     }
+    if (comped) h('div', 'screen-note', panel, 'Comped by the keepers');
     if (corrupt) {
       h('div', 'screen-note', panel, 'Yard diagnostic flags scrambled channels — the refit will re-true them, no charge.');
     }
@@ -1037,11 +1068,33 @@ export function initStation(ctx) {
         `${contact.role} · trust ${Math.round(contact.trust)} · favors ${contact.favors}`);
       const recognition = recognitionLine(ctx, contact);
       if (recognition) h('div', 'people-recognition', card, `“${recognition}”`);
+      // Wave 11: at a hermit keep a trusted pilot sees the comp honored.
+      if (currentDef.hermit && isKeeper(contact) && contact.trust >= KEEPER_COMP_TRUST) {
+        h('div', 'people-note', card, 'The keepers comp a trusted pilot — no scarcity markup at this dock.');
+      }
       const row = h('div', 'screen-btnrow people-actions', card);
       btn(row, 'Ask around', () => {
-        ui.notice = rumorFor(ctx, contact) ?? 'Nothing new reaches the bar.';
+        // Wave 11: a keeper reads the ledger first — a recorded reading of
+        // what still waits, before any rumor.
+        ui.notice = (isKeeper(contact) ? keeperLedgerLine(ctx, contact) : null)
+          ?? rumorFor(ctx, contact)
+          ?? 'Nothing new reaches the bar.';
         render();
       });
+      if (isKeeper(contact)) {
+        // Wave 11: a keeper's marker comps the yard — same session lifecycle
+        // as the fence's locker call (reset in undock()).
+        btn(row, 'Call in a favor', () => {
+          if (contact.favors <= 0) {
+            ui.notice = `${contact.name} spreads their hands. “You hold no marker with me.”`;
+          } else if (spendFavor(ctx, contact)) {
+            ui.keeperComp = true;
+            ctx.station.keeperComp = true;
+            ui.notice = `${contact.name} waves the yard off. “The keepers comp this dock. Mend your ship.”`;
+          }
+          render();
+        });
+      }
       if (contact.role === 'fence') {
         btn(row, 'Call in a favor', () => {
           if (contact.favors <= 0) {
@@ -1180,6 +1233,8 @@ export function initStation(ctx) {
     ui.open = false;
     ui.fenceUnlocked = false; // the fence's call only covers this berth visit
     ctx.station.fenceUnlocked = false;
+    ui.keeperComp = false; // the keepers' comp only covers this berth visit
+    ctx.station.keeperComp = false;
     overlay.style.display = 'none';
     ctx.emit('undocked');
   }

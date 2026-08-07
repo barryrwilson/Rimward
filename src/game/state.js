@@ -640,6 +640,8 @@ export const ACES = {
  * emits 'gunRisen' on each rise and fires milestone 'aspirantBroken' on the
  * first aspirant defeat. Progress lives on ctx.world.aceRivalry
  * { aspirantRisen, aspirantDownAt, aspirantFlying }.
+ * Wave 11: when the third name falls the rim gets a final word — milestone
+ * 'rimAnswered' + 'songShift' { reason: 'aftermath' } — not an ending (§25).
  */
 export const NAMED_GUNS = {
   brokenResolveMod: -5, // pirates rim-wide yield sooner once no Named Gun flies
@@ -656,6 +658,30 @@ export const NAMED_GUNS = {
       'Ash Bell learned your shape from two broken lines. The lanes have a third name now.',
     ],
   },
+};
+
+/**
+ * CALLOW (wave 11): Old Callow sells what memory is worth — ONE vouch into
+ * the keepers' second column, witness-rule safe (§8.7: nothing enters
+ * world.incidents; the record's `vouched` flag, keeper trust/favors, and
+ * milestone 'callowVouched' carry the witness). returnLines are his memory
+ * of the lane — one per verge visit, rotating via rec.callowReturns on the
+ * verge pirate record (persisted free through recordBanks). hailRange gates
+ * the vouch OFFER: his live ship must be near, not just the record route.
+ * The purchase itself lives in hail.js ('callowVouch' intent).
+ */
+export const CALLOW = {
+  hailRange: 800, // vouch offer range (u) — his live ship must be near
+  vouchCost: 600,
+  vouchTrust: 15, // trust granted to each deep-rim keeper on a vouch
+  offerLine: "Back for more quiet? I can put your name in the keepers' second column. 600, and I sell it once.",
+  vouchLine: "Done. The keepers write their own columns — but they'll write you in.",
+  vouchMilestoneLine: 'Old Callow sold you a word in the two-column ledger. The keepers will honor it.',
+  returnLines: [
+    'Back again. The lane remembers you now — I keep its books.',
+    "Nothing comes through here that I don't count. You're counted twice over.",
+    "The quiet out here isn't empty. You know that better than most.",
+  ],
 };
 
 /**

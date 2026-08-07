@@ -22,6 +22,11 @@
 // one-time commLine, the deep-rim keepers (Hush/Verge dockmasters) and
 // their mystery acknowledgments, and the wave-10
 // aceRivalry/milestones/contacts save roundtrip.
+// Wave 11: the aspirant aftermath (rimAnswered + one aftermath songShift,
+// fire-once), Old Callow's per-visit return lines and his vouch hail (600
+// UU, +15 trust and a favor to both keepers), the keeper ledger line, the
+// trust-60 hermit-markup waiver and the favor-comp repair at The Vigil,
+// and the callowReturns/vouched recordBanks save roundtrip.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -154,6 +159,7 @@ const { initShip } = await import('../src/systems/ship.js');
 const { initWorld, recordPosition } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
+  keeperLedgerLine, KEEPER_LEDGER_TRUST,
 } = await import('../src/game/contacts.js');
 const { initMystery } = await import('../src/game/mystery.js');
 const { initEpics, epicEffects } = await import('../src/game/epics.js');
@@ -174,7 +180,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW } = await import('../src/game/state.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
@@ -2144,7 +2150,7 @@ let driftV = NaN;
 let driftH = NaN;
 try {
   Math.random = () => 0.9;
-  const measureDrift9 = (label, ticksN) => {
+  const measureDrift9 = (label, ticksN, preDrag) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       tick(1, `${label} pre-check`); // a due event starts on THIS tick, not mid-window
       if (ctx.world.activeEvent) {
@@ -2152,6 +2158,22 @@ try {
         tick(2, `${label} event cleared`);
       }
       if (ctx.world.activeEvent) continue;
+      // Hermit equilibrium flake (wave-11 gate hygiene): the walk state is a
+      // fractional dev with an unscaled mean-revert pull, so at the hermit
+      // equilibrium (step × walkMult vs full pull) the ROUNDED price sits
+      // constant — driftV read exactly 0 whenever prior dev history started
+      // above it (~1-in-4 runs). Drag dev below the equilibrium first so the
+      // pinned upward walk is always visible in the rounded price.
+      if (preDrag) {
+        Math.random = () => 0.1;
+        tick(ticksN, `${label} dev drag`);
+        Math.random = () => 0.9;
+        if (ctx.world.activeEvent) {
+          ctx.world.activeEvent.endsAt = ctx.world.time - 1;
+          tick(2, `${label} drag-event cleared`);
+        }
+        if (ctx.world.activeEvent) continue;
+      }
       const p0 = ctx.world.prices.provisions;
       tick(ticksN, label);
       if (ctx.world.activeEvent) {
@@ -2163,7 +2185,7 @@ try {
     }
     return null;
   };
-  const v9 = measureDrift9('wave9 verge walk', 600);
+  const v9 = measureDrift9('wave9 verge walk', 600, true);
   if (v9) driftV = v9.p1 - v9.p0;
   // verge → hush (NOT hermit): same pinned measurement, same tick count.
   ctx.ship.object.position.set(...vergeReturnGate.position); // [0,90,-1250]
@@ -2174,7 +2196,7 @@ try {
     console.log('WAVE9 WALK JUMP FAIL — never arrived at hush');
     errors++;
   }
-  const h9 = measureDrift9('wave9 hush walk', 600);
+  const h9 = measureDrift9('wave9 hush walk', 600, true);
   if (h9) driftH = h9.p1 - h9.p0;
 } finally {
   Math.random = origRandom9;
@@ -2530,6 +2552,400 @@ for (let i = 0; i < 5; i++) { tick(1, 'wave10 no rise post-restore'); postRestor
 w10restoreChecks.noGunRisenPostRestore = !postRestoreEvs.some((e) => e.type === 'gunRisen');
 console.log('wave10 restore:', JSON.stringify(w10restoreChecks));
 if (!Object.values(w10restoreChecks).every(Boolean)) { console.log('WAVE10 RESTORE FAIL'); errors++; }
+
+// ---- Wave 11: aspirant aftermath / Callow returns + vouch / keeper value / save ----
+// The continuing run sits DOCKED AT THE VIGIL IN THE VERGE (the wave-10 save
+// roundtrip's death-restore): aspEvs holds every event across the three
+// aspirant defeats and the no-fourth-rise watch, 'hermitPirateMet' stands,
+// and the restored recordBanks carry Old Callow. A reads aspEvs + the
+// restored milestones; B round-trips verge → hush → verge twice (each
+// 'systemLoaded' to the verge arms one return line); C hails Callow for the
+// vouch; D/E/F exercise the keeper value mechanics (D pure, E/F through the
+// real station UI); G closes with the recordBanks save roundtrip.
+// Test SETUP: re-pin the hull huge — the wave-10 death-restore returned the
+// class maxes, and random soak combat killing the player mid-section would
+// eat later digit dispatches (the death overlay listens for the same keys).
+ctx.player.hullMax = 1e9;
+ctx.player.hull = 1e9;
+
+// -- a. aftermath: rimAnswered + one aftermath songShift, fire-once ---------
+// Both events fired inside the wave-10 aspirant section (the third fall) and
+// ride aspEvs; the milestone then rode the wave-10 dock autosave + restore.
+const rimAnsweredEvs = aspEvs.filter((e) => e.type === 'milestone' && e.id === 'rimAnswered');
+const aftermathShiftEvs = aspEvs.filter((e) => e.type === 'songShift' && e.reason === 'aftermath');
+const w11aftermathEvs = [];
+for (let i = 0; i < 5; i++) { tick(1, 'wave11 aftermath fire-once'); w11aftermathEvs.push(...ctx.lastEvents); }
+const w11aftermathChecks = {
+  rimAnsweredOnce: rimAnsweredEvs.length === 1,
+  rimAnsweredLine: rimAnsweredEvs[0]?.line === 'The lanes are done sending names. The quiet after is yours to fly.',
+  aftermathSongShiftOnce: aftermathShiftEvs.length === 1,
+  milestonePersistedPostRestore: ctx.world.milestones.includes('rimAnswered'),
+  noGunRisenAfter: !w11aftermathEvs.some((e) => e.type === 'gunRisen'),
+  noAftermathShiftRefire: !w11aftermathEvs.some((e) => e.type === 'songShift' && e.reason === 'aftermath'),
+};
+console.log('wave11 aftermath:', JSON.stringify(w11aftermathChecks));
+if (!Object.values(w11aftermathChecks).every(Boolean)) { console.log('WAVE11 AFTERMATH FAIL'); errors++; }
+
+// -- b. Callow returns: one return line per Verge visit ---------------------
+// The wave-10 first-meet beat already fired, so proximity now voices the
+// rotating return lines — at most one per visit, armed by each
+// 'systemLoaded' to the verge. Counts filter to CALLOW.returnLines exactly:
+// parked on his lane, the LIVE Old Callow can acquire the player and bark
+// ('Heave to. Cargo or hull.', npc.js telegraph) — same sender, different
+// system (the wave-10 hermit-pirate discipline).
+if (ctx.flags.docked) undockStation(); // leave The Vigil (wave-10 restore dock)
+const rv11 = new THREE.Vector3();
+// Baseline is ROUTE-DEPENDENT: the first-meet can fire as early as the
+// wave-8 arrival (his lane can pass within 350u of the gate), and a return
+// line then fires on ANY later jump-in (e.g. the wave-10 travel) — long
+// before this section. Assert relative to the counter at section start.
+const vergeBank11 = ctx.world.recordBanks?.verge ?? [];
+const callowRec = vergeBank11.find((r) => r.name === 'Old Callow') ?? null;
+const callowReturnsBase = callowRec?.callowReturns ?? 0;
+// Round trip 1: verge → hush → verge arms the first return line.
+ctx.ship.object.position.set(...vergeReturnGate.position); // verge [0,90,-1250] → hush
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hush gate (wave11 returns 1)');
+ctx.emit('jumpRequested', { to: 'hush' });
+if (!tickUntilJumpDone('hush', 'wave11 hop to hush (returns 1)')) {
+  console.log('WAVE11 TRAVEL FAIL — never arrived at hush');
+  errors++;
+}
+ctx.ship.object.position.set(...vergeGate.position); // hush [750,90,-350] → verge
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at verge gate (wave11 returns 1)');
+// The return beat can fire AT THE ARRIVAL GATE during the jump-settle ticks
+// (Callow's route passes within 350u of the verge gate), so collect across the
+// ENTIRE return leg — a manual tickUntilJumpDone with event capture.
+const returnEvs1 = [];
+ctx.emit('jumpRequested', { to: 'verge' });
+let arrivedVerge1 = false;
+for (let i = 0; i < 60 * 10; i++) {
+  tick(1, 'wave11 hop to verge (returns 1)');
+  returnEvs1.push(...ctx.lastEvents);
+  if (ctx.world.currentSystem === 'verge' && !ctx.gate.jumping) { arrivedVerge1 = true; break; }
+}
+if (!arrivedVerge1) {
+  console.log('WAVE11 TRAVEL FAIL — never arrived at verge');
+  errors++;
+}
+if (callowRec && (callowRec.state === 'dead' || callowRec.state === 'captured')) callowRec.state = 'enroute';
+if (callowRec) {
+  recordPosition(callowRec, rv11); // the route drifts — re-read, park exactly on it
+  ctx.ship.object.position.copy(rv11);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+for (let i = 0; i < 3; i++) { tick(1, 'wave11 callow return 1'); returnEvs1.push(...ctx.lastEvents); }
+const isReturnLine = (e) => e.type === 'commLine' && e.from === 'Old Callow' && CALLOW.returnLines.includes(e.text);
+const firstVisitLines = returnEvs1.filter(isReturnLine);
+for (let i = 0; i < 10; i++) { tick(1, 'wave11 return-1 refire watch'); returnEvs1.push(...ctx.lastEvents); }
+const firstVisitLinesAll = returnEvs1.filter(isReturnLine);
+const callowReturnsAfterVisit1 = callowRec?.callowReturns; // snapshot BEFORE round trip 2 moves it
+// Round trip 2: verge → hush → verge arms the second return line.
+ctx.ship.object.position.set(...vergeReturnGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hush gate (wave11 returns 2)');
+ctx.emit('jumpRequested', { to: 'hush' });
+if (!tickUntilJumpDone('hush', 'wave11 hop to hush (returns 2)')) {
+  console.log('WAVE11 TRAVEL FAIL — never arrived at hush');
+  errors++;
+}
+ctx.ship.object.position.set(...vergeGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at verge gate (wave11 returns 2)');
+const returnEvs2 = []; // whole-leg collection, same as round 1
+ctx.emit('jumpRequested', { to: 'verge' });
+let arrivedVerge2 = false;
+for (let i = 0; i < 60 * 10; i++) {
+  tick(1, 'wave11 hop to verge (returns 2)');
+  returnEvs2.push(...ctx.lastEvents);
+  if (ctx.world.currentSystem === 'verge' && !ctx.gate.jumping) { arrivedVerge2 = true; break; }
+}
+if (!arrivedVerge2) {
+  console.log('WAVE11 TRAVEL FAIL — never arrived at verge');
+  errors++;
+}
+if (callowRec) {
+  recordPosition(callowRec, rv11); // re-read after the hops — the route drifts
+  ctx.ship.object.position.copy(rv11);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+for (let i = 0; i < 3; i++) { tick(1, 'wave11 callow return 2'); returnEvs2.push(...ctx.lastEvents); }
+const secondVisitLines = returnEvs2.filter(isReturnLine);
+const w11returnChecks = {
+  callowInVergeBank: !!callowRec && callowRec.role === 'pirate',
+  returnLinesShape: Array.isArray(CALLOW.returnLines) && CALLOW.returnLines.length === 3 &&
+    CALLOW.returnLines.every((l) => typeof l === 'string' && l.length > 0),
+  firstVisitLineOnce: firstVisitLines.length === 1 && firstVisitLines[0]?.text === CALLOW.returnLines[callowReturnsBase % CALLOW.returnLines.length],
+  counterAfterFirst: callowReturnsAfterVisit1 === callowReturnsBase + 1,
+  noSecondLineSameVisit: firstVisitLinesAll.length === 1, // the per-visit guard holds across the refire watch
+  secondVisitLineOnce: secondVisitLines.length === 1 && secondVisitLines[0]?.text === CALLOW.returnLines[(callowReturnsBase + 1) % CALLOW.returnLines.length],
+  counterAfterSecond: callowRec?.callowReturns === callowReturnsBase + 2,
+};
+console.log('wave11 callow returns:', JSON.stringify(w11returnChecks), `lines=${JSON.stringify(firstVisitLinesAll.map((e) => e.text))}|${JSON.stringify(secondVisitLines.map((e) => e.text))}`);
+if (!Object.values(w11returnChecks).every(Boolean)) { console.log('WAVE11 CALLOW RETURNS FAIL'); errors++; }
+
+// -- c. Callow's vouch: the hail, the 600, both keepers owed ----------------
+// Still in the verge, parked on his lane from subsection b. 'hermitPirateMet'
+// stands (wave-10 cold variant, restored), rec.vouched is falsy, and the
+// purse is pinned at exactly vouchCost + 50 so the charge is unambiguous.
+ctx.world.credits = CALLOW.vouchCost + 50;
+const vergeKeeper11 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const hushKeeper11 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-hush-dockmaster') ?? null;
+const vergeTrustBefore11 = vergeKeeper11?.trust ?? 0;
+const vergeFavorsBefore11 = vergeKeeper11?.favors ?? 0;
+const hushTrustBefore11 = hushKeeper11?.trust ?? 0;
+const hushFavorsBefore11 = hushKeeper11?.favors ?? 0;
+if (callowRec) {
+  recordPosition(callowRec, rv11); // re-read — the route drifted during the return watches
+  ctx.ship.object.position.copy(rv11);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+// Instantiation is range-based: single ticks until his live ship exists.
+let callowLive = ctx.ships.find((s) => s.record === callowRec) ?? null;
+for (let i = 0; i < 30 && !callowLive; i++) {
+  tick(1, 'wave11 callow instantiate');
+  callowLive = ctx.ships.find((s) => s.record === callowRec) ?? null;
+}
+const vouchHailEvs = [];
+dispatchKey('KeyH');
+// world.js emits 'hailOpened' up to a frame after the KeyH pulse and hail.js
+// consumes it from lastEvents on a LATER frame, so poll (max 10 ticks) until
+// the card's vouch button exists in the DOM before dispatching Digit1.
+let vouchBtn = null;
+for (let i = 0; i < 10 && !vouchBtn; i++) {
+  tick(1, 'wave11 vouch hail');
+  vouchHailEvs.push(...ctx.lastEvents);
+  for (const n of walkDom(document.body)) {
+    if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.includes('Buy his vouch')) { vouchBtn = n; break; }
+  }
+}
+const hailOpenedEvs = vouchHailEvs.filter((e) => e.type === 'hailOpened');
+const creditsBeforeVouch = ctx.world.credits;
+const vouchResolveEvs = [];
+dispatchKey('Digit1'); // hail card intent 1 — the vouch
+for (let i = 0; i < 2; i++) { tick(1, 'wave11 vouch resolve'); vouchResolveEvs.push(...ctx.lastEvents); }
+const vouchMilestoneEvs = vouchResolveEvs.filter((e) => e.type === 'milestone' && e.id === 'callowVouched');
+const vouchLineEvs = vouchResolveEvs.filter((e) => e.type === 'commLine' && e.from === 'Old Callow' && e.text === CALLOW.vouchLine);
+const vouchRefireEvs = [];
+for (let i = 0; i < 5; i++) { tick(1, 'wave11 vouch refire watch'); vouchRefireEvs.push(...ctx.lastEvents); }
+dispatchKey('KeyH'); // vouched already — no hail opens now
+for (let i = 0; i < 2; i++) { tick(1, 'wave11 second hail watch'); vouchRefireEvs.push(...ctx.lastEvents); }
+const w11vouchChecks = {
+  callowData: CALLOW.hailRange === 800 && CALLOW.vouchCost === 600 && CALLOW.vouchTrust === 15,
+  hermitMetPrecondition: ctx.world.milestones.includes('hermitPirateMet'),
+  liveShipFound: !!callowLive,
+  keepersFound: !!vergeKeeper11 && !!hushKeeper11,
+  hailOpenedOnce: hailOpenedEvs.length === 1,
+  hailIntents: JSON.stringify(hailOpenedEvs[0]?.intents) === JSON.stringify(['callowVouch', 'keepFiring']),
+  hailLine: hailOpenedEvs[0]?.line === CALLOW.offerLine,
+  creditsDroppedExact: creditsBeforeVouch - ctx.world.credits === CALLOW.vouchCost,
+  vouched: callowRec?.vouched === true,
+  vergeKeeperTrust: vergeKeeper11?.trust === vergeTrustBefore11 + CALLOW.vouchTrust,
+  vergeKeeperFavor: vergeKeeper11?.favors === vergeFavorsBefore11 + 1,
+  hushKeeperTrust: hushKeeper11?.trust === hushTrustBefore11 + CALLOW.vouchTrust,
+  hushKeeperFavor: hushKeeper11?.favors === hushFavorsBefore11 + 1,
+  milestoneOnce: vouchMilestoneEvs.length === 1 && vouchMilestoneEvs[0]?.line === CALLOW.vouchMilestoneLine,
+  milestoneBanked: ctx.world.milestones.includes('callowVouched'),
+  vouchCommLineOnce: vouchLineEvs.length === 1,
+  noMilestoneRefire: !vouchRefireEvs.some((e) => e.type === 'milestone' && e.id === 'callowVouched'),
+  secondHailSilent: !vouchRefireEvs.some((e) => e.type === 'hailOpened'),
+};
+console.log('wave11 callow vouch:', JSON.stringify(w11vouchChecks), `credits=${ctx.world.credits} vergeTrust=${vergeKeeper11?.trust} hushTrust=${hushKeeper11?.trust}`);
+if (!Object.values(w11vouchChecks).every(Boolean)) { console.log('WAVE11 CALLOW VOUCH FAIL'); errors++; }
+
+// -- d. keeper ledger: the rotating second-column line (pure, no UI) --------
+// Trust-gated at KEEPER_LEDGER_TRUST; names one undiscovered landmark + its
+// system per call, rotating; the closing line once every landmark is
+// witnessed. Test SETUP is self-cleaning: trust and mystery.visited are
+// restored before any further ticks so later sections aren't poisoned.
+const ledgerContact = vergeKeeper11;
+const visitedBefore11 = [...(ctx.world.mystery?.visited ?? [])];
+const trustBeforeLedger = ledgerContact?.trust;
+if (ledgerContact) ledgerContact.trust = KEEPER_LEDGER_TRUST - 1;
+const ledgerLineLow = ledgerContact ? keeperLedgerLine(ctx, ledgerContact) : undefined;
+if (ledgerContact) ledgerContact.trust = 60;
+const ledgerLine1 = ledgerContact ? keeperLedgerLine(ctx, ledgerContact) : null;
+const ledgerLine2 = ledgerContact ? keeperLedgerLine(ctx, ledgerContact) : null;
+const LEDGER_RE = /^The second column holds: (.+), in (.+)\. Marked awaiting\.$/;
+const ledgerTarget = (line) => {
+  const m = typeof line === 'string' ? line.match(LEDGER_RE) : null;
+  if (!m) return null;
+  for (const def of Object.values(SYSTEMS)) {
+    if (def.name !== m[2]) continue;
+    const lm = (def.landmarks ?? []).find((l) => l.name === m[1]);
+    if (lm) return lm;
+  }
+  return null;
+};
+const ledgerLm1 = ledgerTarget(ledgerLine1);
+const ledgerLm2 = ledgerTarget(ledgerLine2);
+for (const def of Object.values(SYSTEMS)) {
+  for (const lm of def.landmarks ?? []) {
+    if (!ctx.world.mystery.visited.includes(lm.id)) ctx.world.mystery.visited.push(lm.id);
+  }
+}
+const ledgerClosing = ledgerContact ? keeperLedgerLine(ctx, ledgerContact) : null;
+ctx.world.mystery.visited.length = 0; // restore in place — landmarks.js change-detects on length
+ctx.world.mystery.visited.push(...visitedBefore11);
+if (ledgerContact) ledgerContact.trust = trustBeforeLedger;
+const w11ledgerChecks = {
+  exportValue: KEEPER_LEDGER_TRUST === 30,
+  belowThresholdNull: ledgerLineLow === null,
+  line1Shape: LEDGER_RE.test(ledgerLine1 ?? ''),
+  line2Shape: LEDGER_RE.test(ledgerLine2 ?? ''),
+  twoCallsRotate: typeof ledgerLine1 === 'string' && ledgerLine1 !== ledgerLine2,
+  line1NamesUnvisited: !!ledgerLm1 && !visitedBefore11.includes(ledgerLm1.id),
+  line2NamesUnvisited: !!ledgerLm2 && !visitedBefore11.includes(ledgerLm2.id),
+  closingExact: ledgerClosing === 'Both columns balanced. Nothing waits that you have not already witnessed.',
+};
+console.log('wave11 keeper ledger:', JSON.stringify(w11ledgerChecks), `l1=${JSON.stringify(ledgerLine1)} l2=${JSON.stringify(ledgerLine2)}`);
+if (!Object.values(w11ledgerChecks).every(Boolean)) { console.log('WAVE11 KEEPER LEDGER FAIL'); errors++; }
+
+// -- e. keeper service: trust >= 60 waives the hermit buy markup (real UI) --
+// The wave-9 hermit market pattern (service selection via window keydown
+// digits, trades via stub-DOM button clicks, prices read from the market
+// cells), but asserting the WAIVED figure under keeper trust 60 and the full
+// ×1.25 figure below it; the sell premium is untouched either way.
+// Test SETUP: park live hostiles so the dock autosave can't be
+// combat-blocked (Old Callow's live ship sits next to us after the vouch —
+// the wave-10 save discipline), and keep the purse comfortably positive.
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave11 dock)');
+ctx.world.credits = 5000;
+dockAtCurrentStation('dock verge (wave11 keeper service)'); // The Vigil
+const keeperTrustBeforeE = vergeKeeper11?.trust;
+if (vergeKeeper11) vergeKeeper11.trust = 60;
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+const priceCellWaived = marketRowCell('Provisions', 2);
+const expectedWaived = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1));
+const creditsBeforeWaivedBuy = ctx.world.credits;
+const buyBtnWaived = marketTradeButton('Provisions', '+1');
+buyBtnWaived?.click(); // real path: stub-DOM click → tryTrade('provisions', 1, true)
+const waivedCharged = creditsBeforeWaivedBuy - ctx.world.credits;
+// Trust back below 60: the full hermit markup returns (panel re-rendered via
+// a fresh service open — the wave-4 Escape-then-digit pattern).
+if (vergeKeeper11) vergeKeeper11.trust = 30;
+dispatchKey('Escape'); // market → services
+dispatchKey('Digit1'); // market
+const priceCellFull = marketRowCell('Provisions', 2);
+const expectedFull11 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
+// Sell one back (bought above): epic sellMult × rank goodwill × the hermit
+// premium — the sell side is unchanged by the keeper waiver.
+const expectedSell11 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
+const creditsBeforeSell11 = ctx.world.credits;
+const sellBtn11 = marketTradeButton('Provisions', '−1');
+sellBtn11?.click();
+const sellPaid11 = ctx.world.credits - creditsBeforeSell11;
+if (vergeKeeper11) vergeKeeper11.trust = keeperTrustBeforeE; // self-cleaning
+const w11serviceChecks = {
+  waivedPriceCell: priceCellWaived?.textContent === `${expectedWaived} UU`,
+  waivedBuyButtonFound: !!buyBtnWaived,
+  waivedChargedExact: waivedCharged === expectedWaived,
+  fullPriceCellReturns: priceCellFull?.textContent === `${expectedFull11} UU`,
+  sellButtonFound: !!sellBtn11,
+  sellPremiumUnchanged: sellPaid11 === expectedSell11,
+};
+console.log('wave11 keeper service:', JSON.stringify(w11serviceChecks), `waived=${waivedCharged} full=${expectedFull11} sell=${sellPaid11}`);
+if (!Object.values(w11serviceChecks).every(Boolean)) { console.log('WAVE11 KEEPER SERVICE FAIL'); errors++; }
+
+// -- f. keeper comp: 'Call in a favor' zeroes the repair bill (real UI) -----
+// Still docked at The Vigil; the verge keeper holds +1 favor from the vouch.
+// The favor button lives on the keeper's card in the people service (the
+// wave-4 fence pattern, scoped to the card titled with his name); the repair
+// flow is the hotfix repair-pricing path. Damage is set explicitly — hull
+// was pinned huge — so an uncomped bill would be nonzero and deterministic.
+const rp11 = ctx.player;
+rp11.hull = rp11.hullMax - 120;
+dispatchKey('Escape'); // market → services
+dispatchKey('Digit7'); // people (DOCK_KEY_SERVICES[6])
+let keeperFavorBtn = null;
+{
+  const ov = stationOverlay();
+  if (ov) for (const n of walkDom(ov)) {
+    if (n.textContent !== vergeKeeper11?.name || !n.parent) continue;
+    for (let card = n.parent; card && card !== ov; card = card.parent) {
+      const btn = [...walkDom(card)].find((d) => d.tagName === 'BUTTON' && /call in a favor/i.test(d.textContent ?? ''));
+      if (btn) { keeperFavorBtn = btn; break; }
+    }
+    if (keeperFavorBtn) break;
+  }
+}
+keeperFavorBtn?.click(); // real path: spendFavor → per-session keeper comp
+dispatchKey('Escape'); // people → services
+dispatchKey('Digit5'); // repair service (DOCK_KEY_SERVICES[4])
+tick(2, 'wave11 repair screen (comped)');
+let repairBtn11 = null;
+{
+  const ov = stationOverlay();
+  if (ov) for (const n of walkDom(ov)) {
+    if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.startsWith('1 — Repair all')) { repairBtn11 = n; break; }
+  }
+}
+const labelCost11 = repairBtn11 ? Number((repairBtn11.textContent.match(/\((\d+) UU\)/) ?? [])[1]) : NaN;
+const breakdownMentionsKeepers = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => typeof n.textContent === 'string' && /keepers/i.test(n.textContent));
+const creditsBeforeCompRepair = ctx.world.credits;
+repairBtn11?.click();
+tick(1, 'wave11 comped repair settle');
+const w11compChecks = {
+  favorButtonFound: !!keeperFavorBtn,
+  compedTotalZero: labelCost11 === 0,
+  breakdownMentionsKeepers,
+  creditsUnchanged: ctx.world.credits === creditsBeforeCompRepair,
+  madeWhole: rp11.hull === rp11.hullMax,
+};
+console.log('wave11 keeper comp:', JSON.stringify(w11compChecks), `label=${labelCost11}`);
+if (!Object.values(w11compChecks).every(Boolean)) { console.log('WAVE11 KEEPER COMP FAIL'); errors++; }
+
+// -- g. save roundtrip: callowReturns/vouched ride recordBanks --------------
+// The wave-10 save pattern, continuing run at The Vigil. Test SETUP: park
+// live hostiles so neither the undock nor the dock autosave is
+// combat-blocked.
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave11 save)');
+undockStation(); // leave The Vigil so the re-dock fires a fresh autosave
+dockAtCurrentStation('dock verge (wave11 save)'); // 'docked' fires trySave
+tick(3, 'wave11 save settle');
+const w11snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const callowSaved = (w11snap?.world?.recordBanks?.verge ?? []).find((r) => r.name === 'Old Callow') ?? null;
+const w11saveChecks = {
+  saveWritten: !!w11snap?.world,
+  systemIsVerge: w11snap?.world?.currentSystem === 'verge',
+  callowInSavedBank: !!callowSaved,
+  vouchedPersisted: callowSaved?.vouched === true,
+  returnsPersisted: callowSaved?.callowReturns === callowReturnsBase + 2,
+};
+console.log('wave11 save fields:', JSON.stringify(w11saveChecks));
+if (!Object.values(w11saveChecks).every(Boolean)) { console.log('WAVE11 SAVE FIELDS FAIL'); errors++; }
+
+// Corrupt in memory, die, recover from the dock autosave (Enter skips the
+// hold synchronously — the wave-5 death path). The restore swaps recordBanks
+// wholesale, so Callow is re-found through ctx.world.recordBanks.
+const callowG = (ctx.world.recordBanks?.verge ?? []).find((r) => r.name === 'Old Callow') ?? null;
+if (callowG) { callowG.vouched = false; callowG.callowReturns = 0; }
+tick(2, 'wave11 fields corrupted');
+const w11corrupted = !!callowG && callowG.vouched === false && callowG.callowReturns === 0;
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave11 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const callowRestored = (ctx.world.recordBanks?.verge ?? []).find((r) => r.name === 'Old Callow') ?? null;
+const w11restoreChecks = {
+  corruptedFirst: w11corrupted,
+  callowInRestoredBank: !!callowRestored,
+  vouchedRestored: callowRestored?.vouched === true,
+  returnsRestored: callowRestored?.callowReturns === callowReturnsBase + 2,
+};
+console.log('wave11 restore:', JSON.stringify(w11restoreChecks));
+if (!Object.values(w11restoreChecks).every(Boolean)) { console.log('WAVE11 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
