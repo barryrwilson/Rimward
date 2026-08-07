@@ -435,22 +435,49 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   flying with the computed name + distance label, witnessing hides
   it, a cross-system charted id adds nothing, run left re-docked at
   Threshold). PASS ×7 runs.
-## Next round candidates (wave 16)
+- Wave 16: the queued station-screen surface, taken as a chart note
+  on the keeper's People card — not a new service. contacts.js:
+  exported chartedMarkNotes(ctx) — a pure UI-time reader over
+  mystery.charted ?? [] and mystery.visited ?? [] (?? guards keep
+  old saves empty), iterating SYSTEMS key order then each system's
+  authored landmark-table order, returning { lmName, systemName }
+  for charted-but-unvisited landmarks across systems, stale ids
+  ignored, §25 names only. station.js imports it; renderPeople
+  computes notes once and hangs them on keeper cards only (the
+  existing isKeeper gate), regardless of local trust, rendered after
+  the recognition/comp note and before the actions: container
+  .people-chart, title exactly 'CHART MARKS — pages still waiting',
+  each line .people-chart-line exactly '◇ lmName — systemName'.
+  screens.css adds the people-chart/title/line styles and includes
+  .people-chart-line in the high-contrast dim-text selector. Boot
+  test wave-16 section: pure helper gates (hush-only exact note,
+  SYSTEMS + same-system landmark-table order asserted with reverse
+  charted push order, visited exclusion, stale-id tolerance, old-save
+  missing charted key, every mutation restored in place) and real
+  DOM gates (docked at Threshold, People opened by Digit7, exact
+  title/lines asserted on Keeper Ond's card, §25 no clue id/text
+  leak, a synthetic non-keeper hush fixer gets no chart while the
+  keeper keeps the only chart, a visited-only chart hides the note,
+  roster/mystery restored in place, run left docked at Threshold in
+  hush). Final independent review approved the diff. npm run
+  test:boot PASS ×7 runs; npm run build clean (only the pre-existing
+  >500 kB chunk warning). Uncommitted.
+## Next round candidates (wave 17)
 
-- Wave 15 closed the queue again: the keeper's mark is a heading on
-  the HUD now, and the ledger acknowledges a charted page.
-- The mark is flight-only — hidden while docked. A station-screen
-  surface (a chart note on the keeper's people card, or a services-
-  screen list of charted pages) would let a pilot review their marks
-  at dock; recorded state already suffices (mystery.charted +
-  SYSTEMS).
+- Wave 16 closed the docked-review gap: charted pages are readable
+  at dock as a chart note on the keeper's People card, so the mark
+  now surfaces both in flight (HUD, wave 15) and on the station.
 - The trust-60 comp tier still carries four privileges (the comp,
   the vouch word on two surfaces, the narrowed page, the chart mark)
-  — wave 15 added none (the ledger ack rides the 30-tier reading,
-  the markers are free). The pile-up note from wave 13 stands, still
-  no rebalancing action.
+  — wave 16 added none (the People-card note is keeper-gated, not
+  trust-gated). The pile-up note from wave 13 stands, still no
+  rebalancing action.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
   reset; vouchAck is a bool; mystery.charted grows by landmark id but
   is bounded by the authored landmark tables — self-limiting. The
   long-campaign int-growth note from wave 12 stands.
-- Polish debt: none known; boot test is the gate.
+- Polish/gate debt: a pre-existing wave-4 recovery-board flake —
+  one run in an earlier seven-run verification batch found no
+  unexpired wreck after the soak; wave-16 code was not involved and
+  the subsequent final batch passed 7/7. Tracked as gate/polish
+  debt, not wave-16 behavior. Boot test remains the gate.

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT } from '../game/state.js';
-import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine } from '../game/contacts.js';
+import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 
@@ -1061,6 +1061,9 @@ export function initStation(ctx) {
       h('div', 'screen-note', panel, 'Faces blur past the berth lights. Nobody here knows you yet.');
       return;
     }
+    // Wave 16: the pilot's own recorded chart marks (wave 14), surfaced
+    // once per dock on keeper cards only — computed once for the loop.
+    const chartNotes = chartedMarkNotes(ctx);
     for (const contact of people) {
       const card = h('div', 'people-card', panel);
       h('div', 'people-name', card, contact.name);
@@ -1071,6 +1074,15 @@ export function initStation(ctx) {
       // Wave 11: at a hermit keep a trusted pilot sees the comp honored.
       if (currentDef.hermit && isKeeper(contact) && contact.trust >= KEEPER_COMP_TRUST) {
         h('div', 'people-note', card, 'The keepers comp a trusted pilot — no scarcity markup at this dock.');
+      }
+      // Wave 16: keeper cards only, regardless of trust — the pilot
+      // reviewing their own recorded marks at dock, never a clue id/text.
+      if (isKeeper(contact) && chartNotes.length > 0) {
+        const chart = h('div', 'people-chart', card);
+        h('div', 'people-chart-title', chart, 'CHART MARKS — pages still waiting');
+        for (const note of chartNotes) {
+          h('div', 'people-chart-line', chart, `◇ ${note.lmName} — ${note.systemName}`);
+        }
       }
       const row = h('div', 'screen-btnrow people-actions', card);
       btn(row, 'Ask around', () => {

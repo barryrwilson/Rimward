@@ -278,6 +278,28 @@ export function keeperChartMark(ctx, contact) {
   return null;
 }
 
+// Wave 16: the pilot's own review of wave 14's chart marks at dock — one
+// { lmName, systemName } per authored landmark whose id rides
+// mystery.charted without yet being witnessed (mystery.visited). Iterated
+// in SYSTEMS order over the landmark tables, so stale/unknown ids fall out
+// naturally and old saves read empty (?? [] throughout). §25 holds:
+// authored names only, never a clue id or text. Recorded state only —
+// pure read, no mutation; UI-time only (station.js People card).
+export function chartedMarkNotes(ctx) {
+  const charted = ctx.world.mystery?.charted ?? [];
+  const visited = ctx.world.mystery?.visited ?? [];
+  const notes = [];
+  for (const sysId of Object.keys(SYSTEMS)) {
+    const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
+    for (const lm of def.landmarks ?? []) {
+      if (charted.includes(lm.id) && !visited.includes(lm.id)) {
+        notes.push({ lmName: lm.name, systemName: def.name });
+      }
+    }
+  }
+  return notes;
+}
+
 /**
  * A recognition line once trust >= 60: the contact knows the ship. Uses the
  * player-set shipName when present, else refers to the living hull (§12.5).

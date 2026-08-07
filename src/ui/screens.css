@@ -325,6 +325,26 @@
   font-style: italic;
 }
 
+.people-chart {
+  margin: 6px 0;
+  padding: 6px 8px;
+  background: #0a111c;
+  border: 1px solid #22303f;
+}
+
+.people-chart-title {
+  color: var(--rw-accent);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  margin-bottom: 3px;
+}
+
+.people-chart-line {
+  color: #8a9db2;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
 .people-actions {
   flex-direction: row;
   gap: 8px;
@@ -405,6 +425,7 @@ body.rw-contrast .screen-btn {
 body.rw-contrast .screen-note,
 body.rw-contrast .job-detail,
 body.rw-contrast .people-meta,
+body.rw-contrast .people-chart-line,
 body.rw-contrast .bar-hint {
   color: #c3d4e6;
 }

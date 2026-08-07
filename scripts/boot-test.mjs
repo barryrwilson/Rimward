@@ -177,7 +177,7 @@ const { initShip } = await import('../src/systems/ship.js');
 const { initWorld, recordPosition } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
-  keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark,
+  keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,
 } = await import('../src/game/contacts.js');
 const { initMystery } = await import('../src/game/mystery.js');
 const { initEpics, epicEffects } = await import('../src/game/epics.js');
@@ -3921,6 +3921,236 @@ const w15hudChecks = {
 };
 console.log('wave15 hud chart markers:', JSON.stringify(w15hudChecks), `label=${JSON.stringify(flyLabelText15)} cross=${JSON.stringify(crossLabelText15)}`);
 if (!Object.values(w15hudChecks).every(Boolean)) { console.log('WAVE15 HUD CHART MARKERS FAIL'); errors++; }
+
+// ---- Wave 16: chart marks on the keeper People card ---------------------
+// chartedMarkNotes(ctx) (contacts.js) turns the wave-14 mystery.charted id
+// list into display-ready { lmName, systemName } notes — charted but not
+// yet witnessed, iterated in SYSTEMS key order then landmark-table order,
+// stale ids ignored, old saves (no charted key) reading empty via the ?? []
+// guard. station.js renders them ONLY on keeper People cards (the
+// hollowreach/hush/verge dockmasters): one div.people-chart per card with
+// a fixed title and one div.people-chart-line per note,
+// `◇ lmName — systemName`. §25: names only — never a clue id or clue line.
+// Same discipline throughout: snapshot every touched field, restore every
+// mutation in place (charted via the hadCharted presence discipline —
+// wave-15 a), every expectation COMPUTED off SYSTEMS. mystery14 (the live
+// record), hushKeeper14 (natural trust), hushLm14, hushLmOther16 (the
+// second authored hush page — intra-system ordering coverage), hushClue13,
+// veridianLm15, and walkDom/stationOverlay all ride from waves 12–15. The
+// run is docked at Threshold in the hush — wave-15 b's end state, overlay
+// at the services level — hull still pinned huge.
+
+// -- a. chartedMarkNotes, pure gates (wave-14 d discipline) ----------------
+const visitedBefore16 = [...(mystery14?.visited ?? [])];
+const hadCharted16 = mystery14 ? 'charted' in mystery14 : false;
+const chartedBefore16 = [...(mystery14?.charted ?? [])];
+const chartedRef16 = mystery14?.charted ?? null; // restore the SAME array when the key stood
+// A second authored hush landmark: intra-system ordering is asserted
+// against the authored landmark table below, never the charted push order.
+const hushLmOther16 = (SYSTEMS.hush.landmarks ?? []).find((l) => l.id !== hushLm14?.id) ?? null;
+// Both landmark ids stay OUT of visited (splice if an earlier leg witnessed
+// them — restored below).
+const unvisit16 = (id) => {
+  if (typeof id !== 'string') return;
+  const i = mystery14.visited.indexOf(id);
+  if (i >= 0) mystery14.visited.splice(i, 1);
+};
+unvisit16(hushLm14?.id);
+unvisit16(veridianLm15?.id);
+unvisit16(hushLmOther16?.id);
+// The expectation is COMPUTED, never hardcoded: SYSTEMS key order, then the
+// authored landmark-table order — the contract's iteration order verbatim.
+const expectedNotes16 = () => {
+  const out = [];
+  const chartedIds = mystery14?.charted ?? [];
+  const visitedIds = mystery14?.visited ?? [];
+  for (const def of Object.values(SYSTEMS)) {
+    for (const lm of def.landmarks ?? []) {
+      if (chartedIds.includes(lm.id) && !visitedIds.includes(lm.id)) {
+        out.push({ lmName: lm.name, systemName: def.name });
+      }
+    }
+  }
+  return out;
+};
+// 1. The hush page alone on the charts: exactly one note, its own names.
+if ('charted' in mystery14) {
+  mystery14.charted.length = 0;
+  if (hushLm14) mystery14.charted.push(hushLm14.id);
+} else {
+  mystery14.charted = hushLm14 ? [hushLm14.id] : [];
+}
+const notes16a = chartedMarkNotes(ctx);
+const expected16a = expectedNotes16();
+// 2. Both hush pages plus a cross-system id ride the charts, the hush
+// pair pinned in REVERSE authored-table order: the notes still follow
+// SYSTEMS key order, then the authored landmark-table order — an
+// implementation ordering same-system marks by charted-array order
+// fails here. The expectation iterates SYSTEMS/landmark tables (above);
+// only the PIN reads the table's order.
+const hushAuthored16 = (SYSTEMS.hush.landmarks ?? [])
+  .filter((l) => l.id === hushLm14?.id || l.id === hushLmOther16?.id);
+mystery14.charted.length = 0;
+for (const lm of [...hushAuthored16].reverse()) mystery14.charted.push(lm.id);
+if (veridianLm15) mystery14.charted.push(veridianLm15.id);
+const notes16b = chartedMarkNotes(ctx);
+const expected16b = expectedNotes16();
+// 3. A witnessed mark is no longer waiting: the hush id joins visited —
+// the OTHER hush page and the veridian page still wait.
+if (hushLm14 && !mystery14.visited.includes(hushLm14.id)) mystery14.visited.push(hushLm14.id);
+const notes16c = chartedMarkNotes(ctx);
+const expected16c = expectedNotes16();
+// 4. Stale ids read as nothing: an unauthored id joins the charts.
+mystery14.charted.push('lm-stale-nowhere-16');
+const notes16d = chartedMarkNotes(ctx);
+// 5. Old saves carry no charted key: the ?? [] guard reads empty.
+delete mystery14.charted;
+const notes16e = chartedMarkNotes(ctx);
+// Restore everything in place — landmarks.js change-detects on length.
+mystery14.visited.length = 0;
+mystery14.visited.push(...visitedBefore16);
+if (hadCharted16) {
+  mystery14.charted = chartedRef16 ?? [];
+  mystery14.charted.length = 0;
+  mystery14.charted.push(...chartedBefore16);
+} else {
+  delete mystery14.charted;
+}
+const w16helperChecks = {
+  landmarksKnown: !!mystery14 && !!hushLm14 && typeof hushLm14.id === 'string' &&
+    !!hushLmOther16 && typeof hushLmOther16.id === 'string' &&
+    !!veridianLm15 && typeof veridianLm15.id === 'string',
+  hushOnlyExact: notes16a.length === 1 && expected16a.length === 1 &&
+    notes16a[0]?.lmName === hushLm14?.name && notes16a[0]?.systemName === SYSTEMS.hush.name,
+  crossAndHushTableOrdered: notes16b.length === 3 && expected16b.length === 3 &&
+    JSON.stringify(notes16b) === JSON.stringify(expected16b),
+  visitedExcluded: notes16c.length === 2 && expected16c.length === 2 &&
+    JSON.stringify(notes16c) === JSON.stringify(expected16c) &&
+    notes16c.some((n) => n?.lmName === hushLmOther16?.name && n?.systemName === SYSTEMS.hush.name) &&
+    notes16c.some((n) => n?.lmName === veridianLm15?.name && n?.systemName === SYSTEMS.veridian.name) &&
+    !notes16c.some((n) => n?.lmName === hushLm14?.name),
+  staleIgnored: JSON.stringify(notes16d) === JSON.stringify(notes16c),
+  oldSaveEmpty: Array.isArray(notes16e) && notes16e.length === 0,
+  restoredInPlace: JSON.stringify(mystery14.visited) === JSON.stringify(visitedBefore16) &&
+    ('charted' in mystery14) === hadCharted16 &&
+    JSON.stringify(mystery14.charted ?? []) === JSON.stringify(chartedBefore16),
+};
+console.log('wave16 chart mark notes:', JSON.stringify(w16helperChecks), `hush=${JSON.stringify(notes16a)} cross=${JSON.stringify(notes16b)} stale=${JSON.stringify(notes16d)} old=${JSON.stringify(notes16e)}`);
+if (!Object.values(w16helperChecks).every(Boolean)) { console.log('WAVE16 CHART MARK NOTES FAIL'); errors++; }
+
+// -- b. keeper People card chart marks, real DOM ---------------------------
+// Pin the charts to the hush page plus veridian's first authored landmark,
+// both unvisited; Digit7 opens the real People service (DOCK_KEY_SERVICES
+// [6]) and Keeper Ond's card carries the ONLY chart note. A synthetic
+// non-keeper fixer then joins the hush roster mid-leg: its card renders
+// NO chart note while the keeper's still does (popped in place right
+// after). Finally pin the charts to an already-witnessed landmark: the
+// note never renders.
+const visitedBefore16b = [...(mystery14?.visited ?? [])];
+const hadCharted16b = mystery14 ? 'charted' in mystery14 : false;
+const chartedBefore16b = [...(mystery14?.charted ?? [])];
+const chartedRef16b = mystery14?.charted ?? null;
+unvisit16(hushLm14?.id);
+unvisit16(veridianLm15?.id);
+if ('charted' in mystery14) {
+  mystery14.charted.length = 0;
+  if (hushLm14) mystery14.charted.push(hushLm14.id);
+  if (veridianLm15) mystery14.charted.push(veridianLm15.id);
+} else {
+  mystery14.charted = [hushLm14?.id, veridianLm15?.id].filter((id) => typeof id === 'string');
+}
+const classHas16 = (n, cls) => typeof n.className === 'string' && n.className.split(' ').includes(cls);
+tick(2, 'wave16 people settle');
+dispatchKey('Digit7'); // people (DOCK_KEY_SERVICES[6])
+const ov16 = stationOverlay();
+const peopleCards16 = ov16 ? [...walkDom(ov16)].filter((n) => classHas16(n, 'people-card')) : [];
+const keeperCard16 = peopleCards16.find((card) =>
+  [...walkDom(card)].some((n) => classHas16(n, 'people-name') && n.textContent === hushKeeper14?.name)) ?? null;
+const chartBoxes16 = ov16 ? [...walkDom(ov16)].filter((n) => classHas16(n, 'people-chart')) : [];
+const chartInKeeper16 = chartBoxes16.length === 1 && !!keeperCard16 &&
+  [...walkDom(keeperCard16)].includes(chartBoxes16[0]);
+const chartTitle16 = chartBoxes16.length === 1
+  ? ([...walkDom(chartBoxes16[0])].find((n) => classHas16(n, 'people-chart-title'))?.textContent ?? null)
+  : null;
+const chartLines16 = chartBoxes16.length === 1
+  ? [...walkDom(chartBoxes16[0])].filter((n) => classHas16(n, 'people-chart-line')).map((n) => n.textContent)
+  : [];
+const expectedLines16 = expectedNotes16().map((t) => `◇ ${t.lmName} — ${t.systemName}`);
+const chartText16 = [chartTitle16, ...chartLines16].filter((t) => typeof t === 'string').join('\n');
+// Keeper-only exclusivity: a synthetic NON-keeper hush contact (a fixer)
+// joins the roster with the marks still charted — its card must carry no
+// .people-chart even while Keeper Ond's does (an implementation that drops
+// the isKeeper gate fails here). Popped in place right after.
+const contactsLen16 = ctx.world.contacts.length;
+ctx.world.contacts.push({
+  id: 'contact-w16-synthetic-fixer',
+  name: 'Fixer Wren Sixteen',
+  role: 'fixer',
+  system: 'hush',
+  trust: 0,
+  favors: 0,
+  metAt: null,
+  rumorIdx: 0,
+  ledgerIdx: 0,
+});
+dispatchKey('Escape'); // people → services
+dispatchKey('Digit7'); // people again — re-rendered with the mixed roster
+const ov16mixed = stationOverlay();
+const mixedCards16 = ov16mixed ? [...walkDom(ov16mixed)].filter((n) => classHas16(n, 'people-card')) : [];
+const synthCard16 = mixedCards16.find((card) =>
+  [...walkDom(card)].some((n) => classHas16(n, 'people-name') && n.textContent === 'Fixer Wren Sixteen')) ?? null;
+const keeperCardMixed16 = mixedCards16.find((card) =>
+  [...walkDom(card)].some((n) => classHas16(n, 'people-name') && n.textContent === hushKeeper14?.name)) ?? null;
+const chartInSynth16 = synthCard16
+  ? [...walkDom(synthCard16)].filter((n) => classHas16(n, 'people-chart'))
+  : null;
+const chartBoxesMixed16 = ov16mixed ? [...walkDom(ov16mixed)].filter((n) => classHas16(n, 'people-chart')) : [];
+// Restore the roster in place immediately — contactsForSystem filters live.
+ctx.world.contacts.pop();
+const contactsRestored16 = ctx.world.contacts.length === contactsLen16 &&
+  !ctx.world.contacts.some((c) => c.id === 'contact-w16-synthetic-fixer');
+// Every mark already witnessed: no page waits — the note never renders.
+if ('charted' in mystery14) mystery14.charted.length = 0;
+if (hushLm14) {
+  mystery14.charted.push(hushLm14.id);
+  if (!mystery14.visited.includes(hushLm14.id)) mystery14.visited.push(hushLm14.id);
+}
+dispatchKey('Escape'); // people → services
+dispatchKey('Digit7'); // people again — re-rendered
+const chartBoxesVisited16 = [...walkDom(stationOverlay() ?? { children: [] })]
+  .filter((n) => classHas16(n, 'people-chart'));
+// Restore every pinned field in place — the run stays docked at Threshold.
+mystery14.visited.length = 0;
+mystery14.visited.push(...visitedBefore16b);
+if (hadCharted16b) {
+  mystery14.charted = chartedRef16b ?? [];
+  mystery14.charted.length = 0;
+  mystery14.charted.push(...chartedBefore16b);
+} else {
+  delete mystery14.charted;
+}
+const w16domChecks = {
+  dockedInHush: ctx.flags.docked === true && ctx.world.currentSystem === 'hush',
+  peopleOpened: !!ov16 && [...walkDom(ov16)].some((n) => n.textContent === 'PEOPLE — who runs this dock'),
+  keeperCardFound: !!keeperCard16,
+  oneChartBox: chartBoxes16.length === 1,
+  chartOnKeeperCard: chartInKeeper16,
+  titleExact: chartTitle16 === 'CHART MARKS — pages still waiting',
+  linesExact: chartLines16.length === 2 && expectedLines16.length === 2 &&
+    JSON.stringify(chartLines16) === JSON.stringify(expectedLines16),
+  noLeak: !!hushClue13 && !chartText16.includes('th_c_keeper') && !chartText16.includes(hushClue13.line),
+  mixedRosterTwoCards: mixedCards16.length === 2 && !!synthCard16 && !!keeperCardMixed16,
+  nonKeeperCardNoChart: Array.isArray(chartInSynth16) && chartInSynth16.length === 0,
+  chartStillOnlyKeeper: chartBoxesMixed16.length === 1 && !!keeperCardMixed16 &&
+    [...walkDom(keeperCardMixed16)].includes(chartBoxesMixed16[0]),
+  contactsRestoredInPlace: contactsRestored16,
+  visitedHides: chartBoxesVisited16.length === 0,
+  restoredInPlace: JSON.stringify(mystery14.visited) === JSON.stringify(visitedBefore16b) &&
+    ('charted' in mystery14) === hadCharted16b &&
+    JSON.stringify(mystery14.charted ?? []) === JSON.stringify(chartedBefore16b),
+};
+console.log('wave16 people chart marks:', JSON.stringify(w16domChecks), `lines=${JSON.stringify(chartLines16)}`);
+if (!Object.values(w16domChecks).every(Boolean)) { console.log('WAVE16 PEOPLE CHART MARKS FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
