@@ -12,7 +12,8 @@
  * from mystery.visited (recorded state, never invented) — and (wave 12),
  * once every landmark is witnessed, name the system of an unfound clue as
  * a page left open (§25: the system's name only, never the clue's text) —
- * and comp a trusted pilot's dock at trust >= 60 (station.js applies the
+ * and comp a trusted pilot's dock at trust >= KEEPER_COMP_TRUST (station.js
+ * applies the
  * Wave 13: the two keepers Callow's vouch writes to (hush,
  * verge) acknowledge his word once each (contact.vouchAck) before the
  * ship line resumes, and at the comp tier an open ledger page narrows to
@@ -122,6 +123,11 @@ export function rumorFor(ctx, contact) {
 // systems holding unfound clues — once the landmark column balances).
 export const KEEPER_LEDGER_TRUST = 30;
 
+// Wave 18: keeper trust that comps a trusted pilot — recognitionLine's ship
+// line, the vouch acknowledgment, the narrowed ledger page, the chart mark,
+// and station.js's waived hermit markup / comp note all ride this one tier.
+export const KEEPER_COMP_TRUST = 60;
+
 /**
  * Waves 11–12: a keeper (hollowreach/hush/verge dockmaster) reads from the
  * two-column ledger at trust >= KEEPER_LEDGER_TRUST, in three tiers.
@@ -133,7 +139,7 @@ export const KEEPER_LEDGER_TRUST = 30;
  *   2. Landmarks all witnessed but unfound clues remain → rotates through
  *      the SYSTEMS holding at least one unfound clue; the line names only
  *      the system display name, a page left open. Wave 13: at the comp
- *      tier (station.js KEEPER_COMP_TRUST) the keeper narrows the open
+ *      tier (KEEPER_COMP_TRUST) the keeper narrows the open
  *      page to a landmark pairing — the landmark nearest that system's
  *      first unfound clue (§25: still never the clue's text or id; the
  *      landmark name is authored, already-spoken state from tier 1).
@@ -199,8 +205,7 @@ export function keeperLedgerLine(ctx, contact) {
   if (openPages.length > 0) {
     const entry = openPages[contact.ledgerIdx % openPages.length];
     contact.ledgerIdx = (contact.ledgerIdx + 1) % openPages.length;
-    // Wave 13: at the comp tier (station.js KEEPER_COMP_TRUST — literal
-    // 60, matching recognitionLine's convention) and with a landmark to
+    // Wave 13: at the comp tier (KEEPER_COMP_TRUST) and with a landmark to
     // pair, the keeper narrows the open page. §25: the landmark name is
     // authored, already-spoken state from tier 1 — still never the
     // clue's text or id. Wave 15: a page whose paired landmark already
@@ -210,12 +215,12 @@ export function keeperLedgerLine(ctx, contact) {
     // the comp tier — the uncharted lines stay byte-identical.
     const charted = ctx.world.mystery?.charted ?? [];
     if (charted.includes(entry.lmId)) {
-      if (contact.trust >= 60 && entry.lmName !== null) {
+      if (contact.trust >= KEEPER_COMP_TRUST && entry.lmName !== null) {
         return `The second column balances. A page stays open in ${entry.systemName} — the mark near ${entry.lmName} is yours now; the page waits to be read.`;
       }
       return `The second column balances. A page stays open in ${entry.systemName} — the mark on your charts is yours now; the page waits to be read.`;
     }
-    if (contact.trust >= 60 && entry.lmName !== null) {
+    if (contact.trust >= KEEPER_COMP_TRUST && entry.lmName !== null) {
       return `The second column balances. A page stays open in ${entry.systemName} — the page near ${entry.lmName} waits to be read.`;
     }
     return `The second column balances. A page stays open in ${entry.systemName} — something there waits to be read.`;
@@ -233,7 +238,7 @@ const VOUCH_ACK_LINE = "Callow's word arrived ahead of you — your name sits in
  * gates of recognitionLine's vouch tier — a hush/verge dockmaster (the two
  * keepers hail.js's 'callowVouch' resolve writes to; Hollowreach's keeper
  * never got the letter), the 'callowVouched' milestone standing, the comp
- * tier (literal 60), and !contact.vouchAck — so a fly-through hears
+ * tier (KEEPER_COMP_TRUST), and !contact.vouchAck — so a fly-through hears
  * Callow's word without ever docking. Sets contact.vouchAck, the SAME
  * flag the people card uses: once per keeper across both surfaces, and
  * undefined reads falsy on old saves (deepAck discipline). null otherwise.
@@ -241,7 +246,7 @@ const VOUCH_ACK_LINE = "Callow's word arrived ahead of you — your name sits in
 export function keeperVouchArrival(ctx, contact) {
   if (contact.role !== 'dockmaster') return null;
   if (contact.system !== 'hush' && contact.system !== 'verge') return null;
-  if (contact.trust < 60) return null;
+  if (contact.trust < KEEPER_COMP_TRUST) return null;
   if (!(ctx.world.milestones ?? []).includes('callowVouched')) return null;
   if (contact.vouchAck) return null;
   contact.vouchAck = true;
@@ -249,8 +254,8 @@ export function keeperVouchArrival(ctx, contact) {
 }
 
 /**
- * Wave 14: at the comp tier (literal 60, the recognitionLine convention) a
- * docked keeper turns the narrowed page into a heading — the page's paired
+ * Wave 14: at the comp tier (KEEPER_COMP_TRUST) a docked keeper turns the
+ * narrowed page into a heading — the page's paired
  * landmark is marked on the pilot's charts once (mystery.charted, a plain
  * id list riding the persisted mystery record; undefined reads empty on
  * old saves). Recorded state only: nothing is rendered or revealed, and
@@ -263,7 +268,7 @@ export function keeperVouchArrival(ctx, contact) {
 export function keeperChartMark(ctx, contact) {
   if (contact.role !== 'dockmaster') return null;
   if (contact.system !== 'hollowreach' && contact.system !== 'hush' && contact.system !== 'verge') return null;
-  if (contact.trust < 60) return null;
+  if (contact.trust < KEEPER_COMP_TRUST) return null;
   const mystery = ctx.world.mystery;
   const charted = mystery?.charted ?? [];
   const { awaiting, openPages } = ledgerColumns(ctx);
@@ -301,7 +306,8 @@ export function chartedMarkNotes(ctx) {
 }
 
 /**
- * A recognition line once trust >= 60: the contact knows the ship. Uses the
+ * A recognition line once trust >= KEEPER_COMP_TRUST: the contact knows the
+ * ship. Uses the
  * player-set shipName when present, else refers to the living hull (§12.5).
  * Wave 13: at the top of that tier, the two keepers Callow's vouch writes
  * to (hush/verge dockmasters) acknowledge the word once each
@@ -318,7 +324,7 @@ export function chartedMarkNotes(ctx) {
  * saves, so no normalization. null otherwise.
  */
 export function recognitionLine(ctx, contact) {
-  if (contact.trust >= 60) {
+  if (contact.trust >= KEEPER_COMP_TRUST) {
     // Wave 13: closes the loop Callow's vouch opened — the two keepers
     // his word actually writes to (hush/verge dockmasters; hail.js
     // bumpTrust targets only them) acknowledge it once each, then the

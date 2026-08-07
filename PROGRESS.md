@@ -479,23 +479,50 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   delivery assertions stay intact. Production code untouched. npm run
   test:boot PASS ×7 runs; npm run build clean (only the pre-existing
   >500 kB chunk warning). Uncommitted.
-## Next round candidates (wave 18)
+- Wave 18: the queued zero-behavior cleanup — the trust-60 comp tier
+  was a literal repeated across contacts.js (recognitionLine, the
+  vouch acknowledgment on both surfaces, the narrowed ledger page,
+  the chart mark) and duplicated as a station.js-side const for the
+  waived hermit markup / comp note. contacts.js now exports
+  KEEPER_COMP_TRUST = 60 beside KEEPER_LEDGER_TRUST; every gate reads
+  the shared constant and station.js imports it instead of keeping
+  its own. No numeric rebalance; every 60-gate still also carries its
+  independent system/milestone/ledger gate, and the boot-test
+  harness keeps its own literal 60 pins (it asserts the number
+  independently). Comments referencing the old 'literal 60' /
+  'station.js KEEPER_COMP_TRUST' convention updated. During
+  verification a pre-existing, unrelated boot-test flake surfaced:
+  one run in the first batch failed JUMP TEST on veridianSpread
+  (provisions not > provBefore × 1.1 after the freehold→veridian
+  hop). Reproduced on the untouched wave-17 tree in a scratch
+  worktree (1 failure in 20 runs there vs 1 in 52 with the change) —
+  the wave-18 diff does not touch pricing; suspected cause is the
+  soak-event price band occasionally compressing the spread the
+  check assumes. Tracked as a wave-19 candidate below. npm run
+  test:boot PASS ×51 of 52 runs (the one fail being the pre-existing
+  jump-check flake); npm run build clean (only the pre-existing
+  >500 kB chunk warning).
+## Next round candidates (wave 19)
 
-- Wave 17 closed the known gate/polish debt: the recovery-board setup
-  is deterministic and the one-card collision has a regression guard.
-- The trust-60 comp tier still carries four privileges (the comp, the
-  vouch word on two surfaces, the narrowed page, the chart mark). The
-  wave-17 assessment found one zero-behavior cleanup worth taking
-  next: export KEEPER_COMP_TRUST = 60 from contacts.js beside
-  KEEPER_LEDGER_TRUST, replace the contacts.js trust-60 literals, and
-  consume the shared constant in station.js instead of keeping it on
-  the UI side. No numeric rebalance yet; every 60-gate also has an
-  independent system/milestone/ledger gate.
+- Boot-test flake (pre-existing, reproduced on the wave-17 tree):
+  jump checks' veridianSpread gate assumes provisions > provBefore ×
+  1.1 after the freehold→veridian hop, but the soak's random world
+  event (e.g. commodityGlut/laborStrike) can move freehold's baseline
+  before provBefore is sampled, compressing the spread. Observed ~1
+  in 20–50 runs. Fix direction mirrors wave 17: make the harness
+  setup deterministic (clear/expire the active soak event or rebase
+  provBefore to the authored priceBase) rather than touching pricing
+  itself.
+- The trust-60 tier now rides one exported constant
+  (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
+  change, but every 60-gate still has an independent
+  system/milestone/ledger gate to re-check if the number moves.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
   reset; vouchAck is a bool; mystery.charted grows by landmark id but
   is bounded by the authored landmark tables — self-limiting. The
-  wave-17 assessment found no action worth taking: ledgerIdx is
+  wave-17/18 assessments found no action worth taking: ledgerIdx is
   modulo-bounded, charted is deduped by authored ids, vouchAck is one
   bit per keeper, and the Callow cursors grow only +1 per real Verge
   visit with exact arithmetic pinned by existing gates.
-- Polish debt: none known; boot test remains the gate.
+- Polish debt: the veridianSpread flake above; boot test remains the
+  gate.

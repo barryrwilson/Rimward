@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT } from '../game/state.js';
-import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes } from '../game/contacts.js';
+import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 
@@ -76,7 +76,8 @@ const FIXER_TRUST_PER_SALE = 2;
 const DOCKMASTER_TRUST_PER_JOB = 5;
 // Wave 11: keeper trust that comps a pilot at a deep-rim dock — the hermit
 // scarcity markup is waived and the keeper card shows the comp note.
-const KEEPER_COMP_TRUST = 60;
+// Wave 18: the constant lives in contacts.js (KEEPER_COMP_TRUST) — the
+// recognition/vouch/ledger/chart-mark tiers already key on it there.
 const DEFAULT_ACE_NAME = 'Carver Illyx';
 const DEFAULT_ACE_BOUNTY = 2500;
 const PIRATE_BOUNTY_CAP = 2; // max pirate bounty cards per system's board
