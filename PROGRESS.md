@@ -115,19 +115,45 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   frame (save.js swaps fields wholesale on restore; init-time captures
   orphaned — same discipline as mystery.js). PASS. Browser-verified: origin
   overlay, settings panel live-apply + persistence, Standing service.
-## Next round candidates (wave 7)
+- Wave 7: depth queue (all five candidates). state.js: SYSTEMS.hush ("The
+  Hush", band 3, hollow faction, station Threshold, gate hollowreach↔hush,
+  landmarks th_lanes_end + th_first_garden, clues th_c_keeper/th_c_song),
+  BANDS[3] (near-total silence), DEEPENING (post-convergence rung: converged
+  + 5 clues → hint → site 'The Answer' in hush → milestone + 'deepening'
+  event + second songShift {reason:'deepening'}; flags mystery.deepHinted/
+  deepened), ACES.hunter.lineage (maxGenerations 3, respawnDelay 90, +12
+  resolve/gen, bounty ×1.5^gen), EPICS 4th capstone stages (requires gained
+  landmarkVisited/converged/deepened/credits/fear; effects still Object.assign
+  — capstone values are totals), ORIGIN_ARCS (creditor: 240 s calls ×3, −3
+  redledger rep each, 3rd injects Collector Dresk into current bank, clear at
+  credits ≥ 0 → milestone 'debtCleared' +10 rep; one-time payoffs for
+  marked/beautiful/drifter/greenhand). ctx.js froze 'deepening',
+  'lineagePassed', 'creditorCall', 'originPayoff'; save.js WORLD_FIELDS +=
+  'originArc'. world.js: spawnHunterSuccessor + aceRivalry hunterGeneration/
+  hunterDownAt (defeat → successor same-name new-pilot after delay; last
+  bearer's defeat → milestone 'namedGunBroken'), originArcTick (creditor +
+  payoffs, per-frame re-resolved). npc.js: Illyx rematch ladder
+  (record.rematchCount 0..2, +15 each, cap 95; 'Again. Again.'), Vane
+  recognition lines by generation. epics.js: stageHolds extension + watched
+  cache (visited count, converged/deepened, fear, credit bucket ÷500).
+  song.js: deep voice a fifth below the phrase root joins after the deepening
+  shift. landmarks.js: The Answer anomaly post-hint, dims on deepened.
+  hud.js: toasts for the four new events. jump.js band-3 arrival line;
+  starfield BAND_OPACITY[3]. Boot test wave-7 section: 5-system jump chain,
+  deepening chain, lineage to namedGunBroken, Illyx ladder, all four
+  capstones, creditor arc + collector, payoff no-refire, save roundtrip.
+  PASS first run.
+## Next round candidates (wave 8)
 
-- All ten ladder rungs are DONE. What remains is depth, not new rungs:
-- Band 3+: the glossary goes to "Band 0–3+" but the world stops at 2. A
-  fourth band (beyond Hollow Reach) is where the convergence heading points.
-- Post-convergence mystery: songShift changed her voice; the chain wants the
-  next rung WITHOUT restating the buried truth (§27 — reference, never copy).
-- Ace arc depth: Vane has no rematch/rivalry escalation of her own; Illyx's
-  rematch caps at one bump. Named-Gun lineage (a defeated ace's name passing
-  to a successor) is unbuilt.
-- Epic depth: stages are reputation/clue gates; none have a systemic capstone
-  (the Shepherd's lane endpoint, the sixth berth, the unfinished column all
-  tease destinations that don't exist yet).
-- Origin depth: origins set conditions but have no payoff arcs (Ledger debt
-  is just negative credits — no creditor come-due event).
+- Wave 7 closed the depth queue. What remains:
+- Band 4+: the Hush is the deepest authored space; the deepening site's "not
+  finished becoming" teases further. No band-4 content designed yet.
+- Post-deepening mystery: her voice and the dark are one — the chain could
+  continue, but §25 (curiosity before explanation) argues for stopping here
+  or near it.
+- Lineage depth: Vane's line can be broken; Illyx has no lineage of his own
+  (freehold's Named Gun). Collectors are one-shot; a repeat-debtor path is
+  unbuilt.
+- Origin arcs: four of five are single payoffs; only ledgerDebt is a true
+  arc. Beautiful/marked could grow mid-game beats.
 - Polish debt: none known; boot test is the gate.

@@ -10,6 +10,12 @@ import { BANDS } from '../game/state.js';
  * lowpass and a generated-impulse convolver reverb, phrase scheduling via a
  * lookahead timer in update() (no per-sample work, no per-frame allocs).
  * The ship's voice is the warmest sound in the game: keep it gentle.
+ *
+ * Two-stage song evolution (§29: she sings differently): the convergence
+ * songShift adds a quiet answering voice a fifth above the phrase root —
+ * the dark hums back. The deepening songShift adds a low third voice a
+ * fifth below the root, quieter still — the dark now leads the duet.
+ * The chain continues; what it means is never said aloud.
  */
 
 const MASTER_GAIN = 0.15;
@@ -96,6 +102,7 @@ export function initSong(ctx) {
   let mood = 'serene';
   let nextPhraseAt = 0;
   let answering = false; // songShift consumed: the dark hums back (§29)
+  let deepened = false; // songShift{reason:'deepening'} consumed: the dark leads (§29)
   let bedGain = null; // combat drone level (0 when at peace)
   let humGain = null; // station ambience level (0 when undocked)
   let combatOn = false;
@@ -267,8 +274,9 @@ export function initSong(ctx) {
     }
   }
 
-  // Reused params for the answer voice (mutated at schedule time — no alloc).
+  // Reused params for the answer/deep voices (mutated at schedule time — no alloc).
   const ANSWER_P = { gain: 0, vibRate: 0, vibDepth: 0, fall: 1 };
+  const DEEP_P = { gain: 0, vibRate: 0, vibDepth: 0, fall: 1 };
 
   /** A phrase: 1–3 notes on the mood's interval pattern. */
   function schedulePhrase(t) {
@@ -287,6 +295,13 @@ export function initSong(ctx) {
       ANSWER_P.gain = p.gain * 0.35;
       const dur = p.dur[0] + Math.random() * (p.dur[1] - p.dur[0]);
       voice(p.base * 1.5, t + 2.5 + Math.random() * 1.5, dur, ANSWER_P);
+    }
+    // §29 after deepening: a low third voice a fifth below the root — the
+    // dark now leads the duet, quieter than the answer, same phrase timing.
+    if (deepened) {
+      DEEP_P.gain = p.gain * 0.3;
+      const dur = p.dur[0] + Math.random() * (p.dur[1] - p.dur[0]);
+      voice((p.base * 2) / 3, t + 1.0 + Math.random() * 1.5, dur, DEEP_P);
     }
   }
 
@@ -345,7 +360,10 @@ export function initSong(ctx) {
       for (let i = 0; i < evs.length; i++) {
         const cue = CUES[evs[i].type];
         if (cue) for (let j = 0; j < cue.length; j++) tone(cue[j], t);
-        if (evs[i].type === 'songShift') answering = true; // she sings differently now
+        if (evs[i].type === 'songShift') {
+          answering = true; // she sings differently now
+          if (evs[i].reason === 'deepening') deepened = true; // the dark leads the duet
+        }
       }
 
       // Live master volume/mute (settings.js owns ctx.settings; read every frame).

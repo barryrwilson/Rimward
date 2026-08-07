@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 
 /**
@@ -34,6 +34,17 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  *   entries — the same path that covers save restores.
  * - MILESTONES §8.8: first-time beats, non-interrupting, fired once each as
  *   emit('milestone', {id, line}) in the terse voice of §13.5.
+ * - WAVE 7 — NAMED-GUN LINEAGE + ORIGIN ARCS: defeating Sister Vane schedules
+ *   a successor (same name, harder resolve, grown bounty) after
+ *   ACES.hunter.lineage.respawnDelay world-seconds, until the last bearer
+ *   falls and milestone 'namedGunBroken' ends the line. Origin payoff arcs
+ *   close the situations origins opened: ledgerDebt gets escalating creditor
+ *   calls (and a collector) while credits < 0; the other four origins fire
+ *   one-time 'originPayoff' beats. State lives in ctx.world.aceRivalry
+ *   { hunterGeneration, hunterDownAt } and the flat JSON-plain
+ *   ctx.world.originArc — both persisted via WORLD_FIELDS
+ *   'aceRivalry'/'originArc' and re-resolved per frame (save.js swaps world
+ *   fields wholesale on restore).
  *
  * ctx.world.time is advanced by main.js before systems run.
  */
@@ -236,7 +247,7 @@ function ensureBank(ctx, sysId) {
  * ctx.world.records IS that bank, so the push suffices either way.
  */
 function spawnHunterAce(ctx) {
-  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false });
+  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
   if (rivalry.hunterSpawned) return;
   const def = SYSTEMS[ACES.hunter.system];
   if (!def) return;
@@ -260,6 +271,47 @@ function spawnHunterAce(ctx) {
     text: 'The Ledger has bought a Named Gun. Sister Vane flies the Redmarch now.',
     from: 'Whisper',
   });
+}
+
+// Successor hail lines, indexed generation - 1 (generations 1 and 2; the
+// third defeat breaks the line instead — see the ace-defeat handlers).
+const LINEAGE_LINES = [
+  'Sister Vane is dead. Sister Vane flies. The Ledger does not bury its Guns.',
+  'The third Vane hails you. She knows exactly how you fly.',
+];
+
+/**
+ * Named-Gun lineage (wave 7): the name is a mantle. When a defeated Vane's
+ * respawnDelay has elapsed, the next generation takes up the name in the
+ * redmarch bank — same jittered gate↔planet route and cargo copy as
+ * spawnHunterAce, record.resolve seeded per generation (createShipState
+ * prefers the record field), bounty scaled by bountyGrowth^generation.
+ * Caller bumps hunterGeneration and clears hunterDownAt first; the
+ * ace-defeat handlers decide whether the line continues at all.
+ */
+function spawnHunterSuccessor(ctx) {
+  const rivalry = ctx.world.aceRivalry; // re-resolved per frame; save.js swaps wholesale
+  rivalry.hunterGeneration++;
+  rivalry.hunterDownAt = null;
+  const gen = rivalry.hunterGeneration;
+  const def = SYSTEMS[ACES.hunter.system];
+  if (!def) return;
+  const gate = gatePoint(def);
+  const planet = planetPoint(def);
+  const bank = ensureBank(ctx, ACES.hunter.system);
+  const rec = makeRecord(ctx, {
+    name: ACES.hunter.name,
+    classKey: ACES.hunter.classKey,
+    faction: ACES.hunter.faction,
+    role: 'ace',
+    route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
+    cargo: ACES.hunter.cargo.map((c) => ({ commodity: c.commodity, units: c.units })),
+    bounty: Math.round(ACES.hunter.bounty * Math.pow(ACES.hunter.lineage.bountyGrowth, gen)),
+    system: ACES.hunter.system,
+  });
+  rec.resolve = 55 + ACES.hunter.lineage.resolvePerGeneration * gen;
+  bank.push(rec);
+  ctx.emit('lineagePassed', { name: ACES.hunter.name, generation: gen, line: LINEAGE_LINES[gen - 1] });
 }
 
 /**
@@ -310,6 +362,102 @@ function fireMilestone(ctx, id, line) {
   ctx.world.milestones.push(id);
   ctx.emit('milestone', { id, line });
   return true;
+}
+
+// ---------- Origin payoff arcs (wave 7) ----------
+/**
+ * Ledger collector injection: the maxCalls-th unanswered come-due call sends
+ * ORIGIN_ARCS.ledgerDebt.collector after the player — role 'pirate' (so
+ * pickMigrant never moves him) on a jittered gate↔planet route, pushed into
+ * the CURRENT system's bank. Same aliasing note as the hunter: when the
+ * player is in that system, the bank IS ctx.world.records.
+ */
+function injectCollector(ctx) {
+  const sysId = ctx.world.currentSystem;
+  const def = SYSTEMS[sysId];
+  if (!def) return;
+  const col = ORIGIN_ARCS.ledgerDebt.collector;
+  const gate = gatePoint(def);
+  const planet = planetPoint(def);
+  const bank = ensureBank(ctx, sysId);
+  bank.push(
+    makeRecord(ctx, {
+      name: col.name,
+      classKey: col.classKey,
+      faction: col.faction,
+      role: 'pirate',
+      route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
+      cargo: col.cargo.map((c) => ({ commodity: c.commodity, units: c.units })),
+      bounty: col.bounty,
+      system: sysId,
+    }),
+  );
+}
+
+/**
+ * Per-frame origin-arc checks. Cheap scalar compares, zero allocation in
+ * the common path; ctx.world.originArc is re-resolved every call (save.js
+ * swaps world fields wholesale on restore) and stays JSON-plain —
+ * lastCallAt starts at 0, never Infinity.
+ */
+function originArcTick(ctx) {
+  const origin = ctx.world.origin;
+  if (!origin) return; // old saves may lack an origin
+  const arc = (ctx.world.originArc ??= {
+    calls: 0,
+    lastCallAt: 0,
+    debtCleared: false,
+    collectorSent: false,
+    marked: false,
+    beautiful: false,
+    drifter: false,
+    greenhand: false,
+  });
+
+  // a. Ledger come-due: while credits < 0 the Ledger calls every
+  // callInterval world-seconds (max maxCalls, each costing redledger
+  // standing; the last call sends the collector). Climbing back to
+  // credits >= 0 closes the arc once.
+  if (origin === 'ledgerDebt' && !arc.debtCleared) {
+    if (ctx.world.credits >= 0) {
+      arc.debtCleared = true;
+      ctx.world.reputation.redledger = (ctx.world.reputation.redledger ?? 0) + ORIGIN_ARCS.ledgerDebt.clearRepBonus;
+      fireMilestone(ctx, 'debtCleared', ORIGIN_ARCS.ledgerDebt.clearLine);
+    } else if (arc.calls < ORIGIN_ARCS.ledgerDebt.maxCalls && ctx.world.time - arc.lastCallAt >= ORIGIN_ARCS.ledgerDebt.callInterval) {
+      arc.calls++;
+      arc.lastCallAt = ctx.world.time;
+      ctx.world.reputation.redledger = (ctx.world.reputation.redledger ?? 0) + ORIGIN_ARCS.ledgerDebt.repPerCall;
+      ctx.emit('creditorCall', { stage: arc.calls, line: ORIGIN_ARCS.ledgerDebt.callLines[arc.calls - 1] });
+      if (arc.calls === ORIGIN_ARCS.ledgerDebt.maxCalls && !arc.collectorSent) {
+        arc.collectorSent = true;
+        injectCollector(ctx);
+      }
+    }
+  }
+
+  // b. One-time payoffs — each fires exactly once when its condition first
+  // holds.
+  if (origin === 'marked' && !arc.marked && (ctx.world.reputation.veridian ?? 0) >= 0) {
+    arc.marked = true;
+    ctx.emit('originPayoff', { id: 'marked', line: ORIGIN_ARCS.payoffs.marked });
+  }
+  if (origin === 'beautiful' && !arc.beautiful && (ctx.bio?.growth ?? 0) >= 1) {
+    arc.beautiful = true;
+    ctx.emit('originPayoff', { id: 'beautiful', line: ORIGIN_ARCS.payoffs.beautiful });
+  }
+  if (origin === 'drifter' && !arc.drifter && ctx.world.mystery?.converged) {
+    arc.drifter = true;
+    ctx.emit('originPayoff', { id: 'drifter', line: ORIGIN_ARCS.payoffs.drifter });
+  }
+  if (origin === 'greenhand' && !arc.greenhand) {
+    for (const key in ctx.world.epics ?? {}) {
+      if (ctx.world.epics[key] > 0) {
+        arc.greenhand = true;
+        ctx.emit('originPayoff', { id: 'greenhand', line: ORIGIN_ARCS.payoffs.greenhand });
+        break;
+      }
+    }
+  }
 }
 
 // ---------- Module state (never serialized) ----------
@@ -434,7 +582,21 @@ export function initWorld(ctx) {
 
   // Named-ace rivalry state (JSON-plain, persisted via WORLD_FIELDS
   // 'aceRivalry'). Old saves lack it — same ??= discipline as recordBanks.
-  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false };
+  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null };
+
+  // Origin payoff arcs (wave 7): flat JSON-plain record persisted via
+  // WORLD_FIELDS 'originArc'. Re-resolved per frame where used — save.js
+  // restores swap world fields wholesale.
+  ctx.world.originArc ??= {
+    calls: 0,
+    lastCallAt: 0,
+    debtCleared: false,
+    collectorSent: false,
+    marked: false,
+    beautiful: false,
+    drifter: false,
+    greenhand: false,
+  };
 
   let nextEventAt = rollEventGap(ctx);
   let nextMigrationAt = MIGRATION_INTERVAL * (0.5 + Math.random() * 0.5); // first pick ~45–90s in
@@ -609,10 +771,20 @@ export function initWorld(ctx) {
         });
         const entry = stageAftermath(ctx, incident);
         if (rec?.role === 'ace') {
-          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false });
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
           rivalry.defeats++;
           rivalry.lastOutcome = 'destroyed';
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
+          // Named-Gun lineage (wave 7): the defeated ace is the hunter →
+          // schedule the next generation, or break the line at the last.
+          if (rec.name === ACES.hunter.name && rec.role === 'ace' && rec.faction === ACES.hunter.faction) {
+            rivalry.hunterGeneration ??= 0; // pre-wave-7 saves lack the field
+            if (rivalry.hunterGeneration >= ACES.hunter.lineage.maxGenerations - 1) {
+              fireMilestone(ctx, 'namedGunBroken', 'There will be no fourth Vane. Even the Ledger calls it enough.');
+            } else {
+              rivalry.hunterDownAt = ctx.world.time;
+            }
+          }
         }
         if (entry && causer !== 'player') {
           fireMilestone(ctx, 'theWorldDidThat', 'The world did that. You just found it.');
@@ -636,10 +808,20 @@ export function initWorld(ctx) {
         fireMilestone(ctx, 'firstCapitulation', 'They yield. First capitulation.');
         if (outcome === 'tribute') fireMilestone(ctx, 'firstTribute', 'Tribute paid. The lane remembers.');
         if (rec?.role === 'ace') {
-          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false });
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
           rivalry.defeats++;
           rivalry.lastOutcome = outcome; // 'flee' | 'jettison' | 'ransom' | ...
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
+          // Named-Gun lineage (wave 7): the defeated ace is the hunter →
+          // schedule the next generation, or break the line at the last.
+          if (rec.name === ACES.hunter.name && rec.role === 'ace' && rec.faction === ACES.hunter.faction) {
+            rivalry.hunterGeneration ??= 0; // pre-wave-7 saves lack the field
+            if (rivalry.hunterGeneration >= ACES.hunter.lineage.maxGenerations - 1) {
+              fireMilestone(ctx, 'namedGunBroken', 'There will be no fourth Vane. Even the Ledger calls it enough.');
+            } else {
+              rivalry.hunterDownAt = ctx.world.time;
+            }
+          }
         }
       }
     }
@@ -751,6 +933,16 @@ export function initWorld(ctx) {
       if (!ctx.world.aceRivalry?.hunterSpawned && ctx.world.fear >= ACES.hunter.fearThreshold) {
         spawnHunterAce(ctx);
       }
+
+      // Named-Gun lineage (wave 7): a defeated Vane's successor takes up the
+      // name after respawnDelay world-seconds — until the line is broken.
+      const rivalry = ctx.world.aceRivalry;
+      if (rivalry && rivalry.hunterDownAt != null && now - rivalry.hunterDownAt >= ACES.hunter.lineage.respawnDelay) {
+        spawnHunterSuccessor(ctx);
+      }
+
+      // Origin payoff arcs (wave 7): creditor come-due + one-time payoffs.
+      originArcTick(ctx);
 
       // First Scare: any live ship pushed into the bargaining band §8.8.
       if (!ctx.world.milestones.includes('firstScare')) {

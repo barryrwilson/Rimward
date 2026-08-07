@@ -1061,9 +1061,19 @@ export function initStation(ctx) {
       if (n <= achieved) {
         h('div', 'screen-note', panel, `✓ ${stage.line}`);
       } else if (n === achieved + 1) {
-        const hint = stage.requires.rankTier != null
-          ? `Rank: ${rankNameForTier(stage.requires.rankTier)}`
-          : `Echoes found: ${clues}/${stage.requires.cluesFound}`;
+        // Hint names the first UNMET requirement — capstones (wave 7) gate on
+        // landmarks, mystery flags, credits, or fear, not just rank/echoes.
+        const req = stage.requires;
+        const rep = ctx.world.reputation?.[currentDef.faction] ?? 0;
+        const mystery = ctx.world.mystery;
+        let hint = 'Within reach';
+        if (req.rankTier != null && rankFor(rep).tier < req.rankTier) hint = `Rank: ${rankNameForTier(req.rankTier)}`;
+        else if (req.cluesFound != null && clues < req.cluesFound) hint = `Echoes found: ${clues}/${req.cluesFound}`;
+        else if (req.landmarkVisited != null && (mystery?.visited?.indexOf(req.landmarkVisited) ?? -1) < 0) hint = 'A landmark waits to be witnessed';
+        else if (req.converged === true && mystery?.converged !== true) hint = 'The mystery still calls';
+        else if (req.deepened === true && mystery?.deepened !== true) hint = 'The mystery has a further rung';
+        else if (req.credits != null && (ctx.world.credits ?? 0) < req.credits) hint = `Holdings: ${Math.floor(ctx.world.credits ?? 0)}/${req.credits} UU`;
+        else if (req.fear != null && (ctx.world.fear ?? 0) < req.fear) hint = `Fear: ${ctx.world.fear ?? 0}/${req.fear}`;
         h('div', 'screen-note', panel, `→ NEXT — ${hint}`);
       } else {
         h('div', 'screen-note', panel, '··· locked');

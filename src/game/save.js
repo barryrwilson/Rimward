@@ -48,6 +48,9 @@ const WORLD_FIELDS = [
   // wave 6: epics {faction:stageCount} (epics.js), origin id (origins.js),
   // onboarding {seen:[hintIds]} (onboarding.js), aceRivalry (world.js ace arc)
   'epics', 'origin', 'onboarding', 'aceRivalry',
+  // wave 7: originArc {calls,lastCallAt,debtCleared,collectorSent,...payoff
+  // flags} (world.js origin payoff arcs)
+  'originArc',
 ];
 
 function snapshot(ctx) {

@@ -226,7 +226,7 @@ export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
  * creating deliberate arbitrage spreads (Freehold grows food, Veridian refines
  * metal): buy low here, sell high there (§10.1).
  *
- * band indexes BANDS (§15): 0 = core, 2 = rim edge. Pacing modules read it
+ * band indexes BANDS (§15): 0 = core, 3 = the deepest rim. Pacing modules read it
  * to stretch event/chatter/song gaps the farther out you fly.
  * landmarks[] are authored POIs { id, name, kind, position, line } discovered
  * at 100u; clues[] are mystery breadcrumbs { id, position, line } discovered
@@ -313,7 +313,10 @@ export const SYSTEMS = {
     planetCount: 2,
     station: { name: 'Hollow Anchorage', position: [-300, 30, 500], palette: 0x7a6a8a },
     field: { center: [420, -60, -320], radius: 100, count: 60, oreMult: 2.0 },
-    gates: [{ position: [0, 70, 1100], to: 'redmarch' }],
+    gates: [
+      { position: [0, 70, 1100], to: 'redmarch' },
+      { position: [650, 60, -700], to: 'hush' },
+    ],
     priceBase: { provisions: 1.6, refinedMetals: 1.2, restrictedComponents: 0.6, rawOre: 0.9, livingRock: 0.7 },
     cast: { traders: 2, pirates: 3, patrols: 0, ace: false },
     tradesRestricted: true,
@@ -325,6 +328,32 @@ export const SYSTEMS = {
     clues: [
       { id: 'hr_c_answer', position: [150, -20, 150], line: 'Your ship\'s song went out ahead of you — and something here answered in the same key.' },
       { id: 'hr_c_garden', position: [-150, 200, -600], line: 'A ring of stones arranged like a garden. Whatever was planted here was dug up and taken rimward.' },
+    ],
+  },
+  // Wave 7: band 3. The convergence heading ends here. One keeper, no patrols,
+  // the sparsest cast in the rim — the Hush is where the silence was going.
+  hush: {
+    id: 'hush',
+    name: 'The Hush',
+    faction: 'hollow',
+    worldSeed: 131,
+    sunColor: 0x6a5a7a,
+    sunRadius: 34,
+    planetCount: 1,
+    station: { name: 'Threshold', position: [260, 40, 420], palette: 0x5a4a6a },
+    field: { center: [-350, -50, -280], radius: 90, count: 45, oreMult: 2.5 },
+    gates: [{ position: [0, 80, -1150], to: 'hollowreach' }],
+    priceBase: { provisions: 1.9, refinedMetals: 1.3, restrictedComponents: 0.55, rawOre: 0.85, livingRock: 0.6 },
+    cast: { traders: 1, pirates: 2, patrols: 0, ace: false },
+    tradesRestricted: true,
+    band: 3,
+    landmarks: [
+      { id: 'th_lanes_end', name: "The Lane's End", kind: 'beacon', position: [-650, 120, 300], line: "The Shepherd's broadcast ends here, at a second beacon answering it across everything between. Someone built a lane to nowhere — or to this." },
+      { id: 'th_first_garden', name: 'The First Garden', kind: 'monument', position: [500, -140, -500], line: 'The stones from Hollow Reach were not taken rimward. They were brought home. The garden here is older — and it is not empty.' },
+    ],
+    clues: [
+      { id: 'th_c_keeper', position: [100, -60, -150], line: "The Threshold's keeper logs every arrival in two columns. The second column is arrivals that have not happened yet." },
+      { id: 'th_c_song', position: [-250, 180, 550], line: 'Out here the answer is louder than the song. She has stopped leading the duet.' },
     ],
   },
 };
@@ -348,6 +377,7 @@ export const BANDS = {
   0: { eventGapMult: 1.0, chatterMult: 1.0, songGapMult: 1.0 },
   1: { eventGapMult: 1.4, chatterMult: 0.6, songGapMult: 1.5 },
   2: { eventGapMult: 2.2, chatterMult: 0.25, songGapMult: 2.5 },
+  3: { eventGapMult: 3.5, chatterMult: 0.1, songGapMult: 4.0 }, // the Hush: near-total silence
 };
 
 // ---------- Faction ranks (§12.x station depth) ----------
@@ -414,13 +444,23 @@ export const ORIGINS = {
 
 /**
  * EPICS (ladder #10 faction epics, derived from §29 + glossary — the §1-24
- * epic specs are truncated). One three-stage systemic arc per faction. Stages
- * are NOT scripted quests: epics.js advances a stage the moment its
- * requirements hold (rankTier via rankFor on ctx.world.reputation[faction],
- * or cluesFound via ctx.world.mystery.found.length), emits 'epicStage', and
- * records progress in ctx.world.epics = { [faction]: stageCount }.
+ * epic specs are truncated). One systemic arc per faction: three rank/clue
+ * stages (wave 6) plus a fourth CAPSTONE stage (wave 7) gated on a systemic
+ * condition, not a scripted quest. epics.js advances a stage the moment its
+ * requirements hold, emits 'epicStage', and records progress in
+ * ctx.world.epics = { [faction]: stageCount }.
+ * Requirement vocabulary (stageHolds, epics.js):
+ *   rankTier — rankFor(ctx.world.reputation[faction]).tier >= value
+ *   cluesFound — ctx.world.mystery.found.length >= value
+ *   landmarkVisited — id present in ctx.world.mystery.visited
+ *   converged / deepened — ctx.world.mystery flags true
+ *   credits — ctx.world.credits >= value (multiples of 500 only: the
+ *     watched-value cache quantizes credits to 500-UU buckets)
+ *   fear — ctx.world.fear >= value
  * Effect vocabulary (all read live at transaction/AI time; nothing here is
- * applied by mutating other modules' state):
+ * applied by mutating other modules' state). Effects MERGE by Object.assign
+ * across achieved stages — a later stage's value REPLACES an earlier one
+ * under the same key; capstone values below are totals, not deltas:
  *   sellMult/buyMult — station.js trade prices at stations of this faction
  *   repairMult — station.js refit pricing at this faction's station
  *   jobPayMult — station.js job payouts at this faction's station
@@ -440,6 +480,9 @@ export const EPICS = {
         line: 'Dock crews wave you into the short queue. The Shepherd blinks a little brighter when you pass. Nobody admits to maintaining it.' },
       { requires: { rankTier: 3 }, effect: { sellMult: 1.1 },
         line: 'The lane the Shepherd still broadcasts ends somewhere past the rim charts. The Compact swears you to it: when you find what is there, come home and tell them.' },
+      // Capstone (wave 7): the lane's end exists — a second beacon in the Hush.
+      { requires: { rankTier: 3, landmarkVisited: 'th_lanes_end' }, effect: { sellMult: 1.15 },
+        line: 'You have flown the Shepherd\'s lane to its end and come home to say so. The Compact keeps no higher standing than a witness.' },
     ],
   },
   redledger: {
@@ -452,6 +495,9 @@ export const EPICS = {
         line: "The Tithe Stone's unfinished column — a clerk asks, casual, what you would carve there. Every answer is written down." },
       { requires: { rankTier: 3 }, effect: { pirateResolveMod: -10 },
         line: "The Ledger strikes your tithe. Their pirates are told your hull is bad luck. The column stays unfinished, and now you know they are afraid to finish it." },
+      // Capstone (wave 7): the column stays unfinished by your choice now.
+      { requires: { rankTier: 3, credits: 8000 }, effect: { buyMult: 0.85 },
+        line: "You could carve the column's last name a hundred times over. You don't. The Ledger respects an account that chooses to stay open." },
     ],
   },
   veridian: {
@@ -464,6 +510,9 @@ export const EPICS = {
         line: "Refinery crews leave a sixth bracket empty on the Row. 'Tradition,' they say. They won't say whose." },
       { requires: { rankTier: 3 }, effect: { jobPayMult: 1.25 },
         line: 'The Combine names you a partner of the Reach — and quietly asks you to stop asking about the sixth berth. The price of silence is excellent.' },
+      // Capstone (wave 7): stand on the Row as Sworn and the berth answers.
+      { requires: { rankTier: 3, landmarkVisited: 'vd_hulk_row' }, effect: { repairMult: 0.75 },
+        line: 'Standing on the Row, you finally see it: the sixth bracket is not empty. It is reserved. The crews meet your eyes and say nothing at all.' },
     ],
   },
   hollow: {
@@ -476,6 +525,9 @@ export const EPICS = {
         line: "Out here your ship's song carries further than it should. The keeper says the Beacon changed its interval the day you arrived." },
       { requires: { cluesFound: 4 }, effect: { repairMult: 0.8 },
         line: "Whatever the Beacon repeats, your ship has started harmonizing with it. The keeper won't translate. She says you are closer than the colonies ever got." },
+      // Capstone (wave 7): the mystery's second rung, witnessed.
+      { requires: { deepened: true }, effect: { repairMult: 0.7 },
+        line: 'The keeper closes her log. "It has your voice now," she says. "Whatever it becomes, it began with you." Her care costs you less; some debts the anchorage will not name.' },
     ],
   },
 };
@@ -496,6 +548,14 @@ export const ACES = {
     bounty: 4000,
     cargo: [{ commodity: 'restrictedComponents', units: 6 }],
     fearThreshold: 25,
+    // Named-Gun lineage (wave 7): the name is a mantle, not a person. Each
+    // time the hunter is defeated, a successor takes up the name after
+    // lineage.respawnDelay world-seconds — same name, new pilot, harder
+    // (record.resolve seeded base + resolvePerGeneration × generation, bounty
+    // scaled by bountyGrowth^generation). The line ends at maxGenerations;
+    // defeating the last bearer fires milestone 'namedGunBroken'. Progress
+    // lives on ctx.world.aceRivalry { hunterGeneration, hunterDownAt }.
+    lineage: { maxGenerations: 3, respawnDelay: 90, resolvePerGeneration: 12, bountyGrowth: 1.5 },
   },
 };
 
@@ -519,6 +579,75 @@ export const CONVERGENCE = {
     position: [-400, 250, -150],
     radius: 60,
     line: 'The tally, the shanty, the garden — they were never scattered. They were a heading. Your ship hums the last note of it, and something in the dark hums back in the same key.',
+  },
+};
+
+/**
+ * Mystery rung AFTER convergence (wave 7; §25 curiosity-before-explanation,
+ * §27 — reference, never restate the buried truth). Once the player has
+ * converged AND holds cluesNeeded clues (5 of the 6 authored — the last two
+ * live in the Hush, so the chain pulls rimward), Echo voices hintLine once
+ * (mystery.deepHinted); approaching the site then fires milestone
+ * 'deepening', a 'deepening' event, and a second 'songShift'
+ * { reason: 'deepening' } once ever (mystery.deepened).
+ */
+export const DEEPENING = {
+  cluesNeeded: 5,
+  hintLine: 'Since the dark first answered, her song has become a question asked twice. The second asking points past Hollow Reach — to the place the lane was always going.',
+  site: {
+    id: 'deepening',
+    name: 'The Answer',
+    system: 'hush',
+    kind: 'anomaly',
+    position: [-100, 320, -80],
+    radius: 60,
+    line: 'It was never a place. It was a correspondence, and you have flown the whole length of it. Her song and the dark are one voice now — and it is not finished becoming.',
+  },
+};
+
+/**
+ * Origin payoff arcs (wave 7). Origins set situations; these close them.
+ * world.js owns the checks; progress persists in ctx.world.originArc
+ * (WORLD_FIELDS 'originArc'), a flat JSON-plain record:
+ *   { calls, lastCallAt, debtCleared, collectorSent,
+ *     marked, beautiful, drifter, greenhand }
+ * ledgerDebt is the deep arc: while credits < 0 the Ledger calls every
+ * callInterval world-seconds (escalating lines, 'creditorCall' {stage,line});
+ * the maxCalls-th call also injects the collector (a named cutter, role
+ * 'pirate', hunts the player) into the CURRENT system's record bank, once.
+ * Reaching credits >= 0 closes it: milestone 'debtCleared', redledger
+ * rep +10. The other four arcs are single one-time payoffs ('originPayoff'
+ * {id, line}) firing on their condition:
+ *   marked — veridian reputation climbs back to >= 0 (the board comes down)
+ *   beautiful — ctx.bio.growth reaches 1 (she finishes becoming)
+ *   drifter — mystery.converged (the tally's question, stood inside)
+ *   greenhand — any epic stage recorded (no story yet → a story)
+ */
+export const ORIGIN_ARCS = {
+  ledgerDebt: {
+    callInterval: 240, // world-seconds between come-due calls while in debt
+    maxCalls: 3,
+    repPerCall: -3, // each unanswered call costs redledger standing
+    clearRepBonus: 10,
+    callLines: [
+      'Ledger hail: your account is past due, pilot. Fly it off faster.',
+      'Ledger hail: the Column does not forget a name. Yours is written in red.',
+      'Ledger hail: enough. A collector has your vector. Pay, or be collected.',
+    ],
+    collector: {
+      name: 'Collector Dresk',
+      classKey: 'cutter',
+      faction: 'redledger',
+      cargo: [{ commodity: 'restrictedComponents', units: 4 }],
+      bounty: 0,
+    },
+    clearLine: 'Ledger hail: account closed. The Column strikes your name in black. The clerk almost smiles.',
+  },
+  payoffs: {
+    marked: 'The board in Veridian spacedock comes down. No announcement; one morning your face simply is not there. The Combine does not apologize — it un-remembers.',
+    beautiful: 'She stretches the whole length of her new growth against the dark and hums, content. Whatever she is becoming, she is becoming it with you.',
+    drifter: 'The tally ends where you are standing. You came in with more questions than money; you leave this one answered, and the rest no longer feel like debts.',
+    greenhand: 'A berth, a living ship — and now a story. The Drift will want to hear it.',
   },
 };
 

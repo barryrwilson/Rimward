@@ -90,7 +90,7 @@ function buildStarLayer({ count, minRadius, maxRadius, size, opacity, texture })
 }
 
 // Rim-band sparseness (§15): opacity multiplier per band — the rim feels emptier.
-const BAND_OPACITY = [1.0, 0.8, 0.55];
+const BAND_OPACITY = [1.0, 0.8, 0.55, 0.35];
 
 export function initStarfield(ctx) {
   const texture = createStarSprite();

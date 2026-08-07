@@ -9,6 +9,7 @@ const ARRIVAL_LINES = [
   (name, factionName) => name + '. ' + factionName + ' space. Welcome home, traffic control has you on scope.',
   (name, factionName) => name + '. ' + factionName + ' space. Light traffic out this far.',
   (name) => name + '. …no traffic on scope.',
+  (name) => name + '. No one answers. The gate logs your arrival for no one.',
 ];
 
 /**

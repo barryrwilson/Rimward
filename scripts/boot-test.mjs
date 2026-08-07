@@ -5,6 +5,9 @@
 // Wave 6: origin pick at fresh boot, onboarding hints, faction epics +
 // Standing service, mystery convergence, Named-Gun ace arc, headless audio
 // cues, settings/a11y panel, and the extended save WORLD_FIELDS roundtrip.
+// Wave 7: the Hush jump leg (band 3), mystery deepening, Named-Gun lineage
+// successors, the Illyx rematch ladder, epic capstone stages, the ledgerDebt
+// creditor arc + one-time origin payoff, and the originArc save roundtrip.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -143,7 +146,7 @@ const { initEpics, epicEffects } = await import('../src/game/epics.js');
 const { initGate } = await import('../src/systems/gate.js');
 const { initJump } = await import('../src/game/jump.js');
 const { initTraffic } = await import('../src/game/traffic.js');
-const { initNpc } = await import('../src/systems/npc.js');
+const { initNpc, spawnLiveShip, removeLiveShip } = await import('../src/systems/npc.js');
 const { initCombat } = await import('../src/systems/combat.js');
 const { initPods } = await import('../src/game/pods.js');
 const { initHail } = await import('../src/systems/hail.js');
@@ -157,7 +160,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS } = await import('../src/game/state.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
@@ -1179,6 +1182,315 @@ const w6saveChecks = {
 };
 console.log('wave6 save fields:', JSON.stringify(w6saveChecks));
 if (!Object.values(w6saveChecks).every(Boolean)) { console.log('WAVE6 SAVE FIELDS FAIL'); errors++; }
+
+// ---- Wave 7: the Hush / deepening / lineage / capstones / origin arcs / save ----
+// Order respects dependencies: the deepening rung needs the wave-6 converged
+// flag plus both hush clues; lineage supplies the ace defeats the Illyx
+// ladder counts; the capstones need deepened + the pushed visited ids; the
+// creditor arc mutates redledger rep/credits only after the capstones have
+// recorded (epic stages are never revoked); the save roundtrip closes the
+// run (its death-restore leaves us docked at Threshold, run over).
+
+// -- 1. jump chain: hollowreach's SECOND gates entry reaches the Hush --------
+undockStation(); // leave Hollow Anchorage (wave-6 save dock)
+const hushGate = SYSTEMS.hollowreach.gates.find((g) => g.to === 'hush'); // [650,60,-700]
+ctx.ship.object.position.set(...hushGate.position);
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at hush gate');
+const hushGateInZone = ctx.gate.inZone === true && ctx.gate.nearTo === 'hush';
+ctx.emit('jumpRequested', { to: 'hush' });
+const hushArrived = tickUntilJumpDone('hush', 'wave7 jump to hush');
+if (!hushArrived) { console.log('WAVE7 CHAIN FAIL — never arrived at hush'); errors++; }
+const hp7 = ctx.ship.object.position;
+const w7jumpChecks = {
+  gateIsSecondEntry: SYSTEMS.hollowreach.gates[1] === hushGate,
+  inZoneAtGate: hushGateInZone,
+  arrived: hushArrived && ctx.world.currentSystem === 'hush',
+  jumpingDone: !ctx.gate.jumping,
+  band3: ctx.systems.hush.band === 3 && SYSTEMS.hush.band === 3,
+  bandTable3: !!BANDS[3] && BANDS[3].eventGapMult > BANDS[2].eventGapMult,
+  stationThreshold: ctx.station?.name === 'Threshold',
+  nearArrivalGate: Math.hypot(hp7.x - 0, hp7.y - 80, hp7.z + 1150) < 120, // hush gate [0,80,-1150] + arrivalOffset
+};
+console.log('wave7 hush jump:', JSON.stringify(w7jumpChecks));
+if (!Object.values(w7jumpChecks).every(Boolean)) { console.log('WAVE7 HUSH JUMP FAIL'); errors++; }
+
+// -- 2. deepening: 5 held clues hint, the Answer site deepens -----------------
+// mystery.converged is already true (wave-6 d; no death since) and found
+// holds hr_c_answer + the two pushed ids — the two hush clues bring it to
+// DEEPENING.cluesNeeded via real 35u proximity discovery.
+const mystery7 = ctx.world.mystery;
+const deepEvs = [];
+for (const clue of SYSTEMS.hush.clues) {
+  ctx.ship.object.position.set(...clue.position);
+  ctx.ship.velocity.set(0, 0, 0);
+  for (let i = 0; i < 30 && !mystery7.found.includes(clue.id); i++) {
+    tick(1, 'hush clue approach');
+    deepEvs.push(...ctx.lastEvents);
+  }
+}
+for (let i = 0; i < 3 && mystery7.deepHinted !== true; i++) {
+  tick(1, 'deep hint');
+  deepEvs.push(...ctx.lastEvents);
+}
+const clueEvs7 = deepEvs.filter((e) => e.type === 'clueFound' && (e.id === 'th_c_keeper' || e.id === 'th_c_song'));
+const deepHintLine = deepEvs.find((e) => e.type === 'commLine' && e.text === DEEPENING.hintLine)?.text ?? null;
+// The site: hinted, in the Hush, inside its 60u radius — fires once ever.
+ctx.ship.object.position.set(...DEEPENING.site.position);
+ctx.ship.velocity.set(0, 0, 0);
+const deepSiteEvs = [];
+for (let i = 0; i < 5; i++) {
+  tick(1, 'deepening site');
+  deepSiteEvs.push(...ctx.lastEvents);
+}
+const w7deepChecks = {
+  convergedAlready: mystery7.converged === true,
+  bothHushCluesFound: mystery7.found.includes('th_c_keeper') && mystery7.found.includes('th_c_song'),
+  fiveCluesHeld: mystery7.found.length >= DEEPENING.cluesNeeded,
+  clueEventsCarriedLines: clueEvs7.length >= 2 && clueEvs7.every((e) => typeof e.line === 'string' && e.line.length > 0),
+  hintFlagSet: mystery7.deepHinted === true,
+  hintLineVoiced: deepHintLine === DEEPENING.hintLine,
+  deepened: mystery7.deepened === true,
+  // mystery.js voices its rung milestones as EVENTS (world.milestones is
+  // world.js's own fireMilestone list) — same assertion shape as wave-6
+  // convergence.
+  milestoneEvent: deepSiteEvs.some((e) => e.type === 'milestone' && e.id === 'deepening'),
+  deepeningEvent: deepSiteEvs.some((e) => e.type === 'deepening' && e.id === DEEPENING.site.id && e.line === DEEPENING.site.line),
+  songShiftEvent: deepSiteEvs.some((e) => e.type === 'songShift' && e.reason === 'deepening'),
+};
+console.log('wave7 deepening:', JSON.stringify(w7deepChecks), `found=${JSON.stringify(mystery7.found)}`);
+if (!Object.values(w7deepChecks).every(Boolean)) { console.log('WAVE7 DEEPENING FAIL'); errors++; }
+
+// -- 3. Named-Gun lineage: defeat, backdate the wait, successor --------------
+// Test SETUP (mirrors wave-6 c): one deterministic gen-0 hunter — splice any
+// existing Vane records (random soak combat could have marked one dead) and
+// reset the lineage fields before re-tripping the fear threshold.
+{
+  const bank = ctx.world.recordBanks?.redmarch ?? [];
+  for (let i = bank.length - 1; i >= 0; i--) if (bank[i].name === ACES.hunter.name) bank.splice(i, 1);
+  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null });
+  rivalry.hunterSpawned = false;
+  rivalry.hunterGeneration = 0;
+  rivalry.hunterDownAt = null;
+}
+ctx.world.fear = Math.max(ctx.world.fear, ACES.hunter.fearThreshold);
+tick(3, 'wave7 hunter spawn');
+const liveVane = () => (ctx.world.recordBanks?.redmarch ?? []).find((r) => r.name === ACES.hunter.name && r.state !== 'dead') ?? null;
+// Defeat an ace record through the real incident path: an 'npcDestroyed'
+// event is consumed by world.js exactly like a combat kill (wave-5's
+// atrocity emit uses the same mechanism).
+function defeatAce(rec, label, collector) {
+  ctx.emit('npcDestroyed', { ship: { id: `harness-${rec.id}`, record: rec } });
+  for (let i = 0; i < 3; i++) {
+    tick(1, label);
+    if (collector) collector.push(...ctx.lastEvents);
+  }
+}
+const expectVaneResolve = (gen) => 55 + ACES.hunter.lineage.resolvePerGeneration * gen;
+const expectVaneBounty = (gen) => Math.round(ACES.hunter.bounty * Math.pow(ACES.hunter.lineage.bountyGrowth, gen));
+const lineageEvs = [];
+const vane0 = liveVane();
+if (vane0) defeatAce(vane0, 'defeat vane gen0', lineageEvs);
+const downAt0 = ctx.world.aceRivalry?.hunterDownAt ?? null;
+// Backdate instead of sleeping: the respawn check is world.time - hunterDownAt.
+ctx.world.aceRivalry.hunterDownAt = ctx.world.time - (ACES.hunter.lineage.respawnDelay + 1);
+for (let i = 0; i < 3; i++) { tick(1, 'successor gen1'); lineageEvs.push(...ctx.lastEvents); }
+const vane1 = liveVane();
+const genAfterFirst = ctx.world.aceRivalry?.hunterGeneration;
+if (vane1) defeatAce(vane1, 'defeat vane gen1', lineageEvs);
+const downAt1 = ctx.world.aceRivalry?.hunterDownAt ?? null;
+ctx.world.aceRivalry.hunterDownAt = ctx.world.time - (ACES.hunter.lineage.respawnDelay + 1);
+for (let i = 0; i < 3; i++) { tick(1, 'successor gen2'); lineageEvs.push(...ctx.lastEvents); }
+const vane2 = liveVane();
+const genAfterSecond = ctx.world.aceRivalry?.hunterGeneration;
+if (vane2) defeatAce(vane2, 'defeat vane gen2', lineageEvs);
+const w7lineageChecks = {
+  gen0Spawned: !!vane0 && vane0.bounty === ACES.hunter.bounty,
+  downStamped0: downAt0 != null,
+  gen1Successor: !!vane1 && vane1.resolve === expectVaneResolve(1) && vane1.bounty === expectVaneBounty(1), // 67 / 6000
+  generationBumped1: genAfterFirst === 1,
+  lineagePassed1: lineageEvs.some((e) => e.type === 'lineagePassed' && e.name === ACES.hunter.name && e.generation === 1),
+  downStamped1: downAt1 != null,
+  gen2Successor: !!vane2 && vane2.resolve === expectVaneResolve(2) && vane2.bounty === expectVaneBounty(2), // 79 / 9000
+  generationBumped2: genAfterSecond === 2,
+  lineagePassed2: lineageEvs.some((e) => e.type === 'lineagePassed' && e.name === ACES.hunter.name && e.generation === 2),
+  lineBroken: ctx.world.milestones.includes('namedGunBroken'), // world.js fireMilestone records this one
+  noFourthVane: ctx.world.aceRivalry?.hunterDownAt == null && liveVane() === null,
+};
+console.log('wave7 lineage:', JSON.stringify(w7lineageChecks), `defeats=${ctx.world.aceRivalry?.defeats}`);
+if (!Object.values(w7lineageChecks).every(Boolean)) { console.log('WAVE7 LINEAGE FAIL'); errors++; }
+
+// -- 4. Illyx rematch ladder: two recorded defeats re-arm him twice ----------
+// The bump lives in spawnLiveShip (one bump per instantiation, written back
+// to record.rematchCount/record.resolve). Test SETUP: normalize the record so
+// the ladder is deterministic — random soak traffic could have instantiated
+// him after an early random ace kill and banked a bump already.
+const illyxRec = (ctx.world.recordBanks?.freehold ?? []).find((r) => r.name === 'Carver Illyx') ?? null;
+let illyxBase = 55; // spawnLiveShip's `record.resolve ?? 55` fallback
+if (illyxRec) {
+  illyxRec.rematchCount = 0;
+  delete illyxRec.resolve;
+  if (illyxRec.state === 'dead' || illyxRec.state === 'captured') illyxRec.state = 'enroute';
+  illyxBase = illyxRec.resolve ?? 55;
+  const spawnPos = new THREE.Vector3(0, 0, 0);
+  // The live objects never join ctx.ships (traffic owns that list) — the
+  // meshes are removed immediately; only the record-side bumps matter here.
+  removeLiveShip(ctx, spawnLiveShip(ctx, illyxRec, spawnPos)); // bump 1: defeats(3) > rematchCount(0)
+  removeLiveShip(ctx, spawnLiveShip(ctx, illyxRec, spawnPos)); // bump 2: defeats(3) > rematchCount(1)
+}
+const w7illyxChecks = {
+  defeatsBanked: (ctx.world.aceRivalry?.defeats ?? 0) >= 2,
+  recordFound: !!illyxRec,
+  rematchCount2: illyxRec?.rematchCount === 2,
+  resolvePlus30: illyxRec?.resolve === Math.min(95, illyxBase + 30), // 55 + 2×15 = 85
+};
+console.log('wave7 illyx ladder:', JSON.stringify(w7illyxChecks), `resolve=${illyxRec?.resolve} rematches=${illyxRec?.rematchCount}`);
+if (!Object.values(w7illyxChecks).every(Boolean)) { console.log('WAVE7 ILLYX LADDER FAIL'); errors++; }
+
+// -- 5. epic capstones: the fourth stage of every faction ---------------------
+// epics.js re-evaluates only when a watched value moves (rep entry, visited
+// count, credit 500-bucket, deepened flag) and advances ONE stage per faction
+// per frame — factions starting at 0 need four frames to reach the capstone.
+ctx.world.reputation.freehold = 50; // Sworn (tier 3) — stages 1-3 already recorded (wave-6 b)
+if (!ctx.world.mystery.visited.includes('th_lanes_end')) ctx.world.mystery.visited.push('th_lanes_end');
+tick(3, 'freehold capstone');
+const freeholdCap7 = ctx.world.epics?.freehold;
+const freeholdFx7 = epicEffects(ctx, 'freehold');
+
+ctx.world.reputation.redledger = 50;
+ctx.world.credits = 8000; // capstone threshold (multiple of 500 — the watched bucket moves)
+tick(6, 'redledger capstone');
+const redledgerCap7 = ctx.world.epics?.redledger;
+
+ctx.world.reputation.veridian = 50;
+if (!ctx.world.mystery.visited.includes('vd_hulk_row')) ctx.world.mystery.visited.push('vd_hulk_row');
+tick(6, 'veridian capstone');
+const veridianCap7 = ctx.world.epics?.veridian;
+
+tick(6, 'hollow capstone'); // deepened already true (step 2); 5 clues hold stages 1-3
+const hollowCap7 = ctx.world.epics?.hollow;
+
+const w7capstoneChecks = {
+  freehold4: freeholdCap7 === 4,
+  freeholdSellTotal: freeholdFx7.sellMult === 1.15, // capstone REPLACES the stage-3 1.1
+  redledger4: redledgerCap7 === 4,
+  redledgerBuyTotal: epicEffects(ctx, 'redledger').buyMult === 0.85, // replaces stage-2 0.9
+  veridian4: veridianCap7 === 4,
+  veridianRepairTotal: epicEffects(ctx, 'veridian').repairMult === 0.75, // replaces stage-2 0.85
+  hollow4: hollowCap7 === 4,
+  hollowRepairTotal: epicEffects(ctx, 'hollow').repairMult === 0.7, // replaces stage-3 0.8
+};
+console.log('wave7 epic capstones:', JSON.stringify(w7capstoneChecks), `epics=${JSON.stringify(ctx.world.epics)}`);
+if (!Object.values(w7capstoneChecks).every(Boolean)) { console.log('WAVE7 EPIC CAPSTONES FAIL'); errors++; }
+
+// -- 6. creditor arc: ledgerDebt come-due calls, the collector, the close -----
+// originArc was created live by world.js long ago (the greenhand payoff
+// fired back in wave-6 b); the ??= only covers an unexpected gap.
+const arc7 = (ctx.world.originArc ??= {
+  calls: 0, lastCallAt: 0, debtCleared: false, collectorSent: false,
+  marked: false, beautiful: false, drifter: false, greenhand: false,
+});
+ctx.world.origin = 'ledgerDebt';
+ctx.world.credits = -100;
+const callStep = ORIGIN_ARCS.ledgerDebt.callInterval + 1; // 241 world-s
+const credEvs = [];
+const repTrack = [];
+const repBeforeCalls = ctx.world.reputation.redledger;
+// Call 1 fires immediately (lastCallAt starts at 0, world.time is long past
+// the interval); later calls need the time jump — deterministic, no sleeps.
+for (let stage = 1; stage <= ORIGIN_ARCS.ledgerDebt.maxCalls; stage++) {
+  for (let i = 0; i < 2; i++) { tick(1, `creditor call ${stage}`); credEvs.push(...ctx.lastEvents); }
+  repTrack.push(ctx.world.reputation.redledger);
+  // Spacing guard: without the time jump no further call may arrive.
+  for (let i = 0; i < 3; i++) { tick(1, `creditor spacing ${stage}`); credEvs.push(...ctx.lastEvents); }
+  if (stage < ORIGIN_ARCS.ledgerDebt.maxCalls) ctx.world.time += callStep;
+}
+const callStages7 = credEvs.filter((e) => e.type === 'creditorCall').map((e) => e.stage);
+const dresk = (ctx.world.recordBanks?.[ctx.world.currentSystem] ?? []).find((r) => r.name === ORIGIN_ARCS.ledgerDebt.collector.name) ?? null;
+// Close the arc: credits back above water.
+ctx.world.credits = 100;
+const clearEvs = [];
+for (let i = 0; i < 3; i++) { tick(1, 'debt cleared'); clearEvs.push(...ctx.lastEvents); }
+const w7creditorChecks = {
+  stagesArrivedSpaced: JSON.stringify(callStages7) === JSON.stringify([1, 2, 3]),
+  callLinesMatch: credEvs.filter((e) => e.type === 'creditorCall')
+    .every((e) => e.line === ORIGIN_ARCS.ledgerDebt.callLines[e.stage - 1]),
+  repDropped3PerCall: repTrack[0] === repBeforeCalls - 3 && repTrack[1] === repBeforeCalls - 6 && repTrack[2] === repBeforeCalls - 9,
+  collectorSentFlag: arc7.collectorSent === true,
+  collectorInBank: !!dresk && dresk.role === 'pirate' && dresk.classKey === ORIGIN_ARCS.ledgerDebt.collector.classKey && dresk.faction === 'redledger',
+  debtClearedFlag: arc7.debtCleared === true,
+  debtClearedMilestone: ctx.world.milestones.includes('debtCleared'),
+  clearRepBonus: ctx.world.reputation.redledger === repBeforeCalls - 9 + ORIGIN_ARCS.ledgerDebt.clearRepBonus,
+  clearEventVoiced: clearEvs.some((e) => e.type === 'milestone' && e.id === 'debtCleared'),
+};
+console.log('wave7 creditor:', JSON.stringify(w7creditorChecks), `calls=${arc7.calls} rep.redledger=${ctx.world.reputation.redledger}`);
+if (!Object.values(w7creditorChecks).every(Boolean)) { console.log('WAVE7 CREDITOR FAIL'); errors++; }
+
+// -- 7. one-time payoff: 'marked' fires once at veridian rep >= 0 -------------
+ctx.world.origin = 'marked';
+ctx.world.reputation.veridian = 0; // the threshold crossing itself
+const payoffEvs = [];
+for (let i = 0; i < 3; i++) { tick(1, 'marked payoff'); payoffEvs.push(...ctx.lastEvents); }
+const markedFires = payoffEvs.filter((e) => e.type === 'originPayoff' && e.id === 'marked');
+// Re-crossing the threshold must not re-fire — the arc flag is the guard.
+ctx.world.reputation.veridian = -5;
+tick(2, 'marked dip');
+ctx.world.reputation.veridian = 5;
+const refireEvs = [];
+for (let i = 0; i < 3; i++) { tick(1, 'marked re-cross'); refireEvs.push(...ctx.lastEvents); }
+const w7payoffChecks = {
+  firedOnce: markedFires.length === 1,
+  carriesLine: markedFires[0]?.line === ORIGIN_ARCS.payoffs.marked,
+  arcFlagSet: arc7.marked === true,
+  noRefire: !refireEvs.some((e) => e.type === 'originPayoff' && e.id === 'marked'),
+};
+console.log('wave7 origin payoff:', JSON.stringify(w7payoffChecks));
+if (!Object.values(w7payoffChecks).every(Boolean)) { console.log('WAVE7 ORIGIN PAYOFF FAIL'); errors++; }
+
+// -- 8. save roundtrip: wave-7 world fields survive save AND restore ---------
+// Test SETUP: park live hostiles so the dock autosave can't be combat-blocked
+// (same pattern as the wave-5/wave-6 save sections — the hush pirates and the
+// injected collector are live somewhere in this system).
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave7 save)');
+dockAtCurrentStation('dock hush (wave7 save)'); // Threshold — 'docked' fires trySave
+tick(3, 'wave7 save settle');
+const w7snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const w7saveChecks = {
+  saveWritten: !!w7snap?.world,
+  originArcPersisted: w7snap?.world?.originArc?.debtCleared === true && w7snap?.world?.originArc?.marked === true,
+  hunterGenerationPersisted: w7snap?.world?.aceRivalry?.hunterGeneration === 2,
+  deepeningPersisted: w7snap?.world?.mystery?.deepHinted === true && w7snap?.world?.mystery?.deepened === true,
+};
+console.log('wave7 save fields:', JSON.stringify(w7saveChecks));
+if (!Object.values(w7saveChecks).every(Boolean)) { console.log('WAVE7 SAVE FIELDS FAIL'); errors++; }
+
+// Restore half of the roundtrip: corrupt the wave-7 fields in memory, die,
+// recover from the dock autosave (the wave-5 death path — Enter skips the
+// hold synchronously, so the asserts read post-restore state).
+ctx.world.originArc = {
+  calls: 0, lastCallAt: 0, debtCleared: false, collectorSent: false,
+  marked: false, beautiful: false, drifter: false, greenhand: false,
+};
+ctx.world.aceRivalry.hunterGeneration = 0;
+ctx.world.mystery = { found: [], visited: [] };
+tick(2, 'wave7 fields corrupted');
+const w7corrupted = ctx.world.originArc.debtCleared === false && ctx.world.mystery.found.length === 0;
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave7 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const w7restoreChecks = {
+  corruptedFirst: w7corrupted,
+  originArcRestored: ctx.world.originArc?.debtCleared === true && ctx.world.originArc?.marked === true,
+  hunterGenerationRestored: ctx.world.aceRivalry?.hunterGeneration === 2,
+  deepeningRestored: ctx.world.mystery?.deepHinted === true && ctx.world.mystery?.deepened === true,
+};
+console.log('wave7 restore:', JSON.stringify(w7restoreChecks));
+if (!Object.values(w7restoreChecks).every(Boolean)) { console.log('WAVE7 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

@@ -236,20 +236,23 @@ export function spawnLiveShip(ctx, record, position) {
     ...record,
     resolve: record.resolve ?? Math.round((record.resolveSeed ?? 0.5) * 100),
   });
-  // Illyx rematch: he fled a defeat once and came back harder. +15 resolve,
-  // once per record — the bump is written back onto record.resolve (JSON-plain,
-  // persisted), which createShipState prefers on every later instantiation, so
-  // despawn/re-instantiation reuses it instead of stacking another +15.
+  // Illyx rematch ladder: he fled a defeat and comes back harder, up to TWO
+  // bumps (+15 resolve each, capped at 95). Each bump requires one more
+  // recorded ace defeat than bumps already taken. record.rematchCount
+  // (JSON-plain, persisted) counts bumps taken; the bump is written back onto
+  // record.resolve, which createShipState prefers on every later
+  // instantiation, so despawn/re-instantiation reuses it instead of
+  // stacking another +15.
   if (
     record.name === 'Carver Illyx' &&
-    !record.rematchReady &&
-    (ctx.world.aceRivalry?.defeats ?? 0) > 0 &&
+    (record.rematchCount ?? 0) < 2 &&
+    (ctx.world.aceRivalry?.defeats ?? 0) > (record.rematchCount ?? 0) &&
     record.state !== 'dead' &&
     record.state !== 'captured'
   ) {
-    record.rematchReady = true;
-    state.resolve = Math.min(100, state.resolve + 15);
-    record.resolve = state.resolve;
+    record.rematchCount = (record.rematchCount ?? 0) + 1;
+    record.resolve = Math.min(95, (record.resolve ?? 55) + 15);
+    state.resolve = record.resolve;
   }
   const live = {
     id: record.id ?? `npc-${nextShipId++}`,
@@ -670,9 +673,15 @@ function updateDuel(ctx, live, dt, now) {
         ai.recognitionSent = true;
         const recName = live.record?.name;
         if (recName === 'Sister Vane') {
-          line = 'The Ledger bought my wing for you.';
+          // Lineage generation: each fallen Vane is succeeded by the next.
+          const gen = ctx.world.aceRivalry?.hunterGeneration ?? 0;
+          line = gen >= 2
+            ? 'The third Vane does not run, legend.'
+            : gen === 1
+              ? 'You killed her. The name you will have to kill again.'
+              : 'The Ledger bought my wing for you.';
         } else if (recName === 'Carver Illyx' && (ctx.world.aceRivalry?.defeats ?? 0) > 0) {
-          line = 'Again.';
+          line = (live.record?.rematchCount ?? 0) < 2 ? 'Again.' : 'Again. Again.';
         } else if (ctx.world.fear >= 25) {
           line = 'They pay me to end you. Nothing personal, legend.';
         } else if (ctx.world.fear >= 15) {

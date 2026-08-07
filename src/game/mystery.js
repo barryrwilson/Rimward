@@ -20,13 +20,19 @@
  * and 'songShift' once (converged flag). Both flags live on the mystery
  * record so they persist; the copy never restates the buried truth.
  *
+ * Wave 7 rung: post-convergence, with DEEPENING.cluesNeeded clues held,
+ * Echo voices the fixed hintLine once (deepHinted flag); approaching
+ * DEEPENING.site in its system after the hint then fires the 'deepening'
+ * milestone + event and 'songShift' once (deepened flag). Same
+ * persistence and no-restatement discipline as the convergence rung.
+ *
  * Pure sim: no three.js/DOM imports. Ship position is read as plain x/y/z
  * properties off ctx.ship.object.position; distances via Math.hypot.
  * Per-frame cost: one pass over the current system's few entries, zero
  * allocations.
  */
 
-import { CONVERGENCE } from './state.js';
+import { CONVERGENCE, DEEPENING } from './state.js';
 
 const CLUE_RADIUS = 35; // u — clue discovery range
 const LANDMARK_RADIUS = 100; // u — landmark discovery range
@@ -68,6 +74,29 @@ export function initMystery(ctx) {
           ctx.emit('milestone', { id: 'convergence', line: CONVERGENCE.site.line });
           ctx.emit('convergence', { id: CONVERGENCE.site.id, line: CONVERGENCE.site.line });
           ctx.emit('songShift', { reason: 'convergence' });
+        }
+      }
+
+      // Deepening rung (wave 7): after convergence, once enough clues are
+      // held, Echo voices the hint exactly once ever — the flag persists on
+      // the mystery record. Old saves lack these fields; missing reads falsy.
+      if (mystery.converged && !mystery.deepHinted
+        && (mystery.found?.length ?? 0) >= DEEPENING.cluesNeeded) {
+        mystery.deepHinted = true;
+        ctx.emit('commLine', { text: DEEPENING.hintLine, from: 'Echo' });
+      }
+
+      // Site discovery: hinted, in the site's system, within its radius.
+      // The deepened flag is the permanence guard — fires exactly once ever.
+      if (mystery.deepHinted && !mystery.deepened
+        && ctx.world.currentSystem === DEEPENING.site.system) {
+        const sp = DEEPENING.site.position;
+        if (Math.hypot(px - sp[0], py - sp[1], pz - sp[2]) <= DEEPENING.site.radius) {
+          mystery.deepened = true;
+          ctx.emit('milestone', { id: 'deepening', line: DEEPENING.site.line });
+          ctx.emit('deepening', { id: DEEPENING.site.id, line: DEEPENING.site.line });
+          ctx.emit('songShift', { reason: 'deepening' });
+          ctx.emit('commLine', { text: DEEPENING.site.line, from: 'Echo' });
         }
       }
 

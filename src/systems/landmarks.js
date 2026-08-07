@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONVERGENCE } from '../game/state.js';
+import { CONVERGENCE, DEEPENING } from '../game/state.js';
 
 /**
  * Authored landmarks + clue motes — per-system points of interest from
@@ -29,6 +29,11 @@ import { CONVERGENCE } from '../game/state.js';
  * and flips trigger a full rebuild. mystery.converged dims it like any
  * discovered landmark (dimmable list 'converged' reads the flag, not an
  * array).
+ *
+ * Wave 7: the DEEPENING site follows the same dynamic-POI pattern — built
+ * (anomaly visual) only in DEEPENING.site.system and only once
+ * mystery.deepHinted is true, watched in update() with rebuilds on flips;
+ * mystery.deepened dims it (dimmable list 'deepened').
  *
  * Ownership: adds/removes objects in ctx.scene, writes nothing shared.
  * update() performs zero allocations — pulse phases, base intensities, and
@@ -65,6 +70,8 @@ export function initLandmarks(ctx) {
   let lastMystery = null; // identity watch: save-load may swap the object
   let lastHinted = false;   // mystery.convergeHinted watch (site POI add)
   let lastConverged = false; // mystery.converged watch (site dim)
+  let lastDeepHinted = false;  // mystery.deepHinted watch (site POI add)
+  let lastDeepened = false;    // mystery.deepened watch (site dim)
 
   function ownMat(mat) {
     ownedMats.push(mat);
@@ -203,6 +210,8 @@ export function initLandmarks(ctx) {
     lastMystery = mystery;
     lastHinted = !!mystery?.convergeHinted;
     lastConverged = !!mystery?.converged;
+    lastDeepHinted = !!mystery?.deepHinted;
+    lastDeepened = !!mystery?.deepened;
     if (!def) return;
 
     const landmarks = def.landmarks ?? EMPTY;
@@ -242,6 +251,18 @@ export function initLandmarks(ctx) {
       d.list = 'converged'; // membership is the converged flag, not an array
       applyDim(d, lastConverged);
     }
+
+    // Wave 7: the deepening site mirrors the convergence site — exists only
+    // after Echo's hint, and only in its own system. Same anomaly visual,
+    // dimmed like a discovered landmark once deepened.
+    if (systemId === DEEPENING.site.system && lastDeepHinted) {
+      const site = buildAnomaly(DEEPENING.site);
+      site.position.fromArray(DEEPENING.site.position);
+      group.add(site);
+      const d = dimmables[dimmables.length - 1];
+      d.list = 'deepened'; // membership is the deepened flag, not an array
+      applyDim(d, lastDeepened);
+    }
   }
 
   function dispose() {
@@ -277,18 +298,23 @@ export function initLandmarks(ctx) {
       const visited = mystery.visited ?? EMPTY;
       const hinted = !!mystery.convergeHinted;
       const converged = !!mystery.converged;
-      if (mystery !== lastMystery || hinted !== lastHinted) {
+      const deepHinted = !!mystery.deepHinted;
+      const deepened = !!mystery.deepened;
+      if (mystery !== lastMystery || hinted !== lastHinted
+        || deepHinted !== lastDeepHinted) {
         // Record swap or hint flip can add/remove the site POI — full
         // rebuild (same discipline as systemLoaded; disposes per-build mats).
         rebuild(ctx.world.currentSystem);
       } else if (found.length !== lastFound || visited.length !== lastVisited
-        || converged !== lastConverged) {
+        || converged !== lastConverged || deepened !== lastDeepened) {
         lastFound = found.length;
         lastVisited = visited.length;
         lastConverged = converged;
+        lastDeepened = deepened;
         for (let i = 0; i < dimmables.length; i++) {
           const d = dimmables[i];
           if (d.list === 'converged') { applyDim(d, converged); continue; }
+          if (d.list === 'deepened') { applyDim(d, deepened); continue; }
           const list = d.list === 'found' ? found : visited;
           applyDim(d, list.includes(d.id));
         }
