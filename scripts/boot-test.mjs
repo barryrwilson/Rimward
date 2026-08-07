@@ -3734,5 +3734,193 @@ const w14dockChecks = {
 console.log('wave14 docked chart mark:', JSON.stringify(w14dockChecks), `lines=${JSON.stringify(dockMarkLines14a.map((e) => e.text))} charted=${JSON.stringify(chartedAfterDock14)}`);
 if (!Object.values(w14dockChecks).every(Boolean)) { console.log('WAVE14 DOCKED CHART MARK FAIL'); errors++; }
 
+// ---- Wave 15: charted-page acknowledgment / chart-mark HUD markers ----
+// Wave 14's keeperChartMark left a plain landmark-id list on the persisted
+// mystery record (mystery.charted); wave 15 adds its two readers. A: the
+// ledger's tier-2 open page, already charted, is acknowledged as the
+// pilot's own mark — at and below the comp tier, with the uncharted lines
+// byte-identical to waves 13/14. B: the HUD surfaces each charted-but-
+// unvisited landmark of the current system as a POI marker (pool created
+// at init, hidden while docked, labels on the throttled ~5 Hz text pass).
+// Same discipline throughout: snapshot every touched field, restore every
+// mutation in place (charted via the hadCharted presence discipline),
+// every expectation COMPUTED off SYSTEMS. mystery14 (the live record),
+// hushKeeper14 (natural trust restored), hushLm14, hushClue13,
+// ALL_CLUE_IDS, LEDGER2_RE/LEDGER2_NEAR_RE, and the dock helpers all ride
+// from waves 12–14. The run is docked at Threshold in the hush — wave-14
+// e's end state — hull still pinned huge.
+
+// -- a. ledger acknowledgment, pure gates (wave-14 d discipline) -----------
+// Pin tier-2 on the hush keeper: every authored landmark witnessed (dedup
+// push), every clue found but 'th_c_keeper' — The Hush's page is then the
+// ONLY open page, so the ledgerIdx rotation always lands on it — trust
+// pinned, charted controlled. Pure calls; nothing ticks between them.
+const trustBefore15 = hushKeeper14?.trust;
+const ledgerIdxBefore15 = hushKeeper14?.ledgerIdx;
+const visitedBefore15 = [...(mystery14?.visited ?? [])];
+const foundBefore15 = [...(mystery14?.found ?? [])];
+const hadCharted15 = mystery14 ? 'charted' in mystery14 : false;
+const chartedBefore15 = [...(mystery14?.charted ?? [])];
+const chartedRef15 = mystery14?.charted ?? null; // restore the SAME array when the key stood
+// COMPUTED off the authored tables (markExpected14's discipline) — the
+// system name and the paired landmark name, never a hardcoded string.
+const ackCompExpected15 = hushLm14
+  ? `The second column balances. A page stays open in ${SYSTEMS.hush.name} — the mark near ${hushLm14.name} is yours now; the page waits to be read.`
+  : null;
+const ackBelowExpected15 =
+  `The second column balances. A page stays open in ${SYSTEMS.hush.name} — the mark on your charts is yours now; the page waits to be read.`;
+const unchartedCompExpected15 = hushLm14
+  ? `The second column balances. A page stays open in ${SYSTEMS.hush.name} — the page near ${hushLm14.name} waits to be read.`
+  : null;
+const unchartedBelowExpected15 =
+  `The second column balances. A page stays open in ${SYSTEMS.hush.name} — something there waits to be read.`;
+for (const def of Object.values(SYSTEMS)) {
+  for (const lm of def.landmarks ?? []) {
+    if (!mystery14.visited.includes(lm.id)) mystery14.visited.push(lm.id);
+  }
+}
+mystery14.found.length = 0;
+mystery14.found.push(...ALL_CLUE_IDS.filter((id) => id !== 'th_c_keeper'));
+// The hush page's paired landmark rides the charts (in place when the key
+// already stands).
+if ('charted' in mystery14) {
+  mystery14.charted.length = 0;
+  if (hushLm14) mystery14.charted.push(hushLm14.id);
+} else {
+  mystery14.charted = hushLm14 ? [hushLm14.id] : [];
+}
+// Comp tier with the mark on the charts: the exact acknowledgment.
+if (hushKeeper14) hushKeeper14.trust = 60;
+const ackCompLine15 = hushKeeper14 ? keeperLedgerLine(ctx, hushKeeper14) : null;
+// One trust short, same charted state: the mark is still the pilot's own,
+// but the landmark stays unnamed (the narrowing is gated at 60).
+if (hushKeeper14) hushKeeper14.trust = 59;
+const ackBelowLine15 = hushKeeper14 ? keeperLedgerLine(ctx, hushKeeper14) : null;
+// Charts blank, same tier-2 state: the wave-13/14 lines come back
+// BYTE-IDENTICAL — comp narrows to the page near the landmark, below the
+// gate only the system is named.
+if ('charted' in mystery14) mystery14.charted.length = 0;
+if (hushKeeper14) hushKeeper14.trust = 60;
+const unchartedCompLine15 = hushKeeper14 ? keeperLedgerLine(ctx, hushKeeper14) : null;
+if (hushKeeper14) hushKeeper14.trust = 59;
+const unchartedBelowLine15 = hushKeeper14 ? keeperLedgerLine(ctx, hushKeeper14) : null;
+// Old saves carry no charted key: the ?? [] guard reads empty and the
+// comp-tier call returns the uncharted narrowed line.
+delete mystery14.charted;
+if (hushKeeper14) hushKeeper14.trust = 60;
+const oldSaveLine15 = hushKeeper14 ? keeperLedgerLine(ctx, hushKeeper14) : null;
+// Restore everything in place — landmarks.js change-detects on length.
+mystery14.visited.length = 0;
+mystery14.visited.push(...visitedBefore15);
+mystery14.found.length = 0;
+mystery14.found.push(...foundBefore15);
+if (hadCharted15) {
+  mystery14.charted = chartedRef15 ?? [];
+  mystery14.charted.length = 0;
+  mystery14.charted.push(...chartedBefore15);
+} else {
+  delete mystery14.charted;
+}
+if (hushKeeper14) {
+  hushKeeper14.trust = trustBefore15;
+  if (ledgerIdxBefore15 !== undefined) hushKeeper14.ledgerIdx = ledgerIdxBefore15;
+}
+const w15ledgerChecks = {
+  keeperKnown: !!hushKeeper14,
+  hushLmKnown: !!hushLm14 && typeof hushLm14.id === 'string' && typeof hushLm14.name === 'string',
+  ackCompExact: ackCompExpected15 !== null && ackCompLine15 === ackCompExpected15,
+  ackBelowExact: ackBelowLine15 === ackBelowExpected15,
+  ackBelowNamesNoLm: typeof ackBelowLine15 === 'string' && !!hushLm14 && !ackBelowLine15.includes(hushLm14.name),
+  unchartedCompByteIdentical: unchartedCompExpected15 !== null && unchartedCompLine15 === unchartedCompExpected15 &&
+    LEDGER2_NEAR_RE.test(unchartedCompLine15 ?? ''),
+  unchartedBelowByteIdentical: unchartedBelowLine15 === unchartedBelowExpected15 &&
+    LEDGER2_RE.test(unchartedBelowLine15 ?? ''),
+  ackNoLeak: !!hushClue13 && [ackCompLine15, ackBelowLine15]
+    .every((l) => typeof l === 'string' && !l.includes('th_c_keeper') && !l.includes(hushClue13.line)),
+  oldSaveUncharted: oldSaveLine15 !== null && oldSaveLine15 === unchartedCompExpected15,
+};
+console.log('wave15 ledger charted ack:', JSON.stringify(w15ledgerChecks), `comp=${JSON.stringify(ackCompLine15)} below=${JSON.stringify(ackBelowLine15)} uncharted=${JSON.stringify(unchartedCompLine15)}|${JSON.stringify(unchartedBelowLine15)} old=${JSON.stringify(oldSaveLine15)}`);
+if (!Object.values(w15ledgerChecks).every(Boolean)) { console.log('WAVE15 LEDGER CHARTED ACK FAIL'); errors++; }
+
+// -- b. HUD chart markers, real DOM ----------------------------------------
+// initHud's pool rides the #hud root (the harness's getElementById stub —
+// NOT under document.body): one div.rw-chartmark per slot, each created
+// with className 'rw-chartmark is-hidden', and visibility flips through
+// classList only, so the stub's className string stays the creation value
+// and classList carries the live state. Pin mystery.charted to exactly the
+// hush page's landmark id and keep that id OUT of mystery.visited (splice
+// if an earlier leg witnessed it — snapshot first). Every assertion reads
+// the live stub DOM after real ticks.
+const hudRoot15 = document.getElementById('hud');
+const chartmarkBoxes15 = () => [...walkDom(hudRoot15 ?? { children: [] })]
+  .filter((n) => typeof n.className === 'string' && n.className.split(' ').includes('rw-chartmark'));
+const chartmarkLabel15 = (box) => (box?.children ?? []).find((c) => c.className === 'rw-chartmark-label') ?? null;
+const visitedBefore15b = [...(mystery14?.visited ?? [])];
+const hadCharted15b = mystery14 ? 'charted' in mystery14 : false;
+const chartedBefore15b = [...(mystery14?.charted ?? [])];
+const chartedRef15b = mystery14?.charted ?? null;
+if ('charted' in mystery14) {
+  mystery14.charted.length = 0;
+  if (hushLm14) mystery14.charted.push(hushLm14.id);
+} else {
+  mystery14.charted = hushLm14 ? [hushLm14.id] : [];
+}
+const visitedIdx15 = hushLm14 ? mystery14.visited.indexOf(hushLm14.id) : -1;
+if (visitedIdx15 >= 0) mystery14.visited.splice(visitedIdx15, 1);
+// Docked at Threshold: the station screen is up — every marker stays hidden.
+tick(2, 'wave15 chartmark docked');
+const dockedBoxes15 = chartmarkBoxes15();
+const dockedAllHidden15 = dockedBoxes15.length > 0 && dockedBoxes15.every((b) => b.classList.contains('is-hidden'));
+// Undock and fly: exactly one marker shows — the hush page's landmark —
+// its label naming the landmark (labels write on the ~5 Hz text pass, so
+// the tick count spans a couple of text windows).
+undockStation();
+tick(15, 'wave15 chartmark flying');
+const flyVisible15 = chartmarkBoxes15().filter((b) => !b.classList.contains('is-hidden'));
+const flyLabelText15 = (flyVisible15.length === 1 ? chartmarkLabel15(flyVisible15[0]) : null)?.textContent ?? '';
+// A witnessed landmark no longer needs the mark: the id joins
+// mystery.visited and the marker hides again.
+if (hushLm14 && !mystery14.visited.includes(hushLm14.id)) mystery14.visited.push(hushLm14.id);
+tick(3, 'wave15 chartmark witnessed');
+const witnessedAllHidden15 = chartmarkBoxes15().every((b) => b.classList.contains('is-hidden'));
+// A charted id from ANOTHER system renders nothing here: unwitness the
+// hush landmark, add veridian's first authored landmark to the charts —
+// still exactly one marker, still the hush one.
+const witnessedIdx15 = hushLm14 ? mystery14.visited.indexOf(hushLm14.id) : -1;
+if (witnessedIdx15 >= 0) mystery14.visited.splice(witnessedIdx15, 1);
+const veridianLm15 = (SYSTEMS.veridian.landmarks ?? []).find((l) => l.id !== hushLm14?.id) ?? null;
+if (veridianLm15 && !mystery14.charted.includes(veridianLm15.id)) mystery14.charted.push(veridianLm15.id);
+tick(15, 'wave15 chartmark cross-system');
+const crossVisible15 = chartmarkBoxes15().filter((b) => !b.classList.contains('is-hidden'));
+const crossLabelText15 = (crossVisible15.length === 1 ? chartmarkLabel15(crossVisible15[0]) : null)?.textContent ?? '';
+// Re-dock at Threshold — the run ends where wave 14 left it — and restore
+// every pinned field in place.
+dockAtCurrentStation('dock hush (wave15 chartmark)');
+const redockedHush15 = ctx.flags.docked === true && ctx.world.currentSystem === 'hush';
+mystery14.visited.length = 0;
+mystery14.visited.push(...visitedBefore15b);
+if (hadCharted15b) {
+  mystery14.charted = chartedRef15b ?? [];
+  mystery14.charted.length = 0;
+  mystery14.charted.push(...chartedBefore15b);
+} else {
+  delete mystery14.charted;
+}
+const w15hudChecks = {
+  hudRootFound: !!hudRoot15,
+  hushLmKnown: !!hushLm14 && typeof hushLm14.id === 'string',
+  poolPresent: dockedBoxes15.length > 0,
+  dockedAllHidden: dockedAllHidden15,
+  oneVisibleFlying: flyVisible15.length === 1,
+  labelNamesLandmark: !!hushLm14 && flyLabelText15.includes(hushLm14.name),
+  labelHasDistance: /· \d/.test(flyLabelText15),
+  witnessedHides: witnessedAllHidden15,
+  veridianLmComputed: !!veridianLm15 && typeof veridianLm15.id === 'string',
+  crossSystemStillOne: crossVisible15.length === 1 && !!hushLm14 && crossLabelText15.includes(hushLm14.name),
+  redockedInHush: redockedHush15,
+};
+console.log('wave15 hud chart markers:', JSON.stringify(w15hudChecks), `label=${JSON.stringify(flyLabelText15)} cross=${JSON.stringify(crossLabelText15)}`);
+if (!Object.values(w15hudChecks).every(Boolean)) { console.log('WAVE15 HUD CHART MARKERS FAIL'); errors++; }
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

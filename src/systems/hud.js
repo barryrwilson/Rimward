@@ -15,6 +15,14 @@ import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand } from '.
  * writes are throttled to ~5 Hz and only when the value actually changed.
  * No per-frame object allocations — scratch Vector3s live at init scope.
  *
+ * Wave 15: charted landmarks surface as POI markers while flying their
+ * system — the keeper's chart mark (wave 14 mystery.charted) becomes a
+ * heading. One pooled diamond + label per charted-but-unvisited landmark of
+ * the current system, projected and edge-clamped like the target bracket;
+ * hidden while docked, dimmed in combat (§13.2). mystery.charted/visited are
+ * read fresh each frame (save.js swaps the record on restore). §25: labels
+ * name the authored landmark + distance only, never a clue.
+ *
  * Color is never the only signal (§18.4/§20): every state pairs palette with
  * text, shape (petals, corners, icons), or glyph prefixes.
  */
@@ -25,6 +33,7 @@ const TOAST_SLOTS = 5;
 const HULL_PETALS = 10;
 const EDGE_MARGIN = 84; // px inset for the off-screen target arrow
 const LEAD_MIN_SPEED = 6; // u/s — slower targets hide the lead pip
+const EMPTY_LIST = []; // shared ?? fallback — never mutated, avoids per-frame []
 
 const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // input.weaponGroup 1..3
 const BAND_LABEL = {
@@ -265,6 +274,25 @@ export function initHud(ctx) {
   const lead = el('div', 'rw-lead is-hidden', root);
   const edgeArrow = el('div', 'rw-edge-arrow is-hidden', root);
 
+  // ---------- wave 15: charted landmark markers (keeper chart marks) ----------
+  // One slot per possible mark: pool sized to the largest authored landmark
+  // table in SYSTEMS, every node created ONCE here (performance contract).
+  // Decorative — the mark is announced via commLine when charted, so the
+  // marker is pointer-inert and aria-hidden.
+  let CHARTMARK_SLOTS = 0;
+  for (const sysId in SYSTEMS) {
+    const n = (SYSTEMS[sysId].landmarks ?? EMPTY_LIST).length;
+    if (n > CHARTMARK_SLOTS) CHARTMARK_SLOTS = n;
+  }
+  const chartSlots = [];
+  for (let i = 0; i < CHARTMARK_SLOTS; i++) {
+    const box = el('div', 'rw-chartmark is-hidden', root);
+    box.setAttribute('aria-hidden', 'true');
+    el('span', 'rw-chartmark-glyph', box);
+    const label = el('span', 'rw-chartmark-label', box);
+    chartSlots.push({ box, label, lmId: '', lmName: '', dist: 0, shown: null, x: -1, y: -1, textId: '', textBucket: -1 });
+  }
+
   // ---------- top-center toasts (comm lines + milestone stings) ----------
   const toasts = el('div', 'rw-toasts', root);
   // screen readers announce toasts/banner as they appear (no focus moves)
@@ -402,6 +430,7 @@ export function initHud(ctx) {
   const velInst = new THREE.Vector3(); // instantaneous velocity sample
   const targetVel = new THREE.Vector3(); // smoothed target velocity
   const lastTargetPos = new THREE.Vector3();
+  const chartProj = new THREE.Vector3(); // charted landmark world→NDC (wave 15)
   let lastTargetRef = null;
 
   // ---------- change-detection cache ----------
@@ -609,6 +638,48 @@ export function initHud(ctx) {
         }
       }
 
+      // --- wave 15: charted landmark markers (positions every frame) ---
+      // mystery is read FRESH each frame — save.js swaps the record on
+      // restore (landmarks.js identity-watch discipline); ?? guards cover old
+      // saves with no mystery record. A landmark already witnessed
+      // (mystery.visited) no longer needs its mark; docking hides them all
+      // (station screen is up — these are flight instruments).
+      const mystery = ctx.world.mystery;
+      const charted = mystery?.charted ?? EMPTY_LIST;
+      const unvisited = mystery?.visited ?? EMPTY_LIST;
+      const curLandmarks = SYSTEMS[ctx.world.currentSystem]?.landmarks ?? EMPTY_LIST;
+      let cmSlot = 0;
+      if (!ctx.flags.docked) {
+        for (let i = 0; i < curLandmarks.length && cmSlot < CHARTMARK_SLOTS; i++) {
+          const lm = curLandmarks[i];
+          if (charted.indexOf(lm.id) === -1 || unvisited.indexOf(lm.id) !== -1) continue;
+          const s = chartSlots[cmSlot++];
+          s.lmId = lm.id;
+          s.lmName = lm.name;
+          chartProj.set(lm.position[0], lm.position[1], lm.position[2]);
+          s.dist = fromPos.distanceTo(chartProj);
+          chartProj.project(cam);
+          let mdx = chartProj.x, mdy = chartProj.y;
+          if (chartProj.z > 1) { mdx = -mdx; mdy = -mdy; } // behind camera: flip
+          let mpx = (mdx * 0.5 + 0.5) * vw;
+          let mpy = (-mdy * 0.5 + 0.5) * vh;
+          // off-screen: edge-clamp like the target arrow's EDGE_MARGIN inset
+          if (mpx < EDGE_MARGIN) mpx = EDGE_MARGIN; else if (mpx > vw - EDGE_MARGIN) mpx = vw - EDGE_MARGIN;
+          if (mpy < EDGE_MARGIN) mpy = EDGE_MARGIN; else if (mpy > vh - EDGE_MARGIN) mpy = vh - EDGE_MARGIN;
+          const mrx = Math.round(mpx), mry = Math.round(mpy);
+          if (mrx !== s.x || mry !== s.y) {
+            s.x = mrx; s.y = mry;
+            s.box.style.transform = 'translate3d(' + mrx + 'px,' + mry + 'px,0)';
+          }
+          if (s.shown !== true) { s.shown = true; s.box.classList.remove('is-hidden'); }
+        }
+      }
+      for (let i = cmSlot; i < CHARTMARK_SLOTS; i++) {
+        const s = chartSlots[i];
+        if (s.shown !== false) { s.shown = false; s.box.classList.add('is-hidden'); }
+        s.lmId = '';
+      }
+
       // ---------- throttled text / bars (~5 Hz, write-on-change) ----------
       textAccum += dt;
       if (textAccum < TEXT_UPDATE_INTERVAL) return;
@@ -622,6 +693,21 @@ export function initHud(ctx) {
       if (combat !== last.combat) {
         last.combat = combat;
         root.classList.toggle('in-combat', combat);
+      }
+
+      // wave 15: charted marker labels — landmark name + distance (bracket's
+      // ' · N u' convention, k-abbreviated past 1000); write-on-change per
+      // slot, keyed on assigned landmark id + rounded distance bucket
+      for (let i = 0; i < CHARTMARK_SLOTS; i++) {
+        const s = chartSlots[i];
+        if (!s.shown) continue;
+        const bucket = s.dist >= 1000 ? Math.round(s.dist / 100) : Math.round(s.dist / 10);
+        if (s.lmId !== s.textId || bucket !== s.textBucket) {
+          s.textId = s.lmId; s.textBucket = bucket;
+          s.label.textContent = s.dist >= 1000
+            ? s.lmName + ' · ' + (Math.round(s.dist / 100) / 10) + 'k'
+            : s.lmName + ' · ' + Math.round(s.dist) + 'u';
+        }
       }
 
       // player defense (§6.4): screen = thin outer bar, shell = thick inner,

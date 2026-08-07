@@ -402,18 +402,53 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   event path marking th_first_garden exactly once across two dock
   cycles — every mutation restored in place (wave-12 b discipline).
   PASS ×7 runs.
-## Next round candidates (wave 15)
+- Wave 15: the queued candidate (mystery.charted gains its readers —
+  the mark did nothing but persist). contacts.js: keeperLedgerLine's
+  tier 2 acknowledges a charted open page — the rotated entry's lmId
+  in mystery.charted (?? [] for old saves, lmId null falls through
+  uncharted) swaps the narrowing for the acknowledgment at and below
+  the comp gate: 'the mark near The First Garden is yours now; the
+  page waits to be read.' (trust >= 60, landmark named) / 'the mark
+  on your charts is yours now; the page waits to be read.' (below 60,
+  system only). Uncharted pages stay byte-identical to waves 13/14;
+  tiers 1/3, keeperChartMark, and the ledgerIdx cursor untouched;
+  §25 holds (landmark + system names, never the clue). hud.js +
+  hud.css: the mark surfaces as a flight instrument — one pooled
+  .rw-chartmark (diamond glyph + name/distance label, pointer-inert,
+  aria-hidden — the mark was already announced by commLine) per
+  charted-but-unvisited landmark of the current system, pool sized at
+  init to the largest authored landmarks table (every node created
+  once — the HUD performance contract), projected per frame through
+  an init-scope scratch Vector3 with the target bracket's behind-
+  camera flip and EDGE_MARGIN edge-clamp, transforms written on
+  rounded-pixel change, labels (name + ' · Nu'/'k') on the ~5 Hz
+  throttled cadence keyed on landmark id + distance bucket. All
+  markers hide while docked (station screen up) and dim under
+  .in-combat (§13.2); mystery is read FRESH each frame (save.js
+  record-swap discipline) with shared EMPTY_LIST ?? guards — zero
+  per-frame allocation. A witnessed landmark sheds its mark (visited
+  filter); other systems' charted ids render nothing. Boot test
+  wave-15 section: pure ledger gates (exact computed ack lines at and
+  below the comp gate, byte-identical uncharted lines, §25 no-leak,
+  delete-charted old-save guard, every mutation restored in place)
+  and real-DOM HUD markers (docked all hidden, exactly one visible
+  flying with the computed name + distance label, witnessing hides
+  it, a cross-system charted id adds nothing, run left re-docked at
+  Threshold). PASS ×7 runs.
+## Next round candidates (wave 16)
 
-- Wave 14 closed the queue again: a fly-through hears Callow's word,
-  and the narrowed page is a heading on the pilot's charts now.
-- mystery.charted is recorded state with no reader. A charted landmark
-  could surface somewhere (a HUD marker in its system, a station-screen
-  note), or the ledger could acknowledge a charted page ('the mark is
-  yours now') — the mark currently does nothing but persist.
-- The trust-60 comp tier now carries four privileges (the comp, the
-  vouch word on two surfaces, the narrowed page, the chart mark) — all
-  once-or-cheap; the pile-up noted in wave 13 grows, still no
-  rebalancing action.
+- Wave 15 closed the queue again: the keeper's mark is a heading on
+  the HUD now, and the ledger acknowledges a charted page.
+- The mark is flight-only — hidden while docked. A station-screen
+  surface (a chart note on the keeper's people card, or a services-
+  screen list of charted pages) would let a pilot review their marks
+  at dock; recorded state already suffices (mystery.charted +
+  SYSTEMS).
+- The trust-60 comp tier still carries four privileges (the comp,
+  the vouch word on two surfaces, the narrowed page, the chart mark)
+  — wave 15 added none (the ledger ack rides the 30-tier reading,
+  the markers are free). The pile-up note from wave 13 stands, still
+  no rebalancing action.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
   reset; vouchAck is a bool; mystery.charted grows by landmark id but
   is bounded by the authored landmark tables — self-limiting. The

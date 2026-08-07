@@ -137,6 +137,10 @@ export const KEEPER_LEDGER_TRUST = 30;
  *      page to a landmark pairing — the landmark nearest that system's
  *      first unfound clue (§25: still never the clue's text or id; the
  *      landmark name is authored, already-spoken state from tier 1).
+ *      Wave 15: a page already charted (its paired landmark rides
+ *      mystery.charted, wave 14's mark) is acknowledged as the pilot's
+ *      own — 'the mark is yours now' — at and below the comp tier; the
+ *      uncharted lines stay byte-identical to waves 13/14.
  *   3. Everything witnessed and found → the closing line; both columns
  *      balance.
  * One cursor (contact.ledgerIdx, ??= 0 for old saves, same discipline as
@@ -199,7 +203,18 @@ export function keeperLedgerLine(ctx, contact) {
     // 60, matching recognitionLine's convention) and with a landmark to
     // pair, the keeper narrows the open page. §25: the landmark name is
     // authored, already-spoken state from tier 1 — still never the
-    // clue's text or id.
+    // clue's text or id. Wave 15: a page whose paired landmark already
+    // rides mystery.charted (wave 14's keeperChartMark; ?? [] for old
+    // saves, lmId null falls through uncharted since charted holds only
+    // real ids) is acknowledged as the pilot's own mark at and below
+    // the comp tier — the uncharted lines stay byte-identical.
+    const charted = ctx.world.mystery?.charted ?? [];
+    if (charted.includes(entry.lmId)) {
+      if (contact.trust >= 60 && entry.lmName !== null) {
+        return `The second column balances. A page stays open in ${entry.systemName} — the mark near ${entry.lmName} is yours now; the page waits to be read.`;
+      }
+      return `The second column balances. A page stays open in ${entry.systemName} — the mark on your charts is yours now; the page waits to be read.`;
+    }
     if (contact.trust >= 60 && entry.lmName !== null) {
       return `The second column balances. A page stays open in ${entry.systemName} — the page near ${entry.lmName} waits to be read.`;
     }
