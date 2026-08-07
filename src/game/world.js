@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 
 /**
@@ -40,13 +40,17 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  *   falls and milestone 'namedGunBroken' ends the line. Wave 8 gives the
  *   Freehold's Carver Illyx a kin-carried lineage of the same shape —
  *   exactly one successor, then milestone 'illyxLineBroken' ends his line.
+ *   Wave 9 closes the pair: once both broken-line milestones stand, the rim
+ *   itself reacts — milestone 'rimWithoutGuns' fires once, fear takes a
+ *   one-time bump, and pirates everywhere yield sooner (NAMED_GUNS).
  *   Origin payoff arcs
  *   close the situations origins opened: ledgerDebt gets escalating creditor
  *   calls (and a collector) while credits < 0, and a colder second round
  *   (Dresk again, milestone 'debtClearedAgain') if the player re-enters debt
  *   after clearing; the other four origins fire one-time 'originPayoff'
- *   beats, with beautiful and marked growing two 'originBeat' mid-beats
- *   each ahead of the payoff. State lives in ctx.world.aceRivalry
+ *   beats, with all four growing two 'originBeat' mid-beats each ahead
+ *   of the payoff — beautiful/marked since wave 8, drifter/greenhand
+ *   added wave 9 (clue count/hint, and faction reputation thresholds). State lives in ctx.world.aceRivalry
  *   { hunterGeneration, hunterDownAt, illyxGeneration, illyxDownAt } and
  *   the flat JSON-plain
  *   ctx.world.originArc — both persisted via WORLD_FIELDS
@@ -472,6 +476,10 @@ function originArcTick(ctx) {
     beautiful2: false,
     marked1: false,
     marked2: false,
+    drifter1: false,
+    drifter2: false,
+    greenhand1: false,
+    greenhand2: false,
   });
   // Old saves predate round 2 and the mid-beats — normalize in place.
   arc.calls2 ??= 0;
@@ -483,6 +491,10 @@ function originArcTick(ctx) {
   arc.beautiful2 ??= false;
   arc.marked1 ??= false;
   arc.marked2 ??= false;
+  arc.drifter1 ??= false;
+  arc.drifter2 ??= false;
+  arc.greenhand1 ??= false;
+  arc.greenhand2 ??= false;
 
   // a. Ledger come-due: while credits < 0 the Ledger calls every
   // callInterval world-seconds (max maxCalls, each costing redledger
@@ -535,8 +547,9 @@ function originArcTick(ctx) {
     }
   }
 
-  // b. Mid-beats — beautiful and marked grow two 'originBeat' steps each
-  // ahead of their payoff; each fires exactly once.
+  // b. Mid-beats — each non-ledger origin grows two 'originBeat' steps
+  // ahead of its payoff (beautiful/marked wave 8, drifter/greenhand wave
+  // 9); each fires exactly once.
   if (origin === 'beautiful') {
     const growth = ctx.bio?.growth ?? 0;
     if (!arc.beautiful1 && growth >= 0.4) {
@@ -557,6 +570,38 @@ function originArcTick(ctx) {
     if (!arc.marked2 && veridian >= -5) {
       arc.marked2 = true;
       ctx.emit('originBeat', { id: 'marked2', line: ORIGIN_ARCS.beats.marked[1].line });
+    }
+  }
+  // Wave 9: drifter beats at the first EARNED clue (mystery.found hits 2 —
+  // the origin grants rm_c_tally at pick) and at mystery.convergeHinted.
+  if (origin === 'drifter') {
+    if (!arc.drifter1 && (ctx.world.mystery?.found?.length ?? 0) >= 2) {
+      arc.drifter1 = true;
+      ctx.emit('originBeat', { id: 'drifter1', line: ORIGIN_ARCS.beats.drifter[0].line });
+    }
+    if (!arc.drifter2 && ctx.world.mystery?.convergeHinted) {
+      arc.drifter2 = true;
+      ctx.emit('originBeat', { id: 'drifter2', line: ORIGIN_ARCS.beats.drifter[1].line });
+    }
+  }
+  // Wave 9: greenhand beats when the rim first learns the name (any
+  // faction |rep| or fear at 10) and when a berth becomes yours (any
+  // faction rep at 25). One pass, both maxima, zero allocation.
+  if (origin === 'greenhand') {
+    let maxAbsRep = 0;
+    let maxRep = 0;
+    for (const f in ctx.world.reputation) {
+      const rep = ctx.world.reputation[f] ?? 0;
+      if (Math.abs(rep) > maxAbsRep) maxAbsRep = Math.abs(rep);
+      if (rep > maxRep) maxRep = rep;
+    }
+    if (!arc.greenhand1 && (maxAbsRep >= 10 || ctx.world.fear >= 10)) {
+      arc.greenhand1 = true;
+      ctx.emit('originBeat', { id: 'greenhand1', line: ORIGIN_ARCS.beats.greenhand[0].line });
+    }
+    if (!arc.greenhand2 && maxRep >= 25) {
+      arc.greenhand2 = true;
+      ctx.emit('originBeat', { id: 'greenhand2', line: ORIGIN_ARCS.beats.greenhand[1].line });
     }
   }
 
@@ -730,6 +775,10 @@ export function initWorld(ctx) {
     beautiful2: false,
     marked1: false,
     marked2: false,
+    drifter1: false,
+    drifter2: false,
+    greenhand1: false,
+    greenhand2: false,
   };
 
   let nextEventAt = rollEventGap(ctx);
@@ -1098,6 +1147,15 @@ export function initWorld(ctx) {
       // after respawnDelay world-seconds — one successor, then the line ends.
       if (rivalry && rivalry.illyxDownAt != null && now - rivalry.illyxDownAt >= ACES.illyx.lineage.respawnDelay) {
         spawnIllyxSuccessor(ctx);
+      }
+
+      // Rim without Named Guns (wave 9): once both lines are broken the rim
+      // reacts — one milestone, one fear bump. fireMilestone's guard makes
+      // this fire exactly once; fear is applied only on that first fire.
+      if (ctx.world.milestones.includes('namedGunBroken') && ctx.world.milestones.includes('illyxLineBroken')) {
+        if (fireMilestone(ctx, 'rimWithoutGuns', 'No Named Gun flies the rim. The lanes know it — small crews fly taller, and the dark gets checked a little less.')) {
+          ctx.world.fear += NAMED_GUNS.fearBonus;
+        }
       }
 
       // Origin payoff arcs (wave 7): creditor come-due + one-time payoffs.

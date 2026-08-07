@@ -1,4 +1,4 @@
-import { COMMODITIES, PRICE_BAND } from './state.js';
+import { COMMODITIES, PRICE_BAND, SYSTEMS, HERMIT } from './state.js';
 
 /**
  * Market — per-system commodity prices (doc §8.4, §9.3, §10.1, §15).
@@ -151,13 +151,16 @@ export function tickPrices(ctx, dt) {
   const pressure = pressureBySystem[id];
   const devs = (devBySystem[id] ??= {});
   const now = ctx.world.time;
+  // Wave 9: a hermit system (SYSTEMS[id].hermit) has no traffic — its random
+  // walk runs at HERMIT.walkMult rate. Event-pressure pull is untouched.
+  const walkMult = SYSTEMS[id]?.hermit ? HERMIT.walkMult : 1;
 
   for (const key of COMMODITY_KEYS) {
     const base = baselineFor(ctx, id, key);
     let dev = devs[key];
     if (dev === undefined) dev = ((prices[key] ?? Math.round(base)) - base) / base;
     // Mean-reverting random walk (fractional — see devBySystem note).
-    dev += (Math.random() - 0.5) * 2 * WALK_RATE * dt;
+    dev += (Math.random() - 0.5) * 2 * WALK_RATE * walkMult * dt;
     // Event pressure pull.
     const target = (pressure?.[key] ?? 0) * PRICE_BAND;
     dev += (target - dev) * PRESSURE_PULL * dt;

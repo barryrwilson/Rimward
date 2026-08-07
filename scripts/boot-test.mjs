@@ -12,6 +12,11 @@
 // kin lineage (one successor, then the line breaks), the ledgerDebt
 // repeat-debtor round, the beautiful/marked origin beats on fresh harness
 // boots, and the wave-8 originArc/aceRivalry save roundtrip.
+// Wave 9: rimWithoutGuns (one milestone + one fear bump once both Named-Gun
+// lines are broken, and the pirate resolve reaction), the greenhand/drifter
+// origin beats on fresh harness boots, the hermit economy (scarcity pricing,
+// the first-trade milestone, the slowed random walk), and the wave-9
+// originArc/milestones save roundtrip.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -141,7 +146,7 @@ const { initControls } = await import('../src/systems/controls.js');
 const { initSettings } = await import('../src/systems/settings.js');
 const { initBio } = await import('../src/game/bio.js');
 const { initShip } = await import('../src/systems/ship.js');
-const { initWorld } = await import('../src/game/world.js');
+const { initWorld, recordPosition } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
 } = await import('../src/game/contacts.js');
@@ -164,7 +169,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT } = await import('../src/game/state.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
@@ -1861,6 +1866,368 @@ const w8markedChecks = {
 };
 console.log('wave8 marked beats:', JSON.stringify(w8markedChecks));
 if (!Object.values(w8markedChecks).every(Boolean)) { console.log('WAVE8 MARKED BEATS FAIL'); errors++; }
+
+// ---- Wave 9: rimWithoutGuns / greenhand+drifter beats / hermit economy / save ----
+// Order respects dependencies: A runs on the continuing run (post-wave-8, in
+// the Verge — both broken-line milestones already stand, so the wave-9
+// world.js check has fired the rim's reaction during this run); B and C boot
+// their OWN fresh harnesses (the wave-8 lesson: the origin overlay's digit
+// listener eats Digit1-5 until the pick, so each arc starts from an empty
+// store and picks first); D returns to the main run for the hermit market,
+// the walk-rate comparison leg to the Hush, and the closing save roundtrip.
+
+// -- A. rimWithoutGuns: one milestone, one fear bump, pirates yield sooner ----
+const w9ms = ctx.world.milestones;
+const alreadyWithoutGuns = w9ms.includes('rimWithoutGuns');
+// Deterministic refire: pull the milestone, let world.js's per-frame check
+// re-fire it; fireMilestone's guard then holds it at exactly one.
+const fearBeforeRefire = ctx.world.fear;
+const idxWithoutGuns = w9ms.indexOf('rimWithoutGuns');
+if (idxWithoutGuns >= 0) w9ms.splice(idxWithoutGuns, 1);
+const w9aEvs = [];
+for (let i = 0; i < 3; i++) { tick(1, 'wave9 rimWithoutGuns refire'); w9aEvs.push(...ctx.lastEvents); }
+const w9RefireEvs = w9aEvs.filter((e) => e.type === 'milestone' && e.id === 'rimWithoutGuns');
+const fearAfterRefire = ctx.world.fear;
+for (let i = 0; i < 30; i++) { tick(1, 'wave9 rimWithoutGuns refire watch'); w9aEvs.push(...ctx.lastEvents); }
+const refireTotal = w9aEvs.filter((e) => e.type === 'milestone' && e.id === 'rimWithoutGuns').length;
+
+// Pirate resolve delta: same inputs, milestone present vs spliced. Test
+// SETUP: re-pin the player huge (hull AND shields — playerFrac is a resolve
+// input, and a hunting pirate's shots must not move it), and pin the
+// pirate's personality mid-scale so computeResolve's 0..100 clamp and the
+// capitulate transition can't eat the ±5 mod mid-measurement.
+if (ctx.flags.docked) undockStation();
+ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+const isPirateShip = (s) => s.role === 'pirate' || s.record?.role === 'pirate' || s.ai?.role === 'pirate';
+let vergePirate = ctx.ships.find(isPirateShip) ?? null;
+if (!vergePirate) {
+  // Not instantiated (parked hostiles de-instantiate past range) — teleport
+  // to the record's position and let traffic spawn it (the Verge cast has
+  // exactly one pirate).
+  const pirateRec = ctx.world.records.find((r) => r.role === 'pirate') ?? null;
+  if (pirateRec) {
+    const rp9 = recordPosition(pirateRec, new THREE.Vector3());
+    ctx.ship.object.position.set(rp9.x, rp9.y, rp9.z);
+    ctx.ship.velocity.set(0, 0, 0);
+    for (let i = 0; i < 90 && !vergePirate; i++) {
+      tick(1, 'wave9 instantiate verge pirate');
+      vergePirate = ctx.ships.find(isPirateShip) ?? null;
+    }
+  }
+}
+let resolveWith = NaN;
+let resolveWithout = NaN;
+let withoutGunsRestored = false;
+if (vergePirate) {
+  // Away from the Vigil's law zone so updateHunt keeps intent hot.
+  vergePirate.object.position.set(3000, 3000, 3000);
+  ctx.ship.object.position.set(3000, 3000, 3000);
+  ctx.ship.velocity.set(0, 0, 0);
+  vergePirate.state.personality = 10;
+  vergePirate.ai.mode = 'hunt';
+  vergePirate.ai.intent = true;
+  vergePirate.ai.calmUntil = 0;
+  // updateResolve is throttled by RESOLVE_INTERVAL (ai.resolveAt) — force a
+  // recompute on the next frame so each measurement reads a fresh value.
+  vergePirate.ai.resolveAt = 0;
+  tick(1, 'wave9 resolve with milestone');
+  resolveWith = vergePirate.state.resolve;
+  // Splice BOTH: removing only rimWithoutGuns would let world.js refire it
+  // next frame, re-adding the mod (and the fear bump) mid-measurement.
+  const iR = w9ms.indexOf('rimWithoutGuns');
+  if (iR >= 0) w9ms.splice(iR, 1);
+  const iI = w9ms.indexOf('illyxLineBroken');
+  if (iI >= 0) w9ms.splice(iI, 1);
+  vergePirate.ai.intent = true; // updateHunt re-derives intent every frame
+  vergePirate.ai.resolveAt = 0;
+  tick(1, 'wave9 resolve without milestone');
+  resolveWithout = vergePirate.state.resolve;
+  w9ms.push('illyxLineBroken', 'rimWithoutGuns');
+  tick(1, 'wave9 milestones restored');
+  withoutGunsRestored = ctx.world.milestones.includes('rimWithoutGuns');
+}
+const w9gunsChecks = {
+  milestoneFiredInRun: alreadyWithoutGuns,
+  refiredOnce: w9RefireEvs.length === 1,
+  fearBumpExact: fearAfterRefire - fearBeforeRefire === NAMED_GUNS.fearBonus,
+  noSecondRefire: refireTotal === 1,
+  pirateFound: !!vergePirate,
+  resolveDeltaExact: Math.abs((resolveWithout - resolveWith) - (-NAMED_GUNS.brokenResolveMod)) <= 0.001,
+  milestoneRestored: withoutGunsRestored,
+};
+console.log('wave9 rimWithoutGuns:', JSON.stringify(w9gunsChecks), `resolve=${resolveWith}→${resolveWithout} fear=${ctx.world.fear}`);
+if (!Object.values(w9gunsChecks).every(Boolean)) { console.log('WAVE9 RIMWITHOUTGUNS FAIL'); errors++; }
+
+// -- B. greenhand beats: |rep| 10, rep 25, then the payoff — FRESH harness ---
+const greenBoot = bootFreshHarness('greenhand');
+const gctx = greenBoot.ctx;
+const gtick = greenBoot.tick;
+const gOverlayShown = [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+dispatchKey('Digit1'); // [1] Freehold Greenhand (ORIGINS key order)
+const gOriginEv = gctx.events.find((e) => e.type === 'originChosen') ?? null; // emit is synchronous
+// Same hull pin as the other boots: random combat must not kill the fresh
+// pilot mid-section (the death overlay would eat later digit dispatches).
+gctx.player.hullMax = 1e9;
+gctx.player.hull = 1e9;
+const gEvs = [];
+gctx.world.reputation.freehold = 10; // the rim first learns the name
+for (let i = 0; i < 3; i++) { gtick(1, 'greenhand beat1'); gEvs.push(...gctx.lastEvents); }
+for (let i = 0; i < 30; i++) { gtick(1, 'greenhand beat1 refire watch'); gEvs.push(...gctx.lastEvents); }
+gctx.world.reputation.freehold = 25; // a berth becomes yours
+for (let i = 0; i < 3; i++) { gtick(1, 'greenhand beat2'); gEvs.push(...gctx.lastEvents); }
+for (let i = 0; i < 30; i++) { gtick(1, 'greenhand beat2 refire watch'); gEvs.push(...gctx.lastEvents); }
+gctx.world.epics = { freehold: 1 }; // any achieved epic stage closes the arc
+for (let i = 0; i < 3; i++) { gtick(1, 'greenhand payoff'); gEvs.push(...gctx.lastEvents); }
+for (let i = 0; i < 10; i++) { gtick(1, 'greenhand payoff refire watch'); gEvs.push(...gctx.lastEvents); }
+const gBeat1 = gEvs.filter((e) => e.type === 'originBeat' && e.id === 'greenhand1');
+const gBeat2 = gEvs.filter((e) => e.type === 'originBeat' && e.id === 'greenhand2');
+const gPayoff = gEvs.filter((e) => e.type === 'originPayoff' && e.id === 'greenhand');
+const w9greenChecks = {
+  overlayShown: gOverlayShown,
+  originRecorded: gctx.world.origin === 'greenhand',
+  originChosenEmitted: gOriginEv?.id === 'greenhand',
+  beat1Once: gBeat1.length === 1,
+  beat1Line: gBeat1[0]?.line === ORIGIN_ARCS.beats.greenhand[0].line,
+  beat2Once: gBeat2.length === 1,
+  beat2Line: gBeat2[0]?.line === ORIGIN_ARCS.beats.greenhand[1].line,
+  payoffOnce: gPayoff.length === 1,
+  payoffLine: gPayoff[0]?.line === ORIGIN_ARCS.payoffs.greenhand,
+  arcFlags: gctx.world.originArc?.greenhand1 === true &&
+    gctx.world.originArc?.greenhand2 === true && gctx.world.originArc?.greenhand === true,
+};
+console.log('wave9 greenhand beats:', JSON.stringify(w9greenChecks));
+if (!Object.values(w9greenChecks).every(Boolean)) { console.log('WAVE9 GREENHAND BEATS FAIL'); errors++; }
+
+// -- C. drifter beats: the granted tally, a second clue, the hint, the payoff —
+const driftBoot = bootFreshHarness('drifter');
+const dctx = driftBoot.ctx;
+const dtick = driftBoot.tick;
+const dOverlayShown = [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+dispatchKey('Digit5'); // [5] Rim Drifter (ORIGINS key order: greenhand, ledgerDebt, marked, beautiful, drifter)
+const dOriginEv = dctx.events.find((e) => e.type === 'originChosen') ?? null;
+dctx.player.hullMax = 1e9;
+dctx.player.hull = 1e9;
+// The pick's applyEffects grants rm_c_tally through the real origins.js path.
+const grantedTally = (dctx.world.mystery?.found ?? []).includes('rm_c_tally');
+const dEvs = [];
+const dmystery = dctx.world.mystery;
+// Second held clue (the wave-6 d test-SETUP pattern) — drifter1 needs two.
+if (!dmystery.found.includes('vd_c_shanty')) dmystery.found.push('vd_c_shanty');
+for (let i = 0; i < 3; i++) { dtick(1, 'drifter beat1'); dEvs.push(...dctx.lastEvents); }
+for (let i = 0; i < 30; i++) { dtick(1, 'drifter beat1 refire watch'); dEvs.push(...dctx.lastEvents); }
+dmystery.convergeHinted = true;
+for (let i = 0; i < 3; i++) { dtick(1, 'drifter beat2'); dEvs.push(...dctx.lastEvents); }
+dmystery.converged = true;
+for (let i = 0; i < 3; i++) { dtick(1, 'drifter payoff'); dEvs.push(...dctx.lastEvents); }
+for (let i = 0; i < 10; i++) { dtick(1, 'drifter payoff refire watch'); dEvs.push(...dctx.lastEvents); }
+const dBeat1 = dEvs.filter((e) => e.type === 'originBeat' && e.id === 'drifter1');
+const dBeat2 = dEvs.filter((e) => e.type === 'originBeat' && e.id === 'drifter2');
+const dPayoff = dEvs.filter((e) => e.type === 'originPayoff' && e.id === 'drifter');
+const w9driftChecks = {
+  overlayShown: dOverlayShown,
+  originRecorded: dctx.world.origin === 'drifter',
+  originChosenEmitted: dOriginEv?.id === 'drifter',
+  grantedTally,
+  beat1Once: dBeat1.length === 1,
+  beat1Line: dBeat1[0]?.line === ORIGIN_ARCS.beats.drifter[0].line,
+  beat2Once: dBeat2.length === 1,
+  beat2Line: dBeat2[0]?.line === ORIGIN_ARCS.beats.drifter[1].line,
+  payoffOnce: dPayoff.length === 1,
+  payoffLine: dPayoff[0]?.line === ORIGIN_ARCS.payoffs.drifter,
+  arcFlags: dctx.world.originArc?.drifter1 === true &&
+    dctx.world.originArc?.drifter2 === true && dctx.world.originArc?.drifter === true,
+};
+console.log('wave9 drifter beats:', JSON.stringify(w9driftChecks));
+if (!Object.values(w9driftChecks).every(Boolean)) { console.log('WAVE9 DRIFTER BEATS FAIL'); errors++; }
+
+// -- D. hermit economy: scarcity pricing, first-trade milestone, slow walk ----
+// Back on the main run, still in the Verge from subsection A.
+const w9hermitDataChecks = {
+  vergeIsHermit: SYSTEMS.verge.hermit === true,
+  walkMult: HERMIT.walkMult === 0.25,
+  buyMult: HERMIT.buyMult === 1.25,
+  sellMult: HERMIT.sellMult === 1.25,
+};
+console.log('wave9 hermit data:', JSON.stringify(w9hermitDataChecks));
+if (!Object.values(w9hermitDataChecks).every(Boolean)) { console.log('WAVE9 HERMIT DATA FAIL'); errors++; }
+
+// Real trades at The Vigil, driven through the real market UI (the wave-4
+// pattern: service selection via window keydown digits, trades via stub-DOM
+// button clicks). Test SETUP: keep the purse comfortably positive so the
+// scarcity prices can't bounce a trade and no creditor bookkeeping can stir.
+ctx.world.credits = 5000;
+dockAtCurrentStation('dock verge (wave9 hermit)');
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+// The market table is a flat child list: 5 head cells, then 5 cells per
+// commodity row (name, status, price, hold, actions).
+function marketRowCell(comName, offset) {
+  const ov = stationOverlay();
+  if (!ov) return null;
+  for (const n of walkDom(ov)) {
+    if (typeof n.textContent === 'string' && n.textContent === comName &&
+      typeof n.className === 'string' && n.className.includes('market-cell') && n.parent) {
+      const kids = n.parent.children ?? [];
+      const idx = kids.indexOf(n);
+      if (idx >= 0 && kids.length > idx + offset) return kids[idx + offset];
+    }
+  }
+  return null;
+}
+function marketTradeButton(comName, label) {
+  const cell = marketRowCell(comName, 4);
+  if (!cell) return null;
+  for (const b of walkDom(cell)) {
+    if (b.tagName === 'BUTTON' && b.textContent === label) return b;
+  }
+  return null;
+}
+const hollowFx9 = () => epicEffects(ctx, 'hollow'); // The Vigil flies the hollow flag
+const goodwill9 = () => {
+  const t = rankFor(ctx.world.reputation.hollow ?? 0).tier; // sell-only goodwill, computed station.js's way
+  return t > 0 ? 1 + 0.02 * t : 1;
+};
+const priceCell9 = marketRowCell('Provisions', 2);
+const expectedBuy9 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
+const creditsBeforeBuy9 = ctx.world.credits;
+const buyBtn9 = marketTradeButton('Provisions', '+1');
+buyBtn9?.click(); // real path: stub-DOM click → tryTrade('provisions', 1, true)
+const buyCharged9 = creditsBeforeBuy9 - ctx.world.credits;
+tick(1, 'wave9 hermit buy settle'); // the milestone event rides this frame's lastEvents
+const hermitMilestoneEvs = ctx.lastEvents.filter((e) => e.type === 'milestone' && e.id === 'hermitMarket');
+// Second buy: charged the same way, but the milestone must NOT re-fire.
+const expectedBuy9b = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
+const creditsBeforeBuy9b = ctx.world.credits;
+const buyBtn9b = marketTradeButton('Provisions', '+1');
+buyBtn9b?.click();
+const buyCharged9b = creditsBeforeBuy9b - ctx.world.credits;
+tick(1, 'wave9 hermit second buy settle');
+const secondHermitMilestone = ctx.lastEvents.some((e) => e.type === 'milestone' && e.id === 'hermitMarket');
+// Sell one back: epic sellMult × rank goodwill × the hermit premium.
+const expectedPayout9 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
+const creditsBeforeSell9 = ctx.world.credits;
+const sellBtn9 = marketTradeButton('Provisions', '−1');
+sellBtn9?.click();
+const sellPaid9 = ctx.world.credits - creditsBeforeSell9;
+const w9hermitTradeChecks = {
+  priceCellShowsHermitBuy: priceCell9?.textContent === `${expectedBuy9} UU`,
+  buyButtonFound: !!buyBtn9,
+  buyChargedExact: buyCharged9 === expectedBuy9,
+  milestoneOnce: hermitMilestoneEvs.length === 1 && hermitMilestoneEvs[0]?.line === HERMIT.line,
+  milestoneBanked: ctx.world.milestones.includes('hermitMarket'),
+  secondBuyButtonFound: !!buyBtn9b,
+  secondBuyChargedExact: buyCharged9b === expectedBuy9b,
+  noSecondMilestone: !secondHermitMilestone,
+  sellButtonFound: !!sellBtn9,
+  sellPaidExact: sellPaid9 === expectedPayout9,
+};
+console.log('wave9 hermit trades:', JSON.stringify(w9hermitTradeChecks), `buy=${buyCharged9} sell=${sellPaid9}`);
+if (!Object.values(w9hermitTradeChecks).every(Boolean)) { console.log('WAVE9 HERMIT TRADES FAIL'); errors++; }
+
+// Walk rate: pinned Math.random turns the random walk into a deterministic
+// upward ramp; a hermit system's ramp runs at HERMIT.walkMult of any other.
+// Guard: an active event's pressure pull would pollute the ramp — end any
+// active/due event through the real endEvent path (which clears the
+// pressure), and retry once if one starts mid-window.
+undockStation();
+const origRandom9 = Math.random;
+let driftV = NaN;
+let driftH = NaN;
+try {
+  Math.random = () => 0.9;
+  const measureDrift9 = (label, ticksN) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      tick(1, `${label} pre-check`); // a due event starts on THIS tick, not mid-window
+      if (ctx.world.activeEvent) {
+        ctx.world.activeEvent.endsAt = ctx.world.time - 1; // real endEvent → applyEventPressure('clear')
+        tick(2, `${label} event cleared`);
+      }
+      if (ctx.world.activeEvent) continue;
+      const p0 = ctx.world.prices.provisions;
+      tick(ticksN, label);
+      if (ctx.world.activeEvent) {
+        ctx.world.activeEvent.endsAt = ctx.world.time - 1;
+        tick(2, `${label} mid-event cleared`);
+        continue;
+      }
+      return { p0, p1: ctx.world.prices.provisions };
+    }
+    return null;
+  };
+  const v9 = measureDrift9('wave9 verge walk', 600);
+  if (v9) driftV = v9.p1 - v9.p0;
+  // verge → hush (NOT hermit): same pinned measurement, same tick count.
+  ctx.ship.object.position.set(...vergeReturnGate.position); // [0,90,-1250]
+  ctx.ship.velocity.set(0, 0, 0);
+  tick(5, 'at hush gate (wave9 walk)');
+  ctx.emit('jumpRequested', { to: 'hush' });
+  if (!tickUntilJumpDone('hush', 'wave9 hop to hush (walk)')) {
+    console.log('WAVE9 WALK JUMP FAIL — never arrived at hush');
+    errors++;
+  }
+  const h9 = measureDrift9('wave9 hush walk', 600);
+  if (h9) driftH = h9.p1 - h9.p0;
+} finally {
+  Math.random = origRandom9;
+}
+const w9walkChecks = {
+  vergeWalkedUp: driftV > 0,
+  hushWalkedUp: driftH > 0,
+  // Theory: 4× (1 / walkMult), modulo baseline 220 vs 190 and integer
+  // rounding — 2.5× leaves slop for the mean-reverting pull.
+  hermitWalkSlower: driftH >= 2.5 * driftV,
+};
+console.log('wave9 hermit walk:', JSON.stringify(w9walkChecks), `driftV=${driftV} driftH=${driftH}`);
+if (!Object.values(w9walkChecks).every(Boolean)) { console.log('WAVE9 HERMIT WALK FAIL'); errors++; }
+
+// Save roundtrip (the wave-8 section-5 pattern): originArc.greenhand1 and
+// both wave-9 milestones ride the dock autosave and the death restore.
+// Credits are comfortably positive from the trades above, so no creditor
+// call can interfere in the corruption window.
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave9 save)');
+dockAtCurrentStation('dock hush (wave9 save)'); // Threshold — 'docked' fires trySave
+tick(3, 'wave9 save settle');
+const w9snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const w9saveChecks = {
+  saveWritten: !!w9snap?.world,
+  systemIsHush: w9snap?.world?.currentSystem === 'hush',
+  greenhandBeatPersisted: w9snap?.world?.originArc?.greenhand1 === true,
+  rimWithoutGunsPersisted: w9snap?.world?.milestones?.includes('rimWithoutGuns') === true,
+  hermitMarketPersisted: w9snap?.world?.milestones?.includes('hermitMarket') === true,
+};
+console.log('wave9 save fields:', JSON.stringify(w9saveChecks));
+if (!Object.values(w9saveChecks).every(Boolean)) { console.log('WAVE9 SAVE FIELDS FAIL'); errors++; }
+
+// Corrupt in memory, die, recover. world.js legitimately REFIRES
+// rimWithoutGuns in the post-corruption ticks (both broken-line milestones
+// still stand) — expected, not a failure; the roundtrip asserts read
+// post-restore values.
+ctx.world.originArc.greenhand1 = false;
+for (const id of ['rimWithoutGuns', 'hermitMarket']) {
+  const i = ctx.world.milestones.indexOf(id);
+  if (i >= 0) ctx.world.milestones.splice(i, 1);
+}
+tick(2, 'wave9 fields corrupted');
+const w9corrupted = ctx.world.originArc.greenhand1 === false && !ctx.world.milestones.includes('hermitMarket');
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave9 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const w9restoreChecks = {
+  corruptedFirst: w9corrupted,
+  greenhandBeatRestored: ctx.world.originArc?.greenhand1 === true,
+  rimWithoutGunsRestored: ctx.world.milestones.includes('rimWithoutGuns'),
+  hermitMarketRestored: ctx.world.milestones.includes('hermitMarket'),
+};
+console.log('wave9 restore:', JSON.stringify(w9restoreChecks));
+if (!Object.values(w9restoreChecks).every(Boolean)) { console.log('WAVE9 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

@@ -5,6 +5,7 @@ import {
   U,
   WEAPONS,
   ECON,
+  NAMED_GUNS,
   createShipState,
   tickShipState,
   computeResolve,
@@ -342,7 +343,10 @@ function updateResolve(ctx, live, now) {
       doctrine: FACTIONS[st.faction]?.doctrine ?? 0.5,
     },
     ai.role === 'pirate'
+      // Wave 9: no Named Guns left, every pirate has heard — additive -5
+      // alongside the epic mod while 'rimWithoutGuns' stands.
       ? st.personality + (epicEffects(ctx, live.record?.faction ?? st.faction).pirateResolveMod ?? 0)
+        + (ctx.world.milestones.includes('rimWithoutGuns') ? NAMED_GUNS.brokenResolveMod : 0)
       : st.personality,
   );
   const band = resolveBand(st.resolve);

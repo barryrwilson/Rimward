@@ -175,15 +175,46 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   spawn), repeat-debtor round 2 (stages 4–5, second Dresk, no third
   round), beautiful/marked beats no-refire on fresh harnesses, originArc/
   aceRivalry round-2 + lineage save roundtrip. PASS.
-## Next round candidates (wave 9)
+- Wave 9: all three queued candidates (origin beats ×2, no-Named-Guns
+  reaction, hermit economy). state.js: ORIGIN_ARCS.beats gains drifter
+  (drifter1 at the first EARNED clue — mystery.found ≥ 2, the origin
+  grants rm_c_tally at pick; drifter2 at mystery.convergeHinted) and
+  greenhand (greenhand1 at any faction |rep| ≥ 10 or fear ≥ 10; greenhand2
+  at any faction rep ≥ 25) — both payoffs unchanged; NAMED_GUNS
+  { brokenResolveMod −5, fearBonus 5 } after ACES; HERMIT { buyMult 1.25,
+  sellMult 1.25, walkMult 0.25, line } after BANDS; SYSTEMS.verge.hermit.
+  world.js: originArcTick fires the four new 'originBeat's once each
+  (arc flags drifter1/2 + greenhand1/2 in the ??= literal, the initWorld
+  literal, and the old-save normalization block); per-frame, once
+  milestones hold BOTH 'namedGunBroken' and 'illyxLineBroken',
+  fireMilestone('rimWithoutGuns', …) fires once and only that first fire
+  adds NAMED_GUNS.fearBonus to world.fear. npc.js: updateResolve adds
+  brokenResolveMod to pirate personality while 'rimWithoutGuns' stands
+  (non-pirates untouched). market.js: tickPrices scales ONLY the random-
+  walk step × HERMIT.walkMult for hermit systems (event-pressure pull
+  unchanged). station.js: hermit stations charge round(price × buyMult ×
+  1.25) on buy, sell chain gains × 1.25 after the tier multiplier, the
+  market PRICE cell shows the hermit buy price, and the first successful
+  trade pushes 'hermitMarket' into world.milestones + emits 'milestone'
+  (guard-push-emit, world.js fireMilestone semantics). No new event
+  types, no new WORLD_FIELDS (originArc + milestones already persist).
+  Boot test wave-9 section: rimWithoutGuns fire-once + exact fear bump +
+  pirate resolve delta (39→44, RESOLVE_INTERVAL-throttled — the harness
+  forces ai.resolveAt), greenhand + drifter beats on fresh harnesses
+  (drifter = Digit5), hermit data/pricing/milestone via real market-UI
+  clicks, pinned-RNG walk-rate ratio (verge drift 3 vs hush 8-9), and a
+  wave-9 save roundtrip (greenhand1 + both milestones). PASS ×5 runs.
+## Next round candidates (wave 10)
 
-- Wave 8 closed the queue again. Band 4 was the last spatial rung — no
-  band-5 content designed; the mystery chain deliberately stops at The
-  Answer per §25, and The Verge is the non-verbal continuation.
-- Origin arcs: greenhand/drifter are still single payoffs; beautiful/marked
-  grew beats this wave, they did not.
-- Named Guns: Vane's and Illyx's lines can both be broken, but nothing
-  systemic reacts to a rim with no Named Guns left.
-- Band-4 economy: one pirate, zero traders — a hermit-economy beat could
-  exist.
+- Wave 9 closed the queue again. The named candidates are all built:
+  every origin now has mid-beats, the rim reacts to having no Named
+  Guns, and the Verge has its hermit economy.
+- Named Guns: both lines can break, but no NEW gun ever rises — a
+  player-with-maxes-fear world could grow the next name (a successor
+  aspirant, not a lineage bearer).
+- The Verge: the keeper is silent and the market is a hermit's; the one
+  pirate has no authored beat (a hermit pirate who remembers the lane?).
+- Contacts never react to the deep rim: no Hollow Reach/Hush/Vigil
+  contact beyond the wave-5 dockmaster pattern; epics capstone at
+  deepened but contacts stop at their wave-4/6 beats.
 - Polish debt: none known; boot test is the gate.

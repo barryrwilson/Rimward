@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT } from '../game/state.js';
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
@@ -736,7 +736,8 @@ export function initStation(ctx) {
       return;
     }
     if (buying) {
-      const unit = Math.round(price * (fx.buyMult ?? 1));
+      // Wave 9: hermit stations charge scarcity prices (HERMIT.buyMult).
+      const unit = Math.round(price * (fx.buyMult ?? 1) * (currentDef.hermit ? HERMIT.buyMult : 1));
       const cost = unit * qty;
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return; }
       if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return; }
@@ -748,6 +749,8 @@ export function initStation(ctx) {
       // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
       const tier = rankFor(ctx.world.reputation[currentDef.faction] ?? 0).tier;
       let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
+      // Wave 9: hermit stations pay a premium for anything hauled out this far.
+      if (currentDef.hermit) unit *= HERMIT.sellMult;
       // Epic standing on patent stock stacks with the fixer's brokered rate.
       if (key === 'restrictedComponents') unit *= fx.restrictedSellMult ?? 1;
       // Fixer brokered: at tradesRestricted stations a trusted fixer (30+)
@@ -765,6 +768,14 @@ export function initStation(ctx) {
       if (fixer) bumpTrust(ctx, fixer, FIXER_TRUST_PER_SALE);
       ui.notice = `Sold ${qty} ${com.name} for ${payout} UU.`;
     }
+    // Wave 9: first real trade at a hermit station is a milestone. Replicates
+    // world.js fireMilestone semantics — world.milestones is the shared
+    // persisted list, hud.js consumes the 'milestone' event. Early returns
+    // above mean only a successful trade (credits moved) reaches this.
+    if (currentDef.hermit && !ctx.world.milestones.includes('hermitMarket')) {
+      ctx.world.milestones.push('hermitMarket');
+      ctx.emit('milestone', { id: 'hermitMarket', line: HERMIT.line });
+    }
   }
 
   function renderMarket(panel) {
@@ -781,7 +792,7 @@ export function initStation(ctx) {
       const sel = i === ui.marketSel ? ' market-row-sel' : '';
       h('div', 'market-cell' + sel, table, com.name);
       h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
-      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1))} UU`);
+      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * (currentDef.hermit ? HERMIT.buyMult : 1))} UU`);
       h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
       const actions = h('div', 'market-cell market-actions' + sel, table);
       if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {

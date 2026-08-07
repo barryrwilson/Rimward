@@ -373,6 +373,8 @@ export const SYSTEMS = {
     priceBase: { provisions: 2.2, refinedMetals: 1.4, restrictedComponents: 0.5, rawOre: 0.8, livingRock: 0.5 },
     cast: { traders: 0, pirates: 1, patrols: 0, ace: false },
     tradesRestricted: true,
+    // Wave 9: hermit economy — no traders ever come; see HERMIT.
+    hermit: true,
     band: 4,
     landmarks: [
       { id: 'vg_choir_stones', name: 'The Choir Stones', kind: 'monument', position: [600, 110, -400], line: 'When your ship sings, the stones answer — a half-beat late, in a chord with more notes than there are stones.' },
@@ -407,6 +409,17 @@ export const BANDS = {
   2: { eventGapMult: 2.2, chatterMult: 0.25, songGapMult: 2.5 },
   3: { eventGapMult: 3.5, chatterMult: 0.1, songGapMult: 4.0 }, // the Hush: near-total silence
   4: { eventGapMult: 5.0, chatterMult: 0.05, songGapMult: 6.0 }, // the Verge: past silence — events almost never come
+};
+
+// Wave 9: hermit economy (§15 band 4). SYSTEMS[id].hermit opts a station in.
+// station.js prices trades with these multipliers, market.js slows the random
+// walk by walkMult, and the first successful trade fires milestone
+// 'hermitMarket' with this line.
+export const HERMIT = {
+  buyMult: 1.25, // scarcity markup on what the station sells
+  sellMult: 1.25, // premium it pays for anything hauled out here
+  walkMult: 0.25, // a market with no traffic barely drifts
+  line: 'The Vigil trades without ceremony — weights, measures, payment. What you brought is the first new thing here in a long time.',
 };
 
 // ---------- Faction ranks (§12.x station depth) ----------
@@ -609,6 +622,20 @@ export const ACES = {
 };
 
 /**
+ * NAMED_GUNS (wave 9): the rim reacts to having no Named Guns left. When
+ * BOTH broken-line milestones ('namedGunBroken' + 'illyxLineBroken') sit in
+ * ctx.world.milestones, world.js fires 'rimWithoutGuns' once and bumps
+ * ctx.world.fear by fearBonus — the wave-7/8 lines were the Ledger's long
+ * arm, and the lanes notice when the arm is gone. npc.js folds
+ * brokenResolveMod into every pirate's resolve while the milestone stands
+ * (systemic §7.2 shift, additive like the epic pirateResolveMod).
+ */
+export const NAMED_GUNS = {
+  brokenResolveMod: -5, // pirates rim-wide yield sooner once no Named Gun flies
+  fearBonus: 5, // one-time fear bump when the second line breaks
+};
+
+/**
  * Mystery next rung (§25: "the mystery increases curiosity before it increases
  * explanation" — this NEVER restates the buried truth). Once the player holds
  * cluesNeeded clues, mystery.js voices hintLine once and the site becomes
@@ -661,7 +688,8 @@ export const DEEPENING = {
  *   { calls, lastCallAt, debtCleared, collectorSent,
  *     calls2, lastCallAt2, collectorSent2, reenteredDebt, debtClearedAgain,
  *     marked, beautiful, drifter, greenhand,
- *     beautiful1, beautiful2, marked1, marked2 }
+ *     beautiful1, beautiful2, marked1, marked2,
+ *     drifter1, drifter2, greenhand1, greenhand2 }
  * ledgerDebt is the deep arc, in two rounds. Round 1: while credits < 0 the
  * Ledger calls every callInterval world-seconds (escalating lines,
  * 'creditorCall' {stage,line}); the maxCalls-th call also injects the
@@ -674,14 +702,20 @@ export const DEEPENING = {
  * Whisper 'commLine'; climbing back to >= 0 fires milestone
  * 'debtClearedAgain' + round2.clearRepBonus. There is no third round. The
  * other four arcs fire one-time payoffs ('originPayoff' {id, line}) on
- * their condition; beautiful and marked also grow two mid-beats each
- * ('originBeat' {id,line}, lines in beats) ahead of the payoff:
+ * their condition; all four also grow two mid-beats each ('originBeat'
+ * {id,line}, lines in beats) ahead of the payoff — beautiful/marked since
+ * wave 8, drifter/greenhand added wave 9:
  *   marked — beats at fear 25 (veridian rep < 0) and veridian rep >= -5;
  *     payoff at veridian reputation >= 0 (the board comes down)
  *   beautiful — beats at growth 0.4 and 0.75; payoff at growth 1 (she
  *     finishes becoming)
- *   drifter — mystery.converged (the tally's question, stood inside)
- *   greenhand — any epic stage recorded (no story yet → a story)
+ *   drifter — beats at the first EARNED clue (mystery.found reaches 2 —
+ *     the origin grants rm_c_tally at pick) and at mystery.convergeHinted;
+ *     payoff at mystery.converged (the tally's question, stood inside)
+ *   greenhand — beats when any faction |reputation| or fear first reaches
+ *     10 (the rim learns the name) and when any faction reputation first
+ *     reaches 25 (a berth that is yours); payoff at any epic stage
+ *     recorded (no story yet → a story)
  */
 export const ORIGIN_ARCS = {
   ledgerDebt: {
@@ -724,6 +758,16 @@ export const ORIGIN_ARCS = {
     marked: [
       { id: 'marked1', line: 'The board in Veridian spacedock has a second sketch under your face now. Someone is paying to keep it current.' },
       { id: 'marked2', line: "A Combine clerk quietly misfiles your dossier. The board's copy of your face has begun to blur." },
+    ],
+    // Wave 9 mid-beats: drifter/greenhand grow two 'originBeat' steps each
+    // ahead of their payoffs, same shape as beautiful/marked.
+    drifter: [
+      { id: 'drifter1', line: 'You found a second count the colonies stopped keeping. The tally-board was never alone — the rim keeps its own ledger of questions, and yours is not the longest.' },
+      { id: 'drifter2', line: 'The pull rimward is not new to you. You have been following it since before you knew it had a direction.' },
+    ],
+    greenhand: [
+      { id: 'greenhand1', line: "A dockhand you have never met uses your ship's name. Word travels the lanes faster than you do." },
+      { id: 'greenhand2', line: 'You know which berth is yours, which clerk skims, which lane runs quiet. The Drift has stopped feeling like a question.' },
     ],
   },
   payoffs: {
