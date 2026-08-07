@@ -89,6 +89,8 @@ function toastForEvent(e, ctx, mem) {
       return { text: '◎ ' + (e.line ?? 'The song deepens.'), cls: 'sting' };
     case 'lineagePassed':
       return { text: '◆ ' + (e.line ?? 'The name flies again.'), cls: 'sting' };
+    case 'gunRisen':
+      return { text: '✦ ' + (e.line ?? 'A new name rides the lanes.'), cls: 'sting' };
     case 'creditorCall':
       return { text: '▲ ' + (e.line ?? 'The Ledger calls.'), cls: 'warn' };
     case 'originPayoff':

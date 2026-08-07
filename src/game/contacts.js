@@ -2,10 +2,13 @@
  * Contacts — named station NPCs with trust + favors (doc §12.9).
  *
  * Pure simulation module: no three.js, no scene. One contact per
- * (system, role): a dockmaster at every station, a fence at Freehold
- * (restricted-locker access via favors), a fixer at Veridian and Redmarch
- * (better restricted prices at high trust). station.js reads the roster and
- * applies the mechanics; world.trust/favors persist via save.js.
+ * (system, role): a dockmaster at every station including the deep-rim
+ * keeps (hush's Threshold, verge's Vigil — keepers, same family as Voss),
+ * a fence at Freehold (restricted-locker access via favors), a fixer at
+ * Veridian and Redmarch (better restricted prices at high trust). Deep-rim
+ * keepers acknowledge the mystery arc once per rung (converged, deepened).
+ * station.js reads the roster and applies the mechanics; world.trust/favors
+ * persist via save.js.
  *
  * WITNESS RULE (§8.7): rumorFor voices ONLY what ctx.world.incidents
  * records — contacts never invent events. recognitionLine keys off
@@ -21,6 +24,8 @@ const CONTACT_NAMES = {
   veridian: { dockmaster: 'Adjutant Vey', fixer: 'Lias Corrow' },
   redmarch: { dockmaster: 'Dockhand Sorrow', fixer: 'Six-Finger Brack' },
   hollowreach: { dockmaster: 'Keeper Voss' },
+  hush: { dockmaster: 'Keeper Ond' },
+  verge: { dockmaster: 'Keeper Leth' },
 };
 
 // Roster: dockmaster everywhere; fence at freehold; fixer off-freehold.
@@ -29,6 +34,8 @@ const CONTACT_ROLES = {
   veridian: ['dockmaster', 'fixer'],
   redmarch: ['dockmaster', 'fixer'],
   hollowreach: ['dockmaster'],
+  hush: ['dockmaster'],
+  verge: ['dockmaster'],
 };
 
 function buildRoster() {
@@ -94,9 +101,14 @@ export function rumorFor(ctx, contact) {
 /**
  * A recognition line once trust >= 60: the contact knows the ship. Uses the
  * player-set shipName when present, else refers to the living hull (§12.5).
- * Below the trust threshold, freehold/redmarch contacts instead acknowledge
- * the player's first Named-ace defeat — once each (contact.aceAck rides the
- * persisted contact record, same discipline as bumpTrust). null otherwise.
+ * Below the trust threshold, tiers in order: deep-rim keepers (hollowreach,
+ * hush, verge) acknowledge the mystery arc once each — the deepened tier
+ * (contact.deepAck2, which also marks deepAck1: the deeper word covers the
+ * shallower) before the converged tier (contact.deepAck1) — then
+ * freehold/redmarch contacts acknowledge the player's first Named-ace
+ * defeat once each (contact.aceAck). Flags ride the persisted contact
+ * record, same discipline as bumpTrust; undefined reads falsy on old
+ * saves, so no normalization. null otherwise.
  */
 export function recognitionLine(ctx, contact) {
   if (contact.trust >= 60) {
@@ -104,6 +116,17 @@ export function recognitionLine(ctx, contact) {
     return ship
       ? `${ship}, back on my pad. Good to see her in one piece.`
       : `The living hull — we'd know that ship anywhere. Welcome back.`;
+  }
+  const mys = ctx.world.mystery;
+  const deepRim = contact.system === 'hollowreach' || contact.system === 'hush' || contact.system === 'verge';
+  if (deepRim && mys?.deepened && !contact.deepAck2) {
+    contact.deepAck2 = true;
+    contact.deepAck1 = true;
+    return 'You stood in the Answer and came back. We do not ask what it said.';
+  }
+  if (deepRim && mys?.converged && !contact.deepAck1) {
+    contact.deepAck1 = true;
+    return 'Two columns, always — arrivals, and arrivals that have not happened yet. Your return goes in neither.';
   }
   if (
     (ctx.world.aceRivalry?.defeats ?? 0) > 0 &&

@@ -629,10 +629,33 @@ export const ACES = {
  * arm, and the lanes notice when the arm is gone. npc.js folds
  * brokenResolveMod into every pirate's resolve while the milestone stands
  * (systemic §7.2 shift, additive like the epic pirateResolveMod).
+ *
+ * Wave 10 — ASPIRANTS: once 'rimWithoutGuns' stands and fear sits at the top
+ * of the economy (ECON.fear.lawfulClosesAt is 50, hence fearThreshold 50),
+ * the rim grows NEW Named Guns. Aspirants are new names, not mantles — no
+ * lineage, no Ledger contract — and each rises exactly once, in order,
+ * while fear stays maxed. One flies at a time (aceRivalry.aspirantFlying);
+ * the next rises aspirants.respawnDelay world-seconds after the last fell
+ * (aspirantDownAt). When the third name is spent, no more rise. world.js
+ * emits 'gunRisen' on each rise and fires milestone 'aspirantBroken' on the
+ * first aspirant defeat. Progress lives on ctx.world.aceRivalry
+ * { aspirantRisen, aspirantDownAt, aspirantFlying }.
  */
 export const NAMED_GUNS = {
   brokenResolveMod: -5, // pirates rim-wide yield sooner once no Named Gun flies
   fearBonus: 5, // one-time fear bump when the second line breaks
+  aspirants: {
+    fearThreshold: 50, // fear must be maxed (ECON.fear.lawfulClosesAt)
+    respawnDelay: 150, // world-seconds after a defeat before the next name rises
+    resolve: 75, // aspirants start hard — they studied two broken lines
+    bounty: 4000,
+    names: ['Harrow Quist', 'Saint Ruvic', 'Ash Bell'],
+    lines: [
+      'No line bought this one. Harrow Quist rides the lanes to see what broke the Guns.',
+      'Saint Ruvic carries no mantle. He carries a heading — yours.',
+      'Ash Bell learned your shape from two broken lines. The lanes have a third name now.',
+    ],
+  },
 };
 
 /**

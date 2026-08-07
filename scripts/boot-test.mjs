@@ -17,6 +17,11 @@
 // origin beats on fresh harness boots, the hermit economy (scarcity pricing,
 // the first-trade milestone, the slowed random walk), and the wave-9
 // originArc/milestones save roundtrip.
+// Wave 10: the aspirant cycle (three new names rise once rimWithoutGuns
+// stands at max fear, then the rim stays quiet), the hermit pirate's
+// one-time commLine, the deep-rim keepers (Hush/Verge dockmasters) and
+// their mystery acknowledgments, and the wave-10
+// aceRivalry/milestones/contacts save roundtrip.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -441,9 +446,10 @@ const holdCount = (commodity) => ctx.cargo.reduce((n, c) => n + (c.commodity ===
 const w4contacts = ctx.world.contacts ?? [];
 const contactRoleCt = (role) => w4contacts.filter((c) => c.role === role).length;
 const contactDataChecks = {
-  // Wave 5 added the Hollow Reach dockmaster: 7 entries, 4 dockmasters.
-  sixEntries: w4contacts.length === 7,
-  dockmasterX3: contactRoleCt('dockmaster') === 4,
+  // Wave 5 added the Hollow Reach dockmaster; wave 10 the Hush/Verge
+  // keepers: 9 entries, 6 dockmasters.
+  nineEntries: w4contacts.length === 9,
+  dockmasterX6: contactRoleCt('dockmaster') === 6,
   fenceX1: contactRoleCt('fence') === 1,
   fixerX2: contactRoleCt('fixer') === 2,
   jsonRoundTrip: w4contacts.every((c) => {
@@ -2228,6 +2234,302 @@ const w9restoreChecks = {
 };
 console.log('wave9 restore:', JSON.stringify(w9restoreChecks));
 if (!Object.values(w9restoreChecks).every(Boolean)) { console.log('WAVE9 RESTORE FAIL'); errors++; }
+
+// ---- Wave 10: aspirant cycle / hermit pirate / deep-rim keepers / save ----
+// The continuing run sits DOCKED AT THRESHOLD IN THE HUSH (the wave-9 save
+// roundtrip's death-restore), both broken-line milestones and
+// 'rimWithoutGuns' standing, mystery.converged AND mystery.deepened true.
+// A/B/C run on the continuing run after a hop back to the Verge (an
+// aspirant rises into the CURRENT system's bank; the hermit beat is
+// verge-only); C also boots one fresh harness for the converged-only rung
+// (the wave-8/9 lesson: the origin overlay's digit listener eats Digit1-5
+// until the pick, so the pick comes first); D closes with the save
+// roundtrip in the Verge.
+// Test SETUP: re-pin the hull huge — the wave-9 death-restore returned the
+// class maxes, and random soak combat killing the player mid-section would
+// eat later digit dispatches (the death overlay listens for the same keys).
+ctx.player.hullMax = 1e9;
+ctx.player.hull = 1e9;
+
+// Travel: hush → verge (the wave-8 gate pair, in reverse).
+if (ctx.flags.docked) undockStation(); // leave Threshold (wave-9 restore dock)
+ctx.ship.object.position.set(...vergeGate.position); // hush [750,90,-350] → verge
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'at verge gate (wave10)');
+ctx.emit('jumpRequested', { to: 'verge' });
+if (!tickUntilJumpDone('verge', 'wave10 hop to verge')) {
+  console.log('WAVE10 TRAVEL FAIL — never arrived at verge');
+  errors++;
+}
+
+// -- a. aspirant cycle: three new names rise, then the rim stays quiet ------
+// Test SETUP (mirrors the wave-7/8 lineage normalize): splice any aspirant
+// records earlier soak phases may have grown (fear has sat high since the
+// wave-9 refire — a spontaneous rise during wave-9's ticks is possible),
+// reset the cycle fields, and pin fear at the threshold. 'aspirantBroken'
+// is spliced too so the scripted first fall is guaranteed to voice it.
+{
+  const seenBanks = new Set();
+  for (const bank of [...Object.values(ctx.world.recordBanks ?? {}), ctx.world.records]) {
+    if (!bank || seenBanks.has(bank)) continue; // ctx.world.records aliases the current bank
+    seenBanks.add(bank);
+    for (let i = bank.length - 1; i >= 0; i--) {
+      if (NAMED_GUNS.aspirants.names.includes(bank[i].name)) bank.splice(i, 1);
+    }
+  }
+  const rivalry10 = ctx.world.aceRivalry; // created by world.js long ago
+  rivalry10.aspirantRisen = 0;
+  rivalry10.aspirantDownAt = null;
+  rivalry10.aspirantFlying = false;
+  const iBroken10 = ctx.world.milestones.indexOf('aspirantBroken');
+  if (iBroken10 >= 0) ctx.world.milestones.splice(iBroken10, 1);
+}
+ctx.world.fear = NAMED_GUNS.aspirants.fearThreshold; // 50
+const aspEvs = [];
+for (let i = 0; i < 3; i++) { tick(1, 'wave10 first aspirant'); aspEvs.push(...ctx.lastEvents); }
+const rise1Evs = aspEvs.filter((e) => e.type === 'gunRisen');
+const vergeBank10 = ctx.world.recordBanks?.verge ?? [];
+const liveAspirant = () => vergeBank10.find((r) => r.aspirant === true && r.state !== 'dead' && r.state !== 'captured') ?? null;
+const asp1 = liveAspirant();
+const flyingAfterRise1 = ctx.world.aceRivalry.aspirantRisen === 1 && ctx.world.aceRivalry.aspirantFlying === true;
+if (asp1) defeatAce(asp1, 'wave10 defeat aspirant 1', aspEvs); // the wave-7 'npcDestroyed' path
+const aspDownAt1 = ctx.world.aceRivalry.aspirantDownAt;
+const downedAfter1 = ctx.world.aceRivalry.aspirantFlying === false && Number.isFinite(aspDownAt1);
+// Backdate instead of sleeping: the rise check is world.time - aspirantDownAt.
+ctx.world.aceRivalry.aspirantDownAt = ctx.world.time - (NAMED_GUNS.aspirants.respawnDelay + 1);
+for (let i = 0; i < 3; i++) { tick(1, 'wave10 second aspirant'); aspEvs.push(...ctx.lastEvents); }
+const asp2 = liveAspirant();
+if (asp2) defeatAce(asp2, 'wave10 defeat aspirant 2', aspEvs);
+ctx.world.aceRivalry.aspirantDownAt = ctx.world.time - (NAMED_GUNS.aspirants.respawnDelay + 1);
+for (let i = 0; i < 3; i++) { tick(1, 'wave10 third aspirant'); aspEvs.push(...ctx.lastEvents); }
+const asp3 = liveAspirant();
+if (asp3) defeatAce(asp3, 'wave10 defeat aspirant 3', aspEvs);
+// Third name spent: even with the wait satisfied, nothing more rises.
+ctx.world.aceRivalry.aspirantDownAt = ctx.world.time - (NAMED_GUNS.aspirants.respawnDelay + 1);
+for (let i = 0; i < 5; i++) { tick(1, 'wave10 no fourth aspirant'); aspEvs.push(...ctx.lastEvents); }
+const riseEvs = aspEvs.filter((e) => e.type === 'gunRisen');
+const brokenEvs10 = aspEvs.filter((e) => e.type === 'milestone' && e.id === 'aspirantBroken');
+const w10aspirantChecks = {
+  firstRiseOnce: rise1Evs.length === 1,
+  firstName: rise1Evs[0]?.name === NAMED_GUNS.aspirants.names[0], // 'Harrow Quist'
+  firstLine: rise1Evs[0]?.line === NAMED_GUNS.aspirants.lines[0],
+  recordInVergeBank: !!asp1 && asp1.name === NAMED_GUNS.aspirants.names[0] && asp1.aspirant === true,
+  recordSpecs: asp1?.role === 'ace' && asp1?.faction === 'independent' && asp1?.classKey === 'cutter' &&
+    asp1?.resolve === NAMED_GUNS.aspirants.resolve && asp1?.bounty === NAMED_GUNS.aspirants.bounty &&
+    JSON.stringify(asp1?.cargo) === JSON.stringify([{ commodity: 'restrictedComponents', units: 4 }]),
+  flyingAfterRise: flyingAfterRise1,
+  downedAfterDefeat: downedAfter1,
+  brokenMilestoneBanked: ctx.world.milestones.includes('aspirantBroken'),
+  brokenMilestoneEvent: brokenEvs10.length >= 1,
+  secondRise: riseEvs[1]?.name === NAMED_GUNS.aspirants.names[1] && // 'Saint Ruvic'
+    riseEvs[1]?.line === NAMED_GUNS.aspirants.lines[1],
+  thirdRise: riseEvs[2]?.name === NAMED_GUNS.aspirants.names[2] && // 'Ash Bell'
+    riseEvs[2]?.line === NAMED_GUNS.aspirants.lines[2],
+  noFourthRise: riseEvs.length === 3 && ctx.world.aceRivalry.aspirantRisen === 3,
+  brokenMilestoneOnceEver: brokenEvs10.length === 1, // three falls, one milestone
+};
+console.log('wave10 aspirants:', JSON.stringify(w10aspirantChecks), `rises=${riseEvs.map((e) => e.name).join('|')}`);
+if (!Object.values(w10aspirantChecks).every(Boolean)) { console.log('WAVE10 ASPIRANTS FAIL'); errors++; }
+
+// -- b. hermit pirate: Old Callow hails once, near his record position ------
+// Test SETUP: splice the milestone if an earlier section already parked the
+// player within his 350u earshot (guarantees a fresh fire regardless of
+// where the arrival gate dropped us), and revive the record if random soak
+// combat marked him dead (the wave-8 Illyx revive pattern).
+{
+  const iMet10 = ctx.world.milestones.indexOf('hermitPirateMet');
+  if (iMet10 >= 0) ctx.world.milestones.splice(iMet10, 1);
+}
+const callow = vergeBank10.find((r) => r.name === 'Old Callow') ?? null;
+if (callow && (callow.state === 'dead' || callow.state === 'captured')) callow.state = 'enroute';
+const hermitEvs = [];
+const rp10 = new THREE.Vector3();
+// Exact cold-variant string from world.js hermitPirateBeat (rimWithoutGuns
+// stands in this run). Counts filter to it: parked on his route, the LIVE
+// Old Callow can acquire the player and bark ('Heave to. Cargo or hull.',
+// npc.js telegraph) — same sender, different system. The beat's once-ever
+// semantics live on the cold line and the milestone guard.
+const COLD_HAIL = 'You broke the Guns. This lane had teeth once. I remember teeth.';
+if (callow) {
+  recordPosition(callow, rp10);
+  // 2000u out: beyond DEINSTANTIATE_RANGE (1400), so no live copy, and far
+  // past the encounter bubble (800) — neither the beat nor a bark can fire.
+  ctx.ship.object.position.set(rp10.x + 2000, rp10.y, rp10.z);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+for (let i = 0; i < 3; i++) { tick(1, 'wave10 hermit far'); hermitEvs.push(...ctx.lastEvents); }
+const farHails = hermitEvs.filter((e) => e.type === 'commLine' && e.from === 'Old Callow');
+if (callow) {
+  recordPosition(callow, rp10); // the route drifts — re-read, park exactly on it
+  ctx.ship.object.position.copy(rp10);
+  ctx.ship.velocity.set(0, 0, 0);
+}
+for (let i = 0; i < 3; i++) { tick(1, 'wave10 hermit near'); hermitEvs.push(...ctx.lastEvents); }
+const nearCold = hermitEvs.filter((e) => e.type === 'commLine' && e.from === 'Old Callow' && e.text === COLD_HAIL);
+for (let i = 0; i < 10; i++) { tick(1, 'wave10 hermit refire watch'); hermitEvs.push(...ctx.lastEvents); }
+const totalCold = hermitEvs.filter((e) => e.type === 'commLine' && e.from === 'Old Callow' && e.text === COLD_HAIL);
+const w10hermitChecks = {
+  callowInVergeBank: !!callow && callow.role === 'pirate',
+  beatKeysOnCallow: vergeBank10.find((r) => r.role === 'pirate') === callow, // world.js reads the first pirate
+  coldPrecondition: ctx.world.milestones.includes('rimWithoutGuns'),
+  silentFromFar: farHails.length === 0,
+  coldHailOnceNear: nearCold.length === 1,
+  coldVariant: nearCold[0]?.text === COLD_HAIL,
+  milestoneBanked: ctx.world.milestones.includes('hermitPirateMet'),
+  noSecondHail: totalCold.length === 1, // the milestone guard holds across the refire watch
+};
+console.log('wave10 hermit pirate:', JSON.stringify(w10hermitChecks), `text=${JSON.stringify(nearCold[0]?.text)}`);
+if (!Object.values(w10hermitChecks).every(Boolean)) { console.log('WAVE10 HERMIT PIRATE FAIL'); errors++; }
+
+// -- c. deep-rim keepers: the mystery acknowledgments, once per rung --------
+// Continuing run: the wave-10 roster is 9 entries, 6 dockmasters (the wave-4
+// check, re-derived — save restores swap the roster array wholesale).
+const w10contacts = ctx.world.contacts ?? [];
+const w10roleCt = (role) => w10contacts.filter((c) => c.role === role).length;
+const vergeKeeper = w10contacts.find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const hushKeeper = w10contacts.find((c) => c.id === 'contact-hush-dockmaster') ?? null;
+// Exact strings from contacts.js recognitionLine (not exported — asserted
+// verbatim, same as the wave-5/8 arrival lines).
+const DEEPENED_ACK = 'You stood in the Answer and came back. We do not ask what it said.';
+const CONVERGED_ACK = 'Two columns, always — arrivals, and arrivals that have not happened yet. Your return goes in neither.';
+// mystery.deepened stands in this run (wave-7) — the deeper rung answers
+// first and marks BOTH once-flags. Test SETUP: clear any ack flags an
+// earlier people-screen render may have voiced (the wave-7/8 normalize
+// discipline — none are expected; no wave opened people off-freehold).
+for (const k of [vergeKeeper, hushKeeper]) {
+  if (k) { delete k.deepAck1; delete k.deepAck2; }
+}
+const deepenedLineV = vergeKeeper ? recognitionLine(ctx, vergeKeeper) : null;
+const deepenedRepeatV = vergeKeeper ? recognitionLine(ctx, vergeKeeper) : null;
+const deepenedLineH = hushKeeper ? recognitionLine(ctx, hushKeeper) : null;
+// Non-deep-rim control: neither deep line ever comes from a shallow-rim
+// contact. aceRivalry.defeats > 0 in this run, so skip freehold/redmarch
+// (their aceAck tier would answer instead) — take the veridian dockmaster,
+// falling back to the fixer if trust ever crossed the recognition
+// threshold (wave 4 bumped freehold 65 / redmarch 10, never veridian).
+let shallowContact = contactsForSystem(ctx, 'veridian').find((c) => c.role === 'dockmaster') ?? null;
+if (shallowContact && shallowContact.trust >= 60) {
+  shallowContact = contactsForSystem(ctx, 'veridian').find((c) => c.role === 'fixer') ?? shallowContact;
+}
+const shallowLine = shallowContact ? recognitionLine(ctx, shallowContact) : null;
+const w10keeperChecks = {
+  nineEntries: w10contacts.length === 9,
+  dockmasterX6: w10roleCt('dockmaster') === 6,
+  keepersFound: vergeKeeper?.name === 'Keeper Leth' && hushKeeper?.name === 'Keeper Ond',
+  deepenedPrecondition: ctx.world.mystery?.deepened === true && ctx.world.mystery?.converged === true,
+  vergeDeepenedLine: deepenedLineV === DEEPENED_ACK,
+  vergeFlagsBoth: vergeKeeper?.deepAck1 === true && vergeKeeper?.deepAck2 === true,
+  deepenedNotRepeated: deepenedRepeatV !== DEEPENED_ACK,
+  hushDeepenedLine: deepenedLineH === DEEPENED_ACK, // once flags are per-contact
+  hushFlagsBoth: hushKeeper?.deepAck1 === true && hushKeeper?.deepAck2 === true,
+  shallowNeverDeep: shallowLine !== DEEPENED_ACK && shallowLine !== CONVERGED_ACK,
+};
+console.log('wave10 deep-rim keepers:', JSON.stringify(w10keeperChecks), `shallow=${JSON.stringify(shallowLine)}`);
+if (!Object.values(w10keeperChecks).every(Boolean)) { console.log('WAVE10 DEEP-RIM KEEPERS FAIL'); errors++; }
+
+// Converged-only rung: one FRESH harness (the wave-9 B/C pattern — empty
+// store, origin pick FIRST because the overlay eats Digit1-5). The main
+// run's docked/paused flags gate its own window listeners; both are false
+// (last docked at the wave-9 restore, undocked for the wave-10 travel).
+ctx.flags.docked = false;
+ctx.flags.paused = false;
+const convBoot = bootFreshHarness('wave10-converged');
+const cctx = convBoot.ctx;
+const ctick = convBoot.tick;
+const cOverlayShown = [...walkDom(document.body)]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.toLowerCase().includes('who are you'));
+dispatchKey('Digit1'); // [1] Freehold Greenhand (ORIGINS key order)
+const cOriginEv = cctx.events.find((e) => e.type === 'originChosen') ?? null; // emit is synchronous
+cctx.player.hullMax = 1e9;
+cctx.player.hull = 1e9;
+ctick(2, 'wave10 converged boot settle');
+const cmystery = cctx.world.mystery;
+cmystery.converged = true; // converged WITHOUT deepened — the shallower rung
+const keeperVoss = (cctx.world.contacts ?? []).find((c) => c.id === 'contact-hollowreach-dockmaster') ?? null;
+const convergedLine1 = keeperVoss ? recognitionLine(cctx, keeperVoss) : null;
+const convergedLine2 = keeperVoss ? recognitionLine(cctx, keeperVoss) : null;
+const w10convergedChecks = {
+  overlayShown: cOverlayShown,
+  originRecorded: cctx.world.origin === 'greenhand',
+  originChosenEmitted: cOriginEv?.id === 'greenhand',
+  vossFound: keeperVoss?.name === 'Keeper Voss',
+  deepenedFalsy: cmystery.deepened !== true,
+  convergedLine: convergedLine1 === CONVERGED_ACK,
+  deepAck1Only: keeperVoss?.deepAck1 === true && keeperVoss?.deepAck2 !== true,
+  convergedNotRepeated: convergedLine2 !== CONVERGED_ACK,
+};
+console.log('wave10 converged ack:', JSON.stringify(w10convergedChecks), `line=${JSON.stringify(convergedLine1)}`);
+if (!Object.values(w10convergedChecks).every(Boolean)) { console.log('WAVE10 CONVERGED ACK FAIL'); errors++; }
+
+// -- d. save roundtrip: wave-10 fields ride the dock autosave + restore -----
+// The wave-8 section-5 / wave-9 closing pattern, continuing run in the
+// Verge. Test SETUP: park live hostiles so the dock autosave can't be
+// combat-blocked (the three spent aspirants, Dresk, and Old Callow are
+// live somewhere in this system).
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave10 save)');
+dockAtCurrentStation('dock verge (wave10 save)'); // The Vigil — 'docked' fires trySave
+tick(3, 'wave10 save settle');
+const downAtPreSave10 = ctx.world.aceRivalry.aspirantDownAt;
+const w10snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const w10saveChecks = {
+  saveWritten: !!w10snap?.world,
+  systemIsVerge: w10snap?.world?.currentSystem === 'verge',
+  aspirantsPersisted: w10snap?.world?.aceRivalry?.aspirantRisen === 3 &&
+    Number.isFinite(w10snap?.world?.aceRivalry?.aspirantDownAt),
+  brokenPersisted: w10snap?.world?.milestones?.includes('aspirantBroken') === true,
+  hermitMetPersisted: w10snap?.world?.milestones?.includes('hermitPirateMet') === true,
+  deepAcksPersisted: (w10snap?.world?.contacts ?? [])
+    .some((c) => c.id === 'contact-verge-dockmaster' && c.deepAck1 === true && c.deepAck2 === true),
+};
+console.log('wave10 save fields:', JSON.stringify(w10saveChecks));
+if (!Object.values(w10saveChecks).every(Boolean)) { console.log('WAVE10 SAVE FIELDS FAIL'); errors++; }
+
+// Corrupt in memory, die, recover from the dock autosave (Enter skips the
+// hold synchronously — the wave-5 death path). The post-corruption ticks
+// legitimately RE-RISE an aspirant (rimWithoutGuns + fear 50 + reset
+// fields) — expected, not a failure, mirroring wave-9's rimWithoutGuns
+// refire: the restore swaps aceRivalry/recordBanks wholesale, and the
+// corruptedFirst probe reads fields nothing re-derives while docked
+// (hermitPirateMet — The Vigil sits ~800u from Old Callow's lane — and the
+// keeper flags).
+const rivalry10d = ctx.world.aceRivalry;
+rivalry10d.aspirantRisen = 0;
+rivalry10d.aspirantDownAt = null;
+rivalry10d.aspirantFlying = false;
+for (const id of ['aspirantBroken', 'hermitPirateMet']) {
+  const i = ctx.world.milestones.indexOf(id);
+  if (i >= 0) ctx.world.milestones.splice(i, 1);
+}
+for (const keeperId of ['contact-verge-dockmaster', 'contact-hush-dockmaster']) {
+  const k = ctx.world.contacts.find((c) => c.id === keeperId);
+  if (k) { delete k.deepAck1; delete k.deepAck2; }
+}
+tick(2, 'wave10 fields corrupted');
+const w10corrupted = !ctx.world.milestones.includes('hermitPirateMet') &&
+  !ctx.world.contacts.some((c) => c.id === 'contact-verge-dockmaster' && c.deepAck2 === true);
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave10 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const vergeKeeperRestored = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const w10restoreChecks = {
+  corruptedFirst: w10corrupted,
+  aspirantRisenRestored: ctx.world.aceRivalry?.aspirantRisen === 3,
+  downAtRestored: Number.isFinite(downAtPreSave10) && ctx.world.aceRivalry?.aspirantDownAt === downAtPreSave10,
+  brokenRestored: ctx.world.milestones.includes('aspirantBroken'),
+  hermitMetRestored: ctx.world.milestones.includes('hermitPirateMet'),
+  deepAcksRestored: vergeKeeperRestored?.deepAck1 === true && vergeKeeperRestored?.deepAck2 === true,
+};
+// All three names spent: the restore must not re-arm the cycle.
+const postRestoreEvs = [];
+for (let i = 0; i < 5; i++) { tick(1, 'wave10 no rise post-restore'); postRestoreEvs.push(...ctx.lastEvents); }
+w10restoreChecks.noGunRisenPostRestore = !postRestoreEvs.some((e) => e.type === 'gunRisen');
+console.log('wave10 restore:', JSON.stringify(w10restoreChecks));
+if (!Object.values(w10restoreChecks).every(Boolean)) { console.log('WAVE10 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

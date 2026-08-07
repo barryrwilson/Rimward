@@ -670,13 +670,18 @@ function updateDuel(ctx, live, dt, now) {
     if (!ai.commSent) {
       ai.commSent = true;
       // Recognition: a Named Gun acknowledges a known/hunted pilot. Priority:
+      // aspirant (wave 10, a new name defines itself against the player) >
       // Sister Vane's first-ever encounter > Illyx lineage/rematch > fear
       // recognition > the generic line.
       let line = 'Run if you like.';
       if (!ai.recognitionSent) {
         ai.recognitionSent = true;
         const recName = live.record?.name;
-        if (recName === 'Sister Vane') {
+        if (live.record?.aspirant) {
+          // Aspirant cycle (wave 10): no mantle, no lineage — the new name
+          // takes its measure from the pilot who broke the old lines.
+          line = 'No mantle. No lineage. I take my name from yours.';
+        } else if (recName === 'Sister Vane') {
           // Lineage generation: each fallen Vane is succeeded by the next.
           const gen = ctx.world.aceRivalry?.hunterGeneration ?? 0;
           line = gen >= 2

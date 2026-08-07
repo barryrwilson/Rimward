@@ -204,17 +204,58 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   (drifter = Digit5), hermit data/pricing/milestone via real market-UI
   clicks, pinned-RNG walk-rate ratio (verge drift 3 vs hush 8-9), and a
   wave-9 save roundtrip (greenhand1 + both milestones). PASS ×5 runs.
-## Next round candidates (wave 10)
+- Wave 10: all three queued candidates (successor aspirant, hermit
+  pirate, deep-rim contacts). state.js: NAMED_GUNS.aspirants
+  { fearThreshold 50 (= ECON.fear.lawfulClosesAt — the top of the fear
+  economy), respawnDelay 150, resolve 75, bounty 4000, names ['Harrow
+  Quist','Saint Ruvic','Ash Bell'], lines ×3 } — new NAMES, not mantles:
+  each rises once, in order, then the rim stays quiet. world.js:
+  aceRivalry gains aspirantRisen/aspirantDownAt/aspirantFlying at all
+  four literal sites + ??= normalization (wave-8 discipline);
+  spawnAspirant (mirrors the successor spawns — makeRecord into the
+  CURRENT system's bank, jittered gate↔planet ace route, role 'ace',
+  faction 'independent', rec.aspirant = true, emits 'gunRisen'
+  {name,line}); the update tick rises the next name once
+  'rimWithoutGuns' stands and fear ≥ 50, one at a time (aspirantFlying),
+  gated by respawnDelay after a fall; BOTH ace-defeat branches mark the
+  fall (flying=false, downAt) and fireMilestone('aspirantBroken', …)
+  once ever, generic ace bookkeeping untouched. PIRATE_NAMES.verge =
+  ['Old Callow']; hermitPirateBeat — once ever ('hermitPirateMet'
+  guard-push on world.milestones), verge-only, within 350u of his
+  RECORD position (recordPosition into module _v1, no instantiation
+  needed, zero allocation), emits 'commLine' from him: a remembers-
+  the-lane line, or the cold variant ('You broke the Guns…') when
+  rimWithoutGuns stands; dead record never voices. contacts.js: roster
+  7 → 9 — Keeper Ond (contact-hush-dockmaster) + Keeper Leth
+  (contact-verge-dockmaster), six dockmasters; recognitionLine gains
+  deep-rim tiers for hollowreach/hush/verge only (priority trust ≥ 60
+  > deepened > converged > aceAck): mystery.deepened fires once per
+  keeper (sets deepAck1 AND deepAck2 — the deeper covers the shallower),
+  mystery.converged fires once (deepAck1); undefined flags falsy on old
+  saves, contacts ride WORLD_FIELDS 'contacts'. ctx.js froze 'gunRisen'
+  {name,line}; hud.js ✦ sting toast; npc.js recognition: aspirant branch
+  first ('No mantle. No lineage. I take my name from yours.'). No new
+  WORLD_FIELDS. Boot test wave-10 section: full aspirant cycle on the
+  continuing run (three rises with exact names/lines/record specs, one
+  'aspirantBroken' ever, no fourth rise), Old Callow beat (silent from
+  far, cold-variant hail once near, no refire), keeper acknowledgments
+  (deepened on the continuing run incl. shallow-rim control, converged
+  on a fresh harness), wave-10 save roundtrip (aspirant fields, both
+  milestones, deepAck flags, no post-restore rise); wave-4 roster counts
+  updated 7→9 / 4→6. PASS ×4 runs.
+## Next round candidates (wave 11)
 
-- Wave 9 closed the queue again. The named candidates are all built:
-  every origin now has mid-beats, the rim reacts to having no Named
-  Guns, and the Verge has its hermit economy.
-- Named Guns: both lines can break, but no NEW gun ever rises — a
-  player-with-maxes-fear world could grow the next name (a successor
-  aspirant, not a lineage bearer).
-- The Verge: the keeper is silent and the market is a hermit's; the one
-  pirate has no authored beat (a hermit pirate who remembers the lane?).
-- Contacts never react to the deep rim: no Hollow Reach/Hush/Vigil
-  contact beyond the wave-5 dockmaster pattern; epics capstone at
-  deepened but contacts stop at their wave-4/6 beats.
+- Wave 10 closed the queue again: the rim grows new names, the Verge's
+  pirate has a voice, and the keepers acknowledge the deep.
+- After the third aspirant falls the rim is quiet for good — the
+  milestone says 'the lanes have more where that came from' but nothing
+  more comes. Either the line becomes true (an endless slow cycle) or
+  the rim gets a final word (not an ending — §25: credits/endings do
+  not terminate the sandbox).
+- Old Callow remembers the lane but only speaks once: a hermit pirate
+  could sell what memory is worth (charts? a vouch? one favor, witness-
+  rule safe) or simply react when the player returns.
+- Deep-rim keepers acknowledge but offer nothing: no favors, no
+  services, no rumors from the two-column ledger. Trust past 60 at
+  Threshold/The Vigil currently buys the generic line only.
 - Polish debt: none known; boot test is the gate.

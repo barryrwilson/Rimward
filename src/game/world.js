@@ -43,6 +43,13 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  *   Wave 9 closes the pair: once both broken-line milestones stand, the rim
  *   itself reacts — milestone 'rimWithoutGuns' fires once, fear takes a
  *   one-time bump, and pirates everywhere yield sooner (NAMED_GUNS).
+ *   Wave 10 answers the vacuum: while 'rimWithoutGuns' stands and fear sits
+ *   maxed, new names rise to hunt the player — aspirants, not line-bearers,
+ *   one at a time, three total ('gunRisen' per rise, milestone
+ *   'aspirantBroken' on the first fall), then the rim stays quiet.
+ *   Wave 10 names the Verge's lone pirate ('Old Callow') and gives him a
+ *   one-time proximity beat — the hermit who remembers the lane, his line
+ *   gone cold if the rim already stands without Guns ('hermitPirateMet').
  *   Origin payoff arcs
  *   close the situations origins opened: ledgerDebt gets escalating creditor
  *   calls (and a collector) while credits < 0, and a colder second round
@@ -51,7 +58,8 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
  *   beats, with all four growing two 'originBeat' mid-beats each ahead
  *   of the payoff — beautiful/marked since wave 8, drifter/greenhand
  *   added wave 9 (clue count/hint, and faction reputation thresholds). State lives in ctx.world.aceRivalry
- *   { hunterGeneration, hunterDownAt, illyxGeneration, illyxDownAt } and
+ *   { hunterGeneration, hunterDownAt, illyxGeneration, illyxDownAt,
+ *   aspirantRisen, aspirantDownAt, aspirantFlying } and
  *   the flat JSON-plain
  *   ctx.world.originArc — both persisted via WORLD_FIELDS
  *   'aceRivalry'/'originArc' and re-resolved per frame (save.js swaps world
@@ -96,6 +104,7 @@ const TRADER_NAMES = {
 const PIRATE_NAMES = {
   freehold: ['Red Marlow', 'Gallows Wren', 'Ninth Tooth', 'Sable Ilex'],
   veridian: ['Copper Vane', 'Hollow Quill', 'Bracken-12'],
+  verge: ['Old Callow'],
 };
 const PATROL_NAMES = {
   freehold: ['Watchful Apt', 'Lancer Po'],
@@ -258,7 +267,7 @@ function ensureBank(ctx, sysId) {
  * ctx.world.records IS that bank, so the push suffices either way.
  */
 function spawnHunterAce(ctx) {
-  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
+  const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null, aspirantRisen: 0, aspirantDownAt: null, aspirantFlying: false });
   if (rivalry.hunterSpawned) return;
   const def = SYSTEMS[ACES.hunter.system];
   if (!def) return;
@@ -367,6 +376,48 @@ function spawnIllyxSuccessor(ctx) {
   rec.rematchCount = 0;
   bank.push(rec);
   ctx.emit('lineagePassed', { name: ACES.illyx.name, generation: gen, line: ILLYX_LINEAGE_LINES[gen - 1] });
+}
+
+/**
+ * Aspirant cycle (wave 10): with no Named Guns left and fear at the top of
+ * the economy, the rim grows NEW names — not mantles, not kin. The next
+ * unrisen aspirant joins the CURRENT system's record bank with the same
+ * jittered gate↔planet ace route the hunter/Illyx spawns use, carrying the
+ * restrictedComponents load, rec.aspirant = true so the ace-defeat handlers
+ * can tell a new name from a line-bearer. Caller (the update tick) gates on
+ * rimWithoutGuns + fear + one-at-a-time; here we bump aspirantRisen and
+ * mark the name flying first, mirroring the successor spawns. Emits
+ * 'gunRisen' { name, line }.
+ */
+function spawnAspirant(ctx) {
+  const rivalry = ctx.world.aceRivalry; // re-resolved per frame; save.js swaps wholesale
+  rivalry.aspirantRisen ??= 0; // pre-wave-10 saves lack the field
+  rivalry.aspirantDownAt ??= null;
+  rivalry.aspirantFlying ??= false;
+  const idx = rivalry.aspirantRisen;
+  rivalry.aspirantRisen++;
+  rivalry.aspirantDownAt = null;
+  rivalry.aspirantFlying = true;
+  const sysId = ctx.world.currentSystem;
+  const def = SYSTEMS[sysId];
+  if (!def) return;
+  const gate = gatePoint(def);
+  const planet = planetPoint(def);
+  const bank = ensureBank(ctx, sysId);
+  const rec = makeRecord(ctx, {
+    name: NAMED_GUNS.aspirants.names[idx],
+    classKey: 'cutter',
+    faction: 'independent',
+    role: 'ace',
+    route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
+    cargo: [{ commodity: 'restrictedComponents', units: 4 }],
+    bounty: NAMED_GUNS.aspirants.bounty,
+    system: sysId,
+  });
+  rec.resolve = NAMED_GUNS.aspirants.resolve;
+  rec.aspirant = true;
+  bank.push(rec);
+  ctx.emit('gunRisen', { name: rec.name, line: NAMED_GUNS.aspirants.lines[idx] });
 }
 
 /**
@@ -630,6 +681,33 @@ function originArcTick(ctx) {
   }
 }
 
+/**
+ * Hermit pirate beat (wave 10): the Verge's lone pirate — 'Old Callow' —
+ * remembers the lane and says so, once ever, when the player first comes
+ * within 350u of his RECORD position (recordPosition into module _v1 —
+ * works whether or not traffic.js has instantiated him, zero allocation).
+ * Witness-Rule-safe: he voices only himself. Dead records (state 'dead',
+ * the defeat path) never voice it. Persisted via world.milestones
+ * ('hermitPirateMet'), already a WORLD_FIELD; a colder line stands in if
+ * 'rimWithoutGuns' has fired.
+ */
+function hermitPirateBeat(ctx) {
+  if (ctx.world.currentSystem !== 'verge') return;
+  if (ctx.world.milestones.includes('hermitPirateMet')) return;
+  if (!ctx.ship.object) return;
+  const bank = ensureBank(ctx, 'verge');
+  const rec = bank.find((r) => r.role === 'pirate');
+  if (!rec || rec.state === 'dead') return;
+  if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > 350) return;
+  ctx.world.milestones.push('hermitPirateMet');
+  ctx.emit('commLine', {
+    from: rec.name,
+    text: ctx.world.milestones.includes('rimWithoutGuns')
+      ? 'You broke the Guns. This lane had teeth once. I remember teeth.'
+      : "Flew this lane when the Shepherd's broadcast still had takers. First hull in longer than I bothered counting.",
+  });
+}
+
 // ---------- Module state (never serialized) ----------
 const wreckMeshes = new Map(); // aftermath.id → { group, emberMat }
 let debrisGeoBox = null;
@@ -752,7 +830,7 @@ export function initWorld(ctx) {
 
   // Named-ace rivalry state (JSON-plain, persisted via WORLD_FIELDS
   // 'aceRivalry'). Old saves lack it — same ??= discipline as recordBanks.
-  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null };
+  ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null, aspirantRisen: 0, aspirantDownAt: null, aspirantFlying: false };
 
   // Origin payoff arcs (wave 7): flat JSON-plain record persisted via
   // WORLD_FIELDS 'originArc'. Re-resolved per frame where used — save.js
@@ -954,10 +1032,23 @@ export function initWorld(ctx) {
         });
         const entry = stageAftermath(ctx, incident);
         if (rec?.role === 'ace') {
-          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null, aspirantRisen: 0, aspirantDownAt: null, aspirantFlying: false });
+          rivalry.aspirantRisen ??= 0; // pre-wave-10 saves lack the field
+          rivalry.aspirantDownAt ??= null;
+          rivalry.aspirantFlying ??= false;
           rivalry.defeats++;
           rivalry.lastOutcome = 'destroyed';
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
+          // Aspirant cycle (wave 10): the defeated ace is a new name, not a
+          // line-bearer — mark it downed; the tick rises the next name after
+          // aspirants.respawnDelay. First fall ever fires 'aspirantBroken'
+          // (fireMilestone guards duplicates). Generic ace bookkeeping above
+          // still counts these defeats.
+          if (rec.aspirant) {
+            rivalry.aspirantFlying = false;
+            rivalry.aspirantDownAt = ctx.world.time;
+            fireMilestone(ctx, 'aspirantBroken', 'A new name goes out. The lanes have more where that came from.');
+          }
           // Named-Gun lineage (wave 7): the defeated ace is the hunter →
           // schedule the next generation, or break the line at the last.
           if (rec.name === ACES.hunter.name && rec.role === 'ace' && rec.faction === ACES.hunter.faction) {
@@ -1001,10 +1092,23 @@ export function initWorld(ctx) {
         fireMilestone(ctx, 'firstCapitulation', 'They yield. First capitulation.');
         if (outcome === 'tribute') fireMilestone(ctx, 'firstTribute', 'Tribute paid. The lane remembers.');
         if (rec?.role === 'ace') {
-          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null });
+          const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null, aspirantRisen: 0, aspirantDownAt: null, aspirantFlying: false });
+          rivalry.aspirantRisen ??= 0; // pre-wave-10 saves lack the field
+          rivalry.aspirantDownAt ??= null;
+          rivalry.aspirantFlying ??= false;
           rivalry.defeats++;
           rivalry.lastOutcome = outcome; // 'flee' | 'jettison' | 'ransom' | ...
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
+          // Aspirant cycle (wave 10): the defeated ace is a new name, not a
+          // line-bearer — mark it downed; the tick rises the next name after
+          // aspirants.respawnDelay. First fall ever fires 'aspirantBroken'
+          // (fireMilestone guards duplicates). Generic ace bookkeeping above
+          // still counts these defeats.
+          if (rec.aspirant) {
+            rivalry.aspirantFlying = false;
+            rivalry.aspirantDownAt = ctx.world.time;
+            fireMilestone(ctx, 'aspirantBroken', 'A new name goes out. The lanes have more where that came from.');
+          }
           // Named-Gun lineage (wave 7): the defeated ace is the hunter →
           // schedule the next generation, or break the line at the last.
           if (rec.name === ACES.hunter.name && rec.role === 'ace' && rec.faction === ACES.hunter.faction) {
@@ -1140,6 +1244,13 @@ export function initWorld(ctx) {
       // Named-Gun lineage (wave 7): a defeated Vane's successor takes up the
       // name after respawnDelay world-seconds — until the line is broken.
       const rivalry = ctx.world.aceRivalry;
+      // wave 10: pre-wave-10 saves lack the aspirant fields — same ??=
+      // discipline as the wave-8 illyx guards in the defeat handlers.
+      if (rivalry) {
+        rivalry.aspirantRisen ??= 0;
+        rivalry.aspirantDownAt ??= null;
+        rivalry.aspirantFlying ??= false;
+      }
       if (rivalry && rivalry.hunterDownAt != null && now - rivalry.hunterDownAt >= ACES.hunter.lineage.respawnDelay) {
         spawnHunterSuccessor(ctx);
       }
@@ -1158,8 +1269,27 @@ export function initWorld(ctx) {
         }
       }
 
+      // Aspirant cycle (wave 10): no Named Guns left + fear maxed → the rim
+      // grows new names. One flies at a time; the first rise is immediate
+      // (aspirantDownAt starts null), later rises wait respawnDelay after a
+      // defeat; the cycle ends when all three names are spent. Cheap
+      // per-frame guard; the spawn allocates once.
+      if (
+        rivalry &&
+        ctx.world.milestones.includes('rimWithoutGuns') &&
+        ctx.world.fear >= NAMED_GUNS.aspirants.fearThreshold &&
+        !rivalry.aspirantFlying &&
+        rivalry.aspirantRisen < NAMED_GUNS.aspirants.names.length &&
+        (rivalry.aspirantDownAt == null || now - rivalry.aspirantDownAt >= NAMED_GUNS.aspirants.respawnDelay)
+      ) {
+        spawnAspirant(ctx);
+      }
+
       // Origin payoff arcs (wave 7): creditor come-due + one-time payoffs.
       originArcTick(ctx);
+
+      // Hermit pirate (wave 10): the Verge's Old Callow hails once, near.
+      hermitPirateBeat(ctx);
 
       // First Scare: any live ship pushed into the bargaining band §8.8.
       if (!ctx.world.milestones.includes('firstScare')) {
