@@ -390,6 +390,23 @@ tick(5, 'at redmarch gate');
 console.log(`gate inZone (expect true): ${ctx.gate.inZone} nearTo (expect redmarch): ${ctx.gate.nearTo}`);
 ctx.emit('jumpRequested', { to: 'redmarch' });
 tick(60 * 4, 'jump to redmarch');
+// Cast hygiene (pre-existing flake): inter-system migration (world.js §8.2)
+// marks an enroute veridian trader 'inTransit' every ~90 s with a 60–120 s
+// eta, and arriveMigrants PUSHES the record into the destination bank when
+// the eta passes. A pick made during the wave-2 veridian visit therefore
+// lands mid-soak here and grows ctx.world.records to 14 — the old
+// `records.length === 13` gate flaked (~1/70 runs) even though the seeded
+// cast was intact. Snapshot the bank right after the jump completes: the
+// earliest veridian pick is the first veridian-current tick, and pick →
+// this line is ~40–45 s of world time < 60 s min eta (freehold's only gate
+// leads to veridian; hollowreach, the other redmarch neighbor, is never
+// current before this), so no arrival can have landed yet and this Set IS
+// exactly the seeded redmarch cast. The gate below asserts the REAL
+// contract — the seeded 5 trader / 7 pirate / 1 patrol / 0 ace cast
+// survives the hop and soak intact (membership by reference; deaths only
+// flip rec.state, they never splice the bank) — and tolerates only genuine
+// migration arrivals, which pickMigrant guarantees are traders.
+const seededCast = new Set(ctx.world.records);
 tick(60 * 30, 'redmarch soak 30s'); // let traffic respawn from the new cast
 settlePrices('wave3 redmarch');
 let redPlanets = 0;
@@ -398,12 +415,14 @@ ctx.scene.traverse((o) => {
   // wave-5 landmark/clue POIs carry userData.poiType and are excluded).
   if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.isMeshStandardMaterial && !o.material?.isMeshPhysicalMaterial && !o.userData?.poiType) redPlanets++;
 });
-const roleCount = (role) => ctx.world.records.filter((r) => r.role === role).length;
+const roleCount = (role) => ctx.world.records.filter((r) => r.role === role && seededCast.has(r)).length;
 const redChecks = {
   currentSystem: ctx.world.currentSystem === 'redmarch',
   jumpingDone: !ctx.gate.jumping,
   shipsRespawned: ctx.ships.length > 0 && ctx.ships.every((s) => ctx.world.records.some((r) => r.name === s.record?.name)),
-  castMatches: ctx.world.records.length === 13 && roleCount('trader') === 5 && roleCount('pirate') === 7 && roleCount('patrol') === 1 && roleCount('ace') === 0,
+  // Seeded cast must survive exact (see snapshot above); any record beyond
+  // it must be a migration-arrival trader — anything else is cast drift.
+  castMatches: seededCast.size === 13 && roleCount('trader') === 5 && roleCount('pirate') === 7 && roleCount('patrol') === 1 && roleCount('ace') === 0 && ctx.world.records.every((r) => seededCast.has(r) || r.role === 'trader'),
   stationPresent: ctx.station?.name === 'Ledger Anchorage',
   pricesTable: !!ctx.world.markets?.redmarch && ctx.world.prices === ctx.world.markets.redmarch,
   provisionsSpread: ctx.world.prices.provisions > 100, // priceBase 1.3 × 100 baseline
@@ -2228,6 +2247,36 @@ try {
         tick(2, `${label} event cleared`);
       }
       if (ctx.world.activeEvent) continue;
+      // Residual-deviation flake (wave-20): ending an event through the real
+      // endEvent path zeroes its pressure TARGET but not the fractional dev
+      // the pressure already built up, and PRESSURE_PULL 0.06/s decays that
+      // leftover slowly (dt = 1/60 per world tick → ~0.1%/tick), so dev
+      // inherited from soak history or from an event that ran inside an
+      // earlier window survives the 600-tick preDrag ((1 − 0.001)^600 ≈ 0.55
+      // of it remains) and shifts the p0 sample — compressing or inverting
+      // the pinned ramp (observed: driftV=4 vs driftH=5, or driftH going
+      // negative). Normalize dev to ~0 BEFORE the preDrag so the drag — and
+      // therefore the p0/p1 window — starts from harness-pinned state, not
+      // prior walk history: 300 price-only tickPrices(ctx, 0.5) calls shrink
+      // any dev by (1 − 0.06×0.5)^300 ≈ 10^4×. Price-only is safe here: no
+      // world ticks means world time never advances, so no event can start
+      // mid-settle and traffic/migration/cast counts are untouched (same
+      // 300 × 0.5 s pattern as the wave-2 settlePrices helper; its pre-check
+      // tick and event clear are already done by this retry loop, so only
+      // the decay loop is inlined).
+      // Math.random: tickPrices' walk term uses Math.random, and under the
+      // ambient 0.9 pin its expectation is positive — 300 pinned-upward
+      // calls would equilibrate dev at ≈ +0.107 × walkMult (walk step
+      // 0.0032×walkMult vs pull 0.03×dev per call), not ~0. Pin 0.5 for the
+      // settle so the walk's expectation is exactly zero and the pull does
+      // all the decay work, then restore the 0.9 pin for preDrag/measure.
+      // No settle is needed after the preDrag's own event-clear branch: if
+      // an event fired mid-drag the loop retries and re-runs THIS settle,
+      // and otherwise the settle → drag sequence has already pinned dev, so
+      // p0 is never sampled from inherited state.
+      Math.random = () => 0.5;
+      for (let i = 0; i < 300; i++) tickPrices(ctx, 0.5);
+      Math.random = () => 0.9;
       // Hermit equilibrium flake (wave-11 gate hygiene): the walk state is a
       // fractional dev with an unscaled mean-revert pull, so at the hermit
       // equilibrium (step × walkMult vs full pull) the ROUNDED price sits

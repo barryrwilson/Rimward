@@ -531,21 +531,36 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   0/80 → 1/70 — same within noise). Production code untouched.
   npm run test:boot PASS ×7 final runs; npm run build clean (only
   the pre-existing >500 kB chunk warning).
-## Next round candidates (wave 20)
-
-- Boot-test flake (pre-existing, seen on base 2/80 and fixed-tree
-  3/70): the wave-9 hermit walk gate hermitWalkSlower (driftH >=
-  2.5 × driftV) still flakes — driftV=4 with driftH=5/-3 observed.
-  The measurement pins Math.random and pre-drags the deviation, but
-  event timing around the verge/hush window can still compress the
-  hush ramp. Fix direction: same pattern as wave 19 — clear events
-  through the real endEvent path and settle deviations with
-  price-only tickPrices before measuring.
-- Boot-test flake (rare, 1/70 fixed-tree, 0/80 base): redmarch
-  castMatches expects exactly 13 records; an in-migration arrival
-  during the redmarch window makes it 14. Fix direction: filter
-  in-transit/arrived records out of the cast assertion or pin the
-  migration schedule for the window.
+- Wave 20: the two remaining pre-existing boot-test flakes, both
+  harness-only in scripts/boot-test.mjs. (1) wave-9 hermit walk
+  (hermitWalkSlower, base 2/80, fixed-tree 3/70 in wave-19
+  measurement): endEvent zeroes the pressure target but not the
+  fractional deviation already built up, and PRESSURE_PULL decays it
+  ~0.1%/world-tick, so dev inherited from soak history survived the
+  600-tick preDrag (~55% remains) and shifted the p0 sample —
+  observed driftV=4 vs driftH=5 and negative driftH. measureDrift9
+  now settles the residual deviation with 300 price-only
+  tickPrices(ctx, 0.5) calls after the event-clear pre-check and
+  before preDrag, with Math.random pinned to 0.5 during the settle
+  (under the ambient 0.9 pin the walk's positive expectation would
+  equilibrate dev at ~+0.107 × walkMult, not ~0) and restored to 0.9
+  for the measurement. Assertions unchanged (vergeWalkedUp,
+  hushWalkedUp, hermitWalkSlower with the 2.5× slop). (2) wave-3
+  redmarch castMatches (base 0/80, fixed-tree 1/70): inter-system
+  migration (world.js §8.2) marks an enroute veridian trader
+  inTransit with a 60–120 s eta; a pick made during the wave-2
+  veridian visit lands mid-soak and pushes records to 14. The bank
+  is now snapshotted by reference right after the jump tick
+  (pick → snapshot is ~40–45 s < 60 s min eta, so the Set IS the
+  seeded cast) and castMatches asserts the seeded 13 records survive
+  exact (5 trader / 7 pirate / 1 patrol / 0 ace, membership in both
+  records and the snapshot) while tolerating only extra records that
+  are traders — pickMigrant guarantees arrivals are traders;
+  anything else is cast drift. No >= / <= weakening. Production code
+  untouched. npm run test:boot PASS ×70 runs, 0 failures (base flake
+  rates 2/80 and 1/70); npm run build clean (only the pre-existing
+  >500 kB chunk warning).
+## Next round candidates (wave 21)
 - The trust-60 tier now rides one exported constant
   (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
   change, but every 60-gate still has an independent
@@ -557,5 +572,5 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   modulo-bounded, charted is deduped by authored ids, vouchAck is one
   bit per keeper, and the Callow cursors grow only +1 per real Verge
   visit with exact arithmetic pinned by existing gates.
-- Polish debt: the two boot-test flakes above; boot test remains
-  the gate.
+- Polish debt: none standing; both pre-existing boot-test flakes
+  were closed in wave 20 (0/70). Boot test remains the gate.
