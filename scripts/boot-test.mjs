@@ -82,6 +82,20 @@
 // cg_vigil (congregation job pay ×1.2) with authored freehold as the
 // negative control, and the dock-autosave + death-restore roundtrip at
 // cg_vigil (roster 103, the generated dockmaster's name/trust survive).
+// Wave 26: generated-system depth, part 4 — the generated dockmaster
+// favor economy (a finished contract banks +1 favor once the post-bump
+// trust reads GENERATED_KNOWN_TRUST, generated systems only, driven
+// through real recovery cycles at fh_hearth below and at the gate with
+// authored freehold at trust 100 as the negative control; a spent marker
+// comps the yard session-scoped and speaks the faction's FACTION_COMP
+// line through the real People/repair UI — no-marker notice, zeroed
+// bill, undock reset — with the keeper line pinned verbatim at the
+// nearer of hush/verge) and ferry/haul quote==pay (acceptJob stamps
+// job.payQuoted off the DESTINATION chain; delivery pays exactly the
+// snapshot on a live-picked discriminating lane; an accepted contract
+// without the snapshot falls back to the live chain — the wave-6
+// behavior; the snapshot and the banked favors ride the dock autosave
+// and death-restore, roster 103 intact).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -258,7 +272,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION, FACTION_RUMOR } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION, FACTION_RUMOR, FACTION_COMP } = await import('../src/game/state.js');
 const { tickPrices } = await import('../src/game/market.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
@@ -5349,6 +5363,545 @@ const w25peopleChecks = {
 console.log('wave25 hearth people recognition:', JSON.stringify(w25peopleChecks), `line=${JSON.stringify(recogDiv25?.textContent ?? null)}`);
 if (!Object.values(w25peopleChecks).every(Boolean)) { console.log('WAVE25 HEARTH PEOPLE RECOGNITION FAIL'); errors++; }
 dispatchKey('Escape'); // people → services
+
+// ---- Wave 26: generated-system depth, part 4 — generated dockmaster favor --
+// ---- economy (earn gate + favor-comp repair), ferry/haul quote==pay --------
+
+// -- a. data: FACTION_COMP covers exactly the generated-faction set ----------
+// (static, the wave-23 a / wave-24 a / wave-25 a discipline): the key set of
+// FACTION_COMP equals FACTION_SERVICES's key set exactly — the same ten keys
+// in the same order — the authored-only 'hollow' holds no entry, and every
+// value is a non-empty string (each line is dual-use: spoken in a people-card
+// notice AND shown verbatim as the repair screen's note).
+const svcKeys26 = Object.keys(FACTION_SERVICES);
+const compKeys26 = Object.keys(FACTION_COMP);
+const w26dataChecks = {
+  servicesKeys10: svcKeys26.length === 10,
+  compKeys10: compKeys26.length === 10,
+  compKeyOrderMatchesServices: JSON.stringify(compKeys26) === JSON.stringify(svcKeys26),
+  hollowAbsent: !('hollow' in FACTION_COMP),
+  compCoversGeneratedFactions: JSON.stringify([...compKeys26].sort()) === JSON.stringify(genFactions25), // the wave-25 a set
+  compAllNonEmpty: Object.values(FACTION_COMP).every((v) => typeof v === 'string' && v.length > 0),
+  // The jobPayMult table values the lane math below relies on, pinned
+  // separately so no expectation downstream hardcodes them unasserted.
+  jobPayMultTablePins: FACTION_SERVICES.veridian.jobPayMult === 1.15
+    && FACTION_SERVICES.congregation.jobPayMult === 1.2
+    && FACTION_SERVICES.independent.jobPayMult === 1.1,
+};
+console.log('wave26 faction comp table:', JSON.stringify(w26dataChecks));
+if (!Object.values(w26dataChecks).every(Boolean)) { console.log('WAVE26 FACTION COMP TABLE FAIL'); errors++; }
+
+// Shared wave-26 drivers -------------------------------------------------------
+// Strict card-scoped accept (the wave-24 d4 ruling): the Accept button must
+// live INSIDE the subtree of the card titled titleFrag — DONE cards ride
+// every board and a loose ancestor walk can return another card's button.
+const w26CardAcceptButton = (titleFrag) => {
+  const ov = stationOverlay();
+  if (!ov) return null;
+  for (const n of walkDom(ov)) {
+    if (typeof n.className !== 'string' || !n.className.split(' ').includes('job-card')) continue;
+    const titled = [...walkDom(n)].some((d) => typeof d.textContent === 'string' && d.textContent.includes(titleFrag));
+    if (!titled) continue;
+    for (const d of walkDom(n)) {
+      if (d.tagName === 'BUTTON' && typeof d.textContent === 'string' && d.textContent.startsWith('Accept')) return d;
+    }
+  }
+  return null;
+};
+// The 'Call in a favor' button on the people card titled with contactName
+// (the wave-11 f ancestor walk).
+const w26FavorButton = (contactName) => {
+  const ov = stationOverlay();
+  if (!ov) return null;
+  for (const n of walkDom(ov)) {
+    if (n.textContent !== contactName || !n.parent) continue;
+    for (let card = n.parent; card && card !== ov; card = card.parent) {
+      const b = [...walkDom(card)].find((d) => d.tagName === 'BUTTON' && /call in a favor/i.test(d.textContent ?? ''));
+      if (b) return b;
+    }
+  }
+  return null;
+};
+// The station notice div's text (render() rewrites it on every action).
+const w26StationNotice = () => [...walkDom(stationOverlay() ?? { children: [] })]
+  .find((n) => classHas24(n, 'station-notice'))?.textContent ?? null;
+// The job-reward line on the card titled titleFrag.
+const w26JobRewardLine = (titleFrag) => {
+  const ov = stationOverlay();
+  if (!ov) return null;
+  for (const n of walkDom(ov)) {
+    if (typeof n.className !== 'string' || !n.className.split(' ').includes('job-card')) continue;
+    const titled = [...walkDom(n)].some((d) => typeof d.textContent === 'string' && d.textContent.includes(titleFrag));
+    if (!titled) continue;
+    const rd = [...walkDom(n)].find((d) => typeof d.className === 'string' && d.className.split(' ').includes('job-reward'));
+    return rd?.textContent ?? null;
+  }
+  return null;
+};
+// Independent in-test replica of station.js's jobPayFor (the wave-26 shared
+// contract): epic multiplier first, faction service multiplier second, the
+// authored six guarded to 1 by id. Never reads station.js internals.
+const svcJobMult26 = (sysId) => AUTHORED_IDS23.includes(sysId) ? 1 : (FACTION_SERVICES[SYSTEMS[sysId]?.faction]?.jobPayMult ?? 1);
+const epicJobMult26 = (sysId) => epicEffects(ctx, SYSTEMS[sysId]?.faction).jobPayMult ?? 1;
+const w26JobPayFor = (sysId, base) => Math.round(base * epicJobMult26(sysId) * svcJobMult26(sysId));
+// A real completeJob reach (completeJob is module-private in station.js): the
+// full recovery cycle at the system the run is docked in — the wave-24 d4
+// template: expire soak wrecks for the system, seed a test wreck, accept the
+// card through the real board, scoop the pod, redock, pay out. Assumes the
+// run starts docked at sysId and leaves it docked there.
+const w26RecoveryCycle = (sysId, wreckId, label) => {
+  for (const entry of ctx.world.aftermath) {
+    if (entry.kind === 'wreck' && entry.system === sysId) {
+      entry.expiresAt = Math.min(entry.expiresAt, ctx.world.time);
+    }
+  }
+  tick(1, `expire soak wrecks (${label})`);
+  ctx.world.aftermath.push({
+    id: wreckId, incidentId: `inc-${wreckId}`, kind: 'wreck',
+    position: { x: 30, y: 0, z: -60 }, system: sysId,
+    createdAt: ctx.world.time, expiresAt: ctx.world.time + 9999,
+  });
+  dispatchKey('Digit2'); // jobs board (DOCK_KEY_SERVICES[1]) — syncRecoveryJob posts the card
+  const job = ctx.world.jobs.find((j) => j.kind === 'recovery' && j.wreckId === wreckId) ?? null;
+  const btn = job?.state === 'offered' ? w26CardAcceptButton('Recovery: wreck salvage') : null;
+  const podsBefore = ctx.pods.length;
+  btn?.click(); // real accept path: spawns the salvage pod at the wreck
+  const podSpawned = ctx.pods.length === podsBefore + 1;
+  undockStation();
+  const pod = ctx.pods[ctx.pods.length - 1] ?? null;
+  let scooped = false;
+  if (podSpawned && pod) {
+    ctx.ship.velocity.set(0, 0, 0);
+    for (let i = 0; i < 600 && !scooped; i++) {
+      ctx.ship.object.position.copy(pod.mesh.position); // pod drifts; stay on it
+      tick(1, `scoop salvage pod (${label})`);
+      scooped = !ctx.pods.includes(pod);
+    }
+  }
+  tick(30, `post-scoop settle (${label})`); // let the job's event scan see podCollected
+  dockAtCurrentStation(`redock ${sysId} (${label})`);
+  tick(90, `${label} payout tick`); // delivery check is throttled at 0.5s
+  return { job, btnFound: !!btn, podSpawned, scooped };
+};
+
+// -- b. earn gate: a finished contract banks +1 favor once the post-bump -----
+// trust reads GENERATED_KNOWN_TRUST — generated systems only -----------------
+// Real recovery cycles (the wave-24 d4 mirror) at fh_hearth, with the local
+// dockmaster's trust pinned pre-completion; completeJob bumps
+// DOCKMASTER_TRUST_PER_JOB (= 5, station.js) first, so the grant fires iff
+// pin + 5 >= GENERATED_KNOWN_TRUST. The completions are real gameplay state
+// (the wave-24 d4/e precedent): trust and favors are left where the cycles
+// land them, not restored.
+const hearthDm26 = contactsForSystem(ctx, 'fh_hearth').find((c) => c.role === 'dockmaster') ?? null;
+const pinsStraddleGate26 = 24 + 5 < GENERATED_KNOWN_TRUST && 29 + 5 >= GENERATED_KNOWN_TRUST;
+
+// b1. below the gate: trust pinned 24 → post-bump 29 < 30 → no favor.
+const favorsBeforeB1_26 = hearthDm26?.favors ?? -1;
+if (hearthDm26) hearthDm26.trust = 24; // the wave-11 pin discipline
+const cycB1_26 = w26RecoveryCycle('fh_hearth', 'aft-w26b1', 'wave26 earn-below');
+const w26earnBelowChecks = {
+  dockedAtHearth: ctx.flags.docked === true && ctx.world.currentSystem === 'fh_hearth',
+  dockmasterFound: !!hearthDm26,
+  pinsStraddleGate: pinsStraddleGate26,
+  favorsStartedAt0: favorsBeforeB1_26 === 0,
+  cycleRan: cycB1_26.btnFound && cycB1_26.podSpawned && cycB1_26.scooped,
+  jobDone: cycB1_26.job?.state === 'done',
+  postBumpTrustBelowGate: hearthDm26?.trust === 24 + 5 && hearthDm26?.trust < GENERATED_KNOWN_TRUST,
+  noFavorBelowGate: hearthDm26?.favors === 0,
+};
+console.log('wave26 earn below gate:', JSON.stringify(w26earnBelowChecks));
+if (!Object.values(w26earnBelowChecks).every(Boolean)) { console.log('WAVE26 EARN BELOW GATE FAIL'); errors++; }
+
+// b2. at the gate: trust pinned 29 → post-bump 34 >= 30 → +1 favor.
+if (hearthDm26) hearthDm26.trust = 29;
+const cycB2_26 = w26RecoveryCycle('fh_hearth', 'aft-w26b2', 'wave26 earn-at-gate');
+const w26earnAtGateChecks = {
+  cycleRan: cycB2_26.btnFound && cycB2_26.podSpawned && cycB2_26.scooped,
+  jobDone: cycB2_26.job?.state === 'done',
+  postBumpTrustAtGate: hearthDm26?.trust === 29 + 5 && hearthDm26?.trust >= GENERATED_KNOWN_TRUST,
+  favorBankedAtGate: hearthDm26?.favors === 1,
+};
+console.log('wave26 earn at gate:', JSON.stringify(w26earnAtGateChecks));
+if (!Object.values(w26earnAtGateChecks).every(Boolean)) { console.log('WAVE26 EARN AT GATE FAIL'); errors++; }
+
+// b3. authored NEGATIVE control: Mother Tarn (authored freehold dockmaster)
+// at trust 100 completes a contract → the AUTHORED_SYSTEMS id guard falls
+// through and favors stay 0 (the wave-25 b tarn25 control, through the real
+// completion path).
+undockStation();
+travelTo('freehold', 'wave26 authored control leg');
+dockAtCurrentStation('dock freehold (wave26 authored control)');
+const tarn26 = contactsForSystem(ctx, 'freehold').find((c) => c.role === 'dockmaster') ?? null;
+const tarnFavorsBefore26 = tarn26?.favors ?? -1;
+if (tarn26) tarn26.trust = 100; // max trust — even here the authored id must fall through
+const cycB3_26 = w26RecoveryCycle('freehold', 'aft-w26b3', 'wave26 earn-authored');
+const w26earnAuthoredChecks = {
+  dockedAtFreehold: ctx.flags.docked === true && ctx.world.currentSystem === 'freehold',
+  tarnFound: !!tarn26,
+  favorsStartedAt0: tarnFavorsBefore26 === 0,
+  cycleRan: cycB3_26.btnFound && cycB3_26.podSpawned && cycB3_26.scooped,
+  jobDone: cycB3_26.job?.state === 'done',
+  trustClamped100: tarn26?.trust === 100, // bumpTrust clamps 0..100
+  authoredNoFavorAt100: tarn26?.favors === 0,
+};
+console.log('wave26 earn authored control:', JSON.stringify(w26earnAuthoredChecks));
+if (!Object.values(w26earnAuthoredChecks).every(Boolean)) { console.log('WAVE26 EARN AUTHORED CONTROL FAIL'); errors++; }
+
+// -- c. spend: a generated dockmaster's marker comps the yard (real DOM) -----
+// The wave-11 f keeper-comp drive extended to the generated branch at
+// fh_hearth: the no-marker notice for favors <= 0, then the real spend —
+// the comp flag mirrors on ctx.station, the notice speaks the faction's
+// FACTION_COMP line, the repair screen shows that line verbatim as its
+// screen-note (ui.compNote) with a zeroed bill, and undock clears the
+// session state. fh_hearth flies the freehold flag (the wave-25 d ruling).
+undockStation();
+travelTo('fh_hearth', 'wave26 spend leg');
+dockAtCurrentStation('dock hearth (wave26 spend)');
+const fhFaction26 = SYSTEMS.fh_hearth.faction;
+const compLine26 = FACTION_COMP[fhFaction26];
+const favorsBanked26 = hearthDm26?.favors ?? -1; // 1, banked by b2's completion
+// No-marker notice first: favors pinned 0, then restored via the real
+// addFavor API (the wave-4 fence setup).
+if (hearthDm26) hearthDm26.favors = 0;
+dispatchKey('Digit7'); // people (DOCK_KEY_SERVICES[6])
+const noMarkerBtn26 = w26FavorButton(hearthDm26?.name ?? '');
+noMarkerBtn26?.click();
+const noMarkerNotice26 = w26StationNotice();
+const favorsAfterNoMarker26 = hearthDm26?.favors ?? -1;
+const compFlagAfterNoMarker26 = ctx.station.keeperComp === true;
+if (hearthDm26) addFavor(ctx, hearthDm26, favorsBanked26); // real API: re-bank the marker
+const spendBtn26 = w26FavorButton(hearthDm26?.name ?? ''); // re-found — the click re-rendered
+spendBtn26?.click(); // real path: spendFavor → session comp (the keeper-comp precedent)
+const spendNotice26 = w26StationNotice();
+const compFlagAfterSpend26 = ctx.station.keeperComp === true;
+dispatchKey('Escape'); // people → services
+w24Damage();
+const compScreen26 = w24RepairScreen('wave26 hearth comp');
+// Eager captures: compScreen26.ov is the LIVE overlay — the repair-click
+// re-render and the Escape below rebuild it, so the notes must be read while
+// the repair screen is still on show.
+const compNoteShown26 = w24NoteShown(compScreen26.ov, compLine26);
+const keeperLineAtHearth26 = w24NoteShown(compScreen26.ov, 'Comped by the keepers');
+const creditsBeforeCompRepair26 = ctx.world.credits;
+compScreen26.btn?.click();
+tick(1, 'wave26 comped repair settle');
+const madeWholeAfterComp26 = w24MadeWhole();
+w24RepinHull();
+dispatchKey('Escape'); // repair → services
+undockStation();
+const compFlagAfterUndock26 = ctx.station.keeperComp === true;
+// The comp died with the berth visit: a fresh dock shows no comp note and a
+// real bill (ui.compNote is module-private; this is its observable reset).
+dockAtCurrentStation('redock hearth (wave26 reset proof)');
+w24Damage();
+const resetScreen26 = w24RepairScreen('wave26 hearth reset');
+const redockCompNoteGone26 = !w24NoteShown(resetScreen26.ov, compLine26); // eager — same live-overlay discipline
+w24RepinHull();
+dispatchKey('Escape'); // repair → services
+const w26spendChecks = {
+  dockedAtHearth: ctx.flags.docked === true && ctx.world.currentSystem === 'fh_hearth',
+  hearthIsFreeholdFlag: fhFaction26 === 'freehold',
+  bankedFromEarn: favorsBanked26 === 1,
+  noMarkerButtonFound: !!noMarkerBtn26,
+  noMarkerNotice: noMarkerNotice26 === `${hearthDm26?.name} spreads their hands. “You hold no marker with me.”`,
+  noMarkerNoSpend: favorsAfterNoMarker26 === 0,
+  noMarkerNoFlag: !compFlagAfterNoMarker26,
+  spendButtonFound: !!spendBtn26,
+  favorSpent: hearthDm26?.favors === favorsBanked26 - 1,
+  compFlagSet: compFlagAfterSpend26,
+  spendNotice: spendNotice26 === `${hearthDm26?.name} waves the yard off. “${compLine26}”`,
+  compLineDiscriminates: compLine26 !== 'Comped by the keepers',
+  repairButtonFound: !!compScreen26.btn,
+  compedTotalZero: compScreen26.labelCost === 0,
+  compNoteIsFactionLine: compNoteShown26,
+  keeperLineNotShown: !keeperLineAtHearth26,
+  repairAllDeducts0: ctx.world.credits === creditsBeforeCompRepair26,
+  madeWhole: madeWholeAfterComp26,
+  undockClearsCompFlag: !compFlagAfterUndock26,
+  redockNoCompNote: redockCompNoteGone26,
+  redockRealBill: resetScreen26.labelCost > 0,
+};
+console.log('wave26 dockmaster favor spend:', JSON.stringify(w26spendChecks), `comp=${JSON.stringify(compLine26)}`);
+if (!Object.values(w26spendChecks).every(Boolean)) { console.log('WAVE26 DOCKMASTER FAVOR SPEND FAIL'); errors++; }
+
+// c2. the keeper path keeps its own line — the wave-11 pin, preserved
+// verbatim: a keeper's spent marker sets ui.compNote to 'Comped by the
+// keepers' and the repair screen shows exactly that. Driven at the BFS-
+// nearer of the two deep-rim keeps.
+const keeperSys26 = ((routePath('fh_hearth', 'hush') ?? []).length || 99)
+  <= ((routePath('fh_hearth', 'verge') ?? []).length || 99) ? 'hush' : 'verge';
+undockStation();
+travelTo(keeperSys26, 'wave26 keeper pin leg');
+dockAtCurrentStation(`dock ${keeperSys26} (wave26 keeper pin)`);
+const keeper26 = contactsForSystem(ctx, keeperSys26).find((c) => c.role === 'dockmaster') ?? null;
+const keeperFavorsBefore26 = keeper26?.favors ?? -1;
+if (keeper26) addFavor(ctx, keeper26, 1); // real API: bank the marker to spend
+w24Damage();
+dispatchKey('Digit7'); // people
+const keeperFavorBtn26 = keeper26 ? w26FavorButton(keeper26.name) : null;
+keeperFavorBtn26?.click(); // real path: spendFavor → per-session keeper comp
+const keeperNotice26 = w26StationNotice();
+const keeperCompFlag26 = ctx.station.keeperComp === true;
+dispatchKey('Escape'); // people → services
+const keeperScreen26 = w24RepairScreen('wave26 keeper comp');
+const keeperLineShown26 = w24NoteShown(keeperScreen26.ov, 'Comped by the keepers'); // eager — the live-overlay discipline
+const creditsBeforeKeeperRepair26 = ctx.world.credits;
+keeperScreen26.btn?.click();
+tick(1, 'wave26 keeper comp settle');
+const madeWholeKeeper26 = w24MadeWhole();
+w24RepinHull();
+dispatchKey('Escape'); // repair → services
+const w26keeperChecks = {
+  keeperSystemPicked: keeperSys26 === 'hush' || keeperSys26 === 'verge',
+  dockedAtKeeper: ctx.flags.docked === true && ctx.world.currentSystem === keeperSys26,
+  keeperFound: !!keeper26,
+  favorButtonFound: !!keeperFavorBtn26,
+  favorSpent: keeper26?.favors === keeperFavorsBefore26,
+  compFlagSet: keeperCompFlag26,
+  keeperNoticeKept: keeperNotice26 === `${keeper26?.name} waves the yard off. “The keepers comp this dock. Mend your ship.”`,
+  keeperLineShownVerbatim: keeperLineShown26,
+  compedTotalZero: keeperScreen26.labelCost === 0,
+  repairAllDeducts0: ctx.world.credits === creditsBeforeKeeperRepair26,
+  madeWhole: madeWholeKeeper26,
+};
+console.log('wave26 keeper comp pin:', JSON.stringify(w26keeperChecks), `keeper=${keeperSys26}`);
+if (!Object.values(w26keeperChecks).every(Boolean)) { console.log('WAVE26 KEEPER COMP PIN FAIL'); errors++; }
+
+// -- d/e. ferry + haul quote==pay: the accept-time snapshot IS the agreement -
+// Lane picked off the live graph (the wave-24 d leg-plan ruling): a generated
+// non-hub origin whose primary-gate destination's jobPay chain differs from
+// its own, preferring both-ends epic-neutral so the faction modifier reads
+// exactly. (veridian/congregation/independent are the only jobPayMult flags
+// and the generated graph holds no congregation↔independent gate pair — the
+// scan settles on the first epic-neutral svc-differing pair it finds.)
+const lanePool26 = nonHubIds24.filter((o) => {
+  const d = SYSTEMS[o].gates?.[0]?.to;
+  return !!SYSTEMS[d] && svcJobMult26(o) !== svcJobMult26(d);
+});
+const laneNeutralPool26 = lanePool26.filter((o) => epicJobMult26(o) === 1 && epicJobMult26(SYSTEMS[o].gates[0].to) === 1);
+const laneO26 = (laneNeutralPool26[0] ?? lanePool26[0]) ?? null;
+const laneD26 = laneO26 ? SYSTEMS[laneO26].gates[0].to : null;
+const w26laneChecks = {
+  laneFound: !!laneO26 && !!laneD26,
+  svcMultsDiffer: !!laneO26 && svcJobMult26(laneO26) !== svcJobMult26(laneD26),
+  laneEpicNeutral: !!laneO26 && epicJobMult26(laneO26) === 1 && epicJobMult26(laneD26) === 1,
+};
+console.log('wave26 lane pick:', JSON.stringify(w26laneChecks), `lane=${laneO26}->${laneD26}`);
+if (!Object.values(w26laneChecks).every(Boolean)) { console.log('WAVE26 LANE PICK FAIL'); errors++; }
+
+undockStation();
+if (laneO26) travelTo(laneO26, 'wave26 lane leg');
+dockAtCurrentStation(`dock ${laneO26} (wave26 quote)`);
+const ferryJob26 = ctx.world.jobs.find((j) => j.id === 'ferry-consignment') ?? null;
+const haulJob26 = ctx.world.jobs.find((j) => j.id === 'haul-provisions') ?? null;
+// TEST SETUP (self-restoring): the galaxy carries ONE ferry contract and ONE
+// haul contract; wave 4 did the freehold→veridian ferry, so re-offer it for
+// this lane — the real accept/deliver cycle below takes it back to done.
+if (ferryJob26) { ferryJob26.state = 'offered'; ferryJob26.originSystem = null; ferryJob26.destSystem = null; delete ferryJob26.payQuoted; }
+// Free the hold for the consignment + haul load through the REAL market path
+// (the wave-9/11 sell discipline): the recovery cycles' scooped refined
+// metals ride the hold by this point in the run — sell down whatever is
+// aboard until the fronted 4 + the 5-unit load genuinely fit.
+const needFree26 = (ferryJob26?.need ?? 4) + (haulJob26?.need ?? 5);
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+let sellGuard26 = 60;
+while (ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) < needFree26 && sellGuard26-- > 0) {
+  const held = ctx.cargo.find((c) => c.units > 0 && COMMODITIES[c.commodity]?.legal);
+  if (!held) break;
+  const sellBtn26 = marketTradeButton(COMMODITIES[held.commodity].name, '−1');
+  if (!sellBtn26) break;
+  sellBtn26.click(); // real path: tryTrade(commodity, 1, false) — re-found per click (each trade re-renders)
+}
+dispatchKey('Escape'); // market → services
+const freeCap26 = ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0);
+const provAtLaneStart26 = holdCount('provisions');
+// One tick-free window: the board render, both quote parses, and both real
+// accepts read the same provisions price (the random walk only moves on
+// ticks, and acceptJob runs synchronously inside the button click).
+dispatchKey('Digit2'); // jobs board
+const ferryQuoteText26 = w26JobRewardLine('Ferry a consignment');
+const haulQuoteText26 = w26JobRewardLine('Haul provisions');
+const ferryQuoted26 = Number((ferryQuoteText26?.match(/pays (\d+) UU/) ?? [])[1]);
+const haulQuoted26 = Number((haulQuoteText26?.match(/pays (\d+) UU/) ?? [])[1]);
+const priceAtAccept26 = ctx.world.prices.provisions ?? COMMODITIES.provisions.base; // station.js priceOf
+const ferryAcceptBtn26 = w26CardAcceptButton('Ferry a consignment');
+ferryAcceptBtn26?.click(); // real accept: stamps destSystem + payQuoted, fronts the consignment
+const haulAcceptBtn26 = w26CardAcceptButton('Haul provisions'); // re-found — the ferry accept re-rendered
+haulAcceptBtn26?.click(); // real accept: stamps originSystem/originPrice + payQuoted
+const ferryStamp26 = ferryJob26?.payQuoted;
+const haulStamp26 = haulJob26?.payQuoted;
+// Accepted cards re-render the SAME quoted number (the snapshot, not a re-price).
+const ferryAcceptedText26 = w26JobRewardLine('Ferry a consignment');
+const haulAcceptedText26 = w26JobRewardLine('Haul provisions');
+const w26ferryQuoteChecks = {
+  dockedAtLaneOrigin: ctx.flags.docked === true && ctx.world.currentSystem === laneO26,
+  jobsFound: !!ferryJob26 && !!haulJob26,
+  holdRoomFor9: freeCap26 >= needFree26,
+  ferryCardQuoted: Number.isFinite(ferryQuoted26),
+  quoteIsDestChain: ferryQuoted26 === w26JobPayFor(laneD26, ferryJob26?.reward),
+  destChainDiscriminates: w26JobPayFor(laneO26, ferryJob26?.reward) !== ferryQuoted26,
+  acceptButtonFound: !!ferryAcceptBtn26,
+  jobAccepted: ferryJob26?.state === 'accepted',
+  destStamped: ferryJob26?.destSystem === laneD26,
+  payQuotedStamped: ferryStamp26 === ferryQuoted26 && ferryStamp26 === w26JobPayFor(laneD26, ferryJob26?.reward),
+  provisionsFronted: holdCount('provisions') === provAtLaneStart26 + (ferryJob26?.need ?? 4),
+  acceptedCardShowsQuote: ferryAcceptedText26 === ferryQuoteText26,
+};
+console.log('wave26 ferry quote:', JSON.stringify(w26ferryQuoteChecks), `quoted=${ferryQuoted26}`);
+if (!Object.values(w26ferryQuoteChecks).every(Boolean)) { console.log('WAVE26 FERRY QUOTE FAIL'); errors++; }
+const w26haulQuoteChecks = {
+  haulCardQuoted: Number.isFinite(haulQuoted26),
+  marginPinnedInCardText: haulQuoteText26?.includes('140% of buy cost') === true,
+  quoteIsDestChain: haulQuoted26 === w26JobPayFor(laneD26, Math.round((haulJob26?.need ?? 5) * priceAtAccept26 * 1.4)),
+  destChainDiscriminates: w26JobPayFor(laneO26, Math.round((haulJob26?.need ?? 5) * priceAtAccept26 * 1.4)) !== haulQuoted26,
+  acceptButtonFound: !!haulAcceptBtn26,
+  jobAccepted: haulJob26?.state === 'accepted',
+  originStamped: haulJob26?.originSystem === laneO26 && haulJob26?.originPrice === priceAtAccept26,
+  payQuotedStamped: haulStamp26 === haulQuoted26
+    && haulStamp26 === w26JobPayFor(laneD26, Math.round((haulJob26?.need ?? 5) * (haulJob26?.originPrice ?? 0) * 1.4)),
+  acceptedCardShowsQuote: haulAcceptedText26 === haulQuoteText26,
+};
+console.log('wave26 haul quote:', JSON.stringify(w26haulQuoteChecks), `quoted=${haulQuoted26}`);
+if (!Object.values(w26haulQuoteChecks).every(Boolean)) { console.log('WAVE26 HAUL QUOTE FAIL'); errors++; }
+
+// Buy the haul load through the real market (the wave-24 d3 cell/click path,
+// re-found per click — each trade re-renders), then fly the lane and dock:
+// the throttled delivery tick pays both contracts off their snapshots.
+dispatchKey('Escape'); // jobs → services
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+let bought26 = 0;
+for (let i = 0; i < (haulJob26?.need ?? 5); i++) {
+  const provBeforeClick26 = holdCount('provisions');
+  const b = marketTradeButton('Provisions', '+1');
+  if (!b) break;
+  b.click(); // real path: tryTrade('provisions', 1, true)
+  if (holdCount('provisions') === provBeforeClick26 + 1) bought26++; // count units actually aboard, not clicks
+}
+const provAtDeparture26 = holdCount('provisions');
+dispatchKey('Escape'); // market → services
+undockStation();
+if (laneD26) travelTo(laneD26, 'wave26 delivery leg');
+const creditsBeforeDelivery26 = ctx.world.credits;
+dockAtCurrentStation(`dock ${laneD26} (wave26 delivery)`);
+const payLines26 = [];
+for (let i = 0; i < 90; i++) {
+  tick(1, 'wave26 delivery tick');
+  for (const e of ctx.lastEvents) if (e.type === 'commLine') payLines26.push(e.text);
+}
+const ferryPaidLine26 = payLines26.find((t) => t.startsWith('Consignment landed intact')) ?? null;
+const haulPaidLine26 = payLines26.find((t) => t.startsWith('Provisions delivered')) ?? null;
+const ferryPaid26 = Number((ferryPaidLine26?.match(/— (\d+) UU/) ?? [])[1]);
+const haulPaid26 = Number((haulPaidLine26?.match(/— (\d+) UU/) ?? [])[1]);
+const w26deliveryChecks = {
+  boughtTheLoad: bought26 === (haulJob26?.need ?? 5),
+  holdLoadedForBoth: provAtDeparture26 === provAtLaneStart26 + (ferryJob26?.need ?? 4) + (haulJob26?.need ?? 5),
+  dockedAtLaneDest: ctx.flags.docked === true && ctx.world.currentSystem === laneD26,
+  ferryPaidExactlyQuoted: ferryPaid26 === ferryQuoted26 && ferryPaid26 === ferryStamp26,
+  haulPaidExactlyQuoted: haulPaid26 === haulQuoted26 && haulPaid26 === haulStamp26,
+  haulPaidIs140UnderDestChain: haulPaid26 === w26JobPayFor(laneD26, Math.round((haulJob26?.need ?? 5) * (haulJob26?.originPrice ?? 0) * 1.4)),
+  creditsDeltaIsBothQuotes: ctx.world.credits - creditsBeforeDelivery26 === ferryQuoted26 + haulQuoted26,
+  ferryDone: ferryJob26?.state === 'done',
+  haulDone: haulJob26?.state === 'done',
+};
+console.log('wave26 lane delivery:', JSON.stringify(w26deliveryChecks), `ferryPaid=${ferryPaid26} haulPaid=${haulPaid26}`);
+if (!Object.values(w26deliveryChecks).every(Boolean)) { console.log('WAVE26 LANE DELIVERY FAIL'); errors++; }
+
+// -- f. old-save fallback: an accepted ferry WITHOUT payQuoted pays the live -
+// chain at the destination (the wave-6 behavior preserved) --------------------
+// The reset/accept/delete is test SETUP the real cycle restores: the contract
+// returns to done by delivery. The snapshot the real accept stamps is
+// captured first (proving the stamp path ran), then deleted to simulate the
+// pre-wave-26 save.
+if (ferryJob26) { ferryJob26.state = 'offered'; ferryJob26.originSystem = null; ferryJob26.destSystem = null; delete ferryJob26.payQuoted; }
+dispatchKey('Digit2'); // jobs board (the delivery dock left the overlay at services)
+const ferryReacceptBtn26 = w26CardAcceptButton('Ferry a consignment');
+ferryReacceptBtn26?.click();
+const destF26 = ferryJob26?.destSystem ?? null; // otherSystemId of the lane destination, stamped by the real accept
+const stampedF26 = ferryJob26?.payQuoted;
+if (ferryJob26) delete ferryJob26.payQuoted; // old-save simulation: accepted, no snapshot
+undockStation();
+if (destF26) travelTo(destF26, 'wave26 fallback leg');
+const creditsBeforeFallback26 = ctx.world.credits;
+dockAtCurrentStation(`dock ${destF26} (wave26 fallback)`);
+tick(90, 'wave26 fallback payout tick');
+// The throttled delivery tick can land inside the dock's own settle ticks,
+// before any post-dock collection window opens — so the paid figure is the
+// observed credits delta around the whole dock+settle window (jobDone pins
+// that the delivery is what moved them).
+const fallbackPaid26 = ctx.world.credits - creditsBeforeFallback26;
+const liveChainAtPayout26 = destF26 ? w26JobPayFor(destF26, ferryJob26?.reward) : NaN; // jobPay under the CURRENT chain
+const w26fallbackChecks = {
+  reacceptButtonFound: !!ferryReacceptBtn26,
+  acceptStampedSnapshot: Number.isFinite(stampedF26) && stampedF26 === liveChainAtPayout26,
+  snapshotDeleted: !!ferryJob26 && !('payQuoted' in ferryJob26),
+  dockedAtFallbackDest: ctx.flags.docked === true && ctx.world.currentSystem === destF26,
+  deliveryFired: ferryJob26?.state === 'done',
+  paidViaLiveChain: fallbackPaid26 === liveChainAtPayout26,
+};
+console.log('wave26 old-save fallback:', JSON.stringify(w26fallbackChecks), `dest=${destF26} paid=${fallbackPaid26}`);
+if (!Object.values(w26fallbackChecks).every(Boolean)) { console.log('WAVE26 OLD-SAVE FALLBACK FAIL'); errors++; }
+
+// -- g. save roundtrip: job.payQuoted + banked dockmaster favors survive -----
+// The wave-23 e / wave-24 e pattern where the run ended docked: re-offer the
+// ferry, accept it for real (snapshot stamped) and leave it OPEN — its
+// destination is never the save dock — bank favors on the hearth dockmaster
+// through the real addFavor API, park hostiles so the autosave can't be
+// combat-blocked, cycle the dock so the 'docked' autosave carries the state,
+// assert the save, corrupt in memory, die, recover via Enter, assert the
+// restore.
+if (ferryJob26) { ferryJob26.state = 'offered'; ferryJob26.originSystem = null; ferryJob26.destSystem = null; delete ferryJob26.payQuoted; }
+dispatchKey('Digit2'); // jobs board
+const ferrySaveAcceptBtn26 = w26CardAcceptButton('Ferry a consignment');
+ferrySaveAcceptBtn26?.click(); // real accept: snapshot stamped, consignment fronted
+const quotedG26 = ferryJob26?.payQuoted;
+const destG26 = ferryJob26?.destSystem ?? null;
+if (hearthDm26) addFavor(ctx, hearthDm26, 2); // real API: markers in the bank
+const bankedFavors26 = hearthDm26?.favors ?? -1;
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave26 save)');
+dispatchKey('Escape'); // jobs → services
+undockStation();
+dockAtCurrentStation(`dock ${destF26} (wave26 save)`); // 'docked' fires trySave with the open contract banked
+tick(3, 'wave26 save settle');
+const w26snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const snapJob26 = (w26snap?.world?.jobs ?? []).find((j) => j.id === 'ferry-consignment') ?? null;
+const snapHearth26 = (w26snap?.world?.contacts ?? []).find((c) => c.id === 'contact-fh_hearth-dockmaster') ?? null;
+const w26saveChecks = {
+  saveWritten: !!w26snap?.world,
+  rosterInSave103: (w26snap?.world?.contacts ?? []).length === 103,
+  acceptButtonFound: !!ferrySaveAcceptBtn26,
+  contractOpenInSave: snapJob26?.state === 'accepted' && snapJob26?.destSystem === destG26 && destG26 !== destF26,
+  payQuotedInSave: Number.isFinite(quotedG26) && snapJob26?.payQuoted === quotedG26,
+  favorsInSave: bankedFavors26 > 0 && snapHearth26?.favors === bankedFavors26,
+};
+console.log('wave26 save fields:', JSON.stringify(w26saveChecks), `snapJob=${JSON.stringify(snapJob26)}`);
+if (!Object.values(w26saveChecks).every(Boolean)) { console.log('WAVE26 SAVE FIELDS FAIL'); errors++; }
+
+// Corrupt in memory (drop the snapshot, empty the bank), die, recover from
+// the dock autosave (Enter skips the hold): both come back, roster 103
+// intact. The restore swaps the jobs/contacts arrays wholesale, so the
+// restored records are re-found through ctx.world.
+if (ferryJob26) delete ferryJob26.payQuoted;
+if (hearthDm26) hearthDm26.favors = 0;
+tick(2, 'wave26 fields corrupted');
+const w26corrupted = !!ferryJob26 && !('payQuoted' in ferryJob26) && hearthDm26?.favors === 0;
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave26 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const restoredJob26 = ctx.world.jobs.find((j) => j.id === 'ferry-consignment') ?? null;
+const restoredHearth26 = contactsForSystem(ctx, 'fh_hearth').find((c) => c.role === 'dockmaster') ?? null;
+const w26restoreChecks = {
+  corruptedFirst: w26corrupted,
+  rosterRestored103: (ctx.world.contacts ?? []).length === 103,
+  payQuotedRestored: restoredJob26?.state === 'accepted' && restoredJob26?.payQuoted === quotedG26,
+  favorsRestored: restoredHearth26?.favors === bankedFavors26,
+};
+console.log('wave26 restore:', JSON.stringify(w26restoreChecks));
+if (!Object.values(w26restoreChecks).every(Boolean)) { console.log('WAVE26 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

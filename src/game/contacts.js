@@ -47,6 +47,17 @@
  * by-id guards, so the authored six stay byte-identical; the wave-23
  * hub three (ferrous/gilded/independent) ride the same tables. §25
  * holds: neither table references the authored mystery.
+ * Wave 26: generated dockmasters hold a favor economy. station.js banks
+ * +1 favor per finished contract once the post-bump trust reads
+ * GENERATED_KNOWN_TRUST, and a spent marker comps the yard
+ * session-scoped (the keeper-comp precedent), spoken in the faction's
+ * FACTION_COMP line (state.js). The earn gate is an AUTHORED_SYSTEMS
+ * by-id guard like the wave-24/25 ones, so the authored six stay
+ * byte-identical — Mother Tarn stays favor-less — and every authored-id
+ * gate (keeper ledger/vouch/chart-mark, deep-rim and ace tiers) still
+ * falls through for generated ids. contact.favors already defaults 0,
+ * so old saves need no migration. §25 holds: the comp lines voice no
+ * authored-mystery reference.
  *
  * WITNESS RULE (§8.7): rumorFor voices ONLY what ctx.world.incidents
  * records — contacts never invent events. recognitionLine keys off

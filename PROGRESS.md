@@ -805,18 +805,88 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   byte-unchanged and the preface applies uniformly after the branch).
   npm run test:boot PASS ×7 consecutive ×2 (pre- and post-review-fix);
   npm run build clean (only the pre-existing >500 kB chunk warning).
-## Next round candidates (wave 26)
-- Generated-system depth, part 4: landmarks (wave 23), hub dockmasters
-  (23), procedural dockmaster contacts at all 91 non-hub generated
-  stations (24), faction-specific station services (24), and
-  per-faction dockmaster recognition/rumor voice (25) are in. Standing:
-  generated systems hold no clues BY DESIGN (the authored total stays
-  6 — convergence/deepening math); generated dockmasters' trust curve
-  still tops out at the shared comp ship line (no favors/keeper-style
-  mechanics — a deeper per-contact economy would be a new system, not
-  a voice pass); ferry/haul jobs quote the origin jobPayMult and pay
-  the destination's (pre-existing wave-6 behavior — snapshot at accept
-  time if exact agreement is ever wanted).
+- Wave 26: generated-system depth, part 4 (the two standing threads —
+  the generated-dockmaster per-contact economy the wave-25 candidates
+  called "a new system, not a voice pass", and the ferry/haul quote/pay
+  agreement). state.js: FACTION_COMP after FACTION_RUMOR — one dual-use
+  comp line per faction, exactly the 10 generated-flown keys in
+  FACTION_SERVICES order, 'hollow' absent (authored-only), faction-true
+  to the FACTION_RECOGNITION voice, §25-safe; spoken in the spend notice
+  AND shown verbatim as the repair screen's note. station.js: (1) favor
+  economy — completeJob's contact loop gains, after the dockmaster
+  bumpTrust, addFavor for a dockmaster whose system is not in
+  AUTHORED_SYSTEMS at post-bump trust >= GENERATED_KNOWN_TRUST (30:
+  strangers hold no markers; authored six byte-identical — Mother Tarn
+  stays favor-less, keepers keep vouch-only favors); renderPeople gains
+  a 'Call in a favor' branch for generated dockmasters (!isKeeper &&
+  role dockmaster && !AUTHORED_SYSTEMS[currentId]) spending to comp the
+  yard session-scoped through the EXISTING keeperComp flags (undock
+  reset untouched), with new session-only ui.compNote carrying the note
+  text — 'Comped by the keepers' on the keeper path (byte-identical
+  output), FACTION_COMP[faction] on the generated path; the repair
+  screen renders ui.compNote ?? 'Comped by the keepers'. (2) Ferry/haul
+  agreement — jobPayFor(ctx, sysId, base) extracted chain-identical
+  from jobPay (epic then faction-service, single Math.round); acceptJob
+  stamps job.payQuoted (JSON-plain, rides WORLD_FIELDS 'jobs', no
+  save.js change) with the DESTINATION chain (ferry: destSystem; haul:
+  otherSystemId(originSystem) over the stamped originPrice); payouts and
+  accepted-card renders read job.payQuoted ?? the old expression
+  (old-save fallback preserves wave-6 behavior byte-for-byte); offered
+  quotes now price the destination chain so quote == pay by
+  construction; bounty/patrol/salvage/recovery untouched. contacts.js:
+  header doc only (no logic — the economy rides existing
+  addFavor/spendFavor/GENERATED_KNOWN_TRUST). No generator change
+  (lines are runtime templates; galaxy.generated.js untouched), no new
+  ctx events, DOCK_KEY_SERVICES untouched. Boot test wave-26 section:
+  FACTION_COMP data (key set/order == FACTION_SERVICES, 'hollow' absent,
+  jobPayMult table pins), the earn gate through REAL full recovery
+  cycles (fh_hearth pinned 24 → post-bump 29 no favor, pinned 29 → 34
+  banks 1; Mother Tarn at 100 authored control banks 0), the spend as a
+  real DOM drive (no-marker notice exact, comp flags, spoken notice,
+  repair screen-note == FACTION_COMP line with the keeper line absent,
+  repairAll deducts 0, undock reset, redock real bill), the keeper pin
+  ('Comped by the keepers' verbatim), ferry+haul quote==pay on a
+  live-scanned discriminating lane (as_census→blackstation, svc 1 vs
+  1.1: card quote == in-test destination-chain replica == payQuoted
+  stamp == payout, haul paid 140% of stamped originPrice under the dest
+  chain, credits delta == both quotes), the old-save fallback (snapshot
+  deleted → pays the live destination chain), and the dock-autosave +
+  death-restore roundtrip (payQuoted + banked favors + roster 103).
+  Independent review APPROVE (0 CRITICAL/HIGH; MEDIUM consciously not
+  fixed — the pre-existing wave-6 haul delivery gate never enforced the
+  named destination, so the stamped chain now travels to any non-origin
+  dock; recorded as standing below; LOW intended — offered quotes at
+  authored stations now price the destination's epic standing, quote ==
+  pay by design, payouts unchanged). First gate run found 5 harness-side
+  defects, all fixed in scripts/boot-test.mjs (implementation
+  untouched): live-overlay staleness (note assertions evaluated after
+  the overlay re-rendered — captured eagerly right after the repair
+  screen opens), the lane-leg hold carrying recovery-cycle residue
+  (real market sell-down setup; the buy loop counts successful buys),
+  and the fallback paid-parse NaN (delivery fired inside the dock
+  settle, before the commLine window — paid read as the observed
+  credits delta with job-done pinning). npm run test:boot PASS ×7
+  consecutive; npm run build clean (only the pre-existing >500 kB chunk
+  warning).
+## Next round candidates (wave 27)
+- Generated-system depth, part 4 is in: landmarks (wave 23), hub
+  dockmasters (23), procedural dockmaster contacts at all 91 non-hub
+  generated stations (24), faction-specific station services (24),
+  per-faction dockmaster recognition/rumor voice (25), the
+  generated-dockmaster favor economy (26 — earn at GENERATED_KNOWN_TRUST
+  post-bump, spend to comp the yard session-scoped through the shared
+  keeperComp path, FACTION_COMP voice), and the ferry/haul payQuoted
+  agreement (26 — destination chain snapshotted at accept, quote == pay,
+  old saves fall back to the live chain). Standing: generated systems
+  hold no clues BY DESIGN (the authored total stays 6 —
+  convergence/deepening math); the pre-existing wave-6 haul delivery
+  gate still never enforced the named destination the way ferry does,
+  so a stamped haul chain pays at any non-origin dock (wave-26 review
+  MEDIUM — gate delivery on otherSystemId(originSystem) if the named
+  destination is ever meant to bind; multi-gate systems make that a
+  gameplay decision, not a patch); generated dockmasters' recognition
+  still tops out at the shared comp ship line (keeper-style
+  ledger/vouch/chart mechanics stay authored-id BY DESIGN).
 - NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
   are player/Guild infrastructure; physical gates only — recorded on
   pickMigrant in world.js). No action standing; revisit only if routed

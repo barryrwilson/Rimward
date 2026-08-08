@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP } from '../game/state.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
-import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST } from '../game/contacts.js';
+import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 
@@ -44,6 +44,19 @@ import { epicEffects } from '../game/epics.js';
  * progress for this station's faction, and epicEffects(ctx, faction)
  * multiplies trade prices, refit totals, restricted-component sales, and job
  * payouts at transaction time (all read live; nothing cached per frame).
+ *
+ * Wave 26: generated-system depth, part 4. (1) Generated-system dockmasters
+ * hold a favor economy: every finished contract banks +1 favor once the
+ * post-bump trust reads >= GENERATED_KNOWN_TRUST (AUTHORED_SYSTEMS-guarded
+ * by id, so the authored six stay byte-identical), and their people card
+ * gains the keeper-pattern 'Call in a favor' button — a spent marker comps
+ * the yard session-scoped and speaks the faction's FACTION_COMP line, shown
+ * verbatim as the repair screen's note (ui.compNote, reset in undock()).
+ * (2) Ferry/haul quotes become agreements: acceptJob stamps job.payQuoted
+ * (JSON-plain, computed with the DESTINATION system's jobPayFor) and the
+ * payout reads the snapshot with a jobPay fallback for old saves, so a
+ * mid-contract standing shift never moves an agreed price. Bounty, patrol,
+ * salvage, and recovery payouts are untouched.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -449,9 +462,10 @@ function boardJobs(ctx, sysId) {
 /**
  * Epic standing (wave 6): job payouts scale by the current system faction's
  * achieved jobPayMult. Called only at payout/render time, never per frame.
+ * Wave 26: jobPayFor takes the system id so ferry/haul quotes and snapshots
+ * price the DESTINATION dock; jobPay keeps the current-system shorthand.
  */
-function jobPay(ctx, base) {
-  const sysId = ctx.world.currentSystem;
+function jobPayFor(ctx, sysId, base) {
   const faction = ctx.systems?.[sysId]?.faction;
   const mult = epicEffects(ctx, faction).jobPayMult ?? 1;
   // Wave 24: the faction service modifier composes multiplicatively AFTER the
@@ -459,6 +473,9 @@ function jobPay(ctx, base) {
   // by id — they hold no FACTION_SERVICES application.
   const svcMult = AUTHORED_SYSTEMS[sysId] ? 1 : (FACTION_SERVICES[faction]?.jobPayMult ?? 1);
   return Math.round(base * mult * svcMult);
+}
+function jobPay(ctx, base) {
+  return jobPayFor(ctx, ctx.world.currentSystem, base);
 }
 
 /** Rank name for a ladder tier (epic requirement hints: 'Rank: Trusted'). */
@@ -492,6 +509,10 @@ function completeJob(ctx, job, notice) {
   // earns the local fence's favor where one works the dock (§12.x).
   for (const c of contactsForSystem(ctx, ctx.world.currentSystem)) {
     if (c.role === 'dockmaster') bumpTrust(ctx, c, DOCKMASTER_TRUST_PER_JOB);
+    // Wave 26: a generated-system dockmaster banks +1 favor per finished
+    // contract once the post-bump trust reads known (GENERATED_KNOWN_TRUST);
+    // the authored six fall through by id.
+    if (c.role === 'dockmaster' && !AUTHORED_SYSTEMS[ctx.world.currentSystem] && c.trust >= GENERATED_KNOWN_TRUST) addFavor(ctx, c);
     if (job.kind === 'bounty' && c.role === 'fence') addFavor(ctx, c);
   }
   if (notice) ctx.emit('commLine', { text: notice });
@@ -564,7 +585,7 @@ function tickDeliveryJobs(ctx, ui) {
       if (holdUnits(ctx, 'provisions') < HAUL_UNITS) continue;
       removeCargo(ctx, 'provisions', HAUL_UNITS);
       const unitCost = job.originPrice || priceOf(ctx, 'provisions');
-      const reward = jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
+      const reward = job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
       ctx.world.credits += reward;
       const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
       completeJob(ctx, job, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
@@ -572,7 +593,7 @@ function tickDeliveryJobs(ctx, ui) {
       if (ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
       if (holdUnits(ctx, 'provisions') >= FERRY_UNITS) {
         removeCargo(ctx, 'provisions', FERRY_UNITS);
-        const ferryPay = jobPay(ctx, job.reward);
+        const ferryPay = job.payQuoted ?? jobPay(ctx, job.reward);
         ctx.world.credits += ferryPay;
         const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
         completeJob(ctx, job, `Consignment landed intact — ${ferryPay} UU from the factor at ${destName}.`);
@@ -649,6 +670,7 @@ export function initStation(ctx) {
     notice: '',
     fenceUnlocked: false, // session-scoped: a called-in favor opens the locker
     keeperComp: false, // session-scoped (wave 11): a keeper's marker comps the yard
+    compNote: null, // session-scoped (wave 26): the repair screen note a comp speaks
   };
 
   function h(tag, cls, parent, text) {
@@ -872,6 +894,9 @@ export function initStation(ctx) {
       }
       job.originSystem = ctx.world.currentSystem;
       job.destSystem = otherSystemId(ctx, job.originSystem);
+      // Wave 26: the quote becomes the agreement — stamped with the
+      // destination dock's rates, JSON-plain on the job entry.
+      job.payQuoted = jobPayFor(ctx, job.destSystem, job.reward);
       addCargo(ctx, 'provisions', FERRY_UNITS);
     } else if (job.kind === 'recovery') {
       // Cut the salvage pod loose at the wreck site (world.js keeps aftermath
@@ -888,6 +913,9 @@ export function initStation(ctx) {
       // Cross-system contract: stamp where (and at what price) it was taken.
       job.originSystem = ctx.world.currentSystem;
       job.originPrice = priceOf(ctx, 'provisions');
+      // Wave 26: the quote becomes the agreement — stamped with the
+      // destination dock's rates, JSON-plain on the job entry.
+      job.payQuoted = jobPayFor(ctx, otherSystemId(ctx, job.originSystem), Math.round(HAUL_UNITS * job.originPrice * HAUL_MARGIN));
     }
     ui.notice = `Accepted: ${job.title}`;
     render();
@@ -913,12 +941,20 @@ export function initStation(ctx) {
         const unitCost = job.state === 'accepted' && job.originPrice
           ? job.originPrice
           : priceOf(ctx, 'provisions');
-        const est = jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
+        // Wave 26: offered cards quote the DESTINATION dock's rates; accepted
+        // cards show the agreed snapshot (old saves fall back to the old math).
+        const est = job.state === 'accepted'
+          ? (job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN)))
+          : jobPayFor(ctx, destId, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
       } else if (job.kind === 'ferry') {
         const destId = job.state === 'accepted' ? job.destSystem : otherSystemId(ctx, currentId);
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
-        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${jobPay(ctx, job.reward)} UU, no buy-in`;
+        // Wave 26: same quote/snapshot split as the haul line above.
+        const ferryEst = job.state === 'accepted'
+          ? (job.payQuoted ?? jobPay(ctx, job.reward))
+          : jobPayFor(ctx, destId, job.reward);
+        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${ferryEst} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
         rewardLine = `Scoop the salvage pod, redock here — pays ${jobPay(ctx, job.reward)} UU`;
       } else {
@@ -1060,7 +1096,7 @@ export function initStation(ctx) {
     for (const part of parts) {
       h('div', 'screen-note', panel, `${part.key} — ${part.lack} integrity down · ${part.cost} UU`);
     }
-    if (comped) h('div', 'screen-note', panel, 'Comped by the keepers');
+    if (comped) h('div', 'screen-note', panel, ui.compNote ?? 'Comped by the keepers');
     if (corrupt) {
       h('div', 'screen-note', panel, 'Yard diagnostic flags scrambled channels — the refit will re-true them, no charge.');
     }
@@ -1135,6 +1171,7 @@ export function initStation(ctx) {
           } else if (spendFavor(ctx, contact)) {
             ui.keeperComp = true;
             ctx.station.keeperComp = true;
+            ui.compNote = 'Comped by the keepers';
             ui.notice = `${contact.name} waves the yard off. “The keepers comp this dock. Mend your ship.”`;
           }
           render();
@@ -1148,6 +1185,23 @@ export function initStation(ctx) {
             ui.fenceUnlocked = true;
             ctx.station.fenceUnlocked = true;
             ui.notice = `${contact.name} makes one call. The restricted locker will be... open to you, this visit.`;
+          }
+          render();
+        });
+      }
+      // Wave 26: a generated-system dockmaster's marker comps the yard — the
+      // same session lifecycle as the keeper comp (reset in undock()), spoken
+      // in the faction's FACTION_COMP voice. Keepers keep their own branch
+      // above; the authored six fall through by id.
+      if (!isKeeper(contact) && contact.role === 'dockmaster' && !AUTHORED_SYSTEMS[currentId]) {
+        btn(row, 'Call in a favor', () => {
+          if (contact.favors <= 0) {
+            ui.notice = `${contact.name} spreads their hands. “You hold no marker with me.”`;
+          } else if (spendFavor(ctx, contact)) {
+            ui.keeperComp = true;
+            ctx.station.keeperComp = true;
+            ui.compNote = FACTION_COMP[currentDef.faction];
+            ui.notice = `${contact.name} waves the yard off. “${ui.compNote}”`;
           }
           render();
         });
@@ -1280,6 +1334,7 @@ export function initStation(ctx) {
     ctx.station.fenceUnlocked = false;
     ui.keeperComp = false; // the keepers' comp only covers this berth visit
     ctx.station.keeperComp = false;
+    ui.compNote = null; // the comp's voice only covers this berth visit (wave 26)
     overlay.style.display = 'none';
     ctx.emit('undocked');
   }

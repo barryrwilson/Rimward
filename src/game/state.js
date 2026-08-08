@@ -326,6 +326,28 @@ export const FACTION_RUMOR = {
   lamplighter: 'The lights carried the word down the lane.',
 };
 
+// Wave 26: generated-faction comp voice (generated-system depth, part 4).
+// One line per faction flown by the 94 generated systems — what a generated
+// dockmaster's spent favor says when it comps the yard. station.js uses each
+// line DUAL-USE: spoken in the people-card notice and shown verbatim as the
+// repair screen's note (the 'Comped by the keepers' precedent), so every
+// line is plain recorded speech, never an invented event. Same wave-24
+// ruling: the authored six are guarded by id, so they stay byte-identical;
+// 'hollow' is authored-only and holds no entry. Voices follow
+// generate-galaxy.mjs's CT_TONE tones. §25: no authored-mystery references.
+export const FACTION_COMP = {
+  freehold: 'The grange covers a neighbor’s yard bill — mend her and sit a spell.',
+  veridian: 'This berth’s yard work posts to the Combine’s account — waived, audited to the digit.',
+  redledger: 'Your marker covers the yard tally; the Ledger calls the account even.',
+  ferrous: 'Standing orders: the Bastion’s yard crews mend you — no charge logged.',
+  gilded: 'The gavel falls — the Chain buys out the yard’s bill, certified and cataloged.',
+  beautiful: 'The salon insists — a lovely hull mends on the house, beneath the chandeliers.',
+  congregation: 'The tithe chest opens for a traveler — the yard’s labor is this vigil’s offering.',
+  assembly: 'Yard charges waived — form-stamped, filed, and read into the record as paid.',
+  independent: 'No flag, no bill — the drift fixes its own, and the yard owes you one.',
+  lamplighter: 'The lamps keep the lane; the Guild keeps the yard bill — mend and travel lit.',
+};
+
 // ---------- Faction ranks (§12.x station depth) ----------
 /**
  * Reputation → named rank. First rung whose min <= rep wins, so the ladder
