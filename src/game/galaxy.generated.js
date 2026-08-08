@@ -13,6 +13,19 @@ export const GENERATED_SYSTEMS = {
       1700,
       549
     ],
+    "landmarks": [
+      {
+        "id": "fh_hearth_lm",
+        "name": "The Hearth Cart",
+        "kind": "wreck",
+        "position": [
+          -179,
+          20,
+          679
+        ],
+        "line": "A family ark, stripped to the ribs. Somebody's grandmother was born on it, and they'll tell you so."
+      }
+    ],
     "sunColor": 11037757,
     "sunRadius": 53,
     "planetCount": 2,
@@ -84,6 +97,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1674,
       910
+    ],
+    "landmarks": [
+      {
+        "id": "fh_haven_lm",
+        "name": "Orchard Bell",
+        "kind": "beacon",
+        "position": [
+          431,
+          -94,
+          492
+        ],
+        "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
+      }
     ],
     "sunColor": 11037757,
     "sunRadius": 52,
@@ -157,6 +183,19 @@ export const GENERATED_SYSTEMS = {
       1805,
       563
     ],
+    "landmarks": [
+      {
+        "id": "fh_meridian_lm",
+        "name": "Grange Stone",
+        "kind": "monument",
+        "position": [
+          -84,
+          -114,
+          -731
+        ],
+        "line": "A stone for the first field broken this far out. The names on it are still farmed by their grandchildren."
+      }
+    ],
     "sunColor": 10512447,
     "sunRadius": 53,
     "planetCount": 3,
@@ -220,6 +259,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1600,
       910
+    ],
+    "landmarks": [
+      {
+        "id": "fh_alder_lm",
+        "name": "The Wain",
+        "kind": "wreck",
+        "position": [
+          -513,
+          -98,
+          -485
+        ],
+        "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
+      }
     ],
     "sunColor": 8410953,
     "sunRadius": 37,
@@ -293,6 +345,19 @@ export const GENERATED_SYSTEMS = {
       1746,
       679
     ],
+    "landmarks": [
+      {
+        "id": "fh_mercy_lm",
+        "name": "The Grange Murmur",
+        "kind": "anomaly",
+        "position": [
+          -689,
+          24,
+          575
+        ],
+        "line": "The stars here look nearer than they should. Kids dare each other to fly through it."
+      }
+    ],
     "sunColor": 10184001,
     "sunRadius": 48,
     "planetCount": 3,
@@ -365,6 +430,19 @@ export const GENERATED_SYSTEMS = {
       1780,
       704
     ],
+    "landmarks": [
+      {
+        "id": "fh_longtable_lm",
+        "name": "Hearth Candle",
+        "kind": "beacon",
+        "position": [
+          807,
+          140,
+          -211
+        ],
+        "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
+      }
+    ],
     "sunColor": 8542280,
     "sunRadius": 31,
     "planetCount": 1,
@@ -421,6 +499,19 @@ export const GENERATED_SYSTEMS = {
       1635,
       656
     ],
+    "landmarks": [
+      {
+        "id": "fh_sweetwater_lm",
+        "name": "The Kinward Glow",
+        "kind": "anomaly",
+        "position": [
+          180,
+          5,
+          572
+        ],
+        "line": "Out this far the beacon's answer comes back late, and slightly wrong."
+      }
+    ],
     "sunColor": 8345161,
     "sunRadius": 31,
     "planetCount": 1,
@@ -476,6 +567,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1652,
       851
+    ],
+    "landmarks": [
+      {
+        "id": "fh_granary_lm",
+        "name": "The Orchard Wain",
+        "kind": "wreck",
+        "position": [
+          -128,
+          141,
+          592
+        ],
+        "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
+      }
     ],
     "sunColor": 10052673,
     "sunRadius": 50,
@@ -549,6 +653,19 @@ export const GENERATED_SYSTEMS = {
       1843,
       713
     ],
+    "landmarks": [
+      {
+        "id": "fh_kinhold_lm",
+        "name": "The Glow",
+        "kind": "anomaly",
+        "position": [
+          685,
+          -38,
+          -9
+        ],
+        "line": "The last freeholder out this way left the porch light on. It's still on."
+      }
+    ],
     "sunColor": 9264453,
     "sunRadius": 41,
     "planetCount": 1,
@@ -612,6 +729,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1548,
       670
+    ],
+    "landmarks": [
+      {
+        "id": "fh_tallow_lm",
+        "name": "The Candle",
+        "kind": "beacon",
+        "position": [
+          -679,
+          -25,
+          447
+        ],
+        "line": "The last freeholder out this way left the porch light on. It's still on."
+      }
     ],
     "sunColor": 9198917,
     "sunRadius": 42,
@@ -685,6 +815,19 @@ export const GENERATED_SYSTEMS = {
       1514,
       867
     ],
+    "landmarks": [
+      {
+        "id": "fh_tamsin_lm",
+        "name": "The Homeward Cairn",
+        "kind": "monument",
+        "position": [
+          -470,
+          -37,
+          -678
+        ],
+        "line": "A cairn of ballast rock, one stone per family that stayed. It gets taller every year."
+      }
+    ],
     "sunColor": 8476489,
     "sunRadius": 37,
     "planetCount": 1,
@@ -741,6 +884,19 @@ export const GENERATED_SYSTEMS = {
       1604,
       829
     ],
+    "landmarks": [
+      {
+        "id": "fh_cloverfield_lm",
+        "name": "Harvest Wain",
+        "kind": "wreck",
+        "position": [
+          -662,
+          -31,
+          -126
+        ],
+        "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
+      }
+    ],
     "sunColor": 8542280,
     "sunRadius": 38,
     "planetCount": 2,
@@ -796,6 +952,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1646,
       953
+    ],
+    "landmarks": [
+      {
+        "id": "fh_bramblehome_lm",
+        "name": "The Sweetwater Murmur",
+        "kind": "anomaly",
+        "position": [
+          504,
+          82,
+          69
+        ],
+        "line": "Out this far the beacon's answer comes back late, and slightly wrong."
+      }
     ],
     "sunColor": 8542280,
     "sunRadius": 33,
@@ -860,6 +1029,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1576,
       769
+    ],
+    "landmarks": [
+      {
+        "id": "fh_meadowlark_lm",
+        "name": "The Grange Humming Field",
+        "kind": "anomaly",
+        "position": [
+          -442,
+          -38,
+          -725
+        ],
+        "line": "A slow shimmer, like heat off a summer field. Nothing grows there, but nothing dies there either."
+      }
     ],
     "sunColor": 8542280,
     "sunRadius": 31,
@@ -933,6 +1115,19 @@ export const GENERATED_SYSTEMS = {
       1842,
       533
     ],
+    "landmarks": [
+      {
+        "id": "fh_harvest_lm",
+        "name": "The Grange Cart",
+        "kind": "wreck",
+        "position": [
+          -710,
+          74,
+          -461
+        ],
+        "line": "Broke up hauling seed stock inward. The field around it gets left alone, out of respect."
+      }
+    ],
     "sunColor": 9198917,
     "sunRadius": 45,
     "planetCount": 2,
@@ -1004,6 +1199,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1503,
       697
+    ],
+    "landmarks": [
+      {
+        "id": "fh_wellspring_lm",
+        "name": "The Bell",
+        "kind": "beacon",
+        "position": [
+          -84,
+          -35,
+          620
+        ],
+        "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
+      }
     ],
     "sunColor": 9790019,
     "sunRadius": 50,
@@ -1077,6 +1285,19 @@ export const GENERATED_SYSTEMS = {
       1596,
       983
     ],
+    "landmarks": [
+      {
+        "id": "fh_saltbox_lm",
+        "name": "The Grange Warm Patch",
+        "kind": "anomaly",
+        "position": [
+          -611,
+          9,
+          -18
+        ],
+        "line": "The last freeholder out this way left the porch light on. It's still on."
+      }
+    ],
     "sunColor": 9395781,
     "sunRadius": 37,
     "planetCount": 2,
@@ -1149,6 +1370,19 @@ export const GENERATED_SYSTEMS = {
       1836,
       980
     ],
+    "landmarks": [
+      {
+        "id": "fh_applebough_lm",
+        "name": "The Ark",
+        "kind": "wreck",
+        "position": [
+          -189,
+          72,
+          570
+        ],
+        "line": "Broke up hauling seed stock inward. The field around it gets left alone, out of respect."
+      }
+    ],
     "sunColor": 8542280,
     "sunRadius": 38,
     "planetCount": 1,
@@ -1212,6 +1446,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1555,
       955
+    ],
+    "landmarks": [
+      {
+        "id": "fh_goodrest_lm",
+        "name": "The Warm Patch",
+        "kind": "anomaly",
+        "position": [
+          518,
+          -66,
+          -308
+        ],
+        "line": "The last freeholder out this way left the porch light on. It's still on."
+      }
     ],
     "sunColor": 9461572,
     "sunRadius": 42,
@@ -1285,6 +1532,19 @@ export const GENERATED_SYSTEMS = {
       1444,
       1017
     ],
+    "landmarks": [
+      {
+        "id": "vd_survey_lm",
+        "name": "The Pylon",
+        "kind": "monument",
+        "position": [
+          -345,
+          118,
+          503
+        ],
+        "line": "A memorial plaque for a profitable quarter. The company does not mark its losses."
+      }
+    ],
     "sunColor": 6995664,
     "sunRadius": 59,
     "planetCount": 1,
@@ -1357,6 +1617,19 @@ export const GENERATED_SYSTEMS = {
       1250,
       908
     ],
+    "landmarks": [
+      {
+        "id": "vd_prospect_lm",
+        "name": "The Ledgerline Transponder",
+        "kind": "beacon",
+        "position": [
+          -276,
+          146,
+          693
+        ],
+        "line": "A nav beacon broadcasting claim coordinates to a claim that lapsed decades ago."
+      }
+    ],
     "sunColor": 6928844,
     "sunRadius": 52,
     "planetCount": 5,
@@ -1420,6 +1693,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1265,
       1096
+    ],
+    "landmarks": [
+      {
+        "id": "vd_canaan_lm",
+        "name": "The Assay Pylon",
+        "kind": "monument",
+        "position": [
+          240,
+          71,
+          484
+        ],
+        "line": "A survey marker, first of a planned thousand. It remains first."
+      }
     ],
     "sunColor": 6928329,
     "sunRadius": 54,
@@ -1493,6 +1779,19 @@ export const GENERATED_SYSTEMS = {
       1307,
       964
     ],
+    "landmarks": [
+      {
+        "id": "vd_claim9_lm",
+        "name": "Vested Discrepancy",
+        "kind": "anomaly",
+        "position": [
+          745,
+          -36,
+          -156
+        ],
+        "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
+      }
+    ],
     "sunColor": 6528948,
     "sunRadius": 37,
     "planetCount": 2,
@@ -1556,6 +1855,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1379,
       1128
+    ],
+    "landmarks": [
+      {
+        "id": "vd_filing7_lm",
+        "name": "The Claimed Drift Entry",
+        "kind": "anomaly",
+        "position": [
+          859,
+          -81,
+          250
+        ],
+        "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
+      }
     ],
     "sunColor": 6063260,
     "sunRadius": 32,
@@ -1629,6 +1941,19 @@ export const GENERATED_SYSTEMS = {
       1452,
       1130
     ],
+    "landmarks": [
+      {
+        "id": "vd_stakedown_lm",
+        "name": "The Survey Discrepancy",
+        "kind": "anomaly",
+        "position": [
+          698,
+          140,
+          -474
+        ],
+        "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
+      }
+    ],
     "sunColor": 6196644,
     "sunRadius": 31,
     "planetCount": 2,
@@ -1693,6 +2018,19 @@ export const GENERATED_SYSTEMS = {
       1390,
       1032
     ],
+    "landmarks": [
+      {
+        "id": "vd_assay_lm",
+        "name": "The Survey Stone",
+        "kind": "monument",
+        "position": [
+          -159,
+          130,
+          507
+        ],
+        "line": "A cornerstone for an office that was never built. The plaque lists projections."
+      }
+    ],
     "sunColor": 6662075,
     "sunRadius": 46,
     "planetCount": 4,
@@ -1748,6 +2086,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1339,
       1008
+    ],
+    "landmarks": [
+      {
+        "id": "vd_gridmark_lm",
+        "name": "Vested Marker",
+        "kind": "beacon",
+        "position": [
+          512,
+          100,
+          501
+        ],
+        "line": "Out here the audit trail ends mid-entry, and the ink looks recent."
+      }
     ],
     "sunColor": 6262437,
     "sunRadius": 31,
@@ -1812,6 +2163,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1309,
       1110
+    ],
+    "landmarks": [
+      {
+        "id": "vd_plat12_lm",
+        "name": "Assay Transponder",
+        "kind": "beacon",
+        "position": [
+          -365,
+          48,
+          672
+        ],
+        "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
+      }
     ],
     "sunColor": 6529462,
     "sunRadius": 40,
@@ -1885,6 +2249,19 @@ export const GENERATED_SYSTEMS = {
       1522,
       1110
     ],
+    "landmarks": [
+      {
+        "id": "vd_motherlode_lm",
+        "name": "The Anomaly File",
+        "kind": "anomaly",
+        "position": [
+          -718,
+          -74,
+          78
+        ],
+        "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
+      }
+    ],
     "sunColor": 6329771,
     "sunRadius": 42,
     "planetCount": 1,
@@ -1957,6 +2334,19 @@ export const GENERATED_SYSTEMS = {
       1535,
       1006
     ],
+    "landmarks": [
+      {
+        "id": "vd_claim44_lm",
+        "name": "The Ledgerline Drift Entry",
+        "kind": "anomaly",
+        "position": [
+          581,
+          90,
+          -660
+        ],
+        "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
+      }
+    ],
     "sunColor": 6196130,
     "sunRadius": 37,
     "planetCount": 2,
@@ -2012,6 +2402,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1315,
       1068
+    ],
+    "landmarks": [
+      {
+        "id": "vd_surveyd_lm",
+        "name": "The Tow",
+        "kind": "wreck",
+        "position": [
+          -334,
+          -95,
+          564
+        ],
+        "line": "A survey hull written off mid-contract. The crew's severance is still in arbitration."
+      }
     ],
     "sunColor": 6661818,
     "sunRadius": 50,
@@ -2085,6 +2488,19 @@ export const GENERATED_SYSTEMS = {
       1548,
       894
     ],
+    "landmarks": [
+      {
+        "id": "vd_filing12c_lm",
+        "name": "The Margin Pylon",
+        "kind": "monument",
+        "position": [
+          -63,
+          131,
+          -572
+        ],
+        "line": "A survey marker, first of a planned thousand. It remains first."
+      }
+    ],
     "sunColor": 6795203,
     "sunRadius": 50,
     "planetCount": 4,
@@ -2156,6 +2572,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1331,
       889
+    ],
+    "landmarks": [
+      {
+        "id": "vd_coresample_lm",
+        "name": "Margin Drift Entry",
+        "kind": "anomaly",
+        "position": [
+          -782,
+          -49,
+          290
+        ],
+        "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
+      }
     ],
     "sunColor": 6196387,
     "sunRadius": 35,
@@ -2229,6 +2658,19 @@ export const GENERATED_SYSTEMS = {
       1343,
       936
     ],
+    "landmarks": [
+      {
+        "id": "vd_paydirt_lm",
+        "name": "The Discrepancy",
+        "kind": "anomaly",
+        "position": [
+          -760,
+          81,
+          -31
+        ],
+        "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
+      }
+    ],
     "sunColor": 6130081,
     "sunRadius": 36,
     "planetCount": 2,
@@ -2293,6 +2735,19 @@ export const GENERATED_SYSTEMS = {
       1262,
       962
     ],
+    "landmarks": [
+      {
+        "id": "vd_stakeside_lm",
+        "name": "The Drift Entry",
+        "kind": "anomaly",
+        "position": [
+          -292,
+          81,
+          -436
+        ],
+        "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
+      }
+    ],
     "sunColor": 6662332,
     "sunRadius": 44,
     "planetCount": 4,
@@ -2356,6 +2811,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1386,
       946
+    ],
+    "landmarks": [
+      {
+        "id": "vd_annexclaim_lm",
+        "name": "The Vested Reading",
+        "kind": "anomaly",
+        "position": [
+          29,
+          -13,
+          858
+        ],
+        "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
+      }
     ],
     "sunColor": 6129567,
     "sunRadius": 35,
@@ -2428,6 +2896,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1495,
       1205
+    ],
+    "landmarks": [
+      {
+        "id": "fx_bastion_lm",
+        "name": "Cohort Null Reading",
+        "kind": "anomaly",
+        "position": [
+          -778,
+          145,
+          -117
+        ],
+        "line": "A dead zone where comms fall flat. Patrols file around it and call the habit tradition."
+      }
     ],
     "sunColor": 6976645,
     "sunRadius": 53,
@@ -2513,6 +2994,19 @@ export const GENERATED_SYSTEMS = {
       1681,
       1293
     ],
+    "landmarks": [
+      {
+        "id": "fx_liron_lm",
+        "name": "Muster Gunboat",
+        "kind": "wreck",
+        "position": [
+          183,
+          86,
+          -825
+        ],
+        "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
+      }
+    ],
     "sunColor": 6580861,
     "sunRadius": 52,
     "planetCount": 3,
@@ -2584,6 +3078,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1574,
       1051
+    ],
+    "landmarks": [
+      {
+        "id": "fx_shieldwall_lm",
+        "name": "The Cohort Gunboat",
+        "kind": "wreck",
+        "position": [
+          522,
+          -17,
+          -382
+        ],
+        "line": "A troop-hauler holed at her moorings. The muster roll inside was never recovered."
+      }
     ],
     "sunColor": 6448763,
     "sunRadius": 37,
@@ -2657,6 +3164,19 @@ export const GENERATED_SYSTEMS = {
       1690,
       1154
     ],
+    "landmarks": [
+      {
+        "id": "fx_honorhold_lm",
+        "name": "Slag Muster Beacon",
+        "kind": "beacon",
+        "position": [
+          -309,
+          1,
+          -687
+        ],
+        "line": "A perimeter beacon marking a line the Bastion no longer holds. The watch still logs it."
+      }
+    ],
     "sunColor": 6316664,
     "sunRadius": 41,
     "planetCount": 3,
@@ -2728,6 +3248,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1703,
       1255
+    ],
+    "landmarks": [
+      {
+        "id": "fx_rampart_lm",
+        "name": "Muster Held Breath",
+        "kind": "anomaly",
+        "position": [
+          211,
+          -33,
+          458
+        ],
+        "line": "A watch-post buoy beyond the last patrol route. Its log shows one visitor, years apart, always the same hull."
+      }
     ],
     "sunColor": 6448506,
     "sunRadius": 44,
@@ -2801,6 +3334,19 @@ export const GENERATED_SYSTEMS = {
       1653,
       1182
     ],
+    "landmarks": [
+      {
+        "id": "fx_aegis_lm",
+        "name": "Garrison Dead Zone",
+        "kind": "anomaly",
+        "position": [
+          640,
+          18,
+          481
+        ],
+        "line": "A reading like a held breath. Gunnery used it for calibration once; they don't anymore."
+      }
+    ],
     "sunColor": 6052466,
     "sunRadius": 34,
     "planetCount": 1,
@@ -2857,6 +3403,19 @@ export const GENERATED_SYSTEMS = {
       1543,
       1205
     ],
+    "landmarks": [
+      {
+        "id": "fx_ironhold_lm",
+        "name": "Cohort Dead Zone",
+        "kind": "anomaly",
+        "position": [
+          58,
+          -112,
+          632
+        ],
+        "line": "The perimeter light at the edge of the map still answers roll call. No one remembers who it answers to."
+      }
+    ],
     "sunColor": 6382456,
     "sunRadius": 45,
     "planetCount": 1,
@@ -2912,6 +3471,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1704,
       1043
+    ],
+    "landmarks": [
+      {
+        "id": "fx_ward_lm",
+        "name": "The Gunboat",
+        "kind": "wreck",
+        "position": [
+          538,
+          160,
+          -386
+        ],
+        "line": "The perimeter light at the edge of the map still answers roll call. No one remembers who it answers to."
+      }
     ],
     "sunColor": 6184564,
     "sunRadius": 34,
@@ -2985,6 +3557,19 @@ export const GENERATED_SYSTEMS = {
       1503,
       1287
     ],
+    "landmarks": [
+      {
+        "id": "fx_palisade_lm",
+        "name": "Garrison Hulk",
+        "kind": "wreck",
+        "position": [
+          -265,
+          113,
+          -548
+        ],
+        "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
+      }
+    ],
     "sunColor": 6382713,
     "sunRadius": 42,
     "planetCount": 1,
@@ -3057,6 +3642,19 @@ export const GENERATED_SYSTEMS = {
       1567,
       1279
     ],
+    "landmarks": [
+      {
+        "id": "fx_vanguard_lm",
+        "name": "The Perimeter Dead Zone",
+        "kind": "anomaly",
+        "position": [
+          -56,
+          120,
+          646
+        ],
+        "line": "A reading like a held breath. Gunnery used it for calibration once; they don't anymore."
+      }
+    ],
     "sunColor": 6382457,
     "sunRadius": 40,
     "planetCount": 2,
@@ -3112,6 +3710,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1658,
       1069
+    ],
+    "landmarks": [
+      {
+        "id": "fx_bulwark_lm",
+        "name": "The Null Reading",
+        "kind": "anomaly",
+        "position": [
+          -133,
+          -89,
+          -616
+        ],
+        "line": "A dead zone where comms fall flat. Patrols file around it and call the habit tradition."
+      }
     ],
     "sunColor": 6646654,
     "sunRadius": 48,
@@ -3185,6 +3796,19 @@ export const GENERATED_SYSTEMS = {
       1577,
       1106
     ],
+    "landmarks": [
+      {
+        "id": "fx_garrison9_lm",
+        "name": "Muster Hulk",
+        "kind": "wreck",
+        "position": [
+          358,
+          -70,
+          -631
+        ],
+        "line": "A gunboat that lost its war before the war started. The garrison salutes it on passing."
+      }
+    ],
     "sunColor": 6778496,
     "sunRadius": 48,
     "planetCount": 2,
@@ -3257,6 +3881,19 @@ export const GENERATED_SYSTEMS = {
       1635,
       1252
     ],
+    "landmarks": [
+      {
+        "id": "fx_citadel_lm",
+        "name": "Slag Held Breath",
+        "kind": "anomaly",
+        "position": [
+          380,
+          -58,
+          406
+        ],
+        "line": "Something out there reflects ranging pulses a half-second late. The Bastion has standing orders not to ping it."
+      }
+    ],
     "sunColor": 6052722,
     "sunRadius": 36,
     "planetCount": 1,
@@ -3320,6 +3957,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1718,
       1207
+    ],
+    "landmarks": [
+      {
+        "id": "fx_sentry_lm",
+        "name": "The Iron Held Breath",
+        "kind": "anomaly",
+        "position": [
+          628,
+          42,
+          88
+        ],
+        "line": "Something out there reflects ranging pulses a half-second late. The Bastion has standing orders not to ping it."
+      }
     ],
     "sunColor": 6316664,
     "sunRadius": 40,
@@ -3393,6 +4043,19 @@ export const GENERATED_SYSTEMS = {
       1749,
       1089
     ],
+    "landmarks": [
+      {
+        "id": "fx_oathkeep_lm",
+        "name": "Perimeter Scow",
+        "kind": "wreck",
+        "position": [
+          8,
+          -95,
+          551
+        ],
+        "line": "A troop-hauler holed at her moorings. The muster roll inside was never recovered."
+      }
+    ],
     "sunColor": 6646911,
     "sunRadius": 48,
     "planetCount": 1,
@@ -3464,6 +4127,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1475,
       1090
+    ],
+    "landmarks": [
+      {
+        "id": "fx_merit_lm",
+        "name": "The Oathbound Scow",
+        "kind": "wreck",
+        "position": [
+          861,
+          103,
+          251
+        ],
+        "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
+      }
     ],
     "sunColor": 6316407,
     "sunRadius": 43,
@@ -3537,6 +4213,19 @@ export const GENERATED_SYSTEMS = {
       1703,
       1084
     ],
+    "landmarks": [
+      {
+        "id": "fx_steelhaven_lm",
+        "name": "The Roll",
+        "kind": "monument",
+        "position": [
+          -516,
+          128,
+          278
+        ],
+        "line": "An oath-stone for a cohort that did not come back. The names are punched, not carved — iron doesn't take sentiment."
+      }
+    ],
     "sunColor": 6712704,
     "sunRadius": 47,
     "planetCount": 2,
@@ -3608,6 +4297,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1206,
       572
+    ],
+    "landmarks": [
+      {
+        "id": "rl_toll_lm",
+        "name": "The Cutthroat Pillar",
+        "kind": "monument",
+        "position": [
+          60,
+          141,
+          -625
+        ],
+        "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
+      }
     ],
     "sunColor": 9123133,
     "sunRadius": 46,
@@ -3682,6 +4384,19 @@ export const GENERATED_SYSTEMS = {
       1153,
       657
     ],
+    "landmarks": [
+      {
+        "id": "rl_reckoning_lm",
+        "name": "Cutthroat Reminder",
+        "kind": "monument",
+        "position": [
+          323,
+          141,
+          576
+        ],
+        "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
+      }
+    ],
     "sunColor": 9385276,
     "sunRadius": 47,
     "planetCount": 4,
@@ -3746,6 +4461,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1239,
       672
+    ],
+    "landmarks": [
+      {
+        "id": "rl_cutter_lm",
+        "name": "The Due Blind Toll",
+        "kind": "anomaly",
+        "position": [
+          205,
+          -67,
+          -555
+        ],
+        "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
+      }
     ],
     "sunColor": 9385276,
     "sunRadius": 49,
@@ -3820,6 +4548,19 @@ export const GENERATED_SYSTEMS = {
       1306,
       603
     ],
+    "landmarks": [
+      {
+        "id": "rl_interest_lm",
+        "name": "The Blind Toll",
+        "kind": "anomaly",
+        "position": [
+          -788,
+          -118,
+          3
+        ],
+        "line": "The farthest toll-light the ledger ever hung. Its account is still open, and something keeps paying it."
+      }
+    ],
     "sunColor": 7550792,
     "sunRadius": 31,
     "planetCount": 1,
@@ -3876,6 +4617,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1379,
       733
+    ],
+    "landmarks": [
+      {
+        "id": "rl_due_lm",
+        "name": "Ledger Gravity Tick",
+        "kind": "anomaly",
+        "position": [
+          188,
+          58,
+          844
+        ],
+        "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
+      }
     ],
     "sunColor": 8599105,
     "sunRadius": 45,
@@ -3950,6 +4704,19 @@ export const GENERATED_SYSTEMS = {
       1325,
       673
     ],
+    "landmarks": [
+      {
+        "id": "rl_arrears_lm",
+        "name": "The Gravity Tick",
+        "kind": "anomaly",
+        "position": [
+          566,
+          -8,
+          -73
+        ],
+        "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
+      }
+    ],
     "sunColor": 8336962,
     "sunRadius": 37,
     "planetCount": 2,
@@ -4022,6 +4789,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1211,
       712
+    ],
+    "landmarks": [
+      {
+        "id": "rl_principal_lm",
+        "name": "The Posted Guide-Light",
+        "kind": "beacon",
+        "position": [
+          46,
+          -87,
+          -552
+        ],
+        "line": "Out past the last marker, a buoy that bills nobody. The ledger leaves it alone."
+      }
     ],
     "sunColor": 8468034,
     "sunRadius": 42,
@@ -4096,6 +4876,19 @@ export const GENERATED_SYSTEMS = {
       1198,
       632
     ],
+    "landmarks": [
+      {
+        "id": "rl_tithemark_lm",
+        "name": "The Due Marker",
+        "kind": "monument",
+        "position": [
+          -194,
+          96,
+          713
+        ],
+        "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
+      }
+    ],
     "sunColor": 8336962,
     "sunRadius": 45,
     "planetCount": 1,
@@ -4160,6 +4953,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1120,
       589
+    ],
+    "landmarks": [
+      {
+        "id": "rl_default_lm",
+        "name": "The Debtor's Echo",
+        "kind": "anomaly",
+        "position": [
+          608,
+          124,
+          -403
+        ],
+        "line": "A stretch of black where the toll-beacons don't answer. The ledger charges extra to cross it, and can't say why."
+      }
     ],
     "sunColor": 7812934,
     "sunRadius": 33,
@@ -4234,6 +5040,19 @@ export const GENERATED_SYSTEMS = {
       1130,
       733
     ],
+    "landmarks": [
+      {
+        "id": "rl_margin_lm",
+        "name": "The Posted Echo",
+        "kind": "anomaly",
+        "position": [
+          -470,
+          73,
+          -254
+        ],
+        "line": "Something here echoes back your own transponder, a day later, from somewhere else."
+      }
+    ],
     "sunColor": 7485256,
     "sunRadius": 30,
     "planetCount": 2,
@@ -4307,6 +5126,19 @@ export const GENERATED_SYSTEMS = {
       1187,
       787
     ],
+    "landmarks": [
+      {
+        "id": "rl_compound_lm",
+        "name": "The Marked Blind Toll",
+        "kind": "anomaly",
+        "position": [
+          -292,
+          47,
+          -723
+        ],
+        "line": "Out past the last marker, a buoy that bills nobody. The ledger leaves it alone."
+      }
+    ],
     "sunColor": 7550792,
     "sunRadius": 35,
     "planetCount": 2,
@@ -4363,6 +5195,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1219,
       512
+    ],
+    "landmarks": [
+      {
+        "id": "gc_auction_lm",
+        "name": "The Galleon",
+        "kind": "wreck",
+        "position": [
+          -445,
+          -91,
+          779
+        ],
+        "line": "A lot that failed to sell: one ship, slightly used, reserve not met. It's still on the block."
+      }
     ],
     "sunColor": 11834431,
     "sunRadius": 44,
@@ -4449,6 +5294,19 @@ export const GENERATED_SYSTEMS = {
       997,
       523
     ],
+    "landmarks": [
+      {
+        "id": "gc_gavel_lm",
+        "name": "The Salvage",
+        "kind": "wreck",
+        "position": [
+          595,
+          134,
+          388
+        ],
+        "line": "A buyer's yacht, scuttled for the insurance and then, embarrassingly, found."
+      }
+    ],
     "sunColor": 9533000,
     "sunRadius": 32,
     "planetCount": 2,
@@ -4521,6 +5379,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1055,
       637
+    ],
+    "landmarks": [
+      {
+        "id": "gc_lot7_lm",
+        "name": "Saleroom Shimmer",
+        "kind": "anomaly",
+        "position": [
+          877,
+          94,
+          -75
+        ],
+        "line": "A shimmer the guild certified as art and now charges to view."
+      }
     ],
     "sunColor": 10913859,
     "sunRadius": 45,
@@ -4595,6 +5466,19 @@ export const GENERATED_SYSTEMS = {
       1164,
       558
     ],
+    "landmarks": [
+      {
+        "id": "gc_appraisal_lm",
+        "name": "The Consignment Gallery",
+        "kind": "anomaly",
+        "position": [
+          443,
+          134,
+          381
+        ],
+        "line": "The guild's farthest showroom: one spotlight, one pedestal, nothing on it. Offers are accepted."
+      }
+    ],
     "sunColor": 10585156,
     "sunRadius": 44,
     "planetCount": 1,
@@ -4660,6 +5544,19 @@ export const GENERATED_SYSTEMS = {
       1078,
       564
     ],
+    "landmarks": [
+      {
+        "id": "gc_reserve_lm",
+        "name": "The Catalog Shimmer",
+        "kind": "anomaly",
+        "position": [
+          -142,
+          -7,
+          -654
+        ],
+        "line": "A catalog beacon past the last buyer. The lots it lists were beautiful, once."
+      }
+    ],
     "sunColor": 9796167,
     "sunRadius": 35,
     "planetCount": 1,
@@ -4724,6 +5621,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1103,
       648
+    ],
+    "landmarks": [
+      {
+        "id": "gc_provenance_lm",
+        "name": "Reserve Yacht",
+        "kind": "wreck",
+        "position": [
+          78,
+          -38,
+          -867
+        ],
+        "line": "A galleon that went down with the season's catalog. The auction of its salvage rights outlasted the salvage."
+      }
     ],
     "sunColor": 10256453,
     "sunRadius": 39,
@@ -4798,6 +5708,19 @@ export const GENERATED_SYSTEMS = {
       993,
       683
     ],
+    "landmarks": [
+      {
+        "id": "gc_hammerfall_lm",
+        "name": "The Gavel Acoustic",
+        "kind": "anomaly",
+        "position": [
+          -756,
+          -66,
+          -247
+        ],
+        "line": "A patch of space with excellent acoustics. Recitals are held there. Attendance is declining."
+      }
+    ],
     "sunColor": 10256453,
     "sunRadius": 39,
     "planetCount": 1,
@@ -4862,6 +5785,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1081,
       502
+    ],
+    "landmarks": [
+      {
+        "id": "gc_showcase_lm",
+        "name": "The Yacht",
+        "kind": "wreck",
+        "position": [
+          -589,
+          122,
+          -656
+        ],
+        "line": "A galleon that went down with the season's catalog. The auction of its salvage rights outlasted the salvage."
+      }
     ],
     "sunColor": 9796167,
     "sunRadius": 30,
@@ -4936,6 +5872,19 @@ export const GENERATED_SYSTEMS = {
       1103,
       448
     ],
+    "landmarks": [
+      {
+        "id": "bt_cradle_lm",
+        "name": "Mirror Monument",
+        "kind": "monument",
+        "position": [
+          181,
+          3,
+          545
+        ],
+        "line": "A mirror-polished obelisk. It shows you the stars behind you, slightly improved."
+      }
+    ],
     "sunColor": 8115106,
     "sunRadius": 53,
     "planetCount": 2,
@@ -4999,6 +5948,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1137,
       470
+    ],
+    "landmarks": [
+      {
+        "id": "stolenwomb_lm",
+        "name": "The Muse",
+        "kind": "monument",
+        "position": [
+          723,
+          138,
+          -502
+        ],
+        "line": "A mirror-polished obelisk. It shows you the stars behind you, slightly improved."
+      }
     ],
     "sunColor": 7650968,
     "sunRadius": 49,
@@ -5064,6 +6026,19 @@ export const GENERATED_SYSTEMS = {
       1193,
       447
     ],
+    "landmarks": [
+      {
+        "id": "bt_moss_lm",
+        "name": "The Last Season's Obelisk",
+        "kind": "monument",
+        "position": [
+          849,
+          144,
+          -135
+        ],
+        "line": "A statue of a muse the artist later denied sculpting. Both are famous now."
+      }
+    ],
     "sunColor": 7120012,
     "sunRadius": 42,
     "planetCount": 3,
@@ -5119,6 +6094,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1145,
       1036
+    ],
+    "landmarks": [
+      {
+        "id": "cg_vigil_lm",
+        "name": "The Unshriven Vow-Stone",
+        "kind": "monument",
+        "position": [
+          509,
+          64,
+          516
+        ],
+        "line": "A vow-stone, carved by hands that never saw it placed. That was the vow."
+      }
     ],
     "sunColor": 11969923,
     "sunRadius": 45,
@@ -5184,6 +6172,19 @@ export const GENERATED_SYSTEMS = {
       1043,
       1027
     ],
+    "landmarks": [
+      {
+        "id": "cg_psalm_lm",
+        "name": "The Chapel Ship",
+        "kind": "wreck",
+        "position": [
+          -438,
+          -49,
+          414
+        ],
+        "line": "The last chapel lamp before the quiet. The psalm sung here is shorter than it used to be."
+      }
+    ],
     "sunColor": 10522491,
     "sunRadius": 37,
     "planetCount": 3,
@@ -5248,6 +6249,19 @@ export const GENERATED_SYSTEMS = {
       1020,
       905
     ],
+    "landmarks": [
+      {
+        "id": "cg_shore_lm",
+        "name": "The Vigil Answer",
+        "kind": "anomaly",
+        "position": [
+          315,
+          153,
+          -448
+        ],
+        "line": "An answer comes back to prayers broadcast here. It is one word. The word is not comfort."
+      }
+    ],
     "sunColor": 9338228,
     "sunRadius": 33,
     "planetCount": 1,
@@ -5303,6 +6317,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       761,
       640
+    ],
+    "landmarks": [
+      {
+        "id": "as_census_lm",
+        "name": "The Courier Hull",
+        "kind": "wreck",
+        "position": [
+          546,
+          55,
+          -449
+        ],
+        "line": "A filing beacon past the rim's edge. It acknowledges receipt of nothing, promptly."
+      }
     ],
     "sunColor": 8818856,
     "sunRadius": 44,
@@ -5368,6 +6395,19 @@ export const GENERATED_SYSTEMS = {
       857,
       678
     ],
+    "landmarks": [
+      {
+        "id": "as_archive_lm",
+        "name": "Filed Courier Hull",
+        "kind": "wreck",
+        "position": [
+          -251,
+          134,
+          -714
+        ],
+        "line": "A census barge, sunk by paperwork in the literal end. Its crew are listed as present."
+      }
+    ],
     "sunColor": 8028314,
     "sunRadius": 32,
     "planetCount": 1,
@@ -5423,6 +6463,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       950,
       620
+    ],
+    "landmarks": [
+      {
+        "id": "blackstation_lm",
+        "name": "Unclaimed Hull",
+        "kind": "wreck",
+        "position": [
+          252,
+          -15,
+          596
+        ],
+        "line": "The last light nobody owns. Past it, even the ledger gives up."
+      }
     ],
     "sunColor": 8356761,
     "sunRadius": 40,
@@ -5510,6 +6563,19 @@ export const GENERATED_SYSTEMS = {
       931,
       702
     ],
+    "landmarks": [
+      {
+        "id": "uc_drift_lm",
+        "name": "Bootleg Hull",
+        "kind": "wreck",
+        "position": [
+          790,
+          -78,
+          -198
+        ],
+        "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
+      }
+    ],
     "sunColor": 9081253,
     "sunRadius": 46,
     "planetCount": 3,
@@ -5582,6 +6648,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       984,
       949
+    ],
+    "landmarks": [
+      {
+        "id": "uc_sorrow_lm",
+        "name": "The Hulk",
+        "kind": "wreck",
+        "position": [
+          283,
+          105,
+          755
+        ],
+        "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
+      }
     ],
     "sunColor": 8883874,
     "sunRadius": 51,
@@ -5656,6 +6735,19 @@ export const GENERATED_SYSTEMS = {
       996,
       870
     ],
+    "landmarks": [
+      {
+        "id": "uc_ashfall_lm",
+        "name": "The Signal",
+        "kind": "beacon",
+        "position": [
+          785,
+          -2,
+          302
+        ],
+        "line": "A hand-built lane-light. The drift keeps it lit for the next ones through."
+      }
+    ],
     "sunColor": 8422554,
     "sunRadius": 39,
     "planetCount": 1,
@@ -5728,6 +6820,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1184,
       924
+    ],
+    "landmarks": [
+      {
+        "id": "uc_tumble_lm",
+        "name": "The Bootleg Road Sign",
+        "kind": "wreck",
+        "position": [
+          -771,
+          -119,
+          5
+        ],
+        "line": "A nameless hulk the drifters use as a road sign. Turn inward at the wreck, they say, and you'll find water."
+      }
     ],
     "sunColor": 8356504,
     "sunRadius": 44,
@@ -5802,6 +6907,19 @@ export const GENERATED_SYSTEMS = {
       795,
       839
     ],
+    "landmarks": [
+      {
+        "id": "uc_nowhere_lm",
+        "name": "The Hum",
+        "kind": "anomaly",
+        "position": [
+          384,
+          -78,
+          437
+        ],
+        "line": "A drift-current with no mass behind it. The unclaimed ride it inward and pay nothing."
+      }
+    ],
     "sunColor": 8290711,
     "sunRadius": 43,
     "planetCount": 3,
@@ -5874,6 +6992,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       892,
       650
+    ],
+    "landmarks": [
+      {
+        "id": "uc_faint_lm",
+        "name": "The Scratch Hulk",
+        "kind": "wreck",
+        "position": [
+          -361,
+          -15,
+          -541
+        ],
+        "line": "A nameless hulk the drifters use as a road sign. Turn inward at the wreck, they say, and you'll find water."
+      }
     ],
     "sunColor": 8620189,
     "sunRadius": 45,
@@ -5948,6 +7079,19 @@ export const GENERATED_SYSTEMS = {
       745,
       859
     ],
+    "landmarks": [
+      {
+        "id": "uc_wisp_lm",
+        "name": "The Unclaimed Hulk",
+        "kind": "wreck",
+        "position": [
+          -81,
+          -23,
+          -530
+        ],
+        "line": "A claim-jumper's barge, dead between claims. Nobody filed. Nobody files out here."
+      }
+    ],
     "sunColor": 8817824,
     "sunRadius": 51,
     "planetCount": 2,
@@ -6020,6 +7164,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       906,
       831
+    ],
+    "landmarks": [
+      {
+        "id": "uc_cinder_lm",
+        "name": "The Hand-Built Lane-Light",
+        "kind": "beacon",
+        "position": [
+          -569,
+          149,
+          -269
+        ],
+        "line": "The last light nobody owns. Past it, even the ledger gives up."
+      }
     ],
     "sunColor": 8158868,
     "sunRadius": 42,
@@ -6094,6 +7251,19 @@ export const GENERATED_SYSTEMS = {
       875,
       787
     ],
+    "landmarks": [
+      {
+        "id": "uc_stray_lm",
+        "name": "The Wayward Hull",
+        "kind": "wreck",
+        "position": [
+          139,
+          -33,
+          483
+        ],
+        "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
+      }
+    ],
     "sunColor": 9081253,
     "sunRadius": 48,
     "planetCount": 1,
@@ -6158,6 +7328,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       870,
       914
+    ],
+    "landmarks": [
+      {
+        "id": "uc_husk_lm",
+        "name": "The Nameless Bell Pile",
+        "kind": "monument",
+        "position": [
+          144,
+          110,
+          -686
+        ],
+        "line": "A marker for a well found by accident and lost on purpose. The coordinates are a shared secret."
+      }
     ],
     "sunColor": 9147046,
     "sunRadius": 51,
@@ -6232,6 +7415,19 @@ export const GENERATED_SYSTEMS = {
       1020,
       975
     ],
+    "landmarks": [
+      {
+        "id": "uc_gone_lm",
+        "name": "Nameless Barge",
+        "kind": "wreck",
+        "position": [
+          -571,
+          -16,
+          -322
+        ],
+        "line": "A claim-jumper's barge, dead between claims. Nobody filed. Nobody files out here."
+      }
+    ],
     "sunColor": 8685982,
     "sunRadius": 45,
     "planetCount": 1,
@@ -6296,6 +7492,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1091,
       813
+    ],
+    "landmarks": [
+      {
+        "id": "uc_ember_lm",
+        "name": "The Hull",
+        "kind": "wreck",
+        "position": [
+          -118,
+          -65,
+          -853
+        ],
+        "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
+      }
     ],
     "sunColor": 8356761,
     "sunRadius": 45,
@@ -6369,6 +7578,19 @@ export const GENERATED_SYSTEMS = {
     "chart": [
       1080,
       900
+    ],
+    "landmarks": [
+      {
+        "id": "lastbeacon_lm",
+        "name": "Way Hull",
+        "kind": "wreck",
+        "position": [
+          668,
+          48,
+          -539
+        ],
+        "line": "A lamp-tender's tender, run down by its own route. The lamps it served are still lit."
+      }
     ],
     "sunColor": 12886127,
     "sunRadius": 42,

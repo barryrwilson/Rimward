@@ -35,9 +35,15 @@
  */
 
 import { SYSTEMS } from './state.js'; // landmark tables for the keeper ledger (wave 11)
+// Wave 23: the ledger is the authored mystery lane only (§25) — it reads
+// the authored six's landmark/clue tables, never the generated systems'.
+import { AUTHORED_SYSTEMS } from './authored-systems.js';
 
 // Fixed per-system name table (same convention as world.js record pools).
 // Freehold frontier-warm, Veridian corporate-cool, Redmarch outlaw.
+// Wave 23: the three generated hubs gain a dockmaster apiece — fx_bastion
+// martial (ferrous), gc_auction mercantile (guild), blackstation drift
+// (unclaimed). They are not keepers: no ledger, no deep-rim gates.
 const CONTACT_NAMES = {
   freehold: { dockmaster: 'Mother Tarn', fence: 'Quiet Hollis' },
   veridian: { dockmaster: 'Adjutant Vey', fixer: 'Lias Corrow' },
@@ -45,9 +51,15 @@ const CONTACT_NAMES = {
   hollowreach: { dockmaster: 'Keeper Voss' },
   hush: { dockmaster: 'Keeper Ond' },
   verge: { dockmaster: 'Keeper Leth' },
+  fx_bastion: { dockmaster: 'Warden Korrh' },
+  gc_auction: { dockmaster: 'Auctioneer Mavra' },
+  blackstation: { dockmaster: 'Driftcaller Oss' },
 };
 
 // Roster: dockmaster everywhere; fence at freehold; fixer off-freehold.
+// Wave 23: a plain dockmaster at each generated hub (fx_bastion,
+// gc_auction, blackstation) — they fall through the keeper/vouch/ace
+// gates untouched, which key on authored system id strings.
 const CONTACT_ROLES = {
   freehold: ['dockmaster', 'fence'],
   veridian: ['dockmaster', 'fixer'],
@@ -55,6 +67,9 @@ const CONTACT_ROLES = {
   hollowreach: ['dockmaster'],
   hush: ['dockmaster'],
   verge: ['dockmaster'],
+  fx_bastion: ['dockmaster'],
+  gc_auction: ['dockmaster'],
+  blackstation: ['dockmaster'],
 };
 
 function buildRoster() {
@@ -155,6 +170,10 @@ export const KEEPER_COMP_TRUST = 60;
  * rumorIdx) serves all tiers — the tier list length changes as discoveries
  * land, and the modulo keeps it in range. null for non-keepers or below
  * the threshold.
+ * Wave 23: ledgerColumns reads the AUTHORED six's landmark/clue tables
+ * only — the 94 generated systems' landmarks never enter the ledger, and
+ * the generated-hub dockmasters (fx_bastion/gc_auction/blackstation) are
+ * not keepers (the system id gate above excludes them).
  */
 // Shared ledger columns (waves 11–14): awaiting = authored landmarks not
 // yet in mystery.visited; openPages = one entry per system holding an
@@ -162,13 +181,16 @@ export const KEEPER_COMP_TRUST = 60;
 // (squared distances over the position [x,y,z] arrays, first-wins on ties
 // — the contacts.js order). lmId rides for wave 14's chart mark; lmName
 // null-guards a landmark-less system (every clue-holding system currently
-// has at least one).
+// has at least one). Wave 23: the iteration runs over AUTHORED_SYSTEMS
+// only — the ledger is the authored mystery lane (§25), and the 94
+// generated systems' landmarks never enter it. The per-key def read
+// (ctx.systems?.[sysId] ?? SYSTEMS[sysId]) is unchanged.
 function ledgerColumns(ctx) {
   const visited = ctx.world.mystery?.visited ?? [];
   const found = ctx.world.mystery?.found ?? [];
   const awaiting = [];
   const openPages = []; // { systemName, lmName, lmId } per system holding an unfound clue
-  for (const sysId of Object.keys(SYSTEMS)) {
+  for (const sysId of Object.keys(AUTHORED_SYSTEMS)) {
     const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
     for (const lm of def.landmarks ?? []) {
       if (!visited.includes(lm.id)) awaiting.push({ lm, systemName: def.name });
@@ -264,7 +286,8 @@ export function keeperVouchArrival(ctx, contact) {
  * §25 holds — the line names the authored landmark and its system, never
  * the clue's text or id. Only while the ledger's tier 2 is open (every
  * landmark witnessed, unfound clues remain); one mark per call, the first
- * uncharted open page in SYSTEMS order. null for non-keepers, below the
+ * uncharted open page in authored-lane order (wave 23: ledgerColumns reads
+ * the authored six only — see its comment). null for non-keepers, below the
  * comp tier, while landmarks still await, or with nothing left to mark.
  */
 export function keeperChartMark(ctx, contact) {
@@ -288,15 +311,17 @@ export function keeperChartMark(ctx, contact) {
 // Wave 16: the pilot's own review of wave 14's chart marks at dock — one
 // { lmName, systemName } per authored landmark whose id rides
 // mystery.charted without yet being witnessed (mystery.visited). Iterated
-// in SYSTEMS order over the landmark tables, so stale/unknown ids fall out
-// naturally and old saves read empty (?? [] throughout). §25 holds:
+// in AUTHORED_SYSTEMS order over the authored six's landmark tables, so
+// stale/unknown ids fall out naturally and old saves read empty
+// (?? [] throughout). Wave 23: generated systems' landmarks never enter
+// this read — the ledger lane stays authored-only (§25). §25 holds:
 // authored names only, never a clue id or text. Recorded state only —
 // pure read, no mutation; UI-time only (station.js People card).
 export function chartedMarkNotes(ctx) {
   const charted = ctx.world.mystery?.charted ?? [];
   const visited = ctx.world.mystery?.visited ?? [];
   const notes = [];
-  for (const sysId of Object.keys(SYSTEMS)) {
+  for (const sysId of Object.keys(AUTHORED_SYSTEMS)) {
     const def = ctx.systems?.[sysId] ?? SYSTEMS[sysId];
     for (const lm of def.landmarks ?? []) {
       if (charted.includes(lm.id) && !visited.includes(lm.id)) {

@@ -61,6 +61,15 @@
 // parked at freehold, userData.routeIndex tracking KeyG with wrap, no
 // junction group in hub-less fh_hearth, and the group rebuilt on the
 // freehold return leg.
+// Wave 23: generated-system depth, part 1 — every generated system carries
+// exactly one landmark ('<sysId>_lm', kind wreck|beacon|monument|anomaly,
+// placed clear of station/gates/field/hub and inside the 1000u bubble)
+// discovered by the real 100u proximity path at fh_hearth, the keeper
+// ledger stays authored-lane only (an unwitnessed generated landmark never
+// opens a second-column page), the three generated hubs
+// (fx_bastion/gc_auction/blackstation) each answer contactsForSystem with
+// exactly one dockmaster, and the generated mark + 12-contact roster ride
+// the dock autosave and death-restore.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -926,9 +935,10 @@ const w4contacts = ctx.world.contacts ?? [];
 const contactRoleCt = (role) => w4contacts.filter((c) => c.role === role).length;
 const contactDataChecks = {
   // Wave 5 added the Hollow Reach dockmaster; wave 10 the Hush/Verge
-  // keepers: 9 entries, 6 dockmasters.
-  nineEntries: w4contacts.length === 9,
-  dockmasterX6: contactRoleCt('dockmaster') === 6,
+  // keepers; wave 23 the three generated-hub dockmasters: 12 entries,
+  // 9 dockmasters.
+  twelveEntries: w4contacts.length === 12,
+  dockmasterX9: contactRoleCt('dockmaster') === 9,
   fenceX1: contactRoleCt('fence') === 1,
   fixerX2: contactRoleCt('fixer') === 2,
   jsonRoundTrip: w4contacts.every((c) => {
@@ -2906,7 +2916,7 @@ console.log('wave10 hermit pirate:', JSON.stringify(w10hermitChecks), `text=${JS
 if (!Object.values(w10hermitChecks).every(Boolean)) { console.log('WAVE10 HERMIT PIRATE FAIL'); errors++; }
 
 // -- c. deep-rim keepers: the mystery acknowledgments, once per rung --------
-// Continuing run: the wave-10 roster is 9 entries, 6 dockmasters (the wave-4
+// Continuing run: the wave-23 roster is 12 entries, 9 dockmasters (the wave-4
 // check, re-derived — save restores swap the roster array wholesale).
 const w10contacts = ctx.world.contacts ?? [];
 const w10roleCt = (role) => w10contacts.filter((c) => c.role === role).length;
@@ -2937,8 +2947,8 @@ if (shallowContact && shallowContact.trust >= 60) {
 }
 const shallowLine = shallowContact ? recognitionLine(ctx, shallowContact) : null;
 const w10keeperChecks = {
-  nineEntries: w10contacts.length === 9,
-  dockmasterX6: w10roleCt('dockmaster') === 6,
+  twelveEntries: w10contacts.length === 12,
+  dockmasterX9: w10roleCt('dockmaster') === 9,
   keepersFound: vergeKeeper?.name === 'Keeper Leth' && hushKeeper?.name === 'Keeper Ond',
   deepenedPrecondition: ctx.world.mystery?.deepened === true && ctx.world.mystery?.converged === true,
   vergeDeepenedLine: deepenedLineV === DEEPENED_ACK,
@@ -4635,6 +4645,165 @@ const w16domChecks = {
 };
 console.log('wave16 people chart marks:', JSON.stringify(w16domChecks), `lines=${JSON.stringify(chartLines16)}`);
 if (!Object.values(w16domChecks).every(Boolean)) { console.log('WAVE16 PEOPLE CHART MARKS FAIL'); errors++; }
+
+// ---- Wave 23: generated-system depth — one landmark per generated system, ---
+// ---- hub dockmasters, authored-lane ledger gate, save roundtrip -------------
+
+// -- a. data: exactly one landmark per generated system; the authored six ----
+// tables are byte-unchanged; the separation invariants hold everywhere. ------
+const AUTHORED_IDS23 = ['freehold', 'veridian', 'redmarch', 'hollowreach', 'hush', 'verge'];
+const LM_KINDS23 = ['wreck', 'beacon', 'monument', 'anomaly'];
+const dist23 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const generatedIds23 = Object.keys(SYSTEMS).filter((id) => !AUTHORED_IDS23.includes(id));
+const lmShapeOk23 = (id) => {
+  const lms = SYSTEMS[id].landmarks;
+  const lm = lms?.[0];
+  return Array.isArray(lms) && lms.length === 1
+    && lm.id === `${id}_lm` && LM_KINDS23.includes(lm.kind)
+    && typeof lm.name === 'string' && lm.name.length > 0
+    && typeof lm.line === 'string' && lm.line.length > 0
+    && Array.isArray(lm.position) && lm.position.length === 3
+    && lm.position.every((v) => Number.isFinite(v));
+};
+const lmSeparationOk23 = (id) => {
+  const def = SYSTEMS[id];
+  const p = def.landmarks[0].position;
+  return dist23(p, def.station.position) >= 400
+    && (def.gates ?? []).every((g) => dist23(p, g.position) >= 300)
+    && dist23(p, def.field.center) >= def.field.radius + 200
+    && (!def.hub || dist23(p, def.hub.position) >= 300)
+    && Math.hypot(p[0], p[1], p[2]) <= 1000;
+};
+const authoredLmIds23 = (id) => (SYSTEMS[id].landmarks ?? []).map((l) => l.id).join('|');
+const w23dataChecks = {
+  generatedCount94: generatedIds23.length === 94,
+  landmarkShapeOk: generatedIds23.every(lmShapeOk23),
+  separationHolds: generatedIds23.every(lmSeparationOk23),
+  authoredTablesUnchanged: authoredLmIds23('freehold') === 'fh_shepherd'
+    && authoredLmIds23('veridian') === 'vd_hulk_row'
+    && authoredLmIds23('redmarch') === 'rm_tithe_stone'
+    && authoredLmIds23('hollowreach') === 'hr_quiet_beacon|hr_first_wreck'
+    && authoredLmIds23('hush') === 'th_lanes_end|th_first_garden'
+    && authoredLmIds23('verge') === 'vg_choir_stones|vg_unfinished',
+};
+console.log('wave23 generated landmarks:', JSON.stringify(w23dataChecks));
+if (!Object.values(w23dataChecks).every(Boolean)) { console.log('WAVE23 GENERATED LANDMARKS FAIL'); errors++; }
+
+// -- b. discovery: the real 100u proximity path at fh_hearth ------------------
+// The run is docked at Threshold (wave 16) — undock and BFS-hop out to the
+// wave-21 hub-route system, then park on its landmark (the wave-5/8
+// pattern). The mark STAYS in mystery.visited: the save roundtrip below
+// asserts it persists.
+if (ctx.flags.docked) undockStation();
+const hearthLm23 = SYSTEMS.fh_hearth.landmarks[0];
+if (ctx.world.currentSystem !== 'fh_hearth') travelTo('fh_hearth', 'wave23 hearth leg');
+const visitedBefore23 = [...ctx.world.mystery.visited];
+const hearthLmEvs = [];
+ctx.ship.object.position.set(...hearthLm23.position);
+ctx.ship.velocity.set(0, 0, 0);
+for (let i = 0; i < 30 && !ctx.world.mystery.visited.includes(hearthLm23.id); i++) {
+  tick(1, 'wave23 landmark approach');
+  hearthLmEvs.push(...ctx.lastEvents.filter((e) => e.type === 'landmarkFound'));
+}
+const hearthEv23 = hearthLmEvs.find((e) => e.id === hearthLm23.id) ?? null;
+const w23discoveryChecks = {
+  arrivedAtHearth: ctx.world.currentSystem === 'fh_hearth',
+  landmarkVisited: ctx.world.mystery.visited.includes(hearthLm23.id),
+  eventFired: !!hearthEv23,
+  eventCarriesNameAndLine: hearthEv23?.name === hearthLm23.name && hearthEv23?.line === hearthLm23.line,
+};
+console.log('wave23 landmark discovery:', JSON.stringify(w23discoveryChecks), `visited=${JSON.stringify(ctx.world.mystery?.visited)}`);
+if (!Object.values(w23discoveryChecks).every(Boolean)) { console.log('WAVE23 LANDMARK DISCOVERY FAIL'); errors++; }
+
+// -- c. ledger authored-lane gate: a generated landmark never opens a page ---
+// Trust pinned at the ledger gate, visited = the authored-six landmark ids
+// ONLY (the witnessed fh_hearth mark is held out) — the second column must
+// answer exactly as if generated landmarks did not exist. The control call
+// with the fh_hearth mark pushed back in must never name it either (the two
+// lines are identical modulo the rotation cursor, so the robust assertion
+// is that neither ever mentions the generated system or its landmark).
+// Self-cleaning: visited/found restored in place (landmarks.js
+// change-detects on array length), trust restored.
+const vergeKeeper23 = (ctx.world.contacts ?? []).find((c) => c.id === 'contact-verge-dockmaster') ?? null;
+const visitedBeforeLedger23 = [...ctx.world.mystery.visited];
+const foundBeforeLedger23 = [...ctx.world.mystery.found];
+const trustBeforeLedger23 = vergeKeeper23?.trust;
+if (vergeKeeper23) vergeKeeper23.trust = KEEPER_LEDGER_TRUST; // 30
+ctx.world.mystery.visited.length = 0;
+for (const id of AUTHORED_IDS23) {
+  for (const lm of SYSTEMS[id].landmarks ?? []) ctx.world.mystery.visited.push(lm.id);
+}
+const gatedLine23 = vergeKeeper23 ? keeperLedgerLine(ctx, vergeKeeper23) : null;
+if (!ctx.world.mystery.visited.includes(hearthLm23.id)) ctx.world.mystery.visited.push(hearthLm23.id);
+const fullLine23 = vergeKeeper23 ? keeperLedgerLine(ctx, vergeKeeper23) : null;
+ctx.world.mystery.visited.length = 0; // restore in place — landmarks.js change-detects on length
+ctx.world.mystery.visited.push(...visitedBeforeLedger23);
+ctx.world.mystery.found.length = 0; // same in-place discipline for the clue list
+ctx.world.mystery.found.push(...foundBeforeLedger23);
+if (vergeKeeper23) vergeKeeper23.trust = trustBeforeLedger23;
+const w23ledgerChecks = {
+  keeperFound: !!vergeKeeper23,
+  gatedLineAnswered: typeof gatedLine23 === 'string' && gatedLine23.length > 0,
+  gatedNeverNamesHearth: !gatedLine23?.includes('Hearth') && !gatedLine23?.includes(hearthLm23.name),
+  fullNeverNamesHearth: !fullLine23?.includes('Hearth') && !fullLine23?.includes(hearthLm23.name),
+};
+console.log('wave23 ledger authored-lane:', JSON.stringify(w23ledgerChecks), `gated=${JSON.stringify(gatedLine23)} full=${JSON.stringify(fullLine23)}`);
+if (!Object.values(w23ledgerChecks).every(Boolean)) { console.log('WAVE23 LEDGER AUTHORED-LANE FAIL'); errors++; }
+
+// -- d. hub dockmasters: exactly one per generated hub (shape/id/role) -------
+// This continuing run never docked at a generated hub before this section,
+// so trust/favors sit at their zero defaults; assert shape rather than
+// flavor text (names are not asserted verbatim).
+const hubRosters23 = ['fx_bastion', 'gc_auction', 'blackstation'].map((sys) => [sys, contactsForSystem(ctx, sys)]);
+const w23hubChecks = {
+  oneContactEach: hubRosters23.every(([, roster]) => roster.length === 1),
+  dockmasterRole: hubRosters23.every(([, roster]) => roster[0]?.role === 'dockmaster'),
+  derivedIds: hubRosters23.every(([sys, roster]) => roster[0]?.id === `contact-${sys}-dockmaster`),
+  systemFields: hubRosters23.every(([sys, roster]) => roster[0]?.system === sys),
+  zeroedShape: hubRosters23.every(([, roster]) =>
+    typeof roster[0]?.name === 'string' && roster[0].name.length > 0
+    && roster[0].trust === 0 && roster[0].favors === 0),
+};
+console.log('wave23 hub dockmasters:', JSON.stringify(w23hubChecks));
+if (!Object.values(w23hubChecks).every(Boolean)) { console.log('WAVE23 HUB DOCKMASTERS FAIL'); errors++; }
+
+// -- e. save roundtrip: the generated mark + 12-contact roster persist --------
+// The wave-10 pattern, docked at Hearth Landing: park hostiles so the
+// autosave can't be combat-blocked, dock (fires trySave), assert the save,
+// corrupt in memory, die, recover via Enter, assert the restore.
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave23 save)');
+dockAtCurrentStation('dock hearth (wave23 save)'); // Hearth Landing — 'docked' fires trySave
+tick(3, 'wave23 save settle');
+const w23snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const w23saveChecks = {
+  saveWritten: !!w23snap?.world,
+  landmarkInSave: w23snap?.world?.mystery?.visited?.includes(hearthLm23.id) === true,
+  rosterInSave12: (w23snap?.world?.contacts ?? []).length === 12,
+};
+console.log('wave23 save fields:', JSON.stringify(w23saveChecks));
+if (!Object.values(w23saveChecks).every(Boolean)) { console.log('WAVE23 SAVE FIELDS FAIL'); errors++; }
+
+// Corrupt in memory, die, recover from the dock autosave (Enter skips the
+// hold): the generated mark and the full roster come back.
+ctx.world.mystery.visited.length = 0; // in place — landmarks.js change-detects on length
+ctx.world.mystery.visited.push(...visitedBefore23);
+tick(2, 'wave23 visited corrupted');
+const w23corrupted = !ctx.world.mystery.visited.includes(hearthLm23.id);
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave23 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const w23restoreChecks = {
+  corruptedFirst: w23corrupted,
+  landmarkRestored: ctx.world.mystery.visited.includes(hearthLm23.id),
+  rosterRestored12: (ctx.world.contacts ?? []).length === 12,
+};
+console.log('wave23 restore:', JSON.stringify(w23restoreChecks));
+if (!Object.values(w23restoreChecks).every(Boolean)) { console.log('WAVE23 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

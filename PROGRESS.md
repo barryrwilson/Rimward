@@ -666,11 +666,63 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   real KeyG cycling (ROUTE 1/4→3/4, prompt HEARTH→HAVEN→MERIDIAN), and
   the selected-route lamp emphasis (selected arm scale 9.5/opacity 1.0,
   others 6/0.45, emphasis advancing lamp-for-lamp with routeIndex).
-## Next round candidates (wave 23)
-- Generated-system depth: the 94 new systems are mechanically reachable
-  (trade/mine/fight/traffic) but intentionally sparse — no contacts,
-  landmarks, clues, jobs, or faction-specific station behavior yet. The
-  standing big candidate; likely multi-wave if taken whole.
+- Wave 23: generated-system depth, part 1 (landmarks across the
+  generated rim, generated-hub dockmasters, authored-lane ledger gate).
+  scripts/generate-galaxy.mjs: every one of the 94 generated systems
+  gains exactly one landmark { id '<sysId>_lm', name, kind, position,
+  line } (kind wreck 31 / beacon 11 / monument 15 / anomaly 37,
+  band-weighted — anomalies rise with band). Draws ride a SECOND
+  mulberry32(SEED + 1) stream (lmRng/lmRint/lmRf beside rng/rint/rf)
+  consumed ONLY in a new loop after the out{} flavor loop completes,
+  iterating GENERATED_IDS in order — the main stream is untouched and
+  the galaxy.generated.js diff is purely additive (1222 insertions, 0
+  deletions; md5 identical across consecutive runs). Positions draw
+  direction + 500–900u (y in [-120,160]), redrawn from the landmark
+  stream (bounded 40, then fail()) until ≥400u station, ≥300u every
+  gate, ≥ field.radius+200 from field.center, ≥300u hub.position when
+  present, |pos| ≤ 1000. Flavor: LM_TONE pools for all 10 generated
+  factions with per-kind noun/name-mod pools and line templates plus a
+  band≥3 'deep' pool; names unique across the 94 (bounded 60 redraws).
+  validate() enforces exactly-one-landmark (clues still forbidden on
+  generated systems — the authored total holds at 6 for the
+  convergence/deepening math), the id scheme, kind validity, id
+  uniqueness across all 100 systems (authored landmark ids collected
+  from AUTHORED_SYSTEMS), name uniqueness, and every separation
+  invariant. contacts.js: roster 9 → 12 — Warden Korrh
+  (contact-fx_bastion-dockmaster, ferrous), Auctioneer Mavra
+  (contact-gc_auction-dockmaster), Driftcaller Oss
+  (contact-blackstation-dockmaster); no new recognitionLine tiers (the
+  three fall through the existing gates — not deep-rim keepers, aceAck
+  stays freehold/redmarch). CRITICAL gate: ledgerColumns +
+  chartedMarkNotes now iterate Object.keys(AUTHORED_SYSTEMS) (import
+  from authored-systems.js) — the keeper ledger is the authored mystery
+  lane (§25), so 94 generated landmarks never flood the tier-1
+  rotation and waves 11–16 ledger behavior stays byte-identical.
+  Boot test wave-23 section (before the final tally): data shape +
+  separations across all 94 + authored tables byte-unchanged, real
+  100u proximity discovery of fh_hearth_lm ('The Hearth Cart', wreck)
+  with the landmarkFound event carrying name+line, ledger authored-lane
+  gate (authored six visited, fh_hearth_lm held out — the keeper line
+  never names Hearth, identical to the full-list control), hub
+  dockmaster shape (one each, role/derived ids), and a dock-autosave +
+  death-restore roundtrip (the mark and the 12-contact roster survive).
+  Wave-4/wave-10 roster counts updated 9→12 / 6→9. Independent review
+  APPROVE (0 CRITICAL/HIGH/MEDIUM; the stale 'SYSTEMS order'
+  keeperChartMark doc-line LOW fixed inline). npm run test:boot PASS
+  ×7 runs + 1 post-comment-fix confirmation run; npm run build clean
+  (only the pre-existing >500 kB chunk warning). Browser-verified:
+  fh_hearth systemLoaded rebuilds the 'landmarks' group with the wreck
+  POI (debris meshes at the site coords, POS readout HEARTH).
+## Next round candidates (wave 24)
+- Generated-system depth, part 2: landmarks (wave 23) and hub
+  dockmasters are in; the remaining 91 generated stations still have
+  no contacts at all, station behavior is faction-thin (tradesRestricted
+  is the only generated faction flag), and generated systems hold no
+  clues BY DESIGN (the authored total stays 6 — convergence/deepening
+  math). A procedural-contact pass (per-faction name pools riding the
+  generator's deterministic streams) is the largest standing slice;
+  faction-specific station services another. Still multi-wave if taken
+  whole.
 - NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
   are player/Guild infrastructure; physical gates only — recorded on
   pickMigrant in world.js). No action standing; revisit only if routed
@@ -680,23 +732,13 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   change, but every 60-gate still has an independent
   system/milestone/ledger gate to re-check if the number moves.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
-  reset; vouchAck is a bool; mystery.charted grows by landmark id but
-  is bounded by the authored landmark tables — self-limiting. The
-  wave-17/18 assessments found no action worth taking: ledgerIdx is
-  modulo-bounded, charted is deduped by authored ids, vouchAck is one
-  bit per keeper, and the Callow cursors grow only +1 per real Verge
-  visit with exact arithmetic pinned by existing gates.
-- Polish debt: none standing; both pre-existing boot-test flakes
-  were closed in wave 20, and the wave-20 follow-up fixed the
-  cross-system event-pressure leak behind the residual hermit-walk
-  flake (0/300 post-fix). Boot test remains the gate.
-- Counters (callowReturns, callowRefusals, ledgerIdx) still never
-  reset; vouchAck is a bool; mystery.charted grows by landmark id but
-  is bounded by the authored landmark tables — self-limiting. The
-  wave-17/18 assessments found no action worth taking: ledgerIdx is
-  modulo-bounded, charted is deduped by authored ids, vouchAck is one
-  bit per keeper, and the Callow cursors grow only +1 per real Verge
-  visit with exact arithmetic pinned by existing gates.
+  reset; vouchAck is a bool; mystery.charted grows by landmark id and
+  stays bounded by the AUTHORED landmark tables (wave 23 gate) —
+  self-limiting. The wave-17/18 assessments found no action worth
+  taking: ledgerIdx is modulo-bounded, charted is deduped by authored
+  ids, vouchAck is one bit per keeper, and the Callow cursors grow only
+  +1 per real Verge visit with exact arithmetic pinned by existing
+  gates.
 - Polish debt: none standing; both pre-existing boot-test flakes
   were closed in wave 20, and the wave-20 follow-up fixed the
   cross-system event-pressure leak behind the residual hermit-walk
