@@ -45,6 +45,16 @@
 // chart mark (a docked keeper marks the narrowed page's nearest landmark
 // on the pilot's charts — mystery.charted, recorded state only, never
 // the clue).
+// Wave 21: the Lamplighter hub junction flown end-to-end through REAL
+// input (park at freehold's hub, KeyG cycles the authored route list with
+// wrap, D rides the real gate path to fh_hearth, and fh_hearth's physical
+// back-gate home lands at the hub junction — jump.js's hub-arrival rule),
+// the runtime galaxy chart DOM (KeyM/Escape, 100 .rw-galaxy-node elements,
+// the live .is-current marker, .rw-galaxy-gate + .rw-galaxy-route edges),
+// the same-system restore in-transit migrant registry regression (a
+// forced migrant must still ARRIVE after a freehold→freehold
+// death-restore, never strand), and the galaxyChecks degree-cap + pinned
+// band extensions.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -78,12 +88,14 @@ function makeEl(tag = 'div') {
     children: [],
     parent: null,
     _listeners: {},
+    _attrs: {},
     style: { setProperty(k, v) { this[k] = v; } },
     classList: {
       _s: new Set(),
-      add(...c) { c.forEach((x) => this._s.add(x)); },
-      remove(...c) { c.forEach((x) => this._s.delete(x)); },
-      toggle(c, f) { (f ?? !this._s.has(c)) ? this._s.add(c) : this._s.delete(c); },
+      _commit() { el.className = [...this._s].join(' '); }, // routes through the className sync below
+      add(...c) { c.forEach((x) => this._s.add(x)); this._commit(); },
+      remove(...c) { c.forEach((x) => this._s.delete(x)); this._commit(); },
+      toggle(c, f) { (f ?? !this._s.has(c)) ? this._s.add(c) : this._s.delete(c); this._commit(); },
       contains(c) { return this._s.has(c); },
     },
     dataset: {},
@@ -101,8 +113,16 @@ function makeEl(tag = 'div') {
     remove() { const p = this.parent; if (p) { const i = p.children.indexOf(this); if (i >= 0) p.children.splice(i, 1); } },
     addEventListener(type, fn) { (this._listeners[type] ??= []).push(fn); },
     removeEventListener(type, fn) { const a = this._listeners[type]; if (!a) return; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); },
-    setAttribute() {},
-    getAttribute() { return null; },
+    setAttribute(k, v) {
+      const val = String(v);
+      if (k === 'class') { el.className = val; return; } // routes through the className/classList sync below
+      el._attrs[k] = val;
+      // data-system-id → dataset.systemId (real DOM camelCase rule);
+      // galaxychart.js builds its SVG nodes/edges entirely via setAttribute.
+      if (k.startsWith('data-')) el.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = val;
+    },
+    getAttribute(k) { return Object.hasOwn(el._attrs, k) ? el._attrs[k] : null; },
+    removeAttribute(k) { delete el._attrs[k]; },
     querySelector() { return null; },
     querySelectorAll() { return []; },
     getBoundingClientRect() { return { x: 0, y: 0, width: 100, height: 20, top: 0, left: 0, right: 100, bottom: 20 }; },
@@ -118,6 +138,17 @@ function makeEl(tag = 'div') {
       }
     },
   };
+  // className mirrors real DOM: assigning it re-syncs classList and the
+  // 'class' attribute (and vice versa via classList._commit / setAttribute).
+  let className = '';
+  Object.defineProperty(el, 'className', {
+    get() { return className; },
+    set(v) {
+      className = String(v);
+      el._attrs.class = className;
+      el.classList._s = new Set(className.split(/\s+/).filter(Boolean));
+    },
+  });
   // textContent mirrors real DOM: assigning '' clears children (render() relies on it).
   let text = '';
   Object.defineProperty(el, 'textContent', {
@@ -192,6 +223,7 @@ const { initSong } = await import('../src/systems/song.js');
 const { initSave } = await import('../src/game/save.js');
 const { initOrigins } = await import('../src/game/origins.js');
 const { initOnboarding } = await import('../src/systems/onboarding.js');
+const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
 const { initHud } = await import('../src/systems/hud.js');
 
 const scene = new THREE.Scene();
@@ -207,7 +239,7 @@ const inits = [
   ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['settings', initSettings], ['bio', initBio],
   ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['traffic', initTraffic],
   ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['hail', initHail],
-  ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['hud', initHud],
+  ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['hud', initHud],
 ];
 const systems = [];
 for (const [name, init] of inits) {
@@ -267,12 +299,138 @@ if (!Object.values(originChecks).every(Boolean)) { console.log('WAVE6 ORIGIN PIC
 tick(120, 'boot idle');
 console.log(`after boot: ships=${ctx.ships.length} records=${ctx.world.records.length} prices=${Object.keys(ctx.world.prices).length} pods=${ctx.pods?.length ?? 0}`);
 
+// ---- Galaxy graph routing (computed at test time, never hardcoded) ----
+// SYSTEMS merges the authored six with the generated galaxy (state.js), so
+// no inter-system route below is a fixed id chain: every hop is BFS-computed
+// over physical gates (gates[].to) AND hub routes (hub.routes) as edges.
+// Hub travel is asymmetric by design — hub→X rides the junction menu
+// (jumpRequested accepts any known destination; gate proximity is gate.js's
+// concern and the harness fires the event directly), X→hub rides X's
+// physical back-gate.
+function graphEdges(id) {
+  const def = SYSTEMS[id];
+  if (!def) return [];
+  const out = [];
+  for (const g of def.gates ?? []) if (SYSTEMS[g.to]) out.push(g.to);
+  for (const r of def.hub?.routes ?? []) if (SYSTEMS[r]) out.push(r);
+  return out;
+}
+// BFS shortest path from → to across the merged galaxy; null when unreachable.
+function routePath(from, to) {
+  if (from === to) return [from];
+  const prev = new Map([[from, null]]);
+  const queue = [from];
+  for (let qi = 0; qi < queue.length; qi++) {
+    const cur = queue[qi];
+    for (const nx of graphEdges(cur)) {
+      if (prev.has(nx)) continue;
+      prev.set(nx, cur);
+      if (nx === to) {
+        const path = [to];
+        for (let n = cur; n !== null; n = prev.get(n)) path.unshift(n);
+        return path;
+      }
+      queue.push(nx);
+    }
+  }
+  return null;
+}
+// The next hop from `from` toward `to` (null when unreachable or already there).
+function nextHop(from, to) {
+  const path = routePath(from, to);
+  return path && path.length > 1 ? path[1] : null;
+}
+// The physical gate in `from` for the computed next hop toward `to`; null
+// when the hop is a hub-route leg (no gate to park at — jump from anywhere).
+function gateToward(from, to) {
+  const hop = nextHop(from, to);
+  return hop ? (SYSTEMS[from].gates ?? []).find((g) => g.to === hop) ?? null : null;
+}
+// The gate in `to` pointing back at `from` — jump.js's arrival rule, with
+// the same gates[0] fallback.
+function returnGate(to, from) {
+  const gates = SYSTEMS[to]?.gates ?? [];
+  return gates.find((g) => g.to === from) ?? gates[0] ?? null;
+}
+// Park at the computed gate for the next hop toward `to` (a hub-route hop
+// has no gate — fire from anywhere) and emit the jump request. Returns the
+// hop id, or null (counting an error) when the destination is unreachable.
+function jumpToward(to, label) {
+  const from = ctx.world.currentSystem;
+  const hop = nextHop(from, to);
+  if (!hop) {
+    console.log(`ROUTE FAIL — no path ${from} → ${to} (${label})`);
+    errors++;
+    return null;
+  }
+  const gate = (SYSTEMS[from].gates ?? []).find((g) => g.to === hop);
+  if (gate) {
+    ctx.ship.object.position.set(...gate.position);
+    ctx.ship.velocity.set(0, 0, 0);
+    tick(5, `at ${hop} gate (${label})`);
+  }
+  ctx.emit('jumpRequested', { to: hop });
+  return hop;
+}
+// BFS-hop legs until arrival at `to` — for travel chains whose intermediate
+// stops carry no assertions. Returns false on failure (error counted).
+function travelTo(to, label) {
+  let guard = Object.keys(SYSTEMS).length + 1;
+  while (ctx.world.currentSystem !== to) {
+    if (--guard <= 0) { console.log(`ROUTE FAIL — hop loop toward ${to} (${label})`); errors++; return false; }
+    const hop = jumpToward(to, label);
+    if (!hop || !tickUntilJumpDone(hop, `${label} hop to ${hop}`)) {
+      console.log(`TRAVEL FAIL — never arrived at ${hop} (${label})`);
+      errors++;
+      return false;
+    }
+  }
+  return true;
+}
+
 // ---- Wave 3: gate network data sanity (every system def) ----
+// 100-system phase-1 contract: the authored six plus the generated galaxy.
+// The pre-existing per-def gate hygiene is EXTENDED with the structural
+// invariants: physical-gate reversibility (A→B gate implies B reaches A —
+// a physical gate back, OR B is a hub whose hub.routes include A), hub
+// routes that resolve AND carry a physical back-gate to the hub, full
+// connectivity from freehold (BFS over gates + hub routes), band bounds
+// (0..4, the Verge pinned at 4), the required field set (chart/station/
+// field/gates/cast/worldSeed/planetCount), the exact system count, and the
+// pinned deep-rim named specials.
+const systemIds = Object.keys(SYSTEMS);
 const gateDataOk = Object.values(SYSTEMS).every((def) =>
   Array.isArray(def.gates) && def.gates.length > 0 && def.gates.every((g) =>
     Array.isArray(g.position) && g.position.length === 3 && !!SYSTEMS[g.to]));
-console.log(`gate network: systems=${Object.keys(SYSTEMS).length} allDefsValid=${gateDataOk}`);
-if (!gateDataOk) {
+const gateSymmetryOk = systemIds.every((id) => SYSTEMS[id].gates.every((g) =>
+  (SYSTEMS[g.to].gates ?? []).some((bg) => bg.to === id)
+  || (SYSTEMS[g.to].hub?.routes ?? []).includes(id)));
+const hubRoutesOk = systemIds.every((id) => (SYSTEMS[id].hub?.routes ?? []).every((r) =>
+  !!SYSTEMS[r] && (SYSTEMS[r].gates ?? []).some((g) => g.to === id)));
+const connectedOk = systemIds.every((id) => routePath('freehold', id) !== null);
+const bandsOk = systemIds.every((id) =>
+  Number.isInteger(SYSTEMS[id].band) && SYSTEMS[id].band >= 0 && SYSTEMS[id].band <= 4)
+  && SYSTEMS.verge?.band === 4;
+const fieldsOk = systemIds.every((id) => {
+  const def = SYSTEMS[id];
+  return Array.isArray(def.chart) && def.chart.length === 2 && def.chart.every((v) => Number.isFinite(v))
+    && !!def.station && Array.isArray(def.station.position) && def.station.position.length === 3
+    && !!def.field && Array.isArray(def.field.center) && def.field.center.length === 3
+    && Array.isArray(def.gates) && !!def.cast
+    && Number.isInteger(def.worldSeed) && Number.isInteger(def.planetCount);
+});
+const countOk = systemIds.length === 100;
+const pinnedOk = ['lastbeacon', 'blackstation', 'stolenwomb', 'fx_bastion', 'gc_auction']
+  .every((id) => !!SYSTEMS[id]);
+// Wave-21 review pins: the generator's physical-degree cap (symmetric
+// physical gates, <= 3 per system — one-way hub routes are the exempt
+// relief valve and never count) and the named-special band placements.
+const degreeOk = systemIds.every((id) => (SYSTEMS[id].gates ?? []).length <= 3);
+const pinnedBandsOk = SYSTEMS.stolenwomb?.band === 2
+  && SYSTEMS.lastbeacon?.band === 3 && SYSTEMS.blackstation?.band === 3;
+const galaxyChecks = { gateDataOk, gateSymmetryOk, hubRoutesOk, connectedOk, bandsOk, fieldsOk, countOk, pinnedOk, degreeOk, pinnedBandsOk };
+console.log(`gate network: systems=${systemIds.length}`, JSON.stringify(galaxyChecks));
+if (!Object.values(galaxyChecks).every(Boolean)) {
   console.log('GATE NETWORK DATA FAIL');
   errors++;
 }
@@ -330,6 +488,216 @@ console.log(`after soak: time=${ctx.world.time.toFixed(0)}s ships=${ctx.ships.le
 console.log(`bio: mood=${ctx.bio.mood} hunger=${ctx.bio.hunger.toFixed(2)} wounds=${ctx.bio.wounds.toFixed(2)}`);
 console.log(`save present: ${store.has('rimward-save-v1')}`);
 
+// ---- Wave 21: hub junction flight / runtime chart / same-system restore ----
+// Runs with the hull pinned (random combat can't kill), ahead of the
+// wave-2 authored lanes; the run ends back in freehold, undocked, for them.
+
+// -- 1. Lamplighter hub junction, flown through REAL input -----------------
+// The shared hub contract: gate.js builds a junction assembly at
+// SYSTEMS[id].hub.position carrying hub.routes; KeyG cycles the selection
+// (wrapping, authored order) while the junction is the nearest zone; D —
+// the same dockPressed edge a physical-gate jump uses — emits
+// jumpRequested for the selected route. jump.js arrives at the
+// destination's return-pointing physical gate, and coming HOME through a
+// route target's physical back-gate lands at the hub junction (the
+// wave-21 hub-arrival rule) instead of the gates[0] fallback.
+const fhHub = SYSTEMS.freehold.hub;
+const fhRoutes = fhHub?.routes ?? [];
+ctx.ship.object.position.set(...(fhHub?.position ?? [0, 0, 0]));
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'wave21 at freehold junction');
+const w21hubChecks = {
+  hubDataOk: Array.isArray(fhHub?.position) && fhHub.position.length === 3
+    && fhRoutes.length > 0 && fhRoutes[0] === 'fh_hearth',
+  inZone: ctx.gate.inZone === true,
+  nearHub: ctx.gate.nearHub === true,
+  routeCount: ctx.gate.nearRouteCount === fhRoutes.length && fhRoutes.length > 0,
+  initialSelection: ctx.gate.nearRouteIndex === 0 && ctx.gate.nearTo === fhRoutes[0],
+};
+// KeyG through the whole list in authored order, then once more to wrap.
+{
+  let cyclesInOrder = true;
+  let wrapsToFirst = false;
+  for (let i = 1; i <= fhRoutes.length; i++) {
+    dispatchKey('KeyG');
+    tick(1, 'wave21 junction cycle');
+    const want = i % fhRoutes.length;
+    if (ctx.gate.nearRouteIndex !== want || ctx.gate.nearTo !== fhRoutes[want]) cyclesInOrder = false;
+    if (i === fhRoutes.length) wrapsToFirst = ctx.gate.nearRouteIndex === 0 && ctx.gate.nearTo === fhRoutes[0];
+  }
+  w21hubChecks.cyclesInOrder = cyclesInOrder;
+  w21hubChecks.wrapsToFirst = wrapsToFirst;
+}
+// D on the wrapped selection (routes[0] === fh_hearth): controls.js turns
+// the keydown into dockPressed one tick after the keydown; gate.js emits
+// and jump.js consumes on the tick after that — the request rides
+// lastEvents exactly like a physical-gate D press.
+dispatchKey('KeyD');
+tick(2, 'wave21 junction D');
+const w21jumpEv = ctx.lastEvents.find((e) => e.type === 'jumpRequested') ?? null;
+w21hubChecks.dEmitsRouteJump = w21jumpEv?.to === fhRoutes[0] && fhRoutes[0] === 'fh_hearth';
+w21hubChecks.jumpBegun = ctx.gate.jumping === true && ctx.gate.destination === 'fh_hearth';
+const w21hearthOk = tickUntilJumpDone('fh_hearth', 'wave21 junction jump');
+w21hubChecks.arrivedAtHearth = w21hearthOk && ctx.world.currentSystem === 'fh_hearth';
+// Arrival: just past fh_hearth's physical back-gate to freehold (the
+// return-pointing gate rule; the offset is exactly JUMP.arrivalOffset.
+// fh_hearth's gates[0] IS the back-gate, so this leg pins the arrival
+// position only — the RETURN leg below carries the hub-arrival rule
+// coverage).
+const hearthBack = returnGate('fh_hearth', 'freehold');
+const p21a = ctx.ship.object.position;
+w21hubChecks.nearHearthBackGate = !!hearthBack && hearthBack.to === 'freehold'
+  && Math.hypot(p21a.x - hearthBack.position[0], p21a.y - hearthBack.position[1], p21a.z - hearthBack.position[2]) < 80;
+// Home through the physical back-gate — the real D path again. The
+// hub-arrival rule must land the ship at the freehold JUNCTION (~50u off
+// hub.position), never at the gates[0] fallback (~145u away — 80u
+// discriminates; the junction sits ~145u from freehold's veridian gate).
+ctx.ship.object.position.set(...(hearthBack?.position ?? [0, 0, 0]));
+ctx.ship.velocity.set(0, 0, 0);
+tick(5, 'wave21 at hearth back-gate');
+w21hubChecks.backGateZone = ctx.gate.inZone === true && ctx.gate.nearHub === false && ctx.gate.nearTo === 'freehold';
+dispatchKey('KeyD');
+tick(2, 'wave21 back-gate D');
+const w21homeOk = tickUntilJumpDone('freehold', 'wave21 junction return');
+const p21b = ctx.ship.object.position;
+w21hubChecks.returnedToFreehold = w21homeOk && ctx.world.currentSystem === 'freehold';
+w21hubChecks.hubArrivalRule = Math.hypot(
+  p21b.x - (fhHub?.position?.[0] ?? 1e9), p21b.y - (fhHub?.position?.[1] ?? 1e9), p21b.z - (fhHub?.position?.[2] ?? 1e9)) < 80;
+console.log('wave21 hub junction:', JSON.stringify(w21hubChecks));
+if (!Object.values(w21hubChecks).every(Boolean)) { console.log('WAVE21 HUB JUNCTION FAIL'); errors++; }
+
+// -- 2. Runtime galaxy chart DOM -------------------------------------------
+// The chart root is built once at init from the live SYSTEMS/FACTIONS
+// records (is-hidden until KeyM). SVG nodes/edges arrive via setAttribute
+// — recorded by the harness stub — and .is-current is refreshed by the
+// chart's own update(); the run is back in freehold, so the freehold node
+// must carry it. Class queries split on whitespace: the layer groups
+// (.rw-galaxy-gates/-routes/-nodes) must never substring-match.
+const chartRoot = (() => {
+  for (const n of walkDom(document.body)) {
+    if (typeof n.className === 'string' && n.className.split(/\s+/).includes('rw-galaxy-chart')) return n;
+  }
+  return null;
+})();
+const chartClass = (cls) => {
+  const out = [];
+  if (!chartRoot) return out;
+  for (const n of walkDom(chartRoot)) {
+    if ((n.getAttribute?.('class') ?? '').split(/\s+/).includes(cls)) out.push(n);
+  }
+  return out;
+};
+dispatchKey('KeyM');
+tick(2, 'wave21 chart open');
+const chartNodes = chartClass('rw-galaxy-node');
+const fhChartNode = chartNodes.find((n) => n.getAttribute('data-system-id') === 'freehold') ?? null;
+const w21chartChecks = {
+  rootPresent: !!chartRoot,
+  opensOnKeyM: !!chartRoot && !chartRoot.classList.contains('is-hidden')
+    && chartRoot.getAttribute('aria-hidden') === 'false',
+  nodeCount100: chartNodes.length === 100 && chartNodes.length === systemIds.length,
+  currentMarked: !!fhChartNode && fhChartNode.classList.contains('is-current'),
+  gateEdges: chartClass('rw-galaxy-gate').length > 0,
+  routeEdges: chartClass('rw-galaxy-route').length > 0,
+};
+dispatchKey('Escape');
+tick(2, 'wave21 chart escape');
+w21chartChecks.escapeCloses = !!chartRoot && chartRoot.classList.contains('is-hidden')
+  && chartRoot.getAttribute('aria-hidden') === 'true';
+dispatchKey('KeyM'); // toggle back open…
+tick(2, 'wave21 chart reopen');
+w21chartChecks.keyMReopens = !!chartRoot && !chartRoot.classList.contains('is-hidden');
+dispatchKey('KeyM'); // …and toggle closed — the state later sections inherit
+tick(2, 'wave21 chart toggle close');
+w21chartChecks.keyMCloses = !!chartRoot && chartRoot.classList.contains('is-hidden');
+console.log('wave21 galaxy chart:', JSON.stringify(w21chartChecks), `nodes=${chartNodes.length} gates=${chartClass('rw-galaxy-gate').length} routes=${chartClass('rw-galaxy-route').length}`);
+if (!Object.values(w21chartChecks).every(Boolean)) { console.log('WAVE21 GALAXY CHART FAIL'); errors++; }
+
+// -- 3. Same-system restore: the in-transit migrant registry ---------------
+// Regression target: restore() swaps recordBanks wholesale, so every
+// in-transit registry entry pointing at a PRE-restore record object is
+// stale — and a freehold→freehold death-restore emits no 'systemLoaded'
+// (save.js only announces a CHANGE), so world.js's consumeSystemLoaded
+// registry rebuild never fires. Without the wave-21 registry heal the
+// restored migrant sits 'inTransit' forever. Force one deterministically
+// (bypassing pickMigrant's ~90 s timer; a non-live trader so no live ship
+// references it), ride the REAL dock-autosave + death-recovery path, then
+// assert the migrant ARRIVES through the same arriveInSystem path a
+// natural migrant takes. The arrival is a legitimate migration outcome —
+// the run continues with one extra trader in the destination bank, which
+// the wave-3 cast gate explicitly tolerates.
+const migrantDest = SYSTEMS[ctx.world.currentSystem].gates[0]?.to ?? null;
+const migrant = ctx.world.records.find((r) => r.role === 'trader' && !r.live && r.state !== 'dead' && r.state !== 'captured')
+  ?? ctx.world.records.find((r) => r.role === 'trader' && r.state !== 'dead' && r.state !== 'captured')
+  ?? null;
+if (migrant?.id && migrantDest) {
+  migrant.state = 'inTransit';
+  migrant.transitTo = migrantDest;
+  migrant.transitEta = ctx.world.time + 30; // ~30 s of world time past the dock save
+}
+// Records re-resolve by ID across the restore — save.js swaps the bank
+// arrays (and every record object in them) wholesale; ids ('rec-N') are
+// stable, names are not guaranteed unique across 100 systems.
+const migrantId = migrant?.id ?? null;
+const migrantName = migrant?.name ?? null; // logging only
+const findBankRec = (id) => {
+  for (const sysId of Object.keys(ctx.world.recordBanks ?? {})) {
+    const rec = ctx.world.recordBanks[sysId].find((r) => r.id === id);
+    if (rec) return { rec, bank: sysId };
+  }
+  return null;
+};
+// Park live hostiles so the dock autosave can't be combat-blocked (the
+// wave-10 save pattern — a blocked save retries only after BLOCK_RETRY,
+// and a stale snapshot would false-fail every check below).
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace'
+    || s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave21 migrant save)');
+dockAtCurrentStation('wave21 dock (migrant save)'); // 'docked' fires trySave
+// Poll the store for the migrant instead of trusting one settle window:
+// even a combat-blocked autosave lands within a couple of BLOCK_RETRY
+// cycles, well inside the 30 s eta.
+let w21savedMigrant = null;
+for (let i = 0; i < 60 * 15 && !w21savedMigrant; i++) {
+  tick(1, 'wave21 migrant save wait');
+  const snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+  w21savedMigrant = (snap?.world?.recordBanks?.[snap?.world?.currentSystem ?? ''] ?? [])
+    .find((r) => r.id === migrantId) ?? null;
+}
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave21 restore)');
+dispatchKey('Enter'); // recover(): restore(last save) — SAME system (freehold → freehold)
+const w21restoredSystem = ctx.world.currentSystem;
+const w21restored = migrantId ? findBankRec(migrantId) : null;
+// Snapshot NOW: the arrival below mutates the same bank record object, so
+// reading w21restored.rec after the wait would see 'enroute', not the
+// as-restored state this regression pins.
+const w21restoredState = w21restored?.rec.state ?? null;
+const w21restoredBank = w21restored?.bank ?? null;
+undockStation(); // leave Freehold Landing (wave-21 restore dock)
+tick(2, 'wave21 post-restore settle');
+let w21arrival = null;
+for (let i = 0; i < 60 * 60 && !w21arrival; i++) { // eta is ~30 s out; 60 s bound
+  tick(1, 'wave21 migrant arrival wait');
+  const r = migrantId ? findBankRec(migrantId) : null;
+  if (r && r.rec.state !== 'inTransit') w21arrival = r;
+}
+const w21migrantChecks = {
+  migrantForced: !!migrantId && !!migrantDest,
+  savedInTransit: w21savedMigrant?.state === 'inTransit' && w21savedMigrant?.transitTo === migrantDest
+    && Number.isFinite(w21savedMigrant?.transitEta),
+  sameSystemRestore: w21restoredSystem === 'freehold',
+  restoredStillInTransit: w21restoredState === 'inTransit' && w21restoredBank === 'freehold',
+  migrantArrives: !!w21arrival,
+  landsInDestBank: w21arrival?.bank === migrantDest && w21arrival?.rec.system === migrantDest
+    && w21arrival?.rec.state === 'enroute',
+};
+console.log('wave21 migrant restore:', JSON.stringify(w21migrantChecks), `name=${JSON.stringify(migrantName)} dest=${migrantDest} time=${ctx.world.time.toFixed(1)}`);
+if (!Object.values(w21migrantChecks).every(Boolean)) { console.log('WAVE21 MIGRANT RESTORE FAIL'); errors++; }
+
 // ---- Wave 2: gate jump round trip ----
 // Gate hygiene (pre-existing flake): a soak world event's pressure pull can
 // leave freehold provisions deviated when provBefore is sampled
@@ -350,8 +718,8 @@ const settlePrices = (label) => {
   }
   for (let i = 0; i < 300; i++) tickPrices(ctx, 0.5);
 };
-// Park at the freehold gate: zone check should flip.
-ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
+// Park at the computed gate toward veridian: zone check should flip.
+ctx.ship.object.position.set(...gateToward('freehold', 'veridian').position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at gate');
 console.log(`gate inZone (expect true): ${ctx.gate.inZone}`);
@@ -371,7 +739,7 @@ const jumpChecks = {
   priceRebound: ctx.world.prices.provisions !== provBefore,
   veridianSpread: ctx.world.prices.provisions > provBefore * 1.1, // 135 vs 100 baseline
   nearDestGate: (() => {
-    const g = SYSTEMS.veridian.gates.find((gt) => gt.to === 'freehold').position;
+    const g = returnGate('veridian', 'freehold').position;
     const p = ctx.ship.object.position;
     return Math.hypot(p.x - g[0], p.y - g[1], p.z - g[2]) < 400;
   })(),
@@ -382,8 +750,8 @@ tick(60 * 30, 'veridian soak 30s');
 console.log(`veridian: ships=${ctx.ships.length} station=${ctx.station ? 'present' : 'missing'} prices.provisions=${ctx.world.prices.provisions.toFixed(0)}`);
 
 // ---- Wave 3: second hop veridian → redmarch ----
-// Park at the veridian → redmarch gate (850,45,100) and jump.
-const redGate = SYSTEMS.veridian.gates.find((g) => g.to === 'redmarch');
+// Park at the computed gate toward redmarch and jump.
+const redGate = gateToward('veridian', 'redmarch');
 ctx.ship.object.position.set(...redGate.position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at redmarch gate');
@@ -432,19 +800,20 @@ const redChecks = {
 console.log('redmarch checks:', JSON.stringify(redChecks));
 const redOk = Object.values(redChecks).every(Boolean);
 console.log(`redmarch: ships=${ctx.ships.length} records=${ctx.world.records.length} prices.provisions=${ctx.world.prices.provisions.toFixed(0)} planets=${redPlanets}`);
-// Jump back to veridian: arrival must be the return-pointing gate (850,45,100).
+// Jump back to veridian: arrival must be the return-pointing gate.
 ctx.emit('jumpRequested', { to: 'veridian' });
 tick(60 * 4, 'jump back to veridian');
 const p2 = ctx.ship.object.position;
-const nearReturnGate = Math.hypot(p2.x - 850, p2.y - 45, p2.z - 100) < 120;
+const veridianReturn = returnGate('veridian', 'redmarch').position;
+const nearReturnGate = Math.hypot(p2.x - veridianReturn[0], p2.y - veridianReturn[1], p2.z - veridianReturn[2]) < 120;
 console.log(`back to veridian: currentSystem=${ctx.world.currentSystem} (expect veridian) nearReturnGate (expect true): ${nearReturnGate} pos=${p2.toArray().map((v) => v.toFixed(0))}`);
 if (!redOk || ctx.world.currentSystem !== 'veridian' || !nearReturnGate) {
   console.log('REDMARCH TEST FAIL');
   errors++;
 }
 
-// Park at the veridian → freehold gate for the round trip home.
-ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'freehold').position);
+// Park at the computed gate toward freehold for the round trip home.
+ctx.ship.object.position.set(...gateToward('veridian', 'freehold').position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at freehold gate');
 ctx.emit('jumpRequested', { to: 'freehold' });
@@ -582,7 +951,7 @@ console.log('wave4 ferry accept:', JSON.stringify(ferryAcceptChecks));
 if (!Object.values(ferryAcceptChecks).every(Boolean)) { console.log('WAVE4 FERRY ACCEPT FAIL'); errors++; }
 
 undockStation();
-ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
+ctx.ship.object.position.set(...gateToward('freehold', 'veridian').position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at veridian gate (ferry)');
 ctx.emit('jumpRequested', { to: 'veridian' });
@@ -692,7 +1061,7 @@ if (redmarchFixer) {
   spendFavorUnitOk = emptySpendRefused && bankedSpendWorks;
 }
 undockStation(); // leave Veridian Spire, jump home
-const homeGate = SYSTEMS.veridian.gates.find((g) => g.to === 'freehold');
+const homeGate = gateToward('veridian', 'freehold');
 ctx.ship.object.position.set(...homeGate.position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at freehold gate (fence)');
@@ -741,30 +1110,25 @@ console.log('wave4 fence favor:', JSON.stringify(fenceChecks), `fear=${ctx.world
 if (!Object.values(fenceChecks).every(Boolean)) { console.log('WAVE4 FENCE FAVOR FAIL'); errors++; }
 
 // ---- Wave 5: hollowreach / band pacing / mystery / death tenderness / bio visuals ----
-// -- 1. fourth-system jump: freehold → veridian → redmarch → hollowreach ----
+// -- 1. fourth-system jump: freehold → … → hollowreach (BFS-computed hops) --
 // Same scripted jump pattern as wave 3 (park on the gate, emit the request,
-// bounded-wait for arrival). The final leg captures 'systemLoaded' and the
-// band-aware arrival commLine frame-by-frame — both fire at the jump
-// midpoint, before ctx.gate.jumping clears.
+// bounded-wait for arrival). The intermediate hops are BFS-computed over the
+// merged galaxy (gates + hub routes); the final leg into hollowreach stays
+// explicit — it captures 'systemLoaded' and the band-aware arrival commLine
+// frame-by-frame — both fire at the jump midpoint, before ctx.gate.jumping
+// clears.
 undockStation(); // leave Freehold Landing (wave-4 fence dock)
-ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at veridian gate (wave5 chain)');
-ctx.emit('jumpRequested', { to: 'veridian' });
-if (!tickUntilJumpDone('veridian', 'wave5 hop to veridian')) {
-  console.log('WAVE5 CHAIN FAIL — never arrived at veridian');
-  errors++;
+while (ctx.world.currentSystem !== 'hollowreach' && nextHop(ctx.world.currentSystem, 'hollowreach') !== 'hollowreach') {
+  const hop = jumpToward('hollowreach', 'wave5 chain');
+  if (!hop || !tickUntilJumpDone(hop, `wave5 hop to ${hop}`)) {
+    console.log(`WAVE5 CHAIN FAIL — never arrived at ${hop}`);
+    errors++;
+    break;
+  }
 }
-ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'redmarch').position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at redmarch gate (wave5 chain)');
-ctx.emit('jumpRequested', { to: 'redmarch' });
-if (!tickUntilJumpDone('redmarch', 'wave5 hop to redmarch')) {
-  console.log('WAVE5 CHAIN FAIL — never arrived at redmarch');
-  errors++;
-}
-const hrGate = SYSTEMS.redmarch.gates.find((g) => g.to === 'hollowreach'); // [-800,50,-200]
-const hrReturnGate = SYSTEMS.hollowreach.gates[0]; // [0,70,1100] → redmarch
+const hrFrom = ctx.world.currentSystem; // the last intermediate system
+const hrGate = gateToward(hrFrom, 'hollowreach');
+const hrReturnGate = returnGate('hollowreach', hrFrom);
 ctx.ship.object.position.set(...hrGate.position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at hollowreach gate');
@@ -783,13 +1147,13 @@ for (let i = 0; i < 60 * 10 && !hrArrived; i++) {
 }
 const hrp = ctx.ship.object.position;
 const w5jumpChecks = {
-  gateDefRoundTrip: hrGate.position.join(',') === '-800,50,-200' && hrReturnGate.to === 'redmarch',
+  gateDefRoundTrip: hrGate.to === 'hollowreach' && hrReturnGate.to === hrFrom,
   inZoneAtGate: hrGateInZone,
   arrived: hrArrived && ctx.world.currentSystem === 'hollowreach',
   jumpingDone: !ctx.gate.jumping,
   systemLoadedFired: hrLoadedFired,
   band2SilentLine: hrArrivalLine === 'Hollow Reach. …no traffic on scope.',
-  nearReturnGate: Math.hypot(hrp.x - 0, hrp.y - 70, hrp.z - 1100) < 120,
+  nearReturnGate: Math.hypot(hrp.x - hrReturnGate.position[0], hrp.y - hrReturnGate.position[1], hrp.z - hrReturnGate.position[2]) < 120,
 };
 console.log('wave5 hollowreach jump:', JSON.stringify(w5jumpChecks), `line=${JSON.stringify(hrArrivalLine)}`);
 if (!Object.values(w5jumpChecks).every(Boolean)) { console.log('WAVE5 HOLLOWREACH JUMP FAIL'); errors++; }
@@ -1027,31 +1391,8 @@ tick(5, 'post-heal settle');
 ctx.player.hullMax = 1e9;
 ctx.player.hull = 1e9;
 
-// Travel: post-hotfix we are in hollowreach — chain back to freehold.
-ctx.ship.object.position.set(...SYSTEMS.hollowreach.gates[0].position); // → redmarch
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at redmarch gate (wave6 return)');
-ctx.emit('jumpRequested', { to: 'redmarch' });
-if (!tickUntilJumpDone('redmarch', 'wave6 hop to redmarch')) {
-  console.log('WAVE6 TRAVEL FAIL — never arrived at redmarch');
-  errors++;
-}
-ctx.ship.object.position.set(...SYSTEMS.redmarch.gates.find((g) => g.to === 'veridian').position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at veridian gate (wave6 return)');
-ctx.emit('jumpRequested', { to: 'veridian' });
-if (!tickUntilJumpDone('veridian', 'wave6 hop to veridian')) {
-  console.log('WAVE6 TRAVEL FAIL — never arrived at veridian');
-  errors++;
-}
-ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'freehold').position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at freehold gate (wave6 return)');
-ctx.emit('jumpRequested', { to: 'freehold' });
-if (!tickUntilJumpDone('freehold', 'wave6 hop to freehold')) {
-  console.log('WAVE6 TRAVEL FAIL — never arrived at freehold');
-  errors++;
-}
+// Travel: post-hotfix we are in hollowreach — BFS-hop back to freehold.
+travelTo('freehold', 'wave6 return');
 
 // -- a. onboarding: one-time hint shows, key-dismisses, honors the setting ---
 // Test SETUP: replay the teaching pass from scratch — earlier waves already
@@ -1158,31 +1499,8 @@ for (let i = 0; i < 3 && !convergeHintLine; i++) {
   }
 }
 const convergeHinted = mystery6.convergeHinted === true;
-// Travel: freehold → veridian → redmarch → hollowreach, then the site.
-ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at veridian gate (wave6 convergence)');
-ctx.emit('jumpRequested', { to: 'veridian' });
-if (!tickUntilJumpDone('veridian', 'wave6 hop to veridian (convergence)')) {
-  console.log('WAVE6 TRAVEL FAIL — never arrived at veridian (convergence)');
-  errors++;
-}
-ctx.ship.object.position.set(...SYSTEMS.veridian.gates.find((g) => g.to === 'redmarch').position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at redmarch gate (wave6 convergence)');
-ctx.emit('jumpRequested', { to: 'redmarch' });
-if (!tickUntilJumpDone('redmarch', 'wave6 hop to redmarch (convergence)')) {
-  console.log('WAVE6 TRAVEL FAIL — never arrived at redmarch (convergence)');
-  errors++;
-}
-ctx.ship.object.position.set(...SYSTEMS.redmarch.gates.find((g) => g.to === 'hollowreach').position);
-ctx.ship.velocity.set(0, 0, 0);
-tick(5, 'at hollowreach gate (wave6 convergence)');
-ctx.emit('jumpRequested', { to: 'hollowreach' });
-if (!tickUntilJumpDone('hollowreach', 'wave6 hop to hollowreach (convergence)')) {
-  console.log('WAVE6 TRAVEL FAIL — never arrived at hollowreach (convergence)');
-  errors++;
-}
+// Travel: BFS-hop freehold → … → hollowreach, then the site.
+travelTo('hollowreach', 'wave6 convergence');
 ctx.ship.object.position.set(...CONVERGENCE.site.position);
 ctx.ship.velocity.set(0, 0, 0);
 const convEvs = [];
@@ -1303,7 +1621,8 @@ if (!Object.values(w6saveChecks).every(Boolean)) { console.log('WAVE6 SAVE FIELD
 
 // -- 1. jump chain: hollowreach's SECOND gates entry reaches the Hush --------
 undockStation(); // leave Hollow Anchorage (wave-6 save dock)
-const hushGate = SYSTEMS.hollowreach.gates.find((g) => g.to === 'hush'); // [650,60,-700]
+const hushGate = gateToward('hollowreach', 'hush');
+const hushReturnGate = returnGate('hush', 'hollowreach');
 ctx.ship.object.position.set(...hushGate.position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at hush gate');
@@ -1320,7 +1639,7 @@ const w7jumpChecks = {
   band3: ctx.systems.hush.band === 3 && SYSTEMS.hush.band === 3,
   bandTable3: !!BANDS[3] && BANDS[3].eventGapMult > BANDS[2].eventGapMult,
   stationThreshold: ctx.station?.name === 'Threshold',
-  nearArrivalGate: Math.hypot(hp7.x - 0, hp7.y - 80, hp7.z + 1150) < 120, // hush gate [0,80,-1150] + arrivalOffset
+  nearArrivalGate: Math.hypot(hp7.x - hushReturnGate.position[0], hp7.y - hushReturnGate.position[1], hp7.z - hushReturnGate.position[2]) < 120, // hush return gate + arrivalOffset
 };
 console.log('wave7 hush jump:', JSON.stringify(w7jumpChecks));
 if (!Object.values(w7jumpChecks).every(Boolean)) { console.log('WAVE7 HUSH JUMP FAIL'); errors++; }
@@ -1617,8 +1936,8 @@ if (!Object.values(w7restoreChecks).every(Boolean)) { console.log('WAVE7 RESTORE
 
 // -- 1. jump leg: the Hush's SECOND gates entry reaches the Verge -----------
 undockStation(); // leave Threshold (wave-7 restore dock)
-const vergeGate = SYSTEMS.hush.gates.find((g) => g.to === 'verge'); // [750,90,-350]
-const vergeReturnGate = SYSTEMS.verge.gates.find((g) => g.to === 'hush'); // [0,90,-1250]
+const vergeGate = gateToward('hush', 'verge');
+const vergeReturnGate = returnGate('verge', 'hush');
 ctx.ship.object.position.set(...vergeGate.position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at verge gate');
@@ -1647,7 +1966,7 @@ const w8jumpChecks = {
   bandTable4: !!BANDS[4] && BANDS[4].eventGapMult === 5.0 && BANDS[4].chatterMult === 0.05 && BANDS[4].songGapMult === 6.0,
   band4SilentLine: vergeArrivalLine === 'The Verge. No hail. No echo of a hail. Out here even the quiet has stopped listening.',
   stationTheVigil: ctx.station?.name === 'The Vigil',
-  nearArrivalGate: Math.hypot(vp8.x - 0, vp8.y - 90, vp8.z + 1250) < 120, // verge gate [0,90,-1250] + arrivalOffset
+  nearArrivalGate: Math.hypot(vp8.x - vergeReturnGate.position[0], vp8.y - vergeReturnGate.position[1], vp8.z - vergeReturnGate.position[2]) < 120, // verge return gate + arrivalOffset
 };
 console.log('wave8 verge jump:', JSON.stringify(w8jumpChecks), `line=${JSON.stringify(vergeArrivalLine)}`);
 if (!Object.values(w8jumpChecks).every(Boolean)) { console.log('WAVE8 VERGE JUMP FAIL'); errors++; }
@@ -2327,7 +2646,7 @@ try {
   const v9 = measureDrift9('wave9 verge walk', 600, true);
   if (v9) driftV = v9.p1 - v9.p0;
   // verge → hush (NOT hermit): same pinned measurement, same tick count.
-  ctx.ship.object.position.set(...vergeReturnGate.position); // [0,90,-1250]
+  ctx.ship.object.position.set(...vergeReturnGate.position); // verge → hush
   ctx.ship.velocity.set(0, 0, 0);
   tick(5, 'at hush gate (wave9 walk)');
   ctx.emit('jumpRequested', { to: 'hush' });
@@ -2414,7 +2733,7 @@ ctx.player.hull = 1e9;
 
 // Travel: hush → verge (the wave-8 gate pair, in reverse).
 if (ctx.flags.docked) undockStation(); // leave Threshold (wave-9 restore dock)
-ctx.ship.object.position.set(...vergeGate.position); // hush [750,90,-350] → verge
+ctx.ship.object.position.set(...vergeGate.position); // hush → verge
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at verge gate (wave10)');
 ctx.emit('jumpRequested', { to: 'verge' });
@@ -2742,7 +3061,7 @@ const vergeBank11 = ctx.world.recordBanks?.verge ?? [];
 const callowRec = vergeBank11.find((r) => r.name === 'Old Callow') ?? null;
 const callowReturnsBase = callowRec?.callowReturns ?? 0;
 // Round trip 1: verge → hush → verge arms the first return line.
-ctx.ship.object.position.set(...vergeReturnGate.position); // verge [0,90,-1250] → hush
+ctx.ship.object.position.set(...vergeReturnGate.position); // verge → hush
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at hush gate (wave11 returns 1)');
 ctx.emit('jumpRequested', { to: 'hush' });
@@ -2750,7 +3069,7 @@ if (!tickUntilJumpDone('hush', 'wave11 hop to hush (returns 1)')) {
   console.log('WAVE11 TRAVEL FAIL — never arrived at hush');
   errors++;
 }
-ctx.ship.object.position.set(...vergeGate.position); // hush [750,90,-350] → verge
+ctx.ship.object.position.set(...vergeGate.position); // hush → verge
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at verge gate (wave11 returns 1)');
 // The return beat can fire AT THE ARRIVAL GATE during the jump-settle ticks
@@ -3627,7 +3946,7 @@ const hushTrustBeforeArr14 = hushKeeper14?.trust;
 const vergeTrustBeforeArr14 = vergeKeeper14?.trust;
 if (hushKeeper14) { hushKeeper14.trust = 60; delete hushKeeper14.vouchAck; }
 if (ctx.flags.docked) undockStation(); // leave The Vigil (wave-12 c restore dock)
-ctx.ship.object.position.set(...vergeReturnGate.position); // verge [0,90,-1250] → hush
+ctx.ship.object.position.set(...vergeReturnGate.position); // verge → hush
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'at hush gate (wave14 arrival)');
 const arrEvs14 = [];

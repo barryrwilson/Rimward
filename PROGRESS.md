@@ -586,7 +586,52 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   clamped at 60 under the old path. npm run test:boot PASS ×300 runs,
   0 failures (measured flake rate 12/540 → 0/300); npm run build
   clean (only the pre-existing >500 kB chunk warning).
-## Next round candidates (wave 21)
+- Wave 21: the 100-system rim becomes playable. state.js merges the six
+  authored systems with `src/game/galaxy.generated.js` (94 generated,
+  deterministic SEED 20260808 from `scripts/generate-galaxy.mjs`); authored
+  key order stays first for contacts.js ledger iteration and generator
+  validation rejects authored-id collisions. Generated systems carry chart
+  coords, station/field/cast/worldSeed/planetCount/priceBase, bands 1–4,
+  physical gates plus the hub-route exception (hub H reaches X through
+  `hub.routes`; X keeps a physical back-gate X→H), and the Ten Banners
+  factions. `scripts/galaxy-map.mjs` renders the network to `galaxy-map.svg`
+  (data-fitted transform, gate/hub-route layers, accessible title/desc,
+  escaped labels, readable dim bands). world.js replaces the per-frame
+  all-bank migrant scan with an in-transit registry rebuilt on systemLoaded
+  and on recordBanks reference swaps, so same-system save restores cannot
+  strand restored migrants; contacts.js roster names gain a defensive
+  fallback for generated systems. gate.js renders Lamplighter junctions at
+  `hub.position`; G cycles `hub.routes` in authored order, D jumps the
+  selected route, and HUD publishes `G route i/n · D — Jump to NAME` through
+  the new ctx.gate nearHub/nearRouteIndex/nearRouteCount fields. jump.js
+  arrives at `hub.position` when returning from a routed system; physical
+  gate arrival rules are unchanged. `src/systems/galaxychart.js` adds the
+  runtime M-key galaxy chart: 100 runtime-generated nodes, 133 physical
+  edges, 25 hub routes, current-system highlight, keyboard/Escape/close
+  controls, station-screen ownership while docked, and §25-safe route data
+  only. Boot test wave-21 section drives the real KeyG/D hub flight to
+  fh_hearth and back, the real KeyM chart DOM, the same-system migrant
+  restore regression, degree<=3, pinned named-special bands, and all
+  existing wave gates. Independent integration review found no
+  HIGH/CRITICAL issues; the two LOW review items (chart open over docked
+  station UI, G while paused) were fixed. Browser-verified: chart open/
+  close/current-system updates, hub prompt and G cycling, D jump to
+  fx_bastion, and junction arrival back at freehold. npm run test:boot
+  PASS; npm run build clean (only the pre-existing >500 kB chunk warning).
+## Next round candidates (wave 22)
+- Generated-system depth: the 94 new systems are mechanically reachable
+  (trade/mine/fight/traffic) but intentionally sparse — no contacts,
+  landmarks, clues, jobs, or faction-specific station behavior yet.
+- NPC migration still uses physical gates only, so routed systems can lose
+  traders toward hubs but never receive hub→route migrants. Decide whether
+  that asymmetry is lore (junctions are player/Lamplighter-only) or a wave
+  candidate.
+- Hub junctions currently reuse the standard gate ring silhouette; a
+  distinct junction visual would help before more route density arrives.
+- Generator maintainability: `scripts/generate-galaxy.mjs` still duplicates
+  the authored six-system stubs instead of deriving them from shared data;
+  safe today because boot-test catches drift, but a shared authored-data
+  module would remove the hazard.
 - The trust-60 tier now rides one exported constant
   (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
   change, but every 60-gate still has an independent

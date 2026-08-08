@@ -8,6 +8,13 @@
  * worker needs a change here, it must report back instead.
  */
 
+// Wave 19 (100-system rim): generated systems live in galaxy.generated.js
+// (scripts/generate-galaxy.mjs — deterministic, seeded). The spread below
+// lists the authored six first so their key order leads; generator validation
+// rejects generated/authored id collisions, so no authored record is ever
+// overwritten by the merge.
+import { GENERATED_SYSTEMS } from './galaxy.generated.js';
+
 // ---------- Ranges (units) ----------
 export const U = {
   ENCOUNTER_BUBBLE: 800, // §6.8 "8 km" scaled
@@ -234,12 +241,15 @@ export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
  * at 35u (mystery.js owns discovery; ctx.world.mystery tracks found/visited).
  * Both sit away from station/field/gates so finding them means traveling.
  */
-export const SYSTEMS = {
+const AUTHORED_SYSTEMS = {
   freehold: {
     id: 'freehold',
     name: 'Freehold Drift',
     faction: 'freehold',
     worldSeed: 11,
+    chart: [1620, 760], // galactic map coords (2000x1400 box, x decreases rimward)
+    // Lamplighter junction: routes served from the hub gate (galaxy-map pick)
+    hub: { position: [120, 70, -820], routes: ['fh_hearth', 'fh_haven', 'fh_meridian', 'fx_bastion'] },
     sunColor: 0xffe0b0,
     sunRadius: 60,
     planetCount: 5,
@@ -259,6 +269,8 @@ export const SYSTEMS = {
     name: 'Veridian Reach',
     faction: 'veridian',
     worldSeed: 47,
+    chart: [1470, 830],
+    hub: { position: [-120, 55, 820], routes: ['vd_survey', 'vd_prospect', 'vd_canaan', 'gc_auction'] },
     sunColor: 0xcfe8ff,
     sunRadius: 55,
     planetCount: 3,
@@ -284,6 +296,8 @@ export const SYSTEMS = {
     name: 'The Redmarch',
     faction: 'redledger',
     worldSeed: 73,
+    chart: [1300, 780],
+    hub: { position: [140, 60, -720], routes: ['rl_toll', 'rl_reckoning', 'rl_cutter', 'blackstation'] },
     sunColor: 0xff9a8a,
     sunRadius: 50,
     planetCount: 4,
@@ -309,6 +323,8 @@ export const SYSTEMS = {
     name: 'Hollow Reach',
     faction: 'hollow',
     worldSeed: 99,
+    chart: [1130, 840],
+    hub: { position: [-80, 65, 950], routes: ['lastbeacon', 'uc_drift', 'uc_sorrow'] },
     sunColor: 0x8a7a9a,
     sunRadius: 40,
     planetCount: 2,
@@ -338,6 +354,7 @@ export const SYSTEMS = {
     name: 'The Hush',
     faction: 'hollow',
     worldSeed: 131,
+    chart: [980, 800],
     sunColor: 0x6a5a7a,
     sunRadius: 34,
     planetCount: 1,
@@ -364,6 +381,7 @@ export const SYSTEMS = {
     name: 'The Verge',
     faction: 'hollow',
     worldSeed: 151,
+    chart: [850, 830],
     sunColor: 0x4a3a5a,
     sunRadius: 28,
     planetCount: 1,
@@ -387,6 +405,11 @@ export const SYSTEMS = {
     clues: [],
   },
 };
+// Wave 19: merged galaxy — authored lane first (contacts.js ledger iteration
+// rides SYSTEMS key order), then the 94 generated systems. Generator
+// validation prevents id collisions, so the spread order here fixes key
+// order, not collision precedence.
+export const SYSTEMS = { ...AUTHORED_SYSTEMS, ...GENERATED_SYSTEMS };
 export const JUMP = {
   zone: 60, // activation range from gate
   chargeTime: 2.5, // s of tunnel/fade before arrival
@@ -400,6 +423,15 @@ export const FACTIONS = {
   veridian: { name: 'Veridian Combine', color: 0x6fd0e0, doctrine: 0.5 },
   hollow: { name: 'Hollow Reach', color: 0x7a6a8a, doctrine: 0.3 },
   independent: { name: 'Independent', color: 0x9aa7b8, doctrine: 0.5 },
+  // Wave 19: the Ten Banners (docs/rimward-faction-lore-omp.md). 'hollow'
+  // stays the deep-rim unclaimed key (EPICS.hollow depends on it).
+  ferrous: { name: 'Ferrous Hegemony', color: 0x6e7b8a, doctrine: 0.9 },
+  gilded: { name: 'Gilded Chain', color: 0xd4af37, doctrine: 0.6 },
+  beautiful: { name: 'Beautiful Ones', color: 0x7fe0a8, doctrine: 0.2 },
+  congregation: { name: 'Congregation of the Further Shore', color: 0xd8c690, doctrine: 0.3 },
+  assembly: { name: 'The Assembly', color: 0xaac4d8, doctrine: 0.5 },
+  lamplighter: { name: 'Lamplighter Guild', color: 0xffd27a, doctrine: 0.5 },
+  unknowables: { name: 'Unknowables', color: 0xe8e8ff, doctrine: 0.0 },
 };
 
 // §15 bands: pacing multipliers moving rimward — farther out, longer silences

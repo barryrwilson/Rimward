@@ -194,7 +194,7 @@ function createRecords(ctx, sysId) {
   const station = stationPoint(def);
   const gate = gatePoint(def);
   const planet = planetPoint(def);
-  const otherFaction = SYSTEMS[def.gates[0].to]?.faction ?? 'independent';
+  const otherFaction = SYSTEMS[def.gates?.[0]?.to]?.faction ?? 'independent';
   const traderFactions = [def.faction, otherFaction, 'independent'];
   const cast = def.cast;
   const records = [];
@@ -264,6 +264,34 @@ function createRecords(ctx, sysId) {
 function ensureBank(ctx, sysId) {
   const banks = ctx.world.recordBanks ?? (ctx.world.recordBanks = {});
   return banks[sysId] ?? (banks[sysId] = createRecords(ctx, sysId));
+}
+
+// ---------- Inter-system migration registry §8.2 ----------
+// In-transit registry: pickMigrant registers each record it sends off, and
+// arriveMigrants iterates ONLY this list — per-frame cost is O(in transit),
+// never O(visited banks) (a long save visits dozens of systems; scanning
+// every bank every frame scaled with that). Entries are { rec, sysId } where
+// sysId keys the bank currently holding the record — migrants ride their
+// SOURCE bank until the eta passes, so a player jump mid-transit never
+// strands one. save.js restores recordBanks wholesale, so the registry is
+// REBUILT by scanning all banks once on every 'systemLoaded' (which covers
+// cross-system restores) AND whenever the recordBanks reference itself is
+// swapped — a same-system restore emits no 'systemLoaded', so the world's
+// update detects the swap by identity before each arriveMigrants pass.
+// Restore-time O(banks) is fine; per-frame stays O(in transit) plus one
+// reference compare.
+const inTransitRegistry = [];
+
+function rebuildTransitRegistry(ctx) {
+  inTransitRegistry.length = 0;
+  const banks = ctx.world.recordBanks;
+  if (!banks) return;
+  for (const sysId in banks) {
+    const bank = banks[sysId];
+    for (let i = 0; i < bank.length; i++) {
+      if (bank[i].state === 'inTransit') inTransitRegistry.push({ rec: bank[i], sysId });
+    }
+  }
 }
 
 /**
@@ -907,12 +935,18 @@ function addIncident(ctx, kind, { name, faction, role, position, causer, outcome
 
 export function initWorld(ctx) {
   initPrices(ctx);
-  const banks = ctx.world.recordBanks ??= {}; // may have been restored by save.js
+  // initWorld runs BEFORE initSave (main.js init order), so no restore has
+  // happened yet — banks are always fresh here. Restores swap
+  // ctx.world.recordBanks wholesale AFTER this; knownBanks below tracks the
+  // reference so the update loop can detect the swap.
+  const banks = ctx.world.recordBanks ??= {};
   if (ctx.world.records.length === 0) {
     ctx.world.records = ensureBank(ctx, ctx.world.currentSystem);
   } else {
     banks[ctx.world.currentSystem] ??= ctx.world.records;
   }
+  rebuildTransitRegistry(ctx);
+  let knownBanks = ctx.world.recordBanks;
   // System id of the bank currently sitting in ctx.world.records. Save
   // restores can swap records after init, so swapToSystem re-derives it
   // from the records' own `system` tag whenever possible.
@@ -985,9 +1019,16 @@ export function initWorld(ctx) {
   function consumeSystemLoaded(ctx) {
     for (const ev of ctx.lastEvents) {
       if (ev.type !== 'systemLoaded') continue;
-      const changed = ev.to !== activeSystemId; // restore re-emits same-system
+      const changed = ev.to !== activeSystemId; // boot restore into the live system re-emits same-system
       swapToSystem(ctx, ev.to);
       teardownWreckMeshes(ctx);
+      // Cross-system restores (and jumps) reach the new banks through this
+      // event — re-derive the in-transit registry from the banks themselves.
+      // One O(banks) scan per jump/restore, never per frame. knownBanks is
+      // synced so the update loop's swap check doesn't rebuild a second
+      // time for the same restore.
+      rebuildTransitRegistry(ctx);
+      knownBanks = ctx.world.recordBanks;
       // Wave 11: a verge arrival arms Old Callow's return beat — only on a
       // real jump in (a death-restore re-emitting the same system is no
       // return, and must not leak a line into docked/station-side ticks).
@@ -1017,22 +1058,31 @@ export function initWorld(ctx) {
     chosen.state = 'inTransit';
     chosen.transitTo = dest;
     chosen.transitEta = ctx.world.time + MIGRATION_ETA[0] + Math.random() * (MIGRATION_ETA[1] - MIGRATION_ETA[0]);
+    // The record stays in the CURRENT bank (ctx.world.records) until the eta
+    // passes — activeSystemId keys that bank.
+    inTransitRegistry.push({ rec: chosen, sysId: activeSystemId });
   }
 
   // Migrants live in their SOURCE bank until the eta passes (the player may
-  // jump away meanwhile), so arrivals scan every bank, not just the current.
+  // jump away meanwhile). The registry — rebuilt on every 'systemLoaded', at
+  // init, and on any recordBanks reference swap (same-system restore) — is
+  // the only per-frame scan: O(in transit), never O(visited banks). Timing
+  // semantics are unchanged: arrival when world.time reaches the same
+  // persisted transitEta, through the same arriveInSystem path.
   function arriveMigrants(ctx) {
-    const banks = ctx.world.recordBanks;
-    if (!banks) return;
     const now = ctx.world.time;
-    for (const sysId in banks) {
-      const bank = banks[sysId];
-      for (let i = bank.length - 1; i >= 0; i--) {
-        const rec = bank[i];
-        if (rec.state !== 'inTransit' || now < rec.transitEta) continue;
-        bank.splice(i, 1);
-        arriveInSystem(ctx, rec, rec.transitTo);
-      }
+    for (let i = inTransitRegistry.length - 1; i >= 0; i--) {
+      const entry = inTransitRegistry[i];
+      const rec = entry.rec;
+      if (rec.state !== 'inTransit' || now < rec.transitEta) continue;
+      inTransitRegistry.splice(i, 1);
+      // Defensive membership check: a stale entry (banks swapped without a
+      // rebuild) must never resurrect a record no bank holds.
+      const bank = ctx.world.recordBanks?.[entry.sysId];
+      const idx = bank ? bank.indexOf(rec) : -1;
+      if (idx < 0) continue;
+      bank.splice(idx, 1);
+      arriveInSystem(ctx, rec, rec.transitTo);
     }
   }
 
@@ -1343,6 +1393,17 @@ export function initWorld(ctx) {
       if (now >= nextMigrationAt) {
         nextMigrationAt = now + MIGRATION_INTERVAL * (0.75 + Math.random() * 0.5);
         pickMigrant(ctx);
+      }
+      // Same-system save restores swap ctx.world.recordBanks wholesale but
+      // emit NO 'systemLoaded' (save.js only emits when the system changes)
+      // — restored in-transit migrants would never arrive without this.
+      // One reference compare per frame; the O(banks) rebuild runs only on
+      // a restore swap. Cross-system restores also swap the reference but
+      // consumeSystemLoaded already rebuilt and re-synced knownBanks, so
+      // they never trip this.
+      if (ctx.world.recordBanks !== knownBanks) {
+        knownBanks = ctx.world.recordBanks ?? (ctx.world.recordBanks = {});
+        rebuildTransitRegistry(ctx);
       }
       arriveMigrants(ctx);
 

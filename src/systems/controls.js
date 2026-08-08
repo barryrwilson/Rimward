@@ -180,6 +180,8 @@ export function initControls(ctx) {
     '1/2/3 — weapon group: cannon / disruptor / mining',
     'T — cycle target',
     'H — hail · D — dock · C — camera (chase / first-person)',
+    'G — cycle hub route at a Lamplighter junction',
+    'M — galaxy chart',
     'P — pause',
   );
 

@@ -871,7 +871,14 @@ export function initHud(ctx) {
         pKey = 'D'; pVerb = 'Dock';
       } else if (ctx.gate.inZone && ctx.gate.nearTo && !ctx.flags.docked && !ctx.gate.jumping) {
         const destDef = SYSTEMS[ctx.gate.nearTo];
-        pKey = 'D'; pVerb = 'Jump to ' + (destDef ? destDef.name : String(ctx.gate.nearTo));
+        const destName = destDef ? destDef.name : String(ctx.gate.nearTo);
+        if (ctx.gate.nearHub) {
+          // Lamplighter junction: G cycles hub.routes, D jumps the selection.
+          pKey = 'G';
+          pVerb = 'route ' + (ctx.gate.nearRouteIndex + 1) + '/' + ctx.gate.nearRouteCount + ' · D — Jump to ' + destName;
+        } else {
+          pKey = 'D'; pVerb = 'Jump to ' + destName;
+        }
       } else if (target && target.state && !target.state.destroyed) {
         const band = resolveBand(target.state.resolve ?? 70);
         if (band === 'bargaining' || band === 'capitulate') { pKey = 'H'; pVerb = 'Hail'; }

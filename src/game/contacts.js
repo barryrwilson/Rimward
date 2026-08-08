@@ -63,7 +63,9 @@ function buildRoster() {
     for (const role of CONTACT_ROLES[system]) {
       roster.push({
         id: `contact-${system}-${role}`,
-        name: CONTACT_NAMES[system][role],
+        // ?? fallback in the world.js poolName style: a role added to
+        // CONTACT_ROLES without a matching name must never crash the roster.
+        name: CONTACT_NAMES[system]?.[role] ?? `${role} ${system}`,
         role,
         system,
         trust: 0,

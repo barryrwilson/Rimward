@@ -129,6 +129,9 @@ export function createCtx({ scene, camera, renderer }) {
     gate: {
       inZone: false, // gate.js owns: player within JUMP.zone of any current-system gate
       nearTo: null, // gate.js owns: system id of the in-range gate, else null
+      nearHub: false, // gate.js owns: in-range destination is a hub junction route
+      nearRouteIndex: -1, // gate.js owns: selected hub route (0-based), else -1
+      nearRouteCount: 0, // gate.js owns: hub route count at the in-range junction
       jumping: false, // jump.js owns: sequence running (blocks save/combat/AI)
       progress: 0, // 0..1 charge progress for HUD
       destination: null, // system id while jumping

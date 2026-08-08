@@ -10,11 +10,16 @@ import { SYSTEMS, JUMP } from '../game/state.js';
  * lamplight amber), and a pulsing beacon. Oriented so the ring faces the
  * system center. Distinct silhouette from 500+u.
  *
- * Ownership: writes ctx.gate.inZone and ctx.gate.nearTo only
- * (jumping/progress/destination are jump.js's). The zone check runs per
- * gate — nearest in-range gate wins: inZone = true and nearTo = that
- * gate's destination id; out of all zones, inZone = false and nearTo =
- * null. Emits 'jumpRequested' { to } with the near gate's destination when
+ * Ownership: writes ctx.gate.inZone, nearTo, nearHub, nearRouteIndex and
+ * nearRouteCount only (jumping/progress/destination are jump.js's). The
+ * zone check runs per gate — nearest in-range gate wins: inZone = true and
+ * nearTo = that gate's destination id; out of all zones, inZone = false,
+ * nearTo = null, nearHub = false, nearRouteIndex = -1, nearRouteCount = 0.
+ * When SYSTEMS[system].hub exists, one extra junction assembly is built at
+ * hub.position carrying hub.routes; while it is the nearest zone (nearHub
+ * = true) KeyG cycles the selected route (wrapping, authored order) and
+ * `to`/nearTo track the selection. Emits 'jumpRequested' { to } with the
+ * near gate's destination when
  * the player presses dock (D) inside JUMP.zone while undocked and not
  * already jumping. Reads ctx.input.dockPressed, ctx.flags.docked,
  * ctx.ship.object — never writes them. On 'systemLoaded' (seen via
@@ -199,8 +204,20 @@ export function initGate(ctx) {
       a.swirl.material.dispose();
     }
     assemblies.length = 0;
-    const gates = SYSTEMS[ctx.world.currentSystem].gates;
+    const def = SYSTEMS[ctx.world.currentSystem];
+    const gates = def.gates;
     for (let i = 0; i < gates.length; i++) assemblies.push(buildAssembly(gates[i]));
+    // Lamplighter junction: one assembly at hub.position carrying the hub's
+    // route list. `to` always tracks the selected route (reset to 0 here);
+    // KeyG advances routeIndex while this is the nearest zone.
+    const hub = def.hub;
+    if (hub && hub.routes && hub.routes.length) {
+      const a = buildAssembly({ position: hub.position, to: hub.routes[0] });
+      a.isHub = true;
+      a.routes = hub.routes;
+      a.routeIndex = 0;
+      assemblies.push(a);
+    }
   }
   rebuild();
 
@@ -219,6 +236,17 @@ export function initGate(ctx) {
   let overlayShown = false;
   let labelFor = null; // destination id currently named in the label
   let wasJumping = false;
+
+  // Junction route cycling: set each frame by the zone check; the KeyG
+  // listener acts on the hub assembly currently nearest in range.
+  let zoneHub = null;
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'KeyG' || e.repeat) return;
+    if (!zoneHub || ctx.flags.docked || ctx.flags.paused || ctx.gate.jumping) return;
+    const routes = zoneHub.routes;
+    zoneHub.routeIndex = (zoneHub.routeIndex + 1) % routes.length;
+    zoneHub.to = routes[zoneHub.routeIndex];
+  });
 
   function update(dt) {
     // Rebuild for a system swap announced last frame.
@@ -289,11 +317,17 @@ export function initGate(ctx) {
       }
     }
     const inZone = nearIdx >= 0;
+    const near = inZone ? assemblies[nearIdx] : null;
+    const nearIsHub = !!(near && near.isHub);
+    zoneHub = nearIsHub ? near : null;
     ctx.gate.inZone = inZone;
-    ctx.gate.nearTo = inZone ? assemblies[nearIdx].to : null;
+    ctx.gate.nearTo = near ? near.to : null;
+    ctx.gate.nearHub = nearIsHub;
+    ctx.gate.nearRouteIndex = nearIsHub ? near.routeIndex : -1;
+    ctx.gate.nearRouteCount = nearIsHub ? near.routes.length : 0;
 
     if (inZone && ctx.input.dockPressed) {
-      ctx.emit('jumpRequested', { to: assemblies[nearIdx].to });
+      ctx.emit('jumpRequested', { to: near.to });
     }
 
     // Jump overlay: fade in over first 40% of progress, out over last 40%.

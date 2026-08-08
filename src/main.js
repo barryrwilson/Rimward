@@ -29,6 +29,7 @@ import { initSave } from './game/save.js';
 import { initSettings } from './systems/settings.js';
 import { initOrigins } from './game/origins.js';
 import { initOnboarding } from './systems/onboarding.js';
+import { initGalaxyChart } from './systems/galaxychart.js';
 import { SYSTEMS } from './game/state.js';
 
 let renderer;
@@ -69,7 +70,9 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // epics after mystery (stage checks read mystery.found); settings right
 // after controls (input registered; DOM-only, everyone reads ctx.settings
 // live); origins after save (ctx.flags.saveRestored is final — a restore
-// means no origin pick); onboarding after origins, before HUD.
+// means no origin pick); onboarding after origins, before HUD; galaxy
+// chart after onboarding, before HUD (DOM-only overlay, reads SYSTEMS +
+// ctx.world.currentSystem live).
 const systems = [
   initStarfield,
   initSolarSystem,
@@ -95,6 +98,7 @@ const systems = [
   initSave,
   initOrigins,
   initOnboarding,
+  initGalaxyChart,
   initHud,
 ].map((init) => init(ctx));
 
