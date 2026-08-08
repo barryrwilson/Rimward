@@ -20,7 +20,7 @@ import { COMMODITIES, PRICE_BAND, SYSTEMS, HERMIT } from './state.js';
  * correct continuation. Pressure is transient per-system module state: after
  * a load, prices resume walking from their restored values.
  *
- * Exports: initPrices(ctx), tickPrices(ctx, dt), applyEventPressure(ctx, kind).
+ * Exports: initPrices(ctx), tickPrices(ctx, dt), applyEventPressure(ctx, kind, systemId?).
  * world.js wires init/tick into its update loop. update path allocates nothing.
  */
 
@@ -93,10 +93,18 @@ export function initPrices(ctx) {
   ctx.world.prices = markets[id];
 }
 
-export function applyEventPressure(ctx, kind) {
+export function applyEventPressure(ctx, kind, systemId) {
   const id = ctx.world.currentSystem;
   if (kind === 'clear') {
-    delete pressureBySystem[id];
+    // Clear the EVENT's system, not the current one: the player can jump
+    // away mid-event, and clearing only the current system leaked the
+    // departed system's pressure forever (a hush commodityGlut pinned its
+    // provisions dev at the −PRICE_BAND clamp for the rest of the session —
+    // surfaced as the wave-9 hermit-walk boot flake, driftH reading 9 from
+    // the clamped floor instead of 13). Events predating this stamp (never
+    // persisted; module state only) fall back to the old current-system
+    // behavior via the ?? below.
+    delete pressureBySystem[systemId ?? id];
     return;
   }
   const pressure = (pressureBySystem[id] ??= {});

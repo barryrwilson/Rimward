@@ -560,6 +560,32 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   untouched. npm run test:boot PASS ×70 runs, 0 failures (base flake
   rates 2/80 and 1/70); npm run build clean (only the pre-existing
   >500 kB chunk warning).
+- Wave 20 follow-up: post-commit verification at scale found the
+  hermit-walk flake NOT closed — 12/540 runs failed with an identical
+  signature (driftV=4, driftH=9; the committed entry's residual-dev
+  theory was wrong). Trajectory instrumentation (per-60-tick price
+  sampling in a scratch harness copy) showed hush's provisions dev
+  pinned at the −PRICE_BAND clamp from the settle onward (afterSettle
+  114 = round(190×0.6), drag flat, window crawling off the floor to
+  +9). Root cause was production, not harness: a cross-system
+  event-pressure LEAK — a commodityGlut firing while docked in hush
+  (provisions pressure −1) whose endEvent ran after the player jumped
+  away, so applyEventPressure('clear') deleted the CURRENT system's
+  entry and left hush pressured at the −40% floor for the rest of the
+  session. The settle then pinned dev to the pressured target and the
+  clamp broke the measurement's differential invariance (any constant
+  pressure otherwise cancels — drift is target-invariant ≈ 13.3 off
+  the clamp). Fix at the source: startEvent stamps activeEvent.system
+  and endEvent clears THAT system's pressure (applyEventPressure gains
+  an optional systemId, used only by 'clear'; unstamped events fall
+  back to current-system behavior). Harness keeps the wave-20 settle
+  and gains a retry-on-mid-drag-event (the old post-clear fall-through
+  would have sampled pressure-polluted p0). Deterministic proof
+  (scratch script, removed after use): glut-in-hush → depart → clear →
+  revisit recovers to the walk equilibrium under the fix, stays
+  clamped at 60 under the old path. npm run test:boot PASS ×300 runs,
+  0 failures (measured flake rate 12/540 → 0/300); npm run build
+  clean (only the pre-existing >500 kB chunk warning).
 ## Next round candidates (wave 21)
 - The trust-60 tier now rides one exported constant
   (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
@@ -573,4 +599,6 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   bit per keeper, and the Callow cursors grow only +1 per real Verge
   visit with exact arithmetic pinned by existing gates.
 - Polish debt: none standing; both pre-existing boot-test flakes
-  were closed in wave 20 (0/70). Boot test remains the gate.
+  were closed in wave 20, and the wave-20 follow-up fixed the
+  cross-system event-pressure leak behind the residual hermit-walk
+  flake (0/300 post-fix). Boot test remains the gate.

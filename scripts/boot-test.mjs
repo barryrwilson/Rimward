@@ -2240,7 +2240,9 @@ let driftH = NaN;
 try {
   Math.random = () => 0.9;
   const measureDrift9 = (label, ticksN, preDrag) => {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Three attempts: a mid-window OR mid-drag event consumes one retry, and
+    // two consecutive event hits must still leave a clean measurement.
+    for (let attempt = 0; attempt < 3; attempt++) {
       tick(1, `${label} pre-check`); // a due event starts on THIS tick, not mid-window
       if (ctx.world.activeEvent) {
         ctx.world.activeEvent.endsAt = ctx.world.time - 1; // real endEvent → applyEventPressure('clear')
@@ -2255,7 +2257,9 @@ try {
       // earlier window survives the 600-tick preDrag ((1 − 0.001)^600 ≈ 0.55
       // of it remains) and shifts the p0 sample — compressing or inverting
       // the pinned ramp (observed: driftV=4 vs driftH=5, or driftH going
-      // negative). Normalize dev to ~0 BEFORE the preDrag so the drag — and
+      // negative). (The later driftH=9 residual had a different root cause:
+      // a cross-system event-pressure LEAK pinning hush at the −PRICE_BAND
+      // clamp — fixed in world.js/market.js; this settle stays as hygiene.) Normalize dev to ~0 BEFORE the preDrag so the drag — and
       // therefore the p0/p1 window — starts from harness-pinned state, not
       // prior walk history: 300 price-only tickPrices(ctx, 0.5) calls shrink
       // any dev by (1 − 0.06×0.5)^300 ≈ 10^4×. Price-only is safe here: no
@@ -2270,10 +2274,12 @@ try {
       // 0.0032×walkMult vs pull 0.03×dev per call), not ~0. Pin 0.5 for the
       // settle so the walk's expectation is exactly zero and the pull does
       // all the decay work, then restore the 0.9 pin for preDrag/measure.
-      // No settle is needed after the preDrag's own event-clear branch: if
-      // an event fired mid-drag the loop retries and re-runs THIS settle,
-      // and otherwise the settle → drag sequence has already pinned dev, so
-      // p0 is never sampled from inherited state.
+      // No settle is needed after the pre-check's own event-clear branch:
+      // the event was alive only ~3 ticks (negligible pull) and THIS settle
+      // runs right after, erasing even that. The preDrag's event-clear
+      // branch is different — see its comment below: it must RETRY so this
+      // settle re-runs, because up to 10 s of mid-drag pressure is not
+      // negligible.
       Math.random = () => 0.5;
       for (let i = 0; i < 300; i++) tickPrices(ctx, 0.5);
       Math.random = () => 0.9;
@@ -2288,10 +2294,24 @@ try {
         tick(ticksN, `${label} dev drag`);
         Math.random = () => 0.9;
         if (ctx.world.activeEvent) {
+          // Mid-drag event hygiene: an event starting inside the 10 s drag
+          // lives to its end (durations 120–240 s ≫ 10 s), so the clear
+          // below always succeeds — and without the `continue` the old code
+          // FELL THROUGH to the p0 sample with dev polluted by up to 10 s
+          // of event pressure and no re-settle. Retry the whole attempt so
+          // the settle re-pins dev; the clear's endEvent re-rolls
+          // nextEventAt ≥ 342×eventGapMult s out (pinned 0.9), so the
+          // retry's drag and window are event-free.
+          // (The wave-20 driftH=9 flake turned out to be a different bug:
+          // a cross-system commodityGlut pressure LEAK pinning hush's dev
+          // at the −PRICE_BAND clamp — fixed in world.js/market.js by
+          // stamping activeEvent.system and clearing that system's
+          // pressure in endEvent. This retry guards the genuinely rare
+          // mid-drag case that fix does not cover.)
           ctx.world.activeEvent.endsAt = ctx.world.time - 1;
           tick(2, `${label} drag-event cleared`);
+          continue;
         }
-        if (ctx.world.activeEvent) continue;
       }
       const p0 = ctx.world.prices.provisions;
       tick(ticksN, label);

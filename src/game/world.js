@@ -1069,7 +1069,7 @@ export function initWorld(ctx) {
   function startEvent(ctx, kind) {
     const now = ctx.world.time;
     const dur = EVENT_DURATION[0] + Math.random() * (EVENT_DURATION[1] - EVENT_DURATION[0]);
-    ctx.world.activeEvent = { kind, startedAt: now, endsAt: now + dur };
+    ctx.world.activeEvent = { kind, startedAt: now, endsAt: now + dur, system: ctx.world.currentSystem };
     applyEventPressure(ctx, kind);
     ctx.emit('worldEvent', { kind, phase: 'start' });
     if (kind === 'strikeRush') {
@@ -1079,10 +1079,10 @@ export function initWorld(ctx) {
   }
 
   function endEvent(ctx) {
-    const kind = ctx.world.activeEvent?.kind;
+    const ev = ctx.world.activeEvent;
     ctx.world.activeEvent = null;
-    applyEventPressure(ctx, 'clear');
-    if (kind) ctx.emit('worldEvent', { kind, phase: 'end' });
+    applyEventPressure(ctx, 'clear', ev?.system); // clear the system the event pressured, wherever the player is now
+    if (ev) ctx.emit('worldEvent', { kind: ev.kind, phase: 'end' });
     const now = ctx.world.time;
     nextEventAt = now + rollEventGap(ctx);
   }
