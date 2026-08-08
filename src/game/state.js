@@ -291,6 +291,41 @@ export const FACTION_SERVICES = {
   lamplighter: { buyMult: 0.85, line: 'The Guild keeps the lights; no traveler pays full fare at the Last Beacon.' },
 };
 
+// Wave 25: generated-faction dockmaster voice (generated-system depth, part 3).
+// One recognition greeting + one rumor preface per faction flown by the 94
+// generated systems — contacts.js reads them behind AUTHORED_SYSTEMS by-id
+// guards (the wave-24 ruling, same as FACTION_SERVICES), so the authored six
+// stay byte-identical; 'hollow' is authored-only and holds no entry. The
+// greeting carries no ship name — the trust-60 comp line owns ship
+// recognition — and the preface adds voice only, never an event (Witness
+// Rule §8.7): each one reads naturally before a space + any of rumorFor's
+// three bodies. Voices follow generate-galaxy.mjs's CT_TONE tones. §25: no
+// authored-mystery references.
+export const FACTION_RECOGNITION = {
+  freehold: 'Back on the porch already? There’s always a berth for a neighbor.',
+  veridian: 'Your charter reads clean. The Combine notes a returning account.',
+  redledger: 'You again. Your tally holds — the Ledger counts a pilot who pays.',
+  ferrous: 'The watch logged your last pass. Standing orders: you’re cleared to berth.',
+  gilded: 'A returning consignor — the Chain remembers a good account.',
+  beautiful: 'Back beneath the chandeliers — the salon remembers every lovely silhouette.',
+  congregation: 'The vigil kept your lamp lit. Welcome back to the fold, traveler.',
+  assembly: 'Your berth filing is current — welcome back, registered pilot.',
+  independent: 'Look who drifted back. No flag, no paperwork — just glad you made it.',
+  lamplighter: 'The lamps held the lane for you. The Guild lights the way home.',
+};
+export const FACTION_RUMOR = {
+  freehold: 'Word travels porch to porch.',
+  veridian: 'The filings record it plainly.',
+  redledger: 'The Ledger counted it twice, so it happened.',
+  ferrous: 'The muster saw it. The Bastion doesn’t repeat hearsay.',
+  gilded: 'It came under the gavel’s notice, certified and cataloged.',
+  beautiful: 'The salon whispered it before the mirrors did.',
+  congregation: 'It was sung at vigil; the psalms do not lie.',
+  assembly: 'The log has it, stamped and filed.',
+  independent: 'The drift talks, if you know how to listen.',
+  lamplighter: 'The lights carried the word down the lane.',
+};
+
 // ---------- Faction ranks (§12.x station depth) ----------
 /**
  * Reputation → named rank. First rung whose min <= rep wins, so the ladder

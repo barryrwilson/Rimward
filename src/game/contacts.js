@@ -39,6 +39,14 @@
  * authored-only. No migration: old saves restore their persisted
  * 12-contact roster over the fresh roster (save.js, the waves 10/23
  * pattern), so generated dockmasters appear on fresh runs only.
+ * Wave 25: generated dockmasters gain voice. recognitionLine's final
+ * tier greets a known pilot (trust >= GENERATED_KNOWN_TRUST) with the
+ * FACTION_RECOGNITION line of their system's faction, and rumorFor
+ * prefaces the incident body with the FACTION_RUMOR framing — voice
+ * only, never an invented event. Both gates are AUTHORED_SYSTEMS
+ * by-id guards, so the authored six stay byte-identical; the wave-23
+ * hub three (ferrous/gilded/independent) ride the same tables. §25
+ * holds: neither table references the authored mystery.
  *
  * WITNESS RULE (§8.7): rumorFor voices ONLY what ctx.world.incidents
  * records — contacts never invent events. recognitionLine keys off
@@ -47,7 +55,7 @@
  * All entries are JSON-plain. update() allocates nothing per frame.
  */
 
-import { SYSTEMS } from './state.js'; // landmark tables for the keeper ledger (wave 11); generated contacts table for buildRoster (wave 24)
+import { SYSTEMS, FACTION_RECOGNITION, FACTION_RUMOR } from './state.js'; // landmark tables for the keeper ledger (wave 11); generated contacts table for buildRoster (wave 24); faction voice tables (wave 25)
 // Wave 23: the ledger is the authored mystery lane only (§25) — it reads
 // the authored six's landmark/clue tables, never the generated systems'.
 import { AUTHORED_SYSTEMS } from './authored-systems.js';
@@ -63,9 +71,11 @@ import { AUTHORED_SYSTEMS } from './authored-systems.js';
 // per-system names that live in data, not this table — and buildRoster
 // appends them below. They are plain dockmasters, exactly like the wave-23
 // hub three: NOT keepers (no ledger/vouch/chart-mark gates — those key on
-// the authored system id strings hollowreach/hush/verge), and no
-// recognitionLine tiers (deep-rim and ace acknowledgments key on authored
-// ids too), so they fall through every gate untouched.
+// the authored system id strings hollowreach/hush/verge), and the
+// recognitionLine tiers (deep-rim and ace acknowledgments, waves 6/10)
+// key on authored ids too. Wave 25: they gain the
+// faction greeting (GENERATED_KNOWN_TRUST) and rumorFor's faction preface,
+// both AUTHORED_SYSTEMS-guarded, so the authored six stay untouched.
 const CONTACT_NAMES = {
   freehold: { dockmaster: 'Mother Tarn', fence: 'Quiet Hollis' },
   veridian: { dockmaster: 'Adjutant Vey', fixer: 'Lias Corrow' },
@@ -180,13 +190,26 @@ export function rumorFor(ctx, contact) {
   if (incidents.length === 0) return null;
   const inc = incidents[contact.rumorIdx % incidents.length];
   contact.rumorIdx = (contact.rumorIdx + 1) % incidents.length;
+  let body;
   if (inc.kind === 'destroyed') {
-    return inc.causer === 'player'
+    body = inc.causer === 'player'
       ? `Everyone saw what became of ${inc.name}. The ${inc.faction} won't forget it.`
       : `${inc.name} came apart out in the drift. Happens more than it should.`;
+  } else {
+    // 'surrendered'
+    body = `${inc.name} struck colors and paid to walk away. Smart, that one.`;
   }
-  // 'surrendered'
-  return `${inc.name} struck colors and paid to walk away. Smart, that one.`;
+  // Wave 25: a generated-system dockmaster prefaces the rumor with the
+  // faction voice (FACTION_RUMOR) — framing only, never an invented
+  // event (Witness Rule §8.7). Generated-only by id, so the authored
+  // six return the identical body strings as before. Faction resolved
+  // with the wave-23 live-def fallback.
+  if (contact.role === 'dockmaster' && !AUTHORED_SYSTEMS[contact.system]) {
+    const faction = (ctx.systems?.[contact.system] ?? SYSTEMS[contact.system])?.faction;
+    const preface = FACTION_RUMOR[faction];
+    if (preface) return preface + ' ' + body;
+  }
+  return body;
 }
 
 // Wave 11: trust threshold at which a deep-rim keeper opens the second
@@ -198,6 +221,12 @@ export const KEEPER_LEDGER_TRUST = 30;
 // line, the vouch acknowledgment, the narrowed ledger page, the chart mark,
 // and station.js's waived hermit markup / comp note all ride this one tier.
 export const KEEPER_COMP_TRUST = 60;
+
+// Wave 25: trust at which a generated-system dockmaster greets a known
+// pilot with the faction line (FACTION_RECOGNITION, final recognitionLine
+// tier). Below KEEPER_COMP_TRUST, so the comp ship line still dominates
+// at >= 60.
+export const GENERATED_KNOWN_TRUST = 30;
 
 /**
  * Waves 11–12: a keeper (hollowreach/hush/verge dockmaster) reads from the
@@ -446,6 +475,20 @@ export function recognitionLine(ctx, contact) {
   ) {
     contact.aceAck = true;
     return "Carver Illyx speaks your ship's name carefully now. Coming from him, that's a crown.";
+  }
+  // Wave 25: a generated-system dockmaster greets a known pilot with the
+  // faction line. Generated-only by id — the authored six fall through
+  // untouched; the wave-23 hub three (ferrous/gilded/independent) ride
+  // the same table. Faction resolved with the wave-23 live-def fallback.
+  // No ship name — the comp tier owns ship recognition. Pure read, no
+  // flags, no persistence.
+  if (
+    contact.role === 'dockmaster' &&
+    !AUTHORED_SYSTEMS[contact.system] &&
+    contact.trust >= GENERATED_KNOWN_TRUST
+  ) {
+    const faction = (ctx.systems?.[contact.system] ?? SYSTEMS[contact.system])?.faction;
+    return FACTION_RECOGNITION[faction] ?? null;
   }
   return null;
 }

@@ -236,6 +236,7 @@ const { initWorld, recordPosition } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
   keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,
+  KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST,
 } = await import('../src/game/contacts.js');
 const { initMystery } = await import('../src/game/mystery.js');
 const { initEpics, epicEffects } = await import('../src/game/epics.js');
@@ -257,7 +258,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION, FACTION_RUMOR } = await import('../src/game/state.js');
 const { tickPrices } = await import('../src/game/market.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
@@ -5191,6 +5192,163 @@ const w24restoreChecks = {
 };
 console.log('wave24 restore:', JSON.stringify(w24restoreChecks));
 if (!Object.values(w24restoreChecks).every(Boolean)) { console.log('WAVE24 RESTORE FAIL'); errors++; }
+
+// ---- Wave 25: generated-system depth, part 3 — generated dockmaster voice:
+// ---- faction recognition greetings + faction-framed rumors -----------------
+
+// -- a. data: the faction voice tables cover exactly the generated galaxy ----
+// (static, the wave-23 a / wave-24 a discipline): the key sets of
+// FACTION_RECOGNITION and FACTION_RUMOR each equal the set of factions flown
+// by the 94 generated systems — the authored-only 'hollow' holds no entry —
+// and every value is a non-empty string.
+const genFactions25 = [...new Set(generatedIds23.map((id) => SYSTEMS[id].faction))].sort();
+const recogKeys25 = Object.keys(FACTION_RECOGNITION).sort();
+const rumorKeys25 = Object.keys(FACTION_RUMOR).sort();
+const w25dataChecks = {
+  generatedFactions10: genFactions25.length === 10,
+  recognitionKeySetMatches: JSON.stringify(recogKeys25) === JSON.stringify(genFactions25),
+  rumorKeySetMatches: JSON.stringify(rumorKeys25) === JSON.stringify(genFactions25),
+  hollowAbsent: !('hollow' in FACTION_RECOGNITION) && !('hollow' in FACTION_RUMOR),
+  recognitionAllNonEmpty: Object.values(FACTION_RECOGNITION).every((v) => typeof v === 'string' && v.length > 0),
+  rumorAllNonEmpty: Object.values(FACTION_RUMOR).every((v) => typeof v === 'string' && v.length > 0),
+};
+console.log('wave25 faction voice tables:', JSON.stringify(w25dataChecks), `factions=${JSON.stringify(genFactions25)}`);
+if (!Object.values(w25dataChecks).every(Boolean)) { console.log('WAVE25 FACTION VOICE TABLES FAIL'); errors++; }
+
+// -- b. fresh-harness gates: the faction tier answers at GENERATED_KNOWN_TRUST,
+// falls silent one point below, and the comp ship line still dominates at
+// KEEPER_COMP_TRUST -----------------------------------------------------------
+// The wave-24 b pattern: a second harness on the empty store, its origin
+// overlay dismissed with the same Digit1 (that digit opens the main run's
+// market — the run sits docked at cg_vigil from the wave-24 e restore — and
+// one Escape backs it out to services); the fresh harness is never ticked.
+// Same two differing-faction generated systems wave-24 b picked (genA24/
+// genB24, recomputed off the live data there); every trust move rides the
+// real bumpTrust API.
+const freshBoot25 = bootFreshHarness('wave25 gates');
+const fctx25 = freshBoot25.ctx;
+dispatchKey('Digit1'); // fresh overlay: [1] Freehold Greenhand (empty effects)
+dispatchKey('Escape'); // main run: market → services
+const genA25 = genA24;
+const genB25 = genB24;
+const factionA25 = SYSTEMS[genA25].faction;
+const factionB25 = SYSTEMS[genB25].faction;
+const contactA25 = contactsForSystem(fctx25, genA25).find((c) => c.role === 'dockmaster') ?? null;
+const contactB25 = contactsForSystem(fctx25, genB25).find((c) => c.role === 'dockmaster') ?? null;
+// The shared comp-tier ship line, computed off the live shipName (the fresh
+// harness carries the world.js default): trust 60 must still answer THIS,
+// never the faction greeting — the comp tier dominates the faction tier.
+const ship25 = fctx25.world.shipName;
+const compLine25 = ship25
+  ? `${ship25}, back on my pad. Good to see her in one piece.`
+  : `The living hull — we'd know that ship anywhere. Welcome back.`;
+const gate25 = (c) => { // trust walked 0 → 30 → 29 → 59 → 60 entirely through bumpTrust
+  if (!c) return { known: 'no-contact', below: 'no-contact', mid: 'no-contact', comp: 'no-contact', tKnown: NaN, tBelow: NaN, tMid: NaN, tComp: NaN };
+  bumpTrust(fctx25, c, GENERATED_KNOWN_TRUST - c.trust); // land exactly at the known tier
+  const tKnown = c.trust;
+  const known = recognitionLine(fctx25, c);
+  bumpTrust(fctx25, c, -1); // one point below the gate
+  const tBelow = c.trust;
+  const below = recognitionLine(fctx25, c);
+  bumpTrust(fctx25, c, KEEPER_COMP_TRUST - 1 - c.trust); // mid-tier: above the gate, below the comp tier
+  const tMid = c.trust;
+  const mid = recognitionLine(fctx25, c);
+  bumpTrust(fctx25, c, KEEPER_COMP_TRUST - c.trust); // the comp tier
+  const tComp = c.trust;
+  const comp = recognitionLine(fctx25, c);
+  return { known, below, mid, comp, tKnown, tBelow, tMid, tComp };
+};
+const gateA25 = gate25(contactA25);
+const gateB25 = gate25(contactB25);
+// Authored NEGATIVE control: Mother Tarn (authored freehold dockmaster) at
+// the same trust 30 must stay byte-identical to wave-24 behavior — the
+// faction tier is AUTHORED_SYSTEMS-guarded, so an authored id answers null.
+const tarn25 = contactsForSystem(fctx25, 'freehold').find((c) => c.role === 'dockmaster') ?? null;
+if (tarn25) bumpTrust(fctx25, tarn25, GENERATED_KNOWN_TRUST - tarn25.trust);
+const tarnRecog25 = tarn25 ? recognitionLine(fctx25, tarn25) : 'no-contact';
+const w25gateChecks = {
+  contactsFound: !!contactA25 && !!contactB25 && !!tarn25,
+  factionsDiffer: factionA25 !== factionB25,
+  knownTrustLanded: gateA25.tKnown === GENERATED_KNOWN_TRUST && gateB25.tKnown === GENERATED_KNOWN_TRUST,
+  knownAIsFactionLine: gateA25.known === FACTION_RECOGNITION[factionA25],
+  knownBIsFactionLine: gateB25.known === FACTION_RECOGNITION[factionB25],
+  belowTrustLanded: gateA25.tBelow === GENERATED_KNOWN_TRUST - 1 && gateB25.tBelow === GENERATED_KNOWN_TRUST - 1,
+  belowANull: gateA25.below === null,
+  belowBNull: gateB25.below === null,
+  midTrustLanded: gateA25.tMid === KEEPER_COMP_TRUST - 1 && gateB25.tMid === KEEPER_COMP_TRUST - 1,
+  midAIsFactionLine: gateA25.mid === FACTION_RECOGNITION[factionA25], // >= semantics: the tier spans the whole mid band
+  midBIsFactionLine: gateB25.mid === FACTION_RECOGNITION[factionB25],
+  compTrustLanded: gateA25.tComp === KEEPER_COMP_TRUST && gateB25.tComp === KEEPER_COMP_TRUST,
+  compAIsShipLine: gateA25.comp === compLine25,
+  compBIsShipLine: gateB25.comp === compLine25,
+  compDominatesFaction: gateA25.comp !== FACTION_RECOGNITION[factionA25]
+    && gateB25.comp !== FACTION_RECOGNITION[factionB25],
+  authoredTarnNullAt30: tarn25?.trust === GENERATED_KNOWN_TRUST && tarnRecog25 === null,
+};
+console.log('wave25 recognition gates:', JSON.stringify(w25gateChecks), `genA=${genA25} genB=${genB25}`);
+if (!Object.values(w25gateChecks).every(Boolean)) { console.log('WAVE25 RECOGNITION GATES FAIL'); errors++; }
+
+// -- c. rumor: the faction preface frames the SAME witnessed body ------------
+// Same fresh harness (throwaway, never ticked): seed ctx.world.incidents with
+// one destroyed incident (the wave-4 §3 assignment discipline — rumorFor keys
+// off incidents alone). The generated dockmasters must voice
+// FACTION_RUMOR[faction] + ' ' + the unmodified destroyed body while Mother
+// Tarn voices the body bare; an empty log answers null on both. The preface
+// adds voice only, never an event (Witness Rule §8.7).
+const inc25 = { id: 'inc-w25', kind: 'destroyed', causer: 'npc-marauder', name: 'Kestrel of the Tenth', faction: 'ferrous' };
+const rumorBody25 = `${inc25.name} came apart out in the drift. Happens more than it should.`;
+fctx25.world.incidents = [inc25];
+const rumorGenA25 = contactA25 ? rumorFor(fctx25, contactA25) : 'no-contact';
+const rumorGenB25 = contactB25 ? rumorFor(fctx25, contactB25) : 'no-contact';
+const rumorTarn25 = tarn25 ? rumorFor(fctx25, tarn25) : 'no-contact';
+fctx25.world.incidents = [];
+const rumorGenEmpty25 = contactA25 ? rumorFor(fctx25, contactA25) : 'no-contact';
+const rumorTarnEmpty25 = tarn25 ? rumorFor(fctx25, tarn25) : 'no-contact';
+const w25rumorChecks = {
+  genAPrefixed: rumorGenA25 === `${FACTION_RUMOR[factionA25]} ${rumorBody25}`,
+  genBPrefixed: rumorGenB25 === `${FACTION_RUMOR[factionB25]} ${rumorBody25}`,
+  authoredBare: rumorTarn25 === rumorBody25,
+  prefaceDiscriminates: rumorGenA25 !== rumorBody25 && rumorGenB25 !== rumorBody25,
+  emptyGenNull: rumorGenEmpty25 === null,
+  emptyAuthoredNull: rumorTarnEmpty25 === null,
+};
+console.log('wave25 faction rumor:', JSON.stringify(w25rumorChecks), `genA=${JSON.stringify(rumorGenA25)} tarn=${JSON.stringify(rumorTarn25)}`);
+if (!Object.values(w25rumorChecks).every(Boolean)) { console.log('WAVE25 FACTION RUMOR FAIL'); errors++; }
+
+// -- d. real dock drive: the People card at fh_hearth voices the greeting ----
+// The continuing run is docked at cg_vigil (the wave-24 e death-restore);
+// fh_hearth already rode the wave-21 hub leg, the wave-23 landmark discovery,
+// and the wave-24 c People card, so this extends that same docked leg — a
+// travelTo hop, no new jump soak. Bump Yardkeeper Stovers (the generated
+// freehold dockmaster) to exactly GENERATED_KNOWN_TRUST via the real
+// bumpTrust API, then Digit7 re-opens the real People service (the wave-24 c
+// path): the recognition div must render the FACTION_RECOGNITION.freehold
+// line, quoted. The redock's 'docked' autosave also rewrites the save the
+// fresh-harness boot cleared.
+const hearthDm25 = contactsForSystem(ctx, 'fh_hearth').find((c) => c.role === 'dockmaster') ?? null;
+if (hearthDm25) bumpTrust(ctx, hearthDm25, GENERATED_KNOWN_TRUST - hearthDm25.trust); // land exactly at the known tier
+undockStation();
+travelTo('fh_hearth', 'wave25 hearth leg');
+dockAtCurrentStation('dock hearth (wave25)');
+dispatchKey('Digit7'); // people (DOCK_KEY_SERVICES[6])
+const ov25d = stationOverlay();
+const peopleCards25 = ov25d ? [...walkDom(ov25d)].filter((n) => classHas24(n, 'people-card')) : [];
+const hearthCard25 = peopleCards25.find((card) =>
+  [...walkDom(card)].some((n) => classHas24(n, 'people-name') && n.textContent === hearthDm25?.name)) ?? null;
+const recogDiv25 = hearthCard25
+  ? [...walkDom(hearthCard25)].find((n) => classHas24(n, 'people-recognition')) ?? null
+  : null;
+const expectedRecog25 = `“${FACTION_RECOGNITION.freehold}”`; // station.js quotes the line
+const w25peopleChecks = {
+  dockmasterFound: !!hearthDm25 && hearthDm25.name === SYSTEMS.fh_hearth.contacts[0].name,
+  trustAtKnownTier: hearthDm25?.trust === GENERATED_KNOWN_TRUST,
+  dockedAtHearth: ctx.flags.docked === true && ctx.world.currentSystem === 'fh_hearth',
+  oneCard: peopleCards25.length === 1,
+  recognitionRendered: recogDiv25?.textContent === expectedRecog25,
+};
+console.log('wave25 hearth people recognition:', JSON.stringify(w25peopleChecks), `line=${JSON.stringify(recogDiv25?.textContent ?? null)}`);
+if (!Object.values(w25peopleChecks).every(Boolean)) { console.log('WAVE25 HEARTH PEOPLE RECOGNITION FAIL'); errors++; }
+dispatchKey('Escape'); // people → services
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

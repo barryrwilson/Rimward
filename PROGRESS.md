@@ -769,17 +769,54 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   wave-6 epic behavior — no fix). npm run test:boot PASS ×7
   consecutive; npm run build clean (pre-existing chunk warning only);
   regeneration byte-identical ×3.
-## Next round candidates (wave 25)
-- Generated-system depth, part 3: landmarks (wave 23), hub dockmasters
+- Wave 25: generated-system depth, part 3 (the one standing contact
+  slice — generated dockmasters gain per-faction voice). state.js:
+  FACTION_RECOGNITION + FACTION_RUMOR after FACTION_SERVICES — one
+  recognition greeting + one witness-safe rumor preface per faction,
+  exactly the 10 generated-flown keys in FACTION_SERVICES order,
+  'hollow' absent (authored-only), voices true to generate-galaxy.mjs's
+  CT_TONE tones; the greeting carries no ship name (the trust-60 comp
+  line owns ship recognition), each preface reads before a space + any
+  of rumorFor's three bodies. contacts.js: GENERATED_KNOWN_TRUST = 30
+  (below KEEPER_COMP_TRUST, so the comp ship line still dominates at
+  >= 60); recognitionLine's new final tier (after the ace gate, before
+  return null) answers FACTION_RECOGNITION[faction] for a dockmaster
+  whose system is not in AUTHORED_SYSTEMS at trust >= 30 — pure read,
+  no flags, faction via the wave-23 live-def fallback; rumorFor computes
+  the body byte-identically and prefixes FACTION_RUMOR[faction] + ' '
+  behind the same role + AUTHORED_SYSTEMS guard (empty log still null
+  first, rumorIdx rotation untouched). Authored six byte-identical by
+  construction — every new gate is by-id; hub dockmasters covered by the
+  same generated-only gate as wave-24's services. No generator change
+  (lines are runtime templates; galaxy.generated.js untouched), no
+  persisted fields (repeatable greeting, not a one-shot ack), no
+  save.js/station.js changes. Boot test wave-25 section: data (key sets
+  == the live 94-system faction set, 'hollow' absent, all non-empty),
+  fresh-harness trust walk 0→30→29→59→60 through the real bumpTrust
+  (30 faction line, 29 null, 59 faction line — the tier spans the whole
+  mid band, 60 comp line dominates), authored negative control (Mother
+  Tarn at 30 → null), rumor (generated = preface + ' ' + witnessed
+  body, authored = bare body, empty log null both), and a real Digit7
+  People-card drive at fh_hearth rendering the freehold greeting.
+  Independent review APPROVE (0 CRITICAL/HIGH/MEDIUM; LOWs fixed
+  inline: wave-misattributed comment reworded, dockmaster role gate
+  added to the rumor preface, mid-tier 59 probe added; the
+  alternate-bodies-under-preface pin consciously not added — bodies are
+  byte-unchanged and the preface applies uniformly after the branch).
+  npm run test:boot PASS ×7 consecutive ×2 (pre- and post-review-fix);
+  npm run build clean (only the pre-existing >500 kB chunk warning).
+## Next round candidates (wave 26)
+- Generated-system depth, part 4: landmarks (wave 23), hub dockmasters
   (23), procedural dockmaster contacts at all 91 non-hub generated
-  stations (24), and faction-specific station services (24) are in.
-  Standing: generated dockmasters share only the trust-only ship
-  recognition line — per-faction recognition tiers or rumor flavor is
-  the largest remaining contact slice; generated systems hold no clues
-  BY DESIGN (the authored total stays 6 — convergence/deepening math);
-  ferry/haul jobs quote the origin jobPayMult and pay the destination's
-  (pre-existing wave-6 behavior — snapshot at accept time if exact
-  agreement is ever wanted).
+  stations (24), faction-specific station services (24), and
+  per-faction dockmaster recognition/rumor voice (25) are in. Standing:
+  generated systems hold no clues BY DESIGN (the authored total stays
+  6 — convergence/deepening math); generated dockmasters' trust curve
+  still tops out at the shared comp ship line (no favors/keeper-style
+  mechanics — a deeper per-contact economy would be a new system, not
+  a voice pass); ferry/haul jobs quote the origin jobPayMult and pay
+  the destination's (pre-existing wave-6 behavior — snapshot at accept
+  time if exact agreement is ever wanted).
 - NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
   are player/Guild infrastructure; physical gates only — recorded on
   pickMigrant in world.js). No action standing; revisit only if routed
