@@ -199,6 +199,7 @@ const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
 const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW } = await import('../src/game/state.js');
+const { tickPrices } = await import('../src/game/market.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
@@ -330,6 +331,25 @@ console.log(`bio: mood=${ctx.bio.mood} hunger=${ctx.bio.hunger.toFixed(2)} wound
 console.log(`save present: ${store.has('rimward-save-v1')}`);
 
 // ---- Wave 2: gate jump round trip ----
+// Gate hygiene (pre-existing flake): a soak world event's pressure pull can
+// leave freehold provisions deviated when provBefore is sampled
+// (laborStrike pushes staples toward +34% of baseline, and the fractional
+// deviation outlives the event — PRESSURE_PULL 0.06/s), or start mid-jump
+// and drag the DESTINATION system's price — either side compresses the
+// veridianSpread / provisionsSpread gates below. End any active or due
+// event through the real endEvent path (clears the pressure, pushes the
+// next event 3-6 min out), then decay the residual deviation with
+// price-only tickPrices calls — NO world ticks, so traffic, migration, and
+// cast counts are untouched (explicit-Euler pull needs dt <= 1 to stay
+// stable; 300 × 0.5 s shrinks any deviation ~10^4×).
+const settlePrices = (label) => {
+  tick(1, `${label} pre-check`); // a due event starts on THIS tick, not mid-window
+  if (ctx.world.activeEvent) {
+    ctx.world.activeEvent.endsAt = ctx.world.time - 1; // real endEvent → applyEventPressure('clear')
+    tick(2, `${label} event cleared`);
+  }
+  for (let i = 0; i < 300; i++) tickPrices(ctx, 0.5);
+};
 // Park at the freehold gate: zone check should flip.
 ctx.ship.object.position.set(...SYSTEMS.freehold.gates[0].position);
 ctx.ship.velocity.set(0, 0, 0);
@@ -337,10 +357,12 @@ tick(5, 'at gate');
 console.log(`gate inZone (expect true): ${ctx.gate.inZone}`);
 // Fire the jump directly (input edges are controls.js territory; the browser
 // verifier covers the D-key path — here we test the swap machinery).
+settlePrices('wave2 freehold');
 const astBefore = ctx.asteroids.list;
 const provBefore = ctx.world.prices.provisions;
 ctx.emit('jumpRequested', { to: 'veridian' });
 tick(60 * 4, 'jump to veridian');
+settlePrices('wave2 veridian');
 const jumpChecks = {
   currentSystem: ctx.world.currentSystem === 'veridian',
   jumpingDone: !ctx.gate.jumping,
@@ -369,6 +391,7 @@ console.log(`gate inZone (expect true): ${ctx.gate.inZone} nearTo (expect redmar
 ctx.emit('jumpRequested', { to: 'redmarch' });
 tick(60 * 4, 'jump to redmarch');
 tick(60 * 30, 'redmarch soak 30s'); // let traffic respawn from the new cast
+settlePrices('wave3 redmarch');
 let redPlanets = 0;
 ctx.scene.traverse((o) => {
   // Planets: standard-material spheres (sun/eyes are basic, hull is physical,

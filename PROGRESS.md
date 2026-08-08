@@ -502,17 +502,50 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   test:boot PASS ×51 of 52 runs (the one fail being the pre-existing
   jump-check flake); npm run build clean (only the pre-existing
   >500 kB chunk warning).
-## Next round candidates (wave 19)
+- Wave 19: the wave-18-surfaced boot-test flake. Root cause: a soak
+  world event's market pressure (laborStrike pulls provisions toward
+  +34% of baseline; the fractional deviation outlives the event —
+  PRESSURE_PULL 0.06/s) leaves freehold's provisions price inflated
+  when the jump checks sample provBefore, compressing veridianSpread
+  (135 > provBefore × 1.1). Reproduced on the untouched tree twice
+  (event=laborStrike at soak end, veridianSpread:false; base rate
+  2/80 runs). Fix is harness-only, scripts/boot-test.mjs: a
+  settlePrices(label) helper ends any active/due event through the
+  real endEvent path (endsAt = time - 1, a 1-tick pre-check forces a
+  due event to start so it can be cleared — the wave-9 walk
+  pattern), then decays the residual deviation with 300 price-only
+  tickPrices(ctx, 0.5) calls — NO world ticks, so traffic, migration,
+  and cast counts are untouched (an earlier whole-world-tick settle
+  broke castMatches via migration churn and was reverted). Applied
+  before the freehold provBefore sample and after the redmarch soak
+  (same latent exposure: a mid-window commodityGlut on provisions can
+  drag 130 below the 100 floor). The veridian hop needs no settle —
+  first-visit table is built at baseline and the 4 s window bounds
+  any mid-window pull. Deterministic proof: an injection variant
+  forcing laborStrike pressure + fully pulled deviation (provisions
+  135, the exact flake condition) recovers to 100 through
+  settlePrices and passes every gate. Rates over 150 runs: jump
+  flake 2/80 base → 0/70 fixed; the two remaining pre-existing
+  flakes (wave-9 hermit walk driftH vs driftV ratio, redmarch
+  castMatches migration arrival) held at base rates (2/80 → 3/70 and
+  0/80 → 1/70 — same within noise). Production code untouched.
+  npm run test:boot PASS ×7 final runs; npm run build clean (only
+  the pre-existing >500 kB chunk warning).
+## Next round candidates (wave 20)
 
-- Boot-test flake (pre-existing, reproduced on the wave-17 tree):
-  jump checks' veridianSpread gate assumes provisions > provBefore ×
-  1.1 after the freehold→veridian hop, but the soak's random world
-  event (e.g. commodityGlut/laborStrike) can move freehold's baseline
-  before provBefore is sampled, compressing the spread. Observed ~1
-  in 20–50 runs. Fix direction mirrors wave 17: make the harness
-  setup deterministic (clear/expire the active soak event or rebase
-  provBefore to the authored priceBase) rather than touching pricing
-  itself.
+- Boot-test flake (pre-existing, seen on base 2/80 and fixed-tree
+  3/70): the wave-9 hermit walk gate hermitWalkSlower (driftH >=
+  2.5 × driftV) still flakes — driftV=4 with driftH=5/-3 observed.
+  The measurement pins Math.random and pre-drags the deviation, but
+  event timing around the verge/hush window can still compress the
+  hush ramp. Fix direction: same pattern as wave 19 — clear events
+  through the real endEvent path and settle deviations with
+  price-only tickPrices before measuring.
+- Boot-test flake (rare, 1/70 fixed-tree, 0/80 base): redmarch
+  castMatches expects exactly 13 records; an in-migration arrival
+  during the redmarch window makes it 14. Fix direction: filter
+  in-transit/arrived records out of the cast assertion or pin the
+  migration schedule for the window.
 - The trust-60 tier now rides one exported constant
   (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
   change, but every 60-gate still has an independent
@@ -524,5 +557,5 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   modulo-bounded, charted is deduped by authored ids, vouchAck is one
   bit per keeper, and the Callow cursors grow only +1 per real Verge
   visit with exact arithmetic pinned by existing gates.
-- Polish debt: the veridianSpread flake above; boot test remains the
-  gate.
+- Polish debt: the two boot-test flakes above; boot test remains
+  the gate.
