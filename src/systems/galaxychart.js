@@ -36,8 +36,9 @@ const NODE_R = 8;
 const HUB_RING_R = 15;
 const MARKER_R = 22;
 
-// Authored six (state.js AUTHORED_SYSTEMS is not exported; ids are stable
-// and boot tests pin them). Pinned specials are wave-19 landmarks of the
+// Authored six (their records live in game/authored-systems.js — wave 22 —
+// and state.js does not re-export them; ids are stable and boot tests pin
+// them). Pinned specials are wave-19 landmarks of the
 // generated rim that the design doc calls out by name.
 const AUTHORED_IDS = new Set(['freehold', 'veridian', 'redmarch', 'hollowreach', 'hush', 'verge']);
 const PINNED_IDS = new Set(['stolenwomb', 'lastbeacon', 'blackstation', 'fx_bastion', 'gc_auction']);

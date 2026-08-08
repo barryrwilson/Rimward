@@ -55,6 +55,12 @@
 // forced migrant must still ARRIVE after a freehold→freehold
 // death-restore, never strand), and the galaxyChecks degree-cap + pinned
 // band extensions.
+// Wave 22: the junction "lantern" silhouette (hex frame + per-route arm
+// lamps) checked inside the wave-21 hub flight — exactly one
+// 'lamplighter-junction' group with routeCount/arm-lamp hooks while
+// parked at freehold, userData.routeIndex tracking KeyG with wrap, no
+// junction group in hub-less fh_hearth, and the group rebuilt on the
+// freehold return leg.
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -514,19 +520,47 @@ const w21hubChecks = {
   routeCount: ctx.gate.nearRouteCount === fhRoutes.length && fhRoutes.length > 0,
   initialSelection: ctx.gate.nearRouteIndex === 0 && ctx.gate.nearTo === fhRoutes[0],
 };
+// Wave 22: junction lantern silhouette hooks, while parked at the hub.
+const w22junctionsAt = () => {
+  const found = [];
+  ctx.scene.traverse((o) => { if (o.name === 'lamplighter-junction') found.push(o); });
+  return found;
+};
+const w22lampsIn = (g) => {
+  let n = 0;
+  g.traverse((o) => { if (o.name === 'junction-arm-lamp') n++; });
+  return n;
+};
+const w22junction = w22junctionsAt();
+const w22hubChecks = {
+  singleJunction: w22junction.length === 1,
+  routeCountHook: w22junction.length === 1
+    && w22junction[0].userData.routeCount === SYSTEMS.freehold.hub.routes.length
+    && SYSTEMS.freehold.hub.routes.length === 4,
+  armLamps: w22junction.length === 1 && w22lampsIn(w22junction[0]) === fhRoutes.length,
+};
 // KeyG through the whole list in authored order, then once more to wrap.
 {
   let cyclesInOrder = true;
   let wrapsToFirst = false;
+  let routeIndexTracks = true;
+  let routeIndexWraps = false;
   for (let i = 1; i <= fhRoutes.length; i++) {
     dispatchKey('KeyG');
     tick(1, 'wave21 junction cycle');
     const want = i % fhRoutes.length;
     if (ctx.gate.nearRouteIndex !== want || ctx.gate.nearTo !== fhRoutes[want]) cyclesInOrder = false;
     if (i === fhRoutes.length) wrapsToFirst = ctx.gate.nearRouteIndex === 0 && ctx.gate.nearTo === fhRoutes[0];
+    // Wave 22: the junction group's userData mirror follows the same cadence.
+    if (w22junction.length === 1) {
+      if (w22junction[0].userData.routeIndex !== want) routeIndexTracks = false;
+      if (i === fhRoutes.length) routeIndexWraps = w22junction[0].userData.routeIndex === 0;
+    }
   }
   w21hubChecks.cyclesInOrder = cyclesInOrder;
   w21hubChecks.wrapsToFirst = wrapsToFirst;
+  w22hubChecks.routeIndexTracks = w22junction.length === 1 && routeIndexTracks;
+  w22hubChecks.routeIndexWraps = w22junction.length === 1 && routeIndexWraps;
 }
 // D on the wrapped selection (routes[0] === fh_hearth): controls.js turns
 // the keydown into dockPressed one tick after the keydown; gate.js emits
@@ -548,6 +582,8 @@ const hearthBack = returnGate('fh_hearth', 'freehold');
 const p21a = ctx.ship.object.position;
 w21hubChecks.nearHearthBackGate = !!hearthBack && hearthBack.to === 'freehold'
   && Math.hypot(p21a.x - hearthBack.position[0], p21a.y - hearthBack.position[1], p21a.z - hearthBack.position[2]) < 80;
+// Wave 22: fh_hearth is hub-less — no junction group may survive the rebuild.
+w22hubChecks.goneInHearth = w22junctionsAt().length === 0;
 // Home through the physical back-gate — the real D path again. The
 // hub-arrival rule must land the ship at the freehold JUNCTION (~50u off
 // hub.position), never at the gates[0] fallback (~145u away — 80u
@@ -565,6 +601,14 @@ w21hubChecks.hubArrivalRule = Math.hypot(
   p21b.x - (fhHub?.position?.[0] ?? 1e9), p21b.y - (fhHub?.position?.[1] ?? 1e9), p21b.z - (fhHub?.position?.[2] ?? 1e9)) < 80;
 console.log('wave21 hub junction:', JSON.stringify(w21hubChecks));
 if (!Object.values(w21hubChecks).every(Boolean)) { console.log('WAVE21 HUB JUNCTION FAIL'); errors++; }
+// Wave 22: back in freehold the systemLoaded rebuild must restore exactly
+// one junction group with the full route hook set.
+const w22junctionBack = w22junctionsAt();
+w22hubChecks.rebuiltOnReturn = w22junctionBack.length === 1
+  && w22junctionBack[0].userData.routeCount === fhRoutes.length
+  && w22lampsIn(w22junctionBack[0]) === fhRoutes.length;
+console.log('wave22 junction visual:', JSON.stringify(w22hubChecks));
+if (!Object.values(w22hubChecks).every(Boolean)) { console.log('WAVE22 JUNCTION VISUAL FAIL'); errors++; }
 
 // -- 2. Runtime galaxy chart DOM -------------------------------------------
 // The chart root is built once at init from the live SYSTEMS/FACTIONS

@@ -601,41 +601,95 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   and on recordBanks reference swaps, so same-system save restores cannot
   strand restored migrants; contacts.js roster names gain a defensive
   fallback for generated systems. gate.js renders Lamplighter junctions at
-  `hub.position`; G cycles `hub.routes` in authored order, D jumps the
-  selected route, and HUD publishes `G route i/n · D — Jump to NAME` through
-  the new ctx.gate nearHub/nearRouteIndex/nearRouteCount fields. jump.js
-  arrives at `hub.position` when returning from a routed system; physical
-  gate arrival rules are unchanged. `src/systems/galaxychart.js` adds the
-  runtime M-key galaxy chart: 100 runtime-generated nodes, 133 physical
-  edges, 25 hub routes, current-system highlight, keyboard/Escape/close
-  controls, station-screen ownership while docked, and §25-safe route data
-  only. Boot test wave-21 section drives the real KeyG/D hub flight to
-  fh_hearth and back, the real KeyM chart DOM, the same-system migrant
-  restore regression, degree<=3, pinned named-special bands, and all
-  existing wave gates. Independent integration review found no
-  HIGH/CRITICAL issues; the two LOW review items (chart open over docked
-  station UI, G while paused) were fixed. Browser-verified: chart open/
-  close/current-system updates, hub prompt and G cycling, D jump to
-  fx_bastion, and junction arrival back at freehold. npm run test:boot
-  PASS; npm run build clean (only the pre-existing >500 kB chunk warning).
-## Next round candidates (wave 22)
+ `hub.position`; G cycles `hub.routes` in authored order, D jumps the
+ selected route, and HUD publishes `G route i/n · D — Jump to NAME` through
+ the new ctx.gate nearHub/nearRouteIndex/nearRouteCount fields. jump.js
+ arrives at `hub.position` when returning from a routed system; physical
+ gate arrival rules are unchanged. `src/systems/galaxychart.js` adds the
+ runtime M-key galaxy chart: 100 runtime-generated nodes, 133 physical
+ edges, 25 hub routes, current-system highlight, keyboard/Escape/close
+ controls, station-screen ownership while docked, and §25-safe route data
+ only. Boot test wave-21 section drives the real KeyG/D hub flight to
+ fh_hearth and back, the real KeyM chart DOM, the same-system migrant
+ restore regression, degree<=3, pinned named-special bands, and all
+ existing wave gates. Independent integration review found no
+ HIGH/CRITICAL issues; the two LOW review items (chart open over docked
+ station UI, G while paused) were fixed. Browser-verified: chart open/
+ close/current-system updates, hub prompt and G cycling, D jump to
+ fx_bastion, and junction arrival back at freehold. npm run test:boot
+ PASS; npm run build clean (only the pre-existing >500 kB chunk warning).
+- Wave 22: three of the queued candidates (junction silhouette, generator
+  shared-data module, hub-route migration decision). state.js: the six
+  authored-system records move verbatim into NEW src/game/authored-systems.js
+  (zero imports, plain data, doc comment included); state.js imports it
+  beside GENERATED_SYSTEMS, the wave-19 merge `SYSTEMS = { ...AUTHORED_SYSTEMS,
+  ...GENERATED_SYSTEMS }` and its key-order comment are untouched.
+  scripts/generate-galaxy.mjs: the hand-duplicated AUTHORED stub literal is
+  replaced by a derivation from the shared module (Object.fromEntries over
+  AUTHORED_SYSTEMS — faction/band/chart.slice()/gates.map(g=>g.to)/
+  hub?.routes?.slice() ?? [], insertion order preserved, zero RNG consumed);
+  all six ids diffed field-by-field against the old literal before deletion
+  (MATCH ×6, hush/verge routes [] from absent hub keys); regeneration is
+  BYTE-IDENTICAL vs HEAD (git diff --exit-code clean). Post-review the
+  generated-file header template and the galaxychart.js comment stopped
+  saying authored systems live in state.js (regenerated diff header-only,
+  4 lines). gate.js: hub junctions gain the Lamplighter "lantern"
+  silhouette — the standard ring/chevrons/glow/beacon/swirl stay (a
+  junction is still a transit ring; charge intensification untouched) plus
+  a counter-rotating hexagonal frame (6 brass bars, shared geometry,
+  per-assembly material, circumradius RING_RADIUS×1.35, frozen under
+  reducedMotion) and one slender brass arm PER ROUTE tipped with an amber
+  lamp sprite ('junction-arm-lamp'); the selected route's lamp lerps
+  scale 6→9.5 / opacity 0.45→1.0 from the live a.routeIndex (the same
+  field the KeyG listener mutates — no copy to desync), giving route
+  cycling visual feedback. Testability hooks without touching the ctx.gate
+  ownership list: group.name 'lamplighter-junction'/'lamplighter-gate',
+  userData.routeCount at build, userData.routeIndex mirrored per frame.
+  rebuild() disposes hexMat + lamp materials per assembly; shared
+  hexBarGeo/armGeo survive like ringGeo. Boot test wave-22 section
+  integrates INTO the existing wave-21 hub flight (no second leg):
+  w22hubChecks singleJunction/routeCountHook/armLamps parked pre-KeyG,
+  routeIndexTracks/routeIndexWraps inside the existing KeyG loop,
+  goneInHearth after the D jump, rebuiltOnReturn after the home leg;
+  helpers w22junctionsAt/w22lampsIn traverse ctx.scene by name.
+  world.js: the hub-route migration asymmetry is DECIDED lore, recorded
+  as a comment on pickMigrant — physical gates only; Lamplighter
+  junctions are player/Guild infrastructure; routed systems keep their
+  sparse casts and the deep rim keeps its designed silence (BANDS).
+  No code change; boot-test already documented the asymmetry by design.
+  Independent review APPROVE (0 CRITICAL/HIGH/MEDIUM; the two stale-
+  comment LOWs fixed inline above; the reducedMotion lamp-lerp LOW is
+  compliant by design — selection feedback, not decoration). npm run
+  test:boot PASS ×7 runs + 1 post-comment-fix confirmation run; npm run
+  build clean (only the pre-existing >500 kB chunk warning).
+  Browser-verified: junction hex/arms silhouette vs the plain ring,
+  real KeyG cycling (ROUTE 1/4→3/4, prompt HEARTH→HAVEN→MERIDIAN), and
+  the selected-route lamp emphasis (selected arm scale 9.5/opacity 1.0,
+  others 6/0.45, emphasis advancing lamp-for-lamp with routeIndex).
+## Next round candidates (wave 23)
 - Generated-system depth: the 94 new systems are mechanically reachable
   (trade/mine/fight/traffic) but intentionally sparse — no contacts,
-  landmarks, clues, jobs, or faction-specific station behavior yet.
-- NPC migration still uses physical gates only, so routed systems can lose
-  traders toward hubs but never receive hub→route migrants. Decide whether
-  that asymmetry is lore (junctions are player/Lamplighter-only) or a wave
-  candidate.
-- Hub junctions currently reuse the standard gate ring silhouette; a
-  distinct junction visual would help before more route density arrives.
-- Generator maintainability: `scripts/generate-galaxy.mjs` still duplicates
-  the authored six-system stubs instead of deriving them from shared data;
-  safe today because boot-test catches drift, but a shared authored-data
-  module would remove the hazard.
+  landmarks, clues, jobs, or faction-specific station behavior yet. The
+  standing big candidate; likely multi-wave if taken whole.
+- NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
+  are player/Guild infrastructure; physical gates only — recorded on
+  pickMigrant in world.js). No action standing; revisit only if routed
+  systems ever need living traffic.
 - The trust-60 tier now rides one exported constant
   (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
   change, but every 60-gate still has an independent
   system/milestone/ledger gate to re-check if the number moves.
+- Counters (callowReturns, callowRefusals, ledgerIdx) still never
+  reset; vouchAck is a bool; mystery.charted grows by landmark id but
+  is bounded by the authored landmark tables — self-limiting. The
+  wave-17/18 assessments found no action worth taking: ledgerIdx is
+  modulo-bounded, charted is deduped by authored ids, vouchAck is one
+  bit per keeper, and the Callow cursors grow only +1 per real Verge
+  visit with exact arithmetic pinned by existing gates.
+- Polish debt: none standing; both pre-existing boot-test flakes
+  were closed in wave 20, and the wave-20 follow-up fixed the
+  cross-system event-pressure leak behind the residual hermit-walk
+  flake (0/300 post-fix). Boot test remains the gate.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
   reset; vouchAck is a bool; mystery.charted grows by landmark id but
   is bounded by the authored landmark tables — self-limiting. The

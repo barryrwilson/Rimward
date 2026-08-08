@@ -1041,6 +1041,11 @@ export function initWorld(ctx) {
   // ---------- Inter-system migration §8.2 ----------
   function pickMigrant(ctx) {
     // Uniform-random destination among the current system's gates.
+    // Wave 22 (lore decision): physical gates ONLY — hub routes are never
+    // migration destinations. Lamplighter junctions are player/Guild
+    // infrastructure; NPC traffic rides the old ring network. The asymmetry
+    // is authored, not a gap: routed systems keep their sparse casts and
+    // the deep rim keeps its designed silence (BANDS pacing).
     const gates = SYSTEMS[ctx.world.currentSystem]?.gates;
     if (!gates || gates.length === 0) return;
     const dest = gates[(Math.random() * gates.length) | 0].to;

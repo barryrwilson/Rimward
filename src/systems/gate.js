@@ -8,7 +8,16 @@ import { SYSTEMS, JUMP } from '../game/state.js';
  * Visual: each gate is a ~30u-radius rotating torus ring with inner chevron
  * markers, an additive amber/brass glow (Lamplighter palette: worn brass,
  * lamplight amber), and a pulsing beacon. Oriented so the ring faces the
- * system center. Distinct silhouette from 500+u.
+ * system center. Distinct silhouette from 500+u. Hub junctions add the
+ * "Lamplighter lantern" silhouette on top of the same ring: a slowly
+ * counter-rotating hexagonal brass outer frame (~1.35× ring radius, faint
+ * amber emissive; frozen under reducedMotion) and one slender brass arm
+ * per hub route, evenly spaced in the ring plane, each tipped with an
+ * amber lamp sprite — the selected route's lamp burns visibly brighter
+ * and larger, tracking the live routeIndex (KeyG cycling) each frame.
+ * Junction groups are named 'lamplighter-junction' (standard gates
+ * 'lamplighter-gate') and mirror the selection onto
+ * group.userData.routeIndex (userData.routeCount set at build).
  *
  * Ownership: writes ctx.gate.inZone, nearTo, nearHub, nearRouteIndex and
  * nearRouteCount only (jumping/progress/destination are jump.js's). The
@@ -38,7 +47,9 @@ import { SYSTEMS, JUMP } from '../game/state.js';
  *
  * update() performs zero allocations: gate assemblies are preallocated on
  * rebuild and iterated by index; overlay style/text are only touched on
- * state changes; the swirl mutates its position buffer in place.
+ * state changes; the swirl mutates its position buffer in place; junction
+ * hex frame/arms/lamps are preallocated with the assembly and update()
+ * only mutates frame rotation, lamp scale/opacity, and userData scalars.
  */
 
 // Lamplighter palette (§16): worn brass structure, lamplight amber glow.
@@ -57,6 +68,18 @@ const SPIN_SPEED = 0.25; // rad/s, slow
 const TUNNEL_COUNT = 200;
 const TUNNEL_DEPTH = 24; // tunnel length along the bore axis (local Z)
 const TUNNEL_SIZE = 1.7; // point size
+
+// Junction lantern silhouette (wave-22): a hexagonal brass outer frame
+// counter-rotating against the ring, plus one slender brass arm per hub
+// route tipped with an amber lamp. All preallocated at build time.
+const HEX_RADIUS = RING_RADIUS * 1.35;
+const HEX_BAR_THICK = 1.4;
+const HEX_SPIN_SPEED = -SPIN_SPEED * 0.4; // counter-rotates the ring spin
+const ARM_THICK = 0.7;
+const LAMP_BASE_SCALE = 6;
+const LAMP_SELECTED_SCALE = 9.5;
+const LAMP_BASE_OPACITY = 0.45;
+const LAMP_SELECTED_OPACITY = 1;
 
 /** Additive radial-gradient sprite texture for the gate glow/beacon. */
 function makeGlowTexture(inner, outer) {
@@ -94,6 +117,12 @@ export function initGate(ctx) {
   const chevronRadius = RING_RADIUS - RING_TUBE - 3;
   const glowBaseScale = RING_RADIUS * 3.2;
   const beaconBaseScale = 10;
+
+  // Junction silhouette shared geometry (like ringGeo/chevronGeo: shared
+  // across assemblies, never disposed per rebuild). Hex bars span a full
+  // hex edge (edge length == circumradius for a regular hexagon).
+  const hexBarGeo = new THREE.BoxGeometry(HEX_RADIUS, HEX_BAR_THICK, HEX_BAR_THICK);
+  const armGeo = new THREE.BoxGeometry(HEX_RADIUS - RING_RADIUS, ARM_THICK, ARM_THICK);
 
   // One preallocated assembly per gate: { group, ring, chevrons, glow,
   // beacon, to, x, y, z }. Rebuilt only on 'systemLoaded'.
@@ -192,6 +221,70 @@ export function initGate(ctx) {
     return { group, ring, chevrons, glow, beacon, swirl, swirlArr, swirlBase, swirlZ, swirlPhase: 0, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
   }
 
+  // Junction lantern silhouette (wave-22): augment a hub assembly with the
+  // hexagonal outer frame + one brass arm per route tipped with an amber
+  // lamp sprite. Everything is preallocated here — update() only mutates
+  // frame rotation, lamp scale/opacity, and userData scalars.
+  function buildJunctionExtras(a, routes) {
+    const group = a.group;
+    // Per-assembly frame/arm material (disposed with the assembly).
+    const hexMat = new THREE.MeshStandardMaterial({
+      color: BRASS_DARK,
+      emissive: AMBER,
+      emissiveIntensity: 0.35,
+      roughness: 0.5,
+      metalness: 0.7,
+    });
+    const hexFrame = new THREE.Group();
+    const edgeMidR = HEX_RADIUS * Math.cos(Math.PI / 6);
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      const bar = new THREE.Mesh(hexBarGeo, hexMat);
+      bar.position.set(Math.cos(ang) * edgeMidR, Math.sin(ang) * edgeMidR, 0);
+      bar.rotation.z = ang + Math.PI / 2;
+      hexFrame.add(bar);
+    }
+    group.add(hexFrame);
+
+    const arms = new THREE.Group();
+    const lamps = [];
+    const lampMats = [];
+    const armR = (RING_RADIUS + HEX_RADIUS) / 2;
+    const lampR = HEX_RADIUS - 1;
+    for (let k = 0; k < routes.length; k++) {
+      const phi = (k / routes.length) * Math.PI * 2;
+      const arm = new THREE.Mesh(armGeo, hexMat);
+      arm.position.set(Math.cos(phi) * armR, Math.sin(phi) * armR, 0);
+      arm.rotation.z = phi;
+      arms.add(arm);
+      const lampMat = new THREE.SpriteMaterial({
+        map: beaconMap,
+        color: AMBER,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: LAMP_BASE_OPACITY,
+        depthWrite: false,
+      });
+      const lamp = new THREE.Sprite(lampMat);
+      lamp.name = 'junction-arm-lamp';
+      lamp.position.set(Math.cos(phi) * lampR, Math.sin(phi) * lampR, 0);
+      lamp.scale.setScalar(LAMP_BASE_SCALE);
+      arms.add(lamp);
+      lamps.push(lamp);
+      lampMats.push(lampMat);
+    }
+    group.add(arms);
+
+    a.hexFrame = hexFrame;
+    a.hexMat = hexMat;
+    a.arms = arms;
+    a.lamps = lamps;
+    a.lampMats = lampMats;
+    a.lampBlend = new Float32Array(routes.length); // per-lamp selection lerp state
+    group.userData.routeCount = routes.length;
+    group.userData.routeIndex = 0;
+  }
+
   // --- Rebuild every assembly for the current system (on 'systemLoaded') ---
   function rebuild() {
     for (let i = 0; i < assemblies.length; i++) {
@@ -202,11 +295,21 @@ export function initGate(ctx) {
       a.beacon.material.dispose();
       a.swirl.geometry.dispose();
       a.swirl.material.dispose();
+      if (a.isHub) {
+        // Junction silhouette: shared hexBarGeo/armGeo survive (like
+        // ringGeo); dispose only the per-assembly material and lamp mats.
+        a.hexMat.dispose();
+        for (let k = 0; k < a.lampMats.length; k++) a.lampMats[k].dispose();
+      }
     }
     assemblies.length = 0;
     const def = SYSTEMS[ctx.world.currentSystem];
     const gates = def.gates;
-    for (let i = 0; i < gates.length; i++) assemblies.push(buildAssembly(gates[i]));
+    for (let i = 0; i < gates.length; i++) {
+      const a = buildAssembly(gates[i]);
+      a.group.name = 'lamplighter-gate';
+      assemblies.push(a);
+    }
     // Lamplighter junction: one assembly at hub.position carrying the hub's
     // route list. `to` always tracks the selected route (reset to 0 here);
     // KeyG advances routeIndex while this is the nearest zone.
@@ -216,6 +319,8 @@ export function initGate(ctx) {
       a.isHub = true;
       a.routes = hub.routes;
       a.routeIndex = 0;
+      buildJunctionExtras(a, hub.routes);
+      a.group.name = 'lamplighter-junction';
       assemblies.push(a);
     }
   }
@@ -276,6 +381,22 @@ export function initGate(ctx) {
       const charge = charging ? 1 + ctx.gate.progress * 1.6 : 1;
       a.glow.scale.setScalar(glowBaseScale * (0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
       a.ring.material.emissiveIntensity = charging ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
+
+      // Junction silhouette (wave-22): hex frame counter-rotates the ring
+      // spin (frozen under reducedMotion); the selected route's lamp lerps
+      // brighter/larger — scale/opacity mutated in place, no allocation.
+      if (a.isHub) {
+        if (!reducedMotion) a.hexFrame.rotation.z += HEX_SPIN_SPEED * dt;
+        const lerp = Math.min(1, dt * 8);
+        for (let k = 0; k < a.lamps.length; k++) {
+          const target = k === a.routeIndex ? 1 : 0;
+          const blend = a.lampBlend[k] + (target - a.lampBlend[k]) * lerp;
+          a.lampBlend[k] = blend;
+          a.lamps[k].scale.setScalar(LAMP_BASE_SCALE + (LAMP_SELECTED_SCALE - LAMP_BASE_SCALE) * blend);
+          a.lampMats[k].opacity = LAMP_BASE_OPACITY + (LAMP_SELECTED_OPACITY - LAMP_BASE_OPACITY) * blend;
+        }
+        a.group.userData.routeIndex = a.routeIndex;
+      }
 
       // Charge tunnel (wave-6): swirl the particle ring while this gate
       // charges — radius contracts and opacity rises with jump progress.
