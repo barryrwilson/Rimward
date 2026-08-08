@@ -268,6 +268,29 @@ export const HERMIT = {
   line: 'The Vigil trades without ceremony — weights, measures, payment. What you brought is the first new thing here in a long time.',
 };
 
+// Wave 24: generated-faction station services (generated-system depth, part 2).
+// One distinctive modifier per faction flown by the 94 generated systems, each
+// with a flavor line station.js surfaces in the matching service UI (the
+// 'Comped by the keepers' precedent — a note line, never a new service).
+// station.js applies each modifier in its own transaction path, composed
+// multiplicatively AFTER the wave-6 epic multiplier: epic first, faction
+// second. Ruling (wave 24): freehold/veridian/redledger entries apply ONLY at
+// generated stations flying those flags — station.js guards the authored six
+// by id, so authored-system pricing stays byte-identical; 'hollow' is
+// authored-only and holds no entry. §25: no authored-mystery references.
+export const FACTION_SERVICES = {
+  freehold: { repairMult: 0.9, line: 'The grange keeps a yard crew — neighbors’ rates.' },
+  veridian: { jobPayMult: 1.15, line: 'The Combine pays contract rates, on the dot, audited to the digit.' },
+  redledger: { buyMult: 1.15, line: 'Every credit is counted twice — once by you, once by the Ledger.' },
+  ferrous: { repairMult: 0.85, line: 'The yard owes the Bastion.' },
+  gilded: { sellMult: 1.15, line: 'Everything has a price, and the Chain pays it on the fall of the gavel.' },
+  beautiful: { sellMult: 0.85, line: 'They pay for beauty, not ballast — the offer is the offer.' },
+  congregation: { jobPayMult: 1.2, line: 'The porters of the Further Shore are paid from the tithe chest.' },
+  assembly: { repairMult: 1.1, line: 'Every rivet is stamped, logged, and billed.' },
+  independent: { jobPayMult: 1.1, line: 'No tithe, no tariff — work pays what the hand that posted it can carry.' },
+  lamplighter: { buyMult: 0.85, line: 'The Guild keeps the lights; no traveler pays full fare at the Last Beacon.' },
+};
+
 // ---------- Faction ranks (§12.x station depth) ----------
 /**
  * Reputation → named rank. First rung whose min <= rep wins, so the ladder

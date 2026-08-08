@@ -26,6 +26,15 @@
  * finished with the main stream. The main sequence is untouched, so the
  * generated diff from this pass is purely additive: one new landmarks key
  * per record, nothing else.
+ *
+ * Wave 24: every non-hub generated system gains exactly one contact
+ * ({ role: 'dockmaster', name }). Contacts draw from a THIRD rng stream
+ * seeded SEED + 2, consumed only by the contact loop, which runs AFTER the
+ * landmark loop. The main and landmark sequences are untouched, so the
+ * generated diff from this pass is purely additive: one new contacts key
+ * per non-hub record, nothing else. The three generated hubs (fx_bastion,
+ * gc_auction, blackstation) gain NO contacts key — their dockmasters are
+ * authored in contacts.js CONTACT_NAMES.
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +60,13 @@ const rf = (lo, hi) => lo + rng() * (hi - lo);
 const lmRng = mulberry32(SEED + 1);
 const lmRint = (lo, hi) => lo + Math.floor(lmRng() * (hi - lo + 1));
 const lmRf = (lo, hi) => lo + lmRng() * (hi - lo);
+// Wave 24 contact stream: separate seed, separate helpers, consumed ONLY by
+// the contact pass after the landmark loop. Neither the main rng sequence
+// above nor the lmRng sequence is ever advanced by contact generation.
+const ctRng = mulberry32(SEED + 2);
+const ctRint = (lo, hi) => lo + Math.floor(ctRng() * (hi - lo + 1));
+// NOTE: no ctRf — an uncalled float helper here would be a silent stream-shift
+// hazard for all 91 names if ever called (review LOW, wave 24).
 const round2 = (v) => Math.round(v * 100) / 100;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -518,6 +534,9 @@ for (const cluster of CLUSTERS) {
 // Wave 23: landmarks are NOT part of this loop. They are generated in their
 // own pass below, off the lmRng (SEED + 1) stream, so every draw below keeps
 // its pre-landmark value and the generated diff stays purely additive.
+// Wave 24: contacts are likewise NOT part of this loop. They are generated
+// in their own pass below, off the ctRng (SEED + 2) stream, AFTER the
+// landmark loop has finished with the lmRng stream.
 bailIfErrors();
 
 function blendColor(c1, c2, t) {
@@ -1029,6 +1048,138 @@ for (const id of GENERATED_IDS) {
   out[id] = { id: _id, name: _name, faction: _faction, band: _band, chart: _chart, landmarks: [{ id: `${id}_lm`, name, kind, position, line }], ...rest };
 }
 
+// ------------------------------------------------- wave 24: generated contacts
+// Every non-hub generated system gains exactly ONE contact:
+// { role: 'dockmaster', name }. The three generated hubs (fx_bastion,
+// gc_auction, blackstation) gain NO contacts key — their dockmasters (Warden
+// Korrh, Auctioneer Mavra, Driftcaller Oss) are authored in contacts.js
+// CONTACT_NAMES. Determinism discipline: this section draws ONLY from ctRng
+// (mulberry32(SEED + 2)), in GENERATED_IDS order, AFTER the landmark loop
+// above has finished with the lmRng stream — the generated diff is a purely
+// additive contacts key per non-hub record.
+//
+// Flavor: per-faction tone pools (titles, surnames, epithets) mirroring
+// LM_TONE's faction voices, plus a band>=3 'deep' variant pool (deeper
+// docks get far-rim titles/names, same pattern as the landmark deep lines).
+// Names are complete 'Title Name' strings in the style of the authored
+// contacts (Mother Tarn, Warden Korrh), never raw pool words. Names are
+// unique across all 91 emitted and distinct from the 12 authored/hub
+// contact names (redrawn from ctRng on collision; validate() re-checks).
+const CT_HUB_IDS = ['fx_bastion', 'gc_auction', 'blackstation'];
+// The 12 contact names already authored in contacts.js CONTACT_NAMES (the 9
+// authored-system contacts + the 3 generated-hub dockmasters). Hard-coded
+// here (rather than imported) so the generator stays dependency-light;
+// validate() fails if a generated name collides with any of them.
+const AUTHORED_CONTACT_NAMES = [
+  'Mother Tarn', 'Quiet Hollis', 'Adjutant Vey', 'Lias Corrow',
+  'Dockhand Sorrow', 'Six-Finger Brack', 'Keeper Voss', 'Keeper Ond',
+  'Keeper Leth', 'Warden Korrh', 'Auctioneer Mavra', 'Driftcaller Oss',
+];
+const CT_TONE = {
+  freehold: { // frontier-warm: porch lights, neighbors, family berths
+    titles: ['Harbormaster', 'Dockmother', 'Dockfather', 'Yardkeeper', 'Berthmaster', 'Porch Warden'],
+    names: ['Aldercroft', 'Bramm', 'Callow', 'Dunmore', 'Ellery', 'Fenwick', 'Garron', 'Halloway', 'Marrow', 'Quill', 'Stovers', 'Tilley'],
+    epithets: ['Steady', 'Kindly', 'Old', 'Wide', 'Sunny', 'True'],
+    deepTitles: ['Far-Porch Keeper', 'Last-Light Harbormaster'],
+    deepNames: ['Outrim', 'Farthest', 'Longwatch', 'Eventide'],
+  },
+  veridian: { // corporate-cold: filings, margins, chartered berths
+    titles: ['Port Officer', 'Dock Comptroller', 'Berth Agent', 'Claims Warden', 'Chartermaster', 'Margin Officer'],
+    names: ['Ashcombe', 'Braille', 'Corven', 'Dray', 'Estwick', 'Fallow', 'Grange', 'Holt', 'Inverness', 'Kestrel', 'Lorne', 'Mercer'],
+    epithets: ['Vested', 'Audited', 'Chartered', 'Prudent', 'Salaried', 'Measured'],
+    deepTitles: ['Senior Claims Officer', 'Outer Ledger Comptroller'],
+    deepNames: ['Farledger', 'Terminus', 'Outcharter', 'Lastfiling'],
+  },
+  ferrous: { // martial: musters, oaths, standing orders
+    titles: ['Warden', 'Muster Officer', 'Dock Sergeant', 'Garrison Keeper', 'Ironmaster', 'Watch Commander'],
+    names: ['Brakk', 'Corvane', 'Drummond', 'Esk', 'Ferro', 'Gant', 'Harrow', 'Kessel', 'Marn', 'Rourke', 'Stahl', 'Tann'],
+    epithets: ['Iron', 'Oathbound', 'Standing', 'Grim', 'Unbroken', 'Slag-Born'],
+    deepTitles: ['Perimeter Warden', 'Last Watch Officer'],
+    deepNames: ['Farpost', 'Outwatch', 'Rimward', 'Lastmuster'],
+  },
+  redledger: { // outlaw-ledger: tolls, tallies, debts that outlive people
+    titles: ['Tollkeeper', 'Due Warden', 'Ledger Master', 'Mark Officer', 'Cut Steward', 'Tallymaster'],
+    names: ['Blythe', 'Crake', 'Doven', 'Fenn', 'Griggs', 'Hallow', 'Ire', 'Jett', 'Kress', 'Morl', 'Quane', 'Skell'],
+    epithets: ['Marked', 'Debtor', 'Cutthroat', 'Posted', 'Paid', 'Owing'],
+    deepTitles: ['Blind Tollkeeper', 'Last Ledger Warden'],
+    deepNames: ['Outmark', 'Lasttoll', 'Dueward', 'Blackmark'],
+  },
+  gilded: { // guild mercantile: auctions, lots, commissions
+    titles: ['Saleroom Master', 'Lot Warden', 'Commissaire', 'Gavel Keeper', 'Reserve Officer', 'Consignment Master'],
+    names: ['Aurum', 'Belvoir', 'Castellane', 'Dore', 'Estrella', 'Fontaine', 'Gildersleeve', 'Hargreave', 'Lissome', 'Mirenne', 'Palladio', 'Velluto'],
+    epithets: ['Gilt', 'Certified', 'Reserve', 'Cataloged', 'Patron', 'Gilded'],
+    deepTitles: ['Far Saleroom Master', 'Last Lot Commissaire'],
+    deepNames: ['Outlot', 'Farhammer', 'Lastgavel', 'Unsold'],
+  },
+  beautiful: { // faded glamor: beauty kept past its usefulness
+    titles: ['Salon Keeper', 'Velvet Harbormaster', 'Curator', 'Opal Warden', 'Chandelier Master', 'Mirror Keeper'],
+    names: ['Bellamere', 'Chandel', 'Delacroix', 'Esthrelle', 'Fauve', 'Giltmore', 'Lumiere', 'Mirelle', 'Opaline', 'Seraphine', 'Valette', 'Vespertine'],
+    epithets: ['Faded', 'Gilt', 'Opal', 'Velvet', "Last Season's", 'Radiant'],
+    deepTitles: ['Far Salon Curator', 'Last Waltz Keeper'],
+    deepNames: ['Outglow', 'Farbloom', 'Lastseason', 'Diminishing'],
+  },
+  congregation: { // penitent: vows, psalms, tended absences
+    titles: ['Prior', 'Sexton', 'Vigil Keeper', 'Lamp Warden', 'Choir Master', 'Psalm Keeper'],
+    names: ['Ashwell', 'Candor', 'Dirge', 'Grieve', 'Incense', 'Lament', 'Mourn', 'Psalter', 'Requiem', 'Shriven', 'Toll', 'Votive'],
+    epithets: ['Penitent', 'Unshriven', 'Vigilant', 'Sung', 'Tonsured', 'Devout'],
+    deepTitles: ['Last Chapel Prior', 'Far Vigil Sexton'],
+    deepNames: ['Outvigil', 'Farpsalm', 'Lastlamp', 'Unanswered'],
+  },
+  assembly: { // bureaucratic: case numbers, standing orders, authoritative charts
+    titles: ['Port Registrar', 'Dock Clerk', 'Berth Registrar', 'Case Officer', 'Index Warden', 'Quorum Keeper'],
+    names: ['Arkwright', 'Billing', 'Docket', 'Fileworth', 'Grubb', 'Inkwell', 'Pendleton', 'Quire', 'Rubric', 'Stamps', 'Triplicate', 'Verbatim'],
+    epithets: ['Registered', 'Pending', 'Indexed', 'Standing', 'Filed', 'Notarized'],
+    deepTitles: ['Outer Filing Registrar', 'Last Office Clerk'],
+    deepNames: ['Outfile', 'Lastinbox', 'Farform', 'Docketed'],
+  },
+  independent: { // unclaimed drift: hand-built docks, no flags
+    titles: ['Dock Boss', 'Berth Boss', 'Drift Warden', 'Scratch Keeper', 'Salvage Master', 'Camp Boss'],
+    names: ['Ash', 'Bolt', 'Cinder', 'Drift', 'Flint', 'Grub', 'Hinge', 'Moth', 'Patch', 'Rust', 'Splice', 'Tinker'],
+    epithets: ['Bootleg', 'Hand-Built', 'Nameless', 'Wayward', 'Scratch', 'Lucky'],
+    deepTitles: ['Far Drift Boss', 'Edge-of-Map Warden'],
+    deepNames: ['Outpast', 'Nobody', 'Farlight', 'Nowhere'],
+  },
+  lamplighter: { // wayfinding elegy: the lane carried outward past its end
+    titles: ['Lightkeeper', 'Way Warden', 'Lamp Tender', 'Interval Keeper', 'Far Warden', 'Lantern Master'],
+    names: ['Aster', 'Beacon', 'Candle', 'Dusk', 'Ember', 'Flare', 'Glim', 'Halo', 'Interval', 'Lucent', 'Wick', 'Wane'],
+    epithets: ['Last-Lit', 'Outward', 'Far', 'Unlit', 'Wayworn', 'Twilight'],
+    deepTitles: ['Last Lamp Keeper', 'Outermost Warden'],
+    deepNames: ['Outward', 'Lastlight', "Lane's End", 'Afterglow'],
+  },
+};
+
+// Seeded with the 12 authored/hub names so generated names can never collide
+// with contacts.js CONTACT_NAMES (validate() re-checks against the list).
+const ctNameTaken = new Set(AUTHORED_CONTACT_NAMES);
+function ctNamePick(sys, tone) {
+  const titles = sys.band >= 3 ? tone.titles.concat(tone.deepTitles) : tone.titles;
+  const names = sys.band >= 3 ? tone.names.concat(tone.deepNames) : tone.names;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const title = titles[ctRint(0, titles.length - 1)];
+    const surname = names[ctRint(0, names.length - 1)];
+    const epithet = tone.epithets[ctRint(0, tone.epithets.length - 1)];
+    const style = ctRint(0, 2);
+    const name = style === 0 ? `${title} ${surname}` : style === 1 ? `${epithet} ${surname}` : `${title} ${epithet} ${surname}`;
+    if (!ctNameTaken.has(name)) { ctNameTaken.add(name); return name; }
+  }
+  fail(`${sys.id} contact name: no unique candidate in 60 attempts`);
+  return 'Unnamed Dockmaster'; // validate() bails before output on any error
+}
+
+for (const id of GENERATED_IDS) {
+  if (CT_HUB_IDS.includes(id)) continue; // hub dockmasters live in contacts.js
+  const sys = out[id];
+  const tone = CT_TONE[sys.faction];
+  if (!tone) { fail(`${id} has no contact tone for faction ${sys.faction}`); continue; }
+  const name = ctNamePick(sys, tone);
+  // Rebuild the record with contacts right after landmarks: inserting the new
+  // key anywhere but the record's end keeps the generated diff purely
+  // additive (JSON's trailing-comma rule would otherwise touch the old last
+  // line). Hub records are not rebuilt at all — they gain no key.
+  const { id: _id, name: _name, faction: _faction, band: _band, chart: _chart, landmarks: _lm, ...rest } = sys;
+  out[id] = { id: _id, name: _name, faction: _faction, band: _band, chart: _chart, landmarks: _lm, contacts: [{ role: 'dockmaster', name }], ...rest };
+}
+
 // ---------------------------------------------------------------- validation
 function validate() {
   // count + authored collision
@@ -1097,6 +1248,30 @@ function validate() {
     if (dist3(p, sys.field.center) < sys.field.radius + 200) fail(`${sys.id} landmark inside field buffer`);
     if (sys.hub && dist3(p, sys.hub.position) < 300) fail(`${sys.id} landmark <300u from hub`);
   }
+
+  // wave 24: contact shape — exactly one { role: 'dockmaster', name } entry on
+  // every non-hub generated system, exactly zero on the three generated hubs,
+  // names unique across all 91 and distinct from the 12 authored/hub
+  // CONTACT_NAMES values (AUTHORED_CONTACT_NAMES, hard-coded above).
+  const seenCtNames = new Set();
+  for (const sys of Object.values(out)) {
+    const isHub = CT_HUB_IDS.includes(sys.id);
+    if (isHub) {
+      if ('contacts' in sys) fail(`${sys.id} generated hub must omit contacts (dockmaster is authored in contacts.js)`);
+      continue;
+    }
+    if (!Array.isArray(sys.contacts) || sys.contacts.length !== 1) {
+      fail(`${sys.id} must have exactly one contact entry`);
+      continue;
+    }
+    const ct = sys.contacts[0];
+    if (ct.role !== 'dockmaster') fail(`${sys.id} contact role ${ct.role} != dockmaster`);
+    if (typeof ct.name !== 'string' || ct.name.length === 0) fail(`${sys.id} contact name empty/non-string`);
+    if (AUTHORED_CONTACT_NAMES.includes(ct.name)) fail(`${sys.id} contact name collides with authored: ${ct.name}`);
+    if (seenCtNames.has(ct.name)) fail(`${sys.id} contact name collision: ${ct.name}`);
+    seenCtNames.add(ct.name);
+  }
+  if (seenCtNames.size !== 91) fail(`expected 91 generated contact names, got ${seenCtNames.size}`);
 
   // hub routes: targets exist, have back-gates, hub has routes array
   for (const [h, list] of routes) {
@@ -1204,4 +1379,6 @@ console.log(`  band histogram: ${JSON.stringify(bandHist)}`);
 console.log(`  chart min separation: ${minSep.toFixed(1)} units`);
 const lmCount = Object.values(out).reduce((n, s) => n + (s.landmarks?.length ?? 0), 0);
 console.log(`  landmarks: ${lmCount} (1 per generated system)`);
+const ctCount = Object.values(out).reduce((n, s) => n + (s.contacts?.length ?? 0), 0);
+console.log(`  contacts: ${ctCount} (1 dockmaster per non-hub generated system)`);
 console.log(`  wrote ${outPath}`);

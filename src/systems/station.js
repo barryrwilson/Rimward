@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES } from '../game/state.js';
+import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
@@ -450,9 +451,14 @@ function boardJobs(ctx, sysId) {
  * achieved jobPayMult. Called only at payout/render time, never per frame.
  */
 function jobPay(ctx, base) {
-  const faction = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  const sysId = ctx.world.currentSystem;
+  const faction = ctx.systems?.[sysId]?.faction;
   const mult = epicEffects(ctx, faction).jobPayMult ?? 1;
-  return Math.round(base * mult);
+  // Wave 24: the faction service modifier composes multiplicatively AFTER the
+  // epic multiplier (epic first, faction second); the authored six are guarded
+  // by id — they hold no FACTION_SERVICES application.
+  const svcMult = AUTHORED_SYSTEMS[sysId] ? 1 : (FACTION_SERVICES[faction]?.jobPayMult ?? 1);
+  return Math.round(base * mult * svcMult);
 }
 
 /** Rank name for a ladder tier (epic requirement hints: 'Rank: Trusted'). */
@@ -591,6 +597,10 @@ function tickDeliveryJobs(ctx, ui) {
 export function initStation(ctx) {
   let currentId = ctx.world.currentSystem;
   let currentDef = ctx.systems[currentId];
+  // Wave 24: this dock's faction service entry (FACTION_SERVICES, state.js),
+  // resolved once per station like currentDef — never per frame. The authored
+  // six are guarded by id, so authored-system pricing is byte-identical.
+  let currentService = AUTHORED_SYSTEMS[currentId] ? null : (FACTION_SERVICES[currentDef.faction] ?? null);
   let mesh = buildStationMesh(ctx, currentId, currentDef);
   // One stable Vector3 for the station's life — hud.js may hold the ref.
   const stationPos = new THREE.Vector3().fromArray(currentDef.station.position);
@@ -614,6 +624,7 @@ export function initStation(ctx) {
     if (!ctx.systems?.[newId]?.station) return; // unknown system id: keep current
     currentId = newId;
     currentDef = ctx.systems[newId];
+    currentService = AUTHORED_SYSTEMS[newId] ? null : (FACTION_SERVICES[currentDef.faction] ?? null);
     teardownMesh(ctx, mesh);
     mesh = buildStationMesh(ctx, currentId, currentDef);
     stationPos.fromArray(currentDef.station.position);
@@ -760,7 +771,11 @@ export function initStation(ctx) {
     if (buying) {
       // Wave 9: hermit stations charge scarcity prices (HERMIT.buyMult).
       // Wave 11: a keeper who trusts the pilot (60+) waives the markup.
-      const unit = Math.round(price * (fx.buyMult ?? 1) * hermitBuyMult());
+      // Wave 24: the faction service modifier composes multiplicatively AFTER
+      // the epic multiplier (epic first, faction second); hermit applies last
+      // and is authored-only, so the two never stack. The PRICE cell in
+      // renderMarket uses this exact chain (wave-11 agreement precedent).
+      const unit = Math.round(price * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
       const cost = unit * qty;
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return; }
       if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return; }
@@ -772,6 +787,10 @@ export function initStation(ctx) {
       // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
       const tier = rankFor(ctx.world.reputation[currentDef.faction] ?? 0).tier;
       let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
+      // Wave 24: the faction service modifier composes multiplicatively AFTER
+      // the epic multiplier (epic first, faction second) — generated systems
+      // only; the authored six are guarded out of currentService.
+      if (currentService) unit *= currentService.sellMult ?? 1;
       // Wave 9: hermit stations pay a premium for anything hauled out this far.
       if (currentDef.hermit) unit *= HERMIT.sellMult;
       // Epic standing on patent stock stacks with the fixer's brokered rate.
@@ -816,7 +835,7 @@ export function initStation(ctx) {
       const sel = i === ui.marketSel ? ' market-row-sel' : '';
       h('div', 'market-cell' + sel, table, com.name);
       h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
-      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * buyMult)} UU`);
+      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * buyMult)} UU`);
       h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
       const actions = h('div', 'market-cell market-actions' + sel, table);
       if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
@@ -834,6 +853,11 @@ export function initStation(ctx) {
     } else if (!restrictedAllowed(ctx, ui.fenceUnlocked)) {
       h('div', 'screen-note', panel,
         `The dockmaster keeps the restricted locker closed. Fear ${ECON.fear.tributeOpensAt}+ or a burned Compact name opens it.`);
+    }
+    // Wave 24: the faction's market line, surfaced the way keeper-comp notes
+    // are — one note line, not a new service.
+    if (currentService?.buyMult || currentService?.sellMult) {
+      h('div', 'screen-note', panel, currentService.line);
     }
   }
 
@@ -871,6 +895,8 @@ export function initStation(ctx) {
 
   function renderJobs(panel) {
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
+    // Wave 24: the faction's jobs line (same note-line precedent as the market).
+    if (currentService?.jobPayMult) h('div', 'screen-note', panel, currentService.line);
     refreshBountyJob(ctx);
     syncPirateBounties(ctx, currentId);
     syncRecoveryJob(ctx, currentId);
@@ -988,7 +1014,11 @@ export function initStation(ctx) {
   // ---- repair ----
   function repairCost() {
     const p = ctx.player;
-    const repairMult = epicEffects(ctx, currentDef.faction).repairMult ?? 1; // wave-6 epic standing
+    // Wave 24: the faction yard rate composes multiplicatively AFTER the epic
+    // multiplier (epic first, faction second); a keeper comp still zeroes the
+    // itemized total below, and the authored six hold no faction entry.
+    const repairMult = (epicEffects(ctx, currentDef.faction).repairMult ?? 1) // wave-6 epic standing
+      * (currentService?.repairMult ?? 1);
     const parts = [];
     let missing = 0;
     let cost = 0;
@@ -1020,6 +1050,8 @@ export function initStation(ctx) {
   }
   function renderRepair(panel) {
     h('div', 'screen-sub', panel, 'REPAIR BAYS — hull & systems');
+    // Wave 24: the faction's yard line (the 'Comped by the keepers' precedent).
+    if (currentService?.repairMult) h('div', 'screen-note', panel, currentService.line);
     const { missing, cost, parts, corrupt, comped } = repairCost();
     if (missing < 1 && !corrupt) {
       h('div', 'screen-note', panel, 'She reads whole on every channel. Nothing to fix.');

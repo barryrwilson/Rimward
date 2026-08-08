@@ -713,16 +713,73 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   (only the pre-existing >500 kB chunk warning). Browser-verified:
   fh_hearth systemLoaded rebuilds the 'landmarks' group with the wreck
   POI (debris meshes at the site coords, POS readout HEARTH).
-## Next round candidates (wave 24)
-- Generated-system depth, part 2: landmarks (wave 23) and hub
-  dockmasters are in; the remaining 91 generated stations still have
-  no contacts at all, station behavior is faction-thin (tradesRestricted
-  is the only generated faction flag), and generated systems hold no
-  clues BY DESIGN (the authored total stays 6 — convergence/deepening
-  math). A procedural-contact pass (per-faction name pools riding the
-  generator's deterministic streams) is the largest standing slice;
-  faction-specific station services another. Still multi-wave if taken
-  whole.
+- Wave 24: generated-system depth, part 2 (procedural dockmaster
+  contacts across the 91 non-hub generated stations + faction-specific
+  station services). scripts/generate-galaxy.mjs: the contact pass
+  mirrors the wave-23 landmark pass — ctRng = mulberry32(SEED + 2) with
+  ctRint ONLY (no ctRf: an uncalled float helper in a determinism-
+  critical section is a silent stream-shift hazard — review LOW, fixed
+  by deletion), consumed ONLY in a new loop after the landmark loop
+  iterating GENERATED_IDS in order, so the regenerated diff is purely
+  additive (+546/-0; md5 6f8c811d… identical across 3 runs).
+  CT_TONE per-faction name pools (title/surname/epithets faction-true
+  to each LM_TONE voice) plus band≥3 deep pools; ctNamePick bounded-60
+  redraws, taken-set pre-seeded with the 12 authored/hub names. The
+  three generated hubs (fx_bastion/gc_auction/blackstation) keep their
+  wave-23 authored dockmasters and carry no contacts key. validate()
+  enforces exactly-one-per-non-hub, zero-on-hubs, role/name shape,
+  91-way uniqueness, no authored-name collision. contacts.js:
+  buildRoster appends one plain dockmaster per generated system from
+  SYSTEMS[id].contacts (skips CONTACT_NAMES ids), exact existing record
+  shape/defaults, Object.keys(SYSTEMS) order, wave-21-style defensive
+  skips — fresh-run roster 12 → 103. Every authored-id gate (keeper
+  ledger/vouch/chart-mark, deep-rim + ace recognitionLine tiers) is
+  unreachable for generated ids; the trust-only comp-tier ship line is
+  shared with the wave-23 hub three. No migration: restored saves keep
+  their persisted roster (waves 10/23 pattern). state.js:
+  FACTION_SERVICES — 10 entries, one modifier each in the 0.85–1.25
+  band plus a §25-safe line (freehold repair 0.9, veridian jobPay 1.15,
+  redledger buy 1.15, ferrous repair 0.85, gilded sell 1.15, beautiful
+  sell 0.85, congregation jobPay 1.2, assembly repair 1.1, independent
+  jobPay 1.1, lamplighter buy 0.85). Ruling (spec conflict): generated
+  clusters fly authored flags, so entries cover the 10 factions flown
+  by generated systems and station.js guards on AUTHORED_SYSTEMS id
+  membership — the authored six are byte-identical; generated stations
+  flying freehold/veridian/redledger flags DO get their modifier.
+  station.js applies each modifier in its own transaction path (buy
+  charge == PRICE cell chain, sell after epic/before hermit, repairCost
+  single source for render+charge, jobPay shared payout/render),
+  composed multiplicatively AFTER the wave-6 epic multiplier, faction
+  'screen-note' lines in market/jobs/repair; hermit ×1.25 and keeper
+  comp dominate exactly as before on authored systems; no per-frame
+  allocations (currentService resolved once per station). Boot test
+  wave-24 section: data shape (91/hub-exclusion/uniqueness/no-clues),
+  fresh-harness roster 103 + keeper-gate null checks at trust 100,
+  People card at fh_hearth ('Yardkeeper Stovers'), authored freehold
+  negative control (epic-only ×0.9, cost 112, no note) vs fx_liron
+  ferrous repair ×0.85 (cost 106, note, charge==label), lastbeacon
+  lamplighter buy ×0.85 (PRICE cell 169 UU == charge), cg_vigil
+  congregation jobPay ×1.2 full recovery cycle (quoted/paid exactly
+  360), dock-autosave + death-restore roundtrip (roster 103 + banked
+  dockmaster trust survive). Wave-4/10/23 roster counts updated to
+  103 (each site's save semantics checked — no old-fixture restore
+  sites). Independent review APPROVE (0 CRITICAL/HIGH/MEDIUM; LOWs:
+  dead ctRf removed, gate-comment overclaim reworded; the ferry/haul
+  origin-estimate vs destination-payout note mirrors pre-existing
+  wave-6 epic behavior — no fix). npm run test:boot PASS ×7
+  consecutive; npm run build clean (pre-existing chunk warning only);
+  regeneration byte-identical ×3.
+## Next round candidates (wave 25)
+- Generated-system depth, part 3: landmarks (wave 23), hub dockmasters
+  (23), procedural dockmaster contacts at all 91 non-hub generated
+  stations (24), and faction-specific station services (24) are in.
+  Standing: generated dockmasters share only the trust-only ship
+  recognition line — per-faction recognition tiers or rumor flavor is
+  the largest remaining contact slice; generated systems hold no clues
+  BY DESIGN (the authored total stays 6 — convergence/deepening math);
+  ferry/haul jobs quote the origin jobPayMult and pay the destination's
+  (pre-existing wave-6 behavior — snapshot at accept time if exact
+  agreement is ever wanted).
 - NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
   are player/Guild infrastructure; physical gates only — recorded on
   pickMigrant in world.js). No action standing; revisit only if routed

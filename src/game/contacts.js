@@ -27,6 +27,19 @@
  * station.js reads the roster and applies the mechanics; world.trust/favors
  * persist via save.js.
  *
+ * Wave 24: the roster grows 12 → 103 — the 12 authored/hub contacts above
+ * plus one plain dockmaster per generated non-hub system, appended by
+ * buildRoster from SYSTEMS[id].contacts (generate-galaxy.mjs data).
+ * Generated dockmasters are plain dockmasters: every authored-id gate
+ * (keeper ledger/vouch/chart-mark, deep-rim and ace recognitionLine
+ * tiers) keys on authored system id strings, so a generated id falls
+ * through every one. The trust-only comp-tier ship-recognition line is
+ * shared by all dockmasters, as with the wave-23 hub three. §25
+ * holds: generated systems never gain clues, and the ledger lane stays
+ * authored-only. No migration: old saves restore their persisted
+ * 12-contact roster over the fresh roster (save.js, the waves 10/23
+ * pattern), so generated dockmasters appear on fresh runs only.
+ *
  * WITNESS RULE (§8.7): rumorFor voices ONLY what ctx.world.incidents
  * records — contacts never invent events. recognitionLine keys off
  * accumulated trust, not scripted beats.
@@ -34,7 +47,7 @@
  * All entries are JSON-plain. update() allocates nothing per frame.
  */
 
-import { SYSTEMS } from './state.js'; // landmark tables for the keeper ledger (wave 11)
+import { SYSTEMS } from './state.js'; // landmark tables for the keeper ledger (wave 11); generated contacts table for buildRoster (wave 24)
 // Wave 23: the ledger is the authored mystery lane only (§25) — it reads
 // the authored six's landmark/clue tables, never the generated systems'.
 import { AUTHORED_SYSTEMS } from './authored-systems.js';
@@ -44,6 +57,15 @@ import { AUTHORED_SYSTEMS } from './authored-systems.js';
 // Wave 23: the three generated hubs gain a dockmaster apiece — fx_bastion
 // martial (ferrous), gc_auction mercantile (guild), blackstation drift
 // (unclaimed). They are not keepers: no ledger, no deep-rim gates.
+// Wave 24: the roster grows 12 → 103. The 91 generated non-hub systems
+// carry their dockmaster name on the generated record itself
+// (SYSTEMS[id].contacts, written by generate-galaxy.mjs) — faction-true
+// per-system names that live in data, not this table — and buildRoster
+// appends them below. They are plain dockmasters, exactly like the wave-23
+// hub three: NOT keepers (no ledger/vouch/chart-mark gates — those key on
+// the authored system id strings hollowreach/hush/verge), and no
+// recognitionLine tiers (deep-rim and ace acknowledgments key on authored
+// ids too), so they fall through every gate untouched.
 const CONTACT_NAMES = {
   freehold: { dockmaster: 'Mother Tarn', fence: 'Quiet Hollis' },
   veridian: { dockmaster: 'Adjutant Vey', fixer: 'Lias Corrow' },
@@ -88,6 +110,38 @@ function buildRoster() {
         metAt: null,
         rumorIdx: 0,
         ledgerIdx: 0, // wave 11: rotation cursor for keeperLedgerLine
+      });
+    }
+  }
+  // Wave 24: one plain dockmaster per generated non-hub system, read from
+  // the generated record's contacts array (generate-galaxy.mjs). Iterated
+  // in Object.keys(SYSTEMS) order (authored six, then generated insertion
+  // order) so the roster is deterministic. Systems already covered by
+  // CONTACT_NAMES (the authored six and the three generated hubs) are
+  // skipped. Defensive in the wave-21 style: a missing/malformed contacts
+  // array or entry is skipped via ?? / continue, never a crash — if the
+  // generated data lacks contacts keys entirely the roster stays 12.
+  // These are plain dockmasters only: the keeper/vouch/ace gates below key
+  // on authored system id strings (hollowreach/hush/verge/freehold/
+  // redmarch), so a generated id falls through every one of them, exactly
+  // like the wave-23 hub dockmasters.
+  for (const system of Object.keys(SYSTEMS)) {
+    if (system in CONTACT_NAMES) continue;
+    const entries = SYSTEMS[system]?.contacts ?? [];
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (entry === null || typeof entry !== 'object') continue;
+      const role = entry.role ?? 'dockmaster';
+      roster.push({
+        id: `contact-${system}-${role}`,
+        name: entry.name ?? `${role} ${system}`,
+        role,
+        system,
+        trust: 0,
+        favors: 0,
+        metAt: null,
+        rumorIdx: 0,
+        ledgerIdx: 0,
       });
     }
   }

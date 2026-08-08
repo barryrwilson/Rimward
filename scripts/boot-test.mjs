@@ -68,8 +68,20 @@
 // ledger stays authored-lane only (an unwitnessed generated landmark never
 // opens a second-column page), the three generated hubs
 // (fx_bastion/gc_auction/blackstation) each answer contactsForSystem with
-// exactly one dockmaster, and the generated mark + 12-contact roster ride
-// the dock autosave and death-restore.
+// exactly one dockmaster, and the generated mark + 103-contact roster
+// (12 authored + 91 generated, wave 24) ride the dock autosave and
+// death-restore.
+// Wave 24: generated-system depth, part 2 — one plain dockmaster per
+// generated non-hub system (fresh roster 12 → 103; data-driven unique
+// names, zero keeper-gate reach even at trust 100, the People card at
+// fh_hearth through the real dock UI), faction station services
+// (FACTION_SERVICES — one modifier per generated banner, composed
+// multiplicatively AFTER the epic multiplier, the authored six guarded
+// out by id) driven through the REAL market/repair/jobs UI at fx_liron
+// (ferrous repair ×0.85), lastbeacon (lamplighter buy ×0.85), and
+// cg_vigil (congregation job pay ×1.2) with authored freehold as the
+// negative control, and the dock-autosave + death-restore roundtrip at
+// cg_vigil (roster 103, the generated dockmaster's name/trust survive).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -245,7 +257,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES } = await import('../src/game/state.js');
 const { tickPrices } = await import('../src/game/market.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
@@ -935,10 +947,11 @@ const w4contacts = ctx.world.contacts ?? [];
 const contactRoleCt = (role) => w4contacts.filter((c) => c.role === role).length;
 const contactDataChecks = {
   // Wave 5 added the Hollow Reach dockmaster; wave 10 the Hush/Verge
-  // keepers; wave 23 the three generated-hub dockmasters: 12 entries,
-  // 9 dockmasters.
-  twelveEntries: w4contacts.length === 12,
-  dockmasterX9: contactRoleCt('dockmaster') === 9,
+  // keepers; wave 23 the three generated-hub dockmasters (12 entries,
+  // 9 dockmasters); wave 24 one plain dockmaster per generated non-hub
+  // system: 12 → 103 entries, 9 → 100 dockmasters.
+  fullRoster103: w4contacts.length === 103,
+  dockmasterX100: contactRoleCt('dockmaster') === 100,
   fenceX1: contactRoleCt('fence') === 1,
   fixerX2: contactRoleCt('fixer') === 2,
   jsonRoundTrip: w4contacts.every((c) => {
@@ -2916,8 +2929,9 @@ console.log('wave10 hermit pirate:', JSON.stringify(w10hermitChecks), `text=${JS
 if (!Object.values(w10hermitChecks).every(Boolean)) { console.log('WAVE10 HERMIT PIRATE FAIL'); errors++; }
 
 // -- c. deep-rim keepers: the mystery acknowledgments, once per rung --------
-// Continuing run: the wave-23 roster is 12 entries, 9 dockmasters (the wave-4
-// check, re-derived — save restores swap the roster array wholesale).
+// Continuing run: the wave-24 roster is 103 entries, 100 dockmasters (the
+// wave-4 check, re-derived — save restores swap the roster array wholesale,
+// and every save in this run was written after the wave-24 roster build).
 const w10contacts = ctx.world.contacts ?? [];
 const w10roleCt = (role) => w10contacts.filter((c) => c.role === role).length;
 const vergeKeeper = w10contacts.find((c) => c.id === 'contact-verge-dockmaster') ?? null;
@@ -2947,8 +2961,8 @@ if (shallowContact && shallowContact.trust >= 60) {
 }
 const shallowLine = shallowContact ? recognitionLine(ctx, shallowContact) : null;
 const w10keeperChecks = {
-  twelveEntries: w10contacts.length === 12,
-  dockmasterX9: w10roleCt('dockmaster') === 9,
+  fullRoster103: w10contacts.length === 103,
+  dockmasterX100: w10roleCt('dockmaster') === 100,
   keepersFound: vergeKeeper?.name === 'Keeper Leth' && hushKeeper?.name === 'Keeper Ond',
   deepenedPrecondition: ctx.world.mystery?.deepened === true && ctx.world.mystery?.converged === true,
   vergeDeepenedLine: deepenedLineV === DEEPENED_ACK,
@@ -4767,10 +4781,12 @@ const w23hubChecks = {
 console.log('wave23 hub dockmasters:', JSON.stringify(w23hubChecks));
 if (!Object.values(w23hubChecks).every(Boolean)) { console.log('WAVE23 HUB DOCKMASTERS FAIL'); errors++; }
 
-// -- e. save roundtrip: the generated mark + 12-contact roster persist --------
+// -- e. save roundtrip: the generated mark + 103-contact roster persist -------
 // The wave-10 pattern, docked at Hearth Landing: park hostiles so the
 // autosave can't be combat-blocked, dock (fires trySave), assert the save,
-// corrupt in memory, die, recover via Enter, assert the restore.
+// corrupt in memory, die, recover via Enter, assert the restore. (Roster
+// count is the wave-24 103 — this run's saves all postdate the roster
+// growth.)
 for (const s of ctx.ships) {
   const hostile = s.role === 'pirate' || s.role === 'ace' ||
     s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
@@ -4783,7 +4799,7 @@ const w23snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ??
 const w23saveChecks = {
   saveWritten: !!w23snap?.world,
   landmarkInSave: w23snap?.world?.mystery?.visited?.includes(hearthLm23.id) === true,
-  rosterInSave12: (w23snap?.world?.contacts ?? []).length === 12,
+  rosterInSave103: (w23snap?.world?.contacts ?? []).length === 103,
 };
 console.log('wave23 save fields:', JSON.stringify(w23saveChecks));
 if (!Object.values(w23saveChecks).every(Boolean)) { console.log('WAVE23 SAVE FIELDS FAIL'); errors++; }
@@ -4800,10 +4816,381 @@ dispatchKey('Enter'); // recover(): restore(last save)
 const w23restoreChecks = {
   corruptedFirst: w23corrupted,
   landmarkRestored: ctx.world.mystery.visited.includes(hearthLm23.id),
-  rosterRestored12: (ctx.world.contacts ?? []).length === 12,
+  rosterRestored103: (ctx.world.contacts ?? []).length === 103,
 };
 console.log('wave23 restore:', JSON.stringify(w23restoreChecks));
 if (!Object.values(w23restoreChecks).every(Boolean)) { console.log('WAVE23 RESTORE FAIL'); errors++; }
+
+// ---- Wave 24: generated-system depth, part 2 — generated dockmasters -------
+// ---- across the 91 non-hub systems, faction station services, roundtrip ----
+
+// -- a. data: contacts shape across the generated galaxy (static, the ---------
+// wave-23 a discipline): exactly one plain dockmaster contact per non-hub
+// generated system, none on the three hubs (their wave-23 dockmasters live in
+// contacts.js CONTACT_NAMES, not data), names unique and clear of the
+// authored twelve, and §25 intact — no generated system gained clues. --------
+const HUB_IDS24 = ['fx_bastion', 'gc_auction', 'blackstation'];
+const nonHubIds24 = generatedIds23.filter((id) => !HUB_IDS24.includes(id));
+const contactShapeOk24 = (id) => {
+  const cs = SYSTEMS[id].contacts;
+  const c = cs?.[0];
+  return Array.isArray(cs) && cs.length === 1
+    && c.role === 'dockmaster'
+    && typeof c.name === 'string' && c.name.length > 0;
+};
+const genContactNames24 = nonHubIds24.map((id) => SYSTEMS[id].contacts[0].name);
+// The authored twelve names, read back off the live roster (CONTACT_NAMES is
+// module-private in contacts.js): the authored six plus the three hubs.
+const authoredNames24 = (ctx.world.contacts ?? [])
+  .filter((c) => AUTHORED_IDS23.includes(c.system) || HUB_IDS24.includes(c.system))
+  .map((c) => c.name);
+const w24dataChecks = {
+  generatedCount94: generatedIds23.length === 94,
+  nonHubCount91: nonHubIds24.length === 91,
+  contactShapeOk: nonHubIds24.every(contactShapeOk24),
+  hubsCarryNone: HUB_IDS24.every((id) => SYSTEMS[id].contacts === undefined),
+  namesUnique91: new Set(genContactNames24).size === 91,
+  authoredTwelveFound: authoredNames24.length === 12,
+  noAuthoredCollision: genContactNames24.every((n) => !authoredNames24.includes(n)),
+  noGeneratedClues: generatedIds23.every((id) => (SYSTEMS[id].clues ?? []).length === 0),
+};
+console.log('wave24 generated contacts:', JSON.stringify(w24dataChecks));
+if (!Object.values(w24dataChecks).every(Boolean)) { console.log('WAVE24 GENERATED CONTACTS FAIL'); errors++; }
+
+// -- b. roster: a fresh boot builds 103; generated dockmasters are plain -----
+// contacts with zero keeper-gate reach ---------------------------------------
+// The wave-8 fresh-boot pattern: a second harness on the empty store builds
+// its roster from data alone (restored saves keep their persisted roster, so
+// the fresh-boot count is the only honest 103 check). Its origin overlay is
+// dismissed with the same Digit1 the main run used (the origins listener
+// self-removes on choice); that digit opens the main run's market (it sits
+// docked at Hearth Landing from the wave-23 e restore) and one Escape backs
+// it out to services. The fresh harness is never ticked.
+const freshBoot24 = bootFreshHarness('wave24 roster');
+const fctx24 = freshBoot24.ctx;
+dispatchKey('Digit1'); // fresh overlay: [1] Freehold Greenhand (empty effects)
+dispatchKey('Escape'); // main run: market → services
+const freshRoster24 = fctx24.world.contacts ?? [];
+// Two generated systems from different factions, computed off the data —
+// contactsForSystem reads live roster refs (trust/favors/metAt still zero
+// defaults: this harness never docked).
+const genA24 = nonHubIds24[0];
+const genB24 = nonHubIds24.find((id) => SYSTEMS[id].faction !== SYSTEMS[genA24].faction) ?? null;
+const freshGenA24 = genA24 ? contactsForSystem(fctx24, genA24) : [];
+const freshGenB24 = genB24 ? contactsForSystem(fctx24, genB24) : [];
+const genContactOk24 = (sys, roster) => roster.length === 1
+  && roster[0]?.id === `contact-${sys}-dockmaster`
+  && roster[0]?.role === 'dockmaster' && roster[0]?.system === sys
+  && roster[0]?.name === SYSTEMS[sys].contacts[0].name
+  && roster[0]?.trust === 0 && roster[0]?.favors === 0 && roster[0]?.metAt === null;
+// Keeper-gate fall-through, the wave-14 d pure-gate discipline: every OTHER
+// condition pinned open (trust 100, the vouch milestone standing, every
+// authored landmark witnessed with clues unfound) so the authored-system id
+// string gate is the ONLY condition that can answer — a generated id must
+// still draw null from all three keeper functions.
+const gateContact24 = freshGenA24[0] ?? null;
+const trustBeforeGate24 = gateContact24?.trust;
+if (gateContact24) gateContact24.trust = 100;
+if (!fctx24.world.milestones.includes('callowVouched')) fctx24.world.milestones.push('callowVouched');
+fctx24.world.mystery.visited.length = 0;
+for (const id of AUTHORED_IDS23) {
+  for (const lm of SYSTEMS[id].landmarks ?? []) fctx24.world.mystery.visited.push(lm.id);
+}
+const gateLedger24 = gateContact24 ? keeperLedgerLine(fctx24, gateContact24) : 'no-contact';
+const gateVouch24 = gateContact24 ? keeperVouchArrival(fctx24, gateContact24) : 'no-contact';
+const gateMark24 = gateContact24 ? keeperChartMark(fctx24, gateContact24) : 'no-contact';
+if (gateContact24) gateContact24.trust = trustBeforeGate24; // hygiene — the fresh harness is throwaway
+const w24rosterChecks = {
+  freshRoster103: freshRoster24.length === 103, // 12 authored + 91 generated (wave-24 growth)
+  twoSystemsPicked: !!genA24 && !!genB24 && genA24 !== genB24,
+  factionsDiffer: !!genA24 && !!genB24 && SYSTEMS[genA24].faction !== SYSTEMS[genB24].faction,
+  genAContactOk: !!genA24 && genContactOk24(genA24, freshGenA24),
+  genBContactOk: !!genB24 && genContactOk24(genB24, freshGenB24),
+  keeperLedgerNull: gateLedger24 === null,
+  keeperVouchNull: gateVouch24 === null,
+  keeperChartMarkNull: gateMark24 === null,
+};
+console.log('wave24 generated roster:', JSON.stringify(w24rosterChecks), `genA=${genA24} genB=${genB24}`);
+if (!Object.values(w24rosterChecks).every(Boolean)) { console.log('WAVE24 GENERATED ROSTER FAIL'); errors++; }
+
+// -- c. real dock drive: the People card at fh_hearth -------------------------
+// The continuing run is docked at Hearth Landing (the wave-23 e death-
+// restore); fh_hearth already rode the wave-21 hub leg and the wave-23
+// landmark discovery, so this extends an existing leg — no new jump. Digit7
+// opens the real People service (DOCK_KEY_SERVICES[6]): exactly one card,
+// titled with the generated dockmaster's data name.
+const hearthDmName24 = SYSTEMS.fh_hearth.contacts[0].name;
+const classHas24 = (n, cls) => typeof n.className === 'string' && n.className.split(' ').includes(cls);
+dispatchKey('Digit7'); // people (DOCK_KEY_SERVICES[6])
+const ov24c = stationOverlay();
+const peopleCards24 = ov24c ? [...walkDom(ov24c)].filter((n) => classHas24(n, 'people-card')) : [];
+const hearthCard24 = peopleCards24.find((card) =>
+  [...walkDom(card)].some((n) => classHas24(n, 'people-name') && n.textContent === hearthDmName24)) ?? null;
+const w24peopleChecks = {
+  dockedAtHearth: ctx.flags.docked === true && ctx.world.currentSystem === 'fh_hearth',
+  oneCard: peopleCards24.length === 1,
+  cardShowsGeneratedName: !!hearthCard24,
+};
+console.log('wave24 hearth people card:', JSON.stringify(w24peopleChecks), `name=${JSON.stringify(hearthDmName24)}`);
+if (!Object.values(w24peopleChecks).every(Boolean)) { console.log('WAVE24 HEARTH PEOPLE CARD FAIL'); errors++; }
+dispatchKey('Escape'); // people → services
+
+// -- d. faction services through the REAL station UI (the wave-9/11 ----------
+// precedent: keydown service selection, stub-DOM button clicks, charge/UI
+// agreement) ----------------------------------------------------------------
+// Leg plan computed off the live graph, never hardcoded: freehold (authored
+// NEGATIVE control, one hop home through the physical back-gate) → fx_liron
+// (ferrous repairMult 0.85) → lastbeacon (lamplighter buyMult 0.85) →
+// cg_vigil (congregation jobPayMult 1.2). Ferrous/lamplighter/congregation
+// hold no EPICS entry, so the epic multiplier is neutral at their stations
+// and the faction modifier reads exactly; every expectation is still computed
+// off live epicEffects/prices (the world drifts).
+const w24Damage = () => { // the hotfix repair-pricing setup: a deterministic itemized bill
+  const p = ctx.player;
+  p.hullMax = 100; p.screenMax = 40; p.shellMax = 60; p.engineMax = 100; // class maxes (hull pinned huge)
+  p.hull = 40; p.screen = 10; p.shell = 0; p.engine = 50;
+};
+const w24RepinHull = () => { ctx.player.hullMax = 1e9; ctx.player.hull = 1e9; }; // the wave-6 re-pin
+// station.js repairCost: per part Math.ceil(lack × REPAIR_RATES[key] × mult),
+// summed; rates hull 0.9 / screen 0.3 / shell 0.5 / engine 0.6 (the hotfix
+// section's itemization), mult = epic × faction composed epic-first.
+const w24RepairExpected = (mult) =>
+  Math.ceil(60 * 0.9 * mult) + Math.ceil(30 * 0.3 * mult) + Math.ceil(60 * 0.5 * mult) + Math.ceil(50 * 0.6 * mult);
+const w24RepairScreen = (label) => { // open the repair service, return button/overlay/label cost
+  dispatchKey('Digit5'); // repair service (DOCK_KEY_SERVICES[4])
+  tick(2, `${label} repair screen`);
+  let btn = null;
+  const ov = stationOverlay();
+  if (ov) for (const n of walkDom(ov)) {
+    if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.startsWith('1 — Repair all')) { btn = n; break; }
+  }
+  return { btn, ov, labelCost: btn ? Number((btn.textContent.match(/\((\d+) UU\)/) ?? [])[1]) : NaN };
+};
+const w24NoteShown = (ov, line) => [...walkDom(ov ?? { children: [] })]
+  .some((n) => classHas24(n, 'screen-note') && n.textContent === line);
+const w24MadeWhole = () => {
+  const p = ctx.player;
+  return p.hull === p.hullMax && p.screen === p.screenMax && p.shell === p.shellMax && p.engine === p.engineMax;
+};
+
+// d1. NEGATIVE control: authored freehold shows no faction note and the yard
+// charges epic standing ONLY (the AUTHORED_SYSTEMS id guard) — a dropped
+// guard would stack FACTION_SERVICES.freehold.repairMult 0.9 on top.
+undockStation();
+travelTo('freehold', 'wave24 freehold control leg');
+dockAtCurrentStation('dock freehold (wave24 control)');
+w24Damage();
+const freeholdEpicMult24 = epicEffects(ctx, 'freehold').repairMult ?? 1; // epic applies at authored stations
+const expectedFreeholdRepair24 = w24RepairExpected(freeholdEpicMult24);
+const creditsBeforeRepair24a = ctx.world.credits;
+const screen24a = w24RepairScreen('wave24 freehold');
+screen24a.btn?.click(); // real path: stub-DOM click → act.repairAll
+const w24controlChecks = {
+  dockedAtFreehold: ctx.flags.docked === true && ctx.world.currentSystem === 'freehold',
+  noFactionNote: !w24NoteShown(screen24a.ov, FACTION_SERVICES.freehold.line),
+  repairButtonFound: !!screen24a.btn,
+  epicOnlyTotal: screen24a.labelCost === expectedFreeholdRepair24,
+  guardDiscriminates: expectedFreeholdRepair24 !== w24RepairExpected(freeholdEpicMult24 * FACTION_SERVICES.freehold.repairMult),
+  chargedExactly: creditsBeforeRepair24a - ctx.world.credits === expectedFreeholdRepair24,
+  madeWhole: w24MadeWhole(),
+};
+console.log('wave24 freehold control:', JSON.stringify(w24controlChecks), `cost=${screen24a.labelCost} expect=${expectedFreeholdRepair24}`);
+if (!Object.values(w24controlChecks).every(Boolean)) { console.log('WAVE24 FREEHOLD CONTROL FAIL'); errors++; }
+w24RepinHull();
+
+// d2. ferrous yard at fx_liron: the itemized bill × 0.85, the faction note
+// rendered, charge agreeing with the label.
+undockStation();
+travelTo('fx_liron', 'wave24 ferrous leg');
+dockAtCurrentStation('dock fx_liron (wave24 repair)');
+w24Damage();
+const ferrousFx24 = epicEffects(ctx, 'ferrous'); // no EPICS entry — neutral
+const expectedFerrousRepair24 = w24RepairExpected((ferrousFx24.repairMult ?? 1) * FACTION_SERVICES.ferrous.repairMult);
+const creditsBeforeRepair24b = ctx.world.credits;
+const screen24b = w24RepairScreen('wave24 fx_liron');
+screen24b.btn?.click();
+const w24repairChecks = {
+  dockedAtLiron: ctx.flags.docked === true && ctx.world.currentSystem === 'fx_liron',
+  epicNeutral: Object.keys(ferrousFx24).length === 0,
+  factionNoteShown: w24NoteShown(screen24b.ov, FACTION_SERVICES.ferrous.line),
+  repairButtonFound: !!screen24b.btn,
+  scaledTotal: screen24b.labelCost === expectedFerrousRepair24,
+  multDiscriminates: expectedFerrousRepair24 !== w24RepairExpected(1),
+  chargedExactly: creditsBeforeRepair24b - ctx.world.credits === expectedFerrousRepair24,
+  madeWhole: w24MadeWhole(),
+};
+console.log('wave24 ferrous repair:', JSON.stringify(w24repairChecks), `cost=${screen24b.labelCost} expect=${expectedFerrousRepair24}`);
+if (!Object.values(w24repairChecks).every(Boolean)) { console.log('WAVE24 FERROUS REPAIR FAIL'); errors++; }
+w24RepinHull();
+
+// d3. lamplighter market at lastbeacon: the buy chain carries × 0.85, the
+// PRICE cell agrees with the charge (the wave-9/11 cell/charge agreement).
+// Prices drift with the random walk, so the expectation reads the live price
+// inside the same tick-free render window as the cell and the click.
+undockStation();
+travelTo('lastbeacon', 'wave24 lamplighter leg');
+dockAtCurrentStation('dock lastbeacon (wave24 market)');
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+const lamFx24 = epicEffects(ctx, 'lamplighter'); // no EPICS entry — neutral
+const lamPrice24 = ctx.world.prices.provisions ?? COMMODITIES.provisions.base; // station.js priceOf
+const expectedBuy24 = Math.round(lamPrice24 * (lamFx24.buyMult ?? 1) * FACTION_SERVICES.lamplighter.buyMult);
+const lamNoteShown24 = w24NoteShown(stationOverlay(), FACTION_SERVICES.lamplighter.line);
+const priceCellText24 = marketRowCell('Provisions', 2)?.textContent ?? null;
+const creditsBeforeBuy24 = ctx.world.credits;
+const buyBtn24 = marketTradeButton('Provisions', '+1');
+buyBtn24?.click(); // real path: stub-DOM click → tryTrade('provisions', 1, true)
+const buyCharged24 = creditsBeforeBuy24 - ctx.world.credits;
+const w24marketChecks = {
+  dockedAtBeacon: ctx.flags.docked === true && ctx.world.currentSystem === 'lastbeacon',
+  epicNeutral: Object.keys(lamFx24).length === 0,
+  factionNoteShown: lamNoteShown24,
+  priceCellAgrees: priceCellText24 === `${expectedBuy24} UU`,
+  multInChain: expectedBuy24 !== Math.round(lamPrice24 * (lamFx24.buyMult ?? 1)),
+  buyButtonFound: !!buyBtn24,
+  chargedExactly: buyCharged24 === expectedBuy24,
+};
+console.log('wave24 lamplighter market:', JSON.stringify(w24marketChecks), `cell=${JSON.stringify(priceCellText24)} charged=${buyCharged24}`);
+if (!Object.values(w24marketChecks).every(Boolean)) { console.log('WAVE24 LAMPLIGHTER MARKET FAIL'); errors++; }
+
+// d4. congregation jobs at cg_vigil: the recovery card quotes AND pays the
+// scaled reward (× 1.2), the full accept → scoop → redock cycle through the
+// real UI (the wave-4 §5 pattern, wreck seeded as test SETUP data after
+// expiring any soak wrecks for this system through the real lifecycle).
+undockStation();
+travelTo('cg_vigil', 'wave24 congregation leg');
+dockAtCurrentStation('dock cg_vigil (wave24 jobs)');
+for (const entry of ctx.world.aftermath) {
+  if (entry.kind === 'wreck' && entry.system === 'cg_vigil') {
+    entry.expiresAt = Math.min(entry.expiresAt, ctx.world.time);
+  }
+}
+tick(1, 'expire soak wrecks (wave24 recovery setup)');
+ctx.world.aftermath.push({
+  id: 'aft-w24', incidentId: 'inc-w24', kind: 'wreck',
+  position: { x: 30, y: 0, z: -60 }, system: 'cg_vigil',
+  createdAt: ctx.world.time, expiresAt: ctx.world.time + 9999,
+});
+dispatchKey('Digit2'); // jobs board (DOCK_KEY_SERVICES[1]) — renderJobs → syncRecoveryJob posts the card
+const cgFx24 = epicEffects(ctx, 'congregation'); // no EPICS entry — neutral
+const recoveryJob24 = ctx.world.jobs.find((j) => j.kind === 'recovery' && j.wreckId === 'aft-w24') ?? null;
+const expectedPay24 = recoveryJob24
+  ? Math.round(recoveryJob24.reward * (cgFx24.jobPayMult ?? 1) * FACTION_SERVICES.congregation.jobPayMult)
+  : NaN;
+const cgNoteShown24 = w24NoteShown(stationOverlay(), FACTION_SERVICES.congregation.line);
+const rewardLineShown24 = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => typeof n.className === 'string' && n.className.includes('job-reward')
+    && typeof n.textContent === 'string' && n.textContent.includes(`pays ${expectedPay24} UU`));
+// Strict card-scoped accept: wave-4's DONE recovery card rides every board
+// (boardJobs only filters OFFERED recovery by system), and findAcceptButton's
+// ancestor walk can climb to the panel and return another job's button —
+// require the Accept button INSIDE the titled card's own subtree.
+const recoveryBtn24 = recoveryJob24?.state === 'offered' ? (() => {
+  const ov = stationOverlay();
+  if (!ov) return null;
+  for (const n of walkDom(ov)) {
+    if (typeof n.className !== 'string' || !n.className.split(' ').includes('job-card')) continue;
+    const titled = [...walkDom(n)].some((d) => typeof d.textContent === 'string' && d.textContent.includes('Recovery: wreck salvage'));
+    if (!titled) continue;
+    for (const d of walkDom(n)) {
+      if (d.tagName === 'BUTTON' && typeof d.textContent === 'string' && d.textContent.startsWith('Accept')) return d;
+    }
+  }
+  return null;
+})() : null;
+const podsAtAccept24 = ctx.pods.length;
+recoveryBtn24?.click(); // real accept path: spawns the salvage pod at the wreck
+const w24acceptChecks = {
+  dockedAtVigil: ctx.flags.docked === true && ctx.world.currentSystem === 'cg_vigil',
+  epicNeutral: Object.keys(cgFx24).length === 0,
+  factionNoteShown: cgNoteShown24,
+  rewardLineScaled: rewardLineShown24,
+  multDiscriminates: Number.isFinite(expectedPay24) && expectedPay24 !== recoveryJob24?.reward,
+  recoveryOffered: recoveryJob24?.state === 'offered' || recoveryJob24?.state === 'accepted',
+  acceptButtonFound: !!recoveryBtn24,
+  podSpawnedAtWreck: ctx.pods.length === podsAtAccept24 + 1,
+  jobAccepted: recoveryJob24?.state === 'accepted',
+};
+console.log('wave24 congregation job accept:', JSON.stringify(w24acceptChecks), `pay=${expectedPay24}`);
+if (!Object.values(w24acceptChecks).every(Boolean)) { console.log('WAVE24 CONGREGATION ACCEPT FAIL'); errors++; }
+
+undockStation();
+const salvagePod24 = ctx.pods[ctx.pods.length - 1] ?? null;
+let podScooped24 = false;
+if (salvagePod24) {
+  ctx.ship.velocity.set(0, 0, 0);
+  for (let i = 0; i < 600 && !podScooped24; i++) {
+    ctx.ship.object.position.copy(salvagePod24.mesh.position); // pod drifts; stay on it
+    tick(1, 'scoop salvage pod (wave24)');
+    podScooped24 = !ctx.pods.includes(salvagePod24);
+  }
+}
+tick(30, 'post-scoop settle (wave24)'); // let the job's event scan see podCollected
+const creditsAtRedock24 = ctx.world.credits;
+dockAtCurrentStation('redock cg_vigil (wave24 recovery)');
+tick(90, 'wave24 recovery payout tick');
+const w24jobsChecks = {
+  podScooped: podScooped24,
+  jobCollected: recoveryJob24?.collected === true,
+  redockedAtVigil: ctx.flags.docked === true && ctx.world.currentSystem === 'cg_vigil',
+  paidScaled: ctx.world.credits - creditsAtRedock24 === expectedPay24,
+  jobDone: recoveryJob24?.state === 'done',
+};
+console.log('wave24 congregation job payout:', JSON.stringify(w24jobsChecks), `delta=${ctx.world.credits - creditsAtRedock24} expect=${expectedPay24}`);
+if (!Object.values(w24jobsChecks).every(Boolean)) { console.log('WAVE24 CONGREGATION PAYOUT FAIL'); errors++; }
+
+// -- e. save roundtrip: roster 103 + the generated dockmaster survive ---------
+// The wave-23 e pattern at the generated system d4 ended docked in (Vigil
+// Chapel, cg_vigil): bank non-default state on the generated dockmaster
+// (trust 25 via the real bumpTrust API), park hostiles so the autosave can't
+// be combat-blocked, cycle the dock so the 'docked' autosave carries the
+// banked state, assert the save, corrupt the live roster, die, recover via
+// Enter, assert the restore.
+const cgContact24 = contactsForSystem(ctx, 'cg_vigil').find((c) => c.role === 'dockmaster') ?? null;
+if (cgContact24) bumpTrust(ctx, cgContact24, 25);
+// Baseline-relative: the d4 recovery payout already banked its own trust with
+// the yard, so read the live figure the autosave must carry (and prove it is
+// non-default), never a hardcoded total.
+const bankedTrust24 = cgContact24?.trust ?? 0;
+const bankedName24 = cgContact24?.name ?? '';
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave24 save)');
+undockStation();
+dockAtCurrentStation('dock cg_vigil (wave24 save)'); // 'docked' fires trySave with trust 25 banked
+tick(3, 'wave24 save settle');
+const w24snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+const snapCg24 = (w24snap?.world?.contacts ?? []).find((c) => c.id === 'contact-cg_vigil-dockmaster') ?? null;
+const w24saveChecks = {
+  saveWritten: !!w24snap?.world,
+  rosterInSave103: (w24snap?.world?.contacts ?? []).length === 103,
+  bankedNonDefault: bankedTrust24 > 0 && bankedName24 === SYSTEMS.cg_vigil.contacts[0].name,
+  dockmasterInSave: snapCg24?.name === bankedName24 && snapCg24?.trust === bankedTrust24,
+};
+console.log('wave24 save fields:', JSON.stringify(w24saveChecks), `snap=${JSON.stringify(snapCg24)}`);
+if (!Object.values(w24saveChecks).every(Boolean)) { console.log('WAVE24 SAVE FIELDS FAIL'); errors++; }
+
+// Corrupt in memory (splice the generated dockmaster out of the live roster),
+// die, recover from the dock autosave (Enter skips the hold): the full roster
+// and the banked name/trust come back.
+const cgIdx24 = (ctx.world.contacts ?? []).findIndex((c) => c.id === 'contact-cg_vigil-dockmaster');
+if (cgIdx24 >= 0) ctx.world.contacts.splice(cgIdx24, 1);
+tick(2, 'wave24 roster corrupted');
+const w24corrupted = (ctx.world.contacts ?? []).length === 102
+  && !(ctx.world.contacts ?? []).some((c) => c.id === 'contact-cg_vigil-dockmaster');
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave24 restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+const restoredCg24 = contactsForSystem(ctx, 'cg_vigil').find((c) => c.role === 'dockmaster') ?? null;
+const w24restoreChecks = {
+  corruptedFirst: w24corrupted,
+  rosterRestored103: (ctx.world.contacts ?? []).length === 103,
+  dockmasterRestored: restoredCg24?.name === bankedName24 && restoredCg24?.trust === bankedTrust24,
+};
+console.log('wave24 restore:', JSON.stringify(w24restoreChecks));
+if (!Object.values(w24restoreChecks).every(Boolean)) { console.log('WAVE24 RESTORE FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

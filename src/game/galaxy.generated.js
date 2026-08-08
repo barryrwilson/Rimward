@@ -26,6 +26,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A family ark, stripped to the ribs. Somebody's grandmother was born on it, and they'll tell you so."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Yardkeeper Stovers"
+      }
+    ],
     "sunColor": 11037757,
     "sunRadius": 53,
     "planetCount": 2,
@@ -109,6 +115,12 @@ export const GENERATED_SYSTEMS = {
           492
         ],
         "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Kindly Fenwick"
       }
     ],
     "sunColor": 11037757,
@@ -196,6 +208,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A stone for the first field broken this far out. The names on it are still farmed by their grandchildren."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Yardkeeper Wide Stovers"
+      }
+    ],
     "sunColor": 10512447,
     "sunRadius": 53,
     "planetCount": 3,
@@ -271,6 +289,12 @@ export const GENERATED_SYSTEMS = {
           -485
         ],
         "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Yardkeeper Old Tilley"
       }
     ],
     "sunColor": 8410953,
@@ -358,6 +382,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The stars here look nearer than they should. Kids dare each other to fly through it."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Sunny Fenwick"
+      }
+    ],
     "sunColor": 10184001,
     "sunRadius": 48,
     "planetCount": 3,
@@ -443,6 +473,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Steady Fenwick"
+      }
+    ],
     "sunColor": 8542280,
     "sunRadius": 31,
     "planetCount": 1,
@@ -512,6 +548,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Out this far the beacon's answer comes back late, and slightly wrong."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Sunny Outrim"
+      }
+    ],
     "sunColor": 8345161,
     "sunRadius": 31,
     "planetCount": 1,
@@ -579,6 +621,12 @@ export const GENERATED_SYSTEMS = {
           592
         ],
         "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Yardkeeper Steady Stovers"
       }
     ],
     "sunColor": 10052673,
@@ -666,6 +714,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The last freeholder out this way left the porch light on. It's still on."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dockmother Outrim"
+      }
+    ],
     "sunColor": 9264453,
     "sunRadius": 41,
     "planetCount": 1,
@@ -741,6 +795,12 @@ export const GENERATED_SYSTEMS = {
           447
         ],
         "line": "The last freeholder out this way left the porch light on. It's still on."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dockfather Tilley"
       }
     ],
     "sunColor": 9198917,
@@ -828,6 +888,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A cairn of ballast rock, one stone per family that stayed. It gets taller every year."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Porch Warden Kindly Aldercroft"
+      }
+    ],
     "sunColor": 8476489,
     "sunRadius": 37,
     "planetCount": 1,
@@ -897,6 +963,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Steady Halloway"
+      }
+    ],
     "sunColor": 8542280,
     "sunRadius": 38,
     "planetCount": 2,
@@ -964,6 +1036,12 @@ export const GENERATED_SYSTEMS = {
           69
         ],
         "line": "Out this far the beacon's answer comes back late, and slightly wrong."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Harbormaster Wide Stovers"
       }
     ],
     "sunColor": 8542280,
@@ -1041,6 +1119,12 @@ export const GENERATED_SYSTEMS = {
           -725
         ],
         "line": "A slow shimmer, like heat off a summer field. Nothing grows there, but nothing dies there either."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Harbormaster Steady Tilley"
       }
     ],
     "sunColor": 8542280,
@@ -1128,6 +1212,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Broke up hauling seed stock inward. The field around it gets left alone, out of respect."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Far-Porch Keeper Wide Dunmore"
+      }
+    ],
     "sunColor": 9198917,
     "sunRadius": 45,
     "planetCount": 2,
@@ -1211,6 +1301,12 @@ export const GENERATED_SYSTEMS = {
           620
         ],
         "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Steady Tilley"
       }
     ],
     "sunColor": 9790019,
@@ -1298,6 +1394,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The last freeholder out this way left the porch light on. It's still on."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Harbormaster Sunny Halloway"
+      }
+    ],
     "sunColor": 9395781,
     "sunRadius": 37,
     "planetCount": 2,
@@ -1383,6 +1485,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Broke up hauling seed stock inward. The field around it gets left alone, out of respect."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Porch Warden Sunny Bramm"
+      }
+    ],
     "sunColor": 8542280,
     "sunRadius": 38,
     "planetCount": 1,
@@ -1458,6 +1566,12 @@ export const GENERATED_SYSTEMS = {
           -308
         ],
         "line": "The last freeholder out this way left the porch light on. It's still on."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Porch Warden Sunny Fenwick"
       }
     ],
     "sunColor": 9461572,
@@ -1545,6 +1659,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A memorial plaque for a profitable quarter. The company does not mark its losses."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Margin Officer Estwick"
+      }
+    ],
     "sunColor": 6995664,
     "sunRadius": 59,
     "planetCount": 1,
@@ -1630,6 +1750,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A nav beacon broadcasting claim coordinates to a claim that lapsed decades ago."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Vested Corven"
+      }
+    ],
     "sunColor": 6928844,
     "sunRadius": 52,
     "planetCount": 5,
@@ -1705,6 +1831,12 @@ export const GENERATED_SYSTEMS = {
           484
         ],
         "line": "A survey marker, first of a planned thousand. It remains first."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Comptroller Vested Braille"
       }
     ],
     "sunColor": 6928329,
@@ -1792,6 +1924,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Chartered Dray"
+      }
+    ],
     "sunColor": 6528948,
     "sunRadius": 37,
     "planetCount": 2,
@@ -1867,6 +2005,12 @@ export const GENERATED_SYSTEMS = {
           250
         ],
         "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Comptroller Measured Farledger"
       }
     ],
     "sunColor": 6063260,
@@ -1954,6 +2098,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Claims Warden Outcharter"
+      }
+    ],
     "sunColor": 6196644,
     "sunRadius": 31,
     "planetCount": 2,
@@ -2031,6 +2181,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A cornerstone for an office that was never built. The plaque lists projections."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Vested Inverness"
+      }
+    ],
     "sunColor": 6662075,
     "sunRadius": 46,
     "planetCount": 4,
@@ -2098,6 +2254,12 @@ export const GENERATED_SYSTEMS = {
           501
         ],
         "line": "Out here the audit trail ends mid-entry, and the ink looks recent."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Comptroller Chartered Corven"
       }
     ],
     "sunColor": 6262437,
@@ -2175,6 +2337,12 @@ export const GENERATED_SYSTEMS = {
           672
         ],
         "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Claims Warden Lastfiling"
       }
     ],
     "sunColor": 6529462,
@@ -2262,6 +2430,12 @@ export const GENERATED_SYSTEMS = {
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Outer Ledger Comptroller Measured Mercer"
+      }
+    ],
     "sunColor": 6329771,
     "sunRadius": 42,
     "planetCount": 1,
@@ -2347,6 +2521,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Chartermaster Mercer"
+      }
+    ],
     "sunColor": 6196130,
     "sunRadius": 37,
     "planetCount": 2,
@@ -2414,6 +2594,12 @@ export const GENERATED_SYSTEMS = {
           564
         ],
         "line": "A survey hull written off mid-contract. The crew's severance is still in arbitration."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Port Officer Salaried Kestrel"
       }
     ],
     "sunColor": 6661818,
@@ -2501,6 +2687,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A survey marker, first of a planned thousand. It remains first."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Audited Ashcombe"
+      }
+    ],
     "sunColor": 6795203,
     "sunRadius": 50,
     "planetCount": 4,
@@ -2584,6 +2776,12 @@ export const GENERATED_SYSTEMS = {
           290
         ],
         "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Port Officer Vested Outcharter"
       }
     ],
     "sunColor": 6196387,
@@ -2671,6 +2869,12 @@ export const GENERATED_SYSTEMS = {
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Outer Ledger Comptroller Lastfiling"
+      }
+    ],
     "sunColor": 6130081,
     "sunRadius": 36,
     "planetCount": 2,
@@ -2748,6 +2952,12 @@ export const GENERATED_SYSTEMS = {
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Comptroller Mercer"
+      }
+    ],
     "sunColor": 6662332,
     "sunRadius": 44,
     "planetCount": 4,
@@ -2823,6 +3033,12 @@ export const GENERATED_SYSTEMS = {
           858
         ],
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Comptroller Dray"
       }
     ],
     "sunColor": 6129567,
@@ -3007,6 +3223,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Oathbound Corvane"
+      }
+    ],
     "sunColor": 6580861,
     "sunRadius": 52,
     "planetCount": 3,
@@ -3090,6 +3312,12 @@ export const GENERATED_SYSTEMS = {
           -382
         ],
         "line": "A troop-hauler holed at her moorings. The muster roll inside was never recovered."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Sergeant Outwatch"
       }
     ],
     "sunColor": 6448763,
@@ -3177,6 +3405,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A perimeter beacon marking a line the Bastion no longer holds. The watch still logs it."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Oathbound Rimward"
+      }
+    ],
     "sunColor": 6316664,
     "sunRadius": 41,
     "planetCount": 3,
@@ -3260,6 +3494,12 @@ export const GENERATED_SYSTEMS = {
           458
         ],
         "line": "A watch-post buoy beyond the last patrol route. Its log shows one visitor, years apart, always the same hull."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Warden Unbroken Corvane"
       }
     ],
     "sunColor": 6448506,
@@ -3347,6 +3587,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A reading like a held breath. Gunnery used it for calibration once; they don't anymore."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Ironmaster Slag-Born Stahl"
+      }
+    ],
     "sunColor": 6052466,
     "sunRadius": 34,
     "planetCount": 1,
@@ -3416,6 +3662,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The perimeter light at the edge of the map still answers roll call. No one remembers who it answers to."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Ironmaster Iron Ferro"
+      }
+    ],
     "sunColor": 6382456,
     "sunRadius": 45,
     "planetCount": 1,
@@ -3483,6 +3735,12 @@ export const GENERATED_SYSTEMS = {
           -386
         ],
         "line": "The perimeter light at the edge of the map still answers roll call. No one remembers who it answers to."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Ironmaster Gant"
       }
     ],
     "sunColor": 6184564,
@@ -3570,6 +3828,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Muster Officer Standing Rimward"
+      }
+    ],
     "sunColor": 6382713,
     "sunRadius": 42,
     "planetCount": 1,
@@ -3655,6 +3919,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A reading like a held breath. Gunnery used it for calibration once; they don't anymore."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Slag-Born Rourke"
+      }
+    ],
     "sunColor": 6382457,
     "sunRadius": 40,
     "planetCount": 2,
@@ -3722,6 +3992,12 @@ export const GENERATED_SYSTEMS = {
           -616
         ],
         "line": "A dead zone where comms fall flat. Patrols file around it and call the habit tradition."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Warden Kessel"
       }
     ],
     "sunColor": 6646654,
@@ -3809,6 +4085,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A gunboat that lost its war before the war started. The garrison salutes it on passing."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Ironmaster Standing Rourke"
+      }
+    ],
     "sunColor": 6778496,
     "sunRadius": 48,
     "planetCount": 2,
@@ -3894,6 +4176,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Something out there reflects ranging pulses a half-second late. The Bastion has standing orders not to ping it."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Garrison Keeper Oathbound Rourke"
+      }
+    ],
     "sunColor": 6052722,
     "sunRadius": 36,
     "planetCount": 1,
@@ -3969,6 +4257,12 @@ export const GENERATED_SYSTEMS = {
           88
         ],
         "line": "Something out there reflects ranging pulses a half-second late. The Bastion has standing orders not to ping it."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Standing Farpost"
       }
     ],
     "sunColor": 6316664,
@@ -4056,6 +4350,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A troop-hauler holed at her moorings. The muster roll inside was never recovered."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Watch Commander Brakk"
+      }
+    ],
     "sunColor": 6646911,
     "sunRadius": 48,
     "planetCount": 1,
@@ -4139,6 +4439,12 @@ export const GENERATED_SYSTEMS = {
           251
         ],
         "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Sergeant Unbroken Esk"
       }
     ],
     "sunColor": 6316407,
@@ -4226,6 +4532,12 @@ export const GENERATED_SYSTEMS = {
         "line": "An oath-stone for a cohort that did not come back. The names are punched, not carved — iron doesn't take sentiment."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Warden Standing Gant"
+      }
+    ],
     "sunColor": 6712704,
     "sunRadius": 47,
     "planetCount": 2,
@@ -4309,6 +4621,12 @@ export const GENERATED_SYSTEMS = {
           -625
         ],
         "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Cutthroat Skell"
       }
     ],
     "sunColor": 9123133,
@@ -4397,6 +4715,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Ledger Master Paid Quane"
+      }
+    ],
     "sunColor": 9385276,
     "sunRadius": 47,
     "planetCount": 4,
@@ -4473,6 +4797,12 @@ export const GENERATED_SYSTEMS = {
           -555
         ],
         "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Posted Morl"
       }
     ],
     "sunColor": 9385276,
@@ -4561,6 +4891,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The farthest toll-light the ledger ever hung. Its account is still open, and something keeps paying it."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Blind Tollkeeper Posted Ire"
+      }
+    ],
     "sunColor": 7550792,
     "sunRadius": 31,
     "planetCount": 1,
@@ -4629,6 +4965,12 @@ export const GENERATED_SYSTEMS = {
           844
         ],
         "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Cut Steward Paid Skell"
       }
     ],
     "sunColor": 8599105,
@@ -4717,6 +5059,12 @@ export const GENERATED_SYSTEMS = {
         "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Posted Dueward"
+      }
+    ],
     "sunColor": 8336962,
     "sunRadius": 37,
     "planetCount": 2,
@@ -4801,6 +5149,12 @@ export const GENERATED_SYSTEMS = {
           -552
         ],
         "line": "Out past the last marker, a buoy that bills nobody. The ledger leaves it alone."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Paid Blackmark"
       }
     ],
     "sunColor": 8468034,
@@ -4889,6 +5243,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Due Warden Blackmark"
+      }
+    ],
     "sunColor": 8336962,
     "sunRadius": 45,
     "planetCount": 1,
@@ -4965,6 +5325,12 @@ export const GENERATED_SYSTEMS = {
           -403
         ],
         "line": "A stretch of black where the toll-beacons don't answer. The ledger charges extra to cross it, and can't say why."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Posted Kress"
       }
     ],
     "sunColor": 7812934,
@@ -5053,6 +5419,12 @@ export const GENERATED_SYSTEMS = {
         "line": "Something here echoes back your own transponder, a day later, from somewhere else."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Blind Tollkeeper Lasttoll"
+      }
+    ],
     "sunColor": 7485256,
     "sunRadius": 30,
     "planetCount": 2,
@@ -5137,6 +5509,12 @@ export const GENERATED_SYSTEMS = {
           -723
         ],
         "line": "Out past the last marker, a buoy that bills nobody. The ledger leaves it alone."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Cut Steward Dueward"
       }
     ],
     "sunColor": 7550792,
@@ -5307,6 +5685,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A buyer's yacht, scuttled for the insurance and then, embarrassingly, found."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Gavel Keeper Dore"
+      }
+    ],
     "sunColor": 9533000,
     "sunRadius": 32,
     "planetCount": 2,
@@ -5391,6 +5775,12 @@ export const GENERATED_SYSTEMS = {
           -75
         ],
         "line": "A shimmer the guild certified as art and now charges to view."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Last Lot Commissaire Hargreave"
       }
     ],
     "sunColor": 10913859,
@@ -5479,6 +5869,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The guild's farthest showroom: one spotlight, one pedestal, nothing on it. Offers are accepted."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Certified Palladio"
+      }
+    ],
     "sunColor": 10585156,
     "sunRadius": 44,
     "planetCount": 1,
@@ -5557,6 +5953,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A catalog beacon past the last buyer. The lots it lists were beautiful, once."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Saleroom Master Patron Lissome"
+      }
+    ],
     "sunColor": 9796167,
     "sunRadius": 35,
     "planetCount": 1,
@@ -5633,6 +6035,12 @@ export const GENERATED_SYSTEMS = {
           -867
         ],
         "line": "A galleon that went down with the season's catalog. The auction of its salvage rights outlasted the salvage."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Cataloged Palladio"
       }
     ],
     "sunColor": 10256453,
@@ -5721,6 +6129,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A patch of space with excellent acoustics. Recitals are held there. Attendance is declining."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Gavel Keeper Farhammer"
+      }
+    ],
     "sunColor": 10256453,
     "sunRadius": 39,
     "planetCount": 1,
@@ -5797,6 +6211,12 @@ export const GENERATED_SYSTEMS = {
           -656
         ],
         "line": "A galleon that went down with the season's catalog. The auction of its salvage rights outlasted the salvage."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Saleroom Master Cataloged Fontaine"
       }
     ],
     "sunColor": 9796167,
@@ -5885,6 +6305,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A mirror-polished obelisk. It shows you the stars behind you, slightly improved."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Opal Warden Opal Valette"
+      }
+    ],
     "sunColor": 8115106,
     "sunRadius": 53,
     "planetCount": 2,
@@ -5960,6 +6386,12 @@ export const GENERATED_SYSTEMS = {
           -502
         ],
         "line": "A mirror-polished obelisk. It shows you the stars behind you, slightly improved."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Mirror Keeper Radiant Seraphine"
       }
     ],
     "sunColor": 7650968,
@@ -6039,6 +6471,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A statue of a muse the artist later denied sculpting. Both are famous now."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Velvet Harbormaster Outglow"
+      }
+    ],
     "sunColor": 7120012,
     "sunRadius": 42,
     "planetCount": 3,
@@ -6106,6 +6544,12 @@ export const GENERATED_SYSTEMS = {
           516
         ],
         "line": "A vow-stone, carved by hands that never saw it placed. That was the vow."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Tonsured Toll"
       }
     ],
     "sunColor": 11969923,
@@ -6185,6 +6629,12 @@ export const GENERATED_SYSTEMS = {
         "line": "The last chapel lamp before the quiet. The psalm sung here is shorter than it used to be."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Far Vigil Sexton Lament"
+      }
+    ],
     "sunColor": 10522491,
     "sunRadius": 37,
     "planetCount": 3,
@@ -6262,6 +6712,12 @@ export const GENERATED_SYSTEMS = {
         "line": "An answer comes back to prayers broadcast here. It is one word. The word is not comfort."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Sung Toll"
+      }
+    ],
     "sunColor": 9338228,
     "sunRadius": 33,
     "planetCount": 1,
@@ -6329,6 +6785,12 @@ export const GENERATED_SYSTEMS = {
           -449
         ],
         "line": "A filing beacon past the rim's edge. It acknowledges receipt of nothing, promptly."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Last Office Clerk Pending Arkwright"
       }
     ],
     "sunColor": 8818856,
@@ -6406,6 +6868,12 @@ export const GENERATED_SYSTEMS = {
           -714
         ],
         "line": "A census barge, sunk by paperwork in the literal end. Its crew are listed as present."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Clerk Rubric"
       }
     ],
     "sunColor": 8028314,
@@ -6576,6 +7044,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Scratch Keeper Hinge"
+      }
+    ],
     "sunColor": 9081253,
     "sunRadius": 46,
     "planetCount": 3,
@@ -6660,6 +7134,12 @@ export const GENERATED_SYSTEMS = {
           755
         ],
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Scratch Tinker"
       }
     ],
     "sunColor": 8883874,
@@ -6748,6 +7228,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A hand-built lane-light. The drift keeps it lit for the next ones through."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Scratch Keeper Bootleg Bolt"
+      }
+    ],
     "sunColor": 8422554,
     "sunRadius": 39,
     "planetCount": 1,
@@ -6832,6 +7318,12 @@ export const GENERATED_SYSTEMS = {
           5
         ],
         "line": "A nameless hulk the drifters use as a road sign. Turn inward at the wreck, they say, and you'll find water."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Nameless Drift"
       }
     ],
     "sunColor": 8356504,
@@ -6920,6 +7412,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A drift-current with no mass behind it. The unclaimed ride it inward and pay nothing."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Nameless Moth"
+      }
+    ],
     "sunColor": 8290711,
     "sunRadius": 43,
     "planetCount": 3,
@@ -7004,6 +7502,12 @@ export const GENERATED_SYSTEMS = {
           -541
         ],
         "line": "A nameless hulk the drifters use as a road sign. Turn inward at the wreck, they say, and you'll find water."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Drift Warden Wayward Hinge"
       }
     ],
     "sunColor": 8620189,
@@ -7092,6 +7596,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A claim-jumper's barge, dead between claims. Nobody filed. Nobody files out here."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Drift Warden Splice"
+      }
+    ],
     "sunColor": 8817824,
     "sunRadius": 51,
     "planetCount": 2,
@@ -7176,6 +7686,12 @@ export const GENERATED_SYSTEMS = {
           -269
         ],
         "line": "The last light nobody owns. Past it, even the ledger gives up."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Bootleg Patch"
       }
     ],
     "sunColor": 8158868,
@@ -7264,6 +7780,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Lucky Flint"
+      }
+    ],
     "sunColor": 9081253,
     "sunRadius": 48,
     "planetCount": 1,
@@ -7340,6 +7862,12 @@ export const GENERATED_SYSTEMS = {
           -686
         ],
         "line": "A marker for a well found by accident and lost on purpose. The coordinates are a shared secret."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Drift Warden Grub"
       }
     ],
     "sunColor": 9147046,
@@ -7428,6 +7956,12 @@ export const GENERATED_SYSTEMS = {
         "line": "A claim-jumper's barge, dead between claims. Nobody filed. Nobody files out here."
       }
     ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Dock Boss Cinder"
+      }
+    ],
     "sunColor": 8685982,
     "sunRadius": 45,
     "planetCount": 1,
@@ -7504,6 +8038,12 @@ export const GENERATED_SYSTEMS = {
           -853
         ],
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Edge-of-Map Warden Scratch Grub"
       }
     ],
     "sunColor": 8356761,
@@ -7590,6 +8130,12 @@ export const GENERATED_SYSTEMS = {
           -539
         ],
         "line": "A lamp-tender's tender, run down by its own route. The lamps it served are still lit."
+      }
+    ],
+    "contacts": [
+      {
+        "role": "dockmaster",
+        "name": "Last Lamp Keeper Last-Lit Outward"
       }
     ],
     "sunColor": 12886127,
