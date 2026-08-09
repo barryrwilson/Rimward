@@ -332,14 +332,19 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // sun catch glossy highlights) with the vein network still glowing softly
   // UNDER it (emissive 0xffffff × vein texture). tagPulse rides
   // emissiveIntensity: the vein network slowly brightens and dims.
+  // Wave 36: emissive is distance-independent while the lit fill is not, so
+  // past ~150u only the lattice read (wave-33 review P3) — opacity rises
+  // 0.58 → 0.72 and the vein pulse drops (base 0.6 → 0.42, amp 0.18 → 0.10)
+  // to rebalance skin vs lattice, and roughness 0.3 → 0.55 broadens the
+  // diffuse lobe so the sun's directional term shows on the fill.
   const skinMat = new THREE.MeshPhysicalMaterial({
     color: ORGANIC.lagoon, // glassy deep-teal epidermis — translucent
-    transparent: true, opacity: 0.58, depthWrite: false, // hearths show through
-    roughness: 0.3, metalness: 0,
+    transparent: true, opacity: 0.72, depthWrite: false, // hearths show through
+    roughness: 0.55, metalness: 0,
     clearcoat: 0.6, clearcoatRoughness: 0.3, // wet-glass sheen
-    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.6,
+    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.42,
   });
-  tagPulse(skinMat, { base: 0.6, amp: 0.18, hz: 0.07 }); // veins breathe
+  tagPulse(skinMat, { base: 0.42, amp: 0.10, hz: 0.07 }); // veins breathe
   const webMat = new THREE.MeshStandardMaterial({
     color: 0x1f4a46, // deep teal membrane — translucent, the delicate contrast
     transparent: true, opacity: 0.5,
@@ -379,8 +384,12 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // --- bioluminescent fill: a soft teal point light at the body center so
   // the translucent flesh READS as volume (the ship carries underLight for
   // the same reason). Without it, far from the sun, only the emissive veins
-  // show and the body collapses to a glowing lattice.
-  const fleshLight = new THREE.PointLight(0x7fe0d0, 300, 140, 2);
+  // show and the body collapses to a glowing lattice. Wave 36: 300 → 60 —
+  // at 300/decay-2 it delivered ~1.2-13x the flat decay-0 sun's irradiance
+  // (2.5) at skin distances (3-10u), swamping all sunward/anti-sun shading;
+  // 60 puts it at parity (~2.4 at 5u) so the sun now shapes the bell and
+  // arms (wave-33 review P3).
+  const fleshLight = new THREE.PointLight(0x7fe0d0, 60, 140, 2);
   fleshLight.position.set(0, 6, 0);
   group.add(fleshLight);
 

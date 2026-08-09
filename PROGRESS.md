@@ -1353,20 +1353,63 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   leg flips under the old code). No residual findings — nothing new
   standing this wave.
 
-## Next round candidates (wave 36)
-- Wave 33 standing (review P3s, documented not patched):
-  - bt_cradle's sun (PointLight 300, decay 2, ~535u) contributes
-    ≈0.001 irradiance at the station — the bloom is effectively
-    self-lit (emissives + fleshLight + ambient), so sunward/anti-sun
-    shading barely differs. Lighting-model observation, not a defect.
-  - At ~150u+ the emissive vein lattice visually dominates the 0.58
-    skin fill (glassy up close, lattice-ish at range). Perception
-    note; not the wave-29 wireframe bug (surfaces + clearcoat render).
+- Wave 36: bt_cradle lighting rebalance (user-decided scope — the two
+  wave-33 review P3s were the only candidates naming a possible pass;
+  the rest of the ledger stands). station.js buildBeautifulStation,
+  station-local only (the solarsystem.js decay-0 sun lights the planets
+  and stays untouched): fleshLight 300 → 60 — at 300/decay-2 it
+  delivered ~1.2-13x the flat sun's 2.5 at 3-10u skin distances,
+  swamping all sunward/anti-sun shading; 60 is parity (~2.4 at 5u);
+  skinMat opacity 0.58 → 0.72 and vein pulse base 0.6 → 0.42 / amp
+  0.18 → 0.10 (emissive is distance-independent, the lit fill is not —
+  past ~150u only the lattice read); roughness 0.3 → 0.55 broadens the
+  diffuse lobe so the sun's directional term shows on the fill. The
+  wave-33/34 pins all survive unchanged (5 pads/hearths/nodes, 19
+  petals, the shared transparent/emissiveMap/FrontSide skin instance on
+  6 meshes, hearth warmth r>g>b, hearth scale.z 5.4 containment). Boot
+  test wave-36 section (additive): leg a lighting contract (real travel
+  to bt_cradle, LIVE pins — skin opacity 0.72, roughness 0.55,
+  userData.pulse prop/base/amp/hz field-wise, exactly-one shared
+  instance on ≥6 meshes, exactly-one station PointLight with intensity
+  60 / distance 140 / decay 2 / position (0,6,0)); leg b sun envelope
+  (the decay-0 sun read LIVE — the only scene PointLight with
+  distance === 0 && decay === 0; the discriminator fails LOUDLY on zero
+  matches if solarsystem.js ever moves the sun off the flat contract,
+  no silent stale denominator — code-review/security informational,
+  fixed same-wave; fleshRatio ≤ 4.0 at the five spine distances and
+  ≤ 1.2 at the 5u parity zone; pre-wave-36 ratios 10.38/4.8 exceed both
+  bounds, so both legs discriminate). PASS ×3 consecutive + npm run
+  build clean. Reviews: security SHIP (attack surface unchanged — no
+  new save/event/DOM surface; consumer census: the skin instance rides
+  exactly the bell + 5 arms, fleshLight has no code consumers); code
+  APPROVE (overall correct, confidence 0.9; 3 P3s fixed same-wave —
+  the inflated '~12-50x' swamping figure corrected to ~1.2-13x in
+  station.js, the leg-b comment's pre-wave ratios corrected to
+  10.38/4.80, and the hardcoded 2.5 sun denominator replaced with the
+  live decay-0 lookup); designer visual SHIP — all 6 checkpoints live
+  in headless system Chrome on SwiftShader WebGL2 (sunward vs anti-sun
+  bell luminance 111.4 vs 22.4 at 40u — ratio 4.97x with a monotonic
+  sun-side ramp, 86.6 vs 56.4 at 80u; fill reads against the lattice at
+  160/180u; hearths read through the 0.72 skin — 1429/1615 amber px at
+  25u arm profile, mean (165,138,86); sea-glass + clearcoat glint up
+  close; pads/crown/orbs/webs standing, no black-on-black; motion
+  deltas over 2s — breath 1.018→0.980, arm tips 0.24/0.45u, pulse
+  inside the 0.42/0.10 envelope; 11 stills in .chrome-shot/w36/,
+  untracked scratch). Both wave-33 P3s CLOSED.
+
+## Next round candidates (wave 37)
+- Wave 33 standing: both review P3s are CLOSED (wave 36 — fleshLight
+  300 → 60 restores the sun gradient, opacity 0.72 + pulse 0.42/0.10
+  rebalance the fill vs the lattice at range; designer-measured:
+  sunward/anti-sun 4.97x at 40u, fill reads at 160/180u).
 - Wave 33 contract note for future station work: the boot test pins
   the v2 structural surface — 5 'beautiful-pad' (userData.pad 0..4),
   5 'beautiful-hearth', 5 'beautiful-node', 19 crown petals, and a
   shared transparent/emissiveMap/FrontSide skin instance on ≥6 meshes.
-  Any v3 pass must update that section deliberately.
+  Wave 36 adds a lighting surface to that pin: skin opacity 0.72,
+  roughness 0.55, pulse base 0.42 / amp 0.10 / hz 0.07, fleshLight
+  60/140/2 at (0,6,0), and the live sun-envelope ratios (≤4.0, parity
+  ≤1.2 at 5u). Any v3 pass must update those sections deliberately.
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
   docking still autosaves. Standing notes:

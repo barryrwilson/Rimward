@@ -8283,5 +8283,113 @@ tick(5, 'wave35b d cleanup');
 // No travel this section — the run never left freehold off the wave-35a
 // home leg, and the harness ends here.
 
+// ---- Wave 36: bloom lighting rebalance — the sun shapes the bloom --------
+// Wave 36 closes the two wave-33 review P3s: the bloom was effectively
+// self-lit — the station's fleshLight (PointLight 300, decay 2) delivered
+// ~1.2-13x the irradiance of the flat decay-0 system sun (intensity 2.5, no
+// distance falloff) at skin distances (3-10u), and the emissive vein lattice
+// (pulse base 0.6) visually dominated the 0.58-opacity skin fill past
+// ~150u. The fix is station-local to buildBeautifulStation (src/systems/
+// station.js): fleshLight 300 -> 60 (distance 140, decay 2, color 0x7fe0d0
+// unchanged), skin opacity 0.58 -> 0.72, roughness 0.3 -> 0.55, vein pulse
+// base 0.6 -> 0.42 / amp 0.18 -> 0.10 (hz stays 0.07). Every check below
+// discriminates against the PRE-wave-36 source by reasoning: opacity
+// 0.58 !== 0.72, roughness 0.3 !== 0.55, pulse base 0.6 !== 0.42 and amp
+// 0.18 !== 0.10, flesh intensity 300 !== 60, and the leg-b irradiance
+// ratios (10.38 at 3.4u and 4.8 at 5u pre-wave-36) exceed both bounds — so
+// both legs FAIL on the old code. All values are read off LIVE scene
+// objects; nothing is imported from station.js. The harness arrives here
+// freehold/undocked with hostiles parked (wave-35b end state).
+// -- a. Lighting contract, real travel (the wave-33/wave-34 idiom) --------
+// Hull re-pin before the bt_cradle leg — the cradle pirates can't kill the
+// flight out — plus the wave-34 undock guard.
+if (ctx.flags.docked) undockStation();
+ctx.player.hullMax = 1e9; ctx.player.hull = 1e9; // the wave-30 pinned-hull discipline
+ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+travelTo('bt_cradle', 'wave36 cradle leg');
+const w36station = findByName('beautiful-station')[0] ?? null;
+// Skin: the SAME discriminator as wave-33 — transparent && emissiveMap &&
+// side !== DoubleSide (the crown's petalMat is DoubleSide and stays out) —
+// counted per material INSTANCE. Exactly one instance may qualify, shared
+// by >= 6 meshes (body bell + 5 arms); none or an ambiguous split fails.
+const w36skinCounts = new Map();
+if (w36station) {
+  w36station.traverse((o) => {
+    if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+    const m = o.material;
+    if (m.transparent === true && m.emissiveMap != null && m.side !== THREE.DoubleSide) w36skinCounts.set(m, (w36skinCounts.get(m) ?? 0) + 1);
+  });
+}
+const w36skinEntries = [...w36skinCounts.entries()].filter(([, n]) => n >= 6);
+const w36skin = w36skinEntries.length === 1 ? w36skinEntries[0][0] : null;
+const w36skinShared = w36skinEntries.length === 1 ? w36skinEntries[0][1] : 0;
+// The tagPulse spec lives at material.userData.pulse — read the fields
+// individually (no object deep-equal); the LIVE emissiveIntensity itself
+// is oscillating around base by amp, so it is never pinned directly.
+const w36pulse = w36skin ? (w36skin.userData.pulse ?? null) : null;
+// Flesh: exactly one PointLight rides the station group — the fleshLight.
+const w36fleshes = [];
+if (w36station) w36station.traverse((o) => { if (o.isPointLight) w36fleshes.push(o); });
+const w36flesh = w36fleshes.length === 1 ? w36fleshes[0] : null;
+const w36lightChecks = {
+  arrivedAtCradle: ctx.world.currentSystem === 'bt_cradle',
+  stationLive: !!w36station && findByName('beautiful-station').length === 1,
+  skinUniqueSharedInstance: w36skinEntries.length === 1,
+  skinOpacity: !!w36skin && w36skin.opacity === 0.72,
+  skinRoughness: !!w36skin && w36skin.roughness === 0.55,
+  skinPulseProp: !!w36pulse && w36pulse.prop === 'emissiveIntensity',
+  skinPulseBase: !!w36pulse && w36pulse.base === 0.42,
+  skinPulseAmp: !!w36pulse && w36pulse.amp === 0.10,
+  skinPulseHz: !!w36pulse && w36pulse.hz === 0.07,
+  skinStillShared: w36skinShared >= 6,
+  fleshUnique: w36fleshes.length === 1,
+  fleshIntensity: !!w36flesh && w36flesh.intensity === 60,
+  fleshDistance: !!w36flesh && w36flesh.distance === 140,
+  fleshDecay: !!w36flesh && w36flesh.decay === 2,
+  fleshPosition: !!w36flesh && w36flesh.position.x === 0 && w36flesh.position.y === 6 && w36flesh.position.z === 0,
+};
+console.log('wave36 lighting:', JSON.stringify(w36lightChecks));
+if (!Object.values(w36lightChecks).every(Boolean)) { console.log('WAVE36 LIGHTING FAIL'); errors++; }
+
+// -- b. Sun-shapes-bloom envelope, analytic against LIVE lights ----------
+// Irradiance model I / d^decay. The system sun is a flat decay-0
+// PointLight (solarsystem.js, out of scope): decay 0 means NO distance
+// falloff, so its irradiance at every station point is the constant
+// intensity. Like leg a, the sun reference is read LIVE — the harness
+// precedent (the wave-34 legs: nothing hardcoded from source). The sun is
+// the ONLY scene PointLight with distance === 0 && decay === 0 (the ship's
+// underLight is 28/2, the station fleshLight 140/2); if solarsystem.js
+// ever moves the sun off the decay-0 contract the discriminator finds ZERO
+// matches and this leg fails LOUDLY — no silent stale denominator
+// (wave-36 review P3). Sample distances d are spine-frame distances from
+// the fleshLight at the body center, read off the wave-33 arm-spine
+// comment: 3.4 is the arm-root radius, 20 the far arm span. fleshRatio(d)
+// = (flesh.intensity / d^flesh.decay) / sun.intensity. Post-rebalance the
+// fleshLight is a fill light, not the key: every sample must sit at
+// <= 4.0x the sun (pre-wave-36 the 3.4u ratio is ~10.38 — discriminates),
+// and at 5u the ratio must be <= 1.2 — the parity zone where the sun's
+// directional term now wins (pre-wave-36 it's 4.8). This is an
+// irradiance-ratio promise, not a rendered-pixel claim — the designer
+// pass measures pixels live.
+const w36suns = [];
+ctx.scene.traverse((o) => { if (o.isPointLight && o.distance === 0 && o.decay === 0) w36suns.push(o); });
+const w36sun = w36suns.length === 1 ? w36suns[0] : null;
+const w36sunIrradiance = w36sun ? w36sun.intensity : NaN; // decay-0 sun: constant everywhere
+const w36spineDistances = [3.4, 5, 7, 10, 20]; // arm root through far arm span (spine frame)
+const w36fleshRatio = (d) => (w36flesh ? (w36flesh.intensity / Math.pow(d, w36flesh.decay)) / w36sunIrradiance : Infinity);
+const w36ratios = w36spineDistances.map(w36fleshRatio);
+const w36envelopeChecks = {
+  fleshLive: !!w36flesh, // leg a's traverse result carries over — same station, same leg
+  sunUniqueLive: w36suns.length === 1, // exactly one decay-0 unbounded PointLight in the scene
+  everyRatioUnder4: w36ratios.every((r) => r <= 4.0),
+  parityAt5u: w36fleshRatio(5) <= 1.2, // the sun wins from here out
+};
+console.log('wave36 sun envelope:', JSON.stringify(w36envelopeChecks), `ratios=${JSON.stringify(w36ratios.map((r) => Number(r.toFixed(3))))}`);
+if (!Object.values(w36envelopeChecks).every(Boolean)) { console.log('WAVE36 SUN ENVELOPE FAIL'); errors++; }
+
+// Home — the wave-27 discipline: the run ends where the harness began.
+travelTo('freehold', 'wave36 home leg');
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
