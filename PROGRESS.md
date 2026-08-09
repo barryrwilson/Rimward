@@ -1028,6 +1028,15 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   interval). NOTE: animateOrganic is a deliberate no-op under
   ctx.settings.reducedMotion (persisted 'rimward-settings-v1') — if the
   station ever reads fully frozen, that toggle is the first suspect.
+  Vein fix (user: "veins look like wireframes — compare my ship"): the
+  per-arm additive vein OVERLAY meshes deleted; veins now ride
+  emissiveMap on skinMat/webMat themselves (ship.js living-hull recipe:
+  emissive 0xffffff × shared vein texture so the texture colors carry),
+  tagPulse back on emissiveIntensity (skin 0.9±0.25 @ 0.07 Hz, web
+  0.5±0.15 @ 0.075 Hz phase-offset); skinMat opacity 0.5 → 0.8 for
+  flesh presence. Spore motes switched mats.veinGlow → lightMat (vein
+  texture on a sphere read as a wireframe ball). Live-verified:
+  wireframe cage gone, veins glow inside translucent flesh.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,

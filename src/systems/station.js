@@ -66,10 +66,11 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  * orchid-petal crown (the ringGroup, spun by update as always) growing out
  * of the arm-ring center, chandelier light clusters tucked beneath the
  * body, and a small pearl beacon nestled at the flower's throat, all
- * sculpted from organic.js primitives. update() drives the tagged
- * breath/sway parts via animateOrganic (zero-allocation; frozen under
- * reducedMotion) and the per-build tagPulse materials (skin/web opacity,
- * heart emissive, per-arm vein overlays). Cached shared organic
+ * sculpted from organic.js primitives. Veins glow from WITHIN the flesh
+ * (emissiveMap, the ship.js recipe) — no overlay meshes. update() drives
+ * the tagged breath/sway parts via animateOrganic (zero-allocation;
+ * frozen under reducedMotion) and the per-build tagPulse materials
+ * (skin/web vein emissive, heart emissive). Cached shared organic
  * materials/textures are never disposed or pulse-tagged (teardownMesh
  * skips userData.shared); per-build materials/textures dispose exactly as
  * before. Every other faction's station path is byte-identical.
@@ -263,9 +264,11 @@ function buildStationMesh(ctx, systemId, def) {
  * flower–starfish hybrid: a translucent nacre body (breathing skin over a
  * slow-pulsing mint heart) with five starfish arms in perpetual two-axis
  * undulation (0.09/0.13 Hz incommensurate sways — the tips trace a slow
- * Lissajous sweep that never dwells), each cloaked in an additive vein
- * overlay that pulses traveling around the body, and membrane web-fans
- * breathing in the gaps between arms. The orchid-petal crown (the rotating
+ * Lissajous sweep that never dwells). Veins are EMISSIVE MAPS on the
+ * skin/web materials themselves (the ship.js living-hull recipe: emissive
+ * 0xffffff × shared vein texture, pulsed via emissiveIntensity) — never
+ * additive overlay meshes, which read as wireframe cages. Membrane
+ * web-fans breathe in the gaps between arms. The orchid-petal crown (the rotating
  * ringGroup) is rooted at the arm-ring center so the flower grows OUT of
  * the starfish disc; a small pearl beacon lantern blinks at the flower's
  * throat (update() drives beaconMat/beaconGlowMat as on every station);
@@ -298,28 +301,29 @@ function buildBeautifulStation(ctx, systemId, def) {
 
   // --- per-build translucent materials (dispose with the mesh; their maps
   // are the shared cached textures, which teardown skips via userData.shared).
-  // tagPulse picks emissiveIntensity on MeshStandardMaterial, so skin/web
-  // flip the tagged prop to opacity — the fluctuation rides transparency.
+  // Veins are EMISSIVE MAPS on the flesh itself — the ship.js recipe
+  // (emissive 0xffffff × vein texture, so the texture's own colors carry) —
+  // never an additive overlay mesh, which reads as a wireframe cage.
+  // tagPulse rides emissiveIntensity: the vein network slowly brightens and
+  // dims like the living hull's breath.
   const skinMat = new THREE.MeshStandardMaterial({
     map: mats.flesh.map, // shared nacre texture
     color: 0xf6ece0,
-    transparent: true, opacity: 0.5,
+    transparent: true, opacity: 0.8,
     roughness: 0.35, metalness: 0,
-    emissive: ORGANIC.deepFlesh, emissiveIntensity: 0.35,
+    emissive: 0xffffff, emissiveMap: mats.veinGlow.map, emissiveIntensity: 0.9,
     side: THREE.DoubleSide, depthWrite: false,
   });
-  tagPulse(skinMat, { base: 0.5, amp: 0.08, hz: 0.06 });
-  skinMat.userData.pulse.prop = 'opacity';
+  tagPulse(skinMat, { base: 0.9, amp: 0.25, hz: 0.07 }); // veins breathe
   const webMat = new THREE.MeshStandardMaterial({
     map: mats.flesh.map,
     color: 0xdff5e6, // mint-tinged membrane
     transparent: true, opacity: 0.38,
     roughness: 0.35, metalness: 0,
-    emissive: ORGANIC.deepFlesh, emissiveIntensity: 0.35,
+    emissive: 0xffffff, emissiveMap: mats.veinGlow.map, emissiveIntensity: 0.5,
     side: THREE.DoubleSide, depthWrite: false,
   });
-  tagPulse(webMat, { base: 0.38, amp: 0.07, hz: 0.075, phase: 2.1 }); // offset from skin — never syncs
-  webMat.userData.pulse.prop = 'opacity';
+  tagPulse(webMat, { base: 0.5, amp: 0.15, hz: 0.075, phase: 2.1 }); // offset from skin — never syncs
   // The heart: emissive pulse visible through the translucent body.
   const heartMat = new THREE.MeshStandardMaterial({
     color: ORGANIC.mint, emissive: ORGANIC.mint, emissiveIntensity: 1.2,
@@ -340,20 +344,11 @@ function buildBeautifulStation(ctx, systemId, def) {
   tagBreath(bodyGroup, { depth: 0.02, hz: 0.18 });
   group.add(bodyGroup);
 
-  // --- five starfish arms: one shared tapered/drooping geometry; each arm
-  // wears a slightly larger vein overlay in its own per-build additive
-  // material (black-background vein texture → only the veins show). The
-  // holders sway so the arms slowly undulate.
+  // --- five starfish arms: one shared tapered/drooping geometry. The veins
+  // live in skinMat's emissiveMap (no overlay cage). Nested flex group =
+  // the second sway axis (incommensurate frequencies never dwell).
   const armGeo = makeStarfishArmGeometry({ length: 20, rootRadius: 3.4, tipRadius: 0.4, droop: 6.5 });
   for (let i = 0; i < 5; i++) {
-    const veinMat = new THREE.MeshBasicMaterial({
-      map: mats.veinGlow.map, // shared vein texture
-      color: 0xbfffe0,
-      transparent: true, opacity: 0.6,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    tagPulse(veinMat, { base: 0.6, amp: 0.22, hz: 0.09, phase: i * 1.3 }); // pulse travels arm to arm
     const holder = new THREE.Group();
     holder.rotation.y = (i * Math.PI * 2) / 5 + (i % 2 ? 0.05 : -0.04); // grown, never machined
     // Inner flex group: a SECOND sway axis at an incommensurate frequency.
@@ -364,9 +359,6 @@ function buildBeautifulStation(ctx, systemId, def) {
     holder.add(flex);
     const armMesh = new THREE.Mesh(armGeo, skinMat);
     flex.add(armMesh);
-    const veins = new THREE.Mesh(armGeo, veinMat);
-    veins.scale.setScalar(1.03);
-    flex.add(veins);
     tagSway(holder, { axis: 'x', amp: 0.09, hz: 0.09, phase: i * 1.1 }); // vertical sweep: ±1.8u at the tip
     tagSway(flex, { axis: 'z', amp: 0.06, hz: 0.13, phase: i * 1.7 + 0.9 }); // lateral roll: ±1.2u, off-beat
     group.add(holder);
@@ -459,11 +451,12 @@ function buildBeautifulStation(ctx, systemId, def) {
   group.add(glow);
 
   // --- spore lantern motes: tiny bioluminescent bulbs drifting on slow
-  // sway around the bloom.
+  // sway around the bloom. Solid lightMat bulbs — mats.veinGlow on a sphere
+  // reads as a wireframe ball.
   for (let i = 0; i < 8; i++) {
     const orbit = new THREE.Group();
     orbit.rotation.y = i * 2.4; // golden-ish spread
-    const mote = new THREE.Mesh(bulbGeo, mats.veinGlow);
+    const mote = new THREE.Mesh(bulbGeo, lightMat);
     mote.scale.setScalar(0.5 + (i % 3) * 0.18);
     mote.position.set(20 + (i % 3) * 4, -14 + i * 4, 0);
     orbit.add(mote);
