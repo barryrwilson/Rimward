@@ -37,12 +37,20 @@ let renderer;
 try {
   renderer = new THREE.WebGLRenderer({ antialias: true });
 } catch (err) {
-  window.__websimFatal?.(
-    'WebGL is unavailable in this browser, so the sim cannot render.\n\n' +
-      String(err) +
-      '\n\nCheck chrome://gpu — "WebGL" should say Hardware accelerated. If hardware acceleration is disabled (Settings → System), enable it and relaunch.',
-  );
-  throw err;
+  // MSAA context allocation can fail under GPU memory pressure (or a
+  // half-crashed GPU process) even when a plain context would succeed —
+  // retry once without antialiasing before declaring WebGL unavailable.
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: false });
+    console.warn('WebSim: antialiased WebGL context failed; running without MSAA.', err);
+  } catch (err2) {
+    window.__websimFatal?.(
+      'WebGL is unavailable in this browser, so the sim cannot render.\n\n' +
+        String(err2) +
+        '\n\nCheck chrome://gpu — "WebGL" should say Hardware accelerated. If hardware acceleration is disabled (Settings → System), enable it and relaunch.',
+    );
+    throw err2;
+  }
 }
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
