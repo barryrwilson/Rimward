@@ -45,6 +45,12 @@ export const ORGANIC = {
   mintHot: 0xb8ffd8, // hot bioluminescent core
   gilt: 0xc9a86a, // aged gold veining/trim
   opal: 0xd8c8f0, // opal accent
+  // Wave 33 (bloom station v2): the glassy lagoon-teal + warm-amber look of
+  // the reference render — translucent veined petal-arms over lit golden
+  // chambers, teal node orbs at the arm roots.
+  lagoon: 0x2e8f86, // glassy deep teal skin (translucent)
+  lagoonHot: 0x6fe0d0, // glowing node-orb teal
+  amber: 0xffc978, // warm golden interior glow (lit chambers)
 };
 
 // Tarnished ("fallen Beautiful") shifts.

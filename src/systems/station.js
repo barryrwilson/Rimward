@@ -60,21 +60,30 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  * salvage, and recovery payouts are untouched.
  *
  * Wave 27: Beautiful Ones bloom station. When isBeautiful(def.faction) the
- * mesh is built by buildBeautifulStation — a flower–starfish hybrid: an
- * opaque deep-flesh breathing body (the ship.js living-hull recipe) with
- * mint+crimson veins glowing from emissiveMaps, five slowly undulating
- * starfish arms webbed by translucent breathing membrane fans, the
- * orchid-petal crown (the ringGroup, spun by update as always) growing out
- * of the arm-ring center, chandelier light clusters tucked beneath the
- * body, and a small pearl beacon nestled at the flower's throat, all
- * sculpted from organic.js primitives. Veins glow from WITHIN the flesh
- * (emissiveMap) — no overlay meshes. update() drives the tagged
- * breath/sway parts via animateOrganic (zero-allocation; frozen under
- * reducedMotion) and the per-build tagPulse materials (skin/web vein
- * emissive). Cached shared organic materials/textures (including the
- * module-cached bloom vein texture) are never disposed or pulse-tagged
- * (teardownMesh skips userData.shared); per-build materials dispose
- * exactly as before. Every other faction's station path is byte-identical.
+ * mesh is built by buildBeautifulStation — a flower–starfish hybrid sculpted
+ * from organic.js primitives. update() drives the tagged breath/sway parts
+ * via animateOrganic (zero-allocation; frozen under reducedMotion) and the
+ * per-build tagPulse materials. Cached shared organic materials/textures
+ * (including the module-cached bloom vein texture) are never disposed or
+ * pulse-tagged (teardownMesh skips userData.shared); per-build materials
+ * dispose exactly as before. Every other faction's station path is
+ * byte-identical.
+ *
+ * Wave 33 (bloom station v2, toward BeautifulOnes_Station_Example.png): the
+ * opaque green flesh becomes GLASS. The body bell and five starfish arms
+ * share a translucent lagoon-teal MeshPhysicalMaterial (transparent, no
+ * depth write, clearcoat sheen) with teal/amber veins glowing from WITHIN
+ * the emissiveMap — so each arm reads as a veined petal of sea-glass with a
+ * warm golden 'beautiful-hearth' chamber lit inside it. A circular landing
+ * pad ('beautiful-pad') is embedded on the dorsal mid-bulge of every arm —
+ * dark disc, twin gilt rings, mint rim lamps on the pulsing lightMat, amber
+ * center — and a glowing teal 'beautiful-node' orb sits at every arm root.
+ * The orchid crown gains a third whorl: five steep, nearly-closed bud
+ * petals inside the outer/inner sevens (19 petals total) so the ringGroup
+ * reads as a tall layered bud. Kept from v1: the breathing membrane webs,
+ * chandelier clusters, throat pearl beacon + glow, mint halo, spore motes,
+ * the dual-axis Lissajous arm sway, every tag convention, and the exact
+ * return record update() consumes.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -300,7 +309,8 @@ function buildStationMesh(ctx, systemId, def) {
 let _bloomVeinTex = null;
 function bloomVeinTexture() {
   if (_bloomVeinTex) return _bloomVeinTex;
-  _bloomVeinTex = makeOrganicVeinTexture({ seed: 7331, colors: ['#7fe0a8', '#b8ffd8', '#e0485a'], count: 16 });
+  // Wave 33: teal veins with a warm amber thread — the v2 lagoon/gold look.
+  _bloomVeinTex = makeOrganicVeinTexture({ seed: 7331, colors: ['#5fe0c8', '#a8f0e0', '#e0a048'], count: 16 });
   _bloomVeinTex.userData.shared = true;
   return _bloomVeinTex;
 }
@@ -316,22 +326,22 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
 
   // --- per-build flesh materials (dispose with the mesh; the emissiveMap
   // is the module-cached bloom vein texture, which teardown skips via
-  // userData.shared). The skin is a MeshPhysicalMaterial like the living
-  // hull: a PALE epidermis (the surface must READ — a near-black base
-  // collapses to veins-over-void) with a clearcoat wet sheen so the fill
-  // light and sun catch glossy highlights, and the veins glowing softly
-  // UNDER it (emissiveMap, emissive 0xffffff × vein texture) — "skin with
-  // veins showing through", never an overlay cage. tagPulse rides
+  // userData.shared). Wave 33: the skin is SEA-GLASS — a translucent
+  // lagoon-teal MeshPhysicalMaterial (transparent, depthWrite off so the
+  // golden hearths glow through, clearcoat wet sheen so the fill light and
+  // sun catch glossy highlights) with the vein network still glowing softly
+  // UNDER it (emissive 0xffffff × vein texture). tagPulse rides
   // emissiveIntensity: the vein network slowly brightens and dims.
   const skinMat = new THREE.MeshPhysicalMaterial({
-    color: 0x55755f, // mid-dark green epidermis — visible surface, not pale
-    roughness: 0.38, metalness: 0,
-    clearcoat: 0.55, clearcoatRoughness: 0.35, // wet-skin sheen
+    color: ORGANIC.lagoon, // glassy deep-teal epidermis — translucent
+    transparent: true, opacity: 0.58, depthWrite: false, // hearths show through
+    roughness: 0.3, metalness: 0,
+    clearcoat: 0.6, clearcoatRoughness: 0.3, // wet-glass sheen
     emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.6,
   });
   tagPulse(skinMat, { base: 0.6, amp: 0.18, hz: 0.07 }); // veins breathe
   const webMat = new THREE.MeshStandardMaterial({
-    color: 0x2a4a40, // deep membrane — translucent, the delicate contrast
+    color: 0x1f4a46, // deep teal membrane — translucent, the delicate contrast
     transparent: true, opacity: 0.5,
     roughness: 0.5, metalness: 0,
     emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.5,
@@ -339,10 +349,25 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   });
   tagPulse(webMat, { base: 0.5, amp: 0.15, hz: 0.075, phase: 2.1 }); // offset from skin — never syncs
 
-  // --- core body: a squashed flesh sphere, breathing as one. The squash
+  // --- wave 33 golden interior: ONE per-build warm-amber basic material
+  // carries every lit chamber (the five arm hearths and the five pad
+  // centers). MeshBasicMaterial has no emissiveIntensity, so tagPulse rides
+  // opacity — the golden chambers softly breathe (intended).
+  const hearthMat = new THREE.MeshBasicMaterial({
+    color: ORGANIC.amber, // warm gold — reads as a lit room through the glass
+    transparent: true, opacity: 0.92,
+  });
+  tagPulse(hearthMat, { base: 0.88, amp: 0.1, hz: 0.11 });
+  // Pad deck plate: dark gunmetal-teal so the gilt rings and amber center pop.
+  const padMat = new THREE.MeshStandardMaterial({
+    color: 0x14262b, metalness: 0.6, roughness: 0.45,
+  });
+
+  // --- core body: a squashed glass sphere, breathing as one. The squash
   // lives on the mesh; tagBreath sits on a holder group because breath
-  // drives scale.setScalar (uniform) around its base. (No inner heart mesh:
-  // the flesh is opaque now — the vein pulse IS the heartbeat.)
+  // drives scale.setScalar (uniform) around its base. The bell shares
+  // skinMat — the same translucent lagoon sea-glass as the arms, with the
+  // crown heart glowing through it.
   const bodyGroup = new THREE.Group();
   bodyGroup.position.y = 4;
   const body = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), skinMat);
@@ -351,18 +376,37 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   tagBreath(bodyGroup, { depth: 0.02, hz: 0.18 });
   group.add(bodyGroup);
 
-  // --- bioluminescent fill: a soft mint point light at the body center so
-  // the opaque flesh READS as solid surface (the ship carries underLight
-  // for the same reason). Without it, far from the sun, only the emissive
-  // veins show and the body collapses to a glowing lattice.
-  const fleshLight = new THREE.PointLight(0x9fe8c8, 300, 140, 2);
+  // --- bioluminescent fill: a soft teal point light at the body center so
+  // the translucent flesh READS as volume (the ship carries underLight for
+  // the same reason). Without it, far from the sun, only the emissive veins
+  // show and the body collapses to a glowing lattice.
+  const fleshLight = new THREE.PointLight(0x7fe0d0, 300, 140, 2);
   fleshLight.position.set(0, 6, 0);
   group.add(fleshLight);
 
   // --- five starfish arms: one shared tapered/drooping geometry. The veins
-  // live in skinMat's emissiveMap (no overlay cage). Nested flex group =
-  // the second sway axis (incommensurate frequencies never dwell).
+  // live in skinMat's emissiveMap (no overlay cage); the translucent skin
+  // now reveals each arm's golden hearth chamber. Nested flex group = the
+  // second sway axis (incommensurate frequencies never dwell). Every arm
+  // carries its hearth, its dorsal landing pad, and its root node orb
+  // INSIDE the holder/flex chain so they ride the sway.
   const armGeo = makeStarfishArmGeometry({ length: 20, rootRadius: 3.4, tipRadius: 0.4, droop: 6.5 });
+  // Arm spine (see makeStarfishArmGeometry): at parameter t the center is
+  // (2.4·sin πt, −6.5·t², 20·t), radius (3.4−3t)(1+0.15·sin πt) — the
+  // hearth/pad/node placements below are read straight off that curve.
+  const bulbGeo = new THREE.SphereGeometry(1, 10, 8);
+  const hearthGeo = new THREE.SphereGeometry(1, 12, 10);
+  const nodeGeo = new THREE.SphereGeometry(1.2, 14, 10);
+  const padDiscGeo = new THREE.CylinderGeometry(3, 3.2, 0.35, 24);
+  const padRingGeo = new THREE.TorusGeometry(2.15, 0.1, 8, 28);
+  const padRingGeo2 = new THREE.TorusGeometry(1.35, 0.08, 8, 24);
+  const padCenterGeo = new THREE.CircleGeometry(1.0, 20);
+  // Shared per-build additive glow for the five node orbs (like the halo,
+  // but teal and small); not pulse-tagged — the orb cores pulse instead.
+  const nodeGlowMat = new THREE.SpriteMaterial({
+    map: makeOrganicGlowTexture('rgba(140,240,220,0.9)', 'rgba(46,143,134,0)'),
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7,
+  });
   for (let i = 0; i < 5; i++) {
     const holder = new THREE.Group();
     holder.rotation.y = (i * Math.PI * 2) / 5 + (i % 2 ? 0.05 : -0.04); // grown, never machined
@@ -374,6 +418,65 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     holder.add(flex);
     const armMesh = new THREE.Mesh(armGeo, skinMat);
     flex.add(armMesh);
+
+    // Golden hearth: the lit chamber inside the arm — an elongated amber
+    // core (~63% of arm length, slim radius) nested along the spine's mid
+    // reach and pitched with the droop, reading through the glass skin.
+    const hearth = new THREE.Mesh(hearthGeo, hearthMat);
+    hearth.name = 'beautiful-hearth';
+    hearth.scale.set(1.05, 1.05, 6.3);
+    hearth.position.set(2.32, -1.15, 8.4); // spine at t≈0.42
+    hearth.rotation.x = 0.27; // droop slope at mid-arm
+    flex.add(hearth);
+
+    // Landing pad: a circular deck embedded in the dorsal mid-bulge — dark
+    // disc, two concentric gilt rings, six mint rim lamps (lightMat, so
+    // update() pulses them with the chandeliers), warm amber center. ONE
+    // named group per arm; userData.pad is the arm index.
+    const pad = new THREE.Group();
+    pad.name = 'beautiful-pad';
+    pad.userData.pad = i;
+    pad.position.set(2.4, 0.6, 10.6); // dorsal surface at the mid bulge (t≈0.5)
+    pad.rotation.x = 0.32; // pad top faces up/out of the arm silhouette
+    const padDisc = new THREE.Mesh(padDiscGeo, padMat);
+    pad.add(padDisc);
+    const padRing = new THREE.Mesh(padRingGeo, mats.gilt);
+    padRing.rotation.x = Math.PI / 2;
+    padRing.position.y = 0.22;
+    pad.add(padRing);
+    const padRing2 = new THREE.Mesh(padRingGeo2, mats.gilt);
+    padRing2.rotation.x = Math.PI / 2;
+    padRing2.position.y = 0.24;
+    pad.add(padRing2);
+    const padCenter = new THREE.Mesh(padCenterGeo, hearthMat);
+    padCenter.rotation.x = -Math.PI / 2; // face up
+    padCenter.position.y = 0.26;
+    pad.add(padCenter);
+    for (let k = 0; k < 6; k++) {
+      const lamp = new THREE.Mesh(bulbGeo, lightMat);
+      lamp.scale.setScalar(0.3);
+      const la = (k * Math.PI * 2) / 6 + (i % 2 ? 0.06 : -0.05);
+      lamp.position.set(Math.cos(la) * 2.65, 0.3, Math.sin(la) * 2.65);
+      pad.add(lamp);
+    }
+    flex.add(pad);
+
+    // Node orb: a glowing teal sphere nested on the arm root where the arm
+    // meets the body disc. Per-node material so tagPulse phases the five
+    // orbs around the ring; the shared additive sprite sells the glow.
+    const nodeMat = new THREE.MeshBasicMaterial({
+      color: ORGANIC.lagoonHot, transparent: true, opacity: 0.95,
+    });
+    tagPulse(nodeMat, { base: 0.9, amp: 0.1, hz: 0.15, phase: i * 1.256 });
+    const node = new THREE.Mesh(nodeGeo, nodeMat);
+    node.name = 'beautiful-node';
+    node.position.set(0, 2.6, 4.0); // dorsal side of the root, beside the bell
+    holder.add(node);
+    const nodeGlow = new THREE.Sprite(nodeGlowMat);
+    nodeGlow.scale.setScalar(6);
+    nodeGlow.position.copy(node.position);
+    holder.add(nodeGlow);
+
     tagSway(holder, { axis: 'x', amp: 0.09, hz: 0.09, phase: i * 1.1 }); // vertical sweep: ±1.8u at the tip
     tagSway(flex, { axis: 'z', amp: 0.06, hz: 0.13, phase: i * 1.7 + 0.9 }); // lateral roll: ±1.2u, off-beat
     group.add(holder);
@@ -391,17 +494,19 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     group.add(web);
   }
 
-  // --- petal crown: TWO whorls rooted at the arm-ring center (y 4, inside
+  // --- petal crown: THREE whorls rooted at the arm-ring center (y 4, inside
   // the bell pod) so the flower grows OUT of the starfish disc — seven
-  // large outer petals plus seven smaller inner sepals offset a half-step,
-  // with deterministic per-petal jitter (golden-hash walk) in angle,
-  // openness, and size: grown, never machined. petalMat is per-build opal
-  // flesh carrying the bloom vein emissiveMap — the flower shares the
-  // body's living veins. Activity: every petal flexes open/closed on its
-  // OWN incommensurate frequency, the whole crown breathes and slowly
-  // nods; update() spins it as always (RING_SPIN).
+  // large outer petals, seven smaller inner sepals offset a half-step, and
+  // (wave 33) five steep, nearly-closed bud petals at the heart offset a
+  // quarter-step, raising the crown into the tall layered bud of the
+  // reference. Deterministic per-petal jitter (sin-hash walk) in angle,
+  // openness, and size: grown, never machined. petalMat is per-build
+  // glassy lagoon-pale flesh carrying the bloom vein emissiveMap — the
+  // flower shares the body's living veins. Activity: every petal flexes
+  // open/closed on its OWN incommensurate frequency, the whole crown
+  // breathes and slowly nods; update() spins it as always (RING_SPIN).
   const petalMat = new THREE.MeshPhysicalMaterial({
-    color: 0xd8c8e0, // opal-pale petal flesh
+    color: 0x9fd0c8, // pale glassy lagoon petal flesh (harmonized with the skin)
     roughness: 0.45, metalness: 0,
     clearcoat: 0.4, clearcoatRoughness: 0.4,
     emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.35,
@@ -436,6 +541,23 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     tilt2.add(sepal);
     ringGroup.add(tilt2);
   }
+  // Innermost bud whorl (wave 33): five steep, nearly-closed petals cupped
+  // tight around the crown heart — taller curl/cup, smaller scale, offset a
+  // quarter-step from the inner whorl. 7 outer + 7 inner + 5 bud = 19.
+  const budGeo = makePetalGeometry({ length: 15, width: 6, curl: 12, cup: 5.5, segs: 12 });
+  const BUDS = 5;
+  for (let i = 0; i < BUDS; i++) {
+    const j1 = Math.sin(i * 12.9898 + 4.7) * 0.5 + 0.5; // same sin-hash, own salt
+    const j2 = Math.sin(i * 78.233 + 2.3) * 0.5 + 0.5;
+    const tilt3 = new THREE.Group();
+    tilt3.rotation.y = ((i + 0.25) * Math.PI * 2) / BUDS + (j1 - 0.5) * 0.1; // quarter-step offset
+    const bud = new THREE.Mesh(budGeo, petalMat);
+    bud.rotation.x = -1.2 - j2 * 0.15; // nearly closed: -1.20..-1.35
+    bud.scale.setScalar(0.85 + j1 * 0.2);
+    tagSway(bud, { axis: 'x', amp: 0.07 + j1 * 0.04, hz: 0.13 + j2 * 0.06, phase: i * 1.9 + 0.3 });
+    tilt3.add(bud);
+    ringGroup.add(tilt3);
+  }
   tagBreath(ringGroup, { depth: 0.04, hz: 0.07 }); // the whole bloom slowly opens/closes
   tagSway(ringGroup, { axis: 'x', amp: 0.06, hz: 0.04 }); // …and nods (rotation.y spin is +=, unaffected)
   const crownHeart = new THREE.Mesh(new THREE.SphereGeometry(2.5, 14, 10), mats.gilt);
@@ -444,7 +566,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
 
   // --- no docking arm: the bloom is a single unified creature (dock logic
   // is position-only — ctx.station.position — so no silhouette is needed).
-  const bulbGeo = new THREE.SphereGeometry(1, 10, 8);
+  // (bulbGeo is declared with the arm geometries above.)
 
   // --- chandelier light clusters hanging tight beneath the body underside
   // (lightMat — update() pulses its color toward lightColor, as on every

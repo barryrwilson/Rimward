@@ -7724,5 +7724,100 @@ tick(3, 'wave32 f.c cleanup');
 
 ctx.world.jumpGraceUntil = w32grace0; // restore the section-start grace state (long expired; the death-restore already rewound it — this pins the intent)
 
+// ---- Wave 33: Bloom station v2 — the glassy teal + amber rebuild -----------
+// The wave-33 contract (src/systems/station.js buildBeautifulStation): five
+// translucent teal veined petal-arms, each carrying a visible circular
+// landing pad ('beautiful-pad', userData.pad = arm index) and a warm golden
+// hearth core ('beautiful-hearth') INSIDE the arm's flex group (the
+// tagSway axis-'z' holder, so pads ride the sway); glowing teal node orbs
+// ('beautiful-node') at the five arm roots; a 19-petal layered bud crown
+// (7 outer + 7 inner + 5 innermost) on the ringGroup; and a transparent
+// skin material shared by the body bell and all five arms (still
+// emissiveMap-pulsed via the shared bloomVeinTexture). The run is
+// freehold/undocked off wave-32 with the hull still pinned at 1e9 — the
+// bt_cradle pirates can't kill the flight out. The freehold negative
+// control (wave-27 noBeautifulStation) is untouched upstream; nothing here
+// duplicates or weakens it. ----------------------------------------------------
+travelTo('bt_cradle', 'wave33 cradle leg');
+const w33station = findByName('beautiful-station')[0] ?? null;
+const w33named = (name) => {
+  const found = [];
+  if (w33station) w33station.traverse((o) => { if (o.name === name) found.push(o); });
+  return found;
+};
+const w33pads = w33named('beautiful-pad');
+const w33hearths = w33named('beautiful-hearth');
+const w33nodes = w33named('beautiful-node');
+const w33padSet = new Set(w33pads.map((p) => p.userData.pad));
+// Every pad must sit INSIDE its arm's flex group: some ancestor between the
+// pad and the station root carries the axis-'z' sway tag (the inner flex;
+// the outer holder sways on axis 'x' — the wave-27 Lissajous pair).
+const w33padsRideFlex = w33pads.length > 0 && w33pads.every((p) => {
+  for (let a = p.parent; a && a !== w33station; a = a.parent) {
+    if (a.userData.sway && a.userData.sway.axis === 'z') return true;
+  }
+  return false;
+});
+// ringGroup identification: the harness only has the scene group (the record
+// is station.js-internal), so find the crown as the station's DIRECT child
+// group whose subtree holds the petal meshes and NO landing pad — the arm
+// holders are ruled out by the pads they carry, the body bell is a bare
+// Mesh. Discriminator for the petals themselves: makePetalGeometry IS
+// indexed, and the per-build petal MeshPhysicalMaterial is the only
+// transparent DoubleSide emissiveMap material in the crown — so count Mesh
+// descendants with geometry.index !== null && material.transparent === true.
+const w33meshKids = (root) => {
+  const out = [];
+  root.traverse((o) => { if (o.isMesh && o.material && !Array.isArray(o.material)) out.push(o); });
+  return out;
+};
+const w33isPetalMesh = (o) => o.geometry && o.geometry.index !== null
+  && o.material.transparent === true && o.material.side === THREE.DoubleSide;
+let w33ringGroup = null;
+let w33crownPetals = 0;
+if (w33station) {
+  for (const child of w33station.children) {
+    if (!child.isGroup) continue;
+    let hasPad = false;
+    child.traverse((o) => { if (o.name === 'beautiful-pad') hasPad = true; });
+    if (hasPad) continue; // an arm holder, not the crown
+    const petals = w33meshKids(child).filter(w33isPetalMesh).length;
+    if (petals > w33crownPetals) { w33crownPetals = petals; w33ringGroup = child; }
+  }
+}
+// Skin: one shared MeshPhysicalMaterial (transparent teal, vein emissiveMap)
+// across the body bell + 5 arms — at least 6 meshes on the SAME instance.
+const w33skinCounts = new Map();
+if (w33station) {
+  for (const o of w33meshKids(w33station)) {
+    const m = o.material;
+    if (m.transparent === true && m.emissiveMap != null) w33skinCounts.set(m, (w33skinCounts.get(m) ?? 0) + 1);
+  }
+}
+const w33skinShared = [...w33skinCounts.values()].some((n) => n >= 6);
+// Hearth warmth: every hearth core glows amber/gold — color r > g > b.
+const w33hearthsWarm = w33hearths.length > 0 && w33hearths.every((h) => {
+  const c = h.material && !Array.isArray(h.material) ? h.material.color : null;
+  return !!c && c.r > c.g && c.g > c.b;
+});
+const w33checks = {
+  arrivedAtCradle: ctx.world.currentSystem === 'bt_cradle',
+  stationLive: !!w33station && findByName('beautiful-station').length === 1,
+  fivePads: w33pads.length === 5,
+  padIndicesExact: w33padSet.size === 5 && [0, 1, 2, 3, 4].every((i) => w33padSet.has(i)),
+  fiveHearths: w33hearths.length === 5,
+  fiveNodes: w33nodes.length === 5,
+  padsRideFlexSway: w33padsRideFlex,
+  crownFound: !!w33ringGroup,
+  crownNineteenPetals: w33crownPetals === 19,
+  translucentSharedSkin: w33skinShared,
+  hearthsGlowWarm: w33hearthsWarm,
+};
+console.log('wave33 bloom v2 structure:', JSON.stringify(w33checks));
+if (!Object.values(w33checks).every(Boolean)) { console.log('WAVE33 BLOOM V2 FAIL'); errors++; }
+
+// Home — the wave-27 discipline: the run ends where the harness began.
+travelTo('freehold', 'wave33 home leg');
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
