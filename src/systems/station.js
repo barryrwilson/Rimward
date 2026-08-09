@@ -315,18 +315,20 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
 
   // --- per-build flesh materials (dispose with the mesh; the emissiveMap
   // is the module-cached bloom vein texture, which teardown skips via
-  // userData.shared). Veins are EMISSIVE MAPS on OPAQUE deep flesh — the
-  // ship.js living-hull recipe (no color map, emissive 0xffffff × vein
-  // texture so the texture's own colors carry) — never an additive overlay
-  // mesh, which reads as a wireframe cage. tagPulse rides emissiveIntensity:
-  // the vein network slowly brightens and dims like the living hull's
-  // breath.
-  const skinMat = new THREE.MeshStandardMaterial({
-    color: ORGANIC.deepFlesh, // opaque deep body flesh, like the living hull
-    roughness: 0.5, metalness: 0,
-    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.9,
+  // userData.shared). The skin is a MeshPhysicalMaterial like the living
+  // hull: a PALE epidermis (the surface must READ — a near-black base
+  // collapses to veins-over-void) with a clearcoat wet sheen so the fill
+  // light and sun catch glossy highlights, and the veins glowing softly
+  // UNDER it (emissiveMap, emissive 0xffffff × vein texture) — "skin with
+  // veins showing through", never an overlay cage. tagPulse rides
+  // emissiveIntensity: the vein network slowly brightens and dims.
+  const skinMat = new THREE.MeshPhysicalMaterial({
+    color: 0xa8bfae, // pale green-nacre epidermis
+    roughness: 0.38, metalness: 0,
+    clearcoat: 0.55, clearcoatRoughness: 0.35, // wet-skin sheen
+    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.6,
   });
-  tagPulse(skinMat, { base: 0.9, amp: 0.25, hz: 0.07 }); // veins breathe
+  tagPulse(skinMat, { base: 0.6, amp: 0.18, hz: 0.07 }); // veins breathe
   const webMat = new THREE.MeshStandardMaterial({
     color: 0x2a4a40, // deep membrane — translucent, the delicate contrast
     transparent: true, opacity: 0.5,
@@ -352,7 +354,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // the opaque flesh READS as solid surface (the ship carries underLight
   // for the same reason). Without it, far from the sun, only the emissive
   // veins show and the body collapses to a glowing lattice.
-  const fleshLight = new THREE.PointLight(0x9fe8c8, 600, 140, 2);
+  const fleshLight = new THREE.PointLight(0x9fe8c8, 300, 140, 2);
   fleshLight.position.set(0, 6, 0);
   group.add(fleshLight);
 
@@ -422,9 +424,9 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // floating mid-air.
   for (let c = 0; c < 3; c++) {
     const ca = (c * Math.PI * 2) / 3 + 0.5;
-    const cx = Math.cos(ca) * 4.5;
-    const cz = Math.sin(ca) * 4.5;
-    const cy = -3.5 - c * 1.5;
+    const cx = Math.cos(ca) * 3;
+    const cz = Math.sin(ca) * 3;
+    const cy = -1.5 - c * 1.2;
     for (let i = 0; i < 5; i++) {
       const bulb = new THREE.Mesh(bulbGeo, lightMat);
       const s = 0.55 + ((i + c) % 3) * 0.22;

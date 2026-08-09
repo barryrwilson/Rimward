@@ -1049,6 +1049,16 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   the bloom carries a soft mint PointLight fill (600/140/decay 2) at
   the body center, the same reason the ship carries underLight. webMat
   stays the one translucent note (opacity 0.5).
+  Skin fix (user: "no reflection, looks fake — should be skin with
+  veins showing through"): the near-black deepFlesh base vanished
+  against space → veins-over-void lattice. skinMat is now a
+  MeshPhysicalMaterial (the living hull's class) with a PALE green-
+  nacre epidermis (0xa8bfae), clearcoat 0.55 wet sheen (glossy
+  highlights from fill light + sun = the "reflection"), and the vein
+  emissiveMap softened (0.6±0.18) so veins read THROUGH the surface.
+  fleshLight 600 → 300 (pale base overexposed). Chandeliers tucked to
+  radius 3 / y −1.5… — at 4.5 under an opaque bell they read as
+  floating balls again.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
