@@ -962,6 +962,27 @@ function updateHunt(ctx, live, dt, now) {
     revealQship(ctx, live);
   }
 
+  // Retaliation (wave 32): apathy is not a death sentence. Damage overrides
+  // the interest roll for the rest of the instantiation — being shot is the
+  // loudest notice there is, and a pirate's only damage source IS the player
+  // (patrols loiter, NPC fire hits only its target). Law-zone pacifism still
+  // holds: no intent develops inside the zone, so a zone-side pirate only
+  // routs. setTarget re-arms the telegraph — the §6.1 warning still precedes
+  // any fire. Fleeing/disabled/demanding ships never reach this: flee and
+  // disabled are other modes, and a demanding pirate already targets you.
+  if (
+    ai.target !== 'player' &&
+    (st.hull < st.hullMax || st.screen < st.screenMax) &&
+    ctx.ship.object &&
+    !ctx.flags.docked &&
+    ctx.ship.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+    live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS
+  ) {
+    ai.playerRolled = true; // the scratch IS the roll — no dice after notice
+    ai.playerInterested = true;
+    setTarget(ai, 'player');
+  }
+
   // Validate current target.
   let targetPos = null;
   if (ai.target === 'player') {

@@ -7408,6 +7408,35 @@ if (!Object.values(w32graceChecks).every(Boolean)) { console.log('WAVE32 GRACE G
 w30removeShip(w32b); // the demand card closes on the despawn path
 tick(3, 'wave32 grace cleanup');
 
+// -- b2. Positive control (review P3): a flagless temper-preset (0.5) pirate
+// with Math.random pinned LOW (0) for exactly the roll frame MUST roll
+// interested (chance >= 0.05 > 0 always), acquire the player on that frame,
+// and leave the preset temper untouched (??= never consumes on a preset).
+// Without this leg a broken chance formula (e.g. always 0) false-passes the
+// whole suite: c1/c2 prove the dice can say no, this proves they can say yes.
+ctx.world.jumpGraceUntil = 0; // the roll frame's preconditions hold on tick one
+const w32pcRec = {
+  id: 'wave32-control', name: 'Wave32 Control', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0.5,
+}; // NO alwaysHuntsPlayer — the roll itself must carry this one
+const w32pc = w32spawn(w32pcRec, [250, 0, 0]);
+const w32rngPc = Math.random;
+Math.random = () => 0; // pinned LOW for exactly the roll frame (try/finally: a mid-window throw must not leave the suite pinned)
+try {
+  tick(1, 'wave32 control interest roll');
+} finally {
+  Math.random = w32rngPc;
+}
+const w32controlChecks = {
+  rollPinnedAndPassed: w32pc.ai.playerRolled === true && w32pc.ai.playerInterested === true,
+  acquiresPlayer: w32pc.ai.target === 'player',
+  temperUntouched: w32pcRec.temper === 0.5, // the preset rides the roll — ??= never stamps over it
+};
+console.log('wave32 positive control:', JSON.stringify(w32controlChecks));
+if (!Object.values(w32controlChecks).every(Boolean)) { console.log('WAVE32 POSITIVE CONTROL FAIL'); errors++; }
+w30removeShip(w32pc); // the demand card (opened on the acquisition frame) closes on the despawn path
+tick(3, 'wave32 control cleanup');
+
 // -- c1. Disinterest + trader preference: temper preset 0 (the lazy ??= -----
 // never fires) and Math.random pinned HIGH for exactly the roll frame — the
 // once-per-instantiation roll fails (max chance 0.9 < 0.999999). Wrapped as
@@ -7424,9 +7453,12 @@ const w32c1 = w32spawn({
   faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0,
 }, [250, 0, 0]);
 const w32rng1 = Math.random;
-Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame
-tick(1, 'wave32 c1 interest roll');
-Math.random = w32rng1;
+Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame (try/finally: a mid-window throw must not leave the suite pinned)
+try {
+  tick(1, 'wave32 c1 interest roll');
+} finally {
+  Math.random = w32rng1;
+}
 const w32c1RolledOut = w32c1.ai.playerRolled === true && w32c1.ai.playerInterested === false;
 let w32c1PlayerEver = false;
 const w32c1Evs = [];
@@ -7461,9 +7493,12 @@ const w32c2Rec = {
 };
 const w32c2 = w32spawn(w32c2Rec, [0, 0, -200]);
 const w32rng2 = Math.random;
-Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame
-tick(1, 'wave32 c2 interest roll');
-Math.random = w32rng2;
+Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame (try/finally: a mid-window throw must not leave the suite pinned)
+try {
+  tick(1, 'wave32 c2 interest roll');
+} finally {
+  Math.random = w32rng2;
+}
 const w32c2RolledOut = w32c2.ai.playerRolled === true && w32c2.ai.playerInterested === false;
 let w32c2TargetEver = null;
 for (let i = 0; i < 59; i++) {
@@ -7509,9 +7544,12 @@ const w32d = w32spawn(w32dRec, [250, 0, 0]);
 const w32dStamped = w32dRec.alwaysHuntsPlayer === true;
 const w32dChanceOne = w32interestChance(ctx, w32dRec) === 1;
 const w32rng3 = Math.random;
-Math.random = () => 0.999999; // pinned HIGH for the roll frame — chance 1 beats the pin
-tick(1, 'wave32 dresk bypass');
-Math.random = w32rng3;
+Math.random = () => 0.999999; // pinned HIGH for the roll frame — chance 1 beats the pin (try/finally: a mid-window throw must not leave the suite pinned)
+try {
+  tick(1, 'wave32 dresk bypass');
+} finally {
+  Math.random = w32rng3;
+}
 const w32dreskChecks = {
   selfHealStampsFlag: w32dStamped,
   chanceIsOne: w32dChanceOne,
@@ -7554,6 +7592,135 @@ const w32temperChecks = {
 };
 console.log('wave32 temper save roundtrip:', JSON.stringify(w32temperChecks));
 if (!Object.values(w32temperChecks).every(Boolean)) { console.log('WAVE32 TEMPER ROUNDTRIP FAIL'); errors++; }
+
+// -- f. Retaliation (review P1): damage overrides the interest roll. The -----
+// npc.js override at the top of updateHunt latches playerRolled/player-
+// Interested and setTarget('player') when a scratched pirate and the player
+// are BOTH outside the law zone — the scratch IS the roll, no dice after
+// notice (Math.random is restored after each pin tick, so the latch proves
+// the override, not luck). Law-zone pacifism holds: a zone-side pirate only
+// routs. Leg e's death-restore ends DOCKED at freehold — undock, re-calm,
+// re-pin the hull (the restore returned the save's class maxes; the telegraph
+// must never kill the player mid-leg), and freeze traffic per variant. ------
+if (ctx.flags.docked) undockStation();
+w28calm('wave32 calm (retaliation)');
+ctx.player.hullMax = 1e9; ctx.player.hull = 1e9; // the wave-30 pinned-hull discipline
+ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+ctx.world.jumpGraceUntil = 0;
+
+// -- f.a. Disinterested plain pirate, NO trader in range (the c1 geometry): -
+// apathy holds until the scratch poke; next tick the override latches target
+// 'player' WITHOUT a roll, and the telegraph phase stands (setTarget re-arms
+// it; the demand hail freezes it open — weapons cold, we never answer). -----
+w31freezeTraffic([]);
+const w32f1 = w32spawn({
+  id: 'wave32-f-retaliate', name: 'Wave32 Grudge', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0,
+}, [250, 0, 0]);
+const w32rngF1 = Math.random;
+Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame (try/finally hygiene)
+try {
+  tick(1, 'wave32 f.a interest roll');
+} finally {
+  Math.random = w32rngF1;
+}
+for (let i = 0; i < 5; i++) tick(1, 'wave32 f.a apathy settle');
+const w32f1Apathetic = w32f1.ai.target == null && w32f1.ai.playerRolled === true && w32f1.ai.playerInterested === false;
+w32f1.state.screen = w32f1.state.screenMax - 1; // TEST SETUP poke (the wave-31 leg-e scratch idiom; one tick is caught before recharge)
+tick(1, 'wave32 f.a retaliation latch');
+const w32f1Latched = w32f1.ai.target === 'player' && w32f1.ai.playerInterested === true;
+let w32f1Telegraph = w32f1.ai.phase === 'telegraph';
+for (let i = 0; i < 200 && !w32f1Telegraph; i++) { // ~3.3 s — the §6.1 warning re-arms; we do NOT wait for fire
+  tick(1, 'wave32 f.a telegraph watch');
+  w32f1Telegraph = w32f1.ai.phase === 'telegraph';
+}
+const w32retaliationChecks = {
+  apatheticUntilScratched: w32f1Apathetic,
+  scratchLatchesPlayer: w32f1Latched,
+  telegraphRearmed: w32f1Telegraph,
+  playerAlive: ctx.player.hull > 0, // the pinned hull held — the leg measured the pirate, never lethality
+};
+console.log('wave32 retaliation:', JSON.stringify(w32retaliationChecks));
+if (!Object.values(w32retaliationChecks).every(Boolean)) { console.log('WAVE32 RETALIATION FAIL'); errors++; }
+w30removeShip(w32f1); // the demand card (opened on the latch frame) closes on the despawn path
+tick(3, 'wave32 f.a cleanup');
+
+// -- f.b. Law-zone variant: the same scratch on a pirate parked INSIDE the ---
+// 300u zone (the p6law geometry — player at the z+400 perch, pirate z+100)
+// buys NOTHING: the override's both-sides-outside guard blocks it, so no
+// target develops across 60 ticks. The pin tick is hygiene symmetry — the
+// roll never fires in-zone either (the law guard short-circuits first). -----
+ctx.ship.object.position.set(w31st[0], w31st[1], w31st[2] + 400); // the wave-30 leg-i perch
+ctx.ship.velocity.set(0, 0, 0);
+ctx.input.throttle = 0;
+ctx.input.fullStop = true;
+w31freezeTraffic([]);
+const w32f2rec = {
+  id: 'wave32-f-law', name: 'Wave32 Zonebound', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0,
+};
+const w32f2 = spawnLiveShip(ctx, w32f2rec, new THREE.Vector3(w31st[0], w31st[1], w31st[2] + 100)); // deep in-zone (p6law geometry)
+ctx.ships.push(w32f2);
+const w32rngF2 = Math.random;
+Math.random = () => 0.999999; // pinned HIGH one tick (try/finally hygiene; the law guard blocks the roll outright)
+try {
+  tick(1, 'wave32 f.b in-zone settle');
+} finally {
+  Math.random = w32rngF2;
+}
+w32f2.state.screen = w32f2.state.screenMax - 1; // TEST SETUP poke — zone pacifism must hold
+let w32f2TargetEver = null;
+for (let i = 0; i < 60; i++) {
+  tick(1, 'wave32 f.b zone pacifism');
+  if (w32f2.ai.target != null) w32f2TargetEver = w32f2.ai.target;
+}
+const w32zoneChecks = {
+  noRetaliationInZone: w32f2TargetEver === null && w32f2.ai.target == null,
+  noLatchInZone: w32f2.ai.playerInterested === false, // the override never ran its latch
+};
+console.log('wave32 retaliation law zone:', JSON.stringify(w32zoneChecks));
+if (!Object.values(w32zoneChecks).every(Boolean)) { console.log('WAVE32 RETALIATION ZONE FAIL'); errors++; }
+w30removeShip(w32f2);
+tick(3, 'wave32 f.b cleanup');
+
+// -- f.c. Disguised Q-ship variant: a disinterested pinned MASKED qship ------
+// outside the zone (player still at the z+400 perch; the qship spawns 250u
+// out, z+650 — both clear of the zone). The scratch kills facade AND apathy
+// in the same frame: the wave-31 scratch check reveals (record flips, mesh
+// swaps in place) and the override latches the player. The once-ever
+// milestone guard (spent in wave-31 leg d, restored in leg e) holds at 1. ---
+w31freezeTraffic([]);
+const w32f3rec = {
+  id: 'wave32-f-qship', name: 'Wave32 Grudge Shroud', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0,
+  qship: true, coverClass: 'freighter', coverName: 'Wave32 Mild Mercy', coverFaction: 'freehold',
+}; // NO alwaysHuntsPlayer — apathy first, then the bullet decides
+const w32f3 = w32spawn(w32f3rec, [250, 0, 0]);
+const w32f3objBefore = w32f3.object;
+const w32rngF3 = Math.random;
+Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame (try/finally hygiene)
+try {
+  tick(1, 'wave32 f.c interest roll');
+} finally {
+  Math.random = w32rngF3;
+}
+for (let i = 0; i < 3; i++) tick(1, 'wave32 f.c masked settle');
+const w32f3MaskedApathetic = !('revealed' in w32f3rec) && w32f3.ai.target == null
+  && w32f3.ai.playerRolled === true && w32f3.ai.playerInterested === false;
+w32f3.state.screen = w32f3.state.screenMax - 1; // TEST SETUP poke — facade and apathy die to the same bullet
+tick(1, 'wave32 f.c scratch reveal+latch');
+const w32qshipRetaliationChecks = {
+  maskedAndApatheticPreScratch: w32f3MaskedApathetic,
+  scratchReveals: w32f3rec.revealed === true,
+  meshSwapped: w32f3.object !== w32f3objBefore,
+  scratchLatchesPlayer: w32f3.ai.target === 'player' && w32f3.ai.playerInterested === true,
+  milestoneStillOnce: ctx.world.milestones.filter((m) => m === 'qshipUnmasked').length === 1,
+};
+console.log('wave32 retaliation qship:', JSON.stringify(w32qshipRetaliationChecks));
+if (!Object.values(w32qshipRetaliationChecks).every(Boolean)) { console.log('WAVE32 RETALIATION QSHIP FAIL'); errors++; }
+w30removeShip(w32f3); // the demand card closes on the despawn path
+tick(3, 'wave32 f.c cleanup');
 
 ctx.world.jumpGraceUntil = w32grace0; // restore the section-start grace state (long expired; the death-restore already rewound it — this pins the intent)
 
