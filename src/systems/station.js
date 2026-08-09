@@ -420,11 +420,18 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     flex.add(armMesh);
 
     // Golden hearth: the lit chamber inside the arm — an elongated amber
-    // core (~63% of arm length, slim radius) nested along the spine's mid
+    // core (~54% of arm length, slim radius) nested along the spine's mid
     // reach and pitched with the droop, reading through the glass skin.
+    // Wave 34: scale.z 6.3 → 5.4. The wave-33 review flagged a ~0.41u tip
+    // breach near spine t≈0.72 (droop slope 0.47 vs the hearth's fixed 0.27
+    // pitch); wave-34 re-derivation shows 6.3 was in fact contained (+0.434u
+    // worst margin — the breach figure was the margin, sign-flipped). 5.4
+    // still taken: worst margin rises to +0.782u (tip at t≈0.68, 0.51u
+    // off-axis vs a 1.53u skin radius), and the boot test wave-34 leg c now
+    // pins the envelope so any future length/droop change trips it.
     const hearth = new THREE.Mesh(hearthGeo, hearthMat);
     hearth.name = 'beautiful-hearth';
-    hearth.scale.set(1.05, 1.05, 6.3);
+    hearth.scale.set(1.05, 1.05, 5.4);
     hearth.position.set(2.32, -1.15, 8.4); // spine at t≈0.42
     hearth.rotation.x = 0.27; // droop slope at mid-arm
     flex.add(hearth);

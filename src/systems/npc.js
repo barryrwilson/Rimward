@@ -929,12 +929,15 @@ function engageTarget(ctx, live, dt, now, targetPos) {
 /**
  * The chance a pirate takes an interest in the player (wave 32). Reads the
  * record's persisted temper and live world state; the ONLY write is the
- * lazy temper stamp (??= — old saves roll it on first sight, the spawnLiveShip
- * rematch write-back discipline). Exported for the boot test.
+ * lazy temper stamp (finite-guarded — old saves roll it on first sight, a
+ * hand-edited non-numeric temper re-rolls instead of NaN-ing the chance
+ * (wave-32 security LOW, closed wave 34); the spawnLiveShip rematch
+ * write-back discipline). Exported for the boot test.
  */
 export function playerInterestChance(ctx, record) {
   if (record?.alwaysHuntsPlayer === true) return 1; // injected hunters (the Ledger's collector)
-  if (record) record.temper ??= Math.random(); // per-record greed — rolled once ever, persisted
+  // per-record greed — rolled once ever, persisted; non-finite heals
+  if (record && !Number.isFinite(record.temper)) record.temper = Math.random();
   const cargo = clamp01(cargoValue(ctx.cargo, ctx.world.prices) / INTEREST.cargoNormUU);
   const p = INTEREST.base + (record?.temper ?? 0.5) * INTEREST.temperSpan
     + cargo * INTEREST.cargoSpan - ctx.world.fear * INTEREST.fearRepel;

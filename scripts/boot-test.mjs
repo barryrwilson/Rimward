@@ -7823,5 +7823,180 @@ if (!Object.values(w33checks).every(Boolean)) { console.log('WAVE33 BLOOM V2 FAI
 // Home — the wave-27 discipline: the run ends where the harness began.
 travelTo('freehold', 'wave33 home leg');
 
+// ---- Wave 34: review debt — scanner heal, temper guard, hearth fit -------
+// The wave-34 contract: three standing review items closed in src.
+// 1. save.js sanitizeRestored heals a tampered ctx.world.scanner to 0 beside
+//    the wave-30 concealedMounts coercion (`if (![0, 1, 2].includes(...))`)
+//    — a hand-edited save (scanner 99 or '2') no longer restores with the
+//    free Mk II Wolfeye pierce (wave-31 security LOW).
+// 2. npc.js playerInterestChance replaces the lazy `??=` temper stamp with a
+//    Number.isFinite guard — a tampered non-numeric record.temper re-rolls
+//    instead of NaN-ing the interest chance (wave-32 security LOW).
+// 3. station.js buildBeautifulStation shortens the hearth core scale.z 6.3 →
+//    5.4. The wave-33 review flagged a ~0.41u tip breach near spine t≈0.72
+//    (droop slope 0.47 vs the hearth's fixed 0.27 pitch); wave-34
+//    re-derivation shows 6.3 was in fact contained (+0.434u worst margin —
+//    the breach figure was the margin, sign-flipped) and 5.4 raises the
+//    worst margin to +0.782u. Leg c pins the envelope so any future
+//    length/droop change trips it.
+//    Arm spine (makeStarfishArmGeometry, length 20, rootRadius 3.4, droop
+//    6.5): center C(t) = (2.4·sin πt, −6.5·t², 20·t), skin radius R(t) =
+//    (3.4−3t)(1+0.15·sin πt).
+// Run state: freehold, undocked, hull still pinned 1e9 off wave-33's home
+// leg. Leg a's death-restores return the save's class maxes, so leg c
+// re-pins the hull before the cradle flight (the wave-32 leg-f preamble
+// discipline). ------------------------------------------------------------
+
+// -- a. Scanner restore heal: the REAL dock autosave → death-restore path --
+// (the wave-31 leg-f idiom). Each case pokes ctx.world.scanner, docks (the
+// 'docked' event fires trySave), waits for the save carrying the poked value
+// (the wave-30 save-wait discipline), dies, and recovers. Tampered values
+// (99, '2', null — the hand-edited shapes; a NaN save lands as null through
+// JSON) must heal to EXACTLY 0; legit 0/1/2 ride the roundtrip unchanged (a
+// quick re-assert — the wave-31 scanner roundtrip leg is the deep coverage).
+// A per-case sentinel credits value rides each poke and joins the poll
+// predicate: scanner 0/1/2 all appear in earlier autosaves of this run, so
+// the value alone cannot prove the matched save is THIS dock's — the
+// sentinel can (and post-restore it proves the restore read our save, not a
+// stale one). ------------------------------------------------------------
+const w34scannerCases = [
+  { poke: 99, expect: 0 }, // tampered: off the Wolfeye ladder
+  { poke: '2', expect: 0 }, // tampered: right rung, wrong type
+  { poke: null, expect: 0 }, // tampered: JSON null (snapshot keeps it — null !== undefined)
+  { poke: 0, expect: 0 }, // legit ladder rungs survive unchanged
+  { poke: 1, expect: 1 },
+  { poke: 2, expect: 2 },
+];
+const w34scannerResults = [];
+for (let ci = 0; ci < w34scannerCases.length; ci++) {
+  const { poke: w34poke, expect: w34expect } = w34scannerCases[ci];
+  const w34sentinel = 61231 + ci * 7; // unique per case, provably unlike any earlier autosave
+  if (ctx.flags.docked) undockStation(); // a death-restore ends docked (the wave-32 leg-e note) — undock for the next real dock
+  ctx.world.scanner = w34poke; // TEST SETUP tamper (the wave-9 scanner poke pattern)
+  ctx.world.credits = w34sentinel; // TEST SETUP sentinel (the wave-30 leg-d credits-drift idiom)
+  w30parkHostiles('wave34 hostiles parked (scanner save)');
+  dockAtCurrentStation('wave34 dock freehold (scanner heal)'); // 'docked' fires trySave
+  let w34snap = null;
+  for (let i = 0; i < 60 * 15 && !w34snap; i++) { // the wave-30 save-wait discipline
+    for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
+    tick(1, 'wave34 scanner save wait');
+    try {
+      const s = JSON.parse(store.get('rimward-save-v1') ?? 'null');
+      if (s?.world && 'scanner' in s.world && s.world.scanner === w34poke && s.world.credits === w34sentinel) w34snap = s;
+    } catch { /* keep waiting */ }
+  }
+  // Die + recover (the wave-26 restore path): the tampered save loses to the sanitizer.
+  ctx.emit('playerDestroyed', {});
+  tick(2, 'wave34 death consumed (scanner heal)');
+  dispatchKey('Enter'); // recover(): restore(last save)
+  tick(2, 'wave34 scanner restore settle');
+  w34scannerResults.push({
+    poke: String(w34poke),
+    saveCarriesPoke: w34snap !== null, // the poll's predicate already gates value + sentinel
+    scannerHealed: ctx.world.scanner === w34expect,
+    restoreReadOurSave: ctx.world.credits === w34sentinel,
+  });
+}
+const w34scannerOk = w34scannerResults.every((r) => r.saveCarriesPoke && r.scannerHealed && r.restoreReadOurSave);
+console.log('wave34 scanner restore heal:', JSON.stringify(w34scannerResults));
+if (!w34scannerOk) { console.log('WAVE34 SCANNER HEAL FAIL'); errors++; }
+
+// -- b. Temper finite re-roll: pure calls, no ticks (the wave-32 leg-a -----
+// discipline), reusing the wave-32 scoped import. Math.random is pinned to a
+// deterministic constant AND call-counted inside one save/try/finally/
+// restore window (the wave-32 pin discipline): a tampered non-numeric temper
+// ('rich') must re-roll to a FINITE temper through exactly one Math.random
+// (the guard's lazy roll, nothing else), the returned chance stays finite
+// and clamped [0.05, 0.9] (never NaN — the pre-wave-34 `??=` failure), the
+// re-roll is sticky across a second call (zero further rolls), and a legit
+// finite temper is neither re-rolled NOR allowed to consume Math.random at
+// all — the guard must not fire on the healthy path. ----------------------
+const w34bBad = { role: 'pirate', temper: 'rich' }; // the hand-edited record
+const w34bGood = { role: 'pirate', temper: 0.5 };
+const w34rngB = Math.random;
+let w34rngCalls = 0;
+Math.random = () => { w34rngCalls++; return 0.42; }; // pinned deterministic + counted (try/finally: a mid-window throw must not leave the suite pinned)
+let w34temperChecks = null;
+try {
+  const w34bP1 = w32interestChance(ctx, w34bBad);
+  const w34bT1 = w34bBad.temper; // 0.42 — the pinned re-roll
+  const w34callsReroll = w34rngCalls;
+  const w34bP2 = w32interestChance(ctx, w34bBad); // the sticky read
+  const w34callsSticky = w34rngCalls;
+  const w34bG1 = w32interestChance(ctx, w34bGood);
+  const w34bG2 = w32interestChance(ctx, w34bGood);
+  const w34callsFinite = w34rngCalls;
+  w34temperChecks = {
+    rerollFinite: Number.isFinite(w34bT1) && w34bT1 >= 0 && w34bT1 <= 1,
+    rerollIsOneRandomCall: w34callsReroll === 1, // the guard's lazy roll, nothing else
+    chanceFinite: Number.isFinite(w34bP1) && Number.isFinite(w34bP2), // never NaN
+    chanceClamped: w34bP1 >= 0.05 && w34bP1 <= 0.9,
+    rerollSticky: w34bBad.temper === w34bT1 && w34bP2 === w34bP1 && w34callsSticky === w34callsReroll,
+    finiteTemperByteSticky: w34bGood.temper === 0.5 && w34bG2 === w34bG1, // the guard never touches a healthy temper
+    finiteTemperZeroRandomCalls: w34callsFinite === w34callsSticky, // NO Math.random beyond the one lazy re-roll all leg
+  };
+} finally {
+  Math.random = w34rngB;
+}
+console.log('wave34 temper finite reroll:', JSON.stringify(w34temperChecks));
+if (!w34temperChecks || !Object.values(w34temperChecks).every(Boolean)) { console.log('WAVE34 TEMPER REROLL FAIL'); errors++; }
+
+// -- c. Hearth containment, analytic against the LIVE mesh: travel to ------
+// bt_cradle (the wave-33 travel idiom), then for EACH 'beautiful-hearth'
+// mesh read the ACTUAL fields (scale, position, rotation.x — nothing
+// hardcoded) and verify the ellipsoid never leaves the arm skin. Ellipsoid
+// axis d = (0, −sin(rotation.x), cos(rotation.x)), half-length L = scale.z;
+// at axial offset s ∈ [−L, L] the surface point H(s) = position + s·d
+// carries cross radius r(s) = scale.x·√(1−(s/L)²) (scale.x === scale.y, so
+// the section is circular). Mapped to spine parameter t(s) = H(s).z / 20,
+// containment requires dist(H(s), C(t(s))) + r(s) ≤ R(t(s)) − 0.5 — a 0.5u
+// margin, the triangle-inequality bound over the whole circular section.
+// scale.z ≤ 5.4 is the structural pin so a future length bump trips this
+// leg outright. The hearth sits in the arm's flex group like the arm mesh
+// itself, so flex-local space IS the spine frame (the wave-33 placement
+// comment: hearth/pad/node placements are read straight off that curve). --
+if (ctx.flags.docked) undockStation(); // leg a's last restore ends docked
+ctx.player.hullMax = 1e9; ctx.player.hull = 1e9; // the wave-30 pinned-hull discipline
+ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+travelTo('bt_cradle', 'wave34 cradle leg');
+const w34station = findByName('beautiful-station')[0] ?? null;
+const w34hearths = [];
+if (w34station) w34station.traverse((o) => { if (o.name === 'beautiful-hearth') w34hearths.push(o); });
+const w34spineC = (t) => [2.4 * Math.sin(Math.PI * t), -6.5 * t * t, 20 * t];
+const w34spineR = (t) => (3.4 - 3 * t) * (1 + 0.15 * Math.sin(Math.PI * t));
+let w34worstMargin = Infinity; // min over every hearth and sample of R(t) − dist − r(s)
+for (const h of w34hearths) {
+  const p = h.position; // LIVE mesh fields — no copied constants
+  const sx = h.scale.x;
+  const L = h.scale.z;
+  const rx = h.rotation.x;
+  const d = [0, -Math.sin(rx), Math.cos(rx)];
+  const w34samples = 2000; // dense across [−L, L]
+  for (let i = 0; i <= w34samples; i++) {
+    const s = -L + (2 * L * i) / w34samples;
+    const hx = p.x + s * d[0];
+    const hy = p.y + s * d[1];
+    const hz = p.z + s * d[2];
+    const t = hz / 20;
+    const c = w34spineC(t);
+    const dist = Math.hypot(hx - c[0], hy - c[1], hz - c[2]);
+    const r = sx * Math.sqrt(Math.max(0, 1 - (s / L) * (s / L)));
+    const margin = w34spineR(t) - dist - r;
+    if (margin < w34worstMargin) w34worstMargin = margin;
+  }
+}
+const w34hearthChecks = {
+  arrivedAtCradle: ctx.world.currentSystem === 'bt_cradle',
+  fiveHearths: w34hearths.length === 5,
+  scaleZPinned: w34hearths.length > 0 && w34hearths.every((h) => h.scale.z <= 5.4), // the structural pin
+  containedHalfUnit: w34worstMargin >= 0.5, // every sample inside the skin with 0.5u to spare
+};
+console.log('wave34 hearth containment:', JSON.stringify(w34hearthChecks), `worstMargin=${Number.isFinite(w34worstMargin) ? w34worstMargin.toFixed(3) : 'n/a'}`);
+if (!Object.values(w34hearthChecks).every(Boolean)) { console.log('WAVE34 HEARTH CONTAINMENT FAIL'); errors++; }
+
+// Home again — the wave-27 discipline: the run ends where the harness began.
+travelTo('freehold', 'wave34 home leg');
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

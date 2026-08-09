@@ -144,6 +144,10 @@ function sanitizeRestored(ctx) {
   // Wave 30: only a literal true restores the Q-ship flag — anything else
   // (legacy save, corrupted value) heals to unpurchased.
   if (ctx.world.concealedMounts !== true) ctx.world.concealedMounts = false;
+  // Wave 34: the Wolfeye ladder is 0/1/2 — a hand-edited scanner (99, '2')
+  // would otherwise restore with the Mk II pierce and the station
+  // 'installed' note for free (wave-31 security LOW).
+  if (![0, 1, 2].includes(ctx.world.scanner)) ctx.world.scanner = 0;
   const bio = ctx.bio;
   if (bio) {
     if (!Number.isFinite(bio.hunger)) bio.hunger = 0.15;

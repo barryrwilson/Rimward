@@ -1254,14 +1254,57 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   nothing stalled) verified live in headless system Chrome on
   SwiftShader WebGL2.
 
-## Next round candidates (wave 34)
+- Wave 34: standing review debt (user-decided: close it — the wave-34
+  candidates were all standing notes, and the save-tamper precedent was
+  explicitly broken for the two heals). save.js sanitizeRestored: scanner
+  ladder heal beside the concealedMounts coercion — `if
+  (![0,1,2].includes(ctx.world.scanner)) scanner = 0` closes the wave-31
+  security LOW (a hand-edited scanner 99/'2' restored with the free Mk II
+  pierce + station 'installed' note); restore() is the sole snapshot-apply
+  path (boot load, death recovery, wave-28 berth load all funnel through
+  it, sanitize at its tail) so every entry point heals; 'systemLoaded'
+  re-emit precedes sanitize but events consume next frame, no pre-heal
+  read window. npc.js playerInterestChance: `??=` → Number.isFinite guard
+  closes the wave-32 security LOW (tampered non-numeric temper NaN-ing
+  the chance); finite tempers never re-roll (zero Math.random consumed —
+  the wave-32 p=0.425 RNG-pin exactness legs unaffected); -0 and numeric
+  extremes stay but are railed by the [0.05,0.9] clamp (residual LOW
+  standing below). station.js hearth core scale.z 6.3→5.4: wave-34
+  re-derivation (independent 20k-sample sweeps by BOTH reviewers, same
+  analytic model as boot leg c) shows 6.3 was CONTAINED all along
+  (+0.434u worst margin at s≈5.91/t≈0.705 — the wave-33 review's 0.41u
+  breach figure was the margin, sign-flipped, confidence 0.6); 5.4 taken
+  anyway — worst margin rises to +0.782u (s≈4.82/t≈0.652) and the
+  envelope is now pinned by test; comments in station.js + the boot-test
+  header corrected same-wave (code-review P3). Boot test wave-34 section
+  (additive +171/−0): leg a scanner heal through the REAL dock autosave →
+  death-restore ×6 cases (99/'2'/null heal to exactly 0; 0/1/2 roundtrip
+  unchanged; per-case sentinel credits 61231+7ci ride the poke and gate
+  both the save-poll and the post-restore assert — scanner 0/1/2 all
+  appear in earlier autosaves, so value alone can't prove THIS dock's
+  save won; a timed-out poll fails closed), leg b temper guard (pinned
+  counted Math.random in one save/try/finally/restore window: exactly
+  one roll for temper 'rich', re-roll finite + sticky, chance clamped
+  [0.05,0.9], finite temper byte-sticky with ZERO random calls — a
+  healthy-path roll would trip finiteTemperZeroRandomCalls), leg c hearth
+  containment (real travel to bt_cradle, reads the LIVE hearth mesh
+  scale/position/rotation.x — never copied constants — 2001-sample sweep
+  dist(H,C)+r ≤ R−0.5, structural pin scale.z ≤ 5.4, home leg to
+  freehold; leg-a death-restores return class maxes so leg c re-pins the
+  1e9 hull, documented in-section). PASS ×3 consecutive + npm run build
+  clean (only the pre-existing >500 kB chunk warning). Reviews: security
+  SHIP (all six scanner consumers + both temper read/write sites
+  enumerated; 3 LOW/informational standing below); code APPROVE (overall
+  correct, confidence 0.9; the comment P3 fixed same-wave); designer
+  visual SHIP — all 6 checkpoints live in headless system Chrome on
+  SwiftShader WebGL2 (dist via vite preview; 5 hearths scale.z=5.4
+  world-decomposed, no visible poke-through from 5 close tip angles on 2
+  arms, chamber never reads severed, pads/crown/orbs/webs unchanged,
+  sway/breath/pulse deltas measured live over 2.04s; 12 stills in
+  .chrome-shot/w34/, untracked scratch).
+
+## Next round candidates (wave 35)
 - Wave 33 standing (review P3s, documented not patched):
-  - Hearth-tip breach: the amber hearth ellipsoid (fixed 0.27 pitch)
-    pokes ~0.41u outside the arm skin near spine t≈0.72 where the
-    droop steepens to 0.47 (code review, confidence 0.6, analytic).
-    Invisible in the SHIP'd visual pass (transparent depthWrite-off
-    skin glows regardless); shortening scale.z 6.3→~5.4 or re-centering
-    to t≈0.38 closes it if it ever reads.
   - bt_cradle's sun (PointLight 300, decay 2, ~535u) contributes
     ≈0.001 irradiance at the station — the bloom is effectively
     self-lit (emissives + fleshLight + ambient), so sunward/anti-sun
@@ -1320,12 +1363,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   units NaN the demand → payTribute credits chain. Both need edited
   localStorage; the restore boundary heals on next load. Negative-
   demand credit grants are NOT possible (demandMin floor).
-- Wave-31 standing (security LOWs, save-tamper only — documented not
-  patched, the wave-30 precedent): ctx.world.scanner is unhealed at the
-  restore boundary — a hand-edited scanner 99/'2' gets the Mk II pierce
-  and the station 'installed' note free (the one-line heal
-  `if (![0,1,2].includes(...)) scanner = 0` beside the concealedMounts
-  coercion closes it if ever wanted); the qship flag is strict
+- Wave-31 standing (security LOWs, save-tamper only): the scanner-heal
+  LOW is CLOSED (wave 34 — sanitizeRestored heals any non-0/1/2 scanner
+  to 0 at every restore entry point); the qship flag is strict
   (=== true) at spawn but truthy at reveal/HUD — legit saves always
   carry literal true, so only an edited save splits them, and even then
   the failure is cosmetic (cover text over a real mesh, a self-granted
@@ -1334,13 +1374,13 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 - Wave-31 content note: Q-ships exist only in record banks generated
   under wave-31+ code — old saves' already-visited systems stay
   classic (no retrofit, the standing lazy-generation precedent).
-- Wave-32 standing (security LOWs, save-tamper only — documented not
-  patched, the standing precedent): a hand-edited non-numeric
-  record.temper survives the ??= (it only re-rolls null/undefined) and
-  NaNs playerInterestChance — the only consumer is a `< chance`
-  compare, so the record is permanently apathetic; no crash, no NaN
-  into fear/credits (a Number.isFinite re-roll closes it if ever
-  wanted). Rename-tamper can grant or strip alwaysHuntsPlayer through
+- Wave-32 standing (security LOWs, save-tamper only): the temper-NaN LOW
+  is CLOSED (wave 34 — a Number.isFinite guard re-rolls any non-finite
+  temper). Residual, documented standing: a finite-but-huge tampered
+  temper survives the guard and rails that record's interest chance at
+  the [0.05, 0.9] clamps — bounded (one record permanently min/maxed),
+  no NaN into fear/credits, localStorage-edit-only reach. Rename-tamper
+  can grant or strip alwaysHuntsPlayer through
   the name-keyed Dresk heal — self-harm or trivially achievable
   directions only; no procedural name pool collides with 'Collector
   Dresk'.
