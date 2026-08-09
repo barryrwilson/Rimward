@@ -937,32 +937,71 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   bore, buds, cocooning petals), the patrol heavy's additive vein
   tracery, and the Mirror Monument glaze with its real proximity
   discovery toast.
-## Next round candidates (wave 28)
-- Wave 27 (Beautiful Ones organic technology) is in: the 'beautiful'
-  faction's ships/stations/gates/landmarks are GROWN, not built —
-  the first real modeling beyond the player's living ship (the rest was
-  placeholder boxes/cylinders). Standing notes:
-  - Cast faction rules (world.js createRecords, unchanged) mean
-    beautiful ships appear only as traders i%3==0 and patrol 0 in
-    beautiful systems; pirates are always redledger/independent, so the
-    tarnished fallen-Beautiful variant (organicMaterials({tarnished}))
-    is synthetic-only unless the cast table ever flies pirates beautiful
-    — a gameplay decision, not a patch.
-  - organicMaterials/geometry caches are userData.shared-marked, never
-    disposed; station/gate/landmark teardown paths skip them. Never
-    tagPulse a cached shared material (one userData.pulse slot);
-    never Material.clone one (clone deep-copies userData — false
-    shared flag). veinGlow is AdditiveBlending by contract: the vein
-    texture is black-background and a normal-blended overlay cloaks the
-    hull in 90% black (caught in browser verification, fixed).
-  - landmarks.js: a save-load mystery-record identity swap no longer
-    rebuilds the POI scene (latent over-broad watch, first exposed by
-    the wave-27 death-restore identity pin). Hint flips still rebuild;
-    swaps re-apply dimming in place — also covers swapped records with
-    different ids at equal lengths, which the old length watch missed.
-  - Beautiful systems hold monuments only (all three landmarks are
-    monument-kind); the wreck/beacon/anomaly glazes are implemented and
-    boot-tested via synthetic defs but have no live site yet.
+- Wave 28: Berth Records — a save/load interface from space plus manual
+  save slots (user-directed). save.js: SLOT_KEYS
+  ('rimward-save-v1-slot-1..3') beside the autosave KEY — boot load and
+  death recovery still read ONLY the autosave key; loadSnapshot(key)/
+  trySave(key) generalized with default params (every prior call site
+  unchanged; a manual save emits the 'Mid-jump — berth record refused.'
+  saveBlocked where the autosave stays silent); the berth-records panel
+  (settings.js inline-DOM pattern, stub-safe makeEl surface only): root
+  #rw-berth-records, four .rw-berth-row entries (data-slot auto/1/2/3)
+  with .rw-berth-meta ('<toLocaleString> · <SYSTEMS[id].name> · <credits>
+  UU' occupied, '— empty berth —' empty/corrupt), .rw-berth-save on the
+  manual rows only, .rw-berth-load everywhere (disabled when empty);
+  KeyL toggles (galaxychart gating: open only !docked && !paused &&
+  !dead, close always, ESC closes), auto-close on docked/dead in
+  update(), frozen-vocabulary feedback only (commLine 'Berth record
+  sealed — slot N.' / 'Berth record restored.', saveBlocked reuse),
+  refresh-on-open and after every write. loadFromSlot reuses restore()
+  as-is (systemLoaded emit, healLiveRecords, sanitizeRestored) gated
+  like a save (mid-jump, encounter bubble) PLUS paused (review P2: a
+  cross-system restore while the loop is frozen drops 'systemLoaded'
+  unseen — station/gates/environment desync until the next jump).
+  controls.js: HUD hint 'L — berth records (save/load)'. Boot test
+  wave-28 section (24 checks): the real KeyL/click drive — four rows in
+  order, a save → sentinel-drift → load roundtrip (credits, 1e-6
+  position, both toasts, auto-close), the paused-load refusal
+  (flags.paused poked directly — main.js owns KeyP, the harness runs
+  its own loop), occupied autosave/manual berth meta shape, empty-berth
+  text + disabled LOADs, docked open-refusal, ESC/toggle close, no save
+  button on the autosave row. Harness lessons: npc.js sets flags.combat
+  from ai.intent && distance < ENCOUNTER_BUBBLE — lawful patrols turn
+  intent-hostile after the run's earlier piracy, so role-based parking
+  misses exactly the ships holding the bubble, and parking fights a
+  despawn/re-instantiate treadmill (records re-spawn at 900u and close
+  in); w28calm instead teleports the PLAYER beyond every record route
+  with full-stop and ticks until the flag clears, clicking
+  synchronously after. The drift sentinel moved AFTER the pre-load calm
+  so the calm teleport can never erase it (review P2 — positionRestored
+  was vacuous), and the post-load position is captured by value, not
+  the live Vector3 the dock/undock legs mutate. Security review APPROVE
+  (0 findings; three optional LOW hardening notes pre-date the wave in
+  the autosave path). Code review CHANGES-REQUESTED — both P2s fixed
+  inline above and defended by new checks. npm run test:boot PASS ×7
+  consecutive ×2 rounds (post-implementation, post-review-fix); npm run
+  build clean (only the pre-existing >500 kB chunk warning).
+## Next round candidates (wave 29)
+- Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
+  (never docked/paused/dead), three manual slots beside the autosave,
+  docking still autosaves. Standing notes:
+  - Manual berths never participate in boot load or death recovery (by
+    design — recovering into slot N is an explicit in-space load).
+  - Slots are overwrite-only: no rename, no note, no delete. A slot
+    label/annotation pass is a UI decision, not a patch.
+  - SAVE while paused still writes (frozen state is coherent); LOAD is
+    the only paused-gated action (the 'systemLoaded'-while-frozen
+    hazard). The pre-existing death-overlay Enter-while-paused path
+    shares that engine hazard and was left as-is (reviewer-noted, far
+    less reachable).
+  - berth meta uses toLocaleString — fine for display, never parse it.
+- Wave 27 standing notes that still bind: beautiful ships fly only as
+  traders i%3==0 / patrol 0 in beautiful systems (pirates always
+  redledger/independent — the tarnished variant stays synthetic-only,
+  a gameplay decision); organicMaterials/geometry caches are
+  userData.shared, never disposed, never tagPulse'd/Material.clone'd;
+  veinGlow is AdditiveBlending by contract; the wreck/beacon/anomaly
+  glazes are boot-tested via synthetic defs but have no live site.
 - The pre-existing wave-6 haul delivery gate STILL never enforced the
   named destination the way ferry does (wave-26 review MEDIUM): a
   payQuoted-stamped haul chain pays at any non-origin dock. Gate

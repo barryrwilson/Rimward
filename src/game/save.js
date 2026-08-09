@@ -1,5 +1,5 @@
 import '../ui/screens.css';
-import { createShipState, SHIP_CLASSES, U, JUMP } from './state.js';
+import { createShipState, SHIP_CLASSES, SYSTEMS, U, JUMP } from './state.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -23,6 +23,19 @@ import { createShipState, SHIP_CLASSES, U, JUMP } from './state.js';
  *   outlive a restore with orphaned pre-restore record objects) and heals
  *   bank `live` flags, so same-system restores (death recovery, no
  *   'systemLoaded' emit) can't strand a record as never-re-instantiable.
+ * - MANUAL SLOTS ("Berth Records", KeyL — SPACE ONLY): three manual slots
+ *   beside the autosave, localStorage keys 'rimward-save-v1-slot-1..3' with
+ *   the same {v:1} snapshot envelope. KeyL toggles the panel — opens only
+ *   while flying (!docked, !paused, not dead; Escape always closes; the
+ *   game keeps running underneath). Each row shows its berth's date,
+ *   system name, and credits; manual rows get a Save button, every row a
+ *   Load button (disabled while the berth is empty or corrupt). Manual
+ *   saves share the autosave gating (hostile within the encounter bubble
+ *   → 'saveBlocked'), except a mid-jump manual save is refused with a
+ *   'Mid-jump — berth record refused.' toast where the autosave stays
+ *   silent. The panel closes itself if the ship docks or dies. Boot load
+ *   and death recovery still read ONLY the autosave key — manual berths
+ *   are only ever restored explicitly from the panel.
  * - DEATH (§4.4): consumes 'playerDestroyed' → 'Ship lost.' overlay → reload
  *   the last save (or a fresh start at the Freehold station with a new player
  *   state record when no save exists). No corpse run, no insurance. Emits the
@@ -36,6 +49,7 @@ import { createShipState, SHIP_CLASSES, U, JUMP } from './state.js';
  */
 
 const KEY = 'rimward-save-v1';
+const SLOT_KEYS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
 const IDLE_INTERVAL = 60; // s between in-space autosaves
 const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
 const DEATH_HOLD_MS = 2500; // 'Ship lost.' hold before recovery
@@ -77,9 +91,9 @@ function snapshot(ctx) {
   };
 }
 
-function loadSnapshot() {
+function loadSnapshot(key = KEY) {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const snap = JSON.parse(raw);
     return snap && snap.v === 1 && snap.world ? snap : null;
@@ -320,6 +334,161 @@ export function initSave(ctx) {
     if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Digit1') recover();
   });
 
+  // ---- berth records panel (KeyL, space-only) ----
+  // Plain DOM in the settings.js inline-style pattern; display:none when
+  // closed so it never swallows gameplay input. Manual slots sit beside the
+  // autosave under SLOT_KEYS — boot load and death recovery never touch them.
+  const berthRoot = document.createElement('div');
+  berthRoot.id = 'rw-berth-records';
+  berthRoot.style.cssText =
+    'position:fixed;inset:0;display:none;align-items:center;justify-content:center;' +
+    'background:rgba(2,5,11,0.72);z-index:60;pointer-events:none;' +
+    "font-family:'Consolas','Cascadia Mono','Courier New',monospace;color:#dce8f4;";
+
+  const berthPanel = document.createElement('div');
+  berthPanel.style.cssText =
+    'pointer-events:auto;min-width:380px;max-width:92vw;max-height:82vh;overflow-y:auto;' +
+    'padding:18px 22px 16px;background:linear-gradient(180deg,#101826 0%,#0a101b 100%);' +
+    'border:1px solid #2c3d52;border-radius:2px;font-size:13px;line-height:1.5;' +
+    'box-shadow:0 0 0 1px rgba(111,210,224,0.06),0 12px 48px rgba(0,0,0,0.65);';
+  berthPanel.setAttribute('role', 'dialog');
+  berthPanel.setAttribute('aria-label', 'Berth Records');
+  // Clicks on the panel must not reach the canvas (fire input).
+  berthPanel.addEventListener('mousedown', (e) => e.stopPropagation());
+  berthPanel.addEventListener('click', (e) => e.stopPropagation());
+  berthRoot.appendChild(berthPanel);
+
+  const berthTitle = document.createElement('div');
+  berthTitle.textContent = 'BERTH RECORDS';
+  berthTitle.style.cssText =
+    'font-size:15px;letter-spacing:0.3em;color:#6fd2e0;margin-bottom:4px;' +
+    'border-bottom:1px solid #22303f;padding-bottom:8px;';
+  berthPanel.appendChild(berthTitle);
+
+  const berthHint = document.createElement('div');
+  berthHint.textContent = 'L or ESC to close — records hold while you fly';
+  berthHint.style.cssText = 'color:#5f7185;font-size:11px;letter-spacing:0.1em;margin:6px 0 12px;';
+  berthPanel.appendChild(berthHint);
+
+  document.body.appendChild(berthRoot);
+
+  let berthOpen = false;
+
+  function setBerthOpen(next) {
+    berthOpen = next;
+    berthRoot.style.display = next ? 'flex' : 'none';
+    berthRoot.setAttribute('aria-hidden', String(!next));
+    if (next) refreshBerth();
+  }
+
+  function saveToSlot(slotKey, n) {
+    if (trySave(slotKey)) {
+      ctx.emit('commLine', { text: 'Berth record sealed — slot ' + n + '.' });
+      refreshBerth();
+    }
+  }
+
+  function loadFromSlot(slotKey) {
+    // Paused: system updates are frozen (main.js skips the loop), so a
+    // cross-system restore's 'systemLoaded' would rotate out of the event
+    // queue unseen — station/gates/environment would stay desynced from the
+    // restored world until the next jump. Refuse like the docked gate.
+    if (ctx.flags.paused) return;
+    if (ctx.gate?.jumping) {
+      ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+      return;
+    }
+    // saveBlockReason does not emit on its own (trySave does) — toast here.
+    const reason = saveBlockReason();
+    if (reason) {
+      ctx.emit('saveBlocked', { reason });
+      return;
+    }
+    const snap = loadSnapshot(slotKey);
+    if (!snap) return; // empty or corrupt berth — nothing to restore
+    restore(ctx, snap);
+    setBerthOpen(false);
+    ctx.emit('commLine', { text: 'Berth record restored.' });
+  }
+
+  const berthRows = [];
+  const BERTH_SLOTS = [
+    ['auto', KEY, 'AUTOSAVE'],
+    ['1', SLOT_KEYS[0], 'SLOT 1'],
+    ['2', SLOT_KEYS[1], 'SLOT 2'],
+    ['3', SLOT_KEYS[2], 'SLOT 3'],
+  ];
+  for (const [slot, slotKey, labelText] of BERTH_SLOTS) {
+    const row = document.createElement('div');
+    row.className = 'rw-berth-row';
+    row.setAttribute('data-slot', slot);
+    row.style.cssText =
+      'display:flex;align-items:center;gap:10px;padding:8px 2px;' +
+      'border-bottom:1px solid #1a2634;';
+
+    const textWrap = document.createElement('div');
+    textWrap.style.cssText = 'flex:1;min-width:0;';
+    const label = document.createElement('div');
+    label.textContent = labelText;
+    label.style.cssText = 'color:#9fb2c6;font-size:11px;letter-spacing:0.2em;';
+    const meta = document.createElement('div');
+    meta.className = 'rw-berth-meta';
+    meta.style.cssText = 'color:#7d93ab;font-size:12px;margin-top:2px;';
+    textWrap.appendChild(label);
+    textWrap.appendChild(meta);
+    row.appendChild(textWrap);
+
+    if (slot !== 'auto') {
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'screen-btn rw-berth-save';
+      saveBtn.textContent = 'SAVE';
+      saveBtn.style.cssText = 'width:auto;padding:4px 12px;';
+      saveBtn.addEventListener('click', () => saveToSlot(slotKey, slot));
+      row.appendChild(saveBtn);
+    }
+
+    const loadBtn = document.createElement('button');
+    loadBtn.type = 'button';
+    loadBtn.className = 'screen-btn rw-berth-load';
+    loadBtn.textContent = 'LOAD';
+    loadBtn.style.cssText = 'width:auto;padding:4px 12px;';
+    loadBtn.addEventListener('click', () => loadFromSlot(slotKey));
+    row.appendChild(loadBtn);
+
+    berthPanel.appendChild(row);
+    berthRows.push({ key: slotKey, meta, loadBtn });
+  }
+
+  function refreshBerth() {
+    for (const row of berthRows) {
+      const snap = loadSnapshot(row.key);
+      if (snap) {
+        const sysId = snap.world.currentSystem;
+        const sysName = SYSTEMS[sysId] ? SYSTEMS[sysId].name : sysId;
+        row.meta.textContent =
+          new Date(snap.savedAt).toLocaleString() + ' · ' + sysName + ' · ' + snap.world.credits + ' UU';
+        row.loadBtn.disabled = false;
+      } else {
+        row.meta.textContent = '— empty berth —';
+        row.loadBtn.disabled = true;
+      }
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.code === 'KeyL') {
+      // Never intercept: no preventDefault/stopPropagation. While docked or
+      // paused other overlays own the screen, and while dead the death
+      // overlay does — only allow closing in those states.
+      if (berthOpen) setBerthOpen(false);
+      else if (!ctx.flags.docked && !ctx.flags.paused && !dead) setBerthOpen(true);
+    } else if (e.code === 'Escape' && berthOpen) {
+      setBerthOpen(false);
+    }
+  });
+
   // ---- save gating ----
 
   /** Null when a save is allowed; a refusal reason string when blocked. */
@@ -342,18 +511,22 @@ export function initSave(ctx) {
   }
 
   /** Attempt a save. Returns true when written. */
-  function trySave() {
+  function trySave(key = KEY) {
     if (!ctx.player || !ctx.ship.object || dead) return false;
     // Mid-jump state is incoherent (ships despawned, system half-swapped);
-    // the 'systemLoaded' autosave fires the moment the jump completes.
-    if (ctx.gate?.jumping) return false;
+    // the 'systemLoaded' autosave fires the moment the jump completes. The
+    // autosave path stays silent; a manual berth save gets a refusal toast.
+    if (ctx.gate?.jumping) {
+      if (key !== KEY) ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+      return false;
+    }
     const reason = saveBlockReason();
     if (reason) {
       ctx.emit('saveBlocked', { reason });
       return false;
     }
     try {
-      localStorage.setItem(KEY, JSON.stringify(snapshot(ctx)));
+      localStorage.setItem(key, JSON.stringify(snapshot(ctx)));
       return true;
     } catch {
       return false; // storage full/unavailable — stay silent, game continues
@@ -374,6 +547,7 @@ export function initSave(ctx) {
 
   return {
     update(dt) {
+      if (berthOpen && (ctx.flags.docked || dead)) setBerthOpen(false);
       for (const ev of ctx.lastEvents) {
         if (ev.type === 'playerDestroyed') { onPlayerDestroyed(); continue; }
         if (dead) continue;

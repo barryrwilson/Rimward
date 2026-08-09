@@ -182,6 +182,7 @@ export function initControls(ctx) {
     'H — hail · D — dock · C — camera (chase / first-person)',
     'G — cycle hub route at a Lamplighter junction',
     'M — galaxy chart',
+    'L — berth records (save/load)',
     'P — pause',
   );
 

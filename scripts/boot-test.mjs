@@ -6281,5 +6281,175 @@ if (!Object.values(w27reemitChecks).every(Boolean)) { console.log('WAVE27 REBUIL
 undockStation(); // leave The Cradle (wave-27 restore dock)
 travelTo('freehold', 'wave27 home leg');
 
+// ---- Wave 28: Berth Records — the save/load panel, SPACE ONLY ------------
+// KeyL toggles, Escape closes, three manual slots beside the autosave, a
+// real save → drift → load roundtrip through the stub DOM, and the docked
+// refusal. The run is freehold/undocked off the wave-27 home leg; hostiles
+// parked first (the wave-27 save pattern) so the encounter-bubble combat
+// block can never refuse a drive.
+// The encounter-bubble save gate is LIVE in this run — npc.js sets
+// flags.combat from ai.intent && distance < ENCOUNTER_BUBBLE (800u), and
+// lawful patrols turn intent-hostile after the run's earlier piracy.
+// Parking hostiles fights a despawn/re-instantiate treadmill (records
+// re-spawn at 900u, just outside the bubble, and close in), so calm
+// deterministically instead: teleport the PLAYER beyond every record's
+// instantiate range, tick until traffic despawns the live ships and
+// npc.js clears the flag, then click synchronously — no tick between the
+// clear and the click, so the state cannot change in between. The berth-1
+// envelope legitimately holds the far position; the restore check below
+// compares against the envelope, never a hardcoded point.
+const w28calm = (label) => {
+  ctx.ship.object.position.set(0, 30000, 0);
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.input.throttle = 0; // the setpoint persists from earlier flight legs —
+  ctx.input.fullStop = true; // without full-stop the hull drifts mid-tick and
+  // the saved/restored position can never match at 1e-6
+  for (let i = 0; i < 240 && ctx.flags.combat; i++) tick(1, label);
+  return !ctx.flags.combat;
+};
+if (ctx.flags.docked) undockStation(); // precondition: in space, never docked
+
+// Panel root discovery rides BOTH stub-DOM anchor paths: an implementation
+// that appends an id-tagged root under document.body (the settings.js
+// pattern) and one that roots at document.getElementById (the hud.js
+// pattern — the stub memoizes by id, NOT under document.body). The lazy
+// getElementById fallback yields a display-less stub when the feature is
+// absent, so every check below fails honestly.
+const w28Panel = () => {
+  for (const n of walkDom(document.body)) {
+    if (n.id === 'rw-berth-records' || n.getAttribute?.('id') === 'rw-berth-records') return n;
+  }
+  return document.getElementById('rw-berth-records');
+};
+const w28classHas = (n, cls) => typeof n.className === 'string' && n.className.split(' ').includes(cls);
+const w28rows = () => [...walkDom(w28Panel())].filter((n) => w28classHas(n, 'rw-berth-row'));
+const w28row = (slot) => w28rows().find((n) => n.dataset?.slot === slot) ?? null;
+const w28btn = (row, cls) => (row
+  ? ([...walkDom(row)].find((n) => n.tagName === 'BUTTON' && w28classHas(n, cls)) ?? null)
+  : null);
+const w28metaText = (row) => (row
+  ? ([...walkDom(row)].find((n) => w28classHas(n, 'rw-berth-meta'))?.textContent ?? null)
+  : null);
+
+// -- a/b. KeyL opens in space: display flex, exactly four rows in ----------
+// auto/1/2/3 order (walkDom yields document order). -------------------------
+dispatchKey('KeyL');
+const w28openedInSpace = w28Panel().style.display === 'flex';
+const w28slotOrder = w28rows().map((n) => n.dataset?.slot);
+
+// -- c. manual save into berth 1 — the real click path writes the slot key --
+const w28calmBeforeSave = w28calm('wave28 calm pre-save');
+w28btn(w28row('1'), 'rw-berth-save')?.click();
+const w28sealedToast = ctx.events.some((e) => e.type === 'commLine' && e.text === 'Berth record sealed — slot 1.'); // emit is synchronous
+const w28snap1 = (() => { try { return JSON.parse(store.get('rimward-save-v1-slot-1') ?? 'null'); } catch { return null; } })();
+const w28savedCredits = w28snap1?.world?.credits;
+const w28savedPos = w28snap1?.ship?.position ?? null;
+
+// -- d. calm first, THEN drift the live state (sentinel credits, known ----
+// position offset) and click LOAD with NO intervening tick — the calm
+// teleport must never land the hull back on the saved coordinate after the
+// drift, or positionRestored passes vacuously (review P2). The drift is
+// synchronous with the click, so the sim cannot move the hull in between. -
+const w28calmBeforeLoad = w28calm('wave28 calm pre-load');
+ctx.world.credits = (w28savedCredits ?? 0) + 777;
+ctx.ship.object.position.x += 111.25;
+ctx.ship.object.position.y -= 42.5;
+ctx.ship.object.position.z += 77.75;
+w28btn(w28row('1'), 'rw-berth-load')?.click(); // re-queried — renders may rebuild rows
+const w28restoredToast = ctx.events.some((e) => e.type === 'commLine' && e.text === 'Berth record restored.');
+tick(2, 'wave28 post-load settle');
+const w28panelClosedAfterLoad = w28Panel().style.display === 'none';
+// By value, not the live Vector3 — the dock/undock legs below teleport the
+// hull and would mutate a referenced vector before w28Checks evaluates.
+const w28shipPosArr = [ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z];
+
+// -- d2. paused-load guard: the panel survives pause-after-open (updates ---
+// freeze, so the auto-close can't run) but LOAD must refuse while the
+// system loop is frozen — a cross-system restore's 'systemLoaded' would
+// rotate out of the event queue unseen (review P2 fix). Credits are
+// re-sentinelled first so a wrongful restore is observable. --------------
+dispatchKey('KeyL'); // reopen — the load auto-closed the panel
+// main.js owns the KeyP listener and the harness runs its own loop, so the
+// paused state is poked directly (the bootFreshHarness convention).
+ctx.flags.paused = true; // pause with the panel open
+ctx.world.credits = (w28savedCredits ?? 0) + 555;
+w28btn(w28row('1'), 'rw-berth-load')?.click();
+const w28pausedLoadRefused = ctx.world.credits === (w28savedCredits ?? 0) + 555
+  && !ctx.events.some((e) => e.type === 'commLine' && e.text === 'Berth record restored.');
+ctx.flags.paused = false; // unpause
+ctx.world.credits = w28savedCredits; // hand the restored state back — the
+// d2 sentinel must not leak into creditsRestored at w28Checks time
+dispatchKey('Escape'); // close for the next leg
+
+// -- e. the autosave berth reads occupied ------------------------------------
+// 'rimward-save-v1' has been written by dozens of earlier dock/jump
+// autosaves; if a future reorder ever reaches here without one, force a dock
+// autosave the wave-27 way (dock fires trySave, poll the store, undock).
+if (!store.has('rimward-save-v1')) {
+  dockAtCurrentStation('wave28 autosave force');
+  for (let i = 0; i < 60 * 15 && !store.has('rimward-save-v1'); i++) tick(1, 'wave28 autosave wait');
+  undockStation();
+}
+dispatchKey('KeyL'); // reopen — the load auto-closed the panel
+const w28autoMeta = w28metaText(w28row('auto'));
+const w28slot1Meta = w28metaText(w28row('1'));
+const w28emptyMeta23 = [w28metaText(w28row('2')), w28metaText(w28row('3'))];
+dispatchKey('KeyL'); // toggle shut before docking
+const w28toggleClosed = w28Panel().style.display === 'none';
+
+// -- f. the space-only rule: docked, KeyL is refused; the dock autosave -----
+// key exists (written long before this wave — asserted, not forced). --------
+dockAtCurrentStation('wave28 space-only dock'); // real dock path (dock zone + dockPressed edge)
+dispatchKey('KeyL'); // docked: the panel must refuse to open
+const w28dockedRefused = ctx.flags.docked === true && w28Panel().style.display === 'none';
+const w28autosavePresent = store.has('rimward-save-v1');
+
+// -- g. back in space: KeyL reopens, Escape closes ---------------------------
+undockStation();
+dispatchKey('KeyL');
+const w28reopened = w28Panel().style.display === 'flex';
+// -- h. row anatomy on this open panel: the autosave row carries NO save ----
+// button; every manual row's LOAD is a real <button> — enabled on the berth
+// (c) occupied, disabled on the two never-written berths. -------------------
+const w28autoSaveBtn = w28btn(w28row('auto'), 'rw-berth-save');
+const w28loadBtns = ['1', '2', '3'].map((s) => w28btn(w28row(s), 'rw-berth-load'));
+dispatchKey('Escape');
+const w28escapeClosed = w28Panel().style.display === 'none';
+
+const w28Checks = {
+  openedInSpace: w28openedInSpace,
+  fourRowsInOrder: w28slotOrder.length === 4 && w28slotOrder.join(',') === 'auto,1,2,3',
+  calmBeforeSave: w28calmBeforeSave,
+  calmBeforeLoad: w28calmBeforeLoad,
+  manualSaveWritten: store.has('rimward-save-v1-slot-1'),
+  envelopeShape: w28snap1?.v === 1 && !!w28snap1?.world && typeof w28snap1.world === 'object',
+  envelopeCaptured: Number.isFinite(w28savedCredits) && Array.isArray(w28savedPos) && w28savedPos.length === 3,
+  sealedToast: w28sealedToast,
+  creditsRestored: ctx.world.credits === w28savedCredits,
+  positionRestored: Array.isArray(w28savedPos)
+    && Math.abs(w28shipPosArr[0] - w28savedPos[0]) < 1e-6
+    && Math.abs(w28shipPosArr[1] - w28savedPos[1]) < 1e-6
+    && Math.abs(w28shipPosArr[2] - w28savedPos[2]) < 1e-6,
+  loadClosesPanel: w28panelClosedAfterLoad,
+  restoredToast: w28restoredToast,
+  pausedLoadRefused: w28pausedLoadRefused,
+  autosaveBerthOccupied: typeof w28autoMeta === 'string' && w28autoMeta !== '— empty berth —'
+    && w28autoMeta.includes('·') && w28autoMeta.includes('UU'),
+  slot1BerthOccupied: typeof w28slot1Meta === 'string' && w28slot1Meta !== '— empty berth —'
+    && w28slot1Meta.includes('·') && w28slot1Meta.includes('UU'),
+  emptyBerthsReadEmpty: w28emptyMeta23.every((t) => t === '— empty berth —'),
+  toggleCloses: w28toggleClosed,
+  dockedRefusesOpen: w28dockedRefused,
+  dockAutosavePresent: w28autosavePresent,
+  reopenedAfterUndock: w28reopened,
+  autoRowHasNoSave: w28autoSaveBtn === null,
+  loadButtonsAreReal: w28loadBtns.every((b) => b && b.tagName === 'BUTTON'),
+  occupiedLoadEnabled: w28loadBtns[0]?.disabled === false,
+  emptyLoadsDisabled: w28loadBtns[1]?.disabled === true && w28loadBtns[2]?.disabled === true,
+  escapeCloses: w28escapeClosed,
+};
+console.log('wave28 berth records:', JSON.stringify(w28Checks));
+if (!Object.values(w28Checks).every(Boolean)) { console.log('WAVE28 BERTH RECORDS FAIL'); errors++; }
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
