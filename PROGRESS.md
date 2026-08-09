@@ -1058,7 +1058,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   emissiveMap softened (0.6±0.18) so veins read THROUGH the surface.
   fleshLight 600 → 300 (pale base overexposed). Chandeliers tucked to
   radius 3 / y −1.5… — at 4.5 under an opaque bell they read as
-  floating balls again.
+  floating balls again. Tone pass (user: "too light; the throat ball
+  is too big"): epidermis 0xa8bfae → 0x55755f (mid-dark green);
+  beacon pearl r 1.5 → 0.9, glow sprite 12 → 7.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,

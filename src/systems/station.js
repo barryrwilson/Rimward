@@ -323,7 +323,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // veins showing through", never an overlay cage. tagPulse rides
   // emissiveIntensity: the vein network slowly brightens and dims.
   const skinMat = new THREE.MeshPhysicalMaterial({
-    color: 0xa8bfae, // pale green-nacre epidermis
+    color: 0x55755f, // mid-dark green epidermis — visible surface, not pale
     roughness: 0.38, metalness: 0,
     clearcoat: 0.55, clearcoatRoughness: 0.35, // wet-skin sheen
     emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.6,
@@ -443,7 +443,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // --- beacon: a small pearl lantern nestled at the flower's throat (where
   // the petals converge), modest glow — update() blinks it as always. No
   // floating ball above the silhouette.
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), beaconMat);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 10), beaconMat);
   beacon.position.set(0, 11, 0);
   group.add(beacon);
   const beaconGlowMat = new THREE.SpriteMaterial({
@@ -451,7 +451,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8,
   });
   const beaconGlow = new THREE.Sprite(beaconGlowMat);
-  beaconGlow.scale.setScalar(12);
+  beaconGlow.scale.setScalar(7);
   beaconGlow.position.set(0, 11, 0);
   group.add(beaconGlow);
 
