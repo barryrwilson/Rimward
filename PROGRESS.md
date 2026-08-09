@@ -1076,7 +1076,11 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   Activity: per-petal open/close flex on individual incommensurate
   frequencies (amp 0.06–0.13, hz 0.13–0.27 walks), whole-crown breath
   (0.03 @ 0.09 Hz) and a slow nod (ringGroup sway x 0.05 @ 0.05 Hz —
-  rotation.y RING_SPIN is +=, unaffected).
+  rotation.y RING_SPIN is +=, unaffected). Petal dynamics pass (user:
+  "curl more, a little slower"): geometry curl 5→8 / 6.5→10, cup
+  2.5→3.2 / 3.5→4.5 (petals hood and cup visibly); flex amps ~×1.4
+  (outer 0.11–0.17, inner 0.09–0.14) at ~⅔ the frequency (hz walks
+  0.09–0.18 / 0.11–0.18); crown breath 0.04@0.07, nod 0.06@0.04.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,

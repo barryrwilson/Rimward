@@ -409,8 +409,8 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   tagPulse(petalMat, { base: 0.35, amp: 0.12, hz: 0.09, phase: 1.1 }); // petal veins breathe, offset from skin/web
   const ringGroup = new THREE.Group();
   ringGroup.position.y = 4;
-  const outerGeo = makePetalGeometry({ length: 26, width: 11, curl: 5, cup: 2.5, segs: 14 });
-  const innerGeo = makePetalGeometry({ length: 17, width: 8, curl: 6.5, cup: 3.5, segs: 12 });
+  const outerGeo = makePetalGeometry({ length: 26, width: 11, curl: 8, cup: 3.2, segs: 14 });
+  const innerGeo = makePetalGeometry({ length: 17, width: 8, curl: 10, cup: 4.5, segs: 12 });
   const PETALS = 7;
   for (let i = 0; i < PETALS; i++) {
     // Deterministic 0..1 jitter per petal (no RNG import; stable per index).
@@ -422,7 +422,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     const petal = new THREE.Mesh(outerGeo, petalMat);
     petal.rotation.x = -0.55 - j1 * 0.18; // uneven openness
     petal.scale.set(1 + (j2 - 0.5) * 0.24, 1, 1 + (j1 - 0.5) * 0.2);
-    tagSway(petal, { axis: 'x', amp: 0.08 + j1 * 0.05, hz: 0.13 + j2 * 0.14, phase: i * 0.9 });
+    tagSway(petal, { axis: 'x', amp: 0.11 + j1 * 0.06, hz: 0.09 + j2 * 0.09, phase: i * 0.9 }); // deeper, slower flex
     tilt.add(petal);
     ringGroup.add(tilt);
     // Inner whorl — half-step offset, steeper, smaller.
@@ -431,12 +431,12 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     const sepal = new THREE.Mesh(innerGeo, petalMat);
     sepal.rotation.x = -0.95 - j2 * 0.15;
     sepal.scale.setScalar(0.9 + j1 * 0.2);
-    tagSway(sepal, { axis: 'x', amp: 0.06 + j2 * 0.04, hz: 0.17 + j1 * 0.1, phase: i * 1.3 + 0.6 });
+    tagSway(sepal, { axis: 'x', amp: 0.09 + j2 * 0.05, hz: 0.11 + j1 * 0.07, phase: i * 1.3 + 0.6 });
     tilt2.add(sepal);
     ringGroup.add(tilt2);
   }
-  tagBreath(ringGroup, { depth: 0.03, hz: 0.09 }); // the whole bloom slowly opens/closes
-  tagSway(ringGroup, { axis: 'x', amp: 0.05, hz: 0.05 }); // …and nods (rotation.y spin is +=, unaffected)
+  tagBreath(ringGroup, { depth: 0.04, hz: 0.07 }); // the whole bloom slowly opens/closes
+  tagSway(ringGroup, { axis: 'x', amp: 0.06, hz: 0.04 }); // …and nods (rotation.y spin is +=, unaffected)
   const crownHeart = new THREE.Mesh(new THREE.SphereGeometry(2.5, 14, 10), mats.gilt);
   ringGroup.add(crownHeart);
   group.add(ringGroup);
