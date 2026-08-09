@@ -1172,8 +1172,53 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   telegraph/fire/demand, the mesh swap is reference-safe across
   hud/combat/controls/traffic/wakes, no false-pass holes in the boot
   section; 1 P3 cosmetic, standing below).
+- Wave 32: pirate player-interest (user-reported: pirates instantly
+  attacked on every system entry — combat-averse players had no peace
+  outside dock). npc.js: INTEREST const { base 0.25, temperSpan 0.35,
+  cargoSpan 0.3, cargoNormUU 800, fearRepel 0.004, min 0.05, max 0.9 };
+  exported playerInterestChance(ctx, record) — 1 for alwaysHuntsPlayer,
+  else a lazy record.temper ??= (persisted per-record greed; old saves
+  roll it on first sight) and the clamped formula (manifest richness
+  draws, fear repels). playerInterestedIn rolls ONCE per instantiation
+  (ai.playerRolled/playerInterested). updateHunt player acquisition is
+  now gated on jumpGraceUntil (JUMP.graceSeconds 5 — 'no hostile intent
+  on arrival' finally covers TARGETING, not just the wave-30 demand)
+  AND the roll; losers of the roll hunt the nearest live trader or
+  loiter (the pre-existing prey loop — they go after other ships and
+  ignore you). Retaliation (review P1, both reviewers converged):
+  damage overrides the roll for the rest of the instantiation — a
+  pirate's only damage source IS the player (patrols loiter, NPC fire
+  hits only its target) — latching playerInterested + setTarget with a
+  freshly armed telegraph (§6.1 warning still precedes fire). Law-zone
+  pacifism holds (a zone-side pirate only routs); fleeing/disabled/
+  demanding ships never reach the latch. Apathy is no longer a death
+  sentence — the free-bounty/fear-spiral exploit is closed. world.js:
+  injectCollector stamps alwaysHuntsPlayer: true (the Ledger's
+  collector never rolls — he has your vector); npc.js spawnLiveShip
+  name-heals pre-wave-32 Dresk records via
+  ORIGIN_ARCS.ledgerDebt.collector.name. Boot test: every
+  engagement-dependent synthetic pirate flagged alwaysHuntsPlayer
+  (w30spawnPirate, w30lawRec, w31spawnQship — their passing IS the
+  interested-path regression; w31wren uses set-then-DELETE so the flag
+  never leaks into its save roundtrip), plus the wave-32 section:
+  chance exactness (0.425 / 0.9 max-clamp (one IEEE ulp under —
+  epsilon-asserted) / 0.05 min-clamp / 1 bypass, lazy temper sticky),
+  grace gate (null target + no hail during grace, demand after),
+  disinterest → trader preference (one-tick HIGH pin; never the
+  player), masked-by-apathy (a disinterested disguised Q-ship stays
+  covered, bracket shows the cover), collector bypass (self-heal +
+  chance 1 beats a HIGH pin), positive control (LOW pin — the dice can
+  say YES; closes the false-pass gap the code review flagged), temper
+  save roundtrip (Ninth Tooth, byte-exact), retaliation ×3 (apathetic
+  until scratched → latch + telegraph re-arm; NO latch inside the law
+  zone; masked Q-ship — facade and apathy die to the same bullet, the
+  qshipUnmasked milestone still fires exactly once). All seven RNG-pin
+  windows are save/try/finally/restore. PASS ×3 consecutive full runs.
+  Reviews: security FIX-FIRST → the retaliation override; code
+  FIX-FIRST → same P1 + the positive-control P3. Both closed same-wave;
+  remaining LOWs standing below.
 
-## Next round candidates (wave 32)
+## Next round candidates (wave 33)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
   docking still autosaves. Standing notes:
@@ -1234,4 +1279,20 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 - Wave-31 content note: Q-ships exist only in record banks generated
   under wave-31+ code — old saves' already-visited systems stay
   classic (no retrofit, the standing lazy-generation precedent).
+- Wave-32 standing (security LOWs, save-tamper only — documented not
+  patched, the standing precedent): a hand-edited non-numeric
+  record.temper survives the ??= (it only re-rolls null/undefined) and
+  NaNs playerInterestChance — the only consumer is a `< chance`
+  compare, so the record is permanently apathetic; no crash, no NaN
+  into fear/credits (a Number.isFinite re-roll closes it if ever
+  wanted). Rename-tamper can grant or strip alwaysHuntsPlayer through
+  the name-keyed Dresk heal — self-harm or trivially achievable
+  directions only; no procedural name pool collides with 'Collector
+  Dresk'.
+- Wave-32 design notes: the interest ROLL is per-instantiation (temper
+  persists, interest re-rolls each meeting) and retaliation is
+  instance-scoped (ai fields die on despawn) — a pirate you shot and
+  outran may roll cold next time; plays true, recorded as a decision.
+  Disinterested pirates under attack still degrade resolve → bargain/
+  capitulate/flee (bounty kills credit; they just shoot back now).
 - Polish debt: none standing. Boot test remains the gate.
