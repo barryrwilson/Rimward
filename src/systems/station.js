@@ -5,7 +5,7 @@ import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: auth
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
-import { isBeautiful, organicMaterials, makePetalGeometry, makeTendrilGeometry, makeOrganicGlowTexture, tagSway, tagBreath, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
+import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeTendrilGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -60,14 +60,18 @@ import { isBeautiful, organicMaterials, makePetalGeometry, makeTendrilGeometry, 
  * salvage, and recovery payouts are untouched.
  *
  * Wave 27: Beautiful Ones bloom station. When isBeautiful(def.faction) the
- * mesh is built by buildBeautifulStation — grown nacre lobes, an orchid-
- * petal crown (the ringGroup, spun by update as always), a tendril docking
- * arm, chandelier light clusters, and a pearl beacon lantern, all sculpted
- * from organic.js primitives. update() drives the tagged breath/sway parts
- * via animateOrganic (zero-allocation; frozen under reducedMotion). Cached
- * shared organic materials/textures are never disposed (teardownMesh skips
- * userData.shared); per-build materials/textures dispose exactly as before.
- * Every other faction's station path is byte-identical.
+ * mesh is built by buildBeautifulStation — a flower–starfish hybrid: a
+ * translucent, veined, breathing body with a pulsing mint heart, five
+ * starfish arms webbed by breathing membrane fans, the orchid-petal crown
+ * (the ringGroup, spun by update as always), a tendril docking arm,
+ * chandelier light clusters, and a pearl beacon lantern, all sculpted from
+ * organic.js primitives. update() drives the tagged breath/sway parts via
+ * animateOrganic (zero-allocation; frozen under reducedMotion) and the
+ * per-build tagPulse materials (skin/web opacity, heart emissive, per-arm
+ * vein overlays). Cached shared organic materials/textures are never
+ * disposed or pulse-tagged (teardownMesh skips userData.shared); per-build
+ * materials/textures dispose exactly as before. Every other faction's
+ * station path is byte-identical.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -255,23 +259,32 @@ function buildStationMesh(ctx, systemId, def) {
 
 /**
  * Wave 27: 'The Bloom' — a Beautiful Ones station, grown not built. A
- * vertical spindle of bulbous nacre lobes with gilt vein seams, an
- * orchid-petal crown (the rotating ringGroup), a tendril docking arm tipped
- * with a gilt cradle ring at roughly the old box arm's extent (dock logic
- * is position-only; the silhouette still reads as an approach lane), mint
- * chandelier light clusters under the lobes, a pearl beacon lantern, and
- * drifting spore-lantern motes. Overall envelope stays comparable to the
- * spindle station (~±45u vertical, ~35u radius) so arrival framing holds.
+ * flower–starfish hybrid: a translucent nacre body (breathing skin over a
+ * slow-pulsing mint heart) with five gently undulating starfish arms, each
+ * cloaked in an additive vein overlay that pulses traveling around the
+ * body, and membrane web-fans breathing in the gaps between arms. The
+ * orchid-petal crown (the rotating ringGroup) sits atop the body; a
+ * tendril docking arm tipped with a gilt cradle ring keeps the old box
+ * arm's extent (dock logic is position-only; the silhouette still reads
+ * as an approach lane); mint chandelier clusters hang beneath the arm
+ * roots; a pearl beacon lantern crowns the whole; spore-lantern motes
+ * drift on slow sway. Envelope stays ~30u radius, −16…+38 vertical so
+ * arrival framing holds.
  *
  * Shared cached organic materials (flesh/membrane/gilt/veinGlow) are used
- * directly for sculpted parts and NEVER disposed (teardownMesh skips
- * userData.shared). Light/beacon/glow materials and the organic glow
- * textures are per-build and dispose with the mesh exactly as the stock
- * station's do. update() spins ringGroup and pulses lightMat/beaconMat/
- * glowMat/beaconGlowMat unchanged; organicParts rides the same record.
+ * directly for sculpted parts and NEVER disposed or pulse-tagged
+ * (teardownMesh skips userData.shared). The translucent skin/web/heart and
+ * per-arm vein materials are PER-BUILD (pulse params live on
+ * material.userData, so pulsing requires a per-assembly material); their
+ * .map references the shared cached textures, which teardown skips while
+ * disposing the materials themselves. Light/beacon/glow materials and the
+ * organic glow textures are per-build too, disposing with the mesh exactly
+ * as the stock station's do. update() spins ringGroup and pulses lightMat/
+ * beaconMat/glowMat/beaconGlowMat unchanged; organicParts rides the same
+ * record.
  */
 function buildBeautifulStation(ctx, systemId, def) {
-  const mats = organicMaterials(); // cached shared set — never disposed
+  const mats = organicMaterials(); // cached shared set — never disposed, never pulse-tagged
   const group = new THREE.Group();
   group.name = 'beautiful-station';
   group.userData.organic = true;
@@ -280,40 +293,93 @@ function buildBeautifulStation(ctx, systemId, def) {
   const lightMat = new THREE.MeshBasicMaterial({ color: 0x7fe0a8 }); // chandeliers
   const beaconMat = new THREE.MeshBasicMaterial({ color: 0xfdf6ec }); // opal-white
 
-  // --- core spindle: a stack of five bulbous shell lobes, breathing as one
-  const lobeGroup = new THREE.Group();
-  const lobeGeo = new THREE.SphereGeometry(1, 24, 18);
-  // [y, radius] bottom → top, decreasing; slight per-lobe squash/offset so
-  // no two lobes read alike (grown, never machined).
-  const LOBES = [
-    [-26, 13.0], [-12, 11.0], [0, 9.0], [11, 7.0], [21, 5.0],
-  ];
-  for (let i = 0; i < LOBES.length; i++) {
-    const [y, r] = LOBES[i];
-    const lobe = new THREE.Mesh(lobeGeo, mats.flesh);
-    lobe.scale.set(r, r * 0.75, r * 0.88);
-    lobe.position.set((i % 2 ? -1 : 1) * 0.8, y, (i % 2 ? 1 : -1) * 0.6);
-    lobeGroup.add(lobe);
-  }
-  // Gilt vein seams hugging the lobe joints — thin, slightly irregular rings.
-  const SEAMS = [
-    [-19, 10.6], [-6, 8.9], [5.5, 7.1], [16, 5.5],
-  ];
-  for (let i = 0; i < SEAMS.length; i++) {
-    const [y, r] = SEAMS[i];
-    const seam = new THREE.Mesh(new THREE.TorusGeometry(r, 0.35, 6, 40), mats.gilt);
-    seam.rotation.x = Math.PI / 2 + (i % 2 ? 0.03 : -0.03);
-    seam.scale.set(1.02, 0.98, 1);
-    seam.position.y = y;
-    lobeGroup.add(seam);
-  }
-  tagBreath(lobeGroup, { depth: 0.01, hz: 0.25 });
-  group.add(lobeGroup);
+  // --- per-build translucent materials (dispose with the mesh; their maps
+  // are the shared cached textures, which teardown skips via userData.shared).
+  // tagPulse picks emissiveIntensity on MeshStandardMaterial, so skin/web
+  // flip the tagged prop to opacity — the fluctuation rides transparency.
+  const skinMat = new THREE.MeshStandardMaterial({
+    map: mats.flesh.map, // shared nacre texture
+    color: 0xf6ece0,
+    transparent: true, opacity: 0.5,
+    roughness: 0.35, metalness: 0,
+    emissive: ORGANIC.deepFlesh, emissiveIntensity: 0.35,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  tagPulse(skinMat, { base: 0.5, amp: 0.08, hz: 0.06 });
+  skinMat.userData.pulse.prop = 'opacity';
+  const webMat = new THREE.MeshStandardMaterial({
+    map: mats.flesh.map,
+    color: 0xdff5e6, // mint-tinged membrane
+    transparent: true, opacity: 0.38,
+    roughness: 0.35, metalness: 0,
+    emissive: ORGANIC.deepFlesh, emissiveIntensity: 0.35,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  tagPulse(webMat, { base: 0.38, amp: 0.07, hz: 0.075, phase: 2.1 }); // offset from skin — never syncs
+  webMat.userData.pulse.prop = 'opacity';
+  // The heart: emissive pulse visible through the translucent body.
+  const heartMat = new THREE.MeshStandardMaterial({
+    color: ORGANIC.mint, emissive: ORGANIC.mint, emissiveIntensity: 1.2,
+    roughness: 0.4,
+  });
+  tagPulse(heartMat, { base: 1.2, amp: 0.45, hz: 0.11 });
 
-  // --- petal crown: seven orchid-petal sails opening outward/up around the
-  // mid lobe. This is ringGroup — update() spins it exactly like the stock
-  // habitat ring.
+  // --- core body: a squashed translucent sphere, breathing as one. The
+  // squash lives on the mesh; tagBreath sits on a holder group because
+  // breath drives scale.setScalar (uniform) around its base.
+  const bodyGroup = new THREE.Group();
+  bodyGroup.position.y = 4;
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), skinMat);
+  body.scale.set(9, 6, 9);
+  bodyGroup.add(body);
+  const heart = new THREE.Mesh(new THREE.SphereGeometry(3.6, 18, 14), heartMat);
+  bodyGroup.add(heart);
+  tagBreath(bodyGroup, { depth: 0.02, hz: 0.18 });
+  group.add(bodyGroup);
+
+  // --- five starfish arms: one shared tapered/drooping geometry; each arm
+  // wears a slightly larger vein overlay in its own per-build additive
+  // material (black-background vein texture → only the veins show). The
+  // holders sway so the arms slowly undulate.
+  const armGeo = makeStarfishArmGeometry({ length: 20, rootRadius: 3.4, tipRadius: 0.4, droop: 6.5 });
+  for (let i = 0; i < 5; i++) {
+    const veinMat = new THREE.MeshBasicMaterial({
+      map: mats.veinGlow.map, // shared vein texture
+      color: 0xbfffe0,
+      transparent: true, opacity: 0.6,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    tagPulse(veinMat, { base: 0.6, amp: 0.22, hz: 0.09, phase: i * 1.3 }); // pulse travels arm to arm
+    const holder = new THREE.Group();
+    holder.rotation.y = (i * Math.PI * 2) / 5 + (i % 2 ? 0.05 : -0.04); // grown, never machined
+    const armMesh = new THREE.Mesh(armGeo, skinMat);
+    holder.add(armMesh);
+    const veins = new THREE.Mesh(armGeo, veinMat);
+    veins.scale.setScalar(1.03);
+    holder.add(veins);
+    tagSway(holder, { axis: 'x', amp: 0.02, hz: 0.09, phase: i * 1.1 });
+    group.add(holder);
+  }
+
+  // --- five membrane webs fanning between adjacent arms, breathing against
+  // them: the flower-skirt / starfish-webbing hybrid. One shared fan
+  // geometry, each rotated to bisect its gap.
+  const webGeo = makeWebGeometry({ inner: 3.5, outer: 16, spread: (Math.PI * 2 / 5) * 0.92, droop: 2.5, ruffle: 0.7 });
+  for (let i = 0; i < 5; i++) {
+    const web = new THREE.Mesh(webGeo, webMat);
+    web.rotation.y = ((i + 0.5) * Math.PI * 2) / 5;
+    web.position.y = 0.5;
+    tagBreath(web, { depth: 0.015, hz: 0.13, phase: i * 0.7 });
+    group.add(web);
+  }
+
+  // --- petal crown: seven orchid-petal sails opening outward/up, rooted
+  // inside the upper bell so the flower grows OUT of the starfish body (one
+  // creature, not two tiers). This is ringGroup — update() spins it exactly
+  // like the stock habitat ring.
   const ringGroup = new THREE.Group();
+  ringGroup.position.y = 7;
   const petalGeo = makePetalGeometry({ length: 26, width: 11, curl: 5, cup: 2.5, segs: 14 });
   const PETALS = 7;
   for (let i = 0; i < PETALS; i++) {
@@ -352,27 +418,28 @@ function buildBeautifulStation(ctx, systemId, def) {
     group.add(lamp);
   }
 
-  // --- chandelier light clusters hanging beneath three lobes (lightMat —
-  // update() pulses its color toward lightColor, as on every station).
-  const CLUSTERS = [
-    [6, -37, 4], [-8, -22, -5], [7, -10, 6],
-  ];
-  for (let c = 0; c < CLUSTERS.length; c++) {
-    const [cx, cy, cz] = CLUSTERS[c];
+  // --- chandelier light clusters hanging beneath the body rim / arm roots
+  // (lightMat — update() pulses its color toward lightColor, as on every
+  // station).
+  for (let c = 0; c < 3; c++) {
+    const ca = (c * Math.PI * 2) / 3 + 0.5;
+    const cx = Math.cos(ca) * 8;
+    const cz = Math.sin(ca) * 8;
+    const cy = -6.5 - c * 2;
     for (let i = 0; i < 5; i++) {
       const bulb = new THREE.Mesh(bulbGeo, lightMat);
       const s = 0.55 + ((i + c) % 3) * 0.22;
       bulb.scale.setScalar(s);
       bulb.position.set(
         cx + Math.cos(i * 2.4) * 1.6,
-        cy - i * 0.9,
+        cy - i * 1.0,
         cz + Math.sin(i * 2.4) * 1.6,
       );
       group.add(bulb);
     }
   }
 
-  // --- beacon: a pearl lantern sphere crowning the top lobe + glow sprite.
+  // --- beacon: a pearl lantern sphere crowning the crown + glow sprite.
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(2.4, 14, 10), beaconMat);
   beacon.position.set(0, 38, 0);
   group.add(beacon);
@@ -401,7 +468,7 @@ function buildBeautifulStation(ctx, systemId, def) {
     orbit.rotation.y = i * 2.4; // golden-ish spread
     const mote = new THREE.Mesh(bulbGeo, mats.veinGlow);
     mote.scale.setScalar(0.5 + (i % 3) * 0.18);
-    mote.position.set(22 + (i % 3) * 5, -20 + i * 5, 0);
+    mote.position.set(20 + (i % 3) * 4, -14 + i * 4, 0);
     orbit.add(mote);
     tagSway(orbit, { axis: 'y', amp: 0.6, hz: 0.07, phase: i * 0.8 });
     group.add(orbit);

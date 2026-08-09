@@ -981,7 +981,32 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   inline above and defended by new checks. npm run test:boot PASS ×7
   consecutive ×2 rounds (post-implementation, post-review-fix); npm run
   build clean (only the pre-existing >500 kB chunk warning).
-## Next round candidates (wave 29)
+- Wave 29: Bloom redesign (user-directed — the wave-27 station read as
+  solid stacked blobs; brief: flower × starfish, translucent, veined,
+  slowly pulsing). organic.js gains two sculpt primitives following the
+  toolkit conventions (indexed, normals+uvs): makeStarfishArmGeometry
+  (tapered drooping arm, mid bulge, lateral curl) and makeWebGeometry
+  (ruffled membrane sector fan). station.js buildBeautifulStation
+  REPLACES the nacre lobe stack + gilt seams with a living body:
+  translucent skinMat bell (per-build, opacity-pulsed at 0.06 Hz) over
+  a mint emissive heart (0.11 Hz heartbeat), five starfish arms each
+  cloaked in a per-build additive vein overlay (opacity pulse phased
+  i*1.3 so the pulse travels around the body), five webMat membrane
+  fans breathing between arms, chandeliers under the arm roots. The
+  7-petal orchid crown stays (user liked the petals), nested INTO the
+  upper bell (ringGroup y 16 → 7 after visual review — the raised
+  crown read as two disjoint tiers). tagPulse auto-selects
+  emissiveIntensity on MeshStandardMaterial; skin/web flip
+  userData.pulse.prop to 'opacity' so the fluctuation rides
+  transparency. Docking arm/cradle/lamp positions byte-identical;
+  return-record keys, envelope (~30u radius, −16…+38), and the
+  shared-material disposal contract all preserved (per-build materials
+  reference the shared cached maps, which teardownMesh skips).
+  Verified: npm run test:boot PASS (all wave-27 station checks green
+  unchanged) plus a live browser visual pass (system Chrome headless,
+  SwiftShader WebGL — the shared headless Chromium has no GL) framing
+  The Cradle from multiple angles.
+## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
   docking still autosaves. Standing notes:

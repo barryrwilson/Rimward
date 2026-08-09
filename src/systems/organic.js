@@ -388,6 +388,177 @@ export function makeTendrilGeometry({
   return geo;
 }
 
+/**
+ * Starfish arm: a tapered tube whose spine starts at the origin heading
+ * local +Z, bends monotonically downward (−Y) to ≈ −droop at the tip
+ * (z ≈ length), and carries one gentle lateral sinusoidal wave in X with
+ * amplitude ≈ curl * length. Ring radius lerps rootRadius → tipRadius
+ * with a slight mid-length bulge (r *= 1 + 0.15 * sin(π * t)) — the
+ * starfish-arm profile. Built ring-by-ring along the spine with frames
+ * from the analytic tangent (the bend is shallow, so a fixed up reference
+ * is stable). Indexed, uv-mapped (u along the arm, v around the ring).
+ *
+ *   length       root→tip extent along +Z (22)
+ *   rootRadius   ring radius at the root (3.2)
+ *   tipRadius    ring radius at the tip (0.35)
+ *   droop        downward −Y drop at the tip (7)
+ *   curl         lateral wave amplitude factor, × length (0.12)
+ *   radialSegs   ring resolution (10)
+ *   tubularSegs  length resolution (28)
+ */
+export function makeStarfishArmGeometry({
+  length = 22,
+  rootRadius = 3.2,
+  tipRadius = 0.35,
+  droop = 7,
+  curl = 0.12,
+  radialSegs = 10,
+  tubularSegs = 28,
+} = {}) {
+  const rings = tubularSegs + 1;
+  const ringVerts = radialSegs + 1; // duplicate seam for clean uvs
+  const vcount = rings * ringVerts;
+  const positions = new Float32Array(vcount * 3);
+  const uvs = new Float32Array(vcount * 2);
+  const indices = new (vcount > 65535 ? Uint32Array : Uint16Array)(tubularSegs * radialSegs * 6);
+
+  const curlAmp = curl * length;
+  for (let i = 0; i < rings; i++) {
+    const t = i / tubularSegs; // 0 root → 1 tip
+    // Spine: monotonic downward bend (t² keeps the root tangent flat along
+    // +Z) plus one half-wave of lateral curl in X.
+    const cx = curlAmp * Math.sin(Math.PI * t);
+    const cy = -droop * t * t;
+    const cz = t * length;
+    // Analytic spine tangent.
+    const tx = curlAmp * Math.PI * Math.cos(Math.PI * t);
+    const ty = -2 * droop * t;
+    const tz = length;
+    const tl = Math.hypot(tx, ty, tz);
+    const nx = tx / tl;
+    const ny = ty / tl;
+    const nz = tz / tl;
+    // Frame: side = normalize(cross(up, tangent)), up2 = cross(tangent, side).
+    // Tangent stays near +Z so the (0,1,0) reference never degenerates.
+    let sx = nz; // cross((0,1,0),(nx,ny,nz)) = (nz, 0, -nx)
+    let sz = -nx;
+    const sl = Math.hypot(sx, sz);
+    sx /= sl;
+    sz /= sl;
+    const ux = ny * sz - nz * 0; // cross(tangent, side) with side.y = 0
+    const uy = nz * sx - nx * sz;
+    const uz = -ny * sx;
+    // Radius: root→tip lerp with a slight mid-length bulge.
+    const r = (rootRadius + (tipRadius - rootRadius) * t) * (1 + 0.15 * Math.sin(Math.PI * t));
+    for (let j = 0; j < ringVerts; j++) {
+      const v = j / radialSegs;
+      const a = v * Math.PI * 2;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const idx = i * ringVerts + j;
+      positions[idx * 3] = cx + (ca * sx + sa * ux) * r;
+      positions[idx * 3 + 1] = cy + sa * uy * r;
+      positions[idx * 3 + 2] = cz + (ca * sz + sa * uz) * r;
+      uvs[idx * 2] = t;
+      uvs[idx * 2 + 1] = v;
+    }
+  }
+
+  let k = 0;
+  for (let i = 0; i < tubularSegs; i++) {
+    for (let j = 0; j < radialSegs; j++) {
+      const a = i * ringVerts + j;
+      const b = (i + 1) * ringVerts + j;
+      const c = i * ringVerts + j + 1;
+      const d = (i + 1) * ringVerts + j + 1;
+      indices[k++] = a;
+      indices[k++] = b;
+      indices[k++] = c;
+      indices[k++] = b;
+      indices[k++] = d;
+      indices[k++] = c;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Web membrane: a fan/sector in the local XZ plane, centered on the +Z
+ * axis, spanning `spread` radians with radius inner → outer. The surface
+ * dips from 0 at the inner edge to −droop at the outer rim (radial t^1.5
+ * so the inner margin stays level) and carries a gentle sinusoidal ruffle
+ * (~2 waves across the arc) that grows toward the rim — grown membrane,
+ * not machined. Indexed polar grid, uv-mapped (u along the radius, v
+ * across the arc); pair with a DoubleSide material.
+ *
+ *   inner   inner radius (4)
+ *   outer   outer radius / rim (20)
+ *   spread  angular span in radians, centered on +Z (π/5)
+ *   droop   downward −Y dip at the rim (2.5)
+ *   ruffle  ruffle amplitude at the rim (0.6)
+ *   segs    grid resolution per axis (12)
+ */
+export function makeWebGeometry({
+  inner = 4,
+  outer = 20,
+  spread = Math.PI / 5,
+  droop = 2.5,
+  ruffle = 0.6,
+  segs = 12,
+} = {}) {
+  const n = segs + 1;
+  const vcount = n * n;
+  const positions = new Float32Array(vcount * 3);
+  const uvs = new Float32Array(vcount * 2);
+  const indices = new (vcount > 65535 ? Uint32Array : Uint16Array)(segs * segs * 6);
+
+  for (let i = 0; i < n; i++) {
+    const t = i / segs; // 0 inner → 1 rim
+    const radius = inner + (outer - inner) * t;
+    const dip = -droop * Math.pow(t, 1.5);
+    for (let j = 0; j < n; j++) {
+      const v = j / segs; // 0..1 across the arc
+      const angle = (v - 0.5) * spread; // -spread/2..+spread/2 off +Z
+      const idx = i * n + j;
+      positions[idx * 3] = radius * Math.sin(angle);
+      // Ruffle: ~2 waves across the arc, amplitude growing with radial t.
+      positions[idx * 3 + 1] = dip + ruffle * Math.sin(v * Math.PI * 4) * t;
+      positions[idx * 3 + 2] = radius * Math.cos(angle);
+      uvs[idx * 2] = t;
+      uvs[idx * 2 + 1] = v;
+    }
+  }
+
+  let k = 0;
+  for (let i = 0; i < segs; i++) {
+    for (let j = 0; j < segs; j++) {
+      const a = i * n + j;
+      const b = (i + 1) * n + j;
+      const c = i * n + j + 1;
+      const d = (i + 1) * n + j + 1;
+      indices[k++] = a;
+      indices[k++] = b;
+      indices[k++] = c;
+      indices[k++] = b;
+      indices[k++] = d;
+      indices[k++] = c;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
+  geo.computeVertexNormals();
+  return geo;
+}
+
 // ---------------------------------------------------------------------------
 // Shared materials (cached per variant, NEVER disposed)
 // ---------------------------------------------------------------------------
