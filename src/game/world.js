@@ -536,18 +536,18 @@ function injectCollector(ctx) {
   const gate = gatePoint(def);
   const planet = planetPoint(def);
   const bank = ensureBank(ctx, sysId);
-  bank.push(
-    makeRecord(ctx, {
-      name: col.name,
-      classKey: col.classKey,
-      faction: col.faction,
-      role: 'pirate',
-      route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
-      cargo: col.cargo.map((c) => ({ commodity: c.commodity, units: c.units })),
-      bounty: col.bounty,
-      system: sysId,
-    }),
-  );
+  const rec = makeRecord(ctx, {
+    name: col.name,
+    classKey: col.classKey,
+    faction: col.faction,
+    role: 'pirate',
+    route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)],
+    cargo: col.cargo.map((c) => ({ commodity: c.commodity, units: c.units })),
+    bounty: col.bounty,
+    system: sysId,
+  });
+  rec.alwaysHuntsPlayer = true; // wave 32: the collector never rolls for interest — he has your vector (npc.js playerInterestChance)
+  bank.push(rec);
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   resolveBand,
   cargoValue,
   HIDDEN_MOUNTS,
+  ORIGIN_ARCS,
 } from '../game/state.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod } from '../game/pods.js';
@@ -100,6 +101,23 @@ const FIRE_FACE_DOT = 0.92; // must roughly face target to fire
 const FLASH_LIFE = 0.6; // s debris flash on destruction
 const DEMAND_COOLDOWN = 300; // s before the same pirate record may demand the player again (record.demandedAt)
 const WAKE_SITE_DISTANCE = 1400; // = U.DEINSTANTIATE_RANGE (state.js; traffic.js despawns there) — the wake site sits beyond the fold
+
+// Player-interest model (wave 32): pirates no longer lock the player on
+// sight — always-on pursuit read as instant attack on every system entry.
+// Each live pirate decides ONCE per instantiation whether the player is
+// worth its attention; the rest hunt the lane's traders or loiter. The roll
+// is biased by the record's persisted temper (greed), the player's current
+// manifest, and fear (they have heard of you). Injected hunters
+// (record.alwaysHuntsPlayer — the Ledger's collector) never roll.
+const INTEREST = {
+  base: 0.25, // a drifter with an empty hold is still sometimes worth a look
+  temperSpan: 0.35, // per-record greed weight — record.temper (persisted, lazy-rolled)
+  cargoSpan: 0.3, // a rich manifest draws the lane's eyes
+  cargoNormUU: 800, // manifest value that maxes the draw
+  fearRepel: 0.004, // per fear point — your name precedes you
+  min: 0.05, // the rim keeps its teeth: never fully safe
+  max: 0.9, // and never a certainty
+};
 
 let nextShipId = 1;
 
@@ -492,6 +510,8 @@ function makeAi(ctx, record, startPos) {
     demandOutcome: null, // stamped by hail.js: 'paid'|'bluffed'|'refused'|'failed'
     demandPeaceAt: 0, // demand open time; a player hit after this voids the parley
     resolveBoost: 0, // wave 30: failed-bluff sting (hail.js showTeeth); see updateResolve for lifecycle
+    playerRolled: false, // wave 32: the interest decision is made once per instantiation
+    playerInterested: false,
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
@@ -554,6 +574,11 @@ export function spawnLiveShip(ctx, record, position) {
     record.resolve = Math.min(95, (record.resolve ?? 55) + 15);
     state.resolve = record.resolve;
   }
+  // Wave 32: the Ledger's collector never rolls for interest — he has your
+  // vector. Name-keyed so saves written before alwaysHuntsPlayer existed
+  // self-heal on his next instantiation (world.js injectCollector stamps
+  // the flag at injection for new records).
+  if (record.name === ORIGIN_ARCS.ledgerDebt.collector.name) record.alwaysHuntsPlayer = true;
   const live = {
     id: record.id ?? `npc-${nextShipId++}`,
     record,
@@ -901,6 +926,31 @@ function engageTarget(ctx, live, dt, now, targetPos) {
   }
 }
 
+/**
+ * The chance a pirate takes an interest in the player (wave 32). Reads the
+ * record's persisted temper and live world state; the ONLY write is the
+ * lazy temper stamp (??= — old saves roll it on first sight, the spawnLiveShip
+ * rematch write-back discipline). Exported for the boot test.
+ */
+export function playerInterestChance(ctx, record) {
+  if (record?.alwaysHuntsPlayer === true) return 1; // injected hunters (the Ledger's collector)
+  if (record) record.temper ??= Math.random(); // per-record greed — rolled once ever, persisted
+  const cargo = clamp01(cargoValue(ctx.cargo, ctx.world.prices) / INTEREST.cargoNormUU);
+  const p = INTEREST.base + (record?.temper ?? 0.5) * INTEREST.temperSpan
+    + cargo * INTEREST.cargoSpan - ctx.world.fear * INTEREST.fearRepel;
+  return Math.min(INTEREST.max, Math.max(INTEREST.min, p));
+}
+
+/** Roll once per instantiation whether this pirate hunts the player. */
+function playerInterestedIn(ctx, live) {
+  const ai = live.ai;
+  if (!ai.playerRolled) {
+    ai.playerRolled = true;
+    ai.playerInterested = Math.random() < playerInterestChance(ctx, live.record);
+  }
+  return ai.playerInterested;
+}
+
 function updateHunt(ctx, live, dt, now) {
   const ai = live.ai;
   const station = ctx.config.world.stationPosition;
@@ -931,15 +981,20 @@ function updateHunt(ctx, live, dt, now) {
     else if (live.object.position.distanceTo(targetPos) >= U.ENCOUNTER_BUBBLE) breakOff(ai);
   }
 
-  // Acquire: player first, else nearest live trader inside the bubble.
+  // Acquire (wave 32): the interest roll decides whether this pirate bothers
+  // with the player at all — the rest hunt the lane's traders. Arrival grace
+  // shields the player from the roll itself: JUMP.graceSeconds' 'no hostile
+  // intent on arrival' now covers targeting, not just the wave-30 demand.
   if (!ai.target) {
     const pObj = ctx.ship.object;
     if (
       pObj &&
       !ctx.flags.docked &&
+      now >= (ctx.world.jumpGraceUntil ?? 0) &&
       pObj.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
       live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
-      live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE
+      live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE &&
+      playerInterestedIn(ctx, live)
     ) {
       setTarget(ai, 'player');
       targetPos = pObj.position;

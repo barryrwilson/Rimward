@@ -6481,6 +6481,10 @@ const w30spawnPirate = (suffix, personality, offset) => {
   const rec = {
     id: `wave30-${suffix}`, name: `Wave30 ${suffix}`, classKey: 'cutter',
     faction: 'redledger', role: 'pirate', resolve: 50, personality,
+    // Wave 32: pin the interest roll. Every wave-30 leg requires engagement;
+    // alwaysHuntsPlayer reproduces the pre-wave-32 always-lock behavior
+    // exactly (chance 1, no temper stamp), so the dice can't skip a demand.
+    alwaysHuntsPlayer: true,
   };
   const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x + offset[0], p.y + offset[1], p.z + offset[2]));
   ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
@@ -6882,6 +6886,10 @@ w30parkHostiles('wave30 hostiles parked (law zone)');
 const w30lawRec = {
   id: 'wave30-law', name: 'Wave30 law', classKey: 'cutter',
   faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
+  // Wave 32: this leg tests the LAW guard — with the interest roll live, a
+  // disinterest roll would pass every check trivially. The flag guarantees
+  // the pirate WANTS the player, so only the zone keeps it honest.
+  alwaysHuntsPlayer: true,
 };
 const p6law = spawnLiveShip(ctx, w30lawRec, new THREE.Vector3(w30stPos[0], w30stPos[1], w30stPos[2] + 100)); // inside the 300u zone
 ctx.ships.push(p6law);
@@ -6952,6 +6960,12 @@ const w31spawnQship = (suffix, coverName, pos) => {
     id: `wave31-${suffix}`, name: `Wave31 ${suffix}`, classKey: 'cutter',
     faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
     qship: true, coverClass: 'freighter', coverName, coverFaction: 'freehold',
+    // Wave 32: leg d's reveal-on-acquire needs engagement — pin the interest
+    // roll. Inert in legs c/e: both ships sit inside the 300u law zone there
+    // (player z+150 with q1 z-50; q3 z+100 with the player at the z+400
+    // perch — the live ship is in-zone either way), so the law guard blocks
+    // acquisition before the roll is ever consulted.
+    alwaysHuntsPlayer: true,
   };
   const live = spawnLiveShip(ctx, rec, new THREE.Vector3(pos[0], pos[1], pos[2]));
   ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
@@ -7203,6 +7217,13 @@ tick(3, 'wave31 q3 cleanup');
 const w31wren = w31bankB.find((r) => r.role === 'pirate' && r.name === 'Gallows Wren') ?? null;
 if (w31wren && w31wren.revealed !== true) {
   if (w31wren.state === 'dead' || w31wren.state === 'captured') w31wren.state = 'enroute'; // the wave-12 resurrection idiom
+  // Wave 32: guarantee the interest roll for this leg. Set-then-delete was
+  // chosen over a Math.random pin: the reveal window runs up to 30 ticks and
+  // a constant pin would feed every other consumer in those frames (steer,
+  // loiter, resolve), while the flag scopes the guarantee to exactly this
+  // record. It is deleted below BEFORE the dock autosave, so the save
+  // roundtrip that follows stays pristine (no alwaysHuntsPlayer rides it).
+  w31wren.alwaysHuntsPlayer = true;
   const w31wrenLive = spawnLiveShip(ctx, w31wren,
     new THREE.Vector3(ctx.ship.object.position.x + 250, ctx.ship.object.position.y, ctx.ship.object.position.z));
   ctx.ships.push(w31wrenLive);
@@ -7212,6 +7233,7 @@ if (w31wren && w31wren.revealed !== true) {
   if (w31wi >= 0) ctx.ships.splice(w31wi, 1);
   removeLiveShip(ctx, w31wrenLive);
   w31wren.live = false;
+  delete w31wren.alwaysHuntsPlayer; // wave 32: leg-scoped — must not ride the dock autosave below
   tick(3, 'wave31 wren cleanup'); // combat flag clears; any demand card closes on the despawn path
 }
 const w31wrenRevealed = w31wren?.revealed === true;
@@ -7281,6 +7303,259 @@ console.log('wave31 plain-pirate bracket:', JSON.stringify(w31plainChecks), `met
 if (!Object.values(w31plainChecks).every(Boolean)) { console.log('WAVE31 PLAIN BRACKET FAIL'); errors++; }
 w30removeShip(w31plain);
 tick(3, 'wave31 plain cleanup');
+
+// ---- Wave 32: pirate player-interest — temper, grace, apathy, Dresk ------
+// The wave-32 contract: playerInterestChance (npc.js, exported) prices a
+// pirate's attention from the record's persisted temper (lazy ??= stamp),
+// the player's manifest value, and fear, clamped [0.05, 0.9]; each live
+// pirate rolls ONCE per instantiation (ai.playerRolled/playerInterested)
+// and only an interested pirate may acquire the player — the rest fall
+// through to the nearest-trader loop or loiter. Jump grace (jumpGraceUntil)
+// now shields TARGETING, not just the wave-30 demand hail. record.
+// alwaysHuntsPlayer skips the roll (chance 1); spawnLiveShip self-heals the
+// flag onto any record named 'Collector Dresk' for pre-wave-32 saves, and
+// world.js injectCollector stamps it on new Dresk records.
+//
+// REGRESSION NOTE (the brief's leg f): the interested path needs NO leg of
+// its own — the wave-30 and wave-31 sections above now run with
+// alwaysHuntsPlayer pinned on every synthetic pirate (w30spawnPirate,
+// w30lawRec, w31spawnQship, the w31wren window), so their passing IS the
+// pre-wave-32 engagement regression, dice-free. This section proves only
+// the NEW behavior: the chance math, the grace gate, apathy, and the
+// collector bypass. Run on the continuing run's end state (freehold,
+// undocked, traffic frozen by the wave-31 legs — every bank record carries
+// live=true, so nothing ambient instantiates mid-leg; leg e's death-restore
+// heals those flags wholesale at the end).
+const { playerInterestChance: w32interestChance } = await import('../src/systems/npc.js'); // scoped import (the wave-31 FACTIONS precedent) — the header npc.js destructure predates this export
+const w32grace0 = ctx.world.jumpGraceUntil ?? 0; // section-start grace state, restored at the end
+// Spawn offset from the player, the w30spawnPirate pattern — record literal
+// supplied per leg so each carries exactly the fields under test.
+const w32spawn = (rec, offset) => {
+  const p = ctx.ship.object.position;
+  const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x + offset[0], p.y + offset[1], p.z + offset[2]));
+  ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
+  return live;
+};
+
+// -- a. Chance exactness: pure calls, no ticks. Cargo/fear are read live, --
+// so poke and restore them around the calls; the manifest-value check makes
+// a setup break fail honestly instead of silently reading the wrong clamp. -
+const w32cargoSave = ctx.cargo.splice(0, ctx.cargo.length);
+const w32fearSave = ctx.world.fear;
+ctx.world.fear = 0;
+const w32aRec1 = { temper: 0.5 }; // 0.25 + 0.5×0.35 = 0.425
+const w32aP1 = w32interestChance(ctx, w32aRec1);
+ctx.cargo.push({ commodity: 'provisions', units: 500 }); // TEST SETUP: a rich manifest — must clear 1600 UU
+const w32aManifest = cargoValue(ctx.cargo, ctx.world.prices);
+const w32aRec2 = { temper: 1 }; // 0.25 + 0.35 + 0.3 = 0.9 → the max clamp
+const w32aP2 = w32interestChance(ctx, w32aRec2);
+ctx.cargo.length = 0;
+ctx.world.fear = 100; // 0.25 − 100×0.004 < 0 → the min clamp
+const w32aRec3 = { temper: 0 };
+const w32aP3 = w32interestChance(ctx, w32aRec3);
+ctx.world.fear = w32fearSave;
+ctx.cargo.push(...w32cargoSave); // restore the wave-30 manifest exactly
+const w32aRec4 = { alwaysHuntsPlayer: true };
+const w32aP4 = w32interestChance(ctx, w32aRec4);
+const w32aRec5 = {}; // flagless: the lazy temper stamp
+const w32aP5a = w32interestChance(ctx, w32aRec5);
+const w32aT5 = w32aRec5.temper;
+const w32aP5b = w32interestChance(ctx, w32aRec5);
+const w32chanceChecks = {
+  temperHalfExact: Math.abs(w32aP1 - 0.425) < 1e-12, // 0.25 + 0.5×0.35, float-safe "exact"
+  manifestRichEnough: w32aManifest >= 1600,
+  temperOneMaxClamp: Math.abs(w32aP2 - 0.9) < 1e-12, // 0.25+0.35+0.3 = 0.9 (the clamp boundary); IEEE lands one ulp under, so epsilon like the 0.425 check
+  temperZeroFearMinClamp: w32aP3 === 0.05,
+  alwaysHuntsIsOne: w32aP4 === 1 && !('temper' in w32aRec4), // the early return never stamps
+  lazyTemperStamped: Number.isFinite(w32aT5) && w32aT5 >= 0 && w32aT5 <= 1,
+  lazyTemperSticky: w32aRec5.temper === w32aT5 && w32aP5b === w32aP5a,
+};
+console.log('wave32 interest chance:', JSON.stringify(w32chanceChecks), `p=${[w32aP1, w32aP2, w32aP3, w32aP4].join('|')}`);
+if (!Object.values(w32chanceChecks).every(Boolean)) { console.log('WAVE32 INTEREST CHANCE FAIL'); errors++; }
+
+// -- b. Grace gate: a GUARANTEED-interested pirate 250u off the player (the -
+// wave-30 geometry, both far outside the law zone at the calm point) cannot
+// acquire while jumpGraceUntil stands — no target, no hail, no intent — and
+// acquires + opens the wave-30 demand hail within ~10 ticks of grace expiry.
+w28calm('wave32 calm (grace gate)');
+w31freezeTraffic([]); // nothing ambient mid-leg (bank records already carry live=true; this clears any live strays)
+ctx.world.jumpGraceUntil = ctx.world.time + 2; // TEST SETUP: grace active for the whole 60-tick hold
+const w32b = w32spawn({
+  id: 'wave32-grace', name: 'Wave32 Grace', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
+  alwaysHuntsPlayer: true, // the leg tests GRACE, never the dice
+}, [250, 0, 0]);
+let w32bTargetInGrace = null;
+const w32bGraceEvs = [];
+for (let i = 0; i < 60; i++) {
+  tick(1, 'wave32 grace hold');
+  w32bGraceEvs.push(...ctx.lastEvents);
+  if (w32b.ai.target != null) w32bTargetInGrace = w32b.ai.target;
+}
+const w32bIntentInGrace = w32b.ai.intent;
+ctx.world.jumpGraceUntil = 0; // grace expires — acquisition must land now
+const w32bAfterEvs = [];
+for (let i = 0; i < 10; i++) { tick(1, 'wave32 grace expired'); w32bAfterEvs.push(...ctx.lastEvents); }
+const w32graceChecks = {
+  targetStaysNull: w32bTargetInGrace === null, // sampled every tick of the hold
+  noHailDuringGrace: !w32bGraceEvs.some((e) => e.type === 'hailOpened' && e.ship === w32b),
+  noIntentDuringGrace: w32bIntentInGrace === false,
+  acquiresAfterGrace: w32b.ai.target === 'player',
+  demandHailAfterGrace: w32bAfterEvs.some((e) => e.type === 'hailOpened' && e.ship === w32b),
+};
+console.log('wave32 grace gate:', JSON.stringify(w32graceChecks));
+if (!Object.values(w32graceChecks).every(Boolean)) { console.log('WAVE32 GRACE GATE FAIL'); errors++; }
+w30removeShip(w32b); // the demand card closes on the despawn path
+tick(3, 'wave32 grace cleanup');
+
+// -- c1. Disinterest + trader preference: temper preset 0 (the lazy ??= -----
+// never fires) and Math.random pinned HIGH for exactly the roll frame — the
+// once-per-instantiation roll fails (max chance 0.9 < 0.999999). Wrapped as
+// save/override/restore around ONE tick: the other consumers that frame
+// tolerate a constant, and the rollFailed check proves the pin framed the
+// roll. A live synthetic trader in range gives the fall-through loop prey. -
+ctx.world.jumpGraceUntil = 0; // the roll frame's preconditions hold on tick one
+const w32c1t = w32spawn({
+  id: 'wave32-c1-prey', name: 'Wave32 Prey', classKey: 'freighter',
+  faction: 'freehold', role: 'trader', resolve: 50,
+}, [400, 0, 0]); // 150u past the pirate — inside its 800u bubble, outside the law zone
+const w32c1 = w32spawn({
+  id: 'wave32-c1', name: 'Wave32 Apathy', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0,
+}, [250, 0, 0]);
+const w32rng1 = Math.random;
+Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame
+tick(1, 'wave32 c1 interest roll');
+Math.random = w32rng1;
+const w32c1RolledOut = w32c1.ai.playerRolled === true && w32c1.ai.playerInterested === false;
+let w32c1PlayerEver = false;
+const w32c1Evs = [];
+for (let i = 0; i < 59; i++) { // 60 ticks total including the roll frame
+  tick(1, 'wave32 c1 trader hunt');
+  w32c1Evs.push(...ctx.lastEvents);
+  if (w32c1.ai.target === 'player') w32c1PlayerEver = true;
+}
+const w32apathyChecks = {
+  rollPinnedAndFailed: w32c1RolledOut,
+  targetIsTheTrader: w32c1.ai.target === w32c1t, // the live trader ship, not its record
+  neverTargetsPlayer: !w32c1PlayerEver && w32c1.ai.target !== 'player',
+  noHailFromPirate: !w32c1Evs.some((e) => e.type === 'hailOpened' && e.ship === w32c1),
+};
+console.log('wave32 disinterest trader preference:', JSON.stringify(w32apathyChecks));
+if (!Object.values(w32apathyChecks).every(Boolean)) { console.log('WAVE32 DISINTEREST FAIL'); errors++; }
+w30removeShip(w32c1);
+w30removeShip(w32c1t);
+tick(3, 'wave32 c1 cleanup');
+
+// -- c2. Masked by apathy: a disguised Q-ship (the wave-31 cover fields, NO -
+// alwaysHuntsPlayer) pinned disinterested with NO traders in range never
+// acquires — the wave-31 reveal triggers (acquisition / scratch) never fire,
+// the bracket keeps reading the cover identity (scanner poked 0, the wave-31
+// leg-c pattern: a pierce read would prove nothing about the facade). ------
+ctx.ship.object.quaternion.identity(); // nose -Z: the bracket reads dead ahead (wave-31 leg-c cadence)
+const w32c2pos = [ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z - 200]; // dead ahead, inside the bubble
+const w32c2Rec = {
+  id: 'wave32-c2', name: 'Wave32 Shrouded', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, temper: 0,
+  qship: true, coverClass: 'freighter', coverName: 'Wave32 Masque', coverFaction: 'freehold',
+};
+const w32c2 = w32spawn(w32c2Rec, [0, 0, -200]);
+const w32rng2 = Math.random;
+Math.random = () => 0.999999; // pinned HIGH for exactly the roll frame
+tick(1, 'wave32 c2 interest roll');
+Math.random = w32rng2;
+const w32c2RolledOut = w32c2.ai.playerRolled === true && w32c2.ai.playerInterested === false;
+let w32c2TargetEver = null;
+for (let i = 0; i < 59; i++) {
+  w32c2.object.position.set(w32c2pos[0], w32c2pos[1], w32c2pos[2]); // re-pin against loiter drift (wave-31 leg-c cadence)
+  tick(1, 'wave32 c2 apathy hold');
+  if (w32c2.ai.target != null) w32c2TargetEver = w32c2.ai.target;
+}
+const w32scannerSave = ctx.world.scanner;
+ctx.world.scanner = 0; // TEST SETUP poke: read the masked branch — the facade must still be on
+ctx.targets.current = w32c2;
+for (let i = 0; i < 90; i++) { // camera lerp + text windows (the wave-31 leg-c cadence)
+  w32c2.object.position.set(w32c2pos[0], w32c2pos[1], w32c2pos[2]);
+  tick(1, 'wave32 c2 bracket cover');
+}
+const w32c2Text = w31bracketText();
+ctx.targets.current = null;
+ctx.world.scanner = w32scannerSave; // restore the wave-31 leg-a state
+const w32maskedChecks = {
+  rollPinnedAndFailed: w32c2RolledOut,
+  neverAcquires: w32c2TargetEver === null && w32c2.ai.target == null,
+  staysMasked: !('revealed' in w32c2Rec),
+  bracketShowsCover: w32c2Text.shown && w32c2Text.name === 'Wave32 Masque',
+  bracketCoverFaction: (w32c2Text.meta ?? '').startsWith(w31FACTIONS.freehold.name + ' · '),
+  bracketNoTell: !(w32c2Text.meta ?? '').includes('CONCEALED MOUNTS'),
+};
+console.log('wave32 masked by apathy:', JSON.stringify(w32maskedChecks), `bracket=${JSON.stringify(w32c2Text)}`);
+if (!Object.values(w32maskedChecks).every(Boolean)) { console.log('WAVE32 MASKED BY APATHY FAIL'); errors++; }
+w30removeShip(w32c2);
+tick(3, 'wave32 c2 cleanup');
+
+// -- d. Collector bypass: a record named 'Collector Dresk' WITHOUT the flag -
+// gets alwaysHuntsPlayer stamped by spawnLiveShip (the pre-wave-32 save
+// self-heal), playerInterestChance returns 1, and with Math.random pinned
+// HIGH he still acquires the player on the roll frame (grace 0, outside the
+// law zone, 250u — the wave-30 geometry). ----------------------------------
+ctx.world.jumpGraceUntil = 0;
+const w32dRec = {
+  id: 'wave32-dresk', name: ORIGIN_ARCS.ledgerDebt.collector.name,
+  classKey: ORIGIN_ARCS.ledgerDebt.collector.classKey,
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
+}; // NO alwaysHuntsPlayer — the spawn self-heal must supply it
+const w32d = w32spawn(w32dRec, [250, 0, 0]);
+const w32dStamped = w32dRec.alwaysHuntsPlayer === true;
+const w32dChanceOne = w32interestChance(ctx, w32dRec) === 1;
+const w32rng3 = Math.random;
+Math.random = () => 0.999999; // pinned HIGH for the roll frame — chance 1 beats the pin
+tick(1, 'wave32 dresk bypass');
+Math.random = w32rng3;
+const w32dreskChecks = {
+  selfHealStampsFlag: w32dStamped,
+  chanceIsOne: w32dChanceOne,
+  interestedDespiteHighPin: w32d.ai.playerRolled === true && w32d.ai.playerInterested === true,
+  acquiresPlayer: w32d.ai.target === 'player',
+};
+console.log('wave32 collector bypass:', JSON.stringify(w32dreskChecks));
+if (!Object.values(w32dreskChecks).every(Boolean)) { console.log('WAVE32 COLLECTOR BYPASS FAIL'); errors++; }
+w30removeShip(w32d); // the demand card (it opened on the acquisition frame) closes on the despawn path
+tick(3, 'wave32 dresk cleanup');
+
+// -- e. Temper roundtrip: a stamped temper rides the real dock autosave and -
+// the death-restore (the wave-31 f discipline) byte-identical. 0.5 survives
+// JSON exactly; the corrupt-then-restore proves the save — not memory — wins.
+// Ninth Tooth is the authored even-index freehold pirate: always banked,
+// never spliced (deaths flip rec.state only). ------------------------------
+const w32tooth = ctx.world.records.find((r) => r.role === 'pirate' && r.name === 'Ninth Tooth') ?? null;
+if (w32tooth) w32tooth.temper = 0.5; // TEST SETUP: deterministic stamp — the lazy roll would be Math.random-shaped
+w30parkHostiles('wave32 hostiles parked (temper save)');
+dockAtCurrentStation('wave32 dock freehold (temper save)'); // 'docked' fires trySave
+let w32snap = null;
+for (let i = 0; i < 60 * 15 && !w32snap; i++) { // the wave-30 save-wait discipline
+  for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
+  tick(1, 'wave32 temper save wait');
+  try {
+    const s = JSON.parse(store.get('rimward-save-v1') ?? 'null');
+    if ((s?.world?.recordBanks?.freehold ?? []).some((r) => r.name === 'Ninth Tooth' && r.temper === 0.5)) w32snap = s;
+  } catch { /* keep waiting */ }
+}
+if (w32tooth) w32tooth.temper = 0.123; // corrupt in memory; the restore must win
+ctx.emit('playerDestroyed', {});
+tick(2, 'wave32 death consumed (temper restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+tick(2, 'wave32 temper restore settle');
+const w32toothRestored = ctx.world.records.find((r) => r.role === 'pirate' && r.name === 'Ninth Tooth') ?? null;
+const w32temperChecks = {
+  toothFound: !!w32tooth,
+  saveCarriesTemper: w32snap !== null, // the poll's predicate already gates the 0.5 stamp
+  temperRestoredExact: w32toothRestored?.temper === 0.5,
+};
+console.log('wave32 temper save roundtrip:', JSON.stringify(w32temperChecks));
+if (!Object.values(w32temperChecks).every(Boolean)) { console.log('WAVE32 TEMPER ROUNDTRIP FAIL'); errors++; }
+
+ctx.world.jumpGraceUntil = w32grace0; // restore the section-start grace state (long expired; the death-restore already rewound it — this pins the intent)
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
