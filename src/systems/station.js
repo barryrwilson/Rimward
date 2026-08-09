@@ -345,7 +345,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   const bodyGroup = new THREE.Group();
   bodyGroup.position.y = 4;
   const body = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), skinMat);
-  body.scale.set(4.5, 3, 4.5); // half-size heart-pod (user: center sphere too big)
+  body.scale.set(2.2, 1.5, 2.2); // quarter of the original pod (user: 50% smaller again)
   bodyGroup.add(body);
   tagBreath(bodyGroup, { depth: 0.02, hz: 0.18 });
   group.add(bodyGroup);

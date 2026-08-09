@@ -1064,7 +1064,8 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   Resize correction (user clarified: the "ball" was the CENTER BELL,
   not the throat pearls): body bell scale (9,6,9) → (4.5,3,4.5) — half
   size; beacon (1.5/12) and crownHeart (2.5) restored, their shrink
-  was the misread.
+  was the misread. Bell again 50% smaller on user repeat:
+  (4.5,3,4.5) → (2.2,1.5,2.2) — a quarter of the original pod.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
