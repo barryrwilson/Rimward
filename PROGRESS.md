@@ -1006,6 +1006,18 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   unchanged) plus a live browser visual pass (system Chrome headless,
   SwiftShader WebGL — the shared headless Chromium has no GL) framing
   The Cradle from multiple angles.
+  Review pass (user screenshot): the tendril docking arm + gilt cradle
+  ("branch out of nowhere") and the y-38 beacon ball + 34u glow
+  ("weird ball") are REMOVED — dock logic is position-only
+  (ctx.station.position), so no silhouette was load-bearing; the beacon
+  is now a small pearl blinking at the flower's throat (glow 12u).
+  Crown re-rooted y 7 → 4 (the arm-ring center, inside the bell) so
+  the flower grows out of the starfish disc; chandeliers tucked to
+  radius 4.5 under the bell; arm sway amp 0.02 → 0.07 rad at 0.07 Hz
+  (was imperceptible — ±0.4u tip travel; now ±1.4u over a ~14 s
+  period, motion-verified live: all five holders swept ±0.05–0.10 rad
+  in a 4 s sample); web breath depth 0.015 → 0.03. makeTendrilGeometry
+  import dropped (station no longer uses it). Boot test re-PASS.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,

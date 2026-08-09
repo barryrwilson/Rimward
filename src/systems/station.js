@@ -5,7 +5,7 @@ import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: auth
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
-import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeTendrilGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
+import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -62,16 +62,17 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeTendrilG
  * Wave 27: Beautiful Ones bloom station. When isBeautiful(def.faction) the
  * mesh is built by buildBeautifulStation — a flower–starfish hybrid: a
  * translucent, veined, breathing body with a pulsing mint heart, five
- * starfish arms webbed by breathing membrane fans, the orchid-petal crown
- * (the ringGroup, spun by update as always), a tendril docking arm,
- * chandelier light clusters, and a pearl beacon lantern, all sculpted from
- * organic.js primitives. update() drives the tagged breath/sway parts via
- * animateOrganic (zero-allocation; frozen under reducedMotion) and the
- * per-build tagPulse materials (skin/web opacity, heart emissive, per-arm
- * vein overlays). Cached shared organic materials/textures are never
- * disposed or pulse-tagged (teardownMesh skips userData.shared); per-build
- * materials/textures dispose exactly as before. Every other faction's
- * station path is byte-identical.
+ * slowly undulating starfish arms webbed by breathing membrane fans, the
+ * orchid-petal crown (the ringGroup, spun by update as always) growing out
+ * of the arm-ring center, chandelier light clusters tucked beneath the
+ * body, and a small pearl beacon nestled at the flower's throat, all
+ * sculpted from organic.js primitives. update() drives the tagged
+ * breath/sway parts via animateOrganic (zero-allocation; frozen under
+ * reducedMotion) and the per-build tagPulse materials (skin/web opacity,
+ * heart emissive, per-arm vein overlays). Cached shared organic
+ * materials/textures are never disposed or pulse-tagged (teardownMesh
+ * skips userData.shared); per-build materials/textures dispose exactly as
+ * before. Every other faction's station path is byte-identical.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -260,16 +261,17 @@ function buildStationMesh(ctx, systemId, def) {
 /**
  * Wave 27: 'The Bloom' — a Beautiful Ones station, grown not built. A
  * flower–starfish hybrid: a translucent nacre body (breathing skin over a
- * slow-pulsing mint heart) with five gently undulating starfish arms, each
- * cloaked in an additive vein overlay that pulses traveling around the
- * body, and membrane web-fans breathing in the gaps between arms. The
- * orchid-petal crown (the rotating ringGroup) sits atop the body; a
- * tendril docking arm tipped with a gilt cradle ring keeps the old box
- * arm's extent (dock logic is position-only; the silhouette still reads
- * as an approach lane); mint chandelier clusters hang beneath the arm
- * roots; a pearl beacon lantern crowns the whole; spore-lantern motes
- * drift on slow sway. Envelope stays ~30u radius, −16…+38 vertical so
- * arrival framing holds.
+ * slow-pulsing mint heart) with five starfish arms undulating on a slow,
+ * clearly visible sway (~14 s period), each cloaked in an additive vein
+ * overlay that pulses traveling around the body, and membrane web-fans
+ * breathing in the gaps between arms. The orchid-petal crown (the rotating
+ * ringGroup) is rooted at the arm-ring center so the flower grows OUT of
+ * the starfish disc; a small pearl beacon lantern blinks at the flower's
+ * throat (update() drives beaconMat/beaconGlowMat as on every station);
+ * mint chandelier clusters hang tight beneath the body; spore-lantern
+ * motes drift on slow sway. Dock logic is position-only
+ * (ctx.station.position) — no docking-arm silhouette is needed. Envelope
+ * stays ~30u radius, −15…+18 vertical so arrival framing holds.
  *
  * Shared cached organic materials (flesh/membrane/gilt/veinGlow) are used
  * directly for sculpted parts and NEVER disposed or pulse-tagged
@@ -358,7 +360,7 @@ function buildBeautifulStation(ctx, systemId, def) {
     const veins = new THREE.Mesh(armGeo, veinMat);
     veins.scale.setScalar(1.03);
     holder.add(veins);
-    tagSway(holder, { axis: 'x', amp: 0.02, hz: 0.09, phase: i * 1.1 });
+    tagSway(holder, { axis: 'x', amp: 0.07, hz: 0.07, phase: i * 1.1 }); // slow visible undulation: ~14s period, ±1.4u at the tip
     group.add(holder);
   }
 
@@ -370,16 +372,16 @@ function buildBeautifulStation(ctx, systemId, def) {
     const web = new THREE.Mesh(webGeo, webMat);
     web.rotation.y = ((i + 0.5) * Math.PI * 2) / 5;
     web.position.y = 0.5;
-    tagBreath(web, { depth: 0.015, hz: 0.13, phase: i * 0.7 });
+    tagBreath(web, { depth: 0.03, hz: 0.13, phase: i * 0.7 });
     group.add(web);
   }
 
-  // --- petal crown: seven orchid-petal sails opening outward/up, rooted
-  // inside the upper bell so the flower grows OUT of the starfish body (one
-  // creature, not two tiers). This is ringGroup — update() spins it exactly
+  // --- petal crown: seven orchid-petal sails rooted at the arm-ring center
+  // (y 4 — inside the translucent bell, at the heart) so the flower grows
+  // OUT of the starfish disc. This is ringGroup — update() spins it exactly
   // like the stock habitat ring.
   const ringGroup = new THREE.Group();
-  ringGroup.position.y = 7;
+  ringGroup.position.y = 4;
   const petalGeo = makePetalGeometry({ length: 26, width: 11, curl: 5, cup: 2.5, segs: 14 });
   const PETALS = 7;
   for (let i = 0; i < PETALS; i++) {
@@ -398,34 +400,19 @@ function buildBeautifulStation(ctx, systemId, def) {
   ringGroup.add(crownHeart);
   group.add(ringGroup);
 
-  // --- docking arm: a curved tendril tipped with a gilt cradle ring at
-  // roughly the old box arm's extent (old arm: z 3..25 at y -6).
-  const arm = new THREE.Mesh(
-    makeTendrilGeometry({ length: 26, radius: 1.6, sway: 4, taper: 0.35, radialSegs: 8, tubularSegs: 32 }),
-    mats.flesh,
-  );
-  arm.position.set(0, -8, 2);
-  group.add(arm);
-  const cradle = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.45, 8, 32), mats.gilt);
-  cradle.position.set(1.6, -8, 28); // tendril tip (sway * 0.4, length)
-  group.add(cradle);
+  // --- no docking arm: the bloom is a single unified creature (dock logic
+  // is position-only — ctx.station.position — so no silhouette is needed).
   const bulbGeo = new THREE.SphereGeometry(1, 10, 8);
-  for (let i = 0; i < 3; i++) {
-    const a = (i * Math.PI * 2) / 3;
-    const lamp = new THREE.Mesh(bulbGeo, lightMat);
-    lamp.scale.setScalar(0.6);
-    lamp.position.set(1.6 + Math.cos(a) * 3.4, -8 + Math.sin(a) * 3.4, 28);
-    group.add(lamp);
-  }
 
-  // --- chandelier light clusters hanging beneath the body rim / arm roots
+  // --- chandelier light clusters hanging tight beneath the body underside
   // (lightMat — update() pulses its color toward lightColor, as on every
-  // station).
+  // station). Kept close to the bell so they read as hanging FROM it, not
+  // floating mid-air.
   for (let c = 0; c < 3; c++) {
     const ca = (c * Math.PI * 2) / 3 + 0.5;
-    const cx = Math.cos(ca) * 8;
-    const cz = Math.sin(ca) * 8;
-    const cy = -6.5 - c * 2;
+    const cx = Math.cos(ca) * 4.5;
+    const cz = Math.sin(ca) * 4.5;
+    const cy = -3.5 - c * 1.5;
     for (let i = 0; i < 5; i++) {
       const bulb = new THREE.Mesh(bulbGeo, lightMat);
       const s = 0.55 + ((i + c) % 3) * 0.22;
@@ -439,17 +426,19 @@ function buildBeautifulStation(ctx, systemId, def) {
     }
   }
 
-  // --- beacon: a pearl lantern sphere crowning the crown + glow sprite.
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(2.4, 14, 10), beaconMat);
-  beacon.position.set(0, 38, 0);
+  // --- beacon: a small pearl lantern nestled at the flower's throat (where
+  // the petals converge), modest glow — update() blinks it as always. No
+  // floating ball above the silhouette.
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), beaconMat);
+  beacon.position.set(0, 11, 0);
   group.add(beacon);
   const beaconGlowMat = new THREE.SpriteMaterial({
     map: makeOrganicGlowTexture('rgba(215,255,235,0.95)', 'rgba(127,224,168,0)'),
     blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8,
   });
   const beaconGlow = new THREE.Sprite(beaconGlowMat);
-  beaconGlow.scale.setScalar(34);
-  beaconGlow.position.set(0, 38, 0);
+  beaconGlow.scale.setScalar(12);
+  beaconGlow.position.set(0, 11, 0);
   group.add(beaconGlow);
 
   // --- halo: big mint-tinted additive glow (update() breathes its opacity).
