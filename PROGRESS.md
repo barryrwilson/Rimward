@@ -1119,8 +1119,61 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   same-wave (wake fade never re-uploaded post-emission; failResolveBump was
   a dead write under updateResolve → resolveBoost; demandCargo/demandRansom
   flee entries unstamped), 2 LOW standing below.
+- Wave 31: the Q-ship counterplay ruling (the wave-30 candidate, user-decided:
+  the Wolfeye's top rung reads concealed mounts — mounts now exist on BOTH
+  sides). world.js: QSHIP_COVERS pool (freehold ×2, veridian ×1, 'Hauler'
+  fallback) beside PIRATE_NAMES; createRecords flags every odd-index pirate
+  rec.qship with coverClass 'freighter' / coverName / coverFaction =
+  def.faction — index 0 (the redledger leader; Verge's Old Callow) and even
+  indices stay classic. JSON-plain, rides record persistence; NO
+  state.js/save.js/ctx.js changes (records persist wholesale; commLine +
+  milestone events already frozen). Banks generated before wave 31 stay
+  Q-ship-free — no retrofit (the PIRATE_NAMES.verge precedent: lazily
+  generated content only reaches unvisited systems). npc.js: spawnLiveShip
+  builds the disguised mesh in cover identity (coverClass ?? 'freighter',
+  coverFaction ?? faction, role 'trader') while createShipState keeps REAL
+  cutter stats and live.role stays 'pirate' (other pirates never hunt it;
+  the overpowered engines under the freighter skin are the in-fiction
+  tell). revealQship() (beside stampWakeSite) sets rec.revealed = true
+  (persisted, once per record), swaps live.object to the real-identity
+  mesh in place (position + quaternion copied; shared geo/mats never
+  disposed; every userData.glow consumer re-reads per call), says 'The
+  manifest lied.' from the real name, and guard-push-emits milestone
+  'qshipUnmasked' once EVER. updateHunt triggers: a top-of-function
+  scratch check (hull < hullMax || screen < screenMax — applyHit damages
+  screen first, so any hit is caught next frame) and both setTarget
+  acquisitions (player AND NPC trader) — the acquire reveal runs before
+  the wave-30 demand block the same frame, so the hail already shows
+  true colors (a 'freighter' closes, flips, 'Your cargo or your hull.').
+  hud.js: a masked target's bracket shows coverName/coverFaction; scanner
+  >= 2 pierces — real identity + ' · CONCEALED MOUNTS' meta suffix;
+  resolve band/numeric reads unchanged either way. station.js:
+  SCANNER2_COST 900, act.buyScanner2 (installed → Mk I prerequisite →
+  credits guard chain), outfitting row4 (three states), Digit4 hotkey.
+  Boot test wave-31 section (7 legs, real paths): Mk II guards + exact
+  400/900 debits through Digit2/Digit4, record-data invariants
+  (name-keyed authored pirates — migrants/injected aces append after the
+  original cast), bracket cover/pierce with exact strings + distance
+  sanity, reveal on acquire (mesh-identity swap, swap-in-place <5u,
+  real-name comm line, once-ever milestone), reveal on scratch (no
+  second milestone), scanner + revealed save roundtrip through the
+  death-restore, byte-exact plain-pirate bracket regression. Harness
+  accommodation (documented in-section): bootFreshHarness re-runs
+  initHud on the SAME memoized #hud stub root, so duplicate bracket
+  chains exist — w31bracketText reads only the SHOWN .rw-target chain
+  (frozen fresh-boot chains read ''); pristineQships=0/2 in the log is
+  EXPECTED (the harness's own soak-era combat legitimately unmasks
+  freehold's Q-ships before the section runs — leg b asserts the sound
+  invariants instead of blanket revealed-absence, leg d re-arms the
+  once-ever milestone guard via the splice idiom). PASS ×3 consecutive
+  full runs.
+  Reviews: security SHIP (2 LOW + 1 informational, standing below);
+  code SHIP (overall correct — every attack path reveals before any
+  telegraph/fire/demand, the mesh swap is reference-safe across
+  hud/combat/controls/traffic/wakes, no false-pass holes in the boot
+  section; 1 P3 cosmetic, standing below).
 
-## Next round candidates (wave 31)
+## Next round candidates (wave 32)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
   docking still autosaves. Standing notes:
@@ -1167,7 +1220,18 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   units NaN the demand → payTribute credits chain. Both need edited
   localStorage; the restore boundary heals on next load. Negative-
   demand credit grants are NOT possible (demandMin floor).
-- Wave-30-surfaced candidate (user decision): the wolfeye scanner's
-  top rung could read concealed mounts on a target (Q-ship
-  counterplay) — a scanner-ladder ruling, not a patch.
+- Wave-31 standing (security LOWs, save-tamper only — documented not
+  patched, the wave-30 precedent): ctx.world.scanner is unhealed at the
+  restore boundary — a hand-edited scanner 99/'2' gets the Mk II pierce
+  and the station 'installed' note free (the one-line heal
+  `if (![0,1,2].includes(...)) scanner = 0` beside the concealedMounts
+  coercion closes it if ever wanted); the qship flag is strict
+  (=== true) at spawn but truthy at reveal/HUD — legit saves always
+  carry literal true, so only an edited save splits them, and even then
+  the failure is cosmetic (cover text over a real mesh, a self-granted
+  milestone). Informational: coverName/coverFaction reach the bracket
+  only via textContent — no injection sink, local-only threat model.
+- Wave-31 content note: Q-ships exist only in record banks generated
+  under wave-31+ code — old saves' already-visited systems stay
+  classic (no retrofit, the standing lazy-generation precedent).
 - Polish debt: none standing. Boot test remains the gate.
