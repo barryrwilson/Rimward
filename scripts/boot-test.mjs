@@ -7787,11 +7787,15 @@ if (w33station) {
 }
 // Skin: one shared MeshPhysicalMaterial (transparent teal, vein emissiveMap)
 // across the body bell + 5 arms — at least 6 meshes on the SAME instance.
+// Discriminator: side !== DoubleSide — the crown's petalMat is ALSO a
+// transparent emissiveMap MeshPhysicalMaterial but DoubleSide (19 meshes),
+// so without the side filter the count passes vacuously via the crown even
+// if the skin instance were split per-mesh (wave-33 reviews MEDIUM/P3).
 const w33skinCounts = new Map();
 if (w33station) {
   for (const o of w33meshKids(w33station)) {
     const m = o.material;
-    if (m.transparent === true && m.emissiveMap != null) w33skinCounts.set(m, (w33skinCounts.get(m) ?? 0) + 1);
+    if (m.transparent === true && m.emissiveMap != null && m.side !== THREE.DoubleSide) w33skinCounts.set(m, (w33skinCounts.get(m) ?? 0) + 1);
   }
 }
 const w33skinShared = [...w33skinCounts.values()].some((n) => n >= 6);
