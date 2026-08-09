@@ -345,7 +345,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   const bodyGroup = new THREE.Group();
   bodyGroup.position.y = 4;
   const body = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), skinMat);
-  body.scale.set(9, 6, 9);
+  body.scale.set(4.5, 3, 4.5); // half-size heart-pod (user: center sphere too big)
   bodyGroup.add(body);
   tagBreath(bodyGroup, { depth: 0.02, hz: 0.18 });
   group.add(bodyGroup);
@@ -443,7 +443,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // --- beacon: a small pearl lantern nestled at the flower's throat (where
   // the petals converge), modest glow — update() blinks it as always. No
   // floating ball above the silhouette.
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 10), beaconMat);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), beaconMat);
   beacon.position.set(0, 11, 0);
   group.add(beacon);
   const beaconGlowMat = new THREE.SpriteMaterial({
@@ -451,7 +451,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8,
   });
   const beaconGlow = new THREE.Sprite(beaconGlowMat);
-  beaconGlow.scale.setScalar(7);
+  beaconGlow.scale.setScalar(12);
   beaconGlow.position.set(0, 11, 0);
   group.add(beaconGlow);
 

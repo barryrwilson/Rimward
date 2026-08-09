@@ -1061,6 +1061,10 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   floating balls again. Tone pass (user: "too light; the throat ball
   is too big"): epidermis 0xa8bfae → 0x55755f (mid-dark green);
   beacon pearl r 1.5 → 0.9, glow sprite 12 → 7.
+  Resize correction (user clarified: the "ball" was the CENTER BELL,
+  not the throat pearls): body bell scale (9,6,9) → (4.5,3,4.5) — half
+  size; beacon (1.5/12) and crownHeart (2.5) restored, their shrink
+  was the misread.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
