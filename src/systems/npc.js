@@ -1340,7 +1340,7 @@ export function initNpc(ctx) {
             ai.demanding = false;
           } else if (st.lastHitAt > ai.demandPeaceAt) {
             ai.demanding = false;
-            ctx.emit('hailClosed', {}); // card closes; the fight is on
+            ctx.emit('hailClosed', { ship: live }); // card closes; the fight is on — ship-scoped (wave 35)
           }
         }
         if (st.disabled) {
@@ -1393,13 +1393,16 @@ export function initNpc(ctx) {
       // 'failed'/'refused' clear ai.demanding themselves and press the
       // attack; 'paid'/'bluffed' are already fleeing. On 'hailClosed',
       // release any OUTCOME-STAMPED hold still standing (outcome-gated so a
-      // stale hailClosed never steals a demand that opened this frame). On
-      // a 'hailOpened' for ANOTHER ship the single hail card was stolen —
-      // release the hold so the pirate stops waiting on a dead parley.
+      // stale hailClosed never steals a demand that opened this frame).
+      // Wave 35: the event is ship-scoped — a close names its own ship, and
+      // only that ship's hold releases (an unscoped payload is a legacy
+      // backstop that releases all). On a 'hailOpened' for ANOTHER ship the
+      // single hail card was stolen — release the hold so the pirate stops
+      // waiting on a dead parley.
       for (const e of ctx.lastEvents) {
         if (e.type === 'hailClosed') {
           for (const s of ctx.ships) {
-            if (s.ai && s.ai.demanding && s.ai.demandOutcome) s.ai.demanding = false;
+            if (s.ai && s.ai.demanding && s.ai.demandOutcome && (!e.ship || s === e.ship)) s.ai.demanding = false;
           }
         } else if (e.type === 'hailOpened') {
           for (const s of ctx.ships) {

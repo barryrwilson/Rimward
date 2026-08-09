@@ -216,7 +216,13 @@ export function initHail(ctx) {
       default:
         break;
     }
-    ctx2.emit('hailClosed', {});
+    // Wave 35: ship-scoped close (the wave-30 review's prescribed fix). A
+    // pirate's resolve-hail and a void-on-hit both close the card, but the
+    // ~1-frame card-steal window must not let ship B's close kill ship A's
+    // open bargaining card. Unscoped emits remain a legacy backstop — both
+    // listeners close/release on a missing ship — but every in-repo emitter
+    // now carries the ship.
+    ctx2.emit('hailClosed', { ship: live });
     closeCard();
   }
 
@@ -314,7 +320,7 @@ export function initHail(ctx) {
     update() {
       for (const ev of ctx.events) {
         if (ev.type === 'hailOpened') openCard(ev);
-        else if (ev.type === 'hailClosed' && open) closeCard();
+        else if (ev.type === 'hailClosed' && open && (!ev.ship || ev.ship === open.ship)) closeCard();
       }
       // Bargaining timeout: target destroyed, disabled, or despawned mid-hail.
       if (open) {

@@ -174,7 +174,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'npcDisabled' {ship}   'npcDestroyed' {ship}   'npcSurrendered' {ship,outcome}
     // 'shieldDown' {layer:'screen'|'shell'}      'engineOut' {ship|player}
     // 'podSpawned' {pod}     'podCollected' {pod}
-    // 'hailOpened' {ship,intents[]}              'hailClosed' {}
+    // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}
     // 'worldEvent' {kind}    'milestone' {id, line}  'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}

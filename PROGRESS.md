@@ -1303,7 +1303,57 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   sway/breath/pulse deltas measured live over 2.04s; 12 stills in
   .chrome-shot/w34/, untracked scratch).
 
-## Next round candidates (wave 35)
+- Wave 35: remaining actionable review debt (user-decided scope — the
+  wave-26 haul MEDIUM and the wave-30 hailClosed LOW were the last two
+  standing items with a prescribed fix). station.js tickDeliveryJobs
+  haul branch: the origin-exclusion (`currentSystem === origin →
+  continue`, paid at ANY other dock) replaced with named-destination
+  binding — `const dest = otherSystemId(ctx, origin); if
+  (currentSystem !== dest || dest === origin) continue;`. The dest ===
+  origin half keeps the gates-less fallback undeliverable (otherSystemId
+  returns the origin id when gates[0] is missing — never pays at
+  origin). Delivery now always matches what the board UI promised at
+  offer/accept/in-flight (all three resolve otherSystemId identically)
+  and what payQuoted priced — the ferry precedent. Multi-gate ruling
+  (gameplay decision, recorded): gates[0] names the destination; side-
+  gate arrivals no longer pay. Old saves need no migration
+  (originSystem + payQuoted already stamped; the payQuoted-less
+  fallback jobPay(current) now prices the same system the quote would
+  have — strictly narrower than the old any-dock fallback). hailClosed
+  ship-scoping: hail.js resolveIntent emits {ship: live} (open.ship at
+  resolution time), npc.js void-on-hit emits {ship: live}; hail.js's
+  card listener closes only on !ev.ship || ev.ship === open.ship;
+  npc.js's hold-release scan keeps its outcome-gate and adds !e.ship ||
+  s === e.ship; ctx.js vocabulary updated to 'hailClosed' {ship?}.
+  Unscoped emits remain a deliberate legacy backstop (the wave-9
+  audio-cue harness leg emits payload-less; song.js keys cues on type
+  alone). Card-steal window closed: ship B's void no longer kills A's
+  card or releases A's hold. Boot test wave-35a section (real paths):
+  runtime triple pick off ctx.systems (origin→dest→third, the live
+  wave-26g leftover ferry's destSystem excluded from ALL THREE legs —
+  code-review P3: ferryDest === origin would eat 4 of the 5 bought
+  provisions in the settle window; fixed same-wave), real board accept
+  with payQuoted/quote-names-dest asserts, overshoot negative control
+  (dock at the third system: job stays accepted, no delivery commLine,
+  credits/cargo untouched — discriminates: old code pays there), named-
+  destination delivery (credit delta === payQuoted exactly, HAUL_UNITS
+  removed, job done). wave-35b section: cross-scope close ignored
+  (card + hold stand), own-scope closes, payload-less backstop closes,
+  hold release scoped (B's hold releases, A's stands). Harness note:
+  leg-d's parked pirate B must sit INSIDE U.DEINSTANTIATE_RANGE (1400)
+  — the 9000-corner w30parkHostiles idiom despawns it before npc.js's
+  ctx.ships release scan runs (traffic.js:71-73 splice; correct product
+  behavior, a despawned ship's ai dies with it). PASS ×3 consecutive +
+  npm run build clean (only the pre-existing >500 kB chunk warning).
+  Reviews: security SHIP (full consumer census of the tamperable job
+  fields — originSystem/payQuoted/originPrice readers+writers — and a
+  complete hailClosed emitter/listener census; no finding survives);
+  code APPROVE (overall correct, confidence 0.85; the triple-picker P3
+  fixed same-wave; per-leg false-pass audit found every discriminating
+  leg flips under the old code). No residual findings — nothing new
+  standing this wave.
+
+## Next round candidates (wave 36)
 - Wave 33 standing (review P3s, documented not patched):
   - bt_cradle's sun (PointLight 300, decay 2, ~535u) contributes
     ≈0.001 irradiance at the station — the bloom is effectively
@@ -1337,12 +1387,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   userData.shared, never disposed, never tagPulse'd/Material.clone'd;
   veinGlow is AdditiveBlending by contract; the wreck/beacon/anomaly
   glazes are boot-tested via synthetic defs but have no live site.
-- The pre-existing wave-6 haul delivery gate STILL never enforced the
-  named destination the way ferry does (wave-26 review MEDIUM): a
-  payQuoted-stamped haul chain pays at any non-origin dock. Gate
-  delivery on otherSystemId(originSystem) if the named destination is
-  ever meant to bind; multi-gate systems make that a gameplay decision,
-  not a patch.
+- The wave-6 haul delivery gate is CLOSED (wave 35 — delivery binds the
+  named destination otherSystemId(originSystem), the ferry precedent;
+  the multi-gate ruling is recorded on the wave-35 history entry).
 - NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
   are player/Guild infrastructure; physical gates only — recorded on
   pickMigrant in world.js). No action standing; revisit only if routed
@@ -1351,12 +1398,11 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   reset; vouchAck is a bool; mystery.charted grows by landmark id and
   stays bounded by the AUTHORED landmark tables (wave 23 gate) —
   self-limiting (waves 17/18 assessments stand).
-- Wave-30 standing (code review LOWs, documented not patched): the
-  void-on-hit path emits a global hailClosed — in the ~1-frame
-  card-steal window it can close a different ship's bargaining card
-  (recoverable; a ship-scoped payload is the fix if it ever bites);
-  the parley voids on ANY damage source (lastHitAt is shared), not
-  just player hits — plays true (a parley under fire breaks).
+- Wave-30 standing (code review LOW): the global-hailClosed card-steal
+  LOW is CLOSED (wave 35 — hailClosed carries {ship}; both listeners
+  discriminate with an unscoped legacy backstop). Still standing: the
+  parley voids on ANY damage source (lastHitAt is shared), not just
+  player hits — plays true (a parley under fire breaks).
 - Wave-30 standing (security LOWs, save-tamper only): a hand-edited
   save with a non-finite record.wakeSite.position fails open in
   wakes.js discovery (NaN pods, TTL-self-healing); tampered cargo

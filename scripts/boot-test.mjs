@@ -7998,5 +7998,290 @@ if (!Object.values(w34hearthChecks).every(Boolean)) { console.log('WAVE34 HEARTH
 // Home again — the wave-27 discipline: the run ends where the harness began.
 travelTo('freehold', 'wave34 home leg');
 
+// ---- Wave 35a: review debt — haul delivery binds the NAMED destination ----
+// Wave 35 closes the wave-26 review MEDIUM: a payQuoted-stamped haul chain
+// paid at ANY non-origin dock. station.js now gates delivery on
+// otherSystemId(origin) — the same primary-gate destination the board UI and
+// the accept-time quote name (the ferry precedent: only the named far
+// station pays), so a side-gate arrival in a multi-gate origin no longer
+// pays. The gates-less fallback (otherSystemId returns the origin itself) is
+// guarded by dest === origin: such a job stays undeliverable, never pays at
+// origin. Old saves need no migration — originSystem + payQuoted were
+// stamped at accept (wave 26); the gate recomputes the same destination at
+// delivery time.
+// -- a. lane pick + real accept at the origin dock --------------------------
+// The triple is picked off the live graph (the wave-24 d / wave-26 d ruling):
+// origin → primary-gate destination → a third hop out of the destination
+// that is neither origin nor dest. freehold→veridian→redmarch is PREFERRED
+// and stands unless any leg is occupied by the wave-26 g leftover — the
+// ferry contract that leg left OPEN (its destSystem reads freehold or
+// redmarch by the wave-26 lane pick, and an open ferry pays at ITS named
+// dock the moment 4 provisions ride the hold). The picker keeps that dock
+// out of ALL THREE legs: at origin it would complete during the post-buy
+// settle and eat 4 of the 5 bought provisions; at the destination or third
+// hop it would stir the credit/provisions deltas (wave-35 review P3). Then
+// the picker falls back to the first clean triple in SYSTEMS order; the
+// chosen lane rides the log line.
+const w35aOpenFerry = ctx.world.jobs.find((j) => j.id === 'ferry-consignment' && j.state === 'accepted') ?? null;
+const w35aFerryDest = w35aOpenFerry?.destSystem ?? null;
+const w35aPickTriple = (o) => {
+  if (o === w35aFerryDest) return null; // the leftover ferry would complete at the accept dock and eat the load
+  const d = ctx.systems?.[o]?.gates?.[0]?.to;
+  if (!d || d === o || d === w35aFerryDest || !ctx.systems?.[d]) return null;
+  const t = (ctx.systems[d].gates ?? []).map((g) => g.to)
+    .find((id) => id !== o && id !== d && id !== w35aFerryDest && !!ctx.systems?.[id]);
+  return t ? { o, d, t } : null;
+};
+const w35aTriple = w35aPickTriple('freehold') ?? Object.keys(SYSTEMS).map(w35aPickTriple).find(Boolean) ?? null;
+const w35aOrigin = w35aTriple?.o ?? 'freehold';
+const w35aDest = w35aTriple?.d ?? null;
+const w35aThird = w35aTriple?.t ?? null;
+travelTo(w35aOrigin, 'wave35a origin leg'); // no-op when the freehold triple stands (the run is home)
+dockAtCurrentStation(`dock ${w35aOrigin} (wave35a accept)`);
+const w35aHaulJob = ctx.world.jobs.find((j) => j.id === 'haul-provisions') ?? null;
+const w35aNeed = w35aHaulJob?.need ?? 5; // HAUL_UNITS
+// TEST SETUP (self-restoring): the galaxy carries ONE haul contract; wave 26
+// ran it to done on a generated lane, so re-offer it for this gate-binding
+// check — the real accept/deliver cycle below takes it back to done.
+if (w35aHaulJob) { w35aHaulJob.state = 'offered'; w35aHaulJob.originSystem = null; w35aHaulJob.originPrice = null; delete w35aHaulJob.payQuoted; }
+// Free the hold for the load through the REAL market path (the wave-26 d
+// sell discipline): whatever the recovery cycles left aboard sells down
+// until the 5-unit load genuinely fits.
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+let w35aSellGuard = 60;
+while (ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) < w35aNeed && w35aSellGuard-- > 0) {
+  const w35aHeld = ctx.cargo.find((c) => c.units > 0 && COMMODITIES[c.commodity]?.legal);
+  if (!w35aHeld) break;
+  const w35aSellBtn = marketTradeButton(COMMODITIES[w35aHeld.commodity].name, '−1');
+  if (!w35aSellBtn) break;
+  w35aSellBtn.click(); // real path: tryTrade(commodity, 1, false) — re-found per click (each trade re-renders)
+}
+dispatchKey('Escape'); // market → services
+dispatchKey('Digit2'); // jobs board
+const w35aAcceptBtn = w26CardAcceptButton('Haul provisions'); // the wave-26 strict card-scoped accept
+w35aAcceptBtn?.click(); // real accept: stamps originSystem/originPrice + payQuoted off the DESTINATION chain
+const w35aPayQuoted = w35aHaulJob?.payQuoted;
+// otherSystemId equivalent read from ctx.systems — the destination the board
+// UI and the quote named must equal the picker's primary-gate destination.
+const w35aStampedDest = ctx.systems?.[w35aHaulJob?.originSystem]?.gates?.[0]?.to ?? w35aHaulJob?.originSystem;
+const w35aAcceptChecks = {
+  tripleFound: !!w35aDest && !!w35aThird,
+  dockedAtOrigin: ctx.flags.docked === true && ctx.world.currentSystem === w35aOrigin,
+  jobFound: !!w35aHaulJob,
+  holdRoomForLoad: ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) >= w35aNeed,
+  acceptButtonFound: !!w35aAcceptBtn,
+  jobAccepted: w35aHaulJob?.state === 'accepted',
+  originStamped: w35aHaulJob?.originSystem === w35aOrigin,
+  payQuotedStamped: Number.isFinite(w35aPayQuoted),
+  quoteNamesSameDest: w35aStampedDest === w35aDest,
+  ferryClearsTriple: w35aFerryDest !== w35aOrigin && w35aFerryDest !== w35aDest && w35aFerryDest !== w35aThird,
+};
+console.log('wave35a accept:', JSON.stringify(w35aAcceptChecks), `lane=${w35aOrigin}->${w35aDest}->${w35aThird} quoted=${w35aPayQuoted} ferryDest=${w35aFerryDest}`);
+if (!Object.values(w35aAcceptChecks).every(Boolean)) { console.log('WAVE35 HAUL GATE ACCEPT FAIL'); errors++; }
+
+// Buy the load through the real market (the wave-26 d cell/click path,
+// re-found per click — each trade re-renders), then give the dock a full
+// delivery-throttle window (0.5s ≈ 30 frames) to PROVE the haul stays open
+// at its origin: the picker's origin guard keeps the leftover ferry's dock
+// out of the lane, so nothing else can pay here and the baselines are quiet.
+dispatchKey('Escape'); // jobs → services
+dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
+let w35aBought = 0;
+for (let i = 0; i < w35aNeed; i++) {
+  const w35aProvBeforeClick = holdCount('provisions');
+  const b = marketTradeButton('Provisions', '+1');
+  if (!b) break;
+  b.click(); // real path: tryTrade('provisions', 1, true)
+  if (holdCount('provisions') === w35aProvBeforeClick + 1) w35aBought++; // count units actually aboard, not clicks
+}
+dispatchKey('Escape'); // market → services
+tick(40, 'wave35a settle (delivery-throttle window)');
+const w35aCreditsAtDeparture = ctx.world.credits;
+const w35aProvAtDeparture = holdCount('provisions');
+const w35aLoadChecks = {
+  boughtTheLoad: w35aBought === w35aNeed,
+  jobUnpaidAtOriginDock: w35aHaulJob?.state === 'accepted',
+};
+console.log('wave35a load:', JSON.stringify(w35aLoadChecks), `bought=${w35aBought} prov=${w35aProvAtDeparture}`);
+if (!Object.values(w35aLoadChecks).every(Boolean)) { console.log('WAVE35 HAUL GATE LOAD FAIL'); errors++; }
+
+// -- b. negative control: dock PAST the named destination — no payout -------
+// The route transits the destination WITHOUT docking (delivery needs the
+// dock), then berths one hop beyond it. Under the wave-26 MEDIUM this dock
+// paid; under wave 35 the job must ride on, untouched.
+undockStation();
+travelTo(w35aThird, 'wave35a overshoot leg');
+dockAtCurrentStation(`dock ${w35aThird} (wave35a overshoot)`);
+const w35aThirdLines = [];
+for (let i = 0; i < 90; i++) { // the wave-26 delivery-collection window
+  tick(1, 'wave35a overshoot tick');
+  for (const e of ctx.lastEvents) if (e.type === 'commLine') w35aThirdLines.push(e.text);
+}
+const w35aThirdChecks = {
+  thirdIsNeitherEnd: w35aThird !== w35aOrigin && w35aThird !== w35aDest,
+  dockedAtThird: ctx.flags.docked === true && ctx.world.currentSystem === w35aThird,
+  jobStillAccepted: w35aHaulJob?.state === 'accepted',
+  noDeliveryLine: !w35aThirdLines.some((t) => t.startsWith('Provisions delivered')),
+  creditsUnchangedByJob: ctx.world.credits === w35aCreditsAtDeparture,
+  provisionsIntact: holdCount('provisions') === w35aProvAtDeparture,
+};
+console.log('wave35a overshoot:', JSON.stringify(w35aThirdChecks), `third=${w35aThird}`);
+if (!Object.values(w35aThirdChecks).every(Boolean)) { console.log('WAVE35 HAUL GATE OVERSHOOT FAIL'); errors++; }
+
+// -- c. the named destination pays exactly the stamped quote ----------------
+undockStation();
+travelTo(w35aDest, 'wave35a delivery leg');
+const w35aCreditsBeforeDest = ctx.world.credits;
+dockAtCurrentStation(`dock ${w35aDest} (wave35a delivery)`);
+const w35aDestLines = [];
+for (let i = 0; i < 90; i++) {
+  tick(1, 'wave35a delivery tick');
+  for (const e of ctx.lastEvents) if (e.type === 'commLine') w35aDestLines.push(e.text);
+}
+const w35aPaidLine = w35aDestLines.find((t) => t.startsWith('Provisions delivered')) ?? null;
+const w35aPaid = Number((w35aPaidLine?.match(/— (\d+) UU/) ?? [])[1]);
+const w35aDeliveryChecks = {
+  dockedAtNamedDest: ctx.flags.docked === true && ctx.world.currentSystem === w35aDest,
+  paidExactlyQuoted: w35aPaid === w35aPayQuoted && Number.isFinite(w35aPaid),
+  creditsDeltaIsQuote: ctx.world.credits - w35aCreditsBeforeDest === w35aPayQuoted,
+  provisionsRemoved: holdCount('provisions') === w35aProvAtDeparture - w35aNeed,
+  jobDone: w35aHaulJob?.state === 'done',
+};
+console.log('wave35a delivery:', JSON.stringify(w35aDeliveryChecks), `paid=${w35aPaid} quoted=${w35aPayQuoted}`);
+if (!Object.values(w35aDeliveryChecks).every(Boolean)) { console.log('WAVE35 HAUL GATE DELIVERY FAIL'); errors++; }
+
+undockStation();
+// Home again — the wave-27 discipline: the run ends where the harness began.
+travelTo('freehold', 'wave35a home leg');
+
+// ---- Wave 35b: ship-scoped hailClosed (wave-30 code-review LOW) -----------
+// The wave-30 review's prescribed fix, now live in src: 'hailClosed' was
+// emitted with an empty payload, so in the ~1-frame card-steal window a
+// void-on-hit from pirate B could close pirate A's open bargaining card, and
+// npc.js's hold-release scan cleared EVERY ship's outcome-stamped hold on
+// any hailClosed. hail.js's resolveIntent and npc.js's void-on-hit now both
+// emit { ship }, hail.js's update listener closes the open card only when
+// the event names open.ship (unscoped payloads remain a legacy backstop),
+// and the npc.js release loop gates on the same scope. Four legs, all on
+// real demand hails (the w30spawnPirate / w30demandEvs / w30hailDisplay
+// idioms) with direct ctx.emit close events:
+//   a. a close naming ship B leaves ship A's open card open (the old bug)
+//   b. a close naming A closes A's card
+//   c. a payload-less close still closes the card (the backstop)
+//   d. a close naming B releases ONLY B's outcome-stamped demand hold
+// Run state: freehold/undocked off the wave-35a home leg; hostiles parked,
+// the wave-30 pinned-hull + cargo demand setup, and the jump-grace wait
+// (the wave-30 discipline — the demand guard requires now >= jumpGraceUntil
+// and the home-leg travel re-arms it).
+if (ctx.flags.docked) undockStation();
+w28calm('wave35b calm (hail scope setup)');
+w30parkHostiles('wave35b hostiles parked');
+ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+ctx.cargo.length = 0;
+ctx.cargo.push({ commodity: 'provisions', units: 10 }); // cargo aboard: the demand rides its value
+for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave35b jump grace wait');
+
+// -- a. cross-scoped close: pirate A's demand card is open; a hailClosed ---
+// naming a DIFFERENT ship B must NOT close it (pre-wave-35 the empty
+// payload stole the card in exactly this window). B is spawned then parked
+// at the 9000-corner (TEST SETUP, the w30parkHostiles corner: it never
+// closes in, so it can never open its own demand hail and steal the card
+// for real). tick(3) covers both reads: hail.js sees the emit in ctx.events
+// next frame; npc.js's release scan reads the rotated lastEvents a frame
+// later. ---------------------------------------------------------------
+const w35bA = w30spawnPirate('scope-a', 95, [250, 0, 0]); // 250u: inside TARGET_RANGE, outside the bubble edge
+const w35bAEvs = w30demandEvs(w35bA, 'wave35b A demand');
+const w35bAOpen = w35bAEvs.some((e) => e.type === 'hailOpened' && e.ship === w35bA)
+  && w35bA.ai.demanding === true && w30hailDisplay() === 'block';
+const w35bB = w30spawnPirate('scope-b', 95, [0, 0, 0]);
+w35bB.object.position.set(9000, 9000, 9000); // TEST SETUP: parked out of the fight
+tick(2, 'wave35b B parked');
+ctx.emit('hailClosed', { ship: w35bB }); // the wave-35 shape, naming B
+tick(3, 'wave35b scoped close (B)');
+const w35bCrossChecks = {
+  cardWasOpen: w35bAOpen,
+  cardStillOpen: w30hailDisplay() === 'block', // the fix: B's close no longer steals A's card
+  holdStands: w35bA.ai.demanding === true,
+};
+console.log('wave35b hailClosed cross-scope:', JSON.stringify(w35bCrossChecks));
+if (!Object.values(w35bCrossChecks).every(Boolean)) { console.log('WAVE35 HAILCLOSED CROSS-SCOPE FAIL'); errors++; }
+
+// -- b. own-ship close: the same event naming A closes A's card. ----------
+ctx.emit('hailClosed', { ship: w35bA });
+tick(3, 'wave35b scoped close (A)');
+const w35bOwnChecks = {
+  cardClosed: w30hailDisplay() === 'none',
+};
+console.log('wave35b hailClosed own-scope:', JSON.stringify(w35bOwnChecks));
+if (!Object.values(w35bOwnChecks).every(Boolean)) { console.log('WAVE35 HAILCLOSED OWN-SCOPE FAIL'); errors++; }
+w30removeShip(w35bA);
+w30removeShip(w35bB);
+tick(5, 'wave35b a/b cleanup');
+
+// -- c. unscoped backstop: a legacy payload-less hailClosed still closes ---
+// an open card (both listeners keep the !ship branch). A fresh REAL demand
+// hail reopens the card first. ------------------------------------------
+const w35bC = w30spawnPirate('backstop', 95, [250, 0, 0]);
+w30demandEvs(w35bC, 'wave35b C demand');
+const w35bCOpen = w35bC.ai.demanding === true && w30hailDisplay() === 'block';
+ctx.emit('hailClosed', {}); // the pre-wave-35 shape
+tick(3, 'wave35b unscoped close');
+const w35bBackstopChecks = {
+  cardWasOpen: w35bCOpen,
+  cardClosed: w30hailDisplay() === 'none',
+};
+console.log('wave35b hailClosed backstop:', JSON.stringify(w35bBackstopChecks));
+if (!Object.values(w35bBackstopChecks).every(Boolean)) { console.log('WAVE35 HAILCLOSED BACKSTOP FAIL'); errors++; }
+w30removeShip(w35bC);
+tick(5, 'wave35b c cleanup');
+
+// -- d. hold scoping: two demanding pirates, both holds OUTCOME-STAMPED ----
+// (the release loop's gate). A's hold is a real open demand card with the
+// stamp poked on (TEST SETUP: hail.js stamps ai.demandOutcome on resolution;
+// poking it beside a still-standing hold reproduces the loop's target shape
+// without resolving the card away). B is parked at 1000u with the same
+// stamped-hold shape poked on (demandPeaceAt pinned so the void-on-hit
+// upkeep can't pre-clear the hold). The 1000u park is deliberate: traffic.js
+// despawns live ships beyond U.DEINSTANTIATE_RANGE (1400 — the 9000-corner
+// w30parkHostiles uses is a despawn, fine for parking hostiles but fatal
+// here: the release scan iterates ctx.ships only, so a despawned B could
+// never be released), while U.TARGET_RANGE (600) gates the demand hail, so
+// 1000u keeps B in-bubble yet never opening its own hail. A B-scoped
+// hailClosed must release ONLY B's hold — pre-wave-35 the unscoped scan
+// cleared both. ----------------------------------------------------------
+const w35bD1 = w30spawnPirate('hold-a', 95, [250, 0, 0]);
+w30demandEvs(w35bD1, 'wave35b hold A demand');
+const w35bD1Open = w35bD1.ai.demanding === true && w30hailDisplay() === 'block';
+w35bD1.ai.demandOutcome = 'paid'; // TEST SETUP: the outcome-stamped hold shape (see header)
+const w35bD2 = w30spawnPirate('hold-b', 95, [0, 0, 0]);
+// TEST SETUP: parked in-bubble at 1000u (see header) — close enough that
+// traffic keeps it live, far enough that its own demand hail can never open.
+w35bD2.object.position.set(
+  ctx.ship.object.position.x + 1000,
+  ctx.ship.object.position.y,
+  ctx.ship.object.position.z,
+);
+w35bD2.ai.demanding = true; // TEST SETUP: a second outcome-stamped hold with no card
+w35bD2.ai.demandOutcome = 'paid';
+w35bD2.ai.demandPeaceAt = ctx.world.time;
+ctx.emit('hailClosed', { ship: w35bD2 });
+tick(3, 'wave35b hold-scope close (B)');
+const w35bHoldChecks = {
+  cardWasOpen: w35bD1Open,
+  holdBReleased: w35bD2.ai.demanding === false,
+  holdAStands: w35bD1.ai.demanding === true,
+  cardStillOpen: w30hailDisplay() === 'block',
+};
+console.log('wave35b hailClosed hold scope:', JSON.stringify(w35bHoldChecks));
+if (!Object.values(w35bHoldChecks).every(Boolean)) { console.log('WAVE35 HAILCLOSED HOLD SCOPE FAIL'); errors++; }
+w30removeShip(w35bD1);
+w30removeShip(w35bD2);
+tick(5, 'wave35b d cleanup');
+
+// No travel this section — the run never left freehold off the wave-35a
+// home leg, and the harness ends here.
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

@@ -985,13 +985,26 @@ function tickDeliveryJobs(ctx, ui) {
         completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${bountyPay} UU posted.`);
       }
     } else if (job.kind === 'haul' && ctx.flags.docked) {
+      // Wave 35: delivery binds the NAMED destination, closing the wave-26
+      // review MEDIUM — a payQuoted-stamped chain paid at ANY non-origin
+      // dock. otherSystemId names the primary-gate destination, the same id
+      // the board UI and the accept-time quote resolve (the ferry precedent:
+      // only the named far station pays). Side-gate arrivals in multi-gate
+      // origins no longer pay. Old saves need no migration: originSystem +
+      // payQuoted were stamped at accept, and this gate recomputes the same
+      // destination at delivery time.
       const origin = job.originSystem ?? 'freehold';
-      if (ctx.world.currentSystem === origin) continue; // must reach the OTHER system
+      const dest = otherSystemId(ctx, origin);
+      // Gates-less fallback (otherSystemId returns the origin itself): the
+      // job stays undeliverable — it can never pay at origin.
+      if (ctx.world.currentSystem !== dest || dest === origin) continue;
       if (holdUnits(ctx, 'provisions') < HAUL_UNITS) continue;
       removeCargo(ctx, 'provisions', HAUL_UNITS);
       const unitCost = job.originPrice || priceOf(ctx, 'provisions');
       const reward = job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
       ctx.world.credits += reward;
+      // The gate above makes this dock the named destination, so the line's
+      // station is always the one the quote was priced off.
       const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
       completeJob(ctx, job, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
     } else if (job.kind === 'ferry' && ctx.flags.docked) {
