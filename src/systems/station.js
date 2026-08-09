@@ -5,7 +5,7 @@ import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: auth
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
-import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
+import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -60,20 +60,21 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  * salvage, and recovery payouts are untouched.
  *
  * Wave 27: Beautiful Ones bloom station. When isBeautiful(def.faction) the
- * mesh is built by buildBeautifulStation — a flower–starfish hybrid: a
- * translucent, veined, breathing body with a pulsing mint heart, five
- * slowly undulating starfish arms webbed by breathing membrane fans, the
+ * mesh is built by buildBeautifulStation — a flower–starfish hybrid: an
+ * opaque deep-flesh breathing body (the ship.js living-hull recipe) with
+ * mint+crimson veins glowing from emissiveMaps, five slowly undulating
+ * starfish arms webbed by translucent breathing membrane fans, the
  * orchid-petal crown (the ringGroup, spun by update as always) growing out
  * of the arm-ring center, chandelier light clusters tucked beneath the
  * body, and a small pearl beacon nestled at the flower's throat, all
  * sculpted from organic.js primitives. Veins glow from WITHIN the flesh
- * (emissiveMap, the ship.js recipe) — no overlay meshes. update() drives
- * the tagged breath/sway parts via animateOrganic (zero-allocation;
- * frozen under reducedMotion) and the per-build tagPulse materials
- * (skin/web vein emissive, heart emissive). Cached shared organic
- * materials/textures are never disposed or pulse-tagged (teardownMesh
- * skips userData.shared); per-build materials/textures dispose exactly as
- * before. Every other faction's station path is byte-identical.
+ * (emissiveMap) — no overlay meshes. update() drives the tagged
+ * breath/sway parts via animateOrganic (zero-allocation; frozen under
+ * reducedMotion) and the per-build tagPulse materials (skin/web vein
+ * emissive). Cached shared organic materials/textures (including the
+ * module-cached bloom vein texture) are never disposed or pulse-tagged
+ * (teardownMesh skips userData.shared); per-build materials dispose
+ * exactly as before. Every other faction's station path is byte-identical.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -261,14 +262,13 @@ function buildStationMesh(ctx, systemId, def) {
 
 /**
  * Wave 27: 'The Bloom' — a Beautiful Ones station, grown not built. A
- * flower–starfish hybrid: a translucent nacre body (breathing skin over a
- * slow-pulsing mint heart) with five starfish arms in perpetual two-axis
- * undulation (0.09/0.13 Hz incommensurate sways — the tips trace a slow
- * Lissajous sweep that never dwells). Veins are EMISSIVE MAPS on the
- * skin/web materials themselves (the ship.js living-hull recipe: emissive
- * 0xffffff × shared vein texture, pulsed via emissiveIntensity) — never
- * additive overlay meshes, which read as wireframe cages. Membrane
- * web-fans breathe in the gaps between arms. The orchid-petal crown (the rotating
+ * flower–starfish hybrid: an OPAQUE deep-flesh body (the ship.js living-
+ * hull recipe — no translucency) with mint+crimson veins glowing from
+ * emissiveMaps and breathing via pulsed emissiveIntensity, five starfish
+ * arms in perpetual two-axis undulation (0.09/0.13 Hz incommensurate
+ * sways — the tips trace a slow Lissajous sweep that never dwells), and
+ * translucent membrane web-fans breathing in the gaps between arms (the
+ * one delicate translucent note). The orchid-petal crown (the rotating
  * ringGroup) is rooted at the arm-ring center so the flower grows OUT of
  * the starfish disc; a small pearl beacon lantern blinks at the flower's
  * throat (update() drives beaconMat/beaconGlowMat as on every station);
@@ -289,8 +289,22 @@ function buildStationMesh(ctx, systemId, def) {
  * beaconMat/glowMat/beaconGlowMat unchanged; organicParts rides the same
  * record.
  */
-function buildBeautifulStation(ctx, systemId, def) {
-  const mats = organicMaterials(); // cached shared set — never disposed, never pulse-tagged
+// The Bloom's vein texture: mint family plus a CRIMSON accent every 6th
+// vein (user-directed contrast). Count 16 (vs the toolkit default 42):
+// the station's surfaces are huge and fill the screen, so the default
+// density reads as a glowing lattice instead of branching veins on dark
+// flesh. Module-cached and userData.shared-marked like the
+// organicMaterials() caches — NEVER disposed (teardownMesh only disposes
+// maps lacking the shared mark).
+let _bloomVeinTex = null;
+function bloomVeinTexture() {
+  if (_bloomVeinTex) return _bloomVeinTex;
+  _bloomVeinTex = makeOrganicVeinTexture({ seed: 7331, colors: ['#7fe0a8', '#b8ffd8', '#e0485a'], count: 16 });
+  _bloomVeinTex.userData.shared = true;
+  return _bloomVeinTex;
+}
+
+function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMaterials(); // cached shared set — never disposed, never pulse-tagged
   const group = new THREE.Group();
   group.name = 'beautiful-station';
   group.userData.organic = true;
@@ -299,50 +313,48 @@ function buildBeautifulStation(ctx, systemId, def) {
   const lightMat = new THREE.MeshBasicMaterial({ color: 0x7fe0a8 }); // chandeliers
   const beaconMat = new THREE.MeshBasicMaterial({ color: 0xfdf6ec }); // opal-white
 
-  // --- per-build translucent materials (dispose with the mesh; their maps
-  // are the shared cached textures, which teardown skips via userData.shared).
-  // Veins are EMISSIVE MAPS on the flesh itself — the ship.js recipe
-  // (emissive 0xffffff × vein texture, so the texture's own colors carry) —
-  // never an additive overlay mesh, which reads as a wireframe cage.
-  // tagPulse rides emissiveIntensity: the vein network slowly brightens and
-  // dims like the living hull's breath.
+  // --- per-build flesh materials (dispose with the mesh; the emissiveMap
+  // is the module-cached bloom vein texture, which teardown skips via
+  // userData.shared). Veins are EMISSIVE MAPS on OPAQUE deep flesh — the
+  // ship.js living-hull recipe (no color map, emissive 0xffffff × vein
+  // texture so the texture's own colors carry) — never an additive overlay
+  // mesh, which reads as a wireframe cage. tagPulse rides emissiveIntensity:
+  // the vein network slowly brightens and dims like the living hull's
+  // breath.
   const skinMat = new THREE.MeshStandardMaterial({
-    map: mats.flesh.map, // shared nacre texture
-    color: 0xf6ece0,
-    transparent: true, opacity: 0.8,
-    roughness: 0.35, metalness: 0,
-    emissive: 0xffffff, emissiveMap: mats.veinGlow.map, emissiveIntensity: 0.9,
-    side: THREE.DoubleSide, depthWrite: false,
+    color: ORGANIC.deepFlesh, // opaque deep body flesh, like the living hull
+    roughness: 0.5, metalness: 0,
+    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.9,
   });
   tagPulse(skinMat, { base: 0.9, amp: 0.25, hz: 0.07 }); // veins breathe
   const webMat = new THREE.MeshStandardMaterial({
-    map: mats.flesh.map,
-    color: 0xdff5e6, // mint-tinged membrane
-    transparent: true, opacity: 0.38,
-    roughness: 0.35, metalness: 0,
-    emissive: 0xffffff, emissiveMap: mats.veinGlow.map, emissiveIntensity: 0.5,
+    color: 0x2a4a40, // deep membrane — translucent, the delicate contrast
+    transparent: true, opacity: 0.5,
+    roughness: 0.5, metalness: 0,
+    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.5,
     side: THREE.DoubleSide, depthWrite: false,
   });
   tagPulse(webMat, { base: 0.5, amp: 0.15, hz: 0.075, phase: 2.1 }); // offset from skin — never syncs
-  // The heart: emissive pulse visible through the translucent body.
-  const heartMat = new THREE.MeshStandardMaterial({
-    color: ORGANIC.mint, emissive: ORGANIC.mint, emissiveIntensity: 1.2,
-    roughness: 0.4,
-  });
-  tagPulse(heartMat, { base: 1.2, amp: 0.45, hz: 0.11 });
 
-  // --- core body: a squashed translucent sphere, breathing as one. The
-  // squash lives on the mesh; tagBreath sits on a holder group because
-  // breath drives scale.setScalar (uniform) around its base.
+  // --- core body: a squashed flesh sphere, breathing as one. The squash
+  // lives on the mesh; tagBreath sits on a holder group because breath
+  // drives scale.setScalar (uniform) around its base. (No inner heart mesh:
+  // the flesh is opaque now — the vein pulse IS the heartbeat.)
   const bodyGroup = new THREE.Group();
   bodyGroup.position.y = 4;
   const body = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), skinMat);
   body.scale.set(9, 6, 9);
   bodyGroup.add(body);
-  const heart = new THREE.Mesh(new THREE.SphereGeometry(3.6, 18, 14), heartMat);
-  bodyGroup.add(heart);
   tagBreath(bodyGroup, { depth: 0.02, hz: 0.18 });
   group.add(bodyGroup);
+
+  // --- bioluminescent fill: a soft mint point light at the body center so
+  // the opaque flesh READS as solid surface (the ship carries underLight
+  // for the same reason). Without it, far from the sun, only the emissive
+  // veins show and the body collapses to a glowing lattice.
+  const fleshLight = new THREE.PointLight(0x9fe8c8, 600, 140, 2);
+  fleshLight.position.set(0, 6, 0);
+  group.add(fleshLight);
 
   // --- five starfish arms: one shared tapered/drooping geometry. The veins
   // live in skinMat's emissiveMap (no overlay cage). Nested flex group =

@@ -1037,6 +1037,18 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   flesh presence. Spore motes switched mats.veinGlow → lightMat (vein
   texture on a sphere read as a wireframe ball). Live-verified:
   wireframe cage gone, veins glow inside translucent flesh.
+  Flesh fix (user: "too translucent — match my ship's skin; add red
+  veins"): skinMat is now OPAQUE deep flesh (ORGANIC.deepFlesh, no
+  color/transparency — the ship hull recipe); the heart mesh went with
+  the translucency (invisible inside opaque flesh — the vein pulse is
+  the heartbeat). New module-cached bloomVeinTexture() (mint family +
+  crimson every 6th, count 16 not 42 — station surfaces fill the
+  screen, so toolkit-default density read as a lattice), shared-marked,
+  never disposed. Key lighting finding: far from the sun, opaque flesh
+  renders BLACK and only emissive veins show (glowing-lattice look) —
+  the bloom carries a soft mint PointLight fill (600/140/decay 2) at
+  the body center, the same reason the ship carries underLight. webMat
+  stays the one translucent note (opacity 0.5).
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
