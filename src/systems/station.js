@@ -390,26 +390,53 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     group.add(web);
   }
 
-  // --- petal crown: seven orchid-petal sails rooted at the arm-ring center
-  // (y 4 — inside the translucent bell, at the heart) so the flower grows
-  // OUT of the starfish disc. This is ringGroup — update() spins it exactly
-  // like the stock habitat ring.
+  // --- petal crown: TWO whorls rooted at the arm-ring center (y 4, inside
+  // the bell pod) so the flower grows OUT of the starfish disc — seven
+  // large outer petals plus seven smaller inner sepals offset a half-step,
+  // with deterministic per-petal jitter (golden-hash walk) in angle,
+  // openness, and size: grown, never machined. petalMat is per-build opal
+  // flesh carrying the bloom vein emissiveMap — the flower shares the
+  // body's living veins. Activity: every petal flexes open/closed on its
+  // OWN incommensurate frequency, the whole crown breathes and slowly
+  // nods; update() spins it as always (RING_SPIN).
+  const petalMat = new THREE.MeshPhysicalMaterial({
+    color: 0xd8c8e0, // opal-pale petal flesh
+    roughness: 0.45, metalness: 0,
+    clearcoat: 0.4, clearcoatRoughness: 0.4,
+    emissive: 0xffffff, emissiveMap: bloomVeinTexture(), emissiveIntensity: 0.35,
+    transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false,
+  });
+  tagPulse(petalMat, { base: 0.35, amp: 0.12, hz: 0.09, phase: 1.1 }); // petal veins breathe, offset from skin/web
   const ringGroup = new THREE.Group();
   ringGroup.position.y = 4;
-  const petalGeo = makePetalGeometry({ length: 26, width: 11, curl: 5, cup: 2.5, segs: 14 });
+  const outerGeo = makePetalGeometry({ length: 26, width: 11, curl: 5, cup: 2.5, segs: 14 });
+  const innerGeo = makePetalGeometry({ length: 17, width: 8, curl: 6.5, cup: 3.5, segs: 12 });
   const PETALS = 7;
   for (let i = 0; i < PETALS; i++) {
-    const petal = new THREE.Mesh(petalGeo, mats.membrane);
-    // A holder group aims the petal radially; the mesh tilts its local +Z
-    // (petal length) up and out.
+    // Deterministic 0..1 jitter per petal (no RNG import; stable per index).
+    const j1 = Math.sin(i * 12.9898) * 0.5 + 0.5;
+    const j2 = Math.sin(i * 78.233) * 0.5 + 0.5;
+    // Outer whorl.
     const tilt = new THREE.Group();
-    tilt.rotation.y = (i * Math.PI * 2) / PETALS;
-    petal.rotation.x = -0.55; // tip climbs as the petal sweeps outward
-    petal.scale.setScalar(i % 2 ? 0.94 : 1.06); // uneven bloom
-    tagSway(petal, { axis: 'x', amp: 0.03, hz: 0.2, phase: i * 0.9 });
+    tilt.rotation.y = (i * Math.PI * 2) / PETALS + (j1 - 0.5) * 0.14;
+    const petal = new THREE.Mesh(outerGeo, petalMat);
+    petal.rotation.x = -0.55 - j1 * 0.18; // uneven openness
+    petal.scale.set(1 + (j2 - 0.5) * 0.24, 1, 1 + (j1 - 0.5) * 0.2);
+    tagSway(petal, { axis: 'x', amp: 0.08 + j1 * 0.05, hz: 0.13 + j2 * 0.14, phase: i * 0.9 });
     tilt.add(petal);
     ringGroup.add(tilt);
+    // Inner whorl — half-step offset, steeper, smaller.
+    const tilt2 = new THREE.Group();
+    tilt2.rotation.y = ((i + 0.5) * Math.PI * 2) / PETALS + (j2 - 0.5) * 0.12;
+    const sepal = new THREE.Mesh(innerGeo, petalMat);
+    sepal.rotation.x = -0.95 - j2 * 0.15;
+    sepal.scale.setScalar(0.9 + j1 * 0.2);
+    tagSway(sepal, { axis: 'x', amp: 0.06 + j2 * 0.04, hz: 0.17 + j1 * 0.1, phase: i * 1.3 + 0.6 });
+    tilt2.add(sepal);
+    ringGroup.add(tilt2);
   }
+  tagBreath(ringGroup, { depth: 0.03, hz: 0.09 }); // the whole bloom slowly opens/closes
+  tagSway(ringGroup, { axis: 'x', amp: 0.05, hz: 0.05 }); // …and nods (rotation.y spin is +=, unaffected)
   const crownHeart = new THREE.Mesh(new THREE.SphereGeometry(2.5, 14, 10), mats.gilt);
   ringGroup.add(crownHeart);
   group.add(ringGroup);

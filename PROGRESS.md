@@ -1066,6 +1066,17 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   size; beacon (1.5/12) and crownHeart (2.5) restored, their shrink
   was the misread. Bell again 50% smaller on user repeat:
   (4.5,3,4.5) → (2.2,1.5,2.2) — a quarter of the original pod.
+  Crown rework (user: "more organic, more active"): the single flat
+  7-petal whorl is now TWO whorls — 7 large outer petals + 7 smaller
+  steeper inner sepals offset a half-step — with deterministic
+  per-petal jitter (sin-hash walk, no RNG) in angle/openness/size.
+  Petals moved off shared mats.membrane onto per-build petalMat
+  (MeshPhysicalMaterial, opal-pale, clearcoat, bloom-vein emissiveMap
+  pulsing 0.35±0.12) so the flower shares the body's living veins.
+  Activity: per-petal open/close flex on individual incommensurate
+  frequencies (amp 0.06–0.13, hz 0.13–0.27 walks), whole-crown breath
+  (0.03 @ 0.09 Hz) and a slow nod (ringGroup sway x 0.05 @ 0.05 Hz —
+  rotation.y RING_SPIN is +=, unaffected).
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
