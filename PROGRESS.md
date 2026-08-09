@@ -1217,8 +1217,63 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   Reviews: security FIX-FIRST → the retaliation override; code
   FIX-FIRST → same P1 + the positive-control P3. Both closed same-wave;
   remaining LOWs standing below.
+- Wave 33: Bloom station v2 (user-directed — BeautifulOnes_Station_Example.png
+  committed as the target: glassy teal × warm amber, pads on the arms).
+  organic.js: ORGANIC palette extended additively (lagoon 0x2e8f86,
+  lagoonHot 0x6fe0d0, amber 0xffc978); no existing export touched.
+  station.js buildBeautifulStation rewritten: skinMat is now a
+  TRANSLUCENT lagoon-teal MeshPhysicalMaterial (opacity 0.58,
+  depthWrite false, clearcoat kept, emissiveMap = the shared
+  bloomVeinTexture retinted teal/amber same-seed, tagPulse on
+  emissiveIntensity) shared by the body bell + 5 arms; per-arm
+  'beautiful-hearth' amber MeshBasicMaterial glow cores (pulse rides
+  opacity — MeshBasicMaterial has no emissiveIntensity) nested in the
+  flex groups; 5 'beautiful-pad' GROUPS (userData.pad 0..4, dark disc +
+  2 gilt torus rings on shared mats.gilt + 6 lightMat rim lamps +
+  amber center disc) riding the arm sway; 5 'beautiful-node' lagoonHot
+  root orbs with additive glow sprites, per-node phased opacity pulse;
+  crown gains a third innermost whorl of 5 steep bud petals (19 total,
+  same jitter/flex conventions). Kept byte-contract: return record
+  keys, group.name/userData.organic/data position, dual-axis Lissajous
+  arm sway, webs/chandeliers/beacon/halo/motes/fleshLight (retinted),
+  shared-material disposal contract (verified: teardownMesh only ever
+  disposes mat.map, never emissiveMap — the shared vein cache is
+  unreachable from teardown). Boot test wave-33 section: real travel
+  to bt_cradle — 5 pads with exact userData.pad set, 5 hearths, 5
+  nodes, pads' ancestry carries the axis-z flex sway, crown found with
+  exactly 19 petals (indexed + transparent + DoubleSide discriminator),
+  one transparent emissiveMap FrontSide material shared by ≥6 meshes
+  (the skin), hearths warm (r>g>b); home leg back to freehold. PASS
+  ×3 consecutive + npm run build clean. Reviews: security 1 MEDIUM
+  (the skin-sharing predicate passed vacuously via the 19-mesh
+  DoubleSide petalMat) → fixed same-wave by discriminating
+  side !== DoubleSide; code APPROVE with 2 P3s (standing below);
+  designer visual pass SHIP — all 7 checkpoints (glassy skin with
+  in-surface veins, amber through the arms, pads read as pads, layered
+  bud crown, root orbs, no black-on-black, 44 tagged parts drifting,
+  nothing stalled) verified live in headless system Chrome on
+  SwiftShader WebGL2.
 
-## Next round candidates (wave 33)
+## Next round candidates (wave 34)
+- Wave 33 standing (review P3s, documented not patched):
+  - Hearth-tip breach: the amber hearth ellipsoid (fixed 0.27 pitch)
+    pokes ~0.41u outside the arm skin near spine t≈0.72 where the
+    droop steepens to 0.47 (code review, confidence 0.6, analytic).
+    Invisible in the SHIP'd visual pass (transparent depthWrite-off
+    skin glows regardless); shortening scale.z 6.3→~5.4 or re-centering
+    to t≈0.38 closes it if it ever reads.
+  - bt_cradle's sun (PointLight 300, decay 2, ~535u) contributes
+    ≈0.001 irradiance at the station — the bloom is effectively
+    self-lit (emissives + fleshLight + ambient), so sunward/anti-sun
+    shading barely differs. Lighting-model observation, not a defect.
+  - At ~150u+ the emissive vein lattice visually dominates the 0.58
+    skin fill (glassy up close, lattice-ish at range). Perception
+    note; not the wave-29 wireframe bug (surfaces + clearcoat render).
+- Wave 33 contract note for future station work: the boot test pins
+  the v2 structural surface — 5 'beautiful-pad' (userData.pad 0..4),
+  5 'beautiful-hearth', 5 'beautiful-node', 19 crown petals, and a
+  shared transparent/emissiveMap/FrontSide skin instance on ≥6 meshes.
+  Any v3 pass must update that section deliberately.
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
   docking still autosaves. Standing notes:
