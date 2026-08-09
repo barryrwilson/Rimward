@@ -1018,6 +1018,16 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   period, motion-verified live: all five holders swept ±0.05–0.10 rad
   in a 4 s sample); web breath depth 0.015 → 0.03. makeTendrilGeometry
   import dropped (station no longer uses it). Boot test re-PASS.
+  Motion fix (user: "arms moved a couple seconds then stopped"): the
+  single-axis sinusoid DWELLS near each extremum for seconds — reads as
+  stopped. Each arm now has a nested flex group with a second sway axis
+  at an incommensurate frequency (holder x 0.09 rad @ 0.09 Hz + flex z
+  0.06 rad @ 0.13 Hz, per-arm staggered phases) — a slow Lissajous
+  sweep that never stalls. Live-verified: page-side sampler, 10 × 2 s
+  intervals × 5 arms, zero stalls (≥1 axis moved > 0.004 rad every
+  interval). NOTE: animateOrganic is a deliberate no-op under
+  ctx.settings.reducedMotion (persisted 'rimward-settings-v1') — if the
+  station ever reads fully frozen, that toggle is the first suspect.
 ## Next round candidates (wave 30)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,

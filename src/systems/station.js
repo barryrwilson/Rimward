@@ -261,8 +261,9 @@ function buildStationMesh(ctx, systemId, def) {
 /**
  * Wave 27: 'The Bloom' — a Beautiful Ones station, grown not built. A
  * flower–starfish hybrid: a translucent nacre body (breathing skin over a
- * slow-pulsing mint heart) with five starfish arms undulating on a slow,
- * clearly visible sway (~14 s period), each cloaked in an additive vein
+ * slow-pulsing mint heart) with five starfish arms in perpetual two-axis
+ * undulation (0.09/0.13 Hz incommensurate sways — the tips trace a slow
+ * Lissajous sweep that never dwells), each cloaked in an additive vein
  * overlay that pulses traveling around the body, and membrane web-fans
  * breathing in the gaps between arms. The orchid-petal crown (the rotating
  * ringGroup) is rooted at the arm-ring center so the flower grows OUT of
@@ -355,12 +356,19 @@ function buildBeautifulStation(ctx, systemId, def) {
     tagPulse(veinMat, { base: 0.6, amp: 0.22, hz: 0.09, phase: i * 1.3 }); // pulse travels arm to arm
     const holder = new THREE.Group();
     holder.rotation.y = (i * Math.PI * 2) / 5 + (i % 2 ? 0.05 : -0.04); // grown, never machined
+    // Inner flex group: a SECOND sway axis at an incommensurate frequency.
+    // A single-axis sinusoid dwells motionless near each extremum for
+    // seconds (reads as "stopped"); two axes at 0.09/0.13 Hz never stall
+    // together — the tip traces a slow Lissajous sweep, always drifting.
+    const flex = new THREE.Group();
+    holder.add(flex);
     const armMesh = new THREE.Mesh(armGeo, skinMat);
-    holder.add(armMesh);
+    flex.add(armMesh);
     const veins = new THREE.Mesh(armGeo, veinMat);
     veins.scale.setScalar(1.03);
-    holder.add(veins);
-    tagSway(holder, { axis: 'x', amp: 0.07, hz: 0.07, phase: i * 1.1 }); // slow visible undulation: ~14s period, ±1.4u at the tip
+    flex.add(veins);
+    tagSway(holder, { axis: 'x', amp: 0.09, hz: 0.09, phase: i * 1.1 }); // vertical sweep: ±1.8u at the tip
+    tagSway(flex, { axis: 'z', amp: 0.06, hz: 0.13, phase: i * 1.7 + 0.9 }); // lateral roll: ±1.2u, off-beat
     group.add(holder);
   }
 
