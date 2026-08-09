@@ -5,6 +5,7 @@ import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: auth
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
+import { isBeautiful, organicMaterials, makePetalGeometry, makeTendrilGeometry, makeOrganicGlowTexture, tagSway, tagBreath, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -57,6 +58,16 @@ import { epicEffects } from '../game/epics.js';
  * payout reads the snapshot with a jobPay fallback for old saves, so a
  * mid-contract standing shift never moves an agreed price. Bounty, patrol,
  * salvage, and recovery payouts are untouched.
+ *
+ * Wave 27: Beautiful Ones bloom station. When isBeautiful(def.faction) the
+ * mesh is built by buildBeautifulStation — grown nacre lobes, an orchid-
+ * petal crown (the ringGroup, spun by update as always), a tendril docking
+ * arm, chandelier light clusters, and a pearl beacon lantern, all sculpted
+ * from organic.js primitives. update() drives the tagged breath/sway parts
+ * via animateOrganic (zero-allocation; frozen under reducedMotion). Cached
+ * shared organic materials/textures are never disposed (teardownMesh skips
+ * userData.shared); per-build materials/textures dispose exactly as before.
+ * Every other faction's station path is byte-identical.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -157,6 +168,7 @@ function makeGlowTexture(inner, outer) {
 }
 
 function buildStationMesh(ctx, systemId, def) {
+  if (isBeautiful(def.faction)) return buildBeautifulStation(ctx, systemId, def); // wave 27
   const scheme = schemeFor(systemId, def);
   const group = new THREE.Group();
   group.position.fromArray(def.station.position);
@@ -241,6 +253,168 @@ function buildStationMesh(ctx, systemId, def) {
   };
 }
 
+/**
+ * Wave 27: 'The Bloom' — a Beautiful Ones station, grown not built. A
+ * vertical spindle of bulbous nacre lobes with gilt vein seams, an
+ * orchid-petal crown (the rotating ringGroup), a tendril docking arm tipped
+ * with a gilt cradle ring at roughly the old box arm's extent (dock logic
+ * is position-only; the silhouette still reads as an approach lane), mint
+ * chandelier light clusters under the lobes, a pearl beacon lantern, and
+ * drifting spore-lantern motes. Overall envelope stays comparable to the
+ * spindle station (~±45u vertical, ~35u radius) so arrival framing holds.
+ *
+ * Shared cached organic materials (flesh/membrane/gilt/veinGlow) are used
+ * directly for sculpted parts and NEVER disposed (teardownMesh skips
+ * userData.shared). Light/beacon/glow materials and the organic glow
+ * textures are per-build and dispose with the mesh exactly as the stock
+ * station's do. update() spins ringGroup and pulses lightMat/beaconMat/
+ * glowMat/beaconGlowMat unchanged; organicParts rides the same record.
+ */
+function buildBeautifulStation(ctx, systemId, def) {
+  const mats = organicMaterials(); // cached shared set — never disposed
+  const group = new THREE.Group();
+  group.name = 'beautiful-station';
+  group.userData.organic = true;
+  group.position.fromArray(def.station.position);
+
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0x7fe0a8 }); // chandeliers
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xfdf6ec }); // opal-white
+
+  // --- core spindle: a stack of five bulbous shell lobes, breathing as one
+  const lobeGroup = new THREE.Group();
+  const lobeGeo = new THREE.SphereGeometry(1, 24, 18);
+  // [y, radius] bottom → top, decreasing; slight per-lobe squash/offset so
+  // no two lobes read alike (grown, never machined).
+  const LOBES = [
+    [-26, 13.0], [-12, 11.0], [0, 9.0], [11, 7.0], [21, 5.0],
+  ];
+  for (let i = 0; i < LOBES.length; i++) {
+    const [y, r] = LOBES[i];
+    const lobe = new THREE.Mesh(lobeGeo, mats.flesh);
+    lobe.scale.set(r, r * 0.75, r * 0.88);
+    lobe.position.set((i % 2 ? -1 : 1) * 0.8, y, (i % 2 ? 1 : -1) * 0.6);
+    lobeGroup.add(lobe);
+  }
+  // Gilt vein seams hugging the lobe joints — thin, slightly irregular rings.
+  const SEAMS = [
+    [-19, 10.6], [-6, 8.9], [5.5, 7.1], [16, 5.5],
+  ];
+  for (let i = 0; i < SEAMS.length; i++) {
+    const [y, r] = SEAMS[i];
+    const seam = new THREE.Mesh(new THREE.TorusGeometry(r, 0.35, 6, 40), mats.gilt);
+    seam.rotation.x = Math.PI / 2 + (i % 2 ? 0.03 : -0.03);
+    seam.scale.set(1.02, 0.98, 1);
+    seam.position.y = y;
+    lobeGroup.add(seam);
+  }
+  tagBreath(lobeGroup, { depth: 0.01, hz: 0.25 });
+  group.add(lobeGroup);
+
+  // --- petal crown: seven orchid-petal sails opening outward/up around the
+  // mid lobe. This is ringGroup — update() spins it exactly like the stock
+  // habitat ring.
+  const ringGroup = new THREE.Group();
+  const petalGeo = makePetalGeometry({ length: 26, width: 11, curl: 5, cup: 2.5, segs: 14 });
+  const PETALS = 7;
+  for (let i = 0; i < PETALS; i++) {
+    const petal = new THREE.Mesh(petalGeo, mats.membrane);
+    // A holder group aims the petal radially; the mesh tilts its local +Z
+    // (petal length) up and out.
+    const tilt = new THREE.Group();
+    tilt.rotation.y = (i * Math.PI * 2) / PETALS;
+    petal.rotation.x = -0.55; // tip climbs as the petal sweeps outward
+    petal.scale.setScalar(i % 2 ? 0.94 : 1.06); // uneven bloom
+    tagSway(petal, { axis: 'x', amp: 0.03, hz: 0.2, phase: i * 0.9 });
+    tilt.add(petal);
+    ringGroup.add(tilt);
+  }
+  const crownHeart = new THREE.Mesh(new THREE.SphereGeometry(2.5, 14, 10), mats.gilt);
+  ringGroup.add(crownHeart);
+  group.add(ringGroup);
+
+  // --- docking arm: a curved tendril tipped with a gilt cradle ring at
+  // roughly the old box arm's extent (old arm: z 3..25 at y -6).
+  const arm = new THREE.Mesh(
+    makeTendrilGeometry({ length: 26, radius: 1.6, sway: 4, taper: 0.35, radialSegs: 8, tubularSegs: 32 }),
+    mats.flesh,
+  );
+  arm.position.set(0, -8, 2);
+  group.add(arm);
+  const cradle = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.45, 8, 32), mats.gilt);
+  cradle.position.set(1.6, -8, 28); // tendril tip (sway * 0.4, length)
+  group.add(cradle);
+  const bulbGeo = new THREE.SphereGeometry(1, 10, 8);
+  for (let i = 0; i < 3; i++) {
+    const a = (i * Math.PI * 2) / 3;
+    const lamp = new THREE.Mesh(bulbGeo, lightMat);
+    lamp.scale.setScalar(0.6);
+    lamp.position.set(1.6 + Math.cos(a) * 3.4, -8 + Math.sin(a) * 3.4, 28);
+    group.add(lamp);
+  }
+
+  // --- chandelier light clusters hanging beneath three lobes (lightMat —
+  // update() pulses its color toward lightColor, as on every station).
+  const CLUSTERS = [
+    [6, -37, 4], [-8, -22, -5], [7, -10, 6],
+  ];
+  for (let c = 0; c < CLUSTERS.length; c++) {
+    const [cx, cy, cz] = CLUSTERS[c];
+    for (let i = 0; i < 5; i++) {
+      const bulb = new THREE.Mesh(bulbGeo, lightMat);
+      const s = 0.55 + ((i + c) % 3) * 0.22;
+      bulb.scale.setScalar(s);
+      bulb.position.set(
+        cx + Math.cos(i * 2.4) * 1.6,
+        cy - i * 0.9,
+        cz + Math.sin(i * 2.4) * 1.6,
+      );
+      group.add(bulb);
+    }
+  }
+
+  // --- beacon: a pearl lantern sphere crowning the top lobe + glow sprite.
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(2.4, 14, 10), beaconMat);
+  beacon.position.set(0, 38, 0);
+  group.add(beacon);
+  const beaconGlowMat = new THREE.SpriteMaterial({
+    map: makeOrganicGlowTexture('rgba(215,255,235,0.95)', 'rgba(127,224,168,0)'),
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8,
+  });
+  const beaconGlow = new THREE.Sprite(beaconGlowMat);
+  beaconGlow.scale.setScalar(34);
+  beaconGlow.position.set(0, 38, 0);
+  group.add(beaconGlow);
+
+  // --- halo: big mint-tinted additive glow (update() breathes its opacity).
+  const glowMat = new THREE.SpriteMaterial({
+    map: makeOrganicGlowTexture('rgba(165,240,205,0.8)', 'rgba(55,175,120,0)'),
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3,
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.setScalar(150);
+  group.add(glow);
+
+  // --- spore lantern motes: tiny bioluminescent bulbs drifting on slow
+  // sway around the bloom.
+  for (let i = 0; i < 8; i++) {
+    const orbit = new THREE.Group();
+    orbit.rotation.y = i * 2.4; // golden-ish spread
+    const mote = new THREE.Mesh(bulbGeo, mats.veinGlow);
+    mote.scale.setScalar(0.5 + (i % 3) * 0.18);
+    mote.position.set(22 + (i % 3) * 5, -20 + i * 5, 0);
+    orbit.add(mote);
+    tagSway(orbit, { axis: 'y', amp: 0.6, hz: 0.07, phase: i * 0.8 });
+    group.add(orbit);
+  }
+
+  ctx.scene.add(group);
+  return {
+    group, ringGroup, lightMat, beaconMat, glowMat, beaconGlowMat,
+    lightColor: new THREE.Color(0x7fe0a8),
+    organicParts: collectOrganic(group),
+  };
+}
+
 /** Remove the station mesh and release every GPU resource it holds. */
 function teardownMesh(ctx, mesh) {
   ctx.scene.remove(mesh.group);
@@ -248,7 +422,10 @@ function teardownMesh(ctx, mesh) {
     if (obj.geometry) obj.geometry.dispose();
     const mat = obj.material;
     if (mat) {
-      if (mat.map) mat.map.dispose();
+      // Wave 27: cached shared organic materials (and their maps) are
+      // never disposed — they outlive any single station build.
+      if (mat.userData.shared) return;
+      if (mat.map && !mat.map.userData.shared) mat.map.dispose();
       mat.dispose();
     }
   });
@@ -1407,6 +1584,7 @@ export function initStation(ctx) {
       mesh.beaconMat.visible = (ctx.elapsed % 1.6) < 1.05;
       mesh.glowMat.opacity = 0.3 + 0.12 * Math.sin(ctx.elapsed * 0.8);
       mesh.beaconGlowMat.opacity = mesh.beaconMat.visible ? 0.85 : 0.1;
+      if (mesh.organicParts) animateOrganic(mesh.organicParts, ctx.elapsed, ctx.settings.reducedMotion); // wave 27
 
       // Docking zone (hud.js reads ctx.station; we emit nothing for prompts).
       const shipObj = ctx.ship.object;

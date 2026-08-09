@@ -14,6 +14,17 @@ import {
 } from '../game/state.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod } from '../game/pods.js';
+import {
+  isBeautiful,
+  sculptGrownHull,
+  makePetalGeometry,
+  makeTendrilGeometry,
+  organicMaterials,
+  tagSway,
+  tagBreath,
+  collectOrganic,
+  animateOrganic,
+} from './organic.js';
 
 /**
  * NPC system — live NPC ships: procedural meshes + AI (doc §6.7, §7).
@@ -40,6 +51,17 @@ import { spawnPod } from '../game/pods.js';
  * update() performs zero allocations: all scratch vectors/quaternions are
  * module-scope; allocations happen only on spawn, hail, capitulation, or
  * destruction (event-time, not per-frame).
+ *
+ * Wave 27 (Beautiful Ones organic technology): beautiful-faction ships are
+ * GROWN, not built — buildBeautifulShip sculpts nacre hulls, orchid-petal
+ * sail fins, and tendril tails from the organic.js toolkit instead of the
+ * box/cone placeholder switch. Pirate-role beautiful ships use the
+ * `tarnished` material variant (the fallen-Beautiful look). Grown groups
+ * are named 'beautiful-ship' with userData.organic = { classKey, role,
+ * tarnished }, a mint engine glow, and per-part sway/breath animated from
+ * the update loop via animateOrganic (zero-alloc, frozen under
+ * ctx.settings.reducedMotion). Geometries/materials are module-scope
+ * cached and shared (factionMaterials pattern — never disposed).
  */
 
 // ---------- module-scope scratch (no per-frame allocation) ----------
@@ -95,8 +117,255 @@ function part(group, geometry, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz
   return m;
 }
 
-/** Build a faction-colored ship mesh. Nose points along local -Z (ship.js convention). */
-function buildShipMesh(classKey, faction) {
+// ---------- Beautiful Ones grown ships (wave 27) ----------
+// Beautiful technology is grown, not built: sculpted nacre hulls,
+// orchid-petal sail fins, tendril tails, gilt veining — zero straight
+// edges. All geometry is cached per classKey at module scope and shared
+// across every spawn (factionMaterials pattern — NEVER disposed); the
+// tarnished ("fallen Beautiful" pirate) variant reuses the SAME geometries
+// with the tarnished organicMaterials() set. Animation is part-level only
+// (fin/tendril sway, hull/pod breath) — no per-vertex mutation, which stays
+// unique to the player ship (ship.js). The shared veinGlow/membrane/flesh/
+// gilt materials are never tagPulse'd (pulse params live on material
+// userData — one slot; these are shared).
+const beautifulGeos = {}; // classKey → { hull, fins, extras, tail, glowZ } (shared, never disposed)
+let beautifulGlowMat = null; // mint engine glow (shared, never disposed)
+
+function beautifulGeosFor(classKey) {
+  let c = beautifulGeos[classKey];
+  if (c) return c;
+  switch (classKey) {
+    case 'freighter': {
+      // Salon barge: broad heavy hull, two grand petal sail fins swept
+      // up/back, four pearl blister cargo pods slung ventrally, gilt keel.
+      const hull = sculptGrownHull({
+        spine: 2.3, midWiden: 2.8, tailStart: 1.4, tailRate: 1.0,
+        flatten: 0.42, camber: 0.22, headBulge: 0.12,
+      }).geo;
+      hull.scale(1.8, 1.8, 1.8);
+      const blister = new THREE.SphereGeometry(1, 18, 12);
+      blister.scale(1.15, 0.75, 1.55);
+      const keel = new THREE.SphereGeometry(1, 12, 8);
+      keel.scale(0.16, 0.16, 3.4);
+      const sailA = makePetalGeometry({ length: 5.4, width: 2.6, curl: 1.2, cup: 0.55 });
+      const sailB = makePetalGeometry({ length: 5.4, width: 2.6, curl: 1.2, cup: 0.55 });
+      c = {
+        hull,
+        glowZ: 3.9,
+        fins: [
+          { geo: sailA, x: 1.6, y: 0.8, z: 0.4, rx: -0.15, ry: -0.2, rz: -1.05, axis: 'z', amp: 0.07, hz: 0.32 },
+          { geo: sailB, x: -1.6, y: 0.8, z: 0.4, rx: -0.15, ry: 0.2, rz: 1.05, axis: 'z', amp: 0.07, hz: 0.32 },
+        ],
+        extras: [
+          { geo: blister, mat: 'flesh', x: 2.6, y: -0.85, z: 1.4, breath: { depth: 0.05, hz: 0.22 } },
+          { geo: blister, mat: 'flesh', x: -2.6, y: -0.85, z: 1.4, breath: { depth: 0.05, hz: 0.22 } },
+          { geo: blister, mat: 'flesh', x: 2.6, y: -0.85, z: -1.4, breath: { depth: 0.05, hz: 0.22 } },
+          { geo: blister, mat: 'flesh', x: -2.6, y: -0.85, z: -1.4, breath: { depth: 0.05, hz: 0.22 } },
+          { geo: keel, mat: 'gilt', x: 0, y: -0.8, z: 0.2 },
+        ],
+        tail: { geo: makeTendrilGeometry({ length: 3.4, radius: 0.22, sway: 0.4, taper: 0.25 }), x: 0, y: 0, z: 3.1, amp: 0.05, hz: 0.4 },
+      };
+      break;
+    }
+    case 'cutter': {
+      // Slim predator ray: narrow fast profile (low midWiden, hard tail
+      // whip), two swept petal fins, one dorsal petal crest.
+      const hull = sculptGrownHull({
+        spine: 2.5, midWiden: 1.5, tailStart: 1.1, tailRate: 2.3,
+        flatten: 0.26, camber: 0.12, headBulge: 0.05,
+      }).geo;
+      hull.scale(1.2, 1.2, 1.2);
+      const finA = makePetalGeometry({ length: 3.6, width: 1.5, curl: 0.55, cup: 0.3 });
+      const finB = makePetalGeometry({ length: 3.6, width: 1.5, curl: 0.55, cup: 0.3 });
+      c = {
+        hull,
+        glowZ: 2.85,
+        fins: [
+          { geo: finA, x: 0.9, y: 0.1, z: 0.1, rx: 0, ry: 0.85, rz: -0.25, axis: 'z', amp: 0.1, hz: 0.55 },
+          { geo: finB, x: -0.9, y: 0.1, z: 0.1, rx: 0, ry: -0.85, rz: 0.25, axis: 'z', amp: 0.1, hz: 0.55 },
+          { geo: makePetalGeometry({ length: 2.6, width: 0.9, curl: 0.7, cup: 0.25 }), x: 0, y: 0.4, z: -0.2, rx: -1.0, ry: 0, rz: 0, axis: 'y', amp: 0.06, hz: 0.5 },
+        ],
+        extras: [],
+        tail: { geo: makeTendrilGeometry({ length: 3.4, radius: 0.12, sway: 0.55, taper: 0.2 }), x: 0, y: 0, z: 2.2, amp: 0.07, hz: 0.5 },
+      };
+      break;
+    }
+    case 'heavy':
+    case 'frigate': {
+      // Grand swan-manta: broad hull, tall dorsal sail crest curling
+      // forward like a swan neck, gilt vein spine. Frigate runs ~1.6×
+      // (mirroring the placeholder's larger relative scale; class size
+      // ordering preserved).
+      const k = classKey === 'frigate' ? 1.6 : 1;
+      const s = 2.0 * k;
+      const hull = sculptGrownHull({
+        spine: 2.2, midWiden: 2.5, tailStart: 1.3, tailRate: 1.3,
+        flatten: 0.34, camber: 0.2, headBulge: 0.1,
+      }).geo;
+      hull.scale(s, s, s);
+      const spineGeo = new THREE.SphereGeometry(1, 12, 8);
+      spineGeo.scale(0.14 * k, 0.14 * k, 2.8 * k);
+      const finA = makePetalGeometry({ length: 4.4 * k, width: 1.7 * k, curl: 0.7 * k, cup: 0.35 * k });
+      const finB = makePetalGeometry({ length: 4.4 * k, width: 1.7 * k, curl: 0.7 * k, cup: 0.35 * k });
+      c = {
+        hull,
+        glowZ: 2.2 * s * 0.95,
+        fins: [
+          { geo: finA, x: 2.2 * k, y: 0.1 * k, z: 0.3 * k, rx: 0, ry: 0.7, rz: -0.2, axis: 'z', amp: 0.08, hz: 0.4 },
+          { geo: finB, x: -2.2 * k, y: 0.1 * k, z: 0.3 * k, rx: 0, ry: -0.7, rz: 0.2, axis: 'z', amp: 0.08, hz: 0.4 },
+          { geo: makePetalGeometry({ length: 5.0 * k, width: 1.6 * k, curl: 1.7 * k, cup: 0.4 * k }), x: 0, y: 0.95 * k, z: -0.4 * k, rx: -0.9, ry: 0, rz: 0, axis: 'y', amp: 0.05, hz: 0.3 },
+        ],
+        extras: [
+          { geo: spineGeo, mat: 'gilt', x: 0, y: 0.95 * k, z: 0.9 * k },
+        ],
+        tail: { geo: makeTendrilGeometry({ length: 3.8 * k, radius: 0.18 * k, sway: 0.45 * k, taper: 0.22 }), x: 0, y: 0, z: 3.3 * k, amp: 0.05, hz: 0.35 },
+      };
+      break;
+    }
+    case 'ace': {
+      // Duelist ray: elegant narrow hull; the placeholder's gilt crest ring
+      // becomes a crown of gilt tendrils arcing back over the head —
+      // recognizable at distance.
+      const hull = sculptGrownHull({
+        spine: 2.7, midWiden: 1.7, tailStart: 1.2, tailRate: 1.9,
+        flatten: 0.24, camber: 0.14, headBulge: 0.07,
+      }).geo;
+      hull.scale(1.3, 1.3, 1.3);
+      const crown = makeTendrilGeometry({ length: 1.8, radius: 0.07, sway: 0.5, taper: 0.12 });
+      const finA = makePetalGeometry({ length: 3.4, width: 1.3, curl: 0.6, cup: 0.3 });
+      const finB = makePetalGeometry({ length: 3.4, width: 1.3, curl: 0.6, cup: 0.3 });
+      c = {
+        hull,
+        glowZ: 3.3,
+        fins: [
+          { geo: finA, x: 1.1, y: 0.1, z: 0.1, rx: 0, ry: 0.9, rz: -0.3, axis: 'z', amp: 0.12, hz: 0.6 },
+          { geo: finB, x: -1.1, y: 0.1, z: 0.1, rx: 0, ry: -0.9, rz: 0.3, axis: 'z', amp: 0.12, hz: 0.6 },
+        ],
+        extras: [
+          { geo: crown, mat: 'gilt', x: 0, y: 0.45, z: -1.1, rx: -0.55, ry: -0.6, sway: { axis: 'y', amp: 0.05, hz: 0.65 } },
+          { geo: crown, mat: 'gilt', x: 0, y: 0.45, z: -1.1, rx: -0.55, ry: -0.3, sway: { axis: 'y', amp: 0.05, hz: 0.65 } },
+          { geo: crown, mat: 'gilt', x: 0, y: 0.45, z: -1.1, rx: -0.62, ry: 0, sway: { axis: 'y', amp: 0.05, hz: 0.65 } },
+          { geo: crown, mat: 'gilt', x: 0, y: 0.45, z: -1.1, rx: -0.55, ry: 0.3, sway: { axis: 'y', amp: 0.05, hz: 0.65 } },
+          { geo: crown, mat: 'gilt', x: 0, y: 0.45, z: -1.1, rx: -0.55, ry: 0.6, sway: { axis: 'y', amp: 0.05, hz: 0.65 } },
+        ],
+        tail: { geo: makeTendrilGeometry({ length: 3.2, radius: 0.12, sway: 0.45, taper: 0.2 }), x: 0, y: 0, z: 2.6, amp: 0.06, hz: 0.55 },
+      };
+      break;
+    }
+    default: {
+      // Light / unknown: small dart-ray.
+      const hull = sculptGrownHull({
+        spine: 2.1, midWiden: 1.9, tailStart: 1.2, tailRate: 1.8,
+        flatten: 0.3, camber: 0.14, headBulge: 0.08,
+      }).geo;
+      const finA = makePetalGeometry({ length: 2.4, width: 1.1, curl: 0.45, cup: 0.28 });
+      const finB = makePetalGeometry({ length: 2.4, width: 1.1, curl: 0.45, cup: 0.28 });
+      c = {
+        hull,
+        glowZ: 2.0,
+        fins: [
+          { geo: finA, x: 0.7, y: 0.05, z: 0, rx: 0, ry: 0.95, rz: -0.3, axis: 'z', amp: 0.14, hz: 0.7 },
+          { geo: finB, x: -0.7, y: 0.05, z: 0, rx: 0, ry: -0.95, rz: 0.3, axis: 'z', amp: 0.14, hz: 0.7 },
+        ],
+        extras: [],
+        tail: { geo: makeTendrilGeometry({ length: 2.4, radius: 0.1, sway: 0.4, taper: 0.25 }), x: 0, y: 0, z: 1.6, amp: 0.08, hz: 0.6 },
+      };
+      break;
+    }
+  }
+  beautifulGeos[classKey] = c;
+  return c;
+}
+
+/**
+ * Grow a Beautiful Ones ship (wave 27). Nose -Z, class-comparable scale.
+ * `role` selects the material variant: pirates are tarnished (fallen
+ * Beautiful). Every fin mesh is named 'beautiful-fin' and sway-tagged; the
+ * hull breathes; the tendril tail sways gently. Sets userData.glow (mint,
+ * shared geometry/material — consumers mutate scale/visible only),
+ * userData.organic, and userData.organicParts for the update loop.
+ */
+function buildBeautifulShip(classKey, role) {
+  role = role ?? SHIP_CLASSES[classKey]?.role ?? 'trader';
+  const tarnished = role === 'pirate';
+  const mats = organicMaterials({ tarnished });
+  const spec = beautifulGeosFor(classKey);
+  const g = new THREE.Group();
+  g.name = 'beautiful-ship';
+
+  // Nacre hull + mint vein-glow overlay shell riding just off the skin
+  // (child of the hull so it inherits the breath scale).
+  const hull = new THREE.Mesh(spec.hull, mats.flesh);
+  tagBreath(hull, { depth: 0.012, hz: 0.16, phase: Math.random() * Math.PI * 2 });
+  const veins = new THREE.Mesh(spec.hull, mats.veinGlow);
+  veins.scale.setScalar(1.018);
+  hull.add(veins);
+  g.add(hull);
+
+  // Petal fins: translucent membrane over a veinGlow liner that glows
+  // through. Each fin sways on its tagged axis around its rest rotation.
+  for (let i = 0; i < spec.fins.length; i++) {
+    const f = spec.fins[i];
+    const fin = new THREE.Mesh(f.geo, mats.membrane);
+    fin.name = 'beautiful-fin';
+    fin.position.set(f.x, f.y, f.z);
+    fin.rotation.set(f.rx, f.ry, f.rz);
+    tagSway(fin, { axis: f.axis, amp: f.amp, hz: f.hz, phase: Math.random() * Math.PI * 2 });
+    const liner = new THREE.Mesh(f.geo, mats.veinGlow);
+    liner.scale.set(0.92, 0.92, 0.97);
+    liner.position.y = 0.02;
+    fin.add(liner);
+    g.add(fin);
+  }
+
+  // Class extras: blister cargo pods (breathing), gilt keel/vein spine,
+  // ace gilt tendril crown (swaying).
+  for (let i = 0; i < spec.extras.length; i++) {
+    const e = spec.extras[i];
+    const mesh = new THREE.Mesh(e.geo, e.mat === 'gilt' ? mats.gilt : mats.flesh);
+    mesh.position.set(e.x, e.y, e.z);
+    mesh.rotation.set(e.rx ?? 0, e.ry ?? 0, e.rz ?? 0);
+    if (e.breath) tagBreath(mesh, { depth: e.breath.depth, hz: e.breath.hz, phase: Math.random() * Math.PI * 2 });
+    if (e.sway) tagSway(mesh, { axis: e.sway.axis, amp: e.sway.amp, hz: e.sway.hz, phase: Math.random() * Math.PI * 2 });
+    g.add(mesh);
+  }
+
+  // Tendril tail, gently swaying at the sculpted stern.
+  const tail = new THREE.Mesh(spec.tail.geo, mats.flesh);
+  tail.position.set(spec.tail.x, spec.tail.y, spec.tail.z);
+  tagSway(tail, { axis: 'y', amp: spec.tail.amp, hz: spec.tail.hz, phase: Math.random() * Math.PI * 2 });
+  g.add(tail);
+
+  // Mint engine glow at the sculpted tail — same shared-geometry contract
+  // as the standard glow (consumers mutate scale/visible only, so a second
+  // shared material is safe).
+  glowGeo ??= new THREE.SphereGeometry(0.55, 8, 6);
+  beautifulGlowMat ??= new THREE.MeshBasicMaterial({
+    color: 0x7fe0a8,
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const glow = new THREE.Mesh(glowGeo, beautifulGlowMat);
+  glow.position.set(0, 0, spec.glowZ);
+  g.add(glow);
+  g.userData.glow = glow;
+
+  g.userData.organic = { classKey, role, tarnished };
+  g.userData.organicParts = collectOrganic(g);
+  return g;
+}
+
+/**
+ * Build a faction-colored ship mesh. Nose points along local -Z (ship.js
+ * convention). Beautiful-Ones factions delegate to buildBeautifulShip
+ * (wave 27: grown organic hulls; `role` selects the tarnished fallen-
+ * Beautiful material variant for pirates). Every other faction takes the
+ * box/cone placeholder path below, unchanged.
+ */
+function buildShipMesh(classKey, faction, role) {
+  if (isBeautiful(faction)) return buildBeautifulShip(classKey, role);
   const { hull, trim } = materialsFor(faction);
   const g = new THREE.Group();
   let glowZ = 3;
@@ -227,7 +496,7 @@ function makeAi(ctx, record, startPos) {
 // returned object itself. removeLiveShip removes the mesh only; traffic
 // splices the list (its splice is defensive if the entry is already gone).
 export function spawnLiveShip(ctx, record, position) {
-  const object = buildShipMesh(record.classKey, record.faction);
+  const object = buildShipMesh(record.classKey, record.faction, record.role ?? SHIP_CLASSES[record.classKey]?.role ?? 'trader');
   object.position.copy(position);
   ctx.scene.add(object);
   // createShipState reads { name, faction, cargo, resolve, personality,
@@ -818,6 +1087,14 @@ export function initNpc(ctx) {
         }
         tickShipState(st, now, dt);
         const ai = live.ai;
+        // Wave 27: grown Beautiful-Ones ships breathe/sway. Driven BEFORE the
+        // disabled branch — a surrendered/engine-out living hull still
+        // breathes (it is alive, not destroyed). ctx.elapsed is the
+        // visual-animation clock (ship.js/gate.js/station.js convention;
+        // `now` is the game-logic clock). Zero-alloc; no-op under
+        // reducedMotion.
+        const op = live.object.userData.organicParts;
+        if (op) animateOrganic(op, ctx.elapsed, ctx.settings.reducedMotion);
         if (st.disabled) {
           updateDisabled(live, dt, now);
           continue;

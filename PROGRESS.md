@@ -868,42 +868,113 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   credits delta with job-done pinning). npm run test:boot PASS ×7
   consecutive; npm run build clean (only the pre-existing >500 kB chunk
   warning).
-## Next round candidates (wave 27)
-- Generated-system depth, part 4 is in: landmarks (wave 23), hub
-  dockmasters (23), procedural dockmaster contacts at all 91 non-hub
-  generated stations (24), faction-specific station services (24),
-  per-faction dockmaster recognition/rumor voice (25), the
-  generated-dockmaster favor economy (26 — earn at GENERATED_KNOWN_TRUST
-  post-bump, spend to comp the yard session-scoped through the shared
-  keeperComp path, FACTION_COMP voice), and the ferry/haul payQuoted
-  agreement (26 — destination chain snapshotted at accept, quote == pay,
-  old saves fall back to the live chain). Standing: generated systems
-  hold no clues BY DESIGN (the authored total stays 6 —
-  convergence/deepening math); the pre-existing wave-6 haul delivery
-  gate still never enforced the named destination the way ferry does,
-  so a stamped haul chain pays at any non-origin dock (wave-26 review
-  MEDIUM — gate delivery on otherSystemId(originSystem) if the named
-  destination is ever meant to bind; multi-gate systems make that a
-  gameplay decision, not a patch); generated dockmasters' recognition
-  still tops out at the shared comp ship line (keeper-style
-  ledger/vouch/chart mechanics stay authored-id BY DESIGN).
+- Wave 27: Beautiful Ones organic technology — the 'beautiful'
+  faction's technology is grown, not built (user-directed; the first
+  real modeling beyond the player's living ship). NEW
+  src/systems/organic.js: the shared beautech toolkit — ORGANIC
+  palette (nacre/mint/gilt/opal), deterministic seeded canvas textures
+  (nacre iridescence, generalized vein, radial glow),
+  sculptGrownHull (ship.js makeLivingHull generalized with a tunable
+  profile; defaults verified byte-equivalent), hand-built parametric
+  makePetalGeometry (cupped/curled membrane sail, no three/examples),
+  makeTendrilGeometry (S-curve tapered tube), cached
+  organicMaterials({tarnished}) (flesh/membrane/gilt/veinGlow;
+  userData.shared-marked, never disposed), and the zero-alloc
+  tagSway/tagBreath/tagPulse + collectOrganic/animateOrganic
+  animation convention (complete no-op under reducedMotion). npc.js:
+  buildShipMesh gains a role param (spawnLiveShip passes the record
+  role); isBeautiful(faction) delegates to buildBeautifulShip — five
+  grown silhouettes (freighter salon barge with pearl blister pods,
+  cutter predator ray, heavy/frigate swan-manta with dorsal sail
+  crest, ace duelist ray with gilt tendril crown, dart-ray default),
+  module-scope per-class geometry caches, mint beautifulGlowMat engine
+  glow (userData.glow contract preserved), tarnished materials for
+  pirate role, group.name 'beautiful-ship' + userData.organic
+  {classKey, role, tarnished}; animateOrganic driven in the update
+  loop BEFORE the disabled branch (a surrendered/engine-out living
+  hull still breathes — review P3 fixed inline). station.js:
+  buildBeautifulStation 'The Bloom' (5 nacre lobes breathing at
+  0.25 Hz, 7-petal orchid crown as the rotating ringGroup, gilt vein
+  seams, tendril docking arm with gilt cradle + mint lane lamps,
+  chandelier bulb clusters, pearl beacon lantern, mint halo, drifting
+  spore motes) returning the exact record shape update() consumes;
+  teardownMesh skips userData.shared materials/maps. gate.js: the
+  Lamplighter ring stays Guild brass but is GROWN OVER in beautiful
+  systems — arc-bent tendrils hugging the torus (centerline pinned
+  R=30.000), membrane petals cocooning alternating chevrons
+  (parented INTO a.chevrons so they co-rotate — review P3 fixed
+  inline), 4 tagPulse'd mint bud-lanterns per assembly (disposed in
+  rebuild), gilt vine rings, mint swirl/beacon/glow; group names and
+  route userData untouched. landmarks.js: four glaze builders (sunken
+  salon barge ribs, blown-glass lantern, mirror-petal obelisk, the
+  bloom) gated by isBeautiful(def.faction), deterministic
+  FNV-1a-seeded scatter, registerDimmable/addPulse contracts
+  preserved, CONVERGENCE/DEEPENING sites never glazed (§25); PLUS a
+  real production fix the wave-27 identity pin exposed: update()'s
+  mystery-record watch was over-broad — a same-system death-restore
+  swaps ctx.world.mystery for a semantically identical new object and
+  the old code rebuilt the whole POI scene; now hint flips rebuild
+  (structural) and record swaps re-apply dimming in place.
+  Post-review browser catch: veinGlow was NormalBlending — the
+  black-background vein texture cloaked hulls in 90% black (invisible
+  ships); now AdditiveBlending + depthWrite false (the ship.js
+  emissiveMap pattern). Boot test wave-27 section: toolkit shapes
+  (formula-exact sway/breath/pulse at solved peak/trough times,
+  reducedMotion freeze), real spawnLiveShip drives (beautiful
+  freighter, tarnished pirate cutter, veridian negative control),
+  freehold negative controls, real 3-leg travel
+  freehold→veridian→gc_auction→bt_cradle (station at the data
+  position, one overgrowth + 4 buds per gate, glaze root userData),
+  a real dock/undock at The Cradle, the station animation drive, and
+  the death-restore identity pin (station same object, glaze root
+  survives) + same-system re-emit rebuild proof. Independent review
+  APPROVE (0 CRITICAL/HIGH/MEDIUM; both P3s fixed inline above).
+  npm run test:boot PASS ×7 consecutive ×3 rounds (post-implementation,
+  post-review-fix, post-veinGlow); npm run build clean (only the
+  pre-existing >500 kB chunk warning). Browser-verified (real Chrome,
+  WebGL): the 3-leg gate/hub-route flight, the Bloom approach + hero
+  shots (lobes/crown/lantern/spore motes), the overgrown gate (mint
+  bore, buds, cocooning petals), the patrol heavy's additive vein
+  tracery, and the Mirror Monument glaze with its real proximity
+  discovery toast.
+## Next round candidates (wave 28)
+- Wave 27 (Beautiful Ones organic technology) is in: the 'beautiful'
+  faction's ships/stations/gates/landmarks are GROWN, not built —
+  the first real modeling beyond the player's living ship (the rest was
+  placeholder boxes/cylinders). Standing notes:
+  - Cast faction rules (world.js createRecords, unchanged) mean
+    beautiful ships appear only as traders i%3==0 and patrol 0 in
+    beautiful systems; pirates are always redledger/independent, so the
+    tarnished fallen-Beautiful variant (organicMaterials({tarnished}))
+    is synthetic-only unless the cast table ever flies pirates beautiful
+    — a gameplay decision, not a patch.
+  - organicMaterials/geometry caches are userData.shared-marked, never
+    disposed; station/gate/landmark teardown paths skip them. Never
+    tagPulse a cached shared material (one userData.pulse slot);
+    never Material.clone one (clone deep-copies userData — false
+    shared flag). veinGlow is AdditiveBlending by contract: the vein
+    texture is black-background and a normal-blended overlay cloaks the
+    hull in 90% black (caught in browser verification, fixed).
+  - landmarks.js: a save-load mystery-record identity swap no longer
+    rebuilds the POI scene (latent over-broad watch, first exposed by
+    the wave-27 death-restore identity pin). Hint flips still rebuild;
+    swaps re-apply dimming in place — also covers swapped records with
+    different ids at equal lengths, which the old length watch missed.
+  - Beautiful systems hold monuments only (all three landmarks are
+    monument-kind); the wreck/beacon/anomaly glazes are implemented and
+    boot-tested via synthetic defs but have no live site yet.
+- The pre-existing wave-6 haul delivery gate STILL never enforced the
+  named destination the way ferry does (wave-26 review MEDIUM): a
+  payQuoted-stamped haul chain pays at any non-origin dock. Gate
+  delivery on otherSystemId(originSystem) if the named destination is
+  ever meant to bind; multi-gate systems make that a gameplay decision,
+  not a patch.
 - NPC hub-route migration asymmetry: DECIDED lore in wave 22 (junctions
   are player/Guild infrastructure; physical gates only — recorded on
   pickMigrant in world.js). No action standing; revisit only if routed
   systems ever need living traffic.
-- The trust-60 tier now rides one exported constant
-  (KEEPER_COMP_TRUST); a future numeric rebalance is a one-line
-  change, but every 60-gate still has an independent
-  system/milestone/ledger gate to re-check if the number moves.
 - Counters (callowReturns, callowRefusals, ledgerIdx) still never
   reset; vouchAck is a bool; mystery.charted grows by landmark id and
   stays bounded by the AUTHORED landmark tables (wave 23 gate) —
-  self-limiting. The wave-17/18 assessments found no action worth
-  taking: ledgerIdx is modulo-bounded, charted is deduped by authored
-  ids, vouchAck is one bit per keeper, and the Callow cursors grow only
-  +1 per real Verge visit with exact arithmetic pinned by existing
-  gates.
-- Polish debt: none standing; both pre-existing boot-test flakes
-  were closed in wave 20, and the wave-20 follow-up fixed the
-  cross-system event-pressure leak behind the residual hermit-walk
-  flake (0/300 post-fix). Boot test remains the gate.
+  self-limiting (waves 17/18 assessments stand).
+- Polish debt: none standing. Boot test remains the gate.

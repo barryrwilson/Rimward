@@ -96,6 +96,21 @@
 // without the snapshot falls back to the live chain — the wave-6
 // behavior; the snapshot and the banked favors ride the dock autosave
 // and death-restore, roster 103 intact).
+// Wave 27: Beautiful Ones organic technology — the grown look end-to-end:
+// the organic.js toolkit shapes pure (sculpted-hull metadata, indexed
+// petal/tendril geometry with normals+uvs, identity-cached shared
+// materials, the collectOrganic/animateOrganic tag walk with a
+// reducedMotion freeze), real spawnLiveShip meshes (beautiful freighter
+// and pirate cutter named/tagged, the tarnished fallen-Beautiful variant,
+// a veridian freighter negative control), the real 3-leg flight to
+// bt_cradle (one 'beautiful-station' at the data position, every gate
+// assembly overgrown with exactly 4 bud sprites, the landmark POI glazed
+// with poiId/poiType/kind intact — freehold as the negative control), a
+// real dock at The Cradle, the animation drive on the live station group
+// (formula-exact sway/breath, frozen under reducedMotion, restored), and
+// the dock-autosave + death-restore + same-system re-emit roundtrip (the
+// station object survives, gates/landmarks rebuild with the overgrowth
+// stable).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
 
@@ -267,6 +282,10 @@ const { initOrigins } = await import('../src/game/origins.js');
 const { initOnboarding } = await import('../src/systems/onboarding.js');
 const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
 const { initHud } = await import('../src/systems/hud.js');
+const {
+  ORGANIC, isBeautiful, sculptGrownHull, makePetalGeometry, makeTendrilGeometry,
+  organicMaterials, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic,
+} = await import('../src/systems/organic.js'); // wave 27: Beautiful Ones organic toolkit
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
@@ -5902,6 +5921,365 @@ const w26restoreChecks = {
 };
 console.log('wave26 restore:', JSON.stringify(w26restoreChecks));
 if (!Object.values(w26restoreChecks).every(Boolean)) { console.log('WAVE26 RESTORE FAIL'); errors++; }
+
+// ---- Wave 27: Beautiful Ones organic technology — grown ships, station, ---
+// ---- gate overgrowth, glazed landmarks (toolkit pure shapes, real spawns, -
+// ---- the bt_cradle scene, a real dock, the animation drive, save/rebuild) --
+
+// Generic scene find-by-name (the w22junctionsAt :560 shape, generalized) —
+// every wave-27 scene lookup rides this one helper instead of ad-hoc closures.
+const findByName = (name) => {
+  const found = [];
+  ctx.scene.traverse((o) => { if (o.name === name) found.push(o); });
+  return found;
+};
+// POI lookups key on userData.poiId (landmarks carry no name) — one shared
+// collector for the pieces, one for the organic glaze root.
+const w27poiPieces = (poiId) => {
+  const found = [];
+  ctx.scene.traverse((o) => { if (o.userData.poiId === poiId) found.push(o); });
+  return found;
+};
+const w27organicPoi = (poiId) => {
+  let root = null;
+  ctx.scene.traverse((o) => { if (o.userData.poiId === poiId && o.userData.organic === true) root = o; });
+  return root;
+};
+const w27lm = SYSTEMS.bt_cradle.landmarks[0];
+
+// -- a. toolkit shapes (pure — no scene, no ticks, nothing to restore beyond -
+// the synthetic parts' own transforms) ---------------------------------------
+const w27hull = sculptGrownHull();
+const w27petal = makePetalGeometry();
+const w27tendril = makeTendrilGeometry();
+const w27matsA = organicMaterials();
+const w27matsA2 = organicMaterials();
+const w27matsT = organicMaterials({ tarnished: true });
+const w27matsT2 = organicMaterials({ tarnished: true });
+// A synthetic tagged assembly (never added to the scene): one sway object,
+// one breath object, one pulse-tagged PER-TEST material (never a cached
+// shared one — pulse params live on material.userData).
+const w27synRoot = new THREE.Group();
+const w27synSway = new THREE.Object3D();
+w27synSway.rotation.z = 0.4;
+w27synRoot.add(w27synSway);
+tagSway(w27synSway, { axis: 'z', amp: 0.2, hz: 0.5, phase: 0.25 });
+const w27synBreath = new THREE.Object3D();
+w27synBreath.scale.setScalar(2);
+w27synRoot.add(w27synBreath);
+tagBreath(w27synBreath, { depth: 0.1, hz: 0.5 });
+const w27synPulseMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5 });
+tagPulse(w27synPulseMat, { amp: 0.2, hz: 0.5 });
+w27synRoot.add(new THREE.Mesh(w27petal, w27synPulseMat));
+const w27synParts = collectOrganic(w27synRoot);
+// Deterministic drive times solved off the tag params themselves: the peak
+// (sin = +1) and trough (sin = -1) of the sway cycle, so the expected values
+// are exact — no RNG anywhere in this section.
+const TAU27 = Math.PI * 2;
+const w27sd = w27synSway.userData.sway;
+const w27bd = w27synBreath.userData.breath;
+const w27pd = w27synPulseMat.userData.pulse;
+let w27tPeak = (0.25 - w27sd.phase / TAU27) / w27sd.hz;
+while (w27tPeak <= 0) w27tPeak += 1 / w27sd.hz;
+const w27tTrough = w27tPeak + 0.5 / w27sd.hz;
+animateOrganic(w27synParts, w27tPeak, false);
+const w27aSwayPeak = w27synSway.rotation[w27sd.axis];
+const w27aBreathPeak = w27synBreath.scale.x;
+const w27aPulsePeak = w27synPulseMat[w27pd.prop];
+animateOrganic(w27synParts, w27tTrough, false);
+const w27aSwayTrough = w27synSway.rotation[w27sd.axis];
+const w27aBreathTrough = w27synBreath.scale.x;
+const w27aPulseTrough = w27synPulseMat[w27pd.prop];
+animateOrganic(w27synParts, w27tPeak + 9.17, true); // reducedMotion: complete no-op
+const w27aSwayFrozen = w27synSway.rotation[w27sd.axis];
+const w27aBreathFrozen = w27synBreath.scale.x;
+const w27aPulseFrozen = w27synPulseMat[w27pd.prop];
+// Restore the synthetic parts to their stashed bases (the frozen state).
+w27synSway.rotation[w27sd.axis] = w27sd.base;
+w27synBreath.scale.setScalar(w27bd.baseScale);
+w27synPulseMat[w27pd.prop] = w27pd.base;
+const w27toolkitChecks = {
+  hullShape: w27hull.count > 0 && w27hull.base.length === w27hull.count * 3
+    && w27hull.zNorm.length === w27hull.count && w27hull.wingness.length === w27hull.count
+    && w27hull.geo.attributes.position.count === w27hull.count,
+  petalShape: w27petal.isBufferGeometry === true && w27petal.index !== null
+    && !!w27petal.attributes.normal && !!w27petal.attributes.uv,
+  tendrilShape: w27tendril.isBufferGeometry === true && w27tendril.index !== null
+    && !!w27tendril.attributes.normal && !!w27tendril.attributes.uv,
+  matsIdentityCached: w27matsA === w27matsA2 && w27matsT === w27matsT2
+    && w27matsT !== w27matsA && w27matsT.flesh !== w27matsA.flesh,
+  matsMarkedShared: ['flesh', 'membrane', 'gilt', 'veinGlow']
+    .every((k) => w27matsA[k].userData.shared === true && w27matsT[k].userData.shared === true),
+  collectFindsTags: w27synParts.sway.length === 1 && w27synParts.sway[0] === w27synSway
+    && w27synParts.breath.length === 1 && w27synParts.breath[0] === w27synBreath
+    && w27synParts.pulse.length === 1 && w27synParts.pulse[0] === w27synPulseMat,
+  swayFormulaExact: w27aSwayPeak === w27sd.base + Math.sin(TAU27 * w27sd.hz * w27tPeak + w27sd.phase) * w27sd.amp
+    && w27aSwayTrough === w27sd.base + Math.sin(TAU27 * w27sd.hz * w27tTrough + w27sd.phase) * w27sd.amp
+    && Math.abs(w27aSwayPeak - (w27sd.base + w27sd.amp)) < 1e-9
+    && Math.abs(w27aSwayTrough - (w27sd.base - w27sd.amp)) < 1e-9
+    && w27aSwayPeak !== w27aSwayTrough,
+  breathFormulaExact: w27aBreathPeak === w27bd.baseScale * (1 + w27bd.depth * Math.sin(TAU27 * w27bd.hz * w27tPeak + w27bd.phase)),
+  pulseFormulaExact: w27aPulsePeak === w27pd.base + w27pd.amp * Math.sin(TAU27 * w27pd.hz * w27tPeak + w27pd.phase),
+  frozenUnderReducedMotion: w27aSwayFrozen === w27aSwayTrough
+    && w27aBreathFrozen === w27aBreathTrough && w27aPulseFrozen === w27aPulseTrough,
+};
+// The test-owned geometry/materials dispose; the cached shared sets NEVER do.
+w27hull.geo.dispose();
+w27petal.dispose();
+w27tendril.dispose();
+w27synPulseMat.dispose();
+console.log('wave27 toolkit:', JSON.stringify(w27toolkitChecks));
+if (!Object.values(w27toolkitChecks).every(Boolean)) { console.log('WAVE27 TOOLKIT FAIL'); errors++; }
+
+// -- b. ship meshes: the real spawnLiveShip drive (the :1849 Illyx pattern: ---
+// construct + assert + remove, no ticks — the live objects never join
+// ctx.ships, traffic owns that list) ------------------------------------------
+const w27spawnPos = new THREE.Vector3(0, 0, 0);
+const w27freighterLive = spawnLiveShip(ctx, {
+  id: 'wave27-freighter', name: 'Shell of Former Glory', classKey: 'freighter',
+  faction: 'beautiful', role: 'trader', resolve: 50,
+}, w27spawnPos);
+const w27cutterLive = spawnLiveShip(ctx, {
+  id: 'wave27-cutter', name: 'Fallen Petal', classKey: 'cutter',
+  faction: 'beautiful', role: 'pirate', resolve: 50,
+}, w27spawnPos);
+const w27veridianLive = spawnLiveShip(ctx, {
+  id: 'wave27-veridian', name: 'Plain Control', classKey: 'freighter',
+  faction: 'veridian', role: 'trader', resolve: 50,
+}, w27spawnPos);
+const w27finsIn = (root) => {
+  let n = 0;
+  root.traverse((o) => { if (o.name === 'beautiful-fin') n++; });
+  return n;
+};
+const w27shipChecks = {
+  freighterNamed: w27freighterLive.object.name === 'beautiful-ship',
+  freighterOrganicTags: w27freighterLive.object.userData.organic?.classKey === 'freighter'
+    && w27freighterLive.object.userData.organic?.role === 'trader'
+    && w27freighterLive.object.userData.organic?.tarnished === false,
+  freighterFins: w27finsIn(w27freighterLive.object) >= 2,
+  freighterGlowMint: !!w27freighterLive.object.userData.glow
+    && w27freighterLive.object.userData.glow.material?.color?.getHex() === ORGANIC.mint,
+  cutterTarnished: w27cutterLive.object.name === 'beautiful-ship'
+    && w27cutterLive.object.userData.organic?.classKey === 'cutter'
+    && w27cutterLive.object.userData.organic?.role === 'pirate'
+    && w27cutterLive.object.userData.organic?.tarnished === true,
+  veridianNegativeControl: w27veridianLive.object.name !== 'beautiful-ship'
+    && w27veridianLive.object.userData.organic === undefined
+    && !!w27veridianLive.object.userData.glow,
+};
+removeLiveShip(ctx, w27freighterLive);
+removeLiveShip(ctx, w27cutterLive);
+removeLiveShip(ctx, w27veridianLive);
+console.log('wave27 ship meshes:', JSON.stringify(w27shipChecks));
+if (!Object.values(w27shipChecks).every(Boolean)) { console.log('WAVE27 SHIP MESH FAIL'); errors++; }
+
+// -- c. freehold negative controls, then the real 3-leg flight to bt_cradle ---
+// The run is docked at the wave-26 save system; freehold first for the
+// authored-system control readings, then travelTo BFS-hops the real legs
+// (freehold→veridian physical, veridian hub→gc_auction, gc_auction hub→
+// bt_cradle).
+if (ctx.flags.docked) undockStation();
+travelTo('freehold', 'wave27 freehold control leg');
+const w27freeholdOrganicPois = (() => {
+  let n = 0;
+  ctx.scene.traverse((o) => { if (o.userData.poiId && o.userData.organic === true) n++; });
+  return n;
+})();
+const w27controlChecks = {
+  factionGuard: !isBeautiful(SYSTEMS.freehold.faction) && isBeautiful(SYSTEMS.bt_cradle.faction),
+  noBeautifulStation: findByName('beautiful-station').length === 0,
+  noOvergrowth: findByName('beautiful-overgrowth').length === 0,
+  noBuds: findByName('beautiful-bud').length === 0,
+  noOrganicPois: w27freeholdOrganicPois === 0,
+};
+console.log('wave27 freehold controls:', JSON.stringify(w27controlChecks));
+if (!Object.values(w27controlChecks).every(Boolean)) { console.log('WAVE27 FREEHOLD CONTROL FAIL'); errors++; }
+
+travelTo('bt_cradle', 'wave27 cradle leg');
+const w27stationGroups = findByName('beautiful-station');
+const w27gateGroups = findByName('lamplighter-gate');
+const w27stPos = SYSTEMS.bt_cradle.station.position;
+const w27overIn = (g) => {
+  let n = 0;
+  g.traverse((o) => { if (o.name === 'beautiful-overgrowth') n++; });
+  return n;
+};
+let w27overPerGate = w27gateGroups.length > 0;
+let w27budsPerGate = w27gateGroups.length > 0;
+for (const g of w27gateGroups) {
+  if (w27overIn(g) !== 1) w27overPerGate = false;
+  let buds = 0;
+  let allSprites = true;
+  g.traverse((o) => { if (o.name === 'beautiful-bud') { buds++; if (!o.isSprite) allSprites = false; } });
+  if (buds !== 4 || !allSprites) w27budsPerGate = false;
+}
+const w27lmPieces = w27poiPieces(w27lm.id);
+const w27lmRoot = w27organicPoi(w27lm.id);
+const w27sceneChecks = {
+  arrivedAtCradle: ctx.world.currentSystem === 'bt_cradle',
+  oneBeautifulStation: w27stationGroups.length === 1 && w27stationGroups[0].userData.organic === true,
+  stationAtDataPosition: w27stationGroups.length === 1
+    && Math.hypot(
+      w27stationGroups[0].position.x - w27stPos[0],
+      w27stationGroups[0].position.y - w27stPos[1],
+      w27stationGroups[0].position.z - w27stPos[2],
+    ) < 1e-6,
+  gateCountMatchesData: w27gateGroups.length === SYSTEMS.bt_cradle.gates.length,
+  overgrowthPerGate: w27overPerGate,
+  fourBudSpritesPerGate: w27budsPerGate,
+  landmarkTagsKept: w27lmPieces.length >= 1
+    && w27lmPieces.every((o) => o.userData.poiType === 'landmark' && o.userData.kind === w27lm.kind),
+  landmarkGlazeRoot: !!w27lmRoot && w27lmRoot.userData.poiId === w27lm.id
+    && w27lmRoot.userData.poiType === 'landmark' && w27lmRoot.userData.kind === w27lm.kind,
+};
+console.log('wave27 cradle scene:', JSON.stringify(w27sceneChecks));
+if (!Object.values(w27sceneChecks).every(Boolean)) { console.log('WAVE27 CRADLE SCENE FAIL'); errors++; }
+
+// -- d. a real dock at The Cradle — the organic station is mechanically -------
+// transparent (dock zone, overlay, undock all ride the data position) --------
+dockAtCurrentStation('dock cradle (wave27)');
+const w27dockChecks = {
+  docked: ctx.flags.docked === true && ctx.world.currentSystem === 'bt_cradle',
+  atTheCradle: ctx.station.name === SYSTEMS.bt_cradle.station.name,
+  overlayOpen: stationOverlay() !== null,
+};
+undockStation();
+w27dockChecks.undockedClean = ctx.flags.docked === false;
+console.log('wave27 cradle dock:', JSON.stringify(w27dockChecks));
+if (!Object.values(w27dockChecks).every(Boolean)) { console.log('WAVE27 CRADLE DOCK FAIL'); errors++; }
+
+// -- e. the animation drive on the live station group --------------------------
+// collectOrganic fresh off the scene group (the boot-test hook), drive the
+// widest-amplitude sway part to its exact peak/trough, prove the
+// reducedMotion no-op, then restore every value animateOrganic can touch to
+// its pre-drive snapshot. No ticks between calls — station.update re-drives
+// from the stashed bases on the next frame, so nothing drifts.
+const w27animStation = findByName('beautiful-station')[0] ?? null;
+const w27animParts = w27animStation ? collectOrganic(w27animStation) : { sway: [], breath: [], pulse: [] };
+let w27swayObj = null;
+for (const o of w27animParts.sway) {
+  if (!w27swayObj || Math.abs(o.userData.sway.amp) > Math.abs(w27swayObj.userData.sway.amp)) w27swayObj = o;
+}
+const w27breathObj = w27animParts.breath[0] ?? null;
+const w27ad = w27swayObj?.userData.sway ?? null;
+const w27adBreath = w27breathObj?.userData.breath ?? null;
+const w27snapSway = w27animParts.sway.map((o) => [o, o.userData.sway.axis, o.rotation[o.userData.sway.axis]]);
+const w27snapBreath = w27animParts.breath.map((o) => [o, o.scale.x]);
+const w27snapPulse = w27animParts.pulse.map((m) => [m, m.userData.pulse.prop, m[m.userData.pulse.prop]]);
+let w27animPeakT = 0;
+let w27animTroughT = 0;
+if (w27ad) {
+  w27animPeakT = (0.25 - w27ad.phase / TAU27) / w27ad.hz;
+  while (w27animPeakT <= 0) w27animPeakT += 1 / w27ad.hz;
+  w27animTroughT = w27animPeakT + 0.5 / w27ad.hz;
+  animateOrganic(w27animParts, w27animPeakT, false);
+}
+const w27animSwayPeak = w27swayObj ? w27swayObj.rotation[w27ad.axis] : NaN;
+const w27animBreathPeak = w27breathObj ? w27breathObj.scale.x : NaN;
+if (w27swayObj) animateOrganic(w27animParts, w27animTroughT, false);
+const w27animSwayTrough = w27swayObj ? w27swayObj.rotation[w27ad.axis] : NaN;
+if (w27swayObj) animateOrganic(w27animParts, w27animPeakT + 13.73, true); // reducedMotion: complete no-op
+const w27animSwayFrozen = w27swayObj ? w27swayObj.rotation[w27ad.axis] : NaN;
+for (const [o, axis, v] of w27snapSway) o.rotation[axis] = v;
+for (const [o, v] of w27snapBreath) o.scale.setScalar(v);
+for (const [m, prop, v] of w27snapPulse) m[prop] = v;
+const w27animChecks = {
+  stationFound: !!w27animStation,
+  swayAndBreathTagged: w27animParts.sway.length > 0 && !!w27ad && w27ad.amp !== 0
+    && !!w27adBreath,
+  swayFormulaExact: !!w27ad
+    && w27animSwayPeak === w27ad.base + Math.sin(TAU27 * w27ad.hz * w27animPeakT + w27ad.phase) * w27ad.amp
+    && w27animSwayTrough === w27ad.base + Math.sin(TAU27 * w27ad.hz * w27animTroughT + w27ad.phase) * w27ad.amp
+    && Math.abs(w27animSwayPeak - (w27ad.base + w27ad.amp)) < 1e-9
+    && Math.abs(w27animSwayTrough - (w27ad.base - w27ad.amp)) < 1e-9
+    && w27animSwayPeak !== w27animSwayTrough,
+  breathFormulaExact: !!w27adBreath
+    && w27animBreathPeak === w27adBreath.baseScale * (1 + w27adBreath.depth * Math.sin(TAU27 * w27adBreath.hz * w27animPeakT + w27adBreath.phase)),
+  frozenUnderReducedMotion: !!w27ad && w27animSwayFrozen === w27animSwayTrough,
+  restoredAfterDrive: !!w27ad && w27swayObj.rotation[w27ad.axis] === w27snapSway.find((s) => s[0] === w27swayObj)[2],
+};
+console.log('wave27 station animation:', JSON.stringify(w27animChecks));
+if (!Object.values(w27animChecks).every(Boolean)) { console.log('WAVE27 STATION ANIMATION FAIL'); errors++; }
+
+// -- f. save/rebuild roundtrip --------------------------------------------------
+// Part 1, the wave-23 e / wave-26 g pattern where the run is docked: park
+// hostiles (bt_cradle flies pirates) so the dock autosave can't be combat-
+// blocked, poll the store for the bt_cradle save (the wave-21 discipline —
+// the jump-arrival autosave already wrote one, so the guard is the dock's
+// world.time), then die and recover via Enter. A SAME-system restore emits
+// no 'systemLoaded' (save.js restore), so the grown scene must survive
+// untouched — same station object, same overgrowth count, same glaze root.
+for (const s of ctx.ships) {
+  const hostile = s.role === 'pirate' || s.role === 'ace' ||
+    s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+  if (hostile && s.object) s.object.position.set(9000, 9000, 9000);
+}
+tick(5, 'hostiles parked (wave27 save)');
+const w27timeBeforeDock = ctx.world.time;
+dockAtCurrentStation('dock cradle (wave27 save)'); // 'docked' fires trySave
+let w27snap = null;
+for (let i = 0; i < 60 * 15 && !w27snap; i++) {
+  tick(1, 'wave27 save wait');
+  const snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+  if (snap?.world?.currentSystem === 'bt_cradle' && snap.world.time >= w27timeBeforeDock) w27snap = snap;
+}
+const w27stationPreDeath = findByName('beautiful-station')[0] ?? null;
+const w27overPreDeath = findByName('beautiful-overgrowth').length;
+const w27lmPreDeath = w27organicPoi(w27lm.id);
+ctx.emit('playerDestroyed', {});
+tick(2, 'death consumed (wave27 restore)');
+dispatchKey('Enter'); // recover(): restore(last save) — SAME system (bt_cradle → bt_cradle)
+tick(3, 'wave27 post-restore settle');
+const w27restoreChecks = {
+  saveWritten: !!w27snap?.world,
+  restoredAtCradle: ctx.world.currentSystem === 'bt_cradle',
+  stillDocked: ctx.flags.docked === true,
+  stationPresent: findByName('beautiful-station').length === 1,
+  stationSameObject: findByName('beautiful-station')[0] === w27stationPreDeath,
+  overgrowthStable: w27overPreDeath === SYSTEMS.bt_cradle.gates.length
+    && findByName('beautiful-overgrowth').length === w27overPreDeath,
+  glazeRootSurvives: !!w27lmPreDeath && w27organicPoi(w27lm.id) === w27lmPreDeath,
+};
+console.log('wave27 death-restore:', JSON.stringify(w27restoreChecks));
+if (!Object.values(w27restoreChecks).every(Boolean)) { console.log('WAVE27 DEATH-RESTORE FAIL'); errors++; }
+
+// Part 2, the rebuild proof: a same-system 'systemLoaded' re-emit (the
+// wave-14 c pattern) rebuilds gates and landmarks in place; station.js's
+// rebuild guard (ev.to !== currentId) leaves the station object untouched.
+const w27stationPreReemit = findByName('beautiful-station')[0] ?? null;
+const w27gatesPreReemit = findByName('lamplighter-gate');
+const w27lmPreReemit = w27organicPoi(w27lm.id);
+ctx.emit('systemLoaded', { to: ctx.world.currentSystem }); // bt_cradle — the same system
+tick(3, 'wave27 same-system re-emit');
+const w27gatesPostReemit = findByName('lamplighter-gate');
+let w27reemitGateShape = w27gatesPostReemit.length === SYSTEMS.bt_cradle.gates.length;
+for (const g of w27gatesPostReemit) {
+  if (w27overIn(g) !== 1) w27reemitGateShape = false;
+  let buds = 0;
+  g.traverse((o) => { if (o.name === 'beautiful-bud') buds++; });
+  if (buds !== 4) w27reemitGateShape = false;
+}
+const w27lmPostReemit = w27organicPoi(w27lm.id);
+const w27reemitChecks = {
+  stationGuarded: findByName('beautiful-station').length === 1
+    && findByName('beautiful-station')[0] === w27stationPreReemit,
+  gatesRebuilt: w27gatesPostReemit.length === w27gatesPreReemit.length
+    && w27gatesPreReemit.length > 0
+    && w27gatesPostReemit.every((g) => !w27gatesPreReemit.includes(g)),
+  overgrownShapeStable: w27reemitGateShape,
+  glazeRootRebuilt: !!w27lmPostReemit && w27lmPostReemit !== w27lmPreReemit
+    && w27lmPostReemit.userData.poiId === w27lm.id
+    && w27lmPostReemit.userData.poiType === 'landmark'
+    && w27lmPostReemit.userData.kind === w27lm.kind,
+};
+console.log('wave27 rebuild re-emit:', JSON.stringify(w27reemitChecks));
+if (!Object.values(w27reemitChecks).every(Boolean)) { console.log('WAVE27 REBUILD RE-EMIT FAIL'); errors++; }
+
+// -- g. home — the final tally carries no location assumption, but the run ----
+// ends where the harness began: freehold, undocked. -----------------------------
+undockStation(); // leave The Cradle (wave-27 restore dock)
+travelTo('freehold', 'wave27 home leg');
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

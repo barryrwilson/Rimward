@@ -1,5 +1,17 @@
 import * as THREE from 'three';
 import { SYSTEMS, JUMP } from '../game/state.js';
+import {
+  ORGANIC,
+  isBeautiful,
+  makePetalGeometry,
+  makeTendrilGeometry,
+  makeOrganicGlowTexture,
+  organicMaterials,
+  tagSway,
+  tagPulse,
+  collectOrganic,
+  animateOrganic,
+} from './organic.js';
 
 /**
  * Jump gates — the Lamplighter Guild transit rings of the current system's
@@ -18,6 +30,21 @@ import { SYSTEMS, JUMP } from '../game/state.js';
  * Junction groups are named 'lamplighter-junction' (standard gates
  * 'lamplighter-gate') and mirror the selection onto
  * group.userData.routeIndex (userData.routeCount set at build).
+ *
+ * Beautiful Ones overgrowth (wave-27): the Beautiful don't build gates,
+ * they cultivate them. In systems whose faction is 'beautiful'
+ * (isBeautiful), every ring assembly — gates and junction alike — keeps
+ * its Lamplighter brass but is GROWN OVER: a 'beautiful-overgrowth'
+ * subgroup adds living tendrils hugging the torus tube, membrane petals
+ * cocooning alternate chevrons, four pulsing mint bud-lantern sprites
+ * ('beautiful-bud'), and gilt vine rings circling the main ring; the
+ * glow/beacon sprites and the charge tunnel shift from amber to mint
+ * (0x7fe0a8). Overgrowth geometries and the mint glow texture are
+ * lazy-cached shared resources (the ringGeo pattern — never disposed);
+ * only the per-assembly bud SpriteMaterials join the rebuild() disposal
+ * path. Parts sway/pulse via collectOrganic/animateOrganic each frame
+ * (zero-alloc, complete no-op under reducedMotion — stashed bases stay,
+ * everything freezes). Non-beautiful systems are byte-identical.
  *
  * Ownership: writes ctx.gate.inZone, nearTo, nearHub, nearRouteIndex and
  * nearRouteCount only (jumping/progress/destination are jump.js's). The
@@ -124,12 +151,70 @@ export function initGate(ctx) {
   const hexBarGeo = new THREE.BoxGeometry(HEX_RADIUS, HEX_BAR_THICK, HEX_BAR_THICK);
   const armGeo = new THREE.BoxGeometry(HEX_RADIUS - RING_RADIUS, ARM_THICK, ARM_THICK);
 
+  // --- Beautiful Ones overgrowth (wave-27) shared resources ---
+  // The Beautiful don't build gates; they cultivate them. In beautiful
+  // systems the brass ring is GROWN OVER: living tendrils, membrane
+  // petals, mint bud-lanterns, gilt vines. All geometries and the mint
+  // glow texture are lazy-cached here and shared across assemblies and
+  // rebuilds — NEVER disposed (the ringGeo pattern). The shared
+  // organicMaterials() set is used directly: never cloned, never
+  // disposed, never tagPulse'd. Only the per-assembly bud SpriteMaterials
+  // (tagPulse'd) enter the rebuild() disposal path.
+  let currentBeautiful = false; // set per rebuild() from the system faction
+  let ogTendrilGeoA = null;
+  let ogTendrilGeoB = null;
+  let ogPetalGeo = null;
+  let ogVineGeoA = null;
+  let ogVineGeoB = null;
+  let beautifulGlowMap = null;
+
+  // Bend a +Z-growing tendril geometry into a planar arc of radius rb
+  // (curving toward local -X) so it hugs the gate ring circle.
+  function bendTendrilToArc(geo, rb) {
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      const th = z / rb;
+      const c = Math.cos(th);
+      const s = Math.sin(th);
+      pos.setXYZ(i, -rb * (1 - c) - x * c, y, rb * s - x * s);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function ensureOrganicShared() {
+    if (ogTendrilGeoA) return;
+    // Tendrils spanning ~a quarter-ring arc (2π·30/4 ≈ 47u), bent to hug
+    // the ring circle; two sway variants for variety.
+    ogTendrilGeoA = bendTendrilToArc(
+      makeTendrilGeometry({ length: 47, radius: 0.9, sway: 1.4, taper: 0.35, radialSegs: 6, tubularSegs: 36 }),
+      RING_RADIUS,
+    );
+    ogTendrilGeoB = bendTendrilToArc(
+      makeTendrilGeometry({ length: 47, radius: 0.8, sway: -1.1, taper: 0.3, radialSegs: 6, tubularSegs: 36 }),
+      RING_RADIUS,
+    );
+    ogPetalGeo = makePetalGeometry({ length: 8, width: 4.5, curl: 1.7, cup: 1.3, segs: 10 });
+    ogVineGeoA = new THREE.TorusGeometry(RING_RADIUS + 3, 0.3, 6, 72);
+    ogVineGeoB = new THREE.TorusGeometry(RING_RADIUS - 3, 0.3, 6, 72);
+    beautifulGlowMap = makeOrganicGlowTexture('rgba(184,255,216,1)', 'rgba(127,224,168,0)');
+  }
+
   // One preallocated assembly per gate: { group, ring, chevrons, glow,
   // beacon, to, x, y, z }. Rebuilt only on 'systemLoaded'.
   const assemblies = [];
 
   function buildAssembly(gateDef) {
     const group = new THREE.Group();
+    const beautiful = currentBeautiful;
+    if (beautiful) ensureOrganicShared();
+    // Beautiful systems swap the amber glow texture for the mint organic
+    // one (glow/beacon sprites and the charge tunnel).
+    const gMap = beautiful ? beautifulGlowMap : glowMap;
 
     // Ring (brass, slightly emissive so it reads against deep space). The
     // material is per-gate: charge glow raises one ring's emissive only.
@@ -160,7 +245,7 @@ export function initGate(ctx) {
     // Additive amber glow filling the bore (the "lamplight").
     const glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: glowMap,
+        map: gMap,
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,
@@ -172,7 +257,7 @@ export function initGate(ctx) {
     // Pulsing beacon riding the ring.
     const beacon = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: beaconMap,
+        map: beautiful ? beautifulGlowMap : beaconMap,
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,
@@ -199,8 +284,8 @@ export function initGate(ctx) {
     const swirl = new THREE.Points(
       swirlGeo,
       new THREE.PointsMaterial({
-        map: glowMap,
-        color: AMBER_HOT,
+        map: gMap,
+        color: beautiful ? ORGANIC.mint : AMBER_HOT,
         size: TUNNEL_SIZE,
         blending: THREE.AdditiveBlending,
         transparent: true,
@@ -218,7 +303,94 @@ export function initGate(ctx) {
     group.lookAt(0, 0, 0);
     root.add(group);
 
-    return { group, ring, chevrons, glow, beacon, swirl, swirlArr, swirlBase, swirlZ, swirlPhase: 0, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
+    const a = { group, ring, chevrons, glow, beacon, swirl, swirlArr, swirlBase, swirlZ, swirlPhase: 0, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
+    // Beautiful Ones overgrowth (wave-27): grown tendrils/petals/buds over
+    // the brass ring. collectOrganic walks the finished assembly ONCE;
+    // update() drives a.organicParts with animateOrganic.
+    if (beautiful) {
+      buildOvergrowth(a);
+      a.organicParts = collectOrganic(group);
+    }
+    return a;
+  }
+
+  // Beautiful Ones overgrowth (wave-27): the ring stays Lamplighter brass
+  // (Guild infrastructure) but is GROWN OVER — living tendrils wrap the
+  // torus tube, membrane petals cocoon alternating chevrons, mint
+  // bud-lanterns ride the ring, gilt vines circle it. Shared geometries /
+  // materials are used directly; only the bud SpriteMaterials are
+  // per-assembly (tagPulse'd) and disposed in rebuild().
+  function buildOvergrowth(a) {
+    const mats = organicMaterials(); // cached shared set — used directly
+    const group = new THREE.Group();
+    group.name = 'beautiful-overgrowth';
+
+    // Living tendrils wrapped around the torus tube at spaced angles,
+    // conforming to the ring circle (arc-bent geometry at build time).
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2 + 0.35;
+      const mount = new THREE.Group();
+      mount.position.set(Math.cos(ang) * RING_RADIUS, Math.sin(ang) * RING_RADIUS, 0);
+      mount.rotation.z = ang; // local +X radially outward
+      const tendril = new THREE.Mesh(i % 2 ? ogTendrilGeoB : ogTendrilGeoA, mats.flesh);
+      // Arc plane into the ring plane: local +Z (root tangent) → mount -Y
+      // (ring tangent), local -X (arc-center side) → mount -X (inward).
+      tendril.rotation.x = Math.PI / 2;
+      // Alternate riding the outer/inner tube surface with a plane wobble.
+      tendril.position.set(i % 2 ? RING_TUBE * 0.75 : -RING_TUBE * 0.75, 0, i % 2 ? -1.1 : 1.1);
+      mount.add(tendril);
+      tagSway(mount, { axis: 'z', amp: 0.015, hz: 0.15, phase: i * 1.9 });
+      group.add(mount);
+    }
+
+    // Membrane petals cocooning alternating chevrons (0, 2, 4, 6). Mounted
+    // INTO a.chevrons so they keep their seats as the chevron ring
+    // counter-rotates each frame (collectOrganic walks the whole assembly,
+    // so sway collection is unaffected).
+    for (let k = 0; k < 4; k++) {
+      const ang = ((k * 2) / CHEVRON_COUNT) * Math.PI * 2;
+      const mount = new THREE.Group();
+      mount.position.set(Math.cos(ang) * chevronRadius, Math.sin(ang) * chevronRadius, 0);
+      mount.rotation.z = ang + Math.PI / 2; // local +Y points at the ring center (chevron-tip direction)
+      const petal = new THREE.Mesh(ogPetalGeo, mats.membrane);
+      petal.rotation.x = -Math.PI / 2; // petal length +Z → mount +Y (over the chevron)
+      petal.rotation.z = 0.15; // organic asymmetry
+      petal.position.y = -3; // root behind the chevron base, curling over it
+      mount.add(petal);
+      tagSway(mount, { axis: 'z', amp: 0.04, hz: 0.25, phase: k * 1.7 });
+      a.chevrons.add(mount);
+    }
+
+    // Mint bud-lanterns riding the ring at 45° offsets from the chevrons.
+    // Per-assembly SpriteMaterials (tagPulse'd) — disposed in rebuild().
+    const budMats = [];
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const mat = new THREE.SpriteMaterial({
+        map: beautifulGlowMap,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+      });
+      tagPulse(mat, { base: 0.55, amp: 0.25, hz: 0.4, phase: i * 1.6 });
+      const bud = new THREE.Sprite(mat);
+      bud.name = 'beautiful-bud';
+      bud.position.set(Math.cos(ang) * RING_RADIUS, Math.sin(ang) * RING_RADIUS, 0);
+      bud.scale.setScalar(7);
+      group.add(bud);
+      budMats.push(mat);
+    }
+
+    // Gilt vine rings circling the main ring — the 'gilded growth'.
+    const vineA = new THREE.Mesh(ogVineGeoA, mats.gilt);
+    const vineB = new THREE.Mesh(ogVineGeoB, mats.gilt);
+    vineB.rotation.x = 0.06;
+    group.add(vineA);
+    group.add(vineB);
+
+    a.group.add(group);
+    a.budMats = budMats;
   }
 
   // Junction lantern silhouette (wave-22): augment a hub assembly with the
@@ -301,9 +473,17 @@ export function initGate(ctx) {
         a.hexMat.dispose();
         for (let k = 0; k < a.lampMats.length; k++) a.lampMats[k].dispose();
       }
+      // Beautiful overgrowth: shared geometries/materials/texture survive
+      // (ringGeo pattern); dispose only the per-assembly bud SpriteMaterials.
+      if (a.budMats) {
+        for (let k = 0; k < a.budMats.length; k++) a.budMats[k].dispose();
+      }
     }
     assemblies.length = 0;
     const def = SYSTEMS[ctx.world.currentSystem];
+    // Beautiful Ones overgrowth (wave-27): gate/junction rings in beautiful
+    // systems are grown over — buildAssembly reads this flag.
+    currentBeautiful = isBeautiful(def.faction);
     const gates = def.gates;
     for (let i = 0; i < gates.length; i++) {
       const a = buildAssembly(gates[i]);
@@ -381,6 +561,11 @@ export function initGate(ctx) {
       const charge = charging ? 1 + ctx.gate.progress * 1.6 : 1;
       a.glow.scale.setScalar(glowBaseScale * (0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
       a.ring.material.emissiveIntensity = charging ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
+
+      // Beautiful overgrowth (wave-27): part-level tendril/petal sway and
+      // bud pulse, zero-alloc; animateOrganic is a complete no-op under
+      // reducedMotion (stashed bases stay — the overgrowth freezes).
+      if (a.organicParts) animateOrganic(a.organicParts, ctx.elapsed, reducedMotion);
 
       // Junction silhouette (wave-22): hex frame counter-rotates the ring
       // spin (frozen under reducedMotion); the selected route's lamp lerps
