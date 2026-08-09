@@ -281,6 +281,7 @@ const { initSave } = await import('../src/game/save.js');
 const { initOrigins } = await import('../src/game/origins.js');
 const { initOnboarding } = await import('../src/systems/onboarding.js');
 const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
+const { initWakes } = await import('../src/systems/wakes.js'); // wave 30: flee wake trails + wreck-field discovery (same init slot as main.js)
 const { initHud } = await import('../src/systems/hud.js');
 const {
   ORGANIC, isBeautiful, sculptGrownHull, makePetalGeometry, makeTendrilGeometry,
@@ -291,7 +292,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
 const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
 const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION, FACTION_RUMOR, FACTION_COMP } = await import('../src/game/state.js');
+const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION, FACTION_RUMOR, FACTION_COMP, U, HIDDEN_MOUNTS, cargoValue } = await import('../src/game/state.js');
 const { tickPrices } = await import('../src/game/market.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
@@ -299,7 +300,7 @@ const inits = [
   ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
   ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['settings', initSettings], ['bio', initBio],
   ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['traffic', initTraffic],
-  ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['hail', initHail],
+  ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
   ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['hud', initHud],
 ];
 const systems = [];
@@ -6450,6 +6451,451 @@ const w28Checks = {
 };
 console.log('wave28 berth records:', JSON.stringify(w28Checks));
 if (!Object.values(w28Checks).every(Boolean)) { console.log('WAVE28 BERTH RECORDS FAIL'); errors++; }
+
+// ---- Wave 30: Pirate demand-hail (Q-ship bluff) + flee wake-trailing ------
+// Two features, one section: (a) the concealed-mounts purchase — outfitting
+// row 3 through the real hotkey path, save/restore persistence, the
+// corrupt-restore heal — and (b) the demand hail a hunting pirate opens
+// before pressing the attack (payTribute / showTeeth — only with mounts — /
+// refuseFight), plus the wake contract: every pirate flee stamps
+// record.wakeSite 1400u ahead (npc.js) while wakes.js sheds a pooled
+// world-space trail and discovers a stamped site within 120u.
+// Live pirates are synthetic spawnLiveShip records pushed into ctx.ships by
+// hand (traffic owns that list in production — the wave-27 spawn pattern
+// extended to a real AI drive); each is spliced + mesh-removed after its
+// beat so the next beat starts clean. The player hull is pinned huge (the
+// wave-9 pattern) so attack waits measure the pirate, never the player.
+const w30collect = (n, label) => {
+  const evs = [];
+  for (let i = 0; i < n; i++) { tick(1, label); evs.push(...ctx.lastEvents); }
+  return evs;
+};
+const w30isHostile = (s) => s.role === 'pirate' || s.role === 'ace'
+  || s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
+const w30parkHostiles = (label) => {
+  for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
+  tick(5, label);
+};
+const w30spawnPirate = (suffix, personality, offset) => {
+  const p = ctx.ship.object.position;
+  const rec = {
+    id: `wave30-${suffix}`, name: `Wave30 ${suffix}`, classKey: 'cutter',
+    faction: 'redledger', role: 'pirate', resolve: 50, personality,
+  };
+  const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x + offset[0], p.y + offset[1], p.z + offset[2]));
+  ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
+  return live;
+};
+const w30removeShip = (live) => {
+  const i = ctx.ships.indexOf(live);
+  if (i >= 0) ctx.ships.splice(i, 1);
+  removeLiveShip(ctx, live);
+};
+// Tick (max 10) until this ship's demand hail lands in the event stream.
+const w30demandEvs = (live, label) => {
+  const evs = [];
+  for (let i = 0; i < 10; i++) {
+    tick(1, label);
+    evs.push(...ctx.lastEvents);
+    if (evs.some((e) => e.type === 'hailOpened' && e.ship === live)) break;
+  }
+  return evs;
+};
+// Hail-card buttons are the only '[n] …' labels in the stub DOM.
+const w30hailBtn = (frag) => {
+  for (const n of walkDom(document.body)) {
+    if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.startsWith(frag)) return n;
+  }
+  return null;
+};
+// The hail root is an unclassed fixed div (hail.js builds it without id);
+// reach it through a card button's parent chain. Buttons persist after
+// closeCard (they are rebuilt per hail), so visibility — not presence — is
+// the open signal. 'none' before any card has ever opened.
+const w30hailDisplay = () => {
+  const btn = w30hailBtn('[1]');
+  if (!btn) return 'none';
+  let r = btn;
+  while (r.parent && r.parent !== document.body) r = r.parent;
+  return r.style?.display ?? null;
+};
+const w30siteShape = (live) => {
+  const ws = live.record?.wakeSite;
+  return Array.isArray(ws?.position) && ws.position.length === 3
+    && ws.position.every((v) => Number.isFinite(v)) && ws.found === false;
+};
+const w30siteDist = (live) => {
+  const ws = live.record?.wakeSite;
+  if (!ws) return NaN;
+  const p = live.object.position;
+  return Math.hypot(ws.position[0] - p.x, ws.position[1] - p.y, ws.position[2] - p.z);
+};
+
+// -- a. demand hail WITHOUT mounts: the card offers pay-or-fight, holds -----
+// weapons-cold while open, fires once per record, and refuseFight presses --
+// the attack through the real card button. The run is freehold/undocked off
+// the wave-28 end state; concealedMounts has never been bought. -------------
+if (ctx.flags.docked) undockStation();
+w28calm('wave30 calm (demand setup)'); // the wave-28 teleport-and-clear
+ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+ctx.input.weaponGroup = 1; // cannon — the firing legs below pin the group
+ctx.world.credits = 4000;
+ctx.cargo.length = 0;
+ctx.cargo.push({ commodity: 'provisions', units: 10 }); // cargo aboard: the demand rides its value
+const w30demandExpected = Math.max(
+  HIDDEN_MOUNTS.demandMin,
+  Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
+);
+// The wave-28 berth restore rewound world.time into a snapshot taken inside
+// the 5 s jump grace, so the demand guard (now >= jumpGraceUntil) can still
+// be shut here — wait it out through real ticks rather than poking the flag.
+for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave30 jump grace wait');
+const w30graceExpired = ctx.world.time >= (ctx.world.jumpGraceUntil ?? 0);
+const p1refuse = w30spawnPirate('refuse', 95, [250, 0, 0]); // 250u: inside TARGET_RANGE, outside the bubble edge
+const p1openEvs = w30demandEvs(p1refuse, 'wave30 p1 demand');
+const p1hail = p1openEvs.find((e) => e.type === 'hailOpened' && e.ship === p1refuse) ?? null;
+const p1holdEvs = w30collect(60, 'wave30 p1 hold'); // 1 s with the card open
+const p1demandingAfterHold = p1refuse.ai.demanding === true;
+const p1cardOpenDuringHold = w30hailDisplay() === 'block';
+const p1refuseBtn = w30hailBtn('[2] Refuse — and fight');
+p1refuseBtn?.click(); // real card path: refuseFight
+const p1closeEvs = w30collect(2, 'wave30 p1 close');
+const p1fireEvs = [];
+for (let i = 0; i < 600 && !p1fireEvs.some((e) => e.type === 'npcFire' && e.ship === p1refuse); i++) {
+  tick(1, 'wave30 p1 attack'); // 3 s telegraph re-arms after the frozen hold, then it fires
+  p1fireEvs.push(...ctx.lastEvents);
+}
+const p1intentAfterRefuse = p1refuse.ai.intent === true;
+const w30demandChecks = {
+  graceExpired: w30graceExpired,
+  hailOpened: !!p1hail,
+  demandLine: p1hail?.line === 'Your cargo or your hull.',
+  intentsWithoutMounts: JSON.stringify(p1hail?.intents) === JSON.stringify(['payTribute', 'refuseFight']),
+  demandRolledOnce: p1hail?.demand === w30demandExpected && w30demandExpected > HIDDEN_MOUNTS.demandMin,
+  demandFlagAndRecord: p1refuse.ai.demandSent === true && Number.isFinite(p1refuse.record.demandedAt),
+  weaponsColdWhileDemanding: !p1holdEvs.some((e) => e.type === 'npcFire' && e.ship === p1refuse),
+  stillDemandingAfterHold: p1demandingAfterHold,
+  cardOpenDuringHold: p1cardOpenDuringHold,
+  oneDemandPerRecord: [...p1openEvs, ...p1holdEvs].filter((e) => e.type === 'hailOpened' && e.ship === p1refuse).length === 1,
+  refuseButtonFound: !!p1refuseBtn,
+  refusedOutcome: p1refuse.ai.demandOutcome === 'refused' && p1refuse.ai.demanding === false,
+  cardClosedAfterRefuse: w30hailDisplay() === 'none' && p1closeEvs.some((e) => e.type === 'hailClosed'),
+  pirateAttacks: p1intentAfterRefuse && p1fireEvs.some((e) => e.type === 'npcFire' && e.ship === p1refuse),
+};
+console.log('wave30 demand hail:', JSON.stringify(w30demandChecks), `demand=${w30demandExpected}`);
+if (!Object.values(w30demandChecks).every(Boolean)) { console.log('WAVE30 DEMAND HAIL FAIL'); errors++; }
+w30removeShip(p1refuse);
+tick(5, 'wave30 p1 cleanup');
+
+// -- b. concealed mounts: the real outfitting hotkey path (Digit6 service, --
+// Digit3 row), the second-buy refusal, the save/restore roundtrip, the ------
+// corrupt-restore heal, and a real re-buy so the legs below carry the bluff.
+w30parkHostiles('wave30 hostiles parked (outfitting)');
+dockAtCurrentStation('wave30 dock freehold (outfitting)');
+ctx.world.credits = 5000;
+dispatchKey('Digit6'); // outfitting (DOCK_KEY_SERVICES[5])
+const w30outfitOpen = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => n.textContent === 'OUTFITTING — hull work & instruments');
+const w30mountsBtn = [...walkDom(stationOverlay() ?? { children: [] })]
+  .find((n) => n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.startsWith('3 — Concealed mounts')) ?? null;
+const w30creditsAtBuy = ctx.world.credits;
+dispatchKey('Digit3'); // outfitting n===3 → act.buyConcealedMounts
+const w30bought = ctx.world.concealedMounts === true && ctx.world.credits === w30creditsAtBuy - HIDDEN_MOUNTS.cost;
+const w30fittedNote = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => typeof n.textContent === 'string' && n.textContent.startsWith('Concealed mounts fitted'));
+dispatchKey('Digit3'); // second buy: refused through the same hotkey path
+const w30secondRefused = w26StationNotice() === 'Concealed mounts already fitted.'
+  && ctx.world.credits === w30creditsAtBuy - HIDDEN_MOUNTS.cost && ctx.world.concealedMounts === true;
+dispatchKey('Escape'); // back to services
+// Save roundtrip (the wave-26 pattern): park, cycle the dock, then POLL the
+// store for a snapshot carrying the flag (the wave-27 save-wait discipline —
+// a combat-blocked autosave lands within a couple of BLOCK_RETRY cycles).
+w30parkHostiles('wave30 hostiles parked (mounts save)');
+undockStation();
+dockAtCurrentStation('wave30 dock freehold (mounts save)'); // 'docked' fires trySave
+let w30snap = null;
+for (let i = 0; i < 60 * 15 && !w30snap; i++) {
+  for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
+  tick(1, 'wave30 mounts save wait');
+  try {
+    const s = JSON.parse(store.get('rimward-save-v1') ?? 'null');
+    if (s?.world?.concealedMounts === true) w30snap = s;
+  } catch { /* keep waiting */ }
+}
+// Die + recover (the wave-26 restore path): the in-memory corruption loses.
+ctx.world.concealedMounts = false; // corrupt in memory; the restore must win
+ctx.emit('playerDestroyed', {});
+tick(2, 'wave30 death consumed (mounts restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+tick(2, 'wave30 mounts restore settle');
+const w30restoredTrue = ctx.world.concealedMounts === true;
+// Corrupt the STORED value: anything but literal true heals to false
+// (save.js sanitizeRestored).
+const w30corruptSnap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ?? 'null'); } catch { return null; } })();
+if (w30corruptSnap?.world) { w30corruptSnap.world.concealedMounts = 'yes'; store.set('rimward-save-v1', JSON.stringify(w30corruptSnap)); }
+ctx.emit('playerDestroyed', {});
+tick(2, 'wave30 death consumed (corrupt restore)');
+dispatchKey('Enter');
+tick(2, 'wave30 corrupt restore settle');
+const w30healedFalse = ctx.world.concealedMounts === false;
+// Re-buy through the real path (fresh dock → services root) — the demand
+// legs below need the bluff fitted, and this proves purchase after a heal.
+undockStation();
+w30parkHostiles('wave30 hostiles parked (mounts rebuy)');
+dockAtCurrentStation('wave30 dock freehold (mounts rebuy)');
+const w30creditsAtRebuy = ctx.world.credits;
+dispatchKey('Digit6');
+dispatchKey('Digit3');
+const w30rebought = ctx.world.concealedMounts === true && ctx.world.credits === w30creditsAtRebuy - HIDDEN_MOUNTS.cost;
+dispatchKey('Escape'); // back to services
+const w30outfitChecks = {
+  outfittingOpened: w30outfitOpen,
+  mountsButtonFound: !!w30mountsBtn,
+  boughtExact: w30bought && HIDDEN_MOUNTS.cost === 900,
+  fittedNoteShown: w30fittedNote,
+  secondBuyRefused: w30secondRefused,
+  saveCarriesTrue: w30snap?.world?.concealedMounts === true,
+  restoreKeepsTrue: w30restoredTrue,
+  corruptRestoreHeals: w30healedFalse,
+  reboughtAfterHeal: w30rebought,
+};
+console.log('wave30 concealed mounts:', JSON.stringify(w30outfitChecks), `credits=${ctx.world.credits}`);
+if (!Object.values(w30outfitChecks).every(Boolean)) { console.log('WAVE30 CONCEALED MOUNTS FAIL'); errors++; }
+
+// -- c. payTribute: the real card path pays the exact demand, the pirate ----
+// flees calm-stamped (+60 s), and the flee stamps a wake site 1400u ahead.
+undockStation();
+w28calm('wave30 calm (payTribute)');
+ctx.world.credits = 4000;
+const p2pay = w30spawnPirate('pay', 95, [250, 0, 0]);
+const p2openEvs = w30demandEvs(p2pay, 'wave30 p2 demand');
+const p2hail = p2openEvs.find((e) => e.type === 'hailOpened' && e.ship === p2pay) ?? null;
+const p2payBtn = w30hailBtn('[1] Pay tribute');
+const p2payLabel = p2payBtn?.textContent ?? null;
+p2payBtn?.click(); // synchronous resolveIntent — read the stamps before any tick
+const p2creditsAfter = ctx.world.credits;
+const p2modeAfter = p2pay.ai.mode;
+const p2outcomeAfter = p2pay.ai.demandOutcome;
+const p2calmDelta = p2pay.ai.calmUntil - ctx.world.time;
+const p2shape = w30siteShape(p2pay);
+const p2dist = w30siteDist(p2pay);
+const p2settleEvs = w30collect(3, 'wave30 p2 settle'); // npc.js releases the hold on hailClosed
+const w30payChecks = {
+  hailOpened: !!p2hail,
+  intentsWithMounts: JSON.stringify(p2hail?.intents) === JSON.stringify(['payTribute', 'showTeeth', 'refuseFight']),
+  payButtonLabeled: p2payLabel === `[1] Pay tribute — ${w30demandExpected} UU`,
+  creditsPaidExact: p2creditsAfter === 4000 - w30demandExpected,
+  pirateFleesPaid: p2modeAfter === 'flee' && p2outcomeAfter === 'paid',
+  calmStamped60: p2calmDelta === 60,
+  wakeSiteShape: p2shape,
+  wakeSite1400: Math.abs(p2dist - 1400) < 0.5,
+  holdReleased: p2pay.ai.demanding === false,
+  paidLine: p2settleEvs.some((e) => e.type === 'commLine' && e.text === 'Smart. Run along.'),
+};
+console.log('wave30 payTribute:', JSON.stringify(w30payChecks), `siteDist=${p2dist?.toFixed?.(2)}`);
+if (!Object.values(w30payChecks).every(Boolean)) { console.log('WAVE30 PAYTRIBUTE FAIL'); errors++; }
+
+// -- d. wake trail visual sanity: with p2pay live and fleeing, the pooled ---
+// Points ring (600-slot buffer, the wave-27 scene-traversal discipline) ------
+// receives points and shows; reducedMotion mutes emission and hides it. -----
+const w30wakePoints = () => {
+  let pts = null;
+  ctx.scene.traverse((o) => { if (o.isPoints && o.geometry?.attributes?.position?.count === 600) pts = o; });
+  return pts;
+};
+const w30wakeLive = () => {
+  const col = w30wakePoints()?.geometry?.attributes?.color?.array;
+  if (!col) return 0;
+  let n = 0;
+  for (let i = 0; i < col.length; i += 3) if (col[i] > 0 || col[i + 1] > 0 || col[i + 2] > 0) n++;
+  return n;
+};
+w30collect(30, 'wave30 wake emission'); // 10 Hz × 0.5 s ≈ 5 points
+const w30emitCount = w30wakeLive();
+const w30wakeVisible = w30wakePoints()?.visible === true;
+ctx.settings.reducedMotion = true; // settings flag, read live (the flags.paused poke convention)
+const w30mutedBefore = w30wakeLive();
+w30collect(60, 'wave30 reducedMotion mute'); // 45 s life: nothing expires inside 1 s
+const w30mutedAfter = w30wakeLive();
+const w30mutedHidden = w30wakePoints()?.visible === false;
+ctx.settings.reducedMotion = false;
+w30removeShip(p2pay);
+tick(5, 'wave30 p2 cleanup');
+const w30trailChecks = {
+  pointsObjectFound: !!w30wakePoints(),
+  emittedWhileFleeing: w30emitCount > 0,
+  visibleWhileLive: w30wakeVisible,
+  noEmissionWhenMuted: w30mutedAfter === w30mutedBefore,
+  hiddenWhenMuted: w30mutedHidden,
+};
+console.log('wave30 wake trail:', JSON.stringify(w30trailChecks), `emitted=${w30emitCount}`);
+if (!Object.values(w30trailChecks).every(Boolean)) { console.log('WAVE30 WAKE TRAIL FAIL'); errors++; }
+
+// -- e/f. showTeeth: fear pinned to 5 (bluffP = 0.40) so the forced roll ----
+// decides deterministically — Math.random stubbed for the CLICK ONLY, the ---
+// wave-9 pin discipline. Success: flee + fear +1 + 90 s calm + wake site. ---
+// Failure: resolve +20 (the p4 hull reads the bump pre-cap) and the pirate --
+// presses the attack. --------------------------------------------------------
+const w30fearRestore = ctx.world.fear;
+ctx.world.fear = 5; // TEST SETUP: bluffP = 0.35 + 5×0.01 = 0.40 (restored below)
+const p3bluff = w30spawnPirate('bluff', 95, [250, 0, 0]);
+w30demandEvs(p3bluff, 'wave30 p3 demand');
+const p3teethBtn = w30hailBtn('[2] Show teeth');
+const origRandom30s = Math.random;
+Math.random = () => 0; // < 0.40: the bluff lands
+try { p3teethBtn?.click(); } finally { Math.random = origRandom30s; }
+const p3modeAfter = p3bluff.ai.mode;
+const p3outcomeAfter = p3bluff.ai.demandOutcome;
+const p3calmDelta = p3bluff.ai.calmUntil - ctx.world.time;
+const p3fearAfter = ctx.world.fear;
+const p3shape = w30siteShape(p3bluff);
+const p3dist = w30siteDist(p3bluff);
+const p3settleEvs = w30collect(3, 'wave30 p3 settle');
+const p3released = p3bluff.ai.demanding === false;
+w30removeShip(p3bluff);
+tick(5, 'wave30 p3 cleanup');
+const p4called = w30spawnPirate('called', 95, [250, 0, 0]);
+w30demandEvs(p4called, 'wave30 p4 demand');
+const p4teethBtn = w30hailBtn('[2] Show teeth');
+p4called.state.resolve = 55; // TEST SETUP: read the +20 bump clear of the 95 cap (updateResolve recomputes later from personality 95 — the attack stays hot)
+const origRandom30f = Math.random;
+Math.random = () => 0.999; // ≥ 0.40: the bluff is called
+try { p4teethBtn?.click(); } finally { Math.random = origRandom30f; }
+const p4resolveAfter = p4called.state.resolve;
+const p4outcomeAfter = p4called.ai.demandOutcome;
+const p4demandingAfter = p4called.ai.demanding;
+const p4noSite = p4called.record.wakeSite === undefined; // no flee, no stamp
+const p4closeEvs = w30collect(2, 'wave30 p4 close');
+const p4fireEvs = [];
+for (let i = 0; i < 600 && !p4fireEvs.some((e) => e.type === 'npcFire' && e.ship === p4called); i++) {
+  tick(1, 'wave30 p4 attack');
+  p4fireEvs.push(...ctx.lastEvents);
+}
+ctx.world.fear = w30fearRestore; // unpin (the +1 bluff bump goes with it — test setup)
+w30removeShip(p4called);
+tick(5, 'wave30 p4 cleanup');
+const w30teethChecks = {
+  successButtonFound: !!p3teethBtn,
+  successFlees: p3modeAfter === 'flee' && p3outcomeAfter === 'bluffed',
+  successFearBump: p3fearAfter === 6,
+  successCalm90: p3calmDelta === HIDDEN_MOUNTS.calmSeconds,
+  successWakeSite: p3shape && Math.abs(p3dist - 1400) < 0.5,
+  successLine: p3settleEvs.some((e) => e.type === 'commLine' && e.text === 'Guns where none should be. Breaking off.'),
+  successHoldReleased: p3released,
+  failureButtonFound: !!p4teethBtn,
+  failureResolveBump: p4resolveAfter === Math.min(95, 55 + HIDDEN_MOUNTS.failResolveBump),
+  failureOutcome: p4outcomeAfter === 'failed' && p4demandingAfter === false,
+  failureNoWakeSite: p4noSite,
+  failureLine: p4closeEvs.some((e) => e.type === 'commLine' && e.text === 'Nice plating. Burn them.'),
+  failurePressesAttack: p4called.ai.intent === true && p4fireEvs.some((e) => e.type === 'npcFire' && e.ship === p4called),
+};
+console.log('wave30 showTeeth:', JSON.stringify(w30teethChecks), `resolve=55→${p4resolveAfter}`);
+if (!Object.values(w30teethChecks).every(Boolean)) { console.log('WAVE30 SHOWTEETH FAIL'); errors++; }
+
+// -- g. void-on-hit: a player bolt landing after the demand opened ends the --
+// parley — demanding clears, the card closes (hailClosed), the fight is on. -
+const p5void = w30spawnPirate('void', 95, [250, 0, 0]);
+w30demandEvs(p5void, 'wave30 p5 demand');
+const p5demandOpen = p5void.ai.demanding === true && w30hailDisplay() === 'block';
+// Aim the nose (identity quaternion = -Z forward) and park the pirate dead
+// ahead inside cannon range; the demand hold keeps it on the bolt line.
+ctx.ship.object.quaternion.identity();
+ctx.ship.velocity.set(0, 0, 0);
+p5void.object.position.set(ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z - 200);
+p5void.object.quaternion.identity();
+const p5peaceAt = p5void.ai.demandPeaceAt;
+const p5fireEvs = [];
+// The outfitting Digit3 presses above double as weapon-group picks
+// (controls.js digits 1-3 switch groups), so re-pin cannon here, and lock the
+// pirate: firePlayerGun's §6.2 frontal-cone convergence then aims the bolts
+// onto its drift. Real fire path: controls.js recomputes input.fireHeld from
+// its own mouse state every frame (a direct poke is stomped), so hold button
+// 0 through the same window-listener drive dispatchKey uses for keys.
+ctx.input.weaponGroup = 1;
+ctx.targets.current = p5void;
+for (const fn of winListeners.mousedown ?? []) fn({ button: 0 });
+for (let i = 0; i < 360 && !(p5void.state.lastHitAt > p5peaceAt); i++) {
+  tick(1, 'wave30 p5 firing'); // 900 u/s bolts close 200u in ~14 frames
+  p5fireEvs.push(...ctx.lastEvents);
+}
+for (const fn of winListeners.mouseup ?? []) fn({ button: 0 });
+ctx.targets.current = null;
+const p5hitLanded = p5void.state.lastHitAt > p5peaceAt;
+const p5releaseEvs = w30collect(3, 'wave30 p5 release'); // npc.js upkeep sees lastHitAt > demandPeaceAt
+const w30voidChecks = {
+  demandWasOpen: p5demandOpen,
+  hitLanded: p5hitLanded,
+  demandingCleared: p5void.ai.demanding === false,
+  hailClosedEmitted: [...p5fireEvs, ...p5releaseEvs].some((e) => e.type === 'hailClosed'),
+  cardClosed: w30hailDisplay() === 'none',
+};
+console.log('wave30 void on hit:', JSON.stringify(w30voidChecks));
+if (!Object.values(w30voidChecks).every(Boolean)) { console.log('WAVE30 VOID ON HIT FAIL'); errors++; }
+w30removeShip(p5void);
+tick(5, 'wave30 p5 cleanup');
+
+// -- h. wake-site discovery: a stamped unfound site on a live-system record -
+// (the npc.js stamp shape, planted as controlled setup — prior soak sites ---
+// are uncontrolled state, cleared first) found within 120u through the real -
+// wakes.js scan: 2-3 refinedMetals pods, the Echo commLine, and the ---------
+// firstWakeSite milestone exactly once (the wave-9 splice-and-refire pattern).
+w28calm('wave30 calm (discovery)');
+for (const r of ctx.world.records) delete r.wakeSite;
+const w30msIdx = ctx.world.milestones.indexOf('firstWakeSite');
+if (w30msIdx >= 0) ctx.world.milestones.splice(w30msIdx, 1);
+const w30siteRec = ctx.world.records.find((r) => r.role === 'pirate' || r.role === 'ace') ?? ctx.world.records[0] ?? null;
+if (w30siteRec) w30siteRec.wakeSite = { position: [0, 30000, 500], found: false };
+const w30podsBefore = ctx.pods.length;
+ctx.ship.object.position.set(0, 30000, 450); // 50u off the site — inside the 120u scan
+ctx.ship.velocity.set(0, 0, 0);
+const w30discEvs = w30collect(30, 'wave30 site discovery'); // 4 Hz scan — two windows
+const w30refireEvs = w30collect(30, 'wave30 site refire watch');
+const w30podDelta = ctx.pods.length - w30podsBefore;
+const w30podEvs = w30discEvs.filter((e) => e.type === 'podSpawned');
+const w30trailLines = w30discEvs.filter((e) => e.type === 'commLine' && e.text === 'The trail ends in a wreck field.' && e.from === 'Echo');
+const w30msEvs = w30discEvs.filter((e) => e.type === 'milestone' && e.id === 'firstWakeSite');
+const w30siteChecks = {
+  recordFound: !!w30siteRec,
+  siteFound: w30siteRec?.wakeSite?.found === true,
+  pods2to3: w30podDelta >= 2 && w30podDelta <= 3,
+  podEventsMatch: w30podEvs.length === w30podDelta,
+  podsCarryMetals: w30podEvs.length > 0 && w30podEvs.every((e) => (e.pod?.contents ?? []).some((c) => c.commodity === 'refinedMetals')),
+  trailLineOnce: w30trailLines.length === 1,
+  milestoneOnce: w30msEvs.length === 1 && ctx.world.milestones.includes('firstWakeSite'),
+  noRefire: !w30refireEvs.some((e) => (e.type === 'milestone' && e.id === 'firstWakeSite')
+    || (e.type === 'commLine' && e.text === 'The trail ends in a wreck field.')),
+};
+console.log('wave30 wake discovery:', JSON.stringify(w30siteChecks), `pods=${w30podDelta}`);
+if (!Object.values(w30siteChecks).every(Boolean)) { console.log('WAVE30 WAKE DISCOVERY FAIL'); errors++; }
+
+// -- i. law-zone guard: a pirate inside the station's 300u law zone never ---
+// develops the target, so the demand hail never opens (assertions filter by -
+// ship: ambient re-instantiation near the dock is the wave-28 treadmill). ---
+const w30stPos = SYSTEMS.freehold.station.position;
+ctx.ship.object.position.set(w30stPos[0], w30stPos[1], w30stPos[2] + 400); // outside the zone, inside the bubble
+ctx.ship.velocity.set(0, 0, 0);
+ctx.input.throttle = 0;
+ctx.input.fullStop = true;
+w30parkHostiles('wave30 hostiles parked (law zone)');
+const w30lawRec = {
+  id: 'wave30-law', name: 'Wave30 law', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
+};
+const p6law = spawnLiveShip(ctx, w30lawRec, new THREE.Vector3(w30stPos[0], w30stPos[1], w30stPos[2] + 100)); // inside the 300u zone
+ctx.ships.push(p6law);
+const w30lawEvs = w30collect(90, 'wave30 law zone');
+const w30lawChecks = {
+  noDemandHail: !w30lawEvs.some((e) => e.type === 'hailOpened' && e.ship === p6law),
+  demandNeverSent: p6law.ai.demandSent === false && p6law.ai.demanding === false,
+  targetNeverDevelops: p6law.ai.target !== 'player',
+  noDemandOnRecord: w30lawRec.demandedAt == null,
+};
+console.log('wave30 law zone:', JSON.stringify(w30lawChecks));
+if (!Object.values(w30lawChecks).every(Boolean)) { console.log('WAVE30 LAW ZONE FAIL'); errors++; }
+w30removeShip(p6law);
+tick(5, 'wave30 p6 cleanup');
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

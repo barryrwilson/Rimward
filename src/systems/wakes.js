@@ -15,7 +15,8 @@ import { spawnPod } from '../game/pods.js';
  * system. World-space, NOT parented to the ship — the trail outlives the
  * despawn. Emission is throttled to WAKE_EMIT_HZ per fleeing ship via a
  * module-scope WeakMap of per-ship timers (entries die with the ship;
- * set only on first sight = spawn-event time, never per frame).
+ * the timer value is rewritten in place every frame the ship keeps
+ * fleeing — keying happens once per ship, so nothing allocates).
  * frustumCulled = false — points roam. reducedMotion
  * (ctx.settings.reducedMotion) → no emission and the points stay hidden,
  * the same contract as the ship.js trail.
@@ -105,8 +106,9 @@ export function initWakes(ctx) {
   let wakeHead = 0; // ring-buffer write cursor
 
   // Per-ship emission timers, keyed by the live ship object. WeakMap so
-  // entries die with traffic.js despawns; .set runs only on first sight
-  // of a fleeing ship (spawn-event time), never per frame.
+  // entries die with traffic.js despawns. .set rewrites the timer value
+  // in place on every frame the ship is fleeing (the entry itself is
+  // created once per ship) — a value write, not a per-frame allocation.
   const emitTimers = new WeakMap();
 
   let scanT = 0; // site-discovery throttle accumulator
@@ -115,8 +117,28 @@ export function initWakes(ctx) {
     update(dt) {
       const reducedMotion = ctx.settings?.reducedMotion === true;
 
+      // --- System swap: wake points are world-space, only meaningful in
+      // the system that spawned them. jump.js runs earlier in the system
+      // list, so its 'systemLoaded' is in this frame's ctx.events queue;
+      // save.js cross-system restores run later and are seen a frame
+      // later in ctx.lastEvents. Zero every point's life and black the
+      // color buffer IN PLACE (additive: black = gone) — no allocation. ---
+      let systemSwapped = false;
+      for (let i = 0; i < ctx.events.length; i++) {
+        if (ctx.events[i].type === 'systemLoaded') { systemSwapped = true; break; }
+      }
+      if (!systemSwapped) {
+        for (let i = 0; i < ctx.lastEvents.length; i++) {
+          if (ctx.lastEvents[i].type === 'systemLoaded') { systemSwapped = true; break; }
+        }
+      }
+
       // --- Wake emission: fleeing ships shed points at the tail. ---
-      let wakeTouched = false;
+      let wakeTouched = systemSwapped; // swap clear raises both flags below
+      if (systemSwapped) {
+        wakeLife.fill(0);
+        wakeCol.fill(0);
+      }
       if (!reducedMotion) {
         const step = 1 / WAKE_EMIT_HZ;
         for (let i = 0; i < ctx.ships.length; i++) {
@@ -161,6 +183,10 @@ export function initWakes(ctx) {
         wakeLive++;
       }
       wakePoints.visible = wakeLive > 0 && !reducedMotion;
+      // The fade loop rewrote the color buffer for every live point, so
+      // the upload must follow the points — not just emit/expiry events —
+      // or a despawned runner's trail freezes at full brightness and pops.
+      if (wakeLive > 0) wakeTouched = true;
       if (wakeTouched) {
         wakeGeo.attributes.position.needsUpdate = true;
         wakeGeo.attributes.color.needsUpdate = true;

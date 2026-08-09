@@ -89,6 +89,7 @@ export function initHail(ctx) {
         ai.intent = false;
         ai.target = null;
         bumpFear(ctx2, ECON.fear.capitulation);
+        stampWakeSite(live); // wave 30: every pirate/ace flee entry stamps (role-guarded)
         ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
         ctx2.emit('npcSurrendered', { ship: live, outcome: 'jettison' });
         break;
@@ -101,6 +102,7 @@ export function initHail(ctx) {
         ai.intent = false;
         ai.target = null;
         bumpFear(ctx2, ECON.fear.ransom);
+        stampWakeSite(live); // wave 30: every pirate/ace flee entry stamps (role-guarded)
         ctx2.emit('commLine', { text: 'Paid. Go.', from: st.name });
         ctx2.emit('npcSurrendered', { ship: live, outcome: 'ransom' });
         break;
@@ -192,8 +194,13 @@ export function initHail(ctx) {
         } else {
           // Called bluff: the pirate steadies (resolve bump) and presses the
           // attack — intent stays true, and the hold releases here rather
-          // than waiting on npc.js's hailClosed scan.
+          // than waiting on npc.js's hailClosed scan. Two writes: st.resolve
+          // bumps now for instant HUD feedback, and ai.resolveBoost carries
+          // the same sting past npc.js updateResolve's 1s recompute (which
+          // would otherwise overwrite st.resolve wholesale). The boost is
+          // instance-scoped and cleared on stand-down — see updateResolve.
           st.resolve = Math.min(95, st.resolve + HIDDEN_MOUNTS.failResolveBump);
+          ai.resolveBoost = HIDDEN_MOUNTS.failResolveBump;
           ai.demandOutcome = 'failed';
           ai.demanding = false;
           ctx2.emit('commLine', { text: 'Nice plating. Burn them.', from: st.name });

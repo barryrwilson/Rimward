@@ -1081,7 +1081,46 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   2.5→3.2 / 3.5→4.5 (petals hood and cup visibly); flex amps ~×1.4
   (outer 0.11–0.17, inner 0.09–0.14) at ~⅔ the frequency (hz walks
   0.09–0.18 / 0.11–0.18); crown breath 0.04@0.07, nod 0.06@0.04.
-## Next round candidates (wave 30)
+- Wave 30: the two remaining §29 product-test gaps ("bluffed the other with
+  hidden mounts", "followed its wake after it ran"). state.js: HIDDEN_MOUNTS
+  {cost 900, bluffBase 0.35, bluffPerFear 0.01, failResolveBump 20,
+  calmSeconds 90, demandMin 50} after ECON. ctx.world.concealedMounts (bool;
+  save.js WORLD_FIELDS += 'concealedMounts'; sanitizeRestored coerces
+  !== true → false). station.js outfitting row 3 'Concealed mounts' (n===3
+  hotkey, one-time, owned note in the yard's voice). npc.js: a hunt-mode
+  pirate targeting the player opens ONE demand hail per record
+  (ai.demandSent, record.demandedAt, DEMAND_COOLDOWN 300) inside
+  U.TARGET_RANGE past jump grace, then holds weapons-cold (cap*0.15) while
+  ai.demanding; demand = max(demandMin, round(tributeRate × cargoValue(player
+  cargo) × 10)) rolled once. hail.js intents (INTENT_ORDER appended, combat
+  numbering unchanged): payTribute (credits = max(0, credits − demand),
+  flee + calm 60), showTeeth (only when concealedMounts === true; success
+  p = bluffBase + fear × bluffPerFear → flee + calm 90 + fear+1; failure →
+  +20 resolve via ai.resolveBoost — survives the 1 s updateResolve recompute,
+  instance-scoped, cleared on stand-down/calm/disabled — and the pirate
+  presses), refuseFight (card closes, pirate attacks). A player hit after
+  ai.demandPeaceAt voids the parley (demanding cleared + hailClosed emitted).
+  stampWakeSite(live) (npc.js export, role-guarded pirate/ace): EVERY flee
+  entry (capitulate + all seven hail resolutions) stamps record.wakeSite
+  {position: [x,y,z] (flee heading × 1400 = U.DEINSTANTIATE_RANGE), found:
+  false} — JSON-plain, rides record persistence. src/systems/wakes.js (new;
+  main.js after pods, before hud): pooled 600-point wake trails (45 s life,
+  wake blue #4a9fd8, 10 Hz per fleeing ship, world-space so the trail
+  survives the runner's despawn; reducedMotion mutes + hides; 'systemLoaded'
+  zeroes the ring buffer same-frame; fade uploads whenever any point lives)
+  + 4 Hz site discovery: player within 120 u of an unfound wakeSite → found,
+  2–3 refinedMetals pods, Echo commLine, one-time milestone firstWakeSite.
+  Boot test wave-30 section (8 groups, real paths): purchase/restore-heal/
+  rebuy, demand hail intents ± mounts/hold/once-per-record, payTribute exact
+  debit + 1400 u site, showTeeth both branches, refuseFight → npcFire,
+  void-on-hit, wake emission + reducedMotion mute, discovery + milestone
+  exactly once, law-zone guard. PASS ×3 consecutive full runs.
+  Reviews: security SHIP (2 LOW, standing below); code SHIP — 3 MEDIUM fixed
+  same-wave (wake fade never re-uploaded post-emission; failResolveBump was
+  a dead write under updateResolve → resolveBoost; demandCargo/demandRansom
+  flee entries unstamped), 2 LOW standing below.
+
+## Next round candidates (wave 31)
 - Wave 28 (Berth Records) is in: KeyL opens a save/load panel in space
   (never docked/paused/dead), three manual slots beside the autosave,
   docking still autosaves. Standing notes:
@@ -1116,10 +1155,19 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   reset; vouchAck is a bool; mystery.charted grows by landmark id and
   stays bounded by the AUTHORED landmark tables (wave 23 gate) —
   self-limiting (waves 17/18 assessments stand).
+- Wave-30 standing (code review LOWs, documented not patched): the
+  void-on-hit path emits a global hailClosed — in the ~1-frame
+  card-steal window it can close a different ship's bargaining card
+  (recoverable; a ship-scoped payload is the fix if it ever bites);
+  the parley voids on ANY damage source (lastHitAt is shared), not
+  just player hits — plays true (a parley under fire breaks).
+- Wave-30 standing (security LOWs, save-tamper only): a hand-edited
+  save with a non-finite record.wakeSite.position fails open in
+  wakes.js discovery (NaN pods, TTL-self-healing); tampered cargo
+  units NaN the demand → payTribute credits chain. Both need edited
+  localStorage; the restore boundary heals on next load. Negative-
+  demand credit grants are NOT possible (demandMin floor).
+- Wave-30-surfaced candidate (user decision): the wolfeye scanner's
+  top rung could read concealed mounts on a target (Q-ship
+  counterplay) — a scanner-ladder ruling, not a patch.
 - Polish debt: none standing. Boot test remains the gate.
-- FIXED (user-reported): docked overlay scroll snap — the 1 s docked
-  refresh rebuilds the panel DOM (overlay.textContent=''), resetting
-  scrollTop, so a scrolled jobs board popped to the top every second.
-  render() now carries scrollTop across same-view rebuilds and resets
-  on navigation (level:service view key). Live-verified: scrollTop
-  held through two refresh cycles, Esc→reopen resets to 0.

@@ -491,6 +491,7 @@ function makeAi(ctx, record, startPos) {
     demanding: false, // demand card open: hold position, weapons cold
     demandOutcome: null, // stamped by hail.js: 'paid'|'bluffed'|'refused'|'failed'
     demandPeaceAt: 0, // demand open time; a player hit after this voids the parley
+    resolveBoost: 0, // wave 30: failed-bluff sting (hail.js showTeeth); see updateResolve for lifecycle
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
@@ -632,6 +633,14 @@ function updateResolve(ctx, live, now) {
   const ai = live.ai;
   const hostile = (ai.mode === 'hunt' || ai.mode === 'duel') && ai.intent;
   const threatened = now - st.lastCombatAt < THREAT_MEMORY;
+  // resolveBoost lifecycle (wave 30, failed-bluff sting): instance-scoped —
+  // unlike the Illyx rematch ladder it is never written to record, so it
+  // dies with the live ship on despawn. It lives only while the ship keeps
+  // pressing the fight; every stand-down clears it here: intent dropped
+  // (flee/drift via capitulate, breakOff, or a hail resolution) or a calm
+  // window (paid off, bluffed, tribute, respect). Disabled ships never
+  // reach this function — the update loop clears the boost there instead.
+  if (!hostile || now < ai.calmUntil) ai.resolveBoost = 0;
   if (!hostile && !threatened) return;
   if (now < ai.calmUntil) return;
 
@@ -662,6 +671,11 @@ function updateResolve(ctx, live, now) {
         + (ctx.world.milestones.includes('rimWithoutGuns') ? NAMED_GUNS.brokenResolveMod : 0)
       : st.personality,
   );
+  // Failed-bluff sting (wave 30): applied AFTER the recompute so this 1s
+  // loop can't erase it; capped at 95 like every resolve write. Cleared on
+  // the stand-down gate above, so a paid-off or bluffed-into-flight pirate
+  // never carries it — one that fights on keeps it for the encounter.
+  st.resolve = Math.min(95, st.resolve + (ai.resolveBoost ?? 0));
   const band = resolveBand(st.resolve);
   if (band === ai.band) return;
   ai.band = band;
@@ -1200,6 +1214,7 @@ export function initNpc(ctx) {
           }
         }
         if (st.disabled) {
+          ai.resolveBoost = 0; // stand-down: a disabled hull drops the bluff sting (updateResolve never runs here)
           updateDisabled(live, dt, now);
           continue;
         }
