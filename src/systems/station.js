@@ -93,6 +93,7 @@ const CARGO_UPGRADE_COST = 600;
 const CARGO_UPGRADE_STEP = 10;
 const CARGO_UPGRADE_MAX = 2;
 const SCANNER_COST = 400;
+const SCANNER2_COST = 900;
 
 const PATROL_REWARD = 300;
 const PATROL_REP = 5;
@@ -1038,6 +1039,15 @@ export function initStation(ctx) {
       ui.notice = 'Wolfeye Mk I bolted in. Their nerve reads as numbers now.';
       render();
     },
+    buyScanner2() {
+      if (ctx.world.scanner >= 2) { ui.notice = 'Wolfeye Mk II already installed.'; render(); return; }
+      if (ctx.world.scanner < 1) { ui.notice = 'The Mk II lattice bolts onto a Mk I eye. Buy that first.'; render(); return; }
+      if (ctx.world.credits < SCANNER2_COST) { ui.notice = 'Not enough UU.'; render(); return; }
+      ctx.world.credits -= SCANNER2_COST;
+      ctx.world.scanner = 2;
+      ui.notice = 'Wolfeye Mk II bolted in. Their guns show through their skins.';
+      render();
+    },
     // Wave 30: Q-ship path (§29) — guns that don't show on a manifest.
     buyConcealedMounts() {
       if (ctx.world.concealedMounts === true) { ui.notice = 'Concealed mounts already fitted.'; render(); return; }
@@ -1411,6 +1421,15 @@ export function initStation(ctx) {
     } else {
       btn(row3, `3 — Concealed mounts — guns that don't show on a manifest (${HIDDEN_MOUNTS.cost} UU)`, act.buyConcealedMounts);
     }
+    // Wave 31: Mk II eye (§30) — reads the masks back, needs the Mk I socket.
+    const row4 = h('div', 'screen-btnrow', panel);
+    if (ctx.world.scanner >= 2) {
+      h('div', 'screen-note', row4, 'Wolfeye Mk II installed — hidden gunports read on the target bracket.');
+    } else if (ctx.world.scanner === 1) {
+      btn(row4, `4 — Wolfeye Mk II scanner (${SCANNER2_COST} UU)`, act.buyScanner2);
+    } else {
+      h('div', 'screen-note', row4, 'Wolfeye Mk II needs the Mk I eye in the socket first.');
+    }
   }
 
   // ---- people (contacts: dockmaster/fence/fixer of this dock, §12.x) ----
@@ -1683,6 +1702,7 @@ export function initStation(ctx) {
       if (n === 1) act.buyCargoRack();
       else if (n === 2) act.buyScanner();
       else if (n === 3) act.buyConcealedMounts();
+      else if (n === 4) act.buyScanner2();
     } else if (ui.service === 'launch') {
       if (n === 1) undock();
     }

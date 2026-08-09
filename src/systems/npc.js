@@ -518,7 +518,15 @@ function makeAi(ctx, record, startPos) {
 // returned object itself. removeLiveShip removes the mesh only; traffic
 // splices the list (its splice is defensive if the entry is already gone).
 export function spawnLiveShip(ctx, record, position) {
-  const object = buildShipMesh(record.classKey, record.faction, record.role ?? SHIP_CLASSES[record.classKey]?.role ?? 'trader');
+  // Disguised Q-ship (wave 31, contract with world.js/hud.js): a pirate
+  // record flagged qship and not yet revealed spawns in its COVER identity —
+  // freighter mesh, cover faction, trader-looking hull. State below stays
+  // REAL (createShipState(record.classKey, …): cutter stats under the
+  // freighter skin — the overpowered engines are the in-fiction tell), and
+  // live.role stays record.role ('pirate') so other pirates never hunt it.
+  const object = record.qship === true && !record.revealed
+    ? buildShipMesh(record.coverClass ?? 'freighter', record.coverFaction ?? record.faction, 'trader')
+    : buildShipMesh(record.classKey, record.faction, record.role ?? SHIP_CLASSES[record.classKey]?.role ?? 'trader');
   object.position.copy(position);
   ctx.scene.add(object);
   // createShipState reads { name, faction, cargo, resolve, personality,
@@ -593,6 +601,36 @@ export function stampWakeSite(live) {
     position: [p.x + _fwd.x * WAKE_SITE_DISTANCE, p.y + _fwd.y * WAKE_SITE_DISTANCE, p.z + _fwd.z * WAKE_SITE_DISTANCE],
     found: false,
   };
+}
+
+/**
+ * Reveal a disguised Q-ship (wave 31, contract with world.js/hud.js):
+ * world.js stamps rec.qship/coverClass/coverName/coverFaction on designated
+ * pirate records; hud.js reads rec.revealed for the CONCEALED MOUNTS tell.
+ * Fires exactly once per record — rec.revealed is JSON-plain/persisted, the
+ * lane saw it, it stays seen — on the first hostile act (updateHunt
+ * acquisition) or the first hull/screen scratch. The mesh is rebuilt in the
+ * REAL identity in place; shared geometries/materials are never disposed
+ * (removeLiveShip precedent — just scene.remove). userData.glow is set by
+ * the builder and every consumer looks it up per-call from live.object, so
+ * the swap is safe. say() reads state.name — the REAL name, correct at
+ * reveal. The milestone is once-EVER, not per ship.
+ */
+function revealQship(ctx, live) {
+  const rec = live.record;
+  if (!rec?.qship || rec.revealed) return;
+  rec.revealed = true; // persisted — the lane saw it, it stays seen
+  const object = buildShipMesh(rec.classKey, rec.faction, rec.role ?? SHIP_CLASSES[rec.classKey]?.role ?? 'trader');
+  object.position.copy(live.object.position);
+  object.quaternion.copy(live.object.quaternion);
+  ctx.scene.remove(live.object);
+  ctx.scene.add(object);
+  live.object = object;
+  say(ctx, live, 'The manifest lied.');
+  if (!ctx.world.milestones.includes('qshipUnmasked')) {
+    ctx.world.milestones.push('qshipUnmasked');
+    ctx.emit('milestone', { id: 'qshipUnmasked', line: 'The lane wears masks. You saw one come off.' });
+  }
 }
 
 function speedCap(live) {
@@ -867,6 +905,13 @@ function updateHunt(ctx, live, dt, now) {
   const ai = live.ai;
   const station = ctx.config.world.stationPosition;
 
+  // A damage scratch strips the facade (wave 31): screen recharges in
+  // combat, but this runs every frame — any hit is caught next frame.
+  const st = live.state;
+  if (live.record?.qship && !live.record.revealed && (st.hull < st.hullMax || st.screen < st.screenMax)) {
+    revealQship(ctx, live);
+  }
+
   // Validate current target.
   let targetPos = null;
   if (ai.target === 'player') {
@@ -898,6 +943,10 @@ function updateHunt(ctx, live, dt, now) {
     ) {
       setTarget(ai, 'player');
       targetPos = pObj.position;
+      // Reveal BEFORE the wave-30 demand-hail block below runs this frame —
+      // the hail and bracket already show true colors: a 'freighter' closes,
+      // flips, then 'Your cargo or your hull.'
+      revealQship(ctx, live);
     } else {
       let best = null;
       let bestD = U.ENCOUNTER_BUBBLE;
@@ -914,6 +963,8 @@ function updateHunt(ctx, live, dt, now) {
       if (best) {
         setTarget(ai, best);
         targetPos = best.object.position;
+        // Hostile act against a trader strips the disguise (wave 31).
+        revealQship(ctx, live);
       }
     }
   }

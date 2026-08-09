@@ -6897,5 +6897,390 @@ if (!Object.values(w30lawChecks).every(Boolean)) { console.log('WAVE30 LAW ZONE 
 w30removeShip(p6law);
 tick(5, 'wave30 p6 cleanup');
 
+// ---- Wave 31: Q-ship counterplay — Wolfeye Mk II, bracket tells, reveals --
+// The wave-31 contract: world.js flags every ODD-index pirate as a Q-ship
+// (qship/coverClass/coverName/coverFaction; revealed ABSENT until the first
+// hostile act or scratch); npc.js spawns disguised records in their cover
+// identity (real cutter stats underneath) and revealQship swaps the mesh in
+// place, says 'The manifest lied.' under the REAL name, and guard-pushes the
+// once-EVER 'qshipUnmasked' milestone; hud.js's target bracket shows the
+// cover identity while masked, the real identity + ' · CONCEALED MOUNTS'
+// once a Wolfeye Mk II (scanner >= 2) pierces it; station.js sells the Mk II
+// on outfitting row 4 (Digit4) behind the Mk I prerequisite. Synthetic
+// pirates follow the w30spawnPirate pattern extended with the cover fields.
+//
+// RUN-STATE NOTE (deliberate deviation from the letter of the brief): with
+// wave-31 world.js/npc.js live, the run's EARLY freehold combat (the wave-2
+// firing leg + 3 min soak) legitimately unmasks freehold's two authored
+// Q-ships — acquisition reveals them and every autosave since carries
+// revealed:true forward. So leg b asserts revealed ABSENT only where that is
+// sound mid-run (even-index pirates, every non-pirate, and the cross-bank
+// discipline invariant that revealed appears ONLY on qships and ONLY as
+// true) and LOGS how many authored qships are still pristine; it does not
+// fail the gate on soak-era unmasking. Leg d re-arms the once-ever milestone
+// guard with the wave-30 splice idiom for the same reason.
+const { FACTIONS: w31FACTIONS } = await import('../src/game/state.js'); // the line-295 destructure predates this section; a fresh import touches nothing earlier
+const w31classHas = (n, cls) => typeof n.className === 'string' && n.className.split(' ').includes(cls);
+const w31st = SYSTEMS.freehold.station.position;
+// Target-bracket text lives under the getElementById-memoized #hud root
+// (the wave-28 hud.js anchor pattern — NOT under document.body). That root
+// carries MULTIPLE bracket chains: bootFreshHarness (wave 7-10 fresh boots)
+// re-runs the full inits list — initHud included — on the same memoized
+// root, so .rw-target-name/.rw-target-meta exist once per boot and every
+// fresh-boot chain is frozen after its sub-run. Reading "the" node by class
+// alone reads a frozen duplicate ('' forever); the LIVE chain is the one
+// hud.js actually un-hid this frame — scope the text read to the SHOWN
+// .rw-target instance (the continuing run's chain is appended first, so the
+// first shown bracket in document order is always the live one).
+const w31bracketText = () => {
+  let live = null;
+  for (const n of walkDom(document.getElementById('hud'))) {
+    if (w31classHas(n, 'rw-target') && !n.classList.contains('is-hidden')) { live = n; break; }
+  }
+  if (!live) return { name: null, meta: null, shown: false };
+  let name = null, meta = null;
+  for (const n of walkDom(live)) {
+    if (w31classHas(n, 'rw-target-name')) name = n.textContent;
+    else if (w31classHas(n, 'rw-target-meta')) meta = n.textContent;
+  }
+  return { name, meta, shown: true };
+};
+// A synthetic disguised Q-ship pirate: cover identity on the record, REAL
+// cutter stats in state (spawnLiveShip reads classKey), role stays 'pirate'.
+const w31spawnQship = (suffix, coverName, pos) => {
+  const rec = {
+    id: `wave31-${suffix}`, name: `Wave31 ${suffix}`, classKey: 'cutter',
+    faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
+    qship: true, coverClass: 'freighter', coverName, coverFaction: 'freehold',
+  };
+  const live = spawnLiveShip(ctx, rec, new THREE.Vector3(pos[0], pos[1], pos[2]));
+  ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
+  return live;
+};
+// Freeze ambient traffic for a leg: splice every live ship except the keeps
+// and stamp rec.live = true on EVERY current-bank record, so traffic's spawn
+// pass (which skips live records) instantiates nothing mid-leg — no ambient
+// trader can drift inside a synthetic Q-ship's 800u hunt bubble and trip an
+// untimed reveal. Stale live flags are healed wholesale by leg f's
+// death-restore (save.js healLiveRecords rebuilds them from real ships).
+const w31freezeTraffic = (keep) => {
+  const keeps = new Set(Array.isArray(keep) ? keep : [keep]);
+  for (let i = ctx.ships.length - 1; i >= 0; i--) {
+    const s = ctx.ships[i];
+    if (keeps.has(s)) continue;
+    ctx.ships.splice(i, 1);
+    removeLiveShip(ctx, s);
+  }
+  for (const r of ctx.world.records) r.live = true;
+};
+
+// -- a. Wolfeye Mk II purchase: the real outfitting hotkey path (Digit6 -----
+// service, Digit2/Digit4 rows) — prerequisite refusal with scanner 0, the --
+// exact 400/900 debits, the row-4 note transitions, the second-buy refusal.
+w30parkHostiles('wave31 hostiles parked (Mk II)');
+dockAtCurrentStation('wave31 dock freehold (Mk II)');
+ctx.world.credits = 5000; // TEST SETUP poke (the wave-30 outfitting convention)
+dispatchKey('Digit6'); // outfitting (DOCK_KEY_SERVICES[5])
+const w31outfitOpen = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => n.textContent === 'OUTFITTING — hull work & instruments');
+const w31scannerZero = (ctx.world.scanner ?? 0) === 0; // provable: no earlier wave presses outfitting Digit2/4
+const w31prereqNote = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => typeof n.textContent === 'string' && n.textContent === 'Wolfeye Mk II needs the Mk I eye in the socket first.');
+const w31creditsAtBuy = ctx.world.credits;
+dispatchKey('Digit4'); // outfitting n===4 → act.buyScanner2 — refused without the Mk I
+const w31noMk1Refused = w26StationNotice() === 'The Mk II lattice bolts onto a Mk I eye. Buy that first.'
+  && ctx.world.credits === w31creditsAtBuy && (ctx.world.scanner ?? 0) === 0;
+dispatchKey('Digit2'); // n===2 → act.buyScanner: the Mk I eye, exact 400 debit
+const w31mk1Bought = ctx.world.scanner === 1 && ctx.world.credits === w31creditsAtBuy - 400
+  && w26StationNotice() === 'Wolfeye Mk I bolted in. Their nerve reads as numbers now.';
+const w31mk2Btn = [...walkDom(stationOverlay() ?? { children: [] })]
+  .find((n) => n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent === '4 — Wolfeye Mk II scanner (900 UU)') ?? null;
+dispatchKey('Digit4'); // real buy: exact 900 debit, scanner 2, success line
+const w31mk2Bought = ctx.world.scanner === 2 && ctx.world.credits === w31creditsAtBuy - 1300
+  && w26StationNotice() === 'Wolfeye Mk II bolted in. Their guns show through their skins.';
+const w31installedNote = [...walkDom(stationOverlay() ?? { children: [] })]
+  .some((n) => typeof n.textContent === 'string' && n.textContent === 'Wolfeye Mk II installed — hidden gunports read on the target bracket.');
+dispatchKey('Digit4'); // second buy: refused through the same hotkey path
+const w31secondRefused = w26StationNotice() === 'Wolfeye Mk II already installed.'
+  && ctx.world.credits === w31creditsAtBuy - 1300 && ctx.world.scanner === 2;
+dispatchKey('Escape'); // back to services
+const w31buyChecks = {
+  outfittingOpened: w31outfitOpen,
+  scannerStartsZero: w31scannerZero,
+  prereqNoteShown: w31prereqNote,
+  refusedWithoutMk1: w31noMk1Refused,
+  mk1Exact400: w31mk1Bought,
+  mk2ButtonAtScanner1: !!w31mk2Btn,
+  mk2Exact900: w31mk2Bought,
+  installedNoteShown: w31installedNote,
+  secondBuyRefused: w31secondRefused,
+};
+console.log('wave31 Mk II purchase:', JSON.stringify(w31buyChecks), `credits=${ctx.world.credits}`);
+if (!Object.values(w31buyChecks).every(Boolean)) { console.log('WAVE31 MK II PURCHASE FAIL'); errors++; }
+
+// -- b. Record data: the CURRENT freehold bank (generated fresh this run by -
+// the wave-31 world.js). The authored freehold cast is 8 traders, 4 pirates,
+// 2 patrols, 1 ace (authored-systems.js); migrants/injected aces append AFTER
+// them, so the authored pirates are identified by NAME, not bank position.
+// Odd pirate indices carry exactly the four cover fields; even indices and
+// every non-pirate carry none and never carry 'revealed'. Migrants keep
+// their HOME bank's fields, so they get the shape check, not the freehold
+// values. revealed discipline is asserted across EVERY bank: present only on
+// qships, only ever === true (a generation-time false-stamp on any
+// never-revealed qship shows up here; soak-era unmasking is legal play). ---
+const w31bankB = ctx.world.records;
+const w31authored = [ // PIRATE_NAMES.freehold in cast order → pirate index
+  { name: 'Red Marlow', i: 0 }, { name: 'Gallows Wren', i: 1 },
+  { name: 'Ninth Tooth', i: 2 }, { name: 'Sable Ilex', i: 3 },
+];
+const w31coverFor = { 1: 'Mercy of Tarsus', 3: 'Long Orchard' }; // QSHIP_COVERS.freehold[(i-1)/2]
+const w31coverKeys = ['qship', 'coverClass', 'coverName', 'coverFaction'];
+const w31recByName = (name) => w31bankB.find((r) => r.role === 'pirate' && r.name === name) ?? null;
+let w31authoredFound = true, w31oddCover = true, w31evenClean = true, w31pristine = 0;
+for (const { name, i } of w31authored) {
+  const rec = w31recByName(name);
+  if (!rec) { w31authoredFound = false; continue; }
+  if (i % 2 === 1) {
+    if (!(rec.qship === true && rec.coverClass === 'freighter'
+      && rec.coverName === w31coverFor[i] && rec.coverFaction === 'freehold')) w31oddCover = false;
+    if (!('revealed' in rec)) w31pristine++; // logged, not asserted — see the run-state note above
+  } else if (w31coverKeys.some((k) => k in rec) || 'revealed' in rec) w31evenClean = false;
+}
+const w31nonPiratesClean = w31bankB.every((r) => r.role === 'pirate'
+  || (!w31coverKeys.some((k) => k in r) && !('revealed' in r)));
+const w31migrantPiratesShaped = w31bankB.every((r) => {
+  if (r.role !== 'pirate' || w31authored.some((a) => a.name === r.name)) return true;
+  if (r.qship === true) {
+    return r.coverClass === 'freighter' && typeof r.coverName === 'string' && r.coverName.length > 0
+      && typeof r.coverFaction === 'string' && (!('revealed' in r) || r.revealed === true);
+  }
+  return !w31coverKeys.some((k) => k in r) && !('revealed' in r);
+});
+let w31revealedDiscipline = true;
+for (const sysId of Object.keys(ctx.world.recordBanks ?? {})) {
+  for (const r of ctx.world.recordBanks[sysId]) {
+    if ('revealed' in r && !(r.qship === true && r.revealed === true)) w31revealedDiscipline = false;
+  }
+}
+const w31recordChecks = {
+  authoredPiratesFound: w31authoredFound,
+  oddPiratesCarryCover: w31oddCover,
+  evenPiratesClean: w31evenClean,
+  nonPiratesCarryNothing: w31nonPiratesClean,
+  migrantPiratesShaped: w31migrantPiratesShaped,
+  revealedOnlyTrueOnQships: w31revealedDiscipline,
+};
+console.log('wave31 qship records:', JSON.stringify(w31recordChecks), `pristineQships=${w31pristine}/2`);
+if (!Object.values(w31recordChecks).every(Boolean)) { console.log('WAVE31 QSHIP RECORDS FAIL'); errors++; }
+
+// -- c. Bracket cover/pierce: a synthetic disguised Q-ship dead ahead of the
+// player, BOTH inside the station's 300u law zone so updateHunt can never
+// develop a target (player branch needs both sides outside; the trader
+// branch finds nothing — traffic is frozen). Scanner poked 0 → cover
+// identity; restored to the leg-a-bought 2 → real name + the CONCEALED
+// MOUNTS suffix. Position re-pinned per tick so the loiter drift can't move
+// the distance reading between text windows (5 Hz write-on-change). --------
+undockStation();
+ctx.ship.object.position.set(w31st[0], w31st[1], w31st[2] + 150); // inside the law zone, clear of the 45u dock ring
+ctx.ship.velocity.set(0, 0, 0);
+ctx.ship.object.quaternion.identity(); // nose -Z: the chase cam looks dead ahead
+ctx.input.throttle = 0;
+ctx.input.fullStop = true;
+const w31q1pos = [w31st[0], w31st[1], w31st[2] + 150 - 200]; // 200u ahead, 50u off the station — in-zone too
+const w31q1 = w31spawnQship('Veiled', 'Wave31 Cover', w31q1pos);
+w31freezeTraffic([w31q1]);
+ctx.targets.current = w31q1;
+ctx.world.scanner = 0; // TEST SETUP poke (the wave-9 scanner pattern): read the masked branch
+for (let i = 0; i < 90; i++) { // camera lerp (~1 s) + several 0.2 s text windows
+  w31q1.object.position.set(w31q1pos[0], w31q1pos[1], w31q1pos[2]);
+  tick(1, 'wave31 bracket cover');
+}
+const w31coverText = w31bracketText();
+ctx.world.scanner = 2; // restore the real leg-a state: the pierce branch
+for (let i = 0; i < 30; i++) {
+  w31q1.object.position.set(w31q1pos[0], w31q1pos[1], w31q1pos[2]);
+  tick(1, 'wave31 bracket pierce');
+}
+const w31pierceText = w31bracketText();
+ctx.targets.current = null; // release the bracket (change-detection caching unwinds next frame)
+const w31coverDist = Number((w31coverText.meta ?? '').match(/· (\d+)u$/)?.[1]);
+const w31pierceDist = Number((w31pierceText.meta ?? '').match(/· (\d+)u · CONCEALED MOUNTS$/)?.[1]);
+const w31distNow = () => Math.round(ctx.ship.object.position.distanceTo(w31q1.object.position));
+const w31bracketChecks = {
+  bracketShown: w31coverText.shown && w31pierceText.shown,
+  coverNameShown: w31coverText.name === 'Wave31 Cover',
+  coverMetaFaction: (w31coverText.meta ?? '').startsWith(w31FACTIONS.freehold.name + ' · '),
+  coverMetaNoTell: !(w31coverText.meta ?? '').includes('CONCEALED MOUNTS'),
+  coverDistSane: Number.isFinite(w31coverDist) && Math.abs(w31coverDist - w31distNow()) <= 10,
+  pierceShowsRealName: w31pierceText.name === 'Wave31 Veiled',
+  pierceMetaRealFaction: (w31pierceText.meta ?? '').startsWith(w31FACTIONS.redledger.name + ' · '),
+  pierceMetaSuffix: (w31pierceText.meta ?? '').endsWith(' · CONCEALED MOUNTS'),
+  pierceDistSane: Number.isFinite(w31pierceDist) && Math.abs(w31pierceDist - w31distNow()) <= 10,
+  neverRevealed: !('revealed' in w31q1.record) && w31q1.ai.target == null,
+};
+console.log('wave31 bracket cover/pierce:', JSON.stringify(w31bracketChecks),
+  `cover=${JSON.stringify(w31coverText)} pierce=${JSON.stringify(w31pierceText)}`);
+if (!Object.values(w31bracketChecks).every(Boolean)) { console.log('WAVE31 BRACKET COVER FAIL'); errors++; }
+w30removeShip(w31q1);
+tick(3, 'wave31 q1 cleanup');
+
+// -- d. Reveal on acquisition: a second synthetic Q-ship, the player parked -
+// outside the law zone within the 800u bubble (the wave-30 leg-i perch at ---
+// station z+400). updateHunt's acquire reveals it the same frame: the record
+// flips, the mesh swaps IN PLACE (object identity changes, position carried),
+// the comm line speaks the REAL name, and the once-ever milestone fires. The
+// guard is re-armed first — soak-era combat legitimately fired it already. --
+ctx.ship.object.position.set(w31st[0], w31st[1], w31st[2] + 400); // outside the 300u zone, inside the bubble
+ctx.ship.velocity.set(0, 0, 0);
+ctx.ship.object.quaternion.identity();
+const w31msIdxD = ctx.world.milestones.indexOf('qshipUnmasked');
+if (w31msIdxD >= 0) ctx.world.milestones.splice(w31msIdxD, 1); // TEST SETUP: re-arm the once-ever guard (wave-30 firstWakeSite idiom)
+const w31q2 = w31spawnQship('Unmasked', 'Wave31 Shroud', [w31st[0] + 250, w31st[1], w31st[2] + 400]);
+const w31objBefore = w31q2.object;
+const w31classUnderSkin = w31q2.state.classKey; // 'cutter' — real stats under the freighter skin
+const w31revealEvs = [];
+let w31swapDelta = NaN;
+for (let i = 0; i < 30 && w31q2.record.revealed !== true; i++) {
+  const px = w31q2.object.position.x, py = w31q2.object.position.y, pz = w31q2.object.position.z;
+  tick(1, 'wave31 reveal on acquire');
+  w31revealEvs.push(...ctx.lastEvents);
+  if (w31q2.record.revealed === true && Number.isNaN(w31swapDelta)) {
+    w31swapDelta = Math.hypot(w31q2.object.position.x - px, w31q2.object.position.y - py, w31q2.object.position.z - pz);
+  }
+}
+const w31msEvsD = w31revealEvs.filter((e) => e.type === 'milestone' && e.id === 'qshipUnmasked');
+const w31acquireChecks = {
+  revealedOnAcquire: w31q2.record.revealed === true,
+  objectSwapped: w31q2.object !== w31objBefore,
+  swapInPlace: Number.isFinite(w31swapDelta) && w31swapDelta < 5, // one frame of post-swap steer at most
+  realStatsUnderSkin: w31classUnderSkin === 'cutter' && w31q2.state.classKey === 'cutter',
+  liedLineRealName: w31revealEvs.some((e) => e.type === 'commLine' && e.text === 'The manifest lied.' && e.from === 'Wave31 Unmasked'),
+  milestoneOnce: w31msEvsD.length === 1
+    && w31msEvsD[0].line === 'The lane wears masks. You saw one come off.'
+    && ctx.world.milestones.filter((m) => m === 'qshipUnmasked').length === 1,
+};
+console.log('wave31 reveal on acquire:', JSON.stringify(w31acquireChecks), `swapDelta=${w31swapDelta?.toFixed?.(2)}`);
+if (!Object.values(w31acquireChecks).every(Boolean)) { console.log('WAVE31 REVEAL ON ACQUIRE FAIL'); errors++; }
+w30removeShip(w31q2); // the demand card (if the hail opened) closes on the despawn path
+tick(3, 'wave31 q2 cleanup');
+
+// -- e. Reveal on scratch: a third synthetic Q-ship held inside the law zone
+// (never acquires — asserted), then a one-point hull scratch. updateHunt's
+// top-of-function check strips the facade next frame WITHOUT a second
+// milestone event (the once-ever guard already spent it in leg d). --------
+const w31q3pos = [w31st[0], w31st[1], w31st[2] + 100]; // deep in-zone
+const w31q3 = w31spawnQship('Scratch', 'Wave31 Veil', w31q3pos);
+for (let i = 0; i < 3; i++) {
+  w31q3.object.position.set(w31q3pos[0], w31q3pos[1], w31q3pos[2]);
+  tick(1, 'wave31 scratch settle');
+}
+const w31keptFromAcquiring = w31q3.record.revealed !== true && w31q3.ai.target == null;
+w31q3.state.hull = w31q3.state.hullMax - 1; // TEST SETUP: the scratch itself
+const w31scratchEvs = [];
+for (let i = 0; i < 3; i++) {
+  w31q3.object.position.set(w31q3pos[0], w31q3pos[1], w31q3pos[2]);
+  tick(1, 'wave31 scratch reveal');
+  w31scratchEvs.push(...ctx.lastEvents);
+}
+const w31scratchChecks = {
+  keptFromAcquiring: w31keptFromAcquiring,
+  scratchReveals: w31q3.record.revealed === true,
+  liedLineAgain: w31scratchEvs.some((e) => e.type === 'commLine' && e.text === 'The manifest lied.' && e.from === 'Wave31 Scratch'),
+  noSecondMilestone: !w31scratchEvs.some((e) => e.type === 'milestone' && e.id === 'qshipUnmasked')
+    && ctx.world.milestones.filter((m) => m === 'qshipUnmasked').length === 1,
+};
+console.log('wave31 reveal on scratch:', JSON.stringify(w31scratchChecks));
+if (!Object.values(w31scratchChecks).every(Boolean)) { console.log('WAVE31 REVEAL ON SCRATCH FAIL'); errors++; }
+w30removeShip(w31q3);
+tick(3, 'wave31 q3 cleanup');
+
+// -- f. Save roundtrip: scanner 2 (bought in leg a) and a STANDING revealed
+// flag on a persisted bank record ride the dock autosave and the
+// death-restore. The flag is guaranteed by unmasking the authored freehold
+// Q-ship 'Gallows Wren' through the real acquisition path when the run
+// hasn't already (either way revealed === true stands pre-save; an
+// already-unmasked record simply spawns undisguised and nothing fires). ----
+const w31wren = w31bankB.find((r) => r.role === 'pirate' && r.name === 'Gallows Wren') ?? null;
+if (w31wren && w31wren.revealed !== true) {
+  if (w31wren.state === 'dead' || w31wren.state === 'captured') w31wren.state = 'enroute'; // the wave-12 resurrection idiom
+  const w31wrenLive = spawnLiveShip(ctx, w31wren,
+    new THREE.Vector3(ctx.ship.object.position.x + 250, ctx.ship.object.position.y, ctx.ship.object.position.z));
+  ctx.ships.push(w31wrenLive);
+  w31wren.live = true; // traffic's own spawn-pass contract — no double instantiation
+  for (let i = 0; i < 30 && w31wren.revealed !== true; i++) tick(1, 'wave31 wren reveal'); // player still at the leg-d perch, outside the zone
+  const w31wi = ctx.ships.indexOf(w31wrenLive);
+  if (w31wi >= 0) ctx.ships.splice(w31wi, 1);
+  removeLiveShip(ctx, w31wrenLive);
+  w31wren.live = false;
+  tick(3, 'wave31 wren cleanup'); // combat flag clears; any demand card closes on the despawn path
+}
+const w31wrenRevealed = w31wren?.revealed === true;
+w30parkHostiles('wave31 hostiles parked (scanner save)');
+dockAtCurrentStation('wave31 dock freehold (scanner save)'); // 'docked' fires trySave
+let w31snap = null;
+for (let i = 0; i < 60 * 15 && !w31snap; i++) { // the wave-30 save-wait discipline
+  for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
+  tick(1, 'wave31 scanner save wait');
+  try {
+    const s = JSON.parse(store.get('rimward-save-v1') ?? 'null');
+    if (s?.world?.scanner === 2
+      && (s?.world?.recordBanks?.freehold ?? []).some((r) => r.name === 'Gallows Wren' && r.revealed === true)) w31snap = s;
+  } catch { /* keep waiting */ }
+}
+// Die + recover (the wave-26 restore path): the in-memory corruption loses.
+ctx.world.scanner = 0; // corrupt in memory; the restore must win
+if (w31wren) w31wren.revealed = false; // corrupt the standing reveal — the pre-restore object is discarded wholesale
+ctx.emit('playerDestroyed', {});
+tick(2, 'wave31 death consumed (scanner restore)');
+dispatchKey('Enter'); // recover(): restore(last save)
+tick(2, 'wave31 scanner restore settle');
+const w31wrenRestored = ctx.world.records.find((r) => r.role === 'pirate' && r.name === 'Gallows Wren') ?? null;
+const w31saveChecks = {
+  wrenRevealedPreSave: w31wrenRevealed,
+  saveCarriesBoth: w31snap?.world?.scanner === 2, // the poll's predicate already gates Wren's flag
+  scannerRestored: ctx.world.scanner === 2,
+  revealRestored: w31wrenRestored?.revealed === true,
+  milestoneRidesRestore: ctx.world.milestones.filter((m) => m === 'qshipUnmasked').length === 1,
+};
+console.log('wave31 scanner save roundtrip:', JSON.stringify(w31saveChecks));
+if (!Object.values(w31saveChecks).every(Boolean)) { console.log('WAVE31 SCANNER SAVE FAIL'); errors++; }
+
+// -- g. Regression: a plain non-qship pirate's bracket at scanner 2 is the --
+// pre-wave-31 shape, byte-for-byte — record name, faction + distance, no ---
+// suffix. Same in-zone geometry as leg c so nothing hunts mid-read. --------
+if (ctx.flags.docked) undockStation();
+ctx.ship.object.position.set(w31st[0], w31st[1], w31st[2] + 150);
+ctx.ship.velocity.set(0, 0, 0);
+ctx.ship.object.quaternion.identity();
+ctx.input.throttle = 0;
+ctx.input.fullStop = true;
+const w31plainRec = {
+  id: 'wave31-plain', name: 'Wave31 Plain', classKey: 'cutter',
+  faction: 'redledger', role: 'pirate', resolve: 50, personality: 95,
+};
+const w31plainPos = [w31st[0], w31st[1], w31st[2] + 150 - 200];
+const w31plain = spawnLiveShip(ctx, w31plainRec, new THREE.Vector3(w31plainPos[0], w31plainPos[1], w31plainPos[2]));
+ctx.ships.push(w31plain);
+w31freezeTraffic([w31plain]);
+ctx.targets.current = w31plain;
+for (let i = 0; i < 90; i++) { // camera lerp + text windows (the leg-c cadence)
+  w31plain.object.position.set(w31plainPos[0], w31plainPos[1], w31plainPos[2]);
+  tick(1, 'wave31 plain bracket');
+}
+const w31plainText = w31bracketText();
+ctx.targets.current = null;
+const w31plainDist = Number((w31plainText.meta ?? '').match(/· (\d+)u$/)?.[1]);
+const w31plainChecks = {
+  bracketShown: w31plainText.shown,
+  nameIsRecordName: w31plainText.name === 'Wave31 Plain',
+  metaExactShape: (w31plainText.meta ?? '') === `${w31FACTIONS.redledger.name} · ${w31plainDist}u`, // faction + distance, nothing else
+  metaNoSuffix: !(w31plainText.meta ?? '').includes('CONCEALED MOUNTS'),
+  distSane: Number.isFinite(w31plainDist) && Math.abs(w31plainDist - Math.round(ctx.ship.object.position.distanceTo(w31plain.object.position))) <= 10,
+};
+console.log('wave31 plain-pirate bracket:', JSON.stringify(w31plainChecks), `meta=${JSON.stringify(w31plainText.meta)}`);
+if (!Object.values(w31plainChecks).every(Boolean)) { console.log('WAVE31 PLAIN BRACKET FAIL'); errors++; }
+w30removeShip(w31plain);
+tick(3, 'wave31 plain cleanup');
+
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);

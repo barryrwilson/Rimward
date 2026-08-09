@@ -115,6 +115,10 @@ const PIRATE_NAMES = {
   veridian: ['Copper Vane', 'Hollow Quill', 'Bracken-12'],
   verge: ['Old Callow'],
 };
+const QSHIP_COVERS = {
+  freehold: ['Mercy of Tarsus', 'Long Orchard'],
+  veridian: ['Pale Consign'],
+};
 const PATROL_NAMES = {
   freehold: ['Watchful Apt', 'Lancer Po'],
   veridian: ['Steadfast Ivo', 'Pale Warrant', 'Crescent Anh'],
@@ -216,18 +220,27 @@ function createRecords(ctx, sysId) {
     // Pirates haunt the gate and the lane back toward the station.
     const laneMid = new THREE.Vector3().lerpVectors(station, gate, 0.5);
     jitter(laneMid, 90);
-    records.push(
-      makeRecord(ctx, {
-        name: poolName(PIRATE_NAMES, sysId, i, 'Reaver'),
-        classKey: 'cutter',
-        faction: i === 0 ? 'redledger' : 'independent',
-        role: 'pirate',
-        route: [jitter(gate.clone(), 90), laneMid, jitter(gate.clone(), 120)],
-        cargo: [],
-        bounty: 300 + i * 75, // posted price — station.js bounty-pirate jobs read this
-        system: sysId,
-      }),
-    );
+    const rec = makeRecord(ctx, {
+      name: poolName(PIRATE_NAMES, sysId, i, 'Reaver'),
+      classKey: 'cutter',
+      faction: i === 0 ? 'redledger' : 'independent',
+      role: 'pirate',
+      route: [jitter(gate.clone(), 90), laneMid, jitter(gate.clone(), 120)],
+      cargo: [],
+      bounty: 300 + i * 75, // posted price — station.js bounty-pirate jobs read this
+      system: sysId,
+    });
+    // wave 31: odd-index pirates fly as disguised Q-ships — these fields are
+    // read by npc.js (spawn alias / reveal on first hostile act) and hud.js
+    // (target bracket tells under the Mk II scanner). Index 0 (the redledger
+    // leader — Verge's 'Old Callow') and all even indices stay classic.
+    if (i % 2 === 1) {
+      rec.qship = true;
+      rec.coverClass = 'freighter';
+      rec.coverName = poolName(QSHIP_COVERS, sysId, (i - 1) / 2, 'Hauler');
+      rec.coverFaction = def.faction;
+    }
+    records.push(rec);
   }
   for (let i = 0; i < cast.patrols; i++) {
     records.push(

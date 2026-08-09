@@ -839,9 +839,19 @@ export function initHud(ctx) {
         const dist = Math.round(fromPos.distanceTo(targetPos));
         if (isShip) {
           const st = target.state;
-          const key = (st && st.faction) || target.record?.faction || 'independent';
-          name = target.record?.name ?? (st && st.name) ?? 'CONTACT';
+          // wave 31: a Q-ship's record lies until it reveals; the Mk II
+          // Wolfeye reads the hidden gunports through the disguise.
+          const rec = target.record;
+          const masked = !!(rec && rec.qship) && !rec.revealed;
+          const pierced = masked && (ctx.world.scanner ?? 0) >= 2;
+          let key = (st && st.faction) || rec?.faction || 'independent';
+          name = rec?.name ?? (st && st.name) ?? 'CONTACT';
+          if (masked && !pierced) {
+            name = rec.coverName ?? name;
+            key = rec.coverFaction ?? key;
+          }
           meta = (FACTIONS[key]?.name ?? key) + ' · ' + dist + 'u';
+          if (pierced) meta += ' · CONCEALED MOUNTS';
           if (st && typeof st.resolve === 'number') {
             band = resolveBand(st.resolve);
             resText = BAND_LABEL[band];
