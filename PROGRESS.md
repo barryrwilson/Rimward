@@ -1117,3 +1117,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   stays bounded by the AUTHORED landmark tables (wave 23 gate) —
   self-limiting (waves 17/18 assessments stand).
 - Polish debt: none standing. Boot test remains the gate.
+- FIXED (user-reported): docked overlay scroll snap — the 1 s docked
+  refresh rebuilds the panel DOM (overlay.textContent=''), resetting
+  scrollTop, so a scrolled jobs board popped to the top every second.
+  render() now carries scrollTop across same-view rebuilds and resets
+  on navigation (level:service view key). Live-verified: scrollTop
+  held through two refresh cycles, Esc→reopen resets to 0.

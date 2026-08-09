@@ -1548,7 +1548,16 @@ export function initStation(ctx) {
     epics: renderEpics,
   };
 
+  let renderedView = null; // 'level:service' of the last render
   function render() {
+    // The panel is the scroller (screens.css .screen-panel overflow-y:auto)
+    // and the 1 s docked refresh rebuilds it from scratch — carry scrollTop
+    // across the rebuild or the board snaps to the top mid-scroll. Only
+    // same-view rebuilds restore: navigation (Back / service select) resets
+    // to the top as expected.
+    const view = `${ui.level}:${ui.service}`;
+    const oldPanel = overlay.firstElementChild;
+    const scrollY = oldPanel && renderedView === view ? oldPanel.scrollTop : 0;
     overlay.textContent = '';
     const panel = h('div', 'screen-panel station-panel', overlay);
 
@@ -1581,6 +1590,8 @@ export function initStation(ctx) {
     }
 
     if (ui.notice) h('div', 'station-notice', panel, ui.notice);
+    panel.scrollTop = scrollY; // after content: clamped against the new scrollHeight
+    renderedView = view;
   }
 
   function selectService(key) {
