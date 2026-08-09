@@ -11,6 +11,7 @@ import {
   computeResolve,
   resolveBand,
   cargoValue,
+  HIDDEN_MOUNTS,
 } from '../game/state.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod } from '../game/pods.js';
@@ -62,6 +63,20 @@ import {
  * the update loop via animateOrganic (zero-alloc, frozen under
  * ctx.settings.reducedMotion). Geometries/materials are module-scope
  * cached and shared (factionMaterials pattern — never disposed).
+ *
+ * Wave 30 (§29 product test — "I paid one off, bluffed the other with hidden
+ * mounts"): a hunting pirate that closes to U.TARGET_RANGE of the player
+ * opens ONE demand hail before pressing the attack — 'payTribute' /
+ * 'showTeeth' (only when ctx.world.concealedMounts === true) / 'refuseFight',
+ * resolved in hail.js. While the card is open the pirate holds position
+ * weapons-cold (ai.demanding); the parley voids if the player lands a hit,
+ * and record.demandedAt (JSON-plain, persisted) enforces a per-record
+ * cooldown across despawn/re-instantiation. Every pirate/ace entry into flee
+ * mode (capitulate or hail resolution) also stamps record.wakeSite
+ * { position: [x,y,z], found: false } — current position + forward heading ×
+ * WAKE_SITE_DISTANCE (1400 = U.DEINSTANTIATE_RANGE in state.js, the range at
+ * which traffic.js folds live ships back into records, so the site outlives
+ * the fleeing ship) — the wake-trailing contract consumed by wakes.js.
  */
 
 // ---------- module-scope scratch (no per-frame allocation) ----------
@@ -83,6 +98,8 @@ const RESOLVE_INTERVAL = 1; // s between resolve recomputes
 const THREAT_MEMORY = 12; // s a ship stays wary after last combat
 const FIRE_FACE_DOT = 0.92; // must roughly face target to fire
 const FLASH_LIFE = 0.6; // s debris flash on destruction
+const DEMAND_COOLDOWN = 300; // s before the same pirate record may demand the player again (record.demandedAt)
+const WAKE_SITE_DISTANCE = 1400; // = U.DEINSTANTIATE_RANGE (state.js; traffic.js despawns there) — the wake site sits beyond the fold
 
 let nextShipId = 1;
 
@@ -470,6 +487,10 @@ function makeAi(ctx, record, startPos) {
     recognitionSent: false, // ace recognition/rematch line fires once per instance
     hailed: false,
     surrenderDone: false,
+    demandSent: false, // wave 30: one demand hail per instantiation (reset never)
+    demanding: false, // demand card open: hold position, weapons cold
+    demandOutcome: null, // stamped by hail.js: 'paid'|'bluffed'|'refused'|'failed'
+    demandPeaceAt: 0, // demand open time; a player hit after this voids the parley
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
@@ -550,6 +571,29 @@ function bumpFear(ctx, delta) {
   ctx.emit('fearChanged', { fear: ctx.world.fear });
 }
 
+/**
+ * Flee wake-site stamping (wave 30, contract with wakes.js): when a pirate
+ * or ace breaks off, stamp where its wake can later be trailed — current
+ * position + forward heading × WAKE_SITE_DISTANCE (1400 = U.DEINSTANTIATE_RANGE,
+ * so the site sits beyond traffic.js's despawn fold). Overwritten on each
+ * flee. JSON-plain only (plain array — records serialize through save.js);
+ * allocation is event-time, never per-frame. Skips null records and
+ * non-pirate/ace ships. Exported for hail.js, which resolves several of the
+ * flee entries.
+ */
+export function stampWakeSite(live) {
+  const rec = live.record;
+  if (!rec) return;
+  const role = live.role ?? rec.role;
+  if (role !== 'pirate' && role !== 'ace') return;
+  _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+  const p = live.object.position;
+  rec.wakeSite = {
+    position: [p.x + _fwd.x * WAKE_SITE_DISTANCE, p.y + _fwd.y * WAKE_SITE_DISTANCE, p.z + _fwd.z * WAKE_SITE_DISTANCE],
+    found: false,
+  };
+}
+
 function speedCap(live) {
   const cls = SHIP_CLASSES[live.state.classKey];
   return live.state.engineOut ? cls.cruise * 0.3 : cls.cruise;
@@ -621,7 +665,7 @@ function updateResolve(ctx, live, now) {
   const band = resolveBand(st.resolve);
   if (band === ai.band) return;
   ai.band = band;
-  if (band === 'bargaining' && !ai.hailed && playerNear(ctx, live, U.TARGET_RANGE)) {
+  if (band === 'bargaining' && !ai.hailed && !ai.demanding && playerNear(ctx, live, U.TARGET_RANGE)) {
     ai.hailed = true;
     say(ctx, live, 'Terms. Name them.');
     ctx.emit('hailOpened', { ship: live, intents: intentsFor(ctx, live), line: 'They are breaking.' });
@@ -639,6 +683,18 @@ function intentsFor(ctx, live) {
   // Named-ace respect: a feared pilot can ask a Named Gun to stand down.
   if ((live.record?.role ?? live.role) === 'ace' && ctx.world.fear >= 15) intents.push('respect');
   intents.push('letGo', 'keepFiring');
+  return intents;
+}
+
+/**
+ * Demand-hail intents (wave 30): the pirate's opening offer to the player.
+ * 'showTeeth' — the hidden-mounts Q-ship bluff — exists only once the player
+ * owns concealed mounts (ctx.world.concealedMounts, worker-B contract).
+ */
+function demandIntentsFor(ctx, live) {
+  const intents = ['payTribute'];
+  if (ctx.world.concealedMounts === true) intents.push('showTeeth');
+  intents.push('refuseFight');
   return intents;
 }
 
@@ -679,6 +735,7 @@ function capitulate(ctx, live) {
   if (outcome === 'jettison' || outcome === 'crewPods') jettison(ctx, live, outcome === 'crewPods');
   if (outcome === 'flee') {
     ai.mode = 'flee';
+    stampWakeSite(live);
     say(ctx, live, 'Breaking off.');
   } else {
     ai.mode = 'drift';
@@ -753,8 +810,8 @@ function engageTarget(ctx, live, dt, now, targetPos) {
   _aim.copy(targetPos);
 
   const shaken = ai.band === 'shaken' || (ai.band === 'bargaining' && ai.hailed);
-  if (ai.band === 'bargaining' && !ai.hailed) {
-    // mid-offer: hold position, weapons cold
+  if ((ai.band === 'bargaining' && !ai.hailed) || ai.demanding) {
+    // mid-offer / demand hail open (wave 30): hold position, weapons cold
     speed = cap * 0.15;
     glow.scale.setScalar(0.7);
   } else if (shaken) {
@@ -772,6 +829,10 @@ function engageTarget(ctx, live, dt, now, targetPos) {
   steer(live.object, _aim, speed, cls.turn, dt);
 
   if (ai.phase === 'telegraph') {
+    if (ai.demanding) {
+      ai.phaseStart = now; // demand hold: telegraph stays frozen, weapons cold
+      return;
+    }
     if (!ai.commSent) {
       ai.commSent = true;
       say(ctx, live, ai.role === 'ace' ? 'Run if you like.' : 'Heave to. Cargo or hull.');
@@ -780,7 +841,7 @@ function engageTarget(ctx, live, dt, now, targetPos) {
     if (now - ai.phaseStart >= TELEGRAPH_SECONDS) ai.phase = 'attack';
     return;
   }
-  if (ai.band === 'bargaining') return; // no fire while talking
+  if (ai.band === 'bargaining' || ai.demanding) return; // no fire while talking
   const interval = ai.acePhase === 3 && ai.mode === 'duel' ? ACE_FURY_INTERVAL : shaken ? NPC_FIRE_INTERVAL * 1.5 : NPC_FIRE_INTERVAL;
   if (now >= ai.fireAt && dist < WEAPONS.cannon.range && facingDot(live.object, targetPos) > FIRE_FACE_DOT) {
     ai.fireAt = now + interval;
@@ -849,6 +910,36 @@ function updateHunt(ctx, live, dt, now) {
     updateLoiter(live, dt);
     return;
   }
+
+  // Demand hail (wave 30, §29 Q-ship beat): a hunting pirate that closes on
+  // the player opens ONE demand hail before pressing the attack — tribute,
+  // hidden-mount bluff, or refuse-and-fight, resolved in hail.js. Guards:
+  // once per instantiation (ai.demandSent), per-record cooldown across
+  // re-instantiation (record.demandedAt), never while docked or inside the
+  // law zone (both already broken off above), never during jump grace, and
+  // only inside U.TARGET_RANGE. The demand amount is rolled ONCE here so the
+  // offer is stable (hail.js ransom pattern): 10× the tribute rate on the
+  // player's cargo value, floored at HIDDEN_MOUNTS.demandMin.
+  if (
+    ai.target === 'player' &&
+    ai.role === 'pirate' &&
+    !ai.demandSent &&
+    now >= (ctx.world.jumpGraceUntil ?? 0) &&
+    now - (live.record?.demandedAt ?? -Infinity) >= DEMAND_COOLDOWN &&
+    live.object.position.distanceTo(targetPos) < U.TARGET_RANGE
+  ) {
+    ai.demandSent = true; // reset never — one demand per instantiation
+    ai.demanding = true;
+    ai.demandOutcome = null;
+    ai.demandPeaceAt = now; // a player hit stamped after this voids the parley
+    if (live.record) live.record.demandedAt = now;
+    const demand = Math.max(
+      HIDDEN_MOUNTS.demandMin,
+      Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
+    );
+    ctx.emit('hailOpened', { ship: live, intents: demandIntentsFor(ctx, live), line: 'Your cargo or your hull.', demand });
+  }
+
   engageTarget(ctx, live, dt, now, targetPos);
 }
 
@@ -1095,6 +1186,19 @@ export function initNpc(ctx) {
         // reducedMotion.
         const op = live.object.userData.organicParts;
         if (op) animateOrganic(op, ctx.elapsed, ctx.settings.reducedMotion);
+        // Wave 30 demand-hail upkeep: the parley dies with the hail target
+        // (disabled here; destroyed/despawned discard the ai outright, and
+        // hail.js's own timeout closes the card on those same conditions),
+        // and opening fire on the demanding pirate voids the offer — any hit
+        // stamped after the demand opened ends the hold and closes the card.
+        if (ai.demanding) {
+          if (st.disabled) {
+            ai.demanding = false;
+          } else if (st.lastHitAt > ai.demandPeaceAt) {
+            ai.demanding = false;
+            ctx.emit('hailClosed', {}); // card closes; the fight is on
+          }
+        }
         if (st.disabled) {
           updateDisabled(live, dt, now);
           continue;
@@ -1136,6 +1240,26 @@ export function initNpc(ctx) {
         if (e.type === 'npcDestroyed' && e.ship && e.ship.ai && !e.ship.ai.deathHandled) {
           e.ship.ai.deathHandled = true;
           handleDestroyed(ctx, e.ship, flashes); // emit is skipped: event already seen
+        }
+      }
+
+      // Demand-hail release (wave 30, cross-system via ctx.lastEvents):
+      // hail.js resolves demand intents and stamps live.ai.demandOutcome —
+      // 'failed'/'refused' clear ai.demanding themselves and press the
+      // attack; 'paid'/'bluffed' are already fleeing. On 'hailClosed',
+      // release any OUTCOME-STAMPED hold still standing (outcome-gated so a
+      // stale hailClosed never steals a demand that opened this frame). On
+      // a 'hailOpened' for ANOTHER ship the single hail card was stolen —
+      // release the hold so the pirate stops waiting on a dead parley.
+      for (const e of ctx.lastEvents) {
+        if (e.type === 'hailClosed') {
+          for (const s of ctx.ships) {
+            if (s.ai && s.ai.demanding && s.ai.demandOutcome) s.ai.demanding = false;
+          }
+        } else if (e.type === 'hailOpened') {
+          for (const s of ctx.ships) {
+            if (s.ai && s.ai.demanding && s !== e.ship) s.ai.demanding = false;
+          }
         }
       }
 

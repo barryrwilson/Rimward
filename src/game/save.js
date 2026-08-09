@@ -69,6 +69,9 @@ const WORLD_FIELDS = [
   // wave 7: originArc {calls,lastCallAt,debtCleared,collectorSent,...payoff
   // flags} (world.js origin payoff arcs)
   'originArc',
+  // wave 30: concealedMounts Q-ship ownership flag (station.js outfitting,
+  // §29 hidden-mounts bluff)
+  'concealedMounts',
 ];
 
 function snapshot(ctx) {
@@ -138,6 +141,9 @@ function sanitizeRestored(ctx) {
   }
   if (!Number.isFinite(ctx.world.credits)) ctx.world.credits = 350; // fresh-start purse §9
   if (!Number.isFinite(ctx.world.fear)) ctx.world.fear = 0;
+  // Wave 30: only a literal true restores the Q-ship flag — anything else
+  // (legacy save, corrupted value) heals to unpurchased.
+  if (ctx.world.concealedMounts !== true) ctx.world.concealedMounts = false;
   const bio = ctx.bio;
   if (bio) {
     if (!Number.isFinite(bio.hunger)) bio.hunger = 0.15;

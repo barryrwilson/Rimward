@@ -1,16 +1,18 @@
 import * as THREE from 'three';
-import { ECON, FACTIONS, cargoValue, ransomFor, CALLOW } from '../game/state.js';
+import { ECON, FACTIONS, cargoValue, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
+import { stampWakeSite } from './npc.js';
 
 /**
  * Combat hail UI (doc §7.6, §12.3): a lower-third card. The world stays live —
  * nothing here touches ctx.flags.paused, and the container is pointer-events:
  * none except the card itself, so the combat HUD is never blocked.
  *
- * Opens on 'hailOpened' { ship, intents[], line? } (emitted by npc.js when a
- * ship's resolve hits the bargaining band). Intents are verbs with real
- * mechanics only ("no verb without a system" §12.3):
+ * Opens on 'hailOpened' { ship, intents[], line?, demand? } (emitted by
+ * npc.js when a ship's resolve hits the bargaining band, or when a hunting
+ * pirate closes on the player with a tribute demand — wave 30). Intents are
+ * verbs with real mechanics only ("no verb without a system" §12.3):
  *   demandCargo   → target jettisons its manifest as pods (fear +2)
  *   demandRansom  → credits += ransomFor(state) (fear +3)
  *   acceptTribute → credits += ECON.tributeRate × cargo value (no fear)
@@ -18,15 +20,23 @@ import { spawnPod } from '../game/pods.js';
  *   respect       → a Named Gun (ace) stands down; flee + 60 s calm, no econ
  *   callowVouch   → Old Callow sells a word in the keepers' second ledger column (credits, trust, favors; no econ fear)
  *   keepFiring    → close the card, nothing else changes
- * Every resolution emits 'hailClosed'. If the hail ship is destroyed,
- * disabled, or despawned while the card is open, the card closes (bargaining
- * timeout). Buttons carry number-key shortcuts (1..n).
+ *   payTribute    → demand-hail: credits -= demand (clamped at 0; a short pilot pays what they have); pirate flees + 60 s calm
+ *   showTeeth     → hidden-mounts bluff (offered only with concealedMounts): success → pirate flees + 90 s calm, fear +1; failure → pirate resolve +20 and it presses the attack
+ *   refuseFight   → wave the demand off; the card closes and the pirate attacks
+ * Demand hails carry ev.demand (integer UU rolled once at emit time — the
+ * offer is stable). Every resolution emits 'hailClosed'. If the hail ship is
+ * destroyed, disabled, or despawned while the card is open, the card closes
+ * (bargaining timeout). Buttons carry number-key shortcuts (1..n).
  */
 
 // NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
 // order, and the vouch hail offers the purchase as intent [1]. Combat hails
 // never include 'callowVouch', so their button order is unchanged.
-const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect'];
+// Wave 30: the demand-hail intents ('payTribute','showTeeth','refuseFight')
+// are appended AFTER every existing entry so combat-hail button numbering is
+// unchanged; demand hails offer only these three ([1] pay, [2] teeth,
+// [3] refuse).
+const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect', 'payTribute', 'showTeeth', 'refuseFight'];
 
 const _offset = new THREE.Vector3();
 
@@ -110,6 +120,7 @@ export function initHail(ctx) {
         ai.intent = false;
         ai.target = null;
         ai.calmUntil = ctx2.world.time + 30;
+        stampWakeSite(live); // wave 30: pirate/ace wake-trailing contract
         ctx2.emit('commLine', { text: 'Running.', from: st.name });
         break;
       }
@@ -121,6 +132,7 @@ export function initHail(ctx) {
         ai.intent = false;
         ai.target = null;
         ai.calmUntil = ctx2.world.time + 60;
+        stampWakeSite(live); // wave 30: a standing-down Named Gun leaves a trail
         ctx2.emit('commLine', { text: 'Another time, then.', from: st.name });
         break;
       }
@@ -146,8 +158,56 @@ export function initHail(ctx) {
         break;
       }
       case 'keepFiring':
-      default:
         break; // close only; the fight continues
+      case 'payTribute': {
+        // Wave 30 demand-hail: buy the pirate off. Clamped at 0 — a pilot
+        // who can't cover the full demand pays what they have; partial
+        // payment still counts. The paid-off pirate runs and stays calm a
+        // while; npc.js releases the weapons-cold hold on 'hailClosed'.
+        ctx2.world.credits = Math.max(0, ctx2.world.credits - (h.demand ?? 0));
+        ai.mode = 'flee';
+        ai.phase = null;
+        ai.intent = false;
+        ai.target = null;
+        ai.calmUntil = ctx2.world.time + 60;
+        ai.demandOutcome = 'paid';
+        stampWakeSite(live);
+        ctx2.emit('commLine', { text: 'Smart. Run along.', from: st.name });
+        break;
+      }
+      case 'showTeeth': {
+        // Wave 30 hidden-mounts bluff (§29 Q-ship): success odds scale with
+        // fear — the whisper does the work before the guns have to.
+        const bluffP = HIDDEN_MOUNTS.bluffBase + ctx2.world.fear * HIDDEN_MOUNTS.bluffPerFear;
+        if (Math.random() < bluffP) {
+          ai.mode = 'flee';
+          ai.phase = null;
+          ai.intent = false;
+          ai.target = null;
+          ai.calmUntil = ctx2.world.time + HIDDEN_MOUNTS.calmSeconds;
+          ai.demandOutcome = 'bluffed';
+          bumpFear(ctx2, 1); // the Q-ship sighting spreads
+          stampWakeSite(live);
+          ctx2.emit('commLine', { text: 'Guns where none should be. Breaking off.', from: st.name });
+        } else {
+          // Called bluff: the pirate steadies (resolve bump) and presses the
+          // attack — intent stays true, and the hold releases here rather
+          // than waiting on npc.js's hailClosed scan.
+          st.resolve = Math.min(95, st.resolve + HIDDEN_MOUNTS.failResolveBump);
+          ai.demandOutcome = 'failed';
+          ai.demanding = false;
+          ctx2.emit('commLine', { text: 'Nice plating. Burn them.', from: st.name });
+        }
+        break;
+      }
+      case 'refuseFight': {
+        // No parley: the card closes and the pirate attacks.
+        ai.demandOutcome = 'refused';
+        ai.demanding = false;
+        break;
+      }
+      default:
+        break;
     }
     ctx2.emit('hailClosed', {});
     closeCard();
@@ -169,6 +229,12 @@ export function initHail(ctx) {
         return `Buy his vouch — ${CALLOW.vouchCost} UU`;
       case 'keepFiring':
         return 'Keep firing';
+      case 'payTribute':
+        return `Pay tribute — ${h.demand} UU`;
+      case 'showTeeth':
+        return 'Show teeth — reveal the hidden mounts';
+      case 'refuseFight':
+        return 'Refuse — and fight';
       default:
         return intent;
     }
@@ -185,6 +251,7 @@ export function initHail(ctx) {
       intents,
       ransom: ransomFor(st), // rolled once so the offer is stable
       tribute: Math.round(ECON.tributeRate * cargoValue(st.cargo, ctx.world.prices)),
+      demand: ev.demand ?? null, // wave 30: pirate demand-hail amount, rolled at emit time
       buttons: null,
     };
 

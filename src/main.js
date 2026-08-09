@@ -30,6 +30,7 @@ import { initSettings } from './systems/settings.js';
 import { initOrigins } from './game/origins.js';
 import { initOnboarding } from './systems/onboarding.js';
 import { initGalaxyChart } from './systems/galaxychart.js';
+import { initWakes } from './systems/wakes.js';
 import { SYSTEMS } from './game/state.js';
 
 let renderer;
@@ -72,7 +73,8 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // live); origins after save (ctx.flags.saveRestored is final — a restore
 // means no origin pick); onboarding after origins, before HUD; galaxy
 // chart after onboarding, before HUD (DOM-only overlay, reads SYSTEMS +
-// ctx.world.currentSystem live).
+// ctx.world.currentSystem live); wakes after npc + pods (reads ctx.ships
+// flee modes, spawns discovery pods), before HUD (consumes its events).
 const systems = [
   initStarfield,
   initSolarSystem,
@@ -93,6 +95,7 @@ const systems = [
   initNpc,
   initCombat,
   initPods,
+  initWakes,
   initHail,
   initSong,
   initSave,

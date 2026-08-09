@@ -208,6 +208,13 @@ export const ECON = {
   hotHullFence: [0.3, 0.5], // claimed hull after laundering
   fear: { capitulation: 2, ransom: 3, aceDefeated: 5, killedSurrendered: 8, decayPerWeek: 1, tributeOpensAt: 40, lawfulClosesAt: 50 },
 };
+// Wave 30: concealed mounts — the Q-ship path (§29 product test 'bluffed the
+// other with hidden mounts'). A Q-ship reads harmless on a manifest until
+// the guns run out. Success roll on the bluff is bluffBase +
+// bluffPerFear × fear; on failure the pirate's resolve takes the
+// failResolveBump sting; calmSeconds is the stand-down after a refused
+// demand; demandMin is the floor of a pirate's demand (UU).
+export const HIDDEN_MOUNTS = { cost: 900, bluffBase: 0.35, bluffPerFear: 0.01, failResolveBump: 20, calmSeconds: 90, demandMin: 50 };
 export const COMMODITIES = {
   provisions: { name: 'Provisions', base: 100, legal: true },
   refinedMetals: { name: 'Refined metals', base: 240, legal: true },

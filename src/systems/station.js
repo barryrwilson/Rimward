@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS } from '../game/state.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
@@ -1038,6 +1038,15 @@ export function initStation(ctx) {
       ui.notice = 'Wolfeye Mk I bolted in. Their nerve reads as numbers now.';
       render();
     },
+    // Wave 30: Q-ship path (§29) — guns that don't show on a manifest.
+    buyConcealedMounts() {
+      if (ctx.world.concealedMounts === true) { ui.notice = 'Concealed mounts already fitted.'; render(); return; }
+      if (ctx.world.credits < HIDDEN_MOUNTS.cost) { ui.notice = 'Not enough UU.'; render(); return; }
+      ctx.world.credits -= HIDDEN_MOUNTS.cost;
+      ctx.world.concealedMounts = true;
+      ui.notice = 'The yard keeps it off the books. Her guns sleep where a manifest can\'t see them.';
+      render();
+    },
   };
 
   // ---- market ----
@@ -1395,6 +1404,13 @@ export function initStation(ctx) {
     } else {
       btn(row2, `2 — Wolfeye Mk I scanner (${SCANNER_COST} UU)`, act.buyScanner);
     }
+    // Wave 30: concealed mounts (§29) — the Q-ship bluff enabler, bought once.
+    const row3 = h('div', 'screen-btnrow', panel);
+    if (ctx.world.concealedMounts === true) {
+      h('div', 'screen-note', row3, 'Concealed mounts fitted — her guns sleep where a manifest can\'t see them.');
+    } else {
+      btn(row3, `3 — Concealed mounts — guns that don't show on a manifest (${HIDDEN_MOUNTS.cost} UU)`, act.buyConcealedMounts);
+    }
   }
 
   // ---- people (contacts: dockmaster/fence/fixer of this dock, §12.x) ----
@@ -1666,6 +1682,7 @@ export function initStation(ctx) {
     } else if (ui.service === 'outfitting') {
       if (n === 1) act.buyCargoRack();
       else if (n === 2) act.buyScanner();
+      else if (n === 3) act.buyConcealedMounts();
     } else if (ui.service === 'launch') {
       if (n === 1) undock();
     }
