@@ -72,10 +72,10 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // ---------------------------------------------------------------- factions
 const FACTION_COLOR = {
-  freehold: 0xb0703a, veridian: 0x6fd0e0, redledger: 0xa03434,
+  freehold: 0xb0703a, veridian: 0x58c49a, redledger: 0xa03434,
   hollow: 0x7a6a8a, independent: 0x9aa7b8, ferrous: 0x6e7b8a,
   gilded: 0xd4af37, beautiful: 0x7fe0a8, congregation: 0xd8c690,
-  assembly: 0xaac4d8, lamplighter: 0xffd27a,
+  assembly: 0x7fb8b8, lamplighter: 0xffd27a,
 };
 
 const PRICE_PROFILES = {

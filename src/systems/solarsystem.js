@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SYSTEMS } from '../game/state.js';
+import { styleFor } from '../game/faction-style.js'; // wave 37: faction planet grading
 
 /**
  * Solar system — procedural sun + orbiting planets centered on
@@ -203,9 +204,17 @@ const SLOTS = [
   },
 ];
 
+const _bandColor = new THREE.Color();
+/** Wave 37: slot band palette for a faction — mood picks warm/cold base,
+ *  tint multiplies each band (null tint = the pre-wave-37 colors). */
+function bandsFor(slot, mood, tint) {
+  const base = slot.bands[mood] ?? slot.bands.warm;
+  if (!tint) return base;
+  return base.map((hex) => '#' + _bandColor.set(hex).multiply(tint).getHexString());
+}
+
 /** Remove an object subtree from the scene and free GPU resources. */
-function disposeObject(root) {
-  root.traverse((obj) => {
+function disposeObject(root) {  root.traverse((obj) => {
     if (obj.geometry) obj.geometry.dispose();
     if (obj.material) {
       if (obj.material.map) obj.material.map.dispose();
@@ -261,7 +270,15 @@ export function initSolarSystem(ctx) {
     // innermost planet (R=250) orbits in ~17 s and the outermost (R=1400)
     // in ~3.5 min.
     const ORBIT_K = 1500;
-    const palette = def.faction === 'veridian' ? 'cold' : 'warm';
+    // Wave 37: per-faction band grading from FACTION_STYLE — the base
+    // warm/cold slot palette is chosen by planetMood (veridian→cold,
+    // freehold→warm reproduces the pre-wave-37 look exactly), then
+    // multiplied by planetTint so each faction's space carries its cast
+    // (ferrous slate, congregation violet, gilded pale gold…). Null tint
+    // is byte-identical to the old warm/cold path.
+    const st = styleFor(def.faction);
+    const mood = st.planetMood ?? 'warm';
+    const tint = st.planetTint != null ? new THREE.Color(st.planetTint) : null;
     const count = Math.min(def.planetCount, SLOTS.length);
     planets = [];
     for (let i = 0; i < count; i++) {
@@ -276,7 +293,7 @@ export function initSolarSystem(ctx) {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(slot.radius, 24, 18),
         new THREE.MeshStandardMaterial({
-          map: makePlanetTexture({ bands: slot.bands[palette], seed }),
+          map: makePlanetTexture({ bands: bandsFor(slot, mood, tint), seed }),
           roughness: 0.9,
           metalness: 0.0,
         }),

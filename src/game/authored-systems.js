@@ -60,7 +60,7 @@ export const AUTHORED_SYSTEMS = {
     sunColor: 0xcfe8ff,
     sunRadius: 55,
     planetCount: 3,
-    station: { name: 'Veridian Spire', position: [-140, 30, -550], palette: 0x6fd0e0 },
+    station: { name: 'Veridian Spire', position: [-140, 30, -550], palette: 0x58c49a }, // wave 37: emerald (D1)
     field: { center: [500, -40, 300], radius: 120, count: 90, oreMult: 1.5 },
     gates: [
       { position: [0, 50, 900], to: 'freehold' },

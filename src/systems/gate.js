@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SYSTEMS, JUMP } from '../game/state.js';
+import { styleFor } from '../game/faction-style.js'; // wave 37: faction gate tinting
 import {
   ORGANIC,
   isBeautiful,
@@ -145,6 +146,40 @@ export function initGate(ctx) {
   const glowBaseScale = RING_RADIUS * 3.2;
   const beaconBaseScale = 10;
 
+  // Wave 37: faction gate tinting. The ring structure stays Lamplighter
+  // brass everywhere (Guild infrastructure, per lore), but in a faction's
+  // home systems the chevron emissives, bore glow, beacon, and charge
+  // tunnel shift to the faction's FACTION_STYLE glow/beacon colors — the
+  // "faction-contextualized gate" look of the reference art. Textures and
+  // chevron materials are lazy-cached per faction and shared across
+  // assemblies/rebuilds — NEVER disposed (the ringGeo/glowMap pattern).
+  // Beautiful keeps its wave-27 mint overgrowth path, unchanged.
+  let currentFaction = 'independent'; // set per rebuild() from the system def
+  const factionTintCache = {}; // faction → { glowMap, beaconMap, chevronMat }
+  function _hexRgba(hex, a) {
+    return `rgba(${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255},${a})`;
+  }
+  function tintFor(faction) {
+    let t = factionTintCache[faction];
+    if (!t) {
+      const st = styleFor(faction);
+      t = {
+        glowMap: makeGlowTexture(_hexRgba(st.beacon, 0.9), _hexRgba(st.glow, 0.35)),
+        beaconMap: makeGlowTexture(_hexRgba(st.beacon, 1), _hexRgba(st.glow, 0.5)),
+        chevronMat: new THREE.MeshStandardMaterial({
+          color: BRASS_DARK,
+          emissive: st.glow,
+          emissiveIntensity: 0.9,
+          roughness: 0.4,
+          metalness: 0.6,
+        }),
+        tunnelColor: st.glow,
+      };
+      factionTintCache[faction] = t;
+    }
+    return t;
+  }
+
   // Junction silhouette shared geometry (like ringGeo/chevronGeo: shared
   // across assemblies, never disposed per rebuild). Hex bars span a full
   // hex edge (edge length == circumradius for a regular hexagon).
@@ -213,8 +248,13 @@ export function initGate(ctx) {
     const beautiful = currentBeautiful;
     if (beautiful) ensureOrganicShared();
     // Beautiful systems swap the amber glow texture for the mint organic
-    // one (glow/beacon sprites and the charge tunnel).
-    const gMap = beautiful ? beautifulGlowMap : glowMap;
+    // one (glow/beacon sprites and the charge tunnel). Other factions tint
+    // glow/beacon/chevrons/tunnel from their FACTION_STYLE (wave 37);
+    // independent/hollow get the classic amber (tintFor falls back).
+    const tint = beautiful ? null : tintFor(currentFaction);
+    const gMap = beautiful ? beautifulGlowMap : (tint?.glowMap ?? glowMap);
+    const bMap = beautiful ? beautifulGlowMap : (tint?.beaconMap ?? beaconMap);
+    const chvMat = beautiful ? chevronMat : (tint?.chevronMat ?? chevronMat);
 
     // Ring (brass, slightly emissive so it reads against deep space). The
     // material is per-gate: charge glow raises one ring's emissive only.
@@ -234,7 +274,7 @@ export function initGate(ctx) {
     const chevrons = new THREE.Group();
     for (let i = 0; i < CHEVRON_COUNT; i++) {
       const a = (i / CHEVRON_COUNT) * Math.PI * 2;
-      const c = new THREE.Mesh(chevronGeo, chevronMat);
+      const c = new THREE.Mesh(chevronGeo, chvMat);
       c.position.set(Math.cos(a) * chevronRadius, Math.sin(a) * chevronRadius, 0);
       // Cone +Y is the tip; rotate so the tip points at the ring center.
       c.rotation.z = a + Math.PI / 2;
@@ -257,7 +297,7 @@ export function initGate(ctx) {
     // Pulsing beacon riding the ring.
     const beacon = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: beautiful ? beautifulGlowMap : beaconMap,
+        map: bMap,
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,
@@ -285,7 +325,7 @@ export function initGate(ctx) {
       swirlGeo,
       new THREE.PointsMaterial({
         map: gMap,
-        color: beautiful ? ORGANIC.mint : AMBER_HOT,
+        color: beautiful ? ORGANIC.mint : (tint?.tunnelColor ?? AMBER_HOT),
         size: TUNNEL_SIZE,
         blending: THREE.AdditiveBlending,
         transparent: true,
@@ -484,6 +524,7 @@ export function initGate(ctx) {
     // Beautiful Ones overgrowth (wave-27): gate/junction rings in beautiful
     // systems are grown over — buildAssembly reads this flag.
     currentBeautiful = isBeautiful(def.faction);
+    currentFaction = def.faction ?? 'independent'; // wave 37: gate tinting
     const gates = def.gates;
     for (let i = 0; i < gates.length; i++) {
       const a = buildAssembly(gates[i]);

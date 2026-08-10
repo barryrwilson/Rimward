@@ -1665,7 +1665,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Margin Officer Estwick"
       }
     ],
-    "sunColor": 6995664,
+    "sunColor": 5682066,
     "sunRadius": 59,
     "planetCount": 1,
     "worldSeed": 18234,
@@ -1676,7 +1676,7 @@ export const GENERATED_SYSTEMS = {
         23,
         -419
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -1756,7 +1756,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Vested Corven"
       }
     ],
-    "sunColor": 6928844,
+    "sunColor": 5681040,
     "sunRadius": 52,
     "planetCount": 5,
     "worldSeed": 94424,
@@ -1767,7 +1767,7 @@ export const GENERATED_SYSTEMS = {
         33,
         -508
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -1839,7 +1839,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Dock Comptroller Vested Braille"
       }
     ],
-    "sunColor": 6928329,
+    "sunColor": 5680527,
     "sunRadius": 54,
     "planetCount": 5,
     "worldSeed": 31373,
@@ -1850,7 +1850,7 @@ export const GENERATED_SYSTEMS = {
         27,
         -240
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -1930,7 +1930,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Chartered Dray"
       }
     ],
-    "sunColor": 6528948,
+    "sunColor": 5478277,
     "sunRadius": 37,
     "planetCount": 2,
     "worldSeed": 45952,
@@ -1941,7 +1941,7 @@ export const GENERATED_SYSTEMS = {
         21,
         -292
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2013,7 +2013,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Dock Comptroller Measured Farledger"
       }
     ],
-    "sunColor": 6063260,
+    "sunColor": 5340794,
     "sunRadius": 32,
     "planetCount": 2,
     "worldSeed": 26425,
@@ -2024,7 +2024,7 @@ export const GENERATED_SYSTEMS = {
         43,
         -583
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2104,7 +2104,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Claims Warden Outcharter"
       }
     ],
-    "sunColor": 6196644,
+    "sunColor": 5408381,
     "sunRadius": 31,
     "planetCount": 2,
     "worldSeed": 15456,
@@ -2115,7 +2115,7 @@ export const GENERATED_SYSTEMS = {
         44,
         -471
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2187,7 +2187,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Vested Inverness"
       }
     ],
-    "sunColor": 6662075,
+    "sunColor": 5545608,
     "sunRadius": 46,
     "planetCount": 4,
     "worldSeed": 32090,
@@ -2198,7 +2198,7 @@ export const GENERATED_SYSTEMS = {
         28,
         -624
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2262,7 +2262,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Dock Comptroller Chartered Corven"
       }
     ],
-    "sunColor": 6262437,
+    "sunColor": 5408894,
     "sunRadius": 31,
     "planetCount": 2,
     "worldSeed": 60928,
@@ -2273,7 +2273,7 @@ export const GENERATED_SYSTEMS = {
         43,
         -387
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2345,7 +2345,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Claims Warden Lastfiling"
       }
     ],
-    "sunColor": 6529462,
+    "sunColor": 5544326,
     "sunRadius": 40,
     "planetCount": 1,
     "worldSeed": 30803,
@@ -2356,7 +2356,7 @@ export const GENERATED_SYSTEMS = {
         35,
         389
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2436,7 +2436,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Outer Ledger Comptroller Measured Mercer"
       }
     ],
-    "sunColor": 6329771,
+    "sunColor": 5475969,
     "sunRadius": 42,
     "planetCount": 1,
     "worldSeed": 88078,
@@ -2447,7 +2447,7 @@ export const GENERATED_SYSTEMS = {
         27,
         132
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2527,7 +2527,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Chartermaster Mercer"
       }
     ],
-    "sunColor": 6196130,
+    "sunColor": 5407869,
     "sunRadius": 37,
     "planetCount": 2,
     "worldSeed": 92096,
@@ -2538,7 +2538,7 @@ export const GENERATED_SYSTEMS = {
         32,
         -642
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2602,7 +2602,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Port Officer Salaried Kestrel"
       }
     ],
-    "sunColor": 6661818,
+    "sunColor": 5545352,
     "sunRadius": 50,
     "planetCount": 4,
     "worldSeed": 59479,
@@ -2613,7 +2613,7 @@ export const GENERATED_SYSTEMS = {
         43,
         -129
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2693,7 +2693,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Audited Ashcombe"
       }
     ],
-    "sunColor": 6795203,
+    "sunColor": 5613196,
     "sunRadius": 50,
     "planetCount": 4,
     "worldSeed": 46225,
@@ -2704,7 +2704,7 @@ export const GENERATED_SYSTEMS = {
         23,
         179
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2784,7 +2784,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Port Officer Vested Outcharter"
       }
     ],
-    "sunColor": 6196387,
+    "sunColor": 5408125,
     "sunRadius": 35,
     "planetCount": 1,
     "worldSeed": 16429,
@@ -2795,7 +2795,7 @@ export const GENERATED_SYSTEMS = {
         29,
         -417
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2875,7 +2875,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Outer Ledger Comptroller Lastfiling"
       }
     ],
-    "sunColor": 6130081,
+    "sunColor": 5342076,
     "sunRadius": 36,
     "planetCount": 2,
     "worldSeed": 15288,
@@ -2886,7 +2886,7 @@ export const GENERATED_SYSTEMS = {
         28,
         591
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -2958,7 +2958,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Dock Comptroller Mercer"
       }
     ],
-    "sunColor": 6662332,
+    "sunColor": 5545865,
     "sunRadius": 44,
     "planetCount": 4,
     "worldSeed": 78790,
@@ -2969,7 +2969,7 @@ export const GENERATED_SYSTEMS = {
         26,
         281
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -3041,7 +3041,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Dock Comptroller Dray"
       }
     ],
-    "sunColor": 6129567,
+    "sunColor": 5341563,
     "sunRadius": 35,
     "planetCount": 1,
     "worldSeed": 84983,
@@ -3052,7 +3052,7 @@ export const GENERATED_SYSTEMS = {
         18,
         514
       ],
-      "palette": 7327968
+      "palette": 5817498
     },
     "field": {
       "center": [
@@ -6793,7 +6793,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Last Office Clerk Pending Arkwright"
       }
     ],
-    "sunColor": 8818856,
+    "sunColor": 7047316,
     "sunRadius": 44,
     "planetCount": 3,
     "worldSeed": 6737,
@@ -6804,7 +6804,7 @@ export const GENERATED_SYSTEMS = {
         38,
         -497
       ],
-      "palette": 11191512
+      "palette": 8370360
     },
     "field": {
       "center": [
@@ -6876,7 +6876,7 @@ export const GENERATED_SYSTEMS = {
         "name": "Dock Clerk Rubric"
       }
     ],
-    "sunColor": 8028314,
+    "sunColor": 6650505,
     "sunRadius": 32,
     "planetCount": 1,
     "worldSeed": 95871,
@@ -6887,7 +6887,7 @@ export const GENERATED_SYSTEMS = {
         40,
         218
       ],
-      "palette": 11191512
+      "palette": 8370360
     },
     "field": {
       "center": [

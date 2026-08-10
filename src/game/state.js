@@ -241,7 +241,7 @@ export const JUMP = {
 export const FACTIONS = {
   freehold: { name: 'Freehold Compact', color: 0xb0703a, doctrine: 0.4 },
   redledger: { name: 'Red Ledger', color: 0xa03434, doctrine: 0.7 },
-  veridian: { name: 'Veridian Combine', color: 0x6fd0e0, doctrine: 0.5 },
+  veridian: { name: 'Veridian Combine', color: 0x58c49a, doctrine: 0.5 }, // wave 37: graphite/emerald per reference art (D1)
   hollow: { name: 'Hollow Reach', color: 0x7a6a8a, doctrine: 0.3 },
   independent: { name: 'Independent', color: 0x9aa7b8, doctrine: 0.5 },
   // Wave 19: the Ten Banners (docs/rimward-faction-lore-omp.md). 'hollow'
@@ -250,7 +250,7 @@ export const FACTIONS = {
   gilded: { name: 'Gilded Chain', color: 0xd4af37, doctrine: 0.6 },
   beautiful: { name: 'Beautiful Ones', color: 0x7fe0a8, doctrine: 0.2 },
   congregation: { name: 'Congregation of the Further Shore', color: 0xd8c690, doctrine: 0.3 },
-  assembly: { name: 'The Assembly', color: 0xaac4d8, doctrine: 0.5 },
+  assembly: { name: 'The Assembly', color: 0x7fb8b8, doctrine: 0.5 }, // wave 37: teal optics per reference art
   lamplighter: { name: 'Lamplighter Guild', color: 0xffd27a, doctrine: 0.5 },
   unknowables: { name: 'Unknowables', color: 0xe8e8ff, doctrine: 0.0 },
 };

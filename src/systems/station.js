@@ -5,6 +5,7 @@ import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: auth
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
+import { styleFor } from '../game/faction-style.js'; // wave 37: per-faction station schemes
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
@@ -131,39 +132,34 @@ const _podPos = new THREE.Vector3(); // scratch for recovery-job pod spawns
 // ------------------------------------------------------------- palette ----
 
 /**
- * Per-system material schemes (§18.2). Freehold: rust hulls, sodium running
- * lights, warm amber glow. Veridian: white composite hulls, cyan corporate
- * strips, cool glow. Unknown systems derive a neutral scheme from
- * def.station.palette.
+ * Per-FACTION material schemes (wave 37). Pre-wave-37 only Freehold and
+ * Veridian had authored schemes and everything else fell back to a neutral
+ * gray tinted by def.station.palette. Now every scheme derives from the
+ * faction's FACTION_STYLE record (faction-style.js — colors sampled from the
+ * Docs/FactionExamples reference art): hull/hullDark structure, style.glow
+ * running lights, style.beacon, and style.patch for the habitat-module
+ * patchwork (freehold's donated red/cream/blue panels, lamplighter's
+ * yellow/cobalt…). def.station.palette is no longer consulted here.
  */
-const SCHEMES = {
-  freehold: {
-    hull: 0x8a5a34, hullEmissive: 0x140a04, hullMetalness: 0.55, hullRoughness: 0.6,
-    dark: 0x3a2e24, darkEmissive: 0x0a0603, darkMetalness: 0.6, darkRoughness: 0.7,
-    light: 0xffb454, beacon: 0xffdca0,
-    glowInner: 'rgba(255,190,110,0.85)', glowOuter: 'rgba(255,140,40,0)',
-    beaconGlowInner: 'rgba(255,230,180,0.95)', beaconGlowOuter: 'rgba(255,170,60,0)',
-  },
-  veridian: {
-    hull: 0xdfe7ee, hullEmissive: 0x0a0f12, hullMetalness: 0.3, hullRoughness: 0.35,
-    dark: 0x55646f, darkEmissive: 0x060a0d, darkMetalness: 0.5, darkRoughness: 0.5,
-    light: 0x6fd0e0, beacon: 0xd8f6ff,
-    glowInner: 'rgba(150,225,245,0.8)', glowOuter: 'rgba(60,160,200,0)',
-    beaconGlowInner: 'rgba(220,250,255,0.95)', beaconGlowOuter: 'rgba(110,210,235,0)',
-  },
-};
+function _dim(hex, f) {
+  const r = Math.round(((hex >> 16) & 255) * f);
+  const g = Math.round(((hex >> 8) & 255) * f);
+  const b = Math.round((hex & 255) * f);
+  return (r << 16) | (g << 8) | b;
+}
+function _rgba(hex, a) {
+  return `rgba(${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255},${a})`;
+}
 
-function schemeFor(systemId, def) {
-  const known = SCHEMES[systemId];
-  if (known) return known;
-  const c = new THREE.Color(def.station?.palette ?? 0x9aa7b8);
-  const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255);
+function schemeFor(def) {
+  const st = styleFor(def.faction);
   return {
-    hull: 0x8a8f96, hullEmissive: 0x0a0a0c, hullMetalness: 0.5, hullRoughness: 0.55,
-    dark: 0x3a3f45, darkEmissive: 0x060608, darkMetalness: 0.55, darkRoughness: 0.65,
-    light: c.getHex(), beacon: 0xffffff,
-    glowInner: `rgba(${r},${g},${b},0.8)`, glowOuter: `rgba(${r},${g},${b},0)`,
-    beaconGlowInner: 'rgba(255,255,255,0.95)', beaconGlowOuter: `rgba(${r},${g},${b},0)`,
+    hull: st.hull, hullEmissive: _dim(st.hull, 0.15), hullMetalness: st.metalness, hullRoughness: st.roughness,
+    dark: st.hullDark, darkEmissive: _dim(st.hullDark, 0.2), darkMetalness: Math.min(st.metalness + 0.05, 1), darkRoughness: Math.min(st.roughness + 0.1, 1),
+    light: st.glow, beacon: st.beacon, accent: st.accent,
+    patch: st.patch,
+    glowInner: _rgba(st.glow, 0.8), glowOuter: _rgba(st.glow, 0),
+    beaconGlowInner: _rgba(st.beacon, 0.95), beaconGlowOuter: _rgba(st.glow, 0),
   };
 }
 
@@ -186,7 +182,7 @@ function makeGlowTexture(inner, outer) {
 
 function buildStationMesh(ctx, systemId, def) {
   if (isBeautiful(def.faction)) return buildBeautifulStation(ctx, systemId, def); // wave 27
-  const scheme = schemeFor(systemId, def);
+  const scheme = schemeFor(def);
   const group = new THREE.Group();
   group.position.fromArray(def.station.position);
 
@@ -200,6 +196,14 @@ function buildStationMesh(ctx, systemId, def) {
   });
   const lightMat = new THREE.MeshBasicMaterial({ color: scheme.light }); // running lights
   const beaconMat = new THREE.MeshBasicMaterial({ color: scheme.beacon });
+  // Wave 37 patchwork: one per-build material per patch color; habitat
+  // modules and drum bands cycle them (freehold's mismatched donated panels
+  // are the archetype). Disposed with the mesh like rustMat/darkMat.
+  const patchMats = scheme.patch.map((hex) => new THREE.MeshStandardMaterial({
+    color: hex, metalness: scheme.hullMetalness,
+    roughness: scheme.hullRoughness, emissive: _dim(hex, 0.12),
+  }));
+  const accentMat = new THREE.MeshBasicMaterial({ color: scheme.accent });
 
   // Central spindle.
   const spindle = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 4.4, 84, 12), rustMat);
@@ -211,16 +215,22 @@ function buildStationMesh(ctx, systemId, def) {
   beacon.position.set(0, 45, 0);
   group.add(beacon);
 
-  // Rotating habitat ring (spins about the spindle axis).
+  // Rotating habitat ring (spins about the spindle axis). Habitat modules
+  // cycle the faction patch palette; an accent collar ring carries the
+  // faction identity color.
   const ringGroup = new THREE.Group();
   const ring = new THREE.Mesh(new THREE.TorusGeometry(30, 2.6, 10, 56), rustMat);
   ring.rotation.x = Math.PI / 2;
   ringGroup.add(ring);
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(30, 0.5, 6, 56), accentMat);
+  collar.rotation.x = Math.PI / 2;
+  collar.position.y = 1.4;
+  ringGroup.add(collar);
   const habGeo = new THREE.BoxGeometry(9, 5, 5.5);
   const lightGeo = new THREE.SphereGeometry(0.85, 8, 6);
   for (let i = 0; i < 4; i++) {
     const a = (i * Math.PI) / 2;
-    const hab = new THREE.Mesh(habGeo, darkMat);
+    const hab = new THREE.Mesh(habGeo, patchMats[i % patchMats.length]);
     hab.position.set(Math.cos(a) * 30, 0, Math.sin(a) * 30);
     hab.rotation.y = -a;
     ringGroup.add(hab);
@@ -233,14 +243,15 @@ function buildStationMesh(ctx, systemId, def) {
   }
   group.add(ringGroup);
 
-  // Habitat drums on the spindle with window bands.
+  // Habitat drums on the spindle with window bands alternating faction glow
+  // and accent.
   const drumGeo = new THREE.CylinderGeometry(6, 6, 13, 14);
   const bandGeo = new THREE.TorusGeometry(6.05, 0.18, 6, 28);
   for (const y of [-19, 15]) {
     const drum = new THREE.Mesh(drumGeo, rustMat);
     drum.position.y = y;
     group.add(drum);
-    const band = new THREE.Mesh(bandGeo, lightMat);
+    const band = new THREE.Mesh(bandGeo, y < 0 ? lightMat : accentMat);
     band.rotation.x = Math.PI / 2;
     band.position.y = y;
     group.add(band);

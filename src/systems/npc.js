@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { styleFor } from '../game/faction-style.js'; // wave 37: faction visual identity
 import {
   SHIP_CLASSES,
   FACTIONS,
@@ -126,31 +128,119 @@ function clamp01(x) {
 }
 
 // ---------- procedural meshes (§13.1 silhouette-readable) ----------
-const factionMaterials = {}; // faction → { hull, trim } (shared, never disposed)
-function materialsFor(faction) {
-  let m = factionMaterials[faction];
+// Wave 37 (user: "hard-core option"): built (non-organic) faction ships bake
+// their FACTION_STYLE palette into VERTEX COLORS on one merged geometry per
+// faction×classKey (module-cached, shared, never disposed) and render with a
+// SINGLE shared MeshStandardMaterial — one draw call per ship, color lives
+// in the mesh. Patchwork factions (freehold, redledger, lamplighter…) cycle
+// style.patch across cargo pods / fins. Engine glow is a per-faction cached
+// additive material in the faction's style.glow.
+const vcMaterial = new THREE.MeshStandardMaterial({
+  vertexColors: true, roughness: 0.55, metalness: 0.45,
+});
+vcMaterial.userData.shared = true;
+
+// Part spec: [makeGeometry, colorRole, x,y,z, rx,ry,rz, sx,sy,sz]. colorRole
+// is a FACTION_STYLE key or 'patch0'..'patchN' (cycled modulo patch length).
+// Rotations/scales are BAKED into the merged geometry (Euler order matches
+// the old mesh.rotation semantics via Matrix4).
+const VC_PARTS = {
+  freighter: [
+    [() => new THREE.BoxGeometry(3.6, 3, 9), 'hull'],
+    [() => new THREE.BoxGeometry(2.2, 1.4, 2), 'trim', 0, 1.9, -2.5], // cab
+    [() => new THREE.BoxGeometry(1.4, 1.4, 2.6), 'patch0', -2.4, 0, 1.6],
+    [() => new THREE.BoxGeometry(1.4, 1.4, 2.6), 'patch1', 2.4, 0, 1.6],
+    [() => new THREE.BoxGeometry(1.4, 1.4, 2.6), 'patch2', -2.4, 0, -1.6],
+    [() => new THREE.BoxGeometry(1.4, 1.4, 2.6), 'patch0', 2.4, 0, -1.6],
+  ],
+  cutter: [
+    [() => new THREE.ConeGeometry(1.1, 7, 6), 'hull', 0, 0, 0, -Math.PI / 2],
+    [() => new THREE.BoxGeometry(3.4, 0.15, 1.6), 'trim', 0, 0, 2.2],
+    [() => new THREE.BoxGeometry(0.15, 1.6, 1.4), 'accent', 0, 0.7, 2.4],
+  ],
+  heavy: [
+    [() => new THREE.BoxGeometry(7, 2, 6), 'hull'],
+    [() => new THREE.ConeGeometry(2.6, 4, 4), 'hullDark', 0, 0, -5, -Math.PI / 2, Math.PI / 4, 0, 1.35, 0.55, 1],
+    [() => new THREE.BoxGeometry(8.6, 0.4, 2.4), 'trim', 0, 0.9, 1.6],
+  ],
+  frigate: [
+    [() => new THREE.BoxGeometry(24.5, 7, 21), 'hull'],
+    [() => new THREE.ConeGeometry(9.1, 14, 4), 'hullDark', 0, 0, -17.5, -Math.PI / 2, Math.PI / 4, 0, 1.35, 0.55, 1],
+    [() => new THREE.BoxGeometry(30.1, 1.4, 8.4), 'trim', 0, 3.15, 5.6],
+  ],
+  ace: [
+    [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
+    [() => new THREE.TorusGeometry(1.3, 0.14, 6, 18), 'accent', 0, 0, 0.6],
+    [() => new THREE.BoxGeometry(0.14, 1.8, 1.8), 'trim', 0, 0.8, 2.4],
+  ],
+  light: [
+    [() => new THREE.ConeGeometry(0.9, 5, 6), 'hull', 0, 0, 0, -Math.PI / 2],
+    [() => new THREE.BoxGeometry(2.4, 0.12, 1.2), 'trim', 0, 0, 1.6],
+  ],
+};
+const GLOW_Z = { freighter: 4.8, cutter: 3.6, heavy: 3.2, frigate: 11.2, ace: 4.6, light: 2.8 };
+
+const _vcColor = new THREE.Color();
+const _vcMatrix = new THREE.Matrix4();
+const _vcEuler = new THREE.Euler();
+
+/** Bake one part spec into a positioned, vertex-colored geometry. */
+function colorPart(spec, st) {
+  const [make, role, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1] = spec;
+  let geo = make();
+  if (geo.index) { const ni = geo.toNonIndexed(); geo.dispose(); geo = ni; } // mergeGeometries needs uniform indexing
+  if (sx !== 1 || sy !== 1 || sz !== 1) geo.scale(sx, sy, sz);
+  if (rx || ry || rz) geo.applyMatrix4(_vcMatrix.makeRotationFromEuler(_vcEuler.set(rx, ry, rz)));
+  geo.translate(x, y, z);
+  const hex = role === 'hull' ? st.hull
+    : role === 'hullDark' ? st.hullDark
+    : role === 'trim' ? st.trim
+    : role === 'accent' ? st.accent
+    : st.patch[(Number(role.slice(5)) || 0) % st.patch.length];
+  _vcColor.setHex(hex);
+  const n = geo.attributes.position.count;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    col[i * 3] = _vcColor.r; col[i * 3 + 1] = _vcColor.g; col[i * 3 + 2] = _vcColor.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+
+const vcGeos = {}; // 'faction:classKey' → merged vertex-colored geometry (shared, never disposed)
+function vcGeoFor(classKey, faction) {
+  const key = faction + ':' + classKey;
+  let geo = vcGeos[key];
+  if (!geo) {
+    const st = styleFor(faction);
+    const spec = VC_PARTS[classKey] ?? VC_PARTS.light;
+    const parts = spec.map((p) => colorPart(p, st));
+    geo = mergeGeometries(parts, false);
+    for (const p of parts) p.dispose();
+    vcGeos[key] = geo;
+  }
+  return geo;
+}
+
+const vcGlowMats = {}; // faction → engine glow material in style.glow (shared, never disposed)
+function glowMatFor(faction) {
+  let m = vcGlowMats[faction];
   if (!m) {
-    const color = FACTIONS[faction]?.color ?? FACTIONS.independent.color;
-    m = {
-      hull: new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.45 }),
-      trim: new THREE.MeshStandardMaterial({ color: 0xd7e4ea, roughness: 0.35, metalness: 0.6 }),
-    };
-    factionMaterials[faction] = m;
+    m = new THREE.MeshBasicMaterial({
+      color: styleFor(faction).glow,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    m.userData.shared = true;
+    vcGlowMats[faction] = m;
   }
   return m;
 }
 
 let glowGeo = null;
-let glowMat = null;
 let flashGeo = null;
-
-function part(group, geometry, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-  const m = new THREE.Mesh(geometry, material);
-  m.position.set(x, y, z);
-  if (rx || ry || rz) m.rotation.set(rx, ry, rz);
-  group.add(m);
-  return m;
-}
 
 // ---------- Beautiful Ones grown ships (wave 27) ----------
 // Beautiful technology is grown, not built: sculpted nacre hulls,
@@ -396,78 +486,21 @@ function buildBeautifulShip(classKey, role) {
  * Build a faction-colored ship mesh. Nose points along local -Z (ship.js
  * convention). Beautiful-Ones factions delegate to buildBeautifulShip
  * (wave 27: grown organic hulls; `role` selects the tarnished fallen-
- * Beautiful material variant for pirates). Every other faction takes the
- * box/cone placeholder path below, unchanged.
+ * Beautiful material variant for pirates). Every other faction renders the
+ * wave-37 vertex-colored merged geometry for its faction×classKey — one
+ * mesh, one draw call, palette baked into the vertices from FACTION_STYLE.
  */
 function buildShipMesh(classKey, faction, role) {
   if (isBeautiful(faction)) return buildBeautifulShip(classKey, role);
-  const { hull, trim } = materialsFor(faction);
   const g = new THREE.Group();
-  let glowZ = 3;
+  g.add(new THREE.Mesh(vcGeoFor(classKey, faction), vcMaterial));
 
-  switch (classKey) {
-    case 'freighter': {
-      // Boxy hull + visible cargo pods (§13.1: visible cargo).
-      part(g, new THREE.BoxGeometry(3.6, 3, 9), hull);
-      part(g, new THREE.BoxGeometry(2.2, 1.4, 2), trim, 0, 1.9, -2.5); // cab
-      const podGeo = new THREE.BoxGeometry(1.4, 1.4, 2.6);
-      part(g, podGeo, trim, -2.4, 0, 1.6);
-      part(g, podGeo, trim, 2.4, 0, 1.6);
-      part(g, podGeo, trim, -2.4, 0, -1.6);
-      part(g, podGeo, trim, 2.4, 0, -1.6);
-      glowZ = 4.8;
-      break;
-    }
-    case 'cutter': {
-      // Lean dart.
-      part(g, new THREE.ConeGeometry(1.1, 7, 6), hull, 0, 0, 0, -Math.PI / 2);
-      const wingGeo = new THREE.BoxGeometry(3.4, 0.15, 1.6);
-      part(g, wingGeo, trim, 0, 0, 2.2);
-      part(g, new THREE.BoxGeometry(0.15, 1.6, 1.4), trim, 0, 0.7, 2.4);
-      glowZ = 3.6;
-      break;
-    }
-    case 'heavy':
-    case 'frigate': {
-      // Broad wedge.
-      const s = classKey === 'frigate' ? 3.5 : 1;
-      const body = part(g, new THREE.BoxGeometry(7 * s, 2 * s, 6 * s), hull);
-      body.scale.set(1, 1, 1);
-      const nose = part(g, new THREE.ConeGeometry(2.6 * s, 4 * s, 4), hull, 0, 0, -5 * s, -Math.PI / 2, Math.PI / 4);
-      nose.scale.set(1.35, 0.55, 1);
-      part(g, new THREE.BoxGeometry(8.6 * s, 0.4 * s, 2.4 * s), trim, 0, 0.9 * s, 1.6 * s);
-      glowZ = 3.2 * s;
-      break;
-    }
-    case 'ace': {
-      // Sleek + distinctive trim ring (§6.7 named ace: recognizable).
-      const body = part(g, new THREE.OctahedronGeometry(1.6, 0), hull);
-      body.scale.set(0.9, 0.55, 3.2);
-      part(g, new THREE.TorusGeometry(1.3, 0.14, 6, 18), trim, 0, 0, 0.6);
-      part(g, new THREE.BoxGeometry(0.14, 1.8, 1.8), trim, 0, 0.8, 2.4);
-      glowZ = 4.6;
-      break;
-    }
-    default: {
-      // Light / unknown: small dart.
-      part(g, new THREE.ConeGeometry(0.9, 5, 6), hull, 0, 0, 0, -Math.PI / 2);
-      part(g, new THREE.BoxGeometry(2.4, 0.12, 1.2), trim, 0, 0, 1.6);
-      glowZ = 2.8;
-    }
-  }
-
-  // Small engine-glow point at the stern. Animated via scale/visible only so
-  // the material stays shared across every ship.
+  // Small engine-glow point at the stern, in the faction's style.glow.
+  // Animated via scale/visible only so the material stays shared across
+  // every ship of the faction.
   glowGeo ??= new THREE.SphereGeometry(0.55, 8, 6);
-  glowMat ??= new THREE.MeshBasicMaterial({
-    color: 0xffa54a,
-    transparent: true,
-    opacity: 0.95,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const glow = new THREE.Mesh(glowGeo, glowMat);
-  glow.position.set(0, 0, glowZ);
+  const glow = new THREE.Mesh(glowGeo, glowMatFor(faction));
+  glow.position.set(0, 0, GLOW_Z[classKey] ?? GLOW_Z.light);
   g.add(glow);
   g.userData.glow = glow;
   return g;

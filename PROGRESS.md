@@ -1398,6 +1398,69 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   untracked scratch). Both wave-33 P3s CLOSED.
 
 ## Next round candidates (wave 37)
+- Wave 37 faction visual alignment (user-decided scope — "hard-core
+  option", vertex colors on merged geometry; plan doc
+  Docs/FactionVisualUpdatePlan.md, reference art Docs/FactionExamples/).
+  New module src/game/faction-style.js: FACTION_STYLE — per-faction
+  hull/hullDark/trim/accent/glow/beacon/patch[]/metalness/roughness +
+  planetMood/planetTint, colors sampled from the 30 reference PNGs.
+  Decisions recorded same-module and in the plan: D1 veridian §18.2
+  white/cyan → graphite/emerald 0x58c49a (approved); D2 beautiful stays
+  mint 0x7fe0a8 (approved — indigo/violet reads via planetTint only);
+  D3 unknowables deferred (no generated system flies it); D4 the
+  vertex-color ruling (approved). SHIPS (npc.js): materialsFor/
+  placeholder switch DELETED — vcGeoFor(faction×classKey) merges
+  per-part specs into ONE vertex-colored geometry (module-cached,
+  shared, never disposed) rendered with ONE shared MeshStandardMaterial
+  (vertexColors: true) — one draw call per built ship; patch roles
+  cycle style.patch (freehold red/cream/blue pods, lamplighter
+  yellow/cobalt…); engine glow is a per-faction cached material in
+  style.glow (scale/visible-only animation contract unchanged; the
+  beautiful grown path and qship cover path untouched). STATIONS
+  (station.js): SCHEMES/schemeFor replaced by per-FACTION schemes
+  derived from FACTION_STYLE (def.station.palette no longer consulted);
+  habitat modules cycle per-build patch materials, an accent collar
+  ring + alternating glow/accent drum bands carry the identity color;
+  disposal unchanged (per-build mats, teardownMesh). GATES (gate.js):
+  structure stays Lamplighter brass (lore), but chevron emissive, bore
+  glow, beacon, and charge tunnel tint per system faction via
+  lazy-cached shared textures/materials (tintFor — the ringGeo/glowMap
+  never-disposed pattern; rebuild disposes only per-assembly materials
+  as before); beautiful overgrowth path byte-identical. PLANETS
+  (solarsystem.js): warm/cold chosen by style.planetMood, bands
+  multiplied by style.planetTint (null tint = byte-identical pre-wave
+  colors; veridian-cold/freehold-warm reproduced). DATA: FACTIONS
+  veridian 0x6fd0e0 → 0x58c49a, assembly 0xaac4d8 → 0x7fb8b8;
+  authored-systems veridian palette synced; generate-galaxy.mjs
+  FACTION_COLOR synced and galaxy.generated.js regenerated (generator
+  validation OK; diff = 19 recolored systems' palette+sunColor only).
+  Verification: boot test PASS (all waves green, beautiful controls
+  byte-identical); live headless Chrome/SwiftShader walkthrough —
+  freehold station (brown hull, barn-red collar, cream/red patch
+  modules, amber glow), veridian station (graphite, emerald lamps,
+  pale-alloy modules), gc_auction (black ceramic, ivory/gold patch,
+  turquoise glow), fx_bastion (iron gray, crimson collar); scene audit
+  at fx_bastion: gate chevrons emissive #d86a4a on brass #5a4422 cones,
+  station material set {#42454b,#252d35,#ffe0b0,#8a3a34,#b08a4a}; NPC
+  ships verified vertexColors:true with 2 materials (shared vc material
+  + faction glow). Save-hack travel (localStorage currentSystem patch)
+  used for the fx_bastion leg only — restore boundary healed clean.
+
+## Next round candidates (wave 38)
+- Faction visual alignment phases 2–4 (Docs/FactionVisualUpdatePlan.md):
+  per-faction ship silhouette sculpts (vcGeoFor part specs are the
+  seam — batch A freehold/veridian/ferrous, B redledger/gilded/
+  congregation/assembly, C lamplighter + optional unknowables no-hull
+  render path), per-faction station builders (the buildBeautifulStation
+  dispatch pattern), and gate overlay subgroups (the beautiful-
+  overgrowth precedent, generalized). Phase 1 (colors) is DONE in
+  wave 37; FACTION_STYLE is the single source of truth all sculpts read.
+- Wave 37 contract notes for future work: vcGeos/vcGlowMats/vcMaterial
+  are module-cached shared and NEVER disposed; ships have exactly 2
+  materials (shared vertex-color + faction glow); gate tintFor caches
+  are shared like ringGeo/glowMap; FACTIONS.color must stay mirrored
+  to FACTION_STYLE.accent and generate-galaxy.mjs FACTION_COLOR (the
+  generator's palette-mismatch validation enforces the data side).
 - Wave 33 standing: both review P3s are CLOSED (wave 36 — fleshLight
   300 → 60 restores the sun gradient, opacity 0.72 + pulse 0.42/0.10
   rebalance the fill vs the lattice at range; designer-measured:
