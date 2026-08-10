@@ -9,10 +9,11 @@
  * absent storage silently falls back to the ctx.js defaults.
  *
  * KeyO toggles the settings panel (Escape closes). The panel is plain DOM
- * with inline layout styles in the hail.js self-contained pattern; it sits
- * above the station overlay (.screen-overlay z-index 20) so it opens while
- * docked, and is display:none when closed so it never swallows gameplay
- * input. Every control applies + persists immediately.
+ * with inline layout styles in the hail.js self-contained pattern; it is the
+ * topmost interactive surface at z-index 80, above the title screen (70),
+ * the pause overlay (50) and every 60-level panel, and below only #fatal
+ * (99). It is display:none when closed so it never swallows gameplay input.
+ * Every control applies + persists immediately.
  *
  * Apply side effects: body classes rw-colorblind / rw-contrast /
  * rw-reduced-motion (CSS in hud.css/screens.css reacts), and --rw-text-scale
@@ -86,7 +87,7 @@ export function initSettings(ctx) {
   const root = document.createElement('div');
   root.style.cssText =
     'position:fixed;inset:0;display:none;align-items:center;justify-content:center;' +
-    'background:rgba(2,5,11,0.72);z-index:60;pointer-events:none;' +
+    'background:rgba(2,5,11,0.72);z-index:80;pointer-events:none;' +
     "font-family:'Consolas','Cascadia Mono','Courier New',monospace;color:#dce8f4;";
 
   const panel = document.createElement('div');

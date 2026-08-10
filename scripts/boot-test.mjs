@@ -250,6 +250,12 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 };
+const sessionStore = new Map();
+globalThis.sessionStorage = {
+  getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+  setItem: (k, v) => sessionStore.set(k, String(v)),
+  removeItem: (k) => sessionStore.delete(k),
+};
 
 // ---- Boot the full system graph ----
 const { initStarfield } = await import('../src/systems/starfield.js');
@@ -282,6 +288,7 @@ const { initOrigins } = await import('../src/game/origins.js');
 const { initOnboarding } = await import('../src/systems/onboarding.js');
 const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
 const { initWakes } = await import('../src/systems/wakes.js'); // wave 30: flee wake trails + wreck-field discovery (same init slot as main.js)
+const { initTitle } = await import('../src/systems/title.js'); // wave 40: title screen front door
 const { initHud } = await import('../src/systems/hud.js');
 const {
   ORGANIC, isBeautiful, sculptGrownHull, makePetalGeometry, makeTendrilGeometry,
@@ -297,6 +304,7 @@ const { tickPrices } = await import('../src/game/market.js');
 ctx.systems = SYSTEMS; // mirrors main.js boot line
 
 const inits = [
+  ['title', initTitle],
   ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
   ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['settings', initSettings], ['bio', initBio],
   ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['traffic', initTraffic],
@@ -333,6 +341,32 @@ function tick(n, label) {
     ctx.events = [];
   }
 }
+
+// ---- Wave 40: title screen front door (must precede the wave-6 origin pick) --
+// A fresh boot with no skip marker opens the title overlay and pauses. Dismiss
+// it the way a player does — by CLICKING [1] NEW GAME. It has to be a click and
+// not dispatchKey: in the browser the title's capture-phase listener stops a
+// Digit1 from ever reaching origins.js, but this harness's synthetic event
+// carries no stopImmediatePropagation, so a dispatched Digit1 would reach BOTH
+// the title menu and the origin picker and steal the wave-6 pick.
+// NEW GAME on a save-less boot deliberately leaves ctx.flags.paused alone —
+// origins.js paused underneath and owns the unpause when the player picks.
+function titleActionBtn(action) {
+  for (const n of walkDom(document.body)) if (n.dataset?.titleAction === action) return n;
+  return null;
+}
+const titleOverlayShown = [...walkDom(document.body)].some((n) => n.id === 'rw-title');
+const pausedAtTitle = ctx.flags.paused === true;
+titleActionBtn('new')?.click(); // [1] NEW GAME — a fresh harness boot has no autosave
+const titleOverlayGone = ![...walkDom(document.body)].some((n) => n.id === 'rw-title');
+const titleChecks = {
+  overlayShown: titleOverlayShown,
+  pausedWhileOpen: pausedAtTitle,
+  overlayRemoved: titleOverlayGone,
+  pauseLeftForOrigins: ctx.flags.paused === true,
+};
+console.log('wave40 title screen dismiss:', JSON.stringify(titleChecks));
+if (!Object.values(titleChecks).every(Boolean)) { console.log('WAVE40 TITLE SCREEN FAIL'); errors++; }
 
 // ---- Wave 6: origin pick at fresh boot (must precede every other section) --
 // A fresh boot (no save restored) opens the origin overlay and pauses; its
@@ -9409,6 +9443,142 @@ for (const live of [...w39ships, ...w39glowShips]) {
 }
 console.log('wave39 ship glow reducedMotion:', JSON.stringify(w39glowChecks));
 if (!Object.values(w39glowChecks).every(Boolean)) { console.log('WAVE39 SHIP GLOW MOTION FAIL'); errors++; }
+
+// ---- Wave 40: title screen front door ----
+// The live boot path is already pinned above (line ~345). This section drives
+// initTitle directly against synthetic storage states. Every activation goes
+// through .click() on the real button element, never dispatchKey: an open title
+// leaves a capture-phase window listener behind, and this harness's synthetic
+// event has no stopImmediatePropagation, so a dispatched digit would reach every
+// title still standing from an earlier sub-case.
+const W40_AUTOSAVE = 'rimward-save-v1';
+const W40_SLOTS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
+const W40_SKIP = 'rimward-title-skip';
+// The minimal envelope save.js loadSnapshot() accepts: v===1 with a world object.
+const w40Snap = () => JSON.stringify({ v: 1, savedAt: Date.now(), world: { currentSystem: 'freehold', credits: 350 } });
+const w40Root = () => [...walkDom(document.body)].find((n) => n.id === 'rw-title') ?? null;
+const w40Buttons = () => [...walkDom(w40Root() ?? { children: [] })].filter((n) => n.tagName === 'BUTTON');
+const w40Text = (cls) => [...walkDom(w40Root() ?? { children: [] })].find((n) => n.className === cls)?.textContent ?? null;
+function w40Reset() {
+  w40Root()?.remove();
+  localStorage.removeItem(W40_AUTOSAVE);
+  for (const k of W40_SLOTS) localStorage.removeItem(k);
+  sessionStorage.removeItem(W40_SKIP);
+}
+function w40Ctx() {
+  const c = createCtx({ scene, camera, renderer });
+  c.systems = SYSTEMS;
+  c.flags.paused = false;
+  return c;
+}
+
+// -- a. no autosave: two entries, no CONTINUE, exact labels, paused ----------
+w40Reset();
+const ctx40a = w40Ctx();
+initTitle(ctx40a);
+const w40aBtns = w40Buttons();
+const w40aClass = w40Root()?.className ?? '';
+const w40aChecks = {
+  pausedWhileOpen: ctx40a.flags.paused === true,
+  rootClassed: w40aClass.includes('screen-overlay') && w40aClass.includes('title-overlay'),
+  twoEntries: w40aBtns.length === 2,
+  noContinueEntry: !w40aBtns.some((b) => b.dataset?.titleAction === 'continue'),
+  labelsExact: w40aBtns.map((b) => b.textContent).join('|') === '[1] NEW GAME|[2] SETTINGS',
+  legendExact: w40Text('title-legend') === 'PRESS 1-2 OR CLICK',
+  taglineExact: w40Text('title-tagline') === 'A LIVING FRONTIER',
+};
+console.log('wave40a fresh boot menu:', JSON.stringify(w40aChecks));
+if (!Object.values(w40aChecks).every(Boolean)) { console.log('WAVE40A FRESH BOOT MENU FAIL'); errors++; }
+
+// -- b. NEW GAME without an autosave closes the door but never unpauses ------
+// origins.js paused underneath and owns the unpause; stealing it here would
+// hand the player a live sim with the origin picker still up.
+titleActionBtn('new').click();
+const w40bChecks = {
+  rootRemoved: w40Root() === null,
+  pauseLeftForOrigins: ctx40a.flags.paused === true,
+};
+console.log('wave40b new game no autosave:', JSON.stringify(w40bChecks));
+if (!Object.values(w40bChecks).every(Boolean)) { console.log('WAVE40B NEW GAME NO AUTOSAVE FAIL'); errors++; }
+
+// -- c. autosave present: CONTINUE leads and unpauses ------------------------
+w40Reset();
+localStorage.setItem(W40_AUTOSAVE, w40Snap());
+const ctx40c = w40Ctx();
+initTitle(ctx40c);
+const w40cBtns = w40Buttons();
+const w40cChecks = {
+  threeEntries: w40cBtns.length === 3,
+  continueLeads: w40cBtns[0]?.dataset?.titleAction === 'continue' && w40cBtns[0]?.textContent === '[1] CONTINUE',
+  legendExact: w40Text('title-legend') === 'PRESS 1-3 OR CLICK',
+  pausedWhileOpen: ctx40c.flags.paused === true,
+};
+titleActionBtn('continue').click();
+w40cChecks.continueUnpauses = ctx40c.flags.paused === false;
+w40cChecks.continueRemovesRoot = w40Root() === null;
+console.log('wave40c autosave continue:', JSON.stringify(w40cChecks));
+if (!Object.values(w40cChecks).every(Boolean)) { console.log('WAVE40C AUTOSAVE CONTINUE FAIL'); errors++; }
+
+// -- d. NEW GAME over an autosave arms once, then erases only the autosave ---
+w40Reset();
+localStorage.setItem(W40_AUTOSAVE, w40Snap());
+for (const k of W40_SLOTS) localStorage.setItem(k, w40Snap());
+const ctx40d = w40Ctx();
+initTitle(ctx40d);
+const w40dBtn = titleActionBtn('new');
+w40dBtn.click(); // first press arms the confirm — it must destroy nothing
+const w40dChecks = {
+  autosaveSurvivesArming: localStorage.getItem(W40_AUTOSAVE) !== null,
+  labelWarnsWithIndex: w40dBtn.textContent === '[2] NEW GAME — CONFIRM (ERASES AUTOSAVE)',
+  warmClassAdded: w40dBtn.className.includes('screen-btn-warm'),
+  rootStandsWhileArmed: w40Root() !== null,
+};
+w40dBtn.click(); // second press confirms
+w40dChecks.autosaveCleared = localStorage.getItem(W40_AUTOSAVE) === null;
+w40dChecks.berthSlotsSurvive = W40_SLOTS.every((k) => localStorage.getItem(k) !== null);
+w40dChecks.skipMarkerSet = sessionStorage.getItem(W40_SKIP) === '1';
+// globalThis.location does not exist under node, so reload() is a no-op and the
+// overlay stays up. In the browser the page reloads and the next boot consumes
+// the marker (sub-case e), which is what actually clears the screen.
+w40dChecks.overlayStandsWithoutReload = w40Root() !== null;
+console.log('wave40d new game confirm:', JSON.stringify(w40dChecks));
+if (!Object.values(w40dChecks).every(Boolean)) { console.log('WAVE40D NEW GAME CONFIRM FAIL'); errors++; }
+
+// -- e. skip marker: inert init, marker consumed -----------------------------
+w40Reset();
+sessionStorage.setItem(W40_SKIP, '1');
+const ctx40e = w40Ctx();
+initTitle(ctx40e);
+const w40eChecks = {
+  noOverlay: w40Root() === null,
+  neverPauses: ctx40e.flags.paused === false,
+  markerConsumed: sessionStorage.getItem(W40_SKIP) === null,
+};
+console.log('wave40e skip marker:', JSON.stringify(w40eChecks));
+if (!Object.values(w40eChecks).every(Boolean)) { console.log('WAVE40E SKIP MARKER FAIL'); errors++; }
+
+// -- f. SETTINGS keeps the door shut; unmapped keys change nothing -----------
+// The settings entry dispatches a synthetic KeyO. node has no KeyboardEvent
+// constructor, so that dispatch is skipped here and the panel itself is covered
+// by the browser pass. What the harness CAN pin: the entry never closes the
+// title and never unpauses. Likewise propagation — dispatchKey's event has no
+// stopImmediatePropagation, so only the observable outcome is asserted.
+w40Reset();
+const ctx40f = w40Ctx();
+initTitle(ctx40f);
+titleActionBtn('settings').click();
+const w40fChecks = {
+  settingsKeepsTitleOpen: w40Root() !== null,
+  settingsKeepsPause: ctx40f.flags.paused === true,
+};
+dispatchKey('Digit9'); // no entry is mapped to 9
+dispatchKey('KeyA');   // swallowed outright
+w40fChecks.unmappedKeysInert = w40Root() !== null && ctx40f.flags.paused === true;
+console.log('wave40f settings + unmapped keys:', JSON.stringify(w40fChecks));
+if (!Object.values(w40fChecks).every(Boolean)) { console.log('WAVE40F SETTINGS/KEYS FAIL'); errors++; }
+
+w40Reset(); // leave document.body and both stores as this section found them
+
 
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');

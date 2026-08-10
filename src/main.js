@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createCtx } from './core/ctx.js';
 
 // Presentation systems
+import { initTitle } from './systems/title.js';
 import { initStarfield } from './systems/starfield.js';
 import { initSolarSystem } from './systems/solarsystem.js';
 import { initAsteroids } from './systems/asteroids.js';
@@ -83,7 +84,11 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // chart after onboarding, before HUD (DOM-only overlay, reads SYSTEMS +
 // ctx.world.currentSystem live); wakes after npc + pods (reads ctx.ships
 // flee modes, spawns discovery pods), before HUD (consumes its events).
+// title runs FIRST so its capture-phase keydown listener registers before
+// controls.js and origins.js, and it pauses the sim until the player chooses
+// Continue or New Game.
 const systems = [
+  initTitle,
   initStarfield,
   initSolarSystem,
   initAsteroids,

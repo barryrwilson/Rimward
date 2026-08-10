@@ -1598,13 +1598,105 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   diagnosis in this entry came from the orchestrator reading the stills
   directly and then measuring pixels. Delegate the measuring, not the
   seeing.
+- Wave 40: title screen — the game finally has a front door (orchestrated;
+  four parallel slices, one contract). Before this wave main.js booted
+  straight into the sim: save.js restored under you, origins.js threw the
+  "who are you" picker up at init, and there was no way to start over
+  short of clearing localStorage by hand. The key art
+  (public/assets/rimward-title-screen.png, 1672×941 — the wordmark, the
+  whale, the lit station and a gate) was already in the tree, unused.
+  NEW MODULE src/systems/title.js (initTitle, ~220 lines, update() empty):
+  a full-screen overlay id 'rw-title', class 'screen-overlay
+  title-overlay', role dialog, holding .title-tagline 'A LIVING FRONTIER',
+  one <button class="screen-btn"> per visible entry (id 'rw-title-<action>'
+  + data-title-action, label '[N] LABEL' where N indexes the VISIBLE
+  entries) and .title-legend 'PRESS 1-n OR CLICK'. CONTINUE only exists
+  when save.js hasAutosave() is true, so a save-less boot reads
+  [1] NEW GAME / [2] SETTINGS and a restored boot reads [1] CONTINUE /
+  [2] NEW GAME / [3] SETTINGS. THE THREE ACTIONS: CONTINUE closes the door
+  and sets ctx.flags.paused = false (save.js already restored the world
+  underneath at its normal init slot — CONTINUE only reveals it). NEW GAME
+  with no autosave closes the door and DELIBERATELY does not touch
+  ctx.flags.paused, because origins.js paused at its own init and owns the
+  unpause when the player picks — the origin card is sitting at z-index 60
+  under the title at 70 the whole time. NEW GAME over an autosave arms a
+  confirm first (label becomes '[2] NEW GAME — CONFIRM (ERASES AUTOSAVE)',
+  class screen-btn-warm); the second press calls save.js clearAutosave(),
+  sets sessionStorage 'rimward-title-skip' = '1' and reloads the page. The
+  reload is the design decision worth keeping: resetting a live world in
+  place would have to unwind world.js record banks, contacts, mystery,
+  epics and the market tables, and every one of those is a place to leave
+  a stale reference — a reload is the only cheap guarantee. On the boot
+  that follows, title.js consumes the skip marker and returns inert, so
+  the player lands straight on the origin picker instead of pressing NEW
+  GAME twice. Manual berth slots 1-3 survive a NEW GAME by contract
+  (clearAutosave touches only 'rimward-save-v1') — that is the safety
+  valve. SETTINGS dispatches a synthetic KeyO so settings.js opens its own
+  panel; settings.js was raised z-index 60 → 80 so it is now the topmost
+  interactive surface (title 70, pause 50, the 60-level panels, #fatal 99
+  above all). INPUT: one capture-phase window keydown listener registered
+  FIRST (initTitle is element 0 of the main.js systems array, ahead of
+  controls.js and origins.js) — Digit1-9 pick an entry, Enter takes the
+  first, KeyO and Escape pass through to the settings panel, and every
+  other key is swallowed with preventDefault + stopImmediatePropagation so
+  nothing flies, docks, or picks an origin behind a shut door. The
+  listener dies with the overlay. No animation anywhere in the screen, so
+  the reducedMotion contract needs no branch. CSS (screens.css): the
+  .screen-overlay scrim is replaced by a bottom-only gradient over the art
+  (a full scrim would waste the picture) and pointer-events flips to auto
+  so a click on the backdrop can never reach the canvas and fire the guns;
+  body.rw-contrast gets its own .title-overlay rule because the existing
+  body.rw-contrast .screen-overlay selector outranks it and would flatten
+  the art to a solid field. HARNESS (boot-test.mjs +150): sessionStorage
+  is stubbed beside localStorage; 'title' leads the inits array; the boot
+  door is dismissed by CLICKING the NEW GAME button before the wave-6
+  origin pick — NOT by dispatchKey, because the harness's synthetic event
+  carries no stopImmediatePropagation and a dispatched Digit1 would reach
+  the title menu AND the origin picker and steal the wave-6 pick (it did,
+  on the first attempt; wave6 went red and that is how the leak was
+  found). Six wave40 sub-sections pin the menu shape and exact labels, the
+  no-autosave pause hand-off, CONTINUE, confirm arming (autosave survives
+  the first press, only the autosave dies on the second, berth slots live,
+  marker set), skip-marker consumption, and the settings entry leaving the
+  door open. Verification: npm run test:boot PASS with every wave40
+  boolean true and all wave-6/36/37/38/39 sections unchanged; npm run
+  build clean (only the pre-existing >500 kB chunk warning) with the PNG
+  copied to dist/assets/; browser-verified solo end to end at 1600×900 —
+  fresh title → SETTINGS opens at z 80 over it → Escape closes → NEW GAME
+  → origin picker → play → autosave written → reload shows CONTINUE →
+  CONTINUE unpauses into the live sim → NEW GAME arms → confirm clears the
+  autosave, keeps slot 2, reloads, skips the title and lands on the origin
+  picker; console clean throughout; stills in .chrome-shot/w40/
+  (untracked scratch — .chrome-shot is now gitignored).
+  Orchestration lesson, matching wave 39's: the parallel slices were clean
+  for CSS and the small API additions, and the two that needed judgement
+  came back wrong in ways only a read caught — the title module wired its
+  click handlers through document.getElementById (fine in a browser, dead
+  under the harness stub, so no button would ever have fired in a test),
+  and the harness slice deleted an unrelated import and asserted a
+  contract nobody specified. Read the diff, run the gate.
 
-## Next round candidates (wave 40)
+## Next round candidates (wave 41)
 - Docs/FactionVisualUpdatePlan.md is COMPLETE — phases 0–5 all landed
   (waves 37–39). The only piece left in that plan is the optional
   unknowables no-hull render path (D3 — deferred; no generated system
   flies it; colors recorded in FACTION_STYLE.unknowables; it needs a
   new additive field-loop/cell render path, not the mesh kit).
+- Wave 40 contract notes for future work: initTitle MUST stay element 0
+  of the main.js systems array — its capture-phase keydown listener only
+  outranks controls.js and origins.js because it registers first, and the
+  whole "nothing happens behind a shut door" guarantee rests on that.
+  The z-index ladder is now #hud 10, .screen-overlay 20, banners 30,
+  onboarding 35, hail/gate labels 40, pause 50, origins/berth 60, title
+  70, settings 80, #fatal 99; settings is deliberately topmost so it can
+  open over any surface including the title. save.js clearAutosave()
+  touches ONLY 'rimward-save-v1' — a New Game must never reach the three
+  manual berth slots. sessionStorage 'rimward-title-skip' is consumed on
+  read, so it survives exactly one boot. The boot-test harness dismisses
+  the title by CLICKING the data-title-action="new" button; never convert
+  that to dispatchKey — the synthetic event has no
+  stopImmediatePropagation and the digit would also land on the origin
+  picker.
 - Wave 39 contract notes for future work: FACTION_STYLE metalness is
   CAPPED AT 0.35 — the project has no environment map, so higher
   metalness kills the diffuse term and the authored hull color renders

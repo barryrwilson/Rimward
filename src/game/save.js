@@ -36,6 +36,10 @@ import { createShipState, SHIP_CLASSES, SYSTEMS, U, JUMP } from './state.js';
  *   silent. The panel closes itself if the ship docks or dies. Boot load
  *   and death recovery still read ONLY the autosave key — manual berths
  *   are only ever restored explicitly from the panel.
+ * - TITLE SCREEN (wave 40, src/systems/title.js): queries hasAutosave() to
+ *   decide whether to show CONTINUE; a confirmed NEW GAME calls clearAutosave()
+ *   then reloads with a sessionStorage marker — manual berths survive this
+ *   path, so an explicitly-saved berth is never erased by starting fresh.
  * - DEATH (§4.4): consumes 'playerDestroyed' → 'Ship lost.' overlay → reload
  *   the last save (or a fresh start at the Freehold station with a new player
  *   state record when no save exists). No corpse run, no insurance. Emits the
@@ -102,6 +106,23 @@ function loadSnapshot(key = KEY) {
     return snap && snap.v === 1 && snap.world ? snap : null;
   } catch {
     return null; // corrupt blob or storage unavailable → fresh start
+  }
+}
+
+/** Returns true when the autosave key holds a restorable snapshot. */
+export function hasAutosave() {
+  return loadSnapshot() !== null;
+}
+
+/**
+ * Clears only the autosave key; manual berth slots survive so a New Game never
+ * destroys an explicitly-saved berth.
+ */
+export function clearAutosave() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* storage denied — silently fail */
   }
 }
 

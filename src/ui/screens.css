@@ -396,6 +396,66 @@
   cursor: pointer;
 }
 
+
+/* ---------- title screen (wave 40) ---------- */
+
+/* The key art carries the RIMWARD wordmark and the whale, so a full-frame
+   .screen-overlay scrim would hide it. We only darken the bottom strip
+   under the menu. Order matters: .title-overlay must come after .screen-overlay
+   (line 8) so its equal-specificity background wins. */
+
+.title-overlay {
+  z-index: 70;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: auto;
+  background:
+    linear-gradient(180deg, rgba(2, 5, 11, 0) 40%, rgba(2, 5, 11, 0.84) 88%),
+    url('/assets/rimward-title-screen.png') center / cover no-repeat #02050b;
+}
+
+/* .screen-overlay sets pointer-events: none, but the title must swallow clicks
+   so they never reach the WebGL canvas underneath and fire the player's guns. */
+
+.title-menu {
+  pointer-events: auto;
+  width: 340px;
+  max-width: 88vw;
+  margin-bottom: 7vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title-tagline {
+  margin-bottom: 6px;
+  text-align: center;
+  color: var(--rw-accent);
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+
+.title-menu .screen-btn {
+  text-align: center;
+  background: rgba(6, 12, 22, 0.72);
+  border-color: #3a5570;
+  letter-spacing: 0.18em;
+}
+
+.title-menu .screen-btn:disabled {
+  color: #5f7185;
+  border-color: #22303f;
+  cursor: default;
+}
+
+.title-legend {
+  margin-top: 6px;
+  text-align: center;
+  color: #9fb2c6;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
 /* ---------- accessibility overrides (settings.js toggles these classes) ---------- */
 
 /* Okabe-Ito colorblind-safe accent/warm/good */
@@ -422,10 +482,22 @@ body.rw-contrast .screen-btn {
   color: #ffffff;
 }
 
+body.rw-contrast .title-overlay {
+  background:
+    linear-gradient(180deg, rgba(1, 3, 7, 0.4) 0%, rgba(1, 3, 7, 0.95) 78%),
+    url('/assets/rimward-title-screen.png') center / cover no-repeat #010307;
+}
+
+body.rw-contrast .title-menu .screen-btn {
+  background: #060b14;
+  border-color: #5a7699;
+}
+
 body.rw-contrast .screen-note,
 body.rw-contrast .job-detail,
 body.rw-contrast .people-meta,
 body.rw-contrast .people-chart-line,
-body.rw-contrast .bar-hint {
+body.rw-contrast .bar-hint,
+body.rw-contrast .title-legend {
   color: #c3d4e6;
 }
