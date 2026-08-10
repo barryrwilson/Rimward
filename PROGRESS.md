@@ -1675,8 +1675,102 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   under the harness stub, so no button would ever have fired in a test),
   and the harness slice deleted an unrelated import and asserted a
   contract nobody specified. Read the diff, run the gate.
+- Wave 41: faces — the faction character studies reach the screen
+  (orchestrated; four parallel slices on one pre-written contract, plus
+  the asset bake run by the orchestrator alongside them). Waves 37-39
+  matched the reference art for ships, stations, gates and planets; the
+  twenty male/female studies in docs/FactionExamples/ had never been
+  used, and every person in the game — dockmasters, fences, fixers, the
+  pirate demanding tribute — was a name over a paragraph.
+  NEW MODULE src/game/portraits.js: PORTRAIT_DIR '/assets/portraits/',
+  PORTRAIT_SOURCES (faction id -> reference basename, exactly the TEN
+  arted Banners), PORTRAIT_VARIANTS {a:'male',b:'female'},
+  portraitVariant(faction, variant) and portraitFor(faction, seed) ->
+  {src, variant, alt} | null. The variant is an FNV-1a hash of a stable
+  person identity (contact.id at a dock, record.pilot ?? state.name in a
+  hail), so a face never moves between sessions and NOTHING about the
+  choice is persisted — no save field, no migration. 'hollow' and
+  'independent' have no study and resolve to null by design: both
+  surfaces then render exactly their pre-wave-41 text-only shape (the
+  FACTION_STYLE discipline — never invent a look the sheets do not
+  have). The game side carries no gender semantics; 'a'/'b' are neutral
+  keys and the README records why.
+  ASSETS: public/assets/portraits/<faction>-<a|b>.webp, 20 files,
+  384x384, quality 0.82, 485 kB total (source PNGs are ~2 MB each and
+  stay reference-only). Baked once through a headless-Chrome canvas
+  pass — the project has no image dependency and gained none. The
+  per-image crop rectangles are recorded in the README so the bake is
+  reproducible; sides differ deliberately (560-620 px head-and-shoulders
+  for the human studies, 700-941 px for the full-figure Beautiful Ones,
+  Unknowables and Assembly compositions, which read as noise cropped
+  tight). Three frames were re-cut after the orchestrator viewed the
+  contact sheet: both congregation studies (first estimates were a row
+  off and cut the face) and unknowables-b (widened to full height so the
+  field silhouette survives).
+  STATION (station.js renderPeople): '.people-card > .people-head >
+  [img.people-portrait?] + .people-headtext > .people-name +
+  .people-meta'. Everything below the meta line keeps its old parent, so
+  recognition, hermit note, chart marks and buttons are byte-identical.
+  64x64, loading lazy, decoding async, alt '<name>, <role>' — the
+  screen reader hears the person, not the banner. FACE SPREAD: two
+  studies per faction against up to three contacts per dock, so a plain
+  hash showed Mother Tarn and Quiet Hollis the same face (caught in the
+  browser, not the harness). renderPeople now claims variants in roster
+  order — first claim keeps it, a collider takes the free study — which
+  is deterministic because buildRoster order is stable.
+  HAIL (hail.js openCard): the card's first child is a flex row holding
+  img.rw-hail-portrait (72x72, inline-styled in this file's cssText
+  idiom, alt '<speaker> — <faction>') and a text column with the
+  existing header/sub/line. Intent buttons still append to the card
+  below the row: count, order, '[N] LABEL' text and the Digit1-9
+  shortcuts are untouched.
+  CSS (screens.css): .people-head / .people-headtext / .people-portrait
+  and a body.rw-contrast .people-portrait border lift. Nothing animated
+  anywhere in this wave — there is no transition or transform for
+  reducedMotion to disable, which is why the wave adds no reducedMotion
+  pin.
+  HARNESS (boot-test.mjs, wave41a-f): the API contract (determinism,
+  both variants reachable, null for hollow/independent/undefined/
+  unknown), PORTRAIT_SOURCES shape and src pattern for all ten keys, the
+  PEOPLE card at redmarch (structure, src, alt starting with the
+  contact's name, lazy/async, 64x64, and the face-spread rule: every
+  card carries a face and the first two differ), the PEOPLE card at
+  hollowreach (head present, zero imgs), and both hail cases via the
+  wave-30 pirate helpers (redledger card carries exactly one
+  rw-hail-portrait; independent carries none and keeps its buttons).
+  Verification: npm run test:boot PASS with every wave41 boolean true
+  and every earlier section unchanged; npm run build clean (only the
+  pre-existing >500 kB chunk warning) with all 20 crops copied to
+  dist/assets/portraits/; browser-verified solo at 1600x900 — a live
+  Red Ledger tribute hail rendered redledger-b at 72 px with the right
+  alt and both intent buttons, and Freehold Landing rendered Mother Tarn
+  (freehold-b) and Quiet Hollis (freehold-a) at 64 px, naturalWidth 384,
+  contrast mode lifting the border to #c3d4e6; console clean throughout.
+  Orchestration lesson, the third in a row: the slices that were pure
+  mechanical wiring landed clean, and the two that needed judgement did
+  not. The station slice REPLACED the contacts.js import line with its
+  own import — ten symbols deleted, the whole dock dead — and the
+  harness slice invented plumbing wholesale (contactsForSystem called
+  with one argument, throwaway contexts instead of travelTo/
+  dockAtCurrentStation, and assertions hunting a 'hail-card' class that
+  hail.js has never set, so two of its four DOM sections were vacuous).
+  Read the diff, run the gate — and look at the screen: the duplicate
+  face was invisible to every assertion that passed.
 
-## Next round candidates (wave 41)
+## Next round candidates (wave 42)
+- Wave 41 contract notes for future work: PORTRAIT_SOURCES is the single
+  list of factions that HAVE a character study — keep it in lockstep
+  with what actually sits in public/assets/portraits/, because
+  portraitFor's null branch is what keeps hollow/independent cards
+  text-only. The variant key is neutral by ruling ('a'/'b', not
+  male/female) and the pick is never persisted, so re-hashing or adding
+  a third study per faction is a free change with no save migration.
+  The face-spread rule lives in station.js renderPeople, not in
+  portraits.js: a surface that shows several people at once owns the
+  de-duplication, and it stays deterministic only while buildRoster
+  order is stable. Two surfaces carry faces today (people card, hail
+  card); a third — the bar, contacts in the chart, the origin picker —
+  would reuse portraitFor unchanged.
 - Docs/FactionVisualUpdatePlan.md is COMPLETE — phases 0–5 all landed
   (waves 37–39). The only piece left in that plan is the optional
   unknowables no-hull render path (D3 — deferred; no generated system

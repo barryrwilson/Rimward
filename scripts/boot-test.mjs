@@ -9578,6 +9578,228 @@ console.log('wave40f settings + unmapped keys:', JSON.stringify(w40fChecks));
 if (!Object.values(w40fChecks).every(Boolean)) { console.log('WAVE40F SETTINGS/KEYS FAIL'); errors++; }
 
 w40Reset(); // leave document.body and both stores as this section found them
+// ---- Wave 41: Faction character portraits (wave 41) ----
+// Portraits ship as 384x384 WebP crops under public/assets/portraits/. The
+// portraitFor(faction, seed) API returns { src, variant, alt } for the ten
+// factions with reference art (PORTRAIT_SOURCES) or null for hollow/independent.
+// This section pins: API contract, variant hash coverage, and DOM rendering in
+// the station PEOPLE card and combat HAIL card. No images are fetched — the
+// harness's makeEl stub carries src/alt/loading/decoding as plain properties.
+const { portraitFor, PORTRAIT_DIR, PORTRAIT_SOURCES, PORTRAIT_VARIANTS } = await import('../src/game/portraits.js');
+
+// -- a. API contract: determinism, variant coverage, and null returns ---------
+const w41sameSeed = portraitFor('redledger', 'test-seed');
+const w41sameSeedAgain = portraitFor('redledger', 'test-seed');
+const w41differentSeeds = [
+  portraitFor('redledger', 'seed-1'),
+  portraitFor('redledger', 'seed-2'),
+  portraitFor('redledger', 'seed-3'),
+  portraitFor('redledger', 'seed-4'),
+  portraitFor('redledger', 'seed-5'),
+  portraitFor('redledger', 'seed-6'),
+];
+const w41variantsFound = new Set(w41differentSeeds.map((p) => p?.variant ?? 'null'));
+const w41nullHollow = portraitFor('hollow', 'x');
+const w41nullIndependent = portraitFor('independent', 'x');
+const w41nullUndefined = portraitFor(undefined, 'x');
+const w41nullUnknown = portraitFor('not-a-faction', 'x');
+
+const w41apiChecks = {
+  // Same seed → same result (determinism)
+  deterministic: w41sameSeed?.src === w41sameSeedAgain?.src
+    && w41sameSeed?.variant === w41sameSeedAgain?.variant
+    && w41sameSeed?.alt === w41sameSeedAgain?.alt,
+  // Hash actually splits both variants across different seeds
+  bothVariantsPossible: w41variantsFound.has('a') && w41variantsFound.has('b'),
+  // Null for factions without art
+  nullForHollow: w41nullHollow === null,
+  nullForIndependent: w41nullIndependent === null,
+  nullForUndefined: w41nullUndefined === null,
+  nullForUnknown: w41nullUnknown === null,
+};
+console.log('wave41a API contract:', JSON.stringify(w41apiChecks));
+if (!Object.values(w41apiChecks).every(Boolean)) { console.log('WAVE41A API CONTRACT FAIL'); errors++; }
+
+// -- b. PORTRAIT_SOURCES: exact keys and src pattern -------------------------
+const w41sourceKeys = Object.keys(PORTRAIT_SOURCES);
+const w41sourceCount = w41sourceKeys.length;
+const w41allKeysMatchArt = w41sourceKeys.every((k) =>
+  typeof k === 'string' && !!PORTRAIT_SOURCES[k] && PORTRAIT_SOURCES[k].length > 0);
+const w41allKeysHavePattern = w41sourceKeys.every((k) => {
+  const p = portraitFor(k, 'any');
+  return p !== null && /^\/assets\/portraits\/[a-z]+-[ab]\.webp$/.test(p.src);
+});
+const w41noHollowKey = !w41sourceKeys.includes('hollow');
+const w41noIndependentKey = !w41sourceKeys.includes('independent');
+
+const w41sourcesChecks = {
+  exactlyTenKeys: w41sourceCount === 10,
+  allKeysHaveArtEntries: w41allKeysMatchArt,
+  allKeysProduceValidPattern: w41allKeysHavePattern,
+  noHollowKey: w41noHollowKey,
+  noIndependentKey: w41noIndependentKey,
+};
+console.log('wave41b PORTRAIT_SOURCES:', JSON.stringify(w41sourcesChecks), `keys=${w41sourceKeys.length}`);
+if (!Object.values(w41sourcesChecks).every(Boolean)) { console.log('WAVE41B PORTRAIT_SOURCES FAIL'); errors++; }
+
+// -- c. PEOPLE card: faction WITH art (redledger at redmarch) -------------------
+// Travel to redmarch (redledger faction) and open the people service.
+travelTo('redmarch', 'wave41c travel to redmarch');
+dockAtCurrentStation('wave41c dock at redmarch');
+
+// Open people service (Digit7 = DOCK_KEY_SERVICES[6])
+dispatchKey('Digit7', 'wave41c open people service');
+
+// Walk the overlay to find a PEOPLE card and its portrait structure.
+const w41redOv = stationOverlay();
+const w41redCard = w41redOv ? [...walkDom(w41redOv)].find((n) => n.className?.split(' ').includes('people-card') && [...walkDom(n)].some((c) => c.className?.split(' ').includes('people-name'))) ?? null : null;
+const w41redHead = w41redCard ? [...walkDom(w41redCard)].find((n) => n.className?.split(' ').includes('people-head')) : null;
+const w41redPortrait = w41redHead ? [...walkDom(w41redHead)].find((n) => n.tagName === 'IMG') : null;
+const w41redHeadtext = w41redHead ? [...walkDom(w41redHead)].find((n) => n.className?.split(' ').includes('people-headtext')) : null;
+const w41redName = w41redHeadtext ? [...walkDom(w41redHeadtext)].find((n) => n.className?.split(' ').includes('people-name')) : null;
+const w41redMeta = w41redHeadtext ? [...walkDom(w41redHeadtext)].find((n) => n.className?.split(' ').includes('people-meta')) : null;
+// Wave 41 face spread: two studies per faction, three contacts at a generated
+// dock — the roster must fill both studies before it repeats one.
+const w41redAllCards = w41redOv ? [...walkDom(w41redOv)].filter((n) => n.className?.split(' ').includes('people-card')) : [];
+const w41redAllSrcs = w41redAllCards
+  .map((c) => [...walkDom(c)].find((n) => n.tagName === 'IMG')?.src ?? null)
+  .filter((s) => typeof s === 'string');
+const w41redContactName = w41redName?.textContent ?? '';
+
+const w41peopleWithArtChecks = {
+  cardExists: !!w41redCard,
+  headExists: !!w41redHead,
+  portraitExists: !!w41redPortrait,
+  portraitClassCorrect: w41redPortrait?.className === 'people-portrait',
+  portraitSrcStartsCorrect: typeof w41redPortrait?.src === 'string' && w41redPortrait.src.startsWith('/assets/portraits/'),
+  portraitNonEmptyAlt: typeof w41redPortrait?.alt === 'string' && w41redPortrait.alt.length > 0,
+  // The alt names the person, not just the banner (screen-reader contract).
+  altNamesContact: w41redContactName.length > 0 && w41redPortrait?.alt?.startsWith(w41redContactName),
+  everyCardHasAFace: w41redAllCards.length >= 2 && w41redAllSrcs.length === w41redAllCards.length,
+  firstTwoFacesDiffer: w41redAllSrcs[0] !== w41redAllSrcs[1],
+  portraitLazy: w41redPortrait?.loading === 'lazy',
+  portraitAsync: w41redPortrait?.decoding === 'async',
+  portraitWidth: w41redPortrait?.width === 64,
+  portraitHeight: w41redPortrait?.height === 64,
+  headtextExists: !!w41redHeadtext,
+  nameInHeadtext: !!w41redName,
+  metaInHeadtext: !!w41redMeta,
+};
+console.log('wave41c PEOPLE with art (redledger at redmarch):', JSON.stringify(w41peopleWithArtChecks));
+if (!Object.values(w41peopleWithArtChecks).every(Boolean)) { console.log('WAVE41C PEOPLE WITH ART FAIL'); errors++; }
+
+// -- d. PEOPLE card: faction WITHOUT art (hollow at hollowreach) -------------
+undockStation();
+travelTo('hollowreach', 'wave41d travel to hollowreach');
+dockAtCurrentStation('wave41d dock at hollowreach');
+
+// Open people service
+dispatchKey('Digit7', 'wave41d open people service');
+
+const w41hollowOv = stationOverlay();
+const w41hollowCard = w41hollowOv ? [...walkDom(w41hollowOv)].find((n) => n.className?.split(' ').includes('people-card') && [...walkDom(n)].some((c) => c.className?.split(' ').includes('people-name'))) ?? null : null;
+const w41hollowHead = w41hollowCard ? [...walkDom(w41hollowCard)].find((n) => n.className?.split(' ').includes('people-head')) : null;
+const w41hollowImgs = w41hollowHead ? [...walkDom(w41hollowHead)].filter((n) => n.tagName === 'IMG') : [];
+
+const w41peopleWithoutArtChecks = {
+  cardExists: !!w41hollowCard,
+  headExists: !!w41hollowHead,
+  noPortraitInHead: w41hollowImgs.length === 0,
+};
+console.log('wave41d PEOPLE without art (hollow at hollowreach):', JSON.stringify(w41peopleWithoutArtChecks));
+if (!Object.values(w41peopleWithoutArtChecks).every(Boolean)) { console.log('WAVE41D PEOPLE WITHOUT ART FAIL'); errors++; }
+// -- e. HAIL card: faction WITH art (redledger ship) -------------------------
+undockStation();
+// Spawn a redledger raider within hail range (wave30 pattern)
+const w41hailRedledger = w30spawnPirate('w41-redledger', 95, [250, 0, 0]);
+w41hailRedledger.state.faction = 'redledger';
+w41hailRedledger.record.faction = 'redledger';
+ctx.emit('hailOpened', {
+  ship: w41hailRedledger,
+  intents: ['Talk', 'Leave'],
+  line: 'Redledger raiders demand tribute.',
+});
+tick(1, 'wave41e redledger hail opened');
+
+// Walk DOM from hail button to find the card (no class on card itself).
+const w41redHailBtn = w30hailBtn('[1]');
+let w41redHailCard = null;
+if (w41redHailBtn) {
+  let r = w41redHailBtn;
+  while (r.parent && r.parent !== document.body) r = r.parent;
+  w41redHailCard = r;
+}
+// Walk all children of the card to find the flex row and portrait.
+const w41redHailChildren = w41redHailCard ? [...walkDom(w41redHailCard)] : [];
+const w41redHailRow = w41redHailChildren.find((n) => n.tagName === 'DIV' && (n.style?.display === 'flex' || n.style?.cssText?.includes('display:flex')));
+// Check all images in the row to find the portrait.
+const w41redImgs = w41redHailRow ? [...walkDom(w41redHailRow)].filter((n) => n.tagName === 'IMG') : [];
+const w41redHailPortrait = w41redImgs.find((n) => n.className === 'rw-hail-portrait') ?? null;
+const w41redHailBtns = w41redHailCard ? [...walkDom(w41redHailCard)].filter((n) => n.tagName === 'BUTTON') : [];
+const w41redHailFirstBtn = w41redHailBtns[0] ?? null;
+
+const w41hailWithArtChecks = {
+  hailCardExists: !!w41redHailCard,
+  portraitRowExists: !!w41redHailRow,
+  portraitExists: !!w41redHailPortrait,
+  portraitClass: w41redHailPortrait?.className === 'rw-hail-portrait',
+  portraitSrc: typeof w41redHailPortrait?.src === 'string' && w41redHailPortrait.src.startsWith('/assets/portraits/redledger-'),
+  portraitAlt: typeof w41redHailPortrait?.alt === 'string' && w41redHailPortrait.alt.length > 0,
+  portraitWidth: w41redHailPortrait?.width === 72,
+  portraitHeight: w41redHailPortrait?.height === 72,
+  hasIntentButtons: w41redHailBtns.length >= 2,
+  firstBtnLabel: typeof w41redHailFirstBtn?.textContent === 'string' && w41redHailFirstBtn.textContent.startsWith('[1]'),
+};
+console.log('wave41e HAIL with art (redledger):', JSON.stringify(w41hailWithArtChecks));
+// -- f. HAIL card: faction WITHOUT art (independent ship) --------------------
+ctx.emit('hailClosed', {});
+tick(1, 'wave41f close redledger hail');
+// Spawn an independent trader within hail range
+const w41hailIndy = w30spawnPirate('w41-indy', 95, [250, 0, 0]);
+w41hailIndy.state.faction = 'independent';
+w41hailIndy.record.faction = 'independent';
+ctx.ships.push(w41hailIndy);
+// Manually trigger a hail with pirate intents (which are supported)
+// The faction is 'independent' so there should be no portrait art
+ctx.emit('hailOpened', {
+  ship: w41hailIndy,
+  intents: ['payTribute', 'refuseFight'], // Use pirate intents (supported by hail system)
+  line: 'Your cargo or your hull.',
+});
+tick(1, 'wave41f independent hail opened');
+const w41indyHailBtn = w30hailBtn('[1]'); // Look for any [1] button
+let w41indyHailCard = null;
+if (w41indyHailBtn) {
+  let r = w41indyHailBtn;
+  while (r.parent && r.parent !== document.body) r = r.parent;
+  w41indyHailCard = r;
+}
+const w41indyChildren = w41indyHailCard ? [...walkDom(w41indyHailCard)] : [];
+const w41indyAllRows = w41indyChildren.filter((n) => n.tagName === 'DIV' && (n.style?.display === 'flex' || n.style?.cssText?.includes('display:flex')));
+const w41indyRow = w41indyAllRows[0] ?? null; // Use the first flex row found
+// Check if this row contains a portrait - for independent, it should not.
+const w41indyPortrait = w41indyRow ? [...walkDom(w41indyRow)].find((n) => n.tagName === 'IMG' && n.className === 'rw-hail-portrait') : null;
+const w41indyBtns = w41indyHailCard ? [...walkDom(w41indyHailCard)].filter((n) => n.tagName === 'BUTTON') : [];
+const w41indyFirstBtn = w41indyBtns[0] ?? null;
+
+const w41hailWithoutArtChecks = {
+  hailCardExists: !!w41indyHailCard,
+  rowExists: !!w41indyRow,
+  noPortrait: !w41indyPortrait, // No portrait image should be found for independent
+  hasIntentButtons: w41indyBtns.length >= 2,
+  firstBtnLabel: typeof w41indyFirstBtn?.textContent === 'string' && w41indyFirstBtn.textContent.startsWith('[1]'),
+};
+console.log('wave41f HAIL without art (independent):', JSON.stringify(w41hailWithoutArtChecks));
+if (!Object.values(w41hailWithoutArtChecks).every(Boolean)) { console.log('WAVE41F HAIL WITHOUT ART FAIL'); errors++; }
+
+// Clean up: close hail, undock, and reset to bar like wave40
+ctx.emit('hailClosed', {});
+tick(1, 'wave41 close independent hail');
+undockStation();
+travelTo('redmarch', 'wave41 reset to redmarch');
+dockAtCurrentStation('wave41 dock for cleanup');
+dispatchKey('Digit3', 'wave41 open bar');
+dispatchKey('Escape', 'wave41 close bar'); // stationOverlay() now null
 
 
 if (errors === 0) {

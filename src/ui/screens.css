@@ -290,6 +290,28 @@
 
 /* people (station contacts) */
 
+.people-head {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.people-headtext {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.people-portrait {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid #31445c;
+  background: #0a111c;
+}
+
 .station-rank {
   margin-top: 12px;
   color: var(--rw-accent);
@@ -500,4 +522,8 @@ body.rw-contrast .people-chart-line,
 body.rw-contrast .bar-hint,
 body.rw-contrast .title-legend {
   color: #c3d4e6;
+}
+
+body.rw-contrast .people-portrait {
+  border-color: #c3d4e6;
 }

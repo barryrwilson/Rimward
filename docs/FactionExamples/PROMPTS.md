@@ -1,5 +1,51 @@
 # Prompt Set
 
+## Character portraits
+
+The 20 character images use the `stylized-concept` use case and the same
+polished, realistic science-fiction game-concept finish as the exterior art.
+Each is a landscape 16:9, waist-up three-quarter portrait of one representative
+individual, not a named ruler. The matching faction ship concept was supplied
+as the visual reference. Shared constraints exclude readable text, watermarks,
+trademarks, flags, heraldry, real celebrities, and recognizable existing
+science-fiction franchises.
+
+- **01 — Veridian Combine:** male and female survey-claims officers in graphite
+  pressure suits with pale-alloy hexagonal modules, muted emerald instruments,
+  and calm corporate authority inside a survey registry bay.
+- **02 — Ferrous Hegemony:** male and female frontier officers in symmetrical
+  iron-gray armor with restrained crimson bands and brass service accents,
+  framed by a formal cruiser readiness deck.
+- **03 — Freehold Compact:** male and female homesteader lane-keepers in
+  repaired cream, faded-blue, and barn-red work gear inside a warm community
+  workshop and greenhouse.
+- **04 — Red Ledger:** male and female tribute captains/bookkeepers in rebuilt
+  dark armor, dried-red tally geometry, and tarnished copper, working from an
+  amber-lit raider counting room.
+- **05 — Gilded Chain:** male- and female-presenting reptilian auction-house
+  representatives in immaculate black-ceramic, ivory, and old-gold formalwear,
+  lit by cold turquoise transfer galleries.
+- **06 — The Beautiful Ones:** male- and female-presenting nonhuman Vow-keepers:
+  extremely tall, slender alien humanoids with elongated necks, near-knee arm
+  reach, long digitigrade legs, four-digit hands, hairless sensory crowns, dark
+  almond eyes, reduced breathing slits, opalescent skin, and gentle
+  bioluminescence. Their pearl-and-indigo grown pressure harnesses and living
+  sanctuary share the companion ships' visual language; graceful and tender,
+  never body horror.
+- **07 — The Unknowables:** male- and female-presenting temporary humanoid field
+  approximations made only from ultraviolet/cyan plasma, white-gold nodes,
+  lensing arcs, charged dust, anchor matter, and energy cells. The female final
+  uses wholly abstract, non-anatomical field geometry.
+- **08 — The Assembly:** male- and female-presenting diplomatic survey avatars,
+  clearly mechanical contact chassis of weathered off-white alloy, charcoal,
+  faded orange copy-error panels, teal optics, recursive modules, and antennae.
+- **09 — Congregation of the Further Shore:** male and female pilgrim navigators
+  in practical midnight-blue and weathered-silver sacred pressure garments,
+  with candle-amber lamps and violet Wakeglass navigation optics.
+- **10 — Lamplighter Guild:** male and female gatewright technicians in
+  soot-dark work suits with replaceable utility-yellow panels, amber lamps,
+  cobalt diagnostics, tools, cable reels, and gate-service gantries.
+
 ## Shared direction
 
 All 30 images used the `stylized-concept` use case and were requested as polished, realistic science-fiction concept art suitable for game visual development. They use a wide three-quarter exterior composition, keep the complete primary silhouette readable, and avoid readable text, watermarks, trademarks, finalized flags/heraldry, and resemblance to existing science-fiction franchises.

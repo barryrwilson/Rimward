@@ -3,6 +3,7 @@ import '../ui/screens.css';
 import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS } from '../game/state.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
+import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41: faction character portraits
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 import { styleFor } from '../game/faction-style.js'; // wave 37: per-faction station schemes
@@ -2011,10 +2012,33 @@ export function initStation(ctx) {
     // Wave 16: the pilot's own recorded chart marks (wave 14), surfaced
     // once per dock on keeper cards only — computed once for the loop.
     const chartNotes = chartedMarkNotes(ctx);
+    // Wave 41: two studies per faction, up to three contacts per dock — a
+    // roster must never show one face twice. The first claim on a variant
+    // keeps it; a collider takes the free study. Roster order is stable
+    // (buildRoster), so each face stays put across sessions.
+    const facesTaken = new Set();
     for (const contact of people) {
       const card = h('div', 'people-card', panel);
-      h('div', 'people-name', card, contact.name);
-      h('div', 'people-meta', card,
+      // Wave 41: faction portrait in a shared head row (img + text).
+      const head = h('div', 'people-head', card);
+      let portrait = portraitFor(currentDef.faction, contact.id);
+      if (portrait && facesTaken.has(portrait.variant)) {
+        const free = portrait.variant === 'a' ? 'b' : 'a';
+        if (!facesTaken.has(free)) portrait = portraitVariant(currentDef.faction, free);
+      }
+      if (portrait) facesTaken.add(portrait.variant);
+      if (portrait) {
+        const img = h('img', 'people-portrait', head);
+        img.src = portrait.src;
+        img.alt = `${contact.name}, ${contact.role}`;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.width = 64;
+        img.height = 64;
+      }
+      const headtext = h('div', 'people-headtext', head);
+      h('div', 'people-name', headtext, contact.name);
+      h('div', 'people-meta', headtext,
         `${contact.role} · trust ${Math.round(contact.trust)} · favors ${contact.favors}`);
       const recognition = recognitionLine(ctx, contact);
       if (recognition) h('div', 'people-recognition', card, `“${recognition}”`);

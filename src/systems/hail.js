@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ECON, FACTIONS, cargoValue, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
+import { portraitFor } from '../game/portraits.js';
 import { spawnPod } from '../game/pods.js';
 import { stampWakeSite } from './npc.js';
 
@@ -8,6 +9,8 @@ import { stampWakeSite } from './npc.js';
  * Combat hail UI (doc §7.6, §12.3): a lower-third card. The world stays live —
  * nothing here touches ctx.flags.paused, and the container is pointer-events:
  * none except the card itself, so the combat HUD is never blocked.
+ * Wave 41: the card carries a faction portrait when the faction has reference
+ * art; speaker seed is record.pilot ?? state.name.
  *
  * Opens on 'hailOpened' { ship, intents[], line?, demand? } (emitted by
  * npc.js when a ship's resolve hits the bargaining band, or when a hunting
@@ -281,7 +284,35 @@ export function initHail(ctx) {
     const line = document.createElement('div');
     line.style.cssText = 'font-size:12px;color:#d7e4ea;margin:8px 0 10px;';
     line.textContent = `“${ev.line ?? 'They are breaking.'}”`;
-    card.append(header, sub, line);
+    // Wave 41: faction portrait (when available) in a flex row.
+    const portrait = portraitFor(st.faction, speaker);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:12px;align-items:flex-start;';
+
+    if (portrait) {
+      const img = document.createElement('img');
+      img.className = 'rw-hail-portrait';
+      img.src = portrait.src;
+      img.alt = `${speaker} — ${factionName}`;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.width = 72;
+      img.height = 72;
+      img.style.cssText =
+        'width:72px;height:72px;object-fit:cover;' +
+        'border:1px solid rgba(111,242,224,.35);' +
+        'border-radius:2px;' +
+        'background:rgba(4,18,22,.9);' +
+        'flex:0 0 auto;';
+      row.appendChild(img);
+    }
+
+    const textCol = document.createElement('div');
+    textCol.appendChild(header);
+    textCol.appendChild(sub);
+    textCol.appendChild(line);
+    row.appendChild(textCol);
+    card.appendChild(row);
 
     open.buttons = intents.map((intent, idx) => {
       const btn = document.createElement('button');
