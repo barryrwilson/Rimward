@@ -9800,6 +9800,280 @@ travelTo('redmarch', 'wave41 reset to redmarch');
 dockAtCurrentStation('wave41 dock for cleanup');
 dispatchKey('Digit3', 'wave41 open bar');
 dispatchKey('Escape', 'wave41 close bar'); // stationOverlay() now null
+// ---- Wave 42: Unknowables faction no-hull look (energy field) ----
+// No system flies the faction, so tests use synthetic defs/spawns. Ship is a
+// coherent energy field (12 children, all meshes): 3 magnetic loops, 2 lensing
+// arcs, 6 floating cells, 1 core. Gates get lens arcs + plasma cells visible
+// during transit. All materials are additive (transparent, depthWrite=false),
+// module-cached + userData.shared=true. No hull geometry, no vcMaterial.
+const { FACTION_STYLE: w42STYLE } = await import('../src/game/faction-style.js'); // wave-31 fresh-import idiom
+
+const w42scopedCtx = (systemId, faction) => {
+  const sceneS = new THREE.Scene();
+  const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
+  const rendererS = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
+  const ctxS = createCtx({ scene: sceneS, camera: cameraS, renderer: rendererS });
+  ctxS.systems = SYSTEMS;
+  ctxS.world.currentSystem = systemId;
+  ctxS.world.currentFaction = faction;
+  return ctxS;
+};
+
+// -- a. ship field structure: 12 children, named parts, material properties --
+let w42uid = 0;
+const w42lives = [];
+const w42spawn = (classKey, role) => {
+  const live = spawnLiveShip(ctx, {
+    id: `wave42-${++w42uid}`, name: 'Wave42 Field', classKey, faction: 'unknowables', role, resolve: 50,
+  }, new THREE.Vector3(0, 0, -4000));
+  w42lives.push(live);
+  return live;
+};
+const w42read = (live) => {
+  const meshes = live.object.children.filter((c) => c.isMesh);
+  const byName = {};
+  for (const m of meshes) { if (m.name) byName[m.name] = (byName[m.name] ?? 0) + 1; }
+  return { meshes, byName, glow: live.object.userData.glow };
+};
+const w42trader = w42read(w42spawn('cutter', 'trader'));
+const w42trader2 = w42read(w42spawn('cutter', 'trader'));
+const w42pirate = w42read(w42spawn('cutter', 'pirate')); // same classKey as the trader — the bake must be identical
+const w42materialOk = (mesh) => !!mesh?.material
+  && mesh.material.blending === THREE.AdditiveBlending
+  && mesh.material.transparent === true
+  && mesh.material.depthWrite === false
+  && mesh.material.userData?.shared === true;
+
+let w42fieldChildren = true;
+if (w42trader.meshes.length !== 12) w42fieldChildren = false;
+if (w42trader.byName['unknowables-loop'] !== 3) w42fieldChildren = false;
+if (w42trader.byName['unknowables-arc'] !== 2) w42fieldChildren = false;
+if (w42trader.byName['unknowables-cell'] !== 6) w42fieldChildren = false;
+if (w42trader.byName['unknowables-core'] !== 1) w42fieldChildren = false;
+
+let w42coreIsGlow = true;
+if (!w42trader.glow || w42trader.glow.name !== 'unknowables-core') w42coreIsGlow = false;
+if (w42trader.glow?.position.x !== 0 || w42trader.glow?.position.y !== 0 || w42trader.glow?.position.z !== 0) w42coreIsGlow = false;
+
+let w42allMaterialsAdditive = true;
+for (const m of w42trader.meshes) { if (!w42materialOk(m)) w42allMaterialsAdditive = false; }
+
+// Same classKey spawn shares IDENTICAL geometry and material objects (module cache)
+let w42sameClassKeyGeo = true;
+let w42sameClassKeyMat = true;
+for (let i = 0; i < w42trader.meshes.length; i++) {
+  if (w42trader.meshes[i].name !== w42trader2.meshes[i].name) {
+    w42sameClassKeyGeo = false; w42sameClassKeyMat = false; break;
+  }
+  if (w42trader.meshes[i].geometry !== w42trader2.meshes[i].geometry) w42sameClassKeyGeo = false;
+  if (w42trader.meshes[i].material !== w42trader2.meshes[i].material) w42sameClassKeyMat = false;
+}
+
+// Pirate role reuses IDENTICAL geometry and material as trader (no ':pirate' bake)
+let w42pirateGeoShared = true;
+let w42pirateMatShared = true;
+for (let i = 0; i < w42trader.meshes.length; i++) {
+  if (w42trader.meshes[i].geometry !== w42pirate.meshes[i].geometry) w42pirateGeoShared = false;
+  if (w42trader.meshes[i].material !== w42pirate.meshes[i].material) w42pirateMatShared = false;
+}
+
+// Every child material has userData.shared === true and is NOT the vertex-color hull material
+let w42allSharedNotVc = true;
+for (const m of w42trader.meshes) {
+  if (!m.material?.userData.shared) w42allSharedNotVc = false;
+  if (m.material.vertexColors === true) w42allSharedNotVc = false;
+}
+
+let w42roleSharing = true;
+if (w42trader.meshes.length !== w42pirate.meshes.length) w42roleSharing = false;
+if (w42trader.meshes.length !== 12 || w42pirate.meshes.length !== 12) w42roleSharing = false;
+if (w42pirate.byName['unknowables-loop'] !== 3) w42roleSharing = false;
+
+const w42fieldChecks = {
+  exact12Children: w42trader.meshes.length === 12,
+  threeLoops: w42trader.byName['unknowables-loop'] === 3,
+  twoArcs: w42trader.byName['unknowables-arc'] === 2,
+  sixCells: w42trader.byName['unknowables-cell'] === 6,
+  oneCore: w42trader.byName['unknowables-core'] === 1,
+  coreIsGlow: w42coreIsGlow,
+  coreAtOrigin: !!w42trader.glow && w42trader.glow.position.x === 0 && w42trader.glow.position.y === 0 && w42trader.glow.position.z === 0,
+  allMaterialsAdditive: w42allMaterialsAdditive,
+  sameClassKeyGeo: w42sameClassKeyGeo,
+  sameClassKeyMat: w42sameClassKeyMat,
+  pirateGeoShared: w42pirateGeoShared,
+  pirateMatShared: w42pirateMatShared,
+  allSharedNotVc: w42allSharedNotVc,
+  roleSharing: w42roleSharing,
+};
+console.log('wave42a ship field structure:', JSON.stringify(w42fieldChecks));
+if (!Object.values(w42fieldChecks).every(Boolean)) { console.log('WAVE42A SHIP FIELD STRUCTURE FAIL'); errors++; }
+
+// -- b. animateField motion + reducedMotion freeze -----------------------
+// The npc.js update path consumes fieldParts array, preallocated at build.
+const w42npcSys = systems.find(([n]) => n === 'npc')[1];
+const w42field = w42spawn('heavy', 'trader');
+ctx.ships.push(w42field); // traffic owns this list in production; the harness drives by hand
+const w42parts = w42field.object.userData.fieldParts;
+let w42partsExist = !!w42parts && Array.isArray(w42parts);
+let w42partsLength11 = w42partsExist && w42parts.length === 11; // core mesh is userData.glow, NOT in fieldParts
+// Sample unfrozen motion: different frame states should differ.
+// animateField uses total elapsed time, not frame delta. Accumulate elapsed across frames.
+const w42origReducedMotion = ctx.settings.reducedMotion;
+ctx.settings.reducedMotion = false;
+const w42sample = () => w42parts ? w42parts.map((p) => ({ x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z, rx: p.mesh.rotation.x, ry: p.mesh.rotation.y, rz: p.mesh.rotation.z, s: p.mesh.scale.x })) : [];
+const w42dt = 1 / 60;
+ctx.elapsed = 0;
+w42npcSys.update(w42dt);
+const w42s1 = w42sample();
+// Run 10 more frames to accumulate elapsed time
+for (let i = 0; i < 10; i++) {
+  ctx.elapsed += w42dt;
+  w42npcSys.update(w42dt);
+}
+const w42s2 = w42sample();
+// unfrozenMotion: at least one part's sampled value CHANGED across the unfrozen frames
+let w42unfrozenMotion = false;
+if (w42partsLength11) {
+  for (let i = 0; i < w42s1.length; i++) {
+    if (w42s1[i].x !== w42s2[i].x || w42s1[i].y !== w42s2[i].y || w42s1[i].z !== w42s2[i].z || w42s1[i].rx !== w42s2[i].rx || w42s1[i].ry !== w42s2[i].ry || w42s1[i].rz !== w42s2[i].rz || w42s1[i].s !== w42s2[i].s) {
+      w42unfrozenMotion = true;
+      break;
+    }
+  }
+}
+
+// Freeze: reducedMotion = true holds state across frames.
+ctx.settings.reducedMotion = true;
+ctx.elapsed += w42dt;
+w42npcSys.update(w42dt);
+const w42s3 = w42sample();
+ctx.elapsed += w42dt;
+w42npcSys.update(w42dt);
+const w42s4 = w42sample();
+let w42frozenEq = true;
+if (w42partsLength11) { for (let i = 0; i < w42s3.length; i++) { if (w42s3[i].x !== w42s4[i].x || w42s3[i].y !== w42s4[i].y || w42s3[i].z !== w42s4[i].z || w42s3[i].rx !== w42s4[i].rx || w42s3[i].ry !== w42s4[i].ry || w42s3[i].rz !== w42s4[i].rz || w42s3[i].s !== w42s4[i].s) w42frozenEq = false; } }
+// Unfreeze: motion resumes.
+ctx.settings.reducedMotion = false;
+ctx.elapsed += w42dt;
+w42npcSys.update(w42dt);
+const w42s5 = w42sample();
+let w42motionResumes = true;
+if (w42partsLength11) { for (let i = 0; i < w42s4.length; i++) { if (w42s4[i].x === w42s5[i].x && w42s4[i].y === w42s5[i].y && w42s4[i].z === w42s5[i].z && w42s4[i].rx === w42s5[i].rx && w42s4[i].ry === w42s5[i].ry && w42s4[i].rz === w42s5[i].rz && w42s4[i].s === w42s5[i].s) w42motionResumes = false; } }
+
+// Core mesh IS userData.glow and is absent from fieldParts
+let w42coreIsGlowAbsent = !!w42field.object.userData.glow && w42field.object.userData.glow.name === 'unknowables-core' && !w42parts?.some((p) => p.mesh === w42field.object.userData.glow);
+
+ctx.settings.reducedMotion = w42origReducedMotion; // restore original value
+
+const w42motionChecks = {
+  fieldPartsExist: w42partsExist,
+  partsLength11: w42partsLength11,
+  unfrozenMotion: w42unfrozenMotion,
+  frozenUnderReducedMotion: w42frozenEq,
+  motionResumes: w42motionResumes,
+  coreIsGlowAbsent: w42coreIsGlowAbsent,
+};
+console.log('wave42b animateField motion:', JSON.stringify(w42motionChecks));
+if (!Object.values(w42motionChecks).every(Boolean)) { console.log('WAVE42B ANIMATEFIELD MOTION FAIL'); errors++; }
+
+// -- c. gate overlay: lens arcs + plasma cells ----------------------------
+// Unknowables overlay: 4 lens arcs + 1 plasma group (8 cells). Plasma group
+// is hidden at idle, visible during transit (same as tunnel-points).
+// Set system faction so rebuild() reads it (gate.js reads def.faction, not ctx.world.currentFaction)
+const w42origFaction = SYSTEMS['fh_hearth'].faction;
+SYSTEMS['fh_hearth'].faction = 'unknowables';
+const ctx42G = w42scopedCtx('fh_hearth', 'unknowables');
+const gate42 = initGate(ctx42G);
+const w42gates = w38namedIn(ctx42G.scene, 'lamplighter-gate');
+const w42gate = w42gates[0];
+const w42unkOverlay = w42gate?.children.find((c) => c.name === 'unknowables-overlay') ?? null;
+
+let w42overlayExists = !!w42unkOverlay;
+let w42fourLenses = 0;
+let w42plasmaGroup = null;
+if (w42unkOverlay) {
+  for (const c of w42unkOverlay.children) {
+    if (c.isMesh && c.name === 'unknowables-lens') w42fourLenses++;
+    if (c.isGroup && c.name === 'unknowables-plasma') w42plasmaGroup = c;
+  }
+}
+let w42plasmaCells = 0;
+if (w42plasmaGroup) {
+  for (const c of w42plasmaGroup.children) {
+    if (c.isMesh && c.name === 'unknowables-plasma-cell') w42plasmaCells++;
+  }
+}
+
+// Plasma visibility: hidden at idle, visible during transit.
+// The gate updates ctx.gate.{jumping,destination} directly; poke the real API.
+let w42plasmaHiddenIdle = !w42plasmaGroup || w42plasmaGroup.visible === false;
+// The departing gate is the assembly whose `to` matches ctx.gate.destination.
+ctx42G.gate.jumping = true;
+ctx42G.gate.destination = SYSTEMS['fh_hearth'].gates[0].to;
+gate42.update(1 / 60);
+const w42plasmaVisibleTransit = !!w42plasmaGroup && w42plasmaGroup.visible === true;
+// reducedMotion freezes the cells' motion; it must NEVER hide them.
+const w42origRM42c = ctx42G.settings.reducedMotion;
+ctx42G.settings.reducedMotion = true;
+gate42.update(1 / 60);
+const w42plasmaVisibleFrozen = !!w42plasmaGroup && w42plasmaGroup.visible === true;
+ctx42G.settings.reducedMotion = w42origRM42c;
+ctx42G.gate.jumping = false;
+ctx42G.gate.destination = null;
+gate42.update(1 / 60);
+const w42plasmaHiddenAgain = !w42plasmaGroup || w42plasmaGroup.visible === false;
+
+const w42gateChecks = {
+  overlayExists: w42overlayExists,
+  fourLenses: w42fourLenses === 4,
+  plasmaGroupExists: !!w42plasmaGroup,
+  eightPlasmaCells: w42plasmaCells === 8,
+  plasmaHiddenIdle: w42plasmaHiddenIdle,
+  plasmaVisibleTransit: w42plasmaVisibleTransit,
+  plasmaVisibleUnderReducedMotion: w42plasmaVisibleFrozen,
+  plasmaHiddenAfterTransit: w42plasmaHiddenAgain,
+};
+console.log('wave42c gate overlay:', JSON.stringify(w42gateChecks));
+if (!Object.values(w42gateChecks).every(Boolean)) { console.log('WAVE42C GATE OVERLAY FAIL'); errors++; }
+// Cleanup: restore fh_hearth faction
+SYSTEMS['fh_hearth'].faction = w42origFaction;
+
+// -- d. negatives: independent ship, veridian gate -------------------------
+// Independent ships have no unknowables field; veridian gates have no overlay.
+// Spawn an independent trader directly (not an unknowables override).
+const w42indyCtx = w42scopedCtx('test-system', 'independent');
+const w42indy = spawnLiveShip(w42indyCtx, { id: 'wave42-indy', name: 'Indy', classKey: 'light', faction: 'independent', role: 'trader', resolve: 50 }, new THREE.Vector3(0, 0, -4000));
+w42lives.push(w42indy);
+const w42indyMeshes = w42indy.object.children.filter((c) => c.isMesh);
+// Independent ships keep the wave-37 fallback shape: 2 meshes (vertex-colored
+// hull + engine glow), and no unknowables field part anywhere.
+const w42indyField = !w42indyMeshes.some((c) => c.name.startsWith('unknowables-'));
+const w42indyWave37 = w42indyMeshes.length === 2 && w42indyMeshes[0].material?.vertexColors === true;
+
+const ctx42V = w42scopedCtx('vd_survey', 'veridian');
+const gate42V = initGate(ctx42V);
+const w42veridGates = w38namedIn(ctx42V.scene, 'lamplighter-gate');
+const w42veridGate = w42veridGates[0];
+const w42hasUnknowablesOverlay = w42veridGate?.children.some((c) => c.name === 'unknowables-overlay');
+
+// Positive: the veridian gate still carries its own wave-38 overlay.
+const w42veridHasOwnOverlay = !!w42veridGate?.children.some((c) => c.name === 'veridian-overlay');
+
+const w42negativeChecks = {
+  independentNoField: w42indyField,
+  independentKeepsWave37Shape: w42indyWave37,
+  veridianNoUnknowablesOverlay: !w42hasUnknowablesOverlay,
+  veridianKeepsOwnOverlay: w42veridHasOwnOverlay,
+};
+console.log('wave42d negatives + positive shape:', JSON.stringify(w42negativeChecks));
+if (!Object.values(w42negativeChecks).every(Boolean)) { console.log('WAVE42D NEGATIVES FAIL'); errors++; }
+
+// Cleanup
+for (const live of w42lives) {
+  removeLiveShip(ctx, live);
+  const ix = ctx.ships.indexOf(live);
+  if (ix >= 0) ctx.ships.splice(ix, 1);
+}
 
 
 if (errors === 0) {

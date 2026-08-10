@@ -131,8 +131,13 @@ export const FACTION_STYLE = {
     metalness: 0.30, roughness: 0.60,
     planetMood: 'warm', planetTint: 0xc0b090,
   },
-  // 07 — D3 (approved): deferred — no generated system flies unknowables.
-  // Colors recorded from 07-unknowables-*.png for the future no-hull pass.
+  // 07 — D3 (approved, wave 37; BUILT in wave 42): the Unknowables have no
+  // hull. `hull`/`hullDark`/`trim` are recorded from 07-unknowables-*.png for
+  // completeness, but the ship path (npc.js 'unknowables-field') and the gate
+  // overlay (gate.js 'unknowables-overlay') read only the additive light
+  // roles — patch[0] ultraviolet, accent electric cyan, glow, beacon
+  // white-gold. No generated system flies the faction; the assets reach the
+  // screen through the same faction dispatch as every other kit.
   unknowables: {
     hull: 0x1e2024, hullDark: 0x141414, trim: 0x404c77, accent: 0x6fd8e8,
     glow: 0x8aa0ff, beacon: 0xe8e8ff,

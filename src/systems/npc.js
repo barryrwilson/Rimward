@@ -87,7 +87,16 @@ import {
  * pipeline — still ONE merged geometry + shared vcMaterial + faction glow,
  * one draw call per hull). Pirate-role kit ships render a dulled/desaturated
  * bake of the same spec (':pirate' cache entries). independent/hollow/
- * unknowables/unknown factions keep the wave-37 VC_PARTS fallback untouched.
+ * unknown factions keep the wave-37 VC_PARTS fallback untouched.
+ *
+ * Wave 42 (unknowables field — Decision D3): the unknowables faction has no
+ * hull; ships are energy fields (nested magnetic loops, lensing arcs, floating
+ * cells, core) built via buildUnknowablesField. No VC kit, no ':pirate' bake.
+ * Assets are module-shared and never disposed. The core mesh doubles as the
+ * AI engine-glow handle (userData.glow), so its scale/visibility belong to the
+ * AI contract and animateField never writes it (fieldParts has 11 records for
+ * 12 meshes). All other factions keep their wave-38 kits or wave-37 fallbacks
+ * byte-identically.
  */
 
 // ---------- module-scope scratch (no per-frame allocation) ----------
@@ -822,6 +831,146 @@ function glowMatFor(faction) {
   return m;
 }
 
+// Wave 42: cell offsets for the 6 floating cells (shared by geometry cache and builder)
+const UNKNOWABLES_CELL_OFFSETS = [
+  { x: 1.2, y: 0.4, z: 0.8 },
+  { x: -0.9, y: 0.6, z: 1.0 },
+  { x: 0.5, y: -0.5, z: 1.1 },
+  { x: -0.7, y: 0.3, z: -0.6 },
+  { x: 0.8, y: 0.7, z: -0.4 },
+  { x: -1.0, y: -0.4, z: 0.5 },
+];
+// Wave 42: per-part animation axes for the unknowables field (loops and arcs
+// spin on their own axis; cells drift on a cycled axis). Read by
+// buildUnknowablesField when it allocates the per-ship animation records.
+const LOOP_AXES = ['x', 'y', 'z'];
+const ARC_AXES = ['z', 'x'];
+const CELL_AXES = ['x', 'y', 'z'];
+
+// Wave 42 (unknowables field): no-hull energy field — nested magnetic loops,
+// lensing arcs, floating cells, core. Geometries cached per classKey, materials
+// shared globally. No VC kit, no ':pirate' bake. All resources are module-shared
+// and never disposed.
+const unknowablesGeos = {}; // classKey → { loops, arcs, cells, core, scale } (shared, never disposed)
+const unknowablesMats = {}; // material type → shared MeshBasicMaterial
+
+function unknowablesMatFor(colorHex) {
+  let m = unknowablesMats[colorHex];
+  if (!m) {
+    m = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    m.userData.shared = true;
+    unknowablesMats[colorHex] = m;
+  }
+  return m;
+}
+
+function unknowablesGeosFor(classKey) {
+  let g = unknowablesGeos[classKey];
+  if (g) return g;
+
+  // Size scale based on classKey (frigate > heavy > freighter > cutter/ace > light)
+  const scale = {
+    frigate: 3.2,
+    heavy: 2.2,
+    freighter: 1.8,
+    cutter: 1.2,
+    ace: 1.0,
+    light: 0.8,
+  }[classKey] ?? 1.0;
+
+  // Nested magnetic loops: three rings on MUTUALLY PERPENDICULAR planes
+  // (a gyroscope, not three near-coplanar hoops — small offsets collapse
+  // into one ring at flight distance). Radii step inward and the outermost
+  // sits forward of the innermost so the field carries a heading along -Z.
+  const loops = [
+    new THREE.TorusGeometry(2.4 * scale, 0.055 * scale, 6, 28),
+    new THREE.TorusGeometry(1.9 * scale, 0.05 * scale, 6, 24),
+    new THREE.TorusGeometry(1.4 * scale, 0.045 * scale, 6, 20),
+  ];
+  loops[0].translate(0, 0, -0.9 * scale); // bow ring, in the XY plane
+  loops[1].rotateX(Math.PI / 2); // XZ plane
+  loops[2].rotateY(Math.PI / 2); // YZ plane
+  loops[2].translate(0, 0, 0.9 * scale); // stern ring
+  loops.forEach(g => { g.userData.shared = true; });
+
+  // Lensing arcs: two wide sweeps OUTSIDE the loop cage, thick enough to
+  // read as gravitational distortion rather than more wire.
+  const arcs = [
+    new THREE.TorusGeometry(3.3 * scale, 0.13 * scale, 6, 28, 0, Math.PI * 0.75),
+    new THREE.TorusGeometry(2.9 * scale, 0.10 * scale, 6, 24, 0, Math.PI * 0.55),
+  ];
+  arcs[0].rotateY(-Math.PI / 5);
+  arcs[1].rotateX(Math.PI / 3);
+  arcs.forEach(g => { g.userData.shared = true; });
+
+  // Floating cells: small sparks inside the cage, not blocks. Alternating
+  // sizes so the swarm reads as depth instead of a row of identical dice.
+  const cells = [];
+  for (let i = 0; i < 6; i++) {
+    const geo = new THREE.OctahedronGeometry((i % 2 === 0 ? 0.11 : 0.08) * scale, 0);
+    geo.userData.shared = true;
+    cells.push(geo);
+  }
+
+  // Core: the bright heart of the field (and the AI's engine-glow handle).
+  const core = new THREE.SphereGeometry(0.42 * scale, 10, 8);
+  core.userData.shared = true;
+
+  g = { loops, arcs, cells, core, scale };
+  unknowablesGeos[classKey] = g;
+  return g;
+}
+
+// Wave 42: animate the Unknowables energy field. Zero-alloc — mutates mesh
+// transforms in place. Parts preallocated at build time in fieldParts array.
+// Under reducedMotion, returns immediately without resetting (parts freeze at
+// their accumulated values). Materials are shared — never mutate them.
+function animateField(parts, elapsed, reducedMotion) {
+  if (reducedMotion) return;
+
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const mesh = p.mesh;
+
+    if (p.rotAxis) {
+      // Rotating part (loops, arcs)
+      const r = elapsed * p.rotHz * Math.PI * 2;
+      switch (p.rotAxis) {
+        case 'x':
+          mesh.rotation.x = r;
+          break;
+        case 'y':
+          mesh.rotation.y = r;
+          break;
+        case 'z':
+          mesh.rotation.z = r;
+          break;
+      }
+    } else if (p.driftAmp > 0 && (p.driftAxis === 'x' || p.driftAxis === 'y' || p.driftAxis === 'z')) {
+      // Drifting cell (sine wave on its phase)
+      const t = elapsed + p.phase;
+      const s = Math.sin(t * 0.8) * p.driftAmp;
+      switch (p.driftAxis) {
+        case 'x':
+          mesh.position.x = p.baseX + s;
+          break;
+        case 'y':
+          mesh.position.y = p.baseY + s;
+          break;
+        case 'z':
+          mesh.position.z = p.baseZ + s;
+          break;
+      }
+    }
+  }
+}
+
 let glowGeo = null;
 let flashGeo = null;
 
@@ -1066,18 +1215,121 @@ function buildBeautifulShip(classKey, role) {
 }
 
 /**
+ * Build an Unknowables energy field ship (wave 42, Decision D3). No hull:
+ * the group is a nested energy field (magnetic loops, lensing arcs, floating
+ * cells, core). The core mesh at (0,0,0) serves two purposes: it is the visual
+ * heart of the field AND the AI engine-glow handle (userData.glow), so its
+ * scale and visibility belong exclusively to the AI glow contract (updateRoute,
+ * engageTarget, updateDuel, updateDisabled all write live.object.userData.glow).
+ * animateField must never touch the core, or the AI would overwrite it in the
+ * same frame. Therefore fieldParts holds 11 animation records for the 11 moving
+ * parts (3 loops + 2 arcs + 6 cells) while the group has 12 mesh children.
+ *
+ * @param {string} classKey - Ship class key
+ * @returns {THREE.Group} Named 'unknowables-field', userData.fieldParts === 11
+ */
+function buildUnknowablesField(classKey) {
+  const g = new THREE.Group();
+  g.name = 'unknowables-field';
+
+  const spec = unknowablesGeosFor(classKey);
+  const style = styleFor('unknowables');
+
+  // Materials from FACTION_STYLE.unknowables
+  const loopMat = unknowablesMatFor(style.patch[0]); // ultraviolet
+  const loopMatGlow = unknowablesMatFor(style.glow);  // blue glow
+  const arcMat = unknowablesMatFor(style.accent);     // electric cyan
+  const cellMat = unknowablesMatFor(style.beacon);    // white-gold
+  const coreMat = unknowablesMatFor(style.beacon);    // white-gold core
+
+  // Nested magnetic loops (3 tori)
+  for (let i = 0; i < 3; i++) {
+    const loop = new THREE.Mesh(spec.loops[i], i % 2 === 0 ? loopMat : loopMatGlow);
+    loop.name = 'unknowables-loop';
+    g.add(loop);
+  }
+
+  // Lensing arcs (2 partial tori)
+  for (let i = 0; i < 2; i++) {
+    const arc = new THREE.Mesh(spec.arcs[i], arcMat);
+    arc.name = 'unknowables-arc';
+    g.add(arc);
+  }
+
+  // Floating cells (6 octahedra)
+  for (let i = 0; i < 6; i++) {
+    const cell = new THREE.Mesh(spec.cells[i], cellMat);
+    cell.name = 'unknowables-cell';
+    cell.position.set(
+      UNKNOWABLES_CELL_OFFSETS[i].x * spec.scale,
+      UNKNOWABLES_CELL_OFFSETS[i].y * spec.scale,
+      UNKNOWABLES_CELL_OFFSETS[i].z * spec.scale
+    );
+    g.add(cell);
+  }
+
+  // Core at center (0, 0, 0). This mesh is both the visual heart of the field
+  // AND the AI engine-glow handle (userData.glow). Its scale and visibility
+  // belong exclusively to the AI glow contract (updateRoute, engageTarget,
+  // updateDuel, updateDisabled all write live.object.userData.glow).
+  // animateField must never touch this mesh, or the AI would overwrite it
+  // in the same frame. Therefore the core is NOT in fieldParts.
+  const core = new THREE.Mesh(spec.core, coreMat);
+  core.name = 'unknowables-core';
+  g.add(core);
+  g.userData.glow = core;
+
+  // Per-ship animation records — allocated here, at build time, and mutated
+  // in place by animateField (the shared caches are never written to after
+  // they are filled). Child order is the boot-pinned order above:
+  // loops 0-2, arcs 3-4, cells 5-10, core 11 (NOT animated — see ruling above).
+  // fieldParts.length === 11 for the 11 moving parts only.
+  const parts = [];
+  for (let i = 0; i < 3; i++) {
+    parts.push({
+      mesh: g.children[i], rotAxis: LOOP_AXES[i], rotHz: 0.15 + i * 0.08,
+      phase: 0, driftAmp: 0, driftAxis: null, baseX: 0, baseY: 0, baseZ: 0,
+    });
+  }
+  for (let i = 0; i < 2; i++) {
+    parts.push({
+      mesh: g.children[3 + i], rotAxis: ARC_AXES[i], rotHz: 0.08 + i * 0.04,
+      phase: 0, driftAmp: 0, driftAxis: null, baseX: 0, baseY: 0, baseZ: 0,
+    });
+  }
+  for (let i = 0; i < 6; i++) {
+    const off = UNKNOWABLES_CELL_OFFSETS[i];
+    parts.push({
+      mesh: g.children[5 + i], rotAxis: null, rotHz: 0,
+      phase: i * (Math.PI * 2 / 6), driftAmp: 0.15 * spec.scale,
+      driftAxis: CELL_AXES[i % 3],
+      baseX: off.x * spec.scale, baseY: off.y * spec.scale, baseZ: off.z * spec.scale,
+    });
+  }
+  // Child 11 (the core) is deliberately absent from `parts` — it is
+  // userData.glow and belongs to the AI glow contract (updateRoute,
+  // engageTarget, updateDuel, updateDisabled all write it every frame).
+  g.userData.fieldParts = parts;
+
+  return g;
+}
+
+/**
  * Build a faction-colored ship mesh. Nose points along local -Z (ship.js
  * convention). Beautiful-Ones factions delegate to buildBeautifulShip
  * (wave 27: grown organic hulls; `role` selects the tarnished fallen-
- * Beautiful material variant for pirates). Every other faction renders the
- * merged vertex-colored geometry for its faction×classKey — one mesh, one
- * draw call, palette baked into the vertices from FACTION_STYLE. Wave 38:
- * the 8 built factions sculpt from their FACTION_VC_PARTS silhouette kits
- * (pirate role → the dulled ':pirate' bake of the same spec); factions
- * without a kit render the wave-37 VC_PARTS fallback byte-identically.
+ * Beautiful material variant for pirates); `unknowables` delegates to
+ * buildUnknowablesField (wave 42: the no-hull energy field). Every other
+ * faction renders the merged vertex-colored geometry for its
+ * faction×classKey — one mesh, one draw call, palette baked into the
+ * vertices from FACTION_STYLE. Wave 38: the 8 built factions sculpt from
+ * their FACTION_VC_PARTS silhouette kits (pirate role → the dulled
+ * ':pirate' bake of the same spec); factions without a kit render the
+ * wave-37 VC_PARTS fallback byte-identically.
  */
 function buildShipMesh(classKey, faction, role) {
   if (isBeautiful(faction)) return buildBeautifulShip(classKey, role);
+  if (faction === 'unknowables') return buildUnknowablesField(classKey);
   const g = new THREE.Group();
   g.add(new THREE.Mesh(vcGeoFor(classKey, faction, role === 'pirate'), vcMaterial));
 
@@ -1953,6 +2205,9 @@ export function initNpc(ctx) {
         // reducedMotion.
         const op = live.object.userData.organicParts;
         if (op) animateOrganic(op, ctx.elapsed, reducedMotion);
+        // Wave 42: Unknowables energy field animation.
+        const fp = live.object.userData.fieldParts;
+        if (fp) animateField(fp, ctx.elapsed, reducedMotion);
         // Wave 30 demand-hail upkeep: the parley dies with the hail target
         // (disabled here; destroyed/despawned discard the ai outright, and
         // hail.js's own timeout closes the card on those same conditions),

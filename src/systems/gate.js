@@ -115,9 +115,10 @@ const LAMP_SELECTED_OPACITY = 1;
 
 // Faction gate overlays (wave 38): systems flying these factions dress the
 // Lamplighter brass ring with a '<faction>-overlay' subgroup (plan Phase 4).
+// Wave 42 D3: Unknowables join as energy-field (no hull, additive only).
 // Beautiful keeps its wave-27 overgrowth; independent/hollow/unknown stay
 // plain brass (byte-identical).
-const OVERLAY_FACTIONS = new Set(['veridian', 'ferrous', 'freehold', 'redledger', 'gilded', 'congregation', 'assembly', 'lamplighter']);
+const OVERLAY_FACTIONS = new Set(['veridian', 'ferrous', 'freehold', 'redledger', 'gilded', 'congregation', 'assembly', 'lamplighter', 'unknowables']);
 
 /** Additive radial-gradient sprite texture for the gate glow/beacon. */
 function makeGlowTexture(inner, outer) {
@@ -266,8 +267,8 @@ export function initGate(ctx) {
   // Unit primitives scaled per part — lazy-cached, marked userData.shared,
   // NEVER disposed (the ringGeo/glowMap pattern). Overlay sprite lamps
   // reuse the wave-37 tintFor per-faction textures (also shared). Only
-  // per-assembly overlay materials/sprite materials enter the rebuild()
-  // disposal path (the wave-27 bud-material precedent).
+// per-assembly overlay materials/sprite materials enter the rebuild()
+// disposal path (the wave-27 bud-material precedent).
   let ovShared = null;
   function ensureOverlayShared() {
     if (ovShared) return;
@@ -276,12 +277,17 @@ export function initGate(ctx) {
     const cone = new THREE.ConeGeometry(1, 1, 6);
     const sphere = new THREE.SphereGeometry(1, 8, 6);
     const ring = new THREE.TorusGeometry(1, 0.1, 6, 40);
+    // Hairline partial torus for the wave-42 unknowables lens arcs: the unit
+    // torus is scaled to ring size, so the tube scales with it — 0.02 lands
+    // at roughly half a unit of thickness at T+7, which reads as bent light.
+    const arcRing = new THREE.TorusGeometry(1, 0.02, 6, 48, Math.PI * 0.55);
     box.userData.shared = true;
     cyl.userData.shared = true;
     cone.userData.shared = true;
     sphere.userData.shared = true;
     ring.userData.shared = true;
-    ovShared = { box, cyl, cone, sphere, ring };
+    arcRing.userData.shared = true;
+    ovShared = { box, cyl, cone, sphere, ring, arcRing };
   }
 
   // Per-system-faction dress over the Lamplighter brass base, built
@@ -523,6 +529,71 @@ export function initGate(ctx) {
           lamp(tint.beaconMap, st.glow, 2.2, (i / 12) * Math.PI * 2, T + 0.9, i % 2 ? 1.6 : -1.6, 0.5, 0.25, 1.7, i * 0.7);
         }
         lamp(tint.beaconMap, st.patch[1], 3, Math.PI / 6 + (Math.PI * 2) / 3, T + 15.9, 0, 0.45, 0.25, 2.2, 1.1);
+        break;
+      }
+      case 'unknowables': {
+        // Energy-field overlay (wave 42 D3): no hull structure. Additive
+        // gravitational lens arcs and plasma cells in the bore.
+        const lensMat = (color) => {
+          const m = new THREE.MeshBasicMaterial({
+            color,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 0.5, // light bent around the bore, not painted cladding
+            depthWrite: false,
+          });
+          mats.push(m);
+          return m;
+        };
+        // Exactly 4 lens arcs: partial torus sweeps standing off the ring on
+        // the bore axis, each tilted out of the ring plane so they cross the
+        // silhouette. The unit torus is scaled uniformly, so its tube scales
+        // too — G.arcRing is deliberately a HAIRLINE tube (see
+        // ensureOverlayShared), because at ring scale a normal tube reads as
+        // a solid painted crescent instead of bent light.
+        // Colors alternate patch[0] (ultraviolet) / accent (electric cyan).
+        for (let i = 0; i < 4; i++) {
+          const ang = (i / 4) * Math.PI * 2;
+          const lens = new THREE.Mesh(G.arcRing, lensMat(i % 2 === 0 ? st.patch[0] : st.accent));
+          lens.name = 'unknowables-lens';
+          const arcRadius = T + 2 + (i % 2) * 5; // two shells, T+2 and T+7
+          lens.scale.setScalar(arcRadius);
+          lens.rotation.x = i % 2 === 0 ? 0.32 : -0.22; // tilt out of the ring plane
+          lens.rotation.z = ang; // spaced around the bore
+          ov.add(lens);
+          // Slow counter-rotation about the bore — the lensing drifts.
+          anims.push({ obj: lens, spin: i % 2 === 0 ? 0.12 : -0.08 });
+        }
+        // Plasma cells group: 8 small additive cells in the bore.
+        const plasmaGroup = new THREE.Group();
+        plasmaGroup.name = 'unknowables-plasma';
+        plasmaGroup.visible = false; // Hidden until jump transit.
+        const plasmaMat = (color) => {
+          const m = new THREE.MeshBasicMaterial({
+            color,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            depthWrite: false,
+          });
+          mats.push(m);
+          return m;
+        };
+        // Exactly 8 plasma cells arranged in the bore.
+        for (let i = 0; i < 8; i++) {
+          const ang = (i / 8) * Math.PI * 2;
+          const radius = RING_RADIUS * 0.5;
+          const cell = new THREE.Mesh(G.sphere, plasmaMat(i % 3 === 0 ? st.beacon : st.accent));
+          cell.name = 'unknowables-plasma-cell';
+          cell.scale.setScalar(1.8);
+          cell.position.set(Math.cos(ang) * radius, Math.sin(ang) * radius, 0);
+          // Z-wobble for depth in the bore.
+          cell.position.z = (i % 2 === 0 ? 2 : -2) + (i % 3) * 1.5;
+          plasmaGroup.add(cell);
+          // Preallocate plasma animation: slow radial drift.
+          anims.push({ obj: cell, spin: (i % 2 === 0 ? 0.08 : -0.08) });
+        }
+        ov.add(plasmaGroup);
+        a.unknowablesPlasma = plasmaGroup;
         break;
       }
     }
@@ -927,6 +998,12 @@ export function initGate(ctx) {
           }
         }
       }
+
+      // Unknowables plasma cells (wave 42 D3): the bore fills with plasma
+      // geometry only while the transit runs — the same `charging` condition
+      // the tunnel swirl reads. reducedMotion freezes the cells' motion in
+      // the loop above; it never hides them.
+      if (a.unknowablesPlasma) a.unknowablesPlasma.visible = charging;
 
       // Junction silhouette (wave-22): hex frame counter-rotates the ring
       // spin (frozen under reducedMotion); the selected route's lamp lerps

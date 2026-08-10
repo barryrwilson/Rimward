@@ -72,8 +72,15 @@ trim/light tones). `PROMPTS.md` supplies the intent where sampling is muddy.
 - **D2 — Beautiful Ones glow (APPROVED, wave 37).** Mint (`0x7fe0a8`) kept
   (established in-fiction and already built); indigo/violet reads only via
   planet grading and gate overgrowth accents. Implemented.
-- **D3 — Unknowables scope (APPROVED, wave 37).** Deferred — no generated
-  system flies it; colors recorded in `FACTION_STYLE` for the future pass.
+- **D3 — Unknowables scope (APPROVED, wave 37; BUILT, wave 42).** No hull.
+  Ships are an energy field (`'unknowables-field'`: 3 nested magnetic loops on
+  perpendicular planes, 2 lensing arcs, 6 floating cells, 1 core) and gates take
+  an `'unknowables-overlay'` of 4 hairline lens sweeps plus 8 plasma cells that
+  fill the bore only during transit. Still no generated system flies the
+  faction — the assets reach the screen through the ordinary faction dispatch
+  (`buildShipMesh`, `OVERLAY_FACTIONS`) the moment one does, and the boot
+  harness covers both through synthetic spawns and a scoped faction override
+  (the wave-27 precedent).
 - **D4 — Multi-color mechanism (APPROVED, wave 37, user: "hard-core
   option").** Built ships bake per-part faction colors into **vertex colors
   on merged geometry** sharing ONE `MeshStandardMaterial` across all
@@ -146,9 +153,10 @@ per faction+classKey (shared, never disposed), part-level animation only.
     ceramic), `congregation` (forward observation chamber, folded sails),
     `assembly` (recursive duplicated modules, sensor crown, daughter pods).
   - **Batch C:** `lamplighter` (repair arms, cable reels, relay mast, tug
-    engines), and optionally `unknowables` (D3) — **no hull**: nested additive
-    field loops + floating cell sprites; needs a small new render path, not the
-    mesh kit.
+    engines), and `unknowables` (D3) — **no hull**: additive field loops,
+    lensing arcs and floating cells on a new render path, not the mesh kit.
+    Landed in wave 42; the core mesh doubles as `userData.glow`, so the AI
+    engine-glow contract owns its scale and `animateField` never writes it.
 - Pirate-role variants reuse the same geometries with a scarred/dulled material
   set (the tarnished-Beautiful precedent).
 - **Verify:** spawn each faction×class in a test system; silhouette readable at
@@ -191,8 +199,9 @@ then add a per-system-faction overlay subgroup — the exact
 - `assembly`: recursive scaffolds, duplicated sub-rings, teal optics.
 - `lamplighter`: full service dress — gantries, relay crown, maintenance rail,
   thousands of amber lamps (this is the gate's "home" look).
-- `unknowables` (optional, D3): gravitational lens arcs, plasma geometry
-  sprites during transit.
+- `unknowables` (D3, wave 42): four hairline gravitational lens sweeps standing
+  off the ring on the bore axis, plus an 8-cell plasma group that is visible
+  only while `ctx.gate.jumping` names this gate's destination.
 - Junction lantern (hex frame + route arms) stays faction-neutral brass; tunnel
   particles already tint from Phase 1.
 - **Verify:** jump charge/tunnel visuals per faction; hub route selection
@@ -200,8 +209,8 @@ then add a per-system-faction overlay subgroup — the exact
 
 ### Phase 5 — Verification, polish, documentation
 
-**STATUS: DONE (wave 39).** The plan is complete; phases 0–4 landed in waves
-37–38.
+**STATUS: DONE (wave 39).** Phases 0–4 landed in waves 37–38; the last optional
+piece, D3 (unknowables), landed in wave 42. The plan is closed.
 
 - Full screenshot matrix (10 factions × station/ship/gate, 33 stills) captured
   and diffed against `docs/FactionExamples/`. Result: every kit is built and
@@ -234,7 +243,8 @@ then add a per-system-faction overlay subgroup — the exact
 - **Batches within Phases 2–4 ordered by flown-system count** (freehold 20 →
   lamplighter 1) so each increment maximizes in-game visibility.
 - **Unknowables last/optional**: no generated system flies it, and its no-hull
-  ship needs a new render path rather than the mesh kit.
+  ship needed a new render path rather than the mesh kit. Built in wave 42
+  once every flown faction was done.
 
 ## 5. Risk register
 
@@ -244,4 +254,4 @@ then add a per-system-faction overlay subgroup — the exact
 | Generator validation (`palette mismatch`) fails after color changes | Phase 1 step 6 regenerates data in the same commit |
 | Disposal leaks from new per-faction station/gate builders | `userData.shared` convention + teardown audit in Phases 3/5 (10-jump leak test) |
 | Per-frame allocation regressions from new animation | Zero-alloc `update()` contract checked per phase; part-level animation only (no per-vertex work — the organic.js ruling) |
-| Unknowables no-hull ship is a render-path rabbit hole | Scoped to optional Batch C behind D3; placeholder ships remain if deferred |
+| Unknowables no-hull ship is a render-path rabbit hole | Scoped to optional Batch C behind D3; built in wave 42 as an additive field (loops/arcs/cells) with no hull geometry and no new dependency |

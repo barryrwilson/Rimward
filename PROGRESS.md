@@ -1756,8 +1756,115 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   hail.js has never set, so two of its four DOM sections were vacuous).
   Read the diff, run the gate — and look at the screen: the duplicate
   face was invisible to every assertion that passed.
+- Wave 42: the Unknowables — Decision D3, the last open item in
+  docs/FactionVisualUpdatePlan.md (orchestrated; three parallel slices,
+  two corrective rounds, and a visual pass the orchestrator drove in the
+  browser). Waves 37-39 gave every FLOWN faction a ship kit, a station
+  and a gate overlay; the Unknowables were skipped on purpose, because
+  their reference sheets show NO HULL and no generated system flies
+  them. This wave builds the no-hull path anyway, so the faction is
+  ready the moment anything spawns it.
+  SHIPS (npc.js): buildShipMesh gains one branch beside the wave-27
+  isBeautiful branch — faction 'unknowables' returns
+  buildUnknowablesField(classKey), which NEVER touches vcGeoFor, so no
+  'unknowables:*' key is ever written into the vcGeos cache. The group
+  is named 'unknowables-field' and holds exactly 12 additive meshes:
+  3 'unknowables-loop' (nested magnetic rings on MUTUALLY
+  PERPENDICULAR planes — the first cut used three near-coplanar hoops
+  with small offsets and collapsed into one ring at flight distance),
+  2 'unknowables-arc' (lensing sweeps outside the loop cage),
+  6 'unknowables-cell' (small sparks, alternating sizes), and 1
+  'unknowables-core'. Geometry is cached per classKey with a size scale
+  (frigate 3.2 → light 0.8) and every geometry and material is
+  MeshBasicMaterial/AdditiveBlending, userData.shared, never disposed.
+  role plays no part: there is no hull to dull, so a 'pirate' spawn
+  reuses the identical cached objects — no ':pirate' bake for this
+  faction.
+  THE CORE RULING (the one real design decision): the core mesh is BOTH
+  the visual heart of the field AND userData.glow, the handle every AI
+  path writes (updateRoute/engageTarget/updateDuel/updateDisabled all
+  call glow.scale.setScalar / glow.visible). An energy field has no
+  stern to hang an engine glow off, so the core takes that job — and
+  therefore animateField must never write it, or the AI would overwrite
+  it in the same frame. userData.fieldParts holds 11 animation records
+  for 12 meshes. The first cut animated the core too; the boot section
+  caught it as "motion never resumes", because the AI pinned the scale
+  back to 1 every frame.
+  animateField(parts, elapsed, reducedMotion) sits beside animateOrganic
+  in the npc update loop and runs for every live ship regardless of AI
+  mode: loops and arcs take absolute rotation from elapsed, cells drift
+  on a sine of elapsed plus a deterministic per-index phase. Zero
+  allocation; under reducedMotion it returns immediately WITHOUT
+  resetting, so parts freeze at their accumulated values (the wave-39
+  ruling).
+  GATES (gate.js): 'unknowables' joins OVERLAY_FACTIONS (9 now). The
+  branch builds nothing solid — the Lamplighter brass ring stays the
+  structural base everywhere, per lore. It adds 4 'unknowables-lens'
+  sweeps centred on the bore axis, spaced by rotation about Z and
+  tilted out of the ring plane, on a new HAIRLINE shared geometry
+  (TorusGeometry(1, 0.02, 6, 48, π·0.55) in ensureOverlayShared): the
+  unit torus is scaled to ring size, so a normal 0.1 tube became a
+  3-unit-thick painted crescent — caught in the browser, not the
+  harness. Plus one 'unknowables-plasma' group of 8
+  'unknowables-plasma-cell', hidden at build and driven in update() by
+  a.unknowablesPlasma.visible = charging (the assembly reference is
+  stored at build time; the first cut resolved it with two .find
+  closures per gate per frame, and gated it on !reducedMotion — which
+  would have HIDDEN the feature for accessibility users instead of
+  freezing it).
+  HARNESS (boot-test.mjs, wave42a-d): the 12-child census with names,
+  core-is-glow-at-origin, additive/shared/not-vertexColors on every
+  material, cache identity across two spawns of one classKey AND across
+  trader vs pirate; fieldParts length 11 with the core absent, real
+  motion unfrozen, frozen-across-frames under reducedMotion and motion
+  resuming after; the gate overlay built through the REAL initGate on a
+  scoped context (gate.js rebuild() reads the MODULE-LEVEL SYSTEMS
+  import, so the faction override goes on SYSTEMS['fh_hearth'] and the
+  ORIGINAL value is restored afterwards) with the plasma hidden idle,
+  visible during a real ctx.gate.jumping transit, still visible under
+  reducedMotion, hidden again after; and negatives — an independent
+  ship keeps the wave-37 two-mesh vertex-colored shape, a veridian gate
+  keeps its own overlay and gains no unknowables one.
+  Verification: npm run test:boot PASS with every wave42 boolean true
+  and every earlier section unchanged; npm run build clean (only the
+  pre-existing >500 kB chunk warning); browser-verified solo at
+  1600x900 — three field ships beside a freehold freighter for scale
+  (the field reads as a violet gyroscope cage with a white-gold core,
+  not a hull, and stays legible at 40u), and a gate dressed as
+  unknowables showing the brass ring crossed by four slim lens sweeps
+  under an "UNKNOWABLES SPACE" label, with the plasma group reporting
+  visible=true / 8 cells during a live transit.
+  Orchestration lesson, the fourth in a row, and sharper: the parallel
+  slices produced work that PASSED review-by-summary and failed
+  review-by-reading. One slice deleted the wave-38 header paragraph it
+  was told to preserve; a corrective slice reported "fixes_applied:
+  [header]" and left the file syntactically broken (a variable
+  shadowing itself, a builder that never returned its group); another
+  reintroduced the exact dead template a previous pass had removed.
+  The harness slice ran the gate it was told to skip, then reported two
+  failures with confident, wrong diagnoses — the real cause was that
+  spawnLiveShip does not push into ctx.ships (traffic.js owns that
+  list), so nothing it ticked was ever updated. Read the diff, run the
+  gate, look at the screen — and when a subagent's summary and the file
+  disagree, the file wins.
 
-## Next round candidates (wave 42)
+## Next round candidates (wave 43)
+- Wave 42 contract notes for future work: docs/FactionVisualUpdatePlan.md
+  is now CLOSED — phases 0-5 landed in waves 37-39 and the last optional
+  piece, D3 (unknowables), landed in wave 42. Nothing in that plan is
+  outstanding. The unknowables path has NO live site by design: no
+  generated system flies the faction, so the field ship and the gate
+  overlay only appear if something spawns one (the wave-27
+  wreck/beacon/anomaly precedent). Giving them one is a CONTENT
+  decision, not a rendering one — an unknowables system would also own
+  a station, a market, contacts and an epic, none of which exist. The
+  three dispatch tables to keep in lockstep are now
+  npc.js buildShipMesh (isBeautiful / 'unknowables' / VC kit /
+  fallback), gate.js OVERLAY_FACTIONS (9 keys), and station.js
+  STATION_BUILDERS (8 — unknowables build no stations, by their sheets).
+  The core-is-glow ruling is the one thing a future pass must not
+  break: userData.glow must stay a real mesh with a scale, because
+  every AI path dereferences it without a guard.
 - Wave 41 contract notes for future work: PORTRAIT_SOURCES is the single
   list of factions that HAVE a character study — keep it in lockstep
   with what actually sits in public/assets/portraits/, because
@@ -1771,11 +1878,6 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   order is stable. Two surfaces carry faces today (people card, hail
   card); a third — the bar, contacts in the chart, the origin picker —
   would reuse portraitFor unchanged.
-- Docs/FactionVisualUpdatePlan.md is COMPLETE — phases 0–5 all landed
-  (waves 37–39). The only piece left in that plan is the optional
-  unknowables no-hull render path (D3 — deferred; no generated system
-  flies it; colors recorded in FACTION_STYLE.unknowables; it needs a
-  new additive field-loop/cell render path, not the mesh kit).
 - Wave 40 contract notes for future work: initTitle MUST stay element 0
   of the main.js systems array — its capture-phase keydown listener only
   outranks controls.js and origins.js because it registers first, and the
