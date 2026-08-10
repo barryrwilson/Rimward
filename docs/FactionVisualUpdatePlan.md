@@ -200,14 +200,27 @@ then add a per-system-faction overlay subgroup — the exact
 
 ### Phase 5 — Verification, polish, documentation
 
-- Full screenshot matrix (10 factions × station/ship/gate) diffed by eye against
-  `Docs/FactionExamples/` overviews; iterate on the worst three mismatches.
-- Perf pass: shared-resource audit (no per-spawn allocations, no disposal of
-  shared assets), reducedMotion sweep.
-- `scripts/boot-test.mjs` green; generator validation green.
-- `PROGRESS.md` wave entry per repo convention; note in
-  `Docs/FactionExamples/README.md` that the game now implements these references
-  (still non-canonical).
+**STATUS: DONE (wave 39).** The plan is complete; phases 0–4 landed in waves
+37–38.
+
+- Full screenshot matrix (10 factions × station/ship/gate, 33 stills) captured
+  and diffed against `docs/FactionExamples/`. Result: every kit is built and
+  correctly coloured in the data, but the authored hull colour was invisible on
+  any face the sun did not strike — `metalness` 0.45–0.7 with no environment map
+  plus a flat low ambient. Fixed by capping `FACTION_STYLE.metalness` at 0.35
+  and replacing the flat ambient with a graded
+  `HemisphereLight(0x9fb4c8, 0x2a2418, 2.0)` in `solarsystem`'s scene backdrop
+  (`starfield.js`). Calibrated by masked pixel measurement; gilded black ceramic
+  is the control and did not lift.
+- Perf pass: per-frame allocation, shared-asset disposal and cache-key
+  collisions all came back clean for wave-37/38 code. One pre-existing per-frame
+  string allocation in the gate jump-fade was removed. reducedMotion sweep
+  closed three pre-existing ungated animation blocks (station idle, ship engine
+  glow, gate idle).
+- `scripts/boot-test.mjs` green with four new `wave39` sections; generator
+  validation green; `vite build` clean.
+- `PROGRESS.md` wave-39 entry written; `docs/FactionExamples/README.md` carries
+  the implementation-status note (the references stay non-canonical).
 
 ## 4. Sequencing rationale
 

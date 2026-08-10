@@ -142,7 +142,9 @@ export function initGate(ctx) {
 
   // --- Shared resources across every gate assembly in a system ---
   const ringGeo = new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 12, 48);
+  ringGeo.userData.shared = true;
   const chevronGeo = new THREE.ConeGeometry(1.6, 5, 4);
+  chevronGeo.userData.shared = true;
   const chevronMat = new THREE.MeshStandardMaterial({
     color: BRASS_DARK,
     emissive: AMBER_HOT,
@@ -150,8 +152,11 @@ export function initGate(ctx) {
     roughness: 0.4,
     metalness: 0.6,
   });
+  chevronMat.userData.shared = true;
   const glowMap = makeGlowTexture('rgba(255,220,150,0.9)', 'rgba(255,170,70,0.35)');
+  glowMap.userData.shared = true;
   const beaconMap = makeGlowTexture('rgba(255,240,200,1)', 'rgba(255,190,90,0.5)');
+  beaconMap.userData.shared = true;
   const chevronRadius = RING_RADIUS - RING_TUBE - 3;
   const glowBaseScale = RING_RADIUS * 3.2;
   const beaconBaseScale = 10;
@@ -173,16 +178,22 @@ export function initGate(ctx) {
     let t = factionTintCache[faction];
     if (!t) {
       const st = styleFor(faction);
+      const factionGlowMap = makeGlowTexture(_hexRgba(st.beacon, 0.9), _hexRgba(st.glow, 0.35));
+      factionGlowMap.userData.shared = true;
+      const factionBeaconMap = makeGlowTexture(_hexRgba(st.beacon, 1), _hexRgba(st.glow, 0.5));
+      factionBeaconMap.userData.shared = true;
+      const factionChevronMat = new THREE.MeshStandardMaterial({
+        color: BRASS_DARK,
+        emissive: st.glow,
+        emissiveIntensity: 0.9,
+        roughness: 0.4,
+        metalness: 0.6,
+      });
+      factionChevronMat.userData.shared = true;
       t = {
-        glowMap: makeGlowTexture(_hexRgba(st.beacon, 0.9), _hexRgba(st.glow, 0.35)),
-        beaconMap: makeGlowTexture(_hexRgba(st.beacon, 1), _hexRgba(st.glow, 0.5)),
-        chevronMat: new THREE.MeshStandardMaterial({
-          color: BRASS_DARK,
-          emissive: st.glow,
-          emissiveIntensity: 0.9,
-          roughness: 0.4,
-          metalness: 0.6,
-        }),
+        glowMap: factionGlowMap,
+        beaconMap: factionBeaconMap,
+        chevronMat: factionChevronMat,
         tunnelColor: st.glow,
       };
       factionTintCache[faction] = t;
@@ -194,7 +205,9 @@ export function initGate(ctx) {
   // across assemblies, never disposed per rebuild). Hex bars span a full
   // hex edge (edge length == circumradius for a regular hexagon).
   const hexBarGeo = new THREE.BoxGeometry(HEX_RADIUS, HEX_BAR_THICK, HEX_BAR_THICK);
+  hexBarGeo.userData.shared = true;
   const armGeo = new THREE.BoxGeometry(HEX_RADIUS - RING_RADIUS, ARM_THICK, ARM_THICK);
+  armGeo.userData.shared = true;
 
   // --- Beautiful Ones overgrowth (wave-27) shared resources ---
   // The Beautiful don't build gates; they cultivate them. In beautiful
@@ -853,6 +866,7 @@ export function initGate(ctx) {
   let overlayShown = false;
   let labelFor = null; // destination id currently named in the label
   let wasJumping = false;
+  let lastFadeStep = -1;
 
   // Junction route cycling: set each frame by the zone check; the KeyG
   // listener acts on the hub assembly currently nearest in range.
@@ -877,21 +891,20 @@ export function initGate(ctx) {
 
     const jumping = ctx.gate.jumping;
     const reducedMotion = ctx.settings?.reducedMotion === true;
-
     // Per-gate idle motion + glow; only the departing gate (the one whose
     // `to` matches ctx.gate.destination) intensifies during charge.
     for (let i = 0; i < assemblies.length; i++) {
       const a = assemblies[i];
       // Slow spin of ring + chevrons around the bore axis.
-      a.ring.rotation.z += SPIN_SPEED * dt;
-      a.chevrons.rotation.z -= SPIN_SPEED * 0.6 * dt;
+      if (!reducedMotion) a.ring.rotation.z += SPIN_SPEED * dt;
+      if (!reducedMotion) a.chevrons.rotation.z -= SPIN_SPEED * 0.6 * dt;
       // Beacon pulse (~1.2 s period).
-      const pulse = 0.7 + 0.3 * Math.sin(ctx.elapsed * 5.2);
+      const pulse = reducedMotion ? 1.0 : 0.7 + 0.3 * Math.sin(ctx.elapsed * 5.2);
       a.beacon.scale.setScalar(beaconBaseScale * pulse);
       // Glow: gentle breathing at rest, intensifies on the departing gate.
       const charging = jumping && a.to === ctx.gate.destination;
       const charge = charging ? 1 + ctx.gate.progress * 1.6 : 1;
-      a.glow.scale.setScalar(glowBaseScale * (0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
+      a.glow.scale.setScalar(glowBaseScale * (reducedMotion ? 1.0 : 0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
       a.ring.material.emissiveIntensity = charging ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
 
       // Beautiful overgrowth (wave-27): part-level tendril/petal sway and
@@ -992,7 +1005,11 @@ export function initGate(ctx) {
         overlay.style.display = 'flex';
         overlayShown = true;
       }
-      overlay.style.opacity = opacity.toFixed(3);
+      const fadeStep = Math.round(opacity * 32);
+      if (fadeStep !== lastFadeStep) {
+        lastFadeStep = fadeStep;
+        overlay.style.opacity = (fadeStep / 32).toFixed(3);
+      }
       if (ctx.gate.destination !== labelFor) {
         labelFor = ctx.gate.destination;
         const dest = SYSTEMS[labelFor];
@@ -1000,8 +1017,9 @@ export function initGate(ctx) {
       }
     } else if (overlayShown || wasJumping) {
       overlay.style.display = 'none';
-      overlay.style.opacity = '0';
+      overlay.style.opacity = (0).toFixed(3);
       overlayShown = false;
+      lastFadeStep = -1;
       labelFor = null;
     }
     wasJumping = jumping;

@@ -1513,18 +1513,119 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   console clean throughout; stills in .chrome-shot/w38/ (untracked
   scratch). npm run test:boot PASS ×7 consecutive; npm run build
   clean (only the pre-existing >500 kB chunk warning).
+- Wave 39: faction visual alignment phase 5 — verification, exposure
+  rebalance, reducedMotion sweep (orchestrated; phases 1–4 landed in
+  waves 37–38, so this closes the plan). THE FINDING: a 33-still matrix
+  (10 factions × station/ship/gate, .chrome-shot/w39/, untracked
+  scratch) diffed against Docs/FactionExamples/ showed the kits are all
+  correctly built and correctly coloured IN THE DATA, but the authored
+  hull colour was invisible on every face the sun did not strike —
+  ferrous 0x42454b and lamplighter 0x24211c rendered as black
+  silhouettes, and at as_census the ancient-core SPHERE read its
+  off-white 0xb8b4a8 while the foundry-cell BOXES beside it, same
+  palette, read black. Flat faces were the tell. Cause: total fill was
+  a flat AmbientLight(0xffffff, 0.15) (starfield.js) plus
+  AmbientLight(0x334455, 0.25) per system, while every faction carried
+  metalness 0.45–0.7 with NO environment map anywhere in the project —
+  MeshStandardMaterial scales diffuse by (1 - metalness) and puts the
+  rest in a specular term that needs an IBL that does not exist. Gilded
+  was the control that proved it: black ceramic 0x14161a read correctly
+  because its target IS black. THE FIX, two levers, both measured not
+  guessed: (1) FACTION_STYLE metalness capped at 0.35 for all 12
+  factions with relative ordering preserved (ferrous highest 0.35,
+  assembly/beautiful lowest 0.15) and roughness nudged up to match; the
+  module header records the cap and why, so nobody raises it without an
+  envMap. npc.js vcMaterial (ONE shared vertex-colour material for every
+  built ship) 0.45/0.55 → 0.28/0.60. (2) starfield.js flat ambient →
+  HemisphereLight(0x9fb4c8, 0x2a2418, 2.0) — graded cool-sky/warm-ground
+  fill so unlit faces get a value gradient instead of a uniform crush.
+  Intensity chosen by masked pixel measurement in headless Chrome
+  (render the scene, render again with only the '<faction>-station'
+  opaque meshes visible, sample the full-scene buffer through that
+  mask): ferrous station median luminance 10.9 → 24.5, assembly 28 →
+  46.1, freehold 35.2 → 46.9, while gilded HELD at 7.0 (control intact,
+  black ceramic stays black) and the Bloom station did not move at all
+  at ANY intensity 0–4 (emissive-driven — zero risk to the wave-36
+  pins, and the sun-envelope ratios came back byte-identical at
+  [2.076, 0.96, 0.49, 0.24, 0.06]). Rendered value ordering now tracks
+  the authored palette ordering. The per-system AmbientLight(0x334455,
+  0.25) was deliberately left alone — the cool night-side tint is the
+  established look. REDUCEDMOTION SWEEP (the plan's other phase-5 leg):
+  an audit found every animation ADDED in waves 37–38 already frozen,
+  but three PRE-EXISTING blocks ungated, now closed — station.js
+  update() ring spin / lightMat pulse / beacon blink / glow breathe
+  (frozen to lightColor, visible true, opacity 0.3 / 0.85; the ring
+  keeps its accumulated angle rather than snapping to 0), npc.js engine
+  glow across every AI mode (wavers and the telegraph flash freeze at
+  scale 1; the disabled flicker freezes at the DIM end, visible false,
+  so a dead hull still reads dead; capitulate's engine-cut visible
+  false is semantic state and was left alone), and gate.js idle ring /
+  chevron / beacon / bore. Also closed: gate.js allocated a string every
+  frame during a jump via overlay.style.opacity = opacity.toFixed(3) —
+  now quantised to 1/32 steps and written only on change (max deviation
+  1/64, endpoints unchanged). The audit gave per-frame allocation,
+  shared-asset disposal and cache-key collision a clean bill of health
+  for all wave-37/38 code. HARNESS (boot-test.mjs +390): four wave39
+  sections — ten-jump leak (a real fh_hearth→…→bt_cradle chain,
+  743/743 per-build assets disposed, sharedDisposed=0, live count
+  199→186 across ten loads), zero-alloc update (120 frames over three
+  stations, three gates and a ship; includes the fade-quantisation
+  pin), station reducedMotion (4 factions × animate/freeze/base/resume,
+  the wave-38 gate pattern), ship glow reducedMotion (3 factions plus a
+  pirate telegraph and the disabled flicker). That work also surfaced a
+  latent hygiene gap: gate.js held several shared-by-design caches
+  (factionTintCache glowMap/beaconMap/chevronMat, the initGate default
+  triple, hexBarGeo/armGeo, the junction lamp texture) that were never
+  disposed but were never MARKED userData.shared either, so no
+  automated classifier could tell them from a leak — all marked at
+  creation (5 marks -> 15) and gate.js now has one convention.
+  Verification: npm run test:boot PASS with every wave39 boolean true
+  and all wave-36/37/38 sections unchanged; generator re-run zero-diff;
+  npx vite build clean (only the pre-existing >500 kB chunk warning);
+  browser-verified solo (wave-38 lesson — one browser driver at a
+  time) with before/after stills in .chrome-shot/w39/ and
+  .chrome-shot/w39/after/, ferrous/lamplighter/assembly/gilded/
+  freehold/beautiful stations plus spawned ferrous/lamplighter/assembly
+  ships (2 meshes / 2 materials confirmed live). Docs/FactionExamples/
+  README.md gained the implementation-status note the plan asked for
+  (the references stay non-canonical).
+  Orchestration lesson worth keeping: subagents were reliable for code
+  audit, harness authoring and mechanical edits, and UNRELIABLE for
+  perceptual judgement — one reported the ferrous and lamplighter kits
+  as "wholesale placeholders" (they are fully built and boot-pinned)
+  and invented filenames that do not exist; another scored almost every
+  cell 5/5 by restating the source table instead of looking. The
+  diagnosis in this entry came from the orchestrator reading the stills
+  directly and then measuring pixels. Delegate the measuring, not the
+  seeing.
 
-## Next round candidates (wave 39)
-- Faction visual alignment phase 5 (Docs/FactionVisualUpdatePlan.md):
-  full screenshot matrix (10 factions × station/ship/gate) diffed by
-  eye against Docs/FactionExamples/ overviews, iterate on the worst
-  three mismatches; perf pass (shared-resource audit, reducedMotion
-  sweep); note in Docs/FactionExamples/README.md that the game now
-  implements these references (still non-canonical). Phases 1–4 are
-  DONE (waves 37–38). Optional: unknowables no-hull render path
-  (D3 — deferred; no generated system flies it; colors recorded in
-  FACTION_STYLE.unknowables; needs a new render path, not the mesh
-  kit).
+## Next round candidates (wave 40)
+- Docs/FactionVisualUpdatePlan.md is COMPLETE — phases 0–5 all landed
+  (waves 37–39). The only piece left in that plan is the optional
+  unknowables no-hull render path (D3 — deferred; no generated system
+  flies it; colors recorded in FACTION_STYLE.unknowables; it needs a
+  new additive field-loop/cell render path, not the mesh kit).
+- Wave 39 contract notes for future work: FACTION_STYLE metalness is
+  CAPPED AT 0.35 — the project has no environment map, so higher
+  metalness kills the diffuse term and the authored hull color renders
+  black on unlit faces. Raise the cap only together with an envMap, and
+  re-measure the four calibration systems (fx_bastion, as_census,
+  lastbeacon, gc_auction — gilded is the black-ceramic control that
+  must NOT lift) if the scene fill changes. The scene fill is one
+  HemisphereLight(0x9fb4c8, 0x2a2418, 2.0) added once in starfield.js;
+  the per-system AmbientLight(0x334455, 0.25) in solarsystem.js is a
+  separate, deliberate cool night-side tint. The Bloom station is
+  emissive-driven and does not respond to fill at all — a fill change
+  cannot move the wave-36 sun-envelope pins.
+- Wave 39 harness notes: the wave39 sections pin the ten-jump
+  disposal contract (743/743, sharedDisposed=0), zero-alloc update
+  across stations/gates/ships including the gate fade quantisation,
+  and reducedMotion freeze for stations and ship glow. The station
+  ring and the gate ring/chevron freeze at their ACCUMULATED angle —
+  assert "unchanged across frames", never "equals 0". Everything in
+  gate.js that is intentionally never disposed is now marked
+  userData.shared (15 marks); keep that invariant or the leak check
+  will flag the asset as a leak when its last user departs.
 - Wave 38 contract notes for future work: STATION_BUILDERS /
   FACTION_VC_PARTS / OVERLAY_FACTIONS cover the same 8 factions —
   keep the three dispatch tables in lockstep when adding one;

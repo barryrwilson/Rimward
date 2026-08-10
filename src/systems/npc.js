@@ -144,7 +144,7 @@ function clamp01(x) {
 // style.patch across cargo pods / fins. Engine glow is a per-faction cached
 // additive material in the faction's style.glow.
 const vcMaterial = new THREE.MeshStandardMaterial({
-  vertexColors: true, roughness: 0.55, metalness: 0.45,
+  vertexColors: true, roughness: 0.60, metalness: 0.28,
 });
 vcMaterial.userData.shared = true;
 
@@ -1445,7 +1445,7 @@ function capitulate(ctx, live) {
 }
 
 // ---------- movement modes ----------
-function updateRoute(ctx, live, dt, now) {
+function updateRoute(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
   const cls = SHIP_CLASSES[live.state.classKey];
   const cap = speedCap(live);
@@ -1462,7 +1462,7 @@ function updateRoute(ctx, live, dt, now) {
     _v3.crossVectors(_v2, UP).normalize();
     _aim.addScaledVector(_v3, Math.sin(now * 2.1 + ai.weaveSeed) * 40);
     speed = cap * (0.85 + 0.15 * Math.sin(now * 5 + ai.weaveSeed));
-    glow.scale.setScalar(1 + 0.45 * Math.sin(now * 8 + ai.weaveSeed));
+    glow.scale.setScalar(reducedMotion ? 1 : 1 + 0.45 * Math.sin(now * 8 + ai.weaveSeed));
   } else {
     glow.scale.setScalar(1);
   }
@@ -1489,7 +1489,7 @@ function setTarget(ai, target) {
   ai.intent = false;
 }
 
-function engageTarget(ctx, live, dt, now, targetPos) {
+function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
   const ai = live.ai;
   const st = live.state;
   const cls = SHIP_CLASSES[st.classKey];
@@ -1516,7 +1516,7 @@ function engageTarget(ctx, live, dt, now, targetPos) {
     _v3.crossVectors(_v2, UP).normalize();
     _aim.addScaledVector(_v3, Math.sin(now * 2.2 + ai.weaveSeed) * 70).addScaledVector(UP, Math.cos(now * 1.7 + ai.weaveSeed) * 35);
     speed = cap * (0.8 + 0.2 * Math.sin(now * 5 + ai.weaveSeed));
-    glow.scale.setScalar(1 + 0.5 * Math.sin(now * 9 + ai.weaveSeed));
+    glow.scale.setScalar(reducedMotion ? 1 : 1 + 0.5 * Math.sin(now * 9 + ai.weaveSeed));
   } else {
     // defiant: aggressive press into weapon-exchange range
     speed = dist > 220 ? cap : cap * 0.6;
@@ -1533,7 +1533,7 @@ function engageTarget(ctx, live, dt, now, targetPos) {
       ai.commSent = true;
       say(ctx, live, ai.role === 'ace' ? 'Run if you like.' : 'Heave to. Cargo or hull.');
     }
-    glow.scale.setScalar(Math.max(0.3, 1 + 0.7 * Math.sin(now * 14))); // flashing warning
+    glow.scale.setScalar(reducedMotion ? 1 : Math.max(0.3, 1 + 0.7 * Math.sin(now * 14))); // flashing warning
     if (now - ai.phaseStart >= TELEGRAPH_SECONDS) ai.phase = 'attack';
     return;
   }
@@ -1573,7 +1573,7 @@ function playerInterestedIn(ctx, live) {
   return ai.playerInterested;
 }
 
-function updateHunt(ctx, live, dt, now) {
+function updateHunt(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
   const station = ctx.config.world.stationPosition;
 
@@ -1703,10 +1703,10 @@ function updateHunt(ctx, live, dt, now) {
     ctx.emit('hailOpened', { ship: live, intents: demandIntentsFor(ctx, live), line: 'Your cargo or your hull.', demand });
   }
 
-  engageTarget(ctx, live, dt, now, targetPos);
+  engageTarget(ctx, live, dt, now, targetPos, reducedMotion);
 }
 
-function updateDuel(ctx, live, dt, now) {
+function updateDuel(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
   const st = live.state;
   const cls = SHIP_CLASSES[st.classKey];
@@ -1826,7 +1826,7 @@ function updateDuel(ctx, live, dt, now) {
       }
       say(ctx, live, line);
     }
-    glow.scale.setScalar(Math.max(0.3, 1 + 0.7 * Math.sin(now * 14)));
+    glow.scale.setScalar(reducedMotion ? 1 : Math.max(0.3, 1 + 0.7 * Math.sin(now * 14)));
     if (now - ai.phaseStart >= TELEGRAPH_SECONDS) ai.phase = 'attack';
     return;
   }
@@ -1855,14 +1855,16 @@ function updateFlee(ctx, live, dt) {
   // traffic.js despawns at DEINSTANTIATE_RANGE — we just run.
 }
 
-function updateDrift(live, dt) {
+function updateDrift(live, dt, reducedMotion) {
   // Surrendered, engines cut: drift and gentle tumble, glow dark.
   live.object.position.addScaledVector(live.ai.driftVel, dt);
-  live.object.rotation.x += dt * 0.12;
-  live.object.rotation.z += dt * 0.08;
+  if (!reducedMotion) {
+    live.object.rotation.x += dt * 0.12;
+    live.object.rotation.z += dt * 0.08;
+  }
 }
 
-function updateDisabled(live, dt, now) {
+function updateDisabled(live, dt, now, reducedMotion) {
   const ai = live.ai;
   if (!ai.disabledInit) {
     ai.disabledInit = true;
@@ -1870,10 +1872,12 @@ function updateDisabled(live, dt, now) {
     ai.driftVel.copy(_fwd).multiplyScalar(6);
   }
   live.object.position.addScaledVector(ai.driftVel, dt);
-  live.object.rotation.x += dt * 0.35; // slow tumble
-  live.object.rotation.y += dt * 0.22;
-  // dim flickering lights, no fire
-  live.object.userData.glow.visible = (now * 6 + ai.weaveSeed) % 1 < 0.18;
+  if (!reducedMotion) {
+    live.object.rotation.x += dt * 0.35; // slow tumble
+    live.object.rotation.y += dt * 0.22;
+  }
+  // dim flickering lights, no fire (reducedMotion: freeze dark, engines dead)
+  live.object.userData.glow.visible = reducedMotion ? false : (now * 6 + ai.weaveSeed) % 1 < 0.18;
 }
 
 function handleDestroyed(ctx, live, flashes) {
@@ -1924,9 +1928,9 @@ export function initNpc(ctx) {
   return {
     update(dt) {
       const now = ctx.world.time;
+      const reducedMotion = ctx.settings.reducedMotion;
       const playerObj = ctx.ship.object;
       let combat = false;
-
       for (let i = ctx.ships.length - 1; i >= 0; i--) {
         const live = ctx.ships[i];
         const st = live.state;
@@ -1948,7 +1952,7 @@ export function initNpc(ctx) {
         // `now` is the game-logic clock). Zero-alloc; no-op under
         // reducedMotion.
         const op = live.object.userData.organicParts;
-        if (op) animateOrganic(op, ctx.elapsed, ctx.settings.reducedMotion);
+        if (op) animateOrganic(op, ctx.elapsed, reducedMotion);
         // Wave 30 demand-hail upkeep: the parley dies with the hail target
         // (disabled here; destroyed/despawned discard the ai outright, and
         // hail.js's own timeout closes the card on those same conditions),
@@ -1964,7 +1968,7 @@ export function initNpc(ctx) {
         }
         if (st.disabled) {
           ai.resolveBoost = 0; // stand-down: a disabled hull drops the bluff sting (updateResolve never runs here)
-          updateDisabled(live, dt, now);
+          updateDisabled(live, dt, now, reducedMotion);
           continue;
         }
         ai.t += dt;
@@ -1974,19 +1978,19 @@ export function initNpc(ctx) {
         }
         switch (ai.mode) {
           case 'hunt':
-            updateHunt(ctx, live, dt, now);
+            updateHunt(ctx, live, dt, now, reducedMotion);
             break;
           case 'duel':
-            updateDuel(ctx, live, dt, now);
+            updateDuel(ctx, live, dt, now, reducedMotion);
             break;
           case 'flee':
             updateFlee(ctx, live, dt);
             break;
           case 'drift':
-            updateDrift(live, dt);
+            updateDrift(live, dt, reducedMotion);
             break;
           case 'route':
-            updateRoute(ctx, live, dt, now);
+            updateRoute(ctx, live, dt, now, reducedMotion);
             break;
           default:
             updateLoiter(live, dt);

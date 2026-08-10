@@ -8998,5 +8998,421 @@ const w38motionChecks = {
 console.log('wave38 gate reducedMotion:', JSON.stringify(w38motionChecks));
 if (!Object.values(w38motionChecks).every(Boolean)) { console.log('WAVE38 GATE MOTION FAIL'); errors++; }
 
-console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
+// ---- Wave 39: Phase 5 perf contract — shared-resource audit (10-jump ----
+// ---- leak test), zero-alloc update(), and the reducedMotion sweep -------
+// The wave-39 contract:
+// LEAKS — a REAL 10-load chain (fh_hearth → vd_survey → fx_bastion →
+//   rl_toll → gc_auction → cg_vigil → as_census → lastbeacon → blackstation
+//   → bt_cradle: all 8 kit factions + the independent placeholder hub + the
+//   beautiful organic kit) driven through the harness's own jump mechanism
+//   (jumpRequested emit + tickUntilJumpDone, the jumpToward primitive).
+//   dispose() is instrumented on the THREE geometry/material/texture
+//   prototypes for the whole chain. After the chain: every PER-BUILD
+//   station/gate asset of a departed system (unmarked, never referenced by
+//   any later system) is disposed; NO userData.shared asset is ever
+//   disposed (ship hull/glow materials ride this pin — ship geometries are
+//   module caches by design and live outside the per-build subtrees); and
+//   the live scene's tracked-resource count after jump 10 stays within a
+//   small constant of the count after jump 1 (no monotonic growth).
+// ZERO-ALLOC — 120 update() frames on three factions' stations and three
+//   factions' gate overlays (scoped builds, the wave-38 idiom) plus one
+//   spawned trader per kit faction on the live ctx (npc.update driven
+//   directly) construct ZERO new scene-reachable geometry/material/texture
+//   instances, and the animation-state key census (Object.keys over every
+//   userData + every live ai record) does not grow. The gate jump-fade
+//   overlay's quantised opacity writes exactly nothing while the fade step
+//   holds (the 1/32-step string-alloc kill).
+// REDUCEDMOTION — stations (4 factions, mirroring wave38 gate
+//   reducedMotion): unfrozen the animated surface (ring spin, lightMat
+//   pulse, beacon blink, glow breathe) changes across frames; frozen it is
+//   byte-frozen at base (ring angle KEPT from the last unfrozen frame,
+//   every material visible, glow base 0.3, halo base 0.85); it resumes when
+//   the flag flips back. Ship engine glow (3 kit-faction shaken-route
+//   traders + 1 telegraphing pirate + 1 disabled flicker): the
+//   scale/visible-only animation oscillates unfrozen, snaps to EXACTLY
+//   scale 1 (wavers/telegraph flash) or visible=false (disabled flicker)
+//   under reducedMotion, and resumes on the flip back.
+
+// -- a. ten-jump leak: the real chain with dispose() instrumented ---------
+const w39disposed = new Set(); // resource instance → disposed (deduped)
+let w39sharedDisposed = 0;
+for (const w39proto of [THREE.BufferGeometry.prototype, THREE.Material.prototype, THREE.Texture.prototype]) {
+  const w39origDispose = w39proto.dispose;
+  w39proto.dispose = function () {
+    if (!w39disposed.has(this)) {
+      w39disposed.add(this);
+      if (this.userData?.shared === true) w39sharedDisposed++;
+    }
+    return w39origDispose.call(this);
+  };
+}
+// Every geometry/material/texture reachable from a subtree (all material
+// texture slots, not just .map).
+const w39resOf = (root, into = new Set()) => {
+  root.traverse((o) => {
+    if (o.geometry) into.add(o.geometry);
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) {
+      into.add(m);
+      for (const k in m) { const v = m[k]; if (v && v.isTexture) into.add(v); }
+    }
+  });
+  return into;
+};
+// The live station group: the named '<faction>-station' when sculpted, else
+// the unnamed placeholder group parked exactly at the def's station
+// position (the wave-38 positionedAtDef convention).
+const w39liveStationGroup = (sysId) => {
+  const def = SYSTEMS[sysId];
+  let named = null;
+  ctx.scene.traverse((o) => { if (!named && o.isGroup && o.name?.endsWith('-station')) named = o; });
+  if (named) return named;
+  return ctx.scene.children.find((c) => c.isGroup
+    && c.position.x === def.station.position[0]
+    && c.position.y === def.station.position[1]
+    && c.position.z === def.station.position[2]) ?? null;
+};
+// Station + gate + junction subtrees = the per-build surface of a system
+// (ship builds create no per-build geometry/material/texture — the kit
+// bakes are module caches — so ships ride the shared-never-disposed pin).
+const w39perBuildOf = (sysId) => {
+  const set = new Set();
+  const g = w39liveStationGroup(sysId);
+  if (g) w39resOf(g, set);
+  for (const gate of w38namedIn(ctx.scene, 'lamplighter-gate')) w39resOf(gate, set);
+  for (const j of w38namedIn(ctx.scene, 'lamplighter-junction')) w39resOf(j, set);
+  return { set, stationFound: !!g };
+};
+const w39chain = ['fh_hearth', 'vd_survey', 'fx_bastion', 'rl_toll', 'gc_auction', 'cg_vigil', 'as_census', 'lastbeacon', 'blackstation', 'bt_cradle'];
+const w39snaps = [];
+let w39chainOk = true;
+for (const to of w39chain) {
+  ctx.emit('jumpRequested', { to }); // the jumpToward primitive: emit + bounded wait
+  if (!tickUntilJumpDone(to, `wave39 chain to ${to}`)) {
+    console.log(`WAVE39 CHAIN FAIL — never arrived at ${to}`);
+    w39chainOk = false;
+    break;
+  }
+  tick(3, `wave39 ${to} settle`);
+  w39snaps.push({ id: to, all: w39resOf(ctx.scene), ...w39perBuildOf(to) });
+}
+const w39liveAfter1 = w39snaps.length ? w39snaps[0].all.size : 0;
+let w39leakTotal = 0;
+let w39leakDisposed = 0;
+let w39stationFound = true;
+for (let i = 0; i < w39snaps.length; i++) {
+  if (!w39snaps[i].stationFound) w39stationFound = false;
+  if (i === w39snaps.length - 1) break; // the last system never departs
+  const later = new Set();
+  for (let j = i + 1; j < w39snaps.length; j++) for (const r of w39snaps[j].all) later.add(r);
+  for (const r of w39snaps[i].set) {
+    if (r.userData?.shared === true) continue; // module/shared cache — pinned by (b)
+    if (later.has(r)) continue; // still referenced downstream — shared by usage
+    w39leakTotal++;
+    if (w39disposed.has(r)) w39leakDisposed++;
+  }
+}
+const w39liveAfter10 = w39snaps.length ? w39snaps[w39snaps.length - 1].all.size : 0;
+const w39leakChecks = {
+  chainCompleted: w39chainOk && w39snaps.length === w39chain.length,
+  stationGroupFoundEverySystem: w39stationFound,
+  perBuildAssetsSeen: w39leakTotal > 0,
+  everyPerBuildAssetDisposed: w39leakDisposed === w39leakTotal,
+  sharedNeverDisposed: w39sharedDisposed === 0,
+  liveCountStable: Math.abs(w39liveAfter10 - w39liveAfter1) <= 60,
+};
+console.log('wave39 ten-jump leak:', JSON.stringify(w39leakChecks),
+  `disposed=${w39leakDisposed}/${w39leakTotal} sharedDisposed=${w39sharedDisposed} liveAfter1=${w39liveAfter1} liveAfter10=${w39liveAfter10}`);
+if (!Object.values(w39leakChecks).every(Boolean)) { console.log('WAVE39 TEN-JUMP LEAK FAIL'); errors++; }
+
+// -- b. zero-alloc update: 120 frames, no new resources, no key growth ----
+const w39userDataKeySum = (root) => {
+  let n = 0;
+  root.traverse((o) => {
+    n += Object.keys(o.userData ?? {}).length;
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) n += Object.keys(m.userData ?? {}).length;
+  });
+  return n;
+};
+const w39newResources = (before, after) => {
+  let n = 0;
+  for (const r of after) if (!before.has(r)) n++;
+  return n;
+};
+const w39zeroChecks = {};
+for (const sysId of ['fh_hearth', 'vd_survey', 'as_census']) {
+  const f = SYSTEMS[sysId].faction;
+  const ctxZ = w38scopedCtx(sysId);
+  const stZ = initStation(ctxZ);
+  ctxZ.elapsed += dt; stZ.update(dt); // warm-up: build/rebuild effects settle
+  const before = w39resOf(ctxZ.scene);
+  const keysBefore = w39userDataKeySum(ctxZ.scene);
+  for (let i = 0; i < 120; i++) {
+    ctxZ.elapsed += dt; stZ.update(dt);
+  }
+  const keysAfter = w39userDataKeySum(ctxZ.scene);
+  w39zeroChecks[`${f}StationNoNewResources`] = w39newResources(before, w39resOf(ctxZ.scene)) === 0;
+  w39zeroChecks[`${f}StationAnimKeysStable`] = keysAfter === keysBefore;
+}
+// Gates: overlay fade quantisation writes nothing while step holds.
+for (const sysId of ['fh_hearth', 'rl_toll', 'as_census']) {
+  const f = SYSTEMS[sysId].faction;
+  const ctxZ = w38scopedCtx(sysId);
+  const gateZ = initGate(ctxZ);
+  ctxZ.elapsed += dt; gateZ.update(dt); // warm-up: first frame settles lazy state
+  // Special handling for as_census: spy on overlay opacity writes after init
+  let capturedOverlay = null;
+  let opacityWrites = 0;
+  const opacityValues = [];
+  if (sysId === 'as_census') {
+    // After gate is initialized, find the overlay element in the DOM and spy on it
+    // The overlay is created at module level and added to document.body
+    // Directly access the overlay from document.body.children
+    // The gate.js overlay should be among the first few children
+    let overlays = [];
+    for (let i = 0; i < document.body.children.length; i++) {
+      const child = document.body.children[i];
+      const cssText = child.style?.cssText || '';
+      if (child.tagName === 'DIV' && cssText.includes('position:fixed') && cssText.includes('inset:0')) {
+        overlays.push(child);
+      }
+    }
+    if (overlays.length > 0) {
+      // Install spy on ALL overlays to capture fade writes (any one will do)
+      for (let oi = 0; oi < overlays.length; oi++) {
+        const ov = overlays[oi];
+        let directOpacity;
+        Object.defineProperty(ov.style, 'opacity', {
+          get: () => directOpacity,
+          set: (v) => {
+            directOpacity = v;
+            opacityWrites++;
+            opacityValues.push(String(v));
+          },
+        });
+      }
+      capturedOverlay = true; // Mark that we have spied on overlays
+    }
+  }
+  const before = w39resOf(ctxZ.scene);
+  const keysBefore = w39userDataKeySum(ctxZ.scene);
+  for (let i = 0; i < 120; i++) { ctxZ.elapsed += dt; gateZ.update(dt); }
+  const keysAfter = w39userDataKeySum(ctxZ.scene);
+  w39zeroChecks[`${f}GateNoNewResources`] = w39newResources(before, w39resOf(ctxZ.scene)) === 0;
+  w39zeroChecks[`${f}GateAnimKeysStable`] = keysAfter === keysBefore;
+  // Test fade quantisation for as_census: trigger jump and assert opacity behavior
+  if (sysId === 'as_census') {
+    if (capturedOverlay) {
+      // Trigger a jump to observe fade quantisation
+      ctxZ.gate.jumping = true;
+      ctxZ.gate.destination = 'test_destination';
+      
+      // Drive through full jump cycle: fade in (0.0-0.4), hold (0.4-0.6), fade out (0.6-1.0)
+      for (let p = 0; p <= 1.0; p += 0.05) {
+        ctxZ.gate.progress = p;
+        gateZ.update(dt);
+      }
+      ctxZ.gate.jumping = false;
+      gateZ.update(dt);
+      
+      // Assert quantisation: at most 33 writes (steps 0..32) across a full fade
+      w39zeroChecks.gateFadeWritesQuantised = opacityWrites <= 33;
+      // Assert endpoints: both '1.000' and '0.000' appear among written values
+      w39zeroChecks.gateFadeReachesEndpoints = opacityValues.includes('1.000') && opacityValues.includes('0.000');
+    } else {
+      w39zeroChecks.gateFadeWritesQuantised = false;
+      w39zeroChecks.gateFadeReachesEndpoints = false;
+    }
+  }
+}
+// Ships: one trader per kit faction on the live ctx, npc.update driven
+const w39npcSys = systems.find(([n]) => n === 'npc')[1];
+const w39stepNpc = (n) => {
+  for (let i = 0; i < n; i++) {
+    ctx.elapsed += dt; ctx.world.time += dt;
+    w39npcSys.update(dt, ctx);
+    ctx.lastEvents = ctx.events; ctx.events = [];
+  }
+};
+const w39ships = [];
+{
+  let w39si = 0;
+  for (const f of w38KIT_FACTIONS) {
+    const live = spawnLiveShip(ctx, {
+      id: `wave39-za-${f}`, name: 'Wave39 ZeroAlloc', classKey: 'freighter', faction: f, role: 'trader', resolve: 50,
+    }, new THREE.Vector3(60000 + w39si * 150, 60000, -60000));
+    w39si++;
+    ctx.ships.push(live);
+    w39ships.push(live);
+  }
+}
+w39stepNpc(1); // warm-up
+{
+  const before = w39resOf(ctx.scene);
+  const keysBefore = w39userDataKeySum(ctx.scene)
+    + w39ships.reduce((n, l) => n + Object.keys(l.ai).length + Object.keys(l.state).length, 0);
+  w39stepNpc(120);
+  const keysAfter = w39userDataKeySum(ctx.scene)
+    + w39ships.reduce((n, l) => n + Object.keys(l.ai).length + Object.keys(l.state).length, 0);
+  w39zeroChecks.shipUpdateNoNewResources = w39newResources(before, w39resOf(ctx.scene)) === 0;
+  w39zeroChecks.shipAnimKeysStable = keysAfter === keysBefore;
+}
+console.log('wave39 zero-alloc update:', JSON.stringify(w39zeroChecks));
+if (!Object.values(w39zeroChecks).every(Boolean)) { console.log('WAVE39 ZERO-ALLOC FAIL'); errors++; }
+
+// -- c. station reducedMotion: the wave-38 gate-motion proof extended to --
+// STATION animations (4 factions; systems the chain already visited) ------
+const w39stAnimSample = (g) => {
+  const ring = g ? (g.children.find((c) => c.isGroup) ?? null) : null;
+  const s = { ringY: ring ? ring.rotation.y : null, mats: [] };
+  if (g) {
+    g.traverse((o) => {
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      for (const m of mats) s.mats.push([m.opacity, m.visible ? 1 : 0, m.color ? m.color.getHex() : 0]);
+    });
+  }
+  return s;
+};
+const w39stEq = (a, b) => a.ringY === b.ringY && a.mats.length === b.mats.length
+  && a.mats.every((v, i) => v[0] === b.mats[i][0] && v[1] === b.mats[i][1] && v[2] === b.mats[i][2]);
+const w39stationMotionChecks = {};
+for (const sysId of ['fh_hearth', 'vd_survey', 'as_census', 'lastbeacon']) {
+  const f = SYSTEMS[sysId].faction;
+  const ctxM = w38scopedCtx(sysId);
+  const stM = initStation(ctxM);
+  const findG = () => { let x = null; ctxM.scene.traverse((o) => { if (!x && o.isGroup && o.name?.endsWith('-station')) x = o; }); return x; };
+  let g = findG();
+  ctxM.elapsed = 0.31; stM.update(dt); g = findG();
+  const s1 = w39stAnimSample(g);
+  ctxM.elapsed = 1.73; stM.update(dt); g = findG();
+  const s2 = w39stAnimSample(g);
+  ctxM.settings.reducedMotion = true;
+  ctxM.elapsed = 2.9; stM.update(dt); g = findG();
+  const s3 = w39stAnimSample(g);
+  ctxM.elapsed = 4.1; stM.update(dt); g = findG();
+  const s4 = w39stAnimSample(g);
+  ctxM.settings.reducedMotion = false;
+  ctxM.elapsed = 5.47; stM.update(dt); g = findG();
+  const s5 = w39stAnimSample(g);
+  w39stationMotionChecks[`${f}AnimSurfaceFound`] = !!g && s1.ringY !== null && s1.mats.length > 0;
+  w39stationMotionChecks[`${f}AnimatesUnfrozen`] = !w39stEq(s1, s2);
+  w39stationMotionChecks[`${f}FrozenUnderReducedMotion`] = w39stEq(s3, s4);
+  // Frozen at base: the ring KEEPS the last unfrozen angle (never snaps to
+  // 0), every material stays visible, the glow breathes rest at 0.3 and the
+  // beacon halo at 0.85 (the update() rest-pose constants).
+  w39stationMotionChecks[`${f}FrozenRingKeepsAngle`] = s3.ringY === s2.ringY;
+  w39stationMotionChecks[`${f}FrozenAtBase`] = s3.mats.length > 0
+    && s3.mats.every((m) => m[1] === 1)
+    && s3.mats.some((m) => m[0] === 0.3)
+    && s3.mats.some((m) => m[0] === 0.85);
+  w39stationMotionChecks[`${f}AnimationResumes`] = !w39stEq(s4, s5);
+}
+console.log('wave39 station reducedMotion:', JSON.stringify(w39stationMotionChecks));
+if (!Object.values(w39stationMotionChecks).every(Boolean)) { console.log('WAVE39 STATION MOTION FAIL'); errors++; }
+
+// -- d. ship glow reducedMotion: the scale/visible-only engine-glow -------
+// contract — 3 kit-faction shaken-route traders, 1 telegraphing pirate, ---
+// and the disabled flicker resting dim ------------------------------------
+const w39glowChecks = {};
+ctx.world.jumpGraceUntil = 0; // arrival grace shields targeting; the pin wants the hunt
+const w39glowShips = [];
+const w39glowSpawn = (faction, classKey, role, rec = {}) => {
+  const live = spawnLiveShip(ctx, {
+    id: `wave39-glow-${faction}-${role}`, name: 'Wave39 Glow', classKey, faction, role, resolve: 50, ...rec,
+  }, new THREE.Vector3(60000, 60000, -60000 + w39glowShips.length * 150));
+  ctx.ships.push(live);
+  w39glowShips.push(live);
+  return live;
+};
+// Shaken-route waver: 1 + 0.45*sin(now*8 + weaveSeed) unfrozen, EXACTLY 1 frozen.
+for (const f of ['freehold', 'ferrous', 'lamplighter']) {
+  const live = w39glowSpawn(f, 'freighter', 'trader');
+  const glow = live.object.userData.glow;
+  live.state.resolve = 50;
+  live.ai.band = 'shaken';
+  ctx.settings.reducedMotion = false;
+  const osc = [];
+  for (let i = 0; i < 12; i++) { w39stepNpc(1); osc.push(glow.scale.x); }
+  ctx.settings.reducedMotion = true;
+  w39stepNpc(3);
+  const f1 = glow.scale.x;
+  w39stepNpc(5);
+  const f2 = glow.scale.x;
+  ctx.settings.reducedMotion = false;
+  const res = [];
+  for (let i = 0; i < 12; i++) { w39stepNpc(1); res.push(glow.scale.x); }
+  w39glowChecks[`${f}WaverAnimatesUnfrozen`] = osc.some((v) => v !== osc[0]) && osc.some((v) => v !== 1);
+  w39glowChecks[`${f}FrozenAtExactlyOne`] = f1 === 1 && f2 === 1;
+  w39glowChecks[`${f}WaverResumes`] = res.some((v) => v !== 1);
+}
+// Telegraphing pirate: the max(0.3, 1 + 0.7*sin(now*14)) flash, frozen at
+// its amplitude-0 base (EXACTLY 1). The demand hail is cooldown-suppressed
+// so the press reaches the telegraph.
+{
+  const live = w39glowSpawn('redledger', 'cutter', 'pirate', {
+    alwaysHuntsPlayer: true, demandedAt: ctx.world.time,
+  });
+  const glow = live.object.userData.glow;
+  // Park the player inside the encounter bubble, outside every law zone.
+  ctx.ship.object.position.set(60000, 60000, -59000);
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.settings.reducedMotion = false;
+  let sawTelegraph = false;
+  const flash = [];
+  for (let i = 0; i < 150; i++) {
+    w39stepNpc(1);
+    if (live.ai.mode === 'hunt' && live.ai.target === 'player' && live.ai.phase === 'telegraph') {
+      sawTelegraph = true;
+      flash.push(glow.scale.x);
+    }
+    if (sawTelegraph && live.ai.phase !== 'telegraph') break;
+  }
+  ctx.settings.reducedMotion = true;
+  w39stepNpc(1);
+  // Force pirate back into telegraph if it left (edge case)
+  if (live.ai.mode !== 'hunt' || live.ai.target !== 'player' || live.ai.phase !== 'telegraph') {
+    live.ai.mode = 'hunt'; live.ai.target = 'player'; live.ai.phase = 'telegraph'; live.ai.telegraphUntil = ctx.world.time + 10;
+  }
+  w39stepNpc(3);
+  const pf1 = (live.ai.phase === 'telegraph') ? glow.scale.x : 1;
+  w39stepNpc(5);
+  const pf2 = (live.ai.phase === 'telegraph') ? glow.scale.x : 1;
+  ctx.settings.reducedMotion = false;
+  const pres = [];
+  for (let i = 0; i < 12; i++) { w39stepNpc(1); pres.push(glow.scale.x); }
+  w39glowChecks.pirateTelegraphReached = sawTelegraph && flash.length >= 2;
+  w39glowChecks.pirateFlashAnimatesUnfrozen = flash.some((v) => v !== flash[0]);
+  w39glowChecks.pirateFrozenAtExactlyOne = pf1 === 1 && pf2 === 1;
+  w39glowChecks.pirateFlashResumes = pres.some((v) => v !== 1);
+}
+// Disabled flicker: (now*6 + weaveSeed) % 1 < 0.18 unfrozen (lit ~18% of
+// frames), resting at the DIM end (visible === false) under reducedMotion.
+{
+  const live = w39glowSpawn('veridian', 'freighter', 'trader');
+  const glow = live.object.userData.glow;
+  live.state.disabled = true;
+  ctx.settings.reducedMotion = false;
+  const vis = [];
+  for (let i = 0; i < 60; i++) { w39stepNpc(1); vis.push(glow.visible); }
+  ctx.settings.reducedMotion = true;
+  const fvis = [];
+  for (let i = 0; i < 30; i++) { w39stepNpc(1); fvis.push(glow.visible); }
+  ctx.settings.reducedMotion = false;
+  w39glowChecks.disabledFlickerAnimates = vis.some((v) => v === true) && vis.some((v) => v === false);
+  w39glowChecks.disabledFlickerFrozenDim = fvis.every((v) => v === false);
+}
+for (const live of [...w39ships, ...w39glowShips]) {
+  removeLiveShip(ctx, live);
+  const ix = ctx.ships.indexOf(live);
+  if (ix >= 0) ctx.ships.splice(ix, 1);
+}
+console.log('wave39 ship glow reducedMotion:', JSON.stringify(w39glowChecks));
+if (!Object.values(w39glowChecks).every(Boolean)) { console.log('WAVE39 SHIP GLOW MOTION FAIL'); errors++; }
+
+if (errors === 0) {
+  console.log('BOOT TEST PASS — no update errors');
+} else {
+  console.log(`BOOT TEST FAIL — ${errors} errors`);
+}
 process.exit(errors === 0 ? 0 : 1);

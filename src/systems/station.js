@@ -2291,13 +2291,26 @@ export function initStation(ctx) {
       }
       if (loadedTo) rebuild(loadedTo);
 
+      const reducedMotion = ctx.settings?.reducedMotion === true;
+
+
+
       // Mesh life: ring spin, running-light pulse, beacon blink, glow breathe.
-      mesh.ringGroup.rotation.y += RING_SPIN * dt;
-      _pulse.copy(mesh.lightColor).multiplyScalar(0.72 + 0.28 * Math.sin(ctx.elapsed * 2));
-      mesh.lightMat.color.copy(_pulse);
-      mesh.beaconMat.visible = (ctx.elapsed % 1.6) < 1.05;
-      mesh.glowMat.opacity = 0.3 + 0.12 * Math.sin(ctx.elapsed * 0.8);
-      mesh.beaconGlowMat.opacity = mesh.beaconMat.visible ? 0.85 : 0.1;
+      // Frozen at rest pose under reducedMotion (angle kept, pulses at base,
+      // beacon lit) — lightColor is the un-pulsed base, stashed at build.
+      if (!reducedMotion) {
+        mesh.ringGroup.rotation.y += RING_SPIN * dt;
+        _pulse.copy(mesh.lightColor).multiplyScalar(0.72 + 0.28 * Math.sin(ctx.elapsed * 2));
+        mesh.lightMat.color.copy(_pulse);
+        mesh.beaconMat.visible = (ctx.elapsed % 1.6) < 1.05;
+        mesh.glowMat.opacity = 0.3 + 0.12 * Math.sin(ctx.elapsed * 0.8);
+        mesh.beaconGlowMat.opacity = mesh.beaconMat.visible ? 0.85 : 0.1;
+      } else {
+        mesh.lightMat.color.copy(mesh.lightColor);
+        mesh.beaconMat.visible = true;
+        mesh.glowMat.opacity = 0.3;
+        mesh.beaconGlowMat.opacity = 0.85;
+      }
       if (mesh.organicParts) animateOrganic(mesh.organicParts, ctx.elapsed, ctx.settings.reducedMotion); // wave 27
 
       // Docking zone (hud.js reads ctx.station; we emit nothing for prompts).
