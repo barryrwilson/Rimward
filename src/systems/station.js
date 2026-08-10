@@ -85,6 +85,12 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  * chandelier clusters, throat pearl beacon + glow, mint halo, spore motes,
  * the dual-axis Lissajous arm sway, every tag convention, and the exact
  * return record update() consumes.
+ *
+ * Wave 38 (FactionVisualUpdatePlan Phase 3): buildStationMesh dispatches on
+ * def.faction to per-faction builders (STATION_BUILDERS) for the eight
+ * factions with reference art; the placeholder stays the fallback for
+ * independent/hollow/unknown. Every builder returns the placeholder's exact
+ * record shape and disposes through teardownMesh unchanged.
  */
 
 const RING_SPIN = 0.05; // rad/s
@@ -182,6 +188,12 @@ function makeGlowTexture(inner, outer) {
 
 function buildStationMesh(ctx, systemId, def) {
   if (isBeautiful(def.faction)) return buildBeautifulStation(ctx, systemId, def); // wave 27
+  const builder = Object.hasOwn(STATION_BUILDERS, def.faction) ? STATION_BUILDERS[def.faction] : null; // wave 38: per-faction sculpts
+  if (builder) return builder(ctx, systemId, def);
+  return buildPlaceholderStation(ctx, systemId, def);
+}
+
+function buildPlaceholderStation(ctx, systemId, def) {
   const scheme = schemeFor(def);
   const group = new THREE.Group();
   group.position.fromArray(def.station.position);
@@ -280,6 +292,400 @@ function buildStationMesh(ctx, systemId, def) {
     lightColor: new THREE.Color(scheme.light),
   };
 }
+
+// ----------------------------------------------------- faction sculpts ----
+// Wave 38 (FactionVisualUpdatePlan Phase 3): per-faction builders for the
+// eight factions with reference art. Same return contract as the
+// placeholder; every geometry/material is per-build and disposes through
+// teardownMesh exactly as the placeholder's do. No PointLights (the scene
+// light census is boot-pinned) and no new animation paths — update() spins
+// ringGroup and pulses lightMat/beaconMat/glowMat/beaconGlowMat as always.
+
+/** Shared per-build material set + positioned group for a faction build. */
+function factionKit(ctx, def) {
+  const scheme = schemeFor(def);
+  const st = styleFor(def.faction);
+  const group = new THREE.Group();
+  group.name = `${def.faction}-station`;
+  group.position.fromArray(def.station.position);
+  const std = (hex) => new THREE.MeshStandardMaterial({
+    color: hex, metalness: st.metalness, roughness: st.roughness, emissive: _dim(hex, 0.14),
+  });
+  return {
+    scheme, group,
+    hullMat: std(st.hull), darkMat: std(st.hullDark), trimMat: std(st.trim),
+    patchMats: scheme.patch.map((hex) => std(hex)),
+    lightMat: new THREE.MeshBasicMaterial({ color: scheme.light }),
+    beaconMat: new THREE.MeshBasicMaterial({ color: scheme.beacon }),
+    accentMat: new THREE.MeshBasicMaterial({ color: scheme.accent }),
+  };
+}
+
+/** Mesh shorthand: create, position, yaw, attach. */
+function put(parent, geo, mat, x, y, z, ry = 0) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.rotation.y = ry;
+  parent.add(m);
+  return m;
+}
+
+/** Mount the group, add the beacon + halo, return the update() record. */
+function stationRecord(ctx, kit, ringGroup, beaconY) {
+  const { group, scheme } = kit;
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 8), kit.beaconMat);
+  beacon.position.set(0, beaconY, 0);
+  group.add(beacon);
+  const glowMat = new THREE.SpriteMaterial({
+    map: makeGlowTexture(scheme.glowInner, scheme.glowOuter),
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.35,
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.setScalar(150);
+  group.add(glow);
+  const beaconGlowMat = new THREE.SpriteMaterial({
+    map: makeGlowTexture(scheme.beaconGlowInner, scheme.beaconGlowOuter),
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8,
+  });
+  const beaconGlow = new THREE.Sprite(beaconGlowMat);
+  beaconGlow.scale.setScalar(30);
+  beaconGlow.position.set(0, beaconY, 0);
+  group.add(beaconGlow);
+  ctx.scene.add(group);
+  return {
+    group, ringGroup,
+    lightMat: kit.lightMat, beaconMat: kit.beaconMat, glowMat, beaconGlowMat,
+    lightColor: new THREE.Color(scheme.light),
+  };
+}
+
+/** Freehold Compact — farm rings, greenhouse domes, donated patchwork hull. */
+function buildFreeholdStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, trimMat, patchMats, lightMat } = kit;
+  put(group, new THREE.CylinderGeometry(6.5, 8, 44, 10), hullMat, 0, 0, 0); // cared-for spine
+  put(group, new THREE.BoxGeometry(2.2, 2.2, 20), darkMat, 0, -8, 13); // dock arm
+  // Donated mismatched hull sections slapped along the spine.
+  for (let i = 0; i < 7; i++) {
+    const a = i * 2.4 + 0.5;
+    put(group, new THREE.BoxGeometry(6 + (i % 3) * 2, 4 + (i % 2) * 2, 2.5),
+      patchMats[i % patchMats.length], Math.cos(a) * 7.5, -18 + i * 5.5, Math.sin(a) * 7.5, -a);
+  }
+  // Main farm ring (spins): greenhouse domes glow warm amber on lightMat.
+  const ringGroup = new THREE.Group();
+  const ring = put(ringGroup, new THREE.TorusGeometry(26, 1.7, 8, 40), hullMat, 0, 0, 0);
+  ring.rotation.x = Math.PI / 2;
+  const domeGeo = new THREE.SphereGeometry(2.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    put(ringGroup, domeGeo, lightMat, Math.cos(a) * 26, 1.2, Math.sin(a) * 26);
+    put(ringGroup, new THREE.BoxGeometry(5.5, 1.6, 3.2), patchMats[(i + 1) % patchMats.length],
+      Math.cos(a) * 26, -1.2, Math.sin(a) * 26, -a);
+  }
+  group.add(ringGroup);
+  // Second static farm ring hung below on scaffold struts.
+  const ring2 = put(group, new THREE.TorusGeometry(17, 1.3, 8, 32), trimMat, 0, -16, 0);
+  ring2.rotation.x = Math.PI / 2;
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + Math.PI / 4;
+    put(group, new THREE.BoxGeometry(0.7, 0.7, 10), darkMat, Math.cos(a) * 12, -8, Math.sin(a) * 12, -a + Math.PI / 2);
+  }
+  put(group, new THREE.SphereGeometry(3.4, 12, 10), patchMats[0], 0, 24.5, 0); // barn-red tank
+  const lampGeo = new THREE.SphereGeometry(0.7, 8, 6);
+  for (let i = 0; i < 6; i++) put(group, lampGeo, lightMat, Math.cos(i * 1.05) * 7.2, -14 + i * 6, Math.sin(i * 1.05) * 7.2);
+  return stationRecord(ctx, kit, ringGroup, 28.5);
+}
+
+/** Veridian Combine — hex extraction complex, assay towers, docking spokes. */
+function buildVeridianStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, trimMat, patchMats, lightMat, accentMat } = kit;
+  put(group, new THREE.CylinderGeometry(9, 11, 30, 6), hullMat, 0, 0, 0); // faceted graphite core
+  put(group, new THREE.CylinderGeometry(6.5, 8, 10, 6), darkMat, 0, 19, 0);
+  put(group, new THREE.CylinderGeometry(0.5, 0.9, 10, 6), darkMat, 0, 28, 0); // beacon mast
+  // Hexagonal extraction ring (spins) with docking spokes + emerald lamps.
+  const ringGroup = new THREE.Group();
+  const hex = put(ringGroup, new THREE.TorusGeometry(22, 2, 6, 6), darkMat, 0, -2, 0);
+  hex.rotation.x = Math.PI / 2;
+  const lampGeo = new THREE.SphereGeometry(0.9, 8, 6);
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    put(ringGroup, new THREE.BoxGeometry(3, 2.4, 9), trimMat, Math.cos(a) * 26.5, -2, Math.sin(a) * 26.5, -a + Math.PI / 2);
+    put(ringGroup, lampGeo, lightMat, Math.cos(a) * 22, 0.6, Math.sin(a) * 22);
+  }
+  group.add(ringGroup);
+  // Assay towers: slim hex stacks with emerald lamp crowns.
+  for (let i = 0; i < 3; i++) {
+    const a = (i * Math.PI * 2) / 3 + Math.PI / 6;
+    const h = 26 + i * 6;
+    put(group, new THREE.CylinderGeometry(1.6, 2.2, h, 6), patchMats[i % patchMats.length], Math.cos(a) * 13, h / 2 - 8, Math.sin(a) * 13);
+    put(group, lampGeo, lightMat, Math.cos(a) * 13, h - 8, Math.sin(a) * 13);
+  }
+  for (let i = 0; i < 4; i++) { // sensor fins
+    const a = (i * Math.PI) / 2;
+    put(group, new THREE.BoxGeometry(0.5, 12, 4.5), darkMat, Math.cos(a) * 9.5, 6, Math.sin(a) * 9.5, -a);
+  }
+  const collar = put(group, new THREE.TorusGeometry(9.6, 0.5, 6, 6), accentMat, 0, 12, 0); // emerald claim collar
+  collar.rotation.x = Math.PI / 2;
+  return stationRecord(ctx, kit, ringGroup, 33.5);
+}
+
+/** Ferrous Hegemony — fortress-bastion, radial batteries, command tower. */
+function buildFerrousStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, patchMats, lightMat, accentMat } = kit;
+  put(group, new THREE.CylinderGeometry(22, 26, 12, 8), darkMat, 0, -6, 0); // bastion skirt
+  put(group, new THREE.CylinderGeometry(16, 20, 10, 8), hullMat, 0, 4, 0); // upper tier
+  put(group, new THREE.CylinderGeometry(5, 8, 30, 8), hullMat, 0, 22, 0); // command tower
+  put(group, new THREE.BoxGeometry(3, 6, 3), patchMats[1 % patchMats.length], 0, 38, 0); // brass cap
+  for (let i = 0; i < 4; i++) { // crimson banner strips stand off the tower taper
+    const a = (i * Math.PI) / 2;
+    put(group, new THREE.BoxGeometry(0.3, 16, 2.4), accentMat, Math.cos(a) * 7.4, 24, Math.sin(a) * 7.4, -a);
+  }
+  // Rotating battery ring: eight turrets with twin barrels + crimson markers.
+  const ringGroup = new THREE.Group();
+  const ring = put(ringGroup, new THREE.TorusGeometry(24, 2.2, 8, 8), hullMat, 0, 0, 0);
+  ring.rotation.x = Math.PI / 2;
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    const tx = Math.cos(a) * 24, tz = Math.sin(a) * 24;
+    put(ringGroup, new THREE.CylinderGeometry(2.6, 3, 2.6, 8), darkMat, tx, 1.6, tz);
+    put(ringGroup, new THREE.BoxGeometry(1.1, 1.1, 7), darkMat, Math.cos(a) * 27.5, 2.6, Math.sin(a) * 27.5, -a + Math.PI / 2);
+    put(ringGroup, new THREE.SphereGeometry(0.7, 8, 6), accentMat, tx, 3.6, tz);
+  }
+  group.add(ringGroup);
+  const lampGeo = new THREE.SphereGeometry(0.6, 8, 6);
+  for (let i = 0; i < 12; i++) {
+    const a = (i * Math.PI) / 6;
+    put(group, lampGeo, lightMat, Math.cos(a) * 25, -1, Math.sin(a) * 25);
+  }
+  return stationRecord(ctx, kit, ringGroup, 42);
+}
+
+/** Red Ledger — captured refinery core, tribute vault, toll-keeper gantry. */
+function buildRedledgerStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, patchMats, lightMat, accentMat } = kit;
+  put(group, new THREE.CylinderGeometry(11, 13, 24, 12), hullMat, 0, 2, 0); // refinery drum
+  for (const y of [-7, 3, 11]) { // tarnished copper bands
+    const band = put(group, new THREE.TorusGeometry(12.6 - y * 0.04, 0.55, 6, 24), patchMats[1 % patchMats.length], 0, y, 0);
+    band.rotation.x = Math.PI / 2;
+  }
+  for (let i = 0; i < 4; i++) { // flare stacks; one tip burns amber
+    const a = (i * Math.PI) / 2 + Math.PI / 4;
+    const h = 8 + (i % 2) * 5;
+    put(group, new THREE.CylinderGeometry(0.9, 1.3, h, 6), darkMat, Math.cos(a) * 6, 14 + h / 2, Math.sin(a) * 6);
+    if (i === 0) put(group, new THREE.SphereGeometry(1.1, 8, 6), lightMat, Math.cos(a) * 6, 14 + h, Math.sin(a) * 6);
+  }
+  // Repair-scar plates over the old wounds.
+  for (let i = 0; i < 4; i++) {
+    const a = i * 1.7 + 0.4;
+    put(group, new THREE.BoxGeometry(5, 3.4, 0.8), patchMats[i % patchMats.length], Math.cos(a) * 12.4, -8 + i * 5, Math.sin(a) * 12.4, -a + Math.PI / 2);
+  }
+  // Tribute vault: an armored sphere chained beneath the drum.
+  put(group, new THREE.CylinderGeometry(2.5, 3.5, 6, 8), darkMat, 0, -12, 0);
+  put(group, new THREE.SphereGeometry(7, 14, 10), darkMat, 0, -20, 0);
+  const vaultBand = put(group, new THREE.TorusGeometry(7.1, 0.5, 6, 24), accentMat, 0, -20, 0); // dried-blood seal
+  vaultBand.rotation.x = Math.PI / 2;
+  // Toll gantry: a long arm with amber utility lamps and a boarding claw.
+  put(group, new THREE.BoxGeometry(2, 2, 26), hullMat, 0, 2, 22);
+  for (let i = 0; i < 4; i++) put(group, new THREE.SphereGeometry(0.6, 8, 6), lightMat, 1.2, 3.2, 12 + i * 6);
+  put(group, new THREE.BoxGeometry(1, 5, 4), darkMat, 1.8, -1, 34);
+  put(group, new THREE.BoxGeometry(1, 5, 4), darkMat, -1.8, -1, 34);
+  // Tally collar (spins): lamps and two trophy hull plates.
+  const ringGroup = new THREE.Group();
+  const collar = put(ringGroup, new THREE.TorusGeometry(16, 1, 6, 24), patchMats[1 % patchMats.length], 0, 6, 0);
+  collar.rotation.x = Math.PI / 2;
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    put(ringGroup, new THREE.SphereGeometry(0.65, 8, 6), lightMat, Math.cos(a) * 16, 6, Math.sin(a) * 16);
+  }
+  for (let i = 0; i < 2; i++) {
+    const a = i * Math.PI + 0.8;
+    put(ringGroup, new THREE.BoxGeometry(6, 4, 0.9), patchMats[0], Math.cos(a) * 16, 6, Math.sin(a) * 16, -a + Math.PI / 2);
+  }
+  group.add(ringGroup);
+  return stationRecord(ctx, kit, ringGroup, 28.5);
+}
+
+/** Gilded Chain — auction pavilion + observation rotunda, ivory/gold on black. */
+function buildGildedStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, patchMats, lightMat } = kit;
+  const gold = patchMats[0], ivory = patchMats[1 % patchMats.length];
+  put(group, new THREE.CylinderGeometry(24, 27, 6, 24), hullMat, 0, 0, 0); // black ceramic disc
+  const rim = put(group, new THREE.TorusGeometry(25.4, 0.7, 6, 48), gold, 0, 2.8, 0);
+  rim.rotation.x = Math.PI / 2;
+  put(group, new THREE.SphereGeometry(15, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), darkMat, 0, 3, 0); // grand dome
+  const domeRim = put(group, new THREE.TorusGeometry(15.2, 0.6, 6, 40), gold, 0, 3.2, 0);
+  domeRim.rotation.x = Math.PI / 2;
+  for (let i = 0; i < 4; i++) { // gold ribs arching over the dome
+    const rib = put(group, new THREE.TorusGeometry(15.1, 0.45, 5, 24, Math.PI), gold, 0, 3, 0);
+    rib.rotation.y = (i * Math.PI) / 4;
+  }
+  // Observation rotunda + spire.
+  put(group, new THREE.CylinderGeometry(5, 6, 4, 12), ivory, 0, 19.5, 0);
+  put(group, new THREE.SphereGeometry(4.4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), gold, 0, 21.5, 0);
+  put(group, new THREE.CylinderGeometry(0.4, 0.7, 8, 6), gold, 0, 28, 0);
+  // Scale cladding: overlapping plates leaning on the disc edge.
+  for (let i = 0; i < 14; i++) {
+    const a = (i * Math.PI) / 7;
+    const plate = put(group, new THREE.BoxGeometry(6.5, 0.7, 4), hullMat, Math.cos(a) * 23.5, 3.6, Math.sin(a) * 23.5, -a + Math.PI / 2);
+    plate.rotation.x = 0.22;
+  }
+  // Ivory gallery arms (spin as the observation carousel) with turquoise tips.
+  const ringGroup = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    put(ringGroup, new THREE.BoxGeometry(3.4, 2.4, 12), ivory, Math.cos(a) * 30, -0.5, Math.sin(a) * 30, -a + Math.PI / 2);
+    put(ringGroup, new THREE.SphereGeometry(0.8, 8, 6), lightMat, Math.cos(a) * 36, -0.5, Math.sin(a) * 36);
+  }
+  group.add(ringGroup);
+  for (let i = 0; i < 12; i++) { // turquoise gallery lights at the dome base
+    const a = (i * Math.PI) / 6;
+    put(group, new THREE.SphereGeometry(0.55, 8, 6), lightMat, Math.cos(a) * 15.4, 3.4, Math.sin(a) * 15.4);
+  }
+  return stationRecord(ctx, kit, ringGroup, 32.5);
+}
+
+/** Congregation — outward-facing nave, sect bays, folded-sail shrines. */
+function buildCongregationStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, trimMat, patchMats, lightMat } = kit;
+  const wakeglass = patchMats[0]; // violet
+  put(group, new THREE.CylinderGeometry(4.5, 6.5, 30, 8), hullMat, 0, 0, 0); // central keep
+  // Observation nave reaching rimward (+Z) with a faceted prow.
+  put(group, new THREE.BoxGeometry(7, 6, 26), hullMat, 0, 0, 16);
+  const prow = put(group, new THREE.CylinderGeometry(0.8, 4.2, 8, 4), trimMat, 0, 0, 33);
+  prow.rotation.x = Math.PI / 2;
+  for (const side of [-1, 1]) { // candle-amber window strips along the nave
+    for (let i = 0; i < 5; i++) put(group, new THREE.BoxGeometry(0.4, 1.1, 2.2), lightMat, side * 3.6, 0.8, 6 + i * 4.6);
+  }
+  for (let i = 0; i < 6; i++) { // rose-window lamps at the prow base
+    const a = (i * Math.PI) / 3;
+    put(group, new THREE.SphereGeometry(0.6, 8, 6), lightMat, Math.cos(a) * 3, Math.sin(a) * 3, 29.2);
+  }
+  // Sect bays (spin in slow procession around the keep).
+  const ringGroup = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const a = (i * Math.PI * 2) / 5;
+    put(ringGroup, new THREE.CylinderGeometry(2.4, 2.8, 7, 6), patchMats[1 % patchMats.length], Math.cos(a) * 11, -2, Math.sin(a) * 11);
+    put(ringGroup, new THREE.SphereGeometry(0.7, 8, 6), lightMat, Math.cos(a) * 11, 2.2, Math.sin(a) * 11);
+  }
+  group.add(ringGroup);
+  // Folded-sail shrines: violet Wakeglass vanes cupped toward the keep.
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + Math.PI / 4;
+    for (const fold of [-1, 1]) {
+      const sail = put(group, new THREE.ConeGeometry(2.4, 10, 4), wakeglass, Math.cos(a + fold * 0.14) * 9, 15, Math.sin(a + fold * 0.14) * 9, -a);
+      sail.scale.z = 0.22;
+      sail.rotation.z = Math.cos(a) * fold * 0.3;
+      sail.rotation.x = -Math.sin(a) * fold * 0.3;
+    }
+  }
+  put(group, new THREE.SphereGeometry(2.2, 12, 10), lightMat, 0, 17, 0); // sanctuary lantern
+  return stationRecord(ctx, kit, ringGroup, 21);
+}
+
+/** Assembly — repeating foundry cells, antenna forest, ancient core. */
+function buildAssemblyStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, trimMat, patchMats, lightMat } = kit;
+  put(group, new THREE.SphereGeometry(11, 16, 12), hullMat, 0, 4, 0); // ancient off-white core
+  const equator = put(group, new THREE.TorusGeometry(11.1, 0.6, 6, 32), patchMats[0], 0, 4, 0); // faded-orange band
+  equator.rotation.x = Math.PI / 2;
+  const cellGeo = new THREE.BoxGeometry(8, 6, 8);
+  // Foundry cells: identical charcoal boxes in a ring — two duplicated with
+  // copy-error offsets (the Assembly's imperfect self-similarity).
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    put(group, cellGeo, darkMat, Math.cos(a) * 17, -6, Math.sin(a) * 17, -a);
+    if (i % 3 === 0) put(group, cellGeo, trimMat, Math.cos(a) * 17.8, -5.2, Math.sin(a) * 17.8, -a);
+  }
+  // Rotating sub-ring of four more cells (a daughter print in progress).
+  const ringGroup = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    put(ringGroup, cellGeo, darkMat, Math.cos(a) * 17, 10, Math.sin(a) * 17, -a);
+    put(ringGroup, new THREE.SphereGeometry(0.6, 8, 6), lightMat, Math.cos(a) * 17, 13.6, Math.sin(a) * 17);
+  }
+  group.add(ringGroup);
+  // Antenna forest with teal optics.
+  for (let i = 0; i < 12; i++) {
+    const a = i * 2.4;
+    const r = i < 6 ? 15.5 : 8 + (i % 3) * 2;
+    const h = 8 + (i % 4) * 3;
+    const base = i < 6 ? -3 : 10;
+    put(group, new THREE.CylinderGeometry(0.18, 0.3, h, 4), trimMat, Math.cos(a) * r, base + h / 2, Math.sin(a) * r);
+    put(group, new THREE.SphereGeometry(0.45, 6, 5), lightMat, Math.cos(a) * r, base + h, Math.sin(a) * r);
+  }
+  // Daughter probes on docking arms.
+  for (const side of [-1, 1]) {
+    put(group, new THREE.BoxGeometry(1, 1, 12), trimMat, side * 4, -10, 12);
+    put(group, new THREE.BoxGeometry(3, 2.4, 3.6), patchMats[0], side * 4, -10, 19);
+  }
+  return stationRecord(ctx, kit, ringGroup, 28.5);
+}
+
+/** Lamplighter Guild — gate-service depot: ring yard, spare segments, cranes. */
+function buildLamplighterStation(ctx, systemId, def) {
+  const kit = factionKit(ctx, def);
+  const { group, hullMat, darkMat, trimMat, patchMats, lightMat } = kit;
+  const yellow = patchMats[0], cobalt = patchMats[1 % patchMats.length];
+  put(group, new THREE.CylinderGeometry(7, 8, 18, 10), darkMat, 0, 0, 0); // depot hub
+  put(group, new THREE.CylinderGeometry(0.6, 1, 12, 6), trimMat, 0, 14, 0); // beacon mast
+  // Service ring (spins): soot segments with yellow replacement panels and
+  // warm guide lamps at every joint.
+  const ringGroup = new THREE.Group();
+  const ring = put(ringGroup, new THREE.TorusGeometry(26, 3, 8, 36), hullMat, 0, 0, 0);
+  ring.rotation.x = Math.PI / 2;
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    put(ringGroup, new THREE.BoxGeometry(7, 4.4, 5.5), i % 2 ? yellow : hullMat, Math.cos(a) * 26, 0, Math.sin(a) * 26, -a + Math.PI / 2);
+  }
+  const lampGeo = new THREE.SphereGeometry(0.65, 8, 6);
+  for (let i = 0; i < 16; i++) {
+    const a = (i * Math.PI) / 8;
+    put(ringGroup, lampGeo, lightMat, Math.cos(a) * 26, 3.2, Math.sin(a) * 26);
+  }
+  group.add(ringGroup);
+  for (let i = 0; i < 4; i++) { // spokes tying ring to hub
+    const a = (i * Math.PI) / 2 + Math.PI / 4;
+    put(group, new THREE.BoxGeometry(1.4, 1.4, 20), darkMat, Math.cos(a) * 13, 0, Math.sin(a) * 13, -a + Math.PI / 2);
+  }
+  // Parts yard: flat deck with crate rows and spare ring segments.
+  put(group, new THREE.BoxGeometry(30, 2, 26), hullMat, 0, -16, 0);
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      put(group, new THREE.BoxGeometry(3, 2.4, 3), (r + c) % 3 === 0 ? cobalt : ((r + c) % 2 ? yellow : darkMat), -10.5 + c * 7, -13.8, -8 + r * 8);
+    }
+  }
+  for (const x of [-8, 8]) { // spare gate-ring segments staged on the deck
+    const arc = put(group, new THREE.TorusGeometry(9, 1.5, 6, 14, 1.6), trimMat, x, -12.5, 0);
+    arc.rotation.x = Math.PI / 2;
+    arc.rotation.z = x > 0 ? 0.4 : 2.2;
+  }
+  // Two yard cranes: column, jib, cable, hook.
+  for (const side of [-1, 1]) {
+    put(group, new THREE.CylinderGeometry(1, 1.4, 22, 6), darkMat, side * 18, -5, -10);
+    put(group, new THREE.BoxGeometry(14, 1.2, 1.2), yellow, side * 12, 6, -10);
+    put(group, new THREE.BoxGeometry(0.3, 7, 0.3), darkMat, side * 7, 2.5, -10);
+    put(group, new THREE.BoxGeometry(1.4, 1.4, 1.4), cobalt, side * 7, -1.2, -10);
+    put(group, lampGeo, lightMat, side * 5.2, 6, -10); // jib-tip work lamp
+  }
+  return stationRecord(ctx, kit, ringGroup, 21);
+}
+
+const STATION_BUILDERS = {
+  freehold: buildFreeholdStation,
+  veridian: buildVeridianStation,
+  ferrous: buildFerrousStation,
+  redledger: buildRedledgerStation,
+  gilded: buildGildedStation,
+  congregation: buildCongregationStation,
+  assembly: buildAssemblyStation,
+  lamplighter: buildLamplighterStation,
+};
 
 /**
  * Wave 27: 'The Bloom' — a Beautiful Ones station, grown not built. A

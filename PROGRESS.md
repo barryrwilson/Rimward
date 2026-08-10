@@ -1397,8 +1397,7 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   inside the 0.42/0.10 envelope; 11 stills in .chrome-shot/w36/,
   untracked scratch). Both wave-33 P3s CLOSED.
 
-## Next round candidates (wave 37)
-- Wave 37 faction visual alignment (user-decided scope — "hard-core
+- Wave 37 (commit 7368f92): faction visual alignment phase 1 (user-decided scope — "hard-core
   option", vertex colors on merged geometry; plan doc
   Docs/FactionVisualUpdatePlan.md, reference art Docs/FactionExamples/).
   New module src/game/faction-style.js: FACTION_STYLE — per-faction
@@ -1445,16 +1444,99 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   ships verified vertexColors:true with 2 materials (shared vc material
   + faction glow). Save-hack travel (localStorage currentSystem patch)
   used for the fx_bastion leg only — restore boundary healed clean.
+- Wave 38: faction visual alignment phases 2–4 (orchestrated — three
+  parallel workers, one file each; parallel browser verifiers
+  contended over the shared browser and two died, so final visual
+  verification ran solo — lesson: one browser driver at a time).
+  SHIPS (npc.js +604/-9): FACTION_VC_PARTS sculpts all 6 classKeys
+  for the 8 kit factions from their concept-art languages (freehold
+  patch slabs/greenhouse dome/towed pod, veridian hex spine/assay
+  fins, ferrous wedge prow/citadel tower/barrel housings, redledger
+  grappling claws/ram spike/tally stripes, gilded ceramic wedge/
+  scale domes/turquoise gallery, congregation observation dome/rib
+  rings/folded violet sails, assembly repeated modules/antenna
+  forest/daughter pods, lamplighter tug block/repair crane/cable
+  reel/relay mast); colorPart gains 'glow'/'beacon' additive roles;
+  vcGeoFor(classKey, faction, pirate) — pirate role bakes a dulled
+  ':pirate' variant (desaturate 50% to luminance, dim ×0.72,
+  glow/beacon stay lit), still exactly 2 materials; glowZFor()
+  per-sculpt stern placement; VC_PARTS fallback byte-identical for
+  independent/hollow/unknown (no ':pirate' variant); qship cover +
+  revealQship routing preserved; kit lookups Object.hasOwn-guarded.
+  STATIONS (station.js +406/-0): STATION_BUILDERS dispatch on
+  def.faction — freehold farm rings/greenhouse domes/donated plates,
+  veridian hex extraction complex/assay towers/docking spokes,
+  ferrous fortress-bastion/battery ring/command tower, redledger
+  captured refinery core/tribute vault, gilded auction pavilion/
+  observation rotunda, congregation nave/sect bays/sail shrines,
+  assembly foundry cells/antenna forest/ancient core, lamplighter
+  depot (spare ring segments, parts yard, cranes); the pre-wave
+  placeholder extracted verbatim (fallback byte-identical, group
+  unnamed); faction groups named '<faction>-station'; return-record
+  shape, update(), dock paths, and teardown contract unchanged —
+  station builders carry NO shared assets (all per-build; rebuild
+  disposes 38/38 tracked resources). GATES (gate.js +307/-0):
+  '<faction>-overlay' subgroup per assembly for the 8 factions
+  (veridian hex cladding/claim beacons, ferrous cardinal bastions/
+  blast shutters, freehold replaced segments/scaffolds/window pods,
+  redledger toll platforms/boarding dock/beacon lanes, gilded oval
+  scale cladding/turquoise aperture, congregation shrine pods/
+  Wakeglass lamps, assembly spinning daughter sub-rings/recursive
+  scaffolds, lamplighter gantries/relay crown/maintenance rail);
+  the junction lantern stays neutral brass and COEXISTS with the
+  overlay at freehold/fx_bastion/gc_auction hubs; overlay anims
+  preallocated at build, mutated in place (zero-alloc), frozen
+  under reducedMotion; per-assembly overlayMats join rebuild()
+  disposal; independent/hollow stay plain brass byte-identical;
+  beautiful overgrowth untouched. Harness (boot-test.mjs +609/-2):
+  the redmarch planet pin gained a '-station' ancestor exclusion —
+  the redledger tribute-vault sphere counted as a 5th planet (the
+  wave-5 poiType-exclusion precedent); the wave-38 section pins the
+  new surfaces with zero added travel (checks hung on existing
+  legs): 150 real spawnLiveShip builds (2 meshes/2 materials,
+  shared vcMaterial identity, stern glow, pirate bake position-
+  identical + strictly dimmer, fallback byte-identity, qship cover
+  cache-key identity), 8 station discriminators + unnamed-
+  placeholder and beautiful controls + a real fh_meridian→vd_survey
+  rebuild disposal audit, gate overlay part censuses + junction
+  coexistence + reducedMotion freeze, and hollow/independent
+  negative controls. Reviews: integrated security SHIP (zero
+  findings; full consumer census — scene traversals, disposers,
+  name lookups, save-controlled keys) + code APPROVE (correct,
+  0.87; one P3 latent standing below). Browser-verified (solo
+  headless Chrome/SwiftShader): all 8 ship kits live in-system +
+  pirate dull variant (baked luminance 0.079 vs trader 0.114) +
+  qship cover→reveal captured via a scene.add interceptor +
+  stations (7 factions positive reads; lastbeacon dock/undock flow;
+  placeholder controls; Bloom control) + gates CLEAN across 14
+  system loads incl. a real charge/jump and KeyG route cycling;
+  console clean throughout; stills in .chrome-shot/w38/ (untracked
+  scratch). npm run test:boot PASS ×7 consecutive; npm run build
+  clean (only the pre-existing >500 kB chunk warning).
 
-## Next round candidates (wave 38)
-- Faction visual alignment phases 2–4 (Docs/FactionVisualUpdatePlan.md):
-  per-faction ship silhouette sculpts (vcGeoFor part specs are the
-  seam — batch A freehold/veridian/ferrous, B redledger/gilded/
-  congregation/assembly, C lamplighter + optional unknowables no-hull
-  render path), per-faction station builders (the buildBeautifulStation
-  dispatch pattern), and gate overlay subgroups (the beautiful-
-  overgrowth precedent, generalized). Phase 1 (colors) is DONE in
-  wave 37; FACTION_STYLE is the single source of truth all sculpts read.
+## Next round candidates (wave 39)
+- Faction visual alignment phase 5 (Docs/FactionVisualUpdatePlan.md):
+  full screenshot matrix (10 factions × station/ship/gate) diffed by
+  eye against Docs/FactionExamples/ overviews, iterate on the worst
+  three mismatches; perf pass (shared-resource audit, reducedMotion
+  sweep); note in Docs/FactionExamples/README.md that the game now
+  implements these references (still non-canonical). Phases 1–4 are
+  DONE (waves 37–38). Optional: unknowables no-hull render path
+  (D3 — deferred; no generated system flies it; colors recorded in
+  FACTION_STYLE.unknowables; needs a new render path, not the mesh
+  kit).
+- Wave 38 contract notes for future work: STATION_BUILDERS /
+  FACTION_VC_PARTS / OVERLAY_FACTIONS cover the same 8 factions —
+  keep the three dispatch tables in lockstep when adding one;
+  '<faction>-station' / '<faction>-overlay' group names are
+  boot-pinned; station builders carry NO shared assets (all
+  per-build — teardownMesh disposes everything under the group);
+  ship ':pirate' cache entries are the dulled-bake contract
+  (positions byte-identical to the clean bake, colors strictly
+  dimmer, glow/beacon stay lit); scene-wide SphereGeometry censuses
+  are fragile — scope traversals by group name (the wave-38 redmarch
+  planet-pin fix; gilded gate overlays contain spheres, no live pin
+  counts them).
 - Wave 37 contract notes for future work: vcGeos/vcGlowMats/vcMaterial
   are module-cached shared and NEVER disposed; ships have exactly 2
   materials (shared vertex-color + faction glow); gate tintFor caches

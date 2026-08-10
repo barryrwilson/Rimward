@@ -665,6 +665,46 @@ w22hubChecks.rebuiltOnReturn = w22junctionBack.length === 1
   && w22lampsIn(w22junctionBack[0]) === fhRoutes.length;
 console.log('wave22 junction visual:', JSON.stringify(w22hubChecks));
 if (!Object.values(w22hubChecks).every(Boolean)) { console.log('WAVE22 JUNCTION VISUAL FAIL'); errors++; }
+// Wave 38 (live, hung on the wave-21/22 flight — the wave-22 discipline, no
+// added travel): back at freehold the junction and physical gates wear the
+// 'freehold-overlay' faction dress COEXISTING with the wave-22 lantern, and
+// the station is the wave-38 freehold sculpt. The two lookups below are the
+// wave-38 scene census shared by every live-leg pin (the wave-27 findByName
+// helper lands later in the file); the per-faction scoped-harness pins live
+// in the wave-38 section proper at the end of the run.
+const w38namedIn = (root, name) => {
+  const found = [];
+  root.traverse((o) => { if (o.name === name) found.push(o); });
+  return found;
+};
+const w38lampsIn = (g) => {
+  let n = 0;
+  g.traverse((o) => { if (o.name === 'junction-arm-lamp') n++; });
+  return n;
+};
+// The wave-22 hex frame is the junction's direct-child group of exactly six
+// hex-bar meshes (the arms group mixes meshes with lamp sprites, the
+// chevrons group holds 10 cones — neither collides).
+const w38hexFrameIn = (g) => g.children.some((c) => c.isGroup && c.children.length === 6
+  && c.children.every((m) => m.isMesh));
+{
+  const fh38gates = w38namedIn(ctx.scene, 'lamplighter-gate');
+  const fh38junction = w38namedIn(ctx.scene, 'lamplighter-junction');
+  const w38freeholdLive = {
+    stationSculpt: w38namedIn(ctx.scene, 'freehold-station').length === 1,
+    gateCount: fh38gates.length === SYSTEMS.freehold.gates.length && fh38gates.length > 0,
+    gatesOverlain: fh38gates.length > 0 && fh38gates.every((g) => g.children.filter((c) => c.name === 'freehold-overlay').length === 1),
+    junctionSingle: fh38junction.length === 1,
+    junctionCoexists: fh38junction.length === 1
+      && fh38junction[0].children.filter((c) => c.name === 'freehold-overlay').length === 1
+      && w38hexFrameIn(fh38junction[0])
+      && w38lampsIn(fh38junction[0]) === fhRoutes.length
+      && fh38junction[0].userData.routeCount === fhRoutes.length
+      && 'routeIndex' in fh38junction[0].userData,
+  };
+  console.log('wave38 live freehold:', JSON.stringify(w38freeholdLive));
+  if (!Object.values(w38freeholdLive).every(Boolean)) { console.log('WAVE38 LIVE FREEHOLD FAIL'); errors++; }
+}
 
 // -- 2. Runtime galaxy chart DOM -------------------------------------------
 // The chart root is built once at init from the live SYSTEMS/FACTIONS
@@ -848,6 +888,24 @@ console.log('jump checks:', JSON.stringify(jumpChecks));
 const jumpOk = Object.values(jumpChecks).every(Boolean);
 tick(60 * 30, 'veridian soak 30s');
 console.log(`veridian: ships=${ctx.ships.length} station=${ctx.station ? 'present' : 'missing'} prices.provisions=${ctx.world.prices.provisions.toFixed(0)}`);
+// Wave 38 (live, hung on the wave-2 veridian stop — no added travel): the
+// veridian station sculpt and gate dress are in the live scene right now,
+// the junction lantern coexisting as at freehold.
+{
+  const vd38gates = w38namedIn(ctx.scene, 'lamplighter-gate');
+  const vd38junction = w38namedIn(ctx.scene, 'lamplighter-junction');
+  const w38veridianLive = {
+    stationSculpt: w38namedIn(ctx.scene, 'veridian-station').length === 1,
+    gateCount: vd38gates.length === SYSTEMS.veridian.gates.length && vd38gates.length > 0,
+    gatesOverlain: vd38gates.length > 0 && vd38gates.every((g) => g.children.filter((c) => c.name === 'veridian-overlay').length === 1),
+    junctionCoexists: vd38junction.length === 1
+      && vd38junction[0].children.filter((c) => c.name === 'veridian-overlay').length === 1
+      && w38hexFrameIn(vd38junction[0])
+      && w38lampsIn(vd38junction[0]) === SYSTEMS.veridian.hub.routes.length,
+  };
+  console.log('wave38 live veridian:', JSON.stringify(w38veridianLive));
+  if (!Object.values(w38veridianLive).every(Boolean)) { console.log('WAVE38 LIVE VERIDIAN FAIL'); errors++; }
+}
 
 // ---- Wave 3: second hop veridian → redmarch ----
 // Park at the computed gate toward redmarch and jump.
@@ -880,8 +938,15 @@ settlePrices('wave3 redmarch');
 let redPlanets = 0;
 ctx.scene.traverse((o) => {
   // Planets: standard-material spheres (sun/eyes are basic, hull is physical,
-  // wave-5 landmark/clue POIs carry userData.poiType and are excluded).
-  if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.isMeshStandardMaterial && !o.material?.isMeshPhysicalMaterial && !o.userData?.poiType) redPlanets++;
+  // wave-5 landmark/clue POIs carry userData.poiType and are excluded, and
+  // wave-38 faction station builders — groups named '<faction>-station',
+  // beautiful included — add legit standard-material spheres: vaults, domes,
+  // cores; those aren't planets either).
+  if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.isMeshStandardMaterial && !o.material?.isMeshPhysicalMaterial && !o.userData?.poiType) {
+    let inStation = false;
+    for (let p = o; p; p = p.parent) if (p.name?.endsWith('-station')) { inStation = true; break; }
+    if (!inStation) redPlanets++;
+  }
 });
 const roleCount = (role) => ctx.world.records.filter((r) => r.role === role && seededCast.has(r)).length;
 const redChecks = {
@@ -900,6 +965,24 @@ const redChecks = {
 console.log('redmarch checks:', JSON.stringify(redChecks));
 const redOk = Object.values(redChecks).every(Boolean);
 console.log(`redmarch: ships=${ctx.ships.length} records=${ctx.world.records.length} prices.provisions=${ctx.world.prices.provisions.toFixed(0)} planets=${redPlanets}`);
+// Wave 38 (live, hung on the wave-3 redmarch stop — no added travel): the
+// redledger station sculpt and gate dress in the live scene, junction
+// lantern coexisting.
+{
+  const rl38gates = w38namedIn(ctx.scene, 'lamplighter-gate');
+  const rl38junction = w38namedIn(ctx.scene, 'lamplighter-junction');
+  const w38redmarchLive = {
+    stationSculpt: w38namedIn(ctx.scene, 'redledger-station').length === 1,
+    gateCount: rl38gates.length === SYSTEMS.redmarch.gates.length && rl38gates.length > 0,
+    gatesOverlain: rl38gates.length > 0 && rl38gates.every((g) => g.children.filter((c) => c.name === 'redledger-overlay').length === 1),
+    junctionCoexists: rl38junction.length === 1
+      && rl38junction[0].children.filter((c) => c.name === 'redledger-overlay').length === 1
+      && w38hexFrameIn(rl38junction[0])
+      && w38lampsIn(rl38junction[0]) === SYSTEMS.redmarch.hub.routes.length,
+  };
+  console.log('wave38 live redmarch:', JSON.stringify(w38redmarchLive));
+  if (!Object.values(w38redmarchLive).every(Boolean)) { console.log('WAVE38 LIVE REDMARCH FAIL'); errors++; }
+}
 // Jump back to veridian: arrival must be the return-pointing gate.
 ctx.emit('jumpRequested', { to: 'veridian' });
 tick(60 * 4, 'jump back to veridian');
@@ -1259,6 +1342,30 @@ const w5jumpChecks = {
 };
 console.log('wave5 hollowreach jump:', JSON.stringify(w5jumpChecks), `line=${JSON.stringify(hrArrivalLine)}`);
 if (!Object.values(w5jumpChecks).every(Boolean)) { console.log('WAVE5 HOLLOWREACH JUMP FAIL'); errors++; }
+// Wave 38 (live negative control, hung on the wave-5 hollowreach stop): a
+// hollow system builds NO faction overlay and NO named station group — the
+// unnamed placeholder and the plain brass gates survive byte-identical,
+// the hub junction's lantern included.
+{
+  const hr38overlays = [];
+  const hr38stations = [];
+  ctx.scene.traverse((o) => {
+    if (o.name?.endsWith('-overlay')) hr38overlays.push(o);
+    if (o.name?.endsWith('-station')) hr38stations.push(o);
+  });
+  const hr38junction = w38namedIn(ctx.scene, 'lamplighter-junction');
+  const w38hollowLive = {
+    noOverlay: hr38overlays.length === 0,
+    noNamedStation: hr38stations.length === 0,
+    gatesPresent: w38namedIn(ctx.scene, 'lamplighter-gate').length === SYSTEMS.hollowreach.gates.length,
+    junctionLanternNoOverlay: hr38junction.length === 1
+      && w38hexFrameIn(hr38junction[0])
+      && w38lampsIn(hr38junction[0]) === SYSTEMS.hollowreach.hub.routes.length
+      && !hr38junction[0].children.some((c) => c.name?.endsWith('-overlay')),
+  };
+  console.log('wave38 live hollow:', JSON.stringify(w38hollowLive));
+  if (!Object.values(w38hollowLive).every(Boolean)) { console.log('WAVE38 LIVE HOLLOW FAIL'); errors++; }
+}
 
 // -- 2. band pacing data (§15): rim edge runs quieter ------------------------
 const w5bandChecks = {
@@ -8390,6 +8497,506 @@ if (!Object.values(w36envelopeChecks).every(Boolean)) { console.log('WAVE36 SUN 
 
 // Home — the wave-27 discipline: the run ends where the harness began.
 travelTo('freehold', 'wave36 home leg');
+
+// ---- Wave 38: per-faction visual surfaces — ship silhouette kits, -------
+// ---- station sculpt dispatch, gate overlays (scoped real builds; the -----
+// ---- live-loop pins ride the wave-2/3/5/21 legs above) -------------------
+// The wave-38 contract:
+// SHIPS (npc.js FACTION_VC_PARTS) — the 8 kit factions × 6 classKeys bake
+//   one merged vertex-colored geometry per faction:classKey (module-cached,
+//   identity-shared across same-key spawns, never disposed) and render with
+//   exactly 2 meshes / 2 materials: the single shared vertexColors:true
+//   vcMaterial (identity-compared across every spawn below) plus a
+//   per-faction cached glow material whose color === FACTION_STYLE[f].glow,
+//   sitting at the stern (positive local z). Pirate role bakes a ':pirate'
+//   dulled variant of the same spec: a DISTINCT cache entry, position
+//   arrays byte-identical to the clean bake, colors never brighter and
+//   strictly dimmer overall (glow/beacon roles stay lit — luminance, not
+//   per-channel, is the honest comparator), still 2 materials.
+//   independent/hollow/a bogus key keep the wave-37 VC_PARTS fallback
+//   byte-identically (no ':pirate' variant — pirate shares the clean cache
+//   entry). A disguised Q-ship builds its coverClass/coverFaction geometry
+//   (the clean cover cache key). The beautiful short-circuit is wave-27
+//   pinned upstream — not duplicated.
+// STATIONS (station.js STATION_BUILDERS) — each of the 8 factions builds a
+//   '<faction>-station' group with faction-distinct structure (spot
+//   discriminators below); a non-kit faction (independent/hollow) yields
+//   the unnamed placeholder byte-identically; beautiful keeps
+//   'beautiful-station' (the wave-27/33/36 pins hold — not duplicated).
+//   Per-build materials/geometries dispose through teardownMesh on the
+//   real rebuild path.
+// GATES (gate.js buildOverlay) — a sculpted-faction system dresses every
+//   gate assembly with a '<faction>-overlay' subgroup (faction-specific
+//   part census); independent/hollow carry NO overlay (plain brass,
+//   byte-identical); beautiful keeps 'beautiful-overgrowth' and NO built
+//   overlay; hub junctions wear the overlay COEXISTING with the wave-22
+//   lantern (hex frame + 'junction-arm-lamp' arms, routeCount/routeIndex
+//   hooks intact); reducedMotion freezes overlay blink/spin at base.
+// Method: the wave-13/14 discipline — pure structure, no added travel.
+// Ships drive the REAL spawnLiveShip/removeLiveShip (the wave-27 pattern:
+// construct + assert + remove, no ticks); stations/gates drive the REAL
+// initStation/initGate on scoped throwaway contexts (same createCtx as the
+// top-of-file boot, one system graph node, no main-run state touched).
+const { FACTION_STYLE: w38STYLE } = await import('../src/game/faction-style.js'); // the wave-31 fresh-import idiom
+const w38KIT_FACTIONS = ['freehold', 'veridian', 'ferrous', 'redledger', 'gilded', 'congregation', 'assembly', 'lamplighter'];
+const w38CLASS_KEYS = ['freighter', 'cutter', 'heavy', 'frigate', 'ace', 'light'];
+const w38arrEq = (a, b) => !!a && !!b && a.length === b.length && a.every((v, i) => v === b[i]);
+const w38scopedCtx = (systemId) => {
+  const sceneS = new THREE.Scene();
+  const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
+  const rendererS = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
+  const ctxS = createCtx({ scene: sceneS, camera: cameraS, renderer: rendererS });
+  ctxS.systems = SYSTEMS; // mirrors the main.js boot line
+  ctxS.world.currentSystem = systemId;
+  return ctxS;
+};
+
+// -- a. ship silhouette kits: the real spawnLiveShip build path ------------
+let w38uid = 0;
+const w38lives = [];
+const w38spawn = (faction, classKey, role, rec = {}) => {
+  const live = spawnLiveShip(ctx, {
+    id: `wave38-${++w38uid}`, name: 'Wave38 Pin', classKey, faction, role, resolve: 50, ...rec,
+  }, new THREE.Vector3(0, 0, -4000));
+  w38lives.push(live);
+  return live;
+};
+const w38read = (live) => {
+  const meshes = live.object.children.filter((c) => c.isMesh);
+  return {
+    meshes,
+    hull: meshes[0] ?? null,
+    glow: live.object.userData.glow ?? null,
+    geo: meshes[0]?.geometry ?? null,
+    hullMat: meshes[0]?.material ?? null,
+    glowMat: (live.object.userData.glow ?? null)?.material ?? null,
+  };
+};
+let w38twoMeshes = true;
+let w38vcShared = true;
+let w38matsSharedMarked = true;
+let w38glowColor = true;
+let w38glowStern = true;
+let w38glowIsSecondMesh = true;
+let w38geoCached = true;
+let w38colorAttr = true;
+let w38glowMatPerFaction = true;
+let w38kitDistinct = true;
+let w38vc = null;
+const w38kitGeo = {}; // 'faction:classKey' → clean-bake geometry
+const w38kitGlowMat = {}; // faction → cached glow material
+for (const f of w38KIT_FACTIONS) {
+  for (const ck of w38CLASS_KEYS) {
+    const a = w38read(w38spawn(f, ck, 'trader'));
+    const b = w38read(w38spawn(f, ck, 'trader'));
+    if (!(a.meshes.length === 2 && a.hull && a.glow)) w38twoMeshes = false;
+    if (a.glow && a.meshes[1] !== a.glow) w38glowIsSecondMesh = false;
+    if (a.hullMat?.vertexColors !== true) w38vcShared = false;
+    if (w38vc === null) w38vc = a.hullMat;
+    else if (a.hullMat !== w38vc) w38vcShared = false;
+    if (a.hullMat?.userData?.shared !== true || a.glowMat?.userData?.shared !== true) w38matsSharedMarked = false;
+    if (a.glowMat?.color?.getHex() !== w38STYLE[f].glow) w38glowColor = false;
+    if (!(a.glow && a.glow.position.z > 0 && a.glow.position.x === 0 && a.glow.position.y === 0)) w38glowStern = false;
+    if (a.geo && b.geo && a.geo !== b.geo) w38geoCached = false;
+    const col = a.geo?.attributes?.color;
+    const pos = a.geo?.attributes?.position;
+    if (!(col && pos && col.itemSize === 3 && col.count === pos.count)) w38colorAttr = false;
+    if (w38kitGlowMat[f] === undefined) w38kitGlowMat[f] = a.glowMat;
+    else if (w38kitGlowMat[f] !== a.glowMat) w38glowMatPerFaction = false;
+    w38kitGeo[`${f}:${ck}`] = a.geo;
+  }
+}
+// Fallback bakes share the same vcMaterial (the wave-37 pipeline) and every
+// kit sculpt is geometrically DISTINCT from its classKey's fallback bake.
+const w38fbGeo = {}; // classKey → independent (VC_PARTS fallback) geometry
+for (const ck of w38CLASS_KEYS) {
+  const a = w38read(w38spawn('independent', ck, 'trader'));
+  w38fbGeo[ck] = a.geo;
+  if (a.hullMat !== w38vc) w38vcShared = false;
+  if (a.glowMat?.color?.getHex() !== w38STYLE.independent.glow) w38glowColor = false;
+  if (!(a.glow && a.glow.position.z > 0)) w38glowStern = false;
+}
+for (const f of w38KIT_FACTIONS) {
+  for (const ck of w38CLASS_KEYS) {
+    const k = w38kitGeo[`${f}:${ck}`];
+    const fb = w38fbGeo[ck];
+    if (!k || !fb || k === fb || w38arrEq(k.attributes.position.array, fb.attributes.position.array)) w38kitDistinct = false;
+  }
+}
+const w38kitChecks = {
+  twoMeshesTwoMaterials: w38twoMeshes && w38glowIsSecondMesh,
+  vcMaterialShared: w38vcShared && !!w38vc && w38vc.vertexColors === true,
+  materialsSharedMarked: w38matsSharedMarked,
+  glowColorPerFaction: w38glowColor,
+  glowMatCachedPerFaction: w38glowMatPerFaction,
+  glowSternPositiveZ: w38glowStern,
+  hullColorAttribute: w38colorAttr,
+  hullGeoCacheShared: w38geoCached,
+  kitDistinctFromFallback: w38kitDistinct,
+};
+console.log('wave38 ship kits:', JSON.stringify(w38kitChecks));
+if (!Object.values(w38kitChecks).every(Boolean)) { console.log('WAVE38 SHIP KITS FAIL'); errors++; }
+
+// -- b. pirate ':pirate' dulled bakes (every kit faction × classKey) -------
+let w38pirateDistinct = true;
+let w38piratePositions = true;
+let w38pirateDimmer = true;
+let w38pirateTwoMats = true;
+for (const f of w38KIT_FACTIONS) {
+  for (const ck of w38CLASS_KEYS) {
+    const clean = w38kitGeo[`${f}:${ck}`];
+    const p = w38read(w38spawn(f, ck, 'pirate'));
+    if (!p.geo || !clean || p.geo === clean) w38pirateDistinct = false;
+    if (p.geo && clean && !w38arrEq(p.geo.attributes.position.array, clean.attributes.position.array)) w38piratePositions = false;
+    if (p.geo && clean) {
+      const pc = p.geo.attributes.color?.array;
+      const cc = clean.attributes.color?.array;
+      if (!pc || !cc || pc.length !== cc.length) { w38pirateDimmer = false; } else {
+        let anyDimmer = false;
+        for (let i = 0; i < cc.length; i += 3) {
+          const cl = 0.3 * cc[i] + 0.59 * cc[i + 1] + 0.11 * cc[i + 2];
+          const pl = 0.3 * pc[i] + 0.59 * pc[i + 1] + 0.11 * pc[i + 2];
+          if (pl > cl + 1e-6) w38pirateDimmer = false;
+          if (pl < cl - 1e-6) anyDimmer = true;
+        }
+        if (!anyDimmer) w38pirateDimmer = false;
+      }
+    }
+    if (!(p.meshes.length === 2 && p.hullMat === w38vc && p.glowMat === w38kitGlowMat[f])) w38pirateTwoMats = false;
+  }
+}
+const w38pirateChecks = {
+  distinctCacheEntry: w38pirateDistinct,
+  positionsByteIdentical: w38piratePositions,
+  colorsNeverBrighterStrictlyDimmer: w38pirateDimmer,
+  stillTwoMaterials: w38pirateTwoMats,
+};
+console.log('wave38 ship pirates:', JSON.stringify(w38pirateChecks));
+if (!Object.values(w38pirateChecks).every(Boolean)) { console.log('WAVE38 SHIP PIRATES FAIL'); errors++; }
+
+// -- c. fallback byte-identity + the Q-ship cover cache key ----------------
+const w38hollowFrt = w38read(w38spawn('hollow', 'freighter', 'trader'));
+const w38bogusFrt = w38read(w38spawn('bogus', 'freighter', 'trader'));
+const w38indPirate = w38read(w38spawn('independent', 'freighter', 'pirate'));
+const w38qshipLive = w38spawn('redledger', 'cutter', 'pirate', {
+  qship: true, coverClass: 'freighter', coverName: 'Wave38 Masque', coverFaction: 'freehold',
+});
+const w38q = w38read(w38qshipLive);
+const w38fallbackChecks = {
+  hollowPositionsIdentical: w38arrEq(w38hollowFrt.geo?.attributes.position.array, w38fbGeo.freighter?.attributes.position.array),
+  hollowColorsDiffer: !w38arrEq(w38hollowFrt.geo?.attributes.color.array, w38fbGeo.freighter?.attributes.color.array),
+  bogusByteIdentical: w38arrEq(w38bogusFrt.geo?.attributes.position.array, w38fbGeo.freighter?.attributes.position.array)
+    && w38arrEq(w38bogusFrt.geo?.attributes.color.array, w38fbGeo.freighter?.attributes.color.array),
+  bogusGlowIndependent: w38bogusFrt.glowMat?.color?.getHex() === w38STYLE.independent.glow,
+  noPirateVariant: w38indPirate.geo === w38fbGeo.freighter, // pirate shares the clean cache entry without a kit
+  fallbackTwoMaterials: w38indPirate.meshes.length === 2 && w38indPirate.hullMat === w38vc,
+  qshipCoverGeometry: w38q.geo === w38kitGeo['freehold:freighter'], // the clean cover identity cache key
+  qshipCoverGlow: w38q.glowMat === w38kitGlowMat.freehold,
+  qshipTwoMaterials: w38q.meshes.length === 2 && w38q.hullMat === w38vc,
+};
+for (const live of w38lives) removeLiveShip(ctx, live);
+console.log('wave38 ship fallback + qship:', JSON.stringify(w38fallbackChecks));
+if (!Object.values(w38fallbackChecks).every(Boolean)) { console.log('WAVE38 SHIP FALLBACK FAIL'); errors++; }
+
+// -- d. station sculpt dispatch: the REAL initStation build path on scoped -
+// contexts (one representative generated system per faction) ----------------
+const w38stationGroupOf = (ctxS) => {
+  let g = null;
+  ctxS.scene.traverse((o) => { if (o.name?.endsWith('-station')) g = o; });
+  return g;
+};
+const w38geoCount = (root, type, pred = null) => {
+  let n = 0;
+  root.traverse((o) => {
+    if (o.isMesh && o.geometry?.type === type && (!pred || pred(o.geometry.parameters ?? {}))) n++;
+  });
+  return n;
+};
+const w38STATION_REPS = {
+  freehold: 'fh_hearth', veridian: 'vd_survey', ferrous: 'fx_liron', redledger: 'rl_toll',
+  gilded: 'gc_gavel', congregation: 'cg_vigil', assembly: 'as_census', lamplighter: 'lastbeacon',
+};
+let w38stRingUnique = true;
+let w38stPositioned = true;
+let w38stNoPointLights = true;
+const w38stationChecks = {};
+for (const [f, sysId] of Object.entries(w38STATION_REPS)) {
+  const ctxS = w38scopedCtx(sysId);
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  const def = SYSTEMS[sysId];
+  w38stationChecks[`${f}Named`] = !!g && g.name === `${f}-station` && w38namedIn(ctxS.scene, `${f}-station`).length === 1;
+  if (!g) { w38stRingUnique = false; w38stPositioned = false; w38stNoPointLights = false; continue; }
+  // The spinning ringGroup is the group's ONLY Group child (every other
+  // child is a Mesh or a Sprite — the stationRecord beacon/halo).
+  if (g.children.filter((c) => c.isGroup).length !== 1) w38stRingUnique = false;
+  if (g.position.x !== def.station.position[0] || g.position.y !== def.station.position[1] || g.position.z !== def.station.position[2]) w38stPositioned = false;
+  g.traverse((o) => { if (o.isPointLight) w38stNoPointLights = false; });
+}
+{
+  const ctxS = w38scopedCtx('fh_hearth');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.freeholdDomes = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 2.6 && Math.abs(p.thetaLength - Math.PI / 2) < 1e-9) === 6;
+  w38stationChecks.freeholdSecondRing = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.radius === 17) === 1;
+}
+{
+  const ctxS = w38scopedCtx('vd_survey');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.veridianHexTori = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.radialSegments === 6 && p.tubularSegments === 6) === 2;
+  w38stationChecks.veridianAssayTowers = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radialSegments === 6 && p.height >= 26) === 4;
+}
+{
+  const ctxS = w38scopedCtx('fx_liron');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.ferrousTurrets = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 2.6 && p.height === 2.6) === 8;
+  w38stationChecks.ferrousBanners = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 0.3 && p.height === 16) === 4;
+}
+{
+  const ctxS = w38scopedCtx('rl_toll');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.redledgerVault = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 7) === 1;
+  w38stationChecks.redledgerFlares = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 0.9 && p.radiusBottom === 1.3) === 4;
+  w38stationChecks.redledgerGantry = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 2 && p.depth === 26) === 1;
+}
+{
+  const ctxS = w38scopedCtx('gc_gavel');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.gildedGrandDome = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 15 && Math.abs(p.thetaLength - Math.PI / 2) < 1e-9) === 1;
+  w38stationChecks.gildedScalePlates = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 6.5 && p.height === 0.7) === 14;
+  w38stationChecks.gildedDomeRibs = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.arc === Math.PI) === 4;
+}
+{
+  const ctxS = w38scopedCtx('cg_vigil');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.congregationSails = !!g && w38geoCount(g, 'ConeGeometry', (p) => p.radius === 2.4 && p.height === 10) === 8;
+  w38stationChecks.congregationSectBays = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 2.4 && p.radiusBottom === 2.8) === 5;
+}
+{
+  const ctxS = w38scopedCtx('as_census');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.assemblyCore = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 11) === 1;
+  w38stationChecks.assemblyFoundryCells = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 8 && p.height === 6 && p.depth === 8) === 12;
+  w38stationChecks.assemblyAntennas = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 0.18) === 12;
+}
+{
+  const ctxS = w38scopedCtx('lastbeacon');
+  initStation(ctxS);
+  const g = w38stationGroupOf(ctxS);
+  w38stationChecks.lamplighterSpareSegments = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.arc === 1.6) === 2;
+  w38stationChecks.lamplighterCranes = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 1 && p.height === 22) === 2;
+  w38stationChecks.lamplighterRingPanels = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 7 && p.height === 4.4) === 8;
+}
+w38stationChecks.ringGroupUnique = w38stRingUnique;
+w38stationChecks.positionedAtDef = w38stPositioned;
+w38stationChecks.noPointLights = w38stNoPointLights;
+console.log('wave38 stations:', JSON.stringify(w38stationChecks));
+if (!Object.values(w38stationChecks).every(Boolean)) { console.log('WAVE38 STATIONS FAIL'); errors++; }
+
+// -- e. placeholder fallback: non-kit factions keep the unnamed placeholder
+// byte-identically (independent + hollow defs) ------------------------------
+let w38phUnnamed = true;
+let w38phShape = true;
+for (const sysId of ['blackstation', 'hollowreach']) {
+  const ctxS = w38scopedCtx(sysId);
+  initStation(ctxS);
+  const namedGroups = [];
+  ctxS.scene.traverse((o) => { if (o.name?.endsWith('-station')) namedGroups.push(o); });
+  if (namedGroups.length !== 0) w38phUnnamed = false;
+  const root = ctxS.scene.children.find((c) => c.isGroup) ?? null; // the placeholder group itself (only group at scene root)
+  w38phShape = w38phShape && !!root
+    && w38geoCount(root, 'CylinderGeometry', (p) => p.radiusTop === 3.2 && p.height === 84) === 1 // the spindle
+    && w38geoCount(root, 'TorusGeometry', (p) => p.radius === 30) === 2; // habitat ring + accent collar
+}
+const w38placeholderChecks = { unnamedPlaceholder: w38phUnnamed, placeholderShapeIntact: w38phShape };
+console.log('wave38 station placeholder:', JSON.stringify(w38placeholderChecks));
+if (!Object.values(w38placeholderChecks).every(Boolean)) { console.log('WAVE38 STATION PLACEHOLDER FAIL'); errors++; }
+
+// -- f. rebuild/teardown disposal across the REAL systemLoaded rebuild -----
+// (fh_meridian → vd_survey inside one scoped context): every per-build
+// geometry/material/texture of the old sculpt disposes; the old group
+// leaves the scene; the new sculpt is the named veridian build; update()
+// then spins the NEW ringGroup (the one stable rotation hook).
+const ctx38R = w38scopedCtx('fh_meridian');
+const st38R = initStation(ctx38R);
+const w38gBefore = w38stationGroupOf(ctx38R);
+let w38tracked = 0;
+const w38disposedRes = new Set();
+if (w38gBefore) {
+  // Dedupe: the builders share geometries/materials across meshes (one
+  // domeGeo for six domes), and teardownMesh calls dispose() per mesh
+  // encounter — count RESOURCES, not dispose() calls.
+  const w38res = new Set();
+  w38gBefore.traverse((o) => {
+    if (o.geometry) w38res.add(o.geometry);
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) { w38res.add(m); if (m.map) w38res.add(m.map); }
+  });
+  for (const res of w38res) {
+    w38tracked++;
+    res.addEventListener('dispose', () => { w38disposedRes.add(res); });
+  }
+}
+ctx38R.lastEvents = [{ type: 'systemLoaded', to: 'vd_survey' }];
+st38R.update(1 / 60); // the real consume: rebuild() then one frame of mesh life
+const w38gAfter = w38stationGroupOf(ctx38R);
+const w38ringAfter = w38gAfter ? (w38gAfter.children.find((c) => c.isGroup) ?? null) : null;
+const w38rebuildChecks = {
+  assetsTracked: w38tracked > 0,
+  everyAssetDisposed: w38disposedRes.size === w38tracked,
+  oldGroupRemoved: !!w38gBefore && w38gBefore.parent === null,
+  rebuiltNamed: !!w38gAfter && w38gAfter.name === 'veridian-station' && w38gAfter !== w38gBefore,
+  newRingGroupSpun: !!w38ringAfter && w38ringAfter.rotation.y > 0,
+};
+console.log('wave38 station rebuild:', JSON.stringify(w38rebuildChecks), `disposed=${w38disposedRes.size}/${w38tracked}`);
+if (!Object.values(w38rebuildChecks).every(Boolean)) { console.log('WAVE38 STATION REBUILD FAIL'); errors++; }
+
+// -- g. gate overlays: the REAL initGate build path on scoped contexts -----
+const w38GATE_REPS = {
+  freehold: 'fh_hearth', veridian: 'vd_survey', ferrous: 'fx_liron', redledger: 'rl_toll',
+  gilded: 'gc_gavel', congregation: 'cg_vigil', assembly: 'as_census', lamplighter: 'lastbeacon',
+};
+// Faction part census inside ONE overlay group (sprites = blink lamps;
+// subGroups = the assembly-faction spin mounts; includes the ov root in
+// `groups`, so subgroup count = groups - 1).
+const w38overlayCensus = (ov) => {
+  const c = { sprites: 0, groups: 0, boxes: 0, cyls: 0, cones: 0, spheres: 0, tori: 0 };
+  ov.traverse((o) => {
+    if (o.isSprite) { c.sprites++; return; }
+    if (o.isGroup) { c.groups++; return; }
+    if (o.isMesh) {
+      const t = o.geometry?.type;
+      if (t === 'BoxGeometry') c.boxes++;
+      else if (t === 'CylinderGeometry') c.cyls++;
+      else if (t === 'ConeGeometry') c.cones++;
+      else if (t === 'SphereGeometry') c.spheres++;
+      else if (t === 'TorusGeometry') c.tori++;
+    }
+  });
+  return c;
+};
+const w38overlayOf = (gate) => gate.children.find((c) => c.name?.endsWith('-overlay')) ?? null;
+let w38gateCountOk = true;
+let w38gateOverlain = true;
+const w38gateChecks = {};
+for (const [f, sysId] of Object.entries(w38GATE_REPS)) {
+  const ctxG = w38scopedCtx(sysId);
+  initGate(ctxG);
+  const gates = w38namedIn(ctxG.scene, 'lamplighter-gate');
+  if (!(gates.length === SYSTEMS[sysId].gates.length && gates.length > 0)) w38gateCountOk = false;
+  if (!gates.every((g) => g.children.filter((c) => c.name === `${f}-overlay`).length === 1)) w38gateOverlain = false;
+  const ov = gates.length ? w38overlayOf(gates[0]) : null;
+  const c = ov ? w38overlayCensus(ov) : null;
+  // Faction-specific part census (deterministic build constants, not pixels).
+  if (f === 'freehold') w38gateChecks.freeholdParts = !!c && c.boxes === 10 && c.cyls === 6 && c.sprites === 3;
+  if (f === 'veridian') w38gateChecks.veridianParts = !!c && c.boxes === 12 && c.cyls === 3 && c.sprites === 3;
+  if (f === 'ferrous') w38gateChecks.ferrousParts = !!c && c.boxes === 16 && c.sprites === 4 && c.cyls === 0;
+  if (f === 'redledger') w38gateChecks.redledgerParts = !!c && c.boxes === 6 && c.sprites === 7;
+  if (f === 'gilded') w38gateChecks.gildedParts = !!c && c.spheres === 12 && c.tori === 1 && c.sprites === 4;
+  if (f === 'congregation') w38gateChecks.congregationParts = !!c && c.boxes === 8 && c.cones === 4 && c.sprites === 8;
+  if (f === 'assembly') w38gateChecks.assemblyParts = !!c && c.groups - 1 === 2 && c.tori === 2 && c.boxes === 15 && c.sprites === 4;
+  if (f === 'lamplighter') w38gateChecks.lamplighterParts = !!c && c.boxes === 6 && c.cyls === 2 && c.cones === 1 && c.tori === 1 && c.sprites === 14;
+}
+w38gateChecks.gateCountMatchesDef = w38gateCountOk;
+w38gateChecks.everyGateOverlain = w38gateOverlain;
+console.log('wave38 gates:', JSON.stringify(w38gateChecks));
+if (!Object.values(w38gateChecks).every(Boolean)) { console.log('WAVE38 GATES FAIL'); errors++; }
+
+// -- h. gate negatives: independent/hollow plain brass, beautiful overgrowth
+let w38noOverlayIndependent = true;
+let w38brassIntact = true;
+for (const sysId of ['blackstation', 'hollowreach']) {
+  const ctxG = w38scopedCtx(sysId);
+  initGate(ctxG);
+  const overlays = [];
+  ctxG.scene.traverse((o) => { if (o.name?.endsWith('-overlay')) overlays.push(o); });
+  if (overlays.length !== 0) w38noOverlayIndependent = false;
+  const gates = w38namedIn(ctxG.scene, 'lamplighter-gate');
+  w38brassIntact = w38brassIntact && gates.length === SYSTEMS[sysId].gates.length
+    && gates.every((g) => w38geoCount(g, 'TorusGeometry') === 1); // the brass ring survives
+}
+const ctx38B = w38scopedCtx('bt_cradle');
+initGate(ctx38B);
+const w38btGates = w38namedIn(ctx38B.scene, 'lamplighter-gate');
+const w38btOverlays = [];
+ctx38B.scene.traverse((o) => { if (o.name?.endsWith('-overlay')) w38btOverlays.push(o); });
+const w38gateNegativeChecks = {
+  noOverlayIndependentHollow: w38noOverlayIndependent,
+  plainBrassIntact: w38brassIntact,
+  beautifulOvergrowth: w38btGates.length === SYSTEMS.bt_cradle.gates.length && w38btGates.length > 0
+    && w38btGates.every((g) => g.children.filter((c) => c.name === 'beautiful-overgrowth').length === 1),
+  beautifulNoBuiltOverlay: w38btOverlays.length === 0,
+};
+console.log('wave38 gate negatives:', JSON.stringify(w38gateNegativeChecks));
+if (!Object.values(w38gateNegativeChecks).every(Boolean)) { console.log('WAVE38 GATE NEGATIVES FAIL'); errors++; }
+
+// -- i. hub junctions: the overlay COEXISTS with the wave-22 lantern -------
+// (freehold is pinned LIVE off the wave-21/22 flight upstream; fx_bastion
+// and gc_auction ride scoped builds here).
+const w38junctionChecks = {};
+for (const sysId of ['fx_bastion', 'gc_auction']) {
+  const f = SYSTEMS[sysId].faction;
+  const routes = SYSTEMS[sysId].hub.routes;
+  const ctxG = w38scopedCtx(sysId);
+  initGate(ctxG);
+  const junction = w38namedIn(ctxG.scene, 'lamplighter-junction');
+  w38junctionChecks[`${f}JunctionCoexists`] = junction.length === 1
+    && junction[0].children.filter((c) => c.name === `${f}-overlay`).length === 1
+    && w38hexFrameIn(junction[0])
+    && w38lampsIn(junction[0]) === routes.length
+    && junction[0].userData.routeCount === routes.length
+    && 'routeIndex' in junction[0].userData;
+}
+console.log('wave38 gate junctions:', JSON.stringify(w38junctionChecks));
+if (!Object.values(w38junctionChecks).every(Boolean)) { console.log('WAVE38 GATE JUNCTIONS FAIL'); errors++; }
+
+// -- j. reducedMotion freezes the overlay animation (opacity AND mount spin)
+// at base; live again when unfrozen. The REAL gate update drives the
+// as_census (assembly) overlay — the one faction with spin mounts — with
+// the elapsed clock scripted by hand.
+const ctx38M = w38scopedCtx('as_census');
+const gate38M = initGate(ctx38M);
+const w38mOverlay = w38namedIn(ctx38M.scene, 'assembly-overlay')[0] ?? null;
+const w38animSample = (ov) => {
+  const s = { op: [], rot: [] };
+  if (!ov) return s;
+  ov.traverse((o) => {
+    if (o.isSprite) s.op.push(o.material.opacity);
+    else if (o.isGroup && o !== ov) s.rot.push(o.rotation.z); // the two spin mounts
+  });
+  return s;
+};
+const w38sampleEq = (a, b) => a.op.length === b.op.length && a.rot.length === b.rot.length
+  && a.op.every((v, i) => v === b.op[i]) && a.rot.every((v, i) => v === b.rot[i]);
+ctx38M.settings.reducedMotion = false;
+ctx38M.elapsed = 0.31; gate38M.update(1 / 60);
+const w38m1 = w38animSample(w38mOverlay);
+ctx38M.elapsed = 1.73; gate38M.update(1 / 60);
+const w38m2 = w38animSample(w38mOverlay);
+ctx38M.settings.reducedMotion = true;
+ctx38M.elapsed = 2.9; gate38M.update(1 / 60);
+const w38m3 = w38animSample(w38mOverlay);
+ctx38M.elapsed = 4.1; gate38M.update(1 / 60);
+const w38m4 = w38animSample(w38mOverlay);
+ctx38M.settings.reducedMotion = false;
+ctx38M.elapsed = 5.37; gate38M.update(1 / 60);
+const w38m5 = w38animSample(w38mOverlay);
+const w38motionChecks = {
+  animSurfaceFound: !!w38mOverlay && w38m1.op.length === 4 && w38m1.rot.length === 2,
+  opacityBlinksUnfrozen: w38m1.op.some((v, i) => v !== w38m2.op[i]),
+  mountSpinsUnfrozen: w38m1.rot.some((v, i) => v !== w38m2.rot[i]),
+  frozenUnderReducedMotion: w38sampleEq(w38m3, w38m4),
+  frozenAtBase: w38m3.op.length > 0 && w38m3.op.every((v) => v === 0.5), // every assembly lamp base
+  animationResumes: !w38sampleEq(w38m4, w38m5),
+};
+console.log('wave38 gate reducedMotion:', JSON.stringify(w38motionChecks));
+if (!Object.values(w38motionChecks).every(Boolean)) { console.log('WAVE38 GATE MOTION FAIL'); errors++; }
 
 console.log(errors === 0 ? 'BOOT TEST PASS — no update errors' : `BOOT TEST FAIL — ${errors} update errors`);
 process.exit(errors === 0 ? 0 : 1);
