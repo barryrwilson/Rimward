@@ -501,7 +501,7 @@ export function initModelsBrowser(ctx) {
     let hasGeometry = false;
 
     object.traverse((child) => {
-      if (child.isMesh || child.isPoints) {
+      if (child.isMesh || child.isPoints || child.isLine) {
         const childBox = new THREE.Box3().setFromObject(child);
         if (!childBox.isEmpty()) {
           structuralBox.union(childBox);

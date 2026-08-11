@@ -112,8 +112,14 @@ const TRAIL_R = 0.62; // teal-white tint (vein family)
 const TRAIL_G = 1.0;
 const TRAIL_B = 0.9;
 
-/** Bioluminescent vein texture: branching random-walk lines on dark flesh. */
-function makeVeinTexture() {
+/**
+ * Bioluminescent vein texture: branching random-walk lines on dark flesh.
+ *
+ * Exported so the Models Browser can build the Player hull as the rebuild's
+ * scale anchor (docs/FactionShipRebuildPlan.md §5). Forking this sculpt into a
+ * second copy would let the yardstick drift away from the ship it measures.
+ */
+export function makeVeinTexture() {
   const w = 512;
   const h = 256;
   const canvas = document.createElement('canvas');
@@ -187,8 +193,12 @@ function makeSoftDotTexture() {
  * geometry plus per-vertex animation metadata (base positions, normalized
  * spine coordinate, wingness factor). Animation then mutates positions
  * relative to the base every frame.
+ *
+ * Exported for the same reason as makeVeinTexture: this hull IS P, the scale
+ * charter's yardstick (src/game/ship-scale.js), so the Models Browser has to
+ * show this exact geometry rather than a lookalike.
  */
-function makeLivingHull() {
+export function makeLivingHull() {
   const geo = new THREE.SphereGeometry(1, 64, 40);
   const pos = geo.attributes.position;
   const count = pos.count;

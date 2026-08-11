@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WEAPONS, HEAT, DEFENSE, U, applyHit, tickShipState } from '../game/state.js';
+import { scaleFor } from '../game/ship-scale.js';
 
 /**
  * Combat system — player weapons + ALL projectile simulation (player & NPC).
@@ -33,13 +34,20 @@ const _tmp = new THREE.Vector3();
 const _lead = new THREE.Vector3();
 const _oc = new THREE.Vector3();
 const _targetFwd = new THREE.Vector3();
-// Swept-collision scratch: a 900 u/s bolt steps ~15 u per 60 fps frame —
-// larger than a ship's hit sphere — so hits are tested segment-vs-sphere
-// (previous position → new position), never point-vs-sphere. No tunneling.
+// NPC ships use capsule proxies (radius + half-length along local Z). A 900 u/s
+// bolt steps ~15 u per 60 fps frame — larger than a proxy sphere — so hits
+// are tested segment-vs-capsule (previous position → new position), never point tests.
 const _prev = new THREE.Vector3();
 const _seg = new THREE.Vector3();
 const _f = new THREE.Vector3();
 const _closest = new THREE.Vector3();
+// Capsule-proxy scratch: axis, segment midpoint, closest point on axis, projection scalar.
+// These alias with sweptHit scratch — capsule resolution runs first, then sweptHit
+// clobbers _seg/_f/_closest. Zero per-frame allocation.
+const _axis = new THREE.Vector3();
+const _mid = new THREE.Vector3();
+const _cap = new THREE.Vector3();
+let _proj = 0;
 // mineHit point payloads rotate through this ring: emitted events are read
 // NEXT frame via ctx.lastEvents, so a single scratch vector would be mutated
 // under the consumer. A ring of 3 outlasts the one-frame rotation.
@@ -50,7 +58,6 @@ const POOL_SIZE = 64;
 const FLASH_POOL = 16;
 const PROJ_RADIUS = 0.4;
 const PLAYER_HIT_RADIUS = 2.4; // true visual bounds of the living hull (§6.1)
-const NPC_BASE_RADIUS = 3.4; // living-hull bounding sphere at object scale 1
 const NOSE_OFFSET = 3.0; // projectile spawns just past the nose
 const AIM_ERROR = Math.tan((2 * Math.PI) / 180); // ±2° NPC aim error
 const CONVERGE_DOT = 0.85; // aim-assist convergence only in the frontal cone
@@ -414,13 +421,28 @@ export function initCombat(ctx) {
     for (let i = 0; i < ctx.ships.length; i++) {
       const s = ctx.ships[i];
       if (!s?.object || !s.state || s.state.destroyed) continue;
-      let r = s._hitRadius;
+
+      // Cache per live ship: capsule proxy (r, halfLen) × object scale.
+      let r = s._proxyR;
+      let halfLen = s._proxyHalf;
       if (r === undefined) {
-        // Cached per live ship: living-hull bounding sphere × object scale.
-        r = s._hitRadius = NPC_BASE_RADIUS * (s.object.scale?.x || 1);
+        const scale = s.object.scale?.x || 1;
+        const proxy = scaleFor(s.state.classKey).proxy;
+        r = s._proxyR = proxy.r * scale;
+        halfLen = s._proxyHalf = proxy.halfLen * scale;
       }
+
+      // Resolve capsule to closest sphere centre before sweptHit.
+      // Ship's local Z is the capsule axis (stern-ward, symmetric).
+      _axis.set(0, 0, 1).applyQuaternion(s.object.quaternion);
+      _mid.addVectors(_prev, p.mesh.position).multiplyScalar(0.5); // projectile segment midpoint
+      _tmp.subVectors(_mid, s.object.position); // midpoint → ship centre
+      _proj = _tmp.dot(_axis); // scalar projection onto axis
+      _proj = Math.max(-halfLen, Math.min(halfLen, _proj)); // clamp to capsule segment
+      _cap.copy(s.object.position).addScaledVector(_axis, _proj); // closest point on axis
+
       const rr = r * DEFENSE.playerHitPadding + PROJ_RADIUS; // padded vs NPCs (§6.1)
-      if (!sweptHit(p, s.object.position, rr)) continue;
+      if (!sweptHit(p, _cap, rr)) continue;
 
       // Facet: attacker aft when the shooter sits behind the target's forward.
       _targetFwd.set(0, 0, -1).applyQuaternion(s.object.quaternion);

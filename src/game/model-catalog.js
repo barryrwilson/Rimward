@@ -13,7 +13,9 @@
  * field builders inside buildShipMesh, which is why they need no special case.
  */
 
+import * as THREE from 'three';
 import { buildShipMesh, animateShipMesh } from '../systems/npc.js';
+import { makeLivingHull, makeVeinTexture } from '../systems/ship.js';
 import { buildStationModel } from '../systems/station.js';
 import { buildGateModel } from '../systems/gate.js';
 import { buildLandmarkModel } from '../systems/landmarks.js';
@@ -72,6 +74,34 @@ for (const faction of FACTION_ORDER) {
     });
   }
 }
+
+// Player ship — the scale anchor (docs/FactionShipRebuildPlan.md §5).
+// The GEOMETRY is what the charter measures, so it comes straight from
+// ship.js's exported sculpt rather than a copy. The flesh material is
+// re-declared here because initShip owns the live one; a shared material would
+// be mutated by the game's mood-colour lerp while the browser is showing it.
+ships.push({
+  id: 'ship:player',
+  label: 'Player — Living Hull (scale anchor)',
+  category: 'Ships',
+  faction: 'beautiful',
+  build: () => {
+    const { geo } = makeLivingHull();
+    const veinTex = makeVeinTexture();
+    const fleshMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2b2145, // deep violet flesh
+      roughness: 0.5,
+      metalness: 0.05,
+      clearcoat: 0.7, // wet, organic sheen
+      clearcoatRoughness: 0.35,
+      emissive: 0xffffff,
+      emissiveMap: veinTex, // bioluminescent veins
+      emissiveIntensity: 0.8,
+    });
+    const hull = new THREE.Mesh(geo, fleshMat);
+    return { object: hull };
+  },
+});
 
 // ---- Stations ----
 const DETAIL_STATION_FACTIONS = [
