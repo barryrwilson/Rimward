@@ -89,12 +89,15 @@ trim/light tones). `PROMPTS.md` supplies the intent where sampling is muddy.
   system faction. Implemented across npc.js / station.js / gate.js /
   solarsystem.js.
 - **D5 — Merged-vertex-colour station detail (APPROVED, wave 43).** User
- rejected the wave-38 detail level as too simple and basic; stations are
- rebuilt with merged geometry baking per-part colours into vertex
- attributes. Freehold Landing, the pilot, carries ~600 parts (175,775
- vertices) in 8 geometries + 6 materials + 2 textures — measurably CHEAPER
- than the ~25-part sculpt it replaced (scene resource reading 195 → 173).
- The remaining seven built factions await the same treatment.
+  rejected the wave-38 detail level as too simple and basic; stations are
+  rebuilt with merged geometry baking per-part colours into vertex
+  attributes. Freehold Landing, the pilot, carries ~600 parts (175,775
+  vertices) in 8 geometries + 6 materials + 2 textures — measurably CHEAPER
+  than the ~25-part sculpt it replaced (scene resource reading 195 → 173).
+  The remaining seven built factions await the same treatment. Wave 44
+  widens the palette rule to a recomputable weathering ladder (SHADES =
+  [1.0, 0.86, 0.72, 0.6] applied via Math.round(channel8bit * f) per sRGB
+  channel) so plating can be mottled without leaving the faction identity.
 
 ## 3. Phases
 
@@ -339,6 +342,56 @@ all. The placeholder (independent/hollow) remains untouched.
   teardownDisposesAll); browser-verified at fh_hearth from three camera
   angles; mesh bounding box inside the U.DOCK_RANGE envelope; window pulse
   live and glaze static; teardown disposal clean; reducedMotion freeze.
+
+#### Wave 44
+
+User rejected the wave-43 result: "still too simple and components of the
+station aren't connected and looks nothing like the associated example."
+Wave 43 delivered the merged-vertex-colour machinery but the sculpt failed
+the visual reference in five ways: modules floated apart with air between
+them; almost no connective tissue; bare smooth cylinder skins where the
+reference is tiled with panel plates; too few and too small windows; a
+radius-24 agri hoop enclosing a void; and too few vertical tiers.
+
+NEW TOOLKIT PRIMITIVES (src/systems/station-detail.js):
+- `panelSkin` — dense plate grid on a cylinder surface, the plating IS the
+  perceived detail. Tiles rows x cols rectangular plates with visible seams,
+  mottled colours from a caller-supplied hex array, deterministic per-seed
+  jitter.
+- `windowGrid` — rows x cols lit window fields, a grid of small boxes at
+  caller-specified pitch.
+- `airlock` — short fat connector tube with collar rings, the connective
+  tissue that makes two modules read as one station.
+- `bridge` — catwalk deck plus two railings between modules.
+
+DESIGN RULE: packed pile plus connective tissue. Modules interpenetrate
+(a drum spacing of 7 units for radius-4.5 drums, so neighbours overlap by
+2). Every adjacency gets an airlock; every gap gets a bridge; every drum
+gets a panelSkin of 40-70 plates and a windowGrid of 20-40 windows per
+flank. The agri carousel shrinks to radius 11 and tucks under the belly at
+y = -16, so it reads as part of the mass instead of a hoop around a void.
+
+PALETTE RULE (weathering ladder): wave 43's paletteFromStyle pin required
+every hull vertex colour to be EXACTLY one of the five FACTION_STYLE.freehold
+colours, which was too tight for weathered reference art. The rule widens
+to a fixed, recomputable product set: SHADES = [1.0, 0.86, 0.72, 0.6],
+applied as Math.round(channel8bit * SHADES[i]) on each sRGB channel of
+the deduplicated FACTION_STYLE.freehold palette. The allowed hull set is
+therefore exactly the 5 palette colours crossed with the 4 shades (20
+values). Both sculpt and harness pin MUST use identical arithmetic.
+
+HARNESS CHANGES (scripts/boot-test.mjs):
+- freeholdDetailDensity floor raised from >= 20000 to >= 120000 merged
+  vertices.
+- freeholdWindowDensity floor raised from >= 2000 to >= 30000 glow vertices.
+- freeholdMergeDiscipline unchanged (<= 8 geometries and <= 8 materials).
+- paletteFromStyle reimplemented against the shade ladder.
+- new connectedness pin: buckets hull vertices into 4-unit cubes and fails
+  when more than 2% of occupied cells are isolated (a packed pile passes;
+  six drums with air between them does not).
+
+Seven built factions still await the merged-vertex-colour station-detail
+treatment. Phase 6 remains IN PROGRESS.
 
 
 ## 4. Sequencing rationale

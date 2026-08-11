@@ -1958,8 +1958,76 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   lamplighter (1). Once the user approves Freehold, each gets the same
   toolkit treatment. The eighth built faction is unknowables, who by D3 build
   no station at all. The independent/hollow placeholder stays untouched.
+- Wave 44: station detail, round 2 — Freehold rebuilt as packed, skinned,
+  connected station. User verdict on wave 43: "still too simple and components
+  of the station aren't connected and looks nothing like the associated
+  example." Wave 43 delivered the merged-vertex-colour machinery (~600 parts
+  in 8 geometries) but the sculpt failed the visual reference: modules floated
+  apart with air between them, almost no connective tissue, bare smooth
+  cylinder skins where the reference is tiled with panel plates, too few and
+  too small windows, a radius-24 agri hoop enclosing a void that the reference
+  does not have at all, and too few vertical tiers. Density is affordable: a
+  small box is 36 vertices, so thousands of extra parts stay inside the SAME
+  8 merged geometries (the wave-39 resource pin that constrains GPU load).
+  This wave goes from ~600 to 2,000-3,000 parts.
+  NEW TOOLKIT EXPORTS (src/systems/station-detail.js, four additions):
+  panelSkin — dense plate grid on a cylinder surface, the plating IS the
+  perceived detail. Tiles rows x cols rectangular plates with visible seams,
+  mottled colours from a caller-supplied hex array, deterministic per-seed
+  jitter, plate size clamped so seams remain on all four sides.
+  windowGrid — rows x cols lit window fields, a grid of small boxes at
+  caller-specified pitch, centred on a position, oriented along an axis.
+  airlock — short fat connector tube with collar rings, the connective
+  tissue that makes two modules read as one station: a cylinder spanning two
+  points with rings at each end (two rings for the standard call, four total).
+  bridge — catwalk deck plus two railings between modules: a deck box
+  spanning two points with posts and top rail on each side.
+  WEATHERING LADDER (the palette rule): wave 43's paletteFromStyle pin
+  required every hull vertex colour to be EXACTLY one of the five
+  FACTION_STYLE.freehold colours, which was too tight for weathered reference
+  art. The rule widens to a fixed, recomputable product set, not a tolerance
+  band: SHADES = [1.0, 0.86, 0.72, 0.6], applied as Math.round(channel8bit *
+  SHADES[i]) on each sRGB channel of the deduplicated FACTION_STYLE.freehold
+  palette. The allowed hull set is therefore exactly the 5 palette colours
+  crossed with the 4 shades (20 values). The sculpt uses only weather(paletteHex,
+  i) values; the harness pin recomputes the same product set and requires
+  exact membership after converting each vertex colour back to sRGB. Both
+  sides MUST use identical arithmetic (Math.round(c * f) on 8-bit channels).
+  Glow rule unchanged: every distinct glow vertex colour, converted back to
+  sRGB, has all three channels >= 0.6.
+  HARNESS CHANGES (boot-test.mjs): freeholdDetailDensity floor raised from
+  >= 20000 to >= 120000 merged vertices; freeholdWindowDensity floor raised
+  from >= 2000 to >= 30000 glow vertices; freeholdMergeDiscipline unchanged
+  (<= 8 geometries and <= 8 materials — proves density stayed free);
+  paletteFromStyle reimplemented against the shade ladder (build exact product
+  set, convert each distinct hull vertex colour back to sRGB, require exact
+  membership, report first stray hex); new connectedness pin that buckets hull
+  vertices into 4-unit cubes and fails when more than 2% of occupied cells are
+  isolated (a packed pile passes; six drums with air between them does not).
+  MEASURED OUTCOME: 368,687 merged vertices across the same 8 geometries and 6
+  materials, 33,252 of them in the glow chunk (wave 43 was 175,775 / 14,160 —
+  so 2.1x the geometry for zero extra resources). Bounding box
+  x[-28.5, 27.6] y[-18.7, 32.4] z[-28.7, 28.7], inside the DOCK_RANGE
+  envelope. The connectedness pin reports 0 isolated cells of 738 occupied —
+  the mass is fully contiguous, which is the measurement that answers the
+  user's "components aren't connected".
+  THE SUBAGENT TAX, again: the toolkit slice reported "no existing export
+  changed" and had in fact DELETED the `antenna` export, which failed the boot
+  import immediately; and the harness slice implemented the shade ladder by
+  scaling LINEAR channels instead of the sRGB 8-bit channels, so a correct
+  sculpt failed `paletteFromStyle` with a stray that was itself exactly on the
+  ladder. Both were found by running the gate and reading the diff, not by
+  reading the reports. The wave-42 lesson stands: when a subagent's summary
+  and the file disagree, the file wins.
+  FOLLOW-UP (standing work, NOT a completion): seven built factions still
+  carry their wave-38 low-detail sculpts and await the same toolkit treatment
+  once Freehold is approved. The batch order, by flown-system count: veridian
+  (18 systems), ferrous (17), redledger (12), gilded (8), congregation (3),
+  assembly (2), lamplighter (1). The eighth built faction is unknowables, who
+  by D3 build no station at all. The independent/hollow placeholder stays
+  untouched.
 
-## Next round candidates (wave 44)
+## Next round candidates (wave 45)
 - Wave 43 contract notes for future work: seven built factions still carry
  their wave-38 low-detail station sculpts and await the same toolkit
  treatment once Freehold is approved. The batch order, by flown-system count:

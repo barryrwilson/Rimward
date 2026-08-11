@@ -362,23 +362,162 @@ export function pipeRun(b, ch, hex, { ax, ay, az, bx, by, bz, r = 0.16, seg = 6,
     b._addMatrix(ch, new THREE.CylinderGeometry(r * 1.4, r * 1.4, r * 1.5, seg), hex, _matrix);
   }
 }
+// Dense grid of rectangular hull plating: rows * cols plates on cylinder surface.
+export function panelSkin(b, ch, hexes, { r, from, to, rows, cols, seed, t = 0.18, axis = 'x', inset = 0.22, jitter = 0.18 }) {
+  const rnd = rng(seed);
+  const len = to - from;
+  const cellLength = len / rows;
+  const cellWidth = 2 * r * Math.sin(Math.PI / cols);
+  
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const hex = hexes[Math.floor(rnd() * hexes.length)];
+      
+      const lengthScale = 1 + (rnd() - 0.5) * 2 * jitter;
+      const widthScale = 1 + (rnd() - 0.5) * 2 * jitter;
+      
+      const plateLength = cellLength * (1 - inset) * Math.min(lengthScale, 1);
+      const plateWidth = cellWidth * (1 - inset) * Math.min(widthScale, 1);
+      
+      const along = from + j * cellLength + cellLength / 2;
+      const ang = (i + 0.5) * (Math.PI * 2 / cols);
+      
+      const pr = r + t / 2;
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang);
+      
+      let px, py, pz;
+      if (axis === 'x') { px = along; py = cos * pr; pz = sin * pr; }
+      else if (axis === 'y') { px = cos * pr; py = along; pz = sin * pr; }
+      else { px = cos * pr; py = sin * pr; pz = along; }
+      
+      let cax = 0, cay = 0, caz = 0;
+      if (axis === 'x') { cax = 1; }
+      else if (axis === 'y') { cay = 1; }
+      else { caz = 1; }
+      
+      _axis.set(cax, cay, caz);
+      _out.set(px, py, pz);
+      if (axis === 'x') _out.x = 0; else if (axis === 'y') _out.y = 0; else _out.z = 0;
+      _out.normalize();
+      _side.crossVectors(_out, _axis).normalize();
+      _matrix.makeBasis(_side, _axis, _out).setPosition(px, py, pz);
+      b._addMatrix(ch, new THREE.BoxGeometry(plateWidth, plateLength, t), hex, _matrix);
+    }
+  }
+}
 
+// Rectangular window grid centred on origin, columns step along axis, rows step along +Y (or +Z if axis is 'y').
+export function windowGrid(b, ch, hex, { rows, cols, rowGap, colGap, w, h, d, x = 0, y = 0, z = 0, axis = 'x', ry = 0 }) {
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const colOff = (i - (cols - 1) / 2) * colGap;
+      const rowOff = (j - (rows - 1) / 2) * rowGap;
+      
+      let wx = x, wy = y, wz = z;
+      if (axis === 'x') {
+        wx += colOff; wy += rowOff;
+      } else if (axis === 'y') {
+        wx += colOff; wz += rowOff;
+      } else {
+        wx += colOff; wy += rowOff;
+      }
+      
+      box(b, ch, hex, w, h, d, { x: wx, y: wy, z: wz, ry });
+    }
+  }
+}
+
+// Pressurised connector A->B with collar rings at each end.
+export function airlock(b, ch, hexBody, hexRing, { ax, ay, az, bx, by, bz, r = 1.4, seg = 12, rings = 2 }) {
+  const A = new THREE.Vector3(ax, ay, az);
+  const B = new THREE.Vector3(bx, by, bz);
+  const dir = new THREE.Vector3().subVectors(B, A);
+  const len = dir.length();
+  if (len > 1e-6) dir.normalize();
+  else dir.set(0, 1, 0);
+  const side = new THREE.Vector3().crossVectors(dir, _up);
+  if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+  else side.normalize();
+  const normal = new THREE.Vector3().crossVectors(side, dir).normalize();
+  const p = new THREE.Vector3().addVectors(A, B).multiplyScalar(0.5);
+  _matrix.makeBasis(side, dir, normal).setPosition(p);
+  b._addMatrix(ch, new THREE.CylinderGeometry(r, r, Math.max(len, 1e-4), seg), hexBody, _matrix);
+  
+  const ringR = r * 1.18;
+  const ringTube = r * 0.16;
+  const ringMat = new THREE.Matrix4().makeBasis(dir, normal, side);
+  
+  const offsets = rings === 2 ? [0.1, 0.26, 0.74, 0.9] : [0.12, 0.88];
+  for (const t of offsets) {
+    p.copy(A).addScaledVector(dir, len * t);
+    ringMat.setPosition(p);
+    b._addMatrix(ch, new THREE.TorusGeometry(ringR, ringTube, 8, seg), hexRing, ringMat);
+  }
+}
+
+// Walkway deck A->B with two handrails offset ±width/2 on the perpendicular.
+export function bridge(b, ch, hexDeck, hexRail, { ax, ay, az, bx, by, bz, w = 1.8, railH = 0.8, posts = 6, deck = 0.22, rail = 0.08 }) {
+  const A = new THREE.Vector3(ax, ay, az);
+  const B = new THREE.Vector3(bx, by, bz);
+  const dir = new THREE.Vector3().subVectors(B, A);
+  const len = dir.length();
+  if (len > 1e-6) dir.normalize();
+  else dir.set(0, 0, 1);
+  const side = new THREE.Vector3().crossVectors(dir, _up);
+  if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+  else side.normalize();
+  const normal = new THREE.Vector3().crossVectors(side, dir).normalize();
+  const p = new THREE.Vector3().addVectors(A, B).multiplyScalar(0.5);
+  _matrix.makeBasis(side, normal, dir).setPosition(p);
+  b._addMatrix(ch, new THREE.BoxGeometry(w, deck, Math.max(len, 1e-4)), hexDeck, _matrix);
+  
+  const halfW = w / 2;
+  const p0 = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const postMat = new THREE.Matrix4();
+  const up = new THREE.Vector3(0, 1, 0);
+  
+  for (const s of [-halfW, halfW]) {
+    p0.copy(A).addScaledVector(side, s);
+    p1.copy(B).addScaledVector(side, s);
+    const n = Math.max(1, posts | 0);
+    for (let i = 0; i < n; i++) {
+      const t = n > 1 ? i / (n - 1) : 0;
+      const pt = new THREE.Vector3().lerpVectors(p0, p1, t);
+      const postTop = new THREE.Vector3().copy(pt).addScaledVector(up, railH);
+      postMat.makeBasis(side, up, dir).setPosition(postTop.x - side.x * rail / 2, postTop.y - up.y * rail / 2, postTop.z - dir.z * rail / 2);
+      b._addMatrix(ch, new THREE.BoxGeometry(rail, railH, rail), hexRail, postMat);
+    }
+    const topA = new THREE.Vector3().copy(p0).addScaledVector(up, railH);
+    const topB = new THREE.Vector3().copy(p1).addScaledVector(up, railH);
+    if (len > 1e-6) {
+      _dir.subVectors(topB, topA);
+      const postLen = _dir.length();
+      if (postLen > 1e-6) _dir.normalize();
+      const postSide = new THREE.Vector3().crossVectors(_dir, up);
+      if (postSide.lengthSq() < 1e-6) postSide.set(1, 0, 0);
+      else postSide.normalize();
+      const postNorm = new THREE.Vector3().crossVectors(postSide, _dir).normalize();
+      _pos.addVectors(topA, topB).multiplyScalar(0.5);
+      _matrix.makeBasis(postSide, postNorm, _dir).setPosition(_pos);
+      b._addMatrix(ch, new THREE.BoxGeometry(rail, rail, Math.max(postLen, 1e-4)), hexRail, _matrix);
+    }
+  }
+}
+
+// A tapered mast of stacked cones with either a box tip or a tilted dish.
 export function antenna(b, ch, hexMast, hexTip, { x = 0, y = 0, z = 0, h, r = 0.14, tip = 0.4, dish = 0 }) {
-  // Tapered mast as stacked cones of decreasing radius
   const tiers = 3;
   const tierH = h / tiers;
   for (let i = 0; i < tiers; i++) {
     const r0 = r * (1 - i * 0.25);
-    const r1 = r * (1 - (i + 1) * 0.25);
     const yt = y + i * tierH + tierH / 2; // cones are centred on their own origin
     cone(b, ch, hexMast, r0, tierH, 6, { x, y: yt, z });
   }
-  const yt = y + h;
-  if (dish > 0) {
-    hemi(b, ch, hexTip, dish, 8, 6, { x, y: yt, z, rx: 0.6 });
-  } else {
-    box(b, ch, hexTip, tip, tip, tip, { x, y: yt + tip / 2, z });
-  }
+  const top = y + h;
+  if (dish > 0) hemi(b, ch, hexTip, dish, 8, 6, { x, y: top, z, rx: 0.6 });
+  else box(b, ch, hexTip, tip, tip, tip, { x, y: top + tip / 2, z });
 }
 
 // Two stiles plus `rungs` cross rungs, the WHOLE assembly yawed by `ry` —

@@ -8801,12 +8801,15 @@ for (const [f, sysId] of Object.entries(w38STATION_REPS)) {
     for (const m of mats) w43mats.add(m);
   });
   w38stationChecks.freeholdMergeDiscipline = !!g && w43geos.size <= 8 && w43mats.size <= 8;
-  w38stationChecks.freeholdDetailDensity = w43verts >= 20000;
+  w38stationChecks.freeholdDetailDensity = w43verts >= 120000;
+  // Wave 43 measured 175,775; wave 44 is denser (2,000-3,000 parts). This floor
+  // still fails any regression to sparse primitives by a wide margin.
   // The glow chunk is the one wearing the record's pulsed lightMat.
   const glowMesh = directMeshes.find((m) => m.material?.isMeshBasicMaterial
     && m.material.color.getHex() === FACTION_STYLE.freehold.glow) ?? null;
   w38stationChecks.freeholdWindowDensity = !!glowMesh
-    && glowMesh.geometry.attributes.position.count >= 2000;
+    && glowMesh.geometry.attributes.position.count >= 30000;
+  // Wave 43 measured 14,160; wave 44 window fields roughly triple it.
   // Envelope: U.DOCK_RANGE is 45, so the SOLID silhouette must stay compact.
   // Measured over MESH geometry only — the stationRecord halo Sprites are
   // 150- and 30-unit billboards and would swamp a setFromObject() box.
@@ -10189,21 +10192,38 @@ for (const live of w42lives) {
     }
   }
 
-  // paletteFromStyle: every distinct hull-chunk colour must be a
-  // FACTION_STYLE.freehold colour (within 1/255 per channel). Vertex colours
-  // are linear; FACTION_STYLE hexes go through the same setHex conversion, so
-  // both sides are compared in the same space.
+  // paletteFromStyle: every distinct hull-chunk colour must sit on the wave-44
+  // WEATHERING LADDER — the deduplicated FACTION_STYLE.freehold palette crossed
+  // with SHADES [1.0, 0.86, 0.72, 0.6]. This is a fixed recomputable product
+  // set, not a tolerance band. The shade MUST be taken on the sRGB 8-bit
+  // channels of the palette hex, exactly as station.js's fhWeather() does:
+  // scaling the LINEAR channels instead gives different values and fails a
+  // correct sculpt (that was the wave-44 bring-up false failure).
   let w43paletteFromStyle = false;
   let w43paletteStray = 'none';
   if (gA) {
     const hull = gA.children.find((c) => c.isMesh && c.material?.isMeshStandardMaterial
       && c.material.vertexColors === true) ?? null;
     if (hull) {
-      const allowed = [
-        FACTION_STYLE.freehold.hull, FACTION_STYLE.freehold.hullDark,
-        FACTION_STYLE.freehold.trim, FACTION_STYLE.freehold.accent,
+      const SHADES = [1.0, 0.86, 0.72, 0.6];
+      // accent === patch[0] and trim === patch[1], so the Set dedupes to five.
+      const paletteUnique = [...new Set([
+        FACTION_STYLE.freehold.hull,
+        FACTION_STYLE.freehold.hullDark,
+        FACTION_STYLE.freehold.trim,
+        FACTION_STYLE.freehold.accent,
         ...FACTION_STYLE.freehold.patch,
-      ].map((hex) => new THREE.Color(hex));
+      ])];
+      const allowed = new Set();
+      for (const hex of paletteUnique) {
+        const r8 = (hex >> 16) & 255;
+        const g8 = (hex >> 8) & 255;
+        const b8 = hex & 255;
+        for (const f of SHADES) {
+          const wh = (Math.round(r8 * f) << 16) | (Math.round(g8 * f) << 8) | Math.round(b8 * f);
+          allowed.add(`#${wh.toString(16).padStart(6, '0')}`);
+        }
+      }
       const colorAttr = hull.geometry.attributes.color;
       const seen = new Set();
       const probe = new THREE.Color();
@@ -10215,11 +10235,10 @@ for (const live of w42lives) {
         const key = `${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const ok = allowed.some((c) => Math.abs(c.r - r) <= 1 / 255
-          && Math.abs(c.g - g) <= 1 / 255 && Math.abs(c.b - b) <= 1 / 255);
-        if (!ok) {
-          probe.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
-          w43paletteStray = `#${probe.getHex(THREE.SRGBColorSpace).toString(16).padStart(6, '0')}`;
+        probe.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+        const hex = `#${probe.getHex(THREE.SRGBColorSpace).toString(16).padStart(6, '0')}`;
+        if (!allowed.has(hex)) {
+          w43paletteStray = hex;
           w43paletteFromStyle = false;
           break;
         }
@@ -10281,14 +10300,60 @@ for (const live of w42lives) {
       && !!gAfter && gAfter.name === 'veridian-station';
   }
   
+  // connectedness: assert the hull chunk is a packed mass rather than a scatter
+  // of islands. Hash-grid approach: bucket vertices into 4-unit cubes, count
+  // occupied cells, and require at most 2% isolated cells (no 6-neighbour).
+  let w43connectedness = false;
+  let w43connectednessStray = 'n/a';
+  if (gA) {
+    const hull = gA.children.find((c) => c.isMesh && c.material?.isMeshStandardMaterial
+      && c.material.vertexColors === true) ?? null;
+    if (hull) {
+      const w43cellSize = 4;
+      const w43maxIsolatedRatio = 0.02;
+      const posAttr = hull.geometry.attributes.position;
+      const grid = new Map();
+      // First pass: bucket vertices into cells
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posAttr.getX(i);
+        const y = posAttr.getY(i);
+        const z = posAttr.getZ(i);
+        const ix = Math.floor(x / w43cellSize);
+        const iy = Math.floor(y / w43cellSize);
+        const iz = Math.floor(z / w43cellSize);
+        const key = `${ix},${iy},${iz}`;
+        grid.set(key, (grid.get(key) || 0) + 1);
+      }
+      const occupied = grid.size;
+      // Second pass: count isolated cells (no 6-axis neighbour occupied)
+      let isolated = 0;
+      for (const key of grid.keys()) {
+        const [ix, iy, iz] = key.split(',').map(Number);
+        let hasNeighbour = false;
+        const neighbours = [
+          `${ix + 1},${iy},${iz}`, `${ix - 1},${iy},${iz}`,
+          `${ix},${iy + 1},${iz}`, `${ix},${iy - 1},${iz}`,
+          `${ix},${iy},${iz + 1}`, `${ix},${iy},${iz - 1}`,
+        ];
+        for (const nKey of neighbours) {
+          if (grid.has(nKey)) { hasNeighbour = true; break; }
+        }
+        if (!hasNeighbour) isolated++;
+      }
+      w43connectednessStray = `${isolated}/${occupied}`;
+      w43connectedness = occupied > 0 && isolated <= occupied * w43maxIsolatedRatio;
+    }
+  }
+  
   const w43checks = {
     determinism: w43determinism,
     paletteFromStyle: w43paletteFromStyle,
     glowNearWhite: w43glowNearWhite,
     teardownDisposesAll: w43teardownDisposesAll,
+    connectedness: w43connectedness,
   };
   console.log('wave43 freehold detail:', JSON.stringify(w43checks),
-    `paletteStray=${w43paletteStray} glowWorstChannel=${w43glowWorst} teardown=${w43teardownTally}`);
+    `paletteStray=${w43paletteStray} glowWorstChannel=${w43glowWorst} teardown=${w43teardownTally} connectedness=${w43connectednessStray}`);
   if (!Object.values(w43checks).every(Boolean)) { console.log('WAVE43 FREEHOLD DETAIL FAIL'); errors++; }
 }
 
