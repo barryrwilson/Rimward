@@ -19,6 +19,7 @@ import { lamplighterStation } from './stations/lamplighter.js';
 import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
+import { latticeShell, veinFiligree, cellPod, coralTuft, arcadeRing, starfishArmPoint } from './organic.js'; // wave 48: the Bloom detail pass (visual plan Phase 7)
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -584,6 +585,96 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   fleshLight.position.set(0, 6, 0);
   group.add(fleshLight);
 
+  // --- wave 48: the density layer (visual plan Phase 7, D6 nacre-first).
+  // Three per-build materials carry every merged organic chunk, exactly as the
+  // detail stations' hull/glow/glaze trio does:
+  //   organicHullMat   opaque nacre-family structure — the lattice IS the mass
+  //                    now, and the lagoon glass becomes the panel seen through
+  //                    it (the reference's figure/ground, inverted back from
+  //                    wave 33). Opaque on purpose: it is the only thing here
+  //                    that holds its value past 150u.
+  //   organicGlowMat   lattice lamps and arcade interiors. vertexColors, so
+  //                    update() multiplies the chandelier pulse over the baked
+  //                    colour and the whole station breathes on one clock.
+  //   organicGlazeMat  saturated glass — basin water, cell vein fans. White
+  //                    material, never animated, depthWrite off.
+  const organicHullMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, vertexColors: true,
+    roughness: 0.52, metalness: 0.12,
+    emissive: ORGANIC.deepFlesh, emissiveIntensity: 0.18,
+  });
+  const organicGlowMat = new THREE.MeshBasicMaterial({ color: 0x7fe0a8, vertexColors: true });
+  const organicGlazeMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false,
+  });
+
+  // Arm lattice: ONE merged chunk per channel, built once in ARM-LOCAL space
+  // and mounted in all five flex groups (the armGeo sharing pattern). A merged
+  // chunk cannot flex per-vertex, but it does not need to — parented inside the
+  // flex group it rides the sway transform with the arm mesh, so rest pose and
+  // flexed pose can never diverge. The animation contract (part-level
+  // transforms only) is untouched.
+  const armLatticeB = detailBuilder();
+  const armLat = latticeShell({
+    length: 20, rootRadius: 3.4, tipRadius: 0.4, droop: 6.5, curl: 0.12, // MUST match armGeo
+    ribs: 9, hoops: 9, strut: 0.16, swell: 1.06,
+    nodeEvery: 2, // every other crossing carries a lamp — the lattice sparkles
+  });
+  armLatticeB.add('organicHull', armLat.ribs, ORGANIC.nacre);
+  armLatticeB.add('organicHull', armLat.ribsAlt, ORGANIC.gilt); // pearl and gold weave
+  armLatticeB.add('organicHull', armLat.struts, ORGANIC.nacreShadow);
+  armLatticeB.add('organicGlow', armLat.nodes, 0xe8fff6); // near-white: the material carries the mint
+
+  // Coral colonies ON the lattice (never volume-scattered — the wave-47 rule).
+  // Every foot is placed with starfishArmPoint at the lattice's own swell, so
+  // it is seated on structure by construction rather than by luck. They ride
+  // the DORSAL line, where local +Y really is the outward normal and a tuft
+  // can grow straight up without a per-anchor frame.
+  const CORAL_AT = [0.18, 0.33, 0.52, 0.68, 0.84];
+  const armAnchor = new THREE.Vector3();
+  for (let i = 0; i < CORAL_AT.length; i++) {
+    const t = CORAL_AT[i];
+    starfishArmPoint(t, Math.PI / 2, {
+      length: 20, rootRadius: 3.4, tipRadius: 0.4, droop: 6.5, curl: 0.12, swell: 1.02,
+    }, armAnchor);
+    const tuft = coralTuft({
+      height: 1.5 - t * 0.7, branches: 3 + (i % 2), splits: 2, strut: 0.085, seed: 41 + i * 7,
+    });
+    const o = { x: armAnchor.x, y: armAnchor.y, z: armAnchor.z, rz: (i % 2 ? 0.22 : -0.18) };
+    armLatticeB.add('organicHull', tuft.stems, ORGANIC.coral, o);
+    armLatticeB.add('organicHull', tuft.tips, ORGANIC.coralDeep, o);
+  }
+
+  // Leaf-cell pod at the arm tip: the reference hangs teardrop cells with a
+  // glowing vein fan off the outer structure. Shell and bezel are hull; the
+  // fan is glaze, so it keeps its saturated teal instead of being pulled to
+  // the chandelier mint.
+  starfishArmPoint(0.99, 0, {
+    length: 20, rootRadius: 3.4, tipRadius: 0.4, droop: 6.5, curl: 0.12, swell: 0,
+  }, armAnchor);
+  {
+    const pod = cellPod({ length: 3.4, width: 1.7, height: 0.85, seed: 23 });
+    const o = { x: armAnchor.x, y: armAnchor.y - 0.2, z: armAnchor.z, rx: -0.5 };
+    armLatticeB.add('organicHull', pod.shell, ORGANIC.nacreShadow, o);
+    armLatticeB.add('organicHull', pod.rim, ORGANIC.nacre, o);
+    armLatticeB.add('organicGlaze', pod.veins, ORGANIC.lagoonHot, o);
+  }
+  const armLatticeGeos = armLatticeB.build();
+
+  // Root cell: the wave-33 node orb becomes the CORE of a leaf-cell, so the
+  // five teal beads read as organs instead of loose marbles. Bezel and fan
+  // only — no shell, or it would swallow the orb it is built around. Built in
+  // HOLDER space because that is where the orb lives; putting it in the flex
+  // group would let the roll separate the two by a visible margin.
+  const rootCellB = detailBuilder();
+  {
+    const pod = cellPod({ length: 3.6, width: 3.0, height: 1.6, seed: 57, fan: 6 });
+    const o = { x: 0, y: 2.6, z: 4.0, rx: -1.15 }; // the node orb's own seat, tipped dorsal
+    rootCellB.add('organicHull', pod.rim, ORGANIC.nacre, o);
+    rootCellB.add('organicGlaze', pod.veins, ORGANIC.lagoonHot, o);
+  }
+  const rootCellGeos = rootCellB.build();
+
   // --- five starfish arms: one shared tapered/drooping geometry. The veins
   // live in skinMat's emissiveMap (no overlay cage); the translucent skin
   // now reveals each arm's golden hearth chamber. Nested flex group = the
@@ -618,6 +709,10 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     holder.add(flex);
     const armMesh = new THREE.Mesh(armGeo, skinMat);
     flex.add(armMesh);
+    // The openwork sheath over the glass. Same flex group as the arm mesh.
+    flex.add(new THREE.Mesh(armLatticeGeos.organicHull, organicHullMat));
+    flex.add(new THREE.Mesh(armLatticeGeos.organicGlow, organicGlowMat));
+    flex.add(new THREE.Mesh(armLatticeGeos.organicGlaze, organicGlazeMat));
 
     // Golden hearth: the lit chamber inside the arm — an elongated amber
     // core (~54% of arm length, slim radius) nested along the spine's mid
@@ -683,11 +778,47 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     nodeGlow.scale.setScalar(6);
     nodeGlow.position.copy(node.position);
     holder.add(nodeGlow);
+    // …and the leaf-cell bezel + vein fan built around that orb (wave 48).
+    holder.add(new THREE.Mesh(rootCellGeos.organicHull, organicHullMat));
+    holder.add(new THREE.Mesh(rootCellGeos.organicGlaze, organicGlazeMat));
 
     tagSway(holder, { axis: 'x', amp: 0.09, hz: 0.09, phase: i * 1.1 }); // vertical sweep: ±1.8u at the tip
     tagSway(flex, { axis: 'z', amp: 0.06, hz: 0.13, phase: i * 1.7 + 0.9 }); // lateral roll: ±1.2u, off-beat
     group.add(holder);
   }
+
+  // --- wave 48: base-ring filigree. The five arms met the bell at five
+  // separate points and the eye read five limbs, not one creature. A static
+  // openwork ring under the bell ties every root into a single mass — the
+  // reference's wide filigree base, and the same job the detail stations'
+  // deck skirts do. It lives on `group` (not a flex chain): the arms sway
+  // THROUGH it, which is what a skeleton does.
+  const baseB = detailBuilder();
+  {
+    const RING_R = 5.6;
+    const SPOKES = 30;
+    baseB.add('organicHull', new THREE.TorusGeometry(RING_R, 0.3, 8, 44), ORGANIC.nacre, { rx: Math.PI / 2, y: 1.2 });
+    baseB.add('organicHull', new THREE.TorusGeometry(RING_R - 1.5, 0.22, 8, 40), ORGANIC.nacreShadow, { rx: Math.PI / 2, y: 0.2 });
+    baseB.add('organicHull', new THREE.TorusGeometry(RING_R + 1.3, 0.18, 8, 48), ORGANIC.gilt, { rx: Math.PI / 2, y: 1.9 });
+    for (let i = 0; i < SPOKES; i++) {
+      const a = (i / SPOKES) * Math.PI * 2;
+      const cos = Math.cos(a);
+      const sin = Math.sin(a);
+      // Slanted rib from the inner ring up and out to the outer gilt hoop:
+      // struts, not posts, so the ring reads woven from every angle.
+      baseB.add('organicHull', new THREE.CylinderGeometry(0.12, 0.16, 2.4, 5), ORGANIC.nacre, {
+        x: cos * (RING_R - 0.6), y: 1.05, z: sin * (RING_R - 0.6), rz: cos * 0.5, rx: -sin * 0.5,
+      });
+      if (i % 3 === 0) {
+        baseB.add('organicGlow', new THREE.OctahedronGeometry(0.24, 0), 0xeafff8, {
+          x: cos * (RING_R + 1.3), y: 1.9, z: sin * (RING_R + 1.3),
+        });
+      }
+    }
+  }
+  const baseGeos = baseB.build();
+  group.add(new THREE.Mesh(baseGeos.organicHull, organicHullMat));
+  group.add(new THREE.Mesh(baseGeos.organicGlow, organicGlowMat));
 
   // --- five membrane webs fanning between adjacent arms, breathing against
   // them: the flower-skirt / starfish-webbing hybrid. One shared fan
@@ -724,6 +855,23 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   ringGroup.position.y = 4;
   const outerGeo = makePetalGeometry({ length: 26, width: 11, curl: 8, cup: 3.2, segs: 14 });
   const innerGeo = makePetalGeometry({ length: 17, width: 8, curl: 10, cup: 4.5, segs: 12 });
+
+  // Wave 48: gilt vein ridges and a nacre edge rib for each petal, merged per
+  // WHORL and mounted as a child of the petal MESH — so a filigree set
+  // inherits that petal's own tilt, its non-uniform scale jitter and its
+  // tagSway flex, and cannot drift off the membrane it belongs to. The edge
+  // rib is what makes a petal read as an outlined blade at 300u, where the
+  // translucent membrane itself has gone to haze.
+  const petalFiligree = (params) => {
+    const fb = detailBuilder();
+    const f = veinFiligree({ ...params, veins: 5, segs: 18, strut: 0.13 });
+    fb.add('organicHull', f.veins, ORGANIC.gilt);
+    fb.add('organicHull', f.rim, ORGANIC.nacre);
+    return fb.build().organicHull;
+  };
+  const outerFilGeo = petalFiligree({ length: 26, width: 11, curl: 8, cup: 3.2 });
+  const innerFilGeo = petalFiligree({ length: 17, width: 8, curl: 10, cup: 4.5 });
+
   const PETALS = 7;
   for (let i = 0; i < PETALS; i++) {
     // Deterministic 0..1 jitter per petal (no RNG import; stable per index).
@@ -736,6 +884,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     petal.rotation.x = -0.55 - j1 * 0.18; // uneven openness
     petal.scale.set(1 + (j2 - 0.5) * 0.24, 1, 1 + (j1 - 0.5) * 0.2);
     tagSway(petal, { axis: 'x', amp: 0.11 + j1 * 0.06, hz: 0.09 + j2 * 0.09, phase: i * 0.9 }); // deeper, slower flex
+    petal.add(new THREE.Mesh(outerFilGeo, organicHullMat));
     tilt.add(petal);
     ringGroup.add(tilt);
     // Inner whorl — half-step offset, steeper, smaller.
@@ -745,6 +894,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     sepal.rotation.x = -0.95 - j2 * 0.15;
     sepal.scale.setScalar(0.9 + j1 * 0.2);
     tagSway(sepal, { axis: 'x', amp: 0.09 + j2 * 0.05, hz: 0.11 + j1 * 0.07, phase: i * 1.3 + 0.6 });
+    sepal.add(new THREE.Mesh(innerFilGeo, organicHullMat));
     tilt2.add(sepal);
     ringGroup.add(tilt2);
   }
@@ -752,6 +902,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   // tight around the crown heart — taller curl/cup, smaller scale, offset a
   // quarter-step from the inner whorl. 7 outer + 7 inner + 5 bud = 19.
   const budGeo = makePetalGeometry({ length: 15, width: 6, curl: 12, cup: 5.5, segs: 12 });
+  const budFilGeo = petalFiligree({ length: 15, width: 6, curl: 12, cup: 5.5 });
   const BUDS = 5;
   for (let i = 0; i < BUDS; i++) {
     const j1 = Math.sin(i * 12.9898 + 4.7) * 0.5 + 0.5; // same sin-hash, own salt
@@ -762,13 +913,50 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
     bud.rotation.x = -1.2 - j2 * 0.15; // nearly closed: -1.20..-1.35
     bud.scale.setScalar(0.85 + j1 * 0.2);
     tagSway(bud, { axis: 'x', amp: 0.07 + j1 * 0.04, hz: 0.13 + j2 * 0.06, phase: i * 1.9 + 0.3 });
+    bud.add(new THREE.Mesh(budFilGeo, organicHullMat));
     tilt3.add(bud);
     ringGroup.add(tilt3);
   }
   tagBreath(ringGroup, { depth: 0.04, hz: 0.07 }); // the whole bloom slowly opens/closes
   tagSway(ringGroup, { axis: 'x', amp: 0.06, hz: 0.04 }); // …and nods (rotation.y spin is +=, unaffected)
-  const crownHeart = new THREE.Mesh(new THREE.SphereGeometry(2.5, 14, 10), mats.gilt);
-  ringGroup.add(crownHeart);
+  // --- wave 48 (decision D7): the crown throat. The wave-33 build closed the
+  // bud around a bare gilt sphere; the reference's single unforgettable
+  // feature is an open turquoise POOL with a light column standing over it,
+  // and that is what sits here now. Three parts, in the crown's own frame
+  // (ringGroup y 4, so local y 6 is station y 10):
+  //   arcade  a ring of lit arched openings — the only architecture note on
+  //           the whole station, and the place the amber hearth palette
+  //           becomes legible as rooms rather than diffuse glow. Piers run
+  //           the hull channel, arch interiors the GLAZE channel: glaze is
+  //           the un-animated white material, so the amber survives exactly
+  //           (the glow channel is multiplied by the mint chandelier pulse).
+  //   basin   a lagoonHot disc seated inside the arcade, drawn as glaze so
+  //           it renders inside the opaque pier ring and cannot fight the
+  //           45 transparent materials already in this build for sort order.
+  //   shaft   a soft additive column above it. Deliberately dimmer and
+  //           cooler than the beacon lantern 1u below it — the beacon is
+  //           signalling and must stay the brighter read.
+  const crownB = detailBuilder();
+  const arc = arcadeRing({ radius: 5.4, piers: 12, y: 0, height: 2.4, pierWidth: 0.5, pierDepth: 0.6 });
+  crownB.add('organicHull', arc.piers, ORGANIC.nacre);
+  crownB.add('organicGlaze', arc.arches, ORGANIC.amber);
+  crownB.add('organicGlaze', new THREE.CircleGeometry(4.5, 28), ORGANIC.lagoonHot, { rx: -Math.PI / 2, y: 0.5 });
+  crownB.add('organicHull', new THREE.TorusGeometry(4.55, 0.22, 8, 30), ORGANIC.gilt, { rx: Math.PI / 2, y: 0.52 });
+  const crownGeos = crownB.build();
+  const crown = new THREE.Group();
+  crown.position.y = 6;
+  crown.add(new THREE.Mesh(crownGeos.organicHull, organicHullMat));
+  crown.add(new THREE.Mesh(crownGeos.organicGlaze, organicGlazeMat));
+  ringGroup.add(crown);
+
+  const shaftMat = new THREE.SpriteMaterial({
+    map: makeOrganicGlowTexture('rgba(150,235,225,0.55)', 'rgba(46,143,134,0)'),
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.34,
+  });
+  const shaft = new THREE.Sprite(shaftMat);
+  shaft.scale.set(11, 26, 1); // a column, not a ball — tall and narrow
+  shaft.position.y = 19;
+  ringGroup.add(shaft);
   group.add(ringGroup);
 
   // --- no docking arm: the bloom is a single unified creature (dock logic
@@ -838,6 +1026,7 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   ctx.scene.add(group);
   return {
     group, ringGroup, lightMat, beaconMat, glowMat, beaconGlowMat,
+    organicGlowMat, // wave 48: rides the lightMat pulse so the lattice lamps breathe with the chandeliers
     lightColor: new THREE.Color(0x7fe0a8),
     organicParts: collectOrganic(group),
   };
@@ -2099,11 +2288,16 @@ export function initStation(ctx) {
         mesh.ringGroup.rotation.y += RING_SPIN * dt;
         _pulse.copy(mesh.lightColor).multiplyScalar(0.72 + 0.28 * Math.sin(ctx.elapsed * 2));
         mesh.lightMat.color.copy(_pulse);
+        // Wave 48: the Bloom's merged glow chunks ride the SAME pulse — one
+        // clock for chandeliers, lattice lamps and arcade interiors. Its
+        // vertex colours are near-white, so this colour is what they show.
+        if (mesh.organicGlowMat) mesh.organicGlowMat.color.copy(_pulse);
         mesh.beaconMat.visible = (ctx.elapsed % 1.6) < 1.05;
         mesh.glowMat.opacity = 0.3 + 0.12 * Math.sin(ctx.elapsed * 0.8);
         mesh.beaconGlowMat.opacity = mesh.beaconMat.visible ? 0.85 : 0.1;
       } else {
         mesh.lightMat.color.copy(mesh.lightColor);
+        if (mesh.organicGlowMat) mesh.organicGlowMat.color.copy(mesh.lightColor);
         mesh.beaconMat.visible = true;
         mesh.glowMat.opacity = 0.3;
         mesh.beaconGlowMat.opacity = 0.85;

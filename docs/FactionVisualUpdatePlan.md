@@ -540,10 +540,19 @@ to the `file:line` that emitted it, by wrapping the builder and mapping
 merged-vertex index to part. Every defect in this wave was named by that trace.
 
 
-### Phase 7 — The Bloom detail pass (PLANNED, wave 48+)
+### Phase 7 — The Bloom detail pass (BUILT, wave 48)
 
-**STATUS: PLANNED, DECISIONS APPROVED (D6/D7/D8, user, 2026-08-11) — READY TO
-BUILD.** Start at 7.3 step 1. The Bloom (`buildBeautifulStation`, wave 27, relit waves
+**STATUS: BUILT AND VERIFIED (wave 48, 2026-08-11).** All four steps of 7.3
+landed; the pins of 7.4 are live in scripts/boot-test.mjs and green. Measured
+at bt_cradle through the real initStation path: 261,558 vertices (was 17,049),
+244,674 of them merged, 19,602 glow, 0 orphan detail vertices, no palette
+strays, envelope unchanged at x [-24.4, 24.8] y [-14.5, 29.0] z [-22.0, 28.8].
+The one reference item still open is 7.0 item 1's nest READ — the wave-33 bud
+whorl is nearly closed, so the new basin reads from above and from the crown's
+own quarter but not from a level approach. Opening the bud is a change to
+user-directed wave-33 geometry and was left for a decision.
+
+Everything below is the plan as approved and built to. The Bloom (`buildBeautifulStation`, wave 27, relit waves
 33/36) is now the least dense station in the game. It predates the whole
 merged-vertex-colour programme: measured live at bt_cradle it carries 115 meshes,
 17,049 vertices, 15 geometries, 16 materials, 4 textures, 7 sprites and 1
@@ -663,6 +672,36 @@ cannot flex per-part. The resolution is parenting, not per-vertex work:
 - PointLight stays ALLOWED here (fleshLight, wave-36 calibrated) — the no-light
   rule is a detail-station contract, and the Bloom is deliberately not in
   DETAIL_STATIONS.
+
+#### 7.4a What actually shipped (wave 48)
+
+The pin names in 7.4 survived; the harness section carries seventeen of them,
+including four the plan did not anticipate. Deltas worth knowing:
+
+- **The glaze channel took the amber, not the glow channel.** 7.2 put the
+  arcade's warm interiors in `organicGlow`, but that material is multiplied by
+  the chandelier pulse (mint), which would have turned every arch mint. Glaze
+  is the un-animated white material, so amber and lagoonHot survive exactly.
+  Glow now carries only near-white lattice lamps — and `bloomGlowNearWhite`
+  pins that, borrowing the wave-45 discipline.
+- **`organicGlowMat` is a second material driven beside `lightMat`.** The
+  chandelier bulbs have no colour attribute, so `lightMat` could not simply
+  take `vertexColors: true`. update() copies the same pulse into both, which
+  is what 7.2's "breathe with the chandeliers" asked for.
+- **`bloomRidesAnimation` is the load-bearing pin.** 48 merged chunks; 46 sit
+  under a sway- or breath-tagged ancestor, 2 (the base ring and its lamps) are
+  static by design. If a future edit parents a chunk to the station group
+  instead of a flex group it stops riding the sway, and this is the only pin
+  that would notice.
+- **`bloomFreeze` needs `updateMatrixWorld` from the station ROOT.** The
+  harness never renders, so a chunk sampled on its own reads a stale parent
+  matrix and the leg false-passes as frozen. Bring-up hit exactly this.
+- **latticeShell returns ribs split by parity** (`ribs`/`ribsAlt`) so the arm
+  weave runs pearl and gold alternating without the primitive knowing about
+  colour. Same idea as the named-pieces return on every other primitive.
+- **New tool: `scripts/measure-bloom.mjs`** — the wave-47 sculpt measurer in
+  bloom mode. Per-role vertex census, envelope, seating, palette and hull mean
+  luminance off the REAL build. Every number above came from it.
 
 #### 7.5 Risks
 

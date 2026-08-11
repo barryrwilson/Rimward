@@ -2233,17 +2233,73 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   fx_bastion, vd_survey, lastbeacon and as_census through the real initStation
   path, three to four framings each.
 
-## Next round candidates (wave 48)
+- Wave 48: the Bloom detail pass — the Beautiful Ones station stops being the
+  least dense in the game.
+  WHY. buildBeautifulStation predates the whole merged-vertex-colour programme:
+  measured at bt_cradle it carried 115 meshes / 17,049 vertices while the ten
+  sculpted stations run 155,000-451,000. Next to the wave-47 ferrous or veridian
+  it read smooth and sparse. Phase 7 of docs/FactionVisualUpdatePlan.md closed
+  that WITHOUT touching what already worked — the living animation, the
+  translucent glass, the mint identity are all unchanged.
+  THE MECHANISM (plan 7.2, decision D8). Station density comes from merged
+  static geometry; the organic contract animates by part-level transforms, and a
+  merged chunk cannot flex per-vertex. The resolution is parenting, not
+  per-vertex work: a merged chunk is static within itself but is an ordinary
+  Object3D, so it is parented INTO the arm's flex group / the petal mesh / the
+  crown ring and rides that transform. Rest pose and flexed pose cannot diverge
+  by construction. 48 chunks now: 46 ride animation, 2 (base ring + its lamps)
+  are static by design, and `bloomRidesAnimation` pins that split.
+  WHAT WAS BUILT. Five new organic primitives in organic.js — latticeShell (the
+  openwork trellis over an arm, ribs split by parity so the weave runs pearl and
+  gold), veinFiligree (gilt vein ridges + a nacre edge rib on a petal, evaluated
+  on makePetalGeometry's own surface), cellPod (teardrop leaf-cell, bezel + vein
+  fan), coralTuft (branching clump, seated by its FOOT), arcadeRing (arched
+  openings, piers in hull and lit interiors in glaze) — plus starfishArmPoint, a
+  shared read of the arm spine so anything seated on an arm hugs it exactly.
+  In station.js: the arm lattice in all five flex groups, filigree on all 19
+  petals, coral and a tip cell-pod per arm, the node orbs re-cast as the cores of
+  root cells, a static base-ring skeleton tying the five roots into one mass, and
+  the crown throat rebuilt per D7 — a lagoonHot basin in a gilt-and-nacre arcade
+  ring with a soft light column, replacing the bare gilt crownHeart sphere.
+  D6 NACRE-FIRST, AND WHY IT PAID. The lattice is the mass and the lagoon glass
+  is now the PANEL seen through it — the reference's figure/ground, inverted back
+  from wave 33. Hull mean luminance 0.423 (ferrous 0.269, veridian 0.300), so the
+  at-range problem the wave-36 rebalance only softened is fixed outright: at 150u
+  the station holds a bright pale silhouette instead of going murky.
+  THE AMBER TRAP. The plan put the arcade's warm interiors in the glow channel,
+  but glow is multiplied by the chandelier pulse — every arch would have gone
+  mint. Warm and saturated colours (amber arches, lagoonHot basin and vein fans)
+  live in the GLAZE channel, which is white and never animated. Glow carries only
+  near-white lattice lamps, pinned by bloomGlowNearWhite. And lightMat could not
+  simply take vertexColors (the chandelier bulbs have no colour attribute), so
+  the Bloom carries a second organicGlowMat that update() drives with the same
+  pulse — one clock for chandeliers, lattice lamps and pads.
+  TOOLING. scripts/measure-bloom.mjs — the wave-47 sculpt measurer in bloom mode:
+  per-role vertex census, envelope, seating, palette and hull luminance off the
+  REAL initStation build. Every number here came from it, not from a summary.
+  ONE HARNESS TRAP WORTH KEEPING. bloomFreeze compares chunk world matrices
+  across frames; the harness never renders, so a chunk sampled on its own reads a
+  STALE parent matrix and the leg false-passes as "frozen". updateMatrixWorld
+  must run from the station root. Bring-up hit exactly this.
+  VERIFIED. Boot test PASS (17 new wave-48 pins green); vite build clean.
+  Measured at bt_cradle: 261,558 vertices (was 17,049), 244,674 merged, 19,602
+  glow, 0 orphans of 24,936 detail vertices, no palette strays, envelope
+  unchanged at x [-24.4, 24.8] y [-14.5, 29.0] z [-22.0, 28.8], teardown 50/50
+  per-build assets disposed with the shared textures untouched. Driven in the
+  real game at bt_cradle at five framings from 30u to 150u.
+  STILL OPEN. Reference item 1's nest READ: the wave-33 bud whorl is nearly
+  closed, so the new basin reads from above and from the crown's quarter but not
+  from a level approach. Opening the bud means changing user-directed wave-33
+  geometry, so it is a decision, not a fix.
 
-- The Bloom detail pass: docs/FactionVisualUpdatePlan.md Phase 7 — READY TO
-  BUILD, all three decisions APPROVED (user, 2026-08-11): D6 nacre-first
-  structure, D7 the turquoise basin + arcade, D8 the two-layer animation split.
-  The Beautiful Ones station is the least dense in the game (115 meshes /
-  17,049 verts vs 155k-451k for the sculpts). The plan carries a first-pass
-  reference comparison (7.0), the merged-organic-chunks-riding-animated-parts
-  technique (7.2), the four-step build order (7.3 — start at step 1, the arm
-  lattice), the new bloom harness pins (7.4), and a risk table (7.5). Nothing
-  is built yet.
+## Next round candidates (wave 49)
+
+- The Bloom's crown opening (Phase 7 leftover): the D7 basin is the reference's
+  one unforgettable feature and the closed wave-33 bud hides it at approach
+  elevation. Opening the five bud petals from -1.20..-1.35 to roughly
+  -0.95..-1.10 and lifting the outer whorl would buy the nest read that 7.0 item
+  1 asked for, without hollowing the core. Needs a user call — the closed bud was
+  user-directed in wave 33.
 
 ## Next round candidates (wave 47, historical)
 - Wave 46 contract notes for future work: station.js DETAIL_STATIONS carries 10

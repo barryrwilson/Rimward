@@ -10529,6 +10529,255 @@ for (const live of w42lives) {
   if (!Object.values(w46checks).every(Boolean)) { console.log('WAVE46 SEEDED FACTIONS FAIL'); errors++; }
 }
 
+// ---- Wave 48: the Bloom detail pass (visual plan Phase 7) -----------------
+// The Beautiful Ones station was the least dense in the game — 17,049 vertices
+// against 155,000-451,000 for the ten sculpted stations — because it predates
+// the whole merged-vertex-colour programme. Wave 48 gives it the same density
+// WITHOUT touching what already worked: the living animation, the translucent
+// glass, the mint identity.
+//
+// The mechanism these pins exist to protect: a merged chunk is static within
+// itself but is an ordinary Object3D, so it is PARENTED INTO the animated part
+// it belongs to (arm flex group, petal mesh, crown ring) and rides that part's
+// transform. Rest pose and flexed pose therefore cannot diverge by
+// construction — but only for as long as the parenting holds, which is exactly
+// what `bloomRidesAnimation` and `bloomFreeze` measure. Nothing here reads a
+// report: every number is taken off the built scene graph.
+//
+// The Bloom answers to the ORGANIC palette, NOT to FACTION_STYLE, so
+// `bloomPaletteOrganic` recomputes its own allowed set (ORGANIC bases × the
+// SHADES ladder) rather than borrowing the wave-45 paletteFromStyle loop —
+// which must keep excluding beautiful.
+{
+  const w48 = {};
+  const w48notes = [];
+  const { ORGANIC: w48ORGANIC } = await import('../src/systems/organic.js');
+  const { SHADES: w48SHADES, weather: w48weather } = await import('../src/systems/station-detail.js');
+
+  const ctx48 = w38scopedCtx('bt_cradle');
+  const st48 = initStation(ctx48);
+  let g48 = null;
+  ctx48.scene.traverse((o) => { if (o.name === 'beautiful-station') g48 = o; });
+  w48.stationBuilt = !!g48 && ctx48.scene.children.filter((c) => c.name === 'beautiful-station').length === 1;
+
+  if (g48) {
+    g48.updateMatrixWorld(true);
+    // A merged chunk is exactly a mesh whose material carries vertexColors;
+    // hull is the Standard one, glow/glaze the two Basic ones.
+    const roleOf = (m) => {
+      const mat = m.material;
+      if (!mat || !mat.vertexColors) return null;
+      if (mat.isMeshStandardMaterial) return 'hull';
+      return mat.transparent && mat.depthWrite === false ? 'glaze' : 'glow';
+    };
+    const chunks = { hull: [], glow: [], glaze: [] };
+    let total = 0;
+    let lamps = 0;
+    g48.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      const n = o.geometry.attributes.position?.count ?? 0;
+      total += n;
+      const r = roleOf(o);
+      if (r) chunks[r].push(o);
+      else if (o.material?.isMeshBasicMaterial) lamps += n; // chandeliers, pad lamps, motes
+    });
+    const vertsOf = (list) => list.reduce((n, m) => n + (m.geometry.attributes.position?.count ?? 0), 0);
+    const hullV = vertsOf(chunks.hull);
+    const glowV = vertsOf(chunks.glow);
+    const glazeV = vertsOf(chunks.glaze);
+
+    // -- density: the floor sits BELOW the boxy stations' 120,000 because
+    // translucent layering reads denser per vertex (visual plan 7.4).
+    w48.bloomDensity = total >= 100000;
+    w48.bloomGlow = glowV + lamps >= 15000;
+    w48.bloomMergedIsMostOfIt = hullV + glowV + glazeV > total * 0.8;
+
+    // -- the parenting mechanism. Every merged chunk except the ONE static
+    // base ring must sit under a sway- or breath-tagged ancestor.
+    const animatedAncestor = (o) => {
+      for (let p = o.parent; p && p !== g48.parent; p = p.parent) {
+        if (p.userData?.sway || p.userData?.breath) return true;
+      }
+      return false;
+    };
+    const all48 = [...chunks.hull, ...chunks.glow, ...chunks.glaze];
+    const riding = all48.filter(animatedAncestor).length;
+    const staticChunks = all48.length - riding;
+    w48.bloomRidesAnimation = all48.length >= 30 && staticChunks === 2; // base-ring hull + its lamp chunk
+    w48notes.push(`wave48 chunks: ${all48.length} merged (${riding} riding animation, ${staticChunks} static)`);
+
+    // -- envelope: unchanged from wave 34's framing contract, and pinned at
+    // the MEASURED post-build box so any future growth trips here first.
+    const bb = new THREE.Box3();
+    const one = new THREE.Box3();
+    g48.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      one.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+      bb.union(one);
+    });
+    bb.min.sub(g48.position);
+    bb.max.sub(g48.position);
+    const near = (a, b) => Math.abs(a - b) <= 0.6;
+    w48.bloomEnvelope = !bb.isEmpty()
+      && Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)) <= 30
+      && Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z)) <= 30
+      && bb.min.y >= -16 && bb.max.y <= 30;
+    w48.bloomEnvelopeMeasured = near(bb.min.x, -24.4) && near(bb.max.x, 24.8)
+      && near(bb.min.y, -14.5) && near(bb.max.y, 29.0)
+      && near(bb.min.z, -22.0) && near(bb.max.z, 28.8);
+    w48notes.push(`wave48 envelope: x [${bb.min.x.toFixed(1)}, ${bb.max.x.toFixed(1)}]`
+      + ` y [${bb.min.y.toFixed(1)}, ${bb.max.y.toFixed(1)}] z [${bb.min.z.toFixed(1)}, ${bb.max.z.toFixed(1)}]`);
+
+    // -- seating (the wave-45 arithmetic, hull set widened to the ANIMATED
+    // meshes' rest-pose positions: on this station the arms, bell, petals and
+    // webs are structure too, they just move).
+    const cell = 2;
+    const occupied = new Set();
+    const wp = new THREE.Vector3();
+    const glowSet = new Set([...chunks.glow, ...chunks.glaze]);
+    g48.traverse((o) => {
+      if (!o.isMesh || !o.geometry || glowSet.has(o)) return;
+      const p = o.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        wp.set(p.getX(i), p.getY(i), p.getZ(i)).applyMatrix4(o.matrixWorld).sub(g48.position);
+        occupied.add(`${Math.floor(wp.x / cell)},${Math.floor(wp.y / cell)},${Math.floor(wp.z / cell)}`);
+      }
+    });
+    let orphans = 0;
+    let detailV = 0;
+    for (const o of glowSet) {
+      const p = o.geometry.attributes.position;
+      detailV += p.count;
+      for (let i = 0; i < p.count; i++) {
+        wp.set(p.getX(i), p.getY(i), p.getZ(i)).applyMatrix4(o.matrixWorld).sub(g48.position);
+        const ix = Math.floor(wp.x / cell);
+        const iy = Math.floor(wp.y / cell);
+        const iz = Math.floor(wp.z / cell);
+        let seated = false;
+        for (let dx = -1; dx <= 1 && !seated; dx++) {
+          for (let dy = -1; dy <= 1 && !seated; dy++) {
+            for (let dz = -1; dz <= 1 && !seated; dz++) {
+              if (occupied.has(`${ix + dx},${iy + dy},${iz + dz}`)) seated = true;
+            }
+          }
+        }
+        if (!seated) orphans++;
+      }
+    }
+    w48.bloomSeated = detailV > 0 && (100 * orphans) / detailV <= 1;
+
+    // -- palette: ORGANIC bases × SHADES. NOT FACTION_STYLE.
+    const allowed = new Set();
+    for (const base of [w48ORGANIC.nacre, w48ORGANIC.nacreShadow, w48ORGANIC.gilt,
+      w48ORGANIC.deepFlesh, w48ORGANIC.coral, w48ORGANIC.coralDeep]) {
+      for (let i = 0; i < w48SHADES.length; i++) allowed.add(w48weather(base, i));
+    }
+    const col = new THREE.Color();
+    let strays = 0;
+    let colouredHull = true;
+    for (const m of chunks.hull) {
+      const a = m.geometry.attributes.color;
+      if (!a) { colouredHull = false; continue; }
+      for (let i = 0; i < a.count; i++) {
+        col.setRGB(a.getX(i), a.getY(i), a.getZ(i));
+        if (!allowed.has(col.getHex())) strays++;
+      }
+    }
+    w48.bloomPaletteOrganic = colouredHull && strays === 0;
+
+    // -- glow vertex colours stay near-neutral, so update()'s mint pulse is
+    // what the lamps actually show (the wave-45 glowNearWhite discipline).
+    let glowNeutral = true;
+    for (const m of chunks.glow) {
+      const a = m.geometry.attributes.color;
+      if (!a) { glowNeutral = false; continue; }
+      for (let i = 0; i < a.count; i++) {
+        if (a.getX(i) < 0.6 || a.getY(i) < 0.6 || a.getZ(i) < 0.6) { glowNeutral = false; break; }
+      }
+    }
+    w48.bloomGlowNearWhite = glowNeutral;
+
+    // -- D7: the crown throat is a basin + arcade + light shaft, and the bare
+    // gilt crownHeart sphere is gone.
+    let shaft = 0;
+    let crownChunks = 0;
+    g48.traverse((o) => {
+      if (o.isSprite && o.scale.y > o.scale.x * 2) shaft++; // a column, not a halo
+      if (roleOf(o) && o.parent?.position.y === 6) crownChunks++;
+    });
+    w48.bloomBasinAndArcade = crownChunks === 2 && shaft === 1;
+
+    // -- PointLight stays ALLOWED here: the no-light rule is a detail-station
+    // contract and the Bloom is deliberately not in DETAIL_STATIONS.
+    let lights48 = 0;
+    g48.traverse((o) => { if (o.isLight) lights48++; });
+    w48.bloomKeepsFleshLight = lights48 === 1;
+
+    w48notes.push(`wave48 verts: total=${total} hull=${hullV} glow=${glowV} glaze=${glazeV}`
+      + ` lamps=${lamps} orphans=${orphans}/${detailV}`);
+
+    // -- bloomFreeze: under reducedMotion the merged chunks inherit FROZEN
+    // part transforms — a chunk that had wandered off its parent would show
+    // up here as motion the animation driver no longer drives.
+    // The harness never renders, so nothing else refreshes world matrices —
+    // update from the STATION ROOT, or every chunk samples a stale parent and
+    // the whole leg false-passes as "frozen".
+    const sample = () => {
+      g48.updateMatrixWorld(true);
+      let s = 0;
+      for (const m of all48) { const e = m.matrixWorld.elements; for (let i = 0; i < 16; i++) s += e[i] * (i + 1); }
+      return s;
+    };
+    ctx48.settings.reducedMotion = false;
+    for (let i = 0; i < 20; i++) { ctx48.elapsed += dt; st48.update(dt); }
+    const moveA = sample();
+    for (let i = 0; i < 60; i++) { ctx48.elapsed += dt; st48.update(dt); }
+    const moveB = sample();
+    ctx48.settings.reducedMotion = true;
+    st48.update(dt);
+    const frozenA = sample();
+    for (let i = 0; i < 60; i++) { ctx48.elapsed += dt; st48.update(dt); }
+    const frozenB = sample();
+    w48.bloomChunksAnimate = Math.abs(moveB - moveA) > 1e-6;
+    w48.bloomFreeze = Math.abs(frozenB - frozenA) < 1e-9;
+    ctx48.settings.reducedMotion = false;
+
+    // -- bloomAlloc: merged chunks are plain children, so they add exactly
+    // zero per-frame work. 120 frames, no new resources, no key growth.
+    const before48 = w39resOf(ctx48.scene);
+    const keysBefore48 = w39userDataKeySum(ctx48.scene);
+    for (let i = 0; i < 120; i++) { ctx48.elapsed += dt; st48.update(dt); }
+    w48.bloomAlloc = w39newResources(before48, w39resOf(ctx48.scene)) === 0
+      && w39userDataKeySum(ctx48.scene) === keysBefore48;
+
+    // -- bloomTeardown: every PER-BUILD material/geometry reaches dispose on
+    // rebuild; the four shared textures and the organicMaterials() caches stay
+    // undisposed (the wave-27 contract, now pinned). dispose() is already
+    // instrumented globally by the wave-39 leg.
+    const perBuild = new Set();
+    for (const r of w39resOf(g48)) if (r.userData?.shared !== true) perBuild.add(r);
+    const sharedSeen = [...w39resOf(g48)].filter((r) => r.userData?.shared === true);
+    ctx48.events.push({ type: 'systemLoaded', to: 'fh_hearth' });
+    ctx48.world.currentSystem = 'fh_hearth';
+    ctx48.lastEvents = ctx48.events;
+    ctx48.events = [];
+    st48.update(dt);
+    let undisposed = 0;
+    for (const r of perBuild) if (!w39disposed.has(r)) undisposed++;
+    let sharedKilled = 0;
+    for (const r of sharedSeen) if (w39disposed.has(r)) sharedKilled++;
+    w48.bloomTeardown = perBuild.size > 0 && undisposed === 0;
+    w48.bloomSharedSurvives = sharedSeen.length > 0 && sharedKilled === 0;
+    w48notes.push(`wave48 teardown: perBuild=${perBuild.size} undisposed=${undisposed}`
+      + ` shared=${sharedSeen.length} sharedDisposed=${sharedKilled}`);
+  }
+
+  for (const line of w48notes) console.log(line);
+  console.log('wave48 bloom detail pass:', JSON.stringify(w48));
+  if (!Object.values(w48).every(Boolean)) { console.log('WAVE48 BLOOM FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {
