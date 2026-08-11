@@ -2235,13 +2235,15 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 
 ## Next round candidates (wave 48)
 
-- The Bloom detail pass: docs/FactionVisualUpdatePlan.md Phase 7 (PLANNED).
-  The Beautiful Ones station is now the least dense in the game (115 meshes /
+- The Bloom detail pass: docs/FactionVisualUpdatePlan.md Phase 7 — READY TO
+  BUILD, all three decisions APPROVED (user, 2026-08-11): D6 nacre-first
+  structure, D7 the turquoise basin + arcade, D8 the two-layer animation split.
+  The Beautiful Ones station is the least dense in the game (115 meshes /
   17,049 verts vs 155k-451k for the sculpts). The plan carries a first-pass
-  reference comparison (7.0), three decisions awaiting approval — D6 nacre-first
-  structure, D7 the turquoise basin, D8 the two-layer animation split (7.1) —
-  the merged-organic-chunks-riding-animated-parts technique (7.2), build order
-  (7.3), and the new bloom harness pins (7.4). Nothing is built yet.
+  reference comparison (7.0), the merged-organic-chunks-riding-animated-parts
+  technique (7.2), the four-step build order (7.3 — start at step 1, the arm
+  lattice), the new bloom harness pins (7.4), and a risk table (7.5). Nothing
+  is built yet.
 
 ## Next round candidates (wave 47, historical)
 - Wave 46 contract notes for future work: station.js DETAIL_STATIONS carries 10

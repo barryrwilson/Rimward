@@ -542,7 +542,8 @@ merged-vertex index to part. Every defect in this wave was named by that trace.
 
 ### Phase 7 — The Bloom detail pass (PLANNED, wave 48+)
 
-**STATUS: PLANNED.** The Bloom (`buildBeautifulStation`, wave 27, relit waves
+**STATUS: PLANNED, DECISIONS APPROVED (D6/D7/D8, user, 2026-08-11) — READY TO
+BUILD.** Start at 7.3 step 1. The Bloom (`buildBeautifulStation`, wave 27, relit waves
 33/36) is now the least dense station in the game. It predates the whole
 merged-vertex-colour programme: measured live at bt_cradle it carries 115 meshes,
 17,049 vertices, 15 geometries, 16 materials, 4 textures, 7 sprites and 1
@@ -573,20 +574,22 @@ the same at-range concern applies: the lagoon glass at opacity 0.72 goes murky
 past ~150u (the wave-36 rebalance helped; nacre lattice would fix it outright,
 since ORGANIC.nacre 0xe9dccf is the palette's brightest value).
 
-#### 7.1 Decisions to approve before building
+#### 7.1 Decisions — ALL THREE APPROVED (user, 2026-08-11)
 
-- **D6 — Structure colour.** Recommend: nacre-first. The lattice filigree (the
+The recommendations below were approved as written. Build to them.
+
+- **D6 — Structure colour (APPROVED).** Recommend: nacre-first. The lattice filigree (the
   new mass) builds in nacre/nacreShadow/gilt, and the existing lagoon-glass
   shells become the PANELS seen through and between the lattice — which is
   exactly the reference's figure/ground. The wave-33 sea-glass look survives as
   the glazing layer rather than the body. Alternative if rejected: lattice in
   dimmed lagoon tones — worse at-range contrast (see luminance note above).
-- **D7 — The basin.** Recommend: build it. An open turquoise pool disc
+- **D7 — The basin (APPROVED).** Recommend: build it. An open turquoise pool disc
   (lagoonHot glaze) seated in a gilt arcade ring at the crown throat (y ≈ 10),
   with a soft additive light-shaft sprite above. It replaces the bare gilt
   crownHeart sphere. The beacon lantern stays; the shaft must stay subtler than
   the beacon blink so signalling reads unchanged.
-- **D8 — Animation split.** Recommend: two-layer build (this is the plan's core
+- **D8 — Animation split (APPROVED).** Recommend: two-layer build (this is the plan's core
   mechanism, spelled out in 7.2). Nothing about the existing animation changes;
   reducedMotion behaviour is untouched.
 
