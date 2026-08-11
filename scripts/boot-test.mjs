@@ -113,6 +113,7 @@
 // stable).
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
+import { FACTION_STYLE } from '../src/game/faction-style.js';
 
 // ---- Minimal DOM stubs (enough for hud/station/hail/controls/song) ----
 function makeCtx2d() {
@@ -8767,12 +8768,72 @@ for (const [f, sysId] of Object.entries(w38STATION_REPS)) {
   if (g.position.x !== def.station.position[0] || g.position.y !== def.station.position[1] || g.position.z !== def.station.position[2]) w38stPositioned = false;
   g.traverse((o) => { if (o.isPointLight) w38stNoPointLights = false; });
 }
+// Freehold is the wave-43 merged-geometry sculpt: its 350-550 primitive
+// parts are baked into vertex-coloured BufferGeometry chunks, so the
+// per-primitive Sphere/Torus parameter pins the other seven factions use
+// cannot match anything here. These pins check the merge discipline
+// (resource budget), measured density, and the docking envelope instead —
+// all derived from the live scene graph, nothing self-reported.
 {
   const ctxS = w38scopedCtx('fh_hearth');
   initStation(ctxS);
   const g = w38stationGroupOf(ctxS);
-  w38stationChecks.freeholdDomes = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 2.6 && Math.abs(p.thetaLength - Math.PI / 2) < 1e-9) === 6;
-  w38stationChecks.freeholdSecondRing = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.radius === 17) === 1;
+  const merged = (parent) => (parent ? parent.children.filter((c) => c.isMesh
+    && c.geometry?.type === 'BufferGeometry' && !!c.geometry.attributes.color) : []);
+  const directMeshes = merged(g);
+  const ringGroup = g ? (g.children.find((c) => c.isGroup) ?? null) : null;
+  const ringMeshes = merged(ringGroup);
+  const allMeshes = [...directMeshes, ...ringMeshes];
+  // hull + glow + glaze on the group, ringHull + ringGlow + ringGlaze in the ring.
+  w38stationChecks.freeholdMergedChunks = directMeshes.length === 3 && ringMeshes.length === 3;
+  w38stationChecks.freeholdVertexColoured = allMeshes.length === 6 && allMeshes.every((m) => {
+    const col = m.geometry.attributes.color;
+    return m.material?.vertexColors === true && !!col && col.itemSize === 3
+      && col.count === m.geometry.attributes.position.count;
+  });
+  // Resource budget: the merge exists so ~430 parts cost ~12 resources.
+  const w43geos = new Set();
+  const w43mats = new Set();
+  let w43verts = 0;
+  if (g) g.traverse((o) => {
+    if (o.geometry) { w43geos.add(o.geometry); w43verts += o.geometry.attributes?.position?.count ?? 0; }
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) w43mats.add(m);
+  });
+  w38stationChecks.freeholdMergeDiscipline = !!g && w43geos.size <= 8 && w43mats.size <= 8;
+  w38stationChecks.freeholdDetailDensity = w43verts >= 20000;
+  // The glow chunk is the one wearing the record's pulsed lightMat.
+  const glowMesh = directMeshes.find((m) => m.material?.isMeshBasicMaterial
+    && m.material.color.getHex() === FACTION_STYLE.freehold.glow) ?? null;
+  w38stationChecks.freeholdWindowDensity = !!glowMesh
+    && glowMesh.geometry.attributes.position.count >= 2000;
+  // Envelope: U.DOCK_RANGE is 45, so the SOLID silhouette must stay compact.
+  // Measured over MESH geometry only — the stationRecord halo Sprites are
+  // 150- and 30-unit billboards and would swamp a setFromObject() box.
+  const w43bb = new THREE.Box3();
+  const w43one = new THREE.Box3();
+  if (g) {
+    g.updateMatrixWorld(true);
+    g.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      w43one.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+      w43bb.union(w43one);
+    });
+    w43bb.min.sub(g.position);
+    w43bb.max.sub(g.position);
+  }
+  w38stationChecks.freeholdEnvelope = !w43bb.isEmpty()
+    && Math.max(Math.abs(w43bb.min.x), Math.abs(w43bb.max.x)) <= 32
+    && Math.max(Math.abs(w43bb.min.z), Math.abs(w43bb.max.z)) <= 32
+    && w43bb.min.y >= -26 && w43bb.max.y <= 33;
+  console.log('wave43 freehold census:',
+    `chunks=${directMeshes.length}+${ringMeshes.length}`,
+    `geos=${w43geos.size} mats=${w43mats.size} verts=${w43verts}`,
+    `glowVerts=${glowMesh ? glowMesh.geometry.attributes.position.count : -1}`,
+    `bbox=x[${w43bb.min.x.toFixed(1)},${w43bb.max.x.toFixed(1)}]`,
+    `y[${w43bb.min.y.toFixed(1)},${w43bb.max.y.toFixed(1)}]`,
+    `z[${w43bb.min.z.toFixed(1)},${w43bb.max.z.toFixed(1)}]`);
 }
 {
   const ctxS = w38scopedCtx('vd_survey');
@@ -10073,6 +10134,162 @@ for (const live of w42lives) {
   removeLiveShip(ctx, live);
   const ix = ctx.ships.indexOf(live);
   if (ix >= 0) ctx.ships.splice(ix, 1);
+}
+
+// ---- Wave 43: freehold merged-detail station ----
+// The wave-43 contract: Freehold Landing is rebuilt as a single merged
+// vertex-coloured sculpt (350–550 primitive parts baked into ≤6 geometries).
+// These pins check the merge discipline, colour fidelity, and teardown hygiene.
+{
+  // Instrument dispose (wave-39 pattern)
+  const w43disposed = new Set();
+  let w43sharedDisposed = 0;
+  for (const w43proto of [THREE.BufferGeometry.prototype, THREE.Material.prototype, THREE.Texture.prototype]) {
+    const w43origDispose = w43proto.dispose;
+    w43proto.dispose = function () {
+      if (!w43disposed.has(this)) {
+        w43disposed.add(this);
+        if (this.userData?.shared === true) w43sharedDisposed++;
+      }
+      return w43origDispose.call(this);
+    };
+  }
+  const w43resOf = (root, into = new Set()) => {
+    root.traverse((o) => {
+      if (o.geometry) into.add(o.geometry);
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      for (const m of mats) {
+        into.add(m);
+        for (const k in m) { const v = m[k]; if (v && v.isTexture) into.add(v); }
+      }
+    });
+    return into;
+  };
+
+  // Scoped contexts for determinism check
+  const w43ctxA = w38scopedCtx('fh_hearth');
+  const w43ctxB = w38scopedCtx('fh_hearth');
+  const stA = initStation(w43ctxA);
+  const stB = initStation(w43ctxB);
+  const gA = w38stationGroupOf(w43ctxA);
+  const gB = w38stationGroupOf(w43ctxB);
+  
+  // determinism: two independent builds produce byte-identical hull position/color
+  let w43determinism = false;
+  if (gA && gB) {
+    const hullA = gA.children.find((c) => c.isMesh && c.material?.vertexColors === true && c.material?.type === 'MeshStandardMaterial');
+    const hullB = gB.children.find((c) => c.isMesh && c.material?.vertexColors === true && c.material?.type === 'MeshStandardMaterial');
+    if (hullA && hullB) {
+      const posA = hullA.geometry.attributes.position.array;
+      const posB = hullB.geometry.attributes.position.array;
+      const colA = hullA.geometry.attributes.color.array;
+      const colB = hullB.geometry.attributes.color.array;
+      w43determinism = posA.length === posB.length && colA.length === colB.length &&
+        posA.every((v, i) => v === posB[i]) && colA.every((v, i) => v === colB[i]);
+    }
+  }
+
+  // paletteFromStyle: every distinct hull-chunk colour must be a
+  // FACTION_STYLE.freehold colour (within 1/255 per channel). Vertex colours
+  // are linear; FACTION_STYLE hexes go through the same setHex conversion, so
+  // both sides are compared in the same space.
+  let w43paletteFromStyle = false;
+  let w43paletteStray = 'none';
+  if (gA) {
+    const hull = gA.children.find((c) => c.isMesh && c.material?.isMeshStandardMaterial
+      && c.material.vertexColors === true) ?? null;
+    if (hull) {
+      const allowed = [
+        FACTION_STYLE.freehold.hull, FACTION_STYLE.freehold.hullDark,
+        FACTION_STYLE.freehold.trim, FACTION_STYLE.freehold.accent,
+        ...FACTION_STYLE.freehold.patch,
+      ].map((hex) => new THREE.Color(hex));
+      const colorAttr = hull.geometry.attributes.color;
+      const seen = new Set();
+      const probe = new THREE.Color();
+      w43paletteFromStyle = colorAttr.count > 0;
+      for (let i = 0; i < colorAttr.count; i++) {
+        const r = colorAttr.getX(i);
+        const g = colorAttr.getY(i);
+        const b = colorAttr.getZ(i);
+        const key = `${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const ok = allowed.some((c) => Math.abs(c.r - r) <= 1 / 255
+          && Math.abs(c.g - g) <= 1 / 255 && Math.abs(c.b - b) <= 1 / 255);
+        if (!ok) {
+          probe.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+          w43paletteStray = `#${probe.getHex(THREE.SRGBColorSpace).toString(16).padStart(6, '0')}`;
+          w43paletteFromStyle = false;
+          break;
+        }
+      }
+    }
+  }
+  
+  // glowNearWhite: the update() pulse multiplies lightMat.color (scheme.light,
+  // warm amber) by these vertex colours, so a saturated hue here would corrupt
+  // the pulse. Vertex colours are stored LINEAR (THREE.ColorManagement converts
+  // on setHex), so convert back to sRGB before applying the >= 0.6 rule —
+  // comparing linear values against an sRGB threshold reads ~20% too dark.
+  let w43glowNearWhite = false;
+  let w43glowWorst = 'none';
+  if (gA) {
+    const glow = gA.children.find((c) => c.isMesh && c.material?.isMeshBasicMaterial
+      && c.material.vertexColors === true
+      && c.material.color.getHex() === FACTION_STYLE.freehold.glow) ?? null;
+    if (glow) {
+      w43glowNearWhite = true;
+      const colorAttr = glow.geometry.attributes.color;
+      const probe = new THREE.Color();
+      const seenGlow = new Set();
+      let worst = 1;
+      for (let i = 0; i < colorAttr.count; i++) {
+        const key = `${colorAttr.getX(i)},${colorAttr.getY(i)},${colorAttr.getZ(i)}`;
+        if (seenGlow.has(key)) continue;
+        seenGlow.add(key);
+        probe.setRGB(colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i), THREE.LinearSRGBColorSpace);
+        const hex = probe.getHex(THREE.SRGBColorSpace);
+        const lo = Math.min((hex >> 16) & 255, (hex >> 8) & 255, hex & 255) / 255;
+        if (lo < worst) { worst = lo; w43glowWorst = `#${hex.toString(16).padStart(6, '0')}`; }
+        if (lo < 0.6) w43glowNearWhite = false;
+      }
+    }
+  }
+
+  // teardownDisposesAll: the REAL rebuild path — station.js consumes a
+  // 'systemLoaded' event out of ctx.lastEvents inside update() (the wave-38 f
+  // idiom); emitting alone rebuilds nothing. Rebuild fh_hearth → vd_survey so
+  // the freehold sculpt's own per-build assets are the ones under audit.
+  let w43teardownDisposesAll = false;
+  let w43teardownTally = 'n/a';
+  if (gA) {
+    const firstBuildRes = w43resOf(gA);
+    w43disposed.clear();
+    w43sharedDisposed = 0;
+    w43ctxA.lastEvents = [{ type: 'systemLoaded', to: 'vd_survey' }];
+    stA.update(1 / 60);
+    const gAfter = w38stationGroupOf(w43ctxA);
+    let leaked = 0;
+    for (const r of firstBuildRes) {
+      if (r.userData?.shared === true) continue;
+      if (!w43disposed.has(r)) leaked++;
+    }
+    w43teardownTally = `${firstBuildRes.size - leaked}/${firstBuildRes.size}`;
+    w43teardownDisposesAll = firstBuildRes.size > 0 && leaked === 0
+      && w43sharedDisposed === 0 && gA.parent === null
+      && !!gAfter && gAfter.name === 'veridian-station';
+  }
+  
+  const w43checks = {
+    determinism: w43determinism,
+    paletteFromStyle: w43paletteFromStyle,
+    glowNearWhite: w43glowNearWhite,
+    teardownDisposesAll: w43teardownDisposesAll,
+  };
+  console.log('wave43 freehold detail:', JSON.stringify(w43checks),
+    `paletteStray=${w43paletteStray} glowWorstChannel=${w43glowWorst} teardown=${w43teardownTally}`);
+  if (!Object.values(w43checks).every(Boolean)) { console.log('WAVE43 FREEHOLD DETAIL FAIL'); errors++; }
 }
 
 

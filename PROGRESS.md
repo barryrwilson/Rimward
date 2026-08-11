@@ -1847,24 +1847,160 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   list), so nothing it ticked was ever updated. Read the diff, run the
   gate, look at the screen — and when a subagent's summary and the file
   disagree, the file wins.
+- Wave 43: station detail — Freehold Landing rebuilt as a merged-vertex-colour
+  sculpt (orchestrated; parallel slices on a fixed contract, then a solo art
+  pass). The user rejected the wave-38 station detail level across all eight
+  built factions: the per-faction sculpts carried only ~25-30 primitives each
+  and read as toy assemblies. This wave rebuilds ONE station — the Freehold
+  Compact ("Freehold Landing") — as a genuinely detailed sculpt for review,
+  reusing the wave-37 D4 vertex-colour ruling so the detail costs no GPU
+  resources. Once approved, the other seven factions follow the same pattern.
+  NEW MODULE src/systems/station-detail.js: a deterministic greeble toolkit
+  seeded by a 32-bit LCG (no Math.random anywhere). Exports detailBuilder
+  (frame stack + named colour channels; build() merges each channel to ONE
+  BufferGeometry via mergeGeometries), 6 shape primitives (box, cyl, sphere,
+  hemi, torus, cone), and 12 composite greebles (ribBands, windowRow,
+  portholeRing, truss, railing, panelPatches, pipeRun, antenna, ladder,
+  radiatorPanel, lampString, crate). Every part colour arrives as a hex from
+  the caller — the module knows nothing about FACTION_STYLE. Geometry
+  ownership transfers to the builder on add()/_addMatrix(): it converts to
+  non-indexed, applies opts then the frame-stack matrix, bakes the colour into
+  a vertex `color` attribute, and disposes the part at build().
+  WHY MERGING WAS MANDATORY (not a stylistic choice): the wave-39 ten-jump
+  leak test pins scene-wide resource counts with
+  Math.abs(liveAfter10 - liveAfter1) <= 60, where liveAfter1 counts distinct
+  geometries + materials + textures reachable from the scene while parked at
+  fh_hearth (a Freehold system) and liveAfter10 the same at bt_cradle. The
+  pre-wave-43 reading was 195 vs 194 — 1 of 60 margin used. Per-part
+  materials or geometries could not scale. MEASURED AFTER: the station carries
+  ~600 primitives in 8 geometries + 6 materials + 2 textures (175,775 merged
+  vertices, 14,160 of them in the glow chunk), and the scene reading DROPPED
+  to liveAfter1=173 — the detailed station is cheaper than the placeholder it
+  replaced.
+  BUILD CONTRACT (station.js buildFreeholdStation): six merged chunks. hull
+  (MeshStandardMaterial, vertexColors) + glow and glaze (MeshBasicMaterial,
+  vertexColors) mount directly on the station group; ringHull, ringGlow and
+  ringGlaze mount inside the single spinning ringGroup (offset to y = -15 so
+  the agri carousel hangs under the raft). lightMat carries glow/ringGlow and
+  update() pulses its colour, which MULTIPLIES the vertex colours — so glow
+  vertices must stay near-neutral (0xffffff / 0xfff2e2 / 0xe8dcc8; the rule is
+  every sRGB channel >= 0.6). Anything needing a different hue lives in
+  glaze/ringGlaze, whose material is white and never animated: that is where
+  the greenhouse grow-light green 0x35603a sits (a light colour, not a faction
+  colour). Reference: docs/FactionExamples/03-freehold-compact-station.png —
+  six ribbed pressure drums lying along X on a keel truss, a barn-red ribbed
+  centre dome with cupola and lit portholes, a 14-pane glazed barrel-vault
+  greenhouse, three domed habitats, a spherical tank farm, a lighthouse mast,
+  spine catwalks, radiator wings, mooring gantries with slung cargo drums, a
+  railed crate yard, an antenna thicket, pipe runs, 34 surface greebles, and a
+  24-lamp agri carousel with 12 glazed growing pods. Palette from
+  FACTION_STYLE.freehold: hull 0x6b4f36 warm brown (mass), hullDark 0x3a2c1e
+  (truss/seams/ribs), trim 0xd8c9a8 weathered cream (panelling), patch[0]
+  0x9a4436 barn red (roofs), patch[2] 0x5b7a94 faded blue (one donated module
+  plus radiator fins), scheme.light 0xffb454 warm amber windows.
+  INVARIANTS (all survive the rebuild): group.name === 'freehold-station';
+  exactly ONE direct Group child (the spinning ringGroup); no PointLight
+  anywhere; return via stationRecord(ctx, { scheme, group, lightMat,
+  beaconMat }, ringGroup, 31); zero new resources and zero new userData keys
+  per frame; everything reaches teardownMesh (nothing userData.shared);
+  U.DOCK_RANGE is 45, so the mesh bounding box stays inside |x|,|z| <= 32 and
+  y in [-26, 33] (measured x[-29.0,29.1] y[-16.6,32.4] z[-25.5,25.5]; the
+  beacon owns the top).
+  FOUR BRING-UP BUGS, all in the new code, all found by measurement rather
+  than by reading summaries — worth knowing before the next faction:
+  (1) detailBuilder.push() composed its frame with ONE module scratch Matrix4
+  for both the translation and the rotation, so makeRotationFromEuler
+  clobbered the translation before multiply() read it (frame became R*R with
+  no offset); fixed with Matrix4.compose from the quaternion form.
+  (2) add() pushed into channels[channel] without the lazy-create guard, so
+  the first part of any channel threw. (3) _addMatrix() was missing
+  _color.setHex(hex), so every oriented member (truss, railing, pipeRun,
+  portholeRing, panelPatches) silently inherited the PREVIOUS part's colour —
+  which is how near-white window tints leaked into the hull chunk. (4) the
+  sculpt's tank-farm block left a b.push() unclosed, offsetting every later
+  assembly (gantries, pipes, crates, greebles) by (18, 4, 14) and throwing
+  parts to x = 222. Two guards now make (1) and (4) loud instead of silent:
+  build() throws on any unclosed push() frame, and _member documents that it
+  clobbers the module scratch so callers must hold their own vectors.
+  HARNESS (boot-test.mjs): the two wave-38 freehold primitive-parameter pins
+  (freeholdDomes: 6 SphereGeometry r=2.6 hemispheres; freeholdSecondRing: 1
+  TorusGeometry r=17) can no longer match anything — the parts are merged into
+  anonymous BufferGeometry — and are replaced by six pins derived from the
+  live scene graph: freeholdMergedChunks (exactly 3 merged meshes on the group
+  and 3 in the ringGroup), freeholdVertexColoured (all 6 wear
+  vertexColors === true and carry a color attribute of itemSize 3 whose count
+  equals the position count), freeholdMergeDiscipline (<= 8 distinct
+  geometries and <= 8 distinct materials reachable from the group — the budget
+  that lets the detail exist), freeholdDetailDensity (>= 20000 merged
+  vertices), freeholdWindowDensity (the glow chunk alone >= 2000 vertices),
+  and freeholdEnvelope (a Box3 over MESH geometry only — the stationRecord
+  halo Sprites are 150- and 30-unit billboards and would swamp
+  setFromObject — inside the DOCK_RANGE envelope). A new wave-43 section adds
+  determinism (two independent scoped builds produce byte-identical hull
+  position AND color arrays, proving the seeded RNG), paletteFromStyle (every
+  distinct hull-chunk colour is a FACTION_STYLE.freehold value within 1/255
+  per channel), glowNearWhite (every distinct glow colour converted back to
+  sRGB has all channels >= 0.6 — comparing linear values against an sRGB
+  threshold reads ~20% too dark and was itself a false failure during
+  bring-up), and teardownDisposesAll (the REAL rebuild path: ctx.lastEvents =
+  [{ type: 'systemLoaded', to: 'vd_survey' }] then update(1/60), asserting the
+  old group left the scene, the new one is the veridian sculpt, and all 16
+  first-build resources disposed with none userData.shared).
+  VERIFIED: boot test PASS; browser-verified solo at fh_hearth (three camera
+  angles) with the model re-tuned twice off the screenshots — the drums were
+  laid along Z instead of X (a cylinder's +Y axis needs rz, not rx), the
+  greenhouse read as one saturated green tube until it was split into 14 panes
+  behind dark mullions and the green dulled to 0x35603a, and the mid-raft was
+  blue-dominant until blue was pulled back to one donated module.
+  FOLLOW-UP (standing work, NOT a completion): seven built factions still
+  carry their wave-38 low-detail sculpts — veridian (18 systems), ferrous
+  (17), redledger (12), gilded (8), congregation (3), assembly (2),
+  lamplighter (1). Once the user approves Freehold, each gets the same
+  toolkit treatment. The eighth built faction is unknowables, who by D3 build
+  no station at all. The independent/hollow placeholder stays untouched.
 
-## Next round candidates (wave 43)
+## Next round candidates (wave 44)
+- Wave 43 contract notes for future work: seven built factions still carry
+ their wave-38 low-detail station sculpts and await the same toolkit
+ treatment once Freehold is approved. The batch order, by flown-system count:
+ veridian (18 systems), ferrous (17), redledger (12), gilded (8),
+ congregation (3), assembly (2), lamplighter (1). The pattern is now set:
+ rewrite the faction builder in station.js to consume src/systems/station-detail.js
+ (seeded RNG, frame stack, primitives, greebles), emit merged channels (hull,
+ glow, glaze on the group; ringHull, ringGlow, ringGlaze in the one ringGroup),
+ keep every invariant (group name '<faction>-station', exactly one direct Group
+ child, no PointLight, userData.shared-free teardown, U.DOCK_RANGE 45 envelope
+ |x|,|z| <= 32 and y in [-26, 33]), keep glow vertex tints near-neutral (every
+ sRGB channel >= 0.6 — lightMat's pulsed colour multiplies them), and mirror
+ the six freehold harness pins for that faction (mergedChunks, vertexColoured,
+ mergeDiscipline <= 8 geos / <= 8 mats, detailDensity >= 20000 verts,
+ windowDensity >= 2000 glow verts, envelope). Freehold's reference numbers:
+ ~600 parts, 175,775 verts, 8 geometries, 6 materials. Each rebuild is
+ self-contained and touches only that faction's builder.
+ Three traps the freehold bring-up paid for: a CylinderGeometry's axis is +Y,
+ so `rz: Math.PI/2` lays it along X (`rx` lays it along Z); a TorusGeometry
+ lies in XY, so `rx: Math.PI/2` puts the ring in the XZ plane and
+ `ry: Math.PI/2` rings the X axis; and every b.push() must be popped — build()
+ now throws on an unclosed frame, but only after the whole assembly has been
+ authored in the wrong space.
 - Wave 42 contract notes for future work: docs/FactionVisualUpdatePlan.md
-  is now CLOSED — phases 0-5 landed in waves 37-39 and the last optional
-  piece, D3 (unknowables), landed in wave 42. Nothing in that plan is
-  outstanding. The unknowables path has NO live site by design: no
-  generated system flies the faction, so the field ship and the gate
-  overlay only appear if something spawns one (the wave-27
-  wreck/beacon/anomaly precedent). Giving them one is a CONTENT
-  decision, not a rendering one — an unknowables system would also own
-  a station, a market, contacts and an epic, none of which exist. The
-  three dispatch tables to keep in lockstep are now
-  npc.js buildShipMesh (isBeautiful / 'unknowables' / VC kit /
-  fallback), gate.js OVERLAY_FACTIONS (9 keys), and station.js
-  STATION_BUILDERS (8 — unknowables build no stations, by their sheets).
-  The core-is-glow ruling is the one thing a future pass must not
-  break: userData.glow must stay a real mesh with a scale, because
-  every AI path dereferences it without a guard.
+ was CLOSED at Phase 5 (wave 39) and now carries a new Phase 6 section
+ (wave 43+) recording the merged-vertex-colour station detail toolkit as
+ Decision D5. The plan is no longer closed — the station detail pass is
+ active. Everything else from the original phases 0-5 remains done: D1-D4
+ are implemented, all ten factions have ships and gate overlays, and the
+ unknowables no-hull path is built. The unknowables path has NO live site
+ by design: no generated system flies the faction, so the field ship and
+ the gate overlay only appear if something spawns one (the wave-27
+ wreck/beacon/anomaly precedent). Giving them one is a CONTENT decision,
+ not a rendering one — an unknowables system would also own a station, a
+ market, contacts and an epic, none of which exist. The three dispatch
+ tables to keep in lockstep are now npc.js buildShipMesh (isBeautiful /
+ 'unknowables' / VC kit / fallback), gate.js OVERLAY_FACTIONS (9 keys),
+ and station.js STATION_BUILDERS (8 — unknowables build no stations, by
+ their sheets). The core-is-glow ruling is the one thing a future pass must
+ not break: userData.glow must stay a real mesh with a scale, because
+ every AI path dereferences it without a guard.
 - Wave 41 contract notes for future work: PORTRAIT_SOURCES is the single
   list of factions that HAVE a character study — keep it in lockstep
   with what actually sits in public/assets/portraits/, because

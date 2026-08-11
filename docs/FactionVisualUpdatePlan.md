@@ -88,6 +88,13 @@ trim/light tones). `PROMPTS.md` supplies the intent where sampling is muddy.
   full per-faction schemes plus patchwork part coloring; gates tint per
   system faction. Implemented across npc.js / station.js / gate.js /
   solarsystem.js.
+- **D5 — Merged-vertex-colour station detail (APPROVED, wave 43).** User
+ rejected the wave-38 detail level as too simple and basic; stations are
+ rebuilt with merged geometry baking per-part colours into vertex
+ attributes. Freehold Landing, the pilot, carries ~600 parts (175,775
+ vertices) in 8 geometries + 6 materials + 2 textures — measurably CHEAPER
+ than the ~25-part sculpt it replaced (scene resource reading 195 → 173).
+ The remaining seven built factions await the same treatment.
 
 ## 3. Phases
 
@@ -157,10 +164,12 @@ per faction+classKey (shared, never disposed), part-level animation only.
     lensing arcs and floating cells on a new render path, not the mesh kit.
     Landed in wave 42; the core mesh doubles as `userData.glow`, so the AI
     engine-glow contract owns its scale and `animateField` never writes it.
-- Pirate-role variants reuse the same geometries with a scarred/dulled material
-  set (the tarnished-Beautiful precedent).
+**STATUS: PARTIAL (wave 43).** Stations received per-faction schemes and
+ patchwork part coloring in wave 37, but the geometry remained low-detail.
+ Wave 43 rebuilds ONE station (Freehold Compact) as a detailed merged-vertex-colour
+ sculpt; seven built factions await the same treatment.
 - **Verify:** spawn each faction×class in a test system; silhouette readable at
-  500u; zero-alloc `update()`; qship cover path and ace-reveal rebuild still
+ 500u; zero-alloc `update()`; qship cover path and ace-reveal rebuild still
   route through the dispatch correctly.
 
 ### Phase 3 — Stations: per-faction builders (`src/systems/station.js`)
@@ -207,11 +216,10 @@ then add a per-system-faction overlay subgroup — the exact
 - **Verify:** jump charge/tunnel visuals per faction; hub route selection
   (KeyG lamps) unaffected; zero-alloc update; rebuild disposal on systemLoaded.
 
-### Phase 5 — Verification, polish, documentation
-
-**STATUS: DONE (wave 39).** Phases 0–4 landed in waves 37–38; the last optional
-piece, D3 (unknowables), landed in wave 42. The plan is closed.
-
+**STATUS: DONE (wave 39), REVISTED (wave 43).** Phases 0-4 landed in waves
+37-38; D3 (unknowables) landed in wave 42. Wave 43 added Phase 6 for
+ station detail; Phase 3 stations are now partial pending the remaining
+ seven faction rebuilds.
 - Full screenshot matrix (10 factions × station/ship/gate, 33 stills) captured
   and diffed against `docs/FactionExamples/`. Result: every kit is built and
   correctly coloured in the data, but the authored hull colour was invisible on
@@ -230,6 +238,108 @@ piece, D3 (unknowables), landed in wave 42. The plan is closed.
   validation green; `vite build` clean.
 - `PROGRESS.md` wave-39 entry written; `docs/FactionExamples/README.md` carries
   the implementation-status note (the references stay non-canonical).
+### Phase 6 - Station detail pass (wave 43+)
+
+**STATUS: IN PROGRESS (wave 43).** Freehold Compact rebuilt as detailed
+merged-vertex-colour sculpt for user review; seven built factions await
+the same treatment.
+
+After wave 38, the user rejected the per-faction station detail level as
+too simple and basic across all eight built factions. The stations carried
+only ~30 parts each via ~36 resources (geometries + materials), nowhere
+near the visual density of the reference art.
+
+**Decision D5 — Merged-vertex-colour station detail:** rebuild stations
+using the same merged-geometry pattern from the wave-37 D4 ship ruling,
+baking per-part colours into vertex attributes and merging each colour
+channel into ONE BufferGeometry. This makes detail cost almost no GPU
+resources. The wave-39 ten-jump leak test pins scene-wide resource
+counts with the assertion `Math.abs(liveAfter10 - liveAfter1) <= 60`
+where the baseline is `liveAfter1=195 liveAfter10=194` — margin of 1
+used out of 60. Per-part materials or geometries therefore could not
+scale. MEASURED: the rebuilt Freehold station carries ~600 primitives in 8
+geometries + 6 materials + 2 textures — 175,775 merged vertices, 14,160 of
+them in the glow chunk — and the scene resource reading DROPPED from 195 to
+173, so the detailed station is cheaper than the placeholder it replaced.
+
+NEW TOOLKIT `src/systems/station-detail.js`: deterministic greeble toolkit
+with seeded RNG (no Math.random), frame stack for sub-assembly local
+space, 6 shape primitives (box, cyl, sphere, hemi, torus, cone), and 12
+composite greebles (ribBands, windowRow, portholeRing, truss, railing,
+panelPatches, pipeRun, antenna, ladder, radiatorPanel, lampString, crate).
+Every part colour arrives as a hex from the caller — the module knows
+nothing about FACTION_STYLE. Exports `detailBuilder`, `rng`, all
+primitives, and all greebles. `build()` throws on an unclosed `push()`
+frame: an unbalanced frame silently offsets every later assembly, which is
+exactly how the bring-up threw parts 200 units off the raft.
+
+SIX MERGED CHANNELS (`buildFreeholdStation` in `station.js`):
+- `hull` (MeshStandardMaterial, vertexColors) — all lit-by-sun structure
+- `glow` (MeshBasicMaterial, vertexColors) — amber windows, lamps, lantern,
+  pulsed by `update()`
+- `glaze` (MeshBasicMaterial, vertexColors) — greenhouse grow-light glazing,
+  static
+- `ringHull` / `ringGlow` / `ringGlaze` — the agri-carousel's structure, pod
+  lights and glazed growing pods, inside the one spinning ringGroup
+
+COLOUR RULE: `update()` pulses `lightMat.color` (the faction's warm amber)
+and that MULTIPLIES the glow channel's vertex colours, so those must stay
+near-neutral — every sRGB channel >= 0.6. Any other hue belongs in
+`glaze`/`ringGlaze`, whose material is white and never animated.
+
+CRITICAL INVARIANTS (boot-harness pinned):
+- Group name `freehold-station` and exactly ONE direct Group child (the
+  spinning ringGroup)
+- No PointLight anywhere
+- Zero new resources and zero new userData per frame
+- Everything reaches teardownMesh (no userData.shared skip)
+- U.DOCK_RANGE 45 envelope (|x|,|z| <= 32, y in [-26, 33])
+
+Reference art: `docs/FactionExamples/03-freehold-compact-station.png`
+("Freehold Landing" — sprawling raft of mismatched pressurised modules,
+fat drums, spheres, glazed barrel-vault greenhouse, barn-red centre dome,
+lighthouse mast, catwalks, hundreds of warm-amber windows).
+
+FOLLOW-ON BATCH (pending user approval of Freehold): the remaining seven
+built factions, ordered by flown-system count:
+- veridian (18 systems) — hexagonal extraction complex, assay towers,
+  docking spokes
+- ferrous (17) — fortress-bastion, radial batteries, central command tower
+- redledger (12) — captured refinery core + tribute vault
+- gilded (8) — auction pavilion, observation rotunda
+- congregation (3) — outward-facing nave, sect bays
+- assembly (2) — repeating foundry cells, antenna forest, ancient core
+- lamplighter (1) — gate-service depot: spare ring segments, parts yards,
+  cranes
+
+Each rebuild follows the Freehold pattern: rewrite the faction builder in
+station.js to consume station-detail.js, emit merged channels, keep every
+invariant, and mirror the six harness pins (mergedChunks, vertexColoured,
+mergeDiscipline <= 8 geometries and <= 8 materials, detailDensity >= 20000
+merged vertices, windowDensity >= 2000 glow vertices, envelope). Freehold's
+reference numbers are ~600 parts and 175,775 vertices. Each rebuild is
+self-contained and touches only that faction's builder.
+
+Orientation traps the Freehold bring-up paid for, worth carrying forward: a
+`CylinderGeometry`'s axis is +Y, so `rz: Math.PI/2` lays it along X while
+`rx: Math.PI/2` lays it along Z; a `TorusGeometry` lies in XY, so
+`rx: Math.PI/2` puts the ring in the XZ plane and `ry: Math.PI/2` rings the
+X axis; and a `MeshBasicMaterial` glaze channel is unlit, so a saturated hue
+there reads as a flat plastic blob — the greenhouse only worked once it was
+split into 14 panes behind dark mullions with the green dulled to `0x35603a`.
+
+The eighth built faction is unknowables, who by D3 build no station at
+all. The placeholder (independent/hollow) remains untouched.
+
+- **Files:** `src/systems/station-detail.js` (new), `src/systems/station.js`
+  (buildFreeholdStation rewrite), `scripts/boot-test.mjs` (wave-38 freehold
+  pins replaced + new wave-43 section).
+- **Verify:** boot test PASS with the six replaced wave-38 pins and the four
+  wave-43 checks (determinism, paletteFromStyle, glowNearWhite,
+  teardownDisposesAll); browser-verified at fh_hearth from three camera
+  angles; mesh bounding box inside the U.DOCK_RANGE envelope; window pulse
+  live and glaze static; teardown disposal clean; reducedMotion freeze.
+
 
 ## 4. Sequencing rationale
 

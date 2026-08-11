@@ -7,6 +7,7 @@ import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41:
 import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 import { styleFor } from '../game/faction-style.js'; // wave 37: per-faction station schemes
+import { detailBuilder, rng, box, cyl, sphere, hemi, torus, cone, ribBands, windowRow, portholeRing, truss, railing, panelPatches, pipeRun, antenna, ladder, radiatorPanel, lampString, crate } from './station-detail.js'; // wave 43: merged-geometry detail kit
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
@@ -360,41 +361,336 @@ function stationRecord(ctx, kit, ringGroup, beaconY) {
   };
 }
 
-/** Freehold Compact — farm rings, greenhouse domes, donated patchwork hull. */
+/**
+ * Freehold Compact — "Freehold Landing", the homestead raft.
+ *
+ * Wave 43: the first station built as MERGED, vertex-coloured geometry
+ * (station-detail.js), generalising the wave-37 D4 ship ruling to stations.
+ * ~600 primitive parts land in five merged chunks — hull / glow / glaze on the
+ * group and ringHull / ringGlow inside the spinning ringGroup — so the whole
+ * sculpt costs 7 geometries and 6 materials, fewer than the 25-part wave-38
+ * placeholder it replaces (the wave-39 scene resource budget is pinned).
+ *
+ * Read from 03-freehold-compact-station.png: a low, wide, deliberately
+ * mismatched raft of pressurised drums, spherical tanks and domed habitats
+ * bolted onto a shared keel truss, warm brown and weathered cream with barn-red
+ * roofs and one or two donated faded-blue modules, a glazed barrel-vault
+ * greenhouse on the spine, a lighthouse mast off the +X flank, catwalks and
+ * mooring gantries everywhere, and hundreds of small warm-amber windows. The
+ * agri carousel hangs beneath and turns.
+ *
+ * Channel discipline: `glow` carries lit elements ONLY, in near-neutral tints —
+ * update() pulses lightMat.color (the faction's warm amber) and that multiplies
+ * these vertex colours, so a saturated tint there would square the hue. The
+ * greenhouse's grow-light green therefore lives in `glaze`, whose material is
+ * white and never animated. Everything structural takes a FACTION_STYLE colour.
+ *
+ * Envelope: U.DOCK_RANGE is 45, so the solid silhouette stays inside |x|,|z| <=
+ * 30 and y in [-24, +29]; the stationRecord beacon owns y = 31.
+ */
 function buildFreeholdStation(ctx, systemId, def) {
-  const kit = factionKit(ctx, def);
-  const { group, hullMat, darkMat, trimMat, patchMats, lightMat } = kit;
-  put(group, new THREE.CylinderGeometry(6.5, 8, 44, 10), hullMat, 0, 0, 0); // cared-for spine
-  put(group, new THREE.BoxGeometry(2.2, 2.2, 20), darkMat, 0, -8, 13); // dock arm
-  // Donated mismatched hull sections slapped along the spine.
-  for (let i = 0; i < 7; i++) {
-    const a = i * 2.4 + 0.5;
-    put(group, new THREE.BoxGeometry(6 + (i % 3) * 2, 4 + (i % 2) * 2, 2.5),
-      patchMats[i % patchMats.length], Math.cos(a) * 7.5, -18 + i * 5.5, Math.sin(a) * 7.5, -a);
+  const scheme = schemeFor(def);
+  const st = styleFor(def.faction);
+
+  const hullMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, vertexColors: true,
+    metalness: st.metalness, roughness: st.roughness,
+    emissive: _dim(st.hull, 0.10),
+  });
+  const lightMat = new THREE.MeshBasicMaterial({ color: scheme.light, vertexColors: true });
+  const glazeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+  const beaconMat = new THREE.MeshBasicMaterial({ color: scheme.beacon });
+
+  const group = new THREE.Group();
+  group.name = 'freehold-station';
+  group.position.fromArray(def.station.position);
+
+  const b = detailBuilder();
+  const rand = rng(4303);
+
+  // Structure palette. Warm brown carries the mass, cream the panelling, barn
+  // red the roofs and the one donated blue module the mismatch — the image is
+  // warm-dominant, so blue is used sparingly.
+  const BROWN = st.hull;       // 0x6b4f36 warm brown
+  const DARK = st.hullDark;    // 0x3a2c1e recessed / truss / seams
+  const CREAM = st.trim;       // 0xd8c9a8 weathered panelling
+  const RED = st.patch[0];     // 0x9a4436 barn red
+  const BLUE = st.patch[2];    // 0x5b7a94 donated faded blue
+  // Window tints: near-neutral so the amber pulse keeps its hue.
+  const LIT = 0xffffff;
+  const LIT_WARM = 0xfff2e2;
+  const LIT_DIM = 0xe8dcc8;
+  const GROW = 0x35603a; // grow-light green, deliberately dull — a LIGHT colour, not a faction colour
+
+  // ------------------------------------------------------------- keel truss --
+  // The shared spine everything is bolted to; visible between the modules.
+  truss(b, 'hull', DARK, { ax: -27, ay: -3.4, az: 0, bx: 27, by: -3.4, bz: 0, bays: 12, thickness: 0.34, spread: 1.1 });
+  for (const kx of [-16, -5, 7, 18]) {
+    truss(b, 'hull', DARK, { ax: kx, ay: -3.4, az: -14, bx: kx, by: -3.4, bz: 14, bays: 5, thickness: 0.26, spread: 0.8 });
   }
-  // Main farm ring (spins): greenhouse domes glow warm amber on lightMat.
+  box(b, 'hull', DARK, 54, 0.5, 3.0, { y: -4.6 }); // keel deck plate
+
+  // ------------------------------------------------------------- drum row ----
+  // Six pressurised habitat drums lying across the keel, no two alike: warm
+  // brown and cream alternate, one barn-red and one donated blue. Each carries
+  // rib bands, bolt rings, dense window rows, repair plates and a catwalk.
+  const drums = [
+    { x: -21, y: 0.5, z: -3, r: 4.6, l: 13, skin: CREAM, cap: BROWN, roof: RED, win: 9 },
+    { x: -11, y: -1.5, z: 7, r: 3.5, l: 10, skin: BROWN, cap: CREAM, roof: BROWN, win: 7 },
+    { x: -1, y: 1.5, z: -8, r: 5.0, l: 15, skin: BROWN, cap: CREAM, roof: RED, win: 10 },
+    { x: 9, y: -0.5, z: 6, r: 4.0, l: 12, skin: CREAM, cap: BROWN, roof: RED, win: 8 },
+    { x: 18, y: 1.0, z: -5, r: 3.8, l: 11, skin: CREAM, cap: BROWN, roof: RED, win: 8 },
+    { x: 24, y: -1.5, z: 5, r: 3.0, l: 8, skin: BROWN, cap: CREAM, roof: BROWN, win: 6 },
+  ];
+  drums.forEach((d, i) => {
+    b.push(d.x, d.y, d.z, 0, (i % 2 ? 1 : -1) * 0.05, 0);
+    // CylinderGeometry's axis is +Y, so rz = 90 degrees lays the barrel along X.
+    cyl(b, 'hull', d.skin, d.r, d.r, d.l, 18, { rz: Math.PI / 2 });
+    for (const s of [-1, 1]) { // end caps + bolt rings (rings stand in the YZ plane)
+      cyl(b, 'hull', d.cap, d.r * 1.05, d.r * 0.92, 1.0, 18, { x: s * d.l / 2, rz: Math.PI / 2 });
+      torus(b, 'hull', DARK, d.r * 0.78, 0.12, 6, 18, undefined, { x: s * (d.l / 2 + 0.55), ry: Math.PI / 2 });
+      torus(b, 'hull', DARK, d.r * 0.42, 0.1, 6, 14, undefined, { x: s * (d.l / 2 + 0.55), ry: Math.PI / 2 });
+    }
+    ribBands(b, 'hull', DARK, { r: d.r + 0.06, tube: 0.2, from: -d.l / 2 + 1.6, to: d.l / 2 - 1.6, count: 5, axis: 'x', tseg: 18 });
+    // Longitudinal seams break the smooth barrel up.
+    for (const a of [0.5, 2.1, 3.9, 5.4]) {
+      box(b, 'hull', DARK, d.l - 1.2, 0.16, 0.5, { x: 0, y: Math.sin(a) * (d.r + 0.05), z: Math.cos(a) * (d.r + 0.05), rz: 0, ry: 0 });
+    }
+    // Two dense window rows down the flanks plus a lit end port.
+    windowRow(b, 'glow', LIT, { count: d.win, spacing: 1.25, w: 1.0, h: 0.66, d: 0.5, x: 0, y: d.r * 0.52, z: d.r * 0.86, axis: 'x' });
+    windowRow(b, 'glow', LIT_WARM, { count: d.win - 1, spacing: 1.35, w: 0.9, h: 0.6, d: 0.5, x: 0, y: -d.r * 0.34, z: -d.r * 0.94, axis: 'x' });
+    windowRow(b, 'glow', LIT_DIM, { count: 3, spacing: 1.1, w: 0.7, h: 0.5, d: 0.4, x: -d.l / 2 - 0.4, y: 0.4, z: 0, axis: 'z' });
+    panelPatches(b, 'hull', [RED, CREAM, BLUE, BROWN], { r: d.r, from: -d.l / 2 + 1.4, to: d.l / 2 - 1.4, count: 7, seed: 4310 + i, w: 2.4, h: 1.7, t: 0.24, axis: 'x' });
+    // Roof spine, catwalk and access ladder.
+    box(b, 'hull', d.roof, d.l * 0.86, 0.5, 2.2, { y: d.r + 0.2 });
+    railing(b, 'hull', DARK, { ax: -d.l / 2 + 1, ay: d.r + 0.45, az: 0, bx: d.l / 2 - 1, by: d.r + 0.45, bz: 0, height: 0.8, posts: 7, rail: 0.09 });
+    ladder(b, 'hull', DARK, { x: d.l / 2 - 1.6, y: -d.r, z: d.r * 0.55, h: d.r * 1.9, w: 0.6, rungs: 6 });
+    for (let v = 0; v < 3; v++) { // roof vents
+      box(b, 'hull', DARK, 0.7, 0.8, 0.7, { x: -d.l / 3 + v * (d.l / 3), y: d.r + 0.9, z: 0.9 });
+    }
+    b.pop();
+  });
+
+  // ----------------------------------------------------------- centre dome ---
+  // The image's barn-red centrepiece: a drum collar, a ribbed red dome, a
+  // lantern cupola and a ring of lit portholes.
+  b.push(1, 4.5, -1, 0, 0, 0);
+  cyl(b, 'hull', CREAM, 7.2, 7.6, 3.0, 24);
+  ribBands(b, 'hull', DARK, { r: 7.35, tube: 0.22, from: -1.2, to: 1.2, count: 3, axis: 'y', tseg: 24 });
+  hemi(b, 'hull', RED, 7.0, 24, 14, { y: 1.5 });
+  for (let i = 0; i < 8; i++) { // meridian ribs over the dome
+    const rib = 7.06;
+    torus(b, 'hull', DARK, rib, 0.13, 6, 20, Math.PI, { y: 1.5, ry: (i * Math.PI) / 8, rx: 0 });
+  }
+  portholeRing(b, 'glow', LIT_WARM, { r: 7.3, count: 14, size: 0.42, y: 0.6, tilt: 0 });
+  portholeRing(b, 'glow', LIT, { r: 5.6, count: 10, size: 0.34, y: 5.6, tilt: 0.5 });
+  cyl(b, 'hull', CREAM, 1.9, 2.2, 2.2, 14, { y: 8.4 }); // cupola drum
+  portholeRing(b, 'glow', LIT, { r: 2.1, count: 8, size: 0.3, y: 8.6, tilt: 0 });
+  hemi(b, 'hull', RED, 2.1, 14, 8, { y: 9.5 });
+  cyl(b, 'hull', DARK, 0.28, 0.28, 15.5, 8, { y: 17.5 }); // beacon mast to y=25
+  ribBands(b, 'hull', CREAM, { r: 0.4, tube: 0.1, from: 12, to: 24, count: 4, axis: 'y', tseg: 8 });
+  ladder(b, 'hull', DARK, { x: 6.6, y: 0, z: 1.2, h: 8, w: 0.6, rungs: 7, ry: 0.5 });
+  b.pop();
+
+  // ------------------------------------------------------- greenhouse vault --
+  // Glazed barrel vault over a planter deck: a dark mullion frame with 13
+  // separate glazing panes, so it reads as glass-and-frame rather than a solid
+  // green mass. Interior amber spills out along the base.
+  b.push(-8, 9.5, 7.5, 0, 0, 0);
+  box(b, 'hull', DARK, 17.5, 0.7, 7.6, { y: -3.7 }); // planter deck
+  box(b, 'hull', BROWN, 17.5, 1.1, 0.7, { y: -2.9, z: 3.6 });
+  box(b, 'hull', BROWN, 17.5, 1.1, 0.7, { y: -2.9, z: -3.6 });
+  for (let i = 0; i < 13; i++) { // glazing panes between mullions
+    const px = -8 + i * 1.33;
+    cyl(b, 'glaze', GROW, 3.5, 3.5, 0.72, 14, { x: px, rz: Math.PI / 2 });
+  }
+  for (let i = 0; i <= 13; i++) { // mullion ribs
+    torus(b, 'hull', DARK, 3.62, 0.2, 6, 18, undefined, { x: -8.66 + i * 1.33, ry: Math.PI / 2 });
+  }
+  box(b, 'hull', DARK, 17.8, 0.5, 0.5, { y: 3.6 }); // ridge beam
+  windowRow(b, 'glow', LIT_WARM, { count: 13, spacing: 1.33, w: 0.8, h: 0.5, d: 0.4, x: 0, y: -2.8, z: 3.9, axis: 'x' });
+  windowRow(b, 'glow', LIT_DIM, { count: 11, spacing: 1.55, w: 0.7, h: 0.45, d: 0.4, x: 0, y: -2.8, z: -3.9, axis: 'x' });
+  b.pop();
+
+  // -------------------------------------------------------- domed habitats ---
+  // Three donated pressure vessels on collar drums, each with bolt rings,
+  // portholes and a vent stack. Deliberately different sizes and colours.
+  const habs = [
+    { x: -24, y: 7.5, z: 8, r: 3.4, skin: CREAM, cap: RED },
+    { x: 13, y: 8.5, z: -11, r: 3.9, skin: BROWN, cap: CREAM },
+    { x: 22, y: 6.5, z: 10, r: 2.9, skin: BLUE, cap: BROWN },
+  ];
+  habs.forEach((h, i) => {
+    b.push(h.x, h.y, h.z, 0, rand() * 0.5 - 0.25, 0);
+    cyl(b, 'hull', h.skin, h.r * 0.92, h.r, 2.2, 18, { y: -h.r * 0.9 });
+    sphere(b, 'hull', h.skin, h.r, 18, 12);
+    hemi(b, 'hull', h.cap, h.r * 0.98, 18, 8, { y: h.r * 0.22 });
+    ribBands(b, 'hull', DARK, { r: h.r * 1.01, tube: 0.16, from: -h.r * 0.5, to: h.r * 0.5, count: 3, axis: 'y', tseg: 18 });
+    portholeRing(b, 'glow', LIT, { r: h.r * 1.0, count: 8 + i, size: 0.36, y: h.r * 0.15, tilt: 0 });
+    portholeRing(b, 'glow', LIT_DIM, { r: h.r * 0.86, count: 6, size: 0.28, y: -h.r * 0.5, tilt: -0.3 });
+    cyl(b, 'hull', DARK, 0.4, 0.5, 2.4, 8, { y: h.r + 1.0 }); // vent stack
+    torus(b, 'hull', CREAM, 0.55, 0.13, 6, 10, undefined, { y: h.r + 2.1, rx: Math.PI / 2 });
+    ladder(b, 'hull', DARK, { x: h.r * 0.9, y: -h.r * 1.9, z: 0, h: h.r * 2.0, w: 0.5, rungs: 5, ry: Math.PI / 2 });
+    b.pop();
+  });
+
+  // ------------------------------------------------------------ tank farm ----
+  // Spherical water and slurry tanks strapped to the -X end, piped to the drums.
+  const tanks = [[-26, 3.5, -9, 2.6, CREAM], [-22, 2.6, -12, 2.1, RED], [-19, 4.2, -8, 1.8, BROWN]];
+  for (const [tx, ty, tz, tr, col] of tanks) {
+    sphere(b, 'hull', col, tr, 16, 12, { x: tx, y: ty, z: tz });
+    b.push(tx, ty, tz, 0, 0, 0);
+    ribBands(b, 'hull', DARK, { r: tr * 1.01, tube: 0.13, from: -tr * 0.4, to: tr * 0.4, count: 2, axis: 'y', tseg: 16 });
+    cyl(b, 'hull', DARK, 0.34, 0.34, tr * 1.4, 8, { y: -tr * 1.1 }); // stand
+    b.pop();
+    pipeRun(b, 'hull', CREAM, { ax: tx, ay: ty - tr, az: tz, bx: tx + 4, by: ty - 3, bz: tz + 3, r: 0.18, seg: 8, collars: 3 });
+  }
+
+  // -------------------------------------------------------- lighthouse mast --
+  // The image's tall slim tower on the +X flank: tapered stack, collar bands,
+  // a gallery ring, a lit lantern room and a short needle. Tops out at y=+22.
+  b.push(27, 2, -10, 0, 0, 0);
+  cyl(b, 'hull', CREAM, 0.85, 1.5, 15, 12);
+  ribBands(b, 'hull', DARK, { r: 1.3, tube: 0.16, from: -6, to: 6, count: 5, axis: 'y', tseg: 12 });
+  panelPatches(b, 'hull', [BROWN, CREAM], { r: 1.2, from: -6, to: 6, count: 5, seed: 4321, w: 1.0, h: 1.2, t: 0.16, axis: 'y' });
+  torus(b, 'hull', DARK, 1.9, 0.18, 6, 16, undefined, { y: 7.4, rx: Math.PI / 2 }); // gallery
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    box(b, 'hull', DARK, 0.12, 0.9, 0.12, { x: Math.cos(a) * 1.85, y: 7.9, z: Math.sin(a) * 1.85 });
+  }
+  cyl(b, 'glow', LIT, 1.15, 1.15, 1.7, 12, { y: 9.2 }); // lantern room
+  cyl(b, 'hull', RED, 1.35, 1.35, 0.3, 12, { y: 10.2 });
+  hemi(b, 'hull', DARK, 1.3, 12, 8, { y: 10.4 });
+  cone(b, 'hull', DARK, 0.16, 2.6, 6, { y: 12.9 });
+  ladder(b, 'hull', DARK, { x: 1.35, y: -7, z: 0, h: 15, w: 0.5, rungs: 11, ry: Math.PI / 2 });
+  lampString(b, 'glow', LIT_DIM, { ax: 1.5, ay: -6, az: 0, bx: 1.5, by: 6.6, bz: 0, count: 6, size: 0.3 });
+  b.pop();
+
+  // ------------------------------------------------------------- upper deck --
+  // Catwalks tying the modules together, with a lamp string down the spine.
+  box(b, 'hull', CREAM, 46, 0.4, 2.6, { y: 5.2, z: 0.5 });
+  railing(b, 'hull', DARK, { ax: -22, ay: 5.4, az: 1.6, bx: 22, by: 5.4, bz: 1.6, height: 0.85, posts: 20, rail: 0.08 });
+  railing(b, 'hull', DARK, { ax: -22, ay: 5.4, az: -0.6, bx: 22, by: 5.4, bz: -0.6, height: 0.85, posts: 20, rail: 0.08 });
+  lampString(b, 'glow', LIT, { ax: -21, ay: 6.4, az: 0.5, bx: 21, by: 6.4, bz: 0.5, count: 15, size: 0.34 });
+  for (const [sx, sz, ex, ez] of [[-16, 2, -22, 8], [-4, -4, -2, -10], [10, 3, 13, -9], [18, -3, 22, 9]]) {
+    box(b, 'hull', BROWN, Math.hypot(ex - sx, ez - sz), 0.35, 1.6,
+      { x: (sx + ex) / 2, y: 4.2, z: (sz + ez) / 2, ry: -Math.atan2(ez - sz, ex - sx) });
+  }
+
+  // ---------------------------------------------------------- radiator wings -
+  // Faded-blue fin panels on short outriggers, canted off the -Z flank.
+  for (const [rx0, rz0, ry0] of [[-14, -13, 0.5], [4, -14, -0.35], [16, 13, 0.9]]) {
+    b.push(rx0, 2.5, rz0, 0, 0, 0);
+    box(b, 'hull', DARK, 3.4, 0.4, 0.4, { x: 1.7 });
+    radiatorPanel(b, 'hull', DARK, BLUE, { x: 5.2, y: 1.5, z: 0, w: 5.5, h: 7.5, fins: 8, ry: ry0, thick: 0.16 });
+    b.pop();
+  }
+
+  // -------------------------------------------------------- mooring gantries -
+  // Two spars under the raft with clamp jaws, slung cargo drums and lamp lanes.
+  for (const side of [-1, 1]) {
+    b.push(2, -9, side * 6, 0, 0, 0);
+    truss(b, 'hull', DARK, { ax: 0, ay: 0, az: 0, bx: 0, by: -1.5, bz: side * 13, bays: 5, thickness: 0.28, spread: 0.9 });
+    box(b, 'hull', CREAM, 2.4, 1.0, 1.4, { y: -1.6, z: side * 13 }); // clamp body
+    box(b, 'hull', DARK, 0.5, 2.4, 1.2, { x: 1.2, y: -1.6, z: side * 13.6 });
+    box(b, 'hull', DARK, 0.5, 2.4, 1.2, { x: -1.2, y: -1.6, z: side * 13.6 });
+    for (let i = 0; i < 3; i++) { // slung cargo drums
+      b.push(0, -3.4, side * (3.5 + i * 3.4), 0, 0, 0);
+      cyl(b, 'hull', [RED, CREAM, BLUE][i], 1.35, 1.35, 3.0, 12, { rx: Math.PI / 2 });
+      ribBands(b, 'hull', DARK, { r: 1.4, tube: 0.12, from: -1.0, to: 1.0, count: 3, axis: 'x', tseg: 12 });
+      box(b, 'hull', DARK, 0.16, 2.0, 0.16, { y: 2.2 });
+      b.pop();
+    }
+    lampString(b, 'glow', LIT, { ax: 0.9, ay: 0.4, az: side * 1.5, bx: 0.9, by: -1.1, bz: side * 12.5, count: 7, size: 0.26 });
+    b.pop();
+  }
+
+  // ------------------------------------------------------------ cargo yard ---
+  // A railed deck of stacked crates at the -X end, bands mismatched.
+  b.push(-24, -6.5, 0, 0, 0.2, 0);
+  box(b, 'hull', DARK, 10, 0.7, 11);
+  railing(b, 'hull', CREAM, { ax: -4.6, ay: 0.35, az: -5.2, bx: 4.6, by: 0.35, bz: -5.2, height: 0.7, posts: 7, rail: 0.07 });
+  railing(b, 'hull', CREAM, { ax: -4.6, ay: 0.35, az: 5.2, bx: 4.6, by: 0.35, bz: 5.2, height: 0.7, posts: 7, rail: 0.07 });
+  const yard = [[-2.6, 1.3, -2.6, 1.9, RED], [0.6, 1.1, -2.2, 1.5, CREAM], [2.8, 1.2, 0.4, 1.7, BLUE],
+    [-2.2, 1.1, 2.4, 1.5, BROWN], [0.4, 3.0, -2.4, 1.5, CREAM], [-2.4, 2.9, -2.6, 1.4, BLUE],
+    [2.6, 1.2, 3.4, 1.6, RED], [-0.4, 1.2, 4.0, 1.4, BROWN]];
+  yard.forEach(([cx, cy, cz, cs, col], i) => {
+    crate(b, 'hull', col, { x: cx, y: cy, z: cz, s: cs, ry: rand() * 1.2 - 0.6, bands: 2, bandHex: DARK });
+  });
+  lampString(b, 'glow', LIT_DIM, { ax: -4, ay: 1.6, az: -4.6, bx: 4, by: 1.6, bz: -4.6, count: 5, size: 0.26 });
+  b.pop();
+
+  // -------------------------------------------------------- antenna thicket --
+  for (const [ax0, az0, ah, adish] of [[-27, 4, 9, 0], [-13, -15, 12, 1.5], [6, 16, 8, 0],
+    [15, -16, 11, 1.8], [26, 6, 9, 0], [-6, 15, 7, 0]]) {
+    antenna(b, 'hull', DARK, CREAM, { x: ax0, y: 2.5, z: az0, h: ah, r: 0.14, tip: 0.34, dish: adish });
+  }
+
+  // ------------------------------------------------------------ pipe runs ----
+  for (const [px0, py0, pz0, px1, py1, pz1] of [
+    [-18, 2.5, 4, -10, 3.5, 8], [-6, 3, -6, 2, 4.5, -8], [8, 2.5, 5, 16, 3.5, 3],
+    [18, 2, -4, 24, 2.5, 3], [-10, 5.5, 8, -2, 6, 2], [12, 4, -9, 20, 3.5, -4]]) {
+    pipeRun(b, 'hull', CREAM, { ax: px0, ay: py0, az: pz0, bx: px1, by: py1, bz: pz1, r: 0.16, seg: 8, collars: 3 });
+  }
+
+  // -------------------------------------------------------- surface greebles -
+  // Hatches, junction boxes and small vents scattered over the raft, with an
+  // occasional lit inspection port. Deterministic: rng(4303) only.
+  for (let i = 0; i < 34; i++) {
+    const gx = -26 + rand() * 52;
+    const gz = -13 + rand() * 26;
+    const gy = -2 + rand() * 8;
+    box(b, 'hull', i % 4 === 0 ? CREAM : DARK,
+      0.7 + rand() * 0.7, 0.5 + rand() * 0.5, 0.5 + rand() * 0.6,
+      { x: gx, y: gy, z: gz, ry: rand() * Math.PI });
+    if (i % 3 === 0) box(b, 'glow', LIT_DIM, 0.4, 0.3, 0.28, { x: gx + 0.55, y: gy + 0.35, z: gz });
+  }
+
+  // -------------------------------------------------------- agri carousel ----
+  // The Freehold farm ring, hung beneath the raft and turning: a boxed keel,
+  // six spokes to a hub, twelve glazed growing pods and a lamp-lined rim.
   const ringGroup = new THREE.Group();
-  const ring = put(ringGroup, new THREE.TorusGeometry(26, 1.7, 8, 40), hullMat, 0, 0, 0);
-  ring.rotation.x = Math.PI / 2;
-  const domeGeo = new THREE.SphereGeometry(2.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-  for (let i = 0; i < 6; i++) {
-    const a = (i * Math.PI) / 3;
-    put(ringGroup, domeGeo, lightMat, Math.cos(a) * 26, 1.2, Math.sin(a) * 26);
-    put(ringGroup, new THREE.BoxGeometry(5.5, 1.6, 3.2), patchMats[(i + 1) % patchMats.length],
-      Math.cos(a) * 26, -1.2, Math.sin(a) * 26, -a);
+  ringGroup.position.y = -15;
+  const ringB = detailBuilder();
+  const R = 24;
+  torus(ringB, 'ringHull', BROWN, R, 1.5, 10, 48, undefined, { rx: Math.PI / 2 });
+  torus(ringB, 'ringHull', DARK, R, 0.4, 6, 48, undefined, { y: 1.3, rx: Math.PI / 2 });
+  torus(ringB, 'ringHull', DARK, R, 0.4, 6, 48, undefined, { y: -1.3, rx: Math.PI / 2 });
+  cyl(ringB, 'ringHull', CREAM, 2.6, 3.0, 1.6, 16); // hub collar
+  ribBands(ringB, 'ringHull', DARK, { r: 3.1, tube: 0.16, from: -0.6, to: 0.6, count: 2, axis: 'y', tseg: 16 });
+  for (let i = 0; i < 6; i++) { // spokes
+    const a = (i / 6) * Math.PI * 2;
+    box(ringB, 'ringHull', DARK, R - 2.4, 0.4, 0.36, { x: Math.cos(a) * (R / 2), z: Math.sin(a) * (R / 2), ry: -a });
+    box(ringB, 'ringHull', CREAM, 1.6, 0.9, 1.2, { x: Math.cos(a) * (R - 1.6), z: Math.sin(a) * (R - 1.6), ry: -a });
   }
+  for (let i = 0; i < 12; i++) { // glazed growing pods
+    const a = (i / 12) * Math.PI * 2;
+    ringB.push(Math.cos(a) * R, 0, Math.sin(a) * R, -a, 0, 0);
+    box(ringB, 'ringHull', CREAM, 2.6, 0.4, 4.6, { y: 0.6 });
+    cyl(ringB, 'ringGlaze', GROW, 0.92, 0.92, 3.6, 12, { y: 1.5, rx: Math.PI / 2 });
+    for (let r2 = 0; r2 < 4; r2++) {
+      torus(ringB, 'ringHull', DARK, 0.99, 0.11, 5, 12, undefined, { y: 1.5, x: 0, z: -1.5 + r2 * 1.0, ry: 0 });
+    }
+    box(ringB, 'ringGlow', LIT_WARM, 0.42, 0.3, 0.3, { y: 0.35, z: 1.4 });
+    box(ringB, 'ringGlow', LIT_WARM, 0.42, 0.3, 0.3, { y: 0.35, z: -1.4 });
+    ringB.pop();
+  }
+  for (let i = 0; i < 24; i++) { // rim lamps
+    const a = (i / 24) * Math.PI * 2 + Math.PI / 24;
+    box(ringB, 'ringGlow', LIT, 0.36, 0.36, 0.28, { x: Math.cos(a) * (R + 1.3), z: Math.sin(a) * (R + 1.3), ry: -a });
+  }
+  const ringGeos = ringB.build();
+  if (ringGeos.ringHull) ringGroup.add(new THREE.Mesh(ringGeos.ringHull, hullMat));
+  if (ringGeos.ringGlow) ringGroup.add(new THREE.Mesh(ringGeos.ringGlow, lightMat));
+  if (ringGeos.ringGlaze) ringGroup.add(new THREE.Mesh(ringGeos.ringGlaze, glazeMat));
   group.add(ringGroup);
-  // Second static farm ring hung below on scaffold struts.
-  const ring2 = put(group, new THREE.TorusGeometry(17, 1.3, 8, 32), trimMat, 0, -16, 0);
-  ring2.rotation.x = Math.PI / 2;
-  for (let i = 0; i < 4; i++) {
-    const a = (i * Math.PI) / 2 + Math.PI / 4;
-    put(group, new THREE.BoxGeometry(0.7, 0.7, 10), darkMat, Math.cos(a) * 12, -8, Math.sin(a) * 12, -a + Math.PI / 2);
-  }
-  put(group, new THREE.SphereGeometry(3.4, 12, 10), patchMats[0], 0, 24.5, 0); // barn-red tank
-  const lampGeo = new THREE.SphereGeometry(0.7, 8, 6);
-  for (let i = 0; i < 6; i++) put(group, lampGeo, lightMat, Math.cos(i * 1.05) * 7.2, -14 + i * 6, Math.sin(i * 1.05) * 7.2);
-  return stationRecord(ctx, kit, ringGroup, 28.5);
+
+  const geos = b.build();
+  group.add(new THREE.Mesh(geos.hull, hullMat));
+  group.add(new THREE.Mesh(geos.glow, lightMat));
+  group.add(new THREE.Mesh(geos.glaze, glazeMat));
+
+  return stationRecord(ctx, { scheme, group, lightMat, beaconMat }, ringGroup, 31);
 }
 
 /** Veridian Combine — hex extraction complex, assay towers, docking spokes. */
