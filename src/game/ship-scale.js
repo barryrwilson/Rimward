@@ -66,6 +66,12 @@ export const HUMAN = {
   railPost: 0.05,
   ladderW: 0.30,
   lampSize: 0.10, // ~0.36 m — one running/work lamp
+  // Centre-to-centre pitch of a lamp run. This exists because the obvious
+  // `count = runLength / lampSize` is wrong: it packs lamps edge to edge into a
+  // continuous glowing strip. A Veridian freighter authored that way carried 805
+  // lamps and 73,692 lit vertices against a 23,000 ceiling. Lamps are spaced
+  // like lamps.
+  lampGap: 1.20,  // ~4.4 m between work lamps on a walkway
   collarR: 0.62,  // ~2.26 m — a standard docking collar bore
   crateS: 0.85,   // ~3.09 m — one standardised cargo container edge
 };

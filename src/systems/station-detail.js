@@ -63,8 +63,13 @@ export function rng(seed) {
  */
 export const SHADES = [1.0, 0.86, 0.72, 0.6];
 
+// Out-of-range `i` is CLAMPED, not passed through. An unclamped `SHADES[4]` is
+// undefined, every channel becomes NaN, Math.round(NaN) is 0, and the part comes
+// out pure #000000 — which is off every faction's palette ladder and fails the
+// palette pin with no hint of where it came from. Wave 49 lost two sculpts to a
+// `weather(hex, layer + 1)` inside a four-step armour loop before this landed.
 export function weather(hex, i) {
-  const f = SHADES[i];
+  const f = SHADES[i < 0 ? 0 : i >= SHADES.length ? SHADES.length - 1 : i];
   return (Math.round(((hex >> 16) & 255) * f) << 16)
     | (Math.round(((hex >> 8) & 255) * f) << 8)
     | Math.round((hex & 255) * f);

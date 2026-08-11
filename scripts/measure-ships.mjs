@@ -437,7 +437,14 @@ for (const faction of targets) {
       const l = geos.lights ? measure(geos.lights) : { verts: 0 };
       const cell = isRebuilt ? scaleFor(ck).cell : (LEGACY_SHIP_SCALE[ck]?.cell ?? 1.0);
       const mass = massShare(geos.hull, cell);
-      const orphan = geos.lights ? orphanPct(geos.hull, geos.lights, cell) : 100;
+      // Orphan lights use a FIXED 1.0-unit cell, never the class cell. Seating a
+      // lamp is a HUMAN-scale question — a work lamp 3.6 m off the plating is
+      // floating whether it is bolted to a scout or to a freighter — and
+      // boot-test.mjs's w49orphanPct hard-codes 1.0. When the two harnesses
+      // disagree a sculpt passes one gate and fails the other: this line, with
+      // the class cell at 3.2, reported the Veridian freighter at 0.0% while the
+      // boot test correctly reported 26.3%.
+      const orphan = geos.lights ? orphanPct(geos.hull, geos.lights, 1.0) : 100;
       
       // Choose pin set based on rebuild status
       if (isRebuilt) {

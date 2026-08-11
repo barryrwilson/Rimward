@@ -1,5 +1,12 @@
 # RIMWARD Faction Visual Alignment — Phased Plan
 
+> **Ship-art supersession (2026-08-11):** The wave-47 NPC ship sculpts and their
+> numeric envelope table were rejected as visual and scale targets. Do not use
+> Phase 7 below as direction for another modeling pass. The authoritative rebuild
+> brief is now `docs/FactionShipDesignBible.md`; it preserves the Player ship,
+> places frigates below freighters, and requires freighters too large for internal
+> station berths. Phase 7 remains in this file only as implementation history.
+
 Goal: make every faction's **stations, ships, and jump gates** in-game match the
 colors and styles of the reference concept art in `Docs/FactionExamples/`
 (30 PNGs + 3 overview sheets; prompt notes in `PROMPTS.md`).

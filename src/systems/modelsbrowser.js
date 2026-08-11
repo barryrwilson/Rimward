@@ -442,10 +442,10 @@ export function initModelsBrowser(ctx) {
 
     // Compute stats and structural bounding box
     const stats = computeStats(currentObject);
-    const { center, radius } = measureModel(currentObject);
+    const { center, radius, size } = measureModel(currentObject);
 
     // Reframe camera
-    frameModel(center, radius);
+    frameModel(center, radius, size);
 
     // Update info bar
     updateInfoBar(entry, stats, radius);
@@ -492,7 +492,8 @@ export function initModelsBrowser(ctx) {
 
   /**
    * Measure a model's structural bounding box (excluding sprites).
-   * Returns { center, radius } for framing the camera.
+   * Returns { center, radius, size } — `size` is the box extent, which framing
+   * needs so a long hull is not framed as if it were a ball.
    */
   function measureModel(object) {
     object.updateMatrixWorld(true);
@@ -520,29 +521,58 @@ export function initModelsBrowser(ctx) {
 
     // Final fallback to radius 1 if still empty
     if (structuralBox.isEmpty()) {
-      return { center: new THREE.Vector3(), radius: 1 };
+      return { center: new THREE.Vector3(), radius: 1, size: new THREE.Vector3(2, 2, 2) };
     }
 
     const center = structuralBox.getCenter(new THREE.Vector3());
     const radius = structuralBox.getBoundingSphere(new THREE.Sphere()).radius;
-    return { center, radius };
+    const size = structuralBox.getSize(new THREE.Vector3());
+    return { center, radius, size };
   }
 
   /**
    * Frame the camera on a model.
+   *
+   * Fits the model's BOUNDING BOX to the frustum, not its bounding sphere. The
+   * wave-49 ship charter spans a 6.8-unit scout to a 78-unit freighter, and a
+   * sphere fit sizes the long hulls by their diagonal: the Veridian extraction
+   * carrier framed to a 52-unit radius filled about a sixth of the viewport and
+   * could not be reviewed. Projecting the box onto the camera basis and solving
+   * for the tighter of the vertical and horizontal fits makes every model in the
+   * ladder arrive at a comparable apparent size.
    */
-  function frameModel(center, radius) {
+  function frameModel(center, radius, size) {
     if (!controls || !camera) return;
 
-    // Use a fallback radius for degenerate/empty models
     const safeRadius = radius > 0 && Number.isFinite(radius) ? radius : 1;
 
     controls.target.copy(center);
 
-    // Position camera at a pleasing angle
-    const direction = new THREE.Vector3(0.75, 0.42, 1).normalize();
+    // Default view direction is SIDE-BIASED, mostly +X. Every ship in this
+    // project is built nose -Z / stern +Z, so the old (0.75, 0.42, 1) camera
+    // looked down the length and a 78-unit freighter projected to almost
+    // nothing however tightly the box was fitted. From the side the long axis
+    // spans the viewport and the class silhouette is what a reviewer sees first.
+    const direction = new THREE.Vector3(1, 0.42, 0.34).normalize();
+
+    // Extent of the box as seen from `direction`: project the half-extents onto
+    // the camera's right and up vectors. abs() on each term is the support
+    // function of a box, so this is exact for any orientation.
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(up, direction).normalize();
+    const camUp = new THREE.Vector3().crossVectors(direction, right).normalize();
+    const ext = size && Number.isFinite(size.x)
+      ? size : new THREE.Vector3(safeRadius * 2, safeRadius * 2, safeRadius * 2);
+    const halfW = 0.5 * (Math.abs(ext.x * right.x) + Math.abs(ext.y * right.y) + Math.abs(ext.z * right.z));
+    const halfH = 0.5 * (Math.abs(ext.x * camUp.x) + Math.abs(ext.y * camUp.y) + Math.abs(ext.z * camUp.z));
+
     const fovRad = THREE.MathUtils.degToRad(CAMERA_FOV / 2);
-    const distance = (safeRadius / Math.sin(fovRad)) * 1.35;
+    const aspect = camera.aspect > 0 ? camera.aspect : 1;
+    const distV = halfH / Math.tan(fovRad);
+    const distH = halfW / (Math.tan(fovRad) * aspect);
+    // Half the box depth still has to clear the near plane once we are close.
+    const halfD = 0.5 * (Math.abs(ext.x * direction.x) + Math.abs(ext.y * direction.y) + Math.abs(ext.z * direction.z));
+    const distance = Math.max(distV, distH) * 1.12 + halfD;
 
     camera.position.copy(center).add(direction.multiplyScalar(distance));
 
@@ -733,8 +763,8 @@ export function initModelsBrowser(ctx) {
       modelGroup.rotation.set(0, 0, 0);
     }
 
-    const { center, radius } = measureModel(currentObject);
-    frameModel(center, radius);
+    const { center, radius, size } = measureModel(currentObject);
+    frameModel(center, radius, size);
   }
 
   /**
