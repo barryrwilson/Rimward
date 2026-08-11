@@ -241,11 +241,12 @@ then add a per-system-faction overlay subgroup — the exact
   validation green; `vite build` clean.
 - `PROGRESS.md` wave-39 entry written; `docs/FactionExamples/README.md` carries
   the implementation-status note (the references stay non-canonical).
-### Phase 6 - Station detail pass (wave 43+)
+### Phase 6 - Station detail pass (waves 43-45)
 
-**STATUS: IN PROGRESS (wave 43).** Freehold Compact rebuilt as detailed
-merged-vertex-colour sculpt for user review; seven built factions await
-the same treatment.
+**STATUS: DONE (wave 45).** All eight built factions carry merged-vertex-colour
+detail sculpts. Freehold landed in waves 43-44; the remaining seven landed in
+wave 45, which also moved every sculpt into its own module and generalised the
+harness pins across the whole set.
 
 After wave 38, the user rejected the per-faction station detail level as
 too simple and basic across all eight built factions. The stations carried
@@ -390,8 +391,52 @@ HARNESS CHANGES (scripts/boot-test.mjs):
   when more than 2% of occupied cells are isolated (a packed pile passes;
   six drums with air between them does not).
 
-Seven built factions still await the merged-vertex-colour station-detail
-treatment. Phase 6 remains IN PROGRESS.
+#### Wave 45 — the remaining seven, and the module split
+
+All seven remaining built factions were rebuilt in one wave: veridian, ferrous,
+redledger, gilded, congregation, assembly, lamplighter. Two structural changes
+came with them.
+
+ONE MODULE PER SCULPT. `station.js` was already 2,760 lines carrying the dock
+UI, the job board, the market and the economy; eight sculpts of 400-700 lines
+each would have doubled it. Each faction's sculpt now lives in
+`src/systems/stations/<faction>.js` and exports `{ ringY, build(b, ringB, st) }`
+— no THREE import, no material, no Group, no knowledge of FACTION_STYLE beyond
+the record handed to `build`. `station.js` owns `buildDetailStation` plus the
+`DETAIL_STATIONS` dispatch table (which replaces `STATION_BUILDERS`), so every
+shared invariant is asserted in ONE place: group name, the single spinning
+ringGroup child, the six merged chunks, the three materials, the beacon at
+`DETAIL_BEACON_Y = 31`. A missing channel throws with the faction and channel
+named instead of failing inside the renderer. The weathering ladder moved to
+`station-detail.js` as the exported `SHADES` + `weather(hex, i)`.
+
+GENERALISED PINS. Every wave-38 per-primitive station pin (`veridianHexTori`,
+`ferrousTurrets`, …) is gone: merged geometry cannot answer a
+`TorusGeometry.radialSegments` census. The wave-38 section now loops the eight
+factions and pins the SHARED contract — `mergedChunks` 3+3, `vertexColoured`,
+`mergeDiscipline` <= 8 geometries and <= 8 materials, `detailDensity` >= 120,000
+merged vertices, `windowDensity` >= 30,000 glow vertices, `envelope`. The
+wave-43 detail section loops the same eight for `determinism`,
+`paletteFromStyle` (each faction's own ladder), `glowNearWhite`,
+`connectedness`, and `teardownDisposesAll` (each sculpt rebuilt into another
+faction's system, so its own per-build assets are the ones audited).
+
+NEW PIN — `seatedDetail`, the wave-45 lesson. Every numeric pin passed on the
+first round and the sculpts still looked wrong in the browser: `windowGrid` is a
+FLAT field, so a tall grid wrapped onto a round or faceted drum grazes the hull
+at its centre and hangs off at its edges. Ferrous sprayed 10% of its 50,000 glow
+vertices into open space; veridian grew blades of windows; redledger parked a
+detached slab of amber windows beside the refinery. The pin buckets the hull
+chunk into 2-unit cells and requires each glow/glaze vertex to find hull
+material in its own cell or any of the 26 around it, at most 1% orphans
+(freehold, the approved bar, measures 0.54%). The arithmetic a sculpt needs:
+a faceted cylinder's flats sit at `r * cos(PI / seg)`, not `r`, and a field of
+half-extent H must be sunk to `sqrt(rFlat^2 - H^2)`; on spheres and domes use
+`portholeRing`, which is built from an explicit radial basis and cannot float.
+
+Phase 6 is COMPLETE. The eighth built faction, unknowables, builds no station
+by decision D3; beautiful is grown by `buildBeautifulStation`; independent and
+hollow keep the placeholder.
 
 
 ## 4. Sequencing rationale

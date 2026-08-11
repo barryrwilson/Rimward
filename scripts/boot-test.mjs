@@ -8553,13 +8553,14 @@ travelTo('freehold', 'wave36 home leg');
 //   entry). A disguised Q-ship builds its coverClass/coverFaction geometry
 //   (the clean cover cache key). The beautiful short-circuit is wave-27
 //   pinned upstream — not duplicated.
-// STATIONS (station.js STATION_BUILDERS) — each of the 8 factions builds a
-//   '<faction>-station' group with faction-distinct structure (spot
-//   discriminators below); a non-kit faction (independent/hollow) yields
-//   the unnamed placeholder byte-identically; beautiful keeps
-//   'beautiful-station' (the wave-27/33/36 pins hold — not duplicated).
-//   Per-build materials/geometries dispose through teardownMesh on the
-//   real rebuild path.
+// STATIONS (station.js DETAIL_STATIONS) — each of the 8 kit factions builds a
+//   '<faction>-station' group as a MERGED vertex-coloured detail sculpt
+//   (wave 45: six chunks, ~2,300 primitives, <= 8 geometries + <= 8
+//   materials, measured density and envelope below); a non-kit faction
+//   (independent/hollow) yields the unnamed placeholder byte-identically;
+//   beautiful keeps 'beautiful-station' (the wave-27/33/36 pins hold — not
+//   duplicated). Per-build materials/geometries dispose through teardownMesh
+//   on the real rebuild path.
 // GATES (gate.js buildOverlay) — a sculpted-faction system dresses every
 //   gate assembly with a '<faction>-overlay' subgroup (faction-specific
 //   part census); independent/hollow carry NO overlay (plain brass,
@@ -8755,6 +8756,16 @@ let w38stRingUnique = true;
 let w38stPositioned = true;
 let w38stNoPointLights = true;
 const w38stationChecks = {};
+// Wave 45: every kit faction is a merged-geometry detail sculpt, so its
+// primitive parts are baked into vertex-coloured BufferGeometry chunks and the
+// per-primitive Sphere/Torus parameter pins of the wave-38 sculpts cannot match
+// anything any more. These pins check the SHARED contract instead — chunk
+// census, vertex-colour shape, merge discipline (the resource budget),
+// measured density and the docking envelope — all read off the live scene
+// graph, nothing self-reported.
+const w45merged = (parent) => (parent ? parent.children.filter((c) => c.isMesh
+  && c.geometry?.type === 'BufferGeometry' && !!c.geometry.attributes.color) : []);
+const w45census = [];
 for (const [f, sysId] of Object.entries(w38STATION_REPS)) {
   const ctxS = w38scopedCtx(sysId);
   initStation(ctxS);
@@ -8767,130 +8778,61 @@ for (const [f, sysId] of Object.entries(w38STATION_REPS)) {
   if (g.children.filter((c) => c.isGroup).length !== 1) w38stRingUnique = false;
   if (g.position.x !== def.station.position[0] || g.position.y !== def.station.position[1] || g.position.z !== def.station.position[2]) w38stPositioned = false;
   g.traverse((o) => { if (o.isPointLight) w38stNoPointLights = false; });
-}
-// Freehold is the wave-43 merged-geometry sculpt: its 350-550 primitive
-// parts are baked into vertex-coloured BufferGeometry chunks, so the
-// per-primitive Sphere/Torus parameter pins the other seven factions use
-// cannot match anything here. These pins check the merge discipline
-// (resource budget), measured density, and the docking envelope instead —
-// all derived from the live scene graph, nothing self-reported.
-{
-  const ctxS = w38scopedCtx('fh_hearth');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  const merged = (parent) => (parent ? parent.children.filter((c) => c.isMesh
-    && c.geometry?.type === 'BufferGeometry' && !!c.geometry.attributes.color) : []);
-  const directMeshes = merged(g);
-  const ringGroup = g ? (g.children.find((c) => c.isGroup) ?? null) : null;
-  const ringMeshes = merged(ringGroup);
-  const allMeshes = [...directMeshes, ...ringMeshes];
   // hull + glow + glaze on the group, ringHull + ringGlow + ringGlaze in the ring.
-  w38stationChecks.freeholdMergedChunks = directMeshes.length === 3 && ringMeshes.length === 3;
-  w38stationChecks.freeholdVertexColoured = allMeshes.length === 6 && allMeshes.every((m) => {
+  const directMeshes = w45merged(g);
+  const ringGroup = g.children.find((c) => c.isGroup) ?? null;
+  const ringMeshes = w45merged(ringGroup);
+  const allMeshes = [...directMeshes, ...ringMeshes];
+  w38stationChecks[`${f}MergedChunks`] = directMeshes.length === 3 && ringMeshes.length === 3;
+  w38stationChecks[`${f}VertexColoured`] = allMeshes.length === 6 && allMeshes.every((m) => {
     const col = m.geometry.attributes.color;
     return m.material?.vertexColors === true && !!col && col.itemSize === 3
       && col.count === m.geometry.attributes.position.count;
   });
-  // Resource budget: the merge exists so ~430 parts cost ~12 resources.
-  const w43geos = new Set();
-  const w43mats = new Set();
-  let w43verts = 0;
-  if (g) g.traverse((o) => {
-    if (o.geometry) { w43geos.add(o.geometry); w43verts += o.geometry.attributes?.position?.count ?? 0; }
+  // Resource budget: the merge exists so ~2,300 parts cost ~12 resources.
+  const w45geos = new Set();
+  const w45mats = new Set();
+  let w45verts = 0;
+  g.traverse((o) => {
+    if (o.geometry) { w45geos.add(o.geometry); w45verts += o.geometry.attributes?.position?.count ?? 0; }
     const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
-    for (const m of mats) w43mats.add(m);
+    for (const m of mats) w45mats.add(m);
   });
-  w38stationChecks.freeholdMergeDiscipline = !!g && w43geos.size <= 8 && w43mats.size <= 8;
-  w38stationChecks.freeholdDetailDensity = w43verts >= 120000;
-  // Wave 43 measured 175,775; wave 44 is denser (2,000-3,000 parts). This floor
-  // still fails any regression to sparse primitives by a wide margin.
+  w38stationChecks[`${f}MergeDiscipline`] = w45geos.size <= 8 && w45mats.size <= 8;
+  // Freehold measured 175,775 merged vertices over ~2,300 parts in wave 44;
+  // this floor fails any regression to sparse primitives by a wide margin.
+  w38stationChecks[`${f}DetailDensity`] = w45verts >= 120000;
   // The glow chunk is the one wearing the record's pulsed lightMat.
   const glowMesh = directMeshes.find((m) => m.material?.isMeshBasicMaterial
-    && m.material.color.getHex() === FACTION_STYLE.freehold.glow) ?? null;
-  w38stationChecks.freeholdWindowDensity = !!glowMesh
+    && m.material.color.getHex() === FACTION_STYLE[f].glow) ?? null;
+  w38stationChecks[`${f}WindowDensity`] = !!glowMesh
     && glowMesh.geometry.attributes.position.count >= 30000;
-  // Wave 43 measured 14,160; wave 44 window fields roughly triple it.
   // Envelope: U.DOCK_RANGE is 45, so the SOLID silhouette must stay compact.
   // Measured over MESH geometry only — the stationRecord halo Sprites are
   // 150- and 30-unit billboards and would swamp a setFromObject() box.
-  const w43bb = new THREE.Box3();
-  const w43one = new THREE.Box3();
-  if (g) {
-    g.updateMatrixWorld(true);
-    g.traverse((o) => {
-      if (!o.isMesh || !o.geometry) return;
-      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
-      w43one.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
-      w43bb.union(w43one);
-    });
-    w43bb.min.sub(g.position);
-    w43bb.max.sub(g.position);
-  }
-  w38stationChecks.freeholdEnvelope = !w43bb.isEmpty()
-    && Math.max(Math.abs(w43bb.min.x), Math.abs(w43bb.max.x)) <= 32
-    && Math.max(Math.abs(w43bb.min.z), Math.abs(w43bb.max.z)) <= 32
-    && w43bb.min.y >= -26 && w43bb.max.y <= 33;
-  console.log('wave43 freehold census:',
-    `chunks=${directMeshes.length}+${ringMeshes.length}`,
-    `geos=${w43geos.size} mats=${w43mats.size} verts=${w43verts}`,
-    `glowVerts=${glowMesh ? glowMesh.geometry.attributes.position.count : -1}`,
-    `bbox=x[${w43bb.min.x.toFixed(1)},${w43bb.max.x.toFixed(1)}]`,
-    `y[${w43bb.min.y.toFixed(1)},${w43bb.max.y.toFixed(1)}]`,
-    `z[${w43bb.min.z.toFixed(1)},${w43bb.max.z.toFixed(1)}]`);
+  const w45bb = new THREE.Box3();
+  const w45one = new THREE.Box3();
+  g.updateMatrixWorld(true);
+  g.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    w45one.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    w45bb.union(w45one);
+  });
+  w45bb.min.sub(g.position);
+  w45bb.max.sub(g.position);
+  w38stationChecks[`${f}Envelope`] = !w45bb.isEmpty()
+    && Math.max(Math.abs(w45bb.min.x), Math.abs(w45bb.max.x)) <= 32
+    && Math.max(Math.abs(w45bb.min.z), Math.abs(w45bb.max.z)) <= 32
+    && w45bb.min.y >= -26 && w45bb.max.y <= 33;
+  w45census.push(`wave45 ${f} census: chunks=${directMeshes.length}+${ringMeshes.length}`
+    + ` geos=${w45geos.size} mats=${w45mats.size} verts=${w45verts}`
+    + ` glowVerts=${glowMesh ? glowMesh.geometry.attributes.position.count : -1}`
+    + ` bbox=x[${w45bb.min.x.toFixed(1)},${w45bb.max.x.toFixed(1)}]`
+    + ` y[${w45bb.min.y.toFixed(1)},${w45bb.max.y.toFixed(1)}]`
+    + ` z[${w45bb.min.z.toFixed(1)},${w45bb.max.z.toFixed(1)}]`);
 }
-{
-  const ctxS = w38scopedCtx('vd_survey');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.veridianHexTori = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.radialSegments === 6 && p.tubularSegments === 6) === 2;
-  w38stationChecks.veridianAssayTowers = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radialSegments === 6 && p.height >= 26) === 4;
-}
-{
-  const ctxS = w38scopedCtx('fx_liron');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.ferrousTurrets = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 2.6 && p.height === 2.6) === 8;
-  w38stationChecks.ferrousBanners = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 0.3 && p.height === 16) === 4;
-}
-{
-  const ctxS = w38scopedCtx('rl_toll');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.redledgerVault = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 7) === 1;
-  w38stationChecks.redledgerFlares = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 0.9 && p.radiusBottom === 1.3) === 4;
-  w38stationChecks.redledgerGantry = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 2 && p.depth === 26) === 1;
-}
-{
-  const ctxS = w38scopedCtx('gc_gavel');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.gildedGrandDome = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 15 && Math.abs(p.thetaLength - Math.PI / 2) < 1e-9) === 1;
-  w38stationChecks.gildedScalePlates = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 6.5 && p.height === 0.7) === 14;
-  w38stationChecks.gildedDomeRibs = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.arc === Math.PI) === 4;
-}
-{
-  const ctxS = w38scopedCtx('cg_vigil');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.congregationSails = !!g && w38geoCount(g, 'ConeGeometry', (p) => p.radius === 2.4 && p.height === 10) === 8;
-  w38stationChecks.congregationSectBays = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 2.4 && p.radiusBottom === 2.8) === 5;
-}
-{
-  const ctxS = w38scopedCtx('as_census');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.assemblyCore = !!g && w38geoCount(g, 'SphereGeometry', (p) => p.radius === 11) === 1;
-  w38stationChecks.assemblyFoundryCells = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 8 && p.height === 6 && p.depth === 8) === 12;
-  w38stationChecks.assemblyAntennas = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 0.18) === 12;
-}
-{
-  const ctxS = w38scopedCtx('lastbeacon');
-  initStation(ctxS);
-  const g = w38stationGroupOf(ctxS);
-  w38stationChecks.lamplighterSpareSegments = !!g && w38geoCount(g, 'TorusGeometry', (p) => p.arc === 1.6) === 2;
-  w38stationChecks.lamplighterCranes = !!g && w38geoCount(g, 'CylinderGeometry', (p) => p.radiusTop === 1 && p.height === 22) === 2;
-  w38stationChecks.lamplighterRingPanels = !!g && w38geoCount(g, 'BoxGeometry', (p) => p.width === 7 && p.height === 4.4) === 8;
-}
+for (const line of w45census) console.log(line);
 w38stationChecks.ringGroupUnique = w38stRingUnique;
 w38stationChecks.positionedAtDef = w38stPositioned;
 w38stationChecks.noPointLights = w38stNoPointLights;
@@ -8927,9 +8869,9 @@ const w38gBefore = w38stationGroupOf(ctx38R);
 let w38tracked = 0;
 const w38disposedRes = new Set();
 if (w38gBefore) {
-  // Dedupe: the builders share geometries/materials across meshes (one
-  // domeGeo for six domes), and teardownMesh calls dispose() per mesh
-  // encounter — count RESOURCES, not dispose() calls.
+  // Dedupe: the detail sculpts share ONE material across several merged
+  // chunks (hullMat wears both hull and ringHull), and teardownMesh calls
+  // dispose() per mesh encounter — count RESOURCES, not dispose() calls.
   const w38res = new Set();
   w38gBefore.traverse((o) => {
     if (o.geometry) w38res.add(o.geometry);
@@ -10139,25 +10081,29 @@ for (const live of w42lives) {
   if (ix >= 0) ctx.ships.splice(ix, 1);
 }
 
-// ---- Wave 43: freehold merged-detail station ----
-// The wave-43 contract: Freehold Landing is rebuilt as a single merged
-// vertex-coloured sculpt (350–550 primitive parts baked into ≤6 geometries).
-// These pins check the merge discipline, colour fidelity, and teardown hygiene.
+// ---- Wave 45: merged-detail stations, every kit faction ----
+// The wave-43/44 freehold contract, generalised to all eight: each station is
+// ONE merged vertex-coloured sculpt (~2,300 primitive parts in six chunks)
+// whose hull colours ride the faction's weathering ladder and whose glow tints
+// stay near-neutral. These pins check determinism, colour fidelity, packing,
+// and teardown hygiene. The ladder arithmetic is recomputed here from
+// FACTION_STYLE rather than imported from station-detail.js — an independent
+// recomputation is the point of the pin.
 {
   // Instrument dispose (wave-39 pattern)
-  const w43disposed = new Set();
-  let w43sharedDisposed = 0;
-  for (const w43proto of [THREE.BufferGeometry.prototype, THREE.Material.prototype, THREE.Texture.prototype]) {
-    const w43origDispose = w43proto.dispose;
-    w43proto.dispose = function () {
-      if (!w43disposed.has(this)) {
-        w43disposed.add(this);
-        if (this.userData?.shared === true) w43sharedDisposed++;
+  const w45disposed = new Set();
+  let w45sharedDisposed = 0;
+  for (const w45proto of [THREE.BufferGeometry.prototype, THREE.Material.prototype, THREE.Texture.prototype]) {
+    const w45origDispose = w45proto.dispose;
+    w45proto.dispose = function () {
+      if (!w45disposed.has(this)) {
+        w45disposed.add(this);
+        if (this.userData?.shared === true) w45sharedDisposed++;
       }
-      return w43origDispose.call(this);
+      return w45origDispose.call(this);
     };
   }
-  const w43resOf = (root, into = new Set()) => {
+  const w45resOf = (root, into = new Set()) => {
     root.traverse((o) => {
       if (o.geometry) into.add(o.geometry);
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
@@ -10168,101 +10114,87 @@ for (const live of w42lives) {
     });
     return into;
   };
-
-  // Scoped contexts for determinism check
-  const w43ctxA = w38scopedCtx('fh_hearth');
-  const w43ctxB = w38scopedCtx('fh_hearth');
-  const stA = initStation(w43ctxA);
-  const stB = initStation(w43ctxB);
-  const gA = w38stationGroupOf(w43ctxA);
-  const gB = w38stationGroupOf(w43ctxB);
-  
-  // determinism: two independent builds produce byte-identical hull position/color
-  let w43determinism = false;
-  if (gA && gB) {
-    const hullA = gA.children.find((c) => c.isMesh && c.material?.vertexColors === true && c.material?.type === 'MeshStandardMaterial');
-    const hullB = gB.children.find((c) => c.isMesh && c.material?.vertexColors === true && c.material?.type === 'MeshStandardMaterial');
-    if (hullA && hullB) {
-      const posA = hullA.geometry.attributes.position.array;
-      const posB = hullB.geometry.attributes.position.array;
-      const colA = hullA.geometry.attributes.color.array;
-      const colB = hullB.geometry.attributes.color.array;
-      w43determinism = posA.length === posB.length && colA.length === colB.length &&
-        posA.every((v, i) => v === posB[i]) && colA.every((v, i) => v === colB[i]);
-    }
-  }
-
-  // paletteFromStyle: every distinct hull-chunk colour must sit on the wave-44
-  // WEATHERING LADDER — the deduplicated FACTION_STYLE.freehold palette crossed
-  // with SHADES [1.0, 0.86, 0.72, 0.6]. This is a fixed recomputable product
+  // The allowed hull set for a faction: its DEDUPLICATED FACTION_STYLE palette
+  // crossed with SHADES [1.0, 0.86, 0.72, 0.6]. A fixed recomputable product
   // set, not a tolerance band. The shade MUST be taken on the sRGB 8-bit
-  // channels of the palette hex, exactly as station.js's fhWeather() does:
+  // channels of the palette hex, exactly as station-detail.js weather() does:
   // scaling the LINEAR channels instead gives different values and fails a
   // correct sculpt (that was the wave-44 bring-up false failure).
-  let w43paletteFromStyle = false;
-  let w43paletteStray = 'none';
-  if (gA) {
-    const hull = gA.children.find((c) => c.isMesh && c.material?.isMeshStandardMaterial
-      && c.material.vertexColors === true) ?? null;
-    if (hull) {
-      const SHADES = [1.0, 0.86, 0.72, 0.6];
-      // accent === patch[0] and trim === patch[1], so the Set dedupes to five.
-      const paletteUnique = [...new Set([
-        FACTION_STYLE.freehold.hull,
-        FACTION_STYLE.freehold.hullDark,
-        FACTION_STYLE.freehold.trim,
-        FACTION_STYLE.freehold.accent,
-        ...FACTION_STYLE.freehold.patch,
-      ])];
-      const allowed = new Set();
-      for (const hex of paletteUnique) {
-        const r8 = (hex >> 16) & 255;
-        const g8 = (hex >> 8) & 255;
-        const b8 = hex & 255;
-        for (const f of SHADES) {
-          const wh = (Math.round(r8 * f) << 16) | (Math.round(g8 * f) << 8) | Math.round(b8 * f);
-          allowed.add(`#${wh.toString(16).padStart(6, '0')}`);
-        }
-      }
-      const colorAttr = hull.geometry.attributes.color;
-      const seen = new Set();
-      const probe = new THREE.Color();
-      w43paletteFromStyle = colorAttr.count > 0;
-      for (let i = 0; i < colorAttr.count; i++) {
-        const r = colorAttr.getX(i);
-        const g = colorAttr.getY(i);
-        const b = colorAttr.getZ(i);
-        const key = `${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        probe.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
-        const hex = `#${probe.getHex(THREE.SRGBColorSpace).toString(16).padStart(6, '0')}`;
-        if (!allowed.has(hex)) {
-          w43paletteStray = hex;
-          w43paletteFromStyle = false;
-          break;
-        }
+  const w45SHADES = [1.0, 0.86, 0.72, 0.6];
+  const w45allowedHull = (f) => {
+    const style = FACTION_STYLE[f];
+    const allowed = new Set();
+    for (const hex of new Set([style.hull, style.hullDark, style.trim, style.accent, ...style.patch])) {
+      const r8 = (hex >> 16) & 255;
+      const g8 = (hex >> 8) & 255;
+      const b8 = hex & 255;
+      for (const s of w45SHADES) {
+        const wh = (Math.round(r8 * s) << 16) | (Math.round(g8 * s) << 8) | Math.round(b8 * s);
+        allowed.add(`#${wh.toString(16).padStart(6, '0')}`);
       }
     }
-  }
-  
-  // glowNearWhite: the update() pulse multiplies lightMat.color (scheme.light,
-  // warm amber) by these vertex colours, so a saturated hue here would corrupt
-  // the pulse. Vertex colours are stored LINEAR (THREE.ColorManagement converts
-  // on setHex), so convert back to sRGB before applying the >= 0.6 rule —
-  // comparing linear values against an sRGB threshold reads ~20% too dark.
-  let w43glowNearWhite = false;
-  let w43glowWorst = 'none';
-  if (gA) {
-    const glow = gA.children.find((c) => c.isMesh && c.material?.isMeshBasicMaterial
-      && c.material.vertexColors === true
-      && c.material.color.getHex() === FACTION_STYLE.freehold.glow) ?? null;
-    if (glow) {
-      w43glowNearWhite = true;
+    return allowed;
+  };
+  const w45hullOf = (root) => (root ? root.children.find((c) => c.isMesh
+    && c.material?.isMeshStandardMaterial && c.material.vertexColors === true) ?? null : null);
+  const w45attrEq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const w45checks = {};
+  const w45notes = [];
+
+  for (const [f, sysId] of Object.entries(w38STATION_REPS)) {
+    // Two independent builds of the same sculpt must be byte-identical: the
+    // toolkit's scatter runs off the seeded RNG only, never Math.random.
+    const ctxA = w38scopedCtx(sysId);
+    const ctxB = w38scopedCtx(sysId);
+    const stA = initStation(ctxA);
+    initStation(ctxB);
+    const gA = w38stationGroupOf(ctxA);
+    const gB = w38stationGroupOf(ctxB);
+    const hullA = w45hullOf(gA);
+    const hullB = w45hullOf(gB);
+    w45checks[`${f}Determinism`] = !!hullA && !!hullB
+      && w45attrEq(hullA.geometry.attributes.position.array, hullB.geometry.attributes.position.array)
+      && w45attrEq(hullA.geometry.attributes.color.array, hullB.geometry.attributes.color.array);
+
+    // paletteFromStyle: every distinct hull colour sits on the ladder. The
+    // ringHull rides the same material and the same rule, so scan both.
+    const ringA = gA ? (gA.children.find((c) => c.isGroup) ?? null) : null;
+    const allowed = w45allowedHull(f);
+    const probe = new THREE.Color();
+    let paletteOk = !!hullA;
+    let paletteStray = 'none';
+    for (const mesh of [hullA, w45hullOf(ringA)]) {
+      if (!mesh || !paletteOk) continue;
+      const colorAttr = mesh.geometry.attributes.color;
+      const seen = new Set();
+      if (colorAttr.count === 0) { paletteOk = false; break; }
+      for (let i = 0; i < colorAttr.count; i++) {
+        const key = `${colorAttr.getX(i)},${colorAttr.getY(i)},${colorAttr.getZ(i)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        probe.setRGB(colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i), THREE.LinearSRGBColorSpace);
+        const hex = `#${probe.getHex(THREE.SRGBColorSpace).toString(16).padStart(6, '0')}`;
+        if (!allowed.has(hex)) { paletteStray = hex; paletteOk = false; break; }
+      }
+    }
+    w45checks[`${f}PaletteFromStyle`] = paletteOk;
+
+    // glowNearWhite: update() pulses lightMat.color (the faction's glow hue)
+    // and that MULTIPLIES these vertex colours, so a saturated tint here would
+    // square the hue. Vertex colours are stored LINEAR (ColorManagement
+    // converts on setHex), so convert back to sRGB before applying the >= 0.6
+    // rule — comparing linear values against an sRGB threshold reads ~20% too
+    // dark. Both the group's glow chunk and the ring's ringGlow carry the rule.
+    const glowMeshesOf = (root) => (root ? root.children.filter((c) => c.isMesh
+      && c.material?.isMeshBasicMaterial && c.material.vertexColors === true
+      && c.material.color.getHex() === FACTION_STYLE[f].glow) : []);
+    const glowMeshes = [...glowMeshesOf(gA), ...glowMeshesOf(ringA)];
+    let glowOk = glowMeshes.length === 2;
+    let glowWorst = 'none';
+    let worst = 1;
+    for (const glow of glowMeshes) {
       const colorAttr = glow.geometry.attributes.color;
-      const probe = new THREE.Color();
       const seenGlow = new Set();
-      let worst = 1;
       for (let i = 0; i < colorAttr.count; i++) {
         const key = `${colorAttr.getX(i)},${colorAttr.getY(i)},${colorAttr.getZ(i)}`;
         if (seenGlow.has(key)) continue;
@@ -10270,91 +10202,123 @@ for (const live of w42lives) {
         probe.setRGB(colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i), THREE.LinearSRGBColorSpace);
         const hex = probe.getHex(THREE.SRGBColorSpace);
         const lo = Math.min((hex >> 16) & 255, (hex >> 8) & 255, hex & 255) / 255;
-        if (lo < worst) { worst = lo; w43glowWorst = `#${hex.toString(16).padStart(6, '0')}`; }
-        if (lo < 0.6) w43glowNearWhite = false;
+        if (lo < worst) { worst = lo; glowWorst = `#${hex.toString(16).padStart(6, '0')}`; }
+        if (lo < 0.6) glowOk = false;
       }
     }
-  }
+    w45checks[`${f}GlowNearWhite`] = glowOk;
 
-  // teardownDisposesAll: the REAL rebuild path — station.js consumes a
-  // 'systemLoaded' event out of ctx.lastEvents inside update() (the wave-38 f
-  // idiom); emitting alone rebuilds nothing. Rebuild fh_hearth → vd_survey so
-  // the freehold sculpt's own per-build assets are the ones under audit.
-  let w43teardownDisposesAll = false;
-  let w43teardownTally = 'n/a';
-  if (gA) {
-    const firstBuildRes = w43resOf(gA);
-    w43disposed.clear();
-    w43sharedDisposed = 0;
-    w43ctxA.lastEvents = [{ type: 'systemLoaded', to: 'vd_survey' }];
-    stA.update(1 / 60);
-    const gAfter = w38stationGroupOf(w43ctxA);
-    let leaked = 0;
-    for (const r of firstBuildRes) {
-      if (r.userData?.shared === true) continue;
-      if (!w43disposed.has(r)) leaked++;
-    }
-    w43teardownTally = `${firstBuildRes.size - leaked}/${firstBuildRes.size}`;
-    w43teardownDisposesAll = firstBuildRes.size > 0 && leaked === 0
-      && w43sharedDisposed === 0 && gA.parent === null
-      && !!gAfter && gAfter.name === 'veridian-station';
-  }
-  
-  // connectedness: assert the hull chunk is a packed mass rather than a scatter
-  // of islands. Hash-grid approach: bucket vertices into 4-unit cubes, count
-  // occupied cells, and require at most 2% isolated cells (no 6-neighbour).
-  let w43connectedness = false;
-  let w43connectednessStray = 'n/a';
-  if (gA) {
-    const hull = gA.children.find((c) => c.isMesh && c.material?.isMeshStandardMaterial
-      && c.material.vertexColors === true) ?? null;
-    if (hull) {
-      const w43cellSize = 4;
-      const w43maxIsolatedRatio = 0.02;
-      const posAttr = hull.geometry.attributes.position;
-      const grid = new Map();
-      // First pass: bucket vertices into cells
+    // connectedness: the hull chunk must be a packed mass, not a scatter of
+    // islands (the wave-43 rejection). Hash-grid: bucket vertices into 4-unit
+    // cubes, count occupied cells, allow at most 2% with no 6-axis neighbour.
+    let connectedOk45 = false;
+    let connectedNote = 'n/a';
+    if (hullA) {
+      const cellSize = 4;
+      const posAttr = hullA.geometry.attributes.position;
+      const grid = new Set();
       for (let i = 0; i < posAttr.count; i++) {
-        const x = posAttr.getX(i);
-        const y = posAttr.getY(i);
-        const z = posAttr.getZ(i);
-        const ix = Math.floor(x / w43cellSize);
-        const iy = Math.floor(y / w43cellSize);
-        const iz = Math.floor(z / w43cellSize);
-        const key = `${ix},${iy},${iz}`;
-        grid.set(key, (grid.get(key) || 0) + 1);
+        grid.add(`${Math.floor(posAttr.getX(i) / cellSize)},${Math.floor(posAttr.getY(i) / cellSize)},${Math.floor(posAttr.getZ(i) / cellSize)}`);
       }
-      const occupied = grid.size;
-      // Second pass: count isolated cells (no 6-axis neighbour occupied)
       let isolated = 0;
-      for (const key of grid.keys()) {
+      for (const key of grid) {
         const [ix, iy, iz] = key.split(',').map(Number);
-        let hasNeighbour = false;
-        const neighbours = [
+        const hasNeighbour = [
           `${ix + 1},${iy},${iz}`, `${ix - 1},${iy},${iz}`,
           `${ix},${iy + 1},${iz}`, `${ix},${iy - 1},${iz}`,
           `${ix},${iy},${iz + 1}`, `${ix},${iy},${iz - 1}`,
-        ];
-        for (const nKey of neighbours) {
-          if (grid.has(nKey)) { hasNeighbour = true; break; }
-        }
+        ].some((n) => grid.has(n));
         if (!hasNeighbour) isolated++;
       }
-      w43connectednessStray = `${isolated}/${occupied}`;
-      w43connectedness = occupied > 0 && isolated <= occupied * w43maxIsolatedRatio;
+      connectedNote = `${isolated}/${grid.size}`;
+      connectedOk45 = grid.size > 0 && isolated <= grid.size * 0.02;
     }
+    w45checks[`${f}Connectedness`] = connectedOk45;
+
+    // seatedDetail: lit and glazed parts must SIT ON the hull, not float beside
+    // it. A windowGrid is a FLAT field, so a tall one wrapped onto a round or
+    // faceted drum grazes the surface at its centre and hangs off at its edges
+    // — the wave-45 bring-up sprayed thousands of window slabs into open space
+    // that way, and the sculpt still passed every colour and density pin.
+    // Metric: bucket the hull chunk into 2-unit cells, then require each
+    // glow/glaze vertex to find hull material in its own cell or any of the 26
+    // around it. The approved freehold sculpt measures 0.54% orphan glow and
+    // 0.00% orphan glaze; the ring chunks are measured against ringHull in
+    // their own local space.
+    const w45orphanPct = (hullMesh, detailMesh) => {
+      if (!hullMesh || !detailMesh) return 100;
+      const cell = 2;
+      const hp = hullMesh.geometry.attributes.position;
+      const occupied = new Set();
+      for (let i = 0; i < hp.count; i++) {
+        occupied.add(`${Math.floor(hp.getX(i) / cell)},${Math.floor(hp.getY(i) / cell)},${Math.floor(hp.getZ(i) / cell)}`);
+      }
+      const dp = detailMesh.geometry.attributes.position;
+      if (dp.count === 0) return 100;
+      let orphans = 0;
+      for (let i = 0; i < dp.count; i++) {
+        const ix = Math.floor(dp.getX(i) / cell);
+        const iy = Math.floor(dp.getY(i) / cell);
+        const iz = Math.floor(dp.getZ(i) / cell);
+        let near = false;
+        for (let dx = -1; dx <= 1 && !near; dx++) {
+          for (let dy = -1; dy <= 1 && !near; dy++) {
+            for (let dz = -1; dz <= 1 && !near; dz++) {
+              if (occupied.has(`${ix + dx},${iy + dy},${iz + dz}`)) near = true;
+            }
+          }
+        }
+        if (!near) orphans++;
+      }
+      return (100 * orphans) / dp.count;
+    };
+    const w45basicOf = (root, hex) => (root ? root.children.find((c) => c.isMesh
+      && c.material?.isMeshBasicMaterial && c.material.vertexColors === true
+      && c.material.color.getHex() === hex) ?? null : null);
+    const seated = [
+      w45orphanPct(hullA, w45basicOf(gA, FACTION_STYLE[f].glow)),
+      w45orphanPct(hullA, w45basicOf(gA, 0xffffff)),
+      w45orphanPct(w45hullOf(ringA), w45basicOf(ringA, FACTION_STYLE[f].glow)),
+      w45orphanPct(w45hullOf(ringA), w45basicOf(ringA, 0xffffff)),
+    ];
+    w45checks[`${f}SeatedDetail`] = seated.every((p) => p <= 1);
+    const seatedNote = seated.map((p) => `${p.toFixed(2)}%`).join('/');
+
+    // teardownDisposesAll: the REAL rebuild path — station.js consumes a
+    // 'systemLoaded' out of ctx.lastEvents inside update() (the wave-38 f
+    // idiom); emitting alone rebuilds nothing. Rebuild into another faction's
+    // system so THIS sculpt's per-build assets are the ones under audit.
+    const swapTo = f === 'veridian' ? 'fh_hearth' : 'vd_survey';
+    const swapName = f === 'veridian' ? 'freehold-station' : 'veridian-station';
+    let teardownOk = false;
+    let teardownTally = 'n/a';
+    if (gA) {
+      const firstBuildRes = w45resOf(gA);
+      w45disposed.clear();
+      w45sharedDisposed = 0;
+      ctxA.lastEvents = [{ type: 'systemLoaded', to: swapTo }];
+      stA.update(1 / 60);
+      const gAfter = w38stationGroupOf(ctxA);
+      let leaked = 0;
+      for (const r of firstBuildRes) {
+        if (r.userData?.shared === true) continue;
+        if (!w45disposed.has(r)) leaked++;
+      }
+      teardownTally = `${firstBuildRes.size - leaked}/${firstBuildRes.size}`;
+      teardownOk = firstBuildRes.size > 0 && leaked === 0
+        && w45sharedDisposed === 0 && gA.parent === null
+        && !!gAfter && gAfter.name === swapName;
+    }
+    w45checks[`${f}TeardownDisposesAll`] = teardownOk;
+
+    w45notes.push(`wave45 ${f} detail: paletteStray=${paletteStray}`
+      + ` glowWorstChannel=${glowWorst} teardown=${teardownTally}->${swapName}`
+      + ` connectedness=${connectedNote} orphanDetail=${seatedNote}`);
   }
-  
-  const w43checks = {
-    determinism: w43determinism,
-    paletteFromStyle: w43paletteFromStyle,
-    glowNearWhite: w43glowNearWhite,
-    teardownDisposesAll: w43teardownDisposesAll,
-    connectedness: w43connectedness,
-  };
-  console.log('wave43 freehold detail:', JSON.stringify(w43checks),
-    `paletteStray=${w43paletteStray} glowWorstChannel=${w43glowWorst} teardown=${w43teardownTally} connectedness=${w43connectednessStray}`);
-  if (!Object.values(w43checks).every(Boolean)) { console.log('WAVE43 FREEHOLD DETAIL FAIL'); errors++; }
+
+  for (const line of w45notes) console.log(line);
+  console.log('wave45 detail stations:', JSON.stringify(w45checks));
+  if (!Object.values(w45checks).every(Boolean)) { console.log('WAVE45 DETAIL STATIONS FAIL'); errors++; }
 }
 
 

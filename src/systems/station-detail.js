@@ -39,6 +39,24 @@ export function rng(seed) {
   };
 }
 
+/**
+ * Weathering ladder (wave 44, generalised wave 45). SHADES scale the sRGB
+ * 8-bit channels of a BASE FACTION_STYLE colour, so a detail station's allowed
+ * hull palette is exactly its deduplicated FACTION_STYLE colours crossed with
+ * these four shades. scripts/boot-test.mjs recomputes the identical product set
+ * with the same Math.round arithmetic, so both sides must use this function.
+ * NEVER weather an already-weathered colour: round(round(c * 0.86) * 0.86) is
+ * not round(c * 0.72), and the pin rejects the difference.
+ */
+export const SHADES = [1.0, 0.86, 0.72, 0.6];
+
+export function weather(hex, i) {
+  const f = SHADES[i];
+  return (Math.round(((hex >> 16) & 255) * f) << 16)
+    | (Math.round(((hex >> 8) & 255) * f) << 8)
+    | Math.round((hex & 255) * f);
+}
+
 // ---------- 1.2 detailBuilder ----------
 export function detailBuilder() {
   const channels = {}; // { [name]: BufferGeometry[] }

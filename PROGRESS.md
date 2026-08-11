@@ -2026,36 +2026,126 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   assembly (2), lamplighter (1). The eighth built faction is unknowables, who
   by D3 build no station at all. The independent/hollow placeholder stays
   untouched.
+- Wave 45: station detail, round 3 — the remaining SEVEN factions rebuilt, one
+  module per sculpt, harness pins generalised. Phase 6 of
+  docs/FactionVisualUpdatePlan.md is now CLOSED: all eight built factions carry
+  merged-vertex-colour detail stations.
+  MODULE SPLIT: station.js was 2,760 lines of dock UI, job board, market and
+  economy; eight sculpts of 400-700 lines each would have doubled it. Every
+  sculpt now lives in src/systems/stations/<faction>.js and exports
+  `{ ringY, build(b, ringB, st) }` — it imports ONLY station-detail.js, creates
+  no THREE object, no material, no Group, and knows nothing of FACTION_STYLE
+  beyond the record handed to build(). station.js owns buildDetailStation plus
+  the DETAIL_STATIONS dispatch table (replaces STATION_BUILDERS), so every
+  shared invariant is asserted ONCE: '<faction>-station' group name, the single
+  spinning ringGroup child at spec.ringY, the six merged chunks wearing three
+  materials, the beacon at DETAIL_BEACON_Y = 31. A sculpt that forgets a channel
+  now throws with the faction and channel named instead of failing inside the
+  renderer. The weathering ladder moved to station-detail.js as the exported
+  SHADES + weather(hex, i); freehold's fhWeather/FH_SHADES are gone. The seven
+  wave-38 low-detail builders, factionKit and put are deleted (clean cutover).
+  MEASURED (boot-test census, every faction: 3+3 chunks, 8 geometries,
+  6 materials): freehold 368,687 verts / 33,252 glow · veridian 221,495 /
+  38,544 · ferrous 387,779 / 32,880 · redledger 165,371 / 30,828 · gilded
+  373,067 / 54,672 · congregation 291,497 / 31,356 · assembly 183,371 /
+  30,024 · lamplighter 245,339 / 38,004. Ten-jump leak: 498/498 disposed,
+  sharedDisposed 0, liveAfter1 172 → liveAfter10 188. Boot test runtime roughly
+  doubled (32s → ~60s): eight sculpts are built three times each by the
+  generalised loops, which is the price of pinning all eight.
+  HARNESS GENERALISED: every wave-38 per-primitive station pin
+  (veridianHexTori, ferrousTurrets, gildedScalePlates …) is GONE — merged
+  geometry cannot answer a TorusGeometry.radialSegments census. The wave-38
+  section now loops the eight factions for the shared contract (mergedChunks
+  3+3, vertexColoured, mergeDiscipline <= 8 geos / <= 8 mats, detailDensity
+  >= 120,000 verts, windowDensity >= 30,000 glow verts, envelope), and the
+  wave-43 section became wave45 detail: determinism, paletteFromStyle against
+  each faction's OWN ladder, glowNearWhite, connectedness, seatedDetail, and
+  teardownDisposesAll — each sculpt rebuilt into ANOTHER faction's system so its
+  own per-build assets are the ones audited (16/16 for all eight).
+  NEW PIN — seatedDetail, and the lesson behind it: every numeric pin passed on
+  the first round and five of the seven sculpts still looked WRONG in the
+  browser. windowGrid is a FLAT field, so a tall grid wrapped onto a round or
+  faceted drum grazes the hull at its centre and hangs off at its edges.
+  Ferrous sprayed 10.3% of its 50,160 glow vertices into open space (orange
+  confetti around a dark fortress); veridian grew blades of windows standing
+  clear of the hull; redledger parked a detached 14-unit slab of amber windows
+  beside the refinery; gilded hung window blocks off the rotunda. The pin
+  buckets the hull chunk into 2-unit cells and requires every glow/glaze vertex
+  to find hull material in its own cell or any of the 26 around it, at most 1%
+  orphans — measured per chunk for the group AND the ring in its own local
+  space. Final readings: freehold 0.54% (the approved bar), redledger 0.38%,
+  lamplighter 0.09%, the other five 0.00%.
+  The arithmetic every future sculpt needs: a faceted cylinder's flats sit at
+  r * cos(PI / seg), NOT at r (an 8-segment drum of radius 18 has its faces at
+  16.6), and a field of half-extent H must be SUNK to sqrt(rFlat^2 - H^2), not
+  placed at rFlat * 0.96. On spheres and domes use portholeRing, which is built
+  from an explicit radial basis and cannot float. Prefer many small per-facet
+  fields over one wide wrapped grid.
+  TWO STRUCTURAL DEFECTS ONLY THE BROWSER FOUND: lamplighter called
+  panelSkin(r: 17.5, axis: 'x') and ribBands(r: 17.8, axis: 'x') on a FLAT yard
+  deck — with axis 'x' both wrap a cylinder in the YZ plane, so at radius 18
+  they built a 36-unit plated cage around the entire station (and pinned the
+  bbox floor at exactly -26.0, 0.02 units of margin). Every numeric pin passed;
+  the station rendered as a black checkered pod with the depot invisible inside.
+  Assembly's daughter-print ring hung below the mass with open air between them
+  — the wave-43 rejection reproduced — and was packed against the belly
+  (ringY -12.5 → -9, radius 13.5 → 9, plated stem plus four truss cradle arms).
+  METHOD NOTE for the next visual pass: the harness cannot see a silhouette.
+  Drive the real game — vite dev, Chrome spawned with
+  --use-angle=swiftshader --enable-unsafe-swiftshader (headless Chromium has no
+  WebGL and main.js's fatal screen catches it), window.__ctx to set
+  world.currentSystem and emit 'systemLoaded', ctx.flags.paused = true to freeze
+  the camera, then place ctx.camera by hand and screenshot. Two framings per
+  faction (46/26/46 and 26/10/26) found every defect above. To locate an
+  offending call, wrap the builder and record each add()'s world bounding box,
+  then sort by diagonal — that is how the lamplighter cage was identified in
+  one pass.
+  THE SUBAGENT TAX, again: seven sculpt agents all reported "all pins pass" and
+  all seven were telling the truth about the NUMBERS. The numbers were not the
+  contract the user cares about. Two more rounds of fix-up agents (7 then 2)
+  were needed, each driven by screenshots and by a metric added AFTER the defect
+  was seen. When a report and the render disagree, the render wins.
 
-## Next round candidates (wave 45)
-- Wave 43 contract notes for future work: seven built factions still carry
- their wave-38 low-detail station sculpts and await the same toolkit
- treatment once Freehold is approved. The batch order, by flown-system count:
- veridian (18 systems), ferrous (17), redledger (12), gilded (8),
- congregation (3), assembly (2), lamplighter (1). The pattern is now set:
- rewrite the faction builder in station.js to consume src/systems/station-detail.js
- (seeded RNG, frame stack, primitives, greebles), emit merged channels (hull,
- glow, glaze on the group; ringHull, ringGlow, ringGlaze in the one ringGroup),
- keep every invariant (group name '<faction>-station', exactly one direct Group
- child, no PointLight, userData.shared-free teardown, U.DOCK_RANGE 45 envelope
- |x|,|z| <= 32 and y in [-26, 33]), keep glow vertex tints near-neutral (every
- sRGB channel >= 0.6 — lightMat's pulsed colour multiplies them), and mirror
- the six freehold harness pins for that faction (mergedChunks, vertexColoured,
- mergeDiscipline <= 8 geos / <= 8 mats, detailDensity >= 20000 verts,
- windowDensity >= 2000 glow verts, envelope). Freehold's reference numbers:
- ~600 parts, 175,775 verts, 8 geometries, 6 materials. Each rebuild is
- self-contained and touches only that faction's builder.
- Three traps the freehold bring-up paid for: a CylinderGeometry's axis is +Y,
- so `rz: Math.PI/2` lays it along X (`rx` lays it along Z); a TorusGeometry
- lies in XY, so `rx: Math.PI/2` puts the ring in the XZ plane and
- `ry: Math.PI/2` rings the X axis; and every b.push() must be popped — build()
- now throws on an unclosed frame, but only after the whole assembly has been
- authored in the wrong space.
+## Next round candidates (wave 46)
+- Wave 45 contract notes for future work: Phase 6 of
+ docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
+ merged-vertex-colour detail stations. The dispatch table is now
+ station.js DETAIL_STATIONS (8 keys, was STATION_BUILDERS), and it stays in
+ lockstep with npc.js FACTION_VC_PARTS and gate.js OVERLAY_FACTIONS.
+ Adding or reworking a station means ONE file: src/systems/stations/<faction>.js,
+ exporting `{ ringY, build(b, ringB, st) }`. That module imports ONLY
+ station-detail.js — no THREE, no material, no Group, no FACTION_STYLE lookup —
+ and station.js's buildDetailStation owns every shared invariant (group name
+ '<faction>-station', the single spinning ringGroup child at spec.ringY, six
+ merged chunks on three materials, no PointLight, userData.shared-free
+ teardown, beacon at DETAIL_BEACON_Y 31, U.DOCK_RANGE 45 envelope |x|,|z| <= 32
+ and y in [-26, 33]). The boot harness pins the whole set generically: keep
+ hull colours on the exported SHADES/weather ladder (base FACTION_STYLE colours
+ only — never weather an already-weathered value), keep glow tints near-neutral
+ (every sRGB channel >= 0.6, because lightMat's pulsed colour multiplies them),
+ put saturated hues in glaze behind dark mullions, and hold >= 120,000 merged
+ vertices with >= 30,000 in the glow chunk.
+ FOUR traps the waves 43-45 bring-ups paid for, in the order they cost time:
+ (1) a windowGrid is a FLAT field — on a faceted cylinder the flats sit at
+ r * cos(PI / seg), not r, and a field of half-extent H must be sunk to
+ sqrt(rFlat^2 - H^2), or its edges hang in open space (the seatedDetail pin);
+ (2) panelSkin and ribBands WRAP A CYLINDER around the named axis, so calling
+ them with a large radius on a flat deck builds a cage around the whole station
+ (lamplighter, wave 45 — every numeric pin passed);
+ (3) a CylinderGeometry's axis is +Y, so `rz: Math.PI/2` lays it along X and
+ `rx: Math.PI/2` along Z, while a TorusGeometry lies in XY, so `rx: Math.PI/2`
+ puts the ring in the XZ plane and `ry: Math.PI/2` rings the X axis;
+ (4) every b.push() must be popped — build() throws on an unclosed frame, but
+ only after the whole assembly has been authored in the wrong space.
+ And the standing rule: the harness cannot see a silhouette. Any station work
+ ends in the real game (vite dev + Chrome with --use-angle=swiftshader,
+ window.__ctx to swap systems, ctx.flags.paused to freeze the camera) with two
+ framings per faction. Screenshots from wave 45 are in .chrome-shot/w45,
+ w45r2 and w45r3.
 - Wave 42 contract notes for future work: docs/FactionVisualUpdatePlan.md
- was CLOSED at Phase 5 (wave 39) and now carries a new Phase 6 section
- (wave 43+) recording the merged-vertex-colour station detail toolkit as
- Decision D5. The plan is no longer closed — the station detail pass is
- active. Everything else from the original phases 0-5 remains done: D1-D4
+ carries Phase 6 (waves 43-45), the merged-vertex-colour station detail pass,
+ as Decision D5 — CLOSED in wave 45, so the whole plan is done again.
+ Everything from the original phases 0-5 remains done: D1-D4
  are implemented, all ten factions have ships and gate overlays, and the
  unknowables no-hull path is built. The unknowables path has NO live site
  by design: no generated system flies the faction, so the field ship and
@@ -2065,7 +2155,7 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
  market, contacts and an epic, none of which exist. The three dispatch
  tables to keep in lockstep are now npc.js buildShipMesh (isBeautiful /
  'unknowables' / VC kit / fallback), gate.js OVERLAY_FACTIONS (9 keys),
- and station.js STATION_BUILDERS (8 — unknowables build no stations, by
+ and station.js DETAIL_STATIONS (8 — unknowables build no stations, by
  their sheets). The core-is-glow ruling is the one thing a future pass must
  not break: userData.glow must stay a real mesh with a scale, because
  every AI path dereferences it without a guard.
@@ -2118,8 +2208,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   gate.js that is intentionally never disposed is now marked
   userData.shared (15 marks); keep that invariant or the leak check
   will flag the asset as a leak when its last user departs.
-- Wave 38 contract notes for future work: STATION_BUILDERS /
-  FACTION_VC_PARTS / OVERLAY_FACTIONS cover the same 8 factions —
+- Wave 38 contract notes for future work: DETAIL_STATIONS (renamed from
+  STATION_BUILDERS in wave 45) / FACTION_VC_PARTS / OVERLAY_FACTIONS cover the
+  same 8 factions —
   keep the three dispatch tables in lockstep when adding one;
   '<faction>-station' / '<faction>-overlay' group names are
   boot-pinned; station builders carry NO shared assets (all
@@ -2217,4 +2308,12 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   outran may roll cold next time; plays true, recorded as a decision.
   Disinterested pirates under attack still degrade resolve → bargain/
   capitulate/flee (bounty kills credit; they just shoot back now).
-- Polish debt: none standing. Boot test remains the gate.
+- Polish debt: none standing. Boot test remains the gate — with ONE known
+  intermittent: roughly 1 run in 10 fails `WAVE30 DEMAND HAIL` +
+  `WAVE30 PAYTRIBUTE` together (2 errors). Wave 45 reproduced it on a clean
+  HEAD worktree at commit 2d47e0d (4 runs: 3 pass, 1 fail with exactly that
+  pair), so it PREDATES the station work and is not a station regression. Both
+  sections ride the live run's random combat and world events (the documented
+  wave-2 "gate hygiene" flake family). Re-run to confirm green; fixing it means
+  pinning the demand/tribute setup against soak-era fear and cargo drift, which
+  is a harness job, not a gameplay one.
