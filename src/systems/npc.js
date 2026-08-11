@@ -901,7 +901,7 @@ function buildUnknowablesField(classKey) {
  * desaturated; lights unchanged). Factions without a sculpt fall back to the
  * wave-37 VC_PARTS pipeline (hull mesh + engine-glow sphere only).
  */
-function buildShipMesh(classKey, faction, role) {
+export function buildShipMesh(classKey, faction, role) {
   if (isBeautiful(faction)) return buildBeautifulShip(classKey, role);
   if (faction === 'unknowables') return buildUnknowablesField(classKey);
   const g = new THREE.Group();
@@ -918,6 +918,23 @@ function buildShipMesh(classKey, faction, role) {
   g.add(glow);
   g.userData.glow = glow;
   return g;
+}
+
+/**
+ * Drive one ship mesh's own animation outside the AI loop — the models
+ * browser shows a hull with nobody flying it, and a Beautiful hull that does
+ * not breathe or an Unknowables field that does not turn reads as a bug.
+ * This is the visual half of update()'s per-ship block: the organic sway/
+ * breath walk and the energy-field spin. Engine-glow scale/visibility stays
+ * out — that channel belongs to the AI (updateRoute/engageTarget/updateDuel/
+ * updateDisabled all write userData.glow every frame) and has no meaning for
+ * a parked model. Zero-alloc; both helpers freeze under reducedMotion.
+ */
+export function animateShipMesh(object, elapsed, reducedMotion = false) {
+  const op = object.userData.organicParts;
+  if (op) animateOrganic(op, elapsed, reducedMotion);
+  const fp = object.userData.fieldParts;
+  if (fp) animateField(fp, elapsed, reducedMotion);
 }
 
 // ---------- AI construction ----------

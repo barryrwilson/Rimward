@@ -681,3 +681,423 @@ export function initLandmarks(ctx) {
 
   return { update };
 }
+/**
+ * Standalone landmark model builder for the models browser — an unparented
+ * THREE.Object3D at the origin with per-frame visual update (no gameplay,
+ * no scene mounting, no ctx reads). The returned object is deterministic for
+ * a given (kind, faction) pair and can be added to any scene.
+ *
+ * Contract mirrors initLandmarks' private builders exactly: standard POI
+ * dispatch with isBeautiful(faction) → glaze variants, same geometry and
+ * materials, same emissive pulse / organic animation math. The only
+ * difference is the synthetic def (id, position, faction) and the lack of
+ * discovery dimming / mystery events.
+ *
+ * @param {string} kind - One of 'wreck' | 'beacon' | 'monument' | 'anomaly' | 'clue'
+ * @param {string} faction - Faction id, defaults to 'independent'; 'beautiful' routes through glaze builders
+ * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
+ */
+export function buildLandmarkModel(kind, faction = 'independent') {
+  // Stable deterministic id from kind + faction for reproducible scatter.
+  const id = `model-${kind}-${faction}`;
+  const def = { id, position: [0, 0, 0], faction };
+  const beautiful = isBeautiful(faction);
+
+  // Local tracking for this standalone build (no ctx, no scene mounting).
+  const ownedMats = [];
+  const ownedGeos = [];
+  const pulse = [];
+  const organicRoots = [];
+  let updateFn = null;
+
+  // Local helpers mirroring initLandmarks' closures.
+  function ownMat(mat) {
+    ownedMats.push(mat);
+    return mat;
+  }
+
+  function ownGeo(geo) {
+    ownedGeos.push(geo);
+    return geo;
+  }
+
+  function registerDimmable(_id, _list, mats, colors) {
+    // Standalone builds never dim — we track pulse entries and organic roots
+    // only for the per-frame visual update. Discovery state is ignored.
+    return { dim: 1, mats, colors };
+  }
+
+  function addPulse(mat, base, dimRef, speed, phase) {
+    pulse.push({ mat, base, dimRef, speed, phase });
+  }
+
+  // Organic helpers (mirroring the glaze closure helpers in initLandmarks).
+  function tagPiece(obj, def, kind) {
+    obj.userData.poiId = def.id;
+    obj.userData.poiType = 'landmark';
+    obj.userData.kind = kind;
+    return obj;
+  }
+
+  function makeGlazeGlow(def, kind, tex, scale) {
+    const mat = ownMat(new THREE.SpriteMaterial({
+      map: tex, color: 0xffffff, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(scale, scale, 1);
+    tagPiece(sprite, def, kind);
+    return { sprite, mat };
+  }
+
+  function glazeRoot(def, kind) {
+    const root = new THREE.Group();
+    root.name = 'beautiful-landmark';
+    root.userData.organic = true;
+    tagPiece(root, def, kind);
+    return root;
+  }
+
+  function finishGlaze(root, colors) {
+    registerDimmable(root.userData.poiId, 'visited', EMPTY, colors);
+    root.userData.organicParts = collectOrganic(root);
+    organicRoots.push(root);
+    return root;
+  }
+
+  // ---- Standard builders (mirrors of initLandmarks' private closures) ----
+
+  function buildWreck(def) {
+    const mat = ownMat(new THREE.MeshStandardMaterial({
+      color: 0x3a3630, roughness: 0.95, metalness: 0.3,
+    }));
+    const wreck = new THREE.Group();
+    const pieces = 3 + (Math.random() * 2 | 0);
+    for (let i = 0; i < pieces; i++) {
+      const geo = i % 2 ? GEO.debrisTet : GEO.debrisBox;
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 10,
+      );
+      m.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      const s = 0.7 + Math.random() * 1.3;
+      m.scale.setScalar(s);
+      m.userData.poiId = def.id;
+      m.userData.poiType = 'landmark';
+      m.userData.kind = 'wreck';
+      wreck.add(m);
+    }
+    registerDimmable(def.id, 'visited', EMPTY, [{ mat, base: mat.color.clone() }]);
+    return wreck;
+  }
+
+  function buildBeacon(def) {
+    const beacon = new THREE.Group();
+    const pole = new THREE.Mesh(GEO.pole, MAT_POLE);
+    pole.userData.poiId = def.id;
+    pole.userData.poiType = 'landmark';
+    pole.userData.kind = 'beacon';
+    beacon.add(pole);
+
+    const tipMat = ownMat(new THREE.MeshStandardMaterial({
+      color: 0x1a1208, emissive: 0xffc070, emissiveIntensity: 1.2,
+      roughness: 0.6, metalness: 0.2,
+    }));
+    const tip = new THREE.Mesh(GEO.tip, tipMat);
+    tip.position.y = 8;
+    tip.userData.poiId = def.id;
+    tip.userData.poiType = 'landmark';
+    tip.userData.kind = 'beacon';
+    beacon.add(tip);
+
+    const d = registerDimmable(def.id, 'visited', [{ mat: tipMat, base: 1.2 }], EMPTY);
+    addPulse(tipMat, 1.2, d, 2.2, Math.random() * Math.PI * 2);
+    return beacon;
+  }
+
+  function buildMonument(def) {
+    const mat = ownMat(new THREE.MeshStandardMaterial({
+      color: 0x23201f, roughness: 0.9, metalness: 0.15,
+    }));
+    const slab = new THREE.Mesh(GEO.slab, mat);
+    slab.rotation.y = Math.random() * Math.PI;
+    slab.userData.poiId = def.id;
+    slab.userData.poiType = 'landmark';
+    slab.userData.kind = 'monument';
+    registerDimmable(def.id, 'visited', EMPTY, [{ mat, base: mat.color.clone() }]);
+    return slab;
+  }
+
+  function buildAnomaly(def) {
+    const mat = ownMat(new THREE.MeshStandardMaterial({
+      color: 0x0a0812, emissive: 0x8a6aff, emissiveIntensity: 0.5,
+      roughness: 0.4, metalness: 0.0,
+      transparent: true, opacity: 0.85,
+    }));
+    const mesh = new THREE.Mesh(GEO.anomaly, mat);
+    mesh.userData.poiId = def.id;
+    mesh.userData.poiType = 'landmark';
+    mesh.userData.kind = 'anomaly';
+    const d = registerDimmable(def.id, 'visited', [{ mat, base: 0.5 }], EMPTY);
+    addPulse(mat, 0.5, d, 0.9, Math.random() * Math.PI * 2);
+    return mesh;
+  }
+
+  function buildClue(def) {
+    const mat = ownMat(new THREE.MeshStandardMaterial({
+      color: 0x060a10, emissive: 0x9ab4ff, emissiveIntensity: 0.9,
+      roughness: 0.5, metalness: 0.0,
+    }));
+    const mote = new THREE.Mesh(GEO.mote, mat);
+    mote.userData.poiId = def.id;
+    mote.userData.poiType = 'clue';
+    const d = registerDimmable(def.id, 'found', [{ mat, base: 0.9 }], EMPTY);
+    addPulse(mat, 0.9, d, 1.3, Math.random() * Math.PI * 2);
+    return mote;
+  }
+
+  // ---- Glaze builders (mirrors of initLandmarks' beautiful-faction closures) ----
+
+  function glazeWreck(def) {
+    const rand = poiRand(def.id);
+    const mats = organicMaterials();
+    const tarnished = organicMaterials({ tarnished: true });
+    const root = glazeRoot(def, 'wreck');
+
+    const keel = new THREE.Mesh(
+      ownGeo(makeTendrilGeometry({ length: 26, radius: 1.1, sway: 2.2, taper: 0.35, tubularSegs: 32 })),
+      mats.flesh);
+    keel.position.z = -13;
+    keel.scale.y = 0.6;
+    tagPiece(keel, def, 'wreck');
+    root.add(keel);
+
+    const ribs = 3 + (rand() * 3 | 0);
+    let biggest = null;
+    let biggestLen = 0;
+    for (let i = 0; i < ribs; i++) {
+      const t = ribs === 1 ? 0.5 : i / (ribs - 1);
+      const len = 12 + rand() * 6;
+      const rib = new THREE.Mesh(
+        ownGeo(makePetalGeometry({ length: len, width: 3.2 + rand() * 1.6, curl: 4.5 + rand() * 2.5, cup: 1.2, segs: 10 })),
+        mats.flesh);
+      rib.position.set((rand() - 0.5) * 2, 0.4, -11 + t * 22);
+      rib.rotation.x = -Math.PI / 2 + 0.25;
+      rib.rotation.z = (rand() - 0.5) * 0.9;
+      tagPiece(rib, def, 'wreck');
+      root.add(rib);
+      if (len > biggestLen) { biggestLen = len; biggest = rib; }
+    }
+
+    const blisters = 5 + (rand() * 4 | 0);
+    for (let i = 0; i < blisters; i++) {
+      const b = new THREE.Mesh(GEO.blister, mats.flesh);
+      b.position.set((rand() - 0.5) * 6, rand() * 1.5, (rand() - 0.5) * 22);
+      b.scale.set(1.2 + rand() * 1.8, 0.5 + rand() * 0.5, 1.2 + rand() * 1.8);
+      tagPiece(b, def, 'wreck');
+      root.add(b);
+    }
+
+    const chandelier = new THREE.Group();
+    tagPiece(chandelier, def, 'wreck');
+    chandelier.position.copy(biggest.position);
+    chandelier.position.y = biggest.position.y + biggestLen * 0.45;
+    const frame = new THREE.Mesh(
+      ownGeo(makeTendrilGeometry({ length: 5, radius: 0.35, sway: 1.1, taper: 0.5 })),
+      tarnished.gilt);
+    frame.rotation.x = Math.PI / 2;
+    tagPiece(frame, def, 'wreck');
+    chandelier.add(frame);
+    const tex = glowTextures();
+    const colors = [];
+    const buds = 2 + (rand() * 2 | 0);
+    for (let i = 0; i < buds; i++) {
+      const g = makeGlazeGlow(def, 'wreck', tex.mint, 3.5);
+      g.sprite.position.set((rand() - 0.5) * 2.4, -4.2 - rand() * 1.2, (rand() - 0.5) * 2.4);
+      tagPulse(g.mat, { base: 0.85, amp: 0.15, hz: 0.3 + rand() * 0.25, phase: rand() * TAU });
+      colors.push({ mat: g.mat, base: g.mat.color.clone() });
+      chandelier.add(g.sprite);
+    }
+    tagSway(chandelier, { axis: 'z', amp: 0.06, hz: 0.15, phase: rand() * TAU });
+    root.add(chandelier);
+    return finishGlaze(root, colors);
+  }
+
+  function glazeBeacon(def) {
+    const rand = poiRand(def.id);
+    const mats = organicMaterials();
+    const root = glazeRoot(def, 'beacon');
+
+    const globe = new THREE.Mesh(GEO.blister, mats.membrane);
+    globe.scale.setScalar(5.2);
+    globe.position.y = 7;
+    tagPiece(globe, def, 'beacon');
+    root.add(globe);
+
+    const arms = 3 + (rand() * 2 | 0);
+    for (let i = 0; i < arms; i++) {
+      const arm = new THREE.Mesh(
+        ownGeo(makeTendrilGeometry({ length: 13, radius: 0.45, sway: 2.4, taper: 0.4 })),
+        mats.gilt);
+      arm.rotation.order = 'YXZ';
+      arm.rotation.x = -Math.PI / 2 + 0.35;
+      arm.rotation.y = (i / arms) * TAU + rand() * 0.4;
+      tagPiece(arm, def, 'beacon');
+      root.add(arm);
+    }
+
+    const tex = glowTextures();
+    const core = makeGlazeGlow(def, 'beacon', tex.mint, 11);
+    core.sprite.position.y = 7;
+    tagPulse(core.mat, { base: 0.9, amp: 0.1, hz: 0.5, phase: rand() * TAU });
+    root.add(core.sprite);
+
+    const pivot = new THREE.Group();
+    tagPiece(pivot, def, 'beacon');
+    pivot.position.y = 7;
+    const motes = 2 + (rand() * 2 | 0);
+    for (let i = 0; i < motes; i++) {
+      const mote = new THREE.Mesh(GEO.blister, mats.veinGlow);
+      mote.scale.setScalar(0.5 + rand() * 0.4);
+      const a = rand() * TAU;
+      mote.position.set(
+        Math.cos(a) * (6.5 + rand() * 2),
+        (rand() - 0.5) * 4,
+        Math.sin(a) * (6.5 + rand() * 2));
+      tagPiece(mote, def, 'beacon');
+      pivot.add(mote);
+    }
+    tagSway(pivot, { axis: 'y', amp: 0.6, hz: 0.08, phase: rand() * TAU });
+    root.add(pivot);
+
+    return finishGlaze(root, [{ mat: core.mat, base: core.mat.color.clone() }]);
+  }
+
+  function glazeMonument(def) {
+    const rand = poiRand(def.id);
+    const mats = organicMaterials();
+    const root = glazeRoot(def, 'monument');
+
+    const petals = 3 + (rand() * 3 | 0);
+    for (let i = 0; i < petals; i++) {
+      const petal = new THREE.Mesh(
+        ownGeo(makePetalGeometry({ length: 20 + rand() * 6, width: 6 + rand() * 3, curl: 5 + rand() * 3.5, cup: 1.6, segs: 12 })),
+        mats.flesh);
+      petal.rotation.order = 'YXZ';
+      petal.rotation.x = -Math.PI / 2 + 0.12 + rand() * 0.15;
+      petal.rotation.y = (i / petals) * TAU + rand() * 0.5;
+      tagPiece(petal, def, 'monument');
+      tagSway(petal, { axis: 'z', amp: 0.015, hz: 0.1, phase: rand() * TAU });
+      root.add(petal);
+    }
+
+    const spine = new THREE.Mesh(
+      ownGeo(makeTendrilGeometry({ length: 26, radius: 0.55, sway: 1.6, taper: 0.25, tubularSegs: 32 })),
+      mats.gilt);
+    spine.rotation.x = -Math.PI / 2;
+    tagPiece(spine, def, 'monument');
+    root.add(spine);
+
+    const tex = glowTextures();
+    const crown = makeGlazeGlow(def, 'monument', tex.opal, 7);
+    crown.sprite.position.y = 24;
+    tagPulse(crown.mat, { base: 0.8, amp: 0.2, hz: 0.25, phase: rand() * TAU });
+    root.add(crown.sprite);
+
+    return finishGlaze(root, [{ mat: crown.mat, base: crown.mat.color.clone() }]);
+  }
+
+  function glazeAnomaly(def) {
+    const rand = poiRand(def.id);
+    const mats = organicMaterials();
+    const root = glazeRoot(def, 'anomaly');
+
+    const bloom = new THREE.Group();
+    tagPiece(bloom, def, 'anomaly');
+    const petals = 5 + (rand() * 3 | 0);
+    for (let i = 0; i < petals; i++) {
+      const petal = new THREE.Mesh(
+        ownGeo(makePetalGeometry({ length: 13 + rand() * 5, width: 8 + rand() * 3, curl: 6 + rand() * 3, cup: 2.5 + rand() * 1.5, segs: 12 })),
+        mats.membrane);
+      petal.rotation.order = 'YXZ';
+      petal.rotation.x = -Math.PI / 2 + 0.5 + rand() * 0.35;
+      petal.rotation.y = (i / petals) * TAU + rand() * 0.4;
+      petal.scale.setScalar(0.85 + rand() * 0.35);
+      tagPiece(petal, def, 'anomaly');
+      bloom.add(petal);
+    }
+    tagBreath(bloom, { depth: 0.03, hz: 0.2, phase: rand() * TAU });
+    root.add(bloom);
+
+    const tex = glowTextures();
+    const drift = new THREE.Group();
+    tagPiece(drift, def, 'anomaly');
+    const colors = [];
+    const glows = 2 + (rand() * 2 | 0);
+    for (let i = 0; i < glows; i++) {
+      const g = makeGlazeGlow(def, 'anomaly', i % 2 ? tex.opal : tex.mint, 6 + rand() * 3);
+      g.sprite.position.set((rand() - 0.5) * 5, 2 + rand() * 4, (rand() - 0.5) * 5);
+      tagPulse(g.mat, { base: 0.75, amp: 0.2, hz: 0.3 + rand() * 0.3, phase: rand() * TAU });
+      colors.push({ mat: g.mat, base: g.mat.color.clone() });
+      drift.add(g.sprite);
+    }
+    tagSway(drift, { axis: 'y', amp: 0.8, hz: 0.06, phase: rand() * TAU });
+    root.add(drift);
+
+    return finishGlaze(root, colors);
+  }
+
+  // ---- Dispatch -----------------------------------------------------------
+
+  let object;
+  let label;
+
+  switch (kind) {
+    case 'wreck':
+      object = beautiful ? glazeWreck(def) : buildWreck(def);
+      label = 'Wreck';
+      break;
+    case 'beacon':
+      object = beautiful ? glazeBeacon(def) : buildBeacon(def);
+      label = 'Beacon';
+      break;
+    case 'monument':
+      object = beautiful ? glazeMonument(def) : buildMonument(def);
+      label = 'Monument';
+      break;
+    case 'anomaly':
+      object = beautiful ? glazeAnomaly(def) : buildAnomaly(def);
+      label = 'Anomaly';
+      break;
+    case 'clue':
+      object = buildClue(def);
+      label = 'Clue mote';
+      break;
+    default:
+      throw new Error(`Unknown landmark kind: ${kind}`);
+  }
+
+  // Ensure the object sits at the origin (builders never set position).
+  object.position.set(0, 0, 0);
+
+  // Per-frame visual update: emissive pulse for beacon/anomaly/clue,
+  // organic animation for beautiful glazes. No gameplay logic.
+  function update(elapsed, reducedMotion) {
+    // Standard emissive pulse (mirrors initLandmarks' loop exactly).
+    for (let i = 0; i < pulse.length; i++) {
+      const p = pulse[i];
+      p.mat.emissiveIntensity =
+        p.base * p.dimRef.dim * (0.75 + 0.25 * Math.sin(elapsed * p.speed + p.phase));
+    }
+
+    // Organic sway/breath/pulse for beautiful glazes.
+    for (let i = 0; i < organicRoots.length; i++) {
+      const parts = organicRoots[i].userData.organicParts;
+      if (parts) animateOrganic(parts, elapsed, reducedMotion);
+    }
+  }
+
+  return { object, update, label };
+}

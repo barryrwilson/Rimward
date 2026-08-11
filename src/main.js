@@ -12,6 +12,7 @@ import { initShip } from './systems/ship.js';
 import { initHail } from './systems/hail.js';
 import { initHud } from './systems/hud.js';
 import { initSong } from './systems/song.js';
+import { initModelsBrowser } from './systems/modelsbrowser.js';
 
 // Input + simulation systems
 import { initControls } from './systems/controls.js';
@@ -82,11 +83,13 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // live); origins after save (ctx.flags.saveRestored is final — a restore
 // means no origin pick); onboarding after origins, before HUD; galaxy
 // chart after onboarding, before HUD (DOM-only overlay, reads SYSTEMS +
-// ctx.world.currentSystem live); wakes after npc + pods (reads ctx.ships
-// flee modes, spawns discovery pods), before HUD (consumes its events).
-// title runs FIRST so its capture-phase keydown listener registers before
-// controls.js and origins.js, and it pauses the sim until the player chooses
-// Continue or New Game.
+// ctx.world.currentSystem live); models browser after galaxy chart, before
+// HUD (DOM + own-renderer overlay, owns its own render loop and pause
+// save/restore, reached lazily through ctx.models at click time); wakes
+// after npc + pods (reads ctx.ships flee modes, spawns discovery pods),
+// before HUD (consumes its events); title runs FIRST so its capture-phase
+// keydown listener registers before controls.js and origins.js, and it
+// pauses the sim until the player chooses Continue or New Game.
 const systems = [
   initTitle,
   initStarfield,
@@ -115,6 +118,7 @@ const systems = [
   initOrigins,
   initOnboarding,
   initGalaxyChart,
+  initModelsBrowser,
   initHud,
 ].map((init) => init(ctx));
 

@@ -36,6 +36,43 @@ export function spawnPod(ctx, contents, position, drift = null) {
   ctx.emit('podSpawned', { pod });
   return pod;
 }
+/**
+ * Build a standalone pod mesh for the models browser (no ctx, no scene, no shared state).
+ * Returns a cloned material so emissive drive doesn't affect live pods.
+ * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
+ */
+export function buildPodModel() {
+  podGeo ??= new THREE.IcosahedronGeometry(0.9, 0);
+  podMat ??= new THREE.MeshStandardMaterial({
+    color: 0x3fae6a, // salvage green (doc §18.4)
+    emissive: 0x1d5c38,
+    roughness: 0.4,
+    metalness: 0.3,
+  });
+
+  // Clone material: browser pod's emissive drive must not mutate live pods.
+  const browserMat = podMat.clone();
+  const object = new THREE.Mesh(podGeo, browserMat);
+
+  let spin = 0;
+
+  function update(elapsed, reducedMotion) {
+    if (reducedMotion) {
+      spin = 0;
+      browserMat.emissiveIntensity = 0.8;
+      return;
+    }
+    // Live path: spin accumulates per-frame (line 46), each pod gets offset rotation.
+    // We mirror index 0: spin * 0.7 + 0 for x, spin * 1.1 + 0 for y, z always 0.
+    spin += 0.016; // dt ≈ 0.016 at 60fps
+    object.rotation.set(spin * 0.7, spin * 1.1, 0);
+    // Glitter: same math as line 52 for index 0 (spin * 3 + 0).
+    browserMat.emissiveIntensity = 0.8 + 0.4 * Math.sin(spin * 3);
+  }
+
+  return { object, update, label: 'Cargo pod' };
+}
+
 
 export function initPods(ctx) {
   ctx.pods = ctx.pods ?? [];

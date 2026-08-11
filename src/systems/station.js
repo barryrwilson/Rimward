@@ -845,6 +845,52 @@ function buildBeautifulStation(ctx, systemId, def) {  const mats = organicMateri
   };
 }
 
+/** Standalone station model for the Models Browser — unparented, origin-centered. */
+export function buildStationModel(faction, systemId = faction) {
+  const def = {
+    faction,
+    station: { position: [0, 0, 0], name: 'Station Model' },
+    name: 'System Model',
+  };
+
+  const throwawayScene = new THREE.Group();
+  const throwawayCtx = { scene: throwawayScene, elapsed: 0, settings: { reducedMotion: false } };
+
+  let record;
+  if (isBeautiful(faction)) {
+    record = buildBeautifulStation(throwawayCtx, systemId, def);
+  } else if (Object.hasOwn(DETAIL_STATIONS, faction)) {
+    record = buildDetailStation(throwawayCtx, systemId, def, DETAIL_STATIONS[faction]);
+  } else {
+    record = buildPlaceholderStation(throwawayCtx, systemId, def);
+  }
+
+  throwawayScene.remove(record.group);
+  record.group.position.set(0, 0, 0);
+
+  const label = def.name;
+
+  return {
+    object: record.group,
+    update: (elapsed, reducedMotion) => {
+      if (!reducedMotion) {
+        record.ringGroup.rotation.y = RING_SPIN * elapsed;
+        _pulse.copy(record.lightColor).multiplyScalar(0.72 + 0.28 * Math.sin(elapsed * 2));
+        record.lightMat.color.copy(_pulse);
+        record.beaconMat.visible = (elapsed % 1.6) < 1.05;
+        record.glowMat.opacity = 0.3 + 0.12 * Math.sin(elapsed * 0.8);
+        record.beaconGlowMat.opacity = record.beaconMat.visible ? 0.85 : 0.1;
+      } else {
+        record.lightMat.color.copy(record.lightColor);
+        record.beaconMat.visible = true;
+        record.glowMat.opacity = 0.3;
+        record.beaconGlowMat.opacity = 0.85;
+      }
+      if (record.organicParts) animateOrganic(record.organicParts, elapsed, reducedMotion);
+    },
+    label,
+  };
+}
 /** Remove the station mesh and release every GPU resource it holds. */
 function teardownMesh(ctx, mesh) {
   ctx.scene.remove(mesh.group);

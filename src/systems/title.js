@@ -19,6 +19,9 @@
  *   epics — a partial in-place reset would be a bug farm.
  * - SETTINGS: dispatches a synthetic KeyO keydown event to every window
  *   listener so the settings panel opens; the title stays open behind it.
+ * - MODELS: opens the models browser overlay via ctx.models.open(); the title
+ *   stays open behind it (same as SETTINGS — the browser is a viewer, not a
+ *   game start).
  * - Manual berth slots (rimward-save-v1-slot-1/2/3) survive NEW GAME; only the
  *   autosave key is cleared.
  *
@@ -98,6 +101,16 @@ export function initTitle(ctx) {
       },
     },
     {
+      id: 'rw-title-models',
+      action: 'models',
+      label: 'MODELS',
+      run: () => {
+        // MODELS: open the models browser overlay.
+        // Title stays open behind it (same as SETTINGS).
+        ctx.models?.open?.();
+      },
+    },
+    {
       id: 'rw-title-settings',
       action: 'settings',
       label: 'SETTINGS',
@@ -172,6 +185,12 @@ export function initTitle(ctx) {
 
   // Capture-phase keydown listener: swallows all input except KeyO/Escape.
   function onKey(e) {
+    // The models browser is a modal in FRONT of the title. Its own
+    // capture-phase listener registers later than this one, so without this
+    // early-out the title would swallow the browser's own keys before it ever
+    // sees them (init order, not z-order, decides who runs first).
+    if (ctx.models?.isOpen?.()) return;
+
     if (e.repeat) {
       e.preventDefault?.();
       e.stopImmediatePropagation?.();

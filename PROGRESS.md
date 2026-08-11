@@ -2292,6 +2292,60 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
  heavies the contract accepts. Authored world-unit numbers win over a derived
  proxy; the fallback radii are still measured and printed for whoever next edits
  the table.
+- Wave 48: the Models Browser — a 3D gallery for every model the game builds,
+  reachable from the title screen so the art can be inspected without a pirate
+  on the tail. `[2] MODELS` sits between NEW GAME and SETTINGS; the title stays
+  open behind it (the SETTINGS precedent).
+  WHAT SHIPPED: src/game/model-catalog.js — 220 lazy entries in six categories
+  (Ships 144 = 12 factions x 6 classes x trader/pirate, Stations 12, Gates 13,
+  Landmarks 10, Celestial 36, Props 5), each `{ id, label, category, faction?,
+  build() }` where `build()` returns `{ object, update? }` and allocates nothing
+  until it is called. src/systems/modelsbrowser.js — the overlay: its OWN
+  WebGLRenderer, scene, camera and rAF loop, because main.js renders
+  (scene, camera) unconditionally every frame and a shared renderer would fight
+  it. OrbitControls, a local 1,500-point star shell, solarsystem.js's live light
+  values so hulls read as they do in flight, a filter box, category tabs,
+  arrow-key navigation, R to re-frame, Escape to close, and a per-model
+  turntable that stops on the first drag. src/ui/models.css. Registered in
+  main.js between initGalaxyChart and initHud; title.js reaches it lazily
+  through `ctx.models` at CLICK time, which is why it may init after the title.
+  THE MODEL SIDE IS PURELY ADDITIVE: npc.js exports buildShipMesh +
+  animateShipMesh; station.js buildStationModel; gate.js buildGateModel;
+  landmarks.js buildLandmarkModel; solarsystem.js buildStarModel /
+  buildPlanetModel / PLANET_SLOT_COUNT; asteroids.js buildAsteroidModel;
+  pods.js buildPodModel. Each returns an unparented, origin-centred Object3D
+  plus the same per-frame visual math the live system runs.
+  ONE REAL REFACTOR: gate.js's assembly builders lived inside initGate's
+  closure and read mutable per-rebuild state, so the first pass at
+  buildGateModel hand-copied 540 lines of sculpt. That was rejected. The
+  builders are now module scope — gateShared() (one lazy singleton holding the
+  resources initGate used to own), buildAssembly(gateDef, faction, beautiful),
+  buildOvergrowth, buildOverlay, buildJunctionExtras, animateAssembly — and
+  initGate and buildGateModel call the SAME code. gate.js went 1,107 -> 1,058
+  lines with the duplicate gone.
+  FOUR DEFECTS THE HARNESS ALONE WOULD NOT HAVE CAUGHT, all in the hoist or the
+  overlay: (1) rebuild() lost `root.add(a.group)`, so gates built fine and never
+  entered the scene; (2) animateAssembly collapsed `charging` (the departing
+  gate's own flag) and `ctx.gate.progress` into one number — a transit opens at
+  progress 0, so the wave-42 plasma cells and the charge swirl never appeared;
+  (3) `ovShared` was created but not exposed on the shared singleton;
+  (4) main.js came back with a DUPLICATE `initGalaxyChart` import (a hard
+  SyntaxError — the app did not load at all) and a deleted `window.__ctx`.
+  TWO MORE only the render showed: the sidebar's flex column shrank all 144 Ships
+  rows to 14px and clipped the text (`flex: 0 0 auto` on the row), and framing on
+  `Box3.setFromObject` measured the additive glow SPRITES — a station read radius
+  108 for a 35-unit hull, a star 261 for a 60-unit sphere — so measureModel()
+  now unions Mesh/Points children only and skips billboards.
+  ONE ORDERING TRAP worth remembering: capture-phase listeners on the same
+  target fire in REGISTRATION order, not z-order. title.js registers its
+  swallow-everything keydown first (by design, wave 40), so it ate the browser's
+  arrows and R. title.js now early-outs while `ctx.models.isOpen()`.
+  INSTRUMENT SHIPPED: `node --import ./scripts/with-css-stub.mjs
+  scripts/probe-models.mjs [idSubstring]` builds all 220 entries headlessly,
+  ticks each update() three times (including a reducedMotion pass), and reports
+  mesh/triangle/radius per category plus the heaviest models. It catches a
+  sculpt that throws for one faction+class pair, which the browser would
+  otherwise only surface when a player happened to click it.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

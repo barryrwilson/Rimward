@@ -9584,10 +9584,10 @@ const w40aClass = w40Root()?.className ?? '';
 const w40aChecks = {
   pausedWhileOpen: ctx40a.flags.paused === true,
   rootClassed: w40aClass.includes('screen-overlay') && w40aClass.includes('title-overlay'),
-  twoEntries: w40aBtns.length === 2,
+  threeEntries: w40aBtns.length === 3,
   noContinueEntry: !w40aBtns.some((b) => b.dataset?.titleAction === 'continue'),
-  labelsExact: w40aBtns.map((b) => b.textContent).join('|') === '[1] NEW GAME|[2] SETTINGS',
-  legendExact: w40Text('title-legend') === 'PRESS 1-2 OR CLICK',
+  labelsExact: w40aBtns.map((b) => b.textContent).join('|') === '[1] NEW GAME|[2] MODELS|[3] SETTINGS',
+  legendExact: w40Text('title-legend') === 'PRESS 1-3 OR CLICK',
   taglineExact: w40Text('title-tagline') === 'A LIVING FRONTIER',
 };
 console.log('wave40a fresh boot menu:', JSON.stringify(w40aChecks));
@@ -9611,9 +9611,9 @@ const ctx40c = w40Ctx();
 initTitle(ctx40c);
 const w40cBtns = w40Buttons();
 const w40cChecks = {
-  threeEntries: w40cBtns.length === 3,
+  fourEntries: w40cBtns.length === 4,
   continueLeads: w40cBtns[0]?.dataset?.titleAction === 'continue' && w40cBtns[0]?.textContent === '[1] CONTINUE',
-  legendExact: w40Text('title-legend') === 'PRESS 1-3 OR CLICK',
+  legendExact: w40Text('title-legend') === 'PRESS 1-4 OR CLICK',
   pausedWhileOpen: ctx40c.flags.paused === true,
 };
 titleActionBtn('continue').click();

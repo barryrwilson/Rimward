@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SYSTEMS, JUMP } from '../game/state.js';
+import { SYSTEMS, JUMP, FACTIONS } from '../game/state.js';
 import { styleFor } from '../game/faction-style.js'; // wave 37: faction gate tinting
 import {
   ORGANIC,
@@ -16,72 +16,23 @@ import {
 
 /**
  * Jump gates — the Lamplighter Guild transit rings of the current system's
- * gate NETWORK. One ring assembly per entry in SYSTEMS[system].gates.
+ * origin (arrival/departure). One assembly per gate plus one junction assembly
+ * at the hub (if any). The ring is Guild brass everywhere; faction home
+ * systems tint the glow/beacon/chevrons (wave 37) or overlay sculpted dress
+ * (wave 38). Beautiful systems grow mint overgrowth (wave 27).
  *
- * Visual: each gate is a ~30u-radius rotating torus ring with inner chevron
- * markers, an additive amber/brass glow (Lamplighter palette: worn brass,
- * lamplight amber), and a pulsing beacon. Oriented so the ring faces the
- * system center. Distinct silhouette from 500+u. Hub junctions add the
- * "Lamplighter lantern" silhouette on top of the same ring: a slowly
- * counter-rotating hexagonal brass outer frame (~1.35× ring radius, faint
- * amber emissive; frozen under reducedMotion) and one slender brass arm
- * per hub route, evenly spaced in the ring plane, each tipped with an
- * amber lamp sprite — the selected route's lamp burns visibly brighter
- * and larger, tracking the live routeIndex (KeyG cycling) each frame.
- * Junction groups are named 'lamplighter-junction' (standard gates
- * 'lamplighter-gate') and mirror the selection onto
- * group.userData.routeIndex (userData.routeCount set at build).
+ * Live gates sit at gate positions from the system def, look at origin, and
+ * animate per-frame (ring spin, beacon pulse, glow breath, tunnel swirl).
+ * Jump charge (`ctx.gate.progress`) intensifies the departing gate's glow and
+ * triggers the particle tunnel; zone checks enable dock input (KeyG) to pick a
+ * destination. The hub assembly carries the route list; KeyG cycles selection.
+ * rebuild() runs on `systemLoaded`, tearing down every assembly and rebuilding
+ * from the new system def.
  *
- * Beautiful Ones overgrowth (wave-27): the Beautiful don't build gates,
- * they cultivate them. In systems whose faction is 'beautiful'
- * (isBeautiful), every ring assembly — gates and junction alike — keeps
- * its Lamplighter brass but is GROWN OVER: a 'beautiful-overgrowth'
- * subgroup adds living tendrils hugging the torus tube, membrane petals
- * cocooning alternate chevrons, four pulsing mint bud-lantern sprites
- * ('beautiful-bud'), and gilt vine rings circling the main ring; the
- * glow/beacon sprites and the charge tunnel shift from amber to mint
- * (0x7fe0a8). Overgrowth geometries and the mint glow texture are
- * lazy-cached shared resources (the ringGeo pattern — never disposed);
- * only the per-assembly bud SpriteMaterials join the rebuild() disposal
- * path. Parts sway/pulse via collectOrganic/animateOrganic each frame
- * (zero-alloc, complete no-op under reducedMotion — stashed bases stay,
- * everything freezes). Non-beautiful systems are byte-identical.
- *
- * Faction overlays (wave 38): systems flying a sculpted faction add a
- * '<faction>-overlay' subgroup over the brass base (shared unit-primitive
- * geometries, per-assembly materials, in-place blink/spin animations).
- *
- * Ownership: writes ctx.gate.inZone, nearTo, nearHub, nearRouteIndex and
- * nearRouteCount only (jumping/progress/destination are jump.js's). The
- * zone check runs per gate — nearest in-range gate wins: inZone = true and
- * nearTo = that gate's destination id; out of all zones, inZone = false,
- * nearTo = null, nearHub = false, nearRouteIndex = -1, nearRouteCount = 0.
- * When SYSTEMS[system].hub exists, one extra junction assembly is built at
- * hub.position carrying hub.routes; while it is the nearest zone (nearHub
- * = true) KeyG cycles the selected route (wrapping, authored order) and
- * `to`/nearTo track the selection. Emits 'jumpRequested' { to } with the
- * near gate's destination when
- * the player presses dock (D) inside JUMP.zone while undocked and not
- * already jumping. Reads ctx.input.dockPressed, ctx.flags.docked,
- * ctx.ship.object — never writes them. On 'systemLoaded' (seen via
- * ctx.lastEvents) all gate assemblies rebuild for the new current system.
- *
- * Jump visual (driven by jump.js's ctx.gate fields): a full-screen black
- * fade — in over the first 40% of progress, out over the last 40% — plus a
- * centered 'JUMP' label naming the destination. The overlay div is created
- * once at init and hidden otherwise. Only the departing gate (the one whose
- * `to` matches ctx.gate.destination) intensifies its glow during charge.
- * Wave-6 polish: the departing gate also swirls a preallocated particle
- * ring (~200 THREE.Points, per-assembly buffers rebuilt with the assembly)
- * around the bore, radius/opacity scaling with ctx.gate.progress — the
- * charge tunnel. Suppressed entirely under ctx.settings.reducedMotion (the
- * fade/label overlay remains, unchanged).
- *
- * update() performs zero allocations: gate assemblies are preallocated on
- * rebuild and iterated by index; overlay style/text are only touched on
- * state changes; the swirl mutates its position buffer in place; junction
- * hex frame/arms/lamps are preallocated with the assembly and update()
- * only mutates frame rotation, lamp scale/opacity, and userData scalars.
+ * Models Browser uses buildGateModel(faction, opts) to generate a standalone
+ * gate model at the origin with visual update only — no gameplay. The model
+ * shares the same sculpt code as live gates (ring, chevrons, glow, beacon,
+ * tunnel, overgrowth, overlay, junction extras) via module-scope builders.
  */
 
 // Lamplighter palette (§16): worn brass structure, lamplight amber glow.
@@ -137,11 +88,14 @@ function makeGlowTexture(inner, outer) {
   return texture;
 }
 
-export function initGate(ctx) {
-  const root = new THREE.Group();
-  ctx.scene.add(root);
+// =============================================================================
+// MODULE-SCOPE SHARED RESOURCES (lazy, reused across all gate assemblies)
+// =============================================================================
 
-  // --- Shared resources across every gate assembly in a system ---
+let _gateShared = null;
+function gateShared() {
+  if (_gateShared) return _gateShared;
+
   const ringGeo = new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 12, 48);
   ringGeo.userData.shared = true;
   const chevronGeo = new THREE.ConeGeometry(1.6, 5, 4);
@@ -162,19 +116,32 @@ export function initGate(ctx) {
   const glowBaseScale = RING_RADIUS * 3.2;
   const beaconBaseScale = 10;
 
-  // Wave 37: faction gate tinting. The ring structure stays Lamplighter
-  // brass everywhere (Guild infrastructure, per lore), but in a faction's
-  // home systems the chevron emissives, bore glow, beacon, and charge
-  // tunnel shift to the faction's FACTION_STYLE glow/beacon colors — the
-  // "faction-contextualized gate" look of the reference art. Textures and
-  // chevron materials are lazy-cached per faction and shared across
-  // assemblies/rebuilds — NEVER disposed (the ringGeo/glowMap pattern).
-  // Beautiful keeps its wave-27 mint overgrowth path, unchanged.
-  let currentFaction = 'independent'; // set per rebuild() from the system def
-  const factionTintCache = {}; // faction → { glowMap, beaconMap, chevronMat }
+  // Junction silhouette shared geometry (shared across assemblies, never disposed).
+  const hexBarGeo = new THREE.BoxGeometry(HEX_RADIUS, HEX_BAR_THICK, HEX_BAR_THICK);
+  hexBarGeo.userData.shared = true;
+  const armGeo = new THREE.BoxGeometry(HEX_RADIUS - RING_RADIUS, ARM_THICK, ARM_THICK);
+  armGeo.userData.shared = true;
+
+  // Faction gate tinting cache (per-faction glow/beacon textures and chevron material).
+  const factionTintCache = {};
+
+  // Beautiful Ones overgrowth shared resources (lazy-cached, never disposed).
+  let ogTendrilGeoA = null;
+  let ogTendrilGeoB = null;
+  let ogPetalGeo = null;
+  let ogVineGeoA = null;
+  let ogVineGeoB = null;
+  let beautifulGlowMap = null;
+
+  // Overlay shared resources (lazy-cached, never disposed).
+  let ovShared = null;
+
+  // Helper: hex color to rgba string.
   function _hexRgba(hex, a) {
     return `rgba(${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255},${a})`;
   }
+
+  // Helper: faction-specific tint resources (lazy-cached).
   function tintFor(faction) {
     let t = factionTintCache[faction];
     if (!t) {
@@ -202,33 +169,7 @@ export function initGate(ctx) {
     return t;
   }
 
-  // Junction silhouette shared geometry (like ringGeo/chevronGeo: shared
-  // across assemblies, never disposed per rebuild). Hex bars span a full
-  // hex edge (edge length == circumradius for a regular hexagon).
-  const hexBarGeo = new THREE.BoxGeometry(HEX_RADIUS, HEX_BAR_THICK, HEX_BAR_THICK);
-  hexBarGeo.userData.shared = true;
-  const armGeo = new THREE.BoxGeometry(HEX_RADIUS - RING_RADIUS, ARM_THICK, ARM_THICK);
-  armGeo.userData.shared = true;
-
-  // --- Beautiful Ones overgrowth (wave-27) shared resources ---
-  // The Beautiful don't build gates; they cultivate them. In beautiful
-  // systems the brass ring is GROWN OVER: living tendrils, membrane
-  // petals, mint bud-lanterns, gilt vines. All geometries and the mint
-  // glow texture are lazy-cached here and shared across assemblies and
-  // rebuilds — NEVER disposed (the ringGeo pattern). The shared
-  // organicMaterials() set is used directly: never cloned, never
-  // disposed, never tagPulse'd. Only the per-assembly bud SpriteMaterials
-  // (tagPulse'd) enter the rebuild() disposal path.
-  let currentBeautiful = false; // set per rebuild() from the system faction
-  let ogTendrilGeoA = null;
-  let ogTendrilGeoB = null;
-  let ogPetalGeo = null;
-  let ogVineGeoA = null;
-  let ogVineGeoB = null;
-  let beautifulGlowMap = null;
-
-  // Bend a +Z-growing tendril geometry into a planar arc of radius rb
-  // (curving toward local -X) so it hugs the gate ring circle.
+  // Helper: bend a +Z-growing tendril geometry into a planar arc of radius rb.
   function bendTendrilToArc(geo, rb) {
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
@@ -245,10 +186,9 @@ export function initGate(ctx) {
     return geo;
   }
 
+  // Helper: ensure Beautiful Ones organic shared resources are initialized.
   function ensureOrganicShared() {
     if (ogTendrilGeoA) return;
-    // Tendrils spanning ~a quarter-ring arc (2π·30/4 ≈ 47u), bent to hug
-    // the ring circle; two sway variants for variety.
     ogTendrilGeoA = bendTendrilToArc(
       makeTendrilGeometry({ length: 47, radius: 0.9, sway: 1.4, taper: 0.35, radialSegs: 6, tubularSegs: 36 }),
       RING_RADIUS,
@@ -263,13 +203,7 @@ export function initGate(ctx) {
     beautifulGlowMap = makeOrganicGlowTexture('rgba(184,255,216,1)', 'rgba(127,224,168,0)');
   }
 
-  // --- Faction gate overlays (wave 38) shared resources ---
-  // Unit primitives scaled per part — lazy-cached, marked userData.shared,
-  // NEVER disposed (the ringGeo/glowMap pattern). Overlay sprite lamps
-  // reuse the wave-37 tintFor per-faction textures (also shared). Only
-// per-assembly overlay materials/sprite materials enter the rebuild()
-// disposal path (the wave-27 bud-material precedent).
-  let ovShared = null;
+  // Helper: ensure overlay shared resources are initialized.
   function ensureOverlayShared() {
     if (ovShared) return;
     const box = new THREE.BoxGeometry(1, 1, 1);
@@ -277,9 +211,6 @@ export function initGate(ctx) {
     const cone = new THREE.ConeGeometry(1, 1, 6);
     const sphere = new THREE.SphereGeometry(1, 8, 6);
     const ring = new THREE.TorusGeometry(1, 0.1, 6, 40);
-    // Hairline partial torus for the wave-42 unknowables lens arcs: the unit
-    // torus is scaled to ring size, so the tube scales with it — 0.02 lands
-    // at roughly half a unit of thickness at T+7, which reads as bent light.
     const arcRing = new THREE.TorusGeometry(1, 0.02, 6, 48, Math.PI * 0.55);
     box.userData.shared = true;
     cyl.userData.shared = true;
@@ -290,584 +221,641 @@ export function initGate(ctx) {
     ovShared = { box, cyl, cone, sphere, ring, arcRing };
   }
 
-  // Per-system-faction dress over the Lamplighter brass base, built
-  // alongside the ring at assembly build time (junction assemblies get it
-  // too — the faction-neutral lantern coexists). Overlay animation is
-  // preallocated entries in a.overlayAnims: update() mutates opacity /
-  // rotation in place and freezes them at base under reducedMotion.
-  function buildOverlay(a, faction, tint) {
-    ensureOverlayShared();
-    const st = styleFor(faction);
-    const G = ovShared;
-    const ov = new THREE.Group();
-    ov.name = faction + '-overlay';
-    const mats = [];
-    const anims = [];
-    const T = RING_RADIUS + RING_TUBE; // outer tube surface radius
-    const IN = RING_RADIUS - RING_TUBE; // inner tube surface radius
+  _gateShared = {
+    ringGeo, chevronGeo, chevronMat, glowMap, beaconMap, chevronRadius,
+    glowBaseScale, beaconBaseScale, hexBarGeo, armGeo,
+    tintFor, ensureOrganicShared, ensureOverlayShared,
+    get ogTendrilGeoA() { return ogTendrilGeoA; },
+    get ogTendrilGeoB() { return ogTendrilGeoB; },
+    get ogPetalGeo() { return ogPetalGeo; },
+    get ogVineGeoA() { return ogVineGeoA; },
+    get ogVineGeoB() { return ogVineGeoB; },
+    get beautifulGlowMap() { return beautifulGlowMap; },
+    get ovShared() { return ovShared; },
+  };
+  return _gateShared;
+}
 
-    // Per-assembly structural material (faction PBR response); disposed in rebuild().
-    const struct = (color, emissive, ei) => {
-      const m = new THREE.MeshStandardMaterial({
-        color,
-        emissive: emissive ?? 0x000000,
-        emissiveIntensity: ei ?? 0,
-        metalness: st.metalness,
-        roughness: st.roughness,
-      });
-      mats.push(m);
-      return m;
-    };
-    // Box/sphere/ring part: scaled, placed on the ring circle at angle ang,
-    // radius r, bore offset z; rotation.z = ang + rot (rot π/2 = tangential,
-    // -π/2 = local +Y radial).
-    const part = (geo, mat, sx, sy, sz, ang, r, z = 0, rot = 0) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.scale.set(sx, sy, sz);
-      m.position.set(Math.cos(ang) * r, Math.sin(ang) * r, z);
-      m.rotation.z = ang + rot;
-      ov.add(m);
-      return m;
-    };
-    // Cylinder/cone mast: +Y axis pointed radially outward.
-    const axial = (geo, mat, thick, len, ang, r, z = 0) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.scale.set(thick, len, thick);
-      m.position.set(Math.cos(ang) * r, Math.sin(ang) * r, z);
-      m.rotation.z = ang - Math.PI / 2;
-      ov.add(m);
-      return m;
-    };
-    // Additive lamp sprite; amp > 0 registers an in-place pulse entry.
-    const lamp = (map, color, scale, ang, r, z, base, amp, spd, phase = 0) => {
-      const m = new THREE.SpriteMaterial({
-        map, color,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: base,
-        depthWrite: false,
-      });
-      mats.push(m);
-      const s = new THREE.Sprite(m);
-      s.scale.setScalar(scale);
-      s.position.set(Math.cos(ang) * r, Math.sin(ang) * r, z);
-      ov.add(s);
-      if (amp > 0) anims.push({ mat: m, base, amp, spd, phase });
-      return s;
-    };
+// =============================================================================
+// BUILDER FUNCTIONS (module-scope, used by both live gates and buildGateModel)
+// =============================================================================
 
-    switch (faction) {
-      case 'veridian': {
-        // Segmented hexagonal ring cladding, claim beacons, emerald aperture.
-        const clad = struct(st.hull);
-        const alloy = struct(st.trim);
-        const aperture = struct(st.hullDark, st.glow, 1.2);
-        for (let i = 0; i < 6; i++) {
-          const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
-          part(G.box, clad, 11, 3.4, 4.6, ang, T + 1.4, 0, Math.PI / 2);
-          part(G.box, aperture, 4.2, 0.9, 1.4, ang, IN - 1.2, 0, Math.PI / 2);
-        }
-        for (let i = 0; i < 3; i++) {
-          const ang = (i / 3) * Math.PI * 2;
-          axial(G.cyl, alloy, 0.6, 7, ang, T + 3.5);
-          lamp(tint.beaconMap, st.glow, 4.5, ang, T + 7.5, 0, 0.5, 0.35, 2.2, i * 2.1);
-        }
-        break;
-      }
-      case 'ferrous': {
-        // Four cardinal bastions, blast shutters, crimson marker lights.
-        const iron = struct(st.hull);
-        const dark = struct(st.hullDark);
-        for (let i = 0; i < 4; i++) {
-          const ang = (i / 4) * Math.PI * 2;
-          part(G.box, iron, 6, 9, 6.5, ang, T + 3.5, 0, -Math.PI / 2);
-          part(G.box, dark, 3.6, 3, 4.2, ang, T + 9.5, 0, -Math.PI / 2);
-          // Strict alternating blink (paired phases).
-          lamp(tint.beaconMap, st.accent, 4, ang, T + 11.5, 0, 0.6, 0.4, 3.2, (i % 2) * Math.PI);
-        }
-        for (let i = 0; i < 4; i++) {
-          const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
-          part(G.box, dark, 12, 5.5, 0.9, ang, IN - 2.2, 2.4, Math.PI / 2);
-          part(G.box, dark, 12, 5.5, 0.9, ang, IN - 2.2, -2.4, Math.PI / 2);
-        }
-        break;
-      }
-      case 'freehold': {
-        // Replaced ring segments (mismatched patch panels), repair
-        // scaffolds, warm window pods.
-        const patchMats = st.patch.map((c) => struct(c));
-        for (let i = 0; i < 5; i++) {
-          const ang = (i / 5) * Math.PI * 2 + 0.45;
-          part(G.box, patchMats[i % 3], 8 + (i % 3) * 2.5, 2.6 + (i % 2), 4.8,
-            ang, T + 0.9, i % 2 ? 0.8 : -0.8, Math.PI / 2);
-        }
-        const frame = struct(st.trim);
-        for (let i = 0; i < 2; i++) {
-          const ang = i * Math.PI + Math.PI / 2.5;
-          for (let k = -1; k <= 1; k++) axial(G.cyl, frame, 0.28, 9, ang + k * 0.075, T + 4.5);
-          part(G.box, frame, 5.5, 0.5, 3, ang, T + 9, 0, Math.PI / 2);
-        }
-        const pod = struct(st.hullDark, st.glow, 0.9);
-        for (let i = 0; i < 3; i++) {
-          const ang = (i / 3) * Math.PI * 2 + 1.1;
-          part(G.box, pod, 3.2, 2.4, 3, ang, T + 2.6, 1.2, Math.PI / 2);
-          lamp(tint.beaconMap, st.glow, 2.6, ang, T + 4.4, 1.2, 0.45, 0.2, 1.4, i * 1.3);
-        }
-        break;
-      }
-      case 'redledger': {
-        // Armored toll platforms, boarding dock, strict beacon lanes.
-        const iron = struct(st.hull);
-        const copper = struct(st.trim);
-        for (const s of [-1, 1]) {
-          const ang = s * Math.PI / 3;
-          part(G.box, iron, 11, 2.6, 7.5, ang, T + 1.6, 0, Math.PI / 2);
-          part(G.box, copper, 11.6, 0.7, 8.1, ang, T + 3.2, 0, Math.PI / 2);
-        }
-        const dAng = -Math.PI / 2;
-        part(G.box, iron, 3, 15, 3.4, dAng, T + 7.5, 0, -Math.PI / 2);
-        part(G.box, copper, 5.5, 1.2, 5.5, dAng, T + 15.5, 0, -Math.PI / 2);
-        lamp(tint.beaconMap, st.glow, 3.6, dAng, T + 16.8, 0, 0.6, 0.35, 2.6);
-        // Beacon lanes through the bore — strict unison blink.
-        for (const s of [-1, 1]) {
-          for (let k = -1; k <= 1; k++) {
-            lamp(tint.beaconMap, st.beacon, 2.8, s > 0 ? 0 : Math.PI, 16, k * 13, 0.5, 0.45, 3.4);
-          }
-        }
-        break;
-      }
-      case 'gilded': {
-        // Oval scale-segment cladding, turquoise aperture.
-        const ceramic = struct(st.hull);
-        const gold = struct(st.accent);
-        const aperture = struct(st.hullDark, st.glow, 1.5);
-        for (let i = 0; i < 12; i++) {
-          const ang = (i / 12) * Math.PI * 2;
-          part(G.sphere, i % 4 === 3 ? gold : ceramic, 5.4, 3.1, 1.7,
-            ang, T + 0.7, i % 2 ? 1 : -1, Math.PI / 2);
-        }
-        part(G.ring, aperture, IN - 1.4, IN - 1.4, (IN - 1.4) * 0.22, 0, 0);
-        for (let i = 0; i < 4; i++) {
-          lamp(tint.beaconMap, st.glow, 3.4, (i / 4) * Math.PI * 2 + Math.PI / 4, IN - 1.4, 0, 0.5, 0.3, 1.8, i * 1.6);
-        }
-        break;
-      }
-      case 'congregation': {
-        // Shrine pods, amber guidance lights, violet Wakeglass accents.
-        const hullM = struct(st.hull);
-        const silver = struct(st.trim);
-        const wake = struct(st.hullDark, st.patch[0], 1.4);
-        for (let i = 0; i < 4; i++) {
-          const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
-          part(G.box, hullM, 4.4, 2.6, 4.4, ang, T + 1.4, 0, Math.PI / 2);
-          axial(G.cone, silver, 1.7, 6.5, ang, T + 5.6);
-          part(G.box, wake, 1.2, 1.2, 1.2, ang + 0.16, T + 1.8, 1.4);
-        }
-        for (let i = 0; i < 6; i++) {
-          lamp(tint.beaconMap, st.glow, 3, (i / 6) * Math.PI * 2, T + 0.6, i % 2 ? 2.4 : -2.4, 0.5, 0.25, 1.2, i * 1.05);
-        }
-        for (let i = 0; i < 2; i++) {
-          lamp(tint.beaconMap, st.patch[0], 3.6, (i / 2) * Math.PI * 2 + Math.PI / 4, T + 8.6, 0, 0.45, 0.25, 1.6, i * Math.PI);
-        }
-        break;
-      }
-      case 'assembly': {
-        // Recursive scaffolds, duplicated sub-rings, teal optics.
-        const off = struct(st.hull);
-        const char = struct(st.hullDark);
-        const orange = struct(st.accent);
-        for (let i = 0; i < 2; i++) {
-          const ang = (i / 2) * Math.PI * 2 + Math.PI / 3;
-          // Daughter-ring copy riding the hull: torus + nubs so the slow
-          // counter-rotation reads (a bare torus spins invisibly).
-          const mount = new THREE.Group();
-          mount.position.set(Math.cos(ang) * (T + 6), Math.sin(ang) * (T + 6), i ? -4 : 4);
-          const sub = new THREE.Mesh(G.ring, off);
-          sub.scale.setScalar(9);
-          mount.add(sub);
-          for (let k = 0; k < 3; k++) {
-            const na = (k / 3) * Math.PI * 2;
-            const nub = new THREE.Mesh(G.box, k === 1 ? orange : char);
-            nub.scale.set(2, 2, 2);
-            nub.position.set(Math.cos(na) * 9, Math.sin(na) * 9, 0);
-            mount.add(nub);
-          }
-          ov.add(mount);
-          anims.push({ obj: mount, spin: i ? 0.3 : -0.3 });
-        }
-        for (let i = 0; i < 3; i++) {
-          const ang = (i / 3) * Math.PI * 2;
-          part(G.box, char, 5, 5, 5, ang, T + 2.5);
-          part(G.box, off, 2.6, 2.6, 2.6, ang, T + 6.3);
-          part(G.box, orange, 1.3, 1.3, 1.3, ang, T + 8.2);
-        }
-        for (let i = 0; i < 4; i++) {
-          lamp(tint.beaconMap, st.glow, 3.2, (i / 4) * Math.PI * 2 + Math.PI / 4, T + 3.4, i % 2 ? 2 : -2, 0.5, 0.35, 2.0, i * 1.9);
-        }
-        break;
-      }
-      case 'lamplighter': {
-        // Full service dress — gantries, relay crown, maintenance rail,
-        // many small amber lamps (the gate's home look).
-        const soot = struct(st.hull);
-        const yellow = struct(st.trim);
-        for (let i = 0; i < 3; i++) {
-          const ang = (i / 3) * Math.PI * 2 + Math.PI / 6;
-          part(G.box, soot, 1.4, 13, 1.4, ang, T + 6.5, 0, -Math.PI / 2);
-          part(G.box, yellow, 2.2, 2.2, 2.2, ang, T + 13.5, 0, -Math.PI / 2);
-        }
-        // Relay crown riding the ring flank at 330° — clear of the pulsing
-        // gate beacon at 90° and the three gantries (30°/150°/270°).
-        const cAng = (11 / 6) * Math.PI;
-        axial(G.cyl, soot, 2.6, 6, cAng, T + 3);
-        axial(G.cyl, yellow, 1.4, 3.4, cAng, T + 7.4);
-        axial(G.cone, soot, 0.8, 3.4, cAng, T + 10.6);
-        lamp(tint.beaconMap, st.patch[1], 3.8, cAng, T + 12.8, 0, 0.5, 0.3, 2.8); // cobalt diagnostic
-        const rail = part(G.ring, yellow, T + 3.4, T + 3.4, (T + 3.4) * 0.12, 0, 0);
-        rail.rotation.x = 0.05;
-        for (let i = 0; i < 12; i++) {
-          lamp(tint.beaconMap, st.glow, 2.2, (i / 12) * Math.PI * 2, T + 0.9, i % 2 ? 1.6 : -1.6, 0.5, 0.25, 1.7, i * 0.7);
-        }
-        lamp(tint.beaconMap, st.patch[1], 3, Math.PI / 6 + (Math.PI * 2) / 3, T + 15.9, 0, 0.45, 0.25, 2.2, 1.1);
-        break;
-      }
-      case 'unknowables': {
-        // Energy-field overlay (wave 42 D3): no hull structure. Additive
-        // gravitational lens arcs and plasma cells in the bore.
-        const lensMat = (color) => {
-          const m = new THREE.MeshBasicMaterial({
-            color,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            opacity: 0.5, // light bent around the bore, not painted cladding
-            depthWrite: false,
-          });
-          mats.push(m);
-          return m;
-        };
-        // Exactly 4 lens arcs: partial torus sweeps standing off the ring on
-        // the bore axis, each tilted out of the ring plane so they cross the
-        // silhouette. The unit torus is scaled uniformly, so its tube scales
-        // too — G.arcRing is deliberately a HAIRLINE tube (see
-        // ensureOverlayShared), because at ring scale a normal tube reads as
-        // a solid painted crescent instead of bent light.
-        // Colors alternate patch[0] (ultraviolet) / accent (electric cyan).
-        for (let i = 0; i < 4; i++) {
-          const ang = (i / 4) * Math.PI * 2;
-          const lens = new THREE.Mesh(G.arcRing, lensMat(i % 2 === 0 ? st.patch[0] : st.accent));
-          lens.name = 'unknowables-lens';
-          const arcRadius = T + 2 + (i % 2) * 5; // two shells, T+2 and T+7
-          lens.scale.setScalar(arcRadius);
-          lens.rotation.x = i % 2 === 0 ? 0.32 : -0.22; // tilt out of the ring plane
-          lens.rotation.z = ang; // spaced around the bore
-          ov.add(lens);
-          // Slow counter-rotation about the bore — the lensing drifts.
-          anims.push({ obj: lens, spin: i % 2 === 0 ? 0.12 : -0.08 });
-        }
-        // Plasma cells group: 8 small additive cells in the bore.
-        const plasmaGroup = new THREE.Group();
-        plasmaGroup.name = 'unknowables-plasma';
-        plasmaGroup.visible = false; // Hidden until jump transit.
-        const plasmaMat = (color) => {
-          const m = new THREE.MeshBasicMaterial({
-            color,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            depthWrite: false,
-          });
-          mats.push(m);
-          return m;
-        };
-        // Exactly 8 plasma cells arranged in the bore.
-        for (let i = 0; i < 8; i++) {
-          const ang = (i / 8) * Math.PI * 2;
-          const radius = RING_RADIUS * 0.5;
-          const cell = new THREE.Mesh(G.sphere, plasmaMat(i % 3 === 0 ? st.beacon : st.accent));
-          cell.name = 'unknowables-plasma-cell';
-          cell.scale.setScalar(1.8);
-          cell.position.set(Math.cos(ang) * radius, Math.sin(ang) * radius, 0);
-          // Z-wobble for depth in the bore.
-          cell.position.z = (i % 2 === 0 ? 2 : -2) + (i % 3) * 1.5;
-          plasmaGroup.add(cell);
-          // Preallocate plasma animation: slow radial drift.
-          anims.push({ obj: cell, spin: (i % 2 === 0 ? 0.08 : -0.08) });
-        }
-        ov.add(plasmaGroup);
-        a.unknowablesPlasma = plasmaGroup;
-        break;
-      }
-    }
-
-    a.group.add(ov);
-    a.overlayMats = mats;
-    a.overlayAnims = anims;
+// Per-assembly visual animation (pure visual work, no gameplay).
+// `charging` is the departing gate's own flag (jumping AND this assembly is
+// the destination lane). It is NOT derivable from jumpProgress: a transit
+// opens at progress 0, and the plasma cells, the tunnel swirl and the bore
+// bloom all key off the flag, not the ramp (wave 42 D3).
+function animateAssembly(a, elapsed, dt, reducedMotion, charging = false, jumpProgress = 0) {
+  // Slow spin of ring + chevrons around the bore axis.
+  if (!reducedMotion) {
+    a.ring.rotation.z += SPIN_SPEED * dt;
+    a.chevrons.rotation.z -= SPIN_SPEED * 0.6 * dt;
   }
 
-  // One preallocated assembly per gate: { group, ring, chevrons, glow,
-  // beacon, to, x, y, z }. Rebuilt only on 'systemLoaded'.
+  // Beacon pulse (~1.2 s period).
+  const pulse = reducedMotion ? 1.0 : 0.7 + 0.3 * Math.sin(elapsed * 5.2);
+  a.beacon.scale.setScalar(gateShared().beaconBaseScale * pulse);
+
+  // Glow: gentle breathing at rest, intensifies with jump progress.
+  const charge = charging ? 1 + jumpProgress * 1.6 : 1;
+  a.glow.scale.setScalar(
+    gateShared().glowBaseScale * (reducedMotion ? 1.0 : 0.95 + 0.05 * Math.sin(elapsed * 2.1)) * charge
+  );
+  a.ring.material.emissiveIntensity = charging ? 0.25 + jumpProgress * 1.2 : 0.25;
+
+  // Beautiful overgrowth (wave-27): part-level tendril/petal sway and bud pulse.
+  if (a.organicParts) animateOrganic(a.organicParts, elapsed, reducedMotion);
+
+  // Faction overlay (wave 38): lamp blink/pulse + slow sub-ring spins.
+  if (a.overlayAnims) {
+    for (let k = 0; k < a.overlayAnims.length; k++) {
+      const an = a.overlayAnims[k];
+      if (an.obj) {
+        if (!reducedMotion) an.obj.rotation.z += an.spin * dt;
+      } else {
+        an.mat.opacity = reducedMotion
+          ? an.base
+          : an.base + an.amp * Math.sin(elapsed * an.spd + an.phase);
+      }
+    }
+  }
+
+  // Unknowables plasma cells (wave 42 D3): visible only while charging.
+  if (a.unknowablesPlasma) a.unknowablesPlasma.visible = charging;
+
+  // Junction silhouette (wave-22): hex frame counter-rotates the ring spin.
+  if (a.isHub) {
+    if (!reducedMotion) a.hexFrame.rotation.z += HEX_SPIN_SPEED * dt;
+
+    // Lamp selection lerp (smooth transition to selected route).
+    const lerp = Math.min(1, dt * 8);
+    for (let k = 0; k < a.lamps.length; k++) {
+      const target = k === a.routeIndex ? 1 : 0;
+      const blend = a.lampBlend[k] + (target - a.lampBlend[k]) * lerp;
+      a.lampBlend[k] = blend;
+      a.lamps[k].scale.setScalar(LAMP_BASE_SCALE + (LAMP_SELECTED_SCALE - LAMP_BASE_SCALE) * blend);
+      a.lampMats[k].opacity = LAMP_BASE_OPACITY + (LAMP_SELECTED_OPACITY - LAMP_BASE_OPACITY) * blend;
+    }
+  }
+
+  // Charge tunnel (wave-6): swirl the particle ring while charging.
+  const swirling = charging && !reducedMotion;
+  a.swirl.visible = swirling;
+  if (swirling) {
+    const prog = jumpProgress;
+    a.swirlPhase += dt * (1.5 + prog * 4);
+    const zDrift = (elapsed * (20 + prog * 40)) % TUNNEL_DEPTH;
+    const radScale = RING_RADIUS * (1.15 - 0.55 * prog);
+    for (let j = 0; j < TUNNEL_COUNT; j++) {
+      const ang = a.swirlBase[j * 2] + a.swirlPhase;
+      const r = a.swirlBase[j * 2 + 1] * radScale;
+      let z = a.swirlZ[j] + zDrift;
+      if (z >= TUNNEL_DEPTH) z -= TUNNEL_DEPTH;
+      const j3 = j * 3;
+      a.swirlArr[j3] = Math.cos(ang) * r;
+      a.swirlArr[j3 + 1] = Math.sin(ang) * r;
+      a.swirlArr[j3 + 2] = z - TUNNEL_DEPTH * 0.5;
+    }
+    a.swirl.geometry.attributes.position.needsUpdate = true;
+    a.swirl.material.opacity = 0.25 + prog * 0.75;
+  }
+}
+
+// Build the Beautiful Ones overgrowth (wave-27) on an assembly.
+function buildOvergrowth(a) {
+  const sh = gateShared();
+  const mats = organicMaterials(); // cached shared set — used directly
+  const group = new THREE.Group();
+  group.name = 'beautiful-overgrowth';
+
+  // Living tendrils wrapped around the torus tube at spaced angles.
+  for (let i = 0; i < 4; i++) {
+    const ang = (i / 4) * Math.PI * 2 + 0.35;
+    const mount = new THREE.Group();
+    mount.position.set(Math.cos(ang) * RING_RADIUS, Math.sin(ang) * RING_RADIUS, 0);
+    mount.rotation.z = ang;
+    const tendril = new THREE.Mesh(i % 2 ? sh.ogTendrilGeoB : sh.ogTendrilGeoA, mats.flesh);
+    tendril.rotation.x = Math.PI / 2;
+    tendril.position.set(i % 2 ? RING_TUBE * 0.75 : -RING_TUBE * 0.75, 0, i % 2 ? -1.1 : 1.1);
+    mount.add(tendril);
+    tagSway(mount, { axis: 'z', amp: 0.015, hz: 0.15, phase: i * 1.9 });
+    group.add(mount);
+  }
+
+  // Membrane petals cocooning alternating chevrons (0, 2, 4, 6).
+  for (let k = 0; k < 4; k++) {
+    const ang = ((k * 2) / CHEVRON_COUNT) * Math.PI * 2;
+    const mount = new THREE.Group();
+    mount.position.set(Math.cos(ang) * sh.chevronRadius, Math.sin(ang) * sh.chevronRadius, 0);
+    mount.rotation.z = ang + Math.PI / 2;
+    const petal = new THREE.Mesh(sh.ogPetalGeo, mats.membrane);
+    petal.rotation.x = -Math.PI / 2;
+    petal.rotation.z = 0.15;
+    petal.position.y = -3;
+    mount.add(petal);
+    tagSway(mount, { axis: 'z', amp: 0.04, hz: 0.25, phase: k * 1.7 });
+    a.chevrons.add(mount);
+  }
+
+  // Mint bud-lanterns riding the ring at 45° offsets from the chevrons.
+  const budMats = [];
+  for (let i = 0; i < 4; i++) {
+    const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const mat = new THREE.SpriteMaterial({
+      map: sh.beautifulGlowMap,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+    tagPulse(mat, { base: 0.55, amp: 0.25, hz: 0.4, phase: i * 1.6 });
+    const bud = new THREE.Sprite(mat);
+    bud.name = 'beautiful-bud';
+    bud.position.set(Math.cos(ang) * RING_RADIUS, Math.sin(ang) * RING_RADIUS, 0);
+    bud.scale.setScalar(7);
+    group.add(bud);
+    budMats.push(mat);
+  }
+
+  // Gilt vine rings circling the main ring.
+  const vineA = new THREE.Mesh(sh.ogVineGeoA, mats.gilt);
+  const vineB = new THREE.Mesh(sh.ogVineGeoB, mats.gilt);
+  vineB.rotation.x = 0.06;
+  group.add(vineA);
+  group.add(vineB);
+
+  a.group.add(group);
+  a.budMats = budMats;
+}
+
+// Build faction overlay (wave 38) on an assembly.
+function buildOverlay(a, faction, tint) {
+  const sh = gateShared();
+  sh.ensureOverlayShared();
+  const st = styleFor(faction);
+  const G = sh.ovShared; // This is now accessed through the shared object
+  const ov = new THREE.Group();
+  ov.name = faction + '-overlay';
+  const mats = [];
+  const anims = [];
+  const T = RING_RADIUS + RING_TUBE;
+  const IN = RING_RADIUS - RING_TUBE;
+
+  // Per-assembly structural material (disposed in rebuild()).
+  const struct = (color, emissive, ei) => {
+    const m = new THREE.MeshStandardMaterial({
+      color,
+      emissive: emissive ?? 0x000000,
+      emissiveIntensity: ei ?? 0,
+      metalness: st.metalness,
+      roughness: st.roughness,
+    });
+    mats.push(m);
+    return m;
+  };
+
+  const part = (geo, mat, sx, sy, sz, ang, r, z = 0, rot = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.scale.set(sx, sy, sz);
+    m.position.set(Math.cos(ang) * r, Math.sin(ang) * r, z);
+    m.rotation.z = ang + rot;
+    ov.add(m);
+    return m;
+  };
+
+  const axial = (geo, mat, thick, len, ang, r, z = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.scale.set(thick, len, thick);
+    m.position.set(Math.cos(ang) * r, Math.sin(ang) * r, z);
+    m.rotation.z = ang - Math.PI / 2;
+    ov.add(m);
+    return m;
+  };
+
+  const lamp = (map, color, scale, ang, r, z, base, amp, spd, phase = 0) => {
+    const m = new THREE.SpriteMaterial({
+      map, color,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: base,
+      depthWrite: false,
+    });
+    mats.push(m);
+    const s = new THREE.Sprite(m);
+    s.scale.setScalar(scale);
+    s.position.set(Math.cos(ang) * r, Math.sin(ang) * r, z);
+    ov.add(s);
+    if (amp > 0) anims.push({ mat: m, base, amp, spd, phase });
+    return s;
+  };
+
+  switch (faction) {
+    case 'veridian': {
+      const clad = struct(st.hull);
+      const alloy = struct(st.trim);
+      const aperture = struct(st.hullDark, st.glow, 1.2);
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        part(G.box, clad, 11, 3.4, 4.6, ang, T + 1.4, 0, Math.PI / 2);
+        part(G.box, aperture, 4.2, 0.9, 1.4, ang, IN - 1.2, 0, Math.PI / 2);
+      }
+      for (let i = 0; i < 3; i++) {
+        const ang = (i / 3) * Math.PI * 2;
+        axial(G.cyl, alloy, 0.6, 7, ang, T + 3.5);
+        lamp(tint.beaconMap, st.glow, 4.5, ang, T + 7.5, 0, 0.5, 0.35, 2.2, i * 2.1);
+      }
+      break;
+    }
+    case 'ferrous': {
+      const iron = struct(st.hull);
+      const dark = struct(st.hullDark);
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2;
+        part(G.box, iron, 6, 9, 6.5, ang, T + 3.5, 0, -Math.PI / 2);
+        part(G.box, dark, 3.6, 3, 4.2, ang, T + 9.5, 0, -Math.PI / 2);
+        lamp(tint.beaconMap, st.accent, 4, ang, T + 11.5, 0, 0.6, 0.4, 3.2, (i % 2) * Math.PI);
+      }
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        part(G.box, dark, 12, 5.5, 0.9, ang, IN - 2.2, 2.4, Math.PI / 2);
+        part(G.box, dark, 12, 5.5, 0.9, ang, IN - 2.2, -2.4, Math.PI / 2);
+      }
+      break;
+    }
+    case 'freehold': {
+      const patchMats = st.patch.map((c) => struct(c));
+      for (let i = 0; i < 5; i++) {
+        const ang = (i / 5) * Math.PI * 2 + 0.45;
+        part(G.box, patchMats[i % 3], 8 + (i % 3) * 2.5, 2.6 + (i % 2), 4.8,
+          ang, T + 0.9, i % 2 ? 0.8 : -0.8, Math.PI / 2);
+      }
+      const frame = struct(st.trim);
+      for (let i = 0; i < 2; i++) {
+        const ang = i * Math.PI + Math.PI / 2.5;
+        for (let k = -1; k <= 1; k++) axial(G.cyl, frame, 0.28, 9, ang + k * 0.075, T + 4.5);
+        part(G.box, frame, 5.5, 0.5, 3, ang, T + 9, 0, Math.PI / 2);
+      }
+      const pod = struct(st.hullDark, st.glow, 0.9);
+      for (let i = 0; i < 3; i++) {
+        const ang = (i / 3) * Math.PI * 2 + 1.1;
+        part(G.box, pod, 3.2, 2.4, 3, ang, T + 2.6, 1.2, Math.PI / 2);
+        lamp(tint.beaconMap, st.glow, 2.6, ang, T + 4.4, 1.2, 0.45, 0.2, 1.4, i * 1.3);
+      }
+      break;
+    }
+    case 'redledger': {
+      const iron = struct(st.hull);
+      const copper = struct(st.trim);
+      for (const s of [-1, 1]) {
+        const ang = s * Math.PI / 3;
+        part(G.box, iron, 11, 2.6, 7.5, ang, T + 1.6, 0, Math.PI / 2);
+        part(G.box, copper, 11.6, 0.7, 8.1, ang, T + 3.2, 0, Math.PI / 2);
+      }
+      const dAng = -Math.PI / 2;
+      part(G.box, iron, 3, 15, 3.4, dAng, T + 7.5, 0, -Math.PI / 2);
+      part(G.box, copper, 5.5, 1.2, 5.5, dAng, T + 15.5, 0, -Math.PI / 2);
+      lamp(tint.beaconMap, st.glow, 3.6, dAng, T + 16.8, 0, 0.6, 0.35, 2.6);
+      for (const s of [-1, 1]) {
+        for (let k = -1; k <= 1; k++) {
+          lamp(tint.beaconMap, st.beacon, 2.8, s > 0 ? 0 : Math.PI, 16, k * 13, 0.5, 0.45, 3.4);
+        }
+      }
+      break;
+    }
+    case 'gilded': {
+      const ceramic = struct(st.hull);
+      const gold = struct(st.accent);
+      const aperture = struct(st.hullDark, st.glow, 1.5);
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2;
+        part(G.sphere, i % 4 === 3 ? gold : ceramic, 5.4, 3.1, 1.7,
+          ang, T + 0.7, i % 2 ? 1 : -1, Math.PI / 2);
+      }
+      part(G.ring, aperture, IN - 1.4, IN - 1.4, (IN - 1.4) * 0.22, 0, 0);
+      for (let i = 0; i < 4; i++) {
+        lamp(tint.beaconMap, st.glow, 3.4, (i / 4) * Math.PI * 2 + Math.PI / 4, IN - 1.4, 0, 0.5, 0.3, 1.8, i * 1.6);
+      }
+      break;
+    }
+    case 'congregation': {
+      const hullM = struct(st.hull);
+      const silver = struct(st.trim);
+      const wake = struct(st.hullDark, st.patch[0], 1.4);
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        part(G.box, hullM, 4.4, 2.6, 4.4, ang, T + 1.4, 0, Math.PI / 2);
+        axial(G.cone, silver, 1.7, 6.5, ang, T + 5.6);
+        part(G.box, wake, 1.2, 1.2, 1.2, ang + 0.16, T + 1.8, 1.4);
+      }
+      for (let i = 0; i < 6; i++) {
+        lamp(tint.beaconMap, st.glow, 3, (i / 6) * Math.PI * 2, T + 0.6, i % 2 ? 2.4 : -2.4, 0.5, 0.25, 1.2, i * 1.05);
+      }
+      for (let i = 0; i < 2; i++) {
+        lamp(tint.beaconMap, st.patch[0], 3.6, (i / 2) * Math.PI * 2 + Math.PI / 4, T + 8.6, 0, 0.45, 0.25, 1.6, i * Math.PI);
+      }
+      break;
+    }
+    case 'assembly': {
+      const off = struct(st.hull);
+      const char = struct(st.hullDark);
+      const orange = struct(st.accent);
+      for (let i = 0; i < 2; i++) {
+        const ang = (i / 2) * Math.PI * 2 + Math.PI / 3;
+        const mount = new THREE.Group();
+        mount.position.set(Math.cos(ang) * (T + 6), Math.sin(ang) * (T + 6), i ? -4 : 4);
+        const sub = new THREE.Mesh(G.ring, off);
+        sub.scale.setScalar(9);
+        mount.add(sub);
+        for (let k = 0; k < 3; k++) {
+          const na = (k / 3) * Math.PI * 2;
+          const nub = new THREE.Mesh(G.box, k === 1 ? orange : char);
+          nub.scale.set(2, 2, 2);
+          nub.position.set(Math.cos(na) * 9, Math.sin(na) * 9, 0);
+          mount.add(nub);
+        }
+        ov.add(mount);
+        anims.push({ obj: mount, spin: i ? 0.3 : -0.3 });
+      }
+      for (let i = 0; i < 3; i++) {
+        const ang = (i / 3) * Math.PI * 2;
+        part(G.box, char, 5, 5, 5, ang, T + 2.5);
+        part(G.box, off, 2.6, 2.6, 2.6, ang, T + 6.3);
+        part(G.box, orange, 1.3, 1.3, 1.3, ang, T + 8.2);
+      }
+      for (let i = 0; i < 4; i++) {
+        lamp(tint.beaconMap, st.glow, 3.2, (i / 4) * Math.PI * 2 + Math.PI / 4, T + 3.4, i % 2 ? 2 : -2, 0.5, 0.35, 2.0, i * 1.9);
+      }
+      break;
+    }
+    case 'lamplighter': {
+      const soot = struct(st.hull);
+      const yellow = struct(st.trim);
+      for (let i = 0; i < 3; i++) {
+        const ang = (i / 3) * Math.PI * 2 + Math.PI / 6;
+        part(G.box, soot, 1.4, 13, 1.4, ang, T + 6.5, 0, -Math.PI / 2);
+        part(G.box, yellow, 2.2, 2.2, 2.2, ang, T + 13.5, 0, -Math.PI / 2);
+      }
+      const cAng = (11 / 6) * Math.PI;
+      axial(G.cyl, soot, 2.6, 6, cAng, T + 3);
+      axial(G.cyl, yellow, 1.4, 3.4, cAng, T + 7.4);
+      axial(G.cone, soot, 0.8, 3.4, cAng, T + 10.6);
+      lamp(tint.beaconMap, st.patch[1], 3.8, cAng, T + 12.8, 0, 0.5, 0.3, 2.8);
+      const rail = part(G.ring, yellow, T + 3.4, T + 3.4, (T + 3.4) * 0.12, 0, 0);
+      rail.rotation.x = 0.05;
+      for (let i = 0; i < 12; i++) {
+        lamp(tint.beaconMap, st.glow, 2.2, (i / 12) * Math.PI * 2, T + 0.9, i % 2 ? 1.6 : -1.6, 0.5, 0.25, 1.7, i * 0.7);
+      }
+      lamp(tint.beaconMap, st.patch[1], 3, Math.PI / 6 + (Math.PI * 2) / 3, T + 15.9, 0, 0.45, 0.25, 2.2, 1.1);
+      break;
+    }
+    case 'unknowables': {
+      const lensMat = (color) => {
+        const m = new THREE.MeshBasicMaterial({
+          color,
+          blending: THREE.AdditiveBlending,
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: false,
+        });
+        mats.push(m);
+        return m;
+      };
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2;
+        const lens = new THREE.Mesh(G.arcRing, lensMat(i % 2 === 0 ? st.patch[0] : st.accent));
+        lens.name = 'unknowables-lens';
+        const arcRadius = T + 2 + (i % 2) * 5;
+        lens.scale.setScalar(arcRadius);
+        lens.rotation.x = i % 2 === 0 ? 0.32 : -0.22;
+        lens.rotation.z = ang;
+        ov.add(lens);
+        anims.push({ obj: lens, spin: i % 2 === 0 ? 0.12 : -0.08 });
+      }
+      const plasmaGroup = new THREE.Group();
+      plasmaGroup.name = 'unknowables-plasma';
+      plasmaGroup.visible = false;
+      const plasmaMat = (color) => {
+        const m = new THREE.MeshBasicMaterial({
+          color,
+          blending: THREE.AdditiveBlending,
+          transparent: true,
+          depthWrite: false,
+        });
+        mats.push(m);
+        return m;
+      };
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const radius = RING_RADIUS * 0.5;
+        const cell = new THREE.Mesh(G.sphere, plasmaMat(i % 3 === 0 ? st.beacon : st.accent));
+        cell.name = 'unknowables-plasma-cell';
+        cell.scale.setScalar(1.8);
+        cell.position.set(Math.cos(ang) * radius, Math.sin(ang) * radius, 0);
+        cell.position.z = (i % 2 === 0 ? 2 : -2) + (i % 3) * 1.5;
+        plasmaGroup.add(cell);
+        anims.push({ obj: cell, spin: (i % 2 === 0 ? 0.08 : -0.08) });
+      }
+      ov.add(plasmaGroup);
+      a.unknowablesPlasma = plasmaGroup;
+      break;
+    }
+  }
+
+  a.group.add(ov);
+  a.overlayMats = mats;
+  a.overlayAnims = anims;
+}
+
+// Build junction extras (wave-22): hexagonal frame + arm lamps for hub assemblies.
+function buildJunctionExtras(a, routes) {
+  const sh = gateShared();
+  const hexMat = new THREE.MeshStandardMaterial({
+    color: BRASS_DARK,
+    emissive: AMBER,
+    emissiveIntensity: 0.35,
+    roughness: 0.5,
+    metalness: 0.7,
+  });
+  const hexFrame = new THREE.Group();
+  const edgeMidR = HEX_RADIUS * Math.cos(Math.PI / 6);
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const bar = new THREE.Mesh(sh.hexBarGeo, hexMat);
+    bar.position.set(Math.cos(ang) * edgeMidR, Math.sin(ang) * edgeMidR, 0);
+    bar.rotation.z = ang + Math.PI / 2;
+    hexFrame.add(bar);
+  }
+  a.group.add(hexFrame);
+
+  const arms = new THREE.Group();
+  const lamps = [];
+  const lampMats = [];
+  const armR = (RING_RADIUS + HEX_RADIUS) / 2;
+  const lampR = HEX_RADIUS - 1;
+  for (let k = 0; k < routes.length; k++) {
+    const phi = (k / routes.length) * Math.PI * 2;
+    const arm = new THREE.Mesh(sh.armGeo, hexMat);
+    arm.position.set(Math.cos(phi) * armR, Math.sin(phi) * armR, 0);
+    arm.rotation.z = phi;
+    arms.add(arm);
+    const lampMat = new THREE.SpriteMaterial({
+      map: sh.beaconMap,
+      color: AMBER,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: LAMP_BASE_OPACITY,
+      depthWrite: false,
+    });
+    const lamp = new THREE.Sprite(lampMat);
+    lamp.name = 'junction-arm-lamp';
+    lamp.position.set(Math.cos(phi) * lampR, Math.sin(phi) * lampR, 0);
+    lamp.scale.setScalar(LAMP_BASE_SCALE);
+    arms.add(lamp);
+    lamps.push(lamp);
+    lampMats.push(lampMat);
+  }
+  a.group.add(arms);
+
+  a.hexFrame = hexFrame;
+  a.hexMat = hexMat;
+  a.arms = arms;
+  a.lamps = lamps;
+  a.lampMats = lampMats;
+  a.lampBlend = new Float32Array(routes.length);
+  a.group.userData.routeCount = routes.length;
+  a.group.userData.routeIndex = 0;
+}
+
+// Build a single gate assembly (ring, chevrons, glow, beacon, tunnel, overgrowth, overlay).
+function buildAssembly(gateDef, faction, beautiful) {
+  const sh = gateShared();
+  const group = new THREE.Group();
+
+  if (beautiful) sh.ensureOrganicShared();
+  const tint = beautiful ? null : sh.tintFor(faction);
+  const gMap = beautiful ? sh.beautifulGlowMap : (tint?.glowMap ?? sh.glowMap);
+  const bMap = beautiful ? sh.beautifulGlowMap : (tint?.beaconMap ?? sh.beaconMap);
+  const chvMat = beautiful ? sh.chevronMat : (tint?.chevronMat ?? sh.chevronMat);
+
+  // Ring (brass, slightly emissive).
+  const ring = new THREE.Mesh(
+    sh.ringGeo,
+    new THREE.MeshStandardMaterial({
+      color: BRASS,
+      emissive: AMBER,
+      emissiveIntensity: 0.25,
+      roughness: 0.55,
+      metalness: 0.8,
+    }),
+  );
+  group.add(ring);
+
+  // Inner chevron markers.
+  const chevrons = new THREE.Group();
+  for (let i = 0; i < CHEVRON_COUNT; i++) {
+    const a = (i / CHEVRON_COUNT) * Math.PI * 2;
+    const c = new THREE.Mesh(sh.chevronGeo, chvMat);
+    c.position.set(Math.cos(a) * sh.chevronRadius, Math.sin(a) * sh.chevronRadius, 0);
+    c.rotation.z = a + Math.PI / 2;
+    chevrons.add(c);
+  }
+  group.add(chevrons);
+
+  // Additive amber glow filling the bore.
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: gMap,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  glow.scale.setScalar(sh.glowBaseScale);
+  group.add(glow);
+
+  // Pulsing beacon riding the ring.
+  const beacon = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: bMap,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  beacon.position.set(0, RING_RADIUS + RING_TUBE + 2, 0);
+  beacon.scale.setScalar(sh.beaconBaseScale);
+  group.add(beacon);
+
+  // Charge tunnel particles (preallocated but invisible).
+  const swirlGeo = new THREE.BufferGeometry();
+  const swirlArr = new Float32Array(TUNNEL_COUNT * 3);
+  swirlGeo.setAttribute('position', new THREE.BufferAttribute(swirlArr, 3));
+  const swirlBase = new Float32Array(TUNNEL_COUNT * 2);
+  const swirlZ = new Float32Array(TUNNEL_COUNT);
+  for (let i = 0; i < TUNNEL_COUNT; i++) {
+    swirlBase[i * 2] = Math.random() * Math.PI * 2;
+    swirlBase[i * 2 + 1] = 0.55 + Math.random() * 0.5;
+    swirlZ[i] = Math.random() * TUNNEL_DEPTH;
+  }
+  const swirl = new THREE.Points(
+    swirlGeo,
+    new THREE.PointsMaterial({
+      map: gMap,
+      color: beautiful ? ORGANIC.mint : (tint?.tunnelColor ?? AMBER_HOT),
+      size: TUNNEL_SIZE,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    }),
+  );
+  swirl.visible = false;
+  swirl.frustumCulled = false;
+  group.add(swirl);
+
+  // Position and orient the assembly.
+  const gp = gateDef.position;
+  group.position.set(gp[0], gp[1], gp[2]);
+  group.lookAt(0, 0, 0);
+
+  const a = {
+    group, ring, chevrons, glow, beacon, swirl, swirlArr, swirlBase, swirlZ, swirlPhase: 0,
+    to: gateDef.to, x: gp[0], y: gp[1], z: gp[2],
+    organicParts: null, overlayAnims: null, budMats: null, overlayMats: null,
+    hexFrame: null, hexMat: null, arms: null, lamps: null, lampMats: null, lampBlend: null,
+    isHub: false, routeIndex: 0, unknowablesPlasma: null,
+  };
+
+  // Beautiful Ones overgrowth (wave-27).
+  if (beautiful) {
+    buildOvergrowth(a);
+    a.organicParts = collectOrganic(group);
+  }
+
+  // Faction overlay (wave 38).
+  if (!beautiful && OVERLAY_FACTIONS.has(faction)) {
+    buildOverlay(a, faction, tint);
+  }
+
+  return a;
+}
+
+// =============================================================================
+// LIVE GATE SYSTEM (initGate)
+// =============================================================================
+
+export function initGate(ctx) {
+  const root = new THREE.Group();
+  ctx.scene.add(root);
+
+  // Per-system-faction state (set per rebuild).
+  let currentFaction = 'independent';
+  let currentBeautiful = false;
+
+  // One preallocated assembly per gate.
   const assemblies = [];
 
-  function buildAssembly(gateDef) {
-    const group = new THREE.Group();
-    const beautiful = currentBeautiful;
-    if (beautiful) ensureOrganicShared();
-    // Beautiful systems swap the amber glow texture for the mint organic
-    // one (glow/beacon sprites and the charge tunnel). Other factions tint
-    // glow/beacon/chevrons/tunnel from their FACTION_STYLE (wave 37);
-    // independent/hollow get the classic amber (tintFor falls back).
-    const tint = beautiful ? null : tintFor(currentFaction);
-    const gMap = beautiful ? beautifulGlowMap : (tint?.glowMap ?? glowMap);
-    const bMap = beautiful ? beautifulGlowMap : (tint?.beaconMap ?? beaconMap);
-    const chvMat = beautiful ? chevronMat : (tint?.chevronMat ?? chevronMat);
-
-    // Ring (brass, slightly emissive so it reads against deep space). The
-    // material is per-gate: charge glow raises one ring's emissive only.
-    const ring = new THREE.Mesh(
-      ringGeo,
-      new THREE.MeshStandardMaterial({
-        color: BRASS,
-        emissive: AMBER,
-        emissiveIntensity: 0.25,
-        roughness: 0.55,
-        metalness: 0.8,
-      }),
-    );
-    group.add(ring);
-
-    // Inner chevron markers: radial inward-pointing cones around the bore.
-    const chevrons = new THREE.Group();
-    for (let i = 0; i < CHEVRON_COUNT; i++) {
-      const a = (i / CHEVRON_COUNT) * Math.PI * 2;
-      const c = new THREE.Mesh(chevronGeo, chvMat);
-      c.position.set(Math.cos(a) * chevronRadius, Math.sin(a) * chevronRadius, 0);
-      // Cone +Y is the tip; rotate so the tip points at the ring center.
-      c.rotation.z = a + Math.PI / 2;
-      chevrons.add(c);
-    }
-    group.add(chevrons);
-
-    // Additive amber glow filling the bore (the "lamplight").
-    const glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: gMap,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        depthWrite: false,
-      }),
-    );
-    glow.scale.setScalar(glowBaseScale);
-    group.add(glow);
-
-    // Pulsing beacon riding the ring.
-    const beacon = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: bMap,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        depthWrite: false,
-      }),
-    );
-    beacon.position.set(0, RING_RADIUS + RING_TUBE + 2, 0);
-    beacon.scale.setScalar(beaconBaseScale);
-    group.add(beacon);
-
-    // Charge tunnel (wave-6): preallocated particle ring in the bore plane.
-    // swirlBase holds per-point { angle, radius fraction }; swirlZ holds the
-    // depth offset streamed along the bore. All buffers preallocated here —
-    // update() writes positions in place only while the gate is charging.
-    const swirlGeo = new THREE.BufferGeometry();
-    const swirlArr = new Float32Array(TUNNEL_COUNT * 3);
-    swirlGeo.setAttribute('position', new THREE.BufferAttribute(swirlArr, 3));
-    const swirlBase = new Float32Array(TUNNEL_COUNT * 2);
-    const swirlZ = new Float32Array(TUNNEL_COUNT);
-    for (let i = 0; i < TUNNEL_COUNT; i++) {
-      swirlBase[i * 2] = Math.random() * Math.PI * 2;
-      swirlBase[i * 2 + 1] = 0.55 + Math.random() * 0.5;
-      swirlZ[i] = Math.random() * TUNNEL_DEPTH;
-    }
-    const swirl = new THREE.Points(
-      swirlGeo,
-      new THREE.PointsMaterial({
-        map: gMap,
-        color: beautiful ? ORGANIC.mint : (tint?.tunnelColor ?? AMBER_HOT),
-        size: TUNNEL_SIZE,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      }),
-    );
-    swirl.visible = false;
-    swirl.frustumCulled = false; // buffer rewritten in place; skip stale culling
-    group.add(swirl);
-
-    const gp = gateDef.position;
-    group.position.set(gp[0], gp[1], gp[2]);
-    // Ring bore faces the system center (origin) — the arrival/departure lane.
-    group.lookAt(0, 0, 0);
-    root.add(group);
-
-    const a = { group, ring, chevrons, glow, beacon, swirl, swirlArr, swirlBase, swirlZ, swirlPhase: 0, to: gateDef.to, x: gp[0], y: gp[1], z: gp[2] };
-    // Beautiful Ones overgrowth (wave-27): grown tendrils/petals/buds over
-    // the brass ring. collectOrganic walks the finished assembly ONCE;
-    // update() drives a.organicParts with animateOrganic.
-    if (beautiful) {
-      buildOvergrowth(a);
-      a.organicParts = collectOrganic(group);
-    }
-    // Faction overlay (wave 38): sculpted-faction dress over the brass base
-    // (junction assemblies get it too — the lantern coexists). Beautiful
-    // keeps overgrowth; independent/hollow/unknown stay plain brass.
-    if (!beautiful && OVERLAY_FACTIONS.has(currentFaction)) {
-      buildOverlay(a, currentFaction, tint);
-    }
-    return a;
-  }
-
-  // Beautiful Ones overgrowth (wave-27): the ring stays Lamplighter brass
-  // (Guild infrastructure) but is GROWN OVER — living tendrils wrap the
-  // torus tube, membrane petals cocoon alternating chevrons, mint
-  // bud-lanterns ride the ring, gilt vines circle it. Shared geometries /
-  // materials are used directly; only the bud SpriteMaterials are
-  // per-assembly (tagPulse'd) and disposed in rebuild().
-  function buildOvergrowth(a) {
-    const mats = organicMaterials(); // cached shared set — used directly
-    const group = new THREE.Group();
-    group.name = 'beautiful-overgrowth';
-
-    // Living tendrils wrapped around the torus tube at spaced angles,
-    // conforming to the ring circle (arc-bent geometry at build time).
-    for (let i = 0; i < 4; i++) {
-      const ang = (i / 4) * Math.PI * 2 + 0.35;
-      const mount = new THREE.Group();
-      mount.position.set(Math.cos(ang) * RING_RADIUS, Math.sin(ang) * RING_RADIUS, 0);
-      mount.rotation.z = ang; // local +X radially outward
-      const tendril = new THREE.Mesh(i % 2 ? ogTendrilGeoB : ogTendrilGeoA, mats.flesh);
-      // Arc plane into the ring plane: local +Z (root tangent) → mount -Y
-      // (ring tangent), local -X (arc-center side) → mount -X (inward).
-      tendril.rotation.x = Math.PI / 2;
-      // Alternate riding the outer/inner tube surface with a plane wobble.
-      tendril.position.set(i % 2 ? RING_TUBE * 0.75 : -RING_TUBE * 0.75, 0, i % 2 ? -1.1 : 1.1);
-      mount.add(tendril);
-      tagSway(mount, { axis: 'z', amp: 0.015, hz: 0.15, phase: i * 1.9 });
-      group.add(mount);
-    }
-
-    // Membrane petals cocooning alternating chevrons (0, 2, 4, 6). Mounted
-    // INTO a.chevrons so they keep their seats as the chevron ring
-    // counter-rotates each frame (collectOrganic walks the whole assembly,
-    // so sway collection is unaffected).
-    for (let k = 0; k < 4; k++) {
-      const ang = ((k * 2) / CHEVRON_COUNT) * Math.PI * 2;
-      const mount = new THREE.Group();
-      mount.position.set(Math.cos(ang) * chevronRadius, Math.sin(ang) * chevronRadius, 0);
-      mount.rotation.z = ang + Math.PI / 2; // local +Y points at the ring center (chevron-tip direction)
-      const petal = new THREE.Mesh(ogPetalGeo, mats.membrane);
-      petal.rotation.x = -Math.PI / 2; // petal length +Z → mount +Y (over the chevron)
-      petal.rotation.z = 0.15; // organic asymmetry
-      petal.position.y = -3; // root behind the chevron base, curling over it
-      mount.add(petal);
-      tagSway(mount, { axis: 'z', amp: 0.04, hz: 0.25, phase: k * 1.7 });
-      a.chevrons.add(mount);
-    }
-
-    // Mint bud-lanterns riding the ring at 45° offsets from the chevrons.
-    // Per-assembly SpriteMaterials (tagPulse'd) — disposed in rebuild().
-    const budMats = [];
-    for (let i = 0; i < 4; i++) {
-      const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      const mat = new THREE.SpriteMaterial({
-        map: beautifulGlowMap,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-      });
-      tagPulse(mat, { base: 0.55, amp: 0.25, hz: 0.4, phase: i * 1.6 });
-      const bud = new THREE.Sprite(mat);
-      bud.name = 'beautiful-bud';
-      bud.position.set(Math.cos(ang) * RING_RADIUS, Math.sin(ang) * RING_RADIUS, 0);
-      bud.scale.setScalar(7);
-      group.add(bud);
-      budMats.push(mat);
-    }
-
-    // Gilt vine rings circling the main ring — the 'gilded growth'.
-    const vineA = new THREE.Mesh(ogVineGeoA, mats.gilt);
-    const vineB = new THREE.Mesh(ogVineGeoB, mats.gilt);
-    vineB.rotation.x = 0.06;
-    group.add(vineA);
-    group.add(vineB);
-
-    a.group.add(group);
-    a.budMats = budMats;
-  }
-
-  // Junction lantern silhouette (wave-22): augment a hub assembly with the
-  // hexagonal outer frame + one brass arm per route tipped with an amber
-  // lamp sprite. Everything is preallocated here — update() only mutates
-  // frame rotation, lamp scale/opacity, and userData scalars.
-  function buildJunctionExtras(a, routes) {
-    const group = a.group;
-    // Per-assembly frame/arm material (disposed with the assembly).
-    const hexMat = new THREE.MeshStandardMaterial({
-      color: BRASS_DARK,
-      emissive: AMBER,
-      emissiveIntensity: 0.35,
-      roughness: 0.5,
-      metalness: 0.7,
-    });
-    const hexFrame = new THREE.Group();
-    const edgeMidR = HEX_RADIUS * Math.cos(Math.PI / 6);
-    for (let i = 0; i < 6; i++) {
-      const ang = (i / 6) * Math.PI * 2 + Math.PI / 6;
-      const bar = new THREE.Mesh(hexBarGeo, hexMat);
-      bar.position.set(Math.cos(ang) * edgeMidR, Math.sin(ang) * edgeMidR, 0);
-      bar.rotation.z = ang + Math.PI / 2;
-      hexFrame.add(bar);
-    }
-    group.add(hexFrame);
-
-    const arms = new THREE.Group();
-    const lamps = [];
-    const lampMats = [];
-    const armR = (RING_RADIUS + HEX_RADIUS) / 2;
-    const lampR = HEX_RADIUS - 1;
-    for (let k = 0; k < routes.length; k++) {
-      const phi = (k / routes.length) * Math.PI * 2;
-      const arm = new THREE.Mesh(armGeo, hexMat);
-      arm.position.set(Math.cos(phi) * armR, Math.sin(phi) * armR, 0);
-      arm.rotation.z = phi;
-      arms.add(arm);
-      const lampMat = new THREE.SpriteMaterial({
-        map: beaconMap,
-        color: AMBER,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: LAMP_BASE_OPACITY,
-        depthWrite: false,
-      });
-      const lamp = new THREE.Sprite(lampMat);
-      lamp.name = 'junction-arm-lamp';
-      lamp.position.set(Math.cos(phi) * lampR, Math.sin(phi) * lampR, 0);
-      lamp.scale.setScalar(LAMP_BASE_SCALE);
-      arms.add(lamp);
-      lamps.push(lamp);
-      lampMats.push(lampMat);
-    }
-    group.add(arms);
-
-    a.hexFrame = hexFrame;
-    a.hexMat = hexMat;
-    a.arms = arms;
-    a.lamps = lamps;
-    a.lampMats = lampMats;
-    a.lampBlend = new Float32Array(routes.length); // per-lamp selection lerp state
-    group.userData.routeCount = routes.length;
-    group.userData.routeIndex = 0;
-  }
-
-  // --- Rebuild every assembly for the current system (on 'systemLoaded') ---
+  // Rebuild every assembly for the current system (on 'systemLoaded').
   function rebuild() {
     for (let i = 0; i < assemblies.length; i++) {
       const a = assemblies[i];
@@ -878,51 +866,43 @@ export function initGate(ctx) {
       a.swirl.geometry.dispose();
       a.swirl.material.dispose();
       if (a.isHub) {
-        // Junction silhouette: shared hexBarGeo/armGeo survive (like
-        // ringGeo); dispose only the per-assembly material and lamp mats.
         a.hexMat.dispose();
         for (let k = 0; k < a.lampMats.length; k++) a.lampMats[k].dispose();
       }
-      // Beautiful overgrowth: shared geometries/materials/texture survive
-      // (ringGeo pattern); dispose only the per-assembly bud SpriteMaterials.
       if (a.budMats) {
         for (let k = 0; k < a.budMats.length; k++) a.budMats[k].dispose();
       }
-      // Faction overlay (wave 38): shared geometries/tint textures survive
-      // (ringGeo pattern); dispose only the per-assembly overlay materials.
       if (a.overlayMats) {
         for (let k = 0; k < a.overlayMats.length; k++) a.overlayMats[k].dispose();
       }
     }
     assemblies.length = 0;
     const def = SYSTEMS[ctx.world.currentSystem];
-    // Beautiful Ones overgrowth (wave-27): gate/junction rings in beautiful
-    // systems are grown over — buildAssembly reads this flag.
     currentBeautiful = isBeautiful(def.faction);
-    currentFaction = def.faction ?? 'independent'; // wave 37: gate tinting
+    currentFaction = def.faction ?? 'independent';
     const gates = def.gates;
     for (let i = 0; i < gates.length; i++) {
-      const a = buildAssembly(gates[i]);
+      const a = buildAssembly(gates[i], currentFaction, currentBeautiful);
       a.group.name = 'lamplighter-gate';
+      root.add(a.group);
       assemblies.push(a);
     }
-    // Lamplighter junction: one assembly at hub.position carrying the hub's
-    // route list. `to` always tracks the selected route (reset to 0 here);
-    // KeyG advances routeIndex while this is the nearest zone.
+    // Lamplighter junction.
     const hub = def.hub;
     if (hub && hub.routes && hub.routes.length) {
-      const a = buildAssembly({ position: hub.position, to: hub.routes[0] });
+      const a = buildAssembly({ position: hub.position, to: hub.routes[0] }, currentFaction, currentBeautiful);
       a.isHub = true;
       a.routes = hub.routes;
       a.routeIndex = 0;
       buildJunctionExtras(a, hub.routes);
       a.group.name = 'lamplighter-junction';
+      root.add(a.group);
       assemblies.push(a);
     }
   }
   rebuild();
 
-  // --- Jump overlay: full-screen fade + centered label, created once ---
+  // Jump overlay: full-screen fade + centered label.
   const overlay = document.createElement('div');
   overlay.style.cssText =
     'position:fixed;inset:0;display:none;align-items:center;justify-content:center;' +
@@ -935,12 +915,11 @@ export function initGate(ctx) {
   document.body.appendChild(overlay);
 
   let overlayShown = false;
-  let labelFor = null; // destination id currently named in the label
+  let labelFor = null;
   let wasJumping = false;
   let lastFadeStep = -1;
 
-  // Junction route cycling: set each frame by the zone check; the KeyG
-  // listener acts on the hub assembly currently nearest in range.
+  // Junction route cycling.
   let zoneHub = null;
   window.addEventListener('keydown', (e) => {
     if (e.code !== 'KeyG' || e.repeat) return;
@@ -962,92 +941,21 @@ export function initGate(ctx) {
 
     const jumping = ctx.gate.jumping;
     const reducedMotion = ctx.settings?.reducedMotion === true;
-    // Per-gate idle motion + glow; only the departing gate (the one whose
-    // `to` matches ctx.gate.destination) intensifies during charge.
+
+    // Per-assembly visual animation.
     for (let i = 0; i < assemblies.length; i++) {
       const a = assemblies[i];
-      // Slow spin of ring + chevrons around the bore axis.
-      if (!reducedMotion) a.ring.rotation.z += SPIN_SPEED * dt;
-      if (!reducedMotion) a.chevrons.rotation.z -= SPIN_SPEED * 0.6 * dt;
-      // Beacon pulse (~1.2 s period).
-      const pulse = reducedMotion ? 1.0 : 0.7 + 0.3 * Math.sin(ctx.elapsed * 5.2);
-      a.beacon.scale.setScalar(beaconBaseScale * pulse);
-      // Glow: gentle breathing at rest, intensifies on the departing gate.
       const charging = jumping && a.to === ctx.gate.destination;
-      const charge = charging ? 1 + ctx.gate.progress * 1.6 : 1;
-      a.glow.scale.setScalar(glowBaseScale * (reducedMotion ? 1.0 : 0.95 + 0.05 * Math.sin(ctx.elapsed * 2.1)) * charge);
-      a.ring.material.emissiveIntensity = charging ? 0.25 + ctx.gate.progress * 1.2 : 0.25;
+      const jumpProgress = charging ? ctx.gate.progress : 0;
+      animateAssembly(a, ctx.elapsed, dt, reducedMotion, charging, jumpProgress);
 
-      // Beautiful overgrowth (wave-27): part-level tendril/petal sway and
-      // bud pulse, zero-alloc; animateOrganic is a complete no-op under
-      // reducedMotion (stashed bases stay — the overgrowth freezes).
-      if (a.organicParts) animateOrganic(a.organicParts, ctx.elapsed, reducedMotion);
-
-      // Faction overlay (wave 38): lamp blink/pulse + slow sub-ring spins,
-      // preallocated entries mutated in place (zero-alloc); frozen at base
-      // values under reducedMotion.
-      if (a.overlayAnims) {
-        for (let k = 0; k < a.overlayAnims.length; k++) {
-          const an = a.overlayAnims[k];
-          if (an.obj) {
-            if (!reducedMotion) an.obj.rotation.z += an.spin * dt;
-          } else {
-            an.mat.opacity = reducedMotion
-              ? an.base
-              : an.base + an.amp * Math.sin(ctx.elapsed * an.spd + an.phase);
-          }
-        }
-      }
-
-      // Unknowables plasma cells (wave 42 D3): the bore fills with plasma
-      // geometry only while the transit runs — the same `charging` condition
-      // the tunnel swirl reads. reducedMotion freezes the cells' motion in
-      // the loop above; it never hides them.
-      if (a.unknowablesPlasma) a.unknowablesPlasma.visible = charging;
-
-      // Junction silhouette (wave-22): hex frame counter-rotates the ring
-      // spin (frozen under reducedMotion); the selected route's lamp lerps
-      // brighter/larger — scale/opacity mutated in place, no allocation.
+      // Update junction userData for gameplay reads.
       if (a.isHub) {
-        if (!reducedMotion) a.hexFrame.rotation.z += HEX_SPIN_SPEED * dt;
-        const lerp = Math.min(1, dt * 8);
-        for (let k = 0; k < a.lamps.length; k++) {
-          const target = k === a.routeIndex ? 1 : 0;
-          const blend = a.lampBlend[k] + (target - a.lampBlend[k]) * lerp;
-          a.lampBlend[k] = blend;
-          a.lamps[k].scale.setScalar(LAMP_BASE_SCALE + (LAMP_SELECTED_SCALE - LAMP_BASE_SCALE) * blend);
-          a.lampMats[k].opacity = LAMP_BASE_OPACITY + (LAMP_SELECTED_OPACITY - LAMP_BASE_OPACITY) * blend;
-        }
         a.group.userData.routeIndex = a.routeIndex;
-      }
-
-      // Charge tunnel (wave-6): swirl the particle ring while this gate
-      // charges — radius contracts and opacity rises with jump progress.
-      // reducedMotion → no swirl at all (fade/label overlay still runs).
-      const swirling = charging && !reducedMotion;
-      a.swirl.visible = swirling;
-      if (swirling) {
-        const prog = ctx.gate.progress;
-        a.swirlPhase += dt * (1.5 + prog * 4);
-        const zDrift = (ctx.elapsed * (20 + prog * 40)) % TUNNEL_DEPTH;
-        const radScale = RING_RADIUS * (1.15 - 0.55 * prog);
-        for (let j = 0; j < TUNNEL_COUNT; j++) {
-          const ang = a.swirlBase[j * 2] + a.swirlPhase;
-          const r = a.swirlBase[j * 2 + 1] * radScale;
-          let z = a.swirlZ[j] + zDrift;
-          if (z >= TUNNEL_DEPTH) z -= TUNNEL_DEPTH;
-          const j3 = j * 3;
-          a.swirlArr[j3] = Math.cos(ang) * r;
-          a.swirlArr[j3 + 1] = Math.sin(ang) * r;
-          a.swirlArr[j3 + 2] = z - TUNNEL_DEPTH * 0.5;
-        }
-        a.swirl.geometry.attributes.position.needsUpdate = true;
-        a.swirl.material.opacity = 0.25 + prog * 0.75;
       }
     }
 
-    // Zone check per gate (ignored while docked or mid-jump); the nearest
-    // in-range gate wins.
+    // Zone check per gate.
     const shipObj = ctx.ship.object;
     let nearIdx = -1;
     let nearD2 = JUMP.zone * JUMP.zone;
@@ -1074,7 +982,7 @@ export function initGate(ctx) {
       ctx.emit('jumpRequested', { to: near.to });
     }
 
-    // Jump overlay: fade in over first 40% of progress, out over last 40%.
+    // Jump overlay: fade in/out.
     if (jumping) {
       const p = ctx.gate.progress;
       const opacity = p < 0.4 ? p / 0.4 : p > 0.6 ? (1 - p) / 0.4 : 1;
@@ -1103,4 +1011,53 @@ export function initGate(ctx) {
   }
 
   return { update };
+}
+
+// =============================================================================
+// MODELS BROWSER ENTRY POINT
+// =============================================================================
+
+/**
+ * Standalone gate model builder for the Models Browser.
+ * Returns an unparented gate assembly at the origin with visual update.
+ * This is a thin wrapper that uses the same sculpt code as live gates.
+ * @param {string} faction - Faction id (e.g., 'freehold', 'beautiful', 'lamplighter')
+ * @param {Object} opts - { hub: boolean, routes: number }
+ * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
+ */
+export function buildGateModel(faction = 'independent', opts = {}) {
+  const { hub = false, routes = 0 } = opts;
+  const beautiful = isBeautiful(faction);
+
+  // Build a synthetic gate def at the origin.
+  const gateDef = { position: [0, 0, 0], to: null };
+
+  // Build the assembly using the same builder as live gates.
+  const a = buildAssembly(gateDef, faction, beautiful);
+
+  // Add junction extras if hub option is set.
+  if (hub && routes > 0) {
+    a.isHub = true;
+    a.routeIndex = 0;
+    a.routes = Array.from({ length: routes }, (_, i) => `route${i}`);
+    buildJunctionExtras(a, a.routes);
+  }
+
+  // Ensure the group is at the origin.
+  a.group.position.set(0, 0, 0);
+  a.group.rotation.set(0, 0, 0);
+
+  // Create the update function (visual only, no gameplay).
+  let prevElapsed = 0;
+  function update(elapsed, reducedMotion) {
+    const dt = prevElapsed === 0 ? 0.016 : Math.max(0, elapsed - prevElapsed);
+    prevElapsed = elapsed;
+    animateAssembly(a, elapsed, dt, reducedMotion, false, 0); // parked model: never charging
+  }
+
+  return {
+    object: a.group,
+    update,
+    label: `${FACTIONS[faction]?.name ?? faction}${hub ? ' hub' : ''} gate`,
+  };
 }

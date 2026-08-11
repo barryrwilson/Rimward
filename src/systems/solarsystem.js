@@ -349,3 +349,100 @@ export function initSolarSystem(ctx) {
 
   return { update };
 }
+/**
+ * Standalone star model for the Models Browser.
+ * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
+ */
+export function buildStarModel(systemId = 'freehold') {
+  const def = SYSTEMS[systemId];
+  if (!def) {
+    throw new Error(`Unknown system: ${systemId}`);
+  }
+
+  const group = new THREE.Group();
+
+  // Sun mesh
+  const sun = new THREE.Mesh(
+    new THREE.SphereGeometry(def.sunRadius, 32, 24),
+    new THREE.MeshBasicMaterial({ color: def.sunColor }),
+  );
+  group.add(sun);
+
+  // Glow halo
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: makeGlowTexture(def.sunColor),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  glow.scale.setScalar(def.sunRadius * 6);
+  group.add(glow);
+
+  // Slow rotation matching the live sun
+  function update(elapsed, reducedMotion) {
+    const dt = 0.016; // Fixed timestep for deterministic rendering
+    sun.rotation.y += 0.05 * dt;
+  }
+
+  return {
+    object: group,
+    update,
+    label: `${def.name} Star`,
+  };
+}
+
+/**
+ * Standalone planet model for the Models Browser.
+ * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
+ */
+export function buildPlanetModel(systemId = 'freehold', slotIndex = 0) {
+  const def = SYSTEMS[systemId];
+  const slot = SLOTS[slotIndex];
+
+  if (!def) {
+    throw new Error(`Unknown system: ${systemId}`);
+  }
+  if (!slot) {
+    throw new Error(`Invalid slot index: ${slotIndex}`);
+  }
+
+  // Tilt group for axial tilt
+  const tiltGroup = new THREE.Group();
+  tiltGroup.rotation.z = slot.tilt;
+
+  // Planet mesh with faction-specific band palette
+  const seed = def.worldSeed * (slotIndex + 1);
+  const st = styleFor(def.faction);
+  const mood = st.planetMood ?? 'warm';
+  const tint = st.planetTint != null ? new THREE.Color(st.planetTint) : null;
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(slot.radius, 24, 18),
+    new THREE.MeshStandardMaterial({
+      map: makePlanetTexture({ bands: bandsFor(slot, mood, tint), seed }),
+      roughness: 0.9,
+      metalness: 0.0,
+    }),
+  );
+  tiltGroup.add(mesh);
+
+  // Spin speed (reuses the live path's rng logic)
+  const rng = makeRng(seed * 7919);
+  const spinSpeed = 0.3 + rng() * 0.9;
+
+  // Spin-only update (no orbit; model sits at origin)
+  function update(elapsed, reducedMotion) {
+    const dt = 0.016; // Fixed timestep
+    mesh.rotation.y += spinSpeed * dt;
+  }
+
+  return {
+    object: tiltGroup,
+    update,
+    label: `${def.name} — planet ${slotIndex + 1}`,
+  };
+}
+
+/** Number of available planet slots for enumeration. */
+export const PLANET_SLOT_COUNT = SLOTS.length;

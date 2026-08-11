@@ -42,7 +42,16 @@ function makeRng(seed) {
   };
 }
 
-/** Lumpy rock: icosahedron with seeded radial vertex jitter. */
+/** Factory: shared material for both InstancedMesh (live) and single-mesh browser. */
+function makeRockMaterial() {
+  return new THREE.MeshStandardMaterial({
+    color: 0x8a7a68, // gray-brown
+    roughness: 0.95,
+    metalness: 0.08,
+    flatShading: true,
+  });
+}
+
 function makeRockGeometry(rng) {
   const geo = new THREE.IcosahedronGeometry(1, 1);
   const pos = geo.attributes.position;
@@ -52,6 +61,37 @@ function makeRockGeometry(rng) {
   }
   geo.computeVertexNormals();
   return geo;
+}
+/**
+ * Build a standalone asteroid mesh for the models browser (deterministic per seed).
+ * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
+ */
+export function buildAsteroidModel(seed = 1) {
+  const rng = makeRng(seed);
+  const geo = makeRockGeometry(rng);
+  const mat = makeRockMaterial();
+  const object = new THREE.Mesh(geo, mat);
+
+  // Midpoint of instance scale range (2..14 → 8). Live path uses baseScale = radius.
+  object.scale.setScalar(8);
+
+  // Tumble state mirrors live rock structure.
+  const axis = new THREE.Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5).normalize();
+  const spin = (0.1 + rng() * 0.35) * (rng() < 0.5 ? -1 : 1);
+  let angle = rng() * Math.PI * 2;
+
+  const _quat = new THREE.Quaternion();
+  const _axis = new THREE.Vector3();
+
+  function update(elapsed, reducedMotion) {
+    if (reducedMotion) return;
+    // Live path amortizes over ~4 frames (n/chunk ≈ 4); we advance every frame.
+    angle += spin * 0.016 * 4; // dt ≈ 0.016 at 60fps, n/chunk ≈ 4
+    _quat.setFromAxisAngle(axis, angle);
+    object.quaternion.copy(_quat);
+  }
+
+  return { object, update, label: 'Asteroid' };
 }
 
 export function initAsteroids(ctx) {
@@ -70,12 +110,7 @@ export function initAsteroids(ctx) {
     const rng = makeRng(0xa57e000 + def.worldSeed);
 
     const geo = makeRockGeometry(rng);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x8a7a68, // gray-brown
-      roughness: 0.95,
-      metalness: 0.08,
-      flatShading: true,
-    });
+    const mat = makeRockMaterial();
     mesh = new THREE.InstancedMesh(geo, mat, count);
     mesh.frustumCulled = false; // instances span the whole field
     ctx.scene.add(mesh);
