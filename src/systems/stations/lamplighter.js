@@ -33,17 +33,17 @@
  *   DARK   0x171410  hullDark
  *   YELLOW 0xd8a83a  trim = patch[0]
  *   WARM   0xffc06a  accent = glow
- * Measured (self-check, 2026-08-10, round-3 cage fix):
- *   parts=2635 | tot=245232 | glow=38004
- *   bbox x -22.4 20.4 | y -19.7 18.3 | z -17.5 18.7
- *   strays [] | iso 2/406 0.49%
- *   orphanGlow 0.09% | orphanGlaze 0.00%
+ * Measured (wave 47, after the greebleScatter and tower-window fixes):
+ *   parts=2635 | tot=245232 | glow=43548
+ *   bbox x -22.4 19.3 | y -19.7 18.3 | z -17.5 18.7
+ *   strays [] | iso 0/379 0.00% | one component, singleMass 100%
+ *   orphanGlow 0.00% | orphanGlaze 0.00%
  */
 
 import {
   rng, weather, box, cyl, sphere, hemi, torus, cone, ribBands,
   windowGrid, portholeRing, panelSkin, panelPatches, truss, railing,
-  bridge, airlock, pipeRun, antenna, ladder, lampString, crate,
+  bridge, airlock, pipeRun, antenna, ladder, lampString, crate, greebleScatter,
 } from '../station-detail.js';
 
 export const lamplighterStation = {
@@ -411,10 +411,12 @@ export const lamplighterStation = {
       cyl(b, 'hull', W(SOOT, 1), 0.7, 0.9, site.h, 12);
       panelSkin(b, 'hull', P_SOOT, { r: 0.95, from: 0, to: site.h - 2, rows: 4, cols: 5, seed: 4550 + Math.abs(Math.floor(site.x)), t: 0.15, axis: 'y' });
       ribBands(b, 'hull', DARK, { r: 1.05, tube: 0.16, from: 1, to: site.h - 3, count: 3, axis: 'y', tseg: 12 });
-      // Indicator windows on vertical face: panelSkin provides hull at z=0.95,
-      // so window placed at z=0.95 is against hull material.
-      windowGrid(b, 'glow', LIT_DIM, { rows: 4, cols: 1, rowGap: 2.0, colGap: 1.0, w: 0.38, h: 0.44, d: 0.42, x: 0, y: site.h * 0.3, z: 0.95, axis: 'y' });
-      windowGrid(b, 'glow', LIT_DIM, { rows: 4, cols: 1, rowGap: 2.0, colGap: 1.0, w: 0.38, h: 0.44, d: 0.42, x: 0, y: site.h * 0.3, z:-0.95, axis: 'y' });
+      // Indicator windows climbing the tower face. axis:'x' is what makes the
+      // rows step in +Y; under axis:'y' the rows step in Z instead, which threw
+      // these four windows sideways off the tower as a floating bar (measured
+      // at (-11, 7.3, 12.2) for the z=8 site).
+      windowGrid(b, 'glow', LIT_DIM, { rows: 4, cols: 1, rowGap: 2.0, colGap: 1.0, w: 0.38, h: 0.44, d: 0.42, x: 0, y: site.h * 0.3, z: 0.95, axis: 'x' });
+      windowGrid(b, 'glow', LIT_DIM, { rows: 4, cols: 1, rowGap: 2.0, colGap: 1.0, w: 0.38, h: 0.44, d: 0.42, x: 0, y: site.h * 0.3, z:-0.95, axis: 'x' });
       box(b, 'glow', LIT, 0.4, 0.4, 0.4, { y: site.h - 0.5 });
       cone(b, 'hull', YELLOW, 0.14, 1.8, 6, { y: site.h + 0.2 });
       ladder(b, 'hull', DARK, { x: 0.8, y: 0, z: 0, h: site.h - 1, w: 0.45, rungs: 7, ry: Math.PI / 2 });
@@ -447,15 +449,22 @@ export const lamplighterStation = {
 
     // ============================================================ greebles ==
 
-    for (let i = 0; i < 60; i++) {
-      const gx = -20 + rand() * 40;
-      const gz = -14 + rand() * 28;
-      const gy = -7  + rand() * 17;
-      box(b, 'hull', [DARK, W(SOOT, 2), YELLOW, DARK][i % 4],
-        0.5 + rand() * 0.6, 0.4 + rand() * 0.45, 0.4 + rand() * 0.5,
-        { x: gx, y: gy, z: gz, ry: rand() * Math.PI });
-      if (i % 4 === 0) box(b, 'glow', LIT_DIM, 0.3, 0.22, 0.22, { x: gx + 0.4, y: gy + 0.25, z: gz });
-    }
+    // Seated on named hull surfaces, never scattered through the volume: the
+    // old loop drew from a 40 x 17 x 28 box and left two boxes hanging in open
+    // space every build (measured at (-8, 4, 12) and (-16, 0, -16)).
+    greebleScatter(b, 'hull', [DARK, W(SOOT, 2), YELLOW, W(SOOT, 1)], {
+      count: 60, seed: 4590, min: 0.5, max: 1.1,
+      glowCh: 'glow', glowHex: LIT_DIM, glowEvery: 4, glowSize: 0.3,
+      anchors: [
+        { x: 0, y: -7.1, z: 0, w: 32, d: 24, weight: 3 },   // parts-yard deck top
+        { x: 0, y: -2.5, z: 0, r: 5.5, from: -11, to: 11, axis: 'x', weight: 3 }, // depot hub drum
+        { x: -14, y: 3.5, z: 3, r: 4.2, from: -1.5, to: 1.5, axis: 'y' },  // workshop bays
+        { x: 14, y: 3.5, z: -2, r: 3.8, from: -1.5, to: 1.5, axis: 'y' },
+        { x: -6, y: 4.2, z: -8, r: 3.2, from: -1.5, to: 1.5, axis: 'y' },
+        { x: 9, y: 4.0, z: 7, r: 3.5, from: -1.5, to: 1.5, axis: 'y' },
+        { x: 0, y: 4.2, z: 1.5, w: 7, d: 4, weight: 1 },    // machine-shop tier roof
+      ],
+    });
 
     // ============================================================ ring stem ==
     // Plated structural column connecting depot hub bottom (y=-8) to the service

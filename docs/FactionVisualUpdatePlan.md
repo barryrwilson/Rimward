@@ -485,6 +485,60 @@ factions, beautiful grown by `buildBeautifulStation`, unknowables building no
 station by decision D3, and the placeholder surviving as an untested-by-live-site
 fallback that the harness exercises synthetically.
 
+#### Wave 47 — the review pass: massing, value, and the loose boxes
+
+A review of waves 43-46 against `docs/FactionExamples/` found every numeric pin
+green and three things still wrong. All three are closed.
+
+**Two sculpts missed their reference on MASSING**, not on detail. `ferrous` was a
+squat pile of eight equal bastion drums where the reference is a broad flat
+tiered disc under one cathedral tower; its "command tower" reached y 18 while the
+drums around it reached y 0, so nothing dominated. `veridian` was a compact
+vertical drum stack where the reference is a wide sprawling industrial raft. Both
+were rebuilt around their reference's proportions: ferrous now steps down and out
+through three terraces to r 24 with six gun spars past the rim and a seven-tier
+tower running y 7 to 27 that is the only thing above y 9; veridian now carries a
+hexagonal mega-deck of r 21, six radial arms to r 26 with docking pads, a ten-tank
+settling farm, and a ziggurat that stops at y 9.
+
+**The hollow.js VALUE lesson generalises.** Any faction whose `hull` and
+`hullDark` are both dark reads as a lump at 500u if it plates itself in that pair,
+however much greeble it carries. `trim` now leads the large plate sets for ferrous
+and veridian as it already did for hollow, and the dark pair falls back to
+recesses, ribs, seams and mullions. Hull mean luminance, the useful proxy:
+ferrous 0.233 -> 0.269, veridian 0.237 -> 0.300, against hollow's 0.276 and
+freehold's 0.298. This costs nothing in the palette pin — the shades are already
+in the ladder.
+
+**NEW TOOLKIT EXPORT — `greebleScatter`.** Every sculpt scattered surface greebles
+through a bounding VOLUME. A volume around a station is mostly vacuum, so a few
+boxes every build landed on nothing and read on screen as debris beside the hull;
+`singleMass` allows 3% and waved them through. `greebleScatter(b, ch, hexes,
+{ anchors, count, seed, ... })` takes surfaces the sculpt has already built —
+`{x,y,z,w,d}` deck, `{x,y,z,r,from,to,axis}` drum, `{x,y,z,r}` ball — and seats
+each greeble on one, sunk a quarter of its own size so it always shares hull with
+the surface. Seating is then a property of the construction, not a thing to
+verify. **Do not volume-scatter hull parts in a new sculpt.**
+
+**THE `push` ARGUMENT ORDER, now documented at the source.** `detailBuilder.push`
+is `(x, y, z, RY, RX, rz)` — yaw fourth. An angle in the fifth slot PITCHES a
+sub-assembly out of the deck plane instead of swinging it round, and it fails
+quietly: the wave-47 veridian bring-up passed density, glow, envelope, palette
+and seating with every radial arm pitched, and failed only `singleMass` at 95.3%.
+Both new sculpts hit this. Check the slot before blaming the maths.
+
+**TWO MORE FLOATERS worth carrying forward.** `windowGrid` under `axis: 'y'` steps
+its ROWS along Z, so a "vertical" indicator column on a tower must use
+`axis: 'x'` — lamplighter's four tower windows hung sideways in open space for
+two waves. And a mast thinner than a pixel at viewing range makes its attached tip
+read as a loose speck: assembly's antenna masts went r 0.12 -> 0.22.
+
+**MEASUREMENT.** The wave-46 rule ("measure the FILE, never the report") now has a
+tool: a standalone script that builds a sculpt outside the game, mirrors the
+harness arithmetic exactly, and traces every isolated cell and orphan vertex back
+to the `file:line` that emitted it, by wrapping the builder and mapping
+merged-vertex index to part. Every defect in this wave was named by that trace.
+
 
 ## 4. Sequencing rationale
 

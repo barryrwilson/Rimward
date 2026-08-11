@@ -66,6 +66,13 @@ export function detailBuilder() {
   const topMatrix = () => (stack.length > 0 ? stack[stack.length - 1] : null);
 
   return {
+    // ARGUMENT ORDER: (x, y, z, RY, RX, rz). The yaw comes FOURTH, before the
+    // pitch — a station sculpt yaws sub-assemblies around the mast far more
+    // often than it pitches them, so yaw takes the near slot. Passing an angle
+    // in the fifth slot pitches the assembly instead: `push(0, y, 0, 0, -a, 0)`
+    // tips a radial arm up out of the deck plane rather than swinging it round,
+    // and it does so quietly, because the assembly is still the right distance
+    // from the origin and still passes every density and seating pin.
     push(x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0) {
       if (built) throw new Error('detailBuilder: already built');
       // Scratch aliasing is fatal here: one _matrix cannot hold both the
@@ -584,6 +591,92 @@ export function lampString(b, ch, hex, { ax, ay, az, bx, by, bz, count, size = 0
   for (let i = 0; i < n; i++) {
     p.lerpVectors(A, B, n > 1 ? i / (n - 1) : 0);
     box(b, ch, hex, size, size, size, { x: p.x, y: p.y, z: p.z });
+  }
+}
+
+/**
+ * Surface greeble scatter (wave 47). Hatches, junction boxes, vents and their
+ * status lamps, placed ON named hull surfaces instead of inside a bounding box.
+ *
+ * Every sculpt before this scattered greebles through a VOLUME —
+ * `x = -18 + rand() * 36` and so on — and a volume around a station is mostly
+ * empty space, so a few boxes every build landed on nothing. They read on screen
+ * as debris hanging beside the hull, and the harness caught only the ones that
+ * happened to fall a whole 4-unit cell clear (ferrous 2 cells, lamplighter 2,
+ * assembly 1, all inside the 3% `singleMass` allowance).
+ *
+ * Here the caller names surfaces it has already built, and each greeble is
+ * seated on one of them, sunk by a quarter of its own size so it always shares
+ * hull material:
+ *   { x, y, z, w, d }              DECK — a horizontal top face at y
+ *   { x, y, z, r, from, to, axis } DRUM — a cylinder wall, axis 'x'|'y'|'z'
+ *   { x, y, z, r }                 BALL — a sphere or dome surface
+ * The shape is read from which keys are present: `w` means deck, `from` means
+ * drum, `r` alone means ball. `weight` biases the draw toward bigger surfaces
+ * (default 1 each).
+ *
+ * A `glowCh`/`glowHex` pair adds a status lamp to every `glowEvery`-th greeble,
+ * offset along the surface normal so it stays in the greeble's own 2-unit cell.
+ */
+export function greebleScatter(b, ch, hexes, {
+  anchors, count, seed, min = 0.5, max = 1.2,
+  glowCh = null, glowHex = 0xffffff, glowEvery = 4, glowSize = 0.3,
+}) {
+  if (!anchors || anchors.length === 0) throw new Error('greebleScatter: no anchors');
+  const rnd = rng(seed);
+  const total = anchors.reduce((a, s) => a + (s.weight ?? 1), 0);
+  for (let i = 0; i < count; i++) {
+    // Pick an anchor by weight.
+    let pick = rnd() * total;
+    let a = anchors[anchors.length - 1];
+    for (const cand of anchors) {
+      pick -= cand.weight ?? 1;
+      if (pick <= 0) { a = cand; break; }
+    }
+    const s = min + rnd() * (max - min);
+    const hex = hexes[Math.floor(rnd() * hexes.length)];
+    // Sink a quarter of the greeble into the surface: the overlap is what makes
+    // the part share a hull cell, which is the whole point of this helper.
+    const sink = s * 0.25;
+    let px, py, pz, ry = 0, nx = 0, ny = 1, nz = 0;
+    if (a.w !== undefined) {
+      px = a.x + (rnd() - 0.5) * a.w;
+      pz = a.z + (rnd() - 0.5) * a.d;
+      py = a.y + s / 2 - sink;
+      ry = rnd() * Math.PI;
+    } else if (a.r !== undefined && a.from !== undefined) {
+      const ang = rnd() * Math.PI * 2;
+      const along = a.from + rnd() * (a.to - a.from);
+      const rr = a.r + s / 2 - sink;
+      const cos = Math.cos(ang), sin = Math.sin(ang);
+      const axis = a.axis ?? 'y';
+      if (axis === 'y') {
+        px = a.x + cos * rr; py = a.y + along; pz = a.z + sin * rr;
+        nx = cos; ny = 0; nz = sin; ry = -ang;
+      } else if (axis === 'x') {
+        px = a.x + along; py = a.y + cos * rr; pz = a.z + sin * rr;
+        nx = 0; ny = cos; nz = sin;
+      } else {
+        px = a.x + cos * rr; py = a.y + sin * rr; pz = a.z + along;
+        nx = cos; ny = sin; nz = 0;
+      }
+    } else {
+      // Sphere: uniform direction, then step out to the surface.
+      const u = rnd() * 2 - 1;
+      const ang = rnd() * Math.PI * 2;
+      const rad = Math.sqrt(Math.max(0, 1 - u * u));
+      nx = Math.cos(ang) * rad; ny = u; nz = Math.sin(ang) * rad;
+      const rr = a.r + s / 2 - sink;
+      px = a.x + nx * rr; py = a.y + ny * rr; pz = a.z + nz * rr;
+      ry = -ang;
+    }
+    box(b, ch, hex, s, s * 0.8, s * 0.85, { x: px, y: py, z: pz, ry });
+    if (glowCh && i % glowEvery === 0) {
+      // Lamp on the greeble's outward face, still well inside its own cell.
+      box(b, glowCh, glowHex, glowSize, glowSize * 0.75, glowSize * 0.75, {
+        x: px + nx * s * 0.5, y: py + ny * s * 0.5, z: pz + nz * s * 0.5,
+      });
+    }
   }
 }
 

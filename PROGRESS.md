@@ -2172,6 +2172,66 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   --disable-background-timer-throttling --disable-renderer-backgrounding, and
   confirm ctx.elapsed advances before queueing an event.
   Screenshots: .chrome-shot/w46, w46r2, w46r3.
+- Wave 47: the station review's three findings — ferrous and veridian rebuilt for
+  MASSING and VALUE, and the loose boxes tethered.
+  WHY. A review of the wave-43..46 work against docs/FactionExamples found every
+  numeric pin green and two sculpts still failing their reference art on the two
+  things you see first, plus a class of floating debris the pins were too loose to
+  catch. All three are fixed; the user's verdict on the debris was "loose boxes
+  are not intentional".
+  FERROUS REBUILT (stations/ferrous.js). The reference is a broad flat tiered disc
+  with one cathedral tower far above it and gun spars past the rim. The wave-45
+  sculpt was a squat pile of eight equal bastion drums whose "command tower"
+  topped out at y 18 among drums reaching y 0, so nothing dominated. Now: three
+  terraces stepping down and out to r 24, sixteen rim blocks, six gun spars
+  reaching r 25 with barrels to r 29.6, a muster deck with ranked standards, and a
+  seven-tier tower running y 7 -> 27 with brass rank bands, crimson banners,
+  buttress fins and a lantern crown — nothing but the tower rises above y 9.
+  VERIDIAN REBUILT (stations/veridian.js). The reference is a wide sprawling
+  industrial raft; the wave-45 sculpt was a compact vertical drum stack. Now: a
+  hexagonal mega-deck of r 21 whose six EXACT flat faces carry the reference's long
+  window bands, six radial arms out to r 26 with hexagonal docking pads, a
+  ten-tank settling farm on its own platform off the deck edge, a four-step
+  ziggurat topping at y 9, and survey masts above that.
+  VALUE, THE HOLLOW LESSON APPLIED TWICE. Both factions' hull and hullDark are
+  dark and both sculpts plated themselves in that pair, so they vanished at 500u.
+  trim now LEADS every large plate set (ferrous steel 0x6b7c8c, veridian pale
+  alloy 0x8a948c) and the dark pair falls back to recesses, ribs, seams and
+  mullions. Hull mean luminance: ferrous 0.233 -> 0.269, veridian 0.237 -> 0.300,
+  against hollow's calibrated 0.276. Every colour stays inside the faction ladder
+  (paletteFromStyle green).
+  LOOSE BOXES, ROOT-CAUSED. Every sculpt scattered surface greebles through a
+  bounding VOLUME (`x = -18 + rand() * 36`), and a volume around a station is
+  mostly vacuum, so a few boxes every build landed on nothing: ferrous a 2-cell island
+  at (16, 8, 4), lamplighter 2 isolated cells, assembly 1. All passed singleMass,
+  which allows 3%. New toolkit export `greebleScatter(b, ch, hexes, {anchors,...})`
+  takes surfaces the sculpt has already built — deck / drum / ball — and seats each
+  greeble on one, sunk a quarter of its own size so it always shares hull. All four
+  sculpts now measure 0 isolated cells and 100% single mass.
+  TWO MORE FLOATERS, FOUND THE SAME WAY. lamplighter's service-tower indicator
+  windows passed axis:'y', under which windowGrid steps its ROWS along Z, not up
+  the tower — four windows hung sideways in space at (-11, 7.3, 12.2). And
+  assembly's antenna masts at r 0.12 are thinner than a pixel at 60u, so attached
+  tips read as loose specks; r 0.22 now.
+  A REAL BUG THE MEASUREMENT CAUGHT. detailBuilder.push is
+  (x, y, z, RY, RX, rz) — yaw FOURTH. Both new sculpts were first written with the
+  angle in the fifth slot, which PITCHES a sub-assembly out of the deck plane
+  instead of swinging it round, and does so quietly: veridian still passed
+  density, glow, envelope, palette and seating, and failed only singleMass
+  (95.3%, two 10-cell islands). The argument order is now documented loudly at the
+  push site.
+  TOOLING. A standalone sculpt measuring tool built the whole wave: it runs a
+  sculpt outside the game, mirrors the harness arithmetic exactly, and — the part
+  that mattered — traces every isolated cell and orphan vertex back to the
+  file:line that emitted it by wrapping the builder and mapping merged-vertex
+  index to part. Every defect above was named by that trace, not by reading code.
+  This is the wave-46 rule ("measure the FILE, never the report") with a tool.
+  VERIFIED. Boot test PASS; vite build clean. Measured, all four: ferrous 451,236
+  verts / 102,444 glow, veridian 277,224 / 69,108, assembly 183,264 / 36,372,
+  lamplighter 245,232 / 43,548; every one 0 isolated cells, 1 component, 100%
+  single mass, 0.00% orphans, no palette strays. Driven in the real game at
+  fx_bastion, vd_survey, lastbeacon and as_census through the real initStation
+  path, three to four framings each.
 
 ## Next round candidates (wave 47)
 - Wave 46 contract notes for future work: station.js DETAIL_STATIONS carries 10

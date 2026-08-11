@@ -46,15 +46,17 @@
  *
  * Seed base: 4506.
  *
- * Measured: parts=2246, tot=183264, glow=30024,
+ * Measured (wave 47, after greebleScatter and the r 0.22 masts):
+ * parts=2246, tot=183264, glow=36372,
  * bbox x[-20.3,20.8] y[-11.0,20.6] z[-15.0,16.1],
- * iso=1/277 (0.36%), strays=[], orphanGlow=0%, orphanGlaze=0%.
+ * iso=0/249 (0.00%), one component, singleMass 100%,
+ * strays=[], orphanGlow=0%, orphanGlaze=0%.
  */
 
 import {
   rng, weather, box, cyl, sphere, hemi, torus, cone,
   ribBands, windowGrid, portholeRing, panelSkin, truss, railing, bridge,
-  airlock, pipeRun, antenna, ladder, lampString, crate,
+  airlock, pipeRun, antenna, ladder, lampString, crate, greebleScatter,
 } from '../station-detail.js';
 
 /** Daughter-print ring: horizontal hoop, radius 9, at ringY = -9 */
@@ -431,8 +433,11 @@ export const assemblyStation = {
       { x:  2, y: 13.5, z: -2, h: 4.5 },
     ];
     antSites.forEach(site => {
+      // Mast radius 0.22, not 0.12: at 60u a 0.12 mast is thinner than a pixel,
+      // so the tips and their optic boxes read as loose specks hanging over the
+      // station even though they are attached and the mass is provably single.
       antenna(b, 'hull', W(GREY, 2), W(OFFWHITE, 2), {
-        x: site.x, y: site.y, z: site.z, h: site.h, r: 0.12, tip: 0.30,
+        x: site.x, y: site.y, z: site.z, h: site.h, r: 0.22, tip: 0.30,
       });
       box(b, 'glaze', TEAL, 0.36, 0.13, 0.36,
         { x: site.x, y: site.y + site.h + 0.16, z: site.z });
@@ -488,23 +493,20 @@ export const assemblyStation = {
     });
 
     // --------------------------------------------------- surface greebles --
-    // Hull-only scatter + targeted glow boxes placed inside cell push contexts.
-    // Range limited to station volume (-16..16, -3..13, -14..13).
-    for (let gi = 0; gi < 60; gi++) {
-      const gx = -15 + rand() * 30;
-      const gz = -12 + rand() * 25;
-      const gy =  -2 + rand() * 15;
-      box(b, 'hull',
-        [CHARCOAL, W(GREY, 2), W(OFFWHITE, 2), CHARCOAL][gi % 4],
-        0.50 + rand() * 0.70, 0.40 + rand() * 0.40, 0.40 + rand() * 0.50,
-        { x: gx, y: gy, z: gz, ry: rand() * Math.PI });
-      if (gi % 3 === 0) {
-        // glow status light near the hull greeble, offset so nearest hull vert
-        // is at gx,gy,gz (same 2-unit cell → passes orphan check)
-        box(b, 'glow', LIT_DIM, 0.28, 0.20, 0.18,
-          { x: gx + 0.38, y: gy + 0.22, z: gz });
-      }
-    }
+    // Anchored to the core shell and to every cell roof. The old loop drew from
+    // a 30 x 15 x 25 volume, and a volume around a station is mostly vacuum: one
+    // box a build hung free, measured at (12, 0, -8).
+    greebleScatter(b, 'hull', [CHARCOAL, W(GREY, 2), W(OFFWHITE, 2), W(GREY, 1)], {
+      count: 60, seed: 4595, min: 0.5, max: 1.2,
+      glowCh: 'glow', glowHex: LIT_DIM, glowEvery: 3, glowSize: 0.28,
+      anchors: [
+        { x: 0, y: coreY, z: 0, r: coreR, weight: 4 }, // ancient core shell
+        ...[...bellyCells, ...leftCells, ...rightCells].map((c) => ({
+          x: c.x, y: c.y + 1.9, z: c.z, w: 4.4, d: 4.0,
+        })),
+        ...crownCells.map((c) => ({ x: c.x, y: c.y + 1.8, z: c.z, w: 4.0, d: 3.6 })),
+      ],
+    });
 
     // ===================================================== ring: daughter-print
     const ringN      = 5;
