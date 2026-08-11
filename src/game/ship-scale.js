@@ -252,7 +252,9 @@ export const FACTION_REBUILD_ORDER = [
  * LEGACY_SHIP_SCALE and this set are both deleted and the pins apply
  * unconditionally.
  */
-export const REBUILT_FACTIONS = new Set([]);
+export const REBUILT_FACTIONS = new Set([
+  'veridian', // wave 1
+]);
 
 /**
  * The retired wave-47 table. Read ONLY by the harnesses, ONLY for factions
