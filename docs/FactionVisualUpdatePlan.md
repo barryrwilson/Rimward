@@ -241,12 +241,13 @@ then add a per-system-faction overlay subgroup — the exact
   validation green; `vite build` clean.
 - `PROGRESS.md` wave-39 entry written; `docs/FactionExamples/README.md` carries
   the implementation-status note (the references stay non-canonical).
-### Phase 6 - Station detail pass (waves 43-45)
+### Phase 6 - Station detail pass (waves 43-46)
 
-**STATUS: DONE (wave 45).** All eight built factions carry merged-vertex-colour
-detail sculpts. Freehold landed in waves 43-44; the remaining seven landed in
-wave 45, which also moved every sculpt into its own module and generalised the
-harness pins across the whole set.
+**STATUS: DONE (wave 46).** Every station path in the game is a detail sculpt or
+a deliberate exception. Freehold landed in waves 43-44; the seven remaining built
+factions in wave 45, which also moved every sculpt into its own module and
+generalised the harness pins; independent and hollow in wave 46, which retired
+the placeholder from live service and added a per-system seed.
 
 After wave 38, the user rejected the per-faction station detail level as
 too simple and basic across all eight built factions. The stations carried
@@ -434,9 +435,55 @@ a faceted cylinder's flats sit at `r * cos(PI / seg)`, not `r`, and a field of
 half-extent H must be sunk to `sqrt(rFlat^2 - H^2)`; on spheres and domes use
 `portholeRing`, which is built from an explicit radial basis and cannot float.
 
-Phase 6 is COMPLETE. The eighth built faction, unknowables, builds no station
-by decision D3; beautiful is grown by `buildBeautifulStation`; independent and
-hollow keep the placeholder.
+#### Wave 46 — the placeholder loses its live sites
+
+The user's verdict on the placeholder, seen in-game after the wave-45 tour:
+"this one is BS". Fair — it was the pre-wave-43 sculpt (21 meshes, 2,407
+vertices, 9 geometries, 7 materials, no vertex colours) and it served FIFTEEN
+live systems: 12 independent (Drift, Sorrow, Ashfall, Tumble, Nowhere, Faint,
+Wisp, Cinder, Stray, Husk, Gone, Ember, The Black Station) and 3 hollow (Hollow
+Reach, The Hush, The Verge).
+
+Both factions now have detail sculpts, so `DETAIL_STATIONS` carries 10 keys and
+the placeholder has NO live site: it remains the fallback for an unknown faction
+key only, and the harness pins it through a synthetic faction override rather
+than a real system. Neither faction has reference art — `faction-style.js` says
+so — so the designs come from the lore: independent is "the Anchorage", a dead
+freighter's keel with mismatched hulls lashed along it, accretion, and a crane
+cradle eating a stripped derelict; hollow is "the Vigil", a shuttered watch post
+listening outward with lanterns marking its berths.
+
+NEW IN THE CONTRACT — a per-SYSTEM seed. `build(b, ringB, st, seed)` takes a
+fourth argument: `seedForSystem(systemId)`, FNV-1a over the id. A sculpt authored
+for a whole faction would otherwise repeat itself 12 times across independent
+space. The seed varies DRESSING only — which optional spurs exist, crate and pod
+layout, which drums are lit, plate shade mixes, mast heights — never the tier
+structure or any pinned number. Same id always yields the same seed, so the
+determinism pin still holds. The eight reference-art factions ignore the
+argument: their sculpts answer to concept art, not to variety.
+
+NEW PIN — `singleMass`. `connectedness` counts hull cells with no 6-axis
+neighbour, which a detached CLUSTER passes trivially because its members touch
+each other. The wave-46 hollow bring-up hung its mooring spurs at y -16..-24
+with nothing reaching them — a 12-cell island that read on screen as loose boxes
+under the station — and `connectedness` waved it through. `singleMass` flood-fills
+the 4-unit occupancy grid and requires the largest component to hold >= 97% of
+cells. Calibrated on the approved sculpts, which read 99.5-100%.
+
+NEW PIN — the per-system sweep. A per-faction representative is not enough
+coverage once a sculpt varies by seed: the first independent build scaled its lamp
+populations with the seed, and the ONE system that drew the low end —
+`blackstation`, a generated hub with live traffic — landed at 25,692 glow
+vertices against a 32,000 floor while all twelve others passed. The wave-46
+section now sweeps EVERY live system of both seeded factions through the real
+`initStation` path for density, glow, envelope, seating, packing and single mass,
+and additionally proves the variation is real (one distinct hull signature per
+system, not a seed that is read and ignored).
+
+Phase 6 is COMPLETE for every station path in the game: 10 detail-sculpt
+factions, beautiful grown by `buildBeautifulStation`, unknowables building no
+station by decision D3, and the placeholder surviving as an untested-by-live-site
+fallback that the harness exercises synthetically.
 
 
 ## 4. Sequencing rationale

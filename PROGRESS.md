@@ -2105,8 +2105,86 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   contract the user cares about. Two more rounds of fix-up agents (7 then 2)
   were needed, each driven by screenshots and by a metric added AFTER the defect
   was seen. When a report and the render disagree, the render wins.
+- Wave 46: the placeholder loses its live sites — independent and hollow get
+  detail sculpts, plus a per-SYSTEM seed. User verdict on the placeholder, seen
+  in-game during the wave-45 tour: "this one is BS". It was the pre-wave-43
+  sculpt (21 meshes, 2,407 verts, 9 geometries, 7 materials, no vertex colours)
+  and it served FIFTEEN live systems: 12 independent + 3 hollow.
+  WHAT SHIPPED: src/systems/stations/independent.js — "the Anchorage", a dead
+  freighter's keel with mismatched hulls lashed along it at spacing smaller than
+  their diameter, accretion stacks, tethered salvage, and a crane cradle holding
+  a half-stripped derelict; and src/systems/stations/hollow.js — "the Vigil", a
+  stepped watch-post tower whose crown collars and catwalk rings are traced in
+  lantern strings, three dishes standing clear of the mass, a mast reaching y 24
+  to meet its own beacon at 31, and a sealed shrouded ring beneath. Neither
+  faction has reference art (faction-style.js says so); both designs come from
+  the lore. DETAIL_STATIONS now carries 10 keys and the placeholder has NO live
+  site — it survives as the fallback for an unknown faction key, pinned through a
+  synthetic faction override instead of a real system.
+  MEASURED — independent, all 13 systems: 188,975-243,792 verts, 33,864-79,368
+  glow, singleMass 100.0%, 13 distinct hull geometries. hollow, all 3: 154,986
+  -159,402 verts, 36,684-37,008 glow, singleMass 100.0%, bbox y[-23.0, 25.0],
+  3 distinct geometries.
+  NEW IN THE CONTRACT — build(b, ringB, st, seed). station.js seedForSystem() is
+  FNV-1a over the system id; a sculpt authored for a whole faction would
+  otherwise repeat itself 12 times across independent space. The seed varies
+  DRESSING only — optional spurs, crate and pod layout, which drums are lit, plate
+  shade mixes, dish aim, lantern and plaque counts — never the tiers or any pinned
+  number. Same id always yields the same seed, so the determinism pin holds. The
+  eight reference-art factions ignore the argument.
+  NEW PIN — singleMass. connectedness only counts hull cells with no 6-axis
+  neighbour, which a detached CLUSTER passes trivially because its members touch
+  each other. The hollow bring-up hung its mooring spurs at y -16..-24 with
+  nothing reaching them — a 12-cell island, visible on screen as loose boxes under
+  the station — and connectedness waved it through. singleMass flood-fills the
+  4-unit grid and requires the largest component to hold >= 97% of cells.
+  Calibrated on the approved sculpts: freehold/veridian/redledger/gilded/
+  congregation/independent 100%, ferrous 99.7%, assembly 99.6%, lamplighter 99.5%.
+  NEW PIN — the per-system sweep (wave46 section). A per-faction representative
+  stops being enough coverage the moment a sculpt varies by seed: the first
+  independent build scaled its lamp populations with the seed and the ONE system
+  that drew the low end — blackstation, a generated hub with live traffic — landed
+  at 25,692 glow vertices against a 32,000 floor while all twelve others passed.
+  The sweep now runs EVERY live system of both seeded factions through the real
+  initStation path for density, glow, envelope, seating, packing and single mass,
+  and proves the variation is real (one distinct hull signature per system).
+  THE SUBAGENT TAX, worse this wave, and worth recording precisely. Six agent
+  passes over two files produced: an envelope breach of -32.2 against a -26 floor
+  reported as "envelope PASS"; a ring authored in WORLD coordinates and then
+  offset again by ringY, so ringGlaze sat at world y -30; a sweep run against
+  station DISPLAY NAMES instead of system ids, which is why blackstation was never
+  measured; a fix that silently dropped the sculpt's height from y 20.6 to 10.2;
+  and finally a file that DID NOT PARSE (duplicate `plaqueCount`, duplicate
+  `mx2`) submitted as "ALL ACCEPTANCE CRITERIA PASS", with b.push()/b.pop() frames
+  wrapping ringB emissions so every ring part landed at the hub, and dead code
+  above y 12 (measured: 0 hull vertices above y=12 while the report claimed a mast
+  top at 28). After the third failed pass hollow.js was rewritten by hand, which
+  took less time than the three delegated attempts. THE RULE: measure the FILE,
+  never the report — every one of those defects was found by running a
+  measurement, none by reading a summary.
+  METHOD NOTE: the browser-verification loop from wave 45 caught the visual
+  failures again (independent's untethered junk cloud, hollow's muddy silhouette).
+  One trap worth remembering: a Chrome window that is OCCLUDED reports
+  document.visibilityState 'hidden', which stops requestAnimationFrame, which
+  freezes the sim — and main.js still runs its end-of-frame ctx.events sweep, so a
+  queued jumpRequested is silently discarded. Launch with
+  --disable-features=CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows
+  --disable-background-timer-throttling --disable-renderer-backgrounding, and
+  confirm ctx.elapsed advances before queueing an event.
+  Screenshots: .chrome-shot/w46, w46r2, w46r3.
 
-## Next round candidates (wave 46)
+## Next round candidates (wave 47)
+- Wave 46 contract notes for future work: station.js DETAIL_STATIONS carries 10
+ keys — the 8 reference-art factions plus independent and hollow. The placeholder
+ (buildPlaceholderStation) has NO live site and is pinned only through a
+ synthetic unknown-faction override; keep it working anyway, because a save or a
+ future generator can name a faction station.js has never heard of. A sculpt for
+ a faction with MANY systems must consume the 4th build argument (the
+ seedForSystem FNV-1a seed) and vary its dressing, and the wave46 harness section
+ will sweep every one of that faction's live systems — a representative is not
+ coverage once a seed is in play. The two new pins to respect: singleMass (the
+ hull's largest flood-filled component holds >= 97% of 4-unit cells) and
+ seatedDetail (<= 1% orphan glow/glaze vertices).
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

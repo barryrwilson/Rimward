@@ -1378,9 +1378,14 @@ const w5jumpChecks = {
 console.log('wave5 hollowreach jump:', JSON.stringify(w5jumpChecks), `line=${JSON.stringify(hrArrivalLine)}`);
 if (!Object.values(w5jumpChecks).every(Boolean)) { console.log('WAVE5 HOLLOWREACH JUMP FAIL'); errors++; }
 // Wave 38 (live negative control, hung on the wave-5 hollowreach stop): a
-// hollow system builds NO faction overlay and NO named station group — the
-// unnamed placeholder and the plain brass gates survive byte-identical,
-// the hub junction's lantern included.
+// hollow system builds NO gate overlay — the plain brass gates survive
+// byte-identical, the hub junction's lantern included. Wave 46 changed the
+// station half of this control: hollow now has its own detail sculpt, so the
+// live scene carries exactly one 'hollow-station' group and NO overlay. The
+// two dispatch tables are deliberately different sets (gate.js
+// OVERLAY_FACTIONS has 9 keys and excludes independent/hollow; station.js
+// DETAIL_STATIONS has 10 and includes them), and this pin is what holds that
+// distinction honest on a live system.
 {
   const hr38overlays = [];
   const hr38stations = [];
@@ -1391,7 +1396,7 @@ if (!Object.values(w5jumpChecks).every(Boolean)) { console.log('WAVE5 HOLLOWREAC
   const hr38junction = w38namedIn(ctx.scene, 'lamplighter-junction');
   const w38hollowLive = {
     noOverlay: hr38overlays.length === 0,
-    noNamedStation: hr38stations.length === 0,
+    hollowStationSculpt: hr38stations.length === 1 && hr38stations[0].name === 'hollow-station',
     gatesPresent: w38namedIn(ctx.scene, 'lamplighter-gate').length === SYSTEMS.hollowreach.gates.length,
     junctionLanternNoOverlay: hr38junction.length === 1
       && w38hexFrameIn(hr38junction[0])
@@ -8553,14 +8558,16 @@ travelTo('freehold', 'wave36 home leg');
 //   entry). A disguised Q-ship builds its coverClass/coverFaction geometry
 //   (the clean cover cache key). The beautiful short-circuit is wave-27
 //   pinned upstream — not duplicated.
-// STATIONS (station.js DETAIL_STATIONS) — each of the 8 kit factions builds a
-//   '<faction>-station' group as a MERGED vertex-coloured detail sculpt
+// STATIONS (station.js DETAIL_STATIONS) — each of the 10 sculpt factions builds
+//   a '<faction>-station' group as a MERGED vertex-coloured detail sculpt
 //   (wave 45: six chunks, ~2,300 primitives, <= 8 geometries + <= 8
-//   materials, measured density and envelope below); a non-kit faction
-//   (independent/hollow) yields the unnamed placeholder byte-identically;
-//   beautiful keeps 'beautiful-station' (the wave-27/33/36 pins hold — not
-//   duplicated). Per-build materials/geometries dispose through teardownMesh
-//   on the real rebuild path.
+//   materials, measured density and envelope below; wave 46 added independent
+//   and hollow, whose sculpts also vary their dressing per SYSTEM off the
+//   station.js FNV-1a seed); an UNKNOWN faction key yields the unnamed
+//   placeholder byte-identically (section e, synthetic override — no live
+//   system routes there any more); beautiful keeps 'beautiful-station' (the
+//   wave-27/33/36 pins hold — not duplicated). Per-build materials/geometries
+//   dispose through teardownMesh on the real rebuild path.
 // GATES (gate.js buildOverlay) — a sculpted-faction system dresses every
 //   gate assembly with a '<faction>-overlay' subgroup (faction-specific
 //   part census); independent/hollow carry NO overlay (plain brass,
@@ -8751,6 +8758,8 @@ const w38geoCount = (root, type, pred = null) => {
 const w38STATION_REPS = {
   freehold: 'fh_hearth', veridian: 'vd_survey', ferrous: 'fx_liron', redledger: 'rl_toll',
   gilded: 'gc_gavel', congregation: 'cg_vigil', assembly: 'as_census', lamplighter: 'lastbeacon',
+  // Wave 46: the two factions that used to share the placeholder.
+  independent: 'blackstation', hollow: 'hollowreach',
 };
 let w38stRingUnique = true;
 let w38stPositioned = true;
@@ -8839,23 +8848,35 @@ w38stationChecks.noPointLights = w38stNoPointLights;
 console.log('wave38 stations:', JSON.stringify(w38stationChecks));
 if (!Object.values(w38stationChecks).every(Boolean)) { console.log('WAVE38 STATIONS FAIL'); errors++; }
 
-// -- e. placeholder fallback: non-kit factions keep the unnamed placeholder
-// byte-identically (independent + hollow defs) ------------------------------
+// -- e. placeholder fallback: an UNKNOWN faction key still yields the unnamed
+// placeholder, byte-identically ---------------------------------------------
+// Wave 46 gave independent and hollow their own sculpts, so no live system
+// routes here any more. The fallback still has to work — a save or a future
+// generator can name a faction station.js has never heard of — so the pin now
+// overrides a real system's faction with a bogus key (the wave-42c
+// faction-override idiom, restored immediately) instead of relying on a live
+// site. That also keeps the pin honest: it asserts the FALLBACK, not a faction.
 let w38phUnnamed = true;
 let w38phShape = true;
 for (const sysId of ['blackstation', 'hollowreach']) {
-  const ctxS = w38scopedCtx(sysId);
-  initStation(ctxS);
-  const namedGroups = [];
-  ctxS.scene.traverse((o) => { if (o.name?.endsWith('-station')) namedGroups.push(o); });
-  if (namedGroups.length !== 0) w38phUnnamed = false;
-  const root = ctxS.scene.children.find((c) => c.isGroup) ?? null; // the placeholder group itself (only group at scene root)
-  w38phShape = w38phShape && !!root
-    && w38geoCount(root, 'CylinderGeometry', (p) => p.radiusTop === 3.2 && p.height === 84) === 1 // the spindle
-    && w38geoCount(root, 'TorusGeometry', (p) => p.radius === 30) === 2; // habitat ring + accent collar
+  const w38origFaction = SYSTEMS[sysId].faction;
+  SYSTEMS[sysId].faction = 'nobody-in-particular'; // no builder, no VC kit, no overlay
+  try {
+    const ctxS = w38scopedCtx(sysId);
+    initStation(ctxS);
+    const namedGroups = [];
+    ctxS.scene.traverse((o) => { if (o.name?.endsWith('-station')) namedGroups.push(o); });
+    if (namedGroups.length !== 0) w38phUnnamed = false;
+    const root = ctxS.scene.children.find((c) => c.isGroup) ?? null; // the placeholder group itself (only group at scene root)
+    w38phShape = w38phShape && !!root
+      && w38geoCount(root, 'CylinderGeometry', (p) => p.radiusTop === 3.2 && p.height === 84) === 1 // the spindle
+      && w38geoCount(root, 'TorusGeometry', (p) => p.radius === 30) === 2; // habitat ring + accent collar
+  } finally {
+    SYSTEMS[sysId].faction = w38origFaction;
+  }
 }
 const w38placeholderChecks = { unnamedPlaceholder: w38phUnnamed, placeholderShapeIntact: w38phShape };
-console.log('wave38 station placeholder:', JSON.stringify(w38placeholderChecks));
+console.log('wave38 station placeholder (synthetic unknown faction):', JSON.stringify(w38placeholderChecks));
 if (!Object.values(w38placeholderChecks).every(Boolean)) { console.log('WAVE38 STATION PLACEHOLDER FAIL'); errors++; }
 
 // -- f. rebuild/teardown disposal across the REAL systemLoaded rebuild -----
@@ -9043,8 +9064,8 @@ if (!Object.values(w38motionChecks).every(Boolean)) { console.log('WAVE38 GATE M
 // The wave-39 contract:
 // LEAKS — a REAL 10-load chain (fh_hearth → vd_survey → fx_bastion →
 //   rl_toll → gc_auction → cg_vigil → as_census → lastbeacon → blackstation
-//   → bt_cradle: all 8 kit factions + the independent placeholder hub + the
-//   beautiful organic kit) driven through the harness's own jump mechanism
+//   → bt_cradle: 9 of the 10 detail-sculpt factions + the beautiful organic
+//   kit) driven through the harness's own jump mechanism
 //   (jumpRequested emit + tickUntilJumpDone, the jumpToward primitive).
 //   dispose() is instrumented on the THREE geometry/material/texture
 //   prototypes for the whole chain. After the chain: every PER-BUILD
@@ -10208,11 +10229,20 @@ for (const live of w42lives) {
     }
     w45checks[`${f}GlowNearWhite`] = glowOk;
 
-    // connectedness: the hull chunk must be a packed mass, not a scatter of
-    // islands (the wave-43 rejection). Hash-grid: bucket vertices into 4-unit
-    // cubes, count occupied cells, allow at most 2% with no 6-axis neighbour.
+    // connectedness + singleMass: the hull chunk must be ONE packed mass, not a
+    // scatter of islands (the wave-43 rejection). Hash-grid over 4-unit cubes,
+    // two independent readings:
+    //   isolated  — cells with no 6-axis neighbour at all (loose confetti)
+    //   singleMass — the share of cells in the LARGEST flood-filled component
+    // The second is the stronger statement and it is new in wave 46: the
+    // wave-46 hollow bring-up hung its mooring spurs at y -16..-24 with nothing
+    // reaching them, a 12-cell island that the isolated-cell test waved through
+    // because the spurs touch each OTHER. Calibrated on the approved sculpts:
+    // freehold/veridian/redledger/gilded/congregation/independent read 100%,
+    // lamplighter 99.5%, assembly 99.6%, ferrous 99.7%.
     let connectedOk45 = false;
     let connectedNote = 'n/a';
+    let singleMassOk = false;
     if (hullA) {
       const cellSize = 4;
       const posAttr = hullA.geometry.attributes.position;
@@ -10220,20 +10250,43 @@ for (const live of w42lives) {
       for (let i = 0; i < posAttr.count; i++) {
         grid.add(`${Math.floor(posAttr.getX(i) / cellSize)},${Math.floor(posAttr.getY(i) / cellSize)},${Math.floor(posAttr.getZ(i) / cellSize)}`);
       }
-      let isolated = 0;
-      for (const key of grid) {
+      const neighbours = (key) => {
         const [ix, iy, iz] = key.split(',').map(Number);
-        const hasNeighbour = [
+        return [
           `${ix + 1},${iy},${iz}`, `${ix - 1},${iy},${iz}`,
           `${ix},${iy + 1},${iz}`, `${ix},${iy - 1},${iz}`,
           `${ix},${iy},${iz + 1}`, `${ix},${iy},${iz - 1}`,
-        ].some((n) => grid.has(n));
-        if (!hasNeighbour) isolated++;
+        ];
+      };
+      let isolated = 0;
+      for (const key of grid) {
+        if (!neighbours(key).some((n) => grid.has(n))) isolated++;
       }
-      connectedNote = `${isolated}/${grid.size}`;
+      // Flood fill: largest connected component must hold nearly every cell.
+      const seenCells = new Set();
+      let largest = 0;
+      let components = 0;
+      for (const start of grid) {
+        if (seenCells.has(start)) continue;
+        components++;
+        let size = 0;
+        const stack = [start];
+        seenCells.add(start);
+        while (stack.length > 0) {
+          const cur = stack.pop();
+          size++;
+          for (const n of neighbours(cur)) {
+            if (grid.has(n) && !seenCells.has(n)) { seenCells.add(n); stack.push(n); }
+          }
+        }
+        if (size > largest) largest = size;
+      }
+      connectedNote = `${isolated}/${grid.size} largest=${largest}/${grid.size} comps=${components}`;
       connectedOk45 = grid.size > 0 && isolated <= grid.size * 0.02;
+      singleMassOk = grid.size > 0 && largest >= grid.size * 0.97;
     }
     w45checks[`${f}Connectedness`] = connectedOk45;
+    w45checks[`${f}SingleMass`] = singleMassOk;
 
     // seatedDetail: lit and glazed parts must SIT ON the hull, not float beside
     // it. A windowGrid is a FLAT field, so a tall one wrapped onto a round or
@@ -10321,6 +10374,160 @@ for (const live of w42lives) {
   if (!Object.values(w45checks).every(Boolean)) { console.log('WAVE45 DETAIL STATIONS FAIL'); errors++; }
 }
 
+// ---- Wave 46: the seeded factions, EVERY live system -----------------------
+// independent (12 systems) and hollow (3) used to share one placeholder sculpt;
+// wave 46 gave them detail sculpts that vary their dressing per system off
+// station.js's seedForSystem (FNV-1a of the system id). A per-faction
+// representative is no longer enough coverage: the wave-46 bring-up shipped an
+// independent sculpt whose lamp populations scaled with the seed, and the ONE
+// system that drew the low end — blackstation, a generated hub with live
+// traffic — landed at 25,692 glow vertices against a 32,000 floor. Every other
+// system passed. So this section sweeps EVERY live system of both factions
+// through the REAL initStation path, and additionally proves the variation is
+// real (distinct hull geometry per system) rather than a seed that is read and
+// ignored.
+{
+  const w46checks = {};
+  const w46notes = [];
+  // The wave-45 helpers are block-scoped to their own section, so the two the
+  // sweep needs are re-declared here rather than hoisted — an independent
+  // recomputation is the point of a pin, and hoisting would let one edit move
+  // both sections at once.
+  const w46hullOf = (root) => (root ? root.children.find((c) => c.isMesh
+    && c.material?.isMeshStandardMaterial && c.material.vertexColors === true) ?? null : null);
+  const w46orphanPct = (hullMesh, detailMesh) => {
+    if (!hullMesh || !detailMesh) return 100;
+    const cell = 2;
+    const hp = hullMesh.geometry.attributes.position;
+    const occupied = new Set();
+    for (let i = 0; i < hp.count; i++) {
+      occupied.add(`${Math.floor(hp.getX(i) / cell)},${Math.floor(hp.getY(i) / cell)},${Math.floor(hp.getZ(i) / cell)}`);
+    }
+    const dp = detailMesh.geometry.attributes.position;
+    if (dp.count === 0) return 100;
+    let orphans = 0;
+    for (let i = 0; i < dp.count; i++) {
+      const ix = Math.floor(dp.getX(i) / cell);
+      const iy = Math.floor(dp.getY(i) / cell);
+      const iz = Math.floor(dp.getZ(i) / cell);
+      let near = false;
+      for (let dx = -1; dx <= 1 && !near; dx++) {
+        for (let dy = -1; dy <= 1 && !near; dy++) {
+          for (let dz = -1; dz <= 1 && !near; dz++) {
+            if (occupied.has(`${ix + dx},${iy + dy},${iz + dz}`)) near = true;
+          }
+        }
+      }
+      if (!near) orphans++;
+    }
+    return (100 * orphans) / dp.count;
+  };
+  for (const faction of ['independent', 'hollow']) {
+    const ids = Object.keys(SYSTEMS).filter((id) => SYSTEMS[id].faction === faction);
+    const sigs = new Set();
+    let allDense = true;
+    let allGlow = true;
+    let allEnvelope = true;
+    let allSeated = true;
+    let allPacked = true;
+    let allSingleMass = true;
+    let worstGlow = Infinity;
+    let worstVerts = Infinity;
+    let worstFloor = 0;
+    let worstMass = 1;
+    for (const sysId of ids) {
+      const ctxS = w38scopedCtx(sysId);
+      initStation(ctxS);
+      const g = w38stationGroupOf(ctxS);
+      if (!g || g.name !== `${faction}-station`) { allDense = false; continue; }
+      const ring = g.children.find((c) => c.isGroup) ?? null;
+      const hull = w46hullOf(g);
+      const glow = g.children.find((c) => c.isMesh && c.material?.isMeshBasicMaterial
+        && c.material.vertexColors === true
+        && c.material.color.getHex() === FACTION_STYLE[faction].glow) ?? null;
+      let verts = 0;
+      g.traverse((o) => { if (o.geometry) verts += o.geometry.attributes?.position?.count ?? 0; });
+      if (verts < 120000) allDense = false;
+      if (!glow || glow.geometry.attributes.position.count < 32000) allGlow = false;
+      worstVerts = Math.min(worstVerts, verts);
+      worstGlow = Math.min(worstGlow, glow ? glow.geometry.attributes.position.count : 0);
+      // Envelope, measured over mesh geometry exactly as the wave-45 census does.
+      const bb = new THREE.Box3();
+      const one = new THREE.Box3();
+      g.updateMatrixWorld(true);
+      g.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        one.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+        bb.union(one);
+      });
+      bb.min.sub(g.position);
+      bb.max.sub(g.position);
+      if (bb.isEmpty()
+        || Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)) > 32
+        || Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z)) > 32
+        || bb.min.y < -26 || bb.max.y > 33) allEnvelope = false;
+      worstFloor = Math.min(worstFloor, bb.min.y);
+      // Seated detail and packing, per system — a seed can only vary dressing.
+      if (w46orphanPct(hull, glow) > 1) allSeated = false;
+      if (w46orphanPct(w46hullOf(ring), ring?.children.find((c) => c.isMesh
+        && c.material?.isMeshBasicMaterial && c.material.vertexColors === true
+        && c.material.color.getHex() === FACTION_STYLE[faction].glow) ?? null) > 1) allSeated = false;
+      if (hull) {
+        const cell = 4;
+        const p = hull.geometry.attributes.position;
+        const cells = new Set();
+        let sig = 0;
+        for (let i = 0; i < p.count; i++) {
+          cells.add(`${Math.floor(p.getX(i) / cell)},${Math.floor(p.getY(i) / cell)},${Math.floor(p.getZ(i) / cell)}`);
+          if (i % 97 === 0) sig = (sig + Math.round(p.getX(i) * 31 + p.getY(i) * 17 + p.getZ(i) * 7)) | 0;
+        }
+        const nb = (key) => {
+          const [ix, iy, iz] = key.split(',').map(Number);
+          return [`${ix + 1},${iy},${iz}`, `${ix - 1},${iy},${iz}`,
+            `${ix},${iy + 1},${iz}`, `${ix},${iy - 1},${iz}`,
+            `${ix},${iy},${iz + 1}`, `${ix},${iy},${iz - 1}`];
+        };
+        let isolated = 0;
+        for (const key of cells) if (!nb(key).some((n) => cells.has(n))) isolated++;
+        if (isolated > cells.size * 0.02) allPacked = false;
+        // Single mass, per system: a seed must not detach a spur on one map and
+        // leave it attached on the next (the wave-46 hollow mooring spurs).
+        const seenCells = new Set();
+        let largest = 0;
+        for (const start of cells) {
+          if (seenCells.has(start)) continue;
+          let size = 0;
+          const stack = [start];
+          seenCells.add(start);
+          while (stack.length > 0) {
+            const cur = stack.pop();
+            size++;
+            for (const n of nb(cur)) if (cells.has(n) && !seenCells.has(n)) { seenCells.add(n); stack.push(n); }
+          }
+          if (size > largest) largest = size;
+        }
+        if (largest < cells.size * 0.97) allSingleMass = false;
+        worstMass = Math.min(worstMass, largest / cells.size);
+        sigs.add(`${p.count}:${sig}`);
+      }
+    }
+    w46checks[`${faction}EverySystemDense`] = allDense;
+    w46checks[`${faction}EverySystemGlow`] = allGlow;
+    w46checks[`${faction}EverySystemEnvelope`] = allEnvelope;
+    w46checks[`${faction}EverySystemSeated`] = allSeated;
+    w46checks[`${faction}EverySystemPacked`] = allPacked;
+    w46checks[`${faction}EverySystemSingleMass`] = allSingleMass;
+    // Variation is real: one distinct hull signature per system, not one shared.
+    w46checks[`${faction}SeedVaries`] = ids.length > 1 && sigs.size === ids.length;
+    w46notes.push(`wave46 ${faction}: systems=${ids.length} distinctHulls=${sigs.size}`
+      + ` worstVerts=${worstVerts} worstGlow=${worstGlow} worstFloor=${worstFloor.toFixed(1)}`
+      + ` worstSingleMass=${(100 * worstMass).toFixed(1)}%`);
+  }
+  for (const line of w46notes) console.log(line);
+  console.log('wave46 seeded factions:', JSON.stringify(w46checks));
+  if (!Object.values(w46checks).every(Boolean)) { console.log('WAVE46 SEEDED FACTIONS FAIL'); errors++; }
+}
 
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');

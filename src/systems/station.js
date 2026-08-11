@@ -16,6 +16,8 @@ import { gildedStation } from './stations/gilded.js';
 import { congregationStation } from './stations/congregation.js';
 import { assemblyStation } from './stations/assembly.js';
 import { lamplighterStation } from './stations/lamplighter.js';
+import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
+import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 
 /**
@@ -205,7 +207,7 @@ function makeGlowTexture(inner, outer) {
 function buildStationMesh(ctx, systemId, def) {
   if (isBeautiful(def.faction)) return buildBeautifulStation(ctx, systemId, def); // wave 27
   const spec = Object.hasOwn(DETAIL_STATIONS, def.faction) ? DETAIL_STATIONS[def.faction] : null; // wave 45: per-faction detail sculpts
-  if (spec) return buildDetailStation(ctx, def, spec);
+  if (spec) return buildDetailStation(ctx, systemId, def, spec);
   return buildPlaceholderStation(ctx, systemId, def);
 }
 
@@ -358,6 +360,27 @@ function stationRecord(ctx, kit, ringGroup, beaconY) {
 const DETAIL_BEACON_Y = 31;
 
 /**
+ * Stable per-SYSTEM seed (FNV-1a over the system id), handed to every sculpt.
+ *
+ * Wave 46: independent flies 12 systems and hollow 3, all previously sharing
+ * one placeholder. A sculpt authored for a whole faction would repeat itself 12
+ * times, so `build` takes this seed and varies its DRESSING with it — which
+ * optional spurs exist, crate layout, which drums are lit, plate shade mixes.
+ * Same id always yields the same seed, so the wave-45 determinism pin (two
+ * independent builds of one system are byte-identical) still holds; different
+ * ids diverge. The eight reference-art factions ignore the argument: their
+ * sculpts answer to concept art, not to variety.
+ */
+function seedForSystem(systemId) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < systemId.length; i++) {
+    h ^= systemId.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
  * Build one faction's station from its detail sculpt module.
  *
  * The sculpt emits primitives into six named channels through the
@@ -373,7 +396,7 @@ const DETAIL_BEACON_Y = 31;
  * near-neutral (every sRGB channel >= 0.6). `glaze`/`ringGlaze` wear a white,
  * never-animated material and carry the faction's saturated glass.
  */
-function buildDetailStation(ctx, def, spec) {
+function buildDetailStation(ctx, systemId, def, spec) {
   const scheme = schemeFor(def);
   const st = styleFor(def.faction);
 
@@ -392,7 +415,7 @@ function buildDetailStation(ctx, def, spec) {
 
   const b = detailBuilder();
   const ringB = detailBuilder();
-  spec.build(b, ringB, st);
+  spec.build(b, ringB, st, seedForSystem(systemId));
 
   // A missing channel would mount a Mesh with an undefined geometry and fail
   // deep inside the renderer; name the sculpt and the channel instead.
@@ -418,10 +441,13 @@ function buildDetailStation(ctx, def, spec) {
   return stationRecord(ctx, { scheme, group, lightMat, beaconMat }, ringGroup, DETAIL_BEACON_Y);
 }
 
-// The eighth built faction, unknowables, builds no station at all (decision
-// D3) — beautiful is grown by buildBeautifulStation, and independent/hollow
-// keep the placeholder. Keep this table in lockstep with npc.js
-// FACTION_VC_PARTS and gate.js OVERLAY_FACTIONS when a faction is added.
+// Wave 46: independent and hollow join the table, so the placeholder no longer
+// has a live site — it stays the fallback for an unknown faction key only.
+// unknowables build no station at all (decision D3) and beautiful is grown by
+// buildBeautifulStation, so this table carries 10 of the 12 faction keys. The
+// other two dispatch tables cover different sets by design: npc.js
+// FACTION_VC_PARTS is the 8 with ship reference art, gate.js OVERLAY_FACTIONS
+// is the 9 with gate dress (independent/hollow gates stay plain brass).
 const DETAIL_STATIONS = {
   freehold: freeholdStation,
   veridian: veridianStation,
@@ -431,6 +457,8 @@ const DETAIL_STATIONS = {
   congregation: congregationStation,
   assembly: assemblyStation,
   lamplighter: lamplighterStation,
+  independent: independentStation,
+  hollow: hollowStation,
 };
 
 /**
