@@ -2172,19 +2172,126 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   --disable-background-timer-throttling --disable-renderer-backgrounding, and
   confirm ctx.elapsed advances before queueing an event.
   Screenshots: .chrome-shot/w46, w46r2, w46r3.
+- Wave 47: the faction ship detail pass — ten fleets, and the wave that proved a
+  numeric pin can be unanimously green on the wrong shape. User brief: "the
+  station Phase 6 treatment, applied to ships", the goal being the concept art in
+  docs/FactionExamples. The player ship is out of scope by instruction.
+  WHAT SHIPPED: ten modules under src/systems/ships/ (one per faction, all six
+  classKeys each — 60 sculpts), npc.js FACTION_VC_PARTS deleted in favour of the
+  DETAIL_SHIPS dispatch, a `lights` chunk on the faction glow material beside the
+  `hull` chunk, the wave-38 ship pins rewritten for three children, a wave47
+  harness section measuring all 60, and two new dev instruments
+  (scripts/measure-ships.mjs, scripts/probe-ship.mjs). MEASURED, every class of
+  every faction: hull 3,036-48,408 verts, lights 216-4,644 (all <= 25% of hull),
+  singleMass 97.2-100%, orphan lights 0.0-1.9%, palette strays none.
+  THE LESSON OF THE WAVE, and it is a new one. Round 1 landed 60 sculpts that
+  passed density, envelope, packing, seating, palette and determinism — and
+  rendered as ten fleets of PLATED DRUMS. Barrels standing on end: height equal to
+  beam, length barely exceeding either, a flat disc for a face. The pins were all
+  true and the ships were all wrong, because no pin described PROPORTION. Worse,
+  the envelope table I had published could not even express the reference art: at
+  18.0 x by 26.0 z the widest legal frigate is 1.44 times longer than it is wide,
+  while every ship on overview-ships.jpg is 4-6 times longer than its beam. So the
+  envelope was rewritten (frigate 9.0/6.0/26.0, light 1.3/0.9/3.4) and two pins
+  added — spanZ >= 2.4 * spanX, spanY <= 0.75 * spanX — and all ten factions were
+  reshaped in a second round. WRITE THE PIN THAT DESCRIBES THE THING YOU ACTUALLY
+  WANT; a contract that cannot express the target will be satisfied by something
+  else.
+  THE SUBAGENT TAX, third wave running, and the shape of it is now predictable.
+  Round 1's ten agents reported success and produced: NaN vertex positions from
+  `r: 0` on a cylinder-wrapping helper; Math.random inside a build; a third
+  channel named `glow`; an entire faction authored along the X axis; two modules
+  that threw before emitting a vertex (29 unclosed push frames, a missing import);
+  near-whites baked into the hull channel; radii from 0.32x to 1.74x of target;
+  lit strips floating up to 42% clear of the hull. Nine of the ten reported "all
+  constraints satisfied" for those files. Every defect was found by RUNNING A
+  MEASUREMENT, none by reading a report. freehold burned two more agents (one 90
+  minutes, one 45) without changing a byte and was then written by hand in one
+  pass — the wave-46 hollow precedent, repeated exactly. The fix that changed the
+  economics was giving agents an instrument they could run themselves
+  (measure-ships.mjs, 3 seconds, names the failing class) and making ALL PASS the
+  acceptance criterion instead of a prose description.
+  REVIEWS found three CRITICALs, all one bug class and all pre-existing: raw
+  bracket reads on save-controlled strings. record.faction/classKey come from save
+  data, so `VC_PARTS[classKey]`, `styleFor()`, `vcGlowMats[faction]`,
+  `unknowablesGeos[classKey]` and `dulledStyles[faction]` each resolved
+  '__proto__' / 'constructor' / 'toString' through Object.prototype to a truthy
+  non-spec value — a crafted or corrupted save could crash the update loop, or
+  smuggle Object.prototype into a live Mesh as its material. All now own-key
+  guarded, styleFor included. The ship geometry cache key became JSON (a faction
+  literally named 'a:b' collided with classKey 'b:c' under concatenation) and every
+  unknown faction now collapses to ONE canonical cache entry per class, because
+  they all render the same bake anyway — the never-disposed caches are bounded by
+  the faction table again instead of by whatever a save contains.
+  VERIFIED: measure-ships ALL PASS (60/60); boot test PASS; browser-verified solo
+  at fh_hearth, two framings per faction, which is what caught the drums. Note
+  wave30 payTribute is a pre-existing FLAKY pin (a random roll) — it failed once
+  across a dozen runs and passes on re-run; unrelated to this wave.
+  Screenshots: .chrome-shot/w47 (r2-* are the reshaped fleet).
 
-## Next round candidates (wave 47)
-- Wave 46 contract notes for future work: station.js DETAIL_STATIONS carries 10
- keys — the 8 reference-art factions plus independent and hollow. The placeholder
- (buildPlaceholderStation) has NO live site and is pinned only through a
- synthetic unknown-faction override; keep it working anyway, because a save or a
- future generator can name a faction station.js has never heard of. A sculpt for
- a faction with MANY systems must consume the 4th build argument (the
- seedForSystem FNV-1a seed) and vary its dressing, and the wave46 harness section
- will sweep every one of that faction's live systems — a representative is not
- coverage once a seed is in play. The two new pins to respect: singleMass (the
- hull's largest flood-filled component holds >= 97% of 4-unit cells) and
- seatedDetail (<= 1% orphan glow/glaze vertices).
+## Next round candidates (wave 48)
+- Wave 47 contract notes for future work: Phase 7 of
+ docs/FactionVisualUpdatePlan.md is the ship detail pass, and it is CLOSED — all
+ TEN faction ship kits are merged-vertex-colour detail sculpts. npc.js
+ FACTION_VC_PARTS is DELETED; the dispatch is DETAIL_SHIPS (10 keys: the 8 with
+ ship reference art plus independent and hollow from the lore), which now carries
+ the SAME key set as station.js DETAIL_STATIONS, while gate.js OVERLAY_FACTIONS
+ stays at 9 by design. Adding or reworking a ship means ONE file:
+ src/systems/ships/<faction>.js, exporting
+ `{ <classKey>: { glowZ, build(b, st) } }` for all six classKeys. That module
+ imports ONLY station-detail.js — no THREE, no material, no Group, no
+ FACTION_STYLE lookup — and npc.js's shipGeosFor/buildShipMesh own every shared
+ invariant.
+ NO SEED, unlike stations: a ship geometry is cached per faction:classKey and
+ shared by every spawn of that key, so per-ship variety would mean per-ship
+ geometry. One bake per key, forever, from fixed literal seeds.
+ TWO CHANNELS, THREE MESHES, TWO MATERIALS. `hull` wears the shared vcMaterial;
+ `lights` wears the per-faction additive glow material, whose colour is
+ style.glow and MULTIPLIES the chunk's vertex colours — so lit parts are authored
+ NEAR-WHITE (every sRGB channel >= 0.6) and the material supplies the hue, the
+ station lightMat model. Child order is fixed: [0] hull, [1] lights, [2] the
+ engine-glow sphere, ALWAYS last and always userData.glow. A fallback
+ (unknown-faction) ship keeps two children and no lights chunk. The glow sphere's
+ shared geometry now carries an all-white colour attribute, because the material
+ it rides has vertexColors and would otherwise render it black — glowGeoShared()
+ bakes it once for whichever path asks first, organic or built.
+ THE PIRATE BAKE IS EXACT NOW: the same build with dullStyleFor, so hull
+ positions are byte-identical and hull colours never brighter, and the lights
+ chunk is identical in BOTH positions and colours, because that channel carries
+ no st value at all.
+- Wave 47 measured-pin notes: the wave47 harness section measures all 60 sculpts
+ (10 factions x 6 classKeys, no representatives) on the real spawnLiveShip path
+ plus a direct double build for determinism. Two pins are new in kind and both
+ exist because ROUND 1 PASSED EVERYTHING ELSE AND RENDERED TEN FLEETS OF PLATED
+ DRUMS: `proportion` — spanZ >= 2.4 * spanX and spanY <= 0.75 * spanX — is the
+ measurable form of "reads as a ship", taken from overview-ships.jpg, where every
+ ship is 4-6x longer than its beam with its height well under its beam. And the
+ singleMass grid is EDGE-SAMPLED at ship scale: bucket every triangle edge at
+ half-cell steps, never the raw vertices, because a 4-unit box carries vertices
+ only at its 8 corners and a vertex-only grid reads a solid spine as a chain of
+ islands. The orphan-lights cell is ABSOLUTE (1.0 unit) at every class size, so a
+ lamp offset that looks snug on a light ship floats free on a frigate.
+ TWO INSTRUMENTS SHIPPED WITH THE WAVE, and they are the reason it converged:
+ `node scripts/measure-ships.mjs [faction]` builds all 60 sculpts in 3 seconds
+ and names the failing class; `node scripts/probe-ship.mjs <faction> <class>`
+ wraps the builder and names the LINE that emitted each defect, plus the widest
+ primitives by bbox diagonal (the wave-45 cage-finder). boot-test remains the
+ authority; these make the bring-up loop possible.
+ THE TOOLKIT IS SHARED NOW: station-detail.js serves stations AND ships. Its hex
+ ARITY is per helper and cost this wave real time — panelSkin/panelPatches take
+ an ARRAY, airlock/bridge/antenna/radiatorPanel take two, everything else one. A
+ wrong-arity hex bakes Color.setHex(undefined), which is NaN, which reads back as
+ #000000 and fails only the palette pin. `r: 0` on a cylinder-wrapping helper
+ normalises a zero-length radial vector and sprays NaN through the whole part,
+ which reads out as radius 0.0 beside a non-zero bbox.
+ ONE PIN WAS RETIRED at closeout and the reason generalises: sizeRatio compared
+ the sculpt radius against [0.85, 1.45] x the VC_PARTS fallback radius, using
+ hand-computed fallback literals. When the harness measured the real bake instead,
+ the hand arithmetic proved 15% out for `heavy` (7.0 estimated, 6.10 actual) and
+ the DERIVED band came out tighter than the AUTHORED absolute band, failing three
+ heavies the contract accepts. Authored world-unit numbers win over a derived
+ proxy; the fallback radii are still measured and printed for whoever next edits
+ the table.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

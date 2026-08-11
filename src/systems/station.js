@@ -445,9 +445,11 @@ function buildDetailStation(ctx, systemId, def, spec) {
 // has a live site — it stays the fallback for an unknown faction key only.
 // unknowables build no station at all (decision D3) and beautiful is grown by
 // buildBeautifulStation, so this table carries 10 of the 12 faction keys. The
-// other two dispatch tables cover different sets by design: npc.js
-// FACTION_VC_PARTS is the 8 with ship reference art, gate.js OVERLAY_FACTIONS
-// is the 9 with gate dress (independent/hollow gates stay plain brass).
+// other two dispatch tables cover different sets by design: npc.js DETAIL_SHIPS
+// (wave 47) is the same 10 faction keys as this table — the 8 with ship
+// reference art plus independent and hollow from the lore — while gate.js
+// OVERLAY_FACTIONS is the 9 with gate dress (independent/hollow gates stay
+// plain brass).
 const DETAIL_STATIONS = {
   freehold: freeholdStation,
   veridian: veridianStation,

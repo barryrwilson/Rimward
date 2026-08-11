@@ -485,6 +485,204 @@ factions, beautiful grown by `buildBeautifulStation`, unknowables building no
 station by decision D3, and the placeholder surviving as an untested-by-live-site
 fallback that the harness exercises synthetically.
 
+### Phase 7 - Ship detail pass (wave 47)
+
+**Decision D6 (user, 2026-08-11): the Phase 6 station treatment, applied to
+ships.** Every faction ship gets a merged vertex-coloured detail sculpt. The
+PLAYER ship (`ship.js`) is out of scope and stays as it is. The goal is the
+concept art: each faction's `docs/FactionExamples/NN-<faction>-ship.png`, read
+against `overview-ships.jpg`, the same way the station sculpts were matched to
+the station sheets.
+
+#### What replaces what
+
+`npc.js FACTION_VC_PARTS` — 8 factions x 6 classKeys of 7-14 boxes, authored as
+tuple lists — is DELETED. In its place, `DETAIL_SHIPS` dispatches to ONE MODULE
+PER FACTION under `src/systems/ships/<faction>.js`, ten keys: the eight
+reference-art factions plus `independent` and `hollow` (wave 46 gave both a
+station sculpt from the lore; their ships follow). `VC_PARTS` + `GLOW_Z` stay
+exactly as they are and remain the fallback for an UNKNOWN faction key — a save
+or a future generator can name a faction `npc.js` has never heard of. Under the
+wave-42 ruling `beautiful` (organic.js) and `unknowables` (the no-hull field)
+keep their own paths and are untouched.
+
+#### The module contract
+
+```js
+// src/systems/ships/<faction>.js
+export const <faction>Ship = {
+  freighter: { glowZ: 6.4, build(b, st) { … } },
+  cutter:    { … }, heavy: { … }, frigate: { … }, ace: { … }, light: { … },
+};
+```
+
+All six classKeys are REQUIRED. A module imports ONLY `../station-detail.js` —
+no THREE, no material, no Group, no `FACTION_STYLE` lookup. `st` is the style
+record handed in by `npc.js`, and it is the ONLY source of colour.
+
+- **Nose along -Z, stern at +Z** (the `ship.js` convention). `glowZ` is the
+  stern point where `npc.js` parks the engine-glow sphere.
+- **No seed argument.** A station sculpt varies per system because one station
+  serves one system; a ship geometry is CACHED per `faction:classKey` and shared
+  by every spawn of that key, so per-ship variety would mean per-ship geometry.
+  One bake per key, forever. Use fixed literal seeds with the toolkit's `rng`.
+- **Geometry NEVER branches on a colour.** The pirate bake calls the same
+  `build` with a dulled style record and its positions must come out
+  byte-identical, so nothing about the shape may read a value out of `st`.
+
+#### Two channels, two materials
+
+A sculpt emits into exactly two channels, and `npc.js buildShipMesh` mounts
+three meshes wearing TWO materials — the wave-37 two-material cap holds:
+
+| channel | material | rule |
+|---|---|---|
+| `hull` | the shared `vcMaterial` (`MeshStandardMaterial`, `vertexColors`) | colours come from `st` through the `SHADES`/`weather` ladder |
+| `lights` | the per-faction `glowMatFor(faction)` (additive, `vertexColors`) | NEAR-NEUTRAL tints only: every sRGB channel >= 0.6 |
+
+The lights material's colour is the faction's `glow` hue and it MULTIPLIES the
+vertex colours, exactly like the station `lightMat`. A saturated tint in the
+`lights` channel squares the hue, so lit parts are authored as warm or cool
+WHITES (`0xfff2d8`, `0xe8f0ff`, `0xffffff`) and the faction reads through the
+material. Ships have no `glaze` channel — a third material would break the cap.
+
+Child order is fixed: `[0]` hull, `[1]` lights, `[2]` the engine-glow sphere,
+which is ALWAYS the last child and always `userData.glow`. The core-is-glow
+ruling stands: `userData.glow` must be a real mesh with a scale, because every
+AI path dereferences it without a guard. Fallback (unknown-faction) ships keep
+two children — hull and glow — and no lights chunk.
+
+#### The pirate bake
+
+`shipGeosFor(classKey, faction, pirate)` caches under
+`'<faction>:<classKey>[:pirate]'`. The dulled entry runs the SAME `build`
+against `dullStyleFor(faction)`, so:
+
+- hull positions are byte-identical to the clean bake, hull colours are never
+  brighter by luminance and strictly dimmer somewhere;
+- lights positions AND colours are identical, because the `lights` channel
+  carries authored near-whites and no `st` value at all — a pirate's running
+  lights stay lit (the wave-38 rule, now exact rather than approximate).
+
+#### Numeric pins (wave47 harness section)
+
+Per faction x classKey, measured on the real `spawnLiveShip` path and on direct
+double builds of the module:
+
+| class | envelope max abs x / y / z | radius band | hull verts | lights verts | mass cell |
+|---|---|---|---|---|---|
+| light | 1.3 / 0.9 / 3.4 | 2.2 – 3.5 | 3,000 – 12,000 | >= 200 | 0.6 |
+| cutter | 1.8 / 1.2 / 5.0 | 3.0 – 5.0 | 4,000 – 16,000 | >= 260 | 0.7 |
+| ace | 2.2 / 1.3 / 5.8 | 4.4 – 5.8 | 4,000 – 16,000 | >= 260 | 0.7 |
+| freighter | 2.8 / 2.0 / 7.4 | 4.4 – 7.2 | 6,000 – 24,000 | >= 400 | 0.9 |
+| heavy | 3.6 / 2.4 / 8.8 | 6.0 – 9.0 | 7,000 – 28,000 | >= 460 | 1.0 |
+| frigate | 9.0 / 6.0 / 26.0 | 21.0 – 32.0 | 15,000 – 60,000 | >= 900 | 2.0 |
+
+**The table above is the ROUND 2 revision, and the reason is worth recording.**
+Round 1 built all sixty sculpts inside a much wider envelope (frigate 18.0 /
+9.5 / 26.0, light 2.4 / 2.4 / 3.8) and every numeric pin went green. Then the
+first browser pass showed the truth: ten fleets of PLATED DRUMS. Height came out
+equal to beam and length barely exceeded either, so a freehold frigate rendered
+as a barrel with hoops and a flat disc for a face. The old ceilings could not
+even EXPRESS the reference art — at 18.0 x by 26.0 z the widest legal frigate is
+1.44 times longer than it is wide, and every ship on `overview-ships.jpg` is
+4 to 6 times longer than its beam, with its height well under its beam. The
+ceilings are now simultaneous maxima that only a long slender hull can satisfy;
+a sculpt at maximum beam MUST also be near maximum length. Author beam at about
+three quarters of the ceiling and spend the rest on Z.
+
+- `proportion` — TWO pins, because "reads as a ship" is measurable and round 1
+  proved that nothing else catches a drum:
+  `spanZ >= 2.4 * spanX` (length dominates) and `spanY <= 0.75 * spanX` (the
+  beam exceeds the height). Spans are max-minus-min per axis on the hull chunk.
+- `lights` verts also stay <= 25% of the sculpt's hull verts: lit parts dress a
+  hull, they are not the hull.
+- `radiusBand` — the sculpt's radius, the MAXIMUM DISTANCE FROM THE LOCAL ORIGIN
+  of any hull vertex, sits inside the absolute band in the table above.
+  Encounter readability and combat distance are class properties, not faction
+  ones: the envelope is the hard ceiling per axis and this is the overall one.
+
+  It used to ALSO have to sit in [0.85, 1.45] x the radius of the `VC_PARTS`
+  fallback bake. That second band is gone, and the reason is a lesson about
+  derived pins. The absolute bands were themselves computed by hand from the
+  fallback specs while writing this section — and the hand arithmetic was 15%
+  wrong for `heavy` (estimated 7.0, actual 6.10). When the harness stopped
+  trusting the literal and measured the real fallback bake, the derived band
+  (1.45 x 6.10 = 8.85) came out TIGHTER than the authored ceiling (9.0), so two
+  pins claimed one property and the derived one silently overruled the intent —
+  it failed three heavies that the authored contract accepts. The authored
+  number wins: it is stated in world units, it is what the reshape round was
+  built against, and it does not float when an unrelated fallback spec changes.
+  The harness still MEASURES the six fallback radii and prints them, because the
+  bands were derived from them and whoever next edits the table should see the
+  real values instead of recomputing them by hand.
+- `sternGlow` — `glowZ > 0`, and against the sculpt's OWN stern reach (the
+  largest positive z any hull vertex touches, not the class ceiling):
+  `glowZ <= sternZ + 1.2` and `glowZ >= 0.55 * sternZ`.
+- `paletteFromStyle` — every distinct hull colour lies on the faction's
+  `SHADES` ladder over base `FACTION_STYLE` colours. Never weather an already
+  weathered value.
+- `singleMass` — the hull's largest flood-filled component holds >= 97% of
+  occupied cells. **The occupancy grid is EDGE-SAMPLED at ship scale**: bucket
+  each triangle's three edges at steps of half a cell, not the raw vertices. A
+  4-unit box carries vertices only at its 8 corners, so a vertex-only grid at
+  cell 0.9 reports a solid spine as a chain of islands. This is the one
+  measurement that does not transfer from wave 46 unchanged.
+- `seatedLights` — at most 2% of lights vertices fail to find hull material in
+  their own 1.0-unit cell or any of the 26 around it. Lit parts SIT ON the hull.
+- `determinism` — two direct builds of one module are byte-identical in both
+  channels.
+
+#### Per-faction design language
+
+The eight reference-art factions answer to their own `-ship.png`. The wave-38
+one-line reads stay the starting point, at ten times the part count:
+
+- **freehold** — patchwork homestead: mismatched donated slabs, amber greenhouse
+  dome, scaffold rails, towed pod.
+- **veridian** — hex-modular survey: hexagonal prism spine, stacked hex modules,
+  thin emerald assay and sensor fins.
+- **ferrous** — monumental iron: blunt wedge prow, citadel command tower, formal
+  paired barrel housings, crimson band, brass plate.
+- **redledger** — captured and rebuilt: forward grappling claw booms, ram spike,
+  tally stripes, asymmetric scarred pods.
+- **gilded** — black-ceramic wedge, overlapping ivory and gold scale bands,
+  swept gold stern fins, turquoise gallery strip.
+- **congregation** — pilgrim hull: forward observation dome, silver rib rings,
+  upright folded sails, amber keel shrine.
+- **assembly** — recursive self-similar: identical modules on a charcoal spine,
+  teal bow optic, antenna forest, daughter pods.
+- **lamplighter** — guild tug: stern engine block, folded repair crane, cable
+  reel, relay mast with lamp, hanging work platform.
+
+The two lore factions have NO ship art, exactly as they had no station art:
+
+- **independent** — the lash-up. No two plates from the same yard: donated hull
+  sections bolted over a working frame, external cargo netted down, patch welds,
+  a single amber lamp run. Grey value contrast comes from the weathering ladder,
+  not from colour.
+- **hollow** — the shrouded. A sealed, shuttered hull under wrap panels, long
+  listening masts and dish ears standing clear of the mass, very few lights and
+  those dim. `trim` is the dominant plate colour: the dark pair alone has no
+  value contrast in a band-3 sun (the wave-46 hollow lesson).
+
+#### Traps carried forward from waves 43-46
+
+1. A `windowGrid` is a FLAT field. On a faceted cylinder the flats sit at
+   `r * cos(PI / seg)`, and a field of half-extent H must be sunk to
+   `sqrt(rFlat^2 - H^2)` or its edges hang in space (`seatedLights`).
+2. `panelSkin` and `ribBands` WRAP A CYLINDER around the named axis. Calling
+   them with a large radius on a flat deck builds a cage around the whole ship.
+3. `CylinderGeometry`'s axis is +Y, so `rz: PI/2` lays it along X and
+   `rx: PI/2` along Z. `TorusGeometry` lies in XY, so `rx: PI/2` puts the ring
+   in XZ and `ry: PI/2` rings the X axis.
+4. Every `b.push()` must be popped — `build()` throws on an unclosed frame, but
+   only after the whole assembly has been authored in the wrong space.
+5. Measure the FILE, never the report. Every wave-45/46 defect was found by
+   running a measurement; none by reading a summary.
+6. The harness cannot see a silhouette. The wave ends in the real game, two
+   framings per faction, in Chrome.
+
 
 ## 4. Sequencing rationale
 

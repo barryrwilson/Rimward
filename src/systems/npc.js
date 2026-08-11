@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { styleFor } from '../game/faction-style.js'; // wave 37: faction visual identity
+import { styleFor, FACTION_STYLE } from '../game/faction-style.js'; // wave 37: faction visual identity
 import {
   SHIP_CLASSES,
   FACTIONS,
@@ -80,24 +80,57 @@ import {
  * WAKE_SITE_DISTANCE (1400 = U.DEINSTANTIATE_RANGE in state.js, the range at
  * which traffic.js folds live ships back into records, so the site outlives
  * the fleeing ship) — the wake-trailing contract consumed by wakes.js.
- *
- * Wave 38 (faction visual plan Phase 2): the 8 built factions each sculpt
- * every classKey from their own design language via FACTION_VC_PARTS
- * (per-faction silhouette kits baked through the same wave-37 vertex-color
- * pipeline — still ONE merged geometry + shared vcMaterial + faction glow,
- * one draw call per hull). Pirate-role kit ships render a dulled/desaturated
- * bake of the same spec (':pirate' cache entries). independent/hollow/
- * unknown factions keep the wave-37 VC_PARTS fallback untouched.
- *
- * Wave 42 (unknowables field — Decision D3): the unknowables faction has no
- * hull; ships are energy fields (nested magnetic loops, lensing arcs, floating
- * cells, core) built via buildUnknowablesField. No VC kit, no ':pirate' bake.
- * Assets are module-shared and never disposed. The core mesh doubles as the
- * AI engine-glow handle (userData.glow), so its scale/visibility belong to the
- * AI contract and animateField never writes it (fieldParts has 11 records for
- * 12 meshes). All other factions keep their wave-38 kits or wave-37 fallbacks
- * byte-identically.
  */
+
+/**
+ * Wave 47 (faction visual plan Phase 7): every faction ship renders from a
+ * per-faction detail sculpt under src/systems/ships/<faction>.js. Ten factions
+ * have authored sculpts (freehold, veridian, ferrous, redledger, gilded,
+ * congregation, assembly, lamplighter, independent, hollow). Two channels:
+ * `hull` (vertex-coloured MeshStandardMaterial, colours from FACTION_STYLE via
+ * the SHADES/weather ladder) and `lights` (additive material in faction glow,
+ * vertex-coloured near-whites that the material multiplies). Child order is
+ * fixed: [0] hull mesh, [1] lights mesh (if the sculpt produced one), [2]
+ * engine-glow sphere (always last, always userData.glow). Two materials total.
+ *
+ * Pirate-role ships bake a dulled variant via the same sculpt with
+ * dullStyleFor (hull positions byte-identical, colours desaturated; lights
+ * positions and colours unchanged because the lights channel carries no st
+ * values). Factions without a sculpt (unknown keys) fall back to the wave-37
+ * VC_PARTS tuple pipeline, producing a hull mesh and engine-glow sphere only.
+ *
+ * The unknowables faction has no hull (wave 42) and renders via
+ * buildUnknowablesField. Beautiful factions delegate to buildBeautifulShip
+ * (wave 27). Assets are module-shared and never disposed.
+ */
+
+import { detailBuilder } from './station-detail.js';
+import { freeholdShip } from './ships/freehold.js';
+import { veridianShip } from './ships/veridian.js';
+import { ferrousShip } from './ships/ferrous.js';
+import { redledgerShip } from './ships/redledger.js';
+import { gildedShip } from './ships/gilded.js';
+import { congregationShip } from './ships/congregation.js';
+import { assemblyShip } from './ships/assembly.js';
+import { lamplighterShip } from './ships/lamplighter.js';
+import { independentShip } from './ships/independent.js';
+import { hollowShip } from './ships/hollow.js';
+
+// Wave 47: ten factions with authored ship sculpts. This table stays in lockstep
+// with station.js DETAIL_STATIONS (10 keys) and gate.js OVERLAY_FACTIONS (9 keys).
+// The two lore factions (independent, hollow) now have both station and ship art.
+const DETAIL_SHIPS = {
+  freehold: freeholdShip,
+  veridian: veridianShip,
+  ferrous: ferrousShip,
+  redledger: redledgerShip,
+  gilded: gildedShip,
+  congregation: congregationShip,
+  assembly: assemblyShip,
+  lamplighter: lamplighterShip,
+  independent: independentShip,
+  hollow: hollowShip,
+};
 
 // ---------- module-scope scratch (no per-frame allocation) ----------
 const NEG_Z = new THREE.Vector3(0, 0, -1);
@@ -146,12 +179,17 @@ function clamp01(x) {
 
 // ---------- procedural meshes (§13.1 silhouette-readable) ----------
 // Wave 37 (user: "hard-core option"): built (non-organic) faction ships bake
-// their FACTION_STYLE palette into VERTEX COLORS on one merged geometry per
-// faction×classKey (module-cached, shared, never disposed) and render with a
-// SINGLE shared MeshStandardMaterial — one draw call per ship, color lives
-// in the mesh. Patchwork factions (freehold, redledger, lamplighter…) cycle
-// style.patch across cargo pods / fins. Engine glow is a per-faction cached
-// additive material in the faction's style.glow.
+// their FACTION_STYLE palette into VERTEX COLORS on merged geometry per
+// faction×classKey (module-cached, shared, never disposed), so colour lives in
+// the mesh and one shared MeshStandardMaterial dresses every hull in the game.
+// Patchwork factions (freehold, redledger, lamplighter…) cycle style.patch
+// across plates and pods.
+// Wave 47 corrects the draw-call arithmetic this comment used to claim: a
+// sculpt ship is THREE meshes — hull, lights, engine glow — on TWO materials
+// (vcMaterial plus the faction's additive glow material, which the lights chunk
+// and the glow sphere share). A fallback ship is two meshes on those same two
+// materials. The material CAP is what the wave-39 resource pin cares about;
+// mesh count was never the constraint.
 const vcMaterial = new THREE.MeshStandardMaterial({
   vertexColors: true, roughness: 0.60, metalness: 0.28,
 });
@@ -197,536 +235,6 @@ const VC_PARTS = {
 };
 const GLOW_Z = { freighter: 4.8, cutter: 3.6, heavy: 3.2, frigate: 11.2, ace: 4.6, light: 2.8 };
 
-// Wave 38 (faction visual plan Phase 2): per-faction silhouette kits for the
-// 8 built factions. FACTION_VC_PARTS[faction][classKey] = { glowZ, parts }
-// where parts use the SAME tuple format as VC_PARTS and bake through the
-// same colorPart pipeline (one merged vertex-colored geometry per
-// faction:classKey[:pirate], one draw call, shared vcMaterial). Factions
-// absent from this table (independent, hollow, unknowables, unknown) render
-// the wave-37 VC_PARTS fallback byte-identically. Design languages per
-// Docs/FactionExamples/*-ship.png (plan §2):
-//   freehold     — patchwork homestead: mismatched donated slabs (patch
-//                  cycle), amber greenhouse dome, scaffold rails, tow pod
-//   veridian     — hex-modular survey: hexagonal prism spine + stacked hex
-//                  modules + thin emerald assay/sensor fins
-//   ferrous      — monumental iron: blunt wedge prow, citadel command tower,
-//                  formal paired barrel housings, crimson band, brass plate
-//   redledger    — captured/rebuilt: forward grappling claw booms + ram
-//                  spike, tally stripes, asymmetric scarred pods
-//   gilded       — black-ceramic wedge with overlapping ivory/gold scale
-//                  bands, swept gold stern fins, turquoise gallery strip
-//   congregation — pilgrim hull: forward observation dome, silver rib rings,
-//                  upright folded sails, amber keel shrine
-//   assembly     — recursive self-similar: identical modules on a charcoal
-//                  spine, teal bow optic, antenna forest, daughter pods
-//   lamplighter  — guild tug: stern engine block, folded repair crane,
-//                  cable reel, relay mast with lamp, hanging work platform
-// Class envelopes stay close to VC_PARTS per classKey (frigate > heavy >
-// freighter > cutter/ace > light) so encounter readability and combat
-// distances are unchanged; glowZ marks each sculpt's stern for the engine
-// glow (the GLOW_Z stern contract, generalized).
-const FACTION_VC_PARTS = {
-  freehold: {
-    freighter: { glowZ: 6.2, parts: [
-      [() => new THREE.BoxGeometry(3.6, 3, 9), 'hull'],
-      [() => new THREE.SphereGeometry(1.4, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', 0, 1.2, -3.6], // greenhouse dome
-      [() => new THREE.BoxGeometry(1.5, 1.7, 2.4), 'patch0', -2.3, 0, 1.4],
-      [() => new THREE.BoxGeometry(1.6, 1.5, 2.2), 'patch1', 2.3, 0.1, 0.4],
-      [() => new THREE.BoxGeometry(1.5, 1.6, 2.6), 'patch2', -2.3, -0.1, -1.8],
-      [() => new THREE.BoxGeometry(1.6, 1.4, 2.0), 'patch0', 2.2, 0, -2.4],
-      [() => new THREE.BoxGeometry(0.18, 0.18, 8.6), 'hullDark', -2.9, -0.8, 0],
-      [() => new THREE.BoxGeometry(0.18, 0.18, 8.6), 'hullDark', 2.9, -0.8, 0],
-      [() => new THREE.BoxGeometry(1.9, 1.9, 2.0), 'patch1', 0, 0, 5.0], // towed pod
-      [() => new THREE.BoxGeometry(0.22, 0.22, 1.2), 'hullDark', 0, 0, 4.3], // tow cable
-      [() => new THREE.BoxGeometry(0.16, 2.0, 0.16), 'trim', 0, 2.4, -0.6],
-      [() => new THREE.BoxGeometry(1.2, 0.14, 0.14), 'trim', 0, 3.2, -0.6],
-    ] },
-    cutter: { glowZ: 3.0, parts: [
-      [() => new THREE.BoxGeometry(2.2, 1.8, 5), 'hull', 0, 0, 0.3],
-      [() => new THREE.ConeGeometry(1.05, 2.8, 4), 'hullDark', 0, 0, -3.4, -Math.PI / 2, Math.PI / 4, 0, 1, 1, 1],
-      [() => new THREE.SphereGeometry(0.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', 0, 0.9, -1.4],
-      [() => new THREE.BoxGeometry(0.16, 1.2, 1.8), 'patch0', -1.15, 0, 0.6],
-      [() => new THREE.BoxGeometry(0.16, 1.1, 1.6), 'patch2', 1.15, -0.1, -0.2],
-      [() => new THREE.BoxGeometry(3.2, 0.15, 1.5), 'hullDark', 0, 0, 1.9],
-      [() => new THREE.BoxGeometry(0.14, 1.3, 0.14), 'trim', 0, 1.4, 0.9],
-    ] },
-    heavy: { glowZ: 3.4, parts: [
-      [() => new THREE.BoxGeometry(7, 2, 6), 'hull'],
-      [() => new THREE.BoxGeometry(4.6, 1.7, 2.6), 'hullDark', 0, 0, -4.0],
-      [() => new THREE.SphereGeometry(1.0, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', 0, 1.4, -2.2],
-      [() => new THREE.BoxGeometry(1.8, 1.4, 2.4), 'patch0', -3.9, 0, 1.0],
-      [() => new THREE.BoxGeometry(1.8, 1.3, 2.2), 'patch2', 3.9, 0.1, -0.6],
-      [() => new THREE.BoxGeometry(0.22, 0.22, 5.6), 'hullDark', -4.3, -0.6, 0.4],
-      [() => new THREE.BoxGeometry(0.22, 0.22, 5.6), 'hullDark', 4.3, -0.6, 0.4],
-      [() => new THREE.BoxGeometry(0.2, 1.8, 0.2), 'trim', 0, 2.6, 0.5],
-    ] },
-    frigate: { glowZ: 12.5, parts: [
-      [() => new THREE.BoxGeometry(24.5, 7, 24), 'hull'],
-      [() => new THREE.BoxGeometry(15, 5, 8), 'hullDark', 0, 0, -15],
-      [() => new THREE.SphereGeometry(2.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', -6, 4.2, -7],
-      [() => new THREE.SphereGeometry(2.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', 6, 4.2, -7],
-      [() => new THREE.BoxGeometry(5, 4, 6), 'patch0', -13.5, 0, 4],
-      [() => new THREE.BoxGeometry(5, 3.6, 5.4), 'patch1', 13.5, 0.4, 0],
-      [() => new THREE.BoxGeometry(4.6, 3.8, 5.6), 'patch2', -13.5, -0.4, -5],
-      [() => new THREE.BoxGeometry(4.4, 3.4, 4.6), 'patch0', 13, 0, -8],
-      [() => new THREE.BoxGeometry(0.6, 0.6, 20), 'hullDark', -15, -2, 0],
-      [() => new THREE.BoxGeometry(0.6, 0.6, 20), 'hullDark', 15, -2, 0],
-      [() => new THREE.BoxGeometry(0.5, 6, 0.5), 'trim', 0, 9, 2],
-      [() => new THREE.BoxGeometry(3.5, 0.4, 0.4), 'trim', 0, 11, 2],
-    ] },
-    ace: { glowZ: 4.8, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.BoxGeometry(0.14, 0.9, 1.6), 'patch0', -0.9, 0.2, 1.6, 0, 0, 0.4],
-      [() => new THREE.BoxGeometry(0.14, 1.1, 1.4), 'patch2', 0.95, -0.1, 1.8, 0, 0, -0.35],
-      [() => new THREE.SphereGeometry(0.5, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', 0, 0.75, -1.2],
-      [() => new THREE.BoxGeometry(0.16, 1.6, 1.6), 'trim', 0, 0.7, 2.6],
-    ] },
-    light: { glowZ: 2.8, parts: [
-      [() => new THREE.ConeGeometry(0.9, 5, 6), 'hull', 0, 0, 0, -Math.PI / 2],
-      [() => new THREE.BoxGeometry(2.4, 0.12, 1.2), 'hullDark', 0, 0, 1.6],
-      [() => new THREE.BoxGeometry(0.12, 0.8, 1.4), 'patch1', -0.85, 0, 0.4],
-      [() => new THREE.SphereGeometry(0.35, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), 'glow', 0, 0.55, -0.9],
-    ] },
-  },
-  veridian: {
-    freighter: { glowZ: 4.4, parts: [
-      [() => new THREE.CylinderGeometry(1.9, 1.9, 8, 6), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(1.3, 1.9, 1.2, 6), 'hullDark', 0, 0, -4.4, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(1.3, 1.3, 2.2, 6), 'trim', 0, 1.9, 1.0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(1.3, 1.3, 2.2, 6), 'patch0', 0, -1.9, -0.8, Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.16, 3.0, 1.8), 'accent', -2.1, 0.6, -1.8],
-      [() => new THREE.BoxGeometry(0.16, 3.0, 1.8), 'accent', 2.1, 0.6, -1.8],
-      [() => new THREE.BoxGeometry(2.6, 0.28, 0.5), 'glow', 0, 0.5, -3.4],
-    ] },
-    cutter: { glowZ: 3.4, parts: [
-      [() => new THREE.CylinderGeometry(1.0, 1.0, 6.4, 6), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.55, 1.0, 1.2, 6), 'hullDark', 0, 0, -3.6, Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.14, 2.0, 1.3), 'accent', -1.1, 0.3, 1.4],
-      [() => new THREE.BoxGeometry(0.14, 2.0, 1.3), 'accent', 1.1, 0.3, 1.4],
-      [() => new THREE.BoxGeometry(1.4, 0.2, 0.4), 'glow', 0, 0.45, -2.6],
-    ] },
-    heavy: { glowZ: 3.0, parts: [
-      [() => new THREE.CylinderGeometry(3.1, 3.1, 5.6, 6), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(2.0, 3.1, 1.6, 6), 'hullDark', 0, 0, -3.4, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(1.6, 1.6, 2, 6), 'trim', 0, 3.0, 0.8, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(1.6, 1.6, 2, 6), 'patch1', 0, -3.0, -0.8, Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.2, 4.2, 2.2), 'accent', -3.4, 0.8, -1.2],
-      [() => new THREE.BoxGeometry(0.2, 4.2, 2.2), 'accent', 3.4, 0.8, -1.2],
-      [() => new THREE.BoxGeometry(3.6, 0.3, 0.6), 'glow', 0, 0.9, -2.9],
-    ] },
-    frigate: { glowZ: 12.5, parts: [
-      [() => new THREE.CylinderGeometry(11, 11, 24, 6), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(7, 11, 3, 6), 'hullDark', 0, 0, -13, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(5.5, 5.5, 6, 6), 'trim', 0, 11, 2, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(5.5, 5.5, 6, 6), 'patch0', 0, -11, -2, Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.5, 13, 5), 'accent', -11.5, 3, -5],
-      [() => new THREE.BoxGeometry(0.5, 13, 5), 'accent', 11.5, 3, -5],
-      [() => new THREE.BoxGeometry(12, 0.8, 1.4), 'glow', 0, 2.5, -10.5],
-      [() => new THREE.BoxGeometry(10, 0.7, 1.2), 'glow', 0, -2.5, 5],
-    ] },
-    ace: { glowZ: 4.6, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.TorusGeometry(1.3, 0.14, 6, 6), 'accent', 0, 0, 0.6],
-      [() => new THREE.BoxGeometry(0.12, 1.6, 1.2), 'accent', -0.9, 0.5, 2.0],
-      [() => new THREE.BoxGeometry(0.12, 1.6, 1.2), 'accent', 0.9, 0.5, 2.0],
-      [() => new THREE.BoxGeometry(0.5, 0.15, 1.8), 'glow', 0, 0.75, -0.8],
-    ] },
-    light: { glowZ: 2.6, parts: [
-      [() => new THREE.CylinderGeometry(0.85, 0.85, 4.6, 6), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.4, 0.85, 0.9, 6), 'hullDark', 0, 0, -2.6, Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.12, 1.4, 1.0), 'accent', 0, 0.7, 1.2],
-      [() => new THREE.BoxGeometry(0.9, 0.15, 0.3), 'glow', 0, 0.35, -1.8],
-    ] },
-  },
-  ferrous: {
-    freighter: { glowZ: 4.4, parts: [
-      [() => new THREE.BoxGeometry(3.8, 3, 8.4), 'hull'],
-      [() => new THREE.ConeGeometry(2.4, 3.2, 4), 'hullDark', 0, 0, -5.2, -Math.PI / 2, Math.PI / 4, 0, 1.5, 0.6, 1],
-      [() => new THREE.BoxGeometry(2.0, 1.6, 2.6), 'hullDark', 0, 2.2, 1.2],
-      [() => new THREE.BoxGeometry(1.3, 1.0, 1.6), 'trim', 0, 3.4, 1.2],
-      [() => new THREE.CylinderGeometry(0.35, 0.35, 3.4, 8), 'trim', -2.2, 0.6, -2.5, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.35, 0.35, 3.4, 8), 'trim', 2.2, 0.6, -2.5, Math.PI / 2],
-      [() => new THREE.BoxGeometry(3.9, 0.5, 0.9), 'accent', 0, 0, -3.2],
-      [() => new THREE.BoxGeometry(0.2, 1.2, 2.0), 'patch1', 1.95, 0.3, 0.8],
-    ] },
-    cutter: { glowZ: 3.4, parts: [
-      [() => new THREE.ConeGeometry(1.15, 6.6, 4), 'hull', 0, 0, 0, -Math.PI / 2, Math.PI / 4, 0, 1.15, 0.7, 1],
-      [() => new THREE.BoxGeometry(2.0, 1.2, 1.6), 'hullDark', 0, 0, 1.8],
-      [() => new THREE.CylinderGeometry(0.22, 0.22, 2.6, 8), 'trim', -0.9, -0.2, 0.4, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.22, 0.22, 2.6, 8), 'trim', 0.9, -0.2, 0.4, Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.08, 0.4, 2.2), 'accent', -1.02, 0.15, -0.6],
-      [() => new THREE.BoxGeometry(0.08, 0.4, 2.2), 'accent', 1.02, 0.15, -0.6],
-    ] },
-    heavy: { glowZ: 3.2, parts: [
-      [() => new THREE.BoxGeometry(7, 2, 6), 'hull'],
-      [() => new THREE.ConeGeometry(2.6, 4, 4), 'hullDark', 0, 0, -5.6, -Math.PI / 2, Math.PI / 4, 0, 1.35, 0.55, 1],
-      [() => new THREE.BoxGeometry(5.5, 1.6, 1.4), 'hullDark', 0, 0, 3.5], // stern engine plate
-      [() => new THREE.BoxGeometry(2.6, 2.0, 3.0), 'hullDark', 0, 2.0, 1.0],
-      [() => new THREE.BoxGeometry(1.6, 1.2, 1.8), 'trim', 0, 3.4, 1.0],
-      [() => new THREE.CylinderGeometry(0.4, 0.4, 4.4, 8), 'trim', -3.2, 0.4, -1.5, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.4, 0.4, 4.4, 8), 'trim', 3.2, 0.4, -1.5, Math.PI / 2],
-      [() => new THREE.BoxGeometry(7.1, 0.5, 1.0), 'accent', 0, 0.9, -2.6],
-    ] },
-    frigate: { glowZ: 10.5, parts: [
-      [() => new THREE.BoxGeometry(23, 6.5, 19), 'hull'],
-      [() => new THREE.ConeGeometry(8.5, 11, 4), 'hullDark', 0, 0, -14.5, -Math.PI / 2, Math.PI / 4, 0, 1.45, 0.5, 1],
-      [() => new THREE.BoxGeometry(7, 6, 7), 'hullDark', 0, 6, 3],
-      [() => new THREE.BoxGeometry(4.5, 3.5, 4.5), 'trim', 0, 10.5, 3],
-      [() => new THREE.BoxGeometry(0.6, 4, 0.6), 'trim', 0, 14, 3],
-      [() => new THREE.CylinderGeometry(0.9, 0.9, 7, 8), 'trim', -11.5, 1, -4, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.9, 0.9, 7, 8), 'trim', 11.5, 1, -4, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.9, 0.9, 7, 8), 'trim', -11.5, 1, 4, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.9, 0.9, 7, 8), 'trim', 11.5, 1, 4, Math.PI / 2],
-      [() => new THREE.BoxGeometry(23.2, 1.0, 1.6), 'accent', 0, 2.8, -7],
-      [() => new THREE.BoxGeometry(23.2, 1.0, 1.6), 'accent', 0, 2.8, 7],
-      [() => new THREE.BoxGeometry(0.3, 3, 5), 'patch1', -11.6, -1, 0],
-      [() => new THREE.BoxGeometry(0.3, 3, 5), 'patch1', 11.6, -1, 0],
-    ] },
-    ace: { glowZ: 4.6, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.TorusGeometry(1.3, 0.14, 6, 18), 'patch1', 0, 0, 0.6],
-      [() => new THREE.BoxGeometry(0.14, 1.8, 1.8), 'accent', 0, 0.8, 2.4],
-      [() => new THREE.CylinderGeometry(0.18, 0.18, 2.4, 8), 'trim', -0.7, -0.3, -1.2, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.18, 0.18, 2.4, 8), 'trim', 0.7, -0.3, -1.2, Math.PI / 2],
-    ] },
-    light: { glowZ: 2.6, parts: [
-      [() => new THREE.ConeGeometry(0.95, 5, 4), 'hull', 0, 0, 0, -Math.PI / 2, Math.PI / 4, 0, 1.1, 0.75, 1],
-      [() => new THREE.BoxGeometry(1.6, 0.9, 1.2), 'hullDark', 0, 0, 1.4],
-      [() => new THREE.BoxGeometry(1.0, 0.25, 0.8), 'accent', 0, 0.55, 0.3],
-    ] },
-  },
-  redledger: {
-    freighter: { glowZ: 4.8, parts: [
-      [() => new THREE.BoxGeometry(3.6, 3, 9), 'hull'],
-      [() => new THREE.ConeGeometry(0.8, 3, 4), 'hullDark', 0, 0, -5.5, -Math.PI / 2, Math.PI / 4], // ram spike
-      [() => new THREE.BoxGeometry(0.35, 0.35, 4.5), 'trim', -1.6, 0.2, -4.8, 0, 0.35, 0], // grappling claws
-      [() => new THREE.BoxGeometry(0.35, 0.35, 4.5), 'trim', 1.6, 0.2, -4.8, 0, -0.35, 0],
-      [() => new THREE.BoxGeometry(0.35, 0.35, 4.5), 'trim', 0, -1.2, -4.8, -0.3, 0, 0],
-      [() => new THREE.BoxGeometry(0.12, 1.0, 3.6), 'accent', -1.85, 0.5, 0.5], // tally stripes
-      [() => new THREE.BoxGeometry(0.12, 1.0, 3.6), 'accent', 1.85, 0.5, -1.5],
-      [() => new THREE.BoxGeometry(1.5, 1.4, 2.4), 'patch0', -2.4, 0.2, 1.8],
-      [() => new THREE.BoxGeometry(1.3, 1.6, 2.0), 'patch2', 2.4, -0.2, -0.6],
-      [() => new THREE.BoxGeometry(1.4, 1.2, 1.8), 'patch1', 2.3, 0.3, 2.6],
-      [() => new THREE.BoxGeometry(2.0, 0.3, 0.15), 'glow', 0, 1.2, -4.2], // amber prow windows
-    ] },
-    cutter: { glowZ: 3.2, parts: [
-      [() => new THREE.BoxGeometry(2.4, 1.8, 5.6), 'hull', 0, 0, 0.2],
-      [() => new THREE.ConeGeometry(0.55, 3.0, 4), 'hullDark', 0, 0, -4.0, -Math.PI / 2, Math.PI / 4],
-      [() => new THREE.BoxGeometry(0.28, 0.28, 3.6), 'trim', -1.0, -0.3, -3.2, 0, 0.38, 0],
-      [() => new THREE.BoxGeometry(0.28, 0.28, 3.6), 'trim', 1.0, -0.3, -3.2, 0, -0.38, 0],
-      [() => new THREE.BoxGeometry(0.5, 0.24, 1.0), 'trim', -1.55, -0.3, -4.9, 0, 0.5, 0],
-      [() => new THREE.BoxGeometry(0.5, 0.24, 1.0), 'trim', 1.55, -0.3, -4.9, 0, -0.5, 0],
-      [() => new THREE.BoxGeometry(0.1, 0.7, 2.8), 'accent', -1.25, 0.35, 0.4],
-      [() => new THREE.BoxGeometry(1.3, 1.2, 1.8), 'patch1', 1.5, 0.25, 1.3],
-      [() => new THREE.BoxGeometry(1.5, 0.14, 2.0), 'patch2', -0.3, 0.95, -0.8],
-    ] },
-    heavy: { glowZ: 3.2, parts: [
-      [() => new THREE.BoxGeometry(7, 2, 6), 'hull'],
-      [() => new THREE.BoxGeometry(3.5, 1.5, 2.5), 'hullDark', 0, 0, -4.0],
-      [() => new THREE.BoxGeometry(0.4, 0.4, 4.2), 'trim', -2.2, -0.4, -4.2, 0, 0.3, 0],
-      [() => new THREE.BoxGeometry(0.4, 0.4, 4.2), 'trim', 2.2, -0.4, -4.2, 0, -0.3, 0],
-      [() => new THREE.BoxGeometry(7.1, 0.6, 0.8), 'accent', 0, 0.8, -2.0],
-      [() => new THREE.BoxGeometry(2.0, 1.5, 2.4), 'patch1', -4.0, 0.3, 1.2],
-      [() => new THREE.BoxGeometry(1.8, 1.3, 2.0), 'patch2', 4.0, -0.3, -0.8],
-      [() => new THREE.BoxGeometry(2.5, 0.18, 3.0), 'patch0', 0.5, 1.05, 0.5],
-    ] },
-    frigate: { glowZ: 10.0, parts: [
-      [() => new THREE.BoxGeometry(23, 6.5, 19), 'hull'],
-      [() => new THREE.BoxGeometry(12, 4, 6), 'hullDark', 0, 0, -12],
-      [() => new THREE.BoxGeometry(1.0, 1.0, 12), 'trim', -6, 2.2, -14, 0, 0.28, 0], // claw assembly
-      [() => new THREE.BoxGeometry(1.0, 1.0, 12), 'trim', 6, 2.2, -14, 0, -0.28, 0],
-      [() => new THREE.BoxGeometry(1.0, 1.0, 12), 'trim', -6, -2.2, -14, 0, 0.22, 0],
-      [() => new THREE.BoxGeometry(1.0, 1.0, 12), 'trim', 6, -2.2, -14, 0, -0.22, 0],
-      [() => new THREE.BoxGeometry(23.2, 1.2, 2.0), 'accent', 0, 2.4, -8],
-      [() => new THREE.BoxGeometry(6, 4, 6), 'patch1', -12, 2, 4],
-      [() => new THREE.BoxGeometry(5, 3.5, 5), 'patch2', 12, -1.5, -2],
-      [() => new THREE.BoxGeometry(4, 3, 4), 'patch0', 10, 3.5, 6],
-      [() => new THREE.BoxGeometry(6, 0.6, 0.3), 'glow', 0, 2.8, -14.6],
-    ] },
-    ace: { glowZ: 4.6, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.BoxGeometry(0.16, 0.16, 2.2), 'trim', -0.7, -0.2, -2.6, 0, 0.3, 0],
-      [() => new THREE.BoxGeometry(0.16, 0.16, 2.2), 'trim', 0.7, -0.2, -2.6, 0, -0.3, 0],
-      [() => new THREE.BoxGeometry(0.08, 0.4, 1.8), 'accent', -0.85, 0.2, 0.2],
-      [() => new THREE.BoxGeometry(1.0, 0.12, 1.4), 'patch2', 0.2, 0.6, 1.0],
-    ] },
-    light: { glowZ: 2.6, parts: [
-      [() => new THREE.ConeGeometry(0.9, 5, 6), 'hull', 0, 0, 0, -Math.PI / 2],
-      [() => new THREE.BoxGeometry(0.2, 0.2, 2.6), 'trim', 0.5, -0.2, -2.2, 0, -0.3, 0], // single asymmetric boom
-      [() => new THREE.BoxGeometry(0.08, 0.4, 1.6), 'accent', -0.6, 0.2, 0.2],
-      [() => new THREE.BoxGeometry(2.2, 0.12, 1.1), 'patch2', 0, 0, 1.6],
-    ] },
-  },
-  gilded: {
-    freighter: { glowZ: 5.2, parts: [
-      [() => new THREE.ConeGeometry(2.3, 9.5, 4), 'hull', 0, 0, 0, -Math.PI / 2, Math.PI / 4, 0, 1.35, 0.5, 1],
-      [() => new THREE.SphereGeometry(1, 14, 10), 'patch0', 0, 0.75, -1.2, 0, 0, 0, 1.9, 0.55, 1.3], // scale bands
-      [() => new THREE.SphereGeometry(1, 14, 10), 'patch1', 0, 0.8, 0.8, 0, 0, 0, 1.7, 0.5, 1.2],
-      [() => new THREE.SphereGeometry(1, 14, 10), 'patch0', 0, 0.8, 2.6, 0, 0, 0, 1.5, 0.45, 1.1],
-      [() => new THREE.BoxGeometry(0.16, 2.4, 3.2), 'accent', -1.9, 0.9, 3.0, 0, 0, 0.55], // swept gold fins
-      [() => new THREE.BoxGeometry(0.16, 2.4, 3.2), 'accent', 1.9, 0.9, 3.0, 0, 0, -0.55],
-      [() => new THREE.BoxGeometry(0.25, 0.25, 5.5), 'glow', 0, 0.55, 0.6], // turquoise gallery
-    ] },
-    cutter: { glowZ: 3.6, parts: [
-      [() => new THREE.ConeGeometry(1.1, 6.8, 4), 'hull', 0, 0, 0, -Math.PI / 2, Math.PI / 4, 0, 1.2, 0.55, 1],
-      [() => new THREE.SphereGeometry(1, 10, 8), 'patch0', 0, 0.45, -0.6, 0, 0, 0, 0.85, 0.35, 0.7],
-      [() => new THREE.SphereGeometry(1, 10, 8), 'patch1', 0, 0.45, 0.8, 0, 0, 0, 0.75, 0.3, 0.6],
-      [() => new THREE.BoxGeometry(0.12, 1.5, 2.0), 'accent', -1.0, 0.55, 2.2, 0, 0, 0.5],
-      [() => new THREE.BoxGeometry(0.12, 1.5, 2.0), 'accent', 1.0, 0.55, 2.2, 0, 0, -0.5],
-      [() => new THREE.BoxGeometry(0.18, 0.18, 3.2), 'glow', 0, 0.4, 0.4],
-    ] },
-    heavy: { glowZ: 3.2, parts: [
-      [() => new THREE.BoxGeometry(6.5, 1.8, 6), 'hull'],
-      [() => new THREE.ConeGeometry(2.4, 3.6, 4), 'hullDark', 0, 0, -4.4, -Math.PI / 2, Math.PI / 4, 0, 1.4, 0.5, 1],
-      [() => new THREE.SphereGeometry(1, 14, 10), 'patch0', 0, 0.9, -0.8, 0, 0, 0, 2.6, 0.7, 1.8],
-      [() => new THREE.SphereGeometry(1, 14, 10), 'patch1', 0, 0.95, 1.4, 0, 0, 0, 2.2, 0.6, 1.6],
-      [() => new THREE.BoxGeometry(0.2, 3.0, 3.6), 'accent', -3.0, 1.0, 2.0, 0, 0, 0.5],
-      [() => new THREE.BoxGeometry(0.2, 3.0, 3.6), 'accent', 3.0, 1.0, 2.0, 0, 0, -0.5],
-      [() => new THREE.BoxGeometry(0.15, 0.3, 3.0), 'glow', -3.3, 0, 0.5],
-      [() => new THREE.BoxGeometry(0.15, 0.3, 3.0), 'glow', 3.3, 0, 0.5],
-    ] },
-    frigate: { glowZ: 14.2, parts: [
-      [() => new THREE.ConeGeometry(10, 26, 4), 'hull', 0, 0, 0, -Math.PI / 2, Math.PI / 4, 0, 1.5, 0.42, 1],
-      [() => new THREE.SphereGeometry(1, 16, 12), 'patch0', 0, 2.6, -4, 0, 0, 0, 7, 2, 4.5],
-      [() => new THREE.SphereGeometry(1, 16, 12), 'patch1', 0, 2.8, 3.5, 0, 0, 0, 6, 1.8, 4],
-      [() => new THREE.SphereGeometry(1, 16, 12), 'patch0', 0, 2.8, 10.5, 0, 0, 0, 5, 1.6, 3.5],
-      [() => new THREE.BoxGeometry(0.5, 9, 10), 'accent', -8.5, 3, 7.5, 0, 0, 0.55],
-      [() => new THREE.BoxGeometry(0.5, 9, 10), 'accent', 8.5, 3, 7.5, 0, 0, -0.55],
-      [() => new THREE.BoxGeometry(0.6, 0.6, 18), 'glow', 0, 1.8, 1.5],
-      [() => new THREE.BoxGeometry(1.2, 0.8, 20), 'trim', 0, -1.6, 0], // ivory keel
-    ] },
-    ace: { glowZ: 4.8, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.5, 3.2],
-      [() => new THREE.TorusGeometry(1.3, 0.14, 6, 18), 'accent', 0, 0, 0.6],
-      [() => new THREE.SphereGeometry(1, 10, 8), 'patch1', 0, 0.5, -0.8, 0, 0, 0, 0.7, 0.3, 0.55],
-      [() => new THREE.BoxGeometry(0.1, 1.3, 1.6), 'accent', -0.8, 0.5, 2.2, 0, 0, 0.45],
-      [() => new THREE.BoxGeometry(0.1, 1.3, 1.6), 'accent', 0.8, 0.5, 2.2, 0, 0, -0.45],
-    ] },
-    light: { glowZ: 2.8, parts: [
-      [() => new THREE.ConeGeometry(0.9, 5, 4), 'hull', 0, 0, 0, -Math.PI / 2, Math.PI / 4, 0, 1.15, 0.55, 1],
-      [() => new THREE.SphereGeometry(1, 8, 6), 'patch0', 0, 0.35, -0.3, 0, 0, 0, 0.55, 0.25, 0.45],
-      [() => new THREE.BoxGeometry(0.1, 1.1, 1.4), 'accent', -0.7, 0.4, 1.7, 0, 0, 0.5],
-      [() => new THREE.BoxGeometry(0.1, 1.1, 1.4), 'accent', 0.7, 0.4, 1.7, 0, 0, -0.5],
-      [() => new THREE.BoxGeometry(0.14, 0.14, 2.2), 'glow', 0, 0.3, 0.3],
-    ] },
-  },
-  congregation: {
-    freighter: { glowZ: 4.6, parts: [
-      [() => new THREE.CylinderGeometry(1.7, 1.7, 8, 10), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.SphereGeometry(1.6, 14, 10), 'glow', 0, 0, -4.4, 0, 0, 0, 1, 0.85, 1.1], // observation dome
-      [() => new THREE.TorusGeometry(1.85, 0.16, 6, 14), 'trim', 0, 0, -2.0],
-      [() => new THREE.TorusGeometry(1.85, 0.16, 6, 14), 'trim', 0, 0, 0.5],
-      [() => new THREE.TorusGeometry(1.85, 0.16, 6, 14), 'trim', 0, 0, 3.0],
-      [() => new THREE.BoxGeometry(3.2, 0.12, 1.8), 'patch0', -1.0, 2.2, 1.2, 0, 0, 0.7], // folded sails
-      [() => new THREE.BoxGeometry(3.2, 0.12, 1.8), 'patch0', 1.0, 2.2, 1.2, 0, 0, -0.7],
-      [() => new THREE.BoxGeometry(2.4, 0.12, 1.4), 'trim', -0.8, 2.0, -1.2, 0, 0, 0.65],
-      [() => new THREE.BoxGeometry(2.4, 0.12, 1.4), 'trim', 0.8, 2.0, -1.2, 0, 0, -0.65],
-      [() => new THREE.BoxGeometry(0.4, 1.0, 2.4), 'accent', 0, -1.7, 0.3], // keel shrine
-    ] },
-    cutter: { glowZ: 3.2, parts: [
-      [() => new THREE.CylinderGeometry(1.0, 1.0, 6, 8), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.SphereGeometry(0.9, 10, 8), 'glow', 0, 0, -3.3],
-      [() => new THREE.TorusGeometry(1.1, 0.12, 6, 12), 'trim', 0, 0, 0.5],
-      [() => new THREE.BoxGeometry(2.0, 0.1, 1.2), 'patch0', -0.6, 1.4, 0.8, 0, 0, 0.7],
-      [() => new THREE.BoxGeometry(2.0, 0.1, 1.2), 'patch0', 0.6, 1.4, 0.8, 0, 0, -0.7],
-      [() => new THREE.BoxGeometry(0.3, 0.8, 1.6), 'accent', 0, -1.0, 0.2],
-    ] },
-    heavy: { glowZ: 3.2, parts: [
-      [() => new THREE.CylinderGeometry(2.6, 2.6, 6, 10), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.SphereGeometry(2.2, 12, 10), 'glow', 0, 0, -3.5, 0, 0, 0, 1, 0.8, 1],
-      [() => new THREE.TorusGeometry(2.75, 0.2, 6, 14), 'trim', 0, 0, -1],
-      [() => new THREE.TorusGeometry(2.75, 0.2, 6, 14), 'trim', 0, 0, 1.5],
-      [() => new THREE.BoxGeometry(4.0, 0.15, 2.2), 'patch0', -1.2, 3.2, 1.0, 0, 0, 0.7],
-      [() => new THREE.BoxGeometry(4.0, 0.15, 2.2), 'patch0', 1.2, 3.2, 1.0, 0, 0, -0.7],
-      [() => new THREE.BoxGeometry(3.0, 0.15, 1.8), 'trim', -0.9, 2.9, -1.5, 0, 0, 0.65],
-      [() => new THREE.BoxGeometry(3.0, 0.15, 1.8), 'trim', 0.9, 2.9, -1.5, 0, 0, -0.65],
-      [() => new THREE.BoxGeometry(0.5, 1.4, 3.0), 'accent', 0, -2.4, 0.3],
-    ] },
-    frigate: { glowZ: 10.5, parts: [
-      [() => new THREE.CylinderGeometry(9, 9, 20, 12), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.SphereGeometry(8, 16, 12), 'glow', 0, 0, -10.5, 0, 0, 0, 1, 0.75, 1.1],
-      [() => new THREE.TorusGeometry(9.4, 0.5, 6, 18), 'trim', 0, 0, -6],
-      [() => new THREE.TorusGeometry(9.4, 0.5, 6, 18), 'trim', 0, 0, -1],
-      [() => new THREE.TorusGeometry(9.4, 0.5, 6, 18), 'trim', 0, 0, 4],
-      [() => new THREE.TorusGeometry(9.4, 0.5, 6, 18), 'trim', 0, 0, 8],
-      [() => new THREE.BoxGeometry(12, 0.4, 6), 'patch0', -3.5, 11, 2, 0, 0, 0.7],
-      [() => new THREE.BoxGeometry(12, 0.4, 6), 'patch0', 3.5, 11, 2, 0, 0, -0.7],
-      [() => new THREE.BoxGeometry(9, 0.4, 5), 'trim', -2.8, 10, -5, 0, 0, 0.65],
-      [() => new THREE.BoxGeometry(9, 0.4, 5), 'trim', 2.8, 10, -5, 0, 0, -0.65],
-      [() => new THREE.BoxGeometry(1.5, 4, 8), 'accent', 0, -8, 1],
-    ] },
-    ace: { glowZ: 4.8, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.SphereGeometry(0.55, 10, 8), 'glow', 0, 0.1, -2.4],
-      [() => new THREE.TorusGeometry(1.3, 0.14, 6, 18), 'trim', 0, 0, 0.6],
-      [() => new THREE.BoxGeometry(1.4, 0.1, 1.0), 'patch0', -0.5, 1.0, 1.2, 0, 0, 0.7],
-      [() => new THREE.BoxGeometry(1.4, 0.1, 1.0), 'patch0', 0.5, 1.0, 1.2, 0, 0, -0.7],
-    ] },
-    light: { glowZ: 2.6, parts: [
-      [() => new THREE.CylinderGeometry(0.8, 0.8, 4.6, 8), 'hull', 0, 0, 0, Math.PI / 2],
-      [() => new THREE.SphereGeometry(0.7, 8, 6), 'glow', 0, 0, -2.5],
-      [() => new THREE.TorusGeometry(0.9, 0.1, 6, 10), 'trim', 0, 0, 0.4],
-      [() => new THREE.BoxGeometry(1.5, 0.08, 0.9), 'patch0', -0.45, 1.0, 0.7, 0, 0, 0.7],
-      [() => new THREE.BoxGeometry(1.5, 0.08, 0.9), 'patch0', 0.45, 1.0, 0.7, 0, 0, -0.7],
-    ] },
-  },
-  assembly: {
-    freighter: { glowZ: 4.6, parts: [
-      [() => new THREE.BoxGeometry(1.4, 1.4, 8.6), 'hullDark'],
-      [() => new THREE.BoxGeometry(2.6, 2.6, 2.5), 'hull', 0, 0, -2.9], // identical modules
-      [() => new THREE.BoxGeometry(2.6, 2.6, 2.5), 'hull', 0, 0, 0],
-      [() => new THREE.BoxGeometry(2.6, 2.6, 2.5), 'hull', 0, 0, 2.9],
-      [() => new THREE.TorusGeometry(0.85, 0.2, 6, 12), 'glow', 0, 0, -4.4], // teal bow optic
-      [() => new THREE.CylinderGeometry(0.06, 0.06, 2.2, 5), 'trim', 0.8, 2.2, -0.3],
-      [() => new THREE.CylinderGeometry(0.06, 0.06, 2.2, 5), 'trim', -0.7, 2.1, 0.6],
-      [() => new THREE.CylinderGeometry(0.06, 0.06, 2.2, 5), 'trim', 0.1, 2.3, 2.0],
-      [() => new THREE.BoxGeometry(1.0, 1.0, 1.4), 'hull', -2.1, -0.6, 1.2], // daughter pods
-      [() => new THREE.BoxGeometry(1.0, 1.0, 1.4), 'hull', 2.1, -0.6, 1.2],
-      [() => new THREE.BoxGeometry(0.8, 0.15, 0.15), 'hullDark', -1.5, -0.6, 1.2],
-      [() => new THREE.BoxGeometry(0.8, 0.15, 0.15), 'hullDark', 1.5, -0.6, 1.2],
-      [() => new THREE.BoxGeometry(1.2, 0.14, 1.6), 'patch0', 0, 1.35, -2.9],
-    ] },
-    cutter: { glowZ: 3.4, parts: [
-      [() => new THREE.BoxGeometry(0.9, 0.9, 6.2), 'hullDark'],
-      [() => new THREE.BoxGeometry(1.6, 1.6, 1.6), 'hull', 0, 0, -1.6],
-      [() => new THREE.BoxGeometry(1.6, 1.6, 1.6), 'hull', 0, 0, 1.2],
-      [() => new THREE.TorusGeometry(0.5, 0.12, 6, 10), 'glow', 0, 0, -3.2],
-      [() => new THREE.CylinderGeometry(0.05, 0.05, 1.6, 5), 'trim', 0.4, 1.3, 0.2],
-      [() => new THREE.CylinderGeometry(0.05, 0.05, 1.6, 5), 'trim', -0.4, 1.2, 1.0],
-      [() => new THREE.BoxGeometry(0.7, 0.7, 0.9), 'hull', 1.3, -0.4, 0.6],
-      [() => new THREE.BoxGeometry(0.5, 0.12, 0.12), 'hullDark', 0.9, -0.4, 0.6],
-    ] },
-    heavy: { glowZ: 4.6, parts: [
-      [() => new THREE.BoxGeometry(2.0, 2.0, 7), 'hullDark'],
-      [() => new THREE.BoxGeometry(3.6, 3.2, 2.6), 'hull', 0, 0, -2.4],
-      [() => new THREE.BoxGeometry(3.6, 3.2, 2.6), 'hull', 0, 0, 0.4],
-      [() => new THREE.BoxGeometry(3.6, 3.2, 2.6), 'hull', 0, 0, 3.2],
-      [() => new THREE.TorusGeometry(1.1, 0.25, 6, 12), 'glow', 0, 0, -4.0],
-      [() => new THREE.CylinderGeometry(0.07, 0.07, 2.8, 5), 'trim', 1.2, 2.7, -0.6],
-      [() => new THREE.CylinderGeometry(0.07, 0.07, 2.4, 5), 'trim', -1.0, 2.5, 0.4],
-      [() => new THREE.CylinderGeometry(0.07, 0.07, 3.0, 5), 'trim', 0.2, 2.9, 1.6],
-      [() => new THREE.CylinderGeometry(0.07, 0.07, 2.2, 5), 'trim', -0.5, 2.4, 2.8],
-      [() => new THREE.BoxGeometry(1.3, 1.3, 1.7), 'hull', -2.6, -0.8, 0.8],
-      [() => new THREE.BoxGeometry(1.3, 1.3, 1.7), 'hull', 2.6, -0.8, 0.8],
-      [() => new THREE.BoxGeometry(1.0, 0.18, 0.18), 'hullDark', -1.8, -0.8, 0.8],
-      [() => new THREE.BoxGeometry(1.0, 0.18, 0.18), 'hullDark', 1.8, -0.8, 0.8],
-      [() => new THREE.BoxGeometry(1.8, 0.16, 2.0), 'patch0', 0, 1.7, -2.4],
-    ] },
-    frigate: { glowZ: 12.5, parts: [
-      [() => new THREE.BoxGeometry(6, 6, 24), 'hullDark'],
-      [() => new THREE.BoxGeometry(12, 11, 5), 'hull', 0, 0, -9], // recursive identical cells
-      [() => new THREE.BoxGeometry(12, 11, 5), 'hull', 0, 0, -4.5],
-      [() => new THREE.BoxGeometry(12, 11, 5), 'hull', 0, 0, 0],
-      [() => new THREE.BoxGeometry(12, 11, 5), 'hull', 0, 0, 4.5],
-      [() => new THREE.BoxGeometry(12, 11, 5), 'hull', 0, 0, 9],
-      [() => new THREE.TorusGeometry(3.2, 0.7, 6, 16), 'glow', 0, 0, -13],
-      [() => new THREE.CylinderGeometry(1.8, 1.8, 0.5, 12), 'glow', 0, 0, -13, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.2, 0.2, 8, 6), 'trim', 4, 9.5, -4.5],
-      [() => new THREE.CylinderGeometry(0.2, 0.2, 7, 6), 'trim', -3.5, 9, 0],
-      [() => new THREE.CylinderGeometry(0.2, 0.2, 9, 6), 'trim', 1.5, 10, 4.5],
-      [() => new THREE.CylinderGeometry(0.2, 0.2, 6.5, 6), 'trim', -1.5, 8.75, 9],
-      [() => new THREE.BoxGeometry(4, 4, 5), 'hull', -7.5, -2, 3], // daughter pods
-      [() => new THREE.BoxGeometry(4, 4, 5), 'hull', 7.5, -2, 3],
-      [() => new THREE.BoxGeometry(4, 4, 5), 'hull', -7.5, 2, -6],
-      [() => new THREE.BoxGeometry(2.2, 0.5, 0.5), 'hullDark', -6.2, -2, 3],
-      [() => new THREE.BoxGeometry(2.2, 0.5, 0.5), 'hullDark', 6.2, -2, 3],
-      [() => new THREE.BoxGeometry(2.2, 0.5, 0.5), 'hullDark', -6.2, 2, -6],
-      [() => new THREE.BoxGeometry(4, 0.4, 4.5), 'patch0', 0, 5.7, -4.5],
-      [() => new THREE.BoxGeometry(4, 0.4, 4.5), 'patch0', 0, 5.7, 4.5],
-    ] },
-    ace: { glowZ: 4.6, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.TorusGeometry(1.3, 0.14, 6, 6), 'glow', 0, 0, 0.6], // sensor crown ring
-      [() => new THREE.CylinderGeometry(0.05, 0.05, 1.5, 5), 'trim', 0.5, 1.1, -0.4],
-      [() => new THREE.CylinderGeometry(0.05, 0.05, 1.5, 5), 'trim', -0.5, 1.1, -0.4],
-      [() => new THREE.CylinderGeometry(0.05, 0.05, 1.5, 5), 'trim', 0, 1.2, 0.4],
-      [() => new THREE.BoxGeometry(0.8, 0.8, 0.9), 'hull', -1.1, -0.3, 1.4],
-      [() => new THREE.BoxGeometry(0.8, 0.8, 0.9), 'hull', 1.1, -0.3, 1.4],
-      [() => new THREE.BoxGeometry(0.5, 0.1, 1.6), 'patch0', 0, 0.55, -0.5],
-    ] },
-    light: { glowZ: 2.6, parts: [
-      [() => new THREE.BoxGeometry(0.6, 0.6, 4.4), 'hullDark'],
-      [() => new THREE.BoxGeometry(1.2, 1.2, 1.4), 'hull', 0, 0, -0.8],
-      [() => new THREE.BoxGeometry(1.2, 1.2, 1.4), 'hull', 0, 0, 1.0],
-      [() => new THREE.TorusGeometry(0.4, 0.1, 6, 8), 'glow', 0, 0, -2.4],
-      [() => new THREE.CylinderGeometry(0.04, 0.04, 1.2, 5), 'trim', 0.3, 1.0, 0.3],
-    ] },
-  },
-  lamplighter: {
-    freighter: { glowZ: 5.4, parts: [
-      [() => new THREE.BoxGeometry(3.4, 2.6, 7), 'hull'],
-      [() => new THREE.CylinderGeometry(1.0, 1.0, 1.8, 8), 'hullDark', -1.1, 0, 4.2, Math.PI / 2], // tug engines
-      [() => new THREE.CylinderGeometry(1.0, 1.0, 1.8, 8), 'hullDark', 1.1, 0, 4.2, Math.PI / 2],
-      [() => new THREE.TorusGeometry(0.7, 0.15, 6, 10), 'trim', -1.1, 0, 5.1],
-      [() => new THREE.TorusGeometry(0.7, 0.15, 6, 10), 'trim', 1.1, 0, 5.1],
-      [() => new THREE.BoxGeometry(0.3, 0.3, 2.6), 'trim', 1.2, 1.6, -1.0, 0, 0.5, 0], // folded repair crane
-      [() => new THREE.BoxGeometry(0.25, 0.25, 2.0), 'trim', 2.0, 2.0, -2.2, 0, -0.9, 0],
-      [() => new THREE.CylinderGeometry(0.85, 0.85, 0.6, 10), 'hullDark', -1.7, -0.3, 0.6, 0, 0, Math.PI / 2], // cable reel
-      [() => new THREE.CylinderGeometry(0.08, 0.08, 2.8, 6), 'trim', 0, 2.6, -0.6], // relay mast
-      [() => new THREE.BoxGeometry(0.35, 0.35, 0.35), 'glow', 0, 4.1, -0.6], // mast lamp
-      [() => new THREE.BoxGeometry(1.3, 0.5, 0.14), 'patch1', -1.75, 0.4, -1.2], // cobalt diagnostics
-      [() => new THREE.BoxGeometry(1.8, 0.16, 2.6), 'patch0', 0, -1.5, 0.8], // work platform
-    ] },
-    cutter: { glowZ: 4.0, parts: [
-      [() => new THREE.BoxGeometry(2.2, 1.7, 5), 'hull'],
-      [() => new THREE.CylinderGeometry(0.8, 0.8, 1.4, 8), 'hullDark', 0, 0, 3.0, Math.PI / 2],
-      [() => new THREE.TorusGeometry(0.55, 0.12, 6, 10), 'trim', 0, 0, 3.7],
-      [() => new THREE.BoxGeometry(0.25, 0.25, 1.8), 'trim', 0.8, 1.1, -0.8, 0, 0.5, 0],
-      [() => new THREE.CylinderGeometry(0.07, 0.07, 2.0, 6), 'trim', 0, 1.8, -0.2],
-      [() => new THREE.BoxGeometry(0.28, 0.28, 0.28), 'glow', 0, 2.9, -0.2],
-      [() => new THREE.BoxGeometry(0.9, 0.4, 0.12), 'patch1', -1.15, 0.3, -0.8],
-    ] },
-    heavy: { glowZ: 4.8, parts: [
-      [() => new THREE.BoxGeometry(6.5, 2.2, 6), 'hull'],
-      [() => new THREE.CylinderGeometry(1.1, 1.1, 2.0, 8), 'hullDark', -1.8, 0, 3.6, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(1.1, 1.1, 2.0, 8), 'hullDark', 1.8, 0, 3.6, Math.PI / 2],
-      [() => new THREE.TorusGeometry(0.8, 0.16, 6, 10), 'trim', -1.8, 0, 4.6],
-      [() => new THREE.TorusGeometry(0.8, 0.16, 6, 10), 'trim', 1.8, 0, 4.6],
-      [() => new THREE.BoxGeometry(0.4, 0.4, 3.2), 'trim', 1.6, 1.5, -1.2, 0, 0.55, 0],
-      [() => new THREE.BoxGeometry(0.3, 0.3, 2.4), 'trim', 2.6, 1.9, -2.8, 0, -0.8, 0],
-      [() => new THREE.CylinderGeometry(1.0, 1.0, 0.7, 10), 'hullDark', -3.0, -0.4, 0.8, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.09, 0.09, 3.2, 6), 'trim', 0, 2.6, -0.4],
-      [() => new THREE.BoxGeometry(0.4, 0.4, 0.4), 'glow', 0, 4.3, -0.4],
-      [() => new THREE.BoxGeometry(1.6, 0.6, 0.16), 'patch1', -3.3, 0.5, -1.0],
-      [() => new THREE.BoxGeometry(2.4, 0.18, 3.0), 'patch0', 0, -1.3, 0.6],
-    ] },
-    frigate: { glowZ: 13.5, parts: [
-      [() => new THREE.BoxGeometry(22, 6.5, 18), 'hull'],
-      [() => new THREE.CylinderGeometry(2.6, 2.6, 4.5, 10), 'hullDark', -5.5, 0, 10.5, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(2.6, 2.6, 4.5, 10), 'hullDark', 0, 0, 10.8, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(2.6, 2.6, 4.5, 10), 'hullDark', 5.5, 0, 10.5, Math.PI / 2],
-      [() => new THREE.TorusGeometry(1.9, 0.4, 6, 12), 'trim', -5.5, 0, 12.9],
-      [() => new THREE.TorusGeometry(1.9, 0.4, 6, 12), 'trim', 0, 0, 13.2],
-      [() => new THREE.TorusGeometry(1.9, 0.4, 6, 12), 'trim', 5.5, 0, 12.9],
-      [() => new THREE.BoxGeometry(1.0, 1.0, 9), 'trim', 5, 4.5, -3, 0, 0.5, 0], // gantry crane
-      [() => new THREE.BoxGeometry(0.7, 0.7, 7), 'trim', 8.5, 5.5, -8, 0, -0.85, 0],
-      [() => new THREE.CylinderGeometry(2.6, 2.6, 1.6, 12), 'hullDark', -10.5, -1, 2, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(2.6, 2.6, 1.6, 12), 'hullDark', 10.5, -1, 2, 0, 0, Math.PI / 2],
-      [() => new THREE.CylinderGeometry(0.25, 0.25, 9, 8), 'trim', 0, 7.5, -1],
-      [() => new THREE.BoxGeometry(4, 0.3, 0.3), 'trim', 0, 11, -1],
-      [() => new THREE.BoxGeometry(0.9, 0.9, 0.9), 'glow', 0, 12.1, -1],
-      [() => new THREE.BoxGeometry(4, 1.2, 0.4), 'patch1', -11.2, 1.2, -3],
-      [() => new THREE.BoxGeometry(6, 0.4, 7), 'patch0', 0, -3.5, 1],
-    ] },
-    ace: { glowZ: 4.4, parts: [
-      [() => new THREE.OctahedronGeometry(1.6, 0), 'hull', 0, 0, 0, 0, 0, 0, 0.9, 0.55, 3.2],
-      [() => new THREE.CylinderGeometry(0.7, 0.7, 1.2, 8), 'hullDark', 0, 0, 3.4, Math.PI / 2],
-      [() => new THREE.TorusGeometry(0.5, 0.1, 6, 10), 'trim', 0, 0, 4.0],
-      [() => new THREE.CylinderGeometry(0.06, 0.06, 1.8, 6), 'trim', 0, 1.2, 0.6],
-      [() => new THREE.BoxGeometry(0.25, 0.25, 0.25), 'glow', 0, 2.2, 0.6],
-      [() => new THREE.BoxGeometry(0.14, 0.14, 1.6), 'trim', -0.9, 0.2, 1.8, 0, 0.4, 0],
-      [() => new THREE.BoxGeometry(0.14, 0.14, 1.6), 'trim', 0.9, 0.2, 1.8, 0, -0.4, 0],
-    ] },
-    light: { glowZ: 3.0, parts: [
-      [() => new THREE.BoxGeometry(1.6, 1.2, 4), 'hull'],
-      [() => new THREE.CylinderGeometry(0.55, 0.55, 1.0, 8), 'hullDark', 0, 0, 2.3, Math.PI / 2],
-      [() => new THREE.TorusGeometry(0.4, 0.09, 6, 10), 'trim', 0, 0, 2.8],
-      [() => new THREE.CylinderGeometry(0.05, 0.05, 1.4, 5), 'trim', 0, 1.2, 0],
-      [() => new THREE.BoxGeometry(0.2, 0.2, 0.2), 'glow', 0, 2.0, 0],
-      [() => new THREE.BoxGeometry(2.2, 0.12, 1.0), 'patch0', 0, 0, 1.2],
-    ] },
-  },
-};
 
 const _vcColor = new THREE.Color();
 const _vcMatrix = new THREE.Matrix4();
@@ -771,62 +279,106 @@ function dullHex(hex) {
   _dullColor.multiplyScalar(0.72);
   return _dullColor.getHex();
 }
-const dulledStyles = {}; // faction → dulled style record (hull/hullDark/trim/accent/patch)
+// faction → dulled style record (hull/hullDark/trim/accent/patch). Keyed by the
+// canonical faction, own-key read: see canonFaction and glowMatFor.
+const dulledStyles = {};
 function dullStyleFor(faction) {
-  let d = dulledStyles[faction];
+  const key = canonFaction(faction);
+  let d = Object.hasOwn(dulledStyles, key) ? dulledStyles[key] : undefined;
   if (!d) {
-    const st = styleFor(faction);
+    const st = styleFor(key);
     d = {
       hull: dullHex(st.hull), hullDark: dullHex(st.hullDark),
       trim: dullHex(st.trim), accent: dullHex(st.accent),
       glow: st.glow, beacon: st.beacon, // running lights stay lit
       patch: st.patch.map(dullHex),
     };
-    dulledStyles[faction] = d;
+    dulledStyles[key] = d;
   }
   return d;
 }
 
-const vcGeos = {}; // 'faction:classKey[:pirate]' → merged vertex-colored geometry (shared, never disposed)
-function vcGeoFor(classKey, faction, pirate = false) {
-  // own-key lookup: record.faction/classKey are save-controlled strings
-  const kit = Object.hasOwn(FACTION_VC_PARTS, faction) ? FACTION_VC_PARTS[faction] : undefined;
+// 'faction:classKey[:pirate]' → { hull, lights } (shared, never disposed). Both
+// halves of the key are save-controlled, so the key is JSON — `faction:'a:b',
+// classKey:'c'` and `faction:'a', classKey:'b:c'` would collide under plain
+// concatenation and silently render each other's hull.
+const shipGeos = {};
+
+/**
+ * The faction a lookup should actually use. record.faction is save-controlled
+ * and may be any string, including a prototype-chain name; every key that is
+ * not a sculpt faction renders the SAME fallback bake, because styleFor()
+ * answers with the independent palette for all of them. Collapsing them here
+ * keeps the never-disposed caches bounded by the faction table rather than by
+ * whatever a save file happens to contain.
+ */
+function canonFaction(faction) {
+  if (Object.hasOwn(DETAIL_SHIPS, faction)) return faction;
+  return Object.hasOwn(FACTION_STYLE, faction) ? faction : 'independent';
+}
+
+function shipGeosFor(classKey, faction, pirate = false) {
+  // own-key lookups throughout: record.faction/classKey are save-controlled
+  // strings, and a raw bracket read resolves '__proto__'/'constructor'/
+  // 'toString' through Object.prototype to a truthy non-spec value.
+  const kit = Object.hasOwn(DETAIL_SHIPS, faction) ? DETAIL_SHIPS[faction] : undefined;
   const dulled = pirate && kit !== undefined;
-  const key = dulled ? `${faction}:${classKey}:pirate` : faction + ':' + classKey;
-  let geo = vcGeos[key];
-  if (!geo) {
-    const st = dulled ? dullStyleFor(faction) : styleFor(faction);
-    const spec = kit
-      ? (Object.hasOwn(kit, classKey) ? kit[classKey] : kit.light).parts
-      : (VC_PARTS[classKey] ?? VC_PARTS.light);
+  const key = JSON.stringify([kit ? faction : 'unknown', classKey, dulled]);
+  const cached = Object.hasOwn(shipGeos, key) ? shipGeos[key] : undefined;
+  if (cached) return cached;
+
+  // Fallback: unknown faction keys render the wave-37 VC_PARTS pipeline
+  if (!kit) {
+    const st = styleFor(canonFaction(faction));
+    const spec = Object.hasOwn(VC_PARTS, classKey) ? VC_PARTS[classKey] : VC_PARTS.light;
     const parts = spec.map((p) => colorPart(p, st));
-    geo = mergeGeometries(parts, false);
+    const hull = mergeGeometries(parts, false);
     for (const p of parts) p.dispose();
-    vcGeos[key] = geo;
+    shipGeos[key] = { hull, lights: null };
+    return shipGeos[key];
   }
-  return geo;
+
+  // Detail sculpt path: call the kit's build through the detail builder
+  const st = dulled ? dullStyleFor(faction) : styleFor(faction);
+  const classSpec = Object.hasOwn(kit, classKey) ? kit[classKey] : kit.light;
+  const b = detailBuilder();
+  classSpec.build(b, st);
+  const geos = b.build();
+
+  // Require both channels — a missing one throws, naming the sculpt and channel
+  if (!geos.hull) throw new Error(`${faction} ${classKey} ship sculpt emitted no 'hull' chunk`);
+  if (!geos.lights) throw new Error(`${faction} ${classKey} ship sculpt emitted no 'lights' chunk`);
+
+  shipGeos[key] = geos;
+  return geos;
 }
 
-/** Stern offset for the engine glow: per-kit sculpt glowZ, else the wave-37 GLOW_Z table. */
+/** Stern offset for the engine glow: per-sculpt glowZ, else the wave-37 GLOW_Z table. */
 function glowZFor(classKey, faction) {
-  const kit = Object.hasOwn(FACTION_VC_PARTS, faction) ? FACTION_VC_PARTS[faction] : undefined;
+  const kit = Object.hasOwn(DETAIL_SHIPS, faction) ? DETAIL_SHIPS[faction] : undefined;
   if (kit) return (Object.hasOwn(kit, classKey) ? kit[classKey] : kit.light).glowZ;
-  return GLOW_Z[classKey] ?? GLOW_Z.light;
+  return Object.hasOwn(GLOW_Z, classKey) ? GLOW_Z[classKey] : GLOW_Z.light;
 }
-
-const vcGlowMats = {}; // faction → engine glow material in style.glow (shared, never disposed)
+// faction → engine glow material in style.glow (shared, never disposed). Keyed by
+// the CANONICAL faction (see shipGeosFor): every unknown key wears the
+// independent palette, so they share one material instead of minting one per
+// bogus string. Own-key reads only — `vcGlowMats['__proto__']` would otherwise
+// return the cache object's prototype and hand a non-Material to a live Mesh.
+const vcGlowMats = {};
 function glowMatFor(faction) {
-  let m = vcGlowMats[faction];
+  const key = canonFaction(faction);
+  let m = Object.hasOwn(vcGlowMats, key) ? vcGlowMats[key] : undefined;
   if (!m) {
     m = new THREE.MeshBasicMaterial({
-      color: styleFor(faction).glow,
+      color: styleFor(key).glow,
       transparent: true,
       opacity: 0.95,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      vertexColors: true,
     });
     m.userData.shared = true;
-    vcGlowMats[faction] = m;
+    vcGlowMats[key] = m;
   }
   return m;
 }
@@ -855,7 +407,10 @@ const unknowablesGeos = {}; // classKey → { loops, arcs, cells, core, scale } 
 const unknowablesMats = {}; // material type → shared MeshBasicMaterial
 
 function unknowablesMatFor(colorHex) {
-  let m = unknowablesMats[colorHex];
+  // colorHex is a number from FACTION_STYLE, so it cannot name a prototype
+  // member — but the cache is read own-key anyway, for the same reason as its
+  // siblings: one bracket read on an unguarded object is the whole bug class.
+  let m = Object.hasOwn(unknowablesMats, colorHex) ? unknowablesMats[colorHex] : undefined;
   if (!m) {
     m = new THREE.MeshBasicMaterial({
       color: colorHex,
@@ -871,18 +426,22 @@ function unknowablesMatFor(colorHex) {
 }
 
 function unknowablesGeosFor(classKey) {
-  let g = unknowablesGeos[classKey];
-  if (g) return g;
+  // own-key read: classKey is save-controlled, and `unknowablesGeos['__proto__']`
+  // would return the cache object's prototype, which buildUnknowablesField then
+  // dereferences as `spec.loops[0]`.
+  const cached = Object.hasOwn(unknowablesGeos, classKey) ? unknowablesGeos[classKey] : undefined;
+  if (cached) return cached;
 
   // Size scale based on classKey (frigate > heavy > freighter > cutter/ace > light)
-  const scale = {
+  const scales = {
     frigate: 3.2,
     heavy: 2.2,
     freighter: 1.8,
     cutter: 1.2,
     ace: 1.0,
     light: 0.8,
-  }[classKey] ?? 1.0;
+  };
+  const scale = Object.hasOwn(scales, classKey) ? scales[classKey] : 1.0;
 
   // Nested magnetic loops: three rings on MUTUALLY PERPENDICULAR planes
   // (a gyroscope, not three near-coplanar hoops — small offsets collapse
@@ -922,9 +481,9 @@ function unknowablesGeosFor(classKey) {
   const core = new THREE.SphereGeometry(0.42 * scale, 10, 8);
   core.userData.shared = true;
 
-  g = { loops, arcs, cells, core, scale };
-  unknowablesGeos[classKey] = g;
-  return g;
+  const spec = { loops, arcs, cells, core, scale };
+  unknowablesGeos[classKey] = spec;
+  return spec;
 }
 
 // Wave 42: animate the Unknowables energy field. Zero-alloc — mutates mesh
@@ -973,6 +532,20 @@ function animateField(parts, elapsed, reducedMotion) {
 
 let glowGeo = null;
 let flashGeo = null;
+
+// The engine-glow sphere is shared by every ship path. Wave 47: the faction
+// glow material carries vertexColors (the lights chunk rides it too), and a
+// vertexColors material with no colour attribute renders BLACK — so the shared
+// geometry is baked all-white once, by whichever path asks for it first. The
+// beautiful path's own material ignores the attribute and is unaffected.
+function glowGeoShared() {
+  if (!glowGeo) {
+    glowGeo = new THREE.SphereGeometry(0.55, 8, 6);
+    const n = glowGeo.attributes.position.count;
+    glowGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+  }
+  return glowGeo;
+}
 
 // ---------- Beautiful Ones grown ships (wave 27) ----------
 // Beautiful technology is grown, not built: sculpted nacre hulls,
@@ -1196,7 +769,6 @@ function buildBeautifulShip(classKey, role) {
   // Mint engine glow at the sculpted tail — same shared-geometry contract
   // as the standard glow (consumers mutate scale/visible only, so a second
   // shared material is safe).
-  glowGeo ??= new THREE.SphereGeometry(0.55, 8, 6);
   beautifulGlowMat ??= new THREE.MeshBasicMaterial({
     color: 0x7fe0a8,
     transparent: true,
@@ -1204,7 +776,7 @@ function buildBeautifulShip(classKey, role) {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const glow = new THREE.Mesh(glowGeo, beautifulGlowMat);
+  const glow = new THREE.Mesh(glowGeoShared(), beautifulGlowMat);
   glow.position.set(0, 0, spec.glowZ);
   g.add(glow);
   g.userData.glow = glow;
@@ -1320,24 +892,28 @@ function buildUnknowablesField(classKey) {
  * (wave 27: grown organic hulls; `role` selects the tarnished fallen-
  * Beautiful material variant for pirates); `unknowables` delegates to
  * buildUnknowablesField (wave 42: the no-hull energy field). Every other
- * faction renders the merged vertex-colored geometry for its
- * faction×classKey — one mesh, one draw call, palette baked into the
- * vertices from FACTION_STYLE. Wave 38: the 8 built factions sculpt from
- * their FACTION_VC_PARTS silhouette kits (pirate role → the dulled
- * ':pirate' bake of the same spec); factions without a kit render the
- * wave-37 VC_PARTS fallback byte-identically.
+ * faction renders from a detail sculpt under src/systems/ships/<faction>.js.
+ * Two channels: hull (vertex-coloured MeshStandardMaterial) and lights
+ * (additive material in faction glow, vertex-coloured near-whites). Child
+ * order is fixed: [0] hull mesh, [1] lights mesh (if the sculpt produced one),
+ * [2] engine-glow sphere (always last, always userData.glow). Two materials
+ * total. Pirate role builds a dulled variant via the same sculpt (hull colours
+ * desaturated; lights unchanged). Factions without a sculpt fall back to the
+ * wave-37 VC_PARTS pipeline (hull mesh + engine-glow sphere only).
  */
 function buildShipMesh(classKey, faction, role) {
   if (isBeautiful(faction)) return buildBeautifulShip(classKey, role);
   if (faction === 'unknowables') return buildUnknowablesField(classKey);
   const g = new THREE.Group();
-  g.add(new THREE.Mesh(vcGeoFor(classKey, faction, role === 'pirate'), vcMaterial));
+  const { hull, lights } = shipGeosFor(classKey, faction, role === 'pirate');
+  g.add(new THREE.Mesh(hull, vcMaterial));
+  if (lights) g.add(new THREE.Mesh(lights, glowMatFor(faction)));
 
   // Small engine-glow point at the stern, in the faction's style.glow.
   // Animated via scale/visible only so the material stays shared across
-  // every ship of the faction.
-  glowGeo ??= new THREE.SphereGeometry(0.55, 8, 6);
-  const glow = new THREE.Mesh(glowGeo, glowMatFor(faction));
+  // every ship of the faction. The material MULTIPLIES vertex colours, so
+  // the shared geometry needs an all-white color attribute or it renders black.
+  const glow = new THREE.Mesh(glowGeoShared(), glowMatFor(faction));
   glow.position.set(0, 0, glowZFor(classKey, faction));
   g.add(glow);
   g.userData.glow = glow;

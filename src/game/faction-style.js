@@ -147,7 +147,15 @@ export const FACTION_STYLE = {
   },
 };
 
-/** Style record for `faction`, falling back to independent gray. */
+/**
+ * Style record for `faction`, falling back to independent gray.
+ *
+ * Own-key lookup, not a bare bracket read: `faction` reaches here straight from
+ * save data (npc.js record.faction, station/gate def.faction), and a raw read
+ * resolves '__proto__', 'constructor' or 'toString' through Object.prototype to
+ * a truthy value, so `??` never fires and every caller then dereferences
+ * `st.patch` / `st.glow` on an object that has neither.
+ */
 export function styleFor(faction) {
-  return FACTION_STYLE[faction] ?? FACTION_STYLE.independent;
+  return Object.hasOwn(FACTION_STYLE, faction) ? FACTION_STYLE[faction] : FACTION_STYLE.independent;
 }

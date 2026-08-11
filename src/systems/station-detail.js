@@ -1,18 +1,31 @@
 /**
- * Wave 43 station detail toolkit — merged-geometry greeble library
+ * Detail-sculpt toolkit — merged-geometry greeble library.
+ *
+ * Wave 43 built this for stations; wave 47 gave the ten faction SHIP sculpts
+ * under src/systems/ships/ the same treatment, and they import it unchanged.
+ * The file name still says `station-detail` for the sake of the ten station
+ * modules that have imported it since wave 43 — read it as "detail", not as
+ * "stations only". It knows nothing about either asset type.
  *
  * Ruling (wave-39 resource budget pin, scripts/boot-test.mjs):
  * scene-wide geometry+material+texture count is pinned at ~195, with only 1
  * unit of margin between ten-jump checks. Therefore this module bakes
  * per-part colour into VERTEX COLOURS and merges each colour channel into a
- * single BufferGeometry, exactly like npc.js colorPart()/vcGeoFor(). The
- * whole detailed Freehold station therefore adds zero net resources while
- * carrying 350–550 primitive parts.
+ * single BufferGeometry, exactly like npc.js colorPart()/shipGeosFor(). A
+ * detailed station adds zero net resources while carrying 350-550 primitive
+ * parts; a detailed ship costs two cached geometries per faction×class and no
+ * material at all, because every hull shares npc.js's one vcMaterial.
  *
  * All colours arrive from the caller as hex numbers; the toolkit knows nothing
  * about factions or FACTION_STYLE. Deterministic — scatter uses only the
  * exported seeded RNG. Geometries handed to add() are owned by the builder
  * and disposed in build().
+ *
+ * Hex ARITY is per helper and wave 47 paid for getting it wrong: `panelSkin`
+ * and `panelPatches` take an ARRAY of hexes and pick per part; `airlock`,
+ * `bridge`, `antenna` and `radiatorPanel` take two; everything else takes one.
+ * A wrong-arity argument bakes Color.setHex(undefined), which is NaN, which
+ * reads back as #000000 and fails the palette pin with no other symptom.
  */
 
 import * as THREE from 'three';
