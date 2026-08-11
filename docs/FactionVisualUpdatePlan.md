@@ -540,6 +540,137 @@ to the `file:line` that emitted it, by wrapping the builder and mapping
 merged-vertex index to part. Every defect in this wave was named by that trace.
 
 
+### Phase 7 — The Bloom detail pass (PLANNED, wave 48+)
+
+**STATUS: PLANNED.** The Bloom (`buildBeautifulStation`, wave 27, relit waves
+33/36) is now the least dense station in the game. It predates the whole
+merged-vertex-colour programme: measured live at bt_cradle it carries 115 meshes,
+17,049 vertices, 15 geometries, 16 materials, 4 textures, 7 sprites and 1
+PointLight, while the ten sculpted stations run 155,000-451,000 merged vertices
+each. Next to the wave-47 ferrous or veridian it reads smooth and sparse. This
+phase brings it to the same perceived density WITHOUT abandoning what already
+works: the living animation, the translucent glass, the mint identity.
+
+#### 7.0 First-pass comparison against 06-beautiful-ones-station.png
+
+Feature-by-feature, reference vs the current in-game Bloom. "Keep" means the
+divergence is a recorded decision; "gap" means unrealised reference material.
+
+| # | Reference feature | In-game today | Verdict |
+|---|---|---|---|
+| 1 | **Massing: an open NEST.** Huge curved petal-sails rise from a wide filigree base and cup a central void — the station is a bowl you look INTO. | Flower-on-starfish: five arms droop down and out, the petal crown rises from the middle as a closed bud. The centre is occupied, not cupped. | **Partial gap.** The petal vocabulary matches; the topology differs. Full nest topology would break docking/arrival framing — adopt the nest READ (taller outer petals, more open crown) without hollowing the core. |
+| 2 | **Central turquoise basin + light column.** A pool of turquoise light at the heart, a golden shaft rising above it. The image's focal point. | Nothing. The crown heart is a small gilt sphere hidden inside the bud petals. | **GAP — the headline item.** An open lagoon-glass basin at the crown throat with a soft vertical light shaft would give the Bloom the reference's one unforgettable feature. |
+| 3 | **Bone-lattice filigree everywhere.** No surface is smooth: arms, petal edges and the base ring are openwork trellis — woven struts with holes, like coral lace. This carries ~80% of the reference's perceived density. | Every surface is a smooth translucent shell. | **GAP — the density item.** This is where the merged-chunk budget goes. |
+| 4 | **Arcade galleries.** A ring of lit arched openings (warm gold) around the basin — rooms you could walk, the only "architecture" note. | Five amber hearths glow INSIDE the arms, diffuse through the glass; no legible openings. | **Gap.** An arcade ring under the crown gives the amber somewhere to live that reads as habitation, matching the existing hearth palette exactly. |
+| 5 | **Leaf-cell pods.** Teardrop cells with glowing internal vein fans, hung along the outer structure. | Five plain teal node orbs at the arm roots. | **Gap, cheap win.** Replace/augment orbs with veined leaf-cells (petal geometry + vein glaze) at arm roots and tips. |
+| 6 | **Coral tufts.** Pink/rose/violet coral clumps colonising the lattice. | None. | **Gap, cheap win.** Small merged coral clusters scattered ON lattice anchors (never volume-scattered — the wave-47 rule). |
+| 7 | **Palette: structure.** Bone/pearl-gold nacre dominates; the glass membrane is the accent, not the body. | Wave-33 inverted this: lagoon-teal glass IS the body; nacre appears only in gilt trim. | **Decision needed (D6 below).** The reference read wants nacre-first structure with glass panels; the wave-33 lagoon look was user-directed. |
+| 8 | **Palette: glow.** Violet/indigo membrane glow, turquoise pool. | Mint veins, teal orbs, amber hearths. | **Keep (D2, approved).** Mint stays the identity; violet reads only via planet grading and gate overgrowth. The basin's turquoise (#2) is compatible — lagoonHot is already teal. |
+| 9 | **Scale.** A megastructure filling the frame, attended by ships. | A creature ~30u radius. | **Keep.** The envelope (~30u, y −15…+18, DOCK_RANGE 45) is a hard framing constraint; density, not size, closes the perceived-scale gap. |
+
+Hull mean luminance is not the right metric here (translucency dominates), but
+the same at-range concern applies: the lagoon glass at opacity 0.72 goes murky
+past ~150u (the wave-36 rebalance helped; nacre lattice would fix it outright,
+since ORGANIC.nacre 0xe9dccf is the palette's brightest value).
+
+#### 7.1 Decisions to approve before building
+
+- **D6 — Structure colour.** Recommend: nacre-first. The lattice filigree (the
+  new mass) builds in nacre/nacreShadow/gilt, and the existing lagoon-glass
+  shells become the PANELS seen through and between the lattice — which is
+  exactly the reference's figure/ground. The wave-33 sea-glass look survives as
+  the glazing layer rather than the body. Alternative if rejected: lattice in
+  dimmed lagoon tones — worse at-range contrast (see luminance note above).
+- **D7 — The basin.** Recommend: build it. An open turquoise pool disc
+  (lagoonHot glaze) seated in a gilt arcade ring at the crown throat (y ≈ 10),
+  with a soft additive light-shaft sprite above. It replaces the bare gilt
+  crownHeart sphere. The beacon lantern stays; the shaft must stay subtler than
+  the beacon blink so signalling reads unchanged.
+- **D8 — Animation split.** Recommend: two-layer build (this is the plan's core
+  mechanism, spelled out in 7.2). Nothing about the existing animation changes;
+  reducedMotion behaviour is untouched.
+
+#### 7.2 Technique: merged organic chunks riding animated parts
+
+The tension: station-detail sculpts get density from merged static geometry, but
+the organic contract animates by part-level transforms — and a merged chunk
+cannot flex per-part. The resolution is parenting, not per-vertex work:
+
+- A merged chunk is STATIC WITHIN ITSELF but is an ordinary Object3D — parent it
+  to an arm's `flex` group and it rides the sway exactly like the arm mesh.
+  Nothing in the animation contract is violated (part-level transforms only).
+- One merged lattice geometry per PART TYPE, instanced as meshes: 1 arm-lattice
+  geometry shared by 5 arm meshes (as armGeo already is), 1 petal-edge filigree
+  per whorl (3), 1 base-ring lattice, 1 arcade/basin assembly, 1 coral/cell
+  scatter per anchor set. ~6-8 new geometries + 3 new materials — comfortably
+  inside the wave-39 leak margin (Bloom today: 15 geo + 16 mat; sculpted
+  stations were NET CHEAPER after their rebuilds).
+- `detailBuilder` (station-detail.js) is shape-agnostic — it merges any
+  BufferGeometry with baked vertex colour. Reuse it as the merge engine. The new
+  ORGANIC PRIMITIVES live in organic.js (they are look-specific):
+  - `latticeShell` — openwork trellis wrapped over a tube/petal surface: spline
+    ribs + cross-struts with gaps, the coral-lace read. Parameterised by the
+    same spine maths as makeStarfishArmGeometry so it hugs the arm exactly.
+  - `veinFiligree` — raised gilt vein ridges along a petal edge.
+  - `cellPod` — teardrop leaf-cell: nacre rim + vein-fan glaze interior.
+  - `coralTuft` — clustered small cones/spheres in rose/violet, anchor-seated
+    (greebleScatter's anchor discipline; NEVER volume-scattered).
+  - `arcadeRing` — arch openings around a ring: nacre piers merged in hull,
+    warm-amber arch interiors merged in glow.
+- Channels and materials mirror the detail-station discipline: `organicHull`
+  (MeshStandardMaterial, vertexColors, nacre-family + gilt + coral), `organicGlow`
+  (near-white vertex colours, pulsed by the EXISTING lightMat drive so lattice
+  lamps breathe with the chandeliers), `organicGlaze` (white static material,
+  saturated vein-fan/basin colours). Per-build, disposed by teardownMesh, no
+  userData.shared on the merged chunks.
+
+#### 7.3 Build order (each step browser-verified before the next)
+
+1. **Primitives + arm lattice.** latticeShell over the five arms (parented into
+   flex groups), nacre-first per D6. This single step should double perceived
+   density. Measure: merged verts, at-range read at 150u/300u.
+2. **Petal filigree + crown.** veinFiligree on outer/inner whorls; basin +
+   arcadeRing + light shaft per D7 (replaces crownHeart).
+3. **Cells, corals, base ring.** cellPods at arm roots/tips (node orbs become
+   the pod cores), coralTufts on lattice anchors, base-ring lattice tying the
+   arm roots into one visual mass under the bell.
+4. **Harness + docs.** Pins in 7.4; PROGRESS + this doc updated; screenshot set.
+
+#### 7.4 Harness pins (new wave-48 section; the wave-45 loop excludes beautiful)
+
+- `bloomDensity` — total vertices (animated + merged) >= 100,000. Floor set
+  below the boxy stations' 120,000: translucent layering reads denser per vertex.
+- `bloomGlow` — organicGlow + existing lit parts >= 15,000 vertices.
+- `bloomEnvelope` — unchanged: |x|,|z| <= ~30, y in [−15, 18+crown]; pin the
+  measured post-build bbox exactly as wave 34 pinned the hearth.
+- `bloomSeated` — every organicGlaze/organicGlow vertex finds organicHull or an
+  existing Bloom mesh within its 2-unit neighbourhood (the wave-45 arithmetic,
+  hull set widened to the animated meshes' rest-pose positions).
+- `bloomPaletteOrganic` — merged hull vertex colours ⊂ ORGANIC palette ×
+  SHADES ladder (nacre, nacreShadow, gilt, deepFlesh + approved coral accents).
+  NOT FACTION_STYLE — the Bloom answers to ORGANIC, and the wave-45
+  paletteFromStyle loop must keep excluding beautiful.
+- `bloomTeardown` — per-build materials/geometries all reach dispose; the four
+  shared textures and organicMaterials() caches stay undisposed (existing
+  contract, now pinned).
+- `bloomFreeze` — reducedMotion: merged chunks inherit frozen part transforms;
+  animateOrganic no-op unchanged; light-shaft sprite static.
+- `bloomAlloc` — zero-alloc update() unchanged (merged chunks add zero per-frame
+  work — they are plain children).
+- PointLight stays ALLOWED here (fleshLight, wave-36 calibrated) — the no-light
+  rule is a detail-station contract, and the Bloom is deliberately not in
+  DETAIL_STATIONS.
+
+#### 7.5 Risks
+
+| Risk | Mitigation |
+|---|---|
+| Lattice occludes the glass shells and kills the wave-33 look | Lattice gap ratio is a tuned parameter; verify at three ranges before petal step |
+| Transparent-over-transparent sort artifacts (45 transparent materials today + new glaze) | organicHull/organicGlow are opaque; only glaze adds transparency, depthWrite off, and basin glaze renders inside the opaque arcade ring |
+| Merged chunks on swaying parts double the silhouette at rest vs flexed | Chunks parented INSIDE flex groups share the transform — no divergence by construction |
+| Density push re-breaks the wave-36 at-range balance | Pin a luminance/read check at 150u in the browser protocol; nacre-first (D6) raises at-range value rather than lowering it |
+| Subagent-built organic geometry ships plausible-but-wrong (the wave-46 lesson) | The wave-47 measuring tool grows a bloom mode: per-chunk vert counts, seating, palette, bbox, traced to file:line — measure the FILE, never the report |
+
 ## 4. Sequencing rationale
 
 - **Asset-type phases, not faction phases.** Each asset type has exactly one
