@@ -41,10 +41,21 @@ const _prev = new THREE.Vector3();
 const _seg = new THREE.Vector3();
 const _f = new THREE.Vector3();
 const _closest = new THREE.Vector3();
-// Capsule-proxy scratch: axis, segment midpoint, closest point on axis, projection scalar.
-// These alias with sweptHit scratch — capsule resolution runs first, then sweptHit
-// clobbers _seg/_f/_closest. Zero per-frame allocation.
+// Capsule-proxy scratch: axis, segment midpoint, closest point on axis,
+// projection scalar, plus ship-local right (_right) and up (_up) vectors
+// for projecting the offset onto the ellipse cross-section axes.
+// NPC hulls are flat by charter (SHIP_PROPORTION caps spanY/spanZ at 0.60;
+// sculpts run 0.19-0.47). A circular cross-section sized to reach the flanks
+// must stand equally far above the deck — the veridian cutter's circular
+// hitbox was 2.3× the hull's height and scored hits on bolts passing visibly
+// over it. The proxy cross-section is therefore an ELLIPSE: rx (half-beam,
+// local X) and ry (half-height, local Y) are sized independently so the
+// hitbox stays close to the actual hull silhouette.
+// These alias with sweptHit scratch — capsule resolution runs first, then
+// sweptHit clobbers _seg/_f/_closest. Zero per-frame allocation.
 const _axis = new THREE.Vector3();
+const _right = new THREE.Vector3();   // ship local X in world space
+const _up = new THREE.Vector3();      // ship local Y in world space
 const _mid = new THREE.Vector3();
 const _cap = new THREE.Vector3();
 let _proj = 0;
@@ -422,26 +433,85 @@ export function initCombat(ctx) {
       const s = ctx.ships[i];
       if (!s?.object || !s.state || s.state.destroyed) continue;
 
-      // Cache per live ship: capsule proxy (r, halfLen) × object scale.
-      let r = s._proxyR;
+      // Cache per live ship: elliptical proxy (rx, ry, halfLen) × object scale.
+      // rx = half-beam (local X), ry = half-height (local Y). Both scale uniformly.
+      //
+      // Source: s.object.userData.proxy, set by buildShipMesh from deriveProxy().
+      // This is read from the MESH rather than from scaleFor(state.classKey).proxy,
+      // which fixes a genuine bug: a disguised Q-ship is built with its COVER class
+      // and COVER faction (see spawnLiveShip), so the mesh's actual geometry — and
+      // the proxy derived from it — belong to the cover hull, not to state.classKey.
+      // scaleFor(state.classKey) would have used the hidden cutter proxy while the
+      // ship was visually a freighter; reading userData gets this right automatically.
+      //
+      // Proxy cache is invalidated by revealQship (npc.js) on every mesh swap: it
+      // resets _proxyRx to undefined so this branch re-reads on the next hit test.
+      //
+      // Fallback to SHIP_SCALE[classKey].proxy when userData.proxy is absent or null —
+      // the Unknowables energy field has no hull channel and never calls deriveProxy;
+      // a hull with degenerate geometry returns null from deriveProxy for the same path.
+      let rx = s._proxyRx;
+      let ry = s._proxyRy;
       let halfLen = s._proxyHalf;
-      if (r === undefined) {
+      if (rx === undefined) {
         const scale = s.object.scale?.x || 1;
-        const proxy = scaleFor(s.state.classKey).proxy;
-        r = s._proxyR = proxy.r * scale;
+        // userData.proxy is null for degenerate hulls (deriveProxy returns null) and
+        // absent (undefined) for hull-less ships; ?? falls back in both cases.
+        const proxy = s.object.userData.proxy ?? scaleFor(s.state.classKey).proxy;
+        rx = s._proxyRx = proxy.rx * scale;
+        ry = s._proxyRy = proxy.ry * scale;
         halfLen = s._proxyHalf = proxy.halfLen * scale;
       }
 
-      // Resolve capsule to closest sphere centre before sweptHit.
+      // Resolve elliptical capsule to closest axis point, then derive an
+      // effective isotropic radius in the offset's local-XY direction for sweptHit.
       // Ship's local Z is the capsule axis (stern-ward, symmetric).
-      _axis.set(0, 0, 1).applyQuaternion(s.object.quaternion);
+      //
+      // Per-frame axis cache: NPC movement completes before this loop, so all three
+      // applyQuaternion calls yield identical results for every projectile against the
+      // same ship in the same frame. Cache the 9 axis-component floats on the live
+      // ship object keyed by now (= ctx.world.time, fixed for the whole update call).
+      // No per-frame allocation: components are plain numbers written onto an existing
+      // object; the module-scope scratch vectors _axis/_right/_up are reused as before.
+      // The cache cannot go stale within a frame because now is monotonically increasing
+      // across frames and is never mutated during the projectile loop.
+      if (s._axisFt !== now) {
+        _axis.set(0, 0, 1).applyQuaternion(s.object.quaternion);
+        _right.set(1, 0, 0).applyQuaternion(s.object.quaternion);
+        _up.set(0, 1, 0).applyQuaternion(s.object.quaternion);
+        s._axisAx = _axis.x; s._axisAy = _axis.y; s._axisAz = _axis.z;
+        s._axisRx = _right.x; s._axisRy = _right.y; s._axisRz = _right.z;
+        s._axisUx = _up.x;   s._axisUy = _up.y;   s._axisUz = _up.z;
+        s._axisFt = now;
+      } else {
+        _axis.set(s._axisAx, s._axisAy, s._axisAz);
+        _right.set(s._axisRx, s._axisRy, s._axisRz);
+        _up.set(s._axisUx, s._axisUy, s._axisUz);
+      }
       _mid.addVectors(_prev, p.mesh.position).multiplyScalar(0.5); // projectile segment midpoint
       _tmp.subVectors(_mid, s.object.position); // midpoint → ship centre
       _proj = _tmp.dot(_axis); // scalar projection onto axis
       _proj = Math.max(-halfLen, Math.min(halfLen, _proj)); // clamp to capsule segment
       _cap.copy(s.object.position).addScaledVector(_axis, _proj); // closest point on axis
+      _tmp.subVectors(_mid, _cap); // offset from closest axis point to projectile midpoint
+      const dx = _tmp.dot(_right); // local-X component of offset
+      const dy = _tmp.dot(_up);   // local-Y component of offset
 
-      const rr = r * DEFENSE.playerHitPadding + PROJ_RADIUS; // padded vs NPCs (§6.1)
+      // Effective ellipse radius along the offset direction in the local XY plane.
+      // Exact for an ellipse: rEff = 1 / sqrt((cx/rx)^2 + (cy/ry)^2) where (cx,cy)
+      // is the normalised direction. Guard the degenerate case (offset on the axis,
+      // dx≈dy≈0) by falling back to the minor semi-axis.
+      const d2 = dx * dx + dy * dy;
+      let rEff;
+      if (d2 < 1e-8) {
+        rEff = Math.min(rx, ry); // on-axis: use minor radius
+      } else {
+        const invD = 1 / Math.sqrt(d2);
+        const cx = dx * invD, cy = dy * invD;   // normalised local-XY direction
+        rEff = 1 / Math.sqrt((cx / rx) * (cx / rx) + (cy / ry) * (cy / ry));
+      }
+
+      const rr = rEff * DEFENSE.playerHitPadding + PROJ_RADIUS; // padded vs NPCs (§6.1)
       if (!sweptHit(p, _cap, rr)) continue;
 
       // Facet: attacker aft when the shooter sits behind the target's forward.

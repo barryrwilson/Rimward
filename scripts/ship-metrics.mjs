@@ -147,6 +147,130 @@ export const orphanPct = (hull, detail, cell = 1.0) => {
 };
 
 /**
+ * Fraction of hull vertices inside the elliptical collision capsule.
+ *
+ * The proxy `{ rx, ry, halfLen }` is now **derived per sculpt** from the hull's
+ * vertex distribution by `deriveProxy` in `src/systems/npc.js` and cached on
+ * `group.userData.proxy` by `buildShipMesh`.  Harnesses source it from there,
+ * falling back to `SHIP_SCALE[class].proxy` only for hull-less shapes (e.g.
+ * Unknowables energy fields).  This function is agnostic about where the proxy
+ * came from — pass whatever `{ rx, ry, halfLen }` the caller resolved.
+ *
+ * **True capsule test (mirrors combat.js exactly).**  For each hull vertex:
+ * 1. Clamp the vertex's local Z to [−halfLen, +halfLen] to get the nearest
+ *    point on the axis segment: (0, 0, cz).
+ * 2. Take the 3-D offset from the vertex to that clamped point:
+ *    (x, y, dz) where dz = z − cz (nonzero only when the vertex lies past a cap).
+ * 3. The effective ellipse radius in the vertex's XY direction is
+ *    rEff = r_xy / sqrt((x/rx)² + (y/ry)²)   (r_xy = sqrt(x²+y²))
+ *    falling back to min(rx, ry) when the vertex is on the axis (r_xy = 0).
+ * 4. The vertex is inside when sqrt(x²+y²+dz²) ≤ rEff, which is equivalent to
+ *    E·(r_xy²+dz²) ≤ r_xy²  where E = (x/rx)²+(y/ry)².
+ *    A vertex past a cap (dz ≠ 0) must therefore fall closer to the axis than
+ *    one flush with the disc face — the end caps are the same elliptic profile
+ *    as the body cross-section.
+ *
+ * The previous form clamped z and discarded the result, so coverage was a
+ * purely radial metric independent of halfLen.  A capsule with halfLen = 0
+ * still scored its radial 90th-percentile coverage, and because proxyFit only
+ * bounds excess length nothing in the harness detected an underlength capsule.
+ * Bolts would miss the nose and stern while every gate read green.  The true
+ * capsule test closes that gap: a vertex lying past a cap now correctly counts
+ * as outside.
+ *
+ * **Hostile input.**  A proxy with NaN or a zero semi-axis returns 0 (clear
+ * failure) rather than propagating NaN through the comparison.
+ *
+ * **Why the bar is 80%, not 100%.** The capsule follows PRIMARY MASS only.
+ * Thin appendages (antennae, masts, tendrils, cranes, sails, docking spars,
+ * field wakes) sit outside it on purpose — a bolt passes through a mast without
+ * registering a hull hit, and that is by design. A 92% reading is not a defect.
+ * Below 80% the capsule no longer covers the ship's main body and fails.
+ *
+ * One-sided metric: use alongside proxyFit, which catches the complementary
+ * defect where the capsule is too large.
+ */
+export const proxyCover = (hull, proxy) => {
+  const p = hull.attributes.position;
+  const { rx, ry, halfLen } = proxy;
+  // Hostile-input guard: NaN or non-positive semi-axis → clear failure.
+  if (!Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(halfLen)
+      || rx <= 0 || ry <= 0) {
+    return 0;
+  }
+  const rx2 = rx * rx;
+  const ry2 = ry * ry;
+  const minR2 = rx < ry ? rx2 : ry2; // used for on-axis fallback (min(rx,ry)²)
+  let inside = 0;
+
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    // Nearest point on the axis segment: (0, 0, cz).
+    const cz = z < -halfLen ? -halfLen : (z > halfLen ? halfLen : z);
+    const dz = z - cz; // nonzero only when vertex is past a cap
+    const rxy2 = x * x + y * y;
+    if (rxy2 === 0) {
+      // Vertex lies on the axis — effective radius is min(rx, ry).
+      if (dz * dz <= minR2) inside++;
+    } else {
+      // E * (rxy² + dz²) ≤ rxy²  where E = (x/rx)² + (y/ry)²
+      const E = x * x / rx2 + y * y / ry2;
+      if (E * (rxy2 + dz * dz) <= rxy2) inside++;
+    }
+  }
+
+  return (100 * inside) / p.count;
+};
+
+/**
+ * Capsule overshoot against the sculpt's own measured extents, per axis.
+ *
+ * The proxy `{ rx, ry, halfLen }` is derived per sculpt — see proxyCover's doc for
+ * the full derivation story.  This function is agnostic about where the proxy came
+ * from; pass whatever `{ rx, ry, halfLen }` the caller resolved.
+ *
+ * Returns signed percentages — positive means the capsule exceeds the hull on
+ * that axis, negative means it is smaller.  Ceilings:
+ *   width  (2·rx vs spanX)                      ≤ +25%
+ *   height (2·ry vs spanY)                      ≤ +25%
+ *   length (2·(halfLen + max(rx,ry)) vs spanZ)  ≤ +35%  (end caps legitimately
+ *     round past tapered noses and sterns, so the length ceiling is looser)
+ *
+ * **Why both metrics are necessary.**  proxyCover stops the capsule being too
+ * SMALL — it rewards any proxy that swallows the primary mass, including one
+ * that also swallows a large empty volume above the deck.  A circular capsule
+ * sized for a flat hull's beam must stand 2–3× the hull's height and still
+ * scores healthy coverage.  proxyFit stops the capsule being too BIG — a bolt
+ * passing visibly over the hull should not score a hit.  Neither metric alone
+ * has a sound optimum: coverage alone is satisfied by inflating the capsule;
+ * fit alone is satisfied by shrinking below the coverage floor.  Together they
+ * bracket the proxy to a zone that is neither too small nor too large.
+ *
+ * **Hostile input.**  A proxy with NaN or a zero semi-axis, or a geometry with
+ * a zero-span axis, returns pass:false rather than propagating NaN.
+ *
+ * @param {object} extents  Result of measure() — needs spanX, spanY, spanZ.
+ * @param {object} proxy    { rx, ry, halfLen } — derived per sculpt by deriveProxy
+ *                          in src/systems/npc.js; cached on group.userData.proxy.
+ */
+export const proxyFit = (extents, proxy) => {
+  const { rx, ry, halfLen } = proxy;
+  const { spanX, spanY, spanZ } = extents;
+  // Hostile-input guard: NaN or non-positive values → clear failure.
+  if (!Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(halfLen)
+      || rx <= 0 || ry <= 0 || spanX <= 0 || spanY <= 0 || spanZ <= 0) {
+    return { widthPct: NaN, heightPct: NaN, lengthPct: NaN, pass: false };
+  }
+  const widthPct  = (2 * rx - spanX) / spanX * 100;
+  const heightPct = (2 * ry - spanY) / spanY * 100;
+  const lengthPct = (2 * (halfLen + Math.max(rx, ry)) - spanZ) / spanZ * 100;
+  const pass = widthPct <= 25 && heightPct <= 25 && lengthPct <= 35;
+  return { widthPct, heightPct, lengthPct, pass };
+};
+
+/**
  * Measure a geometry: vertex count, ABSOLUTE half-extents per axis (what the
  * legacy envelope pins compare against), full spans, bbox centre (the pivot
  * pin), max radius from the local origin, and stern reach (largest positive z).

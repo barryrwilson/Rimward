@@ -10705,6 +10705,59 @@ for (const live of w42lives) {
     }
     return (100 * orphans) / dp.count;
   };
+  // True capsule test — mirrors combat.js and proxyCover in ship-metrics.mjs exactly.
+  // For each hull vertex: clamp z to [−halfLen,+halfLen], compute the 3-D offset to the
+  // clamped axis point (x, y, dz), and test E·(rxy²+dz²) ≤ rxy² where E=(x/rx)²+(y/ry)².
+  // Vertices past a cap (dz≠0) count as outside unless the XY offset is small enough.
+  // Hostile input: NaN or non-positive semi-axis → coverPct 0.
+  const w49proxyCover = (hullMesh, proxy) => {
+    if (!hullMesh || !proxy) return null;
+    const posAttr = hullMesh.geometry.attributes.position;
+    const { rx, ry, halfLen } = proxy;
+    if (!Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(halfLen)
+        || rx <= 0 || ry <= 0) {
+      return { coverPct: 0, hullZExtent: 0 };
+    }
+    const rx2 = rx * rx;
+    const ry2 = ry * ry;
+    const minR2 = rx < ry ? rx2 : ry2;
+    let inside = 0;
+    let minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+      const z = posAttr.getZ(i);
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+      // Nearest point on axis segment: (0, 0, cz).
+      const cz = z < -halfLen ? -halfLen : (z > halfLen ? halfLen : z);
+      const dz = z - cz; // nonzero only when vertex is past a cap
+      const rxy2 = x * x + y * y;
+      if (rxy2 === 0) {
+        if (dz * dz <= minR2) inside++;
+      } else {
+        const E = x * x / rx2 + y * y / ry2;
+        if (E * (rxy2 + dz * dz) <= rxy2) inside++;
+      }
+    }
+    const coverPct = posAttr.count > 0 ? (100 * inside) / posAttr.count : 0;
+    const hullZExtent = maxZ === -Infinity ? 0 : maxZ - minZ;
+    return { coverPct, hullZExtent };
+  };
+  const w49proxyFit = (proxy, spanX, spanY, spanZ) => {
+    if (!proxy || spanX <= 0 || spanY <= 0 || spanZ <= 0) return null;
+    const { rx, ry, halfLen } = proxy;
+    // Hostile-input guard: NaN or non-positive semi-axis → clear failure.
+    if (!Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(halfLen)
+        || rx <= 0 || ry <= 0) {
+      return { widthPct: NaN, heightPct: NaN, lengthPct: NaN, pass: false };
+    }
+    const widthPct  = (2 * rx - spanX) / spanX * 100;
+    const heightPct = (2 * ry - spanY) / spanY * 100;
+    const lengthPct = (2 * (halfLen + Math.max(rx, ry)) - spanZ) / spanZ * 100;
+    const pass = widthPct <= 25 && heightPct <= 25 && lengthPct <= 35;
+    return { widthPct, heightPct, lengthPct, pass };
+  };
   const w49hullOf = (root) => (root ? root.children.find((c) => c.isMesh
     && c.material?.isMeshStandardMaterial && c.material.vertexColors === true) ?? null : null);
   const w49lightsOf = (root) => (root ? root.children.find((c) => c.isMesh
@@ -10736,6 +10789,7 @@ for (const live of w42lives) {
     let allSingleMass = true;
     let allDeterminism = true;
     let allClassOrdering = true;
+    let allProxyCover = true;
     let worstDensity = { class: 'none', verts: 0, margin: Infinity };
     let worstLitDensity = { class: 'none', verts: 0, margin: Infinity };
     let worstSpan = { class: 'none', size: 0, band: '[?,?]', use: 0 };
@@ -10746,6 +10800,9 @@ for (const live of w42lives) {
     let worstLitNearWhite = { class: 'none', min: 1 };
     let worstSeatedLights = { class: 'none', pct: 0 };
     let worstSingleMass = { class: 'none', pct: 100 };
+    let worstProxyCover = { class: 'none', pct: 100, zExtent: 0, capHalfLen: 0 };
+    let allProxyFit = true;
+    let worstProxyFit = { class: 'none', widthPct: -Infinity, heightPct: -Infinity, lengthPct: -Infinity };
     const sizes = {}; // classKey -> max(spanX, spanY, spanZ)
 
     // Built factions have hull/lights split; grown/field factions have unified
@@ -10858,6 +10915,27 @@ for (const live of w42lives) {
             const dz = posAttr.getZ(i);
             if (dz > sternZ) sternZ = dz;
           }
+          // proxyCover and proxyFit (rebuilt factions only; spanX/Y/Z in scope here).
+          // Source from group.userData.proxy set by buildShipMesh; SHIP_SCALE.proxy
+          // is the fallback only for hull-less shapes (e.g. Unknowables energy fields).
+          if (isRebuilt) {
+            const bProxy = live.object.userData.proxy ?? table.proxy;
+            const coverResult = w49proxyCover(hull, bProxy);
+            if (coverResult && coverResult.coverPct < 80) {
+              allProxyCover = false;
+              if (coverResult.coverPct < worstProxyCover.pct) {
+                worstProxyCover = { class: ck, pct: coverResult.coverPct, zExtent: coverResult.hullZExtent, capHalfLen: bProxy.halfLen };
+              }
+            }
+            const fitResult = w49proxyFit(bProxy, spanX, spanY, spanZ);
+            if (fitResult && !fitResult.pass) {
+              allProxyFit = false;
+              if (Math.max(fitResult.widthPct, fitResult.heightPct, fitResult.lengthPct)
+                  > Math.max(worstProxyFit.widthPct, worstProxyFit.heightPct, worstProxyFit.lengthPct)) {
+                worstProxyFit = { class: ck, widthPct: fitResult.widthPct, heightPct: fitResult.heightPct, lengthPct: fitResult.lengthPct };
+              }
+            }
+          }
         }
         // sternGlow: glow at x=0,y=0 and 0.55*sternZ <= glowZ <= sternZ + 1.2
         if (glow && sternZ > 0) {
@@ -10950,7 +11028,7 @@ for (const live of w42lives) {
             if (singleMassPct < worstSingleMass.pct) worstSingleMass = { class: ck, pct: singleMassPct };
           }
         }
-        removeLiveShip(ctx, live);
+         removeLiveShip(ctx, live);
       }
 
       // determinism: direct double build of the module
@@ -11006,6 +11084,8 @@ for (const live of w42lives) {
         w49checks[`${f}SingleMass`] = allSingleMass;
         w49checks[`${f}Determinism`] = allDeterminism;
         w49checks[`${f}ClassOrdering`] = allClassOrdering;
+        w49checks[`${f}ProxyCover`] = allProxyCover;
+        w49checks[`${f}ProxyFit`] = allProxyFit;
       } else {
         // Unrebuilt built factions register the full legacy check set
         w49checks[`${f}DetailDensity`] = allDensity;
@@ -11030,7 +11110,9 @@ for (const live of w42lives) {
         + ` palette=${worstPalette.class}:${worstPalette.stray}`
         + ` dimmestLit=${worstLitNearWhite.class}@${worstLitNearWhite.min.toFixed(2)}`
         + ` orphanLights=${worstSeatedLights.class}@${worstSeatedLights.pct.toFixed(1)}%`
-        + ` singleMass=${worstSingleMass.class}@${worstSingleMass.pct.toFixed(1)}%`);
+        + ` singleMass=${worstSingleMass.class}@${worstSingleMass.pct.toFixed(1)}%`
+        + ` proxyCover=${worstProxyCover.class}@${worstProxyCover.pct.toFixed(1)}%(z=${worstProxyCover.zExtent.toFixed(1)},cap=${worstProxyCover.capHalfLen})`
+        + ` proxyFit=${worstProxyFit.class}@w=${isFinite(worstProxyFit.widthPct) ? worstProxyFit.widthPct.toFixed(0) : 'n/a'}%,h=${isFinite(worstProxyFit.heightPct) ? worstProxyFit.heightPct.toFixed(0) : 'n/a'}%,l=${isFinite(worstProxyFit.lengthPct) ? worstProxyFit.lengthPct.toFixed(0) : 'n/a'}%`);
 
     } else {
       // GROWN (beautiful) or FIELD (unknowables): no hull/lights split, no vertex
@@ -11156,6 +11238,29 @@ for (const live of w42lives) {
           if (singleMassPct < worstSingleMass.pct) worstSingleMass = { class: ck, pct: singleMassPct };
         }
 
+        // Proxy coverage and fit (rebuilt factions only).
+        // Source from group.userData.proxy; SHIP_SCALE.proxy is the hull-less fallback
+        // for field factions (Unknowables energy fields) that have no hull geometry.
+        if (isRebuilt) {
+          const gfProxy = live.object.userData.proxy ?? scaleFor(ck).proxy;
+          const gfHullMesh = live.object.children.find((c) => c.isMesh && c !== live.object.userData.glow) ?? null;
+          const coverResult = w49proxyCover(gfHullMesh, gfProxy);
+          if (coverResult && coverResult.coverPct < 80) {
+            allProxyCover = false;
+            if (coverResult.coverPct < worstProxyCover.pct) {
+              worstProxyCover = { class: ck, pct: coverResult.coverPct, zExtent: coverResult.hullZExtent, capHalfLen: gfProxy.halfLen };
+            }
+          }
+          const fitResult = w49proxyFit(gfProxy, spanX, spanY, spanZ);
+          if (fitResult && !fitResult.pass) {
+            allProxyFit = false;
+            if (Math.max(fitResult.widthPct, fitResult.heightPct, fitResult.lengthPct)
+                > Math.max(worstProxyFit.widthPct, worstProxyFit.heightPct, worstProxyFit.lengthPct)) {
+              worstProxyFit = { class: ck, widthPct: fitResult.widthPct, heightPct: fitResult.heightPct, lengthPct: fitResult.lengthPct };
+            }
+          }
+        }
+
         removeLiveShip(ctx, live);
       }
 
@@ -11178,12 +11283,16 @@ for (const live of w42lives) {
         w49checks[`${f}Pivot`] = allPivot;
         w49checks[`${f}SingleMass`] = allSingleMass;
         w49checks[`${f}ClassOrdering`] = allClassOrdering;
+        w49checks[`${f}ProxyCover`] = allProxyCover;
+        w49checks[`${f}ProxyFit`] = allProxyFit;
       }
       w49notes.push(`wave49 ${f}: spec=${spec} kind=${kind}`
         + ` farthestSpan=${worstSpan.class}@${worstSpan.size.toFixed(1)}${worstSpan.band}@${(100 * worstSpan.use).toFixed(0)}%`
         + ` proportion=${worstProportion.class}:${worstProportion.metric}`
         + ` pivot=${worstPivot.class}:${worstPivot.axis}${worstPivot.offset.toFixed(2)}<${worstPivot.limit}`
-        + ` singleMass=${worstSingleMass.class}@${worstSingleMass.pct.toFixed(1)}%`);
+        + ` singleMass=${worstSingleMass.class}@${worstSingleMass.pct.toFixed(1)}%`
+        + ` proxyCover=${worstProxyCover.class}@${worstProxyCover.pct.toFixed(1)}%(z=${worstProxyCover.zExtent.toFixed(1)},cap=${worstProxyCover.capHalfLen})`
+        + ` proxyFit=${worstProxyFit.class}@w=${isFinite(worstProxyFit.widthPct) ? worstProxyFit.widthPct.toFixed(0) : 'n/a'}%,h=${isFinite(worstProxyFit.heightPct) ? worstProxyFit.heightPct.toFixed(0) : 'n/a'}%,l=${isFinite(worstProxyFit.lengthPct) ? worstProxyFit.lengthPct.toFixed(0) : 'n/a'}%`);
     }
 
     // Only beautiful/unknowables (grown/field) print [unpinned] when unrebuilt

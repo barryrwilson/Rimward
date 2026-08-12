@@ -298,6 +298,140 @@ function dullStyleFor(faction) {
   return d;
 }
 
+// ---------- per-sculpt collision proxy derivation ----------
+// Radial percentile q: drives rx and ry (the ellipse semi-axes in local XY).
+// Verified across all 18 rebuilt sculpts (veridian, ferrous, freehold × 6
+// classes) — at 0.90, every sculpt clears radial coverage and proxyFit ≤
+// +25/+25/+35. Typical radial coverage at 0.90 is 88-91%.
+const PROXY_PERCENTILE = 0.90;
+// Longitudinal percentile q_z: target for the halfLen computation, applied
+// before the fit-ceiling cap (see deriveProxy). Must be high enough that pz
+// reaches or exceeds the ceiling for wide/stocky ships; 0.97 is sufficient.
+const PROXY_PERCENTILE_Z = 0.97;
+
+/**
+ * Derive an elliptical collision proxy from a hull geometry.
+ *
+ * Returns { rx, ry, halfLen } in object-local units:
+ *   rx      = scaling × spanX/2  where scaling is PROXY_PERCENTILE-th percentile of
+ *             the normalised 2-D radial distance sqrt((x/hX)²+(y/hY)²) over all vertices
+ *   ry      = scaling × spanY/2
+ *   halfLen = min( PROXY_PERCENTILE_Z-th percentile of |z|,
+ *                  0.67 · spanZ − max(rx, ry) )   clamped ≥ 0
+ *
+ *   The second operand of min() approximates the proxyFit +35% length ceiling
+ *   (exact limit is 0.675 · spanZ; 0.67 is used for IEEE-754 robustness, giving
+ *   ≤ +34% and eliminating rounding past the strict ≤ 35 check).
+ *   For wide/stocky ships the ceiling is the binding constraint; for slender ships it
+ *   is not reached and halfLen = pz (no correction from max(rx,ry) at all, because
+ *   max_r is small relative to spanZ).
+ *
+ * WHY THE NORMALISED RADIAL, NOT INDEPENDENT AXIS PERCENTILES.
+ * Taking the q-th percentile of |x| and |y| separately (the marginal approach)
+ * cannot achieve 80 % coverage for hulls whose primary mass fills the bounding-box
+ * corners — a hammerhead gunship or a broad freighter hull can leave 40–50 % of
+ * its vertices outside the inscribed marginal-percentile ellipse at any fixed q.
+ * The 2-D normalised radial distance sqrt((x/(spanX/2))²+(y/(spanY/2))²) folds the
+ * two axes into a single distribution whose q-th percentile gives the smallest ellipse
+ * (with aspect ratio matching the hull's own span) that encloses q-fraction of the
+ * primary mass — exactly the coverage condition.
+ *
+ * WHY A PERCENTILE AND NOT A BOUNDING BOX.
+ * Thin appendages (antennae, masts, cranes, docking spars, field wakes) contribute
+ * very few vertices relative to the primary hull shell.  They therefore sit in the
+ * high tail of the radial distribution and fall outside the PROXY_PERCENTILE-th ellipse
+ * automatically.  A bolt can pass through a mast without registering a hull hit (bible §6),
+ * and this is how that guarantee is preserved while the coverage pin still passes.
+ *
+ * WHY THE FIT CEILING BOUNDS halfLen.
+ * A true capsule test (proxyCover) measures whether hull vertices lie inside the
+ * ellipsoidal end caps as well as the cylindrical body.  For wide/stocky ships with
+ * large max(rx,ry), the old formula halfLen = pz − max(rx,ry) placed the cap centres
+ * so close to the hull origin that the majority of vertices fell in the end-cap zone
+ * and failed the strict cap test, giving coverage as low as 44%.  Setting halfLen to
+ * the proxyFit ceiling maximises the cylindrical body while remaining within the
+ * agreed ≤+35% length overshoot, and drives coverage above 80% for all 18 sculpts.
+ *
+ * Deterministic and O(n) in vertex count (plus two O(n log n) sorts), runs once per
+ * cached bake.  Trader and pirate bakes share byte-identical position data (the dulled
+ * variant only changes vertex colours) and therefore derive the same proxy.
+ */
+export function deriveProxy(hullGeometry) {
+  const pos = hullGeometry.attributes.position;
+  const n = pos.count;
+
+  // Guard: reject invalid hulls rather than caching NaN or zero semi-axes.
+  // An empty buffer gives idx = -1 → NaN in typed-array read. A single-vertex
+  // hull forces hiX = loX and hiY = loY, giving hX = 0 and hY = 0, and
+  // testNpcHits divides by both semi-axes. Any such hull would produce a
+  // corrupt proxy — return null so every caller falls back to
+  // SHIP_SCALE[classKey].proxy, the same path used by hull-less ships such as
+  // the Unknowables energy field. That fallback is deliberate and commented at
+  // every call site.
+  if (n < 1) return null;
+
+  // Pass 1: bounding-box spans in X, Y, and Z.
+  // X/Y half-spans normalise the radial distance; spanZ enforces the proxyFit
+  // length ceiling when computing halfLen below.
+  let hiX = -Infinity, loX = Infinity;
+  let hiY = -Infinity, loY = Infinity;
+  let hiZ = -Infinity, loZ =  Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (x > hiX) hiX = x; if (x < loX) loX = x;
+    if (y > hiY) hiY = y; if (y < loY) loY = y;
+    if (z > hiZ) hiZ = z; if (z < loZ) loZ = z;
+  }
+  const hX = (hiX - loX) * 0.5; // half-span X — scale reference for radial
+  const hY = (hiY - loY) * 0.5; // half-span Y
+  const spanZ = hiZ - loZ;      // full Z span — used for fit-ceiling cap below
+
+  // A hull with zero X or Y span yields rx or ry = 0; testNpcHits divides by
+  // both semi-axes on every hit test — reject rather than cache a zero divisor.
+  if (hX === 0 || hY === 0) return null;
+
+  // Pass 2: normalised 2-D radial distances and |z| into typed arrays (in-place sort,
+  // zero extra allocation beyond the two arrays).
+  const radii = new Float32Array(n);
+  const az    = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const nx = x / hX;
+    const ny = y / hY;
+    radii[i] = Math.sqrt(nx * nx + ny * ny);
+    az[i]    = Math.abs(z);
+  }
+  radii.sort();
+  az.sort();
+
+  // Radial semi-axes: PROXY_PERCENTILE of the normalised radial distribution.
+  const idxR = Math.min(Math.floor(PROXY_PERCENTILE   * n), n - 1);
+  const s    = radii[idxR]; // scale factor: PROXY_PERCENTILE-th normalised radial
+  const rx   = s * hX;
+  const ry   = s * hY;
+
+  // halfLen: target pz (high z-percentile), capped safely below the proxyFit +35% ceiling.
+  //
+  // The fit ceiling expressed as a halfLen limit:
+  //   2·(halfLen + max(rx,ry)) ≤ 1.35·spanZ  →  halfLen ≤ 0.675·spanZ − max(rx,ry)
+  //
+  // We use 0.67 (giving ≤ 34% length overshoot) rather than the exact 0.675.
+  // 0.675·spanZ is not exactly representable in IEEE 754 so the computed lengthPct
+  // lands at 35.0000...01 and the harness's strict ≤ 35 check fails.  The 1% margin
+  // is free — it costs negligible halfLen (≤ 0.035 u for a 7-unit hull) while making
+  // the fit pass robust to the sculpt's specific FP environment.
+  //
+  // For wide/stocky ships, pz always exceeds this ceiling so halfLen is capped here —
+  // maximising the cylindrical body (and therefore coverage) without exceeding the fit
+  // budget.  For slender ships pz is below the ceiling and halfLen = pz (no correction
+  // from max(rx,ry) at all, because max_r is small relative to spanZ).
+  const idxZ      = Math.min(Math.floor(PROXY_PERCENTILE_Z * n), n - 1);
+  const pz        = az[idxZ]; // PROXY_PERCENTILE_Z-th percentile of |z|
+  const maxHalfLen = 0.67 * spanZ - Math.max(rx, ry); // proxyFit ≤ +34% — FP-safe margin
+  const halfLen   = Math.max(0, Math.min(pz, maxHalfLen));
+  return { rx, ry, halfLen };
+}
+
 // 'faction:classKey[:pirate]' → { hull, lights } (shared, never disposed). Both
 // halves of the key are save-controlled, so the key is JSON — `faction:'a:b',
 // classKey:'c'` and `faction:'a', classKey:'b:c'` would collide under plain
@@ -334,7 +468,7 @@ function shipGeosFor(classKey, faction, pirate = false) {
     const parts = spec.map((p) => colorPart(p, st));
     const hull = mergeGeometries(parts, false);
     for (const p of parts) p.dispose();
-    shipGeos[key] = { hull, lights: null };
+    shipGeos[key] = { hull, lights: null, proxy: deriveProxy(hull) };
     return shipGeos[key];
   }
 
@@ -349,8 +483,8 @@ function shipGeosFor(classKey, faction, pirate = false) {
   if (!geos.hull) throw new Error(`${faction} ${classKey} ship sculpt emitted no 'hull' chunk`);
   if (!geos.lights) throw new Error(`${faction} ${classKey} ship sculpt emitted no 'lights' chunk`);
 
-  shipGeos[key] = geos;
-  return geos;
+  shipGeos[key] = { ...geos, proxy: deriveProxy(geos.hull) };
+  return shipGeos[key];
 }
 
 /** Stern offset for the engine glow: per-sculpt glowZ, else the wave-37 GLOW_Z table. */
@@ -703,6 +837,7 @@ function beautifulGeosFor(classKey) {
       break;
     }
   }
+  c.proxy = deriveProxy(c.hull);
   beautifulGeos[classKey] = c;
   return c;
 }
@@ -781,6 +916,9 @@ function buildBeautifulShip(classKey, role) {
   g.add(glow);
   g.userData.glow = glow;
 
+  // Proxy derived from the hull geometry; cached alongside the sculpt spec so
+  // this is a cache hit on every build after the first.
+  g.userData.proxy = spec.proxy;
   g.userData.organic = { classKey, role, tarnished };
   g.userData.organicParts = collectOrganic(g);
   return g;
@@ -903,9 +1041,12 @@ function buildUnknowablesField(classKey) {
  */
 export function buildShipMesh(classKey, faction, role) {
   if (isBeautiful(faction)) return buildBeautifulShip(classKey, role);
+  // Unknowables: no hull geometry — buildUnknowablesField returns a pure energy
+  // field with no 'hull' channel, so no proxy can be derived.  userData.proxy is
+  // left unset; testNpcHits falls back to SHIP_SCALE[classKey].proxy.
   if (faction === 'unknowables') return buildUnknowablesField(classKey);
   const g = new THREE.Group();
-  const { hull, lights } = shipGeosFor(classKey, faction, role === 'pirate');
+  const { hull, lights, proxy } = shipGeosFor(classKey, faction, role === 'pirate');
   g.add(new THREE.Mesh(hull, vcMaterial));
   if (lights) g.add(new THREE.Mesh(lights, glowMatFor(faction)));
 
@@ -917,6 +1058,9 @@ export function buildShipMesh(classKey, faction, role) {
   glow.position.set(0, 0, glowZFor(classKey, faction));
   g.add(glow);
   g.userData.glow = glow;
+  // Proxy derived once from the hull geometry by deriveProxy (npc.js) and
+  // cached in shipGeos alongside the merged geometry — this is a cache hit.
+  g.userData.proxy = proxy;
   return g;
 }
 
@@ -1104,6 +1248,11 @@ export function stampWakeSite(live) {
  * the builder and every consumer looks it up per-call from live.object, so
  * the swap is safe. say() reads state.name — the REAL name, correct at
  * reveal. The milestone is once-EVER, not per ship.
+ *
+ * Proxy cache invalidation: testNpcHits caches the proxy on live._proxyRx/Ry/Half
+ * and only refreshes when _proxyRx is undefined. Swapping the mesh changes
+ * userData.proxy; clear all three fields here so the next hit test re-reads from
+ * the new hull's proxy, not from the cover mesh.
  */
 function revealQship(ctx, live) {
   const rec = live.record;
@@ -1115,6 +1264,13 @@ function revealQship(ctx, live) {
   ctx.scene.remove(live.object);
   ctx.scene.add(object);
   live.object = object;
+  // Invalidate the per-ship proxy cache (testNpcHits, combat.js). The cache is
+  // keyed to the mesh: a cover freighter proxy must not survive the swap to the
+  // real cutter hull. Setting _proxyRx back to undefined triggers a fresh read
+  // from live.object.userData.proxy on the very next hit test.
+  live._proxyRx  = undefined;
+  live._proxyRy  = undefined;
+  live._proxyHalf = undefined;
   say(ctx, live, 'The manifest lied.');
   if (!ctx.world.milestones.includes('qshipUnmasked')) {
     ctx.world.milestones.push('qshipUnmasked');

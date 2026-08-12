@@ -20,8 +20,9 @@
 
 import { detailBuilder } from '../src/systems/station-detail.js';
 import { FACTION_STYLE } from '../src/game/faction-style.js';
-import { P, scaleFor, proportionFor, CLASS_ORDER } from '../src/game/ship-scale.js';
-import { allowedHull, hexesOf, massShare, orphanPct, measure } from './ship-metrics.mjs';
+import { P, scaleFor, proportionFor, CLASS_ORDER, REBUILT_FACTIONS } from '../src/game/ship-scale.js';
+import { allowedHull, hexesOf, massShare, orphanPct, measure, proxyCover, proxyFit } from './ship-metrics.mjs';
+import { deriveProxy } from '../src/systems/npc.js';
 import { analyseAttachment, analyseContact, blameIsland, TOUCH_EPS, CONTACT_CELL } from './attachment.mjs';
 
 const [faction, ck] = process.argv.slice(2);
@@ -137,6 +138,23 @@ if (geos.lights) {
 ok(att.lonely === 0 && att.attachedPct === 100 && contact.attachedPct === 100,
   `attachment lonely=${att.lonely} boxAttached=${att.attachedPct.toFixed(1)}% contact=${contact.attachedPct.toFixed(1)}%`);
 
+// Proxy coverage and fit (rebuilt factions only)
+const isRebuilt = REBUILT_FACTIONS.has(faction);
+let coverPct = null;
+let fit = null;
+let proxy = null;
+if (isRebuilt) {
+  // Derive from the hull geometry directly — same function the runtime uses;
+  // SHIP_SCALE.proxy is a fallback only for hull-less shapes (Unknowables).
+  proxy = geos.hull ? deriveProxy(geos.hull) : scaleFor(ck).proxy;
+  coverPct = proxyCover(geos.hull, proxy);
+  fit = proxyFit(h, proxy);
+  ok(coverPct >= 80,
+    `proxyCover ${coverPct.toFixed(1)}% < 80% (rx=${proxy.rx.toFixed(2)} ry=${proxy.ry.toFixed(2)} halfLen=${proxy.halfLen.toFixed(2)})`);
+  ok(fit.pass,
+    `proxyFit w=${fit.widthPct.toFixed(0)}% h=${fit.heightPct.toFixed(0)}% l=${fit.lengthPct.toFixed(0)}% exceeds +25%/+25%/+35%`);
+}
+
 console.log(`${faction} ${ck}  (${path})`);
 console.log(`  span    X=${h.spanX.toFixed(2)}  Y=${h.spanY.toFixed(2)}  Z=${h.spanZ.toFixed(2)}`
   + `   size=${size.toFixed(2)} (${axis}) want ${charter.span[0]}-${charter.span[1]} target ${charter.target}`);
@@ -149,6 +167,11 @@ console.log(`  verts   hull=${h.verts} (${charter.hull[0]}-${charter.hull[1]})`
   + `  lights=${l.verts} (${charter.lights}-${Math.floor(h.verts * 0.25)})`);
 console.log(`  seating mass=${(100 * mass.share).toFixed(1)}%  orphanLights=${orphan.toFixed(1)}%`
   + `  parts=${att.total} lonely=${att.lonely} contact=${contact.attachedPct.toFixed(1)}%`);
+if (coverPct !== null) {
+  console.log(`  proxy   cover=${coverPct.toFixed(1)}%`
+    + `  w=${fit.widthPct.toFixed(0)}%  h=${fit.heightPct.toFixed(0)}%  l=${fit.lengthPct.toFixed(0)}%`
+    + `  rx=${proxy.rx.toFixed(2)}  ry=${proxy.ry.toFixed(2)}  halfLen=${proxy.halfLen.toFixed(2)}`);
+}
 console.log(`  stern   z=${h.sternZ.toFixed(2)}  glowZ=${entry.glowZ}`);
 
 for (const line of att.lonelyList) console.log(`      LONELY   ${line}`);

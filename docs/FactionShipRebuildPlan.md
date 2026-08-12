@@ -37,19 +37,36 @@ and the frigate outweighed everything in ordinary traffic. The charter is now:
 
 | class | P band | span (units) | authored target | old span | change |
 |---|---|---:|---:|---:|---|
-| `light` | 0.90–1.10 | 5.94–7.26 | 6.8 | 5.2 | +31% |
-| `ace` | 0.90–1.15 | 5.94–7.59 | 7.2 | 10.0 | −28% |
-| `cutter` | 1.45–1.80 | 9.57–11.88 | 11.0 | 8.7 | +27% |
-| `heavy` | 2.20–2.80 | 14.52–18.48 | 17.0 | 16.4 | +4% |
-| `frigate` | 4.00–5.50 | 26.40–36.30 | 32.0 | 46.4 | −31% |
-| `freighter` | 10.0–14.0 | 66.00–92.40 | 78.0 | 12.4 | **+529%** |
+| `light` | 0.62–1.44 | 4.08–9.52 | 6.8 | 5.2 | +31% |
+| `ace` | 0.65–1.53 | 4.32–10.08 | 7.2 | 10.0 | −28% |
+| `cutter` | 1.00–2.33 | 6.60–15.40 | 11.0 | 8.7 | +27% |
+| `heavy` | 1.55–3.61 | 10.20–23.80 | 17.0 | 16.4 | +4% |
+| `frigate` | 2.91–6.79 | 19.20–44.80 | 32.0 | 46.4 | −31% |
+| `freighter` | 10.0–16.55 | 66.00–109.20 | 78.0 | 12.4 | **+529%** |
 
-The freighter is the whole point of the charter and the largest single change in
-the wave. A station sculpt measures roughly 57 units across
-(`src/systems/stations/*.js`, half-extents ~28), so a 78-unit freighter is
-visibly longer than the station it moors against. That is the intended read —
-bible §2, "Never fits inside a station; exterior berth only" — and station
-scale is deliberately out of scope for this pass.
+The bands were widened in wave 3 to ±40% of the authored target, at the project
+owner's direction — on the same terms as the vertex ceiling relaxation the wave-3
+handoff records. The target values are unchanged and remain the authoring aim.
+
+Adjacent bands now share range. Light (4.08–9.52) and ace (4.32–10.08) almost
+entirely coincide; cutter's floor 6.60 sits inside ace's band; heavy's floor
+10.20 sits inside cutter's band. Two constraints make this safe without loosening
+the hierarchy.
+
+**The size ladder is pinned per faction.** `scripts/boot-test.mjs` checks
+`<faction>ClassOrdering` for every rebuilt fleet: light ≤ ace < cutter < heavy <
+frigate < freighter, with light and ace permitted within 15% of each other. A
+faction still has to climb its own ladder even when adjacent charter bands share
+range.
+
+**The freighter floor is a world-coherence bound, not a budget.** The
+mathematically symmetric lower bound would be 46.8 (78 × 0.60), but the floor is
+held at 66.0. A station sculpt measures roughly 57 units across
+(`src/systems/stations/*.js`, half-extents ~28). The player reads "this ship does
+not fit inside a station" from the silhouette beside it — bible §2, "Never fits
+inside a station; exterior berth only" — and a 46-unit freighter parked beside a
+57-unit station would not deliver that read. Station scale is deliberately out of
+scope for this pass.
 
 ### Silhouette rules
 
@@ -76,12 +93,12 @@ the freighter row alone near 120 MB, which is the ceiling this table respects.
 
 | class | hull verts | lights floor | grid cell |
 |---|---|---:|---:|
-| `light` | 4,000–14,000 | 260 | 0.6 |
-| `ace` | 4,000–15,000 | 260 | 0.6 |
-| `cutter` | 6,000–22,000 | 400 | 0.8 |
-| `heavy` | 9,000–34,000 | 600 | 1.1 |
-| `frigate` | 16,000–60,000 | 1,100 | 1.8 |
-| `freighter` | 34,000–100,000 | 2,400 | 3.2 |
+| `light` | 4,000–25,000 | 260 | 0.6 |
+| `ace` | 4,000–21,000 | 260 | 0.6 |
+| `cutter` | 6,000–47,000 | 400 | 0.8 |
+| `heavy` | 9,000–78,000 | 600 | 1.1 |
+| `frigate` | 16,000–84,000 | 1,100 | 1.8 |
+| `freighter` | 34,000–154,000 | 2,400 | 3.2 |
 
 The lights ceiling stays 25% of the hull count.
 
@@ -170,10 +187,86 @@ layout: `src/systems/ships/<faction>.js` becomes a barrel over
 
 `NPC_BASE_RADIUS = 3.4` was a single sphere for every class. At the new scale a
 78-unit freighter would be a 3.4-unit target, so bolts pass straight through it.
-`SHIP_SCALE[class].proxy` is a **capsule**: sphere radius `r` swept along the
-hull's local Z between `−halfLen` and `+halfLen`, following the primary mass
-only. Thin antennae, tendrils, cranes, sails and field wakes sit outside it on
-purpose.
+`SHIP_SCALE[class].proxy` described a hand-authored circular capsule — sphere
+radius `r` swept along the hull's local Z between `−halfLen` and `+halfLen`.
+
+**Nothing had ever verified the capsule.** The values were sized for the retired
+wave-47 hierarchy and never re-cut when wave 0 re-scaled every class to the
+charter. Grepping `proxy` across `measure-ships.mjs`, `probe-class.mjs`,
+`ship-metrics.mjs` and `boot-test.mjs` returned nothing. Widening the span bands
+in wave 3 forced the first measurement.
+
+`proxyCover` in `scripts/ship-metrics.mjs` measures the fraction of hull vertices
+inside the proxy at unit scale. Nine of eighteen rebuilt sculpts were below 80%:
+veridian cutter 71.1%, heavy 60.6%; ferrous ace 53.4%, cutter 44.5%, heavy 36.8%;
+freehold light 51.3%, ace 69.2%, cutter 70.0%, heavy 20.1%. The freehold heavy at
+20.1% was almost entirely unshootable.
+
+Re-solving the circular capsule for coverage produced the opposite defect. Hulls
+are flat by charter: `SHIP_PROPORTION` caps `spanY / spanZ` at 0.60, and sculpts
+run 0.19–0.47. A circular cross-section reaching the flanks must grow large enough
+to contain the wings, which made it stand up to 2.3× the ship's height. The
+veridian cutter's hitbox was +132% in Y. Coverage alone has a degenerate optimum:
+the metric rewards a capsule that swallows the ship plus empty space.
+
+A second pin, `proxyFit` in `scripts/ship-metrics.mjs`, bounds the overshoot:
+proxy width and height may not exceed the hull's own spans by more than +25%;
+proxy length by more than +35%. `boot-test.mjs` mirrors both per faction as
+`<faction>ProxyCover` and `<faction>ProxyFit`. A proxy needs both bounds, because
+either alone drives a degenerate result.
+
+The cross-section became an **ellipse** `{ rx, ry, halfLen }`. That fixed 15 of
+18 sculpts and left three structurally impossible: one proxy per CLASS cannot serve
+a 2.06× `spanY` ratio between the ferrous cutter (stout tug, `spanY` 5.33) and
+the veridian cutter (flat blade, `spanY` 2.59).
+
+**The proxy is now derived per sculpt.** `deriveProxy(hullGeometry)` is exported
+from `src/systems/npc.js` and called at bake time. Its result is cached alongside
+the merged geometry in `shipGeosFor`'s per faction × class × bake cache;
+`buildShipMesh` puts it on `group.userData.proxy`; `combat.js` reads that field
+and falls back to `SHIP_SCALE[class].proxy` only for hull-less ships (the
+Unknowables are a no-hull energy field and have no geometry to derive from). **Do
+not tune `SHIP_SCALE[class].proxy` for any rebuilt faction — it has no effect.**
+
+The cross-section uses `q = 0.90` of the normalised 2D radial distance
+`sqrt((x/hX)² + (y/hY)²)` scaled by the hull's own half-spans, giving `(rx, ry)`.
+A marginal per-axis percentile was tried and rejected: it gave the ferrous
+hammerhead heavy 45% coverage, because that hull's primary mass fills the XY
+bounding-box corners — the corner cells fall outside both a percentile-X margin
+and a percentile-Y margin individually, even though they sit squarely within the
+actual mass envelope. The joint normalised-radial percentile captures that mass;
+the marginal approach misses it. That is exactly the mistake the next author will
+reach for first.
+
+`halfLen` needed its own rule, and the reason is worth keeping. It was first
+derived as `qthPercentile(|z|) − max(rx, ry)`, which looked correct and measured
+correct — because `proxyCover` at the time clamped a vertex's `z` and then
+DISCARDED the result, so the score was purely radial and could not see length at
+all. A capsule with `halfLen = 0` would have scored ~90%. Once the metric became
+a true capsule test including the end caps, every one of the eighteen sculpts
+fell to 39–79%: subtracting the largest cap radius from an already-percentile
+length put the cylinder caps near the hull midplane, and on a wide hull like the
+ferrous heavy (`rx` 5.78) it left `halfLen` at 2.03 on a 16-unit ship.
+
+Raising the percentile cannot fix that — `max(rx, ry)` can approach the hull's
+own half-length on a stocky ship, driving `halfLen` toward zero for any `q`. The
+formula is now
+`halfLen = max(0, min(zPercentile(0.97), 0.67 · spanZ − max(rx, ry)))`:
+a high longitudinal percentile, clamped by the `proxyFit` length ceiling
+expressed as a bound on `halfLen`. For wide hulls the ceiling is the binding
+term, which is why several classes report a length fit of 34% — the capsule is
+as long as the fit pin permits, and coverage still clears the floor.
+
+All eighteen rebuilt sculpts now sit at ~90% coverage with fit inside +25/+25/+35.
+Reproduce with `node scripts/measure-ships.mjs <faction>` (reports `proxyCover`
+and `proxyFit` per class) and `npm run test:boot` (reports `<faction>ProxyCover`
+and `<faction>ProxyFit` per rebuilt faction).
+
+The coverage floor is 80% and not 100% because the proxy follows primary mass
+only — masts, cranes, docking spars and antennae sit deliberately outside it, and
+a bolt passes through them. A sculpt reading 80–93% is healthy. One that scrapes
+80% consistently means primary hull is slipping outside the proxy, not that
+appendages are unusually large.
 
 ### Out of scope
 
@@ -326,10 +419,12 @@ factions. Two changes were required and are in:
 
 ## 6. Handoff
 
-**Green:** `measure-ships` ALL PASS (whole fleet), `attach-audit` ALL PARTS
-ATTACHED (Veridian, Ferrous and Freehold; the seven unrebuilt built fleets
-still carry wave-47 floaters and are only legacy-pinned), `test:boot` BOOT TEST
-PASS, `probe-models` MODEL PROBE PASS.
+**Green:** `measure-ships` ALL PASS (whole fleet, including `proxyCover` and
+`proxyFit`), `attach-audit` ALL PARTS ATTACHED (Veridian, Ferrous and Freehold;
+the seven unrebuilt built fleets still carry wave-47 floaters and are only
+legacy-pinned), `test:boot` BOOT TEST PASS (including `<faction>ProxyCover` and
+`<faction>ProxyFit` for veridian, ferrous and freehold), `probe-models` MODEL
+PROBE PASS.
 
 ### Wave 3 — Freehold Compact
 
@@ -346,13 +441,25 @@ What landed:
 
 The project owner's direction: relax the budgets, only be concerned at more than 40% out of spec, good models matter more than the initial guidelines. Every ceiling was raised 40% (light 25,000, ace 21,000, cutter 47,000, heavy 78,000, frigate 84,000, freighter 154,000); the floors are unchanged because they are the "not a bare shell" pin. Spans, silhouette ratios, pivots, single mass, orphan lights, attachment and palette are NOT relaxed.
 
-### The five defect shapes wave 3 added to the catalogue
+### The six defect shapes wave 3 added to the catalogue
 
 1. **Double weathering.** The section-scale skin called `weather()` on tones the class files had already passed pre-weathered. `hull` x0.86 x0.72 = x0.619 lands off the four-step SHADES ladder, so the palette pin failed with hexes (#423121, #4f3a28) that match no base colour and no single shade. A helper that shades a caller-supplied colour must never assume the colour is un-shaded; emit tones verbatim from the caller's list instead.
 2. **Colour-dependent colour selection breaks the pirate bake.** The same skin grouped the palette into hue families by reading RGB. The pirate bake desaturates ~50% toward luminance and dims to 72% (`src/systems/npc.js`), which changes hue relationships, so the two bakes selected DIFFERENT slots of the palette and a pirate vertex could come out brighter than its trader counterpart — `wave38 ship pirates / colorsNeverBrighterStrictlyDimmer` in `scripts/boot-test.mjs`. The rule "geometry never reads a colour to decide a position" extends to selection: pick by INDEX and seed, never by colour value.
 3. **A light seated INSIDE a volume is still an orphan.** An agent fixing orphan lights on the habitation drums inset the window panes from radius r to r-0.6, which moved them into the drum's hollow interior where no hull cell can neighbour them. It moved the number and buried the defect. A window in a wall is a hull WELL plus a lit pane seated in it; the general remedy is to seat lights on a plate you add — a window strake built from the loft follows the taper by construction, where a hand-computed X offset cannot.
 4. **Sampling a lofted surface at the wrong height.** Window rows were placed using the section half-width at y=0 while mounting at y~2.5. A chamfered outline narrows as it rises, so the rows hung outside the skin. Sample `sectionOutline` at the part's own y, or avoid the problem entirely with a strake.
 5. **Section-scale colour can overshoot into monotone.** Fixing the per-plate "harlequin" skin with a fixed 2-4 sections per course made a 78-unit freighter almost entirely one tone — a factory paint job, not donated sections. Section count must scale with course LENGTH, and adjacent sections must be forbidden from drawing the same family so a seam is always a visible tone change.
+6. **A charter constant that nothing pins drifts silently.** The collision proxy
+   was documented as "set from the target span" — an intention with no
+   enforcement — and stayed wrong through three waves of rescaling while every
+   gate stayed green. Widening the span bands is what forced the first
+   measurement. The fix was not to pin the constant — it was to delete it and
+   derive the value from the artefact it describes. A derived value cannot drift:
+   when the sculpt changes, the proxy updates automatically. The lesson for wave 4:
+   a number in `ship-scale.js` that no harness reads back against the sculpt is a
+   comment, not a contract. The corollary: a one-sided metric has a degenerate
+   optimum — coverage alone rewards a proxy that swallows empty space, and fit
+   alone rewards one that is arbitrarily small. That is exactly why `proxyCover`
+   and `proxyFit` exist as a pair.
 
 And four process notes worth carrying to wave 4:
 

@@ -200,8 +200,8 @@ import {
   CLASS_ORDER,
   FACTION_REBUILD_ORDER,
 } from '../src/game/ship-scale.js';
-import { buildShipMesh } from '../src/systems/npc.js';
-import { SHADES, allowedHull, hexesOf, massShare, orphanPct, measure } from './ship-metrics.mjs';
+import { buildShipMesh, deriveProxy } from '../src/systems/npc.js';
+import { SHADES, allowedHull, hexesOf, massShare, orphanPct, measure, proxyCover, proxyFit } from './ship-metrics.mjs';
 
 
 const want = process.argv.slice(2);
@@ -283,6 +283,9 @@ for (const faction of targets) {
       const orphan = geos.lights ? orphanPct(geos.hull, geos.lights, 1.0) : 100;
       
       // Choose pin set based on rebuild status
+      let coverage = null;
+      let fit = null;
+      let proxy = null; // set inside isRebuilt block; used in census line
       if (isRebuilt) {
         // Charter pins
         const rule = proportionFor(ck, faction);
@@ -353,6 +356,20 @@ for (const faction of targets) {
           if (dim.length > 0) {
             bad.push(`lights below 0.6 ${dim.slice(0, 4).map((x) => `#${x.toString(16).padStart(6, '0')}`).join(',')}`);
           }
+        }
+        
+        // Proxy coverage and fit (rebuilt factions only).
+        // Derive from the hull geometry directly — same pure function the runtime uses.
+        // SHIP_SCALE.proxy is a fallback only for hull-less shapes (Unknowables).
+        proxy = geos.hull ? deriveProxy(geos.hull) : charter.proxy;
+        const coverPct = proxyCover(geos.hull, proxy);
+        fit = proxyFit(h, proxy);
+        coverage = coverPct;
+        if (coverPct < 80) {
+          bad.push(`proxyCover ${coverPct.toFixed(1)}% < 80% (rx=${proxy.rx} ry=${proxy.ry} halfLen=${proxy.halfLen})`);
+        }
+        if (!fit.pass) {
+          bad.push(`proxyFit w=${fit.widthPct.toFixed(0)}% h=${fit.heightPct.toFixed(0)}% l=${fit.lengthPct.toFixed(0)}% exceeds +25%/+25%/+35%`);
         }
         
         // Determinism
@@ -436,7 +453,12 @@ for (const faction of targets) {
         + ` ${ratios}`
         + ` stern=${h.sternZ.toFixed(1)} glowZ=${entry.glowZ}`
         + ` mass=${(100 * mass.share).toFixed(1)}%`
-        + ` orphan=${orphan.toFixed(1)}%`;
+        + ` orphan=${orphan.toFixed(1)}%`
+        + (coverage !== null
+          ? ` proxyCover=${coverage.toFixed(1)}%`
+            + ` fit:w=${fit.widthPct.toFixed(0)}%,h=${fit.heightPct.toFixed(0)}%,l=${fit.lengthPct.toFixed(0)}%`
+            + ` rx=${proxy.rx.toFixed(2)} ry=${proxy.ry.toFixed(2)} halfLen=${proxy.halfLen.toFixed(2)}`
+          : '')
       
       if (bad.length > 0) {
         failures++;
@@ -535,13 +557,25 @@ for (const faction of targets) {
       const size = Math.max(span.x, span.y, span.z);
       const sizeAxis = span.x >= span.y && span.x >= span.z ? 'X' : span.y >= span.z ? 'Y' : 'Z';
       const ratios = `len/beam=${(span.z / span.x).toFixed(2)} ht/len=${(span.y / span.z).toFixed(2)} beam/len=${(span.x / span.z).toFixed(2)}`;
-      
+      // Proxy: source from the built mesh; SHIP_SCALE.proxy is a hull-less fallback only.
+      // The hull mesh is the first non-glow mesh direct child (null for field factions with
+      // no hull — proxyCover returns null in that case and the coverage check is skipped).
+      const gfProxy = group.userData.proxy ?? scaleFor(ck).proxy;
+      const gfHullMesh = group.children.find((c) => c.isMesh && c !== group.userData.glow) ?? null;
+      const gfCoverPct = (gfProxy && gfHullMesh) ? proxyCover(gfHullMesh.geometry, gfProxy) : null;
+      const gfFit = gfProxy ? proxyFit({ spanX: span.x, spanY: span.y, spanZ: span.z }, gfProxy) : null;
+
       // Census line (no pins for unrebuilt grown/field)
       const line = `${faction.padEnd(13)} ${ck.padEnd(10)} spec=${spec.padEnd(7)}`
         + ` verts=${String(totalVerts).padStart(6)} glow=${String(glowVerts).padStart(5)}`
         + ` size=${size.toFixed(1)} (${sizeAxis})`
         + ` ${ratios}`
         + ` stern=${sternZ.toFixed(1)}`
+        + (isRebuilt && gfCoverPct !== null
+          ? ` proxyCover=${gfCoverPct.toFixed(1)}%`
+            + ` fit:w=${gfFit.widthPct.toFixed(0)}%,h=${gfFit.heightPct.toFixed(0)}%,l=${gfFit.lengthPct.toFixed(0)}%`
+            + ` rx=${gfProxy.rx.toFixed(2)} ry=${gfProxy.ry.toFixed(2)} halfLen=${gfProxy.halfLen.toFixed(2)}`
+          : '')
         + (isUnpinned ? ' [unpinned: not yet rebuilt]' : '');
       
       // Apply pins only if rebuilt
@@ -582,6 +616,14 @@ for (const faction of targets) {
         }
         if (Math.abs(centre.z) > maxPivot * span.z) {
           bad.push(`pivotZ=${(centre.z / span.z).toFixed(2)} > ${maxPivot}`);
+        }
+
+        // Proxy coverage and fit
+        if (gfCoverPct !== null && gfCoverPct < 80) {
+          bad.push(`proxyCover ${gfCoverPct.toFixed(1)}% < 80% (rx=${gfProxy.rx} ry=${gfProxy.ry} halfLen=${gfProxy.halfLen})`);
+        }
+        if (gfFit && !gfFit.pass) {
+          bad.push(`proxyFit w=${gfFit.widthPct.toFixed(0)}% h=${gfFit.heightPct.toFixed(0)}% l=${gfFit.lengthPct.toFixed(0)}% exceeds +25%/+25%/+35%`);
         }
         
         if (bad.length > 0) {

@@ -8,7 +8,8 @@
  *   - src/systems/ships/<faction>.js  authoring envelopes + HUMAN module sizes
  *   - scripts/measure-ships.mjs       the fast authoring loop's pins
  *   - scripts/boot-test.mjs           the same pins inside the real spawn path
- *   - src/systems/combat.js           the collision proxy
+ *   - src/systems/combat.js           the collision proxy (FALLBACK only; real proxy
+ *                                     derived per-sculpt by deriveProxy() in npc.js)
  *
  * ---------------------------------------------------------------------------
  * P — THE PLAYER SHIP IS THE YARDSTICK
@@ -87,14 +88,30 @@ export const HUMAN = {
  *   cell    occupancy-grid cell for the singleMass flood fill, ~= 0.045 * target
  *   role    the modelling role from the bible, for reviewers
  *   berth   station relationship — the freighter's "exterior only" is a hard read
- *   proxy   collision capsule: sphere radius `r` swept along local Z +/- `halfLen`
- *   minLengthOverBeam / maxHeightOverLength  per-class relief on SHIP_PROPORTION
+ *   proxy   FALLBACK collision capsule for hull-less ships ONLY.  Every ship that
+ *           goes through buildShipMesh() with a hull channel (built, grown, and
+ *           VC-fallback factions) derives its proxy in npc.js via deriveProxy()
+ *           at bake time and stores it in group.userData.proxy.  These table
+ *           entries are read by testNpcHits ONLY when userData.proxy is absent —
+ *           currently the Unknowables energy field, which has no hull geometry.
+ *           Do NOT update these values to tune live coverage: edit PROXY_PERCENTILE
+ *           in npc.js and re-run scripts/measure-ships.mjs instead.
  *
- * The proxy follows the PRIMARY MASS only (bible §6): thin antennae, tendrils,
- * cranes, sails and field wakes are deliberately outside it, so a bolt can pass
- * through a mast without registering a hull hit. r/halfLen are set from the
- * target span, not from the ceiling, so a sculpt that lands mid-band is covered
- * without the capsule ballooning past its own plating.
+ *   WHAT WENT WRONG (kept as design record).
+ *   The proxy entries were hand-authored per class for the retired wave-47 hierarchy
+ *   and never re-cut when wave 0 re-scaled the classes.  No harness pinned them
+ *   against the actual sculpts, so the freehold heavy drifted to 20.1 % proxyCover
+ *   — essentially unshootable — and the veridian cutter's circular hitbox stood
+ *   2.3× the hull's height (the ellipse fix reduced that to +21 %).  A per-class
+ *   capsule is structurally unable to serve factions whose hull cross-sections
+ *   differ by 2×+: the ferrous cutter is a stout tug (spanY ≈ 5.3) while the
+ *   veridian cutter is a flat blade (spanY ≈ 2.6) — a 2.06× ratio.  Any shared ry
+ *   that covers the tug overshoots the blade by +94 %.  These are the root causes
+ *   recorded as the sixth defect shape in docs/FactionShipRebuildPlan.md wave-3:
+ *   "a charter constant that nothing pins drifts silently."  Per-sculpt derivation
+ *   removes the constant and the drift simultaneously.
+ *
+ *   minLengthOverBeam / maxHeightOverLength  per-class relief on SHIP_PROPORTION
  */
 //
 // WAVE 3 — the ceilings are now SOFT, by the project owner's direction: "relax
@@ -107,11 +124,35 @@ export const HUMAN = {
 // review. The floors are unchanged — they are the "this is not a bare shell"
 // pin and still bite. Spans, silhouette ratios, pivots, single mass, orphan
 // lights, attachment and palette are NOT relaxed.
+//
+// The SPAN bands are soft on the same terms, and for the same reason: the
+// authored `target` is the aim, and the band is now target +/- 40% rather than
+// the tight window authors were contorting hulls to hit. Two guards make that
+// safe, and both are load-bearing:
+//
+//   - The SIZE LADDER is pinned SEPARATELY, per faction, in scripts/boot-test.mjs
+//     (`<faction>ClassOrdering`): light <= ace < cutter < heavy < frigate <
+//     freighter, with light and ace allowed within 15% of each other. Bands may
+//     now overlap between classes without the ladder loosening at all — a
+//     faction still has to climb its own ladder.
+//   - The FREIGHTER'S FLOOR IS HELD at 66.0 and is not widened downward. A
+//     station sculpt measures roughly 57 units across, and bible §2's "never
+//     fits inside a station; exterior berth only" is a read the player gets from
+//     the silhouette beside the station. A 47-unit freighter would moor inside
+//     the thing it is supposed to dwarf, so that bound is world coherence rather
+//     than a budget. Its ceiling widens normally.
+//
+// The real collision proxy for every sculpted hull is now derived per-sculpt in
+// npc.js (deriveProxy) at bake time and stored in group.userData.proxy.  The
+// `proxy` entries below are a FALLBACK for hull-less ships (the Unknowables
+// energy field) only.  `proxyCover` in scripts/ship-metrics.mjs pins the derived
+// proxy against the sculpt, so a hull that grows into the wider span band fails
+// loudly instead of quietly becoming unshootable.
 export const SHIP_SCALE = {
   light: {
     role: 'scout, courier, interceptor, personal workboat',
     berth: 'fits an internal berth',
-    pBand: [0.90, 1.10], span: [5.94, 7.26], target: 6.8,
+    pBand: [0.62, 1.44], span: [4.08, 9.52], target: 6.8,
     // 14,000 -> 18,000 in wave 2. The number was set for a slim scout with a
     // small skin area; the Ferrous picket is a SOLID WEDGE, and a wedge of this
     // length has roughly twice the flat surface of a dart. Two authoring passes
@@ -121,19 +162,25 @@ export const SHIP_SCALE = {
     // faction's surface language is not optional detail; it is what makes a
     // hull read as constructed. 18,000 is ~0.9 MB a bake.
     hull: [4000, 25000], lights: 260, cell: 0.6,
-    proxy: { r: 1.5, halfLen: 2.0 },
+    // FALLBACK proxy (Unknowables only — built ships derive their proxy in npc.js).
+    // History: pre-wave-3 circular r:1.5,halfLen:2.0 (retired wave-47 hierarchy,
+    // never re-cut after wave 0 re-scaled classes; freehold light was 51 % covered).
+    // Wave 3: ellipse { rx, ry } to decouple beam from height.
+    proxy: { rx: 2.07, ry: 1.13, halfLen: 2.18 },
   },
   ace: {
     role: 'bespoke high-performance personal combat craft',
     berth: 'fits an internal berth',
-    pBand: [0.90, 1.15], span: [5.94, 7.59], target: 7.2,
+    pBand: [0.65, 1.53], span: [4.32, 10.08], target: 7.2,
     hull: [4000, 21000], lights: 260, cell: 0.6,
-    proxy: { r: 1.5, halfLen: 2.2 },
+    // FALLBACK proxy (Unknowables only — built ships derive their proxy in npc.js).
+    // History: pre-wave-3 r:1.5,halfLen:2.2 (retired wave-47; ferrous ace 53 % covered).
+    proxy: { rx: 1.94, ry: 0.74, halfLen: 2.11 },
   },
   cutter: {
     role: 'patrol, boarding, customs, rescue, raiding',
     berth: 'fits a large internal berth',
-    pBand: [1.45, 1.80], span: [9.57, 11.88], target: 11.0,
+    pBand: [1.00, 2.33], span: [6.60, 15.40], target: 11.0,
     // Ceiling raised twice, both times for the same reason: the number predates
     // the detail the bible asks this class to carry, and an author asked to fit
     // it deletes construction language instead of greeble.
@@ -153,12 +200,17 @@ export const SHIP_SCALE = {
     // Combine's entire surface language and leaves a bare shell wearing
     // equipment. 34,000 is ~1.7 MB a bake, in line with the heavy's 40,000.
     hull: [6000, 47000], lights: 400, cell: 0.8,
-    proxy: { r: 2.1, halfLen: 3.4 },
+    // FALLBACK proxy (Unknowables only — built ships derive their proxy in npc.js).
+    // History: pre-wave-3 r:2.1,halfLen:3.4 (retired wave-47; ferrous cutter 44 % covered).
+    // The structural problem that produced the wave-3 cutter note — one shared ry unable
+    // to serve ferrous tug (spanY 5.3) and veridian blade (spanY 2.6) at once — no longer
+    // applies; per-sculpt derivation gives each faction its own (rx, ry).
+    proxy: { rx: 3.02, ry: 2.51, halfLen: 3.31 },
   },
   heavy: {
     role: 'gunship, convoy escort, tough specialist vessel',
     berth: 'uses a large bay or exterior cradle',
-    pBand: [2.20, 2.80], span: [14.52, 18.48], target: 17.0,
+    pBand: [1.55, 3.61], span: [10.20, 23.80], target: 17.0,
     // 40,000 rather than 34,000. Wave 1's review found that the gunship, the
     // frigate and the carrier all ended in bare spine wearing rib hoops — the
     // hull stopped and the ship trailed off into a cage. Closing the stern with a
@@ -175,26 +227,40 @@ export const SHIP_SCALE = {
     // citadel, silhouette-visible turrets and exposed civilian window band are
     // the class read, and the old ceiling predates all three.
     hull: [9000, 78000], lights: 600, cell: 1.1,
-    proxy: { r: 3.2, halfLen: 5.4 },
+    // FALLBACK proxy (Unknowables only — built ships derive their proxy in npc.js).
+    // History: pre-wave-3 r:3.2,halfLen:5.4 (retired wave-47; freehold heavy 20 % covered
+    // — essentially unshootable).  Wave 3 ellipse re-solve left a residual conflict: the
+    // single shared ry=3.57 overshot veridian height by +29 %.  Per-sculpt derivation
+    // resolves both defects simultaneously.
+    proxy: { rx: 5.21, ry: 3.57, halfLen: 4.42 },
   },
   frigate: {
     role: 'compact capital escort and command ship',
     berth: 'normally uses an exterior military clamp',
-    pBand: [4.00, 5.50], span: [26.40, 36.30], target: 32.0,
+    pBand: [2.91, 6.79], span: [19.20, 44.80], target: 32.0,
     hull: [16000, 84000], lights: 1100, cell: 1.8,
-    proxy: { r: 5.4, halfLen: 10.5 },
+    // FALLBACK proxy (Unknowables only — built ships derive their proxy in npc.js).
+    // History: pre-wave-3 r:5.4,halfLen:10.5 (retired wave-47; rebuilt frigates
+    // were borderline 88-93 % with a circular capsule).
+    proxy: { rx: 5.93, ry: 4.14, halfLen: 12.34 },
   },
   freighter: {
     role: 'bulk carrier, mobile industry, migration vessel',
     berth: 'NEVER fits inside a station; exterior berth only',
-    pBand: [10.0, 14.0], span: [66.00, 92.40], target: 78.0,
+    // Floor held at 66.0 on purpose — see the note above the table. Only the
+    // ceiling widens.
+    pBand: [10.0, 16.55], span: [66.00, 109.20], target: 78.0,
     // 110,000 rather than 100,000 for the same reason as the cutter: the wave-1
     // review added an instrument face to every class and the carrier had 2,700
     // vertices of headroom left. At ~5.2 MB a bake this costs about 9 MB across
     // twelve factions and two bakes if a reviewer opens every freighter, which is
     // the memory ceiling this table respects.
     hull: [34000, 154000], lights: 2400, cell: 3.2,
-    proxy: { r: 12.0, halfLen: 26.0 },
+    // FALLBACK proxy (Unknowables only — built ships derive their proxy in npc.js).
+    // History: pre-wave-3 r:12.0,halfLen:26.0 (retired wave-47; veridian freighter
+    // was exactly 80 %, the minimum permitted).  Wave 3 ellipse extend halfLen to
+    // clear all three rebuilt factions.
+    proxy: { rx: 12.88, ry: 7.37, halfLen: 31.27 },
     // A freighter may be broad and irregular (bible §2/§3), so it gets relief
     // on the beam rule — but its travel direction still has to be instant.
     minLengthOverBeam: 1.05,
