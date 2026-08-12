@@ -115,14 +115,26 @@ export const SHIP_SCALE = {
     role: 'patrol, boarding, customs, rescue, raiding',
     berth: 'fits a large internal berth',
     pBand: [1.45, 1.80], span: [9.57, 11.88], target: 11.0,
-    hull: [6000, 22000], lights: 400, cell: 0.8,
+    // Ceiling raised from 22,000 in wave 1's review pass. Every class now carries
+    // a detailed instrument FACE — bezel, sunk iris, mounting bosses, cabling —
+    // because the first reviewer's verdict on the fleet was that the fronts of the
+    // larger vessels were flat shapes with nothing on them. A cutter is the only
+    // class that mounts three apertures, so it was the only one the original
+    // budget could not absorb. Stripping the detail to fit a number drawn before
+    // the detail existed would be the wrong way round.
+    hull: [6000, 26000], lights: 400, cell: 0.8,
     proxy: { r: 2.1, halfLen: 3.4 },
   },
   heavy: {
     role: 'gunship, convoy escort, tough specialist vessel',
     berth: 'uses a large bay or exterior cradle',
     pBand: [2.20, 2.80], span: [14.52, 18.48], target: 17.0,
-    hull: [9000, 34000], lights: 600, cell: 1.1,
+    // 40,000 rather than 34,000. Wave 1's review found that the gunship, the
+    // frigate and the carrier all ended in bare spine wearing rib hoops — the
+    // hull stopped and the ship trailed off into a cage. Closing the stern with a
+    // real drive section (housing, radiators, recessed thrust throats) is mass
+    // and function, not decoration, and it costs about 3,500 vertices.
+    hull: [9000, 40000], lights: 600, cell: 1.1,
     proxy: { r: 3.2, halfLen: 5.4 },
   },
   frigate: {
@@ -136,7 +148,12 @@ export const SHIP_SCALE = {
     role: 'bulk carrier, mobile industry, migration vessel',
     berth: 'NEVER fits inside a station; exterior berth only',
     pBand: [10.0, 14.0], span: [66.00, 92.40], target: 78.0,
-    hull: [34000, 100000], lights: 2400, cell: 3.2,
+    // 110,000 rather than 100,000 for the same reason as the cutter: the wave-1
+    // review added an instrument face to every class and the carrier had 2,700
+    // vertices of headroom left. At ~5.2 MB a bake this costs about 9 MB across
+    // twelve factions and two bakes if a reviewer opens every freighter, which is
+    // the memory ceiling this table respects.
+    hull: [34000, 110000], lights: 2400, cell: 3.2,
     proxy: { r: 12.0, halfLen: 26.0 },
     // A freighter may be broad and irregular (bible §2/§3), so it gets relief
     // on the beam rule — but its travel direction still has to be instant.

@@ -121,3 +121,130 @@ export function analyseAttachment(parts, eps = TOUCH_EPS) {
     strayList: strayIdx.slice(0, 6).map((i) => fmt(parts[i])),
   };
 }
+
+/**
+ * Contact analysis on a FIXED FINE occupancy grid.
+ *
+ * This is the decisive connectivity metric, and it exists because the other two
+ * both have blind spots:
+ *
+ *   - `singleMass` in the harnesses scales its cell with the class (0.6 to 3.2
+ *     units) and joins cells by ADJACENCY, so it passes parts with visible gaps.
+ *   - `analyseAttachment` above compares part BOUNDING BOXES. Box overlap is
+ *     necessary but not sufficient for contact: a vane whose root box just grazes
+ *     the hull's box scores as attached while the render shows daylight between
+ *     them. That false negative shipped detached ranging vanes on the Veridian
+ *     light craft after the box test had already reported ALL PARTS ATTACHED.
+ *
+ * Here every triangle edge is walked in half-cell steps into a grid of FIXED
+ * CELL SIZE, and cells are joined only when they are the same cell or immediate
+ * neighbours. At CONTACT_CELL = 0.3 units (~1.1 m, roughly the human module) a
+ * hairline tangent still registers, but a gap of one cell does not. The cell is
+ * absolute for the same reason the lights-seating cell is: contact is physical,
+ * not class-relative.
+ *
+ * Cost is proportional to total edge length, not to class size, and it runs in
+ * well under a second even on a 100k-vertex freighter.
+ */
+export const CONTACT_CELL = 0.3;
+
+export function analyseContact(geometries, cell = CONTACT_CELL) {
+  const grid = new Map(); // key -> index into cellList
+  const cellList = []; // [ix, iy, iz]
+  const step = cell / 2;
+
+  const mark = (x, y, z) => {
+    const ix = Math.floor(x / cell);
+    const iy = Math.floor(y / cell);
+    const iz = Math.floor(z / cell);
+    const key = `${ix},${iy},${iz}`;
+    if (!grid.has(key)) {
+      grid.set(key, cellList.length);
+      cellList.push([ix, iy, iz]);
+    }
+  };
+
+  for (const geo of geometries) {
+    if (!geo) continue;
+    const p = geo.attributes.position;
+    for (let t = 0; t + 2 < p.count; t += 3) {
+      for (let e = 0; e < 3; e++) {
+        const i = t + e;
+        const j = t + ((e + 1) % 3);
+        const ax = p.getX(i); const ay = p.getY(i); const az = p.getZ(i);
+        const bx = p.getX(j); const by = p.getY(j); const bz = p.getZ(j);
+        const d = Math.hypot(bx - ax, by - ay, bz - az);
+        const n = Math.max(1, Math.ceil(d / step));
+        for (let k = 0; k <= n; k++) {
+          const f = k / n;
+          mark(ax + (bx - ax) * f, ay + (by - ay) * f, az + (bz - az) * f);
+        }
+      }
+    }
+  }
+
+  const total = cellList.length;
+  if (total === 0) {
+    return { cells: 0, components: 0, largest: 0, attachedPct: 0, islands: [] };
+  }
+
+  const seen = new Uint8Array(total);
+  const comps = []; // { size, min:[x,y,z], max:[x,y,z] } in world units
+  for (let s = 0; s < total; s++) {
+    if (seen[s]) continue;
+    let size = 0;
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    const stack = [s];
+    seen[s] = 1;
+    while (stack.length > 0) {
+      const cur = stack.pop();
+      const [ix, iy, iz] = cellList[cur];
+      size++;
+      for (let a = 0; a < 3; a++) {
+        const v = [ix, iy, iz][a];
+        if (v * cell < lo[a]) lo[a] = v * cell;
+        if ((v + 1) * cell > hi[a]) hi[a] = (v + 1) * cell;
+      }
+      // 26-neighbourhood: a diagonal touch is still a touch. Using only the 6
+      // face neighbours would split a part meeting another at a corner.
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dy === 0 && dz === 0) continue;
+            const k = grid.get(`${ix + dx},${iy + dy},${iz + dz}`);
+            if (k !== undefined && !seen[k]) { seen[k] = 1; stack.push(k); }
+          }
+        }
+      }
+    }
+    comps.push({ size, min: lo, max: hi });
+  }
+
+  comps.sort((a, b) => b.size - a.size);
+  const largest = comps[0].size;
+  return {
+    cells: total,
+    components: comps.length,
+    largest,
+    attachedPct: (100 * largest) / total,
+    islands: comps.slice(1, 8).map((c) => ({
+      size: c.size,
+      label: `${c.size} cells`
+        + ` x[${c.min[0].toFixed(2)},${c.max[0].toFixed(2)}]`
+        + ` y[${c.min[1].toFixed(2)},${c.max[1].toFixed(2)}]`
+        + ` z[${c.min[2].toFixed(2)},${c.max[2].toFixed(2)}]`,
+      min: c.min,
+      max: c.max,
+    })),
+  };
+}
+
+/** Parts whose box intersects an island box — names what is floating. */
+export function blameIsland(parts, island, eps = TOUCH_EPS) {
+  const box = { min: island.min, max: island.max };
+  return parts
+    .filter((p) => overlaps(p, box, eps))
+    .slice(0, 4)
+    .map((p) => fmt(p));
+}

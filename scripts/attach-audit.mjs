@@ -2,10 +2,11 @@
  * Attachment audit — names every floating part in a built ship sculpt.
  *
  * The companion to scripts/measure-ships.mjs. `singleMass` cannot see a detached
- * greeble (see scripts/attachment.mjs for why), so this walks each sculpt's PARTS
- * and reports the ones that overlap nothing, plus any cluster that is not joined
- * to the main mass. Every failure it reports is real and carries the source line
- * that added it.
+ * greeble, and neither can a bounding-box test on its own — see
+ * scripts/attachment.mjs for both blind spots. This runs the box test to NAME
+ * offenders and the fixed fine-grid contact test to DECIDE connectivity, so a
+ * failure carries both the geometry of the island and the source line that built
+ * it.
  *
  * Usage: node scripts/attach-audit.mjs [faction ...]
  */
@@ -13,7 +14,9 @@
 import { detailBuilder } from '../src/systems/station-detail.js';
 import { FACTION_STYLE } from '../src/game/faction-style.js';
 import { CLASS_ORDER, FACTION_REBUILD_ORDER, measureKindFor } from '../src/game/ship-scale.js';
-import { analyseAttachment, TOUCH_EPS } from './attachment.mjs';
+import {
+  analyseAttachment, analyseContact, blameIsland, TOUCH_EPS, CONTACT_CELL,
+} from './attachment.mjs';
 
 const want = process.argv.slice(2);
 const targets = (want.length > 0 ? want : FACTION_REBUILD_ORDER)
@@ -51,17 +54,29 @@ for (const faction of targets) {
       failures++;
       continue;
     }
-    const r = analyseAttachment(b.parts(), TOUCH_EPS);
-    const bad = r.lonely > 0 || r.attachedPct < 100;
-    if (bad) failures++;
+    const parts = b.parts();
+    const r = analyseAttachment(parts, TOUCH_EPS);
+    const geos = b.build();
+    // The decisive test. Box overlap can be satisfied by two parts that merely
+    // graze each other, so a sculpt counts as connected only when the fixed fine
+    // grid agrees — that is the check that catches a vane rooted a hair short of
+    // the plating, which is exactly what shipped on the Veridian light craft.
+    const c = analyseContact(Object.values(geos), CONTACT_CELL);
+    if (r.lonely > 0 || r.attachedPct < 100 || c.attachedPct < 100) failures++;
+
     console.log(`${faction.padEnd(13)} ${ck.padEnd(10)}`
       + ` parts=${String(r.total).padStart(5)}`
       + ` lonely=${String(r.lonely).padStart(4)}`
-      + ` components=${String(r.components).padStart(4)}`
-      + ` attached=${r.attachedPct.toFixed(1)}%`);
-    for (const line of r.lonelyList) console.log(`      LONELY  ${line}`);
-    for (const line of r.strayList) console.log(`      STRAY   ${line}`);
-    for (const g of Object.values(b.build())) g.dispose();
+      + ` boxComps=${String(r.components).padStart(3)}`
+      + ` contactComps=${String(c.components).padStart(3)}`
+      + ` contact=${c.attachedPct.toFixed(1)}%`);
+    for (const line of r.lonelyList) console.log(`      LONELY   ${line}`);
+    for (const line of r.strayList) console.log(`      BOXSTRAY ${line}`);
+    for (const isl of c.islands) {
+      console.log(`      FLOATING ${isl.label}`);
+      for (const line of blameIsland(parts, isl)) console.log(`               ${line}`);
+    }
+    for (const g of Object.values(geos)) g.dispose();
   }
 }
 

@@ -46,7 +46,7 @@
 import {
   rng, weather, box, cyl, cone, sphere, hemi, torus,
   ribBands, windowRow, windowGrid, panelSkin, panelPatches, portholeRing,
-  pipeRun, truss, railing, antenna, ladder, lampString, crate,
+  pipeRun, truss, railing, antenna, ladder, radiatorPanel, lampString, crate,
 } from '../station-detail.js';
 import { HUMAN } from '../../game/ship-scale.js';
 
@@ -133,13 +133,24 @@ function hexModule(b, st, { r, len, seed = 1, shade = 0, windows = 0, serial = t
 
 /**
  * Thin lateral ranging vane extending along +X from the current frame origin.
- * A survey instrument, not a fin: it carries graduation ribs, a stiffening
- * root, and one optic strip. Always mounted as a port/starboard pair.
+ * A survey instrument, not a fin: graduation ribs, a stiffening root, one optic
+ * strip. Always mounted as a port/starboard pair.
+ *
+ * THE ROOT REACHES INWARD. The blade used to start at x = 0, so a caller placing
+ * the frame on the hull's flat flank got a butt joint against the plating — the
+ * fine-grid contact test called that connected and the render showed daylight
+ * between the vane and the hull on the claim scout. The blade now starts at
+ * `-root` and carries a shoulder fairing straddling x = 0, so the vane is
+ * visibly BOLTED THROUGH the flank instead of resting against it.
  */
-function rangingVane(b, st, { len, chord, thick = 0.07, ry = 0, lit = true }) {
+function rangingVane(b, st, { len, chord, thick = 0.07, ry = 0, lit = true, root = 0.5 }) {
   b.push(0, 0, 0, ry, 0, 0);
-    box(b, 'hull', st.trim, len, thick, chord, { x: len / 2 });
-    box(b, 'hull', weather(st.trim, 2), len * 0.26, thick * 2.1, chord * 0.62, { x: len * 0.12 });
+    // Blade, spanning from inside the hull out to full span.
+    box(b, 'hull', st.trim, len + root, thick, chord, { x: (len - root) / 2 });
+    // Shoulder fairing: a thicker, deeper block straddling the skin line, which
+    // is what makes the joint read as structure rather than as a seam.
+    box(b, 'hull', weather(st.trim, 1), root * 1.9, thick * 3.2, chord * 0.9, { x: root * 0.1 });
+    box(b, 'hull', weather(st.hullDark, 1), root * 1.2, thick * 4.0, chord * 0.55, { x: -root * 0.25 });
     for (let i = 0; i < 4; i++) {
       box(b, 'hull', weather(st.hull, 1), len * 0.86, thick * 0.6, chord * 0.055,
         { x: len * 0.53, z: (i - 1.5) * chord * 0.24 });
@@ -187,7 +198,7 @@ function sampleCanister(b, st, { r, len, seed = 1 }) {
  * the aperture is bolted through whatever it is mounted on instead of resting
  * against it. scripts/attach-audit.mjs is what catches the difference.
  */
-function surveyAperture(b, st, { r, depth, dir = -1 }) {
+function surveyAperture(b, st, { r, depth, dir = -1, face: withFace = true }) {
   const shank = depth * 0.55;
   cyl(b, 'hull', weather(st.hull, 1), r * 0.72, r * 0.82, shank, 6,
     { rx: Math.PI / 2, z: -dir * shank * 0.5 });
@@ -202,8 +213,139 @@ function surveyAperture(b, st, { r, depth, dir = -1 }) {
     r: r * 0.96, tube: Math.max(0.03, r * 0.07),
     from: dir * depth * 0.08, to: dir * depth * 0.44, count: 2, axis: 'z', tseg: 6,
   });
-  cyl(b, 'lights', OPTIC, r * 0.52, r * 0.52, depth * 0.07, 6,
-    { rx: Math.PI / 2, z: dir * depth * 0.86 });
+
+  // A drone's stowed aperture is a fraction of a unit across; its bezel, bosses
+  // and cabling would cost ~2,700 vertices each and be invisible. `face: false`
+  // is for those. Detail belongs where it can be read.
+  if (!withFace) {
+    cyl(b, 'lights', OPTIC, r * 0.4, r * 0.4, depth * 0.06, 8,
+      { rx: Math.PI / 2, z: dir * depth * 0.84 });
+    return;
+  }
+
+  // THE FACE IS EQUIPMENT, NOT A LIT DISC.
+  //
+  // This used to end in one hexagonal emissive plate filling 52% of the housing
+  // radius, and at any distance it read as a flat green face stuck on the front
+  // of a pipe — the first thing a reviewer said about this fleet. An instrument
+  // this faction treats as valuable has a bezel, a sunk iris, radial mounting
+  // bosses, a calibration target and cabling. The lit element is now a SMALL
+  // pupil at 0.24 of the radius, deep inside the bezel, so the light reads as
+  // coming out of a machine rather than being painted on one.
+  const face = dir * depth * 0.84;
+  cyl(b, 'hull', weather(st.trim, 0), r * 0.68, r * 0.62, depth * 0.14, 12,
+    { rx: Math.PI / 2, z: face });                                    // bezel
+  cyl(b, 'hull', weather(st.hullDark, 1), r * 0.5, r * 0.5, depth * 0.2, 12,
+    { rx: Math.PI / 2, z: face + dir * depth * 0.02 });               // sunk iris well
+  torus(b, 'hull', weather(st.trim, 1), r * 0.58, Math.max(0.025, r * 0.05), 6, 14, undefined,
+    { z: face - dir * depth * 0.06 });                                // retaining ring
+  // Radial mounting bosses and their bolts — six, on the hex facet centres.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const bx = Math.cos(a) * r * 0.78;
+    const by = Math.sin(a) * r * 0.78;
+    box(b, 'hull', weather(st.hull, 0), r * 0.2, r * 0.2, depth * 0.12,
+      { x: bx, y: by, z: face - dir * depth * 0.03 });
+    cyl(b, 'hull', weather(st.trim, 2), r * 0.055, r * 0.055, depth * 0.1, 6,
+      { rx: Math.PI / 2, x: bx, y: by, z: face + dir * depth * 0.03 });
+  }
+  // Calibration target: an off-centre stepped block. Asymmetry of function, not
+  // of construction — it gives the eye something to read the face's roll against.
+  box(b, 'hull', weather(st.hullDark, 0), r * 0.26, r * 0.1, depth * 0.16,
+    { x: r * 0.34, y: -r * 0.34, z: face + dir * depth * 0.04 });
+  // Signal cabling from the bezel back down the shank.
+  for (const sx of [1, -1]) {
+    pipeRun(b, 'hull', weather(st.trim, 2), {
+      ax: sx * r * 0.66, ay: r * 0.2, az: face - dir * depth * 0.1,
+      bx: sx * r * 0.5, by: r * 0.2, bz: -dir * shank * 0.6,
+      r: Math.max(0.02, r * 0.04), seg: 6, collars: 2,
+    });
+  }
+  cyl(b, 'lights', OPTIC, r * 0.24, r * 0.24, depth * 0.05, 10,
+    { rx: Math.PI / 2, z: face + dir * depth * 0.08 });
+}
+
+/**
+ * Drive section over the aft end of a spine of radius `r`, occupying z from
+ * `-len` to 0 in the current frame, terminating in `throats` recessed thrust
+ * throats.
+ *
+ * WHY THIS MOTIF EXISTS. The survey command frigate's aft third was bare spine
+ * wearing rib hoops, and in the render it read as a floating back end: the hull
+ * simply stopped and trailed off into a cage of rings with a couple of blocks
+ * hanging off it. The first attempt at a fix decorated the flat end polygon
+ * instead, which was wrong twice over — it left the silhouette unchanged and
+ * added a second flat disc in front of the first.
+ *
+ * A ship's back end needs MASS and FUNCTION, not a dressed cap. This is a
+ * genuine propulsion section: a stepped armoured housing wider than the spine,
+ * radiator panels shedding drive heat, service plumbing, and thrust throats
+ * recessed into their mounts with the light deep inside them. The silhouette
+ * changes, which is the whole point.
+ */
+function driveSection(b, st, { r, len, throats = 4, seed = 1 }) {
+  const hr = r * 1.14; // housing radius — the drive is the widest part aft
+  // Stepped housing: two courses, the aft one narrower, so the section reads as
+  // built up rather than as a sleeve.
+  b.push(0, 0, -len * 0.62, 0, 0, 0);
+    cyl(b, 'hull', weather(st.hull, 1), hr, hr, len * 0.76, 6, { rx: Math.PI / 2 });
+    panelSkin(b, 'hull', [weather(st.hull, 1), weather(st.hullDark, 1), weather(st.patch[0], 1)], {
+      r: hr, from: -len * 0.34, to: len * 0.34,
+      rows: Math.max(3, Math.round(len / (r * 0.9))), cols: 6,
+      seed, t: Math.max(0.1, r * 0.1), axis: 'z',
+    });
+  b.pop();
+  b.push(0, 0, -len * 0.14, 0, 0, 0);
+    cyl(b, 'hull', weather(st.trim, 2), hr * 0.92, hr * 0.78, len * 0.3, 6, { rx: Math.PI / 2 });
+  b.pop();
+  ribBands(b, 'hull', st.trim, {
+    r: hr + r * 0.05, tube: Math.max(0.06, r * 0.055),
+    from: -len * 0.9, to: -len * 0.2, count: 3, axis: 'z', tseg: 6,
+  });
+
+  // Radiator panels: a drive this size sheds heat, and they break the silhouette
+  // along the top and bottom where a bare tube would read as a pipe.
+  for (const sy of [1, -1]) {
+    for (const sx of [1, -1]) {
+      radiatorPanel(b, 'hull', weather(st.trim, 1), weather(st.hullDark, 1), {
+        x: sx * hr * 0.62, y: sy * hr * 0.72, z: -len * 0.5,
+        w: len * 0.5, h: r * 0.7, fins: 5, ry: Math.PI / 2, thick: Math.max(0.08, r * 0.06),
+      });
+    }
+  }
+
+  // Service plumbing from the housing forward onto the spine.
+  for (const sx of [1, -1]) {
+    pipeRun(b, 'hull', weather(st.trim, 2), {
+      ax: sx * hr * 0.8, ay: 0, az: -len * 0.15,
+      bx: sx * r * 0.86, by: 0, bz: -len * 1.05,
+      r: Math.max(0.05, r * 0.055), seg: 6, collars: 3,
+    });
+  }
+
+  // Thrust throats: recessed, ringed, with the emissive core set DEEP inside so
+  // the light reads as coming out of a machine.
+  const tr = hr * (throats > 3 ? 0.3 : 0.4);
+  const ring = hr * 0.52;
+  for (let i = 0; i < throats; i++) {
+    const a = (i / throats) * Math.PI * 2 + Math.PI / throats;
+    const tx = Math.cos(a) * ring;
+    const ty = Math.sin(a) * ring;
+    cyl(b, 'hull', weather(st.hull, 0), tr * 1.28, tr * 1.1, len * 0.26, 8,
+      { rx: Math.PI / 2, x: tx, y: ty, z: -len * 0.1 });
+    cyl(b, 'hull', weather(st.hullDark, 2), tr, tr * 0.82, len * 0.2, 8,
+      { rx: Math.PI / 2, x: tx, y: ty, z: -len * 0.04 });
+    torus(b, 'hull', weather(st.trim, 0), tr * 1.18, Math.max(0.03, r * 0.04), 6, 10, undefined,
+      { x: tx, y: ty, z: -len * 0.02 });
+    cyl(b, 'lights', OPTIC, tr * 0.62, tr * 0.62, len * 0.05, 8,
+      { rx: Math.PI / 2, x: tx, y: ty, z: -len * 0.16 });
+  }
+  // Between-throat structure so the aft face is a frame, not a plate.
+  for (let i = 0; i < throats; i++) {
+    const a = (i / throats) * Math.PI * 2;
+    box(b, 'hull', weather(st.trim, 1), hr * 0.22, hr * 0.9, len * 0.18,
+      { x: Math.cos(a) * ring * 0.9, y: Math.sin(a) * ring * 0.9, z: -len * 0.12, rz: a });
+  }
 }
 
 /**
@@ -441,7 +583,7 @@ export const veridianShip = {
           hexModule(b, st, { r: 0.28, len: 0.9, seed: 126 + sx, windows: 1, serial: false });
           // Drone's own survey aperture — miniature version
           b.push(0, 0, -0.5, 0, 0, 0);
-            surveyAperture(b, st, { r: 0.26, depth: 0.6, dir: -1 });
+            surveyAperture(b, st, { r: 0.26, depth: 0.6, dir: -1, face: false });
           b.pop();
           // Drone latch — proves it can deploy
           b.push(0, -0.32, 0, 0, 0, 0);
@@ -561,6 +703,12 @@ export const veridianShip = {
         instrumentFin(b, st, { len: 2.2, depth: 1.4 });
       b.pop();
       
+
+      // DRIVE SECTION — the same bare-aft defect the frigate had. A gunship this
+      // dense cannot end in a rib hoop.
+      b.push(0, 0, 7.8, 0, 0, 0);
+        driveSection(b, st, { r: 2.2, len: 3.4, throats: 3, seed: 135 });
+      b.pop();
       // Ventral service lights — EXTENDED to new stern
       lampString(b, 'lights', LAMP, {
         ax: -1.8, ay: -2.0, az: -4.5, bx: 1.8, by: -2.0, bz: 6.5,
@@ -717,6 +865,14 @@ export const veridianShip = {
         b.push(0, 1.4, 1.8, 0, 0, 0);
           moduleLatch(b, st, { s: 1.2 });
         b.pop();
+      b.pop();
+
+      // DRIVE SECTION. The aft third used to be bare spine wearing rib hoops:
+      // the hull stopped and the ship trailed off into a cage of rings, which is
+      // exactly what "floating back end" meant in review. This gives the stern
+      // mass and function instead of dressing its end polygon.
+      b.push(0, 0, 16.5, 0, 0, 0);
+        driveSection(b, st, { r: 2.4, len: 6.4, throats: 4, seed: 145 });
       b.pop();
       
       // Running lights along the spine. These used to run DIAGONALLY from
@@ -906,6 +1062,13 @@ export const veridianShip = {
         b.pop();
       }
       
+      // DRIVE SECTION — the carrier's aft was the same bare spine the frigate and
+      // the gunship had. On a 79-unit hull the missing stern mass was the most
+      // visible of the three.
+      b.push(0, 0, 41.0, 0, 0, 0);
+        driveSection(b, st, { r: 3.2, len: 8.4, throats: 4, seed: 155 });
+      b.pop();
+
       // SERVICE WALKWAYS, and the HUMAN-scale lamp repetition that rides them.
       //
       // Two rules collide here and both matter. The lamp runs are this ship's
