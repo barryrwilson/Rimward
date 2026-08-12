@@ -179,11 +179,22 @@ function sampleCanister(b, st, { r, len, seed = 1 }) {
  * (-1 = forward). A stepped six-facet housing with a recessed lit disc: the
  * instrument the ship exists to carry, treated as expensive equipment.
  *
- * The housing reaches back TOWARD the frame origin as well as forward, so a
- * caller mounts it with its frame INSIDE the hull it belongs to — otherwise the
- * aperture becomes a floating island under the singleMass flood fill.
+ * THE SHANK IS NOT DECORATION. Every part of the housing used to sit forward of
+ * the frame origin, so a caller placing the frame on the hull's front face got a
+ * tangent contact at best — and the occupancy grid happily called that connected
+ * while the render showed the whole instrument floating off the nose on three
+ * classes. The shank reaches BACKWARD, opposite `dir`, by 0.55 of the depth, so
+ * the aperture is bolted through whatever it is mounted on instead of resting
+ * against it. scripts/attach-audit.mjs is what catches the difference.
  */
 function surveyAperture(b, st, { r, depth, dir = -1 }) {
+  const shank = depth * 0.55;
+  cyl(b, 'hull', weather(st.hull, 1), r * 0.72, r * 0.82, shank, 6,
+    { rx: Math.PI / 2, z: -dir * shank * 0.5 });
+  ribBands(b, 'hull', weather(st.trim, 2), {
+    r: r * 0.86, tube: Math.max(0.03, r * 0.06),
+    from: -dir * shank * 0.2, to: -dir * shank * 0.8, count: 2, axis: 'z', tseg: 6,
+  });
   cyl(b, 'hull', st.trim, r * 0.88, r, depth * 0.5, 6, { rx: Math.PI / 2, z: dir * depth * 0.25 });
   cyl(b, 'hull', weather(st.hull, 1), r, r * 0.66, depth * 0.42, 6,
     { rx: Math.PI / 2, z: dir * depth * 0.7 });
@@ -367,9 +378,11 @@ export const veridianShip = {
         b.pop();
       }
       
-      // Stern running lamps
+      // Stern running lamps sit ON the drive booms. Strung across the fork gap
+      // at x=0 they hung in the open air between the two nacelles.
       lampString(b, 'lights', LAMP, {
-        ax: -0.52, ay: 0, az: 3.3, bx: 0.52, by: 0, bz: 3.3, count: 3, size: HUMAN.lampSize,
+        ax: -1.55, ay: 0.2, az: 3.1, bx: 1.55, by: 0.2, bz: 3.1,
+        count: 2, size: HUMAN.lampSize,
       });
     },
   },
@@ -706,13 +719,17 @@ export const veridianShip = {
         b.pop();
       b.pop();
       
-      // Running lights along the spine - TRIMMED to stay under 25% ceiling
+      // Running lights along the spine. These used to run DIAGONALLY from
+      // (-2.4, 2.8, -14) to (+2.4, 2.8, +16), a line that crosses open space for
+      // most of its length; six of the eight lamps were floating. A running light
+      // follows the plating, so they now track the dorsal and ventral crowns at
+      // x = 0 and stop inside the hull's own reach.
       lampString(b, 'lights', LAMP, {
-        ax: -2.4, ay: 2.8, az: -14.0, bx: 2.4, by: 2.8, bz: 16.0,
+        ax: 0, ay: 2.52, az: -13.0, bx: 0, by: 2.52, bz: 15.0,
         count: 8, size: HUMAN.lampSize,
       });
       lampString(b, 'lights', LAMP, {
-        ax: -2.4, ay: -2.6, az: -12.0, bx: 2.4, by: -2.6, bz: 14.0,
+        ax: 0, ay: -2.52, az: -12.0, bx: 0, by: -2.52, bz: 14.0,
         count: 7, size: HUMAN.lampSize,
       });
     },
@@ -726,16 +743,21 @@ export const veridianShip = {
    * Charter: size 66.0-92.4, target 78.0. Hull 34k-100k verts, lights >= 2400.
    */
   freighter: {
-    glowZ: 26.0,
+    glowZ: 30.0,
     build(b, st) {
-      // Gigantic open industrial spine - compressed to target size 78
-      hexSpine(b, st, { r: 3.2, from: -28.0, to: 31.0, ribGap: 2.8, seed: 151 });
-      
-      // SMALL forward crew/control block - deliberately modest, INSIDE spine
-      b.push(0, 0, -26.5, 0, 0, 0);
+      // Gigantic open industrial spine. The keel runs well forward of the cargo
+      // section and well aft of it: the size charter wants 66-92.4 units and the
+      // measured 78 used to come from four pipe runs that a frame bug had thrown
+      // 40 units off the nose. Once those were seated the real hull measured 59.7,
+      // so the keel now carries the length it was always supposed to.
+      hexSpine(b, st, { r: 3.2, from: -37.0, to: 41.0, ribGap: 2.8, seed: 151 });
+
+      // SMALL forward crew/control block — deliberately modest, seated INSIDE the
+      // spine so cargo volume dominates the read.
+      b.push(0, 0, -35.4, 0, 0, 0);
         surveyAperture(b, st, { r: 2.4, depth: 2.4 });
       b.pop();
-      b.push(0, 2.6, -23.0, 0, 0, 0);
+      b.push(0, 2.6, -32.0, 0, 0, 0);
         hexModule(b, st, { r: 1.8, len: 4.0, seed: 152, windows: 7 });
         // Bridge visible but not grand
         box(b, 'hull', weather(st.hullDark, 1), 2.2, 1.1, 4.8, { y: 0.5 });
@@ -806,13 +828,16 @@ export const veridianShip = {
             cyl(b, 'hull', weather(st.hull, 2), 4.2, 4.2, 4.5, 8, { rx: Math.PI / 2 });
             // Different rib pattern - denser, showing different purpose
             ribBands(b, 'hull', weather(st.trim, 1), {
-              r: 4.3, tube: 0.12, from: -1.8, to: 1.8, count: 6, axis: 'z', tseg: 8,
+              r: 4.3, tube: 0.12, from: -1.8, to: 1.8, count: 5, axis: 'z', tseg: 6,
             });
-            // Pipe runs - different plumbing than silos
+            // Pipe runs — different plumbing than the silos. Endpoints are
+            // FRAME-LOCAL: the enclosing b.push already carries z, so passing
+            // `z - 1.2` here applied it twice and threw every pipe out to 2z,
+            // which is how four of them ended up floating 40 units off the nose.
             for (const pipeAngle of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]) {
               pipeRun(b, 'hull', weather(st.trim, 2), {
-                ax: Math.cos(pipeAngle) * 4.0, ay: 0, az: z - 1.2,
-                bx: Math.cos(pipeAngle) * 4.0, by: 0, bz: z + 1.2,
+                ax: Math.cos(pipeAngle) * 4.0, ay: Math.sin(pipeAngle) * 4.0, az: -1.2,
+                bx: Math.cos(pipeAngle) * 4.0, by: Math.sin(pipeAngle) * 4.0, bz: 1.2,
                 r: 0.16, seg: 8, collars: 3,
               });
             }
@@ -824,10 +849,13 @@ export const veridianShip = {
             thickness: 0.4, bays: 4, spread: 1.8,
           });
           
-          // Service walkway
-          b.push(sx * 7.2, 4.8, z, 0, 0, 0);
+          // Service walkway — a deck plate that OVERLAPS the drum crown, with the
+          // handrail on the deck. The rail alone at y = 4.8 sat 0.6 units clear of
+          // a drum whose crown is at 4.2, so all five of its members floated.
+          b.push(sx * 8.5, 4.05, z, 0, 0, 0);
+            box(b, 'hull', weather(st.trim, 1), 4.6, 0.2, 1.1);
             railing(b, 'hull', st.trim, {
-              ax: -2.2, ay: 0, az: 0, bx: 2.2, by: 0, bz: 0,
+              ax: -2.2, ay: 0.1, az: 0, bx: 2.2, by: 0.1, bz: 0,
               height: HUMAN.railH, posts: 4, rail: HUMAN.railPost,
             });
           b.pop();
@@ -852,9 +880,15 @@ export const veridianShip = {
         }
       }
       
-      // EXTERIOR-ONLY BERTHING STORY - awkward service structures
-      // External gantries and access structures
+      // EXTERIOR-ONLY BERTHING STORY — awkward external service structures.
+      // The platform is CARRIED: two pylons reach from inside the silo crown up
+      // into the deck. Without them the whole gantry, its rail and its hatches
+      // hung 1.6 units above the silo and rendered as a floating raft.
       for (const gx of [1, -1]) {
+        for (const pz of [-20.4, -15.6]) {
+          box(b, 'hull', weather(st.hullDark, 1), 0.42, 2.4, 0.5,
+            { x: gx * 7.0, y: 4.1, z: pz });
+        }
         b.push(gx * 6.2, 5.2, -18.0, 0, 0, 0);
           // External access platform
           box(b, 'hull', weather(st.trim, 1), 3.5, 0.4, 7.0);

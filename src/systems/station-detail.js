@@ -76,14 +76,56 @@ export function weather(hex, i) {
 }
 
 // ---------- 1.2 detailBuilder ----------
-export function detailBuilder() {
+/**
+ * `opts.track` records one axis-aligned bounding box per added part, in final
+ * local space, plus the call site that added it. OFF by default: the game builds
+ * every station and ship through this factory and does not need the boxes.
+ *
+ * WHY IT EXISTS. The singleMass pin floods an occupancy grid whose cell runs
+ * from 0.6 units on a light craft to 3.2 on a freighter, and it joins cells by
+ * 6-neighbour ADJACENCY. Two parts in neighbouring cells therefore count as one
+ * connected mass even with a visible gap between their surfaces — which is
+ * exactly how a Veridian sculpt measured 100% single mass while a reviewer could
+ * see detached greebles floating beside the hull. Per-part boxes let a harness
+ * ask the real question: is every part actually touching something?
+ */
+export function detailBuilder(opts = {}) {
   const channels = {}; // { [name]: BufferGeometry[] }
   const stack = []; // Matrix4[] frame stack
   let built = false;
+  const track = opts.track === true;
+  const parts = []; // { channel, min:[x,y,z], max:[x,y,z], site } when tracking
 
   const topMatrix = () => (stack.length > 0 ? stack[stack.length - 1] : null);
 
+  // The call site that added a part, for a harness to name in a failure. Only
+  // walked while tracking — Error().stack is far too slow for a hot path.
+  const siteOf = () => {
+    const lines = String(new Error().stack).split('\n');
+    const hit = lines.find((l, i) => i > 2 && /ships[\\/]|stations[\\/]/.test(l));
+    return (hit ?? lines[4] ?? '?').trim().replace(/^at\s+/, '');
+  };
+
+  const record = (channel, geo) => {
+    if (!track) return;
+    const p = geo.attributes.position;
+    let lo = [Infinity, Infinity, Infinity];
+    let hi = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < p.count; i++) {
+      const v = [p.getX(i), p.getY(i), p.getZ(i)];
+      for (let a = 0; a < 3; a++) {
+        if (v[a] < lo[a]) lo[a] = v[a];
+        if (v[a] > hi[a]) hi[a] = v[a];
+      }
+    }
+    parts.push({ channel, min: lo, max: hi, site: siteOf() });
+  };
+
   return {
+    /** Recorded part boxes, or an empty array when tracking is off. */
+    parts() {
+      return parts;
+    },
     push(x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0) {
       if (built) throw new Error('detailBuilder: already built');
       // Scratch aliasing is fatal here: one _matrix cannot hold both the
@@ -130,6 +172,7 @@ export function detailBuilder() {
       }
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
+      record(channel, geo);
       if (!channels[channel]) channels[channel] = [];
       channels[channel].push(geo);
     },
@@ -155,6 +198,7 @@ export function detailBuilder() {
         col[i * 3 + 2] = _color.b;
       }
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      record(channel, geo);
       if (!channels[channel]) channels[channel] = [];
       channels[channel].push(geo);
     },
