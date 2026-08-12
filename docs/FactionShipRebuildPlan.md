@@ -151,11 +151,11 @@ Each faction is one wave: author the six-ship family, add the faction to
 pin rebuilt factions against `SHIP_SCALE` and everything else against
 `LEGACY_SHIP_SCALE`, so a wave in progress never turns the other fleets red.
 
-| wave | faction | file | notes |
+| wave | faction | file | status |
 |---:|---|---|---|
-| 0 | — | `ship-scale.js`, harnesses, `combat.js`, catalog | foundation |
-| 1 | Veridian Combine | `ships/veridian.js` | |
-| 2 | Ferrous Hegemony | `ships/ferrous.js` | |
+| 0 | — | `ship-scale.js`, harnesses, `combat.js`, catalog | **done** |
+| 1 | Veridian Combine | `ships/veridian.js` | **done** |
+| 2 | Ferrous Hegemony | `ships/ferrous.js` | **next** — spec in this doc's §6 handoff |
 | 3 | Freehold Compact | `ships/freehold.js` | retires the one-builder-six-sizes shortcut |
 | 4 | Red Ledger | `ships/redledger.js` | |
 | 5 | Gilded Chain | `ships/gilded.js` | |
@@ -180,23 +180,128 @@ terms.
 A faction family is done when all of these hold:
 
 1. `node scripts/measure-ships.mjs <faction>` reports ALL PASS.
-2. `npm run test:boot` reports BOOT TEST PASS.
-3. The six classes sort by class at thumbnail size without colour.
-4. The family reads as one faction in grayscale, from construction logic.
-5. The freighter's exterior-only berthing story is visible in the sculpt —
+2. `node scripts/attach-audit.mjs <faction>` reports ALL PARTS ATTACHED.
+3. `npm run test:boot` reports BOOT TEST PASS.
+4. The family is reviewed **in the render**, in the Models Browser, at side and
+   top angles. The numeric pins cannot see a silhouette, and when a report and
+   the render disagree the render wins.
+5. The six classes sort by class at thumbnail size without colour.
+6. The family reads as one faction in grayscale, from construction logic.
+7. The freighter's exterior-only berthing story is visible in the sculpt —
    awkward service structures and multiple external docking points, not just
    size.
-6. No flags, readable text, or borrowed franchise shapes.
-7. The Models Browser renders all twelve entries (six classes × trader/pirate)
+8. No flags, readable text, or borrowed franchise shapes.
+9. The Models Browser renders all twelve entries (six classes × trader/pirate)
    without a build error, framed correctly at both ends of the size ladder.
 
-## 5. Models Browser
+### Why `attach-audit` exists and is not optional
+
+`singleMass` floods an edge-sampled occupancy grid and joins cells by
+**6-neighbour adjacency**. Its cell runs from 0.6 units on a light craft to 3.2
+on a freighter, so two parts in neighbouring cells score as one connected mass
+even with a visible gap between their surfaces. Wave 1 shipped six Veridian
+sculpts at 100% single mass, and the first person to open the Models Browser saw
+detached hull sections and floating greebles.
+
+`scripts/attachment.mjs` asks the question per PART: does every part's bounding
+box overlap another part's, and is the overlap graph connected? Box overlap is
+**necessary but not sufficient** for contact, so the metric cannot prove a sculpt
+is connected — only that a part is not. That is the useful direction: every
+failure it reports is real, and it prints the offending part's box and the source
+line that added it. `detailBuilder({ track: true })` records the boxes; the game
+never pays for it.
+
+The five defect shapes it found in wave 1, all of which passed every numeric pin,
+are the ones to watch for in every later wave:
+
+1. **A motif with no shank.** `surveyAperture` placed every part forward of its
+   own frame origin, so a caller mounting it on a nose face got a tangent contact
+   and the instrument floated. Any motif meant to be mounted INTO something needs
+   geometry reaching back past its frame origin.
+2. **A lamp run strung across a gap.** The ace's stern lamps ran between the two
+   drive booms, through open space.
+3. **A run that crosses the hull instead of following it.** The frigate's running
+   lights went diagonally from one flank to the other; six of eight lamps floated.
+4. **Absolute coordinates passed inside a pushed frame.** The freighter's refinery
+   `pipeRun` passed `az: z - 1.2` inside a frame already carrying `z`, throwing
+   four runs to `2z` — 40 units off the nose. Worse, removing them showed the hull
+   was really 59.7 units and not 78: the floating parts had been measuring the
+   ship's length. Check size again after fixing any attachment defect.
+5. **A deck or rail hovering above what it belongs to.** The refinery walkway and
+   the external gantry raft both sat clear of the drums beneath them. A walkway is
+   a deck plate that overlaps its mount, plus a rail on the deck.
+
+## 5. Models Browser — done
 
 `src/game/model-catalog.js` enumerates ships from `FACTION_ORDER × CLASS_ORDER ×
-{trader, pirate}`, so the rebuild needs no manifest edit for the existing
-twelve factions. Two changes are required:
+{trader, pirate}`, so the rebuild needs no manifest edit for the existing twelve
+factions. Two changes were required and are in:
 
-- The Player ship is the charter's yardstick and cannot currently be inspected
-  in the browser. It gets a catalog entry so a reviewer can put it beside a
+- **The Player ship is now a catalog entry** (`ship:player`), built from
+  `makeLivingHull` / `makeVeinTexture`, which `src/systems/ship.js` now exports
+  for exactly this reason. It is the charter's yardstick, so the browser shows
+  that geometry rather than a lookalike, and a reviewer can put it beside a
   frigate and a freighter (bible §6 deliverable 5, acceptance test 3).
-- Camera framing must survive a 78-unit freighter after a 6.8-unit light craft.
+- **Framing fits the bounding BOX from a side-biased angle.** A bounding-sphere
+  fit down the length of a 78-unit hull filled a sixth of the viewport and could
+  not be reviewed; the old `(0.75, 0.42, 1)` camera also looked straight down the
+  ship's length. `measureModel` now returns the box extent and `frameModel`
+  projects it onto the camera basis, solving for the tighter of the vertical and
+  horizontal fits.
+
+`node --import ./scripts/with-css-stub.mjs scripts/probe-models.mjs` builds all
+221 catalog entries headlessly: 221 built, 0 failures.
+
+## 6. Handoff — state at the end of the first session
+
+**Green:** `measure-ships` ALL PASS, `attach-audit` ALL PARTS ATTACHED (Veridian;
+the nine unrebuilt built fleets still carry wave-47 floaters and are only
+legacy-pinned), `test:boot` BOOT TEST PASS. Waves 0 and 1 committed.
+
+### Reviewing in the render
+
+Headless Chromium has no WebGL and `main.js` catches it with a fatal screen. Use
+real Chrome:
+
+```
+chrome.exe --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist
+```
+
+against `npm run dev`. The title screen's MODELS button is unreliable to click
+while Vite is hot-reloading; `window.__ctx.models.open()` is the dependable way
+in. Then click `.rw-models-entry` by index — the Ships tab lists
+`FACTION_ORDER × CLASS_ORDER × {trader, pirate}`, so Veridian's trader bakes are
+indices 12, 14, 16, 18, 20, 22.
+
+### Wave 2 is prepared but NOT landed
+
+A Ferrous Hegemony motif library and class scaffold were written, measured green
+on every size, proportion, pivot and connectivity pin, and then reverted so this
+session could hand over a clean tree. Rebuild it from the §4.2 brief with the
+nine motifs specified for it: `citadelArmour`, `wedgeProw`, `weaponBlock`,
+`recognitionBand`, `serviceHonour`, `rescueLock`, `pointDefence`, `commandStep`,
+`containerBlock`. Notes worth keeping from that pass:
+
+- Ferrous class targets that measured inside band: light 7.0, ace 7.4, cutter
+  10.8, heavy 15.7, frigate 28.0, freighter 77.6.
+- `citadelArmour` is both the surface language and the vertex engine: its
+  `rows × cols` plates per course are how the hull count moves. Twelve large
+  boxes moved the Veridian frigate's count by 432 verts against a 16,000 floor.
+- Symmetry is doctrine for this faction: every side-mounted part inside
+  `for (const sx of [1, -1])`.
+
+### Authoring rules that cost this session the most time
+
+1. **Budget the extents before you build.** Agents that guessed produced an 8.8
+   unit ace against a 7.59 ceiling and a 117-unit freighter against 92.4. Walk
+   every `b.push` and part offset and write down the min and max z first.
+2. **`panelSkin` is the vertex engine, not `box`.** A box is 36 vertices.
+3. **Lamp counts come from `HUMAN.lampGap`, never `HUMAN.lampSize`.** Dividing by
+   the lamp's own size packs them edge to edge: 805 lamps and 73,692 lit vertices
+   on one freighter.
+4. **Lit parts are seated on a fixed 1.0-unit cell at every class size.** Put
+   them on plating, and build the walkway if the brief implies one.
+5. **`weather(hex, i)` now clamps `i`.** It used to return pure black for `i >= 4`
+   and fail the palette pin with no clue where it came from.
+6. **Never let an agent run `git checkout`.** One did, after a syntax error, and
+   destroyed two agents' uncommitted work.
