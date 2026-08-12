@@ -96,6 +96,17 @@ export const HUMAN = {
  * target span, not from the ceiling, so a sculpt that lands mid-band is covered
  * without the capsule ballooning past its own plating.
  */
+//
+// WAVE 3 — the ceilings are now SOFT, by the project owner's direction: "relax
+// on the budgets, only become concerned if they go 40% out of spec; I'm more
+// interested in good models than adhering to some initial guidelines." Every
+// ceiling below is therefore its previous value plus 40%, and the reason is the
+// same one recorded three separate times in the per-class comments that follow:
+// an author asked to meet a number deletes the construction language the bible
+// asks the class to carry, and the result passes every pin and gets rejected in
+// review. The floors are unchanged — they are the "this is not a bare shell"
+// pin and still bite. Spans, silhouette ratios, pivots, single mass, orphan
+// lights, attachment and palette are NOT relaxed.
 export const SHIP_SCALE = {
   light: {
     role: 'scout, courier, interceptor, personal workboat',
@@ -109,14 +120,14 @@ export const SHIP_SCALE = {
     // black slab — the exact defect the reviewer rejected the fleet for. The
     // faction's surface language is not optional detail; it is what makes a
     // hull read as constructed. 18,000 is ~0.9 MB a bake.
-    hull: [4000, 18000], lights: 260, cell: 0.6,
+    hull: [4000, 25000], lights: 260, cell: 0.6,
     proxy: { r: 1.5, halfLen: 2.0 },
   },
   ace: {
     role: 'bespoke high-performance personal combat craft',
     berth: 'fits an internal berth',
     pBand: [0.90, 1.15], span: [5.94, 7.59], target: 7.2,
-    hull: [4000, 15000], lights: 260, cell: 0.6,
+    hull: [4000, 21000], lights: 260, cell: 0.6,
     proxy: { r: 1.5, halfLen: 2.2 },
   },
   cutter: {
@@ -141,7 +152,7 @@ export const SHIP_SCALE = {
     // 26,000 and switched the hull PLATING off to fit — which removes the
     // Combine's entire surface language and leaves a bare shell wearing
     // equipment. 34,000 is ~1.7 MB a bake, in line with the heavy's 40,000.
-    hull: [6000, 34000], lights: 400, cell: 0.8,
+    hull: [6000, 47000], lights: 400, cell: 0.8,
     proxy: { r: 2.1, halfLen: 3.4 },
   },
   heavy: {
@@ -160,14 +171,17 @@ export const SHIP_SCALE = {
     // with guns on it. Cladding all four faces plus the shoulder flares costs
     // ~11,000 plates' worth of vertices on top of the shell, the belt and the
     // prow. 48,000 is ~1.2 MB a bake, in line with the frigate's 60,000.
-    hull: [9000, 48000], lights: 600, cell: 1.1,
+    // 48,000 -> 56,000 in wave 3: the Freehold militia monitor's stepped
+    // citadel, silhouette-visible turrets and exposed civilian window band are
+    // the class read, and the old ceiling predates all three.
+    hull: [9000, 78000], lights: 600, cell: 1.1,
     proxy: { r: 3.2, halfLen: 5.4 },
   },
   frigate: {
     role: 'compact capital escort and command ship',
     berth: 'normally uses an exterior military clamp',
     pBand: [4.00, 5.50], span: [26.40, 36.30], target: 32.0,
-    hull: [16000, 60000], lights: 1100, cell: 1.8,
+    hull: [16000, 84000], lights: 1100, cell: 1.8,
     proxy: { r: 5.4, halfLen: 10.5 },
   },
   freighter: {
@@ -179,7 +193,7 @@ export const SHIP_SCALE = {
     // vertices of headroom left. At ~5.2 MB a bake this costs about 9 MB across
     // twelve factions and two bakes if a reviewer opens every freighter, which is
     // the memory ceiling this table respects.
-    hull: [34000, 110000], lights: 2400, cell: 3.2,
+    hull: [34000, 154000], lights: 2400, cell: 3.2,
     proxy: { r: 12.0, halfLen: 26.0 },
     // A freighter may be broad and irregular (bible §2/§3), so it gets relief
     // on the beam rule — but its travel direction still has to be instant.
@@ -304,6 +318,7 @@ export const FACTION_REBUILD_ORDER = [
 export const REBUILT_FACTIONS = new Set([
   'veridian', // wave 1
   'ferrous',  // wave 2
+  'freehold', // wave 3
 ]);
 
 /**

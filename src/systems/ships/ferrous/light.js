@@ -157,11 +157,16 @@ export const ferrousLight = {
     box(b, 'hull', st.hullDark, 0.90, 0.18, 0.28);
     // Window slit recessed into dark well
     b.push(0, -0.06, -0.06, 0, 0, 0);
-    windowRow(b, 'lights', GLASS, 3, {
+    // `windowRow` takes ONE options object: `count` and `spacing` live inside
+    // it. Passing the count positionally destructures a number, so `count`
+    // came through undefined and the picket's cockpit emitted no windows at
+    // all while every pin stayed green.
+    windowRow(b, 'lights', GLASS, {
+      count: 3,
+      spacing: HUMAN.windowGap,
       w: HUMAN.windowW,
       h: HUMAN.windowH,
       d: HUMAN.windowD,
-      gap: HUMAN.windowGap,
     });
     b.pop();
     // Armoured brow of trim above cockpit

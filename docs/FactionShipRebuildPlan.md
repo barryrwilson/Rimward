@@ -197,8 +197,8 @@ pin rebuilt factions against `SHIP_SCALE` and everything else against
 | 0 | — | `ship-scale.js`, harnesses, `combat.js`, catalog | **done** |
 | 1 | Veridian Combine | `ships/veridian/` | **done** — rebuilt from silhouette in 49.2; the reference for §2 "Body plans first" |
 | 2 | Ferrous Hegemony | `ships/ferrous/` | **done** — wave 49.3; introduced the shared `ships/loft.js` sweep core |
-| 3 | Freehold Compact | `ships/freehold/` | **next** — retires the one-builder-six-sizes shortcut |
-| 4 | Red Ledger | `ships/redledger.js` | |
+| 3 | Freehold Compact | `ships/freehold/` | **done** — donated-section hulls, greenhouse/tank volumes, soft vertex budgets; one-builder-six-sizes retired |
+| 4 | Red Ledger | `ships/redledger.js` | **next** |
 | 5 | Gilded Chain | `ships/gilded.js` | |
 | 6 | The Beautiful Ones | `ships/beautiful.js` (new) | organic; moves out of `npc.js`/`organic.js` |
 | 7 | The Unknowables | `ships/unknowables.js` (new) | field; moves out of `npc.js` |
@@ -327,11 +327,43 @@ factions. Two changes were required and are in:
 ## 6. Handoff
 
 **Green:** `measure-ships` ALL PASS (whole fleet), `attach-audit` ALL PARTS
-ATTACHED (Veridian and Ferrous; the eight unrebuilt built fleets still carry
-wave-47 floaters and are only legacy-pinned), `test:boot` BOOT TEST PASS,
-`probe-models` MODEL PROBE PASS.
+ATTACHED (Veridian, Ferrous and Freehold; the seven unrebuilt built fleets
+still carry wave-47 floaters and are only legacy-pinned), `test:boot` BOOT TEST
+PASS, `probe-models` MODEL PROBE PASS.
+
+### Wave 3 — Freehold Compact
+
+Six body plans, measured: cab-forward runabout with a framed raked windscreen and a stepped-down aft working deck (7.07); hourglass with a pinched waist between a faired shoulder and an oversized stern drive, with outboard tuned clusters (7.47); flat-bowed rescue launch with a recessed bow airlock, a bow floodlight mast and a separated medical house (11.80); low armoured work hull with a near-vertical riser into a raised monitor citadel carrying turrets on barbettes (17.48); long hull with exposed yard modules over a lowered keel with a visible gap, and an aft ventral rescue hangar (32.13); articulated command tug, narrow exposed spine and drive block, with habitation drums, greenhouse galleries and craft docks beyond the flank (78.60).
+
+What landed:
+
+- **`src/systems/ships/freehold/body.js`** as the faction shape core (`splicedHull`, `patchCourse`, `donatedBlock`, `soundFrame`, `glassHouse`, `tankVolume`) over the unchanged shared `loft.js`.
+- **`src/systems/ships/freehold/motifs.js`** — the Compact's surface and equipment language: window strakes, habitation drums, greenhouse galleries, tank clusters, floodlight masts, recessed bow locks, medical houses, monitor turrets and ventral hangars.
+- One file per class under a barrel at `src/systems/ships/freehold.js` — `light.js`, `ace.js`, `cutter.js`, `heavy.js`, `frigate.js`, `freighter.js`.
+- **`freehold` added to `REBUILT_FACTIONS`** in `src/game/ship-scale.js`.
+
+### The vertex ceilings are now soft
+
+The project owner's direction: relax the budgets, only be concerned at more than 40% out of spec, good models matter more than the initial guidelines. Every ceiling was raised 40% (light 25,000, ace 21,000, cutter 47,000, heavy 78,000, frigate 84,000, freighter 154,000); the floors are unchanged because they are the "not a bare shell" pin. Spans, silhouette ratios, pivots, single mass, orphan lights, attachment and palette are NOT relaxed.
+
+### The five defect shapes wave 3 added to the catalogue
+
+1. **Double weathering.** The section-scale skin called `weather()` on tones the class files had already passed pre-weathered. `hull` x0.86 x0.72 = x0.619 lands off the four-step SHADES ladder, so the palette pin failed with hexes (#423121, #4f3a28) that match no base colour and no single shade. A helper that shades a caller-supplied colour must never assume the colour is un-shaded; emit tones verbatim from the caller's list instead.
+2. **Colour-dependent colour selection breaks the pirate bake.** The same skin grouped the palette into hue families by reading RGB. The pirate bake desaturates ~50% toward luminance and dims to 72% (`src/systems/npc.js`), which changes hue relationships, so the two bakes selected DIFFERENT slots of the palette and a pirate vertex could come out brighter than its trader counterpart — `wave38 ship pirates / colorsNeverBrighterStrictlyDimmer` in `scripts/boot-test.mjs`. The rule "geometry never reads a colour to decide a position" extends to selection: pick by INDEX and seed, never by colour value.
+3. **A light seated INSIDE a volume is still an orphan.** An agent fixing orphan lights on the habitation drums inset the window panes from radius r to r-0.6, which moved them into the drum's hollow interior where no hull cell can neighbour them. It moved the number and buried the defect. A window in a wall is a hull WELL plus a lit pane seated in it; the general remedy is to seat lights on a plate you add — a window strake built from the loft follows the taper by construction, where a hand-computed X offset cannot.
+4. **Sampling a lofted surface at the wrong height.** Window rows were placed using the section half-width at y=0 while mounting at y~2.5. A chamfered outline narrows as it rises, so the rows hung outside the skin. Sample `sectionOutline` at the part's own y, or avoid the problem entirely with a strake.
+5. **Section-scale colour can overshoot into monotone.** Fixing the per-plate "harlequin" skin with a fixed 2-4 sections per course made a 78-unit freighter almost entirely one tone — a factory paint job, not donated sections. Section count must scale with course LENGTH, and adjacent sections must be forbidden from drawing the same family so a seam is always a visible tone change.
+
+And four process notes worth carrying to wave 4:
+
+- **The review prints did the work again.** The family passed every numeric pin and was rejected on shape in the first review — the third wave running that this has happened. Generate and READ `silhouette-sheet` and `ship-render` before declaring a class done.
+- **Central diagnosis, broadcast correction.** When several agents hit the same unexplained pin, diagnosing it once centrally and broadcasting the cause stopped the documented wave-2 failure mode where agents invent a cause and replace shared motifs with private copies.
+- **The wave-2 rule held again: authors asked to meet a number remove the thing the class is for.** Two authors cut plate density to fit a ceiling and had to be told to put it back.
+
 
 ### Wave 49.3 — the Ferrous Hegemony family
+
+
 
 Six body plans, measured: picket, a solid stern-heavy wedge — a doorstop with a
 flat bow strike face (6.9); honour interceptor, a dart with a pronounced
