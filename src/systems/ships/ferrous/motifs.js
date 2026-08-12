@@ -37,8 +37,13 @@ export const DIM = 0xe8dcc8;   // dimmed interior
  * plates; plate COUNT is the hull vertex lever, not plate size.
  *
  * The Ferrous brief asks for "layered citadel armour" as the faction's surface
- * read. Plates cycle through `[st.hull, weather(st.hull, 1), weather(st.hull, 2),
- * st.hullDark]` to give the hull tonal variation without extra geometry.
+ * read, and the model-quality playbook warns that one flat albedo across a hull
+ * is what makes a ship look like a plastic toy. Vertex colour is the only
+ * material channel this project has, so the tonal range has to be authored:
+ * plates cycle through `[st.hull, weather(st.hull, 1), st.trim,
+ * weather(st.trim, 2), weather(st.hull, 2), st.hullDark]` by default — iron
+ * with pale structural-steel plates set into it, not six shades of the same
+ * near-black. Pass `tones` to override the cycle for a specific surface.
  *
  * CALLER CONTRACT. `w`/`h` are the face's half-extents; the motif plates a flat
  * face and stands the plates proud by `t`. `ry` orients the armour on the face.
@@ -48,9 +53,12 @@ export const DIM = 0xe8dcc8;   // dimmed interior
  */
 export function citadelArmour(b, st, {
   w, h, d = 0.5, rows = 3, cols = 2, courses = 3, t = 0.08,
-  inset = 0.18, ry = 0, seed = 1,
+  inset = 0.18, ry = 0, seed = 1, tones = null,
 }) {
-  const plates = [st.hull, weather(st.hull, 1), weather(st.hull, 2), st.hullDark];
+  const plates = tones ?? [
+    st.hull, weather(st.hull, 1), st.trim,
+    weather(st.trim, 2), weather(st.hull, 2), st.hullDark,
+  ];
   const rnd = rng(seed);
   const courseH = d / courses;
   
@@ -262,9 +270,14 @@ export function recognitionBand(b, st, { len, w = 0.18, p = 0.04, ry = 0 }) {
  */
 export function serviceHonour(b, st, { lit = true, ry = 0 }) {
   b.push(0, 0, 0, ry, 0, 0);
-    // Plaque body — brass.
+    // Plaque body — brass. st.patch[1] IS in the allowed hull palette (see
+    // allowedHull() in scripts/ship-metrics.mjs, which admits every SHADES step
+    // of hull/hullDark/trim/accent/patch). An author who saw a #000000 palette
+    // stray here and swapped the brass for trim was chasing the wrong defect:
+    // the black came from a FLOAT weather index in pointDefence below, which
+    // indexes SHADES out of bounds and bakes NaN -> black. Brass is faction DNA.
     box(b, 'hull', st.patch[1], HUMAN.doorW * 0.7, HUMAN.doorH * 0.35, 0.05);
-    
+
     // Raised bezel.
     box(b, 'hull', weather(st.patch[1], 1), HUMAN.doorW * 0.78, HUMAN.doorH * 0.42, 0.08, {
       z: 0.02,
@@ -369,7 +382,7 @@ export function pointDefence(b, st, { r = 0.3, h = 0.3, ry = 0, seed = 1 }) {
       const a = (i / 6) * Math.PI * 2;
       const px = Math.cos(a) * ringR;
       const py = Math.sin(a) * ringR;
-      box(b, 'hull', weather(st.hull, rnd() * 2),
+      box(b, 'hull', weather(st.hull, Math.floor(rnd() * 3)),
         r * 0.4, r * 0.4, h * 0.7, { x: px, y: py, z: -h * 0.35, rz: a });
     }
     

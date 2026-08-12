@@ -23,7 +23,7 @@ import { buildStarModel, buildPlanetModel, PLANET_SLOT_COUNT } from '../systems/
 import { buildAsteroidModel } from '../systems/asteroids.js';
 import { buildPodModel } from '../game/pods.js';
 import { FACTIONS } from './state.js';
-import { SHIP_CLASSES } from './state.js';
+import { CLASS_ORDER } from './ship-scale.js';
 import { AUTHORED_SYSTEMS } from './authored-systems.js';
 
 export const MODEL_CATEGORIES = ['Ships', 'Stations', 'Gates', 'Landmarks', 'Celestial', 'Props'];
@@ -45,7 +45,11 @@ const FACTION_ORDER = [
   'hollow', 'beautiful', 'unknowables',
 ];
 
-const CLASS_ORDER = ['light', 'cutter', 'ace', 'freighter', 'heavy', 'frigate'];
+// Classes run in CHARTER ORDER — smallest to largest — so the Ships tab reads
+// as a size ladder and a reviewer can walk one faction's family in the order
+// docs/FactionShipRebuildPlan.md measures it. The old order here was wave 47's
+// (light, cutter, ace, freighter, heavy, frigate), which predates the size
+// charter and put the freighter fourth, between the ace and the heavy.
 
 const ships = [];
 for (const faction of FACTION_ORDER) {

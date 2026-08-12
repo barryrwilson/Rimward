@@ -101,7 +101,15 @@ export const SHIP_SCALE = {
     role: 'scout, courier, interceptor, personal workboat',
     berth: 'fits an internal berth',
     pBand: [0.90, 1.10], span: [5.94, 7.26], target: 6.8,
-    hull: [4000, 14000], lights: 260, cell: 0.6,
+    // 14,000 -> 18,000 in wave 2. The number was set for a slim scout with a
+    // small skin area; the Ferrous picket is a SOLID WEDGE, and a wedge of this
+    // length has roughly twice the flat surface of a dart. Two authoring passes
+    // spent the whole 14,000 on the shell, the belt and the drive and had
+    // nothing left for the plate courses, so the class rendered as an unbroken
+    // black slab — the exact defect the reviewer rejected the fleet for. The
+    // faction's surface language is not optional detail; it is what makes a
+    // hull read as constructed. 18,000 is ~0.9 MB a bake.
+    hull: [4000, 18000], lights: 260, cell: 0.6,
     proxy: { r: 1.5, halfLen: 2.0 },
   },
   ace: {
@@ -145,7 +153,14 @@ export const SHIP_SCALE = {
     // hull stopped and the ship trailed off into a cage. Closing the stern with a
     // real drive section (housing, radiators, recessed thrust throats) is mass
     // and function, not decoration, and it costs about 3,500 vertices.
-    hull: [9000, 40000], lights: 600, cell: 1.1,
+    // 40,000 -> 48,000 in wave 2, for the same reason as the cutter's two
+    // raises. The Ferrous bastion gunship is a hammerhead: a tall shouldered
+    // citadel whose four large flat faces are most of the ship's visible
+    // surface, and a gunship that cannot afford to clad them is a black box
+    // with guns on it. Cladding all four faces plus the shoulder flares costs
+    // ~11,000 plates' worth of vertices on top of the shell, the belt and the
+    // prow. 48,000 is ~1.2 MB a bake, in line with the frigate's 60,000.
+    hull: [9000, 48000], lights: 600, cell: 1.1,
     proxy: { r: 3.2, halfLen: 5.4 },
   },
   frigate: {
@@ -288,6 +303,7 @@ export const FACTION_REBUILD_ORDER = [
  */
 export const REBUILT_FACTIONS = new Set([
   'veridian', // wave 1
+  'ferrous',  // wave 2
 ]);
 
 /**

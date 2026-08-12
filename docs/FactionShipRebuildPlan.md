@@ -131,20 +131,30 @@ still fundamentally plated tubes; the motifs hang detail on a cylinder, they do
 not give the classes distinct body plans."* Raising vertex ceilings made it
 worse — it bought more detail on the same shape.
 
-So a faction file is now **two layers**, and the shape layer comes first:
+So a faction file is now **three layers**, and the shape layer comes first:
 
-1. **A shape core** — `src/systems/ships/veridian/body.js` is the reference
-   implementation. It sweeps a cross-section along Z through a list of
-   STATIONS, each carrying its own half-width, half-height, vertical offset and
-   chamfer. One station list is one body plan, and the same code produces a
-   wide instrument head over a slim tail, a lifting body that forks, a flat
-   blade, an anvil widest at the prow, or twin keels under a citadel. It also
-   carries `loftPlating` (plating that follows a taper, which `panelSkin`
-   cannot — that limitation is half of why wave 49.1's hulls were cylinders in
-   the first place), `loftRib`, `chamferBlock` and `openKeel`.
-2. **A motif library** — `src/systems/ships/veridian/motifs.js`: the surface
-   and equipment language. Serialized modules, instrument apertures, latches,
-   vanes, drive sections, tug docks.
+0. **The shared sweep core** — `src/systems/ships/loft.js`. Faction-agnostic and
+   the same for every wave: `sectionOutline`, `sectionAt`, `loftExtents`,
+   `loftHull`, `loftPlating`, `loftRib`, plus the `tri`/`quad`/`emitMesh`
+   plumbing. It sweeps a cross-section along Z through a list of STATIONS, each
+   carrying its own half-width, half-height, vertical offset and chamfer. One
+   station list is one body plan, and the same code produces a wide instrument
+   head over a slim tail, a lifting body that forks, a flat blade, an anvil
+   widest at the prow, twin keels under a citadel, or a blunt wedge. It was
+   extracted from the wave-1 Veridian body in wave 2, when the second faction
+   needed the same machinery; ten more waves would otherwise have copied it.
+   `loftPlating` — plating that follows a taper, which `panelSkin` cannot — is
+   the vertex engine, and that limitation is half of why wave 49.1's hulls were
+   cylinders in the first place.
+1. **A faction shape core** — `<faction>/body.js`. ONLY what is that faction's
+   own construction language, on top of the sweep core. Veridian:
+   `chamferBlock`, `openKeel`. Ferrous: `armourBlock`, `beltedHull`,
+   `armourCourse`, `armouredSpine`.
+2. **A motif library** — `<faction>/motifs.js`: the surface and equipment
+   language. Veridian's serialized modules, instrument apertures, latches,
+   vanes, drive sections and tug docks; Ferrous's citadel armour, wedge prow,
+   weapon blocks, recognition bands, service honours, rescue locks, point
+   defence, command steps, container blocks and drive battery.
 
 **An author writes the station list first, reads the extents off it, and only
 then decorates.** Family resemblance comes from the shared motifs and the
@@ -186,8 +196,8 @@ pin rebuilt factions against `SHIP_SCALE` and everything else against
 |---:|---|---|---|
 | 0 | — | `ship-scale.js`, harnesses, `combat.js`, catalog | **done** |
 | 1 | Veridian Combine | `ships/veridian/` | **done** — rebuilt from silhouette in 49.2; the reference for §2 "Body plans first" |
-| 2 | Ferrous Hegemony | `ships/ferrous/` | **next** — spec in this doc's §6 handoff |
-| 3 | Freehold Compact | `ships/freehold/` | retires the one-builder-six-sizes shortcut |
+| 2 | Ferrous Hegemony | `ships/ferrous/` | **done** — wave 49.3; introduced the shared `ships/loft.js` sweep core |
+| 3 | Freehold Compact | `ships/freehold/` | **next** — retires the one-builder-six-sizes shortcut |
 | 4 | Red Ledger | `ships/redledger.js` | |
 | 5 | Gilded Chain | `ships/gilded.js` | |
 | 6 | The Beautiful Ones | `ships/beautiful.js` (new) | organic; moves out of `npc.js`/`organic.js` |
@@ -316,9 +326,81 @@ factions. Two changes were required and are in:
 
 ## 6. Handoff
 
-**Green:** `measure-ships` ALL PASS, `attach-audit` ALL PARTS ATTACHED (Veridian;
-the nine unrebuilt built fleets still carry wave-47 floaters and are only
-legacy-pinned), `test:boot` BOOT TEST PASS.
+**Green:** `measure-ships` ALL PASS (whole fleet), `attach-audit` ALL PARTS
+ATTACHED (Veridian and Ferrous; the eight unrebuilt built fleets still carry
+wave-47 floaters and are only legacy-pinned), `test:boot` BOOT TEST PASS,
+`probe-models` MODEL PROBE PASS.
+
+### Wave 49.3 — the Ferrous Hegemony family
+
+Six body plans, measured: picket, a solid stern-heavy wedge — a doorstop with a
+flat bow strike face (6.9); honour interceptor, a dart with a pronounced
+shoulder whose stern forks into twin drive nacelles on structural arms (7.2);
+patrol launch, a stout tug with a U-notch cut into the bow for the boarding
+lock and a flat working deck aft (11.5); bastion gunship, a hammerhead
+ziggurat — deep wedge prow, hard step up into a shouldered citadel, narrow tail
+(16.4); line escort, a long low hull with a three-step tower above and a
+recessed hangar cavity below (28.0); fleet logistics carrier, an articulated
+train — command tug, armoured spine of container ranks and fuel-tank pairs,
+drive block (81.7).
+
+What else landed, and what the next wave inherits:
+
+- **`src/systems/ships/loft.js`** — the sweep core, extracted from
+  `veridian/body.js` so wave 3 does not copy it a third time. Veridian's output
+  is byte-identical across the extraction (same vertex counts, same spans).
+- **`SHIP_SCALE` ceilings raised twice more**, both recorded in
+  `src/game/ship-scale.js` with their reasons: `light` 14,000 → 18,000 and
+  `heavy` 40,000 → 48,000. Both for the cutter's original reason — the number
+  predates the surface the bible asks the class to carry, and an author asked to
+  fit it deletes construction language instead of greeble.
+- **The Models Browser Ships tab now runs in charter order** (`CLASS_ORDER` from
+  `ship-scale.js`) instead of wave 47's `light, cutter, ace, freighter, heavy,
+  frigate`, so the list reads as a size ladder. Faction × 12 entries: Veridian's
+  trader bakes are indices 12, 14, 16, 18, 20, 22 and Ferrous's are 36, 38, 40,
+  42, 44, 46.
+
+### Write a motif-level smoke probe BEFORE the class files
+
+The single highest-value thing this wave did was throw away three hours of
+corrective work that never happened. Before dispatching class authors, build
+every export of the new `<faction>/body.js` and `<faction>/motifs.js` into its
+own `detailBuilder({ track: true })` and check five things per motif: channel
+set is exactly `hull`/`lights`, no NaN or black vertex colour, no exact 1×1×1
+part, `analyseAttachment` + `analyseContact` both 100%, and every hull hex
+inside `allowedHull(faction)`. That one script found six real defects in the
+foundation in a single run — a stray `[object Object]` channel in three motifs,
+a missing `crate` import, floating approach lamps, a floating window brow, and a
+NaN belt from `undefined + 0` on an omitted station `y`. Every one of them would
+otherwise have shipped into six class files first and been diagnosed six times.
+
+### The three defect shapes wave 2 added to the catalogue
+
+1. **A partial style object.** The frigate called nine motifs with
+   `{ hull: st.hull, trim: st.trim }` instead of `st`. Every other palette key
+   came through `undefined`, baked to pure black, and tripped the palette pin —
+   and silently deleted the faction's crimson and brass from those motifs.
+   Motifs take the WHOLE `st`.
+2. **An armour belt that buried the ship.** `beltedHull` first swept a complete
+   second shell 0.12 proud over the middle 70% of the hull. Plate courses stand
+   0.07–0.10 proud, so the belt swallowed every course, rib and tonal step: the
+   picket and the gunship rendered as featureless black slabs while every pin
+   stayed green. A belt is a girdle of strakes on the flank faces; anything that
+   covers the hull is just a bigger hull.
+3. **A range clip that dropped its own end bands.** `armourCourse` only
+   interpolated a cut section when `from`/`to` did not coincide with a station,
+   then collected interior stations with a strict inequality — so a course whose
+   range landed on a station lost that band, and a full-hull course lost one at
+   each end and could emit nothing at all on a short flank range. Always
+   interpolate both ends; `sectionAt` returns the station itself when they
+   coincide.
+
+And one process rule, learned twice in one session: **an agent that hits a pin
+it cannot explain will invent a cause and act on it.** One replaced four shared
+motifs with private copies; another swapped the brass service honour for trim.
+Both were chasing the same black pixel, whose real cause was a float passed as a
+`weather()` index in a fifth motif. Diagnose centrally, fix at the source, and
+broadcast the correction to every agent still running.
 
 ### Wave 49.2 — the Veridian body-plan rebuild
 
@@ -390,22 +472,33 @@ shaded print answers "does the construction logic read?" — a hull can pass eve
 numeric pin and still be a bare shell wearing equipment, and only the second
 sheet shows it.
 
-### Wave 2 is prepared but NOT landed
+### Wave 3 — Freehold Compact, and what to reuse
 
-A Ferrous Hegemony motif library and class scaffold were written, measured green
-on every size, proportion, pivot and connectivity pin, and then reverted so this
-session could hand over a clean tree. Rebuild it from the §4.2 brief with the
-nine motifs specified for it: `citadelArmour`, `wedgeProw`, `weaponBlock`,
-`recognitionBand`, `serviceHonour`, `rescueLock`, `pointDefence`, `commandStep`,
-`containerBlock`. Notes worth keeping from that pass:
+Bible §4.3. The brief is the hardest yet on shape discipline: "donated hull
+sections on a sound frame", "patchwork is history, not neglect", and the
+silhouette "can be chunky and friendly" while the travel direction stays clear.
+That is a licence for varied section, not for randomness — and the class that
+retires the one-builder-six-sizes shortcut is this one.
 
-- Ferrous class targets that measured inside band: light 7.0, ace 7.4, cutter
-  10.8, heavy 15.7, frigate 28.0, freighter 77.6.
-- `citadelArmour` is both the surface language and the vertex engine: its
-  `rows × cols` plates per course are how the hull count moves. Twelve large
-  boxes moved the Veridian frigate's count by 432 verts against a 16,000 floor.
-- Symmetry is doctrine for this faction: every side-mounted part inside
-  `for (const sx of [1, -1])`.
+Reuse, in this order:
+
+1. `src/systems/ships/loft.js` unchanged. It is faction-agnostic; do not copy it.
+2. Write `src/systems/ships/freehold/body.js` with ONLY the Compact's own
+   construction language on top of it. Ferrous's `armourBlock` / `beltedHull` /
+   `armourCourse` / `armouredSpine` are the shape of the answer, not the answer:
+   a Freehold body core wants donated-section splicing, a sound structural frame
+   under mismatched skins, and greenhouse/tank volumes.
+3. Write `freehold/motifs.js`, then the motif-level smoke probe described above,
+   then the six class files in parallel.
+
+Ferrous notes worth carrying forward:
+
+- Class targets that measured inside band: light 6.9, ace 7.2, cutter 11.5,
+  heavy 16.4, frigate 28.0, freighter 81.7.
+- Plate COUNT is the vertex lever, never plate size. Twelve large boxes moved the
+  Veridian frigate's count by 432 verts against a 16,000 floor.
+- Symmetry was doctrine for Ferrous; for Freehold it is the opposite, and the
+  bible is explicit that the asymmetry must read as history rather than damage.
 
 ### Authoring rules that cost this session the most time
 

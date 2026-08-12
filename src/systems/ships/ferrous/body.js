@@ -62,35 +62,46 @@ export function armourBlock(b, ch, hexes, { w, h, d, c = 0.14, taper = 1, y = 0 
 }
 
 /**
- * The Ferrous signature LAYERED hull — a base shell wrapped by a proud-standing
- * armour belt band.
+ * The Ferrous signature LAYERED hull — a base shell wearing a proud-standing
+ * armour belt.
  *
- * Sweeps the station list twice: first as the base shell (`loftHull`), then
- * a second, shorter, proud-standing sweep forming a continuous belt around the
- * hull. The belt stops visibly short of bow and stern — a belt that runs the
- * full length is just a bigger hull.
+ * The belt is a GIRDLE ON THE FLANKS, not a second closed shell. The first
+ * version of this grew every station uniformly and swept a complete second
+ * hull over the middle of the ship, which buried everything underneath it:
+ * on the picket and the bastion gunship the belt stood 0.12 proud while the
+ * plate courses stood 0.07-0.10 proud, so the armour courses, the rib frames
+ * and the whole tonal range disappeared inside it and both classes rendered as
+ * featureless black slabs. A belt that covers the hull is just a bigger hull.
  *
- * The belt is a separate part chain, so it must OVERLAP the base shell. It is
- * grown from the same sections (w and h grown by `belt`, y shifted by `beltAt`),
- * so it overlaps by construction. The belt's colour comes from the second entry
- * of `hexes` when the caller passes a list; otherwise it shares the base colour.
- *
- * This is the Ferrous citadel doctrine: the protected core is visible as a
- * distinct band around the ship's midsection, leaving the bow and stern clear
- * for prow reinforcement and drive hardware.
+ * So the belt is emitted the way real belt armour is built: strakes laid on
+ * the flanks and the chamfer strakes either side of them, standing `belt`
+ * proud, leaving the dorsal and ventral crowns clear for plate courses,
+ * walkways and equipment. Each strake is a closed slab following the loft, so
+ * the attach audit sees a chain of parts overlapping the skin they clad.
  *
  * @param {Object} options - Belt options.
- * @param {number} [options.trim=0.15] - Fraction of each end to exclude from the belt.
- *   The belt spans the central (1−2·trim) portion of the hull length.
- *   End sections are interpolated at the exact trim positions; filtering original
- *   stations would make the belt disappear on coarse station lists or land at
- *   arbitrary positions depending on station spacing.
+ * @param {number} [options.belt=0.10] - How far the strakes stand proud of the skin.
+ * @param {number} [options.beltAt=0] - Vertical offset of the belt band on the section.
+ * @param {number} [options.trim=0.15] - Fraction of each end excluded from the belt.
+ *   The belt spans the central (1−2·trim) portion of the hull length. End sections
+ *   are interpolated at the exact trim positions; filtering original stations would
+ *   make the belt vanish on a coarse list or land it at arbitrary positions.
+ * @param {number} [options.bands=1] - Strake divisions WITHIN each station band.
+ *   The station list already breaks the belt into courses, so 1 is usually right;
+ *   raising it multiplies the plate count by the number of station bands, which
+ *   is how an earlier default put every class over its vertex ceiling.
+ * @param {number[]} [options.faces] - Cross-section faces the belt covers. Defaults to
+ *   the two flanks, which is where belt armour goes; the dorsal crown (face 2), the
+ *   ventral crown (face 6) and the chamfer strakes are deliberately left bare for
+ *   plate courses, walkways and equipment.
  */
 export function beltedHull(b, ch, hexes, {
   stations,
   belt = 0.10,
   beltAt = 0.0,
   trim = 0.15,
+  bands = 1,
+  faces = [0, 4],
   seg = 0,
   capFore = true,
   capAft = true,
@@ -98,7 +109,7 @@ export function beltedHull(b, ch, hexes, {
   // Base shell.
   loftHull(b, ch, hexes, { stations, seg, capFore, capAft });
 
-  // Belt: grow w/h by `belt`, shift y by `beltAt`, span the trimmed band.
+  // Belt strakes: proud of the flanks over the trimmed band.
   const list = Array.isArray(hexes) ? hexes : [hexes];
   const beltColor = list.length > 1 ? list[1] : list[0];
   const extents = loftExtents(stations);
@@ -117,42 +128,21 @@ export function beltedHull(b, ch, hexes, {
   const sFore = sectionAt(stations, zFore);
   const sAft = sectionAt(stations, zAft);
 
-  // Build belt stations: interpolated ends plus all interior stations.
-  const beltStations = [];
-
-  // Fore end (interpolated).
-  beltStations.push({
-    z: sFore.z,
-    w: sFore.w + belt,
-    h: sFore.h + belt,
-    y: (sFore.y ?? 0) + beltAt,
-    c: sFore.c ?? 0.3,
-  });
-
-  // Interior original stations that fall strictly between the trim marks.
+  // Build belt stations: interpolated ends plus all interior stations. The
+  // sections are NOT grown here — loftPlating stands the strakes proud along
+  // each face's own outward normal, which is what keeps the crowns clear.
+  const beltStations = [{ z: sFore.z, w: sFore.w, h: sFore.h, y: (sFore.y ?? 0) + beltAt, c: sFore.c ?? 0.3 }];
   for (const s of stations) {
     if (s.z > zFore && s.z < zAft) {
-      beltStations.push({
-        z: s.z,
-        w: s.w + belt,
-        h: s.h + belt,
-        y: (s.y ?? 0) + beltAt,
-        c: s.c ?? 0.3,
-      });
+      beltStations.push({ z: s.z, w: s.w, h: s.h, y: (s.y ?? 0) + beltAt, c: s.c ?? 0.3 });
     }
   }
+  beltStations.push({ z: sAft.z, w: sAft.w, h: sAft.h, y: (sAft.y ?? 0) + beltAt, c: sAft.c ?? 0.3 });
 
-  // Aft end (interpolated).
-  beltStations.push({
-    z: sAft.z,
-    w: sAft.w + belt,
-    h: sAft.h + belt,
-    y: (sAft.y ?? 0) + beltAt,
-    c: sAft.c ?? 0.3,
+  loftPlating(b, ch, beltColor, {
+    stations: beltStations, seg, rows: Math.max(1, bands | 0), cols: 1,
+    t: belt, inset: 0.06, seed: 7, faces,
   });
-
-  // Emit the belt as a proud-standing sweep with no end caps.
-  loftHull(b, ch, beltColor, { stations: beltStations, seg, capFore: false, capAft: false });
 }
 
 /**
@@ -162,13 +152,19 @@ export function beltedHull(b, ch, hexes, {
  * The Ferrous doctrine is "protect the vital spine and drive, not every cargo
  * box", so this is the class author's main vertex engine.
  *
- * Does NOT reimplement plate emission: builds a sub-station-list by clipping/
- * interpolating `stations` between `from` and `to` (using `sectionAt` for the
- * two cut sections and keeping every original station strictly between them)
- * and delegates to `loftPlating`.
+ * Does NOT reimplement plate emission: it builds a sub-station-list clipped to
+ * `[from, to]` and delegates to `loftPlating`.
  *
- * Per the context file, this must never be switched off to meet a budget —
- * the faction's surface language IS the plating.
+ * BOTH ENDS ARE ALWAYS INTERPOLATED. An earlier version only added a cut
+ * section when `from`/`to` did not coincide with a station, and then collected
+ * interior stations with a STRICT inequality — so a course whose range landed
+ * exactly on a station silently lost the band at that end, and a course asked
+ * to run the full hull lost a band at each end and could emit nothing at all on
+ * a short flank range. `sectionAt` returns the station itself when the position
+ * coincides with one, so unconditional interpolation is both simpler and right.
+ *
+ * Per the plan, this must never be switched off to meet a budget — the
+ * faction's surface language IS the plating.
  */
 export function armourCourse(b, ch, hexes, {
   stations,
@@ -181,36 +177,16 @@ export function armourCourse(b, ch, hexes, {
   seed = 1,
   faces = null,
 }) {
-  // Build a sub-station-list for the range [from, to].
-  const sub = [];
   const extents = loftExtents(stations);
-  const z0 = extents.z0;
-  const z1 = extents.z1;
+  const startZ = Math.max(extents.z0, from);
+  const endZ = Math.min(extents.z1, to);
+  if (startZ >= endZ) return;
 
-  // Clamp from/to to station range.
-  const startZ = Math.max(z0, from);
-  const endZ = Math.min(z1, to);
-
-  if (startZ >= endZ) return; // Empty range.
-
-  // Add interpolated start section if from is not exactly on a station.
-  const startOnStation = stations.some(s => Math.abs(s.z - startZ) < 1e-4);
-  if (!startOnStation) {
-    sub.push(sectionAt(stations, startZ));
-  }
-
-  // Add all stations strictly inside the range.
+  const sub = [sectionAt(stations, startZ)];
   for (const s of stations) {
-    if (s.z > startZ && s.z < endZ) {
-      sub.push(s);
-    }
+    if (s.z > startZ + 1e-4 && s.z < endZ - 1e-4) sub.push(s);
   }
-
-  // Add interpolated end section if to is not exactly on a station.
-  const endOnStation = stations.some(s => Math.abs(s.z - endZ) < 1e-4);
-  if (!endOnStation) {
-    sub.push(sectionAt(stations, endZ));
-  }
+  sub.push(sectionAt(stations, endZ));
 
   // Delegate to loftPlating.
   if (sub.length >= 2) {
