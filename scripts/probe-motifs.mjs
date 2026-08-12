@@ -49,6 +49,7 @@
  * Usage: node scripts/probe-motifs.mjs [faction]   (default: freehold)
  *   e.g. node scripts/probe-motifs.mjs freehold
  *        node scripts/probe-motifs.mjs ferrous
+ *        node scripts/probe-motifs.mjs redledger
  */
 
 import { detailBuilder } from '../src/systems/station-detail.js';
@@ -428,6 +429,223 @@ function ferrousCallTable(body, motifs) {
   ];
 }
 
+/**
+ * Red Ledger call table.
+ *
+ * Station list constructs (capturedHull, plunderCourse, tallyBand) receive a
+ * representative 5-station cutter-scale hull section. plunderCourse gets two
+ * entries: one with from/to landing exactly on station z values (the end-band
+ * regression) and one clipped mid-band. weaponShutter gets two entries: closed
+ * and open=0.8, so both the shutter-panel and the revealed cavity geometry are
+ * exercised.
+ */
+function redledgerCallTable(body, motifs) {
+  const {
+    capturedHull, plunderCourse, ramProw, grappleArm,
+    haulSpine, breachTube, vaultBlock, tallyBand,
+  } = body;
+  const {
+    tallyGrooves, weaponShutter, commsReceiver, lockBox,
+    clampJaw, magClamp, winchDrum, transferLock,
+    countingHouse, capturedDrive, reverseThruster, boardingSpike,
+    prizeCradle, seizedContainer, workLampRun, crewWalk,
+  } = motifs;
+
+  // Representative 5-station cutter-scale hull — same extents as the other tables
+  // so AABB checks use comparable geometry. c=0.3 matches Freehold rounding.
+  const STA = [
+    { z: -3.0, w: 0.80, h: 0.60, c: 0.3 },
+    { z: -1.5, w: 1.40, h: 0.90, c: 0.3 },
+    { z:  0.0, w: 1.60, h: 1.00, c: 0.3 },
+    { z:  1.5, w: 1.50, h: 0.90, c: 0.3 },
+    { z:  3.0, w: 1.00, h: 0.70, c: 0.3 },
+  ];
+  // Exact station z endpoints — the end-band regression entries must use these.
+  const z0 = STA[0].z;
+  const z1 = STA[STA.length - 1].z;
+
+  return [
+    // ── body constructs ──────────────────────────────────────────────────────
+    {
+      name: 'capturedHull', kind: 'body',
+      // Multi-donor hull with two seam bands at the donor boundaries.
+      // Seams exercise the proud-strap geometry path that the wave-2 Ferrous
+      // reference proved was silently dropped on plain hull section boundaries.
+      call: (b, st) => capturedHull(b, 'hull',
+        [st.hull, st.accent, st.patch[2]],
+        { stations: STA, seams: [-1.5, 1.5], seed: 1 }),
+    },
+    {
+      name: 'plunderCourse (on-station)', kind: 'body',
+      // END-BAND REGRESSION. from and to land exactly on station[0].z and
+      // station[4].z. A strict interior inequality drops both end bands.
+      // plunderCourse must use a non-strict (>=/<= ) comparison on station z.
+      call: (b, st) => plunderCourse(b, 'hull',
+        [st.accent, st.trim],
+        { stations: STA, from: z0, to: z1, rows: 2, cols: 1, seed: 1 }),
+    },
+    {
+      name: 'plunderCourse (mid-band)', kind: 'body',
+      // Mid-band clipping: from/to fall between stations. Tests sectionAt
+      // interpolation and clipping arithmetic independently of the end-band path.
+      call: (b, st) => plunderCourse(b, 'hull',
+        [st.patch[0], st.patch[1]],
+        { stations: STA, from: -1.2, to: 1.8, rows: 2, cols: 1, seed: 2 }),
+    },
+    {
+      name: 'ramProw', kind: 'body',
+      // Pronged boarding prow at the nose (−Z). The shank at +Z must reach far
+      // enough back that the prow connects to whatever hull face it mounts on.
+      call: (b, st) => ramProw(b, 'hull',
+        [st.hull, st.hullDark],
+        { w: 0.9, h: 0.7, d: 1.4, tip: 0.25, ribs: 3, shank: 0.35, seed: 1 }),
+    },
+    {
+      name: 'grappleArm', kind: 'body',
+      // Multi-knuckle arm with claw. Every knuckle segment must overlap its
+      // neighbour; a gap between segments fails the attachment graph.
+      call: (b, st) => grappleArm(b, 'hull',
+        [st.hull, st.trim],
+        { len: 1.8, r: 0.35, knuckles: 2, sweep: 0.3, claw: true, seed: 1 }),
+    },
+    {
+      name: 'haulSpine', kind: 'body',
+      // Box-section spine running fore–aft. Braces must overlap both chords;
+      // tangent-only contact fails the attachment graph.
+      call: (b, st) => haulSpine(b, 'hull',
+        [st.hull, st.hullDark],
+        { from: -2.0, to: 2.0, w: 0.8, h: 0.5, bays: 4, chord: 0.32, brace: 0.16, seed: 1 }),
+    },
+    {
+      name: 'breachTube', kind: 'body',
+      // Breach tube with serrated teeth ring and internal rails. Rails must
+      // overlap the tube cylinder; a rail that only grazes the outer surface fails.
+      call: (b, st) => breachTube(b, 'hull',
+        [st.hull, st.accent],
+        { r: 0.8, len: 2.0, teeth: 10, rails: 4, seed: 1 }),
+    },
+    {
+      name: 'vaultBlock', kind: 'body',
+      // Armoured vault with hasp lock and strap bands. Straps must be proud
+      // of the vault face so they make real contact, not tangency.
+      call: (b, st) => vaultBlock(b, 'hull',
+        [st.hull, st.hullDark],
+        { w: 1.2, h: 0.9, d: 1.4, hasp: true, straps: 2, seed: 1 }),
+    },
+    {
+      name: 'tallyBand', kind: 'body',
+      // Tally ring at z=0 (midship). The band must project outward so it
+      // overlaps the hull cross-section it circles — a flush ring is tangent only.
+      call: (b, st) => tallyBand(b, 'hull',
+        [st.accent, st.trim],
+        { stations: STA, z: 0.0, marks: 5, seed: 1 }),
+    },
+    // ── motifs ───────────────────────────────────────────────────────────────
+    {
+      name: 'tallyGrooves', kind: 'motif',
+      // Score marks cut into the hull. The backing plate must connect the
+      // groove bars; isolated bars fail the attachment graph.
+      call: (b, st) => tallyGrooves(b, st, { count: 6, len: 0.5, pitch: 0.16, seed: 1 }),
+    },
+    {
+      name: 'weaponShutter (closed)', kind: 'motif',
+      // Shutter closed — the panel must overlap its frame. A panel that
+      // sits flush in a recess without a shank behind it will be lonely.
+      call: (b, st) => weaponShutter(b, st, { w: 0.7, h: 0.4, open: 0, seed: 1 }),
+    },
+    {
+      name: 'weaponShutter (open)', kind: 'motif',
+      // Shutter open — the cavity geometry is exposed. Both the retracted panel
+      // and the revealed interior box must remain attached to the frame.
+      call: (b, st) => weaponShutter(b, st, { w: 0.7, h: 0.4, open: 0.8, seed: 2 }),
+    },
+    {
+      name: 'commsReceiver', kind: 'motif',
+      // Dish + mast; mast must reach back past z=0 so the dish is not lonely.
+      call: (b, st) => commsReceiver(b, st, { r: 0.9, depth: 0.4, tilt: 0, seed: 1 }),
+    },
+    {
+      name: 'lockBox', kind: 'motif',
+      // Lock box with hasp and shackle. Shackle must overlap the body.
+      call: (b, st) => lockBox(b, st, { w: 0.55, h: 0.45, d: 0.7, seed: 1 }),
+    },
+    {
+      name: 'clampJaw', kind: 'motif',
+      // Three-jaw clamp — jaws must overlap the hub; a jaw that only
+      // touches tangentially at its root fails the contact check.
+      call: (b, st) => clampJaw(b, st, { r: 0.5, jaws: 3, open: 0.4, seed: 1 }),
+    },
+    {
+      name: 'magClamp', kind: 'motif',
+      // Magnetic clamp pad. Ring and pad must share a face region.
+      call: (b, st) => magClamp(b, st, { r: 0.45, seed: 1 }),
+    },
+    {
+      name: 'winchDrum', kind: 'motif',
+      // Winch drum + frame. Frame must reach behind the drum so the
+      // combined assembly connects to whatever it mounts on.
+      call: (b, st) => winchDrum(b, st, { r: 0.4, len: 0.7, seed: 1 }),
+    },
+    {
+      name: 'transferLock', kind: 'motif',
+      // Pressurised collar with cage. Default r = HUMAN.collarR is supplied
+      // by the function. The cage bars must overlap the collar ring.
+      call: (b, st) => transferLock(b, st, { len: 0.5, caged: true, seed: 1 }),
+    },
+    {
+      name: 'countingHouse', kind: 'motif',
+      // Multi-bay operations block (the Ledger's command core). Window rows must
+      // overlap the hull box, not float in the gap between modules.
+      call: (b, st) => countingHouse(b, st, { w: 2.0, h: 1.4, d: 2.4, rows: 2, seed: 1 }),
+    },
+    {
+      name: 'capturedDrive', kind: 'motif',
+      // Captured enemy drive housing; i=0 selects the first donor colour slot.
+      // The throat nozzles (lights channel) and the housing (hull) must overlap.
+      call: (b, st) => capturedDrive(b, st,
+        { w: 1.4, h: 1.0, len: 1.6, throats: 2, i: 0, seed: 1 }),
+    },
+    {
+      name: 'reverseThruster', kind: 'motif',
+      // Two retro nozzles on a shared mount. Nozzles without a mount are all
+      // lonely; the mount must connect them.
+      call: (b, st) => reverseThruster(b, st, { r: 0.3, count: 2, seed: 1 }),
+    },
+    {
+      name: 'boardingSpike', kind: 'motif',
+      // Penetrating spike with shank. The shank must reach back past the
+      // mounting face; a spike body that starts at z=0 floats on its own.
+      call: (b, st) => boardingSpike(b, st, { len: 1.8, r: 0.22, seed: 1 }),
+    },
+    {
+      name: 'prizeCradle', kind: 'motif',
+      // Open cradle for a captured craft. Approach lamps must be seated on
+      // the cradle arms; a lamp that only touches tangentially at the arm tip
+      // fails the attachment check.
+      call: (b, st) => prizeCradle(b, st, { w: 1.4, d: 2.2, craft: true, seed: 1 }),
+    },
+    {
+      name: 'seizedContainer', kind: 'motif',
+      // Captured cargo container with donor-colour markings (i=0). The markings
+      // must overlap the container box, not float in front of it.
+      call: (b, st) => seizedContainer(b, st, { w: 2.0, h: 1.6, d: 2.8, i: 0, seed: 1 }),
+    },
+    {
+      name: 'workLampRun', kind: 'motif',
+      // Linear amber lamp run along a working corridor. Lamp plates must sit
+      // on a backing rail that spans the full run; isolated plates are lonely.
+      call: (b, st) => workLampRun(b, st,
+        { ax: -1.5, ay: 0.6, az: -2.0, bx: -1.5, by: 0.6, bz: 2.0, seed: 1 }),
+    },
+    {
+      name: 'crewWalk', kind: 'motif',
+      // Grated walkway with railing and lamp posts. The railing must overlap
+      // the deck plate — a wrong y-offset makes the railing lonely.
+      call: (b, st) => crewWalk(b, st, { w: 2.0, d: 1.2, rail: true, lamps: 2, seed: 1 }),
+    },
+  ];
+}
+
 // ── Single-construct probe ────────────────────────────────────────────────────
 
 /**
@@ -592,19 +810,22 @@ function probeOne(entry, allowedSet, st) {
 const allowedSet = allowedHull(loadedFaction);
 const st = FACTION_STYLE[loadedFaction];
 
-// Only freehold and ferrous have call tables in this script. Other factions will
-// fail with a clear message rather than a destructuring error inside the table.
-const SUPPORTED_FACTIONS = new Set(['freehold', 'ferrous']);
+// Call-table registry — one entry per supported faction. Other factions fail
+// with a clear message rather than a destructuring error inside the table.
+const CALL_TABLES = {
+  freehold: freeholdCallTable,
+  ferrous:  ferrousCallTable,
+  redledger: redledgerCallTable,
+};
+const SUPPORTED_FACTIONS = new Set(Object.keys(CALL_TABLES));
 if (!SUPPORTED_FACTIONS.has(loadedFaction)) {
   console.error(
     `probe-motifs: no call table defined for '${loadedFaction}'. `
-    + `Supported: freehold, ferrous. Add a *callTable() function to extend.`,
+    + `Supported: ${[...SUPPORTED_FACTIONS].join(', ')}. Add a *callTable() function to extend.`,
   );
   process.exit(1);
 }
-const callTable = loadedFaction === 'ferrous'
-  ? ferrousCallTable(bodyMod, motifsMod)
-  : freeholdCallTable(bodyMod, motifsMod);
+const callTable = CALL_TABLES[loadedFaction](bodyMod, motifsMod);
 
 const fallbackNote = loadedFaction !== faction
   ? ` (target was ${faction}; fell back to ${loadedFaction})`

@@ -291,8 +291,8 @@ pin rebuilt factions against `SHIP_SCALE` and everything else against
 | 1 | Veridian Combine | `ships/veridian/` | **done** — rebuilt from silhouette in 49.2; the reference for §2 "Body plans first" |
 | 2 | Ferrous Hegemony | `ships/ferrous/` | **done** — wave 49.3; introduced the shared `ships/loft.js` sweep core |
 | 3 | Freehold Compact | `ships/freehold/` | **done** — donated-section hulls, greenhouse/tank volumes, soft vertex budgets; one-builder-six-sizes retired |
-| 4 | Red Ledger | `ships/redledger.js` | **next** |
-| 5 | Gilded Chain | `ships/gilded.js` | |
+| 4 | Red Ledger | `ships/redledger/` | **done** — captured-section hulls, the ram, grapple arms, the haulage spine; six anatomies from one seized-hardware vocabulary |
+| 5 | Gilded Chain | `ships/gilded.js` | **next** |
 | 6 | The Beautiful Ones | `ships/beautiful.js` (new) | organic; moves out of `npc.js`/`organic.js` |
 | 7 | The Unknowables | `ships/unknowables.js` (new) | field; moves out of `npc.js` |
 | 8 | The Assembly | `ships/assembly.js` | |
@@ -420,11 +420,166 @@ factions. Two changes were required and are in:
 ## 6. Handoff
 
 **Green:** `measure-ships` ALL PASS (whole fleet, including `proxyCover` and
-`proxyFit`), `attach-audit` ALL PARTS ATTACHED (Veridian, Ferrous and Freehold;
-the seven unrebuilt built fleets still carry wave-47 floaters and are only
-legacy-pinned), `test:boot` BOOT TEST PASS (including `<faction>ProxyCover` and
-`<faction>ProxyFit` for veridian, ferrous and freehold), `probe-models` MODEL
-PROBE PASS.
+`proxyFit`), `attach-audit` ALL PARTS ATTACHED (Veridian, Ferrous, Freehold and
+Red Ledger; the six unrebuilt built fleets still carry wave-47 floaters and are
+only legacy-pinned), `test:boot` BOOT TEST PASS (including `<faction>ProxyCover`
+and `<faction>ProxyFit` for veridian, ferrous, freehold and redledger),
+`probe-models` MODEL PROBE PASS, `probe-motifs redledger` ALL MOTIFS CLEAN.
+
+### Wave 4 — Red Ledger
+
+Six body plans, measured: account runner, a thin predatory needle carrying an
+oversized dish collector on a stepped cradle above its own crown, with a belly
+lockbox (6.90); collector, a low wide-shouldered blade behind one machined
+boarding spike, its two captured drives deliberately mismatched — port larger,
+lower and further aft, starboard smaller, higher and further forward (7.48);
+boarding talon, the fork: two swept grapple arms with converging jaws around a
+centreline breaching tube, reverse-thrust blocks on the outboard shoulders and
+an armoured brow behind the fork throat (12.01); tribute raider, a hammer — a
+deep wedge ram stepping up into a muscular plated body with four grapple booms
+of four different lengths and three bolted ransom vaults on stand-off pads
+(17.40); clan command ship, three zones on one keel: a narrow low boarding
+gallery forward, a three-step command citadel amidships, a widened rack aft
+carrying three mismatched captured drives (34.20); tribute barge, an armoured
+haulage train — protected command tug, a 52-unit spine of seized containers,
+ransom vaults, counting houses and outboard prize cradles, then a drive block
+(77.93).
+
+What landed:
+
+- **`src/systems/ships/redledger/body.js`** as the faction shape core
+  (`capturedHull`, `plunderCourse`, `ramProw`, `grappleArm`, `haulSpine`,
+  `breachTube`, `vaultBlock`, `tallyBand`) over the unchanged shared `loft.js`.
+  Where Freehold splices donated sections with bolted straps, the Ledger welds
+  seized ones: every seam carries a raised weld bead and adjacent sections are
+  forbidden the same tone, so a hull reads as three captures made into one.
+- **`src/systems/ships/redledger/motifs.js`** — the Ledger's equipment
+  language: tally grooves, hidden weapon shutters, the oversized collector,
+  contract lockboxes, claw jaws, mag clamps, winches, caged transfer locks,
+  counting houses, captured drives, reverse thrusters, the boarding spike,
+  prize cradles, seized containers, amber work-lamp runs and crew walks.
+- One file per class under a barrel at `src/systems/ships/redledger.js`, and
+  **`redledger` added to `REBUILT_FACTIONS`** in `src/game/ship-scale.js`.
+- **`scripts/probe-motifs.mjs` now supports redledger** (26 constructs); its
+  call-table selection became a lookup object instead of a ternary chain, so
+  wave 5 adds one function and one key.
+
+### The six defect shapes wave 4 added to the catalogue
+
+1. **Degrees written into a radian slot.** `detailBuilder.push` is
+   `push(x, y, z, ry, rx, rz)`. Three separate authors passed DEGREES —
+   `-90`, `180`, `-5.7`, `±10` — and two of them put the value in `rx` when
+   they meant yaw. `-90` radians is 243°, so every flank fitting on the cutter
+   was spun about the long axis, and the light's dish collector rendered as a
+   flat black slab leaning over the hull. No pin sees it: attachment, mass,
+   palette and proxy all stay green because a rotated part is still a part.
+   Only the render shows it. Grep a finished class file for a rotation
+   argument whose absolute value exceeds 2π.
+2. **A motif called with no frame stacks at the origin.** The first ace draft
+   contained zero `b.push` calls: the spike, both drives, three groove runs,
+   four shutters, the thrusters, the lockbox and the crew walk were all emitted
+   at the hull centre. Because everything then intersects everything,
+   `attach-audit` reported 100% contact and every numeric pin passed. A motif
+   places geometry around the CALLER'S current frame origin; the `b.push(0, 0,
+   0, ry, 0, 0)` inside a motif is its own local rotation frame, not a
+   position. Cheap smell test: a class file whose `b.push` count is far below
+   its motif-call count is not placing its equipment.
+3. **The object form of `push` makes NaN frames.** `b.push({ z: -15.7 })` puts
+   the object in `x`; `Vector3.set` yields NaN, the frame matrix goes NaN, and
+   every vertex under it is NaN. A min/max scan over NaN never updates, so the
+   part boxes come out `[Infinity, -Infinity]`. On the frigate that single
+   mistake produced 430 lonely parts, a `#000000` palette stray, `proxyCover`
+   0% and `proxyFit` NaN — four symptoms, one cause, and the author's first
+   instinct was to blame the shared body core.
+4. **The barrel is imports only.** An agent, finding two sibling class files
+   missing, wrote 123-byte stubs over them AND inlined placeholder
+   `{ glowZ, build() {} }` entries into `src/systems/ships/redledger.js`. The
+   fleet harnesses then reported "no hull chunk" for ace and freighter while
+   `probe-class` — which imports the class module directly — reported PASS for
+   both. When those two instruments disagree, suspect the barrel before the
+   sculpt.
+5. **Motif detail that ignores the taper it rides.** `boardingSpike` ran four
+   guide rails at a constant radius along a shaft that tapers 5:1, so the
+   forward two thirds of every rail hung in open space and the ace's "precise
+   boarding spike" rendered as four whiskers. Same family as wave 3's window
+   rows sampled at the wrong height: a strake, rail or row must follow the
+   surface it belongs to, or be confined to the part of it that does.
+6. **A motif has a default facing, and the caller must state it.**
+   `commsReceiver` builds its bowl opening toward +Z, which is ASTERN. Mounted
+   without a yaw, the spotter's oversized collector listened backwards. Any
+   motif with a front should say which way it faces in its JSDoc, and any
+   caller mounting one should pass the yaw explicitly rather than inherit the
+   default.
+
+And four process notes for wave 5:
+
+- **The motif smoke probe paid for itself again, harder.** `probe-motifs
+  redledger` was green on its first run over all 26 constructs, and not one of
+  the six defects above turned out to live in `body.js` or `motifs.js` — every
+  one was in a class file. That is the whole point of the instrument: when the
+  foundation is provably clean, a class-level failure cannot be blamed on it,
+  and the three agents who did blame it were answered in one message each.
+- **`probe-class` imports the barrel transitively.** It pulls `deriveProxy`
+  from `npc.js`, which imports every faction barrel, which imports all six
+  class files — so a sibling's half-written file fails YOUR probe with a
+  SyntaxError naming THEIR file. Tell every author up front: that failure is
+  transient, re-run it, never edit the file in the trace.
+- **Central diagnosis, broadcast correction — third wave running.** Two agents
+  attributed their own NaN frames to the shared body core and were about to
+  patch it. One message each, naming the line and the cause, closed both.
+- **The review prints rejected three of six classes that had passed every
+  numeric pin** — the fourth wave in a row this has happened. The light's dish
+  was invisible, the heavy's ram was a blunt slab and the frigate's three zones
+  read as one taper. Generate and READ `silhouette-sheet` and `ship-render`
+  before calling a class done; the numbers cannot see shape.
+
+### Wave 5 — Gilded Chain, and what to reuse
+
+Bible §4.5. The hardest brief yet on SURFACE discipline, where Freehold's was
+on shape: "overlapping scale-like black ceramic armor", "ivory structural
+edges", "old-gold articulation", "cold turquoise gallery light", "sleek, low,
+and ceremonially composed", and threats "hidden until used". The Chain is the
+opposite of the Ledger in every axis — sealed where the Ledger is open,
+symmetric and composed where the Ledger is scarred, cold turquoise where the
+Ledger is amber — so resist carrying the Ledger's habits across.
+
+Reuse, in this order:
+
+1. `src/systems/ships/loft.js` unchanged. Faction-agnostic; never copy it.
+   Note `sectionOutline`'s `seg` override: a smooth ellipse section is how the
+   Chain gets seamless, flush shells without a new code path, where the Ledger
+   and Ferrous use the chamfered octagon.
+2. Write `src/systems/ships/gilded/body.js` with ONLY the Chain's own
+   construction language. The shape of the answer, not the answer: Ferrous has
+   `armourBlock`/`beltedHull`, Freehold has `splicedHull`/`glassHouse`, the
+   Ledger has `capturedHull`/`ramProw`/`grappleArm`. A Chain body core wants
+   OVERLAPPING SCALE COURSES that follow the loft (each scale lapping the one
+   behind it, which `loftPlating` alone cannot express), ivory edge margins
+   along the section's own outline, sealed vault/gallery volumes, and a smooth
+   crescent or leaf plan.
+3. Write `gilded/motifs.js`, then add a `gildedCallTable` to
+   `scripts/probe-motifs.mjs` — the selection is now a lookup object, so this
+   is one function and one key — and run the motif smoke probe BEFORE
+   dispatching class authors. That instrument has now been green-on-first-run
+   once and defect-finding once, and both outcomes saved a full corrective
+   pass.
+4. Then the six class files in parallel, one author each, each briefed with
+   its own body plan, its extent budget and the charter numbers.
+
+Red Ledger notes worth carrying forward:
+
+- Class sizes that measured inside band and on the ladder: light 6.90, ace
+  7.48, cutter 12.01, heavy 17.40, frigate 34.20, freighter 77.93. Remember
+  `<faction>ClassOrdering` allows light and ace only 15% apart — an ace
+  authored at the ace's target while the light lands at its own target is
+  already at the edge of that window.
+- Tell every author, in the brief and before the first line of code, that
+  `push` is `(x, y, z, ry, rx, rz)` in RADIANS. Two thirds of this wave's
+  corrective work was that one signature.
+- The Chain's "threats hidden until used" is the same construction problem the
+  Ledger's `weaponShutter` solved: a recessed well, sliding plates that meet
+  at a seam, and an `open` parameter. Do not re-invent it — author the Chain's
+  hairline-seam version deliberately, and give it a different closed read.
 
 ### Wave 3 — Freehold Compact
 

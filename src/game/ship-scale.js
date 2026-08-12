@@ -382,9 +382,10 @@ export const FACTION_REBUILD_ORDER = [
  * unconditionally.
  */
 export const REBUILT_FACTIONS = new Set([
-  'veridian', // wave 1
-  'ferrous',  // wave 2
-  'freehold', // wave 3
+  'veridian',  // wave 1
+  'ferrous',   // wave 2
+  'freehold',  // wave 3
+  'redledger', // wave 4
 ]);
 
 /**
