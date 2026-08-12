@@ -115,14 +115,25 @@ export const SHIP_SCALE = {
     role: 'patrol, boarding, customs, rescue, raiding',
     berth: 'fits a large internal berth',
     pBand: [1.45, 1.80], span: [9.57, 11.88], target: 11.0,
-    // Ceiling raised from 22,000 in wave 1's review pass. Every class now carries
-    // a detailed instrument FACE — bezel, sunk iris, mounting bosses, cabling —
-    // because the first reviewer's verdict on the fleet was that the fronts of the
-    // larger vessels were flat shapes with nothing on them. A cutter is the only
-    // class that mounts three apertures, so it was the only one the original
-    // budget could not absorb. Stripping the detail to fit a number drawn before
-    // the detail existed would be the wrong way round.
-    hull: [6000, 26000], lights: 400, cell: 0.8,
+    // Ceiling raised twice, both times for the same reason: the number predates
+    // the detail the bible asks this class to carry, and an author asked to fit
+    // it deletes construction language instead of greeble.
+    //
+    // 22,000 -> 26,000 in wave 1's review pass, when every class gained a
+    // detailed instrument FACE (bezel, sunk iris, mounting bosses, cabling)
+    // because the reviewer's verdict was that the fronts of the larger vessels
+    // were flat shapes with nothing on them. The cutter is the only class that
+    // mounts three apertures, so it was the only one 22,000 could not absorb.
+    //
+    // 26,000 -> 34,000 in the body-plan rebuild. The inspection launch carries
+    // more discrete equipment than anything else under a frigate: an impound
+    // collar, three apertures, two stowed survey drones in flank recesses, a
+    // ventral evidence-locker row and a working deck, all on a flat blade hull
+    // whose plating area is large because the body is wide. Twice an author hit
+    // 26,000 and switched the hull PLATING off to fit — which removes the
+    // Combine's entire surface language and leaves a bare shell wearing
+    // equipment. 34,000 is ~1.7 MB a bake, in line with the heavy's 40,000.
+    hull: [6000, 34000], lights: 400, cell: 0.8,
     proxy: { r: 2.1, halfLen: 3.4 },
   },
   heavy: {

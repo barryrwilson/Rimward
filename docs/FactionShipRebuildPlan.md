@@ -115,15 +115,46 @@ one. This is how acceptance test 5 ("the smallest repeated doors/windows/rails
 stay the same physical size across light, frigate and freighter") is met without
 a pin that cannot see intent.
 
-### Motif helpers, not one scaled hull
+### Body plans first, motifs second
 
 The bible forbids one faction hull uniformly scaled into six classes, and
-requires the six to still read as relatives. Each faction file therefore opens
-with a **motif helper section**: small named functions for the faction's
-recurring construction logic (e.g. Veridian's hex pressure module and survey
-vane, Ferrous's citadel armour step, Red Ledger's grapple boom). Every class
-composes those motifs into anatomy appropriate to its job. Family resemblance
-comes from shared motifs; class identity comes from different anatomy.
+requires the six to still read as relatives. Wave 49.1 tried to satisfy both
+with a **motif library** alone: one `hexSpine` call per class, then the
+faction's recurring detail hung off the resulting cylinder. It does not work,
+and the reason is worth writing down because every remaining faction is about
+to face it.
+
+A motif decorates a body. It cannot make one. Six classes that all call the
+same spine helper are one shape six times no matter how different the greeble
+is, and the review verdict on that fleet was exactly that: *"the hulls are
+still fundamentally plated tubes; the motifs hang detail on a cylinder, they do
+not give the classes distinct body plans."* Raising vertex ceilings made it
+worse — it bought more detail on the same shape.
+
+So a faction file is now **two layers**, and the shape layer comes first:
+
+1. **A shape core** — `src/systems/ships/veridian/body.js` is the reference
+   implementation. It sweeps a cross-section along Z through a list of
+   STATIONS, each carrying its own half-width, half-height, vertical offset and
+   chamfer. One station list is one body plan, and the same code produces a
+   wide instrument head over a slim tail, a lifting body that forks, a flat
+   blade, an anvil widest at the prow, or twin keels under a citadel. It also
+   carries `loftPlating` (plating that follows a taper, which `panelSkin`
+   cannot — that limitation is half of why wave 49.1's hulls were cylinders in
+   the first place), `loftRib`, `chamferBlock` and `openKeel`.
+2. **A motif library** — `src/systems/ships/veridian/motifs.js`: the surface
+   and equipment language. Serialized modules, instrument apertures, latches,
+   vanes, drive sections, tug docks.
+
+**An author writes the station list first, reads the extents off it, and only
+then decorates.** Family resemblance comes from the shared motifs and the
+shared cross-section; class identity comes from where the mass is. If a
+silhouette can be described as "a tube with things on it", the class is not
+done.
+
+One class per file. Anatomy is the unit of work, so it is the unit of the file
+layout: `src/systems/ships/<faction>.js` becomes a barrel over
+`src/systems/ships/<faction>/<class>.js`. The runtime contract is unchanged.
 
 ### Collision proxy
 
@@ -154,9 +185,9 @@ pin rebuilt factions against `SHIP_SCALE` and everything else against
 | wave | faction | file | status |
 |---:|---|---|---|
 | 0 | — | `ship-scale.js`, harnesses, `combat.js`, catalog | **done** |
-| 1 | Veridian Combine | `ships/veridian.js` | **done** |
-| 2 | Ferrous Hegemony | `ships/ferrous.js` | **next** — spec in this doc's §6 handoff |
-| 3 | Freehold Compact | `ships/freehold.js` | retires the one-builder-six-sizes shortcut |
+| 1 | Veridian Combine | `ships/veridian/` | **done** — rebuilt from silhouette in 49.2; the reference for §2 "Body plans first" |
+| 2 | Ferrous Hegemony | `ships/ferrous/` | **next** — spec in this doc's §6 handoff |
+| 3 | Freehold Compact | `ships/freehold/` | retires the one-builder-six-sizes shortcut |
 | 4 | Red Ledger | `ships/redledger.js` | |
 | 5 | Gilded Chain | `ships/gilded.js` | |
 | 6 | The Beautiful Ones | `ships/beautiful.js` (new) | organic; moves out of `npc.js`/`organic.js` |
@@ -182,17 +213,48 @@ A faction family is done when all of these hold:
 1. `node scripts/measure-ships.mjs <faction>` reports ALL PASS.
 2. `node scripts/attach-audit.mjs <faction>` reports ALL PARTS ATTACHED.
 3. `npm run test:boot` reports BOOT TEST PASS.
-4. The family is reviewed **in the render**, in the Models Browser, at side and
-   top angles. The numeric pins cannot see a silhouette, and when a report and
-   the render disagree the render wins.
-5. The six classes sort by class at thumbnail size without colour.
-6. The family reads as one faction in grayscale, from construction logic.
+4. `node scripts/silhouette-sheet.mjs <faction>` — the six classes sort by
+   class at thumbnail size, with no colour and no materials, in the SIDE column
+   alone. Two classes that could swap side views are one class.
+5. `node scripts/ship-render.mjs <faction>` — the construction logic reads:
+   plate courses, frames, recesses, the emissive channel, and a tonal range
+   wider than one value. The family reads as one faction from that logic.
+6. The family is reviewed **in the render**, in the Models Browser, at side and
+   top angles. When a report and the render disagree the render wins.
 7. The freighter's exterior-only berthing story is visible in the sculpt —
    awkward service structures and multiple external docking points, not just
    size.
 8. No flags, readable text, or borrowed franchise shapes.
 9. The Models Browser renders all twelve entries (six classes × trader/pirate)
    without a build error, framed correctly at both ends of the size ladder.
+
+### The authoring loop, and why it needs its own instruments
+
+`measure-ships` and `attach-audit` import a faction's whole family through its
+barrel, so while six classes are being authored in parallel one half-written
+sibling blanks the report for the other five. `scripts/probe-class.mjs
+<faction> <class>` imports ONE class module and reports the same numbers plus
+the attachment verdict. It is a probe, not a gate.
+
+It also catches three defect shapes the fleet harnesses cannot, all of which
+shipped green in wave 49.1's first drafts:
+
+- **A stray channel.** `box()` takes the channel SECOND and the colour THIRD.
+  Called with the colour first, a sculpt silently opens a third channel named
+  after a colour number and fills it with NaN-coloured geometry.
+- **A NaN vertex colour**, from an options object passed where a hex belongs.
+- **An exact 1×1×1 part.** THREE defaults every omitted dimension to 1, so a
+  helper called without its `w`/`h`/`d` emits a unit cube instead of throwing.
+  On the ace that was two one-unit emissive cubes on a seven-unit hull, and it
+  rendered as a white slab across the nose while every pin stayed green.
+
+`scripts/silhouette-sheet.mjs` and `scripts/ship-render.mjs` exist because the
+in-game Models Browser needs WebGL and the headless Chromium available to an
+agent has none. They project and scan-convert the merged geometry on the CPU
+(`scripts/raster.mjs`), so shape review is automatable: a silhouette sheet in
+three orthographic views plus a common-scale ladder, and a shaded three-quarter
+print with the emissive channel composited. They are review prints, not game
+frames, and their exposure is set for a white page.
 
 ### Why `attach-audit` exists and is not optional
 
@@ -252,11 +314,52 @@ factions. Two changes were required and are in:
 `node --import ./scripts/with-css-stub.mjs scripts/probe-models.mjs` builds all
 221 catalog entries headlessly: 221 built, 0 failures.
 
-## 6. Handoff — state at the end of the first session
+## 6. Handoff
 
 **Green:** `measure-ships` ALL PASS, `attach-audit` ALL PARTS ATTACHED (Veridian;
 the nine unrebuilt built fleets still carry wave-47 floaters and are only
-legacy-pinned), `test:boot` BOOT TEST PASS. Waves 0 and 1 committed.
+legacy-pinned), `test:boot` BOOT TEST PASS.
+
+### Wave 49.2 — the Veridian body-plan rebuild
+
+Wave 49.1 shipped six Veridian sculpts that passed every pin and were rejected
+in review as plated tubes. 49.2 re-authored the family from silhouette. What
+landed:
+
+- `hexSpine` is **deleted**. No class builds a constant-section hull.
+- `src/systems/ships/veridian.js` is a barrel over `src/systems/ships/veridian/`:
+  `body.js` (the shape core), `motifs.js` (equipment and surface), and one file
+  per class.
+- Six body plans, measured: claim scout, a faceted instrument head on a thin
+  spar with outrigger vanes (7.1); patent demonstrator, a smooth-section
+  lifting body forking into twin drive booms (7.1); inspection launch, a flat
+  wide blade with a bow impound ring and flank drone recesses (10.3); claim
+  enforcement, an anvil widest at the prow behind an instrumented boundary
+  plate (18.0); survey command frigate, twin instrument keels under a raised
+  archive citadel with a 1.45-unit tunnel between them (30.8); extraction
+  carrier, an open four-chord lattice keel under a two-tier drum rack (74.9).
+- New review instruments: `scripts/probe-class.mjs`, `scripts/silhouette-sheet.mjs`,
+  `scripts/ship-render.mjs`, on `scripts/raster.mjs` and the extracted
+  `scripts/ship-metrics.mjs`. Sheets for the family are in `docs/silhouettes/`.
+- `SHIP_SCALE.cutter.hull` ceiling 26,000 → 34,000, for the reason recorded in
+  the comment there: authors asked to fit an inspection launch into 26,000
+  twice responded by switching the hull PLATING off.
+
+### What the second session actually cost, and the rule that came out of it
+
+Almost every corrective pass was the same failure: **an author asked to meet a
+number removed the thing the class is for.** The survey scout's instrument was
+shrunk to a pancake to move a pivot 0.05. The scout's drive section was replaced
+with hand-rolled boxes to save vertices. The inspection launch's impound ring
+was cut to a six-sided wire loop and its windows deleted. Hull plating was
+switched off — with `rows: 0` — on four separate classes.
+
+The rule, and it belongs in every future wave's brief: **when a pin and the
+brief collide, move the geometry that is NOT the class read.** Lengthen the
+stern rather than shortening the instrument. Thin the tail rather than
+un-plating the hull. If nothing can move, the budget is wrong and it gets
+changed in `ship-scale.js` with a comment saying why — that is a smaller lie
+than a ship that no longer matches its brief.
 
 ### Reviewing in the render
 
@@ -272,6 +375,20 @@ while Vite is hot-reloading; `window.__ctx.models.open()` is the dependable way
 in. Then click `.rw-models-entry` by index — the Ships tab lists
 `FACTION_ORDER × CLASS_ORDER × {trader, pirate}`, so Veridian's trader bakes are
 indices 12, 14, 16, 18, 20, 22.
+
+That path still needs a human at a keyboard. For everything short of the final
+sign-off, use the CPU prints instead — they need no GPU, no browser and no
+server, and they are what caught every shape defect in wave 49.2:
+
+```
+node scripts/silhouette-sheet.mjs <faction>   # docs/silhouettes/<f>-shape.png, -scale.png
+node scripts/ship-render.mjs <faction>        # docs/silhouettes/<f>-render.png
+```
+
+Read the PNGs. The silhouette sheet answers "is the anatomy different?" and the
+shaded print answers "does the construction logic read?" — a hull can pass every
+numeric pin and still be a bare shell wearing equipment, and only the second
+sheet shows it.
 
 ### Wave 2 is prepared but NOT landed
 
