@@ -4,6 +4,13 @@
 > document is the engineering plan that carries it into the runtime, and
 > `src/game/ship-scale.js` is the machine-readable half of it. Where this
 > document and the bible disagree, the bible wins and this document is wrong.
+> **Status:** Historical implementation record. The current NPC fleet uses
+> original GLB assets from `assets-source/ships/`, runtime loading from
+> `src/systems/ship-assets.js`, and checks in `scripts/validate-ship-assets.mjs`
+> and `scripts/measure-ships.mjs`. The retired `src/systems/ships/` source path
+> no longer exists. Use the Design Bible and the current runtime/tool sources
+> for active work.
+
 
 The wave-47 sculpts are rejected as shape references. This is a rebuild, not a
 polish pass: every `src/systems/ships/<faction>.js` family is re-authored from

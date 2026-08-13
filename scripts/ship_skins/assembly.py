@@ -1,0 +1,15 @@
+SKIN = {
+    'id': 'assembly',
+    'base': '#3A3C3E',
+    'panel': '#B8B4A8',
+    'accent': '#B8763C',
+    'emissive': '#4FAEAE',
+    'pattern': 'recursive',
+    'roughness': (0.60, 0.72, 0.48),
+    'panel_density': 0.62,
+    'accent_density': 0.42,
+    'wear': 0.38,
+    'emissive_strength': 1.1,
+    'secondary_parts': ('memory-core',),
+    'accent_parts': ('copied-probe', 'teal-optic'),
+}

@@ -1,0 +1,15 @@
+SKIN = {
+    'id': 'unknowables',
+    'base': '#272436',
+    'panel': '#383558',
+    'accent': '#EEE0A8',
+    'emissive': '#81DDF2',
+    'pattern': 'ordered_field',
+    'roughness': (0.15, 0.18, 0.22),
+    'panel_density': 0.20,
+    'accent_density': 0.35,
+    'wear': 0.05,
+    'emissive_strength': 2.5,
+    'secondary_parts': ('physical-anchor', 'structural-anchor'),
+    'accent_parts': ('anchor-cell', 'magnetic-loop'),
+}

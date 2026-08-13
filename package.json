@@ -7,12 +7,23 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs"
+    "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs",
+    "ships:validate": "node scripts/validate-ship-assets.mjs",
+    "ships:measure": "node scripts/measure-ships.mjs",
+    "ships:sheet": "node scripts/silhouette-sheet.mjs",
+    "ships:islands": "node scripts/probe-ship-islands.mjs",
+    "ships:render": "node scripts/ship-render.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.4.2",
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "ktx2-encoder": "^0.6.0",
+    "meshoptimizer": "^1.2.0",
+    "sharp": "^0.35.3",
     "vite": "^6.0.0"
   }
 }

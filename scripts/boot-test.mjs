@@ -112,6 +112,7 @@
 // station object survives, gates/landmarks rebuild with the overgrowth
 // stable).
 import * as THREE from 'three';
+import { readFile } from 'node:fs/promises';
 import { createCtx } from '../src/core/ctx.js';
 import { FACTION_STYLE } from '../src/game/faction-style.js';
 
@@ -279,6 +280,14 @@ const { initEpics, epicEffects } = await import('../src/game/epics.js');
 const { initGate } = await import('../src/systems/gate.js');
 const { initJump } = await import('../src/game/jump.js');
 const { initTraffic } = await import('../src/game/traffic.js');
+const {
+  NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
+} = await import('../src/systems/ship-assets.js');
+configureShipAssetFileReader((assetPath) => readFile(new URL(`../public${assetPath}`, import.meta.url)));
+await Promise.all(NPC_FACTIONS.flatMap((faction) => NPC_CLASSES.flatMap((classKey) => [
+  primeShipAsset(faction, classKey, 'trader'),
+  primeShipAsset(faction, classKey, 'pirate'),
+])));
 const { initNpc, spawnLiveShip, removeLiveShip } = await import('../src/systems/npc.js');
 const { initCombat } = await import('../src/systems/combat.js');
 const { initPods } = await import('../src/game/pods.js');
@@ -292,7 +301,7 @@ const { initWakes } = await import('../src/systems/wakes.js'); // wave 30: flee 
 const { initTitle } = await import('../src/systems/title.js'); // wave 40: title screen front door
 const { initHud } = await import('../src/systems/hud.js');
 const {
-  ORGANIC, isBeautiful, sculptGrownHull, makePetalGeometry, makeTendrilGeometry,
+  isBeautiful, makePetalGeometry, makeTendrilGeometry,
   organicMaterials, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic,
 } = await import('../src/systems/organic.js'); // wave 27: Beautiful Ones organic toolkit
 
@@ -6097,7 +6106,6 @@ const w27lm = SYSTEMS.bt_cradle.landmarks[0];
 
 // -- a. toolkit shapes (pure — no scene, no ticks, nothing to restore beyond -
 // the synthetic parts' own transforms) ---------------------------------------
-const w27hull = sculptGrownHull();
 const w27petal = makePetalGeometry();
 const w27tendril = makeTendrilGeometry();
 const w27matsA = organicMaterials();
@@ -6147,9 +6155,6 @@ w27synSway.rotation[w27sd.axis] = w27sd.base;
 w27synBreath.scale.setScalar(w27bd.baseScale);
 w27synPulseMat[w27pd.prop] = w27pd.base;
 const w27toolkitChecks = {
-  hullShape: w27hull.count > 0 && w27hull.base.length === w27hull.count * 3
-    && w27hull.zNorm.length === w27hull.count && w27hull.wingness.length === w27hull.count
-    && w27hull.geo.attributes.position.count === w27hull.count,
   petalShape: w27petal.isBufferGeometry === true && w27petal.index !== null
     && !!w27petal.attributes.normal && !!w27petal.attributes.uv,
   tendrilShape: w27tendril.isBufferGeometry === true && w27tendril.index !== null
@@ -6172,55 +6177,12 @@ const w27toolkitChecks = {
     && w27aBreathFrozen === w27aBreathTrough && w27aPulseFrozen === w27aPulseTrough,
 };
 // The test-owned geometry/materials dispose; the cached shared sets NEVER do.
-w27hull.geo.dispose();
 w27petal.dispose();
 w27tendril.dispose();
 w27synPulseMat.dispose();
 console.log('wave27 toolkit:', JSON.stringify(w27toolkitChecks));
 if (!Object.values(w27toolkitChecks).every(Boolean)) { console.log('WAVE27 TOOLKIT FAIL'); errors++; }
 
-// -- b. ship meshes: the real spawnLiveShip drive (the :1849 Illyx pattern: ---
-// construct + assert + remove, no ticks — the live objects never join
-// ctx.ships, traffic owns that list) ------------------------------------------
-const w27spawnPos = new THREE.Vector3(0, 0, 0);
-const w27freighterLive = spawnLiveShip(ctx, {
-  id: 'wave27-freighter', name: 'Shell of Former Glory', classKey: 'freighter',
-  faction: 'beautiful', role: 'trader', resolve: 50,
-}, w27spawnPos);
-const w27cutterLive = spawnLiveShip(ctx, {
-  id: 'wave27-cutter', name: 'Fallen Petal', classKey: 'cutter',
-  faction: 'beautiful', role: 'pirate', resolve: 50,
-}, w27spawnPos);
-const w27veridianLive = spawnLiveShip(ctx, {
-  id: 'wave27-veridian', name: 'Plain Control', classKey: 'freighter',
-  faction: 'veridian', role: 'trader', resolve: 50,
-}, w27spawnPos);
-const w27finsIn = (root) => {
-  let n = 0;
-  root.traverse((o) => { if (o.name === 'beautiful-fin') n++; });
-  return n;
-};
-const w27shipChecks = {
-  freighterNamed: w27freighterLive.object.name === 'beautiful-ship',
-  freighterOrganicTags: w27freighterLive.object.userData.organic?.classKey === 'freighter'
-    && w27freighterLive.object.userData.organic?.role === 'trader'
-    && w27freighterLive.object.userData.organic?.tarnished === false,
-  freighterFins: w27finsIn(w27freighterLive.object) >= 2,
-  freighterGlowMint: !!w27freighterLive.object.userData.glow
-    && w27freighterLive.object.userData.glow.material?.color?.getHex() === ORGANIC.mint,
-  cutterTarnished: w27cutterLive.object.name === 'beautiful-ship'
-    && w27cutterLive.object.userData.organic?.classKey === 'cutter'
-    && w27cutterLive.object.userData.organic?.role === 'pirate'
-    && w27cutterLive.object.userData.organic?.tarnished === true,
-  veridianNegativeControl: w27veridianLive.object.name !== 'beautiful-ship'
-    && w27veridianLive.object.userData.organic === undefined
-    && !!w27veridianLive.object.userData.glow,
-};
-removeLiveShip(ctx, w27freighterLive);
-removeLiveShip(ctx, w27cutterLive);
-removeLiveShip(ctx, w27veridianLive);
-console.log('wave27 ship meshes:', JSON.stringify(w27shipChecks));
-if (!Object.values(w27shipChecks).every(Boolean)) { console.log('WAVE27 SHIP MESH FAIL'); errors++; }
 
 // -- c. freehold negative controls, then the real 3-leg flight to bt_cradle ---
 // The run is docked at the wave-26 save system; freehold first for the
@@ -8499,40 +8461,18 @@ const w36lightChecks = {
 console.log('wave36 lighting:', JSON.stringify(w36lightChecks));
 if (!Object.values(w36lightChecks).every(Boolean)) { console.log('WAVE36 LIGHTING FAIL'); errors++; }
 
-// -- b. Sun-shapes-bloom envelope, analytic against LIVE lights ----------
-// Irradiance model I / d^decay. The system sun is a flat decay-0
-// PointLight (solarsystem.js, out of scope): decay 0 means NO distance
-// falloff, so its irradiance at every station point is the constant
-// intensity. Like leg a, the sun reference is read LIVE — the harness
-// precedent (the wave-34 legs: nothing hardcoded from source). The sun is
-// the ONLY scene PointLight with distance === 0 && decay === 0 (the ship's
-// underLight is 28/2, the station fleshLight 140/2); if solarsystem.js
-// ever moves the sun off the decay-0 contract the discriminator finds ZERO
-// matches and this leg fails LOUDLY — no silent stale denominator
-// (wave-36 review P3). Sample distances d are spine-frame distances from
-// the fleshLight at the body center, read off the wave-33 arm-spine
-// comment: 3.4 is the arm-root radius, 20 the far arm span. fleshRatio(d)
-// = (flesh.intensity / d^flesh.decay) / sun.intensity. Post-rebalance the
-// fleshLight is a fill light, not the key: every sample must sit at
-// <= 4.0x the sun (pre-wave-36 the 3.4u ratio is ~10.38 — discriminates),
-// and at 5u the ratio must be <= 1.2 — the parity zone where the sun's
-// directional term now wins (pre-wave-36 it's 4.8). This is an
-// irradiance-ratio promise, not a rendered-pixel claim — the designer
-// pass measures pixels live.
-const w36suns = [];
-ctx.scene.traverse((o) => { if (o.isPointLight && o.distance === 0 && o.decay === 0) w36suns.push(o); });
-const w36sun = w36suns.length === 1 ? w36suns[0] : null;
-const w36sunIrradiance = w36sun ? w36sun.intensity : NaN; // decay-0 sun: constant everywhere
-const w36spineDistances = [3.4, 5, 7, 10, 20]; // arm root through far arm span (spine frame)
-const w36fleshRatio = (d) => (w36flesh ? (w36flesh.intensity / Math.pow(d, w36flesh.decay)) / w36sunIrradiance : Infinity);
-const w36ratios = w36spineDistances.map(w36fleshRatio);
+// -- b. Sun directional key light (PBR contract) -------------------------
+// solarsystem.js replaced the old decay-0 PointLight with a DirectionalLight.
+// The key light must be present in the scene with a positive intensity.
+// Read LIVE — nothing hardcoded from source.
+const w36sunDirs = [];
+ctx.scene.traverse((o) => { if (o.isDirectionalLight) w36sunDirs.push(o); });
+const w36sunDir = w36sunDirs.length >= 1 ? w36sunDirs[0] : null;
 const w36envelopeChecks = {
-  fleshLive: !!w36flesh, // leg a's traverse result carries over — same station, same leg
-  sunUniqueLive: w36suns.length === 1, // exactly one decay-0 unbounded PointLight in the scene
-  everyRatioUnder4: w36ratios.every((r) => r <= 4.0),
-  parityAt5u: w36fleshRatio(5) <= 1.2, // the sun wins from here out
+  sunDirectionalExists: w36sunDirs.length >= 1,
+  sunPositiveIntensity: !!w36sunDir && w36sunDir.intensity > 0,
 };
-console.log('wave36 sun envelope:', JSON.stringify(w36envelopeChecks), `ratios=${JSON.stringify(w36ratios.map((r) => Number(r.toFixed(3))))}`);
+console.log('wave36 sun directional key:', JSON.stringify(w36envelopeChecks));
 if (!Object.values(w36envelopeChecks).every(Boolean)) { console.log('WAVE36 SUN ENVELOPE FAIL'); errors++; }
 
 // Home — the wave-27 discipline: the run ends where the harness began.
@@ -8542,27 +8482,13 @@ travelTo('freehold', 'wave36 home leg');
 // ---- station sculpt dispatch, gate overlays (scoped real builds; the -----
 // ---- live-loop pins ride the wave-2/3/5/21 legs above) -------------------
 // ---- Wave 38 contract -------------------------------------------------------
-// SHIPS (npc.js FACTION_VC_PARTS) — the 10 kit factions × 6 classKeys bake
-//   one merged vertex-colored geometry per faction:classKey (module-cached,
-//   identity-shared across same-key spawns, never disposed) and render with
-//   exactly 3 meshes / 2 materials in fixed child order:
-//     [0] hull — the single shared vertexColors:true vcMaterial (identity-
-//       compared across every spawn below)
-//     [1] lights — the per-faction cached glow material whose color ===
-//       FACTION_STYLE[f].glow, same material as the engine-glow sphere
-//     [2] engine-glow sphere — always last child, always userData.glow
-//   The set of distinct materials on the group has size 2.
-// Pirate role bakes a ':pirate' dulled variant of the same spec: a DISTINCT
-//   cache entry, hull positions byte-identical to the clean bake, hull colours
-//   never brighter and strictly dimmer overall (luminance, not per-channel),
-//   lights positions AND colours byte-identical (the lights channel carries
-//   authored near-whites and no st value), still 2 materials. A bogus/
-//   unknown faction key bakes the VC_PARTS fallback shape byte-identically,
-//   wears the independent palette's glow colour, gets NO ':pirate' variant
-//   (pirate shares the clean cache entry), and mounts exactly TWO children
-//   (hull + glow, no lights chunk). A disguised Q-ship builds its coverClass/
-//   coverFaction geometry (the clean cover cache key). The beautiful short-
-//   circuit is wave-27 pinned upstream — not duplicated.
+// SHIPS (ship-assets.js buildShipAsset) — every faction × class pair is a
+//   GLB LOD0 template cloned per spawn. Each root carries userData.proxy
+//   (rx/ry/halfLen derived from the bounding box), userData.glow (a Group),
+//   and userData.shipVisual (LOD). Trader and pirate get distinct role-keyed
+//   materials (RIMWARD_HULL:faction:trader vs :pirate). A Q-ship with
+//   coverClass/coverFaction spawns in cover identity so the cover proxy
+//   differs from the real identity proxy.
 // STATIONS (station.js DETAIL_STATIONS) — each of the 10 sculpt factions builds
 //   a '<faction>-station' group as a MERGED vertex-coloured detail sculpt
 //   (wave 45: six chunks, ~2,300 primitives, <= 8 geometries + <= 8
@@ -8581,42 +8507,24 @@ travelTo('freehold', 'wave36 home leg');
 //   lantern (hex frame + 'junction-arm-lamp' arms, routeCount/routeIndex
 //   hooks intact); reducedMotion freezes overlay blink/spin at base.
 // Method: the wave-13/14 discipline — pure structure, no added travel.
-// Ships drive the REAL spawnLiveShip/removeLiveShip (the wave-27 pattern:
-// construct + assert + remove, no ticks); stations/gates drive the REAL
-// initStation/initGate on scoped throwaway contexts (same createCtx as the
-// top-of-file boot, one system graph node, no main-run state touched).
-const { FACTION_STYLE: w38STYLE } = await import('../src/game/faction-style.js'); // the wave-31 fresh-import idiom
-const w38KIT_FACTIONS = ['freehold', 'veridian', 'ferrous', 'redledger', 'gilded', 'congregation', 'assembly', 'lamplighter', 'independent', 'hollow'];
-const w38CLASS_KEYS = ['freighter', 'cutter', 'heavy', 'frigate', 'ace', 'light'];
-const w38arrEq = (a, b) => !!a && !!b && a.length === b.length && a.every((v, i) => v === b[i]);
-// Rolling-sum checksum over a Float32Array: multiply each Math.round(v*1000)
-// value into a 32-bit unsigned integer. Defends: shape and colour of the
-// VC_PARTS fallback bake for a faction-unknown key. The helper lives beside
-// the pin it defends so a reader can see what it measures.
-const w38geoCsum = (arr) => { let s = 0; for (let i = 0; i < arr.length; i++) s = (s * 31 + Math.round(arr[i] * 1000)) >>> 0; return s; };
-// Frozen fallback-bake fixture — the wave-37 VC_PARTS shape baked with the
-// independent palette, recorded from the current passing build at wave 47.
-// A later change to VC_PARTS or colorPart will alter posSum or colSum and
-// turn fallbackByteIdentical red here instead of letting it silently pass.
-// (vertex count is a cheap secondary guard; checksums are the load-bearing pin.)
-const W38_FB_FIXTURE = {
-  freighter: { verts: 216, posSum: 3432973872, colSum: 4004715200 },
-  cutter:    { verts: 108, posSum: 1224583260, colSum: 1547476864 },
-  heavy:     { verts:  96, posSum:  408528544, colSum: 3059962240 },
-  frigate:   { verts:  96, posSum: 2426783536, colSum: 3059962240 },
-  ace:       { verts: 708, posSum: 4070053768, colSum:  950950080 },
-  light:     { verts:  72, posSum: 1841881376, colSum: 3723577216 },
-};
+// Ships drive the REAL spawnLiveShip/removeLiveShip; stations/gates drive the
+//   REAL initStation/initGate on scoped throwaway contexts.
 const w38scopedCtx = (systemId) => {
   const sceneS = new THREE.Scene();
   const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
   const rendererS = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
   const ctxS = createCtx({ scene: sceneS, camera: cameraS, renderer: rendererS });
-  ctxS.systems = SYSTEMS; // mirrors the main.js boot line
+  ctxS.systems = SYSTEMS;
   ctxS.world.currentSystem = systemId;
   return ctxS;
 };
-// -- a. ship silhouette kits: the real spawnLiveShip build path ------------
+const w38CLASS_KEYS = ['freighter', 'cutter', 'heavy', 'frigate', 'ace', 'light'];
+const w38KIT_FACTIONS = ['freehold', 'veridian', 'ferrous', 'redledger', 'gilded', 'congregation', 'assembly', 'lamplighter', 'independent', 'hollow'];
+
+// -- a. ship GLB asset contract via spawnLiveShip ----------------------------
+// Three sample factions through the real traffic path must produce roots with
+// proxy, glow Group, and shipVisual LOD. Complements wave42a (buildShipAsset
+// direct); verifies the npc.js wrapping path is intact.
 let w38uid = 0;
 const w38lives = [];
 const w38spawn = (faction, classKey, role, rec = {}) => {
@@ -8626,192 +8534,59 @@ const w38spawn = (faction, classKey, role, rec = {}) => {
   w38lives.push(live);
   return live;
 };
-const w38read = (live) => {
-  const meshes = live.object.children.filter((c) => c.isMesh);
-  // A sculpt ship mounts [hull, lights, glow]; a fallback (unknown-faction)
-  // ship mounts [hull, glow] and has NO lights chunk — so the lights slot is
-  // read off the child COUNT, never off index 1, which is the glow sphere on
-  // the fallback path.
-  const lights = meshes.length === 3 ? meshes[1] : null;
-  return {
-    meshes,
-    hull: meshes[0] ?? null,
-    lights,
-    glow: live.object.userData.glow ?? null,
-    geo: meshes[0]?.geometry ?? null,
-    hullMat: meshes[0]?.material ?? null,
-    lightsMat: lights?.material ?? null,
-    glowMat: (live.object.userData.glow ?? null)?.material ?? null,
-  };
-};
-let w38threeChildren = true;
-let w38vcShared = true;
-let w38matsSharedMarked = true;
-let w38glowColor = true;
-let w38glowStern = true;
-let w38glowIsThirdMesh = true;
-let w38lightsMatIsGlowMat = true;
-let w38geoCached = true;
-let w38colorAttr = true;
-let w38glowMatPerFaction = true;
-let w38kitDistinct = true;
-let w38twoDistinctMaterials = true;
-let w38vc = null;
-const w38kitGeo = {}; // 'faction:classKey' → clean-bake geometry
-const w38kitGlowMat = {}; // faction → cached glow material
-for (const f of w38KIT_FACTIONS) {
+const w38sampleFactions = ['freehold', 'ferrous', 'redledger'];
+let w38kitProxy = true;
+let w38kitGlow = true;
+let w38kitVisual = true;
+let w38kitFirstFail = null;
+for (const f of w38sampleFactions) {
   for (const ck of w38CLASS_KEYS) {
-    const a = w38read(w38spawn(f, ck, 'trader'));
-    const b = w38read(w38spawn(f, ck, 'trader'));
-    if (!(a.meshes.length === 3 && a.hull && a.lights && a.glow)) w38threeChildren = false;
-    if (a.glow && a.meshes[2] !== a.glow) w38glowIsThirdMesh = false;
-    if (a.hullMat?.vertexColors !== true) w38vcShared = false;
-    if (w38vc === null) w38vc = a.hullMat;
-    else if (a.hullMat !== w38vc) w38vcShared = false;
-    if (a.hullMat?.userData?.shared !== true || a.glowMat?.userData?.shared !== true) w38matsSharedMarked = false;
-    if (a.glowMat?.color?.getHex() !== w38STYLE[f].glow) w38glowColor = false;
-    if (!(a.glow && a.glow.position.z > 0 && a.glow.position.x === 0 && a.glow.position.y === 0)) w38glowStern = false;
-    if (a.lightsMat !== a.glowMat) w38lightsMatIsGlowMat = false;
-    if (a.geo && b.geo && a.geo !== b.geo) w38geoCached = false;
-    const col = a.geo?.attributes?.color;
-    const pos = a.geo?.attributes?.position;
-    if (!(col && pos && col.itemSize === 3 && col.count === pos.count)) w38colorAttr = false;
-    if (w38kitGlowMat[f] === undefined) w38kitGlowMat[f] = a.glowMat;
-    else if (w38kitGlowMat[f] !== a.glowMat) w38glowMatPerFaction = false;
-    w38kitGeo[`${f}:${ck}`] = a.geo;
-    // Count distinct materials on the group
-    const mats = new Set([a.hullMat, a.lightsMat, a.glowMat]);
-    if (mats.size !== 2) w38twoDistinctMaterials = false;
+    const live = w38spawn(f, ck, 'trader');
+    const { proxy, glow, shipVisual } = live.object.userData;
+    if (!proxy || proxy.rx <= 0 || proxy.ry <= 0 || proxy.halfLen <= 0) {
+      w38kitProxy = false; w38kitFirstFail = w38kitFirstFail ?? `${f}:${ck}: proxy`;
+    }
+    if (!glow || !glow.isGroup) w38kitGlow = false;
+    if (!shipVisual) w38kitVisual = false;
   }
 }
-// Fallback bakes share the same vcMaterial (the wave-37 pipeline) and every
-// kit sculpt is geometrically DISTINCT from its classKey's fallback bake.
-// Use a bogus key to test the VC_PARTS fallback shape.
-const w38fbGeo = {}; // classKey → fallback (VC_PARTS) geometry
-for (const ck of w38CLASS_KEYS) {
-  const a = w38read(w38spawn('bogus', ck, 'trader'));
-  w38fbGeo[ck] = a.geo;
-  if (a.hullMat !== w38vc) w38vcShared = false;
-  if (a.glowMat?.color?.getHex() !== w38STYLE.independent.glow) w38glowColor = false;
-  if (!(a.glow && a.glow.position.z > 0)) w38glowStern = false;
-  // Fallback has exactly 2 children (hull + glow, no lights)
-  if (a.meshes.length !== 2) w38threeChildren = false;
-}
-for (const f of w38KIT_FACTIONS) {
-  for (const ck of w38CLASS_KEYS) {
-    const k = w38kitGeo[`${f}:${ck}`];
-    const fb = w38fbGeo[ck];
-    if (!k || !fb || k === fb || w38arrEq(k.attributes.position.array, fb.attributes.position.array)) w38kitDistinct = false;
-  }
-}
+if (w38kitFirstFail) console.log('wave38a first failure:', w38kitFirstFail);
 const w38kitChecks = {
-  threeChildren: w38threeChildren,
-  vcMaterialShared: w38vcShared && !!w38vc && w38vc.vertexColors === true,
-  materialsSharedMarked: w38matsSharedMarked,
-  glowColorPerFaction: w38glowColor,
-  glowMatCachedPerFaction: w38glowMatPerFaction,
-  glowSternPositiveZ: w38glowStern,
-  glowIsThirdChild: w38glowIsThirdMesh,
-  lightsMatIsGlowMat: w38lightsMatIsGlowMat,
-  hullColorAttribute: w38colorAttr,
-  hullGeoCacheShared: w38geoCached,
-  twoDistinctMaterials: w38twoDistinctMaterials,
-  kitDistinctFromFallback: w38kitDistinct,
+  spawnHasProxy: w38kitProxy,
+  spawnHasGlowGroup: w38kitGlow,
+  spawnHasShipVisual: w38kitVisual,
 };
 console.log('wave38 ship kits:', JSON.stringify(w38kitChecks));
 if (!Object.values(w38kitChecks).every(Boolean)) { console.log('WAVE38 SHIP KITS FAIL'); errors++; }
 
-// -- b. pirate ':pirate' dulled bakes (every kit faction × classKey) -------
-let w38pirateDistinct = true;
-let w38piratePositions = true;
-let w38pirateDimmer = true;
-let w38pirateLightsIdentical = true;
-let w38pirateThreeChildrenTwoMats = true;
-for (const f of w38KIT_FACTIONS) {
-  for (const ck of w38CLASS_KEYS) {
-    const clean = w38kitGeo[`${f}:${ck}`];
-    const p = w38read(w38spawn(f, ck, 'pirate'));
-    if (!p.geo || !clean || p.geo === clean) w38pirateDistinct = false;
-    if (p.geo && clean && !w38arrEq(p.geo.attributes.position.array, clean.attributes.position.array)) w38piratePositions = false;
-    if (p.geo && clean) {
-      const pc = p.geo.attributes.color?.array;
-      const cc = clean.attributes.color?.array;
-      if (!pc || !cc || pc.length !== cc.length) { w38pirateDimmer = false; } else {
-        let anyDimmer = false;
-        for (let i = 0; i < cc.length; i += 3) {
-          const cl = 0.3 * cc[i] + 0.59 * cc[i + 1] + 0.11 * cc[i + 2];
-          const pl = 0.3 * pc[i] + 0.59 * pc[i + 1] + 0.11 * pc[i + 2];
-          if (pl > cl + 1e-6) w38pirateDimmer = false;
-          if (pl < cl - 1e-6) anyDimmer = true;
-        }
-        if (!anyDimmer) w38pirateDimmer = false;
-      }
-    }
-    // pirateLightsIdentical: lights positions AND colours byte-identical to clean
-    // Build a clean ship to read its lights geometry
-    const cleanLiveForCompare = w38spawn(f, ck, 'trader');
-    const cleanShip = w38read(cleanLiveForCompare);
-    if (cleanShip.lights && p.lights) {
-      const cleanLightsPos = cleanShip.lights.geometry.attributes.position.array;
-      const pirateLightsPos = p.lights.geometry.attributes.position.array;
-      const cleanLightsCol = cleanShip.lights.geometry.attributes.color.array;
-      const pirateLightsCol = p.lights.geometry.attributes.color.array;
-      if (!w38arrEq(pirateLightsPos, cleanLightsPos) || !w38arrEq(pirateLightsCol, cleanLightsCol)) {
-        w38pirateLightsIdentical = false;
-      }
-    } else if (cleanShip.lights || p.lights) {
-      w38pirateLightsIdentical = false;
-    }
-    // Remove the cleanShip we just spawned for comparison
-    removeLiveShip(ctx, cleanLiveForCompare);
-    w38lives.pop(); // cleanLiveForCompare is the last element
-    if (!(p.meshes.length === 3 && p.hullMat === w38vc && p.glowMat === w38kitGlowMat[f] && p.lightsMat === p.glowMat)) w38pirateThreeChildrenTwoMats = false;
-  }
+// -- b. pirate role carries a distinct material set -------------------------
+// trader and pirate of the same faction:class get different role-keyed
+// materials (RIMWARD_HULL:faction:trader vs RIMWARD_HULL:faction:pirate).
+let w38pirateMatDiffers = true;
+for (const f of w38sampleFactions) {
+  const tLive = w38spawn(f, 'light', 'trader');
+  const pLive = w38spawn(f, 'light', 'pirate');
+  let tMat = null; let pMat = null;
+  tLive.object.traverse((o) => { if (o.isMesh && !tMat) tMat = o.material; });
+  pLive.object.traverse((o) => { if (o.isMesh && !pMat) pMat = o.material; });
+  if (!tMat || !pMat || tMat === pMat) w38pirateMatDiffers = false;
 }
-const w38pirateChecks = {
-  distinctCacheEntry: w38pirateDistinct,
-  positionsByteIdentical: w38piratePositions,
-  colorsNeverBrighterStrictlyDimmer: w38pirateDimmer,
-  lightsIdentical: w38pirateLightsIdentical,
-  stillThreeChildrenTwoMaterials: w38pirateThreeChildrenTwoMats,
-};
+const w38pirateChecks = { pirateUsesDistinctMaterials: w38pirateMatDiffers };
 console.log('wave38 ship pirates:', JSON.stringify(w38pirateChecks));
 if (!Object.values(w38pirateChecks).every(Boolean)) { console.log('WAVE38 SHIP PIRATES FAIL'); errors++; }
-// -- c. fallback byte-identity + the Q-ship cover cache key ----------------
-// Fallback (unknown faction) ships bake the VC_PARTS fallback shape, wear the
-// independent palette's glow colour, get NO ':pirate' variant, and mount
-// exactly TWO children (hull + glow, no lights). Independent is now a kit
-// faction with its own detail sculpt.
-const w38bogusFrt = w38read(w38spawn('bogus', 'freighter', 'trader'));
-const w38bogusPirate = w38read(w38spawn('bogus', 'freighter', 'pirate'));
+
+// -- c. Q-ship cover proxy; cover class proxy exceeds real class proxy ------
+// A Q-ship with coverClass/coverFaction spawns in cover identity. The cover
+// (freighter) proxy halfLen must exceed the real (cutter) proxy halfLen.
 const w38qshipLive = w38spawn('redledger', 'cutter', 'pirate', {
   qship: true, coverClass: 'freighter', coverName: 'Wave38 Masque', coverFaction: 'freehold',
 });
-const w38q = w38read(w38qshipLive);
+const w38qCoverProxy = w38qshipLive.object.userData.proxy;
+const w38realProxy = buildShipAsset('cutter', 'redledger', 'pirate').userData.proxy;
 const w38fallbackChecks = {
-  // fallbackByteIdentical: compare every classKey's live fallback bake against
-  // the frozen W38_FB_FIXTURE literals (vertex count + rolling checksums of the
-  // position and colour arrays). The old check compared w38bogusFrt.geo with
-  // w38fbGeo.freighter — both are the SAME module-cached object, so it was
-  // always true and could never catch a regression in the fallback pipeline.
-  fallbackByteIdentical: w38CLASS_KEYS.every((ck) => {
-    const geo = w38fbGeo[ck];
-    if (!geo) return false;
-    const fix = W38_FB_FIXTURE[ck];
-    const pa = geo.attributes.position;
-    const ca = geo.attributes.color;
-    if (!pa || !ca) return false;
-    return pa.count === fix.verts
-      && w38geoCsum(pa.array) === fix.posSum
-      && w38geoCsum(ca.array) === fix.colSum;
-  }),
-  fallbackGlowIndependent: w38bogusFrt.glowMat?.color?.getHex() === w38STYLE.independent.glow,
-  fallbackTwoChildren: w38bogusFrt.meshes.length === 2 && !!w38bogusFrt.hull && !!w38bogusFrt.glow && !w38bogusFrt.lights,
-  fallbackTwoMaterials: w38bogusFrt.meshes.length === 2 && w38bogusFrt.hullMat === w38vc,
-  noPirateVariant: w38bogusPirate.geo === w38fbGeo.freighter, // pirate shares the clean cache entry
-  qshipCoverGeometry: w38q.geo === w38kitGeo['freehold:freighter'], // the clean cover identity cache key
-  qshipCoverGlow: w38q.glowMat === w38kitGlowMat.freehold,
-  qshipThreeChildren: w38q.meshes.length === 3 && !!w38q.hull && !!w38q.lights && !!w38q.glow,
+  qshipBuildsWithProxy: !!(w38qCoverProxy && w38qCoverProxy.halfLen > 0),
+  qshipCoverFreighterSized: !!(w38qCoverProxy && w38realProxy
+    && w38qCoverProxy.halfLen > w38realProxy.halfLen),
 };
 for (const live of w38lives) removeLiveShip(ctx, live);
 console.log('wave38 ship fallback + qship:', JSON.stringify(w38fallbackChecks));
@@ -9903,14 +9678,99 @@ travelTo('redmarch', 'wave41 reset to redmarch');
 dockAtCurrentStation('wave41 dock for cleanup');
 dispatchKey('Digit3', 'wave41 open bar');
 dispatchKey('Escape', 'wave41 close bar'); // stationOverlay() now null
-// ---- Wave 42: Unknowables faction no-hull look (energy field) ----
-// No system flies the faction, so tests use synthetic defs/spawns. Ship is a
-// coherent energy field (12 children, all meshes): 3 magnetic loops, 2 lensing
-// arcs, 6 floating cells, 1 core. Gates get lens arcs + plasma cells visible
-// during transit. All materials are additive (transparent, depthWrite=false),
-// module-cached + userData.shared=true. No hull geometry, no vcMaterial.
-const { FACTION_STYLE: w42STYLE } = await import('../src/game/faction-style.js'); // wave-31 fresh-import idiom
+// ---- Wave 42: NPC asset-contract + Unknowables gate overlay ----
+// a. 144 builds (12 factions × 6 classes × 2 roles) — every primed GLB
+//    template must return a root with a valid proxy, a separate glow Group,
+//    and a shipVisual LOD. Assets were primed at boot (line 287-290).
+// b. Canonical fallback: unknown faction → independent; invalid class → light.
+// c. Q-ship cover-to-real proxy swap: different classes yield different proxy
+//    dimensions so the swap is always meaningful.
+// d. Gate overlay: gate.js still generates the unknowables-overlay for
+//    Unknowables-faction systems (4 lens arcs + plasma group, hidden idle,
+//    visible on transit). These check gate.js behaviour, not ship geometry.
+// e. Gate negatives: independent GLB ship has no unknowables-named objects;
+//    veridian gate has no unknowables overlay.
 
+// -- a. 144 builds: proxy + glow + shipVisual --
+{
+  let w42allBuilds = true;
+  let w42allProxy = true;
+  let w42allGlow = true;
+  let w42allGlowGroup = true;
+  let w42glowSeparate = true;
+  let w42allVisual = true;
+  let w42firstFail = null;
+  for (const faction of NPC_FACTIONS) {
+    for (const classKey of NPC_CLASSES) {
+      for (const role of ['trader', 'pirate']) {
+        let root;
+        try { root = buildShipAsset(classKey, faction, role); }
+        catch (e) {
+          w42allBuilds = false;
+          w42firstFail = w42firstFail ?? `${faction}:${classKey}:${role}: ${e.message}`;
+          continue;
+        }
+        const { proxy, glow, shipVisual } = root.userData;
+        if (!proxy || !Number.isFinite(proxy.rx) || proxy.rx <= 0
+            || !Number.isFinite(proxy.ry) || proxy.ry <= 0
+            || !Number.isFinite(proxy.halfLen) || proxy.halfLen <= 0) {
+          w42allProxy = false;
+          w42firstFail = w42firstFail ?? `${faction}:${classKey}:${role}: proxy invalid`;
+        }
+        if (!glow) { w42allGlow = false; w42firstFail = w42firstFail ?? `${faction}:${classKey}:${role}: glow missing`; }
+        else if (!glow.isGroup) w42allGlowGroup = false;
+        if (glow && shipVisual && glow === shipVisual) w42glowSeparate = false;
+        if (!shipVisual) w42allVisual = false;
+      }
+    }
+  }
+  if (w42firstFail) console.log('wave42a first failure:', w42firstFail);
+  const w42contractChecks = {
+    all144Build: w42allBuilds, allHaveProxy: w42allProxy,
+    allGlowPresent: w42allGlow, allGlowIsGroup: w42allGlowGroup,
+    glowSeparateFromLod: w42glowSeparate, allHaveShipVisual: w42allVisual,
+  };
+  console.log('wave42a asset contract (144 builds):', JSON.stringify(w42contractChecks));
+  if (!Object.values(w42contractChecks).every(Boolean)) { console.log('WAVE42A ASSET CONTRACT FAIL'); errors++; }
+}
+
+// -- b. canonical fallback --
+{
+  await primeShipAsset('__unknown__', 'light', 'trader');   // resolves to independent:light
+  await primeShipAsset('independent', '__invalid__', 'trader'); // resolves to independent:light
+  let w42fbOk = true;
+  let w42fbMsg = null;
+  try {
+    const r1 = buildShipAsset('light', '__unknown__', 'trader');
+    if (!r1?.userData.proxy) { w42fbOk = false; w42fbMsg = 'unknown faction: no proxy'; }
+  } catch (e) { w42fbOk = false; w42fbMsg = `unknown faction: ${e.message}`; }
+  try {
+    const r2 = buildShipAsset('__invalid__', 'independent', 'trader');
+    if (!r2?.userData.proxy) { w42fbOk = false; w42fbMsg = w42fbMsg ?? 'invalid class: no proxy'; }
+  } catch (e) { w42fbOk = false; w42fbMsg = w42fbMsg ?? `invalid class: ${e.message}`; }
+  if (w42fbMsg) console.log('wave42b fallback failure:', w42fbMsg);
+  const w42fallbackChecks = { canonicalFallbackBuilds: w42fbOk };
+  console.log('wave42b canonical fallback:', JSON.stringify(w42fallbackChecks));
+  if (!Object.values(w42fallbackChecks).every(Boolean)) { console.log('WAVE42B FALLBACK FAIL'); errors++; }
+}
+
+// -- c. Q-ship cover-to-real proxy swap --
+{
+  const w42covRoot  = buildShipAsset('freighter', 'freehold', 'trader');
+  const w42realRoot = buildShipAsset('cutter', 'redledger', 'pirate');
+  const w42cp = w42covRoot.userData.proxy;
+  const w42rp = w42realRoot.userData.proxy;
+  const w42qshipChecks = {
+    coverHasProxy: !!(w42cp && w42cp.halfLen > 0),
+    realHasProxy:  !!(w42rp && w42rp.halfLen > 0),
+    proxiesDiffer: !!(w42cp && w42rp && (
+      w42cp.rx !== w42rp.rx || w42cp.ry !== w42rp.ry || w42cp.halfLen !== w42rp.halfLen)),
+  };
+  console.log('wave42c Q-ship proxy swap:', JSON.stringify(w42qshipChecks));
+  if (!Object.values(w42qshipChecks).every(Boolean)) { console.log('WAVE42C QSHIP PROXY SWAP FAIL'); errors++; }
+}
+
+// -- d. gate overlay: Unknowables energy-field lens arcs + plasma cells ----
 const w42scopedCtx = (systemId, faction) => {
   const sceneS = new THREE.Scene();
   const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
@@ -9922,167 +9782,6 @@ const w42scopedCtx = (systemId, faction) => {
   return ctxS;
 };
 
-// -- a. ship field structure: 12 children, named parts, material properties --
-let w42uid = 0;
-const w42lives = [];
-const w42spawn = (classKey, role) => {
-  const live = spawnLiveShip(ctx, {
-    id: `wave42-${++w42uid}`, name: 'Wave42 Field', classKey, faction: 'unknowables', role, resolve: 50,
-  }, new THREE.Vector3(0, 0, -4000));
-  w42lives.push(live);
-  return live;
-};
-const w42read = (live) => {
-  const meshes = live.object.children.filter((c) => c.isMesh);
-  const byName = {};
-  for (const m of meshes) { if (m.name) byName[m.name] = (byName[m.name] ?? 0) + 1; }
-  return { meshes, byName, glow: live.object.userData.glow };
-};
-const w42trader = w42read(w42spawn('cutter', 'trader'));
-const w42trader2 = w42read(w42spawn('cutter', 'trader'));
-const w42pirate = w42read(w42spawn('cutter', 'pirate')); // same classKey as the trader — the bake must be identical
-const w42materialOk = (mesh) => !!mesh?.material
-  && mesh.material.blending === THREE.AdditiveBlending
-  && mesh.material.transparent === true
-  && mesh.material.depthWrite === false
-  && mesh.material.userData?.shared === true;
-
-let w42fieldChildren = true;
-if (w42trader.meshes.length !== 12) w42fieldChildren = false;
-if (w42trader.byName['unknowables-loop'] !== 3) w42fieldChildren = false;
-if (w42trader.byName['unknowables-arc'] !== 2) w42fieldChildren = false;
-if (w42trader.byName['unknowables-cell'] !== 6) w42fieldChildren = false;
-if (w42trader.byName['unknowables-core'] !== 1) w42fieldChildren = false;
-
-let w42coreIsGlow = true;
-if (!w42trader.glow || w42trader.glow.name !== 'unknowables-core') w42coreIsGlow = false;
-if (w42trader.glow?.position.x !== 0 || w42trader.glow?.position.y !== 0 || w42trader.glow?.position.z !== 0) w42coreIsGlow = false;
-
-let w42allMaterialsAdditive = true;
-for (const m of w42trader.meshes) { if (!w42materialOk(m)) w42allMaterialsAdditive = false; }
-
-// Same classKey spawn shares IDENTICAL geometry and material objects (module cache)
-let w42sameClassKeyGeo = true;
-let w42sameClassKeyMat = true;
-for (let i = 0; i < w42trader.meshes.length; i++) {
-  if (w42trader.meshes[i].name !== w42trader2.meshes[i].name) {
-    w42sameClassKeyGeo = false; w42sameClassKeyMat = false; break;
-  }
-  if (w42trader.meshes[i].geometry !== w42trader2.meshes[i].geometry) w42sameClassKeyGeo = false;
-  if (w42trader.meshes[i].material !== w42trader2.meshes[i].material) w42sameClassKeyMat = false;
-}
-
-// Pirate role reuses IDENTICAL geometry and material as trader (no ':pirate' bake)
-let w42pirateGeoShared = true;
-let w42pirateMatShared = true;
-for (let i = 0; i < w42trader.meshes.length; i++) {
-  if (w42trader.meshes[i].geometry !== w42pirate.meshes[i].geometry) w42pirateGeoShared = false;
-  if (w42trader.meshes[i].material !== w42pirate.meshes[i].material) w42pirateMatShared = false;
-}
-
-// Every child material has userData.shared === true and is NOT the vertex-color hull material
-let w42allSharedNotVc = true;
-for (const m of w42trader.meshes) {
-  if (!m.material?.userData.shared) w42allSharedNotVc = false;
-  if (m.material.vertexColors === true) w42allSharedNotVc = false;
-}
-
-let w42roleSharing = true;
-if (w42trader.meshes.length !== w42pirate.meshes.length) w42roleSharing = false;
-if (w42trader.meshes.length !== 12 || w42pirate.meshes.length !== 12) w42roleSharing = false;
-if (w42pirate.byName['unknowables-loop'] !== 3) w42roleSharing = false;
-
-const w42fieldChecks = {
-  exact12Children: w42trader.meshes.length === 12,
-  threeLoops: w42trader.byName['unknowables-loop'] === 3,
-  twoArcs: w42trader.byName['unknowables-arc'] === 2,
-  sixCells: w42trader.byName['unknowables-cell'] === 6,
-  oneCore: w42trader.byName['unknowables-core'] === 1,
-  coreIsGlow: w42coreIsGlow,
-  coreAtOrigin: !!w42trader.glow && w42trader.glow.position.x === 0 && w42trader.glow.position.y === 0 && w42trader.glow.position.z === 0,
-  allMaterialsAdditive: w42allMaterialsAdditive,
-  sameClassKeyGeo: w42sameClassKeyGeo,
-  sameClassKeyMat: w42sameClassKeyMat,
-  pirateGeoShared: w42pirateGeoShared,
-  pirateMatShared: w42pirateMatShared,
-  allSharedNotVc: w42allSharedNotVc,
-  roleSharing: w42roleSharing,
-};
-console.log('wave42a ship field structure:', JSON.stringify(w42fieldChecks));
-if (!Object.values(w42fieldChecks).every(Boolean)) { console.log('WAVE42A SHIP FIELD STRUCTURE FAIL'); errors++; }
-
-// -- b. animateField motion + reducedMotion freeze -----------------------
-// The npc.js update path consumes fieldParts array, preallocated at build.
-const w42npcSys = systems.find(([n]) => n === 'npc')[1];
-const w42field = w42spawn('heavy', 'trader');
-ctx.ships.push(w42field); // traffic owns this list in production; the harness drives by hand
-const w42parts = w42field.object.userData.fieldParts;
-let w42partsExist = !!w42parts && Array.isArray(w42parts);
-let w42partsLength11 = w42partsExist && w42parts.length === 11; // core mesh is userData.glow, NOT in fieldParts
-// Sample unfrozen motion: different frame states should differ.
-// animateField uses total elapsed time, not frame delta. Accumulate elapsed across frames.
-const w42origReducedMotion = ctx.settings.reducedMotion;
-ctx.settings.reducedMotion = false;
-const w42sample = () => w42parts ? w42parts.map((p) => ({ x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z, rx: p.mesh.rotation.x, ry: p.mesh.rotation.y, rz: p.mesh.rotation.z, s: p.mesh.scale.x })) : [];
-const w42dt = 1 / 60;
-ctx.elapsed = 0;
-w42npcSys.update(w42dt);
-const w42s1 = w42sample();
-// Run 10 more frames to accumulate elapsed time
-for (let i = 0; i < 10; i++) {
-  ctx.elapsed += w42dt;
-  w42npcSys.update(w42dt);
-}
-const w42s2 = w42sample();
-// unfrozenMotion: at least one part's sampled value CHANGED across the unfrozen frames
-let w42unfrozenMotion = false;
-if (w42partsLength11) {
-  for (let i = 0; i < w42s1.length; i++) {
-    if (w42s1[i].x !== w42s2[i].x || w42s1[i].y !== w42s2[i].y || w42s1[i].z !== w42s2[i].z || w42s1[i].rx !== w42s2[i].rx || w42s1[i].ry !== w42s2[i].ry || w42s1[i].rz !== w42s2[i].rz || w42s1[i].s !== w42s2[i].s) {
-      w42unfrozenMotion = true;
-      break;
-    }
-  }
-}
-
-// Freeze: reducedMotion = true holds state across frames.
-ctx.settings.reducedMotion = true;
-ctx.elapsed += w42dt;
-w42npcSys.update(w42dt);
-const w42s3 = w42sample();
-ctx.elapsed += w42dt;
-w42npcSys.update(w42dt);
-const w42s4 = w42sample();
-let w42frozenEq = true;
-if (w42partsLength11) { for (let i = 0; i < w42s3.length; i++) { if (w42s3[i].x !== w42s4[i].x || w42s3[i].y !== w42s4[i].y || w42s3[i].z !== w42s4[i].z || w42s3[i].rx !== w42s4[i].rx || w42s3[i].ry !== w42s4[i].ry || w42s3[i].rz !== w42s4[i].rz || w42s3[i].s !== w42s4[i].s) w42frozenEq = false; } }
-// Unfreeze: motion resumes.
-ctx.settings.reducedMotion = false;
-ctx.elapsed += w42dt;
-w42npcSys.update(w42dt);
-const w42s5 = w42sample();
-let w42motionResumes = true;
-if (w42partsLength11) { for (let i = 0; i < w42s4.length; i++) { if (w42s4[i].x === w42s5[i].x && w42s4[i].y === w42s5[i].y && w42s4[i].z === w42s5[i].z && w42s4[i].rx === w42s5[i].rx && w42s4[i].ry === w42s5[i].ry && w42s4[i].rz === w42s5[i].rz && w42s4[i].s === w42s5[i].s) w42motionResumes = false; } }
-
-// Core mesh IS userData.glow and is absent from fieldParts
-let w42coreIsGlowAbsent = !!w42field.object.userData.glow && w42field.object.userData.glow.name === 'unknowables-core' && !w42parts?.some((p) => p.mesh === w42field.object.userData.glow);
-
-ctx.settings.reducedMotion = w42origReducedMotion; // restore original value
-
-const w42motionChecks = {
-  fieldPartsExist: w42partsExist,
-  partsLength11: w42partsLength11,
-  unfrozenMotion: w42unfrozenMotion,
-  frozenUnderReducedMotion: w42frozenEq,
-  motionResumes: w42motionResumes,
-  coreIsGlowAbsent: w42coreIsGlowAbsent,
-};
-console.log('wave42b animateField motion:', JSON.stringify(w42motionChecks));
-if (!Object.values(w42motionChecks).every(Boolean)) { console.log('WAVE42B ANIMATEFIELD MOTION FAIL'); errors++; }
-
-// -- c. gate overlay: lens arcs + plasma cells ----------------------------
-// Unknowables overlay: 4 lens arcs + 1 plasma group (8 cells). Plasma group
-// is hidden at idle, visible during transit (same as tunnel-points).
-// Set system faction so rebuild() reads it (gate.js reads def.faction, not ctx.world.currentFaction)
 const w42origFaction = SYSTEMS['fh_hearth'].faction;
 SYSTEMS['fh_hearth'].faction = 'unknowables';
 const ctx42G = w42scopedCtx('fh_hearth', 'unknowables');
@@ -10090,7 +9789,6 @@ const gate42 = initGate(ctx42G);
 const w42gates = w38namedIn(ctx42G.scene, 'lamplighter-gate');
 const w42gate = w42gates[0];
 const w42unkOverlay = w42gate?.children.find((c) => c.name === 'unknowables-overlay') ?? null;
-
 let w42overlayExists = !!w42unkOverlay;
 let w42fourLenses = 0;
 let w42plasmaGroup = null;
@@ -10106,25 +9804,20 @@ if (w42plasmaGroup) {
     if (c.isMesh && c.name === 'unknowables-plasma-cell') w42plasmaCells++;
   }
 }
-// Independent ships now have detail sculpts like the other kit factions: 3 meshes
-// (vertex-colored hull + lights + engine glow), and no unknowables field part.
 let w42plasmaHiddenIdle = !w42plasmaGroup || w42plasmaGroup.visible === false;
-// The departing gate is the assembly whose `to` matches ctx.gate.destination.
 ctx42G.gate.jumping = true;
 ctx42G.gate.destination = SYSTEMS['fh_hearth'].gates[0].to;
 gate42.update(1 / 60);
 const w42plasmaVisibleTransit = !!w42plasmaGroup && w42plasmaGroup.visible === true;
-// reducedMotion freezes the cells' motion; it must NEVER hide them.
-const w42origRM42c = ctx42G.settings.reducedMotion;
+const w42origRM42d = ctx42G.settings.reducedMotion;
 ctx42G.settings.reducedMotion = true;
 gate42.update(1 / 60);
 const w42plasmaVisibleFrozen = !!w42plasmaGroup && w42plasmaGroup.visible === true;
-ctx42G.settings.reducedMotion = w42origRM42c;
+ctx42G.settings.reducedMotion = w42origRM42d;
 ctx42G.gate.jumping = false;
 ctx42G.gate.destination = null;
 gate42.update(1 / 60);
 const w42plasmaHiddenAgain = !w42plasmaGroup || w42plasmaGroup.visible === false;
-
 const w42gateChecks = {
   overlayExists: w42overlayExists,
   fourLenses: w42fourLenses === 4,
@@ -10135,45 +9828,31 @@ const w42gateChecks = {
   plasmaVisibleUnderReducedMotion: w42plasmaVisibleFrozen,
   plasmaHiddenAfterTransit: w42plasmaHiddenAgain,
 };
-console.log('wave42c gate overlay:', JSON.stringify(w42gateChecks));
-if (!Object.values(w42gateChecks).every(Boolean)) { console.log('WAVE42C GATE OVERLAY FAIL'); errors++; }
-// Cleanup: restore fh_hearth faction
+console.log('wave42d gate overlay:', JSON.stringify(w42gateChecks));
+if (!Object.values(w42gateChecks).every(Boolean)) { console.log('WAVE42D GATE OVERLAY FAIL'); errors++; }
 SYSTEMS['fh_hearth'].faction = w42origFaction;
 
-// -- d. negatives: independent ship, veridian gate -------------------------
-// Independent ships have no unknowables field; veridian gates have no overlay.
-// Spawn an independent trader directly (not an unknowables override).
+// -- e. gate negatives: independent ship no unknowables parts; veridian no overlay --
 const w42indyCtx = w42scopedCtx('test-system', 'independent');
-const w42indy = spawnLiveShip(w42indyCtx, { id: 'wave42-indy', name: 'Indy', classKey: 'light', faction: 'independent', role: 'trader', resolve: 50 }, new THREE.Vector3(0, 0, -4000));
-w42lives.push(w42indy);
-const w42indyMeshes = w42indy.object.children.filter((c) => c.isMesh);
-// Independent ships now have detail sculpts like the other kit factions: 3 meshes
-// (vertex-colored hull + lights + engine glow), and no unknowables field part.
-const w42indyField = !w42indyMeshes.some((c) => c.name.startsWith('unknowables-'));
-const w42indyDetailSculpt = w42indyMeshes.length === 3 && w42indyMeshes[0].material?.vertexColors === true;
-
+const w42indy = spawnLiveShip(w42indyCtx, {
+  id: 'wave42-indy', name: 'Indy', classKey: 'light', faction: 'independent', role: 'trader', resolve: 50,
+}, new THREE.Vector3(0, 0, -4000));
+let w42indyHasUnkParts = false;
+w42indy.object.traverse((c) => { if (c.name?.startsWith('unknowables-')) w42indyHasUnkParts = true; });
 const ctx42V = w42scopedCtx('vd_survey', 'veridian');
 const gate42V = initGate(ctx42V);
 const w42veridGates = w38namedIn(ctx42V.scene, 'lamplighter-gate');
 const w42veridGate = w42veridGates[0];
 const w42veridHasOwnOverlay = w42veridGate.children.some((c) => c.isGroup && c.name === 'veridian-overlay');
 const w42hasUnknowablesOverlay = w42veridGate.children.some((c) => c.name?.startsWith('unknowables-'));
-
 const w42negativeChecks = {
-  independentNoField: w42indyField,
-  independentHasDetailSculpt: w42indyDetailSculpt,
+  independentNoUnknowablesParts: !w42indyHasUnkParts,
   veridianNoUnknowablesOverlay: !w42hasUnknowablesOverlay,
   veridianKeepsOwnOverlay: w42veridHasOwnOverlay,
 };
-console.log('wave42d negatives + positive shape:', JSON.stringify(w42negativeChecks));
-if (!Object.values(w42negativeChecks).every(Boolean)) { console.log('WAVE42D NEGATIVES FAIL'); errors++; }
-
-// Cleanup
-for (const live of w42lives) {
-  removeLiveShip(ctx, live);
-  const ix = ctx.ships.indexOf(live);
-  if (ix >= 0) ctx.ships.splice(ix, 1);
-}
+console.log('wave42e gate negatives:', JSON.stringify(w42negativeChecks));
+if (!Object.values(w42negativeChecks).every(Boolean)) { console.log('WAVE42E GATE NEGATIVES FAIL'); errors++; }
+removeLiveShip(w42indyCtx, w42indy);
 
 // ---- Wave 45: merged-detail stations, every kit faction ----
 // The wave-43/44 freehold contract, generalised to all eight: each station is
@@ -10602,707 +10281,158 @@ for (const live of w42lives) {
   if (!Object.values(w46checks).every(Boolean)) { console.log('WAVE46 SEEDED FACTIONS FAIL'); errors++; }
 }
 
-// ---- Wave 49: the ship-charter pass -------------------------------------------
-// The charter (src/game/ship-scale.js) is the single source of truth for NPC
-// ship size, vertex budgets, silhouette rules and collision proxies. This
-// harness measures every faction × class through the REAL spawnLiveShip path
-// and pins them against the charter or the legacy wave-47 table depending on
-// whether the faction has been rebuilt.
-//
-// MIGRATION GATE: At wave 0 nothing has been rebuilt yet, so REBUILT_FACTIONS
-// is empty. All ten existing factions are judged by LEGACY_SHIP_SCALE +
-// LEGACY_PROPORTION (the exact wave-47 behaviour) and are expected to stay
-// green. The Beautiful Ones and Unknowables are measured, marked [unpinned]
-// and register no checks until their rebuild waves.
-//
-// ROUND 3 (2026-08-11): The retired radiusBand and 2.4×/0.75× proportion
-// pins are deleted, replaced by the charter's silhouette rules (length/beam,
-// height/length, beam/length floors and ceilings) and the class-ladder size
-// ordering. The VC_PARTS fallback-radii probe (w47fbRadii) is removed — the
-// absolute bands were its only consumer. The block is renamed from wave47
-// to wave49 to match the charter wave.
+// ---- Wave 49: the ship-charter pass (GLB asset edition) -------------------------
+// Measures every faction × class through the real primed LOD0 visual. Checks:
+// span (charter band), proportion (length/beam/height silhouette rules), pivot
+// (bounding-box centre offset), proxy coverage, and class-size ladder per
+// faction. Legacy tables, migration-gate conditionals, and procedural module
+// imports are retired; all 12 factions use the one charter.
 {
-  // Import the charter and the legacy table (migration gate)
   const {
-    P, UNITS_PER_METRE, HUMAN,
-    SHIP_SCALE, SHIP_PROPORTION, FACTION_PROPORTION_RELIEF, FACTION_MEASURE_KIND,
-    measureKindFor, proportionFor, scaleFor,
-    CLASS_ORDER, FACTION_REBUILD_ORDER, REBUILT_FACTIONS,
-    LEGACY_SHIP_SCALE, LEGACY_PROPORTION,
+    proportionFor, scaleFor,
+    CLASS_ORDER, FACTION_REBUILD_ORDER,
   } = await import('../src/game/ship-scale.js');
 
-  const w49attrEq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
-  const w49allowedHull = (f) => {
-    const style = FACTION_STYLE[f];
-    const allowed = new Set();
-    for (const hex of new Set([style.hull, style.hullDark, style.trim, style.accent, ...style.patch])) {
-      const r8 = (hex >> 16) & 255;
-      const g8 = (hex >> 8) & 255;
-      const b8 = hex & 255;
-      for (const s of [1.0, 0.86, 0.72, 0.6]) {
-        const wh = (Math.round(r8 * s) << 16) | (Math.round(g8 * s) << 8) | Math.round(b8 * s);
-        allowed.add(`#${wh.toString(16).padStart(6, '0')}`);
-      }
-    }
-    return allowed;
-  };
-  // Edge-sampling occupancy grid: for every triangle, walk its three edges in
-  // steps of half a cell and mark each cell. A 4-unit box carries vertices only
-  // at its 8 corners, so a vertex-only grid reports a solid spine as islands.
-  const w49edgeSampledOccupancy = (posAttr, cellSize) => {
-    const grid = new Set();
-    const step = cellSize / 2;
-    for (let i = 0; i < posAttr.count; i += 3) {
-      const va = i * 3;
-      const vb = (i + 1) * 3;
-      const vc = (i + 2) * 3;
-      const walkEdge = (p1, p2) => {
-        const dx = p2[0] - p1[0];
-        const dy = p2[1] - p1[1];
-        const dz = p2[2] - p1[2];
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const steps = Math.max(1, Math.ceil(dist / step));
-        for (let s = 0; s <= steps; s++) {
-          const t = s / steps;
-          const x = p1[0] + dx * t;
-          const y = p1[1] + dy * t;
-          const z = p1[2] + dz * t;
-          grid.add(`${Math.floor(x / cellSize)},${Math.floor(y / cellSize)},${Math.floor(z / cellSize)}`);
-        }
-      };
-      const v0 = [posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)];
-      const v1 = [posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1)];
-      const v2 = [posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2)];
-      walkEdge(v0, v1);
-      walkEdge(v1, v2);
-      walkEdge(v2, v0);
-    }
-    return grid;
-  };
-  const w49orphanPct = (hullMesh, detailMesh, cellSize) => {
-    if (!hullMesh || !detailMesh) return 100;
-    const hp = hullMesh.geometry.attributes.position;
-    const occupied = new Set();
-    for (let i = 0; i < hp.count; i++) {
-      occupied.add(`${Math.floor(hp.getX(i) / cellSize)},${Math.floor(hp.getY(i) / cellSize)},${Math.floor(hp.getZ(i) / cellSize)}`);
-    }
-    const dp = detailMesh.geometry.attributes.position;
-    if (dp.count === 0) return 100;
-    let orphans = 0;
-    for (let i = 0; i < dp.count; i++) {
-      const ix = Math.floor(dp.getX(i) / cellSize);
-      const iy = Math.floor(dp.getY(i) / cellSize);
-      const iz = Math.floor(dp.getZ(i) / cellSize);
-      let near = false;
-      for (let dx = -1; dx <= 1 && !near; dx++) {
-        for (let dy = -1; dy <= 1 && !near; dy++) {
-          for (let dz = -1; dz <= 1 && !near; dz++) {
-            if (occupied.has(`${ix + dx},${iy + dy},${iz + dz}`)) near = true;
-          }
-        }
-      }
-      if (!near) orphans++;
-    }
-    return (100 * orphans) / dp.count;
-  };
-  // True capsule test — mirrors combat.js and proxyCover in ship-metrics.mjs exactly.
-  // For each hull vertex: clamp z to [−halfLen,+halfLen], compute the 3-D offset to the
-  // clamped axis point (x, y, dz), and test E·(rxy²+dz²) ≤ rxy² where E=(x/rx)²+(y/ry)².
-  // Vertices past a cap (dz≠0) count as outside unless the XY offset is small enough.
-  // Hostile input: NaN or non-positive semi-axis → coverPct 0.
-  const w49proxyCover = (hullMesh, proxy) => {
-    if (!hullMesh || !proxy) return null;
-    const posAttr = hullMesh.geometry.attributes.position;
-    const { rx, ry, halfLen } = proxy;
-    if (!Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(halfLen)
-        || rx <= 0 || ry <= 0) {
-      return { coverPct: 0, hullZExtent: 0 };
-    }
-    const rx2 = rx * rx;
-    const ry2 = ry * ry;
-    const minR2 = rx < ry ? rx2 : ry2;
+  // Elliptic capsule vertex-coverage helper (mirrors combat.js testNpcHits).
+  const w49proxyCover = (visual, proxy) => {
+    if (!visual || !proxy || !Number.isFinite(proxy.rx) || proxy.rx <= 0
+        || !Number.isFinite(proxy.ry) || proxy.ry <= 0
+        || !Number.isFinite(proxy.halfLen)) return 0;
+    const rx2 = proxy.rx * proxy.rx;
+    const ry2 = proxy.ry * proxy.ry;
+    const minR2 = Math.min(rx2, ry2);
+    let total = 0;
     let inside = 0;
-    let minZ = Infinity, maxZ = -Infinity;
-    for (let i = 0; i < posAttr.count; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-      const z = posAttr.getZ(i);
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
-      // Nearest point on axis segment: (0, 0, cz).
-      const cz = z < -halfLen ? -halfLen : (z > halfLen ? halfLen : z);
-      const dz = z - cz; // nonzero only when vertex is past a cap
-      const rxy2 = x * x + y * y;
-      if (rxy2 === 0) {
-        if (dz * dz <= minR2) inside++;
-      } else {
-        const E = x * x / rx2 + y * y / ry2;
-        if (E * (rxy2 + dz * dz) <= rxy2) inside++;
+    visual.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const pos = obj.geometry?.attributes?.position;
+      if (!pos) return;
+      for (let i = 0; i < pos.count; i++) {
+        total++;
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        const cz = z < -proxy.halfLen ? -proxy.halfLen : z > proxy.halfLen ? proxy.halfLen : z;
+        const dz = z - cz;
+        const rxy2 = x * x + y * y;
+        if (rxy2 === 0) { if (dz * dz <= minR2) inside++; }
+        else { const E = x * x / rx2 + y * y / ry2; if (E * (rxy2 + dz * dz) <= rxy2) inside++; }
       }
-    }
-    const coverPct = posAttr.count > 0 ? (100 * inside) / posAttr.count : 0;
-    const hullZExtent = maxZ === -Infinity ? 0 : maxZ - minZ;
-    return { coverPct, hullZExtent };
-  };
-  const w49proxyFit = (proxy, spanX, spanY, spanZ) => {
-    if (!proxy || spanX <= 0 || spanY <= 0 || spanZ <= 0) return null;
-    const { rx, ry, halfLen } = proxy;
-    // Hostile-input guard: NaN or non-positive semi-axis → clear failure.
-    if (!Number.isFinite(rx) || !Number.isFinite(ry) || !Number.isFinite(halfLen)
-        || rx <= 0 || ry <= 0) {
-      return { widthPct: NaN, heightPct: NaN, lengthPct: NaN, pass: false };
-    }
-    const widthPct  = (2 * rx - spanX) / spanX * 100;
-    const heightPct = (2 * ry - spanY) / spanY * 100;
-    const lengthPct = (2 * (halfLen + Math.max(rx, ry)) - spanZ) / spanZ * 100;
-    const pass = widthPct <= 25 && heightPct <= 25 && lengthPct <= 35;
-    return { widthPct, heightPct, lengthPct, pass };
-  };
-  const w49hullOf = (root) => (root ? root.children.find((c) => c.isMesh
-    && c.material?.isMeshStandardMaterial && c.material.vertexColors === true) ?? null : null);
-  const w49lightsOf = (root) => (root ? root.children.find((c) => c.isMesh
-    && c.material?.isMeshBasicMaterial && c.material.vertexColors === true) ?? null : null);
-  const w49spawnAndRead = (faction, classKey) => {
-    const live = spawnLiveShip(ctx, {
-      id: `wave49-${faction}-${classKey}`, name: 'Wave49 Pin', classKey, faction, role: 'trader', resolve: 50,
-    }, new THREE.Vector3(0, 0, -4000));
-    const meshes = live.object.children.filter((c) => c.isMesh);
-    return { live, meshes, hull: meshes[0] ?? null, lights: meshes[1] ?? null, glow: live.object.userData.glow ?? null };
+    });
+    return total > 0 ? (100 * inside) / total : 100;
   };
 
   const w49checks = {};
   const w49notes = [];
-  for (const f of FACTION_REBUILD_ORDER) {
-    const isRebuilt = REBUILT_FACTIONS.has(f);
-    const spec = isRebuilt ? 'charter' : 'legacy';
-    const kind = measureKindFor(f);
 
-    let allDensity = true;
-    let allLitDensity = true;
+  for (const f of FACTION_REBUILD_ORDER) {
+    const sizes = {};
     let allSpan = true;
     let allProportion = true;
     let allPivot = true;
-    let allSternGlow = true;
-    let allPalette = true;
-    let allLitNearWhite = true;
-    let allSeatedLights = true;
-    let allSingleMass = true;
-    let allDeterminism = true;
-    let allClassOrdering = true;
     let allProxyCover = true;
-    let worstDensity = { class: 'none', verts: 0, margin: Infinity };
-    let worstLitDensity = { class: 'none', verts: 0, margin: Infinity };
-    let worstSpan = { class: 'none', size: 0, band: '[?,?]', use: 0 };
-    let worstProportion = { class: 'none', metric: '', ratio: 0, need: '' };
+    let allClassOrdering = true;
+    let worstSpan = { class: 'none', size: 0, band: '', use: 0 };
+    let worstProportion = { class: 'none', metric: '' };
     let worstPivot = { class: 'none', axis: '', offset: 0, limit: 0 };
-    let worstSternGlow = { class: 'none', z: 0, stern: 0, gap: -Infinity };
-    let worstPalette = { class: 'none', stray: 'none' };
-    let worstLitNearWhite = { class: 'none', min: 1 };
-    let worstSeatedLights = { class: 'none', pct: 0 };
-    let worstSingleMass = { class: 'none', pct: 100 };
-    let worstProxyCover = { class: 'none', pct: 100, zExtent: 0, capHalfLen: 0 };
-    let allProxyFit = true;
-    let worstProxyFit = { class: 'none', widthPct: -Infinity, heightPct: -Infinity, lengthPct: -Infinity };
-    const sizes = {}; // classKey -> max(spanX, spanY, spanZ)
+    let worstProxyCover = { class: 'none', pct: 100 };
 
-    // Built factions have hull/lights split; grown/field factions have unified
-    // geometry with no vertex budget — we walk all non-glow meshes and measure
-    // their union.
-    if (kind === 'built') {
-      for (const ck of CLASS_ORDER) {
-        const { live, hull, lights, glow } = w49spawnAndRead(f, ck);
-        const table = isRebuilt ? scaleFor(ck) : LEGACY_SHIP_SCALE[ck];
-        const prop = isRebuilt ? proportionFor(ck, f) : LEGACY_PROPORTION;
-        let sternZ = 0;
-        // detailDensity / densityCap
-        const hullVerts = hull ? hull.geometry.attributes.position.count : 0;
-        const hullMin = table.hull[0];
-        const hullMax = table.hull[1];
-        const lightsMin = table.lights;
-        const densityMiss = hullVerts < hullMin ? hullMin - hullVerts
-          : hullVerts > hullMax ? hullVerts - hullMax : 0;
-        if (densityMiss > 0) allDensity = false;
-        const densityMargin = Math.min(hullVerts - hullMin, hullMax - hullVerts);
-        if (densityMargin < worstDensity.margin) worstDensity = { class: ck, verts: hullVerts, margin: densityMargin };
-        // litDensity
-        const lightsVerts = lights ? lights.geometry.attributes.position.count : 0;
-        const litMiss = lightsVerts < lightsMin ? lightsMin - lightsVerts
-          : lightsVerts > hullVerts * 0.25 ? lightsVerts - hullVerts * 0.25 : 0;
-        if (litMiss > 0) allLitDensity = false;
-        const litMargin = Math.min(lightsVerts - lightsMin, hullVerts * 0.25 - lightsVerts);
-        if (litMargin < worstLitDensity.margin) worstLitDensity = { class: ck, verts: lightsVerts, margin: litMargin };
-        // span (legacy: envelope), proportion, pivot
-        if (hull) {
-          hull.geometry.computeBoundingBox();
-          const bb = hull.geometry.boundingBox;
-          const spanX = bb.max.x - bb.min.x;
-          const spanY = bb.max.y - bb.min.y;
-          const spanZ = bb.max.z - bb.min.z;
-          const size = Math.max(spanX, spanY, spanZ);
-          sizes[ck] = size;
-          if (isRebuilt) {
-            // SPAN: must land inside [span[0], span[1]]
-            const spanMin = table.span[0];
-            const spanMax = table.span[1];
-            const spanUse = size < spanMin ? (size - spanMin) / (spanMax - spanMin) : size > spanMax ? (size - spanMax) / (spanMax - spanMin) : 0;
-            if (size < spanMin || size > spanMax) allSpan = false;
-            if (Math.abs(spanUse) > Math.abs(worstSpan.use)) worstSpan = {
-              class: ck, size, band: `[${spanMin.toFixed(1)},${spanMax.toFixed(1)}]`, use: spanUse
-            };
-          } else {
-            // LEGACY ENVELOPE: maxX, maxY, maxZ are simultaneous half-extent ceilings
-            const maxX = Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x));
-            const maxY = Math.max(Math.abs(bb.min.y), Math.abs(bb.max.y));
-            const maxZ = Math.max(Math.abs(bb.min.z), Math.abs(bb.max.z));
-            const env = table.env;
-            const envUse = Math.max(maxX / env[0], maxY / env[1], maxZ / env[2]);
-            if (envUse > 1) allSpan = false;
-            if (envUse > worstSpan.use) worstSpan = {
-              class: ck, size, band: `[env(±${env[0]},${env[1]},${env[2]})]`, use: envUse
-            };
-          }
-          // PROPORTION: legacy uses 2.4x beam floor, 0.75x height ceiling
-          const lbRatio = spanZ / spanX;
-          const hlRatio = spanY / spanZ;
-          const blRatio = spanX / spanZ;
-          const minLengthOverBeam = prop.minLengthOverBeam;
-          const maxHeightOverBeam = prop.maxHeightOverBeam;
-          const minBeamOverLength = isRebuilt ? prop.minBeamOverLength : 0;
-          if (lbRatio < minLengthOverBeam || hlRatio > maxHeightOverBeam || (isRebuilt && blRatio < minBeamOverLength)) {
-            allProportion = false;
-          }
-          const propFail = lbRatio < minLengthOverBeam ? `lb${lbRatio.toFixed(2)}<${minLengthOverBeam}`
-            : hlRatio > maxHeightOverBeam ? `hl${hlRatio.toFixed(2)}>${maxHeightOverBeam}`
-            : isRebuilt && blRatio < minBeamOverLength ? `bl${blRatio.toFixed(2)}<${minBeamOverLength}` : '';
-          if (propFail && worstProportion.metric === '') worstProportion = {
-            class: ck, metric: propFail, ratio: lbRatio < minLengthOverBeam ? lbRatio : hlRatio > maxHeightOverBeam ? hlRatio : blRatio, need: propFail
-          };
-          // PIVOT: legacy has no pivot pin (only rebuilt factions)
-          if (isRebuilt) {
-            const cx = (bb.min.x + bb.max.x) / 2;
-            const cy = (bb.min.y + bb.max.y) / 2;
-            const cz = (bb.min.z + bb.max.z) / 2;
-            const ox = Math.abs(cx) / spanX;
-            const oy = Math.abs(cy) / spanY;
-            const oz = Math.abs(cz) / spanZ;
-            const maxOffset = prop.maxPivotOffset;
-            if (ox > maxOffset || oy > maxOffset || oz > maxOffset) allPivot = false;
-            const pivotFail = ox > maxOffset ? `x${ox.toFixed(2)}` : oy > maxOffset ? `y${oy.toFixed(2)}` : oz > maxOffset ? `z${oz.toFixed(2)}` : '';
-            if (pivotFail && worstPivot.axis === '') worstPivot = {
-              class: ck, axis: pivotFail.charAt(0), offset: ox > maxOffset ? ox : oy > maxOffset ? oy : oz, limit: maxOffset
-            };
-          } else {
-            // Legacy: pass pivot automatically, but record a nominal value for the census
-            const cx = (bb.min.x + bb.max.x) / 2;
-            const cy = (bb.min.y + bb.max.y) / 2;
-            const cz = (bb.min.z + bb.max.z) / 2;
-            const ox = Math.abs(cx) / spanX;
-            const oy = Math.abs(cy) / spanY;
-            const oz = Math.abs(cz) / spanZ;
-            if (ox > oy && ox > oz && worstPivot.axis === '') worstPivot = {
-              class: ck, axis: 'x', offset: ox, limit: 0.15
-            };
-            if (oy > ox && oy > oz && worstPivot.axis === '') worstPivot = {
-              class: ck, axis: 'y', offset: oy, limit: 0.15
-            };
-            if (oz > ox && oz > oy && worstPivot.axis === '') worstPivot = {
-              class: ck, axis: 'z', offset: oz, limit: 0.15
-            };
-          }
-          // sternZ for glow positioning
-          const posAttr = hull.geometry.attributes.position;
-          for (let i = 0; i < posAttr.count; i++) {
-            const dz = posAttr.getZ(i);
-            if (dz > sternZ) sternZ = dz;
-          }
-          // proxyCover and proxyFit (rebuilt factions only; spanX/Y/Z in scope here).
-          // Source from group.userData.proxy set by buildShipMesh; SHIP_SCALE.proxy
-          // is the fallback only for hull-less shapes (e.g. Unknowables energy fields).
-          if (isRebuilt) {
-            const bProxy = live.object.userData.proxy ?? table.proxy;
-            const coverResult = w49proxyCover(hull, bProxy);
-            if (coverResult && coverResult.coverPct < 80) {
-              allProxyCover = false;
-              if (coverResult.coverPct < worstProxyCover.pct) {
-                worstProxyCover = { class: ck, pct: coverResult.coverPct, zExtent: coverResult.hullZExtent, capHalfLen: bProxy.halfLen };
-              }
-            }
-            const fitResult = w49proxyFit(bProxy, spanX, spanY, spanZ);
-            if (fitResult && !fitResult.pass) {
-              allProxyFit = false;
-              if (Math.max(fitResult.widthPct, fitResult.heightPct, fitResult.lengthPct)
-                  > Math.max(worstProxyFit.widthPct, worstProxyFit.heightPct, worstProxyFit.lengthPct)) {
-                worstProxyFit = { class: ck, widthPct: fitResult.widthPct, heightPct: fitResult.heightPct, lengthPct: fitResult.lengthPct };
-              }
-            }
-          }
-        }
-        // sternGlow: glow at x=0,y=0 and 0.55*sternZ <= glowZ <= sternZ + 1.2
-        if (glow && sternZ > 0) {
-          const gz = glow.position.z;
-          if (!(gz > 0 && gz <= sternZ + 1.2 && gz >= 0.55 * sternZ && glow.position.x === 0 && glow.position.y === 0)) {
-            allSternGlow = false;
-          }
-          if (sternZ - gz > worstSternGlow.gap) worstSternGlow = { class: ck, z: gz, stern: sternZ, gap: sternZ - gz };
-        } else {
-          allSternGlow = false;
-        }
-        // paletteFromStyle
-        const allowed = w49allowedHull(f);
-        const probe = new THREE.Color();
-        let paletteOk = true;
-        let paletteStray = 'none';
-        if (hull) {
-          const colorAttr = hull.geometry.attributes.color;
-          const seen = new Set();
-          for (let i = 0; i < colorAttr.count; i++) {
-            const key = `${colorAttr.getX(i)},${colorAttr.getY(i)},${colorAttr.getZ(i)}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            probe.setRGB(colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i), THREE.LinearSRGBColorSpace);
-            const hex = `#${probe.getHex(THREE.SRGBColorSpace).toString(16).padStart(6, '0')}`;
-            if (!allowed.has(hex)) { paletteStray = hex; paletteOk = false; break; }
-          }
-        }
-        if (!paletteOk) {
-          allPalette = false;
-          if (worstPalette.stray === 'none') worstPalette = { class: ck, stray: paletteStray };
-        }
-        // litNearWhite
-        if (lights) {
-          const colorAttr = lights.geometry.attributes.color;
-          const seenLit = new Set();
-          let minChannel = 1;
-          for (let i = 0; i < colorAttr.count; i++) {
-            const key = `${colorAttr.getX(i)},${colorAttr.getY(i)},${colorAttr.getZ(i)}`;
-            if (seenLit.has(key)) continue;
-            seenLit.add(key);
-            probe.setRGB(colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i), THREE.LinearSRGBColorSpace);
-            const hex = probe.getHex(THREE.SRGBColorSpace);
-            const lo = Math.min((hex >> 16) & 255, (hex >> 8) & 255, hex & 255) / 255;
-            if (lo < minChannel) minChannel = lo;
-          }
-          if (minChannel < 0.6) {
-            allLitNearWhite = false;
-            if (minChannel < worstLitNearWhite.min) worstLitNearWhite = { class: ck, min: minChannel };
-          }
-        }
-        // seatedLights
-        if (hull && lights) {
-          const orphanPct = w49orphanPct(hull, lights, 1.0);
-          if (orphanPct > 2) {
-            allSeatedLights = false;
-            if (orphanPct > worstSeatedLights.pct) worstSeatedLights = { class: ck, pct: orphanPct };
-          }
-        }
-        // singleMass (edge-sampled)
-        if (hull) {
-          const grid = w49edgeSampledOccupancy(hull.geometry.attributes.position, table.cell);
-          const neighbours = (key) => {
-            const [ix, iy, iz] = key.split(',').map(Number);
-            return [
-              `${ix + 1},${iy},${iz}`, `${ix - 1},${iy},${iz}`,
-              `${ix},${iy + 1},${iz}`, `${ix},${iy - 1},${iz}`,
-              `${ix},${iy},${iz + 1}`, `${ix},${iy},${iz - 1}`,
-            ];
-          };
-          const seenCells = new Set();
-          let largest = 0;
-          for (const start of grid) {
-            if (seenCells.has(start)) continue;
-            let size = 0;
-            const stack = [start];
-            seenCells.add(start);
-            while (stack.length > 0) {
-              const cur = stack.pop();
-              size++;
-              for (const n of neighbours(cur)) {
-                if (grid.has(n) && !seenCells.has(n)) { seenCells.add(n); stack.push(n); }
-              }
-              if (size > largest) largest = size;
-            }
-          }
-          const singleMassPct = grid.size > 0 ? (largest / grid.size) * 100 : 0;
-          if (singleMassPct < 97) {
-            allSingleMass = false;
-            if (singleMassPct < worstSingleMass.pct) worstSingleMass = { class: ck, pct: singleMassPct };
-          }
-        }
-         removeLiveShip(ctx, live);
+    for (const ck of CLASS_ORDER) {
+      const root = buildShipAsset(ck, f, 'trader');
+      const visual = root.userData.shipVisual;
+      if (!visual) { allSpan = false; allProportion = false; allPivot = false; continue; }
+
+      const box = new THREE.Box3().setFromObject(visual);
+      const spanX = box.max.x - box.min.x;
+      const spanY = box.max.y - box.min.y;
+      const spanZ = box.max.z - box.min.z;
+      const size = Math.max(spanX, spanY, spanZ);
+      sizes[ck] = size;
+
+      // SPAN: must land inside charter [span[0], span[1]]
+      const table = scaleFor(ck);
+      const spanMin = table.span[0];
+      const spanMax = table.span[1];
+      const spanUse = size < spanMin
+        ? (size - spanMin) / (spanMax - spanMin)
+        : size > spanMax ? (size - spanMax) / (spanMax - spanMin) : 0;
+      if (size < spanMin || size > spanMax) allSpan = false;
+      if (Math.abs(spanUse) > Math.abs(worstSpan.use)) {
+        worstSpan = { class: ck, size, band: `[${spanMin.toFixed(1)},${spanMax.toFixed(1)}]`, use: spanUse };
       }
 
-      // determinism: direct double build of the module
-      const module = await import(`../src/systems/ships/${f}.js`);
-      const { detailBuilder: w49builder } = await import('../src/systems/station-detail.js');
-      for (const ck of CLASS_ORDER) {
-        const st = FACTION_STYLE[f];
-        const b1 = w49builder();
-        module[`${f}Ship`][ck].build(b1, st);
-        const g1 = b1.build();
-        const b2 = w49builder();
-        module[`${f}Ship`][ck].build(b2, st);
-        const g2 = b2.build();
-        if (!g1.hull || !g1.lights || !g2.hull || !g2.lights) { allDeterminism = false; continue; }
-        if (!w49attrEq(g1.hull.attributes.position.array, g2.hull.attributes.position.array)
-          || !w49attrEq(g1.hull.attributes.color.array, g2.hull.attributes.color.array)
-          || !w49attrEq(g1.lights.attributes.position.array, g2.lights.attributes.position.array)
-          || !w49attrEq(g1.lights.attributes.color.array, g2.lights.attributes.color.array)) {
-          allDeterminism = false;
+      // PROPORTION: length-over-beam, height-over-length, beam-over-length
+      const prop = proportionFor(ck, f);
+      const lbRatio = spanX > 0 ? spanZ / spanX : 0;
+      const hlRatio = spanZ > 0 ? spanY / spanZ : 0;
+      const blRatio = spanZ > 0 ? spanX / spanZ : 0;
+      if (lbRatio < prop.minLengthOverBeam || hlRatio > prop.maxHeightOverLength || blRatio < prop.minBeamOverLength) {
+        allProportion = false;
+        if (worstProportion.metric === '') {
+          const fail = lbRatio < prop.minLengthOverBeam
+            ? `lb${lbRatio.toFixed(2)}<${prop.minLengthOverBeam}`
+            : hlRatio > prop.maxHeightOverLength
+              ? `hl${hlRatio.toFixed(2)}>${prop.maxHeightOverLength}`
+              : `bl${blRatio.toFixed(2)}<${prop.minBeamOverLength}`;
+          worstProportion = { class: ck, metric: fail };
         }
-        for (const geo of [...Object.values(g1), ...Object.values(g2)]) geo.dispose();
       }
 
-      // classOrdering. A rebuilt fleet must climb the CHARTER ladder on size
-      // (light <= ace < cutter < heavy < frigate < freighter); light and ace are
-      // allowed within 15% of each other because the bible puts them in the same
-      // band. An UNREBUILT fleet still carries the retired wave-47 hierarchy,
-      // where the freighter is smaller than the heavy — holding it to the charter
-      // ladder would fail every fleet that has not had its wave yet, which is
-      // exactly what the migration gate exists to prevent.
-      const s = sizes;
-      if (isRebuilt) {
-        const lightVsAce = Math.abs((s.light - s.ace) / Math.max(s.light, s.ace)) <= 0.15;
-        if (!lightVsAce || !(s.ace < s.cutter) || !(s.cutter < s.heavy)
-          || !(s.heavy < s.frigate) || !(s.frigate < s.freighter)) {
-          allClassOrdering = false;
+      // PIVOT: bounding-box centre within maxPivotOffset of origin on each axis
+      const cx = (box.min.x + box.max.x) / 2;
+      const cy = (box.min.y + box.max.y) / 2;
+      const cz = (box.min.z + box.max.z) / 2;
+      const ox = spanX > 0 ? Math.abs(cx) / spanX : 0;
+      const oy = spanY > 0 ? Math.abs(cy) / spanY : 0;
+      const oz = spanZ > 0 ? Math.abs(cz) / spanZ : 0;
+      const maxOffset = prop.maxPivotOffset;
+      if (ox > maxOffset || oy > maxOffset || oz > maxOffset) {
+        allPivot = false;
+        if (worstPivot.axis === '') {
+          const axis = ox > maxOffset ? 'x' : oy > maxOffset ? 'y' : 'z';
+          const off = axis === 'x' ? ox : axis === 'y' ? oy : oz;
+          worstPivot = { class: ck, axis, offset: off, limit: maxOffset };
         }
-      } else if (!(s.frigate > s.heavy && s.heavy > s.light && s.freighter > s.light)) {
-        allClassOrdering = false;
       }
 
-      // Register checks for all built factions (rebuilt get charter, unrebuilt get legacy)
-      if (isRebuilt) {
-        w49checks[`${f}DetailDensity`] = allDensity;
-        w49checks[`${f}LitDensity`] = allLitDensity;
-        w49checks[`${f}Span`] = allSpan;
-        w49checks[`${f}Proportion`] = allProportion;
-        w49checks[`${f}Pivot`] = allPivot;
-        w49checks[`${f}SternGlow`] = allSternGlow;
-        w49checks[`${f}PaletteFromStyle`] = allPalette;
-        w49checks[`${f}LitNearWhite`] = allLitNearWhite;
-        w49checks[`${f}SeatedLights`] = allSeatedLights;
-        w49checks[`${f}SingleMass`] = allSingleMass;
-        w49checks[`${f}Determinism`] = allDeterminism;
-        w49checks[`${f}ClassOrdering`] = allClassOrdering;
-        w49checks[`${f}ProxyCover`] = allProxyCover;
-        w49checks[`${f}ProxyFit`] = allProxyFit;
-      } else {
-        // Unrebuilt built factions register the full legacy check set
-        w49checks[`${f}DetailDensity`] = allDensity;
-        w49checks[`${f}LitDensity`] = allLitDensity;
-        w49checks[`${f}Envelope`] = allSpan; // legacy name for span check
-        w49checks[`${f}Proportion`] = allProportion;
-        w49checks[`${f}SternGlow`] = allSternGlow;
-        w49checks[`${f}PaletteFromStyle`] = allPalette;
-        w49checks[`${f}LitNearWhite`] = allLitNearWhite;
-        w49checks[`${f}SeatedLights`] = allSeatedLights;
-        w49checks[`${f}SingleMass`] = allSingleMass;
-        w49checks[`${f}Determinism`] = allDeterminism;
-        w49checks[`${f}ClassOrdering`] = allClassOrdering;
+      // PROXY COVER: >= 80 % of LOD0 mesh vertices inside the derived capsule
+      const proxy = root.userData.proxy;
+      if (proxy) {
+        const coverPct = w49proxyCover(visual, proxy);
+        if (coverPct < 80) {
+          allProxyCover = false;
+          if (coverPct < worstProxyCover.pct) worstProxyCover = { class: ck, pct: coverPct };
+        }
       }
-      w49notes.push(`wave49 ${f}: spec=${spec} kind=${kind}`
-        + ` tightestHull=${worstDensity.class}@${worstDensity.verts}`
-        + ` tightestLit=${worstLitDensity.class}@${worstLitDensity.verts}`
-        + ` farthestSpan=${worstSpan.class}@${worstSpan.size.toFixed(1)}${worstSpan.band}@${(100 * worstSpan.use).toFixed(0)}%`
-        + ` proportion=${worstProportion.class}:${worstProportion.metric}`
-        + ` pivot=${worstPivot.class}:${worstPivot.axis}${worstPivot.offset.toFixed(2)}<${worstPivot.limit}`
-        + ` widestGlowGap=${worstSternGlow.class}@glowZ=${worstSternGlow.z.toFixed(1)}/tail=${worstSternGlow.stern.toFixed(1)}`
-        + ` palette=${worstPalette.class}:${worstPalette.stray}`
-        + ` dimmestLit=${worstLitNearWhite.class}@${worstLitNearWhite.min.toFixed(2)}`
-        + ` orphanLights=${worstSeatedLights.class}@${worstSeatedLights.pct.toFixed(1)}%`
-        + ` singleMass=${worstSingleMass.class}@${worstSingleMass.pct.toFixed(1)}%`
-        + ` proxyCover=${worstProxyCover.class}@${worstProxyCover.pct.toFixed(1)}%(z=${worstProxyCover.zExtent.toFixed(1)},cap=${worstProxyCover.capHalfLen})`
-        + ` proxyFit=${worstProxyFit.class}@w=${isFinite(worstProxyFit.widthPct) ? worstProxyFit.widthPct.toFixed(0) : 'n/a'}%,h=${isFinite(worstProxyFit.heightPct) ? worstProxyFit.heightPct.toFixed(0) : 'n/a'}%,l=${isFinite(worstProxyFit.lengthPct) ? worstProxyFit.lengthPct.toFixed(0) : 'n/a'}%`);
+    }
 
+    // CLASS ORDERING: light ≤ ace (within 15 %) < cutter < heavy < frigate << freighter
+    const s = sizes;
+    const allPresent = CLASS_ORDER.every((ck) => (s[ck] ?? 0) > 0);
+    if (allPresent) {
+      const lightVsAce = Math.abs((s.light - s.ace) / Math.max(s.light, s.ace)) <= 0.15;
+      allClassOrdering = lightVsAce
+        && s.ace < s.cutter && s.cutter < s.heavy
+        && s.heavy < s.frigate && s.frigate < s.freighter;
     } else {
-      // GROWN (beautiful) or FIELD (unknowables): no hull/lights split, no vertex
-      // budget, no palette, no litNearWhite, no orphan lights, no determinism.
-      // Measure span, proportion, pivot, and singleMass only.
-      for (const ck of CLASS_ORDER) {
-        const live = spawnLiveShip(ctx, {
-          id: `wave49-${f}-${ck}`, name: 'Wave49 Pin', classKey: ck, faction: f, role: 'trader', resolve: 50,
-        }, new THREE.Vector3(0, 0, -4000));
-        const table = scaleFor(ck);
-        const prop = proportionFor(ck, f);
-
-        // Collect all non-glow meshes in root-local space (not world space)
-        live.object.updateMatrixWorld(true);
-        const rootToLocal = live.object.matrixWorld.clone().invert();
-        const meshes = [];
-        const collectMeshes = (obj, skipGlow) => {
-          if (obj.isMesh && (!skipGlow || obj !== live.object.userData.glow)) {
-            meshes.push(obj);
-          }
-          for (const c of obj.children) collectMeshes(c, skipGlow || obj === live.object.userData.glow);
-        };
-        collectMeshes(live.object, false);
-
-        // Walk all meshes, accumulate their bounding boxes in root-local space
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-        let totalVerts = 0;
-        const positions = [];
-        for (const mesh of meshes) {
-          const posAttr = mesh.geometry.attributes.position;
-          const count = posAttr.count;
-          totalVerts += count;
-          // Transform each vertex to root-local space
-          const meshToLocal = new THREE.Matrix4().multiplyMatrices(rootToLocal, mesh.matrixWorld);
-          for (let i = 0; i < count; i++) {
-            const vx = posAttr.getX(i);
-            const vy = posAttr.getY(i);
-            const vz = posAttr.getZ(i);
-            const local = new THREE.Vector3(vx, vy, vz).applyMatrix4(meshToLocal);
-            if (local.x < minX) minX = local.x;
-            if (local.y < minY) minY = local.y;
-            if (local.z < minZ) minZ = local.z;
-            if (local.x > maxX) maxX = local.x;
-            if (local.y > maxY) maxY = local.y;
-            if (local.z > maxZ) maxZ = local.z;
-            positions.push(local.x, local.y, local.z);
-          }
-        }
-        const spanX = maxX - minX;
-        const spanY = maxY - minY;
-        const spanZ = maxZ - minZ;
-        const size = Math.max(spanX, spanY, spanZ);
-        sizes[ck] = size;
-
-        // SPAN
-        const spanMin = table.span[0];
-        const spanMax = table.span[1];
-        const spanUse = size < spanMin ? (size - spanMin) / (spanMax - spanMin) : size > spanMax ? (size - spanMax) / (spanMax - spanMin) : 0;
-        if (size < spanMin || size > spanMax) allSpan = false;
-        if (Math.abs(spanUse) > Math.abs(worstSpan.use)) worstSpan = {
-          class: ck, size, band: `[${spanMin.toFixed(1)},${spanMax.toFixed(1)}]`, use: spanUse
-        };
-
-        // PROPORTION
-        const lbRatio = spanZ / spanX;
-        const hlRatio = spanY / spanZ;
-        const blRatio = spanX / spanZ;
-        if (lbRatio < prop.minLengthOverBeam || hlRatio > prop.maxHeightOverLength || blRatio < prop.minBeamOverLength) {
-          allProportion = false;
-        }
-        const propFail = lbRatio < prop.minLengthOverBeam ? `lb${lbRatio.toFixed(2)}<${prop.minLengthOverBeam}`
-          : hlRatio > prop.maxHeightOverLength ? `hl${hlRatio.toFixed(2)}>${prop.maxHeightOverLength}`
-          : blRatio < prop.minBeamOverLength ? `bl${blRatio.toFixed(2)}<${prop.minBeamOverLength}` : '';
-        if (propFail && worstProportion.metric === '') worstProportion = {
-          class: ck, metric: propFail, ratio: lbRatio < prop.minLengthOverBeam ? lbRatio : hlRatio > prop.maxHeightOverLength ? hlRatio : blRatio, need: propFail
-        };
-
-        // PIVOT (bounding-box centre relative to spans)
-        const cx = (minX + maxX) / 2;
-        const cy = (minY + maxY) / 2;
-        const cz = (minZ + maxZ) / 2;
-        const ox = Math.abs(cx) / spanX;
-        const oy = Math.abs(cy) / spanY;
-        const oz = Math.abs(cz) / spanZ;
-        const maxOffset = prop.maxPivotOffset;
-        if (ox > maxOffset || oy > maxOffset || oz > maxOffset) allPivot = false;
-        const pivotFail = ox > maxOffset ? `x${ox.toFixed(2)}` : oy > maxOffset ? `y${oy.toFixed(2)}` : oz > maxOffset ? `z${oz.toFixed(2)}` : '';
-        if (pivotFail && worstPivot.axis === '') worstPivot = {
-          class: ck, axis: pivotFail.charAt(0), offset: ox > maxOffset ? ox : oy > maxOffset ? oy : oz, limit: maxOffset
-        };
-
-        // SINGLE MASS (edge-sampled on the accumulated point cloud)
-        const posAttr = { count: totalVerts, getX: (i) => positions[i * 3], getY: (i) => positions[i * 3 + 1], getZ: (i) => positions[i * 3 + 2] };
-        const grid = w49edgeSampledOccupancy(posAttr, table.cell);
-        const neighbours = (key) => {
-          const [ix, iy, iz] = key.split(',').map(Number);
-          return [
-            `${ix + 1},${iy},${iz}`, `${ix - 1},${iy},${iz}`,
-            `${ix},${iy + 1},${iz}`, `${ix},${iy - 1},${iz}`,
-            `${ix},${iy},${iz + 1}`, `${ix},${iy},${iz - 1}`,
-          ];
-        };
-        const seenCells = new Set();
-        let largest = 0;
-        for (const start of grid) {
-          if (seenCells.has(start)) continue;
-          let size = 0;
-          const stack = [start];
-          seenCells.add(start);
-          while (stack.length > 0) {
-            const cur = stack.pop();
-            size++;
-            for (const n of neighbours(cur)) {
-              if (grid.has(n) && !seenCells.has(n)) { seenCells.add(n); stack.push(n); }
-            }
-            if (size > largest) largest = size;
-          }
-        }
-        const singleMassPct = grid.size > 0 ? (largest / grid.size) * 100 : 0;
-        if (singleMassPct < 97) {
-          allSingleMass = false;
-          if (singleMassPct < worstSingleMass.pct) worstSingleMass = { class: ck, pct: singleMassPct };
-        }
-
-        // Proxy coverage and fit (rebuilt factions only).
-        // Source from group.userData.proxy; SHIP_SCALE.proxy is the hull-less fallback
-        // for field factions (Unknowables energy fields) that have no hull geometry.
-        if (isRebuilt) {
-          const gfProxy = live.object.userData.proxy ?? scaleFor(ck).proxy;
-          const gfHullMesh = live.object.children.find((c) => c.isMesh && c !== live.object.userData.glow) ?? null;
-          const coverResult = w49proxyCover(gfHullMesh, gfProxy);
-          if (coverResult && coverResult.coverPct < 80) {
-            allProxyCover = false;
-            if (coverResult.coverPct < worstProxyCover.pct) {
-              worstProxyCover = { class: ck, pct: coverResult.coverPct, zExtent: coverResult.hullZExtent, capHalfLen: gfProxy.halfLen };
-            }
-          }
-          const fitResult = w49proxyFit(gfProxy, spanX, spanY, spanZ);
-          if (fitResult && !fitResult.pass) {
-            allProxyFit = false;
-            if (Math.max(fitResult.widthPct, fitResult.heightPct, fitResult.lengthPct)
-                > Math.max(worstProxyFit.widthPct, worstProxyFit.heightPct, worstProxyFit.lengthPct)) {
-              worstProxyFit = { class: ck, widthPct: fitResult.widthPct, heightPct: fitResult.heightPct, lengthPct: fitResult.lengthPct };
-            }
-          }
-        }
-
-        removeLiveShip(ctx, live);
-      }
-
-      // classOrdering: the charter ladder, and only for a rebuilt organism/field.
-      // An unrebuilt grown or field faction registers nothing at all, so
-      // computing this for it would only risk a stray failure.
-      if (isRebuilt) {
-        const s = sizes;
-        const lightVsAce = Math.abs((s.light - s.ace) / Math.max(s.light, s.ace)) <= 0.15;
-        if (!lightVsAce || !(s.ace < s.cutter) || !(s.cutter < s.heavy)
-          || !(s.heavy < s.frigate) || !(s.frigate < s.freighter)) {
-          allClassOrdering = false;
-        }
-      }
-
-      // Rebuilt grown/field register the charter pins; unrebuilt print [unpinned]
-      if (isRebuilt) {
-        w49checks[`${f}Span`] = allSpan;
-        w49checks[`${f}Proportion`] = allProportion;
-        w49checks[`${f}Pivot`] = allPivot;
-        w49checks[`${f}SingleMass`] = allSingleMass;
-        w49checks[`${f}ClassOrdering`] = allClassOrdering;
-        w49checks[`${f}ProxyCover`] = allProxyCover;
-        w49checks[`${f}ProxyFit`] = allProxyFit;
-      }
-      w49notes.push(`wave49 ${f}: spec=${spec} kind=${kind}`
-        + ` farthestSpan=${worstSpan.class}@${worstSpan.size.toFixed(1)}${worstSpan.band}@${(100 * worstSpan.use).toFixed(0)}%`
-        + ` proportion=${worstProportion.class}:${worstProportion.metric}`
-        + ` pivot=${worstPivot.class}:${worstPivot.axis}${worstPivot.offset.toFixed(2)}<${worstPivot.limit}`
-        + ` singleMass=${worstSingleMass.class}@${worstSingleMass.pct.toFixed(1)}%`
-        + ` proxyCover=${worstProxyCover.class}@${worstProxyCover.pct.toFixed(1)}%(z=${worstProxyCover.zExtent.toFixed(1)},cap=${worstProxyCover.capHalfLen})`
-        + ` proxyFit=${worstProxyFit.class}@w=${isFinite(worstProxyFit.widthPct) ? worstProxyFit.widthPct.toFixed(0) : 'n/a'}%,h=${isFinite(worstProxyFit.heightPct) ? worstProxyFit.heightPct.toFixed(0) : 'n/a'}%,l=${isFinite(worstProxyFit.lengthPct) ? worstProxyFit.lengthPct.toFixed(0) : 'n/a'}%`);
+      allClassOrdering = false;
     }
 
-    // Only beautiful/unknowables (grown/field) print [unpinned] when unrebuilt
-    if (kind !== 'built' && !isRebuilt) {
-      w49notes.push(`wave49 ${f}: [unpinned] — ${kind} factions register no checks until rebuild`);
-    }
+    w49checks[`${f}Span`] = allSpan;
+    w49checks[`${f}Proportion`] = allProportion;
+    w49checks[`${f}Pivot`] = allPivot;
+    w49checks[`${f}ProxyCover`] = allProxyCover;
+    w49checks[`${f}ClassOrdering`] = allClassOrdering;
+    w49notes.push(`wave49 ${f}:`
+      + ` span=${worstSpan.class}@${worstSpan.size.toFixed(1)}${worstSpan.band}@${(100 * worstSpan.use).toFixed(0)}%`
+      + ` proportion=${worstProportion.class}:${worstProportion.metric || 'ok'}`
+      + ` pivot=${worstPivot.class}:${worstPivot.axis || 'ok'}${worstPivot.offset.toFixed(2)}`
+      + ` proxyCover=${worstProxyCover.class}@${worstProxyCover.pct.toFixed(1)}%`
+      + ` ladder=${CLASS_ORDER.map((ck) => `${ck}=${s[ck]?.toFixed(1) ?? '?'}`).join(',')}`);
   }
   for (const line of w49notes) console.log(line);
-  console.log('wave49 ship detail:', JSON.stringify(w49checks));
-  if (!Object.values(w49checks).every(Boolean)) { console.log('WAVE49 SHIP DETAIL FAIL'); errors++; }
+  console.log('wave49 ship charter:', JSON.stringify(w49checks));
+  if (!Object.values(w49checks).every(Boolean)) { console.log('WAVE49 SHIP CHARTER FAIL'); errors++; }
 }
 
 if (errors === 0) {

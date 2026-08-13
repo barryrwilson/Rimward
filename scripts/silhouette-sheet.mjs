@@ -1,47 +1,96 @@
 /**
- * Black-silhouette sheet — bible §6 deliverable 2, and the only instrument that
- * can answer the question the numeric harnesses cannot.
+ * Black-silhouette sheet — all six classes from side, top, and front.
  *
- * `measure-ships` sees spans and ratios; `attach-audit` sees contact. Neither
- * can see that six hulls are the same shape. The bible's acceptance tests are
- * explicit that the family must be sortable BY CLASS at thumbnail size with no
- * colour and no materials, and readable as ONE FACTION from construction logic
- * in grayscale. This renders exactly that: every class as a filled black
- * silhouette from the side, the top and the front.
+ * Loads public/assets/ships/<faction>/<class>/lod0.glb for each class, expands
+ * indexed geometry to triangle vertices, and CPU scan-converts filled
+ * silhouettes. No WebGL, no browser.
  *
- * Two sheets, because they answer different questions:
- *   <faction>-shape.png  each class fitted to its own cell — is the ANATOMY
- *                        different, or is it one hull six times?
- *   <faction>-scale.png  every class at one common world scale — is the size
- *                        ladder real? (`ace ≈ light < cutter < heavy < frigate
- *                        << freighter`)
- *
- * No WebGL: hull triangles are projected orthographically and scan-converted on
- * the CPU, so this runs anywhere `node` does, unlike the in-game Models Browser.
+ * Two sheets per faction:
+ *   <faction>-shape.png  each class fitted to its own cell — is the anatomy
+ *                        different, or the same hull six times?
+ *   <faction>-scale.png  all classes at one common world scale — is the size
+ *                        ladder real?
  *
  * Usage: node scripts/silhouette-sheet.mjs [faction ...]
- * Output: docs/silhouettes/<faction>-shape.png and -scale.png
+ *   node scripts/silhouette-sheet.mjs veridian
+ *   node scripts/silhouette-sheet.mjs           # all 12 factions
+ *
+ * Output: out/silhouettes/<faction>-shape.png and -scale.png
  */
 
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { detailBuilder } from '../src/systems/station-detail.js';
-import { FACTION_STYLE } from '../src/game/faction-style.js';
-import { CLASS_ORDER, FACTION_REBUILD_ORDER, measureKindFor } from '../src/game/ship-scale.js';
+import { readFile } from 'node:fs/promises';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { CLASS_ORDER, FACTION_REBUILD_ORDER } from '../src/game/ship-scale.js';
 
 const CELL_W = 460;
 const CELL_H = 210;
 const PAD = 12;
 const VIEWS = [
-  { name: 'side', ax: 'z', ay: 'y', flipY: true },
-  { name: 'top', ax: 'z', ay: 'x', flipY: false },
-  { name: 'front', ax: 'x', ay: 'y', flipY: true },
+  { name: 'side',  ax: 'z', ay: 'y', flipY: true  },
+  { name: 'top',   ax: 'z', ay: 'x', flipY: false },
+  { name: 'front', ax: 'x', ay: 'y', flipY: true  },
 ];
+
+// ---- GLB loading -----------------------------------------------------------
+
+const GLB_ROOT = new URL('../public/assets/ships/', import.meta.url);
+
+async function loadGlb(faction, classKey) {
+  const path = new URL(`${faction}/${classKey}/lod0.glb`, GLB_ROOT);
+  const data = await readFile(path);
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  return loader.parseAsync(
+    data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+    '',
+  );
+}
+
+// ---- Geometry extraction ---------------------------------------------------
+
+function inGlowSubtree(obj) {
+  let cur = obj;
+  while (cur) {
+    if (cur.name === 'RIMWARD_ENGINE_GLOW') return true;
+    cur = cur.parent;
+  }
+  return false;
+}
+
+/**
+ * Collect all non-glow mesh positions as expanded (non-indexed) triangle
+ * vertices in scene space. Required by fillTri which processes vertex triples.
+ * Returns a Float32Array of [x,y,z, x,y,z, x,y,z, ...] consecutive triangles.
+ */
+function expandPositions(scene) {
+  scene.updateMatrixWorld(true);
+  const pts = [];
+  const v = new THREE.Vector3();
+  scene.traverse((obj) => {
+    if (!obj.isMesh || inGlowSubtree(obj)) return;
+    let geo = obj.geometry;
+    if (!geo?.attributes?.position) return;
+    if (geo.index) geo = geo.toNonIndexed();
+    const pos = geo.attributes.position;
+    const mat = obj.matrixWorld;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(mat);
+      pts.push(v.x, v.y, v.z);
+    }
+    if (geo !== obj.geometry) geo.dispose();
+  });
+  return new Float32Array(pts);
+}
+
+// ---- Rasteriser ------------------------------------------------------------
 
 /** Greyscale canvas, 0 = ink, 255 = paper. */
 const canvas = (w, h) => ({ w, h, px: new Uint8Array(w * h).fill(255) });
 
-/** Flat-shaded scanline fill of one triangle, no z-buffer: a silhouette is a mask. */
+/** Flat-shaded scanline fill of one triangle; a silhouette is a mask. */
 function fillTri(c, x0, y0, x1, y1, x2, y2, ink) {
   const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2)));
   const maxY = Math.min(c.h - 1, Math.ceil(Math.max(y0, y1, y2)));
@@ -71,7 +120,7 @@ function fillTri(c, x0, y0, x1, y1, x2, y2, ink) {
 function png(c) {
   const raw = Buffer.alloc((c.w + 1) * c.h);
   for (let y = 0; y < c.h; y++) {
-    raw[y * (c.w + 1)] = 0; // filter: none
+    raw[y * (c.w + 1)] = 0;
     raw.set(c.px.subarray(y * c.w, (y + 1) * c.w), y * (c.w + 1) + 1);
   }
   const crcTable = (() => {
@@ -99,8 +148,8 @@ function png(c) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(c.w, 0);
   ihdr.writeUInt32BE(c.h, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 0; // greyscale
+  ihdr[8] = 8;
+  ihdr[9] = 0;
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk('IHDR', ihdr),
@@ -109,23 +158,23 @@ function png(c) {
   ]);
 }
 
-/** Blit a 5x7 bitmap label so a reader can tell the rows apart. */
+/** 5x7 bitmap glyph set for class-key labels. */
 const GLYPHS = {
-  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
-  C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
-  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
-  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
-  G: ['01111', '10000', '10000', '10111', '10001', '10001', '01110'],
-  H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
-  I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
-  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
-  N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
-  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
-  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
-  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
-  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
-  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+  A: ['01110','10001','10001','11111','10001','10001','10001'],
+  C: ['01111','10000','10000','10000','10000','10000','01111'],
+  E: ['11111','10000','10000','11110','10000','10000','11111'],
+  F: ['11111','10000','10000','11110','10000','10000','10000'],
+  G: ['01111','10000','10000','10111','10001','10001','01110'],
+  H: ['10001','10001','10001','11111','10001','10001','10001'],
+  I: ['11111','00100','00100','00100','00100','00100','11111'],
+  L: ['10000','10000','10000','10000','10000','10000','11111'],
+  N: ['10001','11001','10101','10011','10001','10001','10001'],
+  R: ['11110','10001','10001','11110','10100','10010','10001'],
+  T: ['11111','00100','00100','00100','00100','00100','00100'],
+  U: ['10001','10001','10001','10001','10001','10001','01110'],
+  V: ['10001','10001','10001','10001','10001','01010','00100'],
+  Y: ['10001','10001','01010','00100','00100','00100','00100'],
+  ' ': ['00000','00000','00000','00000','00000','00000','00000'],
 };
 function label(c, text, x0, y0, s = 2) {
   let x = x0;
@@ -147,32 +196,28 @@ function label(c, text, x0, y0, s = 2) {
   }
 }
 
-const targets = (process.argv.slice(2).length > 0 ? process.argv.slice(2) : FACTION_REBUILD_ORDER)
-  .filter((f) => measureKindFor(f) === 'built');
+// ---- Main loop -------------------------------------------------------------
 
-mkdirSync('docs/silhouettes', { recursive: true });
+const want = process.argv.slice(2);
+const targets = want.length > 0 ? want : [...FACTION_REBUILD_ORDER];
+
+mkdirSync('out/silhouettes', { recursive: true });
 
 for (const faction of targets) {
-  const mod = await import(`../src/systems/ships/${faction}.js`);
-  const kit = mod[`${faction}Ship`];
-  if (!kit) {
-    console.log(`${faction}: no export named ${faction}Ship`);
-    continue;
-  }
-
-  // Build every class once; keep the hull positions and the bounds.
   const models = [];
+
   for (const ck of CLASS_ORDER) {
-    const b = detailBuilder();
-    kit[ck].build(b, FACTION_STYLE[faction]);
-    const geos = b.build();
-    const p = geos.hull.attributes.position;
-    const pos = new Float32Array(p.count * 3);
-    for (let i = 0; i < p.count; i++) {
-      pos[i * 3] = p.getX(i);
-      pos[i * 3 + 1] = p.getY(i);
-      pos[i * 3 + 2] = p.getZ(i);
+    let gltf;
+    try {
+      gltf = await loadGlb(faction, ck);
+    } catch (err) {
+      console.log(`${faction} ${ck}: GLB LOAD FAIL — ${err.message}`);
+      continue;
     }
+
+    const pos = expandPositions(gltf.scene);
+
+    // Compute bbox from expanded positions.
     const lo = [Infinity, Infinity, Infinity];
     const hi = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < pos.length; i += 3) {
@@ -182,7 +227,11 @@ for (const faction of targets) {
       }
     }
     models.push({ ck, pos, lo, hi });
-    for (const g of Object.values(geos)) g.dispose();
+  }
+
+  if (models.length === 0) {
+    console.log(`${faction}: no models loaded, skipping`);
+    continue;
   }
 
   const AXIS = { x: 0, y: 1, z: 2 };
@@ -193,9 +242,9 @@ for (const faction of targets) {
     const cb = (m.lo[ib] + m.hi[ib]) / 2;
     const sy = view.flipY ? -1 : 1;
     const { pos } = m;
-    for (let i = 0; i < pos.length; i += 9) {
+    for (let i = 0; i + 8 < pos.length; i += 9) {
       fillTri(c,
-        cx + (pos[i + ia] - ca) * scale, cy + sy * (pos[i + ib] - cb) * scale,
+        cx + (pos[i + ia]     - ca) * scale, cy + sy * (pos[i + ib]     - cb) * scale,
         cx + (pos[i + 3 + ia] - ca) * scale, cy + sy * (pos[i + 3 + ib] - cb) * scale,
         cx + (pos[i + 6 + ia] - ca) * scale, cy + sy * (pos[i + 6 + ib] - cb) * scale,
         0);
@@ -205,7 +254,7 @@ for (const faction of targets) {
   const sheetW = PAD + VIEWS.length * (CELL_W + PAD);
   const sheetH = PAD + models.length * (CELL_H + PAD);
 
-  // Sheet 1 — each class fitted to its cell. Answers "is the anatomy different?"
+  // Shape sheet — each class fitted to its own cell.
   const shape = canvas(sheetW, sheetH);
   models.forEach((m, row) => {
     VIEWS.forEach((view, col) => {
@@ -213,23 +262,24 @@ for (const faction of targets) {
       const ib = AXIS[view.ay];
       const sa = m.hi[ia] - m.lo[ia];
       const sb = m.hi[ib] - m.lo[ib];
-      const scale = Math.min((CELL_W - 40) / Math.max(sa, 1e-3), (CELL_H - 30) / Math.max(sb, 1e-3));
+      const scale = Math.min(
+        (CELL_W - 40) / Math.max(sa, 1e-3),
+        (CELL_H - 30) / Math.max(sb, 1e-3),
+      );
       draw(shape, m, view,
         PAD + col * (CELL_W + PAD) + CELL_W / 2,
-        PAD + row * (CELL_H + PAD) + CELL_H / 2, scale);
+        PAD + row * (CELL_H + PAD) + CELL_H / 2,
+        scale);
     });
     label(shape, m.ck, PAD + 4, PAD + row * (CELL_H + PAD) + 4, 2);
   });
-  writeFileSync(`docs/silhouettes/${faction}-shape.png`, png(shape));
+  writeFileSync(`out/silhouettes/${faction}-shape.png`, png(shape));
 
-  // Sheet 2 — one common scale for the whole family, in top view. Answers "is the
-  // ladder real?" Rows are sized from each hull's own beam at that shared scale,
-  // because a fixed row height clips the freighter: it is an order of magnitude
-  // longer than a scout and correspondingly broad, which is the entire point.
+  // Scale sheet — top view, one common world scale. Answers "is the ladder real?"
   const longest = Math.max(...models.map((m) => m.hi[2] - m.lo[2]));
-  const widest = Math.max(...models.map((m) => m.hi[0] - m.lo[0]));
-  const common = Math.min((sheetW - 2 * PAD) / longest, 340 / widest);
-  const rowH = models.map((m) => Math.max(64, Math.ceil((m.hi[0] - m.lo[0]) * common) + 26));
+  const widest  = Math.max(...models.map((m) => m.hi[0] - m.lo[0]));
+  const common  = Math.min((sheetW - 2 * PAD) / Math.max(longest, 1e-3), 340 / Math.max(widest, 1e-3));
+  const rowH    = models.map((m) => Math.max(64, Math.ceil((m.hi[0] - m.lo[0]) * common) + 26));
   const scaleSheet = canvas(sheetW, PAD + rowH.reduce((a, v) => a + v + PAD, 0));
   let y = PAD;
   models.forEach((m, row) => {
@@ -237,8 +287,10 @@ for (const faction of targets) {
     label(scaleSheet, m.ck, PAD + 4, y + 4, 2);
     y += rowH[row] + PAD;
   });
-  writeFileSync(`docs/silhouettes/${faction}-scale.png`, png(scaleSheet));
+  writeFileSync(`out/silhouettes/${faction}-scale.png`, png(scaleSheet));
 
-  console.log(`${faction}: docs/silhouettes/${faction}-shape.png, ${faction}-scale.png`
-    + ` (${models.map((m) => `${m.ck} ${(m.hi[2] - m.lo[2]).toFixed(1)}`).join(', ')})`);
+  console.log(
+    `${faction}: out/silhouettes/${faction}-shape.png, ${faction}-scale.png`
+    + ` (${models.map((m) => `${m.ck} ${(m.hi[2] - m.lo[2]).toFixed(1)}`).join(', ')})`,
+  );
 }

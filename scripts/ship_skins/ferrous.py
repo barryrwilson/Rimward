@@ -1,0 +1,17 @@
+SKIN = {
+    'id': 'ferrous',
+    'base': '#252A2E',
+    'panel': '#5B6169',
+    'accent': '#7A2D2E',
+    'emissive': '#B89550',
+    'pattern': 'plate_band',
+    'roughness': (0.75, 0.70, 0.52),
+    'panel_density': 0.52,
+    'accent_density': 0.18,
+    'wear': 0.18,
+    'emissive_strength': 1.3,
+    'secondary_parts': ('prow', 'citadel'),
+    'accent_parts': ('battery', 'navigation-light'),
+    'recess_mult': 0.44,
+    'trim_mult': 1.30,
+}

@@ -12,6 +12,7 @@
  *
  * Run: node --import ./scripts/with-css-stub.mjs scripts/probe-models.mjs
  */
+import { readFile } from 'node:fs/promises';
 import * as THREE from 'three';
 
 // ---- Minimal DOM stubs (canvas 2d only — the texture builders need it) ----
@@ -59,6 +60,8 @@ globalThis.window = {
   addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
 };
 
+const { configureShipAssetFileReader } = await import('../src/systems/ship-assets.js');
+configureShipAssetFileReader((assetPath) => readFile(new URL(`../public${assetPath}`, import.meta.url)));
 const { MODEL_CATALOG, MODEL_CATEGORIES } = await import('../src/game/model-catalog.js');
 
 // ---- Catalog shape checks ----
@@ -86,14 +89,14 @@ let noUpdate = 0;
 for (const entry of entries) {
   let built;
   try {
-    built = entry.build();
+    built = entry.load ? await entry.load() : entry.build();
   } catch (err) {
-    failures.push({ id: entry.id, why: `build: ${err.message}` });
+    failures.push({ id: entry.id, why: `${entry.load ? 'load' : 'build'}: ${err.message}` });
     continue;
   }
   const object = built?.object;
   if (!object || !object.isObject3D) {
-    failures.push({ id: entry.id, why: 'build() returned no Object3D' });
+    failures.push({ id: entry.id, why: `${entry.load ? 'load' : 'build'}() returned no Object3D` });
     continue;
   }
   if (object.parent) failures.push({ id: entry.id, why: 'object is parented' });

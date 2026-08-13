@@ -1,0 +1,15 @@
+SKIN = {
+    'id': 'veridian',
+    'base': '#29343A',
+    'panel': '#8CA29E',
+    'accent': '#4E9A7F',
+    'emissive': '#4DB88A',
+    'pattern': 'hex_module',
+    'roughness': (0.62, 0.55, 0.42),
+    'panel_density': 0.28,
+    'accent_density': 0.14,
+    'wear': 0.28,
+    'emissive_strength': 1.0,
+    'secondary_parts': ('spine', 'canister'),
+    'accent_parts': ('survey-head', 'navigation-light'),
+}

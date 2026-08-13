@@ -1,0 +1,15 @@
+SKIN = {
+    'id': 'freehold',
+    'base': '#6A3B33',
+    'panel': '#B8AC91',
+    'accent': '#638092',
+    'emissive': '#E8943A',
+    'pattern': 'repair_patch',
+    'roughness': (0.65, 0.72, 0.68),
+    'panel_density': 0.44,
+    'accent_density': 0.32,
+    'wear': 0.55,
+    'emissive_strength': 1.5,
+    'secondary_parts': ('keel', 'water-tank'),
+    'accent_parts': ('greenhouse', 'navigation-light'),
+}

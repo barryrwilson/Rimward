@@ -1,0 +1,15 @@
+SKIN = {
+    'id': 'congregation',
+    'base': '#17263E',
+    'panel': '#AEB4B9',
+    'accent': '#CD9A4B',
+    'emissive': '#7744BB',
+    'pattern': 'folded_rib',
+    'roughness': (0.65, 0.42, 0.55),
+    'panel_density': 0.55,
+    'accent_density': 0.15,
+    'wear': 0.45,
+    'emissive_strength': 0.8,
+    'secondary_parts': ('navigation-rib',),
+    'accent_parts': ('pilgrimage-keel',),
+}

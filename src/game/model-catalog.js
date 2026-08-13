@@ -1,20 +1,21 @@
 /**
  * Model catalog — flat, lazy index of every model the game can build.
- *
  * Powers the Models Browser overlay on the RIMWARD start page. Every model
- * is a { id, label, category, faction?, build() } entry; build() is a
- * zero-allocation closure that returns { object, update? } when called.
+ * is a { id, label, category, faction?, build() | load() } entry. build()
+ * returns a model immediately. load() resolves one after its required asset
+ * template is ready.
  *
- * No geometry is allocated at module load — the browser calls build()
- * on-demand and caches the result. All builders are thin wrappers around
- * the systems they pull from (npc.js for ships, station.js, gate.js, etc.).
+ * No geometry is allocated at module load. The browser calls an entry on
+ * demand and caches its resolved model. Builders are thin wrappers around the
+ * systems they pull from (npc.js for ships, station.js, gate.js, and others).
  *
- * beautiful and unknowables ship factions route to their own grown/energy-
- * field builders inside buildShipMesh, which is why they need no special case.
+ * NPC ship entries load the shared GLB asset templates. Beautiful and
+ * Unknowables use the same asset and material path as every other faction.
  */
 
 import * as THREE from 'three';
 import { buildShipMesh, animateShipMesh } from '../systems/npc.js';
+import { primeShipAsset } from '../systems/ship-assets.js';
 import { makeLivingHull, makeVeinTexture } from '../systems/ship.js';
 import { buildStationModel } from '../systems/station.js';
 import { buildGateModel } from '../systems/gate.js';
@@ -35,7 +36,9 @@ export const MODEL_CATEGORIES = ['Ships', 'Stations', 'Gates', 'Landmarks', 'Cel
  * @property {string}  category  one of MODEL_CATEGORIES
  * @property {string}  [faction] faction id when the model has one
  * @property {() => { object: import('three').Object3D,
- *                    update?: (elapsed: number, reducedMotion: boolean) => void }} build
+ *                    update?: (elapsed: number, reducedMotion: boolean) => void }} [build]
+ * @property {() => Promise<{ object: import('three').Object3D,
+ *                    update?: (elapsed: number, reducedMotion: boolean) => void }>} [load]
  */
 
 // ---- Ships ----
@@ -60,9 +63,10 @@ for (const faction of FACTION_ORDER) {
       label: `${FACTIONS[faction].name} — ${classKey.charAt(0).toUpperCase() + classKey.slice(1)}`,
       category: 'Ships',
       faction,
-      build: () => {
+      load: async () => {
+        await primeShipAsset(faction, classKey, 'trader');
         const object = buildShipMesh(classKey, faction, 'trader');
-        return { object, update: (e, rm) => animateShipMesh(object, e, rm) };
+        return { object, update: (e, rm, camera) => animateShipMesh(object, e, rm, camera) };
       },
     });
     // Pirate bake
@@ -71,9 +75,10 @@ for (const faction of FACTION_ORDER) {
       label: `${FACTIONS[faction].name} — ${classKey.charAt(0).toUpperCase() + classKey.slice(1)} (pirate)`,
       category: 'Ships',
       faction,
-      build: () => {
+      load: async () => {
+        await primeShipAsset(faction, classKey, 'pirate');
         const object = buildShipMesh(classKey, faction, 'pirate');
-        return { object, update: (e, rm) => animateShipMesh(object, e, rm) };
+        return { object, update: (e, rm, camera) => animateShipMesh(object, e, rm, camera) };
       },
     });
   }

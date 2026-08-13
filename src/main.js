@@ -13,6 +13,8 @@ import { initHail } from './systems/hail.js';
 import { initHud } from './systems/hud.js';
 import { initSong } from './systems/song.js';
 import { initModelsBrowser } from './systems/modelsbrowser.js';
+import { configureShipAssets } from './systems/ship-assets.js';
+import { applyShipLighting, applyShipToneMapping } from './systems/ship-lighting.js';
 
 // Input + simulation systems
 import { initControls } from './systems/controls.js';
@@ -56,9 +58,12 @@ try {
 }
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+applyShipToneMapping(renderer);
 document.getElementById('app').appendChild(renderer.domElement);
+configureShipAssets(renderer);
 
 const scene = new THREE.Scene();
+applyShipLighting(renderer, scene);
 const camera = new THREE.PerspectiveCamera(
   70,
   window.innerWidth / window.innerHeight,

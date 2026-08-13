@@ -94,9 +94,8 @@ export const FACTION_STYLE = {
     planetMood: 'cold', planetTint: 0xa8b8a8,
   },
   // 06 — D2 (approved): grown pearl/nacre stays MINT in-game (established
-  // lore, organic.js); the reference art's indigo/violet reads through the
-  // planet grading and gate overgrowth only. Ships/stations are sculpted by
-  // organic.js and never read hull/trim/patch.
+  // lore, organic.js). The reference art's indigo/violet reads through the
+  // planet grading and gate overgrowth. NPC ships use their shared PBR atlas.
   beautiful: {
     hull: 0x283a5e, hullDark: 0x1a2338, trim: 0xd8c8f0, accent: 0x7fe0a8,
     glow: 0x7fe0a8, beacon: 0xfdf6ec,

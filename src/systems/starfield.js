@@ -133,17 +133,6 @@ export function initStarfield(ctx) {
 
   ctx.scene.add(group);
 
-  // Wave 39: a graded hemisphere fill replaces the flat ambient. Flat ambient
-  // lit every unlit face identically, so faction hull colors crushed to black
-  // on any surface the sun did not strike (worst on the flat-sided ferrous /
-  // lamplighter / assembly kits). Cool sky over warm ground gives unlit faces
-  // a value gradient instead of a uniform floor.
-  // Intensity 2.0 measured at fx_bastion / as_census / lastbeacon / gc_auction:
-  // ferrous hull median luminance 10.9 -> 24.5, assembly 28 -> 46, while gilded
-  // black ceramic holds at 7 and the Bloom station (emissive) does not move at
-  // all. Faction value ordering is preserved; space stays dark.
-  ctx.scene.add(new THREE.HemisphereLight(0x9fb4c8, 0x2a2418, 2.0));
-
   let bandApplied = -1; // force the first opacity application
 
   return {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SYSTEMS } from '../game/state.js';
 import { styleFor } from '../game/faction-style.js'; // wave 37: faction planet grading
+import { addShipLightRig } from './ship-lighting.js';
 
 /**
  * Solar system — procedural sun + orbiting planets centered on
@@ -242,16 +243,8 @@ export function initSolarSystem(ctx) {
     );
     root.add(sun);
 
-    // Point light at the sun. decay: 0 keeps intensity constant with
-    // distance so planets out at 1400 units are lit just like the inner ones
-    // (physically correct decay: 2 would leave them pitch black).
-    const sunLight = new THREE.PointLight(def.sunColor, 2.5, 0, 0);
-    root.add(sunLight);
-
-    // Faint ambient so night sides aren't pure black. Lives under root so a
-    // single removal/dispose pass covers the whole system.
-    const ambient = new THREE.AmbientLight(0x334455, 0.25);
-    root.add(ambient);
+    // Shared light rig: key coloured by the system's sun, hemisphere fill, rim, and ambient.
+    addShipLightRig(root, { keyColor: def.sunColor });
 
     // Additive glow halo around the sun.
     const glow = new THREE.Sprite(

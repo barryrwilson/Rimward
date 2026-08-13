@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { U } from './state.js';
 import { recordPosition } from './world.js';
 import { spawnLiveShip, removeLiveShip } from '../systems/npc.js';
+import { isShipAssetReady, primeShipAsset } from '../systems/ship-assets.js';
 
 /**
  * Traffic — the instantiation bubble (doc §8.6).
@@ -81,7 +82,7 @@ export function initTraffic(ctx) {
       let best = null;
       let bestScore = Infinity;
       for (const rec of ctx.world.records) {
-        if (rec.live || rec.state !== 'enroute') continue;
+        if (rec.live || rec.assetPending || rec.state !== 'enroute') continue;
         // Stale-bank guard: on the jump frame records still point at the old
         // system's bank while currentSystem has already flipped. Untagged
         // legacy records (wave-1 saves) pass through.
@@ -98,6 +99,25 @@ export function initTraffic(ctx) {
         }
       }
       if (best) {
+        const cover = best.qship === true && !best.revealed
+          ? { classKey: best.coverClass ?? 'freighter', faction: best.coverFaction ?? best.faction, role: 'trader' }
+          : null;
+        const real = { classKey: best.classKey, faction: best.faction, role: best.role };
+        if (!best.assetReady && isShipAssetReady(real.faction, real.classKey, real.role) && (!cover || isShipAssetReady(cover.faction, cover.classKey, cover.role))) {
+          best.assetReady = true;
+        }
+        if (!best.assetReady) {
+          if (!best.assetPending) {
+            best.assetPending = true;
+            const required = cover ? [primeShipAsset(cover.faction, cover.classKey, cover.role), primeShipAsset(real.faction, real.classKey, real.role)] : [primeShipAsset(real.faction, real.classKey, real.role)];
+            Promise.all(required).then(() => {
+              if (ctx.world.currentSystem === curSys && ctx.world.records.includes(best) && best.state === 'enroute' && !best.live) best.assetReady = true;
+            }).catch((error) => console.error(`NPC asset prime failed for ${best.id ?? best.name ?? 'record'}`, error)).finally(() => {
+              best.assetPending = false;
+            });
+          }
+          return;
+        }
         recordPosition(best, _pos);
         const live = spawnLiveShip(ctx, best, _pos);
         if (live) {

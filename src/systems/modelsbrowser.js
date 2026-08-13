@@ -56,6 +56,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MODEL_CATALOG, MODEL_CATEGORIES } from '../game/model-catalog.js';
+import { configureShipAssets } from './ship-assets.js';
+import { applyShipLighting, addShipLightRig, applyShipToneMapping } from './ship-lighting.js';
 import '../ui/models.css';
 
 const STAR_COUNT = 1500;
@@ -87,6 +89,7 @@ export function initModelsBrowser(ctx) {
   let clock = null;
 
   const builtModels = new Map();
+  const loadingModels = new Map();
   let currentEntry = null;
   let currentObject = null;
   let userHasInteracted = false; // stops auto-turntable on first drag
@@ -210,6 +213,8 @@ export function initModelsBrowser(ctx) {
       showFatalError('WebGL not available');
       return;
     }
+    configureShipAssets(renderer);
+    applyShipToneMapping(renderer);
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(viewport.clientWidth, viewport.clientHeight);
@@ -220,6 +225,7 @@ export function initModelsBrowser(ctx) {
 
     // Scene
     scene = new THREE.Scene();
+    applyShipLighting(renderer, scene);
 
     // Camera
     const aspect = viewport.clientWidth / viewport.clientHeight;
@@ -234,17 +240,8 @@ export function initModelsBrowser(ctx) {
       userHasInteracted = true;
     });
 
-    // Lighting — matches solarsystem.js live values
-    const keyLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
-    keyLight.position.set(100, 80, 100);
-    scene.add(keyLight);
-
-    const ambientLight = new THREE.AmbientLight(0x334455, 0.25);
-    scene.add(ambientLight);
-
-    const fillLight = new THREE.DirectionalLight(0x8899aa, 0.15);
-    fillLight.position.set(-80, -40, -100);
-    scene.add(fillLight);
+    // Match the live system's key direction and its low ambient fill.
+    addShipLightRig(scene);
 
     // Star shell
     buildStarShell();
@@ -418,37 +415,49 @@ export function initModelsBrowser(ctx) {
       currentObject = null;
     }
 
-    // Get or build the model (cache the whole { object, update } record)
-    let built;
     if (builtModels.has(entry.id)) {
-      built = builtModels.get(entry.id);
-    } else {
-      try {
-        built = entry.build();
-        builtModels.set(entry.id, built);
-      } catch (e) {
-        showBuildError(entry, e);
-        return;
-      }
-    }
-
-    if (!built || !built.object) {
-      showBuildError(entry, new Error('build() returned null or missing object'));
+      mountBuilt(entry, builtModels.get(entry.id));
       return;
     }
+    if (entry.load) {
+      showLoading(entry);
+      let pending = loadingModels.get(entry.id);
+      if (!pending) {
+        pending = Promise.resolve(entry.load()).then((built) => {
+          builtModels.set(entry.id, built);
+          return built;
+        }).finally(() => loadingModels.delete(entry.id));
+        loadingModels.set(entry.id, pending);
+      }
+      pending.then((built) => {
+        if (currentEntry === entry) mountBuilt(entry, built);
+      }).catch((error) => {
+        if (currentEntry === entry) showBuildError(entry, error);
+      });
+      return;
+    }
+    try {
+      mountBuilt(entry, entry.build());
+    } catch (error) {
+      showBuildError(entry, error);
+    }
+  }
 
+  function mountBuilt(entry, built) {
+    if (!built?.object) {
+      showBuildError(entry, new Error('Model loader returned no object'));
+      return;
+    }
     currentObject = built.object;
     modelGroup.add(currentObject);
-
-    // Compute stats and structural bounding box
     const stats = computeStats(currentObject);
     const { center, radius, size } = measureModel(currentObject);
-
-    // Reframe camera
     frameModel(center, radius, size);
-
-    // Update info bar
     updateInfoBar(entry, stats, radius);
+  }
+
+  function showLoading(entry) {
+    overlayEl._infoBar.innerHTML = `<div class="rw-models-error"><div>${entry.label}</div><div style="color:#${WARM_COLOR.toString(16)}">Loading asset…</div></div>`;
   }
 
   /**
@@ -789,7 +798,7 @@ export function initModelsBrowser(ctx) {
       if (currentObject && currentEntry) {
         const built = builtModels.get(currentEntry.id);
         if (built?.update) {
-          built.update(elapsed, ctx.settings.reducedMotion);
+          built.update(elapsed, ctx.settings.reducedMotion, camera);
         }
       }
 

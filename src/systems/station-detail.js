@@ -1,20 +1,16 @@
 /**
  * Detail-sculpt toolkit — merged-geometry greeble library.
  *
- * Wave 43 built this for stations; wave 47 gave the ten faction SHIP sculpts
- * under src/systems/ships/ the same treatment, and they import it unchanged.
- * The file name still says `station-detail` for the sake of the ten station
- * modules that have imported it since wave 43 — read it as "detail", not as
- * "stations only". It knows nothing about either asset type.
+ * Wave 43 built this toolkit for stations. The NPC ship assets now load from
+ * GLB templates, so this module serves stations only.
+ * The file name remains for the station modules that import it.
  *
  * Ruling (wave-39 resource budget pin, scripts/boot-test.mjs):
  * scene-wide geometry+material+texture count is pinned at ~195, with only 1
- * unit of margin between ten-jump checks. Therefore this module bakes
- * per-part colour into VERTEX COLOURS and merges each colour channel into a
- * single BufferGeometry, exactly like npc.js colorPart()/shipGeosFor(). A
- * detailed station adds zero net resources while carrying 350-550 primitive
- * parts; a detailed ship costs two cached geometries per faction×class and no
- * material at all, because every hull shares npc.js's one vcMaterial.
+ * unit of margin between ten-jump checks. This module bakes per-part colour
+ * into VERTEX COLOURS and merges each colour channel into a single
+ * BufferGeometry. A detailed station adds zero net resources while carrying
+ * 350-550 primitive parts.
  *
  * All colours arrive from the caller as hex numbers; the toolkit knows nothing
  * about factions or FACTION_STYLE. Deterministic — scatter uses only the
