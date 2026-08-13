@@ -8,8 +8,9 @@
 > original GLB assets from `assets-source/ships/`, runtime loading from
 > `src/systems/ship-assets.js`, and checks in `scripts/validate-ship-assets.mjs`
 > and `scripts/measure-ships.mjs`. The retired `src/systems/ships/` source path
-> no longer exists. Use the Design Bible and the current runtime/tool sources
-> for active work.
+> no longer exists. For active work use the Design Bible for art direction and
+> `docs/ShipAssetPipeline.md` for the process: file layout, commands, gates and
+> failure modes of the Blender/GLB pipeline that replaced this one.
 
 
 The wave-47 sculpts are rejected as shape references. This is a rebuild, not a

@@ -2228,6 +2228,41 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   wave30 payTribute is a pre-existing FLAKY pin (a random roll) — it failed once
   across a dozen runs and passes on re-run; unrelated to this wave.
   Screenshots: .chrome-shot/w47 (r2-* are the reshaped fleet).
+- Wave 5 of the faction rebuild (commit b06a25f): the Freehold Compact fleet,
+  re-authored from the reference corpus, and the wave that put the GLB asset
+  pipeline on the record. The procedural src/systems/ships/ path is RETIRED and
+  deleted; NPC hulls are Blender-baked Meshopt GLB LODs.
+  METHOD IS DOCUMENTED: docs/ShipAssetPipeline.md is the repeatable process —
+  file layout, the four commands (blender bake, compress-ship-assets,
+  measure-ships/probe-ship-islands/validate-ship-assets/test:boot, silhouette and
+  render sheets), every gate with its threshold, the eight corpus authoring rules
+  from docs/SpaceShipIdeas/synthesis, the orchestration recipe for one agent per
+  class, and a failure-mode table. Read it before touching a ship.
+  docs/FactionShipRebuildPlan.md stays HISTORICAL — it documents the retired
+  procedural path, not current work.
+  WHAT SHIPPED: scripts/ship_builders/freehold became a package (surface.py holds
+  the shared hull-surface queries and the absolute human module; one file per
+  class holds one body plan). The cutter moved unchanged and re-measured
+  identically; light, ace, heavy, frigate and freighter are new. Each ship carries
+  three zones with real seams, one detail band on calm hull, an empty open truss
+  gap as the faction thumbnail signature, a countable nozzle group, flat empty
+  radiators, and windows repeated at one fixed pitch instead of scaled. The
+  frigate berths a docked craft in its rescue hangar; the freighter nests a family
+  craft and a container in open bays.
+  MEASURED: light 6000v/7.2, ace 4720v/7.1, cutter 10988v/10.3, heavy 14340v/17.0,
+  frigate 18236v/29.7, freighter 78868v/76.6 — ladder monotone, every class inside
+  its SHIP_SCALE hull band, proxy cover 100 % on all six.
+  VERIFIED: measure-ships freehold ALL PASS; probe-ship-islands ONE CONNECTED BODY
+  for all six classes; validate-ship-assets PASS (72 sources, 228 Meshopt LODs,
+  228 GLB content checks); test:boot PASS with freeholdSpan/Proportion/Pivot/
+  ProxyCover/ClassOrdering true. Sheets: out/silhouettes/freehold-{shape,scale,
+  render}.png.
+  WHAT THE GATES CAUGHT, and the lesson: the first authoring round was green on
+  span, ratios, pivot and proxy while heavy had 5 floating part groups, frigate 21
+  and freighter 9 — fittings placed at typed coordinates instead of seated on the
+  loft, plus a freighter lod2 at 8576 triangles against an 8000 cap. Proportion
+  pins cannot see a floating window row. probe-ship-islands is the authoring gate;
+  run it per class, immediately after each bake.
 
 ## Next round candidates (wave 48)
 - Wave 47 contract notes for future work: Phase 7 of
