@@ -22,11 +22,14 @@ a re-authoring round while every gate stayed green.
 1. **This document**, all of it. §3 gates, §4 authoring rules, §6 failure modes
    and the size-convention table, §7 definition of done.
 2. **`docs/FactionExamples/<n>-<faction>-ship.png`** and
-   **`overview-ships.jpg`** — LOOK AT THEM. Write down, in the brief you hand to
-   each class author, what the render establishes: the silhouette family, the
-   surface treatment, where the accent colour goes and in what shape, what the
-   emissive is and where it sits, and the one element that breaks the outline.
-   The escorts in the frame are the `light` and `ace` briefs.
+   **`overview-ships.jpg`** — LOOK AT THEM. This is CONCEPT ART and a visual
+   charter, NOT a model to reproduce: it fixes the silhouette family, the surface
+   logic, where the accent colour goes and in what shape, what the emissive does,
+   and the one element that breaks the outline. The job is a new sculpt that
+   reads as that faction and beats the art in the engine, across six different
+   anatomies — the art only shows one ship, in one pose. Write the constraints
+   you read off it into the brief you hand each class author. The escorts in the
+   frame are the `light` and `ace` briefs.
 3. **`docs/SpaceShipIdeas/synthesis/21-rimward-gap-analysis.md`** §G6 (this
    faction's ONE construction logic and the signature to model) and §G2 (this
    faction's ONE outline-breaking element, >= 15 % of hull length), then
@@ -344,9 +347,21 @@ pipeline: `freehold` (wave 5, the reference package), `redledger` (wave 6).
 separate small wave, not the next faction. **Next is `gilded`, the Gilded Chain,
 bible §4.5.**
 
-### Wave 7 — the Gilded Chain, and what the render actually shows
+### Wave 7 — the Gilded Chain
 
-`docs/FactionExamples/05-gilded-chain-ship.png`. Read it before the prose:
+`docs/FactionExamples/05-gilded-chain-ship.png` is CONCEPT ART, not a target to
+reproduce. It is the faction's visual charter: it fixes the silhouette family,
+the construction logic, where the accent sits and in what shape, and what the
+light does. Everything below is read off it as a CONSTRAINT on a new sculpt.
+
+The deliverable is a NEW model and a NEW skin that read as this faction at
+thumbnail size and beat the concept art in the engine — more legible surface,
+honest function hardware, a real LOD ladder, a size ladder that works beside the
+other fleets. Do not trace the painting's proportions, do not copy its one hero
+pose, and do not treat its every fitting as a requirement. Six classes need six
+anatomies; the art shows one ship.
+
+What the charter fixes, and a new sculpt must honour:
 
 - An extremely long, LOW, sleek CRESCENT/LEAF hull with a needle prow — the
   silhouette family is `blade/crescent`, held across all six classes, and it is
@@ -365,8 +380,8 @@ bible §4.5.**
 - **Cold turquoise light from DEEP RECESSED galleries** on the ventral flank —
   the light is inside the hull, seen through long slots, not strips laid on the
   surface. "A cold illuminated gallery running deep inside rather than across the
-  surface" is the bible's own wording for the heavy, and the render generalises
-  it to the fleet. Emissive still caps at 5 % of hull area.
+  surface" is the bible's own wording for the heavy, and it generalises to the
+  fleet. Emissive still caps at 5 % of hull area.
 - Swept ventral pylons/fins and smooth tractor apertures break the outline;
   §G2's outline-breaker for this faction is the ventral pylon set, not a boom.
 - **Threats are hairline seams.** Weapon and transfer apertures read as closed
@@ -379,7 +394,12 @@ exposed frame, the mismatched plate, the visible mechanism and the dirt. It is
 the opposite of the Red Ledger on every axis, so resist carrying the Ledger's
 habits across; in particular, do NOT reuse `salvage.py` or `donors.py`.
 
-### What to reuse, in this order
+### What to reuse — TOOLING AND IDIOM ONLY, never geometry
+
+Nothing is inherited from another faction's sculpt, and nothing is carried over
+from the retired procedural `src/systems/ships/` path. What gets reused is the
+kit, the query math, the probes and the file layout. Every mass, course, fitting
+and light on a Gilded hull is authored new for this faction.
 
 1. `scripts/ship_kit.py` unchanged, and the size-convention table in §6. Note
    `hull_loft`'s station tuple takes a per-station chamfer: a LARGE chamfer gives
@@ -400,6 +420,30 @@ habits across; in particular, do NOT reuse `salvage.py` or `donors.py`.
    element, and skip where the callable returns 0.0.
 6. `scripts/probe-ship-extremes.py` the moment a span or a float is wrong. Name
    the part before editing anything.
+
+### The skin is new work too
+
+`scripts/ship_skins/gilded.py` already exists, written for the retired
+procedural fleet: base `#191B1D` ceramic, panel `#DED6BC` ivory, accent
+`#C8A444` gold, emissive `#5AB6BB` turquoise, `panel_density` 0.28,
+`accent_density` 0.16, `wear` 0.10, and `secondary_parts`/`accent_parts` keyed to
+part-name substrings (`course`, `weapon`, `citadel`) that the new sculpt will not
+use. Treat it as a starting hypothesis, not a delivered asset:
+
+- Re-tone it against the finished sculpt in the render, the way wave 6 did
+  (`redledger` panel `#7B5C3A` → `#5E4630` once the render showed copper was
+  patina, not a slab). Judge the palette from `ship-render.mjs` and the Models
+  Browser, never from the hex values.
+- The new modules tag every part with an explicit `skin_role`, so the
+  substring-matched `secondary_parts`/`accent_parts` pools are legacy. Set the
+  roles deliberately: base = ceramic scale field, panel = ivory margin, accent =
+  gold articulation, trim = edge lines, recess = seams and gallery slots.
+- `accent_density` thins the accent pool, and §8's "gold on edges only" plus
+  rule 8's 3-8 % accent cap are what that number has to deliver. Check the
+  measured accent area against the hull area, as wave 6's class docstrings do.
+- `wear` 0.10 and low roughness are the faction's point — "visibly dirty
+  machinery" is on the bible's avoid-list. If the render looks plasticky rather
+  than ceramic, fix roughness and the PBR atlas, not the geometry.
 
 ### Process rules that earned their place in wave 6
 
