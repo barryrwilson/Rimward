@@ -8,8 +8,38 @@
 > not a guide for current work.
 > **First proved end to end:** the Freehold Compact fleet, commit `b06a25f`
 > (wave 5) — cutter first, then light, ace, heavy, frigate, freighter. Second
-> run: the Red Ledger fleet (wave 6), which added §4's reference-art rule, the
-> size-convention table in §6, and the two probes in §6.
+> run: the Red Ledger fleet (wave 6), which added §0's reading order, §4's
+> reference-art rule, the size-convention table in §6, the two probes in §6 and
+> the handoff in §8.
+> **Fresh session: read §0 first, then §8 for the next faction's brief.**
+
+## 0. Start here — the reading order for a fresh session
+
+Do these in order before writing a line of geometry. Steps 2 and 3 are the ones
+that were skipped in wave 6's first pass, and skipping them cost the whole fleet
+a re-authoring round while every gate stayed green.
+
+1. **This document**, all of it. §3 gates, §4 authoring rules, §6 failure modes
+   and the size-convention table, §7 definition of done.
+2. **`docs/FactionExamples/<n>-<faction>-ship.png`** and
+   **`overview-ships.jpg`** — LOOK AT THEM. Write down, in the brief you hand to
+   each class author, what the render establishes: the silhouette family, the
+   surface treatment, where the accent colour goes and in what shape, what the
+   emissive is and where it sits, and the one element that breaks the outline.
+   The escorts in the frame are the `light` and `ace` briefs.
+3. **`docs/SpaceShipIdeas/synthesis/21-rimward-gap-analysis.md`** §G6 (this
+   faction's ONE construction logic and the signature to model) and §G2 (this
+   faction's ONE outline-breaking element, >= 15 % of hull length), then
+   **`20-cross-cutting-design-rules.md`** rules 1-8.
+4. **`docs/FactionShipDesignBible.md`** §4.x for the faction and its six class
+   lines. This is the LAST art input, not the first: the prose alone produces a
+   plated tube that passes every pin.
+5. **`src/game/ship-scale.js`** — `SHIP_SCALE` bands, `CLASS_ORDER`,
+   `FACTION_REBUILD_ORDER` (which names the next faction), `HUMAN`.
+6. **The finished reference fleets**: `scripts/ship_builders/freehold/` for the
+   package idiom and `scripts/ship_builders/redledger/` for the four-module
+   split (`surface.py` queries, `hardware.py` equipment, plus the faction's own
+   surface-language and donor modules) and the `surf` callback pattern.
 
 ## 1. What builds a ship now
 
@@ -302,3 +332,89 @@ part first, then edit.
 - Builder docstrings carry the MEASURED numbers and the commands that produced
   them.
 - Commit named for the wave, with the measured table in the body.
+- The fleet opened in the Models Browser under real Chrome, at two framings per
+  class. A close nose-on view of a citadel looks like a blob in ANY fleet; judge
+  from broadside and quarter views, which is what the sheets show.
+
+## 8. Order of work, and the next wave
+
+`FACTION_REBUILD_ORDER` in `src/game/ship-scale.js` is the queue. Done on this
+pipeline: `freehold` (wave 5, the reference package), `redledger` (wave 6).
+`ferrous` predates it and still has only three pilot classes — finishing it is a
+separate small wave, not the next faction. **Next is `gilded`, the Gilded Chain,
+bible §4.5.**
+
+### Wave 7 — the Gilded Chain, and what the render actually shows
+
+`docs/FactionExamples/05-gilded-chain-ship.png`. Read it before the prose:
+
+- An extremely long, LOW, sleek CRESCENT/LEAF hull with a needle prow — the
+  silhouette family is `blade/crescent`, held across all six classes, and it is
+  the longest-looking family in the fleet. Nothing steps, nothing is bolted on.
+- **Overlapping scale courses** that follow the loft: each scale laps the one
+  behind it, in long fair courses running fore-and-aft. This is NOT the Ledger's
+  patchwork quilt of mismatched plates — it is one ordered shell, and
+  `sv.plate_quilt`'s role mix and jitter are exactly wrong for it. The Chain
+  needs its own lapped-course construct.
+- **Ivory scale margins** on the forward flank and along the leading edges,
+  against near-black ceramic scales dorsally — the tonal split is a large,
+  deliberate two-tone, not per-plate variation.
+- **Old-gold as hairline articulation only**: thin edge lines, ribs and collar
+  rings. Bible §4.5 forbids gaudy gold coverage; treat gold as `ROLE_TRIM` on
+  edges, never as a face.
+- **Cold turquoise light from DEEP RECESSED galleries** on the ventral flank —
+  the light is inside the hull, seen through long slots, not strips laid on the
+  surface. "A cold illuminated gallery running deep inside rather than across the
+  surface" is the bible's own wording for the heavy, and the render generalises
+  it to the fleet. Emissive still caps at 5 % of hull area.
+- Swept ventral pylons/fins and smooth tractor apertures break the outline;
+  §G2's outline-breaker for this faction is the ventral pylon set, not a boom.
+- **Threats are hairline seams.** Weapon and transfer apertures read as closed
+  lines flush with the shell. The Ledger's `shutter_well` is the wrong shape —
+  author a flush seam with an `open` parameter instead.
+
+Construction logic, from §G6: **CLOSED SHELL, ORNAMENT** — "one continuous
+curve; edge-only precious trim; long thin light lines". The Chain must refuse the
+exposed frame, the mismatched plate, the visible mechanism and the dirt. It is
+the opposite of the Red Ledger on every axis, so resist carrying the Ledger's
+habits across; in particular, do NOT reuse `salvage.py` or `donors.py`.
+
+### What to reuse, in this order
+
+1. `scripts/ship_kit.py` unchanged, and the size-convention table in §6. Note
+   `hull_loft`'s station tuple takes a per-station chamfer: a LARGE chamfer gives
+   the Chain its smooth rounded section where the Ledger used `hard_section`.
+2. `scripts/ship_builders/redledger/surface.py` as the shape of the answer for a
+   new `gilded/surface.py`: the same nine queries (they are loft section math,
+   not faction styling), a Chain human module, and whatever seating helpers the
+   scale courses need. Never copy the Ledger's constants.
+3. A `gilded/shell.py` for the faction's own surface language — lapped scale
+   courses, ivory margin runs, gold edge lines, the recessed gallery slot, the
+   hairline aperture seam — and a `gilded/hardware.py` for its equipment: tractor
+   lenses, capture collars, sealed transfer chambers, observation rotunda.
+4. `scripts/probe-ledger-parts.py` as the template for `probe-gilded-parts.py`.
+   Point it at the new modules and RUN IT BEFORE dispatching class authors. It
+   costs three seconds and it is the only thing that proves the foundation clean.
+5. The `surf` callback pattern from `salvage.plate_quilt`: any course, margin or
+   light slot that runs along a tapering hull must re-sample the surface per
+   element, and skip where the callable returns 0.0.
+6. `scripts/probe-ship-extremes.py` the moment a span or a float is wrong. Name
+   the part before editing anything.
+
+### Process rules that earned their place in wave 6
+
+- **Foundation first, and prove it.** Author `surface.py` + the two language
+  modules, smoke-probe them, and only then fan out one agent per class.
+- **Agents author; the orchestrator verifies.** Every class brief says: no
+  Blender, no node, no npm, no formatters, only `python -m py_compile`. Blender
+  bakes serialise, so a mid-flight gate run just blocks siblings.
+- **Forbid instrument archaeology in class briefs.** One wave-6 agent spent two
+  hours reconstructing voxel coordinates and edited nothing. Diagnose centrally
+  with the probes, hand the agent the NAMED part and the fix, and ban the rest.
+- **Bake and probe one class at a time, immediately.** Connectivity defects are
+  cheap to attribute now and expensive after five files land together.
+- **A shared-module edit invalidates every class placement.** After changing a
+  construct's geometry, re-bake the WHOLE faction and re-probe; wave 6 detached a
+  ram and a drive by "fixing" sizes centrally without re-seating callers.
+- **Small numeric adjustments stay inline.** A `rows`, `pitch` or one-line
+  seating fix costs less to do than to describe.

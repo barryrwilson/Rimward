@@ -2319,6 +2319,12 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   and edited nothing; it was cancelled and its work redone in 30 minutes with an
   explicit ban on running instruments. Diagnose centrally with the probes, hand the
   agent the named part, and forbid the archaeology.
+  NEXT FACTION: gilded (the Gilded Chain, bible §4.5) per FACTION_REBUILD_ORDER in
+  src/game/ship-scale.js. Its brief is written up in docs/ShipAssetPipeline.md §8
+  — read §0 (the reading order) and §8 (what the Gilded render actually shows, what
+  to reuse, what NOT to carry across from the Ledger) before authoring. ferrous is
+  a separate small wave: it predates the pilot pipeline and still has only three
+  hand-authored classes.
 
 ## Next round candidates (wave 48)
 - Wave 47 contract notes for future work: Phase 7 of
