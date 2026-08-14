@@ -9,8 +9,11 @@
 > **First proved end to end:** the Freehold Compact fleet, commit `b06a25f`
 > (wave 5) — cutter first, then light, ace, heavy, frigate, freighter. Second
 > run: the Red Ledger fleet (wave 6), which added §0's reading order, §4's
-> reference-art rule, the size-convention table in §6, the two probes in §6 and
-> the handoff in §8.
+> reference-art rule, the size-convention table in §6 and the two probes in §6.
+> Third run: the Gilded Chain (wave 7), which proved FOUNDATION-FIRST — shared
+> modules authored and smoke-probed before any class author is dispatched — and
+> which corrected §6's size table, whose inverted claim had been quoted straight
+> into a brief.
 > **Fresh session: read §0 first, then §8 for the next faction's brief.**
 
 ## 0. Start here — the reading order for a fresh session
@@ -272,27 +275,47 @@ and the gates will pass it.
 | greeble field at the edge of its box floats | field box longer in `z` than the surface it rides, so the outermost boxes overrun the taper | shrink the field box, and add a second field further aft to restore coverage |
 | lod2 over its triangle cap | detail 1 carries full-count repeated hardware (spokes, tank rank, spheres) | count down with detail: `n = 8 if detail >= 2 else 4`, slice the rank |
 | class green on gates but under its hull band | density spent on primitives instead of surface language | add armour courses and human modules inside the existing band; never subdivide primitives |
-| every seam bead reads as a copper frame twice the hull beam | full extents passed to `kit.box`, which takes HALF-extents | halve at the call site; see the size-convention table below |
-| a ram or drive detaches from its own hull after a "fix" | HALF extents passed to `kit.chamfer_block`/`taper_block`/`wedge`, which take FULL extents | the kit is NOT uniform — check the table before editing any size |
+| every seam bead reads as a frame twice the hull beam | a HALF figure from a `surface.py` station tuple passed straight into `kit.box`, which takes FULL extents | double at the call site, or pass the full span the station describes |
+| a human module renders half human size | the size-convention table was trusted instead of the kit source, and an absolute constant was halved before `kit.box` | pass absolute constants unhalved; only `kit.cyl`/`torus`/`strut` want a radius |
 | one drive's nozzle group measures wider than the hull | `kit.engine_bank` lays every nozzle in ONE row along X, so 6 nozzles at radius-derived spacing spans 12+ units | lay the group as a grid bounded by the housing face (`hw.captured_drive` now does) |
 | a whole quilt or stripe run floats aft of a taper | the construct was given ONE surface figure for a run whose surface falls away | pass `surf` and let it re-sample per plate; a `surf` returning 0.0 self-trims the run |
 | a run of sub-voxel parts each float separately | `kit.greeble_field`'s `sy` is the FIELD BOX height and each greeble is 5-15 % of it, so a 0.06 box emits 0.01-tall greebles below the 0.06 probe voxel | give the field box a real height and seat it `top_y - sy * 0.5` |
 | a greeble field buried INSIDE the hull, still detached | seated on the run's MINIMUM deck height to be "safe", which sinks it below the surface at its own station | sample at the field's own station and shorten the run instead |
 | a collar rib floats at a hull corner | ribs distributed by even ANGULAR sweep land on the chamfered corners, where the lofted hull has already fallen away | distribute ribs across the four FLAT faces, inside each face's straight span |
+| a port/starboard PAIR built with `kit.hull_loft` lands on the centreline | a station tuple has no `x` term and `hull_loft` builds at the origin, so the loft ignores the anchor it was handed while the strut and glow parts placed from that anchor sit correctly outboard — the island probe reports only the orphaned small parts | set `obj.location.x` on the returned loft (Blender X is ship X, the transform is never applied, so it survives `centre_parts` and export) |
+| a "recess" widens the ship and its light looks painted on | the well was built OUTBOARD of the skin — walls and lip standing proud, emissive flush at the surface | build the wall INBOARD, let the hood/sill protrude ≤ 0.07, and put the panes at the bottom of the channel |
+| an "open" aperture shows no light | the glow box sits inside the recess strip's own solid volume, so opaque hull geometry encloses it | put strip, lips and glow on three distinct planes, glow ≤ 0.01 proud of the strip and below the lip plane |
+| a nested craft or crate stack floats as one large island | it sits entirely inside a wall box's INTERIOR; a lofted hull and a box are surface shells to the probe, and two nested shells share no voxel | make two SURFACES intersect — run a cradle pad through the wall face, or move the item so it pierces a face |
+| the surface language is invisible in the render while every gate is green | every element of a course sits at the SAME outboard offset, so the laps and joints are coplanar | step the offset in a short cycle (`kit.plate_course`'s "catching light" trick); it costs no geometry |
+| a swept fin reads as a whisker antenna | the fin's tip was placed far aft and the construct interpolates its leading and trailing edges to a 40 % tip chord, so it tapers to a needle over most of the hull | keep the tip within ~0.35 chord of the root and let the chord carry the outline share |
+| the accent colour disappears from random parts | `accent_density` thins the accent POOL BY COUNT and repaints the rest with `base`, so any value below 1.0 blanks whole runs at random | set it to 1.0 and control accent coverage with geometry |
 
-### The kit is not uniform about size, and nothing catches it
+### The kit is uniform about size, and wave 6's table said the opposite
+
+Verified against `scripts/ship_kit.py` source, not from memory:
 
 ```
-kit.box / kit.plate_grid / kit.panel_lines / kit.greeble_field   -> HALF-extents
-kit.plate_course        -> axis figure is a FULL span, the two cross figures are HALF
-kit.chamfer_block / kit.taper_block / kit.wedge                  -> FULL extents
-kit.cyl / kit.torus / kit.strut                                  -> real radius / depth
+kit.box               -> FULL extents (line 82: obj.scale = size / 2 on Blender's
+                         default 2-unit cube, so `size` IS the world extent)
+kit.plate_course / plate_grid / panel_lines / greeble_field
+                      -> FULL extents (they all funnel into kit.box; plate_grid's
+                         docstring says "full extents of the host volume")
+kit.chamfer_block / kit.taper_block / kit.wedge / kit.hull_loft -> FULL extents
+kit.cyl / kit.torus / kit.strut                                -> real radius / depth
 ```
+
+There is no half-extent entry point in the kit. Wave 6's version of this table
+claimed the box family took HALF extents and that `plate_course` mixed the two;
+that was an inverted reading of the two corrective rounds it lost, and wave 7's
+first foundation pass reproduced the error faithfully because the table was
+quoted into the brief — `hardware.py` halved every absolute human constant, which
+silently halves a window. HALF is the convention for the *station tuples* in
+`surface.py` (`half_w`, `half_h`) and for nothing the kit accepts.
 
 No gate sees a size-convention error: spans, ratios, pivot, proxy and even the
 island probe all stay green because an oversized part is still a part and a
-halved one is still attached to something. Only the render shows it. This wave
-lost a round in each direction.
+halved one is still attached to something. Only the render shows it. Check the
+kit source at the call site; do not trust a remembered table, including this one.
 
 ### Two instruments this wave added, and both paid for themselves
 
@@ -342,123 +365,120 @@ part first, then edit.
 ## 8. Order of work, and the next wave
 
 `FACTION_REBUILD_ORDER` in `src/game/ship-scale.js` is the queue. Done on this
-pipeline: `freehold` (wave 5, the reference package), `redledger` (wave 6).
+pipeline: `freehold` (wave 5, the reference package), `redledger` (wave 6),
+`gilded` (wave 7, the four-module package with a callback-factory `surface.py`).
 `ferrous` predates it and still has only three pilot classes — finishing it is a
-separate small wave, not the next faction. **Next is `gilded`, the Gilded Chain,
-bible §4.5.**
+separate small wave, not the next faction. **Next is `beautiful`, The Beautiful
+Ones, bible §4.6.**
 
-### Wave 7 — the Gilded Chain
+### Wave 8 — The Beautiful Ones
 
-`docs/FactionExamples/05-gilded-chain-ship.png` is CONCEPT ART, not a target to
-reproduce. It is the faction's visual charter: it fixes the silhouette family,
-the construction logic, where the accent sits and in what shape, and what the
-light does. Everything below is read off it as a CONSTRAINT on a new sculpt.
+`docs/FactionExamples/06-beautiful-ones-ship.png` is CONCEPT ART, not a target to
+reproduce. It is the visual charter: it fixes the silhouette family, the
+construction logic, where the light lives and what the surface refuses.
 
-The deliverable is a NEW model and a NEW skin that read as this faction at
-thumbnail size and beat the concept art in the engine — more legible surface,
-honest function hardware, a real LOD ladder, a size ladder that works beside the
-other fleets. Do not trace the painting's proportions, do not copy its one hero
-pose, and do not treat its every fitting as a requirement. Six classes need six
-anatomies; the art shows one ship.
+This is the first faction on the pipeline whose construction logic is **GROWN
+BODY** (§21 G6: "no panel lines; flow-line detail; lights on the flow lines"), and
+that makes waves 5-7's whole surface vocabulary WRONG for it. There are no plates,
+no courses, no seams, no collars, no lapped scales, no rivets, no hairline trim.
+Do NOT reuse `redledger/salvage.py`, `gilded/shell.py`, or any construct whose name
+contains `plate`, `course`, `seam` or `collar`. The bible's own avoid-list is
+"mechanical kitbashing", and every previous faction's language IS kitbashing here.
 
 What the charter fixes, and a new sculpt must honour:
 
-- An extremely long, LOW, sleek CRESCENT/LEAF hull with a needle prow — the
-  silhouette family is `blade/crescent`, held across all six classes, and it is
-  the longest-looking family in the fleet. Nothing steps, nothing is bolted on.
-- **Overlapping scale courses** that follow the loft: each scale laps the one
-  behind it, in long fair courses running fore-and-aft. This is NOT the Ledger's
-  patchwork quilt of mismatched plates — it is one ordered shell, and
-  `sv.plate_quilt`'s role mix and jitter are exactly wrong for it. The Chain
-  needs its own lapped-course construct.
-- **Ivory scale margins** on the forward flank and along the leading edges,
-  against near-black ceramic scales dorsally — the tonal split is a large,
-  deliberate two-tone, not per-plate variation.
-- **Old-gold as hairline articulation only**: thin edge lines, ribs and collar
-  rings. Bible §4.5 forbids gaudy gold coverage; treat gold as `ROLE_TRIM` on
-  edges, never as a face.
-- **Cold turquoise light from DEEP RECESSED galleries** on the ventral flank —
-  the light is inside the hull, seen through long slots, not strips laid on the
-  surface. "A cold illuminated gallery running deep inside rather than across the
-  surface" is the bible's own wording for the heavy, and it generalises to the
-  fleet. Emissive still caps at 5 % of hull area.
-- Swept ventral pylons/fins and smooth tractor apertures break the outline;
-  §G2's outline-breaker for this faction is the ventral pylon set, not a boom.
-- **Threats are hairline seams.** Weapon and transfer apertures read as closed
-  lines flush with the shell. The Ledger's `shutter_well` is the wrong shape —
-  author a flush seam with an `open` parameter instead.
+- A single GROWN body: one continuous swollen mass, thickest just aft of the head,
+  drawn out into a long tapering tail. No zone steps, no transom, no drive face.
+  The silhouette family is `manta/lens` with long trailing fin tips.
+- **Multiple large FIN PAIRS** are the outline, not an appendage: a broad forward
+  wing pair sweeping back past the body, a second and third smaller pair, each fin
+  thin, translucent at the edge and carrying flow lines along its span. §G2's
+  outline-breaker for this faction is the fin set, and it is far more than 15 % of
+  hull length.
+- **Pearl and bone tissue over indigo interior**: the dorsal surface is pale
+  pearl-bone; the flanks and fin membranes are violet-indigo, and the two meet in
+  long FLOW LINES that follow the body's own curvature. The tonal split is
+  organic and gradual — it is NOT a two-tone region with a bounding line, which is
+  exactly what the Gilded Chain's ivory margin was.
+- **A lattice of luminous veins** runs under the surface in the deep folds: cyan
+  and violet, branching, brightest where the body creases. Emissive still caps at
+  5 % of hull area, so the veins are thin and they live in the folds, never on the
+  calm pearl back.
+- **A sensory crown** of fine translucent filaments at the head, thin and fragile
+  against the mass — the closest thing this faction has to a mast, and the only
+  place fine detail is allowed forward.
+- Bible §4.6: no engine nozzles, no manufactured windows, no bolted armour, no
+  mechanical turrets. The class read comes from ANATOMY — head and fin shape, body
+  stage, scar history — not from equipment. `hw.drive_face`, `nozzle_ring`,
+  `window_row`, `barbette` and `handrail` are all forbidden.
 
-Construction logic, from §G6: **CLOSED SHELL, ORNAMENT** — "one continuous
-curve; edge-only precious trim; long thin light lines". The Chain must refuse the
-exposed frame, the mismatched plate, the visible mechanism and the dirt. It is
-the opposite of the Red Ledger on every axis, so resist carrying the Ledger's
-habits across; in particular, do NOT reuse `salvage.py` or `donors.py`.
+Two hard consequences for the harness, both already provided for:
+
+1. `FACTION_PROPORTION_RELIEF.beautiful` is `{ minLengthOverBeam: 0.55,
+   maxHeightOverLength: 0.60, minBeamOverLength: 0.35 }`. The fleet may be WIDER
+   than it is long, because the Player ship is itself manta-plan (spanX 6.6 vs
+   spanZ 4.2) and this faction uses it as its direct anatomy reference. Do not
+   author a crescent to satisfy a floor that does not apply.
+2. `add_idle` in `build-ship-assets.py` animates `beautiful` and `unknowables`
+   only, so these sculpts ship with an idle action. Author the body so a slow
+   breathing scale looks right on it, and keep the pivot at the body's centre of
+   mass — the animation multiplies any pivot error.
+
+`SHIP_SCALE[class].lights` and the emissive cap are unchanged. The engine-glow
+sphere is still appended at the stern by the driver and `validate-ship-assets`
+still demands it, so the tail must END somewhere the glow reads as the body's own
+wake, not as an exhaust.
 
 ### What to reuse — TOOLING AND IDIOM ONLY, never geometry
 
 Nothing is inherited from another faction's sculpt, and nothing is carried over
-from the retired procedural `src/systems/ships/` path. What gets reused is the
-kit, the query math, the probes and the file layout. Every mass, course, fitting
-and light on a Gilded hull is authored new for this faction.
+from the retired procedural `src/systems/ships/` path.
 
-1. `scripts/ship_kit.py` unchanged, and the size-convention table in §6. Note
-   `hull_loft`'s station tuple takes a per-station chamfer: a LARGE chamfer gives
-   the Chain its smooth rounded section where the Ledger used `hard_section`.
-2. `scripts/ship_builders/redledger/surface.py` as the shape of the answer for a
-   new `gilded/surface.py`: the same nine queries (they are loft section math,
-   not faction styling), a Chain human module, and whatever seating helpers the
-   scale courses need. Never copy the Ledger's constants.
-3. A `gilded/shell.py` for the faction's own surface language — lapped scale
-   courses, ivory margin runs, gold edge lines, the recessed gallery slot, the
-   hairline aperture seam — and a `gilded/hardware.py` for its equipment: tractor
-   lenses, capture collars, sealed transfer chambers, observation rotunda.
-4. `scripts/probe-ledger-parts.py` as the template for `probe-gilded-parts.py`.
-   Point it at the new modules and RUN IT BEFORE dispatching class authors. It
-   costs three seconds and it is the only thing that proves the foundation clean.
-5. The `surf` callback pattern from `salvage.plate_quilt`: any course, margin or
-   light slot that runs along a tapering hull must re-sample the surface per
-   element, and skip where the callable returns 0.0.
-6. `scripts/probe-ship-extremes.py` the moment a span or a float is wrong. Name
-   the part before editing anything.
+1. `scripts/ship_kit.py` unchanged, and the size-convention table in §6. For a
+   grown body the useful primitives are `hull_loft` with a LARGE per-station
+   chamfer (a `fair` coefficient near the kit's 0.49 clamp gives a near-ellipse),
+   `sphere` for swollen masses, `taper_block`/`wedge` for fin membranes, and
+   `strut` for veins and crown filaments. `plate_course`, `plate_grid`,
+   `panel_lines` and `greeble_field` have no business on this faction.
+2. `scripts/ship_builders/gilded/surface.py` as the SHAPE of the answer for a new
+   `beautiful/surface.py`: the same query set plus the four `surf_*` callback
+   factories, which is the wave-7 idea worth keeping — a class author never
+   hand-writes a lambda, and a run self-trims because the factory returns 0.0 off
+   the section. Never copy the Chain's constants, and note this faction's human
+   module is different in kind: there are no windows or hatches, so the absolute
+   scale cues are the crown filaments, the vein pitch, the nursery hollows and
+   whatever companion craft nests in them (§G5 still applies).
+3. A `beautiful/anatomy.py` for the faction's own surface language — flow lines,
+   vein lattices, fin membranes, fold creases, healed scars — and a
+   `beautiful/organs.py` for its functional biology: sensory crown, breathing
+   vents, grasping fins, belly chamber, sanctuary hollows, garden folds.
+4. `scripts/probe-gilded-parts.py` as the template for `probe-beautiful-parts.py`.
+   Point it at the new modules and RUN IT BEFORE dispatching class authors. Wave 7
+   proves the value twice over: the probe was clean in 4 s, and every defect that
+   survived it was a defect it does not look for (see §6).
+5. `scripts/probe-ship-extremes.py` the moment a span or a float is wrong. Name the
+   part before editing anything.
 
-### The skin is new work too
+### Process rules that have now earned their place twice
 
-`scripts/ship_skins/gilded.py` already exists, written for the retired
-procedural fleet: base `#191B1D` ceramic, panel `#DED6BC` ivory, accent
-`#C8A444` gold, emissive `#5AB6BB` turquoise, `panel_density` 0.28,
-`accent_density` 0.16, `wear` 0.10, and `secondary_parts`/`accent_parts` keyed to
-part-name substrings (`course`, `weapon`, `citadel`) that the new sculpt will not
-use. Treat it as a starting hypothesis, not a delivered asset:
-
-- Re-tone it against the finished sculpt in the render, the way wave 6 did
-  (`redledger` panel `#7B5C3A` → `#5E4630` once the render showed copper was
-  patina, not a slab). Judge the palette from `ship-render.mjs` and the Models
-  Browser, never from the hex values.
-- The new modules tag every part with an explicit `skin_role`, so the
-  substring-matched `secondary_parts`/`accent_parts` pools are legacy. Set the
-  roles deliberately: base = ceramic scale field, panel = ivory margin, accent =
-  gold articulation, trim = edge lines, recess = seams and gallery slots.
-- `accent_density` thins the accent pool, and §8's "gold on edges only" plus
-  rule 8's 3-8 % accent cap are what that number has to deliver. Check the
-  measured accent area against the hull area, as wave 6's class docstrings do.
-- `wear` 0.10 and low roughness are the faction's point — "visibly dirty
-  machinery" is on the bible's avoid-list. If the render looks plasticky rather
-  than ceramic, fix roughness and the PBR atlas, not the geometry.
-
-### Process rules that earned their place in wave 6
-
-- **Foundation first, and prove it.** Author `surface.py` + the two language
-  modules, smoke-probe them, and only then fan out one agent per class.
-- **Agents author; the orchestrator verifies.** Every class brief says: no
-  Blender, no node, no npm, no formatters, only `python -m py_compile`. Blender
-  bakes serialise, so a mid-flight gate run just blocks siblings.
-- **Forbid instrument archaeology in class briefs.** One wave-6 agent spent two
-  hours reconstructing voxel coordinates and edited nothing. Diagnose centrally
-  with the probes, hand the agent the NAMED part and the fix, and ban the rest.
-- **Bake and probe one class at a time, immediately.** Connectivity defects are
-  cheap to attribute now and expensive after five files land together.
+- **Foundation first, and prove it.** Author `surface.py` plus the two language
+  modules, smoke-probe them under Blender, and only then fan out one agent per
+  class. Wave 7 ran the probe before dispatch and no class failure was ever
+  attributable to a shared construct.
+- **Agents author; the orchestrator verifies.** Every class brief says: no Blender,
+  no node, no npm, no formatters, only `python -m py_compile`. Blender bakes
+  serialise, so a mid-flight gate run just blocks siblings.
+- **Forbid instrument archaeology in class briefs.** Diagnose centrally with the
+  probes, hand the agent the NAMED part and the fix, and ban the rest.
+- **Quote the kit source, not a remembered table.** Wave 7's foundation brief
+  quoted §6's size table, which was wrong, and every human module in
+  `hardware.py` came out half size. Check `ship_kit.py` at the call site.
 - **A shared-module edit invalidates every class placement.** After changing a
-  construct's geometry, re-bake the WHOLE faction and re-probe; wave 6 detached a
-  ram and a drive by "fixing" sizes centrally without re-seating callers.
-- **Small numeric adjustments stay inline.** A `rows`, `pitch` or one-line
-  seating fix costs less to do than to describe.
+  construct's geometry, re-bake the WHOLE faction and re-probe.
+- **Bake, probe, and LOOK, in that order, per class.** Every wave-7 defect that
+  mattered was invisible to the gates: coplanar laps, an outboard "recess", a glow
+  line buried inside its own strip, a centreline-locked loft, a nested craft inside
+  a wall's interior. The gates prove a hull is legal; only the render and the
+  Models Browser prove it is the faction.
+- **Small numeric adjustments stay inline.** A `rows`, `pitch` or one-line seating
+  fix costs less to do than to describe.

@@ -2325,6 +2325,82 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   to reuse, what NOT to carry across from the Ledger) before authoring. ferrous is
   a separate small wave: it predates the pilot pipeline and still has only three
   hand-authored classes.
+- Wave 7 of the faction rebuild: the GILDED CHAIN fleet, six hand-authored classes
+  on the Blender GLB pipeline, and the wave that proved the FOUNDATION-FIRST order
+  and corrected the pipeline doc's own size-convention table.
+  WHAT SHIPPED: scripts/ship_builders/gilded/ as a package — surface.py (12 loft
+  queries, the Chain human module, and four surf_* CALLBACK FACTORIES so a class
+  author never hand-writes a lambda: surf_flank/surf_top/surf_bottom/surf_flat all
+  return 0.0 off the section so every run self-trims), shell.py (the faction's own
+  surface language: scale_course, scale_field, ivory_margin, gold_line,
+  collar_band, gallery_slot, aperture_seam, edge_keel) and hardware.py (11
+  equipment constructs: tractor_lens, capture_collar, transfer_chamber,
+  observation_rotunda, ventral_pylon, drive_face, radiator_vane, mast_cluster,
+  marker_run, vault_body, docked_leaf), then one file per class. gilded added to
+  PILOTS in build-ship-assets.py; scripts/probe-gilded-parts.py smoke-probes every
+  shared construct at all four detail levels in ~4 s. ship_skins/gilded.py retoned:
+  base #191B1D -> #23272A, trim_mult 0.94, accent_density 0.16 -> 1.0, and the
+  legacy secondary_parts/accent_parts substring pools DELETED because every part
+  now carries an explicit skin_role.
+  MEASURED: light 10,756v/7.2, ace 12,288v/7.3, cutter 17,776v/10.0, heavy
+  22,056v/16.3, frigate 42,624v/29.6, freighter 98,912v/76.6 — ladder monotone,
+  every class inside its SHIP_SCALE hull band, proxy cover 100 % on all six,
+  len/beam 3.42-4.33 (the faction is a CRESCENT family, so it runs longer and
+  lower than the Ledger's wedge: ht/len 0.13-0.25). lod0 triangles 5,584 / 6,572 /
+  9,320 / 11,656 / 21,768 / 50,348 against the 60,000 cap.
+  VERIFIED: measure-ships gilded ALL PASS; probe-ship-islands ONE CONNECTED BODY
+  for all six at lod0; validate-ship-assets PASS (72 sources, 228 Meshopt LODs, 24
+  KTX2 atlas sets, 96 PNG and 228 GLB content checks); test:boot BOOT TEST PASS
+  with gildedSpan/Proportion/Pivot/ProxyCover/ClassOrdering true; sheets at
+  out/silhouettes/gilded-{shape,scale,render}.png; opened in the Models Browser
+  under real Chrome (--use-angle=swiftshader) at two framings per class.
+  THE PIPELINE DOC WAS WRONG, and it cost the first foundation pass: wave 6's
+  size-convention table said kit.box/plate_grid/panel_lines/greeble_field take HALF
+  extents and plate_course mixes conventions. The kit source says otherwise —
+  kit.box does obj.scale = size/2 on Blender's default 2-unit cube, so EVERY kit
+  size argument is FULL extents and only cyl/torus/strut take a radius. The table
+  was quoted verbatim into the foundation brief, hardware.py halved every absolute
+  human constant, and every window, hatch and lamp came out half human size. §6 of
+  docs/ShipAssetPipeline.md now carries the verified table with the reason the old
+  one was inverted, and two failure-mode rows were rewritten.
+  FOUR DEFECTS THE GATES CANNOT SEE, all found by render or probe, none by a pin:
+  (1) kit.hull_loft is CENTRELINE-LOCKED — its station tuples carry no x term and
+  it builds at the origin — so ventral_pylon's port and starboard blades stacked on
+  the centreline while their gold edges and tip glows sat correctly outboard; the
+  island probe caught only the orphaned tip glows. docked_leaf had the same bug,
+  which would have emptied the frigate's berth and the freighter's bay. Both now
+  set obj.location.x after the loft. (2) gallery_slot built its well OUTBOARD of
+  the skin: a 0.22-proud box with the panes flush at the surface — a light box
+  applied to the flank, and on the light it was what set measured spanX. `depth` is
+  now the INBOARD well depth and the construct can protrude at most 0.07. (3) An
+  open aperture_seam emitted its glow line INSIDE the recess strip's solid volume,
+  so the one lit aperture per class showed nothing; strip, lips and glow now sit on
+  three distinct planes. (4) The freighter's whole nested bay — leaf plus eight
+  crates — floated as one 12,145-cell island because it sat in the bay wall box's
+  INTERIOR. Two nested shells share no voxel: an overlap only connects when two
+  SURFACES intersect. The cradle pad now pierces the wall face.
+  THE ART ROUND THAT MATTERED: the first bake passed every gate and rendered six
+  smooth black hulls. Two causes, both invisible to the harness. Every scale in a
+  course sat at the SAME outboard offset, so the fore-aft laps and the lateral
+  course joints were coplanar and the lamellar shell did not exist — shell.py now
+  steps each scale outboard on a 3-scale cycle (_SCALE_STEP 0.022), which costs no
+  geometry. And the ivory two-tone measured 3 % of hull vertices: the charter's
+  loudest feature was a one-plate ribbon on every class. Six agents rebuilt it as a
+  per-row REGION covering most of the forward flank's height (15-25 % of broadside
+  flank area), each row seated with its own sf.surf_flank so it follows the chamfer.
+  A raked pylon that reads as a whisker was the third correction: ventral_pylon
+  interpolates its LE/TE lines to a 40 % tip chord, so a tip placed far aft tapers
+  to a needle — the cutter's blade ran 6.58 units, 60 % of the hull, 1.7 past the
+  transom. Tips now sit ~0.35 chord aft of the root, and the ace's transom was
+  stretched to l*0.520 so the LOFT sets its span and the ladder stays monotone.
+  NEXT FACTION: beautiful (The Beautiful Ones, bible §4.6) per FACTION_REBUILD_ORDER
+  in src/game/ship-scale.js. Its brief is in docs/ShipAssetPipeline.md §8. Note it
+  is the first faction whose construction logic is GROWN BODY (§21 G6: no panel
+  lines, flow-line detail, lights on the flow lines) and the first with proportion
+  relief in FACTION_PROPORTION_RELIEF (manta plan, minLengthOverBeam 0.55), so the
+  scale-course and plate-quilt idioms of waves 5-7 are all wrong for it. ferrous is
+  still a separate small wave: it predates the pilot pipeline and has three
+  hand-authored classes.
 
 ## Next round candidates (wave 48)
 - Wave 47 contract notes for future work: Phase 7 of
