@@ -14,6 +14,7 @@ from ship_builders import ferrous as ferrous_pilot
 from ship_builders import freehold as freehold_pilot
 from ship_builders import redledger as redledger_pilot
 from ship_builders import gilded as gilded_pilot
+from ship_builders import beautiful as beautiful_pilot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -423,6 +424,7 @@ PILOTS = {
     'freehold': freehold_pilot,
     'redledger': redledger_pilot,
     'gilded': gilded_pilot,
+    'beautiful': beautiful_pilot,
 }
 
 

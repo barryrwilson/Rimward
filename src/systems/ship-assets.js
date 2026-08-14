@@ -40,6 +40,13 @@ const glowGeometry = new THREE.SphereGeometry(1, 12, 8);
 let renderer = null;
 let ktx2Loader = null;
 
+// ---------------------------------------------------------------------------
+// Swim uniforms for Beautiful Ones GPU vertex displacement (shared across all
+// injected materials; updated per frame in updateShipAsset).
+// ---------------------------------------------------------------------------
+const swimTimeUniform = { value: 0 };
+const swimAmpUniform = { value: 1 };
+
 function canonicalFaction(faction) {
   return NPC_FACTIONS.includes(faction) ? faction : FALLBACK_FACTION;
 }
@@ -125,6 +132,43 @@ function loadMaterials(faction, role) {
       emissiveVC.vertexColors = true;
       const fieldVC = field.clone();
       fieldVC.vertexColors = true;
+      // Beautiful Ones swim injection: per-vertex displacement in vertex shader
+      if (resolvedFaction === 'beautiful') {
+        const injectSwim = (shader) => {
+          shader.uniforms.uSwimTime = swimTimeUniform;
+          shader.uniforms.uSwimAmp = swimAmpUniform;
+          // Prepend global-scope declarations (GLSL ES forbids attribute/uniform inside main)
+          shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
+{
+  float swimPhase = uSwimTime * 6.28318530718 * 0.7; // gentle 0.7 Hz swim
+  #ifdef USE_MORPHTARGETS
+    swimPhase += morphTargetInfluences[ MORPHTARGETS_COUNT - 1 ]; // per-ship phase
+  #endif
+  float zn = aSwim.x;       // 0 nose -> 1 tail
+  float wing = aSwim.y;    // 0 spine -> 1 tips
+  float xn = aSwim.z;      // 0 spine -> 1 tip (normalized)
+  float sz = aSwim.w;      // ship size for amplitude scaling
+  float bodyAmp = 0.025 * sz;
+  float flapAmp = 0.045 * sz;
+  float lag = 1.4 * xn;    // span-wise phase lag
+  float breath = 1.0 + 0.012 * uSwimAmp * sin(uSwimTime * 6.28318530718 * 0.25);
+  transformed *= breath;
+  float spineWave = sin(6.9 * zn - swimPhase);
+  float flap = sin(swimPhase - lag);
+  transformed.x += uSwimAmp * bodyAmp * zn * zn * spineWave;
+  transformed.y += uSwimAmp * flapAmp * wing * flap;
+}`
+          );
+        };
+        hull.onBeforeCompile = injectSwim;
+        hullVC.onBeforeCompile = injectSwim;
+        emissive.onBeforeCompile = injectSwim;
+        emissiveVC.onBeforeCompile = injectSwim;
+        field.onBeforeCompile = injectSwim;
+        fieldVC.onBeforeCompile = injectSwim;
+      }
       const set = { hull, hullVC, emissive, emissiveVC, field, fieldVC };
       materialSets.set(key, set);
       return set;
@@ -169,6 +213,40 @@ async function loadTemplate(faction, classKey, lod) {
       : loader.loadAsync(path);
     templatePromises.set(key, request.then((template) => {
       templates.set(key, template);
+      // Beautiful Ones swim data: per-vertex aSwim attribute and dummy morph
+      // for phase offset. Only needed once per cached template.
+      if (resolvedFaction === 'beautiful') {
+        template.scene.traverse((node) => {
+          if (!node.isMesh || !node.geometry?.attributes.position) return;
+          const geo = node.geometry;
+          if (geo.attributes.aSwim) return; // Already processed
+          const pos = geo.attributes.position;
+          const count = pos.count;
+          const aSwim = new THREE.BufferAttribute(new Float32Array(count * 4), 4);
+          // Compute bounding box for this geometry
+          const bbox = new THREE.Box3().setFromBufferAttribute(pos);
+          const zMin = bbox.min.z, zMax = bbox.max.z, zSpan = zMax - zMin;
+          const xMax = Math.max(Math.abs(bbox.min.x), Math.abs(bbox.max.x));
+          const size = Math.max(zSpan, xMax * 2);
+          for (let i = 0; i < count; i++) {
+            const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+            const zNorm = zSpan > 0 ? (z - zMin) / zSpan : 0.5;
+            const xAbs = Math.abs(x);
+            const xNorm = xMax > 0 ? xAbs / xMax : 0;
+            const wingness = Math.pow(Math.min(xNorm, 1), 1.5);
+            aSwim.setXYZW(i, zNorm, wingness, xNorm, size);
+          }
+          geo.attributes.aSwim = aSwim;
+          // Add dummy morph for phase offset if not present
+          if (!geo.morphAttributes.position || geo.morphAttributes.position.length === 0) {
+            const dummy = new THREE.BufferAttribute(new Float32Array(count * 3), 3);
+            geo.morphAttributes.position = [dummy];
+            geo.morphTargetsRelative = true;
+            // Update mesh's morphTargetInfluences array
+            node.updateMorphTargets();
+          }
+        });
+      }
       return template;
     }));
   }
@@ -205,6 +283,15 @@ function addLevel(instance, lod, template, materials) {
   const visual = cloneSkinned(template.scene);
   bindMaterials(visual, materials);
   removeEngineNode(visual);
+  // Beautiful Ones: set swim phase on the new LOD meshes
+  if (instance.userData.swimPhase !== undefined) {
+    visual.traverse((node) => {
+      if (node.isMesh && node.morphTargetInfluences) {
+        const count = node.morphTargetInfluences.length;
+        if (count > 0) node.morphTargetInfluences[count - 1] = instance.userData.swimPhase;
+      }
+    });
+  }
   instance.userData.lod.addLevel(visual, lod.distance, lod.hysteresis);
 }
 
@@ -306,6 +393,17 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
     mixer.clipAction(idle).play();
     root.userData.mixer = mixer;
   }
+  // Beautiful Ones swim phase: per-ship random phase offset
+  if (resolvedFaction === 'beautiful') {
+    root.userData.swimPhase = Math.random() * Math.PI * 2;
+    // Set morphTargetInfluences on all meshes (visual + glow engine)
+    root.traverse((node) => {
+      if (node.isMesh && node.morphTargetInfluences) {
+        const count = node.morphTargetInfluences.length;
+        if (count > 0) node.morphTargetInfluences[count - 1] = root.userData.swimPhase;
+      }
+    });
+  }
   const key = `${resolvedFaction}:${resolvedClass}:${resolvedRole}`;
   root.userData.assetInstanceKey = key;
   if (!instances.has(key)) instances.set(key, new Set());
@@ -331,4 +429,7 @@ export function updateShipAsset(object, elapsed, reducedMotion = false, camera) 
     updateDistanceBands(object, camera);
     object.userData.lod?.update(camera);
   }
+  // Update swim uniforms for Beautiful Ones
+  swimTimeUniform.value = elapsed;
+  swimAmpUniform.value = reducedMotion ? 0 : 1;
 }

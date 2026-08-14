@@ -368,8 +368,10 @@ part first, then edit.
 pipeline: `freehold` (wave 5, the reference package), `redledger` (wave 6),
 `gilded` (wave 7, the four-module package with a callback-factory `surface.py`).
 `ferrous` predates it and still has only three pilot classes — finishing it is a
-separate small wave, not the next faction. **Next is `beautiful`, The Beautiful
-Ones, bible §4.6.**
+separate small wave, not the next faction. **`beautiful`, The Beautiful
+Ones, is DONE — wave 8 completed 2026-08-14; see "Wave 8 status" at the end
+of this section for the measured table and the membrane-fin/ellipse-loft
+lessons.**
 
 ### Wave 8 — The Beautiful Ones
 
@@ -482,3 +484,75 @@ from the retired procedural `src/systems/ships/` path.
   Models Browser prove it is the faction.
 - **Small numeric adjustments stay inline.** A `rows`, `pitch` or one-line seating
   fix costs less to do than to describe.
+
+### Wave 8 status — COMPLETE, recorded 2026-08-14 (second session)
+
+The wave-8 brief above was executed twice. The first execution baked green on
+every numeric gate and was REJECTED on visual review ("needs to be far more
+organic. Think flipper not wings"). The redo, authored against the six
+reference plates in `docs/SpaceShipIdeas/reference-images/beautiful-ones/`
+(the wave's visual charter), landed the fix and closed every gate.
+
+**What the redo changed:**
+
+- `anatomy.py` — fins are now ONE WELDED MEMBRANE per flipper: a crescent
+  planform on the same sagging bezier, fleshy lens cross-section thinning to
+  the membrane-thickness floor at the trailing edge, rounded paddle tip cap,
+  smooth normals. No beads, no tubes, no straight edges. Public API and the
+  `flipper_*` seating helpers unchanged; the helpers evaluate the same
+  `_membrane_point` function the geometry is built from.
+- `surface.py` — new `grown_loft`: TRUE ELLIPSE rings (radial=16) swept
+  through the same `fair()` station tuples, smooth-shaded. It replaces
+  `kit.hull_loft` for every beautiful body/crest loft — the kit's 8-point
+  chamfered ring read as a hard octagon in front silhouette. `kit` itself is
+  untouched; the `fair`-family queries still describe the section within
+  tolerance.
+- `organs.py` — curved thin sea-grass crown filaments (flesh role, cyan
+  droplet tips only), grown irregular hollow lips (seeded), pad-clamped
+  grasping digits, 2-3-swell garden ridges, new `dorsal_mantles` (three
+  overlapping swollen masses) for the heavy.
+- Six class files rewritten against their plates: Light dolphin-manta with
+  fluke and aft fin pair; Ace dart-manta with ~46° fin sweep and a
+  healed-short port fin; Cutter ventral cradle with six pads and a nested
+  juvenile; Heavy raised shield-fin walls + swollen mantle stack; Frigate
+  elder with four decreasing fin pairs and exactly four hollows (two nursery,
+  two open); Freighter gardenback with three separated garden biomes.
+- `src/systems/ship-assets.js` — Beautiful Ones NPC ships now SWIM in game:
+  GPU vertex displacement injected via `onBeforeCompile` into the beautiful
+  material set only. Per-vertex `aSwim` (zNorm, wingness, xNorm, size) is
+  computed once per template geometry; a per-ship random phase rides a spare
+  `morphTargetInfluences` slot so fleets never flap in sync; two module-scope
+  uniforms are written in `updateShipAsset` (zero per-frame allocation);
+  `reducedMotion` freezes amplitude. `organic.js`'s contract note updated:
+  CPU per-vertex mutation stays unique to the player ship.
+
+**Measured (2026-08-14, `measure-ships` + gltf-transform tri counts):**
+
+| class | size | lod0 verts | tris lod0/lod1/lod2(/lod3) |
+|---|---|---|---|
+| light | 7.9 | 19260 | 12112/7572/3696 |
+| ace | 7.7 | 19044 | 11280/6288/2812 |
+| cutter | 10.7 | 29324 | 19788/14108/6556 |
+| heavy | 15.3 | 40900 | 22500/12020/4484 |
+| frigate | 29.0 | 73152 | 41132/20636/6756 |
+| freighter | 83.2 | 79980 | 47956/21268/7412/3024 |
+
+Ladder `light 7.9 ≤ ace 7.7 < cutter 10.7 < heavy 15.3 < frigate 29.0 <
+freighter 83.2`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
+validate-ship-assets PASS (the wave-8 cap failures — frigate/lod2,
+freighter/lod1-3 — are all inside cap with margin); test:boot PASS. Swim
+verified in-engine: harness page loaded the live GLB through the real
+material path, zero console errors, 3021 of 7522 lit pixels changed across a
+quarter swim period with a fixed camera.
+
+**Lesson added to the §6 table by this wave:** the derived collision proxy
+(`rx=0.62·spanX, ry=0.62·spanY, halfLen=max(0.67·spanZ − 0.62·spanX, 0.1)`)
+clamps whenever spanX/spanZ > ~1.08, and a manta-plan faction lives exactly
+there. proxyFit length then jumps past +35 % and proxyCover starves on flat
+bodies. The working rule for wide factions: keep spanX ≤ ~1.05·spanZ and do
+not let spanY collapse (deepen body sections; every beautiful class needed
+its half-heights raised 15–50 % after first bake). **Second lesson:** a tube
+always reads as a spike. A fin is a MEMBRANE — planform curvature (crescent
+leading AND trailing edges) is what reads as flesh, and 8-point loft rings
+read as cut stone no matter the chamfer; grown bodies need true ellipse
+rings and smooth normals.

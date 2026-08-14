@@ -33,8 +33,9 @@ SKIN = {
     # Panel density: anatomical layering is rich and continuous.
     'panel_density': 0.60,
 
-    # Accent density: nerve networks permeate fins and crown but not the full hull.
-    'accent_density': 0.42,
+    # Accent density: 1.0 — values below 1.0 blank accent runs at random
+    # (pipeline §6); nerve coverage is controlled with geometry instead.
+    'accent_density': 1.0,
 
     # Near-zero wear: biological self-repair; surfaces appear freshly grown.
     'wear': 0.06,

@@ -18,12 +18,15 @@ import * as THREE from 'three';
  * ANIMATION CONTRACT: NPC organics animate by PART-LEVEL TRANSFORMS ONLY
  * (fin/tendril sway, whole-part breath scale, emissive/opacity pulse) —
  * per-vertex hull mutation stays unique to the player ship (ship.js).
- * Producers tag parts with tagSway/tagBreath/tagPulse at build time, walk
- * the assembly ONCE with collectOrganic, then call animateOrganic(parts, t,
- * ctx.settings.reducedMotion) per frame. animateOrganic mutates only
- * transforms/material scalars from stashed bases: ZERO allocation per call
- * (no closures, arrays, or object literals), and a complete no-op under
- * reducedMotion (stashed bases remain in effect — everything freezes).
+ * Beautiful Ones NPC ships swim via GPU vertex displacement (ship-assets.js
+ * injects into their materials); CPU per-vertex mutation stays unique to the
+ * player ship. Producers tag parts with tagSway/tagBreath/tagPulse at build
+ * time, walk the assembly ONCE with collectOrganic, then call
+ * animateOrganic(parts, t, ctx.settings.reducedMotion) per frame.
+ * animateOrganic mutates only transforms/material scalars from stashed bases:
+ * ZERO allocation per call (no closures, arrays, or object literals), and a
+ * complete no-op under reducedMotion (stashed bases remain in effect —
+ * everything freezes).
  *
  * Geometry builders allocate at build time only. Materials from
  * organicMaterials() are cached per variant at module scope and shared
