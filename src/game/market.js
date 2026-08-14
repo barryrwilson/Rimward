@@ -116,9 +116,14 @@ export function applyEventPressure(ctx, kind, systemId) {
       pressure.restrictedComponents = 0.5;
       break;
     case 'strikeRush':
-      // Rich deposit floods the market with cheap ore (§8.5).
+      // Rich deposit floods the market with cheap ore (§8.5). Wave 51: a
+      // surface strike also floods the h2 ores a basic head can cut —
+      // slagIron and brineIce — but never the h3/h4 exotics; a lucky strike
+      // does not put void platinum on the board.
       pressure.rawOre = -0.75;
       pressure.livingRock = 0.4; // miners flush with UU feed their hulls well
+      pressure.slagIron = -0.5;
+      pressure.brineIce = -0.4;
       break;
     case 'laborStrike':
       // Station trade volume down: staples scarce, metals pile up unsold.
@@ -132,8 +137,18 @@ export function applyEventPressure(ctx, kind, systemId) {
       break;
     case 'oreRush':
       // Miners flood the market: ore crashes, smelted metals ride the boom.
+      // Wave 51: the h2/h3 ores crash too, the valuable ones less; and with
+      // every miner chasing easy ore, the h4 pair nobody can cut gets
+      // scarcer, not cheaper — a small positive pressure.
       pressure.rawOre = -0.6;
       pressure.refinedMetals = 0.35;
+      pressure.slagIron = -0.45;
+      pressure.brineIce = -0.4;
+      pressure.chromeSalt = -0.35;
+      pressure.emberglass = -0.32;
+      pressure.gildvein = -0.3;
+      pressure.voidPlatinum = 0.15;
+      pressure.wakeglass = 0.15;
       break;
     case 'commodityGlut': {
       // One commodity crashes toward the -40% floor; chosen at event start.

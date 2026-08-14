@@ -42,7 +42,15 @@ export const AUTHORED_SYSTEMS = {
     station: { name: 'Freehold Landing', position: [120, 20, 620], palette: 0xb0703a },
     field: { center: [-450, -30, -250], radius: 160, count: 130, oreMult: 1 },
     gates: [{ position: [0, 60, -900], to: 'veridian' }],
-    priceBase: { provisions: 1.0, refinedMetals: 1.1, restrictedComponents: 1.0, rawOre: 1.0, livingRock: 0.9 },
+    // Wave 51: exotic-ore spread. A system pays MORE for ore its own band
+    // cannot produce and LESS for what its field is full of, so hauling
+    // hard ore coreward is the paying direction. Generated systems carry no
+    // exotic entries and fall through to ×1.0 (market.js baselineFor).
+    priceBase: {
+      provisions: 1.0, refinedMetals: 1.1, restrictedComponents: 1.0, rawOre: 1.0, livingRock: 0.9,
+      slagIron: 0.85, brineIce: 0.90, chromeSalt: 1.15, gildvein: 1.25,
+      emberglass: 1.20, voidPlatinum: 1.35, wakeglass: 1.40,
+    },
     cast: { traders: 8, pirates: 4, patrols: 2, ace: true },
     band: 0,
     landmarks: [
@@ -66,7 +74,12 @@ export const AUTHORED_SYSTEMS = {
       { position: [0, 50, 900], to: 'freehold' },
       { position: [850, 45, 100], to: 'redmarch' },
     ],
-    priceBase: { provisions: 1.35, refinedMetals: 0.75, restrictedComponents: 1.2, rawOre: 0.8, livingRock: 1.3 },
+    // Combine refineries bid up smeltable feedstock and dump what they finish.
+    priceBase: {
+      provisions: 1.35, refinedMetals: 0.75, restrictedComponents: 1.2, rawOre: 0.8, livingRock: 1.3,
+      slagIron: 1.20, brineIce: 1.05, chromeSalt: 1.30, gildvein: 1.10,
+      emberglass: 0.95, voidPlatinum: 1.15, wakeglass: 0.85,
+    },
     cast: { traders: 7, pirates: 3, patrols: 3, ace: false },
     tradesRestricted: true,
     band: 0,
@@ -93,7 +106,12 @@ export const AUTHORED_SYSTEMS = {
       { position: [0, 55, -850], to: 'veridian' },
       { position: [-800, 50, -200], to: 'hollowreach' },
     ],
-    priceBase: { provisions: 1.3, refinedMetals: 0.9, restrictedComponents: 0.7, rawOre: 1.1, livingRock: 1.2 },
+    // The Ledger settles in gildvein more often than in UU.
+    priceBase: {
+      provisions: 1.3, refinedMetals: 0.9, restrictedComponents: 0.7, rawOre: 1.1, livingRock: 1.2,
+      slagIron: 1.05, brineIce: 1.10, chromeSalt: 1.00, gildvein: 1.35,
+      emberglass: 1.10, voidPlatinum: 1.20, wakeglass: 0.90,
+    },
     cast: { traders: 5, pirates: 7, patrols: 1, ace: false },
     tradesRestricted: true,
     band: 1,
@@ -120,7 +138,12 @@ export const AUTHORED_SYSTEMS = {
       { position: [0, 70, 1100], to: 'redmarch' },
       { position: [650, 60, -700], to: 'hush' },
     ],
-    priceBase: { provisions: 1.6, refinedMetals: 1.2, restrictedComponents: 0.6, rawOre: 0.9, livingRock: 0.7 },
+    // oreMult 2.0: the Reach is knee-deep in rock and short of everything else.
+    priceBase: {
+      provisions: 1.6, refinedMetals: 1.2, restrictedComponents: 0.6, rawOre: 0.9, livingRock: 0.7,
+      slagIron: 0.80, brineIce: 0.75, chromeSalt: 0.85, gildvein: 0.90,
+      emberglass: 0.85, voidPlatinum: 0.95, wakeglass: 1.00,
+    },
     cast: { traders: 2, pirates: 3, patrols: 0, ace: false },
     tradesRestricted: true,
     band: 2,
@@ -147,7 +170,12 @@ export const AUTHORED_SYSTEMS = {
     station: { name: 'Threshold', position: [260, 40, 420], palette: 0x5a4a6a },
     field: { center: [-350, -50, -280], radius: 90, count: 45, oreMult: 2.5 },
     gates: [{ position: [0, 80, -1150], to: 'hollowreach' }, { position: [750, 90, -350], to: 'verge' }],
-    priceBase: { provisions: 1.9, refinedMetals: 1.3, restrictedComponents: 0.55, rawOre: 0.85, livingRock: 0.6 },
+    // Band 3: hard ore underfoot, and emberglass keeps the lamps lit.
+    priceBase: {
+      provisions: 1.9, refinedMetals: 1.3, restrictedComponents: 0.55, rawOre: 0.85, livingRock: 0.6,
+      slagIron: 0.75, brineIce: 0.70, chromeSalt: 0.80, gildvein: 0.85,
+      emberglass: 1.15, voidPlatinum: 0.80, wakeglass: 0.85,
+    },
     cast: { traders: 1, pirates: 2, patrols: 0, ace: false },
     tradesRestricted: true,
     band: 3,
@@ -174,7 +202,13 @@ export const AUTHORED_SYSTEMS = {
     station: { name: 'The Vigil', position: [180, 30, 360], palette: 0x4a3a5a },
     field: { center: [-300, -40, -240], radius: 80, count: 35, oreMult: 3.0 },
     gates: [{ position: [0, 90, -1250], to: 'hush' }],
-    priceBase: { provisions: 2.2, refinedMetals: 1.4, restrictedComponents: 0.5, rawOre: 0.8, livingRock: 0.5 },
+    // The terminus. Wakeglass is native here, so it is worth least where it
+    // grows — HERMIT's ×1.25 scarcity multipliers ride on top of these.
+    priceBase: {
+      provisions: 2.2, refinedMetals: 1.4, restrictedComponents: 0.5, rawOre: 0.8, livingRock: 0.5,
+      slagIron: 0.70, brineIce: 0.65, chromeSalt: 0.75, gildvein: 0.80,
+      emberglass: 1.05, voidPlatinum: 0.70, wakeglass: 0.70,
+    },
     cast: { traders: 0, pirates: 1, patrols: 0, ace: false },
     tradesRestricted: true,
     // Wave 9: hermit economy — no traders ever come; see HERMIT.

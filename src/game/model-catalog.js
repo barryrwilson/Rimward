@@ -23,7 +23,7 @@ import { buildLandmarkModel } from '../systems/landmarks.js';
 import { buildStarModel, buildPlanetModel, PLANET_SLOT_COUNT } from '../systems/solarsystem.js';
 import { buildAsteroidModel } from '../systems/asteroids.js';
 import { buildPodModel } from '../game/pods.js';
-import { FACTIONS } from './state.js';
+import { FACTIONS, ORE_KEYS, COMMODITIES } from './state.js';
 import { CLASS_ORDER } from './ship-scale.js';
 import { AUTHORED_SYSTEMS } from './authored-systems.js';
 
@@ -205,13 +205,18 @@ for (const systemId of authoredSystemIds) {
 
 // ---- Props ----
 const props = [];
-const asteroidSeeds = [1, 2, 3, 4];
-for (const seed of asteroidSeeds) {
+// Wave 51: one prop per ORE_TYPES key instead of four seed-varied rawOre
+// rocks — the nine ores have genuinely different geometry and materials, and
+// this browser is how they get reviewed. buildAsteroidModel's optional second
+// parameter selects the ore (added in systems/asteroids.js this wave). The
+// seed is derived from the ore's index (1 + index), not a random draw, so
+// every entry is deterministic across reloads.
+for (const [index, oreKey] of ORE_KEYS.entries()) {
   props.push({
-    id: `prop:asteroid:${seed}`,
-    label: `Asteroid (seed ${seed})`,
+    id: `prop:asteroid:${oreKey}`,
+    label: `${COMMODITIES[oreKey].name} asteroid`,
     category: 'Props',
-    build: () => buildAsteroidModel(seed),
+    build: () => buildAsteroidModel(1 + index, oreKey),
   });
 }
 props.push({

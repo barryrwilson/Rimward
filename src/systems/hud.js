@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/hud.css';
-import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand } from '../game/state.js';
+import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor } from '../game/state.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
@@ -25,6 +25,15 @@ import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand } from '.
  *
  * Color is never the only signal (§18.4/§20): every state pairs palette with
  * text, shape (petals, corners, icons), or glyph prefixes.
+ *
+ * Wave 51 (ore ladder): the asteroid bracket meta names the ore, its
+ * hardness (H1..H4), and the units left — and when the rock is harder than
+ * the installed mining head it instead names the cheapest head that CAN cut
+ * it ('NEEDS …') and tints the meta amber (.ore-blocked; text still carries
+ * the state, color is redundant). Weapon group 3 labels itself with the
+ * installed head's name (Mk I..IV), resolved fresh each frame. The
+ * combat.js 'mineBlocked' event (throttled 1/s per rock) routes through the
+ * existing toast channel as a warn line — no new overlay.
  */
 
 const TEXT_UPDATE_INTERVAL = 0.2; // s between throttled text refreshes
@@ -113,6 +122,11 @@ function toastForEvent(e, ctx, mem) {
       return { text: '▲ SAVE BLOCKED — ' + (e.reason ?? 'hostiles near'), cls: 'warn' };
     case 'podCollected':
       return { text: '■ Cargo secured.', cls: 'good' };
+    case 'mineBlocked':
+      // wave 51: beam hit rock harder than the installed head. combat.js
+      // already throttles to one emit per second per asteroid, so no
+      // HUD-side dedupe; the ore's refusal line speaks for itself.
+      return { text: '▲ ' + (e.line ?? 'The head cannot bite this rock.'), cls: 'warn' };
     case 'fearChanged': {
       const up = mem.lastFear !== null && (e.fear ?? 0) > mem.lastFear;
       mem.lastFear = e.fear ?? mem.lastFear;
@@ -437,7 +451,7 @@ export function initHud(ctx) {
   const last = {
     retX: -1, retY: -1, fp: null,
     bracketShown: null, leadShown: null, arrowShown: null, bx: -1, by: -1,
-    band: '', tName: '', tMeta: '', tResolve: '',
+    band: '', tName: '', tMeta: '', tResolve: '', oreBlocked: null,
     petalsOn: -1, hullBand: '',
     strainFlag: null, engine: '',
     speed: -1, burner: '', drift: '', driftActive: null,
@@ -787,7 +801,11 @@ export function initHud(ctx) {
       // weapon group + strain readout
       const wKey = WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon';
       const wDef = WEAPONS[wKey];
-      const wLabel = (ctx.input.weaponGroup | 0) + ' · ' + (wDef ? wDef.name : '—');
+      // wave 51: group 3 names the INSTALLED mining head (WEAPONS.mining.name
+      // is now permanently the Mk I); resolved fresh each frame because save
+      // restores swap ctx.world fields wholesale.
+      const wName = wKey === 'mining' ? miningLaserFor(ctx.world.miningLaser).name : (wDef ? wDef.name : '—');
+      const wLabel = (ctx.input.weaponGroup | 0) + ' · ' + wName;
       if (wLabel !== last.weapon) { last.weapon = wLabel; weaponName.textContent = wLabel; }
       const wStrain = player ? Math.round((player.heat / HEAT.max) * 100) + '%' : '—';
       if (wStrain !== last.weaponStrain) { last.weaponStrain = wStrain; weaponStrain.textContent = wStrain; }
@@ -835,7 +853,7 @@ export function initHud(ctx) {
       // with a Wolfeye scanner, §7.4); band also changes bracket shape (§7.3)
       if (last.bracketShown && target) {
         const isShip = !!(target.state || target.object);
-        let name, meta, resText = '', band = 'neutral';
+        let name, meta, resText = '', band = 'neutral', blocked = false;
         const dist = Math.round(fromPos.distanceTo(targetPos));
         if (isShip) {
           const st = target.state;
@@ -859,10 +877,33 @@ export function initHud(ctx) {
           }
         } else {
           name = 'ASTEROID';
-          meta = (COMMODITIES[target.ore]?.name ?? 'Ore') + ' · ' + dist + 'u';
+          // wave 51: ore readout with a hardness gate. target.ore is the
+          // remaining UNIT COUNT — the old COMMODITIES[target.ore] lookup
+          // keyed a table by a number, always missed, and the bracket read
+          // the literal 'Ore' since the day it shipped. Wave-51 entries
+          // carry commodity/oreKey/hardness (batch contract).
+          const oreName = COMMODITIES[target.commodity]?.name ?? 'Ore';
+          const hardness = target.hardness ?? ORE_TYPES[target.oreKey]?.hardness ?? 1;
+          const laser = miningLaserFor(ctx.world.miningLaser);
+          if (hardness <= laser.tier) {
+            meta = oreName + ' · H' + hardness + ' · ' + Math.round(target.ore) + 'u left · ' + dist + 'u';
+          } else {
+            // too hard: name the cheapest head whose tier clears the rock
+            // (MINING_LASERS is tier-ordered, first match wins)
+            blocked = true;
+            let needs = MINING_LASERS[MINING_LASERS.length - 1];
+            for (let li = 0; li < MINING_LASERS.length; li++) {
+              if (MINING_LASERS[li].tier >= hardness) { needs = MINING_LASERS[li]; break; }
+            }
+            meta = oreName + ' · H' + hardness + ' · NEEDS ' + needs.name + ' · ' + dist + 'u';
+          }
         }
         if (name !== last.tName) { last.tName = name; tName.textContent = name; }
         if (meta !== last.tMeta) { last.tMeta = meta; tMeta.textContent = meta; }
+        if (blocked !== last.oreBlocked) {
+          last.oreBlocked = blocked;
+          bracket.classList.toggle('ore-blocked', blocked);
+        }
         if (resText !== last.tResolve) {
           last.tResolve = resText;
           tResolve.textContent = resText;

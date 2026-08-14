@@ -310,6 +310,13 @@
 .rw-target[data-band='capitulate'] .rw-corner { border-color: var(--green); border-style: dashed; width: 18px; height: 18px; }
 .rw-target[data-band='neutral'] .rw-corner { border-color: var(--cyan); }
 
+/* wave 51: rock harder than the installed mining head — meta goes threat
+   amber (the NEEDS text still carries the state; color is redundant §18.4).
+   --amber resolves to --rw-warn, so the colorblind/contrast overrides below
+   re-palette this automatically — no per-class variants, matching how the
+   band/data-state rules in this file handle state color. */
+.rw-target.ore-blocked .rw-target-meta { color: var(--amber); }
+
 .rw-target-info {
   position: absolute;
   top: 36px;

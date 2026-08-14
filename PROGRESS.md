@@ -36,6 +36,10 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
 - Per-system content rebuilds on `'systemLoaded'` (solarsystem, asteroids, station, gate).
 - Verify with `npm run test:boot` (headless harness, must end BOOT TEST PASS).
 - Systems init order in main.js is load-bearing (comment explains).
+- `ctx.asteroids.list` entries carry `{ id, position, radius, ore, commodity,
+  oreKey, hardness }` with `id === array index` — combat.js and hud.js both
+  dereference it, and 'mineHit'/'mineBlocked' asteroidId semantics ride on it
+  (wave 51).
 
 ## Wave history
 
@@ -2519,6 +2523,119 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   mesh/triangle/radius per category plus the heaviest models. It catches a
   sculpt that throws for one faction+class pair, which the browser would
   otherwise only surface when a player happened to click it.
+- Wave 51: the ore ladder — nine ores, four cutting heads, and a hardness
+  gate that turns the asteroid bracket into an outfitter's shop window
+  (orchestrated; parallel slices on one fixed contract, harness section
+  alongside). Since wave 1 mining was one undifferentiated rawOre roll
+  with a ~5% livingRock kicker; the whole depth stack now lives in data.
+  THE DATA: ORE_TYPES in src/game/state.js — nine entries keyed by
+  commodity. The two pre-wave-51 ores stay hardness 1 (rawOre,
+  livingRock); the seven new ones step the ladder — slagIron/brineIce h2,
+  chromeSalt/gildvein/emberglass h3, voidPlatinum/wakeglass h4. Each
+  entry carries hardness, extractResist (divisor on the head's rate, so
+  hard rock is slow even with the right head — the ladder buys speed as
+  well as access), unitsMult (valuable ore in small pockets: wakeglass
+  0.35 against a 4..12 base roll), sparkColor/dustColor/podTint, a
+  blockedLine refusal, and a full `rock` recipe (shape/detail/wobble/
+  scaleMult/hue/sat/light/roughness/metalness/emissive) — asteroids.js
+  holds no per-ore constants of its own.
+  THE LADDER: MINING_LASERS, four heads, array index IS
+  ctx.world.miningLaser (0..3 — the ctx.world.scanner discipline). Mk I
+  stock (cost 0), Bore laser Mk II 1400, Ferrous cutting head Mk III
+  4200, Deepcore lance Mk IV 11000; extractPerSec 1.2/2.0/3.1/4.4, range
+  90/115/140/165, per-head beam colour/width and a spoken purchase line.
+  WEAPONS.mining is now DERIVED from MINING_LASERS[0] — value-identical
+  to pre-wave-51, so applyHit's damage family never moved and the ladder
+  is the single source of truth. station.js sells indices 1..3 in order
+  on outfitter digits 5/6/7: buyMiningLaser guards already-fitted, then
+  the prerequisite (a head seats only on the previous head's mount), then
+  credits; success deducts, sets the index, speaks the head's line.
+  save.js puts 'miningLaser' in WORLD_FIELDS and sanitizeRestored heals
+  anything outside [0,1,2,3] to 0 — a tampered 99 would otherwise
+  restore Deepcore reach, damage and h4 access for free (the wave-31
+  scanner-heal reasoning); station init also `??= 0` for legacy saves.
+  THE GATE: combat.js resolves miningLaserFor(ctx.world.miningLaser)
+  EVERY call — save restores swap world fields wholesale, so nothing
+  caches. laser.range is the reach cap; heat is heatPerShot x
+  WEAPONS.mining.rof x dt. A rock whose hardness beats the installed
+  tier scatters the beam and yields nothing, firing the new frozen
+  'mineBlocked' { asteroidId, oreKey, hardness, needs, line } — at most
+  once per second per asteroid id off two module scalars (mining touches
+  one rock at a time), reset on 'systemLoaded' because a fresh field
+  reuses ids. `needs` is the cheapest head whose tier clears the rock;
+  `line` is the ore's own blockedLine. Blocked contacts still accrue
+  heat — the energy goes into rock that will not yield. Productive
+  contacts fire 'mineHit' { asteroidId, point, laserTier, extractPerSec }
+  and asteroids.js banks extractPerSec / extractResist per second.
+  THE FIELD: composition is drawn by BAND, not per-system data — one
+  pickOreType(def.band ?? 0, rng()) per rock off ORE_BAND_WEIGHTS (bands
+  0..4, relative weights, unknown band falls back to 0). All 100 systems
+  got a coherent mix with ZERO data churn: not one of the 94 generated
+  systems or the authored six's field blocks changed, and the seeded
+  draw order keeps the mix deterministic per worldSeed. Band 0's
+  livingRock weight (5 of 100) reproduces the pre-wave-51 ~5% roll
+  exactly; band 4 is where void platinum and wakeglass actually live
+  (18 and 17 of 100). One InstancedMesh per ore key that drew >= 1 rock
+  — empty meshes are never allocated — named 'asteroid-field-<oreKey>'
+  with userData.oreKey (boot contract), geometry from five
+  makeRockGeometry shapes (lumpy/blocky/crystal/shard/bloom). rebuild()
+  removes AND disposes every per-ore mesh's geometry and material off a
+  module teardown list — a leaked mesh across a jump is a hard failure.
+  ctx.asteroids.list is still REPLACED wholesale and stays flat with
+  id === index; entries grew to { id, position, radius, ore, commodity,
+  oreKey, hardness }, so every pre-wave-51 consumer's contract held.
+  THE PASS: the beam is a tapered additive quad ('mine-beam', 4 verts,
+  width beamWidth x 0.5 at the muzzle opening to x 1.4 at the contact)
+  around a 'mine-beam-core' Line, with a pulsing 'mine-glow' sprite at
+  the contact; outer and core breathe at different rates (0.35..0.8 /
+  0.7..1.0) and reducedMotion pins both to their midpoints. Pooled
+  Points — 'mine-sparks' 48 fast chips, 'mine-dust' 32 slow powder —
+  wear the ore's sparkColor/dustColor. A blocked cut is legible with no
+  UI at all: amber chips kick BACK along the beam and no dust comes off
+  the rock. A rock being cut warms (heat += dt x 2.5, cools dt x 1.2)
+  as its instance colour lerps toward the spark tint, tracked in a
+  reused active-index array capped at 24; reducedMotion swaps the lerp
+  for a static bright tint. Depletion darkens x 0.35 immediately, then
+  collapses over ~0.4 s with a quadratic ease-out to baseScale x 0.3 —
+  reducedMotion snaps. Pods spawn through spawnPod's new optional 5th
+  `tint` (the ore's podTint), served by a tint-keyed material cache
+  whose null key IS the pre-wave-51 salvage-green instance — npc.js and
+  world.js 4-arg callers are unchanged, and the cache is process-
+  lifetime on purpose (one default plus at most nine ore tints).
+  THE BUG WORTH THE WAVE: hud.js's asteroid bracket had always keyed
+  COMMODITIES[target.ore] — the commodity table by the numeric
+  REMAINING-UNIT count — so the lookup missed every time and the
+  bracket printed the literal 'Ore' since the day mining shipped. It
+  now keys COMMODITIES[target.commodity] and reads '<Ore> · H<n> ·
+  <units>u left · <dist>u', or past the gate '<Ore> · H<n> · NEEDS
+  <head name> · <dist>u' with an .ore-blocked amber class on the meta
+  (text still carries the state; colour is redundant). Weapon group 3
+  labels itself with the installed head's name, resolved fresh each
+  frame; 'mineBlocked' routes through the pooled toast channel as a
+  warn line — no new overlay, no HUD-side dedupe.
+  THE ECONOMY GUARDS: COMMODITIES gained a `bulk` flag on exactly the
+  four pre-wave-51 legal staples, and world.js LEGAL_KEYS now filters
+  legal && bulk — NPC trader manifests stay byte-identical and no
+  Freehold grain hauler spawns void platinum; exotic ore reaches a
+  market only by being mined and sold. The authored six carry priceBase
+  entries for all seven new ores, spread so the deep bands sell cheap
+  and the core buys dear (the band-4 authored system prices the h4 pair
+  at 0.70/0.70; freehold pays 1.35/1.40) — hauling hard ore coreward is
+  the paying direction. Generated systems fall through to x1.0 via
+  baselineFor's `?? 1`. strikeRush now floods the two h2 ores a stock
+  head can reach (slagIron -0.5, brineIce -0.4) but never h3/h4 — a
+  lucky strike does not put void platinum on the board; oreRush crashes
+  h2/h3 with the valuable ones less (slagIron -0.45, brineIce -0.4,
+  chromeSalt -0.35, emberglass -0.32, gildvein -0.3) and LIFTS the h4
+  pair +0.15 — scarcer, not cheaper, while every miner chases easy ore.
+  THE BROWSER: model-catalog.js Props trades the four seed-varied rawOre
+  rocks for one prop per ORE_KEYS entry — 'prop:asteroid:<oreKey>',
+  buildAsteroidModel(1 + index, oreKey), deterministic seed — because
+  the nine ores have genuinely different geometry and this browser is
+  how they get reviewed.
+  THE HARNESS: scripts/boot-test.mjs gained a wave-51 section pinning
+  the ladder, the gate, the per-ore meshes and the readout; the boot
+  run ends BOOT TEST PASS.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

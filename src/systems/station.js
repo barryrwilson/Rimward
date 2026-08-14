@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS } from '../game/state.js';
+import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor } from '../game/state.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41: faction character portraits
@@ -1295,6 +1295,8 @@ export function initStation(ctx) {
   // World fields this system owns.
   ensureJobs(ctx);
   ctx.world.scanner ??= 0;
+  // Wave 51: legacy saves predate the head ladder — default to the stock Mk I.
+  ctx.world.miningLaser ??= 0;
 
   // Exposed for hud.js every frame (dock prompt; we emit nothing for it).
   ctx.station = {
@@ -1445,6 +1447,25 @@ export function initStation(ctx) {
       ctx.world.credits -= HIDDEN_MOUNTS.cost;
       ctx.world.concealedMounts = true;
       ui.notice = 'The yard keeps it off the books. Her guns sleep where a manifest can\'t see them.';
+      render();
+    },
+    // Wave 51: mining-head ladder (§51) — four tiers in state.js MINING_LASERS,
+    // bought strictly in order like the Wolfeye eyes above. ctx.world.miningLaser
+    // is the persisted index into MINING_LASERS (0 = stock Mk I, never sold
+    // here); each head seats only on the previous head's mount. The hardness
+    // gate that makes the ladder matter lives in combat.js ('mineBlocked').
+    buyMiningLaser(targetIndex) {
+      const target = miningLaserFor(targetIndex);
+      if (ctx.world.miningLaser >= targetIndex) { ui.notice = `${target.name} already fitted.`; render(); return; }
+      if (ctx.world.miningLaser < targetIndex - 1) {
+        ui.notice = `The ${target.name} seats on a ${miningLaserFor(targetIndex - 1).name} mount. Fit that first.`;
+        render();
+        return;
+      }
+      if (ctx.world.credits < target.cost) { ui.notice = 'Not enough UU.'; render(); return; }
+      ctx.world.credits -= target.cost;
+      ctx.world.miningLaser = targetIndex;
+      ui.notice = target.line;
       render();
     },
   };
@@ -1820,6 +1841,22 @@ export function initStation(ctx) {
     } else {
       h('div', 'screen-note', row4, 'Wolfeye Mk II needs the Mk I eye in the socket first.');
     }
+    // Wave 51: mining-head ladder (§51) — one row per purchasable head
+    // (indices 1..3 of MINING_LASERS; 0 is the stock head). Bought in order:
+    // installed rows read as notes, the next rung is a live button, further
+    // rungs name the previous head they need. ctx.world.miningLaser is the
+    // persisted ladder index; hardness gating lives in combat.js.
+    for (let i = 1; i < MINING_LASERS.length; i++) {
+      const head = MINING_LASERS[i];
+      const row = h('div', 'screen-btnrow', panel);
+      if (i <= ctx.world.miningLaser) {
+        h('div', 'screen-note', row, `${head.name} fitted — cuts hardness ${head.tier} rock at ${head.extractPerSec} units/s.`);
+      } else if (i === ctx.world.miningLaser + 1) {
+        btn(row, `${i + 4} — ${head.name} (${head.cost} UU)`, () => act.buyMiningLaser(i));
+      } else {
+        h('div', 'screen-note', row, `${head.name} needs the ${MINING_LASERS[i - 1].name} in the mount first.`);
+      }
+    }
   }
 
   // ---- people (contacts: dockmaster/fence/fixer of this dock, §12.x) ----
@@ -2116,6 +2153,8 @@ export function initStation(ctx) {
       else if (n === 2) act.buyScanner();
       else if (n === 3) act.buyConcealedMounts();
       else if (n === 4) act.buyScanner2();
+      // Wave 51: head ladder rows continue the digit sequence (5/6/7).
+      else if (n >= 5 && n <= 7) act.buyMiningLaser(n - 4);
     } else if (ui.service === 'launch') {
       if (n === 1) undock();
     }

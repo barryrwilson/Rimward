@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPONS, HEAT, DEFENSE, U, applyHit, tickShipState } from '../game/state.js';
+import { WEAPONS, HEAT, DEFENSE, U, applyHit, tickShipState, MINING_LASERS, miningLaserFor, ORE_TYPES } from '../game/state.js';
 import { scaleFor } from '../game/ship-scale.js';
 
 /**
@@ -24,6 +24,29 @@ import { scaleFor } from '../game/ship-scale.js';
  * small spark burst from a pooled set of THREE.Points (per-burst material
  * created at init, positions/velocities preallocated). Sparks animate, so
  * they are suppressed under ctx.settings.reducedMotion.
+ *
+ * Wave-51 mining pass (§6.3 + ORE_TYPES/MINING_LASERS in state.js):
+ * - HEAD LADDER: the beam resolves the INSTALLED cutting head via
+ *   miningLaserFor(ctx.world.miningLaser) EVERY call (save restores swap
+ *   world fields wholesale, so the entry is never cached). Range, heat,
+ *   beam colour/width all come from that entry; a mid-flight purchase
+ *   retints/reshapes the live beam the next frame.
+ * - HARDNESS GATE: a rock whose ORE_TYPES hardness exceeds the head's tier
+ *   scatters the beam and yields nothing. The world tells first (§13.1):
+ *   'mineBlocked' { asteroidId, oreKey, hardness, needs, line } fires at
+ *   most once per second per asteroid id (a pair of scalars — mining
+ *   touches one rock at a time — reset on 'systemLoaded'), while amber
+ *   sparks kick BACK along the beam and no dust comes off the rock.
+ * - BEAM LOOK: a tapered additive quad strip (4 verts, rebuilt in place
+ *   around the camera-facing right vector; muzzle width ×0.5 → contact
+ *   width ×1.4, a focusing cone) layered over the crisp 2-vertex core
+ *   line, both breathing at working frequency. Contact feedback is an
+ *   ore-tinted glow sprite, a pooled THREE.Points ring of ore-tinted
+ *   chips thrown back off the surface, and a slower, dimmer dust ring
+ *   for the rock-powder read. Pools keep integrating after the beam
+ *   turns off so bursts finish naturally; under reducedMotion nothing
+ *   emits, live particles still expire, and pulse opacities pin to
+ *   their midpoints.
  */
 
 // ---- module-scope scratch (reused every frame) ----
@@ -64,6 +87,22 @@ let _proj = 0;
 // under the consumer. A ring of 3 outlasts the one-frame rotation.
 const _minePoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
 let _minePointIdx = 0;
+// Wave 51 mining scratch: beam endpoint, camera forward, the camera-facing
+// ribbon right vector, the -beamDir launch axis for chips/scatter, a dust
+// drift direction, per-particle velocity assembly, and a hex→rgb staging
+// colour for the particle color buffers. Zero per-frame allocation.
+const _beamEnd = new THREE.Vector3();
+const _camFwd = new THREE.Vector3();
+const _beamRight = new THREE.Vector3();
+const _away = new THREE.Vector3();
+const _dustDir = new THREE.Vector3();
+const _pvel = new THREE.Vector3();
+const _pcol = new THREE.Color();
+// mineBlocked throttle: mining touches one rock at a time, so a pair of
+// scalars (not a Map) caps the refusal at one emit/second per asteroid id.
+// Reset on 'systemLoaded' — a fresh field reuses ids.
+let _lastBlockedId = -1;
+let _lastBlockedAt = -1e9;
 
 const POOL_SIZE = 64;
 const FLASH_POOL = 16;
@@ -81,6 +120,16 @@ const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e 
 const SPARKS_PER_BURST = 6;
 const SPARK_TTL = 0.35; // s
 const SPARK_SPEED = 16; // u/s outward drift
+
+// Mining particles (wave 51): two THREE.Points rings — ore-tinted chips and
+// slower rock-powder dust — plus the held-contact emission cadence.
+const MINE_SPARKS = 48;
+const MINE_DUST = 32;
+const MINE_SPARK_INTERVAL = 0.07; // s between chip bursts on a held contact
+const MINE_DUST_INTERVAL = 0.16;  // s between dust puffs
+const MINE_SPARK_TTL = 0.45;      // chip lifetime
+const MINE_DUST_TTL = 1.2;        // rock-powder lifetime
+const BLOCKED_TINT = 0xff9a3a;    // hostile amber: too-hard rock scatters the beam
 
 /** Soft radial dot sprite shared by projectile glows and spark points. */
 function makeGlowDot() {
@@ -201,34 +250,191 @@ export function initCombat(ctx) {
     sparks.push({ pts, arr, vel: new Float32Array(SPARKS_PER_BURST * 3), t: 0, active: false });
   }
 
-  // --- Mining beam: 2-vertex line, buffer mutated in place; glow at endpoint ---
-  const beamGeo = new THREE.BufferGeometry();
+  // --- Wave 51 mining beam: layered, tapered, pulsing (module header) ---
+  // Inner core: the crisp 2-vertex centre line, buffer mutated in place.
+  const beamCoreGeo = new THREE.BufferGeometry();
   const beamArr = new Float32Array(6);
-  beamGeo.setAttribute('position', new THREE.BufferAttribute(beamArr, 3));
-  const beam = new THREE.Line(
-    beamGeo,
+  beamCoreGeo.setAttribute('position', new THREE.BufferAttribute(beamArr, 3));
+  const beamCore = new THREE.Line(
+    beamCoreGeo,
     new THREE.LineBasicMaterial({
-      color: FAMILY_COLORS.mining,
+      color: MINING_LASERS[0].coreColor,
       blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.85,
     }),
   );
-  beam.visible = false;
-  beam.frustumCulled = false; // endpoints move every frame; skip stale culling
-  scene.add(beam);
+  beamCore.name = 'mine-beam-core';
+  beamCore.visible = false;
+  beamCore.frustumCulled = false; // endpoints move every frame; skip stale culling
+  scene.add(beamCore);
+
+  // Outer beam: a tapered quad strip (4 verts / 2 indexed tris, DoubleSide
+  // additive), rebuilt in place each frame around the camera-facing right
+  // vector — muzzle half-width ×0.25 tapering to ×0.7 at the contact, so it
+  // reads as a focusing cone from any viewpoint.
+  const beamQuadGeo = new THREE.BufferGeometry();
+  const beamQuadArr = new Float32Array(12);
+  beamQuadGeo.setAttribute('position', new THREE.BufferAttribute(beamQuadArr, 3));
+  beamQuadGeo.setIndex([0, 2, 1, 1, 2, 3]);
+  const beamMesh = new THREE.Mesh(
+    beamQuadGeo,
+    new THREE.MeshBasicMaterial({
+      color: MINING_LASERS[0].beamColor,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+    }),
+  );
+  beamMesh.name = 'mine-beam';
+  beamMesh.visible = false;
+  beamMesh.frustumCulled = false;
+  scene.add(beamMesh);
+
+  // Contact glow: endpoint sprite, tinted per contact (ore sparkColor while
+  // cutting, hostile amber while blocked), scale breathing with beamWidth.
   const beamGlow = new THREE.Sprite(
     new THREE.SpriteMaterial({
-      color: FAMILY_COLORS.mining,
+      color: MINING_LASERS[0].beamColor,
       blending: THREE.AdditiveBlending,
       transparent: true,
       opacity: 0.8,
       depthWrite: false,
     }),
   );
+  beamGlow.name = 'mine-glow';
   beamGlow.scale.set(2.5, 2.5, 1);
   beamGlow.visible = false;
   scene.add(beamGlow);
+
+  // Mining particle pools: single THREE.Points rings with position + color
+  // attributes (per-particle fade multiplies toward black — under additive
+  // blending black is gone). All buffers preallocated; a ring cursor hands
+  // out slots. `drag` is the per-second velocity decay; `live` gates the
+  // tick and the visible flag.
+  function makeMinePoints(count, size, drag) {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const pts = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        size,
+        map: glowTex,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+        sizeAttenuation: true,
+      }),
+    );
+    pts.visible = false;
+    pts.frustumCulled = false; // particles can sit anywhere; skip stale culling
+    scene.add(pts);
+    return {
+      pts,
+      pos,
+      col,
+      vel: new Float32Array(count * 3),
+      base: new Float32Array(count * 3), // pre-fade particle colour
+      life: new Float32Array(count),
+      ttl: new Float32Array(count),
+      live: 0,
+      cursor: 0,
+      drag,
+    };
+  }
+  const mineSparks = makeMinePoints(MINE_SPARKS, 0.9, 2.8); // fast chips
+  mineSparks.pts.name = 'mine-sparks';
+  const mineDust = makeMinePoints(MINE_DUST, 2.4, 0.6); // big slow powder
+  mineDust.pts.name = 'mine-dust';
+  // Emission clocks ride the contact; primed to the interval so the first
+  // contact frame bursts immediately. Reset by hideMiningFx().
+  let mineSparkClock = MINE_SPARK_INTERVAL;
+  let mineDustClock = MINE_DUST_INTERVAL;
+
+  /** Ring-emit `count` particles from `point` along `dir` (jittered cone). */
+  function emitMineParticles(pool, point, dir, count, colorHex, speed, spread, ttl) {
+    _pcol.setHex(colorHex);
+    const n = pool.ttl.length;
+    for (let k = 0; k < count; k++) {
+      const i = pool.cursor;
+      pool.cursor = (pool.cursor + 1) % n;
+      if (pool.life[i] <= 0) pool.live++;
+      const i3 = i * 3;
+      pool.pos[i3] = point.x;
+      pool.pos[i3 + 1] = point.y;
+      pool.pos[i3 + 2] = point.z;
+      _pvel.copy(dir).multiplyScalar(speed * (0.7 + 0.6 * Math.random()));
+      _pvel.x += (Math.random() * 2 - 1) * spread;
+      _pvel.y += (Math.random() * 2 - 1) * spread;
+      _pvel.z += (Math.random() * 2 - 1) * spread;
+      pool.vel[i3] = _pvel.x;
+      pool.vel[i3 + 1] = _pvel.y;
+      pool.vel[i3 + 2] = _pvel.z;
+      pool.base[i3] = _pcol.r;
+      pool.base[i3 + 1] = _pcol.g;
+      pool.base[i3 + 2] = _pcol.b;
+      pool.col[i3] = _pcol.r;
+      pool.col[i3 + 1] = _pcol.g;
+      pool.col[i3 + 2] = _pcol.b;
+      pool.life[i] = ttl;
+      pool.ttl[i] = ttl;
+    }
+    pool.pts.visible = true;
+    pool.pts.geometry.attributes.position.needsUpdate = true;
+    pool.pts.geometry.attributes.color.needsUpdate = true;
+  }
+
+  /** Integrate + fade a ring. Under `hide` (reducedMotion) particles stay
+   * hidden and frozen but still expire — bursts never strand mid-air. */
+  function tickMinePool(pool, dt, hide) {
+    if (pool.live <= 0) {
+      pool.pts.visible = false;
+      return;
+    }
+    let live = 0;
+    for (let i = 0; i < pool.life.length; i++) {
+      if (pool.life[i] <= 0) continue;
+      pool.life[i] -= dt;
+      const i3 = i * 3;
+      if (pool.life[i] <= 0) {
+        pool.col[i3] = pool.col[i3 + 1] = pool.col[i3 + 2] = 0; // additive black = gone
+        continue;
+      }
+      live++;
+      if (hide) continue; // no particle motion under reducedMotion
+      const dragK = Math.max(0, 1 - pool.drag * dt);
+      pool.pos[i3] += pool.vel[i3] * dt;
+      pool.pos[i3 + 1] += pool.vel[i3 + 1] * dt;
+      pool.pos[i3 + 2] += pool.vel[i3 + 2] * dt;
+      pool.vel[i3] *= dragK;
+      pool.vel[i3 + 1] *= dragK;
+      pool.vel[i3 + 2] *= dragK;
+      const f = pool.life[i] / pool.ttl[i];
+      pool.col[i3] = pool.base[i3] * f;
+      pool.col[i3 + 1] = pool.base[i3 + 1] * f;
+      pool.col[i3 + 2] = pool.base[i3 + 2] * f;
+    }
+    pool.live = live;
+    pool.pts.visible = !hide && live > 0;
+    pool.pts.geometry.attributes.position.needsUpdate = true;
+    pool.pts.geometry.attributes.color.needsUpdate = true;
+  }
+
+  /** Beam off: hide every beam-layer visual and re-prime the emission
+   * clocks. Particle pools are NOT touched — live bursts finish naturally. */
+  function hideMiningFx() {
+    beamMesh.visible = false;
+    beamCore.visible = false;
+    beamGlow.visible = false;
+    mineSparkClock = MINE_SPARK_INTERVAL;
+    mineDustClock = MINE_DUST_INTERVAL;
+  }
 
   // Per-weapon fire cooldowns (rof), in world time.
   const nextFireAt = { cannon: 0, disruptor: 0 };
@@ -360,11 +566,13 @@ export function initCombat(ctx) {
 
   /** Ray-sphere vs asteroid list; returns true while the beam is on. */
   function updateMining(dt, playerObj) {
-    const w = WEAPONS.mining;
+    // The INSTALLED cutting head, resolved every call: save restores swap
+    // world fields wholesale, so caching this entry across frames goes stale.
+    const laser = miningLaserFor(ctx.world.miningLaser);
     _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion);
     _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET * 0.8);
     _dir.copy(_fwd);
-    // A targeted asteroid (refs are { id, position, radius, ore } — no .object) pulls the beam.
+    // A targeted asteroid (refs are { id, position, radius, ... } — no .object) pulls the beam.
     const t = ctx.targets.current;
     if (t && t.position && !t.object) {
       _dir.subVectors(t.position, _nose);
@@ -372,10 +580,10 @@ export function initCombat(ctx) {
       if (d < 1e-3) _dir.copy(_fwd);
       else _dir.divideScalar(d);
     }
-    // Closest sphere intersection along the beam, within range.
+    // Closest sphere intersection along the beam, capped at the head's reach.
     const list = ctx.asteroids?.list;
-    let bestT = w.range;
-    let bestId = null;
+    let bestT = laser.range;
+    let bestEntry = null;
     if (list) {
       for (let i = 0; i < list.length; i++) {
         const a = list[i];
@@ -389,29 +597,126 @@ export function initCombat(ctx) {
         if (th < 0) th = -b + sq; // origin inside the sphere
         if (th < 0 || th > bestT) continue;
         bestT = th;
-        bestId = a.id;
+        bestEntry = a;
       }
     }
-    _tmp.copy(_nose).addScaledVector(_dir, bestT); // beam endpoint
+    _beamEnd.copy(_nose).addScaledVector(_dir, bestT); // contact point / reach cap
+
+    // Per-frame head re-application: a mid-flight outfitter purchase (or a
+    // save restore) retints/reshapes the live beam immediately. setHex on the
+    // existing material colours — never a new THREE.Color per frame.
+    beamMesh.material.color.setHex(laser.beamColor);
+    beamCore.material.color.setHex(laser.coreColor);
+
+    // Core line endpoints (the original 2-vertex buffer, mutated in place).
     beamArr[0] = _nose.x;
     beamArr[1] = _nose.y;
     beamArr[2] = _nose.z;
-    beamArr[3] = _tmp.x;
-    beamArr[4] = _tmp.y;
-    beamArr[5] = _tmp.z;
-    beamGeo.attributes.position.needsUpdate = true;
-    beam.visible = true;
+    beamArr[3] = _beamEnd.x;
+    beamArr[4] = _beamEnd.y;
+    beamArr[5] = _beamEnd.z;
+    beamCoreGeo.attributes.position.needsUpdate = true;
 
-    if (bestId !== null) {
-      beamGlow.position.copy(_tmp);
+    // Tapered ribbon: right = normalise(cross(beamDir, cameraForward)). The
+    // degenerate beam-straight-at-camera case falls back to the camera's
+    // world X so the strip never collapses to a sliver of NaNs.
+    ctx.camera.getWorldDirection(_camFwd);
+    _beamRight.crossVectors(_dir, _camFwd);
+    if (_beamRight.lengthSq() < 1e-6) _beamRight.set(1, 0, 0).applyQuaternion(ctx.camera.quaternion);
+    else _beamRight.normalize();
+    const w0 = laser.beamWidth * 0.5 * 0.5; // muzzle half-width
+    const w1 = laser.beamWidth * 1.4 * 0.5; // contact half-width (focusing cone)
+    beamQuadArr[0] = _nose.x + _beamRight.x * w0;
+    beamQuadArr[1] = _nose.y + _beamRight.y * w0;
+    beamQuadArr[2] = _nose.z + _beamRight.z * w0;
+    beamQuadArr[3] = _nose.x - _beamRight.x * w0;
+    beamQuadArr[4] = _nose.y - _beamRight.y * w0;
+    beamQuadArr[5] = _nose.z - _beamRight.z * w0;
+    beamQuadArr[6] = _beamEnd.x + _beamRight.x * w1;
+    beamQuadArr[7] = _beamEnd.y + _beamRight.y * w1;
+    beamQuadArr[8] = _beamEnd.z + _beamRight.z * w1;
+    beamQuadArr[9] = _beamEnd.x - _beamRight.x * w1;
+    beamQuadArr[10] = _beamEnd.y - _beamRight.y * w1;
+    beamQuadArr[11] = _beamEnd.z - _beamRight.z * w1;
+    beamQuadGeo.attributes.position.needsUpdate = true;
+
+    // Working-frequency breathing: outer 0.35..0.8, core 0.7..1.0 at a
+    // different rate. reducedMotion pins both to their midpoints (no flicker).
+    const reduced = ctx.settings?.reducedMotion === true;
+    if (reduced) {
+      beamMesh.material.opacity = 0.575;
+      beamCore.material.opacity = 0.85;
+    } else {
+      beamMesh.material.opacity = 0.575 + 0.225 * Math.sin(ctx.elapsed * 26);
+      beamCore.material.opacity = 0.85 + 0.15 * Math.sin(ctx.elapsed * 31);
+    }
+    beamMesh.visible = true;
+    beamCore.visible = true;
+
+    if (bestEntry) {
+      const oreKey = bestEntry.oreKey ?? 'rawOre';
+      const hardness = bestEntry.hardness ?? 1;
+      const oreDef = ORE_TYPES[oreKey];
+      const blocked = hardness > laser.tier; // wave-51 hardness gate
+      beamGlow.position.copy(_beamEnd);
+      const gs = (reduced ? 2.0 : 2.0 + 0.6 * Math.sin(ctx.elapsed * 18)) * laser.beamWidth;
+      beamGlow.scale.set(gs, gs, 1);
+      beamGlow.material.color.setHex(blocked ? BLOCKED_TINT : oreDef.sparkColor);
       beamGlow.visible = true;
-      const pt = _minePoints[_minePointIdx];
-      _minePointIdx = (_minePointIdx + 1) % _minePoints.length;
-      pt.copy(_tmp);
-      ctx.emit('mineHit', { asteroidId: bestId, point: pt }); // asteroids.js reads via lastEvents
-      addHeat(w.heatPerShot * w.rof * dt); // tiny continuous heat while extracting
+      addHeat(laser.heatPerShot * WEAPONS.mining.rof * dt); // tiny continuous heat while on rock
+
+      if (blocked) {
+        // The rock scatters the beam and yields nothing. The world tells
+        // first (§13.1): one mineBlocked per second per asteroid id.
+        const now = ctx.world.time;
+        if (bestEntry.id !== _lastBlockedId || now - _lastBlockedAt >= 1) {
+          _lastBlockedId = bestEntry.id;
+          _lastBlockedAt = now;
+          let needs = MINING_LASERS[MINING_LASERS.length - 1];
+          for (let i = 0; i < MINING_LASERS.length; i++) {
+            if (MINING_LASERS[i].tier >= hardness) { needs = MINING_LASERS[i]; break; }
+          }
+          ctx.emit('mineBlocked', { asteroidId: bestEntry.id, oreKey, hardness, needs, line: oreDef.blockedLine });
+        }
+        // Legible without a word of UI: amber chips kick BACK along the
+        // beam, faster and shorter-lived — and NO dust (nothing comes off).
+        if (!reduced) {
+          mineSparkClock += dt;
+          if (mineSparkClock >= MINE_SPARK_INTERVAL) {
+            mineSparkClock -= MINE_SPARK_INTERVAL;
+            _away.copy(_dir).negate();
+            emitMineParticles(mineSparks, _beamEnd, _away, 4 + ((Math.random() * 3) | 0), BLOCKED_TINT, 30, 4, MINE_SPARK_TTL * 0.6);
+          }
+        }
+        mineDustClock = MINE_DUST_INTERVAL;
+      } else {
+        // Productive contact: asteroids.js extracts at extractPerSec ÷
+        // ORE_TYPES.extractResist (its side of the contract).
+        const pt = _minePoints[_minePointIdx];
+        _minePointIdx = (_minePointIdx + 1) % _minePoints.length;
+        pt.copy(_beamEnd);
+        ctx.emit('mineHit', { asteroidId: bestEntry.id, point: pt, laserTier: laser.tier, extractPerSec: laser.extractPerSec });
+        if (!reduced) {
+          mineSparkClock += dt;
+          if (mineSparkClock >= MINE_SPARK_INTERVAL) {
+            mineSparkClock -= MINE_SPARK_INTERVAL;
+            // Chips thrown back off the surface, ore-tinted.
+            _away.copy(_dir).negate();
+            emitMineParticles(mineSparks, _beamEnd, _away, 5 + ((Math.random() * 3) | 0), oreDef.sparkColor, 14, 7, MINE_SPARK_TTL);
+          }
+          mineDustClock += dt;
+          if (mineDustClock >= MINE_DUST_INTERVAL) {
+            mineDustClock -= MINE_DUST_INTERVAL;
+            // Rock powder drifting perpendicular to the beam, dust-tinted.
+            _dustDir.copy(_beamRight).multiplyScalar(Math.random() < 0.5 ? -1 : 1);
+            emitMineParticles(mineDust, _beamEnd, _dustDir, 2 + ((Math.random() * 2) | 0), oreDef.dustColor, 2.5, 1.6, MINE_DUST_TTL);
+          }
+        }
+      }
     } else {
       beamGlow.visible = false;
+      mineSparkClock = MINE_SPARK_INTERVAL; // primed: first contact frame bursts
+      mineDustClock = MINE_DUST_INTERVAL;
     }
     return true;
   }
@@ -560,10 +865,18 @@ export function initCombat(ctx) {
   return {
     update(dt) {
       const now = ctx.world.time;
+      // Wave 51: a fresh field reuses asteroid ids — reset the mineBlocked
+      // throttle so the first refusal in the new system fires immediately.
+      for (let i = 0; i < ctx.lastEvents.length; i++) {
+        if (ctx.lastEvents[i].type === 'systemLoaded') {
+          _lastBlockedId = -1;
+          _lastBlockedAt = -1e9;
+          break;
+        }
+      }
       if (ctx.flags.docked) {
         // Station owns the screen while docked: weapons cold, sim frozen.
-        beam.visible = false;
-        beamGlow.visible = false;
+        hideMiningFx();
         return;
       }
       const player = ctx.player;
@@ -599,10 +912,7 @@ export function initCombat(ctx) {
           firePlayerGun(wkey, w, playerObj);
         }
       }
-      if (!beamOn) {
-        beam.visible = false;
-        beamGlow.visible = false;
-      }
+      if (!beamOn) hideMiningFx(); // covers destroyed/overheated too (gate above)
 
       // 4. Projectiles: integrate, then sphere-vs-sphere hit tests.
       for (let i = 0; i < pool.length; i++) {
@@ -656,6 +966,14 @@ export function initCombat(ctx) {
         s.pts.geometry.attributes.position.needsUpdate = true;
         s.pts.material.opacity = 1 - k;
       }
+
+      // 7. Mining chips + dust (wave 51): the pools keep integrating after
+      // the beam turns off so bursts finish naturally rather than vanishing.
+      // Under reducedMotion nothing new emits (updateMining gates it) and
+      // live particles expire hidden instead of moving.
+      const hideMineFx = ctx.settings?.reducedMotion === true;
+      tickMinePool(mineSparks, dt, hideMineFx);
+      tickMinePool(mineDust, dt, hideMineFx);
     },
   };
 }

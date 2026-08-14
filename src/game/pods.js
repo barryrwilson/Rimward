@@ -8,21 +8,53 @@ import { U } from './state.js';
  *
  * Pods drift, glitter, and auto-scoop within U.SCOOP_RANGE of the player ship
  * (doc §4.1 "scoop" verb made physical; cargo capacity enforced).
+ *
+ * Wave 51: spawnPod takes an optional 5th `tint` (hex int) so mined ore reads
+ * as what it is while it drifts — asteroids.js passes ORE_TYPES[oreKey].podTint.
+ * Tinted materials come from a per-tint cache below; a 4-argument call still
+ * yields the IDENTICAL pre-wave-51 salvage-green pod (npc.js and world.js
+ * depend on that look).
  */
 
 const _toPlayer = new THREE.Vector3();
 let podGeo = null;
-let podMat = null;
 
-export function spawnPod(ctx, contents, position, drift = null) {
-  podGeo ??= new THREE.IcosahedronGeometry(0.9, 0);
-  podMat ??= new THREE.MeshStandardMaterial({
+// Wave 51: tint-keyed material cache replaces the old single `podMat`
+// singleton. The `null` key holds the DEFAULT salvage-green material — a
+// 4-argument spawnPod call resolves to exactly the instance pre-wave-51 code
+// used, so jettisoned surrenders and aftermath salvage look unchanged. Any
+// other key is an ore podTint hex int and gets a clone of the default's
+// settings with `color` overridden and a matching dimmer `emissive` (the
+// default keeps emissive at roughly half its color's brightness: 0x3fae6a →
+// 0x1d5c38). Geometry stays a single shared singleton — only materials vary.
+//
+// The cache is process-lifetime and INTENTIONALLY never cleared: one default
+// plus at most nine ore tints, shared by every pod in every system. Do not
+// "fix" this into a leak-avoidance dispose loop.
+const podMats = new Map();
+
+function podMaterialFor(tint) {
+  let mat = podMats.get(tint);
+  if (mat) return mat;
+  mat = new THREE.MeshStandardMaterial({
     color: 0x3fae6a, // salvage green (doc §18.4)
     emissive: 0x1d5c38,
     roughness: 0.4,
     metalness: 0.3,
   });
-  const mesh = new THREE.Mesh(podGeo, podMat);
+  if (tint != null) {
+    mat.color.setHex(tint);
+    // Dimmer emissive matched to the tint — same half-brightness relationship
+    // the default keeps between color and emissive.
+    mat.emissive.setHex(tint).multiplyScalar(0.5);
+  }
+  podMats.set(tint, mat);
+  return mat;
+}
+
+export function spawnPod(ctx, contents, position, drift = null, tint = null) {
+  podGeo ??= new THREE.IcosahedronGeometry(0.9, 0);
+  const mesh = new THREE.Mesh(podGeo, podMaterialFor(tint));
   mesh.position.copy(position);
   ctx.scene.add(mesh);
   const pod = {
@@ -39,19 +71,17 @@ export function spawnPod(ctx, contents, position, drift = null) {
 /**
  * Build a standalone pod mesh for the models browser (no ctx, no scene, no shared state).
  * Returns a cloned material so emissive drive doesn't affect live pods.
+ * Wave 51: optional `tint` is a raw hex int matching spawnPod's parameter —
+ * the browser model clones from the same cached per-tint material live pods
+ * use. The label stays 'Cargo pod' either way (COMMODITIES has no hex→key
+ * index, so a hex cannot be named here).
  * @returns {{ object: THREE.Object3D, update: (elapsed: number, reducedMotion: boolean) => void, label: string }}
  */
-export function buildPodModel() {
+export function buildPodModel(tint = null) {
   podGeo ??= new THREE.IcosahedronGeometry(0.9, 0);
-  podMat ??= new THREE.MeshStandardMaterial({
-    color: 0x3fae6a, // salvage green (doc §18.4)
-    emissive: 0x1d5c38,
-    roughness: 0.4,
-    metalness: 0.3,
-  });
 
   // Clone material: browser pod's emissive drive must not mutate live pods.
-  const browserMat = podMat.clone();
+  const browserMat = podMaterialFor(tint).clone();
   const object = new THREE.Mesh(podGeo, browserMat);
 
   let spin = 0;

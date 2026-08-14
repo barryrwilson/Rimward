@@ -123,7 +123,13 @@ const PATROL_NAMES = {
   freehold: ['Watchful Apt', 'Lancer Po'],
   veridian: ['Steadfast Ivo', 'Pale Warrant', 'Crescent Anh'],
 };
-const LEGAL_KEYS = Object.keys(COMMODITIES).filter((k) => COMMODITIES[k].legal);
+// Wave 51: filter on `bulk`, not just `legal`. The wave added 7 exotic ores
+// (slagIron … wakeglass) to COMMODITIES, all legal — but an exotic reaches a
+// market only by being mined and sold by a player, never by spawning in
+// traffic. The four bulk staples (provisions, refinedMetals, rawOre,
+// livingRock) are exactly the pre-wave-51 legal set, so Freehold grain
+// haulers keep byte-identical manifests and never carry void platinum.
+const LEGAL_KEYS = Object.keys(COMMODITIES).filter((k) => COMMODITIES[k].legal && COMMODITIES[k].bulk);
 
 let nextRecordNum = 1;
 

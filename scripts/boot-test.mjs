@@ -10435,6 +10435,650 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w49checks).every(Boolean)) { console.log('WAVE49 SHIP CHARTER FAIL'); errors++; }
 }
 
+// ---- Wave 51: the ore ladder (nine ores, four cutting heads) --------------
+// Mining is no longer the single WEAPONS.mining row. ORE_TYPES gives nine
+// ores a hardness (1..4), an extraction resist, and a full visual recipe;
+// ORE_BAND_WEIGHTS composes fields by system band; MINING_LASERS is the
+// four-head ladder the outfitter sells strictly in order (array index ===
+// ctx.world.miningLaser); combat.js's updateMining gates on
+// hardness > head.tier and tells the world first ('mineBlocked', throttled
+// to 1/s per rock); asteroids.js fans the field out into ONE InstancedMesh
+// per ore key, extracts at extractPerSec / extractResist, and drops
+// ore-tinted pods; save.js persists the rung and heals tampered ones;
+// market.js's strikeRush/oreRush move the new ores while NPC manifests stay
+// byte-identical (LEGAL_KEYS is legal && bulk); authored systems price the
+// exotics so hauling hard ore coreward pays. Method: the LIVE boot ctx for
+// the freehold field and the outfitter/save cases, scoped throwaway
+// contexts (the wave-38 idiom) for determinism, teardown, and the beam
+// cases — the real initAsteroids/initCombat/initPods/initStation paths
+// throughout, never reimplemented arithmetic except where an independent
+// recomputation IS the pin (a, b, l, m).
+{
+  const {
+    ORE_TYPES, ORE_KEYS, ORE_BAND_WEIGHTS, pickOreType, oreKeysForBand,
+    MINING_LASERS, miningLaserFor, WEAPONS, createShipState,
+  } = await import('../src/game/state.js');
+  const { AUTHORED_SYSTEMS } = await import('../src/game/authored-systems.js');
+  const { initPrices, applyEventPressure } = await import('../src/game/market.js');
+  const { MODEL_CATALOG } = await import('../src/game/model-catalog.js');
+  const { initPods: initPods51 } = await import('../src/game/pods.js');
+
+  // Scoped throwaway context (the wave-38 w38scopedCtx idiom).
+  const w51scopedCtx = (systemId) => {
+    const sceneS = new THREE.Scene();
+    const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
+    const rendererS = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
+    const ctxS = createCtx({ scene: sceneS, camera: cameraS, renderer: rendererS });
+    ctxS.systems = SYSTEMS;
+    ctxS.world.currentSystem = systemId;
+    return ctxS;
+  };
+  // Scoped frame stepper — the main tick() rotation order: world time
+  // advances, updates run in init order (asteroids BEFORE combat, so a
+  // mineHit emitted this frame extracts next frame), the queue rotates.
+  // Returns every event emitted across the n frames.
+  const w51step = (ctxS, updates, n) => {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      ctxS.elapsed += dt;
+      ctxS.world.time += dt;
+      for (const u of updates) u.update(dt);
+      out.push(...ctxS.events);
+      ctxS.lastEvents = ctxS.events;
+      ctxS.events = [];
+    }
+    return out;
+  };
+  // Mirrors updateMining's ray-sphere pick — used ONLY to choose a vantage
+  // whose line to the chosen rock is clear; the assertions then fire
+  // through the REAL beam, which must land on the same rock.
+  const w51ClearLine = (list, cand, gap, range) => {
+    const nose = new THREE.Vector3(cand.position.x, cand.position.y, cand.position.z + cand.radius + gap - 2.4);
+    const dir = new THREE.Vector3(0, 0, -1);
+    const oc = new THREE.Vector3();
+    let bestT = range;
+    let best = null;
+    for (const a of list) {
+      oc.subVectors(nose, a.position);
+      const b = oc.dot(dir);
+      const c = oc.lengthSq() - a.radius * a.radius;
+      const disc = b * b - c;
+      if (disc < 0) continue;
+      const sq = Math.sqrt(disc);
+      let th = -b - sq;
+      if (th < 0) th = -b + sq;
+      if (th < 0 || th > bestT) continue;
+      bestT = th;
+      best = a;
+    }
+    return best === cand;
+  };
+  // Park the scoped ship nose-on to `rock`: identity quaternion puts local
+  // -Z (the nose) on the rock, dead ahead at gap + radius along +z.
+  const w51AimAt = (ctxS, rock, gap) => {
+    ctxS.ship.object.position.set(rock.position.x, rock.position.y, rock.position.z + rock.radius + gap);
+    ctxS.ship.object.quaternion.identity();
+    ctxS.ship.velocity.set(0, 0, 0);
+    ctxS.targets.current = null; // a targeted asteroid ref would pull the beam
+  };
+
+  // -- a. contract shape: the tables the whole wave stands on -------------
+  // Every ore key is a real commodity that names itself; hardness is a
+  // 1..4 integer with the 2/2/3/2 census the band ladders are priced
+  // around; band weight tables reference only real ores with positive
+  // weight; the four heads climb tier 1..4 with costs climbing from free;
+  // miningLaserFor heals every off-ladder shape a hand-edited save can
+  // carry; and WEAPONS.mining stays value-identical to the pre-wave-51 row
+  // so the damage family and every older pin survive untouched.
+  const w51census = {};
+  for (const k of ORE_KEYS) w51census[ORE_TYPES[k].hardness] = (w51census[ORE_TYPES[k].hardness] ?? 0) + 1;
+  const w51aChecks = {
+    keysHaveCommodities: ORE_KEYS.every((k) => !!COMMODITIES[k]),
+    commoditySelfNamed: ORE_KEYS.every((k) => ORE_TYPES[k].commodity === k),
+    hardnessBounded: ORE_KEYS.every((k) => Number.isInteger(ORE_TYPES[k].hardness)
+      && ORE_TYPES[k].hardness >= 1 && ORE_TYPES[k].hardness <= 4),
+    nineOres: ORE_KEYS.length === 9,
+    hardnessCensus: (w51census[1] ?? 0) === 2 && (w51census[2] ?? 0) === 2
+      && (w51census[3] ?? 0) === 3 && (w51census[4] ?? 0) === 2,
+    bandWeightsReal: Object.values(ORE_BAND_WEIGHTS).every((w) => Object.entries(w)
+      .every(([k, wt]) => ORE_KEYS.includes(k) && Number.isFinite(wt) && wt > 0)),
+    fourHeads: MINING_LASERS.length === 4,
+    tiersAscending: MINING_LASERS.every((l, i) => l.tier === i + 1),
+    costsAscending: MINING_LASERS[0].cost === 0
+      && MINING_LASERS.every((l, i) => i === 0 || l.cost > MINING_LASERS[i - 1].cost),
+    laserForHeals: [-1, 99, null, '2', 2.5].every((v) => miningLaserFor(v) === MINING_LASERS[0]),
+    laserForLadder: [0, 1, 2, 3].every((i) => miningLaserFor(i) === MINING_LASERS[i]),
+    weaponsMiningStock: WEAPONS.mining.name === 'Mining laser Mk I' && WEAPONS.mining.damage === 4
+      && WEAPONS.mining.rof === 4 && WEAPONS.mining.speed === 0 && WEAPONS.mining.range === 90
+      && WEAPONS.mining.heatPerShot === 2 && WEAPONS.mining.family === 'mining'
+      && WEAPONS.mining.beam === true && WEAPONS.mining.extractPerSec === 1.2,
+  };
+  console.log('wave51a ore ladder contract:', JSON.stringify(w51aChecks));
+  if (!Object.values(w51aChecks).every(Boolean)) { console.log('WAVE51A ORE LADDER CONTRACT FAIL'); errors++; }
+
+  // -- b. pickOreType: distribution, determinism, the 5% living-rock roll --
+  // A fine roll sweep per band must never leave the band's weight table.
+  // Band 0's livingRock share is THE pre-wave-51 field feel: the old code
+  // rolled rng() < 0.05 for living rock, and the 62/5 weight split
+  // reproduces that exactly — a drift here silently changes every core
+  // field in the game. Determinism per roll is what makes a system's
+  // composition stable run to run (sub-case d proves it end-to-end).
+  const W51_STEPS = 1000;
+  let w51bKeysInTable = true;
+  let w51bDeterministic = true;
+  let w51lrCount = 0;
+  const w51band0Seen = new Set();
+  const w51band4Seen = new Set();
+  for (let band = 0; band <= 4; band++) {
+    const table = ORE_BAND_WEIGHTS[band];
+    for (let s = 0; s < W51_STEPS; s++) {
+      const roll = s / W51_STEPS;
+      const key = pickOreType(band, roll);
+      if (!(key in table)) w51bKeysInTable = false;
+      if (pickOreType(band, roll) !== key) w51bDeterministic = false;
+      if (band === 0) { w51band0Seen.add(key); if (key === 'livingRock') w51lrCount++; }
+      if (band === 4) w51band4Seen.add(key);
+    }
+  }
+  const w51lrShare = w51lrCount / W51_STEPS;
+  const w51bChecks = {
+    keysInBandTable: w51bKeysInTable,
+    sameRollSameKey: w51bDeterministic,
+    livingRockShareFivePct: w51lrShare >= 0.045 && w51lrShare <= 0.055,
+    band4YieldsH4Pair: w51band4Seen.has('voidPlatinum') && w51band4Seen.has('wakeglass'),
+    band0YieldsNeither: !w51band0Seen.has('voidPlatinum') && !w51band0Seen.has('wakeglass'),
+  };
+  console.log('wave51b pickOreType sweep:', JSON.stringify(w51bChecks), `livingRockShare=${(w51lrShare * 100).toFixed(1)}%`);
+  if (!Object.values(w51bChecks).every(Boolean)) { console.log('WAVE51B PICKORETYPE FAIL'); errors++; }
+
+  // -- c. real field fan-out at freehold (band 0), LIVE boot ctx ----------
+  // The live scene after a real jump to freehold: one InstancedMesh per ore
+  // key the band-0 table actually drew, instance counts summing to the
+  // field def, and a flat list whose index IS the asteroidId the beam
+  // events name. No mesh may exist for an ore band 0 cannot produce — an
+  // empty-mesh leak would waste a draw call and break the per-ore count.
+  // The pins read the meshes THIS jump's rebuild created (diffed against a
+  // pre-travel snapshot): earlier waves' fresh-harness boots (wave-9/10
+  // origin beats) share asteroids.js's module-level fieldMeshes with the
+  // live ctx, and one of their systemLoaded rebuilds orphaned the live
+  // field of that era (its meshes are still parked in the scene, disposed
+  // but never removed — a harness artifact, not a game bug: the browser
+  // never runs two contexts).
+  if (ctx.flags.docked) undockStation(); // wave 41 left the run docked at redmarch
+  const w51preMeshes = new Set();
+  scene.traverse((o) => { if (o.name?.startsWith('asteroid-field-')) w51preMeshes.add(o); });
+  if (ctx.world.currentSystem !== 'freehold') travelTo('freehold', 'wave51 freehold leg');
+  tick(5, 'wave51 freehold field settle');
+  const w51liveMeshes = [];
+  scene.traverse((o) => {
+    if (o.name?.startsWith('asteroid-field-') && !w51preMeshes.has(o)) w51liveMeshes.push(o);
+  });
+  const w51liveOreKeys = w51liveMeshes.map((m) => m.userData.oreKey);
+  const w51band0Keys = oreKeysForBand(0);
+  const w51listC = ctx.asteroids.list;
+  const w51cChecks = {
+    atFreehold: ctx.world.currentSystem === 'freehold',
+    atLeastTwoMeshes: w51liveMeshes.length >= 2,
+    oreKeysReal: w51liveOreKeys.every((k) => !!ORE_TYPES[k]),
+    oreKeysInBand: w51liveOreKeys.every((k) => w51band0Keys.includes(k)),
+    noOutOfBandMesh: ['gildvein', 'emberglass', 'voidPlatinum', 'wakeglass']
+      .every((k) => !w51liveOreKeys.includes(k)),
+    instanceSumIsCount: w51liveMeshes.reduce((n, m) => n + m.count, 0) === SYSTEMS.freehold.field.count,
+    listLengthIsCount: w51listC.length === SYSTEMS.freehold.field.count,
+    entriesWellFormed: w51listC.every((e, i) => e.id === i
+      && typeof e.commodity === 'string' && !!ORE_TYPES[e.commodity]
+      && typeof e.oreKey === 'string' && !!ORE_TYPES[e.oreKey]
+      && Number.isInteger(e.hardness) && e.hardness === ORE_TYPES[e.oreKey].hardness
+      && e.ore >= 1),
+  };
+  console.log('wave51c freehold field fan-out:', JSON.stringify(w51cChecks),
+    `meshes=${w51liveMeshes.map((m) => `${m.userData.oreKey}:${m.count}`).join(',')}`);
+  if (!Object.values(w51cChecks).every(Boolean)) { console.log('WAVE51C FIELD FAN-OUT FAIL'); errors++; }
+
+  // -- d. determinism: two scoped builds, identical ore-key sequence ------
+  // The field RNG is seeded off worldSeed and the ore draw runs FIRST, so
+  // the same system must compose identically every boot — a save restored
+  // beside a rock must find the same rock.
+  const ctxD1 = w51scopedCtx('freehold');
+  initAsteroids(ctxD1);
+  const ctxD2 = w51scopedCtx('freehold');
+  initAsteroids(ctxD2);
+  const w51seq1 = ctxD1.asteroids.list.map((e) => e.oreKey).join(',');
+  const w51seq2 = ctxD2.asteroids.list.map((e) => e.oreKey).join(',');
+  const w51dChecks = { compositionStableRunToRun: w51seq1 === w51seq2 };
+  console.log('wave51d field determinism:', JSON.stringify(w51dChecks), `rocks=${ctxD1.asteroids.list.length}`);
+  if (!Object.values(w51dChecks).every(Boolean)) { console.log('WAVE51D FIELD DETERMINISM FAIL'); errors++; }
+
+  // -- e. deep-rim composition really differs (verge, band 4) -------------
+  // Scoped, not flown: the live run's flight state stays parked at
+  // freehold. Band 0's table contains NO hardness-4 ore at all (share must
+  // be exactly 0); band 4 is where void platinum and wakeglass live, so
+  // the Verge must field at least one and its share must clear zero.
+  const ctxV = w51scopedCtx('verge');
+  initAsteroids(ctxV);
+  const w51freeH4Share = ctxD1.asteroids.list.filter((e) => e.hardness === 4).length / ctxD1.asteroids.list.length;
+  const w51vergeH4 = ctxV.asteroids.list.filter((e) => e.hardness === 4).length;
+  const w51vergeH4Share = w51vergeH4 / ctxV.asteroids.list.length;
+  const w51eChecks = {
+    vergeFieldsH4: w51vergeH4 >= 1,
+    freeholdH4ShareZero: w51freeH4Share === 0,
+    vergeShareStrictlyGreater: w51vergeH4Share > w51freeH4Share,
+  };
+  console.log('wave51e deep-rim composition:', JSON.stringify(w51eChecks),
+    `vergeH4=${w51vergeH4}/${ctxV.asteroids.list.length} freeholdH4share=${w51freeH4Share}`);
+  if (!Object.values(w51eChecks).every(Boolean)) { console.log('WAVE51E DEEP-RIM COMPOSITION FAIL'); errors++; }
+
+  // -- f. jump teardown disposes EVERY per-ore mesh -----------------------
+  // rebuild()'s contract: a leaked field mesh across a jump is a hard
+  // failure. dispose is patched on every captured geometry/material (the
+  // wave-45 instrumentation, instance-scoped), then a real systemLoaded
+  // rides the module's own consume (the wave-38f idiom): old meshes leave
+  // the scene, every resource disposes, and ctx.asteroids.list is a NEW
+  // array (never mutated — combat drops stale entries immediately).
+  const ctxF = w51scopedCtx('freehold');
+  const astF = initAsteroids(ctxF);
+  const w51captured = [];
+  ctxF.scene.traverse((o) => {
+    if (o.name?.startsWith('asteroid-field-')) w51captured.push({ mesh: o, geo: o.geometry, mat: o.material });
+  });
+  const w51disposed = new Set();
+  for (const cap of w51captured) {
+    for (const res of [cap.geo, cap.mat]) {
+      const orig = res.dispose.bind(res);
+      res.dispose = () => { w51disposed.add(res); orig(); };
+    }
+  }
+  const w51listBefore = ctxF.asteroids.list;
+  ctxF.lastEvents = [{ type: 'systemLoaded', to: 'veridian' }];
+  astF.update(dt); // the real consume: rebuild() then one frame of mesh life
+  const w51fChecks = {
+    meshesCaptured: w51captured.length >= 2,
+    oldMeshesLeaveScene: w51captured.every((cap) => cap.mesh.parent === null),
+    everyResourceDisposed: w51captured.every((cap) => w51disposed.has(cap.geo) && w51disposed.has(cap.mat)),
+    listIsNewArray: ctxF.asteroids.list !== w51listBefore
+      && ctxF.asteroids.list.length === SYSTEMS.veridian.field.count,
+  };
+  console.log('wave51f jump teardown:', JSON.stringify(w51fChecks),
+    `disposed=${w51disposed.size}/${w51captured.length * 2}`);
+  if (!Object.values(w51fChecks).every(Boolean)) { console.log('WAVE51F JUMP TEARDOWN FAIL'); errors++; }
+
+  // -- g. the hardness gate through the REAL beam -------------------------
+  // Scoped freehold field, real initAsteroids + initCombat, the ship
+  // parked nose-on to a REAL h>1 rock found by searching the built list
+  // (never a fabricated asteroid — the raycast is the point). A real
+  // systemLoaded frame first: the module's own consume rebuilds the field
+  // AND resets the mineBlocked throttle, so the first refusal fires
+  // immediately. Then weapon group 3 with fireHeld, exactly as a player.
+  const ctxG = w51scopedCtx('freehold');
+  const astG = initAsteroids(ctxG);
+  const combatG = initCombat(ctxG);
+  initPods51(ctxG); // the real ctx.pods channel — the mk4 half drops pods
+  ctxG.player = createShipState('light');
+  ctxG.ship.object = new THREE.Object3D();
+  ctxG.scene.add(ctxG.ship.object);
+  ctxG.world.miningLaser = 0; // the stock Mk I, tier 1
+  ctxG.lastEvents = [{ type: 'systemLoaded', to: 'freehold' }];
+  w51step(ctxG, [astG, combatG], 1); // fresh-field consume (throttle reset)
+  const w51hardRock = ctxG.asteroids.list.find((e) => e.hardness > 1
+    && w51ClearLine(ctxG.asteroids.list, e, 20, MINING_LASERS[0].range)) ?? null;
+  let w51g1Checks = { aimedAtRealHardRock: false };
+  let w51g2Checks = { mk4Cuts: false };
+  if (w51hardRock) {
+    w51AimAt(ctxG, w51hardRock, 20);
+    ctxG.input.weaponGroup = 3;
+    ctxG.input.fireHeld = true;
+    const w51oreBefore = ctxG.asteroids.list[w51hardRock.id].ore;
+    const w51blockedEvs = w51step(ctxG, [astG, combatG], 72); // 1.2 s of held fire
+    ctxG.input.fireHeld = false;
+    const w51blockedFor = w51blockedEvs.filter((e) => e.type === 'mineBlocked' && e.asteroidId === w51hardRock.id);
+    const w51firstBlocked = w51blockedFor[0] ?? null;
+    const w51expectedNeeds = MINING_LASERS.find((l) => l.tier >= w51hardRock.hardness);
+    w51g1Checks = {
+      aimedAtRealHardRock: w51hardRock.hardness > MINING_LASERS[0].tier,
+      blockedFired: w51blockedFor.length >= 1,
+      blockedNamesRock: !!w51firstBlocked && w51firstBlocked.oreKey === w51hardRock.oreKey
+        && w51firstBlocked.hardness === w51hardRock.hardness,
+      blockedNeedsLowestHead: !!w51firstBlocked && w51firstBlocked.needs === w51expectedNeeds
+        && w51firstBlocked.needs.tier >= w51hardRock.hardness,
+      blockedLineVerbatim: !!w51firstBlocked
+        && w51firstBlocked.line === ORE_TYPES[w51hardRock.oreKey].blockedLine
+        && typeof w51firstBlocked.line === 'string' && w51firstBlocked.line.length > 0,
+      noMineHitWhileBlocked: w51blockedEvs.filter((e) => e.type === 'mineHit').length === 0,
+      oreUntouched: ctxG.asteroids.list[w51hardRock.id].ore === w51oreBefore,
+      throttledToOnePerSec: w51blockedFor.length >= 1 && w51blockedFor.length <= 2, // 72 frames, NOT 72 events
+    };
+    // Second half: the Deepcore lance (tier 4) opens the same rock.
+    ctxG.world.miningLaser = 3;
+    ctxG.input.fireHeld = true;
+    const w51hitEvs = w51step(ctxG, [astG, combatG], 90); // 1.5 s of held fire
+    ctxG.input.fireHeld = false;
+    const w51hits = w51hitEvs.filter((e) => e.type === 'mineHit' && e.asteroidId === w51hardRock.id);
+    w51g2Checks = {
+      mk4Cuts: w51hits.length > 0,
+      hitNamesInstalledHead: !!w51hits[0] && w51hits[0].laserTier === 4
+        && w51hits[0].extractPerSec === MINING_LASERS[3].extractPerSec,
+      oreDrops: ctxG.asteroids.list[w51hardRock.id].ore < w51oreBefore,
+      noBlockedNow: w51hitEvs.filter((e) => e.type === 'mineBlocked' && e.asteroidId === w51hardRock.id).length === 0,
+    };
+  }
+  console.log('wave51g1 hardness gate blocked half:', JSON.stringify(w51g1Checks),
+    w51hardRock ? `rock=${w51hardRock.id}:${w51hardRock.oreKey}:h${w51hardRock.hardness}` : 'no clear hard rock');
+  if (!Object.values(w51g1Checks).every(Boolean)) { console.log('WAVE51G1 HARDNESS GATE FAIL'); errors++; }
+  console.log('wave51g2 hardness gate mk4 half:', JSON.stringify(w51g2Checks));
+  if (!Object.values(w51g2Checks).every(Boolean)) { console.log('WAVE51G2 MK4 CUT FAIL'); errors++; }
+
+  // -- h. mining visual objects exist and hide correctly ------------------
+  // The five FX objects live in the scene from initCombat, hidden until a
+  // beam exists; firing at a reachable rock shows beam + core; the dock
+  // owns the screen and freezes weapons cold (the combat.js early return).
+  const ctxH = w51scopedCtx('freehold');
+  const astH = initAsteroids(ctxH);
+  const combatH = initCombat(ctxH);
+  initPods51(ctxH); // the real ctx.pods channel — the firing leg can drop a pod
+  const w51fx = {};
+  for (const n of ['mine-beam', 'mine-beam-core', 'mine-glow', 'mine-sparks', 'mine-dust']) {
+    w51fx[n] = ctxH.scene.getObjectByName(n) ?? null;
+  }
+  ctxH.player = createShipState('light');
+  ctxH.ship.object = new THREE.Object3D();
+  ctxH.scene.add(ctxH.ship.object);
+  ctxH.world.miningLaser = 0;
+  const w51softTarget = ctxH.asteroids.list.find((e) => e.oreKey === 'rawOre'
+    && w51ClearLine(ctxH.asteroids.list, e, 20, MINING_LASERS[0].range)) ?? null;
+  const w51hChecks = {
+    allFiveExist: Object.values(w51fx).every((o) => !!o),
+    allHiddenWhileCold: Object.values(w51fx).every((o) => o && o.visible === false),
+    aimedAtSoftRock: !!w51softTarget,
+  };
+  if (w51softTarget) {
+    w51AimAt(ctxH, w51softTarget, 20);
+    ctxH.input.weaponGroup = 3;
+    ctxH.input.fireHeld = true;
+    w51step(ctxH, [astH, combatH], 2);
+    w51hChecks.beamShownWhileFiring = w51fx['mine-beam'].visible === true
+      && w51fx['mine-beam-core'].visible === true && w51fx['mine-glow'].visible === true;
+    ctxH.input.fireHeld = false;
+    w51step(ctxH, [astH, combatH], 1);
+    ctxH.flags.docked = true;
+    ctxH.input.fireHeld = true; // a held trigger at the dock must stay cold
+    w51step(ctxH, [astH, combatH], 1);
+    w51hChecks.dockHidesBeamCoreGlow = w51fx['mine-beam'].visible === false
+      && w51fx['mine-beam-core'].visible === false && w51fx['mine-glow'].visible === false;
+  }
+  console.log('wave51h mining fx visibility:', JSON.stringify(w51hChecks));
+  if (!Object.values(w51hChecks).every(Boolean)) { console.log('WAVE51H MINING FX FAIL'); errors++; }
+
+  // -- i. extraction resist and pod tint through the real beam ------------
+  // Same head (Mk IV, 4.4 u/s raw), same frames, two rocks: soft rawOre
+  // (resist 1.0) vs chromeSalt (resist 1.9). The resist divisor is real,
+  // not decorative — the hard rock must yield STRICTLY fewer units, and
+  // the pods carry the rock's commodity AND its podTint. Pods are counted
+  // from ctx.pods (pods.js's update is not stepped: no scooping mid-pin).
+  const ctxI = w51scopedCtx('freehold');
+  const astI = initAsteroids(ctxI);
+  const combatI = initCombat(ctxI);
+  initPods51(ctxI); // the real ctx.pods channel
+  ctxI.player = createShipState('light');
+  ctxI.ship.object = new THREE.Object3D();
+  ctxI.scene.add(ctxI.ship.object);
+  ctxI.world.miningLaser = 3; // Mk IV on both runs — the head is not the variable
+  ctxI.input.weaponGroup = 3;
+  const W51_FIRE_FRAMES = 120; // 2 s of held fire per rock
+  const w51podUnits = () => ctxI.pods.reduce((n, p) => n + p.contents.reduce((m, c) => m + c.units, 0), 0);
+  const w51softRock = ctxI.asteroids.list.find((e) => e.oreKey === 'rawOre' && e.ore >= 8
+    && w51ClearLine(ctxI.asteroids.list, e, 20, MINING_LASERS[3].range)) ?? null;
+  const w51resistRock = ctxI.asteroids.list.find((e) => e.oreKey === 'chromeSalt'
+    && w51ClearLine(ctxI.asteroids.list, e, 20, MINING_LASERS[3].range)) ?? null;
+  let w51softUnits = 0;
+  let w51resistUnits = 0;
+  let w51softCommodityOk = false;
+  let w51softTintOk = false;
+  let w51resistCommodityOk = false;
+  if (w51softRock) {
+    w51AimAt(ctxI, w51softRock, 20);
+    ctxI.input.fireHeld = true;
+    w51step(ctxI, [astI, combatI], W51_FIRE_FRAMES);
+    ctxI.input.fireHeld = false;
+    w51softUnits = w51podUnits();
+    w51softCommodityOk = ctxI.pods.length > 0
+      && ctxI.pods.every((p) => p.contents.every((c) => c.commodity === 'rawOre'));
+    w51softTintOk = ctxI.pods.length > 0
+      && ctxI.pods.every((p) => p.mesh.material.color.getHex() === ORE_TYPES.rawOre.podTint);
+  }
+  ctxI.pods.length = 0; // clear between runs — the scoped scene dies with the pin
+  if (w51resistRock) {
+    w51AimAt(ctxI, w51resistRock, 20);
+    ctxI.input.fireHeld = true;
+    w51step(ctxI, [astI, combatI], W51_FIRE_FRAMES);
+    ctxI.input.fireHeld = false;
+    w51resistUnits = w51podUnits();
+    w51resistCommodityOk = ctxI.pods.length > 0
+      && ctxI.pods.every((p) => p.contents.every((c) => c.commodity === 'chromeSalt'));
+  }
+  const w51iChecks = {
+    softRockFound: !!w51softRock,
+    resistRockFound: !!w51resistRock,
+    softPodsCarryRawOre: w51softCommodityOk,
+    softPodsTinted: w51softTintOk,
+    softRunProductive: w51softUnits >= 7, // theory: 4.4 u/s × ~2 s ≈ 8 units
+    resistRunProductive: w51resistUnits >= 1,
+    resistStrictlySlower: w51resistUnits < w51softUnits, // theory: 4.4/1.9 × ~2 s ≈ 4 units
+    resistPodsCarryChromeSalt: w51resistCommodityOk,
+  };
+  console.log('wave51i extraction resist + pod tint:', JSON.stringify(w51iChecks),
+    `rawOre=${w51softUnits}u chromeSalt=${w51resistUnits}u frames=${W51_FIRE_FRAMES}`);
+  if (!Object.values(w51iChecks).every(Boolean)) { console.log('WAVE51I EXTRACTION RESIST FAIL'); errors++; }
+
+  // -- j. the outfitter ladder through the REAL station UI ----------------
+  // Dock at freehold, open outfitting, and drive the real buttons/digits:
+  // one live button at the stock head naming the Mk II and its 1400 UU
+  // price; the poor click refused; the real buy deducting EXACTLY 1400;
+  // the Mk IV hotkey from rung 1 refused (no rung skipping); the ladder
+  // walked to 3, after which three installed notes stand and NO live
+  // mining button remains. Buttons are re-found after EVERY action —
+  // render() rebuilds the overlay DOM (the wave-30/31 discipline).
+  ctx.world.miningLaser = 0; // TEST SETUP: ladder start (k re-pins every rung below)
+  w30parkHostiles('wave51 hostiles parked (outfitter dock)');
+  dockAtCurrentStation('wave51 dock freehold (outfitter)');
+  dispatchKey('Digit6'); // outfitting (DOCK_KEY_SERVICES[5])
+  const w51outfitOpen = [...walkDom(stationOverlay() ?? { children: [] })]
+    .some((n) => n.textContent === 'OUTFITTING — hull work & instruments');
+  const w51miningBtns = () => {
+    const ov = stationOverlay();
+    if (!ov) return [];
+    return [...walkDom(ov)].filter((n) => n.tagName === 'BUTTON'
+      && /^\d — (Bore laser Mk II|Ferrous cutting head Mk III|Deepcore lance Mk IV) \(\d+ UU\)$/.test(n.textContent ?? ''));
+  };
+  const w51installedNotes = () => [...walkDom(stationOverlay() ?? { children: [] })]
+    .filter((n) => typeof n.textContent === 'string'
+      && /^(Bore laser Mk II|Ferrous cutting head Mk III|Deepcore lance Mk IV) fitted — cuts hardness /.test(n.textContent));
+  const w51btnsAtStock = w51miningBtns();
+  ctx.world.credits = 500; // TEST SETUP: below the Mk II price
+  w51miningBtns()[0]?.click(); // the poor click — refused through the real handler
+  const w51poorRefused = ctx.world.miningLaser === 0;
+  ctx.world.credits = 20000;
+  w51miningBtns()[0]?.click(); // the real Mk II buy
+  const w51mk2Bought = ctx.world.miningLaser === 1 && ctx.world.credits === 20000 - 1400;
+  dispatchKey('Digit7'); // the Mk IV rung from rung 1 — the prerequisite guard
+  const w51noSkip = ctx.world.miningLaser === 1 && ctx.world.credits === 20000 - 1400;
+  const w51btnMk3 = w51miningBtns().find((b) => b.textContent === '6 — Ferrous cutting head Mk III (4200 UU)') ?? null;
+  w51btnMk3?.click();
+  const w51mk3Bought = ctx.world.miningLaser === 2 && ctx.world.credits === 20000 - 1400 - 4200;
+  const w51btnMk4 = w51miningBtns().find((b) => b.textContent === '7 — Deepcore lance Mk IV (11000 UU)') ?? null;
+  w51btnMk4?.click();
+  const w51mk4Bought = ctx.world.miningLaser === 3 && ctx.world.credits === 20000 - 1400 - 4200 - 11000;
+  const w51jChecks = {
+    outfittingOpen: w51outfitOpen,
+    oneLiveButtonAtStock: w51btnsAtStock.length === 1
+      && w51btnsAtStock[0]?.textContent === '5 — Bore laser Mk II (1400 UU)',
+    poorClickRefused: w51poorRefused,
+    mk2BuyExact1400: w51mk2Bought,
+    noRungSkipping: w51noSkip,
+    mk3BuyExact4200: w51mk3Bought,
+    mk4BuyExact11000: w51mk4Bought,
+    threeInstalledNoLiveButton: w51installedNotes().length === 3 && w51miningBtns().length === 0,
+  };
+  console.log('wave51j outfitter ladder:', JSON.stringify(w51jChecks), `credits=${ctx.world.credits}`);
+  if (!Object.values(w51jChecks).every(Boolean)) { console.log('WAVE51J OUTFITTER LADDER FAIL'); errors++; }
+  undockStation(); // leave the dock as the wave-40 discipline found it
+
+  // -- k. save roundtrip: the rung rides the dock autosave, tampering heals
+  // The wave-34 scanner-heal idiom, verbatim: poke ctx.world.miningLaser,
+  // dock (the 'docked' event fires trySave), poll the store for the save
+  // carrying BOTH the poke and a per-case sentinel credits value (rung
+  // values repeat across this run's autosaves — the sentinel proves the
+  // matched save is THIS dock's), die, recover via Enter. Legit 2
+  // survives; 99, '2', null, and 2.5 heal to EXACTLY 0 (a hand-edited
+  // miningLaser must not restore with Deepcore reach for free).
+  const w51saveCases = [
+    { poke: 2, expect: 2 }, // a legit rung rides the roundtrip unchanged
+    { poke: 99, expect: 0 }, // tampered: off the ladder
+    { poke: '2', expect: 0 }, // tampered: right rung, wrong type
+    { poke: null, expect: 0 }, // tampered: JSON null
+    { poke: 2.5, expect: 0 }, // tampered: fractional rung
+  ];
+  const w51saveResults = [];
+  for (let ci = 0; ci < w51saveCases.length; ci++) {
+    const { poke: w51poke, expect: w51expect } = w51saveCases[ci];
+    const w51sentinel = 71231 + ci * 7; // unique per case, provably unlike any earlier autosave
+    if (ctx.flags.docked) undockStation(); // a death-restore ends docked (the wave-34 note)
+    ctx.world.miningLaser = w51poke; // TEST SETUP tamper (the wave-34 scanner poke pattern)
+    ctx.world.credits = w51sentinel; // TEST SETUP sentinel (the wave-30 credits-drift idiom)
+    w30parkHostiles('wave51 hostiles parked (miningLaser save)');
+    dockAtCurrentStation('wave51 dock freehold (miningLaser heal)'); // 'docked' fires trySave
+    let w51snap = null;
+    for (let i = 0; i < 60 * 15 && !w51snap; i++) { // the wave-30 save-wait discipline
+      for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
+      tick(1, 'wave51 miningLaser save wait');
+      try {
+        const s = JSON.parse(store.get('rimward-save-v1') ?? 'null');
+        if (s?.world && 'miningLaser' in s.world && s.world.miningLaser === w51poke
+          && s.world.credits === w51sentinel) w51snap = s;
+      } catch { /* keep waiting */ }
+    }
+    // Die + recover (the wave-26 restore path): a tampered rung loses to the sanitizer.
+    ctx.emit('playerDestroyed', {});
+    tick(2, 'wave51 death consumed (miningLaser heal)');
+    dispatchKey('Enter'); // recover(): restore(last save)
+    tick(2, 'wave51 miningLaser restore settle');
+    w51saveResults.push({
+      poke: String(w51poke),
+      saveCarriesPoke: w51snap !== null, // the poll's predicate already gates value + sentinel
+      miningLaserHealed: ctx.world.miningLaser === w51expect,
+      restoreReadOurSave: ctx.world.credits === w51sentinel,
+    });
+  }
+  const w51kOk = w51saveResults.every((r) => r.saveCarriesPoke && r.miningLaserHealed && r.restoreReadOurSave);
+  console.log('wave51k miningLaser restore heal:', JSON.stringify(w51saveResults));
+  if (!w51kOk) { console.log('WAVE51K MININGLASER HEAL FAIL'); errors++; }
+  if (ctx.flags.docked) undockStation();
+
+  // -- l. economy negatives: manifests stay staple, events move the ores --
+  // LEGAL_KEYS-equivalent recomputation straight off COMMODITIES (the pin
+  // IS the independent recomputation): NPC trader manifests must remain
+  // byte-identical to pre-wave-51 — legal && bulk excludes every exotic.
+  // Then the real applyEventPressure + tickPrices path on a scoped verge
+  // context (module pressure keyed off the live freehold market is never
+  // touched): strikeRush floods the h2 ores a basic head can cut but never
+  // the h4 pair; oreRush crashes the h2/h3 ores and LIFTS voidPlatinum and
+  // wakeglass. Math.random pinned to 0.5 zeroes the random walk so the
+  // pull is deterministic (the wave-34 pin discipline); the loop shape is
+  // settlePrices' own (300 × 0.5 s). Pressure is cleared after — hygiene.
+  const ctxE = w51scopedCtx('verge');
+  initPrices(ctxE);
+  const w51basePrices = { ...ctxE.world.prices };
+  const w51origRandom = Math.random;
+  Math.random = () => 0.5;
+  let w51strikePrices = null;
+  let w51rushPrices = null;
+  try {
+    applyEventPressure(ctxE, 'strikeRush');
+    for (let i = 0; i < 300; i++) tickPrices(ctxE, 0.5);
+    w51strikePrices = { ...ctxE.world.prices };
+    applyEventPressure(ctxE, 'clear', 'verge');
+    applyEventPressure(ctxE, 'oreRush');
+    for (let i = 0; i < 300; i++) tickPrices(ctxE, 0.5);
+    w51rushPrices = { ...ctxE.world.prices };
+    applyEventPressure(ctxE, 'clear', 'verge');
+  } finally {
+    Math.random = w51origRandom;
+  }
+  const w51legalKeys = Object.keys(COMMODITIES).filter((k) => COMMODITIES[k].legal && COMMODITIES[k].bulk);
+  const w51lChecks = {
+    legalKeysExact: JSON.stringify(w51legalKeys) === JSON.stringify(['provisions', 'refinedMetals', 'rawOre', 'livingRock']),
+    strikeCrashesH2: w51strikePrices.slagIron < w51basePrices.slagIron
+      && w51strikePrices.brineIce < w51basePrices.brineIce,
+    strikeLeavesH4Alone: w51strikePrices.voidPlatinum === w51basePrices.voidPlatinum
+      && w51strikePrices.wakeglass === w51basePrices.wakeglass,
+    rushCrashesH2H3: w51rushPrices.slagIron < w51basePrices.slagIron
+      && w51rushPrices.brineIce < w51basePrices.brineIce
+      && w51rushPrices.chromeSalt < w51basePrices.chromeSalt
+      && w51rushPrices.emberglass < w51basePrices.emberglass
+      && w51rushPrices.gildvein < w51basePrices.gildvein,
+    rushLiftsH4: w51rushPrices.voidPlatinum > w51basePrices.voidPlatinum
+      && w51rushPrices.wakeglass > w51basePrices.wakeglass,
+  };
+  console.log('wave51l economy negatives:', JSON.stringify(w51lChecks),
+    `slagIron=${w51basePrices.slagIron}→${w51strikePrices.slagIron}/${w51rushPrices.slagIron} voidPlatinum=${w51basePrices.voidPlatinum}→${w51strikePrices.voidPlatinum}/${w51rushPrices.voidPlatinum}`);
+  if (!Object.values(w51lChecks).every(Boolean)) { console.log('WAVE51L ECONOMY NEGATIVES FAIL'); errors++; }
+
+  // -- m. authored price spread: the haul-coreward loop is real -----------
+  // Recomputed from SYSTEMS + COMMODITIES, independent of market.js: every
+  // authored system carries all seven exotic ore priceBases; the 94
+  // generated systems carry NONE (they fall through to ×1.0 in
+  // baselineFor); and the deep rim prices wakeglass below the core. The
+  // strict pins are verge-below-BOTH band-0 systems and hush-below-
+  // freehold — hush TIES veridian at 0.85, so a blanket deep<core
+  // strictness would be a false pin; the loop the data guarantees is
+  // verge → core (0.70 vs 1.40/0.85).
+  const W51_NEW_ORES = ['slagIron', 'brineIce', 'chromeSalt', 'gildvein', 'emberglass', 'voidPlatinum', 'wakeglass'];
+  const w51authoredIds = Object.keys(AUTHORED_SYSTEMS);
+  const w51generatedIds = Object.keys(SYSTEMS).filter((id) => !AUTHORED_SYSTEMS[id]);
+  const w51wgEff = (id) => COMMODITIES.wakeglass.base * SYSTEMS[id].priceBase.wakeglass;
+  const w51mChecks = {
+    authoredCarryAllSeven: w51authoredIds.every((id) => W51_NEW_ORES
+      .every((k) => Number.isFinite(SYSTEMS[id].priceBase?.[k]))),
+    generatedCarryNone: w51generatedIds.length > 0 && w51generatedIds.every((id) => W51_NEW_ORES
+      .every((k) => !(k in (SYSTEMS[id].priceBase ?? {})))),
+    vergeBelowEveryCore: w51wgEff('verge') < w51wgEff('freehold') && w51wgEff('verge') < w51wgEff('veridian'),
+    hushBelowFreehold: w51wgEff('hush') < w51wgEff('freehold'),
+  };
+  console.log('wave51m authored price spread:', JSON.stringify(w51mChecks),
+    `wakeglassEff=${w51authoredIds.map((id) => `${id}:${w51wgEff(id)}`).join(',')}`);
+  if (!Object.values(w51mChecks).every(Boolean)) { console.log('WAVE51M AUTHORED SPREAD FAIL'); errors++; }
+
+  // -- n. models catalog: one prop per ore plus the cargo pod -------------
+  // The Props tab is how the nine ores get reviewed: exactly one entry per
+  // ORE_KEYS member plus the pre-existing cargo pod; every ore prop builds
+  // a real { object, update, label } model naming its ore; and two builds
+  // of the same prop yield identical geometry vertex counts — the seed is
+  // derived from the ore's index, never a random draw.
+  const w51props = MODEL_CATALOG.filter((e) => e.category === 'Props');
+  const w51oreProps = ORE_KEYS.map((k) => w51props.filter((p) => p.id === `prop:asteroid:${k}`));
+  let w51buildShape = true;
+  let w51vertsDeterministic = true;
+  for (let i = 0; i < ORE_KEYS.length; i++) {
+    const entry = w51oreProps[i][0];
+    if (!entry || typeof entry.build !== 'function') { w51buildShape = false; continue; }
+    const m1 = entry.build();
+    const m2 = entry.build();
+    if (!m1?.object || typeof m1.update !== 'function'
+      || m1.label !== `${COMMODITIES[ORE_KEYS[i]].name} asteroid`) w51buildShape = false;
+    const v1 = m1?.object?.geometry?.attributes?.position?.count ?? -1;
+    const v2 = m2?.object?.geometry?.attributes?.position?.count ?? -2;
+    if (v1 < 0 || v1 !== v2) w51vertsDeterministic = false;
+  }
+  const w51nChecks = {
+    propsCountIsOresPlusPod: w51props.length === ORE_KEYS.length + 1,
+    onePropPerOre: w51oreProps.every((list) => list.length === 1),
+    cargoPodPresent: w51props.some((p) => p.id === 'prop:pod'),
+    buildShapeAndLabel: w51buildShape,
+    vertexCountDeterministic: w51vertsDeterministic,
+  };
+  console.log('wave51n models catalog props:', JSON.stringify(w51nChecks), `props=${w51props.length}`);
+  if (!Object.values(w51nChecks).every(Boolean)) { console.log('WAVE51N MODELS CATALOG FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {

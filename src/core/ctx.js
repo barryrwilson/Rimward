@@ -122,6 +122,10 @@ export function createCtx({ scene, camera, renderer }) {
       activeEvent: null, // current dynamic world event §8.5
       milestones: [], // first-time beats already fired §8.8
       contacts: [], // named station NPCs §12.9 (contacts.js maintains)
+      // Wave 51: installed mining head, an index into MINING_LASERS (0..3).
+      // station.js's outfitter is the only writer; combat.js/hud.js read it.
+      // Same ladder discipline as `scanner` — persisted, sanitized on restore.
+      miningLaser: 0,
     },
 
     // --- star system data + gate/jump surface ---
@@ -185,6 +189,8 @@ export function createCtx({ scene, camera, renderer }) {
     // 'deepening' {id,line} (mystery.js, wave 7)   'lineagePassed' {name,generation,line}
     // 'gunRisen' {name,line} (world.js, wave 10 — aspirant cycle)
     // 'creditorCall' {stage,line}  'originPayoff' {id,line}  'originBeat' {id,line}  (world.js origin arcs)
+    // 'mineBlocked' {asteroidId, oreKey, hardness, needs, line} (combat.js, wave 51 —
+    //   the beam scattered off rock harder than the installed head's tier)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

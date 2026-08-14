@@ -76,6 +76,9 @@ const WORLD_FIELDS = [
   // wave 30: concealedMounts Q-ship ownership flag (station.js outfitting,
   // §29 hidden-mounts bluff)
   'concealedMounts',
+  // wave 51: miningLaser ladder index 0..3 into MINING_LASERS (station.js
+  // outfitting; ctx.world.miningLaser is the only writer target)
+  'miningLaser',
 ];
 
 function snapshot(ctx) {
@@ -169,6 +172,12 @@ function sanitizeRestored(ctx) {
   // would otherwise restore with the Mk II pierce and the station
   // 'installed' note for free (wave-31 security LOW).
   if (![0, 1, 2].includes(ctx.world.scanner)) ctx.world.scanner = 0;
+  // Wave 51: the mining-head ladder is 0/1/2/3 — a hand-edited miningLaser
+  // (99, '2') would otherwise restore with the Deepcore lance's reach,
+  // damage, and hardness-4 access for free (same reasoning as the scanner
+  // heal above). Legacy saves with no key land here too and start on the
+  // stock head, as intended.
+  if (![0, 1, 2, 3].includes(ctx.world.miningLaser)) ctx.world.miningLaser = 0;
   const bio = ctx.bio;
   if (bio) {
     if (!Number.isFinite(bio.hunger)) bio.hunger = 0.15;

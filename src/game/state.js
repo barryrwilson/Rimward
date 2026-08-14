@@ -39,11 +39,60 @@ export const SHIP_CLASSES = {
   frigate: { cruise: 22, burn: 45, creep: 8, stopTime: 5.0, turn: 0.35, hull: 900, shield: 600, engine: 300, role: 'capital' },
 };
 
+// ---------- Mining ladder (§10.3, wave 51) ----------
+// Four cutting heads, bought in order at any station outfitter. `tier` is the
+// ORE_TYPES.hardness a head can cut: a rock harder than the installed tier
+// scatters the beam and yields nothing (combat.js emits 'mineBlocked').
+// Index in this array IS ctx.world.miningLaser (0..3) — the persisted ladder
+// position, same discipline as ctx.world.scanner. extractPerSec is the raw
+// units/second before ORE_TYPES.extractResist divides it, so a Mk IV on soft
+// rawOre is genuinely fast and a Mk IV on wakeglass is merely possible.
+export const MINING_LASERS = [
+  {
+    key: 'mk1', name: 'Mining laser Mk I', tier: 1,
+    extractPerSec: 1.2, range: 90, heatPerShot: 2, damage: 4, cost: 0,
+    beamColor: 0x51ff9e, coreColor: 0xd8fff0, beamWidth: 1.0,
+    line: 'The stock head. It chews soft rock and complains about the rest.',
+  },
+  {
+    key: 'mk2', name: 'Bore laser Mk II', tier: 2,
+    extractPerSec: 2.0, range: 115, heatPerShot: 2.6, damage: 6, cost: 1400,
+    beamColor: 0x6effc4, coreColor: 0xe8fff4, beamWidth: 1.35,
+    line: 'Bore head seated. Slag iron and brine ice come apart now.',
+  },
+  {
+    key: 'mk3', name: 'Ferrous cutting head Mk III', tier: 3,
+    extractPerSec: 3.1, range: 140, heatPerShot: 3.4, damage: 9, cost: 4200,
+    beamColor: 0xa8ff9e, coreColor: 0xf4ffe8, beamWidth: 1.75,
+    line: 'Hegemony pattern, stamped and billed. Salt, gildvein and emberglass open to it.',
+  },
+  {
+    key: 'mk4', name: 'Deepcore lance Mk IV', tier: 4,
+    extractPerSec: 4.4, range: 165, heatPerShot: 4.2, damage: 13, cost: 11000,
+    beamColor: 0xfff0a8, coreColor: 0xffffff, beamWidth: 2.2,
+    line: 'A lance, not a laser. Nothing in the rim is harder than what it will open.',
+  },
+];
+
+/** Installed head for a persisted ladder position; out-of-range heals to Mk I. */
+export function miningLaserFor(tier) {
+  const i = Number.isInteger(tier) ? tier : 0;
+  return MINING_LASERS[i] ?? MINING_LASERS[0];
+}
+
 // ---------- Weapons (§6.3, ×1.5 on speeds/ranges) ----------
 export const WEAPONS = {
   cannon: { name: 'Energy cannon', damage: 8, rof: 6, speed: 900, range: 500, heatPerShot: 4, family: 'energy' },
   disruptor: { name: 'Disruptor', damage: 10, rof: 2.5, speed: 700, range: 350, heatPerShot: 6, family: 'disruptor', shieldMult: 2, engineMult: 2, hullMult: 0.25 },
-  mining: { name: 'Mining laser', damage: 4, rof: 4, speed: 0, range: 90, heatPerShot: 2, family: 'mining', beam: true, extractPerSec: 1.2 },
+  // Wave 51: the 'mining' family entry IS the stock Mk I head, derived from
+  // MINING_LASERS[0] so the ladder is the single source of truth. applyHit
+  // resolves damage families by this key, and combat.js reads the INSTALLED
+  // head via miningLaserFor(ctx.world.miningLaser) — never this row's numbers.
+  mining: {
+    name: MINING_LASERS[0].name, damage: MINING_LASERS[0].damage, rof: 4, speed: 0,
+    range: MINING_LASERS[0].range, heatPerShot: MINING_LASERS[0].heatPerShot,
+    family: 'mining', beam: true, extractPerSec: MINING_LASERS[0].extractPerSec,
+  },
 };
 export const HEAT = { max: 100, coolPerSec: 12, overheatUnlockAt: 40 }; // §6.3 heat-limited
 
@@ -215,15 +264,178 @@ export const ECON = {
 // failResolveBump sting; calmSeconds is the stand-down after a refused
 // demand; demandMin is the floor of a pirate's demand (UU).
 export const HIDDEN_MOUNTS = { cost: 900, bluffBase: 0.35, bluffPerFear: 0.01, failResolveBump: 20, calmSeconds: 90, demandMin: 50 };
+// `bulk: true` marks the staples an NPC freighter actually hauls. Wave 51 added
+// seven exotic ores; without this flag world.js's LEGAL_KEYS manifest roll
+// would put void platinum in a Freehold grain hauler's hold. The four bulk
+// keys are exactly the pre-wave-51 legal set, so trader manifests are
+// unchanged. Exotic ore reaches a market by being MINED and sold, not by
+// spawning in traffic.
 export const COMMODITIES = {
-  provisions: { name: 'Provisions', base: 100, legal: true },
-  refinedMetals: { name: 'Refined metals', base: 240, legal: true },
+  provisions: { name: 'Provisions', base: 100, legal: true, bulk: true },
+  refinedMetals: { name: 'Refined metals', base: 240, legal: true, bulk: true },
   restrictedComponents: { name: 'Restricted components', base: 550, legal: false },
-  rawOre: { name: 'Raw ore', base: 140, legal: true },
-  livingRock: { name: 'Living rock', base: 600, legal: true }, // premium bio food §10.3
+  rawOre: { name: 'Raw ore', base: 140, legal: true, bulk: true },
+  livingRock: { name: 'Living rock', base: 600, legal: true, bulk: true }, // premium bio food §10.3
+  // --- wave 51: the seven exotic ores, hardness 2..4 (see ORE_TYPES) ---
+  slagIron: { name: 'Slag iron', base: 210, legal: true },
+  brineIce: { name: 'Brine ice', base: 265, legal: true },
+  chromeSalt: { name: 'Chrome salt', base: 430, legal: true },
+  gildvein: { name: 'Gildvein', base: 790, legal: true },
+  emberglass: { name: 'Emberglass', base: 650, legal: true },
+  voidPlatinum: { name: 'Void platinum', base: 1180, legal: true },
+  wakeglass: { name: 'Wakeglass', base: 1450, legal: true },
 };
 export const REFINED_ORE_MULT = [1.6, 2.2]; // §10.3
 export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
+
+// ---------- Ore types (§6.8 terrain, §10.3 miner — wave 51) ----------
+// One entry per minable commodity. asteroids.js builds ONE InstancedMesh per
+// ore type present in a field, so `rock` is a full recipe for that mesh's
+// geometry and material; combat.js reads `sparkColor`/`dustColor` to tint the
+// contact burst; pods.js tints the mined pod with `podTint`; hud.js names the
+// rock and compares `hardness` against the installed head's tier.
+//
+// hardness  = MINING_LASERS tier required to cut it at all (1..4).
+// extractResist = divisor on the head's extractPerSec. Hard rock is slow even
+//   with the right head, so the ladder buys speed as well as access.
+// unitsMult = multiplier on the 4..12 base units a rock holds. Valuable ore
+//   comes in small pockets: a wakeglass rock is worth more per unit AND holds
+//   fewer units, so a full hold is a decision, not a formality.
+// blockedLine = the world-tells-first refusal (§13.1) when the head is too weak.
+//
+// shape drives makeRockGeometry: 'lumpy' (pitted stone), 'blocky' (fractured
+// slab), 'crystal' (faceted prism cluster), 'shard' (splintered glass),
+// 'bloom' (grown, near-spherical — living rock and wakeglass).
+export const ORE_TYPES = {
+  rawOre: {
+    commodity: 'rawOre', hardness: 1, extractResist: 1.0, unitsMult: 1.0,
+    sparkColor: 0xffb066, dustColor: 0x8a7a68, podTint: 0x8a7a68,
+    blockedLine: null,
+    rock: {
+      shape: 'lumpy', detail: 1, wobble: [0.75, 1.25], scaleMult: 1.0,
+      hue: [0.07, 0.04], sat: [0.12, 0.12], light: [0.32, 0.18],
+      roughness: 0.95, metalness: 0.08, emissive: 0, emissiveIntensity: 0,
+    },
+  },
+  livingRock: {
+    commodity: 'livingRock', hardness: 1, extractResist: 1.15, unitsMult: 0.8,
+    sparkColor: 0x9fffd0, dustColor: 0x4fbf90, podTint: 0x6fe0b0,
+    blockedLine: null,
+    rock: {
+      shape: 'bloom', detail: 2, wobble: [0.88, 1.12], scaleMult: 0.9,
+      hue: [0.40, 0.05], sat: [0.30, 0.18], light: [0.30, 0.14],
+      roughness: 0.55, metalness: 0.02, emissive: 0x2f8f66, emissiveIntensity: 0.35,
+    },
+  },
+  slagIron: {
+    commodity: 'slagIron', hardness: 2, extractResist: 1.4, unitsMult: 1.1,
+    sparkColor: 0xffd08a, dustColor: 0x6a6a72, podTint: 0x7d7f88,
+    blockedLine: 'Slag iron. The stock head skates off it — you need a bore.',
+    rock: {
+      shape: 'blocky', detail: 1, wobble: [0.62, 1.30], scaleMult: 1.15,
+      hue: [0.60, 0.03], sat: [0.04, 0.06], light: [0.26, 0.14],
+      roughness: 0.80, metalness: 0.35, emissive: 0, emissiveIntensity: 0,
+    },
+  },
+  brineIce: {
+    commodity: 'brineIce', hardness: 2, extractResist: 1.25, unitsMult: 1.2,
+    sparkColor: 0xcdf4ff, dustColor: 0x9fd8e8, podTint: 0xb8e8f4,
+    blockedLine: 'Brine ice. It flashes to vapour and refreezes — cut it with a bore, not a candle.',
+    rock: {
+      shape: 'shard', detail: 1, wobble: [0.55, 1.35], scaleMult: 1.05,
+      hue: [0.53, 0.04], sat: [0.22, 0.16], light: [0.52, 0.16],
+      roughness: 0.22, metalness: 0.05, emissive: 0x2a5a70, emissiveIntensity: 0.25,
+    },
+  },
+  chromeSalt: {
+    commodity: 'chromeSalt', hardness: 3, extractResist: 1.9, unitsMult: 0.75,
+    sparkColor: 0xf0f4ff, dustColor: 0xc8cede, podTint: 0xd8dcea,
+    blockedLine: 'Chrome salt. A bore polishes it. Bring a cutting head.',
+    rock: {
+      shape: 'crystal', detail: 1, wobble: [0.70, 1.22], scaleMult: 0.85,
+      hue: [0.58, 0.06], sat: [0.06, 0.08], light: [0.58, 0.16],
+      roughness: 0.35, metalness: 0.55, emissive: 0x30384a, emissiveIntensity: 0.20,
+    },
+  },
+  gildvein: {
+    commodity: 'gildvein', hardness: 3, extractResist: 2.0, unitsMult: 0.6,
+    sparkColor: 0xffe08a, dustColor: 0xb8913a, podTint: 0xd4af37,
+    blockedLine: 'Gildvein. Every chain in the rim wants it and none of them lend a bore.',
+    rock: {
+      shape: 'lumpy', detail: 2, wobble: [0.72, 1.24], scaleMult: 0.9,
+      hue: [0.12, 0.03], sat: [0.45, 0.20], light: [0.34, 0.14],
+      roughness: 0.45, metalness: 0.70, emissive: 0x6a4c10, emissiveIntensity: 0.30,
+    },
+  },
+  emberglass: {
+    commodity: 'emberglass', hardness: 3, extractResist: 2.1, unitsMult: 0.65,
+    sparkColor: 0xffa050, dustColor: 0xc0602a, podTint: 0xe07838,
+    blockedLine: 'Emberglass. It holds its heat and your beam with it — a cutting head or nothing.',
+    rock: {
+      shape: 'shard', detail: 2, wobble: [0.60, 1.32], scaleMult: 0.95,
+      hue: [0.05, 0.03], sat: [0.55, 0.20], light: [0.30, 0.14],
+      roughness: 0.30, metalness: 0.20, emissive: 0xa03a08, emissiveIntensity: 0.55,
+    },
+  },
+  voidPlatinum: {
+    commodity: 'voidPlatinum', hardness: 4, extractResist: 2.7, unitsMult: 0.42,
+    sparkColor: 0xeaf0ff, dustColor: 0x8e96a8, podTint: 0xc6ccd8,
+    blockedLine: 'Void platinum. Nothing short of a deepcore lance marks it.',
+    rock: {
+      shape: 'blocky', detail: 2, wobble: [0.80, 1.16], scaleMult: 0.75,
+      hue: [0.62, 0.04], sat: [0.05, 0.06], light: [0.44, 0.12],
+      roughness: 0.18, metalness: 0.90, emissive: 0x1e2634, emissiveIntensity: 0.18,
+    },
+  },
+  wakeglass: {
+    commodity: 'wakeglass', hardness: 4, extractResist: 2.9, unitsMult: 0.35,
+    sparkColor: 0xe0c0ff, dustColor: 0x8a5ac0, podTint: 0xb088e8,
+    blockedLine: 'Wakeglass. The Further Shore cuts it with prayer and a lance. You have neither yet.',
+    rock: {
+      shape: 'bloom', detail: 2, wobble: [0.84, 1.18], scaleMult: 0.7,
+      hue: [0.76, 0.05], sat: [0.42, 0.20], light: [0.36, 0.14],
+      roughness: 0.25, metalness: 0.10, emissive: 0x6a30b0, emissiveIntensity: 0.70,
+    },
+  },
+};
+
+export const ORE_KEYS = Object.keys(ORE_TYPES);
+
+// Field composition by BAND (§15), not by per-system data: all 100 systems get
+// a coherent mix with zero churn in authored-systems.js or the generated
+// galaxy. Rimward means richer AND harder — band 0 is a rawOre field with a
+// little slag, band 4 is where void platinum and wakeglass actually live.
+// Band 0's livingRock weight reproduces the pre-wave-51 ~5% roll exactly.
+// Weights are relative, not percentages; pickOreType normalises.
+export const ORE_BAND_WEIGHTS = {
+  0: { rawOre: 62, livingRock: 5, slagIron: 22, brineIce: 8, chromeSalt: 3 },
+  1: { rawOre: 46, livingRock: 5, slagIron: 22, brineIce: 10, chromeSalt: 10, gildvein: 5, emberglass: 2 },
+  2: { rawOre: 32, livingRock: 5, slagIron: 18, brineIce: 10, chromeSalt: 14, gildvein: 9, emberglass: 7, voidPlatinum: 4, wakeglass: 1 },
+  3: { rawOre: 20, livingRock: 4, slagIron: 12, brineIce: 8, chromeSalt: 14, gildvein: 12, emberglass: 12, voidPlatinum: 11, wakeglass: 7 },
+  4: { rawOre: 12, livingRock: 3, slagIron: 8, brineIce: 6, chromeSalt: 11, gildvein: 12, emberglass: 13, voidPlatinum: 18, wakeglass: 17 },
+};
+
+/**
+ * Deterministic ore pick for one rock. `roll` is a 0..1 draw from the field's
+ * seeded RNG, so a system's composition is stable run to run. An unknown band
+ * falls back to band 0 — the safe, soft mix.
+ */
+export function pickOreType(band, roll) {
+  const weights = ORE_BAND_WEIGHTS[band] ?? ORE_BAND_WEIGHTS[0];
+  let total = 0;
+  for (const key in weights) total += weights[key];
+  let acc = roll * total;
+  for (const key in weights) {
+    acc -= weights[key];
+    if (acc <= 0) return key;
+  }
+  return 'rawOre'; // unreachable with finite weights; defensive
+}
+
+/** The ore keys a band can actually produce — asteroids.js sizes its meshes by this. */
+export function oreKeysForBand(band) {
+  return Object.keys(ORE_BAND_WEIGHTS[band] ?? ORE_BAND_WEIGHTS[0]);
+}
 
 // ---------- Star systems (§15.1/§15.3) ----------
 // Wave 19: merged galaxy — authored lane first (contacts.js ledger iteration
