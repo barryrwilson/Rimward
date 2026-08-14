@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ship_skins import SKINS
 from ship_builders import ferrous as ferrous_pilot
 from ship_builders import freehold as freehold_pilot
+from ship_builders import redledger as redledger_pilot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -419,6 +420,7 @@ BUILDERS = {
 PILOTS = {
     'ferrous': ferrous_pilot,
     'freehold': freehold_pilot,
+    'redledger': redledger_pilot,
 }
 
 

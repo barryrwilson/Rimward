@@ -7,7 +7,9 @@
 > historical record of the retired procedural `src/systems/ships/` path and is
 > not a guide for current work.
 > **First proved end to end:** the Freehold Compact fleet, commit `b06a25f`
-> (wave 5) — cutter first, then light, ace, heavy, frigate, freighter.
+> (wave 5) — cutter first, then light, ace, heavy, frigate, freighter. Second
+> run: the Red Ledger fleet (wave 6), which added §4's reference-art rule, the
+> size-convention table in §6, and the two probes in §6.
 
 ## 1. What builds a ship now
 
@@ -168,6 +170,37 @@ Author the station list FIRST and read the extents off it. If the silhouette can
 be described as "a tube with things on it", the class is not done — a motif
 decorates a body, it cannot make one.
 
+### Author from the reference art, not from the bible text alone
+
+This wave's first pass read `docs/FactionShipDesignBible.md` §4.4 and nothing
+else. It passed every numeric gate and was rejected on sight: six smooth
+chamfered lozenges wearing oversized copper boxes. The inputs that were skipped
+are the ones that decide what the fleet looks like, and they are cheap to read:
+
+1. **`docs/FactionExamples/<n>-<faction>-ship.png`** — the faction's own render.
+   The Red Ledger sheet establishes a long low FACETED PLATED WEDGE at roughly
+   5:1, a quilt of small varied plates over the whole flank, dried-red VERTICAL
+   PANELS, copper only as patina on mechanisms, dozens of tiny amber slits low
+   on the flanks, and a thin skeletal boom slung under the bow. None of that is
+   derivable from the bible prose. The escorts in the same frame are the `light`
+   and `ace` briefs.
+2. **`docs/FactionExamples/overview-ships.jpg`** — how the faction must differ
+   from its neighbours at a glance.
+3. **`docs/SpaceShipIdeas/synthesis/21-rimward-gap-analysis.md`** §G6 assigns
+   each faction ONE construction logic and names the signature to model, and §G2
+   assigns each faction ONE outline-breaking element of at least 15 % of hull
+   length. For the Red Ledger those are "exposed frame, salvage: cut-and-welded
+   seams, captured parts of OTHER FACTIONS bolted on" and "the salvage boom".
+   The first pass had neither, which is why the family read as generic.
+4. **`docs/SpaceShipIdeas/synthesis/20-cross-cutting-design-rules.md`** rule 6
+   assigns ONE silhouette family held across all six classes, and rule 8 caps
+   the accent at 3-8 % of area in ONE shape family.
+
+Put these in the brief for every class author, quoted, with the specific reading
+of the image. An author who has not seen the render will produce a plated tube,
+and the gates will pass it.
+
+
 ## 5. Orchestration recipe (what worked for six classes)
 
 1. **Migrate the reference class alone.** One finished class (Freehold's cutter)
@@ -206,6 +239,54 @@ decorates a body, it cannot make one.
 | greeble field at the edge of its box floats | field box longer in `z` than the surface it rides, so the outermost boxes overrun the taper | shrink the field box, and add a second field further aft to restore coverage |
 | lod2 over its triangle cap | detail 1 carries full-count repeated hardware (spokes, tank rank, spheres) | count down with detail: `n = 8 if detail >= 2 else 4`, slice the rank |
 | class green on gates but under its hull band | density spent on primitives instead of surface language | add armour courses and human modules inside the existing band; never subdivide primitives |
+| every seam bead reads as a copper frame twice the hull beam | full extents passed to `kit.box`, which takes HALF-extents | halve at the call site; see the size-convention table below |
+| a ram or drive detaches from its own hull after a "fix" | HALF extents passed to `kit.chamfer_block`/`taper_block`/`wedge`, which take FULL extents | the kit is NOT uniform — check the table before editing any size |
+| one drive's nozzle group measures wider than the hull | `kit.engine_bank` lays every nozzle in ONE row along X, so 6 nozzles at radius-derived spacing spans 12+ units | lay the group as a grid bounded by the housing face (`hw.captured_drive` now does) |
+| a whole quilt or stripe run floats aft of a taper | the construct was given ONE surface figure for a run whose surface falls away | pass `surf` and let it re-sample per plate; a `surf` returning 0.0 self-trims the run |
+| a run of sub-voxel parts each float separately | `kit.greeble_field`'s `sy` is the FIELD BOX height and each greeble is 5-15 % of it, so a 0.06 box emits 0.01-tall greebles below the 0.06 probe voxel | give the field box a real height and seat it `top_y - sy * 0.5` |
+| a greeble field buried INSIDE the hull, still detached | seated on the run's MINIMUM deck height to be "safe", which sinks it below the surface at its own station | sample at the field's own station and shorten the run instead |
+| a collar rib floats at a hull corner | ribs distributed by even ANGULAR sweep land on the chamfered corners, where the lofted hull has already fallen away | distribute ribs across the four FLAT faces, inside each face's straight span |
+
+### The kit is not uniform about size, and nothing catches it
+
+```
+kit.box / kit.plate_grid / kit.panel_lines / kit.greeble_field   -> HALF-extents
+kit.plate_course        -> axis figure is a FULL span, the two cross figures are HALF
+kit.chamfer_block / kit.taper_block / kit.wedge                  -> FULL extents
+kit.cyl / kit.torus / kit.strut                                  -> real radius / depth
+```
+
+No gate sees a size-convention error: spans, ratios, pivot, proxy and even the
+island probe all stay green because an oversized part is still a part and a
+halved one is still attached to something. Only the render shows it. This wave
+lost a round in each direction.
+
+### Two instruments this wave added, and both paid for themselves
+
+`scripts/probe-ledger-parts.py` (Blender, ~3 s) builds every shared construct in
+`hardware.py`, `salvage.py` and `donors.py` at all four detail levels and reports
+object count, bounding box, triangle count, NaN or non-finite vertices,
+degenerate zero-extent parts and illegal `skin_role` values. Run it BEFORE
+dispatching class authors and after every shared-module edit: when the
+foundation is provably clean, a class-level failure cannot be blamed on it. Note
+it must call `bpy.context.view_layer.update()` before reading `matrix_world` —
+kit builders assign `obj.location` without flushing the depsgraph, and reading
+early reports every bmesh part as if it were stacked at the origin.
+
+`scripts/probe-ship-extremes.py` (Blender) answers the two questions
+`measure-ships` and `probe-ship-islands` cannot:
+
+```
+# which parts set the span on each axis, and what the span becomes without them
+blender -b -P scripts/probe-ship-extremes.py -- redledger cutter lod0 --top=5
+# which part is at a float's coordinates (undoes the centre_parts shift for you)
+blender -b -P scripts/probe-ship-extremes.py -- redledger frigate lod0 --at=-0.15,-1.05,-9.75 --r=0.6
+```
+
+Before this existed, two rounds were spent narrowing hull stations while a
+nozzle rail and a radiator were the real beam, and an agent spent two hours
+reconstructing voxel coordinates by hand instead of editing the file. Name the
+part first, then edit.
 
 ## 7. Definition of done for a faction wave
 

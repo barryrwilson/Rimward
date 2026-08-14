@@ -11,8 +11,13 @@ SKIN = {
     # Dark iron — base hull plates welded from seized hardware.
     'base': '#242226',
 
-    # Tarnished copper — transfer collars, grapple mechanisms, adapted interfaces.
-    'panel': '#7B5C3A',
+    # Weathered salvage plate. Was #7B5C3A bright tarnished copper, which the
+    # reference render (docs/FactionExamples/04-red-ledger-ship.png) does not
+    # support: copper there is PATINA on small mechanisms, never a slab. Cross-
+    # cutting rule 8 wants a low-chroma field, so the secondary tone is now a
+    # desaturated iron-brown. Copper survives one step brighter through
+    # ROLE_TRIM (panel x 1.12) on rails, strips and edges.
+    'panel': '#5E4630',
 
     # Dried red — scored tally marks, boarding spike, prize-count scratches.
     'accent': '#8C2E22',
@@ -27,8 +32,9 @@ SKIN = {
     # Iron hull very rough; tarnished copper moderately rough; scored accent slightly rough.
     'roughness': (0.76, 0.62, 0.70),
 
-    # Panel density: organized copper runs at seams and transfer points, not saturating.
-    'panel_density': 0.50,
+    # Panel density drives the ATLAS pattern only. Organised copper runs at
+    # seams and transfer points, thinned so the iron field stays dominant.
+    'panel_density': 0.34,
 
     # Accent density: tally marks discrete, confined to prize-logging surfaces.
     'accent_density': 0.30,

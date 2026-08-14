@@ -2263,6 +2263,62 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   loft, plus a freighter lod2 at 8576 triangles against an 8000 cap. Proportion
   pins cannot see a floating window row. probe-ship-islands is the authoring gate;
   run it per class, immediately after each bake.
+- Wave 6 of the faction rebuild: the RED LEDGER fleet, six hand-authored classes on
+  the Blender GLB pipeline, and the wave that put the REFERENCE ART on the record as
+  a required input.
+  WHAT SHIPPED: scripts/ship_builders/redledger/ as a package — surface.py (hull
+  queries + the absolute human module), hardware.py (15 equipment constructs: weld
+  beads, capture collars, tally bands, grapple arms, clamp pads, breach tube,
+  shutter wells, ransom vaults, counting houses, transfer locks, captured drives,
+  reverse blocks, ram prow, lamp runs, radiators), salvage.py (the faction's own
+  surface language: plate_quilt, stripe_block, stripe_group, salvage_boom) and
+  donors.py (CAPTURED PARTS OF OTHER FACTIONS: a Combine instrument head, a
+  Hegemony rib belt, a Compact habitation drum, a Chain scale panel, plus weld_strap
+  and cut_edge), then one file per class. redledger added to PILOTS in
+  build-ship-assets.py; ship_skins/redledger.py panel retoned #7B5C3A -> #5E4630
+  (weathered salvage, not bright copper) with panel_density 0.50 -> 0.34.
+  MEASURED: light 19,072v/7.1, ace 13,764v/7.4, cutter 24,522v/11.9, heavy
+  30,682v/17.1, frigate 58,336v/33.4, freighter 110,560v/79.3 — ladder monotone,
+  every class inside its SHIP_SCALE hull band, proxy cover 99.2-100 %, len/beam
+  2.37-4.29 (the faction is a WEDGE family, so the small classes run 3.3-4.3).
+  VERIFIED: measure-ships redledger ALL PASS; probe-ship-islands ONE CONNECTED BODY
+  for all six; validate-ship-assets PASS (72 sources, 228 Meshopt LODs, 228 GLB
+  content checks) with freighter lod0 56,052 tris against the 60,000 cap; test:boot
+  BOOT TEST PASS with redledgerSpan/Proportion/Pivot/ProxyCover/ClassOrdering true;
+  sheets at out/silhouettes/redledger-{shape,scale,render}.png; browser-verified in
+  the Models Browser (real Chrome, --use-angle=swiftshader) at entries 24-34.
+  THE LESSON OF THE WAVE, and it is the important one: the first pass was authored
+  from the bible §4.4 PROSE ALONE. It passed every numeric gate and was rejected on
+  sight as six smooth lozenges wearing copper boxes. Nobody had opened
+  docs/FactionExamples/04-red-ledger-ship.png (a long low faceted plated wedge at
+  ~5:1, whole-flank plate quilt, dried-red VERTICAL panels, copper only as patina,
+  tiny amber slits, a skeletal boom slung under the bow) or
+  docs/SpaceShipIdeas/synthesis/21 §G6 (Red Ledger = exposed-frame SALVAGE, with
+  CAPTURED PARTS OF OTHER FACTIONS bolted on) and §G2 (its outline-breaker is the
+  salvage boom, >= 15 % of hull length). The re-authoring round added all of it.
+  docs/ShipAssetPipeline.md §4 now makes reading the render and the synthesis files
+  a required step in every class brief.
+  THE SECOND LESSON: the kit is NOT uniform about size — kit.box/plate_grid/
+  panel_lines/greeble_field take HALF extents, kit.chamfer_block/taper_block/wedge
+  take FULL extents, kit.plate_course mixes the two. No gate can see the error, so
+  it cost a corrective round in EACH direction (seam beads twice the hull beam;
+  then a ram detached from its own hull). The table is now in the pipeline doc.
+  NEW INSTRUMENTS: scripts/probe-ledger-parts.py builds every shared construct at
+  all four detail levels and reports NaN, degenerate parts, illegal roles and
+  bounding boxes (~3 s, and it must call view_layer.update() before reading
+  matrix_world); scripts/probe-ship-extremes.py names the parts that SET each span
+  and, with --at, names the part at a float's post-centring coordinates. The second
+  one found in one run what two rounds of station-narrowing had missed: a single
+  drive's 6-nozzle group was laid in ONE row 15 units wide by kit.engine_bank, so
+  hw.captured_drive now lays a grid bounded by the housing face.
+  ALSO FIXED CENTRALLY: sv.plate_quilt and sv.stripe_group take a `surf` callback
+  and re-sample the surface per plate (one figure per run floated 135 groups on the
+  frigate and 47 on the freighter); capture_collar ribs moved off the chamfered
+  corners onto the four flat faces.
+  SUBAGENT NOTE: one agent ran two hours reconstructing voxel coordinates by hand
+  and edited nothing; it was cancelled and its work redone in 30 minutes with an
+  explicit ban on running instruments. Diagnose centrally with the probes, hand the
+  agent the named part, and forbid the archaeology.
 
 ## Next round candidates (wave 48)
 - Wave 47 contract notes for future work: Phase 7 of
