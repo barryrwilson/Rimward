@@ -40,6 +40,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   oreKey, hardness }` with `id === array index` — combat.js and hud.js both
   dereference it, and 'mineHit'/'mineBlocked' asteroidId semantics ride on it
   (wave 51).
+- Asteroid look is DATA: `ORE_TYPES[key].rock` owns shape, craters,
+  axisJitter and the `surface` recipe; asteroids.js holds no per-ore
+  constants and rock-surface.js reads the recipe only (wave 52).
 
 ## Wave history
 
@@ -2636,6 +2639,82 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   THE HARNESS: scripts/boot-test.mjs gained a wave-51 section pinning
   the ladder, the gate, the per-ore meshes and the readout; the boot
   run ends BOOT TEST PASS.
+- Wave 52: rock that reads as rock — nine ores, nine surfaces
+  (orchestrated; parallel slices per shape and per style, reviewed in the
+  models browser between rounds). Since wave 51 the field was tinted
+  glass: ONE geometry per ore drawn at a UNIFORM scale, ~240-400 verts of
+  radial wobble, and a white MeshStandardMaterial with flatShading over
+  huge facets. Every rock of an ore was the same silhouette at the same
+  size, and the only variation was one per-instance HSL tint.
+  THE DATA: every `ORE_TYPES[key].rock` gained `craters` (stony and
+  metal bodies only), `axisJitter`, and a `surface` recipe (style, noise
+  scale, contrast, bump, roughVar, dark/light pair, plus style extras
+  rustColor / veinColor+veinWidth / crackColor+crackWidth+crackGlow /
+  glowColor+glowWidth, and `flat` which now decides flatShading).
+  Light bands dropped and emissiveIntensity fell across the board: a
+  whole-surface emissive lift is what made every ore read pale.
+  THE SHAPES: five builders, each with ALL rng draws in one up-front
+  fixed-count block (the vertex loop draws nothing, so a seed's draw
+  count can never depend on the values drawn) and a float32-safe clamp
+  into the mining-raycast radius contract — makeLumpyRock (lobes +
+  4-octave fBm + crater bowls with narrow raised rims at several
+  scales; rawOre, gildvein), makeBlockyRock (spherify blend, six armour
+  plates, craters, then 3-5 cleavage planes applied LAST so fracture
+  faces stay dead flat; slagIron, voidPlatinum), makeShardRock
+  (orthonormal splinter frame, ten sphere-uniform cuts, terrace steps,
+  chips; brineIce, emberglass), makeCrystalRock (rocky core plus 12-20
+  capped prisms in two tiers, merged to ONE geometry — the ore's mesh
+  takes one geometry and one material; chromeSalt), makeBloomRock (4-6
+  spaced growth lobes with fusion-seam creases, welded smooth normals;
+  livingRock, wakeglass). polyDetail gained an opt-in `budget` argument
+  so only the rebuilt shapes leave the wave-51 ~400-vert cap.
+  THE CLONES: build() draws per-rock axis ratios (largest component
+  EXACTLY 1, so no axis exceeds rock.radius and the raycast sphere still
+  holds) plus a static tilt folded into the tumble quaternion; every
+  transform site composes _scale.copy(rock.scaleVec) instead of
+  setScalar. A profile without axisJitter gets (1,1,1) and an identity
+  tilt, so the call sites stay branch-free.
+  THE SURFACE: new src/systems/rock-surface.js — applyRockSurface
+  patches the shared material through onBeforeCompile (six anchors
+  verified against three 0.170's meshphysical chunks; inject() THROWS on
+  a missing anchor rather than silently no-oping). Object-space fBm
+  albedo seeded per instance from instanceMatrix[3].xyz, grain-driven
+  roughness, a frequency-derived and tangent-clamped normal
+  perturbation, cavity darkening, and eight styles: regolith, metal
+  (coherent oxidation patches that also drop metalnessFactor), ice
+  (pale frost, blue only in cavity troughs, bimodal polish), facet
+  (Worley salt grains), vein (connected gold bands at metalness 1.0),
+  ember (thin emissive cracks on dark glass), bloom (organic mottle
+  with rim lift), wake (luminous filaments). No textures, no new
+  dependencies, no DOM at import time (the harness imports it without
+  WebGL); recipe values are baked as GLSL literals and
+  customProgramCacheKey carries the style, so two ores sharing a style
+  never share a program.
+  THE LESSON WORTH THE WAVE: procedural detail is invisible at the
+  wrong FREQUENCY. Round one shipped a correct shader at scale 3.1 —
+  three noise cells across a unit body — and rendered a smooth white
+  blob. Round two calmed the albedo span (0.30..1.5, sd 0.33 was
+  confetti; the eight non-regolith styles now sit inside ~0.70..1.35 at
+  sd <= 0.15) and moved the energy into the fine octaves. Every round
+  was judged from a screenshot, never from the numbers alone.
+  THE FINS: clipping a non-indexed octahedron leaves vertices still
+  outside a second, nearly parallel plane after ONE argmax projection,
+  and needle triangles where a cut edge crosses a face. Both render as
+  thin bright wedges apparently sticking out of the ends (reviewed and
+  rejected twice). The projection now repeats until nothing protrudes,
+  and any triangle whose quality 4*sqrt(3)*A/(a^2+b^2+c^2) falls below
+  0.05 collapses to its own centroid — zero area, nothing rasterised,
+  and no neighbour moves because every vertex is private to its face.
+  The same review killed the loaf silhouette: 1.80x elongation on a
+  scaled sphere with cuts drawn within ~45 degrees of the long axis only
+  shaved the tips, so the stretch dropped to 1.32-1.54x and each cut now
+  sits at 74-92% of the body's OWN support along its normal — an
+  absolute offset never reaches a thin axis whose support is ~0.45,
+  which is why those faces stayed round.
+  THE HARNESS: no new section — wave 51's per-ore mesh, composition and
+  determinism pins already cover the rebuild, and they pass unchanged
+  (BOOT TEST PASS). Geometry review happens in the models browser: nine
+  'prop:asteroid:<oreKey>' entries, which is why that browser exists.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now
