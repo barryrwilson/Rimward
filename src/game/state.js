@@ -312,9 +312,20 @@ export const ORE_TYPES = {
     sparkColor: 0xffb066, dustColor: 0x8a7a68, podTint: 0x8a7a68,
     blockedLine: null,
     rock: {
-      shape: 'lumpy', detail: 1, wobble: [0.75, 1.25], scaleMult: 1.0,
-      hue: [0.07, 0.04], sat: [0.12, 0.12], light: [0.32, 0.18],
-      roughness: 0.95, metalness: 0.08, emissive: 0, emissiveIntensity: 0,
+      shape: 'lumpy', detail: 3, wobble: [0.80, 1.20], scaleMult: 1.0,
+      hue: [0.07, 0.05], sat: [0.05, 0.08], light: [0.11, 0.10],
+      roughness: 1.0, metalness: 0.0, emissive: 0, emissiveIntensity: 0,
+      // Wave 52 rawOre pilot — a real rock, not a tinted facet:
+      // craters  -> makeRockGeometry carves bowls + rims (asteroids.js)
+      // axisJitter -> per-instance axis ratios, so one shared geometry
+      //   never reads as a field of clones (asteroids.js build)
+      // surface  -> procedural in-shader detail recipe (rock-surface.js)
+      craters: { count: 6, radius: [0.16, 0.44], depth: 0.17, rim: 0.055 },
+      axisJitter: 0.34,
+      surface: {
+        style: 'regolith', scale: 9.0, contrast: 0.62, bump: 1.6, roughVar: 0.22,
+        darkColor: 0x241d16, lightColor: 0xa8977c,
+      },
     },
   },
   livingRock: {
@@ -323,8 +334,13 @@ export const ORE_TYPES = {
     blockedLine: null,
     rock: {
       shape: 'bloom', detail: 2, wobble: [0.88, 1.12], scaleMult: 0.9,
-      hue: [0.40, 0.05], sat: [0.30, 0.18], light: [0.30, 0.14],
-      roughness: 0.55, metalness: 0.02, emissive: 0x2f8f66, emissiveIntensity: 0.35,
+      hue: [0.40, 0.05], sat: [0.28, 0.14], light: [0.16, 0.10],
+      roughness: 0.55, metalness: 0.02, emissive: 0x2f8f66, emissiveIntensity: 0.18,
+      axisJitter: 0.22, // grown bodies are lopsided, not stretched
+      surface: {
+        style: 'bloom', scale: 9.0, contrast: 0.30, bump: 1.0, roughVar: 0.18,
+        darkColor: 0x0c2116, lightColor: 0x4f9e74, flat: false,
+      },
     },
   },
   slagIron: {
@@ -333,8 +349,14 @@ export const ORE_TYPES = {
     blockedLine: 'Slag iron. The stock head skates off it — you need a bore.',
     rock: {
       shape: 'blocky', detail: 1, wobble: [0.62, 1.30], scaleMult: 1.15,
-      hue: [0.60, 0.03], sat: [0.04, 0.06], light: [0.26, 0.14],
-      roughness: 0.80, metalness: 0.35, emissive: 0, emissiveIntensity: 0,
+      hue: [0.60, 0.03], sat: [0.04, 0.06], light: [0.12, 0.08],
+      roughness: 0.85, metalness: 0.30, emissive: 0, emissiveIntensity: 0,
+      craters: { count: 5, radius: [0.14, 0.38], depth: 0.15, rim: 0.05 },
+      axisJitter: 0.30,
+      surface: {
+        style: 'metal', scale: 12.0, contrast: 0.32, bump: 1.5, roughVar: 0.25,
+        darkColor: 0x14161a, lightColor: 0x5c5e66, rustColor: 0x4a2a14, flat: true,
+      },
     },
   },
   brineIce: {
@@ -342,9 +364,18 @@ export const ORE_TYPES = {
     sparkColor: 0xcdf4ff, dustColor: 0x9fd8e8, podTint: 0xb8e8f4,
     blockedLine: 'Brine ice. It flashes to vapour and refreezes — cut it with a bore, not a candle.',
     rock: {
+      // Wave 52: the shard splinter silhouette stays (reviewed and kept);
+      // the paper-thin tip fins were a makeShardRock clipping bug, fixed
+      // there. Only the surface recipe changed: pale frost instead of a
+      // uniform mid-blue body, with blue confined to cavity troughs.
       shape: 'shard', detail: 1, wobble: [0.55, 1.35], scaleMult: 1.05,
-      hue: [0.53, 0.04], sat: [0.22, 0.16], light: [0.52, 0.16],
-      roughness: 0.22, metalness: 0.05, emissive: 0x2a5a70, emissiveIntensity: 0.25,
+      hue: [0.53, 0.04], sat: [0.14, 0.10], light: [0.44, 0.14],
+      roughness: 0.22, metalness: 0.05, emissive: 0, emissiveIntensity: 0,
+      axisJitter: 0.28,
+      surface: {
+        style: 'ice', scale: 13.0, contrast: 0.30, bump: 1.1, roughVar: 0.45,
+        darkColor: 0x2e6d86, lightColor: 0xeaf6ff, flat: true,
+      },
     },
   },
   chromeSalt: {
@@ -353,8 +384,13 @@ export const ORE_TYPES = {
     blockedLine: 'Chrome salt. A bore polishes it. Bring a cutting head.',
     rock: {
       shape: 'crystal', detail: 1, wobble: [0.70, 1.22], scaleMult: 0.85,
-      hue: [0.58, 0.06], sat: [0.06, 0.08], light: [0.58, 0.16],
-      roughness: 0.35, metalness: 0.55, emissive: 0x30384a, emissiveIntensity: 0.20,
+      hue: [0.58, 0.06], sat: [0.06, 0.08], light: [0.38, 0.12],
+      roughness: 0.35, metalness: 0.55, emissive: 0x30384a, emissiveIntensity: 0.10,
+      axisJitter: 0.24,
+      surface: {
+        style: 'facet', scale: 14.0, contrast: 0.34, bump: 0.8, roughVar: 0.28,
+        darkColor: 0x2b323c, lightColor: 0xc4ccd8, flat: true,
+      },
     },
   },
   gildvein: {
@@ -362,9 +398,16 @@ export const ORE_TYPES = {
     sparkColor: 0xffe08a, dustColor: 0xb8913a, podTint: 0xd4af37,
     blockedLine: 'Gildvein. Every chain in the rim wants it and none of them lend a bore.',
     rock: {
-      shape: 'lumpy', detail: 2, wobble: [0.72, 1.24], scaleMult: 0.9,
-      hue: [0.12, 0.03], sat: [0.45, 0.20], light: [0.34, 0.14],
-      roughness: 0.45, metalness: 0.70, emissive: 0x6a4c10, emissiveIntensity: 0.30,
+      shape: 'lumpy', detail: 3, wobble: [0.72, 1.24], scaleMult: 0.9,
+      hue: [0.12, 0.03], sat: [0.22, 0.12], light: [0.12, 0.07],
+      roughness: 0.70, metalness: 0.25, emissive: 0x6a4c10, emissiveIntensity: 0.10,
+      craters: { count: 5, radius: [0.15, 0.40], depth: 0.16, rim: 0.05 },
+      axisJitter: 0.32,
+      surface: {
+        style: 'vein', scale: 9.5, contrast: 0.34, bump: 1.4, roughVar: 0.22,
+        darkColor: 0x1a150e, lightColor: 0x6a5f4c,
+        veinColor: 0xe8b73a, veinWidth: 0.10, flat: false,
+      },
     },
   },
   emberglass: {
@@ -373,8 +416,14 @@ export const ORE_TYPES = {
     blockedLine: 'Emberglass. It holds its heat and your beam with it — a cutting head or nothing.',
     rock: {
       shape: 'shard', detail: 2, wobble: [0.60, 1.32], scaleMult: 0.95,
-      hue: [0.05, 0.03], sat: [0.55, 0.20], light: [0.30, 0.14],
-      roughness: 0.30, metalness: 0.20, emissive: 0xa03a08, emissiveIntensity: 0.55,
+      hue: [0.05, 0.03], sat: [0.40, 0.16], light: [0.10, 0.07],
+      roughness: 0.30, metalness: 0.20, emissive: 0xa03a08, emissiveIntensity: 0.22,
+      axisJitter: 0.30,
+      surface: {
+        style: 'ember', scale: 11.0, contrast: 0.36, bump: 1.3, roughVar: 0.20,
+        darkColor: 0x0d0705, lightColor: 0x3c1c10,
+        crackColor: 0xff7a2a, crackWidth: 0.09, crackGlow: 1.1, flat: true,
+      },
     },
   },
   voidPlatinum: {
@@ -383,8 +432,14 @@ export const ORE_TYPES = {
     blockedLine: 'Void platinum. Nothing short of a deepcore lance marks it.',
     rock: {
       shape: 'blocky', detail: 2, wobble: [0.80, 1.16], scaleMult: 0.75,
-      hue: [0.62, 0.04], sat: [0.05, 0.06], light: [0.44, 0.12],
-      roughness: 0.18, metalness: 0.90, emissive: 0x1e2634, emissiveIntensity: 0.18,
+      hue: [0.62, 0.04], sat: [0.05, 0.06], light: [0.20, 0.08],
+      roughness: 0.28, metalness: 0.90, emissive: 0x1e2634, emissiveIntensity: 0.10,
+      craters: { count: 4, radius: [0.12, 0.30], depth: 0.12, rim: 0.04 },
+      axisJitter: 0.26,
+      surface: {
+        style: 'metal', scale: 9.0, contrast: 0.30, bump: 1.0, roughVar: 0.20,
+        darkColor: 0x0e1014, lightColor: 0x6a7280, rustColor: 0x1e242e, flat: true,
+      },
     },
   },
   wakeglass: {
@@ -393,8 +448,14 @@ export const ORE_TYPES = {
     blockedLine: 'Wakeglass. The Further Shore cuts it with prayer and a lance. You have neither yet.',
     rock: {
       shape: 'bloom', detail: 2, wobble: [0.84, 1.18], scaleMult: 0.7,
-      hue: [0.76, 0.05], sat: [0.42, 0.20], light: [0.36, 0.14],
-      roughness: 0.25, metalness: 0.10, emissive: 0x6a30b0, emissiveIntensity: 0.70,
+      hue: [0.76, 0.05], sat: [0.34, 0.14], light: [0.14, 0.09],
+      roughness: 0.25, metalness: 0.10, emissive: 0x6a30b0, emissiveIntensity: 0.30,
+      axisJitter: 0.24,
+      surface: {
+        style: 'wake', scale: 8.5, contrast: 0.34, bump: 1.1, roughVar: 0.22,
+        darkColor: 0x120a1e, lightColor: 0x6a4ba8,
+        glowColor: 0x7a3ce0, glowWidth: 0.14, flat: false,
+      },
     },
   },
 };
