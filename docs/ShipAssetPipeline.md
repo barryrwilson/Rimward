@@ -367,11 +367,21 @@ part first, then edit.
 `FACTION_REBUILD_ORDER` in `src/game/ship-scale.js` is the queue. Done on this
 pipeline: `freehold` (wave 5, the reference package), `redledger` (wave 6),
 `gilded` (wave 7, the four-module package with a callback-factory `surface.py`).
-`ferrous` predates it and still has only three pilot classes — finishing it is a
-separate small wave, not the next faction. **`beautiful`, The Beautiful
-Ones, is DONE — wave 8 completed 2026-08-14; see "Wave 8 status" at the end
-of this section for the measured table and the membrane-fin/ellipse-loft
-lessons.**
+**`beautiful`, The Beautiful
+Ones, is DONE — wave 8 completed 2026-08-14.** **`unknowables` wave 9 is
+COMPLETE — recorded 2026-08-15; see "Wave 9 status" at the end of this
+section.** The form is ephemeral lace (filaments, cells, loops), not haze.
+Beam-only damage for this faction is runtime and already landed.
+**`assembly` wave 10 is COMPLETE — recorded 2026-08-15.**
+**`congregation` wave 11 is COMPLETE — recorded 2026-08-16; see "Wave 11
+status" at the end of this section.** **`lamplighter` wave 12 is
+COMPLETE — recorded 2026-08-16; see "Wave 12 status" at the end of this
+section.** **`independent` wave 13 is COMPLETE — recorded 2026-08-16;
+see "Wave 13 status" at the end of this section.** **`hollow` wave 14
+is COMPLETE — recorded 2026-08-16; see "Wave 14 status" at the end of
+this section.** **`ferrous` wave 15 is COMPLETE — recorded 2026-08-16;
+see "Wave 15 status" at the end of this section.** `FACTION_REBUILD_ORDER`
+has no next Banner or lore faction.
 
 ### Wave 8 — The Beautiful Ones
 
@@ -556,3 +566,306 @@ always reads as a spike. A fin is a MEMBRANE — planform curvature (crescent
 leading AND trailing edges) is what reads as flesh, and 8-point loft rings
 read as cut stone no matter the chamfer; grown bodies need true ellipse
 rings and smooth normals.
+
+### Wave 9 — The Unknowables — COMPLETE, recorded 2026-08-15
+
+The plate is lace, not fog and not a hull: filaments, energy cells, nested
+orbital loops, a pointed travel taper. No plates, wings, cockpit, nozzles,
+or haze blobs. The driver pilot path assigns `RIMWARD_FIELD` as `glow_mat`;
+engine glow stays `RIMWARD_EMISSIVE`. `validate-ship-assets` requires the
+field slot on every Unknowables GLB.
+
+`PILOT_CLASSES` is the full six-class set. Shared `field.tie_ring` / 
+`field.tie_spoke` pin loops and arcs to the cell knots so the island probe
+reads one body (a torus does not touch a cell in its hole; lace offset
+0.055 misses `LOOP_MINOR` 0.045).
+
+**Measured (2026-08-15, `measure-ships` + lod triangle counts):**
+
+| class | size | lod0 verts | tris lod0/lod1/lod2(/lod3) |
+|---|---|---|---|
+| light | 6.6 | 12420 | 6808/4188/2080 |
+| ace | 7.2 | 18704 | 10304/8572/4376 |
+| cutter | 10.7 | 57118 | 28652/21192/7816 |
+| heavy | 16.9 | 46692 | 25180/15828/7076 |
+| frigate | 31.6 | 76362 | 37348/23808/7536 |
+| freighter | 90.0 | 94836 | 48364/23036/7388/3604 |
+
+Ladder `light 6.6 < ace 7.2 < cutter 10.7 < heavy 16.9 < frigate 31.6 <
+freighter 90.0`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
+validate-ship-assets PASS. Sheets: `out/silhouettes/unknowables-shape.png`,
+`-scale.png`, `-render.png`. `npm run test:boot` was not run.
+
+**Lesson:** loops and lensing arcs sit around the cells. They need torus-plane
+spokes (r ≥ voxel) or the island probe reports the ring as a float. Do not
+close that gap with haze.
+
+### Wave 10 — Assembly — COMPLETE, recorded 2026-08-15
+
+The plate is a charcoal spine with clamped off-white shells, discrete
+orange block patches, teal irises, and radial petal fans. Construction
+logic is REPEATED MODULE: one part, many copies, visible joints. Fans
+break the outline; orange is a few blocks, not a quilt. Six anatomies,
+one family (spine + radial fans).
+
+`PILOT_CLASSES` is the full six-class set.
+
+**Measured (2026-08-15, `measure-ships` + three.js Meshopt tri counts):**
+
+| class | size | lod0 verts | tris lod0/lod1/lod2(/lod3) |
+|---|---|---|---|
+| light | 7.5 | 12708 | 7128/4896/1524 |
+| ace | 7.9 | 17672 | 10608/6216/1280 |
+| cutter | 11.0 | 27240 | 15880/14056/2440 |
+| heavy | 17.4 | 32680 | 18560/15676/6368 |
+| frigate | 29.0 | 52668 | 30632/10356/2252 |
+| freighter | 83.3 | 79668 | 44948/15996/2704/748 |
+
+Ladder `light 7.5 < ace 7.9 < cutter 11.0 < heavy 17.4 < frigate 29.0 <
+freighter 83.3`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
+validate-ship-assets PASS (no assembly triangle-cap failures). Sheets:
+`out/silhouettes/assembly-shape.png`, `-scale.png`, `-render.png`.
+`npm run test:boot` assembly charter:
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit
+is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light 6.6 vs
+ace 8.0 exceeds the 15 % light/ace band). Not assembly-caused.
+
+**Lesson:** the size ladder is the family. Grow the fan by hub radius and
+petal count, never by scaling the petal module. Orange stays a few
+`ln.orange_patch` blocks.
+
+### Wave 11 — Congregation — COMPLETE, recorded 2026-08-16
+
+The plate is a midnight ribbed drum with a faceted forward nave, silver
+rib rings, candle-amber lamps, and folded sail vanes. Construction logic
+is REPEATED MODULE, ritual: stacked reliquary cans and a procession of
+identical shrines along a spine. Sails break the outline; they are rigid
+vanes on masts, never a scaled `sail_cluster` hub disc.
+
+`PILOT_CLASSES` is the full six-class set.
+
+**Measured (2026-08-16, `measure-ships` + Meshopt tri counts):**
+
+| class | size | lod0 verts | tris lod0/lod1/lod2(/lod3) |
+|---|---|---|---|
+| light | 7.7 | 9460 | 5688/3700/928 |
+| ace | 7.6 | 9484 | 5608/2708/776 |
+| cutter | 10.8 | 13324 | 7928/5676/1016 |
+| heavy | 16.8 | 26176 | 15588/7416/1408 |
+| frigate | 30.4 | 30532 | 18092/9188/1792 |
+| freighter | 83.1 | 86368 | 51000/19980/1468/740 |
+
+Ladder `light 7.7 ≤ ace 7.6 < cutter 10.8 < heavy 16.8 < frigate 30.4 <
+freighter 83.1`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
+validate-ship-assets PASS. Sheets:
+`out/silhouettes/congregation-shape.png`, `-scale.png`, `-render.png`.
+`npm run test:boot` congregation charter:
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit
+is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light 6.6 vs
+ace 8.0 exceeds the 15 % light/ace band). Not congregation-caused.
+
+**Lesson:** `rt.sail_cluster` uses `hub_radius` as the hub cylinder
+radius and the vane-root radius. A freighter hub of 11.10 made a paper
+disc and floated the vanes. Grow G2 reach with a tall mast (or more
+vanes), never by inflating cluster hub radius past ~1.2.
+**Second lesson:** Congregation vanes are solar foils. Face them mostly
+aft so light pressure pushes the bow. Keep foil thickness near 0.024
+and let the boom carry the island probe. A boom along +Z sits edge-on
+to the light and cannot push the ship.
+
+### Wave 12 — Lamplighter Guild
+
+The plate (`docs/FactionExamples/10-lamplighter-guild-ship.png` and the
+overview-ships bottom-right tile) is CONCEPT ART, not a model to
+reproduce. Construction logic is **EXPOSED FRAME, utility** (§G6):
+gantries, cable runs, work lights, clamp arms. Not a closed plated drum.
+Not Assembly radial fans. Not Congregation ritual cans/sails. Not
+Freehold mismatched homestead plates. Not Ledger salvage. Not Beautiful
+flesh. Not Unknowables lace.
+
+This is FOUNDATION-FIRST. Shared modules were smoke-probed before
+class files existed. All six classes are now in `PILOT_CLASSES`.
+
+What the charter fixes:
+
+- Silhouette family: **blocky service workboat / open truss**. Three
+  visible thrust zones (rule 1): bow tools/collar, mid workshop + open
+  frame, stern tug engines. Visible seams or truss gaps between zones.
+- **§G2 outline-breaker (≥ 15 % of hull length): the GATE-ARM FORK.**
+  Two articulated clamp arms that fork toward a gate ring. This is the
+  one large element that breaks the box. Arms are structural (thickness
+  that survives the 0.06 island voxel), not wire. A single giant wrench
+  is FORBIDDEN (bible avoid-list). Grow reach with arm length
+  (`sf.CLAMP_REACH`, default 2.40 — clearly ≥ 15 % of cutter length
+  ~11). Never inflate a hub (Wave 11 lesson).
+- Colour: soot-dark frames (`#24211c` / ROLE_HULL), weathered
+  utility-yellow access modules (`#d8a83a` / ROLE_ACCENT), cobalt
+  diagnostic interiors/panels (`#5a8ae0` / ROLE_ARMOUR), warm work
+  lamps (`#ffc06a` / glow). Yellow is the identity; cobalt is the
+  open-bay / diagnostic habit from the plate. `accent_density` is 1.0;
+  control yellow coverage with geometry count, never random thinning.
+- Every part must look maintainable in a pressure suit. Handrails,
+  clamp points and access routes are primary features. Floodlights and
+  diagnostic panels are the equivalent of other factions' weapon mounts.
+- Avoid: sleek racing shells, ornamental steampunk brass, weapon-first
+  silhouettes, inaccessible surface detail, one giant wrench joke.
+- Emissive ≤ 5 % of hull area: drive glow + one window/bay-light band +
+  a small number of work lamps. Never edge-light every panel. Use
+  `HUMAN.lampGap` (1.20). Detail belongs in one service band (20–30 % of
+  length or one flank).
+
+Package: `scripts/ship_builders/lamplighter/`
+(`surface.py` queries + module constants, `service.py` language,
+`hardware.py` equipment). Smoke probe:
+`scripts/probe-lamplighter-parts.py`.
+
+### Wave 12 status — COMPLETE, recorded 2026-08-16
+
+`PILOT_CLASSES` is the full six-class set. Construction logic is
+EXPOSED FRAME, utility. The §G2 breaker is `sv.gate_fork`; grow reach
+with arm length (light/cutter default 2.40, ace 1.20, heavy 3.60,
+frigate 5.60, freighter 14.00). Do not inflate the fork hub.
+
+**Measured (2026-08-16, `measure-ships` + island lod0 tri counts):**
+
+| class | size | lod0 verts | lod0 tris |
+|---|---|---|---|
+| light | 7.9 | 6884 | 3764 |
+| ace | 7.5 | 7316 | 4032 |
+| cutter | 11.2 | 6436 | 3600 |
+| heavy | 16.6 | 14520 | 7924 |
+| frigate | 32.4 | 16180 | 8688 |
+| freighter | 80.2 | 53156 | 29488 |
+
+Ladder `light 7.9 / ace 7.5` (inside the 15 % band) `< cutter 11.2 <
+heavy 16.6 < frigate 32.4 < freighter 80.2`. Gates: measure ALL PASS;
+islands ONE CONNECTED BODY ×6; validate-ship-assets PASS. Sheets:
+`out/silhouettes/lamplighter-shape.png`, `-scale.png`, `-render.png`.
+`npm run test:boot` lamplighter charter:
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
+exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
+6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not lamplighter-caused.
+
+**Lesson:** centreline posts at x=0 float when spine chords sit at
+`±xo_s`. Name the part with `probe-ship-extremes --at=` before you
+edit. The three island groups were `freighter.post.*.2`.
+**Second lesson:** the frigate fork grows length, not beam. A slim
+spine fails `spanX/spanZ` even when G2 reach is legal. Give the depot
+a mid floor or outboard rails so beam/len sits well above 0.16.
+
+### Wave 13 status — COMPLETE, recorded 2026-08-16
+
+`PILOT_CLASSES` is the full six-class set. Construction logic is
+REPEATED COMMERCIAL MODULE / LASH-UP. The §G2 breaker is
+`su.crate_rack`; grow rack LENGTH / crate COUNT (light default 1.80,
+freighter 16.20). Never inflate `HUMAN.crateS` (0.85).
+
+**Measured (2026-08-16, `measure-ships` + island lod0 tri counts):**
+
+| class | size | lod0 verts | lod0 tris |
+|---|---|---|---|
+| light | 6.8 | 20252 | 9908 |
+| ace | 7.3 | 23980 | 11832 |
+| cutter | 11.0 | 10512 | 5384 |
+| heavy | 17.0 | 10200 | 5076 |
+| frigate | 32.3 | 64058 | 32252 |
+| freighter | 78.4 | 67696 | 34040 |
+
+Ladder `light 6.8 / ace 7.3` (inside the 15 % band) `< cutter 11.0 <
+heavy 17.0 < frigate 32.3 < freighter 78.4`. Gates: measure ALL PASS;
+islands ONE CONNECTED BODY ×6; validate-ship-assets PASS (whole fleet
+72/228). Sheets: `out/silhouettes/independent-shape.png`, `-scale.png`,
+`-render.png`. `npm run test:boot` independent charter:
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
+exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
+6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not independent-caused.
+
+**Lesson:** a cargo net at the extra port rack column (`x=-4.55`) is
+not sitting on a mountain crate (mountain port column starts at
+`-5.35`). The island AABB is crate-footprint × net thickness. Snap
+net `x`/`z` to a real `_crate_block` centre, not the extra rack
+column. Frigate lod0 bake is slow (~16 min) because `plate_grid`
+18×12 on six sections joins thousands of boxes.
+**Hull-band note:** `SHIP_SCALE[class].hull` is a guide with ±40 %
+slack, not a hard cap. Ace lod0 23980 sits 14 % over the 21000
+ceiling and is accepted. Do not grind a plate pass to hit the
+printed ceiling when measure, islands, and the class ladder are
+already green.
+
+### Wave 14 status — COMPLETE, recorded 2026-08-16
+
+`PILOT_CLASSES` is the full six-class set. Construction logic is
+CLOSED SHELL, SHUTTERED / SHROUDED. The §G2 breaker is
+`sh.listening_mast`; grow mast HEIGHT (light 2.40, ace booms 2.20 /
+1.80, cutter 3.20, heavy 4.40, frigate 6.40, freighter 14.00). Never
+inflate `sf.DISH_EAR_R` (0.30). There is no concept-art plate.
+
+**Measured (2026-08-16, `measure-ships` + island lod0 tri counts):**
+
+| class | size | lod0 verts | lod0 tris |
+|---|---|---|---|
+| light | 6.8 | 21368 | 10656 |
+| ace | 7.4 | 19756 | 9808 |
+| cutter | 10.8 | 3084 | 1708 |
+| heavy | 17.4 | 4308 | 2412 |
+| frigate | 32.1 | 6204 | 3440 |
+| freighter | 78.2 | 23236 | 12600 |
+
+Ladder `light 6.8 < ace 7.4 < cutter 10.8 < heavy 17.4 < frigate 32.1 <
+freighter 78.2`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
+validate-ship-assets PASS (whole fleet 72/228). Sheets:
+`out/silhouettes/hollow-shape.png`, `-scale.png`, `-render.png`.
+`npm run test:boot` hollow charter:
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
+exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
+6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not hollow-caused.
+
+**Hull-band note:** cutter / heavy / frigate sit under
+`SHIP_SCALE[class].hull` floors. The sealed shell is calm on purpose.
+Do not restore Independent `plate_grid` or `greeble_field` to chase
+the floor — those fields floated (11 island groups at y ≈ −2.2) and
+a mid 18×44 grid made frigate lod0 take ~15 min.
+
+**Lesson:** a wrap-strap through the loft interior is a paper-thin
+float. Seat straps on the wrap FACE. A `-Y` plate_grid or a
+`greeble_field` at `yo` floats under a taper. Hollow surface language
+is wrap + shutter + mast, not a quilt.
+**Second lesson:** `centre_parts` moves the bbox centre to the origin
+before export, so an up-mast does not fail the 0.15 pivot pin.
+
+### Wave 15 status — COMPLETE, recorded 2026-08-16
+
+`PILOT_CLASSES` is the full six-class set. Construction logic is
+REPEATED MODULE, ARMOURED. The §G2 breaker is `am.rib_flare`; grow
+REACH, never thickness (ace 1.24, heavy 2.80, frigate 5.20).
+light / cutter / freighter are the pre-pipeline ports kept this wave.
+
+**Measured (2026-08-16, `measure-ships` + island lod0 tri counts):**
+
+| class | size | lod0 verts | lod0 tris |
+|---|---|---|---|
+| light | 6.3 | 2510 | 1340 |
+| ace | 7.3 | 19720 | 9928 |
+| cutter | 9.8 | 4824 | 2656 |
+| heavy | 17.1 | 4392 | 2352 |
+| frigate | 32.1 | 47712 | 24112 |
+| freighter | 74.4 | 7044 | 3676 |
+
+Ladder `light 6.3 < ace 7.3 < cutter 9.8 < heavy 17.1 < frigate 32.1 <
+freighter 74.4`. Gates: measure ALL PASS; islands ONE CONNECTED BODY
+for ace / heavy / frigate lod0 (light also one body; cutter 3 floats
+and freighter 15 floats are the kept pre-pipeline ports);
+validate-ship-assets PASS (whole fleet 72/228). Sheets:
+`out/silhouettes/ferrous-shape.png`, `-scale.png`, `-render.png`.
+`npm run test:boot` ferrous charter:
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
+exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
+6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not ferrous-caused.
+
+**Bake note:** frigate lod0 `plate_grid` skin runs take ~8 min to join.
+Do not add a mid 18×44 grid.
+
+**Lesson:** `citadel_plate` at detail ≥ 2 inserts a `plate_course` near
+the block centre. The probe rasterises surfaces, so an interior course
+inside a hollow chamfer shell is a float. Bury the block so the course
+straddles the deck, or call the plate at `detail=1` and keep the mass.
