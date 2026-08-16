@@ -10,6 +10,7 @@ import bpy
 from mathutils import Vector
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ship_skins import SKINS
+from ship_builders import veridian as veridian_pilot
 from ship_builders import ferrous as ferrous_pilot
 from ship_builders import freehold as freehold_pilot
 from ship_builders import redledger as redledger_pilot
@@ -426,6 +427,7 @@ BUILDERS = {
 # module for the classes the module claims, and the generic BUILDERS entry for
 # the rest.
 PILOTS = {
+    'veridian': veridian_pilot,
     'ferrous': ferrous_pilot,
     'freehold': freehold_pilot,
     'redledger': redledger_pilot,
@@ -542,6 +544,13 @@ def _pattern_value(pat, px, py, density):
         hy = py % 28
         edge = min(min(hx, 32 - hx), min(hy, 28 - hy))
         return 1.0 if edge < max(2, int(density * 7)) else 0.0
+    if pat == 'flush_plate':
+        # Large ALIGNED machined plates. Hairline seams only. No brick stagger.
+        cw, ch = 96, 80
+        lx, ly = px % cw, py % ch
+        seam = max(1, int(1 + density * 2))
+        on_seam = lx < seam or ly < seam or lx >= cw - seam or ly >= ch - seam
+        return 1.0 if on_seam else 0.0
     if pat == 'plate_band':
         return 1.0 if py % 32 < max(2, int(density * 9)) else 0.0
     if pat in ('repair_patch', 'panel-patch'):
