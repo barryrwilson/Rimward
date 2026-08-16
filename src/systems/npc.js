@@ -14,7 +14,7 @@ import {
   HIDDEN_MOUNTS,
   ORIGIN_ARCS,
 } from '../game/state.js';
-import { buildShipAsset, releaseShipAsset, updateShipAsset } from './ship-assets.js';
+import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod } from '../game/pods.js';
 
@@ -180,9 +180,12 @@ export function spawnLiveShip(ctx, record, position) {
   // REAL (createShipState(record.classKey, …): cutter stats under the
   // freighter skin — the overpowered engines are the in-fiction tell), and
   // live.role stays record.role ('pirate') so other pirates never hunt it.
-  const object = record.qship === true && !record.revealed
-    ? buildShipMesh(record.coverClass ?? 'freighter', record.coverFaction ?? record.faction, 'trader')
-    : buildShipMesh(record.classKey, record.faction, record.role ?? SHIP_CLASSES[record.classKey]?.role ?? 'trader');
+  const cover = record.qship === true && !record.revealed;
+  const meshClass = cover ? (record.coverClass ?? 'freighter') : record.classKey;
+  const meshFaction = cover ? (record.coverFaction ?? record.faction) : record.faction;
+  const meshRole = cover ? 'trader' : (record.role ?? SHIP_CLASSES[record.classKey]?.role ?? 'trader');
+  if (!isShipAssetReady(meshFaction, meshClass, meshRole)) return null;
+  const object = buildShipMesh(meshClass, meshFaction, meshRole);
   object.position.copy(position);
   ctx.scene.add(object);
   // createShipState reads { name, faction, cargo, resolve, personality,

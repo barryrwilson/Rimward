@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WEAPONS, HEAT, DEFENSE, U, applyHit, tickShipState, MINING_LASERS, miningLaserFor, ORE_TYPES } from '../game/state.js';
 import { scaleFor } from '../game/ship-scale.js';
+import { isUnknowable } from '../game/faction-style.js';
 
 /**
  * Combat system — player weapons + ALL projectile simulation (player & NPC).
@@ -130,6 +131,77 @@ const MINE_DUST_INTERVAL = 0.16;  // s between dust puffs
 const MINE_SPARK_TTL = 0.45;      // chip lifetime
 const MINE_DUST_TTL = 1.2;        // rock-powder lifetime
 const BLOCKED_TINT = 0xff9a3a;    // hostile amber: too-hard rock scatters the beam
+
+/** Fill live._proxyRx/_proxyRy/_proxyHalf from mesh proxy or class fallback. */
+function ensureShipProxy(s) {
+  if (s._proxyRx !== undefined) return;
+  const scale = s.object.scale?.x || 1;
+  const proxy = s.object.userData.proxy ?? scaleFor(s.state.classKey).proxy;
+  s._proxyRx = proxy.rx * scale;
+  s._proxyRy = proxy.ry * scale;
+  s._proxyHalf = proxy.halfLen * scale;
+}
+
+/**
+ * First t along a unit ray that enters the ship's cached elliptical capsule.
+ * Returns -1 when the ray misses or the hit sits past maxT.
+ */
+function rayProxyT(origin, dir, s, maxT) {
+  ensureShipProxy(s);
+  const rx = s._proxyRx;
+  const ry = s._proxyRy;
+  const halfLen = s._proxyHalf;
+  _axis.set(0, 0, 1).applyQuaternion(s.object.quaternion);
+  _right.set(1, 0, 0).applyQuaternion(s.object.quaternion);
+  _up.set(0, 1, 0).applyQuaternion(s.object.quaternion);
+
+  _oc.subVectors(origin, s.object.position);
+  const da = dir.dot(_axis);
+  const ocDir = _oc.dot(dir);
+  const ocA = _oc.dot(_axis);
+  const den = 1 - da * da;
+  let tClosest;
+  let u;
+  if (den < 1e-8) {
+    tClosest = 0;
+    u = ocA;
+  } else {
+    tClosest = (da * ocA - ocDir) / den;
+    u = ocA - da * ocDir;
+    u /= den;
+  }
+  if (u < -halfLen) u = -halfLen;
+  else if (u > halfLen) u = halfLen;
+  _cap.copy(s.object.position).addScaledVector(_axis, u);
+
+  let tSamp = tClosest;
+  if (tSamp < 0) tSamp = 0;
+  else if (tSamp > maxT) tSamp = maxT;
+  _tmp.copy(origin).addScaledVector(dir, tSamp).sub(_cap);
+  const dx = _tmp.dot(_right);
+  const dy = _tmp.dot(_up);
+  const d2 = dx * dx + dy * dy;
+  let rEff;
+  if (d2 < 1e-8) {
+    rEff = rx < ry ? rx : ry;
+  } else {
+    const invD = 1 / Math.sqrt(d2);
+    const cx = dx * invD;
+    const cy = dy * invD;
+    rEff = 1 / Math.sqrt((cx / rx) * (cx / rx) + (cy / ry) * (cy / ry));
+  }
+
+  _oc.subVectors(origin, _cap);
+  const b = _oc.dot(dir);
+  const c = _oc.lengthSq() - rEff * rEff;
+  const disc = b * b - c;
+  if (disc < 0) return -1;
+  const sq = Math.sqrt(disc);
+  let th = -b - sq;
+  if (th < 0) th = -b + sq;
+  if (th < 0 || th > maxT) return -1;
+  return th;
+}
 
 /** Soft radial dot sprite shared by projectile glows and spark points. */
 function makeGlowDot() {
@@ -573,17 +645,24 @@ export function initCombat(ctx) {
     _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET * 0.8);
     _dir.copy(_fwd);
     // A targeted asteroid (refs are { id, position, radius, ... } — no .object) pulls the beam.
+    // An Unknowable field (live ship with .object) pulls the same way.
     const t = ctx.targets.current;
     if (t && t.position && !t.object) {
       _dir.subVectors(t.position, _nose);
       const d = _dir.length();
       if (d < 1e-3) _dir.copy(_fwd);
       else _dir.divideScalar(d);
+    } else if (t?.object && t.state && !t.state.destroyed && isUnknowable(t.state.faction)) {
+      _dir.subVectors(t.object.position, _nose);
+      const d = _dir.length();
+      if (d < 1e-3) _dir.copy(_fwd);
+      else _dir.divideScalar(d);
     }
-    // Closest sphere intersection along the beam, capped at the head's reach.
+    // Closest hit along the beam among rocks and Unknowable fields.
     const list = ctx.asteroids?.list;
     let bestT = laser.range;
     let bestEntry = null;
+    let bestShip = null;
     if (list) {
       for (let i = 0; i < list.length; i++) {
         const a = list[i];
@@ -598,7 +677,18 @@ export function initCombat(ctx) {
         if (th < 0 || th > bestT) continue;
         bestT = th;
         bestEntry = a;
+        bestShip = null;
       }
+    }
+    for (let i = 0; i < ctx.ships.length; i++) {
+      const s = ctx.ships[i];
+      if (!s?.object || !s.state || s.state.destroyed) continue;
+      if (!isUnknowable(s.state.faction)) continue;
+      const th = rayProxyT(_nose, _dir, s, bestT);
+      if (th < 0 || th > bestT) continue;
+      bestT = th;
+      bestShip = s;
+      bestEntry = null;
     }
     _beamEnd.copy(_nose).addScaledVector(_dir, bestT); // contact point / reach cap
 
@@ -653,7 +743,27 @@ export function initCombat(ctx) {
     beamMesh.visible = true;
     beamCore.visible = true;
 
-    if (bestEntry) {
+    if (bestShip) {
+      const now = ctx.world.time;
+      const dmg = laser.damage * dt * (WEAPONS.mining.rof || 4);
+      _targetFwd.set(0, 0, -1).applyQuaternion(bestShip.object.quaternion);
+      _tmp.subVectors(playerObj.position, bestShip.object.position);
+      const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
+      const events = applyHit(bestShip.state, { damage: dmg, family: 'mining', facet, now });
+      ctx.emit('npcHit', { ship: bestShip, damage: dmg });
+      for (const ev of events) {
+        if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, ship: bestShip });
+        else if (ev.type === 'engineOut') ctx.emit('engineOut', { ship: bestShip });
+        else if (ev.type === 'disabled') ctx.emit('npcDisabled', { ship: bestShip });
+        else if (ev.type === 'destroyed') ctx.emit('npcDestroyed', { ship: bestShip });
+      }
+      beamGlow.position.copy(_beamEnd);
+      const gs = (reduced ? 2.0 : 2.0 + 0.6 * Math.sin(ctx.elapsed * 18)) * laser.beamWidth;
+      beamGlow.scale.set(gs, gs, 1);
+      beamGlow.material.color.setHex(laser.coreColor);
+      beamGlow.visible = true;
+      addHeat(laser.heatPerShot * WEAPONS.mining.rof * dt);
+    } else if (bestEntry) {
       const oreKey = bestEntry.oreKey ?? 'rawOre';
       const hardness = bestEntry.hardness ?? 1;
       const oreDef = ORE_TYPES[oreKey];
@@ -737,6 +847,8 @@ export function initCombat(ctx) {
     for (let i = 0; i < ctx.ships.length; i++) {
       const s = ctx.ships[i];
       if (!s?.object || !s.state || s.state.destroyed) continue;
+      // Projectile passes through an Unknowable field. Do not consume the bolt.
+      if (isUnknowable(s.state.faction)) continue;
 
       // Cache per live ship: elliptical proxy (rx, ry, halfLen) × object scale.
       // rx = half-beam (local X), ry = half-height (local Y). Both scale uniformly.
@@ -752,21 +864,13 @@ export function initCombat(ctx) {
       // Proxy cache is invalidated by revealQship (npc.js) on every mesh swap: it
       // resets _proxyRx to undefined so this branch re-reads on the next hit test.
       //
-      // Fallback to SHIP_SCALE[classKey].proxy when userData.proxy is absent or null —
-      // the Unknowables energy field has no hull channel and never calls deriveProxy;
-      // a hull with degenerate geometry returns null from deriveProxy for the same path.
-      let rx = s._proxyRx;
-      let ry = s._proxyRy;
-      let halfLen = s._proxyHalf;
-      if (rx === undefined) {
-        const scale = s.object.scale?.x || 1;
-        // userData.proxy is null for degenerate hulls (deriveProxy returns null) and
-        // absent (undefined) for hull-less ships; ?? falls back in both cases.
-        const proxy = s.object.userData.proxy ?? scaleFor(s.state.classKey).proxy;
-        rx = s._proxyRx = proxy.rx * scale;
-        ry = s._proxyRy = proxy.ry * scale;
-        halfLen = s._proxyHalf = proxy.halfLen * scale;
-      }
+      // Fallback to SHIP_SCALE[classKey].proxy when userData.proxy is absent or
+      // null: degenerate hulls return null from deriveProxy; hull-less meshes
+      // omit the field. Unknowable fields never reach this cache (skipped above).
+      ensureShipProxy(s);
+      const rx = s._proxyRx;
+      const ry = s._proxyRy;
+      const halfLen = s._proxyHalf;
 
       // Resolve elliptical capsule to closest axis point, then derive an
       // effective isotropic radius in the offset's local-XY direction for sweptHit.

@@ -15,6 +15,12 @@ from ship_builders import freehold as freehold_pilot
 from ship_builders import redledger as redledger_pilot
 from ship_builders import gilded as gilded_pilot
 from ship_builders import beautiful as beautiful_pilot
+from ship_builders import unknowables as unknowables_pilot
+from ship_builders import assembly as assembly_pilot
+from ship_builders import congregation as congregation_pilot
+from ship_builders import lamplighter as lamplighter_pilot
+from ship_builders import independent as independent_pilot
+from ship_builders import hollow as hollow_pilot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -425,6 +431,12 @@ PILOTS = {
     'redledger': redledger_pilot,
     'gilded': gilded_pilot,
     'beautiful': beautiful_pilot,
+    'unknowables': unknowables_pilot,
+    'assembly': assembly_pilot,
+    'congregation': congregation_pilot,
+    'lamplighter': lamplighter_pilot,
+    'independent': independent_pilot,
+    'hollow': hollow_pilot,
 }
 
 
@@ -463,7 +475,8 @@ def build_one(faction, key, lod):
     detail = LOD_FEATURES[lod]
     pilot = PILOTS.get(faction)
     if pilot is not None and key in pilot.PILOT_CLASSES:
-        pilot.build(parts, glow_parts, key, l, b, h, hull, emissive, detail)
+        glow_mat = field if faction == 'unknowables' else emissive
+        pilot.build(parts, glow_parts, key, l, b, h, hull, glow_mat, detail)
     else:
         BUILDERS[faction](parts, glow_parts, key, l, b, h, hull, accent, field if faction == 'unknowables' else emissive, detail)
     # Drive flare: sized off the hull's own drive end, not the full beam. The old

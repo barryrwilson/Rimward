@@ -158,3 +158,8 @@ export const FACTION_STYLE = {
 export function styleFor(faction) {
   return Object.hasOwn(FACTION_STYLE, faction) ? FACTION_STYLE[faction] : FACTION_STYLE.independent;
 }
+
+/** Own-key faction id check — Unknowable fields, not a hull. */
+export function isUnknowable(faction) {
+  return faction === 'unknowables';
+}

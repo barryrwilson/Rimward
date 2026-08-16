@@ -17,6 +17,7 @@
 // overwritten by the merge.
 import { GENERATED_SYSTEMS } from './galaxy.generated.js';
 import { AUTHORED_SYSTEMS } from './authored-systems.js';
+import { isUnknowable } from './faction-style.js';
 
 // ---------- Ranges (units) ----------
 export const U = {
@@ -142,7 +143,10 @@ export function createShipState(classKey, opts = {}) {
  * facet: 'fore'|'aft' — determined by attacker geometry at call site.
  */
 export function applyHit(state, { damage, family = 'energy', facet = 'fore', now }) {
-  const w = WEAPONS[family] ?? {};
+  const w = Object.hasOwn(WEAPONS, family) ? WEAPONS[family] : {};
+  // Unknowable fields couple only to beam weapons; a projectile miss must
+  // not stall screen/shell recharge.
+  if (isUnknowable(state.faction) && w.beam !== true) return [];
   const events = [];
   state.lastHitAt = now;
   state.lastCombatAt = now;

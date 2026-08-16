@@ -7,9 +7,9 @@ SKIN = {
     'pattern': 'recursive',
     'roughness': (0.60, 0.72, 0.48),
     'panel_density': 0.62,
-    'accent_density': 0.42,
+    'accent_density': 1.0,
     'wear': 0.38,
     'emissive_strength': 1.1,
-    'secondary_parts': ('memory-core',),
-    'accent_parts': ('copied-probe', 'teal-optic'),
+    'secondary_parts': ('memory-core', 'shell-module', 'fan-petal', 'instrument-petal'),
+    'accent_parts': ('copied-probe', 'teal-optic', 'orange-patch', 'replacement-panel'),
 }

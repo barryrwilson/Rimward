@@ -11079,6 +11079,51 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w51nChecks).every(Boolean)) { console.log('WAVE51N MODELS CATALOG FAIL'); errors++; }
 }
 
+// Unknowable fields: projectiles do not couple; the mining beam does.
+// Isolated applyHit contract — no combat scene, no full-boot tick.
+{
+  const { applyHit, createShipState } = await import('../src/game/state.js');
+  const snap = (s) => ({
+    hull: s.hull, screen: s.screen, shell: s.shell, engine: s.engine,
+    lastHitAt: s.lastHitAt, lastCombatAt: s.lastCombatAt,
+  });
+  const frozen = (a, b) => a.hull === b.hull && a.screen === b.screen
+    && a.shell === b.shell && a.engine === b.engine
+    && a.lastHitAt === b.lastHitAt && a.lastCombatAt === b.lastCombatAt;
+
+  const unkCannon = createShipState('light', { faction: 'unknowables' });
+  const beforeCannon = snap(unkCannon);
+  const evCannon = applyHit(unkCannon, { damage: 20, family: 'cannon', now: 10 });
+  const evEnergy = applyHit(unkCannon, { damage: 20, family: 'energy', now: 10 });
+
+  const unkDisc = createShipState('light', { faction: 'unknowables' });
+  const beforeDisc = snap(unkDisc);
+  const evDisc = applyHit(unkDisc, { damage: 20, family: 'disruptor', now: 10 });
+
+  const unkMine = createShipState('light', { faction: 'unknowables' });
+  const beforeMine = snap(unkMine);
+  const evMine = applyHit(unkMine, { damage: 20, family: 'mining', now: 10 });
+
+  const indy = createShipState('light', { faction: 'independent' });
+  const beforeIndy = snap(indy);
+  const evIndy = applyHit(indy, { damage: 20, family: 'cannon', now: 10 });
+
+  const unkWeaponChecks = {
+    cannonNoOp: evCannon.length === 0 && frozen(snap(unkCannon), beforeCannon),
+    energyNoOp: evEnergy.length === 0 && frozen(snap(unkCannon), beforeCannon),
+    disruptorNoOp: evDisc.length === 0 && frozen(snap(unkDisc), beforeDisc),
+    miningHurts: (unkMine.hull < beforeMine.hull || unkMine.screen < beforeMine.screen
+      || unkMine.shell < beforeMine.shell) && evMine != null,
+    independentHurts: (indy.hull < beforeIndy.hull || indy.screen < beforeIndy.screen
+      || indy.shell < beforeIndy.shell) && evIndy.length >= 0,
+  };
+  console.log('unknowable weapon coupling:', JSON.stringify(unkWeaponChecks));
+  if (!Object.values(unkWeaponChecks).every(Boolean)) {
+    console.log('UNKNOWABLE WEAPON COUPLING FAIL');
+    errors++;
+  }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {

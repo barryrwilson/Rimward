@@ -30,8 +30,9 @@ SKIN = {
     # Panel seam density — high; secondhand ships show every joint and plate edge.
     'panel_density': 0.65,
 
-    # Accent coverage — one small owner mark, deliberately restrained.
-    'accent_density': 0.18,
+    # Accent coverage — one owner mark. Must stay 1.0: values below 1.0
+    # blank accent parts at random. Control coverage with geometry count.
+    'accent_density': 1.0,
 
     # Operational wear — independent haulers are well-used; wear is visible.
     'wear': 0.55,
@@ -39,11 +40,14 @@ SKIN = {
     # Nav lamp output — warm but unassuming; compliant running light, nothing more.
     'emissive_strength': 1.2,
 
-    # Parts receiving panel (dark charcoal) color — the core sphere reads as a
-    # salvaged unit that does not quite match the outer chassis.
-    'secondary_parts': ('load-bearing-core',),
+    # Parts receiving panel (dark charcoal) color — secondhand plates and
+    # standardized crates. Roles are also set via skin_role.
+    'secondary_parts': (
+        'patch-plate', 'iso-crate', 'crate-rack', 'civilian-cabin',
+        'tug-core', 'mission-pod', 'tug-vent',
+    ),
 
     # Parts receiving accent (slate-blue) color — the single owner-marked
-    # secondhand module on the starboard quarter.
-    'accent_parts': ('secondhand-module',),
+    # secondhand module. One shape family.
+    'accent_parts': ('owner-module',),
 }

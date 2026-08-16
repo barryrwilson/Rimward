@@ -713,6 +713,9 @@ export function initModelsBrowser(ctx) {
         e.stopImmediatePropagation();
         close();
       }
+      // Letters must reach the INPUT (this listener is window-capture).
+      // Game shortcuts that listen on bubble (KeyP pause) must ignore
+      // a focused text field — see main.js.
       return;
     }
 
@@ -737,6 +740,12 @@ export function initModelsBrowser(ctx) {
           e.stopImmediatePropagation();
           reframeCamera();
         }
+        break;
+
+      default:
+        // Modal: do not let KeyP unpause the title sim under the overlay.
+        e.preventDefault();
+        e.stopImmediatePropagation();
         break;
     }
   }

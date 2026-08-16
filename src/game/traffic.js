@@ -103,9 +103,12 @@ export function initTraffic(ctx) {
           ? { classKey: best.coverClass ?? 'freighter', faction: best.coverFaction ?? best.faction, role: 'trader' }
           : null;
         const real = { classKey: best.classKey, faction: best.faction, role: best.role };
-        if (!best.assetReady && isShipAssetReady(real.faction, real.classKey, real.role) && (!cover || isShipAssetReady(cover.faction, cover.classKey, cover.role))) {
-          best.assetReady = true;
-        }
+        const primed = isShipAssetReady(real.faction, real.classKey, real.role)
+          && (!cover || isShipAssetReady(cover.faction, cover.classKey, cover.role));
+        // Never trust a persisted assetReady flag from a save. Templates live
+        // only in this page's memory; a stale true here used to call
+        // spawnLiveShip and throw "NPC asset not primed".
+        best.assetReady = primed;
         if (!best.assetReady) {
           if (!best.assetPending) {
             best.assetPending = true;

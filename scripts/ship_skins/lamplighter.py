@@ -30,8 +30,9 @@ SKIN = {
     # Panel seam density — moderate; working ships show structure but not chaos.
     'panel_density': 0.55,
 
-    # Accent coverage — utility modules are prominent but not wall-to-wall.
-    'accent_density': 0.40,
+    # Accent coverage — yellow is identity; control it with geometry count,
+    # never by random thinning.
+    'accent_density': 1.0,
 
     # Operational wear — field-deployed guild ships carry honest service marks.
     'wear': 0.42,
@@ -39,9 +40,13 @@ SKIN = {
     # Lamp output — practical warm brightness, not decorative.
     'emissive_strength': 1.4,
 
-    # Parts receiving panel (cobalt) color — relay masts read as diagnostic columns.
-    'secondary_parts': ('relay-mast',),
+    # Parts receiving panel (cobalt) color — diagnostic interiors and columns.
+    'secondary_parts': (
+        'relay-mast', 'diag-panel', 'workshop-core', 'beacon-rack',
+    ),
 
-    # Parts receiving accent (utility yellow) color — the flanking access modules.
-    'accent_parts': ('utility-module',),
+    # Parts receiving accent (utility yellow) color — access and service gear.
+    'accent_parts': (
+        'utility-module', 'work-lamp', 'lamp-bar', 'clamp-jaw', 'gantry-deck',
+    ),
 }
