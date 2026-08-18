@@ -41,10 +41,31 @@ const MOOD_SONG = {
 };
 
 // Cue table: [type, f0, f1, duration, gain, lowpassHz(0=none), delay]
+// Combat cues stay short and louder than UI ticks; whalesong stays the warmest long sound.
 const CUES = {
   podCollected: [['sine', 880, 1320, 0.3, 0.12, 0, 0]], // soft chime
-  shieldDown: [['triangle', 180, 90, 0.25, 0.18, 400, 0]], // hollow thunk
-  playerHit: [['sine', 110, 55, 0.2, 0.2, 300, 0]], // dull lowpassed thud
+  shieldDown: [ // hollow break (screen/shell collapse)
+    ['triangle', 320, 70, 0.2, 0.28, 900, 0],
+    ['sine', 95, 42, 0.26, 0.2, 280, 0.03],
+  ],
+  playerHit: [ // punchy hull thud (stronger than the old 110→55 sine)
+    ['square', 90, 36, 0.07, 0.34, 240, 0],
+    ['triangle', 140, 48, 0.2, 0.36, 360, 0],
+  ],
+  npcHit: [['triangle', 980, 640, 0.045, 0.08, 2600, 0]], // light metallic tick
+  npcDestroyed: [ // short crump / breakup (not a long explosion)
+    ['sawtooth', 150, 38, 0.16, 0.22, 480, 0],
+    ['triangle', 72, 32, 0.2, 0.16, 260, 0.03],
+  ],
+  bodyHit: [ // PHY scrape (playerHit still carries the hull punch)
+    ['square', 340, 90, 0.07, 0.1, 900, 0],
+    ['sawtooth', 58, 30, 0.1, 0.12, 150, 0],
+  ],
+  playerFire: [ // punchy gun bark
+    ['square', 300, 88, 0.06, 0.3, 1600, 0],
+    ['sawtooth', 170, 70, 0.09, 0.16, 900, 0],
+  ],
+  npcFire: [['square', 380, 200, 0.045, 0.06, 2200, 0]], // thinner than playerFire
   npcDisabled: [['sine', 440, 110, 0.6, 0.12, 0, 0]], // falling tone
   milestone: [ // two-note sting
     ['sine', 660, 660, 0.15, 0.1, 0, 0],
@@ -84,8 +105,16 @@ const CUES = {
   ],
   originChosen: [['sine', 262, 392, 0.6, 0.07, 0, 0]], // confirm swell
   fearChanged: [['sine', 90, 70, 0.4, 0.04, 250, 0]], // low pulse
-  engineOut: [['sawtooth', 120, 40, 0.4, 0.05, 500, 0]], // sputter
+  engineOut: [ // warning sputter — not ambience
+    ['sawtooth', 200, 50, 0.16, 0.2, 900, 0],
+    ['square', 95, 38, 0.24, 0.14, 420, 0.07],
+  ],
+  sunHeat: [['sawtooth', 70, 240, 0.45, 0.016, 650, 0]], // quiet rising hiss; combat throttles emit
 };
+
+// Cap pirate volleys: ~8 overlapping npcFire / npcHit tones (last-play + stagger).
+const VOLLEY_GAP = 0.015;
+const VOLLEY_MAX = 8;
 
 // Sparse station-ambience clank spec (module-scope: no per-frame alloc).
 const CLANK = ['square', 300, 300, 0.05, 0.03, 800, 0];
@@ -111,6 +140,8 @@ export function initSong(ctx) {
   let combatOn = false;
   let dockedOn = false;
   let nextClankAt = 0;
+  let lastNpcFireAt = -99;
+  let lastNpcHitAt = -99;
 
   function unlock() {
     if (unlocked || failed) return;
@@ -370,9 +401,25 @@ export function initSong(ctx) {
       const evs = ctx.lastEvents;
       const t = ac.currentTime;
       for (let i = 0; i < evs.length; i++) {
-        const cue = CUES[evs[i].type];
-        if (cue) for (let j = 0; j < cue.length; j++) tone(cue[j], t);
-        if (evs[i].type === 'songShift') {
+        const typ = evs[i].type;
+        const cue = CUES[typ];
+        if (cue) {
+          let at = t;
+          if (typ === 'npcFire' || typ === 'npcHit') {
+            const last = typ === 'npcFire' ? lastNpcFireAt : lastNpcHitAt;
+            at = last + VOLLEY_GAP;
+            if (at < t) at = t;
+            // Drop overflow so a pirate volley cannot stack more than ~8 tones.
+            if (at <= t + VOLLEY_GAP * (VOLLEY_MAX - 1)) {
+              if (typ === 'npcFire') lastNpcFireAt = at;
+              else lastNpcHitAt = at;
+              for (let j = 0; j < cue.length; j++) tone(cue[j], at);
+            }
+          } else {
+            for (let j = 0; j < cue.length; j++) tone(cue[j], at);
+          }
+        }
+        if (typ === 'songShift') {
           answering = true; // she sings differently now
           if (evs[i].reason === 'deepening') deepened = true; // the dark leads the duet
           if (evs[i].reason === 'aftermath') answered = true; // wave 11: the rim's final word

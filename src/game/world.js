@@ -1,29 +1,36 @@
 import * as THREE from 'three';
 import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
+import { writeStationHold } from './traffic-feel.js';
 
 /**
  * World — the persistent layer (doc §8 Living World), multi-system.
  *
  * - RECORD BANKS §8.2/§15.3: each star system owns a bank of persistent NPC
  *   identities generated lazily from SYSTEMS[id].cast (traders/pirates/
- *   patrols/ace flag) on first need. ctx.world.recordBanks = { sysId: [...] };
+ *   patrols/ace flag) on first need. Miner count is derived from
+ *   cast.traders (busy systems 1–2, hush/verge 0) — not a cast field.
+ *   ctx.world.recordBanks = { sysId: [...] };
  *   ctx.world.records REMAINS the current system's array (station.js/npc.js
  *   keep reading it). On 'systemLoaded' the outgoing array is stashed under
  *   its own system id and the destination bank is swapped in (generated on
  *   first visit). The named ace 'Carver Illyx' exists ONLY in the Freehold
  *   cast — his bounty lives there.
- * - ROUTES §15.3: per system, station → gate → planet using that system's
- *   def coordinates, stored JSON-plain ([x,y,z] → [{x,y,z}...]) so save.js
- *   can serialize them. Waypoint 0 is the "home" stop (station).
- * - INTER-SYSTEM MIGRATION §8.2 destinations: every ~90s an enroute trader
- *   in the CURRENT bank is marked 'inTransit' toward the other system with
- *   an eta of 60–120s. When the eta passes the record moves to the
- *   destination bank, arriving at that system's gate with its route rebuilt
- *   station-ward; if the player is in the destination system, traffic.js
- *   instantiates it normally. The ace and pirates NEVER migrate (pirates are
- *   territorial).
- * - GALAXY TICK: records advance along their routes ~once per second.
+ * - ROUTES §15.3: traders fly a station hold (outside the D5 cylinder) →
+ *   one physical dest gate (def.gates). Patrols keep station → gate →
+ *   planet. Miners keep a station hold → asteroid field center (never a
+ *   planet). Stored JSON-plain so save.js can serialize them. Waypoint 0
+ *   is the "home" stop (station hold for traders/miners).
+ * - INTER-SYSTEM MIGRATION §8.2: a trader that reaches its outbound gate
+ *   dwells there. Only the ~90s pickMigrant interval may mark one
+ *   gate-ready trader 'inTransit' toward that gate's `.to` (physical
+ *   gates only — never hub routes). Unpicked lingerers reverse to the
+ *   station so the current system keeps local traffic. When the eta
+ *   passes the record moves to the destination bank at that system's
+ *   arrival gate, heading station-ward. The ace, pirates, and miners NEVER migrate.
+ * - GALAXY TICK: every existing recordBanks entry advances ~once per
+ *   second. Unvisited systems stay ungenerated. One pickMigrant per
+ *   interval may take a gate-ready trader from any existing bank.
  * - DYNAMIC EVENTS §8.5: one major event at a time (§8.4), 3–6 min apart,
  *   2–4 min duration, with market pressure and traffic weighting. Scope is
  *   the current system, unchanged from wave 1.
@@ -83,10 +90,116 @@ function gatePoint(def) {
   const p = def.gates[0].position;
   return new THREE.Vector3(p[0], p[1], p[2]);
 }
+
+function plusXOf(station) {
+  return { x: station.x + 1, y: station.y, z: station.z };
+}
+
+// One shared route serves mixed classes; freighter hold fits every hull.
+function stationHoldVec(station, fromPos) {
+  const hold = new THREE.Vector3();
+  writeStationHold(hold, station, 'freighter', fromPos);
+  return hold;
+}
+
+/** Station hold → dest gate. `outboundTo` is always a physical `gates[n].to`. */
+export function traderRouteWaypoints(def, i) {
+  const station = stationPoint(def);
+  const gates = def.gates;
+  if (!gates?.length) {
+    return { waypoints: [stationHoldVec(station, plusXOf(station))], outboundTo: null };
+  }
+  const idx = ((i % gates.length) + gates.length) % gates.length;
+  const dest = gates[idx];
+  const p = dest.position;
+  const gate = new THREE.Vector3(p[0], p[1], p[2]);
+  return {
+    waypoints: [stationHoldVec(station, gate), gate],
+    outboundTo: dest.to,
+  };
+}
+
+function traderArrivalWaypoints(def, fromId) {
+  const station = stationPoint(def);
+  const gates = def.gates;
+  if (!gates?.length) {
+    return { waypoints: [stationHoldVec(station, plusXOf(station))], outboundTo: null };
+  }
+  let idx = fromId ? gates.findIndex((g) => g.to === fromId) : 0;
+  if (idx < 0) idx = 0;
+  const dest = gates[idx];
+  const p = dest.position;
+  const gate = new THREE.Vector3(p[0], p[1], p[2]);
+  return {
+    waypoints: [stationHoldVec(station, gate), gate],
+    outboundTo: dest.to,
+  };
+}
 function stationPoint(def) {
   const p = def.station.position;
   return new THREE.Vector3(p[0], p[1], p[2]);
 }
+function fieldPoint(def) {
+  // Asteroid field center. Never a planet — miners haul rock, not colony lanes.
+  const f = def.field;
+  const c = f && f.center;
+  if (Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]) && Number.isFinite(c[2])) {
+    return new THREE.Vector3(c[0], c[1], c[2]);
+  }
+  const s = stationPoint(def);
+  return jitter(new THREE.Vector3(s.x + 320, s.y - 24, s.z - 280), 50);
+}
+
+/** Busy systems get 1–2 miners; hush/verge (0–1 traders) get none. */
+export function minerCountForCast(cast) {
+  const traders = (cast && cast.traders) | 0;
+  return Math.min(2, Math.max(0, (traders / 4) | 0));
+}
+
+export const MINER_CARGO_CAP = 8;
+const MINER_OFFSCREEN_INTERVAL = 5;
+
+function cargoUnitsOf(rec) {
+  const cargo = rec && rec.cargo;
+  if (!Array.isArray(cargo)) return 0;
+  let n = 0;
+  for (let i = 0; i < cargo.length; i++) n += cargo[i].units | 0;
+  return n;
+}
+
+function addMinerOre(rec, units) {
+  rec.cargo ??= [];
+  const room = MINER_CARGO_CAP - cargoUnitsOf(rec);
+  if (room <= 0 || units <= 0) return 0;
+  const add = units < room ? units : room;
+  const key = 'rawOre';
+  for (let i = 0; i < rec.cargo.length; i++) {
+    if (rec.cargo[i].commodity === key) {
+      rec.cargo[i].units = (rec.cargo[i].units | 0) + add;
+      return add;
+    }
+  }
+  rec.cargo.push({ commodity: key, units: add });
+  return add;
+}
+
+function minerAtField(rec) {
+  if (!rec || rec.role !== 'miner' || !rec.route || rec.route.length < 2) return false;
+  const lastLeg = rec.route.length - 2;
+  return rec.leg === lastLeg && rec.legT >= 0.98 && rec.dir > 0;
+}
+
+function tickMinerExtract(rec, ctx) {
+  if (rec.live) return;
+  rec.cargo ??= [];
+  rec.mineAt ??= 0;
+  if (cargoUnitsOf(rec) >= MINER_CARGO_CAP) return;
+  const now = Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  if (now - rec.mineAt < MINER_OFFSCREEN_INTERVAL) return;
+  rec.mineAt = now;
+  addMinerOre(rec, 1);
+}
+
 function planetPoint(def) {
   // Beyond the gate down-lane: the far colony approach. Mirrors the wave-1
   // Freehold layout exactly (gate dir × (|gate| + 350), y flattened, 150u
@@ -122,6 +235,11 @@ const QSHIP_COVERS = {
 const PATROL_NAMES = {
   freehold: ['Watchful Apt', 'Lancer Po'],
   veridian: ['Steadfast Ivo', 'Pale Warrant', 'Crescent Anh'],
+};
+const MINER_NAMES = {
+  freehold: ['Claim Wren', 'Pit Lamp'],
+  veridian: ['Surveyor Kel'],
+  redmarch: ['Tithe Pick'],
 };
 // Wave 51: filter on `bulk`, not just `legal`. The wave added 7 exotic ores
 // (slagIron … wakeglass) to COMMODITIES, all legal — but an exotic reaches a
@@ -161,7 +279,7 @@ function poolName(pool, sysId, i, fallback) {
   return (names && names[i]) ?? `${fallback} ${sysId}-${i + 1}`;
 }
 
-function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system }) {
+function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system, outboundTo = null }) {
   const plain = plainRoute(route);
   return {
     id: `rec-${nextRecordNum++}`,
@@ -175,7 +293,7 @@ function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty =
     legT: Math.random(), // scatter records along their first leg at boot
     dir: 1,
     dwellUntil: 0,
-    role, // trader | pirate | patrol | ace
+    role, // trader | pirate | patrol | ace | miner
     personality: Math.random() * 20 - 10, // ±10 resolve nudge §7.2
     resolveSeed: Math.random(), // npc.js derives base resolve from this
     bounty,
@@ -183,6 +301,8 @@ function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty =
     anchor: systemAnchor(system), // ring-mode orbit center for npc.js
     state: 'enroute', // enroute | docked | dead | captured | inTransit
     live: false, // currently instantiated by traffic.js
+    outboundTo: outboundTo ?? null, // dest system id; physical gates[n].to only
+    gateLinger: false, // parked at dest gate; pickMigrant may take this hull
   };
 }
 
@@ -210,15 +330,18 @@ function createRecords(ctx, sysId) {
   const records = [];
 
   for (let i = 0; i < cast.traders; i++) {
+    const planned = traderRouteWaypoints(def, i);
+    const destWp = (planned.waypoints[1] ?? planned.waypoints[0]).clone();
     records.push(
       makeRecord(ctx, {
         name: poolName(TRADER_NAMES, sysId, i, 'Freighter'),
         classKey: 'freighter',
         faction: traderFactions[i % traderFactions.length],
         role: 'trader',
-        route: [station.clone(), jitter(gate.clone(), 60), jitter(planet.clone(), 80)],
+        route: [planned.waypoints[0].clone(), jitter(destWp, 60)],
         cargo: traderCargo(),
         system: sysId,
+        outboundTo: planned.outboundTo,
       }),
     );
   }
@@ -256,6 +379,26 @@ function createRecords(ctx, sysId) {
         faction: i === 0 ? def.faction : otherFaction,
         role: 'patrol',
         route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)],
+        cargo: [],
+        system: sysId,
+      }),
+    );
+  }
+  const minerN = minerCountForCast(cast);
+  const field = fieldPoint(def);
+  const minerFactions = [def.faction, 'independent'];
+  for (let i = 0; i < minerN; i++) {
+    const destWp = field.clone();
+    records.push(
+      makeRecord(ctx, {
+        name: poolName(MINER_NAMES, sysId, i, 'Miner'),
+        classKey: i % 2 === 0 ? 'light' : 'cutter',
+        faction: minerFactions[i % minerFactions.length],
+        role: 'miner',
+        route: [
+          writeStationHold(new THREE.Vector3(), station, i % 2 === 0 ? 'light' : 'cutter', destWp),
+          jitter(destWp, 50),
+        ],
         cargo: [],
         system: sysId,
       }),
@@ -308,7 +451,10 @@ function rebuildTransitRegistry(ctx) {
   for (const sysId in banks) {
     const bank = banks[sysId];
     for (let i = 0; i < bank.length; i++) {
-      if (bank[i].state === 'inTransit') inTransitRegistry.push({ rec: bank[i], sysId });
+      const rec = bank[i];
+      if (rec.role === 'trader') normalizeTraderRecord(rec);
+      if (rec.role === 'miner') normalizeMinerRecord(rec);
+      if (rec.state === 'inTransit') inTransitRegistry.push({ rec, sysId });
     }
   }
 }
@@ -481,12 +627,18 @@ function spawnAspirant(ctx) {
  * zero allocation. traffic.js uses this as the spawn point.
  */
 export function recordPosition(rec, out) {
-  if (rec.state === 'docked' || rec.route.length === 1) {
-    const w = rec.route[0];
+  const route = rec.route;
+  if (!route || route.length === 0) return out.set(0, 0, 0);
+  if (rec.state === 'docked' || route.length === 1) {
+    const w = route[0];
     return out.set(w.x, w.y, w.z);
   }
-  const a = rec.route[rec.leg];
-  const b = rec.route[rec.leg + 1];
+  const a = route[rec.leg];
+  const b = route[rec.leg + 1];
+  if (!a || !b) {
+    const w = a ?? route[0];
+    return out.set(w.x, w.y, w.z);
+  }
   return out.set(a.x + (b.x - a.x) * rec.legT, a.y + (b.y - a.y) * rec.legT, a.z + (b.z - a.z) * rec.legT);
 }
 
@@ -509,6 +661,151 @@ function rollEventGap(ctx) {
 // ---------- Inter-system migration §8.2 destinations ----------
 const MIGRATION_INTERVAL = 90; // ~s between departure picks
 const MIGRATION_ETA = [60, 120]; // s spent inTransit
+const GATE_HOLD = [30, 50]; // s parked at dest gate before reverse
+
+const PAD_HOME_EPS = 0.5;
+
+function holdClassFor(rec) {
+  if (rec.role === 'trader') return 'freighter';
+  const key = rec.classKey;
+  if (key === 'light' || key === 'cutter') return key;
+  return 'light';
+}
+
+function holdFromPos(rec, def, station) {
+  const wp1 = rec.route && rec.route[1];
+  if (wp1) {
+    const x = wp1.x;
+    const y = wp1.y;
+    const z = wp1.z;
+    if (Number.isFinite(x) && Number.isFinite(z)) {
+      return { x, y: Number.isFinite(y) ? y : station.y, z };
+    }
+  }
+  const g = def.gates?.[0]?.position;
+  if (g) {
+    const gx = Number.isFinite(g.x) ? g.x : g[0];
+    const gy = Number.isFinite(g.y) ? g.y : g[1];
+    const gz = Number.isFinite(g.z) ? g.z : g[2];
+    if (Number.isFinite(gx) && Number.isFinite(gz)) {
+      return { x: gx, y: Number.isFinite(gy) ? gy : station.y, z: gz };
+    }
+  }
+  return plusXOf(station);
+}
+
+/**
+ * Old saves park route[0] on the station pad. Rewrite that home waypoint
+ * through writeStationHold so it sits outside the D5 cylinder.
+ * Missing/NaN system or station is a no-op.
+ */
+export function healPadHome(rec) {
+  if (!rec) return rec;
+  const role = rec.role;
+  if (role !== 'trader' && role !== 'miner') return rec;
+  const sysId = rec.system;
+  if (!sysId || !Object.hasOwn(SYSTEMS, sysId)) return rec;
+  const def = SYSTEMS[sysId];
+  const pos = def && def.station && def.station.position;
+  if (!pos) return rec;
+  const sx = Number.isFinite(pos.x) ? pos.x : pos[0];
+  const sy = Number.isFinite(pos.y) ? pos.y : pos[1];
+  const sz = Number.isFinite(pos.z) ? pos.z : pos[2];
+  if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(sz)) return rec;
+  const route = rec.route;
+  if (!Array.isArray(route) || route.length === 0) return rec;
+  const wp0 = route[0];
+  if (!wp0) return rec;
+  const wx = wp0.x;
+  const wz = wp0.z;
+  if (!Number.isFinite(wx) || !Number.isFinite(wz)) return rec;
+  if (Math.hypot(wx - sx, wz - sz) > PAD_HOME_EPS) return rec;
+  const station = { x: sx, y: sy, z: sz };
+  route[0] = writeStationHold({ x: 0, y: 0, z: 0 }, station, holdClassFor(rec), holdFromPos(rec, def, station));
+  rec.legLens = computeLegLens(route);
+  return rec;
+}
+
+/** Heal outboundTo and clamp old 3-waypoint trader routes to station↔gate. */
+export function normalizeTraderRecord(rec) {
+  if (!rec || rec.role !== 'trader') return rec;
+  rec.outboundTo ??= null;
+  if (rec.system && SYSTEMS[rec.system]?.gates?.length) traderOutboundDest(rec, rec.system);
+  const route = rec.route;
+  if (!Array.isArray(route) || route.length === 0) return rec;
+  if (route.length > 2) {
+    rec.route = [route[0], route[1]];
+    rec.legLens = computeLegLens(rec.route);
+    if (rec.leg >= rec.route.length - 1) {
+      rec.leg = rec.route.length - 2;
+      rec.legT = 1;
+    }
+  }
+  if (!Number.isFinite(rec.leg) || rec.leg < 0) rec.leg = 0;
+  const maxLeg = Math.max(0, rec.route.length - 2);
+  if (rec.leg > maxLeg) rec.leg = maxLeg;
+  if (rec.dir !== 1 && rec.dir !== -1) rec.dir = 1;
+  rec.gateLinger ??= false;
+  if (!Number.isFinite(rec.legT)) rec.legT = 0;
+  if (rec.legT > 1) rec.legT = 1;
+  if (rec.legT < 0) rec.legT = 0;
+  healPadHome(rec);
+  if (!Array.isArray(rec.legLens) || rec.legLens.length !== rec.route.length - 1) {
+    rec.legLens = computeLegLens(rec.route);
+  }
+  return rec;
+}
+
+export function normalizeMinerRecord(rec) {
+  if (!rec || rec.role !== 'miner') return rec;
+  healPadHome(rec);
+  return rec;
+}
+
+export function traderOutboundDest(rec, sysId) {
+  const id = sysId ?? rec.system;
+  if (!id || !Object.hasOwn(SYSTEMS, id)) return null;
+  const gates = SYSTEMS[id].gates;
+  if (!gates?.length) return null;
+  if (rec.outboundTo && gates.some((g) => g.to === rec.outboundTo)) return rec.outboundTo;
+  let pick = 0;
+  const n = rec.id;
+  if (typeof n === 'string') {
+    let h = 0;
+    for (let i = 0; i < n.length; i++) h = (h + n.charCodeAt(i)) | 0;
+    pick = Math.abs(h) % gates.length;
+  }
+  rec.outboundTo = gates[pick].to;
+  return rec.outboundTo;
+}
+
+export function traderAtOutboundGate(rec) {
+  if (!rec || rec.role !== 'trader' || rec.state !== 'enroute') return false;
+  normalizeTraderRecord(rec);
+  const lastLeg = rec.route.length - 2;
+  if (lastLeg < 0) return false;
+  if (rec.leg !== lastLeg || rec.legT < 0.98) return false;
+  return rec.dir > 0 || rec.gateLinger === true;
+}
+
+export function beginTransit(ctx, rec, dest, bankSysId) {
+  if (!rec || rec.state === 'inTransit' || rec.role !== 'trader') return false;
+  if (!dest || !Object.hasOwn(SYSTEMS, dest)) return false;
+  const sysId = bankSysId ?? rec.system ?? ctx.world?.currentSystem;
+  if (!sysId || dest === sysId) return false;
+  const gates = Object.hasOwn(SYSTEMS, sysId) ? SYSTEMS[sysId].gates : null;
+  if (!gates?.some((g) => g.to === dest)) return false;
+  const lo = MIGRATION_ETA[0];
+  const hi = MIGRATION_ETA[1];
+  const span = hi - lo;
+  let eta = ctx.world.time + lo + Math.random() * (Number.isFinite(span) ? span : 0);
+  if (!Number.isFinite(eta)) eta = (Number.isFinite(ctx.world.time) ? ctx.world.time : 0) + lo;
+  rec.state = 'inTransit';
+  rec.transitTo = dest;
+  rec.transitEta = eta;
+  inTransitRegistry.push({ rec, sysId });
+  return true;
+}
 
 // ---------- Aftermath §8.7 ----------
 const WRECK_TTL = 600; // ~10 min world time
@@ -517,6 +814,102 @@ const MAX_INCIDENTS = 40;
 
 // ---------- Update cadence ----------
 const GALAXY_TICK = 1; // s between abstract route advances
+
+/**
+ * Advance one existing bank. Never starts transit (pickMigrant only).
+ * Blockade/strike hurry pirates only when `sysId` is the event's system.
+ */
+export function tickBank(bank, sysId, ctx) {
+  if (!bank) return;
+  const ev = ctx.world.activeEvent;
+  const hurry = ev
+    && (ev.kind === 'pirateBlockade' || ev.kind === 'strikeRush')
+    && (ev.system ?? ctx.world.currentSystem) === sysId;
+  for (let i = 0; i < bank.length; i++) {
+    const rec = bank[i];
+    if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') continue;
+    if (rec.role === 'trader') normalizeTraderRecord(rec);
+    if (rec.role === 'miner') {
+      normalizeMinerRecord(rec);
+      rec.cargo ??= [];
+      rec.mineAt ??= 0;
+      rec.mineHold ??= false;
+    }
+    if (!rec.route || rec.route.length === 0) continue;
+    if (rec.state === 'docked') {
+      if (ctx.world.time >= rec.dwellUntil) rec.state = 'enroute';
+      continue;
+    }
+    if (rec.role === 'miner' && minerAtField(rec) && rec.mineHold) {
+      if (ctx.world.time < rec.dwellUntil) {
+        tickMinerExtract(rec, ctx);
+        continue;
+      }
+      rec.mineHold = false;
+      rec.dir = -1;
+      rec.dwellUntil = ctx.world.time + 8 + Math.random() * 12;
+      rec.gateLinger = false;
+      continue;
+    }
+    if (ctx.world.time < rec.dwellUntil) continue;
+    let speed = SHIP_CLASSES[rec.classKey]?.cruise ?? 90;
+    if (hurry && rec.role === 'pirate') speed *= 1.6;
+    const legs = rec.legLens;
+    const legLen = (legs && legs[rec.leg]) || 1;
+    rec.legT += (speed * GALAXY_TICK * rec.dir) / legLen;
+    if (!Number.isFinite(rec.legT)) rec.legT = 0;
+    if (rec.legT >= 1) {
+      if (rec.leg + 1 >= rec.route.length - 1) {
+        rec.legT = 1;
+        // Traders park at the dest gate. pickMigrant is the only transit
+        // start; unpicked lingerers reverse so the lane stays populated.
+        if (rec.role === 'trader' && rec.dir > 0) {
+          if (!rec.gateLinger) {
+            rec.gateLinger = true;
+            const span = GATE_HOLD[1] - GATE_HOLD[0];
+            let hold = GATE_HOLD[0] + Math.random() * (Number.isFinite(span) ? span : 0);
+            if (!Number.isFinite(hold)) hold = GATE_HOLD[0];
+            const now = Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+            rec.dwellUntil = now + hold;
+            continue;
+          }
+          rec.gateLinger = false;
+          rec.dir = -1;
+          rec.dwellUntil = ctx.world.time + 8 + Math.random() * 12;
+          continue;
+        }
+        if (rec.role === 'miner' && rec.dir > 0) {
+          rec.gateLinger = false;
+          rec.cargo ??= [];
+          rec.mineAt ??= 0;
+          rec.mineHold = true;
+          rec.dwellUntil = ctx.world.time + 20 + Math.random() * 16;
+          continue;
+        }
+        rec.dir = -1;
+        rec.dwellUntil = ctx.world.time + 10 + Math.random() * 20; // brief turnaround
+      } else {
+        rec.leg++;
+        rec.legT = 0;
+      }
+    } else if (rec.legT <= 0) {
+      if (rec.leg === 0) {
+        rec.legT = 0;
+        rec.dir = 1;
+        // Waypoint 0 is home: traders/patrols/miners dock at the station.
+        if (rec.role === 'trader' || rec.role === 'patrol' || rec.role === 'miner') {
+          rec.state = 'docked';
+          rec.dwellUntil = ctx.world.time + 30 + Math.random() * 60;
+        } else {
+          rec.dwellUntil = ctx.world.time + 10;
+        }
+      } else {
+        rec.leg--;
+        rec.legT = 1;
+      }
+    }
+  }
+}
 
 // ---------- Milestones §8.8 ----------
 function fireMilestone(ctx, id, line) {
@@ -826,6 +1219,7 @@ function callowVouchOffer(ctx) {
   if (recordPosition(rec, _v1).distanceTo(ctx.ship.object.position) > CALLOW.hailRange) return;
   const live = ctx.ships.find((s) => s.record === rec && !s.state?.destroyed);
   if (!live) return; // no live ship — the offer stays silent
+  if (live.state?.disabled) return; // dead hulk: hail.js owns salvage, not the vouch
   if (rec.vouched) {
     // Wave 12: the column doesn't take seconds — one refusal per visit.
     if (!callowRefusalArmed) return;
@@ -1059,32 +1453,38 @@ export function initWorld(ctx) {
 
   // ---------- Inter-system migration §8.2 ----------
   function pickMigrant(ctx) {
-    // Uniform-random destination among the current system's gates.
+    // Prefer traders already at their outbound gate. Mid-lane vanishing
+    // reads as a pop; skip the interval if nobody is gate-ready.
     // Wave 22 (lore decision): physical gates ONLY — hub routes are never
     // migration destinations. Lamplighter junctions are player/Guild
-    // infrastructure; NPC traffic rides the old ring network. The asymmetry
-    // is authored, not a gap: routed systems keep their sparse casts and
-    // the deep rim keeps its designed silence (BANDS pacing).
-    const gates = SYSTEMS[ctx.world.currentSystem]?.gates;
-    if (!gates || gates.length === 0) return;
-    const dest = gates[(Math.random() * gates.length) | 0].to;
+    // infrastructure; NPC traffic rides the old ring network.
+    // Wave 57: any existing bank may supply the one pick; never generate.
+    const banks = ctx.world.recordBanks;
+    if (!banks) return;
     let chosen = null;
+    let chosenSys = null;
     let count = 0;
-    for (const rec of ctx.world.records) {
-      // Traders only, enroute and off-screen. The ace and pirates never
-      // migrate (pirates are territorial); live ships are the player's
-      // business right now.
-      if (rec.role !== 'trader' || rec.state !== 'enroute' || rec.live) continue;
-      count++;
-      if (Math.random() < 1 / count) chosen = rec; // reservoir pick, no alloc
+    for (const sysId in banks) {
+      if (!Object.hasOwn(banks, sysId) || !Object.hasOwn(SYSTEMS, sysId)) continue;
+      const gates = SYSTEMS[sysId].gates;
+      if (!gates || gates.length === 0) continue;
+      const bank = banks[sysId];
+      if (!bank) continue;
+      for (let i = 0; i < bank.length; i++) {
+        // Ace and pirates never migrate. Live ships at the gate may leave —
+        // traffic.js despawns inTransit. Mid-lane live ships are not yanked.
+        const rec = bank[i];
+        if (!traderAtOutboundGate(rec)) continue;
+        count++;
+        if (Math.random() < 1 / count) { // reservoir pick, no alloc
+          chosen = rec;
+          chosenSys = sysId;
+        }
+      }
     }
     if (!chosen) return;
-    chosen.state = 'inTransit';
-    chosen.transitTo = dest;
-    chosen.transitEta = ctx.world.time + MIGRATION_ETA[0] + Math.random() * (MIGRATION_ETA[1] - MIGRATION_ETA[0]);
-    // The record stays in the CURRENT bank (ctx.world.records) until the eta
-    // passes — activeSystemId keys that bank.
-    inTransitRegistry.push({ rec: chosen, sysId: activeSystemId });
+    const dest = traderOutboundDest(chosen, chosen.system ?? chosenSys);
+    beginTransit(ctx, chosen, dest, chosenSys);
   }
 
   // Migrants live in their SOURCE bank until the eta passes (the player may
@@ -1098,7 +1498,9 @@ export function initWorld(ctx) {
     for (let i = inTransitRegistry.length - 1; i >= 0; i--) {
       const entry = inTransitRegistry[i];
       const rec = entry.rec;
-      if (rec.state !== 'inTransit' || now < rec.transitEta) continue;
+      if (rec.state !== 'inTransit') continue;
+      if (!Number.isFinite(rec.transitEta)) rec.transitEta = now + MIGRATION_ETA[0];
+      if (now < rec.transitEta) continue;
       inTransitRegistry.splice(i, 1);
       // Defensive membership check: a stale entry (banks swapped without a
       // rebuild) must never resurrect a record no bank holds.
@@ -1111,21 +1513,24 @@ export function initWorld(ctx) {
   }
 
   function arriveInSystem(ctx, rec, destId) {
-    const def = SYSTEMS[destId];
+    const def = destId && Object.hasOwn(SYSTEMS, destId) ? SYSTEMS[destId] : null;
     if (!def) {
       // Should never happen (gate.to is validated data) — fail safe home.
       rec.state = 'enroute';
       rec.transitTo = null;
+      rec.transitEta = 0;
+      const home = ctx.world.recordBanks?.[rec.system];
+      if (home && home.indexOf(rec) < 0) home.push(rec);
       return;
     }
     const destBank = ensureBank(ctx, destId);
-    const station = stationPoint(def);
-    const gate = gatePoint(def);
-    const planet = planetPoint(def);
+    const fromId = rec.system;
+    const planned = traderArrivalWaypoints(def, fromId);
+    const destWp = (planned.waypoints[1] ?? planned.waypoints[0]).clone();
     // Route rebuilt station-ward: the record sits exactly ON the arrival
     // gate waypoint (leg 0, legT 1, dir −1) heading home, so a player
     // present in the destination system sees it materialize at the gate.
-    rec.route = plainRoute([station, gate, jitter(planet, 80)]);
+    rec.route = plainRoute([planned.waypoints[0], jitter(destWp, 60)]);
     rec.legLens = computeLegLens(rec.route);
     rec.leg = 0;
     rec.legT = 1;
@@ -1137,6 +1542,8 @@ export function initWorld(ctx) {
     rec.live = false;
     rec.transitTo = null;
     rec.transitEta = 0;
+    rec.outboundTo = planned.outboundTo;
+    rec.gateLinger = false;
     destBank.push(rec);
   }
 
@@ -1329,47 +1736,12 @@ export function initWorld(ctx) {
   }
 
   function galaxyTick(ctx) {
-    const blockade = ctx.world.activeEvent?.kind === 'pirateBlockade';
-    const strikeRush = ctx.world.activeEvent?.kind === 'strikeRush';
-    for (const rec of ctx.world.records) {
-      if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') continue;
-      if (rec.state === 'docked') {
-        if (ctx.world.time >= rec.dwellUntil) rec.state = 'enroute';
-        continue;
-      }
-      // enroute: honor any turnaround dwell, then advance along the current
-      // leg at the class cruise speed (state.js, our units).
-      if (ctx.world.time < rec.dwellUntil) continue;
-      let speed = SHIP_CLASSES[rec.classKey]?.cruise ?? 90;
-      // Pirates hurry toward the lane during a blockade / a strike rush.
-      if ((blockade || strikeRush) && rec.role === 'pirate') speed *= 1.6;
-      const legLen = rec.legLens[rec.leg] || 1;
-      rec.legT += (speed * GALAXY_TICK * rec.dir) / legLen;
-      if (rec.legT >= 1) {
-        if (rec.leg + 1 >= rec.route.length - 1) {
-          rec.legT = 1;
-          rec.dir = -1;
-          rec.dwellUntil = ctx.world.time + 10 + Math.random() * 20; // brief turnaround
-        } else {
-          rec.leg++;
-          rec.legT = 0;
-        }
-      } else if (rec.legT <= 0) {
-        if (rec.leg === 0) {
-          rec.legT = 0;
-          rec.dir = 1;
-          // Waypoint 0 is home: traders/patrols dock at the station.
-          if (rec.role === 'trader' || rec.role === 'patrol') {
-            rec.state = 'docked';
-            rec.dwellUntil = ctx.world.time + 30 + Math.random() * 60;
-          } else {
-            rec.dwellUntil = ctx.world.time + 10;
-          }
-        } else {
-          rec.leg--;
-          rec.legT = 1;
-        }
-      }
+    // dest banks: tickBank runs gateLinger; this loop never beginTransit
+    const banks = ctx.world.recordBanks;
+    if (!banks) return;
+    for (const sysId in banks) {
+      if (!Object.hasOwn(banks, sysId)) continue;
+      tickBank(banks[sysId], sysId, ctx);
     }
   }
 
@@ -1412,7 +1784,7 @@ export function initWorld(ctx) {
         galaxyTick(ctx);
       }
 
-      // Inter-system migration §8.2: departures from the current bank,
+      // Inter-system migration §8.2: one departure from any existing bank,
       // arrivals into whichever bank the migrant left from.
       if (now >= nextMigrationAt) {
         nextMigrationAt = now + MIGRATION_INTERVAL * (0.75 + Math.random() * 0.5);

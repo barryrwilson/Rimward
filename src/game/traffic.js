@@ -3,6 +3,7 @@ import { U } from './state.js';
 import { recordPosition } from './world.js';
 import { spawnLiveShip, removeLiveShip } from '../systems/npc.js';
 import { isShipAssetReady, primeShipAsset } from '../systems/ship-assets.js';
+import { spawnBlocked, pirateLiveCap, visualClassFor, closeSpawn } from './traffic-feel.js';
 
 /**
  * Traffic — the instantiation bubble (doc §8.6).
@@ -36,6 +37,7 @@ const BLOCKADE_PIRATE_RANGE_MULT = 1.3;
 const BLOCKADE_PIRATE_PRIORITY = 0.5; // score multiplier: pirates spawn sooner
 
 const _pos = new THREE.Vector3();
+const _skipped = [];
 
 export function initTraffic(ctx) {
   ctx.ships = ctx.ships ?? [];
@@ -79,24 +81,53 @@ export function initTraffic(ctx) {
       // Spawn pass: at most one instantiation per frame, best candidate wins.
       if (ctx.ships.length >= MAX_LIVE) return;
       const curSys = ctx.world.currentSystem;
+      let pirateLive = 0;
+      for (let i = 0; i < ctx.ships.length; i++) {
+        if (ctx.ships[i].role === 'pirate') pirateLive++;
+      }
+      const pirateCap = pirateLiveCap(ctx.ships.length + 1, blockade);
+
+      const records = ctx.world.records;
+      const recCount = records.length;
+      _skipped.length = 0;
       let best = null;
-      let bestScore = Infinity;
-      for (const rec of ctx.world.records) {
-        if (rec.live || rec.assetPending || rec.state !== 'enroute') continue;
-        // Stale-bank guard: on the jump frame records still point at the old
-        // system's bank while currentSystem has already flipped. Untagged
-        // legacy records (wave-1 saves) pass through.
-        if (rec.system && rec.system !== curSys) continue;
-        recordPosition(rec, _pos);
-        const d = _pos.distanceTo(pp);
-        let range = U.INSTANTIATE_RANGE;
-        if (blockade && rec.role === 'pirate') range *= BLOCKADE_PIRATE_RANGE_MULT;
-        if (d > range) continue;
-        const score = blockade && rec.role === 'pirate' ? d * BLOCKADE_PIRATE_PRIORITY : d;
-        if (score < bestScore) {
-          bestScore = score;
-          best = rec;
+      for (let attempt = 0; attempt < recCount; attempt++) {
+        best = null;
+        let bestScore = Infinity;
+        for (let i = 0; i < recCount; i++) {
+          const rec = records[i];
+          if (rec.live || rec.assetPending || rec.state !== 'enroute') continue;
+          // Stale-bank guard: on the jump frame records still point at the old
+          // system's bank while currentSystem has already flipped. Untagged
+          // legacy records (wave-1 saves) pass through.
+          if (rec.system && rec.system !== curSys) continue;
+          if (_skipped.includes(rec)) continue;
+          recordPosition(rec, _pos);
+          const d = _pos.distanceTo(pp);
+          let range = U.INSTANTIATE_RANGE;
+          if (blockade && rec.role === 'pirate') range *= BLOCKADE_PIRATE_RANGE_MULT;
+          if (d > range) continue;
+          const score = blockade && rec.role === 'pirate' ? d * BLOCKADE_PIRATE_PRIORITY : d;
+          if (score < bestScore) {
+            bestScore = score;
+            best = rec;
+          }
         }
+        if (!best) break;
+        recordPosition(best, _pos);
+        const close = closeSpawn(_pos.distanceTo(pp));
+        // Sit-on authored pirates (Callow, Named Guns) must instantiate.
+        if (!close && !blockade && best.role === 'pirate' && pirateLive + 1 > pirateCap) {
+          _skipped.push(best);
+          best = null;
+          continue;
+        }
+        if (!close && spawnBlocked(_pos, visualClassFor(best), ctx.ships)) {
+          _skipped.push(best);
+          best = null;
+          continue;
+        }
+        break;
       }
       if (best) {
         const cover = best.qship === true && !best.revealed

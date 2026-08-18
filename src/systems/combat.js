@@ -1,21 +1,41 @@
 import * as THREE from 'three';
 import { WEAPONS, HEAT, DEFENSE, U, applyHit, tickShipState, MINING_LASERS, miningLaserFor, ORE_TYPES } from '../game/state.js';
+import { reticleAimPoint } from '../game/reticle-aim.js';
 import { scaleFor } from '../game/ship-scale.js';
 import { isUnknowable } from '../game/faction-style.js';
+import { PHY } from '../game/physics.js';
+import { sunZone } from '../game/collision.js';
+import {
+  HULL_MARK_POOL,
+  HULL_MARK_SIZE,
+  HULL_MARK_LIFT,
+  isFiniteVec3,
+  worldHitToLocal,
+  liftLocalOffset,
+  nextMarkSlot,
+} from '../game/hull-marks.js';
 
 /**
  * Combat system — player weapons + ALL projectile simulation (player & NPC).
  * Doc §6: projectile-based, dodgeable, readable family identity, no hitscan
  * (the mining beam is an industrial tool, not a weapon).
  *
+ * Player aim follows the HUD reticle ray (camera through the glass point),
+ * not ship local −Z. Chase and third-person place the reticle off the nose;
+ * first-person recenters it so the two coincide.
+ *
  * Generosity flows toward the player (§6.1): player projectiles get
  * DEFENSE.playerHitPadding (1.25×) hit volumes vs NPCs; NPC projectiles use
  * the player's true visual bounds (PLAYER_HIT_RADIUS, no padding).
  *
- * Consumes same-frame ctx.events 'npcFire' { ship, weapon } from npc.js
- * (NPCs never spawn projectiles themselves). Emits mineHit { asteroidId,
- * point } for asteroids.js (read next frame via ctx.lastEvents). Translates
- * applyHit() descriptors into the frozen ctx event vocabulary.
+ * Consumes same-frame ctx.events 'npcFire' { ship, weapon, target } from npc.js
+ * (NPCs never spawn projectiles themselves). target is 'player' (or missing,
+ * legacy) or a live ship. Player-aimed bolts use testPlayerHit only;
+ * ship-aimed bolts use testNpcHits and never testPlayerHit. Emits mineHit { asteroidId,
+ * point } for asteroids.js (read next frame via ctx.lastEvents). Emits
+ * playerFire { weapon } only when a player cannon/disruptor bolt actually
+ * leaves the pool (not dry-fire, heat-lock, mining, or a dropped shot).
+ * Translates applyHit() descriptors into the frozen ctx event vocabulary.
  *
  * Zero per-frame allocation: projectiles/flashes/sparks are pooled, all
  * scratch vectors are module-scope, the mining beam mutates its buffer in
@@ -38,16 +58,35 @@ import { isUnknowable } from '../game/faction-style.js';
  *   most once per second per asteroid id (a pair of scalars — mining
  *   touches one rock at a time — reset on 'systemLoaded'), while amber
  *   sparks kick BACK along the beam and no dust comes off the rock.
- * - BEAM LOOK: a tapered additive quad strip (4 verts, rebuilt in place
- *   around the camera-facing right vector; muzzle width ×0.5 → contact
- *   width ×1.4, a focusing cone) layered over the crisp 2-vertex core
- *   line, both breathing at working frequency. Contact feedback is an
- *   ore-tinted glow sprite, a pooled THREE.Points ring of ore-tinted
- *   chips thrown back off the surface, and a slower, dimmer dust ring
- *   for the rock-powder read. Pools keep integrating after the beam
- *   turns off so bursts finish naturally; under reducedMotion nothing
- *   emits, live particles still expire, and pulse opacities pin to
- *   their midpoints.
+ * - BEAM LOOK (wave 55): a thin additive quad strip (4 verts, rebuilt
+ *   in place around the camera-facing right vector) with a 1D edge-fade
+ *   map so the lance is not a hard rectangle. Half-widths stay in the
+ *   pencil band (Mk I ~0.08 muzzle / ~0.11 contact). A bright 2-vertex
+ *   core line rides the centre. Contact glow is the shared makeGlowDot
+ *   radial sprite — never an untextured square — tinted ore sparkColor
+ *   while cutting or BLOCKED_TINT while scattered. Pooled Points rings
+ *   throw chips and dust. Pools keep integrating after the beam turns
+ *   off so bursts finish naturally; under reducedMotion nothing emits,
+ *   live particles still expire, and pulse opacities pin to midpoints.
+ *
+ * Wave 53 PHY: same-frame bodyHit (ship.js) applies impact damage through
+ * applyHit family 'impact' (not a WEAPONS key — 1:1 shields then hull),
+ * throttled to one scrape / 0.2 s. sunZone heat ticks DPS while undocked
+ * and not jumping; the lethal core emits sunKill once and reuses the
+ * existing playerDestroyed / save.js death path. sunHeat is toast-throttled
+ * to 2.5 s. Zero new per-frame allocations (module-scope _sunOut).
+ *
+ * Wave 54 FX-01: pooled muzzle flashes (family-tinted, ~0.1 s, nose spawn,
+ * cannon/disruptor only — mining stays the industrial tool), stretched
+ * bolt glow/streak (PROJ_RADIUS / segment-vs-capsule unchanged), shield
+ * ripple when screen or shell > 0 at impact, stronger hull sparks on
+ * unshielded ship hits. reducedMotion: no new spark emission; muzzle and
+ * ripple snap one static frame then hide. Emits playerFire { weapon }
+ * only when a player bolt actually leaves the pool.
+ *
+ * Wave 59 FX-DECALS: a fixed pool of dark scorch sprites parents to the
+ * scored hull (shields already down). Recycle oldest. Park on
+ * npcDestroyed / player death / despawn so teardown cannot dispose them.
  */
 
 // ---- module-scope scratch (reused every frame) ----
@@ -57,6 +96,7 @@ const _dir = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _lead = new THREE.Vector3();
 const _oc = new THREE.Vector3();
+const _aim = new THREE.Vector3();
 const _targetFwd = new THREE.Vector3();
 // NPC ships use capsule proxies (radius + half-length along local Z). A 900 u/s
 // bolt steps ~15 u per 60 fps frame — larger than a proxy sphere — so hits
@@ -104,23 +144,43 @@ const _pcol = new THREE.Color();
 // Reset on 'systemLoaded' — a fresh field reuses ids.
 let _lastBlockedId = -1;
 let _lastBlockedAt = -1e9;
+// Wave 53 PHY: sunZone writes here (no per-frame object). Impact and heat
+// toasts are throttled so scrapes / lingering heat do not flood the HUD.
+const _sunOut = { zone: 0, t: 0, dist: 0 };
+const IMPACT_GAP = 0.2;
+const SUN_HEAT_TOAST_GAP = 2.5;
+let _lastImpactAt = -1e9;
+let _lastSunHeatAt = -1e9;
+let _sunKillEmitted = false;
+// Hull-mark stamp scratch. Combat writes sprite.position from these.
+const _markPose = { px: 0, py: 0, pz: 0, qx: 0, qy: 0, qz: 0, qw: 1, sx: 1, sy: 1, sz: 1 };
+const _markLocal = { x: 0, y: 0, z: 0 };
 
 const POOL_SIZE = 64;
 const FLASH_POOL = 16;
+const MUZZLE_POOL = 16;
+const RIPPLE_POOL = 16;
 const PROJ_RADIUS = 0.4;
 const PLAYER_HIT_RADIUS = 2.4; // true visual bounds of the living hull (§6.1)
 const NOSE_OFFSET = 3.0; // projectile spawns just past the nose
 const AIM_ERROR = Math.tan((2 * Math.PI) / 180); // ±2° NPC aim error
-const CONVERGE_DOT = 0.85; // aim-assist convergence only in the frontal cone
+const CONVERGE_DOT = 0.72; // ~44° frontal cone — chase targets sit wider than 32°
 
 const GROUP_WEAPON = { 1: 'cannon', 2: 'disruptor', 3: 'mining' };
 // §6.3 family identity: cannon = cyan bolt, disruptor = violet, mining = salvage green.
 const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e };
 
-// Impact sparks (wave-6): pooled bursts riding the flash discipline.
-const SPARKS_PER_BURST = 6;
-const SPARK_TTL = 0.35; // s
-const SPARK_SPEED = 16; // u/s outward drift
+// Impact sparks (wave-54: stronger than wave-6 6 / 0.35 s / 16 u/s).
+const SPARKS_PER_BURST = 11;
+const SPARK_TTL = 0.48; // s
+const SPARK_SPEED = 24; // u/s outward drift
+const SPARK_SIZE = 0.85;
+const MUZZLE_TTL = 0.1; // s — short pop, 0.08–0.12 band
+const RIPPLE_TTL = 0.2; // s — brief expanding shield ring
+const GLOW_SCALE_ENERGY = 7.2;
+const GLOW_SCALE_DISRUPTOR = 9.0;
+const STREAK_LEN = 8.4;
+const _boltAxis = new THREE.Vector3(0, 0, -1);
 
 // Mining particles (wave 51): two THREE.Points rings — ore-tinted chips and
 // slower rock-powder dust — plus the held-contact emission cadence.
@@ -131,6 +191,12 @@ const MINE_DUST_INTERVAL = 0.16;  // s between dust puffs
 const MINE_SPARK_TTL = 0.45;      // chip lifetime
 const MINE_DUST_TTL = 1.2;        // rock-powder lifetime
 const BLOCKED_TINT = 0xff9a3a;    // hostile amber: too-hard rock scatters the beam
+// Wave 55 lance: beamWidth is a unitless head scale (Mk I 0.22 … Mk IV 0.34).
+// Half-widths = beamWidth × these factors. Contact stays under ~0.18 even on Mk IV.
+const LANCE_W0 = 0.36;
+const LANCE_W1 = 0.52;
+const LANCE_GLOW = 3.4;
+const LANCE_GLOW_PULSE = 0.65;
 
 /** Fill live._proxyRx/_proxyRy/_proxyHalf from mesh proxy or class fallback. */
 function ensureShipProxy(s) {
@@ -220,6 +286,68 @@ function makeGlowDot() {
   return tex;
 }
 
+/** 1D fade across the ribbon so the quad edges read as a soft lance. */
+function makeBeamRibbon() {
+  const w = 64;
+  const h = 4;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.42, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.58, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+/** Soft dark scorch atlas. Material tint supplies the brown; alpha is the chip. */
+function makeScorchDot() {
+  const size = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  const c = size / 2;
+  const grad = g.createRadialGradient(c, c, 0, c, c, c);
+  grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0.32, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.7, 'rgba(255,255,255,0.14)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Additive ring sprite: hollow centre, bright band — shield ripple only. */
+function makeRippleRing() {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  const c = size / 2;
+  const grad = g.createRadialGradient(c, c, 0, c, c, c);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.52, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.7, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0.86, 'rgba(255,255,255,0.35)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export function initCombat(ctx) {
   const { scene } = ctx;
 
@@ -248,7 +376,7 @@ export function initCombat(ctx) {
       color: FAMILY_COLORS.energy,
       blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.95,
       depthWrite: false,
     }),
     disruptor: new THREE.SpriteMaterial({
@@ -256,8 +384,29 @@ export function initCombat(ctx) {
       color: FAMILY_COLORS.disruptor,
       blending: THREE.AdditiveBlending,
       transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
+  };
+  // Visual-only streak: hit tests still use PROJ_RADIUS on mesh.position.
+  const streakGeo = new THREE.CylinderGeometry(0.05, 0.2, STREAK_LEN, 6, 1, true);
+  streakGeo.rotateX(-Math.PI / 2); // cylinder +Y → local −Z (bolt forward)
+  const streakMats = {
+    energy: new THREE.MeshBasicMaterial({
+      color: FAMILY_COLORS.energy,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+    disruptor: new THREE.MeshBasicMaterial({
+      color: FAMILY_COLORS.disruptor,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
       opacity: 0.9,
       depthWrite: false,
+      side: THREE.DoubleSide,
     }),
   };
   const pool = [];
@@ -265,15 +414,21 @@ export function initCombat(ctx) {
     const mesh = new THREE.Mesh(projGeo, projMats.energy);
     mesh.visible = false;
     const glow = new THREE.Sprite(glowMats.energy);
-    glow.scale.set(2.4, 2.4, 1);
+    glow.scale.set(GLOW_SCALE_ENERGY, GLOW_SCALE_ENERGY, 1);
     mesh.add(glow); // child: hides/shows with the bolt, zero extra bookkeeping
+    const streak = new THREE.Mesh(streakGeo, streakMats.energy);
+    streak.position.set(0, 0, STREAK_LEN * 0.32); // trail sits behind the core
+    mesh.add(streak);
     scene.add(mesh);
     pool.push({
       mesh,
       glow,
+      streak,
       active: false,
       vel: new THREE.Vector3(),
       shooterPos: new THREE.Vector3(), // for aft/fore facet at hit time
+      shooter: null, // live ship that fired; testNpcHits skips this ref
+      vsPlayer: false, // NPC bolt aimed at the player (legacy / hunt)
       fromPlayer: true,
       wkey: 'cannon', // WEAPONS key (applyHit family lookup)
       family: 'energy', // §6.3 identity string (events/flash color)
@@ -299,6 +454,40 @@ export function initCombat(ctx) {
     flashes.push({ sprite, t: 0, ttl: 0.18 });
   }
 
+  // --- Muzzle flash pool (wave 54): short family-tinted pop at the nose.
+  const muzzleTex = glowTex;
+  const muzzles = [];
+  for (let i = 0; i < MUZZLE_POOL; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: muzzleTex,
+      color: FAMILY_COLORS.energy,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.visible = false;
+    scene.add(sprite);
+    muzzles.push({ sprite, t: 0, ttl: MUZZLE_TTL, snap: false, seen: false, base: 2.4, grow: 3.2 });
+  }
+
+  // --- Shield ripple pool (wave 54): expanding ring, shielded hits only.
+  const rippleTex = makeRippleRing();
+  const ripples = [];
+  for (let i = 0; i < RIPPLE_POOL; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: rippleTex,
+      color: FAMILY_COLORS.energy,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.visible = false;
+    scene.add(sprite);
+    ripples.push({ sprite, t: 0, ttl: RIPPLE_TTL, snap: false, seen: false });
+  }
+
   // --- Impact spark pool (wave-6): one burst per flash, each a THREE.Points
   // with preallocated position/velocity buffers and a per-burst material
   // (opacity animated per burst). Built once; reused ring-style.
@@ -309,7 +498,7 @@ export function initCombat(ctx) {
     geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
     const mat = new THREE.PointsMaterial({
       color: FAMILY_COLORS.energy,
-      size: 0.6,
+      size: SPARK_SIZE,
       map: glowTex,
       blending: THREE.AdditiveBlending,
       transparent: true,
@@ -320,6 +509,35 @@ export function initCombat(ctx) {
     pts.frustumCulled = false; // burst can sit anywhere; skip stale culling
     scene.add(pts);
     sparks.push({ pts, arr, vel: new Float32Array(SPARKS_PER_BURST * 3), t: 0, active: false });
+  }
+
+  // --- Hull-mark pool (wave 59): tiny dark sprites, parented to the hit
+  // hull so they ride with it. Shared texture + material; slots recycle.
+  // Hidden pool root holds idle slots so teardown of a live ship cannot
+  // dispose them. userData.shared on root / texture / material.
+  const hullMarkTex = makeScorchDot();
+  hullMarkTex.userData.shared = true;
+  const hullMarkMat = new THREE.SpriteMaterial({
+    map: hullMarkTex,
+    color: 0x1a120e,
+    transparent: true,
+    opacity: 0.78,
+    depthWrite: false,
+  });
+  hullMarkMat.userData.shared = true;
+  const hullMarkRoot = new THREE.Group();
+  hullMarkRoot.name = 'hull-mark-pool';
+  hullMarkRoot.visible = false;
+  hullMarkRoot.userData.shared = true;
+  scene.add(hullMarkRoot);
+  const hullMarks = [];
+  for (let i = 0; i < HULL_MARK_POOL; i++) {
+    const sprite = new THREE.Sprite(hullMarkMat);
+    sprite.visible = false;
+    sprite.frustumCulled = false;
+    sprite.scale.set(HULL_MARK_SIZE, HULL_MARK_SIZE, 1);
+    hullMarkRoot.add(sprite);
+    hullMarks.push({ sprite, live: false, stampAt: -1, host: null });
   }
 
   // --- Wave 51 mining beam: layered, tapered, pulsing (module header) ---
@@ -333,7 +551,8 @@ export function initCombat(ctx) {
       color: MINING_LASERS[0].coreColor,
       blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.95,
+      depthWrite: false,
     }),
   );
   beamCore.name = 'mine-beam-core';
@@ -341,22 +560,26 @@ export function initCombat(ctx) {
   beamCore.frustumCulled = false; // endpoints move every frame; skip stale culling
   scene.add(beamCore);
 
-  // Outer beam: a tapered quad strip (4 verts / 2 indexed tris, DoubleSide
-  // additive), rebuilt in place each frame around the camera-facing right
-  // vector — muzzle half-width ×0.25 tapering to ×0.7 at the contact, so it
-  // reads as a focusing cone from any viewpoint.
+  // Outer beam: a thin tapered quad strip (4 verts / 2 indexed tris,
+  // DoubleSide additive + 1D edge-fade map). Rebuilt in place each frame
+  // around the camera-facing right vector — a focusing cone, not a slab.
+  const ribbonTex = makeBeamRibbon();
   const beamQuadGeo = new THREE.BufferGeometry();
   const beamQuadArr = new Float32Array(12);
   beamQuadGeo.setAttribute('position', new THREE.BufferAttribute(beamQuadArr, 3));
+  beamQuadGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([
+    0, 0, 1, 0, 0, 1, 1, 1,
+  ]), 2));
   beamQuadGeo.setIndex([0, 2, 1, 1, 2, 3]);
   const beamMesh = new THREE.Mesh(
     beamQuadGeo,
     new THREE.MeshBasicMaterial({
+      map: ribbonTex,
       color: MINING_LASERS[0].beamColor,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.72,
       depthWrite: false,
     }),
   );
@@ -365,19 +588,21 @@ export function initCombat(ctx) {
   beamMesh.frustumCulled = false;
   scene.add(beamMesh);
 
-  // Contact glow: endpoint sprite, tinted per contact (ore sparkColor while
-  // cutting, hostile amber while blocked), scale breathing with beamWidth.
+  // Contact glow: shared radial makeGlowDot map so the flare is a circle
+  // from any camera angle. Tint per contact (ore sparkColor / BLOCKED_TINT);
+  // scale is a tight flare, not a billboard that swallows the rock.
   const beamGlow = new THREE.Sprite(
     new THREE.SpriteMaterial({
+      map: glowTex,
       color: MINING_LASERS[0].beamColor,
       blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.95,
       depthWrite: false,
     }),
   );
   beamGlow.name = 'mine-glow';
-  beamGlow.scale.set(2.5, 2.5, 1);
+  beamGlow.scale.set(0.8, 0.8, 1);
   beamGlow.visible = false;
   scene.add(beamGlow);
 
@@ -498,6 +723,15 @@ export function initCombat(ctx) {
     pool.pts.geometry.attributes.color.needsUpdate = true;
   }
 
+  /** Tight radial flare at the cut. Mutates the pooled sprite only. */
+  function paintContactGlow(hex, reduced, width) {
+    beamGlow.position.copy(_beamEnd);
+    const gs = (reduced ? LANCE_GLOW : LANCE_GLOW + LANCE_GLOW_PULSE * Math.sin(ctx.elapsed * 18)) * width;
+    beamGlow.scale.set(gs, gs, 1);
+    beamGlow.material.color.setHex(hex);
+    beamGlow.visible = true;
+  }
+
   /** Beam off: hide every beam-layer visual and re-prime the emission
    * clocks. Particle pools are NOT touched — live bursts finish naturally. */
   function hideMiningFx() {
@@ -529,6 +763,8 @@ export function initCombat(ctx) {
       if (p.active) continue;
       p.active = true;
       p.fromPlayer = fromPlayer;
+      p.shooter = null;
+      p.vsPlayer = false;
       p.wkey = wkey;
       p.family = w.family;
       p.damage = w.damage;
@@ -539,7 +775,12 @@ export function initCombat(ctx) {
       p.shooterPos.copy(shooterPos);
       p.mesh.material = projMats[w.family] ?? projMats.energy;
       p.glow.material = glowMats[w.family] ?? glowMats.energy;
+      p.streak.material = streakMats[w.family] ?? streakMats.energy;
+      const gs = w.family === 'disruptor' ? GLOW_SCALE_DISRUPTOR : GLOW_SCALE_ENERGY;
+      p.glow.scale.set(gs, gs, 1);
+      p.streak.scale.set(w.family === 'disruptor' ? 1.2 : 1, w.family === 'disruptor' ? 1.2 : 1, w.family === 'disruptor' ? 0.78 : 1);
       p.mesh.position.copy(origin);
+      orientBolt(p);
       p.mesh.visible = true;
       return p;
     }
@@ -549,6 +790,14 @@ export function initCombat(ctx) {
   function deactivate(p) {
     p.active = false;
     p.mesh.visible = false;
+  }
+
+  /** Align the visual streak to velocity. Hit tests ignore mesh rotation. */
+  function orientBolt(p) {
+    const len2 = p.vel.lengthSq();
+    if (len2 < 1e-8) return;
+    _tmp.copy(p.vel).multiplyScalar(1 / Math.sqrt(len2));
+    p.mesh.quaternion.setFromUnitVectors(_boltAxis.set(0, 0, -1), _tmp);
   }
 
   /** Spark burst at a hit point: random outward velocities, no allocation. */
@@ -582,7 +831,6 @@ export function initCombat(ctx) {
   }
 
   function spawnFlash(pos, family) {
-    spawnSparks(pos, family); // independent pool — fires on every ship impact
     for (let i = 0; i < flashes.length; i++) {
       const f = flashes[i];
       if (f.sprite.visible) continue;
@@ -596,10 +844,135 @@ export function initCombat(ctx) {
     }
   }
 
+  /** Muzzle pop at the existing nose point. Mining never calls this.
+   * First-person camera sits on the nose (FIRST_PERSON_NOSE z=−2.8); a
+   * full-size sprite there fills the glass, so the pop sits a short step
+   * along the shot and stays small. */
+  function spawnMuzzle(pos, family) {
+    const reduced = ctx.settings?.reducedMotion === true;
+    const fp = ctx.flags.firstPerson === true;
+    for (let i = 0; i < muzzles.length; i++) {
+      const f = muzzles[i];
+      if (f.sprite.visible) continue;
+      f.t = 0;
+      f.ttl = MUZZLE_TTL;
+      f.snap = reduced;
+      f.seen = false;
+      f.base = fp ? 1.15 : 2.4;
+      f.grow = fp ? 1.5 : 3.2;
+      f.sprite.material.color.set(FAMILY_COLORS[family] ?? FAMILY_COLORS.energy);
+      f.sprite.material.opacity = reduced ? 0.85 : 1;
+      const s = reduced ? f.base + f.grow * 0.35 : f.base;
+      f.sprite.scale.set(s, s, 1);
+      f.sprite.position.copy(pos);
+      if (fp) f.sprite.position.addScaledVector(_dir, 2.4);
+      f.sprite.visible = true;
+      return;
+    }
+  }
+
+  /** Expanding shield ring. Skip when both layers are already 0. */
+  function spawnRipple(pos, family) {
+    const reduced = ctx.settings?.reducedMotion === true;
+    for (let i = 0; i < ripples.length; i++) {
+      const f = ripples[i];
+      if (f.sprite.visible) continue;
+      f.t = 0;
+      f.ttl = RIPPLE_TTL;
+      f.snap = reduced;
+      f.seen = false;
+      f.sprite.material.color.set(FAMILY_COLORS[family] ?? FAMILY_COLORS.energy);
+      f.sprite.material.opacity = reduced ? 0.75 : 1;
+      const s = reduced ? 5.5 : 2.2;
+      f.sprite.scale.set(s, s, 1);
+      f.sprite.position.copy(pos);
+      f.sprite.visible = true;
+      return;
+    }
+  }
+
+  /** Ship impact: ripple if shielded, hull sparks + lasting mark otherwise. */
+  function spawnHitFx(pos, family, shielded, host) {
+    spawnFlash(pos, family);
+    if (shielded) spawnRipple(pos, family);
+    else {
+      spawnSparks(pos, family);
+      stampHullMark(pos, host);
+    }
+  }
+
+  function parkHullMark(slot) {
+    slot.live = false;
+    slot.host = null;
+    slot.sprite.visible = false;
+    if (slot.sprite.parent !== hullMarkRoot) hullMarkRoot.add(slot.sprite);
+  }
+
+  function parkMarksOnHost(host) {
+    if (!host) return;
+    for (let i = 0; i < hullMarks.length; i++) {
+      if (hullMarks[i].host === host) parkHullMark(hullMarks[i]);
+    }
+  }
+
+  function parkAllHullMarks() {
+    for (let i = 0; i < hullMarks.length; i++) parkHullMark(hullMarks[i]);
+  }
+
+  function stampHullMark(worldPos, host) {
+    if (!host || !worldPos) return;
+    const wx = worldPos.x, wy = worldPos.y, wz = worldPos.z;
+    if (!isFiniteVec3(wx, wy, wz)) return;
+    const p = host.position;
+    const q = host.quaternion;
+    const s = host.scale;
+    if (!p || !q || !s) return;
+    _markPose.px = p.x; _markPose.py = p.y; _markPose.pz = p.z;
+    _markPose.qx = q.x; _markPose.qy = q.y; _markPose.qz = q.z; _markPose.qw = q.w;
+    _markPose.sx = s.x; _markPose.sy = s.y; _markPose.sz = s.z;
+    if (!worldHitToLocal(wx, wy, wz, _markPose, _markLocal)) return;
+    liftLocalOffset(_markLocal, HULL_MARK_LIFT);
+    if (!isFiniteVec3(_markLocal.x, _markLocal.y, _markLocal.z)) return;
+    const idx = nextMarkSlot(hullMarks);
+    if (idx < 0) return;
+    const slot = hullMarks[idx];
+    if (slot.live) parkHullMark(slot);
+    slot.sprite.position.set(_markLocal.x, _markLocal.y, _markLocal.z);
+    host.add(slot.sprite);
+    slot.sprite.visible = true;
+    slot.live = true;
+    slot.host = host;
+    slot.stampAt = ctx.world.time;
+  }
+
+  function reclaimFromEvents(evs) {
+    if (!evs) return;
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i];
+      if (e.type === 'npcDestroyed' && e.ship?.object) parkMarksOnHost(e.ship.object);
+      else if (e.type === 'playerDestroyed') parkMarksOnHost(ctx.ship?.object);
+      else if (e.type === 'systemLoaded') parkAllHullMarks();
+    }
+  }
+
+  function reclaimHullMarks() {
+    for (let i = 0; i < hullMarks.length; i++) {
+      const slot = hullMarks[i];
+      if (!slot.live) continue;
+      if (!slot.host || slot.host.parent == null) parkHullMark(slot);
+    }
+    reclaimFromEvents(ctx.lastEvents);
+    reclaimFromEvents(ctx.events);
+    if (ctx.player?.destroyed) parkMarksOnHost(ctx.ship?.object);
+  }
+
   function firePlayerGun(wkey, w, playerObj) {
     _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion); // nose = local -Z
     _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET);
-    _dir.copy(_fwd);
+    reticleAimPoint(ctx, w.range || U.WEAPON_EXCHANGE, _aim);
+    _dir.subVectors(_aim, _nose);
+    if (_dir.lengthSq() < 1e-6) _dir.copy(_fwd);
+    else _dir.normalize();
     // Slight convergence toward the target's lead point (§6.2), frontal cone only.
     const t = ctx.targets.current;
     if (t?.object && t.state && !t.state.destroyed) {
@@ -608,23 +981,33 @@ export function initCombat(ctx) {
       if (dist > 1 && dist < U.TARGET_RANGE) {
         _tmp.divideScalar(dist);
         if (_tmp.dot(_fwd) > CONVERGE_DOT) {
-          const tv = t.ai?.velocity; // npc.js may publish a velocity; lead only if present
+          // Relative lead, same as the HUD pip. NPC ai.velocity is the
+          // commanded heading×speed from steerLive.
+          const tof = dist / w.speed;
           _lead.copy(t.object.position);
-          if (tv) _lead.addScaledVector(tv, dist / w.speed);
+          const tv = t.ai?.velocity;
+          if (tv) _lead.addScaledVector(tv, tof);
+          const pv = ctx.ship?.velocity;
+          if (pv) _lead.addScaledVector(pv, -tof);
           _dir.subVectors(_lead, _nose).normalize();
         }
       }
     }
-    spawnProjectile(true, wkey, w, _nose, _dir, playerObj.position);
+    const bolt = spawnProjectile(true, wkey, w, _nose, _dir, playerObj.position);
+    if (bolt) {
+      spawnMuzzle(_nose, w.family);
+      ctx.emit('playerFire', { weapon: wkey });
+    }
     addHeat(w.heatPerShot);
   }
 
-  function spawnNpcShot(ship, weapon, playerObj) {
+  function spawnNpcShot(ship, weapon, aimObj) {
+    if (!aimObj?.position) return;
     const wkey = WEAPONS[weapon] ? weapon : 'cannon';
     const w = WEAPONS[wkey];
     _fwd.set(0, 0, -1).applyQuaternion(ship.object.quaternion);
     _nose.copy(ship.object.position).addScaledVector(_fwd, NOSE_OFFSET);
-    _dir.subVectors(playerObj.position, _nose);
+    _dir.subVectors(aimObj.position, _nose);
     const dist = _dir.length();
     if (dist < 1) return;
     _dir.divideScalar(dist);
@@ -633,7 +1016,12 @@ export function initCombat(ctx) {
     _dir.y += (Math.random() * 2 - 1) * AIM_ERROR;
     _dir.z += (Math.random() * 2 - 1) * AIM_ERROR;
     _dir.normalize();
-    spawnProjectile(false, wkey, w, _nose, _dir, ship.object.position);
+    const bolt = spawnProjectile(false, wkey, w, _nose, _dir, ship.object.position);
+    if (bolt) {
+      bolt.shooter = ship;
+      spawnMuzzle(_nose, w.family);
+    }
+    return bolt;
   }
 
   /** Ray-sphere vs asteroid list; returns true while the beam is on. */
@@ -643,20 +1031,20 @@ export function initCombat(ctx) {
     const laser = miningLaserFor(ctx.world.miningLaser);
     _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion);
     _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET * 0.8);
-    _dir.copy(_fwd);
-    // A targeted asteroid (refs are { id, position, radius, ... } — no .object) pulls the beam.
-    // An Unknowable field (live ship with .object) pulls the same way.
+    reticleAimPoint(ctx, laser.range, _aim);
+    _dir.subVectors(_aim, _nose);
+    if (_dir.lengthSq() < 1e-6) _dir.copy(_fwd);
+    else _dir.normalize();
+    // Locked rock / Unknowable still pulls if it sits in the reticle cone.
     const t = ctx.targets.current;
     if (t && t.position && !t.object) {
-      _dir.subVectors(t.position, _nose);
-      const d = _dir.length();
-      if (d < 1e-3) _dir.copy(_fwd);
-      else _dir.divideScalar(d);
+      _tmp.subVectors(t.position, _nose);
+      const d = _tmp.length();
+      if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
     } else if (t?.object && t.state && !t.state.destroyed && isUnknowable(t.state.faction)) {
-      _dir.subVectors(t.object.position, _nose);
-      const d = _dir.length();
-      if (d < 1e-3) _dir.copy(_fwd);
-      else _dir.divideScalar(d);
+      _tmp.subVectors(t.object.position, _nose);
+      const d = _tmp.length();
+      if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
     }
     // Closest hit along the beam among rocks and Unknowable fields.
     const list = ctx.asteroids?.list;
@@ -714,8 +1102,8 @@ export function initCombat(ctx) {
     _beamRight.crossVectors(_dir, _camFwd);
     if (_beamRight.lengthSq() < 1e-6) _beamRight.set(1, 0, 0).applyQuaternion(ctx.camera.quaternion);
     else _beamRight.normalize();
-    const w0 = laser.beamWidth * 0.5 * 0.5; // muzzle half-width
-    const w1 = laser.beamWidth * 1.4 * 0.5; // contact half-width (focusing cone)
+    const w0 = laser.beamWidth * LANCE_W0; // muzzle half-width
+    const w1 = laser.beamWidth * LANCE_W1; // contact half-width (focusing cone)
     beamQuadArr[0] = _nose.x + _beamRight.x * w0;
     beamQuadArr[1] = _nose.y + _beamRight.y * w0;
     beamQuadArr[2] = _nose.z + _beamRight.z * w0;
@@ -730,15 +1118,15 @@ export function initCombat(ctx) {
     beamQuadArr[11] = _beamEnd.z - _beamRight.z * w1;
     beamQuadGeo.attributes.position.needsUpdate = true;
 
-    // Working-frequency breathing: outer 0.35..0.8, core 0.7..1.0 at a
-    // different rate. reducedMotion pins both to their midpoints (no flicker).
+    // Working-frequency breathing. The thin lance leans on the bright core
+    // so it still reads at range. reducedMotion pins both to midpoints.
     const reduced = ctx.settings?.reducedMotion === true;
     if (reduced) {
-      beamMesh.material.opacity = 0.575;
-      beamCore.material.opacity = 0.85;
+      beamMesh.material.opacity = 0.68;
+      beamCore.material.opacity = 0.95;
     } else {
-      beamMesh.material.opacity = 0.575 + 0.225 * Math.sin(ctx.elapsed * 26);
-      beamCore.material.opacity = 0.85 + 0.15 * Math.sin(ctx.elapsed * 31);
+      beamMesh.material.opacity = 0.62 + 0.16 * Math.sin(ctx.elapsed * 26);
+      beamCore.material.opacity = 0.92 + 0.08 * Math.sin(ctx.elapsed * 31);
     }
     beamMesh.visible = true;
     beamCore.visible = true;
@@ -750,6 +1138,7 @@ export function initCombat(ctx) {
       _tmp.subVectors(playerObj.position, bestShip.object.position);
       const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
       const events = applyHit(bestShip.state, { damage: dmg, family: 'mining', facet, now });
+      if (bestShip.ai) bestShip.ai.lastAttacker = 'player';
       ctx.emit('npcHit', { ship: bestShip, damage: dmg });
       for (const ev of events) {
         if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, ship: bestShip });
@@ -757,22 +1146,14 @@ export function initCombat(ctx) {
         else if (ev.type === 'disabled') ctx.emit('npcDisabled', { ship: bestShip });
         else if (ev.type === 'destroyed') ctx.emit('npcDestroyed', { ship: bestShip });
       }
-      beamGlow.position.copy(_beamEnd);
-      const gs = (reduced ? 2.0 : 2.0 + 0.6 * Math.sin(ctx.elapsed * 18)) * laser.beamWidth;
-      beamGlow.scale.set(gs, gs, 1);
-      beamGlow.material.color.setHex(laser.coreColor);
-      beamGlow.visible = true;
+      paintContactGlow(laser.coreColor, reduced, laser.beamWidth);
       addHeat(laser.heatPerShot * WEAPONS.mining.rof * dt);
     } else if (bestEntry) {
       const oreKey = bestEntry.oreKey ?? 'rawOre';
       const hardness = bestEntry.hardness ?? 1;
       const oreDef = ORE_TYPES[oreKey];
       const blocked = hardness > laser.tier; // wave-51 hardness gate
-      beamGlow.position.copy(_beamEnd);
-      const gs = (reduced ? 2.0 : 2.0 + 0.6 * Math.sin(ctx.elapsed * 18)) * laser.beamWidth;
-      beamGlow.scale.set(gs, gs, 1);
-      beamGlow.material.color.setHex(blocked ? BLOCKED_TINT : oreDef.sparkColor);
-      beamGlow.visible = true;
+      paintContactGlow(blocked ? BLOCKED_TINT : oreDef.sparkColor, reduced, laser.beamWidth);
       addHeat(laser.heatPerShot * WEAPONS.mining.rof * dt); // tiny continuous heat while on rock
 
       if (blocked) {
@@ -847,6 +1228,7 @@ export function initCombat(ctx) {
     for (let i = 0; i < ctx.ships.length; i++) {
       const s = ctx.ships[i];
       if (!s?.object || !s.state || s.state.destroyed) continue;
+      if (p.shooter && s === p.shooter) continue; // shooter does not hit itself
       // Projectile passes through an Unknowable field. Do not consume the bolt.
       if (isUnknowable(s.state.faction)) continue;
 
@@ -928,7 +1310,9 @@ export function initCombat(ctx) {
       _tmp.subVectors(p.shooterPos, s.object.position);
       const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
 
+      const shielded = s.state.screen > 0 || s.state.shell > 0;
       const events = applyHit(s.state, { damage: p.damage, family: p.wkey, facet, now });
+      if (s.ai) s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
       ctx.emit('npcHit', { ship: s, damage: p.damage });
       for (const ev of events) {
         if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, ship: s });
@@ -936,10 +1320,21 @@ export function initCombat(ctx) {
         else if (ev.type === 'disabled') ctx.emit('npcDisabled', { ship: s });
         else if (ev.type === 'destroyed') ctx.emit('npcDestroyed', { ship: s });
       }
-      spawnFlash(p.mesh.position, p.family);
+      spawnHitFx(p.mesh.position, p.family, shielded, s.object);
+      if (s.state.destroyed) parkMarksOnHost(s.object);
       return true;
     }
     return false;
+  }
+
+  /** Translate applyHit descriptors into the frozen player event vocabulary. */
+  function emitPlayerApplyHits(events) {
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, player: true });
+      else if (ev.type === 'engineOut') ctx.emit('engineOut', { player: true });
+      else if (ev.type === 'destroyed') ctx.emit('playerDestroyed', {}); // save.js owns the reload flow
+    }
   }
 
   function testPlayerHit(p, now, player, playerObj) {
@@ -955,12 +1350,9 @@ export function initCombat(ctx) {
     const events = applyHit(player, { damage: p.damage, family: p.wkey, facet: fromAft ? 'aft' : 'fore', now });
     // HUD owns all pixels (incl. subtle screen-edge flash on shield hits) — emit only.
     ctx.emit('playerHit', { damage: p.damage, family: p.family, fromAft, shielded });
-    for (const ev of events) {
-      if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, player: true });
-      else if (ev.type === 'engineOut') ctx.emit('engineOut', { player: true });
-      else if (ev.type === 'destroyed') ctx.emit('playerDestroyed', {}); // save.js owns the reload flow
-    }
-    spawnFlash(p.mesh.position, p.family);
+    emitPlayerApplyHits(events);
+    spawnHitFx(p.mesh.position, p.family, shielded, playerObj);
+    if (player.destroyed) parkMarksOnHost(playerObj);
     return true;
   }
 
@@ -969,12 +1361,15 @@ export function initCombat(ctx) {
   return {
     update(dt) {
       const now = ctx.world.time;
+      reclaimHullMarks();
       // Wave 51: a fresh field reuses asteroid ids — reset the mineBlocked
       // throttle so the first refusal in the new system fires immediately.
       for (let i = 0; i < ctx.lastEvents.length; i++) {
         if (ctx.lastEvents[i].type === 'systemLoaded') {
           _lastBlockedId = -1;
           _lastBlockedAt = -1e9;
+          _sunKillEmitted = false;
+          parkAllHullMarks();
           break;
         }
       }
@@ -993,14 +1388,68 @@ export function initCombat(ctx) {
         if (st) tickShipState(st, now, dt);
       }
 
-      // 2. NPC fire requests (same-frame events from npc.js, which runs earlier).
-      if (playerObj) {
+      // 1b. Body impact (same-frame bodyHit from ship.js; combat ticks after ship).
+      // Family 'impact' is not a WEAPONS key — applyHit falls back to 1:1
+      // screen/shell then hull. One damaging scrape per IMPACT_GAP.
+      if (player && !player.destroyed && now - _lastImpactAt >= IMPACT_GAP) {
         for (let i = 0; i < ctx.events.length; i++) {
           const e = ctx.events[i];
-          if (e.type !== 'npcFire') continue;
-          const ship = e.ship;
-          if (!ship?.object || !ship.state || ship.state.destroyed || ship.state.disabled) continue;
-          spawnNpcShot(ship, e.weapon, playerObj);
+          if (e.type !== 'bodyHit' || e.kind === 'player') continue;
+          const speed = e.speed || 0;
+          if (speed < PHY.IMPACT_MIN_SPEED) continue;
+          const damage = speed * PHY.IMPACT_SCREEN_PER_U;
+          const events = applyHit(player, { damage, family: 'impact', facet: 'fore', now });
+          e.damage = damage;
+          ctx.emit('playerHit', { damage, family: 'impact', fromAft: false });
+          emitPlayerApplyHits(events);
+          _lastImpactAt = now;
+          break;
+        }
+      }
+
+      // 1c. Star heat / lethal core. Skip while jumping; docked already returned.
+      if (player && !player.destroyed && !ctx.gate?.jumping && playerObj) {
+        // Live star only. Scoped harness ctxs copy SYSTEMS but never
+        // init solarsystem, so sunRadius stays 0 and mining pins do not
+        // die at the origin.
+        const sunR = ctx.config.world.sunRadius;
+        const sun = ctx.config.world.sunPosition;
+        if (sunR > 0 && sun) {
+          sunZone(playerObj.position.x, playerObj.position.y, playerObj.position.z, sun.x, sun.y, sun.z, sunR, _sunOut);
+          if (_sunOut.zone === 1) {
+            const dps = PHY.SUN_HEAT_DPS + _sunOut.t * PHY.SUN_HEAT_RAMP;
+            const events = applyHit(player, { damage: dps * dt, family: 'impact', facet: 'fore', now });
+            emitPlayerApplyHits(events);
+            if (now - _lastSunHeatAt >= SUN_HEAT_TOAST_GAP) {
+              _lastSunHeatAt = now;
+              ctx.emit('sunHeat', { t: _sunOut.t, dps });
+            }
+          } else if (_sunOut.zone === 2) {
+            const packet = player.hullMax + player.screenMax + player.shellMax + 1;
+            const events = applyHit(player, { damage: packet, family: 'impact', facet: 'fore', now });
+            emitPlayerApplyHits(events);
+            if (!_sunKillEmitted) {
+              _sunKillEmitted = true;
+              ctx.emit('sunKill', { reason: 'sun' });
+            }
+          }
+        }
+      }
+
+      // 2. NPC fire requests (same-frame events from npc.js, which runs earlier).
+      for (let i = 0; i < ctx.events.length; i++) {
+        const e = ctx.events[i];
+        if (e.type !== 'npcFire') continue;
+        const ship = e.ship;
+        if (!ship?.object || !ship.state || ship.state.destroyed || ship.state.disabled) continue;
+        const tgt = e.target;
+        if (tgt === 'player' || tgt == null) {
+          if (!playerObj) continue;
+          const bolt = spawnNpcShot(ship, e.weapon, playerObj);
+          if (bolt) bolt.vsPlayer = true;
+        } else if (tgt.object && tgt.state && !tgt.state.destroyed) {
+          const bolt = spawnNpcShot(ship, e.weapon, tgt.object);
+          if (bolt) bolt.vsPlayer = false;
         }
       }
 
@@ -1029,7 +1478,10 @@ export function initCombat(ctx) {
           deactivate(p);
           continue;
         }
-        const hit = p.fromPlayer ? testNpcHits(p, now) : testPlayerHit(p, now, player, playerObj);
+        orientBolt(p);
+        const hit = (p.fromPlayer || !p.vsPlayer)
+          ? testNpcHits(p, now)
+          : testPlayerHit(p, now, player, playerObj);
         if (hit) deactivate(p);
       }
 
@@ -1046,6 +1498,52 @@ export function initCombat(ctx) {
         const s = 1.5 + 3 * k;
         f.sprite.scale.set(s, s, 1);
         f.sprite.material.opacity = 1 - k;
+      }
+
+      // 5b. Muzzle pops + shield ripples. reducedMotion snaps one frame.
+      for (let i = 0; i < muzzles.length; i++) {
+        const f = muzzles[i];
+        if (!f.sprite.visible) continue;
+        if (f.snap) {
+          if (f.seen) {
+            f.sprite.visible = false;
+            f.snap = false;
+            continue;
+          }
+          f.seen = true;
+          continue;
+        }
+        f.t += dt;
+        const k = f.t / f.ttl;
+        if (k >= 1) {
+          f.sprite.visible = false;
+          continue;
+        }
+        const s = f.base + f.grow * k;
+        f.sprite.scale.set(s, s, 1);
+        f.sprite.material.opacity = 1 - k;
+      }
+      for (let i = 0; i < ripples.length; i++) {
+        const f = ripples[i];
+        if (!f.sprite.visible) continue;
+        if (f.snap) {
+          if (f.seen) {
+            f.sprite.visible = false;
+            f.snap = false;
+            continue;
+          }
+          f.seen = true;
+          continue;
+        }
+        f.t += dt;
+        const k = f.t / f.ttl;
+        if (k >= 1) {
+          f.sprite.visible = false;
+          continue;
+        }
+        const s = 2.2 + 7.2 * k;
+        f.sprite.scale.set(s, s, 1);
+        f.sprite.material.opacity = 1 - k * k;
       }
 
       // 6. Impact sparks: ballistic drift + fade, in-place buffer writes.

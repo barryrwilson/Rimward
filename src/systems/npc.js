@@ -13,10 +13,15 @@ import {
   cargoValue,
   HIDDEN_MOUNTS,
   ORIGIN_ARCS,
+  MINING_LASERS,
 } from '../game/state.js';
 import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
-import { spawnPod } from '../game/pods.js';
+import { spawnPod, spawnSurvivorPod } from '../game/pods.js';
+import { turnRateFor } from '../game/flight-feel.js';
+import { scaleFor } from '../game/ship-scale.js';
+import { PHY } from '../game/physics.js';
+import { collectBodies, resolveMover } from '../game/collision.js';
 
 /**
  * NPC system — live GLB ship assets and AI (doc §6.7, §7).
@@ -25,15 +30,15 @@ import { spawnPod } from '../game/pods.js';
  *   spawnLiveShip(ctx, record, position) → { id, record, object, state, role, ai }
  *   removeLiveShip(ctx, liveShip)
  *
- * record fields read: { id?, classKey, role ('trader'|'patrol'|'pirate'|'ace'),
+ * record fields read: { id?, classKey, role ('trader'|'patrol'|'pirate'|'ace'|'miner'),
  *   name?, faction?, cargo?, resolve?, personality?, bounty?, route?: Vector3[],
  *   anchor?: Vector3 }
  *
  * AI modes: route (trader), loiter (patrol), hunt (pirate), duel (ace),
- * plus surrender modes flee/drift. Hostiles telegraph ≥3 s before the first
+ * mine (miner), plus surrender modes flee/drift. Hostiles telegraph ≥3 s before the first
  * shot (§6.1): direct approach + flashing engine glow + a commLine. Fire is
- * emitted as 'npcFire' { ship, weapon:'cannon' } — combat.js spawns the
- * actual projectile.
+ * emitted as 'npcFire' { ship, weapon:'cannon', target } — combat.js
+ * aims at target ('player' or a live ship) and spawns the projectile.
  *
  * Resolve (§7.2–7.5) is recomputed ~1 Hz for hostiles-with-intent and for any
  * ship recently in combat. Bands drive behavior: defiant presses, shaken
@@ -41,8 +46,9 @@ import { spawnPod } from '../game/pods.js';
  * capitulate picks a §7.5 outcome (cut engines / jettison / flee / crew pods).
  *
  * update() performs zero allocations: all scratch vectors/quaternions are
- * module-scope; allocations happen only on spawn, hail, capitulation, or
- * destruction (event-time, not per-frame).
+ * module-scope; allocations happen only on spawn, hail, or capitulation
+ * (event-time, not per-frame). Death FX is a fixed pool. PHY-02 lookahead
+ * steer and resolveMover bounce reuse module dest/out records.
  *
  * GLB templates provide all NPC hull forms. Each live root exposes its
  * collision proxy, outer engine-effect group, and LOD visual to AI and combat.
@@ -56,20 +62,77 @@ const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
 const _aim = new THREE.Vector3();
+const _aimAvoid = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _toT = new THREE.Vector3();
+const _away = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+const _bodies = { count: 0, items: [] };
+let _gax = 0;
+let _gay = 0;
+let _gaz = 1;
+const _hit = {
+  px: 0, py: 0, pz: 0,
+  vx: 0, vy: 0, vz: 0,
+  hit: false, kind: null, speed: 0,
+  nx: 0, ny: 0, nz: 0, overlap: 0,
+};
+
+let _phyOn = false;
 
 const TELEGRAPH_SECONDS = 3; // §6.1 minimum hostile-intent warning
 const NPC_FIRE_INTERVAL = 1 / (WEAPONS.cannon.rof * 0.5); // ~0.5× player rof
 const ACE_FURY_INTERVAL = NPC_FIRE_INTERVAL * 0.65;
 const LAW_ZONE_RADIUS = 300; // station law zone: no hostile intent develops
+const HOSTILE_STANDING = -10; // patrols hunt the player at or below this standing
 const RESOLVE_INTERVAL = 1; // s between resolve recomputes
 const THREAT_MEMORY = 12; // s a ship stays wary after last combat
+const TRADER_FLEE_HIT = 10; // s a graze keeps a trader in flee after lastHitAt
 const FIRE_FACE_DOT = 0.92; // must roughly face target to fire
-const FLASH_LIFE = 0.6; // s debris flash on destruction
+const DEATH_CHIP_COUNT = 8; // chips emitted per kill
+const DEATH_BURST_SLOTS = 3; // concurrent bursts; ring-reused
+const CHIP_LIFE_MIN = 0.4;
+const CHIP_LIFE_MAX = 0.8;
 const DEMAND_COOLDOWN = 300; // s before the same pirate record may demand the player again (record.demandedAt)
 const WAKE_SITE_DISTANCE = 1400; // = U.DEINSTANTIATE_RANGE (state.js; traffic.js despawns there) — the wake site sits beyond the fold
+// Abeam offsets stay inside ~35° of LOS at typical fight range so a chase
+// keeps the hull on glass. Old 160/240 parked them just off-screen.
+const ENVELOPE_ABEAM = 110;
+const ENVELOPE_EXTEND_DIST = 140;
+const ENVELOPE_CLOSE_DIST = 220;
+const ENVELOPE_CLOSE_RATE = 40; // u/s along LOS
+const ENVELOPE_EXTEND_ABEAM = 140;
+const ENVELOPE_EXTEND_PAST = 120;
+const ENVELOPE_APPROACH_DIST = 350;
+const ENVELOPE_APPROACH_OFFSET = 60;
+const ACE_HELIX_R = 180;
+const ENV_PRESS = 0;
+const ENV_EXTEND = 1;
+const ENV_APPROACH = 2;
+const GUN_PASS_MIN = 80;
+const GUN_PASS_HOLD = 1.35; // readable attack run through the player's sights
+const TELEGRAPH_HOLD = 200; // stay in cannon range, facing, during the warning // below this, extend only — no hull as flight dest
+const MINER_CARGO_CAP = 8;
+const MINER_RANGE = MINING_LASERS[0].range;
+const MINER_HIT_INTERVAL = 0.22;
+const MINER_EXTRACT_PER_SEC = Math.min(0.6, MINING_LASERS[0].extractPerSec);
+const MINER_FACE_DOT = 0.88;
+const MINER_WORK_TIME = 12;
+const MINER_BEAM_MAX = 2;
+const MINER_HOLD_PAD = 12; // extra stand-off beyond cylinder + hull
+const MINER_HOLD_ARRIVE = 28; // dock when this close to the hold, not the pad
+const GATE_TUBE_FALLBACK = 2.2; // RING_TUBE if body.y0 is missing
+const _minePts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+let _minePtIdx = 0;
+const _minerBeams = [];
+const _minerBeamMat = new THREE.LineBasicMaterial({
+  color: MINING_LASERS[0].beamColor,
+  blending: THREE.AdditiveBlending,
+  transparent: true,
+  opacity: 0.72,
+  depthWrite: false,
+});
+let _minerBeamCursor = 0;
 
 // Player-interest model (wave 32): pirates no longer lock the player on
 // sight — always-on pursuit read as instant attack on every system entry.
@@ -127,7 +190,11 @@ function ring(center, radius, n) {
 
 function makeAi(ctx, record, startPos) {
   const role = record.role ?? 'trader';
-  const mode = role === 'pirate' ? 'hunt' : role === 'ace' ? 'duel' : role === 'trader' ? 'route' : 'loiter';
+  const mode = role === 'pirate' ? 'hunt'
+    : role === 'ace' ? 'duel'
+    : role === 'trader' ? 'route'
+    : role === 'miner' ? 'mine'
+    : 'loiter';
   const ai = {
     mode,
     role,
@@ -148,9 +215,15 @@ function makeAi(ctx, record, startPos) {
     resolveBoost: 0, // wave 30: failed-bluff sting (hail.js showTeeth); see updateResolve for lifecycle
     playerRolled: false, // wave 32: the interest decision is made once per instantiation
     playerInterested: false,
+    scratched: false, // hull or screen dipped this instance (trader/patrol memory)
+    lastAttacker: null, // 'player' | live ship | 'npc' — instance only, not saved
+    survivorsSpawned: false, // one crew pod per hull; crewPods and destroy share this
+    fleeFrom: null, // 'player' | live ship — trader job flee source
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
+    gunPassUntil: 0,
+    velocity: new THREE.Vector3(),
     wp: 0,
     waypoints: null,
     calmUntil: 0,
@@ -158,9 +231,9 @@ function makeAi(ctx, record, startPos) {
     driftVel: new THREE.Vector3(),
     weaveSeed: Math.random() * Math.PI * 2,
   };
-  if (mode === 'route' && Array.isArray(record.route) && record.route.length > 0) {
+  if ((mode === 'route' || mode === 'mine') && Array.isArray(record.route) && record.route.length > 0) {
     ai.waypoints = record.route;
-  } else if (mode === 'route') {
+  } else if (mode === 'route' || mode === 'mine') {
     ai.waypoints = ring(startPos, 90, 3);
   } else {
     ai.waypoints = ring(record.anchor ?? ctx.config.world.stationPosition, 80 + Math.random() * 70, 4);
@@ -316,6 +389,315 @@ function speedCap(live) {
   return live.state.engineOut ? cls.cruise * 0.3 : cls.cruise;
 }
 
+/** Collision sphere for bounce/avoid. Prefer scale.maxRadius; else 3. */
+function npcRadius(live) {
+  const sc = scaleFor(live.state.classKey);
+  if (sc && Number.isFinite(sc.maxRadius) && sc.maxRadius > 0) return sc.maxRadius;
+  const p = sc && sc.proxy;
+  if (p) {
+    const r = Math.hypot(p.rx || 0, p.ry || 0, p.halfLen || 0);
+    if (r > 0) return r;
+  }
+  return 3;
+}
+
+function skipAvoidBody(live, body) {
+  if (body.kind === 'ship' && body.id === live.id) return true;
+  const target = live.ai.target;
+  if (target === 'player' && body.kind === 'player') return true;
+  if (target && target !== 'player' && body.kind === 'ship' && body.id === target.id) return true;
+  return false;
+}
+
+function writeGateAxis(body) {
+  const axis = body && body.axis;
+  let ax;
+  let ay;
+  let az;
+  if (axis && Number.isFinite(axis.x) && Number.isFinite(axis.y) && Number.isFinite(axis.z)) {
+    ax = axis.x;
+    ay = axis.y;
+    az = axis.z;
+  } else if (Array.isArray(axis) && axis.length >= 3) {
+    ax = axis[0];
+    ay = axis[1];
+    az = axis[2];
+  } else {
+    ax = -(body.x || 0);
+    ay = -(body.y || 0);
+    az = -(body.z || 0);
+  }
+  const len = Math.hypot(ax, ay, az);
+  if (len < 1e-8) {
+    _gax = 0;
+    _gay = 0;
+    _gaz = 1;
+    return;
+  }
+  _gax = ax / len;
+  _gay = ay / len;
+  _gaz = az / len;
+}
+
+function gateTubeR(body) {
+  const t = body && body.y0;
+  return Number.isFinite(t) && t > 0 ? t : GATE_TUBE_FALLBACK;
+}
+
+/** Torus vs gate ring. Bore is empty; tube is solid. */
+export function gateProbeHits(px, py, pz, rad, body) {
+  if (!body) return false;
+  const R = Number.isFinite(body.r) ? body.r : 0;
+  const tube = gateTubeR(body);
+  const pr = rad > 0 ? rad : 0;
+  writeGateAxis(body);
+  const dx = px - body.x;
+  const dy = py - body.y;
+  const dz = pz - body.z;
+  const axial = dx * _gax + dy * _gay + dz * _gaz;
+  const rx = dx - axial * _gax;
+  const ry = dy - axial * _gay;
+  const rz = dz - axial * _gaz;
+  const rho = Math.hypot(rx, ry, rz);
+  return Math.hypot(rho - R, axial) < tube + pr;
+}
+
+/** Nearest point on the ring centerline. Writes out. */
+function nearestGateRing(px, py, pz, body, out) {
+  writeGateAxis(body);
+  const R = Number.isFinite(body.r) ? body.r : 0;
+  const dx = px - body.x;
+  const dy = py - body.y;
+  const dz = pz - body.z;
+  const axial = dx * _gax + dy * _gay + dz * _gaz;
+  let rx = dx - axial * _gax;
+  let ry = dy - axial * _gay;
+  let rz = dz - axial * _gaz;
+  let rho = Math.hypot(rx, ry, rz);
+  if (rho < 1e-8) {
+    rx = -_gaz;
+    ry = 0;
+    rz = _gax;
+    rho = Math.hypot(rx, ry, rz);
+    if (rho < 1e-8) {
+      rx = 1;
+      ry = 0;
+      rz = 0;
+      rho = 1;
+    }
+  }
+  const s = R / rho;
+  out.x = body.x + rx * s;
+  out.y = body.y + ry * s;
+  out.z = body.z + rz * s;
+  return out;
+}
+
+function stationCylHits(px, py, pz, rad, body) {
+  let ymin = body.y + body.y0;
+  let ymax = body.y + body.y1;
+  if (ymin > ymax) {
+    const tmp = ymin;
+    ymin = ymax;
+    ymax = tmp;
+  }
+  const pr = rad > 0 ? rad : 0;
+  if (py < ymin - pr || py > ymax + pr) return false;
+  const rr = body.r + pr;
+  const dx = px - body.x;
+  const dz = pz - body.z;
+  return dx * dx + dz * dz < rr * rr;
+}
+
+/** 0 none, 1 path/probe, 2 hull already inside the keep-out. */
+function stationKeepOutHits(px, py, pz, sx, sy, sz, rad, body) {
+  if (stationCylHits(sx, sy, sz, rad, body)) return 2;
+  if (stationCylHits(px, py, pz, rad, body)) return 1;
+  let ymin = body.y + body.y0;
+  let ymax = body.y + body.y1;
+  if (ymin > ymax) {
+    const tmp = ymin;
+    ymin = ymax;
+    ymax = tmp;
+  }
+  const pr = rad > 0 ? rad : 0;
+  if (Math.max(sy, py) < ymin - pr || Math.min(sy, py) > ymax + pr) return 0;
+  const abx = px - sx;
+  const abz = pz - sz;
+  const apx = body.x - sx;
+  const apz = body.z - sz;
+  const ab2 = abx * abx + abz * abz;
+  let t = 0;
+  if (ab2 > 1e-12) t = (apx * abx + apz * abz) / ab2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const qx = sx + abx * t - body.x;
+  const qz = sz + abz * t - body.z;
+  const rr = body.r + pr;
+  return qx * qx + qz * qz < rr * rr ? 1 : 0;
+}
+
+function probeHitsBody(px, py, pz, rad, body) {
+  if (body.kind === 'station') return stationCylHits(px, py, pz, rad, body);
+  if (body.kind === 'gate') return gateProbeHits(px, py, pz, rad, body);
+  const rr = body.r + rad;
+  const dx = px - body.x;
+  const dy = py - body.y;
+  const dz = pz - body.z;
+  return dx * dx + dy * dy + dz * dz < rr * rr;
+}
+
+function addLateralAway(ox, oy, oz, px, py, pz) {
+  _away.set(px - ox, py - oy, pz - oz);
+  _away.addScaledVector(_fwd, -_away.dot(_fwd));
+  if (_away.lengthSq() < 1e-8) {
+    _away.crossVectors(_fwd, UP);
+    if (_away.lengthSq() < 1e-8) _away.set(1, 0, 0);
+  }
+  const len = Math.sqrt(_away.lengthSq());
+  _v2.addScaledVector(_away, 1 / len);
+}
+
+function addStationOutXZ(sx, sz, cx, cz) {
+  let ox = sx - cx;
+  let oz = sz - cz;
+  let len = Math.hypot(ox, oz);
+  if (len < 1e-8) {
+    ox = -_fwd.x;
+    oz = -_fwd.z;
+    len = Math.hypot(ox, oz);
+    if (len < 1e-8) {
+      ox = 1;
+      oz = 0;
+      len = 1;
+    }
+  }
+  _v2.x += (ox / len) * 2;
+  _v2.z += (oz / len) * 2;
+}
+
+/**
+ * Bias an aim point laterally around the nearest lookahead obstacle.
+ * Writes outAim. Does not replace combat / waypoint aims — only adds offset.
+ */
+function applyAvoidBias(live, targetPos, outAim) {
+  outAim.copy(targetPos);
+  if (!_phyOn) return outAim;
+  const object = live.object;
+  const pos = object.position;
+  _fwd.copy(NEG_Z).applyQuaternion(object.quaternion);
+  const look = PHY.AVOID_LOOKAHEAD;
+  const px = pos.x + _fwd.x * look;
+  const py = pos.y + _fwd.y * look;
+  const pz = pos.z + _fwd.z * look;
+  const rad = npcRadius(live);
+  _v2.set(0, 0, 0);
+  let hits = 0;
+  let insideStation = false;
+  const n = _bodies.count;
+  for (let i = 0; i < n; i++) {
+    const body = _bodies.items[i];
+    if (!body || skipAvoidBody(live, body)) continue;
+    if (body.kind === 'station') {
+      const how = stationKeepOutHits(px, py, pz, pos.x, pos.y, pos.z, rad, body);
+      if (!how) continue;
+      if (how === 2) {
+        insideStation = true;
+        addStationOutXZ(pos.x, pos.z, body.x, body.z);
+      } else {
+        addLateralAway(body.x, body.y, body.z, px, py, pz);
+      }
+      hits += 1;
+      continue;
+    }
+    if (!probeHitsBody(px, py, pz, rad, body)) continue;
+    if (body.kind === 'gate') {
+      nearestGateRing(px, py, pz, body, _v3);
+      addLateralAway(_v3.x, _v3.y, _v3.z, px, py, pz);
+    } else {
+      addLateralAway(body.x, body.y, body.z, px, py, pz);
+    }
+    hits += 1;
+  }
+  if (hits > 0 && _v2.lengthSq() > 1e-8) {
+    _v2.normalize();
+    const gain = insideStation ? look * PHY.AVOID_GAIN * 2 : look * PHY.AVOID_GAIN;
+    outAim.addScaledVector(_v2, gain);
+  }
+  return outAim;
+}
+
+function appendSunBody(ctx) {
+  const sun = ctx.config && ctx.config.world && ctx.config.world.sunPosition;
+  const sys = ctx.systems && ctx.systems[ctx.world.currentSystem];
+  const sunR0 = sys && sys.sunRadius;
+  if (!sun || !Number.isFinite(sunR0) || sunR0 <= 0) return;
+  if (!Number.isFinite(sun.x) || !Number.isFinite(sun.y) || !Number.isFinite(sun.z)) return;
+  const i = _bodies.count;
+  let slot = _bodies.items[i];
+  if (!slot) {
+    slot = { kind: '', x: 0, y: 0, z: 0, r: 0, y0: 0, y1: 0, id: 0 };
+    _bodies.items[i] = slot;
+  }
+  slot.kind = 'sun';
+  slot.x = sun.x;
+  slot.y = sun.y;
+  slot.z = sun.z;
+  slot.r = sunR0 * PHY.SUN_HEAT_MULT;
+  slot.y0 = 0;
+  slot.y1 = 0;
+  slot.id = 0;
+  _bodies.count = i + 1;
+}
+
+/** Safety-net slide. Derives vel from last pos; folds bounce vel into heading. */
+function bounceLive(live, dt) {
+  const object = live.object;
+  const p = object.position;
+  const ai = live.ai;
+  let vx;
+  let vy;
+  let vz;
+  if (Number.isFinite(ai._px) && dt > 1e-8) {
+    vx = (p.x - ai._px) / dt;
+    vy = (p.y - ai._py) / dt;
+    vz = (p.z - ai._pz) / dt;
+  } else if (live.state.disabled || ai.mode === 'drift') {
+    vx = ai.driftVel.x;
+    vy = ai.driftVel.y;
+    vz = ai.driftVel.z;
+  } else {
+    _fwd.copy(NEG_Z).applyQuaternion(object.quaternion);
+    const spd = speedCap(live);
+    vx = _fwd.x * spd;
+    vy = _fwd.y * spd;
+    vz = _fwd.z * spd;
+  }
+  if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) {
+    vx = 0;
+    vy = 0;
+    vz = 0;
+  }
+  resolveMover(p.x, p.y, p.z, vx, vy, vz, npcRadius(live), _bodies, 'ship', live.id, _hit);
+  if (_hit.hit && Number.isFinite(_hit.px) && Number.isFinite(_hit.py) && Number.isFinite(_hit.pz)) {
+    p.set(_hit.px, _hit.py, _hit.pz);
+    const n = Math.hypot(_hit.vx, _hit.vy, _hit.vz);
+    const oldN = Math.hypot(vx, vy, vz);
+    const dirChanged = n > 1e-4 && (oldN <= 1e-4 || (vx * _hit.vx + vy * _hit.vy + vz * _hit.vz) < 0.995 * oldN * n);
+    if (dirChanged) {
+      _v1.set(_hit.vx / n, _hit.vy / n, _hit.vz / n);
+      _q.setFromUnitVectors(NEG_Z, _v1);
+      if (Number.isFinite(_q.x)) object.quaternion.copy(_q);
+    }
+    if ((live.state.disabled || ai.mode === 'drift') && Number.isFinite(_hit.vx)) {
+      ai.driftVel.set(_hit.vx, _hit.vy, _hit.vz);
+    }
+  }
+  ai._px = p.x;
+  ai._py = p.y;
+  ai._pz = p.z;
+}
+
 /** Rotate toward target and advance along -Z. Returns distance to target. */
 function steer(object, targetPos, speed, turnRate, dt) {
   _v1.subVectors(targetPos, object.position);
@@ -332,15 +714,499 @@ function steer(object, targetPos, speed, turnRate, dt) {
   return dist;
 }
 
+function steerLive(live, targetPos, speed, dt) {
+  const aim = _phyOn ? applyAvoidBias(live, targetPos, _aimAvoid) : targetPos;
+  const dist = steer(live.object, aim, speed, turnRateFor(live.state.classKey, speed), dt);
+  _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+  live.ai.velocity.copy(_fwd).multiplyScalar(speed);
+  return dist;
+}
+
+function abeamSign(ai) {
+  return Math.sin(ai.weaveSeed) >= 0 ? 1 : -1;
+}
+
+/** Writes unit LOS into _toT. Returns distance. */
+function losTo(fromPos, targetPos) {
+  _toT.subVectors(targetPos, fromPos);
+  const dist = _toT.length();
+  if (dist > 1e-3) _toT.divideScalar(dist);
+  else _toT.set(0, 0, 1);
+  return dist;
+}
+
+/** Horizontal unit offset from LOS. Writes _v3. */
+function setAbeam(sign) {
+  _v3.crossVectors(_toT, UP);
+  const lenSq = _v3.lengthSq();
+  if (lenSq < 1e-6) _v3.set(sign, 0, 0);
+  else _v3.multiplyScalar(sign / Math.sqrt(lenSq));
+}
+
+/**
+ * Defiant / ace combat aim. Writes outAim. Returns ENV_PRESS | ENV_EXTEND | ENV_APPROACH.
+ * targetVel may be null. Uses current heading for "past" vs inbound.
+ */
+function applyCombatEnvelope(object, targetPos, speed, targetVel, sign, outAim) {
+  const dist = losTo(object.position, targetPos);
+  setAbeam(sign);
+  _fwd.copy(NEG_Z).applyQuaternion(object.quaternion);
+  let closing = _fwd.dot(_toT) * speed;
+  if (targetVel) closing -= targetVel.dot(_toT);
+  const extend = dist < ENVELOPE_EXTEND_DIST || (dist < ENVELOPE_CLOSE_DIST && closing > ENVELOPE_CLOSE_RATE);
+  if (extend) {
+    if (_fwd.dot(_toT) < 0) {
+      outAim.copy(targetPos).addScaledVector(_fwd, ENVELOPE_EXTEND_PAST).addScaledVector(_v3, ENVELOPE_EXTEND_ABEAM);
+    } else {
+      outAim.copy(targetPos).addScaledVector(_v3, ENVELOPE_EXTEND_ABEAM).addScaledVector(_toT, ENVELOPE_EXTEND_PAST);
+    }
+    return ENV_EXTEND;
+  }
+  if (dist > ENVELOPE_APPROACH_DIST) {
+    outAim.copy(targetPos).addScaledVector(_v3, ENVELOPE_APPROACH_OFFSET);
+    return ENV_APPROACH;
+  }
+  if (dist < ENVELOPE_ABEAM) {
+    outAim.copy(targetPos).addScaledVector(_v3, ENVELOPE_ABEAM);
+    return ENV_PRESS;
+  }
+  outAim.copy(targetPos);
+  return ENV_PRESS;
+}
+
+/** Attack gun-pass: nose on target so FIRE_FACE_DOT can land, then extend. */
+function canGunPass(ai, now, dist) {
+  if (ai.phase !== 'attack' || ai.demanding) return false;
+  if (ai.band === 'bargaining') return false;
+  if (now < (ai.gunPassUntil ?? 0)) return true;
+  if (now < (ai.fireAt ?? 0)) return false;
+  if (dist >= GUN_PASS_MIN && dist < WEAPONS.cannon.range) {
+    ai.gunPassUntil = now + GUN_PASS_HOLD;
+    return true;
+  }
+  return false;
+}
+
 function facingDot(object, targetPos) {
   _fwd.copy(NEG_Z).applyQuaternion(object.quaternion);
   _toT.subVectors(targetPos, object.position).normalize();
   return _fwd.dot(_toT);
 }
 
+function hideMinerBeams() {
+  for (let i = 0; i < _minerBeams.length; i++) _minerBeams[i].visible = false;
+  _minerBeamCursor = 0;
+}
+
+function showMinerBeam(ctx, from, to, reducedMotion) {
+  if (reducedMotion) return;
+  if (_minerBeamCursor >= MINER_BEAM_MAX) return;
+  let line = _minerBeams[_minerBeamCursor];
+  if (!line) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    line = new THREE.Line(geo, _minerBeamMat);
+    line.name = 'npc-mine-beam';
+    line.frustumCulled = false;
+    _minerBeams.push(line);
+  }
+  if (ctx.scene && line.parent !== ctx.scene) ctx.scene.add(line);
+  const arr = line.geometry.attributes.position.array;
+  arr[0] = from.x; arr[1] = from.y; arr[2] = from.z;
+  arr[3] = to.x; arr[4] = to.y; arr[5] = to.z;
+  line.geometry.attributes.position.needsUpdate = true;
+  line.visible = true;
+  _minerBeamCursor++;
+}
+
+function nearestSoftRock(ctx, fromPos) {
+  const list = ctx.asteroids && ctx.asteroids.list;
+  if (!list) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    if (!a || (a.hardness ?? 1) > 1) continue;
+    if ((a.ore ?? 1) <= 0) continue;
+    const p = a.position;
+    if (!p) continue;
+    const dx = p.x - fromPos.x;
+    const dy = p.y - fromPos.y;
+    const dz = p.z - fromPos.z;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) {
+      best = a;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+function minerHoldPoint(livePos, rockPos, rockRadius, out) {
+  _v2.subVectors(livePos, rockPos);
+  const stand = Math.max(MINER_RANGE * 0.62, (rockRadius || 8) + 18);
+  const lenSq = _v2.lengthSq();
+  if (lenSq < 1e-6) {
+    out.copy(rockPos);
+    out.x += stand;
+    return;
+  }
+  out.copy(rockPos).addScaledVector(_v2, stand / Math.sqrt(lenSq));
+}
+
+function dockMiner(live, now) {
+  const rec = live.record;
+  if (!rec) return;
+  rec.state = 'docked';
+  rec.leg = 0;
+  rec.legT = 0;
+  rec.dir = 1;
+  rec.mineHold = false;
+  rec.dwellUntil = now + 30 + Math.random() * 30;
+}
+
+/** Station hold outside the cylinder. Writes out. Never aims through the pad. */
+export function minerHoldFromStation(station, livePos, hullR, out) {
+  if (!out || !station) return out;
+  const hull = Number.isFinite(hullR) && hullR > 0 ? hullR : 0;
+  const pad = PHY.STATION_CYL_RADIUS + hull + MINER_HOLD_PAD;
+  let ox = 0;
+  let oz = 0;
+  if (livePos) {
+    ox = livePos.x - station.x;
+    oz = livePos.z - station.z;
+  }
+  const len = Math.hypot(ox, oz);
+  if (len < 1e-6) {
+    ox = 1;
+    oz = 0;
+  } else {
+    ox /= len;
+    oz /= len;
+  }
+  out.x = station.x + ox * pad;
+  out.y = Number.isFinite(station.y) ? station.y : 0;
+  out.z = station.z + oz * pad;
+  return out;
+}
+
+function holdApproachPos(live, station, out) {
+  const p = live.object.position;
+  const dx = p.x - station.x;
+  const dz = p.z - station.z;
+  if (dx * dx + dz * dz > 1e-8) {
+    live.ai._holdOx = dx;
+    live.ai._holdOz = dz;
+    out.x = p.x;
+    out.y = p.y;
+    out.z = p.z;
+    return out;
+  }
+  const lx = live.ai._holdOx;
+  const lz = live.ai._holdOz;
+  if (Number.isFinite(lx) && Number.isFinite(lz) && lx * lx + lz * lz > 1e-8) {
+    out.x = station.x + lx;
+    out.y = p.y;
+    out.z = station.z + lz;
+    return out;
+  }
+  _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+  let hx = -_fwd.x;
+  let hz = -_fwd.z;
+  if (hx * hx + hz * hz < 1e-8) {
+    hx = 1;
+    hz = 0;
+  }
+  out.x = station.x + hx;
+  out.y = p.y;
+  out.z = station.z + hz;
+  return out;
+}
+
+function steerMinerHome(ctx, live, dt, now, reducedMotion) {
+  const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
+  if (!station) {
+    updateRoute(ctx, live, dt, now, reducedMotion);
+    return;
+  }
+  holdApproachPos(live, station, _v3);
+  minerHoldFromStation(station, _v3, npcRadius(live), _aim);
+  const pos = live.object.position;
+  const holdDist = Math.hypot(pos.x - _aim.x, pos.y - _aim.y, pos.z - _aim.z);
+  steerLive(live, _aim, speedCap(live) * 0.85, dt);
+  if (holdDist < MINER_HOLD_ARRIVE) {
+    dockMiner(live, now);
+    live.ai.haul = false;
+    live.ai.workUntil = 0;
+  }
+}
+
+function updateMine(ctx, live, dt, now, reducedMotion) {
+  const ai = live.ai;
+  const rec = live.record;
+  if (rec && rec.state === 'docked') return;
+  if (rec) rec.cargo ??= [];
+  const cargo = rec?.cargo ?? live.state.cargo;
+  const pos = live.object.position;
+
+  if (ai.haul) {
+    steerMinerHome(ctx, live, dt, now, reducedMotion);
+    return;
+  }
+
+  const rock = nearestSoftRock(ctx, pos);
+  if (!rock) {
+    if (cargoUnitsOf(cargo) > 0) {
+      ai.haul = true;
+      steerMinerHome(ctx, live, dt, now, reducedMotion);
+      return;
+    }
+    updateRoute(ctx, live, dt, now, reducedMotion);
+    return;
+  }
+
+  minerHoldPoint(pos, rock.position, rock.radius, _aim);
+  const dist = pos.distanceTo(rock.position);
+  steerLive(live, _aim, speedCap(live) * 0.7, dt);
+
+  const inRange = dist <= MINER_RANGE;
+  const facing = facingDot(live.object, rock.position) > MINER_FACE_DOT;
+  if (!inRange || !facing) return;
+
+  _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+  _v1.copy(pos).addScaledVector(_fwd, 6);
+  const pt = _minePts[_minePtIdx];
+  _minePtIdx = (_minePtIdx + 1) % _minePts.length;
+  pt.copy(rock.position);
+  _v2.subVectors(pos, rock.position);
+  if (_v2.lengthSq() > 1e-6) _v2.normalize();
+  else _v2.set(0, 1, 0);
+  pt.addScaledVector(_v2, rock.radius || 4);
+  showMinerBeam(ctx, _v1, pt, reducedMotion);
+
+  if (now >= (ai.fireAt || 0)) {
+    ai.fireAt = now + MINER_HIT_INTERVAL;
+    ctx.emit('mineHit', {
+      asteroidId: rock.id,
+      point: pt,
+      laserTier: 0,
+      extractPerSec: MINER_EXTRACT_PER_SEC,
+    });
+    if (Array.isArray(cargo) && cargoUnitsOf(cargo) < MINER_CARGO_CAP) {
+      if (now - (ai.mineAt || 0) >= 2) {
+        ai.mineAt = now;
+        addMinerOre(cargo, rock.oreKey || 'rawOre', 1);
+      }
+    } else {
+      if (!ai.workUntil) ai.workUntil = now + MINER_WORK_TIME;
+      if (now >= ai.workUntil) ai.haul = true;
+    }
+  }
+  if ((rock.ore ?? 1) <= 0 && cargoUnitsOf(cargo) > 0) ai.haul = true;
+}
+
 function playerNear(ctx, live, range) {
   const o = ctx.ship.object;
   return !!o && live.object.position.distanceTo(o.position) < range;
+}
+
+/** Live faction standing. Missing table, missing faction, or non-finite → 0. */
+export function standingOf(ctx, live) {
+  const fac = live.record?.faction ?? live.state?.faction;
+  const table = ctx.world && ctx.world.reputation;
+  const raw = table && fac != null ? table[fac] : 0;
+  return Number.isFinite(raw) ? raw : 0;
+}
+
+/** Who last damaged this hull. Dead ship refs clear. Instance-only. */
+export function lastAttackerOf(live) {
+  const ai = live && live.ai;
+  if (!ai) return null;
+  const a = ai.lastAttacker;
+  if (a === 'player' || a === 'npc') return a;
+  if (a && a.state && !a.state.destroyed) return a;
+  if (a) ai.lastAttacker = null;
+  return null;
+}
+
+/** Latch + read: hull or screen went below max this instantiation. */
+export function isScratched(live) {
+  const ai = live.ai;
+  if (!ai) return false;
+  if (ai.scratched) return true;
+  const st = live.state;
+  if (!st) return false;
+  const hullLow = Number.isFinite(st.hull) && Number.isFinite(st.hullMax) && st.hull < st.hullMax;
+  const screenLow = Number.isFinite(st.screen) && Number.isFinite(st.screenMax) && st.screen < st.screenMax;
+  if (hullLow || screenLow) {
+    ai.scratched = true;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Whether this hull may lock the player as a hunt target.
+ * Traders and miners never. Patrols only if the player scratched them or standing ≤ -10.
+ * An NPC scratch does not authorize a player hunt. Pirates/aces remain
+ * eligible; interest/retaliation still decide.
+ */
+function isCivilianRole(role) {
+  return role === 'trader' || role === 'miner';
+}
+
+export function mayHuntPlayer(ctx, live) {
+  const role = live?.ai?.role ?? live?.role ?? live?.record?.role;
+  if (isCivilianRole(role)) return false;
+  if (role === 'patrol') {
+    if (standingOf(ctx, live) <= HOSTILE_STANDING) return true;
+    return isScratched(live) && lastAttackerOf(live) === 'player';
+  }
+  return role === 'pirate' || role === 'ace';
+}
+
+function hunterRole(other) {
+  return other.role ?? other.record?.role;
+}
+
+/** Pirate/ace currently working a trader or the player. */
+export function hunterHasWork(other, station) {
+  const role = hunterRole(other);
+  if (role !== 'pirate' && role !== 'ace') return false;
+  const ai = other.ai;
+  if (!ai) return false;
+  if (ai.mode === 'flee' || ai.mode === 'drift') return false;
+  const t = ai.target;
+  if (!t) return false;
+  if (station && other.object && other.object.position.distanceTo(station) < LAW_ZONE_RADIUS) return false;
+  if (t === 'player') return ai.intent === true || ai.mode === 'hunt' || ai.mode === 'duel';
+  const tRole = t.role ?? t.record?.role;
+  return isCivilianRole(tRole) && !t.state?.destroyed;
+}
+
+/** First live pirate/ace whose hunt target is this hull. */
+export function findHunterOf(ctx, live) {
+  const ships = ctx.ships;
+  if (!ships) return null;
+  for (let i = 0; i < ships.length; i++) {
+    const other = ships[i];
+    if (other === live || !other.ai) continue;
+    const st = other.state;
+    if (!st || st.destroyed || st.disabled || st.surrendered) continue;
+    const role = hunterRole(other);
+    if (role !== 'pirate' && role !== 'ace') continue;
+    if (other.ai.target === live) return other;
+  }
+  return null;
+}
+
+/** Nearest in-bubble pirate/ace working a trader or the player. */
+export function findPirateWork(ctx, live) {
+  const ships = ctx.ships;
+  if (!ships || !live.object) return null;
+  const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
+  const pos = live.object.position;
+  let best = null;
+  let bestD = U.ENCOUNTER_BUBBLE;
+  for (let i = 0; i < ships.length; i++) {
+    const other = ships[i];
+    if (other === live || !other.ai || !other.object) continue;
+    const st = other.state;
+    if (!st || st.destroyed || st.disabled || st.surrendered) continue;
+    if (!hunterHasWork(other, station)) continue;
+    const d = pos.distanceTo(other.object.position);
+    if (d < bestD) {
+      best = other;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/** Recent graze or shields still down — not a lasting hull scratch. */
+export function traderHitPanic(st, now) {
+  if (!st) return false;
+  const hitAt = st.lastHitAt;
+  if (Number.isFinite(hitAt) && Number.isFinite(now) && now - hitAt >= 0 && now - hitAt <= TRADER_FLEE_HIT) {
+    return true;
+  }
+  return Number.isFinite(st.screen) && Number.isFinite(st.screenMax) && st.screen < st.screenMax;
+}
+
+export function tickTraderJob(ctx, live) {
+  const ai = live.ai;
+  const st = live.state;
+  if (!ai || !st || st.surrendered || ai.mode === 'drift') return;
+  const hunter = findHunterOf(ctx, live);
+  const now = ctx.world && ctx.world.time;
+  if (hunter || traderHitPanic(st, now)) {
+    if (ai.mode !== 'flee') {
+      ai.mode = 'flee';
+      ai.phase = null;
+      ai.intent = false;
+    }
+    ai.fleeFrom = hunter || 'player';
+    return;
+  }
+  if (ai.mode === 'flee') {
+    ai.mode = 'route';
+    ai.fleeFrom = null;
+    breakOff(ai);
+  }
+}
+
+function cargoUnitsOf(cargo) {
+  if (!Array.isArray(cargo)) return 0;
+  let n = 0;
+  for (let i = 0; i < cargo.length; i++) n += cargo[i].units | 0;
+  return n;
+}
+
+function addMinerOre(cargo, key, units) {
+  if (!Array.isArray(cargo) || units <= 0) return;
+  for (let i = 0; i < cargo.length; i++) {
+    if (cargo[i].commodity === key) {
+      cargo[i].units = (cargo[i].units | 0) + units;
+      return;
+    }
+  }
+  cargo.push({ commodity: key, units });
+}
+
+export function tickMinerJob(ctx, live) {
+  const ai = live.ai;
+  const st = live.state;
+  if (!ai || !st || st.surrendered || ai.mode === 'drift') return;
+  const hunter = findHunterOf(ctx, live);
+  const now = ctx.world && ctx.world.time;
+  if (hunter || traderHitPanic(st, now)) {
+    if (ai.mode !== 'flee') {
+      ai.mode = 'flee';
+      ai.phase = null;
+      ai.intent = false;
+    }
+    ai.fleeFrom = hunter || 'player';
+    return;
+  }
+  if (ai.mode === 'flee') {
+    ai.mode = 'mine';
+    ai.fleeFrom = null;
+    breakOff(ai);
+  }
+}
+
+function tickPatrolJob(ctx, live) {
+  const ai = live.ai;
+  const st = live.state;
+  if (!ai || !st || st.surrendered || ai.mode === 'drift' || ai.mode === 'flee') return;
+  if (mayHuntPlayer(ctx, live) || findPirateWork(ctx, live)) {
+    if (ai.mode !== 'hunt') ai.mode = 'hunt';
+    return;
+  }
+  if (ai.mode === 'hunt') {
+    ai.mode = 'loiter';
+    breakOff(ai);
+  }
 }
 
 // ---------- resolve & the fear economy (§7.2–7.5) ----------
@@ -428,19 +1294,61 @@ function demandIntentsFor(ctx, live) {
 }
 
 function jettison(ctx, live, crewPods) {
-  const st = live.state;
-  const pos = live.object.position;
-  for (const entry of st.cargo) {
+  spillShipCargo(ctx, live);
+  if (crewPods) spawnShipSurvivor(ctx, live);
+}
+
+function survivorSourceOf(live) {
+  return lastAttackerOf(live) === 'player' ? 'playerKill' : 'other';
+}
+
+/**
+ * One escape-pod survivor from a live hull. Unknowables have no conventional
+ * crew. A missing faction (dead wreck record) skips. crewPods and destroy
+ * share ai.survivorsSpawned so a later kill cannot dump crew twice.
+ */
+export function spawnShipSurvivor(ctx, live, drift = null) {
+  if (!ctx || !live) return null;
+  const ai = live.ai;
+  if (ai && ai.survivorsSpawned) return null;
+  const faction = live.record?.faction ?? live.state?.faction;
+  if (!faction || faction === 'unknowables') return null;
+  const pos = live.object && live.object.position;
+  if (!pos) return null;
+  const source = survivorSourceOf(live);
+  const name = live.record?.name;
+  const spec = { faction, source };
+  if (name) spec.name = name;
+  _v1.set(
+    pos.x + (Math.random() - 0.5) * 6,
+    pos.y + (Math.random() - 0.5) * 6,
+    pos.z + (Math.random() - 0.5) * 6,
+  );
+  const pod = spawnSurvivorPod(ctx, _v1, spec, drift);
+  if (ai) ai.survivorsSpawned = true;
+  return pod;
+}
+
+/**
+ * Spill a live ship's remaining manifest as scoopable pods. Empty holds
+ * spawn nothing (no fake loot). Returns the number of cargo pods created.
+ * Salvage hail and destroy share this so a dump cannot pay twice.
+ */
+export function spillShipCargo(ctx, live) {
+  const st = live && live.state;
+  const cargo = st && st.cargo;
+  const pos = live && live.object && live.object.position;
+  if (!cargo || !pos) return 0;
+  let n = 0;
+  for (const entry of cargo) {
+    const units = entry && (entry.units | 0);
+    if (units <= 0 || !entry.commodity) continue;
     _v1.set(pos.x + (Math.random() - 0.5) * 8, pos.y + (Math.random() - 0.5) * 8, pos.z + (Math.random() - 0.5) * 8);
-    spawnPod(ctx, [{ commodity: entry.commodity, units: entry.units }], _v1);
+    spawnPod(ctx, [{ commodity: entry.commodity, units }], _v1);
+    n++;
   }
-  st.cargo.length = 0;
-  if (crewPods) {
-    for (let k = 0; k < 2; k++) {
-      _v1.set(pos.x + (Math.random() - 0.5) * 6, pos.y + (Math.random() - 0.5) * 6, pos.z + (Math.random() - 0.5) * 6);
-      spawnPod(ctx, [], _v1); // flavor: crew escape pods
-    }
-  }
+  cargo.length = 0;
+  return n;
 }
 
 function capitulate(ctx, live) {
@@ -480,7 +1388,6 @@ function capitulate(ctx, live) {
 // ---------- movement modes ----------
 function updateRoute(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
-  const cls = SHIP_CLASSES[live.state.classKey];
   const cap = speedCap(live);
   const glow = live.object.userData.glow;
   const wp = ai.waypoints[ai.wp];
@@ -491,22 +1398,26 @@ function updateRoute(ctx, live, dt, now, reducedMotion) {
     glow.scale.setScalar(0.8);
   } else if (ai.band === 'shaken') {
     // wider evasion + power waver (§7.3)
-    _v2.subVectors(wp, live.object.position).normalize();
-    _v3.crossVectors(_v2, UP).normalize();
+    _v2.subVectors(wp, live.object.position);
+    if (_v2.lengthSq() < 1e-6) _v2.set(0, 0, 1);
+    else _v2.normalize();
+    _v3.crossVectors(_v2, UP);
+    if (_v3.lengthSq() < 1e-6) _v3.set(1, 0, 0);
+    else _v3.normalize();
     _aim.addScaledVector(_v3, Math.sin(now * 2.1 + ai.weaveSeed) * 40);
     speed = cap * (0.85 + 0.15 * Math.sin(now * 5 + ai.weaveSeed));
     glow.scale.setScalar(reducedMotion ? 1 : 1 + 0.45 * Math.sin(now * 8 + ai.weaveSeed));
   } else {
     glow.scale.setScalar(1);
   }
-  const dist = steer(live.object, _aim, speed, cls.turn, dt);
+  const dist = steerLive(live, _aim, speed, dt);
   if (dist < 25) ai.wp = (ai.wp + 1) % ai.waypoints.length;
 }
 
 function updateLoiter(live, dt) {
   const ai = live.ai;
-  const cls = SHIP_CLASSES[live.state.classKey];
-  const dist = steer(live.object, ai.waypoints[ai.wp], speedCap(live) * 0.5, cls.turn, dt);
+  const speed = speedCap(live) * 0.5;
+  const dist = steerLive(live, ai.waypoints[ai.wp], speed, dt);
   if (dist < 25) ai.wp = (ai.wp + 1) % ai.waypoints.length;
 }
 
@@ -516,7 +1427,8 @@ function breakOff(ai) {
   ai.intent = false;
 }
 
-function setTarget(ai, target) {
+export function setTarget(ai, target) {
+  if (target === 'player' && isCivilianRole(ai.role)) return;
   ai.target = target;
   ai.phase = null;
   ai.intent = false;
@@ -524,8 +1436,6 @@ function setTarget(ai, target) {
 
 function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
   const ai = live.ai;
-  const st = live.state;
-  const cls = SHIP_CLASSES[st.classKey];
   const glow = live.object.userData.glow;
   if (!ai.phase) {
     ai.phase = 'telegraph';
@@ -545,17 +1455,32 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
     glow.scale.setScalar(0.7);
   } else if (shaken) {
     // wider evasion + visible power waver (§7.3)
-    _v2.subVectors(targetPos, live.object.position).normalize();
-    _v3.crossVectors(_v2, UP).normalize();
+    _v2.subVectors(targetPos, live.object.position);
+    if (_v2.lengthSq() < 1e-6) _v2.set(0, 0, 1);
+    else _v2.normalize();
+    _v3.crossVectors(_v2, UP);
+    if (_v3.lengthSq() < 1e-6) _v3.set(1, 0, 0);
+    else _v3.normalize();
     _aim.addScaledVector(_v3, Math.sin(now * 2.2 + ai.weaveSeed) * 70).addScaledVector(UP, Math.cos(now * 1.7 + ai.weaveSeed) * 35);
     speed = cap * (0.8 + 0.2 * Math.sin(now * 5 + ai.weaveSeed));
     glow.scale.setScalar(reducedMotion ? 1 : 1 + 0.5 * Math.sin(now * 9 + ai.weaveSeed));
+  } else if (ai.phase === 'telegraph') {
+    // Warning: face the target. Creep in; do not ram. The first attack
+    // shot needs FIRE_FACE_DOT after the 3 s freeze-after-demand.
+    _aim.copy(targetPos);
+    speed = dist > TELEGRAPH_HOLD ? cap * 0.35 : cap * 0.12;
   } else {
-    // defiant: aggressive press into weapon-exchange range
-    speed = dist > 220 ? cap : cap * 0.6;
-    if (ai.phase !== 'telegraph') glow.scale.setScalar(1.3);
+    // defiant: offset approach, abeam press, extend on close/high closure.
+    const targetVel = ai.target === 'player' ? ctx.ship?.velocity : null;
+    const mode = applyCombatEnvelope(live.object, targetPos, cap, targetVel, abeamSign(ai), _aim);
+    speed = mode === ENV_EXTEND ? cap * 0.70 : cap;
+    glow.scale.setScalar(1.3);
   }
-  steer(live.object, _aim, speed, cls.turn, dt);
+  if (canGunPass(ai, now, dist)) {
+    _aim.copy(targetPos);
+    if (speed > cap * 0.45) speed = cap * 0.45;
+  }
+  steerLive(live, _aim, speed, dt);
 
   if (ai.phase === 'telegraph') {
     if (ai.demanding) {
@@ -574,7 +1499,7 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
   const interval = ai.acePhase === 3 && ai.mode === 'duel' ? ACE_FURY_INTERVAL : shaken ? NPC_FIRE_INTERVAL * 1.5 : NPC_FIRE_INTERVAL;
   if (now >= ai.fireAt && dist < WEAPONS.cannon.range && facingDot(live.object, targetPos) > FIRE_FACE_DOT) {
     ai.fireAt = now + interval;
-    ctx.emit('npcFire', { ship: live, weapon: 'cannon' });
+    ctx.emit('npcFire', { ship: live, weapon: 'cannon', target: ai.target });
   }
 }
 
@@ -617,16 +1542,19 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
     revealQship(ctx, live);
   }
 
-  // Retaliation (wave 32): apathy is not a death sentence. Damage overrides
-  // the interest roll for the rest of the instantiation — being shot is the
-  // loudest notice there is, and a pirate's only damage source IS the player
-  // (patrols loiter, NPC fire hits only its target). Law-zone pacifism still
-  // holds: no intent develops inside the zone, so a zone-side pirate only
-  // routs. setTarget re-arms the telegraph — the §6.1 warning still precedes
-  // any fire. Fleeing/disabled/demanding ships never reach this: flee and
-  // disabled are other modes, and a demanding pirate already targets you.
+  // Retaliation (wave 32 / 57): a player scratch overrides the interest
+  // roll for the rest of the instantiation. NPC bolts stamp lastAttacker
+  // on the victim; only lastAttacker === 'player' turns a pirate/ace or a
+  // scratched patrol onto the player. A pirate that shoots a patrol must
+  // not send that patrol after the player — they keep pirate work or
+  // return to loiter. Law-zone pacifism still holds: no intent develops
+  // inside the zone. setTarget re-arms the telegraph. Traders never
+  // enter this path. Patrols do not latch pirate interest.
   if (
+    ai.role !== 'patrol' &&
+    !isCivilianRole(ai.role) &&
     ai.target !== 'player' &&
+    lastAttackerOf(live) === 'player' &&
     (st.hull < st.hullMax || st.screen < st.screenMax) &&
     ctx.ship.object &&
     !ctx.flags.docked &&
@@ -636,6 +1564,37 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
     ai.playerRolled = true; // the scratch IS the roll — no dice after notice
     ai.playerInterested = true;
     setTarget(ai, 'player');
+  } else if (
+    ai.role === 'patrol' &&
+    ai.target !== 'player' &&
+    isScratched(live) &&
+    lastAttackerOf(live) === 'player' &&
+    ctx.ship.object &&
+    !ctx.flags.docked &&
+    ctx.ship.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+    live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS
+  ) {
+    setTarget(ai, 'player');
+  }
+
+  // Hostile/scratched patrols drop pirate work only when a player hunt is legal.
+  if (
+    ai.role === 'patrol' &&
+    ai.target &&
+    ai.target !== 'player' &&
+    mayHuntPlayer(ctx, live)
+  ) {
+    const pObj = ctx.ship.object;
+    if (
+      pObj &&
+      !ctx.flags.docked &&
+      now >= (ctx.world.jumpGraceUntil ?? 0) &&
+      pObj.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+      live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+      live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE
+    ) {
+      setTarget(ai, 'player');
+    }
   }
 
   // Validate current target.
@@ -661,41 +1620,63 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
   // with the player at all — the rest hunt the lane's traders. Arrival grace
   // shields the player from the roll itself: JUMP.graceSeconds' 'no hostile
   // intent on arrival' now covers targeting, not just the wave-30 demand.
+  // Patrols never roll interest and never hunt traders. Traders never acquire.
   if (!ai.target) {
     const pObj = ctx.ship.object;
-    if (
-      pObj &&
-      !ctx.flags.docked &&
-      now >= (ctx.world.jumpGraceUntil ?? 0) &&
-      pObj.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
-      live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
-      live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE &&
-      playerInterestedIn(ctx, live)
-    ) {
-      setTarget(ai, 'player');
-      targetPos = pObj.position;
-      // Reveal BEFORE the wave-30 demand-hail block below runs this frame —
-      // the hail and bracket already show true colors: a 'freighter' closes,
-      // flips, then 'Your cargo or your hull.'
-      revealQship(ctx, live);
-    } else {
-      let best = null;
-      let bestD = U.ENCOUNTER_BUBBLE;
-      for (const other of ctx.ships) {
-        if (other === live || other.role !== 'trader') continue;
-        if (other.state.destroyed || other.state.disabled || other.state.surrendered) continue;
-        if (other.object.position.distanceTo(station) < LAW_ZONE_RADIUS) continue;
-        const d = live.object.position.distanceTo(other.object.position);
-        if (d < bestD) {
-          best = other;
-          bestD = d;
+    if (ai.role === 'patrol') {
+      if (
+        mayHuntPlayer(ctx, live) &&
+        pObj &&
+        !ctx.flags.docked &&
+        now >= (ctx.world.jumpGraceUntil ?? 0) &&
+        pObj.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+        live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+        live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE
+      ) {
+        setTarget(ai, 'player');
+        targetPos = pObj.position;
+      } else {
+        const work = findPirateWork(ctx, live);
+        if (work) {
+          setTarget(ai, work);
+          targetPos = work.object.position;
         }
       }
-      if (best) {
-        setTarget(ai, best);
-        targetPos = best.object.position;
-        // Hostile act against a trader strips the disguise (wave 31).
+    } else if (!isCivilianRole(ai.role)) {
+      if (
+        pObj &&
+        !ctx.flags.docked &&
+        now >= (ctx.world.jumpGraceUntil ?? 0) &&
+        pObj.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+        live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
+        live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE &&
+        playerInterestedIn(ctx, live)
+      ) {
+        setTarget(ai, 'player');
+        targetPos = pObj.position;
+        // Reveal BEFORE the wave-30 demand-hail block below runs this frame —
+        // the hail and bracket already show true colors: a 'freighter' closes,
+        // flips, then 'Your cargo or your hull.'
         revealQship(ctx, live);
+      } else {
+        let best = null;
+        let bestD = U.ENCOUNTER_BUBBLE;
+        for (const other of ctx.ships) {
+          if (other === live || !isCivilianRole(other.role)) continue;
+          if (other.state.destroyed || other.state.disabled || other.state.surrendered) continue;
+          if (other.object.position.distanceTo(station) < LAW_ZONE_RADIUS) continue;
+          const d = live.object.position.distanceTo(other.object.position);
+          if (d < bestD) {
+            best = other;
+            bestD = d;
+          }
+        }
+        if (best) {
+          setTarget(ai, best);
+          targetPos = best.object.position;
+          // Hostile act against a trader strips the disguise (wave 31).
+          revealQship(ctx, live);
+        }
       }
     }
   }
@@ -763,7 +1744,8 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
   if (dist > U.ENCOUNTER_BUBBLE) {
     ai.intent = false;
     ai.phase = null;
-    steer(live.object, playerPos, speedCap(live), cls.turn, dt);
+    const approachSpeed = speedCap(live);
+    steerLive(live, playerPos, approachSpeed, dt);
     return;
   }
 
@@ -792,35 +1774,45 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
     speed = cap * 0.15;
     glow.scale.setScalar(0.7);
     _aim.copy(playerPos);
-    steer(live.object, _aim, speed, cls.turn, dt);
+    steerLive(live, _aim, speed, dt);
     return; // no fire while bargaining (capitulation handled globally)
   }
 
+  const sign = abeamSign(ai);
+  const pVel = ctx.ship?.velocity ?? null;
   if (ai.acePhase === 1) {
     // Helix around the player.
     const a = now * 0.9 + ai.weaveSeed;
     _aim.set(
-      playerPos.x + Math.cos(a) * 130,
+      playerPos.x + Math.cos(a) * ACE_HELIX_R,
       playerPos.y + Math.sin(now * 2.3 + ai.weaveSeed) * 40,
-      playerPos.z + Math.sin(a) * 130,
+      playerPos.z + Math.sin(a) * ACE_HELIX_R,
     );
+    if (dist < ENVELOPE_EXTEND_DIST) {
+      applyCombatEnvelope(live.object, playerPos, cap, pVel, sign, _aim);
+      speed = cap * 0.70;
+    }
   } else if (ai.acePhase === 2) {
-    // Feint: rush in, then break away on a ~6 s cycle.
+    // Feint: rush in, then break away on a ~6 s cycle. Extend inside 140 u.
     const cycle = (now + ai.weaveSeed) % 6;
-    if (cycle < 3) {
+    if (dist < ENVELOPE_EXTEND_DIST) {
+      applyCombatEnvelope(live.object, playerPos, cap, pVel, sign, _aim);
+      speed = cap * 0.70;
+    } else if (cycle < 3) {
       _aim.copy(playerPos);
       speed = burning ? cls.burn : cap;
     } else {
       _v2.subVectors(live.object.position, playerPos).normalize();
-      _aim.copy(live.object.position).addScaledVector(_v2, 200);
+      _aim.copy(playerPos).addScaledVector(_v2, 250);
       speed = cap;
     }
   } else {
-    // Fury: direct press.
-    _aim.copy(playerPos);
-    speed = burning ? cls.burn : cap;
+    // Fury: abeam / extend, never copy the player position.
+    const mode = applyCombatEnvelope(live.object, playerPos, burning ? cls.burn : cap, pVel, sign, _aim);
+    speed = mode === ENV_EXTEND ? cap * 0.70 : burning ? cls.burn : cap;
   }
-  steer(live.object, _aim, speed, cls.turn, dt);
+  if (canGunPass(ai, now, dist)) _aim.copy(playerPos);
+  steerLive(live, _aim, speed, dt);
 
   if (ai.phase === 'telegraph') {
     if (!ai.commSent) {
@@ -871,19 +1863,45 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
   }
 }
 
+function threatPos(ctx, live) {
+  const src = live.ai.fleeFrom;
+  if (src && src !== 'player' && src.object && !src.state?.destroyed) return src.object.position;
+  if (src === 'player') {
+    const o = ctx.ship && ctx.ship.object;
+    if (o) return o.position;
+  }
+  const pObj = ctx.ship && ctx.ship.object;
+  return pObj ? pObj.position : null;
+}
+
 function updateFlee(ctx, live, dt) {
-  const ai = live.ai;
   const st = live.state;
   const cls = SHIP_CLASSES[st.classKey];
-  const pObj = ctx.ship.object;
-  if (pObj) {
-    _v2.subVectors(live.object.position, pObj.position).normalize();
+  const threat = threatPos(ctx, live);
+  if (threat) {
+    _v2.subVectors(live.object.position, threat);
+    if (_v2.lengthSq() < 1e-6) {
+      const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
+      if (station) _v2.subVectors(station, live.object.position);
+    }
+    if (_v2.lengthSq() < 1e-6) {
+      _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+      _v2.copy(_fwd);
+    } else {
+      _v2.normalize();
+    }
     _aim.copy(live.object.position).addScaledVector(_v2, 300);
   } else {
-    _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
-    _aim.copy(live.object.position).addScaledVector(_fwd, 300);
+    const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
+    if (station) {
+      minerHoldFromStation(station, live.object.position, npcRadius(live), _aim);
+    } else {
+      _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+      _aim.copy(live.object.position).addScaledVector(_fwd, 300);
+    }
   }
-  steer(live.object, _aim, st.engineOut ? cls.cruise * 0.3 : cls.burn, cls.turn, dt);
+  const fleeSpeed = st.engineOut ? cls.cruise * 0.3 : cls.burn;
+  steerLive(live, _aim, fleeSpeed, dt);
   live.object.userData.glow.scale.setScalar(1.6);
   // traffic.js despawns at DEINSTANTIATE_RANGE — we just run.
 }
@@ -913,7 +1931,172 @@ function updateDisabled(live, dt, now, reducedMotion) {
   live.object.userData.glow.visible = reducedMotion ? false : (now * 6 + ai.weaveSeed) % 1 < 0.18;
 }
 
-function handleDestroyed(ctx, live, flashes) {
+function hash01(n) {
+  const x = Math.sin(n) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/** Fixed chip + flash meshes. Built once; visibility toggled, never spliced. */
+function makeDeathBurstPool(scene) {
+  const chipGeo = new THREE.BoxGeometry(1, 0.5, 0.12);
+  const flashGeo = new THREE.SphereGeometry(1, 10, 8);
+  const chips = [];
+  const nChips = DEATH_BURST_SLOTS * DEATH_CHIP_COUNT;
+  for (let i = 0; i < nChips; i++) {
+    const mesh = new THREE.Mesh(
+      chipGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0xffa060,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+      }),
+    );
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    chips.push({
+      mesh,
+      vel: new THREE.Vector3(),
+      spinX: 0,
+      spinY: 0,
+      spinZ: 0,
+      age: 0,
+      life: 0,
+    });
+  }
+  const flashes = [];
+  for (let i = 0; i < DEATH_BURST_SLOTS; i++) {
+    const mesh = new THREE.Mesh(
+      flashGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0xffc080,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    flashes.push({ mesh, age: 0, life: 0, motion: true, s0: 2, s1: 10 });
+  }
+  return { chips, flashes, chipCursor: 0, flashCursor: 0 };
+}
+
+/** Visible death-flash size at typical chase-cam range, keyed to hull size. */
+export function deathBurstScale(live, reducedMotion) {
+  const proxy = (live && live.object && live.object.userData && live.object.userData.proxy)
+    || (live && live.state && scaleFor(live.state.classKey).proxy)
+    || null;
+  const hullR = proxy
+    ? Math.max(proxy.halfLen || 0, proxy.rx || 0, proxy.ry || 0, 2)
+    : npcRadius(live);
+  if (reducedMotion) {
+    const flash = Math.max(14, hullR * 3.4);
+    return { hullR, flash0: flash, flash1: flash, chipSize: 0 };
+  }
+  return {
+    hullR,
+    flash0: Math.max(7, hullR * 1.8),
+    flash1: Math.max(18, hullR * 4.8),
+    chipSize: Math.max(0.5, hullR * 0.14),
+  };
+}
+
+function emitDeathBurst(pool, live, reducedMotion) {
+  if (!live || !live.object) return;
+  const origin = live.object.position;
+  const sc = deathBurstScale(live, reducedMotion);
+
+  const f = pool.flashes[pool.flashCursor];
+  pool.flashCursor = (pool.flashCursor + 1) % pool.flashes.length;
+  f.mesh.position.copy(origin);
+  f.mesh.scale.setScalar(sc.flash0);
+  f.mesh.material.opacity = 0.95;
+  f.mesh.visible = true;
+  f.age = 0;
+  f.life = reducedMotion ? 0.45 : 0.32;
+  f.motion = !reducedMotion;
+  f.s0 = sc.flash0;
+  f.s1 = sc.flash1;
+
+  if (reducedMotion) return;
+
+  const chipSize = sc.chipSize;
+  const px = origin.x;
+  const py = origin.y;
+  const pz = origin.z;
+  for (let i = 0; i < DEATH_CHIP_COUNT; i++) {
+    const c = pool.chips[pool.chipCursor];
+    pool.chipCursor = (pool.chipCursor + 1) % pool.chips.length;
+    const h1 = hash01(px * 12.9898 + py * 78.233 + pz * 37.719 + i * 17.13);
+    const h2 = hash01(px * 4.1414 + py * 19.19 + pz * 9.17 + i * 23.7);
+    const h3 = hash01(px * 9.2 + py * 3.7 + pz * 11.3 + i * 5.9);
+    const theta = h1 * Math.PI * 2;
+    const phi = Math.acos(h2 * 2 - 1);
+    const sinPhi = Math.sin(phi);
+    _v3.set(sinPhi * Math.cos(theta), Math.cos(phi), sinPhi * Math.sin(theta));
+    c.vel.copy(_v3).multiplyScalar(12 + sc.hullR * 1.6 + h3 * 24);
+    c.mesh.position.copy(origin).addScaledVector(_v3, sc.hullR * (0.2 + h1 * 0.55));
+    c.mesh.rotation.set(h1 * 6.2832, h2 * 6.2832, h3 * 6.2832);
+    c.mesh.scale.setScalar(chipSize * (0.7 + h2 * 0.6));
+    c.mesh.material.color.setRGB(1, 0.55 + h2 * 0.25, 0.3 + h3 * 0.2);
+    c.mesh.material.opacity = 1;
+    c.mesh.visible = true;
+    c.age = 0;
+    c.life = CHIP_LIFE_MIN + h3 * (CHIP_LIFE_MAX - CHIP_LIFE_MIN);
+    c.spinX = (h1 - 0.5) * 8;
+    c.spinY = (h2 - 0.5) * 8;
+    c.spinZ = (h3 - 0.5) * 6;
+  }
+}
+
+function tickDeathBurst(pool, dt, reducedMotion) {
+  const chips = pool.chips;
+  for (let i = 0; i < chips.length; i++) {
+    const c = chips[i];
+    if (c.life <= 0) continue;
+    if (reducedMotion) {
+      c.life = 0;
+      c.mesh.visible = false;
+      continue;
+    }
+    c.age += dt;
+    if (c.age >= c.life) {
+      c.life = 0;
+      c.mesh.visible = false;
+      continue;
+    }
+    c.mesh.position.addScaledVector(c.vel, dt);
+    c.mesh.rotation.x += c.spinX * dt;
+    c.mesh.rotation.y += c.spinY * dt;
+    c.mesh.rotation.z += c.spinZ * dt;
+    c.vel.multiplyScalar(Math.max(0, 1 - 1.4 * dt));
+    c.mesh.material.opacity = 1 - c.age / c.life;
+  }
+  const flashes = pool.flashes;
+  for (let i = 0; i < flashes.length; i++) {
+    const f = flashes[i];
+    if (f.life <= 0) continue;
+    f.age += dt;
+    if (f.age >= f.life) {
+      f.life = 0;
+      f.mesh.visible = false;
+      continue;
+    }
+    const k = f.age / f.life;
+    if (!reducedMotion && f.motion) {
+      const s0 = f.s0 ?? 2;
+      const s1 = f.s1 ?? 10;
+      f.mesh.scale.setScalar(s0 + k * (s1 - s0));
+    }
+    f.mesh.material.opacity = 0.95 * (1 - k);
+  }
+}
+
+function handleDestroyed(ctx, live, burst, reducedMotion) {
   // combat.js normally emits npcDestroyed on the killing blow (it runs after
   // us); emit only if nobody else has, so the event fires exactly once.
   let seen = false;
@@ -937,33 +2120,37 @@ function handleDestroyed(ctx, live, flashes) {
   if (live.state.surrendered) bumpFear(ctx, ECON.fear.killedSurrendered);
   else if (live.role === 'ace') bumpFear(ctx, ECON.fear.aceDefeated);
 
-  // Brief debris flash; world.js stages the lasting aftermath, we don't.
-  flashGeo ??= new THREE.SphereGeometry(1, 10, 8);
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0xffc080,
-    transparent: true,
-    opacity: 0.9,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const mesh = new THREE.Mesh(flashGeo, mat);
-  mesh.position.copy(live.object.position);
-  ctx.scene.add(mesh);
-  flashes.push({ mesh, age: 0 });
+  // Remaining manifest becomes scoopable pods. Salvage already emptied
+  // the hold, so this is a no-op after a dump (no double loot). Empty
+  // cargo still yields no fake pods. Crew leave as one survivor pod
+  // unless capitulate already dumped them (ai.survivorsSpawned).
+  spillShipCargo(ctx, live);
+  spawnShipSurvivor(ctx, live);
+
+  // Brief burst; world.js stages the lasting aftermath, we don't.
+  emitDeathBurst(burst, live, reducedMotion);
 
   removeLiveShip(ctx, live);
 }
 
 // ---------- system ----------
 export function initNpc(ctx) {
-  const flashes = [];
+  const burst = makeDeathBurstPool(ctx.scene);
 
   return {
     update(dt) {
       const now = ctx.world.time;
       const reducedMotion = ctx.settings.reducedMotion;
       const playerObj = ctx.ship.object;
+      _phyOn = !ctx.gate.jumping;
+      if (_phyOn) {
+        collectBodies(ctx, _bodies);
+        appendSunBody(ctx);
+      } else {
+        _bodies.count = 0;
+      }
       let combat = false;
+      hideMinerBeams();
       for (let i = ctx.ships.length - 1; i >= 0; i--) {
         const live = ctx.ships[i];
         const st = live.state;
@@ -972,7 +2159,7 @@ export function initNpc(ctx) {
           // schedule, so guard against processing the same wreck twice.
           if (!live.ai.deathHandled) {
             live.ai.deathHandled = true;
-            handleDestroyed(ctx, live, flashes);
+            handleDestroyed(ctx, live, burst, reducedMotion === true);
           }
           continue;
         }
@@ -995,6 +2182,7 @@ export function initNpc(ctx) {
         if (st.disabled) {
           ai.resolveBoost = 0; // stand-down: a disabled hull drops the bluff sting (updateResolve never runs here)
           updateDisabled(live, dt, now, reducedMotion);
+          if (_phyOn) bounceLive(live, dt);
           continue;
         }
         ai.t += dt;
@@ -1002,6 +2190,9 @@ export function initNpc(ctx) {
           ai.resolveAt = now + RESOLVE_INTERVAL;
           updateResolve(ctx, live, now);
         }
+        if (ai.role === 'trader') tickTraderJob(ctx, live);
+        else if (ai.role === 'miner') tickMinerJob(ctx, live);
+        else if (ai.role === 'patrol') tickPatrolJob(ctx, live);
         switch (ai.mode) {
           case 'hunt':
             updateHunt(ctx, live, dt, now, reducedMotion);
@@ -1018,9 +2209,13 @@ export function initNpc(ctx) {
           case 'route':
             updateRoute(ctx, live, dt, now, reducedMotion);
             break;
+          case 'mine':
+            updateMine(ctx, live, dt, now, reducedMotion);
+            break;
           default:
             updateLoiter(live, dt);
         }
+        if (_phyOn) bounceLive(live, dt);
         if (ai.intent && playerObj && live.object.position.distanceTo(playerObj.position) < U.ENCOUNTER_BUBBLE) {
           combat = true;
         }
@@ -1033,7 +2228,7 @@ export function initNpc(ctx) {
       for (const e of ctx.lastEvents) {
         if (e.type === 'npcDestroyed' && e.ship && e.ship.ai && !e.ship.ai.deathHandled) {
           e.ship.ai.deathHandled = true;
-          handleDestroyed(ctx, e.ship, flashes); // emit is skipped: event already seen
+          handleDestroyed(ctx, e.ship, burst, reducedMotion === true); // emit is skipped: event already seen
         }
       }
 
@@ -1067,20 +2262,7 @@ export function initNpc(ctx) {
         ctx.targets.current = null;
       }
 
-      // Debris flashes.
-      for (let i = flashes.length - 1; i >= 0; i--) {
-        const f = flashes[i];
-        f.age += dt;
-        const k = f.age / FLASH_LIFE;
-        if (k >= 1) {
-          ctx.scene.remove(f.mesh);
-          f.mesh.material.dispose();
-          flashes.splice(i, 1);
-          continue;
-        }
-        f.mesh.scale.setScalar(1 + k * 26);
-        f.mesh.material.opacity = 0.9 * (1 - k);
-      }
+      tickDeathBurst(burst, dt, reducedMotion === true);
     },
   };
 }

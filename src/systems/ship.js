@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { createShipState } from '../game/state.js';
+import { createShipState, U } from '../game/state.js';
+import { hoverTurnRateFor } from '../game/flight-feel.js';
+import { PHY } from '../game/physics.js';
+import { collectBodies, resolveMover } from '../game/collision.js';
 
 /**
  * Ship system — a LIVING ship: grown, not built. Swims through space like a
@@ -21,15 +24,17 @@ import { createShipState } from '../game/state.js';
  *   and chase cam are unaffected. Mood (ctx.bio.mood, §14.6) modulates the
  *   swim/flap rate, vein emissive tint/intensity, and idle jitter.
  *
- * FLIGHT (doc §5): fun-first, non-Newtonian. The ship steers toward the
- * mouse reticle (steerX/steerY), auto-banking into turns (visual roll on the
- * flesh child — there is no player roll axis). Steering authority falls with
- * speed. Velocity eases toward forward × (creep + throttle × (maxSpeed −
- * creep)) with an acceleration clamp plus artificial drag so she settles in
- * ~stopTime at zero throttle. Signature verbs: afterburner (§5.2, ×2 for 6 s,
- * 8 s cooldown, FOV kick §5.4) and vector-hold drift (§5.2, 4 s max, 6 s
- * cooldown, velocity re-aligns to facing over 0.8 s on release). Lateral/
- * vertical strafe rides along the ship's right/up axes.
+ * FLIGHT (doc §5): fun-first, non-Newtonian, full 6DOF. Mouse offset
+ * pitches and yaws the nose. Q/E rolls around the nose so the player
+ * sets what “up” is. Chase and third cameras use the ship's up, not
+ * world Y. Yaw/pitch/roll rate is hoverTurnRateFor(class, speed) from
+ * flight-feel.js. Velocity eases toward
+ * forward × (creep + throttle × (maxSpeed − creep)) with an acceleration
+ * clamp plus artificial drag so she settles in ~stopTime at zero throttle.
+ * Signature verbs: afterburner (§5.2, ×2 for 6 s, 8 s cooldown, FOV kick
+ * §5.4) and vector-hold drift (§5.2, 4 s max, 6 s cooldown, velocity
+ * re-aligns to facing over 0.8 s on release). Lateral/vertical strafe
+ * rides along the ship's right/up axes.
  *
  * Afterburner trail (wave-6 polish): a pooled THREE.Points ring buffer
  * (preallocated position/color buffers + per-point life array) emitted at
@@ -39,6 +44,11 @@ import { createShipState } from '../game/state.js';
  *
  * Owns ctx.ship (object/velocity/speed/burner/drift state) and ctx.player
  * (state record via createShipState); positions ctx.camera every frame.
+ * Hit shake is a decaying camera-local offset after chase/third/first
+ * placement (lastEvents only; reducedMotion / docked / jump → 0).
+ * Weapon recoil (playerFire cannon/disruptor) is a decaying flesh-child
+ * kick (local +Z / +Y) plus a small camera punch on the same shake path.
+ * It never writes ship.velocity, input.throttle, or flags.matchSpeed.
  * Ship nose points along local -Z; the chase cam sits behind at local
  * (0, 4, 12). All scratch objects are module/init-scope — update() performs
  * zero allocations (vertex data is mutated in place).
@@ -52,11 +62,26 @@ const _targetVelocity = new THREE.Vector3();
 const _delta = new THREE.Vector3();
 const _realignFrom = new THREE.Vector3();
 const _camAnchor = new THREE.Vector3();
-const _camOffset = new THREE.Vector3(0, 4, 12); // ship-local: behind + above
-const _noseOffset = new THREE.Vector3(0, 0.35, -1.7); // first-person eye point
+const _camOffset = new THREE.Vector3(0, 4, 12); // chase: on-axis, behind + above
+// Past the hull tip (ellipsoid z radius ~2.1). Eyes at z=-1.45 must not fill glass.
+export const FIRST_PERSON_NOSE = new THREE.Vector3(0, 0.45, -2.8);
+const _noseOffset = FIRST_PERSON_NOSE;
+const _lockLast = new THREE.Vector3();
+const _lockInst = new THREE.Vector3();
 const _lookTarget = new THREE.Vector3();
 const _moodColor = new THREE.Color(0x4fe0c8); // lerped toward the mood tint
 const _targetColor = new THREE.Color();
+
+// Hull bounce: reused every frame. collectBodies / resolveMover write in place.
+const _bodies = { count: 0, items: [] };
+const _hit = {
+  px: 0, py: 0, pz: 0,
+  vx: 0, vy: 0, vz: 0,
+  hit: false, kind: null, speed: 0,
+  nx: 0, ny: 0, nz: 0, overlap: 0,
+};
+const BODY_HIT_EMIT_GAP = 0.15;
+let lastEmitAt = -1;
 
 // Bio-expression tuning (§14: alive before a status label).
 const COLOR_LERP_RATE = 3; // 1/s — mood color easing
@@ -74,13 +99,35 @@ const SCAR_ANCHORS = [
 ];
 
 const CAMERA_LERP_RATE = 6; // 1/s — frame-rate independent smoothing
-const LOOK_AHEAD = 25; // units in front of the ship the camera aims at
+const LOOK_AHEAD = 25; // chase: units in front of the ship the camera aims at
+// Hit shake (FX-01): decaying local offset after placement. Caps keep the
+// aim glass usable. Decay ~0.2 s (e^{-12·0.2} ≈ 0.09 leftover).
+const SHAKE_DECAY = 12; // 1/s
+const SHAKE_HIT_PER_DMG = 0.03; // playerHit — cannon 8 → 0.24 u
+const SHAKE_BODY_PER_SPEED = 0.012; // bodyHit scrape
+const SHAKE_BODY_PER_DMG = 0.03; // bodyHit after combat fills damage
+const SHAKE_WRECK_AMP = 0.07; // nearby npcDestroyed rumble
+const SHAKE_WRECK_DIST = 80;
+const SHAKE_CHASE_MAX = 0.35;
+const SHAKE_FIRST_MAX = 0.12;
+const SHAKE_FIRE_CANNON = 0.055; // playerFire punch — well under first-person cap
+const SHAKE_FIRE_DISRUPTOR = 0.08;
+const RECOIL_DECAY = 12; // 1/s — ~0.2 s envelope, same as SHAKE_DECAY
+const RECOIL_CANNON_Z = 0.16; // flesh local +Z = backward (nose = −Z)
+const RECOIL_CANNON_Y = 0.07;
+const RECOIL_DISRUPTOR_Z = 0.22;
+const RECOIL_DISRUPTOR_Y = 0.1;
+const _shakeWorld = new THREE.Vector3(); // last applied world offset (un-applied before lerp)
+// Third: above and behind, steeper than the first (7.2, 8.4, 15) 29° follow.
+// ~61° elevation. Look-at ahead so the hull sits in the bottom 25% (NDC y ≈ −0.70).
+const THIRD_HEIGHT = 18;
+const THIRD_BACK = 10;
+const THIRD_LOOK_AHEAD = 16;
+const THIRD_SHIP_SCALE = 0.55; // visual only — root / flight stay 1
 const FOV_LERP_RATE = 5; // 1/s — afterburner FOV kick easing (§5.4)
 
-// Flight feel (§5.1/§5.3 light row).
-const MIN_AUTHORITY = 0.15; // steering never fully dies, even at burn speed
-const AUTOBANK_MAX = 0.55; // rad of visual roll at full deflection (§5.1)
-const AUTOBANK_LERP_RATE = 7; // 1/s
+// Flight feel (§5.1/§5.3). Live yaw/pitch/roll: hoverTurnRateFor in flight-feel.js.
+const AUTOBANK_LERP_RATE = 7; // 1/s — ease leftover visual bank back to 0
 const ENGINE_OUT_THRUST = 0.3; // §6.5: engine-out caps thrust at 30%
 
 // Living-motion tuning.
@@ -352,6 +399,11 @@ export function initShip(ctx) {
 
   const baseFov = camera.fov;
   let cameraSnapped = false; // snap (not lerp) on the first frame
+  let lastCamMode = ''; // resnap when C cycles chase / third / first
+  let shakeAmp = 0; // remaining hit-shake amplitude (world units)
+  let shakePhase = 0; // steps on each impulse so hits do not share a waveform
+  let recoilZ = 0; // remaining flesh kick, local +Z (backward)
+  let recoilY = 0; // remaining flesh kick, local +Y (up)
   let swimPhase = 0; // accumulated (frequency varies with speed + mood)
   let bankAngle = 0; // smoothed auto-bank visual roll
   let burnerEndsAt = 0; // ctx.world.time when the current burn cuts out
@@ -359,6 +411,8 @@ export function initShip(ctx) {
   let realigning = false; // drift release: swinging velocity back to facing
   let realignT = 0; // seconds into the re-align window
   let breathScale = 1; // smoothed whole-body breath + growth scale
+  let lockRef = null;
+  let lockSpeed = 0;
 
   const posAttr = geo.attributes.position;
   const arr = posAttr.array;
@@ -386,6 +440,36 @@ export function initShip(ctx) {
       const thrustCap = engineOut ? ENGINE_OUT_THRUST : 1;
 
       // ======================= FLIGHT =======================
+      // Match-speed: ship.js owns flags.matchSpeed. Do not write input.throttle.
+      const lock = ctx.targets.current;
+      const liveLock = !!(lock && lock.object && lock.state && !lock.state.destroyed);
+      if (liveLock) {
+        const lp = lock.object.position;
+        if (lock !== lockRef) {
+          lockRef = lock;
+          _lockLast.copy(lp);
+          lockSpeed = 0;
+        } else if (dt > 0) {
+          const vdt = Math.min(dt, 0.1);
+          _lockInst.copy(lp).sub(_lockLast).divideScalar(vdt);
+          lockSpeed += (_lockInst.length() - lockSpeed) * Math.min(1, vdt * 8);
+          _lockLast.copy(lp);
+        }
+      } else {
+        lockRef = null;
+        lockSpeed = 0;
+      }
+      if (input.matchSpeedPressed) {
+        if (ctx.flags.matchSpeed) ctx.flags.matchSpeed = false;
+        else if (liveLock && !docked && !ctx.gate.jumping && !input.throttleHeld) {
+          ctx.flags.matchSpeed = true;
+        }
+      }
+      if (ctx.flags.matchSpeed
+        && (docked || ctx.gate.jumping || !liveLock || input.throttleHeld)) {
+        ctx.flags.matchSpeed = false;
+      }
+
       if (!docked) {
         // --- Afterburner state machine (§5.2): tap Space → ×2 for burnTime,
         // then cooldown before the next burn is allowed.
@@ -424,17 +508,27 @@ export function initShip(ctx) {
           _realignFrom.copy(ship.velocity);
         }
 
-        // --- Steering: yaw/pitch toward the reticle, authority falling with
-        // speed (§5.1). steerX>0 = right → rotateY negative; steerY>0 = up
-        // → rotateX positive (pitch>0 = nose up). No roll axis.
-        const authority =
-          Math.max(
-            MIN_AUTHORITY,
-            1 - (0.5 * ship.speed) / shipCfg.maxSpeed,
-          ) * ctx.bio.turnFactor;
-        const rs = shipCfg.rotationSpeed * authority * dt;
+        // --- Steering: yaw/pitch toward the reticle, roll on Q/E.
+        // Mouse up always pitches the nose up in ship space.
+        let turn =
+          hoverTurnRateFor(ctx.player?.classKey || 'light', ship.speed) *
+          ctx.bio.turnFactor;
+        // Locked hull in front but off the nose: a small extra pull so a
+        // chase can finish the last degrees into the sights.
+        if (liveLock) {
+          _forward.set(0, 0, -1).applyQuaternion(root.quaternion);
+          _lockInst.copy(lock.object.position).sub(root.position);
+          const lockDist = _lockInst.length();
+          if (lockDist > 1) {
+            _lockInst.multiplyScalar(1 / lockDist);
+            const align = _forward.dot(_lockInst);
+            if (align > 0.08 && align < 0.97) turn *= 1.22;
+          }
+        }
+        const rs = turn * dt;
         if (input.steerY) root.rotateX(input.steerY * rs);
         if (input.steerX) root.rotateY(-input.steerX * rs);
+        if (input.roll) root.rotateZ(input.roll * rs);
 
         // --- Velocity.
         _forward.set(0, 0, -1).applyQuaternion(root.quaternion);
@@ -454,11 +548,20 @@ export function initShip(ctx) {
           // plus strafe along the ship's right/up axes (§5.1). Full stop
           // (double-tap F) overrides the creep floor — she holds station.
           const throttleEff = input.throttle * thrustCap;
-          const fwdSpeed = input.fullStop
-            ? 0
-            : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
-              ctx.bio.speedFactor *
-              burnMult;
+          let fwdSpeed;
+          if (ctx.flags.matchSpeed && liveLock) {
+            // Hold lock world speed. Creep floor uses a full-stop *effect*
+            // without writing input.fullStop. Cruise clamp, no burn.
+            fwdSpeed = lockSpeed < shipCfg.creep
+              ? 0
+              : Math.min(lockSpeed, shipCfg.maxSpeed);
+          } else {
+            fwdSpeed = input.fullStop
+              ? 0
+              : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
+                ctx.bio.speedFactor *
+                burnMult;
+          }
           _right.set(1, 0, 0).applyQuaternion(root.quaternion);
           _up.set(0, 1, 0).applyQuaternion(root.quaternion);
           _targetVelocity
@@ -484,16 +587,50 @@ export function initShip(ctx) {
         root.position.addScaledVector(ship.velocity, dt);
         ship.speed = ship.velocity.length();
 
-        // --- Auto-bank (§5.1): visual roll on the flesh child, proportional
-        // to yaw deflection. Not a player axis — pure presentation.
-        const bankTarget = -input.steerX * AUTOBANK_MAX * Math.min(authority, 1);
-        bankAngle += (bankTarget - bankAngle) * (1 - Math.exp(-AUTOBANK_LERP_RATE * dt));
+        // Sphere vs world bodies. Apply the slide every frame; throttle bodyHit.
+        if (root && !ctx.flags.docked && !ctx.gate.jumping && !ctx.input.dockPressed) {
+          collectBodies(ctx, _bodies);
+          let kept = 0;
+          for (let i = 0; i < _bodies.count; i++) {
+            const body = _bodies.items[i];
+            if (body.kind === 'sun') continue;
+            _bodies.items[kept] = body;
+            kept++;
+          }
+          _bodies.count = kept;
+          resolveMover(
+            root.position.x,
+            root.position.y,
+            root.position.z,
+            ship.velocity.x,
+            ship.velocity.y,
+            ship.velocity.z,
+            PHY.PLAYER_RADIUS,
+            _bodies,
+            'player',
+            -1,
+            _hit,
+          );
+          if (_hit.hit) {
+            root.position.set(_hit.px, _hit.py, _hit.pz);
+            ship.velocity.set(_hit.vx, _hit.vy, _hit.vz);
+            ship.speed = ship.velocity.length();
+            if (time - lastEmitAt >= BODY_HIT_EMIT_GAP || time < lastEmitAt) {
+              lastEmitAt = time;
+              ctx.emit('bodyHit', { kind: _hit.kind, speed: _hit.speed, damage: 0 });
+            }
+          }
+        }
+
+        // Player roll is a real axis now. Do not add a fake visual bank.
+        bankAngle += (0 - bankAngle) * (1 - Math.exp(-AUTOBANK_LERP_RATE * dt));
       } else {
         // Docked: park — no thrust, drift, or steering; hold position.
         ship.velocity.set(0, 0, 0);
         ship.speed = 0;
         ship.driftActive = false;
         ship.burnerActive = false;
+        ctx.flags.matchSpeed = false;
         realigning = false;
         bankAngle += (0 - bankAngle) * (1 - Math.exp(-AUTOBANK_LERP_RATE * dt));
         _forward.set(0, 0, -1).applyQuaternion(root.quaternion);
@@ -646,25 +783,146 @@ export function initShip(ctx) {
         camera.updateProjectionMatrix();
       }
 
-      // --- Camera: first-person (cockpitless, §5.4) hides the flesh and sits
-      // at the nose with no lag; chase cam lerps toward a ship-local anchor
-      // and looks ahead.
-      if (ctx.flags.firstPerson) {
+      // --- Camera: C cycles chase → third → first.
+      // Chase: on-axis follow. Third: above and behind at a steeper angle
+      // than the first attempt; hull sits in the bottom 25%. First: nose.
+      const camMode = ctx.flags.camera || (ctx.flags.firstPerson ? 'first' : 'chase');
+      if (camMode !== lastCamMode) {
+        lastCamMode = camMode;
+        cameraSnapped = false;
+      }
+      const viewScale = camMode === 'third' ? THIRD_SHIP_SCALE : 1;
+      flesh.scale.setScalar(breathScale * viewScale);
+      if (camMode === 'first') {
         flesh.visible = false;
+        hull.visible = false;
+        underLight.visible = false;
+        for (let si = 0; si < scars.length; si++) scars[si].visible = false;
+        _up.set(0, 1, 0).applyQuaternion(root.quaternion);
+        camera.up.copy(_up);
         _camAnchor.copy(_noseOffset).applyQuaternion(root.quaternion).add(root.position);
         camera.position.copy(_camAnchor);
         camera.quaternion.copy(root.quaternion);
       } else {
+        // Ship-up, not world Y. World-up lookAt locks the horizon and
+        // refuses a nose-down attitude (look dir ≈ world ±Y).
         flesh.visible = true;
-        _camAnchor.copy(_camOffset).applyQuaternion(root.quaternion).add(root.position);
+        hull.visible = true;
+        underLight.visible = true;
+        _forward.set(0, 0, -1).applyQuaternion(root.quaternion);
+        _up.set(0, 1, 0).applyQuaternion(root.quaternion);
+        camera.up.copy(_up);
+        if (camMode === 'third') {
+          _camAnchor.copy(root.position)
+            .addScaledVector(_up, THIRD_HEIGHT)
+            .addScaledVector(_forward, -THIRD_BACK);
+          _lookTarget.copy(root.position).addScaledVector(_forward, THIRD_LOOK_AHEAD);
+        } else {
+          _camAnchor.copy(_camOffset).applyQuaternion(root.quaternion).add(root.position);
+          _lookTarget.copy(root.position).addScaledVector(_forward, LOOK_AHEAD);
+        }
+        // Soft padlock: keep a forward lock on glass so a crossing chase
+        // does not sit just off the frame.
+        if (liveLock) {
+          _lockInst.copy(lock.object.position).sub(root.position);
+          const lookDist = _lockInst.length();
+          if (lookDist > 12 && lookDist < U.TARGET_RANGE) {
+            _lockInst.multiplyScalar(1 / lookDist);
+            const align = _forward.dot(_lockInst);
+            if (align > 0.2) {
+              const k = align - 0.2;
+              _lookTarget.lerp(lock.object.position, k < 0.5 ? k : 0.5);
+            }
+          }
+        }
         if (!cameraSnapped) {
           camera.position.copy(_camAnchor);
           cameraSnapped = true;
         } else {
+          // Strip last frame's shake so the follow lerp does not smear it.
+          camera.position.sub(_shakeWorld);
           camera.position.lerp(_camAnchor, 1 - Math.exp(-CAMERA_LERP_RATE * dt));
         }
-        _lookTarget.copy(_forward).multiplyScalar(LOOK_AHEAD).add(root.position);
         camera.lookAt(_lookTarget);
+      }
+
+      // Hit shake + fire recoil: lastEvents only (combat.js emits playerHit
+      // / playerFire after this system, so a same-frame event lands next
+      // frame). Camera-local offset after placement. Recoil overlays the
+      // flesh child only — root / velocity / throttle stay put.
+      if (reducedMotion || docked || ctx.gate.jumping) {
+        shakeAmp = 0;
+        recoilZ = 0;
+        recoilY = 0;
+        _shakeWorld.set(0, 0, 0);
+      } else {
+        const evs = ctx.lastEvents;
+        let impulse = 0;
+        let fireZ = 0;
+        let fireY = 0;
+        for (let i = 0; i < evs.length; i++) {
+          const ev = evs[i];
+          if (ev.type === 'playerHit') {
+            const dmg = ev.damage || 0;
+            const a = Math.min(dmg * SHAKE_HIT_PER_DMG, SHAKE_CHASE_MAX);
+            if (a > impulse) impulse = a;
+          } else if (ev.type === 'bodyHit') {
+            const dmg = ev.damage || 0;
+            const spd = ev.speed || 0;
+            const a = dmg > 0
+              ? Math.min(dmg * SHAKE_BODY_PER_DMG, SHAKE_CHASE_MAX)
+              : Math.min(spd * SHAKE_BODY_PER_SPEED, SHAKE_CHASE_MAX);
+            if (a > impulse) impulse = a;
+          } else if (ev.type === 'npcDestroyed') {
+            const wreck = ev.ship?.object;
+            if (wreck) {
+              if (wreck.position.distanceToSquared(root.position) < SHAKE_WRECK_DIST * SHAKE_WRECK_DIST) {
+                if (SHAKE_WRECK_AMP > impulse) impulse = SHAKE_WRECK_AMP;
+              }
+            }
+          } else if (ev.type === 'playerFire') {
+            const w = ev.weapon;
+            if (w === 'cannon' || w === 'disruptor') {
+              const dis = w === 'disruptor';
+              const a = dis ? SHAKE_FIRE_DISRUPTOR : SHAKE_FIRE_CANNON;
+              if (a > impulse) impulse = a;
+              const z = dis ? RECOIL_DISRUPTOR_Z : RECOIL_CANNON_Z;
+              const y = dis ? RECOIL_DISRUPTOR_Y : RECOIL_CANNON_Y;
+              if (z > fireZ) fireZ = z;
+              if (y > fireY) fireY = y;
+            }
+          }
+        }
+        shakeAmp *= Math.exp(-SHAKE_DECAY * dt);
+        if (impulse > 0) {
+          shakeAmp = Math.max(shakeAmp, impulse);
+          shakePhase += 1.7;
+        }
+        if (shakeAmp < 1e-4) shakeAmp = 0;
+        recoilZ *= Math.exp(-RECOIL_DECAY * dt);
+        recoilY *= Math.exp(-RECOIL_DECAY * dt);
+        if (fireZ > recoilZ) recoilZ = fireZ;
+        if (fireY > recoilY) recoilY = fireY;
+        if (recoilZ < 1e-4) recoilZ = 0;
+        if (recoilY < 1e-4) recoilY = 0;
+        flesh.position.z += recoilZ;
+        flesh.position.y += recoilY;
+        const peak = camMode === 'first' ? SHAKE_FIRST_MAX : SHAKE_CHASE_MAX;
+        const amp = shakeAmp > peak ? peak : shakeAmp;
+        if (amp > 0) {
+          const ox = Math.sin(t * 73.1 + shakePhase) * amp;
+          const oy = Math.cos(t * 61.7 + shakePhase * 1.7) * amp * 0.7;
+          const oz = Math.sin(t * 47.3 + shakePhase * 0.4) * amp * 0.15;
+          const px = camera.position.x;
+          const py = camera.position.y;
+          const pz = camera.position.z;
+          camera.translateX(ox);
+          camera.translateY(oy);
+          camera.translateZ(oz);
+          _shakeWorld.set(camera.position.x - px, camera.position.y - py, camera.position.z - pz);
+        } else {
+          _shakeWorld.set(0, 0, 0);
+        }
       }
     },
   };

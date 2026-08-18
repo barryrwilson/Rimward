@@ -237,6 +237,7 @@ export function initSolarSystem(ctx) {
     ctx.scene.add(root);
 
     // --- Sun ---
+    ctx.config.world.sunRadius = def.sunRadius;
     sun = new THREE.Mesh(
       new THREE.SphereGeometry(def.sunRadius, 32, 24),
       new THREE.MeshBasicMaterial({ color: def.sunColor }),
@@ -308,6 +309,7 @@ export function initSolarSystem(ctx) {
   }
 
   function rebuild(to) {
+    ctx.config.world.sunRadius = 0;
     disposeObject(root);
     build(SYSTEMS[to]);
   }
