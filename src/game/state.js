@@ -52,25 +52,25 @@ export const MINING_LASERS = [
   {
     key: 'mk1', name: 'Mining laser Mk I', tier: 1,
     extractPerSec: 1.2, range: 90, heatPerShot: 2, damage: 4, cost: 0,
-    beamColor: 0x51ff9e, coreColor: 0xd8fff0, beamWidth: 1.0,
+    beamColor: 0x51ff9e, coreColor: 0xd8fff0, beamWidth: 0.22,
     line: 'The stock head. It chews soft rock and complains about the rest.',
   },
   {
     key: 'mk2', name: 'Bore laser Mk II', tier: 2,
     extractPerSec: 2.0, range: 115, heatPerShot: 2.6, damage: 6, cost: 1400,
-    beamColor: 0x6effc4, coreColor: 0xe8fff4, beamWidth: 1.35,
+    beamColor: 0x6effc4, coreColor: 0xe8fff4, beamWidth: 0.26,
     line: 'Bore head seated. Slag iron and brine ice come apart now.',
   },
   {
     key: 'mk3', name: 'Ferrous cutting head Mk III', tier: 3,
     extractPerSec: 3.1, range: 140, heatPerShot: 3.4, damage: 9, cost: 4200,
-    beamColor: 0xa8ff9e, coreColor: 0xf4ffe8, beamWidth: 1.75,
+    beamColor: 0xa8ff9e, coreColor: 0xf4ffe8, beamWidth: 0.30,
     line: 'Hegemony pattern, stamped and billed. Salt, gildvein and emberglass open to it.',
   },
   {
     key: 'mk4', name: 'Deepcore lance Mk IV', tier: 4,
     extractPerSec: 4.4, range: 165, heatPerShot: 4.2, damage: 13, cost: 11000,
-    beamColor: 0xfff0a8, coreColor: 0xffffff, beamWidth: 2.2,
+    beamColor: 0xfff0a8, coreColor: 0xffffff, beamWidth: 0.34,
     line: 'A lance, not a laser. Nothing in the rim is harder than what it will open.',
   },
 ];
@@ -260,6 +260,15 @@ export const ECON = {
   tributeRate: 0.02, // of route cargo value per pass
   hotHullFence: [0.3, 0.5], // claimed hull after laundering
   fear: { capitulation: 2, ransom: 3, aceDefeated: 5, killedSurrendered: 8, decayPerWeek: 1, tributeOpensAt: 40, lawfulClosesAt: 50 },
+};
+// Wave 60: station rescue of scooped survivors (POD-01). Not a market price.
+// source === 'other' is the larger bump; source === 'playerKill' still pays
+// the small bump. Lines are spoken; {faction} is the display name only.
+export const RESCUE = {
+  otherRep: 4,
+  playerKillRep: 1,
+  lineOther: 'They walk the deck as neighbors. The {faction} will remember.',
+  lineKill: 'You brought them home. The {faction} take them in.',
 };
 // Wave 30: concealed mounts — the Q-ship path (§29 product test 'bluffed the
 // other with hidden mounts'). A Q-ship reads harmless on a manifest until

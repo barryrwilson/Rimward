@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor } from '../game/state.js';
+import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor } from '../game/state.js';
+import * as pods from '../game/pods.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41: faction character portraits
-import { spawnPod } from '../game/pods.js';
 import { epicEffects } from '../game/epics.js';
 import { styleFor } from '../game/faction-style.js'; // wave 37: per-faction station schemes
 import { detailBuilder } from './station-detail.js'; // waves 43-45: merged-geometry detail kit
@@ -31,9 +31,10 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  * it for the dock prompt), ctx.world.jobs (created here), ctx.world.scanner.
  * Mutates on purchase only: ctx.world.credits, ctx.cargo, ctx.cargoCapacity,
  * ctx.bio (feed/tend — agreed with bio.js), ctx.player (repair), ctx.world
- * reputation on job completion. Emits 'docked' / 'undocked' (+ 'commLine' for
- * job completions in space). Never emits for the dock prompt — hud.js reads
- * ctx.station.inZone itself.
+ * reputation on job completion and on survivor return (wave 60). Emits
+ * 'docked' / 'undocked' (+ 'commLine' for job completions in space;
+ * 'survivorRescued' + 'commLine' when people come home). Never emits for
+ * the dock prompt — hud.js reads ctx.station.inZone itself.
  *
  * Restricted components (§12/§16): Freehold Landing refuses unless fear ≥
  * ECON.fear.tributeOpensAt or rep.freehold < -25. A system whose def flies
@@ -112,7 +113,7 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  */
 
 const RING_SPIN = 0.05; // rad/s
-const DOCK_KEY_SERVICES = ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics'];
+export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics']);
 
 const RESTRICTED_REP_GATE = -25; // a burned Compact name opens the locker
 
@@ -909,7 +910,7 @@ function teardownMesh(ctx, mesh) {
 
 // ------------------------------------------------------------- helpers ----
 
-function holdUnits(ctx, commodity) {
+export function holdUnits(ctx, commodity) {
   let n = 0;
   for (const c of ctx.cargo) if (c.commodity === commodity) n += c.units;
   return n;
@@ -919,22 +920,127 @@ function cargoUsed(ctx) {
   for (const c of ctx.cargo) n += c.units;
   return n;
 }
-function addCargo(ctx, commodity, units) {
+export function isSurvivorCargo(row) {
+  if (typeof pods.isSurvivorCargo === 'function') return pods.isSurvivorCargo(row);
+  return !!row && row.commodity === 'survivor';
+}
+export function isMarketCommodity(key) {
+  return Object.hasOwn(COMMODITIES, key);
+}
+function holdCap(ctx) {
+  const cap = Number(ctx?.cargoCapacity);
+  return Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : 99;
+}
+function survivorUnitCount(row, cap) {
+  const n = Number(row?.units);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const u = Math.floor(n);
+  return u > cap ? 0 : u;
+}
+function survivorSourceRank(source) {
+  if (source === 'other') return 0;
+  if (source === 'playerKill') return 2;
+  return 1;
+}
+export function survivorUnitsForFaction(ctx, faction) {
+  const cap = holdCap(ctx);
+  let n = 0;
+  for (const c of ctx.cargo ?? []) {
+    if (!isSurvivorCargo(c) || c.faction !== faction) continue;
+    n += survivorUnitCount(c, cap);
+  }
+  return n;
+}
+export function otherSurvivorFactionNames(ctx, hereFaction) {
+  const names = [];
+  const seen = new Set();
+  for (const c of ctx.cargo ?? []) {
+    if (!isSurvivorCargo(c) || c.faction === hereFaction) continue;
+    const name = Object.hasOwn(FACTIONS, c.faction) ? FACTIONS[c.faction].name : null;
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+/** Remove matching-faction survivors. 'other' first, then unknown, then playerKill. */
+export function removeSurvivorsForFaction(ctx, faction) {
+  const cargo = ctx.cargo ?? [];
+  const cap = holdCap(ctx);
+  const matches = [];
+  for (let i = 0; i < cargo.length; i++) {
+    const c = cargo[i];
+    if (!isSurvivorCargo(c) || c.faction !== faction) continue;
+    const units = survivorUnitCount(c, cap);
+    if (units <= 0) continue;
+    matches.push({ i, c, units, rank: survivorSourceRank(c.source) });
+  }
+  matches.sort((a, b) => a.rank - b.rank || a.i - b.i);
+  const drop = new Set(matches.map((m) => m.c));
+  if (drop.size > 0) {
+    let w = 0;
+    for (let r = 0; r < cargo.length; r++) {
+      if (drop.has(cargo[r])) continue;
+      cargo[w++] = cargo[r];
+    }
+    cargo.length = w;
+  }
+  return matches.map((m) => ({ source: m.c.source, units: m.units }));
+}
+function speakRescueLine(faction, source) {
+  const name = Object.hasOwn(FACTIONS, faction) ? FACTIONS[faction].name : 'this dock';
+  const tmpl = source === 'playerKill' ? RESCUE.lineKill : RESCUE.lineOther;
+  return tmpl.replace('{faction}', name);
+}
+export function applySurvivorRescue(ctx, faction) {
+  if (!Object.hasOwn(FACTIONS, faction)) return null;
+  const removed = removeSurvivorsForFaction(ctx, faction);
+  if (removed.length === 0) return null;
+  let count = 0;
+  let nOther = 0;
+  let nKill = 0;
+  for (const r of removed) {
+    count += r.units;
+    if (r.source === 'other') nOther += r.units;
+    else nKill += r.units;
+  }
+  const source = nOther > 0 && nKill === 0 ? 'other' : nKill > 0 && nOther === 0 ? 'playerKill' : 'mixed';
+  const repDelta = nOther * RESCUE.otherRep + nKill * RESCUE.playerKillRep;
+  const bag = ctx.world?.reputation;
+  if (bag && typeof bag === 'object') {
+    const cur = Number(bag[faction]);
+    bag[faction] = (Number.isFinite(cur) ? cur : 0) + repDelta;
+  }
+  const spokenSource = source === 'playerKill' ? 'playerKill' : 'other';
+  const line = speakRescueLine(faction, spokenSource);
+  const payload = { faction, source: source === 'mixed' ? 'other' : source, count, repDelta, line };
+  ctx.emit?.('survivorRescued', payload);
+  ctx.emit?.('commLine', { text: line, from: 'station' });
+  return payload;
+}
+export function addCargo(ctx, commodity, units) {
+  if (commodity === 'survivor') {
+    ctx.cargo.push({ commodity, units });
+    return;
+  }
   for (const c of ctx.cargo) {
+    if (isSurvivorCargo(c)) continue;
     if (c.commodity === commodity) { c.units += units; return; }
   }
   ctx.cargo.push({ commodity, units });
 }
-function removeCargo(ctx, commodity, units) {
+export function removeCargo(ctx, commodity, units) {
+  if (commodity === 'survivor') return;
   for (let i = 0; i < ctx.cargo.length; i++) {
     const c = ctx.cargo[i];
-    if (c.commodity !== commodity) continue;
+    if (isSurvivorCargo(c) || c.commodity !== commodity) continue;
     c.units -= units;
     if (c.units <= 0) ctx.cargo.splice(i, 1);
     return;
   }
 }
-function priceOf(ctx, key) {
+export function priceOf(ctx, key) {
+  if (!isMarketCommodity(key)) return ctx.world?.prices?.[key] ?? 0;
   return ctx.world.prices[key] ?? COMMODITIES[key].base;
 }
 function findAceRecord(ctx) {
@@ -1488,6 +1594,10 @@ export function initStation(ctx) {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
   }
   function tryTrade(key, qty, buying) {
+    if (!isMarketCommodity(key) || key === 'survivor') {
+      ui.notice = 'This dock does not trade in people.';
+      return;
+    }
     const com = COMMODITIES[key];
     const price = priceOf(ctx, key);
     const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
@@ -1610,7 +1720,7 @@ export function initStation(ctx) {
       if (!entry) { ui.notice = 'The wreck has gone cold — nothing left to recover.'; render(); return; }
       const p = entry.position;
       _podPos.set(p.x ?? p[0] ?? 0, p.y ?? p[1] ?? 0, p.z ?? p[2] ?? 0);
-      spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
+      pods.spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
       job.collected = false;
     }
     job.state = 'accepted';
@@ -1821,7 +1931,7 @@ export function initStation(ctx) {
     }
     const row2 = h('div', 'screen-btnrow', panel);
     if (ctx.world.scanner >= 1) {
-      h('div', 'screen-note', row2, 'Wolfeye Mk I installed — target resolve reads numerically on the HUD.');
+      h('div', 'screen-note', row2, 'Wolfeye Mk I installed — target resolve reads numerically; nearby ships sit on a bottom arc.');
     } else {
       btn(row2, `2 — Wolfeye Mk I scanner (${SCANNER_COST} UU)`, act.buyScanner);
     }
@@ -1835,7 +1945,7 @@ export function initStation(ctx) {
     // Wave 31: Mk II eye (§30) — reads the masks back, needs the Mk I socket.
     const row4 = h('div', 'screen-btnrow', panel);
     if (ctx.world.scanner >= 2) {
-      h('div', 'screen-note', row4, 'Wolfeye Mk II installed — hidden gunports read on the target bracket.');
+      h('div', 'screen-note', row4, 'Wolfeye Mk II installed — hidden gunports read on the bracket. Longer contacts; lock shows closure.');
     } else if (ctx.world.scanner === 1) {
       btn(row4, `4 — Wolfeye Mk II scanner (${SCANNER2_COST} UU)`, act.buyScanner2);
     } else {
@@ -1860,8 +1970,27 @@ export function initStation(ctx) {
   }
 
   // ---- people (contacts: dockmaster/fence/fixer of this dock, §12.x) ----
+  function renderRescue(panel) {
+    const faction = currentDef.faction;
+    const n = survivorUnitsForFaction(ctx, faction);
+    const elseNames = otherSurvivorFactionNames(ctx, faction);
+    if (n > 0) {
+      const fname = FACTIONS[faction]?.name ?? 'this dock';
+      h('div', 'people-note', panel, `${n} aboard belong with the ${fname}.`);
+      const row = h('div', 'screen-btnrow people-actions', panel);
+      btn(row, 'Return survivors', () => {
+        const result = applySurvivorRescue(ctx, faction);
+        ui.notice = result?.line ?? 'They are home.';
+        render();
+      });
+    }
+    if (elseNames.length > 0) {
+      h('div', 'people-note', panel, `Some aboard belong with the ${elseNames.join(', ')}.`);
+    }
+  }
   function renderPeople(panel) {
     h('div', 'screen-sub', panel, 'PEOPLE — who runs this dock');
+    renderRescue(panel);
     const people = contactsForSystem(ctx, currentId);
     if (people.length === 0) {
       h('div', 'screen-note', panel, 'Faces blur past the berth lights. Nobody here knows you yet.');
@@ -2066,6 +2195,7 @@ export function initStation(ctx) {
       const rep = ctx.world.reputation[currentDef.faction] ?? 0;
       h('div', 'station-rank', panel,
         `${factionName}: ${rankFor(rep).name} (${rep >= 0 ? '+' : ''}${Math.round(rep)} rep)`);
+      renderRescue(panel);
       h('div', 'screen-legend', panel, '1-9 select service · Esc/B launch');
     } else {
       const back = h('div', 'station-back', panel);

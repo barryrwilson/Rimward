@@ -1,5 +1,5 @@
 import '../ui/screens.css';
-import { createShipState, SHIP_CLASSES, SYSTEMS, U, JUMP } from './state.js';
+import { createShipState, SHIP_CLASSES, SYSTEMS, FACTIONS, U, JUMP } from './state.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -81,14 +81,90 @@ const WORLD_FIELDS = [
   'miningLaser',
 ];
 
-function snapshot(ctx) {
+const SURVIVOR = 'survivor';
+const SAFE_ID = /^[a-z0-9_]+$/i;
+const NAME_MAX = 40;
+const ID_MAX = 64;
+const COMMODITY_MAX = 64;
+
+function stripControlChars(s) {
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code < 32 || code === 127 || (code >= 128 && code <= 159)) continue;
+    if ((code >= 0x200B && code <= 0x200F) || (code >= 0x202A && code <= 0x202E)
+        || (code >= 0x2060 && code <= 0x2064) || (code >= 0x2066 && code <= 0x206F)
+        || code === 0xFEFF) continue;
+    out += s[i];
+  }
+  return out;
+}
+
+function sanitizeUnits(value) {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return 0;
+  const u = Math.trunc(n);
+  if (u < 0) return 0;
+  return u > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : u;
+}
+
+function sanitizeFaction(value) {
+  if (typeof value !== 'string' || !value || value.length > ID_MAX) return null;
+  if (Object.prototype.hasOwnProperty.call(FACTIONS, value)
+      || Object.prototype.hasOwnProperty.call(SYSTEMS, value)) {
+    return value;
+  }
+  return SAFE_ID.test(value) ? value : null;
+}
+
+function sanitizeSurvivorName(value) {
+  if (typeof value !== 'string') return null;
+  const cleaned = stripControlChars(value).trim().slice(0, NAME_MAX);
+  return cleaned || null;
+}
+
+/** JSON-plain cargo row. Ordinary goods stay {commodity, units}; survivors keep faction/source/name. */
+function sanitizeCargoRow(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (typeof raw.commodity !== 'string' || !raw.commodity || raw.commodity.length > COMMODITY_MAX) {
+    return null;
+  }
+  const commodity = raw.commodity;
+  const units = sanitizeUnits(raw.units);
+  if (commodity === SURVIVOR) {
+    if (units <= 0) return null;
+    const row = {
+      commodity: SURVIVOR,
+      units,
+      source: raw.source === 'playerKill' ? 'playerKill' : 'other',
+    };
+    const faction = sanitizeFaction(raw.faction);
+    if (faction) row.faction = faction;
+    const name = sanitizeSurvivorName(raw.name);
+    if (name) row.name = name;
+    return row;
+  }
+  return { commodity, units };
+}
+
+function sanitizeCargoList(list) {
+  const out = [];
+  if (!Array.isArray(list)) return out;
+  for (const raw of list) {
+    const row = sanitizeCargoRow(raw);
+    if (row) out.push(row);
+  }
+  return out;
+}
+
+export function snapshot(ctx) {
   const world = {};
   for (const k of WORLD_FIELDS) if (ctx.world[k] !== undefined) world[k] = ctx.world[k];
   return {
     v: 1,
     savedAt: Date.now(),
     world,
-    cargo: ctx.cargo,
+    cargo: sanitizeCargoList(ctx.cargo),
     cargoCapacity: ctx.cargoCapacity,
     bio: { ...ctx.bio, songEvent: null },
     player: ctx.player,
@@ -195,6 +271,10 @@ function sanitizeRestored(ctx) {
     ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.speed = 0;
   }
+  if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
+  const cargo = sanitizeCargoList(ctx.cargo);
+  ctx.cargo.length = 0;
+  for (const row of cargo) ctx.cargo.push(row);
 }
 
 /**
@@ -241,7 +321,8 @@ function healLiveRecords(ctx) {
   }
 }
 
-function restore(ctx, snap) {
+export function restore(ctx, snap) {
+  if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
   const fromSystem = ctx.world.currentSystem;
   ctx.flags.saveRestored = true; // origins.js: a restore means no origin pick
   for (const k of WORLD_FIELDS) {
@@ -267,8 +348,9 @@ function restore(ctx, snap) {
     ctx.world.markets[ctx.world.currentSystem] = ctx.world.prices;
   }
   rebindPrices(ctx);
-  ctx.cargo.length = 0;
-  for (const c of snap.cargo ?? []) ctx.cargo.push({ commodity: c.commodity, units: c.units });
+  if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
+  else ctx.cargo.length = 0;
+  for (const row of sanitizeCargoList(snap.cargo)) ctx.cargo.push(row);
   if (typeof snap.cargoCapacity === 'number') ctx.cargoCapacity = snap.cargoCapacity;
   if (snap.bio) {
     Object.assign(ctx.bio, snap.bio);
