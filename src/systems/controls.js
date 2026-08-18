@@ -13,7 +13,8 @@ import { U } from '../game/state.js';
  * Bindings (mirrored into ctx.config.controls for the HUD):
  *   Mouse        → steer toward reticle
  *   W / S        → vertical strafe (W = up)
- *   A / D        → lateral strafe (D = right)   — no roll axis (§5.1)
+ *   A / D        → lateral strafe (D = right)
+ *   Q / E        → roll left / right (player sets up)
  *   R / F (hold) → throttle setpoint ramp 0.5/s; double-tap F = full stop
  *   Space (tap)  → afterburner (edge)
  *   Shift (hold) → vector-hold drift
@@ -21,9 +22,10 @@ import { U } from '../game/state.js';
  *   1 / 2 / 3    → weapon group (cannon / disruptor / mining)
  *   T (tap)      → cycle target (nearest first; asteroids too in group 3)
  *   H (tap)      → hail   ·   D (tap) → dock   ·   C (tap) → camera toggle
+ *   X (tap)      → match-speed edge (ship.js toggles flags.matchSpeed)
  *
  * Edge inputs (afterburnerPressed/targetPressed/hailPressed/dockPressed/
- * cameraPressed) pulse for exactly one frame: captured in event handlers,
+ * cameraPressed/matchSpeedPressed) pulse for exactly one frame: captured in event handlers,
  * published (and cleared) at the top of update() so later systems in the
  * same frame still see them. Window blur zeroes axes/fire/drift so the ship
  * never runs away while unfocused; the throttle setpoint persists (§5.1).
@@ -32,7 +34,8 @@ import { U } from '../game/state.js';
 // Keys this system owns; everything else is left to the browser.
 const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
-  'KeyT', 'KeyH', 'KeyC',
+  'KeyQ', 'KeyE',
+  'KeyT', 'KeyH', 'KeyC', 'KeyX',
   'Digit1', 'Digit2', 'Digit3',
   'ShiftLeft', 'ShiftRight',
   'Space',
@@ -91,17 +94,21 @@ export function initControls(ctx) {
   let pendingHail = false;
   let pendingDock = false;
   let pendingCamera = false;
+  let pendingMatchSpeed = false;
 
   let lastFTapAt = -Infinity; // performance.now() ms of previous F tap
 
   const zeroAxesFireDrift = () => {
     pressed.clear();
     fireDown = false;
-    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = false;
+    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = false;
+    input.matchSpeedPressed = false;
+    input.throttleHeld = false;
     input.steerX = 0;
     input.steerY = 0;
     input.strafeX = 0;
     input.strafeY = 0;
+    input.roll = 0;
     input.fireHeld = false;
     input.driftHeld = false;
     // Throttle setpoint deliberately persists (§5.1 persistent setpoint).
@@ -127,6 +134,9 @@ export function initControls(ctx) {
         break;
       case 'KeyC':
         pendingCamera = true;
+        break;
+      case 'KeyX':
+        pendingMatchSpeed = true;
         break;
       case 'KeyF': {
         const now = performance.now();
@@ -173,13 +183,15 @@ export function initControls(ctx) {
     'Mouse — steer toward reticle',
     'W/S — vertical strafe (W = up)',
     'A/D — lateral strafe (D = right)',
+    'Q/E — roll left / right (set your up)',
     'R/F (hold) — throttle up / down · double-tap F — full stop',
     'Space — afterburner',
     'Shift (hold) — vector-hold drift',
     'LMB (hold) — fire',
     '1/2/3 — weapon group: cannon / disruptor / mining',
     'T — cycle target',
-    'H — hail · D — dock · C — camera (chase / first-person)',
+    'H — hail · D — dock · C — camera (chase / third / first-person)',
+    'X — match lock speed',
     'G — cycle hub route at a Lamplighter junction',
     'M — galaxy chart',
     'L — berth records (save/load)',
@@ -196,9 +208,18 @@ export function initControls(ctx) {
       input.hailPressed = pendingHail;
       input.dockPressed = pendingDock;
       input.cameraPressed = pendingCamera;
-      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = false;
+      input.matchSpeedPressed = pendingMatchSpeed;
+      input.throttleHeld = has('KeyR') || has('KeyF');
+      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = false;
 
-      if (input.cameraPressed) ctx.flags.firstPerson = !ctx.flags.firstPerson;
+      if (input.cameraPressed) {
+        const order = ['chase', 'third', 'first'];
+        const cur = ctx.flags.camera || (ctx.flags.firstPerson ? 'first' : 'chase');
+        const i = order.indexOf(cur);
+        const next = order[(i < 0 ? 0 : i + 1) % 3];
+        ctx.flags.camera = next;
+        ctx.flags.firstPerson = next === 'first';
+      }
       if (input.targetPressed) cycleTarget(ctx);
 
       // --- Reticle steering: offset from screen center, clamped to radius.
@@ -220,9 +241,9 @@ export function initControls(ctx) {
       ctx.targets.reticleScreen.x = ox;
       ctx.targets.reticleScreen.y = oy;
 
-      // --- Strafe axes (no roll axis — Q/E unbound, §5.1).
       input.strafeX = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0);
       input.strafeY = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0);
+      input.roll = (has('KeyE') ? 1 : 0) - (has('KeyQ') ? 1 : 0);
 
       // --- Held buttons.
       input.driftHeld = has('ShiftLeft') || has('ShiftRight');

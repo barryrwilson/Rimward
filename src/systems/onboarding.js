@@ -9,9 +9,9 @@ import { U, SYSTEMS } from '../game/state.js';
  * hints survive save/load). Conditions are cheap field reads; once every
  * hint is seen the update loop early-outs.
  *
- * Display: bottom-center translucent dark card, monospace teal, z-index 35
- * (below the station overlay). Auto-dismisses after 8 s or on any keydown,
- * then the queue advances to the next due hint.
+ * Display: top-left line under the Controls header (off the bottom-center
+ * contacts slot), monospace teal, z-index 35 (below the station overlay).
+ * Auto-dismisses after 8 s or on any keydown, then the queue advances.
  *
  * Suppression: nothing is evaluated or shown while ctx.settings.hints ===
  * false (live read — toggling off mid-display hides immediately), while
@@ -79,8 +79,9 @@ export function initOnboarding(ctx) {
   savedReady = false;
 
   const el = document.createElement('div');
+  el.className = 'rw-onboard-hint';
   el.style.cssText =
-    'position:fixed;left:50%;bottom:6%;transform:translateX(-50%);display:none;z-index:35;' +
+    'position:fixed;left:14px;top:48px;transform:none;display:none;z-index:35;' +
     'padding:6px 14px;background:rgba(4,18,22,.78);border:1px solid rgba(111,242,224,.25);' +
     'border-radius:2px;font-size:11px;letter-spacing:.08em;color:#6ff2e0;pointer-events:none;' +
     "font-family:'Consolas','Menlo','Courier New',monospace;";

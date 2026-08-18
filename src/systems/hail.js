@@ -1,25 +1,27 @@
-import * as THREE from 'three';
-import { ECON, FACTIONS, cargoValue, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
+import { ECON, FACTIONS, U, cargoValue, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
-import { spawnPod } from '../game/pods.js';
-import { stampWakeSite } from './npc.js';
+import { stampWakeSite, spillShipCargo } from './npc.js';
 
 /**
- * Combat hail UI (doc §7.6, §12.3): a lower-third card. The world stays live —
- * nothing here touches ctx.flags.paused, and the container is pointer-events:
- * none except the card itself, so the combat HUD is never blocked.
+ * Combat hail UI (doc §7.6, §12.3): a lower-left card above the aux stack.
+ * The world stays live — nothing here touches ctx.flags.paused, and the
+ * container is pointer-events: none except the card itself, so the combat
+ * HUD is never blocked. Bottom-center stays empty for the future contacts arc.
  * Wave 41: the card carries a faction portrait when the faction has reference
  * art; speaker seed is record.pilot ?? state.name.
  *
- * Opens on 'hailOpened' { ship, intents[], line?, demand? } (emitted by
+ * Opens on 'hailOpened' { ship, intents[], line?, demand?, salvage? } (emitted by
  * npc.js when a ship's resolve hits the bargaining band, or when a hunting
- * pirate closes on the player with a tribute demand — wave 30). Intents are
+ * pirate closes on the player with a tribute demand — wave 30, or by this
+ * module when the player presses H on a targeted disabled hull). Intents are
  * verbs with real mechanics only ("no verb without a system" §12.3):
- *   demandCargo   → target jettisons its manifest as pods (fear +2)
+ *   demandCargo   → target jettisons its manifest as pods (fear +2). On a
+ *                   disabled hulk this is salvage: dump cargo only — no flee,
+ *                   no fear, no npcSurrendered.
  *   demandRansom  → credits += ransomFor(state) (fear +3)
  *   acceptTribute → credits += ECON.tributeRate × cargo value (no fear)
- *   letGo         → target flees, no fear
+ *   letGo         → target flees, no fear. On a disabled hulk: close only.
  *   respect       → a Named Gun (ace) stands down; flee + 60 s calm, no econ
  *   callowVouch   → Old Callow sells a word in the keepers' second ledger column (credits, trust, favors; no econ fear)
  *   keepFiring    → close the card, nothing else changes
@@ -27,9 +29,12 @@ import { stampWakeSite } from './npc.js';
  *   showTeeth     → hidden-mounts bluff (offered only with concealedMounts): success → pirate flees + 90 s calm, fear +1; failure → pirate resolve +20 and it presses the attack
  *   refuseFight   → wave the demand off; the card closes and the pirate attacks
  * Demand hails carry ev.demand (integer UU rolled once at emit time — the
- * offer is stable). Every resolution emits 'hailClosed'. If the hail ship is
- * destroyed, disabled, or despawned while the card is open, the card closes
- * (bargaining timeout). Buttons carry number-key shortcuts (1..n).
+ * offer is stable). Salvage hails carry ev.salvage === true. Every resolution
+ * emits 'hailClosed'. If the hail ship is destroyed or despawned while the
+ * card is open, the card closes. A salvage hail stays open on a disabled
+ * hull. A bargaining or demand hail that is still open when the target
+ * becomes disabled converts in place to salvage verbs (least surprising:
+ * the card does not vanish). Buttons carry number-key shortcuts (1..n).
  */
 
 // NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
@@ -41,7 +46,53 @@ import { stampWakeSite } from './npc.js';
 // [3] refuse).
 const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect', 'payTribute', 'showTeeth', 'refuseFight'];
 
-const _offset = new THREE.Vector3();
+/** True when the live manifest still holds at least one unit. */
+export function shipHasCargo(st) {
+  const cargo = st && st.cargo;
+  if (!cargo || cargo.length === 0) return false;
+  for (let i = 0; i < cargo.length; i++) {
+    if ((cargo[i].units | 0) > 0) return true;
+  }
+  return false;
+}
+
+/** Salvage-hail verbs for a disabled hull. demandCargo only if holds are not empty. */
+export function salvageIntentsFor(ctx, live) {
+  const intents = [];
+  if (shipHasCargo(live && live.state)) intents.push('demandCargo');
+  intents.push('letGo', 'keepFiring');
+  return intents;
+}
+
+export function salvageLine(live) {
+  return shipHasCargo(live && live.state)
+    ? 'Hull is dead in space. Holds still sealed.'
+    : 'Hull is dead in space. Holds are empty.';
+}
+
+/** Player-initiated salvage hail: targeted, disabled, in range, still live. */
+export function canHailDisabled(ctx, live, range = U.TARGET_RANGE) {
+  if (!live || !live.state || !live.object) return false;
+  if (!live.state.disabled || live.state.destroyed) return false;
+  if (!ctx.ships || !ctx.ships.includes(live)) return false;
+  const player = ctx.ship && ctx.ship.object;
+  if (!player) return false;
+  return live.object.position.distanceTo(player.position) <= range;
+}
+
+/** Emit hailOpened for the current disabled target. Does not open the DOM card. */
+export function tryOpenDisabledHail(ctx) {
+  const live = ctx.targets && ctx.targets.current;
+  if (!canHailDisabled(ctx, live)) return null;
+  const ev = {
+    ship: live,
+    intents: salvageIntentsFor(ctx, live),
+    line: salvageLine(live),
+    salvage: true,
+  };
+  ctx.emit('hailOpened', ev);
+  return ev;
+}
 
 function bumpFear(ctx, delta) {
   ctx.world.fear = Math.max(0, Math.min(100, ctx.world.fear + delta));
@@ -55,8 +106,9 @@ export function initHail(ctx) {
     'position:fixed;inset:0;display:none;pointer-events:none;z-index:40;' +
     "font-family:'Consolas','Menlo','Courier New',monospace;";
   const card = document.createElement('div');
+  card.className = 'rw-hail-card';
   card.style.cssText =
-    'position:absolute;left:50%;bottom:4%;transform:translateX(-50%);width:560px;max-width:90vw;' +
+    'position:absolute;left:14px;bottom:22%;transform:none;width:360px;max-width:min(360px,calc(100vw - 28px));' +
     'padding:12px 16px;background:rgba(4,18,22,.82);border:1px solid rgba(111,242,224,.35);' +
     'border-radius:2px;pointer-events:auto;text-transform:uppercase;';
   // Clicks on the card must not reach the canvas (fire input).
@@ -65,7 +117,7 @@ export function initHail(ctx) {
   root.appendChild(card);
   document.body.appendChild(root);
 
-  let open = null; // { ship, intents, ransom, tribute, buttons }
+  let open = null; // { ship, intents, ransom, tribute, salvage, buttons }
 
   function closeCard() {
     open = null;
@@ -76,25 +128,33 @@ export function initHail(ctx) {
     const h = open;
     if (!h) return;
     const live = h.ship;
-    const st = live.state;
-    const ai = live.ai;
+    const st = live && live.state;
+    const ai = live && live.ai;
+    if (!st || !ai || st.destroyed || !live.object) {
+      if (live) ctx2.emit('hailClosed', { ship: live });
+      closeCard();
+      return;
+    }
+    const salvage = !!h.salvage || !!st.disabled;
     switch (intent) {
       case 'demandCargo': {
-        const pos = live.object.position;
-        for (const entry of st.cargo) {
-          _offset.set(pos.x + (Math.random() - 0.5) * 8, pos.y + (Math.random() - 0.5) * 8, pos.z + (Math.random() - 0.5) * 8);
-          spawnPod(ctx2, [{ commodity: entry.commodity, units: entry.units }], _offset);
+        spillShipCargo(ctx2, live);
+        if (salvage) {
+          // Dead hulk: dump cargo only. Do not flee, do not stamp a wake,
+          // do not mark a witnessed surrender (destroying them is still
+          // an atrocity via the existing disabled flag).
+          ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
+        } else {
+          st.surrendered = true;
+          ai.mode = 'flee';
+          ai.phase = null;
+          ai.intent = false;
+          ai.target = null;
+          bumpFear(ctx2, ECON.fear.capitulation);
+          stampWakeSite(live); // wave 30: every pirate/ace flee entry stamps (role-guarded)
+          ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
+          ctx2.emit('npcSurrendered', { ship: live, outcome: 'jettison' });
         }
-        st.cargo.length = 0;
-        st.surrendered = true;
-        ai.mode = 'flee';
-        ai.phase = null;
-        ai.intent = false;
-        ai.target = null;
-        bumpFear(ctx2, ECON.fear.capitulation);
-        stampWakeSite(live); // wave 30: every pirate/ace flee entry stamps (role-guarded)
-        ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
-        ctx2.emit('npcSurrendered', { ship: live, outcome: 'jettison' });
         break;
       }
       case 'demandRansom': {
@@ -120,13 +180,17 @@ export function initHail(ctx) {
         break;
       }
       case 'letGo': {
-        ai.mode = 'flee';
-        ai.phase = null;
-        ai.intent = false;
-        ai.target = null;
-        ai.calmUntil = ctx2.world.time + 30;
-        stampWakeSite(live); // wave 30: pirate/ace wake-trailing contract
-        ctx2.emit('commLine', { text: 'Running.', from: st.name });
+        if (salvage) {
+          ctx2.emit('commLine', { text: 'Leaving the hulk.', from: st.name });
+        } else {
+          ai.mode = 'flee';
+          ai.phase = null;
+          ai.intent = false;
+          ai.target = null;
+          ai.calmUntil = ctx2.world.time + 30;
+          stampWakeSite(live); // wave 30: pirate/ace wake-trailing contract
+          ctx2.emit('commLine', { text: 'Running.', from: st.name });
+        }
         break;
       }
       case 'respect': {
@@ -230,21 +294,22 @@ export function initHail(ctx) {
   }
 
   function intentLabel(h, intent) {
+    const salvage = !!(h && (h.salvage || h.ship?.state?.disabled));
     switch (intent) {
       case 'demandCargo':
-        return 'Demand cargo';
+        return salvage ? 'Salvage cargo' : 'Demand cargo';
       case 'demandRansom':
         return `Demand ransom — ${h.ransom} UU`;
       case 'acceptTribute':
         return `Accept tribute — ${h.tribute} UU`;
       case 'letGo':
-        return 'Let them go';
+        return salvage ? 'Leave the hulk' : 'Let them go';
       case 'respect':
         return 'Mutual respect — stand down';
       case 'callowVouch':
         return `Buy his vouch — ${CALLOW.vouchCost} UU`;
       case 'keepFiring':
-        return 'Keep firing';
+        return salvage ? 'Keep firing — finish them' : 'Keep firing';
       case 'payTribute':
         return `Pay tribute — ${h.demand} UU`;
       case 'showTeeth':
@@ -268,6 +333,7 @@ export function initHail(ctx) {
       ransom: ransomFor(st), // rolled once so the offer is stable
       tribute: Math.round(ECON.tributeRate * cargoValue(st.cargo, ctx.world.prices)),
       demand: ev.demand ?? null, // wave 30: pirate demand-hail amount, rolled at emit time
+      salvage: ev.salvage === true || !!st.disabled,
       buttons: null,
     };
 
@@ -353,10 +419,28 @@ export function initHail(ctx) {
         if (ev.type === 'hailOpened') openCard(ev);
         else if (ev.type === 'hailClosed' && open && (!ev.ship || ev.ship === open.ship)) closeCard();
       }
-      // Bargaining timeout: target destroyed, disabled, or despawned mid-hail.
+      // Player-initiated salvage hail (H). World.js may already have opened
+      // a Callow card this frame; do not steal an open card.
+      if (ctx.input.hailPressed && !open) {
+        const ev = tryOpenDisabledHail(ctx);
+        if (ev) openCard(ev);
+      }
+      // Destroyed / despawned still closes. An open salvage hail stays up
+      // on a disabled hull. A live bargaining or demand hail converts.
       if (open) {
         const st = open.ship.state;
-        if (st.destroyed || st.disabled || !ctx.ships.includes(open.ship)) closeCard();
+        if (!st || st.destroyed || !ctx.ships.includes(open.ship)) {
+          closeCard();
+        } else if (st.disabled && !open.salvage) {
+          const ev = {
+            ship: open.ship,
+            intents: salvageIntentsFor(ctx, open.ship),
+            line: salvageLine(open.ship),
+            salvage: true,
+          };
+          ctx.emit('hailOpened', ev);
+          openCard(ev);
+        }
       }
     },
   };

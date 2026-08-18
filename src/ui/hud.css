@@ -177,33 +177,149 @@
 
 .rw-flight.drift-active { border-color: rgba(111, 242, 224, 0.55); }
 
-/* ---------- center reticle: small alien iris (§14.9) ---------- */
+/* ---------- center reticle: thin hub; living iris is a small accent ---------- */
 .rw-reticle {
   position: absolute;
   left: 0;
   top: 0;
-  width: 46px;
-  height: 46px;
-  margin: -23px 0 0 -23px;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 0 -40px;
   pointer-events: none;
   will-change: transform;
 }
 
-.rw-reticle::before { /* outer membrane ring */
+.rw-reticle::before { /* thin hub ring — dashed = out of range */
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(95, 224, 138, 0.55);
-  border-radius: 47% 53% 50% 50% / 52% 48% 52% 48%; /* slightly organic */
-  animation: rw-breathe 3.2s ease-in-out infinite;
+  border: 1px dashed rgba(111, 242, 224, 0.42);
+  border-radius: 50%;
 }
 
-.rw-reticle::after { /* inner iris ring */
+.rw-reticle.in-range::before {
+  border: 2px solid rgba(111, 242, 224, 0.85);
+}
+
+.rw-reticle-range {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  transform: translateX(-50%);
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.16em;
+  color: var(--cyan);
+}
+
+.rw-reticle.in-range .rw-reticle-range {
+  display: block;
+}
+
+.rw-match-lamp {
+  margin-left: 6px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+}
+
+.rw-match-lamp.is-hidden { display: none; }
+
+/* Wave C: FORE / AFT glance — fill vs hollow + the word. */
+.rw-facing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rw-facing-sil {
+  position: relative;
+  width: 22px;
+  height: 10px;
+  flex: 0 0 22px;
+}
+
+.rw-facing-nose {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 0;
+  height: 0;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-right: 5px solid rgba(111, 242, 224, 0.55);
+}
+
+.rw-facing-body {
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  width: 16px;
+  height: 4px;
+  border: 1px solid rgba(111, 242, 224, 0.45);
+  background: transparent;
+}
+
+.rw-facing-ends {
+  display: flex;
+  gap: 6px;
+}
+
+.rw-facing-end {
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.1em;
+  padding: 1px 4px;
+  border: 1px solid rgba(111, 242, 224, 0.35);
+  background: transparent;
+  color: var(--dim);
+}
+
+.rw-facing-end.is-dim {
+  opacity: 0.28;
+  background: transparent;
+}
+
+.rw-facing-end.is-lit {
+  opacity: 1;
+  color: var(--white);
+  background: rgba(111, 242, 224, 0.22);
+  border-color: rgba(111, 242, 224, 0.7);
+}
+
+.rw-facing-end.is-flash {
+  animation: rw-facing-flash 0.4s ease-out;
+  color: var(--white);
+  background: rgba(232, 93, 93, 0.35);
+  border-color: var(--red);
+}
+
+@keyframes rw-facing-flash {
+  0% { background: rgba(232, 93, 93, 0.7); }
+  100% { background: rgba(232, 93, 93, 0.2); }
+}
+
+body.rw-reduced-motion .rw-facing-end.is-flash {
+  animation: none;
+  outline: 1px solid var(--red);
+}
+
+body.rw-colorblind .rw-facing-end.is-lit {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px var(--white);
+}
+
+body.rw-colorblind .rw-facing-end.is-dim {
+  background: transparent;
+  box-shadow: none;
+}
+
+.rw-reticle::after { /* small iris accent */
   content: '';
   position: absolute;
-  inset: 12px;
-  border: 1px dashed rgba(111, 242, 224, 0.6);
-  border-radius: 50%;
+  inset: 28px;
+  border: 1px dashed rgba(95, 224, 138, 0.55);
+  border-radius: 47% 53% 50% 50% / 52% 48% 52% 48%;
   animation: rw-iris-spin 14s linear infinite;
 }
 
@@ -236,9 +352,9 @@
   transform-origin: 0 0;
 }
 
-.rw-reticle-cilia:nth-of-type(1) { transform: rotate(30deg) translateY(-23px); }
-.rw-reticle-cilia:nth-of-type(2) { transform: rotate(150deg) translateY(-23px); }
-.rw-reticle-cilia:nth-of-type(3) { transform: rotate(270deg) translateY(-23px); }
+.rw-reticle-cilia:nth-of-type(1) { transform: rotate(30deg) translateY(-40px); }
+.rw-reticle-cilia:nth-of-type(2) { transform: rotate(150deg) translateY(-40px); }
+.rw-reticle-cilia:nth-of-type(3) { transform: rotate(270deg) translateY(-40px); }
 
 /* subtle fixed center crosshair under the drifting iris */
 .rw-crosshair {
@@ -355,20 +471,59 @@
 .rw-target[data-band='bargaining'] .rw-target-resolve { color: var(--amber); }
 .rw-target[data-band='capitulate'] .rw-target-resolve { color: var(--green); }
 
-/* lead indicator: small diamond pip */
+/* Lead reticle: second aim mark (put your reticle on this, then fire). */
 .rw-lead {
   position: absolute;
   left: 0;
   top: 0;
-  width: 8px;
-  height: 8px;
-  margin: -4px 0 0 -4px;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
   background: transparent;
-  border: 1px solid var(--cyan);
-  transform-origin: center;
-  rotate: 45deg;
-  box-shadow: 0 0 5px rgba(111, 242, 224, 0.6);
+  pointer-events: none;
   will-change: transform;
+}
+
+.rw-lead-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(111, 242, 224, 0.55);
+}
+
+.rw-lead-ring::before,
+.rw-lead-ring::after {
+  content: '';
+  position: absolute;
+  background: var(--cyan);
+}
+
+.rw-lead-ring::before {
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  margin-left: -0.5px;
+}
+
+.rw-lead-ring::after {
+  top: 50%;
+  left: 4px;
+  right: 4px;
+  height: 1px;
+  margin-top: -0.5px;
+}
+
+.rw-lead-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  margin-top: 3px;
+  transform: translateX(-50%);
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.16em;
+  color: var(--cyan);
 }
 
 /* off-screen edge arrow: triangle + direction of travel */
@@ -430,15 +585,16 @@
 /* chart marks are non-critical instruments — fade like the manifest (§13.2) */
 #hud.in-combat .rw-chartmark { opacity: 0.14; }
 
-/* ---------- toasts: comm lines + milestone stings (top-center) ---------- */
+/* ---------- toasts: comm lines + milestone stings (off the aim column) ---------- */
 .rw-toasts {
   position: absolute;
-  top: 7%;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 14px;
+  right: 168px;
+  left: auto;
+  transform: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 5px;
   pointer-events: none;
 }
@@ -469,7 +625,7 @@
 /* ---------- context prompt (§13.4): one verb, bottom-center ---------- */
 .rw-prompt {
   position: absolute;
-  bottom: 17%;
+  bottom: 20%;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -499,6 +655,164 @@
   text-transform: uppercase;
   color: var(--cyan);
 }
+
+#hud .rw-prompt.is-salvage {
+  border-color: rgba(125, 216, 125, 0.55);
+}
+
+#hud .rw-prompt.is-salvage .rw-prompt-key {
+  background: var(--green);
+}
+
+#hud .rw-prompt.is-salvage .rw-prompt-verb {
+  color: var(--green);
+}
+
+/* Wave F: thin bottom bearing arc. Empty middle. No fill, no CRT grid. */
+.rw-contacts {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5%;
+  width: min(400px, 46vw);
+  height: 72px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.rw-contacts-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.rw-contacts-stroke {
+  stroke: rgba(111, 242, 224, 0.38);
+  stroke-width: 1.25;
+  fill: none;
+}
+
+.rw-contact-pip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+}
+
+.rw-contact-mark {
+  display: block;
+  box-sizing: border-box;
+}
+
+.rw-contact-pip.is-civ .rw-contact-mark {
+  width: 2px;
+  height: 8px;
+  margin: 1px 4px;
+  background: var(--dim);
+}
+
+.rw-contact-pip.is-hostile .rw-contact-mark {
+  width: 0;
+  height: 0;
+  margin: 1px 1px 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 8px solid var(--amber);
+  background: none;
+}
+
+.rw-contact-pip.is-lock .rw-contact-mark {
+  width: 8px;
+  height: 8px;
+  margin: 1px;
+  border: 1px solid var(--cyan);
+  background: transparent;
+  transform: rotate(45deg);
+}
+
+.rw-contact-close {
+  position: absolute;
+  left: 10px;
+  top: -2px;
+  font-size: 9px;
+  letter-spacing: 0;
+  color: var(--cyan);
+  line-height: 1;
+}
+
+.rw-contact-pip.is-far { opacity: 0.28; }
+
+.rw-contact-pip.is-enter .rw-contact-mark {
+  animation: rw-contact-enter 0.45s ease-out 1;
+}
+
+@keyframes rw-contact-enter {
+  0% { opacity: 1; transform: scale(1.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+body.rw-reduced-motion .rw-contact-pip.is-enter .rw-contact-mark {
+  animation: none;
+}
+
+body.rw-contrast #hud .rw-contacts-stroke {
+  stroke: rgba(160, 205, 245, 0.7);
+}
+
+/* ---------- HUD-01 mirrored combat rails (FreeSpace glance, not a box) ---------- */
+/* Stroke only so chase / third hull, lead pip, and bolts stay visible.
+   Thin/thick Screen vs Shell already distinguishes the shield layers;
+   hull keeps petals + LOW/CRIT. */
+.rw-combat-rail {
+  position: absolute;
+  top: 57%;
+  left: 50%;
+  min-width: 168px;
+  max-width: 220px;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  pointer-events: none;
+}
+
+.rw-combat-self {
+  transform: translate(calc(-100% - 78px), 0);
+}
+
+.rw-combat-target {
+  transform: translate(78px, 0);
+}
+
+.rw-combat-target .rw-meter {
+  flex-direction: row-reverse;
+}
+
+.rw-combat-name {
+  font-size: calc(11px * var(--rw-text-scale, 1));
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--white);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rw-combat-self .rw-combat-wpn .rw-value {
+  text-align: right;
+}
+
+.rw-combat-rail .rw-bar {
+  min-width: 72px;
+}
+
+/* Bottom aux (strain/engine/throttle) stays, but yields the glance to the rails */
+.rw-aux { min-width: 120px; }
+#hud.in-combat .rw-aux { opacity: 0.38; }
 
 /* ---------- bottom strip layout ---------- */
 .rw-bottom {
@@ -648,6 +962,11 @@ body.rw-contrast #hud .rw-banner,
 body.rw-contrast #hud .rw-jump {
   background: rgba(0, 2, 6, 0.94);
   border-color: rgba(160, 205, 245, 0.6);
+}
+
+body.rw-contrast #hud .rw-combat-rail {
+  background: transparent;
+  border: none;
 }
 
 /* Reduced motion: kill every HUD animation/transition (banner slide, toast

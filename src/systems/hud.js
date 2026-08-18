@@ -5,10 +5,14 @@ import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPE
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
  *
- * Combat-critical set (§13.2): reticle + lead indicator, target bracket with
- * resolve band, Screen/Shell/hull/strain/engine, speed/throttle/afterburner/
- * drift, weapon group, and one focused context prompt. Non-critical panels
- * (resources, controls) fade while ctx.flags.combat is set.
+ * Combat-critical set (§13.2 / HUD-01): reticle + lead indicator, target
+ * bracket with resolve band, mirrored Screen/Shell/hull/speed rails left and
+ * right of center, current weapon on the self rail, target distance on the
+ * target rail, plus one focused context prompt. Bottom aux (strain/engine/
+ * throttle/burner/drift) stays but dims in combat. Non-critical panels
+ * (resources, controls, bio, pos) fade while ctx.flags.combat is set.
+ * Same overlay in chase, third, and first-person. First-person only
+ * recenters the reticle; it does not swap instruments.
  *
  * Performance contract: every DOM node is created once here. update() writes
  * transforms (reticle/bracket/lead/edge-arrow) per frame; ALL text and bar
@@ -34,6 +38,11 @@ import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPE
  * installed head's name (Mk I..IV), resolved fresh each frame. The
  * combat.js 'mineBlocked' event (throttled 1/s per rock) routes through the
  * existing toast channel as a warn line — no new overlay.
+ *
+ * Wave F (contacts): a thin bottom bearing arc, gated on ctx.world.scanner.
+ * Tier 0 has no arc. Mk I shows ships inside U.ENCOUNTER_BUBBLE. Mk II
+ * doubles the bubble and adds a closure glyph on the lock pip. Shape is
+ * the friend/foe cue (tick / chevron / hollow diamond). Not a reticle ring.
  */
 
 const TEXT_UPDATE_INTERVAL = 0.2; // s between throttled text refreshes
@@ -41,8 +50,37 @@ const TOAST_LIFETIME = 4; // s a toast stays fully visible
 const TOAST_SLOTS = 5;
 const HULL_PETALS = 10;
 const EDGE_MARGIN = 84; // px inset for the off-screen target arrow
-const LEAD_MIN_SPEED = 6; // u/s — slower targets hide the lead pip
+const LEAD_MIN_SPEED = 6; // u/s — still used to skip a useless tiny offset draw
 const EMPTY_LIST = []; // shared ?? fallback — never mutated, avoids per-frame []
+const CONTACT_SLOTS = 24;
+const CONTACT_MK1_CAP = 16;
+const CONTACT_CANDIDATES = 48;
+const CONTACT_PULSE = 0.45;
+const CONTACT_CLOSE_FLOOR = 4; // u/s along LOS
+const CONTACT_ARC = { cx: 200, cy: -42, r: 102, half: 1.08, elev: 7 };
+const _arcPt = { x: 0, y: 0 };
+
+/** Aft-centered yaw → arc u in [-1, 1]. Forward sits at the ends. */
+function contactYawToU(yaw) {
+  if (yaw >= 0) return 1 - yaw / Math.PI;
+  return -1 - yaw / Math.PI;
+}
+
+function contactArcPoint(u, elev, out) {
+  const th = Math.PI * 0.5 - u * CONTACT_ARC.half;
+  const rr = CONTACT_ARC.r + elev * CONTACT_ARC.elev;
+  out.x = CONTACT_ARC.cx + rr * Math.cos(th);
+  out.y = CONTACT_ARC.cy + rr * Math.sin(th);
+}
+
+function contactsArcPath() {
+  let d = '';
+  for (let i = 0; i <= 20; i++) {
+    contactArcPoint((i / 20) * 2 - 1, 0, _arcPt);
+    d += (i === 0 ? 'M' : 'L') + _arcPt.x.toFixed(1) + ' ' + _arcPt.y.toFixed(1);
+  }
+  return d;
+}
 
 const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // input.weaponGroup 1..3
 const BAND_LABEL = {
@@ -77,6 +115,99 @@ function makeBar(parent, labelText, barClass) {
       }
     },
   };
+}
+
+/** Hull petal row + LOW/CRIT flag (color is never the only cue). */
+function makeHull(parent) {
+  const hullRow = el('div', 'rw-meter rw-hull', parent);
+  el('div', 'rw-label', hullRow, 'HULL');
+  const petals = el('div', 'rw-petals', hullRow);
+  const petalSpans = [];
+  for (let i = 0; i < HULL_PETALS; i++) petalSpans.push(el('span', 'rw-petal on', petals));
+  const hullFlag = el('div', 'rw-hull-flag', hullRow, '');
+  let lastOn = -1;
+  let lastBand = '';
+  return {
+    set(frac) {
+      const hullFrac = Math.max(0, Math.min(1, frac));
+      const on = Math.round(hullFrac * HULL_PETALS);
+      if (on !== lastOn) {
+        lastOn = on;
+        for (let i = 0; i < HULL_PETALS; i++) petalSpans[i].classList.toggle('on', i < on);
+      }
+      const hullBand = hullFrac > 0.5 ? 'ok' : hullFrac > 0.25 ? 'warn' : 'crit';
+      if (hullBand !== lastBand) {
+        lastBand = hullBand;
+        petals.className = 'rw-petals h-' + hullBand;
+        hullFlag.textContent = hullBand === 'crit' ? 'CRIT' : hullBand === 'warn' ? 'LOW' : '';
+        hullFlag.dataset.state = hullBand;
+        hullFlag.style.display = hullBand === 'ok' ? 'none' : '';
+      }
+    },
+  };
+}
+
+/** SPD readout; write-on-change. Optional MATCH lamp (Wave D). */
+function makeSpeed(parent) {
+  const row = el('div', 'rw-meter rw-speed', parent);
+  el('div', 'rw-label', row, 'SPD');
+  const value = el('div', 'rw-value', row);
+  const text = document.createTextNode('0');
+  value.appendChild(text);
+  el('span', 'rw-unit', value, 'u/s');
+  const lamp = el('span', 'rw-match-lamp is-hidden', value, 'MATCH');
+  let last = -1;
+  let lastMatch = null;
+  return {
+    set(spd, matching) {
+      const n = Math.round(spd);
+      if (n !== last) {
+        last = n;
+        text.nodeValue = String(n);
+      }
+      const on = !!matching;
+      if (on !== lastMatch) {
+        lastMatch = on;
+        lamp.classList.toggle('is-hidden', !on);
+      }
+    },
+  };
+}
+
+/** FORE / AFT glance. Words plus fill vs hollow — color is never the only cue. */
+function makeFacing(parent) {
+  const row = el('div', 'rw-facing', parent);
+  const sil = el('div', 'rw-facing-sil', row);
+  el('span', 'rw-facing-nose', sil);
+  el('span', 'rw-facing-body', sil);
+  const ends = el('div', 'rw-facing-ends', row);
+  const fore = el('span', 'rw-facing-end rw-facing-fore', ends, 'FORE');
+  const aft = el('span', 'rw-facing-end rw-facing-aft', ends, 'AFT');
+  let last = '';
+  return {
+    row,
+    set(mode) {
+      if (mode === last) return;
+      last = mode;
+      const flashFore = mode === 'flash-fore';
+      const flashAft = mode === 'flash-aft';
+      const litFore = mode === 'fore' || flashFore;
+      const litAft = mode === 'aft' || flashAft;
+      const dim = mode === 'dim';
+      fore.classList.toggle('is-lit', litFore && !dim);
+      aft.classList.toggle('is-lit', litAft && !dim);
+      fore.classList.toggle('is-dim', dim || !litFore);
+      aft.classList.toggle('is-dim', dim || !litAft);
+      fore.classList.toggle('is-flash', flashFore);
+      aft.classList.toggle('is-flash', flashAft);
+    },
+  };
+}
+
+function contactKind(hostile, isLock) {
+  if (isLock) return 'lock';
+  if (hostile) return 'hostile';
+  return 'civ';
 }
 
 /** Terse pilot-voice toast copy for a ctx event (§13.5). null = not toastable. */
@@ -148,7 +279,7 @@ function toastForEvent(e, ctx, mem) {
       return null;
     }
     case 'npcDisabled':
-      return { text: '■ They are dead in space.', cls: 'good' };
+      return { text: '■ Dead in space. Hail (H) to salvage.', cls: 'good' };
     case 'npcDestroyed':
       return { text: '▲ Target destroyed.', cls: 'warn' };
     case 'npcSurrendered':
@@ -168,6 +299,21 @@ function toastForEvent(e, ctx, mem) {
     }
     case 'marketShift':
       return { text: '› Prices are moving.', cls: 'comm' };
+    case 'sunHeat':
+      return { text: '▲ STAR HEAT — turn away.', cls: 'warn' };
+    case 'sunKill':
+      return { text: '✕ The star took the ship.', cls: 'danger' };
+    case 'bodyHit':
+      if (!(e.damage > 0)) return null;
+      return { text: '▲ Hull strike.', cls: 'warn' };
+    case 'survivorRescued': {
+      // Same-frame commLine (station.js) carries the spoken line; record it
+      // so the comm case below skips the duplicate toast.
+      if (e.line) mem.frameLines.push(e.line);
+      const n = e.count ?? 0;
+      const text = n === 1 ? '■ A survivor is home.' : `■ ${n} survivors are home.`;
+      return { text, cls: 'good' };
+    }
     default:
       return null;
   }
@@ -187,12 +333,13 @@ function ensureW2Styles() {
   style.textContent = `
 #hud .rw-banner {
   position: absolute;
-  top: 13%;
-  left: 50%;
-  transform: translate(-50%, -8px);
+  top: 96px;
+  right: 14px;
+  left: auto;
+  transform: translateY(-8px);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 4px;
   padding: 10px 26px;
   background: rgba(2, 6, 13, 0.78);
@@ -205,7 +352,7 @@ function ensureW2Styles() {
   pointer-events: none;
   white-space: nowrap;
 }
-#hud .rw-banner.show { opacity: 1; transform: translate(-50%, 0); }
+#hud .rw-banner.show { opacity: 1; transform: translateY(0); }
 #hud .rw-banner-name {
   font-size: calc(22px * var(--rw-text-scale, 1));
   letter-spacing: 0.34em;
@@ -271,6 +418,7 @@ export function initHud(ctx) {
   const reticle = el('div', 'rw-reticle', root);
   el('div', 'rw-reticle-pupil', reticle);
   for (let i = 0; i < 3; i++) el('span', 'rw-reticle-cilia', reticle);
+  el('div', 'rw-reticle-range', reticle, 'RANGE');
   const crosshair = el('div', 'rw-crosshair', root);
   el('div', 'rw-crosshair-dot', crosshair);
 
@@ -286,6 +434,8 @@ export function initHud(ctx) {
   const tMeta = el('div', 'rw-target-meta', bracketInfo);
   const tResolve = el('div', 'rw-target-resolve', bracketInfo);
   const lead = el('div', 'rw-lead is-hidden', root);
+  el('div', 'rw-lead-ring', lead);
+  el('div', 'rw-lead-label', lead, 'LEAD');
   const edgeArrow = el('div', 'rw-edge-arrow is-hidden', root);
 
   // ---------- wave 15: charted landmark markers (keeper chart marks) ----------
@@ -336,35 +486,83 @@ export function initHud(ctx) {
   const promptKey = el('span', 'rw-prompt-key', prompt);
   const promptVerb = el('span', 'rw-prompt-verb', prompt);
 
-  // ---------- bottom strip: defense / flight / weapon … bio + pos ----------
+  // ---------- Wave F: bottom bearing arc (scanner-gated; not a reticle ring) ----------
+  const contacts = el('div', 'rw-contacts is-hidden', root);
+  contacts.setAttribute('aria-hidden', 'true');
+  const contactsSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  contactsSvg.setAttribute('class', 'rw-contacts-svg');
+  contactsSvg.setAttribute('viewBox', '0 0 400 72');
+  contactsSvg.setAttribute('aria-hidden', 'true');
+  const contactsStroke = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  contactsStroke.setAttribute('class', 'rw-contacts-stroke');
+  contactsStroke.setAttribute('d', contactsArcPath());
+  contactsStroke.setAttribute('fill', 'none');
+  contactsSvg.appendChild(contactsStroke);
+  contacts.appendChild(contactsSvg);
+  const contactSlots = [];
+  for (let i = 0; i < CONTACT_SLOTS; i++) {
+    const pip = el('div', 'rw-contact-pip is-hidden', contacts);
+    const mark = el('span', 'rw-contact-mark', pip);
+    const close = el('span', 'rw-contact-close is-hidden', pip);
+    contactSlots.push({
+      pip, mark, close,
+      shipId: '',
+      shown: false,
+      kind: '',
+      far: false,
+      aft: false,
+      closeState: '',
+      pulseUntil: 0,
+      lastX: 0, lastY: 0, lastZ: 0,
+      haveLast: false,
+    });
+  }
+  const contactCand = [];
+  for (let i = 0; i < CONTACT_CANDIDATES; i++) {
+    contactCand.push({ ship: null, dist: 0, hostile: false, isLock: false });
+  }
+  const seenHostiles = new Set();
+  const stillHostiles = new Set();
+
+  // ---------- HUD-01: mirrored combat rails (FreeSpace-style glance) ----------
+  // Sit just below midline and off the reticle so the center glass stays open.
+  // Target rail starts hidden: no target / destroyed / asteroid.
+  const selfRail = el('section', 'rw-combat-rail rw-combat-self', root);
+  const selfFacing = makeFacing(selfRail);
+  const selfScreen = makeBar(selfRail, 'SCREEN', 'rw-screen');
+  const selfShell = makeBar(selfRail, 'SHELL', 'rw-shell');
+  const selfHull = makeHull(selfRail);
+  const selfSpeed = makeSpeed(selfRail);
+  const selfWpnRow = el('div', 'rw-meter rw-combat-wpn', selfRail);
+  el('div', 'rw-label', selfWpnRow, 'WPN');
+  const weaponName = el('div', 'rw-value', selfWpnRow, '—');
+
+  const tgtRail = el('section', 'rw-combat-rail rw-combat-target is-hidden', root);
+  const tgtNameEl = el('div', 'rw-combat-name', tgtRail, '—');
+  const tgtFacing = makeFacing(tgtRail);
+  const tgtScreen = makeBar(tgtRail, 'SCREEN', 'rw-screen');
+  const tgtShell = makeBar(tgtRail, 'SHELL', 'rw-shell');
+  const tgtHull = makeHull(tgtRail);
+  const tgtSpeed = makeSpeed(tgtRail);
+  const tgtDistRow = el('div', 'rw-meter', tgtRail);
+  el('div', 'rw-label', tgtDistRow, 'DIST');
+  const tgtDistVal = el('div', 'rw-value rw-combat-dist', tgtDistRow, '—');
+
+  // ---------- bottom strip: aux flight/defense + bio + pos ----------
+  // Screen/Shell/hull/speed/weapon moved to the rails; these extras stay
+  // readable at the edge and dim in combat so they do not compete.
   const bottom = el('div', 'rw-bottom', root);
 
-  const defense = el('section', 'rw-panel rw-defense', bottom);
-  el('div', 'rw-panel-title', defense, 'Defense');
-  const screenBar = makeBar(defense, 'SCREEN', 'rw-screen');
-  const shellBar = makeBar(defense, 'SHELL', 'rw-shell');
-  const hullRow = el('div', 'rw-meter rw-hull', defense);
-  el('div', 'rw-label', hullRow, 'HULL');
-  const petals = el('div', 'rw-petals', hullRow);
-  const petalSpans = [];
-  for (let i = 0; i < HULL_PETALS; i++) petalSpans.push(el('span', 'rw-petal on', petals));
-  // legibility: petal color/blink alone must not carry hull state — small
-  // text flag mirrors the band (engine OK/DAMAGED/OUT sets the standard)
-  const hullFlag = el('div', 'rw-hull-flag', hullRow, '');
+  const defense = el('section', 'rw-panel rw-defense rw-aux', bottom);
+  el('div', 'rw-panel-title', defense, 'Plant');
   const strainBar = makeBar(defense, 'STRAIN', 'rw-strain');
   const strainFlag = el('div', 'rw-strain-flag', strainBar.row, 'OVERHEAT');
   const engineRow = el('div', 'rw-meter rw-engine', defense);
   el('div', 'rw-label', engineRow, 'ENGINE');
   const engineValue = el('div', 'rw-value', engineRow, 'OK');
 
-  const flight = el('section', 'rw-panel rw-flight', bottom);
+  const flight = el('section', 'rw-panel rw-flight rw-aux', bottom);
   el('div', 'rw-panel-title', flight, 'Flight');
-  const speedRow = el('div', 'rw-meter rw-speed', flight);
-  el('div', 'rw-label', speedRow, 'SPD');
-  const speedValue = el('div', 'rw-value', speedRow);
-  const speedText = document.createTextNode('0');
-  speedValue.appendChild(speedText);
-  el('span', 'rw-unit', speedValue, 'u/s');
   const throttleBar = makeBar(flight, 'THR', 'rw-throttle');
   const burnerRow = el('div', 'rw-meter rw-burner', flight);
   el('div', 'rw-label', burnerRow, 'BURN');
@@ -377,17 +575,14 @@ export function initHud(ctx) {
   const driftBarTrack = el('div', 'rw-bar rw-mini', driftRow);
   const driftBarFill = el('div', 'rw-bar-fill', driftBarTrack);
 
-  const weapon = el('section', 'rw-panel rw-weapon', bottom);
-  el('div', 'rw-panel-title', weapon, 'Weapon');
-  const weaponRow = el('div', 'rw-meter', weapon);
-  el('div', 'rw-label', weaponRow, 'GROUP');
-  const weaponName = el('div', 'rw-value', weaponRow, '—');
+  const weapon = el('section', 'rw-panel rw-weapon rw-aux', bottom);
+  el('div', 'rw-panel-title', weapon, 'Heat');
   const weaponStrainRow = el('div', 'rw-meter', weapon);
   el('div', 'rw-label', weaponStrainRow, 'STRAIN');
   const weaponStrain = el('div', 'rw-value', weaponStrainRow, '0%');
 
   const sideCol = el('div', 'rw-side-col', bottom);
-  const bio = el('section', 'rw-panel rw-bio', sideCol);
+  const bio = el('section', 'rw-panel rw-bio rw-fade', sideCol);
   el('div', 'rw-panel-title rw-bio-title', bio, 'Bio');
   const moodRow = el('div', 'rw-meter rw-mood', bio);
   const moodIcon = el('span', 'rw-bio-icon m-serene', moodRow);
@@ -398,7 +593,7 @@ export function initHud(ctx) {
   el('div', 'rw-label', echoesRow, 'ECHOES');
   const echoesValue = el('div', 'rw-value', echoesRow, '0');
 
-  const posPanel = el('section', 'rw-panel rw-pos', sideCol);
+  const posPanel = el('section', 'rw-panel rw-pos rw-fade', sideCol);
   el('div', 'rw-label', posPanel, 'POS');
   const sysValue = el('div', 'rw-sysname', posPanel, '—'); // current system, above coords
   const posValue = el('div', 'rw-coords', posPanel, '—');
@@ -444,28 +639,40 @@ export function initHud(ctx) {
   const velInst = new THREE.Vector3(); // instantaneous velocity sample
   const targetVel = new THREE.Vector3(); // smoothed target velocity
   const lastTargetPos = new THREE.Vector3();
+  const relVel = new THREE.Vector3();
+  const playerFwd = new THREE.Vector3();
+  const lockFwd = new THREE.Vector3();
+  const toLock = new THREE.Vector3();
+  const contactRel = new THREE.Vector3();
+  const contactRight = new THREE.Vector3();
+  const contactVel = new THREE.Vector3();
   const chartProj = new THREE.Vector3(); // charted landmark world→NDC (wave 15)
   let lastTargetRef = null;
+  let targetDistNow = 0;
+  let targetSpeedNow = 0;
 
   // ---------- change-detection cache ----------
   const last = {
     retX: -1, retY: -1, fp: null,
     bracketShown: null, leadShown: null, arrowShown: null, bx: -1, by: -1,
     band: '', tName: '', tMeta: '', tResolve: '', oreBlocked: null,
-    petalsOn: -1, hullBand: '',
     strainFlag: null, engine: '',
-    speed: -1, burner: '', drift: '', driftActive: null,
+    burner: '', drift: '', driftActive: null,
     burnerPct: -1, driftPct: -1,
     weapon: '', weaponStrain: '',
+    targetRail: null, railName: '', railDist: -1, inRange: null,
     credits: -1, fear: -1, cargo: '',
-    mood: '', echoes: -1, combat: null,
+    mood: '', echoes: -1, combat: null, contactsShown: null,
     prompt: '',
+    promptSalvage: false,
     posX: NaN, posY: NaN, posZ: NaN,
     system: '', jumpShown: null, jumpPct: -1, jumpDest: null,
   };
   const mem = { lastFear: Math.round(ctx.world.fear ?? 0), frameLines: [] };
 
   let textAccum = TEXT_UPDATE_INTERVAL; // refresh text on first frame
+  let selfHitFlashUntil = 0;
+  let selfHitFlashAft = false;
 
   function pushToast(text, cls) {
     if (!text) return;
@@ -502,7 +709,12 @@ export function initHud(ctx) {
       mem.frameLines.length = 0; // per-frame clue/landmark dedupe scratch
       const evs = ctx.events;
       for (let i = 0; i < evs.length; i++) {
-        const t = toastForEvent(evs[i], ctx, mem);
+        const ev = evs[i];
+        if (ev.type === 'playerHit') {
+          selfHitFlashUntil = ctx.elapsed + 0.4;
+          selfHitFlashAft = !!ev.fromAft;
+        }
+        const t = toastForEvent(ev, ctx, mem);
         if (t) pushToast(t.text, t.cls);
       }
       // expire toasts
@@ -560,7 +772,7 @@ export function initHud(ctx) {
       const rs = ctx.targets.reticleScreen;
       let rx = fp ? 0 : rs.x;
       let ry = fp ? 0 : rs.y;
-      const mx = cx - 40, my = cy - 40; // keep the iris on glass
+      const mx = cx - 44, my = cy - 44; // keep the 80 px hub on glass
       if (rx > mx) rx = mx; else if (rx < -mx) rx = -mx;
       if (ry > my) ry = my; else if (ry < -my) ry = -my;
       if (rx !== last.retX || ry !== last.retY) {
@@ -579,11 +791,27 @@ export function initHud(ctx) {
       const shipObj = ctx.ship.object;
       const fromPos = shipObj ? shipObj.position : cam.position;
 
+      // Target combat rail: live ship only. Hide for no target, destroyed,
+      // or asteroid (rocks keep the bracket ore readout, never ship vitals).
+      const shipTgt = !!(target && target.state && !target.state.destroyed && targetPos);
+      if (shipTgt !== last.targetRail) {
+        last.targetRail = shipTgt;
+        tgtRail.classList.toggle('is-hidden', !shipTgt);
+        if (!shipTgt) {
+          last.railName = '';
+          last.railDist = -1;
+        } else {
+          textAccum = TEXT_UPDATE_INTERVAL;
+        }
+      }
+
       if (!targetPos || targetDead) {
         if (last.bracketShown !== false) { last.bracketShown = false; bracket.classList.add('is-hidden'); }
         if (last.leadShown !== false) { last.leadShown = false; lead.classList.add('is-hidden'); }
         if (last.arrowShown !== false) { last.arrowShown = false; edgeArrow.classList.add('is-hidden'); }
         lastTargetRef = null;
+        targetDistNow = 0;
+        targetSpeedNow = 0;
       } else {
         // estimate target velocity from position deltas (works for live ships;
         // asteroids sit still so their pip hides itself)
@@ -600,6 +828,8 @@ export function initHud(ctx) {
         }
 
         const dist = fromPos.distanceTo(targetPos);
+        targetDistNow = dist;
+        targetSpeedNow = shipTgt ? targetVel.length() : 0;
         proj.copy(targetPos).project(cam);
         let ndcX = proj.x, ndcY = proj.y;
         const behind = proj.z > 1;
@@ -616,12 +846,21 @@ export function initHud(ctx) {
             bracket.style.transform = 'translate3d(' + bxs + 'px,' + bys + 'px,0)';
           }
 
-          // lead indicator: aim where the target will be when the shot arrives
-          const speed = targetVel.length();
-          const showLead = speed > LEAD_MIN_SPEED;
+          // Lead reticle: where to put the aim point so the selected shot
+          // meets the lock. Cannon / disruptor always show it on a live
+          // ship. Mining (group 3) hides it. Low relative speed still
+          // draws the mark on the hull so the player can see the instrument.
+          const wKeyLead = WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon';
+          const wLead = WEAPONS[wKeyLead];
+          const wSpeed = wKeyLead === 'mining' ? 0 : (wLead?.speed ?? 0);
+          relVel.copy(targetVel).sub(ctx.ship.velocity);
+          const showLead = shipTgt && wSpeed > 0;
           if (showLead) {
-            const tof = dist / WEAPONS.cannon.speed; // 900 u/s
-            leadWorld.copy(targetPos).addScaledVector(targetVel, tof);
+            const tof = dist / wSpeed;
+            leadWorld.copy(targetPos);
+            if (relVel.length() > LEAD_MIN_SPEED) {
+              leadWorld.addScaledVector(relVel, tof);
+            }
             leadProj.copy(leadWorld).project(cam);
             if (leadProj.z < 1 && Math.abs(leadProj.x) <= 1 && Math.abs(leadProj.y) <= 1) {
               if (last.leadShown !== true) { last.leadShown = true; lead.classList.remove('is-hidden'); }
@@ -649,6 +888,187 @@ export function initHud(ctx) {
           const py = cy + dirY * s;
           const ang = Math.atan2(dirY, dirX) + Math.PI / 2; // glyph points up at 0
           edgeArrow.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) rotate(' + ang + 'rad)';
+        }
+      }
+
+      // Range pop (Wave D): selected weapon envelope. Mining uses the head.
+      {
+        const wKeyR = WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon';
+        const range = wKeyR === 'mining'
+          ? miningLaserFor(ctx.world.miningLaser).range
+          : (WEAPONS[wKeyR]?.range ?? 0);
+        const inRange = !!(shipTgt && range > 0 && targetDistNow <= range);
+        if (inRange !== last.inRange) {
+          last.inRange = inRange;
+          reticle.classList.toggle('in-range', inRange);
+        }
+      }
+
+      // Facing glance (Wave C). No lock → both self ends dim.
+      {
+        const flashing = ctx.elapsed < selfHitFlashUntil;
+        if (!shipTgt || !shipObj || !targetPos) {
+          selfFacing.set(flashing ? (selfHitFlashAft ? 'flash-aft' : 'flash-fore') : 'dim');
+          tgtFacing.set('dim');
+        } else {
+          playerFwd.set(0, 0, -1).applyQuaternion(shipObj.quaternion);
+          toLock.copy(targetPos).sub(shipObj.position);
+          let selfMode = playerFwd.dot(toLock) >= 0 ? 'fore' : 'aft';
+          if (flashing) selfMode = selfHitFlashAft ? 'flash-aft' : 'flash-fore';
+          selfFacing.set(selfMode);
+          if (target.object?.quaternion) {
+            lockFwd.set(0, 0, -1).applyQuaternion(target.object.quaternion);
+            toLock.copy(shipObj.position).sub(target.object.position);
+            tgtFacing.set(lockFwd.dot(toLock) >= 0 ? 'fore' : 'aft');
+          } else {
+            tgtFacing.set('dim');
+          }
+        }
+      }
+
+      // Wave F contacts: scanner-gated bottom arc. Core ships keep DIST /
+      // edge / lead / MATCH. Hide while docked. No reticle ring.
+      {
+        const scanner = ctx.world.scanner ?? 0;
+        const showArc = scanner >= 1 && !ctx.flags.docked && !!shipObj;
+        if (showArc !== last.contactsShown) {
+          last.contactsShown = showArc;
+          contacts.classList.toggle('is-hidden', !showArc);
+        }
+        if (!showArc) {
+          if (seenHostiles.size) seenHostiles.clear();
+          for (let i = 0; i < CONTACT_SLOTS; i++) {
+            const s = contactSlots[i];
+            if (s.shown) {
+              s.shown = false;
+              s.pip.classList.add('is-hidden');
+            }
+            s.shipId = '';
+            s.haveLast = false;
+          }
+        } else {
+          const range = scanner >= 2 ? U.ENCOUNTER_BUBBLE * 2 : U.ENCOUNTER_BUBBLE;
+          const cap = scanner >= 2 ? CONTACT_SLOTS : CONTACT_MK1_CAP;
+          const lockObj = shipTgt && target ? (target.object || null) : null;
+          let nCand = 0;
+          const list = ctx.ships;
+          if (list) {
+            for (let i = 0; i < list.length && nCand < CONTACT_CANDIDATES; i++) {
+              const live = list[i];
+              const obj = live && live.object;
+              if (!obj || obj === shipObj) continue;
+              if (live.state && live.state.destroyed) continue;
+              const dist = shipObj.position.distanceTo(obj.position);
+              if (dist > range) continue;
+              const row = contactCand[nCand++];
+              row.ship = live;
+              row.dist = dist;
+              row.hostile = !!(live.ai && live.ai.intent);
+              row.isLock = !!(lockObj && obj === lockObj);
+            }
+          }
+          for (let a = 1; a < nCand; a++) {
+            const row = contactCand[a];
+            let b = a;
+            while (b > 0) {
+              const prev = contactCand[b - 1];
+              const worse = row.isLock !== prev.isLock ? !row.isLock
+                : row.hostile !== prev.hostile ? !row.hostile
+                : row.dist >= prev.dist;
+              if (worse) break;
+              contactCand[b] = prev;
+              b--;
+            }
+            contactCand[b] = row;
+          }
+          const take = nCand < cap ? nCand : cap;
+          stillHostiles.clear();
+          playerFwd.set(0, 0, -1).applyQuaternion(shipObj.quaternion);
+          contactRight.set(1, 0, 0).applyQuaternion(shipObj.quaternion);
+          const nowT = ctx.elapsed;
+          for (let i = 0; i < take; i++) {
+            const row = contactCand[i];
+            const live = row.ship;
+            const obj = live.object;
+            const id = live.id || (live.record && live.record.id) || ('i' + i);
+            const slot = contactSlots[i];
+            const kind = contactKind(row.hostile, row.isLock);
+            if (slot.shown !== true) {
+              slot.shown = true;
+              slot.pip.classList.remove('is-hidden');
+            }
+            contactRel.copy(obj.position).sub(shipObj.position);
+            const side = contactRel.dot(contactRight);
+            const fwd = contactRel.dot(playerFwd);
+            const yaw = Math.atan2(side, fwd);
+            const u = contactYawToU(yaw);
+            const elev = Math.max(-1, Math.min(1, contactRel.y / 40));
+            contactArcPoint(u, elev, _arcPt);
+            slot.pip.style.transform = 'translate3d(' + _arcPt.x + 'px,' + _arcPt.y + 'px,0)';
+            const aft = Math.abs(yaw) > Math.PI * 0.5;
+            const far = !!(ctx.flags.combat && !row.hostile && !row.isLock && row.dist > range * 0.45);
+            if (slot.kind !== kind) {
+              slot.kind = kind;
+              slot.aft = aft;
+              slot.far = far;
+              slot.pip.className = 'rw-contact-pip is-' + kind + (aft ? ' is-aft' : '') + (far ? ' is-far' : '');
+            } else {
+              if (aft !== slot.aft) {
+                slot.aft = aft;
+                slot.pip.classList.toggle('is-aft', aft);
+              }
+              if (far !== slot.far) {
+                slot.far = far;
+                slot.pip.classList.toggle('is-far', far);
+              }
+            }
+            let closeState = '';
+            if (row.isLock && scanner >= 2) {
+              if (slot.shipId === id && slot.haveLast && dt > 0 && dt < 0.2) {
+                contactVel.set(obj.position.x - slot.lastX, obj.position.y - slot.lastY, obj.position.z - slot.lastZ);
+                contactVel.divideScalar(dt);
+                if (ctx.ship.velocity) contactVel.sub(ctx.ship.velocity);
+                const along = contactRel.lengthSq() > 1e-4
+                  ? contactVel.dot(contactRel) / Math.sqrt(contactRel.lengthSq())
+                  : 0;
+                if (along < -CONTACT_CLOSE_FLOOR) closeState = 'in';
+                else if (along > CONTACT_CLOSE_FLOOR) closeState = 'out';
+              }
+            }
+            if (closeState !== slot.closeState) {
+              slot.closeState = closeState;
+              slot.close.classList.toggle('is-hidden', !closeState);
+              slot.close.textContent = closeState === 'in' ? '«' : closeState === 'out' ? '»' : '';
+            }
+            slot.lastX = obj.position.x;
+            slot.lastY = obj.position.y;
+            slot.lastZ = obj.position.z;
+            slot.haveLast = true;
+            if (row.hostile) {
+              stillHostiles.add(id);
+              if (!seenHostiles.has(id)) {
+                seenHostiles.add(id);
+                slot.pulseUntil = nowT + CONTACT_PULSE;
+              }
+            }
+            const pulsing = slot.pulseUntil > nowT;
+            slot.pip.classList.toggle('is-enter', pulsing);
+            if (!pulsing && slot.pulseUntil) slot.pulseUntil = 0;
+            slot.shipId = id;
+          }
+          for (const id of seenHostiles) {
+            if (!stillHostiles.has(id)) seenHostiles.delete(id);
+          }
+          for (let i = take; i < CONTACT_SLOTS; i++) {
+            const s = contactSlots[i];
+            if (s.shown) {
+              s.shown = false;
+              s.pip.classList.add('is-hidden');
+            }
+            s.shipId = '';
+            s.haveLast = false;
+            s.pulseUntil = 0;
+          }
         }
       }
 
@@ -707,6 +1127,11 @@ export function initHud(ctx) {
       if (combat !== last.combat) {
         last.combat = combat;
         root.classList.toggle('in-combat', combat);
+        if (combat) {
+          controlsCollapsed = true;
+          controls.classList.add('collapsed');
+          controlsToggle.textContent = 'CONTROLS ▸';
+        }
       }
 
       // wave 15: charted marker labels — landmark name + distance (bracket's
@@ -725,24 +1150,11 @@ export function initHud(ctx) {
       }
 
       // player defense (§6.4): screen = thin outer bar, shell = thick inner,
-      // hull = scale-petals (§14.9), strain = heat, engine state text
+      // hull = scale-petals (§14.9) on the self rail; strain/engine stay aux
       if (player) {
-        screenBar.set((player.screen / player.screenMax) * 100);
-        shellBar.set((player.shell / player.shellMax) * 100);
-        const hullFrac = player.hullMax > 0 ? player.hull / player.hullMax : 0;
-        const on = Math.round(hullFrac * HULL_PETALS);
-        if (on !== last.petalsOn) {
-          last.petalsOn = on;
-          for (let i = 0; i < HULL_PETALS; i++) petalSpans[i].classList.toggle('on', i < on);
-        }
-        const hullBand = hullFrac > 0.5 ? 'ok' : hullFrac > 0.25 ? 'warn' : 'crit';
-        if (hullBand !== last.hullBand) {
-          last.hullBand = hullBand;
-          petals.className = 'rw-petals h-' + hullBand;
-          hullFlag.textContent = hullBand === 'crit' ? 'CRIT' : hullBand === 'warn' ? 'LOW' : '';
-          hullFlag.dataset.state = hullBand;
-          hullFlag.style.display = hullBand === 'ok' ? 'none' : '';
-        }
+        selfScreen.set((player.screen / player.screenMax) * 100);
+        selfShell.set((player.shell / player.shellMax) * 100);
+        selfHull.set(player.hullMax > 0 ? player.hull / player.hullMax : 0);
         strainBar.set((player.heat / HEAT.max) * 100);
         const oh = !!player.overheated;
         if (oh !== last.strainFlag) {
@@ -758,9 +1170,8 @@ export function initHud(ctx) {
         }
       }
 
-      // flight: speed, throttle, afterburner + drift state/cooldown bars
-      const spd = Math.round(ctx.ship.speed);
-      if (spd !== last.speed) { last.speed = spd; speedText.nodeValue = String(spd); }
+      // flight: speed on the self rail; throttle / afterburner / drift stay aux
+      selfSpeed.set(ctx.ship.speed, !!(ctx.flags.matchSpeed && shipTgt));
       throttleBar.set(ctx.input.throttle * 100);
 
       const burnerCd = ctx.config.ship.afterburner.cooldown || 1;
@@ -870,7 +1281,10 @@ export function initHud(ctx) {
           }
           meta = (FACTIONS[key]?.name ?? key) + ' · ' + dist + 'u';
           if (pierced) meta += ' · CONCEALED MOUNTS';
-          if (st && typeof st.resolve === 'number') {
+          if (st && st.disabled) {
+            band = 'capitulate';
+            resText = 'DEAD IN SPACE';
+          } else if (st && typeof st.resolve === 'number') {
             band = resolveBand(st.resolve);
             resText = BAND_LABEL[band];
             if ((ctx.world.scanner ?? 0) >= 1) resText += ' ' + Math.round(st.resolve);
@@ -915,6 +1329,29 @@ export function initHud(ctx) {
         }
       }
 
+      // HUD-01 target rail: ship vitals + name + distance (standard, not gated)
+      if (last.targetRail && target && target.state) {
+        const st = target.state;
+        const rec = target.record;
+        const masked = !!(rec && rec.qship) && !rec.revealed;
+        const pierced = masked && (ctx.world.scanner ?? 0) >= 2;
+        let railName = rec?.name ?? st.name ?? 'CONTACT';
+        if (masked && !pierced) railName = rec.coverName ?? railName;
+        if (railName !== last.railName) {
+          last.railName = railName;
+          tgtNameEl.textContent = railName;
+        }
+        const distU = Math.round(targetDistNow);
+        if (distU !== last.railDist) {
+          last.railDist = distU;
+          tgtDistVal.textContent = distU + ' u';
+        }
+        tgtScreen.set(st.screenMax > 0 ? (st.screen / st.screenMax) * 100 : 0);
+        tgtShell.set(st.shellMax > 0 ? (st.shell / st.shellMax) * 100 : 0);
+        tgtHull.set(st.hullMax > 0 ? st.hull / st.hullMax : 0);
+        tgtSpeed.set(targetSpeedNow);
+      }
+
       // context prompt (§13.4): one verb, explicit focus, priority order.
       // Gate sits below dock (zones never overlap in practice).
       let pKey = '', pVerb = '';
@@ -931,8 +1368,13 @@ export function initHud(ctx) {
           pKey = 'D'; pVerb = 'Jump to ' + destName;
         }
       } else if (target && target.state && !target.state.destroyed) {
-        const band = resolveBand(target.state.resolve ?? 70);
-        if (band === 'bargaining' || band === 'capitulate') { pKey = 'H'; pVerb = 'Hail'; }
+        if (target.state.disabled && targetDistNow <= U.TARGET_RANGE) {
+          pKey = 'H';
+          pVerb = 'Hail — dead in space';
+        } else {
+          const band = resolveBand(target.state.resolve ?? 70);
+          if (band === 'bargaining' || band === 'capitulate') { pKey = 'H'; pVerb = 'Hail'; }
+        }
       }
       if (!pKey && !target && shipObj) {
         const p = shipObj.position;
@@ -945,6 +1387,7 @@ export function initHud(ctx) {
         }
       }
       const pStr = pKey + '|' + pVerb;
+      const pSalvage = pVerb === 'Hail — dead in space';
       if (pStr !== last.prompt) {
         last.prompt = pStr;
         if (pKey) {
@@ -954,6 +1397,10 @@ export function initHud(ctx) {
         } else {
           prompt.classList.add('is-hidden');
         }
+      }
+      if (pSalvage !== last.promptSalvage) {
+        last.promptSalvage = pSalvage;
+        prompt.classList.toggle('is-salvage', pSalvage);
       }
     },
   };

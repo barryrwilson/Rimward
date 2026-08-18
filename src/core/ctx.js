@@ -22,8 +22,14 @@ import * as THREE from 'three';
  *   (AI state); combat.js may damage their state records.
  * - targets: written by controls.js (selection) + npc.js (availability).
  * - flags.docked: written by station.js only. flags.combat: written by npc.js.
+ * - flags.camera / flags.firstPerson: written by controls.js only.
+ * - flags.matchSpeed: written by ship.js only (toggle). npc.js does not write it.
+ * - input.matchSpeedPressed / input.throttleHeld: controls.js only.
+ * - ship.js must not write ctx.input.throttle.
  * - events: any system may ctx.emit(); main.js clears the queue AFTER the
  *   last consumer (hud.js) each frame. Event types are frozen — see EVENTS.
+ * - ship.js may emit bodyHit; combat.js applies impact/sun damage via applyHit.
+ * - combat.js emits playerFire { weapon } when a player cannon/disruptor bolt actually spawns.
  */
 export function createCtx({ scene, camera, renderer }) {
   const ctx = {
@@ -40,7 +46,7 @@ export function createCtx({ scene, camera, renderer }) {
         creep: 30, // minimum forward drift when throttle ~ 0 but moving
         acceleration: 90,
         damping: 0.5,
-        rotationSpeed: 1.6, // rad/s at full deflection (low speed)
+        rotationSpeed: 0.85, // light TURN_MAX; live rate is turnRateFor() in flight-feel.js
         afterburner: { multiplier: 2, burnTime: 6, cooldown: 8 }, // §5.2
         drift: { duration: 4, cooldown: 6, realign: 0.8 }, // vector-hold §5.2
         strafeSpeed: 45, // lateral/vertical strafe u/s §5.1
@@ -48,6 +54,7 @@ export function createCtx({ scene, camera, renderer }) {
       },
       world: {
         sunPosition: new THREE.Vector3(0, 0, 0),
+        sunRadius: 0, // solarsystem.js writes the live star; 0 = no heat
         shipSpawn: new THREE.Vector3(0, 30, 800),
         stationPosition: new THREE.Vector3(120, 20, 620), // near spawn
         asteroidField: { center: new THREE.Vector3(-450, -30, -250), radius: 160, count: 130 },
@@ -61,6 +68,7 @@ export function createCtx({ scene, camera, renderer }) {
       steerY: 0, // >0 = up (ship pitches toward reticle)
       strafeX: 0, // >0 = strafe right (D)
       strafeY: 0, // >0 = strafe up (W)
+      roll: 0, // >0 = roll right (E), <0 = roll left (Q)
       throttle: 0, // persistent setpoint 0..1 (R/F); double-tap F = 0
       fullStop: false, // double-tap F sets, R (throttle up) or afterburner clears.
       // While true the ship holds station at 0 speed, overriding creep (§5.1).
@@ -71,7 +79,9 @@ export function createCtx({ scene, camera, renderer }) {
       targetPressed: false, // edge: T (cycle nearest hostiles)
       hailPressed: false, // edge: H
       dockPressed: false, // edge: D
-      cameraPressed: false, // edge: C (chase / cockpitless first-person)
+      cameraPressed: false, // edge: C (chase / third / first)
+      matchSpeedPressed: false, // edge: X (ship.js toggles flags.matchSpeed)
+      throttleHeld: false, // R or F held — ship.js cancels MATCH
       pausePressed: false, // edge: P
     },
 
@@ -156,7 +166,9 @@ export function createCtx({ scene, camera, renderer }) {
       docked: false, // station.js owns
       combat: false, // npc.js owns (hostile intent within bubble)
       paused: false,
-      firstPerson: false,
+      firstPerson: false, // derived: camera === 'first' (HUD reticle center)
+      camera: 'chase', // 'chase' | 'third' | 'first' — C cycles; ship.js reads
+      matchSpeed: false, // ship.js: hold lock speed; HUD shows MATCH
       saveRestored: false, // save.js sets true when a snapshot is restored
     },
 
@@ -191,6 +203,11 @@ export function createCtx({ scene, camera, renderer }) {
     // 'creditorCall' {stage,line}  'originPayoff' {id,line}  'originBeat' {id,line}  (world.js origin arcs)
     // 'mineBlocked' {asteroidId, oreKey, hardness, needs, line} (combat.js, wave 51 —
     //   the beam scattered off rock harder than the installed head's tier)
+    // 'bodyHit' { kind, speed, damage }   // ship.js bounce; combat.js may fill damage
+    // 'sunHeat' { t, dps }                // combat.js, throttled
+    // 'sunKill' { reason: 'sun' }         // combat.js lethal core
+    // 'playerFire' { weapon }             // combat.js: real cannon/disruptor spawn only
+    // 'survivorRescued' { faction, source, count, repDelta }  (station.js, wave 60)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {
