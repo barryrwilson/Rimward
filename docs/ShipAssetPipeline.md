@@ -580,21 +580,26 @@ field slot on every Unknowables GLB.
 reads one body (a torus does not touch a cell in its hole; lace offset
 0.055 misses `LOOP_MINOR` 0.045).
 
-**Measured (2026-08-15, `measure-ships` + lod triangle counts):**
+**Measured (2026-08-17, `measure-ships` + lod triangle counts):**
 
 | class | size | lod0 verts | tris lod0/lod1/lod2(/lod3) |
 |---|---|---|---|
 | light | 6.6 | 12420 | 6808/4188/2080 |
-| ace | 7.2 | 18704 | 10304/8572/4376 |
+| ace | 7.2 | 20410 | 11264/8572/4376 |
 | cutter | 10.7 | 57118 | 28652/21192/7816 |
 | heavy | 16.9 | 46692 | 25180/15828/7076 |
 | frigate | 31.6 | 76362 | 37348/23808/7536 |
 | freighter | 90.0 | 94836 | 48364/23036/7388/3604 |
 
 Ladder `light 6.6 < ace 7.2 < cutter 10.7 < heavy 16.9 < frigate 31.6 <
-freighter 90.0`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
-validate-ship-assets PASS. Sheets: `out/silhouettes/unknowables-shape.png`,
-`-scale.png`, `-render.png`. `npm run test:boot` was not run.
+freighter 90.0`. `measure-ships` light/ace band `|6.6-7.2|/7.2 = 8.3 %`.
+Wave 49 primed `buildShipAsset` Box3: light 6.65 / ace 7.23 (`|6.65-7.23|/7.23
+= 8.0 %`). Earlier boot notes that read ace 8.0 were the joined field AABB
+inheriting a diagonal tip-meridian rotation, not a larger authored span.
+`ace.py` now emits the face-Z nest before the tip so `join()` keeps that
+torus rotation. Gates: measure ALL PASS; islands ONE CONNECTED BODY (ace
+re-probed); RIMWARD_FIELD + idle present on ace LODs. Sheets:
+`out/silhouettes/unknowables-shape.png`, `-scale.png`, `-render.png`.
 
 **Lesson:** loops and lensing arcs sit around the cells. They need torus-plane
 spokes (r ≥ voxel) or the island probe reports the ring as a float. Do not
@@ -626,9 +631,10 @@ freighter 83.3`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
 validate-ship-assets PASS (no assembly triangle-cap failures). Sheets:
 `out/silhouettes/assembly-shape.png`, `-scale.png`, `-render.png`.
 `npm run test:boot` assembly charter:
-Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit
-is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light 6.6 vs
-ace 8.0 exceeds the 15 % light/ace band). Not assembly-caused.
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit was FAIL on pre-existing Wave 9
+`unknowablesClassOrdering` (primed Box3 light 6.6 vs ace 8.0). Closed
+2026-08-17: measure `6.6/7.2`, primed `6.65/7.23` (8 % band). Not
+assembly-caused.
 
 **Lesson:** the size ladder is the family. Grow the fan by hub radius and
 petal count, never by scaling the petal module. Orange stays a few
@@ -660,9 +666,10 @@ freighter 83.1`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
 validate-ship-assets PASS. Sheets:
 `out/silhouettes/congregation-shape.png`, `-scale.png`, `-render.png`.
 `npm run test:boot` congregation charter:
-Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit
-is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light 6.6 vs
-ace 8.0 exceeds the 15 % light/ace band). Not congregation-caused.
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit was FAIL on pre-existing Wave 9
+`unknowablesClassOrdering` (primed Box3 light 6.6 vs ace 8.0). Closed
+2026-08-17: measure `6.6/7.2`, primed `6.65/7.23` (8 % band). Not
+congregation-caused.
 
 **Lesson:** `rt.sail_cluster` uses `hub_radius` as the hub cylinder
 radius and the vane-root radius. A freighter hub of 11.10 made a paper
@@ -742,9 +749,10 @@ heavy 16.6 < frigate 32.4 < freighter 80.2`. Gates: measure ALL PASS;
 islands ONE CONNECTED BODY ×6; validate-ship-assets PASS. Sheets:
 `out/silhouettes/lamplighter-shape.png`, `-scale.png`, `-render.png`.
 `npm run test:boot` lamplighter charter:
-Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
-exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
-6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not lamplighter-caused.
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit was FAIL on pre-existing Wave 9
+`unknowablesClassOrdering` (primed Box3 light 6.6 vs ace 8.0). Closed
+2026-08-17: measure `6.6/7.2`, primed `6.65/7.23` (8 % band). Not
+lamplighter-caused.
 
 **Lesson:** centreline posts at x=0 float when spine chords sit at
 `±xo_s`. Name the part with `probe-ship-extremes --at=` before you
@@ -776,9 +784,10 @@ heavy 17.0 < frigate 32.3 < freighter 78.4`. Gates: measure ALL PASS;
 islands ONE CONNECTED BODY ×6; validate-ship-assets PASS (whole fleet
 72/228). Sheets: `out/silhouettes/independent-shape.png`, `-scale.png`,
 `-render.png`. `npm run test:boot` independent charter:
-Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
-exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
-6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not independent-caused.
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit was FAIL on pre-existing Wave 9
+`unknowablesClassOrdering` (primed Box3 light 6.6 vs ace 8.0). Closed
+2026-08-17: measure `6.6/7.2`, primed `6.65/7.23` (8 % band). Not
+independent-caused.
 
 **Lesson:** a cargo net at the extra port rack column (`x=-4.55`) is
 not sitting on a mountain crate (mountain port column starts at
@@ -816,9 +825,10 @@ freighter 78.2`. Gates: measure ALL PASS; islands ONE CONNECTED BODY ×6;
 validate-ship-assets PASS (whole fleet 72/228). Sheets:
 `out/silhouettes/hollow-shape.png`, `-scale.png`, `-render.png`.
 `npm run test:boot` hollow charter:
-Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
-exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
-6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not hollow-caused.
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit was FAIL on pre-existing Wave 9
+`unknowablesClassOrdering` (primed Box3 light 6.6 vs ace 8.0). Closed
+2026-08-17: measure `6.6/7.2`, primed `6.65/7.23` (8 % band). Not
+hollow-caused.
 
 **Hull-band note:** cutter / heavy / frigate sit under
 `SHIP_SCALE[class].hull` floors. The sealed shell is calm on purpose.
@@ -858,9 +868,10 @@ and freighter 15 floats are the kept pre-pipeline ports);
 validate-ship-assets PASS (whole fleet 72/228). Sheets:
 `out/silhouettes/ferrous-shape.png`, `-scale.png`, `-render.png`.
 `npm run test:boot` ferrous charter:
-Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot
-exit is FAIL on pre-existing Wave 9 `unknowablesClassOrdering` (light
-6.6 vs ace 8.0 exceeds the 15 % light/ace band). Not ferrous-caused.
+Span/Proportion/Pivot/ProxyCover/ClassOrdering all true. Whole-boot exit was FAIL on pre-existing Wave 9
+`unknowablesClassOrdering` (primed Box3 light 6.6 vs ace 8.0). Closed
+2026-08-17: measure `6.6/7.2`, primed `6.65/7.23` (8 % band). Not
+ferrous-caused.
 
 **Bake note:** frigate lod0 `plate_grid` skin runs take ~8 min to join.
 Do not add a mid 18×44 grid.

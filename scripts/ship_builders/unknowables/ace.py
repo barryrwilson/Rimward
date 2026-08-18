@@ -173,11 +173,14 @@ def build_ace(parts, glow, l, b, h, hull_mat, glow_mat, detail):
         parts, 'mote-ace-knot', hull_mat,
         (knot[0] + 0.26, knot[1] + 0.20, knot_z), detail,
     )
-    fd.field_tip(glow, 'tip-ace', glow_mat, tip, sf.TIP_LEN, detail)
+    # Face-Z nest first so join() inherits that torus rotation. A diagonal
+    # tip meridian as parts[0] inflates the exported AABB (wave 49 Box3
+    # read ace 8.0 against a 7.2 vertex span).
     fd.nested_loops(
         glow, 'loop-ace-nest', glow_mat, knot,
         _knot_majors(stations, knot_z), _knot_tilts(), detail,
     )
+    fd.field_tip(glow, 'tip-ace', glow_mat, tip, sf.TIP_LEN, detail)
 
     if detail < 1:
         return

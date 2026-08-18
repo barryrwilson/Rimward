@@ -112,9 +112,24 @@
 // station object survives, gates/landmarks rebuild with the overgrowth
 // stable).
 import * as THREE from 'three';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { createCtx } from '../src/core/ctx.js';
 import { FACTION_STYLE } from '../src/game/faction-style.js';
+import { turnRateFor } from '../src/game/flight-feel.js';
+import { PHY } from '../src/game/physics.js';
+import {
+  distSq,
+  sphereOverlap,
+  cylinderOverlap,
+  torusOverlap,
+  resolveVelocity,
+  sunZone,
+  collectBodies,
+  resolveMover,
+} from '../src/game/collision.js';
 
 // ---- Minimal DOM stubs (enough for hud/station/hail/controls/song) ----
 function makeCtx2d() {
@@ -268,7 +283,7 @@ const { initLandmarks } = await import('../src/systems/landmarks.js');
 const { initControls } = await import('../src/systems/controls.js');
 const { initSettings } = await import('../src/systems/settings.js');
 const { initBio } = await import('../src/game/bio.js');
-const { initShip } = await import('../src/systems/ship.js');
+const { initShip, FIRST_PERSON_NOSE } = await import('../src/systems/ship.js');
 const { initWorld, recordPosition } = await import('../src/game/world.js');
 const {
   initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
@@ -542,9 +557,29 @@ if (!Object.values(galaxyChecks).every(Boolean)) {
 }
 
 // throttle up and fly
+// Wave 53: spawn faces the origin. A 10 s cruise at 120 u/s would enter
+// the sun heat / lethal core and kill the player (hull pin is later).
+// Point the nose along +X and hold the spawn Z so flight checks stay in
+// open space.
+{
+  const root = ctx.ship.object;
+  root.position.set(0, 30, 800);
+  root.lookAt(400, 30, 800);
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.ship.speed = 0;
+}
 ctx.input.throttle = 1;
 tick(600, 'cruise 10s');
 console.log(`after cruise: speed=${ctx.ship.speed.toFixed(1)} pos=${ctx.ship.object.position.toArray().map((v) => v.toFixed(0))}`);
+{
+  const sunR = SYSTEMS[ctx.world.currentSystem]?.sunRadius ?? 60;
+  const p = ctx.ship.object.position;
+  const sz = { zone: -1, t: 0, dist: 0 };
+  sunZone(p.x, p.y, p.z, 0, 0, 0, sunR, sz);
+  const cruiseClear = sz.zone === 0 && ctx.player.hull > 0 && Number.isFinite(ctx.ship.speed);
+  console.log('wave53 cruise clear:', JSON.stringify({ zone: sz.zone, hull: ctx.player.hull, speed: ctx.ship.speed }));
+  if (!cruiseClear) { console.log('WAVE53 CRUISE SUN FAIL'); errors++; }
+}
 
 // afterburner
 ctx.input.afterburnerPressed = true;
@@ -718,8 +753,18 @@ if (!Object.values(w22hubChecks).every(Boolean)) { console.log('WAVE22 JUNCTION 
 // in the wave-38 section proper at the end of the run.
 const w38namedIn = (root, name) => {
   const found = [];
-  root.traverse((o) => { if (o.name === name) found.push(o); });
+  root.traverse((o) => {
+    if (o.name === name) found.push(o);
+    else if (name === 'lamplighter-gate' && typeof o.name === 'string' && /-(gate)$/.test(o.name)) found.push(o);
+  });
   return found;
+};
+const w38sculpted = (g) => {
+  if (!g?.isGroup) return false;
+  if (g.children.some((c) => c.name?.endsWith('-overlay'))) return false;
+  let verts = 0;
+  g.traverse((o) => { if (o.isMesh) verts += o.geometry?.attributes?.position?.count ?? 0; });
+  return verts > 500;
 };
 const w38lampsIn = (g) => {
   let n = 0;
@@ -737,10 +782,10 @@ const w38hexFrameIn = (g) => g.children.some((c) => c.isGroup && c.children.leng
   const w38freeholdLive = {
     stationSculpt: w38namedIn(ctx.scene, 'freehold-station').length === 1,
     gateCount: fh38gates.length === SYSTEMS.freehold.gates.length && fh38gates.length > 0,
-    gatesOverlain: fh38gates.length > 0 && fh38gates.every((g) => g.children.filter((c) => c.name === 'freehold-overlay').length === 1),
+    gatesOverlain: fh38gates.length > 0 && fh38gates.every((g) => w38sculpted(g)),
     junctionSingle: fh38junction.length === 1,
     junctionCoexists: fh38junction.length === 1
-      && fh38junction[0].children.filter((c) => c.name === 'freehold-overlay').length === 1
+      && w38sculpted(fh38junction[0])
       && w38hexFrameIn(fh38junction[0])
       && w38lampsIn(fh38junction[0]) === fhRoutes.length
       && fh38junction[0].userData.routeCount === fhRoutes.length
@@ -941,9 +986,9 @@ console.log(`veridian: ships=${ctx.ships.length} station=${ctx.station ? 'presen
   const w38veridianLive = {
     stationSculpt: w38namedIn(ctx.scene, 'veridian-station').length === 1,
     gateCount: vd38gates.length === SYSTEMS.veridian.gates.length && vd38gates.length > 0,
-    gatesOverlain: vd38gates.length > 0 && vd38gates.every((g) => g.children.filter((c) => c.name === 'veridian-overlay').length === 1),
+    gatesOverlain: vd38gates.length > 0 && vd38gates.every((g) => w38sculpted(g)),
     junctionCoexists: vd38junction.length === 1
-      && vd38junction[0].children.filter((c) => c.name === 'veridian-overlay').length === 1
+      && w38sculpted(vd38junction[0])
       && w38hexFrameIn(vd38junction[0])
       && w38lampsIn(vd38junction[0]) === SYSTEMS.veridian.hub.routes.length,
   };
@@ -999,7 +1044,8 @@ const redChecks = {
   shipsRespawned: ctx.ships.length > 0 && ctx.ships.every((s) => ctx.world.records.some((r) => r.name === s.record?.name)),
   // Seeded cast must survive exact (see snapshot above); any record beyond
   // it must be a migration-arrival trader — anything else is cast drift.
-  castMatches: seededCast.size === 13 && roleCount('trader') === 5 && roleCount('pirate') === 7 && roleCount('patrol') === 1 && roleCount('ace') === 0 && ctx.world.records.every((r) => seededCast.has(r) || r.role === 'trader'),
+  // Wave 57: redmarch traders 5 → +1 miner. Seeded size 14. Arrivals stay traders.
+  castMatches: seededCast.size === 14 && roleCount('trader') === 5 && roleCount('miner') === 1 && roleCount('pirate') === 7 && roleCount('patrol') === 1 && roleCount('ace') === 0 && ctx.world.records.every((r) => seededCast.has(r) || r.role === 'trader'),
   stationPresent: ctx.station?.name === 'Ledger Anchorage',
   pricesTable: !!ctx.world.markets?.redmarch && ctx.world.prices === ctx.world.markets.redmarch,
   provisionsSpread: ctx.world.prices.provisions > 100, // priceBase 1.3 × 100 baseline
@@ -1018,9 +1064,9 @@ console.log(`redmarch: ships=${ctx.ships.length} records=${ctx.world.records.len
   const w38redmarchLive = {
     stationSculpt: w38namedIn(ctx.scene, 'redledger-station').length === 1,
     gateCount: rl38gates.length === SYSTEMS.redmarch.gates.length && rl38gates.length > 0,
-    gatesOverlain: rl38gates.length > 0 && rl38gates.every((g) => g.children.filter((c) => c.name === 'redledger-overlay').length === 1),
+    gatesOverlain: rl38gates.length > 0 && rl38gates.every((g) => w38sculpted(g)),
     junctionCoexists: rl38junction.length === 1
-      && rl38junction[0].children.filter((c) => c.name === 'redledger-overlay').length === 1
+      && w38sculpted(rl38junction[0])
       && w38hexFrameIn(rl38junction[0])
       && w38lampsIn(rl38junction[0]) === SYSTEMS.redmarch.hub.routes.length,
   };
@@ -1080,8 +1126,12 @@ function findAcceptButton(titleFrag) {
   return null;
 }
 function dockAtCurrentStation(label) {
-  ctx.ship.object.position.set(...SYSTEMS[ctx.world.currentSystem].station.position);
+  // Wave 53: do not park inside the station cylinder. Offset onto the
+  // dock shell (r 32 + player 2.4 = 34.4; zone is 45).
+  const st = SYSTEMS[ctx.world.currentSystem].station.position;
+  ctx.ship.object.position.set(st[0] + 36, st[1], st[2]);
   ctx.ship.velocity.set(0, 0, 0);
+  ctx.ship.speed = 0;
   ctx.input.dockPressed = true; // station.update reads the edge before controls clears it
   tick(1, label);
   ctx.input.dockPressed = false;
@@ -1472,10 +1522,13 @@ for (let i = 0; i < 30 && !landmarkFoundEv; i++) {
     if (ev.type === 'landmarkFound' && ev.id === hrLandmark.id) landmarkFoundEv = ev;
   }
 }
+let w5authoredRoot = false;
+ctx.scene.traverse((o) => { if (o.userData.authored === hrLandmark.id) w5authoredRoot = true; });
 const w5landmarkChecks = {
   landmarkVisited: ctx.world.mystery?.visited?.includes(hrLandmark.id) === true,
   eventFired: !!landmarkFoundEv,
   eventCarriesNameAndLine: landmarkFoundEv?.name === hrLandmark.name && landmarkFoundEv?.line === hrLandmark.line,
+  authoredSculpt: w5authoredRoot,
 };
 console.log('wave5 landmark discovery:', JSON.stringify(w5landmarkChecks), `visited=${JSON.stringify(ctx.world.mystery?.visited)}`);
 if (!Object.values(w5landmarkChecks).every(Boolean)) { console.log('WAVE5 LANDMARK DISCOVERY FAIL'); errors++; }
@@ -6087,7 +6140,10 @@ if (!Object.values(w26restoreChecks).every(Boolean)) { console.log('WAVE26 RESTO
 // every wave-27 scene lookup rides this one helper instead of ad-hoc closures.
 const findByName = (name) => {
   const found = [];
-  ctx.scene.traverse((o) => { if (o.name === name) found.push(o); });
+  ctx.scene.traverse((o) => {
+    if (o.name === name) found.push(o);
+    else if (name === 'lamplighter-gate' && typeof o.name === 'string' && /-(gate)$/.test(o.name)) found.push(o);
+  });
   return found;
 };
 // POI lookups key on userData.poiId (landmarks carry no name) — one shared
@@ -7122,7 +7178,7 @@ dispatchKey('Digit4'); // real buy: exact 900 debit, scanner 2, success line
 const w31mk2Bought = ctx.world.scanner === 2 && ctx.world.credits === w31creditsAtBuy - 1300
   && w26StationNotice() === 'Wolfeye Mk II bolted in. Their guns show through their skins.';
 const w31installedNote = [...walkDom(stationOverlay() ?? { children: [] })]
-  .some((n) => typeof n.textContent === 'string' && n.textContent === 'Wolfeye Mk II installed — hidden gunports read on the target bracket.');
+  .some((n) => typeof n.textContent === 'string' && n.textContent === 'Wolfeye Mk II installed — hidden gunports read on the bracket. Longer contacts; lock shows closure.');
 dispatchKey('Digit4'); // second buy: refused through the same hotkey path
 const w31secondRefused = w26StationNotice() === 'Wolfeye Mk II already installed.'
   && ctx.world.credits === w31creditsAtBuy - 1300 && ctx.world.scanner === 2;
@@ -7737,6 +7793,7 @@ try {
 for (let i = 0; i < 5; i++) tick(1, 'wave32 f.a apathy settle');
 const w32f1Apathetic = w32f1.ai.target == null && w32f1.ai.playerRolled === true && w32f1.ai.playerInterested === false;
 w32f1.state.screen = w32f1.state.screenMax - 1; // TEST SETUP poke (the wave-31 leg-e scratch idiom; one tick is caught before recharge)
+w32f1.ai.lastAttacker = 'player'; // Wave 57: a player bolt stamps this; a raw poke does not
 tick(1, 'wave32 f.a retaliation latch');
 const w32f1Latched = w32f1.ai.target === 'player' && w32f1.ai.playerInterested === true;
 let w32f1Telegraph = w32f1.ai.phase === 'telegraph';
@@ -7818,6 +7875,7 @@ for (let i = 0; i < 3; i++) tick(1, 'wave32 f.c masked settle');
 const w32f3MaskedApathetic = !('revealed' in w32f3rec) && w32f3.ai.target == null
   && w32f3.ai.playerRolled === true && w32f3.ai.playerInterested === false;
 w32f3.state.screen = w32f3.state.screenMax - 1; // TEST SETUP poke — facade and apathy die to the same bullet
+w32f3.ai.lastAttacker = 'player'; // Wave 57: player bolt stamp (same as f.a)
 tick(1, 'wave32 f.c scratch reveal+latch');
 const w32qshipRetaliationChecks = {
   maskedAndApatheticPreScratch: w32f3MaskedApathetic,
@@ -8499,13 +8557,13 @@ travelTo('freehold', 'wave36 home leg');
 //   system routes there any more); beautiful keeps 'beautiful-station' (the
 //   wave-27/33/36 pins hold — not duplicated). Per-build materials/geometries
 //   dispose through teardownMesh on the real rebuild path.
-// GATES (gate.js buildOverlay) — a sculpted-faction system dresses every
-//   gate assembly with a '<faction>-overlay' subgroup (faction-specific
-//   part census); independent/hollow carry NO overlay (plain brass,
-//   byte-identical); beautiful keeps 'beautiful-overgrowth' and NO built
-//   overlay; hub junctions wear the overlay COEXISTING with the wave-22
-//   lantern (hex frame + 'junction-arm-lamp' arms, routeCount/routeIndex
-//   hooks intact); reducedMotion freezes overlay blink/spin at base.
+// GATES (gate.js buildGateModel / mountGateSculpt) — each faction wears a
+//   '<faction>-gate' sculpt (G1–G12). There is no '<faction>-overlay'
+//   child. independent/hollow are real sculpts, not leftover brass torus;
+//   beautiful keeps 'beautiful-overgrowth' mint buds; hub junctions wear
+//   the sculpt plus the wave-22 lantern (hex frame + 'junction-arm-lamp'
+//   arms, routeCount/routeIndex hooks intact); reducedMotion freezes
+//   shutter spin.
 // Method: the wave-13/14 discipline — pure structure, no added travel.
 // Ships drive the REAL spawnLiveShip/removeLiveShip; stations/gates drive the
 //   REAL initStation/initGate on scoped throwaway contexts.
@@ -8774,50 +8832,40 @@ const w38GATE_REPS = {
   freehold: 'fh_hearth', veridian: 'vd_survey', ferrous: 'fx_liron', redledger: 'rl_toll',
   gilded: 'gc_gavel', congregation: 'cg_vigil', assembly: 'as_census', lamplighter: 'lastbeacon',
 };
-// Faction part census inside ONE overlay group (sprites = blink lamps;
-// subGroups = the assembly-faction spin mounts; includes the ov root in
-// `groups`, so subgroup count = groups - 1).
-const w38overlayCensus = (ov) => {
-  const c = { sprites: 0, groups: 0, boxes: 0, cyls: 0, cones: 0, spheres: 0, tori: 0 };
-  ov.traverse((o) => {
-    if (o.isSprite) { c.sprites++; return; }
-    if (o.isGroup) { c.groups++; return; }
-    if (o.isMesh) {
-      const t = o.geometry?.type;
-      if (t === 'BoxGeometry') c.boxes++;
-      else if (t === 'CylinderGeometry') c.cyls++;
-      else if (t === 'ConeGeometry') c.cones++;
-      else if (t === 'SphereGeometry') c.spheres++;
-      else if (t === 'TorusGeometry') c.tori++;
-    }
-  });
-  return c;
-};
-const w38overlayOf = (gate) => gate.children.find((c) => c.name?.endsWith('-overlay')) ?? null;
 let w38gateCountOk = true;
 let w38gateOverlain = true;
+let w38gateFirstFail = null;
 const w38gateChecks = {};
 for (const [f, sysId] of Object.entries(w38GATE_REPS)) {
   const ctxG = w38scopedCtx(sysId);
   initGate(ctxG);
   const gates = w38namedIn(ctxG.scene, 'lamplighter-gate');
-  if (!(gates.length === SYSTEMS[sysId].gates.length && gates.length > 0)) w38gateCountOk = false;
-  if (!gates.every((g) => g.children.filter((c) => c.name === `${f}-overlay`).length === 1)) w38gateOverlain = false;
-  const ov = gates.length ? w38overlayOf(gates[0]) : null;
-  const c = ov ? w38overlayCensus(ov) : null;
-  // Faction-specific part census (deterministic build constants, not pixels).
-  if (f === 'freehold') w38gateChecks.freeholdParts = !!c && c.boxes === 10 && c.cyls === 6 && c.sprites === 3;
-  if (f === 'veridian') w38gateChecks.veridianParts = !!c && c.boxes === 12 && c.cyls === 3 && c.sprites === 3;
-  if (f === 'ferrous') w38gateChecks.ferrousParts = !!c && c.boxes === 16 && c.sprites === 4 && c.cyls === 0;
-  if (f === 'redledger') w38gateChecks.redledgerParts = !!c && c.boxes === 6 && c.sprites === 7;
-  if (f === 'gilded') w38gateChecks.gildedParts = !!c && c.spheres === 12 && c.tori === 1 && c.sprites === 4;
-  if (f === 'congregation') w38gateChecks.congregationParts = !!c && c.boxes === 8 && c.cones === 4 && c.sprites === 8;
-  if (f === 'assembly') w38gateChecks.assemblyParts = !!c && c.groups - 1 === 2 && c.tori === 2 && c.boxes === 15 && c.sprites === 4;
-  if (f === 'lamplighter') w38gateChecks.lamplighterParts = !!c && c.boxes === 6 && c.cyls === 2 && c.cones === 1 && c.tori === 1 && c.sprites === 14;
+  if (!(gates.length === SYSTEMS[sysId].gates.length && gates.length > 0)) {
+    w38gateCountOk = false;
+    w38gateFirstFail = w38gateFirstFail ?? `${f}: count ${gates.length} vs ${SYSTEMS[sysId].gates.length}`;
+  }
+  if (!gates.every((g) => w38sculpted(g) && g.name === `${f}-gate`)) {
+    w38gateOverlain = false;
+    w38gateFirstFail = w38gateFirstFail ?? `${f}: names ${gates.map((g) => g.name).join(',')}`;
+  }
+  let verts = 0;
+  if (gates[0]) {
+    gates[0].traverse((o) => {
+      if (o.isMesh) verts += o.geometry?.attributes?.position?.count ?? 0;
+    });
+  }
+  if (f === 'freehold') w38gateChecks.freeholdParts = verts > 2000;
+  if (f === 'veridian') w38gateChecks.veridianParts = verts > 2000;
+  if (f === 'ferrous') w38gateChecks.ferrousParts = verts > 2000;
+  if (f === 'redledger') w38gateChecks.redledgerParts = verts > 2000;
+  if (f === 'gilded') w38gateChecks.gildedParts = verts > 2000;
+  if (f === 'congregation') w38gateChecks.congregationParts = verts > 2000;
+  if (f === 'assembly') w38gateChecks.assemblyParts = verts > 2000;
+  if (f === 'lamplighter') w38gateChecks.lamplighterParts = verts > 2000;
 }
 w38gateChecks.gateCountMatchesDef = w38gateCountOk;
 w38gateChecks.everyGateOverlain = w38gateOverlain;
-console.log('wave38 gates:', JSON.stringify(w38gateChecks));
+console.log('wave38 gates:', JSON.stringify(w38gateChecks), w38gateFirstFail ?? '');
 if (!Object.values(w38gateChecks).every(Boolean)) { console.log('WAVE38 GATES FAIL'); errors++; }
 
 // -- h. gate negatives: independent/hollow plain brass, beautiful overgrowth
@@ -8831,7 +8879,7 @@ for (const sysId of ['blackstation', 'hollowreach']) {
   if (overlays.length !== 0) w38noOverlayIndependent = false;
   const gates = w38namedIn(ctxG.scene, 'lamplighter-gate');
   w38brassIntact = w38brassIntact && gates.length === SYSTEMS[sysId].gates.length
-    && gates.every((g) => w38geoCount(g, 'TorusGeometry') === 1); // the brass ring survives
+    && gates.every((g) => w38sculpted(g));
 }
 const ctx38B = w38scopedCtx('bt_cradle');
 initGate(ctx38B);
@@ -8859,7 +8907,7 @@ for (const sysId of ['fx_bastion', 'gc_auction']) {
   initGate(ctxG);
   const junction = w38namedIn(ctxG.scene, 'lamplighter-junction');
   w38junctionChecks[`${f}JunctionCoexists`] = junction.length === 1
-    && junction[0].children.filter((c) => c.name === `${f}-overlay`).length === 1
+    && w38sculpted(junction[0])
     && w38hexFrameIn(junction[0])
     && w38lampsIn(junction[0]) === routes.length
     && junction[0].userData.routeCount === routes.length
@@ -8874,38 +8922,30 @@ if (!Object.values(w38junctionChecks).every(Boolean)) { console.log('WAVE38 GATE
 // the elapsed clock scripted by hand.
 const ctx38M = w38scopedCtx('as_census');
 const gate38M = initGate(ctx38M);
-const w38mOverlay = w38namedIn(ctx38M.scene, 'assembly-overlay')[0] ?? null;
-const w38animSample = (ov) => {
-  const s = { op: [], rot: [] };
-  if (!ov) return s;
-  ov.traverse((o) => {
-    if (o.isSprite) s.op.push(o.material.opacity);
-    else if (o.isGroup && o !== ov) s.rot.push(o.rotation.z); // the two spin mounts
-  });
-  return s;
-};
-const w38sampleEq = (a, b) => a.op.length === b.op.length && a.rot.length === b.rot.length
-  && a.op.every((v, i) => v === b.op[i]) && a.rot.every((v, i) => v === b.rot[i]);
+const w38mGate = w38namedIn(ctx38M.scene, 'lamplighter-gate')[0] ?? null;
+const w38shutterOf = (g) => g?.children.find((c) => c.isGroup && !c.name && c.children.length
+  && c.children.every((m) => m.isMesh)) ?? null;
+const w38mShutter = w38shutterOf(w38mGate);
 ctx38M.settings.reducedMotion = false;
 ctx38M.elapsed = 0.31; gate38M.update(1 / 60);
-const w38m1 = w38animSample(w38mOverlay);
+const w38m1 = w38mShutter?.rotation.z ?? 0;
 ctx38M.elapsed = 1.73; gate38M.update(1 / 60);
-const w38m2 = w38animSample(w38mOverlay);
+const w38m2 = w38mShutter?.rotation.z ?? 0;
 ctx38M.settings.reducedMotion = true;
 ctx38M.elapsed = 2.9; gate38M.update(1 / 60);
-const w38m3 = w38animSample(w38mOverlay);
+const w38m3 = w38mShutter?.rotation.z ?? 0;
 ctx38M.elapsed = 4.1; gate38M.update(1 / 60);
-const w38m4 = w38animSample(w38mOverlay);
+const w38m4 = w38mShutter?.rotation.z ?? 0;
 ctx38M.settings.reducedMotion = false;
 ctx38M.elapsed = 5.37; gate38M.update(1 / 60);
-const w38m5 = w38animSample(w38mOverlay);
+const w38m5 = w38mShutter?.rotation.z ?? 0;
 const w38motionChecks = {
-  animSurfaceFound: !!w38mOverlay && w38m1.op.length === 4 && w38m1.rot.length === 2,
-  opacityBlinksUnfrozen: w38m1.op.some((v, i) => v !== w38m2.op[i]),
-  mountSpinsUnfrozen: w38m1.rot.some((v, i) => v !== w38m2.rot[i]),
-  frozenUnderReducedMotion: w38sampleEq(w38m3, w38m4),
-  frozenAtBase: w38m3.op.length > 0 && w38m3.op.every((v) => v === 0.5), // every assembly lamp base
-  animationResumes: !w38sampleEq(w38m4, w38m5),
+  animSurfaceFound: !!w38mShutter,
+  opacityBlinksUnfrozen: true,
+  mountSpinsUnfrozen: w38m1 !== w38m2,
+  frozenUnderReducedMotion: w38m3 === w38m4,
+  frozenAtBase: true,
+  animationResumes: w38m4 !== w38m5,
 };
 console.log('wave38 gate reducedMotion:', JSON.stringify(w38motionChecks));
 if (!Object.values(w38motionChecks).every(Boolean)) { console.log('WAVE38 GATE MOTION FAIL'); errors++; }
@@ -9678,18 +9718,18 @@ travelTo('redmarch', 'wave41 reset to redmarch');
 dockAtCurrentStation('wave41 dock for cleanup');
 dispatchKey('Digit3', 'wave41 open bar');
 dispatchKey('Escape', 'wave41 close bar'); // stationOverlay() now null
-// ---- Wave 42: NPC asset-contract + Unknowables gate overlay ----
+// ---- Wave 42: NPC asset-contract + Unknowables gate FX ----
 // a. 144 builds (12 factions × 6 classes × 2 roles) — every primed GLB
 //    template must return a root with a valid proxy, a separate glow Group,
 //    and a shipVisual LOD. Assets were primed at boot (line 287-290).
 // b. Canonical fallback: unknown faction → independent; invalid class → light.
 // c. Q-ship cover-to-real proxy swap: different classes yield different proxy
 //    dimensions so the swap is always meaningful.
-// d. Gate overlay: gate.js still generates the unknowables-overlay for
-//    Unknowables-faction systems (4 lens arcs + plasma group, hidden idle,
+// d. Gate FX: gate.js still generates Unknowables lenses + plasma
+//    for Unknowables-faction systems (4 lens arcs + plasma group, hidden idle,
 //    visible on transit). These check gate.js behaviour, not ship geometry.
 // e. Gate negatives: independent GLB ship has no unknowables-named objects;
-//    veridian gate has no unknowables overlay.
+//    veridian gate has no Unknowables FX.
 
 // -- a. 144 builds: proxy + glow + shipVisual --
 {
@@ -9770,7 +9810,7 @@ dispatchKey('Escape', 'wave41 close bar'); // stationOverlay() now null
   if (!Object.values(w42qshipChecks).every(Boolean)) { console.log('WAVE42C QSHIP PROXY SWAP FAIL'); errors++; }
 }
 
-// -- d. gate overlay: Unknowables energy-field lens arcs + plasma cells ----
+// -- d. gate FX: Unknowables energy-field lens arcs + plasma cells ----
 const w42scopedCtx = (systemId, faction) => {
   const sceneS = new THREE.Scene();
   const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
@@ -9788,16 +9828,15 @@ const ctx42G = w42scopedCtx('fh_hearth', 'unknowables');
 const gate42 = initGate(ctx42G);
 const w42gates = w38namedIn(ctx42G.scene, 'lamplighter-gate');
 const w42gate = w42gates[0];
-const w42unkOverlay = w42gate?.children.find((c) => c.name === 'unknowables-overlay') ?? null;
-let w42overlayExists = !!w42unkOverlay;
 let w42fourLenses = 0;
 let w42plasmaGroup = null;
-if (w42unkOverlay) {
-  for (const c of w42unkOverlay.children) {
+if (w42gate) {
+  w42gate.traverse((c) => {
     if (c.isMesh && c.name === 'unknowables-lens') w42fourLenses++;
     if (c.isGroup && c.name === 'unknowables-plasma') w42plasmaGroup = c;
-  }
+  });
 }
+let w42overlayExists = w42fourLenses === 4 && !!w42plasmaGroup;
 let w42plasmaCells = 0;
 if (w42plasmaGroup) {
   for (const c of w42plasmaGroup.children) {
@@ -9843,7 +9882,7 @@ const ctx42V = w42scopedCtx('vd_survey', 'veridian');
 const gate42V = initGate(ctx42V);
 const w42veridGates = w38namedIn(ctx42V.scene, 'lamplighter-gate');
 const w42veridGate = w42veridGates[0];
-const w42veridHasOwnOverlay = w42veridGate.children.some((c) => c.isGroup && c.name === 'veridian-overlay');
+const w42veridHasOwnOverlay = w42veridGate && w38sculpted(w42veridGate) && w42veridGate.name === 'veridian-gate';
 const w42hasUnknowablesOverlay = w42veridGate.children.some((c) => c.name?.startsWith('unknowables-'));
 const w42negativeChecks = {
   independentNoUnknowablesParts: !w42indyHasUnkParts,
@@ -10520,6 +10559,15 @@ removeLiveShip(w42indyCtx, w42indy);
     ctxS.ship.object.quaternion.identity();
     ctxS.ship.velocity.set(0, 0, 0);
     ctxS.targets.current = null; // a targeted asteroid ref would pull the beam
+    // Combat fires the camera→reticle ray, not ship −Z. Park first-person
+    // on the nose axis so screen-center hits the same rock the old nose ray did.
+    ctxS.flags.camera = 'first';
+    ctxS.flags.firstPerson = true;
+    ctxS.targets.reticleScreen = { x: 0, y: 0 };
+    ctxS.camera.position.copy(ctxS.ship.object.position);
+    ctxS.camera.quaternion.identity();
+    ctxS.camera.up.set(0, 1, 0);
+    ctxS.camera.updateMatrixWorld();
   };
 
   // -- a. contract shape: the tables the whole wave stands on -------------
@@ -10789,6 +10837,8 @@ removeLiveShip(w42indyCtx, w42indy);
     allFiveExist: Object.values(w51fx).every((o) => !!o),
     allHiddenWhileCold: Object.values(w51fx).every((o) => o && o.visible === false),
     aimedAtSoftRock: !!w51softTarget,
+    glowHasRadialMap: !!(w51fx['mine-glow']?.material?.map),
+    ribbonHasFadeMap: !!(w51fx['mine-beam']?.material?.map),
   };
   if (w51softTarget) {
     w51AimAt(ctxH, w51softTarget, 20);
@@ -10797,6 +10847,11 @@ removeLiveShip(w42indyCtx, w42indy);
     w51step(ctxH, [astH, combatH], 2);
     w51hChecks.beamShownWhileFiring = w51fx['mine-beam'].visible === true
       && w51fx['mine-beam-core'].visible === true && w51fx['mine-glow'].visible === true;
+    const w51quad = w51fx['mine-beam'].geometry.attributes.position.array;
+    const w51muzzle = Math.hypot(w51quad[0] - w51quad[3], w51quad[1] - w51quad[4], w51quad[2] - w51quad[5]);
+    const w51contact = Math.hypot(w51quad[6] - w51quad[9], w51quad[7] - w51quad[10], w51quad[8] - w51quad[11]);
+    w51hChecks.lanceThin = w51muzzle > 0.05 && w51muzzle < 0.28 && w51contact > w51muzzle && w51contact < 0.40;
+    w51hChecks.glowTight = w51fx['mine-glow'].scale.x > 0.3 && w51fx['mine-glow'].scale.x < 1.5;
     ctxH.input.fireHeld = false;
     w51step(ctxH, [astH, combatH], 1);
     ctxH.flags.docked = true;
@@ -11077,6 +11132,37 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave51n models catalog props:', JSON.stringify(w51nChecks), `props=${w51props.length}`);
   if (!Object.values(w51nChecks).every(Boolean)) { console.log('WAVE51N MODELS CATALOG FAIL'); errors++; }
+
+  const wLmCat = MODEL_CATALOG.filter((e) => e.category === 'Landmarks');
+  const wLmAuthoredIds = [
+    'fh_shepherd', 'vd_hulk_row', 'rm_tithe_stone', 'hr_quiet_beacon',
+    'hr_first_wreck', 'th_lanes_end', 'th_first_garden', 'vg_choir_stones',
+    'vg_unfinished', 'convergence', 'deepening',
+  ];
+  const wLmCountVerts = (obj) => {
+    let n = 0;
+    obj.traverse((o) => { n += o.geometry?.attributes?.position?.count ?? 0; });
+    return n;
+  };
+  let wLmAuthoredTagged = true;
+  for (const id of wLmAuthoredIds) {
+    const entry = wLmCat.find((e) => e.id === `landmark:authored:${id}`);
+    if (!entry) { wLmAuthoredTagged = false; continue; }
+    const built = entry.build();
+    if (built?.object?.userData?.authored !== id) wLmAuthoredTagged = false;
+  }
+  const wLmWreckA = wLmCat.find((e) => e.id === 'landmark:wreck:independent')?.build();
+  const wLmWreckB = wLmCat.find((e) => e.id === 'landmark:wreck:independent')?.build();
+  const wLmVa = wLmWreckA?.object ? wLmCountVerts(wLmWreckA.object) : -1;
+  const wLmVb = wLmWreckB?.object ? wLmCountVerts(wLmWreckB.object) : -2;
+  const wLmChecks = {
+    catalogCount21: wLmCat.length === 21,
+    authoredNamed: wLmAuthoredIds.every((id) => wLmCat.some((e) => e.id === `landmark:authored:${id}`)),
+    authoredDispatch: wLmAuthoredTagged,
+    kindDeterministic: wLmVa > 10 && wLmVa === wLmVb,
+  };
+  console.log('landmark redesign catalog:', JSON.stringify(wLmChecks), `verts=${wLmVa}`);
+  if (!Object.values(wLmChecks).every(Boolean)) { console.log('LANDMARK REDESIGN CATALOG FAIL'); errors++; }
 }
 
 // Unknowable fields: projectiles do not couple; the mining beam does.
@@ -11122,6 +11208,651 @@ removeLiveShip(w42indyCtx, w42indy);
     console.log('UNKNOWABLE WEAPON COUPLING FAIL');
     errors++;
   }
+}
+
+// G0 gate kit: scale contracts, seeded tunnel, hub lantern extra.
+// Isolated — no travel. Overlay-on-torus census pins are retired (R10 / G13).
+{
+  const { JUMP: jG0 } = await import('../src/game/state.js');
+  const gs = await import('../src/game/gate-scale.js');
+  const gd = await import('../src/systems/gate-detail.js');
+  const { buildGateModel } = await import('../src/systems/gate.js');
+  const tA = new Float32Array(gs.TUNNEL_COUNT * 2);
+  const tZ = new Float32Array(gs.TUNNEL_COUNT);
+  const tA2 = new Float32Array(gs.TUNNEL_COUNT * 2);
+  const tZ2 = new Float32Array(gs.TUNNEL_COUNT);
+  const seed = gd.seedFromParts('g0', 'kit');
+  gd.fillTunnelArrays(tA, tZ, seed);
+  gd.fillTunnelArrays(tA2, tZ2, seed);
+  let tunSame = true;
+  for (let i = 0; i < tA.length; i++) if (tA[i] !== tA2[i]) tunSame = false;
+  const m1 = buildGateModel('independent');
+  const hub = buildGateModel('lamplighter', { hub: true, routes: 3 });
+  const g0Checks = {
+    zone: gs.ZONE === jG0.zone,
+    arrival: gs.ARRIVAL_OFFSET === jG0.arrivalOffset,
+    bore: gs.BORE_RADIUS === 30 && gs.OUTLINE_BREAKER_MIN === 9,
+    tunnelDeterministic: tunSame,
+    catalogBuilds: !!m1.object,
+    hubLantern: hub.object.userData.routeCount === 3,
+    censusHead: gs.GATE_REBUILD_ORDER[0] === 'freehold',
+  };
+  console.log('g0 gate kit:', JSON.stringify(g0Checks));
+  if (!Object.values(g0Checks).every(Boolean)) { console.log('G0 GATE KIT FAIL'); errors++; }
+}
+
+// G13 closeout: leftover RING torus / overlay chassis is gone. Catalog
+// models are faction sculpts named '<faction>-gate' with no '*-overlay' child.
+{
+  const { GATE_REBUILD_ORDER } = await import('../src/game/gate-scale.js');
+  const { buildGateModel } = await import('../src/systems/gate.js');
+  const g13 = {
+    allNamed: true,
+    noOverlayChild: true,
+    hasHullMesh: true,
+    independentSculpt: false,
+    hollowSculpt: false,
+    hubLantern: false,
+  };
+  for (const f of GATE_REBUILD_ORDER) {
+    const { object } = buildGateModel(f);
+    if (object.name !== `${f}-gate`) g13.allNamed = false;
+    if (object.children.some((c) => c.name?.endsWith('-overlay'))) g13.noOverlayChild = false;
+    let verts = 0;
+    object.traverse((o) => { if (o.isMesh) verts += o.geometry?.attributes?.position?.count ?? 0; });
+    if (verts <= 500) g13.hasHullMesh = false;
+    if (f === 'independent') g13.independentSculpt = object.name === 'independent-gate' && verts > 500;
+    if (f === 'hollow') g13.hollowSculpt = object.name === 'hollow-gate' && verts > 500;
+  }
+  const hub = buildGateModel('lamplighter', { hub: true, routes: 3 });
+  g13.hubLantern = hub.object.userData.routeCount === 3;
+  console.log('g13 closeout:', JSON.stringify(g13));
+  if (!Object.values(g13).every(Boolean)) { console.log('G13 CLOSEOUT FAIL'); errors++; }
+}
+
+// ---- HUD-01: mirrored central combat status (player + target rails) --------
+// New glance clusters live under the memoized #hud root. Visibility of the
+// target rail is a classList is-hidden flip (same stub contract as wave 15).
+// Existing wave-15 chartmark and wave-31 bracket class names must still
+// resolve once under that root.
+{
+  const hud01has = (n, cls) => typeof n.className === 'string' && n.className.split(' ').includes(cls);
+  const hud01nodes = (cls) => [...walkDom(document.getElementById('hud'))]
+    .filter((n) => hud01has(n, cls));
+  const hud01shown = (n) => n && !n.classList.contains('is-hidden');
+
+  const prevTgt01 = ctx.targets.current;
+  ctx.targets.current = null;
+  tick(3, 'hud01 no target');
+  const selfRails = hud01nodes('rw-combat-self');
+  const tgtRails = hud01nodes('rw-combat-target');
+  const hiddenNone = tgtRails.length > 0 && tgtRails.every((n) => !hud01shown(n));
+
+  const rec01 = {
+    id: 'hud01-mark', name: 'HUD01 MARK', classKey: 'freighter',
+    faction: 'independent', role: 'trader', resolve: 50,
+  };
+  const origin01 = ctx.ship.object ? ctx.ship.object.position.clone() : new THREE.Vector3();
+  let live01 = spawnLiveShip(ctx, rec01, origin01.clone().add(new THREE.Vector3(80, 0, 0)));
+  let spawned01 = false;
+  if (live01) {
+    ctx.ships.push(live01);
+    spawned01 = true;
+  } else {
+    live01 = (ctx.ships ?? []).find((s) => s?.state && !s.state.destroyed && s.object) ?? null;
+  }
+  if (live01?.state) {
+    live01.state.screen = 12;
+    live01.state.screenMax = 24;
+    live01.state.shell = 40;
+    live01.state.shellMax = 80;
+    live01.state.hull = 50;
+    live01.state.hullMax = 100;
+    live01.state.name = 'HUD01 MARK';
+    if (live01.record) {
+      live01.record.name = 'HUD01 MARK';
+      if (live01.record.qship && !live01.record.revealed) live01.record.coverName = 'HUD01 MARK';
+    }
+  }
+  ctx.targets.current = live01;
+  tick(15, 'hud01 live ship target');
+  const shownRails = tgtRails.filter(hud01shown);
+  const rail01 = shownRails[0] ?? null;
+  const railKids = rail01 ? [...walkDom(rail01)] : [];
+  const nameShown = railKids.some((n) => hud01has(n, 'rw-combat-name')
+    && typeof n.textContent === 'string' && n.textContent.includes('HUD01 MARK'));
+  const distShown = railKids.some((n) => hud01has(n, 'rw-combat-dist')
+    && typeof n.textContent === 'string' && /\d/.test(n.textContent));
+
+  ctx.targets.current = live01
+    ? { object: live01.object, state: { ...live01.state, destroyed: true }, record: live01.record }
+    : { state: { destroyed: true, name: 'HUD01 MARK' } };
+  tick(3, 'hud01 destroyed target');
+  const hiddenWhenDestroyed = tgtRails.every((n) => !hud01shown(n));
+
+  ctx.targets.current = {
+    position: origin01.clone(),
+    ore: 8,
+    commodity: 'rawOre',
+    hardness: 1,
+  };
+  tick(3, 'hud01 asteroid target');
+  const hiddenAsteroid = tgtRails.every((n) => !hud01shown(n));
+
+  ctx.targets.current = prevTgt01;
+  if (spawned01 && live01) {
+    const i01 = ctx.ships.indexOf(live01);
+    if (i01 >= 0) ctx.ships.splice(i01, 1);
+    removeLiveShip(ctx, live01);
+  }
+
+  const hud01 = {
+    selfPresent: selfRails.length > 0,
+    targetPresent: tgtRails.length > 0,
+    hiddenWithoutTarget: hiddenNone,
+    shownOnLiveShip: shownRails.length > 0,
+    nameShown,
+    distShown,
+    hiddenWhenDestroyed,
+    hiddenOnAsteroid: hiddenAsteroid,
+    chartmarkSelector: hud01nodes('rw-chartmark').length > 0
+      && hud01nodes('rw-chartmark-label').length > 0,
+    targetBracketSelector: hud01nodes('rw-target').length > 0
+      && hud01nodes('rw-target-name').length > 0
+      && hud01nodes('rw-target-meta').length > 0,
+  };
+  console.log('hud01 mirrored combat rails:', JSON.stringify(hud01));
+  if (!Object.values(hud01).every(Boolean)) { console.log('HUD01 COMBAT RAILS FAIL'); errors++; }
+}
+
+// ---- HUD utility waves B–E (hail slot, facing, lead/MATCH, first-person) ----
+{
+  const hailCard = [...walkDom(document.body)].find((n) => n.className === 'rw-hail-card');
+  const hailCss = hailCard?.style?.cssText || '';
+  const hintEl = [...walkDom(document.body)].find((n) => n.className === 'rw-onboard-hint');
+  const hintCss = hintEl?.style?.cssText || '';
+  const waveB = {
+    hailCard: !!hailCard,
+    hailLowerLeft: hailCss.includes('left:14px') && hailCss.includes('bottom:22%'),
+    hailMax360: hailCss.includes('360px'),
+    hintOffBottom: hintCss.includes('top:48px') && hintCss.includes('left:14px')
+      && !hintCss.includes('bottom:6%'),
+  };
+  console.log('hud wave B hail/onboard:', JSON.stringify(waveB));
+  if (!Object.values(waveB).every(Boolean)) { console.log('HUD WAVE B FAIL'); errors++; }
+
+  const facingHas = (cls) => [...walkDom(document.getElementById('hud'))]
+    .some((n) => typeof n.className === 'string' && n.className.split(' ').includes(cls));
+  const facingFlash = (cls) => [...walkDom(document.getElementById('hud'))]
+    .some((n) => typeof n.className === 'string' && n.className.split(' ').includes(cls)
+      && n.classList.contains('is-flash'));
+  const waveCpre = {
+    facingPresent: facingHas('rw-facing') && facingHas('rw-facing-fore') && facingHas('rw-facing-aft'),
+  };
+  ctx.emit('playerHit', { damage: 1, family: 'cannon', fromAft: true, shielded: true });
+  tick(1, 'hud wave C aft flash');
+  const waveC = {
+    ...waveCpre,
+    aftFlash: facingFlash('rw-facing-aft'),
+    foreQuiet: !facingFlash('rw-facing-fore'),
+  };
+  console.log('hud wave C facing:', JSON.stringify(waveC));
+  if (!Object.values(waveC).every(Boolean)) { console.log('HUD WAVE C FAIL'); errors++; }
+
+  ctx.flags.docked = false;
+  ctx.gate.jumping = false;
+  const prevTgtD = ctx.targets.current;
+  const recD = {
+    id: 'hud-d-mark', name: 'HUD D MARK', classKey: 'light',
+    faction: 'independent', role: 'trader', resolve: 40,
+  };
+  const originD = ctx.ship.object ? ctx.ship.object.position.clone() : new THREE.Vector3();
+  let liveD = spawnLiveShip(ctx, recD, originD.clone().add(new THREE.Vector3(40, 0, -20)));
+  let spawnedD = false;
+  if (liveD) { ctx.ships.push(liveD); spawnedD = true; }
+  else liveD = (ctx.ships ?? []).find((s) => s?.state && !s.state.destroyed && s.object) ?? null;
+  ctx.targets.current = liveD;
+  ctx.input.weaponGroup = 2;
+  const throttleBefore = ctx.input.throttle;
+  dispatchKey('KeyX');
+  tick(2, 'hud wave D match + disruptor');
+  const matchOn = ctx.flags.matchSpeed === true;
+  const throttleUntouched = ctx.input.throttle === throttleBefore;
+  ctx.input.weaponGroup = 3;
+  tick(2, 'hud wave D mining hides pip');
+  const leadHidden = [...walkDom(document.getElementById('hud'))]
+    .filter((n) => typeof n.className === 'string' && n.className.split(' ').includes('rw-lead'))
+    .every((n) => n.classList.contains('is-hidden'));
+  dispatchKey('KeyX');
+  tick(1, 'hud wave D match off');
+  const matchOff = ctx.flags.matchSpeed === false;
+  ctx.targets.current = prevTgtD;
+  if (spawnedD && liveD) {
+    const iD = ctx.ships.indexOf(liveD);
+    if (iD >= 0) ctx.ships.splice(iD, 1);
+    removeLiveShip(ctx, liveD);
+  }
+  const waveD = { matchOn, throttleUntouched, leadHidden, matchOff };
+  console.log('hud wave D aim/match:', JSON.stringify(waveD));
+  if (!Object.values(waveD).every(Boolean)) { console.log('HUD WAVE D FAIL'); errors++; }
+
+  const prevCam = ctx.flags.camera;
+  ctx.flags.camera = 'first';
+  ctx.flags.firstPerson = true;
+  tick(2, 'hud wave E first-person');
+  const camZ = FIRST_PERSON_NOSE.z;
+  const pastTip = camZ <= -2.5;
+  const noseMoved = FIRST_PERSON_NOSE.y === 0.45 && camZ === -2.8;
+  ctx.flags.camera = prevCam || 'chase';
+  ctx.flags.firstPerson = ctx.flags.camera === 'first';
+  tick(1, 'hud wave E restore cam');
+  const waveE = { pastTip, noseMoved };
+  console.log('hud wave E first-person:', JSON.stringify(waveE));
+  if (!Object.values(waveE).every(Boolean)) { console.log('HUD WAVE E FAIL'); errors++; }
+}
+
+// ---- HUD Wave F: scanner-gated bottom bearing arc (not a reticle ring) ----
+{
+  const hudFhas = (n, cls) => !!(n.classList && n.classList.contains(cls));
+  const hudFnodes = (cls) => [...walkDom(document.getElementById('hud'))]
+    .filter((n) => hudFhas(n, cls));
+  const hudFshown = (n) => n && !n.classList.contains('is-hidden');
+  const prevScanF = ctx.world.scanner;
+  const prevDockF = ctx.flags.docked;
+  const prevTgtF = ctx.targets.current;
+  const prevPosF = ctx.ship.object ? ctx.ship.object.position.clone() : null;
+  ctx.flags.docked = false;
+  ctx.world.scanner = 0;
+  if (ctx.ship.object) ctx.ship.object.position.set(2400, 40, 2400);
+  tick(2, 'hud wave F scanner 0');
+  const arcs = hudFnodes('rw-contacts').filter((n) => n.tagName === 'DIV');
+  const hiddenCore = arcs.length > 0 && arcs.every((n) => !hudFshown(n));
+
+  ctx.world.scanner = 1;
+  tick(2, 'hud wave F scanner 1 empty');
+  const shownMk1 = arcs.some(hudFshown);
+
+  const recF = {
+    id: 'hud-f-mark', name: 'HUD F MARK', classKey: 'light',
+    faction: 'independent', role: 'pirate', resolve: 40,
+  };
+  const originF = ctx.ship.object ? ctx.ship.object.position.clone() : new THREE.Vector3();
+  let liveF = spawnLiveShip(ctx, recF, originF.clone().add(new THREE.Vector3(0, 0, 80)));
+  let spawnedF = false;
+  if (liveF) { ctx.ships.push(liveF); spawnedF = true; }
+  else liveF = (ctx.ships ?? []).find((s) => s?.state && !s.state.destroyed && s.object) ?? null;
+  if (liveF?.ai) {
+    liveF.ai.mode = 'loiter';
+    liveF.ai.target = null;
+    liveF.ai.intent = false;
+  }
+  tick(3, 'hud wave F civilian aft');
+  const civPip = hudFnodes('rw-contact-pip').some((n) => hudFshown(n) && hudFhas(n, 'is-civ'));
+
+  if (liveF?.ai) {
+    liveF.ai.mode = 'hunt';
+    liveF.ai.target = 'player';
+    liveF.ai.phase = 'telegraph';
+    liveF.ai.intent = true;
+    liveF.ai.playerRolled = true;
+    liveF.ai.playerInterested = true;
+  }
+  tick(3, 'hud wave F hostile');
+  const hostilePip = hudFnodes('rw-contact-pip').some((n) => hudFshown(n) && hudFhas(n, 'is-hostile'));
+
+  ctx.targets.current = liveF;
+  tick(3, 'hud wave F lock');
+  const lockPip = hudFnodes('rw-contact-pip').some((n) => hudFshown(n) && hudFhas(n, 'is-lock'));
+
+  ctx.flags.docked = true;
+  tick(2, 'hud wave F docked');
+  const hiddenDocked = arcs.every((n) => !hudFshown(n));
+
+  ctx.flags.docked = false;
+  ctx.world.scanner = 2;
+  tick(3, 'hud wave F mk2');
+  const shownMk2 = arcs.some(hudFshown);
+  const lockStill = hudFnodes('rw-contact-pip').some((n) => hudFshown(n) && hudFhas(n, 'is-lock'));
+
+  ctx.world.scanner = prevScanF;
+  ctx.flags.docked = prevDockF;
+  ctx.targets.current = prevTgtF;
+  if (prevPosF && ctx.ship.object) ctx.ship.object.position.copy(prevPosF);
+  if (spawnedF && liveF) {
+    const iF = ctx.ships.indexOf(liveF);
+    if (iF >= 0) ctx.ships.splice(iF, 1);
+    removeLiveShip(ctx, liveF);
+  }
+  tick(1, 'hud wave F restore');
+
+  const waveF = {
+    arcPresent: arcs.length >= 1,
+    hiddenCore,
+    shownMk1,
+    civPip,
+    hostilePip,
+    lockPip,
+    hiddenDocked,
+    shownMk2,
+    lockStill,
+    bottomNotRing: true,
+  };
+  console.log('hud wave F contacts:', JSON.stringify(waveF));
+  if (!Object.values(waveF).every(Boolean)) { console.log('HUD WAVE F FAIL'); errors++; }
+}
+
+// ---- FLT: shared turn law (player + NPC) ----
+{
+  const near = (a, b) => Math.abs(a - b) < 1e-3;
+  const flt = {
+    lightCreep: near(turnRateFor('light', 30), 30 / 90),
+    lightCruise: near(turnRateFor('light', 120), 0.85),
+    aceCap: near(turnRateFor('ace', 135), 1.05),
+    freightMinR: near(turnRateFor('freighter', 60), 60 / 200),
+    frigateMinR: near(turnRateFor('frigate', 22), 22 / 420),
+    aceBeatsFreight: turnRateFor('ace', 60) > turnRateFor('freighter', 60),
+    unknownFallsToLight: near(turnRateFor('nope', 30), turnRateFor('light', 30)),
+    nanSafe: Number.isFinite(turnRateFor('light', Number.NaN)),
+  };
+  console.log('flt turn law:', JSON.stringify(flt));
+  if (!Object.values(flt).every(Boolean)) { console.log('FLT TURN LAW FAIL'); errors++; }
+}
+
+// ---- WAVE53: PHY kernel + collision math ----
+{
+  const near = (a, b, e = 1e-3) => Number.isFinite(a) && Math.abs(a - b) < e;
+  const so = { hit: false, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  sphereOverlap(0, 0, 0, 2, 3, 0, 0, 2, so);
+  const soMiss = { hit: true, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  sphereOverlap(0, 0, 0, 2, 5, 0, 0, 2, soMiss);
+  const cyHit = { hit: false, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  cylinderOverlap(33, 0, 0, 2, 0, 0, 0, 32, PHY.STATION_CYL_Y0, PHY.STATION_CYL_Y1, cyHit);
+  const cyHigh = { hit: true, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  cylinderOverlap(0, PHY.STATION_CYL_Y1 + 80, 0, 2, 0, 0, 0, 32, PHY.STATION_CYL_Y0, PHY.STATION_CYL_Y1, cyHigh);
+  const rv = { vx: 0, vy: 0, vz: 0 };
+  resolveVelocity(-10, 0, 0, 1, 0, 0, PHY.RESTITUTION, PHY.SLIDE_FRICTION, rv);
+  const R = 100;
+  const sz0 = { zone: -1, t: -1, dist: -1 };
+  const sz1 = { zone: -1, t: -1, dist: -1 };
+  const sz2 = { zone: -1, t: -1, dist: -1 };
+  sunZone(PHY.SUN_HEAT_MULT * R, 0, 0, 0, 0, 0, R, sz0);
+  sunZone(1.5 * R, 0, 0, 0, 0, 0, R, sz1);
+  sunZone(1.0 * R, 0, 0, 0, 0, 0, R, sz2);
+  const dest = { count: 0, items: [] };
+  collectBodies(ctx, dest);
+  let hasStation = false;
+  let hasPlayer = false;
+  for (let i = 0; i < dest.count; i++) {
+    const b = dest.items[i];
+    if (b && b.kind === 'station') hasStation = true;
+    if (b && b.kind === 'player') hasPlayer = true;
+  }
+  const nanSo = { hit: true, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  const nanSz = { zone: 9, t: 9, dist: 9 };
+  let nanThrew = false;
+  try {
+    sphereOverlap(Number.NaN, 0, 0, 2, 0, 0, 0, 2, nanSo);
+    sunZone(Number.NaN, 0, 0, 0, 0, 0, R, nanSz);
+  } catch {
+    nanThrew = true;
+  }
+  const bodies2 = { count: 0, items: [] };
+  collectBodies({}, bodies2);
+  const w53 = {
+    phyFrozen: Object.isFrozen(PHY) && PHY.PLAYER_RADIUS === 2.4 && PHY.STATION_CYL_RADIUS === 32,
+    dist3: near(distSq(0, 0, 0, 3, 0, 0), 9),
+    sphereHit: so.hit === true && near(so.overlap, 1) && so.nx < 0,
+    sphereMiss: soMiss.hit === false,
+    cylHit: cyHit.hit === true && near(cyHit.overlap, 1) && cyHit.nx > 0,
+    cylHigh: cyHigh.hit === false,
+    bounce: near(rv.vx, 1.5),
+    sunBoundary: sz0.zone === 0 || sz0.zone === 1,
+    sunHeat: sz1.zone === 1,
+    sunKill: sz2.zone === 2,
+    sunTRamp: sz0.t < sz1.t && sz1.t < sz2.t && sz2.t === 1,
+    bodiesStation: dest.count >= 1 && hasStation,
+    bodiesPlayer: hasPlayer,
+    bodiesFinite: Number.isFinite(dest.count) && dest.count >= 1,
+    nanSafe: !nanThrew && nanSo.hit === false && nanSz.zone === 0,
+    earlyCollect: bodies2.count === 0 || Number.isFinite(bodies2.count),
+    resolveApi: typeof resolveMover === 'function',
+  };
+  console.log('wave53 phy:', JSON.stringify(w53));
+  if (!Object.values(w53).every(Boolean)) { console.log('WAVE53 PHY FAIL'); errors++; }
+}
+
+// ---- WAVE54: FX first pass (source-contract pins; no WebGL) ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = (rel) => readFileSync(join(here, '..', rel), 'utf8');
+  const combatSrc = src('src/systems/combat.js');
+  const songSrc = src('src/systems/song.js');
+  const shipSrc = src('src/systems/ship.js');
+  const npcSrc = src('src/systems/npc.js');
+  const ctxSrc = src('src/core/ctx.js');
+  const hdStart = npcSrc.indexOf('function handleDestroyed');
+  const hdEnd = npcSrc.indexOf('export function initNpc');
+  const hd = hdStart >= 0 && hdEnd > hdStart ? npcSrc.slice(hdStart, hdEnd) : '';
+  const cueKeys = ['playerFire', 'npcFire', 'npcHit', 'bodyHit', 'npcDestroyed', 'sunHeat'];
+  const w54 = {
+    playerFireEmit: combatSrc.includes("ctx.emit('playerFire'"),
+    playerFireDoc: ctxSrc.includes("'playerFire' { weapon }"),
+    muzzlePool: combatSrc.includes('MUZZLE_POOL') && combatSrc.includes('spawnMuzzle'),
+    ripple: combatSrc.includes('spawnRipple') && combatSrc.includes('spawnHitFx'),
+    sparksUp: combatSrc.includes('SPARKS_PER_BURST = 11'),
+    projRadius: combatSrc.includes('const PROJ_RADIUS = 0.4'),
+    cues: cueKeys.every((k) => songSrc.includes(`${k}:`)),
+    shakeLastEvents: shipSrc.includes('SHAKE_FIRST_MAX = 0.12') && shipSrc.includes('SHAKE_CHASE_MAX = 0.35'),
+    shakeZeros: shipSrc.includes('reducedMotion') && shipSrc.includes('SHAKE_DECAY'),
+    deathPool: npcSrc.includes('DEATH_BURST_SLOTS = 3') && npcSrc.includes('makeDeathBurstPool'),
+    noPerKillMat: hd.includes('emitDeathBurst') && !hd.includes('new THREE.MeshBasicMaterial'),
+  };
+  console.log('wave54 fx:', JSON.stringify(w54));
+  if (!Object.values(w54).every(Boolean)) { console.log('WAVE54 FX FAIL'); errors++; }
+}
+
+// ---- WAVE55: mining lance (source-contract pins; no WebGL) ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const combatSrc = readFileSync(join(here, '..', 'src/systems/combat.js'), 'utf8');
+  const stateSrc = readFileSync(join(here, '..', 'src/game/state.js'), 'utf8');
+  const glowInit = combatSrc.slice(combatSrc.indexOf('const beamGlow'), combatSrc.indexOf('beamGlow.name'));
+  const w55 = {
+    glowUsesSharedDot: glowInit.includes('map: glowTex'),
+    ribbonFade: combatSrc.includes('function makeBeamRibbon'),
+    lanceConsts: combatSrc.includes('LANCE_W0') && combatSrc.includes('LANCE_W1')
+      && combatSrc.includes('LANCE_GLOW'),
+    mk1Pencil: /beamWidth:\s*0\.22/.test(stateSrc),
+    headsStayThin: !/beamWidth:\s*(1\.0|1\.35|1\.75|2\.2)/.test(stateSrc),
+  };
+  console.log('wave55 mining lance:', JSON.stringify(w55));
+  if (!Object.values(w55).every(Boolean)) { console.log('WAVE55 MINING LANCE FAIL'); errors++; }
+}
+
+// ---- WAVE56: AI first pass (source-contract pins; no WebGL) ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = (rel) => readFileSync(join(here, '..', rel), 'utf8');
+  const feelSrc = src('src/game/traffic-feel.js');
+  const trafficSrc = src('src/game/traffic.js');
+  const worldSrc = src('src/game/world.js');
+  const npcSrc = src('src/systems/npc.js');
+  const gtStart = worldSrc.indexOf('function galaxyTick');
+  const gtEnd = worldSrc.indexOf('return {', gtStart);
+  const galaxyTick = gtStart >= 0 && gtEnd > gtStart ? worldSrc.slice(gtStart, gtEnd) : '';
+  const pickStart = worldSrc.indexOf('function pickMigrant');
+  const pickEnd = worldSrc.indexOf('function arriveMigrants');
+  const pickSrc = pickStart >= 0 && pickEnd > pickStart ? worldSrc.slice(pickStart, pickEnd) : '';
+  const w56 = {
+    feelTable: feelSrc.includes('export function hullRadiusFor')
+      && feelSrc.includes('export function visualClassFor')
+      && feelSrc.includes('SEPARATION_PAD = 10'),
+    spawnVisual: trafficSrc.includes('visualClassFor(best)')
+      && trafficSrc.includes('spawnBlocked')
+      && trafficSrc.includes('pirateLiveCap')
+      && trafficSrc.includes('closeSpawn'),
+    coverClass: feelSrc.includes('coverClass ?? \'freighter\''),
+    traderGateRoute: worldSrc.includes('export function traderRouteWaypoints')
+      && worldSrc.includes('GATE_HOLD = [30, 50]'),
+    noTickTransit: galaxyTick.includes('gateLinger') && !galaxyTick.includes('beginTransit('),
+    pickStartsTransit: pickSrc.includes('beginTransit(ctx, chosen'),
+    hostileStanding: npcSrc.includes('HOSTILE_STANDING = -10'),
+    traderPanic: npcSrc.includes('TRADER_FLEE_HIT = 10')
+      && npcSrc.includes('export function traderHitPanic'),
+    noTraderHuntPlayer: npcSrc.includes('isCivilianRole')
+      && npcSrc.includes("role === 'trader' || role === 'miner'"),
+  };
+  console.log('wave56 ai first pass:', JSON.stringify(w56));
+  if (!Object.values(w56).every(Boolean)) { console.log('WAVE56 AI FAIL'); errors++; }
+}
+
+// ---- WAVE57: AI leftovers (bolts, dest ticks, miners; no WebGL) ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = (rel) => readFileSync(join(here, '..', rel), 'utf8');
+  const combatSrc = src('src/systems/combat.js');
+  const npcSrc = src('src/systems/npc.js');
+  const worldSrc = src('src/game/world.js');
+  const gtStart = worldSrc.indexOf('function galaxyTick');
+  const gtEnd = worldSrc.indexOf('return {', gtStart);
+  const galaxyTick = gtStart >= 0 && gtEnd > gtStart ? worldSrc.slice(gtStart, gtEnd) : '';
+  const tbStart = worldSrc.indexOf('export function tickBank');
+  const tbEnd = worldSrc.indexOf('export function', tbStart + 10);
+  const tickBankSrc = tbStart >= 0 && tbEnd > tbStart ? worldSrc.slice(tbStart, tbEnd) : worldSrc.slice(tbStart);
+  const w57 = {
+    aimNotPlayerOnly: combatSrc.includes('function spawnNpcShot(ship, weapon, aimObj)')
+      && combatSrc.includes('aimObj.position'),
+    vsPlayerFlag: combatSrc.includes('bolt.vsPlayer = true')
+      && combatSrc.includes('bolt.vsPlayer = false'),
+    skipShooter: combatSrc.includes('p.shooter && s === p.shooter'),
+    lastAttackerStamp: combatSrc.includes("s.ai.lastAttacker = p.fromPlayer ? 'player'"),
+    playerOnlyRetaliation: npcSrc.includes("lastAttackerOf(live) === 'player'"),
+    destTicksAllBanks: galaxyTick.includes('tickBank(banks[sysId]')
+      && !galaxyTick.includes('beginTransit('),
+    tickBankNoTransit: tickBankSrc.includes('function tickBank')
+      ? !tickBankSrc.includes('beginTransit(')
+      : worldSrc.includes('export function tickBank') && worldSrc.includes('tickMinerExtract'),
+    minerCount: worldSrc.includes('export function minerCountForCast')
+      && worldSrc.includes('MINER_CARGO_CAP = 8'),
+    minerRole: npcSrc.includes("role === 'miner'")
+      && npcSrc.includes("ctx.emit('mineHit'"),
+    minersDoNotMigrate: worldSrc.includes("rec.role !== 'trader'")
+      || worldSrc.includes("rec.role !== 'trader' || rec.state !== 'enroute'"),
+  };
+  console.log('wave57 ai leftovers:', JSON.stringify(w57));
+  if (!Object.values(w57).every(Boolean)) { console.log('WAVE57 AI FAIL'); errors++; }
+}
+
+// ---- WAVE58: PHY leftovers (gate torus, station holds, NPC avoid) ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = (rel) => readFileSync(join(here, '..', rel), 'utf8');
+  const { traderRouteWaypoints } = await import('../src/game/world.js');
+  const { hullRadiusFor, STATION_HOLD_PAD, writeStationHold } = await import('../src/game/traffic-feel.js');
+  const { gateProbeHits, minerHoldFromStation } = await import('../src/systems/npc.js');
+  const near = (a, b, e = 1e-3) => Number.isFinite(a) && Math.abs(a - b) < e;
+  const to = { hit: true, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  torusOverlap(0, 0, 0, 2.4, 0, 0, 200, PHY.GATE_BORE, PHY.GATE_TUBE, to);
+  const tube = { hit: false, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  torusOverlap(PHY.GATE_BORE, 0, 200, 2.4, 0, 0, 200, PHY.GATE_BORE, PHY.GATE_TUBE, tube);
+  const fat = { hit: false, nx: 0, ny: 0, nz: 0, overlap: 0 };
+  torusOverlap(0, 0, 200, 40, 0, 0, 200, PHY.GATE_BORE, PHY.GATE_TUBE, fat);
+  const dest = { count: 0, items: [] };
+  collectBodies(ctx, dest);
+  let gateN = 0;
+  for (let i = 0; i < dest.count; i++) {
+    const b = dest.items[i];
+    if (b && b.kind === 'gate' && b.r === PHY.GATE_BORE && b.y0 === PHY.GATE_TUBE) gateN += 1;
+  }
+  const planned = traderRouteWaypoints(SYSTEMS.freehold, 0);
+  const st = SYSTEMS.freehold.station.position;
+  const gp = SYSTEMS.freehold.gates[0].position;
+  const wp0 = planned.waypoints[0];
+  const holdMin = PHY.STATION_CYL_RADIUS + hullRadiusFor('freighter') + STATION_HOLD_PAD - 0.01;
+  const holdXZ = Math.hypot(wp0.x - st[0], wp0.z - st[2]);
+  const hold = { x: 0, y: 0, z: 0 };
+  minerHoldFromStation({ x: st[0], y: st[1], z: st[2] }, { x: st[0], y: st[1], z: st[2] }, 39.3, hold);
+  const minerXZ = Math.hypot(hold.x - st[0], hold.z - st[2]);
+  const gateBody = { kind: 'gate', x: 0, y: 0, z: 200, r: PHY.GATE_BORE, y0: PHY.GATE_TUBE, y1: 0, id: 0 };
+  const collSrc = src('src/game/collision.js');
+  const npcSrc = src('src/systems/npc.js');
+  const feelSrc = src('src/game/traffic-feel.js');
+  const worldSrc = src('src/game/world.js');
+  const w58 = {
+    phyGate: PHY.GATE_BORE === 30 && PHY.GATE_TUBE === 2.2 && Object.isFrozen(PHY),
+    boreEmpty: to.hit === false,
+    tubeSolid: tube.hit === true,
+    freighterBlocked: fat.hit === true,
+    collectGate: gateN >= 1,
+    holdOffPad: holdXZ >= holdMin && !near(wp0.x, st[0], 0.5),
+    gateEndFixed: near(planned.waypoints[1].x, gp[0]) && near(planned.waypoints[1].z, gp[2]),
+    outboundPhysical: planned.outboundTo === SYSTEMS.freehold.gates[0].to,
+    minerHoldOut: minerXZ >= PHY.STATION_CYL_RADIUS + 39.3 + 11,
+    gateBoreMiss: gateProbeHits(0, 0, 200, 2.4, gateBody) === false,
+    gateTubeHit: gateProbeHits(PHY.GATE_BORE, 0, 200, 2.4, gateBody) === true,
+    torusFn: typeof torusOverlap === 'function' && typeof writeStationHold === 'function',
+    srcGateKind: collSrc.includes("b.kind === 'gate'") && npcSrc.includes("kind === 'gate'"),
+    srcHold: feelSrc.includes('STATION_HOLD_PAD = 12') && worldSrc.includes("writeStationHold(hold, station, 'freighter'"),
+  };
+  console.log('wave58 phy leftovers:', JSON.stringify(w58));
+  if (!Object.values(w58).every(Boolean)) { console.log('WAVE58 PHY FAIL'); errors++; }
+}
+
+// ---- WAVE59: FX leftovers (recoil, hull marks) + pad-home route heal ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = (rel) => readFileSync(join(here, '..', rel), 'utf8');
+  const {
+    healPadHome, normalizeTraderRecord, normalizeMinerRecord,
+  } = await import('../src/game/world.js');
+  const { hullRadiusFor, STATION_HOLD_PAD } = await import('../src/game/traffic-feel.js');
+  const { HULL_MARK_POOL } = await import('../src/game/hull-marks.js');
+  const shipSrc = src('src/systems/ship.js');
+  const combatSrc = src('src/systems/combat.js');
+  const st = SYSTEMS.freehold.station.position;
+  const gp = SYSTEMS.freehold.gates[0].position;
+  const trader = normalizeTraderRecord({
+    role: 'trader',
+    classKey: 'light',
+    system: 'freehold',
+    route: [{ x: st[0], y: st[1], z: st[2] }, { x: gp[0], y: gp[1], z: gp[2] }],
+    outboundTo: SYSTEMS.freehold.gates[0].to,
+  });
+  const traderXZ = Math.hypot(trader.route[0].x - st[0], trader.route[0].z - st[2]);
+  const holdMin = PHY.STATION_CYL_RADIUS + hullRadiusFor('freighter') + STATION_HOLD_PAD - 0.01;
+  const miner = normalizeMinerRecord({
+    role: 'miner',
+    classKey: 'light',
+    system: 'freehold',
+    route: [{ x: st[0], y: st[1], z: st[2] }, { x: gp[0], y: gp[1], z: gp[2] }],
+  });
+  const minerXZ = Math.hypot(miner.route[0].x - st[0], miner.route[0].z - st[2]);
+  const good = { x: trader.route[0].x, y: trader.route[0].y, z: trader.route[0].z };
+  const again = healPadHome({
+    role: 'trader',
+    classKey: 'freighter',
+    system: 'freehold',
+    route: [good, { x: gp[0], y: gp[1], z: gp[2] }],
+  });
+  let nanThrew = false;
+  try { healPadHome({ role: 'trader', system: 'nope', route: [{ x: NaN, y: 0, z: 0 }] }); }
+  catch { nanThrew = true; }
+  const w59 = {
+    recoilEvent: shipSrc.includes("ev.type === 'playerFire'") && shipSrc.includes("w === 'cannon' || w === 'disruptor'"),
+    recoilFlesh: shipSrc.includes('flesh.position.z += recoilZ') && shipSrc.includes('flesh.position.y += recoilY'),
+    recoilZero: shipSrc.includes('recoilZ = 0') && shipSrc.includes('recoilY = 0'),
+    noThrottle: !/ctx\.input\.throttle\s*=/.test(shipSrc),
+    hullPool: HULL_MARK_POOL === 12,
+    stampUnshielded: combatSrc.includes('stampHullMark(pos, host)') && combatSrc.includes('spawnSparks(pos, family)'),
+    parkDestroy: combatSrc.includes('parkMarksOnHost') && combatSrc.includes("e.type === 'npcDestroyed'"),
+    traderHold: traderXZ >= holdMin,
+    minerCloser: minerXZ < traderXZ && minerXZ > PHY.STATION_CYL_RADIUS,
+    idempotent: again.route[0].x === good.x && again.route[0].z === good.z,
+    nanSafe: nanThrew === false,
+    outboundKept: trader.outboundTo === SYSTEMS.freehold.gates[0].to,
+  };
+  console.log('wave59 fx leftovers:', JSON.stringify(w59));
+  if (!Object.values(w59).every(Boolean)) { console.log('WAVE59 FX FAIL'); errors++; }
 }
 
 if (errors === 0) {

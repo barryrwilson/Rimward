@@ -2715,6 +2715,243 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   determinism pins already cover the rebuild, and they pass unchanged
   (BOOT TEST PASS). Geometry review happens in the models browser: nine
   'prop:asteroid:<oreKey>' entries, which is why that browser exists.
+- HUD utility waves A–F (2026-08-17): combat glance, aiming, cameras, and
+  scanner-gated awareness from docs/HudUtilityChangeProposal.md. HUD-02
+  skins did not ship. HUD-03 did not add a new settings wave — scale /
+  contrast / color-blind / reduced-motion already lived in settings.js.
+  TGT-01 lead+range and TGT-02 MATCH shipped on the core ship (the
+  proposal overrode the wishlist “upgrade gates the pip” clause). TGT-03
+  shipped as Wave F awareness only. TGT-04 turrets did not ship.
+  WAVE A: thin stroke rails (`.rw-combat-rail` at top 57%, 78 px off
+  center), 80 px empty hub, Controls collapse on the rising edge of
+  combat, toasts (`top: 14px; right: 168px`) and `.rw-banner` (`top:
+  96px; right: 14px`) off the aim column, Bio / POS / resources /
+  Controls on `.rw-fade` (combat opacity 0.14).
+  WAVE B: Hail card lower-left `left: 14px; bottom: 22%; width: 360px`.
+  Onboarding hints top-left `left: 14px; top: 48px`. Context prompt stays
+  above the later contacts slot (`bottom: 20%`).
+  WAVE C: FORE / AFT glance (fill vs hollow plus the word) on both rails.
+  No lock: both self ends dim.
+  WAVE D: lead from selected-weapon TOF and relative velocity
+  (`targetVel − playerVel`); RANGE pop on the hub; MATCH on X. `ship.js`
+  holds lock world speed via `fwdSpeed` and does not write
+  `ctx.input.throttle`. Mining hides the pip.
+  WAVE E: `C` cycles chase → third → first → chase. One overlay. Chase
+  stays `_camOffset (0, 4, 12)`. Third is 18 up / 10 back, visual hull
+  scale 0.55. First-person `_noseOffset` / `FIRST_PERSON_NOSE` is
+  `(0, 0.45, -2.8)`, past the hull tip. Chase and third keep the hull
+  visible.
+  WAVE F: scanner-gated thin bottom bearing arc (`.rw-contacts`, not a
+  reticle ring). Tier 0: no arc. Mk I: `U.ENCOUNTER_BUBBLE`. Mk II: 2×
+  bubble + lock closure glyph (`«` / `»`). Shape is friend/foe (tick /
+  chevron / hollow diamond). Hidden while docked. Core ships keep DIST,
+  edge arrow, lead, RANGE, MATCH.
+  FILES: `src/systems/hud.js`, `src/ui/hud.css`, `src/systems/ship.js`,
+  `src/systems/hail.js`, `src/systems/onboarding.js`,
+  `src/systems/controls.js`, `src/core/ctx.js` (MATCH / camera flags;
+  “ship.js must not write ctx.input.throttle”).
+  VERIFY: Playwright 1600×900 stills in `out/hud-research/wave-f-*.png`.
+  `scripts/boot-test.mjs` pins HUD-01 rails and HUD waves B–F. This
+  closeout did not re-run the whole harness and does not claim BOOT
+  TEST PASS for the file. Last captured excerpt
+  (`out/hud-01-verify/boot-hud01.txt`) recorded a pre-existing `WAVE49`
+  `unknowablesClassOrdering` fail while the HUD-01 pins passed.
+  CONTRACTS: empty aim glass; no contacts ring around the reticle;
+  MATCH never writes throttle; scanner buys awareness only; HUD-02 and
+  TGT-04 remain later.
+- FLT (2026-08-17): readable dogfight turns. Player and NPC share
+  `src/game/flight-feel.js` `turnRateFor(classKey, speed)` =
+  `min(TURN_MAX, max(speed, 8) / TURN_MIN_RADIUS)`. Light creep radius
+  is 90 u (was ~21). Ace stays the most agile class. `ship.js` dropped
+  the old `MIN_AUTHORITY * rotationSpeed` curve. MATCH still holds lock
+  speed and does not write `input.throttle`.
+  NPC defiant / ace combat uses `applyCombatEnvelope`: approach offset
+  80 u, never aim at the hull inside 160 u, extend on dist < 140 or
+  high closure inside 220 u. Ace helix radius 220. Attack gun-pass
+  points the nose at the target when a shot is due (80–500 u). Telegraph
+  holds ~200 u and faces the target (does not ram). Demand hail, law
+  zone, and resolve bands stayed. `npm run test:boot` ends BOOT TEST
+  PASS (wave30 demand hail / showTeeth fire again; WAVE49 charter green;
+  HUD B–F and FLT pins green).
+  Wave F pip kind-change now writes `is-aft` / `is-far` in the same
+  class string so a kind swap does not drop them.
+  FILES: `src/game/flight-feel.js`, `src/systems/ship.js`,
+  `src/systems/npc.js`, `src/core/ctx.js` (`rotationSpeed` 0.85 fallback
+  comment), `src/systems/hud.js` (kind class string).
+  VERIFY: node table in `out/flt-verify/`; live pursuit stills
+  `out/flt-verify/flt-chase-*.png` and `flt-match.png` (14 s, 180 →
+  extend, MATCH lamp, throttle unchanged). `scripts/boot-test.mjs` pins
+  the turn-law samples.
+- Wave 53 (2026-08-17): PHY first pass — solid spheres/cylinders, NPC
+  avoid, star heat (orchestrated). New `src/game/physics.js` (`PHY`
+  table) and THREE-free `src/game/collision.js` (`sphereOverlap`,
+  `cylinderOverlap`, `resolveVelocity`, `sunZone`, `collectBodies`,
+  `resolveMover`). Station body is the D5 cylinder (r 32, y −26…33).
+  Player bounce in `ship.js` after integrate; `bodyHit` emit, no
+  `applyHit` there. NPC lookahead avoid + bounce in `npc.js` (envelope
+  80/140/160 kept). `combat.js` applies impact (`speed × 0.35`, min 8)
+  and sun heat (2.4× radius) / lethal (1.12×). Heat reads
+  `ctx.config.world.sunRadius` written by `solarsystem.js` (0 until a
+  live star exists — scoped mining harnesses stay at the origin). HUD
+  toasts: hull strike, STAR HEAT, star took the ship.
+  Frozen events: `bodyHit`, `sunHeat`, `sunKill`.
+  VERIFY: `out/phy-verify/` kernel pins CLEAN; Playwright station ram
+  (min radial 34.4), asteroid ram, dock at 40 u, MATCH throttle
+  untouched; NPC traffic 0 inside-cylinder samples. Boot WAVE53 math
+  pins green. Cruise heading now +X so the 10 s flight check does not
+  enter the star. OPEN: `npm run test:boot` still ends with 8 errors
+  (WAVE4 fence favor, WAVE26 ferry/haul quote cluster, WAVE35 haul
+  gate). PHY-02 is avoid+bounce, not full route planning. Gates have
+  no collision volume (the bore stays a lane).
+  FILES: `src/game/physics.js`, `src/game/collision.js`, `src/core/ctx.js`,
+  `src/systems/ship.js`, `src/systems/npc.js`, `src/systems/combat.js`,
+  `src/systems/hud.js`, `src/systems/solarsystem.js`,
+  `scripts/boot-test.mjs`.
+- Wave 54 (2026-08-17): FX first pass — impactful combat feedback
+  (orchestrated; four disjoint slices). FX-01 visuals in `combat.js`:
+  pooled muzzle pops, larger family-tinted bolt glow/streak (hit radius
+  still `PROJ_RADIUS = 0.4`), shield ripple when screen/shell > 0,
+  stronger hull sparks (11 chips). New frozen event `playerFire`
+  `{ weapon }` on a real cannon/disruptor spawn only. FX-01 camera
+  shake in `ship.js`: lastEvents-only, camera-local, chase cap 0.35 u /
+  first-person 0.12 u, zero under reducedMotion / dock / jump. MATCH
+  still does not write throttle. FX-02 audio in `song.js`: louder
+  playerHit / shieldDown / engineOut; new cues playerFire, npcFire,
+  npcHit, npcDestroyed, bodyHit, quiet sunHeat; volley cap ~8 on
+  npcFire/npcHit. FX-03 death burst in `npc.js`: 3-slot pool
+  (24 chips + 3 flashes), no per-kill material; world.js aftermath /
+  pods unchanged. VERIFY: `out/fx-verify/` (audio CLEAN, shake CLEAN
+  chase 0.207 / first 0.064 / reduced 0, MATCH throttle 0; visuals
+  probe saw muzzle + violet disruptor + ripple + playerFire; burst
+  live kill screenshot did not catch chips — pool is static-clean).
+  Boot WAVE54 source pins added. Recoil and persistent hull decals
+  did not ship. Next play-feel cluster: AI.
+  FILES: `src/systems/combat.js`, `src/core/ctx.js`, `src/systems/song.js`,
+  `src/systems/ship.js`, `src/systems/npc.js`, `scripts/boot-test.mjs`.
+- Wave 55 (2026-08-17): mining lance look only. The held beam is a thin
+  industrial cutting lance (Mk I a pencil of light; higher heads a touch
+  wider). Contact glow uses the shared radial `glowTex` so the hit is a
+  soft circular flare, never a white square. Ribbon edges fade via a 1D
+  canvas map. Gameplay numbers (extract, range, heat, damage, hardness)
+  are unchanged. Scene names stay `mine-beam` / `mine-beam-core` /
+  `mine-glow` / `mine-sparks` / `mine-dust`.
+  FILES: `src/systems/combat.js`, `src/game/state.js` (`beamWidth` only),
+  `scripts/boot-test.mjs`, `out/fx-verify/mining-capture.mjs`.
+- Wave 56 (2026-08-17): AI first pass — scaled spawn, gate transit,
+  civilian jobs/hostility (orchestrated; three disjoint slices).
+  AI-01: `src/game/traffic-feel.js` hull radii from SHIP_SCALE
+  (`target/2`, pad 10). Spawn skips a stacked hull. Unrevealed
+  q-ships use the cover class (freighter 88 u, not cutter 21 u).
+  Ordinary live mix caps pirates at ~40% unless blockade.
+  Close spawn (d ≤ 80 u) skips both guards so authored encounters
+  (Callow, Named Guns) still instantiate on top of the player.
+  AI-02: trader routes are station↔one physical `gates[n].to`.
+  Gate arrival dwells 30–50 s (`gateLinger`). Only `pickMigrant`
+  starts transit (one per ~90 s). Unpicked traders reverse so a
+  stay cannot empty the local haul fleet (the first pass dumped
+  Freehold in 22 s). Dest banks still do not tick (old contract).
+  Pirates/aces never migrate. Hub routes stay closed (wave 22).
+  AI-03/04: traders never hunt the player. A trader flees a hunter
+  or a 10 s / shields-down panic, then returns to route. Patrols
+  hunt the player only after a scratch or standing ≤ −10. Friendly
+  patrols intercept a pirate/ace that is working a trader or the
+  player. INTEREST table is unchanged. `npcFire` still emits only
+  at the player — `combat.js` aims every bolt at the player, so
+  ship-vs-ship shots did not ship. Miners did not ship.
+  VERIFY: `out/w56/` probes CLEAN after one fix pass (q-ship cover,
+  drain rate, scratch-flee latch). Boot WAVE56 source pins added.
+  FILES: `src/game/traffic-feel.js`, `src/game/traffic.js`,
+  `src/game/world.js`, `src/systems/npc.js`, `scripts/boot-test.mjs`,
+  `out/w56/`.
+- Wave 57 (2026-08-18): AI leftovers from wave 56 (orchestrated).
+  BOLTS: `spawnNpcShot` aims at `aimObj`. Player-target bolts use
+  `testPlayerHit` only. Ship-target bolts use `testNpcHits`, skip the
+  shooter, skip Unknowables, and never hit the player. `npcFire` carries
+  `target`. `ai.lastAttacker` stamps who shot; pirate/ace/patrol
+  player-hunt on scratch only if that stamp is `'player'`.
+  DEST TICKS: `tickBank` advances every existing `recordBanks` key.
+  `pickMigrant` still starts at most one transit per interval, now from
+  any existing bank. Tick path does not `ensureBank` or `beginTransit`.
+  Blockade hurry stays in the event's system.
+  MINERS: `minerCountForCast` = min(2, traders/4). Freehold 2, hush and
+  verge 0. Role `miner`, station↔field, cargo cap 8. Off-screen +1
+  rawOre / 5 s. Live mode `mine` cuts hardness ≤ 1, emits `mineHit`,
+  reused beam line, flees hunters. Miners never migrate and never hunt
+  the player.
+  VERIFY: `out/w57/` probes CLEAN. Boot WAVE57 source pins added.
+  FILES: `src/systems/combat.js`, `src/systems/npc.js`,
+  `src/game/world.js`, `scripts/boot-test.mjs`, `out/w57/`.
+- Wave 58 (2026-08-18): PHY leftovers from wave 53 / 56 (orchestrated).
+  GATE: `torusOverlap` + `kind:'gate'` bodies. Slot `r=BORE 30`,
+  `y0=TUBE 2.2`. Axis is gate → origin. Player r=2.4 threads the
+  hole. Freighter r=40 cannot. Hub lantern is a second gate body.
+  ROUTES: `writeStationHold` / `stationHoldPoint` in traffic-feel.js
+  (pad 12). Trader waypoint[0] is a freighter hold outside the D5
+  cylinder. Gate end stays authored. Miner station legs use light/
+  cutter holds. Patrol still uses the pad center.
+  AVOID: live `gateProbeHits` is a torus; lateral push uses the
+  nearest ring point. Station keep-out uses hull radius + path
+  test; inside-cylinder bias is XZ out. `steerMinerHome` and
+  no-threat flee dock at the hold (dist < 28), not the pad.
+  OPEN: old saved trader `route[0]` can stay at the pad until the
+  bank rebuilds (`normalizeTraderRecord` does not rewrite it).
+  PHY-02 is still lookahead bias, not full path planning.
+  VERIFY: `out/w58/gate|routes|avoid` probes + verifier extras
+  CLEAN. Boot WAVE58 pins green. `npm run test:boot` still ends
+  with the same 8 pre-existing errors (WAVE4 fence favor,
+  WAVE26 ferry/haul cluster, WAVE35 haul gate). kernel-pins
+  phyKeySet gains GATE_BORE / GATE_TUBE.
+  FILES: `src/game/collision.js`, `src/game/physics.js`,
+  `src/game/traffic-feel.js`, `src/game/world.js`,
+  `src/systems/npc.js`, `scripts/boot-test.mjs`,
+  `out/phy-verify/kernel-pins.mjs`, `out/w58/`.
+- Wave 59 (2026-08-18): FX leftovers from wave 54 plus the wave-58
+  pad-home heal (orchestrated).
+  RECOIL: `playerFire` {cannon|disruptor} kicks the flesh child
+  (+Z/+Y) and a small camera punch on the existing shake path.
+  Caps stay 0.35 / 0.12. Zero under reducedMotion / dock / jump.
+  Does not write throttle, MATCH, or velocity.
+  DECALS: `src/game/hull-marks.js` (pool 12, THREE-free local
+  offset). Unshielded hull scores stamp a dark scorch sprite on the
+  host. Shared mark texture/material/root. Recycle + park on
+  npcDestroyed / playerDestroyed / systemLoaded / orphan host.
+  Shielded hits still ripple only. A kill shot parks the mark.
+  ROUTES: `healPadHome` rewrites trader/miner `route[0]` when it
+  sits on the station pad. Traders use freighter hold, miners use
+  light/cutter. Idempotent. NaN/missing system no-ops.
+  VERIFY: `out/w59/{recoil,decals,routes}` probes CLEAN. Live
+  `out/w59/browser-verify.mjs` recoilOk + decalsOk (flesh 0.19,
+  cam 0.05, reduced cam 0, throttle unchanged; 0→1 scorch on
+  unshielded hits, shielded adds none, destroy parks). Boot WAVE59
+  pins added.
+  FILES: `src/systems/ship.js`, `src/systems/combat.js`,
+  `src/game/hull-marks.js`, `src/game/world.js`,
+  `scripts/boot-test.mjs`, `out/w59/`.
+- Wave 60 (2026-08-18): POD first pass (orchestrated; four
+  disjoint slices). Survivors are cargo rows, not market goods.
+  SCOOP: `pods.js` `isSurvivorCargo` / `survivorKey` /
+  `spawnSurvivorPod`. Scoop merges two survivors only when
+  faction+source match. Empty `[]` pods stay flavor. Mesh name
+  `survivor-pod`. Reserved keys (`__proto__` etc.) do not spawn.
+  SPAWN: `npc.js` one survivor on `crewPods` and on destroy
+  (`spawnShipSurvivor`, `ai.survivorsSpawned` blocks a second
+  dump). `lastAttacker === 'player'` → `playerKill`, else
+  `other`. Unknowables and no-faction wrecks skip. Cargo spill
+  still cargo only. `world.js` aftermath unchanged.
+  RESCUE: `RESCUE` { otherRep 4, playerKillRep 1 }. Matching-
+  faction Return on dock home and People (no new digit). Market
+  cannot list or sell survivors. `priceOf('survivor')` is 0.
+  Event `survivorRescued` { faction, source, count, repDelta }.
+  HUD toast. Trafficking / Gilded sale did not ship.
+  SAVE: `sanitizeCargoRow` keeps survivor faction/source/name
+  (name cap 40). Ordinary rows stay `{commodity, units}`.
+  VERIFY: `out/w60/{scoop,spawn,save,rescue}` probes CLEAN.
+  Live dock: Return on People, digits 1–9 unchanged, market
+  lists no survivor, Freehold other +4/person, wrong-faction
+  row stays. Designer pass skipped.
+  FILES: `src/game/pods.js`, `src/systems/npc.js`,
+  `src/game/save.js`, `src/game/state.js`, `src/core/ctx.js`,
+  `src/systems/station.js`, `src/systems/hud.js`, `out/w60/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now
