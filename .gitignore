@@ -3,4 +3,8 @@ dist
 .chrome-shot
 .git-station-head.js
 .blend1
+*.blend1
+.playwright-mcp/
+.cache-ktx-installer.exe
+.meshopt-test.glb
 __pycache__

@@ -98,7 +98,7 @@ export function detailBuilder(opts = {}) {
   // walked while tracking — Error().stack is far too slow for a hot path.
   const siteOf = () => {
     const lines = String(new Error().stack).split('\n');
-    const hit = lines.find((l, i) => i > 2 && /ships[\\/]|stations[\\/]/.test(l));
+    const hit = lines.find((l, i) => i > 2 && /ships[\\/]|stations[\\/]|gates[\\/]|gate-detail/.test(l));
     return (hit ?? lines[4] ?? '?').trim().replace(/^at\s+/, '');
   };
 

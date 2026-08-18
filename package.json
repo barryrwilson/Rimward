@@ -8,11 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs",
+    "gates:probe": "node --import ./scripts/with-css-stub.mjs scripts/probe-gate-kit.mjs",
     "ships:validate": "node scripts/validate-ship-assets.mjs",
     "ships:measure": "node scripts/measure-ships.mjs",
     "ships:sheet": "node scripts/silhouette-sheet.mjs",
     "ships:islands": "node scripts/probe-ship-islands.mjs",
-    "ships:render": "node scripts/ship-render.mjs"
+    "ships:render": "node scripts/ship-render.mjs",
+    "gates:render": "node --import ./scripts/with-css-stub.mjs scripts/gate-render.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

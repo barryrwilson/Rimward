@@ -23,7 +23,7 @@ import { buildLandmarkModel } from '../systems/landmarks.js';
 import { buildStarModel, buildPlanetModel, PLANET_SLOT_COUNT } from '../systems/solarsystem.js';
 import { buildAsteroidModel } from '../systems/asteroids.js';
 import { buildPodModel } from '../game/pods.js';
-import { FACTIONS, ORE_KEYS, COMMODITIES } from './state.js';
+import { FACTIONS, ORE_KEYS, COMMODITIES, CONVERGENCE, DEEPENING } from './state.js';
 import { CLASS_ORDER } from './ship-scale.js';
 import { AUTHORED_SYSTEMS } from './authored-systems.js';
 
@@ -181,6 +181,32 @@ for (const kind of LANDMARK_KINDS) {
     });
   }
 }
+
+for (const sys of Object.values(AUTHORED_SYSTEMS)) {
+  for (const lm of sys.landmarks ?? []) {
+    landmarks.push({
+      id: `landmark:authored:${lm.id}`,
+      label: lm.name,
+      category: 'Landmarks',
+      faction: sys.faction,
+      build: () => buildLandmarkModel(lm.kind, sys.faction, lm.id),
+    });
+  }
+}
+landmarks.push({
+  id: 'landmark:authored:convergence',
+  label: CONVERGENCE.site.name,
+  category: 'Landmarks',
+  faction: 'hollow',
+  build: () => buildLandmarkModel('anomaly', 'hollow', CONVERGENCE.site.id),
+});
+landmarks.push({
+  id: 'landmark:authored:deepening',
+  label: DEEPENING.site.name,
+  category: 'Landmarks',
+  faction: 'hollow',
+  build: () => buildLandmarkModel('anomaly', 'hollow', DEEPENING.site.id),
+});
 
 // ---- Celestial ----
 const celestial = [];
