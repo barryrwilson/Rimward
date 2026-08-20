@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor } from '../game/state.js';
+import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES } from '../game/state.js';
 import * as pods from '../game/pods.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
@@ -166,6 +166,16 @@ const DEFAULT_ACE_NAME = 'Carver Illyx';
 const DEFAULT_ACE_BOUNTY = 2500;
 const PIRATE_BOUNTY_CAP = 2; // max pirate bounty cards per system's board
 const PIRATE_BOUNTY_FALLBACK = 400; // UU, until world.js prices every pirate
+const MINING_SLOTS_PER_SYSTEM = 2;
+const MINING_REP = 2;
+// Cite world.js WRECK_TTL (line 811). Do not import world.js.
+const MINING_DEADLINE = 600;
+let miningSeq = 0;
+const PAY_QUOTED_MAX = 20000;
+const MINING_ORE_KEYS = [];
+for (const oreKey of Object.keys(ORE_TYPES)) {
+  if (ORE_TYPES[oreKey].hardness <= 1 && Object.hasOwn(COMMODITIES, oreKey)) MINING_ORE_KEYS.push(oreKey);
+}
 
 const _pulse = new THREE.Color();
 const _podPos = new THREE.Vector3(); // scratch for recovery-job pod spawns
@@ -1572,6 +1582,145 @@ function syncRecoveryJob(ctx, sysId) {
   }
 }
 
+function clampJobPay(n) {
+  const x = Math.round(n);
+  if (!Number.isFinite(x) || x < 0) return 0;
+  return x > PAY_QUOTED_MAX ? PAY_QUOTED_MAX : x;
+}
+
+function pickMiningCommodity() {
+  const n = MINING_ORE_KEYS.length;
+  if (n === 0) return 'rawOre';
+  return MINING_ORE_KEYS[(Math.random() * n) | 0];
+}
+
+function nextMiningId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `mine-${sysId}-`;
+  let n = miningSeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  miningSeq = n + 1;
+  return id;
+}
+
+function miningPayBase(ctx, commodity, need) {
+  return Math.round(need * priceOf(ctx, commodity) * HAUL_MARGIN);
+}
+
+function makeMiningJob(ctx, sysId, slot) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const id = nextMiningId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const commodity = pickMiningCommodity();
+  const oreName = COMMODITIES[commodity].name;
+  const stationName = SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
+  const need = FERRY_UNITS;
+  return {
+    id,
+    kind: 'mining',
+    slot,
+    originSystem: sysId,
+    commodity,
+    title: `Mine ${oreName}`,
+    detail: `Cut reachable ${oreName} in this system's field and deliver ${need} units at ${stationName}.`,
+    reward: miningPayBase(ctx, commodity, need),
+    need,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function syncMiningJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const used = new Set();
+  let count = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'mining' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+  }
+  while (count < MINING_SLOTS_PER_SYSTEM) {
+    const slot = used.has(0) ? 1 : 0;
+    const job = makeMiningJob(ctx, sysId, slot);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    count += 1;
+  }
+}
+
+function miningSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function miningSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'mining' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+/** Splice a mining row and push a fresh offered card for the same origin+slot. */
+function replaceMiningJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = miningSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (miningSlotTaken(jobs, origin, slot)) return;
+  const next = makeMiningJob(ctx, origin, slot);
+  if (next) jobs.push(next);
+}
+
+function miningOreName(job) {
+  return Object.hasOwn(COMMODITIES, job.commodity) ? COMMODITIES[job.commodity].name : 'ore';
+}
+
+function miningStationName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  return SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
+}
+
+/** Remaining time for a mining card. Missing/non-finite deadline → empty (fail closed). */
+function miningTimeLeftLabel(ctx, job) {
+  const deadline = job.deadline;
+  const now = ctx.world.time;
+  if (!Number.isFinite(deadline) || !Number.isFinite(now)) return '';
+  const left = deadline - now;
+  if (!Number.isFinite(left)) return '';
+  const sec = left > 0 ? Math.floor(left) : 0;
+  if (sec < 120) return `${sec}s left`;
+  return `${Math.floor(sec / 60)}m left`;
+}
+
+function maybeRefreshJobsBoard(ctx, ui, render) {
+  if (!ctx.flags.docked || typeof render !== 'function' || !ui) return;
+  if (ui.level === 2 && ui.service === 'jobs') render();
+}
+
 /** Board-visible jobs: offered pirate bounties post only at their home system. */
 function boardJobs(ctx, sysId) {
   const out = [];
@@ -1579,6 +1728,7 @@ function boardJobs(ctx, sysId) {
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
       && j.state === 'offered' && j.system !== sysId) continue;
     if (j.kind === 'recovery' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'mining' && j.state === 'offered' && j.originSystem !== sysId) continue;
     out.push(j);
   }
   return out;
@@ -1628,8 +1778,7 @@ function epicEffectLine(key, value) {
   }
 }
 
-function completeJob(ctx, job, notice) {
-  job.state = 'done';
+function rewardJobContacts(ctx, job) {
   // Dockmaster trust grows with every finished contract; a bounty claim also
   // earns the local fence's favor where one works the dock (§12.x).
   for (const c of contactsForSystem(ctx, ctx.world.currentSystem)) {
@@ -1640,6 +1789,11 @@ function completeJob(ctx, job, notice) {
     if (c.role === 'dockmaster' && !AUTHORED_SYSTEMS[ctx.world.currentSystem] && c.trust >= GENERATED_KNOWN_TRUST) addFavor(ctx, c);
     if (job.kind === 'bounty' && c.role === 'fence') addFavor(ctx, c);
   }
+}
+
+function completeJob(ctx, job, notice) {
+  job.state = 'done';
+  rewardJobContacts(ctx, job);
   if (notice) ctx.emit('commLine', { text: notice });
 }
 
@@ -1678,9 +1832,60 @@ function tickPatrolJob(ctx) {
   }
 }
 
-/** Throttled checks: bounty claim + cross-system provisions delivery. */
-function tickDeliveryJobs(ctx, ui) {
-  for (const job of ctx.world.jobs) {
+/** Throttled checks: bounty claim + delivery + mining expire/replace. */
+function tickDeliveryJobs(ctx, ui, render) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  let boardDirty = false;
+  // Reverse so splice of mining rows does not skip an unvisited job.
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const job = jobs[i];
+    if (job.kind === 'mining') {
+      if (job.state === 'failed') {
+        replaceMiningJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        const name = miningOreName(job);
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? `Mining contract lapsed — the ${name} window closed.`
+            : `Mining posting withdrawn — the ${name} contract is off the board.`,
+        });
+        replaceMiningJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.state !== 'accepted' || !ctx.flags.docked) continue;
+      const origin = job.originSystem;
+      if (!Object.hasOwn(SYSTEMS, origin) || ctx.world.currentSystem !== origin) continue;
+      const commodity = job.commodity;
+      if (!Object.hasOwn(ORE_TYPES, commodity) || !Object.hasOwn(COMMODITIES, commodity)) continue;
+      const need = job.need;
+      if (!Number.isFinite(need) || need < 1) continue;
+      if (holdUnits(ctx, commodity) < need) continue;
+      // failed first so a crash mid-replace cannot pay twice.
+      job.state = 'failed';
+      removeCargo(ctx, commodity, need);
+      const base = miningPayBase(ctx, commodity, need);
+      const pay = Number.isFinite(job.payQuoted)
+        ? clampJobPay(job.payQuoted)
+        : clampJobPay(jobPayFor(ctx, origin, base));
+      ctx.world.credits += pay;
+      const faction = SYSTEMS[origin].faction;
+      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
+      }
+      rewardJobContacts(ctx, job);
+      ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.` });
+      replaceMiningJob(ctx, job);
+      boardDirty = true;
+      continue;
+    }
     if (job.state !== 'accepted') continue;
     if (job.kind === 'bounty') {
       if (job.id === 'bounty-ace') {
@@ -1749,6 +1954,7 @@ function tickDeliveryJobs(ctx, ui) {
       }
     }
   }
+  if (boardDirty) maybeRefreshJobsBoard(ctx, ui, render);
 }
 
 // ---------------------------------------------------------------- main ----
@@ -2092,6 +2298,16 @@ export function initStation(ctx) {
       _podPos.set(p.x ?? p[0] ?? 0, p.y ?? p[1] ?? 0, p.z ?? p[2] ?? 0);
       pods.spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
       job.collected = false;
+    } else if (job.kind === 'mining') {
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) job.originSystem = ctx.world.currentSystem;
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const need = Number.isFinite(job.need) && job.need >= 1 ? job.need : FERRY_UNITS;
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, miningPayBase(ctx, job.commodity, need)));
+      job.deadline = ctx.world.time + MINING_DEADLINE;
     }
     job.state = 'accepted';
     if (job.kind === 'haul') {
@@ -2113,11 +2329,22 @@ export function initStation(ctx) {
     refreshBountyJob(ctx);
     syncPirateBounties(ctx, currentId);
     syncRecoveryJob(ctx, currentId);
+    syncMiningJobs(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
     boardJobs(ctx, currentId).forEach((job, i) => {
       const card = h('div', 'job-card', panel);
-      h('div', 'job-title', card, `${i + 1}. ${job.title}`);
-      h('div', 'job-detail', card, job.detail);
+      let title = job.title;
+      let detail = job.detail;
+      if (job.kind === 'mining') {
+        const oreName = miningOreName(job);
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const stationName = miningStationName(originId) ?? 'the dock';
+        const need = Number.isFinite(job.need) && job.need >= 1 ? job.need : FERRY_UNITS;
+        title = `Mine ${oreName}`;
+        detail = `Cut reachable ${oreName} in this system's field and deliver ${need} units at ${stationName}.`;
+      }
+      h('div', 'job-title', card, `${i + 1}. ${title}`);
+      h('div', 'job-detail', card, detail);
       let rewardLine;
       if (job.kind === 'haul') {
         const originId = job.state === 'accepted' ? (job.originSystem ?? currentId) : currentId;
@@ -2142,6 +2369,16 @@ export function initStation(ctx) {
         rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${ferryEst} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
         rewardLine = `Scoop the salvage pod, redock here — pays ${jobPay(ctx, job.reward)} UU`;
+      } else if (job.kind === 'mining') {
+        const commodity = Object.hasOwn(COMMODITIES, job.commodity) ? job.commodity : null;
+        const oreName = commodity ? COMMODITIES[commodity].name : 'ore';
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const need = Number.isFinite(job.need) && job.need >= 1 ? job.need : FERRY_UNITS;
+        const base = commodity ? miningPayBase(ctx, commodity, need) : 0;
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, base))
+          : jobPayFor(ctx, originId, base);
+        rewardLine = `Deliver ${need} ${oreName} here — pays ${est} UU`;
       } else {
         rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
@@ -2152,6 +2389,10 @@ export function initStation(ctx) {
       }
       if (job.state === 'offered') {
         btn(card, `Accept (${i + 1})`, () => acceptJob(job));
+        if (job.kind === 'mining') {
+          const left = miningTimeLeftLabel(ctx, job);
+          if (left) h('div', 'job-state', card, left);
+        }
       } else if (job.state === 'accepted') {
         let stateLine;
         if (job.kind === 'patrol') {
@@ -2166,6 +2407,14 @@ export function initStation(ctx) {
           stateLine = job.collected
             ? 'ACCEPTED — salvage aboard, redock here'
             : 'ACCEPTED — pod adrift at the wreck site';
+        } else if (job.kind === 'mining') {
+          const commodity = Object.hasOwn(COMMODITIES, job.commodity) ? job.commodity : null;
+          const oreName = commodity ? COMMODITIES[commodity].name : 'ore';
+          const need = Number.isFinite(job.need) && job.need >= 1 ? job.need : FERRY_UNITS;
+          const have = commodity ? holdUnits(ctx, commodity) : 0;
+          const left = miningTimeLeftLabel(ctx, job);
+          stateLine = `ACCEPTED — deliver ${need} ${oreName} here (have ${have})`;
+          if (left) stateLine += ` · ${left}`;
         } else {
           stateLine = 'ACCEPTED';
         }
@@ -2820,7 +3069,7 @@ export function initStation(ctx) {
       tickPatrolJob(ctx);
       tickRecoveryCollect(ctx);
       jobTick += dt;
-      if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx, ui); }
+      if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx, ui, render); }
     },
   };
 }

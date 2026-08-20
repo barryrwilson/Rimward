@@ -1,0 +1,45 @@
+PASS hunt.noCommodityReshuffle [{"id":"mine-freehold-0","commodity":"rawOre","slot":0,"need":4,"title":"Mine Raw ore"},{"id":"mine-freehold-1","commodity":"rawOre","slot":1,"need":4,"title":"Mine Raw ore"}] vs [{"id":"mine-freehold-0","commodity":"rawOre","slot":0,"need":4,"title":"Mine Raw ore"},{"id":"mine-freehold-1","commodity":"rawOre","slot":1,"need":4,"title":"Mine Raw ore"}]
+PASS hunt.softOnly
+PASS hunt.softKeys.rawOre.livingRock
+PASS hunt.foreignOfferedHidden
+PASS hunt.veridian.noFreeholdId
+PASS hunt.accept.veridian
+PASS hunt.accept.noFront
+PASS hunt.payQuoted.originHaulMargin quoted=784 expected=784 need=4 c=rawOre
+PASS hunt.deliver.once 350->1134 pay=784
+PASS hunt.deliver.done
+PASS hunt.rep.employer.notStuffed vd=2 fh=0 stuffed=freehold
+PASS hunt.rep.keyIsSystemsFaction
+PASS hunt.noDoublePay 1134->1134 state=done
+PASS hunt.staleAcceptDoesNotMatter
+PASS hunt.noPayAtForeignDock state=accepted credits 1134->1134 hold=4
+PASS hunt.acceptedShowsAtHome
+PASS hunt.unique.four
+PASS hunt.slots.le.2.live n=2
+PASS hunt.ids.unique mine-freehold-0,mine-freehold-1,mine-veridian-0,mine-veridian-1,mine-veridian-2
+PASS hunt.ids.grammar
+PASS hunt.no.asteroidId
+{
+  "hunt.noCommodityReshuffle": true,
+  "hunt.softOnly": true,
+  "hunt.softKeys.rawOre.livingRock": true,
+  "hunt.foreignOfferedHidden": true,
+  "hunt.veridian.noFreeholdId": true,
+  "hunt.accept.veridian": true,
+  "hunt.accept.noFront": true,
+  "hunt.payQuoted.originHaulMargin": true,
+  "hunt.deliver.once": true,
+  "hunt.deliver.done": true,
+  "hunt.rep.employer.notStuffed": true,
+  "hunt.rep.keyIsSystemsFaction": true,
+  "hunt.noDoublePay": true,
+  "hunt.staleAcceptDoesNotMatter": true,
+  "hunt.noPayAtForeignDock": true,
+  "hunt.acceptedShowsAtHome": true,
+  "hunt.unique.four": true,
+  "hunt.slots.le.2.live": true,
+  "hunt.ids.unique": true,
+  "hunt.ids.grammar": true,
+  "hunt.no.asteroidId": true
+}
+OK

@@ -1,0 +1,102 @@
+PASS src.no.innerHTML
+PASS src.h.textContent
+PASS src.syncMining
+PASS src.no.asteroidIdField
+PASS src.no.jobFactionField
+PASS src.no.SAFE_ID.full
+PASS src.digit2.jobs
+PASS src.digit0.shipyard
+PASS src.unique.makeJobs
+PASS src.haul.stamp.dest
+PASS src.ferry.stamp.dest
+PASS src.no.spliceReplace
+dock freehold: docked=true sys=freehold
+PASS fill.count2 n=2
+PASS fill.ids.grammar
+PASS fill.ids.mine-freehold-0
+PASS fill.ids.mine-freehold-1
+PASS fill.slots
+PASS fill.softOre
+PASS fill.need4
+PASS fill.no.asteroidId
+PASS fill.no.faction
+PASS fill.origin
+PASS fill.title.allowlist
+PASS fill.detail.station
+PASS unique.four
+PASS ui.home.showsOffered
+PASS ui.home.accept
+PASS ui.no.html
+PASS fill.noReshuffle mine-freehold-0,mine-freehold-1 vs mine-freehold-0,mine-freehold-1
+dock veridian-offered-hidden: docked=true sys=veridian
+PASS board.hide.foreignOffered
+PASS board.veridian.fills
+dock freehold-accept: docked=true sys=freehold
+PASS accept.clicked
+PASS accept.state
+PASS accept.noFront
+PASS accept.origin
+PASS accept.payQuoted.finite
+PASS accept.identity
+PASS accept.ui.haveNeed
+dock veridian-accepted-shown: docked=true sys=veridian
+PASS board.show.acceptedForeign
+dock freehold-deliver: docked=true sys=freehold
+PASS deliver.have4
+PASS deliver.credits 350->3710 pay=3360
+PASS deliver.cargo
+PASS deliver.rep rep=2
+PASS deliver.done
+PASS deliver.employer.freehold
+PASS unique.four.after
+PASS no.THREE.onJob
+{
+  "src.no.innerHTML": true,
+  "src.h.textContent": true,
+  "src.syncMining": true,
+  "src.no.asteroidIdField": true,
+  "src.no.jobFactionField": true,
+  "src.no.SAFE_ID.full": true,
+  "src.digit2.jobs": true,
+  "src.digit0.shipyard": true,
+  "src.unique.makeJobs": true,
+  "src.haul.stamp.dest": true,
+  "src.ferry.stamp.dest": true,
+  "src.no.spliceReplace": true,
+  "fill.count2": true,
+  "fill.ids.grammar": true,
+  "fill.ids.mine-freehold-0": true,
+  "fill.ids.mine-freehold-1": true,
+  "fill.slots": true,
+  "fill.softOre": true,
+  "fill.need4": true,
+  "fill.no.asteroidId": true,
+  "fill.no.faction": true,
+  "fill.origin": true,
+  "fill.title.allowlist": true,
+  "fill.detail.station": true,
+  "unique.four": true,
+  "ui.home.showsOffered": true,
+  "ui.home.accept": true,
+  "ui.no.html": true,
+  "fill.noReshuffle": true,
+  "board.hide.foreignOffered": true,
+  "board.veridian.fills": true,
+  "accept.clicked": true,
+  "accept.state": true,
+  "accept.noFront": true,
+  "accept.origin": true,
+  "accept.payQuoted.finite": true,
+  "accept.identity": true,
+  "accept.ui.haveNeed": true,
+  "board.show.acceptedForeign": true,
+  "deliver.have4": true,
+  "deliver.credits": true,
+  "deliver.cargo": true,
+  "deliver.rep": true,
+  "deliver.done": true,
+  "deliver.employer.freehold": true,
+  "unique.four.after": true,
+  "no.THREE.onJob": true
+}
+OK

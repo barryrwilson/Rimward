@@ -1,0 +1,21 @@
+MATCH lamp selectors (HUD)
+
+- Lamp node: span.rw-match-lamp inside the self SPD readout (.rw-speed .rw-value).
+- Hidden: class is-hidden (display: none). Visible: class list without is-hidden.
+- Query: document.querySelector('.rw-match-lamp')
+- Hidden check: lamp.classList.contains('is-hidden')
+
+Combat rail (must stay hidden for rocks)
+
+- Target vitals: section.rw-combat-rail.rw-combat-target
+- Hidden unless live shipTgt (target.state and not destroyed).
+- Rock lock keeps the bracket ore readout; do not expect hull/shield on the target rail.
+
+Flag ownership
+
+- ctx.flags.matchSpeed is written by ship.js (X tap / throttle cancel / lost lock).
+- hud.js only reads the flag.
+
+Rock lock shape (hud local duplicate of controls.js isRockLock)
+
+- !!(t && t.position && !t.object && !t.state)

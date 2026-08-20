@@ -14353,6 +14353,165 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w70).every(Boolean)) { console.log('WAVE70 MINEHOLD FAIL'); errors++; }
 }
 
+// ---- WAVE71: MATCH lamp on rock lock + MSN mining board pins ----
+{
+  const { createShipState: w71Ship, ORE_TYPES: w71Ore } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w71Fields } = await import('../src/game/save.js');
+  const here71 = dirname(fileURLToPath(import.meta.url));
+  const src71 = (rel) => readFileSync(join(here71, '..', rel), 'utf8');
+  const hud71 = src71('src/systems/hud.js');
+  const save71 = src71('src/game/save.js');
+  const st71 = src71('src/systems/station.js');
+  const nSys71 = Object.keys(SYSTEMS).length;
+  const cap71 = 4 + 2 * nSys71 + 16;
+  const unique71 = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const soft71 = Object.keys(w71Ore).filter((k) =>
+    w71Ore[k].hardness <= 1 && Object.hasOwn(COMMODITIES, k));
+
+  const job71 = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 71 pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine71 = (sysId, n, slot, extra = {}) => ({
+    id: `mine-${sysId}-${n}`,
+    kind: 'mining',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    commodity: extra.commodity ?? 'rawOre',
+    title: extra.title ?? 'Mine raw ore',
+    detail: extra.detail ?? 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 4,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+  });
+  const four71 = () => [
+    job71('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job71('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job71('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job71('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub71 = (jobs) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w71Ship('light', { name: 'Wave71Pin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs } });
+    return c;
+  };
+
+  const keep71 = stub71([
+    ...four71(),
+    mine71('freehold', 0, 0),
+    mine71('fh_hearth', 1, 1),
+    mine71('__proto__', 0, 0, { originSystem: '__proto__' }),
+    job71('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+  ]);
+  const keepIds71 = keep71.world.jobs.map((j) => j.id);
+
+  const honest71 = four71();
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest71.push(mine71(sysId, 0, 0));
+    honest71.push(mine71(sysId, 1, 1));
+  }
+  const honestCtx71 = stub71(honest71);
+
+  const prevSys71 = ctx.world.currentSystem;
+  const prevDock71 = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  if (prevSys71 !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave71 warp freehold');
+  dockAtCurrentStation('wave71 dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave71 jobs');
+  const mines71 = (ctx.world.jobs ?? []).filter((j) => j.kind === 'mining' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive71 = unique71.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const hard4Live = mines71.some((j) => w71Ore[j.commodity]?.hardness > 1);
+  const noAst71 = mines71.every((j) => !Object.hasOwn(j, 'asteroidId'));
+
+  const payJob71 = mines71.find((j) => j.state === 'offered') ?? mines71[0] ?? null;
+  const payId71 = payJob71?.id;
+  const paySlot71 = payJob71?.slot;
+  const payOre71 = payJob71?.commodity;
+  const credBefore71 = ctx.world.credits;
+  if (payJob71) {
+    payJob71.state = 'accepted';
+    payJob71.payQuoted = 12;
+    payJob71.deadline = ctx.world.time + 600;
+    ctx.cargo.push({ commodity: payOre71, units: 4 });
+  }
+  tick(40, 'wave71 deliver');
+  const paid71 = payJob71 && ctx.world.credits > credBefore71;
+  const replaced71 = !!(payId71 && paySlot71 != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId71)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'mining' && j.originSystem === 'freehold'
+      && j.slot === paySlot71 && j.state === 'offered' && j.id !== payId71));
+
+  const expJob71 = (ctx.world.jobs ?? []).find((j) => j.kind === 'mining' && j.originSystem === 'freehold'
+    && j.state === 'offered') ?? null;
+  const expId71 = expJob71?.id;
+  const credExp71 = ctx.world.credits;
+  if (expJob71) {
+    expJob71.state = 'accepted';
+    expJob71.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave71 expire');
+  const expired71 = !!(expId71 && !(ctx.world.jobs ?? []).some((j) => j.id === expId71));
+  const expireNoPay71 = ctx.world.credits === credExp71;
+
+  dispatchKey('Escape');
+  tick(1, 'wave71 jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys71 && prevSys71 !== 'freehold') {
+    ctx.world.currentSystem = prevSys71;
+    ctx.emit('systemLoaded', { to: prevSys71 });
+    tick(2, 'wave71 restore sys');
+  }
+  if (prevDock71) dockAtCurrentStation('wave71 restore dock');
+
+  const w71 = {
+    lampRock: /matchSpeed && \(shipTgt \|\| isRockLock\(target\)\)/.test(hud71),
+    sanitizeJobs: save71.includes('function sanitizeJobs') && save71.includes('sanitizeJobs(ctx)'),
+    omitJobs: /snap\.world\.jobs === undefined/.test(save71),
+    noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save71) && !/SAFE_ID\.test\(\s*job\.id/.test(st71),
+    dropProto: !keepIds71.includes('__proto__') && !keepIds71.includes('mine-__proto__-0'),
+    keepAce: keepIds71.includes('bounty-ace'),
+    keepMineFh: keepIds71.includes('mine-freehold-0'),
+    keepMineHearth: keepIds71.includes('mine-fh_hearth-1'),
+    capFits: honestCtx71.world.jobs.length === 4 + 2 * nSys71 && honestCtx71.world.jobs.length <= cap71,
+    fieldsJobs: w71Fields.includes('jobs') && !w71Fields.includes('missions'),
+    fillTwo: mines71.length === 2,
+    fillSoft: mines71.every((j) => soft71.includes(j.commodity)),
+    noHard4Sync: !hard4Live,
+    noAsteroidId: noAst71,
+    uniqueFour: uniqueLive71,
+    completeReplace: !!replaced71,
+    completePay: !!paid71,
+    expireNoPay: !!expired71 && expireNoPay71,
+    noInnerHtml: !/innerHTML/.test(st71),
+    replaceHelper: st71.includes('function replaceMiningJob'),
+  };
+  console.log('wave71 msn:', JSON.stringify(w71));
+  if (!Object.values(w71).every(Boolean)) { console.log('WAVE71 MSN FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {

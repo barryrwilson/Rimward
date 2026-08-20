@@ -1,0 +1,67 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w71/pr3/probe.mjs` → `out/w71/pr3/probe-recheck.log`. Exit 0. Log ends `OK`. All listed pins PASS.
+- Ran extra edge `node --import ./scripts/with-css-stub.mjs out/w71/pr3/edge.mjs` → `out/w71/pr3/edge.log`. Exit 0. Log ends `OK`.
+- Read `src/systems/station.js` mining complete / expire / replace vs `out/w70/msn/shared-contract.md` §2.3 and §3.5.
+- Grepped `station.js` for `innerHTML` (none). `h()` still assigns `node.textContent`.
+- `git diff`: this PR’s mining work is `station.js`. `state.js` and `scripts/boot-test.mjs` are clean. `save.js` dirt is PR1 `sanitizeJobs`. `hud.js` dirt is the match-lamp rock lock, not jobs.
+
+Contract §2.3 one-in-one-out:
+- Complete and expire note `originSystem` + `slot` (`miningSlotOf` returns 0, 1, or null).
+- Complete pays; expire does not.
+- `replaceMiningJob` splices by object identity, then `push`es `makeMiningJob` (new `{}`) for the same origin+slot.
+- Mining complete does not call `completeJob` and does not set `state = 'done'`. It sets `failed` as a pay-lock, then splices.
+- Unique four still go through `completeJob` → `done`. Probe ferry pin: `unique.ferry.done` + paid 350.
+
+Contract §3.5 tick / expire:
+- Cadence is `tickDeliveryJobs` at 0.5 s inside `station.update`, docked or not (`Job tracking runs docked or not.`).
+- Reverse index walk, then `continue` after splice, so a new row at the end is not paid or expired on the same tick.
+- Complete: docked, `currentSystem === originSystem`, `holdUnits >= need` → `removeCargo`, clamped `payQuoted`, +2 employer faction after `Object.hasOwn(FACTIONS)`, `rewardJobContacts`, `commLine`, splice+replace.
+- Expire offered/accepted when `world.time >= deadline`: no cargo, no pay, no rep, no favor; commLine withdrawn vs lapsed; splice+replace.
+- Deadline length 600, comment cites `world.js` WRECK_TTL. Accept restarts `world.time + MINING_DEADLINE`.
+- Sanitize keeps a finite `deadline >= 0` (including a past value). Next 0.5 s tick expires fail-closed.
+
+Confirm pins:
+- No DONE mining after complete: `complete.notDone`, `complete.noDoneMining`, leftover failed/done mining count 0.
+- Replacement new object identity, same origin+slot: `complete.replacement.newObject` / `.origin` / `.slot`; expire offered/accepted the same.
+- Expire fail closed: offered and accepted, flight; extra edge also while docked with cargo aboard (no pay).
+- Past deadline on restore: extra edge `deadline: 0` accepted mining kept by `restore`+`sanitizeJobs`, then next tick splices with no pay/rep/cargo change and posts a new offered card. Comm: `contract lapsed`.
+- Unique four still done: ferry `done` + pay; haul/ace/patrol stay offered and present.
+- Double-tick no double pay: `doubleTick.noPay` / `noCargo` / `stillTwo`.
+- PR2 pay still works: cargo 4→0, credits +`payQuoted` (350→3710, pay=3360), Freehold rep +2, dockmaster path via `rewardJobContacts`.
+- no `innerHTML`.
+- `state.js` / `boot-test.mjs` untouched. `save.js` / `hud.js` dirty from earlier serials, not this mining replace PR.
+
+Hunts:
+- Pay after expire: expire check runs before delivery in the same loop and `continue`s. Docked+cargo+past deadline (edge) did not pay.
+- Splice wrong slot: slot is captured before splice; `miningSlotTaken` blocks a second live card on that slot; null/invalid slot splices and does not push onto slot 0.
+- Reuse spliced object: `makeMiningJob` returns a new literal; probe/edge `newObject` pins.
+- Expire docked vs flight: both expire and replace. Flight: worker probe. Docked: extra edge.
+
+## Bugs found
+None in PR3 scope.
+
+Known follow-ons (not scored as PR3 bugs):
+- Remaining-time copy on cards is PR4.
+- WAVE71 boot-test pins are PR5.
+- Sanitize drops a negative `deadline` (not `>= 0`), so a tampered negative value never expires. Honest play stamps `time + 600`.
+- Hardness-4 / live `need` tamper pay paths stay as PR2 notes.
+
+## Environmental issues
+None. Node + CSS stub probe and extra edge both completed with `OK`. Boot-test was skipped as instructed.
+
+## Evidence
+- Probe recheck: `C:\Projects\WebSim\out\w71\pr3\probe-recheck.log` (ends `OK`).
+- Extra edge: `C:\Projects\WebSim\out\w71\pr3\edge.mjs`, `C:\Projects\WebSim\out\w71\pr3\edge.log` (ends `OK`).
+- `src/systems/station.js` 171–172 `MINING_DEADLINE = 600` cite WRECK_TTL.
+- `src/systems/station.js` 1622–1643 `makeMiningJob` new object, `deadline: ctx.world.time + MINING_DEADLINE`.
+- `src/systems/station.js` 1669–1696 `miningSlotOf` / `replaceMiningJob` splice-by-identity + push same origin+slot.
+- `src/systems/station.js` 1777–1781 `completeJob` still `job.state = 'done'` (unique path only).
+- `src/systems/station.js` 1818–1871 mining expire then complete inside reverse `tickDeliveryJobs`; expire has no pay; complete pays then replace.
+- `src/systems/station.js` 2293 accept restarts deadline; 3035–3039 tick runs while undocked.
+- `src/systems/station.js` 2009–2012 `h()` `textContent`; no `innerHTML`.
+- `src/game/save.js` 326–328 keeps finite `deadline >= 0` (PR1; lets a past deadline survive restore).
+- Probe pins: `complete.notDone`, `complete.replacement.newObject`, `doubleTick.noPay`, `expire.offered.noPay`, `expire.accepted.cargoKept`, `unique.ferry.done`.
+- Edge pins: `edge.expireDocked.noPay`, `edge.restore.kept`, `edge.restore.expiredGone`, `edge.restore.noPay`.

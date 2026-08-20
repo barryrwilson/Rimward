@@ -3251,6 +3251,30 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/MsnMissionsDesign.md`,
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
   `out/w70/`.
+- Wave 71 (2026-08-20): MATCH lamp leftover + MSN first impl
+  (orchestrated; MATCH parallel with MSN PR1, then MSN PR2–PR5
+  serial). MATCH: HUD lamp lights when `flags.matchSpeed` is
+  true on a rock lock or a live ship. Combat rail stays
+  ship-only. hud.js still only reads the flag.
+  MSN: `sanitizeJobs` on restore (hyphen tokens, omit-key
+  `[]`, cap `4+2*N_SYSTEMS+16`). Two mining slots per system
+  (`rawOre` / `livingRock`, need 4). Accept stamps origin
+  `payQuoted`. Home delivery pays stamp, +2 employer faction,
+  splice+replace. 600 s expire fails closed. Jobs cards show
+  remaining time and have/need. Unique four stay. No
+  asteroidId. WAVE71 msn pins all true.
+  OPEN: Beautiful / Unknowables frigate later (BIO). BIO
+  first impl later. NPC missiles / incoming gauge later.
+  Power ledger out. Other MSN families later.
+  `npm run test:boot` still ends with the known FAILs
+  (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul).
+  VERIFY: `out/w71/match-lamp` live Chrome CLEAN;
+  `out/w71/pr1`–`pr4` probes CLEAN; WAVE71 boot pins all true.
+  FILES: `src/systems/hud.js`, `src/game/save.js`,
+  `src/systems/station.js`, `scripts/boot-test.mjs`,
+  `docs/MsnMissionsDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w71/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

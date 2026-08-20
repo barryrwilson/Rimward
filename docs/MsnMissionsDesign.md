@@ -5,8 +5,8 @@
 | **Title** | RIMWARD MSN renewable missions and player careers |
 | **Author** | Wave 70 MSN integrator |
 | **Date** | 2026-08-20 |
-| **Status** | Design only. Wave 70 is markdown. Implementation is a later serial wave. |
-| **Wave** | 70 — design. |
+| **Status** | Implemented. Wave 70 was markdown. Wave 71 shipped PR1–PR5. |
+| **Wave** | 70 — design. 71 — first impl. |
 | **Owner request** | MSN design brief. Do not ship board replacement, new families, or `src/` in this wave. |
 | **Merge law** | [`out/w70/msn/shared-contract.md`](../out/w70/msn/shared-contract.md). If this brief and that file conflict, the contract wins. |
 

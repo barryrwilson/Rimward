@@ -1,0 +1,12 @@
+pre {"match":false,"docked":false,"jumping":false,"paused":false,"throttleHeld":false,"group":3,"shipTgt":false,"rockLock":true,"hasTarget":true,"lampExists":true,"lampHidden":true,"railHidden":true}
+rockArm {"match":true,"docked":false,"jumping":false,"paused":false,"throttleHeld":false,"group":3,"shipTgt":false,"rockLock":true,"hasTarget":true,"lampExists":true,"lampHidden":false,"railHidden":true}
+SHOT 01-rock-match.png
+noTarget {"match":false,"docked":false,"jumping":false,"paused":false,"throttleHeld":false,"group":3,"shipTgt":false,"rockLock":false,"hasTarget":false,"lampExists":true,"lampHidden":true,"railHidden":true}
+SHOT 02-no-target.png
+rockArm2 {"match":true,"docked":false,"jumping":false,"paused":false,"throttleHeld":false,"group":3,"shipTgt":false,"rockLock":true,"hasTarget":true,"lampExists":true,"lampHidden":false,"railHidden":true}
+shipArm {"match":true,"docked":false,"jumping":false,"paused":false,"throttleHeld":false,"group":3,"shipTgt":true,"rockLock":false,"hasTarget":true,"lampExists":true,"lampHidden":false,"railHidden":false}
+SHOT 03-ship-match.png
+throttleCancel {"match":false,"docked":false,"jumping":false,"paused":false,"throttleHeld":true,"group":3,"shipTgt":true,"rockLock":false,"hasTarget":true,"lampExists":true,"lampHidden":true,"railHidden":false}
+SHOT 04-cancel.png
+staleFlag {"match":false,"lampHidden":true,"hasTarget":false}
+LIVE PASS

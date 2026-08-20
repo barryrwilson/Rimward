@@ -1,0 +1,139 @@
+PASS src.no.innerHTML
+PASS src.h.textContent
+PASS src.replaceMiningJob
+PASS src.completeJob.done
+PASS src.deadline.600
+PASS src.cite.WRECK_TTL
+PASS world.WRECK_TTL.600
+PASS src.digit2.jobs
+PASS src.unique.makeJobs
+PASS src.no.SAFE_ID.full
+PASS src.emit.commLine
+dock freehold: docked=true sys=freehold
+PASS fill.count2 n=2
+PASS fill.deadline.post
+PASS unique.four
+PASS accept.clicked
+PASS accept.state
+PASS accept.deadline.restart dl=600.0666666666667 t=0.06666666666666667
+PASS accept.payQuoted.finite
+PASS accept.identity
+PASS deliver.have4
+PASS complete.credits 350->1134 pay=784
+PASS complete.cargo
+PASS complete.rep rep=2
+PASS complete.gone
+PASS complete.notDone
+PASS complete.noDoneMining
+PASS complete.noFailedOnBoard
+PASS complete.slotFilled live=2
+PASS complete.replacement.offered
+PASS complete.replacement.origin
+PASS complete.replacement.slot
+PASS complete.replacement.newId mine-freehold-0 -> mine-freehold-2
+PASS complete.replacement.newObject
+PASS complete.commLine
+PASS complete.ui.showsOffer
+PASS doubleTick.noPay
+PASS doubleTick.noCargo
+PASS doubleTick.stillTwo
+PASS expire.offered.undocked
+PASS expire.offered.gone
+PASS expire.offered.noPay
+PASS expire.offered.noRep
+PASS expire.offered.noCargo
+PASS expire.offered.replacement
+PASS expire.offered.newObject
+PASS expire.offered.newId
+PASS expire.offered.comm
+PASS expire.offered.noFailed
+dock freehold-accepted-expire: docked=true sys=freehold
+PASS expire.accepted.took
+PASS expire.accepted.gone
+PASS expire.accepted.noPay
+PASS expire.accepted.noRep
+PASS expire.accepted.cargoKept
+PASS expire.accepted.replacement
+PASS expire.accepted.newObject
+PASS expire.accepted.newId
+PASS expire.accepted.comm
+PASS expire.accepted.noFailed
+dock freehold-ferry: docked=true sys=freehold
+PASS unique.ferry.done
+PASS unique.ferry.paid
+PASS unique.haul.offered
+PASS unique.ace.offered
+PASS unique.patrol.offered
+PASS unique.four.stillPresent
+PASS board.noFailedMining
+dock digit-identity: docked=true sys=freehold
+PASS digit.accept.identity
+{
+  "src.no.innerHTML": true,
+  "src.h.textContent": true,
+  "src.replaceMiningJob": true,
+  "src.completeJob.done": true,
+  "src.deadline.600": true,
+  "src.cite.WRECK_TTL": true,
+  "world.WRECK_TTL.600": true,
+  "src.digit2.jobs": true,
+  "src.unique.makeJobs": true,
+  "src.no.SAFE_ID.full": true,
+  "src.emit.commLine": true,
+  "fill.count2": true,
+  "fill.deadline.post": true,
+  "unique.four": true,
+  "accept.clicked": true,
+  "accept.state": true,
+  "accept.deadline.restart": true,
+  "accept.payQuoted.finite": true,
+  "accept.identity": true,
+  "deliver.have4": true,
+  "complete.credits": true,
+  "complete.cargo": true,
+  "complete.rep": true,
+  "complete.gone": true,
+  "complete.notDone": true,
+  "complete.noDoneMining": true,
+  "complete.noFailedOnBoard": true,
+  "complete.slotFilled": true,
+  "complete.replacement.offered": true,
+  "complete.replacement.origin": true,
+  "complete.replacement.slot": true,
+  "complete.replacement.newId": true,
+  "complete.replacement.newObject": true,
+  "complete.commLine": true,
+  "complete.ui.showsOffer": true,
+  "doubleTick.noPay": true,
+  "doubleTick.noCargo": true,
+  "doubleTick.stillTwo": true,
+  "expire.offered.undocked": true,
+  "expire.offered.gone": true,
+  "expire.offered.noPay": true,
+  "expire.offered.noRep": true,
+  "expire.offered.noCargo": true,
+  "expire.offered.replacement": true,
+  "expire.offered.newObject": true,
+  "expire.offered.newId": true,
+  "expire.offered.comm": true,
+  "expire.offered.noFailed": true,
+  "expire.accepted.took": true,
+  "expire.accepted.gone": true,
+  "expire.accepted.noPay": true,
+  "expire.accepted.noRep": true,
+  "expire.accepted.cargoKept": true,
+  "expire.accepted.replacement": true,
+  "expire.accepted.newObject": true,
+  "expire.accepted.newId": true,
+  "expire.accepted.comm": true,
+  "expire.accepted.noFailed": true,
+  "unique.ferry.done": true,
+  "unique.ferry.paid": true,
+  "unique.haul.offered": true,
+  "unique.ace.offered": true,
+  "unique.patrol.offered": true,
+  "unique.four.stillPresent": true,
+  "board.noFailedMining": true,
+  "digit.accept.identity": true
+}
+OK

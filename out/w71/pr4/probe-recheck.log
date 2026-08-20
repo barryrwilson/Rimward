@@ -1,0 +1,133 @@
+PASS src.no.innerHTML
+PASS src.h.textContent
+PASS src.timeLeft.helper
+PASS src.scheme.120s
+PASS src.no.anim.jobs
+PASS src.digit2.jobs
+PASS src.digit0.shipyard
+PASS src.two.levels
+PASS src.unique.makeJobs
+PASS src.unique.lines.intact
+PASS src.no.SAFE_ID.full
+PASS src.pay.untouched
+PASS src.expire.untouched
+dock freehold: docked=true sys=freehold
+PASS fill.count2 n=2
+PASS unique.four
+PASS offered.cards.2 n=2
+PASS offered.time 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+Accept (5)
+10m left
+PASS offered.minutes.scheme
+PASS offered.accept
+PASS offered.title.allowlist
+PASS offered.detail.station
+PASS offered.reward
+PASS unique.cards.4 n=4 text=FREEHOLD LANDING
+FREEHOLD COMPACT ┬╖ BERTH 7
+ship made fast
+CREDITS 350 UU ┬╖ HOLD 0/20
+ΓåÉ Back (Esc)
+JOBS BOARD ΓÇö Freehold
+PASS unique.patrol.line
+PASS unique.haul.line
+PASS unique.ferry.line
+PASS unique.ace.line
+PASS unique.no.mining.clock
+PASS accept.clicked
+PASS accept.state
+PASS accepted.haveNeed 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2) ┬╖ 9m left
+PASS accepted.time 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2) ┬╖ 9m left
+PASS accepted.minutes.scheme 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2) ┬╖ 9m left
+PASS accepted.seconds.scheme 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2) ┬╖ 90s left
+PASS accepted.failClosed.nan 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2)
+PASS accepted.failClosed.inf 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2)
+PASS accepted.failClosed.missing 5. Mine Living rock
+Cut reachable Living rock in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Living rock here ΓÇö pays 3360 UU
+ACCEPTED ΓÇö deliver 4 Living rock here (have 2)
+PASS complete.credits 350->3710 pay=3360
+PASS complete.gone
+PASS complete.replacement.offered
+PASS complete.replacement.deadlineLine 6. Mine Raw ore
+Cut reachable Raw ore in this system's field and deliver 4 units at Freehold Landing.
+Deliver 4 Raw ore here ΓÇö pays 784 UU
+Accept (6)
+10m left
+PASS unique.four.afterComplete
+PASS expire.offered.gone
+PASS expire.offered.replacement
+dock freehold-after-expire: docked=true sys=freehold
+PASS expire.replacement.deadlineLine 5. Mine Raw ore | 6. Mine Raw ore
+PASS unique.four.afterExpire
+PASS src.no.innerHTML.final
+{
+  "src.no.innerHTML": true,
+  "src.h.textContent": true,
+  "src.timeLeft.helper": true,
+  "src.scheme.120s": true,
+  "src.no.anim.jobs": true,
+  "src.digit2.jobs": true,
+  "src.digit0.shipyard": true,
+  "src.two.levels": true,
+  "src.unique.makeJobs": true,
+  "src.unique.lines.intact": true,
+  "src.no.SAFE_ID.full": true,
+  "src.pay.untouched": true,
+  "src.expire.untouched": true,
+  "fill.count2": true,
+  "unique.four": true,
+  "offered.cards.2": true,
+  "offered.time": true,
+  "offered.minutes.scheme": true,
+  "offered.accept": true,
+  "offered.title.allowlist": true,
+  "offered.detail.station": true,
+  "offered.reward": true,
+  "unique.cards.4": true,
+  "unique.patrol.line": true,
+  "unique.haul.line": true,
+  "unique.ferry.line": true,
+  "unique.ace.line": true,
+  "unique.no.mining.clock": true,
+  "accept.clicked": true,
+  "accept.state": true,
+  "accepted.haveNeed": true,
+  "accepted.time": true,
+  "accepted.minutes.scheme": true,
+  "accepted.seconds.scheme": true,
+  "accepted.failClosed.nan": true,
+  "accepted.failClosed.inf": true,
+  "accepted.failClosed.missing": true,
+  "complete.credits": true,
+  "complete.gone": true,
+  "complete.replacement.offered": true,
+  "complete.replacement.deadlineLine": true,
+  "unique.four.afterComplete": true,
+  "expire.offered.gone": true,
+  "expire.offered.replacement": true,
+  "expire.replacement.deadlineLine": true,
+  "unique.four.afterExpire": true,
+  "src.no.innerHTML.final": true
+}
+OK

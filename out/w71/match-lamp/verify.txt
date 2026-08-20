@@ -1,0 +1,34 @@
+## Status
+CLEAN
+
+## What I tested
+- Static: `src/systems/hud.js` `isRockLock` (~350) and `matchOn` (~1467). Combat rail still gated on `shipTgt` only (~1025–1028). HUD reads `ctx.flags.matchSpeed`; family tick stays `hudMechMatch`.
+- Live (Vite http://localhost:5173/, Chrome + puppeteer-core, Swiftshader): skip title, Digit1 origin, undock via `ctx.flags.docked=false`, weapon group 3.
+- Lock asteroid list entry, tap X: MATCH lamp on, `.rw-combat-rail.rw-combat-target` has `is-hidden`.
+- Drop lock (`targets.current = null`): lamp has `is-hidden`; `matchSpeed` clears.
+- Re-lock rock, tap X: lamp on again; rail stays hidden.
+- Lock live-ship stub (`object` + `state`), tap X: lamp on.
+- Cancel MATCH (R / throttleHeld): lamp has `is-hidden`.
+- Stale `matchSpeed=true` with no target: lamp stays hidden.
+
+## Bugs found
+None. First live pass failed only because the lamp class toggles on the 5 Hz HUD text path (`textAccum` / `TEXT_UPDATE_INTERVAL` 0.2 s). Re-run with 1.5 s polls: LIVE PASS.
+
+## Environmental issues
+None. Vite was down at start; `npm run dev` brought up http://localhost:5173/.
+
+## Evidence
+- Screenshots:
+  - `out/w71/match-lamp/01-rock-match.png` — rock MATCH lamp on (SPD MATCH); asteroid bracket/ore; no target combat rail
+  - `out/w71/match-lamp/02-no-target.png` — no MATCH lamp; no target rail
+  - `out/w71/match-lamp/03-ship-match.png` — ship MATCH lamp on; target combat rail visible (ship-only)
+  - `out/w71/match-lamp/04-cancel.png` — MATCH lamp hidden after R
+- Logs: `out/w71/match-lamp/live-log.txt`
+- Test output: `out/w71/match-lamp/live-verify.mjs` (LIVE PASS)
+
+## Static condition
+```
+const matchOn = !!(ctx.flags.matchSpeed && (shipTgt || isRockLock(target)));
+```
+`isRockLock(t)` = `t && t.position && !t.object && !t.state` (same as controls.js / ship.js).
+Lamp DOM: `span.rw-match-lamp`; hidden class `is-hidden`.

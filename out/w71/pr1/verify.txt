@@ -1,0 +1,65 @@
+## Status
+BUGS_FOUND
+
+## What I tested
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w71/pr1/probe.mjs`. Saved stdout to `out/w71/pr1/probe-recheck.log`. All worker pins true. Exit 0. `PASS`. cap=220, nSys=100, keepLen=5, overflowLen=220.
+- Read `src/game/save.js` `sanitizeJobs` (375–412), helpers `jobIdTokens` / `sanitizeOneJob` / `extraOfferedMining` / `dropJobsUntilCap`, and `sanitizeRestored` call at line 647.
+- Compared that code to merge law `out/w70/msn/shared-contract.md` §1.
+- Ran extra edges in `out/w71/pr1/edge-probe.mjs` (log `out/w71/pr1/edge-probe.log`).
+- Confirmed `src/systems/station.js` and `src/game/state.js` have no working-tree edits. Only `src/game/save.js` changed (250 insertions).
+- Confirmed no `ensureJobs` in `save.js`, no `innerHTML` in `save.js`, no new `WORLD_FIELDS` persist key.
+
+## Merge-law checklist
+- NOT whole-string `SAFE_ID.test(job.id)`: pass. `SAFE_ID.test` runs per hyphen token only (`jobIdTokens`).
+- Hyphen tokens; `RESERVED_IDS` on full id AND tokens: pass (`reservedId` + `toLowerCase`).
+- Unique four exact keep: pass (`UNIQUE_JOB_KIND` own-keys).
+- Mining three tokens `mine-sys-n`; `originSystem === sysId`; slot 0|1: pass.
+- Cap `4+2*N_SYSTEMS+16`: pass (220 at 100 systems).
+- Never drop unique four / accepted / honest two-slot offered mining: pass on worker probe and edge probe (accepted mining kept under overflow; honest `mine-*-0`/`mine-*-1` kept).
+- Fresh `{}` literals, no `Object.assign` from save blob onto a job: pass.
+- No `ensureJobs` from `save.js`: pass.
+- `payQuoted` clamp 0…20000: pass (worker pin `payQuoted.clamp`).
+- No innerHTML; no new persist key; `state.js` untouched: pass.
+- `station.js` not edited (PR2 owns mining fill): pass.
+
+## Extra edges
+- Doubled hyphen `mine-freehold--0`: dropped.
+- Leading hyphen `-mine-freehold-0`: dropped.
+- `constructor` token (`mine-constructor-0`, `bounty-constructor`): dropped.
+- Failed mining under cap: kept (`state` allowlist includes `failed`).
+- Failed mining on overflow: dropped; honest offered slots kept.
+- `asteroidId` / `faction` on a kept mining row: not copied.
+- Origin mismatch `mine-freehold-0` with `originSystem: fh_hearth`: dropped.
+- Slot 2: dropped.
+- Empty `jobs: []`: stays `[]`.
+- Poison non-array / `null`: worker probe → `[]`.
+- Jobs omitted from snap: FAIL (see Bug 1).
+
+## Bugs found
+
+### Bug 1 — omitted `world.jobs` on the snapshot keeps live session jobs
+- Severity: medium
+- Contract: `out/w70/msn/shared-contract.md` §1.2. If `world.jobs` is missing, not an array, or empty after drop → leave `[]` (then `ensureJobs` in `station.js` reseeds the unique four). Same restore pattern as omitted `fieldOre` (`save.js` 703–704 deletes the live bag).
+- Worker claim: missing lists become `[]`. Security review check “Non-array / missing jobs → []” is not true for an omitted key.
+- Repro:
+  1. Build `ctx` with live `world.jobs` that already sanitizes (for example unique four, or the stale ace used in `edge-probe.mjs`).
+  2. Call `restore(ctx, { v: 1, world: { currentSystem: 'freehold' } })` with no `jobs` key.
+- Expected: `ctx.world.jobs` is `[]` so station `ensureJobs` can seed the unique four.
+- Actual: `restore` only copies `WORLD_FIELDS` when `snap.world[k] !== undefined` (`save.js` 698–700). Omitted `jobs` leaves the live array. `sanitizeJobs` then heals that live array, not an empty list.
+- Evidence: `out/w71/pr1/edge-probe.log` — `omit.jobsEmpty: false`, `omit.staleDropped: false`. `omit.jobsIsArray: true` because the stale live list survived.
+- Contrast: `jobs: null` / `{ not: 'array' }` / `[]` do heal to `[]` (worker probe + empty edge).
+- Why it matters: a berth/autosave blob with no `jobs` key (legacy or stripped) loaded into a live session keeps the current board instead of healing missing data. Boot with `world.jobs === undefined` still becomes `[]` inside `sanitizeJobs`, so boot-only missing is fine.
+- Suggested fix (do not apply in this verify pass): in `restore`, if `snap.world.jobs === undefined` set `ctx.world.jobs = []` (or delete, then let `sanitizeJobs` turn non-array into `[]`), next to the `fieldOre` omit delete.
+
+No other restore-heal bugs found in the extra edges above.
+
+## Environmental issues
+- None. Node probe ran in this workspace. `nSys` is 100. Cap is 220.
+
+## Evidence
+- Logs: `C:\Projects\WebSim\out\w71\pr1\probe-recheck.log`, `C:\Projects\WebSim\out\w71\pr1\edge-probe.log`
+- Extra probe: `C:\Projects\WebSim\out\w71\pr1\edge-probe.mjs`
+- Test output: worker recheck `PASS` with `{"allTrue":true,"cap":220,"nSys":100,"keepLen":5,"overflowLen":220}`
+- Edge output: `EDGE FAIL omit.jobsEmpty,omit.staleDropped`
+- Code: `C:\Projects\WebSim\src\game\save.js` restore 698–704 vs `sanitizeJobs` 375–380
+- Contract: `C:\Projects\WebSim\out\w70\msn\shared-contract.md` §1.2

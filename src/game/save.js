@@ -1,5 +1,5 @@
 import '../ui/screens.css';
-import { createShipState, SHIP_CLASSES, SYSTEMS, FACTIONS, U, JUMP } from './state.js';
+import { createShipState, SHIP_CLASSES, SYSTEMS, FACTIONS, U, JUMP, COMMODITIES, ORE_TYPES } from './state.js';
 import {
   sanitizeHangar,
   parkMounted,
@@ -111,6 +111,27 @@ const FIELD_ORE_INDEX = /^(0|[1-9][0-9]*)$/;
 const FIELD_ORE_SYS_CAP = 32;
 const FIELD_ORE_MAX_COUNT = 160;
 const FIELD_ORE_MAX_REMAINING = 64;
+const MINING_SLOTS_PER_SYSTEM = 2;
+const JOBS_OVERLAY_HEADROOM = 16;
+const JOBS_SANITIZE_MAX = 4
+  + MINING_SLOTS_PER_SYSTEM * Object.keys(SYSTEMS).length
+  + JOBS_OVERLAY_HEADROOM;
+const PAY_QUOTED_MAX = 20000;
+const JOB_TITLE_MAX = 240;
+const JOB_DETAIL_MAX = 720;
+const JOB_KINDS = new Set(['bounty', 'patrol', 'haul', 'ferry', 'recovery', 'mining']);
+const JOB_STATES = new Set(['offered', 'accepted', 'done', 'failed']);
+const UNIQUE_JOB_KIND = {
+  'bounty-ace': 'bounty',
+  'patrol-lane': 'patrol',
+  'haul-provisions': 'haul',
+  'ferry-consignment': 'ferry',
+};
+const JOB_FIELD_ALLOW = new Set([
+  'id', 'kind', 'state', 'title', 'detail', 'reward', 'need', 'progress',
+  'originSystem', 'destSystem', 'system', 'payQuoted', 'originPrice',
+  'target', 'wreckId', 'collected', 'commodity', 'deadline', 'slot',
+]);
 
 function sanitizeFieldOre(ctx) {
   const raw = ctx.world.fieldOre;
@@ -161,6 +182,233 @@ function sanitizeFieldOre(ctx) {
     if (!keep.has(keys[i])) takeSys(keys[i]);
   }
   ctx.world.fieldOre = out;
+}
+
+function reservedId(value) {
+  if (typeof value !== 'string' || !value) return true;
+  return RESERVED_IDS.has(value) || RESERVED_IDS.has(value.toLowerCase());
+}
+
+/** Hyphen-token job ids. Do not SAFE_ID.test the full string (hyphens on live ids). */
+function jobIdTokens(id) {
+  if (typeof id !== 'string' || id.length < 1 || id.length > ID_MAX) return null;
+  if (id.charAt(0) === '-' || id.charAt(id.length - 1) === '-') return null;
+  if (id.includes('--')) return null;
+  if (reservedId(id)) return null;
+  const tokens = id.split('-');
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (!t || !SAFE_ID.test(t) || reservedId(t)) return null;
+  }
+  return tokens;
+}
+
+function sanitizeJobSystem(value) {
+  if (typeof value !== 'string' || !value || value.length > ID_MAX) return null;
+  if (reservedId(value)) return null;
+  return Object.hasOwn(SYSTEMS, value) ? value : null;
+}
+
+function clampQuoted(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const u = Math.round(value);
+  if (u < 0) return 0;
+  return u > PAY_QUOTED_MAX ? PAY_QUOTED_MAX : u;
+}
+
+function jobText(value, max) {
+  if (typeof value !== 'string') return null;
+  const cleaned = stripControlChars(value).trim().slice(0, max);
+  return cleaned || null;
+}
+
+function uniqueJobId(id) {
+  return Object.hasOwn(UNIQUE_JOB_KIND, id);
+}
+
+function miningNFromId(id) {
+  const parts = id.split('-');
+  return +parts[parts.length - 1];
+}
+
+function sanitizeOneJob(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const keys = Object.keys(raw);
+  const src = {};
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (reservedId(k) || k === '__proto__') continue;
+    if (!JOB_FIELD_ALLOW.has(k)) continue;
+    if (!Object.hasOwn(raw, k)) continue;
+    src[k] = raw[k];
+  }
+  const kind = src.kind;
+  const state = src.state;
+  if (!JOB_KINDS.has(kind) || !JOB_STATES.has(state)) return null;
+  const tokens = jobIdTokens(src.id);
+  if (!tokens) return null;
+  const id = src.id;
+  if (uniqueJobId(id)) {
+    if (UNIQUE_JOB_KIND[id] !== kind) return null;
+  } else if (kind === 'mining') {
+    if (tokens.length !== 3 || tokens[0] !== 'mine') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'bounty') {
+    if (!id.startsWith('bounty-pirate-') || tokens.length < 3) return null;
+  } else if (kind === 'recovery') {
+    if (!id.startsWith('recovery-') || tokens.length < 2) return null;
+  } else {
+    return null;
+  }
+  const title = jobText(src.title, JOB_TITLE_MAX);
+  const detail = jobText(src.detail, JOB_DETAIL_MAX);
+  if (!title || !detail) return null;
+  const reward = src.reward;
+  const need = src.need;
+  const progress = src.progress;
+  if (typeof reward !== 'number' || !Number.isFinite(reward)) return null;
+  if (typeof need !== 'number' || !Number.isFinite(need) || need < 1) return null;
+  if (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0) return null;
+  const job = {
+    id,
+    kind,
+    state,
+    title,
+    detail,
+    reward,
+    need,
+    progress: progress > need ? need : progress,
+  };
+  const origin = src.originSystem === undefined ? undefined : sanitizeJobSystem(src.originSystem);
+  const dest = src.destSystem === undefined ? undefined : sanitizeJobSystem(src.destSystem);
+  const system = src.system === undefined ? undefined : sanitizeJobSystem(src.system);
+  if (kind === 'mining') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    const commodity = src.commodity;
+    if (typeof commodity !== 'string' || reservedId(commodity)) return null;
+    if (!Object.hasOwn(ORE_TYPES, commodity) || !Object.hasOwn(COMMODITIES, commodity)) return null;
+    job.originSystem = origin;
+    job.slot = src.slot;
+    job.commodity = commodity;
+  } else if (kind === 'recovery') {
+    if (!origin) return null;
+    const wreckRaw = typeof src.wreckId === 'string' ? stripControlChars(src.wreckId).trim().slice(0, ID_MAX) : '';
+    if (!jobIdTokens(wreckRaw)) return null;
+    if (src.collected !== undefined && typeof src.collected !== 'boolean') return null;
+    job.originSystem = origin;
+    job.wreckId = wreckRaw;
+    job.collected = src.collected === true;
+  } else if (kind === 'bounty' && !uniqueJobId(id)) {
+    if (!system) return null;
+    job.system = system;
+  }
+  if (kind !== 'mining' && origin) job.originSystem = origin;
+  if (dest) job.destSystem = dest;
+  if (kind !== 'bounty' || uniqueJobId(id)) {
+    if (system && !job.system) job.system = system;
+  }
+  if (kind === 'bounty') {
+    const target = jobText(src.target, NAME_MAX);
+    if (!target) return null;
+    job.target = target;
+  }
+  if (src.payQuoted !== undefined) {
+    const pay = clampQuoted(src.payQuoted);
+    if (pay !== null) job.payQuoted = pay;
+  }
+  if (src.originPrice !== undefined) {
+    const price = clampQuoted(src.originPrice);
+    if (price !== null) job.originPrice = price;
+  }
+  if (src.deadline !== undefined) {
+    const d = src.deadline;
+    if (typeof d === 'number' && Number.isFinite(d) && d >= 0) job.deadline = d;
+  }
+  return job;
+}
+
+function extraOfferedMining(jobs) {
+  const extra = new Set();
+  const bySysSlot = new Map();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'mining') continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    const key = j.originSystem + '\0' + j.slot;
+    let list = bySysSlot.get(key);
+    if (!list) {
+      list = [];
+      bySysSlot.set(key, list);
+    }
+    list.push(j);
+  }
+  const keys = [];
+  bySysSlot.forEach((_list, key) => { keys.push(key); });
+  for (let k = 0; k < keys.length; k++) {
+    const list = bySysSlot.get(keys[k]);
+    list.sort((a, b) => miningNFromId(a.id) - miningNFromId(b.id));
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].state !== 'accepted') extra.add(list[i]);
+    }
+  }
+  return extra;
+}
+
+function dropJobsUntilCap(jobs, canDrop) {
+  if (jobs.length <= JOBS_SANITIZE_MAX) return jobs;
+  let extra = jobs.length - JOBS_SANITIZE_MAX;
+  const out = [];
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (extra > 0 && canDrop(j)) {
+      extra -= 1;
+      continue;
+    }
+    out.push(j);
+  }
+  return out;
+}
+
+function sanitizeJobs(ctx) {
+  const raw = ctx.world.jobs;
+  if (!Array.isArray(raw)) {
+    ctx.world.jobs = [];
+    return;
+  }
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < raw.length; i++) {
+    const job = sanitizeOneJob(raw[i]);
+    if (!job) continue;
+    if (seen.has(job.id)) continue;
+    seen.add(job.id);
+    out.push(job);
+  }
+  const extras = extraOfferedMining(out);
+  let jobs = dropJobsUntilCap(out, (j) => extras.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  jobs = dropJobsUntilCap(jobs, (j) => (
+    j.kind === 'mining' && (j.state === 'done' || j.state === 'failed') && !uniqueJobId(j.id)
+  ));
+  jobs = dropJobsUntilCap(jobs, (j) => {
+    if (uniqueJobId(j.id) || j.state === 'accepted') return false;
+    if (j.kind === 'recovery' && j.state === 'done') return true;
+    if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-') && j.state === 'done') return true;
+    return false;
+  });
+  const cur = ctx.world.currentSystem;
+  jobs = dropJobsUntilCap(jobs, (j) => {
+    if (uniqueJobId(j.id) || j.state === 'accepted') return false;
+    if (j.kind === 'mining' && j.state === 'offered' && !extras.has(j)) return false;
+    if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-') && j.state === 'offered') {
+      return j.system !== cur;
+    }
+    if (j.kind === 'recovery' && j.state === 'offered') return j.originSystem !== cur;
+    return false;
+  });
+  ctx.world.jobs = jobs;
 }
 
 export function stripControlChars(s) {
@@ -396,6 +644,7 @@ function sanitizeRestored(ctx) {
   for (const row of cargo) ctx.cargo.push(row);
   if (!Number.isFinite(ctx.world.time) || ctx.world.time < 0) ctx.world.time = 0;
   sanitizeFieldOre(ctx);
+  sanitizeJobs(ctx);
 }
 
 /**
@@ -453,6 +702,8 @@ export function restore(ctx, snap) {
   if (snap.world.hangar === undefined) delete ctx.world.hangar;
   // Omitted fieldOre is missing (contract §6.3) — do not keep a live bag.
   if (snap.world.fieldOre === undefined) delete ctx.world.fieldOre;
+  // Omitted jobs is missing (MSN contract §1.2) — do not keep a live board.
+  if (snap.world.jobs === undefined) delete ctx.world.jobs;
   // A system id the current build doesn't know (stale/modded save) must not
   // propagate — every module indexes SYSTEMS with it.
   if (!ctx.systems?.[ctx.world.currentSystem]) ctx.world.currentSystem = 'freehold';

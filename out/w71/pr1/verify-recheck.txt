@@ -1,0 +1,19 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w71/pr1/probe.mjs`. All pins true. Exit 0. `PASS`. cap=220, nSys=100. New omit pins `omit.jobsEmpty` and `omit.staleDropped` are true.
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w71/pr1/edge-probe.mjs`. All pins true. Exit 0. `EDGE PASS`.
+- Read `src/game/save.js` restore omit-key lines 701–706. `jobs` delete sits next to hangar and fieldOre.
+- Confirmed `sanitizeJobs` maps a missing (non-array) `ctx.world.jobs` to `[]` (375–379).
+
+## Bugs found
+None. Bug 1 is fixed. An omitted `jobs` key deletes the live board. `sanitizeJobs` then sets `[]`. Unique four, proto mining drop, cap 220, `payQuoted` clamp, and no prototype pollution still pass.
+
+## Environmental issues
+None.
+
+## Evidence
+- Logs: `C:\Projects\WebSim\out\w71\pr1\probe-recheck2.log`, `C:\Projects\WebSim\out\w71\pr1\edge-probe-recheck.log`
+- Test output: worker `PASS` `{ allTrue:true, cap:220, nSys:100, keepLen:5, overflowLen:220 }`; edge `EDGE PASS` with `omit.jobsEmpty: true`, `omit.staleDropped: true`
+- Code: `src/game/save.js` 705–706 `if (snap.world.jobs === undefined) delete ctx.world.jobs;` then `sanitizeJobs` 375–379

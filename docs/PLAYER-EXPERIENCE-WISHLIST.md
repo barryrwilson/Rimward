@@ -86,7 +86,11 @@ Unknowables still omit frigate. **Wave 70 leftovers + briefs
 landed 2026-08-20:** MATCH on a locked rock (rest-frame hold);
 BIO brief (`docs/BioLivingShipsDesign.md`); MSN brief
 (`docs/MsnMissionsDesign.md`). Beautiful / Unknowables still
-omit frigate.
+omit frigate. **Wave 71 MATCH lamp leftover + MSN first impl
+landed 2026-08-20:** HUD MATCH lights on a rock lock; mining
+Jobs cards (two slots, accept, deliver, 600 s expire,
+one-in-one-out). BIO first impl later. Beautiful /
+Unknowables still omit frigate.
 
 ### Experience references
 
@@ -221,8 +225,8 @@ The base HUD readouts in HUD-01 remain standard.
 **Status:** DONE (core ship, Wave D, 2026-08-17). MATCH lamp + `X`. `ship.js`
 does not write `ctx.input.throttle`. Wave 70: X on a locked rock
 holds in the rock rest frame (sampled world velocity). Ship MATCH
-still uses scalar speed along the nose. The MATCH lamp still needs
-a ship `state`, so it stays off on a rock lock.
+still uses scalar speed along the nose. Wave 71: the MATCH lamp
+lights on a rock lock as well as a live ship.
 
 Add a control that continuously matches the selected target's speed until
 cancelled, invalidated, or the target is lost. The interface must clearly show
@@ -257,6 +261,47 @@ SKU `auto`. No incoming gauge. NPC turrets later.
 
 Turrets and automatic guns should be equipment upgrades with appropriate hull,
 mount, power, and balance restrictions.
+
+### TGT-05 — Target under reticle
+
+**Status:** CAPTURED
+
+Add a targeting control that locks the targetable object currently under, or
+closest to, the center reticle. This is needed because a populated system can
+contain too many ships and objects for repeated next/previous-target cycling to
+remain practical.
+
+- Support every appropriate target category: ships, asteroids, stations, gates,
+  salvage, cargo, escape pods, landmarks, anomalies, and other interactable
+  world objects.
+- Prefer the visible object whose on-screen target area actually contains the
+  reticle; use a small, forgiving selection cone only when there is no direct
+  intersection.
+- When multiple objects overlap, prefer the visually nearest unobscured object
+  rather than selecting something hidden behind it.
+- Preserve existing target filters and eligibility rules; decorative geometry
+  must not steal the lock from its owning targetable object.
+- Give immediate visual and audio confirmation of the new lock, and clear
+  feedback when nothing targetable is under the reticle.
+- Keep the function useful with both mouse/gamepad aiming and keyboard flight
+  controls.
+
+**Acceptance direction**
+
+- Pointing the reticle at a visible ship or asteroid and pressing the command
+  consistently selects that object in a dense representative system.
+- A station, gate, salvage item, cargo pod, escape pod, landmark, or anomaly can
+  be selected the same way when it is targetable through other controls.
+- Foreground targets win over objects hidden behind them.
+- Near misses receive modest aim forgiveness without causing surprising locks
+  on distant or unrelated objects.
+- The selected object feeds the existing target card, range, bearing, MATCH,
+  scanning, mining, and interaction systems according to its capabilities.
+
+**Regression risks to call out:** selection through occluding geometry;
+small/distant objects becoming impossible to acquire; large station or gate
+proxies stealing nearby ship locks; disagreement between the visible reticle
+and the camera ray; input conflicts with firing or existing target commands.
 
 **Acceptance direction**
 
@@ -448,9 +493,11 @@ Standing should affect:
 
 ## Initiative MSN — Renewable missions and player careers
 
-**Status:** brief landed Wave 70 (`docs/MsnMissionsDesign.md`).
-No `src/` this wave. First impl family is mining (extend
-`world.jobs`, one-in-one-out). MSN-03 authored chains later.  
+**Status:** first impl DONE (Wave 71; brief Wave 70:
+`docs/MsnMissionsDesign.md`). Mining family: two slots per
+system, sanitize on restore, accept, home delivery, 600 s
+fail-closed expire, one-in-one-out. Other MSN-02 families
+and MSN-03 authored chains later.  
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  
@@ -602,7 +649,8 @@ is a safety net, not the normal way traffic navigates.
 `docs/AstOrbitsDesign.md`). Closed-form Kepler-lite belts,
 work sector, `fieldOre` persist, arrival line + group-3 cue.
 Wave 70 leftover: MATCH on a locked rock holds in the rock
-rest frame. NPC miners already held relative.
+rest frame. Wave 71: MATCH lamp lights on that rock lock.
+NPC miners already held relative.
 **Player problem:** Asteroids currently appear as a single local cluster in each
 solar system. The cluster feels placed rather than like a natural part of the
 system.

@@ -1,0 +1,21 @@
+{
+  "omit.jobsIsArray": true,
+  "omit.jobsEmpty": true,
+  "omit.staleDropped": true,
+  "empty.array": true,
+  "doubleHyphen.dropped": true,
+  "doubleHyphen.uniqueKept": true,
+  "ctor.mineDropped": true,
+  "ctor.bountyDropped": true,
+  "failed.keptUnderCap": true,
+  "failed.overflowLen": true,
+  "failed.overflowDropped": true,
+  "failed.overflowHonest": true,
+  "asteroidId.dropped": true,
+  "accepted.kept": true,
+  "accepted.overflowLen": true,
+  "originMismatch.dropped": true,
+  "slot2.dropped": true,
+  "leadHyphen.dropped": true
+}
+EDGE PASS

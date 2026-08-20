@@ -1,0 +1,18 @@
+PASS edge.docked
+PASS edge.offered
+PASS edge.expireDocked.gone
+PASS edge.expireDocked.noPay
+PASS edge.expireDocked.noRep
+PASS edge.expireDocked.cargoKept
+PASS edge.expireDocked.replace
+PASS edge.expireDocked.comm
+PASS edge.expireDocked.noDone
+PASS edge.snap.keepsPastDeadline
+PASS edge.restore.kept
+PASS edge.restore.expiredGone
+PASS edge.restore.noPay
+PASS edge.restore.noRep
+PASS edge.restore.cargoUnchanged
+PASS edge.restore.replace
+PASS edge.restore.comm
+OK

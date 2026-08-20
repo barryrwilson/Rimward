@@ -1,0 +1,54 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w71/pr2/probe.mjs` and saved `out/w71/pr2/probe-recheck.log`. Exit 0. Log ends with `OK`. 47 PASS pins. No silent exit.
+- Ran extra hunt `node --import ./scripts/with-css-stub.mjs out/w71/pr2/hunt.mjs` → `out/w71/pr2/hunt.log`. Exit 0. 21 PASS pins.
+- Read `src/systems/station.js`: `syncMiningJobs`, `boardJobs`, `acceptJob` mining branch, `tickDeliveryJobs` mining branch, `renderJobs` mining lines, `h()`, `DOCK_KEY_SERVICES`, Digit jobs accept.
+- Compared those paths to `out/w70/msn/shared-contract.md` §2–§5 for PR2 only (mining cards, fill, accept stamp, origin delivery, employer rep). Did not treat missing expire/replace as a PR2 bug.
+- Confirmed working-tree source for this PR is `station.js`. `state.js` and `scripts/boot-test.mjs` are not dirty. `save.js` dirt is PR1 `sanitizeJobs`. `hud.js` dirt is rock-lock match-speed, not jobs.
+
+Contract checks:
+- Two slots per system; `syncMiningJobs` fills missing `offered|accepted` only; does not rewrite live cards.
+- Ids `mine-<SYSTEMS key>-<n>` with collision increment. No `asteroidId`. No `job.faction` field.
+- Commodity roll is hardness ≤ 1 keys on both `ORE_TYPES` and `COMMODITIES` (`rawOre`, `livingRock`). `need` is `FERRY_UNITS` 4.
+- Accept stamps `payQuoted` with origin `jobPayFor(ctx, origin, round(need * price * HAUL_MARGIN 1.4))` and clamp 0…20000. No cargo front.
+- Delivery only when docked at `originSystem`. Removes `need` cargo. Pays stamped `payQuoted`. Writes +2 to `SYSTEMS[origin].faction` after `Object.hasOwn(FACTIONS, faction)`. `completeJob` sets `done`.
+- Unique four ids still authored in `makeJobs`. Haul still stamps dest `otherSystemId`. Ferry still stamps dest and fronts Provisions.
+- `h()` sets `textContent`. No `innerHTML` in `station.js`.
+- Digit 2 = jobs (`DOCK_KEY_SERVICES[1]`). Digit 0 = shipyard (last index maps to 0).
+
+Hunts:
+- Double-pay: after `done`, restock + extra ticks do not pay again.
+- Double-accept: Digit accept still requires `state === 'offered'`. Accept button is not shown after accept. No cargo front on mining.
+- Foreign offered mining does not appear on a foreign Jobs board. Accepted mining does.
+- `job.faction = 'freehold'` on a Veridian mining job does not write Freehold rep. Employer is `SYSTEMS.veridian.faction` (`veridian`).
+- Second Jobs render keeps the same ids and commodities (no reshuffle).
+
+## Bugs found
+None in PR2 scope.
+
+Known follow-ons (not scored as PR2 bugs):
+- `completeJob` leaves `done` mining on the board. The next `renderJobs` fill posts another live slot (`mine-veridian-2` in hunt after a Veridian complete). PR3 splice+replace.
+- Expire / one-in-one-out / remaining-time copy / boot pins are later PRs.
+
+## Environmental issues
+None. Node + CSS stub probe and hunt both completed with `OK`.
+
+## Evidence
+- Probe recheck: `C:\Projects\WebSim\out\w71\pr2\probe-recheck.log` (ends `OK`).
+- Hunt: `C:\Projects\WebSim\out\w71\pr2\hunt.log` (ends `OK`).
+- `src/systems/station.js` 169–176 `MINING_SLOTS_PER_SYSTEM = 2`, `MINING_REP = 2`, hardness ≤ 1 key list.
+- `src/systems/station.js` 1589–1655 `pickMiningCommodity` / `nextMiningId` increment / `makeMiningJob` / `syncMiningJobs` fill-missing.
+- `src/systems/station.js` 1658–1667 `boardJobs` hides foreign offered mining.
+- `src/systems/station.js` 1833–1851 origin dock delivery, stamped pay, employer faction + `Object.hasOwn(FACTIONS)`, then `completeJob`.
+- `src/systems/station.js` 2197–2208 mining accept: origin `payQuoted`, no `addCargo`.
+- `src/systems/station.js` 2221–2296 `renderJobs` calls pirate/recovery/`syncMiningJobs`; mining copy via `h()`.
+- `src/systems/station.js` 1922–1926 `node.textContent = text`.
+- `src/systems/station.js` 132 and 2761–2762 Digit 1 market, Digit 2 jobs, Digit 0 shipyard.
+- `src/systems/station.js` 2870–2871 Digit accept still index-into-`boardJobs` and `offered` only.
+- Hunt pin `hunt.payQuoted.originHaulMargin`: Veridian `rawOre` need 4 → `payQuoted` 784 = `round(4 * base * 1.4)`.
+- Hunt pin `hunt.rep.employer.notStuffed`: `vd=2 fh=0 stuffed=freehold`.
+- Hunt pin `hunt.noDoublePay`: credits 1134 stay 1134, state `done`.
+- Hunt pin `hunt.noPayAtForeignDock`: Freehold accepted mining at Veridian, credits unchanged.
+- Workspace: `git diff --stat` shows `save.js` +253 (PR1 sanitize), `hud.js` +7 (rock lock), `station.js` +131 (PR2). `state.js` / `boot-test.mjs` not in the dirty list.

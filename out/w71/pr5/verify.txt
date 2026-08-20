@@ -1,0 +1,9 @@
+WAVE71 PR5 boot pins
+
+`npm run test:boot` (via with-css-stub) log line:
+
+`wave71 msn:` every value true. No `WAVE71 MSN FAIL`.
+
+Known unrelated FAILs still print (WAVE4 fence, WAVE26 cluster, WAVE35 haul). Exit 1 with 8 errors. WAVE71 is not among them.
+
+Pins: MATCH lamp source; sanitizeJobs + omit-key; proto drop; keep bounty-ace / mine-freehold-0 / mine-fh_hearth-1; cap 220; two Freehold mining slots hardness ≤ 1; no asteroidId; unique four; complete → replace + pay; expire no pay; no innerHTML.

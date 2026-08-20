@@ -1,0 +1,66 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w71/pr4/probe.mjs` → `out/w71/pr4/probe-recheck.log`. Exit 0. Log ends `OK`. All listed pins PASS.
+- Read `src/systems/station.js` `renderJobs` mining branches, `miningTimeLeftLabel`, `h()`, `DOCK_KEY_SERVICES`, Digit handlers vs `out/w70/msn/shared-contract.md` §7 (closed neighbours) and §8 PR4 row.
+- Grepped `station.js` for `innerHTML` (none). `h()` still assigns `node.textContent`. Overlay clear is `overlay.textContent = ''`.
+- Grepped `station.js` for `asteroidId` (none). Digit 0 still maps to last `DOCK_KEY_SERVICES` entry (`shipyard`). Digit 2 still jobs.
+- Probe still exercises pay (complete credits) and expire (offered splice + replacement).
+
+Contract §8 PR4 (board clarity):
+- Offered mining: Accept (n) plus a `job-state` clock (`Ns left` / `Nm left`).
+- Accepted mining: `ACCEPTED — deliver N <ore> here (have X)` then ` · t left` when a finite deadline exists.
+- Remaining time uses `deadline - ctx.world.time`. Whole seconds if `sec < 120`, else whole minutes (`Math.floor`).
+- Mining title/detail rebuild from `COMMODITIES[commodity].name` and `SYSTEMS[origin].station.name` after `Object.hasOwn`. Unknown commodity → `'ore'`. Unknown origin → current dock, then `'the dock'`.
+- Reward line still stamps `payQuoted` vs live `jobPayFor` (origin). Unique four reward and ACCEPTED lines unchanged in source.
+- Strings go through existing `h(..., text)` / `textContent`. No `innerHTML`.
+
+Contract §7 closed neighbours:
+- AST: no rock UUID / no `asteroidId` on jobs. Copy is commodity + home station.
+- POD: no survivor commodity on the board. People desk not opened from this PR.
+- SHP: Digit 0 still shipyard. Jobs do not grant hulls. `RENDERERS.shipyard` still `renderShipyard`.
+- HUD-02: no chart identity work in `renderJobs`. No extra `requestAnimationFrame` in the jobs renderer.
+- Mystery: mining cards are not clue wrappers.
+
+Confirm pins:
+- Offered two mining cards: `10m left` + `Accept (n)` + allowlisted `Mine <ore>` + station name + `Deliver 4 … here — pays N UU`.
+- Accepted have/need + clock. 90 s remaining uses `90s left`, not minutes.
+- NaN / Infinity / missing deadline: have/need stays; no `NaN` / `Infinity` / invented ` · t left`. No crash.
+- Unique four still four cards. Patrol / haul / ferry / ace lines intact. Unique four do not grow a mining clock.
+- Unique four still present after complete and after expire.
+- Complete pays stamped `payQuoted` (this recheck: 350→3710, pay=3360 living rock) and splices; replacement offered card has a deadline line.
+- Expire offered: old object gone; replacement offered for Freehold; after redock, both mining cards show a deadline line.
+- `DOCK_KEY_SERVICES[1] === 'jobs'`; last entry shipyard; two menu levels.
+- No whole-string `SAFE_ID.test(job.id)`.
+
+Hunts:
+- innerHTML: none in `station.js`. Board copy is `textContent`. (Other `innerHTML` lives in `modelsbrowser.js`, not jobs.)
+- Missing deadline crash: `miningTimeLeftLabel` returns `''` when deadline or `world.time` is missing/non-finite. Offered clock node is skipped. Accepted omits ` · t left`. Probe pins `accepted.failClosed.nan|inf|missing`.
+- Unique four copy: `makeJobs` titles and `renderJobs` haul/ferry/patrol/ace/DONE branches unchanged. Probe `src.unique.lines.intact` + live unique card lines.
+- Digit remap: Digit 1 market, Digit 2 jobs (`d-1` into `DOCK_KEY_SERVICES`), Digit 0 last = shipyard. Jobs Digit still index-into-`boardJobs` and requires `state === 'offered'`.
+- Pay/expire: `tickDeliveryJobs` still expire-fail-closed then origin delivery + `replaceMiningJob`. Probe `complete.credits` / `complete.gone` / `expire.offered.gone` / `expire.offered.replacement`.
+
+## Bugs found
+None in PR4 scope.
+
+Known follow-ons (not scored as PR4 bugs):
+- `Math.floor` can print `9m left` one tick after a 600 s stamp (599.98 s). First offered paint still `10m left`. Instruction: do not fail this LOW nit. Probe `accepted.minutes.scheme` still PASSed as `\d+m left`.
+- WAVE71 boot-test pins are PR5.
+- Unique four still render restored `job.title` / `job.detail` through `textContent` (sanitize already strips). Out of slice.
+
+## Environmental issues
+None. Node + CSS stub probe completed with `OK`.
+
+## Evidence
+- Probe recheck: `C:\Projects\WebSim\out\w71\pr4\probe-recheck.log` (ends `OK`).
+- `src/systems/station.js` 1708–1716 `miningTimeLeftLabel`: finite deadline only; `sec < 120` → seconds else minutes; missing/non-finite → `''`.
+- `src/systems/station.js` 2026–2029 `h()` `node.textContent = text`.
+- `src/systems/station.js` 2325–2424 `renderJobs`: mining title/detail/reward/offered clock/accepted have-need+clock; unique four branches unchanged.
+- `src/systems/station.js` 132 `DOCK_KEY_SERVICES` market, jobs, … shipyard.
+- `src/systems/station.js` 2956–2963 Digit 0 shipyard; Digit 2 jobs.
+- `src/systems/station.js` 2989–2991 Digit accept still `boardJobs(...)[n - 1]` offered-only.
+- `src/systems/station.js` 1458–1482 unique four ids/titles.
+- `src/systems/station.js` 1843–1887 expire then complete pay; 1685–1696 `replaceMiningJob`.
+- Contract: `C:\Projects\WebSim\out\w70\msn\shared-contract.md` §7 closed neighbours; §8 PR4 board clarity (`textContent` only; no HUD-02, innerHTML, Digit remap).
+- Probe pins: `offered.time`, `offered.accept`, `accepted.haveNeed`, `accepted.seconds.scheme`, `accepted.failClosed.*`, `unique.no.mining.clock`, `complete.credits`, `expire.offered.gone`, `src.no.innerHTML`, `src.digit2.jobs`, `src.digit0.shipyard`.

@@ -346,6 +346,11 @@ function isRockTarget(target) {
   return !!(target && target.position && !target.state);
 }
 
+/** Rock lock: list entry with a live position, not a ship `{ object, state }`. */
+function isRockLock(t) {
+  return !!(t && t.position && !t.object && !t.state);
+}
+
 /** Distance to nearest work-sector rock, else ore>0, else field.center. */
 function beltMineDist(ctx, shipPos) {
   const list = ctx.asteroids && ctx.asteroids.list;
@@ -1459,7 +1464,7 @@ export function initHud(ctx) {
       }
 
       // flight: speed on the self rail; throttle / afterburner / drift stay aux
-      const matchOn = !!(ctx.flags.matchSpeed && shipTgt);
+      const matchOn = !!(ctx.flags.matchSpeed && (shipTgt || isRockLock(target)));
       selfSpeed.set(ctx.ship.speed, matchOn);
       if (matchOn !== last.matchLamp) {
         last.matchLamp = matchOn;
