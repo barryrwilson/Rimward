@@ -1,0 +1,76 @@
+Wave 68 PR4 verifier recheck
+Date: 2026-08-19
+Status: CLEAN
+Domain: frontend
+Did not edit src/. Did not run npm run test:boot. Wrote this file only.
+
+## Status
+CLEAN
+
+## What I tested
+1. `node out/w68/pr4/probe.mjs` — PASS, exit 0.
+2. Source read of `src/systems/hud.js`: helper at lead, RANGE, and WPN; no innerHTML; no incoming gauge; hudFamily from hullKind; HUD does not write launcher/ammo.
+3. Groups 1–3 still use WEAPON_KEYS cannon / disruptor / mining.
+4. Browser live HUD — skipped (optional PR5; no server in this pass).
+
+## Bugs found
+None.
+
+## Environmental issues
+- Did not run Playwright. No HUD server in this pass.
+- Did not run npm run test:boot (task).
+- graph_resolve returned blocked_ambiguous (CRM “lead” vs HUD lead pip). This pass used live files and the probe only.
+
+## Evidence
+
+### Probe
+Command: `node out/w68/pr4/probe.mjs`
+Output: `ok pr4 hud pins hudWeaponKey, 4 · —, 4 · Dart rack · 6, RANGE 720/0, lead 260/0, bio living, textContent`
+Exit: 0
+
+Worker `out/w68/pr4/verify.txt` matches this output.
+
+### Helper at three sites
+- Export `hudWeaponKey` at `src/systems/hud.js` 189–196. Group 4 uses `isLauncherId` then `LAUNCHER_IDS[id].wkey`. Empty / god / __proto__ return null. Groups 1–3 stay `WEAPON_KEYS[g - 1] ?? 'cannon'`.
+- Comment 188: “Empty group 4 must not fall through to cannon.”
+- Lead 1028–1030: `const wKeyLead = hudWeaponKey(ctx)`; mining speed 0; empty uses `?? 0` (no cannon 900).
+- RANGE 1091–1094: `const wKeyR = hudWeaponKey(ctx)`; mining uses head range; else `WEAPONS[wKeyR]?.range ?? 0`.
+- WPN 1458–1459: `const wLabel = weaponHudLabel(ctx)`; `weaponName.textContent = wLabel`.
+- Old inline `WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon'` is gone at those three sites. `weaponGroup` appears only in the two helpers.
+
+### Labels
+- Empty group 4: `4 · —` (`weaponHudLabel` 203–204). Probe `label.empty` / `label.empty.noCannon`.
+- Seated dart: `4 · Dart rack · N` with integer ammo only (205–209). Probe `4 · Dart rack · 6`, zero ammo `0`, string/frac/XSS ammo `0`.
+- Groups 1–3 keys unchanged: `WEAPON_KEYS = ['cannon', 'disruptor', 'mining']` (186). Labels still `g + ' · ' + wName` (211–214). Probe: `1 · Energy cannon`, `3 · Mining laser Mk I`, Mk II `3 · Bore laser Mk II`. Disruptor still `WEAPONS.disruptor.name` (`Disruptor` in `state.js` 99).
+
+### No new HUD nodes / no incoming gauge
+- No `innerHTML` in `hud.js`.
+- WPN writes `textContent` only (1459).
+- Init still uses existing rails: WPN row 675–677, RANGE label 558, lead 573–575. No missile child, lock box, aspect ring, incoming-missile, turret reticle, mass/power bar.
+- Grep: no `missileIncoming`, `incoming-missile`, `rw-lock-box`.
+
+### HUD read-only
+- No assignment to `world.launcher`, `world.missileAmmo`, `world.turret`.
+- No assignment to player `hullKind` / `faction` / `classKey` / `input.throttle`.
+- HUD reads `ctx.world.launcher` and `missileAmmo` for copy only.
+
+### HUD-02 / bio family
+- `hudFamily` 66–74 still keys off `hullKind` (`built` → mech, `living` → bio), then faction beauty. Weapons do not pick the family.
+- Probe: living + dart path still `bio`; built stays `mech`.
+- HUD-02 stays closed. Session `rw-hud-family` override is pre-existing debug (76–81), not a missile key.
+
+### Catalog (probe)
+- `WEAPONS.missile.range === 720`, `speed === 260`, `name === 'Dart rack'`.
+- `LAUNCHER_IDS.dart.name === 'Dart rack'`.
+
+## Residual (not bugs for this PR)
+- HUD uses `weaponGroup | 0`; combat uses `=== 4`. Session-only if someone writes `'4'`. Digit4 writes an integer. Same as code-review minor.
+- Live Digit4 WPN / RANGE / lead is PR5 / browser.
+
+## Files read
+- `src/systems/hud.js`
+- `src/game/weapon-fit.js` (`isLauncherId` / `LAUNCHER_IDS.dart`)
+- `out/w68/pr4/probe.mjs`
+- `out/w68/pr4/verify.txt`
+- `out/w68/pr4/code-review.md`
+- `out/w68/pr4/security-review.md`

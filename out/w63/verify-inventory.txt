@@ -1,0 +1,50 @@
+## Status
+CLEAN
+
+## What I tested
+- Read out/w63/current-shp-inventory.md, inventory-security.md, and inventory-review.md.
+- Spot-checked 22 file+line cites against the current tree (more than the required 12). All matched:
+  1. src/systems/ship.js 398 — `ctx.player = createShipState('light')`
+  2. src/systems/ship.js 7–25, 248–321, 393 — living-hull header, makeLivingHull, flesh parent, `ship.object = root`
+  3. src/game/state.js 118–139 — createShipState field list; no `hullKind`
+  4. src/game/state.js 34–41 — six SHIP_CLASSES keys and stats
+  5. src/game/state.js 51–97, 279 — MINING_LASERS / WEAPONS / HIDDEN_MOUNTS
+  6. src/systems/station.js 116 — DOCK_KEY_SERVICES freeze list
+  7. src/systems/station.js 2188–2193, 2248–2251 — menu labels and DigitN → index N-1
+  8. src/game/save.js 170 — `player: ctx.player` wholesale
+  9. src/game/save.js 359 — `Object.assign(ctx.player, snap.player)`
+  10. src/game/save.js 232–256 — vital NaN heal; concealedMounts / scanner / miningLaser ladders
+  11. src/systems/hud.js 64–74, 76–81, 793–799, 1272–1283 — hullKind read-only HUD family
+  12. src/game/save.js 375–444, 537–542 — freshStart, recover, berth rows
+  13. src/core/ctx.js 102–104; src/game/state.js 133; src/systems/npc.js 949 — ctx.cargo vs record cargo
+  14. src/game/save.js 247–256 — scanner 0/1/2 and miningLaser 0/1/2/3
+  15. src/systems/station.js 1513–1519 — repair scratch createShipState
+  16. src/game/flight-feel.js 10–54, 61–65 — turn tables and unknown-class fallback
+  17. src/core/ctx.js 43–47; src/systems/ship.js 513–515, 533–562 — player speed from config.ship; turn from classKey
+  18. src/systems/combat.js 51 (header contract), 1031 — miningLaserFor(ctx.world.miningLaser)
+  19. src/game/world.js 855, 1368–1369 — NPC cruise; shipName ??= 'she'
+  20. src/systems/title.js 15–18, 25–26 (contract comments); impl 96–99 — clearAutosave + reload
+  21. src/systems/organic.js 67–69; src/game/state.js 574–585 — isBeautiful; FACTION_SERVICES multipliers only
+  22. docs/PLAYER-EXPERIENCE-WISHLIST.md 314–352, 684–737 — SHP-01/02/03 and BIO-01/02/05 quotes
+- Confirmed DOCK_KEY_SERVICES at station.js:116 is exactly
+  `['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics']`.
+- Confirmed createShipState writes only: classKey, name, faction, hull/hullMax, screen/screenMax, shell/shellMax, engine/engineMax, heat, overheated, lastHitAt, lastCombatAt, engineOut, disabled, destroyed, surrendered, disabledDamage, disabledSince, cargo, bookValue, bounty, resolve, personality. It does not write hullKind. A bad classKey throws on `cls.shield`.
+- Confirmed `git diff -- src scripts public index.html package.json` is only scripts/boot-test.mjs, src/systems/hud.js, src/ui/hud.css. Worker output is untracked markdown under out/w63/.
+- Confirmed inventory files exist and are markdown: current-shp-inventory.md, inventory-security.md, inventory-review.md.
+- Confirmed ships-today (§0–§11, §13–§14) is separate from wishlist SHP (§12 only). Brief names save-tamper holes and does not propose a persist schema.
+- Hunt: death/freshStart present (§10). ctx.cargo vs ctx.player.cargo present (§9). HUD hullKind reader present (§8). scanner/miningLaser sanitize present (§4.2, §4.4, §5.3). Grep: station.js has no shipyard/hangar/buyShip/hullKind; ship.js has no buildShipMesh; no live `player.classKey =` / `player.faction =` writer; addCargo/scoop write ctx.cargo only.
+
+Loose but not false cites (not bugs):
+- contacts.js 466–469 builds the recognition string; DOM paint is station.js 2031 via h() textContent at 1450–1454.
+- title.js 15–18 / 25–26 are comments; the reload is at 96–99.
+- pods.js 604–607 is src/game/pods.js (not systems/).
+
+## Bugs found
+[Empty if CLEAN]
+
+## Environmental issues
+- Pre-existing working-tree diffs (not this worker): src/systems/hud.js, src/ui/hud.css, scripts/boot-test.mjs, PROGRESS.md, docs/PLAYER-EXPERIENCE-WISHLIST.md. Also untracked docs/Hud02IdentitiesDesign.md and other out/* verify folders.
+- HUD cites were checked against the current working tree, including those HUD diffs. They still match.
+
+## Evidence
+- Logs: out/w63/verify-inventory.txt

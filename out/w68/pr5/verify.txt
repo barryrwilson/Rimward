@@ -1,0 +1,12 @@
+WAVE68 PR5 boot pins
+
+npm run test:boot
+- wave68 weapons: JSON all true. No WAVE68 WEAPONS FAIL.
+- wave64 equipment healEvery still all true (noLoadout, noMissiles, launcherEmpty, missileAmmo0, turretEmpty).
+- Known unrelated FAILs still print (WAVE4 fence, WAVE26 ferry/haul, WAVE30 payTribute, WAVE35 haul). WAVE68 is not among them.
+
+node --import ./scripts/with-css-stub.mjs out/w68/pr5/probe.mjs
+- W68 PR5 PROBE PASS 0
+
+Desk path: stub helpers (armOutfitPapers / confirmOutfitPapers on a heavy hangar row). No extra travel. Digit 8 level-1 Launch is a source pin.
+Probe: thin helper re-run. Boot-test is the source of truth.

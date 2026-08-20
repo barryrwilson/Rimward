@@ -1,0 +1,45 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-read `out/w61/living-family.md` after the second fix (Bio / contacts extra length).
+- Confirmed the attach table, §3.4 host table, §4.2 bond rule, §10.2 sketch, §11, and §14 all set Bio and contacts extra length to **0** (not a preference).
+- Probed claimed `H` points (710, 785), (890, 785), and (1556, 856) against that rule.
+- Hunted every host that can add family length: rails, facing, Bio, contacts, hub iris, Screen/Shell in-track vein, hull petals, contact pips.
+- Confirmed prior rail hide, 52 px inset, and HUD `.hurt` wound cite were not undone.
+- Confirmed no `src/` or `docs/` edits.
+- Graph resolve: `proceed_unmodeled`. No binding workflow.
+
+## Bugs found
+
+## Environmental issues
+- Graph resolve: `proceed_unmodeled`.
+- This wave is markdown only. No live 1600×900 capture. Geometry uses shipped CSS / `hud.js` numbers from the last probe.
+
+## Evidence
+- Extra Bio / contacts length is forbidden, not optional:
+  - Attach table (`living-family.md` 86–87): Bio combat/career/count = **0 / 0 / 0**. Contacts = **0 / 0 / 0**. Text: “No extra corner strokes.” “No extra 8–12 px tangent at `u = ±1`.” Identity = `stroke-linecap: round` (~1 px).
+  - §3.4 host table (132–133): same ban. Notes that (1556, 856) is on Bio and (710, 785) / (890, 785) are legal `H` on the arc ends.
+  - §4.2 bond: “No extra Bio edge ink” (179).
+  - §10.2: `stroke-linecap: round` only; comment “no extra tangent”; “`.rw-bio`: no extra corner/edge `::before`” (324–325).
+  - §11: first wave = rail hairlines + hide; Bio corners = 0; contacts = round cap only (358, 374).
+  - §14: “Bio extra length = 0; contacts extra length = 0” (399).
+  - Later extra px on those hosts **must** reuse the §3.4 hit test and fail closed (135). That is a future-wave gate, not a first-wave hole.
+
+- Probe of claimed `H` positions (1600×900, clamp 44–1556 / 44–856):
+  - Contacts ends ≈ (710, 785) and (890, 785): legal `H`. Extra tangent would sit on the hub origin. First wave adds **0** extra px. Round cap is ~half of the shipped 1.25 px stroke (~1 px), on the existing Wave F path. No new cover of hub / lead.
+  - Bio sample `H` (1556, 856): legal and on the right-bottom Bio panel. First wave adds **0** corner / edge strokes. Existing Bio glance (mood / HUNGER / WOUNDS) stays; that is not family extra ink.
+  - Screen position is not treated as AGEZ. The brief states this (79, 126, 358, 374).
+
+- Remaining hosts that add **extra** length:
+  - Rails only: 10 / 18 px hairlines **plus** `rw-hair-off` (`dist(H, hairBox) < 56`, lead 20 px, 24 px capsule, or `H` missing). Fail closed: `content: none`. Still present (92–122, 315–318). Not re-opened.
+  - Facing: `clip-path` only, length 0 (85, 131).
+  - Hub: no new tendrils. Career +1 px **width** on existing cilia (not length). Inside the iris exception (88, 61–62).
+  - Screen / Shell 1 px vein **inside** the existing bar track (177): restyle of shipped fill, same box, not extra length off the host.
+  - Hull teardrop still 8×13 (178). Ember outline is a one-shot on existing self petals, `.hurt` rising edge only (176).
+  - Contact pips stay 2×8 tick / 8 px chevron / 8×8 diamond (204). Shape restyle, same metrics.
+
+- Closed items still hold:
+  - 52 px label inset in §3.3 and §10.2 (77, 100, 309–313).
+  - Wounds use HUD `.hurt` (`wounds > 0.35` in `hud.js`); `bio.js` 0.3 / 0.6 are mood only (176).
+  - No new bio stats. Same HUD-01 / Wave F glance set. Reduced-motion stills new motion. Family not keyed on `origin === 'beautiful'` or `isBeautiful()` alone. Alt A recommended. No extra SVG layer. No `src/` / `docs/` edits.

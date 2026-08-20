@@ -1,0 +1,73 @@
+Wave 63 verifier — shared SHP merge law
+Scope: out/w63/shared-contract.md vs Hud02IdentitiesDesign, station.js, save.js, state.js, ship.js, hud.js, out/w63/current-shp-inventory.md
+No src/ edits by this verifier.
+
+## Status
+BUGS_FOUND
+
+## Checks
+
+### 1. Hud02IdentitiesDesign (hullKind / Unknowables / HUD writes / HUD-03 / live default)
+PASS. Contract §0.2–0.4, §3, §3.5 match docs/Hud02IdentitiesDesign.md §3.1–3.4, §7 Q1–Q3, and the shipped hudFamily in src/systems/hud.js 65–74:
+- Hull identity is SHP-owned. HUD reads hullKind. HUD never writes it.
+- Unknowables purchased hulls are hullKind 'living', never 'built'.
+- Unset hullKind stays bio for every faction.
+- No HUD-03 skin checkbox. No settings.js / WORLD_FIELDS family key.
+- Live default stays the living starter until a 'built' mount. Mech is session-debug until then.
+hud.js assigns last.kind / kindNow from p.hullKind (795, 1273). Those are read caches. Grep of src/systems/hud.js finds no hullKind write.
+
+### 2. Dock services append-only vs DOCK_KEY_SERVICES
+PASS. Shipped list (station.js 116):
+  market, jobs, bar, feed, repair, outfitting, people, launch, epics
+Contract quotes that list, forbids a mid-list insert, and appends one key 'shipyard' after epics. Digits 1–9 stay the same nine services. Digit 0 is the new last key. Digit mapper today is Number(DigitN)-1 (station.js 2248–2251); Digit0 is -1 and is rejected. Contract requires a Digit0 special case. Labels at 2189 match the nine keys (Standing = epics).
+
+### 3. Markdown-only (this worker)
+PASS. Worker outputs are out/w63/shared-contract.md, shared-security.md, shared-review.md. git status shows those under untracked out/w63/. Dirty src/systems/hud.js and src/ui/hud.css are Wave 62 leftovers, not this worker.
+
+### 4. Persist allowlist + sanitize language
+PASS. Contract §1 and §6:
+- Add hangar to WORLD_FIELDS (today 65–82; hangar is absent).
+- player snapshot wholesale (save.js 170). restore Object.assign (359). Extra keys keep.
+- sanitizeRestored heals NaN vitals only (232–241). No hullKind drop today.
+- hullKind allowlist living|built, else delete.
+- Hangar row allowlist, cap, SAFE_ID (save.js 85), no Object.assign of raw JSON.
+- freshStart leftover hullKind (save.js 379) must be deleted or rewritten.
+- clearAutosave removes only rimward-save-v1 (200–206). No second hangar store.
+Line cites for WORLD_FIELDS, snapshot, restore, sanitizeRestored, clearAutosave, freshStart, SAFE_ID, scanner 247–250, concealedMounts 244–246, miningLaser 256 match the file.
+
+### 5. MATCH / throttle
+PASS. Contract §3.4, §4.1.11, §4.2: remount and HUD must not write ctx.input.throttle. MATCH stays in ship.js. Docked play already clears flags.matchSpeed (ship.js 468–470 and 633). ship.js 443: do not write input.throttle. Throttle writes live only in controls.js (144, 256), which is input, not HUD or remount.
+
+### 6. Named inventory facts (createShipState / live player)
+PASS (not silent). Contract §1.1 line 49 states createShipState (state.js 118–138) does not emit hullKind. Shipped createShipState (118–138) has no hullKind. Boot is ctx.player = createShipState('light') (ship.js 398): classKey light, faction independent, living mesh from makeLivingHull (ship.js 248–308). Contract §3.2 and §4.2 say there is no conventional player mesh today and the live default stays that living starter until a 'built' mount.
+
+### 7. Silent inventory contradiction — player flight numbers
+FAIL. Contract §4.2 must-not row:
+  "Keep the previous class's cruise/turn while showing a new hull"
+  Why: "classKey drives SHIP_CLASSES flight numbers."
+
+Inventory (out/w63/current-shp-inventory.md §1, §3) and shipped code:
+- ship.js does not import or read SHIP_CLASSES.
+- Player cruise / creep / maxSpeed come from ctx.config.ship (ctx.js 43–47: maxSpeed 120, creep 30). That object is the light baseline and is not retuned by classKey.
+- Player turn is hoverTurnRateFor(ctx.player?.classKey || 'light', ship.speed) (ship.js 513–515) from flight-feel.js, not SHIP_CLASSES.turn.
+- SHIP_CLASSES cruise / burn / turn feed createShipState vitals / bookValue and NPC cruise. They do not drive the player flight step.
+
+§4.1 remount steps apply createShipState + vitals + hullKind + world mirrors. They never name ctx.config.ship. Merge law as written will leave a purchased heavy/freighter flying the light 120/30 envelope. Turn would change via classKey; cruise would not. That is not what the table claims.
+
+## Other notes (not scored as bugs)
+- Hangar JSON in contract §1.2 is { mountedId, hulls[] } including the mounted row. Sibling note out/w63/shp-02-hangar.md uses a stored-only array. Shared contract says it wins. That is a note conflict, not an inventory lie.
+- createShipState personality Math.random (state.js 137) is called out. Do not persist.
+- frigate is a legal SHIP_CLASSES key (state.js 40). Sanitize accepts it. Buy lists omit it. Matches inventory.
+- Bio is not a hull. freshStart keeps her (save.js 382–390). Matches inventory §9–10.
+- shared-security.md and shared-review.md match the contract after the MATCH / sell-scope / personality pass. No extra src claims.
+
+## Evidence cites
+- docs/Hud02IdentitiesDesign.md §3.1–3.4, §7 Q1–Q3
+- src/systems/hud.js 65–74, 795, 1273
+- src/systems/station.js 116, 1450–1454, 2175, 2189, 2248–2251
+- src/game/save.js 65–82, 85, 160–170, 200–206, 232–256, 328–330, 359, 379
+- src/game/state.js 34–41, 118–138
+- src/systems/ship.js 7–25, 248–308, 398, 443–470, 513–515, 633
+- src/core/ctx.js 43–47
+- src/game/flight-feel.js 10–65
+- out/w63/current-shp-inventory.md §1–§3, §6, §8

@@ -1,0 +1,77 @@
+SHP-01 design verification
+Date: 2026-08-18
+Domain: data
+Notes read: out/w63/shp-01-shipyards.md, shp-01-security.md, shp-01-review.md
+Locked: docs/Hud02IdentitiesDesign.md §3; src/systems/station.js DOCK_KEY_SERVICES; src/systems/hud.js hudFamily
+Merge law: out/w63/shared-contract.md (exists)
+
+=== PASS: DOCK_KEY_SERVICES citation and append-only ===
+shp-01-shipyards.md §1 cites station.js 116 as:
+  market, jobs, bar, feed, repair, outfitting, people, launch, epics
+Shipped station.js:116 matches that list and Object.freeze.
+Note recommends APPEND 'yard' after 'epics'.
+Note forbids insert before epics or anywhere earlier.
+Note does not fold hull sales into Outfitting (would shift Outfitting digits 1-7).
+Digits 1-9 stay Market..Standing. Launch stays 8. Standing stays 9.
+
+=== PASS: hullKind vs Hud02IdentitiesDesign.md §3 ===
+Note locked field: 'built' | 'living'.
+SHP writes on buy (faction, classKey, hullKind). HUD reads via hudFamily (hud.js 65-74). HUD never writes.
+Unknowables purchased hulls: hullKindFor → 'living'. Restore remount requires hullKindFor(faction)==='built', so Unknowables cannot remount as plated.
+Unset hullKind: stays bio / living-HUD default for every faction. Starter must not be stamped 'built' except by a real purchase.
+Matches Hud02IdentitiesDesign.md §3.1, §3.3 Unknowables (owner 2026-08-18), §3.4 persist allowlist living|built else delete.
+
+=== PASS: FIRST SLICE vs LATER DEPTH ===
+Labels appear from the front matter through §14 checklist.
+FIRST SLICE: three authored capitals, small catalogs, append, no Digit0, no trade-in, no epic hull multiplier.
+LATER DEPTH: remaining factions, optional Digit0, living Beautiful/Unknowables purchases.
+
+=== PASS: no trade-in delete without hangar ===
+§4 Trade-in: No trade-in. Full discounted list. Do not subtract bookValue. Do not delete the mounted hull to pay.
+§7: confirm → parkMountedHull → abort if missing/false → then debit and remount.
+Do not delete the old hull unless confirm AND hangar accepts it.
+
+=== PASS: prices not trusted from save ===
+§4: authored YARD_LIST_UU; never read ctx.player.bookValue or a save-supplied price.
+§10.3: ignore player.bookValue, data-price, snap yardPrice. Recompute from YARD_LIST_UU + live rank.
+
+=== PASS: first-slice stations and class list ===
+Authored Freehold Landing / Veridian Spire / Ledger Anchorage names match authored-systems.js.
+redmarch flag is redledger. SHIP_CLASSES keys match state.js 34-41.
+FACTION_SERVICES has the ten generated-flown keys named in the note (state.js 574-585).
+RANK_LADDER Known min 10 / Trusted min 25 match §5 floors (state.js 650-656).
+createShipState bookValue cls.hull*12 at state.js 134. Starting credits 350 at ctx.js 122.
+
+=== BUGS (integrator vs out/w63/shared-contract.md) ===
+shared-contract.md says: if SHP-01 / SHP-02 / SHP-03 conflict with that file, the contract wins.
+
+BUG 1 — service key `yard` vs contract `shipyard` (MEDIUM)
+Contract §2.2 / §9: append one key after epics named `shipyard`, label Shipyard.
+SHP-01 §1 / PR3: append `yard`, label Yard.
+Both append (digits 1-9 stay). Integrator who follows both notes may land two keys or the wrong token.
+
+BUG 2 — Digit0 first slice (MEDIUM)
+Contract §2.2, §8 Q1, §9: Digit 0 selects the appended shipyard in first slice. Legend includes 0.
+SHP-01 §1 / Q1 / Q9: FIRST SLICE has no Digit0. Click only. Optional Digit0 is LATER DEPTH.
+Does not steal digits 1-9. Still conflicts with merge law.
+
+BUG 3 — buy flow: immediate remount vs add hangar row (MEDIUM)
+Contract §2.3: buy adds a hangar row; it does not trade away the mounted hull.
+Contract §3.3: buy may mount immediately, but the default desk is add-to-hangar.
+SHP-01 §7: every successful buy parks the current hull and remounts the SKU as the live ship.
+Old hull is not deleted (handoff exists). Mounted ship still changes on buy.
+
+BUG 4 — cargo owner on buy (MEDIUM)
+Contract §4.1 / §8 Q2: ctx.cargo parks and loads with the hull.
+SHP-01 §7: cargo stays on ctx.cargo (world hold, not hangar).
+A first-slice buy that remounts would keep the live hold on the new hull instead of parking it with the old row.
+
+Not HIGH: none of the four shift DOCK_KEY_SERVICES 1-9 or break HUD hullKind write/read law.
+
+=== ENV ===
+Workspace has uncommitted src/systems/hud.js, src/ui/hud.css, scripts/boot-test.mjs (HUD-02, not SHP-01).
+SHP-01 worker files are markdown under out/w63/ only. This verifier did not edit src.
+
+=== RESULT ===
+BUGS_FOUND — four MEDIUM integrator contradictions with shared-contract.md.
+Dock append-only, hullKind HUD law, slice labels, no-delete hangar handoff, and save-price distrust all hold.

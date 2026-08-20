@@ -1,5 +1,14 @@
 import '../ui/screens.css';
 import { createShipState, SHIP_CLASSES, SYSTEMS, FACTIONS, U, JUMP } from './state.js';
+import {
+  sanitizeHangar,
+  parkMounted,
+  healPlayerHullKind,
+  rebuildStarterHangar,
+  syncMountedToPlayer,
+  syncMountedWeaponMirrors,
+  applyMountedFlight,
+} from './hangar.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -62,7 +71,7 @@ const DEATH_HOLD_MS = 2500; // 'Ship lost.' hold before recovery
 // multi-system swap (recordBanks et al.) must stay JSON-plain to ride along.
 // 'mystery' ({found:[clueIds], visited:[landmarkIds]}) is created lazily by
 // the mystery module (§25) and persists once present.
-const WORLD_FIELDS = [
+export const WORLD_FIELDS = [
   'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets',
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
@@ -79,15 +88,82 @@ const WORLD_FIELDS = [
   // wave 51: miningLaser ladder index 0..3 into MINING_LASERS (station.js
   // outfitting; ctx.world.miningLaser is the only writer target)
   'miningLaser',
+  // wave 64: magical hangar { mountedId, hulls } — live hull is a row
+  'hangar',
+  // Write-through mirrors of the mounted row. Restore overwrites from the row.
+  'launcher', 'missileAmmo', 'turret',
+  // AST: sparse remaining units { [systemId]: { [indexString]: remainingInt } }
+  'fieldOre',
 ];
 
 const SURVIVOR = 'survivor';
-const SAFE_ID = /^[a-z0-9_]+$/i;
-const NAME_MAX = 40;
-const ID_MAX = 64;
+export const SAFE_ID = /^[a-z0-9_]+$/i;
+export const NAME_MAX = 40;
+export const ID_MAX = 64;
 const COMMODITY_MAX = 64;
+// SAFE_ID matches __proto__; those ids must never become a faction key.
+const RESERVED_IDS = new Set([
+  '__proto__', 'prototype', 'constructor', 'toString', 'valueOf',
+  'hasOwnProperty', '__defineGetter__', '__defineSetter__',
+  '__lookupGetter__', '__lookupSetter__',
+]);
+const FIELD_ORE_INDEX = /^(0|[1-9][0-9]*)$/;
+const FIELD_ORE_SYS_CAP = 32;
+const FIELD_ORE_MAX_COUNT = 160;
+const FIELD_ORE_MAX_REMAINING = 64;
 
-function stripControlChars(s) {
+function sanitizeFieldOre(ctx) {
+  const raw = ctx.world.fieldOre;
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    delete ctx.world.fieldOre;
+    return;
+  }
+  const keep = new Set();
+  const cur = ctx.world.currentSystem;
+  if (typeof cur === 'string') keep.add(cur);
+  const banks = ctx.world.recordBanks;
+  if (banks && typeof banks === 'object' && !Array.isArray(banks)) {
+    const bk = Object.keys(banks);
+    for (let i = 0; i < bk.length; i++) keep.add(bk[i]);
+  }
+  const out = {};
+  const takeSys = (k) => {
+    if (Object.keys(out).length >= FIELD_ORE_SYS_CAP) return;
+    if (Object.hasOwn(out, k)) return;
+    if (RESERVED_IDS.has(k) || k === '__proto__') return;
+    if (!Object.hasOwn(SYSTEMS, k)) return;
+    const child = Object.hasOwn(raw, k) ? raw[k] : undefined;
+    if (child == null || typeof child !== 'object' || Array.isArray(child)) return;
+    const def = SYSTEMS[k];
+    let maxIdx = FIELD_ORE_MAX_COUNT;
+    if (def && def.field && Number.isFinite(def.field.count)) {
+      maxIdx = Math.min(Math.max(0, def.field.count | 0), FIELD_ORE_MAX_COUNT);
+    }
+    const childOut = {};
+    const ck = Object.keys(child);
+    for (let j = 0; j < ck.length; j++) {
+      const ik = ck[j];
+      if (RESERVED_IDS.has(ik) || ik === '__proto__') continue;
+      if (!FIELD_ORE_INDEX.test(ik)) continue;
+      const idx = +ik;
+      if (idx < 0 || idx >= maxIdx) continue;
+      const v = Object.hasOwn(child, ik) ? child[ik] : undefined;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > FIELD_ORE_MAX_REMAINING) continue;
+      childOut[ik] = v;
+    }
+    if (Object.keys(childOut).length > 0) out[k] = childOut;
+  };
+  const keys = Object.keys(raw);
+  for (let i = 0; i < keys.length; i++) {
+    if (keep.has(keys[i])) takeSys(keys[i]);
+  }
+  for (let i = 0; i < keys.length; i++) {
+    if (!keep.has(keys[i])) takeSys(keys[i]);
+  }
+  ctx.world.fieldOre = out;
+}
+
+export function stripControlChars(s) {
   let out = '';
   for (let i = 0; i < s.length; i++) {
     const code = s.charCodeAt(i);
@@ -108,8 +184,9 @@ function sanitizeUnits(value) {
   return u > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : u;
 }
 
-function sanitizeFaction(value) {
+export function sanitizeFaction(value) {
   if (typeof value !== 'string' || !value || value.length > ID_MAX) return null;
+  if (RESERVED_IDS.has(value)) return null;
   if (Object.prototype.hasOwnProperty.call(FACTIONS, value)
       || Object.prototype.hasOwnProperty.call(SYSTEMS, value)) {
     return value;
@@ -133,6 +210,8 @@ function sanitizeCargoRow(raw) {
   const units = sanitizeUnits(raw.units);
   if (commodity === SURVIVOR) {
     if (units <= 0) return null;
+    // Omit-faction would leave a hold row; reserved ids fail closed.
+    if (typeof raw.faction === 'string' && RESERVED_IDS.has(raw.faction)) return null;
     const row = {
       commodity: SURVIVOR,
       units,
@@ -147,7 +226,7 @@ function sanitizeCargoRow(raw) {
   return { commodity, units };
 }
 
-function sanitizeCargoList(list) {
+export function sanitizeCargoList(list) {
   const out = [];
   if (!Array.isArray(list)) return out;
   for (const raw of list) {
@@ -158,6 +237,9 @@ function sanitizeCargoList(list) {
 }
 
 export function snapshot(ctx) {
+  sanitizeHangar(ctx);
+  parkMounted(ctx);
+  healPlayerHullKind(ctx);
   const world = {};
   for (const k of WORLD_FIELDS) if (ctx.world[k] !== undefined) world[k] = ctx.world[k];
   return {
@@ -191,6 +273,43 @@ function loadSnapshot(key = KEY) {
 /** Returns true when the autosave key holds a restorable snapshot. */
 export function hasAutosave() {
   return loadSnapshot() !== null;
+}
+
+function hostileEncounterBlock(ctx) {
+  if (!ctx.flags?.combat) return null;
+  const shipObj = ctx.ship?.object;
+  if (!shipObj) return null;
+  const ships = ctx.ships;
+  if (!Array.isArray(ships)) return null;
+  for (const s of ships) {
+    if (!s?.object || s.state?.destroyed) continue;
+    const hostile =
+      s.role === 'pirate' || s.role === 'ace' ||
+      s.record?.role === 'pirate' || s.record?.role === 'ace' ||
+      s.ai?.hostile === true;
+    if (!hostile) continue;
+    if (s.object.position.distanceTo(shipObj.position) <= U.ENCOUNTER_BUBBLE) {
+      return 'Hostiles within the encounter bubble — berth record refused.';
+    }
+  }
+  return null;
+}
+
+/** Same gates as trySave(autosave key). Does not invent a second storage key. */
+export function requestAutosave(ctx) {
+  if (!ctx?.player || !ctx.ship?.object || ctx.player.destroyed) return false;
+  if (ctx.gate?.jumping) return false;
+  const reason = hostileEncounterBlock(ctx);
+  if (reason) {
+    ctx.emit?.('saveBlocked', { reason });
+    return false;
+  }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(snapshot(ctx)));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -275,6 +394,8 @@ function sanitizeRestored(ctx) {
   const cargo = sanitizeCargoList(ctx.cargo);
   ctx.cargo.length = 0;
   for (const row of cargo) ctx.cargo.push(row);
+  if (!Number.isFinite(ctx.world.time) || ctx.world.time < 0) ctx.world.time = 0;
+  sanitizeFieldOre(ctx);
 }
 
 /**
@@ -328,6 +449,10 @@ export function restore(ctx, snap) {
   for (const k of WORLD_FIELDS) {
     if (snap.world[k] !== undefined) ctx.world[k] = snap.world[k];
   }
+  // Legacy blob with no hangar must not keep a prior session's hulls.
+  if (snap.world.hangar === undefined) delete ctx.world.hangar;
+  // Omitted fieldOre is missing (contract §6.3) — do not keep a live bag.
+  if (snap.world.fieldOre === undefined) delete ctx.world.fieldOre;
   // A system id the current build doesn't know (stale/modded save) must not
   // propagate — every module indexes SYSTEMS with it.
   if (!ctx.systems?.[ctx.world.currentSystem]) ctx.world.currentSystem = 'freehold';
@@ -369,6 +494,11 @@ export function restore(ctx, snap) {
   const sys = ctx.world.currentSystem;
   if (sys && sys !== fromSystem) ctx.emit('systemLoaded', { to: sys });
   sanitizeRestored(ctx);
+  sanitizeHangar(ctx);
+  healPlayerHullKind(ctx);
+  syncMountedToPlayer(ctx);
+  syncMountedWeaponMirrors(ctx);
+  applyMountedFlight(ctx);
 }
 
 /** Fresh start at the Freehold station when death finds no save (§4.4). */
@@ -377,8 +507,13 @@ function freshStart(ctx) {
   const name = ctx.world.shipName ?? ctx.player?.name;
   if (ctx.player) {
     Object.assign(ctx.player, createShipState('light', { name }));
+    healPlayerHullKind(ctx);
+    ctx.player.hullKind = 'living';
   }
   ctx.cargo.length = 0;
+  ctx.cargoCapacity = 20;
+  rebuildStarterHangar(ctx);
+  applyMountedFlight(ctx);
   // The companion SURVIVES death wounded — never factory-reset (§ Bio
   // companion: ordinary defeat creates recovery and tenderness, not
   // surprise permanent loss). She carried you home; keep her bond and
@@ -615,31 +750,18 @@ export function initSave(ctx) {
 
   /** Null when a save is allowed; a refusal reason string when blocked. */
   function saveBlockReason() {
-    if (!ctx.flags.combat) return null;
-    const shipObj = ctx.ship.object;
-    if (!shipObj) return null;
-    for (const s of ctx.ships) {
-      if (!s?.object || s.state?.destroyed) continue;
-      const hostile =
-        s.role === 'pirate' || s.role === 'ace' ||
-        s.record?.role === 'pirate' || s.record?.role === 'ace' ||
-        s.ai?.hostile === true;
-      if (!hostile) continue;
-      if (s.object.position.distanceTo(shipObj.position) <= U.ENCOUNTER_BUBBLE) {
-        return 'Hostiles within the encounter bubble — berth record refused.';
-      }
-    }
-    return null;
+    return hostileEncounterBlock(ctx);
   }
 
   /** Attempt a save. Returns true when written. */
   function trySave(key = KEY) {
     if (!ctx.player || !ctx.ship.object || dead) return false;
+    if (key === KEY) return requestAutosave(ctx);
     // Mid-jump state is incoherent (ships despawned, system half-swapped);
     // the 'systemLoaded' autosave fires the moment the jump completes. The
     // autosave path stays silent; a manual berth save gets a refusal toast.
     if (ctx.gate?.jumping) {
-      if (key !== KEY) ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+      ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
       return false;
     }
     const reason = saveBlockReason();

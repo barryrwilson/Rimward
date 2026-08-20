@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import '../ui/hud.css';
 import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor } from '../game/state.js';
+import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
+import { isBeautiful } from './organic.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
@@ -60,6 +62,105 @@ const CONTACT_CLOSE_FLOOR = 4; // u/s along LOS
 const CONTACT_ARC = { cx: 200, cy: -42, r: 102, half: 1.08, elev: 7 };
 const _arcPt = { x: 0, y: 0 };
 
+/** @returns {'mech' | 'bio'} */
+export function hudFamily(ctx) {
+  const debug = sessionHudFamilyOverride();
+  if (debug === 'mech' || debug === 'bio') return debug;
+  const p = ctx.player;
+  if (!p) return 'bio';
+  if (p.hullKind === 'built') return 'mech';
+  if (p.hullKind === 'living') return 'bio';
+  if (isBeautiful(p.faction)) return 'bio';
+  return 'bio';
+}
+
+function sessionHudFamilyOverride() {
+  try {
+    const v = sessionStorage.getItem('rw-hud-family');
+    if (v === 'mech' || v === 'bio') return v;
+  } catch (_) { /* private / blocked storage */ }
+  return null;
+}
+
+const RAIL_GAP = 78;
+const HAIR_INSET = 52;
+const HAIR_CAREER = 18;
+const HAIR_COMBAT = 10;
+const _agezExp = { l: 0, t: 0, r: 0, b: 0 };
+const _segT = { t0: 0, t1: 1 };
+
+function bioPeriodSec(mood, reduced) {
+  if (reduced) return 0;
+  if (mood === 'serene') return 4;
+  if (mood === 'pained') return 2.2;
+  if (mood === 'keen' || mood === 'anxious' || mood === 'feral') return 1.2;
+  return 4;
+}
+
+/**
+ * Overlay-px hair box for one rail. `out` reuses a caller box (no alloc).
+ * Anchors: top 57% vh, left 50% vw, ±78 px gap, 52 px outer inset, 10/18 grow.
+ */
+export function hairBoxForRail(side, vw, vh, width, height, combat, out) {
+  const b = out || { l: 0, t: 0, r: 0, b: 0 };
+  const grow = combat ? HAIR_COMBAT : HAIR_CAREER;
+  const mid = 0.5 * vw;
+  const top = 0.57 * vh;
+  b.t = top - grow;
+  b.b = top + height + grow;
+  if (side === 'self') {
+    b.l = mid - RAIL_GAP - width + HAIR_INSET;
+    b.r = mid - RAIL_GAP;
+  } else {
+    b.l = mid + RAIL_GAP;
+    b.r = mid + RAIL_GAP + width - HAIR_INSET;
+  }
+  return b;
+}
+
+function distPointBox(x, y, b) {
+  const dx = x < b.l ? b.l - x : (x > b.r ? x - b.r : 0);
+  const dy = y < b.t ? b.t - y : (y > b.b ? y - b.b : 0);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function clipSeg(p, q) {
+  if (p === 0) return q >= 0;
+  const r = q / p;
+  if (p < 0) {
+    if (r > _segT.t1) return false;
+    if (r > _segT.t0) _segT.t0 = r;
+  } else {
+    if (r < _segT.t0) return false;
+    if (r < _segT.t1) _segT.t1 = r;
+  }
+  return true;
+}
+
+function segmentHitsBox(ax, ay, bx, by, b) {
+  _segT.t0 = 0;
+  _segT.t1 = 1;
+  const dx = bx - ax;
+  const dy = by - ay;
+  return clipSeg(-dx, ax - b.l) && clipSeg(dx, b.r - ax)
+    && clipSeg(-dy, ay - b.t) && clipSeg(dy, b.b - ay);
+}
+
+/** True → hide that rail's hair (AGEZ hit, or H missing). */
+export function agezHairOff(hx, hy, leadOn, lx, ly, box) {
+  if (!Number.isFinite(hx) || !Number.isFinite(hy)) return true;
+  if (distPointBox(hx, hy, box) < 56) return true;
+  if (leadOn) {
+    if (distPointBox(lx, ly, box) < 20) return true;
+    _agezExp.l = box.l - 24;
+    _agezExp.t = box.t - 24;
+    _agezExp.r = box.r + 24;
+    _agezExp.b = box.b + 24;
+    if (segmentHitsBox(hx, hy, lx, ly, _agezExp)) return true;
+  }
+  return false;
+}
+
 /** Aft-centered yaw → arc u in [-1, 1]. Forward sits at the ends. */
 function contactYawToU(yaw) {
   if (yaw >= 0) return 1 - yaw / Math.PI;
@@ -82,7 +183,37 @@ function contactsArcPath() {
   return d;
 }
 
-const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // input.weaponGroup 1..3
+const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // groups 1–3; group 4 is hudWeaponKey
+
+/** Empty group 4 must not fall through to cannon. */
+export function hudWeaponKey(ctx) {
+  const g = ctx.input.weaponGroup | 0;
+  if (g === 4) {
+    const id = ctx.world.launcher;
+    if (!isLauncherId(id)) return null;
+    return LAUNCHER_IDS[id].wkey;
+  }
+  return WEAPON_KEYS[g - 1] ?? 'cannon';
+}
+
+/** WPN rail copy. Names and ammo stay textContent; HUD never writes world keys. */
+export function weaponHudLabel(ctx) {
+  const g = ctx.input.weaponGroup | 0;
+  const wKey = hudWeaponKey(ctx);
+  if (g === 4) {
+    if (!wKey) return '4 · —';
+    const sku = LAUNCHER_IDS[ctx.world.launcher];
+    const wName = (sku && sku.name) || WEAPONS[wKey]?.name || '—';
+    const ammo = ctx.world.missileAmmo;
+    const n = Number.isInteger(ammo) && ammo >= 0 ? ammo : 0;
+    return '4 · ' + wName + ' · ' + n;
+  }
+  const wName = wKey === 'mining'
+    ? miningLaserFor(ctx.world.miningLaser).name
+    : (WEAPONS[wKey] ? WEAPONS[wKey].name : '—');
+  return g + ' · ' + wName;
+}
+
 const BAND_LABEL = {
   defiant: 'DEFIANT',
   shaken: 'SHAKEN',
@@ -210,6 +341,54 @@ function contactKind(hostile, isLock) {
   return 'civ';
 }
 
+/** Rock lock: list entry has position and no ship state. */
+function isRockTarget(target) {
+  return !!(target && target.position && !target.state);
+}
+
+/** Distance to nearest work-sector rock, else ore>0, else field.center. */
+function beltMineDist(ctx, shipPos) {
+  const list = ctx.asteroids && ctx.asteroids.list;
+  let best = Infinity;
+  if (list && list.length) {
+    const def = SYSTEMS[ctx.world.currentSystem];
+    const field = def && def.field;
+    let workFrac = field && Number.isFinite(field.workFrac) ? field.workFrac : 0.6;
+    if (workFrac < 0) workFrac = 0;
+    if (workFrac > 1) workFrac = 1;
+    const workN = Math.min(list.length, Math.ceil(workFrac * list.length));
+    for (let pass = 0; pass < 2; pass++) {
+      const n = pass === 0 ? workN : list.length;
+      for (let i = 0; i < n; i++) {
+        const rock = list[i];
+        if (!rock || !(rock.ore > 0)) continue;
+        const p = rock.position;
+        if (!p) continue;
+        const dx = p.x - shipPos.x;
+        const dy = p.y - shipPos.y;
+        const dz = p.z - shipPos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < best) best = d2;
+      }
+      if (best !== Infinity) {
+        const d = Math.round(Math.sqrt(best));
+        return Number.isFinite(d) ? d : 0;
+      }
+    }
+  }
+  const def = SYSTEMS[ctx.world.currentSystem];
+  const c = def && def.field && def.field.center;
+  if (c) {
+    const n = Math.round(Math.hypot(
+      c[0] - shipPos.x,
+      (c[1] || 0) - shipPos.y,
+      c[2] - shipPos.z,
+    ));
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
 /** Terse pilot-voice toast copy for a ctx event (§13.5). null = not toastable. */
 function toastForEvent(e, ctx, mem) {
   switch (e.type) {
@@ -313,6 +492,12 @@ function toastForEvent(e, ctx, mem) {
       const n = e.count ?? 0;
       const text = n === 1 ? '■ A survivor is home.' : `■ ${n} survivors are home.`;
       return { text, cls: 'good' };
+    }
+    case 'survivorSold': {
+      if (e.line) mem.frameLines.push(e.line);
+      const n = Number.isFinite(e.count) ? e.count : 0;
+      const text = n === 1 ? '■ The Chain took one.' : `■ The Chain took ${n}.`;
+      return { text, cls: 'warn' };
     }
     default:
       return null;
@@ -523,11 +708,13 @@ export function initHud(ctx) {
   }
   const seenHostiles = new Set();
   const stillHostiles = new Set();
+  let lastHostileEnterAt = -99;
+  let lastHullBandAt = -99;
 
   // ---------- HUD-01: mirrored combat rails (FreeSpace-style glance) ----------
   // Sit just below midline and off the reticle so the center glass stays open.
   // Target rail starts hidden: no target / destroyed / asteroid.
-  const selfRail = el('section', 'rw-combat-rail rw-combat-self', root);
+  const selfRail = el('section', 'rw-combat-rail rw-combat-self rw-hair-off', root);
   const selfFacing = makeFacing(selfRail);
   const selfScreen = makeBar(selfRail, 'SCREEN', 'rw-screen');
   const selfShell = makeBar(selfRail, 'SHELL', 'rw-shell');
@@ -537,7 +724,7 @@ export function initHud(ctx) {
   el('div', 'rw-label', selfWpnRow, 'WPN');
   const weaponName = el('div', 'rw-value', selfWpnRow, '—');
 
-  const tgtRail = el('section', 'rw-combat-rail rw-combat-target is-hidden', root);
+  const tgtRail = el('section', 'rw-combat-rail rw-combat-target is-hidden rw-hair-off', root);
   const tgtNameEl = el('div', 'rw-combat-name', tgtRail, '—');
   const tgtFacing = makeFacing(tgtRail);
   const tgtScreen = makeBar(tgtRail, 'SCREEN', 'rw-screen');
@@ -547,6 +734,23 @@ export function initHud(ctx) {
   const tgtDistRow = el('div', 'rw-meter', tgtRail);
   el('div', 'rw-label', tgtDistRow, 'DIST');
   const tgtDistVal = el('div', 'rw-value rw-combat-dist', tgtDistRow, '—');
+
+  const selfSize = { width: 168, height: 120 };
+  const tgtSize = { width: 168, height: 120 };
+  const selfHairBox = { l: 0, t: 0, r: 0, b: 0 };
+  const tgtHairBox = { l: 0, t: 0, r: 0, b: 0 };
+  function measureRails() {
+    const sw = selfRail.offsetWidth | 0;
+    const sh = selfRail.offsetHeight | 0;
+    const tw = tgtRail.offsetWidth | 0;
+    const th = tgtRail.offsetHeight | 0;
+    if (sw > 0) selfSize.width = sw;
+    if (sh > 0) selfSize.height = sh;
+    if (tw > 0) tgtSize.width = tw;
+    if (th > 0) tgtSize.height = th;
+  }
+  measureRails();
+  window.addEventListener('resize', measureRails);
 
   // ---------- bottom strip: aux flight/defense + bio + pos ----------
   // Screen/Shell/hull/speed/weapon moved to the rails; these extras stay
@@ -667,8 +871,28 @@ export function initHud(ctx) {
     promptSalvage: false,
     posX: NaN, posY: NaN, posZ: NaN,
     system: '', jumpShown: null, jumpPct: -1, jumpDest: null,
+    family: '', kind: undefined, faction: undefined, hudOverride: undefined,
+    leadX: 0, leadY: 0, selfHairOff: true, tgtHairOff: true,
+    bioPeriod: 4, textScale: ctx.settings?.textScale ?? 1,
+    matchLamp: null, hullBand: '',
   };
   const mem = { lastFear: Math.round(ctx.world.fear ?? 0), frameLines: [] };
+
+  {
+    const p0 = ctx.player;
+    last.kind = p0 ? p0.hullKind : undefined;
+    last.faction = p0 ? p0.faction : undefined;
+    last.hudOverride = sessionHudFamilyOverride();
+    last.family = hudFamily(ctx);
+    root.dataset.family = last.family;
+    root.style.setProperty('--rw-bio-period', '4s');
+  }
+
+  function emitFamilyTick(family, type, data) {
+    if (ctx.settings && ctx.settings.reducedMotion) return;
+    if (hudFamily(ctx) !== family) return;
+    ctx.emit(type, data);
+  }
 
   let textAccum = TEXT_UPDATE_INTERVAL; // refresh text on first frame
   let selfHitFlashUntil = 0;
@@ -846,11 +1070,10 @@ export function initHud(ctx) {
             bracket.style.transform = 'translate3d(' + bxs + 'px,' + bys + 'px,0)';
           }
 
-          // Lead reticle: where to put the aim point so the selected shot
-          // meets the lock. Cannon / disruptor always show it on a live
-          // ship. Mining (group 3) hides it. Low relative speed still
-          // draws the mark on the hull so the player can see the instrument.
-          const wKeyLead = WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon';
+          // Lead reticle: selected-weapon TOF. Mining hides. Empty group 4
+          // has no speed (no cannon fallback). A seated dart uses missile
+          // speed; the pip is advisory because the shot then turns.
+          const wKeyLead = hudWeaponKey(ctx);
           const wLead = WEAPONS[wKeyLead];
           const wSpeed = wKeyLead === 'mining' ? 0 : (wLead?.speed ?? 0);
           relVel.copy(targetVel).sub(ctx.ship.velocity);
@@ -864,8 +1087,9 @@ export function initHud(ctx) {
             leadProj.copy(leadWorld).project(cam);
             if (leadProj.z < 1 && Math.abs(leadProj.x) <= 1 && Math.abs(leadProj.y) <= 1) {
               if (last.leadShown !== true) { last.leadShown = true; lead.classList.remove('is-hidden'); }
-              lead.style.transform =
-                'translate3d(' + ((leadProj.x * 0.5 + 0.5) * vw) + 'px,' + ((-leadProj.y * 0.5 + 0.5) * vh) + 'px,0)';
+              last.leadX = (leadProj.x * 0.5 + 0.5) * vw;
+              last.leadY = (-leadProj.y * 0.5 + 0.5) * vh;
+              lead.style.transform = 'translate3d(' + last.leadX + 'px,' + last.leadY + 'px,0)';
             } else if (last.leadShown !== false) {
               last.leadShown = false; lead.classList.add('is-hidden');
             }
@@ -891,9 +1115,28 @@ export function initHud(ctx) {
         }
       }
 
+      if (last.family === 'bio') {
+        const combatHair = root.classList.contains('in-combat');
+        const hx = cx + rx;
+        const hy = cy + ry;
+        const okH = vw > 0 && vh > 0;
+        hairBoxForRail('self', vw, vh, selfSize.width, selfSize.height, combatHair, selfHairBox);
+        hairBoxForRail('tgt', vw, vh, tgtSize.width, tgtSize.height, combatHair, tgtHairBox);
+        const hideSelf = !okH || agezHairOff(hx, hy, last.leadShown === true, last.leadX, last.leadY, selfHairBox);
+        const hideTgt = !okH || agezHairOff(hx, hy, last.leadShown === true, last.leadX, last.leadY, tgtHairBox);
+        if (hideSelf !== last.selfHairOff) {
+          last.selfHairOff = hideSelf;
+          selfRail.classList.toggle('rw-hair-off', hideSelf);
+        }
+        if (hideTgt !== last.tgtHairOff) {
+          last.tgtHairOff = hideTgt;
+          tgtRail.classList.toggle('rw-hair-off', hideTgt);
+        }
+      }
+
       // Range pop (Wave D): selected weapon envelope. Mining uses the head.
       {
-        const wKeyR = WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon';
+        const wKeyR = hudWeaponKey(ctx);
         const range = wKeyR === 'mining'
           ? miningLaserFor(ctx.world.miningLaser).range
           : (WEAPONS[wKeyR]?.range ?? 0);
@@ -901,6 +1144,7 @@ export function initHud(ctx) {
         if (inRange !== last.inRange) {
           last.inRange = inRange;
           reticle.classList.toggle('in-range', inRange);
+          if (inRange) emitFamilyTick('mech', 'hudMechRange', {});
         }
       }
 
@@ -1049,6 +1293,14 @@ export function initHud(ctx) {
               if (!seenHostiles.has(id)) {
                 seenHostiles.add(id);
                 slot.pulseUntil = nowT + CONTACT_PULSE;
+                if (scanner >= 1 && !(ctx.settings && ctx.settings.reducedMotion)) {
+                  const fam = hudFamily(ctx);
+                  if (fam === 'mech') ctx.emit('hudMechContact', { id });
+                  else if (fam === 'bio' && nowT - lastHostileEnterAt >= 0.5) {
+                    lastHostileEnterAt = nowT;
+                    ctx.emit('hostileEnter', { id });
+                  }
+                }
               }
             }
             const pulsing = slot.pulseUntil > nowT;
@@ -1119,6 +1371,33 @@ export function initHud(ctx) {
       if (textAccum < TEXT_UPDATE_INTERVAL) return;
       textAccum = 0;
 
+      const pFam = ctx.player;
+      const kindNow = pFam ? pFam.hullKind : undefined;
+      const facNow = pFam ? pFam.faction : undefined;
+      const overNow = sessionHudFamilyOverride();
+      if (kindNow !== last.kind || facNow !== last.faction || overNow !== last.hudOverride) {
+        last.kind = kindNow;
+        last.faction = facNow;
+        last.hudOverride = overNow;
+        const family = hudFamily(ctx);
+        if (family !== last.family) {
+          last.family = family;
+          root.dataset.family = family;
+          if (family === 'bio') {
+            last.selfHairOff = true;
+            last.tgtHairOff = true;
+            selfRail.classList.add('rw-hair-off');
+            tgtRail.classList.add('rw-hair-off');
+          }
+        }
+      }
+
+      const tsNow = ctx.settings ? ctx.settings.textScale : 1;
+      if (tsNow !== last.textScale) {
+        last.textScale = tsNow;
+        measureRails();
+      }
+
       const player = ctx.player;
       const now = ctx.world.time;
 
@@ -1154,7 +1433,16 @@ export function initHud(ctx) {
       if (player) {
         selfScreen.set((player.screen / player.screenMax) * 100);
         selfShell.set((player.shell / player.shellMax) * 100);
-        selfHull.set(player.hullMax > 0 ? player.hull / player.hullMax : 0);
+        const hullFrac = player.hullMax > 0 ? player.hull / player.hullMax : 0;
+        selfHull.set(hullFrac);
+        const hullBandNow = hullFrac > 0.5 ? 'ok' : hullFrac > 0.25 ? 'warn' : 'crit';
+        if (hullBandNow !== last.hullBand) {
+          last.hullBand = hullBandNow;
+          if (hullBandNow !== 'ok' && ctx.elapsed - lastHullBandAt >= 2) {
+            lastHullBandAt = ctx.elapsed;
+            emitFamilyTick('bio', 'hullBand', { band: hullBandNow });
+          }
+        }
         strainBar.set((player.heat / HEAT.max) * 100);
         const oh = !!player.overheated;
         if (oh !== last.strainFlag) {
@@ -1171,7 +1459,12 @@ export function initHud(ctx) {
       }
 
       // flight: speed on the self rail; throttle / afterburner / drift stay aux
-      selfSpeed.set(ctx.ship.speed, !!(ctx.flags.matchSpeed && shipTgt));
+      const matchOn = !!(ctx.flags.matchSpeed && shipTgt);
+      selfSpeed.set(ctx.ship.speed, matchOn);
+      if (matchOn !== last.matchLamp) {
+        last.matchLamp = matchOn;
+        if (matchOn) emitFamilyTick('mech', 'hudMechMatch', {});
+      }
       throttleBar.set(ctx.input.throttle * 100);
 
       const burnerCd = ctx.config.ship.afterburner.cooldown || 1;
@@ -1209,14 +1502,8 @@ export function initHud(ctx) {
         flight.classList.toggle('drift-active', dActive);
       }
 
-      // weapon group + strain readout
-      const wKey = WEAPON_KEYS[(ctx.input.weaponGroup | 0) - 1] ?? 'cannon';
-      const wDef = WEAPONS[wKey];
-      // wave 51: group 3 names the INSTALLED mining head (WEAPONS.mining.name
-      // is now permanently the Mk I); resolved fresh each frame because save
-      // restores swap ctx.world fields wholesale.
-      const wName = wKey === 'mining' ? miningLaserFor(ctx.world.miningLaser).name : (wDef ? wDef.name : '—');
-      const wLabel = (ctx.input.weaponGroup | 0) + ' · ' + wName;
+      // weapon group + strain readout (group 3 still names the installed head)
+      const wLabel = weaponHudLabel(ctx);
       if (wLabel !== last.weapon) { last.weapon = wLabel; weaponName.textContent = wLabel; }
       const wStrain = player ? Math.round((player.heat / HEAT.max) * 100) + '%' : '—';
       if (wStrain !== last.weaponStrain) { last.weaponStrain = wStrain; weaponStrain.textContent = wStrain; }
@@ -1237,6 +1524,12 @@ export function initHud(ctx) {
         last.mood = mood;
         moodLabel.textContent = mood.toUpperCase();
         moodIcon.className = 'rw-bio-icon m-' + mood;
+      }
+      const reducedMotion = !!(ctx.settings && ctx.settings.reducedMotion);
+      const moodPeriod = bioPeriodSec(mood, reducedMotion);
+      if (moodPeriod !== last.bioPeriod) {
+        last.bioPeriod = moodPeriod;
+        root.style.setProperty('--rw-bio-period', moodPeriod ? moodPeriod + 's' : '0s');
       }
       hungerBar.set(ctx.bio.hunger * 100);
       woundsBar.set(ctx.bio.wounds * 100);
@@ -1340,6 +1633,7 @@ export function initHud(ctx) {
         if (railName !== last.railName) {
           last.railName = railName;
           tgtNameEl.textContent = railName;
+          measureRails();
         }
         const distU = Math.round(targetDistNow);
         if (distU !== last.railDist) {
@@ -1384,6 +1678,14 @@ export function initHud(ctx) {
           const d = s.object.position;
           const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
           if (dx * dx + dy * dy + dz * dz <= r2) { pKey = 'T'; pVerb = 'Target'; break; }
+        }
+      }
+      // Dock / Jump / Hail / Target win. A rock lock already has a mine target.
+      if (!pKey && (ctx.input.weaponGroup | 0) === 3 && shipObj && !isRockTarget(target)) {
+        const n = beltMineDist(ctx, shipObj.position);
+        if (Number.isFinite(n)) {
+          pKey = '3';
+          pVerb = 'Mine · belt ' + n + 'u';
         }
       }
       const pStr = pKey + '|' + pVerb;

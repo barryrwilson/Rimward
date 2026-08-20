@@ -1,0 +1,61 @@
+## Status
+CLEAN
+
+## What I tested
+- Command: `node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs`
+  Result: exit 1, `BOOT TEST FAIL — 8 errors`.
+  Log: `out/w64/boot-test-desk-recheck.log`
+  WAVE62 HUD family: all true (`noHullWrite` true).
+  WAVE64 hangar persist: all true.
+  WAVE64 remount: all true.
+  WAVE64 shipyard desk: all true (keys, Digit 0/1–9, hangar starter, Yard empty note, credits unchanged, XSS name as text / no IMG, Digit5 remount DeskPlate, Digit3 back to starter, HUD read-only).
+- Fail-count investigation (worker claimed 9; remount/persist verifies had 8):
+  This complete run’s FAIL lines are exactly the known cluster:
+    WAVE4 FENCE FAVOR
+    WAVE26 FERRY QUOTE
+    WAVE26 HAUL QUOTE
+    WAVE26 LANE DELIVERY
+    WAVE26 OLD-SAVE FALLBACK
+    WAVE26 SAVE FIELDS
+    WAVE26 RESTORE
+    WAVE35 HAUL GATE DELIVERY
+  WAVE30 payTribute passed this run.
+  REDMARCH did not fail this complete run (`castMatches:true`).
+  An earlier incomplete run in this session printed `REDMARCH TEST FAIL` with `castMatches:false` before the 120s tool cap. That is the same known flake, not a desk pin.
+  Worker’s “9” = this known 8 + REDMARCH when it flakes. No new WAVE64/desk FAIL. Do not blame the worker.
+- Static XSS / digit review vs `docs/ShpDesign.md` §2 and `out/w63/shared-contract.md` §2.
+  Files: `src/systems/station.js`, `src/systems/shipyard-desk.js`, `src/ui/screens.css`, `scripts/boot-test.mjs`.
+  `h()` sets `textContent` (`station.js` 1452–1456). Overlay wipe is `overlay.textContent = ''`.
+  `shipyard-desk.js` has no `innerHTML` / `insertAdjacentHTML` / `document.write` / `credits`.
+  Hull names, faction, mounted id, notices go through `h(..., text)`.
+  `DOCK_KEY_SERVICES` appends `'shipyard'` only (length 10, last key). Digits 1–9 still Market…Standing. Digit 0 selects last key (not `Number('0')-1`).
+  Menu button is `0 — Shipyard`, not `10 — Shipyard`. Legend: `1-9, 0 select service · Esc/B launch`.
+  Yard pane is a fail-closed note. Digit 3–0 on Yard do not debit.
+- Browser (Playwright MCP, Vite `http://localhost:5173/`):
+  New Game → Freehold Greenhand → force-dock Freehold Landing via `window.__ctx`.
+  Menu: `1 — Market` … `9 — Standing` + `0 — Shipyard`. No `10 — Shipyard`.
+  Digit 1 → MARKET. Digit 9 → STANDING. Digit 0 → SHIPYARD / HANGAR.
+  Hangar lists starter `she`, `Mounted id hull_starter`, `light · Independent · mounted`.
+  Digit 2 → YARD: “This dock has no hull catalog. No sale.” Credits 350 before and after Digit 3–0. Hangar blob unchanged.
+  Console: 0 errors, 0 warnings from the desk session.
+  Shot: `out/w64/desk-hangar.png`
+
+## Bugs found
+None against ShpDesign §2 / contract §2 desk law.
+
+Residual (not a fail; already in PR3 review):
+- Level-2 Digit 0 mounts hulls[7] when the Hangar pane is open. Cap is 8. Legend says `3+` and does not name 0.
+- Hull cards with `i > 7` skip the Mount button. Sanitize cap 8 makes that branch dead.
+
+## Environmental issues
+- First boot-test hit the 120s tool cap; second run at 300s finished.
+- Vite 5173 was already up; a second `npm run dev` bound 5174. Browser used 5173.
+- Log file shows `BOOT TEST FAIL ΓÇö 8 errors` (em-dash encoding). Node stdout is `BOOT TEST FAIL — 8 errors`.
+
+## Evidence
+- `out/w64/boot-test-desk-recheck.log` WAVE62 + WAVE64 persist/remount/desk all-true; 8 known FAILs
+- Browser Freehold dock menu + Digit 1 Market, Digit 9 Standing, Digit 0 Hangar, Digit 2 Yard no debit
+- `out/w64/desk-hangar.png`
+- Cite: `src/systems/station.js` `DOCK_KEY_SERVICES` 117; labels/hot 2196–2207; Digit0 last-key 2260–2264; shipyard level-2 2306–2307
+- Cite: `src/systems/shipyard-desk.js` `h()` names 68–70; empty Yard 51–55; `handleShipyardDigit` no debit 107–128
+- Cite: `scripts/boot-test.mjs` WAVE64 desk 12508–12673

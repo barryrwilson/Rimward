@@ -1,0 +1,278 @@
+Wave 70 BIO design verify
+Date: 2026-08-20
+Scope: markdown-only BIO worker (docs/BioLivingShipsDesign.md + out/w70/bio/*).
+Rule: do not edit src/. This file is evidence only.
+
+================================================================================
+1. Worker tree / freeze: no src, wishlist, or PROGRESS from this worker
+================================================================================
+
+Claimed files:
+  docs/BioLivingShipsDesign.md          untracked markdown
+  out/w70/bio/current-bio-inventory.md  untracked markdown
+  out/w70/bio/shared-contract.md        untracked markdown
+  out/w70/bio/security-review.md        untracked markdown
+  out/w70/bio/code-review.md            untracked markdown
+
+Git working tree also has dirty src/, scripts/boot-test.mjs, PROGRESS.md,
+and docs/PLAYER-EXPERIENCE-WISHLIST.md. Those diffs are other workers
+(Task 1 ship.js / boot-test, HUD, SHP, etc.).
+
+Pins:
+- grep src for Wave 70 | grafted | Abomination | BIO-0* → no matches.
+- git diff src | grafted | Wave 70 | Abomination → none.
+- git diff PROGRESS.md | Wave 70 BIO / graft → none (HUD "--rw-bio-period" only).
+- git diff wishlist does not rewrite Initiative BIO-01..05 (still CAPTURED
+  at docs/PLAYER-EXPERIENCE-WISHLIST.md 784-842).
+- docs/ShpDesign.md was not in this worker's file list (read-only for BIO).
+
+PASS: this worker did not edit src/, the wishlist BIO freeze, or PROGRESS.md.
+
+================================================================================
+2. Brief vs shared-contract.md (conflict = HIGH)
+================================================================================
+
+Merge law is the same in both files: contract wins.
+
+Freezes that match:
+- Wave 70 is markdown only. Serial PRs are a later wave, not this one.
+- Living starter is the quality benchmark. Remount rebuilds makeLivingHull.
+- Beautiful origin is not a second hull and does not write hullKind.
+- First impl in: live Beautiful LIVING_STOCK + Unknowables light yards.
+- Gift / pirate seed / seed commodity: deferred. Persist shape = hangar row.
+- Abomination = hullKind === 'built' && grafted === true.
+- Gilded sells grafts. Two-step textContent warning before debit/write.
+- Any grafted hangar row caps Beautiful at live HOSTILE_STANDING (-10).
+- Living/Unknowables drop grafted. Living remount of grafts is forbidden.
+- Beautiful / Unknowables frigate buy stays omitted.
+- BIO-04 out. No invented WEAPONS row.
+- BIO-03 later visual+motion. This wave does not ship meshes.
+- Growth-center not required for starter cannon.
+- Hangar rows only. No nested loadout.
+- HUD never writes hullKind. Abomination HUD stays mech.
+- state.js READ-ONLY for BIO feature workers.
+
+Compatible narrowing (not opposite law):
+- Contract §7.3 allows mounted built hull or a chosen built row;
+  mounted-only is enough. Brief §7 lists mounted-only.
+- Contract §12 PR2 allows an owner-approved gift. Brief + §3.3 keep gift
+  deferred unless that later PR exists.
+
+Wording clash (not a freeze reverse):
+- Contract §7.4 step 3 says "Confirm debit + write grafted".
+- Contract §7.7 and brief §7: do not debit a guessed UU until an authored
+  constant exists.
+  Later impl must obey §7.7 until a named data PR lands a price.
+
+NO HIGH brief-vs-contract freeze conflict.
+
+================================================================================
+3. Inventory vs live (re-opened cited files)
+================================================================================
+
+src/systems/ship.js
+- makeLivingHull Sphere 64x40, elongate/manta/whip/camber/head; nose -Z
+  tail +Z. Live 258-306. Inventory 257-306. FACT MATCH.
+- Four motion fields never idle: header 17-34; IDLE_SWIM_HZ 0.5,
+  CRUISE_SWIM_HZ 2.3, BREATH_HZ 0.25, HEART_HZ 1.1 at 144-147.
+  Vertex path 888-933. FACT MATCH.
+- GROWTH_SCALE_MAX 0.15 at 98. flesh.scale 978-986. Not gated on living.
+  Plated remount also has a flesh child (buildBuiltVisual 431-446).
+  FACT MATCH. Code-review minor on plated growth is live, not invented.
+- meshKindFor: Unknowables living; built → built; else living. 503-508.
+- remountPlayerHull Unknowables force then living vs plated. 514-543.
+- Boot buildLivingVisual. 549-553. createShipState('light') at 591
+  (inventory said 589-590 — cite drift only).
+- MOOD_VISUALS 152-158 (inventory 151-157). FACT MATCH.
+- Reduced motion hides trail; vertex swim still runs. 989-991. FACT MATCH.
+
+src/game/hangar.js
+- Cap 8. RESERVED_IDS includes __proto__. 25-31. FACT MATCH.
+- sanitizeHangarRecord allowlist; hullKind living|built else omit. 139-168.
+  No grafted today. No nested loadout (writeMountedGear ignores unknown).
+- applyUnknowablesKind on sanitize / starter / heal / load / switch /
+  applyMountedFlight. FACT MATCH.
+- applyFlightEnvelope 467-482:
+    maxSpeed = cruise
+    creep = creep
+    afterburner.multiplier = burn / cruise   (not burn itself)
+    damping = 1/stopTime
+    acceleration = cruise * (90/120)
+  Inventory §2 map says "burn→afterburner.multiplier". That is WRONG.
+  Live is cls.burn / cls.cruise (light 240/120 = 2).
+  Contract §4.2 still correctly says CALL applyFlightEnvelope, do not
+  reimplement. Risk: a later worker copies the inventory map.
+- switchTo dock-only, snapshot rollback, 611-632. FACT MATCH.
+- applyMountedFlight 635-640. FACT MATCH.
+- ctx.bio not written on park/load. FACT MATCH.
+
+src/game/shipyard.js
+- YARD_LIST_UU light 8000 / cutter 11000 / heavy 20000 / ace 28000 /
+  freighter 24000 / frigate 80000. 16-23. FACT MATCH.
+- LIVING_STOCK light, cutter, heavy. UNKNOWABLES_STOCK light. 26-27.
+- CORE_STOCK includes frigate (plated, including gilded). 25, 34.
+- hullKindFor beautiful|unknowables → living else built. 69-72.
+- Hostile rep < 0 no sale at purchaseYardHullUnlocked 191
+  (export purchaseYardHull wraps it at 222). FACT MATCH.
+- Buy addPurchasedHull; restores mountedId so buy does not remount. 209-212.
+
+src/systems/organic.js
+- isBeautiful = faction === 'beautiful'. 67-69. FACT MATCH.
+- Header 18-23 still leads with part-level transforms, then names GPU swim.
+  Inventory overstates "header vs code" a little. Code path is GPU in
+  ship-assets.js. No buildBeautifulShip in src.
+
+src/systems/npc.js
+- HOSTILE_STANDING = -10 at 87. Hunt standingOf <= -10 at 1069.
+- standingOf missing/non-finite → 0. 1021-1025.
+- buildPlayerPlatedMesh role trader. 171-175. FACT MATCH.
+
+src/systems/ship-assets.js
+- idleClip beautiful|unknowables. 33.
+- GPU swim inject 136-170 (0.7 Hz, breath 0.25 Hz scale 1.2%).
+- Math.random phase 397-406. FACT MATCH.
+- public/assets/ships/beautiful has light, cutter, heavy, ace, freighter,
+  frigate GLBs. Inventory correctly says NPC art includes frigate; yard
+  buy does not.
+
+src/game/origins.js
+- applyEffects does not write hullKind, mesh, faction, or classKey. 50-83.
+- Overlay textContent rows. 109, 126. FACT MATCH.
+
+src/game/bio.js
+- Writes ctx.bio only. No hullKind.
+- growth = min(1, bond*0.7 + fedCount*0.05). 156-161. FACT MATCH.
+- Does not change classKey.
+
+src/game/state.js
+- READ-ONLY header 7-9. Wave 68 PR0 owns WEAPONS / MOUNT_TABLE.
+- SHIP_CLASSES 35-42. MOUNT_TABLE light general 2 at 47.
+- WEAPONS: cannon, disruptor, mining, missile, turret. No psionic family.
+- livingRock food base 600. 313.
+- RANK_LADDER Sworn min 50; Stranger min -10; Marked min -1000. 672-678.
+- ORIGINS.beautiful bond 0.35 hunger 0.4 2x livingRock. 716-719.
+- createShipState default faction independent. 140-146. No hullKind on
+  the record. Unset → living mesh. FACT MATCH.
+- FACTIONS.beautiful exists. 559.
+
+src/systems/hud.js
+- hudFamily: built→mech, living→bio, isBeautiful→bio, else bio. 66-75.
+- Debug sessionStorage rw-hud-family only. 77-83.
+- Assignments: last.kind = p.hullKind (local cache 883); kindNow read
+  at 1375. Never writes ctx.player.hullKind.
+- Family reread on the ~5 Hz HUD tick. 1369-1382.
+
+src/game/save.js
+- WORLD_FIELDS hangar 74-97. No grafted / bioSeedGift world key.
+- Wholesale player + bio. 251-252, 480-484.
+- Bio finite heal 376-384.
+- freshStart hullKind living 505-516.
+- Death companion +0.4 wounds, pained, hunger floor 0.4, +0.02 bond.
+  517-525. FACT MATCH.
+- Autosave key rimward-save-v1 (save.js KEY).
+
+src/core/ctx.js
+- HUD reads hullKind; SHP/save write. 19.
+- Default reputation { freehold, redledger, veridian, hollow } all 0.
+  128. beautiful is missing until created.
+- Frozen events 197-226. No hull-swap / grafted event.
+
+src/systems/station.js
+- FEED_COST 60 at 137 (inventory cited 136-137). Biomass zeros hunger
+  +0.05 bond; living rock spend 1 +0.2 bond. 1845-1860. FACT MATCH.
+- Digit list includes shipyard last (Digit 0). 132.
+- Gilded people Confirm transfer two-step. 1270-1298. FACT MATCH.
+
+src/systems/shipyard-desk.js
+- Confirm papers two-step pending. 88-131. Uses station h() (textContent).
+
+src/game/world.js
+- Beautiful originBeat at growth 0.4 / 0.75; originPayoff at 1.
+  1053-1116. FACT MATCH.
+- greenhand for-in on reputation at 1093. Security note is live.
+
+scripts/generate-galaxy.mjs
+- gilded generated region at 193. beautiful at 205.
+- authored-systems.js has no gilded / beautiful keys. FACT MATCH.
+
+docs/ShpDesign.md (read only)
+- HUD never writes hullKind. Living + conventional mounts. Do not
+  require BIO-02 growth-center. 485. FACT MATCH (law). Header current-
+  state still talks like Wave 63 (no yard). Inventory correctly says
+  live hangar/yard win.
+
+out/w67/shp03/shared-contract.md
+- Living hulls may seat conventional guns. No BIO-02 growth-center.
+  No nested loadout.
+
+INVENTORY BUG:
+  Envelope map "burn→afterburner.multiplier" ≠ live burn/cruise ratio.
+
+================================================================================
+4. Freeze checklist
+================================================================================
+
+[x] markdown only this wave (BIO worker)
+[x] living starter not weakened in this design; remount rebuilds makeLivingHull
+[x] growth-center not required for starter cannon (contract §1.3 / §4.6;
+    ShpDesign 485; SHP-03)
+[x] grafted boolean proposed; living and Unknowables drop it
+[x] warn before graft debit; any grafted row caps Beautiful at -10
+[x] Beautiful/Unknowables frigate omitted from yard stock
+[x] BIO-04 out; no invented WEAPONS row
+[x] BIO-03 does not claim shipped meshes
+[x] hangar rows only; no nested loadout
+[x] HUD never writes hullKind
+[x] serial PR plan is later, not Wave 70 impl
+[x] gift / pirate / seed commodity deferred as hangar-row shape
+[x] first impl uses live Beautiful / Unknowables yards
+
+================================================================================
+5. Security (proto, persist, innerHTML, hostility without warning)
+================================================================================
+
+Live today:
+- Hangar RESERVED_IDS + SAFE_ID. Sanitize drops unknown keys.
+- innerHTML only in src/systems/modelsbrowser.js. Station / origins /
+  shipyard-desk use textContent / h().
+- No grafted field. No silent tissue sale.
+
+Design:
+- Two-step warning before graft (security HIGH closed).
+- Ownership invariant on sanitize/restore/remount/confirm so save tamper
+  cannot own grafted tissue at standing 0 (security HIGH closed).
+- grafted = own() === true only. Living/Unknowables drop it.
+- HUD never writes hullKind or grafted.
+- Direct assign reputation.beautiful after FACTIONS check. Do not copy
+  for-in blobs (world.js 1093 is the anti-pattern to avoid).
+- No new localStorage key. No new frozen event in first impl.
+- Graft price proposed, needs owner. Do not guess 900 / 8000.
+
+PASS for a design-only wave. Remaining cautions match security-review.md
+(MEDIUM price unspecified; PR1-before-PR3 save window).
+
+================================================================================
+6. Verdict
+================================================================================
+
+Status: BUGS_FOUND
+
+This is not an src regression. Wave 70 BIO is markdown and matches the
+owner freeze except one inventory mapping error against live hangar.js.
+
+Bugs:
+1. MEDIUM — current-bio-inventory.md §2 envelope map.
+   Says burn→afterburner.multiplier.
+   Live applyFlightEnvelope sets multiplier = cls.burn / cls.cruise.
+   Brief/contract tell later PRs to call applyFlightEnvelope; still fix
+   the inventory before an impl wave copies the table.
+
+Notes (not freeze breaks):
+- ship.js createShipState cite 589-590 is live 591.
+- FEED_COST cite 136-137 is live 137.
+- Contract §7.4 names debit on confirm; §7.7 forbids guessed UU.
+
+Env:
+- graph_resolve returned omp/workflow-activar-brand-messaging (terms
+  bio, write; coverage 0.11). That workflow does not apply to WebSim.
+  Verify continued on the parent BIO pin list.

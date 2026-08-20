@@ -1,0 +1,44 @@
+## Status
+CLEAN
+
+## What I tested
+- Headless probe `out/w70/minehold/probe.mjs`: rock vector MATCH vs ship along-nose MATCH.
+- Extra verifier probe: lost lock, jump/dock cancel, no auto-steer, rest-frame throttle command.
+- `npm run test:boot` WAVE70 pins only.
+- Static review of `src/systems/ship.js` MATCH block.
+- `flags.matchSpeed` writes in `src/` (ship.js only).
+- No `input.throttle` write in ship.js.
+- Chase-turn `1.22` still behind `liveLock` only.
+- Rock list entries have `position` and no `object` / no `state`.
+- Live Chrome (Vite `http://localhost:5173/`): Freehold, weapon group 3, lock rock, KeyX.
+
+## Static MATCH block
+- `flags.matchSpeed` writes only in `src/systems/ship.js` (arm, cancel, docked park).
+- Ship MATCH still uses scalar `lockSpeed` along the nose.
+- Rock MATCH uses `_lockVel` plus rest-frame forward/strafe. Idle (`throttleEff < 0.02` or fullStop) holds the rock vector.
+- Low-throttle damping is skipped while `rockMatch` is on.
+- No auto-arm from combat/mining. Combat has no `matchSpeed` writes.
+- Chase-turn `turn *= 1.22` stays in `if (liveLock)` after the MATCH sample block.
+- NaN rock pose: `lockPosOk` false → `matchLive` false → MATCH cancels.
+- `ctx.input.throttle` is not written in ship.js.
+- Persist: no `matchSpeed` in save.js.
+
+## Scope
+Git shows dirty `asteroids.js`, `combat.js`, `hud.js`, `ctx.js` vs HEAD from earlier waves. MATCH vector work is in `ship.js` plus WAVE70 pins in `scripts/boot-test.mjs`. Asteroids/combat diffs have no MATCH math. HUD still gates the lamp on `shipTgt` (`target.state`). That is the leftover lamp rule, not a new MATCH path.
+
+## Bugs found
+None.
+
+Known leftover (not a hold bug): HUD MATCH lamp needs `shipTgt`, so the lamp stays hidden on a rock lock. Live confirmed `rw-match-lamp` is hidden while rock MATCH is on, and shown on a ship lock. Hold still works. Worker documented this. Severity would be MEDIUM at most; play still holds.
+
+## Environmental issues
+None. Chrome and Vite ran. Boot still has 8 known FAILs (WAVE4 fence, WAVE26 cluster, WAVE35 haul). WAVE70 did not add a fail.
+
+## Evidence
+- Probe: `out/w70/minehold/probe-log.txt` — PASS `rockV=48.0,0.0 shipV=0.0,-47.6`
+- Extra: same file — PASS `restV=46.0,-115.7` (slide X plus cruise along -Z)
+- Boot: `out/w70/minehold/boot-w70.txt` — all five pins true
+- Live log: `out/w70/minehold/live-notes.txt` — LIVE PASS
+  - Rock hold: rockSpeed 68.3, shipSpeed 68.3, relLen 3.09, qDelta 0
+  - Rock lamp hidden; ship lamp shown; KeyR cancels MATCH
+- Screenshots: `out/w70/minehold/01-rock-match.png`, `out/w70/minehold/02-ship-match.png`

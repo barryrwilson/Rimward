@@ -1,0 +1,21 @@
+ERROR The AudioContext encountered an error from the audio device or the WebAudio renderer.
+flightEmpty {"group":4,"launcher":"","wpn":"4 · —","family":""}
+ERROR The AudioContext encountered an error from the audio device or the WebAudio renderer.
+SHOT 01-flight-empty-g4.png
+SHOT 02-docked.png
+lightOutfit {"classKey":"light","buttons":["← Back (Esc)","1 — Expand hold +10 (600 UU) [0/2]","2 — Wolfeye Mk I scanner (400 UU)","3 — Concealed mounts — guns that don't show on a manifest (900 UU)","5 — Bore laser Mk II (1400 UU)"],"hasNoSeat":true,"hasDigit8":false,"hasDigit9":true,"slice":"FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“she” made fastCREDITS 20000 UU · HOLD 0/20← Back (Esc)OUTFITTING — hull work & instruments1 — Expand hold +10 (600 UU) [0/2]2 — Wolfeye Mk I scanner (400 UU)3 — Concealed mounts — guns that don't show on a manifest (900 UU)Wolfeye Mk II needs the Mk I eye in the socket first.5 — Bore laser Mk II (1400 UU)Ferrous cutting head Mk III needs the Bore laser Mk II in the mount first.Deepcore lance Mk IV needs the Ferrous cutting head Mk III in the mount first.This hull has no launcher hardpoint.This hull has no turret hardpoint.Esc back · Esc again / B launch"}
+SHOT 03-outfitting-light.png
+mountedHeavy {"addOk":true,"switchOk":true,"classKey":"heavy","mounted":"hull_heavy_1"}
+heavyOutfit {"classKey":"heavy","credits":20000,"buttons":["← Back (Esc)","1 — Expand hold +10 (600 UU) [0/2]","2 — Wolfeye Mk I scanner (400 UU)","3 — Concealed mounts — guns that don't show on a manifest (900 UU)","5 — Bore laser Mk II (1400 UU)","8 — Dart rack (6500 UU)","9 — Auto turret (4200 UU)"],"slice":"FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“heavy” made fastCREDITS 20000 UU · HOLD 0/20← Back (Esc)OUTFITTING — hull work & instruments1 — Expand hold +10 (600 UU) [0/2]2 — Wolfeye Mk I scanner (400 UU)3 — Concealed mounts — guns that don't show on a manifest (900 UU)Wolfeye Mk II needs the Mk I eye in the socket first.5 — Bore laser Mk II (1400 UU)Ferrous cutting head Mk III needs the Bore laser Mk II in the mount first.Deepcore lance Mk IV needs the Ferrous cutting head Mk III in the mount first.8 — Dart rack (6500 UU)9 — Auto turret (4200 UU)Esc back · Esc again / B launch"}
+SHOT 04-outfitting-heavy.png
+pendingDart {"credits":20000,"buttons":["← Back (Esc)","1 — Expand hold +10 (600 UU) [0/2]","2 — Wolfeye Mk I scanner (400 UU)","3 — Concealed mounts — guns that don't show on a manifest (900 UU)","5 — Bore laser Mk II (1400 UU)","Confirm papers","Esc — Cancel","9 — Auto turret (4200 UU)"],"launcher":""}
+SHOT 05-dart-papers.png
+boughtDart {"credits":13500,"launcher":"dart","ammo":8,"notice":"Dart rack bolted in."}
+SHOT 06-dart-bought.png
+pendingTurret {"credits":13500,"buttons":["← Back (Esc)","1 — Expand hold +10 (600 UU) [0/2]","2 — Wolfeye Mk I scanner (400 UU)","3 — Concealed mounts — guns that don't show on a manifest (900 UU)","5 — Bore laser Mk II (1400 UU)","8 — Restock +2 (400 UU)","Confirm papers","Esc — Cancel"]}
+SHOT 07-turret-papers.png
+boughtTurret {"turret":"auto","credits":9300}
+SHOT 08-turret-bought.png
+flightSeated {"docked":false,"group":4,"launcher":"dart","ammo":8,"wpn":"4 · Dart rack · 8","family":"","hullKind":"living"}
+SHOT 09-flight-seated-g4.png
+LIVE PASS 0

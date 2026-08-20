@@ -1,0 +1,68 @@
+## Status
+CLEAN
+
+## What I tested
+- `node --import ./scripts/with-css-stub.mjs out/w64/hangar-probe.mjs` → `W64 PROBE PASS 0`
+- `node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs` → WAVE62 all true; WAVE64 hangar persist pins all true; 8 pre-existing FAILs only
+- Static persist-contract review vs `docs/ShpDesign.md` PR1 + `out/w63/shared-contract.md`
+  - `src/game/hangar.js`, `src/game/save.js`, `src/core/ctx.js` comments, `src/systems/hud.js` hullKind reads
+  - `WORLD_FIELDS`, snapshot park order, restore missing-hangar migrate, cap 8, key drop, hullKind allowlist, Unknowables force, Object.assign discipline, clearAutosave, freshStart, no remount/desk/state.js/HUD write, circular import, shared cargo sanitizer, no extra localStorage key
+
+## Bugs found
+
+(none in scope)
+
+## Environmental issues
+
+(none)
+
+## Evidence
+
+### Probe
+Command: `node --import ./scripts/with-css-stub.mjs out/w64/hangar-probe.mjs`
+Exit 0. Output: `W64 PROBE PASS 0`
+
+### Boot-test
+Command: `node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs`
+Exit 1 (expected: 8 known pre-existing errors). Full log:
+`C:\Users\barry\.grok\sessions\C%3A%5CProjects%5CWebSim\01a017ae-5f0e-78a0-b604-f7515663371f\terminal\call-940f87bf-a2ce-44f7-b858-9dbc331c6534-30.log`
+
+WAVE62 (all true):
+```
+wave62 hud family hook: {"independentBio":true,"beautifulBio":true,"builtMech":true,"livingBio":true,"defaultFamily":true,"afterBuilt":true,"overrideMech":true,"overrideOff":true,"blockedBio":true,"noHullWrite":true,"hairSelf":true,"hairTgt":true,"mechHook":true,"mechIrisHide":true,"mechAfter":true,"mechHubNoVein":true,"agezH600":true,"bioPeriodTok":true,"hairOffCss":true,"bioCapRound":true,"rmHairHide":true,"noFrameRect":true,"noBioCorner":true,"noContactExtra":true}
+```
+
+WAVE64 (all true):
+```
+wave64 hangar persist: {"miss.oneRow":true,"miss.living":true,"miss.mountedMatches":true,"miss.playerLiving":true,"miss.worldGearKept":true,"miss.mountedGear":true,"cap.length":true,"cap.mountedKept":true,"cap.tailDropped":true,"cap.earlyKept":true,"keys.noLoadout":true,"keys.noPrice":true,"keys.noCtor":true,"keys.noProtoField":true,"keys.noDunder":true,"keys.noPollute":true,"kind.rowDropped":true,"kind.playerDropped":true,"kind.hudBio":true,"kind.hudBioNope":true,"kind.liveDeleted":true,"unk.rowLiving":true,"unk.playerLiving":true,"unk.hudBio":true,"class.rowLight":true,"class.playerLight":true,"gear.worldScanner":true,"gear.worldMining":true,"gear.worldConcealed":true,"gear.mountedScanner":true,"gear.mountedMining":true,"gear.mountedConcealed":true,"gear.otherKept":true,"gearOk.worldOk":true,"gearOk.rowOk":true,"snap.hasHangar":true,"snap.parkedScanner":true,"snap.parkedName":true,"snap.parkedHull":true,"snap.cargoSanitized":true,"berth.autosaveGone":true,"berth.slotsKept":true,"fresh.oneLiving":true,"fresh.mounted":true,"fresh.leftoverGone":true,"fresh.cargoEmpty":true,"fresh.cap20":true,"fresh.worldZeros":true}
+```
+
+Known pre-existing FAILs (8, unchanged; not this PR):
+- WAVE4 FENCE FAVOR FAIL
+- WAVE26 FERRY QUOTE FAIL
+- WAVE26 HAUL QUOTE FAIL
+- WAVE26 LANE DELIVERY FAIL
+- WAVE26 OLD-SAVE FALLBACK FAIL
+- WAVE26 SAVE FIELDS FAIL (follow-on: ferry already `done`, accept never ran)
+- WAVE26 RESTORE FAIL (follow-on: payQuoted/favors never stamped)
+- WAVE35 HAUL GATE DELIVERY FAIL
+
+WAVE30 payTribute passed this run. No new FAIL lines. No WAVE62/WAVE64 FAIL.
+
+### Static contract checklist
+- WORLD_FIELDS includes `hangar` (`save.js` 89–90).
+- `snapshot()`: `sanitizeHangar` → `parkMounted` → `healPlayerHullKind` → WORLD_FIELDS copy (`save.js` 169–174). Park is JSON only; no remount; no `ctx.bio` write.
+- Missing / non-object / non-array / empty hulls → `writeStarterHangar` one living starter, not `[]`. Restore deletes leftover hangar when `snap.world.hangar === undefined` then migrates (`save.js` 343–344, 386).
+- Cap 8: mounted kept, then earlier extras, tail dropped (`hangar.js` `HANGAR_CAP` + `capHulls`).
+- Rows are fresh literals from allowlisted fields. Unknown keys (`loadout`, `price`, `__proto__`, `constructor`, `prototype`) dropped. Never `Object.assign(target, rawSlot)`.
+- `hullKind` only `'living'|'built'`; else key omitted/deleted. Unknowables force `'living'` on row sanitize, pack, player allowlist, and `syncMountedToPlayer`.
+- `clearAutosave` still removes only `rimward-save-v1`. Berths 1–3 untouched.
+- `freshStart`: assign light, heal, force `hullKind: 'living'`, `rebuildStarterHangar({stock:true})` (one living row, cargo empty, world gear zeros).
+- No remount (`config.ship` never written). No shipyard desk (`DOCK_KEY_SERVICES` still nine keys). `state.js` has no `hullKind`. HUD only reads (`hudFamily` + local `last.kind`); `noHullWrite` pin true.
+- Circular `hangar.js` ↔ `save.js` import works (probe + boot).
+- Cargo uses exported `sanitizeCargoList` from `save.js`; hangar only trims to capacity after that.
+- No hangar `localStorage` key in hangar.js; save still KEY + three berth slots only.
+
+### Notes (not bugs)
+- Restore identity copy (`syncMountedToPlayer`) writes player `faction`/`classKey`/`hullKind` and reloads `ctx.cargo` from the mounted row. That is persist identity, not PR2 remount (no mesh, no `config.ship`).
+- First-slice world scanner/mining/concealed mirrors stay on world heals; they are not overwritten from hangar on restore (gearOk pin: world 2/3/true vs row 1/2/true).

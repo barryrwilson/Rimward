@@ -1,0 +1,28 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker probe: `node --import ./scripts/with-css-stub.mjs out/w69/pr5/probe.mjs` (exit 0)
+- Code read of WAVE69 in `scripts/boot-test.mjs` (lines 14150-14260): last block before the final `errors` check. Scoped Freehold `initAsteroids`. Twelve boolean keys. Fail tag `WAVE69 AST FAIL`.
+- WAVE51 first-8 tuples in WAVE69 match PR1 `W51_FIRST8` exactly (`oreKey`, radius, ore). Comment: "Do not weaken." WAVE51 A–F / G1 / H / J–N fail tags are unchanged.
+- `cap160`: `field.count = 200` inside `try`; `field.count = savedCount` in `finally` (authored 130). Probe extra pin `fieldCountRestored`.
+- `npm run test:boot` captured to `out/w69/pr5/boot.log` (exit 1).
+- [NO BROWSER COVERAGE]
+
+## Bugs found
+none
+
+## Environmental issues
+- Boot harness exit 1 is expected. Known tags that printed: WAVE4 FENCE FAVOR, WAVE26 FERRY/HAUL/LANE/OLD-SAVE/SAVE FIELDS/RESTORE, WAVE35 HAUL GATE DELIVERY.
+- WAVE30 payTribute did not print this run.
+- WAVE51G2 MK4 CUT FAIL and WAVE51I EXTRACTION RESIST FAIL also printed. These are mining-beam / pod pins, not asteroid occupancy. They run before WAVE69. PR5 did not edit `src/`. WAVE51 asteroid sections C–F all true (`fan-out`, `determinism`, `deep-rim`, `jump teardown`). Not a PR5 bug.
+
+## Evidence
+- Screenshots: none expected
+- Logs: `C:\Projects\WebSim\out\w69\pr5\probe.log`, `C:\Projects\WebSim\out\w69\pr5\boot.log`
+- Probe: `wave69 ast:` all twelve true; `PASS w69 pr5 pins true n=130 meanR=580.9 R=514.8 sector=0.685`
+- Boot: same `wave69 ast:` JSON all true. No `WAVE69 AST FAIL`. Harness reached WAVE69 (wave66 desk then wave69 then `BOOT TEST FAIL — 10 errors`).
+- Pins: `idEqIndex`, `countFreehold`, `notClump`, `workSector`, `wave51tuples`, `fieldOreWorldField`, `depleteRoundtrip`, `sunMiss`, `cap160`, `beltLine`, `hudMineCue`, `staleLock`
+- WAVE51 first-8 (seed-11): brineIce/livingRock/slagIron/livingRock/rawOre/slagIron/rawOre/slagIron with the PR1 radii and ore amounts
+- WAVE51 asteroid: `wave51c` meshes=rawOre:73,livingRock:12,slagIron:30,brineIce:13,chromeSalt:2; `wave51d` rocks=130; `wave51e` vergeH4=5/35; `wave51f` disposed=10/10
+- Reviews already in tree: `out/w69/pr5/code-review.md`, `out/w69/pr5/security-review.md`

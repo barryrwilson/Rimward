@@ -308,13 +308,13 @@ const { initCombat } = await import('../src/systems/combat.js');
 const { initPods } = await import('../src/game/pods.js');
 const { initHail } = await import('../src/systems/hail.js');
 const { initSong } = await import('../src/systems/song.js');
-const { initSave } = await import('../src/game/save.js');
+const { initSave, snapshot, restore, clearAutosave } = await import('../src/game/save.js');
 const { initOrigins } = await import('../src/game/origins.js');
 const { initOnboarding } = await import('../src/systems/onboarding.js');
 const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
 const { initWakes } = await import('../src/systems/wakes.js'); // wave 30: flee wake trails + wreck-field discovery (same init slot as main.js)
 const { initTitle } = await import('../src/systems/title.js'); // wave 40: title screen front door
-const { initHud } = await import('../src/systems/hud.js');
+const { initHud, hudFamily, hairBoxForRail, agezHairOff } = await import('../src/systems/hud.js');
 const {
   isBeautiful, makePetalGeometry, makeTendrilGeometry,
   organicMaterials, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic,
@@ -10512,22 +10512,6 @@ removeLiveShip(w42indyCtx, w42indy);
     ctxS.world.currentSystem = systemId;
     return ctxS;
   };
-  // Scoped frame stepper — the main tick() rotation order: world time
-  // advances, updates run in init order (asteroids BEFORE combat, so a
-  // mineHit emitted this frame extracts next frame), the queue rotates.
-  // Returns every event emitted across the n frames.
-  const w51step = (ctxS, updates, n) => {
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      ctxS.elapsed += dt;
-      ctxS.world.time += dt;
-      for (const u of updates) u.update(dt);
-      out.push(...ctxS.events);
-      ctxS.lastEvents = ctxS.events;
-      ctxS.events = [];
-    }
-    return out;
-  };
   // Mirrors updateMining's ray-sphere pick — used ONLY to choose a vantage
   // whose line to the chosen rock is clear; the assertions then fire
   // through the REAL beam, which must land on the same rock.
@@ -10568,6 +10552,29 @@ removeLiveShip(w42indyCtx, w42indy);
     ctxS.camera.quaternion.identity();
     ctxS.camera.up.set(0, 1, 0);
     ctxS.camera.updateMatrixWorld();
+  };
+  // Scoped frame stepper — the main tick() rotation order: world time
+  // advances, updates run in init order (asteroids BEFORE combat, so a
+  // mineHit emitted this frame extracts next frame), the queue rotates.
+  // Returns every event emitted across the n frames.
+  // track { id, gap }: re-park on list[id] each frame (closed-form orbit).
+  const w51step = (ctxS, updates, n, track) => {
+    const out = [];
+    const id = track && Number.isInteger(track.id) ? track.id : -1;
+    const gap = track && Number.isFinite(track.gap) ? track.gap : 20;
+    for (let i = 0; i < n; i++) {
+      if (id >= 0) {
+        const rock = ctxS.asteroids.list[id];
+        if (rock) w51AimAt(ctxS, rock, gap);
+      }
+      ctxS.elapsed += dt;
+      ctxS.world.time += dt;
+      for (const u of updates) u.update(dt);
+      out.push(...ctxS.events);
+      ctxS.lastEvents = ctxS.events;
+      ctxS.events = [];
+    }
+    return out;
   };
 
   // -- a. contract shape: the tables the whole wave stands on -------------
@@ -10776,7 +10783,7 @@ removeLiveShip(w42indyCtx, w42indy);
     ctxG.input.weaponGroup = 3;
     ctxG.input.fireHeld = true;
     const w51oreBefore = ctxG.asteroids.list[w51hardRock.id].ore;
-    const w51blockedEvs = w51step(ctxG, [astG, combatG], 72); // 1.2 s of held fire
+    const w51blockedEvs = w51step(ctxG, [astG, combatG], 72, { id: w51hardRock.id, gap: 20 }); // 1.2 s of held fire
     ctxG.input.fireHeld = false;
     const w51blockedFor = w51blockedEvs.filter((e) => e.type === 'mineBlocked' && e.asteroidId === w51hardRock.id);
     const w51firstBlocked = w51blockedFor[0] ?? null;
@@ -10798,7 +10805,7 @@ removeLiveShip(w42indyCtx, w42indy);
     // Second half: the Deepcore lance (tier 4) opens the same rock.
     ctxG.world.miningLaser = 3;
     ctxG.input.fireHeld = true;
-    const w51hitEvs = w51step(ctxG, [astG, combatG], 90); // 1.5 s of held fire
+    const w51hitEvs = w51step(ctxG, [astG, combatG], 90, { id: w51hardRock.id, gap: 20 }); // 1.5 s of held fire
     ctxG.input.fireHeld = false;
     const w51hits = w51hitEvs.filter((e) => e.type === 'mineHit' && e.asteroidId === w51hardRock.id);
     w51g2Checks = {
@@ -10844,7 +10851,7 @@ removeLiveShip(w42indyCtx, w42indy);
     w51AimAt(ctxH, w51softTarget, 20);
     ctxH.input.weaponGroup = 3;
     ctxH.input.fireHeld = true;
-    w51step(ctxH, [astH, combatH], 2);
+    w51step(ctxH, [astH, combatH], 2, { id: w51softTarget.id, gap: 20 });
     w51hChecks.beamShownWhileFiring = w51fx['mine-beam'].visible === true
       && w51fx['mine-beam-core'].visible === true && w51fx['mine-glow'].visible === true;
     const w51quad = w51fx['mine-beam'].geometry.attributes.position.array;
@@ -10892,7 +10899,7 @@ removeLiveShip(w42indyCtx, w42indy);
   if (w51softRock) {
     w51AimAt(ctxI, w51softRock, 20);
     ctxI.input.fireHeld = true;
-    w51step(ctxI, [astI, combatI], W51_FIRE_FRAMES);
+    w51step(ctxI, [astI, combatI], W51_FIRE_FRAMES, { id: w51softRock.id, gap: 20 });
     ctxI.input.fireHeld = false;
     w51softUnits = w51podUnits();
     w51softCommodityOk = ctxI.pods.length > 0
@@ -10904,7 +10911,7 @@ removeLiveShip(w42indyCtx, w42indy);
   if (w51resistRock) {
     w51AimAt(ctxI, w51resistRock, 20);
     ctxI.input.fireHeld = true;
-    w51step(ctxI, [astI, combatI], W51_FIRE_FRAMES);
+    w51step(ctxI, [astI, combatI], W51_FIRE_FRAMES, { id: w51resistRock.id, gap: 20 });
     ctxI.input.fireHeld = false;
     w51resistUnits = w51podUnits();
     w51resistCommodityOk = ctxI.pods.length > 0
@@ -11853,6 +11860,2497 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave59 fx leftovers:', JSON.stringify(w59));
   if (!Object.values(w59).every(Boolean)) { console.log('WAVE59 FX FAIL'); errors++; }
+}
+
+// ---- WAVE62: HUD-02 PR1 family hook (zero visual delta at live bio) ----
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const hudSrc = readFileSync(join(here, '..', 'src/systems/hud.js'), 'utf8');
+  const hudRoot = document.getElementById('hud');
+  const defaultFamily = hudRoot?.dataset?.family === 'bio';
+  const hairSelf = [...walkDom(hudRoot)].some((n) =>
+    typeof n.className === 'string'
+    && n.className.split(' ').includes('rw-combat-self')
+    && n.className.split(' ').includes('rw-hair-off'));
+  const hairTgt = [...walkDom(hudRoot)].some((n) =>
+    typeof n.className === 'string'
+    && n.className.split(' ').includes('rw-combat-target')
+    && n.className.split(' ').includes('rw-hair-off'));
+
+  const independentBio = hudFamily({ player: { faction: 'independent' } }) === 'bio';
+  const beautifulBio = hudFamily({ player: { faction: 'beautiful' } }) === 'bio';
+  const builtMech = hudFamily({ player: { hullKind: 'built', faction: 'freehold' } }) === 'mech';
+  const livingBio = hudFamily({ player: { hullKind: 'living', faction: 'unknowables' } }) === 'bio';
+
+  const hadKind = Object.prototype.hasOwnProperty.call(ctx.player, 'hullKind');
+  const prevKind = ctx.player.hullKind;
+  ctx.player.hullKind = 'built';
+  tick(15, 'wave62 hullKind built 5hz');
+  const afterBuilt = hudRoot?.dataset?.family === 'mech';
+  if (hadKind) ctx.player.hullKind = prevKind;
+  else delete ctx.player.hullKind;
+  tick(15, 'wave62 restore hullKind');
+
+  const prevOverride = sessionStorage.getItem('rw-hud-family');
+  sessionStorage.setItem('rw-hud-family', 'mech');
+  const overrideMech = hudFamily({ player: { faction: 'independent' } }) === 'mech';
+  sessionStorage.removeItem('rw-hud-family');
+  const overrideOff = hudFamily({ player: { faction: 'independent' } }) === 'bio';
+  if (prevOverride != null) sessionStorage.setItem('rw-hud-family', prevOverride);
+
+  const prevGet = sessionStorage.getItem;
+  sessionStorage.getItem = () => { throw new Error('blocked'); };
+  let blockedBio = false;
+  try { blockedBio = hudFamily({ player: { faction: 'independent' } }) === 'bio'; }
+  catch { blockedBio = false; }
+  sessionStorage.getItem = prevGet;
+
+  const noHullWrite = !/hullKind\s*=(?!=)/.test(hudSrc);
+
+  const hudCss = readFileSync(join(here, '..', 'src/ui/hud.css'), 'utf8');
+  const mechHook = hudCss.includes('#hud[data-family="mech"]');
+  const mechIrisHide = /#hud\[data-family="mech"\] \.rw-reticle-pupil/.test(hudCss)
+    && /#hud\[data-family="mech"\] \.rw-reticle-cilia/.test(hudCss)
+    && /#hud\[data-family="mech"\] \.rw-reticle-pupil,\s*#hud\[data-family="mech"\] \.rw-reticle-cilia\s*\{[^}]*display:\s*none/.test(hudCss);
+  const mechAfter = hudCss.includes('#hud[data-family="mech"] .rw-reticle::after')
+    && hudCss.includes('repeating-conic-gradient');
+  const hubStart = hudCss.indexOf('#hud[data-family="mech"] .rw-reticle-pupil');
+  const hubEnd = hudCss.indexOf('#hud[data-family="mech"] .rw-petal');
+  const mechHub = hubStart >= 0 && hubEnd > hubStart ? hudCss.slice(hubStart, hubEnd) : '';
+  const mechHubNoVein = mechHub.length > 0 && !mechHub.includes('--vein');
+
+  const pinBox = hairBoxForRail('self', 1600, 900, 220, 140, false);
+  const agezH600 = agezHairOff(600, 513, false, 0, 0, pinBox) === true;
+  const bioPeriodTok = hudCss.includes('--rw-bio-period');
+  const hairOffCss = hudCss.includes(".rw-combat-rail.rw-hair-off::before")
+    && hudCss.includes('content: none');
+  const bioCapRound = /#hud\[data-family=['"]bio['"]\] \.rw-contacts-stroke\s*\{[^}]*stroke-linecap:\s*round/.test(hudCss);
+  const rmHairHide = hudCss.includes("body.rw-reduced-motion #hud[data-family='bio'] .rw-combat-rail::before")
+    && hudCss.includes("body.rw-reduced-motion #hud[data-family='mech'] .rw-combat-rail::before");
+  const updSrc = hudSrc.slice(hudSrc.indexOf('update(dt)'));
+  const noFrameRect = !updSrc.includes('getBoundingClientRect');
+  const noBioCorner = !/#hud\[data-family=['"]bio['"]\][^{]*\.rw-bio::/.test(hudCss);
+  const noContactExtra = !/#hud\[data-family=['"]bio['"]\][^{]*\.rw-contacts::/.test(hudCss);
+
+  const w62 = {
+    independentBio,
+    beautifulBio,
+    builtMech,
+    livingBio,
+    defaultFamily,
+    afterBuilt,
+    overrideMech,
+    overrideOff,
+    blockedBio,
+    noHullWrite,
+    hairSelf,
+    hairTgt,
+    mechHook,
+    mechIrisHide,
+    mechAfter,
+    mechHubNoVein,
+    agezH600,
+    bioPeriodTok,
+    hairOffCss,
+    bioCapRound,
+    rmHairHide,
+    noFrameRect,
+    noBioCorner,
+    noContactExtra,
+  };
+  console.log('wave62 hud family hook:', JSON.stringify(w62));
+  if (!Object.values(w62).every(Boolean)) { console.log('WAVE62 HUD FAMILY FAIL'); errors++; }
+}
+
+// ---- WAVE64: hangar persist + hullKind allowlist (PR1, no remount) ----
+{
+  const { createShipState } = await import('../src/game/state.js');
+  const { HANGAR_CAP, healPlayerHullKind } = await import('../src/game/hangar.js');
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+
+  function w64ctx(extra = {}) {
+    return {
+      flags: {},
+      world: {
+        currentSystem: 'freehold',
+        credits: 350,
+        fear: 0,
+        scanner: 0,
+        miningLaser: 0,
+        concealedMounts: false,
+        ...(extra.world ?? {}),
+      },
+      systems: { freehold: {} },
+      cargo: extra.cargo ?? [],
+      cargoCapacity: extra.cargoCapacity ?? 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: extra.player ?? createShipState('light', { name: 'Wave64' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+  }
+
+  const miss = w64ctx({
+    player: Object.assign(createShipState('light', { name: 'Legacy' }), { hullKind: 'built' }),
+    world: { scanner: 2, miningLaser: 3, concealedMounts: true },
+    cargo: [{ commodity: 'rawOre', units: 4 }],
+  });
+  restore(miss, { v: 1, world: { currentSystem: 'freehold', credits: 10, scanner: 2, miningLaser: 3, concealedMounts: true }, cargo: [{ commodity: 'rawOre', units: 4 }] });
+  const missHangar = miss.world.hangar;
+  const missRow = missHangar?.hulls?.[0];
+  const missingHangar = {
+    oneRow: missHangar?.hulls?.length === 1,
+    living: missRow?.hullKind === 'living',
+    mountedMatches: missHangar?.mountedId === missRow?.id,
+    playerLiving: miss.player.hullKind === 'living',
+    worldGearKept: miss.world.scanner === 2 && miss.world.miningLaser === 3 && miss.world.concealedMounts === true,
+    mountedGear: missRow?.scanner === 2 && missRow?.miningLaser === 3 && missRow?.concealedMounts === true,
+  };
+
+  const hulls = [];
+  for (let i = 1; i <= 10; i++) {
+    hulls.push({ id: 'hull_' + i, hullKind: 'living', classKey: 'light', faction: 'independent' });
+  }
+  const cap = w64ctx();
+  restore(cap, { v: 1, world: { currentSystem: 'freehold', hangar: { mountedId: 'hull_10', hulls } } });
+  const capIds = (cap.world.hangar?.hulls ?? []).map((h) => h.id);
+  const cap8 = {
+    length: cap.world.hangar?.hulls?.length === HANGAR_CAP && HANGAR_CAP === 8,
+    mountedKept: cap.world.hangar?.mountedId === 'hull_10' && capIds.includes('hull_10'),
+    tailDropped: !capIds.includes('hull_8') && !capIds.includes('hull_9'),
+    earlyKept: capIds.includes('hull_1') && capIds.includes('hull_7'),
+  };
+
+  const dirtyRow = JSON.parse(JSON.stringify({
+    id: 'hull_starter',
+    hullKind: 'living',
+    classKey: 'light',
+    faction: 'independent',
+    loadout: { missiles: 9 },
+    price: 0,
+    constructor: 'nope',
+    prototype: { x: 1 },
+  }));
+  Object.defineProperty(dirtyRow, '__proto__', { value: { polluted: true }, enumerable: true });
+  const keys = w64ctx();
+  restore(keys, { v: 1, world: { currentSystem: 'freehold', hangar: { mountedId: 'hull_starter', hulls: [dirtyRow] } } });
+  const cleaned = keys.world.hangar?.hulls?.[0] ?? {};
+  const unknownKeys = {
+    noLoadout: !('loadout' in cleaned),
+    noPrice: !('price' in cleaned),
+    noCtor: cleaned.constructor === Object,
+    noProtoField: !Object.prototype.hasOwnProperty.call(cleaned, 'prototype'),
+    noDunder: !Object.prototype.hasOwnProperty.call(cleaned, '__proto__'),
+    noPollute: cleaned.polluted !== true,
+  };
+
+  const badKind = w64ctx({ player: Object.assign(createShipState('light'), { hullKind: 'nope' }) });
+  restore(badKind, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      hangar: { mountedId: 'h1', hulls: [{ id: 'h1', hullKind: 99, classKey: 'light', faction: 'freehold' }] },
+    },
+    player: { hullKind: 'mech' },
+  });
+  const kind2 = w64ctx({ player: Object.assign(createShipState('light'), { hullKind: 'live' }) });
+  healPlayerHullKind(kind2);
+  kind2.player.hullKind = 'nope';
+  healPlayerHullKind(kind2);
+  const badKindChecks = {
+    rowDropped: !('hullKind' in (badKind.world.hangar?.hulls?.[0] ?? { hullKind: 1 })),
+    playerDropped: !('hullKind' in badKind.player),
+    hudBio: hudFamily(badKind) === 'bio',
+    hudBioNope: hudFamily({ player: { hullKind: 'nope', faction: 'freehold' } }) === 'bio',
+    liveDeleted: !('hullKind' in kind2.player),
+  };
+
+  const unk = w64ctx();
+  restore(unk, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      hangar: { mountedId: 'u1', hulls: [{ id: 'u1', hullKind: 'built', classKey: 'light', faction: 'unknowables' }] },
+    },
+    player: { hullKind: 'built', faction: 'unknowables' },
+  });
+  const unknowables = {
+    rowLiving: unk.world.hangar?.hulls?.[0]?.hullKind === 'living',
+    playerLiving: unk.player.hullKind === 'living',
+    hudBio: hudFamily(unk) === 'bio',
+  };
+
+  const cls = w64ctx();
+  restore(cls, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      hangar: { mountedId: 'c1', hulls: [{ id: 'c1', hullKind: 'living', classKey: 'not-a-class', faction: 'independent' }] },
+    },
+    player: { classKey: 'starDestroyer' },
+  });
+  const classHeal = {
+    rowLight: cls.world.hangar?.hulls?.[0]?.classKey === 'light',
+    playerLight: cls.player.classKey === 'light',
+  };
+
+  const gear = w64ctx();
+  restore(gear, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      scanner: 99,
+      miningLaser: '2',
+      concealedMounts: 'yes',
+      hangar: {
+        mountedId: 'g1',
+        hulls: [{
+          id: 'g1', hullKind: 'living', classKey: 'light', faction: 'independent',
+          scanner: 99, miningLaser: '2', concealedMounts: 'yes',
+        }, {
+          id: 'g2', hullKind: 'built', classKey: 'heavy', faction: 'freehold',
+          scanner: 2, miningLaser: 3, concealedMounts: true,
+        }],
+      },
+    },
+  });
+  const gMounted = gear.world.hangar?.hulls?.find((h) => h.id === 'g1');
+  const gOther = gear.world.hangar?.hulls?.find((h) => h.id === 'g2');
+  const gearHeal = {
+    worldScanner: gear.world.scanner === 0,
+    worldMining: gear.world.miningLaser === 0,
+    worldConcealed: gear.world.concealedMounts === false,
+    mountedScanner: gMounted?.scanner === 0,
+    mountedMining: gMounted?.miningLaser === 0,
+    mountedConcealed: gMounted?.concealedMounts === false,
+    otherKept: gOther?.scanner === 2 && gOther?.miningLaser === 3 && gOther?.concealedMounts === true,
+  };
+  const gearOk = w64ctx();
+  restore(gearOk, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      scanner: 2,
+      miningLaser: 3,
+      concealedMounts: true,
+      hangar: {
+        mountedId: 'ok1',
+        hulls: [{
+          id: 'ok1', hullKind: 'built', classKey: 'heavy', faction: 'freehold',
+          scanner: 1, miningLaser: 2, concealedMounts: true,
+        }],
+      },
+    },
+  });
+  const gearLiteral = {
+    worldOk: gearOk.world.scanner === 2 && gearOk.world.miningLaser === 3 && gearOk.world.concealedMounts === true,
+    rowOk: gearOk.world.hangar?.hulls?.[0]?.scanner === 1
+      && gearOk.world.hangar?.hulls?.[0]?.miningLaser === 2
+      && gearOk.world.hangar?.hulls?.[0]?.concealedMounts === true,
+  };
+
+  const parkLive = w64ctx({
+    world: { scanner: 2, miningLaser: 1, concealedMounts: true, shipName: 'Parked' },
+    cargo: [{ commodity: 'rawOre', units: 3, attacker: { id: 1 } }, { commodity: '', units: 9 }],
+  });
+  parkLive.player.hull = 77;
+  const parked = snapshot(parkLive);
+  const parkedRow = parked.world?.hangar?.hulls?.find((h) => h.id === parked.world?.hangar?.mountedId);
+  const snapPark = {
+    hasHangar: !!parked.world?.hangar && Array.isArray(parked.world.hangar.hulls),
+    parkedScanner: parkedRow?.scanner === 2,
+    parkedName: parkedRow?.name === 'Parked',
+    parkedHull: parkedRow?.hull === 77,
+    cargoSanitized: parkedRow?.cargo?.length === 1
+      && parkedRow.cargo[0].commodity === 'rawOre'
+      && parkedRow.cargo[0].units === 3
+      && !('attacker' in parkedRow.cargo[0]),
+  };
+
+  const slots = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
+  store.set('rimward-save-v1', '{"v":1,"world":{}}');
+  for (const k of slots) store.set(k, 'keep-berth');
+  clearAutosave();
+  const berth = {
+    autosaveGone: !store.has('rimward-save-v1'),
+    slotsKept: slots.every((k) => store.get(k) === 'keep-berth'),
+  };
+
+  const prevKind = ctx.player.hullKind;
+  const prevHangar = ctx.world.hangar;
+  ctx.player.hullKind = 'built';
+  ctx.world.hangar = {
+    mountedId: 'wreck',
+    hulls: [
+      { id: 'wreck', hullKind: 'built', classKey: 'heavy', faction: 'freehold' },
+      { id: 'spare', hullKind: 'built', classKey: 'freighter', faction: 'freehold' },
+    ],
+  };
+  ctx.cargo.push({ commodity: 'rawOre', units: 2 });
+  store.delete('rimward-save-v1');
+  ctx.emit('playerDestroyed', {});
+  tick(2, 'death consumed (wave64 freshStart)');
+  dispatchKey('Enter');
+  const freshHangar = ctx.world.hangar;
+  const fresh = {
+    oneLiving: freshHangar?.hulls?.length === 1 && freshHangar.hulls[0]?.hullKind === 'living',
+    mounted: freshHangar?.mountedId === freshHangar?.hulls?.[0]?.id,
+    leftoverGone: ctx.player.hullKind === 'living',
+    cargoEmpty: ctx.cargo.length === 0,
+    cap20: ctx.cargoCapacity === 20,
+    worldZeros: ctx.world.scanner === 0 && ctx.world.miningLaser === 0 && ctx.world.concealedMounts === false,
+  };
+  if (prevKind !== undefined) ctx.player.hullKind = prevKind;
+  else delete ctx.player.hullKind;
+  if (prevHangar !== undefined) ctx.world.hangar = prevHangar;
+
+  const w64 = {
+    ...prefix('miss', missingHangar),
+    ...prefix('cap', cap8),
+    ...prefix('keys', unknownKeys),
+    ...prefix('kind', badKindChecks),
+    ...prefix('unk', unknowables),
+    ...prefix('class', classHeal),
+    ...prefix('gear', gearHeal),
+    ...prefix('gearOk', gearLiteral),
+    ...prefix('snap', snapPark),
+    ...prefix('berth', berth),
+    ...prefix('fresh', fresh),
+  };
+  console.log('wave64 hangar persist:', JSON.stringify(w64));
+  if (!Object.values(w64).every(Boolean)) { console.log('WAVE64 HANGAR PERSIST FAIL'); errors++; }
+}
+
+// ---- WAVE64: remount + authored flight envelope (PR2) ----
+{
+  const { createShipState: w64Ship, SHIP_CLASSES: W64_CLASSES } = await import('../src/game/state.js');
+  const {
+    switchTo,
+    applyFlightEnvelope,
+    sanitizeHangar,
+    parkMounted,
+  } = await import('../src/game/hangar.js');
+  const { remountPlayerHull, makeLivingHull } = await import('../src/systems/ship.js');
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  function w64ctx(extra = {}) {
+    return {
+      flags: {},
+      world: {
+        currentSystem: 'freehold',
+        credits: 350,
+        fear: 0,
+        scanner: 0,
+        miningLaser: 0,
+        concealedMounts: false,
+        ...(extra.world ?? {}),
+      },
+      systems: { freehold: {} },
+      cargo: extra.cargo ?? [],
+      cargoCapacity: extra.cargoCapacity ?? 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: extra.player ?? w64Ship('light', { name: 'Wave64' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+  }
+
+  function remountCfg() {
+    return {
+      ship: {
+        maxSpeed: 120,
+        creep: 30,
+        acceleration: 90,
+        damping: 0.5,
+        afterburner: { multiplier: 2, burnTime: 6, cooldown: 8 },
+      },
+    };
+  }
+
+  const envCtx = w64ctx();
+  envCtx.config = remountCfg();
+  applyFlightEnvelope(envCtx, 'heavy');
+  const heavy = W64_CLASSES.heavy;
+  const envHeavy = {
+    cruise: envCtx.config.ship.maxSpeed === heavy.cruise,
+    creep: envCtx.config.ship.creep === heavy.creep,
+    burn: envCtx.config.ship.maxSpeed * envCtx.config.ship.afterburner.multiplier === heavy.burn,
+    damping: Math.abs(envCtx.config.ship.damping - (1 / heavy.stopTime)) < 1e-9,
+  };
+  applyFlightEnvelope(envCtx, 'freighter');
+  const freight = W64_CLASSES.freighter;
+  const envFreight = {
+    cruise: envCtx.config.ship.maxSpeed === freight.cruise,
+    creep: envCtx.config.ship.creep === freight.creep,
+  };
+
+  const tamper = w64ctx({
+    cargo: [{ commodity: 'rawOre', units: 2 }],
+    cargoCapacity: 20,
+  });
+  tamper.config = remountCfg();
+  tamper.flags.docked = true;
+  tamper.world.hangar = {
+    mountedId: 'hull_a',
+    hulls: [
+      {
+        id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent',
+        cargo: [{ commodity: 'rawOre', units: 2 }], cargoCapacity: 20,
+      },
+      {
+        id: 'hull_b', hullKind: 'living', classKey: 'freighter', faction: 'independent',
+        cruise: 999, maxSpeed: 999, burn: 1, creep: 1, stopTime: 0.1,
+        cargo: [{ commodity: 'gildvein', units: 5 }], cargoCapacity: 40,
+      },
+    ],
+  };
+  sanitizeHangar(tamper);
+  const tamperSwitch = switchTo(tamper, 'hull_b');
+  const tamperEnv = {
+    switched: tamperSwitch.ok === true,
+    notBlobCruise: tamper.config.ship.maxSpeed === freight.cruise,
+    notBlobCreep: tamper.config.ship.creep === freight.creep,
+    cargoReplaced: tamper.cargo.length === 1 && tamper.cargo[0].commodity === 'gildvein'
+      && tamper.cargo[0].units === 5 && !tamper.cargo.some((r) => r.commodity === 'rawOre'),
+    capFromRow: tamper.cargoCapacity === 40,
+  };
+
+  const space = w64ctx();
+  space.config = remountCfg();
+  space.flags.docked = false;
+  space.world.hangar = {
+    mountedId: 'hull_a',
+    hulls: [
+      { id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent' },
+      { id: 'hull_b', hullKind: 'built', classKey: 'heavy', faction: 'freehold' },
+    ],
+  };
+  sanitizeHangar(space);
+  const refuseSpace = switchTo(space, 'hull_b');
+  const same = w64ctx();
+  same.config = remountCfg();
+  same.flags.docked = true;
+  same.world.hangar = {
+    mountedId: 'hull_a',
+    hulls: [{ id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent' }],
+  };
+  sanitizeHangar(same);
+  const refuseSame = switchTo(same, same.world.hangar.mountedId);
+
+  const unkSwitch = w64ctx();
+  unkSwitch.config = remountCfg();
+  unkSwitch.flags.docked = true;
+  unkSwitch.world.hangar = {
+    mountedId: 'hull_a',
+    hulls: [
+      { id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent' },
+      { id: 'hull_u', hullKind: 'built', classKey: 'heavy', faction: 'unknowables' },
+    ],
+  };
+  sanitizeHangar(unkSwitch);
+  const unkOk = switchTo(unkSwitch, 'hull_u');
+  const unkMesh = {
+    switched: unkOk.ok === true,
+    kindLiving: unkSwitch.player.hullKind === 'living',
+    hudBio: hudFamily(unkSwitch) === 'bio',
+  };
+
+  const builtHud = w64ctx();
+  builtHud.config = remountCfg();
+  builtHud.flags.docked = true;
+  builtHud.world.hangar = {
+    mountedId: 'hull_a',
+    hulls: [
+      { id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent' },
+      { id: 'hull_m', hullKind: 'built', classKey: 'heavy', faction: 'freehold' },
+    ],
+  };
+  sanitizeHangar(builtHud);
+  switchTo(builtHud, 'hull_m');
+  const familyAfterBuilt = hudFamily(builtHud);
+  const hudWrites = {
+    mech: familyAfterBuilt === 'mech',
+    playerBuilt: builtHud.player.hullKind === 'built',
+    hudDidNotWrite: builtHud.player.hullKind === 'built',
+  };
+  switchTo(builtHud, 'hull_a');
+  const familyAfterLive = hudFamily(builtHud) === 'bio' && builtHud.player.hullKind !== 'built';
+
+  const prevDocked = ctx.flags.docked;
+  const prevCombat = ctx.flags.combat;
+  const prevPaused = ctx.flags.paused;
+  const prevJump = ctx.gate.jumping;
+  const prevHangarLive = ctx.world.hangar;
+  const prevKindLive = ctx.player.hullKind;
+  const prevClassLive = ctx.player.classKey;
+  const prevCargoLive = ctx.cargo.map((r) => ({ ...r }));
+  const prevCapLive = ctx.cargoCapacity;
+  const prevMood = ctx.bio.mood;
+  const prevBond = ctx.bio.bond;
+  const prevThrottle = ctx.input.throttle;
+  const prevMatch = ctx.flags.matchSpeed;
+  const prevShipsLen = ctx.ships.length;
+  const starterPos = ctx.ship.object.position.clone();
+
+  ctx.flags.docked = true;
+  ctx.flags.combat = false;
+  ctx.flags.paused = false;
+  ctx.gate.jumping = false;
+  ctx.input.throttle = 0.42;
+  ctx.flags.matchSpeed = true;
+  ctx.bio.mood = 'keen';
+  ctx.bio.bond = 0.44;
+  ctx.world.hangar = {
+    mountedId: 'hull_starter',
+    hulls: [
+      { id: 'hull_starter', hullKind: 'living', classKey: 'light', faction: 'independent', name: 'She' },
+      {
+        id: 'hull_plate', hullKind: 'built', classKey: 'heavy', faction: 'freehold', name: 'Plate',
+        cargo: [{ commodity: 'slagIron', units: 3 }], cargoCapacity: 30,
+      },
+    ],
+  };
+  sanitizeHangar(ctx);
+  parkMounted(ctx);
+  const liveLiving = {
+    path: ctx.ship.hullPath === 'living',
+    fields: !!(ctx.ship.living?.swim && ctx.ship.living?.breath && ctx.ship.living?.heartbeat && ctx.ship.living?.base),
+    make: typeof makeLivingHull === 'function',
+  };
+  const toPlate = switchTo(ctx, 'hull_plate');
+  const livePlate = {
+    ok: toPlate.ok === true,
+    hullPath: ctx.ship.hullPath === 'built',
+    noLivingSwim: ctx.ship.living == null,
+    cruise: ctx.config.ship.maxSpeed === heavy.cruise,
+    hudMech: hudFamily(ctx) === 'mech',
+    kindBuilt: ctx.player.hullKind === 'built',
+    oneObject: ctx.ship.object && ctx.scene.children.includes(ctx.ship.object),
+    notNpcList: !ctx.ships.some((s) => s.object === ctx.ship.object),
+    shipsLen: ctx.ships.length === prevShipsLen,
+    throttle: ctx.input.throttle === 0.42,
+    matchLeft: ctx.flags.matchSpeed === true,
+    bioMood: ctx.bio.mood === 'keen',
+    bioBond: ctx.bio.bond === 0.44,
+    dockKept: ctx.ship.object.position.distanceTo(starterPos) < 1e-6,
+    cargoReplaced: ctx.cargo.length === 1 && ctx.cargo[0].commodity === 'slagIron',
+  };
+  const toLive = switchTo(ctx, 'hull_starter');
+  const liveBack = {
+    ok: toLive.ok === true,
+    path: ctx.ship.hullPath === 'living',
+    fields: !!(ctx.ship.living?.swim && ctx.ship.living?.base && ctx.ship.living?.zNorm),
+    hudBio: hudFamily(ctx) === 'bio',
+  };
+
+  ctx.world.hangar.hulls.push({
+    id: 'hull_unk', hullKind: 'built', classKey: 'heavy', faction: 'unknowables', name: 'Veil',
+  });
+  sanitizeHangar(ctx);
+  const toUnk = switchTo(ctx, 'hull_unk');
+  const liveUnk = {
+    ok: toUnk.ok === true,
+    kind: ctx.player.hullKind === 'living',
+    path: ctx.ship.hullPath === 'living',
+    hudBio: hudFamily(ctx) === 'bio',
+  };
+
+  ctx.flags.docked = false;
+  const refuseLiveSpace = switchTo(ctx, 'hull_plate');
+  const refuseLive = refuseLiveSpace.ok === false && refuseLiveSpace.reason === 'not-docked';
+
+  remountPlayerHull(ctx);
+
+  ctx.flags.docked = prevDocked;
+  ctx.flags.combat = prevCombat;
+  ctx.flags.paused = prevPaused;
+  ctx.gate.jumping = prevJump;
+  ctx.input.throttle = prevThrottle;
+  ctx.flags.matchSpeed = prevMatch;
+  ctx.bio.mood = prevMood;
+  ctx.bio.bond = prevBond;
+  ctx.cargo.length = 0;
+  for (const row of prevCargoLive) ctx.cargo.push(row);
+  ctx.cargoCapacity = prevCapLive;
+  if (prevHangarLive !== undefined) ctx.world.hangar = prevHangarLive;
+  if (prevKindLive !== undefined) ctx.player.hullKind = prevKindLive;
+  else delete ctx.player.hullKind;
+  ctx.player.classKey = prevClassLive;
+  applyFlightEnvelope(ctx, prevClassLive);
+  if (ctx.player.hullKind === 'built') remountPlayerHull(ctx);
+  else {
+    ctx.flags.docked = true;
+    remountPlayerHull(ctx);
+    ctx.flags.docked = prevDocked;
+  }
+
+  const w64r = {
+    ...prefix('envH', envHeavy),
+    ...prefix('envF', envFreight),
+    ...prefix('tamper', tamperEnv),
+    refuseSpace: refuseSpace.ok === false && refuseSpace.reason === 'not-docked',
+    refuseSame: refuseSame.ok === false && refuseSame.reason === 'already-mounted',
+    ...prefix('unk', unkMesh),
+    ...prefix('hud', hudWrites),
+    familyAfterLive,
+    ...prefix('liveL', liveLiving),
+    ...prefix('plate', livePlate),
+    ...prefix('back', liveBack),
+    ...prefix('lunk', liveUnk),
+    refuseLive,
+  };
+  console.log('wave64 remount:', JSON.stringify(w64r));
+  if (!Object.values(w64r).every(Boolean)) { console.log('WAVE64 REMOUNT FAIL'); errors++; }
+}
+
+// ---- WAVE64: shipyard desk + Digit 0 (PR3, no catalog / no debit) ----
+{
+  const { DOCK_KEY_SERVICES } = await import('../src/systems/station.js');
+  const { sanitizeHangar } = await import('../src/game/hangar.js');
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  function overlayTexts() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas(frag) {
+    return overlayTexts().some((t) => t.includes(frag));
+  }
+  function overlayExact(frag) {
+    return overlayTexts().some((t) => t === frag);
+  }
+
+  const keys = {
+    length10: DOCK_KEY_SERVICES.length === 10,
+    lastShipyard: DOCK_KEY_SERVICES[9] === 'shipyard' && DOCK_KEY_SERVICES.at(-1) === 'shipyard',
+    d1: DOCK_KEY_SERVICES[0] === 'market',
+    d2: DOCK_KEY_SERVICES[1] === 'jobs',
+    d3: DOCK_KEY_SERVICES[2] === 'bar',
+    d4: DOCK_KEY_SERVICES[3] === 'feed',
+    d5: DOCK_KEY_SERVICES[4] === 'repair',
+    d6: DOCK_KEY_SERVICES[5] === 'outfitting',
+    d7: DOCK_KEY_SERVICES[6] === 'people',
+    d8: DOCK_KEY_SERVICES[7] === 'launch',
+    d9: DOCK_KEY_SERVICES[8] === 'epics',
+  };
+
+  if (ctx.flags.docked) undockStation();
+  dockAtCurrentStation('dock shipyard desk');
+  tick(1, 'desk menu');
+  const menu = {
+    legend0: overlayHas('1-9, 0 select service'),
+    btnShipyard: overlayHas('0 — Shipyard'),
+    noTen: !overlayHas('10 — Shipyard'),
+    btnLaunch: overlayHas('8 — Launch'),
+    btnStanding: overlayHas('9 — Standing'),
+    btnPeople: overlayHas('7 — People'),
+  };
+
+  dispatchKey('Digit7');
+  tick(1, 'desk Digit7 people');
+  const digit7People = overlayHas('PEOPLE');
+  dispatchKey('Escape');
+  tick(1, 'desk back from people');
+  dispatchKey('Digit9');
+  tick(1, 'desk Digit9 standing');
+  const digit9Standing = overlayHas('STANDING');
+  dispatchKey('Escape');
+  tick(1, 'desk back from standing');
+
+  const kindBeforeDesk = ctx.player.hullKind;
+  sanitizeHangar(ctx);
+  const starterId = ctx.world.hangar?.mountedId;
+  const starterName = ctx.world.hangar?.hulls?.find((h) => h.id === starterId)?.name ?? '';
+  dispatchKey('Digit0');
+  tick(2, 'desk Digit0 shipyard');
+  const hangarPane = {
+    shipyardHead: overlayHas('SHIPYARD'),
+    hangarHead: overlayHas('HANGAR'),
+    mountedId: overlayHas(`Mounted id ${starterId}`),
+    starterName: !starterName || overlayHas(starterName),
+    noThrow: true,
+  };
+
+  const { yardStockFor: deskStockFor } = await import('../src/game/shipyard.js');
+  const creditsBefore = ctx.world.credits;
+  const deskFaction = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  const deskHasStock = deskStockFor(deskFaction).length > 0;
+  dispatchKey('Digit2');
+  tick(1, 'desk Digit2 yard');
+  for (const code of ['Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0']) {
+    dispatchKey(code);
+  }
+  tick(1, 'desk buy digits');
+  const buyPane = {
+    emptyNote: deskHasStock
+      ? (overlayHas('Confirm papers') || overlayHas('light') || overlayHas('UU'))
+      : (overlayHas('no hull catalog') && overlayHas('No sale')),
+    creditsSame: ctx.world.credits === creditsBefore,
+    stillShipyard: overlayExact('SHIPYARD') && overlayExact('YARD'),
+    noFakeSku: !overlayHas('YARD_LIST') && !overlayHas('SKU'),
+  };
+
+  dispatchKey('Digit1');
+  tick(1, 'desk Digit1 hangar');
+  const kindAfterBuy = ctx.player.hullKind;
+  sanitizeHangar(ctx);
+  const liveRow = ctx.world.hangar.hulls.find((h) => h.id === ctx.world.hangar.mountedId)
+    ?? ctx.world.hangar.hulls[0];
+  ctx.world.hangar = {
+    mountedId: liveRow.id,
+    hulls: [
+      liveRow,
+      {
+        id: 'hull_xss_desk',
+        hullKind: 'built',
+        classKey: 'heavy',
+        faction: 'freehold',
+        name: '<img src=x onerror=alert(1)>',
+      },
+      {
+        id: 'hull_desk_plate',
+        hullKind: 'built',
+        classKey: 'heavy',
+        faction: 'freehold',
+        name: 'DeskPlate',
+      },
+    ],
+  };
+  dispatchKey('Digit1');
+  tick(1, 'desk hangar refresh');
+  let xssImg = false;
+  for (const n of walkDom(stationOverlay() ?? { children: [] })) {
+    if (n.tagName === 'IMG') xssImg = true;
+  }
+  const xss = {
+    nameAsText: overlayHas('<img src=x onerror=alert(1)>'),
+    noImgNode: !xssImg,
+  };
+
+  const kindBeforeSwitch = ctx.player.hullKind;
+  ctx.flags.combat = false;
+  ctx.flags.paused = false;
+  if (ctx.gate) ctx.gate.jumping = false;
+  if (ctx.player) ctx.player.destroyed = false;
+  dispatchKey('Digit5'); // Hangar Digit 3+ : index n-3. Digit5 = hulls[2] DeskPlate
+  tick(2, 'desk Digit5 remount');
+  const remountDesk = {
+    ok: ctx.world.hangar?.mountedId === 'hull_desk_plate',
+    kindBuilt: ctx.player.hullKind === 'built',
+    hudDidNotWrite: ctx.player.hullKind !== 'bio' && ctx.player.hullKind === 'built',
+  };
+  dispatchKey('Digit3'); // first hull = starter
+  tick(2, 'desk Digit3 remount starter');
+  const remountBack = {
+    ok: ctx.world.hangar?.mountedId === starterId,
+    kindRestored: ctx.player.hullKind === kindBeforeSwitch || ctx.player.hullKind === 'living',
+  };
+
+  const familyReadOnly = hudFamily(ctx) === (ctx.player.hullKind === 'built' ? 'mech' : 'bio');
+
+  dispatchKey('Escape');
+  tick(1, 'desk back to menu');
+  dispatchKey('Digit8');
+  tick(2, 'desk Digit8 launch');
+  const digit8Launch = ctx.flags.docked === false;
+
+  const w64d = {
+    ...prefix('key', keys),
+    ...prefix('menu', menu),
+    digit7People,
+    digit9Standing,
+    digit8Launch,
+    ...prefix('hangar', hangarPane),
+    ...prefix('buy', buyPane),
+    ...prefix('xss', xss),
+    ...prefix('sw', remountDesk),
+    ...prefix('back', remountBack),
+    familyReadOnly,
+    hudNoWrite: kindAfterBuy === kindBeforeDesk,
+  };
+  console.log('wave64 shipyard desk:', JSON.stringify(w64d));
+  if (!Object.values(w64d).every(Boolean)) { console.log('WAVE64 SHIPYARD DESK FAIL'); errors++; }
+}
+
+// ---- WAVE64: authored catalog + buy adds hangar row (PR4, no remount) ----
+{
+  const { createShipState: w64BuyShip, rankFor: w64RankFor } = await import('../src/game/state.js');
+  const {
+    YARD_LIST_UU,
+    yardStockFor,
+    hullKindFor,
+    yardPrice,
+    listYardOffers,
+    purchaseYardHull,
+    dockFactionOf,
+  } = await import('../src/game/shipyard.js');
+  const {
+    sanitizeHangar,
+    sanitizeHangarRecord,
+    HANGAR_CAP,
+  } = await import('../src/game/hangar.js');
+  const { requestAutosave } = await import('../src/game/save.js');
+  const { renderShipyardDesk, SHIPYARD_PANE_BUY } = await import('../src/systems/shipyard-desk.js');
+  function overlayTexts() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas(frag) {
+    return overlayTexts().some((t) => t.includes(frag));
+  }
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  function findOverlayButton(label) {
+    const ov = stationOverlay();
+    if (!ov) return null;
+    for (const n of walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && n.textContent === label) return n;
+    }
+    return null;
+  }
+  function buyCtx(faction, extra = {}) {
+    const player = extra.player ?? w64BuyShip('light', { name: 'BuyPin' });
+    player.hullKind = extra.hullKind ?? 'living';
+    return {
+      flags: { docked: true, combat: false, paused: false, ...(extra.flags ?? {}) },
+      world: {
+        currentSystem: extra.systemId ?? 'buy_dock',
+        credits: extra.credits ?? 20000,
+        reputation: extra.reputation ?? { [faction]: 0 },
+        hangar: extra.hangar ?? {
+          mountedId: 'hull_starter',
+          hulls: [{
+            id: 'hull_starter',
+            hullKind: 'living',
+            classKey: 'light',
+            faction: 'independent',
+            name: 'starter',
+            scanner: 0,
+            miningLaser: 0,
+            concealedMounts: false,
+            cargoCapacity: 20,
+            cargo: [],
+          }],
+        },
+        shipName: 'starter',
+        scanner: 0,
+        miningLaser: 0,
+        concealedMounts: false,
+        ...(extra.world ?? {}),
+      },
+      systems: extra.systems ?? { [extra.systemId ?? 'buy_dock']: { faction } },
+      cargo: extra.cargo ?? [],
+      cargoCapacity: extra.cargoCapacity ?? 20,
+      player,
+      ship: extra.ship ?? { object: { position: { toArray: () => [0, 0, 0] }, quaternion: { toArray: () => [0, 0, 0, 1] } } },
+      emit() {},
+      ships: [],
+      gate: { jumping: false },
+    };
+  }
+
+  const stock = {
+    freeholdLight: yardStockFor('freehold').includes('light'),
+    freeholdHasFrigate: yardStockFor('freehold').includes('frigate'),
+    compactSame: yardStockFor('veridian').includes('light') && yardStockFor('redledger').includes('light'),
+    plated: yardStockFor('ferrous').includes('light') && yardStockFor('gilded').includes('heavy')
+      && yardStockFor('assembly').includes('freighter') && yardStockFor('congregation').includes('light')
+      && yardStockFor('lamplighter').includes('light'),
+    independentEmpty: yardStockFor('independent').length === 0,
+    hollowEmpty: yardStockFor('hollow').length === 0,
+    noClassDump: yardStockFor('independent').join(',') !== Object.keys({ light: 1, heavy: 1, freighter: 1, ace: 1, cutter: 1, frigate: 1 }).join(','),
+  };
+
+  const kinds = {
+    platedBuilt: hullKindFor('freehold') === 'built' && hullKindFor('veridian') === 'built',
+    beautifulLiving: hullKindFor('beautiful') === 'living',
+    unknowablesLiving: hullKindFor('unknowables') === 'living',
+  };
+
+  const prices = {
+    lightList: YARD_LIST_UU.light === 8000,
+    stranger: yardPrice('light', 0) === 8000,
+    known: yardPrice('light', 10) === Math.round(8000 * 0.95),
+    trusted: yardPrice('light', 25) === Math.round(8000 * 0.9),
+    sworn: yardPrice('light', 50) === Math.round(8000 * 0.85),
+    blobIgnored: yardPrice('light', 0) !== 0,
+    rankMatches: yardPrice('light', 50) === Math.round(YARD_LIST_UU.light * (1 - 0.15))
+      && w64RankFor(50).name === 'Sworn',
+  };
+
+  const emptyTexts = [];
+  function emptyH(tag, cls, parent, text) {
+    if (text !== undefined) emptyTexts.push(String(text));
+    return { tagName: tag, children: [] };
+  }
+  renderShipyardDesk(emptyH, () => {}, {}, buyCtx('independent'), { shipyardPane: SHIPYARD_PANE_BUY }, () => {});
+  const emptyUi = {
+    note: emptyTexts.some((t) => t.includes('no hull catalog')) && emptyTexts.some((t) => t.includes('No sale')),
+  };
+
+  const fh = buyCtx('freehold', { credits: 20000, reputation: { freehold: 0 } });
+  fh.world.hangar.hulls[0].price = 0;
+  const mountedBefore = fh.world.hangar.mountedId;
+  const hullsBefore = fh.world.hangar.hulls.length;
+  const kindBefore = fh.player.hullKind;
+  const classBefore = fh.player.classKey;
+  const offers = listYardOffers(fh);
+  const bought = purchaseYardHull(fh, 'light');
+  const boughtRow = fh.world.hangar.hulls.find((h) => h.id !== mountedBefore);
+  const success = {
+    dockFaction: dockFactionOf(fh) === 'freehold',
+    listsLight: offers.some((o) => o.classKey === 'light'),
+    ok: bought.ok === true,
+    priceAuthored: bought.price === YARD_LIST_UU.light,
+    credits: fh.world.credits === 20000 - YARD_LIST_UU.light,
+    hullPlus: fh.world.hangar.hulls.length === hullsBefore + 1,
+    mountedSame: fh.world.hangar.mountedId === mountedBefore,
+    noRemount: fh.player.hullKind === kindBefore && fh.player.classKey === classBefore,
+    stockGear: boughtRow?.scanner === 0 && boughtRow?.miningLaser === 0
+      && boughtRow?.concealedMounts === false && boughtRow?.cargoCapacity === 20
+      && Array.isArray(boughtRow?.cargo) && boughtRow.cargo.length === 0,
+    built: boughtRow?.hullKind === 'built',
+    factionDock: boughtRow?.faction === 'freehold',
+    classKey: boughtRow?.classKey === 'light',
+    noBook: !Object.prototype.hasOwnProperty.call(boughtRow ?? {}, 'bookValue')
+      && !Object.prototype.hasOwnProperty.call(boughtRow ?? {}, 'price'),
+  };
+
+  const hostile = buyCtx('freehold', { credits: 20000, reputation: { freehold: -1 } });
+  const hostileBuy = purchaseYardHull(hostile, 'light');
+  const hostilePin = {
+    refused: hostileBuy.ok === false && hostileBuy.reason === 'reputation',
+    credits: hostile.world.credits === 20000,
+    hulls: hostile.world.hangar.hulls.length === 1,
+  };
+
+  const broke = buyCtx('freehold', { credits: 100, reputation: { freehold: 0 } });
+  const brokeBuy = purchaseYardHull(broke, 'light');
+  const brokePin = {
+    refused: brokeBuy.ok === false && brokeBuy.reason === 'credits',
+    credits: broke.world.credits === 100,
+  };
+
+  const fullRows = [];
+  for (let i = 1; i <= HANGAR_CAP; i++) {
+    fullRows.push({
+      id: 'hull_full_' + i,
+      hullKind: 'living',
+      classKey: 'light',
+      faction: 'independent',
+    });
+  }
+  const full = buyCtx('freehold', {
+    credits: 50000,
+    hangar: { mountedId: 'hull_full_1', hulls: fullRows },
+  });
+  sanitizeHangar(full);
+  const fullBuy = purchaseYardHull(full, 'light');
+  const fullPin = {
+    cap: full.world.hangar.hulls.length === HANGAR_CAP,
+    refused: fullBuy.ok === false && fullBuy.reason === 'full',
+    credits: full.world.credits === 50000,
+  };
+
+  const unk = buyCtx('unknowables', { credits: 20000, reputation: { unknowables: 0 } });
+  const unkBuy = purchaseYardHull(unk, 'light');
+  const unkRow = unk.world.hangar.hulls.find((h) => h.id !== 'hull_starter');
+  const unkPin = {
+    ok: unkBuy.ok === true,
+    living: unkRow?.hullKind === 'living',
+  };
+
+  const proto = sanitizeHangarRecord(JSON.parse(
+    '{"id":"hull_buy_clean","classKey":"light","faction":"freehold","hullKind":"built","__proto__":{"polluted":1},"constructor":"nope","price":0,"bookValue":1}',
+  ));
+  const protoPin = {
+    noProto: proto && !Object.prototype.hasOwnProperty.call(proto, 'polluted'),
+    noCtor: proto && !Object.prototype.hasOwnProperty.call(proto, 'constructor'),
+    noPrice: proto && !Object.prototype.hasOwnProperty.call(proto, 'price'),
+  };
+
+  const savePin = {
+    exported: typeof requestAutosave === 'function',
+  };
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  ctx.world.credits = 25000;
+  ctx.world.reputation = ctx.world.reputation ?? {};
+  ctx.world.reputation.freehold = 0;
+  ctx.flags.combat = false;
+  ctx.flags.paused = false;
+  if (ctx.gate) ctx.gate.jumping = false;
+  if (ctx.player) ctx.player.destroyed = false;
+  ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(3, 'buy warp freehold');
+  sanitizeHangar(ctx);
+  const liveMounted = ctx.world.hangar.mountedId;
+  const liveLen = ctx.world.hangar.hulls.length;
+  const liveKind = ctx.player.hullKind;
+  const liveClass = ctx.player.classKey;
+  const liveCredits = ctx.world.credits;
+  const livePrice = yardPrice('light', ctx.world.reputation.freehold ?? 0);
+  dockAtCurrentStation('dock freehold yard buy');
+  dispatchKey('Digit0');
+  tick(2, 'buy Digit0 shipyard');
+  dispatchKey('Digit2');
+  tick(1, 'buy Digit2 yard');
+  const listed = overlayHas('light') && overlayHas(`${livePrice} UU`);
+  dispatchKey('Digit3');
+  tick(1, 'buy Digit3 papers');
+  const confirmShown = overlayHas('Confirm papers');
+  const afterDigit3 = ctx.world.credits === liveCredits
+    && ctx.world.hangar.hulls.length === liveLen
+    && ctx.world.hangar.mountedId === liveMounted;
+  const confirmBtn = findOverlayButton('Confirm papers');
+  if (confirmBtn) confirmBtn.click();
+  tick(2, 'buy confirm papers');
+  const liveBuy = {
+    listed,
+    confirmShown,
+    digit3NoDebit: afterDigit3,
+    clicked: !!confirmBtn,
+    credits: ctx.world.credits === liveCredits - livePrice,
+    hullPlus: ctx.world.hangar.hulls.length === liveLen + 1,
+    mountedSame: ctx.world.hangar.mountedId === liveMounted,
+    noRemount: ctx.player.hullKind === liveKind && ctx.player.classKey === liveClass,
+  };
+
+  ctx.world.reputation.freehold = -5;
+  ctx.world.credits = 25000;
+  const hostileCredits = ctx.world.credits;
+  const hostileLen = ctx.world.hangar.hulls.length;
+  dispatchKey('Digit2');
+  tick(1, 'buy hostile yard');
+  dispatchKey('Digit3');
+  tick(1, 'buy hostile Digit3');
+  const hostileBtn = findOverlayButton('Confirm papers');
+  if (hostileBtn) hostileBtn.click();
+  tick(1, 'buy hostile confirm');
+  const liveHostile = {
+    noSale: overlayHas('No sale'),
+    credits: ctx.world.credits === hostileCredits,
+    hulls: ctx.world.hangar.hulls.length === hostileLen,
+  };
+  ctx.world.reputation.freehold = 0;
+
+  const w64b = {
+    ...prefix('stock', stock),
+    ...prefix('kind', kinds),
+    ...prefix('price', prices),
+    ...prefix('empty', emptyUi),
+    ...prefix('buy', success),
+    ...prefix('hostile', hostilePin),
+    ...prefix('broke', brokePin),
+    ...prefix('full', fullPin),
+    ...prefix('unk', unkPin),
+    ...prefix('proto', protoPin),
+    ...prefix('save', savePin),
+    ...prefix('live', liveBuy),
+    ...prefix('liveH', liveHostile),
+  };
+  console.log('wave64 yard buy:', JSON.stringify(w64b));
+  if (!Object.values(w64b).every(Boolean)) { console.log('WAVE64 YARD BUY FAIL'); errors++; }
+}
+
+// ---- WAVE64: flat equipment on hangar rows (PR5, no missiles) ----
+{
+  const { createShipState: w64EqShip, HIDDEN_MOUNTS: W64_HIDDEN, MINING_LASERS: W64_HEADS } = await import('../src/game/state.js');
+  const {
+    writeMountedGear,
+    switchTo,
+    sanitizeHangar,
+    parkMounted,
+    applyFlightEnvelope,
+  } = await import('../src/game/hangar.js');
+  const { remountPlayerHull } = await import('../src/systems/ship.js');
+  const { purchaseYardHull } = await import('../src/game/shipyard.js');
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  function overlayTexts() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas(frag) {
+    return overlayTexts().some((t) => t.includes(frag));
+  }
+  function eqCtx(extra = {}) {
+    const player = extra.player ?? w64EqShip('light', { name: 'EqPin' });
+    player.hullKind = extra.hullKind ?? 'living';
+    return {
+      flags: { docked: true, combat: false, paused: false, ...(extra.flags ?? {}) },
+      world: {
+        currentSystem: 'freehold',
+        credits: extra.credits ?? 40000,
+        scanner: extra.scanner ?? 0,
+        miningLaser: extra.miningLaser ?? 0,
+        concealedMounts: extra.concealedMounts ?? false,
+        shipName: 'hull_a',
+        hangar: extra.hangar ?? {
+          mountedId: 'hull_a',
+          hulls: [
+            {
+              id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent', name: 'A',
+              scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+            },
+            {
+              id: 'hull_b', hullKind: 'built', classKey: 'heavy', faction: 'freehold', name: 'B',
+              scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+            },
+          ],
+        },
+        ...(extra.world ?? {}),
+      },
+      systems: { freehold: { faction: 'freehold' } },
+      cargo: extra.cargo ?? [],
+      cargoCapacity: extra.cargoCapacity ?? 20,
+      player,
+      config: {
+        ship: {
+          maxSpeed: 120, creep: 30, acceleration: 90, damping: 0.5,
+          afterburner: { multiplier: 2, burnTime: 6, cooldown: 8 },
+        },
+      },
+      ship: { object: null },
+      emit() {},
+      ships: [],
+      gate: { jumping: false },
+    };
+  }
+  function rowOf(c, id) {
+    return c.world.hangar?.hulls?.find((h) => h.id === id);
+  }
+
+  const miss = eqCtx({ scanner: 2, miningLaser: 3, concealedMounts: true, cargoCapacity: 40 });
+  delete miss.world.hangar;
+  restore(miss, {
+    v: 1,
+    world: { currentSystem: 'freehold', credits: 10, scanner: 2, miningLaser: 3, concealedMounts: true },
+    cargoCapacity: 40,
+  });
+  const missRow = miss.world.hangar?.hulls?.[0];
+  const migrate = {
+    oneRow: miss.world.hangar?.hulls?.length === 1,
+    mountedDeepcore: missRow?.miningLaser === 3 && missRow?.scanner === 2 && missRow?.concealedMounts === true,
+    mountedHold: missRow?.cargoCapacity === 40,
+    worldKept: miss.world.scanner === 2 && miss.world.miningLaser === 3 && miss.world.concealedMounts === true,
+  };
+
+  const two = eqCtx();
+  restore(two, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      scanner: 2,
+      miningLaser: 3,
+      concealedMounts: true,
+      hangar: {
+        mountedId: 'hull_a',
+        hulls: [
+          { id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent' },
+          { id: 'hull_b', hullKind: 'built', classKey: 'heavy', faction: 'freehold' },
+        ],
+      },
+    },
+    cargoCapacity: 40,
+  });
+  const otherStock = {
+    mountedNotCopiedWorld: rowOf(two, 'hull_a')?.miningLaser === 0 && rowOf(two, 'hull_a')?.scanner === 0,
+    otherZeros: rowOf(two, 'hull_b')?.scanner === 0 && rowOf(two, 'hull_b')?.miningLaser === 0
+      && rowOf(two, 'hull_b')?.concealedMounts === false && rowOf(two, 'hull_b')?.cargoCapacity === 20,
+    worldMirrorsStay: two.world.scanner === 2 && two.world.miningLaser === 3,
+  };
+
+  const dirty = eqCtx();
+  restore(dirty, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      hangar: {
+        mountedId: 'hull_a',
+        hulls: [{
+          id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent',
+          scanner: 99, miningLaser: '3', concealedMounts: 'yes',
+          launcher: 1, missileAmmo: 99, turret: 'auto',
+          loadout: { missiles: 4, launcher: 1 },
+        }],
+      },
+    },
+  });
+  const healed = dirty.world.hangar?.hulls?.[0] ?? {};
+  const healEvery = {
+    scanner0: healed.scanner === 0,
+    mining0: healed.miningLaser === 0,
+    concealedFalse: healed.concealedMounts === false,
+    noLoadout: !('loadout' in healed),
+    noMissiles: !('missiles' in healed),
+    launcherEmpty: healed.launcher === '',
+    missileAmmo0: healed.missileAmmo === 0,
+    turretEmpty: healed.turret === '',
+  };
+
+  const iso = eqCtx();
+  sanitizeHangar(iso);
+  const wroteMk4 = writeMountedGear(iso, { miningLaser: 3 });
+  const ignoreJunk = writeMountedGear(iso, { missiles: 9, loadout: { x: 1 }, scanner: 2 });
+  const wroteScan = ignoreJunk?.scanner === 2;
+  const aAfterWrite = rowOf(iso, 'hull_a');
+  const writeThenWorld = {
+    mk4Row: wroteMk4?.miningLaser === 3 && aAfterWrite?.miningLaser === 3,
+    mk4World: iso.world.miningLaser === 3,
+    scanRow: wroteScan && aAfterWrite?.scanner === 2,
+    scanWorld: iso.world.scanner === 2,
+    noJunk: !('missiles' in (aAfterWrite ?? {})) && !('loadout' in (aAfterWrite ?? {})),
+    otherStillZero: rowOf(iso, 'hull_b')?.miningLaser === 0 && rowOf(iso, 'hull_b')?.scanner === 0,
+  };
+  writeMountedGear(iso, { concealedMounts: true });
+  writeMountedGear(iso, { cargoCapacity: 30 });
+  const toB = switchTo(iso, 'hull_b');
+  const onB = {
+    switched: toB.ok === true,
+    worldMining: iso.world.miningLaser === 0,
+    worldScan: iso.world.scanner === 0,
+    worldConcealed: iso.world.concealedMounts === false,
+    worldCap: iso.cargoCapacity === 20,
+    aKept: rowOf(iso, 'hull_a')?.miningLaser === 3 && rowOf(iso, 'hull_a')?.scanner === 2
+      && rowOf(iso, 'hull_a')?.concealedMounts === true && rowOf(iso, 'hull_a')?.cargoCapacity === 30,
+    bStock: rowOf(iso, 'hull_b')?.miningLaser === 0 && rowOf(iso, 'hull_b')?.scanner === 0
+      && rowOf(iso, 'hull_b')?.concealedMounts === false && rowOf(iso, 'hull_b')?.cargoCapacity === 20,
+  };
+  const toA = switchTo(iso, 'hull_a');
+  const backA = {
+    switched: toA.ok === true,
+    worldMining: iso.world.miningLaser === 3,
+    worldScan: iso.world.scanner === 2,
+    worldConcealed: iso.world.concealedMounts === true,
+    worldCap: iso.cargoCapacity === 30,
+  };
+  parkMounted(iso);
+  const snapIso = snapshot(iso);
+  const snapFields = {
+    worldScanner: snapIso.world?.scanner === 2,
+    worldMining: snapIso.world?.miningLaser === 3,
+    worldConcealed: snapIso.world?.concealedMounts === true,
+    hangarPresent: !!snapIso.world?.hangar,
+    noLoadout: (snapIso.world?.hangar?.hulls ?? []).every((h) => !('loadout' in h)),
+  };
+
+  const liveHull = eqCtx({ hullKind: 'living' });
+  liveHull.world.hangar.hulls = [{
+    id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent', name: 'She',
+    scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+  }];
+  liveHull.world.hangar.mountedId = 'hull_a';
+  sanitizeHangar(liveHull);
+  writeMountedGear(liveHull, { scanner: 1, miningLaser: 2, concealedMounts: true, cargoCapacity: 30 });
+  const livingParts = {
+    kind: liveHull.player.hullKind === 'living' && rowOf(liveHull, 'hull_a')?.hullKind === 'living',
+    scanner: rowOf(liveHull, 'hull_a')?.scanner === 1 && liveHull.world.scanner === 1,
+    mining: rowOf(liveHull, 'hull_a')?.miningLaser === 2 && liveHull.world.miningLaser === 2,
+    concealed: rowOf(liveHull, 'hull_a')?.concealedMounts === true,
+  };
+
+  const unkEq = eqCtx();
+  unkEq.player.hullKind = 'living';
+  unkEq.player.faction = 'unknowables';
+  unkEq.world.hangar = {
+    mountedId: 'hull_u',
+    hulls: [{
+      id: 'hull_u', hullKind: 'built', classKey: 'light', faction: 'unknowables', name: 'Veil',
+      scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+    }],
+  };
+  sanitizeHangar(unkEq);
+  writeMountedGear(unkEq, { scanner: 2, miningLaser: 3, concealedMounts: true });
+  const unkParts = {
+    living: unkEq.player.hullKind === 'living' && rowOf(unkEq, 'hull_u')?.hullKind === 'living',
+    gear: rowOf(unkEq, 'hull_u')?.scanner === 2 && rowOf(unkEq, 'hull_u')?.miningLaser === 3
+      && rowOf(unkEq, 'hull_u')?.concealedMounts === true,
+  };
+
+  const buyIso = eqCtx({ credits: 20000, reputation: { freehold: 0 } });
+  buyIso.world.reputation = { freehold: 0 };
+  sanitizeHangar(buyIso);
+  writeMountedGear(buyIso, { miningLaser: 3, scanner: 2 });
+  const bought = purchaseYardHull(buyIso, 'light');
+  const newRow = buyIso.world.hangar.hulls.find((h) => h.id !== 'hull_a' && h.id !== 'hull_b');
+  const buyStock = {
+    ok: bought.ok === true,
+    mountedKeptDeepcore: rowOf(buyIso, 'hull_a')?.miningLaser === 3,
+    newStock: newRow?.miningLaser === 0 && newRow?.scanner === 0 && newRow?.concealedMounts === false
+      && newRow?.cargoCapacity === 20,
+    mountedSame: buyIso.world.hangar.mountedId === 'hull_a',
+  };
+
+  const prevDockedEq = ctx.flags.docked;
+  const prevHangarEq = ctx.world.hangar;
+  const prevScanEq = ctx.world.scanner;
+  const prevMineEq = ctx.world.miningLaser;
+  const prevConEq = ctx.world.concealedMounts;
+  const prevCapEq = ctx.cargoCapacity;
+  const prevCreditsEq = ctx.world.credits;
+  const prevKindEq = ctx.player.hullKind;
+  const prevClassEq = ctx.player.classKey;
+  const prevCargoEq = ctx.cargo.map((r) => ({ ...r }));
+  const prevNameEq = ctx.world.shipName;
+
+  if (ctx.flags.docked) undockStation();
+  ctx.flags.combat = false;
+  ctx.flags.paused = false;
+  if (ctx.gate) ctx.gate.jumping = false;
+  ctx.world.scanner = 0;
+  ctx.world.miningLaser = 0;
+  ctx.world.concealedMounts = false;
+  ctx.cargoCapacity = 20;
+  ctx.world.credits = 40000;
+  ctx.world.hangar = {
+    mountedId: 'hull_a',
+    hulls: [
+      {
+        id: 'hull_a', hullKind: 'living', classKey: 'light', faction: 'independent', name: 'A',
+        scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+      },
+      {
+        id: 'hull_b', hullKind: 'built', classKey: 'heavy', faction: 'freehold', name: 'B',
+        scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+      },
+    ],
+  };
+  sanitizeHangar(ctx);
+  ctx.player.hullKind = 'living';
+  ctx.player.classKey = 'light';
+  dockAtCurrentStation('wave64 eq dock');
+  dispatchKey('Digit6');
+  tick(1, 'wave64 eq outfitting');
+  const digits = {
+    hold: overlayHas('1 — Expand hold'),
+    mk1: overlayHas('2 — Wolfeye Mk I scanner'),
+    concealed: overlayHas('3 — Concealed mounts'),
+    mk2Need: overlayHas('Wolfeye Mk II needs the Mk I eye'),
+    mk2Head: overlayHas('5 — Bore laser Mk II') && W64_HEADS[1].cost === 1400,
+    mk3Need: overlayHas('Ferrous cutting head Mk III needs'),
+    mk4Need: overlayHas('Deepcore lance Mk IV needs'),
+  };
+  ctx.world.scanner = 1;
+  dispatchKey('Escape');
+  dispatchKey('Digit6');
+  tick(1, 'wave64 eq ui reads world');
+  const uiReadsMirror = overlayHas('Wolfeye Mk I installed') && !overlayHas('2 — Wolfeye Mk I scanner');
+  ctx.world.scanner = 0;
+  dispatchKey('Escape');
+  dispatchKey('Digit6');
+  tick(1, 'wave64 eq reset scanner');
+  dispatchKey('Digit2');
+  tick(1, 'wave64 eq buy Mk I');
+  const liveScanRow = ctx.world.hangar.hulls.find((h) => h.id === ctx.world.hangar.mountedId);
+  const otherScan = ctx.world.hangar.hulls.find((h) => h.id === 'hull_b');
+  const liveBuyScan = {
+    world: ctx.world.scanner === 1,
+    row: liveScanRow?.scanner === 1,
+    otherZero: otherScan?.scanner === 0,
+  };
+  dispatchKey('Digit3');
+  tick(1, 'wave64 eq buy concealed');
+  dispatchKey('Digit4');
+  tick(1, 'wave64 eq buy Mk II');
+  dispatchKey('Digit5');
+  tick(1, 'wave64 eq buy Mk II head');
+  dispatchKey('Digit6');
+  tick(1, 'wave64 eq buy Mk III head');
+  dispatchKey('Digit7');
+  tick(1, 'wave64 eq buy Mk IV');
+  dispatchKey('Digit1');
+  tick(1, 'wave64 eq buy rack');
+  const liveAfter = ctx.world.hangar.hulls.find((h) => h.id === 'hull_a');
+  const liveOther = ctx.world.hangar.hulls.find((h) => h.id === 'hull_b');
+  const liveGear = {
+    scan2: ctx.world.scanner === 2 && liveAfter?.scanner === 2,
+    concealed: ctx.world.concealedMounts === true && liveAfter?.concealedMounts === true,
+    mk4: ctx.world.miningLaser === 3 && liveAfter?.miningLaser === 3,
+    hold: ctx.cargoCapacity === 30 && liveAfter?.cargoCapacity === 30,
+    otherHold: liveOther?.cargoCapacity === 20,
+    otherMine: liveOther?.miningLaser === 0,
+    otherScan: liveOther?.scanner === 0,
+    otherCon: liveOther?.concealedMounts === false,
+    hiddenCost: typeof W64_HIDDEN.cost === 'number',
+    noLoadout: !('loadout' in (liveAfter ?? {})),
+  };
+  const swapLive = switchTo(ctx, 'hull_b');
+  const liveOnB = {
+    ok: swapLive.ok === true,
+    worldMine: ctx.world.miningLaser === 0,
+    worldScan: ctx.world.scanner === 0,
+    worldCon: ctx.world.concealedMounts === false,
+    cap: ctx.cargoCapacity === 20,
+    aKept: rowOf(ctx, 'hull_a')?.miningLaser === 3 && rowOf(ctx, 'hull_a')?.scanner === 2
+      && rowOf(ctx, 'hull_a')?.cargoCapacity === 30,
+  };
+  const swapBack = switchTo(ctx, 'hull_a');
+  const liveBackEq = {
+    ok: swapBack.ok === true,
+    worldMine: ctx.world.miningLaser === 3,
+    worldScan: ctx.world.scanner === 2,
+    cap: ctx.cargoCapacity === 30,
+  };
+  undockStation();
+
+  ctx.flags.docked = prevDockedEq;
+  ctx.world.scanner = prevScanEq;
+  ctx.world.miningLaser = prevMineEq;
+  ctx.world.concealedMounts = prevConEq;
+  ctx.cargoCapacity = prevCapEq;
+  ctx.world.credits = prevCreditsEq;
+  ctx.world.shipName = prevNameEq;
+  ctx.cargo.length = 0;
+  for (const row of prevCargoEq) ctx.cargo.push(row);
+  if (prevHangarEq !== undefined) ctx.world.hangar = prevHangarEq;
+  if (prevKindEq !== undefined) ctx.player.hullKind = prevKindEq;
+  else delete ctx.player.hullKind;
+  ctx.player.classKey = prevClassEq;
+  applyFlightEnvelope(ctx, prevClassEq);
+  if (ctx.player.hullKind === 'built') remountPlayerHull(ctx);
+  else {
+    ctx.flags.docked = true;
+    remountPlayerHull(ctx);
+    ctx.flags.docked = prevDockedEq;
+  }
+
+  const w64e = {
+    ...prefix('mig', migrate),
+    ...prefix('stock', otherStock),
+    ...prefix('heal', healEvery),
+    ...prefix('write', writeThenWorld),
+    ...prefix('onB', onB),
+    ...prefix('back', backA),
+    ...prefix('snap', snapFields),
+    ...prefix('liveP', livingParts),
+    ...prefix('unk', unkParts),
+    ...prefix('yard', buyStock),
+    ...prefix('digit', digits),
+    uiReadsMirror,
+    ...prefix('buyS', liveBuyScan),
+    ...prefix('liveG', liveGear),
+    ...prefix('liveB', liveOnB),
+    ...prefix('liveA', liveBackEq),
+  };
+  console.log('wave64 equipment:', JSON.stringify(w64e));
+  if (!Object.values(w64e).every(Boolean)) { console.log('WAVE64 EQUIPMENT FAIL'); errors++; }
+}
+
+// ---- WAVE65: yard catalog depth (cutter + ace) + HUD-02 PR4 family audio ----
+{
+  const {
+    yardStockFor: w65StockFor,
+    minRepFor: w65MinRep,
+    yardPrice: w65Price,
+    listYardOffers: w65Offers,
+    YARD_LIST_UU: w65List,
+  } = await import('../src/game/shipyard.js');
+  const { readFileSync: w65Read } = await import('node:fs');
+  const fh = w65StockFor('freehold');
+  const be = w65StockFor('beautiful');
+  const w65cat = {
+    platedCutterAce: fh.includes('cutter') && fh.includes('ace') && fh.includes('light'),
+    platedHasFrigate: fh.includes('frigate'),
+    beautifulCutter: be.includes('cutter') && be.includes('light') && !be.includes('ace'),
+    unkLight: w65StockFor('unknowables').length === 1 && w65StockFor('unknowables')[0] === 'light',
+    indieEmpty: w65StockFor('independent').length === 0,
+    hollowEmpty: w65StockFor('hollow').length === 0,
+    aceFloor: w65MinRep('ace') === 10,
+    cutterOpen: w65MinRep('cutter') === 0 && w65MinRep('light') === 0,
+    cutterList: w65List.cutter === 11000 && w65Price('cutter', 0) === 11000,
+    aceList: w65List.ace === 28000 && w65Price('ace', 0) === 28000,
+    offersFh: w65Offers({
+      world: { currentSystem: 'sol' },
+      systems: { sol: { faction: 'freehold' } },
+    }).some((o) => o.classKey === 'cutter')
+      && w65Offers({
+        world: { currentSystem: 'sol' },
+        systems: { sol: { faction: 'freehold' } },
+      }).some((o) => o.classKey === 'ace'),
+  };
+  const song65 = w65Read(new URL('../src/systems/song.js', import.meta.url), 'utf8');
+  const ctx65 = w65Read(new URL('../src/core/ctx.js', import.meta.url), 'utf8');
+  const w65keys = ['hudMechRange', 'hudMechMatch', 'hudMechContact', 'hostileEnter', 'hullBand'];
+  const w65audio = {
+    cues: w65keys.every((k) => song65.includes('\n  ' + k + ':')),
+    noPlayCue: !/\bplayCue\s*\(/.test(song65),
+    ctxComment: w65keys.every((k) => ctx65.includes("'" + k + "'")),
+  };
+  const w65 = { ...w65cat, ...w65audio };
+  console.log('wave65 catalog+audio:', JSON.stringify(w65));
+  if (!Object.values(w65).every(Boolean)) { console.log('WAVE65 CATALOG AUDIO FAIL'); errors++; }
+}
+
+// ---- WAVE67: plated frigate catalog leftover ----
+{
+  const {
+    yardStockFor: w67StockFor,
+    minRepFor: w67MinRep,
+    yardPrice: w67Price,
+    listYardOffers: w67Offers,
+    purchaseYardHull: w67Buy,
+    YARD_LIST_UU: w67List,
+  } = await import('../src/game/shipyard.js');
+  const PLATED67 = [
+    'freehold', 'veridian', 'redledger', 'ferrous',
+    'gilded', 'assembly', 'congregation', 'lamplighter',
+  ];
+  const CORE67 = ['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate'];
+  const fh67 = w67StockFor('freehold');
+  const be67 = w67StockFor('beautiful');
+  function w67Dock(faction, extra = {}) {
+    return {
+      flags: { docked: true, combat: false, paused: false },
+      world: {
+        currentSystem: extra.systemId ?? 'w67_dock',
+        credits: extra.credits ?? 100000,
+        reputation: extra.reputation ?? { [faction]: extra.rep ?? 0 },
+        hangar: extra.hangar ?? {
+          mountedId: 'hull_starter',
+          hulls: [{
+            id: 'hull_starter',
+            hullKind: 'living',
+            classKey: 'light',
+            faction: 'independent',
+            name: 'starter',
+            scanner: 0,
+            miningLaser: 0,
+            concealedMounts: false,
+            cargoCapacity: 20,
+            cargo: [],
+          }],
+        },
+      },
+      systems: { [extra.systemId ?? 'w67_dock']: { faction } },
+      cargo: [],
+      cargoCapacity: 20,
+      player: { classKey: 'light', hullKind: 'living', faction: 'independent' },
+      ship: { object: { position: { toArray: () => [0, 0, 0] }, quaternion: { toArray: () => [0, 0, 0, 1] } } },
+      emit() {},
+      ships: [],
+      gate: { jumping: false },
+    };
+  }
+  const knownCtx = w67Dock('freehold', { rep: 10, credits: 100000 });
+  const knownOffers = w67Offers(knownCtx);
+  const knownBuy = w67Buy(knownCtx, 'frigate');
+  const trustedCtx = w67Dock('freehold', { rep: 25, credits: 100000 });
+  const trustedBuy = w67Buy(trustedCtx, 'frigate');
+  const trustedRow = trustedCtx.world.hangar.hulls.find((h) => h.id !== 'hull_starter');
+  const w67 = {
+    platedHasFrigate: PLATED67.every((f) => w67StockFor(f).includes('frigate')),
+    platedOrder: fh67.join(',') === CORE67.join(','),
+    beautifulOmits: be67.join(',') === 'light,cutter,heavy'
+      && !be67.includes('frigate') && !be67.includes('ace'),
+    unkOmits: w67StockFor('unknowables').join(',') === 'light'
+      && !w67StockFor('unknowables').includes('frigate'),
+    indieEmpty: w67StockFor('independent').length === 0,
+    hollowEmpty: w67StockFor('hollow').length === 0,
+    minRepFrigate: w67MinRep('frigate') === 25,
+    aceStays: w67MinRep('ace') === 10,
+    openFloors: w67MinRep('cutter') === 0 && w67MinRep('light') === 0
+      && w67MinRep('heavy') === 0 && w67MinRep('freighter') === 0,
+    listPrice: w67List.frigate === 80000,
+    strangerList: w67Price('frigate', 0) === 80000,
+    trustedOff: w67Price('frigate', 25) === Math.round(80000 * 0.9),
+    swornOff: w67Price('frigate', 50) === Math.round(80000 * 0.85),
+    knownListed: knownOffers.some((o) => o.classKey === 'frigate'),
+    knownRefuse: knownBuy.ok === false && knownBuy.reason === 'reputation',
+    knownNoDebit: knownCtx.world.credits === 100000
+      && knownCtx.world.hangar.hulls.length === 1,
+    trustedBuy: trustedBuy.ok === true
+      && trustedBuy.price === Math.round(80000 * 0.9)
+      && trustedCtx.world.hangar.mountedId === 'hull_starter'
+      && trustedRow?.classKey === 'frigate'
+      && trustedRow?.cargoCapacity === 20
+      && trustedRow?.hullKind === 'built',
+    digit8Index: 8 - 3 === 5 && CORE67[5] === 'frigate',
+  };
+  console.log('wave67 catalog:', JSON.stringify(w67));
+  if (!Object.values(w67).every(Boolean)) { console.log('WAVE67 CATALOG FAIL'); errors++; }
+}
+
+// ---- WAVE68: weapons catalog + persist + papers + HUD/fire source pins ----
+{
+  const { WEAPONS: W68_WEAPONS, MOUNT_TABLE: W68_MOUNTS, createShipState: w68Ship } = await import('../src/game/state.js');
+  const { LAUNCHER_IDS: W68_LAUNCHERS, healMissileAmmo: w68HealAmmo } = await import('../src/game/weapon-fit.js');
+  const {
+    writeMountedGear: w68WriteGear,
+    switchTo: w68Switch,
+    sanitizeHangar: w68Sanitize,
+    spendMissileAmmo: w68Spend,
+    sanitizeHangarRecord: w68SanRec,
+  } = await import('../src/game/hangar.js');
+  const { purchaseYardHull: w68Buy } = await import('../src/game/shipyard.js');
+  const { WORLD_FIELDS: w68WorldFields } = await import('../src/game/save.js');
+  const {
+    armOutfitPapers: w68Arm,
+    confirmOutfitPapers: w68Confirm,
+    DOCK_KEY_SERVICES: w68DockKeys,
+  } = await import('../src/systems/station.js');
+  const { hudWeaponKey: w68HudKey, weaponHudLabel: w68HudLabel } = await import('../src/systems/hud.js');
+  const { readFileSync: w68Read } = await import('node:fs');
+  const here68 = dirname(fileURLToPath(import.meta.url));
+  const src68 = (rel) => w68Read(join(here68, '..', rel), 'utf8');
+  const combat68 = src68('src/systems/combat.js');
+  const controls68 = src68('src/systems/controls.js');
+  const ctx68src = src68('src/core/ctx.js');
+  const station68 = src68('src/systems/station.js');
+  const events68 = ctx68src.slice(ctx68src.indexOf('// --- event queue.'), ctx68src.indexOf('events: []'));
+  const level1_68 = station68.slice(station68.indexOf('if (ui.level === 1) {'), station68.indexOf('// level 2'));
+
+  function w68Ctx(extra = {}) {
+    const classKey = extra.classKey ?? 'light';
+    const player = extra.player ?? w68Ship(classKey, { name: 'W68' });
+    player.hullKind = extra.hullKind ?? 'living';
+    player.classKey = classKey;
+    return {
+      flags: { docked: true, combat: false, paused: false, ...(extra.flags ?? {}) },
+      world: {
+        currentSystem: 'freehold',
+        credits: extra.credits ?? 20000,
+        fear: 0,
+        scanner: 0,
+        miningLaser: 0,
+        concealedMounts: false,
+        launcher: extra.launcher ?? '',
+        missileAmmo: extra.missileAmmo ?? 0,
+        turret: extra.turret ?? '',
+        shipName: 'hull_a',
+        hangar: extra.hangar ?? {
+          mountedId: 'hull_a',
+          hulls: [
+            {
+              id: 'hull_a', hullKind: player.hullKind, classKey, faction: 'independent', name: 'A',
+              scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+            },
+            {
+              id: 'hull_b', hullKind: 'built', classKey: 'heavy', faction: 'freehold', name: 'B',
+              scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+            },
+          ],
+        },
+        ...(extra.world ?? {}),
+      },
+      systems: { freehold: { faction: 'freehold' } },
+      cargo: [],
+      cargoCapacity: 20,
+      player,
+      input: { weaponGroup: extra.weaponGroup ?? 1 },
+      ship: { object: null },
+      emit() {},
+      ships: [],
+      gate: { jumping: false },
+    };
+  }
+  function w68Row(c, id) {
+    return c.world.hangar?.hulls?.find((h) => h.id === id);
+  }
+  function w68Ui(extra = {}) {
+    return {
+      level: extra.level ?? 2,
+      service: extra.service ?? 'outfitting',
+      outfitPending: extra.outfitPending ?? null,
+      notice: extra.notice ?? '',
+    };
+  }
+
+  const dartCost = W68_LAUNCHERS.dart.cost;
+  const catalog = {
+    missileFamily: W68_WEAPONS.missile.family === 'missile' && W68_WEAPONS.missile.beam !== true,
+    missileStats: W68_WEAPONS.missile.damage === 22 && W68_WEAPONS.missile.range === 720,
+    turretFamily: W68_WEAPONS.turret.family === 'energy' && W68_WEAPONS.turret.damage === 4,
+    mountLight: W68_MOUNTS.light.missile === 0,
+    mountHeavy: W68_MOUNTS.heavy.missile === 2,
+    dartId: Object.hasOwn(W68_LAUNCHERS, 'dart'),
+    noGod: !Object.hasOwn(W68_LAUNCHERS, 'god'),
+    heal99: w68HealAmmo('dart', 99) === 8,
+    healStr: w68HealAmmo('dart', '2') === 0,
+  };
+
+  const lightDartRec = w68SanRec({ id: 'l1', classKey: 'light', launcher: 'dart', missileAmmo: 99 });
+  const heavyDartRec = w68SanRec({ id: 'h1', classKey: 'heavy', launcher: 'dart', missileAmmo: 99 });
+  const persistHeal = {
+    lightEmpty: lightDartRec?.launcher === '' && lightDartRec?.missileAmmo === 0,
+    heavyCapped: heavyDartRec?.launcher === 'dart' && heavyDartRec?.missileAmmo === 8,
+  };
+
+  const lightWrite = w68Ctx({ classKey: 'light' });
+  w68Sanitize(lightWrite);
+  const lightWrote = w68WriteGear(lightWrite, { launcher: 'dart', missileAmmo: 99, missiles: 9, loadout: { x: 1 } });
+  const persistLightWrite = {
+    empty: lightWrote?.launcher === '' && lightWrote?.missileAmmo === 0
+      && lightWrite.world.launcher === '' && lightWrite.world.missileAmmo === 0,
+    noJunk: !('missiles' in (lightWrote ?? {})) && !('loadout' in (lightWrote ?? {})),
+  };
+
+  const restoreLight = w68Ctx({ classKey: 'light', launcher: 'keep', missileAmmo: 7, turret: 'keep' });
+  restore(restoreLight, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold',
+      launcher: 'dart',
+      missileAmmo: 99,
+      turret: 'auto',
+      hangar: {
+        mountedId: 'l1',
+        hulls: [{ id: 'l1', classKey: 'light', faction: 'independent' }],
+      },
+    },
+  });
+  const persistRestore = {
+    worldEmpty: restoreLight.world.launcher === ''
+      && restoreLight.world.missileAmmo === 0
+      && restoreLight.world.turret === '',
+    rowEmpty: restoreLight.world.hangar?.hulls?.[0]?.launcher === ''
+      && restoreLight.world.hangar?.hulls?.[0]?.missileAmmo === 0
+      && restoreLight.world.hangar?.hulls?.[0]?.turret === '',
+  };
+
+  const heavyWrite = w68Ctx({ classKey: 'light' });
+  w68Sanitize(heavyWrite);
+  const toHeavy = w68Switch(heavyWrite, 'hull_b');
+  const wroteHeavy = w68WriteGear(heavyWrite, { launcher: 'dart', missileAmmo: 99 });
+  const seatedOk = wroteHeavy?.launcher === 'dart' && wroteHeavy?.missileAmmo === 8
+    && heavyWrite.world.launcher === 'dart' && heavyWrite.world.missileAmmo === 8;
+  const spent = w68Spend(heavyWrite, 1);
+  const persistWrite = {
+    switched: toHeavy.ok === true,
+    seated: seatedOk,
+    spent: spent === 1 && wroteHeavy?.missileAmmo === 7 && heavyWrite.world.missileAmmo === 7,
+    otherEmpty: w68Row(heavyWrite, 'hull_a')?.launcher === ''
+      && w68Row(heavyWrite, 'hull_a')?.missileAmmo === 0,
+  };
+
+  const buyIso = w68Ctx({ classKey: 'light', credits: 20000 });
+  buyIso.world.reputation = { freehold: 0 };
+  w68Sanitize(buyIso);
+  w68Switch(buyIso, 'hull_b');
+  w68WriteGear(buyIso, { launcher: 'dart', missileAmmo: 8 });
+  const bought = w68Buy(buyIso, 'heavy');
+  const stockRow = buyIso.world.hangar.hulls.find((h) => h.id !== 'hull_a' && h.id !== 'hull_b');
+  const persistStock = {
+    ok: bought.ok === true,
+    emptyRacks: stockRow?.launcher === '' && stockRow?.missileAmmo === 0 && stockRow?.turret === '',
+    mountedKept: w68Row(buyIso, 'hull_b')?.launcher === 'dart' && w68Row(buyIso, 'hull_b')?.missileAmmo === 8,
+  };
+
+  const persistFields = {
+    worldFields: w68WorldFields.includes('launcher')
+      && w68WorldFields.includes('missileAmmo')
+      && w68WorldFields.includes('turret'),
+  };
+
+  const papersCtx = w68Ctx({ classKey: 'heavy', credits: 20000, hangar: {
+    mountedId: 'h1',
+    hulls: [{
+      id: 'h1', classKey: 'heavy', hullKind: 'built', faction: 'independent', name: 'H',
+      scanner: 0, miningLaser: 0, concealedMounts: false, cargoCapacity: 20, cargo: [],
+    }],
+  } });
+  papersCtx.player.classKey = 'heavy';
+  w68Sanitize(papersCtx);
+  const papersUi = w68Ui();
+  const armed = w68Arm(papersCtx, papersUi, 8);
+  const deskArm = {
+    ok: armed === true,
+    pending: papersUi.outfitPending?.kind === 'offer' && papersUi.outfitPending?.id === 'dart',
+    noDebit: papersCtx.world.credits === 20000 && papersCtx.world.launcher === '',
+  };
+  const confirmed = w68Confirm(papersCtx, papersUi);
+  const papersRow = papersCtx.world.hangar.hulls[0];
+  const deskConfirm = {
+    ok: confirmed.ok === true && confirmed.price === dartCost && dartCost === 6500,
+    debit: papersCtx.world.credits === 20000 - dartCost,
+    seated: papersRow?.launcher === 'dart' && papersRow?.missileAmmo === 8
+      && papersCtx.world.launcher === 'dart' && papersCtx.world.missileAmmo === 8,
+  };
+
+  const deskDigit8 = {
+    level1Launch: w68DockKeys[7] === 'launch',
+    level1NoArm: !/n === 8/.test(level1_68) && !/armOutfitPapers/.test(level1_68),
+  };
+
+  const hudEmpty = w68Ctx({ classKey: 'light', weaponGroup: 4 });
+  const hud = {
+    digit4: /case 'Digit4':[\s\S]{0,180}?input\.weaponGroup = 4/.test(controls68),
+    emptyKey: w68HudKey(hudEmpty) === null,
+    emptyLabel: w68HudLabel(hudEmpty) === '4 · —',
+  };
+
+  const fire = {
+    missilePool: /const MISSILE_POOL = 8/.test(combat68),
+    emptyNoCannon: /function groupWeapon\(ctx\)/.test(combat68)
+      && /if \(g === 4\)/.test(combat68)
+      && /return null/.test(combat68)
+      && /Do not fall through to cannon/.test(combat68),
+    noIncoming: !events68.includes('missileIncoming') && !/missileIncoming/.test(ctx68src),
+  };
+
+  function w68Prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  const w68 = {
+    ...w68Prefix('cat', catalog),
+    ...w68Prefix('heal', persistHeal),
+    ...w68Prefix('lightW', persistLightWrite),
+    ...w68Prefix('rest', persistRestore),
+    ...w68Prefix('write', persistWrite),
+    ...w68Prefix('stock', persistStock),
+    ...w68Prefix('fields', persistFields),
+    ...w68Prefix('arm', deskArm),
+    ...w68Prefix('buy', deskConfirm),
+    ...w68Prefix('d8', deskDigit8),
+    ...w68Prefix('hud', hud),
+    ...w68Prefix('fire', fire),
+  };
+  console.log('wave68 weapons:', JSON.stringify(w68));
+  if (!Object.values(w68).every(Boolean)) { console.log('WAVE68 WEAPONS FAIL'); errors++; }
+}
+
+// ---- WAVE66 SAVE PINS: survivor cargo keep-list + reserved faction fail-closed ----
+{
+  const { createShipState: w66Ship } = await import('../src/game/state.js');
+  const {
+    sanitizeCargoList: w66SanitizeCargo,
+    WORLD_FIELDS: w66WorldFields,
+    NAME_MAX: w66NameMax,
+  } = await import('../src/game/save.js');
+
+  function w66ctx() {
+    return {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0 },
+      systems: { freehold: {} },
+      cargo: [],
+      cargoCapacity: 80,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w66Ship('light', { name: 'Wave66' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+  }
+
+  const extraRow = {
+    commodity: 'survivor', units: 11, faction: 'gilded', source: 'other',
+    price: 99, loadout: { x: 1 },
+  };
+  Object.defineProperty(extraRow, '__proto__', { value: { polluted: true }, enumerable: true });
+
+  const dirty = w66ctx();
+  restore(dirty, {
+    v: 1,
+    world: { currentSystem: 'freehold', peopleTrafficked: 7 },
+    cargoCapacity: 80,
+    cargo: [
+      extraRow,
+      { commodity: 'survivor', units: 12, faction: 'freehold', source: 'hack' },
+      { commodity: 'survivor', units: 13, faction: 'freehold', source: 'playerKill' },
+      { commodity: 'survivor', units: 14, faction: 'veridian', source: 'other', name: '\u0007' + 'A'.repeat(45) },
+      { commodity: 'survivor', units: 15, faction: '__proto__', source: 'other' },
+      { commodity: 'survivor', units: 16, faction: 'constructor', source: 'other' },
+      { commodity: 'survivor', units: 17, faction: 'prototype', source: 'other' },
+      { commodity: 'survivor', units: 2, faction: 'gilded', source: 'other' },
+      { commodity: 'rawOre', units: 5, faction: 'gilded', source: 'playerKill', name: 'nope', price: 1 },
+    ],
+  });
+  const byU = (n) => dirty.cargo.find((r) => r.units === n);
+  const extra = byU(11);
+  const extraKeys = extra ? Object.keys(extra).sort().join(',') : '';
+  const longName = byU(14);
+  const valid = byU(2);
+  const ore = dirty.cargo.find((r) => r.commodity === 'rawOre');
+  const reservedLanded = dirty.cargo.some((r) =>
+    r.faction === '__proto__' || r.faction === 'constructor' || r.faction === 'prototype');
+
+  const listed = w66SanitizeCargo([
+    { commodity: 'survivor', units: 2, faction: 'gilded', source: 'other' },
+  ]);
+
+  const w66 = {
+    extraKeysDrop: extraKeys === 'commodity,faction,source,units'
+      && extra?.price === undefined && extra?.loadout === undefined,
+    enumerableProtoDrop: extra && !Object.prototype.hasOwnProperty.call(extra, '__proto__')
+      && extra.polluted !== true && Object.prototype.polluted !== true,
+    sourceHack: byU(12)?.source === 'other',
+    sourceKill: byU(13)?.source === 'playerKill',
+    nameCap: longName?.name === 'A'.repeat(w66NameMax) && w66NameMax === 40,
+    nameControls: longName?.name && !/[\u0000-\u001f]/.test(longName.name),
+    reservedFaction: !reservedLanded && !byU(15) && !byU(16) && !byU(17),
+    validRoundTrip: valid?.commodity === 'survivor' && valid?.units === 2
+      && valid?.faction === 'gilded' && valid?.source === 'other'
+      && !('name' in valid) && !('price' in valid)
+      && listed.length === 1 && listed[0].faction === 'gilded' && listed[0].source === 'other',
+    noWorldPeopleField: !w66WorldFields.includes('peopleTrafficked'),
+    peopleTraffickedNotRestored: dirty.world.peopleTrafficked === undefined,
+    oreNoLeak: ore?.commodity === 'rawOre' && ore?.units === 5
+      && Object.keys(ore).sort().join(',') === 'commodity,units'
+      && !('faction' in ore) && !('source' in ore) && !('name' in ore),
+  };
+  console.log('wave66 save pins:', JSON.stringify(w66));
+  if (!Object.values(w66).every(Boolean)) { console.log('WAVE66 SAVE PINS FAIL'); errors++; }
+}
+
+// ---- WAVE66 DESK: Gilded People Digit 7 + Confirm + market refuse ----
+{
+  const { readFileSync: w66dRead } = await import('node:fs');
+  const {
+    DOCK_KEY_SERVICES: w66Keys,
+    priceOf: w66PriceOf,
+    applySurvivorRescue: w66Rescue,
+  } = await import('../src/systems/station.js');
+  const { WORLD_FIELDS: w66dWorldFields } = await import('../src/game/save.js');
+  const station66 = w66dRead(new URL('../src/systems/station.js', import.meta.url), 'utf8');
+  const ctx66src = w66dRead(new URL('../src/core/ctx.js', import.meta.url), 'utf8');
+
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  function overlayTexts() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas(frag) {
+    return overlayTexts().some((t) => t.includes(frag));
+  }
+  function findOverlayButton(label) {
+    const ov = stationOverlay();
+    if (!ov) return null;
+    for (const n of walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && n.textContent === label) return n;
+    }
+    return null;
+  }
+  function overlayButtonCount(label) {
+    const ov = stationOverlay();
+    if (!ov) return 0;
+    let n = 0;
+    for (const node of walkDom(ov)) {
+      if (node.tagName === 'BUTTON' && node.textContent === label) n++;
+    }
+    return n;
+  }
+  function surv(faction, source, units) {
+    return { commodity: 'survivor', faction, source, units };
+  }
+  function setHold(rows, cap) {
+    if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
+    ctx.cargo.length = 0;
+    for (const row of rows) ctx.cargo.push(row);
+    if (cap != null) ctx.cargoCapacity = cap;
+  }
+  function clearDockFlags(label) {
+    dispatchKey('Escape');
+    dispatchKey('Escape');
+    dispatchKey('KeyB');
+    ctx.flags.docked = false;
+    tick(2, label);
+  }
+  function goPeople(label) {
+    ctx.flags.combat = false;
+    ctx.flags.paused = false;
+    if (ctx.gate) ctx.gate.jumping = false;
+    if (ctx.player) ctx.player.destroyed = false;
+    if (ctx.flags.docked) clearDockFlags(`${label} undock`);
+    ctx.flags.docked = false;
+    dockAtCurrentStation(label);
+    tick(1, `${label} menu`);
+    dispatchKey('Digit7');
+    tick(1, `${label} people`);
+    if (!overlayHas('PEOPLE —')) {
+      const peopleBtn = findOverlayButton('7 — People');
+      if (peopleBtn) peopleBtn.click();
+      tick(1, `${label} people click`);
+    }
+  }
+  function goMenu(label) {
+    if (!ctx.flags.docked) dockAtCurrentStation(label);
+    for (let i = 0; i < 4 && ctx.flags.docked && !overlayHas('1-9, 0 select service'); i++) {
+      dispatchKey('Escape');
+      tick(1, `${label} menu ${i}`);
+    }
+    if (!overlayHas('1-9, 0 select service') && ctx.flags.docked) {
+      const back = findOverlayButton('← Back (Esc)');
+      if (back) back.click();
+      tick(1, `${label} back click`);
+    }
+  }
+
+  const keys = {
+    length10: w66Keys.length === 10,
+    d7: w66Keys[6] === 'people',
+    d0: w66Keys[9] === 'shipyard' && w66Keys.at(-1) === 'shipyard',
+  };
+  const srcPins = {
+    ctxSurvivorSold: ctx66src.includes("'survivorSold'"),
+    tryTradeRefuse: station66.includes("key === 'survivor'")
+      && station66.includes('This dock does not trade in people.'),
+    noWorldField: !w66dWorldFields.includes('peopleTrafficked'),
+    rescueFn: typeof w66Rescue === 'function',
+  };
+
+  if (!ctx.settings) ctx.settings = {};
+  ctx.settings.reducedMotion = false;
+  if (ctx.flags.docked) undockStation();
+  ctx.flags.docked = false;
+  ctx.flags.combat = false;
+  ctx.flags.paused = false;
+  if (ctx.gate) ctx.gate.jumping = false;
+  if (ctx.player) ctx.player.destroyed = false;
+
+  const reachedGilded = travelTo('gc_auction', 'wave66');
+  const liveFaction = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  const gildedDock = reachedGilded && liveFaction === 'gilded';
+
+  ctx.world.credits = 1000;
+  ctx.cargoCapacity = 20;
+  if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+  ctx.world.reputation.gilded = Number.isFinite(ctx.world.reputation.gilded) ? ctx.world.reputation.gilded : 0;
+  ctx.world.reputation.freehold = Number.isFinite(ctx.world.reputation.freehold) ? ctx.world.reputation.freehold : 0;
+  ctx.world.reputation.veridian = Number.isFinite(ctx.world.reputation.veridian) ? ctx.world.reputation.veridian : 0;
+  if (!Array.isArray(ctx.world.milestones)) ctx.world.milestones = [];
+  ctx.world.milestones = ctx.world.milestones.filter((id) => id !== 'peopleTrafficked');
+  delete ctx.world.peopleTrafficked;
+  if (!ctx.world.prices || typeof ctx.world.prices !== 'object') ctx.world.prices = {};
+
+  let emptyNoOffer = false;
+  let emptyNoConfirm = false;
+  if (gildedDock) {
+    setHold([]);
+    goPeople('wave66 empty');
+    emptyNoOffer = overlayButtonCount('Offer to the Chain') === 0 && !overlayHas('Offer to the Chain');
+    emptyNoConfirm = overlayButtonCount('Confirm transfer') === 0 && !overlayHas('Confirm transfer');
+  }
+
+  let protoNoOffer = false;
+  let protoNoThrow = false;
+  if (gildedDock) {
+    setHold([surv('__proto__', 'other', 2)]);
+    try {
+      goPeople('wave66 proto');
+      protoNoOffer = overlayButtonCount('Offer to the Chain') === 0 && !overlayHas('Offer to the Chain');
+      protoNoThrow = true;
+    } catch {
+      protoNoThrow = false;
+      protoNoOffer = false;
+    }
+  }
+
+  let unkNoOffer = false;
+  let unkRefuse = false;
+  if (gildedDock) {
+    setHold([surv('unknowables', 'other', 2)]);
+    goPeople('wave66 unk');
+    unkNoOffer = overlayButtonCount('Offer to the Chain') === 0 && !overlayHas('Offer to the Chain');
+    unkRefuse = overlayHas('The desk will not take them.');
+  }
+
+  let oversizeNoSale = false;
+  if (gildedDock) {
+    setHold([surv('freehold', 'other', 21)], 20);
+    goPeople('wave66 oversize');
+    oversizeNoSale = overlayButtonCount('Offer to the Chain') === 0
+      && ctx.cargo.some((r) => r.commodity === 'survivor' && r.units === 21);
+  }
+
+  let returnGilded = false;
+  if (gildedDock) {
+    const gRep = ctx.world.reputation.gilded;
+    const gCredits = ctx.world.credits;
+    setHold([surv('gilded', 'other', 2)], 20);
+    goPeople('wave66 gilded return');
+    const retBtn = findOverlayButton('Return survivors');
+    if (retBtn) retBtn.click();
+    tick(1, 'wave66 gilded return click');
+    returnGilded = !!retBtn
+      && !ctx.cargo.some((r) => r.commodity === 'survivor' && r.faction === 'gilded')
+      && ctx.world.credits === gCredits
+      && ctx.world.reputation.gilded === gRep + 8;
+  }
+
+  let mixedTwoOffers = false;
+  let mixedConfirmOne = false;
+  let mixedOtherRemains = false;
+  let mixedOtherUu = false;
+  let oversizeRowKept = false;
+  let digitPendingNoDebit = false;
+  let milestoneOnce = false;
+  let doubleNoSecondPay = false;
+  if (gildedDock) {
+    const credits0 = ctx.world.credits;
+    setHold([
+      surv('freehold', 'other', 2),
+      surv('veridian', 'playerKill', 1),
+      surv('gilded', 'other', 99),
+    ], 20);
+    goPeople('wave66 mixed');
+    mixedTwoOffers = overlayButtonCount('Offer to the Chain') === 2;
+    const offer0 = findOverlayButton('Offer to the Chain');
+    if (offer0) offer0.click();
+    tick(1, 'wave66 mixed offer');
+    const creditsArmed = ctx.world.credits;
+    const holdArmed = ctx.cargo.filter((r) => r.commodity === 'survivor').length;
+    dispatchKey('Digit1');
+    dispatchKey('Digit7');
+    dispatchKey('Digit0');
+    dispatchKey('Digit3');
+    tick(1, 'wave66 digit pending');
+    digitPendingNoDebit = ctx.world.credits === creditsArmed
+      && ctx.cargo.filter((r) => r.commodity === 'survivor').length === holdArmed
+      && overlayHas('Confirm transfer');
+    const confirm0 = findOverlayButton('Confirm transfer');
+    if (confirm0) confirm0.click();
+    tick(1, 'wave66 mixed confirm');
+    const freeholdGone = !ctx.cargo.some((r) => r.faction === 'freehold' && r.commodity === 'survivor');
+    const pkLeft = ctx.cargo.filter((r) => r.commodity === 'survivor' && r.faction === 'veridian' && r.source === 'playerKill');
+    mixedConfirmOne = !!confirm0 && freeholdGone && ctx.world.credits === credits0 + 320;
+    mixedOtherRemains = pkLeft.length === 1 && pkLeft[0].units === 1;
+    mixedOtherUu = overlayHas('240 UU') && overlayButtonCount('Offer to the Chain') === 1;
+    oversizeRowKept = ctx.cargo.some((r) => r.commodity === 'survivor' && r.units === 99);
+    milestoneOnce = Array.isArray(ctx.world.milestones)
+      && ctx.world.milestones.filter((id) => id === 'peopleTrafficked').length === 1
+      && ctx.world.peopleTrafficked === undefined;
+
+    const offer1 = findOverlayButton('Offer to the Chain');
+    if (offer1) offer1.click();
+    tick(1, 'wave66 double offer');
+    const confirm1 = findOverlayButton('Confirm transfer');
+    const credits1 = ctx.world.credits;
+    if (confirm1) confirm1.click();
+    tick(1, 'wave66 double confirm');
+    const afterFirst = ctx.world.credits;
+    if (confirm1) confirm1.click();
+    tick(1, 'wave66 double stale');
+    const confirm2 = findOverlayButton('Confirm transfer');
+    if (confirm2) confirm2.click();
+    tick(1, 'wave66 double second');
+    doubleNoSecondPay = afterFirst === credits1 + 240
+      && ctx.world.credits === afterFirst
+      && !ctx.cargo.some((r) => r.commodity === 'survivor' && r.faction === 'veridian')
+      && ctx.world.milestones.filter((id) => id === 'peopleTrafficked').length === 1;
+    milestoneOnce = milestoneOnce
+      && ctx.world.milestones.filter((id) => id === 'peopleTrafficked').length === 1
+      && ctx.world.peopleTrafficked === undefined;
+  }
+
+  let marketNoSurvivor = false;
+  let asNoSellPeople = false;
+  let priceOfZero = false;
+  if (gildedDock) {
+    setHold([surv('freehold', 'other', 3)], 20);
+    ctx.world.prices.survivor = 999;
+    goMenu('wave66 market');
+    dispatchKey('Digit1');
+    tick(1, 'wave66 market');
+    marketNoSurvivor = !overlayTexts().some((t) => t.includes('survivor') || t.includes('Survivor'));
+    const beforeAs = ctx.cargo.filter((r) => r.commodity === 'survivor').reduce((n, r) => n + r.units, 0);
+    dispatchKey('KeyA');
+    dispatchKey('KeyS');
+    tick(1, 'wave66 market AS');
+    const afterAs = ctx.cargo.filter((r) => r.commodity === 'survivor').reduce((n, r) => n + r.units, 0);
+    asNoSellPeople = beforeAs === 3 && afterAs === 3;
+    priceOfZero = w66PriceOf(ctx, 'survivor') === 0 && ctx.world.prices.survivor === 999;
+    delete ctx.world.prices.survivor;
+  }
+
+  let digit7People = false;
+  let digit0Shipyard = false;
+  if (gildedDock) {
+    goMenu('wave66 digits');
+    digit7People = overlayHas('7 — People');
+    dispatchKey('Digit7');
+    tick(1, 'wave66 digit7');
+    digit7People = digit7People && overlayHas('PEOPLE');
+    dispatchKey('Escape');
+    tick(1, 'wave66 back digits');
+    digit0Shipyard = overlayHas('0 — Shipyard');
+    dispatchKey('Digit0');
+    tick(1, 'wave66 digit0');
+    digit0Shipyard = digit0Shipyard && overlayHas('SHIPYARD');
+  }
+
+  if (ctx.flags.docked) undockStation();
+  const reachedFreehold = travelTo('freehold', 'wave66 fh');
+  let fhReturn = false;
+  let fhNoOffer = false;
+  let returnWorks = returnGilded;
+  if (reachedFreehold) {
+    const fhRep = ctx.world.reputation.freehold;
+    setHold([surv('freehold', 'other', 2)], 20);
+    goPeople('wave66 fh people');
+    fhNoOffer = overlayButtonCount('Offer to the Chain') === 0
+      && !overlayHas('Offer to the Chain')
+      && overlayButtonCount('Confirm transfer') === 0;
+    fhReturn = !!findOverlayButton('Return survivors');
+    const retFh = findOverlayButton('Return survivors');
+    if (retFh) retFh.click();
+    tick(1, 'wave66 fh return click');
+    const rescued = !ctx.cargo.some((r) => r.commodity === 'survivor' && r.faction === 'freehold')
+      && ctx.world.reputation.freehold === fhRep + 8;
+    returnWorks = returnGilded && !!retFh && rescued;
+    fhReturn = fhReturn && rescued;
+  }
+  if (ctx.flags.docked) undockStation();
+
+  const w66d = {
+    ...prefix('key', keys),
+    ...prefix('src', srcPins),
+    gildedDock,
+    emptyNoOffer,
+    emptyNoConfirm,
+    mixedTwoOffers,
+    mixedConfirmOne,
+    mixedOtherRemains,
+    mixedOtherUu,
+    unkNoOffer,
+    unkRefuse,
+    protoNoOffer,
+    protoNoThrow,
+    oversizeNoSale,
+    oversizeRowKept,
+    doubleNoSecondPay,
+    fhReturn,
+    fhNoOffer,
+    returnWorks,
+    marketNoSurvivor,
+    asNoSellPeople,
+    priceOfZero,
+    digit7People,
+    digit0Shipyard,
+    digitPendingNoDebit,
+    milestoneOnce,
+    noWorldPeople: ctx.world.peopleTrafficked === undefined,
+  };
+  console.log('wave66 desk:', JSON.stringify(w66d));
+  if (!Object.values(w66d).every(Boolean)) { console.log('WAVE66 DESK FAIL'); errors++; }
+}
+
+// ---- WAVE69 AST: belt occupancy, fieldOre overlay, sun miss, source pins ----
+{
+  const { WORLD_FIELDS: w69WorldFields } = await import('../src/game/save.js');
+  const here69 = dirname(fileURLToPath(import.meta.url));
+  const src69 = (rel) => readFileSync(join(here69, '..', rel), 'utf8');
+  const jump69 = src69('src/game/jump.js');
+  const hud69 = src69('src/systems/hud.js');
+  const controls69 = src69('src/systems/controls.js');
+
+  // WAVE51 Freehold seed-11 first-8 (oreKey, radius, ore). Do not weaken.
+  const W51_FIRST8 = [
+    ['brineIce', 8.330197296655475, 8],
+    ['livingRock', 6.9844691390487315, 5],
+    ['slagIron', 3.7710742510987254, 11],
+    ['livingRock', 4.248511092880373, 7],
+    ['rawOre', 11.858896609068687, 11],
+    ['slagIron', 5.547035800152279, 10],
+    ['rawOre', 11.52513813834408, 4],
+    ['slagIron', 3.4849928163142665, 9],
+  ];
+
+  const w69scopedCtx = (systemId) => {
+    const sceneS = new THREE.Scene();
+    const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
+    const rendererS = {
+      domElement: { style: {} },
+      setSize() {},
+      setPixelRatio() {},
+      setAnimationLoop() {},
+      render() {},
+    };
+    const ctxS = createCtx({ scene: sceneS, camera: cameraS, renderer: rendererS });
+    ctxS.systems = SYSTEMS;
+    ctxS.world.currentSystem = systemId;
+    ctxS.world.time = 0;
+    return ctxS;
+  };
+  const w69angDiff = (a, b) => {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return Math.abs(d);
+  };
+
+  const ctxA = w69scopedCtx('freehold');
+  const sunRLive = ctx.config.world.sunRadius;
+  ctxA.config.world.sunRadius = Number.isFinite(sunRLive) && sunRLive > 0
+    ? sunRLive
+    : SYSTEMS.freehold.sunRadius;
+  const astA = initAsteroids(ctxA);
+  const listA = ctxA.asteroids.list;
+  const fieldA = SYSTEMS.freehold.field;
+  const [cxA, , czA] = fieldA.center;
+  const RA = Math.hypot(cxA, czA);
+  const azA = Math.atan2(czA, cxA);
+  let sumR = 0;
+  let inSector = 0;
+  let sunHit = 0;
+  const heatR = ctxA.config.world.sunRadius * PHY.SUN_HEAT_MULT;
+  for (let i = 0; i < listA.length; i++) {
+    const p = listA[i].position;
+    const hx = Math.hypot(p.x, p.z);
+    sumR += hx;
+    if (w69angDiff(Math.atan2(p.z, p.x), azA) <= 0.7) inSector += 1;
+    if (hx < heatR) sunHit += 1;
+  }
+  const meanR = listA.length ? sumR / listA.length : 0;
+  const first8 = listA.slice(0, 8).map((e) => [e.oreKey, e.radius, e.ore]);
+
+  const seeded0 = listA[0] ? listA[0].ore : NaN;
+  ctxA.world.fieldOre = { freehold: { '0': 0 } };
+  astA.update(0);
+  const oreZeroed = listA[0] && listA[0].ore === 0;
+  delete ctxA.world.fieldOre;
+  astA.update(0);
+  let oreRefilled = listA[0] && listA[0].ore === seeded0;
+  if (!oreRefilled) {
+    ctxA.flags.saveRestored = true;
+    astA.update(0);
+    oreRefilled = listA[0] && listA[0].ore === seeded0;
+  }
+
+  let cap160 = false;
+  const savedCount = fieldA.count;
+  try {
+    fieldA.count = 200;
+    const ctxCap = w69scopedCtx('freehold');
+    ctxCap.config.world.sunRadius = ctxA.config.world.sunRadius;
+    initAsteroids(ctxCap);
+    cap160 = ctxCap.asteroids.list.length === 160;
+  } finally {
+    fieldA.count = savedCount;
+  }
+
+  const w69 = {
+    idEqIndex: listA.length > 0 && listA.every((e, i) => e.id === i),
+    countFreehold: listA.length === fieldA.count && fieldA.count === 130 && listA.length <= 160,
+    notClump: meanR > 0.6 * RA,
+    workSector: listA.length > 0 && inSector / listA.length >= 0.6,
+    wave51tuples: JSON.stringify(first8) === JSON.stringify(W51_FIRST8),
+    fieldOreWorldField: w69WorldFields.includes('fieldOre'),
+    depleteRoundtrip: oreZeroed && oreRefilled,
+    sunMiss: Number.isFinite(heatR) && heatR > 0 && sunHit === 0,
+    cap160,
+    beltLine: jump69.includes('Belt lies'),
+    hudMineCue: hud69.includes('Mine · belt'),
+    staleLock: controls69.includes('dropStaleRockLock'),
+  };
+  console.log('wave69 ast:', JSON.stringify(w69));
+  if (!Object.values(w69).every(Boolean)) { console.log('WAVE69 AST FAIL'); errors++; }
+}
+
+// ---- WAVE70: MATCH (X) on a locked rock; ship MATCH still arms ----
+{
+  const prevTgt70 = ctx.targets.current;
+  const prevDock70 = ctx.flags.docked;
+  const prevJump70 = ctx.gate.jumping;
+  const prevMatch70 = ctx.flags.matchSpeed;
+  const prevThr70 = ctx.input.throttle;
+  const prevHeld70 = ctx.input.throttleHeld;
+  const prevGroup70 = ctx.input.weaponGroup;
+  const list70 = ctx.asteroids?.list;
+  const rock70 = {
+    id: -70,
+    position: new THREE.Vector3(40, 0, -30),
+    radius: 8,
+  };
+  let pushed70 = false;
+  if (list70) {
+    list70.push(rock70);
+    pushed70 = true;
+  }
+
+  ctx.flags.docked = false;
+  ctx.gate.jumping = false;
+  ctx.flags.matchSpeed = false;
+  ctx.input.throttleHeld = false;
+  ctx.input.weaponGroup = 3;
+
+  ctx.targets.current = null;
+  dispatchKey('KeyX');
+  tick(1, 'wave70 no lock');
+  const noLock = ctx.flags.matchSpeed === false;
+
+  ctx.targets.current = rock70;
+  ctx.flags.matchSpeed = false;
+  const thrBeforeRock = ctx.input.throttle;
+  dispatchKey('KeyX');
+  tick(1, 'wave70 rock arm');
+  const rockArm = ctx.flags.matchSpeed === true;
+  const throttleUntouched = ctx.input.throttle === thrBeforeRock;
+
+  for (const fn of winListeners.keydown ?? []) fn({ code: 'KeyR', repeat: false, preventDefault() {} });
+  tick(1, 'wave70 throttleHeld cancel');
+  const throttleCancel = ctx.flags.matchSpeed === false;
+  for (const fn of winListeners.keyup ?? []) fn({ code: 'KeyR', preventDefault() {} });
+  ctx.input.throttleHeld = false;
+
+  const rec70 = {
+    id: 'w70-match-mark', name: 'W70 MARK', classKey: 'light',
+    faction: 'independent', role: 'trader', resolve: 40,
+  };
+  const origin70 = ctx.ship.object ? ctx.ship.object.position.clone() : new THREE.Vector3();
+  let live70 = spawnLiveShip(ctx, rec70, origin70.clone().add(new THREE.Vector3(40, 0, -20)));
+  let spawned70 = false;
+  if (live70) { ctx.ships.push(live70); spawned70 = true; }
+  else live70 = (ctx.ships ?? []).find((s) => s?.state && !s.state.destroyed && s.object) ?? null;
+  ctx.targets.current = live70;
+  ctx.flags.matchSpeed = false;
+  dispatchKey('KeyX');
+  tick(1, 'wave70 ship arm');
+  const shipArm = !!(live70 && ctx.flags.matchSpeed === true);
+
+  ctx.flags.matchSpeed = false;
+  dispatchKey('KeyX');
+  tick(1, 'wave70 match off');
+
+  ctx.targets.current = prevTgt70;
+  ctx.flags.docked = prevDock70;
+  ctx.gate.jumping = prevJump70;
+  ctx.flags.matchSpeed = prevMatch70;
+  ctx.input.throttle = prevThr70;
+  ctx.input.throttleHeld = prevHeld70;
+  ctx.input.weaponGroup = prevGroup70;
+  if (pushed70) {
+    const iR = list70.indexOf(rock70);
+    if (iR >= 0) list70.splice(iR, 1);
+  }
+  if (spawned70 && live70) {
+    const iS = ctx.ships.indexOf(live70);
+    if (iS >= 0) ctx.ships.splice(iS, 1);
+    removeLiveShip(ctx, live70);
+  }
+
+  const w70 = { rockArm, noLock, throttleCancel, shipArm, throttleUntouched };
+  console.log('wave70 minehold:', JSON.stringify(w70));
+  if (!Object.values(w70).every(Boolean)) { console.log('WAVE70 MINEHOLD FAIL'); errors++; }
 }
 
 if (errors === 0) {

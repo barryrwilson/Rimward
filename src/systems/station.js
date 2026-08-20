@@ -19,6 +19,19 @@ import { lamplighterStation } from './stations/lamplighter.js';
 import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
+import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
+import { writeMountedGear } from '../game/hangar.js';
+import {
+  LAUNCHER_IDS,
+  TURRET_IDS,
+  canSeat,
+  isLauncherId,
+  isTurretId,
+  healMissileAmmo,
+  launcherAmmoMax,
+} from '../game/weapon-fit.js';
+import { trafficLots, applySurvivorSale } from '../game/trafficking.js';
+import { requestAutosave } from '../game/save.js';
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -30,10 +43,13 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  * Owns: ctx.flags.docked, ctx.station = { position, name, inZone } (HUD reads
  * it for the dock prompt), ctx.world.jobs (created here), ctx.world.scanner.
  * Mutates on purchase only: ctx.world.credits, ctx.cargo, ctx.cargoCapacity,
+ * mounted hangar gear (then world scanner / miningLaser / concealedMounts /
+ * launcher / missileAmmo / turret),
  * ctx.bio (feed/tend — agreed with bio.js), ctx.player (repair), ctx.world
  * reputation on job completion and on survivor return (wave 60). Emits
  * 'docked' / 'undocked' (+ 'commLine' for job completions in space;
- * 'survivorRescued' + 'commLine' when people come home). Never emits for
+ * 'survivorRescued' + 'commLine' when people come home). Emits 'survivorSold'
+ * via trafficking applySurvivorSale. Never emits for
  * the dock prompt — hud.js reads ctx.station.inZone itself.
  *
  * Restricted components (§12/§16): Freehold Landing refuses unless fear ≥
@@ -113,7 +129,7 @@ import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfish
  */
 
 const RING_SPIN = 0.05; // rad/s
-export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics']);
+export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard']);
 
 const RESTRICTED_REP_GATE = -25; // a burned Compact name opens the locker
 
@@ -963,6 +979,355 @@ export function otherSurvivorFactionNames(ctx, hereFaction) {
   }
   return names;
 }
+
+export function cancelTrafficPending(ui) {
+  if (!ui?.trafficPending) return false;
+  ui.trafficPending = null;
+  ui.notice = '';
+  return true;
+}
+
+// Outfitting Digit 8/9. Bind only when ui.level === 2 && ui.service ===
+// 'outfitting'. Digit 8 on the dock root is Launch; Digit 9 is Standing.
+let outfitBuyInFlight = false;
+
+function mountedHangarRowOf(ctx) {
+  const hangar = ctx?.world?.hangar;
+  const mountedId = hangar?.mountedId;
+  const hulls = hangar?.hulls;
+  if (typeof mountedId !== 'string' || !Array.isArray(hulls)) return null;
+  for (const row of hulls) {
+    if (row && row.id === mountedId) return row;
+  }
+  return null;
+}
+
+function mountedClassKey(ctx) {
+  const row = mountedHangarRowOf(ctx);
+  if (row && typeof row.classKey === 'string') return row.classKey;
+  const playerKey = ctx?.player?.classKey;
+  return typeof playerKey === 'string' ? playerKey : 'light';
+}
+
+function liveLauncher(ctx) {
+  const row = mountedHangarRowOf(ctx);
+  if (row && typeof row.launcher === 'string') return row.launcher;
+  const world = ctx?.world?.launcher;
+  return typeof world === 'string' ? world : '';
+}
+
+function liveTurret(ctx) {
+  const row = mountedHangarRowOf(ctx);
+  if (row && typeof row.turret === 'string') return row.turret;
+  const world = ctx?.world?.turret;
+  return typeof world === 'string' ? world : '';
+}
+
+function liveMissileAmmo(ctx) {
+  const launcher = liveLauncher(ctx);
+  const row = mountedHangarRowOf(ctx);
+  if (row) return healMissileAmmo(launcher, row.missileAmmo);
+  return healMissileAmmo(launcher, ctx?.world?.missileAmmo);
+}
+
+function authoredCost(n) {
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** Desk row for Digit 8. Cost is authored catalog, never a blob field. */
+export function outfitLauncherState(classKey, launcher, ammo) {
+  void ammo;
+  if (!canSeat(classKey, 'missile')) return { kind: 'noseat', cost: 0, id: '' };
+  if (isLauncherId(launcher)) {
+    const sku = LAUNCHER_IDS[launcher];
+    const cost = authoredCost(sku.restockCost);
+    return { kind: 'restock', cost: cost ?? 0, id: launcher };
+  }
+  const sku = LAUNCHER_IDS.dart;
+  const cost = authoredCost(sku.cost);
+  return { kind: 'offer', cost: cost ?? 0, id: 'dart' };
+}
+
+/** Desk row for Digit 9. No ammo restock. */
+export function outfitTurretState(classKey, turret) {
+  if (!canSeat(classKey, 'turret')) return { kind: 'noseat', cost: 0, id: '' };
+  if (isTurretId(turret)) return { kind: 'seated', cost: 0, id: turret };
+  const sku = TURRET_IDS.auto;
+  const cost = authoredCost(sku.cost);
+  return { kind: 'offer', cost: cost ?? 0, id: 'auto' };
+}
+
+export function cancelOutfitPending(ui) {
+  if (!ui?.outfitPending) return false;
+  ui.outfitPending = null;
+  ui.notice = '';
+  return true;
+}
+
+/** Digit 8/9 arms papers. Does not debit. Fail closed off outfitting level 2. */
+export function armOutfitPapers(ctx, ui, n) {
+  if (!ui || ui.level !== 2 || ui.service !== 'outfitting') return false;
+  if (n !== 8 && n !== 9) return false;
+  if (ui.outfitPending) return true;
+  const classKey = mountedClassKey(ctx);
+  if (n === 8) {
+    const st = outfitLauncherState(classKey, liveLauncher(ctx), liveMissileAmmo(ctx));
+    if (st.kind === 'noseat') {
+      ui.notice = 'This hull has no launcher hardpoint.';
+      return true;
+    }
+    if (st.kind === 'offer' || st.kind === 'restock') {
+      ui.outfitPending = { slot: 'launcher', kind: st.kind, id: st.id };
+      ui.notice = '';
+      return true;
+    }
+    return true;
+  }
+  const st = outfitTurretState(classKey, liveTurret(ctx));
+  if (st.kind === 'noseat') {
+    ui.notice = 'This hull has no turret hardpoint.';
+    return true;
+  }
+  if (st.kind === 'offer') {
+    ui.outfitPending = { slot: 'turret', kind: 'offer', id: st.id };
+    ui.notice = '';
+    return true;
+  }
+  return true;
+}
+
+function refuseOutfit(ui, reason, line) {
+  if (ui) ui.notice = line;
+  return { ok: false, reason };
+}
+
+function applyOutfitPending(ctx, ui, pending) {
+  const slotRaw = Object.hasOwn(pending, 'slot') ? pending.slot : null;
+  const kindRaw = Object.hasOwn(pending, 'kind') ? pending.kind : null;
+  const idRaw = Object.hasOwn(pending, 'id') ? pending.id : '';
+  const slot = slotRaw === 'turret' ? 'turret' : slotRaw === 'launcher' ? 'launcher' : null;
+  const kind = kindRaw === 'restock' || kindRaw === 'offer' ? kindRaw : null;
+  const id = typeof idRaw === 'string' ? idRaw : '';
+  if (!slot || !kind) return refuseOutfit(ui, 'invalid', 'No papers to file.');
+
+  const classKey = mountedClassKey(ctx);
+  if (slot === 'launcher') {
+    if (!isLauncherId(id)) return refuseOutfit(ui, 'invalid', 'The yard cannot seat that.');
+    const live = outfitLauncherState(classKey, liveLauncher(ctx), liveMissileAmmo(ctx));
+    if (live.kind !== kind || live.id !== id) {
+      return refuseOutfit(ui, 'invalid', 'Those papers no longer match this hull.');
+    }
+    const sku = LAUNCHER_IDS[id];
+    const cost = authoredCost(kind === 'restock' ? sku.restockCost : sku.cost);
+    if (cost == null) return refuseOutfit(ui, 'invalid', 'The yard cannot seat that.');
+    const credits = ctx?.world?.credits;
+    if (typeof credits !== 'number' || !Number.isFinite(credits) || credits < cost) {
+      return refuseOutfit(ui, 'credits', 'Not enough UU.');
+    }
+    const nextCredits = credits - cost;
+    if (!(nextCredits >= 0) || !Number.isFinite(nextCredits)) {
+      return refuseOutfit(ui, 'credits', 'Not enough UU.');
+    }
+    if (kind === 'offer') {
+      if (!canSeat(classKey, 'missile')) {
+        return refuseOutfit(ui, 'noseat', 'This hull has no launcher hardpoint.');
+      }
+      const ammoMax = launcherAmmoMax(id);
+      const row = writeMountedGear(ctx, { launcher: id, missileAmmo: ammoMax });
+      if (!row || row.launcher !== id) {
+        return refuseOutfit(ui, 'release', 'The yard cannot seat that.');
+      }
+      ctx.world.credits = nextCredits;
+      ui.notice = `${sku.name} bolted in.`;
+      return { ok: true, price: cost, id };
+    }
+    const have = liveMissileAmmo(ctx);
+    const unit = authoredCost(sku.restockUnit);
+    if (unit == null || unit <= 0) return refuseOutfit(ui, 'invalid', 'The yard cannot seat that.');
+    const cap = launcherAmmoMax(id);
+    if (have >= cap) return refuseOutfit(ui, 'full', 'The rack is already full.');
+    const row = writeMountedGear(ctx, { missileAmmo: have + unit });
+    if (!row || row.missileAmmo <= have) {
+      return refuseOutfit(ui, 'full', 'The rack is already full.');
+    }
+    ctx.world.credits = nextCredits;
+    ui.notice = `${sku.name} restocked.`;
+    return { ok: true, price: cost, id };
+  }
+
+  if (!isTurretId(id) || kind !== 'offer') {
+    return refuseOutfit(ui, 'invalid', 'The yard cannot seat that.');
+  }
+  const live = outfitTurretState(classKey, liveTurret(ctx));
+  if (live.kind !== 'offer' || live.id !== id) {
+    return refuseOutfit(ui, 'invalid', 'Those papers no longer match this hull.');
+  }
+  const sku = TURRET_IDS[id];
+  const cost = authoredCost(sku.cost);
+  if (cost == null) return refuseOutfit(ui, 'invalid', 'The yard cannot seat that.');
+  const credits = ctx?.world?.credits;
+  if (typeof credits !== 'number' || !Number.isFinite(credits) || credits < cost) {
+    return refuseOutfit(ui, 'credits', 'Not enough UU.');
+  }
+  const nextCredits = credits - cost;
+  if (!(nextCredits >= 0) || !Number.isFinite(nextCredits)) {
+    return refuseOutfit(ui, 'credits', 'Not enough UU.');
+  }
+  if (!canSeat(classKey, 'turret')) {
+    return refuseOutfit(ui, 'noseat', 'This hull has no turret hardpoint.');
+  }
+  const row = writeMountedGear(ctx, { turret: id });
+  if (!row || row.turret !== id) {
+    return refuseOutfit(ui, 'release', 'The yard cannot seat that.');
+  }
+  ctx.world.credits = nextCredits;
+  ui.notice = `${sku.name} bolted in.`;
+  return { ok: true, price: cost, id };
+}
+
+/** Confirm papers. Re-reads live credits, canSeat, and catalog cost. */
+export function confirmOutfitPapers(ctx, ui) {
+  if (!ui || ui.level !== 2 || ui.service !== 'outfitting') {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (outfitBuyInFlight) {
+    ui.notice = 'Papers are already in flight.';
+    return { ok: false, reason: 'busy' };
+  }
+  outfitBuyInFlight = true;
+  try {
+    const pending = ui.outfitPending;
+    ui.outfitPending = null;
+    if (!pending || typeof pending !== 'object' || Array.isArray(pending)) {
+      return refuseOutfit(ui, 'invalid', 'No papers to file.');
+    }
+    return applyOutfitPending(ctx, ui, pending);
+  } finally {
+    outfitBuyInFlight = false;
+  }
+}
+
+function trafficSourceOf(source) {
+  return source === 'playerKill' ? 'playerKill' : source === 'other' ? 'other' : null;
+}
+
+function trafficFactionOf(faction) {
+  if (typeof faction !== 'string') return null;
+  if (!Object.hasOwn(FACTIONS, faction)) return null;
+  if (faction === 'unknowables') return null;
+  return faction;
+}
+
+function holdHasSurvivor(ctx) {
+  const cargo = ctx?.cargo;
+  if (!Array.isArray(cargo)) return false;
+  for (const row of cargo) {
+    if (isSurvivorCargo(row)) return true;
+  }
+  return false;
+}
+
+function pendingLotKey(pending) {
+  if (!pending || typeof pending !== 'object' || Array.isArray(pending)) return null;
+  if (!Object.hasOwn(pending, 'faction') || !Object.hasOwn(pending, 'source')) return null;
+  const faction = trafficFactionOf(pending.faction);
+  const source = trafficSourceOf(pending.source);
+  if (!faction || !source) return null;
+  return { faction, source };
+}
+
+function liveTrafficLot(ctx, faction, source) {
+  const wantFaction = trafficFactionOf(faction);
+  const wantSource = trafficSourceOf(source);
+  if (!wantFaction || !wantSource) return null;
+  for (const lot of trafficLots(ctx)) {
+    if (lot.faction === wantFaction && lot.source === wantSource) return lot;
+  }
+  return null;
+}
+
+function confirmTrafficTransfer(ctx, ui, dockFaction, redraw) {
+  if (!ui || ui.trafficBusy || !ui.trafficPending) return;
+  const armed = pendingLotKey(ui.trafficPending);
+  ui.trafficBusy = true;
+  try {
+    const result = armed
+      ? applySurvivorSale(ctx, armed.faction, armed.source, dockFaction)
+      : null;
+    if (result) {
+      ui.notice = result.line;
+      requestAutosave(ctx);
+    } else {
+      ui.notice = 'They are no longer in the hold.';
+    }
+    ui.trafficPending = null;
+    redraw();
+  } finally {
+    ui.trafficBusy = false;
+  }
+}
+
+/** People level-2 Gilded transfer desk. Gate fail-closed. */
+export function renderTrafficDesk(h, btn, panel, ctx, ui, dockFaction, redraw) {
+  if (!(ui?.level === 2 && ui.service === 'people')) return;
+  if (dockFaction !== 'gilded') return;
+
+  const reduced = ctx?.settings?.reducedMotion === true;
+  const lots = trafficLots(ctx);
+  if (ui.trafficPending) {
+    const armed = pendingLotKey(ui.trafficPending);
+    const lot = armed ? liveTrafficLot(ctx, armed.faction, armed.source) : null;
+    if (!lot) {
+      ui.trafficPending = null;
+      ui.notice = 'They are no longer in the hold.';
+    } else {
+      h('div', 'people-note', panel,
+        reduced ? 'Transfer desk.' : 'The Chain keeps a transfer desk. They pay for people still in the hold.');
+      const meta = reduced
+        ? `${lot.total} UU · Confirm`
+        : `${lot.units} · ${lot.total} UU · Confirm transfer`;
+      const box = h('div', 'screen-btnrow people-actions', panel);
+      h('div', 'people-note', box, meta);
+      btn(box, 'Confirm transfer', () => {
+        confirmTrafficTransfer(ctx, ui, dockFaction, redraw);
+      }, 'screen-btn screen-btn-warm');
+      btn(box, 'Esc — Cancel', () => {
+        cancelTrafficPending(ui);
+        redraw();
+      });
+      return;
+    }
+  }
+
+  if (lots.length === 0) {
+    if (holdHasSurvivor(ctx)) {
+      h('div', 'people-note', panel, 'The desk will not take them.');
+    }
+    return;
+  }
+
+  h('div', 'people-note', panel,
+    reduced ? 'Transfer desk.' : 'The Chain keeps a transfer desk. They pay for people still in the hold.');
+  for (const lot of lots) {
+    const faction = trafficFactionOf(lot.faction);
+    const source = trafficSourceOf(lot.source);
+    if (!faction || !source) continue;
+    const fname = FACTIONS[faction].name;
+    if (typeof fname !== 'string' || !fname) continue;
+    const srcLabel = source === 'playerKill' ? 'your kill' : 'recovered';
+    const line = reduced
+      ? `${lot.units} · ${lot.unitPrice} UU`
+      : `${lot.units} ${fname} · ${srcLabel} · ${lot.unitPrice} UU each`;
+    const row = h('div', 'screen-btnrow people-actions', panel);
+    h('div', 'people-note', row, line);
+    btn(row, reduced ? 'Offer' : 'Offer to the Chain', () => {
+      ui.trafficPending = { faction, source };
+      ui.notice = '';
+      redraw();
+    });
+  }
+}
+
 /** Remove matching-faction survivors. 'other' first, then unknown, then playerKill. */
 export function removeSurvivorsForFaction(ctx, faction) {
   const cargo = ctx.cargo ?? [];
@@ -1040,6 +1405,7 @@ export function removeCargo(ctx, commodity, units) {
   }
 }
 export function priceOf(ctx, key) {
+  if (key === 'survivor') return 0;
   if (!isMarketCommodity(key)) return ctx.world?.prices?.[key] ?? 0;
   return ctx.world.prices[key] ?? COMMODITIES[key].base;
 }
@@ -1445,6 +1811,10 @@ export function initStation(ctx) {
     fenceUnlocked: false, // session-scoped: a called-in favor opens the locker
     keeperComp: false, // session-scoped (wave 11): a keeper's marker comps the yard
     compNote: null, // session-scoped (wave 26): the repair screen note a comp speaks
+    shipyardPane: SHIPYARD_PANE_HANGAR,
+    trafficPending: null,
+    trafficBusy: false,
+    outfitPending: null,
   };
 
   function h(tag, cls, parent, text) {
@@ -1525,7 +1895,7 @@ export function initStation(ctx) {
       if (used >= CARGO_UPGRADE_MAX) { ui.notice = 'Hold racks are maxed out.'; render(); return; }
       if (ctx.world.credits < CARGO_UPGRADE_COST) { ui.notice = 'Not enough UU.'; render(); return; }
       ctx.world.credits -= CARGO_UPGRADE_COST;
-      ctx.cargoCapacity += CARGO_UPGRADE_STEP;
+      writeMountedGear(ctx, { cargoCapacity: ctx.cargoCapacity + CARGO_UPGRADE_STEP });
       ui.notice = `Hold racks extended — capacity ${ctx.cargoCapacity}.`;
       render();
     },
@@ -1533,7 +1903,7 @@ export function initStation(ctx) {
       if (ctx.world.scanner >= 1) { ui.notice = 'Wolfeye Mk I already installed.'; render(); return; }
       if (ctx.world.credits < SCANNER_COST) { ui.notice = 'Not enough UU.'; render(); return; }
       ctx.world.credits -= SCANNER_COST;
-      ctx.world.scanner = 1;
+      writeMountedGear(ctx, { scanner: 1 });
       ui.notice = 'Wolfeye Mk I bolted in. Their nerve reads as numbers now.';
       render();
     },
@@ -1542,7 +1912,7 @@ export function initStation(ctx) {
       if (ctx.world.scanner < 1) { ui.notice = 'The Mk II lattice bolts onto a Mk I eye. Buy that first.'; render(); return; }
       if (ctx.world.credits < SCANNER2_COST) { ui.notice = 'Not enough UU.'; render(); return; }
       ctx.world.credits -= SCANNER2_COST;
-      ctx.world.scanner = 2;
+      writeMountedGear(ctx, { scanner: 2 });
       ui.notice = 'Wolfeye Mk II bolted in. Their guns show through their skins.';
       render();
     },
@@ -1551,15 +1921,15 @@ export function initStation(ctx) {
       if (ctx.world.concealedMounts === true) { ui.notice = 'Concealed mounts already fitted.'; render(); return; }
       if (ctx.world.credits < HIDDEN_MOUNTS.cost) { ui.notice = 'Not enough UU.'; render(); return; }
       ctx.world.credits -= HIDDEN_MOUNTS.cost;
-      ctx.world.concealedMounts = true;
+      writeMountedGear(ctx, { concealedMounts: true });
       ui.notice = 'The yard keeps it off the books. Her guns sleep where a manifest can\'t see them.';
       render();
     },
     // Wave 51: mining-head ladder (§51) — four tiers in state.js MINING_LASERS,
-    // bought strictly in order like the Wolfeye eyes above. ctx.world.miningLaser
-    // is the persisted index into MINING_LASERS (0 = stock Mk I, never sold
-    // here); each head seats only on the previous head's mount. The hardness
-    // gate that makes the ladder matter lives in combat.js ('mineBlocked').
+    // bought strictly in order like the Wolfeye eyes above. The mounted hangar
+    // row is the source of truth; ctx.world.miningLaser is the live mirror
+    // (0 = stock Mk I, never sold here). Each head seats only on the previous
+    // head's mount. Hardness gating lives in combat.js ('mineBlocked').
     buyMiningLaser(targetIndex) {
       const target = miningLaserFor(targetIndex);
       if (ctx.world.miningLaser >= targetIndex) { ui.notice = `${target.name} already fitted.`; render(); return; }
@@ -1570,7 +1940,7 @@ export function initStation(ctx) {
       }
       if (ctx.world.credits < target.cost) { ui.notice = 'Not enough UU.'; render(); return; }
       ctx.world.credits -= target.cost;
-      ctx.world.miningLaser = targetIndex;
+      writeMountedGear(ctx, { miningLaser: targetIndex });
       ui.notice = target.line;
       render();
     },
@@ -1967,6 +2337,72 @@ export function initStation(ctx) {
         h('div', 'screen-note', row, `${head.name} needs the ${MINING_LASERS[i - 1].name} in the mount first.`);
       }
     }
+    const classKey = mountedClassKey(ctx);
+    const launcher = liveLauncher(ctx);
+    const ammo = liveMissileAmmo(ctx);
+    const turret = liveTurret(ctx);
+    const launchSt = outfitLauncherState(classKey, launcher, ammo);
+    const turretSt = outfitTurretState(classKey, turret);
+    const pending = ui.outfitPending;
+
+    const row8 = h('div', 'screen-btnrow', panel);
+    if (launchSt.kind === 'noseat') {
+      h('div', 'screen-note', row8, 'This hull has no launcher hardpoint.');
+    } else if (pending && pending.slot === 'launcher') {
+      const sku = isLauncherId(pending.id) ? LAUNCHER_IDS[pending.id] : null;
+      const name = sku ? sku.name : 'Launcher';
+      h('div', 'screen-note', row8, `${name} · ${launchSt.cost} UU · Confirm papers`);
+      btn(row8, 'Confirm papers', () => {
+        confirmOutfitPapers(ctx, ui);
+        render();
+      }, 'screen-btn screen-btn-warm');
+      btn(row8, 'Esc — Cancel', () => {
+        cancelOutfitPending(ui);
+        render();
+      });
+    } else if (launchSt.kind === 'offer') {
+      const sku = LAUNCHER_IDS[launchSt.id];
+      btn(row8, `8 — ${sku.name} (${launchSt.cost} UU)`, () => {
+        armOutfitPapers(ctx, ui, 8);
+        render();
+      });
+    } else {
+      const sku = isLauncherId(launchSt.id) ? LAUNCHER_IDS[launchSt.id] : null;
+      const name = sku ? sku.name : 'Launcher';
+      const unit = sku && Number.isInteger(sku.restockUnit) ? sku.restockUnit : 0;
+      h('div', 'screen-note', row8, `${name} — ${ammo} / ${launcherAmmoMax(launchSt.id)}`);
+      btn(row8, `8 — Restock +${unit} (${launchSt.cost} UU)`, () => {
+        armOutfitPapers(ctx, ui, 8);
+        render();
+      });
+    }
+
+    const row9 = h('div', 'screen-btnrow', panel);
+    if (turretSt.kind === 'noseat') {
+      h('div', 'screen-note', row9, 'This hull has no turret hardpoint.');
+    } else if (pending && pending.slot === 'turret') {
+      const sku = isTurretId(pending.id) ? TURRET_IDS[pending.id] : null;
+      const name = sku ? sku.name : 'Turret';
+      h('div', 'screen-note', row9, `${name} · ${turretSt.cost} UU · Confirm papers`);
+      btn(row9, 'Confirm papers', () => {
+        confirmOutfitPapers(ctx, ui);
+        render();
+      }, 'screen-btn screen-btn-warm');
+      btn(row9, 'Esc — Cancel', () => {
+        cancelOutfitPending(ui);
+        render();
+      });
+    } else if (turretSt.kind === 'offer') {
+      const sku = TURRET_IDS[turretSt.id];
+      btn(row9, `9 — ${sku.name} (${turretSt.cost} UU)`, () => {
+        armOutfitPapers(ctx, ui, 9);
+        render();
+      });
+    } else {
+      const sku = isTurretId(turretSt.id) ? TURRET_IDS[turretSt.id] : null;
+      const name = sku ? sku.name : 'Turret';
+      h('div', 'screen-note', row9, `${name} fitted.`);
+    }
   }
 
   // ---- people (contacts: dockmaster/fence/fixer of this dock, §12.x) ----
@@ -1991,6 +2427,7 @@ export function initStation(ctx) {
   function renderPeople(panel) {
     h('div', 'screen-sub', panel, 'PEOPLE — who runs this dock');
     renderRescue(panel);
+    renderTrafficDesk(h, btn, panel, ctx, ui, currentDef.faction, render);
     const people = contactsForSystem(ctx, currentId);
     if (people.length === 0) {
       h('div', 'screen-note', panel, 'Faces blur past the berth lights. Nobody here knows you yet.');
@@ -2160,7 +2597,12 @@ export function initStation(ctx) {
     people: renderPeople,
     launch: renderLaunch,
     epics: renderEpics,
+    shipyard: renderShipyard,
   };
+
+  function renderShipyard(panel) {
+    renderShipyardDesk(h, btn, panel, ctx, ui, render);
+  }
 
   let renderedView = null; // 'level:service' of the last render
   function render() {
@@ -2186,9 +2628,10 @@ export function initStation(ctx) {
 
     if (ui.level === 1) {
       const menu = h('div', 'station-menu', panel);
-      const labels = ['Market', 'Jobs board', 'Bar', 'Feed & tend', 'Repair', 'Outfitting', 'People', 'Launch', 'Standing'];
+      const labels = ['Market', 'Jobs board', 'Bar', 'Feed & tend', 'Repair', 'Outfitting', 'People', 'Launch', 'Standing', 'Shipyard'];
       DOCK_KEY_SERVICES.forEach((key, i) => {
-        btn(menu, `${i + 1} — ${labels[i]}`, () => selectService(key),
+        const hot = i === DOCK_KEY_SERVICES.length - 1 ? 0 : i + 1;
+        btn(menu, `${hot} — ${labels[i]}`, () => selectService(key),
           key === 'launch' ? 'screen-btn screen-btn-warm' : 'screen-btn');
       });
       // Rank surface: how this dock's faction reads you right now (§12.x).
@@ -2196,10 +2639,14 @@ export function initStation(ctx) {
       h('div', 'station-rank', panel,
         `${factionName}: ${rankFor(rep).name} (${rep >= 0 ? '+' : ''}${Math.round(rep)} rep)`);
       renderRescue(panel);
-      h('div', 'screen-legend', panel, '1-9 select service · Esc/B launch');
+      h('div', 'screen-legend', panel, '1-9, 0 select service · Esc/B launch');
     } else {
       const back = h('div', 'station-back', panel);
-      btn(back, '← Back (Esc)', () => { ui.level = 1; ui.service = null; ui.notice = ''; render(); });
+      btn(back, '← Back (Esc)', () => {
+        ui.trafficPending = null;
+        ui.outfitPending = null;
+        ui.level = 1; ui.service = null; ui.notice = ''; render();
+      });
       RENDERERS[ui.service](panel);
       h('div', 'screen-legend', panel, 'Esc back · Esc again / B launch');
     }
@@ -2214,6 +2661,9 @@ export function initStation(ctx) {
     ui.level = 2;
     ui.service = key;
     ui.notice = '';
+    ui.trafficPending = null;
+    ui.outfitPending = null;
+    if (key === 'shipyard') setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     render();
   }
 
@@ -2223,6 +2673,10 @@ export function initStation(ctx) {
     ui.level = 1;
     ui.service = null;
     ui.notice = '';
+    ui.trafficPending = null;
+    ui.trafficBusy = false;
+    ui.outfitPending = null;
+    setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     overlay.style.display = 'flex';
     ctx.emit('docked');
     render();
@@ -2236,6 +2690,9 @@ export function initStation(ctx) {
     ui.keeperComp = false; // the keepers' comp only covers this berth visit
     ctx.station.keeperComp = false;
     ui.compNote = null; // the comp's voice only covers this berth visit (wave 26)
+    ui.trafficPending = null;
+    ui.trafficBusy = false;
+    ui.outfitPending = null;
     overlay.style.display = 'none';
     ctx.emit('undocked');
   }
@@ -2246,14 +2703,27 @@ export function initStation(ctx) {
     const code = e.code;
     if (ui.level === 1) {
       if (code === 'Escape' || code === 'KeyB') { undock(); return; }
+      if (code === 'KeyY') { selectService('shipyard'); return; }
       if (code.startsWith('Digit')) {
-        const i = Number(code.slice(5)) - 1;
+        const d = Number(code.slice(5));
+        if (d === 0) {
+          selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1]);
+          return;
+        }
+        const i = d - 1;
         if (i >= 0 && i < DOCK_KEY_SERVICES.length) selectService(DOCK_KEY_SERVICES[i]);
       }
       return;
     }
     // level 2
-    if (code === 'Escape') { ui.level = 1; ui.service = null; ui.notice = ''; render(); return; }
+    if (code === 'Escape') {
+      if (ui.service === 'shipyard' && cancelYardPending(ui)) { render(); return; }
+      if (ui.service === 'people' && cancelTrafficPending(ui)) { render(); return; }
+      if (ui.service === 'outfitting' && cancelOutfitPending(ui)) { render(); return; }
+      ui.trafficPending = null;
+      ui.outfitPending = null;
+      ui.level = 1; ui.service = null; ui.notice = ''; render(); return;
+    }
     if (code === 'KeyB') { undock(); return; }
     if (ui.service === 'market') {
       if (code === 'ArrowUp') { ui.marketSel = (ui.marketSel + COMMODITY_KEYS.length - 1) % COMMODITY_KEYS.length; render(); }
@@ -2285,8 +2755,14 @@ export function initStation(ctx) {
       else if (n === 4) act.buyScanner2();
       // Wave 51: head ladder rows continue the digit sequence (5/6/7).
       else if (n >= 5 && n <= 7) act.buyMiningLaser(n - 4);
+      else if (n === 8 || n === 9) {
+        armOutfitPapers(ctx, ui, n);
+        render();
+      }
     } else if (ui.service === 'launch') {
       if (n === 1) undock();
+    } else if (ui.service === 'shipyard') {
+      if (handleShipyardDigit(n, ctx, ui)) render();
     }
   });
 

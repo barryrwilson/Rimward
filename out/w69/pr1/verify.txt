@@ -1,0 +1,32 @@
+## Status
+BUGS_FOUND
+
+## What I tested
+- Worker probe `node --import ./scripts/with-css-stub.mjs out/w69/pr1/probe.mjs` (pins: WAVE51 first-8, id===i, count 130, work sector, keep-out, sanitize, overlay no-mint, extract write).
+- Extra probe `out/w69/pr1/verify-edges.mjs`: HEAD vs live first-8 tuples, list.position identity via tumble matrix, no per-frame slide, keep-out on five authored systems, cloud/sparse sector floors, cap 160, invalid `field.kind`, NaN time at build, same-system restore overlay without dispose, restore no-mint 64, array/NaN/negative sanitize, sparse extract, WORLD_FIELDS / localStorage key / no new emit.
+- Code trace of `build` five `rng()` draws, keep-out (no extra rng), `writeOrbitPose` only at build, `PLANET_SLOTS` vs live `SLOTS`, `overlayFieldOre` / `writeFieldOre`, `sanitizeFieldOre`, restore WORLD_FIELDS copy.
+- Did not run `npm run test:boot`.
+- [NO BROWSER COVERAGE] (PR1 has no HUD).
+
+## Bugs found
+
+### Bug 1: Restore that omits `fieldOre` keeps the live bag
+- Severity: MEDIUM
+- Repro: Build Freehold. Write sparse remaining (`fieldOre.freehold['7'] = 9`, or extract). Call `restore(ctx, { v:1, world:{ time:0, currentSystem:'freehold', credits:10, fear:0 }, cargo:[] })` with no `fieldOre` key. Then `asteroids.update`.
+- Expected: Contract `out/w67/ast/shared-contract.md` §6.3 item 1: missing `fieldOre` deletes the bag. Missing system then overlays seeded amounts. Hangar already deletes on omitted key (`if (snap.world.hangar === undefined) delete ctx.world.hangar`).
+- Actual: Restore copy skips undefined keys. `sanitizeFieldOre` sees the live object and writes a healed copy of it. Rock 7 stays at 9. An old save (no `fieldOre`) loaded after mining does not refill.
+- Evidence: `out/w69/pr1/verify-edges.log` — `FAIL edges restore.missingDeletes: fieldOre={"freehold":{"7":9}}`. Restore loop in `src/game/save.js` WORLD_FIELDS copy; no omitted-key `delete` for `fieldOre`.
+
+## Environmental issues
+none
+
+## Evidence
+- Screenshots: none expected
+- Logs: `C:\Projects\WebSim\out\w69\pr1\probe.log`, `C:\Projects\WebSim\out\w69\pr1\verify-edges.log`
+- Test output:
+  - Worker: `PASS w69 pr1 pins true n=130 meanR=580.9 sector=0.685`
+  - Extra: all pins green except `restore.missingDeletes`
+  - HEAD vs live Freehold first-8 tuples match (WAVE51 stream intact)
+  - `writeOrbitPose` is not called from `update` (PR1 no slide)
+  - `PLANET_SLOTS` radius/orbitRadius match live `SLOTS`; keep-out hits = 0 on freehold/veridian/hollowreach/hush/verge
+  - Cap 160, kind `__proto__`/typo, array `fieldOre`, `time` null/NaN/negative, remaining 99 / Infinity, constructor/prototype keys, overlay cannot mint 64

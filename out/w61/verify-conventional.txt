@@ -1,0 +1,41 @@
+## Status
+CLEAN
+
+## What I tested
+- Read `out/w61/conventional-family.md`, `out/w61/conventional-review.md`, and `out/w61/conventional-security.md`.
+- Checked every named instrument against `src/systems/hud.js` `initHud` / helpers and `src/ui/hud.css`.
+- Rechecked locked citations: rails, empty 80 px hub, iris (pupil + 3 cilia + `::after`), RANGE, MATCH, scanner arc, HUD-03 `FIELDS` / `body.rw-*`, `CUES` + `lastEvents`, frozen events, `textContent` writes.
+- Rechecked switch rule: hull identity vs `isBeautiful`, no `FIELDS.hudSkin`.
+- Rechecked alternatives (§11) and the `#hud[data-family="mech"]` recommendation.
+- Rechecked out-of-scope systems (G/S/E, missiles, four-face shields, new settings keys).
+- `git status --short -- src docs` and `git diff --name-only HEAD -- src docs`: no `src/` or `docs/` change from this design pass (`out/w61/` is untracked only).
+
+## Bugs found
+
+
+## Environmental issues
+- Graph resolve: `proceed_unmodeled` (no binding QA workflow). Verification continued from source and the three `out/w61` briefs.
+- This wave is design-only. No live HUD skin to render.
+
+## Evidence
+- Instruments in §3 exist on the HUD-01 tree:
+  - Hub: `hud.js` 418–421 (`rw-reticle`, pupil, 3× `rw-reticle-cilia`, RANGE); `hud.css` 181–217 (80×80, `margin: -40px`, dashed/solid ring).
+  - Iris accent: `hud.css` 317–357 (`::after` spin, pupil, cilia 30/150/270).
+  - Crosshair / lead / bracket / edge / chart marks: `hud.js` 422–456; `hud.css` 360–574.
+  - Rails: `hud.js` 530–549 (`rw-combat-self` / `rw-combat-target`, SCREEN/SHELL/HULL/SPD+MATCH/WPN/DIST); `hud.css` 769–787 (`top: 57%`, ±78 px).
+  - Facing FORE/AFT: `hud.js` 177–205; `hud.css` 228–315.
+  - Hull 10 petals + LOW/CRIT: `hud.js` 51, 120–147; `hud.css` 132–147, 921–932.
+  - Screen 3 px / Shell 9 px: `hud.css` 111–116.
+  - Contacts 24 pips, bottom 5.5%, scanner ≥ 1: `hud.js` 55, 489–519, 929–933; `hud.css` 671–759. Shapes: civ tick / hostile chevron / lock diamond (`hud.css` 710–734); `«`/`»` (`hud.js` 1041).
+  - Aux Plant / Flight / Heat + Bio / POS / Manifest / Controls + toasts / banner / prompt / jump: `hud.js` 461–633.
+- Aim glass stays empty: no tendrils, no extra hub fill, no contacts ring. Ticks sit on the 80 px ring; inner keep-out is 56 px (§4.4, §5, §10.3, §13).
+- Alternatives: §11 A = second DOM tree (reject); B = token/class skin on the same tree (recommend `#hud[data-family="mech"]`); C = HUD-skin setting (reject).
+- MATCH does not write throttle: brief locks `ctx.js` 28 / `ship.js` 443; HUD only reads `flags.matchSpeed` (`hud.js` 1174) and shows `.rw-match-lamp` text MATCH.
+- Scanner stays awareness-only: family restyles the bottom arc; lead / RANGE / MATCH stay core (`hud.js` 929–930). No scanner-gated combat chrome.
+- HUD-03 not reinvented: `settings.js` `FIELDS` 28–36; body classes 67–70. Brief forbids `FIELDS.hudSkin` and a player `body.rw-hud-mech` toggle.
+- `isBeautiful(faction)` is not the player-hull flag: §6 cites `organic.js` 67–69 (`faction === 'beautiful'` for NPC/station/gate), `ship.js` 398 `createShipState('light')`, `state.js` 124 default `independent`. Reader deferred to shared-contract `hullIsConventional`.
+- Invented systems not proposed: G/S/E, four-face shields, missiles, wingmen, comm video, radar disc, `--rw-fs-green`, new settings keys are out of scope. Later audio uses existing `CUES[typ]` / `ctx.emit` (`song.js` 45–113, 400–431); three NEW types are later-only and must join `ctx.js` 188–210.
+- Audio is later only; no fake `playCue()` (`song.js` exports only `initSong`).
+- `src/` and `docs/` unchanged by this worker.
+- Nit (not a defect): §3 says the MATCH lamp “stays a filled SPD tick.” Today it is text-only (`.rw-match-lamp`). A later CSS `::before` tick is still a restyle of that node.
+- Review + security briefs match the family file (frozen-event note closed; XSS stays on `textContent`).

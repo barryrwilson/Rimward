@@ -1,0 +1,62 @@
+## Status
+CLEAN
+
+## What I tested
+Headless probe `node --import ./scripts/with-css-stub.mjs out/w66/pr4/probe.mjs`: 24 keys true, exit 0.
+
+Static read of `src/systems/hud.js` case `'survivorSold'` and `src/core/ctx.js` frozen-event comment:
+- Toast copy: n===1 `'■ The Chain took one.'` else `` `■ The Chain took ${n}.` ``.
+- `cls: 'warn'` (not `'good'`).
+- `n = Number.isFinite(e.count) ? e.count : 0`.
+- Same-frame `commLine` dedupe: `if (e.line) mem.frameLines.push(e.line)`.
+- HUD does not `emit('survivorSold'`. `ctx.js` comment lists the event; `ctx.emit` is unchanged.
+
+Browser (Playwright MCP, http://localhost:5173/):
+- Title: `[data-title-action="new"]` twice. Origin Digit1 Greenhand.
+- `ctx.emit('jumpRequested', { to: 'gc_auction' })`. Park in dock range. Cargo `{commodity:'survivor', units:1, faction:'freehold', source:'other'}`. Credits 1000. KeyD dock.
+- Digit 7 People. Offer to the Chain. Confirm transfer. Credits 1000 → 1160. Cargo empty. Station notice `The Chain takes them. 1 transferred. 160 UU.`
+- Live toast after Confirm: text `■ The Chain took one.`, class `rw-toast warn` (not `good`). Amber left border, not green.
+- Re-emit `ctx.emit('survivorSold', { count: 1, line: 'Transferred. 160 UU.' })` after HUD live to photograph the mapping with opacity 1.
+- Console: Vite connect only. Errors 0, warnings 0.
+
+## Bugs found
+None.
+
+## Environmental issues
+None. Vite stayed on :5173.
+
+## Evidence
+- Screenshots:
+  - C:\Projects\WebSim\out\w66\pr4\01-survivorSold-toast.png (post-sale People desk; toast already faded)
+  - C:\Projects\WebSim\out\w66\pr4\06-toast-visible-paused.png (HUD toast `■ THE CHAIN TOOK ONE.` class warn, amber bar)
+  - C:\Projects\WebSim\out\w66\pr4\07-toast-warn-crop.png (crop of warn toast)
+- Console: C:\Projects\WebSim\out\w66\pr4\console-warnings.txt
+- Probe output:
+```
+PASS hudFamilyImport
+PASS ctxComment
+PASS ctxNoEmitSold
+PASS hudCase
+PASS hudOne
+PASS hudMany
+PASS hudWarn
+PASS hudNotGood
+PASS hudNoEmitSold
+PASS hudNoRowName
+PASS hudFiniteCount
+PASS hudFrameLines
+PASS hudToastTextContent
+PASS hudNoInnerHtmlSold
+PASS soldCaseExtracted
+PASS toastN1
+PASS toastN2
+PASS toastMissingCount
+PASS toastNullCount
+PASS toastInf
+PASS toastNaN
+PASS toastXssCount
+PASS toastLineDedupe
+PASS toastIgnoresName
+PROBE PASS
+{"hudFamilyImport":true,"ctxComment":true,"ctxNoEmitSold":true,"hudCase":true,"hudOne":true,"hudMany":true,"hudWarn":true,"hudNotGood":true,"hudNoEmitSold":true,"hudNoRowName":true,"hudFiniteCount":true,"hudFrameLines":true,"hudToastTextContent":true,"hudNoInnerHtmlSold":true,"soldCaseExtracted":true,"toastN1":true,"toastN2":true,"toastMissingCount":true,"toastNullCount":true,"toastInf":true,"toastNaN":true,"toastXssCount":true,"toastLineDedupe":true,"toastIgnoresName":true}
+```

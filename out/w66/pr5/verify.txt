@@ -1,0 +1,56 @@
+## Status
+CLEAN
+
+## What I tested
+`npm run test:boot` (full harness, exit 1). Log: `out/w66/pr5/boot-test.log`.
+
+wave66 save pins JSON (11 keys, all true):
+{"extraKeysDrop":true,"enumerableProtoDrop":true,"sourceHack":true,"sourceKill":true,"nameCap":true,"nameControls":true,"reservedFaction":true,"validRoundTrip":true,"noWorldPeopleField":true,"peopleTraffickedNotRestored":true,"oreNoLeak":true}
+
+wave66 desk JSON (32 keys, all true):
+{"key.length10":true,"key.d7":true,"key.d0":true,"src.ctxSurvivorSold":true,"src.tryTradeRefuse":true,"src.noWorldField":true,"src.rescueFn":true,"gildedDock":true,"emptyNoOffer":true,"emptyNoConfirm":true,"mixedTwoOffers":true,"mixedConfirmOne":true,"mixedOtherRemains":true,"mixedOtherUu":true,"unkNoOffer":true,"unkRefuse":true,"protoNoOffer":true,"protoNoThrow":true,"oversizeNoSale":true,"oversizeRowKept":true,"doubleNoSecondPay":true,"fhReturn":true,"fhNoOffer":true,"returnWorks":true,"marketNoSurvivor":true,"asNoSellPeople":true,"priceOfZero":true,"digit7People":true,"digit0Shipyard":true,"digitPendingNoDebit":true,"milestoneOnce":true,"noWorldPeople":true}
+
+No `WAVE66 SAVE PINS FAIL`. No `WAVE66 DESK FAIL`.
+
+Known FAIL lines (8, same cluster as prior waves; no new line):
+1. WAVE4 FENCE FAVOR FAIL
+2. WAVE26 FERRY QUOTE FAIL
+3. WAVE26 HAUL QUOTE FAIL
+4. WAVE26 LANE DELIVERY FAIL
+5. WAVE26 OLD-SAVE FALLBACK FAIL
+6. WAVE26 SAVE FIELDS FAIL
+7. WAVE26 RESTORE FAIL
+8. WAVE35 HAUL GATE DELIVERY FAIL
+
+WAVE30 payTribute did not fail this run (JSON all-true). Count stays 8 because WAVE26 is six lines.
+
+## WAVE66 DESK pin honesty
+Live, not greps:
+- `travelTo('gc_auction', 'wave66')` then faction check `gilded`. `gildedDock` is that arrival.
+- `goPeople` docks (`dockAtCurrentStation` + Digit7 / People click fallback) and reads overlay text/buttons.
+- Mixed sale: `findOverlayButton('Offer to the Chain').click()`, Digit1/7/0/3 while Confirm is up (`digitPendingNoDebit`), then `findOverlayButton('Confirm transfer').click()`. Credits +320, one lot gone, other lot remains, oversize 99 kept.
+- Double Confirm: second Offer, Confirm click, stale Confirm click, extra Confirm click. Credits +240 once.
+- Unknowables: overlay has `The desk will not take them.` and zero Offer buttons.
+- Reserved `__proto__` hold: no Offer, no throw.
+- Oversize-only hold: no Offer, row stays.
+- Empty hold: no Offer, no Confirm.
+- Market: Digit1 market overlay has no `survivor` text; KeyA/KeyS do not sell people; `priceOf('survivor') === 0` with stuffed `world.prices.survivor`.
+- Digit7 People / Digit0 Shipyard overlay heads after live dock.
+- Freehold: `travelTo('freehold')`, People has Return, no Offer; Return click +8 standing.
+- Gilded matching-faction Return click also asserted (`returnGilded`).
+- Milestone `peopleTrafficked` once; `world.peopleTrafficked` undefined.
+
+Source-text pins are labeled `src.*` (ctx `'survivorSold'`, market refuse string, WORLD_FIELDS, `applySurvivorRescue`). Live desk claims are click/overlay/credit, not greps. Pins match what they claim. Did not rewrite `scripts/boot-test.mjs`. Did not edit `src/`.
+
+## Docs
+PROGRESS.md Wave 66: persist keep-list, reserved faction fail-closed, Digit 7 Gilded People, Offer→Confirm, market refuse, priceOf 0, Return, survivorSold toast, milestone once, WAVE66 pins all-true. Matches this run. Known FAIL list names WAVE30 as a flake; this run WAVE30 passed. Not a false shipped claim.
+
+Wishlist: Wave 66 POD-02 impl landed; POD-02 status DONE (Wave 66). Matches shipped first slice.
+
+`docs/Pod02TraffickingDesign.md` Status = Implemented / Wave 66 serial first slice. Overview still has Wave 65 “does not ship here” history. Status line is accurate.
+
+## Bugs found
+None.
+
+## Environmental issues
+None. Vite not touched. First boot run hit a 180s tool cap at wave42; second run finished.

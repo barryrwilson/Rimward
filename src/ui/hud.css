@@ -977,6 +977,439 @@ body.rw-reduced-motion #hud * {
   transition: none !important;
 }
 
+/* HUD-02 PR2 conventional (mech) skin. Same #hud tree. Rails stay 57% / ±78px. */
+#hud[data-family="mech"] .rw-reticle-pupil,
+#hud[data-family="mech"] .rw-reticle-cilia {
+  display: none;
+}
+
+#hud[data-family="mech"] .rw-reticle::after {
+  /* tick ring via masked conic gradient; inner keep-out 56px diameter */
+  inset: 0;
+  border: none;
+  border-radius: 0;
+  animation: none;
+  background: repeating-conic-gradient(
+    from -0.75deg,
+    var(--rw-accent) 0deg 1.5deg,
+    transparent 1.5deg 45deg
+  );
+  -webkit-mask-image: radial-gradient(
+    circle 40px at 50% 50%,
+    transparent 0 28px,
+    transparent 28px 35px,
+    #000 35px 40px,
+    transparent 40.5px
+  );
+  mask-image: radial-gradient(
+    circle 40px at 50% 50%,
+    transparent 0 28px,
+    transparent 28px 35px,
+    #000 35px 40px,
+    transparent 40.5px
+  );
+}
+
+#hud[data-family="mech"] .rw-reticle.in-range::after {
+  background: repeating-conic-gradient(
+    from -1.5deg,
+    var(--rw-accent) 0deg 3deg,
+    transparent 3deg 45deg
+  );
+}
+
+#hud[data-family="mech"] .rw-reticle.in-range::before {
+  animation: rw-mech-range-in 0.2s ease-out 1;
+}
+
+@keyframes rw-mech-range-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+body.rw-reduced-motion #hud[data-family="mech"] .rw-reticle.in-range::before {
+  animation: none;
+}
+
+#hud[data-family="mech"] .rw-petal {
+  width: 6px;
+  height: 12px;
+  border-radius: 0;
+  transform: none;
+}
+
+#hud[data-family="mech"] .rw-petals {
+  gap: 2px;
+}
+
+#hud[data-family="mech"] .rw-petal.on,
+#hud[data-family="mech"] .rw-petals.h-warn .rw-petal.on,
+#hud[data-family="mech"] .rw-petals.h-crit .rw-petal.on {
+  box-shadow: none;
+}
+
+#hud[data-family="mech"] .rw-facing-sil {
+  width: 22px;
+  height: 10px;
+}
+
+#hud[data-family="mech"] .rw-facing-nose {
+  top: 2px;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-right: 5px solid rgba(111, 242, 224, 0.55);
+}
+
+#hud[data-family="mech"] .rw-facing-body {
+  left: 5px;
+  top: 2px;
+  width: 16px;
+  height: 6px;
+  border-radius: 0;
+}
+
+#hud[data-family="mech"] .rw-facing-end {
+  border-radius: 0;
+}
+
+#hud[data-family="mech"] .rw-contact-pip.is-civ .rw-contact-mark {
+  width: 2px;
+  height: 8px;
+  border-radius: 0;
+}
+
+#hud[data-family="mech"] .rw-contact-pip.is-hostile .rw-contact-mark {
+  width: 0;
+  height: 0;
+  margin: 3px 1px 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 4px solid var(--rw-warn);
+  background: none;
+  transform: none;
+}
+
+#hud[data-family="mech"] .rw-contact-pip.is-lock .rw-contact-mark {
+  border-width: 1px;
+  border-color: var(--rw-accent);
+  background: transparent;
+  border-radius: 0;
+}
+
+#hud[data-family="mech"] .rw-contacts-stroke {
+  stroke-width: 1.25;
+}
+
+#hud[data-family="mech"] .rw-contact-pip.is-enter .rw-contact-mark {
+  animation: rw-mech-contact-enter 0.2s ease-out 1;
+}
+
+@keyframes rw-mech-contact-enter {
+  from { opacity: 0.25; }
+  to { opacity: 1; }
+}
+
+#hud[data-family="mech"] .rw-lead {
+  width: 28px;
+  height: 28px;
+}
+
+#hud[data-family="mech"] .rw-lead-ring {
+  box-shadow: none;
+  border-width: 1px;
+  border-radius: 50%;
+}
+
+#hud[data-family="mech"] .rw-combat-rail .rw-bar {
+  border-radius: 0;
+}
+
+#hud[data-family="mech"] .rw-combat-rail .rw-bar-fill,
+#hud[data-family="mech"] .rw-screen .rw-bar-fill,
+#hud[data-family="mech"] .rw-shell .rw-bar-fill {
+  box-shadow: none;
+}
+
+#hud[data-family="mech"] .rw-combat-rail .rw-label {
+  letter-spacing: 0.14em;
+}
+
+#hud[data-family="mech"] .rw-combat-rail .rw-value {
+  letter-spacing: 0.04em;
+}
+
+#hud[data-family="mech"] .rw-match-lamp::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 8px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  background: var(--rw-accent);
+  border-radius: 0;
+}
+
+/* HUD-02 living (bio) skin. Curved veins, breathing iris, organism facing. */
+@keyframes rw-bio-hair-sway {
+  0%, 100% { border-radius: 80% 30% 0 0 / 100% 60% 0 0; }
+  50% { border-radius: 30% 80% 0 0 / 55% 100% 0 0; }
+}
+
+@keyframes rw-bio-hair-sway-aft {
+  0%, 100% { border-radius: 0 0 30% 80% / 0 0 60% 100%; }
+  50% { border-radius: 0 0 80% 30% / 0 0 100% 55%; }
+}
+
+#hud[data-family='bio'] .rw-reticle::after {
+  border: 1px solid color-mix(in srgb, var(--vein) 72%, transparent);
+  border-radius: 58% 42% 55% 45% / 46% 54% 48% 52%;
+  animation:
+    rw-iris-spin 18s linear infinite,
+    rw-breathe var(--rw-bio-period, 4s) ease-in-out infinite;
+}
+
+#hud[data-family='bio'] .rw-reticle-cilia {
+  width: 2px;
+  border-radius: 60% 60% 90% 90%;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--vein) 88%, transparent),
+    color-mix(in srgb, var(--vein) 20%, transparent)
+  );
+}
+
+#hud[data-family='bio'].in-combat .rw-reticle-cilia {
+  width: 1px;
+  height: 7px;
+}
+
+#hud[data-family='bio'] .rw-reticle-pupil {
+  animation: rw-breathe var(--rw-bio-period, 4s) ease-in-out infinite;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--vein) 70%, transparent);
+}
+
+#hud[data-family='bio'] .rw-combat-self::before,
+#hud[data-family='bio'] .rw-combat-self::after,
+#hud[data-family='bio'] .rw-combat-target::before,
+#hud[data-family='bio'] .rw-combat-target::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  height: 18px;
+  width: auto;
+  opacity: 0.55;
+  background: none;
+  box-shadow: 0 4px 0 -2px color-mix(in srgb, var(--vein) 28%, transparent);
+}
+
+#hud[data-family='bio'] .rw-combat-self::before,
+#hud[data-family='bio'] .rw-combat-target::before {
+  border: none;
+  border-top: 1.5px solid color-mix(in srgb, var(--vein) 78%, transparent);
+  border-radius: 80% 30% 0 0 / 100% 60% 0 0;
+  animation: rw-bio-hair-sway 14s ease-in-out infinite;
+}
+
+#hud[data-family='bio'] .rw-combat-self::after,
+#hud[data-family='bio'] .rw-combat-target::after {
+  border: none;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--vein) 78%, transparent);
+  border-radius: 0 0 30% 80% / 0 0 60% 100%;
+  box-shadow: 0 -4px 0 -2px color-mix(in srgb, var(--vein) 28%, transparent);
+  animation: rw-bio-hair-sway-aft 16s ease-in-out infinite;
+}
+
+#hud[data-family='bio'] .rw-combat-self::before {
+  left: 52px;
+  right: 0;
+  top: -18px;
+}
+
+#hud[data-family='bio'] .rw-combat-self::after {
+  left: 52px;
+  right: 0;
+  bottom: -18px;
+  top: auto;
+}
+
+#hud[data-family='bio'] .rw-combat-target::before {
+  left: 0;
+  right: 52px;
+  top: -18px;
+}
+
+#hud[data-family='bio'] .rw-combat-target::after {
+  left: 0;
+  right: 52px;
+  bottom: -18px;
+  top: auto;
+}
+
+#hud[data-family='bio'].in-combat .rw-combat-self::before,
+#hud[data-family='bio'].in-combat .rw-combat-self::after {
+  top: -10px;
+  height: 10px;
+}
+
+#hud[data-family='bio'].in-combat .rw-combat-self::after,
+#hud[data-family='bio'].in-combat .rw-combat-target::after {
+  top: auto;
+  bottom: -10px;
+  height: 10px;
+}
+
+#hud[data-family='bio'].in-combat .rw-combat-target::before {
+  top: -10px;
+  height: 10px;
+}
+
+#hud[data-family='bio'] .rw-combat-rail.rw-hair-off::before,
+#hud[data-family='bio'] .rw-combat-rail.rw-hair-off::after {
+  content: none;
+  visibility: hidden;
+}
+
+body.rw-reduced-motion #hud[data-family='bio'] .rw-combat-rail::before,
+body.rw-reduced-motion #hud[data-family='bio'] .rw-combat-rail::after,
+body.rw-reduced-motion #hud[data-family='mech'] .rw-combat-rail::before,
+body.rw-reduced-motion #hud[data-family='mech'] .rw-combat-rail::after {
+  content: none;
+  visibility: hidden;
+}
+
+#hud[data-family='bio'].in-combat .rw-combat-self::before,
+#hud[data-family='bio'].in-combat .rw-combat-self::after,
+#hud[data-family='bio'].in-combat .rw-combat-target::before,
+#hud[data-family='bio'].in-combat .rw-combat-target::after {
+  animation: none;
+  opacity: 0.32;
+}
+
+#hud[data-family='bio'] .rw-contacts-stroke {
+  stroke-linecap: round;
+}
+
+#hud[data-family='bio'] .rw-facing-sil {
+  width: 22px;
+  height: 10px;
+}
+
+#hud[data-family='bio'] .rw-facing-nose {
+  left: 0;
+  top: 1px;
+  width: 10px;
+  height: 8px;
+  border: none;
+  background: color-mix(in srgb, var(--vein) 62%, transparent);
+  clip-path: ellipse(62% 50% at 58% 50%);
+}
+
+#hud[data-family='bio'] .rw-facing-body {
+  left: 6px;
+  top: 0;
+  width: 16px;
+  height: 10px;
+  border: none;
+  background: color-mix(in srgb, var(--vein) 42%, transparent);
+  clip-path: polygon(0% 32%, 20% 4%, 58% 0%, 100% 40%, 100% 60%, 58% 100%, 20% 96%, 0% 68%);
+}
+
+#hud[data-family='bio'] .rw-facing-end {
+  border-radius: 9px 3px 9px 3px;
+  border-color: color-mix(in srgb, var(--vein) 42%, transparent);
+}
+
+#hud[data-family='bio'] .rw-facing-end.is-lit {
+  background: color-mix(in srgb, var(--vein) 26%, transparent);
+  border-color: color-mix(in srgb, var(--vein) 70%, transparent);
+}
+
+#hud[data-family='bio'] .rw-contact-pip.is-civ .rw-contact-mark {
+  width: 2px;
+  height: 8px;
+  border-radius: 1px 60% 60% 1px;
+  background: var(--dim);
+}
+
+#hud[data-family='bio'] .rw-contact-pip.is-hostile .rw-contact-mark {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 8px solid var(--rw-warn);
+  background: none;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+#hud[data-family='bio'] .rw-contact-pip.is-lock .rw-contact-mark {
+  border-radius: 1px;
+  background: transparent;
+  border-color: var(--rw-accent);
+}
+
+#hud[data-family='bio'] .rw-petal {
+  width: 8px;
+  height: 13px;
+  border-radius: 80% 80% 35% 35% / 75% 75% 25% 25%;
+  transform: skewX(-8deg);
+  border-color: color-mix(in srgb, var(--vein) 40%, transparent);
+}
+
+#hud[data-family='bio'] .rw-petal.on {
+  background: color-mix(in srgb, var(--green) 82%, var(--vein));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--vein) 45%, transparent);
+}
+
+#hud[data-family='bio'] .rw-combat-rail .rw-bar {
+  border-radius: 9px 4px 9px 4px;
+  background: color-mix(in srgb, var(--vein) 7%, transparent);
+}
+
+#hud[data-family='bio'] .rw-combat-rail .rw-bar-fill,
+#hud[data-family='bio'] .rw-screen .rw-bar-fill,
+#hud[data-family='bio'] .rw-shell .rw-bar-fill {
+  border-radius: inherit;
+}
+
+#hud[data-family='bio'] .rw-combat-rail .rw-screen .rw-bar-fill,
+#hud[data-family='bio'] .rw-combat-rail .rw-shell .rw-bar-fill {
+  position: relative;
+}
+
+#hud[data-family='bio'] .rw-combat-rail .rw-screen .rw-bar-fill::after,
+#hud[data-family='bio'] .rw-combat-rail .rw-shell .rw-bar-fill::after {
+  content: '';
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 45%;
+  height: 1px;
+  border-radius: 40%;
+  background: color-mix(in srgb, var(--vein) 50%, transparent);
+  pointer-events: none;
+}
+
+body.rw-colorblind #hud[data-family='bio'] {
+  --vein: var(--rw-good);
+}
+
+body.rw-contrast #hud[data-family='bio'] .rw-combat-self::before,
+body.rw-contrast #hud[data-family='bio'] .rw-combat-self::after,
+body.rw-contrast #hud[data-family='bio'] .rw-combat-target::before,
+body.rw-contrast #hud[data-family='bio'] .rw-combat-target::after {
+  opacity: 0.85;
+  border-top-color: color-mix(in srgb, var(--vein) 90%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--vein) 90%, transparent);
+}
+
+body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle-pupil {
+  animation: none;
+}
+
+body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
+  animation: none;
+}
+
 /* ---------- galaxy chart overlay (systems/galaxychart.js) ----------
    Full-screen dialog, root on document.body (NOT under #hud), so it
    declares its own palette mirroring the #hud variables; the

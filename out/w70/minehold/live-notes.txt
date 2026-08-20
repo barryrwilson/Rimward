@@ -1,0 +1,12 @@
+pre {"sys":"freehold","group":3,"rockLock":true,"match":false,"nRocks":130}
+armed {"match":true,"throttle":0,"q":[0,0,0,1],"lampHidden":true}
+rockLampHidden true
+hold {"match":true,"dt":0.7893999999761583,"rockSpeed":68.28748891078686,"shipSpeed":68.32014779004174,"relLen":3.0949969667866304,"rel":[2.975109661387833,0.21565574027137568,0.8253613322801243],"rv":[17.020080012494503,5.5441222792924965,-65.89962614659795],"sv":[19.995189673882336,5.759778019563872,-65.07426481431783],"qDelta":0,"rockLock":true}
+holdLamp {"match":true,"lampHidden":true}
+SHOT 01-rock-match.png
+shipArm {"match":true,"liveLock":true,"lampHidden":false}
+SHOT 02-ship-match.png
+shipSlide {"match":true,"sv":[0,0,0],"alongNose":false,"copiedSlideX":false,"speed":0}
+throttleCancel false
+rockLampHiddenAtEnd true
+LIVE PASS

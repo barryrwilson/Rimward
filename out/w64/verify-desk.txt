@@ -1,0 +1,20 @@
+WAVE64 PR3 shipyard desk
+
+command: node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs
+
+WAVE62 HUD FAMILY: all true
+WAVE64 HANGAR PERSIST: all true
+WAVE64 REMOUNT: all true
+WAVE64 SHIPYARD DESK: all true
+
+key.length10 last=shipyard
+Digit1-9 = market jobs bar feed repair outfitting people launch epics
+Digit0 opens SHIPYARD / HANGAR, mounted id listed
+Digit2 Yard: "no hull catalog" / "No sale", credits unchanged after Digit3-0
+Digit7 people, Digit9 Standing, Digit8 launch/undock
+XSS hull name is textContent, no IMG node
+Hangar Digit5 remounts hulls[2], Digit3 remounts starter
+HUD does not write hullKind
+
+known suite FAILs (do not fix): REDMARCH, WAVE4 FENCE FAVOR, WAVE26 x6, WAVE35 HAUL GATE
+BOOT TEST FAIL — 9 errors (unchanged known set)

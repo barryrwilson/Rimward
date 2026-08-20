@@ -1,0 +1,77 @@
+## Status
+CLEAN
+
+## What I tested
+- Command: `node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs`
+  Result: exit 1, `BOOT TEST FAIL — 8 errors`.
+  Log: `out/w64/boot-test-equipment.log`
+  WAVE62 HUD family: all true (`noHullWrite` true).
+  WAVE64 hangar persist: all true.
+  WAVE64 remount: all true.
+  WAVE64 shipyard desk: all true.
+  WAVE64 yard buy: all true.
+  WAVE64 equipment: all true (migrate, stock zeros, heal, write-then-mirror,
+  swap isolation, snapshot no loadout, living / Unknowables parts, yard stock
+  row, Digit 1–7 labels, UI reads world mirror, live Digit buys, live swap).
+- FAIL lines on this complete run (known set only; do not fix):
+    WAVE4 FENCE FAVOR
+    WAVE26 FERRY QUOTE
+    WAVE26 HAUL QUOTE
+    WAVE26 LANE DELIVERY
+    WAVE26 OLD-SAVE FALLBACK
+    WAVE26 SAVE FIELDS
+    WAVE26 RESTORE
+    WAVE35 HAUL GATE DELIVERY
+  No WAVE64 / WAVE62 FAIL. REDMARCH did not fail this run.
+- Static law vs `docs/ShpDesign.md` §7.
+  Files: `src/systems/station.js`, `src/game/hangar.js`, `scripts/boot-test.mjs`.
+  `src/game/state.js` is clean (not in the dirty set).
+  Outfitter buys call `writeMountedGear` (scanner / miningLaser / concealedMounts /
+  cargoCapacity). That helper writes the mounted row first, then the world /
+  `ctx.cargoCapacity` mirror. `hasOwnProperty` only; no `Object.assign` onto the
+  row. `missiles` / `loadout` / prototype keys are ignored.
+  `WORLD_FIELDS` still lists `scanner`, `concealedMounts`, `miningLaser`, `hangar`.
+  No world equipment drop. Nested `loadout` is dropped on `sanitizeHangarRecord`.
+  No missiles persist.
+  First hangar create (`writeStarterHangar` stock:false) copies live world gear
+  onto the mounted starter only. Other stored hulls heal missing fields to stock
+  zeros (scanner 0, miningLaser 0, concealedMounts false, capacity 20).
+  Sanitize runs on every restore (`save.js` restore → `sanitizeHangar`). There is
+  no migrate-once skip flag.
+  Swap: `parkMounted` copies live mirrors onto the outgoing row; `loadMountedRow`
+  copies the incoming row onto world + hold. Isolation holds in pins.
+  Digit 1–7 in outfitting stay hold / Mk I / concealed / Mk II / mining heads
+  (`station.js` 2302–2308 and `renderOutfitting`).
+  HUD reads `player.hullKind` only (`hud.js` family + `last.kind`). No hullKind
+  write. WAVE62 `noHullWrite` true.
+  `save.js` still has the wave-51 comment that names world as the mining writer.
+  That matches the PR5 keep-save.js rule. No PR5 outfitter write landed in save.
+- Browser: skipped (optional). Boot live Digit buys plus isolated `switchTo`
+  already cover row-then-world and mount follow.
+
+## Bugs found
+None against ShpDesign §7 / WAVE64 equipment pins.
+
+Residual (not a fail; already in PR5 reviews):
+- `writeMountedGear` trims `row.cargo` on a capacity shrink, not live `ctx.cargo`.
+  Outfitter only expands the hold.
+- Credits debit runs before `writeMountedGear`. Station path cannot hit the null
+  return when `ctx.world` exists.
+
+## Environmental issues
+- Log file may show `BOOT TEST FAIL ΓÇö 8 errors` (em-dash encoding). Node stdout
+  is `BOOT TEST FAIL — 8 errors`.
+- Graph resolve for this verifier run returned `blocked_ambiguous` (unrelated
+  Hal / project-record / Activar workflows). Verification followed the assigned
+  PR5 checklist only.
+
+## Evidence
+- `out/w64/boot-test-equipment.log` WAVE62 + WAVE64 persist/remount/desk/buy/
+  equipment all-true; 8 known FAILs
+- Cite: `src/game/hangar.js` `writeMountedGear` 346–368; `buildStarterRow` 180–221;
+  `sanitizeHangarRecord` 122–148; `loadMountedRow` 475–506; `parkMounted` 284–293
+- Cite: `src/systems/station.js` outfitter writers 1527–1579; Digit 1–7 2302–2308;
+  `renderOutfitting` 1926–1974
+- Cite: `src/game/save.js` `WORLD_FIELDS` 73–92; restore sanitize 423–427
+- Cite: `scripts/boot-test.mjs` WAVE64 equipment 12969–13350
+- Cite: `src/systems/hud.js` hullKind read 70–71, 795

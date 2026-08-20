@@ -1,0 +1,31 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker probe: `node --import ./scripts/with-css-stub.mjs out/w69/pr3/probe.mjs`
+- Code read of `isRockLock` / `dropStaleRockLock` and the update scan in `src/systems/controls.js` (no `src/` edits)
+- `systemLoaded` scan plus unconditional list-membership drop (`indexOf`); drop runs before `cycleTarget`
+- Rock test is `position` present and no `object` / no `state`; ship `{ object, state }` locks stay
+- Probe cases: swap to veridian, same-system rebuild, splice-out with no event, live rock kept, ship lock kept
+- `src/systems/combat.js` still raycasts `list[i]` via `_oc.subVectors(_nose, a.position)` and emits `asteroidId: bestEntry.id`
+- Combat lock pull is still `t.position && !t.object` (live list entry, not a stored xyz)
+- `src/systems/npc.js` `nearestSoftRock` still filters hardness ≤ 1 and ore > 0 and reads `a.position`; `mineHit` still uses `asteroidId: rock.id`
+- `src/game/world.js` `fieldPoint` still uses `const c = f && f.center`
+- `src/systems/asteroids.js` does not write `ctx.targets`; rebuild replaces `ctx.asteroids = { list }`
+- System order: `initAsteroids` before `initControls`, so the list is new on the `lastEvents` `systemLoaded` frame
+- Did not run `npm run test:boot`
+- [NO BROWSER COVERAGE] (backend domain; no HUD)
+
+## Bugs found
+none
+
+## Environmental issues
+none
+
+## Evidence
+- Screenshots: none expected
+- Logs: `C:\Projects\WebSim\out\w69\pr3\probe.log`
+- Test output: `PASS w69 pr3 pins true n=130 soft=85`
+- Source: `dropStaleRockLock` nulls only when `isRockLock` and `list.indexOf(t) < 0`; ship lock is not a rock lock
+- Combat: `updateMining` closest-sphere loop uses live `a.position`; helpers stay unexported
+- World: `fieldPoint` unchanged (field center, then station jitter fallback)

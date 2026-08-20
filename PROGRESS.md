@@ -2952,6 +2952,305 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   FILES: `src/game/pods.js`, `src/systems/npc.js`,
   `src/game/save.js`, `src/game/state.js`, `src/core/ctx.js`,
   `src/systems/station.js`, `src/systems/hud.js`, `out/w60/`.
+- Wave 61 (2026-08-18): HUD-02 identities brief (orchestrated;
+  design only). Two families on the same HUD-01 glance set.
+  SWITCH: `hudFamily(ctx) -> 'mech' | 'bio'`. Hull identity, not
+  origin, not `isBeautiful(faction)` alone. Live default `bio`
+  until SHP writes `hullKind: 'built'`. HUD must not write
+  `hullKind`. Restore already keeps extra player keys.
+  DOM: one `#hud` tree, `#hud[data-family]`. No second HUD.
+  BIO: AGEZ 56 / 24 / 20. Rails use `rw-hair-off` fail-closed.
+  First bio wave: 2 rail hairlines, no extra Bio corners,
+  contacts `stroke-linecap: round` only. Facing is clip-path.
+  MECH: iris accent becomes hub ticks in the same 80 px box.
+  PARITY: same glance data and positions. Reduced-motion hides
+  family hairlines on both families. Mood period ≥ 1.2 s.
+  NON-GOALS: no skins this wave, no GSE, no four-face shields,
+  no missiles, no tendrils on the aim glass, no new HUD-03 keys.
+  OWNER: ship skins before SHP; Unknowables purchased hulls stay
+  `bio` (`hullKind: 'living'`); no HUD-03 free skin override.
+  VERIFY: `out/w61/{inventory,conventional,living,shared}` notes
+  + verifiers CLEAN after fix passes. Design review 0 open issues
+  after 3 rounds.
+  FILES: `docs/Hud02IdentitiesDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`, `out/w61/`.
+  No `src/` edits.
+- Wave 62 (2026-08-18): HUD-02 skins (orchestrated; serial
+  PR1 → PR2 → PR3). One `#hud` tree. Live default stays `bio`.
+  HOOK: export `hudFamily(ctx)` (session `rw-hud-family`, then
+  `hullKind` built/living, then Beautiful, then `bio`).
+  `#hud.dataset.family` in `initHud` and on the 5 Hz
+  write-on-change path. HUD never writes `hullKind`. Both rails
+  start with `rw-hair-off`.
+  MECH: CSS-only under `[data-family="mech"]`. Iris hidden.
+  Hub `::after` is a masked tick ring, 56 px keep-out, no
+  `--vein`. Square 6×12 petals. Rails stay at 57% / ±78 px.
+  BIO: two rail hairlines (18/10 px, 52 px outer inset). AGEZ
+  hide on the reticle/lead path against a cached rail box.
+  `--rw-bio-period` 4.0 / 2.2 / 1.2 s (never faster). Contacts
+  `stroke-linecap: round` only. No extra Bio corners. Reduced
+  motion hides hairlines. Helpers `hairBoxForRail` /
+  `agezHairOff`. Pin H=(600,513) at 1600×900 hides self hair.
+  OPEN: family audio (PR4) did not ship. SHP still owns
+  `hullKind: 'built'` so mech stays debug/screenshot until
+  then. `npm run test:boot` still ends with the known
+  pre-existing FAILs (WAVE4 fence, WAVE26 ferry/haul cluster,
+  WAVE30 payTribute flake, WAVE35 haul gate). WAVE62 pins
+  were all-true.
+  VERIFY: `out/w62/{hook,mech,bio}` probes + verifiers CLEAN.
+  Live stills in those folders.
+  FILES: `src/systems/hud.js`, `src/ui/hud.css`,
+  `scripts/boot-test.mjs`, `docs/Hud02IdentitiesDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w62/`.
+- Wave 63 (2026-08-18): SHP design brief (orchestrated; design
+  only). Same pattern as Wave 61 HUD-02. No `src/` edits.
+  DESK: append `'shipyard'` after `epics`. Digits 1–9 unchanged.
+  Digit 0 opens shipyard (`Number('0')-1 === -1` special-case).
+  SHP-01 `'yard'` rejected. One desk, two panes (Hangar every
+  dock + gated Yard buy). Buy ADDS a hangar row; it does not
+  remount or trade away the mounted hull.
+  PERSIST: `ctx.world.hangar` = `{ mountedId, hulls }` on
+  `WORLD_FIELDS`. Live hull is a row. Cap 8. Cargo travels with
+  the hull. `hullKind` `'living'|'built'` — SHP writes, HUD
+  reads. Unknowables force `'living'` on every path. Unset = bio.
+  REMOUNT: copy `SHIP_CLASSES[classKey]` onto `ctx.config.ship`.
+  Turn already follows `classKey`; cruise does not today. Bio is
+  not a hull and survives swaps. Do not weaken `makeLivingHull`.
+  SHP-03 first: flat `scanner` / `miningLaser` / `concealedMounts`
+  on the hull row (no nested `loadout`). World keys stay mirrors.
+  No missiles, no turrets, no mass/power. First-slice buy lists
+  may omit frigate/ace/cutter; persist still admits `SHIP_CLASSES`
+  keys. New Game: `clearAutosave` only. Berths 1–3 keep hangar.
+  Death + no save: one living starter; delete leftover `hullKind`.
+  World strings: `textContent` only. Serial later PRs: save.js →
+  ship.js → station.js → catalog/buy → equipment migrate.
+  MERGE: `out/w63/shared-contract.md` wins sibling conflicts.
+  VERIFY: `out/w63/current-shp-inventory.md` +
+  `verify-inventory.txt` CLEAN; `shp-01-shipyards.md` +
+  `verify-shp-01.txt` MEDIUM merge nits (contract wins);
+  `shp-02-hangar.md` + `verify-shp-02-recheck.txt` CLEAN;
+  `shp-03-loadouts.md` + `verify-shp-03.txt` MEDIUM persist
+  shape (flatten to contract); `shared-contract.md` +
+  `verify-shared-recheck.txt` CLEAN.
+  FILES: `docs/ShpDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`, `out/w63/`.
+  No `src/` edits.
+- Wave 64 (2026-08-18): SHP first slice (orchestrated; serial PR1–PR5).
+  PR1 persist: new `src/game/hangar.js`. `WORLD_FIELDS` += `hangar`
+  `{ mountedId, hulls }`. Cap 8. Snapshot parks JSON before copy.
+  Missing hangar → one living starter. `freshStart` rebuilds one
+  living starter and deletes leftover `'built'`. `hullKind`
+  `'living'|'built'` or delete. Unknowables force `'living'`.
+  PR2 remount: `switchTo(ctx, id)` + `applyFlightEnvelope` copies
+  authored `SHIP_CLASSES` onto `ctx.config.ship`. Living remount
+  keeps `makeLivingHull` swim/breath/heartbeat. Built remount uses
+  `buildPlayerPlatedMesh`. Restore/`freshStart` run the envelope.
+  PR3 desk: append `'shipyard'` after `epics`. Digit 0 opens it.
+  Digits 1–9 unchanged. Two panes (1 Hangar, 2 Yard).
+  PR4 buy: new `src/game/shipyard.js`. Authored `YARD_LIST_UU`.
+  Buy adds a hangar row. No remount-on-buy. Hostile rep `< 0` is
+  no sale. Confirm papers before debit. First-slice lists omit
+  ace/cutter/frigate. Independent/hollow catalogs stay empty.
+  PR5: outfitter writes the mounted row, then world mirrors.
+  Swap isolation: Deepcore does not follow every stored hull.
+  OPEN: missiles/turrets/mass-power later. Family audio still
+  HUD leftover. `npm run test:boot` still ends with the known
+  8 FAILs (WAVE4 fence, WAVE26 ferry/haul cluster, WAVE35 haul
+  gate). WAVE62 + WAVE64 pins all true.
+  VERIFY: `out/w64/verify-persist.txt` CLEAN; remount recheck
+  CLEAN; desk recheck + live Digit 0 CLEAN; `verify-buy.txt` +
+  live Confirm papers CLEAN; `verify-equipment.txt` CLEAN.
+  FILES: `src/game/hangar.js`, `src/game/shipyard.js`,
+  `src/systems/shipyard-desk.js`, `src/game/save.js`,
+  `src/systems/ship.js`, `src/systems/station.js`,
+  `src/systems/npc.js`, `src/core/ctx.js`, `src/ui/screens.css`,
+  `scripts/boot-test.mjs`, `docs/ShpDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`, `out/w64/`.
+- Wave 65 (2026-08-19): leftovers + POD-02 brief (orchestrated;
+  three parallel tasks). AUDIO: HUD-02 PR4 quiet family ticks.
+  Rising-edge `ctx.emit` from `hud.js`. New `CUES` only in
+  `song.js`. Types `hudMechRange` / `hudMechMatch` /
+  `hudMechContact` / `hostileEnter` / `hullBand`. Gain ≤ 0.08,
+  duration ≤ 0.35 s. `reducedMotion` gates emit. Mute and
+  masterVolume stay on the song master path. FX-02 fire/hit
+  rows unchanged. No `playCue`. No HUD-03 audio checkbox.
+  CATALOG: plated yards sell light, cutter, heavy, freighter,
+  ace. Beautiful sells light, cutter, heavy. Unknowables stay
+  light. Independent / hollow stay empty. Frigate stays off
+  every buy list. Ace needs Known (10). Cutter stays open at
+  Stranger. Buy still adds a hangar row. No remount-on-buy.
+  POD-02: design only. `docs/Pod02TraffickingDesign.md`.
+  Gilded People Digit 7, level 2 only
+  (`ui.level === 2 && ui.service === 'people'`). Confirm
+  before credit. Market `priceOf('survivor')` stays 0. Return
+  stays. Unknowables: no sale. Impl does not ship this wave.
+  OPEN: missiles / turrets / mass-power later. Frigate buy
+  later. Trafficking impl later. `npm run test:boot` still
+  ends with the known 8 FAILs (WAVE4 fence, WAVE26 ferry/haul
+  cluster, WAVE35 haul gate). WAVE65 pins added. WAVE64
+  `freeholdNoFrigate` now means no frigate only.
+  VERIFY: `out/w65/catalog` probe + live Digit 4 papers CLEAN;
+  `out/w65/audio` probe + live MATCH/RANGE CLEAN;
+  `out/w65/pod/verify-recheck.txt` CLEAN after home-gate fix.
+  FILES: `src/systems/hud.js`, `src/systems/song.js`,
+  `src/core/ctx.js`, `src/game/shipyard.js`,
+  `scripts/boot-test.mjs`, `docs/Hud02IdentitiesDesign.md`,
+  `docs/Pod02TraffickingDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w65/`.
+- Wave 66 (2026-08-19): POD-02 Gilded sale first slice
+  (orchestrated; serial PR1–PR5). Persist keep-list on
+  survivor cargo (`faction` / `source` / optional `name`).
+  Reserved ids (`__proto__` / `constructor` / `prototype`)
+  fail closed. No `world.peopleTrafficked` field.
+  Mutator `src/game/trafficking.js`: list UU 160 / 240,
+  Confirm-before-credit, Unknowables refuse, oversize
+  stacks skip like rescue. People Digit 7 at Gilded only
+  (`ui.level === 2 && ui.service === 'people'`). Offer →
+  Confirm transfer. Market still cannot list or sell
+  people. `priceOf('survivor')` stays 0 even if a save
+  stuffs `world.prices.survivor`. Return survivors stays
+  on matching-faction home / People, Gilded and Freehold.
+  HUD toasts `survivorSold` as a warn Chain line.
+  Milestone id `peopleTrafficked` once; not a WORLD_FIELD.
+  OPEN: missiles / turrets / mass-power later. Frigate buy
+  later. `npm run test:boot` still ends with the known
+  FAILs (WAVE4 fence, WAVE26 ferry/haul cluster, WAVE30
+  payTribute, WAVE35 haul gate). WAVE66 save pins and
+  WAVE66 desk pins all true.
+  VERIFY: `out/w66/pr1` persist probe CLEAN; `out/w66/pr2`
+  mutator probe CLEAN; `out/w66/pr3` desk probe + live
+  Gilded People CLEAN; `out/w66/pr4` survivorSold toast
+  CLEAN; `out/w66/pr5` boot `wave66 save pins` +
+  `wave66 desk` all-true.
+  FILES: `src/game/save.js`, `src/game/trafficking.js`,
+  `src/systems/station.js`, `src/systems/hud.js`,
+  `src/core/ctx.js`, `scripts/boot-test.mjs`,
+  `docs/Pod02TraffickingDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w66/`.
+- Wave 67 (2026-08-19): leftovers + two design briefs
+  (orchestrated; three parallel tasks). FRIGATE: plated
+  CORE_STOCK appends `frigate`. List 80000 UU. Min-rep
+  Trusted 25. Beautiful stays light/cutter/heavy.
+  Unknowables stay light. Independent / hollow stay empty.
+  Buy still adds a hangar row after Confirm. Digit 8 at
+  shipyard level 2 is offer index 5. WAVE64 pin renamed
+  `freeholdHasFrigate`. WAVE65 pin renamed
+  `platedHasFrigate`. WAVE67 catalog pins added.
+  SHP-03: design only. `docs/Shp03WeaponsDesign.md`.
+  Flat hangar keys `launcher` / `missileAmmo` / `turret`.
+  Outfitting Digit 8/9 + Confirm papers. Group-4 player
+  missiles. Forward auto-turrets. Seat-count mass. Power
+  ledger out. HUD-02 closed. No incoming gauge. No `src/`
+  weapons. AST: design only. `docs/AstOrbitsDesign.md`.
+  Keep `id === index`. Closed-form pose from seed +
+  `world.time`. Sparse `fieldOre` persist. Work-sector
+  mining aid. PHY keep-out. No `src/` motion.
+  OPEN: missiles / turrets impl later. AST belts later.
+  Beautiful / Unknowables frigate later. `npm run test:boot`
+  still ends with the known FAILs (WAVE4 fence, WAVE26
+  ferry/haul cluster, WAVE30 payTribute, WAVE35 haul gate).
+  WAVE67 catalog pins all true.
+  VERIFY: `out/w67/frigate` probe + live Freehold Yard
+  CLEAN; `out/w67/shp03/verify-recheck.txt` CLEAN;
+  `out/w67/ast/verify.txt` CLEAN.
+  FILES: `src/game/shipyard.js`, `scripts/boot-test.mjs`,
+  `docs/Shp03WeaponsDesign.md`, `docs/AstOrbitsDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w67/`.
+- Wave 68 (2026-08-19): SHP-03 first impl (orchestrated;
+  serial PR0–PR5). Catalog `WEAPONS.missile` / `WEAPONS.turret`
+  + frozen `MOUNT_TABLE` + `src/game/weapon-fit.js` (`dart` /
+  `auto`). Flat hangar keys `launcher` / `missileAmmo` /
+  `turret` on WORLD_FIELDS. Restore overwrites world from
+  the mounted row. `writeMountedGear` + `spendMissileAmmo`.
+  Stock rows seed empty racks. Outfitting level 2 Digit 8/9
+  Confirm papers (6500 / 4200 UU). Light has no hardpoint.
+  Group 4 Digit4: dart pool 8, seeker, spend-on-spawn. Empty
+  rack does not fire cannon. Player turret forward cone,
+  cap 2 bolts. HUD `4 · Dart rack · N` / empty `4 · —`.
+  HUD-02 closed. No incoming gauge. No NPC missiles. Power
+  ledger out. WAVE64 heal pin now expects empty launcher
+  key. WAVE68 weapons pins all true. Known boot FAILs
+  unchanged (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul).
+  OPEN: AST belts later. Beautiful / Unknowables frigate
+  later. NPC missiles / incoming gauge later.
+  VERIFY: `out/w68/pr0`–`pr5` probes CLEAN; live Chrome
+  `out/w68/live` PASS (light refuse, heavy dart+turret
+  papers, WPN `4 · —` then `4 · Dart rack · 8`).
+  FILES: `src/game/state.js`, `src/game/weapon-fit.js`,
+  `src/game/hangar.js`, `src/game/save.js`,
+  `src/game/shipyard.js`, `src/core/ctx.js`,
+  `src/systems/station.js`, `src/systems/combat.js`,
+  `src/systems/controls.js`, `src/systems/hud.js`,
+  `scripts/boot-test.mjs`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w68/`.
+- Wave 69 (2026-08-19): AST first impl (orchestrated;
+  serial PR1–PR2, then PR3+PR4 parallel, then PR5).
+  Closed-form Kepler-lite pose from seed + `world.time`.
+  Five placement draws only. `id === i`. In-place Vector3.
+  Band default kind. Work sector ≥60%. Keep-out vs sun /
+  station / gates / planet slots. Sparse `world.fieldOre`
+  on WORLD_FIELDS. Omit-key restore deletes the live bag.
+  Same-system overlay without mesh dispose. Tumble LOD
+  1200 u; orbit all rocks. Stale rock lock dropped on
+  `systemLoaded`. Arrival `Belt lies <n> u…` plus group-3
+  `Mine · belt <n>u` (textContent). WAVE51 G/I re-aim each
+  fire frame so extract math still pins on a moving rock.
+  WAVE69 ast pins all true. Known boot FAILs unchanged
+  (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul).
+  OPEN: Beautiful / Unknowables frigate later. NPC missiles
+  / incoming gauge later. Power ledger out. Player must
+  track a rock to cut it; NPC miners already hold relative.
+  VERIFY: `out/w69/pr1`–`pr5` CLEAN; live Chrome
+  `out/w69/live` PASS (meanR 581, sector 0.68, rocks slide,
+  cue `3 MINE · BELT 1836U`).
+  FILES: `src/systems/asteroids.js`, `src/game/save.js`,
+  `src/core/ctx.js`, `src/systems/controls.js`,
+  `src/game/jump.js`, `src/systems/hud.js`,
+  `scripts/boot-test.mjs`,
+  `docs/AstOrbitsDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w69/`.
+- Wave 70 (2026-08-20): leftovers + two design briefs
+  (orchestrated; three parallel tasks). MATCH: X on a
+  locked rock samples world velocity and holds in the
+  rock rest frame. Ship MATCH still uses scalar speed
+  along the nose. Dock, jump, lost lock, NaN pose, or
+  throttleHeld cancel. No auto-steer. HUD MATCH lamp
+  still needs a ship `state`, so the lamp stays off on
+  a rock lock. WAVE70 minehold pins all true.
+  BIO: design only. `docs/BioLivingShipsDesign.md`.
+  Living starter stays the benchmark. First impl uses
+  live Beautiful / Unknowables yards. Abomination is
+  `hullKind === 'built'` plus `grafted: true`. Gilded
+  graft after a two-step warning. Beautiful standing
+  caps at HOSTILE_STANDING (−10) while any hangar row
+  is grafted. Living frigate buy stays omitted.
+  Psionic weapons stay out. No `src/` BIO.
+  MSN: design only. `docs/MsnMissionsDesign.md`. First
+  family is mining (two slots per system, one-in-one-out,
+  600 s deadline, expire fails closed). Extend
+  `world.jobs`. No asteroid UUID. Job ids are hyphen
+  tokens (live unique ids keep; `mine-<system>-<n>`;
+  RESERVED_IDS on each token). Cap
+  `4 + 2 * N_SYSTEMS + 16`. No `src/` MSN.
+  OPEN: Beautiful / Unknowables frigate later (BIO).
+  NPC missiles / incoming gauge later. Power ledger
+  out. Rock MATCH lamp later (HUD needs ship state).
+  `npm run test:boot` still ends with the known FAILs
+  (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul).
+  VERIFY: `out/w70/minehold` probe + live Chrome CLEAN;
+  `out/w70/bio/verify-recheck.txt` CLEAN;
+  `out/w70/msn/verify-recheck.txt` CLEAN.
+  FILES: `src/systems/ship.js`, `scripts/boot-test.mjs`,
+  `docs/BioLivingShipsDesign.md`,
+  `docs/MsnMissionsDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w70/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

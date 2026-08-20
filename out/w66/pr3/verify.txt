@@ -1,0 +1,100 @@
+## Status
+CLEAN
+
+## What I tested
+Headless probe `node --import ./scripts/with-css-stub.mjs out/w66/pr3/probe.mjs`: 44 keys true, exit 0.
+
+Static read of `src/systems/station.js`:
+- `renderTrafficDesk` is called only from `renderPeople`, after `renderRescue`.
+- Gate is `ui.level === 2 && ui.service === 'people'` (also requires live dock faction `gilded`).
+- `priceOf` returns 0 for `survivor` on the first line.
+- `DOCK_KEY_SERVICES` stays 10 keys: People at index 6 (Digit 7), Shipyard last (Digit 0).
+- `tryTrade` still refuses `survivor`. `removeCargo('survivor')` is a no-op.
+- Level-1 home calls `renderRescue` only (Return). Desk chrome is not on level 1.
+- Esc on People with pending calls `cancelTrafficPending` and stays on People.
+- Digit handler has jobs/bar/feed/repair/outfitting/launch/shipyard. No People debit branch.
+- `h()` writes `textContent`. Confirm calls `applySurvivorSale(ctx, armed.faction, armed.source, dockFaction)` with live `currentDef.faction`.
+
+Browser (Playwright, http://localhost:5173/):
+- New Game click `[data-title-action="new"]` twice. Origin Digit/click Greenhand.
+- `ctx.emit('jumpRequested', { to: 'gc_auction' })`. Teleport ship onto station. Cargo: freehold/other x2 + gilded/playerKill x1 + provisions. Credits 1000. Dock.
+- Level-1 home: Return present, no Offer/Confirm. Digit 7 People, Digit 0 Shipyard.
+- People: transfer desk, two Offer rows (160 recovered / 240 your kill), no Digit labels on Offer. Copy has no slave/meat/stock.
+- Offer → Confirm. Digit1 and Digit0: credits 1000 and cargo unchanged.
+- Esc: pending gone, still on People.
+- Offer + Confirm transfer: credits 1000 → 1320 (160×2), freehold lot gone, notice `The Chain takes them. 2 transferred. 320 UU.`
+- Market (Digit 1 from menu): no survivor row. A/S sold provisions only. Survivor lot stayed.
+- Control: jump to `freehold`, Digit 7 People: no Offer, no transfer desk.
+- Hunt: double-click Confirm paid once (1000→1320). Return-while-armed cleared pending, notice `They are no longer in the hold.`, no debit. Unknowables-only cargo shows `The desk will not take them.`
+- Console: Vite connect only. No new UI errors.
+
+Note (known minor, not a fail): Return while Confirm is armed overwrites the rescue line with the vanished notice on paint. No second debit. Code review already logged this.
+
+## Bugs found
+None.
+
+## Environmental issues
+None. Vite stayed on :5173.
+
+## Evidence
+- Screenshots:
+  - C:\Projects\WebSim\out\w66\pr3\01-gilded-home.png
+  - C:\Projects\WebSim\out\w66\pr3\02-gilded-people-desk.png
+  - C:\Projects\WebSim\out\w66\pr3\03-confirm-armed.png
+  - C:\Projects\WebSim\out\w66\pr3\04-esc-cancel-people.png
+  - C:\Projects\WebSim\out\w66\pr3\05-confirm-paid.png
+  - C:\Projects\WebSim\out\w66\pr3\06-market-no-survivor.png
+  - C:\Projects\WebSim\out\w66\pr3\07-freehold-no-offer.png
+  - C:\Projects\WebSim\out\w66\pr3\08-double-click.png
+  - C:\Projects\WebSim\out\w66\pr3\09-vanished-lot.png
+  - C:\Projects\WebSim\out\w66\pr3\10-unknowables-refuse.png
+- Probe output:
+```
+{
+  "priceOfSurvivorZero": true,
+  "priceOfSurvivorStuffed": true,
+  "priceOfOreUnchanged": true,
+  "dockKeyCount10": true,
+  "dockKeyLastShipyard": true,
+  "dockKeyPeopleIndex6": true,
+  "dockKeyNoEleventh": true,
+  "traffickingImport": true,
+  "tryTradeRefuseStill": true,
+  "removeCargoSurvivorNoop": true,
+  "priceOfFirstLineSurvivor": true,
+  "peopleHasNoDigitHandler": true,
+  "level1RescueOnly": true,
+  "renderPeopleCallsDeskAfterRescue": true,
+  "noWorldFieldsAdd": true,
+  "gateLevel1NoNodes": true,
+  "gateWrongService": true,
+  "nonGildedNoChrome": true,
+  "emptyHoldNoChrome": true,
+  "ineligibleRefuse": true,
+  "offerLotLine": true,
+  "offerArmLabel": true,
+  "blockNote": true,
+  "noRowName": true,
+  "noRawFactionId": true,
+  "noForbiddenCopy": true,
+  "pendingAllowlist": true,
+  "confirmMeta": true,
+  "confirmButton": true,
+  "cancelLabel": true,
+  "confirmPaysList": true,
+  "reducedBlock": true,
+  "reducedLot": true,
+  "reducedArm": true,
+  "reducedConfirmMeta": true,
+  "liveDockNotPendingBuyer": true,
+  "confirmUsesLiveGilded": true,
+  "busyNoDebit": true,
+  "vanishedClearsPending": true,
+  "cancelPending": true,
+  "cancelEmpty": true,
+  "protoPendingNoConfirm": true,
+  "protoFactionPendingDropped": true,
+  "doubleClickNoSecondDebit": true
+}
+pr3 probe all-true
+```

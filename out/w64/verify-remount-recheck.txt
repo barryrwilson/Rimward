@@ -1,0 +1,54 @@
+## Status
+CLEAN
+
+## What I tested
+- Command: `node --import ./scripts/with-css-stub.mjs out/w64/remount-probe.mjs`
+  Result: `REMOUNT PROBE PASS` (exit 0).
+- Command: `node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs`
+  Result: exit 1, `BOOT TEST FAIL — 8 errors`.
+  WAVE64 persist pins: all true.
+  WAVE64 remount pins: all true (env, blob cruise ignored, cargo replace, refuse space/same, Unknowables living + living mesh path, HUD mech/bio, living swim/breath/heartbeat fields, built no living swim, one object, not on ctx.ships, throttle/MATCH/bio left, dock transform kept).
+  WAVE62 hud family hook: all true, including `noHullWrite`.
+  Eight FAILs only: WAVE4 FENCE FAVOR; WAVE26 FERRY QUOTE, HAUL QUOTE, LANE DELIVERY, OLD-SAVE FALLBACK, SAVE FIELDS, RESTORE; WAVE35 HAUL GATE DELIVERY. Known set. Do not blame this remount worker.
+- Extra node probe (no source edit): remount throw rolls back player, cargo, hangar, world mirrors, and `ctx.config.ship`. Refuse reasons: not-docked, combat, jump, destroyed, paused, missing, already-mounted. Result: `ROLLBACK/REFUSE PASS`.
+- Static review vs `docs/ShpDesign.md` §5 and `out/w63/shared-contract.md` §4.
+  Files: `src/systems/ship.js`, `src/game/hangar.js`, `src/game/save.js`, `src/systems/npc.js`, `scripts/boot-test.mjs`.
+  Git: `state.js` and `station.js` not in the change set. `hangar.js` is new.
+- No browser. Remount logic is confirmed in node (probe + boot-test live mesh). Desk UI is PR3.
+
+## Bugs found
+None against remount law.
+
+Checklist:
+- Envelope from `SHIP_CLASSES` only. `applyFlightEnvelope` maps cruise→maxSpeed, creep→creep, burn→afterburner.multiplier, stopTime→damping. Blob `cruise: 999` is ignored (`sw.notBlob`, `tamper.notBlobCruise`). Snapshot does not persist `ctx.config.ship`.
+- Restore and `freshStart` call `applyMountedFlight` after hangar heal.
+- Living remount uses `makeLivingHull` via `buildLivingVisual`. `publishHullPath` sets swim, breath, heartbeat. Envelope copy does not idle those fields. Boot-test `liveL.fields` and `back.fields` true.
+- Built remount uses `buildPlayerPlatedMesh` (NPC builder, player scale) or a plated box fallback. Update vertex swim is inside `if (living)`. Built path calls `animateShipMesh` only (asset LOD, not living vertex swim). `plate.noLivingSwim` true.
+- Unknowables force `'living'` in sanitize, load, `switchTo`, `applyMountedFlight`, and `meshKindFor` / `remountPlayerHull` before the mesh branch. Live remount of an Unknowables row uses `hullPath === 'living'`.
+- `switchTo` refuses not-docked, combat, jump, destroyed, paused, missing, already-mounted. Rollback on throw restores records then remounts the restored hull.
+- One `ctx.ship.object`. Player root is not pushed to `ctx.ships`.
+- No `ctx.input.throttle` write in hangar/ship remount. No `ctx.bio` write in hangar.js.
+- HUD reads `hullKind`. HUD does not assign `ctx.player.hullKind`.
+- `state.js` not edited. `station.js` not edited (no desk).
+- `clearAutosave` still removes only `rimward-save-v1`.
+- `npc.js` adds a thin `buildPlayerPlatedMesh` wrapper. `buildShipMesh` / traffic / combat paths are unchanged.
+
+Residual (not a fail):
+- `hangar.js` ↔ `save.js` circular import (same class as PR1). Node load works.
+- Restore remounts the mesh even when the living starter is still mounted. Contract asks restore to run the envelope copy.
+
+## Environmental issues
+None. First boot-test run hit the 180s tool cap before WAVE64. Second run at 300s finished.
+
+## Evidence
+- `out/w64/remount-probe.mjs` → `REMOUNT PROBE PASS`
+- `scripts/boot-test.mjs` WAVE64 persist object: every pin true
+- `scripts/boot-test.mjs` WAVE64 remount object: every pin true
+- `scripts/boot-test.mjs` WAVE62: every pin true
+- Boot-test FAIL lines (8): WAVE4 FENCE FAVOR; WAVE26 FERRY QUOTE / HAUL QUOTE / LANE DELIVERY / OLD-SAVE FALLBACK / SAVE FIELDS / RESTORE; WAVE35 HAUL GATE DELIVERY
+- Extra: `ROLLBACK/REFUSE PASS`
+- Cite: `src/game/hangar.js` `applyFlightEnvelope` 330–345, `switchRefuseReason` 449–461, `switchTo` 465–485, `applyMountedFlight` 489–494
+- Cite: `src/systems/ship.js` `meshKindFor` 502–507, `remountPlayerHull` 513–541, living vertex swim 863–921
+- Cite: `src/game/save.js` restore 387–390, `freshStart` 394–405, `clearAutosave` 213–218
+- Cite: `src/systems/npc.js` `buildPlayerPlatedMesh` 170–175
+- Browser: skipped

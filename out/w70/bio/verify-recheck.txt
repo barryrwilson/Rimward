@@ -1,0 +1,159 @@
+Wave 70 BIO design recheck
+Date: 2026-08-20
+Scope: envelope MEDIUM from out/w70/bio/verify.txt. Markdown only.
+Rule: do not edit src/. This file is evidence only.
+
+## Status
+CLEAN
+
+Previous MEDIUM (inventory mapped burn → afterburner.multiplier) is closed.
+No new HIGH. Freeze list still holds.
+
+================================================================================
+1. Pin 1 — inventory cites burn / cruise, not multiplier = burn
+================================================================================
+
+Live applyFlightEnvelope (src/game/hangar.js 467–481):
+  ship.maxSpeed = cls.cruise
+  ship.creep = cls.creep
+  ship.afterburner.multiplier = cls.cruise > 0 ? cls.burn / cls.cruise : 2
+  ship.damping = 1 / stopTime
+  ship.acceleration = cls.cruise * (90/120)
+
+Live SHIP_CLASSES.light (state.js 36): cruise 120, burn 240.
+  240 / 120 = 2. Peak = maxSpeed * multiplier = burn.
+
+out/w70/bio/current-bio-inventory.md §2 Envelope (line 69):
+  afterburner.multiplier = cruise > 0 ? burn / cruise : 2
+  (light 240/120 = 2, not 240)
+  Peak burn speed is maxSpeed * multiplier, which equals burn.
+  Do not assign multiplier = cls.burn.
+
+Grep out/w70/bio except this recheck and the first verify.txt:
+  No remaining "burn→afterburner.multiplier" as a live map.
+  code-review.md records the old map as resolved Major.
+
+PASS.
+
+================================================================================
+2. Pin 2 — brief and contract: CALL applyFlightEnvelope
+================================================================================
+
+docs/BioLivingShipsDesign.md
+  Current-state table: switchTo calls applyFlightEnvelope. Live multiplier
+  = burn / cruise (cruise 0 → 2). Do not set multiplier = burn.
+  Goal 3: class evolution later uses applyFlightEnvelope + living remount.
+  §4: later training must call that function + living remount. It must not
+  copy a wrong envelope table.
+
+out/w70/bio/shared-contract.md
+  §0.11: class evolution calls applyFlightEnvelope + living remount.
+  §4.2: Call applyFlightEnvelope(ctx, classKey). Do not re-author the map.
+        Live hangar.js 477: cruise > 0 ? cls.burn / cls.cruise : 2.
+        Assigning multiplier = cls.burn would make light 240×, not 2×.
+  Verifier pin 11: later PRs call applyFlightEnvelope. Do not assign
+  multiplier = burn.
+
+code-review.md alignment row: contract §4.2 call live fn; brief §4.
+security-review.md LOW: design now cites burn / cruise; later PRs must call
+applyFlightEnvelope.
+
+PASS.
+
+================================================================================
+3. Pin 3 — no HIGH brief-vs-contract conflict
+================================================================================
+
+Merge law: contract wins. Rechecked freezes after the envelope edit:
+
+- Wave 70 markdown only. Serial PRs later.
+- Living starter is the boot default. Remount rebuilds makeLivingHull.
+- Beautiful origin is not a second hull. Does not write hullKind.
+- First impl in: live LIVING_STOCK + Unknowables light.
+- Gift / pirate / seed commodity deferred. Persist = hangar row.
+- Abomination = built && grafted. Gilded sells. Two-step warning.
+- Any grafted row caps Beautiful at live HOSTILE_STANDING (−10).
+- Beautiful / Unknowables frigate buy omit.
+- BIO-04 out. No invented WEAPONS row.
+- BIO-03 later visual+motion. This wave does not ship meshes.
+- Growth-center not required for starter cannon.
+- Hangar rows only. HUD never writes hullKind.
+- Envelope: call applyFlightEnvelope; multiplier = burn / cruise.
+
+Compatible narrowing (not opposite law):
+- Contract §7.3 mounted-or-chosen-row vs brief mounted-only.
+- Contract §7.4 names "Confirm debit"; §7.7 and brief §7 forbid guessed UU
+  until an authored constant exists. Later impl obeys §7.7.
+
+NO HIGH brief-vs-contract freeze conflict.
+
+================================================================================
+4. Pin 4 — markdown only; this worker does not ship src
+================================================================================
+
+BIO tree:
+  docs/BioLivingShipsDesign.md
+  out/w70/bio/current-bio-inventory.md
+  out/w70/bio/shared-contract.md
+  out/w70/bio/security-review.md
+  out/w70/bio/code-review.md
+  out/w70/bio/verify.txt
+  out/w70/bio/verify-recheck.txt (this file)
+
+Grep src for grafted | Abomination | BIO-0 | Wave 70 → no matches.
+
+Dirty / untracked src, PROGRESS.md, wishlist, hangar.js belong to other
+workers. Recheck does not treat them as BIO deliverables.
+
+PASS.
+
+================================================================================
+5. Pin 5 — living starter, graft warning, frigate omit, BIO-04 out
+================================================================================
+
+Living starter
+  Brief §2, contract §0.3 / §1: boot makeLivingHull; remount rebuilds
+  swim / breath / heartbeat; Unset hullKind → living. Independent starter
+  is not built because origin is not Beautiful.
+  Inventory §1: boot buildLivingVisual. Preserve.
+
+Graft warning
+  Brief §7: two-step pending; warning that Beautiful become immediate
+  enemies; cancel = no write, no debit.
+  Contract §7.4: same family as Confirm papers. Esc cancels.
+  Ownership invariant on sanitize / restore / remount / confirm.
+  Security HIGH "graft without warning" remains closed.
+
+Frigate omit
+  Live shipyard.js: LIVING_STOCK light, cutter, heavy. UNKNOWABLES_STOCK
+  light. CORE_STOCK includes plated frigate.
+  Inventory §4, contract §8, brief §8: Beautiful / Unknowables buy keep omit.
+
+BIO-04 out
+  Brief §6 named hole. Contract §6 non-goal. No WEAPONS triad in this
+  design. state.js READ-ONLY. Inventory gap: psionics Absent.
+
+PASS.
+
+================================================================================
+6. Closed MEDIUM vs leftover notes
+================================================================================
+
+CLOSED:
+  MEDIUM inventory envelope map burn→afterburner.multiplier.
+
+Notes (not freeze breaks, not new HIGH):
+- ship.js createShipState cite inventory 589–590 is live 591.
+- FEED_COST cite 136–137 is live 137.
+- Contract §7.4 names debit on confirm; §7.7 forbids guessed UU.
+- Graft price remains proposed, needs owner (security MEDIUM, design).
+
+================================================================================
+7. Verdict
+================================================================================
+
+Status: CLEAN
+
+The BIO inventory now matches live hangar.js 477. Brief and contract tell
+later PRs to call applyFlightEnvelope. Living starter, graft warning,
+frigate omit, and BIO-04 out stay frozen. Wave 70 BIO remains markdown.

@@ -61,7 +61,32 @@ torus collision, station hold routes, live station/gate avoid.
 pooled hull scorches, pad-home route heal. **Wave 60 POD first
 pass landed 2026-08-18:** scoop survivors, spawn on surrender/
 destroy, matching-faction rescue, save provenance. Market sale
-and Gilded trafficking did not ship. HUD-02 stays READY TO DESIGN.
+did not ship in Wave 60. **Wave 61 HUD-02 design
+brief landed 2026-08-18:** `docs/Hud02IdentitiesDesign.md`.
+**Wave 62 HUD-02 skins landed 2026-08-18:** hook + mech + bio.
+Family audio landed Wave 65. **Wave 63 SHP design brief landed
+2026-08-18:** `docs/ShpDesign.md`. **Wave 64 SHP first slice
+landed 2026-08-18:** hangar persist, remount, Digit 0 shipyard
+desk, buy-adds-row, outfitter mirrors. Mech HUD now follows a
+mounted `hullKind: 'built'` hull. **Wave 65 leftovers landed
+2026-08-19:** HUD-02 family audio; plated cutter+ace catalogs
+(frigate still omitted); POD-02 trafficking brief
+(`docs/Pod02TraffickingDesign.md`). **Wave 66 POD-02 impl
+landed 2026-08-19:** Gilded People Digit 7, Confirm transfer,
+160/240 UU, warn toast. Missiles and turrets did not ship.
+Frigate buy did not ship. **Wave 67 leftovers + briefs
+landed 2026-08-19:** plated frigate buy (80000 UU, Trusted 25);
+SHP-03 weapons brief (`docs/Shp03WeaponsDesign.md`); AST
+orbits brief (`docs/AstOrbitsDesign.md`). **Wave 68 SHP-03
+first impl landed 2026-08-19:** dart rack, auto turret,
+Outfitting 8/9 Confirm papers, group 4, HUD WPN ammo.
+**Wave 69 AST first impl landed 2026-08-19:** closed-form belts,
+work sector, sparse `fieldOre`, group-3 mine cue. Beautiful /
+Unknowables still omit frigate. **Wave 70 leftovers + briefs
+landed 2026-08-20:** MATCH on a locked rock (rest-frame hold);
+BIO brief (`docs/BioLivingShipsDesign.md`); MSN brief
+(`docs/MsnMissionsDesign.md`). Beautiful / Unknowables still
+omit frigate.
 
 ### Experience references
 
@@ -93,7 +118,8 @@ mission chains.
 ## Initiative HUD — Action-centered combat HUD
 
 **Status:** HUD-01 DONE (implemented + play-verified 2026-08-17). HUD-02
-READY TO DESIGN. HUD-03 existing settings remain; no new wave.  
+skins DONE (Wave 62, 2026-08-18; brief Wave 61). Family audio DONE
+(Wave 65 PR4). HUD-03 existing settings remain; no new wave.  
 **Player problem:** The current HUD pulls the player's eyes to screen corners,
 away from the target and projectile path. Essential combat state is difficult
 to read quickly.  
@@ -132,8 +158,9 @@ a targeting-computer upgrade.
 
 ### HUD-02 — Conventional and living HUD identities
 
-**Status:** READY TO DESIGN. Not shipped. HUD utility waves A–F did not add
-skins, tendrils, or HUD-family audio.
+**Status:** DONE for hook + mech + first-wave bio (Wave 62) and
+family audio (Wave 65 PR4). Brief: `docs/Hud02IdentitiesDesign.md`.
+Mech follows a mounted `hullKind: 'built'` hull after Wave 64 SHP.
 
 - Conventional ships use one consistent mechanical HUD family.
 - Living ships use an organic HUD family with animated tendrils, pulsing
@@ -141,6 +168,7 @@ skins, tendrils, or HUD-family audio.
   like audio cues.
 - Both variants communicate the same essential information and neither receives
   a competitive readability disadvantage.
+- Owner 2026-08-18: ship skins before SHP (mech is debug-only until `hullKind: 'built'`); Unknowables purchased hulls are living (`hullKind: 'living'`); no HUD-03 free skin override.
 
 ### HUD-03 — Accessibility and customization
 
@@ -191,7 +219,10 @@ The base HUD readouts in HUD-01 remain standard.
 ### TGT-02 — Match target speed
 
 **Status:** DONE (core ship, Wave D, 2026-08-17). MATCH lamp + `X`. `ship.js`
-does not write `ctx.input.throttle`.
+does not write `ctx.input.throttle`. Wave 70: X on a locked rock
+holds in the rock rest frame (sampled world velocity). Ship MATCH
+still uses scalar speed along the nose. The MATCH lamp still needs
+a ship `state`, so it stays off on a rock lock.
 
 Add a control that continuously matches the selected target's speed until
 cancelled, invalidated, or the target is lost. The interface must clearly show
@@ -221,6 +252,9 @@ standard readout even if richer radar information is upgraded.
 
 ### TGT-04 — Automated weapons
 
+**Status:** first impl DONE (Wave 68). Forward auto-turret
+SKU `auto`. No incoming gauge. NPC turrets later.
+
 Turrets and automatic guns should be equipment upgrades with appropriate hull,
 mount, power, and balance restrictions.
 
@@ -248,8 +282,9 @@ should not be assumed parallel-safe:
    **DONE** (Wave D, core ship).
 3. **Equipment progression:** targeting/sensor tiers from TGT-03. **DONE** for
    the scanner-gated awareness arc only (Wave F).
-4. **Presentation pass:** HUD-02, broader HUD-03 options, combat playtest
-   tuning. Still later. HUD-02 is not done.
+4. **Presentation pass:** HUD-02 brief landed Wave 61
+   (`docs/Hud02IdentitiesDesign.md`). Skins landed Wave 62 (hook,
+   mech, bio). Broader HUD-03 options and family audio stay later.
 
 Each wave should be useful on its own rather than withholding all value until
 the entire sequence is complete.
@@ -305,7 +340,11 @@ environmental collisions; player and NPC turn rules drifting apart.
 
 ## Initiative SHP — Ship ownership, shipyards, and loadouts
 
-**Status:** CAPTURED  
+**Status:** first slice DONE (Wave 64, 2026-08-18; brief Wave 63:
+`docs/ShpDesign.md`). Wave 65 added cutter + ace to authored
+buy lists. Wave 67 added plated frigate buy. Missiles /
+turrets first impl DONE (Wave 68;
+`docs/Shp03WeaponsDesign.md`). Power ledger still out.  
 **Player problem:** The player cannot build a collection of ships or meaningfully
 configure a hull for a chosen career.  
 **Likely areas:** station/shipyard UI, player state and saves, ship definitions,
@@ -313,11 +352,19 @@ equipment and combat systems.
 
 ### SHP-01 — Faction shipyards and purchasable ships
 
+**Status:** first slice DONE (Wave 64). Authored faction catalogs,
+reputation + price gate, Digit 0 desk. Cutter + ace buy lists
+DONE (Wave 65). Plated frigate buy DONE (Wave 67; 80000 UU,
+Trusted 25). Beautiful and Unknowables still omit frigate.
+
 - Give each faction at least one shipyard where its ships can be purchased.
 - Gate faction hulls by sufficient reputation as well as price.
 - Make faction and class differences meaningful to careers and loadouts.
 
 ### SHP-02 — Magical multi-ship storage
+
+**Status:** first slice DONE (Wave 64). Magical hangar cap 8.
+Buy adds a row. Hangar pane mounts from any dock.
 
 - The player can own and store multiple ships rather than trading away the
   current hull.
@@ -327,6 +374,11 @@ equipment and combat systems.
   delivery or remote transfer.
 
 ### SHP-03 — Broad but bounded customization
+
+**Status:** first slice DONE (Wave 64) = existing equipment on flat
+hangar fields; world keys stay mirrors. Missiles / turrets /
+seat-count mass first impl DONE (Wave 68,
+`docs/Shp03WeaponsDesign.md`). Power ledger stays out.
 
 - Allow weapons and other reasonable ship systems to be upgraded or swapped.
 - Mount availability depends on hull size and role.
@@ -339,9 +391,9 @@ equipment and combat systems.
 - Living ships can accept conventional components in addition to biological
   growth.
 
-**Open design needs:** conventional weapon families; equipment slots; power,
-mass, heat, ammunition, and cargo tradeoffs; ship prices; faction inventories;
-save migration.
+**Open design needs:** first-slice persist and desk law stay frozen in
+`docs/ShpDesign.md`. Missile / turret / mass law for a later wave is frozen in
+`docs/Shp03WeaponsDesign.md` (merge law `out/w67/shp03/shared-contract.md`).
 
 ---
 
@@ -396,7 +448,9 @@ Standing should affect:
 
 ## Initiative MSN — Renewable missions and player careers
 
-**Status:** CAPTURED  
+**Status:** brief landed Wave 70 (`docs/MsnMissionsDesign.md`).
+No `src/` this wave. First impl family is mining (extend
+`world.jobs`, one-in-one-out). MSN-03 authored chains later.  
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  
@@ -542,6 +596,67 @@ is a safety net, not the normal way traffic navigates.
 
 ---
 
+## Initiative AST — Asteroid orbits and system-scale fields
+
+**Status:** first impl DONE (Wave 69, 2026-08-19; brief Wave 67:
+`docs/AstOrbitsDesign.md`). Closed-form Kepler-lite belts,
+work sector, `fieldOre` persist, arrival line + group-3 cue.
+Wave 70 leftover: MATCH on a locked rock holds in the rock
+rest frame. NPC miners already held relative.
+**Player problem:** Asteroids currently appear as a single local cluster in each
+solar system. The cluster feels placed rather than like a natural part of the
+system.
+**Desired experience:** Give asteroids their own individual orbits around the
+system's star, distributed through a broad belt or Oort-cloud-like region rather
+than gathered into one stationary clump.
+**Likely areas:** asteroid generation and updates, solar-system layout, authored
+system data, mining targets, world persistence, collision/avoidance, map and
+scanner presentation.
+
+### AST-01 — Individual stellar orbits
+
+- Each asteroid occupies a stable orbital path around the system's star.
+- Asteroids are distributed across a broad orbital region instead of one local
+  cluster.
+- Orbital radius, inclination, phase, and speed vary enough to create a natural
+  three-dimensional field while keeping the result readable and deterministic.
+- More distant objects generally move around the star more slowly than nearer
+  objects, even if the simulation uses simplified rather than physically exact
+  orbital mechanics.
+- Different systems may eventually use belts, sparse clouds, multiple bands, or
+  other faction/system-specific distributions rather than sharing one pattern.
+
+### AST-02 — Preserve mining as a practical career
+
+- Players can locate asteroid-rich orbital regions through the chart, scanner,
+  landmarks, or another clear navigation aid.
+- Useful mining targets are not spread so thinly that travel overwhelms mining.
+- Mission generation and NPC miners can select reachable asteroids on these
+  orbits.
+- Mined/depleted asteroid state remains attached to the correct asteroid as it
+  moves and after save/load or leaving and revisiting the system.
+
+**Acceptance direction**
+
+- On entering a representative system, asteroids visibly occupy a large orbital
+  region instead of one compact clump.
+- Individual asteroids advance along stable paths around the star without
+  teleporting, visibly drifting off-orbit, or changing identity.
+- The same system seed produces the same asteroid population and starting
+  orbital state.
+- Save/load and system revisits preserve depletion and other persistent state.
+- Asteroid motion does not cause routine collisions with stations, gates,
+  planets, traffic lanes, NPC miners, or one another.
+- The new distribution remains performant at the intended asteroid count and
+  visual range.
+
+**Regression risks to call out:** turning mining into excessive travel; orbital
+updates increasing frame cost; moving targets breaking mining AI, collision
+lookahead, save identity, or mission destinations; fields intersecting authored
+stations/gates; an Oort-scale region becoming too distant to be useful in play.
+
+---
+
 ## Initiative FX — Combat graphics and feedback
 
 **Status:** FX-01 / FX-02 / FX-03 first pass DONE (Wave 54, 2026-08-17).
@@ -596,8 +711,9 @@ damage decals undermining faction materials or living-ship skin.
 ## Initiative POD — Survivors, provenance, rescue, and trafficking
 
 **Status:** POD-01 first pass DONE (Wave 60). POD-02 provenance
-fields + no-sale first pass DONE. Trafficking / Gilded sale still
-needs tone design and did not ship.  
+fields + no-sale first pass DONE. Trafficking / Gilded sale brief
+landed Wave 65 (`docs/Pod02TraffickingDesign.md`). Trafficking
+Gilded sale first slice DONE (Wave 66 POD-02).  
 **Player opportunity:** Escape pods connect combat aftermath to reputation,
 rescue, piracy, and Gilded Chain trade.  
 **Likely areas:** pods/cargo records, combat aftermath, station services,
@@ -613,8 +729,11 @@ Return on dock home / People. `other` +4 standing, `playerKill` +1.
 
 ### POD-02 — Provenance-aware sale
 
-**Status:** provenance fields DONE (faction, source, name persist).
-Survivors cannot be sold in this pass. Sale / trafficking later.
+**Status:** DONE (Wave 66). Provenance fields persist. Gilded
+People Digit 7 sells eligible lots after Confirm transfer
+(160 UU recovered / 240 UU playerKill). Market cannot sell
+people. `priceOf('survivor')` stays 0. Return stays. Tone
+frozen in `docs/Pod02TraffickingDesign.md` (Wave 65).
 
 - Pods remember the survivors' faction and whether the player destroyed their
   ship or merely recovered them from an incident caused by someone else.
@@ -675,7 +794,10 @@ galaxy and one another.
 
 ## Initiative BIO — Living ships, growth, and Abominations
 
-**Status:** CAPTURED  
+**Status:** brief landed Wave 70 (`docs/BioLivingShipsDesign.md`).
+No `src/` this wave. Living starter stays the benchmark.
+Living frigate buy stays omitted. BIO-04 psionic weapons out
+of first impl.  
 **Preserve:** The current living player ship is the quality benchmark. Its
 organic form, alien skin, and swimming motion that intensifies with speed are
 exactly the desired living-ship experience. Future work must not weaken it.  

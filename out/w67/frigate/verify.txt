@@ -1,0 +1,40 @@
+## Status
+CLEAN
+
+## What I tested
+- Node probe: `node --import ./scripts/with-css-stub.mjs out/w67/frigate/probe.mjs`
+  Result: ALL PINS TRUE, exit 0. Log: `out/w67/frigate/verify-probe.log`.
+- Static pin review of `scripts/boot-test.mjs` WAVE64 / WAVE65 / WAVE67.
+- Static spot-check of `src/game/shipyard.js` CORE_STOCK / MIN_REP / Beautiful stock.
+- Live Vite + headless Chrome: `node out/w67/frigate/browser-verify.mjs`
+  Result: ALL BROWSER PINS TRUE, exit 0. Log: `out/w67/frigate/browser-verify.log`.
+
+## Bugs found
+None.
+
+## Environmental issues
+- Vite was not on :5173 at start. This run started `npm run dev`. Vite binds IPv6 `localhost` / `[::1]`. `127.0.0.1:5173` refuses.
+- Playwright MCP browser was already in use. Live check used puppeteer-core + installed Chrome.
+- Probe and WAVE67 pins do not run the full boot suite. Pre-existing boot FAILs were not re-run.
+
+## Evidence
+- Screenshots:
+  - `out/w67/frigate/01-freehold-dock.png`
+  - `out/w67/frigate/02-yard-rows.png` (frigate 80000 UU, Digit 8 Papers)
+  - `out/w67/frigate/03-frigate-papers.png` (Confirm papers, 80000 UU, no debit)
+  - `out/w67/frigate/04-stranger-refuse.png` (No sale., credits 100000)
+  - `out/w67/frigate/05-trusted-pending.png` (frigate 72000 UU)
+  - `out/w67/frigate/06-trusted-bought.png` (credits 28000, hull_frigate_1)
+  - `out/w67/frigate/07-hangar-after-buy.png` (mounted hull_starter, player still light/living)
+  - `out/w67/frigate/08-independent-empty.png` (no hull catalog)
+  - `out/w67/frigate/09-beautiful-no-frigate.png` (light/cutter/heavy only)
+- Logs:
+  - `out/w67/frigate/verify-probe.log`
+  - `out/w67/frigate/browser-verify.log`
+- Test output: node probe ALL PINS TRUE; browser ALL BROWSER PINS TRUE.
+
+## Static pin notes
+- WAVE64 `freeholdHasFrigate` is `yardStockFor('freehold').includes('frigate')` (true). `Object.values(w64b).every(Boolean)` still holds: the pin is a boolean true, not a leftover NoFrigate false.
+- WAVE65 `platedHasFrigate` is `fh.includes('frigate')` (true). Same every(Boolean) pattern.
+- WAVE67 pins match spec: plated has frigate; beautiful/unk/indie/hollow omit; minRep 25; list 80000; Trusted 72000; Sworn 68000; Known 10 listed then `purchaseYardHull` reason `reputation`; Digit 8 index 5 = frigate (`8 - 3 === 5 && CORE67[5] === 'frigate'`). Known quote is 76000 via rank ladder; buy still refuses.
+- CORE_STOCK first five keys: light, cutter, heavy, freighter, ace. Frigate is appended. MIN_REP.frigate is 25. Beautiful stays LIVING_STOCK light/cutter/heavy.

@@ -1,0 +1,57 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node out/w68/pr1/probe.mjs`. Exit 0. Output: `W68 PR1 PROBE PASS 0`.
+- Ran independent `node out/w68/pr1/verify-edges.mjs`. Exit 0. Output: `W68 PR1 EDGES PASS 0`.
+- Read `src/game/hangar.js`, `src/game/save.js`, `src/core/ctx.js`, `src/game/weapon-fit.js`.
+- Checked `writeMountedGear`, `sanitizeHangarRecord`, `restore`, `WORLD_FIELDS`, `captureSwitch` / `restoreSwitch`, `healPlayerHullKind`.
+- `git diff --name-only HEAD` for state.js, weapon-fit.js, station.js, combat.js, shipyard.js, boot-test.mjs.
+- Extra edges: reserved ids, inherited proto fields, turret:true / turret object, nested loadout dropped, ace keep-seat, negative ammo, writeMountedGear ignore, snapshot/restore JSON roundtrip, world dart + no hangar, switch remount-fail rollback, missing mounted row.
+
+## Bugs found
+None.
+
+Checklist (independent of the worker probe):
+- `sanitizeHangarRecord` builds a fresh object literal. It does not `Object.assign` from raw. Extra keys (`loadout`, `damage`, `rof`) do not leak.
+- Class gate: `healLauncher` uses `canSeat(classKey, 'missile')`. Light + dart → `''`. Cutter / freighter also empty. Heavy / ace keep `dart`.
+- `missileAmmo` is `healMissileAmmo(launcher, own(raw, 'missileAmmo'))` after launcher heal. Empty launcher forces 0. 99 clamps to 8. String / float / negative → 0.
+- `restore()` order is `sanitizeHangar` → `healPlayerHullKind` → `syncMountedToPlayer` → `syncMountedWeaponMirrors` → `applyMountedFlight`.
+- `WORLD_FIELDS` includes `launcher`, `missileAmmo`, `turret`.
+- `writeMountedGear` still writes only scanner / miningLaser / concealedMounts / cargoCapacity. A patch with launcher / ammo / turret does not change the row or world mirrors.
+- Player extras: `healPlayerHullKind` deletes `launcher`, `turret`, `missileAmmo`. Restore then heal leaves those keys off `ctx.player`.
+- Starter / missing hangar: restore with world dart and no hangar rebuilds a starter row and overwrites world to `''` / `0` / `''`. `rebuildStarterHangar` does the same.
+- Switch snapshot: `captureSwitch` stores the three world mirrors. A remount throw restores `dart` / 4 / `auto` and mountedId `h1`.
+- `ctx.world` defaults: `launcher: ''`, `missileAmmo: 0`, `turret: ''`.
+
+Files not edited in this PR (persist scope):
+- `src/game/combat.js` — no HEAD diff; no launcher / missileAmmo / turret matches.
+- `src/game/shipyard.js` — untracked earlier file; no those keys.
+- `src/game/weapon-fit.js` — untracked PR0 catalog; not a persist edit.
+- `src/game/state.js` — HEAD diff is PR0 `MOUNT_TABLE` / `WEAPONS` only.
+- `src/systems/station.js` — HEAD diff is earlier shipyard / traffic / `writeMountedGear` scanner path; no launcher write.
+- `scripts/boot-test.mjs` — not updated by this PR. It still has pin `noMissiles: !('missiles' in healed) && !('launcher' in healed)` (wave-64 shape). That pin will fail if boot-test is run later, because PR1 now stores a flat `launcher` key. Out of this PR (do not edit boot-test; do not run `test:boot`).
+
+## Environmental issues
+None. Probe and extra edges ran in-process with the CSS import hook. No browser.
+
+## Evidence
+```
+node out/w68/pr1/probe.mjs
+W68 PR1 PROBE PASS 0
+exit 0
+
+node out/w68/pr1/verify-edges.mjs
+W68 PR1 EDGES PASS 0
+exit 0
+```
+
+Source pins:
+- `src/game/hangar.js` `sanitizeHangarRecord` ~150–164: fresh literal; `healLauncher` then `healMissileAmmo`.
+- `src/game/hangar.js` `healPlayerHullKind` ~333–335: delete player extras.
+- `src/game/hangar.js` `syncMountedWeaponMirrors` ~372–385: hangar row wins; no row → empty racks.
+- `src/game/hangar.js` `writeMountedGear` ~392–415: no launcher / missileAmmo / turret writes.
+- `src/game/hangar.js` `captureSwitch` / `restoreSwitch` ~484–509: switch snapshot includes the three mirrors.
+- `src/game/save.js` `WORLD_FIELDS` ~94: `'launcher', 'missileAmmo', 'turret'`.
+- `src/game/save.js` `restore` ~436–440: sanitizeHangar, healPlayerHullKind, syncMountedToPlayer, then syncMountedWeaponMirrors.
+- `src/core/ctx.js` ~142–146: world defaults + hangar-source comment.

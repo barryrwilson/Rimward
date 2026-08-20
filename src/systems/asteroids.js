@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { WEAPONS, SYSTEMS, ORE_TYPES, COMMODITIES, pickOreType, oreKeysForBand } from '../game/state.js';
 import { spawnPod } from '../game/pods.js';
+import { PHY } from '../game/physics.js';
+import { cylinderOverlap, torusOverlap } from '../game/collision.js';
 import { applyRockSurface } from './rock-surface.js';
+import { PLANET_SLOT_COUNT } from './solarsystem.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
@@ -63,6 +66,47 @@ const _drift = new THREE.Vector3();
 // Heat-glow bookkeeping cap: mining hits one rock at a time, so 24 listed
 // rocks is generous headroom for beam flicker across overlapping frames.
 const HEAT_CAP = 24;
+const ORBIT_K = 1500; // local copy of solarsystem Kepler constant; do not import
+const KEEP_TRIES = 8;
+const WORK_HALF = 0.7;
+const TUMBLE_RANGE2 = 1200 * 1200; // 1.5 * ENCOUNTER_BUBBLE; skip far spin only
+const FIELD_KINDS = { belt: true, sparse: true, cloud: true };
+// Mirrors solarsystem.js SLOTS (not exported). Keep-out uses live count via PLANET_SLOT_COUNT.
+const PLANET_SLOTS = [
+  { radius: 9, orbitRadius: 250 },
+  { radius: 14, orbitRadius: 420 },
+  { radius: 16, orbitRadius: 640 },
+  { radius: 12, orbitRadius: 920 },
+  { radius: 30, orbitRadius: 1400 },
+];
+const _keepOut = { hit: false, nx: 0, ny: 1, nz: 0, overlap: 0 };
+
+function kindFromDef(def) {
+  const k = def && def.field && def.field.kind;
+  if (typeof k === 'string' && Object.hasOwn(FIELD_KINDS, k)) return k;
+  const band = def && def.band != null ? def.band : 0;
+  if (band <= 1) return 'belt';
+  if (band === 2) return 'sparse';
+  return 'cloud';
+}
+
+function writeOrbitPose(pos, r, inc, node, phase0, omega, y0, time) {
+  const phase = phase0 + omega * time;
+  const cP = Math.cos(phase);
+  const sP = Math.sin(phase);
+  const cN = Math.cos(node);
+  const sN = Math.sin(node);
+  const cI = Math.cos(inc);
+  const sI = Math.sin(inc);
+  pos.x = r * cP * cN - r * sP * cI * sN;
+  pos.z = r * cP * sN + r * sP * cI * cN;
+  pos.y = r * sP * sI + y0;
+}
+
+function omegaForR(r) {
+  if (!(r > 0)) return 0;
+  return ORBIT_K * r ** -1.5;
+}
 
 // Deterministic RNG (mulberry32, same pattern as solarsystem.js) so the
 // field layout is stable run-to-run and per system seed.
@@ -1484,6 +1528,10 @@ export function initAsteroids(ctx) {
   let list = []; // flat ctx.asteroids.list, SAME index as rocks
   let chunk = 1;
   let cursor = 0;
+  let builtSys = ctx.world.currentSystem;
+  let builtSeed = SYSTEMS[builtSys] && SYSTEMS[builtSys].worldSeed;
+  let lastOreRef = ctx.world.fieldOre;
+  let sawSaveRestored = ctx.flags.saveRestored;
   // Reused bookkeeping arrays — reset on build, never reallocated per frame.
   const dirtyBundles = [];
   const activeHeat = []; // rock indices with heat > 0, capped at HEAT_CAP
@@ -1495,13 +1543,132 @@ export function initAsteroids(ctx) {
   // rebuild dispose another ctx's live geometry while it is still rendering.
   const fieldMeshes = [];
 
+  function writeFieldOre(sys, index, remaining, seeded) {
+    if (typeof sys !== 'string' || !Object.hasOwn(SYSTEMS, sys)) return;
+    let bag = ctx.world.fieldOre;
+    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+      bag = {};
+      ctx.world.fieldOre = bag;
+      lastOreRef = bag;
+    }
+    const key = String(index);
+    if (remaining === seeded) {
+      if (!Object.hasOwn(bag, sys)) return;
+      const child = bag[sys];
+      if (child && typeof child === 'object' && !Array.isArray(child) && Object.hasOwn(child, key)) {
+        delete child[key];
+        if (Object.keys(child).length === 0) delete bag[sys];
+      }
+      return;
+    }
+    let child = Object.hasOwn(bag, sys) ? bag[sys] : null;
+    if (!child || typeof child !== 'object' || Array.isArray(child)) {
+      child = {};
+      bag[sys] = child;
+    }
+    child[key] = remaining;
+  }
+
+  function overlayFieldOre(sys) {
+    const bag = ctx.world.fieldOre;
+    let child = null;
+    if (bag && typeof bag === 'object' && !Array.isArray(bag) && typeof sys === 'string'
+        && Object.hasOwn(bag, sys)) {
+      const c = bag[sys];
+      if (c && typeof c === 'object' && !Array.isArray(c)) child = c;
+    }
+    for (let i = 0; i < rocks.length; i++) {
+      const rock = rocks[i];
+      const seeded = rock.seedOre;
+      let remaining = seeded;
+      if (child) {
+        const key = String(i);
+        if (Object.hasOwn(child, key)) {
+          const v = child[key];
+          if (Number.isFinite(v)) remaining = Math.min(seeded, Math.max(0, Math.trunc(v)));
+        }
+      }
+      rock.ore = remaining;
+      if (list[i]) list[i].ore = remaining;
+      if (remaining <= 0) {
+        if (!rock.depleted) deplete(i, rock);
+      } else if (rock.depleted) {
+        rock.depleted = false;
+        rock.collapseT = -1;
+        if (rock.collapseListed) {
+          rock.collapseListed = false;
+          const ix = collapseList.indexOf(i);
+          if (ix >= 0) {
+            collapseList[ix] = collapseList[collapseList.length - 1];
+            collapseList.pop();
+          }
+        }
+        rock.radius = rock.baseScale;
+        if (list[i]) list[i].radius = rock.radius;
+        _color.copy(rock.baseColor);
+        rock.mesh.setColorAt(rock.instanceIndex, _color);
+        rock.mesh.instanceColor.needsUpdate = true;
+        _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
+        _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
+        _mat4.compose(rock.position, _quat, _scale);
+        rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        rock.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+    lastOreRef = ctx.world.fieldOre;
+  }
+
   function build(def) {
     const field = def.field;
-    const count = field.count;
+    const count = Math.min(Math.max(0, field.count | 0), 160);
     const [cx, cy, cz] = field.center;
     const oreMult = field.oreMult ?? 1;
     const band = def.band ?? 0; // §15 band drives composition (wave 51)
     const rng = makeRng(0xa57e000 + def.worldSeed);
+    const kind = kindFromDef(def);
+    let workFrac = field.workFrac;
+    if (!Number.isFinite(workFrac)) workFrac = kind === 'cloud' ? 0.50 : 0.60;
+    if (workFrac < 0) workFrac = 0;
+    if (workFrac > 1) workFrac = 1;
+    const workN = Math.ceil(workFrac * count);
+    const az0 = Math.atan2(cz, cx);
+    const beltR = Math.hypot(cx, cz);
+    const halfW = field.radius;
+    const rLo = Math.max(0, beltR - halfW);
+    const rHi = beltR + halfW;
+    const incAmp = kind === 'cloud' ? 0.55 : 0.12;
+    let tNow = ctx.world.time;
+    if (!Number.isFinite(tNow) || tNow < 0) tNow = 0;
+    let sunR = ctx.config.world.sunRadius;
+    if (!Number.isFinite(sunR) || sunR <= 0) sunR = def.sunRadius || 0;
+    const planetCount = Math.min(def.planetCount | 0, PLANET_SLOT_COUNT, PLANET_SLOTS.length);
+    let sx = ctx.config.world.stationPosition.x;
+    let sy = ctx.config.world.stationPosition.y;
+    let sz = ctx.config.world.stationPosition.z;
+    const stp = def.station && def.station.position;
+    if (stp) {
+      sx = stp[0];
+      sy = stp[1];
+      sz = stp[2];
+    }
+    const gateList = [];
+    const gates = def.gates;
+    if (gates) {
+      for (let g = 0; g < gates.length; g++) {
+        const p = gates[g] && gates[g].position;
+        if (!p) continue;
+        if (Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2])) {
+          gateList.push(p);
+        }
+      }
+    }
+    const hub = def.hub;
+    if (hub && hub.routes && hub.routes.length && hub.position) {
+      const p = hub.position;
+      if (Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2])) {
+        gateList.push(p);
+      }
+    }
 
     // FIRST PASS — draw every rock's ore key before anything else so the
     // RNG draw order (and thus field composition) is deterministic.
@@ -1551,14 +1718,22 @@ export function initAsteroids(ctx) {
       const ore = ORE_TYPES[oreKey];
       const profile = ore.rock;
       const bundle = bundleByOre.get(oreKey);
-      // Flattened torus/cluster: ring 35%..100% of field radius, y squashed.
-      const theta = rng() * Math.PI * 2;
-      const r = field.radius * (0.35 + 0.65 * Math.pow(rng(), 0.7));
-      const position = new THREE.Vector3(
-        cx + Math.cos(theta) * r + (rng() - 0.5) * 24,
-        cy + (rng() - 0.5) * 36,
-        cz + Math.sin(theta) * r + (rng() - 0.5) * 24,
-      );
+      // Five orbit-element draws (replaces theta, r, xz/y jitter). Next draw is radius.
+      const uR = rng();
+      const uInc = rng();
+      const uNode = rng();
+      const uPhase = rng();
+      const uY = rng();
+      const rFrac = kind === 'sparse' ? uR : Math.pow(uR, 0.7);
+      let orbitR = rLo + (rHi - rLo) * rFrac;
+      const inc = (uInc - 0.5) * 2 * incAmp;
+      const node = uNode * Math.PI * 2;
+      const y0 = cy + (uY - 0.5) * (kind === 'cloud' ? 20 : 8);
+      const inWork = i < workN;
+      const sectorOff = inWork ? (uPhase - 0.5) * 2 * WORK_HALF : uPhase * Math.PI * 2;
+      let omega = omegaForR(orbitR);
+      let phase0 = inWork ? az0 + sectorOff - node : sectorOff;
+      const position = new THREE.Vector3();
       // scaleMult sizes the ore's rocks (wakeglass small, slagIron chunky).
       const radius = (2 + Math.pow(rng(), 1.6) * 12) * profile.scaleMult;
       const baseColor = new THREE.Color().setHSL(
@@ -1605,6 +1780,12 @@ export function initAsteroids(ctx) {
         // oreMult rounds up: Veridian's 1.5 yields visibly richer rock;
         // unitsMult thins the exotics (wakeglass 0.35 — precious, not bulk).
         ore: Math.max(1, Math.ceil((4 + Math.floor(rng() * 9)) * oreMult * ore.unitsMult)),
+        orbitR,
+        inc,
+        node,
+        phase0,
+        omega,
+        y0,
         oreKey,
         commodity: oreKey,
         bundle,
@@ -1623,6 +1804,75 @@ export function initAsteroids(ctx) {
         collapseT: -1, // <0 = not collapsing
         collapseListed: false, // in collapseList[]
       };
+      rock.seedOre = rock.ore;
+      // Keep-out mutates r/phase0 only — no extra rng after the look stream.
+      const pad = radius + 20;
+      const sunMin = sunR * PHY.SUN_HEAT_MULT + pad;
+      const bumpR = (r) => {
+        let next = r < sunMin ? sunMin : r + Math.max(8, pad * 0.25);
+        if (next < sunMin) next = sunMin;
+        for (let s = 0; s < planetCount; s++) {
+          const orb = PLANET_SLOTS[s].orbitRadius;
+          const bandW = PLANET_SLOTS[s].radius + 40;
+          if (Math.abs(next - orb) < bandW) next = orb + bandW;
+        }
+        return next;
+      };
+      const radialHit = (r) => {
+        if (r < sunMin) return true;
+        for (let s = 0; s < planetCount; s++) {
+          if (Math.abs(r - PLANET_SLOTS[s].orbitRadius) < PLANET_SLOTS[s].radius + 40) return true;
+        }
+        return false;
+      };
+      const planetTorusHit = () => {
+        const hx = Math.hypot(position.x, position.z);
+        for (let s = 0; s < planetCount; s++) {
+          if (Math.abs(hx - PLANET_SLOTS[s].orbitRadius) < PLANET_SLOTS[s].radius + 40) return true;
+        }
+        return false;
+      };
+      const bodyHit = () => {
+        const pr = radius + 20;
+        cylinderOverlap(
+          position.x, position.y, position.z, pr,
+          sx, sy, sz, PHY.STATION_CYL_RADIUS, PHY.STATION_CYL_Y0, PHY.STATION_CYL_Y1,
+          _keepOut,
+        );
+        if (_keepOut.hit) return true;
+        for (let g = 0; g < gateList.length; g++) {
+          const gp = gateList[g];
+          torusOverlap(
+            position.x, position.y, position.z, pr,
+            gp[0], gp[1], gp[2], PHY.GATE_BORE, PHY.GATE_TUBE,
+            _keepOut,
+          );
+          if (_keepOut.hit) return true;
+        }
+        return false;
+      };
+      const reanchor = () => {
+        rock.omega = omegaForR(rock.orbitR);
+        if (inWork) rock.phase0 = az0 + sectorOff - node;
+        // Keep-out at t=0 so orbit elements do not depend on world.time.
+        writeOrbitPose(position, rock.orbitR, inc, node, rock.phase0, rock.omega, y0, 0);
+      };
+      reanchor();
+      for (let k = 0; k < KEEP_TRIES; k++) {
+        const rad = radialHit(rock.orbitR) || planetTorusHit();
+        const bod = bodyHit();
+        if (!rad && !bod) break;
+        rock.orbitR = bumpR(rock.orbitR);
+        if (bod && !inWork) rock.phase0 += 0.37;
+        reanchor();
+      }
+      let guard = 0;
+      while ((radialHit(rock.orbitR) || planetTorusHit() || bodyHit()) && guard < 24) {
+        rock.orbitR = bumpR(rock.orbitR);
+        reanchor();
+        guard += 1;
+      }
+      writeOrbitPose(position, rock.orbitR, inc, node, rock.phase0, rock.omega, y0, tNow);
       rocks.push(rock);
       list.push({
         id: i,
@@ -1651,6 +1901,9 @@ export function initAsteroids(ctx) {
 
     // Replace (never mutate) so combat.js drops stale entries immediately.
     ctx.asteroids = { list };
+    builtSys = def.id ?? ctx.world.currentSystem;
+    builtSeed = def.worldSeed;
+    overlayFieldOre(builtSys);
 
     // Tumble budget: recompose ~1/4 of instances per frame (full sweep ≈
     // every 4 frames ≈ 15 Hz at 60 fps) — smooth motion, flat cost.
@@ -1724,15 +1977,54 @@ export function initAsteroids(ctx) {
           break; // fresh field: nothing else in this queue can apply to it
         }
       }
+      const restoring = ctx.flags.saveRestored && !sawSaveRestored;
+      sawSaveRestored = ctx.flags.saveRestored;
+      if (ctx.world.fieldOre !== lastOreRef || restoring) {
+        const sys = ctx.world.currentSystem;
+        const seed = SYSTEMS[sys] && SYSTEMS[sys].worldSeed;
+        if (sys === builtSys && seed === builtSeed) overlayFieldOre(sys);
+        else lastOreRef = ctx.world.fieldOre;
+      }
 
       const reduced = ctx.settings.reducedMotion;
       const n = rocks.length;
+      const tWorld = ctx.world.time;
+      const tOrbit = Number.isFinite(tWorld) ? tWorld : 0;
 
-      // --- Slow tumble, round-robin subset of the FLAT rock array ---
+      // Closed-form orbit for every rock. Mutate the live Vector3.
+      for (let i = 0; i < n; i++) {
+        const rock = rocks[i];
+        writeOrbitPose(
+          rock.position,
+          rock.orbitR,
+          rock.inc,
+          rock.node,
+          rock.phase0,
+          rock.omega,
+          rock.y0,
+          tOrbit,
+        );
+        _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
+        _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
+        _mat4.compose(rock.position, _quat, _scale);
+        rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        markDirty(rock);
+      }
+
+      // Slow tumble, round-robin ~1/4. Skip far rocks. Orbit already posed.
+      const pObj = ctx.ship && ctx.ship.object;
+      const pPos = pObj && pObj.position;
       const end = Math.min(cursor + chunk, n);
       for (let i = cursor; i < end; i++) {
         const rock = rocks[i];
         if (rock.depleted) continue;
+        if (pPos) {
+          const dx = rock.position.x - pPos.x;
+          const dy = rock.position.y - pPos.y;
+          const dz = rock.position.z - pPos.z;
+          if (dx * dx + dy * dy + dz * dz > TUMBLE_RANGE2) continue;
+        }
+        if (reduced) continue;
         rock.angle += rock.spin * dt * (n / chunk); // amortized over skipped frames
         _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
         _scale.copy(rock.scaleVec).multiplyScalar(rock.baseScale);
@@ -1808,6 +2100,7 @@ export function initAsteroids(ctx) {
           rock.extract -= 1;
           rock.ore -= 1;
           list[i].ore = rock.ore;
+          writeFieldOre(builtSys, i, rock.ore, rock.seedOre);
           // Pod spawns at the beam contact point (or near the rock) with a
           // small random drift so the player scoops it on a flyby. Wave 51:
           // the pod carries the ore's tint (spawnPod's optional 5th arg).

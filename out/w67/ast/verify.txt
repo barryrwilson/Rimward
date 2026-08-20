@@ -1,0 +1,102 @@
+Wave 67 AST orbits design verification
+Date: 2026-08-19
+Status: CLEAN
+Verifier: design-only. No src/ edit. No formatter. No npm run test:boot.
+
+Sources read
+- docs/AstOrbitsDesign.md
+- out/w67/ast/shared-contract.md
+- out/w67/ast/current-asteroid-inventory.md
+- out/w67/ast/security-review.md
+- out/w67/ast/code-review.md
+
+Spot-check vs live src (code wins)
+
+Identity id === index
+- asteroids.js 1546–1635 second pass; list.push id: i at 1627–1635. CONFIRMED.
+- rocks[] and list[] share index (1483–1484, 1625–1635). CONFIRMED.
+- rocks[ev.asteroidId] at 1779. CONFIRMED.
+- combat.js 1170 mineBlocked and 1189 mineHit emit bestEntry.id. CONFIRMED.
+- npc.js 996–997 mineHit asteroidId: rock.id. CONFIRMED.
+- controls.js 67–70 T-cycle pushes list entry object. CONFIRMED.
+- hud.js 933–934 reads target.position; asteroid bracket 1513–1534. CONFIRMED.
+- PROGRESS.md 39–42 states id === array index. CONFIRMED.
+- Design keeps id === i. No UUID. No serial migration. PASS.
+
+ORE_TYPES data-owned look
+- state.js 322–474 nine ores; rock recipes own look. CONFIRMED.
+- asteroids.js header 12–20: no per-ore constants. CONFIRMED.
+- pickOreType for…in at state.js 497–507 (inventory 502). CONFIRMED.
+- miningLaserFor 79–81; MINING_LASERS 51–76. CONFIRMED.
+- combat hardness gate 1028–1031 every frame; ray 1054–1069. CONFIRMED.
+
+PHY / keep-out cites
+- collision.js collectBodies 411–422 every list rock as sphere. CONFIRMED.
+- physics.js PHY.SUN_HEAT_MULT 2.4 / SUN_LETHAL 1.12 / STATION_CYL / GATE_*. CONFIRMED.
+- sunZone 318–342. CONFIRMED.
+- npc appendSunBody 637–658; collectBodies call 2154–2155. CONFIRMED.
+- solarsystem SLOTS 170–206; ORBIT_K = 1500 at 266; dt integrate 330–337. CONFIRMED.
+- ctx.js sunPosition (0,0,0) line 59; leftover asteroidField line 63. CONFIRMED.
+- Contract §4 keep-out sun/station/gate/planet SLOTS (not live xyz). Present. PASS.
+
+NPC miners / fieldPoint
+- world.js fieldPoint 142–151 reads field.center. CONFIRMED.
+- minerCountForCast 153–156 min(2, traders/4). CONFIRMED.
+- spawn 387–401 jitter(field.center, 50). CONFIRMED.
+- nearestSoftRock 829–849 hardness ≤ 1, ore > 0. CONFIRMED.
+- haul-home / updateRoute 965–972. CONFIRMED.
+- off-screen +1 rawOre / 5 s at 192–200, no rock decrement. CONFIRMED.
+- Design keeps fieldPoint = field.center as work-sector anchor. PASS.
+
+systemLoaded / save
+- asteroids rebuild on systemLoaded 1719–1725; list replace 1652–1653. CONFIRMED.
+- save.js WORLD_FIELDS 73–92: time yes; no fieldOre today. CONFIRMED.
+- restore emit only if currentSystem !== fromSystem at 431. CONFIRMED.
+- sanitizeRestored 291–337: miningLaser 0..3; no world.time heal today. CONFIRMED.
+- KEY rimward-save-v1 at 63. CONFIRMED.
+- main.js initAsteroids (102) before initSave (122). CONFIRMED.
+- Design: persist sparse fieldOre; pose from seed+time; heal time to 0; proto-safe Object.keys. PASS.
+
+Authored / generated field
+- authored-systems.js freehold 43, veridian 72, redmarch 104, hollowreach 136, hush 171, verge 203. CONFIRMED.
+- generate-galaxy.mjs field 592–597. CONFIRMED.
+- No field.kind today. CONFIRMED.
+
+Other cites
+- reticle-aim.js 47–54 ray-sphere vs list. CONFIRMED.
+- U.TARGET_RANGE 600; ENCOUNTER_BUBBLE 800 → 1200 tumble radius. CONFIRMED.
+- Freehold R = hypot(-450,-250) ≈ 515. CONFIRMED.
+- wishlist AST 574–628 CAPTURED. CONFIRMED.
+- hud toast helper uses textContent (el() 196). CONFIRMED.
+- combat mineBlocked reset on systemLoaded 1365–1370 (inventory also cites PROGRESS 2567). CONFIRMED.
+- buildAsteroidModel unknown oreKey → rawOre at 1423. CONFIRMED.
+
+No src/ from this worker
+- fieldOre / phase0 / workFrac appear only in docs/AstOrbitsDesign.md and out/w67/ast/*.
+- Worker files: docs/AstOrbitsDesign.md (untracked) + out/w67/ast/*.md (untracked).
+- Workspace has unrelated dirty src/ (hangar, trafficking, hud, save, npc). Not AST orbit motion.
+
+Contract vs integrator
+- Merge law: contract wins. Stated in both files.
+- Cloud work sector: contract ≥50%; integrator ≥60%. 60% still meets ≥50%. Compatible.
+- Owner Q1–Q4 have defaults in contract §12. Not flagged.
+- id === index frozen. Depletion persist specified. Keep-out specified. Cap 160. No Oort. state.js READ-ONLY.
+
+Residual notes (not bugs)
+- Integrator §2 parenthetical “after angle”: last rng() in the rock literal is ore units (asteroids.js 1607), not angle (1604). Primary rule (after last rng / replace five placement draws) is correct. PR1 pin on Freehold seed 11 tuples covers this.
+- Inventory §2 “±24 xz jitter”: live is (rng()-0.5)*24 = ±12. y ±18 is correct ((rng()-0.5)*36).
+- Inventory makeRng “solarsystem.js 67–77”: live makeRng is solarsystem.js 26–35. Lines 67–77 are texture bands. Family claim (mulberry32) is still true.
+- Contract HUD cite 1488 is the name/meta locals; dist is 1489; asteroid readout is 1513–1534.
+- Contract seeded max “≤ ~42 at oreMult 3.5” assumes unitsMult 1. brineIce unitsMult 1.2 → ceil(12*3.5*1.2)=51. Sanitize 0..64 still covers it.
+
+Checklist
+[x] id === index preserved; no casual UUID
+[x] Mining career: work sector + commLine + group-3 cue + miner anchor
+[x] Persist: JSON-plain fieldOre, WORLD_FIELDS allowlist, proto-safe sanitize
+[x] Stations/gates/sun keep-out present
+[x] No src/ from this worker
+[x] No omit of depletion persist
+[x] No belts-through-stations
+[x] No unbounded Oort without lod
+[x] No required parallel state.js feature rewrite
+[x] Owner-open questions have defaults

@@ -13,6 +13,20 @@ const ARRIVAL_LINES = [
   (name) => name + '. No hail. No echo of a hail. Out here even the quiet has stopped listening.',
 ];
 
+/** Sun-relative belt range for the arrival find-aid. Finite integer u. */
+export function arrivalBeltLine(def) {
+  const center = def && def.field && def.field.center;
+  let n = 0;
+  if (center) {
+    const r = Math.round(Math.hypot(center[0], center[2]));
+    if (Number.isFinite(r)) n = r;
+  }
+  return {
+    text: 'Belt lies ' + n + ' u sun-relative, off the station.',
+    from: 'Echo',
+  };
+}
+
 /**
  * Jump — the system-swap orchestrator. No meshes.
  *
@@ -27,8 +41,9 @@ const ARRIVAL_LINES = [
  *      player to the destination gate + JUMP.arrivalOffset toward the
  *      system center (origin); zero ctx.ship.velocity; set
  *      ctx.world.jumpGraceUntil = time + JUMP.graceSeconds; emit
- *      'systemLoaded' { to } and a band-aware arrival 'commLine' (§13.5 +
- *      designed silence: band 0 warm, band 1 sparse, band 2 near-silent).
+ *      'systemLoaded' { to }, a band-aware arrival 'commLine' (§13.5 +
+ *      designed silence: band 0 warm, band 1 sparse, band 2 near-silent),
+ *      and a spare belt find-aid 'commLine' (AST-02; all bands).
  *      Gate-network arrival rule: the arrival gate is the one in
  *      SYSTEMS[to].gates whose `to` points back at the origin system
  *      (captured before the swap); fallback is gates[0] (the primary).
@@ -116,6 +131,9 @@ export function initJump(ctx) {
       text: (ARRIVAL_LINES[band] ?? ARRIVAL_LINES[0])(def.name, faction ? faction.name : 'Independent'),
       from: 'gate',
     });
+
+    // Mining find-aid: always, including silent high bands.
+    ctx.emit('commLine', arrivalBeltLine(def));
   }
 
   function update(dt) {

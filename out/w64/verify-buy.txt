@@ -1,0 +1,76 @@
+## Status
+CLEAN
+
+## What I tested
+- Command: `node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs`
+  Result: exit 1, `BOOT TEST FAIL — 8 errors`.
+  Log: `out/w64/boot-test-buy.log`
+  WAVE62 HUD family: all true (`noHullWrite` true).
+  WAVE64 hangar persist: all true.
+  WAVE64 remount: all true.
+  WAVE64 shipyard desk: all true.
+  WAVE64 yard buy: all true (stock, kinds, authored prices + rank discount, blob ignored,
+  empty independent catalog, Freehold buy + no remount, hostile refuse, broke, full,
+  unknowables living, proto strip, requestAutosave export, live Digit3 no debit,
+  live confirm debit 8000, live hostile No sale).
+- FAIL lines on this complete run (known set only; do not fix):
+    WAVE4 FENCE FAVOR
+    WAVE26 FERRY QUOTE
+    WAVE26 HAUL QUOTE
+    WAVE26 LANE DELIVERY
+    WAVE26 OLD-SAVE FALLBACK
+    WAVE26 SAVE FIELDS
+    WAVE26 RESTORE
+    WAVE35 HAUL GATE DELIVERY
+  No WAVE64 / WAVE62 FAIL. REDMARCH did not fail this run.
+- Static law vs `docs/ShpDesign.md` §6.
+  Files: `src/game/shipyard.js`, `src/systems/shipyard-desk.js`, `src/systems/station.js`,
+  `src/game/save.js`, `src/game/hangar.js`, `src/ui/screens.css`, `scripts/boot-test.mjs`.
+  `src/game/state.js` is not in the PR4 dirty set.
+  No remount-on-buy: `purchaseYardHull` does not import or call `switchTo`.
+  `addPurchasedHull` parks then pushes; mountedId is forced back if it moved.
+  Authored price: `YARD_LIST_UU.light === 8000`; `yardPrice` uses table + live `rankFor`.
+  No `bookValue` / save-supplied price on the buy path. Rows drop `price` / `bookValue`.
+  Hostile: `rep < 0` → `{ ok:false, reason:'reputation' }`; desk line `No sale.`
+  Confirm required: Digit 3+ calls `setYardPending` only. Debit is `Confirm papers` → `purchaseYardHull`.
+  Esc on pending calls `cancelYardPending` before leaving the desk (`station.js` 2272–2273).
+  hullKind from `hullKindFor(faction)` table, not a button attribute.
+  Unknowables: `hullKindFor` + sanitize force `'living'`.
+  Overlay `h()` writes `textContent`. Desk has no `innerHTML` / `insertAdjacentHTML`.
+- Browser (Playwright MCP, Vite `http://localhost:5173/`):
+  New Game confirm → Freehold Greenhand → force-dock Freehold Landing via `window.__ctx`
+  (park + `ctx.input.dockPressed`). Purse set `ctx.world.credits = 20000`.
+  Digit 0 Shipyard. Digit 2 Yard lists light 8000 / heavy 20000 / freighter 24000 UU.
+  No ace / cutter / frigate. Rank Stranger +0.
+  Digit 3: Confirm papers shown. credits 20000, hulls 1, mountedId `hull_starter`.
+  Confirm papers: credits 12000, hulls 2, mountedId still `hull_starter`,
+  player still `living`/`light`. New row `hull_light_1` built / freehold / stock gear.
+  Notice: `Papers filed. Hull stored in hangar.`
+  Hostile: `reputation.freehold = -1`. Yard prints `No sale.` Confirm refuses.
+  credits stay 12000, hulls stay 2.
+  Esc cancel: Digit 3 arms Confirm, Esc drops pending, no debit, Papers list returns.
+  Console: 0 errors, 0 warnings.
+
+## Bugs found
+None against ShpDesign §6 / WAVE64 buy pins.
+
+Residual (not a fail; already in PR4 review):
+- Hostile Yard still lists `3 — Papers` after `No sale.` Confirm later refuses and does not debit.
+
+## Environmental issues
+- First boot-test hit the 120s tool cap; second run at 300s finished (`out/w64/boot-test-buy.log`).
+- Vite 5173 was already up. Browser used that instance.
+- Station overlay re-renders ~1 Hz; Playwright snapshot refs expire. Clicks used `button.textContent` via evaluate.
+- Log file may show `BOOT TEST FAIL ΓÇö 8 errors` (em-dash encoding). Node stdout is `BOOT TEST FAIL — 8 errors`.
+
+## Evidence
+- `out/w64/boot-test-buy.log` WAVE62 + WAVE64 persist/remount/desk/buy all-true; 8 known FAILs
+- `out/w64/buy-yard-catalog.png` Digit 2 Yard light 8000 UU
+- `out/w64/buy-confirm-papers.png` Digit 3 Confirm papers, credits still 20000
+- `out/w64/buy-after-confirm.png` after Confirm: 12000 UU, hull stored
+- `out/w64/buy-hostile-nosale.png` hostile No sale
+- Cite: `src/game/shipyard.js` `YARD_LIST_UU` 16–23; `yardPrice` 85–95; buy 167–223
+- Cite: `src/systems/shipyard-desk.js` Digit 3 pending 214–219; confirm 93–100
+- Cite: `src/systems/station.js` Esc cancel pending 2272–2273; `h()` textContent 1452–1456
+- Cite: `src/game/hangar.js` `canAcceptPurchase` / `addPurchasedHull` 99–118
+- Cite: `scripts/boot-test.mjs` WAVE64 yard buy 12681–12966

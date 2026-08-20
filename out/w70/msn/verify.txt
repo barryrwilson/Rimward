@@ -1,0 +1,207 @@
+MSN Wave 70 design verify
+Date: 2026-08-20
+Domain: data
+Status: BUGS_FOUND
+
+================================================================
+1. Git / scope
+================================================================
+This worker's claimed files are untracked markdown only:
+
+  docs/MsnMissionsDesign.md                         2026-08-20 00:19
+  out/w70/msn/current-mission-inventory.md          2026-08-20 00:14
+  out/w70/msn/shared-contract.md                    2026-08-20 00:17
+  out/w70/msn/security-review.md                    2026-08-20 00:19
+  out/w70/msn/code-review.md                        2026-08-20 00:19
+
+No `kind: 'mining'` / `sanitizeJobs` in src. grep of workspace js/mjs: none.
+
+Working tree also has dirty src/, scripts/boot-test.mjs, PROGRESS.md,
+docs/PLAYER-EXPERIENCE-WISHLIST.md. Those files are older than the MSN
+docs (PROGRESS/wishlist ~2026-08-19 23:48–23:49). Treat as other waves
+(AST/SHP/POD/Task 1), not an MSN scope break.
+
+This worker did not edit src/, the wishlist, or PROGRESS.md.
+
+Wave 70 is markdown only. Serial PRs are named, not scheduled as Wave 70
+impl. Matches freeze.
+
+================================================================
+2. Brief vs contract
+================================================================
+docs/MsnMissionsDesign.md header: if brief and contract conflict, contract
+wins. Spot-check of freezes: no brief-vs-contract disagreement.
+
+Shared (and therefore both wrong where noted in Bugs):
+
+  - markdown only this wave
+  - extend world.jobs, rimward-save-v1, no new persist key
+  - mining first family, unique four stay
+  - 2 slots / system, one-in-one-out, never DONE mining
+  - 600 s WRECK_TTL, restart on accept, expire fail closed
+  - no asteroidId; system + hardness-1 ore
+  - no POD/SHP/HUD-02 reopen; no REP brief
+  - serial PR1 sanitize → PR5 boot pins; later families named, not numbered
+  - stuffed pay clamp 0…20000; no job.faction; textContent / h(); no innerHTML
+  - job ids: SAFE_ID + RESERVED_IDS + prefix mine-<sysId>-<n>
+
+================================================================
+3. Inventory vs live code (code wins)
+================================================================
+Pins hold at inventory-time line numbers (re-read 2026-08-20):
+
+station.js
+  DOCK_KEY_SERVICES[1] === 'jobs'; Digit 2 = Jobs board (132, 2631–2634)
+  PIRATE_BOUNTY_CAP 2 (167)
+  makeJobs four ids bounty-ace / patrol-lane / haul-provisions /
+    ferry-consignment (1441–1473)
+  ensureJobs empty-only (1476–1478); initStation 1768
+  completeJob sets state='done', no splice, no replacement (1631–1644)
+  boardJobs hides foreign offered pirate/recovery; lists DONE (1576–1584)
+  tickDeliveryJobs 0.5 s, accepted-only loop (1682–1751, 2819–2823)
+  renderJobs sync pirate/recovery, no mining, no deadline UI (2109–2176)
+  h() textContent only; no innerHTML in station.js (1820–1825)
+  patrol always reputation.freehold += PATROL_REP (1671)
+  digit accept boardJobs[n-1] if offered (2740–2742)
+
+save.js
+  KEY rimward-save-v1 (64)
+  WORLD_FIELDS includes 'jobs' (77)
+  SAFE_ID /^[a-z0-9_]+$/i (100) — matches __proto__
+  RESERVED_IDS includes __proto__ (104–109)
+  sanitizeRestored does not walk jobs (351–399)
+  restore copies WORLD_FIELDS wholesale (445–451)
+
+world.js
+  does not write world.jobs (only comment at 359 that station reads bounty)
+  WRECK_TTL = 600 (811)
+
+ctx.js
+  world default has no jobs (123–148)
+  frozen events: no job* type (197–226); completions are 'commLine'
+
+asteroids.js / combat.js / AST brief
+  list[i].id === i (1877–1885)
+  mineHit asteroidId is that index (combat.js 1415)
+  extract/pods 2097–2116
+  docs/AstOrbitsDesign.md §9: no asteroid UUID missions (line 247)
+
+ORE_TYPES hardness 1: rawOre, livingRock only (state.js 345–367).
+Mk I tier 1 (MINING_LASERS[0], state.js 63–66).
+No live kind: 'mining'. Mining is space-side only.
+
+Inventory recommendation (mining first, extend jobs, do not migrate unique
+four) matches contract §0.4 / §0.18.
+
+================================================================
+4. Freeze implementability (except Bugs)
+================================================================
+  [ok] markdown-only wave
+  [ok] extend world.jobs, not a new key
+  [ok] unique four untouched in first impl
+  [ok] one-in-one-out specified as splice+push, never DONE mining
+  [ok] expire has no pay/rep/favor branch; silent complete forbidden
+  [ok] first family mining; not already a unique board card
+  [ok] no rock UUID
+  [ok] POD/SHP/HUD-02 closed
+  [ok] world strings textContent / existing h() / commLine
+  [ok] serial PR plan is later-wave, not Wave 70 impl
+  [ok] stuffed payQuoted clamp + no job.faction frozen in contract §1.3 / §3.2
+  [ok] innerHTML forbidden in contract §0.10 / §4
+  [ok] unsanitized jobs: contract requires sanitizeJobs from sanitizeRestored
+  [FAIL] job-id fail-closed as written vs live SAFE_ID (see Bug 1)
+  [FAIL] JOBS_SANITIZE_MAX vs 2 slots × ~100 systems (see Bug 2)
+
+Owner questions in the brief match contract §12 defaults (2 slots, +2 rep,
+accepted mining visible everywhere, offered home-only). MSN does not write
+a REP brief.
+
+================================================================
+BUGS
+================================================================
+
+BUG 1  HIGH  persist / job ids  [implementable freeze is self-contradictory]
+
+  Contract §0.11, §1.3 and brief merge table require EVERY job.id to pass
+  live SAFE_ID.test (`/^[a-z0-9_]+$/i`, save.js:100) AND mining ids to match
+  `^mine-[a-z0-9_]+-[0-9]+$` (hyphens).
+
+  Live SAFE_ID rejects hyphens. Therefore:
+
+    mine-freehold-0          FAIL SAFE_ID
+    bounty-ace               FAIL SAFE_ID
+    patrol-lane              FAIL SAFE_ID
+    haul-provisions          FAIL SAFE_ID
+    ferry-consignment        FAIL SAFE_ID
+    bounty-pirate-*          FAIL SAFE_ID
+    recovery-*               FAIL SAFE_ID
+
+  If PR1 implements the table as written:
+
+    - Mining cards never survive restore (career cannot persist).
+    - Unique four are "invalid". §1.2 also says never drop them, then says
+      empty-after-drop → ensureJobs rebuilds offered uniques. That wipes
+      accepted/done haul-ferry-ace-patrol. Boot-test restore of
+      ferry-consignment (scripts/boot-test.mjs ~6124, 8192) would fail.
+    - Accepted pirate/recovery overlays vanish.
+
+  Security review claimed this pair as the __proto__ fix and did not notice
+  SAFE_ID cannot accept the hyphen prefix it also froze.
+
+  Fix direction (for a later design patch, not this verifier): do not run
+  raw SAFE_ID on the full hyphenated job id. Allowlist live unique ids;
+  mining: prefix + SYSTEMS-key middle token + RESERVED_IDS; drop __proto__ /
+  mine-__proto__-0. Or use underscores (mine_freehold_0) and still exempt
+  today's hyphenated unique/overlay ids.
+
+BUG 2  MEDIUM  persist cap vs slot law
+
+  MINING_SLOTS_PER_SYSTEM = 2 on a global world.jobs array.
+  SYSTEMS has 6 authored + 94 generated = 100 keys (state.js:500–541,
+  galaxy.generated.js header). Docking around the map can accumulate
+  200 offered mining rows plus unique four plus pirate/recovery.
+
+  JOBS_SANITIZE_MAX = 64 drop order (invalid → done mining → done pirate/
+  recovery → other done) never drops offered mining or accepted jobs.
+  After ~30 systems the cap cannot be applied without violating "never
+  drop accepted" or silently deleting offered remote mining (then
+  syncMiningJobs would refill on next visit, but that is not written).
+
+  Marked "proposed, needs owner" but still a hole: 2-per-system persist
+  and cap 64 cannot both be true galaxy-wide.
+
+================================================================
+Cautions (not scored as bugs)
+================================================================
+- tickDeliveryJobs today continues on state !== 'accepted' (station.js
+  1683–1684). Offered-card expiry needs the separate expire scan the
+  contract already names; do not hang it after that continue.
+- completeJob always sets done. Mining needs the mining-specific
+  completer / replace path already named in §2.3 so trust/favor reuse
+  does not leave DONE mining cards.
+- Digit 1–9 is pre-existing; extra mining cards can sit past index 8.
+
+================================================================
+Security freezes present in contract (not "later maybe")
+================================================================
+  unsanitized jobs     §1 must add sanitizeJobs
+  stuffed payQuoted    §1.3 clamp 0…20000 sanitize and pay
+  stuffed faction      §3.2 / §5 no job.faction; SYSTEMS[origin].faction
+  innerHTML            §0.10 / §4 textContent only
+  expire-as-pay        §3.5 no pay/rep/favor
+  __proto__ job id     §0.11 / §1.3 RESERVED_IDS — but see Bug 1
+
+================================================================
+Evidence cites
+================================================================
+  docs/MsnMissionsDesign.md
+  out/w70/msn/shared-contract.md
+  out/w70/msn/current-mission-inventory.md
+  src/game/save.js:64,77,100–109,351–399,445–451
+  src/systems/station.js:132,167,1441–1478,1576–1584,1631–1644,1671,1682–1751,1820–1825,2109–2176,2740–2742
+  src/game/world.js:359,811
+  src/core/ctx.js:123–148,197–226
+  src/systems/asteroids.js:1877–1885,2097–2116
+  src/systems/combat.js:1415
+  src/game/state.js:63–66,345–367,500–541
+  docs/AstOrbitsDesign.md:247

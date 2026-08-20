@@ -1,0 +1,55 @@
+Wave 67 SHP-03 verifier recheck (pass 2)
+Date: 2026-08-19
+Status: CLEAN
+Domain: data (design-only). Did not run formatters or npm run test:boot.
+Did not edit src/. Wrote this file only.
+
+## Status
+CLEAN
+
+## What I tested
+- Prior bug 1: `missileAmmo` heal must be one law (integer clamp `0..catalogMax`, not trunc) in `shared-contract.md` §1.2 AND §1.3 AND the integrator.
+- Prior bug 2: docked Digit4 Outfitting claim. Must be Digit4 = Feed (`DOCK_KEY_SERVICES` index 3), Outfitting = Digit 6, Digit 0 = Shipyard. Outfitting level-2 Digit 4 stays Wolfeye Mk II; 8/9 stay the new SKUs if frozen.
+- Prior bug 3: inventory `fireHeld` cite must not claim `controls.js` 80. Must cite `controls.js` 171–173 / 250 and/or `ctx.js` 80. Live `controls.js` 80 must still be the target-cycle helper.
+- Recheck: no `src/` missile impl; HUD-02 closed; no nested loadout; only PR0 writes `state.js`; Digit 8 at dock root is Launch, not a one-shot buy.
+- Live cites: `hangar.js` 35–37, `save.js` 306–309, `station.js` 122 / 2334 / 2406–2413 / 2448–2454, `controls.js` 80 / 171–173 / 250, `ctx.js` 80, `state.js` 7–8 / 85–97, `hangar.js` 123–148.
+
+## Bugs found
+None. The previous three fixes hold.
+
+## Environmental issues
+- `git diff -- src` is not empty (sibling dirty tree). Modified include `station.js`, `save.js`, `hud.js`, `npc.js`, `ship.js`, `song.js`, `ctx.js`, HUD CSS. Untracked `src/game/hangar.js`.
+- Station diff is hangar write-through + Digit 0 `shipyard` append, not a missile land. Grep of `src/` found no `missileAmmo`, `LAUNCHER_IDS`, `healMissileAmmo`, or `GROUP_WEAPON[4]`. Turret hits are station-mesh comments (`ferrous.js`, `ship-scale.js`).
+- `docs/Shp03WeaponsDesign.md` and `out/w67/shp03/**` are untracked.
+- graph_resolve matched `hermes-hal/workflow-software-delivery` (low coverage on "verify"). This pass used live files only. CRM/web not used.
+- Did not run Playwright / boot pins (design wave).
+
+## Evidence
+- `out/w67/shp03/verify-recheck.txt`
+
+### Bug 1 — missileAmmo one law (holds)
+- Contract §1.2 table (`shared-contract.md` 44): one `healMissileAmmo`. Empty launcher → 0. Else `Number.isInteger(value)` and `value >= 0` → `Math.min(value, catalogMax(launcher))`. Else 0. Do not trunc. `'2'` / `2.9` → 0. `99` with dart → `ammoMax`.
+- Contract §1.3 (`shared-contract.md` 76): same function text as §1.2. No leftover “Finite, trunc, clamp”.
+- Integrator §6 step 4 (`docs/Shp03WeaponsDesign.md` 296) and data-model row (`403`): same law, cites contract §1.2 / §1.3.
+- Inventory persist (`current-weapons-inventory.md` 167): same integer class as scanner.
+- Live scanner class: `hangar.js` 35–37 `[0,1,2].includes(value)`; `save.js` 306–309 scanner `'2'` → 0. `Number.isInteger('2')` and `Number.isInteger(2.9)` are false, so the new law zeros both.
+
+### Bug 2 — dock Digit4 is Feed (holds)
+- Integrator §3.3 (`Shp03WeaponsDesign.md` 191–193): flight Digit4 = group 4. Docked level 1 Digit4 = Feed (`feed`, index 3). Digit 6 = Outfitting. Digit 8 = Launch. Digit 0 = Shipyard. Outfitting level 2 Digit4 stays Wolfeye Mk II (`station.js` 2452). Digit 8/9 become launcher/turret papers.
+- Inventory dock table (`current-weapons-inventory.md` 183–207): Digit 4 Feed, Digit 6 Outfitting, Digit 8 Launch, Digit 0 Shipyard. Outfitting 8/9 unused today; brief assigns them papers.
+- Contract §2.2 (`shared-contract.md` 115–128): 8/9 only when `ui.level === 2 && ui.service === 'outfitting'`. Digit 8 on level 1 is Launch. Digit 0 unused in outfitting.
+- Live: `DOCK_KEY_SERVICES` (`station.js` 122) index 3 `feed`, index 5 `outfitting`, index 7 `launch`, last `shipyard`. Labels (`2334`). Digit N → `DOCK_KEY_SERVICES[N-1]`; Digit 0 last key (`2406–2413`). Outfitting digits 1–7 only (`2448–2454`); n===4 is `buyScanner2`.
+
+### Bug 3 — fireHeld cites (holds)
+- Inventory Hold fire (`current-weapons-inventory.md` 85): `controls.js` 171–173 (mousedown), 250 (`input.fireHeld = fireDown`), `ctx.js` 80.
+- Live: `controls.js` 80 is the closing brace of `cycleTarget`. `171–173` set `fireDown` on LMB. `250` assigns `input.fireHeld`. `ctx.js` 80 is `fireHeld: false // LMB`.
+- No remaining claim that `controls.js` 80 is `fireHeld` except the closed bug rows in `code-review.md` / prior `verify.txt`.
+
+### Rechecks (hold)
+- No `src/` missile impl (grep empty for persist/combat keys).
+- HUD-02 closed: contract §0.3 / §3 / §10; integrator non-goals and Open Questions; inventory §3; `Hud02IdentitiesDesign.md` 74–75 incoming gauge still a non-goal.
+- Nested `loadout` forbidden: contract §1.1 / §1.4; integrator Frozen 1 and tamper table; live `sanitizeHangarRecord` (`hangar.js` 123–148) is a fresh literal with no `loadout` child.
+- Serial write-set: integrator PR table (`Shp03WeaponsDesign.md` 501–508) and contract §9: only PR0 writes `state.js`. PR1–PR5 import. `state.js` 7–8 still READ-ONLY for feature workers. `WEAPONS` is still cannon/disruptor/mining (`state.js` 85–97).
+- Digit 8 dock root is Launch (`station.js` 122, 2334, 2406–2413). New SKUs Confirm papers (contract §2.3). Existing Digit 1–7 one-shots stay. Digit 8 is not a dock-root buy.
+
+Residual (not a reopen of the three bugs): `code-review.md` 51–53 still says the contract prefers a turret bolt sub-cap of 2. The contract §4.2 does not freeze that number. Keep as impl-watch, same as pass 1.

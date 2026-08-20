@@ -1,0 +1,172 @@
+MSN Wave 70 design recheck (after Bug 1 / Bug 2 patch)
+Date: 2026-08-20
+Domain: data
+Status: CLEAN
+
+Previous record: out/w70/msn/verify.txt (BUGS_FOUND: Bug 1 HIGH job-id SAFE_ID vs hyphens; Bug 2 MEDIUM cap 64 vs 2×100 slots).
+
+================================================================
+1. Git / scope
+================================================================
+MSN claimed files remain untracked markdown only (timestamps after verify.txt):
+
+  docs/MsnMissionsDesign.md                         2026-08-20 00:40
+  out/w70/msn/shared-contract.md                    2026-08-20 00:36
+  out/w70/msn/current-mission-inventory.md          2026-08-20 00:40
+  out/w70/msn/security-review.md                    2026-08-20 00:40
+  out/w70/msn/code-review.md                        2026-08-20 00:41
+  out/w70/msn/verify.txt                            (prior verifier)
+  out/w70/msn/verify-recheck.txt                    (this file)
+
+Workspace grep of *.js / *.mjs: no `kind: 'mining'`, no `sanitizeJobs`, no `JOBS_SANITIZE_MAX`.
+Live `SAFE_ID.test` remains save.js:194 and hangar.js:94 (not job ids).
+
+Working tree still has dirty src/, scripts/boot-test.mjs, PROGRESS.md,
+docs/PLAYER-EXPERIENCE-WISHLIST.md. Same other-wave set as verify.txt.
+This worker's freeze: Wave 70 is markdown only. No MSN src land.
+
+================================================================
+2. Brief vs contract (contract wins)
+================================================================
+Brief header (MsnMissionsDesign.md:11): if brief and contract conflict, contract wins.
+Contract header (shared-contract.md:4): this file wins.
+
+Spot-check of the patched freeze (no disagreement):
+
+  - hyphen-token grammar; never SAFE_ID.test on full job.id
+    brief merge table + persist §3; contract §0.11, §1.3, §4, §12.8
+  - unique four exact allowlist (no underscore rewrite)
+    brief persist §3; contract §1.3 table
+  - mining ids mine-<SYSTEMS key>-<n>
+    brief merge table; contract §0.11 / §1.3 / §3.2
+  - RESERVED_IDS on full id AND every token
+    brief persist §3; contract §0.11 / §1.3
+  - cap 4 + 2 * Object.keys(SYSTEMS).length + 16 (220 at 100 systems)
+    brief merge table + persist §3 + §11; contract §1.2 / §8 PR1 / §12.9
+  - drop order never removes unique four, accepted jobs, or honest offered mining
+    brief persist §3; contract §1.2
+  - first family mining; no asteroidId; expire fail closed; markdown only
+    both documents; inventory still code-wins
+
+Contract still wins. Brief now matches the patched contract on Bug 1 and Bug 2.
+
+================================================================
+3. Bug 1 (HIGH) — CLOSED
+================================================================
+Live SAFE_ID (save.js:100): /^[a-z0-9_]+$/i  — rejects hyphens; matches __proto__.
+RESERVED_IDS (save.js:105–109): includes __proto__, constructor, prototype, …
+ID_MAX 64 (save.js:102).
+Unique four live ids still hyphenated (station.js:1448–1467):
+  bounty-ace, patrol-lane, haul-provisions, ferry-consignment
+
+Patched grammar (contract §1.3):
+  1. Split on '-' (no leading / trailing / doubled '-').
+  2. Each token must match JOB_ID_TOKEN = SAFE_ID character class.
+  3. Do NOT run SAFE_ID.test on the full job.id.
+  4. RESERVED_IDS on the full id and every token (toLowerCase).
+  5. Unique four: exact allowlist.
+  6. Mining: exactly three tokens mine + SYSTEMS key + n
+     with Object.hasOwn(SYSTEMS, sysId) and n /^(0|[1-9][0-9]*)$/.
+
+Mechanical walk (node import of live SYSTEMS + live SAFE_ID / RESERVED_IDS):
+
+  id                 whole-string SAFE_ID.test   new grammar
+  bounty-ace         false (old Bug 1 wipe)      KEEP (tokens bounty, ace; exact unique)
+  mine-freehold-0    false (old Bug 1 wipe)      KEEP (freehold is SYSTEMS key; n=0)
+  __proto__          true                        DROP (reserved token AND reserved full id)
+  mine-__proto__-0   false                       DROP (reserved token __proto__)
+
+Also must-drop examples in contract: mine-freehold (not three tokens),
+mine-notasystem-0 (not a SYSTEMS key), bountyace (unique four exact).
+
+Old implementable contradiction is gone: career mining ids and unique four
+can persist; proto ids still fail closed.
+
+================================================================
+4. Bug 2 (MEDIUM) — CLOSED
+================================================================
+Live SYSTEMS = { ...AUTHORED_SYSTEMS, ...GENERATED_SYSTEMS } (state.js:541).
+Node count: Object.keys(SYSTEMS).length === 100 (6 authored + 94 generated).
+Authored keys include freehold (authored-systems.js:31).
+
+Contract §1.2 formula:
+
+  N_SYSTEMS         = Object.keys(SYSTEMS).length          // 100
+  MINING_ROOM       = 2 * N_SYSTEMS                        // 200
+  OVERLAY_HEADROOM  = 16
+  JOBS_SANITIZE_MAX = 4 + MINING_ROOM + OVERLAY_HEADROOM   // 220
+
+4 + 2 * 100 + 16 = 220.
+220 >= 200 mining + 4 unique.
+
+Drop order (invalid → extra mining beyond two honest slots → done mining →
+done pirate/recovery → tamper offered overlays not at currentSystem)
+explicitly never drops:
+  - unique four (any state)
+  - any accepted job
+  - honest offered mining (one of two slots per originSystem)
+
+64 is forbidden in contract §1.2. Brief persist §3 matches.
+
+Normal play 200 mining + 4 unique + ≤16 overlays ≤ 220. Restore does not
+need to delete honest offered mining to apply the cap.
+
+================================================================
+5. Other freeze pins (unchanged / still hold)
+================================================================
+  [ok] markdown-only wave; no MSN src
+  [ok] extend world.jobs; KEY rimward-save-v1; WORLD_FIELDS includes jobs
+       (save.js:64, 77); sanitizeRestored still does not walk jobs (351–399)
+  [ok] first family mining; no live mining board cards
+  [ok] unique four stay; boot-test pins named, not implemented this wave
+  [ok] no asteroidId; AST §9; asteroids.js list[i].id === i (1877–1878)
+  [ok] expire fail closed: no pay / rep / favor; silent complete forbidden
+       (contract §0.8, §3.5; brief §6)
+  [ok] deadline 600 s WRECK_TTL (world.js:811); restart on accept
+  [ok] innerHTML forbidden; station.js has no innerHTML
+  [ok] no job.faction; stuffed payQuoted clamp 0…20000
+  [ok] POD/SHP/HUD-02 closed; no REP brief from MSN
+  [ok] serial PR1 sanitize → PR5 boot pins; later families named, not numbered
+
+================================================================
+6. Reviews
+================================================================
+code-review.md: Bug 1 and Bug 2 marked resolved in contract §1.2–1.3.
+  No remaining 🔴/🟠 design disagreements. No src diff.
+
+security-review.md re-review: whole-string SAFE_ID forbidden; cap
+  4+2*N_SYSTEMS+16 (220 at 100). No remaining 🔴/🟠 in the markdown set.
+
+Stale sentence only (not merge law): security-review.md first HIGH
+  “Fix applied” still says “cap 64”. Re-review paragraph and contract §1.2
+  override that leftover. Not scored as a new HIGH.
+
+Open 🟡 in reviews (pre-existing / first-slice accepted): pirate-name ids,
+digit-index race, market-fill of bulk ore. Not Bug 1 / Bug 2.
+
+================================================================
+Previous bugs
+================================================================
+BUG 1  HIGH   CLOSED  hyphen-token grammar; unique four + mine-freehold-0 keep;
+                      __proto__ and mine-__proto__-0 drop; never SAFE_ID.test(job.id)
+BUG 2  MEDIUM CLOSED  JOBS_SANITIZE_MAX = 4 + 2 * N_SYSTEMS + 16 = 220 at 100;
+                      never drop unique four / accepted / honest offered mining
+
+No new HIGH.
+
+================================================================
+Evidence cites
+================================================================
+  docs/MsnMissionsDesign.md 11, 113–114, 140–144, 242–246, 270–273, 312, 326
+  out/w70/msn/shared-contract.md 4, 24, 49–77, 79–106, 312–316, 371–372
+  out/w70/msn/current-mission-inventory.md 206–214
+  out/w70/msn/security-review.md 18–24, 99–100 (stale “cap 64” at line 16)
+  out/w70/msn/code-review.md 68–78, 118
+  out/w70/msn/verify.txt (prior BUGS_FOUND)
+  src/game/save.js:64,77,100–109,351–399
+  src/systems/station.js:1441–1473
+  src/game/state.js:541; authored-systems.js:31 (freehold)
+  src/game/world.js:811
+  src/systems/asteroids.js:1877–1878
+  docs/AstOrbitsDesign.md:247
+  live Object.keys(SYSTEMS).length === 100 (node import)

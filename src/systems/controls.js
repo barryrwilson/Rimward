@@ -19,7 +19,7 @@ import { U } from '../game/state.js';
  *   Space (tap)  → afterburner (edge)
  *   Shift (hold) → vector-hold drift
  *   LMB (hold)   → fire current weapon group
- *   1 / 2 / 3    → weapon group (cannon / disruptor / mining)
+ *   1 / 2 / 3 / 4 → weapon group (cannon / disruptor / mining / missiles)
  *   T (tap)      → cycle target (nearest first; asteroids too in group 3)
  *   H (tap)      → hail   ·   D (tap) → dock   ·   C (tap) → camera toggle
  *   X (tap)      → match-speed edge (ship.js toggles flags.matchSpeed)
@@ -36,7 +36,7 @@ const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
   'KeyQ', 'KeyE',
   'KeyT', 'KeyH', 'KeyC', 'KeyX',
-  'Digit1', 'Digit2', 'Digit3',
+  'Digit1', 'Digit2', 'Digit3', 'Digit4',
   'ShiftLeft', 'ShiftRight',
   'Space',
 ]);
@@ -77,6 +77,19 @@ function cycleTarget(ctx) {
   cands.sort((a, b) => a.d2 - b.d2);
   const idx = cands.findIndex((c) => c.ref === ctx.targets.current);
   ctx.targets.current = cands[(idx + 1) % cands.length].ref;
+}
+
+/** Rock lock: list entry with a live position, not a ship `{ object, state }`. */
+function isRockLock(t) {
+  return !!(t && t.position && !t.object && !t.state);
+}
+
+/** Null a rock lock the field no longer holds. Does not touch ship locks. */
+function dropStaleRockLock(ctx) {
+  const t = ctx.targets.current;
+  if (!isRockLock(t)) return;
+  const list = ctx.asteroids && ctx.asteroids.list;
+  if (!list || list.indexOf(t) < 0) ctx.targets.current = null;
 }
 
 export function initControls(ctx) {
@@ -156,6 +169,10 @@ export function initControls(ctx) {
       case 'Digit3':
         input.weaponGroup = 3;
         break;
+      case 'Digit4':
+        // Group 4 is missiles when a launcher is seated.
+        input.weaponGroup = 4;
+        break;
     }
   });
 
@@ -188,7 +205,7 @@ export function initControls(ctx) {
     'Space — afterburner',
     'Shift (hold) — vector-hold drift',
     'LMB (hold) — fire',
-    '1/2/3 — weapon group: cannon / disruptor / mining',
+    '1/2/3/4 — weapon group: cannon / disruptor / mining / missiles',
     'T — cycle target',
     'H — hail · D — dock · C — camera (chase / third / first-person)',
     'X — match lock speed',
@@ -220,6 +237,17 @@ export function initControls(ctx) {
         ctx.flags.camera = next;
         ctx.flags.firstPerson = next === 'first';
       }
+
+      // Stale rock lock: 'systemLoaded' rebuilds the list; drop if gone for any reason.
+      const evs = ctx.lastEvents;
+      for (let i = 0; i < evs.length; i++) {
+        if (evs[i].type === 'systemLoaded') {
+          dropStaleRockLock(ctx);
+          break;
+        }
+      }
+      dropStaleRockLock(ctx);
+
       if (input.targetPressed) cycleTarget(ctx);
 
       // --- Reticle steering: offset from screen center, clamped to radius.

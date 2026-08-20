@@ -1,0 +1,60 @@
+Wave 65 POD-02 verifier notes
+Date: 2026-08-19
+Scope: design-only docs vs Wave 60/64 code. No src edits.
+
+DIGIT LAW
+- station.js:119 DOCK_KEY_SERVICES = market, jobs, bar, feed, repair, outfitting, people, launch, epics, shipyard (10 keys).
+- Index 6 = people = Digit 7 (hot = i+1 except last).
+- Index 9 = shipyard = Digit 0 (station.js:2200, 2264-2266).
+- Labels at 2198 include People then Launch, Standing, Shipyard.
+- Level-2 people has no Digit branch (2289-2313).
+- Brief does not add an 11th service. Digit 7 IS People. Not a blocker.
+
+MARKET / PRICE
+- COMMODITIES (state.js:286-300) has no survivor.
+- COMMODITY_KEYS = Object.keys(COMMODITIES) (station.js:1468). Table loops that list (1674).
+- tryTrade refuses !isMarketCommodity || key === 'survivor' (1600-1604). Notice: This dock does not trade in people.
+- removeCargo('survivor') no-op (1036).
+- priceOf: non-market key → prices[key] ?? 0 (1045-1048). Live table omits survivor (market.js:35, 61-66). Tamper hole real; brief pins explicit 0. cargoValue same hole (state.js:1070-1071).
+- Brief/contract keep market skip and priceOf 0.
+
+RETURN / BUYER / CONFIRM
+- applySurvivorRescue matching-faction, hasOwn(FACTIONS) (998-1022). Deltas RESCUE 4/1 (state.js:267-272).
+- renderRescue Return on People (1976-1997) and dock home (2208).
+- Independent / hollow / beautiful: no desk. Buyer frozen currentDef.faction === 'gilded'.
+- Gilded home: Return stays; Offer is a separate lot. Unknowables: no sale; spawn skip npc.js:1322; sanitizeFaction can still keep the key (save.js:123-126).
+- Confirm-before-debit frozen. Digits do not debit. Copy yard papers (shipyard-desk.js:123-131 click Confirm; 214-215 pending Digit no-op).
+
+XSS / PERSIST
+- h() textContent (station.js:1454-1459). overlay.textContent = '' (2184). hud el() textContent (196). toast slot.el.textContent (834, not 825).
+- Rescue UI prints counts + FACTIONS names, not row.name (1981-1993).
+- WORLD_FIELDS save.js:73-92: no survivor world key. hangar already listed. Brief adds none. Milestone id peopleTrafficked rides existing milestones.
+- Cargo keep-list: commodity, units, source, optional faction, optional name cap 40 (136-155). Extra keys dropped. ui.trafficPending session only.
+
+NUMBERS (brief + contract agree)
+- other: 160 UU / victim 0 / Gilded +2 per unit / fear +1 per lot
+- playerKill: 240 UU / victim -8 / Gilded +2 per unit / fear +2 per lot
+- Gilded victim at Gilded dock: both deltas (net -6 kill / +2 other per unit)
+
+CITE CHECKS (today / inventory)
+
+PASS pods.js 19-21, 44, 46-47, 454-456, 458-464, 466-513, 489-497, 495, 536-543, 598-611
+PASS npc.js 1303-1306, 1308-1336, 1313-1322, 1320, 1325, 1335, 2134-2135, bumpFear 323-326
+PASS station.js 119, 136-137, 930-932, 933-956, 943-947, 957-968, 969-991, 993-996, 998-1022, 1011, 1017-1018, 1024-1027, 1035-1036, 1045-1048, 1454-1459, 1468, 1600-1604, 1658-1660, 1674-1689, 1976-1997, 1981-1993, 2184, 2198-2209, 2208, 2262-2269, 2279-2286, 2289-2313
+PASS state.js 262, 267-272, 286-300, 527-541, 536, 650-657, 1070-1071
+PASS save.js 73-92, 76, 96, 100-110, 121-127, 130-155, 160-168, 180
+PASS ctx.js 213
+PASS hud.js 409-416 (toast builders: 196 PASS; 825 FAIL see bug)
+PASS settings.js 28-36 (reducedMotion in FIELDS)
+PASS shipyard-desk.js 123-131, 198-219; shipyard.js 16-23
+PASS wishlist 677-710 (POD-02; victim harm vs recovered 0; Gilded named)
+FAIL market.js 58 — inventory §4 cites 35, 58 for “live markets built from COMMODITY_KEYS”. 35 is COMMODITY_KEYS. 58 is baselineFor COMMODITIES[key].base. Table build is 61-66.
+FAIL security-review.md hud.js 825 — claims toast textContent. 825 is toastSlots index. Assignment is 834.
+
+CONTRACT VS BRIEF
+- Brief front matter defers: contract wins. Frozen UU/rep/fear/buyer/People/Confirm/no 11th key/no WORLD_FIELDS/Unknowables align.
+- Footgun: brief §3 “additive inside renderPeople / renderRescue” + “append after Return”, while renderRescue also runs on level-1 home (2208). Contract §1.2 forbids Offer on level 1. Brief also forbids Offer on home but does not name ui.level===2 && ui.service==='people'.
+- Naming: §3 uses eligibleSaleLots; export list is trafficLots.
+
+NOT FLAGGED
+- No src trafficking.js / no survivorSold emit — design-only, as tasked.

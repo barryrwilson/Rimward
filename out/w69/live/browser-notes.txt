@@ -1,0 +1,6 @@
+field {"sys":"freehold","n":130,"R":514.78150704935,"meanR":580.8740537134337,"sectorFrac":0.676923076923077,"idOk":true,"time":0.5161999999284744}
+cue {"group":3,"docked":false,"prompt":"Mine · belt 1836u","nShips":0,"nearest":null,"target":false,"pos":[0,1800,0],"texts":["3Mine · belt 1836u","Mine · belt 1836u"]}
+SHOT 01-mine-cue.png
+moved {"dt":1.2173999999761587,"dx":30.51169440127967,"dz":-76.90990661748162,"moved":true}
+SHOT 02-belt.png
+LIVE PASS

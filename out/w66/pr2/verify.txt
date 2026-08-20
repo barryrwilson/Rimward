@@ -1,0 +1,44 @@
+## Status
+CLEAN
+
+## What I tested
+Read `src/game/trafficking.js` against `out/w65/pod/shared-contract.md` (wins) and `docs/Pod02TraffickingDesign.md` §5.
+
+Static checks:
+- Frozen tables: other 160 / playerKill 240 UU; victim 0 / −8; Gilded +2 per unit; fear +1 / +2 per lot, clamped 0..100.
+- Eligibility: survivor + string faction + isFactionKey + hasOwn(FACTIONS) + not unknowables + finite units 1..holdCap.
+- Lots: one (faction, source) group from `ctx.cargo` only. Unknown source → other.
+- Apply: sells only when `dockFaction === 'gilded'`. Recomputes lot. Refuses non-finite / missing credits before remove. Pays `unitPrice * count` after a non-zero remove.
+- Rep: victim delta in `repDelta`; Gilded +2 per unit separate; reserved ids never write `reputation['__proto__']`.
+- Milestone `peopleTrafficked` once. No `world.peopleTrafficked`. No `atrocity`. No `row.name` in copy. No DOM.
+- Busy flag: in-flight re-entry returns null.
+
+Ran:
+- `node --import ./scripts/with-css-stub.mjs out/w66/pr2/probe.mjs` — all keys true, exit 0.
+- `node --import ./scripts/with-css-stub.mjs out/w66/pr2/verify-probe.mjs` (extra hunt cases) — all keys true, exit 0.
+
+Hunt cases (worker probe + extra probe):
+- sale without gilded dock / missing dock arg / `'Gilded'` — no cargo change, no UU
+- double apply (busy during emit + same-lot replay) — second null
+- remove-then-refuse (NaN / ±Infinity / missing credits) — cargo stays, no UU
+- `reputation['__proto__']` — not written
+- Unknowables — not sold
+- hangar parked cargo — ignored; live lot sold only
+- fear per lot not per unit; clamp 100 on playerKill from 99
+- gilded victim net (−8+2)×units
+- milestone once; no rewrite if already present
+
+Did not run `npm run test:boot` (PR5).
+
+## Bugs found
+None.
+
+## Environmental issues
+None.
+
+## Evidence
+Worker probe: all 31 keys true, `PROBE PASS`, exit 0.
+
+Extra probe `out/w66/pr2/verify-probe.mjs`: all 15 keys true, `VERIFY PASS`, exit 0.
+
+Contract match: apply path is fail-closed. Buyer is live `dockFaction`. Mounted hold only. Tables authored in code. Fear is per confirmed lot. Credits refuse happens before `removeLotRows`.

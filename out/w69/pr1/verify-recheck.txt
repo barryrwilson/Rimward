@@ -1,0 +1,24 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-read `restore()` in `src/game/save.js`: hangar-style `if (snap.world.fieldOre === undefined) delete ctx.world.fieldOre`.
+- Worker probe `node --import ./scripts/with-css-stub.mjs out/w69/pr1/probe.mjs` (includes `restore.missingDeletes` and `restore.missingRefill`).
+- Extra probe `node --import ./scripts/with-css-stub.mjs out/w69/pr1/verify-edges.mjs` (`restore.missingDeletes`, seed refill, no-mint 64, `__proto__` sanitize).
+- Did not run `npm run test:boot`.
+- [NO BROWSER COVERAGE]
+
+## Bugs found
+none
+
+## Environmental issues
+none
+
+## Evidence
+- Screenshots: none expected
+- Logs: `C:\Projects\WebSim\out\w69\pr1\probe-recheck.log`, `C:\Projects\WebSim\out\w69\pr1\verify-edges-recheck.log`
+- Test output:
+  - Worker: `PASS w69 pr1 pins true n=130 meanR=580.9 sector=0.685` (exit 0)
+  - Extra: `PASS w69 pr1 edges` (exit 0); prior fail `restore.missingDeletes` now passes
+  - Omit-key restore deletes the live bag; overlay refills from seed; overlay still cannot mint 64; sanitize still drops `__proto__`
+  - Delete sits beside hangar: `src/game/save.js` lines 453–455

@@ -1,0 +1,116 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node out/w68/pr3-fire/probe.mjs`. Exit 0. Printed `ok pr3-fire pins Digit4, empty-rack, MISSILE_POOL=8, spend-on-spawn-only, seeker.turn+ballistic, turret.cap2, no missileIncoming`.
+- Did not run `npm run test:boot`.
+- Read fire path in `src/systems/combat.js`: `groupWeapon`, `tryPlayerMissile`, `spawnMissile`, `liveMissileLock`, `steerSeekerVel`, missile tick, `tryPlayerTurret`, `pickTurretTarget`, `spawnNpcShot`, docked early return, `testNpcHits` Unknowable skip.
+- Read Digit1–4 in `src/systems/controls.js`. Confirmed no `Digit0` and no `weaponGroup = 0`.
+- Read `src/core/ctx.js` comments: group 4, `playerFire` missile/turret wkey, no `missileIncoming`.
+- Read `src/game/state.js` `applyHit` Unknowable non-beam miss and `WEAPONS.missile` / `WEAPONS.turret`. Combat PR did not rewrite that miss.
+- Grep: no `missileIncoming` in combat.js / ctx.js. NPC `npcFire` stays `weapon: 'cannon'`.
+- Browser live fire not run (PR5). No dart seated in a live session here.
+
+## Bugs found
+None.
+
+Code checks that match the contract:
+- Empty group 4: `groupWeapon` returns `null` when `!isLauncherId(launcher)`. Player fire is `if (wkey && …)`. No `?? 'cannon'` on group 4. No ammo, no heat.
+- Missile pool cap 8, separate from the 64-bolt pool.
+- `spendMissileAmmo(ctx, 1)` only after `spawnMissile` returns a dart. Dry pool returns before spend/heat. Failed spend deactivates the dart and returns (no heat, no `playerFire`).
+- `addHeat` on the missile path only after spend succeeds.
+- Lock: `liveMissileLock` requires `object`, `object.parent`, `state`, not destroyed, in `w.range`. No lock → no shot.
+- Spawn uses `playerMuzzleDir` / nose + reticle. Comment and path do not snap spawn onto the lock. Same-frame seeker step turns vel, does not teleport the mesh.
+- Seeker: `steerSeekerVel` caps `|Δθ|` at `WEAPONS.missile.turn * dt`. `lockPos` null → vel unchanged (ballistic). Tick clears lock when `!object.parent` or destroyed, then steers with null.
+- Probe: turn capped, speed kept, null lock ballistic. Catalog `missile.range === 720`, `missile.turn === 0.85`, `turret.range === 380`.
+- Unknowables: `testNpcHits` still `continue`s Unknowable fields. `applyHit` still returns `[]` for non-beam families (missile is not `beam: true`). `state.js` miss law still holds.
+- Turret is not a weapon group (loop 3b). `!isTurretId('')` skips empty rack. Docked combat `return`s before the turret loop. `CONVERGE_DOT === 0.72`. Live turret bolts capped at 2. Heat only after a bolt leaves the 64-pool. No `ctx.input` writes in combat.js.
+- Digit4 sets `input.weaponGroup = 4`. Digit 0 not tracked; Digit 0 is still Shipyard.
+- NPC missiles not added: `spawnNpcShot` stays bolt-pool; npc.js emits cannon only.
+- `playerFire { weapon }` reused for missile wkey and turret wkey. No `missileIncoming`.
+
+## Environmental issues
+- No Vite/preview session; live Digit4 fire not exercised (PR5).
+- Did not run `npm run test:boot` (forbidden for this check).
+- `src/game/state.js` is dirty vs HEAD from PR0 catalog (`WEAPONS.missile` / `turret`, `MOUNT_TABLE`). Unknowable miss block is unchanged in behavior.
+- Probe is source pins + exported seeker math. It does not spawn a dart in a live scene.
+
+## Evidence
+Probe:
+```
+ok pr3-fire pins Digit4, empty-rack, MISSILE_POOL=8, spend-on-spawn-only, seeker.turn+ballistic, turret.cap2, no missileIncoming
+```
+Exit code 0.
+
+Empty group 4 (`src/systems/combat.js`):
+```
+function groupWeapon(ctx) {
+  const g = ctx.input.weaponGroup;
+  if (g === 4) {
+    const id = ctx.world.launcher;
+    if (!isLauncherId(id)) return null;
+    return LAUNCHER_IDS[id].wkey;
+  }
+  return GROUP_WEAPON[g] ?? 'cannon';
+}
+```
+Fire: `else if (wkey && WEAPONS[wkey]?.family === 'missile')` / `else if (wkey && now >= nextFireAt[wkey])`. Null wkey is a no-op.
+
+Spend + heat on spawn only:
+```
+    const dart = spawnMissile(wkey, w, _nose, _dir, playerObj.position);
+    if (!dart) return; // dry pool: no ammo, no heat
+    const spent = spendMissileAmmo(ctx, 1);
+    if (!spent) {
+      deactivate(dart);
+      return;
+    }
+    dart.lock = lock;
+    addHeat(w.heatPerShot);
+    ctx.emit('playerFire', { weapon: wkey });
+```
+
+Lock live ship + no spawn snap:
+```
+    if (!t?.object || !t.object.parent || !t.state || t.state.destroyed) return null;
+```
+`playerMuzzleDir`: nose + reticle. `Does not snap spawn onto a lock.`
+
+Ballistic if lock dies (missile tick):
+```
+        const lockLive = !!(lock?.object?.parent && lock.state && !lock.state.destroyed);
+        if (!lockLive) p.lock = null;
+        steerSeekerVel(p.vel, p.mesh.position, lockLive ? lock.object.position : null, p.speed, WEAPONS.missile.turn, dt);
+```
+
+Turret: skip `''`, cone 0.72, cap 2, no input writes:
+```
+    if (!isTurretId(ctx.world.turret)) return;
+...
+      if (_tmp.dot(_fwd) < CONVERGE_DOT) continue;
+...
+    if (countLiveTurretBolts() >= TURRET_LIVE_CAP) return;
+    const bolt = spawnProjectile(true, wkey, w, _nose, _dir, playerObj.position);
+    if (!bolt) return; // dry pool: no heat
+```
+`CONVERGE_DOT = 0.72`. `TURRET_LIVE_CAP = 2`. combat.js has no `ctx.input =` writes.
+
+Digit4 / Digit 0 (`src/systems/controls.js`):
+```
+  'Digit1', 'Digit2', 'Digit3', 'Digit4',
+...
+      case 'Digit4':
+        // Group 4 is missiles when a launcher is seated.
+        input.weaponGroup = 4;
+```
+No `'Digit0'`. No `weaponGroup = 0`.
+
+Unknowable missile miss (`src/game/state.js`):
+```
+  if (isUnknowable(state.faction) && w.beam !== true) return [];
+```
+`testNpcHits` still skips Unknowable before `applyHit`.
+
+NPC missiles not added (`src/systems/npc.js`): `weapon: 'cannon'` only. `spawnNpcShot` uses the 64-bolt pool.
+
+No `missileIncoming` in `src/systems/combat.js` or `src/core/ctx.js`. `playerFire { weapon }` comment lists `'missile'` / turret wkey.

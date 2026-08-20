@@ -1,0 +1,244 @@
+SHP-02 hangar verify
+Wave 63. Design-only. No src edits by this verifier.
+Date: 2026-08-18
+
+================================================================
+1. Persist allowlist
+================================================================
+PASS (explicit in the note). Gaps listed in §8.
+
+Hangar note §2.1–2.2, §9–11 list:
+- Record fields: id, classKey, faction, hullKind, name, hull, screen, shell,
+  engine, engineOut, cargo, cargoCapacity. Unknown keys dropped.
+- hullKind enum: 'built' | 'living' only; else omit (but see Unknowables hole).
+- classKey: OWNABLE_CLASS_KEYS light|heavy|freighter. Not `in SHIP_CLASSES`.
+  Stored illegal class drops the row. Live illegal class heals to light.
+- faction: Object.hasOwn(FACTIONS). Not sanitizeFaction / SYSTEMS ids.
+- id: SAFE_ID, ID_MAX 64, reserved proto keys dropped.
+- Reserved ids: __proto__, prototype, constructor, toString, valueOf,
+  hasOwnProperty, __defineGetter__, __defineSetter__, __lookupGetter__,
+  __lookupSetter__.
+- Cap: HANGAR_STORED_CAP 3; HANGAR_OWNED_CAP 4. Restore keeps first 3 valid
+  unique ids. Purchase refuses at cap.
+- Prototype: new literals only. No Object.assign(target, raw). Array store
+  only. Never hangar[id] = rec.
+- Player keep-list + delete-unknown is explicit in §10.
+- Credits stay on ctx.world.credits.
+- No HUD family persist key.
+
+WORLD_FIELDS today (save.js 65–82) has no 'hangar'. Note correctly requires
+append of that one key.
+
+================================================================
+2. New Game vs death vs berth vs clearAutosave
+================================================================
+PASS vs current save.js. Note cites match the tree.
+
+clearAutosave (save.js 200–206):
+  localStorage.removeItem(KEY) only. KEY = 'rimward-save-v1' (save.js 55).
+  SLOT_KEYS = rimward-save-v1-slot-1..3 (save.js 56). Not touched.
+
+title.js:
+  Header 15–19, 25–26: New Game clears autosave; berths survive.
+  Call site title.js 97: clearAutosave() then session marker + reload.
+
+freshStart (save.js 375–402):
+  Object.assign(player, createShipState('light', { name })).
+  Clears live cargo.
+  Wounds bio. Does not reset bio.
+  Does not wipe WORLD_FIELDS (credits, rep, jobs stay).
+  After hangar lands on world, stored rows would survive a no-save death
+  unless later code clears them.
+
+restore Object.assign player: save.js 359. Extra keys keep. Note is correct.
+createShipState does not emit hullKind (state.js 118–138). Leftover
+hullKind / hangarId on freshStart is a real hole. Note §12 requires the
+player allowlist after that assign.
+
+Berth Save/Load: snapshot() copies listed WORLD_FIELDS only (save.js 160–162).
+If 'hangar' is on the list, berth blobs keep it. Note forbids a side-channel
+store. Correct.
+
+Note default (§12 / Q6): keep hangar on freshStart. That matches today's
+world-field behavior. It conflicts with shared-contract §1.3 (see §8).
+
+================================================================
+3. Bio survives swaps
+================================================================
+PASS.
+
+Note §0.7, §3.2 step 6, §3.4: hangar must not write ctx.bio.
+ctx.js 107–117: bio is its own blob.
+save.js 46–48, 169, 355–358, 382–390: bio is a snapshot sibling, not a hull.
+freshStart keeps her (wounded). Death+autosave sets mood 'anxious' (save.js 437).
+HUD does not own bio reset.
+
+================================================================
+4. Docked-only switch
+================================================================
+PASS (as written).
+
+Note §0.4, §3.2 guards, §8:
+  docked === true
+  combat !== true
+  gate.jumping !== true
+  player exists and destroyed !== true
+  paused !== true
+  id allowlisted and not live hangarId
+  stored record exists after sanitize
+
+No in-flight / remote switch. Magical any-dock is the convenience rule.
+
+================================================================
+5. Unknowables cannot mount as 'built'
+================================================================
+FAIL (claim vs procedure).
+
+Note CLAIMS the owner lock:
+  §2.5: force 'living' on pack / unpack / restore.
+  §11 table: Unknowables + hullKind 'built' → coerce to 'living'.
+  §14 save.js line: player allowlist + Unknowables → 'living'.
+  Hud02IdentitiesDesign.md §3 / owner 2026-08-18: must not write 'built'.
+
+The executable steps omit the coerce:
+  §9 sanitizeHangarRecord step 5: keep 'built'|'living'; else omit.
+  §3.2 unpack: set hullKind only if 'built' or 'living'; else delete.
+  §10 Force list: keep 'built'|'living'; else delete.
+  'built' is a legal enum, so faction 'unknowables' + hullKind 'built'
+  survives those three paths and mounts as mech.
+
+shp-02-security.md Finding 1 and shp-02-review.md blocker both say
+"resolved in the note". The prose is there. The algorithms are not.
+
+================================================================
+6. Citation check (save.js WORLD_FIELDS + freshStart)
+================================================================
+PASS.
+
+| Note cite | Actual |
+| snapshot ~170 player wholesale | save.js 170 |
+| restore Object.assign ~359 | save.js 359 |
+| sanitizeRestored ~232–278 | save.js 232–278 |
+| cargoCapacity any number ~354 | save.js 354 |
+| clearAutosave ~200–206 | save.js 200–206 |
+| freshStart ~375–402 | save.js 375–402 |
+| WORLD_FIELDS ~65–82 | save.js 65–82; no hangar |
+| title New Game / berths | title.js 15–19, 25–26; call 97 |
+| DOCK_KEY_SERVICES ~116 | station.js 116 |
+| digits ~2249–2251 | station.js 2249–2251 |
+| menu loop ~2190–2192 | station.js 2190–2192 (buttons, not keys) |
+| SHIP_CLASSES ~34–41 | state.js 34–41 (includes ace/cutter/frigate) |
+| createShipState ~118–138 | state.js 118–138; no hullKind; has player.cargo |
+| FACTIONS ~527–542 | state.js 527–542; has unknowables |
+| CARGO_UPGRADE_* ~127–129 | station.js 127–129 |
+| trySave ~636–656 | save.js 636–656; closed over in initSave |
+| ctx bio ~107–117 | ctx.js 107–117 |
+| events frozen ~188–210 | ctx.js 188–210 |
+| state.js read-only ~7–8 | state.js 7–8 |
+| ship.js starter ~398 | ship.js 397–398 createShipState('light') |
+| makeLivingHull | ship.js 248, 308 |
+| player not in ctx.ships | src/game/traffic.js 156–158 NPC only |
+| wishlist SHP-02 ~328–335 | docs/PLAYER-EXPERIENCE-WISHLIST.md 328–335 |
+| HUD never writes hullKind | hud.js hudFamily 65–74 reads only |
+
+Minor cite nit: note says traffic.js; file is src/game/traffic.js.
+
+sanitizeCargoList (save.js 150) is not exported. requestAutosave does not
+exist. Note already says to export a gated hook. Implementers must not
+reach the trySave closure.
+
+================================================================
+7. Contradictions with out/w63/shared-contract.md
+================================================================
+shared-contract is MERGE LAW and says it wins over SHP-01/02/03.
+Hangar note header says hangar wins on stored-ship record and switch flow.
+
+MEDIUM unless marked LOCKED.
+
+LOCKED / process:
+- Two files claim win on the hangar envelope. Implementer cannot obey both.
+
+MEDIUM — persist shape:
+- Contract §1.2: hangar = { mountedId, hulls: [...] }. Live hull is in hulls.
+- Hangar §1/§3: hangar = [] stored-only. Live id is ctx.player.hangarId.
+- Contract migrate: missing hangar → one living starter row.
+- Hangar migrate: missing/unsanitary → [].
+
+MEDIUM — cap:
+- Contract Q4 default: 8 hulls (array includes mounted).
+- Hangar: 4 owned / 3 stored.
+
+MEDIUM — death no-save:
+- Contract §1.3: rebuild hangar to the single living starter.
+- Hangar §12 / Q6: keep stored hangar (vault). Do not pack the wreck.
+
+MEDIUM — career gear (also contract law #10 / SHP-03 first slice):
+- Contract: scanner / miningLaser / concealedMounts park on the hull;
+  world keys are mirrors.
+- Hangar §7.3: those keys stay shared WORLD_FIELDS. Not on the record.
+- shp-03-loadouts.md law 1–2 agrees with the contract, not with hangar.
+
+MEDIUM — classKey / faction heals:
+- Contract: classKey must be a SHIP_CLASSES key else 'light' (admits
+  ace/cutter/frigate). faction via sanitizeFaction else independent.
+- Hangar: drop stored non-ownable / non-FACTIONS rows. Stricter, safer,
+  still a contract break.
+
+MEDIUM — dock key:
+- Contract §2.2 / checklist: appended 'shipyard', Digit 0.
+- Hangar §5.2: DOCK_APPENDED_SERVICES + KeyY. Do not consume Digit0.
+- SHP-01: append 'yard', click only, no Digit0 in first slice.
+- All three append (good). Key name and hotkey disagree.
+- Locked one-page rule #6 is only "append one service after epics".
+  Digit 0 is contract default, not that one-page line.
+
+MEDIUM — record extras:
+- Contract row has hullMax*, heat, scanner, miningLaser, concealedMounts.
+- Hangar drops heat and career gear; recomputes maxima from class.
+
+LOCKED sources that hangar DOES honor:
+- HUD never writes hullKind.
+- Unknowables purchased hulls are living (claimed; procedures incomplete).
+- Bio is not a hull.
+- No mid-list DOCK_KEY_SERVICES insert.
+- Hangar rides WORLD_FIELDS.
+- Magical any-dock switch.
+- clearAutosave does not wipe berths.
+- Cargo stays with the hull (contract Q2 and hangar §7 agree).
+- Buy does not trade away the mount.
+- state.js read-only for feature workers.
+- textContent for world strings.
+
+================================================================
+8. Other note defects
+================================================================
+- §2.2 deletes illegal hullKind. It does not coerce Unknowables. Order
+  vs §2.5 is unspecified in §9.
+- Self-review checklist marks persist / Unknowables / berth as done.
+  The Unknowables algorithm gap makes that check false.
+- First-slice SHP-01 says no Unknowables yard. Tamper still needs the
+  coerce, because a hand-edited save can set faction + hullKind.
+
+================================================================
+9. Src / wishlist
+================================================================
+Hangar worker files are out/w63/shp-02-*.md only (design).
+This verifier did not edit src.
+git status shows other dirty HUD/docs files; they are outside this SHP-02
+design task.
+
+================================================================
+Verdict
+================================================================
+BUGS_FOUND.
+
+The note is implementable on save.js/station.js facts, berth/New Game,
+bio, docked switch, and an explicit allowlist.
+
+Blocker-class note hole: Unknowables+'built' still mounts if an
+implementer follows §3.2 / §9 / §10 instead of §2.5 prose.
+
+Contract: several MEDIUM envelope conflicts, plus a locked integrator-rule
+clash (which file wins). Owner must pick stored-only vs {mountedId,hulls},
+cap 4 vs 8, KeyY vs Digit 0, shared gear vs per-hull gear, and freshStart
+keep vs wipe before a code wave.

@@ -1,0 +1,29 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker probe: `node --import ./scripts/with-css-stub.mjs out/w69/pr4/probe.mjs` → `PROBE PASS`
+- Code read of `src/game/jump.js` (`arrivalBeltLine`, `midpointSwap` comm lines) and `src/systems/hud.js` (`isRockTarget`, `beltMineDist`, context prompt)
+- `textContent` only on prompt key/verb; no `innerHTML` / `outerHTML` / `insertAdjacentHTML` in either file
+- Jump still emits only `systemLoaded` plus two `commLine` events (arrival then belt). No new event name
+- Arrival belt line: `n = round(hypot(center.x, center.z))`; copy `Belt lies <n> u sun-relative, off the station.`; `from: 'Echo'`; high band (verge via hush) still emits both lines
+- HUD mine cue: group 3, ship exists, Dock/Jump/Hail/Target not set, lock is not a rock → `Mine · belt <n>u` via `promptVerb.textContent`; group 1 no cue
+- Hail/Target win traced in source: Hail is in the same if/else before the mine block; Target sets `pKey` when a live ship is in range and there is no lock; mine requires `!pKey`
+- Rock lock (`position`, no `state`) skips the mine cue
+- Did not run `npm run test:boot`
+- Vite `npm run dev` came up on `http://localhost:5173/`
+- Playwright MCP tools exist but every call failed: `Browser is already in use for ... mcp-chrome-7d372dc, use --isolated`
+- [NO BROWSER COVERAGE]
+
+## Bugs found
+none
+
+## Environmental issues
+- Playwright MCP Chrome lock: cannot navigate, snapshot, or screenshot. Live HUD group-3 prompt not captured in a browser this pass.
+
+## Evidence
+- Screenshots: none (Playwright MCP locked)
+- Logs: `C:\Projects\WebSim\out\w69\pr4\probe.log`
+- Test output: worker `PROBE PASS` (33 pins). Pins include `src.jump.noInnerHTML`, `src.hud.noInnerHTML`, `src.hud.textContent`, `src.no.newEvent`, `belt.fh.n 515`, `belt.vg.n 384`, `jump.highband.two`, `jump.highband.belt`, `hud.g3.mine Mine · belt 516u`, `hud.g1.noMine`, `hud.dock.wins Dock`, `hud.jump.wins Jump to Veridian Reach`, `hud.rock.noMine`, `hud.work.sector Mine · belt 40u`, `hud.ore.fallback Mine · belt 5u`
+- Source: `arrivalBeltLine` after the band arrival `commLine`; HUD prompt mine block at group `=== 3` after Dock/Jump/Hail/Target
+- Reviews already in tree: `out/w69/pr4/code-review.md` (no blocker/major), `out/w69/pr4/security-review.md`

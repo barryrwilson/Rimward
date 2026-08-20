@@ -1,0 +1,90 @@
+VERIFY: out/w61 HUD inventory (data domain)
+Date: 2026-08-18
+Worker artifacts: current-hud-inventory.md, inventory-review.md, inventory-security.md
+Verdict: CLEAN
+
+GIT / FILESYSTEM
+- git status --short -- src docs: empty (no unstaged/untracked under src/ or docs/)
+- git diff --name-only HEAD -- src docs: empty
+- out/w61/ is untracked (??). Worker did not edit src/ or docs/.
+- Recent src/docs commits (05cbee1 HUD, ff5e2de PHY, f30ad3c POD) predate this inventory wave; they are not this worker.
+
+CITATION SPOT-CHECK (inventory claim → source)
+
+1. Self rail top 57% / translate(calc(-100% - 78px), 0)
+   hud.css:771 top:57%; :783 transform. PASS
+
+2. Target rail translate(78px, 0)
+   hud.css:787. PASS
+
+3. 80px hub, margin -40px; clamp comment "keep the 80 px hub on glass"
+   hud.css:185-187; hud.js:775. PASS
+
+4. RANGE word + dashed vs solid hub
+   hud.js:421 text 'RANGE'; :903 toggle in-range
+   hud.css:192-202 ::before dashed / .in-range solid; :204-217 word display. PASS
+
+5. MATCH lamp text, self write, CSS letter-spacing only
+   hud.js:158 lamp 'MATCH'; :1174 selfSpeed.set(speed, !!(matchSpeed && shipTgt))
+   hud.css:219-226. No filled-tick node. PASS
+
+6. Target-rail MATCH is dormant, not a second lamp
+   hud.js:546 makeSpeed(tgtRail) always builds .rw-match-lamp
+   hud.js:1352 tgtSpeed.set(targetSpeedNow) — no second arg → stays .is-hidden
+   Inventory §3.2 names this dormant. PASS
+
+7. FORE/AFT + no-lock dim
+   hud.js:184-185 FORE/AFT; :907-927 dim when no lock; flash may still run. PASS
+
+8. Lead relative TOF, selected weapon, mining hide
+   hud.js:853-863 relVel = targetVel - ship.velocity; tof = dist/wSpeed
+   mining speed forced 0 → hide; |relVel|>LEAD_MIN_SPEED else mark on hull. PASS
+
+9. Contacts scanner >= 1
+   hud.js:932-933 showArc = scanner >= 1 && !docked && shipObj
+   hud.js:950-951 Mk I bubble/cap 16; Mk II 2x bubble/cap 24. PASS
+
+10. Contact tick / chevron / diamond
+    hud.css:710-715 civ 2x8 tick; :717-725 hostile chevron; :727-734 lock 8px rotated hollow square. PASS
+
+11. Toasts right: 168px
+    hud.css:589-593 top:14px; right:168px; left:auto. PASS
+
+12. rw-breathe unused
+    hud.css:326-329 @keyframes only. Grep: no selector assigns animation: rw-breathe
+    (only inventory text mentions the name as unused). Iris spin IS attached :323.
+    Inventory §4 and §10 do NOT treat breathe as live. PASS
+
+13. HUD-03 body hooks
+    settings.js:66-70 rw-colorblind / rw-contrast / rw-reduced-motion / --rw-text-scale
+    hud.css:937-978 consumers. PASS
+
+14. MATCH does not write throttle
+    ship.js:443 comment; :552-557 fwdSpeed from lockSpeed; grep input.throttle= : none. PASS
+
+15. Hail / onboarding parking
+    hail.js:104-113 body, z:40, bottom:22%, width 360px
+    onboarding.js:81-87 body, top:48px, z:35. PASS
+
+LOCKED NON-GOALS vs docs/HudUtilityChangeProposal.md
+- Empty aim glass / no reticle-centered ring: proposal Decisions + §2 rule 2 + Wave F + §8. MATCH.
+- MATCH never writes throttle: locked decision + §5.6. MATCH.
+- Scanner buys awareness only: locked + Wave F tier 0. MATCH. Code gates arc only.
+- No GSE: §3 / §5.14 / §8. MATCH. Code Plant/Flight/Heat .rw-aux (hud.js 556-582).
+- No four-face: §3 / §5.7 / §8; FORE/AFT only. MATCH.
+- No missiles: §3 / §8; WEAPON_KEYS cannon/disruptor/mining. MATCH.
+- No tendrils: §6 + later HUD-02 + wishlist HUD-02. MATCH.
+- Other §8 list cited, not added. MATCH.
+
+INSTRUMENTS NAMED — ALL EXIST
+self rail, target rail, 80px hub, pupil, 3 cilia, ::after iris-spin, RANGE,
+MATCH text lamp, FORE/AFT, lead ring+LEAD, edge arrow, bottom contacts arc,
+tick/chevron/diamond, toasts/banner off-column, Hail lower-left, onboarding
+top-left, .rw-fade / .rw-aux, body.rw-*.
+
+Living vs mechanical split matches the wave brief.
+
+NO BUGS FOUND
+- No invented instruments.
+- Code wins over stale Appendix B (lead formula, hail 22%).
+- Worker did not touch game source.

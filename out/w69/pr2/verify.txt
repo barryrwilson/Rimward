@@ -1,0 +1,34 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker probe: `node --import ./scripts/with-css-stub.mjs out/w69/pr2/probe.mjs`
+- Extra probe: `node --import ./scripts/with-css-stub.mjs out/w69/pr2/verify-edges.mjs`
+- Code read of `writeOrbitPose` and `update(dt)` in `src/systems/asteroids.js` (no `src/` edits)
+- Orbit clock is `ctx.world.time` (`tOrbit`), not `dt` on phase
+- Live `position` Vector3 and list entries stay the same objects for all 130 rocks
+- No `new THREE.Vector3` / array alloc in the per-rock orbit loop (module scratch `_mat4` / `_quat` / `_scale`)
+- Build at t=0 then snap time 100 matches a fresh build at t=100; same check at 0, 1, 40, 77.5, 250, 1000
+- `update` dt 0 / 0.001 / 99 does not change xyz when `world.time` is fixed
+- Ship 50k u away still gets closed-form xyz + instance translation for every rock; tumble still uses 1/4 + 1200 u skip
+- `reducedMotion` still orbits; tumble is skipped in source
+- Overlay `fieldOre` remaining 0 on all rocks: husks still match build-at-t=100 xyz and matrices
+- Non-finite `world.time` (`NaN`, `Infinity`) yields finite xyz; NaN pose matches t=0
+- Keep-out still evaluates a t=0 pose then writes live `tNow` (contract generation-time; not a PR2 break of PR1 pins)
+- Did not run `npm run test:boot`
+- [NO BROWSER COVERAGE] (PR2 has no HUD)
+
+## Bugs found
+none
+
+## Environmental issues
+none
+
+## Evidence
+- Screenshots: none expected
+- Logs: `C:\Projects\WebSim\out\w69\pr2\probe.log`, `C:\Projects\WebSim\out\w69\pr2\verify-edges.log`
+- Test output:
+  - Worker: `PASS w69 pr2 pins true n=130`
+  - Extra: `PASS w69 pr2 edges true n=130`
+- Source: `writeOrbitPose` uses `phase = phase0 + omega * time`; update loop `for (let i = 0; i < n; i++)` writes every rock including depleted; tumble then `continue`s on depleted, range > 1200 u, and `reducedMotion`
+- Keep-out comment and call use time 0 so `phase0` is not baked from build clock

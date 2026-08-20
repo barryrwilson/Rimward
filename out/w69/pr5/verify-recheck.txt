@@ -1,0 +1,31 @@
+## Status
+CLEAN
+
+## What I tested
+- `node --import ./scripts/with-css-stub.mjs out/w69/pr5/wave51-gi.mjs` (exit 0)
+- `node --import ./scripts/with-css-stub.mjs out/w69/pr5/probe.mjs` (exit 0)
+- `npm run test:boot` captured to `out/w69/pr5/boot-recheck.log` (exit 1)
+- Code read of `w51step` in `scripts/boot-test.mjs` (~10561–10578). Track parks on `list[id]` then `ctxS.world.time += dt`. G1/G2/H/I pass `{ id, gap: 20 }` on fire holds.
+- Did not edit `src/`.
+- [NO BROWSER COVERAGE]
+
+## Bugs found
+none
+
+## Environmental issues
+- Boot harness exit 1 is expected. Tags that printed: WAVE4 FENCE FAVOR, WAVE26 FERRY/HAUL/LANE/OLD-SAVE/SAVE FIELDS/RESTORE, WAVE35 HAUL GATE DELIVERY (8 errors).
+- WAVE30 payTribute did not print this run.
+
+## Evidence
+- Screenshots: none expected
+- Logs: `C:\Projects\WebSim\out\w69\pr5\wave51-gi.log`, `C:\Projects\WebSim\out\w69\pr5\probe-recheck.log`, `C:\Projects\WebSim\out\w69\pr5\boot-recheck.log`
+- GI helper: `{"mk4Cuts":true,"oreDrops":true,"blockedFired":true,"oreUntouched":true,"softUnits":8,"resistUnits":4}` then `PASS wave51 G2/I re-aim`. softUnits 8 is productive (>= 7). resist 4 is slower.
+- WAVE69 probe: all twelve booleans true; `PASS w69 pr5 pins true n=130 meanR=580.9 R=514.8 sector=0.685`
+- Boot WAVE51 G/H/I (no FAIL tags):
+  - g1 all true (`rock=0:brineIce:h2`)
+  - g2 `mk4Cuts` `hitNamesInstalledHead` `oreDrops` `noBlockedNow` all true
+  - h mining fx all true
+  - i all true `rawOre=8u chromeSalt=4u frames=120`
+- Boot did not print `WAVE51G2 MK4 CUT FAIL` or `WAVE51I EXTRACTION RESIST FAIL`.
+- Boot `wave69 ast:` all twelve true. No `WAVE69 AST FAIL`.
+- Orbits not frozen: `w51step` still does `ctxS.elapsed += dt` and `ctxS.world.time += dt` after the optional re-park, then runs updates.

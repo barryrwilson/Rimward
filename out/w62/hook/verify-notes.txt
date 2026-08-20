@@ -1,0 +1,23 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w62/hook/probe.mjs`. Result: PROBE PASS (16/16).
+- Ran `npm run test:boot`. Process exit 1 from the 8 known errors. WAVE62 pin object is all-true. No WAVE62 HUD FAMILY FAIL line.
+- Grep `src/systems/hud.js` for `hullKind\s*=`, `innerHTML`, and `throttle\s*=`. No assignment writes. The only hullKind hits are `===` compares in `hudFamily`.
+- Static review: `hudFamily` keys on session allowlist, then hullKind, then Beautiful faction, then bio. It does not key on origin. `#hud.dataset.family` is set in `initHud` and on the 5 Hz write-on-change path. Both rails get `rw-hair-off`. No `data-family` CSS skin exists (font-family only).
+- Live browser (Chrome CDP; Playwright MCP was locked by another session): dismissed title (New Game), picked Freehold Greenhand. `#hud` default `data-family="bio"`. Glance rails, reticle, contacts node, and HUD-01 chrome still present. `sessionStorage.setItem('rw-hud-family','mech')` then wait: `data-family` became `mech` in 250 ms. Child count stayed 17 (no new HUD nodes). `localStorage` did not persist the override. Clear override: family returned to `bio` on the next 5 Hz tick.
+
+## Bugs found
+
+## Environmental issues
+- Playwright MCP browser was already in use (`mcp-chrome-7d372dc`). Live check used local Chrome over CDP instead.
+- Headless Chrome without a warm profile did not boot WebGL/HUD. Headed Chrome with `--disable-background-timer-throttling` was required so rAF/5 Hz ticks ran while the window was unfocused.
+
+## Evidence
+- Screenshots: `out/w62/hook/browser-default-bio.png`, `out/w62/hook/browser-override-mech.png` (attribute-only; no mech/bio skin).
+- Logs: `out/w62/hook/probe.log`, `out/w62/hook/boot-test.log`, `out/w62/hook/browser-probe.log`.
+- Test output:
+  - Probe: `PROBE PASS`
+  - WAVE62: `{"independentBio":true,"beautifulBio":true,"builtMech":true,"livingBio":true,"defaultFamily":true,"afterBuilt":true,"overrideMech":true,"overrideOff":true,"blockedBio":true,"noHullWrite":true,"hairSelf":true,"hairTgt":true}`
+  - Live: default family=bio; override family=mech at same 17 children; persist=null; clear family=bio.

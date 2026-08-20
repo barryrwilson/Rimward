@@ -1,0 +1,129 @@
+Wave 67 SHP-03 weapons design verification
+Date: 2026-08-19
+Status: BUGS_FOUND
+Domain: data (design-only). Did not run formatters or npm run test:boot.
+Did not edit src/. Wrote this file only.
+
+Sources read
+- docs/Shp03WeaponsDesign.md
+- out/w67/shp03/shared-contract.md
+- out/w67/shp03/current-weapons-inventory.md
+- out/w67/shp03/security-review.md
+- out/w67/shp03/code-review.md
+Live src spot-check of inventory/integrator cites (working tree).
+
+Git / worker tree
+- Untracked: docs/Shp03WeaponsDesign.md, out/w67/shp03/**
+- git diff -- src is NOT empty in this workspace (sibling dirty files).
+  Modified: ctx.js, save.js, hud.js, npc.js, ship.js, song.js, station.js, hud.css, screens.css
+  Untracked src: hangar.js, shipyard.js, trafficking.js, shipyard-desk.js
+- Grep src for missile|launcher|turret|MOUNT_TABLE|loadout as persist/combat:
+  no hangar keys, no WEAPONS.missile, no loadout.
+  "turret" hits are station-mesh comments (ferrous.js, ship-scale.js) only.
+- This worker did not need src edits. Missile combat code did not appear.
+- PROGRESS.md and PLAYER-EXPERIENCE-WISHLIST.md are dirty; diff text is Wave 64
+  "missiles later" hangar notes, not a Wave 67 src weapons land.
+
+Architecture freezes (pass)
+- Flat keys launcher / missileAmmo / turret. Nested loadout forbidden.
+  Live sanitizeHangarRecord (hangar.js 123-148) is a fresh literal; unknown keys drop.
+  No loadout in src/.
+- Digit 0 Shipyard: station.js 122 last key shipyard; 2408-2410 Digit 0 selects last key.
+  Labels line 2334: Digit 8 Launch, Digit 9 Standing, Digit 0 Shipyard.
+- Digit 8/9 Outfitting vs Launch: contract §2.2 and integrator §8 gate
+  ui.level === 2 && ui.service === 'outfitting' only. Live outfitting digits
+  2448-2454 are 1-7 only. Digit 8 level-1 is launch. Addressed.
+- HUD-02 closed: WPN/RANGE/lead only. Incoming gauge OFF (integrator, contract §3,
+  Hud02IdentitiesDesign.md 74-75). Not required.
+- POD-02 and remount-on-buy: do-not-reopen lists. Not reopened.
+- Persist: three flat keys. Combat stats not persisted. WORLD_FIELDS later PR1.
+- Serial PRs: only PR0 writes state.js. PR1-PR5 import. PR3 must not write weapon-fit.js.
+- Mass = MOUNT_TABLE seats. Power out. Heat = shipped HEAT + heatPerShot.
+- Confirm papers for new SKUs. Digit 1-7 one-shots stay.
+- Player group 4 missiles. Turrets auto forward, not a group. No NPC missiles first impl.
+
+Live cite spot-check (inventory + integrator overview)
+
+PASS (line-accurate on live tree)
+- state.js 7-8 READ-ONLY header
+- SHIP_CLASSES 34-41; no mass/power
+- MINING_LASERS 51-76; miningLaserFor 79-82
+- WEAPONS 85-97 cannon/disruptor/mining only
+- HEAT 98
+- createShipState 118-139 no weapons
+- applyHit Unknowable non-beam 147-149
+- HIDDEN_MOUNTS object 279 (comment 273-278)
+- hangar sanitize 123-148; gear 137-139; writeMountedGear 346-368
+- packLiveHull parks scanner/mining/concealed 161-163
+- loadMountedRow world copy 496-500 (fn starts 475)
+- combat GROUP_WEAPON 169; POOL_SIZE 159; spawn drop 787
+- firePlayerGun 969-1001; addHeat after spawn-or-null 1001
+- updateMining miningLaserFor 1028-1031
+- docked cold 1376-1379; fireHeld gate 1456-1465
+- npcFire spawn 1004-1024, 1439-1453
+- controls Digit1-3 150-158; LMB 171-173
+- ctx input.fireHeld 80; weaponGroup 81; events 191-219; playerFire 212
+- hud hudFamily 65-74; session 76-81; WEAPON_KEYS 185
+- nodes-once 18-20; Heat panel 703-707
+- lead 994-1020 (speed 0 hides); RANGE 1059-1071; WPN 1427-1435
+- station DOCK_KEY_SERVICES 122
+- Digit 0 / 1-9 2406-2413; Esc yard pending 2418
+- outfitting 1-7 2448-2454; renderOutfitting 2062-2108
+- concealed buy 1689-1695; mining writeMountedGear 1712
+- save WORLD_FIELDS 73-92; miningLaser writer comment 87-88
+- snapshot park 180-181; WORLD_FIELDS copy 184
+- restore WORLD_FIELDS 387-389; sanitizeHangar 433; heal+sync 434-435
+- scanner/miningLaser heal 306-315 ('2' → 0 via includes)
+- shipyard buildStockRow 138-163 no launcher
+- shipyard-desk Confirm papers comment 198-201; button 124-127
+- npc demandIntents concealed 1296-1298; npcFire cannon 1509, 1869
+- hail bluff 247-260; Digit1-3 overlap 403-404
+- h() textContent station.js 1589-1592 (not 1450)
+
+WRONG / drifted cites
+- Integrator §3.3: "Docked, Digit4 is still Outfitting (level 1)".
+  Live level-1 Digit4 = Feed (labels[3], DOCK_KEY_SERVICES index 3).
+  Outfitting is Digit 6. Digit4 in outfitting level 2 is Wolfeye Mk II (true).
+- Inventory hold-fire cite controls.js 80 is not fireHeld (line 80 is end of
+  target-cycle helper). 171-173 and ctx.js 80 are correct.
+- Contract "station.js h() 1450-class": h() is 1589.
+
+Integrator vs contract
+- Merge law: contract wins. Integrator §1 points at shared-contract.md.
+- Agree: flat keys, Digit 0, Outfitting 8/9 level 2, HUD gauge off, PR0-only
+  state.js write, power out, no nested loadout, no POD-02/HUD-02 reopen.
+- DISAGREE / hole: contract §1.2 missileAmmo heal = "Finite, trunc, clamp".
+  contract §1.3 and integrator §6 = Number.isInteger else 0 (scanner class).
+  Trunc would keep 2.7 as 2; integer check would zero it. Not one freeze.
+- Integrator §4.2 turret bolt sub-cap of 2 is not in contract §4.2 (silent).
+  Code-review claimed the contract prefers sub-cap 2; that claim is false.
+  Not an architecture break; contract does not forbid the sub-cap.
+- Empty group 4 HUD: integrator requires `4 · —`; contract allows prior WPN
+  or `4 · —`. Contract wins.
+
+Not flagged
+- Suggested dart numbers (22/260/8) — catalog starting points, not persist shape.
+- Sibling dirty src/ without missile persist or fire.
+- graph_resolve matched omp/workflow-research-and-briefing (coverage 0.1 on
+  "brief"/"cit"). Assigned task is live-src design verify; CRM/web not used.
+
+Bugs
+1. MEDIUM — missileAmmo heal is two rules
+   Repro: read shared-contract.md §1.2 table vs §1.3 restore bullets.
+   Expected: one heal class matching live scanner (includes / isInteger).
+   Actual: §1.2 truncates finite numbers; §1.3 zeros non-integers.
+   Evidence: shared-contract.md lines 44 and 76; hangar.js 35-37; save.js 306-309.
+
+2. MEDIUM — integrator docked Digit4 named Outfitting
+   Repro: read Shp03WeaponsDesign.md §3.3 vs station.js 2334-2413.
+   Expected: docked Digit4 = Feed & tend (same index law as Digit1-3).
+   Actual: integrator says Outfitting (level 1).
+   Evidence: docs/Shp03WeaponsDesign.md line 191; station.js 122, 2334, 2406-2413.
+
+3. LOW — inventory controls.js 80 fireHeld cite
+   Evidence: current-weapons-inventory.md §2 Hold fire row; controls.js 80 vs 171-173.
+
+Environmental
+- Workspace has unrelated dirty src/ and docs (HUD-02, POD-02, hangar, boot-test).
+- graph_resolve false-matched research-and-briefing; verification used live files.
+- Did not run Playwright / boot pins (design wave).

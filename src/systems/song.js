@@ -110,6 +110,21 @@ const CUES = {
     ['square', 95, 38, 0.24, 0.14, 420, 0.07],
   ],
   sunHeat: [['sawtooth', 70, 240, 0.45, 0.016, 650, 0]], // quiet rising hiss; combat throttles emit
+  // HUD-02 family ticks. New keys only. Gain ≤ 0.08, duration ≤ 0.35 s.
+  hudMechRange: [['square', 1600, 1600, 0.04, 0.05, 3200, 0]],
+  hudMechMatch: [['square', 980, 1240, 0.07, 0.055, 2800, 0]],
+  hudMechContact: [['triangle', 740, 420, 0.1, 0.06, 2000, 0]],
+  hostileEnter: [['sine', 330, 262, 0.2, 0.045, 800, 0]],
+  hullBand: [['sine', 185, 130, 0.3, 0.055, 420, 0]],
+};
+
+// Fail-closed extra gate. hud.js emit site is the real family gate.
+const FAMILY_CUES = {
+  hudMechRange: 'mech',
+  hudMechMatch: 'mech',
+  hudMechContact: 'mech',
+  hostileEnter: 'bio',
+  hullBand: 'bio',
 };
 
 // Cap pirate volleys: ~8 overlapping npcFire / npcHit tones (last-play + stagger).
@@ -404,19 +419,23 @@ export function initSong(ctx) {
         const typ = evs[i].type;
         const cue = CUES[typ];
         if (cue) {
-          let at = t;
-          if (typ === 'npcFire' || typ === 'npcHit') {
-            const last = typ === 'npcFire' ? lastNpcFireAt : lastNpcHitAt;
-            at = last + VOLLEY_GAP;
-            if (at < t) at = t;
-            // Drop overflow so a pirate volley cannot stack more than ~8 tones.
-            if (at <= t + VOLLEY_GAP * (VOLLEY_MAX - 1)) {
-              if (typ === 'npcFire') lastNpcFireAt = at;
-              else lastNpcHitAt = at;
+          const needFam = FAMILY_CUES[typ];
+          const famOk = !needFam || document.getElementById('hud')?.dataset.family === needFam;
+          if (famOk) {
+            let at = t;
+            if (typ === 'npcFire' || typ === 'npcHit') {
+              const last = typ === 'npcFire' ? lastNpcFireAt : lastNpcHitAt;
+              at = last + VOLLEY_GAP;
+              if (at < t) at = t;
+              // Drop overflow so a pirate volley cannot stack more than ~8 tones.
+              if (at <= t + VOLLEY_GAP * (VOLLEY_MAX - 1)) {
+                if (typ === 'npcFire') lastNpcFireAt = at;
+                else lastNpcHitAt = at;
+                for (let j = 0; j < cue.length; j++) tone(cue[j], at);
+              }
+            } else {
               for (let j = 0; j < cue.length; j++) tone(cue[j], at);
             }
-          } else {
-            for (let j = 0; j < cue.length; j++) tone(cue[j], at);
           }
         }
         if (typ === 'songShift') {

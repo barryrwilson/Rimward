@@ -5,6 +5,8 @@ import { scaleFor } from '../game/ship-scale.js';
 import { isUnknowable } from '../game/faction-style.js';
 import { PHY } from '../game/physics.js';
 import { sunZone } from '../game/collision.js';
+import { spendMissileAmmo } from '../game/hangar.js';
+import { isLauncherId, isTurretId, LAUNCHER_IDS, TURRET_IDS } from '../game/weapon-fit.js';
 import {
   HULL_MARK_POOL,
   HULL_MARK_SIZE,
@@ -33,8 +35,8 @@ import {
  * legacy) or a live ship. Player-aimed bolts use testPlayerHit only;
  * ship-aimed bolts use testNpcHits and never testPlayerHit. Emits mineHit { asteroidId,
  * point } for asteroids.js (read next frame via ctx.lastEvents). Emits
- * playerFire { weapon } only when a player cannon/disruptor bolt actually
- * leaves the pool (not dry-fire, heat-lock, mining, or a dropped shot).
+ * playerFire { weapon } only when a player cannon/disruptor/missile/turret
+ * shot actually leaves a pool (not dry-fire, heat-lock, mining, or a dropped shot).
  * Translates applyHit() descriptors into the frozen ctx event vocabulary.
  *
  * Zero per-frame allocation: projectiles/flashes/sparks are pooled, all
@@ -155,8 +157,13 @@ let _sunKillEmitted = false;
 // Hull-mark stamp scratch. Combat writes sprite.position from these.
 const _markPose = { px: 0, py: 0, pz: 0, qx: 0, qy: 0, qz: 0, qw: 1, sx: 1, sy: 1, sz: 1 };
 const _markLocal = { x: 0, y: 0, z: 0 };
+// Seeker scratch — module-scope, no per-frame alloc on the missile path.
+const _seekFwd = new THREE.Vector3();
+const _seekWant = new THREE.Vector3();
 
 const POOL_SIZE = 64;
+const MISSILE_POOL = 8; // separate cap; do not share the 64-bolt pool
+const TURRET_LIVE_CAP = 2; // turret bolts share the 64-pool; leave room for cannon
 const FLASH_POOL = 16;
 const MUZZLE_POOL = 16;
 const RIPPLE_POOL = 16;
@@ -167,8 +174,10 @@ const AIM_ERROR = Math.tan((2 * Math.PI) / 180); // ±2° NPC aim error
 const CONVERGE_DOT = 0.72; // ~44° frontal cone — chase targets sit wider than 32°
 
 const GROUP_WEAPON = { 1: 'cannon', 2: 'disruptor', 3: 'mining' };
-// §6.3 family identity: cannon = cyan bolt, disruptor = violet, mining = salvage green.
-const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e };
+// GROUP_WEAPON[4] maps to the seated launcher wkey ('missile' for dart).
+// Empty group 4: no missile shot (HUD later shows 4 · —). Do not fall through to cannon via ?? 'cannon'.
+// §6.3 family identity: cannon = cyan bolt, disruptor = violet, mining = salvage green, missile = amber.
+const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e, missile: 0xff8a2a };
 
 // Impact sparks (wave-54: stronger than wave-6 6 / 0.35 s / 16 u/s).
 const SPARKS_PER_BURST = 11;
@@ -179,8 +188,50 @@ const MUZZLE_TTL = 0.1; // s — short pop, 0.08–0.12 band
 const RIPPLE_TTL = 0.2; // s — brief expanding shield ring
 const GLOW_SCALE_ENERGY = 7.2;
 const GLOW_SCALE_DISRUPTOR = 9.0;
+const GLOW_SCALE_MISSILE = 8.6;
 const STREAK_LEN = 8.4;
 const _boltAxis = new THREE.Vector3(0, 0, -1);
+
+/**
+ * Turn vel toward lockPos, cap |Δθ| at turn*dt. lockPos null → ballistic (vel unchanged).
+ * Mutates vel in place. Reuses module scratch; no alloc.
+ */
+export function steerSeekerVel(vel, pos, lockPos, speed, turn, dt) {
+  if (!lockPos) return;
+  _seekWant.subVectors(lockPos, pos);
+  const w2 = _seekWant.lengthSq();
+  if (w2 < 1e-8) return;
+  _seekWant.multiplyScalar(1 / Math.sqrt(w2));
+  const v2 = vel.lengthSq();
+  if (v2 < 1e-8) {
+    vel.copy(_seekWant).multiplyScalar(speed);
+    return;
+  }
+  _seekFwd.copy(vel).multiplyScalar(1 / Math.sqrt(v2));
+  const maxTurn = turn * dt;
+  const dot = Math.max(-1, Math.min(1, _seekFwd.dot(_seekWant)));
+  const ang = Math.acos(dot);
+  if (ang <= maxTurn || ang < 1e-8) {
+    vel.copy(_seekWant).multiplyScalar(speed);
+    return;
+  }
+  const k = maxTurn / ang;
+  _seekFwd.lerp(_seekWant, k);
+  const n2 = _seekFwd.lengthSq();
+  if (n2 < 1e-8) return;
+  _seekFwd.multiplyScalar(1 / Math.sqrt(n2));
+  vel.copy(_seekFwd).multiplyScalar(speed);
+}
+
+function groupWeapon(ctx) {
+  const g = ctx.input.weaponGroup;
+  if (g === 4) {
+    const id = ctx.world.launcher;
+    if (!isLauncherId(id)) return null;
+    return LAUNCHER_IDS[id].wkey;
+  }
+  return GROUP_WEAPON[g] ?? 'cannon';
+}
 
 // Mining particles (wave 51): two THREE.Points rings — ore-tinted chips and
 // slower rock-powder dust — plus the held-contact emission cadence.
@@ -366,6 +417,12 @@ export function initCombat(ctx) {
       transparent: true,
       depthWrite: false,
     }),
+    missile: new THREE.MeshBasicMaterial({
+      color: FAMILY_COLORS.missile,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
   };
   // Additive glow sprites: two shared family materials, one sprite child per
   // pooled bolt (built at init; visible iff the bolt is live via the parent).
@@ -387,6 +444,14 @@ export function initCombat(ctx) {
       opacity: 0.95,
       depthWrite: false,
     }),
+    missile: new THREE.SpriteMaterial({
+      map: glowTex,
+      color: FAMILY_COLORS.missile,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
   };
   // Visual-only streak: hit tests still use PROJ_RADIUS on mesh.position.
   const streakGeo = new THREE.CylinderGeometry(0.05, 0.2, STREAK_LEN, 6, 1, true);
@@ -402,6 +467,14 @@ export function initCombat(ctx) {
     }),
     disruptor: new THREE.MeshBasicMaterial({
       color: FAMILY_COLORS.disruptor,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+    missile: new THREE.MeshBasicMaterial({
+      color: FAMILY_COLORS.missile,
       blending: THREE.AdditiveBlending,
       transparent: true,
       opacity: 0.9,
@@ -436,6 +509,38 @@ export function initCombat(ctx) {
       speed: 0,
       range: 0,
       traveled: 0,
+    });
+  }
+
+  // Separate missile pool (cap 8). Sharing the 64-bolt pool would starve cannon.
+  const missilePool = [];
+  for (let i = 0; i < MISSILE_POOL; i++) {
+    const mesh = new THREE.Mesh(projGeo, projMats.missile);
+    mesh.visible = false;
+    const glow = new THREE.Sprite(glowMats.missile);
+    glow.scale.set(GLOW_SCALE_MISSILE, GLOW_SCALE_MISSILE, 1);
+    mesh.add(glow);
+    const streak = new THREE.Mesh(streakGeo, streakMats.missile);
+    streak.position.set(0, 0, STREAK_LEN * 0.32);
+    mesh.add(streak);
+    scene.add(mesh);
+    missilePool.push({
+      mesh,
+      glow,
+      streak,
+      active: false,
+      vel: new THREE.Vector3(),
+      shooterPos: new THREE.Vector3(),
+      shooter: null,
+      vsPlayer: false,
+      fromPlayer: true,
+      wkey: 'missile',
+      family: 'missile',
+      damage: 0,
+      speed: 0,
+      range: 0,
+      traveled: 0,
+      lock: null,
     });
   }
 
@@ -743,7 +848,7 @@ export function initCombat(ctx) {
   }
 
   // Per-weapon fire cooldowns (rof), in world time.
-  const nextFireAt = { cannon: 0, disruptor: 0 };
+  const nextFireAt = { cannon: 0, disruptor: 0, missile: 0, turret: 0 };
 
   // ---------- helpers ----------
 
@@ -776,7 +881,9 @@ export function initCombat(ctx) {
       p.mesh.material = projMats[w.family] ?? projMats.energy;
       p.glow.material = glowMats[w.family] ?? glowMats.energy;
       p.streak.material = streakMats[w.family] ?? streakMats.energy;
-      const gs = w.family === 'disruptor' ? GLOW_SCALE_DISRUPTOR : GLOW_SCALE_ENERGY;
+      const gs = w.family === 'disruptor' ? GLOW_SCALE_DISRUPTOR
+        : w.family === 'missile' ? GLOW_SCALE_MISSILE
+        : GLOW_SCALE_ENERGY;
       p.glow.scale.set(gs, gs, 1);
       p.streak.scale.set(w.family === 'disruptor' ? 1.2 : 1, w.family === 'disruptor' ? 1.2 : 1, w.family === 'disruptor' ? 0.78 : 1);
       p.mesh.position.copy(origin);
@@ -790,6 +897,7 @@ export function initCombat(ctx) {
   function deactivate(p) {
     p.active = false;
     p.mesh.visible = false;
+    if (p.lock !== undefined) p.lock = null;
   }
 
   /** Align the visual streak to velocity. Hit tests ignore mesh rotation. */
@@ -966,7 +1074,8 @@ export function initCombat(ctx) {
     if (ctx.player?.destroyed) parkMarksOnHost(ctx.ship?.object);
   }
 
-  function firePlayerGun(wkey, w, playerObj) {
+  /** Nose + reticle ray (same as guns). Writes _fwd/_nose/_dir. Does not snap spawn onto a lock. */
+  function playerMuzzleDir(w, playerObj) {
     _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion); // nose = local -Z
     _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET);
     reticleAimPoint(ctx, w.range || U.WEAPON_EXCHANGE, _aim);
@@ -993,12 +1102,129 @@ export function initCombat(ctx) {
         }
       }
     }
+  }
+
+  function firePlayerGun(wkey, w, playerObj) {
+    playerMuzzleDir(w, playerObj);
     const bolt = spawnProjectile(true, wkey, w, _nose, _dir, playerObj.position);
     if (bolt) {
       spawnMuzzle(_nose, w.family);
       ctx.emit('playerFire', { weapon: wkey });
     }
     addHeat(w.heatPerShot);
+  }
+
+  function spawnMissile(wkey, w, origin, dir, shooterPos) {
+    for (let i = 0; i < missilePool.length; i++) {
+      const p = missilePool[i];
+      if (p.active) continue;
+      p.active = true;
+      p.fromPlayer = true;
+      p.shooter = null;
+      p.vsPlayer = false;
+      p.lock = null;
+      p.wkey = wkey;
+      p.family = w.family;
+      p.damage = w.damage;
+      p.speed = w.speed;
+      p.range = w.range;
+      p.traveled = 0;
+      p.vel.copy(dir).multiplyScalar(w.speed);
+      p.shooterPos.copy(shooterPos);
+      p.mesh.material = projMats[w.family] ?? projMats.missile;
+      p.glow.material = glowMats[w.family] ?? glowMats.missile;
+      p.streak.material = streakMats[w.family] ?? streakMats.missile;
+      p.glow.scale.set(GLOW_SCALE_MISSILE, GLOW_SCALE_MISSILE, 1);
+      p.mesh.position.copy(origin);
+      orientBolt(p);
+      p.mesh.visible = true;
+      return p;
+    }
+    return null; // dry pool: no ammo, no heat
+  }
+
+  /** Live ship lock in launcher range. Asteroid / gate / no lock → null. */
+  function liveMissileLock(playerObj, range) {
+    const t = ctx.targets.current;
+    if (!t?.object || !t.object.parent || !t.state || t.state.destroyed) return null;
+    if (playerObj.position.distanceToSquared(t.object.position) > range * range) return null;
+    return t;
+  }
+
+  // spend-on-spawn-only: ammo and heat only after a missile actually leaves the pool.
+  function tryPlayerMissile(wkey, now, playerObj) {
+    if (now < nextFireAt.missile) return;
+    const w = WEAPONS[wkey];
+    if (!w) return;
+    if (!Number.isInteger(ctx.world.missileAmmo) || ctx.world.missileAmmo <= 0) return;
+    const lock = liveMissileLock(playerObj, w.range);
+    if (!lock) return;
+    playerMuzzleDir(w, playerObj);
+    const dart = spawnMissile(wkey, w, _nose, _dir, playerObj.position);
+    if (!dart) return; // dry pool: no ammo, no heat
+    const spent = spendMissileAmmo(ctx, 1);
+    if (!spent) {
+      deactivate(dart);
+      return;
+    }
+    dart.lock = lock;
+    addHeat(w.heatPerShot);
+    ctx.emit('playerFire', { weapon: wkey });
+    nextFireAt.missile = now + 1 / w.rof;
+    spawnMuzzle(_nose, w.family);
+  }
+
+  function countLiveTurretBolts() {
+    let n = 0;
+    for (let i = 0; i < pool.length; i++) {
+      if (pool[i].active && pool[i].wkey === 'turret') n++;
+    }
+    return n;
+  }
+
+  /** Nearest hostile live ship in the forward cone. Does not track aft. */
+  function pickTurretTarget(playerObj, range) {
+    const range2 = range * range;
+    _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion);
+    let best = null;
+    let bestD2 = Infinity;
+    for (let i = 0; i < ctx.ships.length; i++) {
+      const s = ctx.ships[i];
+      if (!s?.object || !s.state || s.state.destroyed) continue;
+      if (!s.ai?.intent) continue;
+      if (isUnknowable(s.state.faction)) continue;
+      _tmp.subVectors(s.object.position, playerObj.position);
+      const d2 = _tmp.lengthSq();
+      if (d2 > range2 || d2 < 1) continue;
+      _tmp.multiplyScalar(1 / Math.sqrt(d2));
+      if (_tmp.dot(_fwd) < CONVERGE_DOT) continue;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  function tryPlayerTurret(now, playerObj) {
+    if (now < nextFireAt.turret) return;
+    if (!isTurretId(ctx.world.turret)) return;
+    const wkey = TURRET_IDS[ctx.world.turret].wkey;
+    const w = WEAPONS[wkey] || WEAPONS.turret;
+    const tgt = pickTurretTarget(playerObj, w.range);
+    if (!tgt) return;
+    if (countLiveTurretBolts() >= TURRET_LIVE_CAP) return;
+    _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion);
+    _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET);
+    _dir.subVectors(tgt.object.position, _nose);
+    if (_dir.lengthSq() < 1e-6) return;
+    _dir.normalize();
+    const bolt = spawnProjectile(true, wkey, w, _nose, _dir, playerObj.position);
+    if (!bolt) return; // dry pool: no heat
+    spawnMuzzle(_nose, w.family);
+    addHeat(w.heatPerShot);
+    ctx.emit('playerFire', { weapon: wkey });
+    nextFireAt.turret = now + 1 / w.rof;
   }
 
   function spawnNpcShot(ship, weapon, aimObj) {
@@ -1456,16 +1682,24 @@ export function initCombat(ctx) {
       // 3. Player weapons (fire while held, rof-gated, heat-locked §6.3).
       let beamOn = false;
       if (ctx.input.fireHeld && player && !player.destroyed && !player.overheated && playerObj) {
-        const wkey = GROUP_WEAPON[ctx.input.weaponGroup] ?? 'cannon';
+        const wkey = groupWeapon(ctx);
+        // Empty group 4: wkey is null — no missile shot, no ammo, no heat. Do not fall through to cannon.
         if (wkey === 'mining') {
           beamOn = updateMining(dt, playerObj);
-        } else if (now >= nextFireAt[wkey]) {
+        } else if (wkey && WEAPONS[wkey]?.family === 'missile') {
+          tryPlayerMissile(wkey, now, playerObj);
+        } else if (wkey && now >= nextFireAt[wkey]) {
           const w = WEAPONS[wkey];
           nextFireAt[wkey] = now + 1 / w.rof;
           firePlayerGun(wkey, w, playerObj);
         }
       }
       if (!beamOn) hideMiningFx(); // covers destroyed/overheated too (gate above)
+
+      // 3b. Auto turret — not a weapon group. Skip if unseated / docked / dead / overheated.
+      if (player && !player.destroyed && !player.overheated && playerObj) {
+        tryPlayerTurret(now, playerObj);
+      }
 
       // 4. Projectiles: integrate, then sphere-vs-sphere hit tests.
       for (let i = 0; i < pool.length; i++) {
@@ -1483,6 +1717,25 @@ export function initCombat(ctx) {
           ? testNpcHits(p, now)
           : testPlayerHit(p, now, player, playerObj);
         if (hit) deactivate(p);
+      }
+
+      // 4b. Missiles: seeker then ballistic. Simulate even under reducedMotion (combat, not decoration).
+      for (let i = 0; i < missilePool.length; i++) {
+        const p = missilePool[i];
+        if (!p.active) continue;
+        const lock = p.lock;
+        const lockLive = !!(lock?.object?.parent && lock.state && !lock.state.destroyed);
+        if (!lockLive) p.lock = null;
+        steerSeekerVel(p.vel, p.mesh.position, lockLive ? lock.object.position : null, p.speed, WEAPONS.missile.turn, dt);
+        _prev.copy(p.mesh.position);
+        p.mesh.position.addScaledVector(p.vel, dt);
+        p.traveled += p.speed * dt;
+        if (p.traveled >= p.range) {
+          deactivate(p);
+          continue;
+        }
+        orientBolt(p);
+        if (testNpcHits(p, now)) deactivate(p);
       }
 
       // 5. Impact flashes: grow + fade (per-sprite material, mutated in place).

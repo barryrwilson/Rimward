@@ -1,0 +1,181 @@
+SHP-02 hangar re-dispatch verify
+Wave 63. Design-only. This verifier did not edit src, scripts, public, docs, or wishlist.
+Date: 2026-08-18
+Inputs: out/w63/shp-02-hangar.md, out/w63/shared-contract.md §1.2, shp-02-review.md, shp-02-security.md
+Tree checks: save.js WORLD_FIELDS / sanitizeFaction; state.js SHIP_CLASSES + FACTIONS.unknowables; station.js DOCK_KEY_SERVICES; src/game/hangar.js absent
+
+## Status
+CLEAN
+
+================================================================
+0. Checklist (this recheck)
+================================================================
+[x] Walk every numbered Unknowables writer. Built cannot survive to remount.
+[x] Persist shape matches shared-contract.md §1.2 ({ mountedId, hulls }, live row).
+[x] Shared-contract-wins line exists (hangar.md line 3).
+[x] Note claims no src edits this wave. hangar.js is absent. This verifier made none.
+
+No leftover HIGH / BLOCKER. First-pass holes (enum-only coerce, stored-only envelope,
+two-file win clash, cap 4/3, shared-only gear, freshStart vault, KeyY-only) are gone
+or marked rejected with contract override.
+
+================================================================
+1. Merge law
+================================================================
+PASS.
+
+out/w63/shp-02-hangar.md line 3:
+  "If this file conflicts with `out/w63/shared-contract.md`, the shared contract wins."
+
+Status line also points persist envelope at contract §1.2. Old first-pass clash
+(hangar wins on record/switch) is gone.
+
+================================================================
+2. Persist shape vs contract §1.2
+================================================================
+PASS. Field-for-field match.
+
+Contract §1.2 and hangar §1.1 / §2.1 both require:
+
+  ctx.world.hangar = { mountedId, hulls: [ row, ... ] }
+
+  row: id, hullKind, faction, classKey, name,
+       scanner, miningLaser, concealedMounts,
+       cargoCapacity, cargo,
+       hull, hullMax, screen, screenMax, shell, shellMax,
+       engine, engineMax, heat
+
+Rules that now match the contract (old note fought these):
+
+- Live hull is a row. Pointer is hangar.mountedId. No player.hangarId.
+- Missing / non-object hangar → one living starter row. Do not heal to [].
+- hulls is an array. Drop non-objects. Cap 8. Keep mounted, then earlier rows.
+- Unknown keys dropped. No proto / constructor / prototype. New literals only.
+- classKey: Object.hasOwn(SHIP_CLASSES) else 'light'
+  (light|heavy|freighter|ace|cutter|frigate). Stored frigate stays.
+- faction: sanitizeFaction else 'independent'.
+- hullKind: 'living'|'built' else delete; Unknowables survivors must be 'living'.
+- Career gear on the row. World scanner / miningLaser / concealedMounts are mirrors.
+- Cargo + cargoCapacity travel with the hull. Credits stay on world.
+- No nextId persist. No top-level snap.hangar. No new HUD family key.
+
+Checked against shipped tree:
+- WORLD_FIELDS (save.js 65–82) still has no 'hangar'. Note still appends one key.
+- SHIP_CLASSES (state.js 34–41) has the six keys the note admits.
+- FACTIONS.unknowables exists (state.js 541). Force uses that exact key.
+
+================================================================
+3. Unknowables + 'built' — numbered path walk
+================================================================
+PASS. A coder who follows only numbered steps cannot remount Unknowables as built.
+
+Law §2.6 (after every enum write):
+  if (faction === 'unknowables') hullKind = 'living';
+Uses the row being written, or ctx.player.faction on player / remount.
+Restore also forces player living if the mounted row is Unknowables.
+
+Worked example §17.3 matches the steps: enum keeps 'built', then force writes
+'living' on record, player, restore copy, and remount-before-mesh.
+
+--- Path A: pack / parkMounted §3.2.1 ---
+Step 5: keep only 'built'|'living'; else delete.
+Step 6: if faction === 'unknowables', write 'living'.
+Snapshot §1.3 step 2 calls this same park (including step 6) before WORLD_FIELDS copy.
+
+--- Path B: unpack / loadMounted §3.2.2 ---
+Incoming row is already sanitized (Path D).
+Step 4: set player hullKind only if 'built'|'living'; else delete.
+Step 5: if incoming.faction or player.faction === 'unknowables', write player 'living'.
+Step 6: write that fresh state. Do not Object.assign(player, incoming).
+
+--- Path C: remountPlayerHull §3.3 ---
+Step 2: if player.faction === 'unknowables', write player hullKind 'living'.
+Step 3: choose mesh from hullKind AFTER step 2.
+Living / unset → makeLivingHull. Built → plated mesh.
+Last gate before the mesh. Unknowables cannot take the built branch.
+
+--- Path D: sanitizeHangarRecord §9.2 ---
+Step 5: faction = sanitizeFaction else 'independent'.
+Step 6: keep only 'built'|'living'; else omit.
+Step 7: if faction === 'unknowables', write 'living'.
+sanitizeHangar §9.1 walks every row through §9.2. Starter rebuild (§9.1 step 8)
+starts living and runs §9.2 again.
+
+--- Path E: player allowlist §10 ---
+Step 4: keep only 'built'|'living'; else delete.
+Step 5: if player.faction === 'unknowables', write 'living'.
+Then §9.3 (Path F).
+
+--- Path F: restore copy §9.3 ---
+Step 3: copy row.hullKind or delete player.hullKind.
+Step 4: if row.faction or player.faction === 'unknowables', write player 'living'.
+Order is hangar sanitize → player allowlist → §9.3. A tampered player blob
+cannot disagree with a mounted Unknowables row.
+
+--- Path G: SHP-01 buy §14.1 ---
+Step 3: stock row must pass sanitizeHangarRecord (Path D).
+Step 4: enum; if stock faction === 'unknowables', write 'living'.
+Step 5: parkMounted (Path A).
+Step 6: optional loadMounted + remount (Paths B, C).
+
+--- Path H: freshStart §12 ---
+Step 2: run §10 (enum, then Unknowables → living).
+Step 3: force 'living' on the recovery light. Delete leftover 'built'.
+Step 4: one starter row through sanitizeHangarRecord (Path D).
+Step 5: hangar = { mountedId: starter.id, hulls: [starter] }.
+Contract §1.3 rebuild. Old keep-stored vault is marked rejected.
+
+Net: Unknowables+'built' is overwritten on every writer. It cannot reach
+remount step 3 as 'built' if the faction key is FACTIONS.unknowables.
+
+================================================================
+4. Other locked first-slice facts (recheck, not new blockers)
+================================================================
+- Cap 8 (HANGAR_HULL_CAP). 4 owned / 3 stored rejected. Purchase refuses at cap.
+- Digit 0 + append 'shipyard' after epics. KeyY extra only. No mid-list insert.
+  DOCK_KEY_SERVICES today (station.js 116) is still the nine keys; Digit0 is free.
+- Career gear on the hull row; world keys are live mirrors.
+- Death + no autosave rebuilds one living starter. Death + autosave restores snapshot.
+- New Game: clearAutosave only (rimward-save-v1). Slots 1–3 keep hangar blobs.
+- Bio: hangar writes no ctx.bio.
+- HUD never writes hullKind. No HUD persist key.
+- state.js read-only for feature workers.
+- Note header: not this wave — no src / scripts / public / docs / wishlist edits.
+  §14 is labeled "later code wave". src/game/hangar.js does not exist.
+
+================================================================
+5. Notes (not BUGS_FOUND)
+================================================================
+These are MEDIUM / integrator nits. Shared contract already wins.
+
+- Remount §3.3 does not repeat contract §4.1.4 (copy SHIP_CLASSES cruise / burn /
+  creep / stopTime onto ctx.config.ship). Restore / freshStart also omit an
+  explicit remount call. Integrator must still obey the contract.
+- Switch rollback ("if remount throws, restore the pre-switch snapshot") can
+  put RAM back to a pre-sanitize player. Success remount still forces living.
+- sanitizeFaction (save.js 111–118) also passes SYSTEMS ids and any SAFE_ID
+  string. Force is exact 'unknowables'. A display-case token is not the banner
+  key. Do not invent a second faction helper (security Finding 10, accepted).
+- Crafted ownable heavy / frigate still mounts (same class as editing credits).
+  Receipts are later (security Finding 7, accepted).
+- Live cargoCapacity clamp and requestAutosave export remain implementation
+  reminders (review minors).
+
+================================================================
+6. Src / claimed edits
+================================================================
+PASS. Design markdown only.
+
+Hangar worker artifacts: out/w63/shp-02-hangar.md, shp-02-review.md, shp-02-security.md.
+This recheck writes only out/w63/verify-shp-02-recheck.txt.
+No hangar.js. This verifier did not edit src.
+
+================================================================
+Verdict
+================================================================
+CLEAN.
+
+Re-dispatch closed the first-pass blockers: Unknowables force is a numbered
+step on pack, unpack, sanitize, player allowlist, restore copy, remount, buy,
+snapshot park, and freshStart. Persist is { mountedId, hulls } with the live
+hull in the list. Shared contract wins on conflict.

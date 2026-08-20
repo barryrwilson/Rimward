@@ -1,0 +1,111 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w68/pr3-desk/probe.mjs`. Exit 0. Printed `W68 PR3a DESK PROBE PASS 0`.
+- Did not run `npm run test:boot`.
+- Read Digit 8/9 helpers and wiring in `src/systems/station.js`: `outfitLauncherState`, `outfitTurretState`, `armOutfitPapers`, `cancelOutfitPending`, `confirmOutfitPapers`, `applyOutfitPending`, `renderOutfitting`, level-1 vs level-2 keydown.
+- Read `h()` at station.js:1820–1825. Grep: no `innerHTML` in station.js.
+- Read `writeMountedGear` in `src/game/hangar.js` (393–429). Patch allowlist has no `hullKind`. Desk patches pass only launcher/ammo or turret.
+- Read `src/systems/shipyard-desk.js` Digit 0: hangar/yard row 8 (`hullIndexForDigit(0) === 7`). Dock root Digit 0 still `DOCK_KEY_SERVICES` last (`shipyard`).
+- Git: this desk slice lives in `src/systems/station.js` (mtime 19:45). `src/game/hangar.js` mtime 19:17 (PR2). `src/systems/combat.js` 19:47 and `src/systems/controls.js` 19:39 are dirty from the fire sibling. Desk worker did not need to edit those files.
+- Browser not run. No server on 5173 or 4173. Live UI is PR5; this desk check is data-first.
+
+## Bugs found
+None.
+
+Code checks that match the contract:
+- Digit 8/9 bind only after the level-1 return, inside `ui.service === 'outfitting'`. `armOutfitPapers` / `confirmOutfitPapers` also require `ui.level === 2 && ui.service === 'outfitting'`.
+- Level-1 Digit 8 still Launch (`DOCK_KEY_SERVICES[7] === 'launch'`). Digit 9 is Standing. Digit 6 is Outfitting. Digit 0 is Shipyard.
+- Digit 8/9 only call `armOutfitPapers`. No `confirmOutfitPapers` and no `credits -=` in that keydown branch. Debit is Confirm papers.
+- Confirm re-reads authored catalog cost, live credits, live hangar row, and `canSeat` (offer: explicit `canSeat`; restock: live kind must stay `restock`, which requires `canSeat`).
+- Pending blob `cost` / `price` is ignored. Pending stores `slot` / `kind` / `id` only.
+- Esc on outfitting: `cancelOutfitPending(ui)` before backing out of the service.
+- `h()` sets `node.textContent`. No `innerHTML`.
+- Buy/restock uses `writeMountedGear` then assigns `ctx.world.credits = nextCredits`. Failed seat does not debit. Purse cannot go negative.
+- `hullKind` is not a station.js token and is not in the gear patch.
+
+Probe edges:
+- Light hull Digit 8: notice, no pending, no debit.
+- Empty heavy launcher: offer dart 6500; confirm writes dart + ammo 8; living `hullKind` stays living.
+- Seated dart ammo 4: restock pending; confirm +2 ammo, −400 UU.
+- Esc / `cancelOutfitPending` clears pending.
+- Confirm at 6499 UU: `reason === 'credits'`, no debit, launcher stays empty.
+- Exact 6500 → credits 0.
+- Level-1 arm/confirm refuse. `__proto__` / inherited pending fail closed.
+
+## Environmental issues
+- `src/systems/combat.js` and `src/systems/controls.js` are dirty vs HEAD. Fire sibling. Station-only check: not a desk fail.
+- `src/game/hangar.js` is untracked. Desk did not rewrite it (older mtime than station.js).
+- `src/systems/shipyard-desk.js` last write 2026-08-18. Digit 0 is still last hangar/yard row. Dock Digit 0 is still shipyard.
+- No local Vite/preview server. Browser dock at Freehold / Digit 6 / rows 8–9 not run.
+
+## Evidence
+Probe:
+```
+W68 PR3a DESK PROBE PASS 0
+```
+Exit code 0.
+
+Level-2 outfitting digits only (`src/systems/station.js`):
+```
+    } else if (ui.service === 'outfitting') {
+      if (n === 1) act.buyCargoRack();
+      else if (n === 2) act.buyScanner();
+      else if (n === 3) act.buyConcealedMounts();
+      else if (n === 4) act.buyScanner2();
+      else if (n >= 5 && n <= 7) act.buyMiningLaser(n - 4);
+      else if (n === 8 || n === 9) {
+        armOutfitPapers(ctx, ui, n);
+        render();
+      }
+```
+
+Arm/confirm gate + catalog re-check:
+```
+export function armOutfitPapers(ctx, ui, n) {
+  if (!ui || ui.level !== 2 || ui.service !== 'outfitting') return false;
+...
+export function confirmOutfitPapers(ctx, ui) {
+  if (!ui || ui.level !== 2 || ui.service !== 'outfitting') {
+    return { ok: false, reason: 'invalid' };
+  }
+```
+Credits: `credits < cost` → `reason: 'credits'`. Seat: `canSeat(classKey, 'missile'|'turret')`. Cost: `authoredCost(sku.cost|sku.restockCost)`, not pending.cost.
+
+Esc:
+```
+      if (ui.service === 'outfitting' && cancelOutfitPending(ui)) { render(); return; }
+```
+
+`h()` / no innerHTML:
+```
+  function h(tag, cls, parent, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+```
+
+`writeMountedGear` allowlist (no hullKind):
+```
+  if (Object.prototype.hasOwnProperty.call(patch, 'launcher')) { ... }
+  if (Object.prototype.hasOwnProperty.call(patch, 'missileAmmo')) { ... }
+  if (Object.prototype.hasOwnProperty.call(patch, 'turret')) { ... }
+  return row;
+```
+
+Dock Digit 0 still shipyard:
+```
+const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard']);
+...
+        if (d === 0) {
+          selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1]);
+```
+
+Git / mtimes:
+```
+ M src/systems/station.js   2026-08-19 19:45:55
+ M src/systems/combat.js    2026-08-19 19:47:30   (fire sibling)
+ M src/systems/controls.js  2026-08-19 19:39:17   (fire sibling)
+?? src/game/hangar.js       2026-08-19 19:17:52   (PR2; not this desk slice)
+```

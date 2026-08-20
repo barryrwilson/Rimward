@@ -1,0 +1,36 @@
+## Status
+CLEAN
+
+## What I tested
+Re-read docs/Pod02TraffickingDesign.md §3 (and merge table §1, API table, Alt S3).
+Re-read out/w65/pod/shared-contract.md §1.2 and PR3 row.
+Grep eligibleSaleLots and renderRescue in brief, contract, inventory, security-review, code-review.
+Checked Digit 7 still People against station.js DOCK_KEY_SERVICES and digit handler.
+Checked hud.js 834 vs 825 and market.js 61–66 vs 58 against live source.
+Did not edit src/.
+
+## Bugs found
+None of the four prior bugs remain.
+
+1. MEDIUM (gone): Offer is not instructed to live in renderRescue. Brief §1 Where? and §3 freeze ui.level === 2 && ui.service === 'people'. Sale helper is called from renderPeople after renderRescue only. Level-1 home keeps Return only. Contract §1.2 matches the same gate and the same forbid. Digit 7 remains people (index 6).
+2. LOW (gone): Live toast assign is hud.js 834 (slot.el.textContent). security-review.md cites 834. Brief does not cite 825.
+3. LOW (gone): Live table loop is market.js 61–66 (buildTable over COMMODITY_KEYS). Inventory cites 35, 61–66. Brief does not cite 58.
+4. LOW (gone): Export name is trafficLots only in brief §3/§5/observability and contract. eligibleSaleLots remains only as historical FAIL text in out/w65/pod/verify-notes.txt.
+
+Accepted leftover (not this fix): save-minted units cash UU + rep stays documented (brief Security table Low; same as Wave 60 rescue). Home gate is explicit, so status is CLEAN.
+
+## Environmental issues
+None.
+
+## Evidence
+- C:\Projects\WebSim\docs\Pod02TraffickingDesign.md:102 — People Digit 7, level 2 only, gate ui.level === 2 && ui.service === 'people', not inside renderRescue.
+- C:\Projects\WebSim\docs\Pod02TraffickingDesign.md:139–155 — Digit 7 = people. Dedicated helper after renderRescue. Do not call from level-1. Gate + trafficLots(ctx).
+- C:\Projects\WebSim\docs\Pod02TraffickingDesign.md:216, 326, 364 — trafficLots export; station change via renderPeople only; same gate.
+- C:\Projects\WebSim\out\w65\pod\shared-contract.md:53–61, 244 — same home forbid, same gate, trafficLots, PR3 not renderRescue.
+- C:\Projects\WebSim\src\systems\station.js:119, 2262–2269 — keys market…people…shipyard; Digit 7 → index 6 people; Digit 0 → last key shipyard.
+- C:\Projects\WebSim\src\systems\station.js:1997, 2208 — renderRescue on People and on level-1 home (why the gate is required).
+- C:\Projects\WebSim\src\systems\hud.js:834 — slot.el.textContent = text.
+- C:\Projects\WebSim\src\game\market.js:35, 61–66 — COMMODITY_KEYS; buildTable loop.
+- C:\Projects\WebSim\out\w65\pod\current-pod-inventory.md:66 — market.js 35, 61–66.
+- C:\Projects\WebSim\out\w65\pod\security-review.md:14, 59–61, 83 — hud.js 834; H7 fixed; cites 834 and 61–66.
+- Grep eligibleSaleLots: only out/w65/pod/verify-notes.txt (old first-pass notes).

@@ -1,0 +1,117 @@
+## Status
+CLEAN
+
+## What I tested
+Wave 63 integrator deliverable. Design-only. No browser. No `src/` edits by this verifier.
+
+Checked:
+1. `docs/ShpDesign.md` exists and carries front matter, persist, PR plan, `hullKind`, remount `config.ship`, append `'shipyard'` + Digit 0, buy-adds-row (not remount-on-buy).
+2. Merge law on those frozen points vs `out/w63/shared-contract.md`.
+3. Wishlist first priority + initiative SHP status.
+4. `PROGRESS.md` Wave 63 placement vs Wave 62 / Wave 45 notes.
+5. No `src/` SHP implementation from this worker.
+6. SHP-01 `'yard'` and remount-on-buy rejected in the integrator brief.
+7. SHP-03 nested `loadout` flattened to hull fields.
+8. Companion `out/w63/integrator-review.md` and `out/w63/integrator-security.md` exist.
+
+## Bugs found
+
+## Environmental issues
+None. Wave 63 is markdown. Static read of docs + `out/w63/` + shipped `src/` is the correct path.
+
+## Checks
+
+### 1. ShpDesign.md exists and has required sections
+PASS.
+
+- File: `docs/ShpDesign.md` (untracked; Wave 63 deliverable).
+- Front matter table: Title, Author (Wave 63 SHP integrator), Date 2026-08-18, Status **Accepted** (design only), Wave 63, owner request (do not ship yards/hangar/swap), merge law points at `out/w63/shared-contract.md`.
+- Persist: §3 `ctx.world.hangar` on `WORLD_FIELDS`, shape `{ mountedId, hulls }`, cap 8, allowlisted flat rows.
+- PR plan: § Rollout Plan PR1–PR5 serial (`save.js` → `ship.js` → `station.js` → catalog/buy → equipment migrate). Wave 63 does not land those PRs.
+- `hullKind`: §4 tokens `'living' | 'built'`. SHP writes. HUD reads. Unknowables force `'living'`. Unset = bio.
+- Remount `config.ship`: §5.1.3 copies authored `SHIP_CLASSES[classKey]` onto `ctx.config.ship` (`cruise`→`maxSpeed`, `creep`, `burn`→afterburner peak, `stopTime`→settle). Do not persist `config.ship`.
+- Dock: §2 append `'shipyard'` after `epics`. Digits 1–9 unchanged. Digit **0** opens shipyard (`Number('0')-1 === -1` special-case).
+- Buy: §6.4 / Key Decisions: buy **adds** a hangar row. Does not remount or trade away the mounted hull.
+
+### 2. Merge law matches shared-contract.md on frozen points
+PASS. No implementer-choice leftover on the frozen set.
+
+| Frozen point | Contract | Brief |
+|---|---|---|
+| Service key + digit | §2.2 append `'shipyard'`; Digit 0; no mid-list insert | §2 + Alt D1: `'shipyard'`. `'yard'` rejected. Digit 0. |
+| Buy vs remount | §2.3 buy adds a hangar row; does not trade away mounted hull | §6.4 / Alt B1: remount-on-buy rejected. Hangar pane mounts. |
+| Persist hangar | §1.2 `{ mountedId, hulls }`; cap 8; drop unknown keys; `WORLD_FIELDS` | §3 copies that shape field-for-field. |
+| `hullKind` | §1.3 / §3 `living`\|`built` or delete; HUD never writes; Unknowables `'living'` | §4 same write sites, heal, and cases. |
+| Envelope remount | §4.1.4 copy `SHIP_CLASSES` onto `ctx.config.ship`; classKey alone does not change cruise | §5.1.3 / Alt F1 same map and diagnosis. |
+| Cargo | §8 Q2 travels with the hull | §6.1 SHP-01 world-hold claim rejected. `ctx.cargo` is the mounted hold. |
+| Equipment first slice | §5 move existing gear onto hull; world keys stay mirrors | §7 flat `scanner` / `miningLaser` / `concealedMounts`. No nest. Mirrors stay. |
+| Open defaults Q1–Q6 | Digit 0; cargo-with-hull; NPC mesh; cap 8 tail-drop; hangar every dock; refuse `rep < 0` | Open Questions 1–6 match those defaults. |
+
+Brief extras Q7–Q13 (no remount-on-buy; no nested `loadout`; omit ace/cutter/frigate from first-slice BUY; no sell/scrap/rename; `freshStart` rebuilds one living starter; no `hullSwitched` event; no HUD-03) resolve sibling notes. They do not contradict §8.
+
+First-slice BUY omit of ace/cutter is stricter than contract’s omit-`frigate` default. Contract still admits those keys on persist. Not a merge-law break.
+
+### 3. Wishlist first priority + initiative SHP
+PASS.
+
+- `docs/PLAYER-EXPERIENCE-WISHLIST.md` Current first priority (lines 67–69): **Wave 63 SHP design brief landed 2026-08-18:** `docs/ShpDesign.md`. Implementation later.
+- Initiative SHP (lines 315–318): **Status: PLANNED** (Wave 63 brief landed). Implementation later. **Not DONE.**
+- SHP-01 / SHP-02: first slice PLANNED (brief). Implementation later.
+- SHP-03: first slice PLANNED = move existing equipment onto the hull (flat hangar fields; world keys stay mirrors). Missiles / turrets later. Not DONE.
+
+### 4. PROGRESS Wave 63 after Wave 62; Wave 62 kept
+PASS.
+
+- `PROGRESS.md` wave history: Wave 62 block (2978–3005) is intact (HUD-02 skins, files, pins).
+- Wave 63 block (3006–3038) follows Wave 62.
+- Wave 45 contract notes (3039+) still follow Wave 63. Wave 45 history earlier in the file is not deleted.
+- Wave 63 text: design only, no `src/` edits, `'shipyard'` + Digit 0, `'yard'` rejected, buy adds row, hangar persist, `config.ship` remount, flat SHP-03, merge law cites `out/w63/shared-contract.md`.
+
+### 5. Worker did not add src/ SHP code
+PASS.
+
+Shipped today (no hangar / shipyard implementation):
+- `src/systems/station.js` 116: nine `DOCK_KEY_SERVICES`. No `'shipyard'` / `'yard'`. Digit 0 still index −1.
+- `src/game/save.js` 65–82: `WORLD_FIELDS` has no `'hangar'`.
+- No `src/game/hangar.js`, `src/game/shipyard.js`, or `src/systems/shipyard.js`.
+- `src/` `hullKind` hits are Wave 62 HUD **reads** in `hud.js` (`hudFamily`), not SHP write/sanitize.
+
+Git: `src/systems/hud.js` and `src/ui/hud.css` are modified (+`scripts/boot-test.mjs`). Diff stat is HUD-02 skins, not yards/hangar/remount. Integrator write set is `docs/ShpDesign.md`, wishlist, `PROGRESS.md`, `out/w63/`.
+
+### 6. SHP-01 `'yard'` and remount-on-buy rejected
+PASS.
+
+Sibling `out/w63/shp-01-shipyards.md`:
+- § Recommendation: append `'yard'`; Digit 0 later; PR3 appends `'yard'`.
+- §7 FIRST SLICE buy: park → debit → write identity → **remount mesh**.
+
+Integrator:
+- Non-goals + §1 merge table + Alt D1 + Key Decisions: key is `'shipyard'`. No SHP-01 `'yard'`.
+- Non-goals + §1 + §6.4 + Alt B1 + Open Q7: remount-on-buy rejected. Buy adds a hangar row. Swap is a Hangar-pane verb.
+
+### 7. SHP-03 nested loadout flattened
+PASS.
+
+Sibling `out/w63/shp-03-loadouts.md`: per-hull nested `loadout` (`scanner` / `miningLaser` / `concealedMounts` / `general`), `hangar.mounted`, `instanceId`; first-slice path drops world keys from `WORLD_FIELDS` once `loadout.v === 1`.
+
+Integrator §1 / §7 / Alt P2 / Open Q8:
+- Flat row fields. No nested `loadout`. Contract drop-unknown-keys would strip a nest.
+- Pointer is `mountedId`. Row id is `id`.
+- World equipment keys stay live mirrors in the first slice.
+
+### Companion reviews
+PASS as presence + agreement, not a second review pass.
+
+- `out/w63/integrator-review.md`: no blockers. Wishlist PLANNED. Merge law match. `'yard'` / remount-on-buy / nested `loadout` rejected.
+- `out/w63/integrator-security.md`: Risk Low. XSS / allowlist / price / cruise / proto / side-channel hangar key named as brief law. No CRITICAL/HIGH left in the markdown.
+
+## Evidence cites
+- `docs/ShpDesign.md` lines 1–11, 72–104, 110–121, 137–146, 189–234, 243–305, 319–366, 431–479, 586–636, 680–705, 709–728, 756–771
+- `out/w63/shared-contract.md` §0, §1.2–1.5, §2.2–2.3, §3, §4.1.4, §4.2, §5, §8 Q1–Q6, §9
+- `docs/PLAYER-EXPERIENCE-WISHLIST.md` 67–69, 315–363
+- `PROGRESS.md` 2978–3038
+- `out/w63/shp-01-shipyards.md` 67–95, 339–350, 441–443
+- `out/w63/shp-03-loadouts.md` 121–160, 186–209
+- `src/systems/station.js` 116, 2251
+- `src/game/save.js` 65–82
+- `src/systems/hud.js` 70–71 (read-only `hullKind`)

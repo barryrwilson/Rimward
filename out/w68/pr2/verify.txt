@@ -1,0 +1,111 @@
+## Status
+PASS
+
+## What I tested
+- Ran `node out/w68/pr2/probe.mjs`. Exit 0. Printed `W68 PR2 PROBE PASS 0`.
+- Read `writeMountedGear` and `spendMissileAmmo` in `src/game/hangar.js`.
+- Read `healMissileAmmo` / `canSeat` / `LAUNCHER_IDS` in `src/game/weapon-fit.js`.
+- Read `MOUNT_TABLE` in `src/game/state.js` (light/cutter/freighter missile=0 turret=0; heavy/ace/frigate have seats).
+- Read `buildStockRow`, `CORE_STOCK`, `LIVING_STOCK`, `UNKNOWABLES_STOCK`, and `purchaseYardHullUnlocked` in `src/game/shipyard.js`.
+- Confirmed launcher heal runs before ammo heal in the same patch, independent of object key order.
+- Confirmed light + `{ launcher: 'dart', missileAmmo: 4 }` fails closed (`''` / 0) via `canSeat` + `healMissileAmmo`.
+- Confirmed `spendMissileAmmo` accepts only `Number.isInteger(n) && n > 0`; float / string / 0 / negative spend 0.
+- Confirmed spend clamps to parked ammo, writes hangar row and `ctx.world.missileAmmo` together, and does not change heat.
+- Confirmed unknown patch keys (`damage`, `rof`, `loadout`) are not copied; only own allowlisted keys apply.
+- Confirmed `buildStockRow` seeds `launcher: ''`, `missileAmmo: 0`, `turret: ''` before sanitize.
+- Confirmed buy parks, appends, then restores `mountedId` (no remount-on-buy). Probe pin `11.buy.notRemount`.
+- Confirmed CORE_STOCK still lists `frigate`. Beautiful stock is `light,cutter,heavy`. Unknowables stock is `light`.
+- Checked git status / timestamps for `src/systems/station.js`, `src/systems/combat.js`, `src/game/state.js`, `scripts/boot-test.mjs`.
+- Did not run `npm run test:boot`. Did not edit `src/**`.
+
+## Bugs found
+None.
+
+Code checks that match the contract:
+- `writeMountedGear` 415–424: launcher block first (heal + re-heal parked ammo), then `patch.missileAmmo`, then turret.
+- Light / unknown launcher id / empty rack all fail closed through `healLauncher` + `healMissileAmmo`.
+- `spendMissileAmmo` 437–447: bad n / no row / empty launcher → 0; row and world stay in lockstep.
+- Stock and yard catalog: Beautiful/Unknowables omit frigate; plated CORE_STOCK still has it.
+
+## Environmental issues
+- `src/game/hangar.js` and `src/game/shipyard.js` are untracked (`git ls-files` has no path). They exist on disk and the probe imports them.
+- `src/game/state.js` is dirty vs HEAD (+22). Diff is Wave 68 PR0 `MOUNT_TABLE` + `WEAPONS.missile` / `WEAPONS.turret`. Last write 18:38. Not a PR2 hangar/shipyard edit.
+- `scripts/boot-test.mjs` is dirty vs HEAD (+2052). Adds Wave 62–67 hangar/HUD/catalog pins. No WAVE68 / `spendMissileAmmo` block. Last write 15:45. PR2 worker did not add boot-test coverage.
+- `src/systems/station.js` is dirty vs HEAD (+186). Diff is earlier shipyard-desk / trafficking / `writeMountedGear` for scanner-mining-cargo. No launcher / ammo / turret writes. Last write 11:27. PR2 files last write 19:17.
+- `src/systems/combat.js` is clean vs HEAD.
+- PR2 worker did not edit `station.js`, `combat.js`, `state.js`, or `boot-test.mjs`. Those dirties (except combat, which is clean) come from earlier waves.
+- `out/w68/pr1/verify-edges.mjs` still expects `writeMountedGear` to ignore launcher/ammo/turret. That is the old PR1 contract. PR2 changed the mutator on purpose. This verifier did not re-run the PR1 probe.
+
+## Evidence
+Probe:
+```
+W68 PR2 PROBE PASS 0
+```
+Exit code 0.
+
+`writeMountedGear` launcher-before-ammo + allowlist (`src/game/hangar.js`):
+```
+  if (Object.prototype.hasOwnProperty.call(patch, 'launcher')) {
+    row.launcher = healLauncher(row.classKey, patch.launcher);
+    ctx.world.launcher = row.launcher;
+    row.missileAmmo = healMissileAmmo(row.launcher, row.missileAmmo);
+    ctx.world.missileAmmo = row.missileAmmo;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'missileAmmo')) {
+    row.missileAmmo = healMissileAmmo(row.launcher, patch.missileAmmo);
+    ctx.world.missileAmmo = row.missileAmmo;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'turret')) {
+    row.turret = healTurret(row.classKey, patch.turret);
+    ctx.world.turret = row.turret;
+  }
+```
+
+`spendMissileAmmo` positive integer + lockstep (`src/game/hangar.js`):
+```
+export function spendMissileAmmo(ctx, n) {
+  if (!Number.isInteger(n) || n <= 0) return 0;
+  const row = mountedHangarRow(ctx);
+  if (!row) return 0;
+  if (row.launcher === '') return 0;
+  const have = healMissileAmmo(row.launcher, row.missileAmmo);
+  const spent = Math.min(n, have);
+  row.missileAmmo = have - spent;
+  if (ctx.world) ctx.world.missileAmmo = row.missileAmmo;
+  return spent;
+}
+```
+
+Seat law (`src/game/weapon-fit.js` + `src/game/state.js`):
+- `healLauncher`: `if (!canSeat(classKey, 'missile')) return ''`.
+- `canSeat`: `MOUNT_TABLE[key][kind] > 0`; unknown classKey uses light.
+- `MOUNT_TABLE.light.missile === 0`, so light + dart → `''`.
+- `healMissileAmmo('', value)` → 0; non-integer value → 0; dart max 8.
+
+Stock (`src/game/shipyard.js`):
+```
+const CORE_STOCK = Object.freeze(['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate']);
+const LIVING_STOCK = Object.freeze(['light', 'cutter', 'heavy']);
+const UNKNOWABLES_STOCK = Object.freeze(['light']);
+...
+  beautiful: LIVING_STOCK,
+  unknowables: UNKNOWABLES_STOCK,
+```
+`buildStockRow` raw includes `launcher: ''`, `missileAmmo: 0`, `turret: ''`.
+Buy restores `mountedId` after `addPurchasedHull`.
+
+Git (forbidden files; PR2 worker did not touch them):
+```
+ M scripts/boot-test.mjs
+ M src/game/state.js
+ M src/systems/station.js
+?? src/game/hangar.js
+?? src/game/shipyard.js
+```
+`src/systems/combat.js` not listed (clean).
+
+Timestamps:
+- hangar.js / shipyard.js: 2026-08-19 19:17:52
+- state.js: 2026-08-19 18:38:50
+- boot-test.mjs: 2026-08-19 15:45:32
+- station.js: 2026-08-19 11:27:13

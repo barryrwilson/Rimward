@@ -1,0 +1,49 @@
+## Status
+CLEAN
+
+## What I tested
+- Hand-read `src/game/save.js`: `RESERVED_IDS`, `sanitizeFaction`, `sanitizeCargoRow`, `sanitizeCargoList`, `WORLD_FIELDS`, `restore`.
+- Confirmed `__proto__`, `constructor`, `prototype` (and the rest of the hangar reserved set) cannot become `row.faction`.
+- Confirmed a reserved cargo faction drops the survivor row (fail-closed), not a faction-less leftover.
+- Confirmed survivor keep-list is a new literal: commodity, units, source, optional faction, optional name. Extra keys (`price`, `loadout`, enumerable `__proto__`) drop.
+- Confirmed ordinary goods stay `{ commodity, units }`.
+- Confirmed `WORLD_FIELDS` has no `peopleTrafficked`; `restore` copies only those keys.
+- Ran `npm run test:boot`. Log line `wave66 save pins` is all-true. No `WAVE66 SAVE PINS FAIL`.
+- Ran isolated probe `out/w66/pr1/probe.mjs` (css stub import). Asserted reserved-id drop, keep-list, ore no-leak, peopleTrafficked not restored. PROBE PASS.
+- Did not fail pre-existing WAVE4 fence, WAVE26 ferry/haul cluster (6), WAVE35 haul gate (8 errors total). WAVE30 did not fail this boot run.
+
+## Bugs found
+None.
+
+## Environmental issues
+None.
+
+## Evidence
+- Logs: `C:\Users\barry\.grok\sessions\C%3A%5CProjects%5CWebSim\01a01a74-1cd5-7541-8f55-9ba8f7c3e736\terminal\call-65873182-a3e3-4cf2-a980-22fa3a7f607a-30.log`
+- Probe: `C:\Projects\WebSim\out\w66\pr1\probe.mjs`
+- Test output:
+```
+wave66 save pins: {"extraKeysDrop":true,"enumerableProtoDrop":true,"sourceHack":true,"sourceKill":true,"nameCap":true,"nameControls":true,"reservedFaction":true,"validRoundTrip":true,"noWorldPeopleField":true,"peopleTraffickedNotRestored":true,"oreNoLeak":true}
+BOOT TEST FAIL — 8 errors
+```
+- Probe output:
+```
+{
+  "factionRejectsReserved": true,
+  "factionKeepsGilded": true,
+  "factionRejectsEmpty": true,
+  "listDropsReservedRows": true,
+  "listKeepsValid": true,
+  "oreNoLeak": true,
+  "zeroUnitsDropped": true,
+  "noWorldPeopleField": true,
+  "restoreDropsReserved": true,
+  "restoreKeepsValid": true,
+  "enumerableProtoDrop": true,
+  "peopleTraffickedNotRestored": true,
+  "omitFactionKeepsRow": true,
+  "upperProtoIsOwnKeyNotPollution": true
+}
+PROBE PASS
+```
+- FAIL lines (pre-existing, not WAVE66): WAVE4 FENCE FAVOR FAIL; WAVE26 FERRY QUOTE / HAUL QUOTE / LANE DELIVERY / OLD-SAVE FALLBACK / SAVE FIELDS / RESTORE FAIL; WAVE35 HAUL GATE DELIVERY FAIL.

@@ -1,0 +1,4 @@
+node out/w68/pr4/probe.mjs
+ok pr4 hud pins hudWeaponKey, 4 · —, 4 · Dart rack · 6, RANGE 720/0, lead 260/0, bio living, textContent
+
+Skipped: npm run test:boot (task). Browser Digit4 WPN/RANGE/lead later.

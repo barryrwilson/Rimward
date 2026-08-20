@@ -1,0 +1,5 @@
+WAVE64 remount probe: PASS
+WAVE64 remount boot pins: all true
+WAVE64 persist pins: all true
+WAVE62: all true
+BOOT TEST FAIL — 8 errors (known WAVE4/26/35; unchanged)

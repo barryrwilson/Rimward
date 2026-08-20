@@ -1,0 +1,23 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node out/w68/pr0/probe.mjs`. Exit 0. Output: `PASS all PR0 pins true`.
+- Read `src/game/state.js` and `src/game/weapon-fit.js`. Compared rows to `out/w67/shp03/current-weapons-inventory.md` and `out/w67/shp03/shared-contract.md` §4.3.
+- Confirmed `WEAPONS.cannon` and `WEAPONS.disruptor` stay byte-identical to the live inventory. Confirmed `WEAPONS.mining` still derives from `MINING_LASERS[0]` (`beam: true`, `speed: 0`, `rof: 4`).
+- Confirmed `WEAPONS.missile.beam` is not true. Unknowable + missile still returns `[]` and does not write `lastHitAt`.
+- Confirmed frozen `MOUNT_TABLE` seats for light/cutter/freighter/heavy/ace/frigate match contract §4.3. Confirmed `SHIP_CLASSES` has no power/kW field.
+- Confirmed `healMissileAmmo` law: empty launcher → 0; `'2'` / `2.9` → 0; `99` dart → 8; reserved ids and `'god'` fail closed to 0.
+- Confirmed `weapon-fit.js` does not write ctx, DOM, or save. It does not import `save.js`.
+- Worker src coupling is only `state.js` catalog rows plus new `weapon-fit.js`. No `weapon-fit` / `LAUNCHER_IDS` / `healMissileAmmo` use in save, hangar, station, combat, or hud. Tree is dirty from prior waves; this PR did not add persist, desk, fire, or HUD.
+- Spot-check `applyHit`: family `'missile'` and `'turret'` do not throw. Damage hits screen first on a light hull.
+- Independent edges (probe may miss): `healMissileAmmo('god', 4) === 0`; `canSeat(undefined, 'missile') === false`; `isLauncherId(null) === false`; `LAUNCHER_IDS` / `TURRET_IDS` are `Object.create(null)` so `__proto__` / `constructor` are not in the table.
+- Browser: not used. This is data. UI is not in scope.
+
+## Bugs found
+
+## Environmental issues
+
+## Evidence
+- Logs: `C:\Projects\WebSim\out\w68\pr0\probe.log`, `C:\Projects\WebSim\out\w68\pr0\verify-edges.log`
+- Test output: `PASS all PR0 pins true` (exit 0); `PASS independent edges` (exit 0)

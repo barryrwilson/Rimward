@@ -6,6 +6,7 @@
  *
  * This file is READ-ONLY for feature workers: import, don't modify. If a
  * worker needs a change here, it must report back instead.
+ * Wave 68 PR0 is the exclusive writer of WEAPONS and MOUNT_TABLE catalog rows.
  */
 
 // Wave 19 (100-system rim): authored systems live in authored-systems.js,
@@ -39,6 +40,17 @@ export const SHIP_CLASSES = {
   cutter: { cruise: 105, burn: 210, creep: 25, stopTime: 2.2, turn: 1.5, hull: 80, shield: 80, engine: 90, role: 'pirate' },
   frigate: { cruise: 22, burn: 45, creep: 8, stopTime: 5.0, turn: 0.35, hull: 900, shield: 600, engine: 300, role: 'capital' },
 };
+
+// Seat counts are the mass law. Do not persist. Unknown classKey → light at
+// weapon-fit.js call sites — never by mutating this table.
+export const MOUNT_TABLE = Object.freeze({
+  light: Object.freeze({ general: 2, mining: 1, scanner: 1, qship: 1, missile: 0, turret: 0 }),
+  cutter: Object.freeze({ general: 2, mining: 1, scanner: 1, qship: 1, missile: 0, turret: 0 }),
+  freighter: Object.freeze({ general: 2, mining: 1, scanner: 1, qship: 1, missile: 0, turret: 0 }),
+  heavy: Object.freeze({ general: 2, mining: 1, scanner: 1, qship: 1, missile: 2, turret: 2 }),
+  ace: Object.freeze({ general: 2, mining: 1, scanner: 1, qship: 1, missile: 2, turret: 1 }),
+  frigate: Object.freeze({ general: 2, mining: 1, scanner: 1, qship: 1, missile: 4, turret: 4 }),
+});
 
 // ---------- Mining ladder (§10.3, wave 51) ----------
 // Four cutting heads, bought in order at any station outfitter. `tier` is the
@@ -93,6 +105,16 @@ export const WEAPONS = {
     name: MINING_LASERS[0].name, damage: MINING_LASERS[0].damage, rof: 4, speed: 0,
     range: MINING_LASERS[0].range, heatPerShot: MINING_LASERS[0].heatPerShot,
     family: 'mining', beam: true, extractPerSec: MINING_LASERS[0].extractPerSec,
+  },
+  missile: {
+    name: 'Dart rack', damage: 22, rof: 0.45, speed: 260, range: 720, heatPerShot: 14,
+    family: 'missile',
+    // rad/s; below cutter.turn 1.5 so a cutter can still cut the dart.
+    turn: 0.85,
+  },
+  turret: {
+    name: 'Auto turret', damage: 4, rof: 3, speed: 800, range: 380, heatPerShot: 2,
+    family: 'energy',
   },
 };
 export const HEAT = { max: 100, coolPerSec: 12, overheatUnlockAt: 40 }; // §6.3 heat-limited

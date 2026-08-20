@@ -378,6 +378,45 @@
   padding: 4px 10px;
 }
 
+.shipyard-tabs {
+  margin-bottom: 8px;
+}
+
+.shipyard-hull,
+.shipyard-buy-row {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #0d1522;
+  border: 1px solid #22303f;
+  border-left: 2px solid #31445c;
+}
+
+.shipyard-hull-name,
+.shipyard-buy-name {
+  color: #e6eef7;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+
+.shipyard-hull-meta,
+.shipyard-buy-meta {
+  color: #8a9db2;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.shipyard-confirm {
+  border-left-color: #6fd2e0;
+}
+
+.shipyard-empty,
+.shipyard-mounted,
+.shipyard-legend,
+.shipyard-buy-flag {
+  color: #9fb2c6;
+}
+
 /* ---------- death (danger red) ---------- */
 
 .death-overlay {
@@ -520,7 +559,13 @@ body.rw-contrast .job-detail,
 body.rw-contrast .people-meta,
 body.rw-contrast .people-chart-line,
 body.rw-contrast .bar-hint,
-body.rw-contrast .title-legend {
+body.rw-contrast .title-legend,
+body.rw-contrast .shipyard-hull-meta,
+body.rw-contrast .shipyard-buy-meta,
+body.rw-contrast .shipyard-empty,
+body.rw-contrast .shipyard-mounted,
+body.rw-contrast .shipyard-legend,
+body.rw-contrast .shipyard-buy-flag {
   color: #c3d4e6;
 }
 

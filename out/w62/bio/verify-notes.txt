@@ -1,0 +1,34 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w62/bio/probe.mjs`. Result: PROBE PASS (28/28). Includes hair insets 52 px, career 18 / combat 10, AGEZ H=(600,513) hide, period token, no extra Bio/contacts, no frame getBoundingClientRect, no hullKind write, no innerHTML, mech block still before bio.
+- Ran `npm run test:boot`. Exit 1 from the 8 known errors. WAVE62 object is all-true (PR1+PR2+PR3 pins). No WAVE62 HUD FAMILY FAIL line.
+- Static review of `src/systems/hud.js` and `src/ui/hud.css`:
+  - `getBoundingClientRect` is absent from hud.js. `update()` uses cached `selfSize` / `tgtSize`. Measure uses `offsetWidth` in init, resize, and 5 Hz text-scale change only.
+  - Mech block `#hud[data-family="mech"]` is still present (iris hide, tick ring, square petals). Bio block starts after it and before the galaxy chart.
+  - Bio hair is only `::before` + `::after` on each combat rail. No `#hud[data-family='bio'] .rw-bio::` or `.rw-contacts::` extra length. Contacts get `stroke-linecap: round` only.
+  - `bioPeriodSec`: serene 4, pained 2.2, keen/anxious/feral 1.2, reduced-motion 0. No faster than 1.2 except 0.
+  - HUD reads `hullKind`. It does not write `hullKind`. No `innerHTML`.
+- Live Chrome CDP at 1600×900 (Playwright MCP was locked). Dismissed title (New Game), picked Freehold Greenhand.
+  - Default live play: `#hud` `data-family="bio"`. Hub at (800,450). Self hair-off false. Two 18 px hairlines on the self rail (left 52 px, not into the 78 px gap). Target rail hidden. `--rw-bio-period` = 4s. Small iris (28 px inset, spin). SCREEN / SHELL / SPD / WPN / FORE / AFT present. No tendrils on hub/lead interior.
+  - Live AGEZ pin: H=(600,513) vs live self hair box (l=566.2,t=495,r=722,b=644.6) expects hide. Probe `agez.h600.hide` also true.
+  - `document.body.classList.add('rw-reduced-motion')`: hair `content:none` / `visibility:hidden` on both rails.
+  - Override `sessionStorage['rw-hud-family']='mech'`: family flips on wait 3. Hair gone. Iris/cilia hidden. Reticle `::after` is masked repeating-conic ticks. Petals 6×12, radius 0. Rails stay 57% / 78 px. Child count 17.
+  - Clear override: family returns to bio. Living iris and petals return. 5 Hz family write fail-closes hair, then the per-frame AGEZ path can show hair again.
+
+## Bugs found
+
+## Environmental issues
+- Playwright MCP browser was already in use (`mcp-chrome-7d372dc`). Live check used local Chrome over CDP instead.
+- Target rail is `is-hidden` with a 0×0 box in idle Freehold. Hair CSS still exists on that node. It does not paint.
+
+## Evidence
+- Screenshots: `out/w62/bio/browser-bio.png`, `out/w62/bio/browser-bio-rm.png`, `out/w62/bio/browser-mech-still.png` (1600×900).
+- Logs: `out/w62/bio/boot-test.log`, `out/w62/bio/browser-probe.log`.
+- Probe: `PROBE PASS`.
+- WAVE62: `{"independentBio":true,"beautifulBio":true,"builtMech":true,"livingBio":true,"defaultFamily":true,"afterBuilt":true,"overrideMech":true,"overrideOff":true,"blockedBio":true,"noHullWrite":true,"hairSelf":true,"hairTgt":true,"mechHook":true,"mechIrisHide":true,"mechAfter":true,"mechHubNoVein":true,"agezH600":true,"bioPeriodTok":true,"hairOffCss":true,"bioCapRound":true,"rmHairHide":true,"noFrameRect":true,"noBioCorner":true,"noContactExtra":true}`
+- Live bio: family=bio; period=4s; two 18 px self hairlines; iris visible; words SCREEN/SHELL/SPD/WPN/FORE/AFT true.
+- Live reduced-motion: hair content none / hidden.
+- Live mech: family=mech; hair none; ticks on; iris hidden.
+- Clear: family=bio; living look returned.

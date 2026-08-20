@@ -1,0 +1,87 @@
+Wave 63 verifier — remount-flight recheck (shared contract re-dispatch)
+Scope: out/w63/shared-contract.md §4.1–4.2 vs ship.js / ctx.js / Hud02IdentitiesDesign
+Also read: out/w63/shared-security.md, out/w63/shared-review.md, prior out/w63/verify-shared.txt
+No src/ edits by this verifier.
+
+## Status
+CLEAN
+
+Pass-1 verify-shared.txt scored BUGS_FOUND: §4.2 said classKey drives cruise, and §4.1 never named ctx.config.ship. This recheck finds that lie gone. Diagnosis of shipped flight is still true.
+
+## Checks
+
+### 1. §4.1 remount steps name ctx.config.ship
+PASS. Contract §4.1 step 4 is titled "Copy the flight envelope" from authored SHIP_CLASSES[classKey] onto ctx.config.ship. Map:
+- cruise → ctx.config.ship.maxSpeed
+- creep → ctx.config.ship.creep
+- burn → afterburner peak so cruise × afterburner.multiplier equals burn (light 120 × 2 = 240)
+- stopTime → settle (damping / accel as ship.js already uses)
+Restore / freshStart remount must run the same copy. Do not persist ctx.config.ship. Do not read cruise / burn / creep / stopTime off the save blob.
+§4.1.3 still says createShipState sets vitals / bookValue only and does not retune player cruise. That matches createShipState (state.js 118–138): no maxSpeed / creep / cruise fields.
+§4.1.9 living remount keeps makeLivingHull + swim / breath / heartbeat. Retune of ctx.config.ship must not idle those fields.
+§1.5, §6.1, §7 ship.js row, and §9 checklist repeat the same envelope copy.
+
+### 2. §4.2 does not claim classKey alone changes cruise
+PASS. The old must-not row ("Keep the previous class's cruise/turn" / "classKey drives SHIP_CLASSES flight numbers") is gone.
+§4.2 lead: classKey alone does not change player cruise. Turn already follows classKey. Cruise does not until remount writes ctx.config.ship.
+Must-not rows now forbid:
+- Claim classKey alone retunes cruise / burn / creep / stopTime
+- Leave ctx.config.ship at the light baseline after a heavy / freighter / other non-light mount
+Those two rows are the inverse of the pass-1 bug.
+
+### 3. Must-not: leave light 120/30 after heavy / freighter mount
+PASS. Explicit must-not: leave ctx.config.ship at the light baseline after a heavy / freighter / other non-light mount. Why: player cruise reads ctx.config.ship, not classKey. Must copy §4.1.4 or she keeps 120/30.
+Authored contrast (state.js 34–37): light cruise 120 / creep 30; heavy 90 / 22; freighter 60 / 15. Boot envelope is the light row (ctx.js 43–47). Without the copy, a purchased heavy or freighter would still fly 120/30.
+
+### 4. MATCH still forbids throttle write
+PASS. Unchanged from pass 1.
+- §4.1.12: leave MATCH alone except as ship.js already does. Docked play clears flags.matchSpeed (ship.js 468–470, 633). Do not write ctx.input.throttle. Do not add a remount MATCH API.
+- §4.2 must-not: write ctx.input.throttle to cancel MATCH. Cites ship.js 443–470: MATCH is a flag; throttle-held clears MATCH; nothing writes the setpoint.
+- §3.4: HUD must not write ctx.input.throttle.
+Shipped: ship.js 28 (ctx.js) and ship.js 51 / 443: ship.js must not write input.throttle. Throttle assigns live only in controls.js (144, 256). MATCH writes are flags.matchSpeed only.
+
+### 5. hullKind / Unknowables / append-only dock still match Hud02IdentitiesDesign
+PASS. Remount-flight edit did not break identity or dock law.
+
+hullKind (docs/Hud02IdentitiesDesign.md §3.1–3.4, §7 Q1–Q3):
+- SHP-owned. HUD reads. HUD never writes (contract §0.2, §3.4; design 301, 313, 792).
+- Unknowables purchased hulls are hullKind 'living', never 'built' (contract §0.3, §3.2; design 335, 363, 942–943).
+- Unset hullKind stays bio for every faction (contract §0.4; design 336, 363).
+- No HUD-03 skin checkbox (contract §3.5; design 915).
+- Live default stays the living starter until a 'built' mount (contract §0.4, §3.2; design 318–327, 1049).
+- Shipped hudFamily (hud.js 65–74) matches the design function.
+
+Append-only dock:
+- Shipped DOCK_KEY_SERVICES (station.js 116): market, jobs, bar, feed, repair, outfitting, people, launch, epics.
+- Contract §2.1 quotes that list. §0.6 / §2.2 append one key 'shipyard' after epics. Digit 0. Digits 1–9 frozen. No mid-list insert.
+
+Living remount still preserves BIO motion (ship.js 7–25, 248–308, 639–656): swim, wing flap, breath, heartbeat. Contract §4.1.9, §4.2, §4.3, §0.11.
+
+### 6. Diagnosis still true in ship.js / ctx.js
+PASS. Shipped code still matches the contract's "today's fact" paragraph.
+
+- ship.js imports createShipState, U, hoverTurnRateFor. It does not import SHIP_CLASSES.
+- Player cruise / creep / maxSpeed come from ctx.config.ship. initShip binds const shipCfg = config.ship (ship.js 301). Forward speed is shipCfg.creep + throttle × (shipCfg.maxSpeed − shipCfg.creep) (ship.js 547–563). MATCH clamp also uses shipCfg.creep / shipCfg.maxSpeed (555–557).
+- ctx.js 43–47 authors the light baseline: maxSpeed 120, creep 30, afterburner.multiplier 2. Comment: "Light-fighter baseline."
+- That object is not retuned by classKey today. No writer copies SHIP_CLASSES onto config.ship.
+- Player turn follows classKey: hoverTurnRateFor(ctx.player?.classKey || 'light', ship.speed) (ship.js 513–515) from flight-feel.js TURN_* tables, not SHIP_CLASSES.turn.
+- createShipState (state.js 118–138) uses SHIP_CLASSES for hull / shield / engine / bookValue only.
+- Boot: ctx.player = createShipState('light') (ship.js 398). Living mesh from makeLivingHull (248–308).
+A remount that only writes player.classKey would still leave a heavy / freighter on the light 120/30 envelope. That is why §4.1.4 must copy the envelope. The diagnosis is still the reason for the law.
+
+## Companion briefs
+shared-security.md pass 3 Finding 6: save-authored cruise on remount is resolved in contract (copy from authored SHIP_CLASSES; do not persist config.ship). Matches §4.1.4 / §6.1.
+shared-review.md pass 3: former §4.2 classKey-drives-cruise is marked resolved. Cross-check "Player flight remount" Pass.
+No new contradiction between the three shared files.
+
+## Evidence cites
+- out/w63/shared-contract.md §1.5, §4.1.3–4.1.4, §4.1.9, §4.1.12, §4.2, §4.3, §6.1
+- out/w63/shared-security.md Finding 6; out/w63/shared-review.md pass-3 flight finding
+- docs/Hud02IdentitiesDesign.md §3.1–3.4, §7 Q1–Q3
+- src/systems/hud.js 65–74
+- src/systems/station.js 116
+- src/game/state.js 34–41, 118–138
+- src/systems/ship.js 2–3, 7–25, 248–308, 301, 398, 443–470, 513–515, 547–563, 633, 639–656
+- src/core/ctx.js 28, 43–47
+- src/game/flight-feel.js 10–65
+- src/systems/controls.js 144, 256 (only throttle writers)

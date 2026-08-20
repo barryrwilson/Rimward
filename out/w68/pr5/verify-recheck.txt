@@ -1,0 +1,87 @@
+Wave 68 PR5 verifier recheck
+Date: 2026-08-19
+Status: CLEAN
+Domain: data
+Did not edit src/. Wrote this file only.
+
+## Status
+CLEAN
+
+## What I tested
+1. `node --import ./scripts/with-css-stub.mjs out/w68/pr5/probe.mjs` — PASS, exit 0.
+2. `npm run test:boot` — WAVE68 + Wave 64 heal keys. Browser Outfitting not this verifier.
+
+## Bugs found
+None.
+
+## WAVE68 weapons
+Log line `wave68 weapons:` — every value true. No `WAVE68 WEAPONS FAIL`.
+
+Keys (all true):
+cat.missileFamily, cat.missileStats, cat.turretFamily, cat.mountLight, cat.mountHeavy,
+cat.dartId, cat.noGod, cat.heal99, cat.healStr,
+heal.lightEmpty, heal.heavyCapped,
+lightW.empty, lightW.noJunk,
+rest.worldEmpty, rest.rowEmpty,
+write.switched, write.seated, write.spent, write.otherEmpty,
+stock.ok, stock.emptyRacks, stock.mountedKept,
+fields.worldFields,
+arm.ok, arm.pending, arm.noDebit,
+buy.ok, buy.debit, buy.seated,
+d8.level1Launch, d8.level1NoArm,
+hud.digit4, hud.emptyKey, hud.emptyLabel,
+fire.missilePool, fire.emptyNoCannon, fire.noIncoming.
+
+Digit 8 level-1 still Launch: `d8.level1Launch` and `d8.level1NoArm` true.
+`DOCK_KEY_SERVICES[7] === 'launch'`. Level-1 slice has no `n === 8` and no `armOutfitPapers`.
+
+Light dart heals empty: `heal.lightEmpty` true (`launcher === ''`, `missileAmmo === 0`).
+`lightW.empty` true (write dart on light row stays empty on row and world).
+`rest.worldEmpty` / `rest.rowEmpty` true (restore dart onto light hangar empties racks).
+
+No extra travel: WAVE68 uses stub `w68Ctx` / papers helpers. It does not dock, undock, or walk the live overlay.
+Wave 64 already docks Digit 6 outfitting and then undocks. WAVE68 does not add a second live dock or yard buy.
+
+## Wave 64 equipment heal
+Log line `wave64 equipment:` — heal keys still true. No `WAVE64 EQUIPMENT FAIL`.
+
+heal.noLoadout: true
+heal.noMissiles: true
+heal.launcherEmpty: true
+heal.missileAmmo0: true
+heal.turretEmpty: true
+
+`launcher` is a hangar key. Heal asserts empty string, not absence.
+
+## Probe
+Command: `node --import ./scripts/with-css-stub.mjs out/w68/pr5/probe.mjs`
+Output: `W68 PR5 PROBE PASS 0`
+Exit: 0
+
+Thin helper re-run. Boot-test is the source of truth. Worker `out/w68/pr5/verify.txt` matches this pass.
+
+## Unrelated boot FAILs (not PR5)
+`BOOT TEST FAIL — 9 errors`. None is WAVE68 or WAVE64 equipment.
+
+- REDMARCH TEST FAIL (`castMatches:false`) — pre-existing jump pin
+- WAVE4 FENCE FAVOR FAIL
+- WAVE26 FERRY QUOTE FAIL
+- WAVE26 HAUL QUOTE FAIL
+- WAVE26 LANE DELIVERY FAIL
+- WAVE26 OLD-SAVE FALLBACK FAIL
+- WAVE26 SAVE FIELDS FAIL
+- WAVE26 RESTORE FAIL
+- WAVE35 HAUL GATE DELIVERY FAIL
+
+WAVE30 payTribute ran and passed this run (`creditsPaidExact` true). The known WAVE30 fail did not print.
+
+## Environmental issues
+- Boot-test exit 1 from the 9 unrelated errors above. WAVE68 JSON is still all true.
+- Browser / live Outfitting skipped (orchestrator).
+- graph_resolve with namespace `codex` returned blocked_ambiguous (document/spreadsheet/slides). Retry with `openclaw-janet/agent-qa` returned proceed_unmodeled.
+
+## Evidence
+- `out/w68/pr5/probe.mjs`
+- `scripts/boot-test.mjs` WAVE64 healEvery + WAVE68 block (~13096–13726)
+- `out/w68/pr5/verify.txt`
+- boot log: `C:\Users\barry\.grok\sessions\C%3A%5CProjects%5CWebSim\01a01ca0-7dcf-77c2-9b90-046921847971\terminal\call-ce744308-5983-4835-94bc-063b2ce28ac6-22.log`

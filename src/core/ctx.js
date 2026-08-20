@@ -16,8 +16,12 @@ import * as THREE from 'three';
  * - ship (flight transform): written ONLY by ship.js.
  * - player (ship state record): created by ship.js via createShipState;
  *   mutated by combat.js (damage) and state.js helpers only.
+ *   SHP / save.js own player.hullKind ('living'|'built'); HUD reads only.
  * - bio: written ONLY by bio.js; ship.js/song.js/hud.js read it.
  * - world/market: written by world.js + market.js; station.js reads/trades.
+ *   SHP hangar persist: world.hangar ({ mountedId, hulls }) rides WORLD_FIELDS.
+ *   Do not persist config.ship. No new persist event for hull swaps.
+ *   world.fieldOre is sparse remaining units; asteroids.js writes on extract; save.js sanitizes.
  * - ships (live NPC list): written by traffic.js (spawn/despawn) and npc.js
  *   (AI state); combat.js may damage their state records.
  * - targets: written by controls.js (selection) + npc.js (availability).
@@ -29,7 +33,7 @@ import * as THREE from 'three';
  * - events: any system may ctx.emit(); main.js clears the queue AFTER the
  *   last consumer (hud.js) each frame. Event types are frozen — see EVENTS.
  * - ship.js may emit bodyHit; combat.js applies impact/sun damage via applyHit.
- * - combat.js emits playerFire { weapon } when a player cannon/disruptor bolt actually spawns.
+ * - combat.js emits playerFire { weapon } when a player cannon/disruptor/missile/turret shot actually spawns.
  */
 export function createCtx({ scene, camera, renderer }) {
   const ctx = {
@@ -75,7 +79,7 @@ export function createCtx({ scene, camera, renderer }) {
       afterburnerPressed: false, // edge: Space tapped (burn if ready)
       driftHeld: false, // Shift held = vector-hold
       fireHeld: false, // LMB
-      weaponGroup: 1, // 1=cannon 2=disruptor 3=mining (keys 1/2/3)
+      weaponGroup: 1, // 1=cannon 2=disruptor 3=mining 4=missiles (keys 1/2/3/4)
       targetPressed: false, // edge: T (cycle nearest hostiles)
       hailPressed: false, // edge: H
       dockPressed: false, // edge: D
@@ -136,6 +140,11 @@ export function createCtx({ scene, camera, renderer }) {
       // station.js's outfitter is the only writer; combat.js/hud.js read it.
       // Same ladder discipline as `scanner` — persisted, sanitized on restore.
       miningLaser: 0,
+      // Hangar row is source of truth; these are write-through mirrors
+      // (SHP / save heal). Combat may decrement ammo later.
+      launcher: '',
+      missileAmmo: 0,
+      turret: '',
     },
 
     // --- star system data + gate/jump surface ---
@@ -206,8 +215,14 @@ export function createCtx({ scene, camera, renderer }) {
     // 'bodyHit' { kind, speed, damage }   // ship.js bounce; combat.js may fill damage
     // 'sunHeat' { t, dps }                // combat.js, throttled
     // 'sunKill' { reason: 'sun' }         // combat.js lethal core
-    // 'playerFire' { weapon }             // combat.js: real cannon/disruptor spawn only
+    // 'playerFire' { weapon }             // combat.js: real spawn only (cannon/disruptor/'missile'/turret wkey)
     // 'survivorRescued' { faction, source, count, repDelta }  (station.js, wave 60)
+    // 'survivorSold' { faction, source, count, credits, repDelta }  (trafficking.js / station.js, wave 66)
+    // 'hudMechRange' {}           // hud.js: rising .in-range (mech)
+    // 'hudMechMatch' {}           // hud.js: rising MATCH lamp (mech)
+    // 'hudMechContact' { id }     // hud.js: first seenHostiles add (mech)
+    // 'hostileEnter' { id }       // hud.js: first hostile in scanner arc (bio, ≤1/0.5s)
+    // 'hullBand' { band }         // hud.js: self hull warn|crit (bio, ≤1/2s)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

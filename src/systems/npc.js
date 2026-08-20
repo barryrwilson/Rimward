@@ -167,6 +167,13 @@ export function buildShipMesh(classKey, faction, role) {
   return buildShipAsset(classKey, faction, role);
 }
 
+/** Player plated hull from the NPC builder. Null if the SKU is not primed. */
+export function buildPlayerPlatedMesh(classKey, faction) {
+  const role = 'trader';
+  if (!isShipAssetReady(faction, classKey, role)) return null;
+  return buildShipMesh(classKey, faction, role);
+}
+
 /** Advance asset animation and choose the active distance LOD. */
 export function animateShipMesh(object, elapsed, reducedMotion = false, camera) {
   updateShipAsset(object, elapsed, reducedMotion, camera);
