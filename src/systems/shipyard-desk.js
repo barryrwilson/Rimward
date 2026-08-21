@@ -1,13 +1,15 @@
-import { sanitizeHangar, switchTo } from '../game/hangar.js';
+import { sanitizeHangar, switchTo, graftMounted } from '../game/hangar.js';
 import {
   dockFactionOf,
   dockReputation,
+  GRAFT_LIST_UU,
   listYardOffers,
   purchaseYardHull,
   yardPrice,
   yardStockFor,
 } from '../game/shipyard.js';
 import { FACTIONS, SHIP_CLASSES } from '../game/state.js';
+import { requestAutosave } from '../game/save.js';
 
 /** Desk panes. Digit 1 Hangar, Digit 2 Yard. Not dock services. */
 export const SHIPYARD_PANE_HANGAR = 'hangar';
@@ -43,6 +45,29 @@ export function buyRefuseLine(reason) {
   return BUY_REFUSE_LINES[reason] ?? 'No sale.';
 }
 
+export const GRAFT_REFUSE_LINES = Object.freeze({
+  dock: 'Dock first to graft this hull.',
+  combat: 'Cannot graft in combat.',
+  jump: 'Cannot graft during a jump.',
+  destroyed: 'That hull is gone.',
+  paused: 'Cannot graft while paused.',
+  missing: 'That hull is not in the hangar.',
+  living: 'Grafts fit plated hulls only.',
+  already: 'This hull is already grafted.',
+  banner: 'The Chain does not graft here.',
+  reputation: 'No sale.',
+  credits: 'Not enough credits.',
+  busy: 'The graft is already in flight.',
+});
+
+export const GRAFT_WARN =
+  'Beautiful Ones become immediate enemies. Patrols hunt at standing -10 or worse.';
+export const GRAFT_WARN_REDUCED = 'Beautiful Ones become enemies.';
+
+export function graftRefuseLine(reason) {
+  return GRAFT_REFUSE_LINES[reason] ?? 'Cannot graft that hull.';
+}
+
 export function shipyardPaneOf(ui) {
   return ui?.shipyardPane === SHIPYARD_PANE_BUY ? SHIPYARD_PANE_BUY : SHIPYARD_PANE_HANGAR;
 }
@@ -51,11 +76,19 @@ export function setShipyardPane(ui, pane) {
   if (!ui) return;
   ui.shipyardPane = pane === SHIPYARD_PANE_BUY ? SHIPYARD_PANE_BUY : SHIPYARD_PANE_HANGAR;
   if (ui.shipyardPane !== SHIPYARD_PANE_BUY) ui.yardPending = null;
+  if (ui.shipyardPane !== SHIPYARD_PANE_HANGAR) ui.graftPending = null;
 }
 
 export function cancelYardPending(ui) {
   if (!ui?.yardPending) return false;
   ui.yardPending = null;
+  ui.notice = '';
+  return true;
+}
+
+export function cancelGraftPending(ui) {
+  if (!ui?.graftPending) return false;
+  ui.graftPending = null;
   ui.notice = '';
   return true;
 }
@@ -98,6 +131,52 @@ function confirmYardBuy(ctx, ui) {
     ? 'Papers filed. Hull stored in hangar.'
     : buyRefuseLine(result.reason);
   return result;
+}
+
+function mountedHangarRowOf(ctx) {
+  const hangar = ctx?.world?.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return null;
+  return hangar.hulls.find((h) => h.id === hangar.mountedId) ?? null;
+}
+
+function graftOfferVisible(ctx) {
+  if (dockFactionOf(ctx) !== 'gilded') return false;
+  if (dockReputation(ctx, 'gilded') < 0) return false;
+  const row = mountedHangarRowOf(ctx);
+  if (!row) return false;
+  if (row.hullKind !== 'built') return false;
+  if (row.faction === 'unknowables') return false;
+  if (row.grafted === true) return false;
+  return true;
+}
+
+function setGraftPending(ui, ctx) {
+  ui.graftPending = { mountedId: ctx?.world?.hangar?.mountedId ?? '' };
+  ui.notice = '';
+}
+
+function confirmGraft(ctx, ui) {
+  if (ui.graftBusy) return { ok: false, reason: 'busy' };
+  const pending = ui.graftPending;
+  if (!pending) return { ok: false, reason: 'missing' };
+  ui.graftBusy = true;
+  try {
+    ui.graftPending = null;
+    if (pending.mountedId && pending.mountedId !== ctx.world?.hangar?.mountedId) {
+      ui.notice = graftRefuseLine('missing');
+      return { ok: false, reason: 'missing' };
+    }
+    const result = graftMounted(ctx);
+    if (result.ok) {
+      ui.notice = 'Tissue sealed to the hull.';
+      requestAutosave(ctx);
+    } else {
+      ui.notice = graftRefuseLine(result.reason);
+    }
+    return result;
+  } finally {
+    ui.graftBusy = false;
+  }
 }
 
 function renderBuyPane(h, btn, panel, ctx, ui, redraw) {
@@ -156,6 +235,22 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
   const hulls = Array.isArray(hangar?.hulls) ? hangar.hulls : [];
   h('div', 'screen-sub', panel, 'HANGAR');
   h('div', 'screen-note shipyard-mounted', panel, `Mounted id ${mountedId}`);
+  if (ui.graftPending) {
+    const reduced = ctx?.settings?.reducedMotion === true;
+    const box = h('div', 'shipyard-buy-row shipyard-confirm', panel);
+    h('div', 'shipyard-buy-name', box, 'Graft tissue');
+    h('div', 'shipyard-buy-meta', box,
+      `${GRAFT_LIST_UU} UU · ${reduced ? GRAFT_WARN_REDUCED : GRAFT_WARN}`);
+    btn(box, 'Confirm graft', () => {
+      confirmGraft(ctx, ui);
+      redraw();
+    }, 'screen-btn screen-btn-warm');
+    btn(box, 'Esc — Cancel', () => {
+      cancelGraftPending(ui);
+      redraw();
+    });
+    return;
+  }
   hulls.forEach((row, i) => {
     const card = h('div', 'shipyard-hull', panel);
     const name = row.name || SHIP_CLASSES[row.classKey]?.role || 'hull';
@@ -169,6 +264,14 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
       ui.notice = result.ok ? `Mounted ${name}.` : switchRefuseLine(result.reason);
       redraw();
     });
+  });
+  if (!graftOfferVisible(ctx)) return;
+  const card = h('div', 'shipyard-buy-row', panel);
+  h('div', 'shipyard-buy-name', card, 'Graft tissue');
+  h('div', 'shipyard-buy-meta', card, `${GRAFT_LIST_UU} UU · Mounted plated hull.`);
+  btn(card, 'Offer graft', () => {
+    setGraftPending(ui, ctx);
+    redraw();
   });
 }
 
@@ -218,6 +321,7 @@ export function handleShipyardDigit(n, ctx, ui) {
     setYardPending(ui, offer.classKey);
     return true;
   }
+  if (ui.graftPending) return true;
   const idx = hullIndexForDigit(n);
   if (idx < 0) return false;
   sanitizeHangar(ctx);

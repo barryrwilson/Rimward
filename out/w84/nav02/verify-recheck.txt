@@ -1,0 +1,157 @@
+Wave 84 NAV-02 verifier recheck (pass 2)
+Date: 2026-08-21
+Domain: data
+Scope: markdown freeze after persist-consume fix. No src edits by this verifier.
+Wrote: out/w84/nav02/verify-recheck.txt only.
+
+RESULT: CLEAN
+
+Prior HIGH (hopIndex persist + active|recalc|broken) is closed.
+Designer majors (180px ellipsis; hide docked/jumping in first chrome PR) are closed.
+hopIndex in brief+contract is rejected only, not required as persist.
+
+-------------------------------------------------------------------------------
+0. Recheck pins
+-------------------------------------------------------------------------------
+1. Consume NAV-01 `{ dest, path, remaining, status: plotted|blocked|arrived }`.
+2. nextTo = path[1] (not path[hopIndex]).
+3. Recalc is an event, not a persist status.
+4. hopIndex grep in Nav02 brief + contract: persist-required → HIGH; rejected only → OK.
+5. First chrome PR: max-width 180px + name ellipsis; hide docked/jumping.
+6. Worker must not write src/, wishlist, or PROGRESS.md.
+
+-------------------------------------------------------------------------------
+1. Worker files vs src / wishlist / PROGRESS
+-------------------------------------------------------------------------------
+NAV-02 worker set (mtime 18:25–18:30):
+  docs/Nav02GuidanceDesign.md
+  out/w84/nav02/shared-contract.md
+  out/w84/nav02/current-nav-guidance-inventory.md
+  out/w84/nav02/security-review.md
+  out/w84/nav02/code-review.md
+  out/w84/nav02/ui-audit.md
+  out/w84/nav02/designer-audit.md
+
+This recheck: out/w84/nav02/verify-recheck.txt
+Prior verify (18:19, BUGS_FOUND): out/w84/nav02/verify.txt  (historical; not the freeze)
+
+src/game/save.js mtime 15:53; src/systems/hud.js 15:53.
+docs/PLAYER-EXPERIENCE-WISHLIST.md 17:08; PROGRESS.md 17:37.
+
+Grep world.nav / rw-nav / hopIndex / nav-gate under src/: 0.
+Grep NAV-02 in PROGRESS.md: 0.
+Wishlist NAV-02 lines 730–740 are the owner backlog (mtime before NAV-02 freeze).
+git status shows dirty src/ + wishlist + PROGRESS from sibling waves.
+Those mtimes predate the NAV-02 freeze files.
+
+PASS: this worker did not write src/, wishlist, or PROGRESS.md.
+
+-------------------------------------------------------------------------------
+2. hopIndex grep — brief + contract (persist-required = HIGH)
+-------------------------------------------------------------------------------
+docs/Nav02GuidanceDesign.md — 7 hits, all reject / warn / forbid:
+
+  74   Requiring hopIndex would hide a legal NAV-01 bag (unknown keys drop).
+  87   Consume NAV-01 { dest, path, remaining, status }. No hopIndex.
+ 118   Extra persist fields? None. Sanitize would drop hopIndex / nextTo.
+ 122   Persist nextTo / hopIndex? No. Never.
+ 158   Do not propose hopIndex. Do not persist 'recalc' / 'broken' / 'active'.
+ 236   Next = path[1]. No hopIndex. Recalc is an event.
+ 261   Risk: requiring hopIndex so a legal NAV-01 persist hides guidance.
+
+No "hopIndex required", path[hopIndex], or fail-closed hide on missing hopIndex.
+
+out/w84/nav02/shared-contract.md — all hits reject / forbid / copy NAV-01:
+
+  §0 / §1.2–§1.5  consume NAV-01 exactly; do not invent hopIndex
+  §1.4            no extra persist fields; hopIndex would vanish on restore
+  §1.5            nextTo = path[1]; never invent hopIndex
+  §2.2            forbidden on blob: hopIndex, nextTo, recalc, broken, active
+  §2.3            JUMPS = bag remaining; do not compute path.length - hopIndex
+  §2.4            Never persist 'recalc'
+  §2.5            Do not treat missing hopIndex as hide — hopIndex does not exist
+  §12             No hopIndex. No persist 'recalc' / 'broken' / 'active'
+  §13 PR1         No hopIndex
+  §14.7           Legal NAV-01 persist without hopIndex still shows guidance
+
+PASS: hopIndex is mentioned only as rejected. Not a persist requirement.
+
+-------------------------------------------------------------------------------
+3. Prior HIGH — persist consume vs NAV-01 (closed)
+-------------------------------------------------------------------------------
+NAV-01 merge law (out/w84/nav01/shared-contract.md §1.2–§1.4.1 / §2.3):
+
+  world.nav = { dest, path, remaining, status }
+  status: 'plotted' | 'blocked' | 'arrived'
+  idle = omit the bag
+  next hop = path[1] when plotted && path.length >= 2
+  remaining persisted = path.length - 1
+  unknown keys DROP
+  hopIndex never allowlisted
+  recalc is navRoute / bag rewrite, not persist 'recalc'
+
+NAV-02 now copies that shape (brief merge table; contract §2.2–§2.4):
+
+  dest / path / remaining / status
+  HUD map: plotted → path[1] + dest + bag remaining + distance
+           blocked → NO ROUTE
+           arrived → hide
+           omit / unknown → hide
+  nextTo = path[1] (live resolve only; never persist)
+  REROUTE = session HUD after systemLoaded / 'navRoute' when path[1] changes
+  No branch on persist 'active' | 'recalc' | 'broken'
+
+Impact of the old freeze is gone: a legal NAV-01 bag without hopIndex still
+shows guidance (contract §14.7). Recalc copy is not keyed on stored 'recalc'.
+
+PASS vs prior HIGH.
+
+-------------------------------------------------------------------------------
+4. Prior designer majors (closed)
+-------------------------------------------------------------------------------
+Major A — side-col overflow at textScale 1.5:
+  Contract §7: min-width 0; max-width 180px; name nowrap + ellipsis.
+  Brief merge table: max-width 180px + ellipsis.
+  §13 PR1: capped CSS + ellipsis. PR5 is screenshots only.
+  ui-audit + designer-audit: Status resolved in freeze.
+
+Major B — hide / motion deferred to PR5:
+  Contract §1.10 / §7: hide docked + jumping in the first chrome PR / PR1.
+  §13 PR1: Hide docked/jumping. PR2 no @keyframes. PR3 static ring.
+  Brief: docked+jumping hide and static motion in first chrome PR.
+  ui-audit + designer-audit: Status resolved in freeze.
+
+PASS vs prior designer majors.
+
+-------------------------------------------------------------------------------
+5. Brief vs contract (internal)
+-------------------------------------------------------------------------------
+Guidance is not a lock. Cue class .rw-nav-gate-cue. Consume world.nav only.
+Advance on systemLoaded, not jumpRequested. innerHTML forbidden.
+KeyG not auto-snapped. Readout in .rw-side-col above POS.
+Wave 84 markdown only. Serial after NAV-01 persist.
+
+PASS.
+
+-------------------------------------------------------------------------------
+6. Nits (not freeze bugs)
+-------------------------------------------------------------------------------
+- Inventory §1 still says NAV-02 "may propose extra fields on the same object"
+  (orchestrator law). Contract §0.3 repeats that law. Contract §1.4 / brief
+  freeze extra persist fields to **none this slice**. Not a hopIndex require.
+- designer-audit focus table still says "Major on PR order" while findings
+  list Status: resolved. Wording leftover; PR table is the freeze.
+- out/w84/nav02/verify.txt still records the old HIGH. Historical. Freeze
+  files are the later 18:25–18:30 set.
+
+-------------------------------------------------------------------------------
+7. Verdict
+-------------------------------------------------------------------------------
+hopIndex in brief+contract: rejected only. OK.
+Consume: { dest, path, remaining, status: plotted|blocked|arrived }.
+nextTo = path[1]. Recalc is not persist.
+PR1: 180px + ellipsis; hide docked/jumping.
+No src / wishlist / PROGRESS writes by this family.
+
+RESULT: CLEAN
+)

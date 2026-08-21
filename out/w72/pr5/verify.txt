@@ -1,0 +1,67 @@
+## Status
+CLEAN
+
+## What I tested
+Ran `npm run test:boot` (node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs). Exit 1. Log: `out/w72/pr5/boot.log`.
+
+`wave72 bio:` JSON has 47 keys. Every value is true. No `WAVE72 BIO FAIL`.
+
+Known FAIL lines (8, same WAVE4/26/35 cluster; WAVE72 is not among them):
+1. WAVE4 FENCE FAVOR FAIL
+2. WAVE26 FERRY QUOTE FAIL
+3. WAVE26 HAUL QUOTE FAIL
+4. WAVE26 LANE DELIVERY FAIL
+5. WAVE26 OLD-SAVE FALLBACK FAIL
+6. WAVE26 SAVE FIELDS FAIL
+7. WAVE26 RESTORE FAIL
+8. WAVE35 HAUL GATE DELIVERY FAIL
+
+Read the WAVE72 block in `scripts/boot-test.mjs` (from line 14515) against `out/w70/bio/shared-contract.md` §12 PR5 and §15 items 2–6. Also checked §7.4 warning-before-write, §7.5 standing, §9 HUD, §10 events, §0.12 no innerHTML.
+
+Git: PR5 worker added only the WAVE72 block in `scripts/boot-test.mjs`. Dirty `src/` files are PR3 graft impl (`hangar.js`, `shipyard-desk.js`, `station.js`). No WAVE72 strings in `src/`. Verifier did not edit `src/`.
+
+Live Chrome (puppeteer-core, Vite `127.0.0.1:5180`): dock `gc_auction`, Digit0 Shipyard, Yard buy plated light, Hangar Digit4 mount, Offer graft, warning still, Esc cancel, Offer again, Confirm graft, remount living starter. All 16 live pins true. Stills under `out/w72/pr5/live/`.
+
+## Merge-law checklist
+- §12 PR5 / §15.2 Starter swim: live `ctx.ship.living` has swim / breath / heartbeat / base; `makeLivingHull` is a function. PASS (`swim.*`).
+- §12 PR5 / §15.3 HUD never writes kind: `hud.js` has no `player.hullKind =` and no `.grafted`. Family uses `p.hullKind ===` reads only. `last.kind = p0.hullKind` caches a read. Built+grafted `hudFamily` is `mech`. PASS (`hud.*`). Regex `player.hullKind\s*=` would also match `===`; current code uses `p.hullKind`. A write to `p.hullKind` would miss the regex. File read confirms no write.
+- §12 PR5 / §15.5 Graft warning before debit: live Offer shows `GRAFT_WARN` and Confirm; credits stay 42000 through Offer, Esc, and Confirm. Harness `graftWarnShown` / `graftArmedNoWrite` / `graftCredits`. PASS. Harness `graftArmedCredits` compares the same local twice (always true). Live and `graftCredits` still prove no debit.
+- §12 PR5 / §15.5 Beautiful standing: confirm sets standing ≤ −10. Restore of a built grafted row caps from 4 to ≤ −10. Living grafted tamper drops the flag and does not cap. PASS (`graftStanding`, `restoreCap`, `restoreLivingDrop`).
+- §15.6 Beautiful/Unknowables omit frigate; Freehold control keeps it. PASS (`omit.*`).
+- §12 PR2 leftover: Beautiful buy adds a living row, no remount, starter stays living. PASS (`buy.*`).
+- §7.3 / Unknowables refuse: banner dock refuses `banner`; Unknowables row at Gilded refuses `living`. PASS (`unkBanner`, `unkRow`).
+- §10 / Digit 0 last service: `DOCK_KEY_SERVICES` length 10, last key `shipyard`, no extra graft/growth service. Live Digit0 opens SHIPYARD. Hangar pane is Digit1. PASS (`src.lastShipyard`, `src.keyCount`, `src.noNewService`, `digit0Shipyard`).
+- §0.12 / §10: no `innerHTML` in `shipyard-desk.js`. No new `ctx.js` events `grafted` / `abomination` / `hullKindChanged`. Warn copy is in desk source. PASS (`src.noInnerHtml`, `src.warn`, `src.ctx*`).
+- Extra: Gilded travel restores hangar, credits, reputation, hullKind, `remountPlayerHull`, `currentSystem` via `systemLoaded`, and dock if previously docked. PASS (lines 14928–14948).
+- Extra: after live graft the pin remounts the starter and asserts no Offer graft; restore then puts the saved living hangar back. Live still 11 shows `hull_starter` mounted and no Offer graft. PASS (`livingNoOffer`).
+- Extra: Esc on the same plated hull after deleting `grafted` (no second buy). Code-review accepted this. Live Esc on an ungrafted plated hull clears Confirm and leaves Offer. PASS (`escClears`, `escNoGrafted`, `escStanding`).
+- §12 PR5 does not land wishlist / PROGRESS edits. Verifier did not change those files. PASS.
+- Did not fix WAVE4 / WAVE26 / WAVE35.
+
+## Bugs found
+None.
+
+Pin-honesty notes (non-blocking):
+- `graftArmedCredits` is tautological in the harness. `graftCredits` and the live stills cover no-debit.
+- HUD grep is `player.hullKind\s*=`, not every assignment form. Manual `hud.js` read still shows no write.
+- Esc pin reuses the confirmed hull after `delete grafted` instead of a second yard buy.
+
+## Environmental issues
+None for the required harness. First live park sat at the `gc_auction` gate hail (verifier script). Second park used station+36 offset like `dockAtCurrentStation`; all live pins true.
+
+Graph resolve matched `hermes-hal/workflow-software-delivery` (read, run real tests, document). Followed. Did not edit `src/`.
+
+## Evidence
+- Boot command: `npm run test:boot`
+- Boot result: exit 1, 8 known errors, `wave72 bio:` all true, no `WAVE72 BIO FAIL`
+- Boot log: `out/w72/pr5/boot.log`
+- WAVE72 source: `scripts/boot-test.mjs` lines 14515–14978
+- Contract: `out/w70/bio/shared-contract.md` §12 PR5, §15.2–6
+- Git dirty src (PR3, not PR5): `src/game/hangar.js`, `src/systems/shipyard-desk.js`, `src/systems/station.js`
+- Live script: `out/w72/pr5/live/browser-graft.mjs`
+- Live log: `out/w72/pr5/live/browser-graft.log` (`ALL LIVE PINS TRUE`)
+- Live stills: `out/w72/pr5/live/01-gilded-dock.png` … `11-living-no-offer.png`
+- Warning copy on still 08: `Beautiful Ones become immediate enemies. Patrols hunt at standing -10 or worse.`
+- Confirm still 10: `Tissue sealed to the hull.` Credits 42000. Offer gone.
+- Living still 11: mounted `hull_starter` / she. No Offer graft.
+- Worker reviews: `out/w72/pr5/code-review.md`, `out/w72/pr5/security-review.md`

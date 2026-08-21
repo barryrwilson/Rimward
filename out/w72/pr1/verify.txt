@@ -1,0 +1,54 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-ran `node --import ./scripts/with-css-stub.mjs out/w72/pr1/probe.mjs`. Saved stdout to `out/w72/pr1/probe-recheck.log`. Exit 0. All worker pins true. Log ends `W72 PR1 PROBE PASS 0`.
+- Read `src/game/hangar.js` grafted helpers, `sanitizeHangarRecord`, `packLiveHull`, `buildStarterRow`, `writeStarterHangar`, `healPlayerHullKind`, `syncMountedToPlayer`, `loadMountedRow`, `switchTo`, `applyMountedFlight`.
+- Compared those paths to merge law `out/w70/bio/shared-contract.md` §7.2 and §2.
+- Ran extra edges in `out/w72/pr1/edge-probe.mjs` (log `out/w72/pr1/edge-probe.log`).
+- Confirmed working-tree src edits: only `src/game/hangar.js` (`+37 / -3`). `hud.js`, `ship.js`, `shipyard.js`, `station.js`, and `state.js` have empty diffs.
+- Grepped `hangar.js`: no `world.reputation`, no `HOSTILE_STANDING`, no `innerHTML`, no nested `grafts:` persist.
+
+## Merge-law checklist
+- §7.2 `grafted` allowlist `own-key === true` only: pass (`graftedOwnTrue`).
+- Else omit (`'yes'`, `1`, `'true'`, `'grafted'`, `false`, `{}`, `[]`, boxed `Boolean(true)`, `null`, `undefined`, missing key): pass.
+- Living + `grafted: true` drops the flag, keeps `hullKind: 'living'`: pass.
+- Unknowables + `grafted: true` on hangar sanitize: `hullKind: 'living'`, flag dropped: pass (`applyUnknowablesKind` inside `applyGraftedAllowlist`).
+- No nested `grafts: []` persist: pass. Extra keys (`grafts`, `extraKey`, row `reputation`) are not copied onto the fresh row literal.
+- Park copies player `grafted: true` onto a built row, then re-enters sanitize: pass.
+- Player `grafted: 'true'` (string) does not pack as true: pass.
+- `switchTo` built grafted row copies `player.grafted === true`. `switchTo` living row deletes it: pass.
+- Sync and `healPlayerHullKind` copy the same rule: pass.
+- Prototype / constructor / reserved hull ids still return null: pass.
+- Proto pollution `Object.prototype.grafted = true` does not stamp a row: pass (worker probe).
+- Starter migrate / rebuild starter: living, no grafted, player flag deleted: pass.
+- HUD does not write `grafted` / `hullKind` in this PR: pass (HUD file not edited; `hud.js` has no `grafted`).
+- Hostility / Beautiful standing not written in this PR: pass. `hangar.js` does not assign `ctx.world.reputation`. Probe mixed hangar leaves the reputation bag unchanged.
+- Meshes, prices, graft desk, HUD family: out of PR1. Not landed. Not flagged.
+- PR3 ownership-invariant hostility: out of PR1. Not flagged.
+
+## Extra edges
+- `grafted: 'true'` / `{}` / `[]` / boxed true / `null` / `undefined`: omitted.
+- Object.assign-style extras on a grafted buy row: unknown keys dropped; `grafted: true` kept.
+- `writeMountedGear({ grafted: false, grafts: [] })`: ignores those keys; mounted built row keeps `grafted: true`.
+- `addPurchasedHull` does not write reputation.
+- Unset `hullKind` + `grafted: true`: row has no `hullKind` and still keeps `grafted: true` (see follow-on).
+- Isolated `applyMountedFlight` on Unknowables + `grafted: true`: sets `hullKind: 'living'` and leaves `player.grafted` (see follow-on). Restore/freshStart still heal first.
+
+## Bugs found
+None in PR1 persist scope.
+
+Known follow-ons (not scored as PR1 bugs):
+- Unset `hullKind` keeps `grafted: true`. Contract §7.2 drops the flag when `hullKind === 'living'`, not when the key is omitted. HUD/mesh treat unset as living. Worker reviews already named this. Optional later: drop unless `hullKind === 'built'`.
+- `applyMountedFlight` forces Unknowables `hullKind: 'living'` and does not delete `player.grafted`. Contract §2 lists this function as a hullKind writer. Live restore runs `healPlayerHullKind` then `syncMountedToPlayer` before it, so save restore is clean. Isolated call is the only miss.
+
+## Environmental issues
+None. Node + CSS stub probe completed with `PASS`. Edge probe exit 1 is only the isolated `applyMountedFlight` follow-on pin.
+
+## Evidence
+- Logs: `C:\Projects\WebSim\out\w72\pr1\probe-recheck.log`, `C:\Projects\WebSim\out\w72\pr1\edge-probe.log`
+- Extra probe: `C:\Projects\WebSim\out\w72\pr1\edge-probe.mjs`
+- Worker probe: `C:\Projects\WebSim\out\w72\pr1\probe.mjs` → `W72 PR1 PROBE PASS 0`
+- Code: `C:\Projects\WebSim\src\game\hangar.js` (`graftedOwnTrue` 81–83, `applyGraftedAllowlist` 93–97, pack 226, heal 362, sync 382, load 610, `applyMountedFlight` 669–674)
+- Git: only `src/game/hangar.js` dirty in src
+- Contract: `C:\Projects\WebSim\out\w70\bio\shared-contract.md` §2, §7.2, §12 PR1 row

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { U } from './state.js';
+import { copyDataCargoEntry, dataRowsMatch, isDataCargo } from './data-trade.js';
 
 /**
  * Cargo pods — shared infrastructure (orchestrator-owned).
@@ -483,10 +484,14 @@ function cargoRowsMatch(held, incoming) {
       && held.faction === incoming.faction
       && normalizeSurvivorSource(held.source) === normalizeSurvivorSource(incoming.source);
   }
+  if (isDataCargo(held) || isDataCargo(incoming)) {
+    return dataRowsMatch(held, incoming);
+  }
   return held.commodity === incoming.commodity;
 }
 
 function copyCargoEntry(c) {
+  if (isDataCargo(c)) return copyDataCargoEntry(c);
   const row = { commodity: c.commodity, units: c.units };
   if (isSurvivorCargo(c)) {
     if (!isFactionKey(c.faction)) return null;
@@ -497,7 +502,7 @@ function copyCargoEntry(c) {
   return row;
 }
 
-/** Scoop merge: survivors stack only on matching faction+source. Empty contents add nothing. */
+/** Scoop merge. Survivors stack on faction+source; data stacks on commodity+source+originFaction. */
 export function mergePodContents(cargo, contents) {
   if (!contents || contents.length === 0) return;
   for (let i = 0; i < contents.length; i++) {

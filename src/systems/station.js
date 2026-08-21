@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES } from '../game/state.js';
+import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS } from '../game/state.js';
 import * as pods from '../game/pods.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
@@ -19,8 +19,8 @@ import { lamplighterStation } from './stations/lamplighter.js';
 import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
-import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
-import { writeMountedGear } from '../game/hangar.js';
+import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
+import { writeMountedGear, applyAbominationStanding } from '../game/hangar.js';
 import {
   LAUNCHER_IDS,
   TURRET_IDS,
@@ -31,7 +31,49 @@ import {
   launcherAmmoMax,
 } from '../game/weapon-fit.js';
 import { trafficLots, applySurvivorSale } from '../game/trafficking.js';
-import { requestAutosave } from '../game/save.js';
+import { requestAutosave, stripControlChars, NAME_MAX } from '../game/save.js';
+import {
+  DATA_CRYSTAL,
+  DATA_CUBE,
+  DATA_LABELS,
+  DATA_SOURCES,
+  DATA_ORIGIN_FACTIONS,
+  ARCHIVE_OWN_UU,
+  ARCHIVE_RIVAL_UU,
+  LAUNDER_UU,
+  isDataCommodity,
+  isDataCargo,
+  isDataSource,
+  isDataOriginFaction,
+  dataCommodityLabel,
+  sanitizeDataCargoRow,
+  copyDataCargoEntry,
+  dataRowsMatch,
+  standingRead,
+  archiveFilePrice,
+  addDataCargoRow,
+  removeDataCargoUnits,
+  launderDataLot,
+} from '../game/data-trade.js';
+import {
+  RESTITUTION_UU,
+  offendedFaction,
+  restitutionOffered,
+  restitutionShort,
+  applyRestitution,
+} from '../game/restitution.js';
+import {
+  CHAIN_ORIGIN,
+  chainEmployerKeys,
+  parseChainId,
+  chainDestSystem,
+  chainEmployerFaction,
+  chainGrantSpec,
+  chainStandingGate,
+  chainCardCopy,
+  makeChainJob,
+  liveChainForEmployer,
+} from '../game/jobs-chains.js';
 
 /**
  * Station — identity driven by SYSTEMS[ctx.world.currentSystem].station
@@ -167,11 +209,29 @@ const DEFAULT_ACE_BOUNTY = 2500;
 const PIRATE_BOUNTY_CAP = 2; // max pirate bounty cards per system's board
 const PIRATE_BOUNTY_FALLBACK = 400; // UU, until world.js prices every pirate
 const MINING_SLOTS_PER_SYSTEM = 2;
+const TRADE_SLOTS_PER_SYSTEM = 2;
+const HUNT_SLOTS_PER_SYSTEM = 2;
+const PASSENGER_SLOTS_PER_SYSTEM = 2;
+const EXPLORE_SLOTS_PER_SYSTEM = 2;
+const ESPIONAGE_SLOTS_PER_SYSTEM = 2;
+const WAR_SLOTS_PER_SYSTEM = 2;
 const MINING_REP = 2;
+const SPY_EXPOSE_DELTA = -2;
+const WAR_TARGET_DELTA = -2;
 // Cite world.js WRECK_TTL (line 811). Do not import world.js.
 const MINING_DEADLINE = 600;
 let miningSeq = 0;
+let tradeSeq = 0;
+let huntSeq = 0;
+let passengerSeq = 0;
+let exploreSeq = 0;
+let spySeq = 0;
+let warSeq = 0;
+const HUNT_RECORD_ID = /^rec-(0|[1-9][0-9]*)$/;
+const HUNT_FALLBACK_NAME = 'the marked reaver';
+const WAR_FALLBACK_NAME = 'the marked patrol';
 const PAY_QUOTED_MAX = 20000;
+const TRADE_SEED = ['provisions', 'provisions', 'refinedMetals', 'rawOre'];
 const MINING_ORE_KEYS = [];
 for (const oreKey of Object.keys(ORE_TYPES)) {
   if (ORE_TYPES[oreKey].hardness <= 1 && Object.hasOwn(COMMODITIES, oreKey)) MINING_ORE_KEYS.push(oreKey);
@@ -997,6 +1057,501 @@ export function cancelTrafficPending(ui) {
   return true;
 }
 
+export function cancelDataPending(ui) {
+  if (!ui?.dataPending) return false;
+  ui.dataPending = null;
+  ui.notice = '';
+  return true;
+}
+
+export function cancelLaunderPending(ui) {
+  if (!ui?.launderPending) return false;
+  ui.launderPending = null;
+  ui.notice = '';
+  return true;
+}
+
+function factionDisplayName(key) {
+  if (typeof key !== 'string' || !key) return '';
+  if (!Object.hasOwn(FACTIONS, key)) return '';
+  const name = FACTIONS[key].name;
+  return typeof name === 'string' && name ? name : '';
+}
+
+function writeFactionStanding(ctx, faction, delta) {
+  if (typeof faction !== 'string' || !Object.hasOwn(FACTIONS, faction)) return false;
+  if (typeof delta !== 'number' || !Number.isFinite(delta)) return false;
+  const world = ctx?.world;
+  if (!world) return false;
+  let bag = world.reputation;
+  if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+    bag = {};
+    world.reputation = bag;
+  }
+  bag[faction] = standingRead(bag, faction) + delta;
+  return true;
+}
+
+function ladderNameAt(min) {
+  for (let i = 0; i < RANK_LADDER.length; i++) {
+    const rung = RANK_LADDER[i];
+    if (rung && rung.min === min && typeof rung.name === 'string') return rung.name;
+  }
+  return '';
+}
+
+export function standingLadderLines() {
+  const lines = [];
+  for (let i = 0; i < RANK_LADDER.length; i++) {
+    const rung = RANK_LADDER[i];
+    if (!rung || typeof rung.name !== 'string') continue;
+    lines.push(`${rung.name} ${rung.min}`);
+  }
+  return lines;
+}
+
+export function nextStandingRung(rep) {
+  const n = typeof rep === 'number' && Number.isFinite(rep) ? rep : 0;
+  for (let i = RANK_LADDER.length - 1; i >= 0; i--) {
+    const rung = RANK_LADDER[i];
+    if (rung && typeof rung.min === 'number' && rung.min > n) return rung;
+  }
+  return null;
+}
+
+export function standingMoveNotes() {
+  const freehold = factionDisplayName('freehold') || 'Freehold';
+  const beautiful = factionDisplayName('beautiful') || 'Beautiful';
+  return [
+    `Mining jobs add +${MINING_REP} standing to the dock flag.`,
+    `Patrol jobs add +${PATROL_REP} standing with ${freehold}.`,
+    `Rescue adds +${RESCUE.otherRep} standing, or +${RESCUE.playerKillRep} if your kill, with the matching faction.`,
+    'Sale at the People desk moves victim standing and Gilded standing by the live table.',
+    `Graft caps ${beautiful} at min(current, -10) while any grafted row remains.`,
+    `Restitution at the offended dock costs ${RESTITUTION_UU} UU and sets that flag to 0.`,
+  ];
+}
+
+export function standingLiveNotes() {
+  const freehold = factionDisplayName('freehold') || 'Freehold';
+  const beautiful = factionDisplayName('beautiful') || 'Beautiful';
+  const known = ladderNameAt(10) || 'Known';
+  const trusted = ladderNameAt(25) || 'Trusted';
+  const sworn = ladderNameAt(50) || 'Sworn';
+  const marked = ladderNameAt(-1000) || 'Marked';
+  const suspect = ladderNameAt(-25) || 'Suspect';
+  const fearOpen = ECON.fear.tributeOpensAt;
+  return [
+    'Patrols hunt at standing -10 or below.',
+    'Yards refuse a sale when standing is below 0.',
+    `Ace hulls need ${known} 10. Frigate hulls need ${trusted} 25.`,
+    `Yard discount ${known}+ 5/10/15% (${known}/${trusted}/${sworn}).`,
+    'Market sell pays +2% per positive rank tier.',
+    `Restricted locker: fear ${fearOpen} or more, or ${freehold} standing below -25 (${marked}; -25 ${suspect} does not open).`,
+    `Graft: ${beautiful} min(current, -10) while any grafted row remains.`,
+    `Mining +${MINING_REP} employer. Patrol +${PATROL_REP} ${freehold}.`,
+    `Restitution ${RESTITUTION_UU} UU at this dock when standing is below 0.`,
+  ];
+}
+
+function authoredUu(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+export function archiveDeskAllowed(faction) {
+  return faction === 'assembly' && Object.hasOwn(DETAIL_STATIONS, 'assembly');
+}
+
+function archiveHostile(ctx) {
+  return standingRead(ctx?.world?.reputation, 'assembly') < 0;
+}
+
+function liveFixerAtDock(ctx, systemId) {
+  if (systemId !== 'veridian' && systemId !== 'redmarch') return null;
+  const bag = ctx?.world?.contacts;
+  if (!Array.isArray(bag)) return null;
+  for (let i = 0; i < bag.length; i++) {
+    const c = bag[i];
+    if (!c || typeof c !== 'object' || Array.isArray(c)) continue;
+    if (!Object.hasOwn(c, 'system') || c.system !== systemId) continue;
+    if (!Object.hasOwn(c, 'role') || c.role !== 'fixer') continue;
+    return c;
+  }
+  return null;
+}
+
+function dataHoldLots(ctx) {
+  const cargo = ctx?.cargo;
+  const lots = [];
+  if (!Array.isArray(cargo)) return lots;
+  for (let i = 0; i < cargo.length; i++) {
+    const row = sanitizeDataCargoRow(cargo[i]);
+    if (!row || !isDataCargo(row)) continue;
+    let merged = false;
+    for (let j = 0; j < lots.length; j++) {
+      if (dataRowsMatch(lots[j], row)) {
+        lots[j].units += row.units;
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) {
+      const copy = copyDataCargoEntry(row);
+      if (copy) lots.push(copy);
+    }
+  }
+  return lots;
+}
+
+function liveDataLot(ctx, commodity, source, originFaction) {
+  if (!isDataCommodity(commodity) || !isDataSource(source) || !isDataOriginFaction(originFaction)) return null;
+  const lots = dataHoldLots(ctx);
+  for (let i = 0; i < lots.length; i++) {
+    const lot = lots[i];
+    if (lot.commodity === commodity && lot.source === source && lot.originFaction === originFaction) return lot;
+  }
+  return null;
+}
+
+function dataPendingKey(pending) {
+  if (!pending || typeof pending !== 'object' || Array.isArray(pending)) return null;
+  if (!Object.hasOwn(pending, 'verb') || !Object.hasOwn(pending, 'commodity')) return null;
+  if (!Object.hasOwn(pending, 'source') || !Object.hasOwn(pending, 'originFaction')) return null;
+  const verb = pending.verb;
+  if (verb !== 'buy' && verb !== 'sell' && verb !== 'refuse') return null;
+  const commodity = pending.commodity;
+  if (!isDataCommodity(commodity)) return null;
+  const source = isDataSource(pending.source) ? pending.source : null;
+  const originFaction = isDataOriginFaction(pending.originFaction) ? pending.originFaction : null;
+  if (!source || !originFaction) return null;
+  return { verb, commodity, source, originFaction };
+}
+
+export function confirmArchivePending(ctx, ui, dockFaction) {
+  if (!ui || ui.dataBusy || !ui.dataPending) return;
+  ui.dataBusy = true;
+  try {
+    const armed = dataPendingKey(ui.dataPending);
+    ui.dataPending = null;
+    if (!armed) {
+      ui.notice = 'The filing is no longer in the hold.';
+      return;
+    }
+    if (!archiveDeskAllowed(dockFaction)) {
+      ui.notice = 'The archive will not file here.';
+      return;
+    }
+    if (archiveHostile(ctx)) {
+      ui.notice = 'No sale.';
+      return;
+    }
+    if (armed.verb === 'refuse' || (armed.commodity === DATA_CUBE && armed.originFaction === 'assembly' && armed.source !== 'legal')) {
+      ui.notice = 'Captured cube — illegal in origin. Filing refused.';
+      return;
+    }
+    if (armed.verb === 'buy' && armed.commodity === DATA_CRYSTAL) {
+      ui.notice = 'The archive does not buy crystals.';
+      return;
+    }
+    const price = archiveFilePrice(armed.verb, armed.commodity, armed.source, armed.originFaction);
+    if (!authoredUu(price)) {
+      ui.notice = 'The archive will not file.';
+      return;
+    }
+    const world = ctx?.world;
+    if (!world || typeof world !== 'object') {
+      ui.notice = 'The archive will not file.';
+      return;
+    }
+    const credits = world.credits;
+    if (typeof credits !== 'number' || !Number.isFinite(credits)) {
+      ui.notice = 'Not enough UU.';
+      return;
+    }
+    if (armed.verb === 'buy') {
+      if (credits < price) {
+        ui.notice = 'Not enough UU.';
+        return;
+      }
+      const nextCredits = credits - price;
+      if (!(nextCredits >= 0) || !Number.isFinite(nextCredits)) {
+        ui.notice = 'Not enough UU.';
+        return;
+      }
+      if (!Array.isArray(ctx.cargo)) {
+        ui.notice = 'Hold is full.';
+        return;
+      }
+      if (cargoUsed(ctx) + 1 > holdCap(ctx)) {
+        ui.notice = 'Hold is full.';
+        return;
+      }
+      const added = addDataCargoRow(ctx.cargo, {
+        commodity: DATA_CUBE,
+        units: 1,
+        source: 'legal',
+        originFaction: 'assembly',
+      });
+      if (!added) {
+        ui.notice = 'Hold is full.';
+        return;
+      }
+      world.credits = nextCredits;
+      ui.notice = `The archive files a legal cube. ${price} UU.`;
+      requestAutosave(ctx);
+      return;
+    }
+    if (armed.verb !== 'sell') {
+      ui.notice = 'The archive will not file.';
+      return;
+    }
+    const lot = liveDataLot(ctx, armed.commodity, armed.source, armed.originFaction);
+    if (!lot) {
+      ui.notice = 'The filing is no longer in the hold.';
+      return;
+    }
+    if (!removeDataCargoUnits(ctx.cargo, armed, 1)) {
+      ui.notice = 'The filing is no longer in the hold.';
+      return;
+    }
+    const nextCredits = credits + price;
+    if (!Number.isFinite(nextCredits) || nextCredits < credits) {
+      addDataCargoRow(ctx.cargo, {
+        commodity: armed.commodity,
+        units: 1,
+        source: armed.source,
+        originFaction: armed.originFaction,
+      });
+      ui.notice = 'The archive will not file.';
+      return;
+    }
+    world.credits = nextCredits;
+    const label = dataCommodityLabel(armed.commodity) || 'filing';
+    ui.notice = `The archive files the ${label.toLowerCase()}. ${price} UU.`;
+    requestAutosave(ctx);
+  } finally {
+    ui.dataBusy = false;
+  }
+}
+
+export function renderArchiveDesk(h, btn, panel, ctx, ui, dockFaction, redraw) {
+  if (!(ui?.level === 2 && ui.service === 'market')) return;
+  if (!archiveDeskAllowed(dockFaction)) return;
+  if (typeof DATA_LABELS !== 'object' || !Array.isArray(DATA_SOURCES) || !Array.isArray(DATA_ORIGIN_FACTIONS)) return;
+
+  const reduced = ctx?.settings?.reducedMotion === true;
+  h('div', 'screen-sub', panel, reduced ? 'ARCHIVE' : 'ARCHIVE — filing desk');
+  h('div', 'screen-note', panel,
+    reduced
+      ? `Legal cubes ${ARCHIVE_OWN_UU} UU. Rival crystals ${ARCHIVE_RIVAL_UU} UU.`
+      : `The archive files legal cubes at ${ARCHIVE_OWN_UU} UU and rival crystals at ${ARCHIVE_RIVAL_UU} UU.`);
+
+  if (archiveHostile(ctx)) {
+    h('div', 'screen-note', panel, 'No sale.');
+    return;
+  }
+
+  if (ui.dataPending) {
+    const armed = dataPendingKey(ui.dataPending);
+    let vanished = !armed;
+    if (armed && armed.verb === 'sell') {
+      vanished = !liveDataLot(ctx, armed.commodity, armed.source, armed.originFaction);
+    }
+    if (vanished) {
+      ui.dataPending = null;
+      ui.notice = 'The filing is no longer in the hold.';
+    } else if (armed) {
+      const label = dataCommodityLabel(armed.commodity) || 'filing';
+      const price = archiveFilePrice(armed.verb, armed.commodity, armed.source, armed.originFaction);
+      const meta = armed.verb === 'refuse' || !authoredUu(price)
+        ? 'Captured cube — illegal in origin. Filing refused.'
+        : `${label} · ${price} UU · Confirm filing`;
+      const box = h('div', 'screen-btnrow people-actions', panel);
+      h('div', 'screen-note', box, meta);
+      btn(box, 'Confirm filing', () => {
+        confirmArchivePending(ctx, ui, dockFaction);
+        redraw();
+      }, 'screen-btn screen-btn-warm');
+      btn(box, 'Esc — Cancel', () => {
+        cancelDataPending(ui);
+        redraw();
+      });
+      return;
+    }
+  }
+
+  const buyRow = h('div', 'screen-btnrow people-actions', panel);
+  h('div', 'screen-note', buyRow, `${dataCommodityLabel(DATA_CUBE)} · legal · ${ARCHIVE_OWN_UU} UU`);
+  btn(buyRow, reduced ? 'File buy' : 'File a legal cube', () => {
+    ui.dataPending = { verb: 'buy', commodity: DATA_CUBE, source: 'legal', originFaction: 'assembly' };
+    ui.notice = '';
+    redraw();
+  });
+  h('div', 'screen-note', panel, 'The archive does not buy crystals.');
+
+  const lots = dataHoldLots(ctx);
+  if (lots.length === 0) {
+    h('div', 'screen-note', panel, 'No crystal or cube in the hold.');
+    return;
+  }
+  for (let i = 0; i < lots.length; i++) {
+    const lot = lots[i];
+    const label = dataCommodityLabel(lot.commodity) || 'filing';
+    const originName = factionDisplayName(lot.originFaction) || 'archive';
+    const src = lot.source === 'legal' ? 'legal' : 'captured';
+    const price = archiveFilePrice('sell', lot.commodity, lot.source, lot.originFaction);
+    const line = reduced
+      ? `${lot.units} · ${label}`
+      : `${lot.units} ${label} · ${src} · ${originName}`;
+    if (lot.commodity === DATA_CUBE && lot.originFaction === 'assembly' && lot.source !== 'legal') {
+      h('div', 'screen-note', panel, `${line}. Captured cube — illegal in origin. Filing refused.`);
+      continue;
+    }
+    if (lot.commodity === DATA_CRYSTAL && lot.originFaction !== 'unknowables') {
+      h('div', 'screen-note', panel, `${line}. Filing refused.`);
+      continue;
+    }
+    if (lot.commodity === DATA_CUBE && !(lot.originFaction === 'assembly' && lot.source === 'legal')) {
+      h('div', 'screen-note', panel, `${line}. Filing refused.`);
+      continue;
+    }
+    if (!authoredUu(price)) {
+      h('div', 'screen-note', panel, `${line}. Filing refused.`);
+      continue;
+    }
+    const priced = `${line} · ${price} UU`;
+    const row = h('div', 'screen-btnrow people-actions', panel);
+    h('div', 'screen-note', row, priced);
+    btn(row, reduced ? 'File sell' : 'File from the hold', () => {
+      ui.dataPending = {
+        verb: 'sell',
+        commodity: lot.commodity,
+        source: lot.source,
+        originFaction: lot.originFaction,
+      };
+      ui.notice = '';
+      redraw();
+    });
+  }
+}
+
+function launderPendingKey(pending) {
+  if (!pending || typeof pending !== 'object' || Array.isArray(pending)) return null;
+  if (!Object.hasOwn(pending, 'commodity') || !Object.hasOwn(pending, 'source') || !Object.hasOwn(pending, 'originFaction')) return null;
+  const commodity = pending.commodity;
+  if (!isDataCommodity(commodity)) return null;
+  if (pending.source !== 'captured') return null;
+  if (!isDataOriginFaction(pending.originFaction)) return null;
+  return { commodity, source: 'captured', originFaction: pending.originFaction };
+}
+
+export function confirmLaunderPending(ctx, ui, systemId) {
+  if (!ui || ui.launderBusy || !ui.launderPending) return;
+  ui.launderBusy = true;
+  try {
+    const armed = launderPendingKey(ui.launderPending);
+    ui.launderPending = null;
+    if (!armed) {
+      ui.notice = 'The filing is no longer in the hold.';
+      return;
+    }
+    if (!liveFixerAtDock(ctx, systemId)) {
+      ui.notice = 'No fixer at this dock.';
+      return;
+    }
+    if (!authoredUu(LAUNDER_UU)) {
+      ui.notice = 'The fixer will not mark this lot.';
+      return;
+    }
+    const lot = liveDataLot(ctx, armed.commodity, armed.source, armed.originFaction);
+    if (!lot) {
+      ui.notice = 'The filing is no longer in the hold.';
+      return;
+    }
+    const world = ctx?.world;
+    const credits = world && world.credits;
+    if (typeof credits !== 'number' || !Number.isFinite(credits) || credits < LAUNDER_UU) {
+      ui.notice = 'Not enough UU.';
+      return;
+    }
+    const nextCredits = credits - LAUNDER_UU;
+    if (!(nextCredits >= 0) || !Number.isFinite(nextCredits)) {
+      ui.notice = 'Not enough UU.';
+      return;
+    }
+    if (!launderDataLot(ctx.cargo, armed)) {
+      ui.notice = 'The filing is no longer in the hold.';
+      return;
+    }
+    world.credits = nextCredits;
+    ui.notice = `The lot is marked legal. ${LAUNDER_UU} UU.`;
+    requestAutosave(ctx);
+  } finally {
+    ui.launderBusy = false;
+  }
+}
+
+export function renderFixerLaunder(h, btn, card, ctx, ui, systemId, contact, redraw) {
+  if (!(ui?.level === 2 && ui.service === 'people')) return;
+  if (!contact || typeof contact !== 'object' || Array.isArray(contact)) return;
+  if (!Object.hasOwn(contact, 'role') || contact.role !== 'fixer') return;
+  if (systemId !== 'veridian' && systemId !== 'redmarch') return;
+  if (!liveFixerAtDock(ctx, systemId)) return;
+  if (!authoredUu(LAUNDER_UU)) return;
+
+  const reduced = ctx?.settings?.reducedMotion === true;
+
+  if (ui.launderPending) {
+    const armed = launderPendingKey(ui.launderPending);
+    const lot = armed ? liveDataLot(ctx, armed.commodity, armed.source, armed.originFaction) : null;
+    if (!lot) {
+      ui.launderPending = null;
+      ui.notice = 'The filing is no longer in the hold.';
+    } else {
+      const label = dataCommodityLabel(armed.commodity) || 'filing';
+      const meta = reduced
+        ? `${label} · ${LAUNDER_UU} UU · Confirm mark`
+        : `${lot.units} ${label} · captured · ${LAUNDER_UU} UU · Confirm mark`;
+      const box = h('div', 'screen-btnrow people-actions', card);
+      h('div', 'people-note', box, meta);
+      btn(box, 'Confirm mark', () => {
+        confirmLaunderPending(ctx, ui, systemId);
+        redraw();
+      }, 'screen-btn screen-btn-warm');
+      btn(box, 'Esc — Cancel', () => {
+        cancelLaunderPending(ui);
+        redraw();
+      });
+      return;
+    }
+  }
+
+  const lots = dataHoldLots(ctx);
+  let listed = 0;
+  for (let i = 0; i < lots.length; i++) {
+    const lot = lots[i];
+    if (lot.source !== 'captured') continue;
+    const label = dataCommodityLabel(lot.commodity) || 'filing';
+    const originName = factionDisplayName(lot.originFaction) || 'archive';
+    const line = reduced
+      ? `${lot.units} · ${label} · ${LAUNDER_UU} UU`
+      : `${lot.units} ${label} · captured · ${originName} · ${LAUNDER_UU} UU`;
+    const row = h('div', 'screen-btnrow people-actions', card);
+    h('div', 'people-note', row, line);
+    btn(row, reduced ? 'Mark legal' : 'Mark this lot legal', () => {
+      ui.launderPending = {
+        commodity: lot.commodity,
+        source: lot.source,
+        originFaction: lot.originFaction,
+      };
+      ui.notice = '';
+      redraw();
+    });
+    listed += 1;
+  }
+  if (listed === 0) return;
+}
+
 // Outfitting Digit 8/9. Bind only when ui.level === 2 && ui.service ===
 // 'outfitting'. Digit 8 on the dock root is Launch; Digit 9 is Standing.
 let outfitBuyInFlight = false;
@@ -1388,9 +1943,11 @@ export function applySurvivorRescue(ctx, faction) {
   }
   const spokenSource = source === 'playerKill' ? 'playerKill' : 'other';
   const line = speakRescueLine(faction, spokenSource);
+  const fname = factionDisplayName(faction) || 'this dock';
+  const reason = `Standing +${repDelta} with the ${fname}.`;
   const payload = { faction, source: source === 'mixed' ? 'other' : source, count, repDelta, line };
   ctx.emit?.('survivorRescued', payload);
-  ctx.emit?.('commLine', { text: line, from: 'station' });
+  ctx.emit?.('commLine', { text: `${line} ${reason}`, from: 'station' });
   return payload;
 }
 export function addCargo(ctx, commodity, units) {
@@ -1416,6 +1973,7 @@ export function removeCargo(ctx, commodity, units) {
 }
 export function priceOf(ctx, key) {
   if (key === 'survivor') return 0;
+  if (isDataCommodity(key)) return 0;
   if (!isMarketCommodity(key)) return ctx.world?.prices?.[key] ?? 0;
   return ctx.world.prices[key] ?? COMMODITIES[key].base;
 }
@@ -1721,6 +2279,1248 @@ function maybeRefreshJobsBoard(ctx, ui, render) {
   if (ui.level === 2 && ui.service === 'jobs') render();
 }
 
+function isTradeCommodity(key) {
+  if (typeof key !== 'string') return false;
+  if (!Object.hasOwn(COMMODITIES, key)) return false;
+  if (COMMODITIES[key].bulk !== true) return false;
+  if (key === 'livingRock') return false;
+  return true;
+}
+
+function pickTradeCommodity() {
+  return TRADE_SEED[(Math.random() * TRADE_SEED.length) | 0];
+}
+
+function nextTradeId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `trade-${sysId}-`;
+  let n = tradeSeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  tradeSeq = n + 1;
+  return id;
+}
+
+function tradePayBase(ctx, commodity, need) {
+  return Math.round(need * priceOf(ctx, commodity) * HAUL_MARGIN);
+}
+
+function tradeDestId(ctx, origin) {
+  if (!Object.hasOwn(SYSTEMS, origin)) return null;
+  const dest = otherSystemId(ctx, origin);
+  if (!dest || dest === origin || !Object.hasOwn(SYSTEMS, dest)) return null;
+  return dest;
+}
+
+function tradeStationName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  return SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
+}
+
+function tradeCommodityName(key) {
+  return isTradeCommodity(key) ? COMMODITIES[key].name : 'cargo';
+}
+
+function makeTradeJob(ctx, sysId, slot) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const dest = tradeDestId(ctx, sysId);
+  if (!dest) return null;
+  const id = nextTradeId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const commodity = pickTradeCommodity();
+  const name = COMMODITIES[commodity].name;
+  const destName = tradeStationName(dest) ?? 'the far station';
+  const need = HAUL_UNITS;
+  return {
+    id,
+    kind: 'trade',
+    slot,
+    originSystem: sysId,
+    destSystem: dest,
+    commodity,
+    title: `Haul ${name}`,
+    detail: `Buy or hold ${need} ${name} and deliver to ${destName}.`,
+    reward: tradePayBase(ctx, commodity, need),
+    need,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function syncTradeJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  if (!tradeDestId(ctx, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const used = new Set();
+  let count = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'trade' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+  }
+  while (count < TRADE_SLOTS_PER_SYSTEM) {
+    const slot = used.has(0) ? 1 : 0;
+    const job = makeTradeJob(ctx, sysId, slot);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    count += 1;
+  }
+}
+
+function tradeSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function tradeSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'trade' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+/** Splice a trade row and push a fresh offered card for the same origin+slot. */
+function replaceTradeJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = tradeSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (tradeSlotTaken(jobs, origin, slot)) return;
+  if (!tradeDestId(ctx, origin)) return;
+  const next = makeTradeJob(ctx, origin, slot);
+  if (next) jobs.push(next);
+}
+
+function huntDisplayName(raw) {
+  if (typeof raw !== 'string') return '';
+  return stripControlChars(raw).trim().slice(0, NAME_MAX);
+}
+
+function isNamedGunName(name) {
+  if (typeof name !== 'string' || !name) return false;
+  if (name === ACES.hunter.name || name === ACES.illyx.name) return true;
+  const names = NAMED_GUNS.aspirants?.names;
+  if (!Array.isArray(names)) return false;
+  for (let i = 0; i < names.length; i++) {
+    if (names[i] === name) return true;
+  }
+  return false;
+}
+
+function huntIdOrigin(job) {
+  if (typeof job?.id !== 'string') return null;
+  const parts = job.id.split('-');
+  if (parts.length !== 3 || parts[0] !== 'hunt') return null;
+  const sysId = parts[1];
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  return sysId;
+}
+
+function huntBank(ctx, origin) {
+  const banks = ctx.world.recordBanks;
+  if (banks && typeof banks === 'object' && !Array.isArray(banks)
+    && Object.hasOwn(banks, origin) && Array.isArray(banks[origin])) {
+    return banks[origin];
+  }
+  if (ctx.world.currentSystem === origin && Array.isArray(ctx.world.records)) {
+    return ctx.world.records;
+  }
+  return null;
+}
+
+function huntRecordInBank(bank, recordId) {
+  if (!Array.isArray(bank) || typeof recordId !== 'string') return null;
+  for (let i = 0; i < bank.length; i++) {
+    const rec = bank[i];
+    if (rec && rec.id === recordId) return rec;
+  }
+  return null;
+}
+
+function resolveHuntRecord(ctx, job) {
+  const origin = huntIdOrigin(job);
+  if (!origin || job.originSystem !== origin) return null;
+  if (typeof job.recordId !== 'string' || !HUNT_RECORD_ID.test(job.recordId)) return null;
+  const rec = huntRecordInBank(huntBank(ctx, origin), job.recordId);
+  if (!rec) return null;
+  if (rec.role !== 'pirate' || rec.system !== origin) return null;
+  if (rec.role === 'ace' || rec.classKey === 'ace') return null;
+  return rec;
+}
+
+function huntCardName(ctx, job) {
+  const rec = resolveHuntRecord(ctx, job);
+  let name = huntDisplayName(rec && rec.name);
+  if (!name) name = huntDisplayName(job.target);
+  if (!name || HUNT_RECORD_ID.test(name)) return HUNT_FALLBACK_NAME;
+  return name;
+}
+
+function isEligibleHuntQuarry(rec, origin, boundIds) {
+  if (!rec || rec.role !== 'pirate') return false;
+  if (rec.classKey === 'ace' || rec.role === 'ace') return false;
+  if (rec.system !== origin) return false;
+  if (rec.state === 'dead' || rec.state === 'captured') return false;
+  if (typeof rec.id !== 'string' || !HUNT_RECORD_ID.test(rec.id)) return false;
+  const name = huntDisplayName(rec.name);
+  if (!name) return false;
+  if (isNamedGunName(rec.name) || isNamedGunName(name)) return false;
+  if (boundIds && boundIds.has(rec.id)) return false;
+  if (!(rec.bounty > 0)) return false;
+  return true;
+}
+
+function huntBoundRecordIds(jobs, origin, skipJob) {
+  const bound = new Set();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j === skipJob) continue;
+    if (j.kind !== 'hunt' || j.originSystem !== origin) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    if (typeof j.recordId === 'string' && j.recordId) bound.add(j.recordId);
+  }
+  return bound;
+}
+
+function pickHuntQuarry(bank, origin, boundIds) {
+  if (!Array.isArray(bank)) return null;
+  for (let i = 0; i < bank.length; i++) {
+    if (isEligibleHuntQuarry(bank[i], origin, boundIds)) return bank[i];
+  }
+  return null;
+}
+
+function nextHuntId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `hunt-${sysId}-`;
+  let n = huntSeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  huntSeq = n + 1;
+  return id;
+}
+
+function makeHuntJob(ctx, sysId, slot, rec) {
+  if (!Object.hasOwn(SYSTEMS, sysId) || !rec) return null;
+  const id = nextHuntId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const name = huntDisplayName(rec.name) || HUNT_FALLBACK_NAME;
+  const stationName = SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
+  const bounty = Math.round(rec.bounty);
+  return {
+    id,
+    kind: 'hunt',
+    slot,
+    originSystem: sysId,
+    recordId: rec.id,
+    target: name,
+    title: `Hunt ${name}`,
+    detail: `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`,
+    reward: bounty,
+    need: 1,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function huntQuarryGone(rec, origin) {
+  if (!rec) return true;
+  if (rec.state === 'dead' || rec.state === 'captured') return true;
+  if (rec.role !== 'pirate' || rec.system !== origin) return true;
+  if (rec.role === 'ace' || rec.classKey === 'ace') return true;
+  return false;
+}
+
+function syncHuntJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const bank = huntBank(ctx, sysId);
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    if (j.kind !== 'hunt' || j.originSystem !== sysId || j.state !== 'offered') continue;
+    const rec = resolveHuntRecord(ctx, j);
+    if (!rec || huntQuarryGone(rec, sysId) || !isEligibleHuntQuarry(rec, sysId, null)) {
+      jobs.splice(i, 1);
+    }
+  }
+  const used = new Set();
+  let count = 0;
+  const bound = huntBoundRecordIds(jobs, sysId, null);
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'hunt' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+  }
+  while (count < HUNT_SLOTS_PER_SYSTEM) {
+    const rec = pickHuntQuarry(bank, sysId, bound);
+    if (!rec) break;
+    const slot = used.has(0) ? 1 : 0;
+    const job = makeHuntJob(ctx, sysId, slot, rec);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    bound.add(rec.id);
+    count += 1;
+  }
+}
+
+function huntSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function huntSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'hunt' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+function replaceHuntJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = huntSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (huntSlotTaken(jobs, origin, slot)) return;
+  const bound = huntBoundRecordIds(jobs, origin, null);
+  const rec = pickHuntQuarry(huntBank(ctx, origin), origin, bound);
+  if (!rec) return;
+  const next = makeHuntJob(ctx, origin, slot, rec);
+  if (next) jobs.push(next);
+}
+
+function passengerDestId(ctx, origin) {
+  if (!Object.hasOwn(SYSTEMS, origin)) return null;
+  const dest = otherSystemId(ctx, origin);
+  if (!dest || dest === origin || !Object.hasOwn(SYSTEMS, dest)) return null;
+  return dest;
+}
+
+function passengerStationName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  return SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
+}
+
+function nextPassengerId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `passenger-${sysId}-`;
+  let n = passengerSeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  passengerSeq = n + 1;
+  return id;
+}
+
+function makePassengerJob(ctx, sysId, slot) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const dest = passengerDestId(ctx, sysId);
+  if (!dest) return null;
+  const id = nextPassengerId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const destName = passengerStationName(dest) ?? 'the far station';
+  return {
+    id,
+    kind: 'passenger',
+    slot,
+    originSystem: sysId,
+    destSystem: dest,
+    title: 'Escort passengers',
+    detail: `Carry a booked party to ${destName}. Paid on docking there.`,
+    reward: FERRY_REWARD,
+    need: 1,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function syncPassengerJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  if (!passengerDestId(ctx, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const used = new Set();
+  let count = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'passenger' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+  }
+  while (count < PASSENGER_SLOTS_PER_SYSTEM) {
+    const slot = used.has(0) ? 1 : 0;
+    const job = makePassengerJob(ctx, sysId, slot);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    count += 1;
+  }
+}
+
+function passengerSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function passengerSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'passenger' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+function replacePassengerJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = passengerSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (passengerSlotTaken(jobs, origin, slot)) return;
+  if (!passengerDestId(ctx, origin)) return;
+  const next = makePassengerJob(ctx, origin, slot);
+  if (next) jobs.push(next);
+}
+
+function exploreLandmarkOk(lm) {
+  if (!lm || typeof lm !== 'object' || Array.isArray(lm)) return false;
+  if (typeof lm.id !== 'string' || !lm.id) return false;
+  if (typeof lm.name !== 'string' || !lm.name.trim()) return false;
+  return true;
+}
+
+function pickExploreLandmark(lms, slot) {
+  if (!Array.isArray(lms) || lms.length === 0) return null;
+  const lm = lms[slot % lms.length];
+  return exploreLandmarkOk(lm) ? lm : null;
+}
+
+function resolveExploreSite(ctx, origin, slot) {
+  if (!Object.hasOwn(SYSTEMS, origin)) return null;
+  const n = slot === 1 ? 1 : 0;
+  const originLm = pickExploreLandmark(SYSTEMS[origin].landmarks, n);
+  if (originLm) return { siteSystem: origin, landmark: originLm };
+  const dest = otherSystemId(ctx, origin);
+  if (!dest || dest === origin || !Object.hasOwn(SYSTEMS, dest)) return null;
+  const destLm = pickExploreLandmark(SYSTEMS[dest].landmarks, n);
+  if (destLm) return { siteSystem: dest, landmark: destLm };
+  return null;
+}
+
+function exploreSiteName(site) {
+  if (!site || !exploreLandmarkOk(site.landmark)) return 'the landmark';
+  return site.landmark.name.trim();
+}
+
+function exploreSystemName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return 'the system';
+  const name = SYSTEMS[sysId].name;
+  return typeof name === 'string' && name.trim() ? name.trim() : 'the system';
+}
+
+function exploreStationName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return 'the dock';
+  return SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name ?? 'the dock';
+}
+
+function explorePayBase() {
+  return Math.round(RECOVERY_REWARD * HAUL_MARGIN);
+}
+
+function nextExploreId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `explore-${sysId}-`;
+  let n = exploreSeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  exploreSeq = n + 1;
+  return id;
+}
+
+function makeExploreJob(ctx, sysId, slot) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const site = resolveExploreSite(ctx, sysId, slot);
+  if (!site) return null;
+  const id = nextExploreId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const lmName = exploreSiteName(site);
+  const sysName = exploreSystemName(site.siteSystem);
+  return {
+    id,
+    kind: 'explore',
+    slot,
+    originSystem: sysId,
+    title: `Survey ${lmName}`,
+    detail: `Fly to ${lmName} in ${sysName}. Redock here to file.`,
+    reward: RECOVERY_REWARD,
+    need: 1,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function syncExploreJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const used = new Set();
+  let count = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'explore' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+  }
+  while (count < EXPLORE_SLOTS_PER_SYSTEM) {
+    const slot = used.has(0) ? 1 : 0;
+    if (!resolveExploreSite(ctx, sysId, slot)) break;
+    const job = makeExploreJob(ctx, sysId, slot);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    count += 1;
+  }
+}
+
+function exploreSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function exploreSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'explore' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+function replaceExploreJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = exploreSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (exploreSlotTaken(jobs, origin, slot)) return;
+  if (!resolveExploreSite(ctx, origin, slot)) return;
+  const next = makeExploreJob(ctx, origin, slot);
+  if (next) jobs.push(next);
+}
+
+function spyStationName(sysId, fallback) {
+  const label = fallback ?? 'the far dock';
+  if (!Object.hasOwn(SYSTEMS, sysId)) return label;
+  const raw = SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
+  if (typeof raw !== 'string') return label;
+  const cleaned = stripControlChars(raw).trim().slice(0, NAME_MAX);
+  return cleaned || label;
+}
+
+function spyEmployerName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return '';
+  return factionDisplayName(SYSTEMS[sysId].faction);
+}
+
+function spyDestFaction(origin, destId) {
+  if (!destId || !Object.hasOwn(SYSTEMS, destId) || !Object.hasOwn(SYSTEMS, origin)) return null;
+  const destFac = SYSTEMS[destId].faction;
+  if (typeof destFac !== 'string' || !Object.hasOwn(FACTIONS, destFac)) return null;
+  const employer = SYSTEMS[origin].faction;
+  if (typeof employer === 'string' && destFac === employer) return null;
+  return destFac;
+}
+
+function applySpyExpose(ctx, origin, destId) {
+  const destFac = spyDestFaction(origin, destId);
+  if (!destFac) return;
+  writeFactionStanding(ctx, destFac, SPY_EXPOSE_DELTA);
+}
+
+function espionageDestEligible(origin, dest) {
+  if (!origin || !dest || origin === dest) return false;
+  if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest)) return false;
+  const home = SYSTEMS[origin];
+  const far = SYSTEMS[dest];
+  if (!home || !far || !home.station || !far.station) return false;
+  const employer = home.faction;
+  const targetFac = far.faction;
+  if (typeof employer !== 'string' || !Object.hasOwn(FACTIONS, employer) || employer === 'unknowables') {
+    return false;
+  }
+  if (typeof targetFac !== 'string' || !Object.hasOwn(FACTIONS, targetFac) || targetFac === 'unknowables') {
+    return false;
+  }
+  return targetFac !== employer;
+}
+
+function originCanPostEspionage(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return false;
+  const home = SYSTEMS[sysId];
+  if (!home || !home.station) return false;
+  const employer = home.faction;
+  return typeof employer === 'string' && Object.hasOwn(FACTIONS, employer) && employer !== 'unknowables';
+}
+
+function espionageRivalList(origin) {
+  if (!originCanPostEspionage(origin)) return [];
+  const gateRivals = [];
+  const seen = new Set();
+  const gates = SYSTEMS[origin].gates;
+  if (Array.isArray(gates)) {
+    for (let i = 0; i < gates.length; i++) {
+      const gate = gates[i];
+      const to = gate && typeof gate.to === 'string' ? gate.to : null;
+      if (!to || seen.has(to)) continue;
+      if (!Object.hasOwn(SYSTEMS, to)) continue;
+      if (!espionageDestEligible(origin, to)) continue;
+      seen.add(to);
+      gateRivals.push(to);
+    }
+  }
+  if (gateRivals.length > 0) return gateRivals;
+  const allRivals = [];
+  const keys = Object.keys(SYSTEMS);
+  for (let i = 0; i < keys.length; i++) {
+    const to = keys[i];
+    if (!Object.hasOwn(SYSTEMS, to)) continue;
+    if (!espionageDestEligible(origin, to)) continue;
+    allRivals.push(to);
+  }
+  return allRivals;
+}
+
+function resolveEspionageDest(ctx, origin, slot) {
+  if (!Object.hasOwn(SYSTEMS, origin)) return null;
+  const n = slot === 1 ? 1 : 0;
+  const list = espionageRivalList(origin);
+  if (n >= list.length) return null;
+  const dest = list[n];
+  return dest && espionageDestEligible(origin, dest) ? dest : null;
+}
+
+function spyCardDestName(ctx, job, origin, slot) {
+  const dest = resolveEspionageDest(ctx, origin, slot);
+  if (dest) return spyStationName(dest, 'the far dock');
+  const fallback = job && typeof job.destSystem === 'string' ? job.destSystem : null;
+  if (fallback && Object.hasOwn(SYSTEMS, fallback)) return spyStationName(fallback, 'the far dock');
+  return 'the far dock';
+}
+
+function nextEspionageId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `spy-${sysId}-`;
+  let n = spySeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  spySeq = n + 1;
+  return id;
+}
+
+function makeEspionageJob(ctx, sysId, slot) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const dest = resolveEspionageDest(ctx, sysId, slot);
+  if (!dest) return null;
+  const id = nextEspionageId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const destName = spyStationName(dest, 'the far dock');
+  const homeName = spyStationName(sysId, 'the home dock');
+  const employerName = spyEmployerName(sysId);
+  const employerLine = employerName ? ` for ${employerName}` : '';
+  return {
+    id,
+    kind: 'espionage',
+    slot,
+    originSystem: sysId,
+    destSystem: dest,
+    title: `Spy at ${destName}`,
+    detail: `Gather at ${destName}. File at ${homeName}${employerLine}.`,
+    reward: explorePayBase(),
+    need: 1,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function syncEspionageJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  if (!originCanPostEspionage(sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    if (j.kind !== 'espionage' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered') continue;
+    const slot = j.slot === 1 ? 1 : (j.slot === 0 ? 0 : null);
+    const dest = slot == null ? null : resolveEspionageDest(ctx, sysId, slot);
+    if (!dest) jobs.splice(i, 1);
+  }
+  const used = new Set();
+  const bound = new Set();
+  let count = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'espionage' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+    const liveSlot = espionageSlotOf(j);
+    const liveDest = liveSlot == null ? null : resolveEspionageDest(ctx, sysId, liveSlot);
+    if (liveDest) bound.add(liveDest);
+  }
+  while (count < ESPIONAGE_SLOTS_PER_SYSTEM) {
+    const slot = used.has(0) ? 1 : 0;
+    const dest = resolveEspionageDest(ctx, sysId, slot);
+    if (!dest || bound.has(dest)) break;
+    const job = makeEspionageJob(ctx, sysId, slot);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    bound.add(dest);
+    count += 1;
+  }
+}
+
+function espionageSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function espionageSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'espionage' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+function replaceEspionageJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = espionageSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (espionageSlotTaken(jobs, origin, slot)) return;
+  if (!resolveEspionageDest(ctx, origin, slot)) return;
+  const next = makeEspionageJob(ctx, origin, slot);
+  if (next) jobs.push(next);
+}
+
+function warDestId(origin) {
+  if (!Object.hasOwn(SYSTEMS, origin)) return null;
+  const employer = SYSTEMS[origin].faction;
+  if (typeof employer !== 'string' || !Object.hasOwn(FACTIONS, employer)) return null;
+  const gates = SYSTEMS[origin].gates;
+  if (!Array.isArray(gates)) return null;
+  for (let i = 0; i < gates.length; i++) {
+    const gate = Object.hasOwn(gates, i) ? gates[i] : null;
+    const to = gate && typeof gate.to === 'string' ? gate.to : null;
+    if (!to) continue;
+    if (!Object.hasOwn(SYSTEMS, to)) continue;
+    if (to === origin) continue;
+    const far = SYSTEMS[to];
+    if (!far || !far.station) continue;
+    const target = far.faction;
+    if (typeof target !== 'string') continue;
+    if (!Object.hasOwn(FACTIONS, target)) continue;
+    if (target === employer) continue;
+    return to;
+  }
+  return null;
+}
+
+function warDisplayName(raw) {
+  if (typeof raw !== 'string') return '';
+  return stripControlChars(raw).trim().slice(0, NAME_MAX);
+}
+
+function warIdOrigin(job) {
+  if (typeof job?.id !== 'string') return null;
+  const parts = job.id.split('-');
+  if (parts.length !== 3 || parts[0] !== 'war') return null;
+  const sysId = parts[1];
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  return sysId;
+}
+
+function warBank(ctx, sysId) {
+  if (typeof sysId !== 'string' || !Object.hasOwn(SYSTEMS, sysId)) return null;
+  const banks = ctx.world.recordBanks;
+  if (banks && typeof banks === 'object' && !Array.isArray(banks)
+    && Object.hasOwn(banks, sysId) && Array.isArray(banks[sysId])) {
+    return banks[sysId];
+  }
+  if (ctx.world.currentSystem === sysId && Array.isArray(ctx.world.records)) {
+    return ctx.world.records;
+  }
+  return null;
+}
+
+function warBankExists(ctx, sysId) {
+  if (typeof sysId !== 'string' || !Object.hasOwn(SYSTEMS, sysId)) return false;
+  const banks = ctx.world.recordBanks;
+  if (banks && typeof banks === 'object' && !Array.isArray(banks)
+    && Object.hasOwn(banks, sysId) && Array.isArray(banks[sysId])) {
+    return true;
+  }
+  return ctx.world.currentSystem === sysId && Array.isArray(ctx.world.records);
+}
+
+function warRecordInBank(bank, recordId) {
+  if (!Array.isArray(bank) || typeof recordId !== 'string') return null;
+  for (let i = 0; i < bank.length; i++) {
+    const rec = bank[i];
+    if (rec && rec.id === recordId) return rec;
+  }
+  return null;
+}
+
+function isEligibleWarQuarry(rec, origin, dest, boundIds) {
+  if (!rec || !dest || rec.role !== 'patrol') return false;
+  if (rec.classKey === 'ace' || rec.role === 'ace') return false;
+  if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest)) return false;
+  const employer = SYSTEMS[origin].faction;
+  const targetFac = SYSTEMS[dest].faction;
+  if (typeof employer !== 'string' || !Object.hasOwn(FACTIONS, employer)) return false;
+  if (typeof targetFac !== 'string' || !Object.hasOwn(FACTIONS, targetFac)) return false;
+  if (targetFac === employer) return false;
+  if (typeof rec.faction !== 'string' || rec.faction !== targetFac) return false;
+  if (rec.system !== origin && rec.system !== dest) return false;
+  if (rec.system === dest && !dest) return false;
+  if (rec.state === 'dead' || rec.state === 'captured') return false;
+  if (typeof rec.id !== 'string' || !HUNT_RECORD_ID.test(rec.id)) return false;
+  const name = warDisplayName(rec.name);
+  if (!name) return false;
+  if (isNamedGunName(rec.name) || isNamedGunName(name)) return false;
+  if (boundIds && boundIds.has(rec.id)) return false;
+  return true;
+}
+
+function resolveWarRecord(ctx, job) {
+  const origin = warIdOrigin(job);
+  if (!origin || job.originSystem !== origin) return null;
+  const dest = warDestId(origin);
+  if (!dest) return null;
+  if (typeof job.recordId !== 'string' || !HUNT_RECORD_ID.test(job.recordId)) return null;
+  const rec = warRecordInBank(warBank(ctx, origin), job.recordId)
+    || warRecordInBank(warBank(ctx, dest), job.recordId);
+  if (!rec) return null;
+  if (rec.role !== 'patrol' || rec.role === 'ace' || rec.classKey === 'ace') return null;
+  if (rec.system !== origin && rec.system !== dest) return null;
+  if (rec.faction !== SYSTEMS[dest].faction) return null;
+  return rec;
+}
+
+function warCardName(ctx, job) {
+  const rec = resolveWarRecord(ctx, job);
+  let name = warDisplayName(rec && rec.name);
+  if (!name) name = warDisplayName(job.target);
+  if (!name || HUNT_RECORD_ID.test(name)) return WAR_FALLBACK_NAME;
+  return name;
+}
+
+function warBoundRecordIds(jobs, origin, skipJob) {
+  const bound = new Set();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j === skipJob) continue;
+    if (j.kind !== 'war' || j.originSystem !== origin) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    if (typeof j.recordId === 'string' && j.recordId) bound.add(j.recordId);
+  }
+  return bound;
+}
+
+function pickWarQuarry(ctx, origin, dest, boundIds) {
+  if (!dest) return null;
+  const destBank = warBank(ctx, dest);
+  if (Array.isArray(destBank)) {
+    for (let i = 0; i < destBank.length; i++) {
+      if (isEligibleWarQuarry(destBank[i], origin, dest, boundIds)) return destBank[i];
+    }
+  }
+  const originBank = warBank(ctx, origin);
+  if (Array.isArray(originBank)) {
+    for (let i = 0; i < originBank.length; i++) {
+      if (isEligibleWarQuarry(originBank[i], origin, dest, boundIds)) return originBank[i];
+    }
+  }
+  return null;
+}
+
+function nextWarId(jobs, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  const prefix = `war-${sysId}-`;
+  let n = warSeq;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i].id;
+    if (typeof id !== 'string' || !id.startsWith(prefix)) continue;
+    const rest = id.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]*)$/.test(rest)) continue;
+    const k = Number(rest);
+    if (k >= n) n = k + 1;
+  }
+  let id = `${prefix}${n}`;
+  while (jobs.some((j) => j.id === id)) {
+    n += 1;
+    id = `${prefix}${n}`;
+  }
+  warSeq = n + 1;
+  return id;
+}
+
+function makeWarJob(ctx, sysId, slot, rec) {
+  if (!Object.hasOwn(SYSTEMS, sysId) || !rec) return null;
+  const dest = warDestId(sysId);
+  if (!dest) return null;
+  const id = nextWarId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const name = warDisplayName(rec.name) || WAR_FALLBACK_NAME;
+  const destName = SYSTEMS[dest].station?.name ?? SYSTEMS[dest].name ?? 'the far dock';
+  const employerName = factionDisplayName(SYSTEMS[sysId].faction);
+  const targetName = factionDisplayName(SYSTEMS[dest].faction);
+  const employerLine = employerName ? ` ${employerName} pays on a witnessed kill.` : ' The posting dock pays on a witnessed kill.';
+  const flagLine = targetName ? ` for ${targetName}` : '';
+  return {
+    id,
+    kind: 'war',
+    slot,
+    originSystem: sysId,
+    destSystem: dest,
+    recordId: rec.id,
+    target: name,
+    title: `Strike ${name}`,
+    detail: `${name} patrols ${destName}${flagLine}.${employerLine}`,
+    reward: PATROL_REWARD,
+    need: 1,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + MINING_DEADLINE,
+  };
+}
+
+function warQuarryGone(rec, origin, dest) {
+  if (!rec) return true;
+  if (rec.state === 'dead' || rec.state === 'captured') return true;
+  if (rec.role !== 'patrol' || rec.role === 'ace' || rec.classKey === 'ace') return true;
+  if (rec.system !== origin && rec.system !== dest) return true;
+  return false;
+}
+
+function syncWarJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const dest = warDestId(sysId);
+  if (!dest) {
+    for (let i = jobs.length - 1; i >= 0; i--) {
+      const j = jobs[i];
+      if (j.kind !== 'war' || j.originSystem !== sysId || j.state !== 'offered') continue;
+      jobs.splice(i, 1);
+    }
+    return;
+  }
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    if (j.kind !== 'war' || j.originSystem !== sysId || j.state !== 'offered') continue;
+    const rec = resolveWarRecord(ctx, j);
+    const originBankOn = warBankExists(ctx, sysId);
+    const destBankOn = warBankExists(ctx, dest);
+    if ((originBankOn || destBankOn) && (!rec || warQuarryGone(rec, sysId, dest) || !isEligibleWarQuarry(rec, sysId, dest, null))) {
+      jobs.splice(i, 1);
+    }
+  }
+  const used = new Set();
+  let count = 0;
+  const bound = warBoundRecordIds(jobs, sysId, null);
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'war' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    count += 1;
+    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
+  }
+  while (count < WAR_SLOTS_PER_SYSTEM) {
+    const rec = pickWarQuarry(ctx, sysId, dest, bound);
+    if (!rec) break;
+    const slot = used.has(0) ? 1 : 0;
+    const job = makeWarJob(ctx, sysId, slot, rec);
+    if (!job) break;
+    jobs.push(job);
+    used.add(slot);
+    bound.add(rec.id);
+    count += 1;
+  }
+}
+
+function warSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function warSlotTaken(jobs, origin, slot) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'war' || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+function replaceWarJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const origin = job.originSystem;
+  const slot = warSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
+  if (warSlotTaken(jobs, origin, slot)) return;
+  const dest = warDestId(origin);
+  if (!dest) return;
+  const bound = warBoundRecordIds(jobs, origin, null);
+  const rec = pickWarQuarry(ctx, origin, dest, bound);
+  if (!rec) return;
+  const next = makeWarJob(ctx, origin, slot, rec);
+  if (next) jobs.push(next);
+}
+
+function syncChainJobs(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const keys = chainEmployerKeys();
+  for (let i = 0; i < keys.length; i++) {
+    const employerKey = keys[i];
+    const origin = Object.hasOwn(CHAIN_ORIGIN, employerKey) ? CHAIN_ORIGIN[employerKey] : null;
+    if (origin !== sysId) continue;
+    if (liveChainForEmployer(jobs, employerKey)) continue;
+    const employerFac = chainEmployerFaction(origin);
+    if (!chainStandingGate(ctx.world?.reputation, employerFac)) continue;
+    const job = makeChainJob(employerKey, 1);
+    if (job) jobs.push(job);
+  }
+}
+
+function chainCompleteDock(ctx, parsed) {
+  if (!parsed) return null;
+  if (parsed.step === 2) return chainDestSystem(parsed.employerKey, 2);
+  return Object.hasOwn(CHAIN_ORIGIN, parsed.employerKey) ? CHAIN_ORIGIN[parsed.employerKey] : null;
+}
+
+function grantChainSku(ctx, employerKey) {
+  const spec = chainGrantSpec(employerKey);
+  if (!spec) return false;
+  const classKey = mountedClassKey(ctx);
+  if (!canSeat(classKey, spec.seat)) return false;
+  if (spec.slot === 'launcher') writeMountedGear(ctx, { launcher: spec.id });
+  else if (spec.slot === 'turret') writeMountedGear(ctx, { turret: spec.id });
+  else return false;
+  return true;
+}
+
+function finishChainStep(ctx, job, parsed) {
+  const origin = job.originSystem;
+  const employer = chainEmployerFaction(origin);
+  writeFactionStanding(ctx, employer, MINING_REP);
+  const employerName = factionDisplayName(employer);
+  const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+  const jobs = ctx.world.jobs;
+  if (parsed.step < 3) {
+    const idx = Array.isArray(jobs) ? jobs.indexOf(job) : -1;
+    if (idx >= 0) jobs.splice(idx, 1);
+    const next = makeChainJob(parsed.employerKey, parsed.step + 1);
+    if (next && Array.isArray(jobs)) jobs.push(next);
+    const copy = chainCardCopy(parsed.employerKey, parsed.step);
+    ctx.emit('commLine', { text: `${copy.title} filed.${repLine}` });
+    return;
+  }
+  const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  if (pay > 0) ctx.world.credits += pay;
+  const granted = grantChainSku(ctx, parsed.employerKey);
+  const grantLine = granted ? ' Gear seated.' : '';
+  completeJob(ctx, job, `Chain sealed — ${pay} UU posted.${repLine}${grantLine}`);
+}
+
+function warPayComplete(ctx, job, rec) {
+  job.state = 'failed';
+  const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  if (pay > 0) ctx.world.credits += pay;
+  const origin = job.originSystem;
+  const faction = Object.hasOwn(SYSTEMS, origin) ? SYSTEMS[origin].faction : null;
+  if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+    writeFactionStanding(ctx, faction, MINING_REP);
+  }
+  const destId = origin ? warDestId(origin) : null;
+  const destFac = destId && Object.hasOwn(SYSTEMS, destId) ? SYSTEMS[destId].faction : null;
+  if (typeof destFac === 'string' && Object.hasOwn(FACTIONS, destFac) && destFac !== faction) {
+    writeFactionStanding(ctx, destFac, WAR_TARGET_DELTA);
+  }
+  rewardJobContacts(ctx, job);
+  const employerName = factionDisplayName(faction);
+  const destName = factionDisplayName(destFac);
+  const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+  const destLine = destName ? ` ${destName} standing ${WAR_TARGET_DELTA}.` : '';
+  const name = warDisplayName(rec.name) || WAR_FALLBACK_NAME;
+  ctx.emit('commLine', { text: `Strike confirmed: ${name} — ${pay} UU posted.${repLine}${destLine}` });
+  replaceWarJob(ctx, job);
+}
+
+function exploreVisitedHas(ctx, landmarkId) {
+  const mystery = ctx.world.mystery;
+  if (!mystery || typeof mystery !== 'object' || Array.isArray(mystery)) return false;
+  const visited = mystery.visited;
+  if (!Array.isArray(visited) || typeof landmarkId !== 'string' || !landmarkId) return false;
+  return visited.indexOf(landmarkId) !== -1;
+}
+
+function acceptedHuntClaimsName(ctx, name) {
+  if (typeof name !== 'string' || !name) return false;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return false;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'hunt' || j.state !== 'accepted') continue;
+    const rec = resolveHuntRecord(ctx, j);
+    if (rec && rec.name === name) return true;
+  }
+  return false;
+}
+
+function silenceOverlayForHunt(ctx, name) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs) || typeof name !== 'string' || !name) return;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'bounty' || j.state !== 'accepted') continue;
+    if (typeof j.id !== 'string' || !j.id.startsWith('bounty-pirate-')) continue;
+    if (j.target !== name) continue;
+    j.state = 'done';
+  }
+}
+
+function playerDestroyedName(ctx, name) {
+  const incidents = ctx.world.incidents || [];
+  for (let i = 0; i < incidents.length; i++) {
+    const inc = incidents[i];
+    if (inc && inc.kind === 'destroyed' && inc.name === name && inc.causer === 'player') return true;
+  }
+  return false;
+}
+
+function huntPayComplete(ctx, job, rec, huntPaidNames) {
+  job.state = 'failed';
+  const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  if (pay > 0) ctx.world.credits += pay;
+  const origin = job.originSystem;
+  const faction = Object.hasOwn(SYSTEMS, origin) ? SYSTEMS[origin].faction : null;
+  if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+    ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
+  }
+  rewardJobContacts(ctx, job);
+  const employerName = factionDisplayName(faction);
+  const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+  const name = huntDisplayName(rec.name) || HUNT_FALLBACK_NAME;
+  ctx.emit('commLine', { text: `Hunt confirmed: ${name} — ${pay} UU posted.${repLine}` });
+  if (rec.name) {
+    huntPaidNames.add(rec.name);
+    silenceOverlayForHunt(ctx, rec.name);
+  }
+  replaceHuntJob(ctx, job);
+}
+
 /** Board-visible jobs: offered pirate bounties post only at their home system. */
 function boardJobs(ctx, sysId) {
   const out = [];
@@ -1729,6 +3529,21 @@ function boardJobs(ctx, sysId) {
       && j.state === 'offered' && j.system !== sysId) continue;
     if (j.kind === 'recovery' && j.state === 'offered' && j.originSystem !== sysId) continue;
     if (j.kind === 'mining' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'trade' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'hunt' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'passenger' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'explore' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'espionage' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'war' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'chain' && j.state === 'done') continue;
+    if (j.kind === 'chain' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if (j.kind === 'chain' && j.state === 'offered') {
+      const parsed = parseChainId(j.id);
+      if (parsed && parsed.step === 1) {
+        const employer = chainEmployerFaction(j.originSystem);
+        if (!chainStandingGate(ctx.world?.reputation, employer)) continue;
+      }
+    }
     out.push(j);
   }
   return out;
@@ -1825,7 +3640,8 @@ function tickPatrolJob(ctx) {
         ctx.world.reputation.freehold += PATROL_REP;
         const pay = jobPay(ctx, PATROL_REWARD);
         ctx.world.credits += pay;
-        completeJob(ctx, job, `Patrol contract fulfilled — ${pay} UU posted.`);
+        const freeholdName = factionDisplayName('freehold') || 'Freehold';
+        completeJob(ctx, job, `Patrol contract fulfilled — ${pay} UU posted. ${freeholdName} standing +${PATROL_REP}.`);
         break; // one payout per contract, even for a multi-kill frame
       }
     }
@@ -1837,9 +3653,70 @@ function tickDeliveryJobs(ctx, ui, render) {
   const jobs = ctx.world.jobs;
   if (!Array.isArray(jobs)) return;
   let boardDirty = false;
+  const huntPaidNames = new Set();
   // Reverse so splice of mining rows does not skip an unvisited job.
   for (let i = jobs.length - 1; i >= 0; i--) {
     const job = jobs[i];
+    if (job.kind === 'hunt') {
+      if (job.state === 'failed') {
+        replaceHuntJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        const name = huntCardName(ctx, job);
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? `Hunt contract lapsed — the window on ${name} closed.`
+            : `Hunt posting withdrawn — the contract on ${name} is off the board.`,
+        });
+        replaceHuntJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const origin = huntIdOrigin(job);
+      const rec = resolveHuntRecord(ctx, job);
+      if (job.state === 'offered') {
+        if (!origin) {
+          job.state = 'failed';
+          replaceHuntJob(ctx, job);
+          boardDirty = true;
+        } else if (huntBank(ctx, origin) && huntQuarryGone(rec, origin)) {
+          job.state = 'failed';
+          replaceHuntJob(ctx, job);
+          boardDirty = true;
+        }
+        continue;
+      }
+      if (job.state !== 'accepted') continue;
+      if (!origin || !rec) {
+        job.state = 'failed';
+        replaceHuntJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.need !== 1) {
+        job.state = 'failed';
+        replaceHuntJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const dead = rec.state === 'dead' || rec.state === 'captured';
+      const witnessed = playerDestroyedName(ctx, rec.name);
+      if (!dead) continue;
+      if (!witnessed || huntPaidNames.has(rec.name)) {
+        job.state = 'failed';
+        replaceHuntJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      huntPayComplete(ctx, job, rec, huntPaidNames);
+      boardDirty = true;
+      continue;
+    }
     if (job.kind === 'mining') {
       if (job.state === 'failed') {
         replaceMiningJob(ctx, job);
@@ -1881,8 +3758,327 @@ function tickDeliveryJobs(ctx, ui, render) {
         ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
       }
       rewardJobContacts(ctx, job);
-      ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.` });
+      const employerName = factionDisplayName(faction);
+      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.${repLine}` });
       replaceMiningJob(ctx, job);
+      boardDirty = true;
+      continue;
+    }
+    if (job.kind === 'trade') {
+      if (job.state === 'failed') {
+        replaceTradeJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        const name = tradeCommodityName(job.commodity);
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? `Trade contract lapsed — the ${name} window closed.`
+            : `Trade posting withdrawn — the ${name} contract is off the board.`,
+        });
+        replaceTradeJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.state !== 'accepted' || !ctx.flags.docked) continue;
+      const origin = job.originSystem;
+      if (!Object.hasOwn(SYSTEMS, origin)) continue;
+      const dest = otherSystemId(ctx, origin);
+      if (ctx.world.currentSystem !== dest || dest === origin) continue;
+      const commodity = job.commodity;
+      if (!isTradeCommodity(commodity)) continue;
+      const need = job.need;
+      if (!Number.isInteger(need) || need !== HAUL_UNITS) continue;
+      if (holdUnits(ctx, commodity) < need) continue;
+      job.state = 'failed';
+      removeCargo(ctx, commodity, need);
+      const base = tradePayBase(ctx, commodity, need);
+      const pay = Number.isFinite(job.payQuoted)
+        ? clampJobPay(job.payQuoted)
+        : clampJobPay(jobPayFor(ctx, origin, base));
+      ctx.world.credits += pay;
+      const faction = SYSTEMS[origin].faction;
+      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
+      }
+      rewardJobContacts(ctx, job);
+      const employerName = factionDisplayName(faction);
+      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.${repLine}` });
+      replaceTradeJob(ctx, job);
+      boardDirty = true;
+      continue;
+    }
+    if (job.kind === 'passenger') {
+      if (job.state === 'failed') {
+        replacePassengerJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? 'Passenger contract lapsed — the escort window closed.'
+            : 'Passenger posting withdrawn — the escort contract is off the board.',
+        });
+        replacePassengerJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.state !== 'accepted' || !ctx.flags.docked) continue;
+      const origin = job.originSystem;
+      if (!Object.hasOwn(SYSTEMS, origin)) continue;
+      const dest = otherSystemId(ctx, origin);
+      if (ctx.world.currentSystem !== dest || dest === origin) continue;
+      if (job.need !== 1) {
+        job.state = 'failed';
+        replacePassengerJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      job.state = 'failed';
+      const pay = Number.isFinite(job.payQuoted)
+        ? clampJobPay(job.payQuoted)
+        : clampJobPay(jobPayFor(ctx, origin, FERRY_REWARD));
+      ctx.world.credits += pay;
+      const faction = SYSTEMS[origin].faction;
+      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
+      }
+      rewardJobContacts(ctx, job);
+      const employerName = factionDisplayName(faction);
+      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      ctx.emit('commLine', { text: `Party delivered — ${pay} UU posted at the dock.${repLine}` });
+      replacePassengerJob(ctx, job);
+      boardDirty = true;
+      continue;
+    }
+    if (job.kind === 'explore') {
+      if (job.state === 'failed') {
+        replaceExploreJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? 'Survey contract lapsed — the window closed.'
+            : 'Survey posting withdrawn — the contract is off the board.',
+        });
+        replaceExploreJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const origin = job.originSystem;
+      const slot = exploreSlotOf(job);
+      const site = slot == null || !Object.hasOwn(SYSTEMS, origin)
+        ? null
+        : resolveExploreSite(ctx, origin, slot);
+      if (live && !site) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? 'Survey contract lapsed — the window closed.'
+            : 'Survey posting withdrawn — the contract is off the board.',
+        });
+        replaceExploreJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.state !== 'accepted') continue;
+      if (!site) continue;
+      if (job.need !== 1) {
+        job.state = 'failed';
+        replaceExploreJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (exploreVisitedHas(ctx, site.landmark.id)) job.progress = 1;
+      if (job.progress < 1 || !ctx.flags.docked) continue;
+      if (ctx.world.currentSystem !== origin) continue;
+      job.state = 'failed';
+      const pay = Number.isFinite(job.payQuoted)
+        ? clampJobPay(job.payQuoted)
+        : clampJobPay(jobPayFor(ctx, origin, explorePayBase()));
+      ctx.world.credits += pay;
+      const faction = SYSTEMS[origin].faction;
+      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
+      }
+      rewardJobContacts(ctx, job);
+      const employerName = factionDisplayName(faction);
+      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      const lmName = exploreSiteName(site);
+      const dockName = exploreStationName(origin);
+      ctx.emit('commLine', { text: `Survey of ${lmName} filed at ${dockName} — ${pay} UU posted.${repLine}` });
+      replaceExploreJob(ctx, job);
+      boardDirty = true;
+      continue;
+    }
+    if (job.kind === 'espionage') {
+      if (job.state === 'failed') {
+        replaceEspionageJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      const origin = job.originSystem;
+      const slot = espionageSlotOf(job);
+      const dest = slot == null || !Object.hasOwn(SYSTEMS, origin)
+        ? null
+        : resolveEspionageDest(ctx, origin, slot);
+      const stampedDest = typeof job.destSystem === 'string' && Object.hasOwn(SYSTEMS, job.destSystem)
+        ? job.destSystem
+        : null;
+      const exposeDest = dest || stampedDest;
+      const employer = dest && Object.hasOwn(SYSTEMS, origin) ? SYSTEMS[origin].faction : null;
+      const targetFac = dest ? SYSTEMS[dest].faction : null;
+      const destOk = !!(dest && typeof employer === 'string' && Object.hasOwn(FACTIONS, employer)
+        && typeof targetFac === 'string' && Object.hasOwn(FACTIONS, targetFac)
+        && employer !== targetFac);
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        if (wasAccepted) applySpyExpose(ctx, origin, exposeDest);
+        job.state = 'failed';
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? 'Spy contract lapsed — the window closed.'
+            : 'Spy posting withdrawn — the contract is off the board.',
+        });
+        replaceEspionageJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (live && !destOk) {
+        const wasAccepted = job.state === 'accepted';
+        if (wasAccepted) applySpyExpose(ctx, origin, exposeDest);
+        job.state = 'failed';
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? 'Spy contract lapsed — the window closed.'
+            : 'Spy posting withdrawn — the contract is off the board.',
+        });
+        replaceEspionageJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.state !== 'accepted') continue;
+      if (!destOk) continue;
+      if (job.need !== 1) {
+        job.state = 'failed';
+        replaceEspionageJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (ctx.flags.docked && ctx.world.currentSystem === dest) job.progress = 1;
+      if (job.progress < 1 || !ctx.flags.docked) continue;
+      if (ctx.world.currentSystem !== origin) continue;
+      job.state = 'failed';
+      const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+      if (pay > 0) ctx.world.credits += pay;
+      if (typeof employer === 'string' && Object.hasOwn(FACTIONS, employer)) {
+        writeFactionStanding(ctx, employer, MINING_REP);
+      }
+      rewardJobContacts(ctx, job);
+      const employerName = factionDisplayName(employer);
+      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      const destName = spyStationName(dest, 'the far dock');
+      const homeName = spyStationName(origin, 'the home dock');
+      ctx.emit('commLine', {
+        text: `Intel from ${destName} filed at ${homeName} — ${pay} UU posted.${repLine}`,
+      });
+      replaceEspionageJob(ctx, job);
+      boardDirty = true;
+      continue;
+    }
+    if (job.kind === 'war') {
+      if (job.state === 'failed') {
+        replaceWarJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const live = job.state === 'offered' || job.state === 'accepted';
+      if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const wasAccepted = job.state === 'accepted';
+        job.state = 'failed';
+        const name = warCardName(ctx, job);
+        ctx.emit('commLine', {
+          text: wasAccepted
+            ? `War contract lapsed — the window on ${name} closed.`
+            : `War posting withdrawn — the contract on ${name} is off the board.`,
+        });
+        replaceWarJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const origin = warIdOrigin(job);
+      const dest = origin ? warDestId(origin) : null;
+      const rec = resolveWarRecord(ctx, job);
+      if (job.state === 'offered') {
+        if (!origin || !dest) {
+          job.state = 'failed';
+          replaceWarJob(ctx, job);
+          boardDirty = true;
+        } else if ((warBankExists(ctx, origin) || warBankExists(ctx, dest)) && warQuarryGone(rec, origin, dest)) {
+          job.state = 'failed';
+          replaceWarJob(ctx, job);
+          boardDirty = true;
+        }
+        continue;
+      }
+      if (job.state !== 'accepted') continue;
+      if (!origin || !dest || !rec) {
+        job.state = 'failed';
+        replaceWarJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      if (job.need !== 1) {
+        job.state = 'failed';
+        replaceWarJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      const dead = rec.state === 'dead' || rec.state === 'captured';
+      const witnessed = playerDestroyedName(ctx, rec.name);
+      if (!dead) continue;
+      if (!witnessed) {
+        job.state = 'failed';
+        replaceWarJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
+      warPayComplete(ctx, job, rec);
+      boardDirty = true;
+      continue;
+    }
+    if (job.kind === 'chain') {
+      const parsed = parseChainId(job.id);
+      if (!parsed) {
+        const idx = jobs.indexOf(job);
+        if (idx >= 0) jobs.splice(idx, 1);
+        boardDirty = true;
+        continue;
+      }
+      if (job.state !== 'accepted') continue;
+      const dockAt = chainCompleteDock(ctx, parsed);
+      if (!dockAt || !Object.hasOwn(SYSTEMS, dockAt)) continue;
+      if (job.need !== 1) continue;
+      if (!ctx.flags.docked) continue;
+      if (ctx.world.currentSystem !== dockAt) continue;
+      finishChainStep(ctx, job, parsed);
       boardDirty = true;
       continue;
     }
@@ -1905,6 +4101,7 @@ function tickDeliveryJobs(ctx, ui, render) {
           (i) => i.kind === 'destroyed' && i.name === job.target && i.causer === 'player',
         );
         if (!claimed) continue;
+        if (acceptedHuntClaimsName(ctx, job.target) || huntPaidNames.has(job.target)) continue;
         const bountyPay = jobPay(ctx, job.reward);
         ctx.world.credits += bountyPay;
         completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${bountyPay} UU posted.`);
@@ -2020,7 +4217,14 @@ export function initStation(ctx) {
     shipyardPane: SHIPYARD_PANE_HANGAR,
     trafficPending: null,
     trafficBusy: false,
+    dataPending: null,
+    dataBusy: false,
+    launderPending: null,
+    launderBusy: false,
     outfitPending: null,
+    graftPending: null,
+    restitutionPending: false,
+    restitutionBusy: false,
   };
 
   function h(tag, cls, parent, text) {
@@ -2170,6 +4374,10 @@ export function initStation(ctx) {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
   }
   function tryTrade(key, qty, buying) {
+    if (isDataCommodity(key)) {
+      ui.notice = 'Data lots file at the archive desk.';
+      return;
+    }
     if (!isMarketCommodity(key) || key === 'survivor') {
       ui.notice = 'This dock does not trade in people.';
       return;
@@ -2198,7 +4406,7 @@ export function initStation(ctx) {
     } else {
       if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return; }
       // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
-      const tier = rankFor(ctx.world.reputation[currentDef.faction] ?? 0).tier;
+      const tier = rankFor(standingRead(ctx.world?.reputation, currentDef.faction)).tier;
       let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
       // Wave 24: the faction service modifier composes multiplicatively AFTER
       // the epic multiplier (epic first, faction second) — generated systems
@@ -2272,6 +4480,7 @@ export function initStation(ctx) {
     if (currentService?.buyMult || currentService?.sellMult) {
       h('div', 'screen-note', panel, currentService.line);
     }
+    renderArchiveDesk(h, btn, panel, ctx, ui, currentDef.faction, render);
   }
 
   // ---- jobs ----
@@ -2308,6 +4517,266 @@ export function initStation(ctx) {
       const need = Number.isFinite(job.need) && job.need >= 1 ? job.need : FERRY_UNITS;
       job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, miningPayBase(ctx, job.commodity, need)));
       job.deadline = ctx.world.time + MINING_DEADLINE;
+    } else if (job.kind === 'trade') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const dest = otherSystemId(ctx, job.originSystem);
+      if (!dest || dest === job.originSystem || !Object.hasOwn(SYSTEMS, dest)) {
+        ui.notice = 'That posting has no far dock.';
+        render();
+        return;
+      }
+      if (!isTradeCommodity(job.commodity) || job.need !== HAUL_UNITS) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      job.destSystem = dest;
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, tradePayBase(ctx, job.commodity, HAUL_UNITS)));
+      job.deadline = ctx.world.time + MINING_DEADLINE;
+    } else if (job.kind === 'hunt') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const rec = resolveHuntRecord(ctx, job);
+      if (!rec || !isEligibleHuntQuarry(rec, job.originSystem, null)) {
+        ui.notice = 'That quarry is no longer on the board.';
+        render();
+        return;
+      }
+      if (!(rec.bounty > 0) || !Number.isFinite(rec.bounty)) {
+        ui.notice = 'That posting has no posted bounty.';
+        render();
+        return;
+      }
+      const pay = clampJobPay(jobPayFor(ctx, job.originSystem, Math.round(rec.bounty)));
+      if (!Number.isFinite(pay) || pay <= 0) {
+        ui.notice = 'That posting has no posted bounty.';
+        render();
+        return;
+      }
+      job.payQuoted = pay;
+      job.deadline = ctx.world.time + MINING_DEADLINE;
+      const name = huntDisplayName(rec.name);
+      if (name) job.target = name;
+    } else if (job.kind === 'passenger') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const dest = otherSystemId(ctx, job.originSystem);
+      if (!dest || dest === job.originSystem || !Object.hasOwn(SYSTEMS, dest)) {
+        ui.notice = 'That posting has no far dock.';
+        render();
+        return;
+      }
+      if (job.need !== 1) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      job.destSystem = dest;
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, FERRY_REWARD));
+      job.deadline = ctx.world.time + MINING_DEADLINE;
+    } else if (job.kind === 'explore') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const slot = exploreSlotOf(job);
+      if (slot == null || !resolveExploreSite(ctx, job.originSystem, slot)) {
+        ui.notice = 'That posting has no survey site.';
+        render();
+        return;
+      }
+      if (job.need !== 1) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, explorePayBase()));
+      job.deadline = ctx.world.time + MINING_DEADLINE;
+    } else if (job.kind === 'espionage') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const slot = espionageSlotOf(job);
+      const dest = slot == null ? null : resolveEspionageDest(ctx, job.originSystem, slot);
+      if (!dest) {
+        ui.notice = 'That posting has no far dock.';
+        render();
+        return;
+      }
+      if (job.need !== 1) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      const pay = clampJobPay(jobPayFor(ctx, job.originSystem, explorePayBase()));
+      if (!Number.isFinite(pay) || pay <= 0) {
+        ui.notice = 'That posting has no posted pay.';
+        render();
+        return;
+      }
+      job.destSystem = dest;
+      job.payQuoted = pay;
+      job.deadline = ctx.world.time + MINING_DEADLINE;
+      job.progress = 0;
+    } else if (job.kind === 'war') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      if (!Object.hasOwn(SYSTEMS, job.originSystem)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      const dest = warDestId(job.originSystem);
+      if (!dest) {
+        ui.notice = 'That posting has no far dock.';
+        render();
+        return;
+      }
+      const rec = resolveWarRecord(ctx, job);
+      if (!rec || !isEligibleWarQuarry(rec, job.originSystem, dest, null)) {
+        ui.notice = 'That quarry is no longer on the board.';
+        render();
+        return;
+      }
+      if (job.need !== 1) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      const pay = clampJobPay(jobPayFor(ctx, job.originSystem, PATROL_REWARD));
+      if (!Number.isFinite(pay) || pay <= 0) {
+        ui.notice = 'That posting has no posted pay.';
+        render();
+        return;
+      }
+      job.destSystem = dest;
+      job.payQuoted = pay;
+      job.deadline = ctx.world.time + MINING_DEADLINE;
+      job.progress = 0;
+      const name = warDisplayName(rec.name);
+      if (name) job.target = name;
+    } else if (job.kind === 'chain') {
+      if (job.state !== 'offered') {
+        render();
+        return;
+      }
+      const parsed = parseChainId(job.id);
+      if (!parsed) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      if (ctx.world.currentSystem !== job.originSystem) {
+        ui.notice = 'Take that contract at the posting dock.';
+        render();
+        return;
+      }
+      const origin = Object.hasOwn(CHAIN_ORIGIN, parsed.employerKey)
+        ? CHAIN_ORIGIN[parsed.employerKey]
+        : null;
+      if (!origin || job.originSystem !== origin || !Object.hasOwn(SYSTEMS, origin)) {
+        ui.notice = 'That posting has no home dock.';
+        render();
+        return;
+      }
+      if (parsed.step === 1) {
+        const employerFac = chainEmployerFaction(origin);
+        if (!chainStandingGate(ctx.world?.reputation, employerFac)) {
+          ui.notice = 'That posting is not open to you.';
+          render();
+          return;
+        }
+      }
+      if (parsed.step === 2) {
+        const dest = chainDestSystem(parsed.employerKey, 2);
+        if (!dest || dest === origin) {
+          ui.notice = 'That posting has no far dock.';
+          render();
+          return;
+        }
+        job.destSystem = dest;
+      }
+      if (job.need !== 1) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return;
+      }
+      const pay = clampJobPay(jobPayFor(ctx, origin, PATROL_REWARD));
+      if (!Number.isFinite(pay) || pay <= 0) {
+        ui.notice = 'That posting has no posted pay.';
+        render();
+        return;
+      }
+      job.payQuoted = pay;
+      job.progress = 0;
+      const copy = chainCardCopy(parsed.employerKey, parsed.step);
+      job.title = copy.title;
+      job.detail = copy.detail;
     }
     job.state = 'accepted';
     if (job.kind === 'haul') {
@@ -2326,10 +4795,19 @@ export function initStation(ctx) {
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
     // Wave 24: the faction's jobs line (same note-line precedent as the market).
     if (currentService?.jobPayMult) h('div', 'screen-note', panel, currentService.line);
+    h('div', 'screen-note', panel,
+      `Mining, hunt, passenger, explore, spy, and war credit the dock flag (+${MINING_REP}). Patrol credits ${factionDisplayName('freehold') || 'Freehold'} (+${PATROL_REP}).`);
     refreshBountyJob(ctx);
     syncPirateBounties(ctx, currentId);
     syncRecoveryJob(ctx, currentId);
     syncMiningJobs(ctx, currentId);
+    syncTradeJobs(ctx, currentId);
+    syncHuntJobs(ctx, currentId);
+    syncPassengerJobs(ctx, currentId);
+    syncExploreJobs(ctx, currentId);
+    syncEspionageJobs(ctx, currentId);
+    syncWarJobs(ctx, currentId);
+    syncChainJobs(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
     boardJobs(ctx, currentId).forEach((job, i) => {
       const card = h('div', 'job-card', panel);
@@ -2342,6 +4820,62 @@ export function initStation(ctx) {
         const need = Number.isFinite(job.need) && job.need >= 1 ? job.need : FERRY_UNITS;
         title = `Mine ${oreName}`;
         detail = `Cut reachable ${oreName} in this system's field and deliver ${need} units at ${stationName}.`;
+      } else if (job.kind === 'trade') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const destId = otherSystemId(ctx, originId);
+        const destName = tradeStationName(destId) ?? 'the far station';
+        const name = tradeCommodityName(job.commodity);
+        title = `Haul ${name}`;
+        detail = `Buy or hold ${HAUL_UNITS} ${name} and deliver to ${destName}.`;
+      } else if (job.kind === 'hunt') {
+        const name = huntCardName(ctx, job);
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const stationName = miningStationName(originId) ?? 'the dock';
+        title = `Hunt ${name}`;
+        detail = `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
+      } else if (job.kind === 'passenger') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const destId = otherSystemId(ctx, originId);
+        const destName = passengerStationName(destId) ?? 'the far station';
+        title = 'Escort passengers';
+        detail = `Carry a booked party to ${destName}. Paid on docking there.`;
+      } else if (job.kind === 'explore') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const slot = exploreSlotOf(job);
+        const site = slot == null ? null : resolveExploreSite(ctx, originId, slot);
+        const lmName = exploreSiteName(site);
+        const sysName = exploreSystemName(site ? site.siteSystem : originId);
+        title = `Survey ${lmName}`;
+        detail = `Fly to ${lmName} in ${sysName}. Redock here to file.`;
+      } else if (job.kind === 'espionage') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const slot = espionageSlotOf(job);
+        const destName = spyCardDestName(ctx, job, originId, slot);
+        const homeName = spyStationName(originId, 'the home dock');
+        const employerName = spyEmployerName(originId);
+        const employerLine = employerName ? ` for ${employerName}` : '';
+        title = `Spy at ${destName}`;
+        detail = `Gather at ${destName}. File at ${homeName}${employerLine}.`;
+      } else if (job.kind === 'war') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const destId = warDestId(originId);
+        const name = warCardName(ctx, job);
+        const destName = destId
+          ? (SYSTEMS[destId].station?.name ?? SYSTEMS[destId].name ?? 'the far dock')
+          : 'the far dock';
+        const employerName = factionDisplayName(Object.hasOwn(SYSTEMS, originId) ? SYSTEMS[originId].faction : '');
+        const targetName = destId ? factionDisplayName(SYSTEMS[destId].faction) : '';
+        const employerLine = employerName ? ` ${employerName} pays on a witnessed kill.` : ' The posting dock pays on a witnessed kill.';
+        const flagLine = targetName ? ` for ${targetName}` : '';
+        title = `Strike ${name}`;
+        detail = `${name} patrols ${destName}${flagLine}.${employerLine}`;
+      } else if (job.kind === 'chain') {
+        const parsed = parseChainId(job.id);
+        if (parsed) {
+          const copy = chainCardCopy(parsed.employerKey, parsed.step);
+          title = copy.title;
+          detail = copy.detail;
+        }
       }
       h('div', 'job-title', card, `${i + 1}. ${title}`);
       h('div', 'job-detail', card, detail);
@@ -2379,6 +4913,72 @@ export function initStation(ctx) {
           ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, base))
           : jobPayFor(ctx, originId, base);
         rewardLine = `Deliver ${need} ${oreName} here — pays ${est} UU`;
+      } else if (job.kind === 'trade') {
+        const commodity = isTradeCommodity(job.commodity) ? job.commodity : null;
+        const name = commodity ? COMMODITIES[commodity].name : 'cargo';
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const destId = otherSystemId(ctx, originId);
+        const destName = tradeStationName(destId) ?? 'the far station';
+        const base = commodity ? tradePayBase(ctx, commodity, HAUL_UNITS) : 0;
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, base))
+          : jobPayFor(ctx, originId, base);
+        rewardLine = `Deliver ${HAUL_UNITS} ${name} to ${destName} — pays ${est} UU`;
+      } else if (job.kind === 'hunt') {
+        const name = huntCardName(ctx, job);
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const rec = resolveHuntRecord(ctx, job);
+        const base = rec && rec.bounty > 0 && Number.isFinite(rec.bounty)
+          ? Math.round(rec.bounty)
+          : (Number.isFinite(job.reward) ? job.reward : 0);
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0)
+          : jobPayFor(ctx, originId, base);
+        rewardLine = `Hunt ${name} in this system — pays ${est} UU`;
+      } else if (job.kind === 'passenger') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const destId = otherSystemId(ctx, originId);
+        const destName = passengerStationName(destId) ?? 'the far station';
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, FERRY_REWARD))
+          : jobPayFor(ctx, originId, FERRY_REWARD);
+        rewardLine = `Escort to ${destName} — pays ${est} UU`;
+      } else if (job.kind === 'explore') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, explorePayBase()))
+          : jobPayFor(ctx, originId, explorePayBase());
+        rewardLine = `File the survey at this dock — pays ${est} UU`;
+      } else if (job.kind === 'espionage') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const slot = espionageSlotOf(job);
+        const destName = spyCardDestName(ctx, job, originId, slot);
+        const homeName = spyStationName(originId, 'the home dock');
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, explorePayBase()))
+          : jobPayFor(ctx, originId, explorePayBase());
+        rewardLine = job.state === 'accepted'
+          ? `File intel from ${destName} at ${homeName} — pays ${est} UU`
+          : `File intel from ${destName} here — pays ${est} UU`;
+      } else if (job.kind === 'war') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const name = warCardName(ctx, job);
+        const destId = warDestId(originId);
+        const destName = destId
+          ? (SYSTEMS[destId].station?.name ?? SYSTEMS[destId].name ?? 'the far dock')
+          : 'the far dock';
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0)
+          : jobPayFor(ctx, originId, PATROL_REWARD);
+        rewardLine = `Strike ${name} at ${destName} — pays ${est} UU`;
+      } else if (job.kind === 'chain') {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0)
+          : jobPayFor(ctx, originId, PATROL_REWARD);
+        rewardLine = job.state === 'accepted'
+          ? `Last paper pays ${est} UU at the home dock`
+          : `Chain paper — last step pays ${est} UU`;
       } else {
         rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
@@ -2389,7 +4989,9 @@ export function initStation(ctx) {
       }
       if (job.state === 'offered') {
         btn(card, `Accept (${i + 1})`, () => acceptJob(job));
-        if (job.kind === 'mining') {
+        if (job.kind === 'mining' || job.kind === 'trade' || job.kind === 'hunt'
+          || job.kind === 'passenger' || job.kind === 'explore' || job.kind === 'espionage'
+          || job.kind === 'war') {
           const left = miningTimeLeftLabel(ctx, job);
           if (left) h('div', 'job-state', card, left);
         }
@@ -2415,6 +5017,66 @@ export function initStation(ctx) {
           const left = miningTimeLeftLabel(ctx, job);
           stateLine = `ACCEPTED — deliver ${need} ${oreName} here (have ${have})`;
           if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'trade') {
+          const commodity = isTradeCommodity(job.commodity) ? job.commodity : null;
+          const name = commodity ? COMMODITIES[commodity].name : 'cargo';
+          const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+          const destId = otherSystemId(ctx, originId);
+          const destName = tradeStationName(destId) ?? 'the far station';
+          const have = commodity ? holdUnits(ctx, commodity) : 0;
+          const left = miningTimeLeftLabel(ctx, job);
+          stateLine = `ACCEPTED — deliver ${HAUL_UNITS} ${name} to ${destName} (have ${have})`;
+          if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'hunt') {
+          const name = huntCardName(ctx, job);
+          const left = miningTimeLeftLabel(ctx, job);
+          stateLine = `ACCEPTED — hunt ${name} in this system`;
+          if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'passenger') {
+          const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+          const destId = otherSystemId(ctx, originId);
+          const destName = passengerStationName(destId) ?? 'the far station';
+          const left = miningTimeLeftLabel(ctx, job);
+          stateLine = `ACCEPTED — dock at ${destName}`;
+          if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'explore') {
+          const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+          const slot = exploreSlotOf(job);
+          const site = slot == null ? null : resolveExploreSite(ctx, originId, slot);
+          const lmName = exploreSiteName(site);
+          const sysName = exploreSystemName(site ? site.siteSystem : originId);
+          const left = miningTimeLeftLabel(ctx, job);
+          stateLine = `ACCEPTED — survey ${lmName} in ${sysName}`;
+          if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'espionage') {
+          const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+          const slot = espionageSlotOf(job);
+          const destName = spyCardDestName(ctx, job, originId, slot);
+          const homeName = spyStationName(originId, 'the home dock');
+          const left = miningTimeLeftLabel(ctx, job);
+          if (job.progress >= 1) {
+            stateLine = `intel aboard — file at ${homeName}`;
+          } else {
+            stateLine = `ACCEPTED — gather at ${destName} then file at ${homeName}`;
+          }
+          if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'war') {
+          const name = warCardName(ctx, job);
+          const left = miningTimeLeftLabel(ctx, job);
+          stateLine = `ACCEPTED — strike ${name}`;
+          if (left) stateLine += ` · ${left}`;
+        } else if (job.kind === 'chain') {
+          const parsed = parseChainId(job.id);
+          if (parsed && parsed.step === 2) {
+            const destId = chainDestSystem(parsed.employerKey, 2);
+            const destName = destId
+              ? (SYSTEMS[destId].station?.name ?? SYSTEMS[destId].name ?? 'the far dock')
+              : 'the far dock';
+            stateLine = `ACCEPTED — dock at ${destName}`;
+          } else {
+            const homeName = spyStationName(job.originSystem, 'the home dock');
+            stateLine = `ACCEPTED — file at ${homeName}`;
+          }
         } else {
           stateLine = 'ACCEPTED';
         }
@@ -2781,18 +5443,89 @@ export function initStation(ctx) {
           render();
         });
       }
+      renderFixerLaunder(h, btn, card, ctx, ui, currentId, contact, render);
     }
   }
 
   // ---- standing (faction epic progress for this dock's flag, wave 6) ----
+  function cancelRestitutionPending() {
+    if (!ui.restitutionPending) return false;
+    ui.restitutionPending = false;
+    ui.notice = '';
+    return true;
+  }
+
+  function confirmRestitutionPay() {
+    if (ui.restitutionBusy) return;
+    ui.restitutionBusy = true;
+    try {
+      const sysId = ctx.world.currentSystem;
+      const result = applyRestitution(ctx, sysId);
+      ui.restitutionPending = false;
+      if (result.ok) {
+        ui.notice = result.line;
+        requestAutosave(ctx);
+      } else if (result.reason === 'short') {
+        ui.notice = 'Not enough UU.';
+      } else {
+        ui.notice = 'Restitution is not on offer.';
+      }
+    } finally {
+      ui.restitutionBusy = false;
+    }
+    render();
+  }
+
   function renderEpics(panel) {
-    const epic = EPICS[currentDef.faction];
+    const factionKey = currentDef.faction;
+    const epic = Object.hasOwn(EPICS, factionKey) ? EPICS[factionKey] : null;
     h('div', 'screen-sub', panel, epic ? `STANDING — ${epic.name}` : 'STANDING');
-    if (!epic) { // independents keep no epic — guard anyway
-      h('div', 'screen-note', panel, 'No standing here.');
+    const fname = factionDisplayName(factionKey) || (typeof factionKey === 'string' ? factionKey : 'this dock');
+    const rep = standingRead(ctx.world?.reputation, factionKey);
+    const rank = rankFor(rep);
+    h('div', 'screen-note', panel,
+      `${fname}: ${rank.name} (${rep >= 0 ? '+' : ''}${Math.round(rep)})`);
+    const next = nextStandingRung(rep);
+    if (next) h('div', 'screen-note', panel, `Next: ${next.name} (${next.min})`);
+    h('div', 'screen-sub', panel, 'LADDER');
+    const ladder = standingLadderLines();
+    for (let i = 0; i < ladder.length; i++) h('div', 'screen-note', panel, ladder[i]);
+    const sysId = ctx.world.currentSystem;
+    const dockFac = offendedFaction(sysId);
+    if (dockFac && standingRead(ctx.world?.reputation, dockFac) < 0) {
+      h('div', 'screen-sub', panel, 'RESTITUTION');
+      if (ui.restitutionPending) {
+        const box = h('div', 'shipyard-buy-row shipyard-confirm', panel);
+        h('div', 'shipyard-buy-name', box, 'Pay restitution');
+        h('div', 'shipyard-buy-meta', box, `${RESTITUTION_UU} UU · Confirm restitution`);
+        btn(box, 'Confirm restitution', () => confirmRestitutionPay(), 'screen-btn screen-btn-warm');
+        btn(box, 'Esc — Cancel', () => {
+          cancelRestitutionPending();
+          render();
+        });
+      } else if (restitutionOffered(ctx, sysId)) {
+        h('div', 'screen-note', panel,
+          `Pay ${RESTITUTION_UU} UU to return this dock's standing to 0.`);
+        btn(panel, 'Pay restitution', () => {
+          ui.restitutionPending = true;
+          ui.notice = '';
+          render();
+        });
+      } else if (restitutionShort(ctx, sysId)) {
+        h('div', 'screen-note', panel, `Restitution ${RESTITUTION_UU} UU. Not enough UU.`);
+      }
+    }
+    h('div', 'screen-sub', panel, 'HOW STANDING MOVES');
+    const moves = standingMoveNotes();
+    for (let i = 0; i < moves.length; i++) h('div', 'screen-note', panel, moves[i]);
+    h('div', 'screen-sub', panel, 'LIVE CONSEQUENCES');
+    const lives = standingLiveNotes();
+    for (let i = 0; i < lives.length; i++) h('div', 'screen-note', panel, lives[i]);
+    if (!epic) {
+      h('div', 'screen-note', panel, 'No epic stages here.');
       return;
     }
-    const achieved = ctx.world.epics?.[currentDef.faction] ?? 0;
+    const achieved = ctx.world.epics?.[factionKey] ?? 0;
     const clues = ctx.world.mystery?.found?.length ?? 0;
     epic.stages.forEach((stage, i) => {
       const n = i + 1;
@@ -2802,7 +5535,6 @@ export function initStation(ctx) {
         // Hint names the first UNMET requirement — capstones (wave 7) gate on
         // landmarks, mystery flags, credits, or fear, not just rank/echoes.
         const req = stage.requires;
-        const rep = ctx.world.reputation?.[currentDef.faction] ?? 0;
         const mystery = ctx.world.mystery;
         let hint = 'Within reach';
         if (req.rankTier != null && rankFor(rep).tier < req.rankTier) hint = `Rank: ${rankNameForTier(req.rankTier)}`;
@@ -2817,7 +5549,7 @@ export function initStation(ctx) {
         h('div', 'screen-note', panel, '··· locked');
       }
     });
-    const fx = epicEffects(ctx, currentDef.faction);
+    const fx = epicEffects(ctx, factionKey);
     const keys = Object.keys(fx);
     if (keys.length === 0) {
       h('div', 'screen-note', panel, 'No standing yet. The first stage is closer than it looks.');
@@ -2866,7 +5598,7 @@ export function initStation(ctx) {
     overlay.textContent = '';
     const panel = h('div', 'screen-panel station-panel', overlay);
 
-    const factionName = FACTIONS[currentDef.faction]?.name ?? currentDef.faction;
+    const factionName = factionDisplayName(currentDef.faction) || currentDef.faction;
     const head = h('div', 'station-head', panel);
     h('div', 'station-title', head, currentDef.station.name.toUpperCase());
     h('div', 'station-faction', head, `${factionName.toUpperCase()} · BERTH 7`);
@@ -2884,16 +5616,22 @@ export function initStation(ctx) {
           key === 'launch' ? 'screen-btn screen-btn-warm' : 'screen-btn');
       });
       // Rank surface: how this dock's faction reads you right now (§12.x).
-      const rep = ctx.world.reputation[currentDef.faction] ?? 0;
+      const rep = standingRead(ctx.world?.reputation, currentDef.faction);
       h('div', 'station-rank', panel,
         `${factionName}: ${rankFor(rep).name} (${rep >= 0 ? '+' : ''}${Math.round(rep)} rep)`);
+      const next = nextStandingRung(rep);
+      if (next) h('div', 'station-rank', panel, `Next: ${next.name} (${next.min})`);
       renderRescue(panel);
       h('div', 'screen-legend', panel, '1-9, 0 select service · Esc/B launch');
     } else {
       const back = h('div', 'station-back', panel);
       btn(back, '← Back (Esc)', () => {
         ui.trafficPending = null;
+        ui.dataPending = null;
+        ui.launderPending = null;
         ui.outfitPending = null;
+        ui.graftPending = null;
+        ui.restitutionPending = false;
         ui.level = 1; ui.service = null; ui.notice = ''; render();
       });
       RENDERERS[ui.service](panel);
@@ -2911,7 +5649,11 @@ export function initStation(ctx) {
     ui.service = key;
     ui.notice = '';
     ui.trafficPending = null;
+    ui.dataPending = null;
+    ui.launderPending = null;
     ui.outfitPending = null;
+    ui.graftPending = null;
+    ui.restitutionPending = false;
     if (key === 'shipyard') setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     render();
   }
@@ -2924,7 +5666,13 @@ export function initStation(ctx) {
     ui.notice = '';
     ui.trafficPending = null;
     ui.trafficBusy = false;
+    ui.dataPending = null;
+    ui.dataBusy = false;
+    ui.launderPending = null;
+    ui.launderBusy = false;
     ui.outfitPending = null;
+    ui.graftPending = null;
+    ui.restitutionPending = false;
     setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     overlay.style.display = 'flex';
     ctx.emit('docked');
@@ -2941,7 +5689,13 @@ export function initStation(ctx) {
     ui.compNote = null; // the comp's voice only covers this berth visit (wave 26)
     ui.trafficPending = null;
     ui.trafficBusy = false;
+    ui.dataPending = null;
+    ui.dataBusy = false;
+    ui.launderPending = null;
+    ui.launderBusy = false;
     ui.outfitPending = null;
+    ui.graftPending = null;
+    ui.restitutionPending = false;
     overlay.style.display = 'none';
     ctx.emit('undocked');
   }
@@ -2966,11 +5720,17 @@ export function initStation(ctx) {
     }
     // level 2
     if (code === 'Escape') {
-      if (ui.service === 'shipyard' && cancelYardPending(ui)) { render(); return; }
-      if (ui.service === 'people' && cancelTrafficPending(ui)) { render(); return; }
+      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui))) { render(); return; }
+      if (ui.service === 'people' && (cancelTrafficPending(ui) || cancelLaunderPending(ui))) { render(); return; }
+      if (ui.service === 'market' && cancelDataPending(ui)) { render(); return; }
       if (ui.service === 'outfitting' && cancelOutfitPending(ui)) { render(); return; }
+      if (ui.service === 'epics' && cancelRestitutionPending()) { render(); return; }
       ui.trafficPending = null;
+      ui.dataPending = null;
+      ui.launderPending = null;
       ui.outfitPending = null;
+      ui.graftPending = null;
+      ui.restitutionPending = false;
       ui.level = 1; ui.service = null; ui.notice = ''; render(); return;
     }
     if (code === 'KeyB') { undock(); return; }

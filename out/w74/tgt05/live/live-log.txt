@@ -1,0 +1,58 @@
+SHOT 01-flight.png
+boot {"docked":false,"paused":false,"ships":7,"rocks":130,"title":false,"prompt":"TTarget","controls":true}
+PASS title-dismissed 
+PASS in-flight 
+ships [{"i":0,"id":"rec-8","name":"Innisfree"},{"i":1,"id":"rec-15","name":"Claim Wren"},{"i":2,"id":"rec-3","name":"Cartwheel Ann"},{"i":3,"id":"rec-6","name":"Kestrel Mercy"},{"i":4,"id":"rec-4","name":"Slow Orison"},{"i":5,"id":"rec-16","name":"Pit Lamp"},{"i":6,"id":"rec-7","name":"Tallow-3"}]
+PASS have-live-ship 
+parkNpc {"id":"rec-8","name":"Innisfree"}
+aimShip {"sx":714.6549083845368,"sy":452.34131830034005,"z":0.9980080029216585,"behind":false}
+PASS npc-on-screen 
+v-ship {"id":"rec-8","name":"Innisfree","ship":true,"rock":false,"indexOf":-1,"sameNpc":true,"sameRock":false,"group":1,"fp":false,"reticle":{"x":14,"y":2},"events":[{"type":"reticleLock","hit":true}],"prompt":"TTarget","toast":false}
+PASS v-locks-visible-ship rec-8
+PASS v-ship-hit-event 
+SHOT 02-ship-lock.png
+v-miss {"id":"rec-8","name":"Innisfree","ship":true,"rock":false,"indexOf":-1,"sameNpc":true,"sameRock":false,"group":1,"fp":false,"reticle":{"x":-270.4944637872911,"y":-161.42411548596405},"events":[{"type":"commLine","text":"Nothing under the reticle."},{"type":"reticleLock","hit":false}],"prompt":"TTarget","toast":true}
+PASS miss-does-not-steal 
+PASS miss-commLine 
+PASS miss-event-hit-false 
+PASS miss-toast-textcontent 
+SHOT 04-miss.png
+parkRock {"idx":117,"id":117,"rad":6.746756030924199,"discR":17.013588945076776,"scr":{"sx":816.4653153326099,"sy":474.0168893123754,"discR":17.013588945076776,"d2":61664.88823457274}}
+PASS have-rock 
+aimRock {"sx":816.4653153326099,"sy":474.0168893123754,"z":0.9992252210643824,"behind":false}
+rockDiag {"pickRock":true,"pickId":117,"isListRow":117,"id":117,"reticle":{"x":380.34825573923604,"y":133.0387222395699},"group":1}
+v-rock {"id":null,"name":null,"ship":false,"rock":false,"indexOf":-1,"sameNpc":false,"sameRock":false,"group":1,"fp":false,"reticle":{"x":116,"y":24},"events":[{"type":"commLine","text":"Nothing under the reticle."},{"type":"reticleLock","hit":false}],"prompt":"TTarget","toast":true}
+PASS v-locks-rock-list-row {"keyV":false,"pick":true,"pickId":117}
+PASS rock-indexOf 117 vs 117
+PASS rock-id-eq-index 117
+PASS rock-lock-in-group-1 
+SHOT 03-rock-lock.png
+cycleSetup {"nLive":4,"rockId":84}
+t-g1 [{"id":"rec-8","ship":true,"rock":false},{"id":"rec-15","ship":true,"rock":false},{"id":"rec-3","ship":true,"rock":false},{"id":"rec-3","ship":true,"rock":false},{"id":"rec-8","ship":true,"rock":false}]
+PASS t-cycles-ships-g1 
+PASS t-no-rock-g1 
+t-g3 [{"id":"rec-8","ship":true,"rock":false},{"id":"rec-8","ship":true,"rock":false},{"id":"rec-10","ship":true,"rock":false},{"id":"rec-10","ship":true,"rock":false},{"id":"rec-10","ship":true,"rock":false},{"id":"rec-15","ship":true,"rock":false},{"id":"rec-15","ship":true,"rock":false},{"id":"rec-3","ship":true,"rock":false}]
+g3cands {"ships":4,"rocks":6,"group":3}
+PASS t-cycle-includes-rock-g3 
+PASS t-cycle-includes-ship-g3 
+PASS group3-rock-candidates 
+SHOT 05-cycle-t.png
+v-dead {"id":null,"name":null,"ship":false,"rock":false,"indexOf":-1,"sameNpc":false,"sameRock":false,"group":1,"fp":false,"reticle":{"x":-8,"y":-2},"events":[{"type":"commLine","text":"Nothing under the reticle."},{"type":"reticleLock","hit":false}],"prompt":"VLock","toast":true}
+PASS destroyed-never-locks 
+PASS destroyed-is-miss 
+fpSetup {"fp":true,"camera":"first"}
+fpPlace {"px":0.38721092861410167,"py":36.70144236512485,"pz":735.931561010816,"player":{"x":-3.1215168182869766,"y":30,"z":793.2362030551133}}
+fpDiag {"cam":{"x":-2.945847234496512,"y":30.750239366674606,"z":790.5069575384873},"npc":{"x":0.38721092861410167,"y":36.70144236512485,"z":735.931561010816},"distCam":54.999999999999964,"distShip":57.801751703559994,"pickId":"rec-8","pickIsNpc":true,"fp":true,"reticle":{"x":-8,"y":-2}}
+fpPickOffset {"pickIsNpc":true,"pickId":"rec-8","fp":true,"reticle":{"x":259.5732061228008,"y":-178.45657920942554}}
+PASS fp-pick-math-ignores-offset 
+v-fp {"id":"rec-8","name":"Innisfree","ship":true,"rock":false,"indexOf":-1,"sameNpc":true,"sameRock":false,"group":1,"fp":true,"reticle":{"x":259.5732061228008,"y":-178.45657920942554},"events":[{"type":"reticleLock","hit":true}],"prompt":"VLock","toast":true}
+PASS fp-flag 
+PASS fp-mouse-offset {"x":259.5732061228008,"y":-178.45657920942554}
+PASS fp-centered-pick-ignores-offset 
+SHOT 06-fp.png
+prompt {"text":"VLock","hidden":false}
+PASS hud-v-lock-prompt VLock
+SHOT 07-prompt-v.png
+pageErrors []
+PASS no-new-errors-from-tgt05-files 
+LIVE PASS

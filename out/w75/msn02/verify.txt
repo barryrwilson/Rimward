@@ -1,0 +1,27 @@
+## Status
+CLEAN
+
+## What I tested
+- Re-checked the prior Bug 1 cite after the worker split. Live `src/systems/station.js`: `holdUnits` 959–963; `addCargo` 1665–1675 (body 1666–1675, survivor skip/merge); `removeCargo` 1676–1685.
+- Inventory §0 POD-02 row now cites `holdUnits` 959–963 and `addCargo` skip survivor merge 1666–1675. Inventory §9 still names `holdUnits` 959–963. Brief and contract never copied the bad 1666–1678 `holdUnits` range.
+- Design law unchanged: no `survivor` on jobs. Contract §0.8 / §3.3, brief merge table / §3.3, inventory neighbour freeze. Seed still `provisions` | `refinedMetals` | `rawOre`. No `livingRock` / data keys.
+- Markdown set: `docs/Msn02TradeDesign.md`, `out/w75/msn02/shared-contract.md`, `current-mission-trade-inventory.md`, `security-review.md`, `code-review.md`. No leftover `1666–1678` `holdUnits` cite except the old BUGS_FOUND text in this file (now overwritten).
+- No `src/` from this task. `git status`: `?? docs/Msn02TradeDesign.md`, `?? out/w75/msn02/`. Dirty `src/` remains Wave 74 (hangar / data-trade / station market / etc.). No `kind: 'trade'`, no `syncTradeJobs`, no `TRADE_SLOTS` under `src/`.
+- Did not re-open Wave 74 dirty `src/`. Did not require a browser.
+
+## Bugs found
+
+None. Prior Bug 1 is closed.
+
+## Environmental issues
+
+None for this cite re-check. Browser not required (owner). Dirty `src/` is out of this family.
+
+## Evidence
+- Live `holdUnits` (`station.js` 959–963) sums every matching `c.commodity`, including survivor rows. Live `addCargo` (1666–1675) pushes survivor as a new row and skips survivor rows when merging bulk. Live `removeCargo` starts 1676.
+- Inventory §0 line 23: `holdUnits` 959–963; `addCargo` skip survivor merge 1666–1675. Matches live. An implementer who opens 959 finds the helper.
+- Law: POD freeze still “No `survivor` on jobs.” Trade still uses ordinary `COMMODITIES` bulk keys only. Cite fix did not change dest, cap (`4+4*N_SYSTEMS+16` = 420), `kind: 'trade'`, unique-four freeze, origin `jobPayFor`, `need` 5, 600 s fail-closed, Digit 2 / `textContent`, or serial PR1–PR5 named-only.
+- Code-review re-scan and security re-scan record the same split. No new 🔴/🟠 in the markdown set from this edit.
+- `git diff --stat -- src/`: 12 files, Wave 74 work. Grep `src/` for `kind: 'trade'` / `syncTradeJobs` / `TRADE_SLOTS`: 0 matches.
+
+Cites that matched live code (this pass): `holdUnits` 959–963; `addCargo` 1666–1675; `removeCargo` 1676–1685; `priceOf` 1686–1688.

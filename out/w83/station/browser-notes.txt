@@ -1,0 +1,10 @@
+goto http://localhost:5184/
+dock {"ok":true,"sys":"freehold","credits":350,"overlay":true}
+payClick true
+pending {"hasConfirm":true,"hasPay":false,"credits":2000,"standing":-6,"textHasConfirm":true}
+afterEsc {"credits":2000,"standing":-6,"hasConfirm":false,"hasPay":true}
+doubleConfirm {"found":true,"credits":800,"standing":0}
+afterPay {"credits":800,"standing":0,"hasPay":false,"hasConfirm":false}
+short {"credits":100,"standing":-4,"hasPay":false,"hasNotEnough":true}
+stranger {"hasBrief":false,"chainIds":[]}
+known {"hasBrief":true,"chainIds":["chain-freehold-1:offered"]}

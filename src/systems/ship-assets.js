@@ -40,12 +40,76 @@ const glowGeometry = new THREE.SphereGeometry(1, 12, 8);
 let renderer = null;
 let ktx2Loader = null;
 
-// ---------------------------------------------------------------------------
-// Swim uniforms for Beautiful Ones GPU vertex displacement (shared across all
-// injected materials; updated per frame in updateShipAsset).
-// ---------------------------------------------------------------------------
-const swimTimeUniform = { value: 0 };
-const swimAmpUniform = { value: 1 };
+// Beautiful NPC GPU swim. Matches player idle→cruise Hz (ship.js) without a
+// CPU vertex loop. Per-instance uniform objects: shared module uniforms would
+// lock every Beautiful NPC to one speed.
+const SWIM_IDLE_HZ = 0.5;
+const SWIM_CRUISE_HZ = 2.3;
+const SWIM_CRUISE_SPEED = 120; // light-class cruise; clamp, not a persist field
+const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-hz';
+
+function makeSwimUniforms() {
+  return {
+    uSwimTime: { value: 0 },
+    uSwimAmp: { value: 1 },
+    uSwimHz: { value: SWIM_IDLE_HZ },
+  };
+}
+
+function injectSwim(uniforms) {
+  return (shader) => {
+    shader.uniforms.uSwimTime = uniforms.uSwimTime;
+    shader.uniforms.uSwimAmp = uniforms.uSwimAmp;
+    shader.uniforms.uSwimHz = uniforms.uSwimHz;
+    shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nuniform float uSwimHz;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+{
+  float swimPhase = uSwimTime * 6.28318530718 * uSwimHz;
+  #ifdef USE_MORPHTARGETS
+    swimPhase += morphTargetInfluences[ MORPHTARGETS_COUNT - 1 ]; // per-ship phase
+  #endif
+  float zn = aSwim.x;       // 0 nose -> 1 tail
+  float wing = aSwim.y;    // 0 spine -> 1 tips
+  float xn = aSwim.z;      // 0 spine -> 1 tip (normalized)
+  float sz = aSwim.w;      // ship size for amplitude scaling
+  float bodyAmp = 0.025 * sz;
+  float flapAmp = 0.045 * sz;
+  float lag = 1.4 * xn;    // span-wise phase lag
+  float breath = 1.0 + 0.012 * uSwimAmp * sin(uSwimTime * 6.28318530718 * 0.25);
+  transformed *= breath;
+  float spineWave = sin(6.9 * zn - swimPhase);
+  float flap = sin(swimPhase - lag);
+  transformed.x += uSwimAmp * bodyAmp * zn * zn * spineWave;
+  transformed.y += uSwimAmp * flapAmp * wing * flap;
+}`
+    );
+  };
+}
+
+function cloneSwimMaterials(materials, uniforms) {
+  const compile = injectSwim(uniforms);
+  const wrap = (material) => {
+    const cloned = material.clone();
+    cloned.onBeforeCompile = compile;
+    cloned.customProgramCacheKey = () => SWIM_PROGRAM_KEY;
+    cloned.userData.swimUniforms = uniforms;
+    cloned.needsUpdate = true;
+    return cloned;
+  };
+  return {
+    hull: wrap(materials.hull),
+    hullVC: wrap(materials.hullVC),
+    emissive: wrap(materials.emissive),
+    emissiveVC: wrap(materials.emissiveVC),
+    field: wrap(materials.field),
+    fieldVC: wrap(materials.fieldVC),
+  };
+}
+
+function materialsForInstance(materials, swimUniforms) {
+  return swimUniforms ? cloneSwimMaterials(materials, swimUniforms) : materials;
+}
 
 function canonicalFaction(faction) {
   return NPC_FACTIONS.includes(faction) ? faction : FALLBACK_FACTION;
@@ -132,43 +196,8 @@ function loadMaterials(faction, role) {
       emissiveVC.vertexColors = true;
       const fieldVC = field.clone();
       fieldVC.vertexColors = true;
-      // Beautiful Ones swim injection: per-vertex displacement in vertex shader
-      if (resolvedFaction === 'beautiful') {
-        const injectSwim = (shader) => {
-          shader.uniforms.uSwimTime = swimTimeUniform;
-          shader.uniforms.uSwimAmp = swimAmpUniform;
-          // Prepend global-scope declarations (GLSL ES forbids attribute/uniform inside main)
-          shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
-            '#include <begin_vertex>',
-            `#include <begin_vertex>
-{
-  float swimPhase = uSwimTime * 6.28318530718 * 0.7; // gentle 0.7 Hz swim
-  #ifdef USE_MORPHTARGETS
-    swimPhase += morphTargetInfluences[ MORPHTARGETS_COUNT - 1 ]; // per-ship phase
-  #endif
-  float zn = aSwim.x;       // 0 nose -> 1 tail
-  float wing = aSwim.y;    // 0 spine -> 1 tips
-  float xn = aSwim.z;      // 0 spine -> 1 tip (normalized)
-  float sz = aSwim.w;      // ship size for amplitude scaling
-  float bodyAmp = 0.025 * sz;
-  float flapAmp = 0.045 * sz;
-  float lag = 1.4 * xn;    // span-wise phase lag
-  float breath = 1.0 + 0.012 * uSwimAmp * sin(uSwimTime * 6.28318530718 * 0.25);
-  transformed *= breath;
-  float spineWave = sin(6.9 * zn - swimPhase);
-  float flap = sin(swimPhase - lag);
-  transformed.x += uSwimAmp * bodyAmp * zn * zn * spineWave;
-  transformed.y += uSwimAmp * flapAmp * wing * flap;
-}`
-          );
-        };
-        hull.onBeforeCompile = injectSwim;
-        hullVC.onBeforeCompile = injectSwim;
-        emissive.onBeforeCompile = injectSwim;
-        emissiveVC.onBeforeCompile = injectSwim;
-        field.onBeforeCompile = injectSwim;
-        fieldVC.onBeforeCompile = injectSwim;
-      }
+      // Beautiful swim inject is per instance (cloneSwimMaterials). Shared
+      // materials stay static so one NPC's speed cannot drive the fleet.
       const set = { hull, hullVC, emissive, emissiveVC, field, fieldVC };
       materialSets.set(key, set);
       return set;
@@ -281,7 +310,7 @@ function proxyFor(root) {
 
 function addLevel(instance, lod, template, materials) {
   const visual = cloneSkinned(template.scene);
-  bindMaterials(visual, materials);
+  bindMaterials(visual, materialsForInstance(materials, instance.userData.swimUniforms));
   removeEngineNode(visual);
   // Beautiful Ones: set swim phase on the new LOD meshes
   if (instance.userData.swimPhase !== undefined) {
@@ -366,7 +395,9 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   root.name = 'npc-ship-asset';
   const lod = new THREE.LOD();
   const visual = cloneSkinned(template.scene);
-  bindMaterials(visual, resolvedMaterials);
+  const swimUniforms = resolvedFaction === 'beautiful' ? makeSwimUniforms() : null;
+  const boundMaterials = materialsForInstance(resolvedMaterials, swimUniforms);
+  bindMaterials(visual, boundMaterials);
   const engine = removeEngineNode(visual);
   lod.addLevel(visual, 0, 0.1);
   root.add(lod);
@@ -375,10 +406,10 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   if (engine) {
     // The drive flare is additive light, not an opaque bead. RIMWARD_FIELD is the
     // additive slot; the opaque emissive material rendered it as a solid pearl.
-    engine.material = engine.geometry?.attributes.color ? resolvedMaterials.fieldVC : resolvedMaterials.field;
+    engine.material = engine.geometry?.attributes.color ? boundMaterials.fieldVC : boundMaterials.field;
     glow.add(engine);
   } else {
-    glow.add(new THREE.Mesh(glowGeometry, resolvedMaterials.field));
+    glow.add(new THREE.Mesh(glowGeometry, boundMaterials.field));
   }
   root.add(glow);
   root.userData.proxy = proxyFor(visual);
@@ -393,8 +424,9 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
     mixer.clipAction(idle).play();
     root.userData.mixer = mixer;
   }
-  // Beautiful Ones swim phase: per-ship random phase offset
-  if (resolvedFaction === 'beautiful') {
+  // Beautiful Ones swim phase: per-ship random phase offset (visual only).
+  if (swimUniforms) {
+    root.userData.swimUniforms = swimUniforms;
     root.userData.swimPhase = Math.random() * Math.PI * 2;
     // Set morphTargetInfluences on all meshes (visual + glow engine)
     root.traverse((node) => {
@@ -422,14 +454,18 @@ export function releaseShipAsset(root) {
   if (active?.size === 0) instances.delete(key);
 }
 
-export function updateShipAsset(object, elapsed, reducedMotion = false, camera) {
+export function updateShipAsset(object, elapsed, reducedMotion = false, camera, speed) {
   const mixer = object.userData.mixer;
   if (mixer && !reducedMotion) mixer.setTime(elapsed);
   if (camera) {
     updateDistanceBands(object, camera);
     object.userData.lod?.update(camera);
   }
-  // Update swim uniforms for Beautiful Ones
-  swimTimeUniform.value = elapsed;
-  swimAmpUniform.value = reducedMotion ? 0 : 1;
+  const uniforms = object.userData.swimUniforms;
+  if (!uniforms) return;
+  const spd = Number.isFinite(speed) ? Math.max(speed, 0) : 0;
+  const speedNorm = Math.min(spd / SWIM_CRUISE_SPEED, 1);
+  uniforms.uSwimTime.value = elapsed;
+  uniforms.uSwimAmp.value = reducedMotion ? 0 : 1;
+  uniforms.uSwimHz.value = SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * speedNorm;
 }

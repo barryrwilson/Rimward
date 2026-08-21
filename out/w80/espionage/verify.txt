@@ -1,0 +1,53 @@
+## Status
+CLEAN
+
+## Verdict
+MSN-02 renewable espionage matches the Wave 79 shared contract. Isolated pin-check PASS. No product flag from the flag list.
+
+## Isolated pin-check
+Command: `node --import ./scripts/with-css-stub.mjs out/w80/espionage/pin-check.mjs`
+Result: WAVE80 ESPIONAGE PIN-CHECK PASS (exit 0)
+All 36 keys true: uniqueFour, keepMineFh, keepTradeFh, keepHuntFh, keepPassengerFh, keepExploreFh, keepSpyFh, keepSpyHearth, dropProto, dropShortId, dropWrongPrefix, dropNeed2, dropBadSys, dropSameDest, dropCommodityAndFaction, capFormula, capFits, floodHeal, fieldsJobs, stuffedDestKept, stuffedFieldsDropped, kindAllow, idPrefix, saveIdPrefix, helpers, boardHide, originAccept, destRebind, noInnerHtml, noFullSafeId, uniqueHaul, haulDestBind, noWarKind, noDataGrant, targetSkip, digit2.
+
+## Full boot
+Not re-run. Full `npm run test:boot` is ~385s. Worker dump `out/w80/espionage/boot-pins.txt` states WAVE80 ESPIONAGE object all true and no WAVE80 ESPIONAGE FAIL. Known WAVE4 / WAVE26 / WAVE35 FAILs are not this task.
+
+## Static vs `out/w79/espionage/shared-contract.md`
+- JOB_KINDS includes `'espionage'`. Ids use `spy-<sys>-<n>` (`tokens[0] !== 'spy'`). Need is 1. Dest rebind uses `resolveEspionageDest`. `boardJobs` hides offered spy when `originSystem !== sysId`.
+- JOBS_SANITIZE_MAX = 4 + 12*N + 16 = live (4+10*N+16) + ESPIONAGE_ROOM (2*N). Comment: plus espionage room only. No WAR_ROOM term.
+- Unique four stay exact: `bounty-ace`, `patrol-lane`, `haul-provisions`, `ferry-consignment` in UNIQUE_JOB_KIND and makeJobs.
+- Overlay cap stays PIRATE_BOUNTY_CAP = 2.
+- Success: pay `payQuoted` (0 if missing); employer `SYSTEMS[origin].faction` + MINING_REP (2); no `reputation[targetFac]`. Expire: splice+replace, no credits, no rep write.
+- No `dataCrystal` / `dataCube` grant in station.js. Spy tick has no addCargo.
+- No `innerHTML` in station.js. `h()` uses `textContent`.
+- Digit 2 Jobs: DOCK_KEY_SERVICES = market, jobs, … (jobs is Digit 2). Digit 0 still shipyard.
+- Proto id dropped (`__proto__`, `spy-__proto__-0`). Ineligible dest (same origin, same faction) drops the job. Eligible stuffed dest is kept on restore; tick/UI match uses rebound dest, not stuffed dest.
+- WORLD_FIELDS still has one `'jobs'` key. No `'spies'` / `'missions'`.
+- `src/game/state.js` is not in this serial's diff. `src/core/ctx.js` is dirty for TGT-05 reticle lock, not spy.
+
+## UI (source)
+Digit 2 cards regen title/detail/reward from dest station display name (`spyStationName` / `spyCardDestName`). Accepted line: gather at dest station then file here, or intel aboard — file here. Remaining time via `miningTimeLeftLabel`. No clue ids, no `recordId`, no dest keys as spy codes. Mouse Accept still binds job identity.
+
+## Playwright
+[NO BROWSER COVERAGE] — Chrome profile locked (`mcp-chrome-7d372dc`). No isolated browser run.
+
+## CROSS-CUT CHECK (harness, MEDIUM)
+WAVE80 REP-04 pin `bioPodStay` still asserts `!save.includes("'espionage'")` and `!station.includes("kind: 'espionage'")` in `scripts/boot-test.mjs` (~16879–16884). This serial must ship those strings. That pin is stale. This is a harness conflict, not a spy-family product bug. Do not remove `'espionage'` from production. Orchestrator should retire or rewrite the REP-04 negative-string pin.
+
+## Flag list (product)
+- Target standing write on success: no
+- Unique four dropped: no
+- innerHTML: no
+- War kind shipped: no
+- state.js edited: no
+- Data cargo grant: no
+- Accept off-origin: refused (notice, no state flip)
+- Dest same faction as employer: dest eligibility requires rival faction; same dest as origin dropped
+
+## Do not flag
+- Known WAVE4 / WAVE26 / WAVE35
+- Missing expose delta (fail-closed until owner)
+- Digit overflow past 9 (existing UX)
+
+## Notes
+Stuffed `progress: 1` on an accepted row still pays at origin dock. Contract names this as the same cheat class as stuffed mining cargo. Not a new hole.

@@ -1,0 +1,27 @@
+## Status
+CLEAN (WAVE80 WAR pins). Known harness FAILs outside this family.
+
+## Verdict
+MSN-02 renewable faction-war matches the Wave 79 shared contract and Wave 80 impl map. Isolated pin-check PASS. Live WAVE80 WAR object all true.
+
+## Isolated pin-check
+Command: `node --import ./scripts/with-css-stub.mjs out/w80/faction-war/pin-check.mjs`
+Result: WAVE80 WAR PIN-CHECK PASS (exit 0)
+
+## WAVE80 WAR boot pins
+`npm run test:boot` (~398s). `wave80 war:` object all true. No `WAVE80 WAR FAIL`.
+`wave80 espionage:` still all true (`spyKindStays` replaced `noWarKind`).
+`wave80 rep04:` `bioPodStay` still true after dropping the no-`kind: 'war'` string pin.
+
+Known FAILs not this task: WAVE4 fence, WAVE35 haul, WAVE78 passenger `completePay`, plus other pre-existing errors (63 total).
+
+## Product
+- Kind `'war'`. Ids `war-<SYSTEMS key>-<n>`. Need 1. Slots 2. Cap live+war room (`WAR_SLOTS_PER_SYSTEM * N_SYSTEMS` added; comment plus war room only; espionage room kept).
+- Dest = first rival-gate with station. Quarry = dest-faction `patrol` in an existing origin/dest bank.
+- Accept origin dock only. `payQuoted` origin `jobPayFor(PATROL_REWARD)`. Deadline 600 s restart.
+- Complete space-side after witnessed player kill + record dead/captured. Employer +2. Target 0.
+- Unique `bounty-ace` stays. Hunt stays pirates. Named Guns are not war quarries.
+- Digit 2. `textContent` only. No `rec-` on cards.
+
+## Playwright
+[NO BROWSER COVERAGE]

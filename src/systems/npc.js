@@ -10,7 +10,6 @@ import {
   tickShipState,
   computeResolve,
   resolveBand,
-  cargoValue,
   HIDDEN_MOUNTS,
   ORIGIN_ARCS,
   MINING_LASERS,
@@ -18,10 +17,13 @@ import {
 import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod, spawnSurvivorPod } from '../game/pods.js';
+import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
+import { applyPlayerKillStanding } from '../game/kill-standing.js';
 import { turnRateFor } from '../game/flight-feel.js';
 import { scaleFor } from '../game/ship-scale.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
+import { isUnknowable } from '../game/faction-style.js';
 
 /**
  * NPC system — live GLB ship assets and AI (doc §6.7, §7).
@@ -37,8 +39,9 @@ import { collectBodies, resolveMover } from '../game/collision.js';
  * AI modes: route (trader), loiter (patrol), hunt (pirate), duel (ace),
  * mine (miner), plus surrender modes flee/drift. Hostiles telegraph ≥3 s before the first
  * shot (§6.1): direct approach + flashing engine glow + a commLine. Fire is
- * emitted as 'npcFire' { ship, weapon:'cannon', target } — combat.js
+ * emitted as 'npcFire' { ship, weapon:'cannon'|'missile', target } — combat.js
  * aims at target ('player' or a live ship) and spawns the projectile.
+ * Pirates and aces vs the player fire one dart after telegraph, then cannon.
  *
  * Resolve (§7.2–7.5) is recomputed ~1 Hz for hostiles-with-intent and for any
  * ship recently in combat. Bands drive behavior: defiant presses, shaken
@@ -174,9 +177,9 @@ export function buildPlayerPlatedMesh(classKey, faction) {
   return buildShipMesh(classKey, faction, role);
 }
 
-/** Advance asset animation and choose the active distance LOD. */
-export function animateShipMesh(object, elapsed, reducedMotion = false, camera) {
-  updateShipAsset(object, elapsed, reducedMotion, camera);
+/** Advance asset animation and choose the active distance LOD. Speed is optional; omit = idle swim Hz. */
+export function animateShipMesh(object, elapsed, reducedMotion = false, camera, speed) {
+  updateShipAsset(object, elapsed, reducedMotion, camera, speed);
 }
 
 // ---------- AI construction ----------
@@ -229,6 +232,7 @@ function makeAi(ctx, record, startPos) {
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
+    dartSpent: false, // one NPC dart after telegraph vs player, then cannon
     gunPassUntil: 0,
     velocity: new THREE.Vector3(),
     wp: 0,
@@ -1072,6 +1076,15 @@ export function mayHuntPlayer(ctx, live) {
   return role === 'pirate' || role === 'ace';
 }
 
+/** One dart after telegraph vs the player. Fail closed: pirate/ace, not Unknowable. */
+function canNpcDart(live) {
+  if (!live?.ai || live.ai.dartSpent) return false;
+  const role = live.ai.role;
+  if (role !== 'pirate' && role !== 'ace') return false;
+  if (isUnknowable(live.state?.faction)) return false;
+  return true;
+}
+
 function hunterRole(other) {
   return other.role ?? other.record?.role;
 }
@@ -1250,7 +1263,7 @@ function updateResolve(ctx, live, now) {
       defense: clamp01(defense),
       force,
       fear: clamp01(ctx.world.fear / 100),
-      cargoAtStake: clamp01(cargoValue(st.cargo, ctx.world.prices) / 2000),
+      cargoAtStake: clamp01(cargoValueSafe(st.cargo, ctx.world.prices) / 2000),
       doctrine: FACTIONS[st.faction]?.doctrine ?? 0.5,
     },
     ai.role === 'pirate'
@@ -1281,7 +1294,7 @@ function intentsFor(ctx, live) {
   const st = live.state;
   const intents = [];
   intents.push('demandRansom');
-  if (cargoValue(st.cargo, ctx.world.prices) > 0) intents.push('acceptTribute');
+  if (cargoValueSafe(st.cargo, ctx.world.prices) > 0) intents.push('acceptTribute');
   // Named-ace respect: a feared pilot can ask a Named Gun to stand down.
   if ((live.record?.role ?? live.role) === 'ace' && ctx.world.fear >= 15) intents.push('respect');
   intents.push('letGo', 'keepFiring');
@@ -1350,11 +1363,14 @@ export function spillShipCargo(ctx, live) {
   for (const entry of cargo) {
     const units = entry && (entry.units | 0);
     if (units <= 0 || !entry.commodity) continue;
+    // Flattening would drop source/originFaction; data pods are a separate roll.
+    if (isDataCommodity(entry.commodity)) continue;
     _v1.set(pos.x + (Math.random() - 0.5) * 8, pos.y + (Math.random() - 0.5) * 8, pos.z + (Math.random() - 0.5) * 8);
     spawnPod(ctx, [{ commodity: entry.commodity, units }], _v1);
     n++;
   }
   cargo.length = 0;
+  maybeSpawnDataFromWreck(ctx, live);
   return n;
 }
 
@@ -1448,6 +1464,7 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
     ai.phase = 'telegraph';
     ai.phaseStart = now;
     ai.commSent = false;
+    ai.dartSpent = false;
   }
   ai.intent = ai.target === 'player';
   const dist = live.object.position.distanceTo(targetPos);
@@ -1506,7 +1523,12 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
   const interval = ai.acePhase === 3 && ai.mode === 'duel' ? ACE_FURY_INTERVAL : shaken ? NPC_FIRE_INTERVAL * 1.5 : NPC_FIRE_INTERVAL;
   if (now >= ai.fireAt && dist < WEAPONS.cannon.range && facingDot(live.object, targetPos) > FIRE_FACE_DOT) {
     ai.fireAt = now + interval;
-    ctx.emit('npcFire', { ship: live, weapon: 'cannon', target: ai.target });
+    if (ai.target === 'player' && canNpcDart(live)) {
+      ai.dartSpent = true;
+      ctx.emit('npcFire', { ship: live, weapon: 'missile', target: 'player' });
+    } else {
+      ctx.emit('npcFire', { ship: live, weapon: 'cannon', target: ai.target });
+    }
   }
 }
 
@@ -1522,7 +1544,7 @@ export function playerInterestChance(ctx, record) {
   if (record?.alwaysHuntsPlayer === true) return 1; // injected hunters (the Ledger's collector)
   // per-record greed — rolled once ever, persisted; non-finite heals
   if (record && !Number.isFinite(record.temper)) record.temper = Math.random();
-  const cargo = clamp01(cargoValue(ctx.cargo, ctx.world.prices) / INTEREST.cargoNormUU);
+  const cargo = clamp01(cargoValueSafe(ctx.cargo, ctx.world.prices) / INTEREST.cargoNormUU);
   const p = INTEREST.base + (record?.temper ?? 0.5) * INTEREST.temperSpan
     + cargo * INTEREST.cargoSpan - ctx.world.fear * INTEREST.fearRepel;
   return Math.min(INTEREST.max, Math.max(INTEREST.min, p));
@@ -1719,7 +1741,7 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
     if (live.record) live.record.demandedAt = now;
     const demand = Math.max(
       HIDDEN_MOUNTS.demandMin,
-      Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
+      Math.round(ECON.tributeRate * cargoValueSafe(ctx.cargo, ctx.world.prices) * 10),
     );
     ctx.emit('hailOpened', { ship: live, intents: demandIntentsFor(ctx, live), line: 'Your cargo or your hull.', demand });
   }
@@ -1770,6 +1792,7 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
     ai.phase = 'telegraph';
     ai.phaseStart = now;
     ai.commSent = false;
+    ai.dartSpent = false;
   }
   ai.intent = true;
   const glow = live.object.userData.glow;
@@ -1866,7 +1889,12 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
   const interval = ai.acePhase === 3 ? ACE_FURY_INTERVAL : NPC_FIRE_INTERVAL;
   if (now >= ai.fireAt && dist < WEAPONS.cannon.range && facingDot(live.object, playerPos) > FIRE_FACE_DOT) {
     ai.fireAt = now + interval;
-    ctx.emit('npcFire', { ship: live, weapon: 'cannon' });
+    if (canNpcDart(live)) {
+      ai.dartSpent = true;
+      ctx.emit('npcFire', { ship: live, weapon: 'missile', target: 'player' });
+    } else {
+      ctx.emit('npcFire', { ship: live, weapon: 'cannon' });
+    }
   }
 }
 
@@ -2123,6 +2151,8 @@ function handleDestroyed(ctx, live, burst, reducedMotion) {
   }
   if (!seen) ctx.emit('npcDestroyed', { ship: live });
 
+  applyPlayerKillStanding(ctx, live);
+
   // §7.7 fear consequences of the kill.
   if (live.state.surrendered) bumpFear(ctx, ECON.fear.killedSurrendered);
   else if (live.role === 'ace') bumpFear(ctx, ECON.fear.aceDefeated);
@@ -2172,7 +2202,7 @@ export function initNpc(ctx) {
         }
         tickShipState(st, now, dt);
         const ai = live.ai;
-        animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera);
+        animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : live.ai.velocity.length());
         // Wave 30 demand-hail upkeep: the parley dies with the hail target
         // (disabled here; destroyed/despawned discard the ai outright, and
         // hail.js's own timeout closes the card on those same conditions),

@@ -19,8 +19,8 @@ import * as THREE from 'three';
  * (fin/tendril sway, whole-part breath scale, emissive/opacity pulse) —
  * per-vertex hull mutation stays unique to the player ship (ship.js).
  * Beautiful Ones NPC ships swim via GPU vertex displacement (ship-assets.js
- * injects into their materials); CPU per-vertex mutation stays unique to the
- * player ship. Producers tag parts with tagSway/tagBreath/tagPulse at build
+ * injects per-instance Hz/amp from NPC speed); CPU per-vertex mutation stays
+ * unique to the player ship. Producers tag parts with tagSway/tagBreath/tagPulse at build
  * time, walk the assembly ONCE with collectOrganic, then call
  * animateOrganic(parts, t, ctx.settings.reducedMotion) per frame.
  * animateOrganic mutates only transforms/material scalars from stashed bases:

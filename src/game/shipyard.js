@@ -22,6 +22,9 @@ export const YARD_LIST_UU = Object.freeze({
   frigate: 80000,
 });
 
+/** Gilded graft list price. Frozen owner integer. */
+export const GRAFT_LIST_UU = 4000;
+
 const CORE_STOCK = Object.freeze(['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate']);
 const LIVING_STOCK = Object.freeze(['light', 'cutter', 'heavy']);
 const UNKNOWABLES_STOCK = Object.freeze(['light']);

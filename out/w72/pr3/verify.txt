@@ -1,0 +1,58 @@
+## Status
+CLEAN
+
+## What I tested
+Ran `node --import ./scripts/with-css-stub.mjs out/w72/pr3/probe.mjs`. Exit 0. Printed PASS. All 56 pins true.
+
+Read `src/game/hangar.js` `graftMounted` / `applyAbominationStanding` / `anyGrafted` / `applyMountedFlight` / `sanitizeHangar` / `loadMountedRow` / `switchTo` against `out/w70/bio/shared-contract.md` §7.3–7.7, §10, §12 PR3.
+
+Read `src/systems/shipyard-desk.js` two-step hangar pane (`setGraftPending`, `confirmGraft`, `renderHangarPane`, `handleShipyardDigit`). Read `src/systems/station.js` Esc path. Save restore still runs `sanitizeHangar` then `healPlayerHullKind` then `applyMountedFlight`.
+
+Wrote and ran `out/w72/pr3/edge-probe.mjs`. Exit 0. Printed PASS. All 58 extra pins true.
+
+Checked git. `state.js`, `hud.js`, `ctx.js`, `ship.js`, `shipyard.js`, `npc.js`, and `save.js` diffs are empty. Dirty `src/` files are `hangar.js`, `shipyard-desk.js`, and `station.js` only.
+
+Did not run `npm run test:boot`. Did not edit `src/`. Did not open Chrome. [NO BROWSER COVERAGE]
+
+## Merge-law checklist
+- §7.1 / §7.6 Abomination is `hullKind === 'built'` AND `grafted === true`. Confirm does not flip kind. No `makeLivingHull` remount on graft. HUD family stays `mech`. PASS (probe 1, 12; edge kind/hud/noRemount).
+- §7.2 Persist: confirm writes `grafted: true` on the mounted built row and the player. Living / Unknowables drop the flag. PASS (probe 1, 5, 8, 10).
+- §7.3 Who sells: Gilded only. Beautiful and Freehold refuse `banner`. Hostile Gilded (`rep < 0`) refuses `reputation`. Dock / combat / jump / paused / destroyed / living / already refuse. PASS (probe 5–7; edge beautiful fail-closed, destroyed).
+- §7.4 Two-step warning: Offer graft only arms pending. Armed pane writes `GRAFT_WARN` via `h()` `textContent` before Confirm calls `graftMounted`. Esc / Cancel calls `cancelGraftPending`. Digits while armed are swallowed and do not confirm. PASS (probe 4, 11; edge warnBeforeConfirm, digits, escCallsCancel).
+- §7.5 Hostility: `Math.min(currentOrZero, -10)` while any sanitized row has `grafted === true`. Missing `beautiful` key is created. Worse standing stays worse. Apply sites: graft confirm, `sanitizeHangar` (all exits), `loadMountedRow`, `switchTo`, `applyMountedFlight`. Save tamper on a built row caps. Empty hangar does not auto-heal standing. PASS (probe 2, 3, 8, 9, standing.noHealEmpty).
+- §7.5 Living-only tamper: sanitize drops the flag. That row alone does not cap. PASS (probe 8 livingDrop; edge livingTamper).
+- §7.5 Mixed hangar: parked built grafted + living mounted still caps. PASS (probe 9; edge parked).
+- §7.7 Price: no debit. Hangar does not write credits. Desk does not copy 900 or 8000. PASS (probe 1 credits, 11; edge noDebit).
+- §9 HUD-02: `hudFamily({ player: { hullKind: 'built', grafted: true } })` is `mech`. HUD does not write `hullKind` or `grafted`. PASS.
+- §10 / §0.12 World strings: no `innerHTML` in hangar, desk, or station. No new frozen `ctx.js` events `grafted` / `abomination` / `hullKindChanged` / `bioSeed`. PASS.
+- §0.13 Prototype keys fail closed. Standing writes only `beautiful` after FACTIONS + RESERVED_IDS checks. `constructor` / `toString` bag keys stay. Inherited `beautiful` is not trusted; own key is written. PASS (edge proto / constructor).
+- §11 `state.js` READ-ONLY. Git diff empty. PASS.
+- §12 PR3 does not land psionics, NPC Abominations, or living remount of grafts. PASS.
+- Double confirm: second `graftMounted` is `already`. Credits unchanged. Standing stays ≤ −10. PASS.
+- `applyMountedFlight` forces Unknowables living, then `healPlayerGrafted`, then standing. PASS (probe 10; edge flightHealOrder).
+
+## Bugs found
+None.
+
+Worker notes remain non-blocking: `switchTo` applies standing twice (`Math.min` is idempotent); `anyGrafted` does not sanitize (live writers sanitize first); Back (←) clears pending and leaves the service while Esc stays on Hangar.
+
+## Environmental issues
+[NO BROWSER COVERAGE] No live Chrome still of the Gilded hangar graft warning. Static desk review plus probe pins cover the warning text and confirm order.
+
+Graph resolve matched `codex/workflow-document-production` (Word / Google Docs). That workflow does not apply to this pin verify. Owner task already named `out/w72/pr3/verify.txt`. Verify continued.
+
+Git: `src/game/hangar.js` 121 lines changed; `src/systems/shipyard-desk.js` 103; `src/systems/station.js` 10. Expected PR3 dirt.
+
+## Evidence
+- Probe command: `node --import ./scripts/with-css-stub.mjs out/w72/pr3/probe.mjs`
+- Probe result: exit 0, `PASS`, 56 pins. Log: `out/w72/pr3/probe.log`
+- Edge command: `node --import ./scripts/with-css-stub.mjs out/w72/pr3/edge-probe.mjs`
+- Edge result: exit 0, `PASS`, 58 pins. Log: `out/w72/pr3/edge-probe.log`
+- Confirm sample: `{ ok: true }`, row `grafted: true` `hullKind: 'built'`, credits 350, Beautiful standing −10
+- Double confirm sample: `{ ok: false, reason: "already" }`
+- Beautiful dock sample: `{ ok: false, reason: "banner" }`, standing 6
+- Warning copy: `Beautiful Ones become immediate enemies. Patrols hunt at standing -10 or worse.`
+- Esc source: `src/systems/station.js` calls `cancelGraftPending(ui) || cancelYardPending(ui)` on shipyard Escape
+- `npc.js` `HOSTILE_STANDING = -10`; hangar local copy with cite; hangar does not import `npc.js`
+- Git clean: `state.js` `hud.js` `ctx.js` `ship.js` `shipyard.js` `npc.js` `save.js`
+- Artifacts: `out/w72/pr3/probe.mjs`, `out/w72/pr3/edge-probe.mjs`, this file

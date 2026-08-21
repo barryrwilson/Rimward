@@ -31,9 +31,12 @@ import {
  * the player's true visual bounds (PLAYER_HIT_RADIUS, no padding).
  *
  * Consumes same-frame ctx.events 'npcFire' { ship, weapon, target } from npc.js
- * (NPCs never spawn projectiles themselves). target is 'player' (or missing,
- * legacy) or a live ship. Player-aimed bolts use testPlayerHit only;
- * ship-aimed bolts use testNpcHits and never testPlayerHit. Emits mineHit { asteroidId,
+ * (NPCs never spawn projectiles themselves). weapon is 'cannon' | 'missile'.
+ * Cannon target is 'player' (or missing, ace legacy) or a live ship. Missile
+ * target is always set; missing missile target drops the shot (never aim the
+ * player by omission). Hit tests follow vsPlayer: NPC-vs-player uses
+ * testPlayerHit only; fromPlayer or NPC-vs-NPC uses testNpcHits and never
+ * testPlayerHit. Emits mineHit { asteroidId,
  * point } for asteroids.js (read next frame via ctx.lastEvents). Emits
  * playerFire { weapon } only when a player cannon/disruptor/missile/turret
  * shot actually leaves a pool (not dry-fire, heat-lock, mining, or a dropped shot).
@@ -160,9 +163,12 @@ const _markLocal = { x: 0, y: 0, z: 0 };
 // Seeker scratch — module-scope, no per-frame alloc on the missile path.
 const _seekFwd = new THREE.Vector3();
 const _seekWant = new THREE.Vector3();
+// Shared lock wrapper for NPC darts vs the player (event-time write, no alloc).
+const _npcPlayerLock = { object: null, state: null };
 
 const POOL_SIZE = 64;
-const MISSILE_POOL = 8; // separate cap; do not share the 64-bolt pool
+const MISSILE_POOL = 8; // player dart rack; do not share the 64-bolt pool
+const NPC_MISSILE_POOL = 4; // separate NPC seekers; do not starve the player 8
 const TURRET_LIVE_CAP = 2; // turret bolts share the 64-pool; leave room for cannon
 const FLASH_POOL = 16;
 const MUZZLE_POOL = 16;
@@ -512,11 +518,12 @@ export function initCombat(ctx) {
     });
   }
 
-  // Separate missile pool (cap 8). Sharing the 64-bolt pool would starve cannon.
-  const missilePool = [];
-  for (let i = 0; i < MISSILE_POOL; i++) {
+  // Separate missile pools. Sharing the 64-bolt pool would starve cannon.
+  // Player rack cap 8; NPC seekers cap 4. Exhausted pool drops the shot.
+  function makeSeekerSlot(poolTag) {
     const mesh = new THREE.Mesh(projGeo, projMats.missile);
     mesh.visible = false;
+    mesh.userData.pool = poolTag;
     const glow = new THREE.Sprite(glowMats.missile);
     glow.scale.set(GLOW_SCALE_MISSILE, GLOW_SCALE_MISSILE, 1);
     mesh.add(glow);
@@ -524,7 +531,7 @@ export function initCombat(ctx) {
     streak.position.set(0, 0, STREAK_LEN * 0.32);
     mesh.add(streak);
     scene.add(mesh);
-    missilePool.push({
+    return {
       mesh,
       glow,
       streak,
@@ -533,7 +540,7 @@ export function initCombat(ctx) {
       shooterPos: new THREE.Vector3(),
       shooter: null,
       vsPlayer: false,
-      fromPlayer: true,
+      fromPlayer: poolTag === 'playerMissile',
       wkey: 'missile',
       family: 'missile',
       damage: 0,
@@ -541,8 +548,12 @@ export function initCombat(ctx) {
       range: 0,
       traveled: 0,
       lock: null,
-    });
+    };
   }
+  const missilePool = [];
+  for (let i = 0; i < MISSILE_POOL; i++) missilePool.push(makeSeekerSlot('playerMissile'));
+  const npcMissilePool = [];
+  for (let i = 0; i < NPC_MISSILE_POOL; i++) npcMissilePool.push(makeSeekerSlot('npcMissile'));
 
   // --- Impact flash pool: per-sprite materials (opacity animated per sprite) ---
   const flashes = [];
@@ -1084,7 +1095,7 @@ export function initCombat(ctx) {
     else _dir.normalize();
     // Slight convergence toward the target's lead point (§6.2), frontal cone only.
     const t = ctx.targets.current;
-    if (t?.object && t.state && !t.state.destroyed) {
+    if (t && !t.lockKind && t.object && t.state && !t.state.destroyed) {
       _tmp.subVectors(t.object.position, _nose);
       const dist = _tmp.length();
       if (dist > 1 && dist < U.TARGET_RANGE) {
@@ -1114,12 +1125,12 @@ export function initCombat(ctx) {
     addHeat(w.heatPerShot);
   }
 
-  function spawnMissile(wkey, w, origin, dir, shooterPos) {
-    for (let i = 0; i < missilePool.length; i++) {
-      const p = missilePool[i];
+  function occupySeeker(pool, fromPlayer, wkey, w, origin, dir, shooterPos) {
+    for (let i = 0; i < pool.length; i++) {
+      const p = pool[i];
       if (p.active) continue;
       p.active = true;
-      p.fromPlayer = true;
+      p.fromPlayer = fromPlayer;
       p.shooter = null;
       p.vsPlayer = false;
       p.lock = null;
@@ -1140,13 +1151,39 @@ export function initCombat(ctx) {
       p.mesh.visible = true;
       return p;
     }
-    return null; // dry pool: no ammo, no heat
+    return null; // dry pool: drop the shot
+  }
+
+  function spawnMissile(wkey, w, origin, dir, shooterPos) {
+    return occupySeeker(missilePool, true, wkey, w, origin, dir, shooterPos);
+  }
+
+  // NPC dart: own pool, no spendMissileAmmo, not spawnNpcShot (that is a bolt).
+  function spawnNpcMissile(ship, aimObj, playerState, playerObj) {
+    if (!aimObj?.position || !ship?.object) return null;
+    const w = WEAPONS.missile;
+    _fwd.set(0, 0, -1).applyQuaternion(ship.object.quaternion);
+    _nose.copy(ship.object.position).addScaledVector(_fwd, NOSE_OFFSET);
+    _dir.subVectors(aimObj.position, _nose);
+    const dist = _dir.length();
+    if (dist < 1) return null;
+    _dir.divideScalar(dist);
+    const dart = occupySeeker(npcMissilePool, false, 'missile', w, _nose, _dir, ship.object.position);
+    if (!dart) return null;
+    dart.shooter = ship;
+    dart.vsPlayer = true;
+    _npcPlayerLock.object = playerObj;
+    _npcPlayerLock.state = playerState;
+    dart.lock = _npcPlayerLock;
+    spawnMuzzle(_nose, w.family);
+    return dart;
   }
 
   /** Live ship lock in launcher range. Asteroid / gate / no lock → null. */
   function liveMissileLock(playerObj, range) {
     const t = ctx.targets.current;
-    if (!t?.object || !t.object.parent || !t.state || t.state.destroyed) return null;
+    if (!t || t.lockKind) return null;
+    if (!t.object || !t.object.parent || !t.state || t.state.destroyed) return null;
     if (playerObj.position.distanceToSquared(t.object.position) > range * range) return null;
     return t;
   }
@@ -1230,6 +1267,7 @@ export function initCombat(ctx) {
   function spawnNpcShot(ship, weapon, aimObj) {
     if (!aimObj?.position) return;
     const wkey = WEAPONS[weapon] ? weapon : 'cannon';
+    if (wkey === 'missile' || WEAPONS[wkey]?.family === 'missile') return;
     const w = WEAPONS[wkey];
     _fwd.set(0, 0, -1).applyQuaternion(ship.object.quaternion);
     _nose.copy(ship.object.position).addScaledVector(_fwd, NOSE_OFFSET);
@@ -1263,11 +1301,14 @@ export function initCombat(ctx) {
     else _dir.normalize();
     // Locked rock / Unknowable still pulls if it sits in the reticle cone.
     const t = ctx.targets.current;
-    if (t && t.position && !t.object) {
+    const rockList = ctx.asteroids && ctx.asteroids.list;
+    const rockPull = !!(t && t.position && !t.object && !t.lockKind
+      && rockList && rockList.indexOf(t) >= 0);
+    if (rockPull) {
       _tmp.subVectors(t.position, _nose);
       const d = _tmp.length();
       if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
-    } else if (t?.object && t.state && !t.state.destroyed && isUnknowable(t.state.faction)) {
+    } else if (t && !t.lockKind && t.object && t.state && !t.state.destroyed && isUnknowable(t.state.faction)) {
       _tmp.subVectors(t.object.position, _nose);
       const d = _tmp.length();
       if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
@@ -1563,6 +1604,29 @@ export function initCombat(ctx) {
     }
   }
 
+  function tickSeekerPool(pool, dt, now, player, playerObj) {
+    for (let i = 0; i < pool.length; i++) {
+      const p = pool[i];
+      if (!p.active) continue;
+      const lock = p.lock;
+      const lockLive = !!(lock?.object?.parent && lock.state && !lock.state.destroyed);
+      if (!lockLive) p.lock = null;
+      steerSeekerVel(p.vel, p.mesh.position, lockLive ? lock.object.position : null, p.speed, WEAPONS.missile.turn, dt);
+      _prev.copy(p.mesh.position);
+      p.mesh.position.addScaledVector(p.vel, dt);
+      p.traveled += p.speed * dt;
+      if (p.traveled >= p.range) {
+        deactivate(p);
+        continue;
+      }
+      orientBolt(p);
+      const hit = (p.fromPlayer || !p.vsPlayer)
+        ? testNpcHits(p, now)
+        : testPlayerHit(p, now, player, playerObj);
+      if (hit) deactivate(p);
+    }
+  }
+
   function testPlayerHit(p, now, player, playerObj) {
     if (!player || player.destroyed || !playerObj) return false;
     const rr = PLAYER_HIT_RADIUS + PROJ_RADIUS; // TRUE bounds, no padding (§6.1)
@@ -1668,6 +1732,14 @@ export function initCombat(ctx) {
         if (e.type !== 'npcFire') continue;
         const ship = e.ship;
         if (!ship?.object || !ship.state || ship.state.destroyed || ship.state.disabled) continue;
+        if (e.weapon === 'missile') {
+          // Missing target must not default to the player. First slice: vsPlayer only.
+          if (e.target !== 'player') continue;
+          if (isUnknowable(ship.state.faction)) continue;
+          if (!playerObj || !player || player.destroyed) continue;
+          spawnNpcMissile(ship, playerObj, player, playerObj);
+          continue;
+        }
         const tgt = e.target;
         if (tgt === 'player' || tgt == null) {
           if (!playerObj) continue;
@@ -1720,23 +1792,9 @@ export function initCombat(ctx) {
       }
 
       // 4b. Missiles: seeker then ballistic. Simulate even under reducedMotion (combat, not decoration).
-      for (let i = 0; i < missilePool.length; i++) {
-        const p = missilePool[i];
-        if (!p.active) continue;
-        const lock = p.lock;
-        const lockLive = !!(lock?.object?.parent && lock.state && !lock.state.destroyed);
-        if (!lockLive) p.lock = null;
-        steerSeekerVel(p.vel, p.mesh.position, lockLive ? lock.object.position : null, p.speed, WEAPONS.missile.turn, dt);
-        _prev.copy(p.mesh.position);
-        p.mesh.position.addScaledVector(p.vel, dt);
-        p.traveled += p.speed * dt;
-        if (p.traveled >= p.range) {
-          deactivate(p);
-          continue;
-        }
-        orientBolt(p);
-        if (testNpcHits(p, now)) deactivate(p);
-      }
+      // vsPlayer → testPlayerHit only. fromPlayer or NPC-vs-NPC → testNpcHits only.
+      tickSeekerPool(missilePool, dt, now, player, playerObj);
+      tickSeekerPool(npcMissilePool, dt, now, player, playerObj);
 
       // 5. Impact flashes: grow + fade (per-sprite material, mutated in place).
       for (let i = 0; i < flashes.length; i++) {

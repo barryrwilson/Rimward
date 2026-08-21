@@ -1,0 +1,39 @@
+{
+  "system": "bt_cradle",
+  "note": "Autosave present. Did not confirm NEW GAME. CONTINUE restored independent living light. Jump emit jumpRequested to bt_cradle.",
+  "player": {
+    "faction": "independent",
+    "hullKind": "living",
+    "rigKind": "living",
+    "living": true,
+    "swimUniforms": false,
+    "cpuVertexMovedAtIdle": true,
+    "geometry": "SphereGeometry",
+    "vertexCount": 2665
+  },
+  "modelsBrowser": {
+    "beautifulLight": { "meshes": 3, "tris": 12112, "radius": 5.6 },
+    "unknowablesLight": { "meshes": 3, "tris": 6808, "radius": 4.2 },
+    "omitSpeedHz": 0.5
+  },
+  "syntheticTwoInstance": {
+    "distinctUniformObjects": true,
+    "distinctHzObjects": true,
+    "idleOmitSpeedHz": 0.5,
+    "cruiseSpeed120Hz": 2.3,
+    "reducedMotionAmp": 0
+  },
+  "glow": {
+    "beautiful": { "type": "Group", "childMesh": "RIMWARD_ENGINE_GLOW" },
+    "unknowables": { "type": "Group", "childMesh": true, "swimUniforms": null }
+  },
+  "liveBeautiful": [
+    { "classKey": "heavy", "speed": 55.677946014028244, "hz": 1.329735207453846, "amp": 1 },
+    { "classKey": "freighter", "speed": 51.000000000000014, "hz": 1.2650000000000001, "amp": 1 },
+    { "classKey": "freighter", "speed": 119.99999999999999, "hz": 2.3, "amp": 1 }
+  ],
+  "reducedMotionLiveAmps": [0, 0, 0],
+  "gpuUniformsShareJsObjects": true,
+  "consoleErrors": 0,
+  "consoleWarnings": 0
+}

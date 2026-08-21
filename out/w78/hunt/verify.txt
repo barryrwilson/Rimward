@@ -1,0 +1,29 @@
+## Status
+CLEAN
+
+## What I tested
+- `npm run test:boot`. WAVE78 hunt pins all true (`uniqueFour`, `keepMineFh`, `keepTradeFh`, `keepHuntFh`, proto/short/need2/bad-sys/ace/commodity drops, cap live+HUNT_ROOM, flood heal keeps unique+mine+trade+hunt, fill two Freehold slots, `recordId` bind, stuffed `target` ignored at pay, overlay skip, expire no pay, `noInnerHtml`, replace helper). WAVE71 / WAVE72 / WAVE74 / WAVE76 all true. No WAVE78 MSN FAIL.
+- Known suite FAILs only: WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul gate. Not hunt bugs.
+- Static: `JOB_KINDS` includes `'hunt'`; cap `4 + 2N + 2N + 2N + 16`; extra hunt drop after extra mine/trade; proto tokens dropped; `recordId` allowlist `rec-<n>`.
+- Static: `syncHuntJobs` fill 2 slots; origin-only accept; origin `payQuoted` from live `rec.bounty` (refuse if not finite `> 0`); hunt does not stamp overlay fallback 400 (`PIRATE_BOUNTY_FALLBACK` stays overlay-only at pirate fill).
+- Static overlay skip: pirate bounty branch tests `acceptedHuntClaimsName` / `huntPaidNames` **before** `credits +=`. Hunt pay uses `rec.name` not stuffed `job.target`. `silenceOverlayForHunt` marks matching accepted overlay `done`.
+- Static UI: `h()` uses `textContent` only. `src/systems/station.js` has no `innerHTML`. Digit 2 hunt cards regen title/detail/reward/state from `huntCardName` (live `rec.name`, else stripped target, else `the marked reaver`). No `rec-` in titles. Accept by mouse `btn(..., acceptJob)` and Digit index into `boardJobs`.
+- NPC AI mode `'hunt'` in `npc.js` unchanged (not a job kind).
+- Edge pins from contract: stuffed target ignored (boot); proto id dropped; expire no pay; accepted hunt wins purse vs overlay (boot `overlaySkip`).
+- Playwright MCP: locked (`Browser is already in use ... mcp-chrome-7d372dc`). Vite served `http://127.0.0.1:5173/` (HTTP 200). Headless Chrome CDP reached a blank `about:blank` page (no `__ctx`, no Jobs overlay). Digit 2 live pane not shown. [NO BROWSER COVERAGE]
+- Residual stuffed-save (not live play, not a WAVE78 pin fail): `extraDuplicateHuntRecords` only drops extras when over cap; two accepted hunts that share `recordId` can survive under cap. `huntPaidNames` is per tick, so a second accepted duplicate could pay on a later tick. Live fill never binds the same `recordId`. Worker already noted this.
+
+## Bugs found
+
+## Environmental issues
+- Playwright MCP could not open a page: browser profile already in use. Isolated flag is not on the tool schema.
+- Headless Chrome CDP did not load the Vite app (stayed `about:blank`; screenshots black). Live Digit 2 Jobs pane was not captured.
+- Graph `graph_resolve` returned `codex/workflow-document-production` (coverage 0.09, Word/Google Docs). That workflow does not apply to this hunt verify. Work followed the parent verifier brief.
+
+## Evidence
+- Screenshots: out/w78/hunt/jobs-00-title.png, out/w78/hunt/jobs-pane.png, out/w78/hunt/jobs-accept.png (all blank; no Jobs pane)
+- Logs: out/w78/hunt/boot-pins.txt, out/w78/hunt/browser-boot.json, out/w78/hunt/browser-origin.json, out/w78/hunt/browser-jobs.json, out/w78/hunt/browser-accept.json, out/w78/hunt/browser-href.json
+- Test output: out/w78/hunt/boot-pins.txt
+  wave78 msn: all 32 pins true
+  WAVE71 / WAVE72 / WAVE74 / WAVE76: all true
+  unexpected FAIL: none (WAVE4 / WAVE26 / WAVE35 only)

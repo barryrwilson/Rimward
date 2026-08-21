@@ -1,0 +1,115 @@
+Wave 82 TGT-05 lock cats + 12px cone — verifier
+Date: 2026-08-21
+Workspace: C:\Projects\WebSim
+Domain: mixed
+Graph: proceed_unmodeled (owner). graph_resolve returned codex/workflow-document-production (false match). Did not follow that stack.
+Rule: do not edit project source. Did not run npm run test:boot.
+
+STATUS: CLEAN
+
+## What I ran
+
+1. `node out/w82/tgt05/probe.mjs`
+   FAIL (env): ERR_UNKNOWN_FILE_EXTENSION .css (hail.js → npc → CSS).
+2. `node --import ./scripts/with-css-stub.mjs out/w82/tgt05/probe.mjs`
+   EXIT 0. SUMMARY fail=0
+   cone=12 stationKind=station gateTo=veridian podKind=pod landmarkId=fh_shepherd
+   Log: out/w82/tgt05/probe-log.txt
+3. Read: src/game/reticle-aim.js, src/systems/controls.js, hud.js, combat.js,
+   hail.js, ship.js, src/game/save.js WORLD_FIELDS, src/game/jump.js,
+   src/systems/station.js dock zone, src/systems/gate.js jump zone,
+   docs/Tgt05LockCatsDesign.md
+4. Browser: GET http://127.0.0.1:5173 HTTP 200. Did not start a second Vite.
+   Playwright MCP browser already in use (mcp-chrome-7d372dc). No KeyV press,
+   no pause, no ctx.targets inspect. [NO BROWSER COVERAGE]
+5. Grep: Raycaster in src/**/*.js = 0 hits.
+
+## pickReticleLock
+
+File: src/game/reticle-aim.js
+- LOCK_CONE_PX = 12 (export). Comment: CSS pixels, not degrees. No CONVERGE_DOT.
+- Direct-hit body disc first (disc.t). Cone only if disc.t is Infinity.
+- centerInCone: dx^2+dy^2 <= 12*12 around pip (_px/_py from fillCamRay).
+- discContains: projected body radius vs pip. Station 32, gate 30, pod 0.9,
+  landmark mesh bounding sphere (skip if no landmarks group / no mesh).
+- Ships: live ctx.ships member, skip destroyed, no lockKind stamp.
+- Rocks: asteroid list row, no lockKind stamp.
+- Wrappers from materializeLock only:
+  { lockKind:'station', position } — live ctx.station.position, not stamp
+  { lockKind:'gate', to, hub, position }
+  { lockKind:'pod', position, pod } — pod is live ctx.pods member
+  { lockKind:'landmark', id, position }
+- Allowlist fail-closed: unknown wrap kind returns null.
+- reservedToken on gate to / landmark id / system id.
+- Clues not in considerLandmarks. Landmark without mesh radius 0 → skip.
+- reticleAimPoint still rocks + live ships only. Guns stay on reticle ray.
+- No THREE.Raycaster.
+
+Probe pins: live ship lock, dead skip, untagged rock, four wrappers, clue miss,
+reserved ids fail, cone 10px hit / 40px miss, disc beats cone.
+
+## Fail-closed rails
+
+MATCH (ship.js 651–656): liveLock requires !lockKind + object + state.
+rockLock requires list.indexOf + position + (lockKind==='rock' OR untagged).
+Kind wrappers refuse.
+
+Mining pull (combat.js 1268–1269): !lockKind && !object && list.indexOf >= 0.
+
+Seeker (combat.js liveMissileLock 1148–1149): if (!t || t.lockKind) return null.
+
+Lead (combat.js playerMuzzleDir 1087): !lockKind && live ship only.
+Guns still spawn along reticleAimPoint ray regardless of lock.
+
+RANGE + combat rail + lead HUD (hud.js):
+- shipTgt = isShipLock && state && !destroyed && targetPos
+- isShipLock = !kind && (state || object)
+- RANGE in-range: shipTgt && weapon range (1218)
+- lead: shipTgt && wSpeed > 0 (1155)
+- MATCH lamp: matchSpeed && (shipTgt || isRockLock) (1537)
+Kind locks do not light RANGE, lead, combat rail, or MATCH.
+
+Hail (hail.js 76): if (!live || live.lockKind) return false.
+
+Cycle-T (controls.js 54–81): ships + group-3 rocks only. No station/gate/pod/landmark.
+
+KeyV: TRACKED KeyV, pendingReticleLock, tryReticleLock.
+Miss: commLine 'Nothing under the reticle.' + emit('reticleLock', { hit: false }).
+Hit: emit('reticleLock', { hit: true }) literal only.
+Unknown lockKind: miss, does not assign.
+
+HUD names: allowedLockKind station/gate/pod/landmark; ASTEROID only if rockOk
+(list membership). textContent; no innerHTML in hud.js. No hullKind write.
+
+## Dock / jump / persist / stale
+
+Dock: station.js inZone = distance <= U.DOCK_RANGE; D uses inZone, not lock.
+Jump: gate.js nearD2 vs JUMP.zone; D emits jumpRequested in zone.
+HUD prompt: ctx.station.inZone / ctx.gate.inZone, not lockKind.
+jump.js midpointSwap: ctx.targets.current = null.
+WORLD_FIELDS (save.js 75–98): no targets.
+snapshot() does not serialize ctx.targets.
+dropStaleKindLock + dropStaleRockLock each frame.
+systemLoaded nulls kind locks; podCollected calls dropStaleKindLock.
+
+## Browser
+
+Vite already up: HTTP 200 len=1571.
+Playwright attach failed: browser already in use.
+Did not press KeyV. Did not inspect window.__ctx.targets.
+[NO BROWSER COVERAGE]
+
+## Bugs found
+
+None.
+
+## Residual notes (not bugs)
+
+- Probe.mjs mining/MATCH/seeker copies live predicates; live files match.
+- Cone occlusion is nearest cone/disc t, not a scene mesh Raycaster.
+- Bare `node out/w82/tgt05/probe.mjs` needs `scripts/with-css-stub.mjs`.
+
+## Environmental
+
+CSS stub required for probe (hail → npc CSS import). After stub: green.
+Playwright MCP session locked. Vite not started by this verifier.

@@ -1,0 +1,35 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker file set: docs/Msn02ExploreDesign.md, out/w77/explore/current-explore-inventory.md, out/w77/explore/shared-contract.md, out/w77/explore/security-review.md, out/w77/explore/code-review.md.
+- Src scope: grep src/, scripts/, public/ for kind 'explore', syncExplore, EXPLORE_SLOTS. Zero matches. No innerHTML in station.js.
+- Git: worker outputs are untracked markdown. Dirty src/scripts/wishlist/PROGRESS exist from other waves. Those diffs do not add explore-job strings. This worker did not edit sibling out/w77/{hunt,passenger} or sibling briefs.
+- Live inventory sample (12+ cites, code wins):
+  - save.js 65 KEY rimward-save-v1; 75-79 WORLD_FIELDS jobs+mystery; 101 SAFE_ID; 106-110 RESERVED_IDS; 115-122 cap 4+4*N+16; 123 PAY_QUOTED_MAX 20000; 127 JOB_KINDS bounty/patrol/haul/ferry/recovery/mining/trade (no explore); 128 JOB_STATES; 197-208 hyphen tokens; 357-389 extraOfferedFamily; 407-447 sanitizeJobs; 519-538 sanitizeReputation; 551-556 snapshot copies WORLD_FIELDS; 711 sanitizeJobs call.
+  - station.js 152 Digit 2 Jobs; 173 HAUL_MARGIN 1.4; 176 RECOVERY_REWARD 300; 187 PIRATE_BOUNTY_CAP 2; 189-190 mining/trade slots 2; 191 MINING_REP 2; 193 MINING_DEADLINE 600; 196 PAY_QUOTED_MAX; 962-965 holdUnits; 1098-1105 ARCHIVE_UU null; 1179-1228 Archive desk lists, no debit while UU unset; 1689-1693 priceOf data 0; 1711-1713 otherSystemId; 1724-1756 unique four; 1759-1761 ensureJobs; 1845-1855 recovery wreck overlay kind recovery; 2132-2142 boardJobs mining/trade home filter; 2151 jobPayFor; 2202-2205 completeJob done; 2233 patrol freehold +=; 2252-2347 mining/trade failed-first pay+replace; 2288-2290 / 2337-2339 employer +2 Object.hasOwn(FACTIONS); 2323-2324 trade dest rebind; 2373-2385 Wave 35 haul dest; 2434 ensureJobs from initStation; 2489-2494 h() textContent; 2777 / 2805-2807 origin payQuoted; 2828-2832 render sync (no syncExploreJobs); 2909 mouse Accept; 3424-3427 Jobs board Digit 2; 3548-3550 digit accept by index; 3627-3631 ticks, delivery 0.5 s.
+  - mystery.js 37-38 radii 35/100; 44 found/visited; 107-128 clue found + landmark visited.
+  - authored-systems.js 56-58 The Shepherd / fh_shepherd; 87-90 Hulk Row; vd_c_shanty is a clue id (illegal UI example, not proposed copy).
+  - galaxy.generated.js 16-26 The Hearth Cart.
+  - contacts.js keeperChartMark 387-402; chartedMarkNotes 414-426; §25 names only 380-400.
+  - hud.js 29-30, 1348-1349, 1421-1432 display names; galaxychart.js 14-19 never clue id/text.
+  - data-trade.js 5-14 tokens; 23 DATA_DROP_RATE null; 72-85 sanitize; 114-125 spawn null.
+  - world.js 24-27 never hub routes; 811 WRECK_TTL 600.
+  - ctx.js 109 cargoCapacity 20; 125-149 world has no jobs default; 169-171 targets; 198-208 commLine/clueFound/landmarkFound.
+  - state.js 308-322 COMMODITIES; 541 SYSTEMS merge; 549-563 FACTIONS.unknowables; no Unknowables SYSTEMS row.
+  - landmarks.js 59-79 / 132-156 dim from mystery.visited.
+- Node count: Object.keys(SYSTEMS).length = 100; 100/100 have a named landmark; faction unknowables systems = 0; live cap 420; explore-room cap 620.
+- Brief merge table vs shared-contract.md §0 / §1.2 / §12: kind explore (not recovery); 2 slots; extend world.jobs; no new persist key; cap LIVE_CAP_AT_IMPL + EXPLORE_ROOM only (4+6*N+16); origin landmarks; need 1; origin jobPayFor(round(RECOVERY_REWARD * HAUL_MARGIN)); employer +2; no dataCrystal/dataCube grant; no invented drop % / Archive UU; Digit 2; serial PRs named only.
+- Proposed UI copy: Survey The Shepherd / Freehold Drift. No clue ids, no clue text, no mystery.visited, no data cargo on jobs.
+- Security freeze present: hyphen-token ids, RESERVED_IDS, stuffed pay clamp 0…20000, dest/landmark rebound, no job.faction, textContent, origin-only accept, failed-before-pay.
+
+## Bugs found
+
+
+## Environmental issues
+- Workspace has dirty Wave 76+ src (station.js, save.js, ctx.js, hud.js, scripts/boot-test.mjs) plus dirty PROGRESS.md and docs/PLAYER-EXPERIENCE-WISHLIST.md. Out of scope: no explore-job strings in those files.
+- Sibling untracked out/w77/hunt and out/w77/passenger and sibling briefs exist. This worker did not write them.
+
+## Evidence
+- Screenshots: none
+- Logs: out/w77/explore/verify.txt

@@ -1,0 +1,23 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker files present: `docs/Bio03ClassLookDesign.md`; `out/w81/bio03/current-bio03-look-inventory.md`; `out/w81/bio03/shared-contract.md`; `out/w81/bio03/security-review.md`; `out/w81/bio03/code-review.md`.
+- No bake this wave: `public/assets/ships/beautiful/**/*.glb` last write 2026-08-14 (Wave 8 commit `b960b57`). Wave 81 markdown mtimes 2026-08-21 ~12:42–12:43. Git shows no `public/assets/ships/beautiful` change on HEAD vs this wave.
+- Preserve split vs live `src/`: player `makeLivingHull` CPU in `ship.js`; NPC `buildShipMesh` → `buildShipAsset` GLB + GPU swim. `makeLivingHull` is not imported by `npc.js`. No `buildBeautifulShip`. `organic.js` `isBeautiful` is `faction === 'beautiful'` only (`organic.js` 67–69).
+- `SHIP_CLASSES` six live keys (`state.js` 35–42). `NPC_CLASSES` same six (`ship-assets.js` 11). Beautiful `PILOT_CLASSES` full six (`scripts/ship_builders/beautiful/__init__.py` 73). `LIVING_STOCK` is `light`/`cutter`/`heavy` only (`shipyard.js` 26, 38). Ace/freighter/frigate stay on `YARD_LIST_UU` and NPC GLBs; yard buy omit holds. Frigate GLB dir exists.
+- Path join: `loadTemplate` / `buildShipAsset` call `canonicalFaction` / `canonicalClass` before `${ASSET_ROOT}/…` (`ship-assets.js` 114–119, 230–234, 387–390). `ASSET_ROOT = '/assets/ships'`. Only `https://` in `ship-assets.js` is a three.js comment (147). No `eval` / `new Function`. `assertSelfContainedGlb` rejects external `uri` (209–228). `userData.glow` is a Group with a mesh child (404–416); `npc.js` writes `.visible` / `.scale` (1382, 1916, 1942).
+- Wave 76 uniforms live: `uSwimTime` / `uSwimAmp` / `uSwimHz` (`ship-assets.js` 43–57, 59–87). `updateShipAsset` idle 0.5 → cruise 2.3 via `speed/120`; omit speed → idle; `reducedMotion` → `uSwimAmp.value = 0` (457–470). NPC caller passes speed (`npc.js` 2181). Mixer `setTime` skipped under `reducedMotion` (458–459). Player vertex swim has no `reducedMotion` gate (888–933 vs trail hide 989–991).
+- Fail-closed keep Wave 8 GLB rather than zoo / CPU clone / `BUILDERS['beautiful']` sphere stub: contract §0.9 / §6; inventory §4 / §13; brief bake section. `PILOT_CLASSES` still lists all six so the stub (354–361) does not run for Beautiful (`build-ship-assets.py` 478–483).
+- Locked-doc writes: this wave did not write `docs/Bio03FleetDesign.md` (mtime 2026-08-20), `docs/BioLivingShipsDesign.md` (2026-08-20), wishlist (2026-08-21 11:38, before BIO-03 files), or `PROGRESS.md` (12:06, before BIO-03 files). Worker file list has no `src/`, `scripts/`, `public/`, `package.json`. Sibling TGT/MSN briefs have 12:41–12:43 mtimes from parallel waves; they are not in the BIO-03 worker file list.
+- Spot-check of inventory/contract/brief `file:line` vs working-tree `src/` (2026-08-21). Law matches live code. Non-blocking cite tightness only: brief overview row lumps unset-`hullKind` onto `ship.js` 590–591 / `state.js` 146 (correct remount cite is `meshKindFor` 503–508, which inventory §1 and contract §1 already use); `heavy.py` overlapping mantles start ~17 vs header cite 1–9; freighter “three biomes” is in-file (~34+) vs header cite 1–14.
+
+## Bugs found
+
+## Environmental issues
+Working tree is dirty from other waves (`src/`, `PROGRESS.md`, wishlist, `docs/BioLivingShipsDesign.md`). This check used the working tree as live code. Those dirty files were not Wave 81 BIO-03 writes. Beautiful GLBs were not rebuilt.
+
+## Evidence
+- Path: out/w81/bio03/verify.txt
+- Live: `state.js` 35–42, 146; `shipyard.js` 16–40; `ship.js` 143–147, 258–307, 354–428, 503–528, 549–553, 590–591, 888–965, 978–991; `ship-assets.js` 7–13, 23–36, 43–108, 114–124, 147, 209–234, 387–470; `npc.js` 167–180, 1382, 1916, 1942, 2156, 2181; `organic.js` 67–69; `hud.js` 66–75; `hangar.js` 81–107, 730–752; `ctx.js` 13–36, 198–227; `ship-scale.js` 10–18, 38–39, 258; `model-catalog.js` 92–113; `station.js` 271, 508–527; `beautiful/__init__.py` 73, 90–107; `build-ship-assets.py` 29, 38–45, 354–361, 420–423, 429–457, 460–506; `measure-ships.mjs` 12; `package.json` 12–13.
+- Disk: six class GLB dirs including `frigate/`; materials `trader`+`pirate` ktx2/png; six `.blend` sources; plates under `docs/SpaceShipIdeas/reference-images/beautiful-ones/`.

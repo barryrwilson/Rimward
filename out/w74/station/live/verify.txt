@@ -1,0 +1,32 @@
+## Status
+CLEAN
+
+## What I tested
+- Reused Vite on 127.0.0.1:5182 (HTTP 200 for `/` and `/src/systems/station.js`; current standing/archive copy). Did not start 5183. Did not kill PID 178564.
+- Chrome `C:\Program Files\Google\Chrome\Application\chrome.exe`, puppeteer-core, `--use-angle=swiftshader`.
+- Script: `out/w74/station/live/browser-station.mjs`. Title → New Game → Digit1 origin. Real Digit/click after `__ctx` dock cheat.
+- Freehold Landing: Digit 0 Shipyard (not a new service). Digit 9 Standing. Digit 1 Market (no ARCHIVE).
+- Assembly Census (`as_census`): Digit 9 Standing. Digit 1 Market Archive after commodities. File a legal cube → Esc cancel → re-arm → Confirm filing.
+- Console: no pageerror, no console error, no `station.js` error.
+
+## Bugs found
+
+## Environmental issues
+- Graph resolve returned blocked_ambiguous (office-document workflows). Owner line was proceed_unmodeled. Live run used that exception. Vite 5182 was already this tree; no second server.
+
+## Evidence
+- Pins: 38/38 PASS. Log: `out/w74/station/live/browser-station.log`. JSON: `out/w74/station/live/pins.json`.
+- Freehold home buttons: `9 — Standing`, `0 — Shipyard`. Rank: `Freehold Compact: Stranger (+0 rep)` / `Next: Known (10)`. Shot `01-freehold-home.png`.
+- Digit 0 overlay includes `SHIPYARD` + Hangar/Yard. Shot `02-freehold-shipyard.png`.
+- Digit 9 `textContent`: `STANDING — The Shepherd's Lane`; current `Stranger (+0)`; `LADDER` Sworn 50 / Trusted 25 / Known 10 / Stranger -10 / Suspect -25 / Marked -1000; `HOW STANDING MOVES` (mining +2, patrol +5, rescue +4/+1, People desk, graft `min(current, -10)`); `LIVE CONSEQUENCES` hunt at -10, yards below 0, Ace Known 10 / Frigate Trusted 25, 5/10/15%, locker fear 40 or Freehold below -25 (Marked; -25 Suspect does not open), graft cap. No police/restitution. Shot `03-freehold-standing.png`.
+- Freehold Market: commodity table (Provisions…Wakeglass). No `ARCHIVE`, no `File a legal cube`. Shot `04-freehold-market.png`.
+- Assembly dock: `as_census` / Census Registry / `assembly`. Shot `05-assembly-home.png`. Digit 9 ladder same. Shot `06-assembly-standing.png`.
+- Assembly Market: ARCHIVE block after Wakeglass/locker note. `ARCHIVE — filing desk` / `UU unset — no debit, no credit.` / `File a legal cube`. Shot `07-assembly-market.png`.
+- Arm: `Data cube · UU unset · Confirm does not file` + `Confirm filing` + `Esc — Cancel`. Credits 350 / cargo `[]` unchanged. Shot `08-assembly-archive-armed.png`.
+- Esc: confirm buttons gone; File a legal cube returns; credits/cargo unchanged. Shot `09-assembly-archive-esc.png`.
+- Confirm: notice `UU unset — the archive will not file.` Credits 350 / cargo `[]` unchanged. Shot `10-assembly-archive-confirm.png`.
+- `[NO BROWSER COVERAGE]` cleared for Freehold Digit 0/9, Freehold Market no-Archive, Assembly Digit 9, Assembly Archive confirm/Esc.
+
+## Notes
+- Assembly jump used `__ctx` (`jumpRequested` then system/dock flags). User clicks after dock: Digit 1/9, File a legal cube, Confirm filing, Esc.
+- Digit 8 Launch left Freehold before the Assembly teleport.

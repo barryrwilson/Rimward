@@ -1,4 +1,5 @@
-import { U } from '../game/state.js';
+import { SYSTEMS, U } from '../game/state.js';
+import { pickReticleLock } from '../game/reticle-aim.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -21,11 +22,12 @@ import { U } from '../game/state.js';
  *   LMB (hold)   → fire current weapon group
  *   1 / 2 / 3 / 4 → weapon group (cannon / disruptor / mining / missiles)
  *   T (tap)      → cycle target (nearest first; asteroids too in group 3)
+ *   V (tap)      → lock under the visible reticle
  *   H (tap)      → hail   ·   D (tap) → dock   ·   C (tap) → camera toggle
  *   X (tap)      → match-speed edge (ship.js toggles flags.matchSpeed)
  *
  * Edge inputs (afterburnerPressed/targetPressed/hailPressed/dockPressed/
- * cameraPressed/matchSpeedPressed) pulse for exactly one frame: captured in event handlers,
+ * cameraPressed/matchSpeedPressed/reticleLockPressed) pulse for exactly one frame: captured in event handlers,
  * published (and cleared) at the top of update() so later systems in the
  * same frame still see them. Window blur zeroes axes/fire/drift so the ship
  * never runs away while unfocused; the throttle setpoint persists (§5.1).
@@ -35,7 +37,7 @@ import { U } from '../game/state.js';
 const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
   'KeyQ', 'KeyE',
-  'KeyT', 'KeyH', 'KeyC', 'KeyX',
+  'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV',
   'Digit1', 'Digit2', 'Digit3', 'Digit4',
   'ShiftLeft', 'ShiftRight',
   'Space',
@@ -79,9 +81,22 @@ function cycleTarget(ctx) {
   ctx.targets.current = cands[(idx + 1) % cands.length].ref;
 }
 
-/** Rock lock: list entry with a live position, not a ship `{ object, state }`. */
+function reservedToken(value) {
+  return value === '__proto__' || value === 'constructor' || value === 'prototype';
+}
+
+function allowedLockKind(t) {
+  const k = t && t.lockKind;
+  if (k === 'station' || k === 'gate' || k === 'pod' || k === 'landmark') return k;
+  return null;
+}
+
+/** Rock lock: asteroid list row. Untagged `{position}` is not a rock. */
 function isRockLock(t) {
-  return !!(t && t.position && !t.object && !t.state);
+  if (!t || !t.position) return false;
+  if (t.lockKind === 'rock') return true;
+  if (t.lockKind) return false;
+  return !t.object && !t.state;
 }
 
 /** Null a rock lock the field no longer holds. Does not touch ship locks. */
@@ -90,6 +105,112 @@ function dropStaleRockLock(ctx) {
   if (!isRockLock(t)) return;
   const list = ctx.asteroids && ctx.asteroids.list;
   if (!list || list.indexOf(t) < 0) ctx.targets.current = null;
+}
+
+function currentSystemDef(ctx) {
+  const sysId = ctx.world && ctx.world.currentSystem;
+  if (typeof sysId !== 'string' || reservedToken(sysId)) return null;
+  if (ctx.systems && Object.hasOwn(ctx.systems, sysId)) return ctx.systems[sysId];
+  if (Object.hasOwn(SYSTEMS, sysId)) return SYSTEMS[sysId];
+  return null;
+}
+
+function dropStaleKindLock(ctx) {
+  const t = ctx.targets.current;
+  if (!t) return;
+  if (t.lockKind == null) return;
+  const kind = allowedLockKind(t);
+  if (!kind) {
+    ctx.targets.current = null;
+    return;
+  }
+  if (kind === 'station') {
+    if (!ctx.station || !ctx.station.position) ctx.targets.current = null;
+    return;
+  }
+  if (kind === 'pod') {
+    if (!ctx.pods || ctx.pods.indexOf(t.pod) < 0) ctx.targets.current = null;
+    return;
+  }
+  const def = currentSystemDef(ctx);
+  if (!def) {
+    ctx.targets.current = null;
+    return;
+  }
+  if (kind === 'gate') {
+    const to = t.to;
+    if (typeof to !== 'string' || reservedToken(to) || !Object.hasOwn(SYSTEMS, to)) {
+      ctx.targets.current = null;
+      return;
+    }
+    if (t.hub) {
+      const routes = def.hub && def.hub.routes;
+      if (!routes || routes.indexOf(to) < 0) ctx.targets.current = null;
+      return;
+    }
+    const gates = def.gates;
+    if (!gates) {
+      ctx.targets.current = null;
+      return;
+    }
+    for (let i = 0; i < gates.length; i++) {
+      if (gates[i] && gates[i].to === to) return;
+    }
+    ctx.targets.current = null;
+    return;
+  }
+  if (kind === 'landmark') {
+    const id = t.id;
+    if (typeof id !== 'string' || reservedToken(id)) {
+      ctx.targets.current = null;
+      return;
+    }
+    const lms = def.landmarks;
+    if (!lms) {
+      ctx.targets.current = null;
+      return;
+    }
+    for (let i = 0; i < lms.length; i++) {
+      if (lms[i] && lms[i].id === id) return;
+    }
+    ctx.targets.current = null;
+  }
+}
+
+const RETICLE_LOCK_MISS = 'Nothing under the reticle.';
+
+function reticleLockBlocked(ctx) {
+  if (!ctx.ship?.object) return true;
+  if (ctx.flags?.docked) return true;
+  if (ctx.gate?.jumping) return true;
+  if (ctx.flags?.paused) return true;
+  if (ctx.models?.isOpen?.()) return true;
+  if (typeof document !== 'undefined' && document.getElementById?.('rw-title')) return true;
+  return false;
+}
+
+function missReticleLock(ctx) {
+  ctx.emit('commLine', { text: RETICLE_LOCK_MISS });
+  ctx.emit('reticleLock', { hit: false });
+}
+
+/** Direct-hit lock under the visible reticle. Miss does not steal the current lock. */
+function tryReticleLock(ctx) {
+  if (reticleLockBlocked(ctx)) {
+    missReticleLock(ctx);
+    return;
+  }
+  const hit = pickReticleLock(ctx);
+  if (!hit) {
+    missReticleLock(ctx);
+    return;
+  }
+  if (hit.lockKind != null && !allowedLockKind(hit)) {
+    missReticleLock(ctx);
+    return;
+  }
+  ctx.targets.current = hit;
+  ctx.emit('reticleLock', { hit: true });
 }
 
 export function initControls(ctx) {
@@ -108,14 +229,16 @@ export function initControls(ctx) {
   let pendingDock = false;
   let pendingCamera = false;
   let pendingMatchSpeed = false;
+  let pendingReticleLock = false;
 
   let lastFTapAt = -Infinity; // performance.now() ms of previous F tap
 
   const zeroAxesFireDrift = () => {
     pressed.clear();
     fireDown = false;
-    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = false;
+    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = false;
     input.matchSpeedPressed = false;
+    input.reticleLockPressed = false;
     input.throttleHeld = false;
     input.steerX = 0;
     input.steerY = 0;
@@ -150,6 +273,9 @@ export function initControls(ctx) {
         break;
       case 'KeyX':
         pendingMatchSpeed = true;
+        break;
+      case 'KeyV':
+        pendingReticleLock = true;
         break;
       case 'KeyF': {
         const now = performance.now();
@@ -207,6 +333,7 @@ export function initControls(ctx) {
     'LMB (hold) — fire',
     '1/2/3/4 — weapon group: cannon / disruptor / mining / missiles',
     'T — cycle target',
+    'V — lock under reticle',
     'H — hail · D — dock · C — camera (chase / third / first-person)',
     'X — match lock speed',
     'G — cycle hub route at a Lamplighter junction',
@@ -226,8 +353,9 @@ export function initControls(ctx) {
       input.dockPressed = pendingDock;
       input.cameraPressed = pendingCamera;
       input.matchSpeedPressed = pendingMatchSpeed;
+      input.reticleLockPressed = pendingReticleLock;
       input.throttleHeld = has('KeyR') || has('KeyF');
-      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = false;
+      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = false;
 
       if (input.cameraPressed) {
         const order = ['chase', 'third', 'first'];
@@ -238,15 +366,18 @@ export function initControls(ctx) {
         ctx.flags.firstPerson = next === 'first';
       }
 
-      // Stale rock lock: 'systemLoaded' rebuilds the list; drop if gone for any reason.
+      // Stale rock / kind lock: jump, scoop, despawn, and systemLoaded drop.
       const evs = ctx.lastEvents;
       for (let i = 0; i < evs.length; i++) {
-        if (evs[i].type === 'systemLoaded') {
+        const typ = evs[i].type;
+        if (typ === 'systemLoaded') {
+          if (ctx.targets.current && ctx.targets.current.lockKind) ctx.targets.current = null;
           dropStaleRockLock(ctx);
-          break;
         }
+        if (typ === 'podCollected') dropStaleKindLock(ctx);
       }
       dropStaleRockLock(ctx);
+      dropStaleKindLock(ctx);
 
       if (input.targetPressed) cycleTarget(ctx);
 
@@ -268,6 +399,8 @@ export function initControls(ctx) {
       // Pixel offset from screen center (0,0 = centered) — HUD re-centers it.
       ctx.targets.reticleScreen.x = ox;
       ctx.targets.reticleScreen.y = oy;
+
+      if (input.reticleLockPressed) tryReticleLock(ctx);
 
       input.strafeX = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0);
       input.strafeY = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0);

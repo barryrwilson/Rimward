@@ -1,0 +1,60 @@
+## Status
+CLEAN
+
+## Verdict
+Wave 80 MSN-02 renewable faction-war matches `out/w79/faction-war/shared-contract.md`. Isolated war pin-check PASS. Live WAVE80 ESPIONAGE and WAVE80 REP-04 do not forbid `kind: 'war'`. Product flags in the serial list are not present.
+
+Isolated sibling harness replicas still fail on war strings. That is MEDIUM harness replica, not a product bug.
+
+## Isolated pin-check
+Command: `node --import ./scripts/with-css-stub.mjs out/w80/faction-war/pin-check.mjs`
+Result: WAVE80 WAR PIN-CHECK PASS (exit 0)
+All listed keys true, including uniqueFour, keepWarFh, keepWarHearth, dropProto, dropNeed2, dropSameDest, dropAceRecord, capFormula, keepHonestSpy, keepHonestWar, noTargetWrite, huntStaysPirate, bountyAceStays, noInnerHtml.
+
+## Static vs shared-contract.md
+- JOB_KINDS includes `'war'` (`src/game/save.js` 144). Ids `war-<sys>-<n>` (`tokens[0] !== 'war'`, three tokens, SYSTEMS key, numeric n). Need integer 1 (`WAR_NEED`). `recordId` `/^rec-(0|[1-9][0-9]*)$/`.
+- Slots 2 (`WAR_SLOTS_PER_SYSTEM` in save.js 121 and station.js 195). `syncWarJobs` fills while count < 2.
+- Dest = first rival gate with a station (`warDestId`). Tick, accept, and card copy rebind `warDestId(origin)`, not stuffed `job.destSystem`. Same-faction dest is skipped (`target === employer` continue).
+- Quarry = `role === 'patrol'`, not pirate, not ace, not Named Gun names (`isEligibleWarQuarry` + `isNamedGunName`). Dest-faction only. Existing origin/dest banks only. `ensureBank` is absent from `station.js`.
+- Pay: origin `clampJobPay(jobPayFor(..., PATROL_REWARD))` with `PATROL_REWARD = 300`. Stamp on accept. Deadline `world.time + MINING_DEADLINE` (600). Expire fail-closed, no pay/rep.
+- Complete: `tickDeliveryJobs` war branch. Witness `destroyed` + `causer === 'player'` + record dead/captured. No `flags.docked` AND. `jobTick` runs docked or not (station.js 5288–5292). `failed` then `warPayComplete`. Employer `MINING_REP` +2. No `reputation[target]`.
+- Unique four stay (`makeJobs` still `bounty-ace` / `patrol-lane` / `haul-provisions` / `ferry-consignment`). Hunt quarry still `role === 'pirate'`. Overlay `PIRATE_BOUNTY_CAP = 2`.
+- Cap = live (unique 4 + five families + espionage room + overlay 16) + war room: `4 + 14*N + 16`. Comment: plus espionage room only, plus war room only. Extra war after extra spy. Last-resort drop keeps honest offered spy and war.
+- UI: Digit 2. `h()` / `textContent`. No `innerHTML` in `station.js`. Cards print quarry name / `the marked patrol`, never `rec-n`. Proto `war-__proto__-0` drops.
+
+## CROSS-CUT harness
+Live `scripts/boot-test.mjs`:
+- WAVE80 ESPIONAGE uses `spyKindStays` (espionage kind + `spy-${sysId}-`). It does not pin `!kind: 'war'`.
+- WAVE80 REP-04 `bioPodStay` is BIO/POD UU + `freehold += PATROL_REP` only. It does not pin `kind: 'war'`.
+- WAVE80 WAR object exists and pins complete/replace, employer +2, targetZero, huntStillPirates, namedGunsNotWar, warTickNoTargetWrite.
+
+Isolated replicas (not live boot-test):
+- `node --import ./scripts/with-css-stub.mjs out/w80/espionage/pin-check.mjs` → FAIL `noWarKind` only (`!stationSrc.includes("kind: 'war'")`). MEDIUM harness replica.
+- `node --import ./scripts/with-css-stub.mjs out/w80/rep04/pin-check.mjs` → FAIL `bioPodStay` (`!station80.includes("kind: 'espionage'")` and `!station80.includes("kind: 'war'")`). MEDIUM harness replica.
+
+Do not strip `'war'` from product to satisfy those replicas.
+
+Full `npm run test:boot` was not re-run here (not cheap). Static read of live WAVE80 ESPIONAGE/REP-04/WAR pins is the evidence for the live harness.
+
+## Restricted files (this task)
+- `src/game/state.js`: not modified.
+- `src/systems/kill-standing.js`: not present.
+- `src/game/kill-standing.js`: untracked sibling (REP-04), not a war-job file.
+- `src/systems/npc.js` and `src/core/ctx.js`: dirty in the working tree. Diffs are reticle-lock input/event, `cargoValueSafe` / data pods, `applyPlayerKillStanding`. No war-job strings. Not this serial.
+
+War serial files remain `src/game/save.js`, `src/systems/station.js`, `scripts/boot-test.mjs`, plus docs under MSN-02 / wishlist.
+
+## Serial flag list
+- Named Gun as war quarry: no (eligibility + ace record drop).
+- Hunt retargeted: no (`isEligibleHuntQuarry` still pirate).
+- Unique ace migrated: no (`id: 'bounty-ace'` still in `makeJobs`).
+- Target standing write: no (employer only).
+- innerHTML: none in `station.js`.
+- Origin-dock required for claim: no.
+- War dest same faction: no (`warDestId` skips employer faction).
+- Proto id kept: no (`war-__proto__-0` drops).
+
+Not flagged: WAVE4/26/35; missing owner target delta; Digit overflow past 9.
+
+## Playwright
+[NO BROWSER COVERAGE]

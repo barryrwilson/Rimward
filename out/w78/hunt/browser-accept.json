@@ -1,0 +1,10 @@
+{
+  "click": {
+    "clicked": false
+  },
+  "after": {
+    "acceptedLines": [],
+    "huntStates": [],
+    "notice": null
+  }
+}

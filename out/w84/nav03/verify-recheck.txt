@@ -1,0 +1,196 @@
+NAV-03 Wave 84 verifier recheck
+Date: 2026-08-21
+Scope: designer blockers frozen in contract + brief. Persist/teleport prior pass CLEAN. No src/wishlist/PROGRESS edits by this verifier.
+Worker files: docs/Nav03AutopilotDesign.md, out/w84/nav03/shared-contract.md (contract wins).
+Live occupancy: src/style.css, src/ui/hud.css, src/systems/hud.js, src/systems/gate.js (read only).
+
+STATUS: CLEAN
+
+================================================================
+0. Graph
+================================================================
+
+graph_resolve decision: proceed_unmodeled (no active workflow met threshold).
+Assigned parent task is this NAV-03 recheck. Continued.
+
+================================================================
+1. Designer blockers (must be frozen in contract AND brief)
+================================================================
+
+1.1 Refuse visible above chart z-index 30 (not #hud toast while chart open)
+
+Contract:
+- §1.8 MATCH refuse on the chart header live region. Do not rely on #hud toasts
+  (z-index 10) under .rw-galaxy-chart (z-index 30).
+- §3.3 same: #hud toasts are not the visible reporter while flags.galaxyChart.
+- §8.1 header status node role=status aria-live=polite; textContent; 4 s.
+  Cites style.css 28 z-index 10 vs hud.css 1431 z-index 30.
+
+Brief:
+- Pain: MATCH refuse on commLine alone is invisible under the open chart.
+- §7 refuse while chart open: header aria-live polite. #hud toasts are not
+  the reporter (z-index 10 vs 30).
+- Open Q 7: MATCH/refuse reporter = chart header live region, not #hud toasts.
+- Acceptance: MATCH on → refuse visible on the open chart.
+
+Live occupancy (unchanged):
+- #hud z-index 10 at style.css:28.
+- .rw-galaxy-chart z-index 30 at hud.css:1431; inset 0; scrim 0.82.
+- Toasts .rw-toasts top:14px right:168px (hud.css:589–592).
+
+Verdict: frozen. Chart-open refuse is the header live region, not a hidden toast.
+
+1.2 Steer-break ignored while chart open / galaxyChart; WASD still cancels
+
+Contract:
+- Flag name is flags.galaxyChart (not chartOpen). Writer galaxychart.js only. §3.4.
+- §5 input: ignore the steer arm while flags.galaxyChart. Header click leaves
+  hypot ~1. After close, arm steer-break only after hypot stays below 0.65
+  for one frame. WASD / throttle / afterburner / drift still cancel while
+  the chart is open.
+
+Brief:
+- §4.1 Ignore steer-break while flags.galaxyChart. After close, arm only after
+  hypot stays below 0.65 for one frame. WASD still cancels.
+- Open Q 6: ignore while chart open; re-arm after hypot < 0.65 one frame.
+- Risk: Chart click drops AP → ignore steer arm while flags.galaxyChart.
+- Coupling: flags.galaxyChart writer galaxychart.js; suppress steer-break.
+
+No identifier chartOpen in brief or contract. Freeze uses flags.galaxyChart.
+
+Verdict: frozen. Steer-break off while chart open. Helm still cancels.
+
+1.3 Native disabled only when no dest; refuse-worthy stays clickable
+
+Contract §8.1:
+- Native disabled only when !dest or path is not an array with length ≥ 1.
+- Refuse-worthy with a dest (MATCH, docked, jumping, paused, combat, hull,
+  dest === here, missing hop): stay clickable. aria-disabled="true".
+  No native disabled. Click writes §8.3 to the chart live region + commLine.
+
+Brief §7:
+- Native disabled only when there is no dest/route.
+- MATCH and other §6 refuses stay clickable (aria-disabled + header live
+  region). Do not dump reason text into aria-disabled.
+
+Verdict: frozen. Empty route uses native disabled. MATCH-with-dest stays click.
+
+1.4 Interrupt English table
+
+Contract §8.3 frozen player map. Never print the token. Never print dest ids.
+Tokens from §5 all have a line (restore silent):
+
+| Token / refuse              | Line |
+|-----------------------------|------|
+| MATCH                       | Autopilot refused — MATCH is on. |
+| no dest / no route          | Autopilot refused — plot a destination first. |
+| dest === current            | Autopilot refused — already in the destination system. |
+| docked                      | Autopilot refused — docked. |
+| jumping                     | Autopilot refused — jump in progress. |
+| paused                      | Autopilot refused — game paused. |
+| combat (refuse)             | Autopilot refused — combat. |
+| hull (refuse)               | Autopilot refused — hull warning. |
+| missing hop at engage       | Autopilot refused — next gate is missing. |
+| cancel                      | Autopilot cancelled. |
+| input                       | Autopilot cancelled — manual helm. |
+| combat (interrupt)          | Autopilot cancelled — combat. |
+| hull (interrupt)            | Autopilot cancelled — hull warning. |
+| sun                         | Autopilot cancelled — star heat. |
+| impact                      | Autopilot cancelled — collision. |
+| missingGate                 | Autopilot cancelled — next gate is missing. |
+| blocked                     | Autopilot cancelled — approach blocked. |
+| dock                        | Autopilot cancelled — docking. |
+| pause                       | Autopilot cancelled — paused. |
+| hail                        | Autopilot cancelled — hail. |
+| arrive                      | Arrived — autopilot off. |
+| restore                     | Silent. No commLine. |
+
+Brief §8 points at contract §8.3. Chart-open refuse = chart live region + commLine.
+
+Cite nit (not a law error): §8.1 no-dest aria-label may say
+"Autopilot unavailable — plot a destination first."
+§8.3 line is "Autopilot refused — plot a destination first."
+Native disabled, no click required. Same player fact.
+
+Verdict: frozen. Designer Major (English table) is closed.
+
+1.5 Cancel chip not under top-right banner (top-center)
+
+Contract §8.2 pin:
+  #hud .rw-autopilot { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); }
+Not .rw-banner (top: 96px; right: 14px).
+Not .rw-jump (center). Not hud.js 1077 hub. Not NAV-02 .rw-nav-readout.
+
+Brief:
+- Merge table: top-center chip top: 14px; left: 50%. Not banner, hub, .rw-jump.
+- Pain: .rw-banner is top-right, not top-center.
+- §7 same CSS pin.
+
+Live occupancy:
+- Banner #hud .rw-banner top: 96px; right: 14px (hud.js:597–600). Top-right.
+- Toasts top: 14px; right: 168px (hud.css:589–592).
+- CONTROLS top: 14px; left: 14px (hud.css:882–884).
+- Empty top-center band between CONTROLS and toasts is free.
+- Hub clamp cx-44 / 80 px (hud.js:1077). .rw-jump center pointer-events none
+  (hud.js:632–646).
+
+Verdict: frozen. Chip is true top-center, not under Manifest banner.
+
+================================================================
+2. Persist / hop / jump (prior CLEAN, rechecked)
+================================================================
+
+2.1 Next hop is path[1]
+
+Contract §1.2, §2.1, §4.1, §6, §8.2 chip hop name SYSTEMS[path[1]].name.
+Brief overview, merge table, §4.2, coupling table.
+hopIndex: 0 hits in docs/Nav03AutopilotDesign.md and out/w84/nav03/*.md
+except prior verify.txt discussing the absence.
+NAV-01 shared-contract.md next = path[1]; hopIndex not stored.
+
+2.2 Restore autopilot false
+
+Contract §0.4 / §1.4 / §2.2 step 5: always write autopilot: false after
+successful restore even if blob said true. Omit-key = false.
+Brief goals 5, restore §6, open Q 1, coupling Restore force false.
+
+2.3 jumpRequested still gate.js only
+
+Contract §1.5 / §3.2 / §4.3 / §13: sole emitter gate.js; to is always near.to.
+AP may only latch ctx.autopilot.wantJump. No emit from autopilot.js.
+Brief: gate.js is the only jumpRequested emitter; to: near.to.
+
+Live: emit('jumpRequested' in src/**/*.js: one hit, gate.js:559
+  if (inZone && ctx.input.dockPressed) emit('jumpRequested', { to: near.to })
+jump.js consumes. ctx.js lists. song.js cues. No second emitter.
+
+No teleport: contract §1.6 still forbids AP position / currentSystem writes
+except existing jump.js midpoint + collision slide. Charge 2.5 stays.
+
+src/** still has 0 hits for autopilot / world.nav. Wave 84 remains markdown.
+
+================================================================
+3. Contract vs brief
+================================================================
+
+No conflict on the five blockers, path[1], restore false, or sole emit.
+Merge law: shared-contract.md wins. Brief says so.
+
+Residual named (not this recheck fail):
+- flags.galaxyChart is a later ctx.js freeze (code-review 🟡).
+- Pause disengage must be called at paused=true writers (security 🟡).
+- wantJump is previous-frame latch (documented).
+- designer-audit.md still shows Status: open on the old pass. That file is
+  the original audit, not the freeze. Contract + brief are the freeze.
+  ui-audit.md records the blockers closed.
+
+================================================================
+4. Worker did not write src / wishlist / PROGRESS
+================================================================
+
+This verifier wrote only out/w84/nav03/verify-recheck.txt.
+Did not edit src/, docs/PLAYER-EXPERIENCE-WISHLIST.md, or PROGRESS.md.
+
+================================================================
+End
+================================================================

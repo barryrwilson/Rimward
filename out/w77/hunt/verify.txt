@@ -1,0 +1,21 @@
+## Status
+CLEAN
+
+## What I tested
+- Git scope: worker hunt files are untracked markdown only (`docs/Msn02HuntDesign.md`, `out/w77/hunt/{current-hunt-inventory,shared-contract,security-review,code-review}.md`). No hunt-worker edits to `src/`, `scripts/`, `public/`, `index.html`, or `package.json`. Dirty Wave 76 `src/` has no `kind: 'hunt'`, `HUNT_SLOTS`, or `syncHuntJobs`.
+- Grep `src/` (and repo) for hunt-job strings: absent from code; present only in hunt markdown.
+- Sampled ≥12 inventory cites vs live (plus extras): `save.js` 65, 78, 101, 115–122 (cap 420), 123, 127 (`JOB_KINDS` no `'hunt'`), 129–134, 197–208, 266–271, 407–446; `station.js` 152, 187–193, 196, 1724–1756 (unique four), 1759–1761, 1777–1819 (overlay cap 2, `kind: 'bounty'`), 1919–1938, 1992–1995, 2077–2099, 2132–2142, 2151–2158, 2189–2205, 2233, 2249–2370, 2434, 2489–2494 (`textContent`; `innerHTML` grep 0), 2769–2807, 2828–2832, 3424–3427, 3548–3550, 3627–3631; `world.js` 30, 252, 282–285 (`rec-<n>`), 348–360, 407–419, 463–493, 584–622, 811 (`WRECK_TTL` 600), 923–946, 1332–1346; `state.js` 6–8, 12–18, 541 (`SYSTEMS` merge; live key count 100), 827–901; `npc.js` 200 (AI mode `'hunt'`, not a job kind); `ctx.js` 109, 198–228; `authored-systems.js` 193–212 (Verge `pirates: 1`); wishlist 549–558.
+- Diff brief merge table vs `out/w77/hunt/shared-contract.md`: kind `'hunt'`, cap `live_cap_at_impl + HUNT_ROOM` (620 at inventory-time 100), overlay cap 2 stays, unique four stay, quarry bind `recordId` `rec-<n>` (no asteroid UUID), origin `payQuoted` + clamp 20000, employer +2, Digit 2 / `textContent`. Serial PRs named only. Contract wins; merge table matches implementable §§.
+- Cap text has no passenger/explore rooms (hunt adds `HUNT_ROOM` only; forbids `4+6*N+16` as a pretend-sibling formula).
+- Freeze: kind is not `'bounty'`; overlay not stuffed; Named Guns / unique ace not renewable; no asteroid UUID; XSS `textContent`; proto ids; stuffed pay/target rebound; `reputation[userString]` locked.
+- Serial PR named-only. No wishlist / `PROGRESS.md` / sibling `out/w77/{passenger,explore}` / sibling briefs in this worker’s file list.
+
+## Bugs found
+
+## Environmental issues
+- Working tree is dirty from Wave 76 (`src/systems/station.js`, `src/game/save.js`, and other `src/` files). Out of scope: no hunt-job strings.
+- Graph catalog `graph_resolve` returned `blocked_ambiguous` on Word/Sheets/Slides workflows (coverage 0.11). Those candidates do not apply to this markdown verify. Work followed the parent verifier brief.
+
+## Evidence
+- Screenshots: none
+- Logs: out/w77/hunt/verify.txt

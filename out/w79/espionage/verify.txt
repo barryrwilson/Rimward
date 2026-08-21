@@ -1,0 +1,111 @@
+Wave 79 espionage verifier
+Date: 2026-08-21
+Scope: markdown-only kind 'espionage'. Do not edit src/. Test this brief only.
+
+STATUS: CLEAN
+
+WHAT I TESTED
+- Worker file set vs src/ and sibling out/w79/{rep04,faction-war}
+- Live JOB_KINDS / cap / unique four / Digit 2 / persist / XSS / EXP / rep writers
+- Contract formula = live_cap_at_impl + ESPIONAGE_ROOM only
+- Brief vs contract vs inventory
+- Live file:line cites vs current src (code wins)
+
+SCOPE
+- Worker files present: docs/Msn02EspionageDesign.md,
+  out/w79/espionage/{current-espionage-inventory.md,shared-contract.md,
+  security-review.md,code-review.md}
+- Grep src for espionage | ESPIONAGE_ROOM | kind: 'espionage' | spy- : 0 hits
+- This worker did not land src edits for the family
+- Sibling out/w79/rep04 and out/w79/faction-war exist from parallel workers
+  (later mtimes). This worker’s five files do not bake WAR_ROOM
+- PROGRESS.md / wishlist / RepStandingDesign.md were not in the worker
+  touch list; verifier did not treat them as this worker’s output
+
+LIVE CODE (code wins)
+- JOB_KINDS save.js:138 =
+  bounty|patrol|haul|ferry|recovery|mining|trade|hunt|passenger|explore
+  No 'espionage'. Stuffed spy kind drops today.
+- JOBS_SANITIZE_MAX save.js:115-129 =
+  4 + 2N*5 families + 16 = 4 + 10*N + 16
+- Object.keys(SYSTEMS).length = 100 (state.js:541 merge)
+- Cap at 100 = 4 + 1000 + 16 = 1020
+- Comment save.js:122: explore was last family in the live formula
+- No war room. No espionage room live
+- UNIQUE_JOB_KIND save.js:140-145 and makeJobs station.js:1732-1764
+  bounty-ace, patrol-lane, haul-provisions, ferry-consignment
+- WORLD_FIELDS includes 'jobs' save.js:78. KEY 'rimward-save-v1' save.js:66
+- Digit 2 = jobs: DOCK_KEY_SERVICES[1]='jobs' station.js:152;
+  Digit d → index d-1 station.js:4393-4400
+- h() textContent station.js:3208-3213
+- innerHTML in station.js: 0
+- job.faction in src: 0
+- Employer +2 mining path: MINING_REP=2 station.js:194;
+  hunt 2657-2658; mining 2893-2895; trade 2942-2944;
+  passenger 2989-2991; explore 3053-3055
+- Patrol hardcoded freehold += PATROL_REP station.js:2777
+- No target-faction Jobs write
+- DATA_DROP_RATE null data-trade.js:23; spawnDataPod returns null :118-121
+- ARCHIVE_UU null station.js:1106
+- Explore complete 3048-3064: credits + employer +2; no data cargo
+- PAY_QUOTED_MAX 20000 save.js:130; clampJobPay station.js:1867-1869
+- explorePayBase = Math.round(RECOVERY_REWARD * HAUL_MARGIN) station.js:2508
+  RECOVERY_REWARD 176=300; HAUL_MARGIN 173=1.4
+- Explore origin stamp station.js:3618
+- MINING_DEADLINE 600 station.js:196; WRECK_TTL world.js:811
+- completeJob sets done station.js:2746-2749 (unique/overlay only)
+- Families splice+replace; tickDeliveryJobs station.js:2789
+- boardJobs hides offered families off-home 2673-2687; no spy line yet
+- otherSystemId = gates[0].to station.js:1719-1720 (may share faction)
+- Trade pay rebinds dest 2928-2929
+- SAFE_ID rejects hyphens save.js:101; jobIdTokens hyphen grammar 209-221
+- sanitizeReputation FACTIONS-only save.js:672-692
+- clueFound comment ctx.js:208; commLine ctx.js:206
+- isUnknowable faction-style.js:163-164
+
+CONTRACT / BRIEF LAW (agree)
+- kind: 'espionage' (unused live). Ids spy-<sys>-<n>. Prefix ≠ kind (mine- precedent)
+- Unique four stay. No migrate. Overlay cap 2 stays
+- Cap at impl: live_cap_at_impl + ESPIONAGE_ROOM, ESPIONAGE_ROOM = 2*N
+  Inventory-time: 1020 + 200 = 1220 at 100
+  Explicit forbid: combined 4+12*N+16 / WAR_ROOM term
+  Add ESPIONAGE_ROOM to whatever cap is live; do not reset to 1020
+- Digit 2 Jobs pane only. No new Digit. textContent / h() / commLine
+- No innerHTML. No new localStorage key. No new WORLD_FIELDS
+- No dataCrystal / dataCube grant
+- Pay: explorePayBase at origin jobPayFor + PAY_QUOTED_MAX. No new UU table
+- Secret success: employer +2, target 0 (no write). Do not write dest faction
+- Expose: proposed, needs owner, fail closed (no target write). No kill UU
+- Expire: no pay, no employer, no target
+- Dest: rival SYSTEMS key with station; dest faction ≠ employer;
+  prefer gate rivals else any rival; pay/gather rebind; stuffed dest ignored
+- One-in-one-out splice+replace; never DONE spy
+- state.js READ-ONLY
+- Brief merge table matches contract §0 / §8 / §12
+- Inventory cites Wave 78 line numbers; sampled cites match live (code wins)
+
+FLAG CHECKS (none tripped)
+- kind reuse: no (new 'espionage')
+- cap baking sibling rooms: no (ESPIONAGE_ROOM only)
+- invented UU pay table: no (cite explorePayBase)
+- target write on success: no (skip / target 0 = no loss)
+- src edits by this worker: no
+- XSS / innerHTML allowed: no (forbidden)
+- unique four migrate: no (forbidden; boot pins)
+
+NON-FLAGS (per brief)
+- Sibling war brief also uses 1220 as its live+room arithmetic: intended
+- Inventory KEY cite save.js 65 is off by one (KEY is 66). String
+  'rimward-save-v1' is correct; WORLD_FIELDS jobs 78 is correct.
+  Would not cause a new persist key. Not a FLAG.
+
+GRAPH
+- graph_resolve returned execute_workflows for browser-assisted work
+  (low coverage on the word "verify"). This task is data/markdown vs live
+  src. No browser. No external send.
+
+BUGS FOUND
+(none)
+
+ENVIRONMENT
+(none)

@@ -1,0 +1,36 @@
+## Status
+CLEAN
+
+## What I tested
+- Isolated pin runner: `node --import ./scripts/with-css-stub.mjs out/w80/rep04/pin-check.mjs` (exit 0; all 11 WAVE80 keys true).
+- Extra helper probe (double-call, miner/patrol, incident-style `causer` only, not-destroyed, pirate/ace/`classKey === 'ace'`, victim-only vs currentSystem). All true; bag and events unchanged.
+- Static review vs `out/w79/rep04/shared-contract.md` and `docs/Rep04AttributionDesign.md`:
+  - `KILL_STANDING_DELTA === null` in `src/game/kill-standing.js` only; not in `state.js` / `save.js`.
+  - Fail-closed gate is first: `typeof !== 'number'` → `{ ok: false, reason: 'no-delta' }` before any bag or `commLine`.
+  - One `applyPlayerKillStanding(ctx, live)` in `handleDestroyed` after the `npcDestroyed` de-dupe emit; `deathHandled` set before both call sites (ships loop + lastEvents backstop).
+  - No `applyPlayerKillStanding` in `combat.js` / `world.js`. Combat still only stamps `ai.lastAttacker` from `fromPlayer`.
+  - Witness is own `ai.lastAttacker === 'player'` (equivalent player case of `lastAttackerOf`). No incident `causer` read.
+  - Skip pirate/ace/`classKey === 'ace'`, independent, reserved, missing FACTIONS keys. `standingRead` + `canWriteRep`; never `standingOf`.
+  - Digit 9 `standingMoveNotes()` still five authored lines; no kill-standing claim. `station.js` has no `innerHTML`.
+  - No `'reputationChanged'` under `src/`. WORLD_FIELDS still `'reputation'` only for standing; restore of stuffed `crimeScore`/`wanted`/`crimes` does not keep those keys.
+  - BIO/POD/patrol `freehold += PATROL_REP` / ladder six rungs / Digit 0 shipyard unchanged.
+- `npm run test:boot` not run (10+ min; worker timeout). Isolated pins cover the WAVE80 object.
+
+## Bugs found
+[Empty if CLEAN]
+
+## Environmental issues
+- Full `npm run test:boot` not executed here. Known WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul FAILs are pre-existing/[ENV] per brief; not treated as this task.
+- Working tree is dirty from other waves (`src/core/ctx.js` reticle lock, `src/game/save.js` MSN-02 job kinds, large `src/systems/station.js`). Those diffs do not add `crimeScore`/`wanted`/`kills` persist keys, `'reputationChanged'`, or Digit 9 kill copy. REP-04-specific src is `src/game/kill-standing.js` (new) plus the `handleDestroyed` bind/import in `src/systems/npc.js`.
+
+## Evidence
+- Pin-check stdout: `out/w80/rep04/pin-check.log` — all keys true, `failed []`, `calls: 1`.
+- Extra probe: `out/w80/rep04/extra-helper.log` — `doubleCall`, `causerNoWrite`, `huntSkip`, `noSystemOwnerStamp` true.
+- `src/game/kill-standing.js:5` `export const KILL_STANDING_DELTA = null;`
+- `src/game/kill-standing.js:85-88` early return `'no-delta'` before mutate/emit.
+- `src/game/kill-standing.js:38-43` witness `ai.lastAttacker === 'player'` only.
+- `src/systems/npc.js:21` import; `npc.js:2128-2130` emit then one helper call; `2173-2175` and `2242-2244` `deathHandled` guards.
+- `src/systems/combat.js:1541-1547` lastAttacker + `npcDestroyed`; no standing write.
+- `src/systems/station.js:1072-1081` five Digit 9 move notes; no kill claim.
+- `src/game/save.js:75-76` WORLD_FIELDS includes `'reputation'`; `672-691` sanitize still drops reserved/non-FACTIONS/non-finite.
+- `scripts/boot-test.mjs:16669-16900` WAVE80 object matches pin-check keys.

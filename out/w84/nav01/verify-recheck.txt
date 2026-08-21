@@ -1,0 +1,160 @@
+NAV-01 Wave 84 verifier recheck
+Date: 2026-08-21
+Scope: data freeze (markdown only). No src edits by this verifier.
+Graph: graph_resolve r-mt3j12eh-b32176e8 (execute_workflows; weak match claude/workflow-cross-agent-coordination). No other-agent control; gate unused.
+
+Prior verify: out/w84/nav01/verify.txt STATUS BUGS_FOUND
+  HIGH-1 hopIndex vs remaining
+  HIGH-2 status enum / recalc persist vs event
+Worker claim: HIGH persist/hopIndex and designer hit-target Major are frozen.
+
+================================================================
+1. Worker artifacts present
+================================================================
+- out/w84/nav01/current-nav-inventory.md
+- out/w84/nav01/shared-contract.md
+- docs/Nav01RouteDesign.md
+- out/w84/nav01/security-review.md
+- out/w84/nav01/code-review.md
+- out/w84/nav01/ui-audit.md
+- out/w84/nav01/designer-audit.md
+- out/w84/nav01/designer-audit-recheck.md (independent CLEAN after §3.3.1)
+- out/w84/nav01/verify.txt (prior pass)
+
+================================================================
+2. This worker vs forbidden paths
+================================================================
+git status --short (relevant):
+  M  PROGRESS.md
+  M  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  M  src/game/save.js
+  ?? docs/Nav01RouteDesign.md
+  ?? out/w84/nav01/
+
+mtime:
+  src/game/save.js 15:53
+  docs/PLAYER-EXPERIENCE-WISHLIST.md 17:08
+  PROGRESS.md 17:37
+  NAV-01 markdown 18:20–18:37
+  designer-audit-recheck.md 18:37
+
+git diff -- src/game/save.js: 477 insertions, no 'nav' / hopIndex / route persist key.
+Live WORLD_FIELDS (save.js 75–98) still ends at fieldOre. No 'nav'. No 'route'.
+src grep world.nav / WORLD_FIELDS 'nav' / hopIndex: 0.
+
+PROGRESS.md: Wave 84 / NAV-01 / nav01 → 0 hits.
+Wishlist: Initiative NAV NAV-01 text is the locked source the brief reads. Worker-touched list does not include it. mtime precedes NAV-01 freeze files.
+
+Verdict: NAV-01 worker did not change src/, wishlist, or PROGRESS.md. Working tree dirt is other work (ENV).
+
+================================================================
+3. Prior HIGH-1 hopIndex (must NOT remain as stored field)
+================================================================
+NAV-01 shape allowlist §1.2: dest, path, remaining, status only.
+
+Forbidden (never allowlist, never persist): hopIndex, cursor, next, active, recalc as stored status, any second hop cursor (§1.4, §1.4.1, §10).
+Sanitize §1.5.2: drop hopIndex / cursor / next if present. Do not copy into the healed bag.
+hopIndex must never join the allowlist (§1.4.1).
+
+Next hop: path[1] when status === 'plotted' and path.length >= 2 (§1.4.1, §2.3).
+remaining REQUIRED and coherent remaining === path.length - 1 when plotted.
+
+Brief merge table, Key Decision 11, regression table match the contract.
+hopIndex appears only as forbidden / consume-map "do not store". MATCH. Prior HIGH-1 closed.
+
+================================================================
+4. Prior HIGH-2 status enum (must be plotted|blocked|arrived)
+================================================================
+Persist status allowlist: 'plotted' | 'blocked' | 'arrived'. Idle = omit bag (§1.2–§1.3).
+recalc is an event, not a persist status. Off-path jump writes plotted or blocked (§1.3, §4.2).
+Sanitize: status not in {plotted, blocked, arrived} → DELETE bag. active / recalc / broken fail closed (§1.5.4).
+
+Sibling must not persist status 'active' / 'recalc' / 'broken' (§1.4.1).
+Name map is docs-only; do not write the left column.
+
+MATCH. Prior HIGH-2 closed.
+
+================================================================
+5. Designer hit-target Major (must NOT remain as 16 chart units)
+================================================================
+Live: NODE_R = 8 chart units (galaxychart.js 35). Hub ring r=15 after the node (194–198).
+.rw-galaxy-hub-ring has fill:none and no pointer-events:none (hud.css 1530–1536).
+Labels + current marker already pointer-events:none. Expected live gap: PR3 later.
+
+Freeze (contract §3.3.1, brief UI / Q11 / decision 12):
+1. Hit floor diameter ≥ 24 CSS px from live viewBox × CSS size. Not 16 chart units.
+2. Hit circle filled (transparent / fill-opacity 0) or pointer-events: all. Never fill:none only.
+3. Hub rings, labels, current marker, plot strokes: pointer-events: none.
+4. Paint order: gates → hub routes → plot overlay → painted nodes + hub rings → hit discs → labels → current marker.
+5. Hit discs receive the click. data-system-id on the disc. Painted NODE_R stays 8.
+6. No chart preventDefault / stopPropagation.
+
+designer-audit.md original verdict remains NOT CLEAN (historical). Worker follow-up points at §3.3.1.
+Independent recheck out/w84/nav01/designer-audit-recheck.md: CLEAN. 0 majors. Prior Major closed.
+
+Remaining designer items are PR3 CSS minors (dest shape, Clear states, legend, hover, paint-order parenthetical). Not the prior Major.
+
+MATCH. Designer hit-target Major frozen.
+
+================================================================
+6. Sibling consume table / next hop path[1]
+================================================================
+Contract §1.4.1 present and explicit. If sibling brief conflicts, this table wins.
+NAV-02 shared-contract.md NOW consumes NAV-01 exactly:
+  shape { dest, path, remaining, status }
+  status ∈ plotted|blocked|arrived
+  nextTo = path[1]
+  remaining from the bag (not path.length - hopIndex)
+  hopIndex forbidden / does not exist
+  recalc is event; transient REROUTE is HUD-only
+NAV-03 shared-contract.md: next hop path[1]; extra field autopilot boolean on SAME record; no hopIndex.
+
+NAV-02 verify.txt is STALE (still BUGS_FOUND hopIndex). Merge law is nav02/shared-contract.md, not that verify file.
+Cross-cut: note only. Do not fail NAV-01. Consume table is explicit. Sibling contract aligned.
+
+================================================================
+7. Orchestrator laws 1–15 in shared-contract.md §0
+================================================================
+1 markdown only / later serial — present
+2 state.js READ-ONLY — present
+3 one WORLD_FIELDS key nav; siblings extra fields same record — present
+4 KeyM toggle; no pause; no preventDefault/stopPropagation — present
+5 plot must not set targets.current / steal KeyV KeyT — present
+6 Digit 0–9 stay — present
+7 innerHTML forbidden — present
+8 chart never mystery — present
+9 BFS gates[].to and hub.routes one-way; uncharted not clickable — present
+10 jump owners; advance systemLoaded; no teleport — present
+11 restore manual; no AP auto-engage — present
+12 no UU/BIO/… inventions — present
+13 do not edit sibling NAV-02/03 files — present
+14 proto dest/path fail closed — present
+15 new emit types listed; no spread smash — present
+
+All 15 appear as numbered items in §0.
+
+================================================================
+8. One WORLD_FIELDS key nav
+================================================================
+Proposed: one string 'nav'. No second key (route / autopilot / guidance) (§1.1).
+Live save.js 75–98: no nav. MATCH inventory “no nav today”.
+Siblings add fields on the same object after a serial extends the allowlist (autopilot later; hopIndex never).
+
+================================================================
+9. Live cites still match (no src this wave)
+================================================================
+WORLD_FIELDS save.js 75–98: time…fieldOre. NO nav. MATCH.
+galaxychart.js innerHTML: 0. KeyM 242–247 no preventDefault. MATCH.
+hud.css hub ring 1530–1536: not pointer-events none (PR3 named). MATCH inventory.
+
+================================================================
+10. Verdict
+================================================================
+Prior HIGH-1 hopIndex-as-stored: closed (forbidden only; next = path[1]).
+Prior HIGH-2 status fork: closed (plotted|blocked|arrived; recalc event).
+Prior designer Major 16 chart units: closed in freeze (≥24 CSS px, fill, hub rings none, paint order). Independent designer-audit-recheck CLEAN.
+Sibling consume table explicit. NAV-02 contract now consumes path[1] / plotted|blocked|arrived.
+Laws 1–15 present. One persist key nav. Worker did not land src / wishlist / PROGRESS.
+
+STATUS: CLEAN
+ENV: dirty save.js + wishlist + PROGRESS from other waves; stale out/w84/nav02/verify.txt (contract already aligned)

@@ -1,0 +1,24 @@
+# WAVE78 boot pin dump (npm run test:boot, 2026-08-21)
+
+wave71 msn: {"lampRock":true,"sanitizeJobs":true,"omitJobs":true,"noFullSafeId":true,"dropProto":true,"keepAce":true,"keepMineFh":true,"keepMineHearth":true,"capFits":true,"fieldsJobs":true,"fillTwo":true,"fillSoft":true,"noHard4Sync":true,"noAsteroidId":true,"uniqueFour":true,"completeReplace":true,"completePay":true,"expireNoPay":true,"noInnerHtml":true,"replaceHelper":true}
+
+wave72 bio: all true (see full boot log)
+
+wave74 pins: all true (see full boot log)
+
+wave76 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"dropProto":true,"dropNeed1":true,"dropBadCargo":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needFive":true,"commodityAllow":true,"destOther":true,"noAsteroidId":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"expireNoPay":true,"noInnerHtml":true,"miningNeedUntouched":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+
+wave78 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropAceRecord":true,"dropCommodity":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needOne":true,"recordBind":true,"noAsteroidId":true,"titlesHideRec":true,"stuffedTargetIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"overlaySkip":true,"overlayCap":true,"expireNoPay":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+
+Known FAILs (not hunt):
+WAVE4 FENCE FAVOR FAIL
+WAVE26 FERRY QUOTE FAIL
+WAVE26 HAUL QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+WAVE35 HAUL GATE DELIVERY FAIL
+BOOT TEST FAIL — 58 errors
+
+No WAVE78 MSN FAIL line. WAVE71/72/74/76 every pin true. No unexpected FAIL besides WAVE4/26/35.

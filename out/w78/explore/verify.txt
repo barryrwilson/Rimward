@@ -1,0 +1,12 @@
+Independent Wave 78 harness re-check after boot-test freeze helpers — 2026-08-21
+Did not modify project source. Overwrites prior BUGS_FOUND verify.txt. Canonical file: out/w78/explore/verify-recheck.txt.
+
+## Status
+CLEAN
+
+See verify-recheck.txt for the full report.
+
+WAVE78 hunt / passenger / explore completePay all true on independent npm run test:boot.
+WAVE71 / WAVE72 / WAVE74 / WAVE76 all true.
+WAVE4 / WAVE26 / WAVE35 FAILs are not bugs this pass.
+[NO BROWSER COVERAGE]

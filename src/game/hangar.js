@@ -1,4 +1,4 @@
-import { createShipState, SHIP_CLASSES } from './state.js';
+import { createShipState, SHIP_CLASSES, FACTIONS } from './state.js';
 import {
   sanitizeCargoList,
   sanitizeFaction,
@@ -13,6 +13,7 @@ import {
   healMissileAmmo,
   canSeat,
 } from './weapon-fit.js';
+import { GRAFT_LIST_UU } from './shipyard.js';
 
 /**
  * Hangar persist + switch helpers — JSON-plain hull rows on ctx.world.hangar.
@@ -78,8 +79,79 @@ function trimCargoToCapacity(list, cap) {
   return out;
 }
 
+function graftedOwnTrue(obj) {
+  return !!obj && Object.prototype.hasOwnProperty.call(obj, 'grafted') && obj.grafted === true;
+}
+
 function applyUnknowablesKind(obj, faction) {
-  if (faction === 'unknowables') obj.hullKind = 'living';
+  if (faction === 'unknowables') {
+    obj.hullKind = 'living';
+    delete obj.grafted;
+  }
+}
+
+/** grafted: true only. Living / Unknowables never keep the flag. */
+function applyGraftedAllowlist(row, raw) {
+  if (graftedOwnTrue(raw)) row.grafted = true;
+  if (row.hullKind === 'living') delete row.grafted;
+  applyUnknowablesKind(row, row.faction);
+}
+
+function copyGraftedFromRow(p, row) {
+  if (graftedOwnTrue(row)) p.grafted = true;
+  else delete p.grafted;
+  if (p.hullKind === 'living' || p.faction === 'unknowables') delete p.grafted;
+}
+
+function healPlayerGrafted(p) {
+  if (!graftedOwnTrue(p)) delete p.grafted;
+  if (p.hullKind === 'living' || p.faction === 'unknowables') delete p.grafted;
+}
+
+/** Patrol hunt floor. Same value as npc.js HOSTILE_STANDING (not exported). */
+const HOSTILE_STANDING = -10;
+
+function dockBannerOf(ctx) {
+  const id = ctx?.world?.currentSystem;
+  const raw = ctx?.systems?.[id]?.faction;
+  return typeof raw === 'string' ? raw : '';
+}
+
+function standingOf(ctx, faction) {
+  const bag = ctx?.world?.reputation;
+  if (!bag || typeof bag !== 'object' || Array.isArray(bag)) return 0;
+  if (typeof faction !== 'string' || !Object.prototype.hasOwnProperty.call(bag, faction)) return 0;
+  if (RESERVED_IDS.has(faction)) return 0;
+  const n = bag[faction];
+  return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+}
+
+/** True when any sanitized hangar row still owns grafted: true. */
+export function anyGrafted(ctx) {
+  const hulls = ctx?.world?.hangar?.hulls;
+  if (!Array.isArray(hulls)) return false;
+  for (const row of hulls) {
+    if (graftedOwnTrue(row)) return true;
+  }
+  return false;
+}
+
+/** Cap Beautiful standing at HOSTILE_STANDING while any grafted row remains. */
+export function applyAbominationStanding(ctx) {
+  if (!anyGrafted(ctx)) return;
+  const world = ctx.world;
+  if (!world) return;
+  let bag = world.reputation;
+  if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+    bag = {};
+    world.reputation = bag;
+  }
+  const key = 'beautiful';
+  if (RESERVED_IDS.has(key)) return;
+  if (!Object.prototype.hasOwnProperty.call(FACTIONS, key)) return;
+  const raw = Object.prototype.hasOwnProperty.call(bag, key) ? bag[key] : 0;
+  const current = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+  bag[key] = Math.min(current, HOSTILE_STANDING);
 }
 
 function sanitizeName(value, classKey) {
@@ -164,7 +236,7 @@ export function sanitizeHangarRecord(raw) {
   };
   const kind = own(raw, 'hullKind');
   if (kind === 'living' || kind === 'built') row.hullKind = kind;
-  applyUnknowablesKind(row, faction);
+  applyGraftedAllowlist(row, raw);
   return row;
 }
 
@@ -198,6 +270,7 @@ function packLiveHull(ctx, rowId) {
     heat: p?.heat,
     hullKind: p?.hullKind,
   };
+  if (graftedOwnTrue(p)) raw.grafted = true;
   return sanitizeHangarRecord(raw);
 }
 
@@ -231,6 +304,7 @@ function buildStarterRow(ctx, { stock = false } = {}) {
   const row = sanitizeHangarRecord(raw);
   if (row) {
     row.hullKind = 'living';
+    delete row.grafted;
     applyUnknowablesKind(row, row.faction);
     return row;
   }
@@ -241,6 +315,7 @@ function buildStarterRow(ctx, { stock = false } = {}) {
     classKey: 'light',
   });
   fallback.hullKind = 'living';
+  delete fallback.grafted;
   return fallback;
 }
 
@@ -260,7 +335,10 @@ function writeStarterHangar(ctx, { stock = false } = {}) {
   const starter = buildStarterRow(ctx, { stock });
   ctx.world.hangar = { mountedId: starter.id, hulls: [starter] };
   // Starter migrate is living. Align the player so a later park cannot wipe it.
-  if (ctx.player) ctx.player.hullKind = 'living';
+  if (ctx.player) {
+    ctx.player.hullKind = 'living';
+    delete ctx.player.grafted;
+  }
   return starter;
 }
 
@@ -273,11 +351,13 @@ export function sanitizeHangar(ctx) {
   const rawHangar = ctx.world.hangar;
   if (!rawHangar || typeof rawHangar !== 'object' || Array.isArray(rawHangar)) {
     writeStarterHangar(ctx, { stock: false });
+    applyAbominationStanding(ctx);
     return;
   }
   const src = own(rawHangar, 'hulls');
   if (!Array.isArray(src)) {
     writeStarterHangar(ctx, { stock: false });
+    applyAbominationStanding(ctx);
     return;
   }
   const seen = new Set();
@@ -291,6 +371,7 @@ export function sanitizeHangar(ctx) {
   }
   if (rows.length === 0) {
     writeStarterHangar(ctx, { stock: false });
+    applyAbominationStanding(ctx);
     return;
   }
   const want = own(rawHangar, 'mountedId');
@@ -298,6 +379,7 @@ export function sanitizeHangar(ctx) {
   const hulls = capHulls(rows, mountedId);
   if (!hulls.some((r) => r.id === mountedId)) mountedId = hulls[0].id;
   ctx.world.hangar = { mountedId, hulls };
+  applyAbominationStanding(ctx);
 }
 
 /** Missing hangar → one living starter. Existing hangar is sanitized. */
@@ -328,6 +410,7 @@ export function healPlayerHullKind(ctx) {
   p.faction = (factionRaw && !RESERVED_IDS.has(factionRaw)) ? factionRaw : 'independent';
   if (p.hullKind !== 'living' && p.hullKind !== 'built') delete p.hullKind;
   if (p.faction === 'unknowables') p.hullKind = 'living';
+  healPlayerGrafted(p);
   if (Object.prototype.hasOwnProperty.call(p, 'cargo')) delete p.cargo;
   if (Object.prototype.hasOwnProperty.call(p, 'hangarId')) delete p.hangarId;
   if (Object.prototype.hasOwnProperty.call(p, 'launcher')) delete p.launcher;
@@ -347,6 +430,7 @@ export function syncMountedToPlayer(ctx) {
   if (row.hullKind === 'living' || row.hullKind === 'built') p.hullKind = row.hullKind;
   else delete p.hullKind;
   if (row.faction === 'unknowables' || p.faction === 'unknowables') p.hullKind = 'living';
+  copyGraftedFromRow(p, row);
   if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
   else ctx.cargo.length = 0;
   for (const item of row.cargo) ctx.cargo.push({ ...item });
@@ -574,9 +658,11 @@ function loadMountedRow(ctx, row) {
     p.faction = row.faction;
     p.classKey = row.classKey;
     if (row.faction === 'unknowables') p.hullKind = 'living';
+    copyGraftedFromRow(p, row);
     if (Object.prototype.hasOwnProperty.call(p, 'cargo')) delete p.cargo;
     rebuildCombatFlags(p);
   }
+  applyAbominationStanding(ctx);
   if (ctx.world) {
     ctx.world.scanner = row.scanner;
     ctx.world.miningLaser = row.miningLaser;
@@ -623,6 +709,7 @@ export function switchTo(ctx, id) {
     if (ctx.player?.faction === 'unknowables') ctx.player.hullKind = 'living';
     applyFlightEnvelope(ctx, row.classKey);
     callRemount(ctx);
+    applyAbominationStanding(ctx);
     return { ok: true };
   } catch {
     restoreSwitch(ctx, snap);
@@ -636,7 +723,44 @@ export function applyMountedFlight(ctx) {
   const key = ctx.player?.classKey;
   applyFlightEnvelope(ctx, key);
   if (ctx.player?.faction === 'unknowables') ctx.player.hullKind = 'living';
+  if (ctx.player) healPlayerGrafted(ctx.player);
+  applyAbominationStanding(ctx);
   callRemount(ctx);
+}
+
+/** Mounted built hull only. Debits GRAFT_LIST_UU. No remount. */
+export function graftMounted(ctx) {
+  if (!ctx?.flags?.docked) return { ok: false, reason: 'dock' };
+  if (ctx.flags?.combat) return { ok: false, reason: 'combat' };
+  if (ctx.gate?.jumping) return { ok: false, reason: 'jump' };
+  if (ctx.player?.destroyed) return { ok: false, reason: 'destroyed' };
+  if (ctx.flags?.paused) return { ok: false, reason: 'paused' };
+  if (dockBannerOf(ctx) !== 'gilded') return { ok: false, reason: 'banner' };
+  if (standingOf(ctx, 'gilded') < 0) return { ok: false, reason: 'reputation' };
+  sanitizeHangar(ctx);
+  const hangar = ctx.world?.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return { ok: false, reason: 'missing' };
+  const row = hangar.hulls.find((h) => h.id === hangar.mountedId);
+  if (!row) return { ok: false, reason: 'missing' };
+  if (row.faction === 'unknowables' || ctx.player?.faction === 'unknowables') {
+    return { ok: false, reason: 'living' };
+  }
+  if (row.hullKind !== 'built') return { ok: false, reason: 'living' };
+  if (graftedOwnTrue(row) || graftedOwnTrue(ctx.player)) return { ok: false, reason: 'already' };
+  const price = GRAFT_LIST_UU;
+  if (price == null || !Number.isInteger(price) || price < 0) {
+    return { ok: false, reason: 'credits' };
+  }
+  const credits = ctx.world.credits;
+  if (typeof credits !== 'number' || !Number.isFinite(credits) || credits < price) {
+    return { ok: false, reason: 'credits' };
+  }
+  row.grafted = true;
+  if (ctx.player) copyGraftedFromRow(ctx.player, row);
+  ctx.world.credits = credits - price;
+  if (!(ctx.world.credits >= 0)) ctx.world.credits = 0;
+  applyAbominationStanding(ctx);
+  return { ok: true };
 }
 
 /** Death no-save: one living starter. Do not keep parked rows. */

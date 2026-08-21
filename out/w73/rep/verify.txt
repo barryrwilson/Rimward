@@ -1,0 +1,66 @@
+Wave 73 REP verifier
+Date: 2026-08-20
+Mode: design-only. No browser. No full boot test. No src edits.
+Scope: docs/RepStandingDesign.md + out/w73/rep/{current-rep-inventory,shared-contract,security-review,code-review}.md vs live code.
+
+STATUS: CLEAN
+
+1. src/ untouched by this worker
+- Wave 73 tree is markdown: docs/RepStandingDesign.md (untracked) and out/w73/rep/*.md (untracked).
+- git status src dirty files: src/game/hangar.js, src/systems/shipyard-desk.js, src/systems/station.js.
+- Those diffs are Wave 72 BIO graft (applyAbominationStanding, GRAFT_WARN, grafted flag). Ignore per brief.
+- No sanitizeReputation, no Digit 9 ladder copy, no crimeScore, no new WORLD_FIELDS key in src from this wave.
+
+2. Inventory file:line sample vs live (16 cites; all match)
+- state.js 672-678 RANK_LADDER: Sworn 50 / Trusted 25 / Known 10 / Stranger -10 / Suspect -25 / Marked -1000. Six rungs. No extras.
+- state.js 680-682 rankFor: first rung with rep >= min; else last rung Marked (NaN falls through).
+- ctx.js 128 default bag: { freehold, redledger, veridian, hollow } all 0. Beautiful etc. absent.
+- save.js 75 WORLD_FIELDS includes 'reputation'. save.js 64 KEY = 'rimward-save-v1'.
+- save.js 698-700 restore assigns WORLD_FIELDS wholesale. save.js 599-647 sanitizeRestored heals credits/fear/jobs/cargo/fieldOre; no reputation bag heal.
+- save.js 105-109 RESERVED_IDS includes __proto__, constructor, prototype.
+- station.js 132 DOCK_KEY_SERVICES: market,jobs,bar,feed,repair,outfitting,people,launch,epics,shipyard.
+- station.js 2881-2885 Digit 1-9 first nine keys; hot 0 is last key shipyard. labels[8] Standing. Digit 9 = epics. Digit 0 = shipyard.
+- station.js 2788-2831 renderEpics epic stages + ACTIVE STANDING. station.js 2887-2890 dock rank line.
+- station.js 150 PATROL_REP=5; 1825 reputation.freehold += PATROL_REP; 2384 board '+N Freehold rep'.
+- station.js 170 MINING_REP=2; 1879-1881 SYSTEMS[origin].faction hasOwn FACTIONS then bag[faction] = (??0)+2.
+- station.js 1370-1388 applySurvivorRescue: matching-faction cargo, + nOther*RESCUE.otherRep + nKill*playerKillRep; hasOwn FACTIONS.
+- state.js 289-294 RESCUE otherRep 4, playerKillRep 1. Not retuned.
+- trafficking.js 8-13 TRAFFIC_LIST_UU other 160 / playerKill 240; victim 0 / -8; gilded +2. 171-174 addRep victim + gilded. 70-81 canWriteRep object bag + isFactionKey + hasOwn FACTIONS.
+- hangar.js 110-111 HOSTILE_STANDING -10; 138-154 applyAbominationStanding min(current, -10) on beautiful; RESERVED_IDS + hasOwn FACTIONS. 738 gilded standingOf < 0 reason 'reputation'.
+- npc.js 87 HOSTILE_STANDING -10; 1021-1026 standingOf table[fac] no hasOwn; 1065-1072 patrol hunt <= -10; 86 and 1745-1749 LAW_ZONE_RADIUS 300.
+- hail.js 47 INTENT_ORDER demand/salvage/vouch/tribute/respect; no orderLeave.
+- station.js 2027-2032 h() textContent only; 2867 overlay.textContent = ''.
+- hud.js 400-408 commLine toast; 924 pushToast textContent. No innerHTML.
+- shipyard.js 42-48 MIN_REP ace 10 / frigate 25; 80-86 dockReputation finite 0; 88-97 Known/Trusted/Sworn 5/10/15%; 191 rep < 0 no sale.
+- station.js 134 RESTRICTED_REP_GATE -25; 1435 fear >= 40 OR freehold < -25 (Marked; -25 Suspect does not open).
+- combat.js npcDestroyed { ship } only; no reputation write.
+- world.js 1093-1096 greenhand for...in on live bag. 1011/1032/1006/1045 redledger origin-arc writes.
+- origins.js 55-59 Object.keys authored deltas.
+- ctx.js 197-225 frozen events: no 'reputationChanged'. 219-220 survivorRescued / survivorSold.
+
+No cite mismatches in the sample.
+
+3. shared-contract.md vs brief
+- Contract is merge law. Brief header points at out/w73/rep/shared-contract.md and says the contract wins.
+- No contradiction found: markdown-only wave; no src; Digit 9 explain-first; Digit 0 shipyard; digits 1-9 stay; RANK_LADDER frozen; no crimeScore/wanted; police leave defer; restitution UU proposed/needs owner; kill delta proposed; patrol freehold freeze + later serial; BIO -10 / POD 160/240 / RESCUE 4/1 not retuned; XSS textContent; proto RESERVED_IDS + hasOwn; missing key reads 0; MSN mining employer +2 named as remedial grind, not a new family.
+- Espionage is a rule freeze (secret success = no target loss; failure exposes). No drop %, no recon table, no kind: 'espionage'.
+
+4. Pins
+- RANK_LADDER still six rungs, values above. Brief does not add rungs.
+- Digit 9 Standing (epics). Digit 0 shipyard. No new DOCK_KEY_SERVICES entry.
+- BIO graft cap -10 and POD 160/240 and rescue +4/+1 cited, not retuned.
+- Patrol still writes freehold until named serial patrol-employer-faction.
+- No universal crime score. Persist stays WORLD_FIELDS 'reputation' / rimward-save-v1.
+- XSS: textContent / h(). Proto: later sanitize Object.keys + RESERVED_IDS + hasOwn FACTIONS; live graft/sale already fail-closed.
+- MSN mining employer-rep is live (MINING_REP +2) and named as the grind path. Not implemented as new REP code here.
+
+5. Reviews
+- security-review.md: no open CRITICAL/HIGH; persist hole closed in contract; residual npc.standingOf / greenhand for...in named as later cautions.
+- code-review.md: APPROVE; locker gate cited as Marked < -25 not Suspect.
+
+Non-blocking notes (not bugs)
+- MsnMissionsDesign.md still says patrol write at station.js 1671 and mining +2 "proposed". That file is out of Wave 73 edit scope. Live code and this inventory use station.js 1825 and MINING_REP=2.
+- GRAFT_WARN constant is shipyard-desk.js 61-62; DOM write is h() at line 240. Inventory cites the constant. Harmless.
+
+ENV
+- graph-engineering graph_resolve returned blocked_ambiguous on Office production workflows (PowerPoint/Word/Sheets). Those triggers do not apply. Owner task was this verify file. Work continued as assigned.

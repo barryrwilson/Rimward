@@ -50,6 +50,8 @@ import { isBeautiful } from './organic.js';
 const TEXT_UPDATE_INTERVAL = 0.2; // s between throttled text refreshes
 const TOAST_LIFETIME = 4; // s a toast stays fully visible
 const TOAST_SLOTS = 5;
+const INCOMING_DART_TOAST = 'Incoming dart.';
+const DART_TOAST_GAP = 2.5;
 const HULL_PETALS = 10;
 const EDGE_MARGIN = 84; // px inset for the off-screen target arrow
 const LEAD_MIN_SPEED = 6; // u/s — still used to skip a useless tiny offset draw
@@ -341,14 +343,80 @@ function contactKind(hostile, isLock) {
   return 'civ';
 }
 
-/** Rock lock: list entry has position and no ship state. */
-function isRockTarget(target) {
-  return !!(target && target.position && !target.state);
+function reservedToken(value) {
+  return value === '__proto__' || value === 'constructor' || value === 'prototype';
 }
 
-/** Rock lock: list entry with a live position, not a ship `{ object, state }`. */
-function isRockLock(t) {
-  return !!(t && t.position && !t.object && !t.state);
+function allowedLockKind(t) {
+  const k = t && t.lockKind;
+  if (k === 'station' || k === 'gate' || k === 'pod' || k === 'landmark') return k;
+  return null;
+}
+
+function stripHudText(value) {
+  if (typeof value !== 'string') return '';
+  let out = '';
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if (c < 32 || c === 127) continue;
+    out += value.charAt(i);
+  }
+  return out;
+}
+
+function asteroidListHas(ctx, t) {
+  const list = ctx.asteroids && ctx.asteroids.list;
+  return !!(list && list.indexOf(t) >= 0);
+}
+
+/** Rock lock: asteroid list row. Untagged `{position}` is not a rock. */
+function isRockLock(ctx, t) {
+  if (!t || !t.position) return false;
+  if (!asteroidListHas(ctx, t)) return false;
+  if (t.lockKind === 'rock') return true;
+  if (t.lockKind) return false;
+  return !t.object && !t.state;
+}
+
+function isRockTarget(ctx, target) {
+  return isRockLock(ctx, target);
+}
+
+function podLockName(pod) {
+  const contents = pod && pod.contents;
+  if (!contents || !contents.length) return 'CARGO';
+  let oreName = '';
+  for (let i = 0; i < contents.length; i++) {
+    const key = contents[i] && contents[i].commodity;
+    if (key === 'survivor') return 'SURVIVOR';
+    if (!oreName && typeof key === 'string' && Object.hasOwn(COMMODITIES, key)) {
+      const n = COMMODITIES[key].name;
+      if (typeof n === 'string' && n) oreName = n;
+    }
+  }
+  return oreName ? stripHudText(oreName) : 'CARGO';
+}
+
+function landmarkLockName(ctx, id) {
+  if (typeof id !== 'string' || !id || reservedToken(id)) return '';
+  const sysId = ctx.world && ctx.world.currentSystem;
+  if (typeof sysId !== 'string' || reservedToken(sysId)) return '';
+  const def = (ctx.systems && Object.hasOwn(ctx.systems, sysId) && ctx.systems[sysId])
+    || (Object.hasOwn(SYSTEMS, sysId) ? SYSTEMS[sysId] : null);
+  const list = def && def.landmarks;
+  if (!list) return '';
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id === id) return stripHudText(list[i].name);
+  }
+  return '';
+}
+
+function gateLockName(target) {
+  const to = target && target.to;
+  if (typeof to !== 'string' || reservedToken(to) || !Object.hasOwn(SYSTEMS, to)) return '';
+  const destName = stripHudText(SYSTEMS[to] && SYSTEMS[to].name);
+  if (!destName) return '';
+  return target.hub ? destName + ' HUB' : destName;
 }
 
 /** Distance to nearest work-sector rock, else ore>0, else field.center. */
@@ -483,6 +551,11 @@ function toastForEvent(e, ctx, mem) {
     }
     case 'marketShift':
       return { text: '› Prices are moving.', cls: 'comm' };
+    case 'npcFire':
+      if (e.weapon !== 'missile' || e.target !== 'player') return null;
+      if ((ctx.elapsed ?? 0) - (mem.lastIncomingDartAt ?? -1e9) < DART_TOAST_GAP) return null;
+      mem.lastIncomingDartAt = ctx.elapsed ?? 0;
+      return { text: INCOMING_DART_TOAST, cls: 'warn' };
     case 'sunHeat':
       return { text: '▲ STAR HEAT — turn away.', cls: 'warn' };
     case 'sunKill':
@@ -881,7 +954,7 @@ export function initHud(ctx) {
     bioPeriod: 4, textScale: ctx.settings?.textScale ?? 1,
     matchLamp: null, hullBand: '',
   };
-  const mem = { lastFear: Math.round(ctx.world.fear ?? 0), frameLines: [] };
+  const mem = { lastFear: Math.round(ctx.world.fear ?? 0), frameLines: [], lastIncomingDartAt: -1e9 };
 
   {
     const p0 = ctx.player;
@@ -1015,14 +1088,18 @@ export function initHud(ctx) {
 
       // --- target bracket / lead / edge arrow (positions every frame) ---
       const target = ctx.targets.current;
-      const targetPos = target && (target.object ? target.object.position : target.position);
+      const kind = allowedLockKind(target);
+      const rockOk = isRockLock(ctx, target);
+      const isShipLock = !!(target && !kind && (target.state || target.object));
+      const lockOk = !!(isShipLock || rockOk || kind);
+      const targetPos = lockOk ? (target.object ? target.object.position : target.position) : null;
       const targetDead = target && target.state && target.state.destroyed;
       const shipObj = ctx.ship.object;
       const fromPos = shipObj ? shipObj.position : cam.position;
 
       // Target combat rail: live ship only. Hide for no target, destroyed,
       // or asteroid (rocks keep the bracket ore readout, never ship vitals).
-      const shipTgt = !!(target && target.state && !target.state.destroyed && targetPos);
+      const shipTgt = !!(isShipLock && target && target.state && !target.state.destroyed && targetPos);
       if (shipTgt !== last.targetRail) {
         last.targetRail = shipTgt;
         tgtRail.classList.toggle('is-hidden', !shipTgt);
@@ -1464,7 +1541,7 @@ export function initHud(ctx) {
       }
 
       // flight: speed on the self rail; throttle / afterburner / drift stay aux
-      const matchOn = !!(ctx.flags.matchSpeed && (shipTgt || isRockLock(target)));
+      const matchOn = !!(ctx.flags.matchSpeed && (shipTgt || isRockLock(ctx, target)));
       selfSpeed.set(ctx.ship.speed, matchOn);
       if (matchOn !== last.matchLamp) {
         last.matchLamp = matchOn;
@@ -1560,8 +1637,8 @@ export function initHud(ctx) {
 
       // target bracket text: name/faction, distance, resolve band (+numeric
       // with a Wolfeye scanner, §7.4); band also changes bracket shape (§7.3)
-      if (last.bracketShown && target) {
-        const isShip = !!(target.state || target.object);
+      if (last.bracketShown && target && lockOk) {
+        const isShip = isShipLock;
         let name, meta, resText = '', band = 'neutral', blocked = false;
         const dist = Math.round(fromPos.distanceTo(targetPos));
         if (isShip) {
@@ -1574,8 +1651,10 @@ export function initHud(ctx) {
           let key = (st && st.faction) || rec?.faction || 'independent';
           name = rec?.name ?? (st && st.name) ?? 'CONTACT';
           if (masked && !pierced) {
-            name = rec.coverName ?? name;
+            name = stripHudText(rec.coverName ?? name);
             key = rec.coverFaction ?? key;
+          } else {
+            name = stripHudText(name);
           }
           meta = (FACTIONS[key]?.name ?? key) + ' · ' + dist + 'u';
           if (pierced) meta += ' · CONCEALED MOUNTS';
@@ -1587,14 +1666,28 @@ export function initHud(ctx) {
             resText = BAND_LABEL[band];
             if ((ctx.world.scanner ?? 0) >= 1) resText += ' ' + Math.round(st.resolve);
           }
-        } else {
+        } else if (kind === 'station') {
+          name = stripHudText(ctx.station && ctx.station.name);
+          meta = dist + 'u';
+        } else if (kind === 'gate') {
+          name = gateLockName(target);
+          meta = dist + 'u';
+        } else if (kind === 'pod') {
+          name = podLockName(target.pod);
+          meta = dist + 'u';
+        } else if (kind === 'landmark') {
+          name = landmarkLockName(ctx, target.id);
+          meta = dist + 'u';
+        } else if (rockOk) {
           name = 'ASTEROID';
           // wave 51: ore readout with a hardness gate. target.ore is the
           // remaining UNIT COUNT — the old COMMODITIES[target.ore] lookup
           // keyed a table by a number, always missed, and the bracket read
           // the literal 'Ore' since the day it shipped. Wave-51 entries
           // carry commodity/oreKey/hardness (batch contract).
-          const oreName = COMMODITIES[target.commodity]?.name ?? 'Ore';
+          const oreKey = target.commodity;
+          const oreName = (typeof oreKey === 'string' && Object.hasOwn(COMMODITIES, oreKey)
+            && COMMODITIES[oreKey].name) || 'Ore';
           const hardness = target.hardness ?? ORE_TYPES[target.oreKey]?.hardness ?? 1;
           const laser = miningLaserFor(ctx.world.miningLaser);
           if (hardness <= laser.tier) {
@@ -1609,6 +1702,9 @@ export function initHud(ctx) {
             }
             meta = oreName + ' · H' + hardness + ' · NEEDS ' + needs.name + ' · ' + dist + 'u';
           }
+        } else {
+          name = '';
+          meta = '';
         }
         if (name !== last.tName) { last.tName = name; tName.textContent = name; }
         if (meta !== last.tMeta) { last.tMeta = meta; tMeta.textContent = meta; }
@@ -1628,7 +1724,7 @@ export function initHud(ctx) {
       }
 
       // HUD-01 target rail: ship vitals + name + distance (standard, not gated)
-      if (last.targetRail && target && target.state) {
+      if (last.targetRail && shipTgt && target && target.state) {
         const st = target.state;
         const rec = target.record;
         const masked = !!(rec && rec.qship) && !rec.revealed;
@@ -1666,7 +1762,7 @@ export function initHud(ctx) {
         } else {
           pKey = 'D'; pVerb = 'Jump to ' + destName;
         }
-      } else if (target && target.state && !target.state.destroyed) {
+      } else if (target && !kind && target.state && !target.state.destroyed) {
         if (target.state.disabled && targetDistNow <= U.TARGET_RANGE) {
           pKey = 'H';
           pVerb = 'Hail — dead in space';
@@ -1686,11 +1782,24 @@ export function initHud(ctx) {
         }
       }
       // Dock / Jump / Hail / Target win. A rock lock already has a mine target.
-      if (!pKey && (ctx.input.weaponGroup | 0) === 3 && shipObj && !isRockTarget(target)) {
+      if (!pKey && (ctx.input.weaponGroup | 0) === 3 && shipObj && !isRockTarget(ctx, target)) {
         const n = beltMineDist(ctx, shipObj.position);
         if (Number.isFinite(n)) {
           pKey = '3';
           pVerb = 'Mine · belt ' + n + 'u';
+        }
+      }
+      if (!pKey && !target && shipObj) {
+        const p = shipObj.position;
+        const r2 = U.TARGET_RANGE * U.TARGET_RANGE;
+        const rocks = ctx.asteroids && ctx.asteroids.list;
+        if (rocks) {
+          for (let i = 0; i < rocks.length; i++) {
+            const d = rocks[i] && rocks[i].position;
+            if (!d) continue;
+            const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
+            if (dx * dx + dy * dy + dz * dz <= r2) { pKey = 'V'; pVerb = 'Lock'; break; }
+          }
         }
       }
       const pStr = pKey + '|' + pVerb;

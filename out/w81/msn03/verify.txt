@@ -1,0 +1,143 @@
+Wave 81 MSN-03 verifier
+Date: 2026-08-21
+Scope: markdown-only kind 'chain'. Do not edit src/. Test this brief only.
+
+## Status
+CLEAN
+
+## What I tested
+- Worker file set vs src/ and sibling docs/Tgt05LockCatsDesign.md, docs/Bio03ClassLookDesign.md
+- Live JOB_KINDS / cap / unique four / overlay cap 2 / Digit 2 / persist / XSS / EPICS / hangar SKUs / rep writers
+- Contract formula = live_cap_at_impl + CHAIN_ROOM only (CHAIN_ROOM = 4 + 3 = 7)
+- Brief vs contract vs inventory
+- Live file:line cites vs current src (code wins)
+- Grep src for kind 'chain' / innerHTML / job.faction
+- Shop costs 6500 / 4200 cited as outfitter prices only
+
+## Bugs found
+(none)
+
+## Environmental issues
+(none)
+
+## Evidence
+- Path: out/w81/msn03/verify.txt
+
+SCOPE
+- Worker files present:
+  docs/Msn03ChainsDesign.md
+  out/w81/msn03/current-msn03-inventory.md
+  out/w81/msn03/shared-contract.md
+  out/w81/msn03/security-review.md
+  out/w81/msn03/code-review.md
+- Grep src for kind: 'chain' / 'chain' string in js: 0 hits
+- This worker did not land src edits for the family
+- Working tree still has uncommitted Wave 80 jobs work in src/game/save.js and
+  src/systems/station.js (HEAD JOB_KINDS is mining-era). Inventory matches
+  the working-tree live board, not HEAD. No 'chain' kind in that diff
+- Sibling docs/Tgt05LockCatsDesign.md and docs/Bio03ClassLookDesign.md exist
+  from parallel Wave 81 workers. This worker’s five files do not bake lockKind
+  or BIO bake numbers. Contract lists those files as other workers
+- PROGRESS.md / wishlist were not in the worker touch list; verifier did not
+  treat them as this worker’s output
+
+LIVE CODE (code wins)
+- JOB_KINDS save.js:144 =
+  bounty|patrol|haul|ferry|recovery|mining|trade|hunt|passenger|explore|espionage|war
+  No 'chain'. No 'epicJob'. Stuffed kind 'chain' hits sanitizeOneJob else (325–326) and drops today
+- JOBS_SANITIZE_MAX save.js:115-133 =
+  4 + 2N * 7 families + 16 = 4 + 14*N + 16
+- Object.keys(SYSTEMS).length = 100 (state.js:541 merge; authored 6 + generated 94)
+- Cap at 100 = 4 + 1400 + 16 = 1420
+- Comment save.js:124 names espionage room plus war room only. No CHAIN_ROOM live
+- UNIQUE_JOB_KIND save.js:146-151 and makeJobs station.js:1737-1770
+  bounty-ace, patrol-lane, haul-provisions, ferry-consignment
+- Overlay PIRATE_BOUNTY_CAP = 2 station.js:187; fill 1819
+- WORLD_FIELDS includes 'jobs' save.js:78. KEY 'rimward-save-v1' save.js:65
+  SLOT_KEYS save.js:66. No world.chains. No new persist key in the freeze
+- Digit 2 = jobs: DOCK_KEY_SERVICES[1]='jobs' station.js:152
+  Digit d → index d-1 station.js:5173-5180. Digit 9 = epics (index 8)
+- h() textContent station.js:3842-3847
+- innerHTML in station.js: 0
+- job.faction in src: 0
+- Employer +2 mining path: MINING_REP=2 station.js:196
+  war 3098-3101; hunt 3157-3159; mining 3397-3398; trade 3445-3447;
+  passenger 3492-3494; explore 3556-3558; spy 3625-3627
+- Patrol hardcoded freehold += PATROL_REP station.js:3280
+- No target-faction Jobs write (spy dest is gather only 3619-3621; war employer only)
+- KILL_STANDING_DELTA null kill-standing.js:5; applyPlayerKillStanding fail-closed 82-87
+- PAY_QUOTED_MAX 20000 save.js:134; station.js:209
+- PATROL_REWARD 300 station.js:169
+- Family origin stamp: mining 4130; spy 4281; war 4323 (origin jobPayFor)
+- Unique haul/ferry stamp dest jobPayFor accept 4099+ / 4111 / 4343
+- MINING_DEADLINE 600 station.js:198; WRECK_TTL world.js:811
+- completeJob sets done station.js:3249-3253 (unique/overlay)
+- Families splice+replace; tickDeliveryJobs station.js:3292
+- boardJobs hides offered families/overlays off-home 3174-3189; no chain line yet
+- SAFE_ID rejects hyphens save.js:101; jobIdTokens hyphen grammar 215-227
+- sanitizeJobs drop order 692-757; extraOfferedFamily 558; hunt/war dups 613-675
+- sanitizeRestored calls sanitizeJobs then sanitizeReputation save.js:1021-1022
+- EPICS four factions × stages state.js:755-816; Digit 9 renderEpics 4977
+- epics.js auto-advance stageHolds 69-77; writes ctx.world.epics 13-14, 39
+- RANK_LADDER Known min 10 tier 1 state.js:672-678; rankFor 680-682
+- dart cost 6500 weapon-fit.js:33-43; auto cost 4200 46-54
+- canSeat / MOUNT_TABLE light missile 0 turret 0 weapon-fit.js:57-61; state.js:47-52
+- writeMountedGear hangar.js:476-512; graftMounted 731-752 (no debit)
+- Jobs complete paths do not call writeMountedGear or graftMounted
+  (station.js writeMountedGear sites are outfitting only)
+- Frozen EVENTS ctx.js:198-227 have commLine; no job* type
+- ctx.world default has no jobs key ctx.js:125-148; ensureJobs 1772-1775
+- Authored homes: freehold/Freehold Landing 31-42; veridian/Veridian Spire 61-71;
+  redmarch/Ledger Anchorage 93-103; hollowreach/Hollow Anchorage 125-135
+- Step-2 gates: freehold→veridian 44; veridian→freehold 73-74;
+  redmarch→veridian 105-106; hollowreach→redmarch 137-138
+- hush/verge also hollow (Threshold / The Vigil) 161-202
+- Wishlist MSN-03 text docs/PLAYER-EXPERIENCE-WISHLIST.md 603-606
+
+CONTRACT / BRIEF LAW (agree)
+- kind: 'chain' (unused live). Not 'epicJob'. Ids exact chain-<employer>-<1|2|3>
+  Employer token is faction key (redledger), origin is authored system (redmarch)
+- Extend world.jobs. No world.chains. No new WORLD_FIELDS. Autosave rimward-save-v1
+- Unique four stay. No migrate. Overlay cap 2 stays
+- Cap at impl: live_cap_at_impl + CHAIN_ROOM, CHAIN_ROOM = 4 + 3 = 7
+  Inventory-time: 1420 + 7 = 1427 at 100
+  Explicit forbid: 4+16*N+16 / 2*N chain room / reset ESPIONAGE_ROOM or WAR_ROOM
+  Add CHAIN_ROOM to whatever cap is live; do not reset to 1020/1220
+- Digit 2 Jobs pane only. No new Digit. textContent / h() / commLine
+- No innerHTML. No new localStorage key. No new WORLD_FIELDS
+- Pay: origin jobPayFor(PATROL_REWARD 300) + PAY_QUOTED_MAX. No new UU table
+- Shop costs 6500 / 4200 stay outfitter prices. Grant fail-closed (credits +2 only)
+  until owner names live SKUs dart / auto. No graft from Jobs
+- Employer +2, target 0 (no write). Do not copy patrol freehold += unless SYSTEMS says so
+- Deadline: none. Do not expire on MINING_DEADLINE 600
+- One-in-one-out splice step N → post N+1; last step done sentinel; hide done chain
+- EPICS stay Digit 9 standing stages. Jobs do not write ctx.world.epics
+- state.js READ-ONLY
+- Brief merge table matches contract §0
+- Inventory cites Wave 80 line numbers; sampled cites match live (code wins)
+
+FLAG CHECKS (none tripped)
+- kind reuse: no (new 'chain'; not 'epicJob')
+- cap baking sibling rooms into a combined 16N formula: no (CHAIN_ROOM only)
+- invented UU pay table: no (cite PATROL_REWARD; shop costs not mission pay)
+- target write on success: no (target 0)
+- src edits by this worker for chain: no
+- XSS / innerHTML allowed: no (forbidden)
+- unique four migrate: no (forbidden; boot pins)
+- EPICS merged into Jobs: no
+- sibling TGT/BIO used as this worker’s law: no
+
+NON-FLAGS (per brief)
+- Contract §0.10 says employer +2 “on each completed step”.
+  §2.2 / §3.5 / PR3 / acceptance apply payQuoted and +2 on last step only.
+  Operative freeze is last-step fail-closed (credits +2). Same class as Wave 79
+  KEY off-by-one: would not mint SKU or write dest faction. Not a FLAG
+- Inventory unique/overlay complete cite 3702–3766: recovery block ends 3768.
+  Law (completeJob done, no splice) is correct
+- Brief overlay cite “render 4355–4357” is syncPirateBounties + syncRecoveryJob,
+  not complete. Inventory has the complete path. Not wrong cap/kind law
+- UNIQUE_FOUR_HEADROOM name in CHAIN_ROOM is the four chain sentinels (owner
+  freeze 4+3=7), not a rewrite of the live leading 4. Live cap stays 4+14N+16
+
+GRAPH
+- This task is data/markdown vs live src. No browser. No external send

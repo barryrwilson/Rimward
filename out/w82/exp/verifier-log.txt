@@ -1,0 +1,163 @@
+Wave 82 EXP archive / drop / launder — verifier log
+Date: 2026-08-21
+Domain: mixed
+Command: node --import ./scripts/with-css-stub.mjs out/w82/exp/probe.mjs
+Result: PASS 49 pins, exit 0
+Did not run: npm run test:boot
+
+STATUS: CLEAN
+
+================================================================
+What I tested
+================================================================
+
+1) Probe pins (49/49 PASS)
+   - DATA_DROP_RATE === 0.20; hasDataDropRate true
+   - ARCHIVE_OWN_UU 400; ARCHIVE_RIVAL_UU 900; LAUNDER_UU 250
+   - archiveFilePrice buy/sell legal cube 400
+   - sell legal/captured unknowable crystal 900
+   - refuse sell captured assembly cube; refuse buy crystal
+   - priceOf data keys 0 on stuffed world.prices
+   - cargoValueSafe ignores stuffed dataCube price
+   - sanitize proto origin / missing source → null
+   - add/remove data row
+   - launderDataLot captured → legal, units kept
+   - spawnDataPod: missing faction / __proto__ / freehold → null
+   - assembly wreck → captured cube 1; unknowables → captured crystal
+   - maybeSpawn miss (rng 0.99) / hit (rng 0)
+   - archiveDeskAllowed assembly true, unknowables false
+   - confirmArchivePending buy debit 500→100, legal cube row, dataBusy cleared
+   - sell legal cube credit 10→410, units 2→1
+   - sell captured crystal credit 0→900, row gone
+   - captured cube refuse: credits/units/source unchanged
+   - standing assembly -1: No sale., no debit
+   - hold full 10/10: Hold is full., no debit
+   - credits 100 < 400: no debit, no row
+   - Esc cancelDataPending / cancelLaunderPending
+   - fixer veridian: 300-250=50, lot legal, units 3
+   - credits 100 < 250: no flip
+   - freehold no fixer: No fixer at this dock.
+   - src: no innerHTML in confirm bodies; no addCargo/removeCargo/tryTrade
+     in archive confirm; no applySurvivorSale in launder confirm;
+     dataBusy/launderBusy present; no "UU unset"; People + fixer gate;
+     DOCK_KEY_SERVICES unchanged (no new Digit)
+
+2) Extra node pins (15/15 PASS) — double apply, proto, redmarch
+   - dataBusy true blocks nested confirm (no debit)
+   - sequential re-arm buy applies twice (two lots) — expected
+   - launderBusy true blocks
+   - redmarch fixer: 500-250=250, lot legal
+   - second launder after flip: no extra debit (no captured lot)
+   - constructor / __proto__ commodity sanitize null
+   - archive pending originFaction __proto__ fail closed
+   - hostile + captured cube: notice "No sale.", cargo stays captured
+
+3) Trace (read, not boot)
+   spawnDataPod (src/game/data-trade.js 153-179)
+     fail closed: no ctx/live/scene/pods/world, missing faction,
+     reserved id, non-origin faction, bad position
+     assembly → DATA_CUBE captured; unknowables → DATA_CRYSTAL captured
+     spawnPod(ctx, [row], pos) 4-arg → untinted steel (pods.js tint null)
+   maybeSpawnDataFromWreck: P(hit)=0.20 via Math.random() >= 0.20
+   Play hook: npc.js spillShipCargo skips flattening data rows, then
+     maybeSpawnDataFromWreck. Called from jettison and destroy.
+   confirmArchivePending: busy flag; clear pending; desk assembly+DETAIL;
+     standingRead(assembly) < 0 → "No sale."; captured cube refuse;
+     authored UU; buy debit then add legal cube; sell remove 1 then credit;
+     overflow restores row
+   confirmLaunderPending: busy; fixer only veridian|redmarch on
+     world.contacts role===fixer; LAUNDER_UU 250; flip lot not 1 unit
+   People Digit 7: DOCK_KEY_SERVICES[6]==='people' (level-1 Digit 7).
+     renderFixerLaunder on fixer card, people level 2. Buttons debit,
+     not a new Digit. contacts.js: Lias Corrow (veridian), Six-Finger
+     Brack (redmarch).
+   h() uses textContent, not innerHTML.
+
+4) Siblings
+   Archive/launder confirm live in data-trade.js + station.js.
+   hangar.js: no dataCube / spawnDataPod / archive confirm
+   src/game/reticle-aim.js: no data trade
+   src/game/kill-standing.js: no data trade
+   src/game/shipyard.js: no data trade
+   npc.js IS the destroy/jettison hook for drop (not archive/launder).
+   Drop would not fire in play without spillShipCargo.
+
+5) Browser
+   TCP 127.0.0.1:5173 LISTENING (pid 177848). Did not start a second vite.
+   playwright__browser_navigate failed: Browser already in use
+   (mcp-chrome-7d372dc). No dock UI snapshot.
+   [NO BROWSER COVERAGE] for Archive desk / People fixer card.
+
+================================================================
+Bugs found
+================================================================
+
+None. Probe 49/49. Extra 15/15. Traced paths match owner Wave 82:
+drop 0.20, own 400, rival 900, launder 250/lot, hostile < 0 blocks sale,
+full hold fail closed, captured origin cubes illegal, Digit 7 People
+fixer at Veridian/Redmarch.
+
+Residuals (not bugs):
+- stolen crystals would price 900 if a tampered row reaches sell
+  (stolen is reserved; no spawn).
+- npc.js also carries unrelated Wave 82 sibling diffs (kill standing,
+  mesh speed). Drop hook itself is correct.
+
+================================================================
+Environmental issues
+================================================================
+
+- graph_resolve: no agent match for "codex/agent-verifier". User graph:
+  proceed_unmodeled. Continued.
+- Playwright MCP browser already in use. Vite 5173 is up; no isolated
+  browser session. [NO BROWSER COVERAGE]
+- Did not run npm run test:boot (instruction).
+
+================================================================
+Evidence
+================================================================
+
+Probe stdout: PASS 49 pins (see command above).
+
+Constants (src/game/data-trade.js):
+  DATA_DROP_RATE = 0.20
+  ARCHIVE_OWN_UU = 400
+  ARCHIVE_RIVAL_UU = 900
+  LAUNDER_UU = 250
+
+spawnDataPod excerpt:
+  faction from wreck record/state; reserved/missing → null
+  assembly → cube captured; unknowables → crystal captured
+  return spawnPod(ctx, [row], _dataPodPos)  // no tint
+
+confirmArchivePending:
+  if (ui.dataBusy || !ui.dataPending) return;
+  ui.dataBusy = true; finally dataBusy = false
+  archiveHostile → ui.notice = 'No sale.'
+  captured assembly cube → illegal refuse, no credit
+  buy: credits < price → 'Not enough UU.'; cargoUsed+1 > holdCap →
+  'Hold is full.'; addDataCargoRow then world.credits -= 400
+  sell: removeDataCargoUnits 1 then credits += price (400 or 900)
+
+confirmLaunderPending:
+  liveFixerAtDock veridian|redmarch
+  credits < 250 → 'Not enough UU.'
+  launderDataLot flips matching captured rows to legal (whole lot)
+  world.credits -= 250
+
+Digit 7:
+  labels index: 1 Market … 7 People
+  renderPeople → renderFixerLaunder(contact.role === 'fixer')
+
+Sibling grep: no archive/drop/launder in hangar.js, reticle-aim.js,
+kill-standing.js, shipyard.js.
+
+Files read:
+  C:\Projects\WebSim\src\game\data-trade.js
+  C:\Projects\WebSim\src\systems\station.js (confirm/render/desk/people)
+  C:\Projects\WebSim\docs\ExpDataTradeDesign.md
+  C:\Projects\WebSim\docs\OwnerDecisionsWave82.md (EXP table)
+  C:\Projects\WebSim\out\w82\exp\probe.mjs
+  C:\Projects\WebSim\src\systems\npc.js (spillShipCargo)
+  C:\Projects\WebSim\src\game\pods.js (steel tint default, scoop copy)
+  C:\Projects\WebSim\src\game\contacts.js (fixer roster)

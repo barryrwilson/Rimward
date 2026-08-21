@@ -1,0 +1,127 @@
+Wave 83 NPC missiles — verifier log
+Worktree: C:\Users\barry\.grok\worktrees\projects-websim\subagent-01a025d4-409c-7c30-8873-bda0f5e33d21
+Date: 2026-08-21
+Status: CLEAN
+
+================================================================================
+1. Probe
+================================================================================
+Command (from worktree):
+  node --import ./scripts/with-css-stub.mjs out/w83/missiles/probe.mjs
+
+Stdout:
+  WAVE83 PROBE PASS
+  (exit 0)
+
+Saved copy: C:\Projects\WebSim\out\w83\missiles\probe-stdout.txt
+
+================================================================================
+2. Boot-test WAVE83 MISSILES
+================================================================================
+Full `npm run test:boot` was skipped (exceeds ~3 minutes).
+WAVE83 MISSILES lives at scripts/boot-test.mjs:18004–18222.
+Those pins match probe.mjs. Probe was the scoped run.
+WAVE4 / WAVE26 / WAVE35 known FAILs were not touched.
+
+================================================================================
+3. Static / contract review
+================================================================================
+Sources: docs/NpcMissilesDesign.md, out/w75/npc-missiles/shared-contract.md,
+docs/OwnerDecisionsWave82.md (Q1 pirate+ace, Q2 toast+song, no commLine,
+FORE/AFT hit-only, pool 4, vsPlayer only).
+
+git: src/game/state.js not in the wave diff (untouched).
+Changed: combat.js, npc.js, hud.js, song.js, ctx.js comment, boot-test.mjs.
+
+CHECK pirate+ace only
+  PASS  canNpcDart: role pirate|ace, not Unknowable, dartSpent fail-closed.
+  PASS  hunt (npc.js ~1526) and ace duel (~1892) emit one missile then cannon.
+  PASS  trader/miner/patrol never emit missile (probe civilianNeverMissile).
+
+CHECK pool 4, not spawnNpcShot, no player ammo
+  PASS  NPC_MISSILE_POOL = 4; MISSILE_POOL = 8.
+  PASS  spawnNpcMissile uses occupySeeker(npcMissilePool); comment forbids spawnNpcShot.
+  PASS  spawnNpcShot returns if wkey === 'missile' or family missile.
+  PASS  spawnNpcMissile does not call spendMissileAmmo.
+  PASS  5th live dart drops (probe drop5th; live visNpc=4 after 5 emits).
+
+CHECK vsPlayer only
+  PASS  combat npcFire missile continues unless e.target === 'player'.
+  PASS  missing target drops (probe missingTargetDrops).
+  PASS  spawnNpcMissile sets vsPlayer true; tickSeekerPool uses
+        (fromPlayer || !vsPlayer) ? testNpcHits : testPlayerHit.
+  PASS  lastAttacker = fromPlayer ? 'player' : (p.shooter || 'npc').
+
+CHECK Unknowables
+  PASS  canNpcDart false for Unknowable faction.
+  PASS  combat drops missile npcFire from Unknowable hull.
+  PASS  probe unkNeverMissile + unkCombatDrop.
+
+CHECK toast
+  PASS  INCOMING_DART_TOAST = 'Incoming dart.'; DART_TOAST_GAP = 2.5.
+  PASS  toastForEvent npcFire: weapon missile AND target player; authored literal.
+  PASS  npcFire case uses textContent path (pushToast); no innerHTML, no e.from, no state.name.
+  PASS  no commLine/say() on the dart spawn (telegraph hail stays the old hunt line).
+  PASS  HUD CSS text-transform:uppercase paints "INCOMING DART." — node text stays Incoming dart.
+
+CHECK no new HUD node
+  PASS  no rw-incoming / rw-inbound / aspect-ring / lock-box in hud.js.
+  PASS  initHud still builds existing hub (reticle, rails, toasts, FORE/AFT).
+  PASS  live #hud children 17; inboundClasses [].
+
+CHECK song
+  PASS  CUES.npcFireMissile; branch ev.weapon === 'missile' from npcFire (not a new ctx type).
+  PASS  volley cap still on typ === 'npcFire'.
+
+CHECK ctx comment
+  PASS  npcFire { ship, weapon:'cannon'|'missile', target } // missiles always set target
+
+CHECK FORE/AFT
+  PASS  playerHit still drives facing flash; npcFire does not.
+
+================================================================================
+4. Browser
+================================================================================
+Playwright MCP: locked (profile mcp-chrome-7d372dc, "use --isolated").
+Fallback: puppeteer-core + Chrome --use-angle=swiftshader.
+Vite: worktree `npx vite --port 5183 --strictPort` (IPv6 ::1; use http://localhost:5183/).
+Killed Vite after capture.
+
+URL: http://localhost:5183/
+Boot: title skip + NEW GAME + Digit1 origin. In flight, not paused.
+
+Live HUD hub (no inbound gauge):
+  kids: rw-reticle, rw-crosshair, rw-target, rw-lead, rw-edge-arrow,
+        rw-chartmark x2, rw-toasts, rw-banner, rw-jump, rw-prompt,
+        rw-contacts, rw-combat-rail self/target, rw-bottom,
+        rw-resources, rw-controls
+  inboundClasses: []
+  facingClass: rw-facing (no hit flash on dart spawn)
+
+Toast: textContent === "Incoming dart." (crop: INCOMING DART. via CSS)
+Cannon npcFire did not add a second dart toast.
+
+Pool live (dummy ship 400u, 5 missile npcFire, 2 frames):
+  visNpc=4 allNpc=4 visPlayer=0 allPlayer=8 ammo=8 (NPC did not spend)
+
+Live roster at first capture: trader 3, miner 2, patrol 1, pirate 1.
+No missile npcFire from those civilians in probe harness.
+Browser did not wait out a natural pirate telegraph (forced emit used instead).
+
+Player dart fire in the live tab was not completed (no lock in the pool pass).
+Player pool 8 is present. Probe pin playerPool8 covers fire-still-works.
+
+Screenshots:
+  C:\Projects\WebSim\out\w83\missiles\hud-hub.png
+  C:\Projects\WebSim\out\w83\missiles\hud-hub-close.png
+  C:\Projects\WebSim\out\w83\missiles\toast-incoming-dart.png
+  C:\Projects\WebSim\out\w83\missiles\toast-crop.png
+  C:\Projects\WebSim\out\w83\missiles\toast-after-pool.png
+Notes:
+  C:\Projects\WebSim\out\w83\missiles\browser-notes.txt
+  C:\Projects\WebSim\out\w83\missiles\browser-pool.txt
+
+================================================================================
+5. Verdict
+================================================================================
+CLEAN. Contract pins hold. Probe PASS. Live toast and hub match HUD-02 empty hub + off-column warning.

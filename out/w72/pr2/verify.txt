@@ -1,0 +1,64 @@
+## Status
+CLEAN
+
+## What I tested
+Ran `node --import ./scripts/with-css-stub.mjs out/w72/pr2/probe.mjs`. Exit 0. Printed PASS. All 85 pins true.
+
+Read `out/w72/pr2/probe.mjs` against `out/w70/bio/shared-contract.md` §3.2, §3.3 gift defer, §8, §12 PR2, and §0.3 / §2 origin hullKind rules.
+
+Wrote and ran `out/w72/pr2/edge-probe.mjs`. Exit 0. All 35 extra pins true.
+
+Checked git for `src/game/shipyard.js` and `src/game/origins.js`. Both diffs empty. `src/game/hangar.js` is dirty (40 lines). That matches the sibling PR1 persist note.
+
+Read live `src/game/shipyard.js` stock tables and `purchaseYardHull`. Read `src/game/origins.js` and `ORIGINS.beautiful` in `src/game/state.js`. Grepped `hull_seed_gift` in those three game files: absent.
+
+Did not run `npm run test:boot`. Did not edit `src/`.
+
+## Merge-law checklist
+- §3.2 Beautiful stock: exact `light,cutter,heavy`. Offers match. No frigate/ace/freighter. PASS (probe 1).
+- §3.2 Beautiful buy: adds one living hangar row. Does not remount. Starter row stays living. Player classKey and hullKind stay living. Price uses live `YARD_LIST_UU` (light 8000). PASS (probe 5; edge debit 8000).
+- §3.2 Beautiful hostile (`rep < 0`): no sale, reason `reputation`, no new row, no debit. PASS (probe 9–10).
+- §3.2 Unknowables stock: exact `light`. No cutter/heavy/frigate. Force `hullKind: 'living'`. Buy adds a living row. No remount. PASS (probe 2, 6).
+- §3.2 Hangar remount path: this PR is pin-only. Buy path does not call remount. `addPurchasedHull` parks then appends. PASS.
+- §8 Living frigate SKU: Beautiful and Unknowables omit frigate. Buy refuses with `reason: 'stock'`. Hangar and credits unchanged. PASS (probe 7–8).
+- §8 Control: plated omit is BIO-only. Freehold stock includes frigate. Offers mark it `built`. Trusted buy (rep 25) adds a built frigate row and does not remount. Veridian and Gilded also list frigate. PASS (edge ctrl.*).
+- §3.3 Gift defer: `hull_seed_gift` is absent in `shipyard.js`, `hangar.js`, and `origins.js`. PASS (probe 12).
+- §12 PR2 does not land pirate drop %, new commodity, or living frigate SKU. PASS.
+- §0.3 / §2 / §3.1 Beautiful origin: `origins.js` does not write `hullKind`, does not remount, does not assign `player.faction`. Effects are bond 0.35, hunger 0.4, two `livingRock`. PASS (edge origin.*).
+- §1.2 Companion: Beautiful cutter buy does not change `ctx.bio` hunger/bond/wounds/growth/fedCount. PASS (edge bioSame).
+- PR2 must not write `grafted` on obtain: Beautiful light/cutter/heavy and Unknowables light rows have no `grafted` own-key. Player and starter also omit it. PASS (edge noGrafted).
+- `hullKindFor`: beautiful and unknowables → `living`; freehold/veridian/gilded → `built`. PASS (probe 3).
+- Refuse paths: credits, full hangar (cap 8), undocked. No new row. Credits refuse does not debit. PASS (probe 10).
+- Catalog slice: mutating `yardStockFor('beautiful')` does not change later catalog reads. PASS.
+- Worker `src/` pin: `shipyard.js` and `origins.js` clean. Other `src/` dirty only `hangar.js`. PASS (probe 11).
+
+## Bugs found
+None.
+
+Worker extra pins already cover Beautiful cutter and heavy living buys with no remount. Verifier extra pins add plated-frigate control, no-`grafted`, origin read, companion freeze, and light 8000 debit. No product miss against §3.2 / §8 / §3.3 defer.
+
+## Environmental issues
+`src/game/hangar.js` is dirty (`git status --porcelain`: ` M src/game/hangar.js`, 37 insertions / 3 deletions). Worker pin 11 allows that sibling PR1 persist dirt. It is not a PR2 obtain bug.
+
+`git diff -- src/game/shipyard.js` is empty. Cached diff is empty. Origins the same.
+
+Graph resolve returned `blocked_ambiguous` with Word/Sheets/Slides document workflows. Those workflows do not apply to this pin verify. Owner task already named `out/w72/pr2/verify.txt`. Verify continued.
+
+## Evidence
+- Probe command: `node --import ./scripts/with-css-stub.mjs out/w72/pr2/probe.mjs`
+- Probe result: exit 0, `PASS`, `{"allTrue":true,"nPins":85}`
+- Sample live buys from probe:
+  - Beautiful light: `ok:true,price:8000`, row `hull_light_1` `hullKind:living` faction `beautiful`
+  - Unknowables light: `ok:true,price:8000`, row `hullKind:living` faction `unknowables`
+  - Beautiful cutter: `ok:true,price:11000`, `classKey:cutter`, `hullKind:living`
+  - Beautiful heavy: `ok:true,price:20000`, `classKey:heavy`, `hullKind:living`
+  - Beautiful frigate: `ok:false,reason:stock`
+  - Unknowables cutter/frigate: `ok:false,reason:stock`
+- Edge command: `node --import ./scripts/with-css-stub.mjs out/w72/pr2/edge-probe.mjs`
+- Edge result: exit 0, `PASS`, `{"allTrue":true,"nPins":35}`
+- Freehold stock: `light,cutter,heavy,freighter,ace,frigate`
+- Freehold frigate buy at rep 25: `ok:true,price:72000`, `hullKind:built` (Trusted 10% off 80000)
+- Git: only `src/game/hangar.js` modified under `src/`
+- `src/game/shipyard.js` `LIVING_STOCK` = `['light','cutter','heavy']`; `UNKNOWABLES_STOCK` = `['light']`; `CORE_STOCK` includes `frigate`; `buildStockRow` does not set `grafted`
+- Gift grep hits in those three game files: none (design docs still name the deferred id)
+- Artifacts: `out/w72/pr2/probe.mjs`, `out/w72/pr2/edge-probe.mjs`, this file

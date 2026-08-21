@@ -1,4 +1,5 @@
-import { ECON, FACTIONS, U, cargoValue, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
+import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
+import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
 import { stampWakeSite, spillShipCargo } from './npc.js';
@@ -72,7 +73,8 @@ export function salvageLine(live) {
 
 /** Player-initiated salvage hail: targeted, disabled, in range, still live. */
 export function canHailDisabled(ctx, live, range = U.TARGET_RANGE) {
-  if (!live || !live.state || !live.object) return false;
+  if (!live || live.lockKind) return false;
+  if (!live.state || !live.object) return false;
   if (!live.state.disabled || live.state.destroyed) return false;
   if (!ctx.ships || !ctx.ships.includes(live)) return false;
   const player = ctx.ship && ctx.ship.object;
@@ -331,7 +333,7 @@ export function initHail(ctx) {
       ship: live,
       intents,
       ransom: ransomFor(st), // rolled once so the offer is stable
-      tribute: Math.round(ECON.tributeRate * cargoValue(st.cargo, ctx.world.prices)),
+      tribute: Math.round(ECON.tributeRate * cargoValueSafe(st.cargo, ctx.world.prices)),
       demand: ev.demand ?? null, // wave 30: pirate demand-hail amount, rolled at emit time
       salvage: ev.salvage === true || !!st.disabled,
       buttons: null,

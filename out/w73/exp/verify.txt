@@ -1,0 +1,115 @@
+Wave 73 EXP verifier
+Date: 2026-08-20
+Domain: data (design-only)
+Status: CLEAN
+
+Scope
+- Read docs/ExpDataTradeDesign.md, out/w73/exp/current-exp-inventory.md,
+  shared-contract.md, security-review.md, code-review.md.
+- Sample inventory file:line cites against live src/.
+- Do not run boot-test. Do not format. Do not edit src/ or the brief.
+
+Worker src/
+- Worker files are markdown only (listed Exp + out/w73/exp).
+- git status shows dirty src/game/hangar.js, src/systems/shipyard-desk.js,
+  src/systems/station.js. Those diffs are Wave 72 hangar/yard (ignore).
+- git diff on those three files: no dataCrystal, dataCube, Archive,
+  originFaction, or spawnDataPod.
+
+Graph
+- graph_resolve returned blocked_ambiguous on Office “verify” workflows
+  (Word / sheet / slides). Those workflows do not apply to this markdown
+  check. Parent already scoped this verify. Continue.
+
+Contract vs brief
+- Merge law: shared-contract.md wins. Brief states the same rule.
+- No persist key. Data rides hangar / ctx.cargo rows. WORLD_FIELDS has
+  mystery + hangar, not data/intel/crystal (save.js 74–97).
+- Dedicated Archive desk. Not COMMODITY_KEYS. Not tryTrade. Not a new
+  DOCK_KEY_SERVICES key. Not People Digit 7 for the desk.
+- Unknowables: no DETAIL_STATIONS.unknowables. No authored or generated
+  Unknowables system. Desk deferred. No invented home system.
+- Provenance: originFaction + legal|captured|stolen. Not survivor
+  faction / playerKill / other / name.
+- Drop % and launder UU: proposed, needs owner. Unset → skip spawn /
+  skip debit / skip flip. No shipped percent or UU constant.
+- priceOf / cargoValue data keys fail closed at 0 (later impl).
+- XSS: authored labels, textContent / h(), no persist name, no innerHTML.
+- Proto: RESERVED_IDS + __proto__ drop on commodity and originFaction.
+- TGT-05: do not steal ctx.targets. No POD/BIO/HUD-02/AST/MSN reopen.
+
+Cite sample (live code)
+
+PASS mystery.js 37–38 — CLUE_RADIUS 35, LANDMARK_RADIUS 100.
+PASS mystery.js 44, 54 — mystery ??= { found, visited }.
+PASS mystery.js 107–128 — clueFound / landmarkFound + commLine.
+PASS save.js 64 — KEY rimward-save-v1.
+PASS save.js 78 — WORLD_FIELDS includes 'mystery'.
+PASS save.js 74–97 — no data / intel / crystal world key.
+PASS save.js 104–109 — RESERVED_IDS; ordinary commodity not checked today.
+PASS save.js 451–474 — ordinary row any string ≤64; survivor extras only.
+PASS save.js 466 — unknown survivor source → 'other' (must not copy for data).
+PASS pods.js 19–21, 536–542 — survivor {commodity, units, faction, source, name?}.
+PASS pods.js 489–497 — copyCargoEntry ordinary {commodity, units} only.
+PASS npc.js 1322 — Unknowables skip spawnShipSurvivor.
+PASS npc.js 1344–1357 — spillShipCargo flattens to {commodity, units}.
+PASS npc.js 2130–2135 — destroy: spill then spawnShipSurvivor.
+PASS world.js 1314–1324 — aftermath visual wreck; no spawnPod.
+PASS world.js 250, 309–319 — LEGAL_KEYS legal+bulk; traderCargo from that set.
+PASS world.js 382 — patrol cargo [].
+PASS station.js 132 — DOCK_KEY_SERVICES ten keys, no archive.
+PASS station.js 234–238 — DETAIL_STATIONS miss → placeholder.
+PASS station.js 473–491 — ten DETAIL_STATIONS keys; assembly yes; unknowables no.
+PASS station.js 1417–1421 — priceOf('survivor') 0; else prices[key] ?? 0.
+PASS station.js 2026–2031 — h() textContent.
+PASS station.js 2041, 2247–2262 — market lists COMMODITY_KEYS.
+PASS station.js 2173–2177 — tryTrade refuses non-market and survivor.
+PASS station.js 939–942 — holdUnits sums all matching commodity (no provenance).
+PASS station.js 1397–1416 — addCargo/removeCargo ignore data provenance.
+PASS state.js 308–322 — COMMODITIES has no dataCrystal/dataCube.
+PASS state.js 561, 563 — assembly / unknowables faction keys.
+PASS state.js 604 — FACTION_SERVICES.assembly; no unknowables row.
+PASS state.js 1092–1094 — cargoValue uses prices[c.commodity].
+PASS galaxy.generated.js 6769–6772, 6851–6854 — as_census / as_archive assembly.
+PASS galaxy.generated.js faction tags — 94 total, 0 unknowables.
+PASS authored-systems.js 34–196 — freehold, veridian, redledger, three hollow.
+PASS PROGRESS.md 3350–3355 — Unknowables no live site; content decision.
+PASS contacts.js 92–93, 107–109 — fixer Lias Corrow (veridian), Six-Finger Brack (redmarch).
+PASS hangar.js 233 — hull cargo via sanitizeCargoList.
+PASS hangar.js 674–677 — loadMountedRow restores cargo through sanitize.
+PASS ctx.js 197–226 — clueFound, landmarkFound, commLine, podCollected, no new EXP event.
+PASS hud.js 1521–1524 — hold used/capacity via textContent.
+PASS shipyard.js 27, 39 — UNKNOWABLES_STOCK ['light']; no live dock.
+PASS market.js 35, 61–66 — tables from COMMODITY_KEYS; prices is live market table.
+PASS asteroids.js 2116 — tinted ore spawnPod.
+PASS station.js 2300 — recovery job two refinedMetals.
+PASS landmarks.js 79, 88 — applyDim.
+PASS landmarks.js 123–128 — systemLoaded rebuild.
+PASS systems/modelsbrowser.js 114, 317 — innerHTML (out of EXP scope).
+PASS npc.js 1722 — tribute uses cargoValue.
+
+Cite nits (not design defects)
+- hangar.js 593 is captureSwitch cargo snapshot, not packLiveHull.
+  packLiveHull copies ctx.cargo at hangar.js 260. 433–436 is
+  syncMountedToPlayer, not loadMountedRow. Semantic “cargo travels with
+  hull” is still true.
+- Inventory “wakes.js 225” is src/systems/wakes.js:225 (two refinedMetals).
+- npc.js 1525 is pirate interest cargoValue, not the tribute hail (1722).
+- Unknowables field: inventory cites buildUnknowablesField / npc.js header.
+  Live npc.js has no builder. ship-assets.js lists faction 'unknowables'
+  as a GLB. Traffic still has no Unknowables def, so no live hulls.
+  Contract spawn path does not depend on the old procedural mesh.
+
+Honesty checks
+- Unknowables buy path waits. DETAIL_STATIONS has no unknowables key.
+  Placeholder fallback must not host the desk (contract §2.1–2.2).
+- Cargo allowlist fail-closed is later PR1, not a new WORLD_FIELDS key.
+- Reserved ids on commodity; originFaction is not survivor keys.
+- No drop % / desk UU / launder UU invented as implement-now constants.
+- No TGT-05 ctx.targets steal.
+
+Bugs found
+None that break merge law or the EXP freeze.
+
+Environmental issues
+None. Design-only; no boot-test run.

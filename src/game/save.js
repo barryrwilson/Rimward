@@ -9,6 +9,7 @@ import {
   syncMountedWeaponMirrors,
   applyMountedFlight,
 } from './hangar.js';
+import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -112,14 +113,38 @@ const FIELD_ORE_SYS_CAP = 32;
 const FIELD_ORE_MAX_COUNT = 160;
 const FIELD_ORE_MAX_REMAINING = 64;
 const MINING_SLOTS_PER_SYSTEM = 2;
+const TRADE_SLOTS_PER_SYSTEM = 2;
+const HUNT_SLOTS_PER_SYSTEM = 2;
+const PASSENGER_SLOTS_PER_SYSTEM = 2;
+const EXPLORE_SLOTS_PER_SYSTEM = 2;
+const ESPIONAGE_SLOTS_PER_SYSTEM = 2;
+const WAR_SLOTS_PER_SYSTEM = 2;
 const JOBS_OVERLAY_HEADROOM = 16;
+const CHAIN_ROOM = 7; // UNIQUE_FOUR_HEADROOM + CHAIN_STEPS; do not reset spy/war rooms
+const N_SYSTEMS = Object.keys(SYSTEMS).length;
+// Live mining+trade+hunt+passenger+explore cap plus espionage room only, plus war room only.
 const JOBS_SANITIZE_MAX = 4
-  + MINING_SLOTS_PER_SYSTEM * Object.keys(SYSTEMS).length
-  + JOBS_OVERLAY_HEADROOM;
+  + MINING_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + TRADE_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + HUNT_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + PASSENGER_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + EXPLORE_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + ESPIONAGE_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + WAR_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + JOBS_OVERLAY_HEADROOM
+  + CHAIN_ROOM;
 const PAY_QUOTED_MAX = 20000;
+const TRADE_NEED = 5; // HAUL_UNITS; stuffed other values drop, never heal.
+const HUNT_NEED = 1;
+const PASSENGER_NEED = 1;
+const EXPLORE_NEED = 1;
+const ESPIONAGE_NEED = 1;
+const WAR_NEED = 1;
+const CHAIN_NEED = 1;
+const RECORD_ID = /^rec-(0|[1-9][0-9]*)$/;
 const JOB_TITLE_MAX = 240;
 const JOB_DETAIL_MAX = 720;
-const JOB_KINDS = new Set(['bounty', 'patrol', 'haul', 'ferry', 'recovery', 'mining']);
+const JOB_KINDS = new Set(['bounty', 'patrol', 'haul', 'ferry', 'recovery', 'mining', 'trade', 'hunt', 'passenger', 'explore', 'espionage', 'war', 'chain']);
 const JOB_STATES = new Set(['offered', 'accepted', 'done', 'failed']);
 const UNIQUE_JOB_KIND = {
   'bounty-ace': 'bounty',
@@ -131,6 +156,25 @@ const JOB_FIELD_ALLOW = new Set([
   'id', 'kind', 'state', 'title', 'detail', 'reward', 'need', 'progress',
   'originSystem', 'destSystem', 'system', 'payQuoted', 'originPrice',
   'target', 'wreckId', 'collected', 'commodity', 'deadline', 'slot',
+  'recordId',
+]);
+const CHAIN_ORIGIN = Object.freeze({
+  freehold: 'freehold',
+  redledger: 'redmarch',
+  veridian: 'veridian',
+  hollow: 'hollowreach',
+});
+const CHAIN_DEST2 = Object.freeze({
+  freehold: 'veridian',
+  redledger: 'veridian',
+  veridian: 'freehold',
+  hollow: 'redmarch',
+});
+const CHAIN_IDS = new Set([
+  'chain-freehold-1', 'chain-freehold-2', 'chain-freehold-3',
+  'chain-redledger-1', 'chain-redledger-2', 'chain-redledger-3',
+  'chain-veridian-1', 'chain-veridian-2', 'chain-veridian-3',
+  'chain-hollow-1', 'chain-hollow-2', 'chain-hollow-3',
 ]);
 
 function sanitizeFieldOre(ctx) {
@@ -209,6 +253,23 @@ function sanitizeJobSystem(value) {
   return Object.hasOwn(SYSTEMS, value) ? value : null;
 }
 
+function espionageDestEligible(origin, dest) {
+  if (!origin || !dest || origin === dest) return false;
+  if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest)) return false;
+  const home = SYSTEMS[origin];
+  const far = SYSTEMS[dest];
+  if (!home || !far || !home.station || !far.station) return false;
+  const employer = home.faction;
+  const targetFac = far.faction;
+  if (typeof employer !== 'string' || !Object.hasOwn(FACTIONS, employer) || employer === 'unknowables') {
+    return false;
+  }
+  if (typeof targetFac !== 'string' || !Object.hasOwn(FACTIONS, targetFac) || targetFac === 'unknowables') {
+    return false;
+  }
+  return targetFac !== employer;
+}
+
 function clampQuoted(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   const u = Math.round(value);
@@ -254,6 +315,35 @@ function sanitizeOneJob(raw) {
     if (tokens.length !== 3 || tokens[0] !== 'mine') return null;
     if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
     if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'trade') {
+    if (tokens.length !== 3 || tokens[0] !== 'trade') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'hunt') {
+    if (tokens.length !== 3 || tokens[0] !== 'hunt') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'passenger') {
+    if (tokens.length !== 3 || tokens[0] !== 'passenger') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'explore') {
+    if (tokens.length !== 3 || tokens[0] !== 'explore') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'espionage') {
+    if (tokens.length !== 3 || tokens[0] !== 'spy') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'war') {
+    if (tokens.length !== 3 || tokens[0] !== 'war') return null;
+    if (!Object.hasOwn(SYSTEMS, tokens[1])) return null;
+    if (!FIELD_ORE_INDEX.test(tokens[2])) return null;
+  } else if (kind === 'chain') {
+    if (!CHAIN_IDS.has(id)) return null;
+    if (tokens.length !== 3 || tokens[0] !== 'chain') return null;
+    if (!Object.hasOwn(CHAIN_ORIGIN, tokens[1])) return null;
+    if (tokens[2] !== '1' && tokens[2] !== '2' && tokens[2] !== '3') return null;
   } else if (kind === 'bounty') {
     if (!id.startsWith('bounty-pirate-') || tokens.length < 3) return null;
   } else if (kind === 'recovery') {
@@ -269,6 +359,13 @@ function sanitizeOneJob(raw) {
   const progress = src.progress;
   if (typeof reward !== 'number' || !Number.isFinite(reward)) return null;
   if (typeof need !== 'number' || !Number.isFinite(need) || need < 1) return null;
+  if (kind === 'trade' && (!Number.isInteger(need) || need !== TRADE_NEED)) return null;
+  if (kind === 'hunt' && (!Number.isInteger(need) || need !== HUNT_NEED)) return null;
+  if (kind === 'passenger' && (!Number.isInteger(need) || need !== PASSENGER_NEED)) return null;
+  if (kind === 'explore' && (!Number.isInteger(need) || need !== EXPLORE_NEED)) return null;
+  if (kind === 'espionage' && (!Number.isInteger(need) || need !== ESPIONAGE_NEED)) return null;
+  if (kind === 'war' && (!Number.isInteger(need) || need !== WAR_NEED)) return null;
+  if (kind === 'chain' && (!Number.isInteger(need) || need !== CHAIN_NEED)) return null;
   if (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0) return null;
   const job = {
     id,
@@ -293,6 +390,78 @@ function sanitizeOneJob(raw) {
     job.originSystem = origin;
     job.slot = src.slot;
     job.commodity = commodity;
+  } else if (kind === 'trade') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    const commodity = src.commodity;
+    if (typeof commodity !== 'string' || reservedId(commodity)) return null;
+    if (!Object.hasOwn(COMMODITIES, commodity) || COMMODITIES[commodity].bulk !== true) return null;
+    if (commodity === 'livingRock') return null;
+    if (!dest || dest === origin) return null;
+    job.originSystem = origin;
+    job.destSystem = dest;
+    job.slot = src.slot;
+    job.commodity = commodity;
+  } else if (kind === 'hunt') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    const recordId = typeof src.recordId === 'string' ? src.recordId : '';
+    if (recordId.length > ID_MAX || reservedId(recordId)) return null;
+    if (!RECORD_ID.test(recordId) || !jobIdTokens(recordId)) return null;
+    job.originSystem = origin;
+    job.slot = src.slot;
+    job.recordId = recordId;
+  } else if (kind === 'passenger') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    if (src.commodity !== undefined) return null;
+    if (!dest || dest === origin) return null;
+    job.originSystem = origin;
+    job.destSystem = dest;
+    job.slot = src.slot;
+  } else if (kind === 'explore') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    job.originSystem = origin;
+    job.slot = src.slot;
+  } else if (kind === 'espionage') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    if (!dest || !espionageDestEligible(origin, dest)) return null;
+    job.originSystem = origin;
+    job.destSystem = dest;
+    job.slot = src.slot;
+  } else if (kind === 'war') {
+    if (origin !== tokens[1]) return null;
+    if (src.slot !== 0 && src.slot !== 1) return null;
+    if (!Number.isInteger(src.slot)) return null;
+    if (!dest || dest === origin) return null;
+    const recordId = typeof src.recordId === 'string' ? src.recordId : '';
+    if (recordId.length > ID_MAX || reservedId(recordId)) return null;
+    if (!RECORD_ID.test(recordId) || !jobIdTokens(recordId)) return null;
+    job.originSystem = origin;
+    job.destSystem = dest;
+    job.slot = src.slot;
+    job.recordId = recordId;
+  } else if (kind === 'chain') {
+    const employerKey = tokens[1];
+    const stepTok = tokens[2];
+    const home = CHAIN_ORIGIN[employerKey];
+    if (!origin || origin !== home) return null;
+    job.originSystem = origin;
+    if (stepTok === '2') {
+      const authoredDest = CHAIN_DEST2[employerKey];
+      if (!dest || dest === origin || dest !== authoredDest) return null;
+      if (!Object.hasOwn(SYSTEMS, dest) || !SYSTEMS[dest].station) return null;
+      job.destSystem = dest;
+    } else if (dest && dest !== origin && Object.hasOwn(SYSTEMS, dest) && SYSTEMS[dest].station) {
+      job.destSystem = dest;
+    }
   } else if (kind === 'recovery') {
     if (!origin) return null;
     const wreckRaw = typeof src.wreckId === 'string' ? stripControlChars(src.wreckId).trim().slice(0, ID_MAX) : '';
@@ -306,11 +475,11 @@ function sanitizeOneJob(raw) {
     job.system = system;
   }
   if (kind !== 'mining' && origin) job.originSystem = origin;
-  if (dest) job.destSystem = dest;
+  if (dest && kind !== 'chain') job.destSystem = dest;
   if (kind !== 'bounty' || uniqueJobId(id)) {
     if (system && !job.system) job.system = system;
   }
-  if (kind === 'bounty') {
+  if (kind === 'bounty' || kind === 'hunt' || kind === 'war') {
     const target = jobText(src.target, NAME_MAX);
     if (!target) return null;
     job.target = target;
@@ -327,15 +496,112 @@ function sanitizeOneJob(raw) {
     const d = src.deadline;
     if (typeof d === 'number' && Number.isFinite(d) && d >= 0) job.deadline = d;
   }
+  if (kind === 'trade' && job.deadline === undefined) return null;
+  if (kind === 'hunt' && job.deadline === undefined) return null;
+  if (kind === 'passenger' && job.deadline === undefined) return null;
+  if (kind === 'explore' && job.deadline === undefined) return null;
+  if (kind === 'espionage' && job.deadline === undefined) return null;
+  if (kind === 'war' && job.deadline === undefined) return null;
   return job;
 }
 
-function extraOfferedMining(jobs) {
+function huntOriginBank(ctx, origin) {
+  const banks = ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) return null;
+  if (typeof origin !== 'string' || reservedId(origin)) return null;
+  const keys = Object.keys(banks);
+  let found = false;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (reservedId(k) || k === '__proto__') continue;
+    if (!Object.hasOwn(banks, k)) continue;
+    if (k === origin) found = true;
+  }
+  if (!found || !Object.hasOwn(banks, origin)) return null;
+  const bank = banks[origin];
+  return Array.isArray(bank) ? bank : null;
+}
+
+function huntRecordMatches(bank, recordId, origin) {
+  for (let i = 0; i < bank.length; i++) {
+    const rec = bank[i];
+    if (rec == null || typeof rec !== 'object' || Array.isArray(rec)) continue;
+    if (rec.id !== recordId) continue;
+    if (rec.role !== 'pirate') continue;
+    if (rec.system !== origin) continue;
+    if (rec.role === 'ace' || rec.classKey === 'ace') continue;
+    return true;
+  }
+  return false;
+}
+
+function huntSanitizeKeepsRecord(ctx, job) {
+  if (job.kind !== 'hunt') return true;
+  const banks = ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) return true;
+  const origin = job.originSystem;
+  const bank = huntOriginBank(ctx, origin);
+  if (!bank) return true;
+  return huntRecordMatches(bank, job.recordId, origin);
+}
+
+function warSanitizeBanks(ctx, origin, dest) {
+  const banks = ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) {
+    return { originBank: null, destBank: null, originExists: false, destExists: false };
+  }
+  const keys = Object.keys(banks);
+  let originExists = false;
+  let destExists = false;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (reservedId(k) || k === '__proto__') continue;
+    if (!Object.hasOwn(banks, k)) continue;
+    if (k === origin) originExists = true;
+    if (k === dest) destExists = true;
+  }
+  const originBank = originExists && Object.hasOwn(banks, origin) && Array.isArray(banks[origin])
+    ? banks[origin]
+    : null;
+  const destBank = destExists && Object.hasOwn(banks, dest) && Array.isArray(banks[dest])
+    ? banks[dest]
+    : null;
+  return { originBank, destBank, originExists, destExists };
+}
+
+function warRecordMatches(bank, recordId, origin, dest) {
+  if (!Array.isArray(bank) || typeof recordId !== 'string') return false;
+  for (let i = 0; i < bank.length; i++) {
+    const rec = bank[i];
+    if (rec == null || typeof rec !== 'object' || Array.isArray(rec)) continue;
+    if (rec.id !== recordId) continue;
+    if (rec.role !== 'patrol') continue;
+    if (rec.role === 'ace' || rec.classKey === 'ace') continue;
+    if (rec.system !== origin && rec.system !== dest) continue;
+    return true;
+  }
+  return false;
+}
+
+function warSanitizeKeepsRecord(ctx, job) {
+  if (job.kind !== 'war') return true;
+  const banks = ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) return true;
+  const origin = job.originSystem;
+  const dest = job.destSystem;
+  const found = warSanitizeBanks(ctx, origin, dest);
+  if (!found.originExists && !found.destExists) return true;
+  if (warRecordMatches(found.originBank, job.recordId, origin, dest)) return true;
+  if (warRecordMatches(found.destBank, job.recordId, origin, dest)) return true;
+  return false;
+}
+
+function extraOfferedFamily(jobs, kind) {
   const extra = new Set();
   const bySysSlot = new Map();
   for (let i = 0; i < jobs.length; i++) {
     const j = jobs[i];
-    if (j.kind !== 'mining') continue;
+    if (j.kind !== kind) continue;
     if (j.state !== 'offered' && j.state !== 'accepted') continue;
     const key = j.originSystem + '\0' + j.slot;
     let list = bySysSlot.get(key);
@@ -350,6 +616,141 @@ function extraOfferedMining(jobs) {
   for (let k = 0; k < keys.length; k++) {
     const list = bySysSlot.get(keys[k]);
     list.sort((a, b) => miningNFromId(a.id) - miningNFromId(b.id));
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].state !== 'accepted') extra.add(list[i]);
+    }
+  }
+  return extra;
+}
+
+function extraOfferedMining(jobs) {
+  return extraOfferedFamily(jobs, 'mining');
+}
+
+function extraOfferedTrade(jobs) {
+  return extraOfferedFamily(jobs, 'trade');
+}
+
+function extraOfferedHunt(jobs) {
+  return extraOfferedFamily(jobs, 'hunt');
+}
+
+function extraOfferedPassenger(jobs) {
+  return extraOfferedFamily(jobs, 'passenger');
+}
+
+function extraOfferedExplore(jobs) {
+  return extraOfferedFamily(jobs, 'explore');
+}
+
+function extraOfferedEspionage(jobs) {
+  return extraOfferedFamily(jobs, 'espionage');
+}
+
+function extraOfferedWar(jobs) {
+  return extraOfferedFamily(jobs, 'war');
+}
+
+function extraChainRows(jobs) {
+  const extra = new Set();
+  const liveByEmp = new Map();
+  const doneByEmp = new Map();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'chain') continue;
+    const parts = typeof j.id === 'string' ? j.id.split('-') : [];
+    const emp = parts[1];
+    if (!emp || !Object.hasOwn(CHAIN_ORIGIN, emp)) continue;
+    if (j.state === 'offered' || j.state === 'accepted') {
+      let list = liveByEmp.get(emp);
+      if (!list) {
+        list = [];
+        liveByEmp.set(emp, list);
+      }
+      list.push(j);
+    } else if (j.state === 'done') {
+      let list = doneByEmp.get(emp);
+      if (!list) {
+        list = [];
+        doneByEmp.set(emp, list);
+      }
+      list.push(j);
+    }
+  }
+  liveByEmp.forEach((list) => {
+    list.sort((a, b) => {
+      if (a.state === 'accepted' && b.state !== 'accepted') return -1;
+      if (b.state === 'accepted' && a.state !== 'accepted') return 1;
+      return a.id.localeCompare(b.id);
+    });
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].state !== 'accepted') extra.add(list[i]);
+    }
+  });
+  doneByEmp.forEach((list) => {
+    list.sort((a, b) => a.id.localeCompare(b.id));
+    for (let i = 1; i < list.length; i++) extra.add(list[i]);
+  });
+  return extra;
+}
+
+function extraDuplicateHuntRecords(jobs) {
+  const extra = new Set();
+  const byRec = new Map();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'hunt') continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    const rid = j.recordId;
+    if (typeof rid !== 'string' || !rid) continue;
+    let list = byRec.get(rid);
+    if (!list) {
+      list = [];
+      byRec.set(rid, list);
+    }
+    list.push(j);
+  }
+  const keys = [];
+  byRec.forEach((_list, key) => { keys.push(key); });
+  for (let k = 0; k < keys.length; k++) {
+    const list = byRec.get(keys[k]);
+    list.sort((a, b) => {
+      if (a.state === 'accepted' && b.state !== 'accepted') return -1;
+      if (b.state === 'accepted' && a.state !== 'accepted') return 1;
+      return miningNFromId(a.id) - miningNFromId(b.id);
+    });
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].state !== 'accepted') extra.add(list[i]);
+    }
+  }
+  return extra;
+}
+
+function extraDuplicateWarRecords(jobs) {
+  const extra = new Set();
+  const byRec = new Map();
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'war') continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    const rid = j.recordId;
+    if (typeof rid !== 'string' || !rid) continue;
+    let list = byRec.get(rid);
+    if (!list) {
+      list = [];
+      byRec.set(rid, list);
+    }
+    list.push(j);
+  }
+  const keys = [];
+  byRec.forEach((_list, key) => { keys.push(key); });
+  for (let k = 0; k < keys.length; k++) {
+    const list = byRec.get(keys[k]);
+    list.sort((a, b) => {
+      if (a.state === 'accepted' && b.state !== 'accepted') return -1;
+      if (b.state === 'accepted' && a.state !== 'accepted') return 1;
+      return miningNFromId(a.id) - miningNFromId(b.id);
+    });
     for (let i = 1; i < list.length; i++) {
       if (list[i].state !== 'accepted') extra.add(list[i]);
     }
@@ -383,14 +784,38 @@ function sanitizeJobs(ctx) {
   for (let i = 0; i < raw.length; i++) {
     const job = sanitizeOneJob(raw[i]);
     if (!job) continue;
+    if (!huntSanitizeKeepsRecord(ctx, job)) continue;
+    if (!warSanitizeKeepsRecord(ctx, job)) continue;
     if (seen.has(job.id)) continue;
     seen.add(job.id);
     out.push(job);
   }
-  const extras = extraOfferedMining(out);
-  let jobs = dropJobsUntilCap(out, (j) => extras.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  const extraMine = extraOfferedMining(out);
+  const extraTrade = extraOfferedTrade(out);
+  const extraHunt = extraOfferedHunt(out);
+  const extraHuntDup = extraDuplicateHuntRecords(out);
+  const extraPassenger = extraOfferedPassenger(out);
+  const extraExplore = extraOfferedExplore(out);
+  const extraEspionage = extraOfferedEspionage(out);
+  const extraWar = extraOfferedWar(out);
+  const extraWarDup = extraDuplicateWarRecords(out);
+  const extraChain = extraChainRows(out);
+  let jobs = dropJobsUntilCap(out, (j) => extraMine.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  jobs = dropJobsUntilCap(jobs, (j) => extraTrade.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
   jobs = dropJobsUntilCap(jobs, (j) => (
-    j.kind === 'mining' && (j.state === 'done' || j.state === 'failed') && !uniqueJobId(j.id)
+    (extraHunt.has(j) || extraHuntDup.has(j)) && !uniqueJobId(j.id) && j.state !== 'accepted'
+  ));
+  jobs = dropJobsUntilCap(jobs, (j) => extraPassenger.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  jobs = dropJobsUntilCap(jobs, (j) => extraExplore.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  jobs = dropJobsUntilCap(jobs, (j) => extraEspionage.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  jobs = dropJobsUntilCap(jobs, (j) => (
+    (extraWar.has(j) || extraWarDup.has(j)) && !uniqueJobId(j.id) && j.state !== 'accepted'
+  ));
+  jobs = dropJobsUntilCap(jobs, (j) => extraChain.has(j) && !uniqueJobId(j.id) && j.state !== 'accepted');
+  jobs = dropJobsUntilCap(jobs, (j) => (
+    (j.kind === 'mining' || j.kind === 'trade' || j.kind === 'hunt' || j.kind === 'passenger'
+      || j.kind === 'explore' || j.kind === 'espionage' || j.kind === 'war')
+    && (j.state === 'done' || j.state === 'failed') && !uniqueJobId(j.id)
   ));
   jobs = dropJobsUntilCap(jobs, (j) => {
     if (uniqueJobId(j.id) || j.state === 'accepted') return false;
@@ -401,7 +826,14 @@ function sanitizeJobs(ctx) {
   const cur = ctx.world.currentSystem;
   jobs = dropJobsUntilCap(jobs, (j) => {
     if (uniqueJobId(j.id) || j.state === 'accepted') return false;
-    if (j.kind === 'mining' && j.state === 'offered' && !extras.has(j)) return false;
+    if (j.kind === 'mining' && j.state === 'offered' && !extraMine.has(j)) return false;
+    if (j.kind === 'trade' && j.state === 'offered' && !extraTrade.has(j)) return false;
+    if (j.kind === 'hunt' && j.state === 'offered' && !extraHunt.has(j) && !extraHuntDup.has(j)) return false;
+    if (j.kind === 'passenger' && j.state === 'offered' && !extraPassenger.has(j)) return false;
+    if (j.kind === 'explore' && j.state === 'offered' && !extraExplore.has(j)) return false;
+    if (j.kind === 'espionage' && j.state === 'offered' && !extraEspionage.has(j)) return false;
+    if (j.kind === 'war' && j.state === 'offered' && !extraWar.has(j) && !extraWarDup.has(j)) return false;
+    if (j.kind === 'chain' && !extraChain.has(j)) return false;
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-') && j.state === 'offered') {
       return j.system !== cur;
     }
@@ -448,13 +880,14 @@ function sanitizeSurvivorName(value) {
   return cleaned || null;
 }
 
-/** JSON-plain cargo row. Ordinary goods stay {commodity, units}; survivors keep faction/source/name. */
+/** JSON-plain cargo row. Ordinary goods stay {commodity, units}; survivors keep faction/source/name; data keeps source+originFaction. */
 function sanitizeCargoRow(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   if (typeof raw.commodity !== 'string' || !raw.commodity || raw.commodity.length > COMMODITY_MAX) {
     return null;
   }
   const commodity = raw.commodity;
+  if (RESERVED_IDS.has(commodity) || commodity === '__proto__') return null;
   const units = sanitizeUnits(raw.units);
   if (commodity === SURVIVOR) {
     if (units <= 0) return null;
@@ -471,14 +904,42 @@ function sanitizeCargoRow(raw) {
     if (name) row.name = name;
     return row;
   }
-  return { commodity, units };
+  if (isDataCommodity(commodity)) return sanitizeDataCargoRow(raw);
+  if (Object.hasOwn(COMMODITIES, commodity)) {
+    if (units <= 0) return null;
+    return { commodity, units };
+  }
+  return null;
+}
+
+/** Fresh bag. Reserved, non-faction, and non-finite keys drop. Missing stays missing. */
+export function sanitizeReputation(ctx) {
+  const world = ctx && ctx.world;
+  if (!world) return;
+  const raw = world.reputation;
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    world.reputation = {};
+    return;
+  }
+  const out = {};
+  const keys = Object.keys(raw);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (RESERVED_IDS.has(key) || key === '__proto__') continue;
+    if (!Object.hasOwn(FACTIONS, key)) continue;
+    if (!Object.hasOwn(raw, key)) continue;
+    const value = raw[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    out[key] = value;
+  }
+  world.reputation = out;
 }
 
 export function sanitizeCargoList(list) {
   const out = [];
   if (!Array.isArray(list)) return out;
-  for (const raw of list) {
-    const row = sanitizeCargoRow(raw);
+  for (let i = 0; i < list.length; i++) {
+    const row = sanitizeCargoRow(list[i]);
     if (row) out.push(row);
   }
   return out;
@@ -645,6 +1106,7 @@ function sanitizeRestored(ctx) {
   if (!Number.isFinite(ctx.world.time) || ctx.world.time < 0) ctx.world.time = 0;
   sanitizeFieldOre(ctx);
   sanitizeJobs(ctx);
+  sanitizeReputation(ctx);
 }
 
 /**

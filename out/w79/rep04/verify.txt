@@ -1,0 +1,49 @@
+Wave 79 REP-04 verifier
+Date: 2026-08-21
+Scope: docs/Rep04AttributionDesign.md + out/w79/rep04/** vs live src (read-only)
+Status: CLEAN
+
+Worker tree
+- Untracked worker artifacts only:
+  docs/Rep04AttributionDesign.md
+  out/w79/rep04/code-review.md
+  out/w79/rep04/current-rep-inventory.md
+  out/w79/rep04/security-review.md
+  out/w79/rep04/shared-contract.md
+- No worker writes under out/w79/espionage or out/w79/faction-war (sibling dirs exist, untouched here).
+- No worker writes under docs/, src/, scripts/, PROGRESS.md except the allowed brief.
+- Markdown only. No applyPlayerKillStanding / KILL_STANDING_DELTA in src/.
+- git shows dirty src/ from other uncommitted waves (sanitizeReputation, employer +2, standingRead). No kill-standing helper. No crimeScore field.
+
+Contract vs brief
+- Merge law named: contract wins. No remaining disagreement on persist key, fail-closed delta, victim-only write, skip independent/missing/reserved, skip pirate/ace, lastAttackerOf witness, leaky incident causer, police/restitution out, patrol freehold freeze, no job kinds, no innerHTML, no reputationChanged, PR1→PR4 order.
+- KILL_STANDING_DELTA = null. No invented UU table or hull %.
+- Unknowables: owner default write-if-allowlisted (not independent). Aligned.
+
+Live cite recheck (code wins)
+- WORLD_FIELDS 'reputation' save.js 75–76. incidents on 77. No crimeScore / wanted / world.crimes in save.js or src/.
+- sanitizeReputation save.js 672–692 (comment 671). Called from sanitizeRestored 865. restore copies WORLD_FIELDS 916–918 then sanitizeRestored() at 965.
+- JOB_KINDS save.js 138 — hunt/passenger/explore present; no espionage/war.
+- JOB_FIELD_ALLOW save.js 146–150 — no faction.
+- RANK_LADDER six rungs state.js 672–678. rankFor 680–682. FACTIONS 549–564 including independent. RESCUE 289–294. ECON.fear.tributeOpensAt 284.
+- Default bag ctx.js 129. Frozen 'npcDestroyed' {ship} ctx.js 200. No 'reputationChanged' in src/.
+- Digit 9 notes standingMoveNotes/standingLiveNotes station.js 1072–1102. Panel renderEpics 4197–4256 (brief 4196–4216 covers HOW/LIVE; inventory 4196–4255 is fuller; kill line belongs in notes, not the renderer).
+- Digits: DOCK_KEY_SERVICES station.js 152; hotkeys 4306–4308 (0 = shipyard). Standing label 4305. RENDERERS.epics 4273.
+- PATROL_REP 170; freehold += 5 at 2777.
+- MINING_REP 194; employer writes hunt 2658, mining 2895, trade 2944, passenger 2991, explore 3055.
+- Overlay/ace 3077–3089 credits only.
+- Rescue 1648–1666; h() textContent 3208–3212; innerHTML station.js = 0; hud.js innerHTML = 0; commLine toast hud.js 400–408, 924.
+- lastAttackerOf npc.js 1028–1036. standingOf reader 1021–1026 (no reserved/hasOwn — correctly banned as write helper).
+- handleDestroyed 2109–2144: fear only, no reputation. deathHandled set then call 2170–2172 and 2239–2241.
+- combat lastAttacker fromPlayer 1541; npcDestroyed 1547; mining laser lastAttacker 'player' 1367 / emit 1373; sun applyHit player-only 1644–1659.
+- world consumeIncidents: any npcHit stamps playerHitAt 1597–1598; 8s causer 1603–1604; fallback faction independent 1609; blockade causer 'world' 1571–1590; surrender causer player 1664–1676.
+- hail INTENT_ORDER 48 — no leave.
+- standingRead data-trade.js 62–70. trafficking canWriteRep 70–81; sale 171–174.
+- boot-test noCrimeScore 15258–15263. wishlist REP-03/04 516–533.
+
+Forbidden content
+- No crimeScore persist. No police/restitution desk. No invented kill number. No innerHTML. No reputation[userString] write path. No kind: 'espionage'.
+
+Nits (not bugs)
+- Brief Digit 9 panel cite 4196–4216 is short vs live 4197–4256; inventory already has 4196–4255. Insert point remains standingMoveNotes 1072–1081.
+- Working tree src/ is dirty from other waves; this serial did not land kill writes.

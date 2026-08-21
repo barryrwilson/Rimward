@@ -85,6 +85,7 @@ export function createCtx({ scene, camera, renderer }) {
       dockPressed: false, // edge: D
       cameraPressed: false, // edge: C (chase / third / first)
       matchSpeedPressed: false, // edge: X (ship.js toggles flags.matchSpeed)
+      reticleLockPressed: false, // edge: V (lock under reticle)
       throttleHeld: false, // R or F held — ship.js cancels MATCH
       pausePressed: false, // edge: P
     },
@@ -216,6 +217,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'sunHeat' { t, dps }                // combat.js, throttled
     // 'sunKill' { reason: 'sun' }         // combat.js lethal core
     // 'playerFire' { weapon }             // combat.js: real spawn only (cannon/disruptor/'missile'/turret wkey)
+    // 'npcFire' { ship, weapon:'cannon'|'missile', target }  // missiles always set target ('player' this slice)
     // 'survivorRescued' { faction, source, count, repDelta }  (station.js, wave 60)
     // 'survivorSold' { faction, source, count, credits, repDelta }  (trafficking.js / station.js, wave 66)
     // 'hudMechRange' {}           // hud.js: rising .in-range (mech)
@@ -223,6 +225,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'hudMechContact' { id }     // hud.js: first seenHostiles add (mech)
     // 'hostileEnter' { id }       // hud.js: first hostile in scanner arc (bio, ≤1/0.5s)
     // 'hullBand' { band }         // hud.js: self hull warn|crit (bio, ≤1/2s)
+    // 'reticleLock' { hit }       // controls.js: V pick; payload is { hit: boolean } only
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

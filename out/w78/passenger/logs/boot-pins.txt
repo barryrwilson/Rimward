@@ -1,0 +1,29 @@
+npm run test:boot (2026-08-21)
+exit: 1
+BOOT TEST FAIL — 58 errors
+
+Known FAIL banners only:
+WAVE4 FENCE FAVOR FAIL
+WAVE26 FERRY QUOTE FAIL
+WAVE26 HAUL QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+WAVE35 HAUL GATE DELIVERY FAIL
+
+No WAVE71 FAIL, WAVE72 FAIL, WAVE74 FAIL, WAVE76 FAIL, WAVE78 MSN FAIL, WAVE78 PASSENGER FAIL.
+
+wave71 msn: {"lampRock":true,"sanitizeJobs":true,"omitJobs":true,"noFullSafeId":true,"dropProto":true,"keepAce":true,"keepMineFh":true,"keepMineHearth":true,"capFits":true,"fieldsJobs":true,"fillTwo":true,"fillSoft":true,"noHard4Sync":true,"noAsteroidId":true,"uniqueFour":true,"completeReplace":true,"completePay":true,"expireNoPay":true,"noInnerHtml":true,"replaceHelper":true}
+
+wave72 bio: all true (see boot-test.log)
+
+wave74 pins: all true (see boot-test.log)
+
+wave76 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"dropProto":true,"dropNeed1":true,"dropBadCargo":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needFive":true,"commodityAllow":true,"destOther":true,"noAsteroidId":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"expireNoPay":true,"noInnerHtml":true,"miningNeedUntouched":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+
+wave78 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropAceRecord":true,"dropCommodity":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needOne":true,"recordBind":true,"noAsteroidId":true,"titlesHideRec":true,"stuffedTargetIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"overlaySkip":true,"overlayCap":true,"expireNoPay":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+
+wave78 passenger: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"keepPassengerFh":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropCommodity":true,"dropSameDest":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"huntStillTwo":true,"needOne":true,"noCommodityLive":true,"destOther":true,"noAsteroidId":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"cargoUnchanged":true,"expireNoPay":true,"uniqueFerryKind":true,"uniqueFerryDone":true,"passTickNoCargo":true,"noFerryAlloc":true,"extraHuntKept":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"passengerDestBind":true,"uniqueHaulIds":true,"replaceHelper":true,"mouseAccept":true}
+
+Full log: out/w78/passenger/logs/boot-test.log

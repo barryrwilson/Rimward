@@ -1,0 +1,72 @@
+## Status
+CLEAN
+
+## What I tested
+- Worker file set vs git: `docs/Msn02PassengerDesign.md`, `out/w77/passenger/{current-passenger-inventory.md,shared-contract.md,security-review.md,code-review.md}`. All untracked markdown. No worker writes under `src/`, `scripts/`, `public/`, `index.html`, or `package.json`.
+- Grep of `src/`, `scripts/`, `public/` for `kind: 'passenger'`, `PASSENGER_SLOTS`, `syncPassenger` / `syncPassengerJobs`: 0 matches (design-only freeze).
+- Grep `station.js` `innerHTML`: 0 matches.
+- Live cite sample (20+) vs `src/systems/station.js`, `src/game/save.js`, `src/core/ctx.js`, `src/game/state.js`, `src/game/world.js`, `src/game/pods.js`, `src/game/trafficking.js`.
+- Brief vs `shared-contract.md` merge law (kind, slots, dest rebind, no cargo, origin `FERRY_REWARD` 350, cap 420 live / 620 impl, unique ferry `done`, POD 160/240 closed, hunt/explore out of formula).
+- Serial PR1–PR5 named-only; Wave 77 non-goals forbid `src/` impl.
+- XSS / proto ids / stuffed pay / dest injection / `reputation[userString]` law present in contract + brief.
+- Unique ferry / trade / mining not migrated; no `survivor` on jobs; cap formula has no hunt/explore room.
+- Wishlist, `PROGRESS.md`, sibling briefs, `out/w77/{hunt,explore}` not in this worker's file set. Dirty `PROGRESS.md` / wishlist diffs are Wave 76 trade (no passenger-family freeze). Dirty Wave 76 `src/` has no passenger-job strings.
+
+## Bugs found
+None.
+
+## Environmental issues
+None. `graph_resolve` returned Google Drive publishing (coverage 0.13). False match. Local verify continued.
+
+## Evidence
+- Screenshots: none (design-only)
+- Logs: out/w77/passenger/verify.txt
+- Test output: cite sample results
+
+Cite sample (live 2026-08-20 working tree; all PASS):
+
+| Claim | Live | Result |
+|---|---|---|
+| Digit 2 Jobs `DOCK_KEY_SERVICES[1]==='jobs'` | `station.js` 152 | pass |
+| Labels `Jobs board` | 3424 | pass |
+| Digit accept `boardJobs(...)[n-1]` | 3548–3550 | pass |
+| `h()` `textContent`; overlay clear | 2489–2494; 3410 | pass |
+| `innerHTML` in `station.js` | grep 0 | pass |
+| `FERRY_REWARD` 350 / `FERRY_UNITS` 4 | 175 / 174 | pass |
+| Unique four + `ferry-consignment` `kind:'ferry'` | `makeJobs` 1724–1756; 1750–1755 | pass |
+| `completeJob` → `done`, no splice | 2202–2206 | pass |
+| Unique ferry dest-stamp pay + front Provisions | 2395–2402; accept 2754–2759 | pass |
+| Trade dest rebind `otherSystemId(origin)` | 2323–2324 | pass |
+| `otherSystemId` primary gate | 1711–1713 | pass |
+| `holdUnits` sums matching commodity incl. survivor | 962–965 | pass |
+| `addCargo('survivor')` push, no merge | 1668–1677 | pass |
+| `priceOf('survivor')` 0 | 1689–1690 | pass |
+| `tryTrade` refuses survivor | 2640–2642 | pass |
+| POD UU 160/240 | `trafficking.js` 8 | pass |
+| People Digit 7 `renderTrafficDesk` | 1550–1553 | pass |
+| Live cap `4+2N+2N+16` (420 at 100) | `save.js` 115–122 | pass |
+| `JOB_KINDS` has `trade`, not `passenger` | 127 | pass |
+| Unique keep map includes `ferry-consignment` | 129–134 | pass |
+| `sanitizeJobs` + call from `sanitizeRestored` | 407–446; 711 | pass |
+| `WORLD_FIELDS` `'jobs'` | 78 | pass |
+| Hyphen-token `jobIdTokens` | 197–208 | pass |
+| `ctx.world` default has no `jobs` | `ctx.js` 125–149 | pass |
+| `cargoCapacity` 20 | `ctx.js` 109 | pass |
+| No `job*` frozen events; `'commLine'` listed | `ctx.js` 198–232 | pass |
+| SYSTEMS merge 6+94 at 541 | `state.js` 12–18, 541 | pass |
+| `COMMODITIES` no `survivor` | `state.js` 308–322 | pass |
+| `WRECK_TTL` 600 | `world.js` 811 | pass |
+| NPC never hub-route | `world.js` 24–28 | pass |
+| Survivor row shape / scoop merge | `pods.js` 20–21, 505–517, 541–547 | pass |
+| `ensureJobs` unique four only | 1759–1762; call `initStation` 2434 | pass |
+| `syncTradeJobs` / `syncMiningJobs` independent | 2077–2098; 1919–1939 | pass |
+| `boardJobs` hides foreign offered mining/trade | 2132–2143 | pass |
+| Patrol `reputation.freehold +=` | 2233 | pass |
+| Mining employer `Object.hasOwn(FACTIONS)` +2 | 2288–2291 | pass |
+| `sanitizeReputation` `Object.hasOwn(FACTIONS, key)` | `save.js` 519–538 | pass |
+| Wishlist passenger ferrying | `PLAYER-EXPERIENCE-WISHLIST.md` 549–556 | pass |
+| No `src/systems/jobs.js` | grep 0 | pass |
+
+Merge: brief merge table matches contract (kind `'passenger'`, 2 slots, dest rebind not unique-ferry stamp, no cargo token, origin `jobPayFor(FERRY_REWARD)` 350, live cap 420, impl cap `4+6*N+16`=620, hunt/explore out, unique ferry stays `done`). Contract declared winner. No freeze contradiction.
+
+Git trees: dirty `src/` (Wave 76) and untracked `src/game/data-trade.js` contain no passenger-job strings. Worker did not land implementation. PR plan is named-only.

@@ -1,0 +1,42 @@
+setup {"system":"gc_auction","faction":"gilded","credits":50000,"hullKind":"living","docked":true}
+home {"docked":true,"faction":"gilded","system":"gc_auction","player":{"classKey":"light","hullKind":"living","grafted":false},"menu":["1 — Market","2 — Jobs board","3 — Bar","4 — Feed & tend","5 — Repair","6 — Outfitting","7 — People","8 — Launch","9 — Standing","0 — Shipyard"]}
+SHOT 01-gilded-dock.png
+shipyard {"head":true,"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount"]}
+SHOT 02-shipyard.png
+yard {"credits":50000,"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Papers","4 — Papers","5 — Papers","6 — Papers","7 — Papers","8 — Papers"],"overlaySlice":"THE GRAND AUCTIONGILDED CHAIN · BERTH 7“she” made fastCREDITS 50000 UU · HOLD 0/20← Back (Esc)SHIPYARDHangar at every dock. Yard sales wait on papers.1 — Hangar2 — YardYARDGilded Chainlight8000 UU3 — Paperscutter11000 UU4 — Papersheavy20000 UU5 — Papersfreighter24000 UU6 — Papersace28000 UU7 — Papersfrigate80000 UU8 — Papers1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc backEsc back · Esc again / B launch"}
+SHOT 03-yard-rows.png
+pending {"credits":50000,"hulls":1,"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","Confirm papers","Esc — Cancel"]}
+SHOT 04-light-papers.png
+afterBuy {"clicked":true,"credits":42000,"hulls":[{"id":"hull_starter","classKey":"light","hullKind":"living","grafted":false,"faction":"independent"},{"id":"hull_light_1","classKey":"light","hullKind":"built","grafted":false,"faction":"gilded"}],"mountedId":"hull_starter","player":{"classKey":"light","hullKind":"living","grafted":false},"notice":"Papers filed. Hull stored in hangar."}
+SHOT 05-after-buy.png
+hangar {"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount","4 — Mount"],"hulls":[{"id":"hull_starter","classKey":"light","hullKind":"living","grafted":false,"faction":"independent"},{"id":"hull_light_1","classKey":"light","hullKind":"built","grafted":false,"faction":"gilded"}],"overlaySlice":"THE GRAND AUCTIONGILDED CHAIN · BERTH 7“she” made fastCREDITS 42000 UU · HOLD 0/20← Back (Esc)SHIPYARDHangar at every dock. Yard sales wait on papers.1 — Hangar2 — YardHANGARMounted id hull_startershelight · Independent · mounted3 — Mountlightlight · Gilded Chain4 — Mount1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc backEsc back · Esc again / B launch"}
+SHOT 06-hangar.png
+mounted {"mountedId":"hull_light_1","player":{"classKey":"light","hullKind":"built","grafted":false},"hulls":[{"id":"hull_starter","classKey":"light","hullKind":"living","grafted":false,"faction":"independent"},{"id":"hull_light_1","classKey":"light","hullKind":"built","grafted":false,"faction":"gilded"}],"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount","4 — Mount","Offer graft"]}
+SHOT 07-plated-mounted.png
+warn {"clicked":true,"credits":42000,"beautiful":4,"player":{"classKey":"light","hullKind":"built","grafted":false},"hulls":[{"id":"hull_starter","classKey":"light","hullKind":"living","grafted":false,"faction":"independent"},{"id":"hull_light_1","classKey":"light","hullKind":"built","grafted":false,"faction":"gilded"}],"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","Confirm graft","Esc — Cancel"],"overlaySlice":"THE GRAND AUCTIONGILDED CHAIN · BERTH 7“light” made fastCREDITS 42000 UU · HOLD 0/20← Back (Esc)SHIPYARDHangar at every dock. Yard sales wait on papers.1 — Hangar2 — YardHANGARMounted id hull_light_1Graft tissueBeautiful Ones become immediate enemies. Patrols hunt at standing -10 or worse.Confirm graftEsc — Cancel1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc backEsc back · Esc again / B launch"}
+SHOT 08-graft-warning.png
+afterEsc {"credits":42000,"beautiful":4,"player":{"classKey":"light","hullKind":"built","grafted":false},"hulls":[{"id":"hull_starter","classKey":"light","hullKind":"living","grafted":false,"faction":"independent"},{"id":"hull_light_1","classKey":"light","hullKind":"built","grafted":false,"faction":"gilded"}],"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount","4 — Mount","Offer graft"]}
+SHOT 09-esc-cancel.png
+afterConfirm {"offer2":true,"confirmClicked":true,"credits":42000,"beautiful":-10,"player":{"classKey":"light","hullKind":"built","grafted":true},"hulls":[{"id":"hull_starter","classKey":"light","hullKind":"living","grafted":false,"faction":"independent"},{"id":"hull_light_1","classKey":"light","hullKind":"built","grafted":true,"faction":"gilded"}],"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount","4 — Mount"],"notice":"Tissue sealed to the hull."}
+SHOT 10-graft-confirm.png
+living {"mountedId":"hull_starter","player":{"classKey":"light","hullKind":"living","grafted":false},"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount","4 — Mount"]}
+SHOT 11-living-no-offer.png
+PINS {
+  "gildedDock": true,
+  "digit0Shipyard": true,
+  "buyPlated": true,
+  "mountedPlated": true,
+  "warnShown": true,
+  "warnNoWrite": true,
+  "warnNoDebit": true,
+  "escClears": true,
+  "escNoGrafted": true,
+  "escStanding": true,
+  "confirmGrafted": true,
+  "confirmKindBuilt": true,
+  "confirmNoDebit": true,
+  "confirmStanding": true,
+  "livingNoOffer": true,
+  "rearmed": true
+}
+ALL LIVE PINS TRUE

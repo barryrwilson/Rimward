@@ -1,0 +1,170 @@
+Wave 84 NAV-02 verifier
+Date: 2026-08-21
+Domain: data
+Scope: markdown-only freeze (inventory, contract, brief, reviews). No src edits by this verifier.
+
+RESULT: BUGS_FOUND
+HIGH: persist consume vs live NAV-01 merge law (hopIndex + status enum)
+
+-------------------------------------------------------------------------------
+1. Worker files vs src / wishlist / PROGRESS
+-------------------------------------------------------------------------------
+Touched (mtime 18:00–18:04):
+  out/w84/nav02/current-nav-guidance-inventory.md
+  out/w84/nav02/shared-contract.md
+  out/w84/nav02/security-review.md
+  out/w84/nav02/code-review.md
+  out/w84/nav02/ui-audit.md
+  docs/Nav02GuidanceDesign.md
+
+src/game/save.js mtime 15:53; src/systems/hud.js 15:53.
+docs/PLAYER-EXPERIENCE-WISHLIST.md 17:08; PROGRESS.md 17:37.
+Worker set is markdown under docs/Nav02* and out/w84/nav02 only.
+Sibling out/w84/nav01/** and out/w84/nav03/** not in the worker file list.
+PASS: this worker did not write src/, wishlist, or PROGRESS.md.
+
+-------------------------------------------------------------------------------
+2. Inventory cites vs live grep
+-------------------------------------------------------------------------------
+WORLD_FIELDS save.js 75–98: no 'nav'. Copy-out 953. Restore walk 1160.
+sanitizeNav absent; sanitizeFieldOre/Jobs/Reputation 1107–1109.
+world.nav / WORLD_FIELDS 'nav' under src/: 0.
+PASS.
+
+jump.js midpointSwap: targets.current = null at 85–87; emit systemLoaded { to } at 123;
+swap when p >= 0.5 at 155–157; jumpRequested consume 144; end jumping 160–164 (read).
+save.js autosave pending on systemLoaded while jumping still true: 1499–1518.
+PASS.
+
+ctx.gate ctx.js 153–162. gate.js zone 535–560; jumpRequested 558–559;
+assemblies private 429; KeyG hub cycle 501–507; overlay textContent 578;
+rebuild lastEvents systemLoaded 510–516; reducedMotion animate 152–202 + 520.
+glow RING_RADIUS * 3.2 at gate.js 78; RING_RADIUS = BORE_RADIUS 30 at gate-scale.js 61;
+BORE_RADIUS 30 line 14; ZONE 60 line 33. JUMP.zone 60 / chargeTime 2.5 / arrival 50
+at state.js 542–547. U.DOCK_RANGE 45 / TARGET_RANGE 600 at 29–30.
+PASS.
+
+hud.js: el() textContent 226–231. innerHTML in hud.js: 0.
+innerHTML in src/systems: modelsbrowser.js only.
+EDGE_MARGIN 84 line 56. Contacts scanner ≥ 1 ships 44–47, 752–782, 1255–1260.
+.rw-edge-arrow 702, 1182–1196. Behind-camera flip 1141–1142.
+chart marks 704–721, 1409–1449. k-abbrev 1507–1509.
+toasts 723–731. banner lastEvents systemLoaded 597–618 (injected CSS), 734–739, 1032–1048.
+POS 878–881, 1622–1635. prompt 1750–1816.
+hud.css: #hud pointer-events 5–6; toasts top 14 right 168px 588–594;
+prompt bottom 20% 626–638; contacts bottom 5.5% 671–680; rails top 57% 769–787;
+.rw-aux combat 0.38 815; .rw-side-col 830–840.
+PASS.
+
+reticle-aim.js GATE_BODY_R 30 line 19; LOCK_CONE_PX 12 line 15; considerGates 172–203.
+controls.js TRACKED Digit1–4, KeyT/V/X 37–44; cycleTarget ships/rocks 54–82; help G/M 339–340.
+galaxychart.js no clues 14–19; KeyM 240–250; update only current marker 257–281.
+station.js DOCK_KEY_SERVICES shipyard last 174; Digit 0 5710–5714.
+main.js initGate 105, initJump 114, initGalaxyChart 125, initHud last 127.
+song.js jumpRequested / systemLoaded 81–82.
+ctx.emit spread 231–232.
+PASS. Inventory line numbers match live Wave 84 code.
+
+Cite nit (not a freeze bug): contract §2.5 points same-system restore at
+save.js 1177 comment. The emit gate is 1207–1208
+(`if (sys && sys !== fromSystem) ctx.emit('systemLoaded', { to: sys })`).
+1177 comment is about recordBanks identity, not the emit.
+
+-------------------------------------------------------------------------------
+3. Contract vs brief (NAV-02 internal)
+-------------------------------------------------------------------------------
+Guidance is not a lock: contract §0.4 / §4; brief merge table + Key Decision 1.
+Never write targets.current. Amber .rw-edge-arrow stays lock.
+PASS.
+
+Cue class is not TGT-03 contacts: .rw-nav-gate-cue; not .rw-contacts / pip /
+.rw-edge-arrow / .rw-chartmark. Brief freeze 3–4.
+PASS.
+
+Persist: consume world.nav only; no second WORLD_FIELDS key; extra field
+proposal is status on the same record. Advance display on systemLoaded only.
+innerHTML forbidden. Marker raycast empty. KeyG not auto-snapped.
+Readout in .rw-side-col above POS (off aim column / rails / prompt / contacts).
+Wave 84 markdown only. Serial after NAV-01 persist.
+PASS vs NAV-02 brief.
+
+-------------------------------------------------------------------------------
+4. Cross-cut vs out/w84/nav01/shared-contract.md  — HIGH
+-------------------------------------------------------------------------------
+NAV-01 merge law (contract wins for that family):
+
+  world.nav = { dest, path, remaining, status }
+  status allowlist: 'plotted' | 'blocked' | 'arrived'
+  idle = omit the bag
+  recalc is an EVENT, not a persist status (after off-path systemLoaded
+    write plotted or blocked)
+  next hop for NAV-02: path[1] when status==='plotted' && path.length>=2
+  path is origin-first (path[0] === currentSystem)
+  remaining persisted = path.length - 1
+  sanitize allowlist: dest, path, remaining, status only
+  unknown keys: DROP
+  hopIndex: not in the record; grep hopIndex in out/w84/nav01 and
+    docs/Nav01RouteDesign.md = 0
+
+NAV-02 freeze still assumes:
+
+  dest / path / hopIndex / status
+  status extra: 'active' | 'recalc' | 'broken' | 'arrived'
+  nextTo = path[hopIndex]
+  remaining = path.length - hopIndex (derive; remaining FORBIDDEN on blob)
+  HUD §8: status==='recalc' → REROUTE; status==='broken' → NO ROUTE
+  stuffed hopIndex fail-closed hide
+
+Consume-their-enum text (NAV-02 contract §2.2):
+  "If NAV-01 already has an equivalent allowlisted enum, do not duplicate.
+   Consume theirs. If they omit status, this proposal is the HUD contract
+   they must allowlist."
+Brief open Q3: "if NAV-01 already names the enum differently, HUD copy
+maps 1:1; do not fork a second field."
+
+That rule does NOT match NAV-01:
+
+  1. NAV-01 did not omit status. Tokens are plotted/blocked/arrived,
+     not active/recalc/broken/arrived.
+  2. No mapping table. HUD algorithms still branch on 'active' / 'recalc' /
+     'broken'. Consuming NAV-01 tokens as-is never hits those branches.
+  3. NAV-01 forbids persist 'recalc'. Wrong-gate HUD copy keyed on
+     status==='recalc' never fires.
+  4. blocked ≠ broken (name and meaning: dest kept, path []).
+  5. hopIndex is not an enum issue. Parenthetical "or NAV-01's equivalent
+     cursor" is not a freeze: §2.2 table still requires hopIndex. NAV-01
+     sanitize DROPS unknown keys, so hopIndex never survives restore.
+  6. NAV-02 fail-closed: hopIndex not a finite int in range → hide guidance.
+     After a legal NAV-01 persist, hopIndex is absent → HUD never shows.
+  7. NAV-02 forbids persist remaining; NAV-01 persist remaining is the
+     hop count. Deriving from missing hopIndex is off-by-one vs path[1]
+     even if hopIndex were later added as 0 (path[0] is current).
+
+code-review.md treated remaining math as a yellow owner Q and said hopIndex
+writes are "resolved" because NAV-02 never writes the cursor. It did not
+flag that NAV-01 does not persist that cursor. security-review.md still
+pins stuffed hopIndex as the smuggle model.
+
+Impact if impl follows NAV-02 consume as written after NAV-01 persist PR:
+  guidance HUD stays hidden; REROUTE/NO ROUTE never maps; remaining wrong.
+
+-------------------------------------------------------------------------------
+5. Security / HUD freeze (design, no src this wave)
+-------------------------------------------------------------------------------
+innerHTML forbidden in contract + live hud.js grep 0. PASS.
+KeyG: hub cycle stays player-owned; no plot snap. PASS.
+Marker: empty raycast, no lockKind, not in ships/asteroid list. PASS (design).
+HUD placement: .rw-side-col above POS; cue not on contacts; toasts already
+right:168px; hop copy must not use commLine. PASS.
+Digit 0–9 / KeyM / KeyT / KeyV / KeyX untouched. PASS.
+
+-------------------------------------------------------------------------------
+6. Verdict
+-------------------------------------------------------------------------------
+Inventory vs live code: clean.
+Internal NAV-02 brief vs contract (lock / cue / persist key / systemLoaded /
+innerHTML / KeyG / occupancy): clean.
+Worker did not write src / wishlist / PROGRESS.
+HIGH persist cross-cut vs NAV-01: hopIndex assumed; status enum does not
+consume plotted|blocked|arrived; consume-their-enum rule has no matching map.
+)

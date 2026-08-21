@@ -14487,7 +14487,8 @@ removeLiveShip(w42indyCtx, w42indy);
   if (prevDock71) dockAtCurrentStation('wave71 restore dock');
 
   const w71 = {
-    lampRock: /matchSpeed && \(shipTgt \|\| isRockLock\(target\)\)/.test(hud71),
+    lampRock: /matchSpeed && \(shipTgt \|\| isRockLock\(ctx, target\)\)/.test(hud71)
+      || /matchSpeed && \(shipTgt \|\| isRockLock\(target\)\)/.test(hud71),
     sanitizeJobs: save71.includes('function sanitizeJobs') && save71.includes('sanitizeJobs(ctx)'),
     omitJobs: /snap\.world\.jobs === undefined/.test(save71),
     noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save71) && !/SAFE_ID\.test\(\s*job\.id/.test(st71),
@@ -14510,6 +14511,4271 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave71 msn:', JSON.stringify(w71));
   if (!Object.values(w71).every(Boolean)) { console.log('WAVE71 MSN FAIL'); errors++; }
+}
+
+// ---- WAVE72: BIO first-impl boot pins (PR5, no feature logic) ----
+{
+  const { makeLivingHull, remountPlayerHull } = await import('../src/systems/ship.js');
+  const {
+    listYardOffers,
+    yardStockFor,
+    purchaseYardHull,
+    GRAFT_LIST_UU,
+  } = await import('../src/game/shipyard.js');
+  const {
+    sanitizeHangar,
+    sanitizeHangarRecord,
+    switchTo,
+    graftMounted,
+    HANGAR_CAP,
+  } = await import('../src/game/hangar.js');
+  const { GRAFT_WARN } = await import('../src/systems/shipyard-desk.js');
+  const { DOCK_KEY_SERVICES: w72Keys } = await import('../src/systems/station.js');
+  const { createShipState: w72Ship } = await import('../src/game/state.js');
+  const here72 = dirname(fileURLToPath(import.meta.url));
+  const src72 = (rel) => readFileSync(join(here72, '..', rel), 'utf8');
+  const hud72src = src72('src/systems/hud.js');
+  const desk72src = src72('src/systems/shipyard-desk.js');
+  const ctx72src = src72('src/core/ctx.js');
+
+  function prefix(tag, obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[tag + '.' + k] = obj[k];
+    return out;
+  }
+  function overlayTexts() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas(frag) {
+    return overlayTexts().some((t) => t.includes(frag));
+  }
+  function findOverlayButton(label) {
+    const ov = stationOverlay();
+    if (!ov) return null;
+    for (const n of walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && n.textContent === label) return n;
+    }
+    return null;
+  }
+  function overlayButtonCount(label) {
+    const ov = stationOverlay();
+    if (!ov) return 0;
+    let n = 0;
+    for (const node of walkDom(ov)) {
+      if (node.tagName === 'BUTTON' && node.textContent === label) n++;
+    }
+    return n;
+  }
+  function hullDigitCode(index) {
+    if (index === 7) return 'Digit0';
+    return 'Digit' + (index + 3);
+  }
+  function goMenu(label) {
+    if (!ctx.flags.docked) dockAtCurrentStation(label);
+    if (!overlayHas('1-9, 0 select service') && ctx.flags.docked) {
+      const back = findOverlayButton('← Back (Esc)');
+      if (back) back.click();
+      tick(1, `${label} back click`);
+    }
+  }
+  function goHangar(label) {
+    goMenu(label);
+    dispatchKey('Digit0');
+    tick(2, `${label} Digit0`);
+    if (!overlayHas('HANGAR')) {
+      dispatchKey('Digit1');
+      tick(1, `${label} Digit1 hangar`);
+    }
+  }
+  function buyCtx(faction, extra = {}) {
+    const player = extra.player ?? w72Ship('light', { name: 'Wave72Pin' });
+    player.hullKind = extra.hullKind ?? 'living';
+    const systemId = extra.systemId ?? 'w72_dock';
+    return {
+      flags: { docked: true, combat: false, paused: false, ...(extra.flags ?? {}) },
+      world: {
+        currentSystem: systemId,
+        credits: extra.credits ?? 20000,
+        reputation: extra.reputation ?? { [faction]: 0 },
+        hangar: extra.hangar ?? {
+          mountedId: 'hull_starter',
+          hulls: [{
+            id: 'hull_starter',
+            hullKind: 'living',
+            classKey: 'light',
+            faction: 'independent',
+            name: 'She',
+          }],
+        },
+      },
+      systems: extra.systems ?? { [systemId]: { faction } },
+      cargo: extra.cargo ?? [],
+      cargoCapacity: extra.cargoCapacity ?? 20,
+      player,
+      ship: extra.ship ?? {
+        object: { position: { toArray: () => [0, 0, 0] }, quaternion: { toArray: () => [0, 0, 0, 1] } },
+      },
+      emit() {},
+      ships: [],
+      gate: extra.gate ?? { jumping: false },
+    };
+  }
+
+  const live = ctx.ship?.living;
+  const swim = {
+    swim: !!live?.swim,
+    breath: !!live?.breath,
+    heartbeat: !!live?.heartbeat,
+    base: !!live?.base,
+    make: typeof makeLivingHull === 'function',
+  };
+
+  const hudPins = {
+    noWriteKind: !/player\.hullKind\s*=/.test(hud72src),
+    noWriteGraft: !/\.grafted\s*=/.test(hud72src),
+    graftedMech: hudFamily({ player: { hullKind: 'built', grafted: true } }) === 'mech',
+  };
+
+  const beauOffers = listYardOffers(buyCtx('beautiful', { reputation: { beautiful: 0 } }));
+  const unkOffers = listYardOffers(buyCtx('unknowables', { reputation: { unknowables: 0 } }));
+  const fhOffers = listYardOffers(buyCtx('freehold', { reputation: { freehold: 25 } }));
+  const omit = {
+    beauStock: !yardStockFor('beautiful').includes('frigate'),
+    unkStock: !yardStockFor('unknowables').includes('frigate'),
+    fhStock: yardStockFor('freehold').includes('frigate'),
+    beauOffers: !beauOffers.some((o) => o.classKey === 'frigate'),
+    unkOffers: !unkOffers.some((o) => o.classKey === 'frigate'),
+    fhOffers: fhOffers.some((o) => o.classKey === 'frigate'),
+  };
+
+  const beau = buyCtx('beautiful', { credits: 20000, reputation: { beautiful: 0 } });
+  const beauMounted = beau.world.hangar.mountedId;
+  const beauLen = beau.world.hangar.hulls.length;
+  const beauKind = beau.player.hullKind;
+  const beauBuyRes = purchaseYardHull(beau, 'light');
+  const beauRow = beau.world.hangar.hulls.find((h) => h.id !== beauMounted);
+  const beauBuy = {
+    ok: beauBuyRes.ok === true,
+    living: beauRow?.hullKind === 'living',
+    hullPlus: beau.world.hangar.hulls.length === beauLen + 1,
+    mountedSame: beau.world.hangar.mountedId === beauMounted,
+    noRemount: beau.player.hullKind === beauKind && beau.player.hullKind === 'living',
+  };
+
+  const srcPins = {
+    noInnerHtml: !/innerHTML/.test(desk72src),
+    warn: desk72src.includes(GRAFT_WARN)
+      || desk72src.includes('Beautiful Ones become immediate enemies'),
+    ctxNoGrafted: !/['"]grafted['"]/.test(ctx72src),
+    ctxNoAbom: !/['"]abomination['"]/.test(ctx72src),
+    ctxNoKindChanged: !/hullKindChanged/.test(ctx72src),
+    lastShipyard: w72Keys[w72Keys.length - 1] === 'shipyard' && w72Keys.at(-1) === 'shipyard',
+    keyCount: w72Keys.length === 10,
+    noNewService: !w72Keys.includes('graft') && !w72Keys.includes('growth')
+      && w72Keys.filter((k) => k === 'shipyard').length === 1,
+  };
+
+  const unkBanner = buyCtx('unknowables', {
+    hullKind: 'built',
+    reputation: { unknowables: 0, gilded: 0 },
+    hangar: {
+      mountedId: 'hull_m',
+      hulls: [{
+        id: 'hull_m', hullKind: 'built', classKey: 'light', faction: 'gilded', name: 'Plate',
+      }],
+    },
+  });
+  unkBanner.player.hullKind = 'built';
+  const unkBannerRes = graftMounted(unkBanner);
+  const unkRowCtx = buyCtx('gilded', {
+    hullKind: 'built',
+    reputation: { gilded: 0 },
+    hangar: {
+      mountedId: 'hull_u',
+      hulls: [{
+        id: 'hull_u', hullKind: 'built', classKey: 'light', faction: 'unknowables', name: 'Veil',
+      }],
+    },
+  });
+  unkRowCtx.player.faction = 'unknowables';
+  unkRowCtx.player.hullKind = 'built';
+  const unkRowRes = graftMounted(unkRowCtx);
+
+  const hangarKeep = JSON.parse(JSON.stringify(ctx.world.hangar ?? null));
+  const repKeep = { ...(ctx.world.reputation ?? {}) };
+  const creditsKeep = ctx.world.credits;
+  const kindKeep = ctx.player.hullKind;
+  const classKeep = ctx.player.classKey;
+  const graftKeep = Object.prototype.hasOwnProperty.call(ctx.player, 'grafted')
+    && ctx.player.grafted === true;
+  const prevSys72 = ctx.world.currentSystem;
+  const prevDock72 = ctx.flags.docked;
+  const snap72 = snapshot(ctx);
+  const snapPlayer72 = { ...ctx.player };
+
+  const builtHangar = {
+    mountedId: 'hull_graft_pin',
+    hulls: [{
+      id: 'hull_graft_pin',
+      hullKind: 'built',
+      grafted: true,
+      classKey: 'light',
+      faction: 'gilded',
+      name: 'GraftPin',
+      scanner: 0,
+      miningLaser: 0,
+      concealedMounts: false,
+      cargoCapacity: 20,
+      cargo: [],
+    }],
+  };
+  restore(ctx, {
+    v: 1,
+    world: {
+      ...snap72.world,
+      hangar: builtHangar,
+      reputation: { ...repKeep, beautiful: 4 },
+    },
+    cargo: snap72.cargo,
+    cargoCapacity: snap72.cargoCapacity,
+    bio: snap72.bio,
+    player: { ...snapPlayer72, hullKind: 'built', grafted: true, classKey: 'light' },
+    ship: snap72.ship,
+  });
+  const restoreCap = (ctx.world.reputation?.beautiful ?? 0) <= -10
+    && ctx.world.hangar?.hulls?.some((h) => h.grafted === true && h.hullKind === 'built') === true;
+
+  const livingHangar = {
+    mountedId: 'hull_live_pin',
+    hulls: [{
+      id: 'hull_live_pin',
+      hullKind: 'living',
+      grafted: true,
+      classKey: 'light',
+      faction: 'beautiful',
+      name: 'LivePin',
+      scanner: 0,
+      miningLaser: 0,
+      concealedMounts: false,
+      cargoCapacity: 20,
+      cargo: [],
+    }],
+  };
+  restore(ctx, {
+    v: 1,
+    world: {
+      ...snap72.world,
+      hangar: livingHangar,
+      reputation: { ...repKeep, beautiful: 4 },
+    },
+    cargo: snap72.cargo,
+    cargoCapacity: snap72.cargoCapacity,
+    bio: snap72.bio,
+    player: { ...snapPlayer72, hullKind: 'living', grafted: true, classKey: 'light' },
+    ship: snap72.ship,
+  });
+  const liveRow72 = ctx.world.hangar?.hulls?.find((h) => h.id === 'hull_live_pin');
+  const restoreLivingDrop = !!liveRow72
+    && liveRow72.hullKind === 'living'
+    && !Object.prototype.hasOwnProperty.call(liveRow72, 'grafted')
+    && (ctx.world.reputation?.beautiful ?? 0) === 4;
+  const recDrop = sanitizeHangarRecord({
+    id: 'hull_live_rec',
+    hullKind: 'living',
+    grafted: true,
+    classKey: 'light',
+    faction: 'beautiful',
+    name: 'LiveRec',
+  });
+  const restoreRecDrop = recDrop?.hullKind === 'living'
+    && !Object.prototype.hasOwnProperty.call(recDrop ?? {}, 'grafted');
+
+  restore(ctx, {
+    v: 1,
+    world: {
+      ...snap72.world,
+      hangar: hangarKeep,
+      reputation: { ...repKeep },
+      credits: creditsKeep,
+    },
+    cargo: snap72.cargo,
+    cargoCapacity: snap72.cargoCapacity,
+    bio: snap72.bio,
+    player: snapPlayer72,
+    ship: snap72.ship,
+  });
+  if (!graftKeep) delete ctx.player.grafted;
+  ctx.player.hullKind = kindKeep;
+  ctx.player.classKey = classKeep;
+  sanitizeHangar(ctx);
+  remountPlayerHull(ctx);
+
+  if (!ctx.settings) ctx.settings = {};
+  ctx.settings.reducedMotion = false;
+  if (ctx.flags.docked) undockStation();
+  ctx.flags.combat = false;
+  ctx.flags.paused = false;
+  if (ctx.gate) ctx.gate.jumping = false;
+  if (ctx.player) ctx.player.destroyed = false;
+
+  const reachedGilded = travelTo('gc_auction', 'wave72');
+  const liveFaction = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  const gildedDock = reachedGilded && liveFaction === 'gilded';
+
+  let digit0Shipyard = false;
+  let graftWarnShown = false;
+  let graftConfirmShown = false;
+  let graftArmedNoWrite = false;
+  let graftArmedCredits = false;
+  let graftedRow = false;
+  let graftedPlayer = false;
+  let graftKindBuilt = false;
+  let graftCredits = false;
+  let graftStanding = false;
+  let graftHudMech = false;
+  let escClears = false;
+  let escNoGrafted = false;
+  let escStanding = false;
+  let livingNoOffer = false;
+
+  if (gildedDock) {
+    ctx.world.credits = Math.max(ctx.world.credits ?? 0, 50000);
+    if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+    ctx.world.reputation.gilded = Number.isFinite(ctx.world.reputation.gilded)
+      ? Math.max(0, ctx.world.reputation.gilded) : 0;
+    dockAtCurrentStation('wave72 dock gilded');
+    goMenu('wave72 menu');
+    digit0Shipyard = overlayHas('0 — Shipyard');
+    dispatchKey('Digit0');
+    tick(2, 'wave72 digit0');
+    digit0Shipyard = digit0Shipyard && overlayHas('SHIPYARD');
+
+    sanitizeHangar(ctx);
+    const starterId = ctx.world.hangar?.mountedId;
+    const lenBefore = ctx.world.hangar?.hulls?.length ?? 0;
+    const room = lenBefore < HANGAR_CAP;
+    const platedBuy = room ? purchaseYardHull(ctx, 'light') : { ok: false };
+    tick(1, 'wave72 buy plated');
+    const platedId = platedBuy.ok
+      ? ctx.world.hangar.hulls.find((h) => h.id !== starterId && h.hullKind === 'built'
+        && h.grafted !== true)?.id
+      : ctx.world.hangar.hulls.find((h) => h.hullKind === 'built' && h.id !== starterId)?.id;
+
+    if (platedId) {
+      goHangar('wave72 hangar mount');
+      const idx = ctx.world.hangar.hulls.findIndex((h) => h.id === platedId);
+      if (idx >= 0) {
+        dispatchKey(hullDigitCode(idx));
+        tick(2, 'wave72 mount plated');
+      }
+      if (ctx.world.hangar.mountedId !== platedId) {
+        switchTo(ctx, platedId);
+        dispatchKey('Digit1');
+        tick(1, 'wave72 switchTo plated');
+      }
+
+      const offerBtn = findOverlayButton('Offer graft');
+      if (offerBtn) offerBtn.click();
+      tick(1, 'wave72 offer graft');
+      const creditsArmed = ctx.world.credits;
+      const rowArmed = ctx.world.hangar.hulls.find((h) => h.id === platedId);
+      graftWarnShown = overlayHas(GRAFT_WARN)
+        && overlayHas('Beautiful Ones become immediate enemies')
+        && overlayHas('Patrols hunt at standing -10 or worse.');
+      graftConfirmShown = overlayHas('Confirm graft') && !!findOverlayButton('Confirm graft');
+      graftArmedNoWrite = rowArmed?.grafted !== true
+        && !Object.prototype.hasOwnProperty.call(ctx.player, 'grafted');
+      graftArmedCredits = ctx.world.credits === creditsArmed;
+
+      const confirmBtn = findOverlayButton('Confirm graft');
+      if (confirmBtn) confirmBtn.click();
+      tick(2, 'wave72 confirm graft');
+      const rowAfter = ctx.world.hangar.hulls.find((h) => h.id === platedId);
+      graftedRow = rowAfter?.grafted === true;
+      graftedPlayer = ctx.player.grafted === true;
+      graftKindBuilt = ctx.player.hullKind === 'built' && rowAfter?.hullKind === 'built';
+      graftCredits = Number.isFinite(creditsArmed)
+        && ctx.world.credits === creditsArmed - GRAFT_LIST_UU
+        && GRAFT_LIST_UU === 4000;
+      graftStanding = (ctx.world.reputation?.beautiful ?? 0) <= -10;
+      graftHudMech = hudFamily(ctx) === 'mech';
+
+      delete rowAfter.grafted;
+      delete ctx.player.grafted;
+      dispatchKey('Digit1');
+      tick(1, 'wave72 reset graft hangar');
+      const standingPreEsc = ctx.world.reputation?.beautiful;
+      const offer2 = findOverlayButton('Offer graft');
+      if (offer2) offer2.click();
+      tick(1, 'wave72 offer graft esc');
+      const pendingShown = overlayHas('Confirm graft');
+      dispatchKey('Escape');
+      tick(1, 'wave72 esc graft');
+      const rowEsc = ctx.world.hangar.hulls.find((h) => h.id === platedId);
+      escClears = pendingShown && !overlayHas('Confirm graft')
+        && overlayButtonCount('Confirm graft') === 0;
+      escNoGrafted = rowEsc?.grafted !== true
+        && !Object.prototype.hasOwnProperty.call(ctx.player, 'grafted');
+      escStanding = ctx.world.reputation?.beautiful === standingPreEsc;
+
+      if (starterId) {
+        switchTo(ctx, starterId);
+        dispatchKey('Digit1');
+        tick(1, 'wave72 mount living');
+      }
+      livingNoOffer = overlayButtonCount('Offer graft') === 0 && !overlayHas('Offer graft');
+    }
+  }
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.hangar = hangarKeep;
+  ctx.world.credits = creditsKeep;
+  ctx.world.reputation = { ...(ctx.world.reputation ?? {}), ...repKeep };
+  if (Object.prototype.hasOwnProperty.call(repKeep, 'beautiful')) {
+    ctx.world.reputation.beautiful = repKeep.beautiful;
+  } else {
+    delete ctx.world.reputation.beautiful;
+  }
+  ctx.player.hullKind = kindKeep;
+  ctx.player.classKey = classKeep;
+  if (graftKeep) ctx.player.grafted = true;
+  else delete ctx.player.grafted;
+  sanitizeHangar(ctx);
+  remountPlayerHull(ctx);
+  if (prevSys72 && prevSys72 !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys72;
+    ctx.emit('systemLoaded', { to: prevSys72 });
+    tick(2, 'wave72 restore sys');
+  }
+  if (prevDock72) dockAtCurrentStation('wave72 restore dock');
+
+  const w72 = {
+    ...prefix('swim', swim),
+    ...prefix('hud', hudPins),
+    ...prefix('omit', omit),
+    ...prefix('buy', beauBuy),
+    ...prefix('src', srcPins),
+    unkBanner: unkBannerRes.ok === false && unkBannerRes.reason === 'banner',
+    unkRow: unkRowRes.ok === false && (unkRowRes.reason === 'living' || unkRowRes.reason === 'banner'),
+    restoreCap,
+    restoreLivingDrop: restoreLivingDrop && restoreRecDrop,
+    gildedDock,
+    digit0Shipyard,
+    graftWarnShown,
+    graftConfirmShown,
+    graftArmedNoWrite,
+    graftArmedCredits,
+    graftedRow,
+    graftedPlayer,
+    graftKindBuilt,
+    graftCredits,
+    graftStanding,
+    graftHudMech,
+    escClears,
+    escNoGrafted,
+    escStanding,
+    livingNoOffer,
+  };
+  console.log('wave72 bio:', JSON.stringify(w72));
+  if (!Object.values(w72).every(Boolean)) { console.log('WAVE72 BIO FAIL'); errors++; }
+}
+
+// ---- WAVE74: TGT-05 / REP / EXP first-impl boot pins ----
+{
+  const { pickReticleLock, reticleAimPoint } = await import('../src/game/reticle-aim.js');
+  const { createShipState: w74Ship, RANK_LADDER: w74Ladder, U: w74U } = await import('../src/game/state.js');
+  const {
+    sanitizeCargoList: w74SanitizeCargo,
+    sanitizeReputation: w74SanitizeRep,
+    WORLD_FIELDS: w74Fields,
+    restore: w74Restore,
+  } = await import('../src/game/save.js');
+  const {
+    DOCK_KEY_SERVICES: w74Keys,
+    priceOf: w74PriceOf,
+    archiveDeskAllowed,
+    standingLadderLines,
+  } = await import('../src/systems/station.js');
+  const {
+    hasDataDropRate,
+    spawnDataPod,
+    maybeSpawnDataFromWreck,
+    DATA_DROP_RATE: w74DropRate,
+    standingRead: w74StandingRead,
+  } = await import('../src/game/data-trade.js');
+  const here74 = dirname(fileURLToPath(import.meta.url));
+  const src74 = (rel) => readFileSync(join(here74, '..', rel), 'utf8');
+  const controls74 = src74('src/systems/controls.js');
+  const combat74 = src74('src/systems/combat.js');
+  const station74 = src74('src/systems/station.js');
+  const tracked74 = controls74.slice(
+    controls74.indexOf('const TRACKED'),
+    controls74.indexOf('const PREVENT_DEFAULT'),
+  );
+  const detailStations74 = (station74.match(/const DETAIL_STATIONS = \{[\s\S]*?\n\};/) ?? [''])[0];
+  const missileFn74 = (combat74.match(/function liveMissileLock[\s\S]*?return t;\s*\}/) ?? [''])[0];
+
+  function seekerOf(t) {
+    if (!t?.object || !t.object.parent || !t.state || t.state.destroyed) return null;
+    return t;
+  }
+  function makeCam74() {
+    const cam = new THREE.PerspectiveCamera(60, 1280 / 720, 0.1, 5000);
+    cam.position.set(0, 0, 100);
+    cam.lookAt(0, 0, 0);
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld(true);
+    return cam;
+  }
+  function aimCtx74(extra = {}) {
+    return {
+      camera: extra.camera ?? makeCam74(),
+      flags: { firstPerson: false, ...(extra.flags ?? {}) },
+      ship: { object: { position: new THREE.Vector3(0, 0, 80) } },
+      asteroids: { list: extra.list ?? [] },
+      ships: extra.ships ?? [],
+      targets: { reticleScreen: { x: extra.rx ?? 0, y: extra.ry ?? 0 } },
+    };
+  }
+  function shipAt74(pos, extra = {}) {
+    return {
+      object: { position: pos.clone(), parent: extra.parent ?? {} },
+      state: { destroyed: !!extra.destroyed, radius: extra.radius ?? 4 },
+      record: { name: extra.name ?? 'W74' },
+    };
+  }
+  function collectCycle74(limit = 48) {
+    const seen = [];
+    ctx.targets.current = null;
+    for (let i = 0; i < limit; i++) {
+      dispatchKey('KeyT');
+      tick(1, 'wave74 cycle');
+      const t = ctx.targets.current;
+      if (!t) break;
+      if (seen.includes(t)) break;
+      seen.push(t);
+    }
+    return seen;
+  }
+  function stub74() {
+    return {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0 },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 80,
+      bio: {
+        hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0,
+        speedFactor: 1, turnFactor: 1,
+      },
+      player: w74Ship('light', { name: 'Wave74Pin' }),
+      ship: { object: null, velocity: { set() {} }, speed: 0 },
+      emit() {},
+      ships: [],
+    };
+  }
+  function withProto74(base) {
+    const bag = { ...base };
+    Object.defineProperty(bag, '__proto__', {
+      value: 99,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+    return bag;
+  }
+
+  const dead = shipAt74(new THREE.Vector3(0, 0, 0), { destroyed: true });
+  const liveNpc = shipAt74(new THREE.Vector3(0, 0, 0));
+  const out74 = new THREE.Vector3();
+  const skipDeadPick = pickReticleLock(aimCtx74({ ships: [dead] })) === null;
+  const skipDeadAim = reticleAimPoint(aimCtx74({ ships: [dead] }), 400, out74) === false;
+  const pad0 = { id: 0, position: new THREE.Vector3(80, 0, 0), radius: 0 };
+  const pad1 = { id: 1 };
+  const rockRow = {
+    id: 2,
+    position: new THREE.Vector3(0, 0, 0),
+    radius: 8,
+  };
+  const rockList = [pad0, pad1, rockRow];
+  const rockHit = pickReticleLock(aimCtx74({ list: rockList }));
+  const rockLockRow = rockHit === rockRow && rockList.indexOf(rockHit) === 2 && rockHit.id === 2;
+  const aimRock = reticleAimPoint(aimCtx74({ list: rockList }), 400, out74);
+  const aimRockRow = aimRock === rockRow && rockList.indexOf(aimRock) === 2 && aimRock.id === 2;
+  const livePick = pickReticleLock(aimCtx74({ ships: [liveNpc] })) === liveNpc;
+
+  const prevTgt74 = ctx.targets.current;
+  const prevDock74 = ctx.flags.docked;
+  const prevJump74 = ctx.gate?.jumping;
+  const prevPause74 = ctx.flags.paused;
+  const prevGroup74 = ctx.input.weaponGroup;
+  const prevLockEdge74 = ctx.input.reticleLockPressed;
+  const prevTargetEdge74 = ctx.input.targetPressed;
+  const origin74 = ctx.ship.object
+    ? ctx.ship.object.position.clone()
+    : new THREE.Vector3();
+  const fakeShip74 = {
+    object: {
+      position: origin74.clone().add(new THREE.Vector3(25, 0, -15)),
+      parent: ctx.scene ?? {},
+    },
+    state: { destroyed: false, radius: 4, name: 'W74 CYCLE' },
+    record: {
+      id: 'w74-pin-ship', name: 'W74 CYCLE', classKey: 'light',
+      faction: 'independent', role: 'trader',
+    },
+  };
+  ctx.ships.push(fakeShip74);
+  const list74 = ctx.asteroids?.list;
+  const rock74 = {
+    id: list74 ? list74.length : 0,
+    position: origin74.clone().add(new THREE.Vector3(18, 0, -12)),
+    radius: 8,
+  };
+  let pushedRock74 = false;
+  if (list74) {
+    list74.push(rock74);
+    pushedRock74 = true;
+    rock74.id = list74.indexOf(rock74);
+  }
+
+  ctx.flags.docked = false;
+  if (ctx.gate) ctx.gate.jumping = false;
+  ctx.flags.paused = false;
+
+  ctx.input.weaponGroup = 1;
+  const cyc1 = collectCycle74();
+  const keyTCycles = cyc1.includes(fakeShip74);
+  const group1NoRock = !cyc1.includes(rock74);
+
+  ctx.input.weaponGroup = 3;
+  const cyc3 = collectCycle74();
+  const group3AddsRocks = cyc3.includes(rock74) && cyc3.includes(fakeShip74);
+
+  ctx.input.reticleLockPressed = false;
+  ctx.input.targetPressed = false;
+  dispatchKey('KeyV');
+  tick(1, 'wave74 keyv');
+  const keyVEdge = ctx.input.reticleLockPressed === true;
+  ctx.input.reticleLockPressed = false;
+  dispatchKey('KeyT');
+  tick(1, 'wave74 keyt edge');
+  const keyTNotLock = ctx.input.reticleLockPressed === false
+    && ctx.input.targetPressed === true;
+
+  const sentinel74 = { id: 'w74-keep-lock' };
+  ctx.targets.current = sentinel74;
+  ctx.flags.docked = true;
+  if (ctx.gate) ctx.gate.jumping = false;
+  ctx.flags.paused = false;
+  dispatchKey('KeyV');
+  tick(1, 'wave74 miss');
+  const missEvents = ctx.lastEvents ?? [];
+  const missComm = missEvents.some((e) => e.type === 'commLine'
+    && e.text === 'Nothing under the reticle.');
+  const missNoSteal = ctx.targets.current === sentinel74;
+  const missNoHtml = missEvents.every((e) => !Object.hasOwn(e, 'innerHTML')
+    && (typeof e.text !== 'string' || !e.text.includes('<')));
+
+  const missileNullOnRock = seekerOf(rock74) === null
+    && seekerOf(fakeShip74) === fakeShip74
+    && missileFn74.includes('function liveMissileLock')
+    && missileFn74.includes('t.state.destroyed')
+    && (missileFn74.includes('t.lockKind') || missileFn74.includes('!t?.object'));
+
+  ctx.targets.current = prevTgt74;
+  ctx.flags.docked = prevDock74;
+  if (ctx.gate) ctx.gate.jumping = prevJump74;
+  ctx.flags.paused = prevPause74;
+  ctx.input.weaponGroup = prevGroup74;
+  ctx.input.reticleLockPressed = prevLockEdge74;
+  ctx.input.targetPressed = prevTargetEdge74;
+  if (pushedRock74) {
+    const iR = list74.indexOf(rock74);
+    if (iR >= 0) list74.splice(iR, 1);
+  }
+  const iS = ctx.ships.indexOf(fakeShip74);
+  if (iS >= 0) ctx.ships.splice(iS, 1);
+
+  const tgt = {
+    keyTCycles,
+    group3AddsRocks,
+    group1NoRock,
+    keyVInTracked: tracked74.includes("'KeyV'") && keyVEdge,
+    notKeyT: tracked74.includes("'KeyT'") && keyTNotLock
+      && /case 'KeyT':\s*pendingTarget = true/.test(controls74)
+      && /case 'KeyV':\s*pendingReticleLock = true/.test(controls74),
+    notLmb: /mousedown[\s\S]*button === 0[\s\S]*fireDown = true/.test(controls74)
+      && !tracked74.includes('Digit0'),
+    notDigit0: !tracked74.includes('Digit0') && !tracked74.includes("'Digit0'"),
+    skipDestroyed: skipDeadPick && skipDeadAim,
+    rockLockRow: rockLockRow && aimRockRow,
+    livePick,
+    missNoInnerHtml: !/innerHTML/.test(controls74)
+      && controls74.includes('Nothing under the reticle.')
+      && missComm && missNoSteal && missNoHtml,
+    missileNullOnRock,
+    noReticleU: !Object.keys(w74U).some((k) => k.startsWith('RETICLE_'))
+      && w74U.TARGET_RANGE === 600,
+  };
+
+  const protoBag = withProto74({
+    freehold: 4,
+    constructor: 8,
+    prototype: 7,
+    veridian: Number.NaN,
+    hollow: -40,
+  });
+  const repCtx = stub74();
+  repCtx.world.reputation = protoBag;
+  w74SanitizeRep(repCtx);
+  const bag = repCtx.world.reputation;
+  const destRep = stub74();
+  w74Restore(destRep, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold', credits: 10, fear: 0,
+      reputation: withProto74({ freehold: 12, veridian: Number.NaN }),
+      crimeScore: 99,
+      wanted: true,
+    },
+    cargo: [],
+  });
+  const ladder74 = standingLadderLines();
+  const rungs74 = w74Ladder.map((r) => r.name);
+  const rep = {
+    protoDropped: !Object.hasOwn(bag, '__proto__') && bag.__proto__ !== 99,
+    nanToZero: !Object.hasOwn(bag, 'veridian') && w74StandingRead(bag, 'veridian') === 0,
+    beautifulMissing: !Object.hasOwn(bag, 'beautiful')
+      && w74StandingRead(bag, 'beautiful') === 0,
+    markedKept: bag.hollow === -40 && bag.freehold === 4,
+    restoreProto: !Object.hasOwn(destRep.world.reputation, '__proto__')
+      || destRep.world.reputation.__proto__ !== 99,
+    restoreNan: !Object.hasOwn(destRep.world.reputation, 'veridian'),
+    restoreBeautiful: !Object.hasOwn(destRep.world.reputation, 'beautiful'),
+    digit9Epics: w74Keys[8] === 'epics' && w74Keys.length === 10
+      && ladder74.length === w74Ladder.length
+      && ladder74.includes('Sworn 50'),
+    digit0Shipyard: w74Keys[w74Keys.length - 1] === 'shipyard'
+      && w74Keys.at(-1) === 'shipyard',
+    noCrimeScore: !w74Fields.includes('crimeScore')
+      && !w74Fields.includes('wanted')
+      && !Object.hasOwn(ctx.world, 'crimeScore')
+      && !Object.hasOwn(ctx.world, 'wanted')
+      && !Object.hasOwn(destRep.world, 'crimeScore')
+      && !Object.hasOwn(destRep.world, 'wanted'),
+    rankLadder: w74Ladder.length === 6
+      && rungs74.join(',') === 'Sworn,Trusted,Known,Stranger,Suspect,Marked'
+      && w74Ladder[0].min === 50 && w74Ladder[5].min === -1000
+      && w74Fields.includes('reputation'),
+  };
+
+  const listed = w74SanitizeCargo([
+    { commodity: 'provisions', units: 4 },
+    { commodity: 'notASku', units: 2 },
+    {
+      commodity: 'dataCrystal',
+      units: 2,
+      source: 'captured',
+      originFaction: 'unknowables',
+      name: '<b>x</b>',
+    },
+    { commodity: 'dataCube', units: 1, originFaction: 'assembly' },
+    { commodity: 'dataCube', units: 1, source: 'legal', originFaction: 'assembly' },
+    {
+      commodity: 'survivor',
+      units: 2,
+      faction: 'veridian',
+      source: 'playerKill',
+      name: 'Ilyra',
+    },
+  ]);
+  const destCargo = stub74();
+  w74Restore(destCargo, {
+    v: 1,
+    world: { currentSystem: 'freehold', credits: 10, fear: 0 },
+    cargo: [
+      { commodity: 'dataCube', units: 3, source: 'legal', originFaction: 'assembly', name: 'nope' },
+      { commodity: 'dataCrystal', units: 1, originFaction: 'unknowables' },
+      { commodity: 'ghostSku', units: 9 },
+      { commodity: 'survivor', units: 1, faction: 'gilded', source: 'other' },
+    ],
+  });
+  const stuffedPrices = { world: { prices: { dataCube: 9999, dataCrystal: 8888 } } };
+  const survivors = listed.filter((r) => r.commodity === 'survivor');
+  const crystals = listed.filter((r) => r.commodity === 'dataCrystal');
+  const cubes = listed.filter((r) => r.commodity === 'dataCube');
+  const spawnWorld = stub74();
+  spawnWorld.pods = [];
+  const spawnLive = {
+    record: { faction: 'assembly' },
+    state: { faction: 'assembly', cargo: [] },
+    object: { position: { x: 0, y: 0, z: 0 } },
+  };
+  const exp = {
+    dataRoundtrip: crystals.length === 1
+      && crystals[0].source === 'captured'
+      && crystals[0].originFaction === 'unknowables'
+      && crystals[0].units === 2
+      && Object.keys(crystals[0]).sort().join(',') === 'commodity,originFaction,source,units'
+      && destCargo.cargo.some((r) => r.commodity === 'dataCube'
+        && r.source === 'legal' && r.originFaction === 'assembly' && !('name' in r)),
+    missingSourceDropped: !listed.some((r) => r.commodity === 'dataCube' && !r.source)
+      && cubes.length === 1 && cubes[0].source === 'legal'
+      && !destCargo.cargo.some((r) => r.commodity === 'dataCrystal'),
+    unknownDropped: !listed.some((r) => r.commodity === 'notASku')
+      && !destCargo.cargo.some((r) => r.commodity === 'ghostSku')
+      && listed.some((r) => r.commodity === 'provisions' && r.units === 4),
+    priceOfDataCube0: w74PriceOf(stuffedPrices, 'dataCube') === 0
+      && w74PriceOf(stuffedPrices, 'dataCrystal') === 0,
+    archiveAssembly: archiveDeskAllowed('assembly') === true
+      && detailStations74.includes('assembly:'),
+    archiveFreeholdClosed: archiveDeskAllowed('freehold') === false
+      && archiveDeskAllowed('placeholder') === false
+      && archiveDeskAllowed('independent') === false,
+    unknowablesDockAbsent: archiveDeskAllowed('unknowables') === false
+      && !/unknowables\s*:/.test(detailStations74),
+    spawnSkip: hasDataDropRate() === true
+      && w74DropRate === 0.20
+      && spawnDataPod(spawnWorld, spawnLive) === null
+      && maybeSpawnDataFromWreck(spawnWorld, spawnLive) === null,
+    survivorUnchanged: survivors.length === 1
+      && survivors[0].faction === 'veridian'
+      && survivors[0].source === 'playerKill'
+      && survivors[0].name === 'Ilyra'
+      && destCargo.cargo.some((r) => r.commodity === 'survivor'
+        && r.faction === 'gilded' && r.source === 'other'),
+  };
+
+  const w74 = { ...tgt, ...rep, ...exp };
+  console.log('wave74 pins:', JSON.stringify(w74));
+  if (!Object.values(w74).every(Boolean)) { console.log('WAVE74 PINS FAIL'); errors++; }
+}
+
+// ---- WAVE76: MSN-02 renewable trade / commodity delivery pins ----
+{
+  const { createShipState: w76Ship } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w76Fields } = await import('../src/game/save.js');
+  const here76 = dirname(fileURLToPath(import.meta.url));
+  const src76 = (rel) => readFileSync(join(here76, '..', rel), 'utf8');
+  const save76 = src76('src/game/save.js');
+  const st76 = src76('src/systems/station.js');
+  const nSys76 = Object.keys(SYSTEMS).length;
+  const cap76 = 4 + 4 * nSys76 + 16;
+  const unique76 = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const tradeAllow76 = ['provisions', 'refinedMetals', 'rawOre'];
+  const destFor76 = (origin) => {
+    const to = SYSTEMS[origin]?.gates?.[0]?.to;
+    return to && to !== origin && Object.hasOwn(SYSTEMS, to) ? to : (origin === 'veridian' ? 'freehold' : 'veridian');
+  };
+
+  const job76 = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 76 pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine76 = (sysId, n, slot, extra = {}) => ({
+    id: `mine-${sysId}-${n}`,
+    kind: 'mining',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    commodity: extra.commodity ?? 'rawOre',
+    title: extra.title ?? 'Mine raw ore',
+    detail: extra.detail ?? 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 4,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+  });
+  const trade76 = (sysId, n, slot, extra = {}) => ({
+    id: `trade-${sysId}-${n}`,
+    kind: 'trade',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor76(sysId),
+    commodity: extra.commodity ?? 'provisions',
+    title: extra.title ?? 'Haul Provisions',
+    detail: extra.detail ?? 'Buy or hold 5 Provisions and deliver to the far station.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 5,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const four76 = () => [
+    job76('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job76('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job76('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job76('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub76 = (jobs) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w76Ship('light', { name: 'Wave76Pin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs } });
+    return c;
+  };
+
+  const keep76 = stub76([
+    ...four76(),
+    mine76('freehold', 0, 0),
+    trade76('freehold', 0, 0),
+    trade76('__proto__', 0, 0, { originSystem: '__proto__', destSystem: 'veridian' }),
+    job76('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+    trade76('freehold', 9, 0, { need: 1, rest: { deadline: 600 } }),
+    trade76('freehold', 10, 0, { commodity: 'livingRock' }),
+    trade76('freehold', 11, 0, { commodity: 'survivor' }),
+    trade76('freehold', 12, 0, { commodity: 'dataCrystal' }),
+    trade76('notasystem', 0, 0, { originSystem: 'notasystem', destSystem: 'veridian' }),
+    { id: 'trade-freehold', kind: 'trade', slot: 0, originSystem: 'freehold', destSystem: 'veridian', commodity: 'provisions', title: 'Short', detail: 'Two tokens only.', reward: 0, need: 5, progress: 0, state: 'offered', deadline: 600 },
+  ]);
+  const keepIds76 = keep76.world.jobs.map((j) => j.id);
+  const keepNeed1 = keep76.world.jobs.some((j) => j.kind === 'trade' && j.need === 1);
+  const keepBadCargo = keep76.world.jobs.some((j) => j.kind === 'trade'
+    && (j.commodity === 'livingRock' || j.commodity === 'survivor' || j.commodity === 'dataCrystal'));
+
+  const honest76 = four76();
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest76.push(mine76(sysId, 0, 0));
+    honest76.push(mine76(sysId, 1, 1));
+    honest76.push(trade76(sysId, 0, 0));
+    honest76.push(trade76(sysId, 1, 1));
+  }
+  const honestCtx76 = stub76(honest76);
+
+  const flood = four76().concat(mine76('freehold', 0, 0), trade76('freehold', 0, 0));
+  for (let i = 0; i < 10000; i++) flood.push({ id: `junk-${i}`, kind: 'trade' });
+  const floodCtx76 = stub76(flood);
+
+  const stuffedPay76 = stub76([
+    ...four76(),
+    trade76('freehold', 0, 0, {
+      destSystem: 'redmarch',
+      state: 'accepted',
+      payQuoted: 80,
+      commodity: 'refinedMetals',
+      deadline: 1e9,
+    }),
+  ]);
+
+  const prevSys76 = ctx.world.currentSystem;
+  const prevDock76 = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  if (prevSys76 !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave76 warp freehold');
+  dockAtCurrentStation('wave76 dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave76 jobs');
+  const trades76 = (ctx.world.jobs ?? []).filter((j) => j.kind === 'trade' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive76 = unique76.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const noAst76 = trades76.every((j) => !Object.hasOwn(j, 'asteroidId'));
+  const need5Live = trades76.every((j) => j.need === 5);
+  const allowLive = trades76.every((j) => tradeAllow76.includes(j.commodity));
+  const destLive = trades76.every((j) => destFor76(j.originSystem) && destFor76(j.originSystem) !== j.originSystem);
+
+  const payJob76 = trades76.find((j) => j.state === 'offered') ?? trades76[0] ?? null;
+  const payId76 = payJob76?.id;
+  const paySlot76 = payJob76?.slot;
+  const destId76 = payJob76 ? destFor76(payJob76.originSystem) : null;
+  if (payJob76) {
+    payJob76.state = 'accepted';
+    payJob76.payQuoted = 18;
+    payJob76.commodity = 'refinedMetals';
+    payJob76.need = 5;
+    payJob76.deadline = ctx.world.time + 600;
+    payJob76.destSystem = 'redmarch';
+  }
+  const credStuff76 = ctx.world.credits;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'redmarch';
+  ctx.emit('systemLoaded', { to: 'redmarch' });
+  tick(2, 'wave76 warp stuffed');
+  dockAtCurrentStation('wave76 dock stuffed');
+  if (payJob76) ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
+  tick(40, 'wave76 stuffed dest');
+  const stuffedIgnored76 = ctx.world.credits === credStuff76
+    && !!(payId76 && (ctx.world.jobs ?? []).some((j) => j.id === payId76 && j.state === 'accepted'));
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = destId76 || 'veridian';
+  ctx.emit('systemLoaded', { to: destId76 || 'veridian' });
+  tick(2, 'wave76 warp dest');
+  dockAtCurrentStation('wave76 dock dest');
+  const credBefore76 = ctx.world.credits;
+  tick(40, 'wave76 deliver');
+  const paid76 = payJob76 && ctx.world.credits > credBefore76;
+  const replaced76 = !!(payId76 && paySlot76 != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId76)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'trade' && j.originSystem === 'freehold'
+      && j.slot === paySlot76 && j.state === 'offered' && j.id !== payId76));
+
+  const again76 = (ctx.world.jobs ?? []).find((j) => j.kind === 'trade' && j.originSystem === 'freehold'
+    && j.slot === paySlot76 && j.state === 'offered' && j.id !== payId76) ?? null;
+  const againId76 = again76?.id;
+  if (again76) {
+    again76.state = 'accepted';
+    again76.payQuoted = 19;
+    again76.commodity = 'refinedMetals';
+    again76.need = 5;
+    again76.deadline = ctx.world.time + 600;
+    ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
+  }
+  tick(40, 'wave76 deliver again');
+  const againReplaced76 = !!(againId76
+    && !(ctx.world.jobs ?? []).some((j) => j.id === againId76)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'trade' && j.originSystem === 'freehold'
+      && j.slot === paySlot76 && j.state === 'offered' && j.id !== againId76));
+
+  const expJob76 = (ctx.world.jobs ?? []).find((j) => j.kind === 'trade' && j.originSystem === 'freehold'
+    && j.state === 'offered') ?? null;
+  const expId76 = expJob76?.id;
+  const credExp76 = ctx.world.credits;
+  if (expJob76) {
+    expJob76.state = 'accepted';
+    expJob76.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave76 expire');
+  const expired76 = !!(expId76 && !(ctx.world.jobs ?? []).some((j) => j.id === expId76));
+  const expireNoPay76 = ctx.world.credits === credExp76;
+  const expireNotDone76 = !expId76 || !(ctx.world.jobs ?? []).some((j) => j.id === expId76 && j.state === 'done');
+
+  dispatchKey('Escape');
+  tick(1, 'wave76 jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys76 && prevSys76 !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys76;
+    ctx.emit('systemLoaded', { to: prevSys76 });
+    tick(2, 'wave76 restore sys');
+  }
+  if (prevDock76) dockAtCurrentStation('wave76 restore dock');
+
+  const w76 = {
+    uniqueFour: keepIds76.includes('bounty-ace') && keepIds76.includes('patrol-lane')
+      && keepIds76.includes('haul-provisions') && keepIds76.includes('ferry-consignment')
+      && uniqueLive76,
+    keepMineFh: keepIds76.includes('mine-freehold-0'),
+    keepTradeFh: keepIds76.includes('trade-freehold-0'),
+    dropProto: !keepIds76.includes('__proto__') && !keepIds76.includes('trade-__proto__-0'),
+    dropNeed1: !keepNeed1,
+    dropBadCargo: !keepBadCargo,
+    capFormula: save76.includes('TRADE_SLOTS_PER_SYSTEM') && cap76 === 4 + 4 * nSys76 + 16,
+    capFits: honestCtx76.world.jobs.length === 4 + 4 * nSys76 && honestCtx76.world.jobs.length <= cap76,
+    floodHeal: floodCtx76.world.jobs.length <= cap76
+      && floodCtx76.world.jobs.some((j) => j.id === 'trade-freehold-0')
+      && floodCtx76.world.jobs.some((j) => j.id === 'mine-freehold-0'),
+    fieldsJobs: w76Fields.includes('jobs') && w76Fields.filter((k) => k === 'jobs').length === 1
+      && !w76Fields.includes('missions'),
+    fillTwo: trades76.length === 2,
+    needFive: need5Live,
+    commodityAllow: allowLive,
+    destOther: destLive,
+    noAsteroidId: noAst76,
+    stuffedDestIgnored: stuffedIgnored76,
+    stuffedRestoreKept: stuffedPay76.world.jobs.some((j) => j.id === 'trade-freehold-0' && j.destSystem === 'redmarch'),
+    completeReplace: !!replaced76,
+    completePay: !!paid76,
+    completeAgain: !!againReplaced76,
+    expireNoPay: !!expired76 && expireNoPay76 && expireNotDone76,
+    noInnerHtml: !/innerHTML/.test(st76),
+    miningNeedUntouched: /function makeMiningJob[\s\S]*?const need = FERRY_UNITS/.test(st76),
+    haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st76),
+    uniqueHaulIds: uniqueLive76,
+    replaceHelper: st76.includes('function replaceTradeJob') && st76.includes('function syncTradeJobs'),
+  };
+  console.log('wave76 msn:', JSON.stringify(w76));
+  if (!Object.values(w76).every(Boolean)) { console.log('WAVE76 MSN FAIL'); errors++; }
+}
+
+// ---- WAVE78: MSN-02 renewable local pirate hunt pins ----
+{
+  const { createShipState: w78Ship } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w78Fields } = await import('../src/game/save.js');
+  const here78 = dirname(fileURLToPath(import.meta.url));
+  const src78 = (rel) => readFileSync(join(here78, '..', rel), 'utf8');
+  const save78 = src78('src/game/save.js');
+  const st78 = src78('src/systems/station.js');
+  const nSys78 = Object.keys(SYSTEMS).length;
+  const liveCap78 = 4 + 4 * nSys78 + 16;
+  const huntRoom78 = 2 * nSys78;
+  const cap78 = liveCap78 + huntRoom78;
+  const unique78 = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+
+  const job78 = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 78 pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine78 = (sysId, n, slot, extra = {}) => ({
+    id: `mine-${sysId}-${n}`,
+    kind: 'mining',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    commodity: extra.commodity ?? 'rawOre',
+    title: extra.title ?? 'Mine raw ore',
+    detail: extra.detail ?? 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 4,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+  });
+  const trade78 = (sysId, n, slot, extra = {}) => ({
+    id: `trade-${sysId}-${n}`,
+    kind: 'trade',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? (sysId === 'freehold' ? 'veridian' : 'freehold'),
+    commodity: extra.commodity ?? 'provisions',
+    title: extra.title ?? 'Haul Provisions',
+    detail: extra.detail ?? 'Buy or hold 5 Provisions and deliver to the far station.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 5,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const hunt78 = (sysId, n, slot, extra = {}) => ({
+    id: `hunt-${sysId}-${n}`,
+    kind: 'hunt',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    recordId: extra.recordId ?? `rec-${n + 1}`,
+    target: extra.target ?? 'Red Marlow',
+    title: extra.title ?? 'Hunt Red Marlow',
+    detail: extra.detail ?? 'Hunt a local pirate in this system.',
+    reward: extra.reward ?? 300,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const four78 = () => [
+    job78('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job78('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job78('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job78('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub78 = (jobs, worldExtra = {}) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w78Ship('light', { name: 'Wave78Pin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs, ...worldExtra } });
+    return c;
+  };
+
+  const keep78 = stub78([
+    ...four78(),
+    mine78('freehold', 0, 0),
+    trade78('freehold', 0, 0),
+    hunt78('freehold', 0, 0, { recordId: 'rec-1' }),
+    hunt78('__proto__', 0, 0, { originSystem: '__proto__', recordId: 'rec-1' }),
+    job78('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+    hunt78('freehold', 9, 0, { need: 2, recordId: 'rec-3' }),
+    hunt78('notasystem', 0, 0, { originSystem: 'notasystem', recordId: 'rec-1' }),
+    { id: 'hunt-freehold', kind: 'hunt', slot: 0, originSystem: 'freehold', recordId: 'rec-1', target: 'Red Marlow', title: 'Short', detail: 'Two tokens only.', reward: 300, need: 1, progress: 0, state: 'offered', deadline: 600 },
+    hunt78('freehold', 8, 1, { recordId: 'rec-4', rest: { commodity: 'provisions' } }),
+  ]);
+  const keepIds78 = keep78.world.jobs.map((j) => j.id);
+  const huntNeed2 = keep78.world.jobs.some((j) => j.kind === 'hunt' && j.need === 2);
+  const huntCommodity = keep78.world.jobs.some((j) => j.kind === 'hunt' && Object.hasOwn(j, 'commodity'));
+
+  const aceBank78 = [
+    { id: 'rec-1', name: 'Red Marlow', role: 'pirate', classKey: 'cutter', system: 'freehold', bounty: 300, state: 'live' },
+    { id: 'rec-99', name: 'Carver Illyx', role: 'ace', classKey: 'ace', system: 'freehold', bounty: 2500, state: 'live' },
+  ];
+  const aceCtx78 = stub78([
+    ...four78(),
+    hunt78('freehold', 0, 0, { recordId: 'rec-1' }),
+    hunt78('freehold', 7, 1, { recordId: 'rec-99', target: 'Carver Illyx' }),
+  ], { recordBanks: { freehold: aceBank78 }, records: aceBank78 });
+
+  const honest78 = four78();
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest78.push(mine78(sysId, 0, 0));
+    honest78.push(mine78(sysId, 1, 1));
+    honest78.push(trade78(sysId, 0, 0));
+    honest78.push(trade78(sysId, 1, 1));
+    honest78.push(hunt78(sysId, 0, 0, { recordId: 'rec-1' }));
+    honest78.push(hunt78(sysId, 1, 1, { recordId: 'rec-2' }));
+  }
+  const honestCtx78 = stub78(honest78);
+
+  const flood = four78().concat(mine78('freehold', 0, 0), trade78('freehold', 0, 0), hunt78('freehold', 0, 0));
+  for (let i = 0; i < 10000; i++) flood.push({ id: `junk-${i}`, kind: 'hunt' });
+  const floodCtx78 = stub78(flood);
+
+  const stuffedPay78 = stub78([
+    ...four78(),
+    hunt78('freehold', 0, 0, {
+      recordId: 'rec-1',
+      target: 'Stuffed Alias',
+      state: 'accepted',
+      payQuoted: 80,
+      deadline: 1e9,
+    }),
+  ]);
+
+  const prevSys78 = ctx.world.currentSystem;
+  const prevDock78 = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  if (prevSys78 !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave78 warp freehold');
+  dockAtCurrentStation('wave78 dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave78 jobs');
+  const hunts78 = (ctx.world.jobs ?? []).filter((j) => j.kind === 'hunt' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive78 = unique78.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const overlay78 = (ctx.world.jobs ?? []).filter((j) => j.kind === 'bounty' && typeof j.id === 'string'
+    && j.id.startsWith('bounty-pirate-') && j.state !== 'done');
+  const noAst78 = hunts78.every((j) => !Object.hasOwn(j, 'asteroidId'));
+  const need1Live = hunts78.every((j) => j.need === 1);
+  const recLive = hunts78.every((j) => typeof j.recordId === 'string' && /^rec-(0|[1-9][0-9]*)$/.test(j.recordId));
+  const titlesHideRec = hunts78.every((j) => typeof j.title === 'string' && !j.title.includes('rec-'));
+
+  const payJob78 = hunts78.find((j) => j.state === 'offered') ?? hunts78[0] ?? null;
+  const payId78 = payJob78?.id;
+  const paySlot78 = payJob78?.slot;
+  const recA78 = payJob78
+    ? (ctx.world.records ?? []).find((r) => r.id === payJob78.recordId)
+    : null;
+  const recB78 = (ctx.world.records ?? []).find((r) => r.role === 'pirate' && recA78 && r.id !== recA78.id
+    && r.state !== 'dead' && r.state !== 'captured' && r.classKey !== 'ace');
+  if (payJob78 && recA78) {
+    payJob78.state = 'accepted';
+    payJob78.payQuoted = 18;
+    payJob78.need = 1;
+    payJob78.deadline = ctx.world.time + 600;
+    payJob78.target = recB78?.name ?? 'Stuffed Alias';
+  }
+  const overlaySkip78 = recA78 ? {
+    id: `bounty-pirate-wave78-skip`,
+    kind: 'bounty',
+    target: recA78.name,
+    system: 'freehold',
+    title: `Bounty: ${recA78.name}`,
+    detail: 'Wave 78 overlay skip pin.',
+    reward: 9999,
+    state: 'accepted',
+    progress: 0,
+    need: 1,
+  } : null;
+  if (overlaySkip78) ctx.world.jobs.push(overlaySkip78);
+  const credStuff78 = ctx.world.credits;
+  if (recB78) {
+    recB78.state = 'dead';
+    ctx.world.incidents.push({ kind: 'destroyed', name: recB78.name, causer: 'player' });
+  }
+  if (ctx.flags.docked) undockStation();
+  tick(40, 'wave78 stuffed other');
+  const stuffedIgnored78 = ctx.world.credits === credStuff78
+    && !!(payId78 && (ctx.world.jobs ?? []).some((j) => j.id === payId78 && j.state === 'accepted'));
+
+  const credBefore78 = ctx.world.credits;
+  if (recA78) {
+    recA78.state = 'dead';
+    ctx.world.incidents.push({ kind: 'destroyed', name: recA78.name, causer: 'player' });
+  }
+  tick(40, 'wave78 hunt pay');
+  const paid78 = !!(payJob78 && ctx.world.credits === credBefore78 + 18);
+  const overlayDidNotPay78 = !overlaySkip78 || ctx.world.credits < credBefore78 + 9999;
+  const overlaySilenced78 = !overlaySkip78
+    || !(ctx.world.jobs ?? []).some((j) => j.id === overlaySkip78.id && j.state === 'accepted');
+  const replaced78 = !!(payId78 && paySlot78 != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId78)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'hunt' && j.originSystem === 'freehold'
+      && j.slot === paySlot78 && j.state === 'offered' && j.id !== payId78));
+
+  const expJob78 = (ctx.world.jobs ?? []).find((j) => j.kind === 'hunt' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted') && j.id !== payId78) ?? null;
+  const expId78 = expJob78?.id;
+  const credExp78 = ctx.world.credits;
+  if (expJob78) {
+    expJob78.state = 'accepted';
+    expJob78.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave78 expire');
+  const expired78 = !!(expId78 && !(ctx.world.jobs ?? []).some((j) => j.id === expId78));
+  const expireNoPay78 = ctx.world.credits === credExp78;
+  const expireNotDone78 = !expId78 || !(ctx.world.jobs ?? []).some((j) => j.id === expId78 && j.state === 'done');
+
+  dispatchKey('Escape');
+  tick(1, 'wave78 jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys78 && prevSys78 !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys78;
+    ctx.emit('systemLoaded', { to: prevSys78 });
+    tick(2, 'wave78 restore sys');
+  }
+  if (prevDock78) dockAtCurrentStation('wave78 restore dock');
+
+  const w78 = {
+    uniqueFour: keepIds78.includes('bounty-ace') && keepIds78.includes('patrol-lane')
+      && keepIds78.includes('haul-provisions') && keepIds78.includes('ferry-consignment')
+      && uniqueLive78,
+    keepMineFh: keepIds78.includes('mine-freehold-0'),
+    keepTradeFh: keepIds78.includes('trade-freehold-0'),
+    keepHuntFh: keepIds78.includes('hunt-freehold-0'),
+    dropProto: !keepIds78.includes('__proto__') && !keepIds78.includes('hunt-__proto__-0'),
+    dropShortId: !keepIds78.includes('hunt-freehold'),
+    dropNeed2: !huntNeed2,
+    dropBadSys: !keepIds78.includes('hunt-notasystem-0'),
+    dropAceRecord: aceCtx78.world.jobs.some((j) => j.id === 'hunt-freehold-0')
+      && !aceCtx78.world.jobs.some((j) => j.id === 'hunt-freehold-7'),
+    dropCommodity: !huntCommodity,
+    capFormula: save78.includes('HUNT_SLOTS_PER_SYSTEM') && cap78 === 4 + 6 * nSys78 + 16,
+    capFits: honestCtx78.world.jobs.length === 4 + 6 * nSys78 && honestCtx78.world.jobs.length <= cap78,
+    floodHeal: floodCtx78.world.jobs.length <= cap78
+      && floodCtx78.world.jobs.some((j) => j.id === 'hunt-freehold-0')
+      && floodCtx78.world.jobs.some((j) => j.id === 'mine-freehold-0')
+      && floodCtx78.world.jobs.some((j) => j.id === 'trade-freehold-0'),
+    fieldsJobs: w78Fields.includes('jobs') && w78Fields.filter((k) => k === 'jobs').length === 1
+      && !w78Fields.includes('missions'),
+    fillTwo: hunts78.length === 2,
+    needOne: need1Live,
+    recordBind: recLive,
+    noAsteroidId: noAst78,
+    titlesHideRec,
+    stuffedTargetIgnored: stuffedIgnored78,
+    stuffedRestoreKept: stuffedPay78.world.jobs.some((j) => j.id === 'hunt-freehold-0' && j.target === 'Stuffed Alias'),
+    completeReplace: !!replaced78,
+    completePay: !!paid78,
+    overlaySkip: !!paid78 && overlayDidNotPay78 && overlaySilenced78,
+    overlayCap: overlay78.length <= 2,
+    expireNoPay: !!expired78 && expireNoPay78 && expireNotDone78,
+    noInnerHtml: !/innerHTML/.test(st78),
+    noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save78) && !/SAFE_ID\.test\(\s*job\.id/.test(st78),
+    haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78),
+    uniqueHaulIds: uniqueLive78,
+    replaceHelper: st78.includes('function replaceHuntJob') && st78.includes('function syncHuntJobs'),
+  };
+  console.log('wave78 msn:', JSON.stringify(w78));
+  if (!Object.values(w78).every(Boolean)) { console.log('WAVE78 MSN FAIL'); errors++; }
+}
+
+// ---- WAVE78: MSN-02 renewable passenger escort pins ----
+{
+  const { createShipState: w78pShip } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w78pFields } = await import('../src/game/save.js');
+  const here78p = dirname(fileURLToPath(import.meta.url));
+  const src78p = (rel) => readFileSync(join(here78p, '..', rel), 'utf8');
+  const save78p = src78p('src/game/save.js');
+  const st78p = src78p('src/systems/station.js');
+  const nSys78p = Object.keys(SYSTEMS).length;
+  const liveCap78p = 4 + 6 * nSys78p + 16;
+  const passRoom78p = 2 * nSys78p;
+  const cap78p = liveCap78p + passRoom78p;
+  const unique78p = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const destFor78p = (origin) => {
+    const to = SYSTEMS[origin]?.gates?.[0]?.to;
+    return to && to !== origin && Object.hasOwn(SYSTEMS, to) ? to : (origin === 'veridian' ? 'freehold' : 'veridian');
+  };
+
+  const job78p = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 78 passenger pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine78p = (sysId, n, slot, extra = {}) => ({
+    id: `mine-${sysId}-${n}`,
+    kind: 'mining',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    commodity: extra.commodity ?? 'rawOre',
+    title: extra.title ?? 'Mine raw ore',
+    detail: extra.detail ?? 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 4,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+  });
+  const trade78p = (sysId, n, slot, extra = {}) => ({
+    id: `trade-${sysId}-${n}`,
+    kind: 'trade',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor78p(sysId),
+    commodity: extra.commodity ?? 'provisions',
+    title: extra.title ?? 'Haul Provisions',
+    detail: extra.detail ?? 'Buy or hold 5 Provisions and deliver to the far station.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 5,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const hunt78p = (sysId, n, slot, extra = {}) => ({
+    id: `hunt-${sysId}-${n}`,
+    kind: 'hunt',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    recordId: extra.recordId ?? `rec-${n + 1}`,
+    target: extra.target ?? 'Red Marlow',
+    title: extra.title ?? 'Hunt Red Marlow',
+    detail: extra.detail ?? 'Hunt a local pirate in this system.',
+    reward: extra.reward ?? 300,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const pass78p = (sysId, n, slot, extra = {}) => ({
+    id: `passenger-${sysId}-${n}`,
+    kind: 'passenger',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor78p(sysId),
+    title: extra.title ?? 'Escort passengers',
+    detail: extra.detail ?? 'Carry a booked party to the far station. Paid on docking there.',
+    reward: extra.reward ?? 350,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const four78p = () => [
+    job78p('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job78p('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job78p('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job78p('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub78p = (jobs) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w78pShip('light', { name: 'Wave78PassPin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs } });
+    return c;
+  };
+
+  const keep78p = stub78p([
+    ...four78p(),
+    mine78p('freehold', 0, 0),
+    trade78p('freehold', 0, 0),
+    hunt78p('freehold', 0, 0, { recordId: 'rec-1' }),
+    pass78p('freehold', 0, 0),
+    pass78p('__proto__', 0, 0, { originSystem: '__proto__', destSystem: 'veridian' }),
+    job78p('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+    pass78p('freehold', 9, 0, { need: 2 }),
+    pass78p('notasystem', 0, 0, { originSystem: 'notasystem', destSystem: 'veridian' }),
+    {
+      id: 'passenger-freehold',
+      kind: 'passenger',
+      slot: 0,
+      originSystem: 'freehold',
+      destSystem: 'veridian',
+      title: 'Short',
+      detail: 'Two tokens only.',
+      reward: 350,
+      need: 1,
+      progress: 0,
+      state: 'offered',
+      deadline: 600,
+    },
+    pass78p('freehold', 8, 1, { destSystem: 'veridian', rest: { commodity: 'survivor' } }),
+    pass78p('freehold', 7, 1, { destSystem: 'freehold' }),
+  ]);
+  const keepIds78p = keep78p.world.jobs.map((j) => j.id);
+  const passNeed2 = keep78p.world.jobs.some((j) => j.kind === 'passenger' && j.need === 2);
+  const passCommodity = keep78p.world.jobs.some((j) => j.kind === 'passenger' && Object.hasOwn(j, 'commodity'));
+  const passSameDest = keep78p.world.jobs.some((j) => j.id === 'passenger-freehold-7');
+
+  const honest78p = four78p();
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest78p.push(mine78p(sysId, 0, 0));
+    honest78p.push(mine78p(sysId, 1, 1));
+    honest78p.push(trade78p(sysId, 0, 0));
+    honest78p.push(trade78p(sysId, 1, 1));
+    honest78p.push(hunt78p(sysId, 0, 0, { recordId: 'rec-1' }));
+    honest78p.push(hunt78p(sysId, 1, 1, { recordId: 'rec-2' }));
+    honest78p.push(pass78p(sysId, 0, 0));
+    honest78p.push(pass78p(sysId, 1, 1));
+  }
+  const honestCtx78p = stub78p(honest78p);
+
+  const floodP = four78p().concat(
+    mine78p('freehold', 0, 0),
+    trade78p('freehold', 0, 0),
+    hunt78p('freehold', 0, 0),
+    pass78p('freehold', 0, 0),
+  );
+  for (let i = 0; i < 10000; i++) floodP.push({ id: `junkp-${i}`, kind: 'passenger' });
+  const floodCtx78p = stub78p(floodP);
+
+  const stuffedPay78p = stub78p([
+    ...four78p(),
+    pass78p('freehold', 0, 0, {
+      destSystem: 'redmarch',
+      state: 'accepted',
+      payQuoted: 80,
+      deadline: 1e9,
+    }),
+  ]);
+
+  const prevSys78p = ctx.world.currentSystem;
+  const prevDock78p = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  if (prevSys78p !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave78p warp freehold');
+  dockAtCurrentStation('wave78p dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave78p jobs');
+  const passes78p = (ctx.world.jobs ?? []).filter((j) => j.kind === 'passenger' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const huntsLive78p = (ctx.world.jobs ?? []).filter((j) => j.kind === 'hunt' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive78p = unique78p.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const uniqueFerryKind78p = (ctx.world.jobs ?? []).some((j) => j.id === 'ferry-consignment' && j.kind === 'ferry');
+  const noAst78p = passes78p.every((j) => !Object.hasOwn(j, 'asteroidId'));
+  const need1LiveP = passes78p.every((j) => j.need === 1);
+  const noCommodityLive = passes78p.every((j) => !Object.hasOwn(j, 'commodity'));
+  const destLiveP = passes78p.every((j) => destFor78p(j.originSystem) && destFor78p(j.originSystem) !== j.originSystem);
+
+  const ferryFreeze = (ctx.world.jobs ?? []).find((j) => j.id === 'ferry-consignment') ?? null;
+  const ferryFreezeState = ferryFreeze ? ferryFreeze.state : null;
+  const freezeSlotJobs78p = (keep) => {
+    const jobs = ctx.world.jobs ?? [];
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j === keep) continue;
+      if (j.state !== 'accepted') continue;
+      if (j.kind === 'mining' || j.kind === 'trade' || j.kind === 'hunt'
+        || j.kind === 'passenger' || j.kind === 'explore'
+        || j.kind === 'bounty' || j.kind === 'haul' || j.kind === 'ferry'
+        || j.kind === 'patrol' || j.kind === 'recovery') {
+        j.state = 'offered';
+      }
+    }
+  };
+
+  const payJob78p = passes78p.find((j) => j.state === 'offered') ?? passes78p[0] ?? null;
+  const payId78p = payJob78p?.id;
+  const paySlot78p = payJob78p?.slot;
+  const destId78p = payJob78p ? destFor78p(payJob78p.originSystem) : null;
+  if (payJob78p) {
+    payJob78p.state = 'accepted';
+    payJob78p.payQuoted = 18;
+    payJob78p.need = 1;
+    payJob78p.deadline = ctx.world.time + 600;
+    payJob78p.destSystem = 'redmarch';
+  }
+  freezeSlotJobs78p(payJob78p);
+  const cargoBeforeStuff = JSON.stringify(ctx.cargo ?? []);
+  const credStuff78p = ctx.world.credits;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'redmarch';
+  ctx.emit('systemLoaded', { to: 'redmarch' });
+  tick(2, 'wave78p warp stuffed');
+  dockAtCurrentStation('wave78p dock stuffed');
+  tick(40, 'wave78p stuffed dest');
+  const stuffedIgnored78p = ctx.world.credits === credStuff78p
+    && !!(payId78p && (ctx.world.jobs ?? []).some((j) => j.id === payId78p && j.state === 'accepted'));
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = destId78p || 'veridian';
+  ctx.emit('systemLoaded', { to: destId78p || 'veridian' });
+  tick(2, 'wave78p warp dest');
+  dockAtCurrentStation('wave78p dock dest');
+  freezeSlotJobs78p(payJob78p);
+  if (payJob78p) {
+    payJob78p.state = 'accepted';
+    payJob78p.payQuoted = 18;
+    payJob78p.need = 1;
+    payJob78p.deadline = ctx.world.time + 600;
+  }
+  const cargoBeforePay = JSON.stringify(ctx.cargo ?? []);
+  const credBefore78p = ctx.world.credits;
+  tick(40, 'wave78p deliver');
+  const paid78p = !!(payJob78p && ctx.world.credits === credBefore78p + 18);
+  const cargoUnchanged78p = JSON.stringify(ctx.cargo ?? []) === cargoBeforePay
+    && cargoBeforePay === cargoBeforeStuff;
+  const replaced78p = !!(payId78p && paySlot78p != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId78p)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'passenger' && j.originSystem === 'freehold'
+      && j.slot === paySlot78p && j.state === 'offered' && j.id !== payId78p));
+
+  const again78p = (ctx.world.jobs ?? []).find((j) => j.kind === 'passenger' && j.originSystem === 'freehold'
+    && j.slot === paySlot78p && j.state === 'offered' && j.id !== payId78p) ?? null;
+  const againId78p = again78p?.id;
+  if (again78p) {
+    again78p.state = 'accepted';
+    again78p.payQuoted = 19;
+    again78p.need = 1;
+    again78p.deadline = ctx.world.time + 600;
+  }
+  freezeSlotJobs78p(again78p);
+  tick(40, 'wave78p deliver again');
+  const againReplaced78p = !!(againId78p
+    && !(ctx.world.jobs ?? []).some((j) => j.id === againId78p)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'passenger' && j.originSystem === 'freehold'
+      && j.slot === paySlot78p && j.state === 'offered' && j.id !== againId78p));
+
+  const expJob78p = (ctx.world.jobs ?? []).find((j) => j.kind === 'passenger' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted') && j.id !== payId78p && j.id !== againId78p) ?? null;
+  const expId78p = expJob78p?.id;
+  const credExp78p = ctx.world.credits;
+  if (expJob78p) {
+    expJob78p.state = 'accepted';
+    expJob78p.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave78p expire');
+  const expired78p = !!(expId78p && !(ctx.world.jobs ?? []).some((j) => j.id === expId78p));
+  const expireNoPay78p = ctx.world.credits === credExp78p;
+  const expireNotDone78p = !expId78p || !(ctx.world.jobs ?? []).some((j) => j.id === expId78p && j.state === 'done');
+
+  const ferryJob78p = (ctx.world.jobs ?? []).find((j) => j.id === 'ferry-consignment') ?? null;
+  if (ferryJob78p && ferryFreezeState) ferryJob78p.state = ferryFreezeState;
+  if (ferryJob78p && ferryJob78p.state !== 'done') {
+    ferryJob78p.state = 'accepted';
+    ferryJob78p.destSystem = ctx.world.currentSystem;
+    ferryJob78p.need = 4;
+    ctx.cargo.push({ commodity: 'provisions', units: 4 });
+    tick(40, 'wave78p unique ferry');
+  }
+  const uniqueFerryDone78p = (ctx.world.jobs ?? []).some((j) => j.id === 'ferry-consignment' && j.state === 'done');
+  const uniqueFerryKept78p = (ctx.world.jobs ?? []).some((j) => j.id === 'ferry-consignment');
+
+  const passTickSrc = st78p.match(/if \(job\.kind === 'passenger'\) \{[\s\S]*?if \(job\.state !== 'accepted'\) continue;/);
+  const passTickNoCargo = !!(passTickSrc && passTickSrc[0]
+    && !/addCargo/.test(passTickSrc[0])
+    && !/removeCargo/.test(passTickSrc[0])
+    && !/holdUnits/.test(passTickSrc[0]));
+  const noFerryAlloc78p = !/passengerSeq[\s\S]*ferry-\$\{/.test(st78p)
+    && !/`ferry-\$\{sysId\}-/.test(st78p)
+    && st78p.includes('function nextPassengerId')
+    && st78p.includes('`passenger-${sysId}-`');
+
+  dispatchKey('Escape');
+  tick(1, 'wave78p jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys78p && prevSys78p !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys78p;
+    ctx.emit('systemLoaded', { to: prevSys78p });
+    tick(2, 'wave78p restore sys');
+  }
+  if (prevDock78p) dockAtCurrentStation('wave78p restore dock');
+
+  const w78p = {
+    uniqueFour: keepIds78p.includes('bounty-ace') && keepIds78p.includes('patrol-lane')
+      && keepIds78p.includes('haul-provisions') && keepIds78p.includes('ferry-consignment')
+      && uniqueLive78p,
+    keepMineFh: keepIds78p.includes('mine-freehold-0'),
+    keepTradeFh: keepIds78p.includes('trade-freehold-0'),
+    keepHuntFh: keepIds78p.includes('hunt-freehold-0'),
+    keepPassengerFh: keepIds78p.includes('passenger-freehold-0'),
+    dropProto: !keepIds78p.includes('__proto__') && !keepIds78p.includes('passenger-__proto__-0'),
+    dropShortId: !keepIds78p.includes('passenger-freehold'),
+    dropNeed2: !passNeed2,
+    dropBadSys: !keepIds78p.includes('passenger-notasystem-0'),
+    dropCommodity: !passCommodity,
+    dropSameDest: !passSameDest,
+    capFormula: save78p.includes('PASSENGER_SLOTS_PER_SYSTEM')
+      && save78p.includes('HUNT_SLOTS_PER_SYSTEM')
+      && cap78p === 4 + 8 * nSys78p + 16
+      && /PASSENGER_SLOTS_PER_SYSTEM \* N_SYSTEMS/.test(save78p),
+    capFits: honestCtx78p.world.jobs.length === 4 + 8 * nSys78p
+      && honestCtx78p.world.jobs.length <= cap78p,
+    floodHeal: floodCtx78p.world.jobs.length <= cap78p
+      && floodCtx78p.world.jobs.some((j) => j.id === 'passenger-freehold-0')
+      && floodCtx78p.world.jobs.some((j) => j.id === 'hunt-freehold-0')
+      && floodCtx78p.world.jobs.some((j) => j.id === 'mine-freehold-0')
+      && floodCtx78p.world.jobs.some((j) => j.id === 'trade-freehold-0'),
+    fieldsJobs: w78pFields.includes('jobs') && w78pFields.filter((k) => k === 'jobs').length === 1
+      && !w78pFields.includes('missions'),
+    fillTwo: passes78p.length === 2,
+    huntStillTwo: huntsLive78p.length === 2,
+    needOne: need1LiveP,
+    noCommodityLive,
+    destOther: destLiveP,
+    noAsteroidId: noAst78p,
+    stuffedDestIgnored: stuffedIgnored78p,
+    stuffedRestoreKept: stuffedPay78p.world.jobs.some((j) => j.id === 'passenger-freehold-0' && j.destSystem === 'redmarch'),
+    completeReplace: !!replaced78p,
+    completePay: !!paid78p,
+    completeAgain: !!againReplaced78p,
+    cargoUnchanged: cargoUnchanged78p,
+    expireNoPay: !!expired78p && expireNoPay78p && expireNotDone78p,
+    uniqueFerryKind: uniqueFerryKind78p,
+    uniqueFerryDone: uniqueFerryDone78p && uniqueFerryKept78p,
+    passTickNoCargo,
+    noFerryAlloc: noFerryAlloc78p,
+    extraHuntKept: save78p.includes('function extraOfferedHunt')
+      && save78p.includes('function extraOfferedPassenger'),
+    noInnerHtml: !/innerHTML/.test(st78p),
+    noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save78p) && !/SAFE_ID\.test\(\s*job\.id/.test(st78p),
+    haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78p),
+    passengerDestBind: /job\.kind === 'passenger'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78p),
+    uniqueHaulIds: uniqueLive78p,
+    replaceHelper: st78p.includes('function replacePassengerJob') && st78p.includes('function syncPassengerJobs'),
+    mouseAccept: st78p.includes('btn(card, `Accept (${i + 1})`, () => acceptJob(job))'),
+  };
+  console.log('wave78 passenger:', JSON.stringify(w78p));
+  if (!Object.values(w78p).every(Boolean)) { console.log('WAVE78 PASSENGER FAIL'); errors++; }
+}
+
+// ---- WAVE78: MSN-02 renewable explore / information recovery pins ----
+{
+  const { createShipState: w78eShip } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w78eFields } = await import('../src/game/save.js');
+  const here78e = dirname(fileURLToPath(import.meta.url));
+  const src78e = (rel) => readFileSync(join(here78e, '..', rel), 'utf8');
+  const save78e = src78e('src/game/save.js');
+  const st78e = src78e('src/systems/station.js');
+  const nSys78e = Object.keys(SYSTEMS).length;
+  const liveCap78e = 4 + 8 * nSys78e + 16;
+  const exploreRoom78e = 2 * nSys78e;
+  const cap78e = liveCap78e + exploreRoom78e;
+  const unique78e = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const destFor78e = (origin) => {
+    const to = SYSTEMS[origin]?.gates?.[0]?.to;
+    return to && to !== origin && Object.hasOwn(SYSTEMS, to) ? to : (origin === 'veridian' ? 'freehold' : 'veridian');
+  };
+  const siteLm78e = (sysId, slot) => {
+    const lms = SYSTEMS[sysId]?.landmarks;
+    if (!Array.isArray(lms) || lms.length === 0) return null;
+    const lm = lms[(slot === 1 ? 1 : 0) % lms.length];
+    return lm && typeof lm.id === 'string' && typeof lm.name === 'string' ? lm : null;
+  };
+
+  const job78e = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 78 explore pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine78e = (sysId, n, slot, extra = {}) => ({
+    id: `mine-${sysId}-${n}`,
+    kind: 'mining',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    commodity: extra.commodity ?? 'rawOre',
+    title: extra.title ?? 'Mine raw ore',
+    detail: extra.detail ?? 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 4,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+  });
+  const trade78e = (sysId, n, slot, extra = {}) => ({
+    id: `trade-${sysId}-${n}`,
+    kind: 'trade',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor78e(sysId),
+    commodity: extra.commodity ?? 'provisions',
+    title: extra.title ?? 'Haul Provisions',
+    detail: extra.detail ?? 'Buy or hold 5 Provisions and deliver to the far station.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 5,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const hunt78e = (sysId, n, slot, extra = {}) => ({
+    id: `hunt-${sysId}-${n}`,
+    kind: 'hunt',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    recordId: extra.recordId ?? `rec-${n + 1}`,
+    target: extra.target ?? 'Red Marlow',
+    title: extra.title ?? 'Hunt Red Marlow',
+    detail: extra.detail ?? 'Hunt a local pirate in this system.',
+    reward: extra.reward ?? 300,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const pass78e = (sysId, n, slot, extra = {}) => ({
+    id: `passenger-${sysId}-${n}`,
+    kind: 'passenger',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor78e(sysId),
+    title: extra.title ?? 'Escort passengers',
+    detail: extra.detail ?? 'Carry a booked party to the far station. Paid on docking there.',
+    reward: extra.reward ?? 350,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const explore78e = (sysId, n, slot, extra = {}) => ({
+    id: `explore-${sysId}-${n}`,
+    kind: 'explore',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    title: extra.title ?? 'Survey The Shepherd',
+    detail: extra.detail ?? 'Fly to The Shepherd in Freehold Drift. Redock here to file.',
+    reward: extra.reward ?? 300,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...(extra.destSystem !== undefined ? { destSystem: extra.destSystem } : {}),
+    ...extra.rest,
+  });
+  const four78e = () => [
+    job78e('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job78e('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job78e('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job78e('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub78e = (jobs) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w78eShip('light', { name: 'Wave78ExplorePin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs } });
+    return c;
+  };
+
+  const keep78e = stub78e([
+    ...four78e(),
+    mine78e('freehold', 0, 0),
+    trade78e('freehold', 0, 0),
+    hunt78e('freehold', 0, 0, { recordId: 'rec-1' }),
+    pass78e('freehold', 0, 0),
+    explore78e('freehold', 0, 0),
+    explore78e('__proto__', 0, 0, { originSystem: '__proto__' }),
+    job78e('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+    explore78e('freehold', 9, 0, { need: 2 }),
+    explore78e('notasystem', 0, 0, { originSystem: 'notasystem' }),
+    {
+      id: 'explore-freehold',
+      kind: 'explore',
+      slot: 0,
+      originSystem: 'freehold',
+      title: 'Short',
+      detail: 'Two tokens only.',
+      reward: 300,
+      need: 1,
+      progress: 0,
+      state: 'offered',
+      deadline: 600,
+    },
+    explore78e('freehold', 8, 1, { rest: { commodity: 'dataCrystal' } }),
+    explore78e('fh_hearth', 1, 1),
+  ]);
+  const keepIds78e = keep78e.world.jobs.map((j) => j.id);
+  const exploreNeed2 = keep78e.world.jobs.some((j) => j.kind === 'explore' && j.need === 2);
+  const exploreCommodity = keep78e.world.jobs.some((j) => j.kind === 'explore' && Object.hasOwn(j, 'commodity'));
+  const keepExploreCrystal = keep78e.world.jobs.some((j) => j.id === 'explore-freehold-8' && !Object.hasOwn(j, 'commodity'));
+
+  const honest78e = four78e();
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest78e.push(mine78e(sysId, 0, 0));
+    honest78e.push(mine78e(sysId, 1, 1));
+    honest78e.push(trade78e(sysId, 0, 0));
+    honest78e.push(trade78e(sysId, 1, 1));
+    honest78e.push(hunt78e(sysId, 0, 0, { recordId: 'rec-1' }));
+    honest78e.push(hunt78e(sysId, 1, 1, { recordId: 'rec-2' }));
+    honest78e.push(pass78e(sysId, 0, 0));
+    honest78e.push(pass78e(sysId, 1, 1));
+    honest78e.push(explore78e(sysId, 0, 0));
+    honest78e.push(explore78e(sysId, 1, 1));
+  }
+  const honestCtx78e = stub78e(honest78e);
+
+  const floodE = four78e().concat(
+    mine78e('freehold', 0, 0),
+    trade78e('freehold', 0, 0),
+    hunt78e('freehold', 0, 0),
+    pass78e('freehold', 0, 0),
+    explore78e('freehold', 0, 0),
+  );
+  for (let i = 0; i < 10000; i++) floodE.push({ id: `junke-${i}`, kind: 'explore' });
+  const floodCtx78e = stub78e(floodE);
+
+  const stuffedPay78e = stub78e([
+    ...four78e(),
+    explore78e('freehold', 0, 0, {
+      destSystem: 'redmarch',
+      state: 'accepted',
+      payQuoted: 80,
+      deadline: 1e9,
+      rest: { landmarkId: 'vd_c_shanty' },
+    }),
+  ]);
+
+  const prevSys78e = ctx.world.currentSystem;
+  const prevDock78e = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  if (prevSys78e !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave78e warp freehold');
+  dockAtCurrentStation('wave78e dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave78e jobs');
+  const explores78e = (ctx.world.jobs ?? []).filter((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const huntsLive78e = (ctx.world.jobs ?? []).filter((j) => j.kind === 'hunt' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const passesLive78e = (ctx.world.jobs ?? []).filter((j) => j.kind === 'passenger' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive78e = unique78e.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const noAst78e = explores78e.every((j) => !Object.hasOwn(j, 'asteroidId'));
+  const need1LiveE = explores78e.every((j) => j.need === 1);
+  const noCommodityLiveE = explores78e.every((j) => !Object.hasOwn(j, 'commodity'));
+  const titlesHideIds = explores78e.every((j) => {
+    const blob = `${j.title ?? ''} ${j.detail ?? ''}`;
+    return !blob.includes('fh_shepherd') && !blob.includes('rec-') && !blob.includes('visited');
+  });
+
+  const payJob78e = explores78e.find((j) => j.state === 'offered') ?? explores78e[0] ?? null;
+  const payId78e = payJob78e?.id;
+  const paySlot78e = payJob78e?.slot;
+  const reboundLm78e = payJob78e ? siteLm78e(payJob78e.originSystem, payJob78e.slot) : null;
+  const freezeSlotJobs78e = (keep) => {
+    const jobs = ctx.world.jobs ?? [];
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j === keep) continue;
+      if (j.state !== 'accepted') continue;
+      if (j.kind === 'mining' || j.kind === 'trade' || j.kind === 'hunt'
+        || j.kind === 'passenger' || j.kind === 'explore'
+        || j.kind === 'bounty' || j.kind === 'haul' || j.kind === 'ferry'
+        || j.kind === 'patrol' || j.kind === 'recovery') {
+        j.state = 'offered';
+      }
+    }
+  };
+  if (payJob78e) {
+    payJob78e.state = 'accepted';
+    payJob78e.payQuoted = 18;
+    payJob78e.need = 1;
+    payJob78e.deadline = ctx.world.time + 600;
+    payJob78e.destSystem = 'redmarch';
+    payJob78e.landmarkId = 'vd_c_shanty';
+  }
+  freezeSlotJobs78e(payJob78e);
+  if (!ctx.world.mystery || typeof ctx.world.mystery !== 'object' || Array.isArray(ctx.world.mystery)) {
+    ctx.world.mystery = { found: [], visited: [] };
+  }
+  if (!Array.isArray(ctx.world.mystery.visited)) ctx.world.mystery.visited = [];
+  if (reboundLm78e && ctx.world.mystery.visited.indexOf(reboundLm78e.id) === -1) {
+    ctx.world.mystery.visited.push(reboundLm78e.id);
+  }
+  const cargoBeforeStuffE = JSON.stringify(ctx.cargo ?? []);
+  const credStuff78e = ctx.world.credits;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'redmarch';
+  ctx.emit('systemLoaded', { to: 'redmarch' });
+  tick(2, 'wave78e warp stuffed');
+  dockAtCurrentStation('wave78e dock stuffed');
+  tick(40, 'wave78e stuffed dest');
+  const stuffedIgnored78e = ctx.world.credits === credStuff78e
+    && !!(payId78e && (ctx.world.jobs ?? []).some((j) => j.id === payId78e && j.state === 'accepted'));
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave78e warp origin');
+  dockAtCurrentStation('wave78e dock origin');
+  freezeSlotJobs78e(payJob78e);
+  if (payJob78e) {
+    payJob78e.state = 'accepted';
+    payJob78e.payQuoted = 18;
+    payJob78e.need = 1;
+    payJob78e.deadline = ctx.world.time + 600;
+  }
+  const cargoBeforePayE = JSON.stringify(ctx.cargo ?? []);
+  const credBefore78e = ctx.world.credits;
+  tick(60, 'wave78e file survey');
+  const paid78e = !!(payJob78e && ctx.world.credits === credBefore78e + 18);
+  const cargoUnchanged78e = JSON.stringify(ctx.cargo ?? []) === cargoBeforePayE
+    && cargoBeforePayE === cargoBeforeStuffE;
+  const noDataGrant78e = !(ctx.cargo ?? []).some((r) => r && (r.commodity === 'dataCrystal' || r.commodity === 'dataCube'));
+  const replaced78e = !!(payId78e && paySlot78e != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId78e)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+      && j.slot === paySlot78e && j.state === 'offered' && j.id !== payId78e));
+
+  const again78e = (ctx.world.jobs ?? []).find((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+    && j.slot === paySlot78e && j.state === 'offered' && j.id !== payId78e) ?? null;
+  const againId78e = again78e?.id;
+  if (again78e) {
+    again78e.state = 'accepted';
+    again78e.payQuoted = 19;
+    again78e.need = 1;
+    again78e.deadline = ctx.world.time + 600;
+  }
+  freezeSlotJobs78e(again78e);
+  tick(60, 'wave78e file again');
+  const againReplaced78e = !!(againId78e
+    && !(ctx.world.jobs ?? []).some((j) => j.id === againId78e)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+      && j.slot === paySlot78e && j.state === 'offered' && j.id !== againId78e));
+
+  const expJob78e = (ctx.world.jobs ?? []).find((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted') && j.id !== payId78e && j.id !== againId78e) ?? null;
+  const expId78e = expJob78e?.id;
+  const credExp78e = ctx.world.credits;
+  if (expJob78e) {
+    expJob78e.state = 'accepted';
+    expJob78e.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave78e expire');
+  const expired78e = !!(expId78e && !(ctx.world.jobs ?? []).some((j) => j.id === expId78e));
+  const expireNoPay78e = ctx.world.credits === credExp78e;
+  const expireNotDone78e = !expId78e || !(ctx.world.jobs ?? []).some((j) => j.id === expId78e && j.state === 'done');
+
+  const exploreTickAt = st78e.indexOf("if (job.kind === 'explore')");
+  const exploreTickSlice = exploreTickAt >= 0 ? st78e.slice(exploreTickAt, exploreTickAt + 5000) : '';
+  const exploreTickNoGrant = exploreTickSlice.includes("if (job.kind === 'explore')")
+    && exploreTickSlice.includes('replaceExploreJob')
+    && !/addCargo/.test(exploreTickSlice)
+    && !/spawnDataPod/.test(exploreTickSlice)
+    && !/confirmArchive/.test(exploreTickSlice)
+    && !/dataCrystal/.test(exploreTickSlice);
+
+  dispatchKey('Escape');
+  tick(1, 'wave78e jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys78e && prevSys78e !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys78e;
+    ctx.emit('systemLoaded', { to: prevSys78e });
+    tick(2, 'wave78e restore sys');
+  }
+  if (prevDock78e) dockAtCurrentStation('wave78e restore dock');
+
+  const w78e = {
+    uniqueFour: keepIds78e.includes('bounty-ace') && keepIds78e.includes('patrol-lane')
+      && keepIds78e.includes('haul-provisions') && keepIds78e.includes('ferry-consignment')
+      && uniqueLive78e,
+    keepMineFh: keepIds78e.includes('mine-freehold-0'),
+    keepTradeFh: keepIds78e.includes('trade-freehold-0'),
+    keepHuntFh: keepIds78e.includes('hunt-freehold-0'),
+    keepPassengerFh: keepIds78e.includes('passenger-freehold-0'),
+    keepExploreFh: keepIds78e.includes('explore-freehold-0'),
+    keepExploreHearth: keepIds78e.includes('explore-fh_hearth-1'),
+    dropProto: !keepIds78e.includes('__proto__') && !keepIds78e.includes('explore-__proto__-0'),
+    dropShortId: !keepIds78e.includes('explore-freehold'),
+    dropNeed2: !exploreNeed2,
+    dropBadSys: !keepIds78e.includes('explore-notasystem-0'),
+    dropCommodityField: !exploreCommodity && keepExploreCrystal,
+    capFormula: save78e.includes('EXPLORE_SLOTS_PER_SYSTEM')
+      && save78e.includes('PASSENGER_SLOTS_PER_SYSTEM')
+      && save78e.includes('HUNT_SLOTS_PER_SYSTEM')
+      && cap78e === 4 + 10 * nSys78e + 16
+      && /EXPLORE_SLOTS_PER_SYSTEM \* N_SYSTEMS/.test(save78e),
+    capFits: honestCtx78e.world.jobs.length === 4 + 10 * nSys78e
+      && honestCtx78e.world.jobs.length <= cap78e,
+    floodHeal: floodCtx78e.world.jobs.length <= cap78e
+      && floodCtx78e.world.jobs.some((j) => j.id === 'explore-freehold-0')
+      && floodCtx78e.world.jobs.some((j) => j.id === 'passenger-freehold-0')
+      && floodCtx78e.world.jobs.some((j) => j.id === 'hunt-freehold-0')
+      && floodCtx78e.world.jobs.some((j) => j.id === 'mine-freehold-0')
+      && floodCtx78e.world.jobs.some((j) => j.id === 'trade-freehold-0'),
+    fieldsJobs: w78eFields.includes('jobs') && w78eFields.filter((k) => k === 'jobs').length === 1
+      && !w78eFields.includes('missions') && !w78eFields.includes('explored'),
+    fillTwo: explores78e.length === 2,
+    huntStillTwo: huntsLive78e.length === 2,
+    passengerStillTwo: passesLive78e.length === 2,
+    needOne: need1LiveE,
+    noCommodityLive: noCommodityLiveE,
+    noAsteroidId: noAst78e,
+    titlesHideIds,
+    stuffedDestIgnored: stuffedIgnored78e,
+    stuffedRestoreKept: stuffedPay78e.world.jobs.some((j) => j.id === 'explore-freehold-0' && j.destSystem === 'redmarch')
+      && stuffedPay78e.world.jobs.every((j) => !Object.hasOwn(j, 'landmarkId')),
+    completeReplace: !!replaced78e,
+    completePay: !!paid78e,
+    completeAgain: !!againReplaced78e,
+    cargoUnchanged: cargoUnchanged78e,
+    noDataGrant: noDataGrant78e,
+    expireNoPay: !!expired78e && expireNoPay78e && expireNotDone78e,
+    exploreTickNoGrant,
+    extraAfterPassenger: save78e.includes('function extraOfferedPassenger')
+      && save78e.includes('function extraOfferedExplore')
+      && save78e.indexOf('function extraOfferedExplore') > save78e.indexOf('function extraOfferedPassenger'),
+    noInnerHtml: !/innerHTML/.test(st78e),
+    noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save78e) && !/SAFE_ID\.test\(\s*job\.id/.test(st78e),
+    haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78e),
+    uniqueHaulIds: uniqueLive78e,
+    replaceHelper: st78e.includes('function replaceExploreJob') && st78e.includes('function syncExploreJobs')
+      && st78e.includes('function resolveExploreSite'),
+    mouseAccept: st78e.includes('btn(card, `Accept (${i + 1})`, () => acceptJob(job))'),
+    huntPassengerHelpers: st78e.includes('function replaceHuntJob') && st78e.includes('function replacePassengerJob'),
+  };
+  console.log('wave78 explore:', JSON.stringify(w78e));
+  if (!Object.values(w78e).every(Boolean)) { console.log('WAVE78 EXPLORE FAIL'); errors++; }
+}
+
+// ---- WAVE80: REP-04 kill attribution fail-closed pins ----
+{
+  const {
+    applyPlayerKillStanding,
+    KILL_STANDING_DELTA: w80KillDelta,
+  } = await import('../src/game/kill-standing.js');
+  const { RANK_LADDER: w80Ladder, RESCUE: w80Rescue } = await import('../src/game/state.js');
+  const {
+    WORLD_FIELDS: w80Fields,
+    sanitizeReputation: w80SanitizeRep,
+    restore: w80Restore,
+  } = await import('../src/game/save.js');
+  const {
+    DOCK_KEY_SERVICES: w80Keys,
+    standingMoveNotes: w80MoveNotes,
+  } = await import('../src/systems/station.js');
+  const { TRAFFIC_LIST_UU: w80ListUu } = await import('../src/game/trafficking.js');
+  const here80 = dirname(fileURLToPath(import.meta.url));
+  const src80 = (rel) => readFileSync(join(here80, '..', rel), 'utf8');
+  const npc80 = src80('src/systems/npc.js');
+  const combat80 = src80('src/systems/combat.js');
+  const station80 = src80('src/systems/station.js');
+  const state80 = src80('src/game/state.js');
+  const save80 = src80('src/game/save.js');
+  const helper80 = src80('src/game/kill-standing.js');
+  const ctx80src = src80('src/core/ctx.js');
+
+  function withProto80(base) {
+    const bag = { ...base };
+    Object.defineProperty(bag, '__proto__', { value: 99, enumerable: true, configurable: true });
+    return bag;
+  }
+  function bagSnap80(bag) {
+    if (!bag || typeof bag !== 'object') return '';
+    return Object.keys(bag).sort().map((k) => `${k}:${String(bag[k])}`).join('|');
+  }
+  function stub80() {
+    return {
+      events: [],
+      world: {
+        time: 0,
+        credits: 10,
+        fear: 0,
+        reputation: { freehold: 5, redledger: 3, veridian: 1, hollow: 0 },
+        currentSystem: 'freehold',
+      },
+      emit(type, payload) {
+        this.events.push({ type, ...(payload && typeof payload === 'object' ? payload : {}) });
+      },
+    };
+  }
+  function hull80(extra = {}) {
+    const role = extra.role ?? 'trader';
+    const faction = extra.faction ?? 'freehold';
+    const lastAttacker = Object.prototype.hasOwnProperty.call(extra, 'lastAttacker')
+      ? extra.lastAttacker
+      : 'player';
+    const classKey = extra.classKey ?? 'freighter';
+    return {
+      record: { role, faction, classKey },
+      state: { destroyed: extra.destroyed !== false, faction, classKey, surrendered: extra.surrendered === true },
+      role,
+      classKey,
+      ai: { lastAttacker, role, deathHandled: true },
+    };
+  }
+
+  const helperCtx = stub80();
+  const startSnap = bagSnap80(helperCtx.world.reputation);
+  const traderPlayer = applyPlayerKillStanding(helperCtx, hull80({
+    role: 'trader', faction: 'freehold', lastAttacker: 'player',
+  }));
+  const traderBag = helperCtx.world.reputation.freehold === 0
+    && helperCtx.world.reputation.redledger === 3
+    && helperCtx.world.reputation.veridian === 1
+    && helperCtx.world.reputation.hollow === 0
+    && bagSnap80(helperCtx.world.reputation) !== startSnap;
+  const traderComm = helperCtx.events.some((e) => e.type === 'commLine');
+  const traderWrote = traderPlayer && traderPlayer.ok === true && traderPlayer.faction === 'freehold';
+
+  const npcVsNpcCtx = stub80();
+  const npcSnap = bagSnap80(npcVsNpcCtx.world.reputation);
+  const npcShip = hull80({ role: 'trader', faction: 'veridian', lastAttacker: 'npc' });
+  applyPlayerKillStanding(npcVsNpcCtx, npcShip);
+  const otherNpc = { state: { destroyed: false } };
+  applyPlayerKillStanding(npcVsNpcCtx, hull80({
+    role: 'trader', faction: 'veridian', lastAttacker: otherNpc,
+  }));
+  applyPlayerKillStanding(npcVsNpcCtx, hull80({
+    role: 'trader', faction: 'veridian', lastAttacker: null,
+  }));
+  const npcVsNpcNoWrite = bagSnap80(npcVsNpcCtx.world.reputation) === npcSnap
+    && !npcVsNpcCtx.events.some((e) => e.type === 'commLine');
+
+  const pirateCtx = stub80();
+  const pirateSnap = bagSnap80(pirateCtx.world.reputation);
+  applyPlayerKillStanding(pirateCtx, hull80({
+    role: 'pirate', faction: 'freehold', lastAttacker: 'player',
+  }));
+  applyPlayerKillStanding(pirateCtx, hull80({
+    role: 'ace', faction: 'redledger', lastAttacker: 'player', classKey: 'ace',
+  }));
+  const pirateNoWrite = bagSnap80(pirateCtx.world.reputation) === pirateSnap
+    && pirateCtx.world.reputation.freehold === 5
+    && pirateCtx.world.reputation.redledger === 3;
+
+  const protoCtx = stub80();
+  protoCtx.world.reputation = { freehold: 5, redledger: 3, veridian: 1, hollow: 0 };
+  applyPlayerKillStanding(protoCtx, hull80({
+    role: 'trader', faction: '__proto__', lastAttacker: 'player',
+  }));
+  applyPlayerKillStanding(protoCtx, hull80({
+    role: 'trader', faction: 'constructor', lastAttacker: 'player',
+  }));
+  applyPlayerKillStanding(protoCtx, hull80({
+    role: 'trader', faction: 'prototype', lastAttacker: 'player',
+  }));
+  applyPlayerKillStanding(protoCtx, hull80({
+    role: 'trader', faction: 'independent', lastAttacker: 'player',
+  }));
+  const protoBag = protoCtx.world.reputation;
+  const protoNeverKey = !Object.hasOwn(protoBag, '__proto__')
+    && protoBag.__proto__ !== 'freehold'
+    && !Object.hasOwn(protoBag, 'constructor')
+    && !Object.hasOwn(protoBag, 'prototype')
+    && !Object.hasOwn(protoBag, 'independent')
+    && protoBag.freehold === 5
+    && bagSnap80(protoBag) === 'freehold:5|hollow:0|redledger:3|veridian:1';
+
+  const healCtx = stub80();
+  healCtx.world.reputation = withProto80({
+    freehold: 4,
+    constructor: 8,
+    prototype: 7,
+    veridian: Number.NaN,
+    hollow: -40,
+  });
+  w80SanitizeRep(healCtx);
+  const healed = healCtx.world.reputation;
+  const restoreHeal = !Object.hasOwn(healed, '__proto__')
+    && healed.__proto__ !== 99
+    && !Object.hasOwn(healed, 'constructor')
+    && !Object.hasOwn(healed, 'prototype')
+    && !Object.hasOwn(healed, 'veridian')
+    && healed.hollow === -40
+    && healed.freehold === 4;
+
+  const dest80 = {
+    flags: {},
+    world: { currentSystem: 'freehold', credits: 10, fear: 0 },
+    systems: SYSTEMS,
+    cargo: [],
+    cargoCapacity: 80,
+    bio: {
+      hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0,
+      speedFactor: 1, turnFactor: 1,
+    },
+    player: { classKey: 'light', name: 'Wave80Pin', faction: 'independent' },
+    ship: { object: null, velocity: { set() {} }, speed: 0 },
+    emit() {},
+    ships: [],
+  };
+  w80Restore(dest80, {
+    v: 1,
+    world: {
+      currentSystem: 'freehold', credits: 10, fear: 0,
+      reputation: withProto80({ freehold: 12, veridian: Number.NaN }),
+      crimeScore: 99,
+      wanted: true,
+      crimes: [{ id: 1 }],
+    },
+    cargo: [],
+  });
+  const noCrimeLive = !Object.hasOwn(ctx.world, 'crimeScore')
+    && !Object.hasOwn(ctx.world, 'wanted')
+    && !Object.hasOwn(ctx.world, 'crimes');
+  const noCrimeFields = !w80Fields.includes('crimeScore')
+    && !w80Fields.includes('wanted')
+    && !w80Fields.includes('crimes')
+    && !w80Fields.includes('kills')
+    && w80Fields.includes('reputation');
+  const noCrimeRestore = !Object.hasOwn(dest80.world, 'crimeScore')
+    && !Object.hasOwn(dest80.world, 'wanted')
+    && !Object.hasOwn(dest80.world, 'crimes');
+
+  const rungs80 = w80Ladder.map((r) => r.name);
+  const ladderUnchanged = w80Ladder.length === 6
+    && rungs80.join(',') === 'Sworn,Trusted,Known,Stranger,Suspect,Marked'
+    && w80Ladder[0].min === 50 && w80Ladder[5].min === -1000
+    && !state80.includes('KILL_STANDING_DELTA');
+
+  const digitsStay = w80Keys[8] === 'epics' && w80Keys.length === 10
+    && w80Keys.at(-1) === 'shipyard'
+    && w80Keys[0] !== 'shipyard';
+  const moveNotes = w80MoveNotes();
+  const digit9NoKillClaim = Array.isArray(moveNotes)
+    && moveNotes.length === 5
+    && !moveNotes.some((n) => /last attacker|KILL_STANDING|victim-faction piracy|kills move standing/i.test(n))
+    && !/innerHTML/.test(station80);
+
+  const oneBind = (npc80.match(/applyPlayerKillStanding\(/g) || []).length === 1
+    && npc80.includes('if (!seen) ctx.emit(\'npcDestroyed\', { ship: live });')
+    && npc80.indexOf('applyPlayerKillStanding(ctx, live)')
+      > npc80.indexOf('if (!seen) ctx.emit(\'npcDestroyed\', { ship: live });')
+    && !combat80.includes('applyPlayerKillStanding')
+    && !save80.includes('KILL_STANDING_DELTA')
+    && !ctx80src.includes('reputationChanged')
+    && helper80.includes('KILL_STANDING_DELTA = -5')
+    && !helper80.includes('standingOf')
+    && !/reputation\[/.test(helper80)
+    && !helper80.includes('innerHTML')
+    && w80KillDelta === -5;
+
+  const bioPodStay = w80Rescue.otherRep === 4 && w80Rescue.playerKillRep === 1
+    && w80ListUu.other === 160 && w80ListUu.playerKill === 240
+    && /freehold \+= PATROL_REP/.test(station80);
+
+  const w80 = {
+    noCrimeScore: noCrimeLive && noCrimeFields && noCrimeRestore,
+    npcVsNpcNoWrite,
+    pirateNoWrite,
+    traderWriteMinus5: traderBag && traderComm && traderWrote,
+    protoNeverBagKey: protoNeverKey,
+    ladderUnchanged,
+    restoreSanitize: restoreHeal,
+    digitsStay,
+    digit9NoKillClaim,
+    oneBind,
+    bioPodStay,
+  };
+  console.log('wave80 rep04:', JSON.stringify(w80));
+  if (!Object.values(w80).every(Boolean)) { console.log('WAVE80 REP-04 FAIL'); errors++; }
+}
+
+// ---- WAVE80: MSN-02 renewable espionage pins ----
+{
+  const { createShipState: w80sShip, FACTIONS: w80sFactions } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w80sFields } = await import('../src/game/save.js');
+  const here80s = dirname(fileURLToPath(import.meta.url));
+  const src80s = (rel) => readFileSync(join(here80s, '..', rel), 'utf8');
+  const save80s = src80s('src/game/save.js');
+  const st80s = src80s('src/systems/station.js');
+  const nSys80s = Object.keys(SYSTEMS).length;
+  const liveCap80s = 4 + 10 * nSys80s + 16;
+  const spyRoom80s = 2 * nSys80s;
+  const cap80s = liveCap80s + spyRoom80s;
+  const unique80s = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const destFor80s = (origin) => {
+    const to = SYSTEMS[origin]?.gates?.[0]?.to;
+    return to && to !== origin && Object.hasOwn(SYSTEMS, to) ? to : (origin === 'veridian' ? 'freehold' : 'veridian');
+  };
+  const spyDestOk80s = (origin, dest) => {
+    if (!origin || !dest || origin === dest) return false;
+    if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest)) return false;
+    const home = SYSTEMS[origin];
+    const far = SYSTEMS[dest];
+    if (!home || !far || !home.station || !far.station) return false;
+    const employer = home.faction;
+    const targetFac = far.faction;
+    if (typeof employer !== 'string' || !Object.hasOwn(w80sFactions, employer) || employer === 'unknowables') {
+      return false;
+    }
+    if (typeof targetFac !== 'string' || !Object.hasOwn(w80sFactions, targetFac) || targetFac === 'unknowables') {
+      return false;
+    }
+    return targetFac !== employer;
+  };
+  const rivalDest80s = (origin, slot) => {
+    const n = slot === 1 ? 1 : 0;
+    if (!Object.hasOwn(SYSTEMS, origin)) return null;
+    const gates = SYSTEMS[origin].gates;
+    const gateRivals = [];
+    const seen = new Set();
+    if (Array.isArray(gates)) {
+      for (let i = 0; i < gates.length; i++) {
+        const to = gates[i] && typeof gates[i].to === 'string' ? gates[i].to : null;
+        if (!to || seen.has(to) || !spyDestOk80s(origin, to)) continue;
+        seen.add(to);
+        gateRivals.push(to);
+      }
+    }
+    const list = gateRivals.length > 0 ? gateRivals : Object.keys(SYSTEMS).filter((to) => spyDestOk80s(origin, to));
+    return list[n] ?? null;
+  };
+
+  const job80s = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 80 spy pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine80s = (sysId, n, slot, extra = {}) => ({
+    id: `mine-${sysId}-${n}`,
+    kind: 'mining',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    commodity: extra.commodity ?? 'rawOre',
+    title: extra.title ?? 'Mine raw ore',
+    detail: extra.detail ?? 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 4,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+  });
+  const trade80s = (sysId, n, slot, extra = {}) => ({
+    id: `trade-${sysId}-${n}`,
+    kind: 'trade',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor80s(sysId),
+    commodity: extra.commodity ?? 'provisions',
+    title: extra.title ?? 'Haul Provisions',
+    detail: extra.detail ?? 'Buy or hold 5 Provisions and deliver to the far station.',
+    reward: extra.reward ?? 0,
+    need: extra.need ?? 5,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const hunt80s = (sysId, n, slot, extra = {}) => ({
+    id: `hunt-${sysId}-${n}`,
+    kind: 'hunt',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    recordId: extra.recordId ?? `rec-${n + 1}`,
+    target: extra.target ?? 'Red Marlow',
+    title: extra.title ?? 'Hunt Red Marlow',
+    detail: extra.detail ?? 'Hunt a local pirate in this system.',
+    reward: extra.reward ?? 300,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const pass80s = (sysId, n, slot, extra = {}) => ({
+    id: `passenger-${sysId}-${n}`,
+    kind: 'passenger',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor80s(sysId),
+    title: extra.title ?? 'Escort passengers',
+    detail: extra.detail ?? 'Carry a booked party to the far station. Paid on docking there.',
+    reward: extra.reward ?? 350,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const explore80s = (sysId, n, slot, extra = {}) => ({
+    id: `explore-${sysId}-${n}`,
+    kind: 'explore',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    title: extra.title ?? 'Survey The Shepherd',
+    detail: extra.detail ?? 'Fly to The Shepherd in Freehold Drift. Redock here to file.',
+    reward: extra.reward ?? 300,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+  });
+  const spy80s = (sysId, n, slot, extra = {}) => ({
+    id: `spy-${sysId}-${n}`,
+    kind: 'espionage',
+    slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? rivalDest80s(sysId, slot) ?? destFor80s(sysId),
+    title: extra.title ?? 'Spy at the far dock',
+    detail: extra.detail ?? 'Gather at the far dock. File at the home dock.',
+    reward: extra.reward ?? 420,
+    need: extra.need ?? 1,
+    progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered',
+    deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const four80s = () => [
+    job80s('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job80s('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job80s('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job80s('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub80s = (jobs) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w80sShip('light', { name: 'Wave80SpyPin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs } });
+    return c;
+  };
+
+  const keep80s = stub80s([
+    ...four80s(),
+    mine80s('freehold', 0, 0),
+    trade80s('freehold', 0, 0),
+    hunt80s('freehold', 0, 0, { recordId: 'rec-1' }),
+    pass80s('freehold', 0, 0),
+    explore80s('freehold', 0, 0),
+    spy80s('freehold', 0, 0),
+    spy80s('__proto__', 0, 0, { originSystem: '__proto__' }),
+    job80s('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+    spy80s('freehold', 9, 0, { need: 2 }),
+    spy80s('notasystem', 0, 0, { originSystem: 'notasystem' }),
+    {
+      id: 'espionage-freehold-0',
+      kind: 'espionage',
+      slot: 0,
+      originSystem: 'freehold',
+      destSystem: rivalDest80s('freehold', 0) ?? 'veridian',
+      title: 'Wrong prefix',
+      detail: 'Kind prefix mismatch.',
+      reward: 420,
+      need: 1,
+      progress: 0,
+      state: 'offered',
+      deadline: 600,
+    },
+    {
+      id: 'spy-freehold',
+      kind: 'espionage',
+      slot: 0,
+      originSystem: 'freehold',
+      destSystem: rivalDest80s('freehold', 0) ?? 'veridian',
+      title: 'Short',
+      detail: 'Two tokens only.',
+      reward: 420,
+      need: 1,
+      progress: 0,
+      state: 'offered',
+      deadline: 600,
+    },
+    spy80s('freehold', 8, 1, { destSystem: 'freehold' }),
+    spy80s('freehold', 7, 1, { rest: { commodity: 'dataCrystal', faction: 'redledger' } }),
+    spy80s('fh_hearth', 1, 1),
+  ]);
+  const keepIds80s = keep80s.world.jobs.map((j) => j.id);
+  const spyNeed2 = keep80s.world.jobs.some((j) => j.kind === 'espionage' && j.need === 2);
+  const spyCommodity = keep80s.world.jobs.some((j) => j.kind === 'espionage' && Object.hasOwn(j, 'commodity'));
+  const spyFactionField = keep80s.world.jobs.some((j) => Object.hasOwn(j, 'faction'));
+  const keepSpyCrystal = keep80s.world.jobs.some((j) => j.id === 'spy-freehold-7' && !Object.hasOwn(j, 'commodity')
+    && !Object.hasOwn(j, 'faction'));
+  const dropSameDest = !keep80s.world.jobs.some((j) => j.id === 'spy-freehold-8');
+
+  const honest80s = four80s();
+  let expectedSpy80s = 0;
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest80s.push(mine80s(sysId, 0, 0));
+    honest80s.push(mine80s(sysId, 1, 1));
+    honest80s.push(trade80s(sysId, 0, 0));
+    honest80s.push(trade80s(sysId, 1, 1));
+    honest80s.push(hunt80s(sysId, 0, 0, { recordId: 'rec-1' }));
+    honest80s.push(hunt80s(sysId, 1, 1, { recordId: 'rec-2' }));
+    honest80s.push(pass80s(sysId, 0, 0));
+    honest80s.push(pass80s(sysId, 1, 1));
+    honest80s.push(explore80s(sysId, 0, 0));
+    honest80s.push(explore80s(sysId, 1, 1));
+    const d0 = rivalDest80s(sysId, 0);
+    const d1 = rivalDest80s(sysId, 1);
+    if (d0) { honest80s.push(spy80s(sysId, 0, 0, { destSystem: d0 })); expectedSpy80s += 1; }
+    if (d1) { honest80s.push(spy80s(sysId, 1, 1, { destSystem: d1 })); expectedSpy80s += 1; }
+  }
+  const honestCtx80s = stub80s(honest80s);
+
+  const floodS = four80s().concat(
+    mine80s('freehold', 0, 0),
+    trade80s('freehold', 0, 0),
+    hunt80s('freehold', 0, 0),
+    pass80s('freehold', 0, 0),
+    explore80s('freehold', 0, 0),
+    spy80s('freehold', 0, 0),
+  );
+  for (let i = 0; i < 10000; i++) floodS.push({ id: `junks-${i}`, kind: 'espionage' });
+  const floodCtx80s = stub80s(floodS);
+
+  const stuffedPay80s = stub80s([
+    ...four80s(),
+    spy80s('freehold', 0, 0, {
+      destSystem: 'redmarch',
+      state: 'accepted',
+      payQuoted: 80,
+      deadline: 1e9,
+      rest: { faction: 'veridian', asteroidId: 3, recordId: 'rec-9' },
+    }),
+  ]);
+
+  const prevSys80s = ctx.world.currentSystem;
+  const prevDock80s = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  if (prevSys80s !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave80s warp freehold');
+  dockAtCurrentStation('wave80s dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave80s jobs');
+  const spies80s = (ctx.world.jobs ?? []).filter((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const exploresLive80s = (ctx.world.jobs ?? []).filter((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive80s = unique80s.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const noAst80s = spies80s.every((j) => !Object.hasOwn(j, 'asteroidId') && !Object.hasOwn(j, 'faction'));
+  const need1LiveS = spies80s.every((j) => j.need === 1);
+  const titlesHideKeys = spies80s.every((j) => {
+    const blob = `${j.title ?? ''} ${j.detail ?? ''}`;
+    return !blob.includes('veridian') && !blob.includes('redmarch') && !blob.includes('freehold')
+      && !blob.includes('rec-') && !blob.includes('clue');
+  });
+  const cardsShowStation = spies80s.length > 0 && spies80s.every((j) => {
+    const blob = `${j.title ?? ''} ${j.detail ?? ''}`;
+    return blob.includes('Veridian Spire') || blob.includes('the far dock');
+  });
+
+  const payJob80s = spies80s.find((j) => j.state === 'offered') ?? spies80s[0] ?? null;
+  const payId80s = payJob80s?.id;
+  const paySlot80s = payJob80s?.slot;
+  const reboundDest80s = payJob80s ? rivalDest80s(payJob80s.originSystem, payJob80s.slot) : null;
+  const freezeSlotJobs80s = (keep) => {
+    const jobs = ctx.world.jobs ?? [];
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j === keep) continue;
+      if (j.state !== 'accepted') continue;
+      if (j.kind === 'mining' || j.kind === 'trade' || j.kind === 'hunt'
+        || j.kind === 'passenger' || j.kind === 'explore' || j.kind === 'espionage'
+        || j.kind === 'bounty' || j.kind === 'haul' || j.kind === 'ferry'
+        || j.kind === 'patrol' || j.kind === 'recovery') {
+        j.state = 'offered';
+      }
+    }
+  };
+  if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+  const empBefore80s = ctx.world.reputation.freehold ?? 0;
+  const verdBefore80s = ctx.world.reputation.veridian ?? 0;
+  const ledgerBefore80s = ctx.world.reputation.redledger ?? 0;
+  if (payJob80s) {
+    payJob80s.state = 'accepted';
+    payJob80s.payQuoted = 18;
+    payJob80s.need = 1;
+    payJob80s.progress = 0;
+    payJob80s.deadline = ctx.world.time + 600;
+    payJob80s.destSystem = 'redmarch';
+  }
+  freezeSlotJobs80s(payJob80s);
+  const cargoBeforeStuffS = JSON.stringify(ctx.cargo ?? []);
+  const credStuff80s = ctx.world.credits;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'redmarch';
+  ctx.emit('systemLoaded', { to: 'redmarch' });
+  tick(2, 'wave80s warp stuffed');
+  dockAtCurrentStation('wave80s dock stuffed');
+  tick(40, 'wave80s stuffed dest');
+  const stuffedIgnored80s = ctx.world.credits === credStuff80s
+    && !!(payId80s && (ctx.world.jobs ?? []).some((j) => j.id === payId80s && j.state === 'accepted' && (j.progress ?? 0) < 1));
+
+  if (reboundDest80s && reboundDest80s !== 'redmarch') {
+    if (ctx.flags.docked) undockStation();
+    ctx.world.currentSystem = reboundDest80s;
+    ctx.emit('systemLoaded', { to: reboundDest80s });
+    tick(2, 'wave80s warp dest');
+    dockAtCurrentStation('wave80s dock dest');
+    freezeSlotJobs80s(payJob80s);
+    if (payJob80s) {
+      payJob80s.state = 'accepted';
+      payJob80s.payQuoted = 18;
+      payJob80s.need = 1;
+      payJob80s.deadline = ctx.world.time + 600;
+    }
+    tick(40, 'wave80s gather dest');
+  }
+  const gathered80s = !!(payJob80s && payJob80s.progress >= 1);
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave80s warp origin');
+  dockAtCurrentStation('wave80s dock origin');
+  freezeSlotJobs80s(payJob80s);
+  if (payJob80s) {
+    payJob80s.state = 'accepted';
+    payJob80s.payQuoted = 18;
+    payJob80s.need = 1;
+    payJob80s.progress = 1;
+    payJob80s.deadline = ctx.world.time + 600;
+  }
+  const cargoBeforePayS = JSON.stringify(ctx.cargo ?? []);
+  const credBefore80s = ctx.world.credits;
+  const empMid80s = ctx.world.reputation.freehold ?? 0;
+  const verdMid80s = ctx.world.reputation.veridian ?? 0;
+  const ledgerMid80s = ctx.world.reputation.redledger ?? 0;
+  tick(60, 'wave80s file spy');
+  const paid80s = !!(payJob80s && ctx.world.credits === credBefore80s + 18);
+  const cargoUnchanged80s = JSON.stringify(ctx.cargo ?? []) === cargoBeforePayS
+    && cargoBeforePayS === cargoBeforeStuffS;
+  const noDataGrant80s = !(ctx.cargo ?? []).some((r) => r && (r.commodity === 'dataCrystal' || r.commodity === 'dataCube'));
+  const empPlus80s = (ctx.world.reputation.freehold ?? 0) === empMid80s + 2;
+  const targetZero80s = (ctx.world.reputation.veridian ?? 0) === verdMid80s
+    && (ctx.world.reputation.redledger ?? 0) === ledgerMid80s;
+  const replaced80s = !!(payId80s && paySlot80s != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId80s)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+      && j.slot === paySlot80s && j.state === 'offered' && j.id !== payId80s));
+
+  const again80s = (ctx.world.jobs ?? []).find((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && j.slot === paySlot80s && j.state === 'offered' && j.id !== payId80s) ?? null;
+  const againId80s = again80s?.id;
+  if (again80s) {
+    again80s.state = 'accepted';
+    again80s.payQuoted = 19;
+    again80s.need = 1;
+    again80s.progress = 1;
+    again80s.deadline = ctx.world.time + 600;
+  }
+  freezeSlotJobs80s(again80s);
+  tick(60, 'wave80s file again');
+  const againReplaced80s = !!(againId80s
+    && !(ctx.world.jobs ?? []).some((j) => j.id === againId80s)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+      && j.slot === paySlot80s && j.state === 'offered' && j.id !== againId80s));
+
+  const expJob80s = (ctx.world.jobs ?? []).find((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted') && j.id !== payId80s && j.id !== againId80s) ?? null;
+  const expId80s = expJob80s?.id;
+  const expDest80s = expJob80s ? rivalDest80s(expJob80s.originSystem, expJob80s.slot) : null;
+  const expDestFac80s = expDest80s && SYSTEMS[expDest80s] ? SYSTEMS[expDest80s].faction : 'veridian';
+  const credExp80s = ctx.world.credits;
+  const empExp80s = ctx.world.reputation.freehold ?? 0;
+  const destExp80s = ctx.world.reputation[expDestFac80s] ?? 0;
+  if (expJob80s) {
+    expJob80s.state = 'accepted';
+    expJob80s.deadline = ctx.world.time - 1;
+  }
+  freezeSlotJobs80s(expJob80s);
+  tick(40, 'wave80s expire accepted');
+  const expired80s = !!(expId80s && !(ctx.world.jobs ?? []).some((j) => j.id === expId80s));
+  const expireNoPay80s = ctx.world.credits === credExp80s;
+  const expireNotDone80s = !expId80s || !(ctx.world.jobs ?? []).some((j) => j.id === expId80s && j.state === 'done');
+  const expireEmployerQuiet80s = (ctx.world.reputation.freehold ?? 0) === empExp80s;
+  const expireDestMinus280s = (ctx.world.reputation[expDestFac80s] ?? 0) === destExp80s - 2;
+
+  const offJob80s = (ctx.world.jobs ?? []).find((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && j.state === 'offered' && j.id !== payId80s && j.id !== againId80s && j.id !== expId80s) ?? null;
+  const offDest80s = offJob80s ? rivalDest80s(offJob80s.originSystem, offJob80s.slot) : null;
+  const offDestFac80s = offDest80s && SYSTEMS[offDest80s] ? SYSTEMS[offDest80s].faction : expDestFac80s;
+  const credOff80s = ctx.world.credits;
+  const empOff80s = ctx.world.reputation.freehold ?? 0;
+  const destOff80s = ctx.world.reputation[offDestFac80s] ?? 0;
+  const offId80s = offJob80s?.id;
+  if (offJob80s) {
+    offJob80s.state = 'offered';
+    offJob80s.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave80s expire offered');
+  const offeredWithdraw80s = !!offId80s
+    && ctx.world.credits === credOff80s
+    && (ctx.world.reputation.freehold ?? 0) === empOff80s
+    && (ctx.world.reputation[offDestFac80s] ?? 0) === destOff80s;
+
+  const spyTickAt = st80s.indexOf("if (job.kind === 'espionage')");
+  const spyTickSlice = spyTickAt >= 0 ? st80s.slice(spyTickAt, spyTickAt + 6000) : '';
+  const spyTickNoGrant = spyTickSlice.includes("if (job.kind === 'espionage')")
+    && spyTickSlice.includes('replaceEspionageJob')
+    && !/addCargo/.test(spyTickSlice)
+    && !/spawnDataPod/.test(spyTickSlice)
+    && !/dataCrystal/.test(spyTickSlice)
+    && !/reputation\.freehold \+=/.test(spyTickSlice)
+    && !/job\.faction/.test(spyTickSlice);
+
+  dispatchKey('Escape');
+  tick(1, 'wave80s jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys80s && prevSys80s !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys80s;
+    ctx.emit('systemLoaded', { to: prevSys80s });
+    tick(2, 'wave80s restore sys');
+  }
+  if (prevDock80s) dockAtCurrentStation('wave80s restore dock');
+
+  const stuffedRestoreKept = stuffedPay80s.world.jobs.some((j) => j.id === 'spy-freehold-0' && j.destSystem === 'redmarch')
+    && stuffedPay80s.world.jobs.every((j) => !Object.hasOwn(j, 'faction') && !Object.hasOwn(j, 'asteroidId')
+      && !Object.hasOwn(j, 'recordId'));
+
+  const w80s = {
+    uniqueFour: keepIds80s.includes('bounty-ace') && keepIds80s.includes('patrol-lane')
+      && keepIds80s.includes('haul-provisions') && keepIds80s.includes('ferry-consignment')
+      && uniqueLive80s,
+    keepMineFh: keepIds80s.includes('mine-freehold-0'),
+    keepTradeFh: keepIds80s.includes('trade-freehold-0'),
+    keepHuntFh: keepIds80s.includes('hunt-freehold-0'),
+    keepPassengerFh: keepIds80s.includes('passenger-freehold-0'),
+    keepExploreFh: keepIds80s.includes('explore-freehold-0'),
+    keepSpyFh: keepIds80s.includes('spy-freehold-0'),
+    keepSpyHearth: keepIds80s.includes('spy-fh_hearth-1'),
+    dropProto: !keepIds80s.includes('__proto__') && !keepIds80s.includes('spy-__proto__-0'),
+    dropShortId: !keepIds80s.includes('spy-freehold'),
+    dropWrongPrefix: !keepIds80s.includes('espionage-freehold-0'),
+    dropNeed2: !spyNeed2,
+    dropBadSys: !keepIds80s.includes('spy-notasystem-0'),
+    dropSameDest,
+    dropCommodityField: !spyCommodity && keepSpyCrystal && !spyFactionField,
+    capFormula: save80s.includes('ESPIONAGE_SLOTS_PER_SYSTEM')
+      && save80s.includes('EXPLORE_SLOTS_PER_SYSTEM')
+      && cap80s === 4 + 12 * nSys80s + 16
+      && /ESPIONAGE_SLOTS_PER_SYSTEM \* N_SYSTEMS/.test(save80s)
+      && !/WAR_ROOM/.test(save80s)
+      && save80s.includes('plus espionage room only'),
+    capFits: honestCtx80s.world.jobs.length === 4 + 10 * nSys80s + expectedSpy80s
+      && honestCtx80s.world.jobs.length <= cap80s
+      && expectedSpy80s <= spyRoom80s,
+    floodHeal: floodCtx80s.world.jobs.length <= cap80s
+      && floodCtx80s.world.jobs.some((j) => j.id === 'spy-freehold-0')
+      && floodCtx80s.world.jobs.some((j) => j.id === 'explore-freehold-0')
+      && floodCtx80s.world.jobs.some((j) => j.id === 'passenger-freehold-0')
+      && floodCtx80s.world.jobs.some((j) => j.id === 'hunt-freehold-0')
+      && floodCtx80s.world.jobs.some((j) => j.id === 'mine-freehold-0')
+      && floodCtx80s.world.jobs.some((j) => j.id === 'trade-freehold-0'),
+    fieldsJobs: w80sFields.includes('jobs') && w80sFields.filter((k) => k === 'jobs').length === 1
+      && !w80sFields.includes('missions') && !w80sFields.includes('spies'),
+    fillHome: spies80s.length >= 1 && spies80s.length <= 2,
+    exploreStillTwo: exploresLive80s.length === 2,
+    needOne: need1LiveS,
+    noAsteroidId: noAst80s,
+    titlesHideKeys,
+    cardsShowStation,
+    stuffedDestIgnored: stuffedIgnored80s,
+    stuffedRestoreKept,
+    gatheredAtDest: gathered80s,
+    completeReplace: !!replaced80s,
+    completePay: !!paid80s,
+    completeAgain: !!againReplaced80s,
+    cargoUnchanged: cargoUnchanged80s,
+    noDataGrant: noDataGrant80s,
+    employerPlus2: empPlus80s,
+    targetZero: targetZero80s,
+    expireNoPay: !!expired80s && expireNoPay80s && expireNotDone80s && expireEmployerQuiet80s,
+    expireDestMinus2: !!expired80s && expireDestMinus280s,
+    offeredWithdrawQuiet: !!offeredWithdraw80s,
+    spyTickNoGrant,
+    extraAfterExplore: save80s.includes('function extraOfferedExplore')
+      && save80s.includes('function extraOfferedEspionage')
+      && save80s.indexOf('function extraOfferedEspionage') > save80s.indexOf('function extraOfferedExplore'),
+    noInnerHtml: !/innerHTML/.test(st80s),
+    noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save80s) && !/SAFE_ID\.test\(\s*job\.id/.test(st80s),
+    haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st80s),
+    uniqueHaulIds: uniqueLive80s,
+    uniqueHaulMake: st80s.includes("id: 'haul-provisions'") && st80s.includes("id: 'ferry-consignment'"),
+    spyKindStays: st80s.includes("kind: 'espionage'") && save80s.includes("'espionage'")
+      && st80s.includes('spy-${sysId}-'),
+    digit2Jobs: st80s.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'"),
+    digit0Shipyard: st80s.includes('d === 0') && st80s.includes('DOCK_KEY_SERVICES.length - 1'),
+    replaceHelper: st80s.includes('function replaceEspionageJob') && st80s.includes('function syncEspionageJobs')
+      && st80s.includes('function resolveEspionageDest'),
+    mouseAccept: st80s.includes('btn(card, `Accept (${i + 1})`, () => acceptJob(job))'),
+    originOnlyAccept: /job\.kind === 'espionage'[\s\S]*?currentSystem !== job\.originSystem/.test(st80s),
+    acceptedNamesHome: st80s.includes('then file at ${homeName}')
+      && st80s.includes('intel aboard — file at ${homeName}')
+      && st80s.includes('File intel from ${destName} at ${homeName}'),
+    acceptedNoFileHere: !/then file here/.test(st80s) && !/intel aboard — file here/.test(st80s),
+    acceptedPayFallback: /Number\.isFinite\(job\.payQuoted\) \? clampJobPay\(job\.payQuoted\) : jobPayFor\(ctx, originId, explorePayBase\(\)\)/.test(st80s)
+      && st80s.includes('File intel from ${destName} at ${homeName} — pays ${est} UU'),
+  };
+  console.log('wave80 espionage:', JSON.stringify(w80s));
+  if (!Object.values(w80s).every(Boolean)) { console.log('WAVE80 ESPIONAGE FAIL'); errors++; }
+}
+
+// ---- WAVE80: MSN-02 renewable faction-war pins ----
+{
+  const { createShipState: w80wShip, FACTIONS: w80wFactions, ACES: w80wAces, NAMED_GUNS: w80wGuns } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w80wFields } = await import('../src/game/save.js');
+  const here80w = dirname(fileURLToPath(import.meta.url));
+  const src80w = (rel) => readFileSync(join(here80w, '..', rel), 'utf8');
+  const save80w = src80w('src/game/save.js');
+  const st80w = src80w('src/systems/station.js');
+  const nSys80w = Object.keys(SYSTEMS).length;
+  const liveCap80w = 4 + 12 * nSys80w + 16;
+  const warRoom80w = 2 * nSys80w;
+  const cap80w = liveCap80w + warRoom80w;
+  const unique80w = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const destFor80w = (origin) => {
+    const to = SYSTEMS[origin]?.gates?.[0]?.to;
+    return to && to !== origin && Object.hasOwn(SYSTEMS, to) ? to : (origin === 'veridian' ? 'freehold' : 'veridian');
+  };
+  const spyDestOk80w = (origin, dest) => {
+    if (!origin || !dest || origin === dest) return false;
+    if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest)) return false;
+    const home = SYSTEMS[origin];
+    const far = SYSTEMS[dest];
+    if (!home || !far || !home.station || !far.station) return false;
+    const employer = home.faction;
+    const targetFac = far.faction;
+    if (typeof employer !== 'string' || !Object.hasOwn(w80wFactions, employer) || employer === 'unknowables') {
+      return false;
+    }
+    if (typeof targetFac !== 'string' || !Object.hasOwn(w80wFactions, targetFac) || targetFac === 'unknowables') {
+      return false;
+    }
+    return targetFac !== employer;
+  };
+  const rivalDest80w = (origin, slot) => {
+    const n = slot === 1 ? 1 : 0;
+    if (!Object.hasOwn(SYSTEMS, origin)) return null;
+    const gates = SYSTEMS[origin].gates;
+    const gateRivals = [];
+    const seen = new Set();
+    if (Array.isArray(gates)) {
+      for (let i = 0; i < gates.length; i++) {
+        const to = gates[i] && typeof gates[i].to === 'string' ? gates[i].to : null;
+        if (!to || seen.has(to) || !spyDestOk80w(origin, to)) continue;
+        seen.add(to);
+        gateRivals.push(to);
+      }
+    }
+    const list = gateRivals.length > 0 ? gateRivals : Object.keys(SYSTEMS).filter((to) => spyDestOk80w(origin, to));
+    return list[n] ?? null;
+  };
+  const warDest80w = (origin) => {
+    if (!Object.hasOwn(SYSTEMS, origin)) return null;
+    const employer = SYSTEMS[origin].faction;
+    if (typeof employer !== 'string' || !Object.hasOwn(w80wFactions, employer)) return null;
+    const gates = SYSTEMS[origin].gates;
+    if (!Array.isArray(gates)) return null;
+    for (let i = 0; i < gates.length; i++) {
+      const to = gates[i] && typeof gates[i].to === 'string' ? gates[i].to : null;
+      if (!to || !Object.hasOwn(SYSTEMS, to) || to === origin) continue;
+      const far = SYSTEMS[to];
+      if (!far || !far.station) continue;
+      const target = far.faction;
+      if (typeof target !== 'string' || !Object.hasOwn(w80wFactions, target)) continue;
+      if (target === employer) continue;
+      return to;
+    }
+    return null;
+  };
+
+  const job80w = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 80 war pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine80w = (sysId, n, slot) => ({
+    id: `mine-${sysId}-${n}`, kind: 'mining', slot, originSystem: sysId, commodity: 'rawOre',
+    title: 'Mine raw ore', detail: 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: 0, need: 4, progress: 0, state: 'offered',
+  });
+  const trade80w = (sysId, n, slot) => ({
+    id: `trade-${sysId}-${n}`, kind: 'trade', slot, originSystem: sysId, destSystem: destFor80w(sysId),
+    commodity: 'provisions', title: 'Haul Provisions',
+    detail: 'Buy or hold 5 Provisions and deliver to the far station.',
+    reward: 0, need: 5, progress: 0, state: 'offered', deadline: 600,
+  });
+  const hunt80w = (sysId, n, slot, extra = {}) => ({
+    id: `hunt-${sysId}-${n}`, kind: 'hunt', slot, originSystem: sysId,
+    recordId: extra.recordId ?? `rec-${n + 1}`, target: extra.target ?? 'Red Marlow',
+    title: extra.title ?? 'Hunt Red Marlow', detail: extra.detail ?? 'Hunt a local pirate in this system.',
+    reward: extra.reward ?? 300, need: extra.need ?? 1, progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered', deadline: extra.deadline ?? 600,
+  });
+  const pass80w = (sysId, n, slot) => ({
+    id: `passenger-${sysId}-${n}`, kind: 'passenger', slot, originSystem: sysId, destSystem: destFor80w(sysId),
+    title: 'Escort passengers', detail: 'Carry a booked party to the far station. Paid on docking there.',
+    reward: 350, need: 1, progress: 0, state: 'offered', deadline: 600,
+  });
+  const explore80w = (sysId, n, slot) => ({
+    id: `explore-${sysId}-${n}`, kind: 'explore', slot, originSystem: sysId,
+    title: 'Survey The Shepherd', detail: 'Fly to The Shepherd in Freehold Drift. Redock here to file.',
+    reward: 300, need: 1, progress: 0, state: 'offered', deadline: 600,
+  });
+  const spy80w = (sysId, n, slot, extra = {}) => ({
+    id: `spy-${sysId}-${n}`, kind: 'espionage', slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? rivalDest80w(sysId, slot) ?? destFor80w(sysId),
+    title: extra.title ?? 'Spy at the far dock',
+    detail: extra.detail ?? 'Gather at the far dock. File at the home dock.',
+    reward: extra.reward ?? 420, need: extra.need ?? 1, progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered', deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const war80w = (sysId, n, slot, extra = {}) => ({
+    id: `war-${sysId}-${n}`, kind: 'war', slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? warDest80w(sysId) ?? destFor80w(sysId),
+    recordId: extra.recordId ?? `rec-${n + 40}`,
+    target: extra.target ?? 'Lane Watch',
+    title: extra.title ?? 'Strike Lane Watch',
+    detail: extra.detail ?? 'Strike a rival patrol.',
+    reward: extra.reward ?? 300, need: extra.need ?? 1, progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered', deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const four80w = () => [
+    job80w('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job80w('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job80w('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job80w('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub80w = (jobs, extraWorld = {}) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w80wShip('light', { name: 'Wave80WarPin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs, ...extraWorld } });
+    return c;
+  };
+
+  const keep80w = stub80w([
+    ...four80w(),
+    mine80w('freehold', 0, 0),
+    trade80w('freehold', 0, 0),
+    hunt80w('freehold', 0, 0, { recordId: 'rec-1' }),
+    pass80w('freehold', 0, 0),
+    explore80w('freehold', 0, 0),
+    spy80w('freehold', 0, 0),
+    war80w('freehold', 0, 0),
+    war80w('__proto__', 0, 0, { originSystem: '__proto__' }),
+    job80w('__proto__', 'bounty', { title: 'Proto', target: 'x' }),
+    war80w('freehold', 9, 0, { need: 2 }),
+    war80w('notasystem', 0, 0, { originSystem: 'notasystem' }),
+    {
+      id: 'war-freehold',
+      kind: 'war',
+      slot: 0,
+      originSystem: 'freehold',
+      destSystem: warDest80w('freehold') ?? 'veridian',
+      recordId: 'rec-40',
+      target: 'Lane Watch',
+      title: 'Short',
+      detail: 'Two tokens only.',
+      reward: 300,
+      need: 1,
+      progress: 0,
+      state: 'offered',
+      deadline: 600,
+    },
+    war80w('freehold', 8, 1, { destSystem: 'freehold' }),
+    war80w('freehold', 7, 1, { rest: { commodity: 'dataCrystal', faction: 'redledger', payQuoted: 999999 } }),
+    war80w('fh_hearth', 1, 1),
+  ]);
+  const keepIds80w = keep80w.world.jobs.map((j) => j.id);
+  const keepWar7 = keep80w.world.jobs.find((j) => j.id === 'war-freehold-7');
+  const warNeed2 = keep80w.world.jobs.some((j) => j.kind === 'war' && j.need === 2);
+  const warCommodity = keep80w.world.jobs.some((j) => j.kind === 'war' && Object.hasOwn(j, 'commodity'));
+  const warFactionField = keep80w.world.jobs.some((j) => Object.hasOwn(j, 'faction'));
+
+  const aceBank80w = stub80w([
+    ...four80w(),
+    war80w('freehold', 0, 0, { recordId: 'rec-1', destSystem: 'veridian', target: 'Lane Watch' }),
+    war80w('freehold', 7, 1, { recordId: 'rec-7', destSystem: 'veridian', target: 'Carver Illyx' }),
+  ], {
+    recordBanks: {
+      freehold: [
+        { id: 'rec-1', role: 'patrol', system: 'freehold', faction: 'veridian', name: 'Lane Watch', classKey: 'heavy' },
+        { id: 'rec-7', role: 'ace', system: 'freehold', faction: 'veridian', name: 'Carver Illyx', classKey: 'ace' },
+      ],
+    },
+  });
+
+  const honest80w = four80w();
+  let expectedSpy80w = 0;
+  let expectedWar80w = 0;
+  for (const sysId of Object.keys(SYSTEMS)) {
+    honest80w.push(mine80w(sysId, 0, 0), mine80w(sysId, 1, 1));
+    honest80w.push(trade80w(sysId, 0, 0), trade80w(sysId, 1, 1));
+    honest80w.push(hunt80w(sysId, 0, 0, { recordId: 'rec-1' }), hunt80w(sysId, 1, 1, { recordId: 'rec-2' }));
+    honest80w.push(pass80w(sysId, 0, 0), pass80w(sysId, 1, 1));
+    honest80w.push(explore80w(sysId, 0, 0), explore80w(sysId, 1, 1));
+    const d0 = rivalDest80w(sysId, 0);
+    const d1 = rivalDest80w(sysId, 1);
+    if (d0) { honest80w.push(spy80w(sysId, 0, 0, { destSystem: d0 })); expectedSpy80w += 1; }
+    if (d1) { honest80w.push(spy80w(sysId, 1, 1, { destSystem: d1 })); expectedSpy80w += 1; }
+    const wd = warDest80w(sysId) ?? destFor80w(sysId);
+    if (wd && wd !== sysId) {
+      honest80w.push(war80w(sysId, 0, 0, { destSystem: wd, recordId: 'rec-40' }));
+      honest80w.push(war80w(sysId, 1, 1, { destSystem: wd, recordId: 'rec-41' }));
+      expectedWar80w += 2;
+    }
+  }
+  const honestCtx80w = stub80w(honest80w);
+
+  const floodW = four80w().concat(
+    mine80w('freehold', 0, 0),
+    trade80w('freehold', 0, 0),
+    hunt80w('freehold', 0, 0),
+    pass80w('freehold', 0, 0),
+    explore80w('freehold', 0, 0),
+    spy80w('freehold', 0, 0),
+    war80w('freehold', 0, 0),
+  );
+  for (let i = 0; i < 10000; i++) floodW.push({ id: `junkw-${i}`, kind: 'war' });
+  const floodCtx80w = stub80w(floodW);
+
+  const stuffedPay80w = stub80w([
+    ...four80w(),
+    war80w('freehold', 0, 0, {
+      destSystem: 'redmarch',
+      target: 'Stuffed Alias',
+      state: 'accepted',
+      payQuoted: 80,
+      deadline: 1e9,
+      recordId: 'rec-40',
+      rest: { faction: 'veridian', asteroidId: 3 },
+    }),
+  ]);
+
+  const prevSys80w = ctx.world.currentSystem;
+  const prevDock80w = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  const destPre80w = warDest80w('freehold');
+  if (destPre80w && destPre80w !== 'freehold') {
+    ctx.world.currentSystem = destPre80w;
+    ctx.emit('systemLoaded', { to: destPre80w });
+    tick(2, 'wave80w warp dest bank');
+    dockAtCurrentStation('wave80w dock dest bank');
+    if (ctx.flags.docked) undockStation();
+  }
+  ctx.world.currentSystem = 'freehold';
+  ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave80w warp freehold');
+  const destFac80w = destPre80w && SYSTEMS[destPre80w] ? SYSTEMS[destPre80w].faction : null;
+  if (typeof destFac80w === 'string' && Array.isArray(ctx.world.records)) {
+    const extras = [
+      { id: 'rec-9001', role: 'patrol', system: 'freehold', faction: destFac80w, name: 'Wave80 Watch', classKey: 'heavy' },
+      { id: 'rec-9002', role: 'patrol', system: 'freehold', faction: destFac80w, name: 'Wave80 Guard', classKey: 'heavy' },
+    ];
+    for (let i = 0; i < extras.length; i++) {
+      if (!ctx.world.records.some((r) => r && r.id === extras[i].id)) ctx.world.records.push(extras[i]);
+    }
+  }
+  dockAtCurrentStation('wave80w dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave80w jobs');
+  const wars80w = (ctx.world.jobs ?? []).filter((j) => j.kind === 'war' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const huntsLive80w = (ctx.world.jobs ?? []).filter((j) => j.kind === 'hunt' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const spiesLive80w = (ctx.world.jobs ?? []).filter((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const uniqueLive80w = unique80w.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const namedGunNames80w = [w80wAces.hunter?.name, w80wAces.illyx?.name]
+    .concat(Array.isArray(w80wGuns.aspirants?.names) ? w80wGuns.aspirants.names : [])
+    .filter((n) => typeof n === 'string' && n);
+  const noNamedGunQuarry = wars80w.every((j) => {
+    const rec = (ctx.world.records ?? []).find((r) => r.id === j.recordId)
+      || Object.values(ctx.world.recordBanks ?? {}).flat().find((r) => r && r.id === j.recordId);
+    const blob = `${j.title ?? ''} ${j.detail ?? ''} ${j.target ?? ''} ${rec?.name ?? ''}`;
+    if (namedGunNames80w.some((n) => blob.includes(n))) return false;
+    if (rec && (rec.role === 'ace' || rec.classKey === 'ace' || rec.role === 'pirate')) return false;
+    return true;
+  });
+  const huntStillPirates = huntsLive80w.length > 0 && huntsLive80w.every((j) => {
+    const rec = (ctx.world.records ?? []).find((r) => r.id === j.recordId);
+    return rec ? rec.role === 'pirate' : true;
+  });
+  const titlesHideRecW = wars80w.every((j) => {
+    const blob = `${j.title ?? ''} ${j.detail ?? ''}`;
+    return !blob.includes('rec-') && !blob.includes('clue');
+  });
+  const cardsNameQuarry = wars80w.length > 0 && wars80w.every((j) => {
+    const blob = `${j.title ?? ''} ${j.detail ?? ''}`;
+    const rec = (ctx.world.records ?? []).find((r) => r.id === j.recordId);
+    const name = rec && typeof rec.name === 'string' ? rec.name : j.target;
+    return typeof name === 'string' && name && blob.includes(name);
+  });
+  const need1LiveW = wars80w.every((j) => j.need === 1);
+  const noAst80w = wars80w.every((j) => !Object.hasOwn(j, 'asteroidId') && !Object.hasOwn(j, 'faction'));
+
+  const payJob80w = wars80w.find((j) => j.state === 'offered') ?? wars80w[0] ?? null;
+  const payId80w = payJob80w?.id;
+  const paySlot80w = payJob80w?.slot;
+  const recA80w = payJob80w
+    ? ((ctx.world.records ?? []).find((r) => r.id === payJob80w.recordId)
+      || Object.values(ctx.world.recordBanks ?? {}).flat().find((r) => r && r.id === payJob80w.recordId))
+    : null;
+  const recB80w = (ctx.world.records ?? []).find((r) => r.role === 'patrol' && recA80w && r.id !== recA80w.id
+    && r.state !== 'dead' && r.state !== 'captured' && r.classKey !== 'ace');
+  const freezeSlotJobs80w = (keep) => {
+    const jobs = ctx.world.jobs ?? [];
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j === keep) continue;
+      if (j.state !== 'accepted') continue;
+      if (j.kind === 'mining' || j.kind === 'trade' || j.kind === 'hunt'
+        || j.kind === 'passenger' || j.kind === 'explore' || j.kind === 'espionage'
+        || j.kind === 'war'
+        || j.kind === 'bounty' || j.kind === 'haul' || j.kind === 'ferry'
+        || j.kind === 'patrol' || j.kind === 'recovery') {
+        j.state = 'offered';
+      }
+    }
+  };
+  if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+  if (payJob80w) {
+    payJob80w.state = 'accepted';
+    payJob80w.payQuoted = 18;
+    payJob80w.need = 1;
+    payJob80w.progress = 0;
+    payJob80w.deadline = ctx.world.time + 600;
+    payJob80w.destSystem = 'redmarch';
+    payJob80w.target = recB80w?.name ?? 'Stuffed Alias';
+  }
+  freezeSlotJobs80w(payJob80w);
+  const credStuff80w = ctx.world.credits;
+  if (recB80w) {
+    recB80w.state = 'dead';
+    ctx.world.incidents.push({ kind: 'destroyed', name: recB80w.name, causer: 'player' });
+  }
+  if (ctx.flags.docked) undockStation();
+  tick(40, 'wave80w stuffed other');
+  const stuffedIgnored80w = ctx.world.credits === credStuff80w
+    && !!(payId80w && (ctx.world.jobs ?? []).some((j) => j.id === payId80w && j.state === 'accepted'));
+
+  const empBefore80w = ctx.world.reputation.freehold ?? 0;
+  const verdBefore80w = ctx.world.reputation.veridian ?? 0;
+  const ledgerBefore80w = ctx.world.reputation.redledger ?? 0;
+  const destRepBefore80w = destFac80w ? (ctx.world.reputation[destFac80w] ?? 0) : 0;
+  const credBefore80w = ctx.world.credits;
+  if (recA80w) {
+    recA80w.state = 'dead';
+    ctx.world.incidents.push({ kind: 'destroyed', name: recA80w.name, causer: 'player' });
+  }
+  freezeSlotJobs80w(payJob80w);
+  tick(40, 'wave80w war pay');
+  const paid80w = !!(payJob80w && ctx.world.credits === credBefore80w + 18);
+  const empPlus80w = (ctx.world.reputation.freehold ?? 0) === empBefore80w + 2;
+  const destMinus280w = !!(destFac80w
+    && (ctx.world.reputation[destFac80w] ?? 0) === destRepBefore80w - 2
+    && (destFac80w === 'redledger' || (ctx.world.reputation.redledger ?? 0) === ledgerBefore80w)
+    && (destFac80w === 'veridian' || (ctx.world.reputation.veridian ?? 0) === verdBefore80w));
+  const replaced80w = !!(payId80w && paySlot80w != null
+    && !(ctx.world.jobs ?? []).some((j) => j.id === payId80w)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'war' && j.originSystem === 'freehold'
+      && j.slot === paySlot80w && j.state === 'offered' && j.id !== payId80w));
+
+  const again80w = (ctx.world.jobs ?? []).find((j) => j.kind === 'war' && j.originSystem === 'freehold'
+    && j.slot === paySlot80w && j.state === 'offered' && j.id !== payId80w) ?? null;
+  const againId80w = again80w?.id;
+  const againRec80w = again80w
+    ? ((ctx.world.records ?? []).find((r) => r.id === again80w.recordId)
+      || Object.values(ctx.world.recordBanks ?? {}).flat().find((r) => r && r.id === again80w.recordId))
+    : null;
+  if (again80w) {
+    again80w.state = 'accepted';
+    again80w.payQuoted = 19;
+    again80w.need = 1;
+    again80w.progress = 0;
+    again80w.deadline = ctx.world.time + 600;
+  }
+  freezeSlotJobs80w(again80w);
+  if (againRec80w) {
+    againRec80w.state = 'dead';
+    ctx.world.incidents.push({ kind: 'destroyed', name: againRec80w.name, causer: 'player' });
+  }
+  tick(40, 'wave80w war again');
+  const againReplaced80w = !!(againId80w
+    && !(ctx.world.jobs ?? []).some((j) => j.id === againId80w)
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'war' && j.originSystem === 'freehold'
+      && j.slot === paySlot80w && j.state === 'offered' && j.id !== againId80w));
+
+  const expJob80w = (ctx.world.jobs ?? []).find((j) => j.kind === 'war' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted') && j.id !== payId80w && j.id !== againId80w) ?? null;
+  const expId80w = expJob80w?.id;
+  const credExp80w = ctx.world.credits;
+  const empExp80w = ctx.world.reputation.freehold ?? 0;
+  const verdExp80w = ctx.world.reputation.veridian ?? 0;
+  if (expJob80w) {
+    expJob80w.state = 'accepted';
+    expJob80w.deadline = ctx.world.time - 1;
+  }
+  tick(40, 'wave80w war expire');
+  const expired80w = !!(expId80w && !(ctx.world.jobs ?? []).some((j) => j.id === expId80w));
+  const expireNoPay80w = ctx.world.credits === credExp80w;
+  const expireNotDone80w = !expId80w || !(ctx.world.jobs ?? []).some((j) => j.id === expId80w && j.state === 'done');
+  const expireNoTarget80w = (ctx.world.reputation.freehold ?? 0) === empExp80w
+    && (ctx.world.reputation.veridian ?? 0) === verdExp80w;
+
+  const warTickAt = st80w.indexOf("if (job.kind === 'war')");
+  const warTickSlice = warTickAt >= 0 ? st80w.slice(warTickAt, warTickAt + 6000) : '';
+  const warTickNoTargetWrite = warTickSlice.includes("if (job.kind === 'war')")
+    && warTickSlice.includes('replaceWarJob')
+    && !/reputation\[target/.test(warTickSlice)
+    && !/job\.faction/.test(warTickSlice)
+    && !/dataCrystal/.test(warTickSlice);
+
+  dispatchKey('Escape');
+  tick(1, 'wave80w jobs back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys80w && prevSys80w !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys80w;
+    ctx.emit('systemLoaded', { to: prevSys80w });
+    tick(2, 'wave80w restore sys');
+  }
+  if (prevDock80w) dockAtCurrentStation('wave80w restore dock');
+
+  const stuffedRestoreKept = stuffedPay80w.world.jobs.some((j) => j.id === 'war-freehold-0' && j.destSystem === 'redmarch'
+    && j.target === 'Stuffed Alias')
+    && stuffedPay80w.world.jobs.every((j) => !Object.hasOwn(j, 'faction') && !Object.hasOwn(j, 'asteroidId'));
+
+  const w80w = {
+    uniqueFour: keepIds80w.includes('bounty-ace') && keepIds80w.includes('patrol-lane')
+      && keepIds80w.includes('haul-provisions') && keepIds80w.includes('ferry-consignment')
+      && uniqueLive80w,
+    keepMineFh: keepIds80w.includes('mine-freehold-0'),
+    keepTradeFh: keepIds80w.includes('trade-freehold-0'),
+    keepHuntFh: keepIds80w.includes('hunt-freehold-0'),
+    keepPassengerFh: keepIds80w.includes('passenger-freehold-0'),
+    keepExploreFh: keepIds80w.includes('explore-freehold-0'),
+    keepSpyFh: keepIds80w.includes('spy-freehold-0'),
+    keepWarFh: keepIds80w.includes('war-freehold-0'),
+    keepWarHearth: keepIds80w.includes('war-fh_hearth-1'),
+    dropProto: !keepIds80w.includes('__proto__') && !keepIds80w.includes('war-__proto__-0'),
+    dropShortId: !keepIds80w.includes('war-freehold'),
+    dropNeed2: !warNeed2,
+    dropBadSys: !keepIds80w.includes('war-notasystem-0'),
+    dropSameDest: !keepIds80w.includes('war-freehold-8'),
+    dropCommodityAndFaction: keepWar7 && !Object.hasOwn(keepWar7, 'commodity') && !Object.hasOwn(keepWar7, 'faction')
+      && keepWar7.payQuoted === 20000 && !warCommodity && !warFactionField,
+    dropAceRecord: aceBank80w.world.jobs.some((j) => j.id === 'war-freehold-0')
+      && !aceBank80w.world.jobs.some((j) => j.id === 'war-freehold-7'),
+    capFormula: save80w.includes('WAR_SLOTS_PER_SYSTEM')
+      && save80w.includes('ESPIONAGE_SLOTS_PER_SYSTEM')
+      && cap80w === 4 + 14 * nSys80w + 16
+      && /WAR_SLOTS_PER_SYSTEM \* N_SYSTEMS/.test(save80w)
+      && save80w.includes('plus war room only'),
+    capFits: honestCtx80w.world.jobs.length === 4 + 10 * nSys80w + expectedSpy80w + expectedWar80w
+      && honestCtx80w.world.jobs.length <= cap80w
+      && expectedWar80w <= warRoom80w,
+    floodHeal: floodCtx80w.world.jobs.length <= cap80w
+      && floodCtx80w.world.jobs.some((j) => j.id === 'war-freehold-0')
+      && floodCtx80w.world.jobs.some((j) => j.id === 'spy-freehold-0')
+      && floodCtx80w.world.jobs.some((j) => j.id === 'explore-freehold-0')
+      && floodCtx80w.world.jobs.some((j) => j.id === 'hunt-freehold-0')
+      && floodCtx80w.world.jobs.some((j) => j.id === 'mine-freehold-0'),
+    fieldsJobs: w80wFields.includes('jobs') && w80wFields.filter((k) => k === 'jobs').length === 1
+      && !w80wFields.includes('missions') && !w80wFields.includes('wars'),
+    fillHome: wars80w.length >= 1 && wars80w.length <= 2,
+    spyStillPresent: spiesLive80w.length >= 1,
+    needOne: need1LiveW,
+    noAsteroidId: noAst80w,
+    titlesHideRec: titlesHideRecW,
+    cardsNameQuarry,
+    stuffedDestIgnored: stuffedIgnored80w,
+    stuffedRestoreKept,
+    completeReplace: !!replaced80w,
+    completePay: !!paid80w,
+    completeAgain: !!againReplaced80w,
+    employerPlus2: empPlus80w,
+    destMinus2: destMinus280w,
+    expireNoPay: !!expired80w && expireNoPay80w && expireNotDone80w && expireNoTarget80w,
+    bountyAceStays: uniqueLive80w && (ctx.world.jobs ?? []).some((j) => j.id === 'bounty-ace'),
+    huntStillPirates,
+    namedGunsNotWar: noNamedGunQuarry,
+    warTickNoTargetWrite,
+    extraAfterSpy: save80w.includes('function extraOfferedEspionage')
+      && save80w.includes('function extraOfferedWar')
+      && save80w.indexOf('function extraOfferedWar') > save80w.indexOf('function extraOfferedEspionage'),
+    noInnerHtml: !/innerHTML/.test(st80w),
+    noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save80w) && !/SAFE_ID\.test\(\s*job\.id/.test(st80w),
+    haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st80w),
+    uniqueHaulIds: uniqueLive80w,
+    uniqueHaulMake: st80w.includes("id: 'haul-provisions'") && st80w.includes("id: 'ferry-consignment'"),
+    digit2Jobs: st80w.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'"),
+    replaceHelper: st80w.includes('function replaceWarJob') && st80w.includes('function syncWarJobs')
+      && st80w.includes('function warDestId') && st80w.includes('function pickWarQuarry'),
+    mouseAccept: st80w.includes('btn(card, `Accept (${i + 1})`, () => acceptJob(job))'),
+    originOnlyAccept: /job\.kind === 'war'[\s\S]*?currentSystem !== job\.originSystem/.test(st80w),
+    acceptedStrikeCopy: st80w.includes('ACCEPTED — strike ${name}'),
+    acceptedNoFileHere: !/strike[\s\S]{0,40}file here/.test(st80w),
+  };
+  console.log('wave80 war:', JSON.stringify(w80w));
+  if (!Object.values(w80w).every(Boolean)) { console.log('WAVE80 WAR FAIL'); errors++; }
+}
+
+// ---- WAVE82: owner numbers + TGT lock cats ----
+{
+  const { LOCK_CONE_PX, pickReticleLock } = await import('../src/game/reticle-aim.js');
+  const { KILL_STANDING_DELTA, ABOMINATION_DESTROY_BEAUTIFUL_DELTA } = await import('../src/game/kill-standing.js');
+  const { GRAFT_LIST_UU: graftUu82 } = await import('../src/game/shipyard.js');
+  const {
+    DATA_DROP_RATE,
+    ARCHIVE_OWN_UU,
+    ARCHIVE_RIVAL_UU,
+    LAUNDER_UU,
+    archiveFilePrice,
+  } = await import('../src/game/data-trade.js');
+  const { isRockLockTarget } = await import('../src/systems/controls.js').catch(() => ({ isRockLockTarget: null }));
+  const here82 = dirname(fileURLToPath(import.meta.url));
+  const src82 = (rel) => readFileSync(join(here82, '..', rel), 'utf8');
+  const aim82 = src82('src/game/reticle-aim.js');
+  const hud82 = src82('src/systems/hud.js');
+  const combat82 = src82('src/systems/combat.js');
+  const hail82 = src82('src/systems/hail.js');
+  const ship82 = src82('src/systems/ship.js');
+  const controls82 = src82('src/systems/controls.js');
+
+  const cam82 = new THREE.PerspectiveCamera(60, 1280 / 720, 0.1, 5000);
+  cam82.position.set(0, 0, 100);
+  cam82.lookAt(0, 0, 0);
+  cam82.updateProjectionMatrix();
+  cam82.updateMatrixWorld(true);
+  const stationPick = pickReticleLock({
+    camera: cam82,
+    flags: { firstPerson: false },
+    ship: { object: { position: new THREE.Vector3(0, 0, 80) } },
+    asteroids: { list: [] },
+    ships: [],
+    station: { position: new THREE.Vector3(0, 0, 0) },
+    targets: { reticleScreen: { x: 0, y: 0 } },
+  });
+
+  const w82 = {
+    cone12: LOCK_CONE_PX === 12 && aim82.includes('LOCK_CONE_PX = 12'),
+    killDelta: KILL_STANDING_DELTA === -5,
+    abomBonus: ABOMINATION_DESTROY_BEAUTIFUL_DELTA === 5,
+    graft4000: graftUu82 === 4000,
+    expUu: DATA_DROP_RATE === 0.20 && ARCHIVE_OWN_UU === 400
+      && ARCHIVE_RIVAL_UU === 900 && LAUNDER_UU === 250
+      && archiveFilePrice('buy', 'dataCube', 'legal', 'assembly') === 400
+      && archiveFilePrice('sell', 'dataCrystal', 'captured', 'unknowables') === 900,
+    kindAllowlist: /lockKind === 'station'/.test(aim82) || /'station'/.test(aim82),
+    refuseKinds: /lockKind/.test(hud82) && /lockKind/.test(combat82)
+      && /lockKind/.test(hail82) && /lockKind/.test(ship82),
+    noRaycaster: !/new THREE\.Raycaster/.test(aim82) && !/new THREE\.Raycaster/.test(controls82),
+    stationPickKind: !!(stationPick && stationPick.lockKind === 'station'),
+    rockHelper: typeof isRockLockTarget === 'function' || /asteroids\.list/.test(ship82),
+  };
+  console.log('wave82 owner:', JSON.stringify(w82));
+  if (!Object.values(w82).every(Boolean)) { console.log('WAVE82 OWNER FAIL'); errors++; }
+}
+
+// ---- WAVE83 STATION: spy expose, war target, restitution, MSN-03 chains ----
+{
+  const { createShipState: w83Ship, FACTIONS: w83Factions } = await import('../src/game/state.js');
+  const { WORLD_FIELDS: w83Fields } = await import('../src/game/save.js');
+  const { RESTITUTION_UU, applyRestitution, restitutionOffered, restitutionShort } = await import('../src/game/restitution.js');
+  const { CHAIN_ROOM, CHAIN_IDS, parseChainId, makeChainJob } = await import('../src/game/jobs-chains.js');
+  const { canSeat } = await import('../src/game/weapon-fit.js');
+  const here83 = dirname(fileURLToPath(import.meta.url));
+  const src83 = (rel) => readFileSync(join(here83, '..', rel), 'utf8');
+  const save83 = src83('src/game/save.js');
+  const st83 = src83('src/systems/station.js');
+  const nSys83 = Object.keys(SYSTEMS).length;
+  const prevMax83 = 4 + 14 * nSys83 + 16;
+  const destFor83 = (origin) => {
+    const to = SYSTEMS[origin]?.gates?.[0]?.to;
+    return to && to !== origin && Object.hasOwn(SYSTEMS, to) ? to : (origin === 'veridian' ? 'freehold' : 'veridian');
+  };
+  const spyDestOk83 = (origin, dest) => {
+    if (!origin || !dest || origin === dest) return false;
+    if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest)) return false;
+    const home = SYSTEMS[origin];
+    const far = SYSTEMS[dest];
+    if (!home || !far || !home.station || !far.station) return false;
+    const employer = home.faction;
+    const targetFac = far.faction;
+    if (typeof employer !== 'string' || !Object.hasOwn(w83Factions, employer) || employer === 'unknowables') return false;
+    if (typeof targetFac !== 'string' || !Object.hasOwn(w83Factions, targetFac) || targetFac === 'unknowables') return false;
+    return targetFac !== employer;
+  };
+  const rivalDest83 = (origin, slot) => {
+    const n = slot === 1 ? 1 : 0;
+    if (!Object.hasOwn(SYSTEMS, origin)) return null;
+    const gates = SYSTEMS[origin].gates;
+    const gateRivals = [];
+    const seen = new Set();
+    if (Array.isArray(gates)) {
+      for (let i = 0; i < gates.length; i++) {
+        const to = gates[i] && typeof gates[i].to === 'string' ? gates[i].to : null;
+        if (!to || seen.has(to) || !spyDestOk83(origin, to)) continue;
+        seen.add(to);
+        gateRivals.push(to);
+      }
+    }
+    const list = gateRivals.length > 0 ? gateRivals : Object.keys(SYSTEMS).filter((to) => spyDestOk83(origin, to));
+    return list[n] ?? null;
+  };
+  const job83 = (id, kind, extra = {}) => ({
+    id, kind,
+    title: extra.title ?? id,
+    detail: extra.detail ?? 'Wave 83 station pin row.',
+    reward: extra.reward ?? 100,
+    state: extra.state ?? 'offered',
+    progress: extra.progress ?? 0,
+    need: extra.need ?? 1,
+    ...(extra.target != null ? { target: extra.target } : {}),
+    ...extra.rest,
+  });
+  const mine83 = (sysId, n, slot) => ({
+    id: `mine-${sysId}-${n}`, kind: 'mining', slot, originSystem: sysId, commodity: 'rawOre',
+    title: 'Mine raw ore', detail: 'Cut reachable rock and deliver the ore at the posting dock.',
+    reward: 0, need: 4, progress: 0, state: 'offered',
+  });
+  const spy83 = (sysId, n, slot, extra = {}) => ({
+    id: `spy-${sysId}-${n}`, kind: 'espionage', slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? rivalDest83(sysId, slot) ?? destFor83(sysId),
+    title: extra.title ?? 'Spy at the far dock',
+    detail: extra.detail ?? 'Gather at the far dock. File at the home dock.',
+    reward: extra.reward ?? 420, need: extra.need ?? 1, progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered', deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const war83 = (sysId, n, slot, extra = {}) => ({
+    id: `war-${sysId}-${n}`, kind: 'war', slot,
+    originSystem: extra.originSystem ?? sysId,
+    destSystem: extra.destSystem ?? destFor83(sysId),
+    recordId: extra.recordId ?? 'rec-1',
+    target: extra.target ?? 'Wave83 Watch',
+    title: extra.title ?? 'Strike the marked patrol',
+    detail: extra.detail ?? 'The posting dock pays on a witnessed kill.',
+    reward: extra.reward ?? 300, need: extra.need ?? 1, progress: extra.progress ?? 0,
+    state: extra.state ?? 'offered', deadline: extra.deadline ?? 600,
+    ...(extra.payQuoted !== undefined ? { payQuoted: extra.payQuoted } : {}),
+    ...extra.rest,
+  });
+  const chain83 = (emp, step, extra = {}) => {
+    const made = makeChainJob(emp, step);
+    return {
+      ...made,
+      state: extra.state ?? 'offered',
+      payQuoted: extra.payQuoted,
+      ...extra.rest,
+    };
+  };
+  const four83 = () => [
+    job83('bounty-ace', 'bounty', { title: 'Bounty: Carver Illyx', target: 'Carver Illyx', reward: 2500 }),
+    job83('patrol-lane', 'patrol', { title: 'Patrol the lane', reward: 300, need: 2 }),
+    job83('haul-provisions', 'haul', { title: 'Haul provisions', reward: 0, need: 5, rest: { originSystem: null, originPrice: 0 } }),
+    job83('ferry-consignment', 'ferry', { title: 'Ferry a consignment', reward: 350, need: 4 }),
+  ];
+  const stub83 = (jobs) => {
+    const c = {
+      flags: {},
+      world: { currentSystem: 'freehold', credits: 350, fear: 0, time: 0, jobs: [{ id: 'stale' }] },
+      systems: SYSTEMS,
+      cargo: [],
+      cargoCapacity: 20,
+      bio: { hunger: 0.15, wounds: 0, bond: 0.1, growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1 },
+      player: w83Ship('light', { name: 'Wave83StationPin' }),
+      ship: { object: null },
+      emit() {},
+      ships: [],
+    };
+    restore(c, { v: 1, world: { currentSystem: 'freehold', jobs } });
+    return c;
+  };
+
+  const keep83 = stub83([
+    ...four83(),
+    mine83('freehold', 0, 0),
+    spy83('freehold', 0, 0),
+    war83('freehold', 0, 0),
+    chain83('freehold', 1),
+    {
+      id: 'chain-__proto__-1',
+      kind: 'chain',
+      originSystem: 'freehold',
+      title: 'Proto chain',
+      detail: 'Must drop.',
+      reward: 0, need: 1, progress: 0, state: 'offered',
+    },
+    chain83('redledger', 1, { rest: { faction: 'veridian', launcher: 'dart', sku: 'dart', asteroidId: 3, slot: 0 } }),
+  ]);
+  const keepIds83 = keep83.world.jobs.map((j) => j.id);
+  const keepChain1 = keep83.world.jobs.find((j) => j.id === 'chain-redledger-1');
+  const stuffedChainDropped = !!(keepChain1 && !Object.hasOwn(keepChain1, 'faction')
+    && !Object.hasOwn(keepChain1, 'launcher') && !Object.hasOwn(keepChain1, 'sku')
+    && !Object.hasOwn(keepChain1, 'asteroidId') && !Object.hasOwn(keepChain1, 'slot'));
+
+  const freezeSlotJobs83 = (keep) => {
+    const jobs = ctx.world.jobs ?? [];
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j === keep) continue;
+      if (j.state !== 'accepted') continue;
+      if (j.kind === 'mining' || j.kind === 'trade' || j.kind === 'hunt'
+        || j.kind === 'passenger' || j.kind === 'explore' || j.kind === 'espionage'
+        || j.kind === 'war' || j.kind === 'chain'
+        || j.kind === 'bounty' || j.kind === 'haul' || j.kind === 'ferry'
+        || j.kind === 'patrol' || j.kind === 'recovery') {
+        j.state = 'offered';
+      }
+    }
+  };
+  const findBtn83 = (label) => {
+    const ov = stationOverlay();
+    if (!ov) return null;
+    for (const n of walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && n.textContent === label) return n;
+    }
+    return null;
+  };
+  const overlayHas83 = (frag) => {
+    const ov = stationOverlay();
+    if (!ov) return false;
+    for (const n of walkDom(ov)) {
+      if (typeof n.textContent === 'string' && n.textContent.includes(frag)) return true;
+    }
+    return false;
+  };
+
+  if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+  const prevSys83 = ctx.world.currentSystem;
+  const prevDock83 = ctx.flags.docked;
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'freehold';
+  ctx.emit('systemLoaded', { to: 'freehold' });
+  tick(2, 'wave83 warp freehold');
+  dockAtCurrentStation('wave83 dock freehold');
+  dispatchKey('Digit2');
+  tick(2, 'wave83 jobs');
+
+  const spies83 = (ctx.world.jobs ?? []).filter((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const wars83 = (ctx.world.jobs ?? []).filter((j) => j.kind === 'war' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted'));
+  const unique83 = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const uniqueLive83 = unique83.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  const destFac83 = SYSTEMS[destFor83('freehold')]?.faction ?? 'veridian';
+  if (typeof destFac83 === 'string' && Array.isArray(ctx.world.records)) {
+    const extras83 = [
+      { id: 'rec-9301', role: 'patrol', system: 'freehold', faction: destFac83, name: 'Wave83 Watch', classKey: 'heavy' },
+      { id: 'rec-9302', role: 'patrol', system: 'freehold', faction: destFac83, name: 'Wave83 Guard', classKey: 'heavy' },
+    ];
+    for (let i = 0; i < extras83.length; i++) {
+      if (!ctx.world.records.some((r) => r && r.id === extras83[i].id)) ctx.world.records.push(extras83[i]);
+    }
+  }
+
+  const offeredSpy83 = spies83.find((j) => j.state === 'offered') ?? spies83[0] ?? null;
+  const credOffSpy = ctx.world.credits;
+  const empOffSpy = ctx.world.reputation.freehold ?? 0;
+  const verdOffSpy = ctx.world.reputation.veridian ?? 0;
+  if (offeredSpy83) {
+    offeredSpy83.state = 'offered';
+    offeredSpy83.deadline = ctx.world.time - 1;
+  }
+  freezeSlotJobs83(offeredSpy83);
+  tick(40, 'wave83 spy offered withdraw');
+  const offeredWithdraw83 = ctx.world.credits === credOffSpy
+    && (ctx.world.reputation.freehold ?? 0) === empOffSpy
+    && (ctx.world.reputation.veridian ?? 0) === verdOffSpy;
+
+  const accSpy83 = (ctx.world.jobs ?? []).find((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted')) ?? null;
+  const liveSpyDest83 = accSpy83 ? rivalDest83(accSpy83.originSystem, accSpy83.slot) : null;
+  const liveSpyFac83 = liveSpyDest83 && SYSTEMS[liveSpyDest83] ? SYSTEMS[liveSpyDest83].faction : 'veridian';
+  const credAccSpy = ctx.world.credits;
+  const empAccSpy = ctx.world.reputation.freehold ?? 0;
+  const tgtAccSpy = ctx.world.reputation[liveSpyFac83] ?? 0;
+  if (accSpy83) {
+    accSpy83.state = 'accepted';
+    accSpy83.deadline = ctx.world.time - 1;
+    accSpy83.payQuoted = 18;
+  }
+  freezeSlotJobs83(accSpy83);
+  tick(40, 'wave83 spy accepted lapse');
+  const expose83 = ctx.world.credits === credAccSpy
+    && (ctx.world.reputation.freehold ?? 0) === empAccSpy
+    && (ctx.world.reputation[liveSpyFac83] ?? 0) === tgtAccSpy - 2;
+
+  const destFailSpy83 = (ctx.world.jobs ?? []).find((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted')) ?? null;
+  const destFailFac83 = destFailSpy83
+    ? (SYSTEMS[destFailSpy83.destSystem]?.faction ?? liveSpyFac83)
+    : liveSpyFac83;
+  const empDestFail = ctx.world.reputation.freehold ?? 0;
+  const tgtDestFail = ctx.world.reputation[destFailFac83] ?? 0;
+  const credDestFail = ctx.world.credits;
+  if (destFailSpy83) {
+    destFailSpy83.state = 'accepted';
+    destFailSpy83.slot = 99;
+    destFailSpy83.deadline = ctx.world.time + 600;
+  }
+  freezeSlotJobs83(destFailSpy83);
+  tick(40, 'wave83 spy dest-fail');
+  const destFail83 = ctx.world.credits === credDestFail
+    && (ctx.world.reputation.freehold ?? 0) === empDestFail
+    && (ctx.world.reputation[destFailFac83] ?? 0) === tgtDestFail - 2;
+
+  const paySpy83 = (ctx.world.jobs ?? []).find((j) => j.kind === 'espionage' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted')) ?? null;
+  const paySpyDest83 = paySpy83 ? rivalDest83(paySpy83.originSystem, paySpy83.slot) : null;
+  const paySpyFac83 = paySpyDest83 && SYSTEMS[paySpyDest83] ? SYSTEMS[paySpyDest83].faction : 'veridian';
+  const empPaySpy = ctx.world.reputation.freehold ?? 0;
+  const tgtPaySpy = ctx.world.reputation[paySpyFac83] ?? 0;
+  const credPaySpy = ctx.world.credits;
+  if (paySpy83) {
+    paySpy83.state = 'accepted';
+    paySpy83.payQuoted = 18;
+    paySpy83.need = 1;
+    paySpy83.progress = 1;
+    paySpy83.deadline = ctx.world.time + 600;
+  }
+  freezeSlotJobs83(paySpy83);
+  tick(60, 'wave83 spy success');
+  const spySuccess83 = !!(paySpy83 && ctx.world.credits === credPaySpy + 18)
+    && (ctx.world.reputation.freehold ?? 0) === empPaySpy + 2
+    && (ctx.world.reputation[paySpyFac83] ?? 0) === tgtPaySpy;
+
+  const warDest83 = wars83[0] ? (SYSTEMS['freehold']?.gates?.[0]?.to ?? 'veridian') : 'veridian';
+  const warDestFac83 = SYSTEMS[warDest83]?.faction ?? 'veridian';
+  const payWar83 = (ctx.world.jobs ?? []).find((j) => j.kind === 'war' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted')) ?? null;
+  const recWar83 = payWar83
+    ? ((ctx.world.records ?? []).find((r) => r.id === payWar83.recordId)
+      || Object.values(ctx.world.recordBanks ?? {}).flat().find((r) => r && r.id === payWar83.recordId))
+    : null;
+  if (payWar83) {
+    payWar83.state = 'accepted';
+    payWar83.payQuoted = 18;
+    payWar83.need = 1;
+    payWar83.progress = 0;
+    payWar83.deadline = ctx.world.time + 600;
+    payWar83.destSystem = 'redmarch';
+    payWar83.faction = 'redledger';
+  }
+  freezeSlotJobs83(payWar83);
+  const empWar = ctx.world.reputation.freehold ?? 0;
+  const destWar = ctx.world.reputation[warDestFac83] ?? 0;
+  const ledgerWar = ctx.world.reputation.redledger ?? 0;
+  const credWar = ctx.world.credits;
+  if (recWar83) {
+    recWar83.state = 'dead';
+    ctx.world.incidents.push({ kind: 'destroyed', name: recWar83.name, causer: 'player' });
+  }
+  tick(40, 'wave83 war success');
+  const warSuccess83 = !!(payWar83 && ctx.world.credits === credWar + 18)
+    && (ctx.world.reputation.freehold ?? 0) === empWar + 2
+    && (ctx.world.reputation[warDestFac83] ?? 0) === destWar - 2;
+  const warStuffedDest83 = warDestFac83 === 'redledger'
+    ? true
+    : (ctx.world.reputation.redledger ?? 0) === ledgerWar;
+
+  const expWar83 = (ctx.world.jobs ?? []).find((j) => j.kind === 'war' && j.originSystem === 'freehold'
+    && (j.state === 'offered' || j.state === 'accepted')) ?? null;
+  const empExpWar = ctx.world.reputation.freehold ?? 0;
+  const destExpWar = ctx.world.reputation[warDestFac83] ?? 0;
+  const credExpWar = ctx.world.credits;
+  if (expWar83) {
+    expWar83.state = 'accepted';
+    expWar83.deadline = ctx.world.time - 1;
+  }
+  freezeSlotJobs83(expWar83);
+  tick(40, 'wave83 war expire');
+  const warExpire83 = ctx.world.credits === credExpWar
+    && (ctx.world.reputation.freehold ?? 0) === empExpWar
+    && (ctx.world.reputation[warDestFac83] ?? 0) === destExpWar;
+
+  const restCredits = ctx.world.credits;
+  ctx.world.credits = 2000;
+  ctx.world.reputation.freehold = -6;
+  ctx.world.reputation.beautiful = 4;
+  if (ctx.world.hangar && Array.isArray(ctx.world.hangar.hulls)) {
+    for (let i = 0; i < ctx.world.hangar.hulls.length; i++) {
+      if (ctx.world.hangar.hulls[i]) ctx.world.hangar.hulls[i].grafted = true;
+    }
+  }
+  dispatchKey('Escape');
+  tick(1, 'wave83 jobs back');
+  dispatchKey('Digit9');
+  tick(2, 'wave83 standing');
+  const payRestBtn = findBtn83('Pay restitution');
+  if (payRestBtn) payRestBtn.click();
+  tick(1, 'wave83 rest pending');
+  const pendingRest = overlayHas83('Confirm restitution');
+  dispatchKey('Escape');
+  tick(1, 'wave83 rest esc');
+  const escCancel83 = ctx.world.credits === 2000 && (ctx.world.reputation.freehold ?? 0) === -6
+    && !overlayHas83('Confirm restitution');
+  const payRestBtn2 = findBtn83('Pay restitution');
+  if (payRestBtn2) payRestBtn2.click();
+  tick(1, 'wave83 rest pending2');
+  const confirmRestBtn = findBtn83('Confirm restitution');
+  if (confirmRestBtn) confirmRestBtn.click();
+  tick(2, 'wave83 rest confirm');
+  const restPaid83 = ctx.world.credits === 800 && (ctx.world.reputation.freehold ?? 0) === 0
+    && (ctx.world.reputation.beautiful ?? 0) === -10;
+  ctx.world.credits = 100;
+  ctx.world.reputation.freehold = -4;
+  const shortDirect = applyRestitution(ctx, 'freehold');
+  const shortRefuse83 = shortDirect.ok === false && shortDirect.reason === 'short'
+    && ctx.world.credits === 100 && (ctx.world.reputation.freehold ?? 0) === -4;
+  dispatchKey('Escape');
+  tick(1, 'wave83 rest short back');
+  dispatchKey('Digit9');
+  tick(2, 'wave83 standing short');
+  const shortNoBtn83 = !findBtn83('Pay restitution') && overlayHas83('Not enough UU');
+  ctx.world.credits = restCredits;
+  ctx.world.reputation.freehold = 12;
+  if (ctx.world.hangar && Array.isArray(ctx.world.hangar.hulls)) {
+    for (let i = 0; i < ctx.world.hangar.hulls.length; i++) {
+      if (ctx.world.hangar.hulls[i]) ctx.world.hangar.hulls[i].grafted = false;
+    }
+  }
+
+  dispatchKey('Escape');
+  tick(1, 'wave83 standing back');
+  ctx.world.reputation.freehold = 0;
+  dispatchKey('Digit2');
+  tick(2, 'wave83 chain stranger');
+  const strangerHide83 = !overlayHas83('File the Freehold Compact brief')
+    && !(ctx.world.jobs ?? []).some((j) => j.id === 'chain-freehold-1' && j.state === 'offered'
+      && overlayHas83(j.title));
+  ctx.world.reputation.freehold = 12;
+  dispatchKey('Escape');
+  tick(1, 'wave83 chain reenter');
+  dispatchKey('Digit2');
+  tick(2, 'wave83 chain known');
+  const knownSee83 = overlayHas83('File the Freehold Compact brief')
+    || (ctx.world.jobs ?? []).some((j) => j.id === 'chain-freehold-1' && j.state === 'offered');
+
+  const liveJobs = ctx.world.jobs ?? [];
+  for (let i = liveJobs.length - 1; i >= 0; i--) {
+    if (liveJobs[i].kind === 'chain') liveJobs.splice(i, 1);
+  }
+  const lastFh = makeChainJob('freehold', 3);
+  lastFh.state = 'accepted';
+  lastFh.payQuoted = 22;
+  lastFh.need = 1;
+  lastFh.progress = 0;
+  liveJobs.push(lastFh);
+  freezeSlotJobs83(lastFh);
+  const empFh = ctx.world.reputation.freehold ?? 0;
+  const verdFh = ctx.world.reputation.veridian ?? 0;
+  const credFh = ctx.world.credits;
+  const launchBefore = ctx.world.launcher ?? '';
+  tick(40, 'wave83 chain freehold last light');
+  const lightNoDart83 = (ctx.world.launcher ?? '') === launchBefore
+    && ctx.world.credits === credFh + 22
+    && (ctx.world.reputation.freehold ?? 0) === empFh + 2
+    && (ctx.world.reputation.veridian ?? 0) === verdFh
+    && lastFh.state === 'done';
+
+  for (let i = liveJobs.length - 1; i >= 0; i--) {
+    if (liveJobs[i].kind === 'chain') liveJobs.splice(i, 1);
+  }
+  const lastFh2 = makeChainJob('freehold', 3);
+  lastFh2.state = 'accepted';
+  lastFh2.payQuoted = 22;
+  lastFh2.need = 1;
+  lastFh2.faction = 'veridian';
+  lastFh2.launcher = 'dart';
+  liveJobs.push(lastFh2);
+  if (ctx.world.hangar && Array.isArray(ctx.world.hangar.hulls)) {
+    for (let i = 0; i < ctx.world.hangar.hulls.length; i++) {
+      const row = ctx.world.hangar.hulls[i];
+      if (row && row.id === ctx.world.hangar.mountedId) row.classKey = 'heavy';
+    }
+  }
+  if (ctx.player) ctx.player.classKey = 'heavy';
+  freezeSlotJobs83(lastFh2);
+  const verdFh2 = ctx.world.reputation.veridian ?? 0;
+  tick(40, 'wave83 chain freehold last heavy');
+  const heavyDart83 = (ctx.world.launcher === 'dart') && canSeat('heavy', 'missile')
+    && (ctx.world.reputation.veridian ?? 0) === verdFh2
+    && lastFh2.state === 'done';
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'veridian';
+  ctx.emit('systemLoaded', { to: 'veridian' });
+  tick(2, 'wave83 warp veridian');
+  dockAtCurrentStation('wave83 dock veridian');
+  const liveJobsV = ctx.world.jobs ?? [];
+  for (let i = liveJobsV.length - 1; i >= 0; i--) {
+    if (liveJobsV[i].kind === 'chain') liveJobsV.splice(i, 1);
+  }
+  const lastVd = makeChainJob('veridian', 3);
+  lastVd.state = 'accepted';
+  lastVd.payQuoted = 19;
+  lastVd.need = 1;
+  liveJobsV.push(lastVd);
+  freezeSlotJobs83(lastVd);
+  const launchVd = ctx.world.launcher;
+  const turretVd = ctx.world.turret;
+  tick(40, 'wave83 chain veridian last');
+  const verdNoSku83 = lastVd.state === 'done'
+    && ctx.world.launcher === launchVd
+    && ctx.world.turret === turretVd;
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.currentSystem = 'hollowreach';
+  ctx.emit('systemLoaded', { to: 'hollowreach' });
+  tick(2, 'wave83 warp hollow');
+  dockAtCurrentStation('wave83 dock hollow');
+  const liveJobsH = ctx.world.jobs ?? [];
+  for (let i = liveJobsH.length - 1; i >= 0; i--) {
+    if (liveJobsH[i].kind === 'chain') liveJobsH.splice(i, 1);
+  }
+  const lastHl = makeChainJob('hollow', 3);
+  lastHl.state = 'accepted';
+  lastHl.payQuoted = 17;
+  lastHl.need = 1;
+  liveJobsH.push(lastHl);
+  freezeSlotJobs83(lastHl);
+  const launchHl = ctx.world.launcher;
+  const turretHl = ctx.world.turret;
+  tick(40, 'wave83 chain hollow last');
+  const hollowNoSku83 = lastHl.state === 'done'
+    && ctx.world.launcher === launchHl
+    && ctx.world.turret === turretHl;
+
+  dispatchKey('Escape');
+  tick(1, 'wave83 hollow back');
+  if (ctx.flags.docked) undockStation();
+  if (prevSys83 && prevSys83 !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys83;
+    ctx.emit('systemLoaded', { to: prevSys83 });
+    tick(2, 'wave83 restore sys');
+  }
+  if (prevDock83) dockAtCurrentStation('wave83 restore dock');
+
+  const w83 = {
+    spyExposeConst: st83.includes('SPY_EXPOSE_DELTA = -2'),
+    spyAcceptedLapse: !!expose83,
+    spyDestFail: !!destFail83,
+    spyOfferedWithdraw: !!offeredWithdraw83,
+    spySuccessEmployer: !!spySuccess83,
+    warTargetConst: st83.includes('WAR_TARGET_DELTA = -2'),
+    warSuccessTarget: !!warSuccess83,
+    warExpireQuiet: !!warExpire83,
+    warStuffedDest: !!warStuffedDest83,
+    restUu: RESTITUTION_UU === 1200 && st83.includes('RESTITUTION_UU'),
+    restConfirm: !!restPaid83,
+    restEsc: !!escCancel83 && pendingRest,
+    restShort: !!shortRefuse83 && shortNoBtn83,
+    restGraftCap: restPaid83,
+    noNewDigit: st83.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'")
+      && !st83.includes("'restitution'")
+      && !/wanted/.test(st83)
+      && !w83Fields.includes('wanted') && !w83Fields.includes('crimeScore'),
+    noInnerHtml: !/innerHTML/.test(st83),
+    chainKind: save83.includes("'chain'") && CHAIN_ROOM === 7 && parseChainId('chain-freehold-1')?.step === 1,
+    keepUniqueFour: keepIds83.includes('bounty-ace') && keepIds83.includes('patrol-lane')
+      && keepIds83.includes('haul-provisions') && keepIds83.includes('ferry-consignment') && uniqueLive83,
+    keepMineSpyWarChain: keepIds83.includes('mine-freehold-0') && keepIds83.includes('spy-freehold-0')
+      && keepIds83.includes('war-freehold-0') && keepIds83.includes('chain-freehold-1'),
+    dropProtoChain: !keepIds83.includes('chain-__proto__-1') && !CHAIN_IDS.has('chain-__proto__-1'),
+    capPlus7: save83.includes('CHAIN_ROOM = 7') && save83.includes('+ CHAIN_ROOM')
+      && save83.includes('plus war room only')
+      && !save83.includes('2*N') && !save83.includes('2 * N'),
+    stuffedChainFields: stuffedChainDropped,
+    strangerHide: !!strangerHide83,
+    knownSee: !!knownSee83,
+    lastFreeholdLight: !!lightNoDart83,
+    lastFreeholdHeavy: !!heavyDart83,
+    lastVeridianNoSku: !!verdNoSku83,
+    lastHollowNoSku: !!hollowNoSku83,
+    noJobFactionWrite: !/job\.faction/.test(st83),
+  };
+  console.log('wave83 station:', JSON.stringify(w83));
+  if (!Object.values(w83).every(Boolean)) { console.log('WAVE83 STATION FAIL'); errors++; }
+}
+
+// ---- WAVE83 MISSILES: NPC darts vs player + off-glass warning ----
+{
+  const { createShipState: w83Ship } = await import('../src/game/state.js');
+  const here83 = dirname(fileURLToPath(import.meta.url));
+  const src83 = (rel) => readFileSync(join(here83, '..', rel), 'utf8');
+  const combat83src = src83('src/systems/combat.js');
+  const npc83src = src83('src/systems/npc.js');
+  const hud83src = src83('src/systems/hud.js');
+  const song83src = src83('src/systems/song.js');
+  const ctx83src = src83('src/core/ctx.js');
+
+  const npcFireCase = hud83src.slice(hud83src.indexOf("case 'npcFire':"), hud83src.indexOf("case 'sunHeat':"));
+  const hudRoot83 = document.getElementById('hud');
+  const hudKids83 = hudRoot83 ? hudRoot83.children.length : 0;
+  const inboundGauge = [...walkDom(hudRoot83 ?? { children: [] })].some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    return /incoming|inbound|aspect-ring|lock-box|lockbox|missile-gauge/i.test(c);
+  });
+
+  function w83count(scene, tag, visibleOnly) {
+    let n = 0;
+    scene.traverse((o) => {
+      if (o.userData && o.userData.pool === tag) {
+        if (!visibleOnly || o.visible) n++;
+      }
+    });
+    return n;
+  }
+
+  function w83harness(faction) {
+    const sc = new THREE.Scene();
+    const c = createCtx({ scene: sc, camera: cam83, renderer });
+    c.player = w83Ship('light', { name: 'W83' });
+    c.ship.object = new THREE.Object3D();
+    c.ship.object.position.set(0, 0, 0);
+    sc.add(c.ship.object);
+    c.world.launcher = 'dart';
+    c.world.missileAmmo = 8;
+    const combat = initCombat(c);
+    const obj = new THREE.Object3D();
+    obj.position.set(0, 0, 40);
+    sc.add(obj);
+    const ship = { object: obj, state: w83Ship('cutter', { faction, name: 'DartP' }) };
+    return { sc, c, combat, ship };
+  }
+  const cam83 = new THREE.PerspectiveCamera(70, 1, 0.1, 5000);
+  const poolH = w83harness('redledger');
+  for (let i = 0; i < 5; i++) {
+    poolH.c.emit('npcFire', { ship: poolH.ship, weapon: 'missile', target: 'player' });
+  }
+  poolH.combat.update(dt);
+  const visNpc = w83count(poolH.sc, 'npcMissile', true);
+  const allNpc = w83count(poolH.sc, 'npcMissile', false);
+  const allPlayer = w83count(poolH.sc, 'playerMissile', false);
+  const visPlayer = w83count(poolH.sc, 'playerMissile', true);
+  const ammoAfter = poolH.c.world.missileAmmo;
+
+  const missH = w83harness('redledger');
+  missH.c.emit('npcFire', { ship: missH.ship, weapon: 'missile' });
+  missH.combat.update(dt);
+  const visAfterMissing = w83count(missH.sc, 'npcMissile', true);
+
+  const unkH = w83harness('unknowables');
+  unkH.c.emit('npcFire', { ship: unkH.ship, weapon: 'missile', target: 'player' });
+  unkH.combat.update(dt);
+  const visAfterUnk = w83count(unkH.sc, 'npcMissile', true);
+
+  const hudSys83 = systems.find((pair) => pair[0] === 'hud')[1];
+  ctx.elapsed += 3;
+  ctx.events.length = 0;
+  for (let i = 0; i < 5; i++) ctx.emit('npcFire', { weapon: 'missile', target: 'player' });
+  hudSys83.update(dt);
+  const dartToasts = [...walkDom(hudRoot83 ?? { children: [] })]
+    .filter((n) => (typeof n.className === 'string' && n.className.includes('rw-toast')
+      && n.className.includes('show') && n.textContent === 'Incoming dart.'));
+  ctx.events.length = 0;
+  ctx.emit('npcFire', { weapon: 'cannon', target: 'player' });
+  hudSys83.update(dt);
+  const cannonGrewDart = [...walkDom(hudRoot83 ?? { children: [] })]
+    .filter((n) => n.textContent === 'Incoming dart.' && (n.className || '').includes('show')).length
+    > dartToasts.length;
+
+  const st83 = ctx.config.world.stationPosition;
+  const savedPos = ctx.ship.object.position.clone();
+  const savedDocked = ctx.flags.docked;
+  ctx.flags.docked = false;
+  ctx.world.jumpGraceUntil = 0;
+  ctx.ship.object.position.set(st83.x, st83.y, st83.z + 500);
+  function w83spawn(role, faction, suffix) {
+    const p = ctx.ship.object.position;
+    const rec = {
+      id: `wave83-${suffix}`, name: `Wave83 ${suffix}`, classKey: role === 'ace' ? 'ace' : 'cutter',
+      faction, role, resolve: 80, alwaysHuntsPlayer: true,
+    };
+    const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x, p.y, p.z + 100));
+    if (!live) return null;
+    ctx.ships.push(live);
+    live.ai.demandSent = true;
+    live.ai.demanding = false;
+    live.ai.band = 'defiant';
+    live.ai.playerRolled = true;
+    live.ai.playerInterested = true;
+    live.ai.target = 'player';
+    live.ai.phase = 'telegraph';
+    live.ai.phaseStart = ctx.world.time - 3.05;
+    live.ai.fireAt = 0;
+    live.ai.dartSpent = false;
+    live.ai.intent = true;
+    // Cadence pin only: skip 1 Hz resolve so a late-boot pirate does not
+    // yield into bargaining before the first dart.
+    live.state.personality = 10;
+    live.state.resolve = 80;
+    live.ai.resolveAt = ctx.world.time + 1e6;
+    live.ai.hailed = true;
+    live.object.quaternion.identity();
+    return live;
+  }
+  function w83fires(live, n, label) {
+    const evs = [];
+    for (let i = 0; i < n && live; i++) {
+      live.object.quaternion.identity();
+      live.object.position.set(ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z + 100);
+      tick(1, label);
+      evs.push(...ctx.lastEvents);
+    }
+    return evs.filter((e) => e.type === 'npcFire' && e.ship === live);
+  }
+  function w83drop(live) {
+    if (!live) return;
+    const i = ctx.ships.indexOf(live);
+    if (i >= 0) ctx.ships.splice(i, 1);
+    removeLiveShip(ctx, live);
+  }
+
+  const pirate83 = w83spawn('pirate', 'redledger', 'pirate');
+  const pirateFires = w83fires(pirate83, 90, 'w83 pirate dart');
+  const pirateMissile = pirateFires.filter((e) => e.weapon === 'missile');
+  const pirateCannon = pirateFires.filter((e) => e.weapon === 'cannon');
+  const pirateFirst = pirateFires[0];
+  w83drop(pirate83);
+
+  const ace83 = w83spawn('ace', 'redledger', 'ace');
+  const aceFires = w83fires(ace83, 90, 'w83 ace dart');
+  const aceFirst = aceFires[0];
+  w83drop(ace83);
+
+  const unk83 = w83spawn('pirate', 'unknowables', 'unk');
+  const unkFires = w83fires(unk83, 90, 'w83 unk dart');
+  w83drop(unk83);
+
+  const trader83 = w83spawn('trader', 'veridian', 'trader');
+  if (trader83) {
+    trader83.ai.mode = 'hunt';
+    trader83.ai.target = 'player';
+  }
+  const traderFires = w83fires(trader83, 40, 'w83 trader dart');
+  w83drop(trader83);
+
+  const miner83 = w83spawn('miner', 'veridian', 'miner');
+  if (miner83) {
+    miner83.ai.mode = 'hunt';
+    miner83.ai.target = 'player';
+  }
+  const minerFires = w83fires(miner83, 40, 'w83 miner dart');
+  w83drop(miner83);
+
+  const patrol83 = w83spawn('patrol', 'freehold', 'patrol');
+  if (patrol83) {
+    patrol83.ai.mode = 'hunt';
+    patrol83.ai.scratched = true;
+    patrol83.ai.lastAttacker = 'player';
+    patrol83.ai.target = 'player';
+  }
+  const patrolFires = w83fires(patrol83, 90, 'w83 patrol dart');
+  w83drop(patrol83);
+
+  ctx.flags.docked = savedDocked;
+  ctx.ship.object.position.copy(savedPos);
+
+  const w83 = {
+    poolCap: /const NPC_MISSILE_POOL = 4/.test(combat83src) && /const MISSILE_POOL = 8/.test(combat83src),
+    notSpawnNpcShot: /function spawnNpcMissile/.test(combat83src)
+      && /if \(wkey === 'missile'/.test(combat83src),
+    noSpend: !combat83src.slice(
+      combat83src.indexOf('function spawnNpcMissile'),
+      combat83src.indexOf('function liveMissileLock'),
+    ).includes('spendMissileAmmo'),
+    vsPlayerSplit: combat83src.includes('tickSeekerPool')
+      && /p\.fromPlayer \|\| !p\.vsPlayer/.test(combat83src),
+    lastAttacker: combat83src.includes("s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc')"),
+    missileTargetDoc: ctx83src.includes("weapon:'cannon'|'missile'")
+      && ctx83src.includes('missiles always set target'),
+    dartGate: npc83src.includes('function canNpcDart')
+      && npc83src.includes("weapon: 'missile', target: 'player'"),
+    noBeautifulGrant: !/beautiful/.test(npc83src.slice(npc83src.indexOf('function canNpcDart'), npc83src.indexOf('function hunterRole'))),
+    toastLiteral: hud83src.includes("INCOMING_DART_TOAST = 'Incoming dart.'")
+      && npcFireCase.includes('INCOMING_DART_TOAST')
+      && !npcFireCase.includes('innerHTML')
+      && !npcFireCase.includes('e.from')
+      && !npcFireCase.includes('state.name'),
+    toastGap: hud83src.includes('DART_TOAST_GAP = 2.5'),
+    noNewHudNode: !/rw-incoming|rw-inbound|aspect-ring|lock-box/.test(hud83src),
+    songBranch: song83src.includes('npcFireMissile')
+      && song83src.includes("ev.weapon === 'missile'"),
+    hudKidsStable: Number.isFinite(hudKids83) && hudKids83 > 0 && inboundGauge === false,
+    playerPool8: allPlayer === 8 && visPlayer === 0,
+    npcPool4: allNpc === 4,
+    drop5th: visNpc === 4,
+    ammoUntouched: ammoAfter === 8,
+    missingTargetDrops: visAfterMissing === 0,
+    unkCombatDrop: visAfterUnk === 0,
+    pirateOneDart: !!pirate83 && pirateMissile.length === 1
+      && pirateFirst && pirateFirst.weapon === 'missile' && pirateFirst.target === 'player'
+      && pirateCannon.length >= 1,
+    aceOneDart: !!ace83 && aceFirst && aceFirst.weapon === 'missile' && aceFirst.target === 'player',
+    unkNeverMissile: !!unk83 && !unkFires.some((e) => e.weapon === 'missile'),
+    civilianNeverMissile: !traderFires.some((e) => e.weapon === 'missile')
+      && !minerFires.some((e) => e.weapon === 'missile')
+      && !patrolFires.some((e) => e.weapon === 'missile'),
+    toastCopy: dartToasts.length === 1 && dartToasts[0].textContent === 'Incoming dart.',
+    toastThrottle: dartToasts.length === 1 && cannonGrewDart === false,
+  };
+  console.log('wave83 missiles:', JSON.stringify(w83));
+  if (!Object.values(w83).every(Boolean)) { console.log('WAVE83 MISSILES FAIL'); errors++; }
 }
 
 if (errors === 0) {

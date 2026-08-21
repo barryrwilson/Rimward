@@ -1,0 +1,136 @@
+Wave 79 faction-war verify
+Date: 2026-08-21
+Domain: data
+Worker files: docs/Msn02FactionWarDesign.md,
+  out/w79/faction-war/{current-war-inventory,shared-contract,security-review,code-review}.md
+This file: out/w79/faction-war/verify.txt only. No src/, docs/, scripts/, PROGRESS.md, sibling writes.
+
+RESULT: CLEAN
+
+1. JOB_KINDS has no 'war'
+- src/game/save.js:138 JOB_KINDS =
+  bounty | patrol | haul | ferry | recovery | mining | trade | hunt | passenger | explore
+- save.js:264 unknown kind drops. save.js:294-296 else-branch also drops.
+- Grep src/*.js for kind:'war' / 'war' in JOB_KINDS: none.
+- Flavor "war" only in generated landmark lines (galaxy.generated.js). Not a job kind.
+- Inventory, contract, brief all freeze kind 'war' as unused live token.
+
+2. Live cap 4+10*N+16 = 1020 at 100. Contract adds only WAR_ROOM.
+- save.js:115-129: 4 unique + 2N mining + 2N trade + 2N hunt + 2N passenger + 2N explore + 16 overlay.
+- node: Object.keys(SYSTEMS).length = 100.
+  4+10*100+16 = 1020.
+  WAR_ROOM = 2*100 = 200.
+  live + WAR_ROOM = 1220.
+- Contract §0.7 / §1.2: JOBS_SANITIZE_MAX_at_impl = live_cap_at_impl + WAR_ROOM.
+  Explicit: do not bake ESPIONAGE_ROOM. Do not write 4+12*N+16 as if spy already shipped.
+- Brief merge table: 1220 at inventory-time 100; no espionage term.
+- Grep out/w79/faction-war: ESPIONAGE_ROOM never used as an addend.
+
+3. Unique four, hunt pirates, Named Guns stay off this family
+- Unique four makeJobs station.js:1732-1765:
+  bounty-ace / patrol-lane / haul-provisions / ferry-consignment
+- UNIQUE_JOB_KIND save.js:140-145 same four ids.
+- Hunt kind 'hunt' station.js:2268; quarry role==='pirate' (2144-2216);
+  forbids ace role/classKey and ACES/NAMED_GUNS names (isNamedGunName 2144-2152).
+- Overlay cap 2 PIRATE_BOUNTY_CAP station.js:187; ids bounty-pirate-*.
+- ACES.hunter Sister Vane; ACES.illyx Carver Illyx; NAMED_GUNS.aspirants.names
+  state.js:827-901.
+- Contract §0.4 / §2.4 / §3.4: war quarry role==='patrol' only; not pirate, not ace,
+  not ACES/NAMED_GUNS names. Unique patrol stays pirate-sweep + freehold+=5.
+
+4. Employer +2 cites MINING_REP. Target write fail-closed.
+- MINING_REP = 2 station.js:194.
+- Live employer writes use MINING_REP: hunt 2658, mining 2895, trade 2944,
+  passenger 2991, explore 3055. Gate Object.hasOwn(FACTIONS).
+- Unique patrol still reputation.freehold += PATROL_REP (5) station.js:2777.
+  Contract forbids copying that into war.
+- Overlay bounty: no employer rep (3081-3089).
+- JOB_FIELD_ALLOW has no 'faction' (save.js:146-151).
+- RepStandingDesign.md §7:210-212 target delta proposed, needs owner;
+  overt war employer up / target down, live tables not job.faction.
+- Wishlist REP-04:530-531 employer up, target down.
+- Contract §0.11 / §5 / §3.6: employer +2 MINING_REP; TARGET WRITE skip until owner.
+  Candidate magnitude 2 is not shippable.
+
+5. No src/ from this task. No sibling folder writes.
+- Worker set is markdown under docs/Msn02FactionWarDesign.md and out/w79/faction-war/*.
+- src/ has no 'war' job kind, no WAR_ROOM, no WAR_SLOTS.
+- Workspace src/ is dirty from other uncommitted waves (hunt/passenger/explore already live).
+  That is not this worker.
+- Sibling out/w79/espionage and out/w79/rep04 exist from parallel workers.
+  This worker’s listed files do not write those folders.
+- Do not flag sibling quoting 1220 as live+its-room (impl will sum rooms).
+
+6. Brief vs contract vs live
+- Kind 'war', two slots, one-in-one-out, 600 s fail-closed (MINING_DEADLINE 196 / WRECK_TTL 811).
+- Pay origin jobPayFor(PATROL_REWARD 300), clamp 0…20000 (save.js:130, station.js:204).
+- Digit 2, h() textContent 3208-3213, innerHTML grep 0 in station.js.
+- Space-side hunt cadence (tickDeliveryJobs hunt 2797-2855). No origin-dock AND.
+- First-draft kind-token typo `war'` and origin-dock AND are closed in freeze text.
+- N_SYSTEMS 100 (state.js:12-18, 541). Autosave rimward-save-v1 (save.js:65).
+- WORLD_FIELDS includes 'jobs' (save.js:78). No new persist key.
+
+Sampled live cites (pass unless noted):
+- JOB_KINDS save.js:138
+- cap save.js:115-129
+- jobIdTokens hyphen grammar save.js:209-221 (SAFE_ID is token class; rejects hyphens on full id)
+- dropJobsUntilCap save.js:531-544; order 562-598
+- huntSanitizeKeepsRecord save.js:442-450
+- sanitizeReputation save.js:672-691
+- sanitizeRestored jobs then rep save.js:864-865
+- PAY_QUOTED_MAX 20000 save.js:130
+- RECORD_ID save.js:135
+- DOCK_KEY_SERVICES[1]==='jobs' station.js:152
+- PATROL_REWARD 300 / PATROL_REP 5 / PATROL_NEED 2  station.js:169-171
+- PIRATE_BOUNTY_CAP 2 station.js:187
+- family slots 2 station.js:189-193
+- MINING_DEADLINE 600 station.js:196
+- findAceRecord 1703-1705
+- otherSystemId gates[0] 1718-1721
+- makeJobs unique four 1732-1765
+- pirateBountyId 1786-1788; syncPirateBounties 1794-1828
+- maybeRefreshJobsBoard 2000
+- syncMiningJobs 1927 (inventory ~1940)
+- syncTradeJobs 2085 (inventory ~2099)
+- hunt kind 2268; syncHuntJobs 2291-2325
+- syncPassengerJobs 2414 (inventory ~2428)
+- explorePayBase 2508-2510; syncExploreJobs 2556-2577
+- huntPayComplete 2651-2669; boardJobs 2673-2687
+- jobPayFor 2695
+- rewardJobContacts 2733-2743; completeJob 2746-2750
+- tickPatrolJob 2768-2786
+- tickDeliveryJobs hunt 2797-2855; overlay/ace 3068-3089
+- initStation ensureJobs 3153 (fn 3141)
+- h() 3208-3213
+- standing notes 1076-1077; Jobs note 3638-3639
+- renderJobs sync order 3640-3647 (no war)
+- accept origin-only trade/hunt/passenger/explore 3498-3619
+- Digit menu 4306-4400; Digit accept jobs 4428-4431
+- update ticks 4508-4512
+- HOSTILE_STANDING -10 npc.js:87; pirate AI mode 'hunt' 200-204; patrol loiter
+- WRECK_TTL 600 / MAX_INCIDENTS 40 world.js:811,813
+- pirates never migrate world.js:30
+- makeRecord rec-<n> world.js:252,285
+- patrol seed i===0 dock faction, i>=1 gates[0] dest faction world.js:327,374-385
+- ace Carver Illyx role ace world.js:407-418
+- incidents name/faction/role/causer, no record id world.js:1332-1346
+- ctx world default has no jobs (125-149); events 198-228 include commLine, no job*
+- standingRead data-trade.js:62-70
+- authored patrols: freehold 2 (54), veridian 3 (83), redmarch 1 (115),
+  hollowreach 0 (147), hush 0 (179), verge 0 + 1 pirate (212)
+- authored gates[0]: freehold→veridian, veridian→freehold, redmarch→veridian,
+  hollowreach→redmarch
+
+Stale / loose cites (not law bugs; code wins):
+- Inventory hunt Extra deadline save.js:405 is TRADE deadline; hunt is 406.
+- Inventory explore Extra deadline save.js:407 is PASSENGER; explore is 408.
+- Inventory hunt Extra "target required" 346-356 is origin/slot/recordId;
+  hunt target copy is 388-392 (kind bounty || hunt).
+- Inventory mining/trade/passenger sync ~1940/~2099/~2428 vs 1927/2085/2414.
+- Inventory cap cite wishlist:547 is the formula `4+10*N+16`, not the integer 1020.
+  Arithmetic 1020 at 100 is still correct.
+
+Law freeze vs live: PASS
+No src from this task: PASS
+Sibling folder writes by this worker: PASS (none)
+Cap formula ESPIONAGE_ROOM baked: PASS (not baked)

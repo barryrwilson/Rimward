@@ -1,0 +1,101 @@
+Wave 83 NPC missiles — pirateOneDart recheck
+Workspace: C:\Projects\WebSim
+Date: 2026-08-21
+Status: CLEAN
+
+Claim: worker fixed WAVE83 pirateOneDart by changing only the boot harness spawn
+(personality / resolve / resolveAt / hailed). Cadence in npc.js is unchanged.
+Ace was already true.
+
+================================================================================
+1. pirate-cadence.mjs
+================================================================================
+Command:
+  node --import ./scripts/with-css-stub.mjs out/w83/missiles/pirate-cadence.mjs
+Cwd: C:\Projects\WebSim
+Exit: 0
+
+math:
+  fear50 (personality 0 + brokenResolveMod): r=36 band=bargaining
+  fear50ace (personality 0, no pirate mod): r=41 band=shaken
+  fear50p10 (personality 10 + brokenResolveMod): r=46 band=shaken
+
+probe-default:
+  pin=true acePin=true
+  pirateW=["missile","cannon","cannon","cannon","cannon"]
+  aceW=["missile","cannon","cannon"]
+  fear=0
+
+late-boot-unpinned (fear=50, rimWithoutGuns, redledger epic 3, NO spawn pin):
+  pin=false  (pirateOneDart still false at high fear)
+  pirateN=0 pirateW=[]
+  snaps: band=bargaining, resolve=34, dartSpent=false, mode=hunt
+  acePin=false aceW=[]  (unpinned ace also yields; boot-test ace pin is the bootspawn path)
+
+late-boot-bootspawn (same high-fear world, spawn pin ON):
+  pin=true   (pirateOneDart true)
+  acePin=true
+  pirateN=5 pirateW=["missile","cannon","cannon","cannon","cannon"]
+  snaps: personality/resolve held at 80, band=defiant, dartSpent false then true
+  aceW=["missile","cannon","cannon"]
+  fear=50 ms=["rimWithoutGuns"] mods=-10
+
+PASS: bootspawn pirateOneDart true; unpinned still false at high fear.
+
+================================================================================
+2. probe.mjs
+================================================================================
+Command:
+  node --import ./scripts/with-css-stub.mjs out/w83/missiles/probe.mjs
+Cwd: C:\Projects\WebSim
+Exit: 0
+Stdout: WAVE83 PROBE PASS
+
+Full 7-min boot skipped (cadence + probe passed).
+Browser skipped (no UI change).
+Designer skipped.
+
+================================================================================
+3. boot-test WAVE83 MISSILES w83spawn
+================================================================================
+File: scripts/boot-test.mjs
+Section: // ---- WAVE83 MISSILES ----  (starts ~18555)
+w83spawn (function starts ~18643):
+
+  live.state.personality = 10;
+  live.state.resolve = 80;
+  live.ai.resolveAt = ctx.world.time + 1e6;  // future — skip 1 Hz resolve
+  live.ai.hailed = true;
+
+Comment in harness:
+  "Cadence pin only: skip 1 Hz resolve so a late-boot pirate does not
+   yield into bargaining before the first dart."
+
+pirateOneDart pin (~18766):
+  pirateMissile.length === 1
+  && first weapon missile target player
+  && pirateCannon.length >= 1
+
+aceOneDart unchanged (first fire missile vs player).
+
+================================================================================
+4. npc.js hunt cadence (unchanged product path)
+================================================================================
+src/systems/npc.js — not edited for this fix (cadence still one dart then cannon).
+
+canNpcDart (~1080): fail-closed pirate|ace, not Unknowable, dartSpent false.
+
+hunt (~1522–1531):
+  if bargaining/demanding: no fire
+  else if target player && canNpcDart: dartSpent=true, emit missile vs player
+  else: emit cannon
+
+ace duel (~1892–1897): same one dart then cannon.
+
+================================================================================
+5. Verdict
+================================================================================
+CLEAN. Harness pin holds pirate/ace cadence under late-boot fear.
+Unpinned high-fear pirate still fails (bargaining, 0 npcFire) as designed.
+npc.js hunt still one dart then cannon.
+WAVE83 PROBE PASS.

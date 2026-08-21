@@ -90,7 +90,86 @@ omit frigate. **Wave 71 MATCH lamp leftover + MSN first impl
 landed 2026-08-20:** HUD MATCH lights on a rock lock; mining
 Jobs cards (two slots, accept, deliver, 600 s expire,
 one-in-one-out). BIO first impl later. Beautiful /
-Unknowables still omit frigate.
+Unknowables still omit frigate. **Wave 72 BIO first impl
+landed 2026-08-20:** hangar `grafted` allowlist; Gilded
+two-step graft; Beautiful standing `min(current, -10)` while
+any grafted row exists; no debit until an owner UU. Gift,
+pirate seed, living frigate, BIO-03 fleet art, and BIO-04
+psionics stay later. **Wave 73 design briefs landed
+2026-08-20:** TGT-05 reticle-lock (`docs/Tgt05ReticleLockDesign.md`);
+REP standing (`docs/RepStandingDesign.md`); EXP data trade
+(`docs/ExpDataTradeDesign.md`). No `src/` that wave.
+**Wave 74 first impl landed 2026-08-20:** KeyV reticle-lock
+(ships + rocks, direct-hit); Digit 9 Standing explain;
+data cargo persist + Assembly Archive desk (no UU).
+**Wave 75 design briefs landed 2026-08-20:** MSN-02
+renewable trade (`docs/Msn02TradeDesign.md`); BIO-03
+Beautiful NPC fleet (`docs/Bio03FleetDesign.md`); NPC
+missiles + incoming warning (`docs/NpcMissilesDesign.md`).
+No `src/` that wave. NPC missiles stay off until owner
+Q1/Q2. No aim-glass gauge.
+**Wave 76 first impl landed 2026-08-20:** MSN-02
+renewable trade (two slots, dest `otherSystemId`, origin
+quote, 600 s expire, cap 420); BIO-03 per-instance GPU
+swim from NPC speed. Player CPU swim stays unique. NPC
+missiles still off until owner Q1/Q2. No aim-glass gauge.
+**Wave 77 design briefs landed 2026-08-20:** MSN-02 hunt
+(`docs/Msn02HuntDesign.md`); passenger
+(`docs/Msn02PassengerDesign.md`); explore
+(`docs/Msn02ExploreDesign.md`). No `src/` that wave.
+NPC missiles still off until owner Q1/Q2. No aim-glass
+gauge. Espionage and faction-war still wait on REP-04.
+**Wave 78 first impl landed 2026-08-21:** MSN-02 hunt,
+passenger, and explore (two slots each, one-in-one-out,
+600 s fail-closed). Cap `4+10*N+16`. Unique four stay.
+NPC missiles still off until owner Q1/Q2. No aim-glass
+gauge. Espionage and faction-war still wait on REP-04.
+**Wave 79 design briefs landed 2026-08-21:** REP-04 kill
+attribution (`docs/Rep04AttributionDesign.md`); MSN-02
+espionage (`docs/Msn02EspionageDesign.md`); faction-war
+(`docs/Msn02FactionWarDesign.md`). No `src/` that wave.
+Kill delta, spy expose, and war target-rep stay
+fail-closed until owner numbers. NPC missiles still off
+until owner Q1/Q2. No aim-glass gauge.
+**Wave 80 first impl landed 2026-08-21:** REP-04 kill
+attribution helper (`docs/Rep04AttributionDesign.md`).
+Victim-faction only; `KILL_STANDING_DELTA` still null
+(no bag write). Digit 9 does not claim kills move
+standing. MSN-02 renewable espionage first impl
+(`docs/Msn02EspionageDesign.md`): two slots, rival dest,
+secret success employer +2 / target 0. MSN-02 renewable
+faction-war first impl (`docs/Msn02FactionWarDesign.md`):
+two slots, rival-gate dest, dest-faction patrol quarry,
+space-side witness, employer +2 / target 0. NPC missiles
+still off until owner Q1/Q2. No aim-glass gauge.
+**Wave 81 design briefs landed 2026-08-21:** TGT-05
+remaining lock categories
+(`docs/Tgt05LockCatsDesign.md`); MSN-03 authored
+chains (`docs/Msn03ChainsDesign.md`); BIO-03
+per-class look and bake
+(`docs/Bio03ClassLookDesign.md`). No `src/` that wave.
+Cone pixel cap, unique-equipment SKUs, and NPC missiles
+Q1/Q2 stay owner-open. No aim-glass gauge.
+**Wave 82 owner calls + first impl landed 2026-08-21:**
+`docs/OwnerDecisionsWave82.md`. Cone **12 px**. Kill
+delta **−5**. Graft **4000 UU**. EXP drop **0.20**, own
+**400**, rival **900**, launder **250**. TGT-05 station /
+gate / pod / landmark KeyV locks. NPC missiles Q1/Q2
+closed (pirate+ace, toast+song) but darts not shipped.
+MSN-03 SKUs named; chains not shipped. Spy expose −2 and
+war target −2 named; writes not shipped. Restitution
+**1200** named; desk not shipped. No aim-glass gauge.
+**Wave 83 impl landed 2026-08-21:** NPC missiles vs player
+(pirate+ace, toast `Incoming dart.` + song, pool 4). Spy
+expose dest −2 on accepted lapse. War success dest −2.
+Restitution desk 1200 UU on Digit 9. MSN-03 chains with
+owner SKUs. Police leave still deferred. No aim-glass gauge.
+**Wave 84 design briefs landed 2026-08-21:** NAV-01 plot
+(`docs/Nav01RouteDesign.md`); NAV-02 guidance
+(`docs/Nav02GuidanceDesign.md`); NAV-03 autopilot
+(`docs/Nav03AutopilotDesign.md`). No `src/` that wave.
+One persist key `nav`. Next hop `path[1]`. Restore does
+not resume flying Autopilot. No aim-glass gauge.
 
 ### Experience references
 
@@ -257,14 +336,20 @@ standard readout even if richer radar information is upgraded.
 ### TGT-04 — Automated weapons
 
 **Status:** first impl DONE (Wave 68). Forward auto-turret
-SKU `auto`. No incoming gauge. NPC turrets later.
+SKU `auto`. No incoming gauge. NPC turrets later. Wave 75
+brief: `docs/NpcMissilesDesign.md` — Q1/Q2 closed Wave 82
+(pirate+ace; toast+song). Darts not shipped. No aim glass.
 
 Turrets and automatic guns should be equipment upgrades with appropriate hull,
 mount, power, and balance restrictions.
 
 ### TGT-05 — Target under reticle
 
-**Status:** CAPTURED
+**Status:** first impl DONE (Wave 74; brief Wave 73:
+`docs/Tgt05ReticleLockDesign.md`). Wave 82 remaining
+categories: station / gate / pod / landmark `lockKind`
+(`docs/Tgt05LockCatsDesign.md`). Cone **12 px**. KeyT
+cycle stays ships (rocks in group 3).
 
 Add a targeting control that locks the targetable object currently under, or
 closest to, the center reticle. This is needed because a populated system can
@@ -423,7 +508,8 @@ Buy adds a row. Hangar pane mounts from any dock.
 **Status:** first slice DONE (Wave 64) = existing equipment on flat
 hangar fields; world keys stay mirrors. Missiles / turrets /
 seat-count mass first impl DONE (Wave 68,
-`docs/Shp03WeaponsDesign.md`). Power ledger stays out.
+`docs/Shp03WeaponsDesign.md`). Wave 75 NPC-missile brief:
+`docs/NpcMissilesDesign.md`. Power ledger stays out.
 
 - Allow weapons and other reasonable ship systems to be upgraded or swapped.
 - Mount availability depends on hull size and role.
@@ -444,7 +530,11 @@ seat-count mass first impl DONE (Wave 68,
 
 ## Initiative REP — Faction reputation and law
 
-**Status:** CAPTURED  
+**Status:** first impl DONE (Wave 74; brief Wave 73:
+`docs/RepStandingDesign.md`). Wave 82 kill delta **−5**
+(`docs/Rep04AttributionDesign.md`). Restitution **1200**
+and police leave stay later. War target −2 and spy
+expose −2 are named, not written. `RANK_LADDER` stays.  
 **Player problem:** The game does not adequately explain how to improve faction
 standing or show what the rating changes.  
 **Likely areas:** reputation/epic state, station UI, mission outcomes, HUD
@@ -496,8 +586,20 @@ Standing should affect:
 **Status:** first impl DONE (Wave 71; brief Wave 70:
 `docs/MsnMissionsDesign.md`). Mining family: two slots per
 system, sanitize on restore, accept, home delivery, 600 s
-fail-closed expire, one-in-one-out. Other MSN-02 families
-and MSN-03 authored chains later.  
+fail-closed expire, one-in-one-out. Wave 76 MSN-02 trade
+first impl: `docs/Msn02TradeDesign.md` (two slots, dest
+named other system, origin quote). Wave 78 MSN-02 hunt /
+passenger / explore first impl: `docs/Msn02HuntDesign.md`,
+`docs/Msn02PassengerDesign.md`, `docs/Msn02ExploreDesign.md`
+(two slots each; cap `4+10*N+16`). Wave 79 briefs:
+espionage `docs/Msn02EspionageDesign.md` and faction-war
+`docs/Msn02FactionWarDesign.md`. Wave 80 MSN-02
+espionage first impl (two slots; cap live+ESPIONAGE_ROOM;
+secret success). Wave 80 MSN-02 faction-war first impl
+(two slots; cap live+WAR_ROOM; dest-faction patrols;
+employer +2 / target 0). Wave 81 MSN-03 brief:
+`docs/Msn03ChainsDesign.md`. Wave 82 names last-step SKUs
+(Freehold `dart`, Red Ledger `auto`); chains not shipped.  
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  
@@ -601,6 +703,97 @@ need a scratch or standing ≤ −10. Pirates keep the wave-32 interest roll.
 **Regression risks to call out:** CPU cost from persistent simulation; traffic
 deadlocks; new avoidance breaking authored encounters; off-screen simulation
 creating impossible economic quantities; neutral AI failing to defend itself.
+
+---
+
+## Initiative NAV — Galaxy route plotting and autopilot
+
+**Status:** design freeze DONE (Wave 84; briefs
+`docs/Nav01RouteDesign.md`, `docs/Nav02GuidanceDesign.md`,
+`docs/Nav03AutopilotDesign.md`). Impl is a later serial.
+**Player problem:** Selecting a destination on the galaxy map does not currently
+turn that choice into useful in-flight navigation. The player must work out the
+gate sequence manually, and there is no option to delegate routine travel.
+**Desired experience:** Select a system once, see the route both on the galaxy
+map and while flying, then either follow the indicated gates manually or click
+Autopilot and let the ship fly the complete route.
+**Likely areas:** galaxy chart, system/gate graph and jump state, HUD markers,
+ship controls and steering, collision/hazard avoidance, save state.
+
+### NAV-01 — Plot a multi-system route
+
+**Status:** design freeze DONE (Wave 84). Impl later.
+
+- Selecting a reachable system on the galaxy map can create a route from the
+  current system to that destination.
+- The map visually highlights the selected destination, every connection in the
+  planned path, the ordered systems/gates, and the number of remaining jumps.
+- Route selection distinguishes unreachable destinations from destinations that
+  are merely distant.
+- The plotted route persists while the player closes the map, flies, docks, and
+  passes through intermediate systems.
+- The player can replace or clear the route at any time.
+- If the player deviates through a different gate, the game recalculates from
+  the new system when a valid route still exists and clearly reports when it
+  does not.
+
+### NAV-02 — In-flight next-gate guidance
+
+**Status:** design freeze DONE (Wave 84). Impl after NAV-01 persist.
+
+- While a route is active, the HUD clearly identifies the gate for the next hop.
+- Use an in-world marker and an off-screen directional indicator so the next
+  gate remains findable regardless of camera direction.
+- Show the next system name, final destination, distance to the next gate, and
+  remaining jump count without requiring the galaxy map to stay open.
+- The route indicator advances only after the corresponding jump completes.
+- Guidance must distinguish the routed gate from the currently selected combat
+  or interaction target; plotting a route must not unexpectedly replace a
+  target lock.
+
+### NAV-03 — Full-route autopilot
+
+**Status:** design freeze DONE (Wave 84). Impl after NAV-01 persist.
+
+- After selecting a destination system, the player can click **Autopilot** to
+  have the ship fly there rather than manually steering through each gate.
+- Autopilot steers to the routed gate, approaches and enters it correctly,
+  completes the jump, reacquires the next routed gate, and repeats until the
+  destination system is reached.
+- Autopilot uses the same solid-object, station/gate approach, traffic, and sun
+  avoidance rules expected of believable NPC navigation.
+- Clearly display the active destination, current leg, and a prominent cancel
+  control throughout the trip.
+- Player cancellation or deliberate manual flight input returns control
+  immediately and predictably without clearing the plotted route.
+- Define and communicate safe interruption behavior for danger, damage, combat,
+  a blocked approach, a missing gate, or another condition autopilot cannot
+  resolve. It must never silently continue into a lethal hazard.
+- Arrival means entering the selected destination system; autopilot should stop
+  and return control there unless a later feature explicitly adds an in-system
+  destination.
+
+**Acceptance direction**
+
+- From a galaxy-map selection several jumps away, the highlighted path and HUD
+  indicators lead the player through the correct ordered gates.
+- Manual route guidance remains accurate after every jump and recalculates after
+  an intentional deviation.
+- One Autopilot command can fly a representative multi-jump route to completion
+  without player steering or collisions.
+- The player can cancel during approach, gate transit, or an intermediate system
+  and regain stable manual control.
+- Autopilot never bypasses ordinary travel by teleporting, and it does not grant
+  immunity from the living world's events or hazards.
+- Save/load restores a plotted manual route safely; whether an actively flying
+  autopilot resumes or returns paused/manual is decided explicitly during the
+  design pass.
+
+**Regression risks to call out:** pathfinding choosing nonexistent or unusable
+connections; route markers competing with target HUD elements; control handoff
+causing sudden acceleration or rotation; autopilot colliding with moving ships
+or enlarged stations/gates; combat interruption becoming frustrating; saving
+mid-route restoring unsafe steering state.
 
 ---
 
@@ -800,7 +993,10 @@ narrative presentation.
 
 ## Initiative EXP — Exploration, information, and data trade
 
-**Status:** CAPTURED  
+**Status:** first impl DONE (Wave 74; brief Wave 73:
+`docs/ExpDataTradeDesign.md`). Wave 82: drop **0.20**,
+Archive own **400** / rival **900**, fixer launder **250**.
+Unknowables dock still waits.  
 **Player goal:** Exploration should reveal valuable knowledge, not only places
 or ordinary commodities.  
 **Likely areas:** mystery, landmarks/anomalies, scanning, contacts, faction
@@ -842,10 +1038,13 @@ galaxy and one another.
 
 ## Initiative BIO — Living ships, growth, and Abominations
 
-**Status:** brief landed Wave 70 (`docs/BioLivingShipsDesign.md`).
-No `src/` this wave. Living starter stays the benchmark.
-Living frigate buy stays omitted. BIO-04 psionic weapons out
-of first impl.  
+**Status:** first impl DONE (Wave 72; brief Wave 70:
+`docs/BioLivingShipsDesign.md`). Wave 82 graft list
+**4000 UU**. Destroy-Abomination Beautiful **+5** (recap
+−10 while the player still wears tissue). Gift, pirate
+seed, class evolution, and BIO-04 stay later. BIO-03
+motion slice Wave 76; look/bake brief Wave 81 (impl later;
+keep GLB). Living frigate buy stays omitted.  
 **Preserve:** The current living player ship is the quality benchmark. Its
 organic form, alien skin, and swimming motion that intensifies with speed are
 exactly the desired living-ship experience. Future work must not weaken it.  

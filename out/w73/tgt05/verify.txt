@@ -1,0 +1,70 @@
+## Status
+CLEAN
+
+## What I tested
+Design-only Wave 73 TGT-05. No browser. Did not run `npm run test:boot`. Did not run formatters or the full suite.
+
+Git: this task’s writes are markdown only.
+- Untracked this-task paths: `docs/Tgt05ReticleLockDesign.md`, `out/w73/tgt05/current-tgt-inventory.md`, `out/w73/tgt05/shared-contract.md`, `out/w73/tgt05/security-review.md`, `out/w73/tgt05/code-review.md`.
+- This verifier added `out/w73/tgt05/verify.txt`.
+- Dirty Wave 72 (ignored): `PROGRESS.md`, `docs/BioLivingShipsDesign.md`, `docs/PLAYER-EXPERIENCE-WISHLIST.md` (BIO status only; TGT-05 block 270–309 untouched), `scripts/boot-test.mjs`, `src/game/hangar.js`, `src/systems/shipyard-desk.js`, `src/systems/station.js`.
+- No TGT-05 strings in those `src/` diffs (`target` / `reticle` / `KeyV` / `cycleTarget` empty).
+
+Sampled inventory `file:line` vs live (2026-08-20). All sampled claims match (12+):
+1. `controls.js` 35–42 `TRACKED` = WASD RF QE THCX Digit1–4 Shift Space
+2. `controls.js` 51–80 `cycleTarget` ships + group-3 rocks, nearest wrap
+3. `controls.js` 82–85 / 87–93 rock lock + stale drop
+4. `controls.js` 139–141 KeyT; 188–193 LMB `button === 0`; 224 / 251 `targetPressed`
+5. `ctx.js` 27, 167–171 `targets`; 89 `pausePressed` unused by controls
+6. `reticle-aim.js` 11 `RETICLE_EDGE` 44; 17–68 visible-reticle ray; 61 `radius ?? 4` (live also `Math.max(2, …)`)
+7. `state.js` 30 `U.TARGET_RANGE` 600; 140–161 `createShipState` has no `radius`
+8. `hud.js` 16–17 FP recenter; 344–352 rock helpers; 998–1009 clamp; 1023–1025 `shipTgt`; 1467–1471 MATCH ship or rock; 1564 bracket; 1678–1695 T prompt / group-3 mine cue
+9. `ship.js` 649–703 MATCH; 651 ship; 653 rock; 829 rock damping comment
+10. `combat.js` 174 `CONVERGE_DOT` 0.72; 1077–1104 muzzle; 1146–1151 seeker ship-only; 1253–1274 mining pull; 1185–1206 turret ignores lock
+11. `station.js` 132 / 2882–2883 / 2963–2965 Digit 0 = last `DOCK_KEY_SERVICES` = shipyard
+12. `jump.js` 85–87 comments + `targets.current = null` at 87
+13. `npc.js` 2265–2270 stale ship drop
+14. `asteroids.js` 48–51 / 1877–1903 `id: i` list replace
+15. `main.js` 156–167 KeyP; `gate.js` 501–507 KeyG; `galaxychart.js` 242 KeyM; `src/game/save.js` 989 KeyL; `settings.js` 227 KeyO
+16. `src/game/gate-scale.js` 14 `BORE_RADIUS` 30; 32–33 `ZONE` 60
+17. `modelsbrowser.js` innerHTML 114, 317, 369, 460, 468, 602; none in `hud.js`
+18. `hail.js` 74–91 salvage as ship; 407 Digit 1–9 intents
+19. `pods.js` 8–10 / 515–527 / 536–542 / 578–611 not selectable
+20. `landmarks.js` 11–15 / 71–79 / 82–88 / 91–97; `model-catalog.js` 168 anomaly kind
+21. `world.js` 1240 / 1253–1271 wreckMeshes decorative
+22. `PROGRESS.md` 38–42 `id === array index`
+23. `song.js` 113–128 HUD-02 gain ≤ 0.08 / duration ≤ 0.35 s; 415–438 `CUES[event.type]`
+24. `src/game/save.js` 74–97 `WORLD_FIELDS` has no `targets`; 14 key `rimward-save-v1`; 105 `RESERVED_IDS`
+
+KeyV / KeyZ / KeyN / Tab: no `src` flight binds. Gamepad API: no `src` hits.
+
+Brief vs contract: no freeze contradiction. Contract wins; brief merge table matches (KeyT keep; KeyV proposed; rocks outside group 3 yes; station/gate defer; cone not invented; PR2 direct-hit if no owner cap).
+
+Wishlist TGT-05 270–309 vs contract: occlusion nearer-sphere; cone fail-closed until owner pixel cap; miss `commLine` literal; MATCH rock stays / later kinds refuse; non-ship rails fail closed. Gamepad deferred (no live API). Audio waits on optional PR4 `reticleLock { hit }`.
+
+Owner Qs listed (binding, rocks outside group 3, station/gate). Cone marked **proposed, needs owner**. Live 600 / 0.72 / 44 / 4 are cited, not invented.
+
+Security review covers XSS `textContent`, proto/`lockKind` allowlist, `emit` payload `{ hit }` only (live `ctx.emit` spreads `data` at `ctx.js` 228–229).
+
+Non-goals held: no `src/` this wave; no HUD-02 reopen; no new `U.*` in feature PR; no innerHTML; no AST UUID; no persist of lock.
+
+## Bugs found
+None.
+
+Non-blocking notes (do not fail Wave 73):
+- Contract §0.6 / §3.4 / §10.3 say “obey §5.3”. There is no §5.3. Fail-closed station/gate rules live in §5 table + §4. Meaning is clear.
+- Code-review glow cite `gate-scale.js` `RING_RADIUS * 3.2` is live `src/systems/gate.js` 78 (`glowBaseScale = RING_RADIUS * 3.2`).
+- Inventory names `save.js` / `gate-scale.js` without `src/game/`. Line numbers match `src/game/save.js` and `src/game/gate-scale.js`, not `src/systems/`.
+- Pick radius: inventory/contract `state.radius ?? 4`; live aim is `Math.max(2, s.state?.radius ?? 4)`. Ships have no `radius`, so both yield 4 today.
+
+## Environmental issues
+None. Design-only; no browser required. Graph resolve: `proceed_unmodeled`.
+
+## Evidence
+- This file: `out/w73/tgt05/verify.txt`
+- Brief: `docs/Tgt05ReticleLockDesign.md`
+- Contract: `out/w73/tgt05/shared-contract.md`
+- Inventory: `out/w73/tgt05/current-tgt-inventory.md`
+- Security: `out/w73/tgt05/security-review.md`
+- Code review: `out/w73/tgt05/code-review.md`
+- Wishlist TGT-05: `docs/PLAYER-EXPERIENCE-WISHLIST.md` 270–309

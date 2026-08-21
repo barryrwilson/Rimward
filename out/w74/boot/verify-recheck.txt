@@ -1,0 +1,82 @@
+WAVE74 boot verifier recheck
+Date: 2026-08-20
+Status: CLEAN
+Did not edit src/. Did not edit the harness. Wrote this file only.
+
+## Status
+CLEAN
+
+WAVE74 pins: 33 keys, all true. No WAVE74 PINS FAIL.
+WAVE72 BIO: still present after WAVE72; 47 keys, all true. No WAVE72 BIO FAIL.
+WAVE74 does not rewrite WAVE72 BIO pins. WAVE74 does not touch WAVE4 / WAVE26 / WAVE35.
+
+## What I tested
+1. Read WAVE74 in scripts/boot-test.mjs (lines 14981–15348). WAVE72 BIO block is immediately above (14515–14978) and is unchanged as a fail unit (`wave72 bio:` JSON + `WAVE72 BIO FAIL`).
+2. Ran `npm run test:boot` on this tree. Read the `wave74 pins:` and `wave72 bio:` lines. Did not trust the worker summary alone.
+3. Spot-checked imports against src/ exports.
+
+## Boot evidence
+Command: `npm run test:boot` (`node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs`)
+Exit: 1 (expected; known WAVE4/26/35 banners)
+
+wave74 pins JSON (all true):
+keyTCycles, group3AddsRocks, group1NoRock,
+keyVInTracked, notKeyT, notLmb, notDigit0,
+skipDestroyed, rockLockRow, livePick,
+missNoInnerHtml, missileNullOnRock, noReticleU,
+protoDropped, nanToZero, beautifulMissing, markedKept,
+restoreProto, restoreNan, restoreBeautiful,
+digit9Epics, digit0Shipyard, noCrimeScore, rankLadder,
+dataRoundtrip, missingSourceDropped, unknownDropped,
+priceOfDataCube0, archiveAssembly, archiveFreeholdClosed,
+unknowablesDockAbsent, spawnSkip, survivorUnchanged.
+
+wave72 bio JSON: all 47 values true (swim.*, hud.*, omit.*, buy.*, src.*, unkBanner, unkRow, restoreCap, restoreLivingDrop, gildedDock, digit0Shipyard, graft*, esc*, livingNoOffer).
+
+No `WAVE74 PINS FAIL`. No `WAVE72 BIO FAIL`.
+
+## Integrity
+- WAVE74 is a new IIFE after WAVE72. It does not change WAVE72 object keys or the `WAVE72 BIO FAIL` gate.
+- WAVE74 does not alter WAVE4 fence, WAVE26 ferry/haul, or WAVE35 haul pins.
+- Known FAIL banners this run (unchanged cluster):
+  WAVE4 FENCE FAVOR FAIL
+  WAVE26 FERRY QUOTE FAIL
+  WAVE26 HAUL QUOTE FAIL
+  WAVE26 LANE DELIVERY FAIL
+  WAVE26 OLD-SAVE FALLBACK FAIL
+  WAVE26 SAVE FIELDS FAIL
+  WAVE26 RESTORE FAIL
+  WAVE35 HAUL GATE DELIVERY FAIL
+- Harness ended `BOOT TEST FAIL — 63 errors`. The extra counter vs eight WAVE banners is not a WAVE74 banner. WAVE74 is last and did not add `WAVE74 PINS FAIL`.
+
+## Imports
+Correct modules, not the wrong files:
+- src/game/reticle-aim.js — pickReticleLock, reticleAimPoint
+- src/game/state.js — createShipState, RANK_LADDER, U
+- src/game/save.js — sanitizeCargoList, sanitizeReputation, WORLD_FIELDS, restore
+- src/systems/station.js — DOCK_KEY_SERVICES, priceOf, archiveDeskAllowed, standingLadderLines
+- src/game/data-trade.js — hasDataDropRate, spawnDataPod, maybeSpawnDataFromWreck, standingRead
+Source slices (not exported): src/systems/controls.js TRACKED, src/systems/combat.js liveMissileLock.
+
+## Pin honesty (non-blocking)
+Most TGT / REP / EXP pins can fail:
+- Live KeyT cycle: group 1 excludes the planted rock; group 3 includes ship + rock.
+- pickReticleLock / reticleAimPoint: skip destroyed, return the list row, pick a live NPC.
+- KeyV miss while docked: comm line, sentinel lock not stolen, no innerHTML on the event.
+- sanitizeReputation / restore: drop enumerable __proto__, drop NaN, omit missing beautiful, keep Marked hollow=-40, drop crimeScore/wanted.
+- sanitizeCargoList / restore: dataCrystal captured round-trip without name; dataCube without source dropped; unknown SKU dropped; survivor fields kept; stuffed priceOf(dataCube/dataCrystal) is 0.
+- archiveDeskAllowed(assembly) true; freehold/independent/placeholder false; unknowables not in DETAIL_STATIONS.
+- spawn skip: hasDataDropRate() false and spawn helpers return null.
+
+Mixed / source-only (same class as prior waves; still fail if strings leave the file):
+- missileNullOnRock: local seekerOf is a copy of liveMissileLock’s first guard. The planted rock has no object/state, so seekerOf(rock) is tautological. The fail-able part is the combat.js extract (`function liveMissileLock`, `t.state.destroyed`, `!t?.object`). liveMissileLock is not exported, so the pin cannot call it.
+- notLmb: regex on controls.js mousedown → fireDown. Can fail if that path is removed.
+- notDigit0 / KeyV-in-TRACKED: slice of TRACKED plus live KeyV/KeyT edge flags. The TRACKED includes are source search; the edge flags are live.
+
+None of these are always-true theater that cannot fail as a group. WAVE74 still gates `Object.values(w74).every(Boolean)`.
+
+## Bugs found
+None for this task.
+
+## Environmental issues
+Boot-test exit 1 from the known WAVE4/WAVE26/WAVE35 cluster (and a 63 error counter). WAVE74 and WAVE72 JSON remain all true.

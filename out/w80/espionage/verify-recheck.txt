@@ -1,0 +1,65 @@
+## Status
+CLEAN
+
+## Verdict
+Re-dispatch claims hold. Isolated pin-check PASS. Designer Major accepted “file here” copy is gone. Reward missing-payQuoted fallback matches explore. Live WAVE80 REP-04 bioPodStay no longer forbids 'espionage' strings. Previous CLEAN product flags still hold.
+
+## Isolated pin-check
+Command: `node --import ./scripts/with-css-stub.mjs out/w80/espionage/pin-check.mjs`
+Result: WAVE80 ESPIONAGE PIN-CHECK PASS (exit 0)
+All 39 keys true: uniqueFour, keepMineFh, keepTradeFh, keepHuntFh, keepPassengerFh, keepExploreFh, keepSpyFh, keepSpyHearth, dropProto, dropShortId, dropWrongPrefix, dropNeed2, dropBadSys, dropSameDest, dropCommodityAndFaction, capFormula, capFits, floodHeal, fieldsJobs, stuffedDestKept, stuffedFieldsDropped, kindAllow, idPrefix, saveIdPrefix, helpers, boardHide, originAccept, destRebind, noInnerHtml, noFullSafeId, uniqueHaul, haulDestBind, noWarKind, noDataGrant, targetSkip, digit2, acceptedNamesHome, acceptedNoFileHere, acceptedPayFallback.
+
+## Claim 1 — accepted spy names home dock
+Grep of `src/systems/station.js`: consecutive `file here` does not appear.
+Accepted spy paths name `homeName`:
+- Reward (accepted): `File intel from ${destName} at ${homeName} — pays ${est} UU` (~4087–4088)
+- State (progress >= 1): `intel aboard — file at ${homeName}` (~4165)
+- State (gather): `ACCEPTED — gather at ${destName} then file at ${homeName}` (~4167)
+- Detail (all states): `Gather at ${destName}. File at ${homeName}${employerLine}.` (~4005)
+- Success comm: `Intel from ${destName} filed at ${homeName}` (~3333)
+Offered reward still uses origin-board shorthand `File intel from ${destName} here` (~4089). Designer audit allowed that. Major accepted-card bug is closed.
+
+## Claim 2 — missing payQuoted on reward
+Accepted spy reward (~4084–4086):
+`Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, explorePayBase())`
+Matches explore. Pin `acceptedPayFallback` true.
+Tick payout still pays `payQuoted` or 0 (~3322). That is the success-pay contract, not the card-reward bug.
+
+## Claim 3 — WAVE80 REP-04 bioPodStay
+Live `scripts/boot-test.mjs` ~16879–16882:
+`bioPodStay` checks BIO/POD UU (4/1, 160/240), `freehold += PATROL_REP`, and `!station80.includes("kind: 'war'")`.
+No `!save80.includes("'espionage'")`. No `!station80.includes("kind: 'espionage'")`.
+Stale replica `out/w80/rep04/pin-check.mjs` ~169–174 still forbids those strings. That replica is not the live boot pin. Not a product flag.
+
+## Production still ships spy
+- `JOB_KINDS` includes `'espionage'` (`src/game/save.js` ~141)
+- `kind: 'espionage'` and `spy-${sysId}-` in `src/systems/station.js`
+- Save prefix gate `tokens[0] !== 'spy'`
+- Unique four exact: `bounty-ace`, `patrol-lane`, `haul-provisions`, `ferry-consignment` in UNIQUE_JOB_KIND and makeJobs
+- No `kind: 'war'` in station.js
+- No `innerHTML` in station.js (`h()` uses textContent)
+
+## Previous CLEAN product flags
+- Target standing write on success: no (`reputation[targetFac]` absent from station.js; employer `SYSTEMS[origin].faction` + MINING_REP only)
+- Dest rebound: `job.destSystem = dest` after `resolveEspionageDest` on accept (~3908–3925); pin destRebind true
+- Origin accept: `currentSystem !== job.originSystem` notice, no state flip (~3897–3900); pin originAccept true
+- Unique four dropped: no
+- Data cargo grant: no (pin noDataGrant true)
+- War kind shipped: no
+- innerHTML in Jobs/station: no
+
+## Full boot
+Not re-run. Isolated pin-check is the assigned gate. Full `npm run test:boot` is long. Ignore WAVE4 / WAVE26 / WAVE35.
+
+## Playwright
+[NO BROWSER COVERAGE]
+
+## Do not flag
+- Known WAVE4 / WAVE26 / WAVE35
+- Digit overflow past 9 (existing Jobs UX)
+- Offered-card “here” shorthand at origin
+- Stale isolated `out/w80/rep04/pin-check.mjs` replica (live boot-test is fixed)
+- Tick pay 0 when `payQuoted` missing (contract, not card copy)
+
+## Notes
+Designer Major at former 4086 / 4161–4163 is fixed. Designer Minor pay-fallback on the reward line is fixed.

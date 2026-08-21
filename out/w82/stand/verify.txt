@@ -1,0 +1,17 @@
+Wave 82 stand/graft probe (re-dispatch recap)
+Command: node --import ./scripts/with-css-stub.mjs out/w82/stand/probe.mjs
+Result: PASS all
+Extra: node --import ./scripts/with-css-stub.mjs out/w82/stand/extra-probe.mjs
+Result: PASS extra all (abom.playerGrafted.capLeak -10)
+KILL_STANDING_DELTA === -5
+ABOMINATION_DESTROY_BEAUTIFUL_DELTA === 5
+GRAFT_LIST_UU === 4000
+Civilian/patrol player lastAttacker: victim -5
+Grafted victim, player not grafted: beautiful +5
+Grafted victim, player hangar grafted: beautiful stays -10
+Beautiful victim: -5 only
+Pirate / ace / independent / reserved / npc attacker: skip
+graftMounted short/NaN/missing credits: refuse credits, no flag, no debit
+graftMounted 4000/5000: debit, grafted, Beautiful cap -10, no remount
+Hostile Gilded / wrong banner: no debit
+Browser Gilded Digit 0 hangar graft confirm: skipped (optional; 5173 not required)

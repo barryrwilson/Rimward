@@ -1,0 +1,41 @@
+## Status
+CLEAN
+
+## What I tested
+1. Harness: `node --import ./scripts/with-css-stub.mjs out/w76/msn02/probe.mjs` — WAVE76 PROBE PASS. Cap 420 at 100 systems. Unique four + mine-freehold-0 + trade-freehold-0 kept. trade-__proto__-0 dropped. Need 1 / livingRock / survivor / dataCrystal / restricted dropped.
+2. Harness: `npm run test:boot`. wave76 msn all keys true. wave71 msn all true. wave72 bio all true. wave74 pins all true. Known FAILs only: WAVE4 fence, WAVE26 ferry/haul/save, WAVE35 haul. No WAVE76 FAIL banner.
+3. Static contract vs out/w75/msn02/shared-contract.md and docs/Msn02TradeDesign.md:
+   - kind 'trade'; unique four stay in makeJobs (haul/ferry ids unmigrated).
+   - Trade need HAUL_UNITS 5; mining need still FERRY_UNITS 4.
+   - Pay uses origin jobPayFor; dest gate uses otherSystemId (stuffed dest ignored).
+   - Accept refuses when currentSystem !== originSystem.
+   - TRADE_SEED is provisions / refinedMetals / rawOre (no livingRock / survivor / data).
+   - station.js has no innerHTML; h() uses textContent.
+   - WORLD_FIELDS still has one 'jobs' key; no 'missions'; state.js not in this worker diff.
+   - Employer write is SYSTEMS[origin].faction with Object.hasOwn(FACTIONS); not patrol freehold +=.
+   - Expire fail-closed (no pay); complete sets failed before pay; replaceTradeJob splices then pushes a new object.
+   - extraOfferedTrade + cap 4+4*N+16.
+4. Browser at http://localhost:5173/ (Playwright): New Game, Freehold Greenhand, dock Freehold Landing, Digit 2 Jobs.
+   - Two trade cards (Raw ore + Refined metals, need 5, dest Veridian Spire, remaining time) plus unique four, pirate overlays, two mining (need 4).
+   - Mouse Accept (10) accepted the overflow trade card. Accepted copy showed dest, have/need, time, stamped 1848 UU.
+   - Cheat 5 refinedMetals; warp/dock Veridian. Credits 350 → 2198. Cargo emptied. trade-freehold-1 gone. New trade-freehold-2 offered (provisions, slot 1). reputation.freehold +2.
+   - Dest Jobs hides origin offered trade; origin board shows the replacement. Console: no error-level messages on Jobs.
+
+## Bugs found
+None.
+
+## Environmental issues
+None. Dev server was already up at http://localhost:5173/. Reused it. Boot suite exit is FAIL for the known WAVE4/WAVE26/WAVE35 pins (41 boolean errors in those blocks). That is not this task.
+
+## Evidence
+- Probe: WAVE76 PROBE PASS (cap 420, nSys 100).
+- Boot wave76 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"dropProto":true,"dropNeed1":true,"dropBadCargo":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needFive":true,"commodityAllow":true,"destOther":true,"noAsteroidId":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"expireNoPay":true,"noInnerHtml":true,"miningNeedUntouched":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+- Boot wave71 msn all true (mining still live).
+- Live: C:\Projects\WebSim\out\w76\msn02\live\01-dock-menu.png
+- Live: C:\Projects\WebSim\out\w76\msn02\live\02-jobs-board.png
+- Live: C:\Projects\WebSim\out\w76\msn02\live\03-trade-accepted.png
+- Live: C:\Projects\WebSim\out\w76\msn02\live\04-dest-paid.png (CREDITS 2198 UU)
+- Live: C:\Projects\WebSim\out\w76\msn02\live\05-dest-jobs.png
+- Live: C:\Projects\WebSim\out\w76\msn02\live\06-origin-replaced.png (Haul Raw ore + new Haul Provisions)
+- Cite: src/game/save.js JOBS_SANITIZE_MAX / extraOfferedTrade / TRADE_NEED 5
+- Cite: src/systems/station.js TRADE_SLOTS_PER_SYSTEM, makeJobs unique four, acceptJob origin-only, tickDeliveryJobs otherSystemId dest + failed-first pay

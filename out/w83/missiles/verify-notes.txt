@@ -1,0 +1,30 @@
+Wave 83 NPC missiles — verification
+
+Command:
+  node --import ./scripts/with-css-stub.mjs out/w83/missiles/probe.mjs
+
+Result: WAVE83 PROBE PASS
+
+Pins:
+- NPC_MISSILE_POOL = 4, MISSILE_POOL = 8
+- spawnNpcMissile exists; spawnNpcShot refuses missile
+- 5th NPC dart drops; player ammo stays 8; player pool still 8
+- missing target drops; Unknowable combat spawn drops
+- pirate/ace: first npcFire is missile target player, then cannon
+- Unknowable NPC never missile npcFire
+- trader/miner/patrol never missile npcFire
+- toast textContent === 'Incoming dart.'; volley uses one slot
+- no inbound/aspect/lock-box class on #hud
+
+pirateOneDart (boot): late-boot fear + rimWithoutGuns + Ledger pirateResolveMod
+put hunt pirates in bargaining (0 npcFire) while aces still dart. w83spawn now
+pins personality/resolve and sets resolveAt in the future so cadence is measured,
+not yield. Evidence: node --import ./scripts/with-css-stub.mjs out/w83/missiles/pirate-cadence.mjs
+— late-boot-unpinned pirateOneDart false; late-boot-bootspawn true (missile then cannon).
+
+Boot-test: WAVE83 MISSILES section is at the end of scripts/boot-test.mjs.
+Full npm run test:boot exceeds 5 minutes here. Known WAVE4 / WAVE26 / WAVE35 FAILs stay unfixed.
+
+Toast literal: Incoming dart.
+Pool constant: NPC_MISSILE_POOL
+Song cue: CUES.npcFireMissile (still triggered from npcFire)

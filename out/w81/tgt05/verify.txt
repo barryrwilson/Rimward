@@ -1,0 +1,157 @@
+Wave 81 TGT-05 remaining lock categories verifier
+Date: 2026-08-21
+Scope: markdown-only kind 'tgt05 lock cats'. Do not edit src/. Test this brief only.
+Rule: live code wins.
+
+STATUS: CLEAN
+
+WHAT I TESTED
+- Worker file set vs src/ and sibling docs/out/w81
+- lockKind grep in src/ (must be 0 unless pre-existing)
+- Live KeyV / pickReticleLock / reticleLock { hit } / KeyT cycle / Digit 0 shipyard
+- Brief vs contract vs inventory (contract wins on conflict)
+- Cone pixel/degree invention; KeyT/KeyV reopen
+- MATCH / mining / hail / combat fail-closed for station/gate/pod/landmark
+- Sibling writes: Msn03 / Bio03 / Tgt05ReticleLock / wishlist / PROGRESS.md
+- file:line cites vs live src
+- XSS / persist / emit payload { hit } only / innerHTML
+- Salvage stays ships; aftermath debris stays out
+
+SCOPE
+- Worker files present:
+  docs/Tgt05LockCatsDesign.md
+  out/w81/tgt05/current-tgt-inventory.md
+  out/w81/tgt05/shared-contract.md
+  out/w81/tgt05/security-review.md
+  out/w81/tgt05/code-review.md
+- src/ grep lockKind: 0 hits. This worker did not land lock-cats impl.
+- pickReticleLock still walks asteroid list rows + live ships only
+  (reticle-aim.js 106–142). No station/gate/pod/landmark pick in src.
+- Sibling untracked docs/Msn03ChainsDesign.md and docs/Bio03ClassLookDesign.md
+  exist from parallel Wave 81 workers (other out/w81 trees). This worker’s
+  five files do not invent sibling numbers.
+- docs/Tgt05ReticleLockDesign.md mtime 2026-08-20 (prior wave). This worker
+  did not edit it.
+- PROGRESS.md / wishlist dirty in the tree from earlier same-day work
+  (mtimes before the tgt05 set). Not this worker’s touch list.
+- src/ is dirty from prior waves (KeyV already ships). No lockKind there.
+
+LIVE CODE (code wins)
+- TRACKED includes KeyV. controls.js 37–44.
+- KeyV edge: keydown 190–191; publish 269; tryReticleLock 313.
+- tryReticleLock: pickReticleLock; miss does not steal; hit assigns current
+  and emit('reticleLock', { hit: true }). controls.js 114–127.
+- Miss: commLine literal 'Nothing under the reticle.' +
+  emit('reticleLock', { hit: false }). controls.js 97, 109–112.
+- Frozen event comment: ctx.js 227
+  'reticleLock' { hit }  // payload is { hit: boolean } only
+- ctx.emit spreads data: { type, t: ctx.world.time, ...data }. ctx.js 230–231.
+- pickReticleLock: disc contains reticle pixel; overlap → smallest positive
+  ray-t; no cone. reticle-aim.js 91–144 (fn starts 96).
+- fillCamRay: FP offset 0,0; clamp RETICLE_EDGE 44. reticle-aim.js 11, 33–39.
+- HUD hub clamp hardcoded 44. hud.js 1000–1006.
+- cycleTarget KeyT: ships in U.TARGET_RANGE; rocks only weaponGroup === 3;
+  nearest then wrap. No station/gate/pod/landmark. controls.js 54–82, 175–176, 292.
+- Digit 0 = shipyard: DOCK_KEY_SERVICES last entry 'shipyard' station.js 152;
+  overlay level-1 d===0 selects last service 5175–5177. KeyY 5172.
+  Wave 73 132 / 2963 are now comments / war-job helpers. Code wins.
+- U.TARGET_RANGE 600; U.DOCK_RANGE 45; U.SCOOP_RANGE 10. state.js 28–30.
+- JUMP.zone 60. state.js 542–543.
+- BORE_RADIUS 30; RING_RADIUS alias. gate-scale.js 14, 61.
+- Glow scale RING_RADIUS * 3.2 = 96. gate.js 78, 348.
+- Station envelope comment |x|,|z| <= 32, y in [-26, 33]. station.js 389–390.
+- Dock D in zone. station.js 5276–5281. ctx.station record 3793–3800.
+- Jump D in zone. gate.js 535–560. Hub G 501–507.
+- Overlay textContent 'JUMP — ' + dest.name. gate.js 578.
+- POD_RADIUS 0.9. pods.js 35. Scoop 603–616. emit podCollected { pod } 613.
+- LANDMARK_RADIUS 100; CLUE_RADIUS 35. mystery.js 37–38, 106–128.
+- Chart marks HUD textContent; aria-hidden. hud.js 24–30, 631–648, 1332–1372, 1421–1433.
+- keeperChartMark writes mystery.charted landmark ids. contacts.js 387–400.
+- wreckMeshes decorative. world.js 1240, 1253–1268.
+- AST id: i at list build. asteroids.js 1878.
+- WORLD_FIELDS has no 'targets'. save.js 75–97.
+- KEY 'rimward-save-v1'. save.js 65.
+- innerHTML in src/**/*.js: modelsbrowser.js only (6 hits). HUD el() is
+  textContent. hud.js 224–229.
+- CUES.reticleLock square 1480/0.06/0.05. song.js 119. Not in FAMILY_CUES 123–129.
+- Jump nulls targets.current. jump.js 85–87.
+- Stale ship drop npc.js 2271–2276. Stale rock drop controls.js 84–95, 282–290.
+
+LIVE DISCRIMINATORS (hole still live; kinds not written)
+- isRockLock: t.position && !t.object && !t.state. controls.js 85–87; hud.js 350–352.
+- hud isRockTarget weaker: position && !state (no !object). hud.js 345–347.
+- ship.js MATCH rockLock same shape. 650–703 (rockLock 653).
+- combat mining pull: t.position && !t.object (no !state) OR Unknowable ship.
+  combat.js 1264–1274.
+- HUD bracket isShip: state || object; else ASTEROID. hud.js 1564–1591.
+- Hail salvage: live.state && live.object && disabled && in ctx.ships.
+  hail.js 75–81, 425–427. Already no-op on untagged {position}.
+- Seeker liveMissileLock needs object+parent+state. combat.js 1146–1152.
+  Already null for rocks/gates.
+- Gun converge needs object+state. combat.js 1086–1104.
+- Combat rail shipTgt needs state. hud.js 1023–1026.
+- MATCH lamp: flags.matchSpeed && (shipTgt || isRockLock). hud.js 1467.
+
+CONTRACT / BRIEF LAW (agree; contract is merge law)
+- Wave 81 markdown only. Later serial PR1–PR5. No src in this wave.
+- Keep KeyT cycle. Keep KeyV. No new bind. No LMB overload. No KeyT/KeyV reopen.
+- This slice in: station, gate, pod, landmark (anomaly = landmark kind).
+  Out: aftermath wreckMeshes. Salvage stays a ship. No lockKind salvage.
+- lockKind wrappers required on the four kinds. Do not stamp ctx.station,
+  gate assembly, live pod, or SYSTEMS row. Pod wrapper { lockKind, position, pod }.
+- Ships and asteroid list rows stay untagged.
+- Rock test later: list.indexOf AND !lockKind. Unknown {position} fails closed.
+- PR2 may return hits from pickReticleLock; must not assign wrappers until
+  PR3 tightens rock tests first (dropStaleRockLock would null them).
+- MATCH refuse four kinds. Mining pull list-row rocks only (+ Unknowable ship).
+  Hail / seeker / combat rail / lead / RANGE ship-only.
+- Dock D / jump D stay proximity zones. Lock does not dock/jump.
+- Cycle-T must not gain station/gate/pod/landmark.
+- Pick: fillCamRay path, FP 0,0, RETICLE_EDGE 44. Direct-hit body discs.
+  Station 32 (envelope, < dock 45). Gate bore 30 (< zone 60). Pod 0.9.
+  Landmark mesh bound; skip if none. Not glow 96 / dock 45 / jump 60 /
+  discovery 100 / clue 35 / magnet 30.
+- Cone pixel cap proposed, needs owner. Do not invent pixels or degrees.
+  Do not copy CONVERGE_DOT 0.72 (~44° gun cone). Until owner cap: direct-hit.
+- Reuse reticleLock { hit: boolean } literals only. No new frozen event.
+- No persist of targets. No innerHTML. textContent. state.js READ-ONLY.
+- Digit 0 stays shipyard. HUD-02 closed.
+- Landmark authored id; never clue id/text. Chart marks inert HUD.
+- Brief merge table matches contract §0 / §1 / §3 / §5 / §9 / §10.
+
+FLAG CHECKS (none tripped)
+- lockKind landed in src: no
+- KeyV / pickReticleLock / reticleLock { hit } missing: no
+- KeyT cycle dropped: no
+- Digit 0 not shipyard: no (152 + 5175–5177 live)
+- Cone pixel/degree invented as pick cap: no
+- KeyT/KeyV reopened: no
+- MATCH/mining/hail/combat allowed on four kinds: no (contract refuse;
+  hail/seeker/combat already fail-closed on shape)
+- Salvage kind invented: no
+- Aftermath wreck in: no
+- New persist / WORLD_FIELDS targets: no
+- innerHTML allowed for TGT HUD: no
+- emit lock ref / payload besides { hit }: no (forbidden)
+- Sibling Msn03 / Bio03 / Tgt05ReticleLock / wishlist / PROGRESS written
+  by this worker: no
+- Stale cite frozen as a wrong law: no
+
+NON-FLAGS (cites slightly wide; strings still true)
+- pickReticleLock cited 91–144; function starts 96 (comment 91–95). Law holds.
+- WORLD_FIELDS cited 75–90; list continues hangar/fieldOre through 97.
+  Still no 'targets'. Would not invent a persist key.
+- Station Beautiful Ones comment ~30u radius (station.js 543–544) vs pick
+  freeze 32 from envelope comment 389–390. Contract names 32 and forbids
+  dock 45 / box diagonal ~46. Not a brief/contract split.
+- hud.js 998–1009 vs 1000–1006 for FP clamp. Offset 0,0 + 44 is live.
+- Inventory records the live rock-shape hole; contract closes it. Intended.
+
+GRAPH
+- This task is data/markdown vs live src. No browser. No external send.
+
+BUGS FOUND
+(none)
+
+ENVIRONMENT
+(none)

@@ -1,0 +1,24 @@
+npm run test:boot
+
+wave74 pins: all true
+  keyTCycles group3AddsRocks group1NoRock
+  keyVInTracked notKeyT notLmb notDigit0
+  skipDestroyed rockLockRow livePick
+  missNoInnerHtml missileNullOnRock noReticleU
+  protoDropped nanToZero beautifulMissing markedKept
+  restoreProto restoreNan restoreBeautiful
+  digit9Epics digit0Shipyard noCrimeScore rankLadder
+  dataRoundtrip missingSourceDropped unknownDropped
+  priceOfDataCube0 archiveAssembly archiveFreeholdClosed
+  unknowablesDockAbsent spawnSkip survivorUnchanged
+
+wave72 bio: all true (preserved)
+
+No WAVE74 PINS FAIL.
+
+Known pre-existing banners (unchanged):
+  WAVE4 FENCE FAVOR FAIL
+  WAVE26 FERRY QUOTE / HAUL QUOTE / LANE DELIVERY / OLD-SAVE FALLBACK / SAVE FIELDS / RESTORE FAIL
+  WAVE35 HAUL GATE DELIVERY FAIL
+
+Harness reached BOOT TEST FAIL — N errors (pre-existing counters). Exit 1 expected.

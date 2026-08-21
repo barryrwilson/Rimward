@@ -1,0 +1,107 @@
+systems {"current":"freehold","hasFreehold":true,"hasCensus":true,"hasArchive":true,"factions":{"freehold":"freehold","as_census":"assembly","as_archive":"assembly"}}
+freehold.setup {"requested":"freehold","hasDest":true,"system":"freehold","faction":"freehold","docked":true}
+freehold.home {"docked":true,"system":"freehold","faction":"freehold","buttons":["1 — Market","2 — Jobs board","3 — Bar","4 — Feed & tend","5 — Repair","6 — Outfitting","7 — People","8 — Launch","9 — Standing","0 — Shipyard"],"overlaySlice":"FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/201 — Market2 — Jobs board3 — Bar4 — Feed & tend5 — Repair6 — Outfitting7 — People8 — Launch9 — Standing0 — ShipyardFreehold Compact: Stranger (+0 rep)Next: Known (10)1-9, 0 select service · Esc/B launch"}
+SHOT 01-freehold-home.png
+PIN PASS fh.docked
+PIN PASS fh.digit0.menu
+PIN PASS fh.digit9.menu
+freehold.digit0 {"buttons":["← Back (Esc)","1 — Hangar","2 — Yard","3 — Mount"],"overlaySlice":"FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/20← Back (Esc)SHIPYARDHangar at every dock. Yard sales wait on papers.1 — Hangar2 — YardHANGARMounted id hull_startershelight · Independent · mounted3 — Mount1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc backEsc back · Esc again / B launch"}
+SHOT 02-freehold-shipyard.png
+PIN PASS fh.digit0.shipyard
+freehold.digit9 {"buttons":["← Back (Esc)"],"overlaySlice":"FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/20← Back (Esc)STANDING — The Shepherd's LaneFreehold Compact: Stranger (+0)Next: Known (10)LADDERSworn 50Trusted 25Known 10Stranger -10Suspect -25Marked -1000HOW STANDING MOVESMining jobs add +2 standing to the dock flag.Patrol jobs add +5 standing with Freehold Compact.Rescue adds +4 standing, or +1 if your kill, with the matching faction.Sale at the People desk moves victim standing and Gilded standing by the live table.Graft caps Beautiful Ones at min(current, -10) while any grafted row remains.LIVE CONSEQUENCESPatrols hunt at standing -10 or below.Yards refuse a sale when standing is below 0.Ace hulls need Known 10. Frigate hulls need Trusted 25.Yard discount Known+ 5/10/15% (Known/Trusted/Sworn).Market sell pays +2% per positive rank tier.Restricted locker: fear 40 or more, or Freehold Compact standing below -25 (Marked; -25 Suspect does not open).Graft: Beautiful Ones min(current, -10) while any grafted row remains.Mining +2 employer. Patrol +5 Freehold Compact.→ NEXT — Rank: Known··· locked··· locked··· lockedNo standing yet. The first stage is closer than it looks.Esc back · Esc again / B launch"}
+SHOT 03-freehold-standing.png
+PIN PASS fh.standing.head
+PIN PASS fh.standing.ladderHead
+PIN PASS fh.standing.sworn
+PIN PASS fh.standing.trusted
+PIN PASS fh.standing.known
+PIN PASS fh.standing.stranger
+PIN PASS fh.standing.suspect
+PIN PASS fh.standing.marked
+PIN PASS fh.standing.currentRank
+PIN PASS fh.standing.howMoves
+PIN PASS fh.standing.hunt
+PIN PASS fh.standing.yard
+PIN PASS fh.standing.locker
+PIN PASS fh.standing.graft
+PIN PASS fh.standing.noPolice
+freehold.market {"buttons":["← Back (Esc)","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5"],"overlaySlice":"FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/20← Back (Esc)MARKET — posted prices, no spreadCOMMODITYSTATUSPRICEHOLDTRADE  (↑/↓ select · Q/W buy 1/5 · A/S sell 1/5)ProvisionsLegal100 UU0+1+5−1−5Refined metalsLegal264 UU0+1+5−1−5Restricted componentsRESTRICTED548 UU0trade refusedRaw oreLegal139 UU0+1+5−1−5Living rockLegal541 UU0+1+5−1−5Slag ironLegal178 UU0+1+5−1−5Brine iceLegal238 UU0+1+5−1−5Chrome saltLegal493 UU0+1+5−1−5GildveinLegal985 UU0+1+5−1−5EmberglassLegal779 UU0+1+5−1−5Void platinumLegal1595 UU0+1+5−1−5WakeglassLegal2025 UU0+1+5−1−5The dockmaster keeps the restricted locker closed. Fear 40+ or a burned Compact name opens it.Esc back · Esc again / B launch"}
+SHOT 04-freehold-market.png
+PIN PASS fh.market.head
+PIN PASS fh.market.commodities
+PIN PASS fh.market.noArchive
+assembly.setup {"requested":"as_census","hasDest":true,"system":"as_census","faction":"assembly","docked":true}
+assembly.home {"docked":true,"system":"as_census","faction":"assembly","buttons":["1 — Market","2 — Jobs board","3 — Bar","4 — Feed & tend","5 — Repair","6 — Outfitting","7 — People","8 — Launch","9 — Standing","0 — Shipyard"]}
+SHOT 05-assembly-home.png
+PIN PASS as.docked
+SHOT 06-assembly-standing.png
+PIN PASS as.standing.head
+PIN PASS as.standing.ladder
+assembly.market {"credits":350,"buttons":["← Back (Esc)","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","File a legal cube"],"overlaySlice":"CENSUS REGISTRYTHE ASSEMBLY · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/20← Back (Esc)MARKET — posted prices, no spreadCOMMODITYSTATUSPRICEHOLDTRADE  (↑/↓ select · Q/W buy 1/5 · A/S sell 1/5)ProvisionsLegal178 UU0+1+5−1−5Refined metalsLegal268 UU0+1+5−1−5Restricted componentsRESTRICTED435 UU0trade refusedRaw oreLegal136 UU0+1+5−1−5Living rockLegal628 UU0+1+5−1−5Slag ironLegal210 UU0+1+5−1−5Brine iceLegal265 UU0+1+5−1−5Chrome saltLegal428 UU0+1+5−1−5GildveinLegal791 UU0+1+5−1−5EmberglassLegal653 UU0+1+5−1−5Void platinumLegal1174 UU0+1+5−1−5WakeglassLegal1448 UU0+1+5−1−5The dockmaster keeps the restricted locker closed. Fear 40+ or a burned Compact name opens it.ARCHIVE — filing deskThe archive files legal cubes and rival crystals. UU unset — no debit, no credit.Data cube · legal · hold copyFile a legal cubeThe archive does not buy crystals.No crystal or cube in the hold.Esc back · Esc again / B launch"}
+SHOT 07-assembly-market.png
+PIN PASS as.market.commodities
+PIN PASS as.market.archive
+PIN PASS as.market.archiveAfter
+PIN PASS as.market.fileBuy
+assembly.armed {"clicked":true,"credits":350,"buttons":["← Back (Esc)","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","Confirm filing","Esc — Cancel"],"notice":"","overlaySlice":"CENSUS REGISTRYTHE ASSEMBLY · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/20← Back (Esc)MARKET — posted prices, no spreadCOMMODITYSTATUSPRICEHOLDTRADE  (↑/↓ select · Q/W buy 1/5 · A/S sell 1/5)ProvisionsLegal178 UU0+1+5−1−5Refined metalsLegal268 UU0+1+5−1−5Restricted componentsRESTRICTED435 UU0trade refusedRaw oreLegal136 UU0+1+5−1−5Living rockLegal628 UU0+1+5−1−5Slag ironLegal210 UU0+1+5−1−5Brine iceLegal265 UU0+1+5−1−5Chrome saltLegal428 UU0+1+5−1−5GildveinLegal791 UU0+1+5−1−5EmberglassLegal652 UU0+1+5−1−5Void platinumLegal1173 UU0+1+5−1−5WakeglassLegal1448 UU0+1+5−1−5The dockmaster keeps the restricted locker closed. Fear 40+ or a burned Compact name opens it.ARCHIVE — filing deskThe archive files legal cubes and rival crystals. UU unset — no debit, no credit.Data cube · UU unset · Confirm does not fileConfirm filingEsc — CancelEsc back · Esc again / B launch"}
+SHOT 08-assembly-archive-armed.png
+PIN PASS as.archive.armed
+PIN PASS as.archive.armNoWrite
+PIN PASS as.archive.escBtn
+assembly.esc {"credits":350,"buttons":["← Back (Esc)","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","File a legal cube"],"notice":""}
+SHOT 09-assembly-archive-esc.png
+PIN PASS as.archive.escClears
+PIN PASS as.archive.escNoWrite
+assembly.confirm {"armed2":true,"confirmed":true,"creditsBefore":350,"creditsAfter":350,"cargoBefore":"[]","cargoAfter":"[]","notice":"UU unset — the archive will not file.","buttons":["← Back (Esc)","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","+1","+5","−1","−5","File a legal cube"]}
+SHOT 10-assembly-archive-confirm.png
+PIN PASS as.archive.confirmClicked
+PIN PASS as.archive.confirmNoCredit
+PIN PASS as.archive.confirmNoCargo
+PIN PASS as.archive.uuNotice
+PIN PASS console.noStationJsError
+stationErrors []
+pageErrors []
+consoleErrors []
+PINS {
+  "fh.docked": true,
+  "fh.digit0.menu": true,
+  "fh.digit9.menu": true,
+  "fh.digit0.shipyard": true,
+  "fh.standing.head": true,
+  "fh.standing.ladderHead": true,
+  "fh.standing.sworn": true,
+  "fh.standing.trusted": true,
+  "fh.standing.known": true,
+  "fh.standing.stranger": true,
+  "fh.standing.suspect": true,
+  "fh.standing.marked": true,
+  "fh.standing.currentRank": true,
+  "fh.standing.howMoves": true,
+  "fh.standing.hunt": true,
+  "fh.standing.yard": true,
+  "fh.standing.locker": true,
+  "fh.standing.graft": true,
+  "fh.standing.noPolice": true,
+  "fh.market.head": true,
+  "fh.market.commodities": true,
+  "fh.market.noArchive": true,
+  "as.docked": true,
+  "as.standing.head": true,
+  "as.standing.ladder": true,
+  "as.market.commodities": true,
+  "as.market.archive": true,
+  "as.market.archiveAfter": true,
+  "as.market.fileBuy": true,
+  "as.archive.armed": true,
+  "as.archive.armNoWrite": true,
+  "as.archive.escBtn": true,
+  "as.archive.escClears": true,
+  "as.archive.escNoWrite": true,
+  "as.archive.confirmClicked": true,
+  "as.archive.confirmNoCredit": true,
+  "as.archive.confirmNoCargo": true,
+  "as.archive.uuNotice": true,
+  "console.noStationJsError": true
+}
+ALL LIVE PINS TRUE
+assemblyReached true

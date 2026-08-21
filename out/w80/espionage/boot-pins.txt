@@ -1,0 +1,14 @@
+# WAVE80 MSN-02 espionage pin dump (re-dispatch, 2026-08-21)
+
+Isolated:
+  node --import ./scripts/with-css-stub.mjs out/w80/espionage/pin-check.mjs
+  WAVE80 ESPIONAGE PIN-CHECK PASS
+  New pins true: acceptedNamesHome, acceptedNoFileHere, acceptedPayFallback
+
+Source:
+  No `then file here` / `intel aboard — file here` in src/systems/station.js.
+  Accepted reward uses `File intel from ${destName} at ${homeName}`.
+  Offered reward may keep `File intel from ${destName} here`.
+  WAVE80 REP-04 bioPodStay no longer tests !save.includes("'espionage'")
+  or !station.includes("kind: 'espionage'"). Still pins BIO/POD UU, patrol
+  freehold +=, and no kind: 'war'.

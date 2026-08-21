@@ -1,0 +1,60 @@
+BIO-03 Wave 75 design verify (markdown only) — cite recheck after fixes
+
+Status
+CLEAN
+
+What I tested
+- Re-opened live src/ against the four prior LOW cites. Did not edit src/ or docs/.
+- Inventory, contract, brief, code-review, security-review, this file.
+- Preserve split still in live code.
+
+Prior LOW 1 — starter independent
+- Live: ship.js 591 is ctx.player = createShipState('light') with no faction arg.
+- Live: state.js 146 is faction: opts.faction ?? 'independent'.
+- Inventory §1, contract §0.4 / §1.2, brief identity row, this file: cite the default at state.js 146, not only ship.js 590–591.
+- MATCH.
+
+Prior LOW 2 — mint-bud
+- Live: gate.js 21–30 is the module header (mint buds mentioned as prose).
+- Live: mint-bud texture is gate.js 87–88 (comment + beautifulGlowMap), built 117–120, used 243 / 327–328.
+- Live dispatch: GATE_BUILDERS import gate.js 17–18 (table is gates/index.js).
+- OVERLAY_FACTIONS is not a live gate.js export. Only a station.js 498 comment.
+- Inventory §9, code-review Major, this file: gate.js 87–88, not header 21–30.
+- MATCH.
+
+Prior LOW 3 — contract §10 step 4 owner override
+- Live contract §10 step 4: procedural Three.js NPC ships unless owner overrides §13.
+- §13 is the open owner question (keep GLB vs procedural).
+- §14 is fail-closed defaults, not the override gate.
+- Brief merge table also points at contract §13.
+- MATCH.
+
+Prior LOW 4 — PROGRESS 2416 era
+- Live PROGRESS 2187 / 2416: Wave 47 deleted FACTION_VC_PARTS in favour of DETAIL_SHIPS (procedural VC kits). That is not the GLB era.
+- Live NPC hull: npc.js 166–167 buildShipMesh → buildShipAsset. No makeLivingHull in npc.js. No FACTION_VC_PARTS / DETAIL_SHIPS export under src/.
+- Inventory §9, code-review, brief, this file: 2416 = DETAIL_SHIPS Wave 47; live GLB = npc.js 166–167.
+- MATCH.
+
+Preserve (still holds)
+- Player makeLivingHull CPU swim unique: ship.js 258–307 sculpt; boot 549–553; loop 888–933; mood/veins/scars/thrust 935–962. NPC path does not clone this.
+- NPC Beautiful = GLB + GPU: ship-assets.js 135–170 inject, 432–434 global amp 0/1 at 0.7 Hz. Not makeLivingHull.
+- isBeautiful is faction === 'beautiful' only (organic.js 67–69). Not a living-player test.
+- Starter faction independent: ship.js 590–591 call; default state.js 146.
+- LIVING_STOCK omit frigate/ace/freighter buy: shipyard.js 26–38. NPC visual may still include frigate GLB.
+- HUD reads hullKind (hud.js 67–75, 888, 1380). No write of player.hullKind.
+- state.js READ-ONLY header 7–9. SHIP_CLASSES six keys 35–42.
+- userData.glow is a Group with a mesh child (ship-assets.js 373–385). npc.js 1915 / 1941 still treat it as a mesh.
+
+Scope freeze (markdown still says)
+- NPC look+motion only. No player remount. No graft overlay. No psionics. No seed. No BIO-02 keys.
+- Living frigate NPC visual allowed; LIVING_STOCK omit.
+- Fail closed keep GLB path (owner override is contract §13).
+- Wave 75 write set: docs/Bio03FleetDesign.md + out/w75/bio03/*. No src/.
+
+Bugs found
+None. The four prior LOW cites match live code. No new cite or preserve break.
+
+This wave
+- docs/Bio03FleetDesign.md
+- out/w75/bio03/*
+- No src/ edits

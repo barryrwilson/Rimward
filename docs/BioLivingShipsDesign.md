@@ -5,8 +5,8 @@
 | **Title** | RIMWARD BIO living ships, growth, and Abominations |
 | **Author** | Wave 70 BIO integrator |
 | **Date** | 2026-08-20 |
-| **Status** | Accepted. Wave 70 is design. A later wave ships serially. |
-| **Wave** | 70 — design only. Later — first impl. |
+| **Status** | Implemented. Wave 70 was markdown. Wave 72 shipped PR1–PR3 + PR5. PR4 class evolution skipped. |
+| **Wave** | 70 — design. 72 — first impl. |
 | **Owner request** | BIO design brief. Do not ship living-fleet meshes, grafts, seeds, or `src/` in this wave. |
 | **Merge law** | [`out/w70/bio/shared-contract.md`](../out/w70/bio/shared-contract.md). If this brief and that file conflict, the contract wins. |
 
@@ -196,7 +196,7 @@ Confirm flow (first impl):
 
 **Ownership invariant:** while any hangar row is `grafted`, Beautiful standing is capped at live `HOSTILE_STANDING` (−10) on sanitize, restore, remount, and graft confirm. Save tamper cannot own tissue without the hostility. Stripping the last graft later does not auto-heal standing.
 
-Graft price is **proposed, needs owner**. Until an authored constant exists, do not debit a guessed UU.
+Graft list price is `GRAFT_LIST_UU = 4000` on `shipyard.js`. Gilded confirm debits that amount. Refuse `credits` if short.
 
 NPC Abominations and “destroy Abomination → Beautiful friend” are later. Do not invent the standing delta.
 
@@ -305,10 +305,10 @@ From the wishlist, made testable:
 
 ## Open owner questions
 
-Defaults in the contract §14 stand unless the owner overrides.
+**Closed Wave 82** — [`docs/OwnerDecisionsWave82.md`](OwnerDecisionsWave82.md).
 
-1. Graft list price (authored UU).
-2. Destroy-Abomination Beautiful standing delta.
-3. Sworn gift in first impl vs deferred.
-4. Pirate seed rate and signal.
-5. Whether a living frigate buy SKU ever exists.
+1. Graft list price: **`GRAFT_LIST_UU = 4000`**.
+2. Destroy-Abomination Beautiful standing: **+5** (skip if victim faction is already Beautiful).
+3. Sworn gift: **defer**.
+4. Pirate seed: **defer** (later rate 0.05, hangar row not cargo).
+5. Living frigate buy SKU: **omit**.

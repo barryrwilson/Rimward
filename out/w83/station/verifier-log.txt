@@ -1,0 +1,138 @@
+Wave 83 station verifier
+Date: 2026-08-21
+Worktree: C:\Users\barry\.grok\worktrees\projects-websim\subagent-01a025d4-40a1-7640-837f-1f4d23e14907
+Evidence: C:\Projects\WebSim\out\w83\station\
+Graph: first resolve blocked_ambiguous (docs/sheets/slides). Second resolve execute_workflows Drive publishing (false match on "artifact"). Parent brief is station verification. No Drive share. No src/ edit.
+
+================================================================================
+1. Probe
+================================================================================
+Command (worktree):
+  node --import ./scripts/with-css-stub.mjs out/w83/station/probe.mjs
+Exit: 0
+
+Stdout:
+  w83 probe: {"restUu":true,"restPaid":true,"restSetZero":true,"restShort":true,"offended":true,"spyConst":true,"warConst":true,"chainRoom":true,"chainKind":true,"keepFour":true,"keepFamilies":true,"dropProto":true,"stuffedDrop":true,"parse":true,"noInnerHtml":true,"noJobFaction":true,"no2n":true}
+  W83 PROBE PASS
+
+================================================================================
+2. Boot-test (targeted read of WAVE80 / WAVE83)
+================================================================================
+Command (worktree):
+  node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs
+Exit: 1  BOOT TEST FAIL — 64 errors
+
+WAVE83 STATION: all pins true. No WAVE83 STATION FAIL line.
+
+  spyExposeConst, spyAcceptedLapse, spyDestFail, spyOfferedWithdraw, spySuccessEmployer
+  warTargetConst, warSuccessTarget, warExpireQuiet, warStuffedDest
+  restUu, restConfirm, restEsc, restShort, restGraftCap
+  noNewDigit, noInnerHtml, chainKind, keepUniqueFour, keepMineSpyWarChain
+  dropProtoChain, capPlus7, stuffedChainFields, strangerHide, knownSee
+  lastFreeholdLight, lastFreeholdHeavy, lastVeridianNoSku, lastHollowNoSku
+  noJobFactionWrite
+
+WAVE80 WAR:
+  uniqueFour true
+  employerPlus2 true
+  expireNoPay true
+  warTickNoTargetWrite true (tick slice does not contain dest write)
+  targetZero FALSE  <- dest standing now -2 on success
+
+WAVE80 ESPIONAGE:
+  uniqueFour true
+  employerPlus2 true
+  targetZero true  (success still dest 0)
+  expireNoPay FALSE  <- accepted lapse now dest -2
+
+Known prior FAILs still present (do not rewrite):
+  WAVE4 FENCE FAVOR FAIL
+  WAVE26 FERRY/HAUL/LANE/OLD-SAVE/SAVE FIELDS/RESTORE FAIL
+  WAVE35 HAUL GATE DELIVERY FAIL
+
+Adjacent FAILs (not this write-set):
+  WAVE78 PASSENGER FAIL
+  WAVE80 REP-04 FAIL  (KILL_STANDING_DELTA is -5 from Wave 82 stand)
+
+================================================================================
+3. Static contract
+================================================================================
+Sources: docs/OwnerDecisionsWave82.md, out/w81/msn03/shared-contract.md,
+  docs/Msn03ChainsDesign.md, Msn02EspionageDesign.md, Msn02FactionWarDesign.md,
+  RepStandingDesign.md, src/systems/station.js, src/game/save.js,
+  src/game/jobs-chains.js, src/game/restitution.js
+
+PASS  git status: state.js not modified
+PASS  WORLD_FIELDS has no wanted / crimeScore / chains
+PASS  station.js innerHTML: 0 hits
+PASS  station.js wanted: 0 hits
+PASS  station.js job.faction: 0 hits
+PASS  save.js 2*N / 2 * N: 0 hits
+PASS  CHAIN_ROOM = 7, JOBS_SANITIZE_MAX adds + CHAIN_ROOM only
+PASS  CHAIN_IDS 12 authored ids; chain-__proto__-1 not in set; sanitize drops it
+PASS  stuffed dest war: warPayComplete uses warDestId(origin), not job.destSystem / job.faction
+PASS  stuffed chain fields: sanitize copies allowlist only (no faction/launcher/sku/slot)
+PASS  SKU: grantChainSku uses chainGrantSpec (dart/auto) + canSeat + writeMountedGear
+PASS  restitution: RESTITUTION_UU 1200, two-step ui.restitutionPending, Esc cancelRestitutionPending,
+      applyRestitution sets offended key to 0 then applyAbominationStanding
+PASS  Digit 9 still DOCK_KEY_SERVICES epics; no new Digit; no police leave
+PASS  spy: offered withdraw no write; accepted deadline/dest-fail applySpyExpose dest -2, employer 0, no pay;
+      success employer +2 dest 0
+PASS  war expire writes nothing
+PASS  chain board: hide done; hide offered off-home; step-1 Known gate rankFor tier >= 1
+
+git status write-set:
+  M scripts/boot-test.mjs
+  M src/game/save.js
+  M src/systems/station.js
+  ?? src/game/jobs-chains.js
+  ?? src/game/restitution.js
+
+================================================================================
+4. Browser
+================================================================================
+Playwright MCP: locked (profile mcp-chrome-7d372dc, "use --isolated").
+Fallback: puppeteer-core + Chrome --use-angle=swiftshader.
+Vite: worktree `npx vite --port 5184 --strictPort`
+  Local http://localhost:5184/  (IPv6). 127.0.0.1:5184 refused.
+Killed Vite after capture.
+
+Boot: title skip + NEW GAME + Digit1 origin. Teleport to Freehold station. D dock.
+
+Restitution Digit 9:
+  standing -6, credits 2000 -> Pay restitution
+  pending: Confirm restitution + Esc — Cancel, credits still 2000, standing -6
+  Esc: pending gone, no debit
+  Confirm (double click): credits 800, standing 0, Pay gone
+  short 100 UU / standing -4: "Restitution 1200 UU. Not enough UU." no Pay button
+
+Jobs Digit 2:
+  Stranger (0): overlay has no "File the Freehold Compact brief"; chainIds []
+  Known (12): chain-freehold-1 offered; card 19 "File the Freehold Compact brief"
+  Unique four still cards 1-4
+
+Screenshots:
+  C:\Projects\WebSim\out\w83\station\dock-menu.png
+  C:\Projects\WebSim\out\w83\station\standing-negative.png
+  C:\Projects\WebSim\out\w83\station\restitution-pending.png
+  C:\Projects\WebSim\out\w83\station\restitution-esc.png
+  C:\Projects\WebSim\out\w83\station\restitution-confirm.png
+  C:\Projects\WebSim\out\w83\station\restitution-short.png
+  C:\Projects\WebSim\out\w83\station\jobs-stranger.png
+  C:\Projects\WebSim\out\w83\station\jobs-chain-known.png  (viewport: unique four)
+  C:\Projects\WebSim\out\w83\station\jobs-chain-card.png   (card 19)
+  C:\Projects\WebSim\out\w83\station\jobs-chain-known-full.png
+
+Graft recap: not mounted in live tab. Boot pin restGraftCap true (WAVE83).
+
+================================================================================
+5. Verdict
+================================================================================
+Product law for Wave 83 station is green (probe + WAVE83 STATION pins + live desk).
+
+HIGH: WAVE80 WAR still asserts targetZero === dest unchanged. Live dest is -2.
+HIGH: WAVE80 ESPIONAGE expireNoPay still asserts dest unchanged on accepted lapse.
+
+Owning worker must rewrite those WAVE80 pins to dest -2. Do not leave a known FAIL.
+Do not rewrite WAVE4 / WAVE26 / WAVE35.
+Unique four pins stay true on WAVE80 and WAVE83.

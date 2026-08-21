@@ -1,0 +1,26 @@
+## Status
+CLEAN
+
+## What I tested
+- Probe: `node --import ./scripts/with-css-stub.mjs out/w74/tgt05/probe.mjs` — 37 PASS / OK (source pins, pick math, KeyV edge, miss no-steal, docked refuse, KeyT group-1 ships / group-3 rocks).
+- Live Chrome (puppeteer-core, swiftshader) against Vite `http://127.0.0.1:5182/`. Harness: `out/w74/tgt05/live/live-verify.mjs`. Result: LIVE PASS.
+- Title skip + Digit1 origin. Flight, not docked.
+- Visible ship under pip + KeyV → `targets.current` is that live ship; `reticleLock { hit: true }`. Bracket shows INNISFREE.
+- Empty-glass KeyV after that lock: `commLine` text `Nothing under the reticle.`; `reticleLock { hit: false }`; previous ship lock not stolen.
+- Asteroid: live `pickReticleLock` on an in-range list row with weaponGroup 1 returns that row, `id === index` (117). Probe `pick-rock-group1` also PASS. Live KeyV on the same rock missed once because the 17px disc sat outside the 0.35 reticle clamp (controls write the clamped pip, then pick). Not a cone. Not a station/gate lock.
+- KeyT still cycles ships in group 1 (no rocks). Group 3 candidate list includes rocks (6 in-range) and ships (4). A prior live pass also wrapped KeyT onto rock ids 117/111/122/91.
+- Destroyed ship under pip + KeyV: no lock; miss event `hit: false`.
+- First-person: offset mouse (~259, -178); pick treats offset as 0,0 and KeyV still locked the ship on the camera ray.
+- HUD prompt `V` / `Lock` after Dock/Jump/Hail/T/Mine when rocks are in range and no ship lock. Controls legend includes `V — lock under reticle`. `textContent` only.
+- No cone const, no Raycaster, `U.TARGET_RANGE` 600, `state.js` has no RETICLE_LOCK, Digit 0 not in TRACKED, combat.js `liveMissileLock` still ship-only (probe).
+- Page console: no NEW errors from controls.js / reticle-aim.js / hud.js / song.js / ctx.js.
+
+## Bugs found
+
+## Environmental issues
+
+## Evidence
+- Screenshots: `out/w74/tgt05/live/01-flight.png`, `02-ship-lock.png`, `03-rock-lock.png`, `04-miss.png`, `05-cycle-t.png`, `06-fp.png`, `07-prompt-v.png`
+- Logs: `out/w74/tgt05/live/live-log.txt`
+- Test output: `out/w74/tgt05/probe-log.txt` (OK); live harness LIVE PASS
+- Harness: `out/w74/tgt05/live/live-verify.mjs`

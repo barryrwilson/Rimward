@@ -3275,6 +3275,477 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/MsnMissionsDesign.md`,
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
   `out/w71/`.
+- Wave 72 (2026-08-20): BIO first impl (orchestrated; PR1
+  persist parallel with PR2 obtain pins, then PR3 desk,
+  then PR5 boot; PR4 class evolution skipped). Hangar rows
+  keep `grafted` only when the own-key is boolean `true`.
+  Living and Unknowables drop it. Pack/load/sync/heal copy
+  the same rule. Gilded Hangar pane: Offer graft → warning
+  → Confirm graft. Mounted built hull only. `hullKind`
+  stays `built`. Credits do not change (graft UU still
+  owner-open). Beautiful standing
+  `Math.min(currentOrZero, -10)` while any sanitized row
+  is grafted (confirm, sanitizeHangar, switch/load,
+  applyMountedFlight). Esc cancels with no write. HUD
+  family stays mech. Living starter swim fields stay.
+  Beautiful / Unknowables still omit frigate. WAVE72 bio
+  pins all true.
+  OPEN: graft list price (owner UU). Gift / pirate seed /
+  commodity later. Class evolution later. BIO-03 Beautiful
+  NPC fleet later. BIO-04 psionics out. NPC Abominations
+  later. Living frigate buy still omit. NPC missiles /
+  incoming gauge later. Power ledger out. Other MSN
+  families later.
+  `npm run test:boot` still ends with the known FAILs
+  (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul).
+  VERIFY: `out/w72/pr1`–`pr3` probes CLEAN; WAVE72 boot
+  pins all true; live Chrome graft desk CLEAN
+  (`out/w72/pr5/live`).
+  FILES: `src/game/hangar.js`,
+  `src/systems/shipyard-desk.js`, `src/systems/station.js`,
+  `scripts/boot-test.mjs`,
+  `docs/BioLivingShipsDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w72/`.
+- Wave 73 (2026-08-20): three design briefs (orchestrated;
+  TGT-05 + REP + EXP parallel, markdown only). No `src/`.
+  TGT-05: `docs/Tgt05ReticleLockDesign.md`. KeyT cycle
+  stays. Reticle-lock is a new command (default KeyV,
+  owner sign-off). First impl locks ships and asteroids.
+  Stations, gates, pods, landmarks deferred. Non-ship
+  MATCH/combat rails fail closed. Group-3 mining stays.
+  REP: `docs/RepStandingDesign.md`. Digit 9 Standing
+  explain-only. No universal crime score. `RANK_LADDER`
+  unchanged. Patrol still writes `freehold`. BIO −10 and
+  POD rescue/sale numbers stay. Police leave / restitution
+  UU / kill attribution deferred. Espionage rule frozen
+  for a later MSN family.
+  EXP: `docs/ExpDataTradeDesign.md`. Crystals/cubes are
+  hangar cargo rows with legal/captured/stolen provenance.
+  Archive desk at live Assembly docks only. Unknowables
+  have no station (Wave 42 content decision). Drop rates
+  and launder UU need owner. `priceOf` for data keys is 0.
+  OPEN: TGT-05 binding key; TGT-05 station/gate lock;
+  REP restitution UU; EXP drop rate / launder UU /
+  Unknowables dock; graft list price (owner UU); gift /
+  pirate seed; BIO-03 fleet; BIO-04 out; living frigate
+  omit; NPC missiles / incoming gauge; power ledger;
+  other MSN families.
+  VERIFY: `out/w73/tgt05/verify.txt` CLEAN;
+  `out/w73/rep/verify.txt` CLEAN;
+  `out/w73/exp/verify.txt` CLEAN.
+  FILES: `docs/Tgt05ReticleLockDesign.md`,
+  `docs/RepStandingDesign.md`,
+  `docs/ExpDataTradeDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w73/`.
+  No `src/` edits.
+- Wave 74 (2026-08-20): TGT-05 + REP + EXP first impl
+  (orchestrated; TGT-05 parallel with persist, then
+  station UI, then boot pins).
+  TGT-05: KeyV `reticleLockPressed`. KeyT cycle stays.
+  Direct-hit pick on the visible-reticle ray. Ships and
+  asteroid list rows (`id === index`); rocks lock in any
+  weapon group. Stations/gates/pods/landmarks out. Miss
+  `commLine` plus `reticleLock { hit }`. No cone. Combat.js
+  untouched (seeker still ship-only). Rock MATCH stays.
+  REP: `sanitizeReputation` on restore (fresh bag, proto /
+  unknown / NaN drop). Digit 9 Standing shows ladder,
+  current rank, how-it-moves, and live hunt/yard/locker/
+  graft facts. Patrol/mining/rescue `commLine` reasons.
+  No crimeScore. `RANK_LADDER` unchanged. Digit 0 shipyard.
+  EXP: dataCrystal/dataCube hangar rows with
+  legal|captured|stolen + originFaction. Missing source
+  drops the row. `priceOf` / tribute treat data as 0.
+  Archive desk on live Assembly Market only; UU unset so
+  confirm does not debit or flip. Spawn skip (no drop %).
+  Unknowables dock still absent.
+  WAVE74 pins all true. WAVE72 BIO pins stay all true.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta; EXP drop
+  rate / desk UU / launder UU / Unknowables dock; graft
+  list price (owner UU); gift / pirate seed; BIO-03 fleet;
+  BIO-04 out; living frigate omit; NPC missiles / incoming
+  gauge; power ledger; other MSN families.
+  `npm run test:boot` still ends with the known FAILs
+  (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul).
+  VERIFY: `out/w74/tgt05/verify.txt` CLEAN (live Chrome);
+  `out/w74/persist/verify.txt` CLEAN (49 pins);
+  `out/w74/station/verify.txt` CLEAN (51 pins);
+  `out/w74/station/live/verify.txt` CLEAN;
+  `out/w74/boot/verify-recheck.txt` CLEAN (33 pins).
+  FILES: `src/systems/controls.js`, `src/game/reticle-aim.js`,
+  `src/core/ctx.js`, `src/systems/hud.js`, `src/systems/song.js`,
+  `src/game/data-trade.js`, `src/game/save.js`,
+  `src/game/pods.js`, `src/systems/npc.js`,
+  `src/systems/hail.js`, `src/systems/station.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Tgt05ReticleLockDesign.md`,
+  `docs/RepStandingDesign.md`,
+  `docs/ExpDataTradeDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w74/`.
+- Wave 75 (2026-08-20): three design briefs (orchestrated;
+  MSN-02 trade + BIO-03 fleet + NPC missiles parallel,
+  markdown only). No `src/`.
+  MSN-02: `docs/Msn02TradeDesign.md`. Renewable `kind:
+  'trade'`, two slots per system, dest `otherSystemId`,
+  origin `jobPayFor` + `HAUL_MARGIN` 1.4. Unique four stay.
+  Sanitize cap later `4+4*N_SYSTEMS+16` (420). No survivor
+  / data / livingRock seed cargo.
+  BIO-03: `docs/Bio03FleetDesign.md`. Beautiful NPC look
+  and motion around the player `makeLivingHull` benchmark.
+  Player CPU swim stays unique. NPC stay GLB + GPU. Fail
+  closed keeps that path. Living frigate NPC visual may
+  exist; yard buy stays omitted.
+  NPC missiles: `docs/NpcMissilesDesign.md`. Reuse dart
+  seeker math, smaller NPC pool. No aim-glass gauge. Default
+  **off** until owner Q1 (who fires) and Q2 (toast + song).
+  Unknowables stay beam-only. Missing missile `target`
+  drops. Hit tests follow live `combat.js` 1716–1718.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta; EXP drop
+  rate / desk UU / launder UU / Unknowables dock; graft
+  list price (owner UU); gift / pirate seed; BIO-03 visual
+  serial; BIO-04 out; living frigate omit; NPC missiles
+  impl (needs Q1/Q2); power ledger; MSN-02 trade impl;
+  other MSN families.
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w75/msn02/verify.txt` CLEAN;
+  `out/w75/bio03/verify.txt` CLEAN;
+  `out/w75/npc-missiles/verify.txt` CLEAN.
+  FILES: `docs/Msn02TradeDesign.md`,
+  `docs/Bio03FleetDesign.md`,
+  `docs/NpcMissilesDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w75/`.
+  No `src/` edits.
+- Wave 76 (2026-08-20): MSN-02 trade first impl + BIO-03
+  GPU swim (orchestrated; two parallel workers). NPC
+  missiles stay off (owner Q1/Q2 still open).
+  MSN-02: `kind: 'trade'`, two slots per system, dest
+  `otherSystemId`, origin `payQuoted` + `HAUL_MARGIN` 1.4,
+  need 5, 600 s fail-closed, splice+replace. Sanitize cap
+  `4+4*N_SYSTEMS+16` (420). Unique four stay. Mining need
+  4 stays. No survivor / data / livingRock seed. Digit 2
+  cards. WAVE76 msn pins all true.
+  BIO-03: per-instance GPU `uSwimHz` / `uSwimAmp` from NPC
+  speed (idle 0.5 → cruise 2.3). Player CPU `makeLivingHull`
+  unchanged. GLB path kept. No new meshes. `reducedMotion`
+  amp 0. Class look / bake later.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta; EXP drop
+  rate / desk UU / launder UU / Unknowables dock; graft
+  list price (owner UU); gift / pirate seed; BIO-03 class
+  look / bake; BIO-04 out; living frigate omit; NPC
+  missiles impl (needs Q1/Q2); power ledger; other MSN
+  families.
+  `npm run test:boot` still ends with the known FAILs
+  (WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul). WAVE76
+  msn pins all true. WAVE71/72/74 pins stay all true.
+  VERIFY: `out/w76/msn02/verify.txt` CLEAN (probe + boot
+  + live Chrome); `out/w76/bio03/verify.txt` CLEAN (live
+  Chrome Hz probe).
+  FILES: `src/game/save.js`, `src/systems/station.js`,
+  `scripts/boot-test.mjs`, `src/systems/ship-assets.js`,
+  `src/systems/npc.js`, `src/systems/organic.js`,
+  `docs/Msn02TradeDesign.md`, `docs/Bio03FleetDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w76/`.
+- Wave 77 (2026-08-20): three design briefs (orchestrated;
+  hunt + passenger + explore parallel, markdown only).
+  No `src/`.
+  Hunt: `docs/Msn02HuntDesign.md`. Renewable
+  `kind: 'hunt'`, two slots per system, quarry
+  `recordId` `rec-<n>`, overlay pirate cap 2 stays,
+  unique `bounty-ace` stays. Cap at impl =
+  live cap + hunt room only (620 at 100).
+  Passenger: `docs/Msn02PassengerDesign.md`. Renewable
+  `kind: 'passenger'`, dest `otherSystemId` rebound,
+  no cargo token, origin `jobPayFor(FERRY_REWARD)` 350.
+  Unique `ferry-consignment` stays `done`. No `survivor`
+  on jobs. POD-02 UU closed.
+  Explore: `docs/Msn02ExploreDesign.md`. Renewable
+  `kind: 'explore'`, landmark display names +
+  `mystery.visited`, no clue id/text in UI. No
+  `dataCrystal` grant. Drop % / Archive UU stay unset.
+  Each family freezes **its** room only. A later impl
+  sums rooms. Espionage and faction-war still wait on
+  REP-04.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta; EXP drop
+  rate / desk UU / launder UU / Unknowables dock; graft
+  list price (owner UU); gift / pirate seed; BIO-03 class
+  look / bake; BIO-04 out; living frigate omit; NPC
+  missiles impl (needs Q1/Q2); power ledger; MSN-02
+  hunt / passenger / explore impl; MSN-03 chains;
+  espionage / faction-war (REP-04).
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w77/hunt/verify.txt` CLEAN;
+  `out/w77/passenger/verify.txt` CLEAN;
+  `out/w77/explore/verify.txt` CLEAN.
+  FILES: `docs/Msn02HuntDesign.md`,
+  `docs/Msn02PassengerDesign.md`,
+  `docs/Msn02ExploreDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w77/`.
+  No `src/` edits.
+- Wave 78 (2026-08-21): MSN-02 hunt + passenger + explore
+  first impl (orchestrated; serial hunt → passenger →
+  explore because save.js + station.js overlap).
+  Hunt: `kind: 'hunt'`, two slots, `recordId` bind,
+  origin `payQuoted` from live bounty, overlay skip
+  before credits, cap +HUNT_ROOM. Unique ace stays.
+  Passenger: `kind: 'passenger'`, dest `otherSystemId`,
+  no cargo, origin `jobPayFor(FERRY_REWARD)` 350.
+  Unique `ferry-consignment` still `done`.
+  Explore: `kind: 'explore'`, `resolveExploreSite`,
+  `mystery.visited` + origin dock, landmark display
+  names only, no data grant. Sanitize cap sums rooms:
+  `4 + 10*N_SYSTEMS + 16` (1020 at 100). WAVE78 hunt /
+  passenger / explore pins all true after harness freeze
+  of sibling accepted jobs on completePay. Known boot
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  Digit 2 live pane: [NO BROWSER COVERAGE] (Playwright
+  Chrome profile locked). Designer audits: no Blocker /
+  Major.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta; EXP drop
+  rate / desk UU / launder UU / Unknowables dock; graft
+  list price (owner UU); gift / pirate seed; BIO-03 class
+  look / bake; BIO-04 out; living frigate omit; NPC
+  missiles impl (needs Q1/Q2); power ledger; MSN-03
+  chains; espionage / faction-war (REP-04).
+  VERIFY: `out/w78/hunt/verify.txt` CLEAN;
+  `out/w78/passenger/verify.txt` CLEAN;
+  `out/w78/explore/verify-recheck.txt` CLEAN.
+  FILES: `src/game/save.js`, `src/systems/station.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Msn02HuntDesign.md`,
+  `docs/Msn02PassengerDesign.md`,
+  `docs/Msn02ExploreDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w78/`.
+- Wave 79 (2026-08-21): three design briefs (orchestrated;
+  REP-04 kill attribution + MSN-02 espionage +
+  faction-war parallel, markdown only). No `src/`.
+  REP-04: `docs/Rep04AttributionDesign.md`. Victim
+  faction only. Skip independent / missing / reserved.
+  Skip pirate and ace. Witness
+  `lastAttackerOf === 'player'`. Incident `causer` is
+  not enough. Kill delta **proposed, needs owner**;
+  helper writes nothing until authored. No `crimeScore`.
+  Police leave and restitution stay out. Digit 9 stays.
+  Espionage: `docs/Msn02EspionageDesign.md`. Renewable
+  `kind: 'espionage'`, two slots, ids `spy-<sys>-<n>`,
+  dest gate rival, origin `explorePayBase`. Secret
+  success: employer +2, target 0. Expose fail-closed.
+  No data cargo. Cap at impl =
+  live cap + espionage room only (1220 at 100).
+  Faction-war: `docs/Msn02FactionWarDesign.md`. Renewable
+  `kind: 'war'`, two slots, ids `war-<sys>-<n>`.
+  Employer +2 (`MINING_REP`). Target delta fail-closed.
+  Unique ace and Named Guns stay unique. Hunt stays
+  local pirates. Cap at impl = live + war room only
+  (1220 at 100). Each family freezes **its** room only.
+  A later impl sums rooms. Unique four stay.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta (owner);
+  EXP drop rate / desk UU / launder UU / Unknowables
+  dock; graft list price (owner UU); gift / pirate seed;
+  BIO-03 class look / bake; BIO-04 out; living frigate
+  omit; NPC missiles impl (needs Q1/Q2); power ledger;
+  MSN-02 espionage / war impl; MSN-03 chains.
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w79/rep04/verify.txt` CLEAN;
+  `out/w79/espionage/verify.txt` CLEAN;
+  `out/w79/faction-war/verify.txt` CLEAN.
+  FILES: `docs/Rep04AttributionDesign.md`,
+  `docs/Msn02EspionageDesign.md`,
+  `docs/Msn02FactionWarDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w79/`.
+  No `src/` edits.
+- Wave 80 (2026-08-21): first impl of Wave 79 briefs
+  (orchestrated; serial REP-04 → espionage → war
+  because save.js + station.js + boot-test overlap).
+  REP-04: `src/game/kill-standing.js` helper
+  `applyPlayerKillStanding`; one bind in
+  `handleDestroyed`. Witness own
+  `lastAttacker === 'player'`. Skip pirate / ace /
+  independent / reserved. `KILL_STANDING_DELTA = null`
+  → no bag write, no Digit 9 kill line, no `commLine`.
+  No `crimeScore`.
+  Espionage: `kind: 'espionage'`, two slots,
+  ids `spy-<sys>-<n>`, rival dest (gate first), dest-dock
+  gather, origin file, origin `explorePayBase` quote,
+  600 s fail-closed. Secret success employer +2,
+  target 0. Expose fail-closed. No data cargo.
+  Accepted cards name the home dock (not “file here”).
+  War: `kind: 'war'`, two slots, ids `war-<sys>-<n>`,
+  rival-gate dest, dest-faction patrol quarry, origin
+  `PATROL_REWARD` 300, space-side hunt witness, employer
+  +2, target 0. Unique ace and Named Guns stay unique.
+  Hunt stays local pirates. Overlay cap 2 stays.
+  Unique four stay.
+  Sanitize cap sums rooms: `4+14*N+16` (1420 at 100).
+  WAVE80 REP-04 / espionage / war pins all true after
+  harness freeze of sibling negative-string pins.
+  Known boot FAILs still WAVE4 fence, WAVE26 ferry/haul,
+  WAVE35 haul.
+  Digit 2 live pane: [NO BROWSER COVERAGE] (Playwright
+  Chrome profile locked). Designer: spy Major (file here)
+  closed on recheck; war audit clean; REP-04 no UI.
+  OPEN: TGT-05 station/gate lock; cone pixel cap; REP
+  restitution UU / police leave / kill delta (owner);
+  EXP drop rate / desk UU / launder UU / Unknowables
+  dock; graft list price (owner UU); gift / pirate seed;
+  BIO-03 class look / bake; BIO-04 out; living frigate
+  omit; NPC missiles impl (needs Q1/Q2); power ledger;
+  MSN-03 chains; spy expose / war target-rep (owner).
+  VERIFY: `out/w80/rep04/verify.txt` CLEAN;
+  `out/w80/espionage/verify-recheck.txt` CLEAN;
+  `out/w80/espionage/designer-audit-recheck.md` clean;
+  `out/w80/faction-war/verify-recheck.txt` CLEAN;
+  `out/w80/faction-war/designer-audit.md` clean.
+  FILES: `src/game/kill-standing.js`, `src/systems/npc.js`,
+  `src/game/save.js`, `src/systems/station.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Rep04AttributionDesign.md`,
+  `docs/Msn02EspionageDesign.md`,
+  `docs/Msn02FactionWarDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w80/`.
+- Wave 81 (2026-08-21): three design briefs (orchestrated;
+  TGT-05 lock cats + MSN-03 chains + BIO-03 class look
+  parallel, markdown only). No `src/`.
+  TGT-05 cats: `docs/Tgt05LockCatsDesign.md`. KeyV stays.
+  KeyT stays. Station / gate / pod / landmark via
+  `lockKind` wrappers. MATCH / mining / hail / combat
+  refuse those kinds. Pick direct-hit body sphere.
+  Cone cap still owner. Digit 0 stays shipyard.
+  MSN-03: `docs/Msn03ChainsDesign.md`. `kind: 'chain'`
+  on `world.jobs`. Four three-step authored chains
+  (EPICS factions only). No 600 s deadline. Origin
+  `PATROL_REWARD` quote. Employer +2, target 0.
+  Cap at impl = live + `CHAIN_ROOM` 7 (1427 at 100).
+  Unique equipment grant fail-closed until owner SKUs.
+  Unique four stay. EPICS stay Digit 9.
+  BIO-03 look: `docs/Bio03ClassLookDesign.md`. NPC stay
+  GLB + Wave 76 GPU swim. Six live class keys. Yard
+  omit ace / freighter / frigate buy. No bake this
+  wave. Player `makeLivingHull` stays unique.
+  OPEN: TGT-05 lock-cats impl; cone pixel cap; REP
+  restitution UU / police leave / kill delta (owner);
+  EXP drop rate / desk UU / launder UU / Unknowables
+  dock; graft list price (owner UU); gift / pirate seed;
+  BIO-03 look/bake impl; BIO-04 out; living frigate
+  omit; NPC missiles impl (needs Q1/Q2); power ledger;
+  MSN-03 chains impl; spy expose / war target-rep
+  (owner).
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w81/tgt05/verify.txt` CLEAN;
+  `out/w81/msn03/verify.txt` CLEAN;
+  `out/w81/bio03/verify.txt` CLEAN.
+  FILES: `docs/Tgt05LockCatsDesign.md`,
+  `docs/Msn03ChainsDesign.md`,
+  `docs/Bio03ClassLookDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w81/`.
+  No `src/` edits.
+- Wave 82 (2026-08-21): owner judgement calls
+  (`docs/OwnerDecisionsWave82.md`) plus three parallel
+  impls. Cone **12 px**. Kill **−5**. Graft **4000 UU**.
+  EXP drop **0.20**, own **400**, rival **900**, launder
+  **250**. TGT-05 KeyV locks station / gate / pod /
+  landmark with `lockKind`; MATCH / hail / mining refuse
+  those kinds. Kill helper writes and recaps Beautiful
+  at −10 while the player still wears a graft. Archive
+  files with debit/credit. Fixer launder 250. Named later:
+  NPC darts (Q1 pirate+ace, Q2 toast+song), MSN-03 SKUs,
+  spy expose −2, war target −2, restitution 1200, police
+  leave defer, BIO-03 bake keep GLB, living frigate omit.
+  VERIFY: `out/w82/tgt05/verifier-log.txt` CLEAN;
+  `out/w82/exp/verifier-log.txt` CLEAN;
+  `out/w82/stand/verifier-recheck.txt` CLEAN.
+  Designer: `out/w82/tgt05/designer-audit.md` CLEAN;
+  `out/w82/exp/designer-audit.md` CLEAN;
+  `out/w82/stand/designer-audit.md` CLEAN.
+  FILES: `docs/OwnerDecisionsWave82.md`, TGT/EXP/BIO/REP
+  briefs, `src/game/reticle-aim.js`, `src/systems/controls.js`,
+  `src/systems/hud.js`, `src/systems/combat.js`,
+  `src/systems/hail.js`, `src/systems/ship.js`,
+  `src/game/data-trade.js`, `src/systems/station.js`,
+  `src/game/kill-standing.js`, `src/game/hangar.js`,
+  `src/game/shipyard.js`, `src/systems/shipyard-desk.js`,
+  `scripts/boot-test.mjs`, wishlist, `PROGRESS.md`,
+  `out/w82/`.
+  `npm run test:boot` still FAIL. WAVE82 owner pins all true.
+  WAVE72 graft debit pin true. Known FAILs still WAVE4 fence,
+  WAVE26 ferry/haul, WAVE35 haul. WAVE78 passenger/explore
+  `completePay` still false (pay quote vs epic mult).
+- Wave 83 (2026-08-21): previously blocked serials after Wave 82
+  numbers. NPC missiles: pirate+ace one dart after hunt
+  telegraph, then cannon; pool 4; toast `Incoming dart.` +
+  song sting; Unknowables never fire. Spy expose: accepted
+  lapse dest −2, employer 0, no pay. War success dest −2
+  plus live employer +2. Restitution desk Digit 9, 1200 UU,
+  two-step confirm, key to 0, graft recap. MSN-03 four
+  authored chains; last-step dart/auto when `canSeat`.
+  WAVE80 pins updated to dest −2. Police leave, gift,
+  pirate seed, BIO-03 bake, Unknowables dock still out.
+  VERIFY: `out/w83/missiles/verifier-log.txt` CLEAN;
+  `out/w83/station/verifier-log.txt` then pin recheck CLEAN.
+  Designer: `out/w83/missiles/designer-audit.md` CLEAN;
+  `out/w83/station/designer-audit.md` CLEAN.
+  FILES: `src/systems/combat.js`, `npc.js`, `hud.js`,
+  `song.js`, `ctx.js`, `station.js`, `src/game/save.js`,
+  `jobs-chains.js`, `restitution.js`, `scripts/boot-test.mjs`,
+  design status lines, wishlist, `PROGRESS.md`, `out/w83/`.
+  Full `npm run test:boot` WAVE83 STATION all true. First
+  missiles run `pirateOneDart` false (late-boot fear
+  bargaining); harness spawn freeze then cadence recheck
+  CLEAN. Known FAILs still WAVE4 fence, WAVE26 ferry/haul,
+  WAVE35 haul. WAVE80 REP-04 `digit9NoKillClaim` still
+  false (pre-existing).
+- Wave 84 (2026-08-21): three design briefs (orchestrated;
+  NAV-01 route plot + NAV-02 in-flight guidance + NAV-03
+  autopilot parallel, markdown only). No `src/`.
+  Persist: one `WORLD_FIELDS` key `nav` =
+  `{ dest, path, remaining, status }` with
+  `plotted|blocked|arrived`. Next hop is `path[1]`.
+  Recalc is an event, not a stored status. `hopIndex`
+  is forbidden. Chart click plots; KeyM stays. No lock
+  steal. No `innerHTML`. No teleport. Hit disc ≥ 24 CSS
+  px; hub rings `pointer-events: none`.
+  Guidance: side-col readout above POS; `.rw-nav-gate-cue`
+  (not scanner arc); decorative gate ring, empty raycast.
+  PR1 chrome `max-width: 180px` + hide docked/jumping.
+  Autopilot: `autopilot.js` commands, `ship.js` mesh;
+  `gate.js` sole `jumpRequested`; MATCH refuse; restore
+  forces `autopilot: false`. Chart-header refuse above
+  z-index 30; steer-break off while chart open.
+  OPEN: NAV-01/02/03 impl (serial after persist);
+  police leave; gift; pirate seed; BIO-03 bake;
+  Unknowables dock; BIO-04; power ledger.
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w84/nav01/verify-recheck.txt` CLEAN;
+  `out/w84/nav02/verify-recheck.txt` CLEAN;
+  `out/w84/nav03/verify-recheck.txt` CLEAN.
+  Designer: `out/w84/nav01/designer-audit-recheck.md` CLEAN;
+  `out/w84/nav02/designer-audit-recheck.md` CLEAN;
+  `out/w84/nav03/designer-audit-recheck.md` CLEAN.
+  FILES: `docs/Nav01RouteDesign.md`,
+  `docs/Nav02GuidanceDesign.md`,
+  `docs/Nav03AutopilotDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w84/`.
+  No `src/` edits.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

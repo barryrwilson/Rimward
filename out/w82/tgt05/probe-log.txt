@@ -1,0 +1,72 @@
+PASS LOCK_CONE_PX is 12 CSS pixels
+PASS LOCK_CONE_PX lives in reticle-aim.js
+PASS state.js has no LOCK_CONE_PX
+PASS pick does not use CONVERGE_DOT
+PASS no scene Raycaster in reticle-aim
+PASS station body sphere 32
+PASS gate body sphere 30 (bore)
+PASS pod body sphere 0.9
+PASS gate pick is not glow 96
+PASS range cap is U.TARGET_RANGE 600
+PASS cycleTarget does not gain kind candidates
+PASS KeyV still the lock edge
+PASS miss line unchanged
+PASS reticleLock payload is { hit } literal
+PASS HUD textContent only in this file
+PASS HUD paints lockKind names
+PASS ASTEROID paint requires rockOk
+PASS mining pull requires list membership
+PASS MATCH rock test requires list membership
+PASS hail refuses lockKind
+PASS stale kind drop exists
+PASS stale drops on systemLoaded and scoop
+PASS KeyV still locks a live ship
+PASS destroyed ship never locks
+PASS KeyV still locks a rock list row untagged
+PASS station lockKind
+PASS station wrapper is not ctx.station stamp
+PASS station wrapper is a fresh object
+PASS station wrapper has no type/t
+PASS gate wrapper dest id + hub flag
+PASS gate wrapper has position
+PASS hub gate uses in-zone dest
+PASS pod wrapper points at live ctx.pods member
+PASS pod wrapper does not set object/state
+PASS landmark lockKind + authored id
+PASS clue motes never lock
+PASS landmark without mesh bound skips
+PASS reserved landmark id fails closed
+PASS reserved gate to fails closed
+PASS guns do not use station/pod as aim proxies
+PASS 12 px cone locks nearest miss of disc
+PASS outside 12 px cone is a miss
+PASS any body disc beats the cone fallback
+PASS mining refuses station
+PASS MATCH refuses station
+PASS seeker null for station
+PASS hail no-op for station
+PASS mining refuses gate
+PASS MATCH refuses gate
+PASS seeker null for gate
+PASS hail no-op for gate
+PASS mining refuses gate
+PASS MATCH refuses gate
+PASS seeker null for gate
+PASS hail no-op for gate
+PASS mining refuses pod
+PASS MATCH refuses pod
+PASS seeker null for pod
+PASS hail no-op for pod
+PASS mining refuses landmark
+PASS MATCH refuses landmark
+PASS seeker null for landmark
+PASS hail no-op for landmark
+PASS untagged {position,name} does not mining-pull
+PASS untagged {position,name} does not MATCH as rock
+PASS allowlist includes station
+PASS listed rock still mining-pulls
+PASS listed rock still MATCH
+PASS hail still opens on a disabled ship
+PASS HUD never writes hullKind
+PASS Digit 0 stays off TRACKED (shipyard)
+SUMMARY fail=0 {"fail":0,"cone":12,"stationKind":"station","gateTo":"veridian","podKind":"pod","landmarkId":"fh_shepherd"}

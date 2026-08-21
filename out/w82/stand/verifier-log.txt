@@ -1,0 +1,53 @@
+Wave 82 stand verifier
+Date: 2026-08-21
+Workspace: C:\Projects\WebSim
+Graph: proceed_unmodeled (mandatory=false)
+
+COMMANDS
+  node --import ./scripts/with-css-stub.mjs out/w82/stand/probe.mjs
+    exit 0, PASS all (50 pins)
+  node --import ./scripts/with-css-stub.mjs out/w82/stand/extra-probe.mjs
+    exit 1, FAIL abom.playerGrafted.capLeak (beautiful -5, want -10)
+  Invoke-WebRequest http://localhost:5173 TimeoutSec 2
+    timeout → [NO BROWSER COVERAGE]
+  npm run test:boot not run (instruction)
+
+WORKER FILES (read + git)
+  src/game/kill-standing.js     untracked (??)
+  src/game/hangar.js            modified
+  src/game/shipyard.js          modified (GRAFT_LIST_UU = 4000)
+  src/systems/shipyard-desk.js  modified (GRAFT_REFUSE_LINES.credits, GRAFT_LIST_UU UI, graftBusy)
+
+SIBLING FILES (not this worker)
+  src/game/station.js           path does not exist
+  src/systems/station.js        modified (sibling jobs/data-trade/archive; cancelGraftPending import)
+  src/game/data-trade.js        untracked (??) — kill-standing.js imports standingRead only
+  src/game/reticle-aim.js       modified (sibling)
+
+TRACE
+  KILL_STANDING_DELTA === -5
+  applyPlayerKillStanding: lastAttacker player + PIRACY_ROLES (patrol/trader/miner)
+    writes bag[faction] = standingRead + (-5)
+  pirate/ace/independent/reserved/npc lastAttacker skip (probe PASS)
+  victimGrafted via own grafted:true on state/player/hangar row → Beautiful +5
+  victimFaction === 'beautiful' → skip bonus, kill -5 only (8 → 3)
+  proto inherited grafted:true does not bonus
+  npc.js handleDestroyed calls applyPlayerKillStanding(ctx, live) once after npcDestroyed
+  graftMounted: gilded banner, gilded standing >= 0, built plated, not already
+    refuses credits when short/NaN/missing; does not set grafted
+    exact 4000 → credits 0, grafted true, beautiful cap -10
+    no callRemount in graftMounted body
+  confirmGraft: graftBusy gate; pending null after first click; second click no debit
+  renderHangarPane / confirm meta: ${GRAFT_LIST_UU} UU
+  GRAFT_REFUSE_LINES.credits === 'Not enough credits.'
+
+BUG
+  applyPlayerKillStanding does not re-apply applyAbominationStanding after the
+  Beautiful +5 write. Player hangar row grafted:true with beautiful already -10,
+  then destroy a grafted patrol: beautiful becomes -5 until the next hangar
+  sanitize. Patrol hunt floor is -10, so the player can leave the hunt window.
+  extra-probe pin abom.playerGrafted.capLeak failed: got -5.
+
+NOT A PRODUCT BUG (notes)
+  scripts/boot-test.mjs wave72 still pins graftCredits = creditsArmed (free graft).
+  Not executed. Will fail if someone runs boot-test without updating that pin.

@@ -1,0 +1,17 @@
+$ node --import ./scripts/with-css-stub.mjs out/w80/rep04/pin-check.mjs
+exit: 0
+{
+  "noCrimeScore": true,
+  "npcVsNpcNoWrite": true,
+  "pirateNoWrite": true,
+  "traderNoWriteWhileNull": true,
+  "protoNeverBagKey": true,
+  "ladderUnchanged": true,
+  "restoreSanitize": true,
+  "digitsStay": true,
+  "digit9NoKillClaim": true,
+  "oneBind": true,
+  "bioPodStay": true
+}
+failed []
+detail { calls: 1, emit: true, patrol: true, notesLen: 5 }

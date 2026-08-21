@@ -1,0 +1,27 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w74/station/probe.mjs`. Result: OK 51/51 pins, exit 0.
+- Static review of `src/systems/station.js` vs `out/w73/rep/shared-contract.md` and `out/w73/exp/shared-contract.md`.
+- Confirmed `src/game/state.js` `RANK_LADDER` is six rungs (Sworn 50 / Trusted 25 / Known 10 / Stranger -10 / Suspect -25 / Marked -1000). `git diff HEAD -- src/game/state.js` is empty.
+- Hunt regressions: Digit 0 last `DOCK_KEY_SERVICES` key is `shipyard`; Digit 9 is `epics`; `ui.graftPending` / `cancelGraftPending` remain; market still lists `COMMODITY_KEYS` from `COMMODITIES`; `tryTrade` rejects data keys and does not pay them; `confirmArchivePending` does not call `tryTrade` / `addCargo` / `removeCargo`.
+- Port 5182 returned HTTP 200 (TGT-05 live verifier). Did not attach a browser. Did not start vite on 5183.
+
+## Bugs found
+
+## Environmental issues
+- Vite already listens on 5182. Verifier did not reuse that session and did not start a second server.
+
+## Evidence
+- Probe: 51/51 PASS (`dock.keys.10`, `dock.digit0.shipyard`, `dock.digit9.epics`, `dock.noArchiveKey`, `bio.graftPending`, `bio.noInnerHTML`, six ladder pins, live hunt/yard/ace/discount/locker/graft/mining-patrol, `digit9.noPolice`, `priceOf` data 0, archive Assembly-only + proto refuse, desk gates, captured-cube refuse, confirm no credit/cargo/flip, `standingRead`, no `reputationChanged`).
+- Digit 9 still `DOCK_KEY_SERVICES[8] === 'epics'`. Digit 0 still last key `shipyard`. No `archive` / `data` service key.
+- `renderEpics` still draws epic stages after ladder / how-it-moves / live notes. `standingRead` + `rankFor` print current rank. `standingLadderLines` walks live `RANK_LADDER`. `standingLiveNotes` lists hunt ≤ -10, yards below 0, Ace Known 10 / Frigate Trusted 25, 5/10/15% discount, +2%/tier sell, locker fear 40 or Freehold below -25 (Marked; -25 Suspect does not open), graft `min(current, -10)`. No police / restitution claim.
+- Dock root keeps `Faction: Rank (±N rep)` plus one `Next:` rung from `nextStandingRung`.
+- Optional `commLine` reasons: patrol (`Freehold standing +5`), mining (`standing +2` employer name), rescue (`Standing +N with the {faction}`).
+- BIO: `graftPending` on ui; cancel on Back / Esc / selectService / dock / undock; import `cancelGraftPending`. RESCUE 4/1 and POD 160/240 not retuned. `MINING_REP` 2, `PATROL_REP` 5.
+- `priceOf`: `isDataCommodity` returns 0 before stuffed `world.prices`. Market table still `COMMODITY_KEYS.forEach`.
+- Archive: `renderArchiveDesk` after the commodity table; gate `ui.level === 2 && ui.service === 'market'` and `archiveDeskAllowed` (`faction === 'assembly' && Object.hasOwn(DETAIL_STATIONS, 'assembly')`). `DETAIL_STATIONS` includes `assembly`. Hidden for other factions / People / level 1.
+- `ARCHIVE_UU` is null. Confirm sets notice `UU unset — the archive will not file.` No debit, credit, or source flip. Captured Assembly cubes get static refuse (`illegal in origin` / `Filing refused`) and no `File from the hold` button.
+- XSS: `h()` uses `textContent`. No `innerHTML` / `insertAdjacentHTML` in `station.js`.
+- [NO BROWSER COVERAGE] Dock Digit 9 / Archive Market pane not proven in a live berth. Orchestrator may run live in PR5/boot.

@@ -1,0 +1,48 @@
+Independent Wave 78 harness re-check after boot-test freeze helpers — 2026-08-21
+Did not modify project source. Did not rubber-stamp prior out/w78/explore/verify.txt.
+
+## Status
+CLEAN
+
+## What I tested
+1. Independent `npm run test:boot` (harness-only). Duration ~354 s. Exit 1.
+   Log extract: out/w78/explore/boot-reverify-pins.txt
+2. Static read of scripts/boot-test.mjs freeze helpers and completePay predicates.
+   station.js not changed (not required this pass).
+
+Boot pins (this run):
+- WAVE78 hunt (wave78 msn): all true, including completePay, overlaySkip, completeReplace.
+- WAVE78 passenger: all true, including completePay (was false on prior independent run).
+- WAVE78 explore: all true, including completePay (was false on prior independent run).
+- WAVE71 / WAVE72 / WAVE74 / WAVE76: all true.
+- No WAVE78 / WAVE71 / WAVE72 / WAVE74 / WAVE76 FAIL lines.
+
+Known FAILs (not bugs this pass): WAVE4 FENCE FAVOR; WAVE26 FERRY/HAUL/LANE/OLD-SAVE/SAVE/RESTORE; WAVE35 HAUL GATE DELIVERY.
+BOOT TEST FAIL — 40 errors. Previous independent run: 63 errors with WAVE78 PASSENGER FAIL and WAVE78 EXPLORE FAIL. This run has no WAVE78 FAIL lines.
+
+Static freeze / pin:
+- freezeSlotJobs78p and freezeSlotJobs78e park accepted sibling jobs of kinds
+  mining, trade, hunt, passenger, explore, bounty, haul, ferry, patrol, recovery
+  to offered, skipping the keep job.
+- Passenger: freezeSlotJobs78p(payJob78p) runs after dest dock and before
+  credBefore78p. paid78p uses credits === credBefore78p + 18.
+- Explore: freezeSlotJobs78e(payJob78e) runs after origin dock and before
+  credBefore78e. paid78e uses credits === credBefore78e + 18.
+- Hunt: paid78 uses credits === credBefore78 + 18 (no >=).
+- Grep of boot-test.mjs: no `credits >= credBefore`. Three `=== credBefore* + 18` pins only.
+
+Browser not required this pass. [NO BROWSER COVERAGE]
+
+## Bugs found
+None. Prior completePay false on passenger and explore is gone with the freeze helpers in scripts/boot-test.mjs only.
+
+## Environmental issues
+None for the harness. Chrome/Playwright not used.
+
+## Evidence
+wave78 msn completePay: true
+wave78 passenger completePay: true
+wave78 explore completePay: true
+wave71/72/74/76 completePay (or equivalent pin set): all true
+Named FAILs this run: WAVE4 FENCE FAVOR FAIL; WAVE26 FERRY QUOTE / HAUL QUOTE / LANE DELIVERY / OLD-SAVE FALLBACK / SAVE FIELDS / RESTORE FAIL; WAVE35 HAUL GATE DELIVERY FAIL; BOOT TEST FAIL — 40 errors.
+Freeze helper kinds include bounty + haul + ferry + patrol + recovery. Pin remains strict === +18.

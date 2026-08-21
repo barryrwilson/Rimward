@@ -648,9 +648,12 @@ export function initShip(ctx) {
       // ======================= FLIGHT =======================
       // Match-speed: ship.js owns flags.matchSpeed. Do not write input.throttle.
       const lock = ctx.targets.current;
-      const liveLock = !!(lock && lock.object && lock.state && !lock.state.destroyed);
-      // Rock lock: list entry with a live position, not a ship { object, state }.
-      const rockLock = !!(lock && lock.position && !lock.object && !lock.state);
+      const liveLock = !!(lock && !lock.lockKind && lock.object && lock.state && !lock.state.destroyed);
+      // Rock lock: asteroid list row only. Station/gate/pod/landmark refuse.
+      const rockList = ctx.asteroids && ctx.asteroids.list;
+      const rockListed = !!(lock && rockList && rockList.indexOf(lock) >= 0);
+      const rockLock = !!(rockListed && lock.position
+        && (lock.lockKind === 'rock' || (!lock.lockKind && !lock.object && !lock.state)));
       const lockPos = liveLock ? lock.object.position : (rockLock ? lock.position : null);
       const lockPosOk = !!(lockPos
         && Number.isFinite(lockPos.x)

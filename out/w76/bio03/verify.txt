@@ -1,0 +1,31 @@
+## Status
+CLEAN
+
+## What I tested
+- Static review of src/systems/ship-assets.js, npc.js, organic.js vs docs/Bio03FleetDesign.md and out/w75/bio03/shared-contract.md.
+- git: ship.js has no diff. LIVING_STOCK in src/game/shipyard.js stays light/cutter/heavy.
+- No makeLivingHull in npc.js. No remote GLB URL. No eval / new Function in ship-assets.js. Shader inject is authored source.
+- animateShipMesh 4-arg callers (ship.js plated remount, model-catalog.js) still omit speed. updateShipAsset maps non-finite speed to 0, so omit = idle 0.5 Hz.
+- userData.glow remains a Group with a mesh child (RIMWARD_ENGINE_GLOW or field mesh).
+- Browser on http://localhost:5173/ (existing Vite server, reused). Autosave was present, so I did not confirm NEW GAME. CONTINUE restored independent living light (same living starter path).
+- Player idle: SphereGeometry 2665 verts, ship.living true, no swimUniforms, CPU vertex sample moved over 400 ms.
+- Models Browser: ship:beautiful (Beautiful Ones — Light) loaded. Glow is a Group with a mesh. Omit-speed uniforms start at 0.5 Hz. Unknowables — Light still loads (Meshes 3, no swimUniforms).
+- Two Beautiful light instances: distinct swimUniforms / uSwimHz objects. Omit speed 0.5 Hz. Speed 120 → 2.3 Hz. reducedMotion amp 0.
+- Jump ctx.emit('jumpRequested', { to: 'bt_cradle' }). Live Beautiful traffic: heavy 55.7 u/s → 1.330 Hz; freighter 51 u/s → 1.265 Hz; freighter 120 u/s → 2.3 Hz. Formula 0.5 + 1.8 * clamp(speed/120). Distinct uniform objects. After compile, renderer material uniforms alias the instance objects.
+- ctx.settings.reducedMotion = true (same field KeyO writes): all uSwimAmp.value === 0, then restored to 1. Did not click the settings checkbox so client settings were not persisted.
+- Console: 0 error, 0 warning. No new GLB load errors.
+- innerHTML: none in the three touched src files. modelsbrowser innerHTML is pre-existing.
+
+## Bugs found
+
+## Environmental issues
+
+## Evidence
+- Screenshots: C:\Projects\WebSim\out\w76\bio03\01-title.png, 02-models-beautiful-light.png, 03-models-unknowables-light.png, 04-starter-living-idle.png, 05-starter-living-third.png, 06-bloom-beautiful-npc.png
+- Logs: C:\Projects\WebSim\out\w76\bio03\hz-probe.json
+- Test output: Live Beautiful Hz 1.330 / 1.265 / 2.3 at speeds 55.7 / 51 / 120. Idle omit-speed 0.5. reducedMotion amp 0. Player CPU verts moved at 0 u/s.
+
+Notes
+- 06-bloom-beautiful-npc.png is Cradle traffic with a hail from a Red Ledger reaver on screen. Beautiful GPU Hz was read from userData.swimUniforms, not from that hail card.
+- Cloned-material dispose on releaseShipAsset was not proven as a leak this session. Not flagged.
+- npc.js also contains cargoValueSafe / data-trade edits outside the motion slice. They did not affect this swim check.

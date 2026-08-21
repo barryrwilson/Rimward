@@ -1,0 +1,57 @@
+PASS 1.confirm.ok {"ok":true}
+PASS 1.row.grafted
+PASS 1.player.grafted
+PASS 1.hullKind.built
+PASS 1.credits.unchanged
+PASS 2.standing.fromZero
+PASS 2.standing.missingKey
+PASS 3.standing.keepWorse
+PASS 4.cancel.clears
+PASS 4.cancel.noGrafted
+PASS 4.cancel.playerClear
+PASS 4.cancel.standing
+PASS 4.cancel.credits
+PASS 5.living.refuse {"ok":false,"reason":"living"}
+PASS 5.living.noFlag
+PASS 5.living.standing
+PASS 5.unk.refuse {"ok":false,"reason":"living"}
+PASS 5.unk.noFlag
+PASS 5.already.refuse {"ok":false,"reason":"already"}
+PASS 5.freehold.banner {"ok":false,"reason":"banner"}
+PASS 5.freehold.noGraft
+PASS 5.beautiful.banner {"ok":false,"reason":"banner"}
+PASS 5.beautiful.noGraft
+PASS 5.beautiful.standingUntouched
+PASS 6.rep.refuse {"ok":false,"reason":"reputation"}
+PASS 6.rep.noGraft
+PASS 7.dock.refuse
+PASS 7.paused.refuse
+PASS 7.combat.refuse
+PASS 7.jump.refuse
+PASS 8.tamper.cap
+PASS 8.tamper.keepRow
+PASS 8.livingDrop.noFlag
+PASS 8.livingDrop.noCap
+PASS 8.livingDrop.any
+PASS 9.mixed.any
+PASS 9.mixed.cap
+PASS 9.mixed.parked
+PASS 9.mixed.mountedLiving
+PASS 10.unk.kindLiving
+PASS 10.unk.playerHeal
+PASS 11.desk.noInnerHTML
+PASS 11.desk.textContentFamily
+PASS 11.desk.warn
+PASS 11.desk.warnHunt
+PASS 11.station.esc
+PASS 11.station.init
+PASS 11.ctx.noGraftedEvent
+PASS 11.ctx.noHullKindChanged
+PASS 11.hangar.noCreditsWrite
+PASS 11.hangar.noAutosave
+PASS 11.hangar.noNpcImport
+PASS 11.noHiddenMountCost
+PASS 11.noYardPriceCopy
+PASS 12.hudFamily.mech mech
+PASS standing.noHealEmpty
+PASS

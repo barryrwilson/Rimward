@@ -1,0 +1,10 @@
+extra helper probe (fail-closed, delta null)
+{
+  "delta": null,
+  "doubleCall": true,
+  "minerPatrolNoWrite": true,
+  "causerNoWrite": true,
+  "notDestroyed": true,
+  "huntSkip": true,
+  "noSystemOwnerStamp": true
+}

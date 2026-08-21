@@ -1,0 +1,211 @@
+NAV-01 Wave 84 verifier evidence
+Date: 2026-08-21
+Scope: data freeze (markdown only). No src edits by this verifier.
+Graph: graph_resolve r-mt3i8ric-56d330fe (execute_workflows; weak match claude/workflow-security-review).
+
+================================================================
+1. Worker artifacts present
+================================================================
+- out/w84/nav01/current-nav-inventory.md
+- out/w84/nav01/shared-contract.md
+- docs/Nav01RouteDesign.md
+- out/w84/nav01/security-review.md
+- out/w84/nav01/code-review.md
+- out/w84/nav01/ui-audit.md
+- out/w84/nav01/designer-audit.md (extra; not on worker-touched list)
+
+================================================================
+2. This worker vs forbidden paths
+================================================================
+git status --short (relevant):
+  M  PROGRESS.md
+  M  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  M  src/* (many files from other waves)
+  ?? docs/Nav01RouteDesign.md
+  ?? docs/Nav02GuidanceDesign.md
+  ?? docs/Nav03AutopilotDesign.md
+  ?? out/w84/nav01/
+  ?? out/w84/nav02/
+  ?? out/w84/nav03/
+
+NAV-01 worker-listed outputs are untracked markdown under out/w84/nav01/ plus docs/Nav01RouteDesign.md.
+
+git diff --stat -- src/systems/galaxychart.js src/game/jump.js src/game/state.js
+  (empty — those files are clean)
+
+git diff -- src | nav / world.nav / 'nav' as WORLD_FIELDS key: no add of persist key nav.
+Live WORLD_FIELDS (save.js 75–98) still ends at fieldOre. No 'nav', no 'route'.
+
+PROGRESS.md: grep Wave 84 / NAV-01 / nav01 → 0 hits. The dirty PROGRESS delta is other waves.
+
+Wishlist: Initiative NAV NAV-01/02/03 text exists (wishlist ~720–782). That is the locked source the brief reads. The file is dirty in the working tree. Worker-touched list does not include it. No evidence the NAV-01 worker authored that diff.
+
+Verdict: NAV-01 worker did not change src/, wishlist, or PROGRESS.md. Working tree dirt is other work (ENV).
+
+================================================================
+3. Live src cites (inventory / contract)
+================================================================
+WORLD_FIELDS save.js 75–98: time…fieldOre. NO nav. NO route. MATCH.
+
+SAFE_ID save.js 101: /^[a-z0-9_]+$/i. MATCH.
+ID_MAX 103 = 64. MATCH.
+RESERVED_IDS 106–110 private Set. MATCH. Not exported.
+reservedId() save.js 231–234. Security cite 233 is inside this helper. MATCH enough.
+N_SYSTEMS save.js 124 Object.keys(SYSTEMS).length. MATCH.
+snapshot copy defined WORLD_FIELDS save.js 953. MATCH.
+omit-delete hangar/fieldOre/jobs save.js 1163–1168. MATCH.
+unknown currentSystem → freehold 1169–1171. MATCH.
+same-system restore: save.js 1207–1208
+  const sys = ctx.world.currentSystem;
+  if (sys && sys !== fromSystem) ctx.emit('systemLoaded', { to: sys });
+  No emit when sys === fromSystem. MATCH.
+
+galaxychart.js
+  mystery/clues: comments 14–19 forbid; grep mystery=0 in file. MATCH.
+  preventDefault/stopPropagation: comments only (21–24, 243–244). No calls. MATCH.
+  KeyM 242–247 toggle; docked/paused close-only. Escape 248–250. MATCH.
+  close button 97–101, 238. MATCH.
+  aria-modal false 81. MATCH.
+  nodes 174–210 data-system-id, NODE_R, textContent labels. MATCH.
+  hub gold .rw-galaxy-route 156–172. MATCH.
+  physical undirected dedupe 135–154. MATCH.
+  uncharted skip !Array.isArray(chart) 64–65 / 140 / 161 / 181. MATCH.
+  update 257–281: current marker only; no click. MATCH.
+  addEventListener: close click + window keydown only. No pointer/mouse on nodes. MATCH.
+  innerHTML: grep 0. MATCH.
+
+jump.js
+  midpoint ctx.targets.current = null at 85–87. MATCH.
+  currentSystem swap 91–92. MATCH.
+  emit systemLoaded { to } 123. MATCH.
+  consume jumpRequested in update 139–148. MATCH.
+  comment block 33–53 describes sequence. MATCH.
+
+ctx.js
+  world bag 125–149: currentSystem, no nav. MATCH.
+  flags 175–183: docked/paused/…/saveRestored. NO chartOpen. MATCH.
+  emit spread { type, t, ...data } 231–232. MATCH.
+  freeze comment lists jumpRequested / systemLoaded; no navRoute. MATCH.
+
+controls.js
+  TRACKED includes KeyV/KeyT Digit1–4, not KeyM/KeyG/Escape/Digit0. 37–44. MATCH.
+  KeyD pendingDock 268–270. MATCH.
+  LMB fireHeld window mousedown button 0 at 314–316. MATCH.
+  reservedToken short list 84–86. MATCH.
+  systemLoaded drops lockKind 369–375. MATCH.
+
+hud.js
+  el() textContent 226–231. MATCH.
+  toasts commLine aria-live 723–731. MATCH.
+  arrival banner systemLoaded 1032–1044. MATCH.
+  chart marks from mystery 704–721 pool, 1415–1423 read. MATCH. Not galaxychart.
+
+hud.css
+  .rw-galaxy-chart fixed inset 0 z-index 30: 1421–1431 (inventory 1421–1432). MATCH.
+  .rw-galaxy-route hub gold 1510–1516. MATCH.
+
+station.js Digit 0 shipyard:
+  DOCK_KEY_SERVICES last = 'shipyard' (174).
+  Digit handler 5710–5717: d===0 selects last service. 5712–5714. MATCH.
+
+state.js SYSTEMS merge 541; JUMP 542–548. MATCH.
+
+main.js initJump 114; initGalaxyChart 125; pause skips system.update 140–142. MATCH.
+
+hangar.js duplicates RESERVED_IDS 28–32. Contract “live pattern hangar.js 28+”. MATCH.
+
+src grep world.nav / WORLD_FIELDS 'nav': 0 persist key. MATCH inventory “no nav today”.
+
+================================================================
+4. Persist shape (NAV-01 freeze)
+================================================================
+One WORLD_FIELDS key: 'nav'. Explicit. No second key (route/autopilot/guidance).
+Shape allowlist: dest, path, remaining, status.
+status persist: 'plotted' | 'blocked' | 'arrived'. idle = omit bag.
+recalc is an event, not a persist status (contract §1.3).
+path origin-first dest-last; remaining = path.length-1 when plotted; next hop = path[1] (§2.3).
+Plot does not set lock. No innerHTML. Chart does not read mystery.
+Advance on systemLoaded, not KeyD. No teleport.
+Restore: manual plot; unknown keys including autopilot DROP until sibling serial extends allowlist (§1.4). Autopilot not armed on restore. MATCH law 11.
+PR plan §9 PR1–PR5 “Do not land these in Wave 84.” Brief repeats. MATCH later-serial-only.
+
+================================================================
+5. Orchestrator laws 1–15 in shared-contract.md §0
+================================================================
+1 markdown only / later serial — present
+2 state.js READ-ONLY — present
+3 one WORLD_FIELDS key nav; siblings extra fields same record — present
+4 KeyM toggle; no pause; no preventDefault/stopPropagation — present
+5 plot must not set targets.current / steal KeyV KeyT — present
+6 Digit 0–9 stay — present
+7 innerHTML forbidden — present
+8 chart never mystery — present
+9 BFS gates[].to and hub.routes one-way; uncharted not clickable — present
+10 jump owners; advance systemLoaded; no teleport — present
+11 restore manual; no AP auto-engage — present
+12 no UU/BIO/… inventions — present
+13 do not edit sibling NAV-02/03 files — present
+14 proto dest/path fail closed — present
+15 new emit types listed; no spread smash — present
+
+All 15 appear as numbered items in §0.
+
+================================================================
+6. Cross-cut NAV-02 / NAV-03
+================================================================
+NAV-03: extra field world.nav.autopilot boolean on SAME record. Restore force false.
+NAV-01 §1.4 explicitly: unknown keys drop; if sibling lands first and writes autopilot, NAV-01 still drops until NAV-03 serial extends allowlist.
+Order explicit. NOT a bug (parent rule).
+
+NAV-02 persist read model:
+  dest, path, hopIndex (writer NAV-01 only)
+  proposed status 'active' | 'recalc' | 'broken' | 'arrived'
+  FORBIDDEN on blob: remaining (derive)
+
+NAV-01 persist write model:
+  dest, path, remaining, status 'plotted' | 'blocked' | 'arrived'
+  NO hopIndex
+  remaining REQUIRED and coherent remaining === path.length-1
+  recalc is NOT a stored status (off-path jump writes plotted or blocked)
+
+Cursor math:
+  NAV-01 next = path[1]; remaining = path.length - 1 (path[0] = current)
+  NAV-02 next = path[hopIndex]; remaining = path.length - hopIndex
+  These match only if hopIndex === 1 while plotted. NAV-01 never stores hopIndex.
+  NAV-02 §1.5 allows “NAV-01’s equivalent cursor” for nextTo, but still forbids remaining on the blob and still assumes hopIndex exists for heal/smuggle rules.
+
+Status:
+  NAV-01 healer: status not in {plotted, blocked, arrived} → DELETE the bag.
+  NAV-02 values active / recalc / broken would wipe a valid route if a later serial wrote them into the same field.
+  NAV-02 says consume NAV-01 enum if equivalent; the names are not equivalent and NAV-01 does not document a map.
+
+Allowlist host:
+  Extra keys (autopilot, later hopIndex) can ride after a sibling serial extends the allowlist. Documented for autopilot only.
+  Conflicting definitions of the SAME fields (status enum; remaining vs hopIndex as the hop cursor) are not extra keys. Later serials cannot merge both contracts without a contract change.
+
+HIGH: hopIndex vs remaining.
+HIGH: status enums (plotted/blocked vs active/broken/recalc; persist recalc vs event).
+
+================================================================
+7. Internal freeze checks (no src this wave)
+================================================================
+- Plotting must not set lock: contract §0.5 / §6. OK.
+- No innerHTML: §0.7 / §7. OK.
+- No teleport: §0.10 / §4.2. OK.
+- No second WORLD_FIELDS key: §1.1. OK.
+- Chart click later; live chart has no node pointer. OK.
+- BFS union physical + hub one-way. OK.
+- .rw-galaxy-plot* not .rw-galaxy-route. OK.
+
+================================================================
+8. Verdict
+================================================================
+Markdown freeze is internally consistent for NAV-01-owned fields.
+Live cites for KeyM, WORLD_FIELDS 75–98, systemLoaded, emit spread, no innerHTML on chart still match.
+Worker did not land src.
+Cross-cut persist with NAV-02 hopIndex/remaining and status enums cannot merge as written.
+
+STATUS: BUGS_FOUND
+HIGH-1 hopIndex vs remaining
+HIGH-2 status enum / recalc persist vs event
+ENV: dirty src + wishlist + PROGRESS from other waves

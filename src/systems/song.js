@@ -66,6 +66,7 @@ const CUES = {
     ['sawtooth', 170, 70, 0.09, 0.16, 900, 0],
   ],
   npcFire: [['square', 380, 200, 0.045, 0.06, 2200, 0]], // thinner than playerFire
+  npcFireMissile: [['sawtooth', 720, 240, 0.07, 0.07, 2600, 0]], // dart sting; still from npcFire
   npcDisabled: [['sine', 440, 110, 0.6, 0.12, 0, 0]], // falling tone
   milestone: [ // two-note sting
     ['sine', 660, 660, 0.15, 0.1, 0, 0],
@@ -116,6 +117,7 @@ const CUES = {
   hudMechContact: [['triangle', 740, 420, 0.1, 0.06, 2000, 0]],
   hostileEnter: [['sine', 330, 262, 0.2, 0.045, 800, 0]],
   hullBand: [['sine', 185, 130, 0.3, 0.055, 420, 0]],
+  reticleLock: [['square', 1480, 1480, 0.06, 0.05, 3200, 0]],
 };
 
 // Fail-closed extra gate. hud.js emit site is the real family gate.
@@ -416,8 +418,9 @@ export function initSong(ctx) {
       const evs = ctx.lastEvents;
       const t = ac.currentTime;
       for (let i = 0; i < evs.length; i++) {
-        const typ = evs[i].type;
-        const cue = CUES[typ];
+        const ev = evs[i];
+        const typ = ev.type;
+        const cue = (typ === 'npcFire' && ev.weapon === 'missile') ? CUES.npcFireMissile : CUES[typ];
         if (cue) {
           const needFam = FAMILY_CUES[typ];
           const famOk = !needFam || document.getElementById('hud')?.dataset.family === needFam;

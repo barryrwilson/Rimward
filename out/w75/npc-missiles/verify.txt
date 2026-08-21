@@ -1,0 +1,184 @@
+Wave 75 NPC-missiles design verify (re-check after law fixes)
+Date: 2026-08-20
+Scope: markdown vs live src. No src/ edits by this verifier. No docs/ edits.
+Status: CLEAN
+
+================================================================
+RESULT: CLEAN
+================================================================
+
+Previous Bug 1 (brief allowed ace missing-target-means-player for darts): GONE
+Previous Bug 2 (Wave 57 cited stale combat.js 35–36 as law): GONE
+No new contradictions among brief, contract, inventory.
+HUD still has no incoming gauge. Unknowables and fail-closed default still hold.
+
+Checked files
+- docs/NpcMissilesDesign.md
+- out/w75/npc-missiles/current-npc-missiles-inventory.md
+- out/w75/npc-missiles/shared-contract.md
+- out/w75/npc-missiles/security-review.md
+- out/w75/npc-missiles/code-review.md
+Live spot-check: combat.js, npc.js, hud.js, song.js, src/core/ctx.js, state.js,
+weapon-fit.js, hangar.js, physics.js, world.js, src/systems/organic.js, controls.js.
+
+Git (this wave vs workspace dirt)
+- Untracked Wave 75: docs/NpcMissilesDesign.md, out/w75/npc-missiles/*
+- docs/Shp03WeaponsDesign.md: not in git status (not edited)
+- Dirty src/: hud.js (mine prompt), npc.js (data-trade cargoValueSafe).
+  Diffs are not NPC-missile impl. npcFire cites still 1512 / 1872.
+- combat.js not dirty. Live split 1716–1718 is the worktree file.
+
+----------------------------------------------------------------
+CHECK 1 — HUD tree does not gain a gauge / lock box / aspect ring
+PASS
+- initHud (hud.js 599–730): reticle, rails, bracket, lead, edge arrow,
+  chartmarks, toasts, banner, jump, prompt, contacts. No inbound-count
+  node, no lock box, no aspect ring, no missile timer.
+- Empty hub clamp remains hud.js 1004 (80 px).
+- Grep hud.js: no innerHTML; no "incoming" / "lock-box" / "aspect".
+- toastForEvent: no npcFire / playerFire / playerHit cases; default → null
+  (hud.js 507–508).
+- pushToast: slot.el.textContent = text (hud.js 924).
+- HUD-01 reject: HudUtilityChangeProposal.md 318–321, 417.
+- HUD-02 reject: Hud02IdentitiesDesign.md 75.
+- Contract §1.1 / brief non-goals match live tree.
+
+----------------------------------------------------------------
+CHECK 2 — Unknowables: darts miss; NPC Unknowables do not fire darts
+PASS (live miss; emit gate is design-only, fail-closed)
+- applyHit: state.js 167–171. isUnknowable && w.beam !== true → [].
+- WEAPONS.missile has no beam (state.js 109–114). Dart is not a beam.
+- testNpcHits skip Unknowable, do not consume: combat.js 1458–1459.
+- Live npcFire is cannon only (npc.js 1512, 1872). No missile emit.
+- Contract §0.6 / §4.4 and brief §4.4: Unknowable NPCs never emit missile
+  npcFire. Inventory cites survivor skip (npc.js 1313–1322) as extra pin;
+  that is crew-pod law, not a hunt gate. Design still forbids darts.
+
+----------------------------------------------------------------
+CHECK 3 — Wave 57 hit tests (live 1716–1718, not header 35–36)
+PASS
+- Live bolts 1716–1718: (fromPlayer || !vsPlayer) ? testNpcHits : testPlayerHit.
+  Player shot → testNpcHits. NPC vs player → testPlayerHit. NPC vs NPC →
+  testNpcHits, never testPlayerHit.
+- Header 35–36 still says the inverted sentence. It is live text but not law.
+- Brief pain + §4.3 + Alt H1: cite 1716–1718; mark 35–36 stale.
+- Contract §4.3: same split; “Do not treat the file header at combat.js 35–36
+  as law.” No longer lists 35–36 as the live-law cite.
+- Inventory §2: live-law row is 1716–1718; header row labeled stale / false.
+- lastAttacker stamp only in testNpcHits (combat.js 1541):
+  fromPlayer ? 'player' : (shooter || 'npc').
+- testPlayerHit 1566–1582: PLAYER_HIT_RADIUS 2.4, no padding, playerHit emit.
+- Missile tick today always testNpcHits (1738). Never testPlayerHit.
+
+----------------------------------------------------------------
+CHECK 4 — Default fail closed = no NPC missiles until owner Q1/Q2
+PASS
+- Brief open questions + overview: unpicked → no NPC missiles.
+- Contract §0.4, §1.2, §3.2, mermaid: unpicked → off.
+- Proposed who: pirate + ace vs player. Not trader/miner/patrol/Unknowable.
+- No invented fire percent. Personality is resolve (npc.js 1256–1261).
+- Live fire is cannon only. Design does not ship darts this wave.
+
+----------------------------------------------------------------
+CHECK 5 — No second player launcher SKU. No chaff. No power ledger.
+         No NPC auto turret sneak.
+PASS
+- LAUNCHER_IDS has only dart (weapon-fit.js 33–44).
+- TURRET_IDS.auto is player SKU; tryPlayerTurret is player-only
+  (combat.js 1699–1702, 1209–1228).
+- spawnNpcShot → 64-bolt pool, no lock, no seeker (1230–1250).
+- spendMissileAmmo is hangar/player (hangar.js 516–529). Contract forbids
+  NPC spend.
+- PHY avoid lookahead 40 / gain 1.4 (physics.js 19–20; npc.js 587–635).
+  Not chaff.
+
+----------------------------------------------------------------
+CHECK 6 — docs/Shp03WeaponsDesign.md not edited
+PASS (git status does not list it)
+
+----------------------------------------------------------------
+CHECK 7 — no src/ writes from this task
+PASS for Wave 75 artifacts (markdown only).
+Workspace src/ is dirty from other concurrent waves; those diffs are
+data-trade / mine prompt, not NPC seekers.
+
+----------------------------------------------------------------
+CHECK 8 — toast copy authored literals, no innerHTML, no attacker name in HUD
+PASS on law
+- Live toastForEvent: commLine uses e.text ?? e.line, ignores from
+  (hud.js 400–408). npcFire falls through default → null (507–508).
+- innerHTML: none in hud.js / combat.js / npc.js / song.js.
+- say() still emits from: live.state.name (npc.js 319–320). Contract:
+  incoming path must not display from. Proposed copy example
+  "Incoming dart." is a source literal, not a name interpolate.
+
+----------------------------------------------------------------
+CHECK 9 — other live citations (spot-check)
+PASS
+- MISSILE_POOL 8, steerSeekerVel 199–224, spawnMissile fromPlayer true /
+  vsPlayer false / shooter null: combat.js 165, 1117–1144.
+- Group 4 / Digit4: combat.js 176–178, 226–234; controls.js 23, 211–214.
+- npcFire hunt with target: npc.js 1509–1512. Ace omit target: 1869–1872.
+  Combat missing target → player (1672–1675). Cannon-only live path.
+- mayHuntPlayer / isCivilianRole: npc.js 1061–1073.
+- Telegraph ≥ 3 s: npc.js 37–39, TELEGRAPH_SECONDS 83.
+- song npcFire one thin bark, no weapon branch: song.js 68, 131–133.
+- ctx frozen list 198–227: playerFire listed; npcFire not listed (emit
+  site npc.js 40). Matches inventory intent.
+- NAMED_GUNS role ace: world.js 414+; state.js 887–902.
+- Collector alwaysHuntsPlayer pirate: world.js 948 (fn nearby 930s).
+- isBeautiful: src/systems/organic.js 67–69.
+- WPN 4 label textContent: hud.js 186–214, 728–730, 1511–1512.
+- FORE/AFT flash on playerHit: 308–336, 942–945, 1156–1175.
+
+----------------------------------------------------------------
+CHECK 10 — brief vs contract vs inventory
+PASS. Merge law: contract wins. After the law fix they agree.
+
+Target / omit (Bug 1 closed)
+- Brief §4.2 step 5: explicit target; ace vs player copies target:'player';
+  missing-target-means-player forbidden for missiles; ace cannon omit stays
+  cannon-only (npc.js 1872); missing missile target → drop, do not aim player.
+- Brief §4.3 close: emit only with explicit target:'player'. Do not omit.
+  Do not use missing-target-means-player.
+- The leftover “or ace duel legacy missing-target-means-player” is gone
+  from the brief (only cited in the prior verify.txt / code-review history).
+- Contract §2.1 / §4.2.7: always set target; ace vs player copies
+  target:'player'; missing missile target → drop.
+- Inventory §2: ace omit is cannon-only; do not copy onto darts.
+
+Wave 57 cite (Bug 2 closed)
+- Brief, contract, inventory all name combat.js 1716–1718 as live law
+  and mark 35–36 stale. Contract no longer pairs 35–36 as the law cite.
+
+----------------------------------------------------------------
+BUGS
+================================================================
+None.
+
+Nit (not a bug, not a fail): brief §3 mermaid still draws Q2 as
+toast | song | both. Contract §2.3 still requires a song branch whenever
+missile npcFire exists (cannon bark must not lie). Toast-only Q2 does
+not waive that. Q2 default remains no NPC missiles. Contract wins.
+
+================================================================
+NOT BUGS / CONFIRMED LAW
+================================================================
+- Separate NPC pool suggested cap 4; player pool 8 stays; drop when dry.
+- Do not call spawnNpcShot for darts (would be ballistic missile-family
+  bolt in the 64-pool).
+- First slice vs player only; ship-vs-ship darts wait.
+- state.js READ-ONLY; Digit 0/8/9 untouched.
+- Serial PR0–PR4 after Q1/Q2. Wave 75 markdown only.
+- XSS: authored literals, textContent, no names in HUD.
+
+================================================================
+ENV
+================================================================
+graph_resolve → execute_workflows omp/workflow-software-delivery (coverage
+low). This run is verify-only: no src/docs write; smoke = live file:line
+spot-check vs the three markdown sources. Browser / LSP MCP tools are not
+on this agent; filesystem read/grep used instead.
+Dirty src/ from other waves did not block citation checks.
+
+End of verify.

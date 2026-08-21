@@ -1,0 +1,81 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w74/persist/probe.mjs`. All 49 pins printed true. Exit code 0.
+- Spot-checked live persist files against `out/w73/rep/shared-contract.md` and `out/w73/exp/shared-contract.md`.
+- `sanitizeReputation` (`src/game/save.js`): walks `Object.keys` into a fresh `{}`; drops `RESERVED_IDS` / `__proto__`; requires `Object.hasOwn(FACTIONS, key)`; keeps finite numbers only; missing keys stay missing (Beautiful omitted reads as 0 via `standingRead`).
+- Restore copies `WORLD_FIELDS` then `sanitizeRestored` calls `sanitizeReputation` next to `sanitizeJobs`. No `Object.assign` merge onto the live bag.
+- `sanitizeCargoRow`: reserved commodity strings drop; unknown SKUs drop; ordinary `COMMODITIES` rows keep `{commodity, units}` only; survivor path still keeps faction/source/name; data rows require exact `source` + `originFaction` and omit extra keys.
+- Missing data `source` drops the row (restore pin `restore.missingSourceNotLegal`). Bad source / reserved origin / non-origin faction (`freehold`) drop. `stolen` stays allowlisted. Zero units drop.
+- `copyCargoEntry` / `dataRowsMatch` (`src/game/pods.js` + `src/game/data-trade.js`): scoop stacks on commodity+source+originFaction; reserved origin returns null and does not enter the hold.
+- `cargoValueSafe` filters data keys then calls `cargoValue`. Stuffed `dataCrystal` / `dataCube` prices contribute 0. Hail tribute, NPC tribute/demand, resolve cargo-at-stake, and pirate interest all use `cargoValueSafe`.
+- `DATA_DROP_RATE` is `null`. `hasDataDropRate()` is false. `spawnDataPod` / `maybeSpawnDataFromWreck` return null. `spillShipCargo` skips data flatten, then calls the wreck hook (no-op).
+- `src/game/state.js` `COMMODITIES` has no `dataCrystal` / `dataCube`. Git shows no `state.js` edit.
+- `WORLD_FIELDS` still lists `reputation` and does not list `crimeScore`, `wanted`, `heat`, or `police`. Grep found no `crimeScore` / `world.wanted` writers.
+- Edge cases covered by probe: enumerable `__proto__` faction key, NaN / Infinity reputation, omitted data `source`, data `originFaction: '__proto__'`, ordinary provisions row still sanitizes.
+- `src/game/hangar.js` is dirty in the tree, but the diff is Wave 72 BIO graft (`grafted`, `applyAbominationStanding`). Persist files do not import hangar APIs from `data-trade.js`. Hangar still sanitizes cargo via existing `sanitizeCargoList`.
+- `src/systems/station.js` is dirty from a sibling graft worker (`graftPending`). Persist worker files do not edit station.js. `priceOf` fail-closed for data keys is a later station/desk handoff, not this slice.
+
+## Bugs found
+
+## Environmental issues
+
+## Evidence
+- Logs: command `node --import ./scripts/with-css-stub.mjs out/w74/persist/probe.mjs` (workspace `C:\Projects\WebSim`).
+- Test output:
+  PASS 49 pins
+  {
+    "rep.protoDropped": true,
+    "rep.constructorDropped": true,
+    "rep.prototypeDropped": true,
+    "rep.unknownDropped": true,
+    "rep.nanDropped": true,
+    "rep.infDropped": true,
+    "rep.freeholdKept": true,
+    "rep.markedKept": true,
+    "rep.beautifulMissing": true,
+    "rep.standingReadMissing": true,
+    "rep.standingReadFinite": true,
+    "rep.standingReadReserved": true,
+    "rep.missingBecomesObject": true,
+    "rep.arrayBecomesEmpty": true,
+    "rep.restore.protoDropped": true,
+    "rep.restore.nanDropped": true,
+    "rep.restore.freehold": true,
+    "rep.restore.beautifulMissing": true,
+    "rep.noCrimeScoreField": true,
+    "rep.reputationFieldKept": true,
+    "cargo.ordinarySurvives": true,
+    "cargo.zeroUnitsDrop": true,
+    "cargo.unknownDrops": true,
+    "cargo.protoCommodityDrops": true,
+    "cargo.survivorUnchanged": true,
+    "cargo.dataRoundtrip": true,
+    "cargo.missingSourceDrops": true,
+    "cargo.badSourceDrops": true,
+    "cargo.stolenAllowlisted": true,
+    "restore.dataKeepsProvenance": true,
+    "restore.missingSourceNotLegal": true,
+    "restore.unknownDropped": true,
+    "restore.ordinaryKept": true,
+    "restore.survivorKept": true,
+    "scoop.dataStacksSameTriple": true,
+    "scoop.dataDoesNotCrossSource": true,
+    "scoop.reservedOriginDropped": true,
+    "scoop.survivorUnchanged": true,
+    "dataRowsMatchTriple": true,
+    "copyDataDropsBadOrigin": true,
+    "value.rawWouldHonorStuff": true,
+    "value.safeZerosData": true,
+    "value.safeEmpty": true,
+    "spawn.rateUnset": true,
+    "spawn.directNull": true,
+    "spawn.maybeNull": true,
+    "spawn.spillSkipsDataRow": true,
+    "spawn.noDataPodFromSpill": true,
+    "spawn.holdCleared": true
+  }
+- Persist-owned diffs vs HEAD: `src/game/data-trade.js` (new), `src/game/save.js`, `src/game/pods.js`, `src/systems/npc.js`, `src/systems/hail.js`.
+- Sibling dirty files (not judged as persist bugs): `src/game/hangar.js` (BIO graft), `src/systems/station.js` (graft pending).
+- Contracts: `out/w73/rep/shared-contract.md` §1.2 bag heal; `out/w73/exp/shared-contract.md` §1.2–1.3 cargo, §2.3 value fail-closed, §3.2 skip spawn.

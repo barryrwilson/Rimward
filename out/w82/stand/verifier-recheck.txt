@@ -1,0 +1,44 @@
+Wave 82 stand verifier recheck
+Date: 2026-08-21
+Workspace: C:\Projects\WebSim
+Graph: proceed_unmodeled (owner instruction). graph_resolve returned blocked_ambiguous on unrelated omp/claude candidates. No src edits. No boot-test. No second vite.
+
+Status: CLEAN
+
+COMMANDS
+  node --import ./scripts/with-css-stub.mjs out/w82/stand/probe.mjs
+    exit 0, PASS all
+  node --import ./scripts/with-css-stub.mjs out/w82/stand/extra-probe.mjs
+    exit 0, PASS extra all
+    abom.playerGrafted.capLeak beautiful === -10 (was -5)
+
+SOURCE TRACE
+  src/game/kill-standing.js applyPlayerKillStanding
+    writes bag[faction] = standingRead + KILL_STANDING_DELTA (-5)
+    if victimGrafted: applyBeautifulAbominationBonus (+5 Beautiful, skip when victim faction is beautiful)
+    then applyAbominationStanding(ctx)  // recap after writes
+    then emitStandingLine
+  src/game/hangar.js applyAbominationStanding
+    anyGrafted hangar row grafted:true → bag.beautiful = Math.min(current, HOSTILE_STANDING)
+    HOSTILE_STANDING === -10
+
+PINS
+  Player not grafted, grafted other-faction civilian:
+    abom.noPlayerGraft.plus5 → beautiful 5  PASS
+  Player hangar grafted, grafted other-faction civilian, beautiful already -10:
+    abom.playerGrafted.capHold → -10  PASS
+    abom.playerGrafted.capLeak → -10  PASS  (previous fail: -5)
+  Trader / miner kill -5 PASS
+  Beautiful victim skip bonus, kill -5 only PASS
+  Pirate / ace / independent / reserved / npc attacker skip PASS
+
+PREVIOUS BUG
+  applyPlayerKillStanding wrote Beautiful +5 and did not recap.
+  Player hangar grafted + kill grafted other-faction civilian leaked beautiful to -5.
+  Now recap after writes holds -10.
+
+BUGS
+  none
+
+ENV
+  none. Browser / vite / boot-test not run (instruction).
