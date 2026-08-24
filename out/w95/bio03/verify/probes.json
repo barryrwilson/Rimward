@@ -1,0 +1,28 @@
+{
+  "playerProbe": {
+    "faction": "independent",
+    "classKey": "light",
+    "living": true,
+    "hullPath": "living",
+    "verts": 2883,
+    "names": [
+      "Mesh",
+      "Mesh",
+      "Mesh",
+      "Mesh",
+      "Mesh",
+      "Mesh",
+      "Mesh",
+      "Mesh"
+    ],
+    "hasSwimUniforms": false,
+    "sys": "freehold"
+  },
+  "npcProbe": null,
+  "traffic": {
+    "sys": "bt_cradle",
+    "nShips": 0,
+    "nBeautiful": 0,
+    "sample": []
+  }
+}

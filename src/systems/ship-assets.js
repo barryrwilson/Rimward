@@ -3,6 +3,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { makeOrganicVeinTexture } from './organic.js';
+import {
+  SWIM_IDLE_HZ,
+  SWIM_CRUISE_HZ,
+  cadenceFor,
+  classCruise,
+} from '../game/living-cadence.js';
+
+export { SWIM_IDLE_HZ, SWIM_CRUISE_HZ };
 
 export const NPC_FACTIONS = Object.freeze([
   'veridian', 'ferrous', 'freehold', 'redledger', 'gilded', 'beautiful',
@@ -42,17 +51,15 @@ let ktx2Loader = null;
 
 // Beautiful NPC GPU swim. Matches player idle→cruise Hz (ship.js) without a
 // CPU vertex loop. Per-instance uniform objects: shared module uniforms would
-// lock every Beautiful NPC to one speed.
-const SWIM_IDLE_HZ = 0.5;
-const SWIM_CRUISE_HZ = 2.3;
-const SWIM_CRUISE_SPEED = 120; // light-class cruise; clamp, not a persist field
-const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-hz';
+// lock every Beautiful NPC to one speed. Hz/sweep scales live in living-cadence.js.
+const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-hz-sweep';
 
 function makeSwimUniforms() {
   return {
     uSwimTime: { value: 0 },
     uSwimAmp: { value: 1 },
     uSwimHz: { value: SWIM_IDLE_HZ },
+    uSwimSweep: { value: 1 },
   };
 }
 
@@ -61,7 +68,8 @@ function injectSwim(uniforms) {
     shader.uniforms.uSwimTime = uniforms.uSwimTime;
     shader.uniforms.uSwimAmp = uniforms.uSwimAmp;
     shader.uniforms.uSwimHz = uniforms.uSwimHz;
-    shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nuniform float uSwimHz;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
+    shader.uniforms.uSwimSweep = uniforms.uSwimSweep;
+    shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nuniform float uSwimHz;\nuniform float uSwimSweep;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
 {
@@ -81,7 +89,7 @@ function injectSwim(uniforms) {
   float spineWave = sin(6.9 * zn - swimPhase);
   float flap = sin(swimPhase - lag);
   transformed.x += uSwimAmp * bodyAmp * zn * zn * spineWave;
-  transformed.y += uSwimAmp * flapAmp * wing * flap;
+  transformed.y += uSwimAmp * flapAmp * wing * flap * uSwimSweep;
 }`
     );
   };
@@ -196,6 +204,32 @@ function loadMaterials(faction, role) {
       emissiveVC.vertexColors = true;
       const fieldVC = field.clone();
       fieldVC.vertexColors = true;
+      // Player living hull uses makeVeinTexture (teal + magenta). Beautiful
+      // NPC GLBs get the same family on the hull emissive map, not 3D beads.
+      if (resolvedFaction === 'beautiful') {
+        let veinTex = null;
+        try {
+          const probe = typeof document !== 'undefined'
+            ? document.createElement('canvas') : null;
+          if (probe && typeof probe.getContext === 'function' && probe.getContext('2d')) {
+            veinTex = makeOrganicVeinTexture({
+              seed: 1337,
+              colors: ['#46ffe0', '#4fe0c8', '#c86bff'],
+              count: 42,
+            });
+            veinTex.wrapT = THREE.RepeatWrapping;
+          }
+        } catch (_) {
+          veinTex = null;
+        }
+        if (veinTex) {
+          for (const mat of [hull, hullVC]) {
+            mat.emissive = new THREE.Color(0xffffff);
+            mat.emissiveMap = veinTex;
+            mat.emissiveIntensity = 0.85;
+          }
+        }
+      }
       // Beautiful swim inject is per instance (cloneSwimMaterials). Shared
       // materials stay static so one NPC's speed cannot drive the fleet.
       const set = { hull, hullVC, emissive, emissiveVC, field, fieldVC };
@@ -418,6 +452,7 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   root.userData.lod = lod;
   root.userData.radius = new THREE.Box3().setFromObject(visual).getBoundingSphere(new THREE.Sphere()).radius;
   root.userData.loadedLods = new Set(['lod0']);
+  root.userData.classKey = resolvedClass;
   const idle = template.animations.find((clip) => clip.name === 'idle');
   if (idle) {
     const mixer = new THREE.AnimationMixer(visual);
@@ -464,8 +499,12 @@ export function updateShipAsset(object, elapsed, reducedMotion = false, camera, 
   const uniforms = object.userData.swimUniforms;
   if (!uniforms) return;
   const spd = Number.isFinite(speed) ? Math.max(speed, 0) : 0;
-  const speedNorm = Math.min(spd / SWIM_CRUISE_SPEED, 1);
+  const cadence = cadenceFor(object.userData.classKey);
+  const cruise = classCruise(object.userData.classKey);
+  const speedNorm = Math.min(spd / cruise, 1);
   uniforms.uSwimTime.value = elapsed;
   uniforms.uSwimAmp.value = reducedMotion ? 0 : 1;
-  uniforms.uSwimHz.value = SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * speedNorm;
+  uniforms.uSwimHz.value =
+    (SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * speedNorm) * cadence.hzScale;
+  uniforms.uSwimSweep.value = reducedMotion ? 0 : cadence.sweepScale;
 }

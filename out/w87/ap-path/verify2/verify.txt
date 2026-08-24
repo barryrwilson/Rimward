@@ -1,0 +1,36 @@
+## Status
+ENV_ISSUE
+
+## What I tested
+- Re-ran headless probe once:
+  `node --import ./scripts/with-css-stub.mjs out/w87/ap-path/probe.mjs`
+  Log: out/w87/ap-path/verify2/probe.log
+  Result: AP PATH PROBE PASS. All recorded keys true, including:
+  zone.jumpRequested.veridian, hub.jumpRequested.haven, live pos matches authored,
+  no phantom vd_survey, gate.cycleStopsOnHop, hub.cycleHitsHop, ap.noJumpEmit,
+  gate.soleJumpEmit.
+- Started Vite (`npm run dev`). VITE v6.4.3 ready at http://localhost:5173/.
+- Attempted live browser via Playwright MCP only (no custom Chrome user-data-dir,
+  no cdp-live.mjs, no chrome-profile folders).
+- Playwright MCP failed twice on lock:
+  Browser is already in use for
+  C:\Users\barry\AppData\Local\ms-playwright-mcp\mcp-chrome-7d372dc
+  (use --isolated to run multiple instances of the same browser).
+- Stopped after two drive attempts. Did not evaluate in-page JS.
+- [NO BROWSER COVERAGE] / [ENV]
+- Headless jump path is green. Orchestrator can judge live-page coverage.
+
+## Bugs found
+None. Probe did not fail. No product bug inferred from a locked Playwright session.
+
+## Environmental issues
+- Playwright MCP cannot attach: profile mcp-chrome-7d372dc is already in use.
+- Live page evaluate of currentSystem / world.nav / autopilot.wantJump /
+  gate.inZone / ring visibility was not possible.
+- Title overlay, KeyM, Veridian node, and Autopilot click were not driven.
+- Did not spawn Chrome with a custom user-data-dir (previous verifier ENV failure mode).
+
+## Evidence
+- out/w87/ap-path/verify2/probe.log — PASS, all keys true
+- out/w87/ap-path/verify2/playwright-error.txt — MCP lock errors
+- Vite ready: http://localhost:5173/ (background npm run dev)

@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "checks": {
+    "mountedKeep": "hull_starter",
+    "docked": true,
+    "menuDigit0": true,
+    "shipyard": true,
+    "trainOffer": true,
+    "hostileNoSale": true,
+    "hostileNoBtn": true,
+    "shortOffer": true,
+    "shortPapers": true,
+    "shortRefuse": true,
+    "afterClass": "heavy",
+    "afterKind": "living",
+    "afterMounted": "hull_starter",
+    "afterMesh": "living",
+    "afterSpeed": 90,
+    "afterMult": 2,
+    "people": true,
+    "consoleErrs": [],
+    "exceptions": []
+  },
+  "env": null,
+  "fails": []
+}

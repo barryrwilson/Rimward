@@ -1,0 +1,350 @@
+{
+  "ok": true,
+  "topKeys": [
+    "scene",
+    "camera",
+    "renderer",
+    "config",
+    "input",
+    "autopilot",
+    "ship",
+    "player",
+    "cargo",
+    "cargoCapacity",
+    "bio",
+    "world",
+    "systems",
+    "gate",
+    "ships",
+    "targets",
+    "flags",
+    "settings",
+    "events",
+    "lastEvents",
+    "emit",
+    "elapsed",
+    "asteroids",
+    "station",
+    "pods",
+    "models"
+  ],
+  "player": {
+    "classKey": "light",
+    "name": "player",
+    "faction": "independent",
+    "hull": 91.83066666634873,
+    "hullMax": 100,
+    "screen": 40,
+    "screenMax": 40,
+    "shell": 47.33580000007219,
+    "shellMax": 60,
+    "engine": 83.66133333269747,
+    "engineMax": 100,
+    "heat": 0,
+    "overheated": false,
+    "lastHitAt": 217.04309999990318,
+    "lastCombatAt": 217.04309999990318,
+    "engineOut": false,
+    "disabled": false,
+    "destroyed": false,
+    "surrendered": false,
+    "disabledDamage": 0,
+    "disabledSince": null,
+    "bookValue": 1200,
+    "bounty": 0,
+    "resolve": 70,
+    "personality": 7.765720649246628,
+    "hullKind": "living"
+  },
+  "ship": {
+    "object": {
+      "isObject3D": true,
+      "uuid": "a00466fe-7ae5-4011-ab74-3a6292b4955d",
+      "name": "",
+      "type": "Object3D",
+      "parent": "object",
+      "children": {
+        "len": 2,
+        "sample": [
+          98,
+          430
+        ]
+      },
+      "up": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      },
+      "position": {
+        "x": 183.5092423437281,
+        "y": 254.08680327036345,
+        "z": 299.1705379968494
+      },
+      "rotation": "object",
+      "quaternion": "object",
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "matrix": "object",
+      "matrixWorld": "object",
+      "matrixAutoUpdate": true,
+      "matrixWorldAutoUpdate": true,
+      "matrixWorldNeedsUpdate": false,
+      "layers": "object",
+      "visible": true,
+      "castShadow": false,
+      "receiveShadow": false,
+      "frustumCulled": true,
+      "renderOrder": 0,
+      "animations": {
+        "len": 0,
+        "sample": []
+      },
+      "userData": "object"
+    },
+    "velocity": {
+      "x": -3.0242901831318685,
+      "y": -15.907266402539623,
+      "z": -24.056507913806513
+    },
+    "speed": 28.998328029736285,
+    "driftActive": false,
+    "burnerActive": false,
+    "burnerReadyAt": 0,
+    "driftReadyAt": 0,
+    "hullRig": {
+      "kind": "living",
+      "root": "object",
+      "flesh": "object",
+      "hull": "object",
+      "geo": "object",
+      "base": "object",
+      "zNorm": "object",
+      "wingness": "object",
+      "count": 2665,
+      "posAttr": "object",
+      "arr": "object",
+      "fleshMat": "object",
+      "veinTex": "object",
+      "eyeGeo": "object",
+      "eyeMat": "object",
+      "scarGeo": "object",
+      "scarMat": "object",
+      "scars": {
+        "len": 5,
+        "sample": [
+          104,
+          105,
+          106,
+          107,
+          108
+        ]
+      },
+      "underLight": "object",
+      "plated": null,
+      "platedIsAsset": false
+    },
+    "hullPath": "living",
+    "living": {
+      "swim": true,
+      "breath": true,
+      "heartbeat": true,
+      "base": "object",
+      "zNorm": "object",
+      "wingness": "object",
+      "count": 2665
+    }
+  },
+  "world": {
+    "time": 247.81159999978195,
+    "credits": 350,
+    "fear": 0,
+    "reputation": {
+      "freehold": 0,
+      "redledger": 0,
+      "veridian": 0,
+      "hollow": 0
+    },
+    "currentSystem": "freehold",
+    "shipName": "she",
+    "records": {
+      "len": 17,
+      "sample": [
+        "rec-1",
+        "rec-2",
+        "rec-3",
+        "rec-4",
+        "rec-5"
+      ]
+    },
+    "incidents": {
+      "len": 0,
+      "sample": []
+    },
+    "aftermath": {
+      "len": 0,
+      "sample": []
+    },
+    "prices": {
+      "provisions": 100,
+      "refinedMetals": 264,
+      "restrictedComponents": 551,
+      "rawOre": 140,
+      "livingRock": 540,
+      "slagIron": 178,
+      "brineIce": 238,
+      "chromeSalt": 495,
+      "gildvein": 989,
+      "emberglass": 782,
+      "voidPlatinum": 1590,
+      "wakeglass": 2030
+    },
+    "markets": {
+      "freehold": "object"
+    },
+    "activeEvent": null,
+    "milestones": {
+      "len": 2,
+      "sample": [
+        "firstScare",
+        "qshipUnmasked"
+      ]
+    },
+    "contacts": {
+      "len": 103,
+      "sample": [
+        "contact-freehold-dockmaster",
+        "contact-freehold-fence",
+        "contact-veridian-dockmaster",
+        "contact-veridian-fixer",
+        "contact-redmarch-dockmaster"
+      ]
+    },
+    "miningLaser": 0,
+    "launcher": "",
+    "missileAmmo": 0,
+    "turret": "",
+    "jobs": {
+      "len": 4,
+      "sample": [
+        "bounty-ace",
+        "patrol-lane",
+        "haul-provisions",
+        "ferry-consignment"
+      ]
+    },
+    "scanner": 0,
+    "recordBanks": {
+      "freehold": {
+        "len": 17,
+        "sample": [
+          "rec-1",
+          "rec-2",
+          "rec-3",
+          "rec-4",
+          "rec-5"
+        ]
+      }
+    },
+    "aceRivalry": {
+      "defeats": 0,
+      "lastOutcome": null,
+      "hunterSpawned": false,
+      "hunterGeneration": 0,
+      "hunterDownAt": null,
+      "illyxGeneration": 0,
+      "illyxDownAt": null,
+      "aspirantRisen": 0,
+      "aspirantDownAt": null,
+      "aspirantFlying": false
+    },
+    "originArc": {
+      "calls": 0,
+      "lastCallAt": 0,
+      "debtCleared": false,
+      "collectorSent": false,
+      "calls2": 0,
+      "lastCallAt2": 0,
+      "collectorSent2": false,
+      "reenteredDebt": false,
+      "debtClearedAgain": false,
+      "marked": false,
+      "beautiful": false,
+      "drifter": false,
+      "greenhand": false,
+      "beautiful1": false,
+      "beautiful2": false,
+      "marked1": false,
+      "marked2": false,
+      "drifter1": false,
+      "drifter2": false,
+      "greenhand1": false,
+      "greenhand2": false
+    },
+    "mystery": {
+      "found": {
+        "len": 0,
+        "sample": []
+      },
+      "visited": {
+        "len": 0,
+        "sample": []
+      }
+    },
+    "epics": {},
+    "onboarding": {
+      "seen": {
+        "len": 2,
+        "sample": [
+          "move",
+          "combat"
+        ]
+      }
+    },
+    "origin": "greenhand",
+    "hangar": {
+      "mountedId": "hull_starter",
+      "hulls": {
+        "len": 1,
+        "sample": [
+          "hull_starter"
+        ]
+      }
+    },
+    "nav": {
+      "dest": "veridian",
+      "path": {
+        "len": 2,
+        "sample": [
+          "freehold",
+          "veridian"
+        ]
+      },
+      "remaining": 1,
+      "status": "plotted",
+      "autopilot": false
+    }
+  },
+  "autopilot": {
+    "engaged": false,
+    "yaw": 0,
+    "pitch": 0,
+    "throttle": 0,
+    "wantJump": false,
+    "cycleHub": false,
+    "reason": "combat"
+  },
+  "gate": {
+    "inZone": false,
+    "nearTo": null,
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "currentSystem": null
+}

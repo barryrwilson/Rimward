@@ -1,0 +1,57 @@
+VITE spawn pid 119848
+VITE ready http://127.0.0.1:5182/
+CHROME spawn pid 211820
+CDP ws from stderr ws://127.0.0.1:9442/devtools/browser/c9fc4098-d5ae-42e7-bd2c-ff65c4550e67
+PAGE ws ws://127.0.0.1:9442/devtools/page/084BBC9441F98F2A6678F75ED91B4E5F
+LOAD event timeout Page.loadEventFired
+NAV try 0 cdp timeout Page.navigate
+NAV {"frameId":"084BBC9441F98F2A6678F75ED91B4E5F","loaderId":"63D92291635FDBDE625D66472386007F","isDownload":false}
+LOAD event timeout Page.loadEventFired
+HREF http://127.0.0.1:5182/ | RIMWARD — A Living Frontier | 5
+PASS ctx present 
+BOOT {"title":true,"newLabel":"[1] NEW GAME","who":true,"paused":true}
+ORIGIN overlay true
+PASS flight ready 
+DIGIT5 {"ready":true,"hasGraftedOwn":false,"heat":0,"overheated":false,"hullKindRaw":null,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":5,"fireHeld":false,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · —","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"bio"}
+FAIL living starter 
+PASS origin greenhand greenhand
+PASS weaponGroup 5 5
+FAIL WPN Psionic bolt 5 · —
+PASS no triad fields 
+FIRE5 {"ready":true,"hasGraftedOwn":false,"heat":0,"overheated":false,"hullKindRaw":null,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":5,"fireHeld":true,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · —","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"bio"}
+FAIL LMB heat rose 0
+FAIL magenta 0xff6ad5 bolts 0
+PASS no energy tint on group 5 0
+PASS no aim-glass extra gauge 
+PASS reticle children pupil+3cilia+range 5
+DIGIT1 {"ready":true,"hasGraftedOwn":false,"heat":5.5848000011444086,"overheated":false,"hullKindRaw":null,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":1,"fireHeld":true,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"1 · Energy cannon","psiBolts":0,"energy":2,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"bio"}
+PASS group 1 
+PASS WPN cannon 1 · Energy cannon
+PASS digit1 energy bolts 2
+PASS digit1 heat 5.5848000011444086
+DIGIT2 {"ready":true,"hasGraftedOwn":false,"heat":3.5904000005722043,"overheated":false,"hullKindRaw":null,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":2,"fireHeld":true,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"2 · Disruptor","psiBolts":0,"energy":0,"disruptor":1,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"bio"}
+PASS group 2 
+PASS WPN disruptor 2 · Disruptor
+PASS digit2 disruptor bolts 1
+DIGIT3 {"ready":true,"hasGraftedOwn":false,"heat":0,"overheated":false,"hullKindRaw":null,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":3,"fireHeld":false,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"3 · Mining laser Mk I","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"bio"}
+PASS group 3 
+PASS digit3 WPN still maps 3 · Mining laser Mk I
+DIGIT4 {"ready":true,"hasGraftedOwn":false,"heat":0,"overheated":false,"hullKindRaw":null,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":4,"fireHeld":false,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"4 · —","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"bio"}
+PASS group 4 
+PASS digit4 WPN still maps 4 · —
+PASS docked 
+DOCK5 {"docked":true,"hasRepairHeading":true,"hasRepairAll":false,"has5RepairMenu":false,"snippet":"✦ A BERTH, A LIVING SHIP, AND NO STORY YET. › DOCKED. V LOCK FORE AFT SCREEN SHELL HULL SPD 0u/s WPN 5 · Psionic bolt PLANT STRAIN ENGINE OK FLIGHT THR BURN READY DRIFT READY HEAT STRAIN 0% BIO SERENE HUNGER WOUNDS ECHOES 0 POS FREEHOLD DRIFT X 120 Y 20 Z 620 MANIFEST UU 350 FEAR 0 CARGO 0/20 CONTROLS ▾ Mouse — steer toward reticle W/S — vertical strafe (W = up) A/D — lateral strafe (D = right) Q/"}
+PASS Digit5 still repair while docked 
+BUILT {"ready":true,"hullKind":"built","hasGraftedOwn":false,"heat":0,"overheated":false,"hullKindRaw":"built","playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","bookValue","bounty","resolve","personality","hullKind"],"group":5,"fireHeld":true,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · —","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"mech"}
+PASS forced built 
+PASS built WPN 5 · — 5 · —
+PASS built no heat 0
+PASS built no magenta spawn 0
+GRAFT {"ready":true,"hullKind":"built","grafted":true,"hasGraftedOwn":true,"heat":13.744800001144409,"overheated":false,"hullKindRaw":"built","playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","bookValue","bounty","resolve","personality","hullKind","grafted"],"group":5,"fireHeld":true,"docked":false,"paused":false,"camera":"first","firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · Psionic bolt","psiBolts":2,"energy":0,"disruptor":0,"mining":0,"missile":0,"extraGauge":0,"reticleKids":5,"reticleClasses":"rw-reticle","stationOpen":false,"stationHasRepair":false,"stationSnippet":"","family":"mech"}
+PASS grafted WPN name 5 · Psionic bolt
+PASS grafted HUD family stays mech mech
+PASS grafted fires {"heat":13.744800001144409,"psiBolts":2}
+CONSOLE errors 0 []
+PAGE exceptions 0 []
+PASS no page exceptions []
+PASS console clean of app errors []

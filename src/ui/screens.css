@@ -410,6 +410,44 @@
   border-left-color: #6fd2e0;
 }
 
+.shipyard-buy-has-preview {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.shipyard-buy-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shipyard-preview {
+  flex: 0 0 128px;
+  width: 128px;
+  height: 84px;
+  margin: 0;
+  padding: 0;
+  background: #070c14;
+  border: 1px solid #22303f;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.shipyard-confirm .shipyard-preview {
+  flex-basis: 168px;
+  width: 168px;
+  height: 108px;
+}
+
+.shipyard-preview-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .shipyard-empty,
 .shipyard-mounted,
 .shipyard-legend,
@@ -567,6 +605,11 @@ body.rw-contrast .shipyard-mounted,
 body.rw-contrast .shipyard-legend,
 body.rw-contrast .shipyard-buy-flag {
   color: #c3d4e6;
+}
+
+body.rw-contrast .shipyard-preview {
+  background: #060b14;
+  border-color: #5a7699;
 }
 
 body.rw-contrast .people-portrait {

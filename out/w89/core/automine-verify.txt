@@ -1,0 +1,28 @@
+automine.js Node harness
+date: 2026-08-22
+command: node out/w89/core/automine-harness.mjs
+result: 48/48 passed
+browser: skipped [NO BROWSER COVERAGE]
+ports claimed: none
+vite: not started
+listen 5176 / 94xx: none from this run
+
+cases:
+1 noRock
+2 engage '' + automineEngaged asteroidId primitive (number 42 and string rock-12 and id 0)
+3 hardness > laser.tier
+4 empty ore<=0
+5 cargo full
+6 world.nav.autopilot refuse
+7 flags.matchSpeed refuse
+8 far: throttle 1, wantMine false, yaw/pitch nonzero; no writes to input/ship/nav
+9 hold range facing: wantMine true (dist 55.8, Mk I range 90)
+9b inside range facing outside mesh: wantMine true
+10 inside mesh dist 2: wantMine false
+11 strafe / roll / throttleHeld / fullStop / steerX 0.65 → reason input
+12 list clear and current null → lostLock
+13 extra keys wantJump/cycleHub/foo stripped
+14 reserved ids __proto__/constructor/prototype omitted from payload keys; no prototype pollution
+plus: combat/cargo/depleted/autopilot/dock/pause/jumping/overheat/hull/hail/sun/impact disengage
+plus: live asteroid row without lockKind engages
+plus: source has no assignment to ctx.input / ctx.ship / nav.autopilot

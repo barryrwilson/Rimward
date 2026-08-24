@@ -1,0 +1,63 @@
+{
+  "url": "http://127.0.0.1:5179/",
+  "vite": "npx vite --port 5179 --strictPort --host 127.0.0.1",
+  "idle": {
+    "kidCount": 20,
+    "kids": [
+      "rw-reticle",
+      "rw-crosshair",
+      "rw-target is-hidden",
+      "rw-lead is-hidden",
+      "rw-edge-arrow is-hidden",
+      "rw-nav-gate-cue is-hidden",
+      "rw-chartmark is-hidden",
+      "rw-chartmark is-hidden",
+      "rw-chartmark is-hidden",
+      "rw-toasts",
+      "rw-banner",
+      "rw-jump is-hidden",
+      "rw-prompt",
+      "rw-contacts is-hidden",
+      "rw-combat-rail rw-combat-self",
+      "rw-combat-rail rw-combat-target is-hidden",
+      "rw-bottom",
+      "rw-panel rw-resources rw-fade",
+      "rw-panel rw-controls rw-fade",
+      "rw-chip-stack"
+    ],
+    "reticleSize": { "w": 80, "h": 80 },
+    "toastBox": { "x": 708.84, "y": 14, "w": 403.16, "h": 135.2, "left": "708.838px", "top": "14px" },
+    "incomingMatches": [],
+    "hasCtx": true
+  },
+  "flyFarLock": {
+    "docked": false,
+    "jumping": false,
+    "lockKept": true,
+    "arrowClass": "rw-edge-arrow",
+    "ariaHidden": "true",
+    "isHidden": false,
+    "display": "block",
+    "transform": "translate3d(1196px, 360.342px, 0px) rotate(1.57141rad)"
+  },
+  "dockedPark": {
+    "docked": true,
+    "jumping": false,
+    "lockKept": true,
+    "lockPos": { "x": 1000000, "y": 0, "z": 0 },
+    "arrowClass": "rw-edge-arrow is-hidden",
+    "ariaHidden": "true",
+    "isHidden": true,
+    "display": "none"
+  },
+  "fakeJumpPark": {
+    "note": "Set ctx.gate.jumping=true without a destination. jump.js midpointSwap threw and stopped the rAF loop. Arrow hid; lock was cleared by jump.js, not hud.js.",
+    "docked": false,
+    "jumping": true,
+    "lockKept": false,
+    "arrowClass": "rw-edge-arrow is-hidden",
+    "ariaHidden": "true",
+    "isHidden": true
+  },
+  "liveNpcFireToast": "not observed; rAF stopped after fake jump. Probe + static hud.js cover the toast path."
+}

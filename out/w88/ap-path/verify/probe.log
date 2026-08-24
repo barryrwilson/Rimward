@@ -1,0 +1,9 @@
+ok chord-through-sun detour outside heat {"hold":"detour","sunAimD":158.4,"heatR":144,"keepSun":158.4}
+ok resume gate when chord clear
+ok frigate turn radius uses flight-feel table r=420
+ok close misaligned frigate widens, throttle 0 {"hold":"widen","th":0,"aimD":460,"turnR":420}
+ok NaN fail-closed
+ok close misaligned spawn: throttle 0, yaw saturates, no wantJump {"tok":"","th":0,"yaw":1,"wantJump":false}
+ok live AP sun chord yaws off the direct gate line {"tokSun":"","yaw":0.26388685625035635,"th":0.9842344881912044}
+ok in-zone wantJump stays gate-predicate only {"tokZone":"","wantJump":true,"nearTo":"veridian"}
+AP PATH PROBE PASS

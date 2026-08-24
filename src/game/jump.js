@@ -1,6 +1,37 @@
 import * as THREE from 'three';
 import { SYSTEMS, JUMP, FACTIONS } from '../game/state.js';
 import { removeLiveShip } from '../systems/npc.js';
+import { standingRead } from './data-trade.js';
+
+/** Exact commLine / toast copy (Wave 104 REP-05). */
+export const JUMP_REFUSE_LINE = 'No passage.';
+
+/** Copy locker Marked exclusive (RESTRICTED_REP_GATE). Refuse when standing < this. */
+export const JUMP_REFUSE_STANDING = -25;
+
+/** Dest flags that never inbound-lock. Beautiful dest may lock. */
+export const JUMP_REFUSE_SKIP = new Set(['unknowables', 'hollow', 'independent']);
+
+const refusedDestThisVisit = new Set();
+
+export function resetJumpRefuseVisit() {
+  refusedDestThisVisit.clear();
+}
+
+/**
+ * Inbound dest standing gate. Missing dest / reserved / skip flags → false (do not lock).
+ * standingRead miss / proto / non-finite → 0 → no refuse.
+ */
+export function destJumpRefused(to, reputation) {
+  if (typeof to !== 'string' || !to) return false;
+  if (!Object.hasOwn(SYSTEMS, to)) return false;
+  const def = SYSTEMS[to];
+  const fac = def && def.faction;
+  if (typeof fac !== 'string' || !fac) return false;
+  if (!Object.hasOwn(FACTIONS, fac)) return false;
+  if (JUMP_REFUSE_SKIP.has(fac)) return false;
+  return standingRead(reputation, fac) < JUMP_REFUSE_STANDING;
+}
 
 // Arrival hails by distance band (§13.5 + designed silence): band 0
 // warm/busy, band 1 sparse, band 2 near-silent. One line per band, chosen
@@ -68,7 +99,17 @@ export function initJump(ctx) {
   let swapped = false;
 
   function beginJump(to) {
-    if (!SYSTEMS[to]) return; // unknown destination: ignore the request
+    if (typeof to !== 'string' || !to) return;
+    if (!Object.hasOwn(SYSTEMS, to)) return;
+    if (destJumpRefused(to, ctx.world?.reputation)) {
+      if (!refusedDestThisVisit.has(to)) {
+        refusedDestThisVisit.add(to);
+        if (typeof ctx.emit === 'function') {
+          ctx.emit('commLine', { text: JUMP_REFUSE_LINE });
+        }
+      }
+      return;
+    }
     ctx.gate.jumping = true;
     ctx.gate.progress = 0;
     ctx.gate.destination = to;
@@ -120,6 +161,7 @@ export function initJump(ctx) {
 
     ctx.world.jumpGraceUntil = ctx.world.time + JUMP.graceSeconds;
 
+    refusedDestThisVisit.clear();
     ctx.emit('systemLoaded', { to });
 
     // Arrival hail (§13.5), band-aware (designed silence — the rim greets
@@ -136,7 +178,27 @@ export function initJump(ctx) {
     ctx.emit('commLine', arrivalBeltLine(def));
   }
 
+  function endJump() {
+    ctx.gate.jumping = false;
+    ctx.gate.progress = 0;
+    ctx.gate.destination = null;
+    timer = 0;
+    swapped = false;
+  }
+
+  function consumeVisitReset() {
+    const evs = ctx.lastEvents;
+    if (!Array.isArray(evs)) return;
+    for (let i = 0; i < evs.length; i++) {
+      if (evs[i] && evs[i].type === 'systemLoaded') {
+        refusedDestThisVisit.clear();
+        return;
+      }
+    }
+  }
+
   function update(dt) {
+    consumeVisitReset();
     if (!ctx.gate.jumping) {
       // Same-frame consumption of gate.js's request.
       for (let i = 0; i < ctx.events.length; i++) {
@@ -149,6 +211,13 @@ export function initJump(ctx) {
       if (!ctx.gate.jumping) return;
     }
 
+    // Flag without a live dest is not in-flight. Do not finish leftover timer.
+    if (!ctx.gate.destination) {
+      timer = 0;
+      swapped = false;
+      return;
+    }
+
     timer += dt;
     const p = timer / JUMP.chargeTime;
 
@@ -158,9 +227,7 @@ export function initJump(ctx) {
     }
 
     if (p >= 1) {
-      ctx.gate.jumping = false;
-      ctx.gate.progress = 0;
-      ctx.gate.destination = null;
+      endJump();
       return;
     }
     ctx.gate.progress = p;

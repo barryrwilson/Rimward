@@ -1,0 +1,35 @@
+{
+  "pin": {
+    "ticks": 11,
+    "inZone": true,
+    "nearTo": "veridian",
+    "jumping": false,
+    "pos": {
+      "x": 0,
+      "y": 60,
+      "z": -890
+    },
+    "combat": true
+  },
+  "pinId": null,
+  "gate": {
+    "inZone": false,
+    "nearTo": null,
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "pos": {
+    "x": -12.20177222120197,
+    "y": 174.52951499818755,
+    "z": -918.3616514459851
+  },
+  "jumpClass": "rw-jump is-hidden",
+  "jumpDisplay": "none",
+  "jumpText": "JUMP",
+  "hudGate": "GATE\n117u\nPOS\nFREEHOLD D",
+  "bodyHasJumpWord": false
+}

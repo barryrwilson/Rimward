@@ -1,0 +1,35 @@
+## Status
+CLEAN
+
+## What I tested
+- Probe: `node --import ./scripts/with-css-stub.mjs out/w88/ap-path/probe.mjs` → `AP PATH PROBE PASS` (log: out/w88/ap-path/verify2/probe.log).
+- Independent FAIL-set script: `node --import ./scripts/with-css-stub.mjs out/w88/ap-path/verify/math-check.mjs` → `MATH CHECK PASS` (log: out/w88/ap-path/verify2/math-check.log).
+- Independent recompute (do not trust probe or worker copy of sphereChordHit): out/w88/ap-path/verify2/recompute.mjs against src/game/ap-path.js planApPath. Local closest-point-on-segment vs origin. Cases: (0,30,800)→(0,60,-900) keep 158.4; closer (0,0,200) vs heat 144; two-body sun+station and adverse sideHint; B-inside (0,0,800)→(0,0,40); close frigate 80u heading 90°.
+- Trace of aimAtGate in src/game/autopilot.js: applyAvoidBias then ship→aim sphereChordHit restore; pathHold freezes blockedAt; wantJump predicate; no jumpRequested / mesh / input.* writes.
+- Extra: PHY.AVOID_LOOKAHEAD still 40.
+- Browser: Playwright MCP locked (`Browser is already in use ... use --isolated`). Real attempt: Vite 5190 first (no-ctx), then Chrome CDP attach to live Vite http://127.0.0.1:5189/ (port 9405), reload, New Game, plot Veridian, engage AP. Samples + jpeg.
+
+## Bugs found
+None. Prior Bug 1 (ship→aim secant through keep/heat), Bug 2 (second obstacle still hit), and Bug 3 (B-inside missed) do not reproduce.
+
+## Environmental issues
+- graph_resolve returned blocked_ambiguous (software-delivery vs browser-assisted). Followed software-delivery (higher score; this is code-fix verification). Browser check still ran.
+- Playwright MCP navigate/tabs failed: profile already in use. Drove Chrome CDP instead. Not [NO BROWSER COVERAGE].
+- Fresh Vite 5190 + new CDP 9410 loaded about:blank / stuck interactive with no canvas. Attached to the already-running 5189 session after cache reload; that session ran the current src.
+
+## What passed (not bugs)
+- Probe PASS: tangent detour, interior B hit, two-obstacle miss, NaN fail-closed, close frigate widen+throttle 0, live stub yaw off gate line, wantJump only when inZone && nearTo===hop.
+- Owner chord rule (independent closest approach): ship (0,30,800)→aim, keep=158.4, hit=false, dist=159.4 ≥ keep. Closer spawn (0,0,200) dist=159.4, does not enter heat 144. Two-body sun+station: sun dist=159.4, station dist=197.95 (keep≈59.12). Adverse sideHint retargets around the station (dist=60.12 ≥ station keep) and still misses sun keep.
+- B-inside: (0,0,800)→(0,0,40), tUn=1.05, source sphereChordHit hit=true, dist=40.
+- Close intercept: frigate at 80u, heading 90°, speed 40 → hold=widen, throttle 0, aimFromGate=540, intercept=false. Aligned close still intercepts.
+- wantJump: ap.wantJump = !!(inZone && !docked && nearTo === hop). No jumpRequested writes.
+- Writer split: autopilot.js writes only the AP channel. Reads input.* for cancel. No mesh / input.* / jumpRequested writes.
+- Blocked timer: if pathHold (detour/widen), blockedAt = now (frozen).
+- applyAvoidBias runs after plan; if hold==='detour' and ship→aim sphereChordHit hits a keep body and ship is not already inside, aim restores to planned.ax/ay/az (chord restore, not aim-point-only).
+- PHY.AVOID_LOOKAHEAD remains 40.
+- Browser (~5s after engage): flying=true, yawedOff maxAbsYaw=1, headingDotGate dropped to 0.45 (not a straight chord), pos → (-13, 55, 510) then screenshot POS X -26 Y 53 Z 478, sunDist min 513 (outside keep 158.4), wantJump false, DEST/NEXT Veridian Reach, HEAT 0%.
+
+## Evidence
+- Screenshot: out/w88/ap-path/verify2/browser-ap.jpg
+- Logs: out/w88/ap-path/verify2/probe.log, math-check.log, recompute.log, cdp-live.log, cdp-summary.json
+- Test output: AP PATH PROBE PASS; MATH CHECK PASS; RECOMPUTE PASS; CDP SUMMARY flying/yawedOff.

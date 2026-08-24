@@ -4,9 +4,7 @@ Why this exists: `ship_builders/beautiful/anatomy.py` and
 `ship_builders/beautiful/organs.py` are consumed by six class files. A defect
 in one shared construct is otherwise diagnosed six times, once per class,
 after it has already been baked into six sculpts. This probe runs every
-construct at every detail level before any class file exists, so a
-class-level failure cannot be blamed on the foundation. Foundation first,
-and prove it — the wave-7 rule.
+construct at every detail level before any class file exists.
 
 Run:
     "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b \
@@ -23,9 +21,9 @@ For every construct, at every detail level 0..3, it reports:
     {hull, armour, accent, recess, trim, glow}.
 
 Depsgraph note: `measure()` calls `bpy.context.view_layer.update()` before
-reading `matrix_world`. Kit builders assign `obj.location` (and the swept
-membranes `obj.rotation_euler`) without flushing the depsgraph, so an early
-read reports every bmesh part as if it were stacked at the origin.
+reading `matrix_world`. Kit builders assign `obj.location` without flushing
+the depsgraph, so an early read reports every bmesh part as if it were
+stacked at the origin.
 
 It asserts nothing about art direction. It only proves the foundation runs
 clean.
@@ -65,13 +63,7 @@ def mats():
 
 
 def measure(objs):
-    """Return (tris, bbox, bad) for a list of objects.
-
-    The view layer is updated first: kit builders assign `obj.location`
-    without flushing the depsgraph, so `matrix_world` is still identity until
-    Blender re-evaluates. Reading it early reports every bmesh part as if it
-    were stacked at the origin.
-    """
+    """Return (tris, bbox, bad) for a list of objects."""
     bpy.context.view_layer.update()
     lo = [math.inf] * 3
     hi = [-math.inf] * 3
@@ -109,21 +101,17 @@ def measure(objs):
     return tris, (lo, hi), bad
 
 
-# A representative manta-plan grown body: ~8 long, ~3.5 half-beam, ~1.0
-# half-height, thickest just aft of the head, drawn into a long tail.
-# Every section is sf.fair() — the near-ellipse the faction's soft roll needs.
-# Stations are (z, half_w, half_h, y_offset, chamfer); -z is the nose.
+# Fusiform grown body: long, round section, thickest just aft of the head.
 STATIONS = [
-    sf.fair(-4.0, 0.30, 0.12, 0.0),
-    sf.fair(-3.0, 1.60, 0.45, 0.0),
-    sf.fair(-1.5, 2.80, 0.80, 0.0),
-    sf.fair(0.0, 3.50, 1.00, 0.0),
-    sf.fair(1.5, 3.10, 0.85, 0.0),
-    sf.fair(3.0, 2.20, 0.55, 0.0),
-    sf.fair(4.0, 1.20, 0.30, 0.0),
+    sf.fair(-4.0, 0.18, 0.14, 0.0),
+    sf.fair(-3.2, 0.55, 0.42, 0.0),
+    sf.fair(-2.0, 0.85, 0.62, 0.0),
+    sf.fair(-0.5, 0.95, 0.70, 0.0),
+    sf.fair(1.2, 0.72, 0.52, 0.0),
+    sf.fair(2.8, 0.40, 0.32, 0.0),
+    sf.fair(4.0, 0.16, 0.12, 0.0),
 ]
 
-# Real surface callbacks, exactly as a class author derives them.
 SURF_FLANK = sf.surf_flank(STATIONS, 0.20)
 SURF_TOP = sf.surf_top(STATIONS)
 SURF_BOTTOM = sf.surf_bottom(STATIONS)
@@ -131,7 +119,6 @@ SURF_FLAT = sf.surf_flat(STATIONS)
 
 
 def flank_anchor(z, y, inset=0.10):
-    """A surface-seated x anchor, as a class file computes it (buried)."""
     return sf.flank_x(STATIONS, z, y) - inset
 
 
@@ -139,7 +126,23 @@ def cases():
     """(label, callable(parts, glow, hull_mat, glow_mat, detail)) for every construct."""
     out = []
 
-    # ---- anatomy.py -------------------------------------------------------
+    def grown_body(p, g, hm, gm, d):
+        radial = {3: 16, 2: 12, 1: 8, 0: 6}[d]
+        return [sf.grown_loft(p, 'living-body-probe', kit.ROLE_ARMOUR,
+                              STATIONS, hm, radial=radial)]
+
+    out.append(('surface.grown_loft', grown_body))
+
+    def fusiform_loft(p, g, hm, gm, d):
+        st = an.fusiform_stations(-4.0, 4.0, 0.95, 0.70, peak_t=0.32, n=7)
+        if len(st) < 2:
+            raise RuntimeError('fusiform_stations returned too few stations')
+        radial = {3: 16, 2: 12, 1: 8, 0: 6}[d]
+        return [sf.grown_loft(p, 'living-body-fusiform', kit.ROLE_ARMOUR,
+                              st, hm, radial=radial)]
+
+    out.append(('anatomy.fusiform_stations', fusiform_loft))
+
     out.append(('anatomy.flow_line', lambda p, g, hm, gm, d: an.flow_line(
         p, 'living-flow', hm,
         [(flank_anchor(z, 0.20), 0.20, z)
@@ -150,81 +153,114 @@ def cases():
         [(flank_anchor(z, 0.30), 0.30, z)
          for z in (-0.9, -0.3, 0.3, 0.9)],
         (1.0, 0.0, 0.0), detail=d)))
-    out.append(('anatomy.fin_membrane', lambda p, g, hm, gm, d: an.fin_membrane(
-        p, 'fin-wing', hm,
-        (flank_anchor(-0.5, 0.10, inset=0.40), 0.10, -0.5),
-        (flank_anchor(0.5, 0.10) + 2.2, -0.15, 1.8),
-        2.0, 0.5, thick=0.10, detail=d)))
+    out.append(('anatomy.healed_scar', lambda p, g, hm, gm, d: an.healed_scar(
+        p, 'scar', hm,
+        [(0.30, sf.top_y(STATIONS, z, 0.30) - 0.10, z)
+         for z in (-1.0, 0.0, 1.0, 2.0)], detail=d)))
+    out.append(('anatomy.nacre_pads', lambda p, g, hm, gm, d: an.nacre_pads(
+        p, 'nacre', hm,
+        [(0.0, sf.top_y(STATIONS, z) - 0.12, z)
+         for z in (-2.0, -1.0, 0.0, 1.0, 2.0)],
+        (0.28, 0.16, 0.36), detail=d, seed=2)))
+    out.append(('anatomy.grown_lip', lambda p, g, hm, gm, d: an.grown_lip(
+        p, 'lip', hm, (0.0, sf.top_y(STATIONS, 0.0), 0.0),
+        (0.40, 0.0, 0.0), (0.0, 0.0, 0.50), (0.0, 1.0, 0.0),
+        count=9, bead_r=0.12, detail=d)))
 
-    def fin_bead_overlap(p, g, hm, gm, d):
-        # Same anchors as the anatomy.fin_membrane case above. Build the
-        # flipper, then assert the bead chain has no gap: every consecutive
-        # bead-centre distance must stay under 0.55 * the sum of the two
-        # beads' along-span radii (the overlap invariant flipper_bead_layout
-        # guarantees), so the chain is one smooth voxel-connected mass.
-        root = (flank_anchor(-0.5, 0.10, inset=0.40), 0.10, -0.5)
-        tip = (flank_anchor(0.5, 0.10) + 2.2, -0.15, 1.8)
-        built = an.fin_membrane(p, 'fin-wing-gap', hm, root, tip,
-                                2.0, 0.5, thick=0.10, detail=d)
-        layout = an.flipper_bead_layout(root, tip, 1.0, 0.25, 0.05, detail=d)
-        for i in range(len(layout) - 1):
-            dist = math.sqrt(sum((layout[i + 1][1][k] - layout[i][1][k]) ** 2
-                                 for k in range(3)))
-            limit = 0.55 * (layout[i][2][2] + layout[i + 1][2][2])
-            if dist >= limit:
-                raise RuntimeError('bead gap: beads %d/%d centre distance '
-                                   '%.3f >= 0.55 * span radii sum %.3f'
-                                   % (i, i + 1, dist, limit))
-        return built
-
-    out.append(('anatomy.fin_membrane bead-overlap', fin_bead_overlap))
-
-    def span_bead_overlap(p, g, hm, gm, d):
-        # Same anchors as the first organs.grasping_fins finger: swept_span
-        # is a fixed detail=3, seed=1 fleshy_sweep with FULL-extents chords
-        # halved to radii — assert the same no-gap invariant on its chain.
-        root = (flank_anchor(0.5, -0.30, inset=0.40), -0.30, 0.5)
-        tip = (flank_anchor(0.5, -0.30) + 1.2, -0.75, -0.1)
-        built = an.swept_span(p, 'fin-grasp-gap', kit.ROLE_ARMOUR, hm,
-                              root, tip, 0.50, 0.16, 0.12)
-        layout = an.flipper_bead_layout(root, tip, 0.25, 0.08, 0.06,
-                                        seed=1, detail=3)
-        for i in range(len(layout) - 1):
-            dist = math.sqrt(sum((layout[i + 1][1][k] - layout[i][1][k]) ** 2
-                                 for k in range(3)))
-            limit = 0.55 * (layout[i][2][2] + layout[i + 1][2][2])
-            if dist >= limit:
-                raise RuntimeError('bead gap: beads %d/%d centre distance '
-                                   '%.3f >= 0.55 * span radii sum %.3f'
-                                   % (i, i + 1, dist, limit))
-        return built
-
-    out.append(('anatomy.swept_span bead-overlap', span_bead_overlap))
-
-    def crease_self_trim(p, g, hm, gm, d):
-        # The run extends past BOTH loft ends (-4..4): it must self-trim via
-        # the surf callback returning 0.0, not raise, and emit no more
-        # objects than the in-loft run plus the pitch-phase allowance.
-        built = an.fold_crease(p, 'fold-t', hm, -6.0, 6.0, 0.20,
-                               SURF_FLANK, detail=d)
+    def fold_self_trim(p, g, hm, gm, d):
+        built = an.muscle_fold(p, 'fold-t', hm, -6.0, 6.0, SURF_FLANK, 0.20,
+                               detail=d)
         scratch = []
-        inner = an.fold_crease(scratch, 'fold-i', hm, -4.0, 4.0, 0.20,
-                               SURF_FLANK, detail=d)
+        inner = an.muscle_fold(scratch, 'fold-i', hm, -4.0, 4.0, SURF_FLANK,
+                               0.20, detail=d)
         if len(built) > len(inner) + 2:
             raise RuntimeError('run did not self-trim past the loft: '
                                'extended run emitted %d objects, in-loft run %d'
                                % (len(built), len(inner)))
         return built
 
-    out.append(('anatomy.fold_crease', lambda p, g, hm, gm, d: an.fold_crease(
-        p, 'fold', hm, -2.5, 2.5, 0.20, SURF_FLANK, detail=d)))
-    out.append(('anatomy.fold_crease self-trim', crease_self_trim))
-    out.append(('anatomy.healed_scar', lambda p, g, hm, gm, d: an.healed_scar(
-        p, 'scar', hm,
-        [(0.30, sf.top_y(STATIONS, z, 0.30) - 0.10, z)
-         for z in (-1.0, 0.0, 1.0, 2.0)], detail=d)))
+    out.append(('anatomy.muscle_fold', lambda p, g, hm, gm, d: an.muscle_fold(
+        p, 'fold', hm, -2.5, 2.5, SURF_FLANK, 0.20, detail=d)))
+    out.append(('anatomy.muscle_fold self-trim', fold_self_trim))
 
-    # ---- organs.py --------------------------------------------------------
+    out.append(('anatomy.shark_dorsal', lambda p, g, hm, gm, d: an.shark_dorsal(
+        p, 'fin-dorsal', hm,
+        (0.0, sf.top_y(STATIONS, -0.4) - 0.12, -0.4),
+        (0.0, sf.top_y(STATIONS, 0.2) + 1.1, 0.6),
+        0.55, thick=0.16, detail=d)))
+    out.append(('anatomy.shark_caudal', lambda p, g, hm, gm, d: an.shark_caudal(
+        p, 'fin-caudal', hm,
+        (0.0, 0.0, 3.4),
+        (0.0, 0.85, 5.1),
+        (0.0, -0.45, 4.4),
+        0.48, thick=0.14, detail=d)))
+    out.append(('anatomy.shark_pectoral', lambda p, g, hm, gm, d: an.shark_pectoral(
+        p, 'fin-pectoral', hm,
+        (flank_anchor(-0.6, 0.0, inset=0.20), 0.0, -0.6),
+        (flank_anchor(-0.6, 0.0) + 1.6, -0.25, 0.4),
+        0.55, 0.18, thick=0.12, detail=d)))
+    out.append(('anatomy.gill_slits', lambda p, g, hm, gm, d: an.gill_slits(
+        p, 'gill', hm, -2.4, -1.0, SURF_FLANK, 0.05, side=1.0,
+        count=5, height=0.36, detail=d)))
+
+    out.append(('anatomy.squid_mantle_fins', lambda p, g, hm, gm, d: an.squid_mantle_fins(
+        p, 'mantlefin', hm, (0.0, 0.15, 2.6), span=1.6, chord=1.1,
+        thick=0.14, detail=d)))
+    out.append(('anatomy.squid_arm', lambda p, g, hm, gm, d: an.squid_arm(
+        p, 'living-arm', hm, (0.4, -0.1, 0.8), (0.7, -0.4, 2.6),
+        root_r=0.16, tip_r=0.07, detail=d)))
+    out.append(('anatomy.feeding_tentacle', lambda p, g, hm, gm, d: an.feeding_tentacle(
+        p, 'living-tentacle', hm, (0.25, -0.05, 0.6), (0.4, -0.3, 3.8),
+        root_r=0.12, club_r=0.18, detail=d)))
+    out.append(('anatomy.sucker_pads', lambda p, g, hm, gm, d: an.sucker_pads(
+        p, 'sucker', hm,
+        [(0.5, -0.2, z) for z in (1.0, 1.4, 1.8, 2.2)],
+        (0.0, -1.0, 0.0), radius=0.08, detail=d)))
+    out.append(('anatomy.siphon', lambda p, g, hm, gm, d: an.siphon(
+        p, 'living-siphon', hm, (0.0, -0.25, 1.6), length=0.7,
+        radius=0.16, detail=d)))
+
+    hub = (0.0, 0.05, -0.4)
+    arm_tips = an.travel_arm_tips(hub, 2.4, count=8, spread=0.38, drop=0.20)
+
+    def travel_check(p, g, hm, gm, d):
+        tips = an.travel_arm_tips(hub, 2.4, count=8, spread=0.38, drop=0.20)
+        for tip in tips:
+            if tip[2] <= hub[2]:
+                raise RuntimeError('travel pose arm tip is not trailing +Z')
+        return an.interbrachial_web(p, 'web-check', hm, hub, tips,
+                                    thick=0.12, trail=0.30, detail=d)
+
+    out.append(('anatomy.octopus_arm', lambda p, g, hm, gm, d: an.octopus_arm(
+        p, 'living-oct-arm', hm, hub, arm_tips[0],
+        root_r=0.22, tip_r=0.08, web_to=arm_tips[1], web_frac=0.28,
+        detail=d)))
+    out.append(('anatomy.interbrachial_web', lambda p, g, hm, gm, d:
+                an.interbrachial_web(p, 'web', hm, hub, arm_tips,
+                                     thick=0.12, trail=0.30, detail=d)))
+    out.append(('anatomy.travel_arm_tips', travel_check))
+
+    out.append(('anatomy.whale_fluke', lambda p, g, hm, gm, d: an.whale_fluke(
+        p, 'fluke', hm, (0.0, 0.0, 3.5), span=2.4, chord=0.9,
+        thick=0.16, detail=d)))
+    out.append(('anatomy.whale_pectoral humpback', lambda p, g, hm, gm, d:
+                an.whale_pectoral(
+                    p, 'fin-hump-pect', hm,
+                    (flank_anchor(0.0, -0.1, inset=0.18), -0.1, 0.0),
+                    (flank_anchor(0.0, -0.1) + 2.4, -0.35, 0.8),
+                    0.42, 0.20, thick=0.14, style='humpback', detail=d)))
+    out.append(('anatomy.whale_pectoral blue', lambda p, g, hm, gm, d:
+                an.whale_pectoral(
+                    p, 'fin-blue-pect', hm,
+                    (flank_anchor(0.2, -0.1, inset=0.16), -0.1, 0.2),
+                    (flank_anchor(0.2, -0.1) + 0.85, -0.15, 0.45),
+                    0.32, 0.14, thick=0.12, style='blue', detail=d)))
+    out.append(('anatomy.dorsal_ridge', lambda p, g, hm, gm, d: an.dorsal_ridge(
+        p, 'ridge', hm, -1.5, 2.0, SURF_TOP, x=0.0, height=0.22, detail=d)))
+    out.append(('anatomy.blowhole', lambda p, g, hm, gm, d: an.blowhole(
+        p, g, 'blow', hm, gm,
+        (0.0, sf.top_y(STATIONS, -2.4), -2.4), radius=0.26, detail=d)))
+
     out.append(('organs.sensory_crown', lambda p, g, hm, gm, d: og.sensory_crown(
         p, g, 'crown', hm, gm, (0.0, 0.05, -3.4), detail=d)))
     vent_pts = [(0.0, sf.top_y(STATIONS, z, 0.0), z)
@@ -232,12 +268,6 @@ def cases():
     out.append(('organs.breathing_vents', lambda p, g, hm, gm, d: og.breathing_vents(
         p, g, 'vent', hm, gm, vent_pts[0], face='y', detail=d,
         points=vent_pts)))
-    out.append(('organs.grasping_fins', lambda p, g, hm, gm, d: og.grasping_fins(
-        p, 'grasp', hm,
-        (flank_anchor(0.5, -0.30, inset=0.40), -0.30, 0.5),
-        [(flank_anchor(0.5, -0.30) + 1.2, -0.75, -0.1),
-         (flank_anchor(0.5, -0.30) + 1.4, -0.85, 0.5),
-         (flank_anchor(0.5, -0.30) + 1.2, -0.75, 1.1)], detail=d)))
     out.append(('organs.belly_chamber', lambda p, g, hm, gm, d: og.belly_chamber(
         p, g, 'belly', hm, gm,
         (0.0, sf.bottom_y(STATIONS, 0.5, 0.0) + 0.20, 0.5),
@@ -263,10 +293,6 @@ def cases():
         scratch = []
         inner = og.garden_fold(scratch, [], 'garden-i', hm, gm, -4.0, 4.0,
                                SURF_TOP, detail=d)
-        # One extra in-range station costs up to five objects at detail 3
-        # (ridge segment, nodule, frond, tip, bud), so the pitch-phase
-        # allowance is six — the failure this guards is a run of parts
-        # sailing PAST the taper, not one phase-shifted nodule.
         if len(built) > len(inner) + 6:
             raise RuntimeError('run did not self-trim past the loft: '
                                'extended run emitted %d objects, in-loft run %d'
@@ -276,10 +302,17 @@ def cases():
     out.append(('organs.garden_fold', lambda p, g, hm, gm, d: og.garden_fold(
         p, g, 'garden', hm, gm, -3.0, 3.0, SURF_TOP, detail=d)))
     out.append(('organs.garden_fold self-trim', garden_self_trim))
+    out.append(('organs.dorsal_mantles', lambda p, g, hm, gm, d: og.dorsal_mantles(
+        p, 'mantle', hm, (0.0, sf.top_y(STATIONS, 0.0) - 0.10, 0.0),
+        (1.6, 0.9, 1.8), count=3, detail=d)))
     return out
 
 
 def main():
+    leftover = [n for n in dir(an) if n.startswith('_FLIP_') or n.startswith('_FIN_')]
+    if leftover:
+        print('LEFTOVER MANTA CONSTANTS: %s' % leftover)
+        sys.exit(1)
     hull_mat, glow_mat = mats()
     failures = []
     print('== Beautiful Ones shared-construct smoke probe')
@@ -293,7 +326,7 @@ def main():
             except Exception as exc:  # noqa: BLE001 - probe reports every failure
                 failures.append('%s detail=%d RAISED %s: %s'
                                 % (label, detail, type(exc).__name__, exc))
-                print('  FAIL %-34s detail=%d  %s: %s'
+                print('  FAIL %-38s detail=%d  %s: %s'
                       % (label, detail, type(exc).__name__, exc))
                 continue
             objs = parts + glow
@@ -301,9 +334,9 @@ def main():
             for message in bad:
                 failures.append('%s detail=%d %s' % (label, detail, message))
             if not objs:
-                print('  ok   %-34s detail=%d  empty' % (label, detail))
+                print('  ok   %-38s detail=%d  empty' % (label, detail))
                 continue
-            print('  ok   %-34s detail=%d  objs=%3d tris=%5d  x[%6.2f,%6.2f] y[%6.2f,%6.2f] z[%6.2f,%6.2f]%s'
+            print('  ok   %-38s detail=%d  objs=%3d tris=%5d  x[%6.2f,%6.2f] y[%6.2f,%6.2f] z[%6.2f,%6.2f]%s'
                   % (label, detail, len(objs), tris,
                      lo[0], hi[0], lo[2], hi[2], -hi[1], -lo[1],
                      '  ' + '; '.join(bad) if bad else ''))

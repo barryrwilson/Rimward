@@ -1,0 +1,17 @@
+Playwright MCP attempts (2, then stop):
+
+1. playwright__browser_tabs action=list
+   Error: Browser is already in use for C:\Users\barry\AppData\Local\ms-playwright-mcp\mcp-chrome-7d372dc, use --isolated to run multiple instances of the same browser
+
+2. playwright__browser_navigate url=http://localhost:5173
+   Error: Browser is already in use for C:\Users\barry\AppData\Local\ms-playwright-mcp\mcp-chrome-7d372dc, use --isolated to run multiple instances of the same browser
+
+3. playwright__browser_close (recovery, not a third drive attempt)
+   Error: Browser is already in use for C:\Users\barry\AppData\Local\ms-playwright-mcp\mcp-chrome-7d372dc, use --isolated to run multiple instances of the same browser
+
+Vite: npm run dev was started; VITE v6.4.3 ready at http://localhost:5173/
+No custom user-data-dir Chrome launch.
+No cdp-live.mjs.
+No chrome-profile folders created under verify2.
+[NO BROWSER COVERAGE]
+[ENV]

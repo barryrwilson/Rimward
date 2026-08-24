@@ -1,0 +1,65 @@
+VITE spawn pid 103408
+VITE ready http://127.0.0.1:5183/
+CHROME spawn pid 100148
+PAGE url http://127.0.0.1:5183/
+PAGE ws ws://127.0.0.1:9443/devtools/page/CDB8C5D74642A0F13EAB8C676D54A242
+HREF0 about:blank
+NAV {"frameId":"CDB8C5D74642A0F13EAB8C676D54A242","loaderId":"4FBF6576BEF061C568CB9E587078CC15","isDownload":false}
+LOAD event timeout Page.loadEventFired
+boot {"href":"http://127.0.0.1:5183/","ctx":false,"ready":"interactive","scripts":3,"canvas":0,"title":false,"fatal":"none","fatalText":"","bodyLen":989}
+boot {"href":"http://127.0.0.1:5183/","ctx":true,"ready":"interactive","scripts":3,"canvas":1,"title":false,"fatal":"none","fatalText":"","bodyLen":70022}
+origin {"origin":true,"paused":true}
+play {"paused":false,"ship":true,"player":true}
+dock {"docked":true,"display":"flex","fac":"beautiful"}
+PASS docked 
+PASS digit0.menu THE CRADLE
+BEAUTIFUL ONES · BERTH 7
+“she” made fast
+CREDITS 50000 UU · HOLD 0/20
+1 — Market
+2 — Jobs board
+3 — Bar
+4 — Feed & tend
+5 — Repair
+6 — Outfitting
+7 — People
+8 — Launch
+9 — Standing
+0 — Ship
+PASS digit0.shipyard 
+PASS train.offer 
+PASS train.legend 
+PASS hostile.nosale 
+PASS hostile.noButton 
+PASS short.offer 
+PASS short.papers 
+PASS short.cargoNote 
+PASS short.refuse 
+PASS short.stillLight 
+PASS short.creditsKeep 
+PASS papers.confirm 
+PASS papers.hop 
+PASS papers.cargo 
+PASS after.classKey heavy
+PASS after.playerClass heavy
+PASS after.hullKind living
+PASS after.mountedId hull_starter
+PASS after.mesh living
+PASS after.restScale 2.5757575757575757
+PASS after.cruise 90
+PASS after.burnCruise 2
+PASS after.cargo 
+PASS after.notice 
+PASS digit0.still 
+PASS gift.people THE CRADLE
+BEAUTIFUL ONES · BERTH 7
+“she” made fast
+CREDITS 33000 UU · HOLD 4/58
+← Back (Esc)
+PEOPLE — WHO RUNS THIS DOCK
+Sworn gift
+The berth answers. Confirm the sworn gift.
+1 — Papers
+Opal Warden Opal Valette
+dockmaster · trust 0 · favor
+CDP HANGAR PASS

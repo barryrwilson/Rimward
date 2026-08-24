@@ -1,0 +1,5 @@
+
+> websim@0.1.0 ships:validate
+> node scripts/validate-ship-assets.mjs
+
+PASS: 72 source assets, 228 Meshopt LOD GLBs, 24 KTX2 PBR atlas sets, 96 PNG content checks, and 228 GLB content checks.

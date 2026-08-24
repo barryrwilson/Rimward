@@ -1,0 +1,74 @@
+Wave 94 Unknowables origin dock — verifier evidence
+Date: 2026-08-23
+Verdict: CLEAN
+
+Probe:
+  node out/w94/unk/probe.mjs
+  Result: PASS all
+  Log: probe.txt
+  Did not edit project source.
+
+Binding vs source (docs/OwnerDecisionsWave94.md §5):
+
+  SYSTEMS.veil.faction === 'unknowables'
+    authored-systems.js veil.faction = 'unknowables'
+    state.js SYSTEMS = { ...AUTHORED_SYSTEMS, ...GENERATED_SYSTEMS }
+    galaxy.generated.js has no id veil (no overwrite)
+
+  hush.gates include to: veil
+    authored-systems.js hush.gates[2] = { position: [-780, 85, 180], to: 'veil' }
+    veil.gates[0] = { position: [0, 80, -1100], to: 'hush' }
+
+  DETAIL_STATIONS has no unknowables
+    station.js DETAIL_STATIONS keys: freehold, veridian, ferrous, redledger,
+    gilded, congregation, assembly, lamplighter, independent, hollow
+    Dispatch: isUnknowable -> buildUnknowablesStation (module
+    src/systems/stations/unknowables.js). Same path in buildStationModel.
+
+  archiveDeskAllowed('unknowables') true
+    station.js: faction === 'unknowables' && UNKNOWABLES_STATION_PATH === true
+  archiveDeskAllowed('assembly') still true
+    Object.hasOwn(DETAIL_STATIONS, 'assembly')
+
+  Archive UU: ARCHIVE_OWN_UU 400, ARCHIVE_RIVAL_UU 900
+    Own SKU at Unknowables desk is crystal. Rival SKU is cube.
+    Hostile: standingRead(unknowables) < 0 -> No sale.
+
+  Seed papers still in station.js
+    grantMarketSeed import, seedPending, renderSeedPapers, cancelSeedPending()
+    before cancelDataPending on market Digit1.
+
+  No EPICS.unknowables
+    EPICS keys: freehold, redledger, veridian, hollow
+
+  hush clues still 2; authored clue total 6
+    hush: th_c_keeper, th_c_song
+    veridian 1, redmarch 1, hollowreach 2, freehold/verge/veil 0
+    veil.clues = [] (verge precedent)
+    th_veil remains hush landmark kind anomaly (not a clue)
+
+  Station / catalog / contacts
+    Name The Quiet, system The Veil, band 3
+    Cast { traders: 0, pirates: 0, patrols: 0, ace: false }
+    Contact Voice-Without, role dockmaster, system veil
+    MODEL_CATALOG id station:unknowables
+    Digit 0 shipyard; UNKNOWABLES_STOCK = LIVING_STOCK
+    generate-galaxy.mjs: no Unknowables cluster (authored only)
+
+Galaxy chart AUTHORED_IDS:
+  Live line includes 'veil':
+  new Set(['freehold', 'veridian', 'redmarch', 'hollowreach', 'hush', 'verge', 'veil'])
+  Omission flag: no (does not omit veil at verify time).
+  Another write-set added the id after the unk worker review note.
+
+Harness (not worker write-set; do not fail CLEAN):
+  scripts/boot-test.mjs AUTHORED_IDS23 still omits veil
+  scripts/galaxy-map.mjs AUTHORED still omits veil
+  generate-galaxy.mjs comment still says "6 authored systems"; keys derive from
+  AUTHORED_SYSTEMS so veil is in the generator set.
+
+Browser:
+  [NO BROWSER COVERAGE]
+  Did not start Vite 5176 or CDP 9416. No leftover process.
+
+No Blocker. No Major.

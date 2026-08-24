@@ -1,0 +1,8 @@
+innerHTML in hangar.js: none
+innerHTML in bio-seed.js: none
+innerHTML in station.js: none
+innerHTML in npc.js: none
+hud.js player.hullKind = : none
+bio-seed.js PIRATE_SEED_DROP_RATE = 0.05 (comment also names DATA_DROP_RATE)
+state.js COMMODITIES: no seed SKU (only "seeded" RNG comments)
+DOCK_KEY_SERVICES last = shipyard (Digit 0), people is Digit 7

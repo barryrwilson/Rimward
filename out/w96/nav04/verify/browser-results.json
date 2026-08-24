@@ -1,0 +1,44 @@
+{
+  "vite": "http://127.0.0.1:5176/",
+  "freehold": {
+    "name": "Freehold Drift",
+    "control": "Control: Freehold Compact",
+    "standing": "Standing: Freehold Compact: Stranger (+0)"
+  },
+  "veilDispatch": {
+    "name": "The Veil",
+    "control": "Control: Unknowables",
+    "standing": "Standing: Unknowables: Stranger (+0)",
+    "hoverId": "veil"
+  },
+  "overlapTopmost": {
+    "name": "Faint",
+    "control": "Control: Independent",
+    "hoverId": "uc_faint"
+  },
+  "independent": {
+    "name": "The Black Station",
+    "control": "Control: Independent",
+    "standing": "Standing: Independent: Stranger (+0)"
+  },
+  "hollow": {
+    "name": "Hollow Reach",
+    "control": "Control: Hollow Reach",
+    "standing": "Standing: Hollow Reach: Stranger (+0)"
+  },
+  "hoverDoesNotPlot": {
+    "dest": [],
+    "plotLines": 0,
+    "apDisabled": true
+  },
+  "clickPlots": {
+    "dest": ["veridian"],
+    "plotStatus": "Veridian Reach · 1 jump",
+    "plotLines": 1,
+    "apDisabled": false
+  },
+  "idle": { "hidden": true, "visibility": "hidden", "name": "" },
+  "reopenPointerOff": { "hoverHidden": true, "name": "", "dest": ["veridian"] },
+  "panelCoversHeader": false,
+  "consoleErrors": 0
+}

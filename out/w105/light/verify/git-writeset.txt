@@ -1,0 +1,9 @@
+ M assets-source/ships/beautiful/light.blend
+ M assets-source/ships/beautiful/light.blend1
+ M public/assets/ships/beautiful/light/lod0.glb
+ M public/assets/ships/beautiful/light/lod1.glb
+ M public/assets/ships/beautiful/light/lod2.glb
+ M scripts/ship_builders/beautiful/heavy.py
+ M scripts/ship_builders/beautiful/light.py
+ M scripts/ship_builders/beautiful/organs.py
+ M src/systems/ship.js

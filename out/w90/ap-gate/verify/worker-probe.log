@@ -1,0 +1,97 @@
+{
+  "auction.hub.meshAtOrigin": true,
+  "auction.hub.meshAtOrigin:extra": {
+    "x": 368,
+    "y": 76,
+    "z": -747,
+    "parent": true,
+    "visible": true
+  },
+  "auction.cradle.liveEqualsHubMesh": true,
+  "auction.cradle.liveEqualsHubMesh:extra": {
+    "liveCradle": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "posCradle": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "hubMesh": {
+      "x": 368,
+      "y": 76,
+      "z": -747,
+      "parent": true,
+      "visible": true
+    }
+  },
+  "auction.cradle.authStillHub": true,
+  "auction.veridian.physicalRing": true,
+  "auction.veridian.physicalRing:extra": {
+    "liveV": {
+      "x": 987,
+      "y": 48,
+      "z": 394
+    },
+    "posV": {
+      "x": 987,
+      "y": 48,
+      "z": 394
+    },
+    "ring0": {
+      "x": 987,
+      "y": 48,
+      "z": 394
+    }
+  },
+  "auction.veridian.notHub": true,
+  "missing.hop.null": true,
+  "reserved.proto.null": true,
+  "guidance.cradle.liveHub": true,
+  "guidance.cradle.liveHub:extra": {
+    "kind": "plotted",
+    "nextId": "bt_cradle",
+    "destId": "bt_cradle",
+    "remaining": 1,
+    "pos": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "nextName": "Cradle",
+    "destName": "Cradle"
+  },
+  "ap.aim.clearChord.isHubOrigin": true,
+  "ap.aim.clearChord.isHubOrigin:extra": {
+    "hold": "none",
+    "aimD": 0,
+    "distGate": 609.2405108001274
+  },
+  "ap.engage.cradle": true,
+  "ap.noWantJumpFar": true,
+  "ap.engage.veridian": true,
+  "ap.veridian.aimPhysical": true,
+  "ap.refuse.missingLiveHop": true,
+  "stale.authGhostExists": true,
+  "stale.liveCradleNull": true,
+  "stale.resolveNullBeforeRebuild": true,
+  "stale.rebuildOnSystemDrift": true,
+  "stale.rebuildOnSystemDrift:extra": {
+    "live": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "hubMesh": {
+      "x": 368,
+      "y": 76,
+      "z": -747,
+      "parent": true,
+      "visible": true
+    }
+  },
+  "stale.resolveAfterRebuild": true
+}
+W90 AP GATE PROBE PASS

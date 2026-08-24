@@ -1,0 +1,34 @@
+Live Playwright session 2026-08-22, http://localhost:5173, viewport 1280x720.
+
+Continue from title. Flight: currentSystem=freehold, paused=false, docked=false.
+
+KeyM opened galaxy chart. ctx.flags.chartOpen=true.
+
+Hit discs: fill=transparent, pointer-events=all, min CSS diameter ~24px.
+
+Hub rings / labels / current marker / plot strokes: pointer-events=none.
+
+Click .rw-galaxy-hit[data-system-id=veridian]:
+  world.nav = { dest:veridian, path:[freehold,veridian], remaining:1, status:plotted }
+  overlay class=rw-galaxy-plot, strokeDasharray=none, stroke=rgb(111,242,224) (not gold hub dashes)
+  dest class is-dest, status "Veridian Reach · 1 jump"
+  Echo toast "Route plotted: 1 jump to Veridian Reach."
+
+Escape closed chart. KeyM reopen: route still painted (persist). Screenshot 02-plotted.png is this reopen.
+
+Click current freehold hit: nav omitted, plotCount=0, toast "Route cleared."
+
+Clear route button type=button. After replot, button click omitted nav again.
+
+LMB hold 500ms on empty panel (110,103) while chartOpen:
+  fireHeld false before/during/after, playerFire count 0.
+
+Click hollowreach: remaining 3, status "Hollow Reach · 3 jumps", 3 plot segments.
+
+Click lastbeacon hub: dest lastbeacon, remaining 4, status "The Last Beacon · 4 jumps". Hub ring did not steal.
+
+innerHTML: galaxychart.js and nav.js contain no innerHTML. Digit 0 selects shipyard (station.js).
+
+Recalc: live jump not run (combat hail). Probe: offPathBlocked, destArrival, firstRecalc, Echo templates.
+
+Full npm run test:boot this session timed out at 300s before WAVE85 lines. Probe PASS. Persist verify-boot.log WAVE85 persist all true.

@@ -1,0 +1,33 @@
+spawn chrome pid=206356
+cdp page {"url":"chrome://newtab/","title":"New Tab"}
+navigate fail cdp-timeout Page.navigate
+boot {"href":"http://127.0.0.1:5180/","ready":"loading","ctx":false,"title":false,"newBtn":false,"scripts":0,"canvas":0,"fatal":null,"fatalText":"","bodyLen":0}
+boot {"href":"http://127.0.0.1:5180/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"scripts":3,"canvas":0,"fatal":"none","fatalText":"","bodyLen":989}
+boot {"href":"http://127.0.0.1:5180/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"scripts":3,"canvas":0,"fatal":"none","fatalText":"","bodyLen":989}
+boot {"href":"http://127.0.0.1:5180/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"scripts":3,"canvas":0,"fatal":"none","fatalText":"","bodyLen":989}
+boot {"href":"http://127.0.0.1:5180/","ready":"interactive","ctx":true,"title":false,"newBtn":false,"scripts":3,"canvas":1,"sys":"freehold","paused":true,"fatal":"none","fatalText":"","bodyLen":70022}
+origin {"text":"FORE\nAFT\nSCREEN\nSHELL\nHULL\nSPD\n0u/s\nWPN\nΓÇö\nPLANT\nSTRAIN\nENGINE\nOK\nFLIGHT\nTHR\nBURN\nREADY\nDRIFT\nREADY\nHEAT\nSTRAIN\n0%\nBIO\nSERENE\nHUNGER\nWOUNDS\nECHOES\n0\nPOS\nΓÇö\nΓÇö\nMANIFEST\nUU\n0\nFEAR\n0\nCARGO\n0/0\nCONTROLS Γû╛\nMouse ΓÇö steer toward reticle\nW/S ΓÇö vertical strafe (W = up)\nA/D ΓÇö lateral strafe (D = right)\nQ/E ΓÇö roll left / right (set your up)\nR/F (hold) ΓÇö throttle up / down ┬╖ double-tap F ΓÇö full stop\nSpace ΓÇö afte","origin":true,"paused":true}
+play {"paused":false,"ship":true,"player":true}
+jump {"sys":"freehold","jumping":false}
+jump {"sys":"freehold","jumping":true}
+jump {"sys":"freehold","jumping":true}
+jump {"sys":"freehold","jumping":true}
+jump {"sys":"freehold","jumping":true}
+jump {"sys":"bt_cradle","jumping":true}
+jump {"sys":"bt_cradle","jumping":true}
+jump {"sys":"bt_cradle","jumping":true}
+jump {"sys":"bt_cradle","jumping":true}
+jump {"sys":"bt_cradle","jumping":true}
+dock {"docked":true,"display":"flex","text":"THE CRADLEBEAUTIFUL ONES ┬╖ BERTH 7ΓÇ£sheΓÇ¥ made fastCREDITS 350 UU ┬╖ HOLD 0/201 ΓÇö Market2 ΓÇö Jobs board3 ΓÇö Bar4 ΓÇö Feed & tend5 ΓÇö Repair6 ΓÇö Outfitting7 ΓÇö People8 ΓÇö Launch9 ΓÇö Standing0 ΓÇö ShipyardBeautiful Ones: Sworn (+50 rep)1-9, 0 select servic"}
+menu {"docked":true,"sys":"bt_cradle","faction":"beautiful","rep":50,"credits":350,"hulls":[],"notice":"","buttons":["1 ΓÇö Market","2 ΓÇö Jobs board","3 ΓÇö Bar","4 ΓÇö Feed & tend","5 ΓÇö Repair","6 ΓÇö Outfitting","7 ΓÇö People","8 ΓÇö Launch","9 ΓÇö Standing","0 ΓÇö Shipyard"],"overlayHas":{"papers":false,"confirm":false,"arm":false,"ok":false,"already":false,"full":false,"noGift":false,"sworn":false,"shipyardMenu":true,"shipyard":false,"people":false}}
+SHOT 01-dock-menu.png
+file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-gift.mjs:126
+      throw new Error('cdp-timeout ' + method);
+            ^
+
+Error: cdp-timeout Runtime.evaluate
+    at file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-gift.mjs:126:13
+    at async evalJson (file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-gift.mjs:131:13)
+    at async file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-gift.mjs:320:1
+
+Node.js v24.14.1

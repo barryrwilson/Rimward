@@ -1,0 +1,27 @@
+{
+  "source": "out/w-boot-fix/jobs/boot.txt",
+  "wave78PassengerFalseKeys": [],
+  "wave80EspionageFalseKeys": [],
+  "wave26LaneDeliveryFalseKeys": [],
+  "wave35aDeliveryFalseKeys": [],
+  "wave12CallowBooksFalseKeys": ["liveShipFound", "refusalRearmedSecond", "refusalsRotatedTwoTotal"],
+  "wave12RestoreHealFalseKeys": [
+    "liveShipPresentPreRestore",
+    "recordIdentityPreRestore",
+    "liveShipSurvivedRestore",
+    "recordRepointed",
+    "restoredRecordLive"
+  ],
+  "wave78PassengerFailLine": false,
+  "wave80EspionageFailLine": false,
+  "completePayPassenger": true,
+  "completePaySpy": true,
+  "employerPlus2": true,
+  "mouseAcceptPassenger": true,
+  "mouseAcceptSpy": true,
+  "haulDestBindPassenger": true,
+  "uniqueHaulIdsPassenger": true,
+  "uniqueFourPassenger": true,
+  "secondTestBootSkipped": true,
+  "reason": "npm run test:boot already running (PID 47220 / 197436)"
+}

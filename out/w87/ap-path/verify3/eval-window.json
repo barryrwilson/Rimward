@@ -1,0 +1,185 @@
+{
+  "keys": [
+    "navigation",
+    "navigator",
+    "ongamepadconnected",
+    "ongamepaddisconnected",
+    "__websimFatal",
+    "__THREE__",
+    "__ctx"
+  ],
+  "hasCtx": true,
+  "ctxType": "undefined",
+  "destText": "DEST\nVeridian Reach\nJUMPS\n1\nGATE\n1.2k\nPOS\nFR",
+  "jumpsText": "JUMPS\n1\nGATE\n1.2k\nPOS\nFRE",
+  "apText": null,
+  "routeText": null,
+  "combatCancel": false,
+  "jumpOverlay": {
+    "display": "none",
+    "text": "JUMP"
+  },
+  "pos": "POS\nFREEHOLD DRIFT\nX 185 Y 250 Z 300\nMANIFEST\nUU\n350\nFEAR\n0\nCARGO\n0/20\nCONTROLS ▸",
+  "chips": [
+    {
+      "tag": "HTML",
+      "cls": "",
+      "t": "RIMWARD — A Living Frontier\n    \n    \n  /* Full-screen menu surfaces — station services + death screen.\n   Cold frontier"
+    },
+    {
+      "tag": "HEAD",
+      "cls": "",
+      "t": "RIMWARD — A Living Frontier\n    \n    \n  /* Full-screen menu surfaces — station services + death screen.\n   Cold frontier"
+    },
+    {
+      "tag": "STYLE",
+      "cls": "",
+      "t": "/* RIMWARD HUD — cold frontier instrumentation around one warm object (§18.4).\n   Scoped to #hud. Palette roles: void bl"
+    },
+    {
+      "tag": "BODY",
+      "cls": "",
+      "t": "RANGELEADHeave to. Cargo or hull.Heave to. Cargo or hull.Incoming dart.✕ Screen down.Incoming dart.JUMPTTargetFOREAFTSCR"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "t": "RANGELEADHeave to. Cargo or hull.Heave to. Cargo or hull.Incoming dart.✕ Screen down.Incoming dart.JUMPTTargetFOREAFTSCR"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-jump is-hidden",
+      "t": "JUMP"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-jump-label",
+      "t": "JUMP"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-bottom",
+      "t": "PlantSTRAINOVERHEATENGINEOKFlightTHRBURNREADYDRIFTREADYHeatSTRAIN0%BioANXIOUSHUNGERWOUNDSECHOES0NEXTVeridian ReachDESTVe"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-side-col",
+      "t": "BioANXIOUSHUNGERWOUNDSECHOES0NEXTVeridian ReachDESTVeridian ReachJUMPS1GATE1.2kPOSFreehold DriftX 185  Y 250  Z 300"
+    },
+    {
+      "tag": "SECTION",
+      "cls": "rw-panel rw-nav-readout rw-aux",
+      "t": "NEXTVeridian ReachDESTVeridian ReachJUMPS1GATE1.2k"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-nav-readout-live",
+      "t": "NEXTVeridian ReachDESTVeridian ReachJUMPS1"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-meter",
+      "t": "NEXTVeridian Reach"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-value",
+      "t": "Veridian Reach"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-meter",
+      "t": "DESTVeridian Reach"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-label",
+      "t": "DEST"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-value",
+      "t": "Veridian Reach"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-label",
+      "t": "JUMPS"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-label",
+      "t": "GATE"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-autopilot is-hidden",
+      "t": "Veridian ReachVeridian Reach1Cancel"
+    },
+    {
+      "tag": "SPAN",
+      "cls": "rw-autopilot-dest",
+      "t": "Veridian Reach"
+    },
+    {
+      "tag": "SPAN",
+      "cls": "rw-autopilot-next",
+      "t": "Veridian Reach"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-galaxy-chart is-hidden",
+      "t": "Galaxy ChartClear routeAutopilot×Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashe"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-galaxy-chart-panel",
+      "t": "Galaxy ChartClear routeAutopilot×Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashe"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-galaxy-chart-header",
+      "t": "Galaxy ChartClear routeAutopilot×"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-galaxy-chart-actions",
+      "t": "Clear routeAutopilot×"
+    },
+    {
+      "tag": "DIV",
+      "cls": "rw-galaxy-ap-cluster",
+      "t": "Autopilot×"
+    },
+    {
+      "tag": "BUTTON",
+      "cls": "rw-galaxy-ap",
+      "t": "Autopilot"
+    },
+    {
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "t": "Freehold DriftVeridian ReachThe RedmarchHollow ReachThe HushThe VergeBastionThe AuctionThe Stolen WombThe Black StationT"
+    },
+    {
+      "tag": "g",
+      "cls": "[object SVGAnimatedString]",
+      "t": "Freehold DriftVeridian ReachThe RedmarchHollow ReachThe HushThe VergeBastionThe AuctionThe Stolen WombThe Black StationT"
+    },
+    {
+      "tag": "text",
+      "cls": "[object SVGAnimatedString]",
+      "t": "Veridian Reach"
+    },
+    {
+      "tag": "P",
+      "cls": "rw-galaxy-plot-status",
+      "t": "Veridian Reach · 1 jump"
+    },
+    {
+      "tag": "SPAN",
+      "cls": "rw-galaxy-legend-item rw-galaxy-legend-gate",
+      "t": "gate"
+    }
+  ]
+}

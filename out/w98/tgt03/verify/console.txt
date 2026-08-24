@@ -1,0 +1,9 @@
+Total messages: 3 (Errors: 1, Warnings: 0)
+Returning 1 messages for level "warning"
+
+TypeError: Cannot read properties of undefined (reading 'hub')
+    at midpointSwap (http://127.0.0.1:5179/src/game/jump.js:100:22)
+    at Object.update (http://127.0.0.1:5179/src/game/jump.js:157:7)
+    at http://127.0.0.1:5179/src/main.js:151:51
+    at onAnimationFrame (http://127.0.0.1:5179/node_modules/.vite/deps/chunk-BQJMB3HC.js?v=4e21b427:17689:37)
+    at onAnimationFrame (http://127.0.0.1:5179/node_modules/.vite/deps/chunk-BQJMB3HC.js?v=4e21b427:8166:5)

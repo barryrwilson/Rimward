@@ -1,0 +1,56 @@
+PASS copy.literal
+PASS radius.matchNpc
+PASS npc.callsTick
+PASS npc.noMainEditNeeded
+PASS src.usesStandingRead
+PASS src.noHullStanding
+PASS src.band
+PASS src.noWanted
+PASS src.noWorldFields
+PASS src.noInnerHTML
+PASS src.noHail
+PASS src.noSong
+PASS src.noNewEvent
+PASS src.resetOnLoaded
+PASS hunt.untouched
+PASS rest.untouched
+PASS save.noNewKey
+PASS ctx.unedited
+PASS main.unedited
+PASS state.uneditedLeave
+PASS hud.commToast
+PASS hud.noInnerHTML
+PASS css.reducedKeepsToast
+PASS live.standingNeg1
+PASS live.oncePerVisit
+PASS live.standingNeg9
+PASS live.noLeave.zero 0
+PASS live.noLeave.neg10 -10
+PASS live.noLeave.neg11 -11
+PASS live.noLeave.pos 4
+PASS hunt.neg10
+PASS hunt.neg11
+PASS hunt.neg9
+PASS hunt.neg1
+PASS live.nanFailClosed
+PASS live.protoFailClosed
+PASS live.protoRoleIgnored
+PASS live.outOfZone
+PASS live.inZone
+PASS live.noPatrol
+PASS live.pirateNever
+PASS live.aceNever
+PASS live.traderNever
+PASS live.minerNever
+PASS live.foreignPatrol
+PASS live.stateFactionMismatch
+PASS live.beautifulNever
+PASS live.unknowableNever
+PASS live.combatAttackerSkip
+PASS live.combatHuntSkip
+PASS live.otherPatrolStillWarns
+PASS live.dockedSkip
+PASS live.firstVisit
+PASS live.jumpRefires
+PASS live.payloadTextOnly
+WAVE95 POLICE PASS { line: 'Leave this space.', radius: 300, rest: 1200 }

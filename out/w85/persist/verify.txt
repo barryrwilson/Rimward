@@ -1,0 +1,19 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w85/persist/pin-check.mjs` (WAVE85 pins all true, PASS).
+- Ran `npm run test:boot`. WAVE85 pin object at end is all true. WAVE82 owner and WAVE83 station/missiles stay all true.
+- Static review of `src/game/nav.js`, `src/game/save.js` hooks, `src/core/ctx.js` freeze comment, and the WAVE85 block in `scripts/boot-test.mjs` vs `out/w84/nav01/shared-contract.md` and `out/w84/nav03/shared-contract.md` §2 persist.
+- Independent probe `out/w85/persist/verify-probe.mjs`: hopIndex drop-on-keep, raw restore `autopilot: true` → false, proto dest drop on restore, same-system plot clears, directed gates no reverse, hub.routes one-way no reverse, uncharted dest no write, omit remaining / stored idle drop, snapshot heal, fresh `navRoute` literal.
+
+## Bugs found
+[Empty if CLEAN]
+
+## Environmental issues
+- Boot-test exit code 1 with 66 errors. Known pre-existing FAILs include WAVE4 fence, WAVE26 ferry/haul/restore, WAVE35 haul. Also WAVE76 MSN, WAVE78 explore, WAVE80 REP-04. None of these are WAVE85 persist pins. WAVE85 did not fail.
+
+## Evidence
+- Screenshots: none expected
+- Logs: `out/w85/persist/verify-pin-check.log`, `out/w85/persist/verify-boot.log`, `out/w85/persist/verify-probe.log`
+- Test output: pin-check WAVE85 NAV PERSIST PASS; boot-test `wave85 nav persist` all keys true; verify-probe VERIFY PROBE PASS

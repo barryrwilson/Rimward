@@ -1,0 +1,26 @@
+wave85 nav persist: {
+  "fieldsNav": true,
+  "omitDelete": true,
+  "protoDestDrop": true,
+  "reservedDrop": true,
+  "stuffedDrop": true,
+  "blockedEmptyKeep": true,
+  "midSlice": true,
+  "offPathBlocked": true,
+  "arrivedOk": true,
+  "remainingOk": true,
+  "apNoRoundtrip": true,
+  "twoWayPlot": true,
+  "hubOneWay": true,
+  "unknownFail": true,
+  "unchartedFail": true,
+  "plotFresh": true,
+  "clearFresh": true,
+  "emitSrc": true,
+  "noInner": true,
+  "stateNoNav": true,
+  "ctxFreeze": true,
+  "autosaveKey": true,
+  "noChartFlag": true
+}
+WAVE85 NAV PERSIST PASS

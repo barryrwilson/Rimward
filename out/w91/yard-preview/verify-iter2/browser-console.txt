@@ -1,0 +1,4 @@
+Total messages: 3 (Errors: 0, Warnings: 1)
+Returning 1 messages for level "warning"
+
+[WARNING] Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently @ :9

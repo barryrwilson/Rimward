@@ -1,0 +1,77 @@
+## Status
+CLEAN
+
+## What I tested
+Static document review only. Domain: data. No browser. No Playwright. No formatter. No full suite.
+
+Re-dispatch target: close designer Majors 1–2 in freeze markdown.
+
+Checked:
+- out/w86/bio02/shared-contract.md (21221 bytes, 2026-08-22 00:34:47)
+- docs/Bio02EvolutionDesign.md (20590 bytes, 2026-08-22 00:36:08)
+- out/w86/bio02/ui-audit.md (matrix + cancel table echo)
+- out/w86/bio02/designer-audit.md (original Major text, read-only compare)
+- git porcelain for src/ vs BIO-02 locked sources
+- LastWriteTime on locked src vs BIO-02 markdown (08:22 00:34–00:37)
+- Live graft chrome cites in src/systems/shipyard-desk.js and src/systems/station.js
+- UU strings: TRAIN_LIST_UU, 20000, omit-offer, OwnerDecisions pointer
+
+Live cites still match (code wins):
+- setShipyardPane graft-null: shipyard-desk.js 75–79
+- graft mountedId mismatch: shipyard-desk.js 165–167
+- ui.graftPending: station.js 4225
+- CREDITS/HOLD head: station.js 5607–5608
+- Back graft-null: station.js 5628–5635 (null at 5633)
+- selectService graft-null: 5655
+- dock graft-null: 5674
+- undock graft-null: 5697
+- Esc cancelGraftPending || cancelYardPending: 5723
+- Esc fallthrough graft-null: 5732
+- KeyB undock skips Esc cancel: 5736
+- Yard hostile note `No sale.`: shipyard-desk.js 214–216
+
+## Bugs found
+None.
+
+Hangar matrix (designer Major 1) is merge law in shared-contract.md §4.2:
+- Hostile `rep < 0`: no Train button; note `No sale.` (yard 214–216, not graft hide)
+- Short credits: keep Offer; Confirm refuses `Not enough credits.`
+- Owner UU still open: omit offer; do not invent a price
+- Explicit: do not copy graftOfferVisible (shipyard-desk.js 142–151)
+- §4 splits mutate vs paint so standing/credits are desk states, not hull-hide
+
+trainPending cancel sites (designer Major 2) are merge law in shared-contract.md §7.2:
+- Esc level-2: cancelTrainPending in the same gate as cancelGraftPending || cancelYardPending (5723)
+- Esc fallthrough: null trainPending with other pendings (5732)
+- Back, selectService, dock, undock (incl. KeyB)
+- setShipyardPane: null when pane is not Hangar
+- Confirm re-reads mountedId; mismatch → refuse, no debit
+- Confirm redraw() so CREDITS/HOLD update (5607–5609)
+
+docs/Bio02EvolutionDesign.md cites the same freeze:
+- Merge table: hostile No sale. not graft-hide; short credits keep Offer; Train UU owner-open; trainPending chrome → contract §4.2 / §7.2
+- §6: Hangar matrix §4.2; cancelTrainPending at 5723; null on Back, selectService, dock, undock, setShipyardPane; mountedId mismatch; redraw()
+- Key Decision 11 and acceptance 4–5 restated hostile / Offer / Esc-Back-Yard-dock-B-launch
+- Brief does not duplicate the 8-row table; merge law says contract wins
+
+No src/ writes in this BIO-02 delta:
+- porcelain dirty src/ is Wave 85 NAV (ctx.js, save.js, hud.js, ship.js, …)
+- hangar.js, bio.js, shipyard.js, state.js, station.js, shipyard-desk.js are not in porcelain
+- those BIO-02 locked files LastWriteTime is 2026-08-21 or earlier; re-dispatch markdown is 2026-08-22 00:34+
+
+No invented UU:
+- Contract §6 / §0.10: owner-open; do not invent TRAIN_LIST_UU
+- Fail-closed candidate = yardPrice('heavy', …) still needs owner check-off; do not ship debit
+- 20000 appears only as live YARD_LIST_UU.heavy and as a “do not debit 20000” warning
+- Brief: “Inventing 20000 in the brief would violate Wave 82 law”
+
+## Notes (not bugs)
+- designer-audit.md still labels M1–M2 Status: open. That file is the original audit snapshot. The freeze files now contain the requested matrix and cancel table.
+- Design brief Key Decision 11 names hostile + short-credits, not the omit-offer row in that one bullet. Contract §4.2 still has the omit row; brief points at §4.2.
+
+## Environmental issues
+- Workspace remains dirty from Wave 85 NAV impl. Unrelated to BIO-02.
+- Playwright not used (task: no browser).
+
+## Evidence
+- Logs: out/w86/bio02/verify-recheck.txt

@@ -1,0 +1,20 @@
+{
+  "info": {
+    "href": "http://127.0.0.1:5189/",
+    "ready": "complete",
+    "title": "RIMWARD — A Living Frontier",
+    "scripts": [
+      "http://127.0.0.1:5189/@vite/client",
+      "",
+      "http://127.0.0.1:5189/src/main.js"
+    ],
+    "text": "FORE\nAFT\nSCREEN\nSHELL\nHULL\nSPD\n0u/s\nWPN\n—\nPLANT\nSTRAIN\nENGINE\nOK\nFLIGHT\nTHR\nBURN\nREADY\nDRIFT\nREADY\nHEAT\nSTRAIN\n0%\nBIO\nSERENE\nHUNGER\nWOUNDS\nECHOES\n0\nPOS\n—\n—\nMANIFEST\nUU\n0\nFEAR\n0\nCARGO\n0/0\nCONTROLS ▾\nMouse — steer toward reticle\nW/S — vertical strafe (W = up)\nA/D — lateral strafe (D = right)\nQ/E — roll left / right (set your up)\nR/F (hold) — throttle up / down · double-tap F — full stop\nSpace — afte",
+    "html": "<html lang=\"en\"><head>\n    <script type=\"module\" src=\"/@vite/client\"></script>\n\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>RIMWARD — A Living Frontier</title>\n    <link rel=\"icon\" href=\"data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;circle cx='8' cy='8' r='6' fill='%23071018' stroke='%236ff2e0'/&gt;&lt;circle cx='8' cy='8' r='2' fill='%236ff2e0'/&gt;&lt;/svg&gt;\">\n    <link rel=\"stylesheet\" href=\"/src/style.css\">\n  <style type=\"text/css\" data-vite-dev-id=\"C:/Projects/WebSim/src/ui/sc",
+    "canvas": 1,
+    "ctx": "object"
+  },
+  "cons": [
+    "debug: [vite] connecting...",
+    "debug: [vite] connected."
+  ]
+}

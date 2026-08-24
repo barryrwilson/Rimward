@@ -1,0 +1,18 @@
+spawn chrome pid=124300
+boot {"ctx":false,"ready":"loading"}
+boot {"ctx":false,"ready":"interactive"}
+boot {"ctx":false,"ready":"interactive"}
+boot {"ctx":false,"ready":"interactive"}
+boot {"ctx":false,"ready":"interactive"}
+boot {"ctx":false,"ready":"interactive"}
+boot {"ctx":true,"ready":"complete","paused":true}
+file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-rest.mjs:78
+  return Promise.race([p, sleep(30000).then(() => { pending.delete(id); throw new Error('timeout ' + method); })]);
+                                                                              ^
+
+Error: timeout Runtime.evaluate
+    at file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-rest.mjs:78:79
+    at async evalJson (file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-rest.mjs:81:13)
+    at async file:///C:/Projects/WebSim/out/w92/bio01/verify/cdp-rest.mjs:111:3
+
+Node.js v24.14.1

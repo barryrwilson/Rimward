@@ -5,8 +5,8 @@
 | **Title** | RIMWARD BIO-03 Beautiful Ones per-class look and bake |
 | **Author** | Wave 81 BIO-03 look integrator |
 | **Date** | 2026-08-21 |
-| **Status** | Wave 76 motion slice landed. Per-class look / bake / new GLBs still later. This wave freezes look + bake law. |
-| **Wave** | 81 — design. Later — serial steps 3–4 (per-class look + bake/wire). |
+| **Status** | Wave 76 motion slice landed. Wave 95 shipped look + bake (keep GLB + GPU). This wave freezes look + bake law. |
+| **Wave** | 81 — design. Wave 95 — serial steps 3–4 (per-class look + bake/wire). |
 | **Owner request** | BIO-03 Beautiful Ones NPC fleet must read as organic/alien around the player living-ship benchmark, with class identity by shape and size and marine *vibes* as inspiration not copies. Wave 81 does not bake GLBs. |
 | **Merge law** | [`out/w81/bio03/shared-contract.md`](../out/w81/bio03/shared-contract.md). If this brief and that file conflict, the contract wins. |
 | **Sibling** | [`docs/Bio03FleetDesign.md`](Bio03FleetDesign.md) (Wave 75; Wave 76 shipped motion). [`docs/BioLivingShipsDesign.md`](BioLivingShipsDesign.md) (Wave 70; Wave 72 shipped grafts). **Do not edit** those files. |

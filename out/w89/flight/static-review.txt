@@ -1,0 +1,35 @@
+Static review (flight verifier)
+
+Helm (src/systems/ship.js)
+- apOn = world.nav.autopilot === true
+- amOn = !apOn && automine.engaged === true  → AP wins if both on
+- steerY/steerX/throttleSet = AP channel if apOn else AM channel if amOn else input
+- roll only from input when !apOn && !amOn
+- MATCH toggle blocked when amOn; MATCH cleared when amOn
+- amIdle = amOn && throttleSet < 0.02 → fwdSpeed/relFwd 0 (creep suppressed)
+- rockMatch = (matchSpeed || amOn) && rockLock && lockPosOk && velOk
+- rock rest-frame: targetVel = _lockVel + relFwd + strafe
+- damping skipped while rockMatch
+
+Combat (src/systems/combat.js)
+- amMine = engaged && wantMine
+- if (amMine) updateMining else if fireHeld groupWeapon path
+- one updateMining call per frame; one mine-beam + one mine-beam-core
+- Digit1 cannot cannon while amMine
+- amOn → nose→rock aim (not reticle)
+
+Pause disengageAutomine(ctx, 'pause')
+- src/main.js KeyP when entering paused
+- src/systems/title.js on title pause
+- src/game/origins.js on origin overlay pause
+- src/systems/modelsbrowser.js on open pause
+No other src writer of flags.paused = true.
+
+Save
+- WORLD_FIELDS does not list automine
+- snapshot() copies only WORLD_FIELDS + cargo/bio/player/ship pose
+- restore() writes only WORLD_FIELDS onto ctx.world
+
+Boot-test
+- scripts/boot-test.mjs inits list has no initAutomine (coverage gap, not a product bug)
+- title.js imports automine.js at boot, so a broken automine import still fails INIT

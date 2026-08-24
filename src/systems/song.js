@@ -129,6 +129,16 @@ const FAMILY_CUES = {
   hullBand: 'bio',
 };
 
+// Optional HUD-alert subset (KeyO hudAlerts). Combat / world / whalesong stay mute-only.
+export const HUD_ALERT_TYPES = new Set([
+  'hudMechRange',
+  'hudMechMatch',
+  'hudMechContact',
+  'hostileEnter',
+  'hullBand',
+  'reticleLock',
+]);
+
 // Cap pirate volleys: ~8 overlapping npcFire / npcHit tones (last-play + stagger).
 const VOLLEY_GAP = 0.015;
 const VOLLEY_MAX = 8;
@@ -424,7 +434,8 @@ export function initSong(ctx) {
         if (cue) {
           const needFam = FAMILY_CUES[typ];
           const famOk = !needFam || document.getElementById('hud')?.dataset.family === needFam;
-          if (famOk) {
+          const alertOk = !HUD_ALERT_TYPES.has(typ) || ctx.settings?.hudAlerts === true;
+          if (famOk && alertOk) {
             let at = t;
             if (typ === 'npcFire' || typ === 'npcHit') {
               const last = typ === 'npcFire' ? lastNpcFireAt : lastNpcHitAt;

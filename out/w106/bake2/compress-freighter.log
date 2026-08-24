@@ -1,0 +1,14 @@
+prune: Removed types... Accessor (14)
+quantize: Skipping TEXCOORD_0; out of [0,1] range.
+quantize: Skipping TEXCOORD_0; out of [0,1] range.
+prune: Removed types... Accessor (6)
+prune: Removed types... Accessor (14)
+quantize: Skipping TEXCOORD_0; out of [0,1] range.
+quantize: Skipping TEXCOORD_0; out of [0,1] range.
+prune: Removed types... Accessor (6)
+prune: Removed types... Accessor (14)
+quantize: Skipping TEXCOORD_0; out of [0,1] range.
+prune: Removed types... Accessor (7)
+prune: Removed types... Accessor (14)
+prune: Removed types... Accessor (8)
+Meshopt-compressed 4 ship LOD files.

@@ -1,0 +1,4 @@
+== beautiful/frigate/lod0  voxel=0.06  triangles=51824  cells=305659
+main  cells=303925  x[ -6.24,  6.24]  y[ -5.16,  5.16]  z[-15.30, 14.52]
+FLOAT cells=  1734  x[ -0.54,  0.60]  y[  0.06,  0.72]  z[ -0.96, -0.12]
+probe-ship-islands: 1 FLOATING PART GROUP(S)

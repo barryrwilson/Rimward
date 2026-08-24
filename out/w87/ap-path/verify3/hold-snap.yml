@@ -1,0 +1,85 @@
+- generic [active] [ref=f1e1]:
+  - generic:
+    - status:
+      - generic: Heave to. Cargo or hull.
+      - generic: Run if you like.
+      - generic: Incoming dart.
+      - generic: ✕ Screen down.
+      - generic: ✕ Screen down.
+    - generic:
+      - generic: D
+      - generic: Jump to Veridian Reach
+    - generic:
+      - generic:
+        - generic:
+          - generic: FORE
+          - generic: AFT
+      - generic: SCREEN
+      - generic: SHELL
+      - generic: HULL
+      - generic:
+        - generic: SPD
+        - generic: 1u/s
+      - generic:
+        - generic: WPN
+        - generic: 1 · Energy cannon
+    - generic:
+      - generic:
+        - generic: Plant
+        - generic: STRAIN
+        - generic:
+          - generic: ENGINE
+          - generic: DAMAGED
+      - generic:
+        - generic: Flight
+        - generic: THR
+        - generic:
+          - generic: BURN
+          - generic: READY
+        - generic:
+          - generic: DRIFT
+          - generic: READY
+      - generic:
+        - generic: Heat
+        - generic:
+          - generic: STRAIN
+          - generic: 0%
+      - generic:
+        - generic:
+          - generic: Bio
+          - generic: ANXIOUS
+          - generic: HUNGER
+          - generic: WOUNDS
+          - generic:
+            - generic: ECHOES
+            - generic: "0"
+        - generic:
+          - status:
+            - generic:
+              - generic: NEXT
+              - generic: Veridian Reach
+            - generic:
+              - generic: DEST
+              - generic: Veridian Reach
+            - generic:
+              - generic: JUMPS
+              - generic: "1"
+          - generic:
+            - generic: GATE
+            - generic: 0u
+        - generic:
+          - generic: POS
+          - generic: Freehold Drift
+          - generic: X 0 Y 60 Z -900
+    - generic:
+      - generic: Manifest
+      - generic:
+        - generic: UU
+        - generic: "350"
+      - generic:
+        - generic: FEAR
+        - generic: "0"
+      - generic:
+        - generic: CARGO
+        - generic: 0/20
+    - button "CONTROLS ▸" [ref=f1e294] [cursor=pointer]

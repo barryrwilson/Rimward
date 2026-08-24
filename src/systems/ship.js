@@ -1,15 +1,22 @@
 import * as THREE from 'three';
-import { createShipState, U } from '../game/state.js';
+import { createShipState, U, POWER } from '../game/state.js';
 import { hoverTurnRateFor } from '../game/flight-feel.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
-import { P } from '../game/ship-scale.js';
+import { P, SHIP_SCALE, scaleFor } from '../game/ship-scale.js';
 import {
   applyFlightEnvelope,
   registerPlayerRemount,
 } from '../game/hangar.js';
 import { buildPlayerPlatedMesh, animateShipMesh } from './npc.js';
 import { releaseShipAsset } from './ship-assets.js';
+import {
+  LIVING_CADENCE,
+  SWIM_IDLE_HZ,
+  SWIM_CRUISE_HZ,
+  cadenceFor,
+  classCruise,
+} from '../game/living-cadence.js';
 
 export { applyFlightEnvelope };
 
@@ -140,9 +147,7 @@ const FOV_LERP_RATE = 5; // 1/s — afterburner FOV kick easing (§5.4)
 const AUTOBANK_LERP_RATE = 7; // 1/s — ease leftover visual bank back to 0
 const ENGINE_OUT_THRUST = 0.3; // §6.5: engine-out caps thrust at 30%
 
-// Living-motion tuning.
-const IDLE_SWIM_HZ = 0.5; // flap frequency at rest — the ship never stops
-const CRUISE_SWIM_HZ = 2.3; // flap frequency at max speed
+// Living-motion tuning. Idle/cruise Hz live in living-cadence.js (BIO-06).
 const BREATH_HZ = 0.25; // ~4 s breath cycle
 const HEART_HZ = 1.1; // resting heartbeat
 
@@ -246,22 +251,43 @@ function makeSoftDotTexture() {
 }
 
 /**
+ * Rest-pose scale vs light. Light stays 1 so this sculpt remains P.
+ * Other classes use charter target / P. classKey is save-controlled.
+ */
+function livingRestScale(classKey) {
+  const row = scaleFor(classKey);
+  if (row === SHIP_SCALE.light) return 1;
+  return row.target / P;
+}
+
+/** Modest class silhouette on the light sculpt. Light is identity. */
+function livingSilhouette(classKey) {
+  if (classKey === 'cutter') return { x: 0.88, y: 0.78, z: 1.16 };
+  if (classKey === 'heavy') return { x: 1.10, y: 1.32, z: 1.06 };
+  return { x: 1, y: 1, z: 1 };
+}
+
+/**
  * Sculpt a sphere into a manta/whale hull (nose -Z, tail +Z) and return the
  * geometry plus per-vertex animation metadata (base positions, normalized
  * spine coordinate, wingness factor). Animation then mutates positions
  * relative to the base every frame.
  *
- * Exported for the same reason as makeVeinTexture: this hull IS P, the scale
- * charter's yardstick (src/game/ship-scale.js), so the Models Browser has to
- * show this exact geometry rather than a lookalike.
+ * Default classKey 'light' is P (src/game/ship-scale.js). Models Browser
+ * calls with no args so the yardstick stays this exact light sculpt.
  */
-export function makeLivingHull() {
+export function makeLivingHull(classKey = 'light') {
   const geo = new THREE.SphereGeometry(1, 64, 40);
   const pos = geo.attributes.position;
   const count = pos.count;
   const base = new Float32Array(pos.array); // pristine copy
   const zNorm = new Float32Array(count); // 0 at nose → 1 at tail
   const wingness = new Float32Array(count); // 0 on spine → 1 at wingtips
+  const restScale = livingRestScale(classKey);
+  const sil = livingSilhouette(classKey);
+  const sx = restScale * sil.x;
+  const sy = restScale * sil.y;
+  const sz = restScale * sil.z;
 
   let zMin = Infinity;
   let zMax = -Infinity;
@@ -285,6 +311,10 @@ export function makeLivingHull() {
     // Head bulge near the nose.
     if (z < -1.2) y += 0.08 * Math.exp(-((z + 1.6) * (z + 1.6)) * 2);
 
+    x *= sx;
+    y *= sy;
+    z *= sz;
+
     base[i3] = x;
     base[i3 + 1] = y;
     base[i3 + 2] = z;
@@ -293,17 +323,19 @@ export function makeLivingHull() {
   }
 
   const zSpan = zMax - zMin;
+  const wingStart = 0.7 * sx;
+  const wingSpan = 2.3 * sx;
   for (let i = 0; i < count; i++) {
     const i3 = i * 3;
     zNorm[i] = (base[i3 + 2] - zMin) / zSpan;
-    const w = (Math.abs(base[i3]) - 0.7) / 2.3;
+    const w = (Math.abs(base[i3]) - wingStart) / wingSpan;
     wingness[i] = Math.pow(Math.min(Math.max(w, 0), 1), 1.5);
   }
 
   pos.array.set(base);
   pos.needsUpdate = true;
   geo.computeVertexNormals();
-  return { geo, base, zNorm, wingness, count };
+  return { geo, base, zNorm, wingness, count, restScale, sx, sy, sz };
 }
 
 let currentRig = null;
@@ -343,20 +375,22 @@ function makeFallbackPlated() {
   return root;
 }
 
-function scalePlatedToPlayer(wrap) {
+function scalePlatedToPlayer(wrap, restScale) {
   wrap.updateMatrixWorld(true);
   _platedBox.setFromObject(wrap);
   _platedBox.getSize(_platedSize);
   const longest = Math.max(_platedSize.x, _platedSize.y, _platedSize.z, 1e-6);
-  wrap.scale.multiplyScalar(P / longest);
+  const s = restScale > 0 ? restScale : 1;
+  wrap.scale.multiplyScalar((P * s) / longest);
 }
 
-function buildLivingVisual() {
+function buildLivingVisual(classKey = 'light') {
   const root = new THREE.Object3D();
   const flesh = new THREE.Object3D();
   root.add(flesh);
 
-  const { geo, base, zNorm, wingness, count } = makeLivingHull();
+  const { geo, base, zNorm, wingness, count, restScale, sx, sy, sz } =
+    makeLivingHull(classKey);
   const veinTex = makeVeinTexture();
   const fleshMat = new THREE.MeshPhysicalMaterial({
     color: 0x2b2145, // deep violet flesh
@@ -372,18 +406,18 @@ function buildLivingVisual() {
   flesh.add(hull);
 
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x9ffff0 });
-  const eyeGeo = new THREE.SphereGeometry(0.09, 10, 8);
+  const eyeGeo = new THREE.SphereGeometry(0.09 * restScale, 10, 8);
   for (const side of [-1, 1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.position.set(side * 0.42, 0.14, -1.45);
+    eye.position.set(side * 0.42 * sx, 0.14 * sy, -1.45 * sz);
     flesh.add(eye);
   }
 
-  const underLight = new THREE.PointLight(0x40ffd8, 20, 28);
-  underLight.position.set(0, -0.9, 0.4);
+  const underLight = new THREE.PointLight(0x40ffd8, 20, 28 * restScale);
+  underLight.position.set(0, -0.9 * sy, 0.4 * sz);
   flesh.add(underLight);
 
-  const scarGeo = new THREE.PlaneGeometry(0.55, 0.34);
+  const scarGeo = new THREE.PlaneGeometry(0.55 * restScale, 0.34 * restScale);
   const scarMat = new THREE.MeshBasicMaterial({
     color: 0x070410, // dead flesh
     polygonOffset: true,
@@ -394,7 +428,7 @@ function buildLivingVisual() {
     const a = SCAR_ANCHORS[i];
     const scar = new THREE.Mesh(scarGeo, scarMat);
     _delta.set(a[0] / 9, a[1] / 0.16, a[2] / 4.41).normalize();
-    scar.position.set(a[0], a[1], a[2]).addScaledVector(_delta, 0.05);
+    scar.position.set(a[0] * sx, a[1] * sy, a[2] * sz).addScaledVector(_delta, 0.05 * restScale);
     _targetVelocity.copy(scar.position).add(_delta);
     scar.lookAt(_targetVelocity);
     scar.visible = false;
@@ -413,6 +447,7 @@ function buildLivingVisual() {
     zNorm,
     wingness,
     count,
+    restScale,
     posAttr,
     arr: posAttr.array,
     fleshMat,
@@ -442,7 +477,8 @@ function buildBuiltVisual(classKey, faction) {
     inner = makeFallbackPlated();
   }
   wrap.add(inner);
-  scalePlatedToPlayer(wrap);
+  const restScale = livingRestScale(classKey);
+  scalePlatedToPlayer(wrap, restScale);
   flesh.add(wrap);
   return {
     kind: 'built',
@@ -466,6 +502,7 @@ function buildBuiltVisual(classKey, faction) {
     underLight: null,
     plated: inner,
     platedIsAsset,
+    restScale,
   };
 }
 
@@ -525,7 +562,7 @@ export function remountPlayerHull(ctx) {
 
   const next = kind === 'built'
     ? buildBuiltVisual(ctx.player?.classKey || 'light', ctx.player?.faction || 'independent')
-    : buildLivingVisual();
+    : buildLivingVisual(ctx.player?.classKey || 'light');
 
   next.root.position.copy(pos);
   next.root.quaternion.copy(quat);
@@ -535,6 +572,7 @@ export function remountPlayerHull(ctx) {
   ship.hullRig = next;
   ship.velocity?.set(0, 0, 0);
   ship.speed = 0;
+  ship.camSnap = true;
   publishHullPath(ship, next);
 
   if (!currentRig || currentRig.root === oldRoot) currentRig = next;
@@ -631,6 +669,7 @@ export function initShip(ctx) {
       const posAttr = rig.posAttr;
       const arr = rig.arr;
       const living = rig.kind === 'living' && base && posAttr && arr;
+      const restScale = rig.restScale > 0 ? rig.restScale : 1;
 
       const time = ctx.world.time;
       const docked = ctx.flags.docked;
@@ -694,14 +733,19 @@ export function initShip(ctx) {
         && Number.isFinite(_lockVel.z);
       // NaN rock pose: fail closed. Ships still match on liveLock alone.
       const matchLive = liveLock || (rockLock && lockPosOk && velOk);
-      if (input.matchSpeedPressed) {
+      const apOn = !!(ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true);
+      const ap = ctx.autopilot;
+      const am = ctx.automine;
+      // Autopilot wins if both channels are engaged. Automine does not write input.
+      const amOn = !apOn && !!(am && am.engaged === true);
+      if (input.matchSpeedPressed && !apOn && !amOn) {
         if (ctx.flags.matchSpeed) ctx.flags.matchSpeed = false;
         else if (matchLive && !docked && !ctx.gate.jumping && !input.throttleHeld) {
           ctx.flags.matchSpeed = true;
         }
       }
       if (ctx.flags.matchSpeed
-        && (docked || ctx.gate.jumping || !matchLive || input.throttleHeld)) {
+        && (docked || ctx.gate.jumping || !matchLive || input.throttleHeld || amOn)) {
         ctx.flags.matchSpeed = false;
       }
 
@@ -711,11 +755,24 @@ export function initShip(ctx) {
         if (
           input.afterburnerPressed &&
           !ship.burnerActive &&
-          time >= ship.burnerReadyAt
+          time >= ship.burnerReadyAt &&
+          (ctx.player?.power ?? 0) >= POWER.afterburnerMin
         ) {
           ship.burnerActive = true;
           input.fullStop = false; // burn is a thrust command — cancels full stop
           burnerEndsAt = time + shipCfg.afterburner.burnTime;
+        }
+        if (ship.burnerActive) {
+          const p = ctx.player;
+          if (p) {
+            p.powerDrainThisFrame = true;
+            const cur = Number.isFinite(p.power) ? p.power : 0;
+            p.power = Math.max(0, cur - POWER.afterburnerPerSec * dt);
+            if (p.power <= 0) {
+              ship.burnerActive = false;
+              ship.burnerReadyAt = time + shipCfg.afterburner.cooldown;
+            }
+          }
         }
         if (ship.burnerActive && time >= burnerEndsAt) {
           ship.burnerActive = false;
@@ -761,9 +818,13 @@ export function initShip(ctx) {
           }
         }
         const rs = turn * dt;
-        if (input.steerY) root.rotateX(input.steerY * rs);
-        if (input.steerX) root.rotateY(-input.steerX * rs);
-        if (input.roll) root.rotateZ(input.roll * rs);
+        const holdApJump = apOn && ctx.gate.jumping;
+        const steerY = holdApJump ? 0 : (apOn && ap ? ap.pitch : (amOn ? am.pitch : input.steerY));
+        const steerX = holdApJump ? 0 : (apOn && ap ? ap.yaw : (amOn ? am.yaw : input.steerX));
+        const throttleSet = holdApJump ? 0 : (apOn && ap ? ap.throttle : (amOn ? am.throttle : input.throttle));
+        if (steerY) root.rotateX(steerY * rs);
+        if (steerX) root.rotateY(-steerX * rs);
+        if (!apOn && !amOn && input.roll) root.rotateZ(input.roll * rs);
 
         // --- Velocity.
         _forward.set(0, 0, -1).applyQuaternion(root.quaternion);
@@ -782,14 +843,15 @@ export function initShip(ctx) {
           // Ease toward forward × (creep + throttle × (maxSpeed − creep)),
           // plus strafe along the ship's right/up axes (§5.1). Full stop
           // (double-tap F) overrides the creep floor — she holds station.
-          const throttleEff = input.throttle * thrustCap;
+          const throttleEff = throttleSet * thrustCap;
           _right.set(1, 0, 0).applyQuaternion(root.quaternion);
           _up.set(0, 1, 0).applyQuaternion(root.quaternion);
-          const rockMatch = ctx.flags.matchSpeed && rockLock && lockPosOk && velOk;
+          const amIdle = amOn && throttleSet < 0.02;
+          const rockMatch = (ctx.flags.matchSpeed || amOn) && rockLock && lockPosOk && velOk;
           if (rockMatch) {
             // Hold the rock's world vector. Scalar-along-nose misses a slide.
             // Creep/throttle/strafe ride in the rock rest frame; idle holds.
-            const relFwd = (input.fullStop || throttleEff < 0.02)
+            const relFwd = (input.fullStop || amIdle || throttleEff < 0.02)
               ? 0
               : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                 ctx.bio.speedFactor *
@@ -808,7 +870,7 @@ export function initShip(ctx) {
                 ? 0
                 : Math.min(lockSpeed, shipCfg.maxSpeed);
             } else {
-              fwdSpeed = input.fullStop
+              fwdSpeed = (input.fullStop || amIdle)
                 ? 0
                 : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                   ctx.bio.speedFactor *
@@ -830,7 +892,7 @@ export function initShip(ctx) {
           // Artificial drag at (near) zero throttle: settle in ~stopTime
           // instead of drifting forever (§5.1, §5.3 light row).
           // Rock MATCH: damping would bleed the hold back to world rest.
-          if (input.throttle < 0.02 && !rockMatch) {
+          if (throttleSet < 0.02 && !rockMatch) {
             ship.velocity.multiplyScalar(Math.exp(-shipCfg.damping * dt));
           }
         }
@@ -894,12 +956,26 @@ export function initShip(ctx) {
 
       // Swim wave: frequency/amplitude scale with speed, never reach zero.
       // Mood paces the stroke (§14.6): keen/feral faster, pained slower.
-      const swimHz =
-        (IDLE_SWIM_HZ + (CRUISE_SWIM_HZ - IDLE_SWIM_HZ) * Math.min(speedNorm, 1)) *
-        mood.rate;
+      // Light (and unknown → light) keeps the live Hz envelope bit-identical.
+      const cadence = cadenceFor(ctx.player?.classKey);
+      let swimHz;
+      let flapAmp;
+      if (cadence !== LIVING_CADENCE.light) {
+        const cruise = classCruise(ctx.player?.classKey);
+        const spd = Number.isFinite(ship.speed) ? Math.max(ship.speed, 0) : 0;
+        const hz =
+          (SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * Math.min(spd / cruise, 1)) *
+          cadence.hzScale;
+        swimHz = hz * mood.rate;
+        flapAmp = (0.16 + 0.5 * Math.min(speedNorm, 1.5)) * restScale * cadence.sweepScale;
+      } else {
+        swimHz =
+          (SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * Math.min(speedNorm, 1)) *
+          mood.rate;
+        flapAmp = (0.16 + 0.5 * speedNorm) * restScale;
+      }
       swimPhase += dt * Math.PI * 2 * swimHz;
-      const bodyAmp = 0.1 + 0.22 * speedNorm;
-      const flapAmp = 0.16 + 0.5 * speedNorm;
+      const bodyAmp = (0.1 + 0.22 * speedNorm) * restScale;
 
       // Breath + heartbeat (always on).
       const breathPhase = t * Math.PI * 2 * BREATH_HZ;
@@ -926,7 +1002,7 @@ export function initShip(ctx) {
           const w = wingness[i];
           if (w > 0) y += flapAmp * w * Math.sin(swimPhase - 1.4 * Math.abs(bx));
 
-          y += 0.03 * Math.sin(1.7 * bx + t * 0.9) * Math.sin(2.3 * bz - t * 1.3);
+          y += 0.03 * restScale * Math.sin(1.7 * bx + t * 0.9) * Math.sin(2.3 * bz - t * 1.3);
 
           arr[i3] = x;
           arr[i3 + 1] = y;
@@ -994,7 +1070,7 @@ export function initShip(ctx) {
       const reducedMotion = ctx.settings?.reducedMotion === true;
       let trailTouched = false;
       if (!reducedMotion && ship.burnerActive && !docked) {
-        _delta.copy(root.position).addScaledVector(_forward, -TRAIL_TAIL);
+        _delta.copy(root.position).addScaledVector(_forward, -TRAIL_TAIL * restScale);
         for (let n = 0; n < TRAIL_EMIT; n++) {
           const i = trailHead;
           trailHead = (trailHead + 1) % TRAIL_COUNT;
@@ -1045,6 +1121,10 @@ export function initShip(ctx) {
         lastCamMode = camMode;
         cameraSnapped = false;
       }
+      if (ship.camSnap) {
+        cameraSnapped = false;
+        ship.camSnap = false;
+      }
       const viewScale = camMode === 'third' ? THIRD_SHIP_SCALE : 1;
       flesh.scale.setScalar(breathScale * viewScale);
       if (camMode === 'first') {
@@ -1054,7 +1134,8 @@ export function initShip(ctx) {
         for (let si = 0; si < scars.length; si++) scars[si].visible = false;
         _up.set(0, 1, 0).applyQuaternion(root.quaternion);
         camera.up.copy(_up);
-        _camAnchor.copy(_noseOffset).applyQuaternion(root.quaternion).add(root.position);
+        _camAnchor.copy(_noseOffset).multiplyScalar(restScale)
+          .applyQuaternion(root.quaternion).add(root.position);
         camera.position.copy(_camAnchor);
         camera.quaternion.copy(root.quaternion);
       } else {
@@ -1068,12 +1149,13 @@ export function initShip(ctx) {
         camera.up.copy(_up);
         if (camMode === 'third') {
           _camAnchor.copy(root.position)
-            .addScaledVector(_up, THIRD_HEIGHT)
-            .addScaledVector(_forward, -THIRD_BACK);
-          _lookTarget.copy(root.position).addScaledVector(_forward, THIRD_LOOK_AHEAD);
+            .addScaledVector(_up, THIRD_HEIGHT * restScale)
+            .addScaledVector(_forward, -THIRD_BACK * restScale);
+          _lookTarget.copy(root.position).addScaledVector(_forward, THIRD_LOOK_AHEAD * restScale);
         } else {
-          _camAnchor.copy(_camOffset).applyQuaternion(root.quaternion).add(root.position);
-          _lookTarget.copy(root.position).addScaledVector(_forward, LOOK_AHEAD);
+          _camAnchor.copy(_camOffset).multiplyScalar(restScale)
+            .applyQuaternion(root.quaternion).add(root.position);
+          _lookTarget.copy(root.position).addScaledVector(_forward, LOOK_AHEAD * restScale);
         }
         // Soft padlock: keep a forward lock on glass so a crossing chase
         // does not sit just off the frame.

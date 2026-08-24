@@ -1,0 +1,134 @@
+Wave 86 BIO-01 verifier
+Coverage: static document review. Playwright MCP disconnected. No live UI.
+Date: 2026-08-22
+Status: CLEAN
+
+1. Six required files exist and are non-empty
+- docs/Bio01ObtainDesign.md                         17890 bytes
+- out/w86/bio01/current-bio01-inventory.md          12068 bytes
+- out/w86/bio01/shared-contract.md                  13794 bytes
+- out/w86/bio01/security-review.md                   4683 bytes
+- out/w86/bio01/code-review.md                       3655 bytes
+- out/w86/bio01/ui-audit.md                          4834 bytes
+Extra (not in worker file list; parallel designer pass, no 0.05 leak):
+- out/w86/bio01/designer-audit.md                    10636 bytes
+
+2. This worker did not write src/ (BIO-01 product paths)
+- docs/Bio01ObtainDesign.md is untracked new markdown.
+- out/w86/bio01/* is untracked markdown.
+- grep src/**/*.js: no hull_seed_gift, no grantLivingSeedRow.
+- Dirty src/, scripts/boot-test.mjs, Nav*.md, wishlist, PROGRESS.md
+  match Wave 85 NAV impl (git diff: nav persist, chart, guidance, AP).
+  Not BIO-01 obtain. Environmental dirty tree, not this worker.
+- Untracked docs/Bio02EvolutionDesign.md and docs/Bio04PsionicsDesign.md
+  are sibling Wave 86 workers.
+
+3. Inventory cites — live file:line still exist
+Hangar cap 8
+- hangar.js 26  HANGAR_CAP = 8
+- hangar.js 188–193  canAcceptPurchase length < 8
+- hangar.js 196–207  addPurchasedHull refuse full
+- hangar.js 322–331  capHulls; 377–381 sanitizeHangar overflow
+- shipyard.js 4 import, 235 re-export HANGAR_CAP
+- shipyard-desk.js 29–30  'The hangar is full.'
+
+LIVING_STOCK
+- shipyard.js 16–23 YARD_LIST_UU
+- shipyard.js 26 GRAFT_LIST_UU = 4000
+- shipyard.js 29 LIVING_STOCK light/cutter/heavy
+- shipyard.js 30 UNKNOWABLES_STOCK light
+- shipyard.js 32–43 yard map
+- shipyard.js 72–75 hullKindFor living vs built
+- shipyard.js 176–221 buy; 212–215 restore mountedId
+
+Graft
+- hangar.js 82–98 living drops grafted
+- hangar.js 111–155 anyGrafted / Abomination
+- hangar.js 731–764 graftMounted mounted built, 4000, no remount
+- shipyard-desk.js 48–65, 142–180, 238–275 Gilded two-step
+
+Sworn 50
+- state.js 672–678 RANK_LADDER Sworn min 50 tier 3
+- state.js 680–682 rankFor
+- shipyard.js 91–100 Sworn discount
+- station.js 1095–1140 ladderNameAt(50)
+
+Digit 0
+- station.js 174 DOCK_KEY_SERVICES last = shipyard
+- station.js 5710–5715 Digit 0 last service
+- shipyard-desk.js 14–16 panes; 104–113 Digit 0 = hangar row 8
+- shipyard-desk.js 301–334 level-2 digits
+- station.js 5338–5377 renderPeople; no gift row
+- station.js 5747–5775 Digit branch: no People gift
+- station.js 4230–4233 h() textContent
+- grep shipyard-desk.js innerHTML: 0
+
+Hangar sanitize
+- save.js 66–67 rimward-save-v1
+- save.js 76–101 WORLD_FIELDS; hangar at 94; nav at 99–100
+- save.js 104–106 SAFE_ID / ID_MAX
+- save.js 108–113 RESERVED_IDS
+- save.js 951–957 snapshot sanitizeHangar
+- save.js 1168 omit hangar → delete; 1216 sanitizeHangar
+- hangar.js 163–167 isSafeHullId; 211–241 sanitizeHangarRecord
+
+isBeautiful vs living-player
+- organic.js 67–69 faction === 'beautiful'
+- hud.js 72–80 hullKind first; isBeautiful fallback art only
+- hud.js 1013, 1598–1605 last.kind cache read; no player.hullKind write
+- ship.js 503–508 meshKindFor hullKind + Unknowables, not isBeautiful
+- ship.js 591 createShipState('light'); state.js 146 independent default
+- state.js 716–719 Beautiful origin bond/hunger/livingRock; origins.js 51–66 apply
+- ctx.js 18–24 SHP writes hullKind; hangar on world
+
+Wreck / commodity
+- npc.js 229 lastAttacker instance-only
+- npc.js 1045–1051 lastAttackerOf
+- npc.js 1364–1387 spillShipCargo; 2146–2177 handleDestroyed
+- data-trade.js 7–8 data tokens; 18–19 DATA_DROP_RATE 0.20 EXP
+- data-trade.js 181–185 maybeSpawnDataFromWreck
+- state.js 308–322 COMMODITIES; livingRock food; no seed SKU
+- src js: hull_seed_gift absent
+
+Wishlist locked cite: PLAYER-EXPERIENCE-WISHLIST.md 1059–1066 BIO-01 bullets.
+Living-ships §3.2 (docs/BioLivingShipsDesign.md 156–158): Sworn ≥50, hull_seed_gift.
+Wave 70 contract §3.3 (out/w70/bio/shared-contract.md 87): price 0, cap 8, once.
+Owner Wave 82 pirate row (OwnerDecisionsWave82.md 87–93): defer; if later, rate 0.05.
+
+4. Contract constraints
+- Forbids invented drop%/UU in the contract/brief; pirate owner-open → OwnerDecisionsWave82.md
+- Gift id hull_seed_gift; Sworn ≥ 50; living light; price 0; People confirm papers
+- Hangar cap 8 fail-closed; no remount; no evict / no capHulls to grant
+- Commodity deferred (no live SKU)
+- No sibling-doc edits (header + §10)
+- PR plan §9 named PR1–PR5: Do not land them in Wave 86
+
+5. Brief serial PR plan is later-impl only
+- Status: Wave 86 — design. Later — serial obtain PRs
+- Overview: Wave 86 lands this markdown only
+- §10 PR plan: Do not schedule or land them in Wave 86
+- Serial PR plan section: Wave 86 does not touch src/
+
+6. Sibling / forbidden docs (this worker)
+- BioLivingShipsDesign.md: not in git status (unmodified)
+- Bio03FleetDesign.md / Bio03ClassLookDesign.md: not in git status
+- Shp*.md: not in git status
+- Wishlist / PROGRESS / Nav*: dirty, but diffs are Wave 85 NAV status, not BIO-01
+- Bio02 / Bio04: untracked sibling workers, not this freeze
+
+7. Contradictions / drop %
+- Brief + contract: no invented pirate percent. Pointer to Wave 82.
+- Inventory §12 quotes Wave 82 owner line rate 0.05 with disclaimer
+  "does not copy that rate into a live constant."
+- That quote matches OwnerDecisionsWave82.md 93 verbatim (defer + 0.05).
+- Not a freeze invention. Contract/brief do not re-author the digits.
+- DATA_DROP_RATE 0.20 cited as EXP, forbidden to copy for pirate.
+- Gift price 0, GRAFT 4000, yard UU: live constants only.
+- No standing-delta invention.
+
+8. Method
+- Static read of the six files + designer-audit.md
+- Live src line checks listed above
+- git status --short / git diff --name-only / git diff of wishlist+PROGRESS+Nav
+- No formatters, linters, or full test suite
+- No browser / Playwright

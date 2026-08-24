@@ -1,0 +1,7 @@
+npm run test:boot finished in ~441s. Exit code 1.
+INIT: all OK. No INIT FAIL. No UPDATE ERR. No automine/import error.
+Title import loads src/game/automine.js, so a broken automine module would fail at title init.
+scripts/boot-test.mjs inits list has no initAutomine (coverage gap).
+WAVE FAIL lines: WAVE4, WAVE26, WAVE30, WAVE31, WAVE35, WAVE80 REP-04, WAVE85 NAV GUIDANCE.
+Final line: BOOT TEST FAIL — 68 errors
+None of those failures name automine.

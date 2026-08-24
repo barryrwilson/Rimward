@@ -1,0 +1,36 @@
+PASS  SWIM_IDLE_HZ 0.5
+PASS  SWIM_CRUISE_HZ 2.3
+PASS  light hzScale
+PASS  light sweepScale
+PASS  light table own
+PASS  ace hzScale
+PASS  ace sweepScale
+PASS  ace table own
+PASS  cutter hzScale
+PASS  cutter sweepScale
+PASS  cutter table own
+PASS  heavy hzScale
+PASS  heavy sweepScale
+PASS  heavy table own
+PASS  frigate hzScale
+PASS  frigate sweepScale
+PASS  frigate table own
+PASS  freighter hzScale
+PASS  freighter sweepScale
+PASS  freighter table own
+PASS  miss unknown ΓåÆ light
+PASS  miss empty ΓåÆ light
+PASS  miss proto ΓåÆ light
+PASS  miss constructor ΓåÆ light
+PASS  miss prototype ΓåÆ light
+PASS  miss number ΓåÆ light
+PASS  miss object ΓåÆ light
+PASS  miss null ΓåÆ light
+PASS  miss undefined ΓåÆ light
+PASS  hasOwn not inherited
+PASS  classCruise light 120
+PASS  classCruise proto 120
+PASS  classCruise miss 120
+PASS  classCruise non-string 120
+PASS  monotonic hz
+BIO06 PROBE PASS

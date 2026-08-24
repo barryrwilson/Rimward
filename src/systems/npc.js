@@ -19,11 +19,15 @@ import { epicEffects } from '../game/epics.js';
 import { spawnPod, spawnSurvivorPod } from '../game/pods.js';
 import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
 import { applyPlayerKillStanding } from '../game/kill-standing.js';
+import { maybeGrantPirateSeed } from '../game/bio-seed.js';
 import { turnRateFor } from '../game/flight-feel.js';
 import { scaleFor } from '../game/ship-scale.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
 import { isUnknowable } from '../game/faction-style.js';
+import { tickPoliceLeave } from '../game/police-leave.js';
+import { tickPoliceCover, findCoveringWork } from '../game/police-cover.js';
+import { canSeat } from '../game/weapon-fit.js';
 
 /**
  * NPC system — live GLB ship assets and AI (doc §6.7, §7).
@@ -39,9 +43,11 @@ import { isUnknowable } from '../game/faction-style.js';
  * AI modes: route (trader), loiter (patrol), hunt (pirate), duel (ace),
  * mine (miner), plus surrender modes flee/drift. Hostiles telegraph ≥3 s before the first
  * shot (§6.1): direct approach + flashing engine glow + a commLine. Fire is
- * emitted as 'npcFire' { ship, weapon:'cannon'|'missile', target } — combat.js
+ * emitted as 'npcFire' { ship, weapon:'cannon'|'missile'|'turret', target } — combat.js
  * aims at target ('player' or a live ship) and spawns the projectile.
  * Pirates and aces vs the player fire one dart after telegraph, then cannon.
+ * Hostile heavy/ace/frigate may add a turret bolt on its own clock vs the
+ * player or vs an already-hostile live NPC. Seat 0 / civilian / Unknowable never.
  *
  * Resolve (§7.2–7.5) is recomputed ~1 Hz for hostiles-with-intent and for any
  * ship recently in combat. Bands drive behavior: defiant presses, shaken
@@ -85,6 +91,7 @@ let _phyOn = false;
 
 const TELEGRAPH_SECONDS = 3; // §6.1 minimum hostile-intent warning
 const NPC_FIRE_INTERVAL = 1 / (WEAPONS.cannon.rof * 0.5); // ~0.5× player rof
+const NPC_TURRET_INTERVAL = 1 / (WEAPONS.turret.rof * 0.5); // named pin: 0.5× player turret ROF
 const ACE_FURY_INTERVAL = NPC_FIRE_INTERVAL * 0.65;
 const LAW_ZONE_RADIUS = 300; // station law zone: no hostile intent develops
 const HOSTILE_STANDING = -10; // patrols hunt the player at or below this standing
@@ -145,13 +152,13 @@ let _minerBeamCursor = 0;
 // manifest, and fear (they have heard of you). Injected hunters
 // (record.alwaysHuntsPlayer — the Ledger's collector) never roll.
 const INTEREST = {
-  base: 0.25, // a drifter with an empty hold is still sometimes worth a look
-  temperSpan: 0.35, // per-record greed weight — record.temper (persisted, lazy-rolled)
-  cargoSpan: 0.3, // a rich manifest draws the lane's eyes
+  base: 0.005, // empty hold: almost never worth a look
+  temperSpan: 0.01, // per-record greed weight — record.temper (persisted, lazy-rolled)
+  cargoSpan: 0.10, // a rich manifest still draws the lane's eyes
   cargoNormUU: 800, // manifest value that maxes the draw
   fearRepel: 0.004, // per fear point — your name precedes you
-  min: 0.05, // the rim keeps its teeth: never fully safe
-  max: 0.9, // and never a certainty
+  min: 0.005, // the rim keeps its teeth: never fully safe
+  max: 0.20, // fat cargo is still not a certainty
 };
 
 let nextShipId = 1;
@@ -232,6 +239,7 @@ function makeAi(ctx, record, startPos) {
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
+    turretFireAt: 0, // independent of cannon fireAt; unset 0 until first try
     dartSpent: false, // one NPC dart after telegraph vs player, then cannon
     gunPassUntil: 0,
     velocity: new THREE.Vector3(),
@@ -402,6 +410,7 @@ function speedCap(live) {
 
 /** Collision sphere for bounce/avoid. Prefer scale.maxRadius; else 3. */
 function npcRadius(live) {
+  if (live && live.role === 'player') return PHY.PLAYER_RADIUS;
   const sc = scaleFor(live.state.classKey);
   if (sc && Number.isFinite(sc.maxRadius) && sc.maxRadius > 0) return sc.maxRadius;
   const p = sc && sc.proxy;
@@ -413,6 +422,10 @@ function npcRadius(live) {
 }
 
 function skipAvoidBody(live, body) {
+  if (live && live.role === 'player') {
+    if (body.kind === 'player') return true;
+    if (body.kind === 'gate') return true;
+  }
   if (body.kind === 'ship' && body.id === live.id) return true;
   const target = live.ai.target;
   if (target === 'player' && body.kind === 'player') return true;
@@ -590,11 +603,16 @@ function addStationOutXZ(sx, sz, cx, cz) {
 /**
  * Bias an aim point laterally around the nearest lookahead obstacle.
  * Writes outAim. Does not replace combat / waypoint aims — only adds offset.
+ * Optional `bodies` bag: player AP fills its own world; NPC uses module `_bodies`.
  */
-function applyAvoidBias(live, targetPos, outAim) {
+export function applyAvoidBias(live, targetPos, outAim, bodies) {
   outAim.copy(targetPos);
-  if (!_phyOn) return outAim;
+  const bag = bodies || _bodies;
+  if (!live) return outAim;
+  live.avoidHits = 0;
+  if (!bodies && !_phyOn) return outAim;
   const object = live.object;
+  if (!object || !object.position) return outAim;
   const pos = object.position;
   _fwd.copy(NEG_Z).applyQuaternion(object.quaternion);
   const look = PHY.AVOID_LOOKAHEAD;
@@ -605,9 +623,9 @@ function applyAvoidBias(live, targetPos, outAim) {
   _v2.set(0, 0, 0);
   let hits = 0;
   let insideStation = false;
-  const n = _bodies.count;
+  const n = bag.count;
   for (let i = 0; i < n; i++) {
-    const body = _bodies.items[i];
+    const body = bag.items[i];
     if (!body || skipAvoidBody(live, body)) continue;
     if (body.kind === 'station') {
       const how = stationKeepOutHits(px, py, pz, pos.x, pos.y, pos.z, rad, body);
@@ -635,20 +653,22 @@ function applyAvoidBias(live, targetPos, outAim) {
     const gain = insideStation ? look * PHY.AVOID_GAIN * 2 : look * PHY.AVOID_GAIN;
     outAim.addScaledVector(_v2, gain);
   }
+  live.avoidHits = hits;
   return outAim;
 }
 
-function appendSunBody(ctx) {
+export function appendSunBody(ctx, dest) {
+  const bag = dest || _bodies;
   const sun = ctx.config && ctx.config.world && ctx.config.world.sunPosition;
   const sys = ctx.systems && ctx.systems[ctx.world.currentSystem];
   const sunR0 = sys && sys.sunRadius;
   if (!sun || !Number.isFinite(sunR0) || sunR0 <= 0) return;
   if (!Number.isFinite(sun.x) || !Number.isFinite(sun.y) || !Number.isFinite(sun.z)) return;
-  const i = _bodies.count;
-  let slot = _bodies.items[i];
+  const i = bag.count;
+  let slot = bag.items[i];
   if (!slot) {
     slot = { kind: '', x: 0, y: 0, z: 0, r: 0, y0: 0, y1: 0, id: 0 };
-    _bodies.items[i] = slot;
+    bag.items[i] = slot;
   }
   slot.kind = 'sun';
   slot.x = sun.x;
@@ -658,7 +678,7 @@ function appendSunBody(ctx) {
   slot.y0 = 0;
   slot.y1 = 0;
   slot.id = 0;
-  _bodies.count = i + 1;
+  bag.count = i + 1;
 }
 
 /** Safety-net slide. Derives vel from last pos; folds bounce vel into heading. */
@@ -1085,6 +1105,43 @@ function canNpcDart(live) {
   return true;
 }
 
+/**
+ * Wave 99 Q1 / Wave 101 vsNPC: class-gated turret.
+ * Seats via canSeat as shipped (heavy / ace / frigate). Already-hostile via
+ * mayHuntPlayer (do not widen). Seat 0, Unknowable, and civilians never.
+ * No faction grant.
+ */
+export function canNpcTurret(ctx, live) {
+  if (!live?.ai) return false;
+  if (isUnknowable(live.state?.faction)) return false;
+  if (!mayHuntPlayer(ctx, live)) return false;
+  const classKey = live.record?.classKey ?? live.state?.classKey;
+  return canSeat(classKey, 'turret');
+}
+
+/** Independent turret clock. Explicit target 'player' or a live NPC. Telegraph/demand stay cold at the caller. */
+function tryNpcTurret(ctx, live, now, dist, targetPos) {
+  const ai = live.ai;
+  if (!ai || !targetPos) return;
+  if (ai.phase !== 'attack') return;
+  if (!canNpcTurret(ctx, live)) return;
+  if (now < (ai.turretFireAt ?? 0)) return;
+  if (dist >= WEAPONS.turret.range) return;
+  if (facingDot(live.object, targetPos) <= FIRE_FACE_DOT) return;
+  const tgt = ai.target;
+  if (tgt === 'player') {
+    ai.turretFireAt = now + NPC_TURRET_INTERVAL;
+    ctx.emit('npcFire', { ship: live, weapon: 'turret', target: 'player' });
+    return;
+  }
+  // vs already-hostile NPC. Missing / non-object stays off this emit (vsPlayer branch above).
+  if (!tgt || typeof tgt !== 'object') return;
+  if (!tgt.object || !tgt.state || tgt.state.destroyed) return;
+  if (tgt === live) return;
+  ai.turretFireAt = now + NPC_TURRET_INTERVAL;
+  ctx.emit('npcFire', { ship: live, weapon: 'turret', target: tgt });
+}
+
 function hunterRole(other) {
   return other.role ?? other.record?.role;
 }
@@ -1219,7 +1276,7 @@ function tickPatrolJob(ctx, live) {
   const ai = live.ai;
   const st = live.state;
   if (!ai || !st || st.surrendered || ai.mode === 'drift' || ai.mode === 'flee') return;
-  if (mayHuntPlayer(ctx, live) || findPirateWork(ctx, live)) {
+  if (mayHuntPlayer(ctx, live) || findPirateWork(ctx, live) || findCoveringWork(ctx, live)) {
     if (ai.mode !== 'hunt') ai.mode = 'hunt';
     return;
   }
@@ -1392,7 +1449,10 @@ function capitulate(ctx, live) {
   else outcome = 'cutEngines';
 
   const glow = live.object.userData.glow;
-  if (outcome === 'jettison' || outcome === 'crewPods') jettison(ctx, live, outcome === 'crewPods');
+  if (outcome === 'jettison' || outcome === 'crewPods') {
+    jettison(ctx, live, outcome === 'crewPods');
+    if (lastAttackerOf(live) === 'player') maybeGrantPirateSeed(ctx, live);
+  }
   if (outcome === 'flee') {
     ai.mode = 'flee';
     stampWakeSite(live);
@@ -1530,6 +1590,7 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
       ctx.emit('npcFire', { ship: live, weapon: 'cannon', target: ai.target });
     }
   }
+  tryNpcTurret(ctx, live, now, dist, targetPos);
 }
 
 /**
@@ -1669,6 +1730,12 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
         if (work) {
           setTarget(ai, work);
           targetPos = work.object.position;
+        } else {
+          const cover = findCoveringWork(ctx, live);
+          if (cover) {
+            setTarget(ai, cover);
+            targetPos = cover.object.position;
+          }
         }
       }
     } else if (!isCivilianRole(ai.role)) {
@@ -1762,6 +1829,16 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
   const playerPos = pObj.position;
   const station = ctx.config.world.stationPosition;
   const dist = live.object.position.distanceTo(playerPos);
+
+  // Arrival / new-game grace: same shield as hunt acquire. Illyx sits on the
+  // gate lane; without this, the first autopilot hop is a guaranteed duel.
+  if (now < (ctx.world.jumpGraceUntil ?? 0)) {
+    ai.intent = false;
+    ai.target = null;
+    ai.phase = null;
+    updateLoiter(live, dt);
+    return;
+  }
 
   // Wait outside the law zone; approach from beyond the bubble without intent.
   if (playerPos.distanceTo(station) < LAW_ZONE_RADIUS || live.object.position.distanceTo(station) < LAW_ZONE_RADIUS) {
@@ -1896,6 +1973,7 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
       ctx.emit('npcFire', { ship: live, weapon: 'cannon' });
     }
   }
+  tryNpcTurret(ctx, live, now, dist, playerPos);
 }
 
 function threatPos(ctx, live) {
@@ -2163,6 +2241,7 @@ function handleDestroyed(ctx, live, burst, reducedMotion) {
   // unless capitulate already dumped them (ai.survivorsSpawned).
   spillShipCargo(ctx, live);
   spawnShipSurvivor(ctx, live);
+  if (lastAttackerOf(live) === 'player') maybeGrantPirateSeed(ctx, live);
 
   // Brief burst; world.js stages the lasting aftermath, we don't.
   emitDeathBurst(burst, live, reducedMotion);
@@ -2194,15 +2273,18 @@ export function initNpc(ctx) {
         if (st.destroyed) {
           // traffic.js splices destroyed ships from the list on its own
           // schedule, so guard against processing the same wreck twice.
-          if (!live.ai.deathHandled) {
+          if (live.ai && !live.ai.deathHandled) {
             live.ai.deathHandled = true;
             handleDestroyed(ctx, live, burst, reducedMotion === true);
           }
           continue;
         }
+        // Boot pins (WAVE74 KeyT dummy) and other non-NPC entries share
+        // ctx.ships without an ai block. traffic.js only pushes spawnLiveShip.
+        if (!live.ai) continue;
         tickShipState(st, now, dt);
         const ai = live.ai;
-        animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : live.ai.velocity.length());
+        animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : ai.velocity.length());
         // Wave 30 demand-hail upkeep: the parley dies with the hail target
         // (disabled here; destroyed/despawned discard the ai outright, and
         // hail.js's own timeout closes the card on those same conditions),
@@ -2300,6 +2382,8 @@ export function initNpc(ctx) {
       }
 
       tickDeathBurst(burst, dt, reducedMotion === true);
+      tickPoliceLeave(ctx);
+      tickPoliceCover(ctx);
     },
   };
 }

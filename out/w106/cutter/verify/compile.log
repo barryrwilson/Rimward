@@ -1,0 +1,6 @@
+command: python -m py_compile scripts/ship_builders/beautiful/cutter.py
+cwd: C:\Projects\WebSim
+exit: 0
+stdout: (empty)
+stderr: (empty)
+note: no bake; compile only

@@ -492,6 +492,9 @@ def build_one(faction, key, lod):
     for _uv in list(engine.data.uv_layers):
         engine.data.uv_layers.remove(_uv)
     centre_parts([*parts, *glow_parts, engine])
+    if faction == 'beautiful' and parts:
+        from ship_builders.beautiful import surface as beautiful_sf
+        beautiful_sf.assign_beautiful_uv(parts)
     # Per-corner vertex colors assigned before join so object names are still available.
     paint_parts_vc(parts, skin, is_glow=False)
     paint_parts_vc(glow_parts, skin, is_glow=True)

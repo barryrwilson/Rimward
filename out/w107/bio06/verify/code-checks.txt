@@ -1,0 +1,55 @@
+BIO-06 static checks (verifier; no src edits)
+
+1. cadenceFor unknown / __proto__ → light
+   src/game/living-cadence.js uses typeof string && Object.hasOwn(LIVING_CADENCE, classKey).
+   Else returns LIVING_CADENCE.light.
+   Probe: miss unknown/empty/__proto__/constructor/prototype/number/object/null/undefined all PASS.
+   classCruise miss / __proto__ → 120 PASS.
+
+2. light player path does not multiply hzScale
+   src/systems/ship.js living motion:
+   if (cadence !== LIVING_CADENCE.light) { ... * cadence.hzScale; flap * sweepScale }
+   else { swimHz = (SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * min(speedNorm, 1)) * mood.rate
+          flapAmp = (0.16 + 0.5 * speedNorm) * restScale }
+   hzScale appears once, inside the non-light branch (line 968).
+
+3. mixer.timeScale not set by class
+   No mixer.timeScale / timeScale in src/systems/ship.js or ship-assets.js.
+   updateShipAsset: mixer.setTime(elapsed) when !reducedMotion.
+
+4. uSwimAmp still 0 under reducedMotion; uSwimSweep separate
+   uniforms.uSwimAmp.value = reducedMotion ? 0 : 1
+   uniforms.uSwimSweep.value = reducedMotion ? 0 : cadence.sweepScale
+   Boot pin npcReducedAmp0 true. Pin uSwimSweep rejects uSwimAmp.*sweepScale.
+
+5. NPC speed-norm uses classCruise, not hardcoded 120 as only denom
+   updateShipAsset: cruise = classCruise(object.userData.classKey); speedNorm = min(spd/cruise, 1)
+   SWIM_CRUISE_SPEED and "/ 120" gone from ship-assets.js.
+   classCruise miss → 120 (light default).
+
+6. state.js not modified by BIO-06
+   Working tree: src/game/state.js is dirty vs HEAD.
+   Diff is cargo holds, POWER, WEAPONS.psionic, applyHit preferEngine, JUMP.graceSeconds.
+   No cadence field on SHIP_CLASSES. Grep cadence in state.js: 0 hits.
+   living-cadence.js imports SHIP_CLASSES (read).
+
+7. no new WORLD_FIELDS cadence key
+   WORLD_FIELDS list has no cadence token.
+   save.js "retry cadence if combat-blocked" is an existing comment, not a persist key.
+   Boot pin noCadenceWorldField true.
+
+8. injectSwim uses uSwimSweep on flap; classKey not interpolated into shader source
+   transformed.y += uSwimAmp * flapAmp * wing * flap * uSwimSweep;
+   GLSL is a static template string. classKey is userData + cadenceFor JS only.
+
+9. Light envelope
+   SWIM_IDLE_HZ 0.5, SWIM_CRUISE_HZ 2.3.
+   Mood rates serene 1.0 / keen 1.25 / feral 1.5 / pained 0.6 unchanged.
+   Light hzScale 1 / sweepScale 1.
+
+10. Table vs contract
+    light 1.00/1.00, ace 0.96/1.06, cutter 0.80/1.22, heavy 0.62/1.42,
+    frigate 0.44/1.68, freighter 0.30/2.00. Monotonic Hz PASS.
+
+[NO BROWSER COVERAGE] live flap Hz for remounted ace/cutter/heavy/frigate/freighter.
+Static review of ship.js formulas vs table only.

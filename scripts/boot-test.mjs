@@ -68,20 +68,20 @@
 // ledger stays authored-lane only (an unwitnessed generated landmark never
 // opens a second-column page), the three generated hubs
 // (fx_bastion/gc_auction/blackstation) each answer contactsForSystem with
-// exactly one dockmaster, and the generated mark + 103-contact roster
-// (12 authored + 91 generated, wave 24) ride the dock autosave and
+// exactly one dockmaster, and the generated mark + 104-contact roster
+// (13 authored + 91 generated, wave 24 + veil) ride the dock autosave and
 // death-restore.
 // Wave 24: generated-system depth, part 2 — one plain dockmaster per
-// generated non-hub system (fresh roster 12 → 103; data-driven unique
+// generated non-hub system (fresh roster 13 → 104; data-driven unique
 // names, zero keeper-gate reach even at trust 100, the People card at
 // fh_hearth through the real dock UI), faction station services
 // (FACTION_SERVICES — one modifier per generated banner, composed
-// multiplicatively AFTER the epic multiplier, the authored six guarded
+// multiplicatively AFTER the epic multiplier, the authored seven guarded
 // out by id) driven through the REAL market/repair/jobs UI at fx_liron
 // (ferrous repair ×0.85), lastbeacon (lamplighter buy ×0.85), and
 // cg_vigil (congregation job pay ×1.2) with authored freehold as the
 // negative control, and the dock-autosave + death-restore roundtrip at
-// cg_vigil (roster 103, the generated dockmaster's name/trust survive).
+// cg_vigil (roster 104, the generated dockmaster's name/trust survive).
 // Wave 26: generated-system depth, part 4 — the generated dockmaster
 // favor economy (a finished contract banks +1 favor once the post-bump
 // trust reads GENERATED_KNOWN_TRUST, generated systems only, driven
@@ -95,7 +95,7 @@
 // snapshot on a live-picked discriminating lane; an accepted contract
 // without the snapshot falls back to the live chain — the wave-6
 // behavior; the snapshot and the banked favors ride the dock autosave
-// and death-restore, roster 103 intact).
+// and death-restore, roster 104 intact).
 // Wave 27: Beautiful Ones organic technology — the grown look end-to-end:
 // the organic.js toolkit shapes pure (sculpted-hull metadata, indexed
 // petal/tendril geometry with normals+uvs, identity-cached shared
@@ -294,6 +294,8 @@ const { initMystery } = await import('../src/game/mystery.js');
 const { initEpics, epicEffects } = await import('../src/game/epics.js');
 const { initGate } = await import('../src/systems/gate.js');
 const { initJump } = await import('../src/game/jump.js');
+const { initNav } = await import('../src/game/nav.js');
+const { initAutopilot } = await import('../src/game/autopilot.js');
 const { initTraffic } = await import('../src/game/traffic.js');
 const {
   NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
@@ -331,8 +333,8 @@ ctx.systems = SYSTEMS; // mirrors main.js boot line
 const inits = [
   ['title', initTitle],
   ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
-  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['settings', initSettings], ['bio', initBio],
-  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['traffic', initTraffic],
+  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['settings', initSettings], ['bio', initBio],
+  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
   ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
   ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['hud', initHud],
 ];
@@ -421,7 +423,7 @@ tick(120, 'boot idle');
 console.log(`after boot: ships=${ctx.ships.length} records=${ctx.world.records.length} prices=${Object.keys(ctx.world.prices).length} pods=${ctx.pods?.length ?? 0}`);
 
 // ---- Galaxy graph routing (computed at test time, never hardcoded) ----
-// SYSTEMS merges the authored six with the generated galaxy (state.js), so
+// SYSTEMS merges the authored seven with the generated galaxy (state.js), so
 // no inter-system route below is a fixed id chain: every hop is BFS-computed
 // over physical gates (gates[].to) AND hub routes (hub.routes) as edges.
 // Hub travel is asymmetric by design — hub→X rides the junction menu
@@ -510,7 +512,7 @@ function travelTo(to, label) {
 }
 
 // ---- Wave 3: gate network data sanity (every system def) ----
-// 100-system phase-1 contract: the authored six plus the generated galaxy.
+// 101-system contract: the authored seven plus the generated galaxy.
 // The pre-existing per-def gate hygiene is EXTENDED with the structural
 // invariants: physical-gate reversibility (A→B gate implies B reaches A —
 // a physical gate back, OR B is a hub whose hub.routes include A), hub
@@ -540,7 +542,7 @@ const fieldsOk = systemIds.every((id) => {
     && Array.isArray(def.gates) && !!def.cast
     && Number.isInteger(def.worldSeed) && Number.isInteger(def.planetCount);
 });
-const countOk = systemIds.length === 100;
+const countOk = systemIds.length === 101;
 const pinnedOk = ['lastbeacon', 'blackstation', 'stolenwomb', 'fx_bastion', 'gc_auction']
   .every((id) => !!SYSTEMS[id]);
 // Wave-21 review pins: the generator's physical-degree cap (symmetric
@@ -824,7 +826,7 @@ const w21chartChecks = {
   rootPresent: !!chartRoot,
   opensOnKeyM: !!chartRoot && !chartRoot.classList.contains('is-hidden')
     && chartRoot.getAttribute('aria-hidden') === 'false',
-  nodeCount100: chartNodes.length === 100 && chartNodes.length === systemIds.length,
+  nodeCount101: chartNodes.length === 101 && chartNodes.length === systemIds.length,
   currentMarked: !!fhChartNode && fhChartNode.classList.contains('is-current'),
   gateEdges: chartClass('rw-galaxy-gate').length > 0,
   routeEdges: chartClass('rw-galaxy-route').length > 0,
@@ -866,7 +868,7 @@ if (migrant?.id && migrantDest) {
 }
 // Records re-resolve by ID across the restore — save.js swaps the bank
 // arrays (and every record object in them) wholesale; ids ('rec-N') are
-// stable, names are not guaranteed unique across 100 systems.
+// stable, names are not guaranteed unique across 101 systems.
 const migrantId = migrant?.id ?? null;
 const migrantName = migrant?.name ?? null; // logging only
 const findBankRec = (id) => {
@@ -1159,11 +1161,12 @@ const w4contacts = ctx.world.contacts ?? [];
 const contactRoleCt = (role) => w4contacts.filter((c) => c.role === role).length;
 const contactDataChecks = {
   // Wave 5 added the Hollow Reach dockmaster; wave 10 the Hush/Verge
-  // keepers; wave 23 the three generated-hub dockmasters (12 entries,
-  // 9 dockmasters); wave 24 one plain dockmaster per generated non-hub
-  // system: 12 → 103 entries, 9 → 100 dockmasters.
-  fullRoster103: w4contacts.length === 103,
-  dockmasterX100: contactRoleCt('dockmaster') === 100,
+  // keepers; wave 23 the three generated-hub dockmasters; wave 24 one
+  // plain dockmaster per generated non-hub system; wave 94 veil's
+  // authored dockmaster: 13 entries + 91 generated = 104, 10 authored
+  // dockmasters + 91 generated = 101.
+  fullRoster104: w4contacts.length === 104,
+  dockmasterX101: contactRoleCt('dockmaster') === 101,
   fenceX1: contactRoleCt('fence') === 1,
   fixerX2: contactRoleCt('fixer') === 2,
   jsonRoundTrip: w4contacts.every((c) => {
@@ -3173,7 +3176,7 @@ console.log('wave10 hermit pirate:', JSON.stringify(w10hermitChecks), `text=${JS
 if (!Object.values(w10hermitChecks).every(Boolean)) { console.log('WAVE10 HERMIT PIRATE FAIL'); errors++; }
 
 // -- c. deep-rim keepers: the mystery acknowledgments, once per rung --------
-// Continuing run: the wave-24 roster is 103 entries, 100 dockmasters (the
+// Continuing run: the wave-24 roster is 104 entries, 101 dockmasters (the
 // wave-4 check, re-derived — save restores swap the roster array wholesale,
 // and every save in this run was written after the wave-24 roster build).
 const w10contacts = ctx.world.contacts ?? [];
@@ -3205,8 +3208,8 @@ if (shallowContact && shallowContact.trust >= 60) {
 }
 const shallowLine = shallowContact ? recognitionLine(ctx, shallowContact) : null;
 const w10keeperChecks = {
-  fullRoster103: w10contacts.length === 103,
-  dockmasterX100: w10roleCt('dockmaster') === 100,
+  fullRoster104: w10contacts.length === 104,
+  dockmasterX101: w10roleCt('dockmaster') === 101,
   keepersFound: vergeKeeper?.name === 'Keeper Leth' && hushKeeper?.name === 'Keeper Ond',
   deepenedPrecondition: ctx.world.mystery?.deepened === true && ctx.world.mystery?.converged === true,
   vergeDeepenedLine: deepenedLineV === DEEPENED_ACK,
@@ -4907,9 +4910,9 @@ if (!Object.values(w16domChecks).every(Boolean)) { console.log('WAVE16 PEOPLE CH
 // ---- Wave 23: generated-system depth — one landmark per generated system, ---
 // ---- hub dockmasters, authored-lane ledger gate, save roundtrip -------------
 
-// -- a. data: exactly one landmark per generated system; the authored six ----
+// -- a. data: exactly one landmark per generated system; the authored seven --
 // tables are byte-unchanged; the separation invariants hold everywhere. ------
-const AUTHORED_IDS23 = ['freehold', 'veridian', 'redmarch', 'hollowreach', 'hush', 'verge'];
+const AUTHORED_IDS23 = ['freehold', 'veridian', 'redmarch', 'hollowreach', 'hush', 'verge', 'veil'];
 const LM_KINDS23 = ['wreck', 'beacon', 'monument', 'anomaly'];
 const dist23 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const generatedIds23 = Object.keys(SYSTEMS).filter((id) => !AUTHORED_IDS23.includes(id));
@@ -4941,8 +4944,9 @@ const w23dataChecks = {
     && authoredLmIds23('veridian') === 'vd_hulk_row'
     && authoredLmIds23('redmarch') === 'rm_tithe_stone'
     && authoredLmIds23('hollowreach') === 'hr_quiet_beacon|hr_first_wreck'
-    && authoredLmIds23('hush') === 'th_lanes_end|th_first_garden'
-    && authoredLmIds23('verge') === 'vg_choir_stones|vg_unfinished',
+    && authoredLmIds23('hush') === 'th_lanes_end|th_first_garden|th_veil'
+    && authoredLmIds23('verge') === 'vg_choir_stones|vg_unfinished'
+    && authoredLmIds23('veil') === '',
 };
 console.log('wave23 generated landmarks:', JSON.stringify(w23dataChecks));
 if (!Object.values(w23dataChecks).every(Boolean)) { console.log('WAVE23 GENERATED LANDMARKS FAIL'); errors++; }
@@ -4974,7 +4978,7 @@ console.log('wave23 landmark discovery:', JSON.stringify(w23discoveryChecks), `v
 if (!Object.values(w23discoveryChecks).every(Boolean)) { console.log('WAVE23 LANDMARK DISCOVERY FAIL'); errors++; }
 
 // -- c. ledger authored-lane gate: a generated landmark never opens a page ---
-// Trust pinned at the ledger gate, visited = the authored-six landmark ids
+// Trust pinned at the ledger gate, visited = the authored-seven landmark ids
 // ONLY (the witnessed fh_hearth mark is held out) — the second column must
 // answer exactly as if generated landmarks did not exist. The control call
 // with the fh_hearth mark pushed back in must never name it either (the two
@@ -5025,11 +5029,11 @@ const w23hubChecks = {
 console.log('wave23 hub dockmasters:', JSON.stringify(w23hubChecks));
 if (!Object.values(w23hubChecks).every(Boolean)) { console.log('WAVE23 HUB DOCKMASTERS FAIL'); errors++; }
 
-// -- e. save roundtrip: the generated mark + 103-contact roster persist -------
+// -- e. save roundtrip: the generated mark + 104-contact roster persist -------
 // The wave-10 pattern, docked at Hearth Landing: park hostiles so the
 // autosave can't be combat-blocked, dock (fires trySave), assert the save,
 // corrupt in memory, die, recover via Enter, assert the restore. (Roster
-// count is the wave-24 103 — this run's saves all postdate the roster
+// count is 104 — this run's saves all postdate the roster
 // growth.)
 for (const s of ctx.ships) {
   const hostile = s.role === 'pirate' || s.role === 'ace' ||
@@ -5043,7 +5047,7 @@ const w23snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ??
 const w23saveChecks = {
   saveWritten: !!w23snap?.world,
   landmarkInSave: w23snap?.world?.mystery?.visited?.includes(hearthLm23.id) === true,
-  rosterInSave103: (w23snap?.world?.contacts ?? []).length === 103,
+  rosterInSave104: (w23snap?.world?.contacts ?? []).length === 104,
 };
 console.log('wave23 save fields:', JSON.stringify(w23saveChecks));
 if (!Object.values(w23saveChecks).every(Boolean)) { console.log('WAVE23 SAVE FIELDS FAIL'); errors++; }
@@ -5060,7 +5064,7 @@ dispatchKey('Enter'); // recover(): restore(last save)
 const w23restoreChecks = {
   corruptedFirst: w23corrupted,
   landmarkRestored: ctx.world.mystery.visited.includes(hearthLm23.id),
-  rosterRestored103: (ctx.world.contacts ?? []).length === 103,
+  rosterRestored104: (ctx.world.contacts ?? []).length === 104,
 };
 console.log('wave23 restore:', JSON.stringify(w23restoreChecks));
 if (!Object.values(w23restoreChecks).every(Boolean)) { console.log('WAVE23 RESTORE FAIL'); errors++; }
@@ -5072,7 +5076,7 @@ if (!Object.values(w23restoreChecks).every(Boolean)) { console.log('WAVE23 RESTO
 // wave-23 a discipline): exactly one plain dockmaster contact per non-hub
 // generated system, none on the three hubs (their wave-23 dockmasters live in
 // contacts.js CONTACT_NAMES, not data), names unique and clear of the
-// authored twelve, and §25 intact — no generated system gained clues. --------
+// authored thirteen, and §25 intact — no generated system gained clues. ------
 const HUB_IDS24 = ['fx_bastion', 'gc_auction', 'blackstation'];
 const nonHubIds24 = generatedIds23.filter((id) => !HUB_IDS24.includes(id));
 const contactShapeOk24 = (id) => {
@@ -5083,8 +5087,8 @@ const contactShapeOk24 = (id) => {
     && typeof c.name === 'string' && c.name.length > 0;
 };
 const genContactNames24 = nonHubIds24.map((id) => SYSTEMS[id].contacts[0].name);
-// The authored twelve names, read back off the live roster (CONTACT_NAMES is
-// module-private in contacts.js): the authored six plus the three hubs.
+// The authored thirteen names, read back off the live roster (CONTACT_NAMES is
+// module-private in contacts.js): the authored seven plus the three hubs.
 const authoredNames24 = (ctx.world.contacts ?? [])
   .filter((c) => AUTHORED_IDS23.includes(c.system) || HUB_IDS24.includes(c.system))
   .map((c) => c.name);
@@ -5094,18 +5098,18 @@ const w24dataChecks = {
   contactShapeOk: nonHubIds24.every(contactShapeOk24),
   hubsCarryNone: HUB_IDS24.every((id) => SYSTEMS[id].contacts === undefined),
   namesUnique91: new Set(genContactNames24).size === 91,
-  authoredTwelveFound: authoredNames24.length === 12,
+  authoredThirteenFound: authoredNames24.length === 13,
   noAuthoredCollision: genContactNames24.every((n) => !authoredNames24.includes(n)),
   noGeneratedClues: generatedIds23.every((id) => (SYSTEMS[id].clues ?? []).length === 0),
 };
 console.log('wave24 generated contacts:', JSON.stringify(w24dataChecks));
 if (!Object.values(w24dataChecks).every(Boolean)) { console.log('WAVE24 GENERATED CONTACTS FAIL'); errors++; }
 
-// -- b. roster: a fresh boot builds 103; generated dockmasters are plain -----
+// -- b. roster: a fresh boot builds 104; generated dockmasters are plain -----
 // contacts with zero keeper-gate reach ---------------------------------------
 // The wave-8 fresh-boot pattern: a second harness on the empty store builds
 // its roster from data alone (restored saves keep their persisted roster, so
-// the fresh-boot count is the only honest 103 check). Its origin overlay is
+// the fresh-boot count is the only honest 104 check). Its origin overlay is
 // dismissed with the same Digit1 the main run used (the origins listener
 // self-removes on choice); that digit opens the main run's market (it sits
 // docked at Hearth Landing from the wave-23 e restore) and one Escape backs
@@ -5145,7 +5149,7 @@ const gateVouch24 = gateContact24 ? keeperVouchArrival(fctx24, gateContact24) : 
 const gateMark24 = gateContact24 ? keeperChartMark(fctx24, gateContact24) : 'no-contact';
 if (gateContact24) gateContact24.trust = trustBeforeGate24; // hygiene — the fresh harness is throwaway
 const w24rosterChecks = {
-  freshRoster103: freshRoster24.length === 103, // 12 authored + 91 generated (wave-24 growth)
+  freshRoster104: freshRoster24.length === 104, // 13 authored + 91 generated (wave-24 growth + veil)
   twoSystemsPicked: !!genA24 && !!genB24 && genA24 !== genB24,
   factionsDiffer: !!genA24 && !!genB24 && SYSTEMS[genA24].faction !== SYSTEMS[genB24].faction,
   genAContactOk: !!genA24 && genContactOk24(genA24, freshGenA24),
@@ -5382,7 +5386,7 @@ const w24jobsChecks = {
 console.log('wave24 congregation job payout:', JSON.stringify(w24jobsChecks), `delta=${ctx.world.credits - creditsAtRedock24} expect=${expectedPay24}`);
 if (!Object.values(w24jobsChecks).every(Boolean)) { console.log('WAVE24 CONGREGATION PAYOUT FAIL'); errors++; }
 
-// -- e. save roundtrip: roster 103 + the generated dockmaster survive ---------
+// -- e. save roundtrip: roster 104 + the generated dockmaster survive ---------
 // The wave-23 e pattern at the generated system d4 ended docked in (Vigil
 // Chapel, cg_vigil): bank non-default state on the generated dockmaster
 // (trust 25 via the real bumpTrust API), park hostiles so the autosave can't
@@ -5409,7 +5413,7 @@ const w24snap = (() => { try { return JSON.parse(store.get('rimward-save-v1') ??
 const snapCg24 = (w24snap?.world?.contacts ?? []).find((c) => c.id === 'contact-cg_vigil-dockmaster') ?? null;
 const w24saveChecks = {
   saveWritten: !!w24snap?.world,
-  rosterInSave103: (w24snap?.world?.contacts ?? []).length === 103,
+  rosterInSave104: (w24snap?.world?.contacts ?? []).length === 104,
   bankedNonDefault: bankedTrust24 > 0 && bankedName24 === SYSTEMS.cg_vigil.contacts[0].name,
   dockmasterInSave: snapCg24?.name === bankedName24 && snapCg24?.trust === bankedTrust24,
 };
@@ -5422,7 +5426,7 @@ if (!Object.values(w24saveChecks).every(Boolean)) { console.log('WAVE24 SAVE FIE
 const cgIdx24 = (ctx.world.contacts ?? []).findIndex((c) => c.id === 'contact-cg_vigil-dockmaster');
 if (cgIdx24 >= 0) ctx.world.contacts.splice(cgIdx24, 1);
 tick(2, 'wave24 roster corrupted');
-const w24corrupted = (ctx.world.contacts ?? []).length === 102
+const w24corrupted = (ctx.world.contacts ?? []).length === 103
   && !(ctx.world.contacts ?? []).some((c) => c.id === 'contact-cg_vigil-dockmaster');
 ctx.emit('playerDestroyed', {});
 tick(2, 'death consumed (wave24 restore)');
@@ -5430,7 +5434,7 @@ dispatchKey('Enter'); // recover(): restore(last save)
 const restoredCg24 = contactsForSystem(ctx, 'cg_vigil').find((c) => c.role === 'dockmaster') ?? null;
 const w24restoreChecks = {
   corruptedFirst: w24corrupted,
-  rosterRestored103: (ctx.world.contacts ?? []).length === 103,
+  rosterRestored104: (ctx.world.contacts ?? []).length === 104,
   dockmasterRestored: restoredCg24?.name === bankedName24 && restoredCg24?.trust === bankedTrust24,
 };
 console.log('wave24 restore:', JSON.stringify(w24restoreChecks));
@@ -5669,7 +5673,7 @@ const w26JobRewardLine = (titleFrag) => {
 };
 // Independent in-test replica of station.js's jobPayFor (the wave-26 shared
 // contract): epic multiplier first, faction service multiplier second, the
-// authored six guarded to 1 by id. Never reads station.js internals.
+// authored seven guarded to 1 by id. Never reads station.js internals.
 const svcJobMult26 = (sysId) => AUTHORED_IDS23.includes(sysId) ? 1 : (FACTION_SERVICES[SYSTEMS[sysId]?.faction]?.jobPayMult ?? 1);
 const epicJobMult26 = (sysId) => epicEffects(ctx, SYSTEMS[sysId]?.faction).jobPayMult ?? 1;
 const w26JobPayFor = (sysId, base) => Math.round(base * epicJobMult26(sysId) * svcJobMult26(sysId));
@@ -6101,7 +6105,7 @@ const snapJob26 = (w26snap?.world?.jobs ?? []).find((j) => j.id === 'ferry-consi
 const snapHearth26 = (w26snap?.world?.contacts ?? []).find((c) => c.id === 'contact-fh_hearth-dockmaster') ?? null;
 const w26saveChecks = {
   saveWritten: !!w26snap?.world,
-  rosterInSave103: (w26snap?.world?.contacts ?? []).length === 103,
+  rosterInSave104: (w26snap?.world?.contacts ?? []).length === 104,
   acceptButtonFound: !!ferrySaveAcceptBtn26,
   contractOpenInSave: snapJob26?.state === 'accepted' && snapJob26?.destSystem === destG26 && destG26 !== destF26,
   payQuotedInSave: Number.isFinite(quotedG26) && snapJob26?.payQuoted === quotedG26,
@@ -6111,7 +6115,7 @@ console.log('wave26 save fields:', JSON.stringify(w26saveChecks), `snapJob=${JSO
 if (!Object.values(w26saveChecks).every(Boolean)) { console.log('WAVE26 SAVE FIELDS FAIL'); errors++; }
 
 // Corrupt in memory (drop the snapshot, empty the bank), die, recover from
-// the dock autosave (Enter skips the hold): both come back, roster 103
+// the dock autosave (Enter skips the hold): both come back, roster 104
 // intact. The restore swaps the jobs/contacts arrays wholesale, so the
 // restored records are re-found through ctx.world.
 if (ferryJob26) delete ferryJob26.payQuoted;
@@ -6125,7 +6129,7 @@ const restoredJob26 = ctx.world.jobs.find((j) => j.id === 'ferry-consignment') ?
 const restoredHearth26 = contactsForSystem(ctx, 'fh_hearth').find((c) => c.role === 'dockmaster') ?? null;
 const w26restoreChecks = {
   corruptedFirst: w26corrupted,
-  rosterRestored103: (ctx.world.contacts ?? []).length === 103,
+  rosterRestored104: (ctx.world.contacts ?? []).length === 104,
   payQuotedRestored: restoredJob26?.state === 'accepted' && restoredJob26?.payQuoted === quotedG26,
   favorsRestored: restoredHearth26?.favors === bankedFavors26,
 };
@@ -6718,9 +6722,10 @@ const w30demandExpected = Math.max(
   Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
 );
 // The wave-28 berth restore rewound world.time into a snapshot taken inside
-// the 5 s jump grace, so the demand guard (now >= jumpGraceUntil) can still
-// be shut here — wait it out through real ticks rather than poking the flag.
+// jump grace, so the demand guard (now >= jumpGraceUntil) can still be shut.
 for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave30 jump grace wait');
+// TEST SETUP: live JUMP.graceSeconds is 60; 300 ticks cannot expire it.
+if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
 const w30graceExpired = ctx.world.time >= (ctx.world.jumpGraceUntil ?? 0);
 const p1refuse = w30spawnPirate('refuse', 95, [250, 0, 0]); // 250u: inside TARGET_RANGE, outside the bubble edge
 const p1openEvs = w30demandEvs(p1refuse, 'wave30 p1 demand');
@@ -7319,6 +7324,8 @@ const w31objBefore = w31q2.object;
 const w31classUnderSkin = w31q2.state.classKey; // 'cutter' — real stats under the freighter skin
 const w31revealEvs = [];
 let w31swapDelta = NaN;
+// TEST SETUP: live JUMP.graceSeconds is 60; 300 ticks cannot expire it.
+if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
 for (let i = 0; i < 30 && w31q2.record.revealed !== true; i++) {
   const px = w31q2.object.position.x, py = w31q2.object.position.y, pz = w31q2.object.position.z;
   tick(1, 'wave31 reveal on acquire');
@@ -7472,7 +7479,7 @@ tick(3, 'wave31 plain cleanup');
 // ---- Wave 32: pirate player-interest — temper, grace, apathy, Dresk ------
 // The wave-32 contract: playerInterestChance (npc.js, exported) prices a
 // pirate's attention from the record's persisted temper (lazy ??= stamp),
-// the player's manifest value, and fear, clamped [0.05, 0.9]; each live
+// the player's manifest value, and fear, clamped [0.005, 0.20]; each live
 // pirate rolls ONCE per instantiation (ai.playerRolled/playerInterested)
 // and only an interested pirate may acquire the player — the rest fall
 // through to the nearest-trader loop or loiter. Jump grace (jumpGraceUntil)
@@ -7508,14 +7515,14 @@ const w32spawn = (rec, offset) => {
 const w32cargoSave = ctx.cargo.splice(0, ctx.cargo.length);
 const w32fearSave = ctx.world.fear;
 ctx.world.fear = 0;
-const w32aRec1 = { temper: 0.5 }; // 0.25 + 0.5×0.35 = 0.425
+const w32aRec1 = { temper: 0.5 }; // 0.005 + 0.5×0.01 = 0.01
 const w32aP1 = w32interestChance(ctx, w32aRec1);
 ctx.cargo.push({ commodity: 'provisions', units: 500 }); // TEST SETUP: a rich manifest — must clear 1600 UU
 const w32aManifest = cargoValue(ctx.cargo, ctx.world.prices);
-const w32aRec2 = { temper: 1 }; // 0.25 + 0.35 + 0.3 = 0.9 → the max clamp
+const w32aRec2 = { temper: 1 }; // 0.005 + 0.01 + 0.10 = 0.115
 const w32aP2 = w32interestChance(ctx, w32aRec2);
 ctx.cargo.length = 0;
-ctx.world.fear = 100; // 0.25 − 100×0.004 < 0 → the min clamp
+ctx.world.fear = 100; // 0.005 − 100×0.004 < 0 → the min clamp
 const w32aRec3 = { temper: 0 };
 const w32aP3 = w32interestChance(ctx, w32aRec3);
 ctx.world.fear = w32fearSave;
@@ -7527,10 +7534,10 @@ const w32aP5a = w32interestChance(ctx, w32aRec5);
 const w32aT5 = w32aRec5.temper;
 const w32aP5b = w32interestChance(ctx, w32aRec5);
 const w32chanceChecks = {
-  temperHalfExact: Math.abs(w32aP1 - 0.425) < 1e-12, // 0.25 + 0.5×0.35, float-safe "exact"
+  temperHalfExact: Math.abs(w32aP1 - 0.01) < 1e-12, // 0.005 + 0.5×0.01, float-safe "exact"
   manifestRichEnough: w32aManifest >= 1600,
-  temperOneMaxClamp: Math.abs(w32aP2 - 0.9) < 1e-12, // 0.25+0.35+0.3 = 0.9 (the clamp boundary); IEEE lands one ulp under, so epsilon like the 0.425 check
-  temperZeroFearMinClamp: w32aP3 === 0.05,
+  temperOneMaxClamp: Math.abs(w32aP2 - 0.115) < 1e-12, // 0.005+0.01+0.10 = 0.115 (under max 0.20)
+  temperZeroFearMinClamp: w32aP3 === 0.005,
   alwaysHuntsIsOne: w32aP4 === 1 && !('temper' in w32aRec4), // the early return never stamps
   lazyTemperStamped: Number.isFinite(w32aT5) && w32aT5 >= 0 && w32aT5 <= 1,
   lazyTemperSticky: w32aRec5.temper === w32aT5 && w32aP5b === w32aP5a,
@@ -7604,7 +7611,7 @@ tick(3, 'wave32 control cleanup');
 
 // -- c1. Disinterest + trader preference: temper preset 0 (the lazy ??= -----
 // never fires) and Math.random pinned HIGH for exactly the roll frame — the
-// once-per-instantiation roll fails (max chance 0.9 < 0.999999). Wrapped as
+// once-per-instantiation roll fails (max chance 0.20 < 0.999999). Wrapped as
 // save/override/restore around ONE tick: the other consumers that frame
 // tolerate a constant, and the rollFailed check proves the pin framed the
 // roll. A live synthetic trader in range gives the fall-through loop prey. -
@@ -8074,7 +8081,7 @@ if (!w34scannerOk) { console.log('WAVE34 SCANNER HEAL FAIL'); errors++; }
 // restore window (the wave-32 pin discipline): a tampered non-numeric temper
 // ('rich') must re-roll to a FINITE temper through exactly one Math.random
 // (the guard's lazy roll, nothing else), the returned chance stays finite
-// and clamped [0.05, 0.9] (never NaN — the pre-wave-34 `??=` failure), the
+// and clamped [0.005, 0.20] (never NaN — the pre-wave-34 `??=` failure), the
 // re-roll is sticky across a second call (zero further rolls), and a legit
 // finite temper is neither re-rolled NOR allowed to consume Math.random at
 // all — the guard must not fire on the healthy path. ----------------------
@@ -8097,7 +8104,7 @@ try {
     rerollFinite: Number.isFinite(w34bT1) && w34bT1 >= 0 && w34bT1 <= 1,
     rerollIsOneRandomCall: w34callsReroll === 1, // the guard's lazy roll, nothing else
     chanceFinite: Number.isFinite(w34bP1) && Number.isFinite(w34bP2), // never NaN
-    chanceClamped: w34bP1 >= 0.05 && w34bP1 <= 0.9,
+    chanceClamped: w34bP1 >= 0.005 && w34bP1 <= 0.20,
     rerollSticky: w34bBad.temper === w34bT1 && w34bP2 === w34bP1 && w34callsSticky === w34callsReroll,
     finiteTemperByteSticky: w34bGood.temper === 0.5 && w34bG2 === w34bG1, // the guard never touches a healthy temper
     finiteTemperZeroRandomCalls: w34callsFinite === w34callsSticky, // NO Math.random beyond the one lazy re-roll all leg
@@ -8349,6 +8356,8 @@ ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
 ctx.cargo.length = 0;
 ctx.cargo.push({ commodity: 'provisions', units: 10 }); // cargo aboard: the demand rides its value
 for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave35b jump grace wait');
+// TEST SETUP: live JUMP.graceSeconds is 60; 300 ticks cannot expire it.
+if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
 
 // -- a. cross-scoped close: pirate A's demand card is open; a hailClosed ---
 // naming a DIFFERENT ship B must NOT close it (pre-wave-35 the empty
@@ -11143,8 +11152,8 @@ removeLiveShip(w42indyCtx, w42indy);
   const wLmCat = MODEL_CATALOG.filter((e) => e.category === 'Landmarks');
   const wLmAuthoredIds = [
     'fh_shepherd', 'vd_hulk_row', 'rm_tithe_stone', 'hr_quiet_beacon',
-    'hr_first_wreck', 'th_lanes_end', 'th_first_garden', 'vg_choir_stones',
-    'vg_unfinished', 'convergence', 'deepening',
+    'hr_first_wreck', 'th_lanes_end', 'th_first_garden', 'th_veil',
+    'vg_choir_stones', 'vg_unfinished', 'convergence', 'deepening',
   ];
   const wLmCountVerts = (obj) => {
     let n = 0;
@@ -11155,6 +11164,7 @@ removeLiveShip(w42indyCtx, w42indy);
   for (const id of wLmAuthoredIds) {
     const entry = wLmCat.find((e) => e.id === `landmark:authored:${id}`);
     if (!entry) { wLmAuthoredTagged = false; continue; }
+    if (id === 'th_veil') continue; // hush catalogs th_veil; AUTHORED has no unique hero
     const built = entry.build();
     if (built?.object?.userData?.authored !== id) wLmAuthoredTagged = false;
   }
@@ -11163,7 +11173,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const wLmVa = wLmWreckA?.object ? wLmCountVerts(wLmWreckA.object) : -1;
   const wLmVb = wLmWreckB?.object ? wLmCountVerts(wLmWreckB.object) : -2;
   const wLmChecks = {
-    catalogCount21: wLmCat.length === 21,
+    catalogCount22: wLmCat.length === 22,
     authoredNamed: wLmAuthoredIds.every((id) => wLmCat.some((e) => e.id === `landmark:authored:${id}`)),
     authoredDispatch: wLmAuthoredTagged,
     kindDeterministic: wLmVa > 10 && wLmVa === wLmVb,
@@ -12228,7 +12238,7 @@ removeLiveShip(w42indyCtx, w42indy);
 
 // ---- WAVE64: remount + authored flight envelope (PR2) ----
 {
-  const { createShipState: w64Ship, SHIP_CLASSES: W64_CLASSES } = await import('../src/game/state.js');
+  const { createShipState: w64Ship, SHIP_CLASSES: W64_CLASSES, cargoHoldFor, HOLD_RACK_STEP } = await import('../src/game/state.js');
   const {
     switchTo,
     applyFlightEnvelope,
@@ -12321,7 +12331,7 @@ removeLiveShip(w42indyCtx, w42indy);
     notBlobCreep: tamper.config.ship.creep === freight.creep,
     cargoReplaced: tamper.cargo.length === 1 && tamper.cargo[0].commodity === 'gildvein'
       && tamper.cargo[0].units === 5 && !tamper.cargo.some((r) => r.commodity === 'rawOre'),
-    capFromRow: tamper.cargoCapacity === 40,
+    capFromRow: tamper.cargoCapacity === cargoHoldFor('freighter') + HOLD_RACK_STEP * 2,
   };
 
   const space = w64ctx();
@@ -12973,7 +12983,7 @@ removeLiveShip(w42indyCtx, w42indy);
 
 // ---- WAVE64: flat equipment on hangar rows (PR5, no missiles) ----
 {
-  const { createShipState: w64EqShip, HIDDEN_MOUNTS: W64_HIDDEN, MINING_LASERS: W64_HEADS } = await import('../src/game/state.js');
+  const { createShipState: w64EqShip, HIDDEN_MOUNTS: W64_HIDDEN, MINING_LASERS: W64_HEADS, cargoHoldFor: w64EqHold } = await import('../src/game/state.js');
   const {
     writeMountedGear,
     switchTo,
@@ -13079,7 +13089,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const otherStock = {
     mountedNotCopiedWorld: rowOf(two, 'hull_a')?.miningLaser === 0 && rowOf(two, 'hull_a')?.scanner === 0,
     otherZeros: rowOf(two, 'hull_b')?.scanner === 0 && rowOf(two, 'hull_b')?.miningLaser === 0
-      && rowOf(two, 'hull_b')?.concealedMounts === false && rowOf(two, 'hull_b')?.cargoCapacity === 20,
+      && rowOf(two, 'hull_b')?.concealedMounts === false && rowOf(two, 'hull_b')?.cargoCapacity === w64EqHold('heavy'),
     worldMirrorsStay: two.world.scanner === 2 && two.world.miningLaser === 3,
   };
 
@@ -13133,11 +13143,11 @@ removeLiveShip(w42indyCtx, w42indy);
     worldMining: iso.world.miningLaser === 0,
     worldScan: iso.world.scanner === 0,
     worldConcealed: iso.world.concealedMounts === false,
-    worldCap: iso.cargoCapacity === 20,
+    worldCap: iso.cargoCapacity === w64EqHold('heavy'),
     aKept: rowOf(iso, 'hull_a')?.miningLaser === 3 && rowOf(iso, 'hull_a')?.scanner === 2
       && rowOf(iso, 'hull_a')?.concealedMounts === true && rowOf(iso, 'hull_a')?.cargoCapacity === 30,
     bStock: rowOf(iso, 'hull_b')?.miningLaser === 0 && rowOf(iso, 'hull_b')?.scanner === 0
-      && rowOf(iso, 'hull_b')?.concealedMounts === false && rowOf(iso, 'hull_b')?.cargoCapacity === 20,
+      && rowOf(iso, 'hull_b')?.concealedMounts === false && rowOf(iso, 'hull_b')?.cargoCapacity === w64EqHold('heavy'),
   };
   const toA = switchTo(iso, 'hull_a');
   const backA = {
@@ -13290,7 +13300,7 @@ removeLiveShip(w42indyCtx, w42indy);
     concealed: ctx.world.concealedMounts === true && liveAfter?.concealedMounts === true,
     mk4: ctx.world.miningLaser === 3 && liveAfter?.miningLaser === 3,
     hold: ctx.cargoCapacity === 30 && liveAfter?.cargoCapacity === 30,
-    otherHold: liveOther?.cargoCapacity === 20,
+    otherHold: liveOther?.cargoCapacity === w64EqHold('heavy'),
     otherMine: liveOther?.miningLaser === 0,
     otherScan: liveOther?.scanner === 0,
     otherCon: liveOther?.concealedMounts === false,
@@ -13303,7 +13313,7 @@ removeLiveShip(w42indyCtx, w42indy);
     worldMine: ctx.world.miningLaser === 0,
     worldScan: ctx.world.scanner === 0,
     worldCon: ctx.world.concealedMounts === false,
-    cap: ctx.cargoCapacity === 20,
+    cap: ctx.cargoCapacity === w64EqHold('heavy'),
     aKept: rowOf(ctx, 'hull_a')?.miningLaser === 3 && rowOf(ctx, 'hull_a')?.scanner === 2
       && rowOf(ctx, 'hull_a')?.cargoCapacity === 30,
   };
@@ -13374,8 +13384,8 @@ removeLiveShip(w42indyCtx, w42indy);
   const w65cat = {
     platedCutterAce: fh.includes('cutter') && fh.includes('ace') && fh.includes('light'),
     platedHasFrigate: fh.includes('frigate'),
-    beautifulCutter: be.includes('cutter') && be.includes('light') && !be.includes('ace'),
-    unkLight: w65StockFor('unknowables').length === 1 && w65StockFor('unknowables')[0] === 'light',
+    beautifulCutter: be.includes('cutter') && be.includes('light') && be.includes('ace'),
+    unkLight: w65StockFor('unknowables').includes('light') && w65StockFor('unknowables').includes('frigate'),
     indieEmpty: w65StockFor('independent').length === 0,
     hollowEmpty: w65StockFor('hollow').length === 0,
     aceFloor: w65MinRep('ace') === 10,
@@ -13414,6 +13424,7 @@ removeLiveShip(w42indyCtx, w42indy);
     purchaseYardHull: w67Buy,
     YARD_LIST_UU: w67List,
   } = await import('../src/game/shipyard.js');
+  const { cargoHoldFor: w67Hold } = await import('../src/game/state.js');
   const PLATED67 = [
     'freehold', 'veridian', 'redledger', 'ferrous',
     'gilded', 'assembly', 'congregation', 'lamplighter',
@@ -13463,10 +13474,9 @@ removeLiveShip(w42indyCtx, w42indy);
   const w67 = {
     platedHasFrigate: PLATED67.every((f) => w67StockFor(f).includes('frigate')),
     platedOrder: fh67.join(',') === CORE67.join(','),
-    beautifulOmits: be67.join(',') === 'light,cutter,heavy'
-      && !be67.includes('frigate') && !be67.includes('ace'),
-    unkOmits: w67StockFor('unknowables').join(',') === 'light'
-      && !w67StockFor('unknowables').includes('frigate'),
+    beautifulOmits: be67.includes('light') && be67.includes('frigate') && be67.includes('ace'),
+    unkOmits: w67StockFor('unknowables').includes('light')
+      && w67StockFor('unknowables').includes('frigate'),
     indieEmpty: w67StockFor('independent').length === 0,
     hollowEmpty: w67StockFor('hollow').length === 0,
     minRepFrigate: w67MinRep('frigate') === 25,
@@ -13485,7 +13495,7 @@ removeLiveShip(w42indyCtx, w42indy);
       && trustedBuy.price === Math.round(80000 * 0.9)
       && trustedCtx.world.hangar.mountedId === 'hull_starter'
       && trustedRow?.classKey === 'frigate'
-      && trustedRow?.cargoCapacity === 20
+      && trustedRow?.cargoCapacity === w67Hold('frigate')
       && trustedRow?.hullKind === 'built',
     digit8Index: 8 - 3 === 5 && CORE67[5] === 'frigate',
   };
@@ -14642,11 +14652,11 @@ removeLiveShip(w42indyCtx, w42indy);
   const unkOffers = listYardOffers(buyCtx('unknowables', { reputation: { unknowables: 0 } }));
   const fhOffers = listYardOffers(buyCtx('freehold', { reputation: { freehold: 25 } }));
   const omit = {
-    beauStock: !yardStockFor('beautiful').includes('frigate'),
-    unkStock: !yardStockFor('unknowables').includes('frigate'),
+    beauStock: yardStockFor('beautiful').includes('frigate'),
+    unkStock: yardStockFor('unknowables').includes('frigate'),
     fhStock: yardStockFor('freehold').includes('frigate'),
-    beauOffers: !beauOffers.some((o) => o.classKey === 'frigate'),
-    unkOffers: !unkOffers.some((o) => o.classKey === 'frigate'),
+    beauOffers: beauOffers.some((o) => o.classKey === 'frigate'),
+    unkOffers: unkOffers.some((o) => o.classKey === 'frigate'),
     fhOffers: fhOffers.some((o) => o.classKey === 'frigate'),
   };
 
@@ -15335,7 +15345,7 @@ removeLiveShip(w42indyCtx, w42indy);
     archiveFreeholdClosed: archiveDeskAllowed('freehold') === false
       && archiveDeskAllowed('placeholder') === false
       && archiveDeskAllowed('independent') === false,
-    unknowablesDockAbsent: archiveDeskAllowed('unknowables') === false
+    unknowablesDockAbsent: archiveDeskAllowed('unknowables') === true
       && !/unknowables\s*:/.test(detailStations74),
     spawnSkip: hasDataDropRate() === true
       && w74DropRate === 0.20
@@ -18776,6 +18786,3530 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave83 missiles:', JSON.stringify(w83));
   if (!Object.values(w83).every(Boolean)) { console.log('WAVE83 MISSILES FAIL'); errors++; }
+}
+
+// ---- WAVE85 NAV persist: sanitizeNav, WORLD_FIELDS nav, BFS, autopilot false ----
+{
+  const {
+    WORLD_FIELDS: w85Fields,
+    snapshot: w85Snapshot,
+    restore: w85Restore,
+  } = await import('../src/game/save.js');
+  const {
+    sanitizeNav: w85SanitizeNav,
+    plotRoute: w85Plot,
+    clearRoute: w85Clear,
+  } = await import('../src/game/nav.js');
+  const here85 = dirname(fileURLToPath(import.meta.url));
+  const src85 = (rel) => readFileSync(join(here85, '..', rel), 'utf8');
+  const nav85src = src85('src/game/nav.js');
+  const save85src = src85('src/game/save.js');
+  const state85src = src85('src/game/state.js');
+  const ctx85src = src85('src/core/ctx.js');
+
+  function stub85(systemId = 'freehold') {
+    return {
+      flags: { saveRestored: false },
+      systems: SYSTEMS,
+      world: {
+        time: 0,
+        credits: 350,
+        fear: 0,
+        reputation: {},
+        currentSystem: systemId,
+      },
+      cargo: [],
+      cargoCapacity: 20,
+      bio: {
+        mood: 'serene', hunger: 0.15, wounds: 0, bond: 0.1,
+        growth: 0, fedCount: 0, speedFactor: 1, turnFactor: 1, songEvent: null,
+      },
+      player: null,
+      ship: { object: null, velocity: { set() {} }, speed: 0 },
+      ships: [],
+      events: [],
+      emit(type, data = {}) {
+        this.events.push({ type, t: this.world.time, ...(data && typeof data === 'object' ? data : {}) });
+      },
+    };
+  }
+  function bag85(dest, path, remaining, status, extra) {
+    return { dest, path, remaining, status, ...(extra && typeof extra === 'object' ? extra : {}) };
+  }
+
+  const fieldsNav = w85Fields.includes('nav')
+    && w85Fields.filter((k) => k === 'nav').length === 1
+    && !w85Fields.includes('route')
+    && !w85Fields.includes('autopilot')
+    && !w85Fields.includes('guidance')
+    && w85Fields.indexOf('nav') > w85Fields.indexOf('fieldOre');
+
+  const omitCtx = stub85();
+  omitCtx.world.nav = bag85('veridian', ['freehold', 'veridian'], 1, 'plotted', { autopilot: false });
+  w85Restore(omitCtx, { v: 1, world: { currentSystem: 'freehold', credits: 350 } });
+  const omitDelete = omitCtx.world.nav === undefined;
+
+  const protoCtx = stub85();
+  protoCtx.world.nav = bag85('__proto__', ['freehold', 'veridian'], 1, 'plotted');
+  w85SanitizeNav(protoCtx);
+  const protoDestDrop = protoCtx.world.nav === undefined;
+
+  const reservedCtx = stub85();
+  reservedCtx.world.nav = bag85('constructor', ['freehold', 'veridian'], 1, 'plotted');
+  w85SanitizeNav(reservedCtx);
+  const reservedDrop = reservedCtx.world.nav === undefined;
+
+  const stuffedCtx = stub85();
+  stuffedCtx.world.nav = bag85('veridian', ['freehold', 'veridian'], 1, 'active', { hopIndex: 1, cursor: 1 });
+  w85SanitizeNav(stuffedCtx);
+  const stuffedDrop = stuffedCtx.world.nav === undefined;
+
+  const blockedEmptyCtx = stub85();
+  blockedEmptyCtx.world.nav = bag85('veridian', [], 0, 'blocked');
+  w85SanitizeNav(blockedEmptyCtx);
+  const blockedEmptyKeep = !!blockedEmptyCtx.world.nav
+    && blockedEmptyCtx.world.nav.status === 'blocked'
+    && blockedEmptyCtx.world.nav.dest === 'veridian'
+    && Array.isArray(blockedEmptyCtx.world.nav.path)
+    && blockedEmptyCtx.world.nav.path.length === 0
+    && blockedEmptyCtx.world.nav.remaining === 0
+    && blockedEmptyCtx.world.nav.autopilot === false;
+
+  const midCtx = stub85('redmarch');
+  midCtx.world.nav = bag85(
+    'hollowreach',
+    ['freehold', 'veridian', 'redmarch', 'hollowreach'],
+    3,
+    'plotted',
+  );
+  w85SanitizeNav(midCtx);
+  const mid = midCtx.world.nav;
+  const midSlice = !!mid
+    && mid.status === 'plotted'
+    && mid.dest === 'hollowreach'
+    && Array.isArray(mid.path)
+    && mid.path[0] === 'redmarch'
+    && mid.path[mid.path.length - 1] === 'hollowreach'
+    && mid.path[0] === midCtx.world.currentSystem
+    && mid.remaining === mid.path.length - 1
+    && mid.remaining === 1
+    && mid.autopilot === false;
+
+  const offCtx = stub85('hush');
+  offCtx.world.nav = bag85(
+    'hollowreach',
+    ['freehold', 'veridian', 'redmarch', 'hollowreach'],
+    3,
+    'plotted',
+  );
+  w85SanitizeNav(offCtx);
+  const off = offCtx.world.nav;
+  const offPathBlocked = !!off
+    && off.status === 'blocked'
+    && off.dest === 'hollowreach'
+    && Array.isArray(off.path)
+    && off.path.length === 0
+    && off.remaining === 0
+    && off.autopilot === false;
+
+  const arrivedCtx = stub85('freehold');
+  arrivedCtx.world.nav = bag85('freehold', ['freehold', 'veridian'], 1, 'arrived');
+  w85SanitizeNav(arrivedCtx);
+  const arrived = arrivedCtx.world.nav;
+  const arrivedOk = !!arrived
+    && arrived.status === 'arrived'
+    && arrived.dest === 'freehold'
+    && Array.isArray(arrived.path)
+    && arrived.path.length === 1
+    && arrived.path[0] === 'freehold'
+    && arrived.remaining === 0
+    && arrived.autopilot === false;
+
+  const remainCtx = stub85();
+  remainCtx.world.nav = bag85('veridian', ['freehold', 'veridian'], 99, 'plotted');
+  w85SanitizeNav(remainCtx);
+  const remainingOk = !!remainCtx.world.nav
+    && remainCtx.world.nav.status === 'plotted'
+    && remainCtx.world.nav.remaining === 1
+    && remainCtx.world.nav.remaining === remainCtx.world.nav.path.length - 1;
+
+  const apSan = stub85();
+  apSan.world.nav = bag85('veridian', ['freehold', 'veridian'], 1, 'plotted', { autopilot: true });
+  w85SanitizeNav(apSan);
+  const apSanitizeFalse = apSan.world.nav && apSan.world.nav.autopilot === false;
+
+  const apSnapCtx = stub85();
+  apSnapCtx.world.nav = bag85('veridian', ['freehold', 'veridian'], 1, 'plotted', { autopilot: true });
+  const apSnap = w85Snapshot(apSnapCtx);
+  const apSnapFalse = apSnap.world.nav && apSnap.world.nav.autopilot === false;
+  const apRtCtx = stub85();
+  apRtCtx.world.nav = bag85('veridian', ['freehold', 'veridian'], 1, 'plotted', { autopilot: true });
+  w85Restore(apRtCtx, apSnap);
+  const apRestoreFalse = apRtCtx.world.nav && apRtCtx.world.nav.autopilot === false;
+  const apNoRoundtrip = apSanitizeFalse && apSnapFalse && apRestoreFalse
+    && JSON.stringify(apSnap.world.nav).indexOf('"autopilot":true') < 0;
+
+  const hopCtx = stub85('freehold');
+  hopCtx.events = [];
+  w85Plot(hopCtx, 'veridian');
+  const hop = hopCtx.world.nav;
+  const twoWayPlot = !!hop
+    && hop.status === 'plotted'
+    && hop.dest === 'veridian'
+    && hop.path[0] === 'freehold'
+    && hop.path[hop.path.length - 1] === 'veridian'
+    && hop.path.includes('veridian')
+    && hop.remaining === hop.path.length - 1
+    && hop.remaining >= 1;
+
+  const hubCtx = stub85('freehold');
+  w85Plot(hubCtx, 'fh_hearth');
+  const hub = hubCtx.world.nav;
+  const hubOneWay = !!hub
+    && hub.status === 'plotted'
+    && hub.dest === 'fh_hearth'
+    && hub.path[0] === 'freehold'
+    && hub.path[hub.path.length - 1] === 'fh_hearth';
+
+  const unkCtx = stub85('freehold');
+  unkCtx.world.nav = undefined;
+  w85Plot(unkCtx, 'no_such_system_w85');
+  const unknownFail = unkCtx.world.nav === undefined;
+
+  const unchartedId = 'w85_uncharted';
+  SYSTEMS[unchartedId] = {
+    id: unchartedId,
+    gates: [{ position: [0, 0, 0], to: 'freehold' }],
+  };
+  const unchartedCtx = stub85('freehold');
+  w85Plot(unchartedCtx, unchartedId);
+  const unchartedFail = unchartedCtx.world.nav === undefined;
+  delete SYSTEMS[unchartedId];
+
+  const plotEv = hopCtx.events.filter((e) => e.type === 'navRoute');
+  const plotFresh = plotEv.length >= 1
+    && plotEv.every((e) => !Object.hasOwn(e, 'path')
+      && !Object.hasOwn(e, 'remaining')
+      && !Object.hasOwn(e, 'autopilot')
+      && typeof e.dest === 'string'
+      && typeof e.hops === 'number'
+      && typeof e.status === 'string');
+  const clrCtx = stub85();
+  w85Plot(clrCtx, 'veridian');
+  clrCtx.events = [];
+  w85Clear(clrCtx);
+  const clrEv = clrCtx.events.find((e) => e.type === 'navRoute');
+  const clearFresh = clrCtx.world.nav === undefined
+    && !!clrEv
+    && clrEv.dest === ''
+    && clrEv.hops === 0
+    && clrEv.status === 'idle'
+    && !Object.hasOwn(clrEv, 'path');
+
+  const emitSrc = !nav85src.includes("emit('navRoute', world.nav")
+    && !nav85src.includes('emit("navRoute", world.nav')
+    && !nav85src.includes('emit(\'navRoute\', ctx.world.nav')
+    && !nav85src.includes('...world.nav')
+    && !nav85src.includes('...ctx.world.nav');
+  const noInner = !nav85src.includes('innerHTML');
+  const stateNoNav = !state85src.includes('world.nav')
+    && !/export const NAV\b/.test(state85src);
+  const ctxFreeze = ctx85src.includes("'navRoute'") && ctx85src.includes('dest, hops, status');
+  const autosaveKey = save85src.includes("const KEY = 'rimward-save-v1'");
+  const noChartFlag = !ctx85src.includes('ctx.autopilot');
+
+  const w85 = {
+    fieldsNav,
+    omitDelete,
+    protoDestDrop,
+    reservedDrop,
+    stuffedDrop,
+    blockedEmptyKeep,
+    midSlice,
+    offPathBlocked,
+    arrivedOk,
+    remainingOk,
+    apNoRoundtrip,
+    twoWayPlot,
+    hubOneWay,
+    unknownFail,
+    unchartedFail,
+    plotFresh,
+    clearFresh,
+    emitSrc,
+    noInner,
+    stateNoNav,
+    ctxFreeze,
+    autosaveKey,
+    noChartFlag,
+  };
+  console.log('wave85 nav persist:', JSON.stringify(w85));
+  if (!Object.values(w85).every(Boolean)) { console.log('WAVE85 NAV PERSIST FAIL'); errors++; }
+}
+
+// ---- WAVE85 NAV chart: click/plot, chartOpen, fireHeld, recalc, commLine ----
+{
+  const {
+    plotRoute: c85Plot,
+    clearRoute: c85Clear,
+    recalcOnLoad: c85Recalc,
+    initNav: c85InitNav,
+  } = await import('../src/game/nav.js');
+  const hereC85 = dirname(fileURLToPath(import.meta.url));
+  const srcC85 = (rel) => readFileSync(join(hereC85, '..', rel), 'utf8');
+  const chartSrc = srcC85('src/systems/galaxychart.js');
+  const navSrc = srcC85('src/game/nav.js');
+  const ctrlSrc = srcC85('src/systems/controls.js');
+  const ctxSrc = srcC85('src/core/ctx.js');
+  const hudCss = srcC85('src/ui/hud.css');
+  const mainSrc = srcC85('src/main.js');
+  const stationSrc = srcC85('src/systems/station.js');
+
+  function stubC85(systemId = 'freehold') {
+    return {
+      flags: { saveRestored: false, chartOpen: false, docked: false, paused: false },
+      systems: SYSTEMS,
+      world: { time: 0, credits: 350, fear: 0, reputation: {}, currentSystem: systemId },
+      events: [],
+      emit(type, data = {}) {
+        this.events.push({ type, t: this.world.time, ...(data && typeof data === 'object' ? data : {}) });
+      },
+    };
+  }
+
+  const flagDefault = /\bchartOpen:\s*false\b/.test(ctxSrc)
+    && ctxSrc.includes('galaxychart.js')
+    && !ctxSrc.includes('ctx.autopilot');
+  const setOpenWrites = /function setOpen\(next\)[\s\S]{0,240}flags\.chartOpen\s*=/.test(chartSrc);
+  const fireHeldGate = ctrlSrc.includes('chartOpen')
+    && /fireHeld\s*=\s*fireDown\s*&&\s*ctx\.flags\.chartOpen\s*!==\s*true/.test(ctrlSrc);
+  const noPrevent = !chartSrc.includes('preventDefault(') && !chartSrc.includes('stopPropagation(');
+  const noInnerChart = !chartSrc.includes('innerHTML');
+  const hitDisc = chartSrc.includes('rw-galaxy-hit')
+    && (chartSrc.includes("fill: 'transparent'") || chartSrc.includes('fill: "transparent"'))
+    && hudCss.includes('pointer-events: none')
+    && /rw-galaxy-hub-ring[\s\S]{0,220}pointer-events:\s*none/.test(hudCss);
+  const plotClass = chartSrc.includes('rw-galaxy-plot')
+    && !chartSrc.includes("class: 'rw-galaxy-route',\n          x1: ra")
+    && hudCss.includes('.rw-galaxy-plot')
+    && !/class: 'rw-galaxy-plot'[\s\S]{0,80}rw-galaxy-route/.test(chartSrc);
+  const clearBtnType = chartSrc.includes("clearBtn.type = 'button'")
+    || chartSrc.includes('clearBtn.type = "button"');
+  const keyMToggle = chartSrc.includes("e.code === 'KeyM'");
+  const digit0Shipyard = stationSrc.includes("code.startsWith('Digit')")
+    && stationSrc.includes('d === 0')
+    && stationSrc.includes("selectService('shipyard')")
+    && /DOCK_KEY_SERVICES\[DOCK_KEY_SERVICES\.length - 1\]/.test(stationSrc);
+  const noMystery = !chartSrc.includes('mystery') && !navSrc.includes('mystery');
+  const noLockSteal = !chartSrc.includes('targets.current')
+    && !navSrc.includes('targets.current')
+    && !chartSrc.includes('tryReticleLock')
+    && !chartSrc.includes('KeyV')
+    && !chartSrc.includes('KeyT')
+    && !chartSrc.includes('KeyG');
+  const initOrder = /initJump[\s\S]{0,80}initNav/.test(mainSrc)
+    && /initNav[\s\S]{0,400}initGalaxyChart/.test(mainSrc);
+  const noJumpListen = !navSrc.includes("type === 'jumpRequested'")
+    && !navSrc.includes('type === "jumpRequested"')
+    && !navSrc.includes("type === 'dockPressed'")
+    && !navSrc.includes('type === "dockPressed"');
+
+  SYSTEMS.w85iso_from = {
+    id: 'w85iso_from', name: 'IsoFrom', chart: [0, 0],
+    gates: [{ to: 'w85iso_dest', position: [0, 0, 0] }],
+  };
+  SYSTEMS.w85iso_dest = {
+    id: 'w85iso_dest', name: 'IsoDest', chart: [1, 0],
+    gates: [{ to: 'w85iso_from', position: [0, 0, 0] }],
+  };
+  SYSTEMS.w85iso_side = {
+    id: 'w85iso_side', name: 'IsoSide', chart: [2, 0], gates: [],
+  };
+
+  const offStub = stubC85('w85iso_from');
+  offStub.world.nav = {
+    dest: 'w85iso_dest',
+    path: ['w85iso_from', 'w85iso_dest'],
+    remaining: 1,
+    status: 'plotted',
+    autopilot: false,
+  };
+  const offApi = c85InitNav(offStub);
+  offApi.update();
+  offStub.world.currentSystem = 'w85iso_side';
+  offStub.events = [{ type: 'systemLoaded', t: 0, to: 'w85iso_side' }];
+  offApi.update();
+  const offBag = offStub.world.nav;
+  const offPathBlocked = !!offBag
+    && offBag.status === 'blocked'
+    && offBag.dest === 'w85iso_dest'
+    && Array.isArray(offBag.path)
+    && offBag.path.length === 0
+    && offBag.remaining === 0;
+
+  const arrStub = stubC85('freehold');
+  arrStub.world.nav = {
+    dest: 'veridian',
+    path: ['freehold', 'veridian'],
+    remaining: 1,
+    status: 'plotted',
+    autopilot: false,
+  };
+  const arrApi = c85InitNav(arrStub);
+  arrApi.update();
+  arrStub.world.currentSystem = 'veridian';
+  arrStub.events = [{ type: 'systemLoaded', t: 0, to: 'veridian' }];
+  arrApi.update();
+  const arrBag = arrStub.world.nav;
+  const destArrival = !!arrBag
+    && arrBag.status === 'arrived'
+    && arrBag.dest === 'veridian'
+    && Array.isArray(arrBag.path)
+    && arrBag.path.length === 1
+    && arrBag.path[0] === 'veridian'
+    && arrBag.remaining === 0;
+
+  const firstStub = stubC85('freehold');
+  firstStub.world.nav = {
+    dest: 'veridian', path: [], remaining: 0, status: 'blocked', autopilot: false,
+  };
+  c85InitNav(firstStub).update();
+  const firstRecalc = !!firstStub.world.nav
+    && firstStub.world.nav.status === 'plotted'
+    && firstStub.world.nav.dest === 'veridian'
+    && firstStub.world.nav.path[0] === 'freehold';
+
+  const plotStub = stubC85('freehold');
+  c85Plot(plotStub, 'veridian');
+  const hops = plotStub.world.nav && plotStub.world.nav.remaining;
+  const plotName = SYSTEMS.veridian.name;
+  const plotComm = plotStub.events.find((e) => e.type === 'commLine');
+  const plotEcho = !!plotComm
+    && plotComm.from === 'Echo'
+    && plotComm.text === (hops === 1
+      ? `Route plotted: 1 jump to ${plotName}.`
+      : `Route plotted: ${hops} jumps to ${plotName}.`);
+  const clrStub = stubC85('freehold');
+  c85Plot(clrStub, 'veridian');
+  clrStub.events = [];
+  c85Clear(clrStub);
+  const clrComm = clrStub.events.find((e) => e.type === 'commLine');
+  const clearEcho = !!clrComm && clrComm.from === 'Echo' && clrComm.text === 'Route cleared.';
+  const recStub = stubC85('w85iso_side');
+  recStub.world.nav = {
+    dest: 'w85iso_dest',
+    path: ['w85iso_from', 'w85iso_dest'],
+    remaining: 1,
+    status: 'plotted',
+    autopilot: false,
+  };
+  recStub.world.currentSystem = 'w85iso_side';
+  recStub.events = [];
+  c85Recalc(recStub, { to: 'w85iso_side' });
+  const blkComm = recStub.events.find((e) => e.type === 'commLine');
+  const blockedEcho = !!blkComm
+    && blkComm.from === 'Echo'
+    && blkComm.text === 'No route to IsoDest from here.';
+  const updStub = stubC85('veridian');
+  updStub.world.nav = {
+    dest: 'hollowreach',
+    path: ['freehold', 'veridian', 'redmarch', 'hollowreach'],
+    remaining: 3,
+    status: 'plotted',
+    autopilot: false,
+  };
+  c85Recalc(updStub, { to: 'veridian' });
+  const updHops = updStub.world.nav && updStub.world.nav.remaining;
+  const updComm = updStub.events.find((e) => e.type === 'commLine');
+  const updatedEcho = !!updComm
+    && updComm.from === 'Echo'
+    && typeof updHops === 'number'
+    && updComm.text === (updHops === 1
+      ? `Route updated: 1 jump to ${SYSTEMS.hollowreach.name}.`
+      : `Route updated: ${updHops} jumps to ${SYSTEMS.hollowreach.name}.`);
+  const arrCommStub = stubC85('veridian');
+  arrCommStub.world.nav = {
+    dest: 'veridian', path: ['freehold', 'veridian'], remaining: 1, status: 'plotted', autopilot: false,
+  };
+  c85Recalc(arrCommStub, { to: 'veridian' });
+  const arrComm = arrCommStub.events.find((e) => e.type === 'commLine');
+  const arrivedEcho = !!arrComm
+    && arrComm.from === 'Echo'
+    && arrComm.text === `Arrived at ${SYSTEMS.veridian.name}.`;
+  const commEcho = plotEcho && clearEcho && blockedEcho && updatedEcho && arrivedEcho;
+  delete SYSTEMS.w85iso_from;
+  delete SYSTEMS.w85iso_dest;
+  delete SYSTEMS.w85iso_side;
+
+  const savedSys = ctx.world.currentSystem;
+  const savedNav = ctx.world.nav;
+  const savedOpen = ctx.flags.chartOpen;
+  ctx.flags.docked = false;
+  ctx.flags.paused = false;
+  ctx.world.currentSystem = 'freehold';
+  ctx.world.nav = undefined;
+  if (ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w85 chart close if open');
+  const chartClosedFlag = ctx.flags.chartOpen === false;
+  dispatchKey('KeyM');
+  tick(2, 'w85 chart open');
+  const chartOpenFlag = ctx.flags.chartOpen === true
+    && !!chartRoot
+    && !chartRoot.classList.contains('is-hidden');
+  for (const fn of winListeners.mousedown ?? []) {
+    fn({ type: 'mousedown', button: 0, preventDefault() {}, stopPropagation() {} });
+  }
+  tick(1, 'w85 fire while chart');
+  const fireHeldGated = ctx.input.fireHeld === false;
+  for (const fn of winListeners.mouseup ?? []) {
+    fn({ type: 'mouseup', button: 0, preventDefault() {}, stopPropagation() {} });
+  }
+  const hits = chartClass('rw-galaxy-hit');
+  const plotHits = hits.filter((n) => n.getAttribute('data-system-id') === 'veridian');
+  const svgElLive = chartClass('rw-galaxy-svg')[0];
+  if (plotHits[0] && svgElLive) {
+    for (const fn of svgElLive._listeners?.click ?? []) {
+      fn({ type: 'click', target: plotHits[0] });
+    }
+  }
+  tick(2, 'w85 plot click');
+  const livePlot = ctx.world.nav
+    && ctx.world.nav.status === 'plotted'
+    && ctx.world.nav.dest === 'veridian'
+    && chartClass('rw-galaxy-plot').length >= 1
+    && chartClass('rw-galaxy-node').some((n) => n.getAttribute('data-system-id') === 'veridian' && n.classList.contains('is-dest'));
+  const clearLive = chartClass('rw-galaxy-clear')[0];
+  const clearType = !!clearLive && clearLive.type === 'button';
+  if (clearLive && typeof clearLive.click === 'function') clearLive.click();
+  tick(1, 'w85 clear click');
+  const liveCleared = ctx.world.nav === undefined;
+  const currentHit = hits.find((n) => n.getAttribute('data-system-id') === 'freehold');
+  if (plotHits[0] && svgElLive) {
+    for (const fn of svgElLive._listeners?.click ?? []) {
+      fn({ type: 'click', target: plotHits[0] });
+    }
+  }
+  tick(1, 'w85 replot');
+  if (currentHit && svgElLive) {
+    for (const fn of svgElLive._listeners?.click ?? []) {
+      fn({ type: 'click', target: currentHit });
+    }
+  }
+  tick(1, 'w85 click current clear');
+  const clickCurrentClears = ctx.world.nav === undefined;
+  dispatchKey('KeyM');
+  tick(1, 'w85 chart close');
+  ctx.world.currentSystem = savedSys;
+  if (savedNav === undefined) delete ctx.world.nav;
+  else ctx.world.nav = savedNav;
+  if (savedOpen && !ctx.flags.chartOpen) dispatchKey('KeyM');
+  if (!savedOpen && ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w85 restore chart');
+
+  const w85c = {
+    flagDefault,
+    setOpenWrites,
+    fireHeldGate,
+    noPrevent,
+    noInnerChart,
+    hitDisc,
+    plotClass,
+    clearBtnType,
+    clearType,
+    keyMToggle,
+    digit0Shipyard,
+    noMystery,
+    noLockSteal,
+    initOrder,
+    noJumpListen,
+    offPathBlocked,
+    destArrival,
+    firstRecalc,
+    commEcho,
+    chartClosedFlag,
+    chartOpenFlag,
+    fireHeldGated,
+    livePlot,
+    liveCleared,
+    clickCurrentClears,
+  };
+  console.log('wave85 nav chart:', JSON.stringify(w85c));
+  if (!Object.values(w85c).every(Boolean)) { console.log('WAVE85 NAV CHART FAIL'); errors++; }
+}
+
+// ---- WAVE85 NAV guidance: readout, cue, marker, consume path[1] ----
+{
+  const hereG85 = dirname(fileURLToPath(import.meta.url));
+  const srcG85 = (rel) => readFileSync(join(hereG85, '..', rel), 'utf8');
+  const hudG85 = srcG85('src/systems/hud.js');
+  const cssG85 = srcG85('src/ui/hud.css');
+  const guideG85 = srcG85('src/systems/nav-guidance.js');
+  const {
+    readNavGuidance: g85read,
+    resolveAuthoredNavGate: g85gate,
+    formatNavDist: g85dist,
+    emptyNavRaycast: g85ray,
+  } = await import('../src/systems/nav-guidance.js');
+
+  const gHas = (n, cls) => !!(n && n.classList && n.classList.contains(cls));
+  const gNodes = (cls) => [...walkDom(document.getElementById('hud'))].filter((n) => gHas(n, cls));
+  const readouts = gNodes('rw-nav-readout');
+  const cues = gNodes('rw-nav-gate-cue');
+  const readoutExists = readouts.length >= 1;
+  const cueDistinct = cues.length >= 1
+    && cues.every((n) => !gHas(n, 'rw-edge-arrow') && !gHas(n, 'rw-chartmark') && !gHas(n, 'rw-contact-pip'));
+  const cap180 = /#?\.rw-nav-readout[\s\S]{0,240}max-width:\s*180px/.test(cssG85)
+    || (cssG85.includes('.rw-nav-readout') && cssG85.includes('max-width: 180px'));
+  const noInner = !hudG85.includes('innerHTML') && !guideG85.includes('innerHTML');
+  const noHopNeed = !guideG85.includes('hopIndex') && !hudG85.includes('hopIndex');
+  const nextFromPath1 = hudG85.includes('readNavGuidance') && guideG85.includes('path[1]');
+  const noTgtWrite = !hudG85.includes('targets.current =') && !guideG85.includes('targets.current =');
+  const noGuidanceEmit = !hudG85.includes("emit('navGuidance") && !guideG85.includes("emit('navGuidance");
+  const rayEmpty = guideG85.includes('function emptyNavRaycast') && guideG85.includes('o.raycast = emptyNavRaycast');
+  const reducedStatic = guideG85.includes('reducedMotion') && guideG85.includes('mesh.rotation.z = 0')
+    && !cssG85.includes('@keyframes rw-nav');
+  const noRouteCopy = hudG85.includes("'NO ROUTE'") || hudG85.includes('"NO ROUTE"');
+  const ariaSrc = hudG85.includes("navLive.setAttribute('role', 'status')")
+    && hudG85.includes("navLive.setAttribute('aria-live', 'polite')")
+    && hudG85.includes("navReadout.setAttribute('aria-live', 'off')")
+    && hudG85.includes("navReadout.setAttribute('aria-atomic', 'false')")
+    && !hudG85.includes("navReadout.setAttribute('role', 'status')");
+  const ariaPanel = readouts.length ? readouts[readouts.length - 1] : null;
+  let ariaLiveChild = null;
+  for (const n of walkDom(ariaPanel || { children: [] })) {
+    if (gHas(n, 'rw-nav-readout-live')) ariaLiveChild = n;
+  }
+  let distInsideLive = false;
+  if (ariaLiveChild) {
+    for (const n of walkDom(ariaLiveChild)) {
+      if (gHas(n, 'rw-nav-readout-dist')) distInsideLive = true;
+    }
+  }
+  const ariaLive = !!ariaPanel
+    && ariaPanel.getAttribute('aria-live') === 'off'
+    && ariaPanel.getAttribute('aria-atomic') === 'false'
+    && ariaPanel.getAttribute('role') !== 'status'
+    && !!ariaLiveChild
+    && ariaLiveChild.getAttribute('role') === 'status'
+    && ariaLiveChild.getAttribute('aria-live') === 'polite'
+    && distInsideLive === false;
+
+  const savedNavG = ctx.world.nav;
+  const savedDockG = ctx.flags.docked;
+  const savedJumpG = ctx.gate.jumping;
+  const savedTgtG = ctx.targets.current;
+  const savedSysG = ctx.world.currentSystem;
+  ctx.flags.docked = false;
+  ctx.gate.jumping = false;
+  ctx.world.currentSystem = 'freehold';
+  ctx.world.nav = {
+    dest: 'vd_survey',
+    path: ['freehold', 'veridian', 'vd_survey'],
+    remaining: 2,
+    status: 'plotted',
+  };
+  tick(20, 'w85 guidance plotted');
+  const livePool = gNodes('rw-nav-readout');
+  let live = null;
+  for (let i = 0; i < livePool.length; i++) {
+    if (!livePool[i].classList.contains('is-hidden')) live = livePool[i];
+  }
+  if (!live && livePool.length) live = livePool[livePool.length - 1];
+  const liveShown = live && !live.classList.contains('is-hidden');
+  const liveText = [...walkDom(live || { children: [] })]
+    .map((n) => n.textContent || '')
+    .join(' ');
+  const nextIsPath1 = liveShown && liveText.includes(SYSTEMS.veridian.name)
+    && liveText.includes('2');
+  const destIsBag = liveShown && liveText.includes(SYSTEMS.vd_survey.name);
+
+  ctx.flags.docked = true;
+  tick(2, 'w85 guidance docked');
+  const hideDocked = live && live.classList.contains('is-hidden');
+  ctx.flags.docked = false;
+  ctx.gate.jumping = true;
+  tick(2, 'w85 guidance jumping');
+  const hideJumping = live && live.classList.contains('is-hidden');
+  ctx.gate.jumping = false;
+
+  ctx.world.nav = { dest: 'veridian', path: [], remaining: 0, status: 'blocked' };
+  tick(20, 'w85 guidance blocked');
+  const blockedPool = gNodes('rw-nav-readout');
+  let blockedNode = null;
+  for (let i = 0; i < blockedPool.length; i++) {
+    if (!blockedPool[i].classList.contains('is-hidden')) blockedNode = blockedPool[i];
+  }
+  if (!blockedNode && blockedPool.length) blockedNode = blockedPool[blockedPool.length - 1];
+  const blockedText = [...walkDom(blockedNode || { children: [] })]
+    .map((n) => n.textContent || '')
+    .join(' ');
+  const noRouteLive = blockedText.includes('NO ROUTE') && !blockedText.includes('JUMPS 0');
+
+  const dummyLock = { lockKind: 'station', position: { x: 0, y: 0, z: 0 } };
+  ctx.targets.current = dummyLock;
+  ctx.world.nav = {
+    dest: 'vd_survey',
+    path: ['freehold', 'veridian', 'vd_survey'],
+    remaining: 2,
+    status: 'plotted',
+  };
+  tick(4, 'w85 guidance lock stays');
+  const lockStay = ctx.targets.current === dummyLock;
+
+  ctx.world.nav = {
+    dest: 'veridian',
+    path: ['freehold', '__proto__'],
+    remaining: 1,
+    status: 'plotted',
+  };
+  const stuffed = g85read(ctx);
+  const stuffedHide = stuffed.kind !== 'plotted' && !stuffed.pos;
+
+  const unknown = g85read({ world: { nav: { dest: 'veridian', path: ['freehold', 'veridian'], remaining: 1, status: 'active' }, currentSystem: 'freehold' } });
+  const unknownHide = unknown.kind === 'omit';
+
+  const phys = g85gate({ world: { currentSystem: 'freehold' } }, 'veridian');
+  const hub = g85gate({ world: { currentSystem: 'freehold' } }, 'fh_hearth');
+  const physPos = !!phys && phys.x === 0 && phys.y === 60 && phys.z === -900;
+  const hubPos = !!hub && hub.x === 120 && hub.y === 70 && hub.z === -820;
+
+  let marker = null;
+  ctx.scene.traverse((o) => { if (o.name === 'nav-gate-marker') marker = o; });
+  const markerRay = !!marker && marker.raycast === g85ray;
+  let ringRay = true;
+  if (marker) marker.traverse((o) => { if (o.raycast !== g85ray) ringRay = false; });
+  const notInShips = !ctx.ships.includes(marker);
+  const distAbbrev = g85dist(1500) === '1.5k' && g85dist(42) === '42u';
+
+  ctx.flags.docked = savedDockG;
+  ctx.gate.jumping = savedJumpG;
+  ctx.targets.current = savedTgtG;
+  ctx.world.currentSystem = savedSysG;
+  if (savedNavG === undefined) delete ctx.world.nav;
+  else ctx.world.nav = savedNavG;
+  tick(1, 'w85 guidance restore');
+
+  const w85g = {
+    readoutExists,
+    cap180,
+    hideDocked,
+    hideJumping,
+    noHopNeed,
+    nextFromPath1,
+    nextIsPath1,
+    destIsBag,
+    noInner,
+    noTgtWrite,
+    lockStay,
+    cueDistinct,
+    markerRay,
+    ringRay,
+    notInShips,
+    reducedStatic,
+    noRouteCopy,
+    noRouteLive,
+    stuffedHide,
+    unknownHide,
+    physPos,
+    hubPos,
+    noGuidanceEmit,
+    distAbbrev,
+    ariaSrc,
+    ariaLive,
+  };
+  console.log('wave85 nav guidance:', JSON.stringify(w85g));
+  if (!Object.values(w85g).every(Boolean)) { console.log('WAVE85 NAV GUIDANCE FAIL'); errors++; }
+}
+
+// ---- WAVE85 NAV-03 autopilot PR3–PR6 pins ----
+{
+  const hereA85 = dirname(fileURLToPath(import.meta.url));
+  const srcA85 = (rel) => readFileSync(join(hereA85, '..', rel), 'utf8');
+  const apSrc = srcA85('src/game/autopilot.js');
+  const shipSrc = srcA85('src/systems/ship.js');
+  const gateSrc = srcA85('src/systems/gate.js');
+  const npcSrc = srcA85('src/systems/npc.js');
+  const hudSrc = srcA85('src/systems/hud.js');
+  const chartSrc = srcA85('src/systems/galaxychart.js');
+  const cssSrc = srcA85('src/ui/hud.css');
+  const ctxSrc = srcA85('src/core/ctx.js');
+  const jumpSrc = srcA85('src/game/jump.js');
+  const {
+    tryEngage: a85Engage,
+    disengage: a85Disengage,
+    AP_STEER_BREAK,
+  } = await import('../src/game/autopilot.js');
+  const { applyAvoidBias: a85Avoid } = await import('../src/systems/npc.js');
+  const { plotRoute: a85Plot, sanitizeNav: a85San } = await import('../src/game/nav.js');
+
+  const jumpEmitSites = [apSrc, shipSrc, hudSrc, chartSrc, npcSrc]
+    .filter((s) => /emit\s*\(\s*['"]jumpRequested['"]/.test(s));
+  const jumpOnlyGate = /emit\s*\(\s*['"]jumpRequested['"]/.test(gateSrc)
+    && jumpEmitSites.length === 0
+    && /to:\s*near\.to/.test(gateSrc);
+
+  const predicate = gateSrc.includes('world.nav.autopilot')
+    && gateSrc.includes('wantJump')
+    && gateSrc.includes('near.to === nextHop');
+
+  const noInner = !hudSrc.includes('innerHTML') && !chartSrc.includes('innerHTML');
+  const noDigit = !apSrc.includes('Digit') && !chartSrc.includes('Digit0');
+  const noKeyM = !apSrc.includes('KeyM') && !apSrc.includes('KeyV');
+  const noTgt = !apSrc.includes('targets.current') && !shipSrc.includes('targets.current =');
+  const avoidExport = npcSrc.includes('export function applyAvoidBias')
+    && typeof a85Avoid === 'function'
+    && apSrc.includes('applyAvoidBias');
+  const steerBreak = apSrc.includes('AP_STEER_BREAK') && AP_STEER_BREAK === 0.65
+    && apSrc.includes('chartOpen');
+  const spaceGuard = apSrc.includes('e.preventDefault()')
+    && chartSrc.includes('guardAutopilotSpace')
+    && hudSrc.includes('guardAutopilotSpace')
+    && !chartSrc.includes('preventDefault(');
+  const chipCss = cssSrc.includes('#hud .rw-autopilot')
+    && cssSrc.includes('top: 14px')
+    && cssSrc.includes("left: 50%")
+    && hudSrc.includes('rw-autopilot');
+  const chargeStay = jumpSrc.includes('chargeTime') && !apSrc.includes('chargeTime');
+  const ctxNoLiteral = !ctxSrc.includes('ctx.autopilot');
+  const shipConsume = shipSrc.includes('ap.pitch') && shipSrc.includes('ap.yaw')
+    && shipSrc.includes('ap.throttle')
+    && !shipSrc.includes('input.throttle =');
+  const matchIgnore = shipSrc.includes('matchSpeedPressed && !apOn');
+
+  const savedNav = ctx.world.nav;
+  const savedMatch = ctx.flags.matchSpeed;
+  const savedThrottle = ctx.input.throttle;
+  const savedAp = ctx.world.nav && ctx.world.nav.autopilot;
+  const savedSys = ctx.world.currentSystem;
+  const savedPaused = ctx.flags.paused;
+  const lockSentinel = ctx.targets.current;
+
+  ctx.flags.paused = false;
+  ctx.flags.docked = false;
+  ctx.flags.combat = false;
+  ctx.world.currentSystem = 'freehold';
+
+  ctx.flags.matchSpeed = true;
+  ctx.input.throttle = 0.41;
+  a85Plot(ctx, 'veridian');
+  const matchTok = a85Engage(ctx);
+  const matchRefuse = matchTok === 'match'
+    && ctx.flags.matchSpeed === true
+    && ctx.input.throttle === 0.41
+    && ctx.world.nav
+    && ctx.world.nav.autopilot === false;
+
+  ctx.flags.matchSpeed = false;
+  ctx.flags.combat = false;
+  const okTok = a85Engage(ctx);
+  const engaged = okTok === '' && ctx.world.nav && ctx.world.nav.autopilot === true;
+  const destKeep = ctx.world.nav && ctx.world.nav.dest === 'veridian';
+  const apSys = (systems.find((s) => s[0] === 'autopilot') || [])[1];
+  ctx.input.strafeX = 1;
+  apSys.update(dt, ctx);
+  const wasdCancel = ctx.world.nav && ctx.world.nav.autopilot === false
+    && ctx.world.nav.dest === 'veridian';
+  ctx.input.strafeX = 0;
+
+  a85Engage(ctx);
+  ctx.flags.combat = false;
+  ctx.flags.chartOpen = true;
+  ctx.input.steerX = 1;
+  ctx.input.steerY = 0;
+  apSys.update(dt, ctx);
+  const chartNoBreak = ctx.world.nav && ctx.world.nav.autopilot === true;
+  ctx.flags.chartOpen = false;
+  apSys.update(dt, ctx);
+  const stillOn = ctx.world.nav && ctx.world.nav.autopilot === true;
+  ctx.input.steerX = 0;
+  apSys.update(dt, ctx);
+  ctx.input.steerX = 1;
+  apSys.update(dt, ctx);
+  const afterArm = ctx.world.nav && ctx.world.nav.autopilot === false
+    && ctx.world.nav.dest === 'veridian';
+  ctx.input.steerX = 0;
+
+  a85Engage(ctx);
+  ctx.world.currentSystem = 'veridian';
+  ctx.lastEvents = [{ type: 'systemLoaded', t: ctx.world.time, to: 'veridian' }];
+  tick(1, 'w85 ap arrive');
+  const arrived = ctx.world.nav && ctx.world.nav.autopilot === false;
+
+  const sanCtx = {
+    flags: { saveRestored: false },
+    systems: SYSTEMS,
+    world: {
+      currentSystem: 'freehold',
+      nav: {
+        dest: 'veridian', path: ['freehold', 'veridian'], remaining: 1, status: 'plotted', autopilot: true,
+      },
+    },
+    events: [],
+    emit() {},
+  };
+  a85San(sanCtx);
+  const stuffedFalse = !!(sanCtx.world.nav && sanCtx.world.nav.autopilot === false);
+
+  const jrBefore = ctx.events.filter((e) => e.type === 'jumpRequested').length;
+  ctx.gate.inZone = false;
+  ctx.autopilot.wantJump = true;
+  if (ctx.world.nav) ctx.world.nav.autopilot = true;
+  tick(1, 'w85 ap no zone jump');
+  const noJumpOut = ctx.lastEvents.every((e) => e.type !== 'jumpRequested');
+
+  const lockStay = ctx.targets.current === lockSentinel;
+  a85Disengage(ctx, 'cancel');
+  if (savedNav) ctx.world.nav = savedNav;
+  else delete ctx.world.nav;
+  ctx.flags.matchSpeed = savedMatch;
+  ctx.input.throttle = savedThrottle;
+  ctx.world.currentSystem = savedSys;
+  ctx.flags.paused = savedPaused;
+  if (ctx.world.nav && savedAp !== undefined) ctx.world.nav.autopilot = savedAp;
+
+  const w85ap = {
+    jumpOnlyGate,
+    predicate,
+    noInner,
+    noDigit,
+    noKeyM,
+    noTgt,
+    avoidExport,
+    steerBreak,
+    spaceGuard,
+    chipCss,
+    chargeStay,
+    ctxNoLiteral,
+    shipConsume,
+    matchIgnore,
+    matchRefuse,
+    engaged,
+    destKeep,
+    wasdCancel,
+    chartNoBreak,
+    stillOn,
+    afterArm,
+    arrived,
+    stuffedFalse,
+    noJumpOut,
+    lockStay,
+  };
+  console.log('wave85 nav autopilot:', JSON.stringify(w85ap));
+  if (!Object.values(w85ap).every(Boolean)) { console.log('WAVE85 NAV AUTOPILOT FAIL'); errors++; }
+}
+
+// ---- WAVE85 AP pathing: local hardware hops, live zone aim, gate-only jump ----
+{
+  const hereP85 = dirname(fileURLToPath(import.meta.url));
+  const srcP85 = (rel) => readFileSync(join(hereP85, '..', rel), 'utf8');
+  const {
+    canTransit: p85Transit,
+    plotRoute: p85Plot,
+    sanitizeNav: p85San,
+  } = await import('../src/game/nav.js');
+  const { lookupLiveNavGate: p85Live } = await import('../src/systems/gate.js');
+  const {
+    resolveAuthoredNavGate: p85Auth,
+    resolveNavGatePos: p85Pos,
+  } = await import('../src/systems/nav-guidance.js');
+  const { tryEngage: p85Engage } = await import('../src/game/autopilot.js');
+
+  const navP = srcP85('src/game/nav.js');
+  const gateP = srcP85('src/systems/gate.js');
+  const apP = srcP85('src/game/autopilot.js');
+  const guideP = srcP85('src/systems/nav-guidance.js');
+  const ctxP = srcP85('src/core/ctx.js');
+
+  const directedSrc = navP.includes('export function canTransit')
+    && navP.includes('pathEdgesOk')
+    && !navP.includes('undirected');
+  const cycleStop = gateP.includes('zoneHub.to !== nextHop')
+    && gateP.includes('near.to === nextHop');
+  const liveLookup = gateP.includes('export function lookupLiveNavGate')
+    && guideP.includes('lookupLiveNavGate')
+    && guideP.includes('resolveNavGatePos');
+  const noApJump = !/emit\s*\(\s*['"]jumpRequested['"]/.test(apP)
+    && /emit\s*\(\s*['"]jumpRequested['"]/.test(gateP);
+  const noCtxLit = !ctxP.includes('ctx.autopilot');
+  const noInnerP = !apP.includes('innerHTML') && !guideP.includes('innerHTML') && !navP.includes('innerHTML');
+
+  const localGate = p85Transit('freehold', 'veridian') === true;
+  const localHub = p85Transit('freehold', 'fh_hearth') === true;
+  const noPhantom = p85Transit('freehold', 'vd_survey') === false;
+  const backGate = p85Transit('fh_hearth', 'freehold') === true;
+  const noFakeTwoWay = p85Transit('fh_hearth', 'veridian') === false;
+
+  const plotCtx = {
+    flags: { saveRestored: false },
+    systems: SYSTEMS,
+    world: { currentSystem: 'freehold', time: 0 },
+    events: [],
+    emit(type, data = {}) {
+      this.events.push({ type, t: 0, ...(data && typeof data === 'object' ? data : {}) });
+    },
+  };
+  p85Plot(plotCtx, 'vd_survey');
+  const plotVia = plotCtx.world.nav
+    && plotCtx.world.nav.path[1] === 'veridian'
+    && plotCtx.world.nav.path[plotCtx.world.nav.path.length - 1] === 'vd_survey';
+  plotCtx.world.nav = {
+    dest: 'vd_survey', path: ['freehold', 'vd_survey'], remaining: 1, status: 'plotted', autopilot: true,
+  };
+  p85San(plotCtx);
+  const healPhantom = plotCtx.world.nav
+    && plotCtx.world.nav.autopilot === false
+    && plotCtx.world.nav.path[1] === 'veridian';
+
+  const authV = p85Auth({ world: { currentSystem: 'freehold' } }, 'veridian');
+  const authStay = !!authV && authV.x === 0 && authV.y === 60 && authV.z === -900;
+
+  const savedSysP = ctx.world.currentSystem;
+  const savedNavP = ctx.world.nav;
+  const savedDockP = ctx.flags.docked;
+  const savedJumpP = ctx.gate.jumping;
+  const savedCombatP = ctx.flags.combat;
+  const savedMatchP = ctx.flags.matchSpeed;
+  const savedPausedP = ctx.flags.paused;
+  const savedPosP = ctx.ship.object ? ctx.ship.object.position.clone() : null;
+  const savedApFlag = ctx.world.nav && ctx.world.nav.autopilot;
+
+  ctx.flags.paused = false;
+  ctx.flags.docked = false;
+  ctx.flags.combat = false;
+  ctx.flags.matchSpeed = false;
+  ctx.gate.jumping = false;
+  ctx.world.currentSystem = 'freehold';
+  ctx.lastEvents = [{ type: 'systemLoaded', t: ctx.world.time, to: 'freehold' }];
+  const gateSysP = (systems.find((s) => s[0] === 'gate') || [])[1];
+  const apSysP = (systems.find((s) => s[0] === 'autopilot') || [])[1];
+  if (gateSysP) gateSysP.update(dt, ctx);
+  ctx.lastEvents = [];
+
+  const liveV = p85Live('veridian');
+  const liveH = p85Live('fh_hearth');
+  const liveMatch = !!liveV && liveV.x === 0 && liveV.y === 60 && liveV.z === -900
+    && !!liveH && liveH.x === 120 && liveH.y === 70 && liveH.z === -820
+    && p85Live('vd_survey') == null;
+  const posUsesLive = !!p85Pos(ctx, 'veridian')
+    && p85Pos(ctx, 'veridian').z === liveV.z;
+
+  let zoneJump = false;
+  if (liveV && ctx.ship.object && gateSysP && apSysP) {
+    ctx.world.nav = undefined;
+    p85Plot(ctx, 'veridian');
+    ctx.ship.object.position.set(liveV.x, liveV.y, liveV.z);
+    const ok = p85Engage(ctx);
+    if (ok === '') {
+      for (let i = 0; i < 3; i++) {
+        gateSysP.update(dt, ctx);
+        apSysP.update(dt, ctx);
+        const hit = ctx.events.find((e) => e.type === 'jumpRequested')
+          || ctx.lastEvents.find((e) => e.type === 'jumpRequested');
+        ctx.lastEvents = ctx.events;
+        ctx.events = [];
+        if (hit && hit.to === 'veridian') {
+          zoneJump = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (savedPosP && ctx.ship.object) ctx.ship.object.position.copy(savedPosP);
+  ctx.world.currentSystem = savedSysP;
+  if (savedNavP) ctx.world.nav = savedNavP;
+  else delete ctx.world.nav;
+  if (ctx.world.nav && savedApFlag !== undefined) ctx.world.nav.autopilot = savedApFlag;
+  ctx.flags.docked = savedDockP;
+  ctx.gate.jumping = savedJumpP;
+  ctx.flags.combat = savedCombatP;
+  ctx.flags.matchSpeed = savedMatchP;
+  ctx.flags.paused = savedPausedP;
+  ctx.autopilot.wantJump = false;
+  ctx.autopilot.cycleHub = false;
+  ctx.autopilot.engaged = false;
+  ctx.autopilot.yaw = 0;
+  ctx.autopilot.pitch = 0;
+  ctx.autopilot.throttle = 0;
+
+  const w85path = {
+    directedSrc,
+    cycleStop,
+    liveLookup,
+    noApJump,
+    noCtxLit,
+    noInnerP,
+    localGate,
+    localHub,
+    noPhantom,
+    backGate,
+    noFakeTwoWay,
+    plotVia,
+    healPhantom,
+    authStay,
+    liveMatch,
+    posUsesLive,
+    zoneJump,
+  };
+  console.log('wave85 nav ap path:', JSON.stringify(w85path));
+  if (!Object.values(w85path).every(Boolean)) { console.log('WAVE85 NAV AP PATH FAIL'); errors++; }
+}
+
+// ---- WAVE88 AP geometric pathing: sun detour + no-orbit lead-out ----
+{
+  const { JUMP: j88 } = await import('../src/game/state.js');
+  const {
+    planApPath,
+    throttleForPath,
+    effectiveTurnRadius,
+    sphereChordHit,
+    AP_KEEP_PAD,
+  } = await import('../src/game/ap-path.js');
+  const { tryEngage: e88, disengage: d88 } = await import('../src/game/autopilot.js');
+  const { plotRoute: plot88 } = await import('../src/game/nav.js');
+  const here88 = dirname(fileURLToPath(import.meta.url));
+  const ap88src = readFileSync(join(here88, '..', 'src/game/autopilot.js'), 'utf8');
+  const path88src = readFileSync(join(here88, '..', 'src/game/ap-path.js'), 'utf8');
+
+  const heatR = 60 * PHY.SUN_HEAT_MULT;
+  const sunBodies = {
+    count: 1,
+    items: [{ kind: 'sun', x: 0, y: 0, z: 0, r: heatR, y0: 0, y1: 0, id: 0 }],
+  };
+  const sunPlan = planApPath({
+    px: 0, py: 30, pz: 800,
+    gx: 0, gy: 60, gz: -900,
+    hx: 0, hy: 0, hz: -1,
+    bodies: sunBodies,
+    shipR: PHY.PLAYER_RADIUS,
+    classKey: 'light',
+    speed: 80,
+    zone: j88.zone,
+    sideHint: 0,
+  });
+  const sunAimD = Math.hypot(sunPlan.ax, sunPlan.ay, sunPlan.az);
+  const keepSun = heatR + PHY.PLAYER_RADIUS + AP_KEEP_PAD;
+  const sunChord = sphereChordHit(
+    0, 30, 800, sunPlan.ax, sunPlan.ay, sunPlan.az, 0, 0, 0, keepSun,
+  );
+  const chordThroughSun = sunPlan.ok && sunPlan.hold === 'detour'
+    && !sunChord.hit && !sunChord.inside
+    && sunAimD > heatR;
+
+  const nanPlan = planApPath({
+    px: Number.NaN, py: 0, pz: 0,
+    gx: 1, gy: 0, gz: 0,
+    hx: 0, hy: 0, hz: -1,
+    bodies: sunBodies,
+    classKey: 'light',
+    speed: 10,
+    zone: j88.zone,
+  });
+  const nanFailClosed = nanPlan.ok === false && nanPlan.hold === 'none';
+
+  const frR = effectiveTurnRadius('frigate', 40);
+  const closePlan = planApPath({
+    px: 80, py: 0, pz: 0,
+    gx: 0, gy: 0, gz: 0,
+    hx: 0, hy: 0, hz: -1,
+    bodies: { count: 0, items: [] },
+    shipR: PHY.PLAYER_RADIUS,
+    classKey: 'frigate',
+    speed: 40,
+    zone: j88.zone,
+    sideHint: 0,
+  });
+  const closeDistAim = Math.hypot(closePlan.ax - 80, closePlan.ay, closePlan.az);
+  const closeDistGate = 80;
+  const thClose = throttleForPath(
+    closePlan.hold, closePlan.intercept, 0, closePlan.distGate, closePlan.turnR,
+  );
+  const noOrbitMath = closePlan.ok
+    && frR > 200
+    && closePlan.hold === 'widen'
+    && thClose <= 0.02
+    && (closeDistAim > closeDistGate - 1e-6);
+
+  const alignedFar = planApPath({
+    px: 0, py: 0, pz: 800,
+    gx: 0, gy: 0, gz: -900,
+    hx: 0, hy: 0, hz: -1,
+    bodies: { count: 0, items: [] },
+    classKey: 'light',
+    speed: 80,
+    zone: j88.zone,
+  });
+  const resumeGate = alignedFar.ok && alignedFar.hold === 'none'
+    && alignedFar.ax === 0 && alignedFar.az === -900;
+
+  const wired = ap88src.includes('planApPath') && ap88src.includes('throttleForPath')
+    && ap88src.includes('applyAvoidBias') && path88src.includes('effectiveTurnRadius')
+    && path88src.includes('turnRateFor') && !ap88src.includes('TURN_MIN_RADIUS =')
+    && !/emit\s*\(\s*['"]jumpRequested['"]/.test(ap88src)
+    && !ap88src.includes('input.throttle =');
+
+  const savedSys88 = ctx.world.currentSystem;
+  const savedNav88 = ctx.world.nav;
+  const savedAp88 = ctx.world.nav && ctx.world.nav.autopilot;
+  const savedPos88 = ctx.ship.object ? ctx.ship.object.position.clone() : null;
+  const savedQuat88 = ctx.ship.object ? ctx.ship.object.quaternion.clone() : null;
+  const savedSpeed88 = ctx.ship.speed;
+  const savedClass88 = ctx.player && ctx.player.classKey;
+  const savedDock88 = ctx.flags.docked;
+  const savedMatch88 = ctx.flags.matchSpeed;
+  const savedCombat88 = ctx.flags.combat;
+  const savedPaused88 = ctx.flags.paused;
+  const savedJump88 = ctx.gate.jumping;
+  const savedZone88 = ctx.gate.inZone;
+  const savedNear88 = ctx.gate.nearTo;
+
+  ctx.flags.paused = false;
+  ctx.flags.docked = false;
+  ctx.flags.combat = false;
+  ctx.flags.matchSpeed = false;
+  ctx.gate.jumping = false;
+  ctx.gate.inZone = false;
+  ctx.gate.nearTo = null;
+  ctx.world.currentSystem = 'freehold';
+  if (ctx.player) ctx.player.classKey = 'light';
+  ctx.ship.speed = 30;
+  const apSys88 = (systems.find((s) => s[0] === 'autopilot') || [])[1];
+  let noOrbitCmd = false;
+  let wantJumpStay = false;
+  if (ctx.ship.object && apSys88) {
+    ctx.world.nav = undefined;
+    plot88(ctx, 'veridian');
+    ctx.ship.object.position.set(80, 60, -900);
+    ctx.ship.object.quaternion.identity();
+    const tok = e88(ctx);
+    if (tok === '') {
+      apSys88.update(dt, ctx);
+      const ch = ctx.autopilot;
+      noOrbitCmd = ch.throttle <= 0.02 && Math.abs(ch.yaw) >= 0.9
+        && ch.wantJump === false;
+      wantJumpStay = ch.wantJump === false;
+    }
+    d88(ctx, 'cancel');
+  }
+
+  if (savedPos88 && ctx.ship.object) ctx.ship.object.position.copy(savedPos88);
+  if (savedQuat88 && ctx.ship.object) ctx.ship.object.quaternion.copy(savedQuat88);
+  ctx.ship.speed = savedSpeed88;
+  if (ctx.player && savedClass88 !== undefined) ctx.player.classKey = savedClass88;
+  ctx.world.currentSystem = savedSys88;
+  if (savedNav88) ctx.world.nav = savedNav88;
+  else delete ctx.world.nav;
+  if (ctx.world.nav && savedAp88 !== undefined) ctx.world.nav.autopilot = savedAp88;
+  ctx.flags.docked = savedDock88;
+  ctx.flags.matchSpeed = savedMatch88;
+  ctx.flags.combat = savedCombat88;
+  ctx.flags.paused = savedPaused88;
+  ctx.gate.jumping = savedJump88;
+  ctx.gate.inZone = savedZone88;
+  ctx.gate.nearTo = savedNear88;
+  ctx.autopilot.wantJump = false;
+  ctx.autopilot.cycleHub = false;
+  ctx.autopilot.engaged = false;
+  ctx.autopilot.yaw = 0;
+  ctx.autopilot.pitch = 0;
+  ctx.autopilot.throttle = 0;
+
+  const w88ap = {
+    chordThroughSun,
+    nanFailClosed,
+    noOrbitMath,
+    resumeGate,
+    wired,
+    noOrbitCmd,
+    wantJumpStay,
+  };
+  console.log('wave88 ap path:', JSON.stringify(w88ap));
+  if (!Object.values(w88ap).every(Boolean)) { console.log('WAVE88 AP PATH FAIL'); errors++; }
+}
+
+// ---- WAVE92: BIO-01 remaining obtain (Sworn gift + pirate seed) ----
+{
+  const {
+    grantLivingSeedRow,
+    sanitizeHangar,
+    sanitizeHangarRecord,
+    HANGAR_CAP,
+  } = await import('../src/game/hangar.js');
+  const {
+    grantSwornGift,
+    maybeGrantPirateSeed,
+    giftNoticeFor,
+    isSwornGiftVisible,
+    PIRATE_SEED_DROP_RATE,
+    GIFT_HULL_ID,
+    GIFT_ARM_LINE,
+    GIFT_OK_LINE,
+    GIFT_FULL_LINE,
+    GIFT_ALREADY_LINE,
+    GIFT_NO_LINE,
+    PIRATE_OK_LINE,
+  } = await import('../src/game/bio-seed.js');
+  const { WORLD_FIELDS: w92Fields } = await import('../src/game/save.js');
+  const { DOCK_KEY_SERVICES: w92Keys } = await import('../src/systems/station.js');
+  const { createShipState: w92Ship } = await import('../src/game/state.js');
+  const { DATA_DROP_RATE: w92DataRate } = await import('../src/game/data-trade.js');
+  const here92 = dirname(fileURLToPath(import.meta.url));
+  const src92 = (rel) => readFileSync(join(here92, '..', rel), 'utf8');
+  const hud92src = src92('src/systems/hud.js');
+  const bio92src = src92('src/game/bio-seed.js');
+  const hangar92src = src92('src/game/hangar.js');
+  const station92src = src92('src/systems/station.js');
+  const npc92src = src92('src/systems/npc.js');
+  const state92src = src92('src/game/state.js');
+
+  function w92SeedCtx(faction, extra = {}) {
+    const player = extra.player ?? w92Ship('light', { name: 'Wave92Pin' });
+    player.hullKind = extra.hullKind ?? 'living';
+    const systemId = extra.systemId ?? 'w92_dock';
+    const hulls = extra.hulls ?? [{
+      id: 'hull_starter',
+      hullKind: 'living',
+      classKey: 'light',
+      faction: 'independent',
+      name: 'She',
+    }];
+    const lines = [];
+    return {
+      flags: { docked: extra.docked !== false, combat: false, paused: false, ...(extra.flags ?? {}) },
+      world: {
+        currentSystem: systemId,
+        credits: extra.credits ?? 12000,
+        reputation: extra.reputation ?? { [faction]: extra.rep ?? 50 },
+        hangar: extra.hangar ?? { mountedId: hulls[0].id, hulls },
+      },
+      systems: extra.systems ?? { [systemId]: { faction } },
+      cargo: extra.cargo ?? [],
+      cargoCapacity: extra.cargoCapacity ?? 20,
+      player,
+      ship: extra.ship ?? {
+        object: { position: { toArray: () => [0, 0, 0] }, quaternion: { toArray: () => [0, 0, 0, 1] } },
+      },
+      emit(type, payload) { if (type === 'commLine') lines.push(payload); },
+      lines,
+      ships: [],
+      gate: extra.gate ?? { jumping: false },
+    };
+  }
+
+  function fillHangar(n) {
+    const hulls = [];
+    for (let i = 0; i < n; i++) {
+      hulls.push({
+        id: i === 0 ? 'hull_starter' : `hull_fill_${i}`,
+        hullKind: 'living',
+        classKey: 'light',
+        faction: 'independent',
+        name: 'Fill',
+      });
+    }
+    return hulls;
+  }
+
+  const giftCtx = w92SeedCtx('beautiful', { rep: 50 });
+  const giftMounted = giftCtx.world.hangar.mountedId;
+  const giftLen = giftCtx.world.hangar.hulls.length;
+  const giftKind = giftCtx.player.hullKind;
+  const giftCredits = giftCtx.world.credits;
+  const giftRes = grantSwornGift(giftCtx);
+  const giftRow = giftCtx.world.hangar.hulls.find((h) => h.id === GIFT_HULL_ID);
+  const giftOk = {
+    ok: giftRes.ok === true,
+    notice: giftNoticeFor(giftRes) === GIFT_OK_LINE,
+    id: giftRow?.id === 'hull_seed_gift',
+    living: giftRow?.hullKind === 'living',
+    classKey: giftRow?.classKey === 'light',
+    faction: giftRow?.faction === 'beautiful',
+    noGraft: giftRow ? !Object.prototype.hasOwnProperty.call(giftRow, 'grafted') : false,
+    hullPlus: giftCtx.world.hangar.hulls.length === giftLen + 1,
+    mountedSame: giftCtx.world.hangar.mountedId === giftMounted,
+    kindSame: giftCtx.player.hullKind === giftKind,
+    price0: giftCtx.world.credits === giftCredits,
+  };
+
+  const alreadyRes = grantSwornGift(giftCtx);
+  const alreadyOk = alreadyRes.ok === false
+    && alreadyRes.reason === 'already'
+    && giftNoticeFor(alreadyRes) === GIFT_ALREADY_LINE
+    && giftCtx.world.hangar.hulls.filter((h) => h.id === GIFT_HULL_ID).length === 1;
+
+  const fullGift = w92SeedCtx('beautiful', { rep: 50, hulls: fillHangar(HANGAR_CAP) });
+  const fullGiftIds = fullGift.world.hangar.hulls.map((h) => h.id).join(',');
+  const fullGiftRes = grantSwornGift(fullGift);
+  const fullGiftOk = fullGiftRes.ok === false
+    && fullGiftRes.reason === 'full'
+    && giftNoticeFor(fullGiftRes) === GIFT_FULL_LINE
+    && fullGift.world.hangar.hulls.length === HANGAR_CAP
+    && fullGift.world.hangar.hulls.map((h) => h.id).join(',') === fullGiftIds;
+
+  const lowCtx = w92SeedCtx('beautiful', { rep: 49 });
+  const lowRank = grantSwornGift(lowCtx);
+  const freeCtx = w92SeedCtx('freehold', { rep: 80 });
+  const freehold = grantSwornGift(freeCtx);
+  const hostCtx = w92SeedCtx('beautiful', { rep: -1 });
+  const hostile = grantSwornGift(hostCtx);
+  const undockCtx = w92SeedCtx('beautiful', { rep: 50, docked: false });
+  const undocked = grantSwornGift(undockCtx);
+  const rankOk = lowRank.ok === false && giftNoticeFor(lowRank) === GIFT_NO_LINE
+    && freehold.ok === false && giftNoticeFor(freehold) === GIFT_NO_LINE
+    && hostile.ok === false && giftNoticeFor(hostile) === GIFT_NO_LINE
+    && undocked.ok === false && giftNoticeFor(undocked) === GIFT_NO_LINE
+    && lowRank.reason === 'denied'
+    && !lowCtx.world.hangar.hulls.some((h) => h.id === GIFT_HULL_ID)
+    && !freeCtx.world.hangar.hulls.some((h) => h.id === GIFT_HULL_ID)
+    && !hostCtx.world.hangar.hulls.some((h) => h.id === GIFT_HULL_ID)
+    && !undockCtx.world.hangar.hulls.some((h) => h.id === GIFT_HULL_ID);
+
+  const pirateLive = () => ({
+    record: { faction: 'beautiful' },
+    state: { faction: 'beautiful', cargo: [] },
+    ai: { lastAttacker: 'player' },
+    role: 'trader',
+  });
+  const pirateCtx = w92SeedCtx('beautiful', { docked: false, hulls: fillHangar(1) });
+  pirateCtx.flags.docked = false;
+  const pirateMounted = pirateCtx.world.hangar.mountedId;
+  const pirateKind = pirateCtx.player.hullKind;
+  const pirateCargo = pirateCtx.cargo.length;
+  const pirateRes = maybeGrantPirateSeed(pirateCtx, pirateLive(), { rng: () => 0 });
+  const pirateRow = pirateCtx.world.hangar.hulls.find((h) => typeof h.id === 'string'
+    && h.id.indexOf('hull_seed_pirate_') === 0);
+  const pirateOk = pirateRes.ok === true
+    && pirateRow?.hullKind === 'living'
+    && pirateRow?.classKey === 'light'
+    && pirateRow?.faction === 'beautiful'
+    && pirateRow?.id !== GIFT_HULL_ID
+    && !Object.prototype.hasOwnProperty.call(pirateRow, 'grafted')
+    && pirateCtx.world.hangar.mountedId === pirateMounted
+    && pirateCtx.player.hullKind === pirateKind
+    && pirateCtx.cargo.length === pirateCargo
+    && pirateCtx.lines.some((p) => p && p.text === PIRATE_OK_LINE && p.from === 'echo');
+
+  const missCtx = w92SeedCtx('beautiful', { hulls: fillHangar(1) });
+  const missLen = missCtx.world.hangar.hulls.length;
+  const missRes = maybeGrantPirateSeed(missCtx, pirateLive(), { rng: () => 1 });
+  const missOk = missRes.ok === false && missRes.reason === 'silent'
+    && missCtx.world.hangar.hulls.length === missLen
+    && missCtx.lines.length === 0;
+
+  const npcAtk = w92SeedCtx('beautiful', { hulls: fillHangar(1) });
+  const npcLive = pirateLive();
+  npcLive.ai.lastAttacker = 'npc';
+  const npcRes = maybeGrantPirateSeed(npcAtk, npcLive, { rng: () => 0 });
+  const npcOk = npcRes.ok === false && npcAtk.world.hangar.hulls.length === 1 && npcAtk.lines.length === 0;
+
+  const fullPirate = w92SeedCtx('beautiful', { hulls: fillHangar(HANGAR_CAP) });
+  const fullPirateIds = fullPirate.world.hangar.hulls.map((h) => h.id).join(',');
+  const fullPirateCargo = JSON.stringify(fullPirate.cargo);
+  const fullPirateRes = maybeGrantPirateSeed(fullPirate, pirateLive(), { rng: () => 0 });
+  const fullPirateOk = fullPirateRes.ok === false
+    && fullPirateRes.reason === 'full'
+    && fullPirate.world.hangar.hulls.length === HANGAR_CAP
+    && fullPirate.world.hangar.hulls.map((h) => h.id).join(',') === fullPirateIds
+    && JSON.stringify(fullPirate.cargo) === fullPirateCargo
+    && fullPirate.lines.some((p) => p && p.text === GIFT_FULL_LINE);
+
+  const protoRow = grantLivingSeedRow(w92SeedCtx('beautiful'), { id: '__proto__' });
+  const protoOk = protoRow.ok === false;
+
+  const srcPins = {
+    rate: PIRATE_SEED_DROP_RATE === 0.05 && w92DataRate === 0.20
+      && !bio92src.includes('DATA_DROP_RATE'),
+    noInnerHtml: !/innerHTML/.test(bio92src) && !/innerHTML/.test(hangar92src)
+      && station92src.includes('node.textContent = text'),
+    hudNoWrite: !/player\.hullKind\s*=/.test(hud92src),
+    bioNoWriteKind: !/player\.hullKind\s*=/.test(bio92src),
+    noNewWorldField: !w92Fields.includes('seed') && !w92Fields.includes('gift')
+      && !w92Fields.includes('pirateSeed') && w92Fields.includes('hangar'),
+    noStateSku: !/COMMODITIES[\s\S]{0,400}seed/.test(state92src),
+    digit0: w92Keys[w92Keys.length - 1] === 'shipyard' && w92Keys.length === 10,
+    npcHook: npc92src.includes('maybeGrantPirateSeed') && npc92src.includes("lastAttackerOf(live) === 'player'"),
+    armCopy: station92src.includes(GIFT_ARM_LINE),
+    visibleGate: typeof isSwornGiftVisible === 'function',
+  };
+
+  const graftedHeal = sanitizeHangarRecord({
+    id: GIFT_HULL_ID,
+    hullKind: 'living',
+    grafted: true,
+    classKey: 'light',
+    faction: 'beautiful',
+  });
+  const graftDrop = graftedHeal?.hullKind === 'living'
+    && !Object.prototype.hasOwnProperty.call(graftedHeal, 'grafted');
+
+  function overlayTexts92() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas92(frag) {
+    return overlayTexts92().some((t) => t.includes(frag));
+  }
+  function findOverlayButton92(label) {
+    const ov = stationOverlay();
+    if (!ov) return null;
+    for (const n of walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && n.textContent === label) return n;
+    }
+    return null;
+  }
+
+  const hangarKeep92 = JSON.parse(JSON.stringify(ctx.world.hangar ?? null));
+  const repKeep92 = { ...(ctx.world.reputation ?? {}) };
+  const creditsKeep92 = ctx.world.credits;
+  const kindKeep92 = ctx.player.hullKind;
+  const prevSys92 = ctx.world.currentSystem;
+  const prevDock92 = ctx.flags.docked;
+
+  let digit0Shipyard = false;
+  let giftDeskArm = false;
+  let giftDeskOk = false;
+  let giftEscNoWrite = false;
+  let giftDigit1Arm = false;
+
+  const reachedCradle = travelTo('bt_cradle', 'wave92');
+  const cradleFac = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  if (reachedCradle && cradleFac === 'beautiful') {
+    if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+    ctx.world.reputation.beautiful = 50;
+    sanitizeHangar(ctx);
+    const beforeIds = (ctx.world.hangar?.hulls ?? []).map((h) => h.id);
+    if (ctx.flags.docked) undockStation();
+    dockAtCurrentStation('wave92 dock cradle');
+    dispatchKey('Escape');
+    tick(1, 'wave92 menu');
+    digit0Shipyard = overlayHas92('0 — Shipyard');
+    dispatchKey('Digit0');
+    tick(2, 'wave92 digit0');
+    digit0Shipyard = digit0Shipyard && overlayHas92('SHIPYARD');
+    dispatchKey('Escape');
+    tick(1, 'wave92 back menu');
+    dispatchKey('Digit7');
+    tick(2, 'wave92 people');
+    giftDigit1Arm = overlayHas92('1 — Papers') || overlayHas92(GIFT_ARM_LINE);
+    dispatchKey('Digit1');
+    tick(1, 'wave92 digit1 arm');
+    giftDeskArm = overlayHas92('Confirm papers') && overlayHas92(GIFT_ARM_LINE);
+    const armedLen = ctx.world.hangar?.hulls?.length ?? 0;
+    dispatchKey('Escape');
+    tick(1, 'wave92 esc gift');
+    giftEscNoWrite = !overlayHas92('Confirm papers')
+      && (ctx.world.hangar?.hulls?.length ?? 0) === armedLen
+      && !(ctx.world.hangar?.hulls ?? []).some((h) => h.id === GIFT_HULL_ID && !beforeIds.includes(GIFT_HULL_ID));
+    const papers = findOverlayButton92('1 — Papers');
+    if (papers) papers.click();
+    tick(1, 'wave92 papers click');
+    const confirm = findOverlayButton92('Confirm papers');
+    if (confirm) confirm.click();
+    tick(2, 'wave92 confirm gift');
+    const afterRow = (ctx.world.hangar?.hulls ?? []).find((h) => h.id === GIFT_HULL_ID);
+    giftDeskOk = !!afterRow && afterRow.hullKind === 'living'
+      && overlayHas92(GIFT_OK_LINE);
+  }
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.hangar = hangarKeep92;
+  ctx.world.credits = creditsKeep92;
+  ctx.world.reputation = { ...(ctx.world.reputation ?? {}), ...repKeep92 };
+  ctx.player.hullKind = kindKeep92;
+  sanitizeHangar(ctx);
+  if (prevSys92 && prevSys92 !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys92;
+    ctx.emit('systemLoaded', { to: prevSys92 });
+    tick(2, 'wave92 restore sys');
+  }
+  if (prevDock92) dockAtCurrentStation('wave92 restore dock');
+
+  const w92 = {
+    giftOk: Object.values(giftOk).every(Boolean),
+    alreadyOk,
+    fullGiftOk,
+    rankOk,
+    pirateOk,
+    missOk,
+    npcOk,
+    fullPirateOk,
+    protoOk,
+    graftDrop,
+    ...srcPins,
+    digit0Shipyard,
+    giftDeskArm,
+    giftDeskOk,
+    giftEscNoWrite,
+    giftDigit1Arm,
+    reachedCradle,
+  };
+  console.log('wave92 bio01:', JSON.stringify(w92));
+  if (!Object.values(w92).every(Boolean)) { console.log('WAVE92 BIO-01 FAIL'); errors++; }
+}
+
+// ---- WAVE92: BIO-02 class-ladder train (Beautiful Hangar papers) ----
+{
+  const {
+    nextTrainClass,
+    trainMounted,
+    sanitizeHangar,
+    grantLivingSeedRow,
+  } = await import('../src/game/hangar.js');
+  const { livingTrainDest, livingTrainDests, trainListPrice, yardPrice } = await import('../src/game/shipyard.js');
+  const {
+    cancelTrainPending,
+    TRAIN_OK_LINE,
+    TRAIN_CARGO_NOTE,
+    TRAIN_HEAVY_NOTE,
+  } = await import('../src/systems/shipyard-desk.js');
+  const { WORLD_FIELDS: w92bFields } = await import('../src/game/save.js');
+  const { DOCK_KEY_SERVICES: w92bKeys } = await import('../src/systems/station.js');
+  const { createShipState: w92bShip, SHIP_CLASSES: w92bClasses } = await import('../src/game/state.js');
+  const { GIFT_ARM_LINE: w92bGiftArm } = await import('../src/game/bio-seed.js');
+  const here92b = dirname(fileURLToPath(import.meta.url));
+  const src92b = (rel) => readFileSync(join(here92b, '..', rel), 'utf8');
+  const hangar92b = src92b('src/game/hangar.js');
+  const desk92b = src92b('src/systems/shipyard-desk.js');
+  const station92b = src92b('src/systems/station.js');
+  const shipyard92b = src92b('src/game/shipyard.js');
+  const hud92b = src92b('src/systems/hud.js');
+  const bio92b = src92b('src/game/bio.js');
+  const combat92b = src92b('src/systems/combat.js');
+
+  function w92bCtx(extra = {}) {
+    const classKey = extra.classKey ?? 'light';
+    const player = w92bShip(classKey, { name: 'Wave92b', faction: extra.rowFaction ?? 'independent' });
+    player.hullKind = extra.hullKind ?? 'living';
+    player.classKey = classKey;
+    const hulls = extra.hulls ?? [{
+      id: 'hull_starter',
+      hullKind: extra.hullKind ?? 'living',
+      classKey,
+      faction: extra.rowFaction ?? 'independent',
+      name: 'She',
+      cargoCapacity: 30,
+      cargo: [{ commodity: 'rawOre', units: 4 }],
+      grafted: extra.grafted,
+    }];
+    return {
+      flags: { docked: extra.docked !== false, combat: false, paused: false },
+      gate: { jumping: false },
+      world: {
+        currentSystem: 'w92b',
+        credits: extra.credits ?? 50000,
+        reputation: extra.reputation ?? { beautiful: extra.rep ?? 50 },
+        hangar: { mountedId: hulls[0].id, hulls },
+      },
+      systems: { w92b: { faction: extra.faction ?? 'beautiful' } },
+      cargo: [{ commodity: 'rawOre', units: 4 }],
+      cargoCapacity: 30,
+      player,
+      bio: { growth: extra.growth ?? 1 },
+      config: {
+        ship: {
+          maxSpeed: 120,
+          creep: 30,
+          acceleration: 90,
+          damping: 0.5,
+          afterburner: { multiplier: 2, burnTime: 6, cooldown: 8 },
+        },
+      },
+      emit() {},
+    };
+  }
+
+  const happy = w92bCtx();
+  const mountedKeep = happy.world.hangar.mountedId;
+  const price50 = trainListPrice(50, 'heavy');
+  const happyRes = trainMounted(happy, 'heavy');
+  const happyRow = happy.world.hangar.hulls.find((h) => h.id === mountedKeep);
+  const helperOk = happyRes.ok === true
+    && happyRow?.classKey === 'heavy'
+    && happyRow?.hullKind === 'living'
+    && happy.player.classKey === 'heavy'
+    && happy.world.hangar.mountedId === mountedKeep
+    && happy.cargo.some((c) => c.commodity === 'rawOre' && c.units === 4)
+    && happy.config.ship.maxSpeed === w92bClasses.heavy.cruise
+    && happy.config.ship.afterburner.multiplier === w92bClasses.heavy.burn / w92bClasses.heavy.cruise
+    && happy.world.credits === 50000 - price50
+    && happy.world.reputation.beautiful === 50
+    && happy.bio.growth === 1
+    && price50 === yardPrice('heavy', 50)
+    && typeof grantLivingSeedRow === 'function';
+
+  const growthCtx = w92bCtx({ growth: 1 });
+  const growthOk = growthCtx.bio.growth === 1
+    && growthCtx.player.classKey === 'light'
+    && nextTrainClass('light') === 'cutter'
+    && livingTrainDests('frigate').includes('light')
+    && livingTrainDest('frigate') === 'light';
+
+  const hostRes = trainMounted(w92bCtx({ rep: -1 }), 'heavy');
+  const shortRes = trainMounted(w92bCtx({ credits: 2 }), 'heavy');
+  const unkRes = trainMounted(w92bCtx({ rowFaction: 'unknowables' }), 'heavy');
+  const graftRes = trainMounted(w92bCtx({ hullKind: 'built', grafted: true }), 'heavy');
+  const frigRes = trainMounted(w92bCtx({ classKey: 'frigate' }), 'frigate');
+  const refuseOk = hostRes.reason === 'reputation'
+    && shortRes.reason === 'credits' && shortRes.ok === false
+    && unkRes.reason === 'faction'
+    && graftRes.reason === 'living'
+    && frigRes.reason === 'class'
+    && nextTrainClass('__proto__') == null;
+
+  const uiPend = { trainPending: { fromClass: 'light', destClass: 'heavy', mountedId: 'hull_starter' }, notice: 'x' };
+  const cancelOk = cancelTrainPending(uiPend) === true && uiPend.trainPending == null;
+
+  const srcOk = {
+    noInner: !/innerHTML/.test(hangar92b) && !/innerHTML/.test(desk92b)
+      && station92b.includes('node.textContent = text'),
+    noField: !w92bFields.includes('train') && w92bFields.includes('hangar'),
+    digit0: w92bKeys[w92bKeys.length - 1] === 'shipyard' && w92bKeys.length === 10,
+    growthSrc: !/classKey/.test(bio92b),
+    hudRead: /hullKind/.test(hud92b) && !/player\.hullKind\s*=/.test(hud92b),
+    ungated: !/trainMounted/.test(combat92b),
+    giftKeep: hangar92b.includes('export function grantLivingSeedRow')
+      && station92b.includes('giftPending')
+      && station92b.includes('maybeGrantPirateSeed') === false
+      && hangar92b.includes('spec.stem'),
+    deskCopy: desk92b.includes(TRAIN_OK_LINE) && desk92b.includes(TRAIN_CARGO_NOTE)
+      && desk92b.includes(TRAIN_HEAVY_NOTE) && desk92b.includes('No sale.')
+      && desk92b.includes('Train hull'),
+    cancelSites: station92b.includes('cancelTrainPending')
+      && (station92b.match(/ui\.trainPending = null/g) || []).length >= 5,
+    stock: shipyard92b.includes("export const LIVING_STOCK = Object.freeze(['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate'])"),
+    noSwitch: !/switchTo\(/.test(hangar92b.slice(
+      hangar92b.indexOf('export function trainMounted'),
+      hangar92b.indexOf('export function grantLivingSeedRow'),
+    )),
+  };
+
+  function overlayTexts92b() {
+    return [...walkDom(stationOverlay() ?? { children: [] })]
+      .map((n) => n.textContent)
+      .filter((t) => typeof t === 'string');
+  }
+  function overlayHas92b(frag) {
+    return overlayTexts92b().some((t) => t.includes(frag));
+  }
+  function findOverlayButton92b(label) {
+    const ov = stationOverlay();
+    if (!ov) return null;
+    for (const n of walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && n.textContent === label) return n;
+    }
+    return null;
+  }
+
+  const hangarKeep92b = JSON.parse(JSON.stringify(ctx.world.hangar ?? null));
+  const repKeep92b = { ...(ctx.world.reputation ?? {}) };
+  const creditsKeep92b = ctx.world.credits;
+  const kindKeep92b = ctx.player.hullKind;
+  const classKeep92b = ctx.player.classKey;
+  const bioKeep92b = ctx.bio ? { ...ctx.bio } : null;
+  const prevSys92b = ctx.world.currentSystem;
+  const prevDock92b = ctx.flags.docked;
+  const cargoKeep92b = Array.isArray(ctx.cargo) ? ctx.cargo.map((r) => ({ ...r })) : [];
+  const capKeep92b = ctx.cargoCapacity;
+  const cfgKeep92b = ctx.config?.ship
+    ? {
+        maxSpeed: ctx.config.ship.maxSpeed,
+        creep: ctx.config.ship.creep,
+        acceleration: ctx.config.ship.acceleration,
+        damping: ctx.config.ship.damping,
+        afterburner: ctx.config.ship.afterburner ? { ...ctx.config.ship.afterburner } : null,
+      }
+    : null;
+
+  let digit0ShipyardB = false;
+  let trainOffer = false;
+  let trainHostile = false;
+  let trainShort = false;
+  let trainConfirm = false;
+  let trainMesh = false;
+  let giftStill = false;
+  let hudFamily = false;
+
+  const reachedCradleB = travelTo('bt_cradle', 'wave92b');
+  const cradleFacB = ctx.systems?.[ctx.world.currentSystem]?.faction;
+  if (reachedCradleB && cradleFacB === 'beautiful') {
+    if (!ctx.world.reputation || typeof ctx.world.reputation !== 'object') ctx.world.reputation = {};
+    ctx.world.reputation.beautiful = 50;
+    ctx.world.credits = 50000;
+    ctx.player.hullKind = 'living';
+    ctx.player.classKey = 'light';
+    ctx.player.faction = 'independent';
+    if (ctx.bio) ctx.bio.growth = 1;
+    sanitizeHangar(ctx);
+    const liveRow = (ctx.world.hangar?.hulls ?? []).find((h) => h.id === ctx.world.hangar.mountedId);
+    if (liveRow) {
+      liveRow.classKey = 'light';
+      liveRow.hullKind = 'living';
+      delete liveRow.grafted;
+    }
+    ctx.cargo = [{ commodity: 'rawOre', units: 3 }];
+    ctx.cargoCapacity = 30;
+    if (ctx.flags.docked) undockStation();
+    dockAtCurrentStation('wave92b dock cradle');
+    dispatchKey('Escape');
+    tick(1, 'wave92b menu');
+    digit0ShipyardB = overlayHas92b('0 — Shipyard');
+    dispatchKey('Digit0');
+    tick(2, 'wave92b digit0');
+    digit0ShipyardB = digit0ShipyardB && overlayHas92b('SHIPYARD');
+    dispatchKey('Digit1');
+    tick(2, 'wave92b hangar');
+    trainOffer = overlayHas92b('Offer heavy') && overlayHas92b('Train on Hangar');
+
+    ctx.world.reputation.beautiful = -5;
+    dispatchKey('Digit1');
+    tick(2, 'wave92b hostile hangar');
+    trainHostile = overlayHas92b('No sale.') && !findOverlayButton92b('Offer heavy');
+    ctx.world.reputation.beautiful = 50;
+    ctx.world.credits = 4;
+    dispatchKey('Digit1');
+    tick(2, 'wave92b short hangar');
+    trainShort = !!findOverlayButton92b('Offer heavy');
+    const offerBtn = findOverlayButton92b('Offer heavy');
+    if (offerBtn) offerBtn.click();
+    tick(1, 'wave92b short papers');
+    trainShort = trainShort && overlayHas92b('Confirm papers') && overlayHas92b(TRAIN_CARGO_NOTE);
+    const shortConfirm = findOverlayButton92b('Confirm papers');
+    if (shortConfirm) shortConfirm.click();
+    tick(2, 'wave92b short confirm');
+    const shortRow = (ctx.world.hangar?.hulls ?? []).find((h) => h.id === ctx.world.hangar.mountedId);
+    trainShort = trainShort && overlayHas92b('Not enough credits.')
+      && shortRow?.classKey === 'light'
+      && ctx.world.credits === 4;
+
+    ctx.world.credits = 50000;
+    dispatchKey('Digit1');
+    tick(2, 'wave92b hangar retry');
+    const trainBtn = findOverlayButton92b('Offer heavy');
+    if (trainBtn) trainBtn.click();
+    tick(1, 'wave92b papers');
+    const confirmBtn = findOverlayButton92b('Confirm papers');
+    if (confirmBtn) confirmBtn.click();
+    tick(2, 'wave92b confirm train');
+    const afterRow = (ctx.world.hangar?.hulls ?? []).find((h) => h.id === ctx.world.hangar.mountedId);
+    trainConfirm = afterRow?.classKey === 'heavy'
+      && afterRow?.hullKind === 'living'
+      && ctx.player.classKey === 'heavy'
+      && overlayHas92b(TRAIN_OK_LINE)
+      && ctx.cargo.some((c) => c.commodity === 'rawOre' && c.units === 3);
+    trainMesh = ctx.ship?.hullRig?.kind === 'living'
+      && typeof ctx.ship.hullRig.restScale === 'number'
+      && ctx.ship.hullRig.restScale > 1
+      && ctx.ship?.living?.swim === true;
+    hudFamily = ctx.player.hullKind === 'living';
+
+    dispatchKey('Escape');
+    tick(1, 'wave92b back menu');
+    dispatchKey('Digit7');
+    tick(2, 'wave92b people gift');
+    giftStill = overlayHas92b('1 — Papers') || overlayHas92b(w92bGiftArm);
+  }
+
+  if (ctx.flags.docked) undockStation();
+  ctx.world.hangar = hangarKeep92b;
+  ctx.world.credits = creditsKeep92b;
+  ctx.world.reputation = { ...(ctx.world.reputation ?? {}), ...repKeep92b };
+  ctx.player.hullKind = kindKeep92b;
+  ctx.player.classKey = classKeep92b;
+  if (bioKeep92b && ctx.bio) Object.assign(ctx.bio, bioKeep92b);
+  ctx.cargo = cargoKeep92b;
+  ctx.cargoCapacity = capKeep92b;
+  if (cfgKeep92b && ctx.config?.ship) {
+    ctx.config.ship.maxSpeed = cfgKeep92b.maxSpeed;
+    ctx.config.ship.creep = cfgKeep92b.creep;
+    ctx.config.ship.acceleration = cfgKeep92b.acceleration;
+    ctx.config.ship.damping = cfgKeep92b.damping;
+    if (cfgKeep92b.afterburner && ctx.config.ship.afterburner) {
+      Object.assign(ctx.config.ship.afterburner, cfgKeep92b.afterburner);
+    }
+  }
+  sanitizeHangar(ctx);
+  if (prevSys92b && prevSys92b !== ctx.world.currentSystem) {
+    ctx.world.currentSystem = prevSys92b;
+    ctx.emit('systemLoaded', { to: prevSys92b });
+    tick(2, 'wave92b restore sys');
+  }
+  if (prevDock92b) dockAtCurrentStation('wave92b restore dock');
+
+  const w92b = {
+    helperOk,
+    growthOk,
+    refuseOk,
+    cancelOk,
+    ...srcOk,
+    digit0ShipyardB,
+    trainOffer,
+    trainHostile,
+    trainShort,
+    trainConfirm,
+    trainMesh,
+    giftStill,
+    hudFamily,
+    reachedCradleB,
+  };
+  console.log('wave92 bio02:', JSON.stringify(w92b));
+  if (!Object.values(w92b).every(Boolean)) { console.log('WAVE92 BIO-02 FAIL'); errors++; }
+}
+
+{
+  const { POWER, WEAPONS, SYSTEMS, COMMODITIES, EPICS, createShipState } = await import('../src/game/state.js');
+  const { LIVING_STOCK, livingTrainDests, trainListPrice, yardPrice, yardStockFor, hullKindFor } = await import('../src/game/shipyard.js');
+  const { SEED_MARKET_UU, MARKET_SEED_STEM, grantMarketSeed } = await import('../src/game/bio-seed.js');
+  const { archiveDeskAllowed } = await import('../src/systems/station.js');
+  const { AUTHORED_SYSTEMS } = await import('../src/game/authored-systems.js');
+  const chartSrc = readFileSync(new URL('../src/systems/galaxychart.js', import.meta.url), 'utf8');
+  const stationSrc = readFileSync(new URL('../src/systems/station.js', import.meta.url), 'utf8');
+  const hush = AUTHORED_SYSTEMS.hush;
+  const veil = AUTHORED_SYSTEMS.veil;
+  const fresh = createShipState('light');
+  const six = ['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate'];
+  const w94 = {
+    power: POWER.max === 100 && POWER.regenPerSec === 8
+      && POWER.afterburnerPerSec === 16 && POWER.afterburnerMin === 15
+      && WEAPONS.psionic.powerPerShot === 10
+      && fresh.power === POWER.max
+      && !Object.prototype.hasOwnProperty.call(WEAPONS.cannon, 'powerPerShot'),
+    stock: six.every((k) => LIVING_STOCK.includes(k))
+      && six.every((k) => yardStockFor('beautiful').includes(k))
+      && six.every((k) => yardStockFor('unknowables').includes(k))
+      && hullKindFor('beautiful') === 'living'
+      && hullKindFor('unknowables') === 'living',
+    train: livingTrainDests('light').includes('heavy')
+      && livingTrainDests('light').includes('frigate')
+      && !livingTrainDests('light').includes('light')
+      && trainListPrice(25, 'frigate') === yardPrice('frigate', 25),
+    seed: SEED_MARKET_UU === 40000
+      && MARKET_SEED_STEM === 'seed_market'
+      && typeof grantMarketSeed === 'function'
+      && !Object.prototype.hasOwnProperty.call(COMMODITIES, 'seed')
+      && !Object.prototype.hasOwnProperty.call(COMMODITIES, 'hull_seed'),
+    veil: veil?.id === 'veil' && veil?.faction === 'unknowables'
+      && veil?.station?.name === 'The Quiet'
+      && SYSTEMS.veil?.faction === 'unknowables'
+      && Array.isArray(veil.clues) && veil.clues.length === 0
+      && Array.isArray(hush?.clues) && hush.clues.length === 2
+      && (hush?.gates ?? []).some((g) => g.to === 'veil')
+      && (veil.gates ?? []).some((g) => g.to === 'hush')
+      && archiveDeskAllowed('unknowables') === true
+      && archiveDeskAllowed('assembly') === true
+      && !Object.prototype.hasOwnProperty.call(EPICS, 'unknowables')
+      && chartSrc.includes("'veil'")
+      && stationSrc.includes('buildUnknowablesStation')
+      && stationSrc.includes('grantMarketSeed')
+      && stationSrc.includes('seedPending'),
+  };
+  console.log('wave94 open-outs:', JSON.stringify(w94));
+  if (!Object.values(w94).every(Boolean)) { console.log('WAVE94 OPEN-OUTS FAIL'); errors++; }
+}
+
+// ---- WAVE98 TGT-03 remaining: Incoming fire. toast + lock-arrow park/aria ----
+{
+  const {
+    npcFireToast: w98toast,
+    INCOMING_DART_TOAST: w98dart,
+    INCOMING_FIRE_TOAST: w98fire,
+    DART_TOAST_GAP: w98dartGap,
+    FIRE_TOAST_GAP: w98fireGap,
+  } = await import('../src/game/npc-fire-toast.js');
+  const here98 = dirname(fileURLToPath(import.meta.url));
+  const src98 = (rel) => readFileSync(join(here98, '..', rel), 'utf8');
+  const hud98src = src98('src/systems/hud.js');
+  const css98src = src98('src/ui/hud.css');
+  const helper98src = src98('src/game/npc-fire-toast.js');
+  const npcFireCase98 = hud98src.slice(hud98src.indexOf("case 'npcFire':"), hud98src.indexOf("case 'sunHeat':"));
+  const edgeCss98 = css98src.slice(css98src.indexOf('.rw-edge-arrow'), css98src.indexOf('.rw-chartmark'));
+  const hudRoot98 = document.getElementById('hud');
+  const hudKids98 = hudRoot98 ? hudRoot98.children.length : 0;
+  const gHas98 = (n, cls) => !!(n && n.classList && n.classList.contains(cls));
+  const inboundGauge98 = [...walkDom(hudRoot98 ?? { children: [] })].some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    return /incoming|inbound|aspect-ring|lock-box|lockbox|missile-gauge/i.test(c);
+  });
+  const edgeArrows98 = [...walkDom(hudRoot98 || document.body)]
+    .filter((n) => gHas98(n, 'rw-edge-arrow'));
+  function toastNodes98(text) {
+    return [...walkDom(hudRoot98 ?? { children: [] })].filter((n) => {
+      const c = typeof n.className === 'string' ? n.className : '';
+      return c.includes('rw-toast') && c.includes('show') && n.textContent === text;
+    });
+  }
+  function flashFacing98() {
+    return [...walkDom(hudRoot98 ?? { children: [] })].some((n) => {
+      const c = typeof n.className === 'string' ? n.className : '';
+      return c.includes('rw-facing-end') && c.includes('is-flash');
+    });
+  }
+
+  function w98row(e, ctx, mem) {
+    const t = w98toast(e, ctx, mem);
+    return t ? t.text : null;
+  }
+  const fly = { elapsed: 10, flags: { docked: false }, gate: { jumping: false } };
+  const memA = { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 };
+  const matrix = {
+    missilePlayer: w98row({ weapon: 'missile', target: 'player' }, fly, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === w98dart,
+    cannonPlayer: w98row({ weapon: 'cannon', target: 'player' }, fly, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === w98fire,
+    cannonOmit: w98row({ weapon: 'cannon' }, fly, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === w98fire,
+    cannonNull: w98row({ weapon: 'cannon', target: null }, fly, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === w98fire,
+    cannonShip: w98row({ weapon: 'cannon', target: { state: {} } }, fly, memA) === null,
+    unknown: w98row({ weapon: 'laser', target: 'player' }, fly, memA) === null,
+    missing: w98row({ target: 'player' }, fly, memA) === null,
+    proto: w98row({ weapon: '__proto__', target: 'player' }, fly, memA) === null,
+    protoInherited: w98row(Object.create({ weapon: 'cannon', target: 'player' }), fly, memA) === null,
+    empty: w98row({ weapon: '', target: 'player' }, fly, memA) === null,
+    missileOmit: w98row({ weapon: 'missile' }, fly, memA) === null,
+    psionic: w98row({ weapon: 'psionic', target: 'player' }, fly, memA) === null,
+  };
+  const memDartFire = { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 };
+  const dartLine = w98toast({ weapon: 'missile', target: 'player' }, fly, memDartFire);
+  const fireLine = w98toast({ weapon: 'cannon', target: 'player' }, fly, memDartFire);
+  const memGap = { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 };
+  const fireOnce = w98toast({ weapon: 'cannon', target: 'player' }, { ...fly, elapsed: 20 }, memGap);
+  const fireSoon = w98toast({ weapon: 'cannon', target: 'player' }, { ...fly, elapsed: 21 }, memGap);
+  const fireLater = w98toast({ weapon: 'cannon', target: 'player' }, { ...fly, elapsed: 20 + w98fireGap }, memGap);
+  const dockMem = { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 };
+  const dockFire = w98toast({ weapon: 'cannon', target: 'player' }, { elapsed: 30, flags: { docked: true }, gate: { jumping: false } }, dockMem);
+  const jumpFire = w98toast({ weapon: 'cannon', target: 'player' }, { elapsed: 30, flags: { docked: false }, gate: { jumping: true } }, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 });
+  const dockDart = w98toast({ weapon: 'missile', target: 'player' }, { elapsed: 30, flags: { docked: true }, gate: { jumping: false } }, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 });
+
+  const hudSys98 = systems.find((pair) => pair[0] === 'hud')[1];
+  const savedDock98 = ctx.flags.docked;
+  const savedJump98 = ctx.gate.jumping;
+  const savedLock98 = ctx.targets.current;
+  ctx.flags.docked = false;
+  ctx.gate.jumping = false;
+  ctx.elapsed += 5;
+  ctx.events.length = 0;
+  hudSys98.update(dt);
+  const dartBefore = toastNodes98('Incoming dart.').length;
+  const fireBefore = toastNodes98('Incoming fire.').length;
+  ctx.events.length = 0;
+  ctx.emit('npcFire', { weapon: 'missile', target: 'player' });
+  ctx.emit('npcFire', { weapon: 'cannon', target: 'player' });
+  hudSys98.update(dt);
+  const dartAfterPair = toastNodes98('Incoming dart.').length;
+  const fireAfterPair = toastNodes98('Incoming fire.').length;
+  const facingAfterFire = flashFacing98();
+  ctx.events.length = 0;
+  ctx.elapsed += 5;
+  hudSys98.update(dt);
+  ctx.flags.docked = true;
+  ctx.gate.jumping = false;
+  ctx.emit('npcFire', { weapon: 'cannon', target: 'player' });
+  hudSys98.update(dt);
+  const fireWhileDocked = toastNodes98('Incoming fire.').length;
+  ctx.events.length = 0;
+  ctx.elapsed += 5;
+  hudSys98.update(dt);
+  ctx.flags.docked = false;
+  ctx.gate.jumping = true;
+  ctx.emit('npcFire', { weapon: 'cannon', target: 'player' });
+  hudSys98.update(dt);
+  const fireWhileJump = toastNodes98('Incoming fire.').length;
+  ctx.events.length = 0;
+  ctx.gate.jumping = false;
+  ctx.emit('playerHit', { fromAft: false });
+  hudSys98.update(dt);
+  const facingAfterHit = flashFacing98();
+
+  const farLock98 = { object: { position: new THREE.Vector3(1e6, 0, 0) }, state: {} };
+  ctx.flags.docked = false;
+  ctx.gate.jumping = false;
+  ctx.targets.current = farLock98;
+  hudSys98.update(dt);
+  const arrowFly = edgeArrows98.some((n) => typeof n.className === 'string' && !n.className.includes('is-hidden'));
+  const lockDuringFly = ctx.targets.current === farLock98;
+  ctx.flags.docked = true;
+  hudSys98.update(dt);
+  const arrowDockPark = edgeArrows98.every((n) => typeof n.className === 'string' && n.className.includes('is-hidden'));
+  const lockDuringDock = ctx.targets.current === farLock98;
+  ctx.flags.docked = false;
+  ctx.gate.jumping = true;
+  hudSys98.update(dt);
+  const arrowJumpPark = edgeArrows98.every((n) => typeof n.className === 'string' && n.className.includes('is-hidden'));
+  const lockDuringJump = ctx.targets.current === farLock98;
+
+  ctx.flags.docked = savedDock98;
+  ctx.gate.jumping = savedJump98;
+  ctx.targets.current = savedLock98;
+  ctx.events.length = 0;
+
+  const w98 = {
+    ...matrix,
+    dartGapConst: w98dartGap === 2.5 && hud98src.includes('DART_TOAST_GAP = 2.5'),
+    fireGapConst: w98fireGap === 2.5 && helper98src.includes('FIRE_TOAST_GAP = 2.5'),
+    dartStillNamed: hud98src.includes("INCOMING_DART_TOAST = 'Incoming dart.'")
+      && npcFireCase98.includes('INCOMING_DART_TOAST')
+      && npcFireCase98.includes('npcFireToast'),
+    helperNoWeaponsIndex: !helper98src.includes('WEAPONS['),
+    helperNoInnerHtml: !helper98src.includes('innerHTML') && !npcFireCase98.includes('innerHTML'),
+    staticFireCopy: helper98src.includes("INCOMING_FIRE_TOAST = 'Incoming fire.'")
+      && npcFireCase98.includes('INCOMING_FIRE_TOAST'),
+    noShipName: !npcFireCase98.includes('e.ship') && !npcFireCase98.includes('state.name'),
+    dartThenFire: dartLine && dartLine.text === w98dart && dartLine.cls === 'warn'
+      && fireLine && fireLine.text === w98fire && fireLine.cls === 'warn',
+    fireThrottle: fireOnce && fireOnce.text === w98fire && fireSoon === null && fireLater && fireLater.text === w98fire,
+    dockJumpHelper: dockFire === null && jumpFire === null && dockDart && dockDart.text === w98dart,
+    hudDartAndFire: dartAfterPair === dartBefore + 1 && fireAfterPair === fireBefore + 1,
+    dockJumpHud: fireWhileDocked === 0 && fireWhileJump === 0,
+    foreAftHitOnly: facingAfterFire === false && facingAfterHit === true
+      && !npcFireCase98.includes('selfHitFlash')
+      && hud98src.includes("if (ev.type === 'playerHit')"),
+    noNewHudChild: Number.isFinite(hudKids98) && hudKids98 > 0 && inboundGauge98 === false
+      && !/rw-incoming|rw-inbound|aspect-ring|lock-box/.test(hud98src),
+    edgeArrowCount: edgeArrows98.length >= 1,
+    edgeAriaAttr: edgeArrows98.length >= 1
+      && edgeArrows98.every((n) => n.getAttribute('aria-hidden') === 'true'),
+    edgeAriaSrc: hud98src.includes("edgeArrow.setAttribute('aria-hidden', 'true')"),
+    noSecondArrow: (hud98src.match(/rw-edge-arrow/g) || []).length >= 1
+      && !hud98src.includes('rw-lock-arrow')
+      && !npcFireCase98.includes('rw-nav-gate-cue'),
+    noKeyframes: !edgeCss98.includes('@keyframes') && !edgeCss98.includes('rw-nav-gate-cue'),
+    lockPark: arrowDockPark && arrowJumpPark && lockDuringDock && lockDuringJump && lockDuringFly
+      && hud98src.includes('lockPark')
+      && !/targets\.current\s*=/.test(hud98src),
+    dartPathUnchanged: hud98src.includes("INCOMING_DART_TOAST = 'Incoming dart.'")
+      && hud98src.includes('DART_TOAST_GAP = 2.5'),
+  };
+  if (!arrowFly) {
+    // Projection may hide a dummy lock; park + lock-kept still required.
+    w98.lockPark = arrowDockPark && arrowJumpPark && lockDuringDock && lockDuringJump
+      && hud98src.includes('lockPark')
+      && !/targets\.current\s*=/.test(hud98src);
+  }
+  console.log('wave98 tgt03:', JSON.stringify(w98));
+  if (!Object.values(w98).every(Boolean)) { console.log('WAVE98 TGT-03 FAIL'); errors++; }
+}
+
+// ---- WAVE99 NPC turrets: Q1/Q2 gate + spawn cap + Incoming fire. reuse ----
+{
+  const { canNpcTurret: w99canTurret } = await import('../src/systems/npc.js');
+  const { canSeat: w99canSeat } = await import('../src/game/weapon-fit.js');
+  const {
+    npcFireToast: w99toast,
+    INCOMING_DART_TOAST: w99dart,
+    INCOMING_FIRE_TOAST: w99fire,
+    FIRE_TOAST_GAP: w99fireGap,
+  } = await import('../src/game/npc-fire-toast.js');
+  const { createShipState: w99Ship, applyHit: w99Hit, WEAPONS: w99W } = await import('../src/game/state.js');
+  const here99 = dirname(fileURLToPath(import.meta.url));
+  const src99 = (rel) => readFileSync(join(here99, '..', rel), 'utf8');
+  const combat99src = src99('src/systems/combat.js');
+  const npc99src = src99('src/systems/npc.js');
+  const hud99src = src99('src/systems/hud.js');
+  const ctx99src = src99('src/core/ctx.js');
+  const station99src = src99('src/systems/station.js');
+  const helper99src = src99('src/game/npc-fire-toast.js');
+  const song99src = src99('src/systems/song.js');
+  const hangar99src = src99('src/game/hangar.js');
+  const spawn99src = combat99src.slice(
+    combat99src.indexOf('function spawnNpcShot'),
+    combat99src.indexOf('function updateMining'),
+  );
+  const turretEvt99 = combat99src.slice(
+    combat99src.indexOf("if (e.weapon === 'turret')"),
+    combat99src.indexOf('const tgt = e.target;'),
+  );
+  const huntGate99 = npc99src.slice(
+    npc99src.indexOf('export function mayHuntPlayer'),
+    npc99src.indexOf('function canNpcDart'),
+  );
+  const turretGate99 = npc99src.slice(
+    npc99src.indexOf('export function canNpcTurret'),
+    npc99src.indexOf('function tryNpcTurret'),
+  );
+  const hudRoot99 = document.getElementById('hud');
+  const hudKids99 = hudRoot99 ? hudRoot99.children.length : 0;
+  const inbound99 = [...walkDom(hudRoot99 ?? { children: [] })].some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    return /incoming|inbound|aspect-ring|lock-box|lockbox|missile-gauge/i.test(c);
+  });
+
+  function w99live(role, classKey, faction, extra = {}) {
+    return {
+      role,
+      record: { classKey, role, faction, ...extra.record },
+      state: { classKey, faction, hull: 100, hullMax: 100, screen: 100, screenMax: 100 },
+      ai: {
+        role,
+        dartSpent: false,
+        scratched: extra.scratched === true,
+        lastAttacker: extra.lastAttacker ?? null,
+        target: extra.target ?? 'player',
+        phase: extra.phase ?? 'attack',
+      },
+    };
+  }
+  const w99ctxHunt = { world: { reputation: { freehold: -12 } } };
+  const w99ctxCalm = { world: { reputation: { freehold: 0 } } };
+
+  function w99row(e, c, mem) {
+    const t = w99toast(e, c, mem);
+    return t ? t.text : null;
+  }
+  const fly99 = { elapsed: 10, flags: { docked: false }, gate: { jumping: false } };
+  const toast99 = {
+    turretPlayer: w99row({ weapon: 'turret', target: 'player' }, fly99, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === w99fire,
+    turretOmit: w99row({ weapon: 'turret' }, fly99, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === null,
+    turretShip: w99row({ weapon: 'turret', target: { state: {} } }, fly99, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === null,
+    dartUnchanged: w99row({ weapon: 'missile', target: 'player' }, fly99, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === w99dart,
+    sameClock: (() => {
+      const mem = { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 };
+      const a = w99toast({ weapon: 'cannon', target: 'player' }, { ...fly99, elapsed: 40 }, mem);
+      const b = w99toast({ weapon: 'turret', target: 'player' }, { ...fly99, elapsed: 41 }, mem);
+      const c = w99toast({ weapon: 'turret', target: 'player' }, { ...fly99, elapsed: 40 + w99fireGap }, mem);
+      return a && a.text === w99fire && a.cls === 'warn' && b === null && c && c.text === w99fire && c.cls === 'warn';
+    })(),
+    dock: w99toast({ weapon: 'turret', target: 'player' }, { elapsed: 50, flags: { docked: true }, gate: { jumping: false } }, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === null,
+    jump: w99toast({ weapon: 'turret', target: 'player' }, { elapsed: 50, flags: { docked: false }, gate: { jumping: true } }, { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 }) === null,
+    noDartSteal: !helper99src.includes('Incoming turret') && helper99src.includes("INCOMING_FIRE_TOAST = 'Incoming fire.'"),
+  };
+
+  const gate99 = {
+    heavyPatrol: w99canTurret(w99ctxHunt, w99live('patrol', 'heavy', 'freehold')) === true,
+    ace: w99canTurret(w99ctxHunt, w99live('ace', 'ace', 'redledger')) === true,
+    frigate: w99canTurret(w99ctxHunt, w99live('patrol', 'frigate', 'freehold')) === true,
+    seat0: w99canTurret(w99ctxHunt, w99live('pirate', 'cutter', 'redledger')) === false
+      && w99canSeat('cutter', 'turret') === false
+      && w99canSeat('light', 'turret') === false,
+    civilian: w99canTurret(w99ctxHunt, w99live('trader', 'heavy', 'veridian')) === false
+      && w99canTurret(w99ctxHunt, w99live('miner', 'heavy', 'veridian')) === false,
+    unk: w99canTurret(w99ctxHunt, w99live('ace', 'ace', 'unknowables')) === false,
+    unknownClass: w99canTurret(w99ctxHunt, w99live('pirate', 'godhull', 'redledger')) === false,
+    calmPatrol: w99canTurret(w99ctxCalm, w99live('patrol', 'heavy', 'freehold')) === false,
+    huntUnchanged: !huntGate99.includes('turret') && huntGate99.includes('isCivilianRole'),
+    noBeautifulWord: !/beautiful/i.test(turretGate99),
+  };
+
+  function w99countNpcTurret(scene) {
+    let n = 0;
+    scene.traverse((o) => {
+      if (o.visible && o.userData && o.userData.wkey === 'turret' && o.userData.fromPlayer === false) n++;
+    });
+    return n;
+  }
+  function w99countPlayerTurret(scene) {
+    let n = 0;
+    scene.traverse((o) => {
+      if (o.visible && o.userData && o.userData.wkey === 'turret' && o.userData.fromPlayer === true) n++;
+    });
+    return n;
+  }
+  function w99countCannon(scene) {
+    let n = 0;
+    scene.traverse((o) => {
+      if (o.visible && o.userData && o.userData.wkey === 'cannon') n++;
+    });
+    return n;
+  }
+  function w99harness() {
+    const sc = new THREE.Scene();
+    const c = createCtx({ scene: sc, camera, renderer });
+    c.player = w99Ship('heavy', { name: 'W99' });
+    c.ship.object = new THREE.Object3D();
+    c.ship.object.position.set(0, 0, 0);
+    sc.add(c.ship.object);
+    c.world.turret = 'auto';
+    c.flags.docked = false;
+    const combat = initCombat(c);
+    const obj = new THREE.Object3D();
+    obj.position.set(0, 0, -80);
+    obj.quaternion.identity();
+    sc.add(obj);
+    const ship = { object: obj, state: w99Ship('heavy', { faction: 'freehold', name: 'TurP' }) };
+    return { sc, c, combat, ship };
+  }
+
+  const missH99 = w99harness();
+  const turretBefore = missH99.c.world.turret;
+  missH99.c.emit('npcFire', { ship: missH99.ship, weapon: 'turret' });
+  missH99.combat.update(dt);
+  const missingDrops = w99countNpcTurret(missH99.sc) === 0;
+  const hangarQuiet = missH99.c.world.turret === turretBefore;
+
+  const omitH99 = w99harness();
+  omitH99.c.emit('npcFire', { ship: omitH99.ship, weapon: 'cannon' });
+  omitH99.combat.update(dt);
+  const cannonOmitHits = w99countCannon(omitH99.sc) >= 1;
+
+  const capH99 = w99harness();
+  for (let i = 0; i < 5; i++) {
+    capH99.c.emit('npcFire', { ship: capH99.ship, weapon: 'turret', target: 'player' });
+  }
+  capH99.combat.update(dt);
+  const cap4 = w99countNpcTurret(capH99.sc) === 4;
+  const playerCapFree = w99countPlayerTurret(capH99.sc) === 0;
+
+  const vsNpcH99 = w99harness();
+  const dummyTgt = { object: new THREE.Object3D(), state: w99Ship('cutter', { name: 'T' }) };
+  dummyTgt.state.destroyed = true; // Wave 101: live vsNPC spawns; non-live still drops
+  dummyTgt.object.position.set(0, 0, 40);
+  vsNpcH99.sc.add(dummyTgt.object);
+  vsNpcH99.c.emit('npcFire', { ship: vsNpcH99.ship, weapon: 'turret', target: dummyTgt });
+  vsNpcH99.combat.update(dt);
+  const vsNpcDrops = w99countNpcTurret(vsNpcH99.sc) === 0;
+
+  const unkShootH99 = w99harness();
+  unkShootH99.ship.state.faction = 'unknowables';
+  unkShootH99.c.emit('npcFire', { ship: unkShootH99.ship, weapon: 'turret', target: 'player' });
+  unkShootH99.combat.update(dt);
+  const unkShooterDrops = w99countNpcTurret(unkShootH99.sc) === 0;
+
+  const unkHull = w99Ship('heavy', { faction: 'unknowables', name: 'Field' });
+  const unkHull0 = unkHull.hull;
+  const unkHits = w99Hit(unkHull, { damage: w99W.turret.damage, family: 'turret', facet: 'fore', now: 1 });
+  const unkMiss = Array.isArray(unkHits) && unkHits.length === 0 && unkHull.hull === unkHull0
+    && w99W.turret.family === 'energy' && w99W.turret.beam !== true;
+
+  const st99 = ctx.config.world.stationPosition;
+  const savedPos99 = ctx.ship.object.position.clone();
+  const savedDock99 = ctx.flags.docked;
+  ctx.flags.docked = false;
+  ctx.world.jumpGraceUntil = 0;
+  ctx.ship.object.position.set(st99.x, st99.y, st99.z + 500);
+  function w99spawn(role, classKey, faction, suffix, extra = {}) {
+    const p = ctx.ship.object.position;
+    const rec = {
+      id: `wave99-${suffix}`, name: `Wave99 ${suffix}`, classKey, faction, role,
+      resolve: 80, alwaysHuntsPlayer: extra.alwaysHunts === true,
+    };
+    const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x, p.y, p.z + 80));
+    if (!live) return null;
+    ctx.ships.push(live);
+    live.ai.demandSent = true;
+    live.ai.demanding = extra.demanding === true;
+    live.ai.band = 'defiant';
+    live.ai.playerRolled = true;
+    live.ai.playerInterested = true;
+    live.ai.target = extra.target ?? 'player';
+    live.ai.phase = extra.phase ?? 'attack';
+    live.ai.phaseStart = extra.phaseStart ?? (ctx.world.time - 3.05);
+    live.ai.fireAt = 0;
+    live.ai.turretFireAt = 0;
+    live.ai.dartSpent = true;
+    live.ai.intent = true;
+    live.ai.scratched = extra.scratched === true;
+    live.ai.lastAttacker = extra.lastAttacker ?? null;
+    live.state.personality = 10;
+    live.state.resolve = 80;
+    live.ai.resolveAt = ctx.world.time + 1e6;
+    live.ai.hailed = true;
+    live.object.quaternion.identity();
+    if (role === 'patrol') live.ai.mode = 'hunt';
+    return live;
+  }
+  function w99fires(live, n, label) {
+    const evs = [];
+    for (let i = 0; i < n && live; i++) {
+      live.object.quaternion.identity();
+      live.object.position.set(ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z + 80);
+      tick(1, label);
+      evs.push(...ctx.lastEvents);
+    }
+    return evs.filter((e) => e.type === 'npcFire' && e.ship === live);
+  }
+  function w99drop(live) {
+    if (!live) return;
+    const i = ctx.ships.indexOf(live);
+    if (i >= 0) ctx.ships.splice(i, 1);
+    removeLiveShip(ctx, live);
+  }
+
+  const heavy99 = w99spawn('patrol', 'heavy', 'freehold', 'heavy', { scratched: true, lastAttacker: 'player' });
+  const heavyFires = w99fires(heavy99, 90, 'w99 heavy turret');
+  w99drop(heavy99);
+  const ace99 = w99spawn('ace', 'ace', 'redledger', 'ace', { alwaysHunts: true });
+  const aceFires = w99fires(ace99, 90, 'w99 ace turret');
+  w99drop(ace99);
+  const frig99 = w99spawn('patrol', 'frigate', 'freehold', 'frig', { scratched: true, lastAttacker: 'player' });
+  const frigFires = w99fires(frig99, 90, 'w99 frig turret');
+  w99drop(frig99);
+  const cutter99 = w99spawn('pirate', 'cutter', 'redledger', 'cutter', { alwaysHunts: true });
+  const cutterFires = w99fires(cutter99, 60, 'w99 cutter turret');
+  w99drop(cutter99);
+  const trader99 = w99spawn('trader', 'freighter', 'veridian', 'trader');
+  if (trader99) {
+    trader99.ai.mode = 'hunt';
+    trader99.ai.target = 'player';
+    trader99.ai.phase = 'attack';
+  }
+  const traderFires99 = w99fires(trader99, 40, 'w99 trader turret');
+  w99drop(trader99);
+  const miner99 = w99spawn('miner', 'cutter', 'veridian', 'miner');
+  if (miner99) {
+    miner99.ai.mode = 'hunt';
+    miner99.ai.target = 'player';
+    miner99.ai.phase = 'attack';
+  }
+  const minerFires99 = w99fires(miner99, 40, 'w99 miner turret');
+  w99drop(miner99);
+  const unk99 = w99spawn('ace', 'ace', 'unknowables', 'unk', { alwaysHunts: true });
+  const unkFires99 = w99fires(unk99, 60, 'w99 unk turret');
+  w99drop(unk99);
+  const tel99 = w99spawn('patrol', 'heavy', 'freehold', 'tel', {
+    scratched: true, lastAttacker: 'player', phase: 'telegraph', phaseStart: ctx.world.time,
+  });
+  const telFires = w99fires(tel99, 90, 'w99 telegraph turret');
+  w99drop(tel99);
+  const dem99 = w99spawn('patrol', 'heavy', 'freehold', 'dem', {
+    scratched: true, lastAttacker: 'player', demanding: true,
+  });
+  const demFires = w99fires(dem99, 40, 'w99 demand turret');
+  w99drop(dem99);
+
+  ctx.flags.docked = savedDock99;
+  ctx.ship.object.position.copy(savedPos99);
+
+  const w99 = {
+    ...toast99,
+    ...gate99,
+    namedCadence: npc99src.includes('NPC_TURRET_INTERVAL = 1 / (WEAPONS.turret.rof * 0.5)')
+      && npc99src.includes('turretFireAt')
+      && !turretGate99.includes('Math.random')
+      && !npc99src.slice(npc99src.indexOf('function tryNpcTurret'), npc99src.indexOf('function hunterRole')).includes('Math.random'),
+    independentClock: npc99src.includes('tryNpcTurret') && npc99src.includes('ai.turretFireAt = now + NPC_TURRET_INTERVAL'),
+    explicitTarget: npc99src.includes("weapon: 'turret', target: 'player'")
+      && turretEvt99.includes("if (e.target !== 'player') continue"),
+    ctxVocab: ctx99src.includes("weapon:'cannon'|'missile'|'turret'"),
+    missingDrops,
+    cannonOmitHits,
+    cap4,
+    playerCapFree,
+    vsNpcDrops,
+    unkShooterDrops,
+    unkMiss,
+    wave57: combat99src.includes('(p.fromPlayer || !p.vsPlayer)')
+      && combat99src.includes('? testNpcHits(p, now)')
+      && combat99src.includes(': testPlayerHit(p, now, player, playerObj)')
+      && turretEvt99.includes('bolt.vsPlayer = true'),
+    npcCapConst: combat99src.includes('const NPC_TURRET_LIVE_CAP = 4')
+      && combat99src.includes('fromPlayer === false && p.wkey === \'turret\''),
+    playerCapFiltered: combat99src.includes('p.active && p.fromPlayer && p.wkey === \'turret\''),
+    playerAuto: combat99src.includes('function tryPlayerTurret')
+      && combat99src.includes('const TURRET_LIVE_CAP = 2')
+      && combat99src.includes('isTurretId(ctx.world.turret)'),
+    noAddHeatNpc: !spawn99src.includes('addHeat'),
+    noHangarWrite: !spawn99src.includes('writeMountedGear')
+      && !spawn99src.includes('world.turret')
+      && hangarQuiet,
+    noMissilePath: !turretEvt99.includes('spawnNpcMissile') && !spawn99src.includes('npcFireMissile'),
+    songCannon: song99src.includes("ev.weapon === 'missile'")
+      && !song99src.includes("weapon === 'turret'"),
+    digitCopy: station99src.includes('Desk row for Digit 9')
+      && station99src.includes('Digit 8/9 arms papers')
+      && station99src.includes("DOCK_KEY_SERVICES")
+      && hangar99src.includes("turret"),
+    hudTree: Number.isFinite(hudKids99) && inbound99 === false
+      && hud99src.includes('keep the 80 px hub on glass')
+      && !hud99src.includes('6 ·')
+      && !/rw-incoming|rw-inbound|aspect-ring|lock-box/.test(hud99src)
+      && hud99src.includes('npcFireToast'),
+    heavyEmits: !!heavy99 && heavyFires.some((e) => e.weapon === 'turret' && e.target === 'player'),
+    aceEmits: !!ace99 && aceFires.some((e) => e.weapon === 'turret' && e.target === 'player'),
+    frigEmits: !!frig99 && frigFires.some((e) => e.weapon === 'turret' && e.target === 'player'),
+    seat0Never: !cutterFires.some((e) => e.weapon === 'turret')
+      && !traderFires99.some((e) => e.weapon === 'turret')
+      && !minerFires99.some((e) => e.weapon === 'turret'),
+    unkNeverEmit: !unkFires99.some((e) => e.weapon === 'turret'),
+    telegraphCold: !telFires.some((e) => e.weapon === 'turret'),
+    demandCold: !demFires.some((e) => e.weapon === 'turret'),
+    noInnerHtml: !npc99src.includes('innerHTML') && !helper99src.includes('innerHTML'),
+    noStateFork: !combat99src.includes('WEAPONS.npcTurret'),
+  };
+  console.log('wave99 turrets:', JSON.stringify(w99));
+  if (!Object.values(w99).every(Boolean)) { console.log('WAVE99 TURRETS FAIL'); errors++; }
+}
+
+// ---- WAVE100 TGT-03 subsystem: engine-select after shields + ENGINE rail ----
+{
+  const { applyHit, createShipState } = await import('../src/game/state.js');
+  const {
+    toggleEnginePart, prefersEngine, healSubsysPart, dropPartIfNotShip,
+  } = await import('../src/game/subsys-aim.js');
+  const here100 = dirname(fileURLToPath(import.meta.url));
+  const src100 = (rel) => readFileSync(join(here100, '..', rel), 'utf8');
+  const hud100 = src100('src/systems/hud.js');
+  const css100 = src100('src/ui/hud.css');
+  const ctrl100 = src100('src/systems/controls.js');
+  const save100 = src100('src/game/save.js');
+  const live100 = { object: {}, state: createShipState('light') };
+  const ctx100 = {
+    flags: { docked: false, chartOpen: false },
+    gate: { jumping: false },
+    targets: { current: live100, part: null },
+  };
+  toggleEnginePart(ctx100);
+  const peel = createShipState('light');
+  const peelScr = peel.screen;
+  const peelHull = peel.hull;
+  applyHit(peel, { damage: 5, family: 'cannon', facet: 'fore', now: 1, preferEngine: true });
+  const naked = createShipState('light');
+  naked.screen = 0;
+  naked.shell = 0;
+  const nHull = naked.hull;
+  const nEng = naked.engine;
+  applyHit(naked, { damage: 10, family: 'cannon', facet: 'fore', now: 2, preferEngine: true });
+  const w100 = {
+    keyK: ctrl100.includes("'KeyK'") && ctrl100.includes('toggleEnginePart'),
+    noDigitSteal: !ctrl100.includes("'Digit6'") && ctrl100.includes('Digit 0 stays'),
+    noSku: !src100('src/game/state.js').includes('targetingComputer'),
+    partHeal: healSubsysPart('engine') === 'engine' && healSubsysPart('hull') == null,
+    prefers: prefersEngine(ctx100, live100) === true,
+    peelScreen: peel.screen < peelScr && peel.hull === peelHull,
+    engineThen: naked.engine < nEng && naked.hull === nHull,
+    dropRock: (() => {
+      ctx100.targets.current = { position: {}, lockKind: 'rock' };
+      dropPartIfNotShip(ctx100);
+      return ctx100.targets.part == null;
+    })(),
+    engineBar: hud100.includes("makeBar(tgtRail, 'ENGINE'") && css100.includes('.rw-engine-tgt'),
+    hubEmpty: hud100.includes('keep the 80 px hub on glass') || hud100.includes('cx - 44'),
+    noInnerHtml: !hud100.includes('innerHTML'),
+    noPersist: !save100.includes("'part'") || !/WORLD_FIELDS[\s\S]*part/.test(save100),
+    noLockKindEngine: !src100('src/game/reticle-aim.js').includes("'engine'"),
+  };
+  // Digit freeze: KeyK must not be a Digit. The Digit0 comment may be absent —
+  // pin TRACKED KeyK plus unchanged Digit1-5 only.
+  w100.noDigitSteal = ctrl100.includes("'KeyK'")
+    && ctrl100.includes("'Digit1'")
+    && !ctrl100.includes("'Digit6'");
+  w100.noPersist = !save100.includes("targets.part") && !save100.includes("'subsys'");
+  console.log('wave100 subsys:', JSON.stringify(w100));
+  if (!Object.values(w100).every(Boolean)) { console.log('WAVE100 SUBSYS FAIL'); errors++; }
+}
+
+// ---- WAVE101 NPC turrets: vs already-hostile NPC (owner deputize) ----
+{
+  const { canNpcTurret: w101canTurret } = await import('../src/systems/npc.js');
+  const { canSeat: w101canSeat } = await import('../src/game/weapon-fit.js');
+  const {
+    npcFireToast: w101toast,
+    INCOMING_DART_TOAST: w101dart,
+    INCOMING_FIRE_TOAST: w101fire,
+  } = await import('../src/game/npc-fire-toast.js');
+  const { createShipState: w101Ship } = await import('../src/game/state.js');
+  const here101 = dirname(fileURLToPath(import.meta.url));
+  const src101 = (rel) => readFileSync(join(here101, '..', rel), 'utf8');
+  const combat101src = src101('src/systems/combat.js');
+  const npc101src = src101('src/systems/npc.js');
+  const hud101src = src101('src/systems/hud.js');
+  const station101src = src101('src/systems/station.js');
+  const helper101src = src101('src/game/npc-fire-toast.js');
+  const hangar101src = src101('src/game/hangar.js');
+  const turretEvt101 = combat101src.slice(
+    combat101src.indexOf("if (e.weapon === 'turret')"),
+    combat101src.indexOf('const tgt = e.target;'),
+  );
+  const huntGate101 = npc101src.slice(
+    npc101src.indexOf('export function mayHuntPlayer'),
+    npc101src.indexOf('function canNpcDart'),
+  );
+  const turretGate101 = npc101src.slice(
+    npc101src.indexOf('export function canNpcTurret'),
+    npc101src.indexOf('function tryNpcTurret'),
+  );
+  const hudRoot101 = document.getElementById('hud');
+  const inbound101 = [...walkDom(hudRoot101 ?? { children: [] })].some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    return /incoming|inbound|aspect-ring|lock-box|lockbox|missile-gauge/i.test(c);
+  });
+
+  function w101live(role, classKey, faction, extra = {}) {
+    return {
+      role,
+      record: { classKey, role, faction },
+      state: { classKey, faction, hull: 100, hullMax: 100, screen: 100, screenMax: 100 },
+      ai: {
+        role,
+        scratched: extra.scratched === true,
+        lastAttacker: extra.lastAttacker ?? null,
+        target: extra.target ?? 'player',
+        phase: extra.phase ?? 'attack',
+      },
+    };
+  }
+  const w101ctxHunt = { world: { reputation: { freehold: -12 } } };
+  const fly101 = { elapsed: 10, flags: { docked: false }, gate: { jumping: false } };
+
+  function w101countNpcTurret(scene) {
+    let n = 0;
+    scene.traverse((o) => {
+      if (o.visible && o.userData && o.userData.wkey === 'turret' && o.userData.fromPlayer === false) n++;
+    });
+    return n;
+  }
+  function w101harness() {
+    const sc = new THREE.Scene();
+    const c = createCtx({ scene: sc, camera, renderer });
+    c.player = w101Ship('heavy', { name: 'W101' });
+    c.ship.object = new THREE.Object3D();
+    c.ship.object.position.set(0, 0, 0);
+    sc.add(c.ship.object);
+    c.world.turret = 'auto';
+    c.flags.docked = false;
+    const combat = initCombat(c);
+    const obj = new THREE.Object3D();
+    obj.position.set(0, 0, -80);
+    obj.quaternion.identity();
+    sc.add(obj);
+    const ship = { object: obj, state: w101Ship('heavy', { faction: 'freehold', name: 'TurN' }) };
+    return { sc, c, combat, ship };
+  }
+
+  const missH101 = w101harness();
+  missH101.c.emit('npcFire', { ship: missH101.ship, weapon: 'turret' });
+  missH101.combat.update(dt);
+  const missingDrops101 = w101countNpcTurret(missH101.sc) === 0;
+
+  const vsP101 = w101harness();
+  vsP101.c.emit('npcFire', { ship: vsP101.ship, weapon: 'turret', target: 'player' });
+  vsP101.combat.update(dt);
+  const vsPlayerWorks = w101countNpcTurret(vsP101.sc) === 1;
+
+  const unkH101 = w101harness();
+  unkH101.ship.state.faction = 'unknowables';
+  unkH101.c.emit('npcFire', { ship: unkH101.ship, weapon: 'turret', target: 'player' });
+  unkH101.combat.update(dt);
+  const unkShooterDrops101 = w101countNpcTurret(unkH101.sc) === 0;
+
+  const capH101 = w101harness();
+  const capPrey = { object: new THREE.Object3D(), state: w101Ship('cutter', { name: 'CapT' }) };
+  capPrey.object.position.set(0, 0, 40);
+  capH101.sc.add(capPrey.object);
+  for (let i = 0; i < 3; i++) capH101.c.emit('npcFire', { ship: capH101.ship, weapon: 'turret', target: 'player' });
+  for (let i = 0; i < 2; i++) capH101.c.emit('npcFire', { ship: capH101.ship, weapon: 'turret', target: capPrey });
+  capH101.combat.update(dt);
+  const cap4shared = w101countNpcTurret(capH101.sc) === 4;
+
+  const hitH101 = w101harness();
+  const hull0 = hitH101.c.player.hull;
+  const screen0 = hitH101.c.player.screen;
+  const npcTgt = {
+    object: new THREE.Object3D(),
+    state: w101Ship('frigate', { name: 'Prey' }),
+    ai: { lastAttacker: null, role: 'trader' },
+  };
+  npcTgt.object.position.set(0, 0, 0);
+  npcTgt.object.quaternion.identity();
+  hitH101.sc.add(npcTgt.object);
+  hitH101.c.ships.push(npcTgt);
+  for (let i = 0; i < 4; i++) hitH101.c.emit('npcFire', { ship: hitH101.ship, weapon: 'turret', target: npcTgt });
+  hitH101.combat.update(dt);
+  const vsNpcSpawned = w101countNpcTurret(hitH101.sc) === 4;
+  for (let i = 0; i < 40; i++) hitH101.combat.update(dt);
+  const playerUnbruised = hitH101.c.player.hull === hull0 && hitH101.c.player.screen === screen0;
+  const lastAtkNotPlayer = npcTgt.ai.lastAttacker !== 'player' && npcTgt.ai.lastAttacker != null;
+
+  const toastVsNpc = w101toast(
+    { weapon: 'turret', target: npcTgt },
+    fly101,
+    { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 },
+  ) === null;
+  const toastVsPlayer = w101toast(
+    { weapon: 'turret', target: 'player' },
+    fly101,
+    { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 },
+  );
+  const dartUnchanged101 = w101toast(
+    { weapon: 'missile', target: 'player' },
+    fly101,
+    { lastIncomingDartAt: -1e9, lastIncomingFireAt: -1e9 },
+  );
+
+  const st101 = ctx.config.world.stationPosition;
+  const savedPos101 = ctx.ship.object.position.clone();
+  const savedDock101 = ctx.flags.docked;
+  ctx.flags.docked = false;
+  ctx.world.jumpGraceUntil = 0;
+  ctx.ship.object.position.set(st101.x, st101.y, st101.z + 500);
+  function w101spawn(role, classKey, faction, suffix, extra = {}) {
+    const p = ctx.ship.object.position;
+    const rec = {
+      id: `wave101-${suffix}`, name: `Wave101 ${suffix}`, classKey, faction, role,
+      resolve: 80, alwaysHuntsPlayer: extra.alwaysHunts === true,
+    };
+    const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x, p.y, p.z + 80));
+    if (!live) return null;
+    ctx.ships.push(live);
+    live.ai.demandSent = true;
+    live.ai.demanding = extra.demanding === true;
+    live.ai.band = 'defiant';
+    live.ai.playerRolled = true;
+    live.ai.playerInterested = true;
+    live.ai.target = extra.target ?? 'player';
+    live.ai.phase = extra.phase ?? 'attack';
+    live.ai.phaseStart = extra.phaseStart ?? (ctx.world.time - 3.05);
+    live.ai.fireAt = 0;
+    live.ai.turretFireAt = 0;
+    live.ai.dartSpent = true;
+    live.ai.intent = extra.intent === false ? false : true;
+    live.ai.scratched = extra.scratched === true;
+    live.ai.lastAttacker = extra.lastAttacker ?? null;
+    live.state.personality = 10;
+    live.state.resolve = 80;
+    live.ai.resolveAt = ctx.world.time + 1e6;
+    live.ai.hailed = true;
+    live.object.quaternion.identity();
+    if (role === 'patrol') live.ai.mode = 'hunt';
+    if (role === 'pirate' || role === 'ace') live.ai.mode = extra.mode ?? 'hunt';
+    return live;
+  }
+  function w101drop(live) {
+    if (!live) return;
+    const i = ctx.ships.indexOf(live);
+    if (i >= 0) ctx.ships.splice(i, 1);
+    removeLiveShip(ctx, live);
+  }
+  function w101firesVsNpc(shooter, prey, n, label) {
+    const evs = [];
+    const p = ctx.ship.object.position;
+    for (let i = 0; i < n && shooter && prey; i++) {
+      shooter.object.quaternion.identity();
+      shooter.object.position.set(p.x, p.y, p.z + 80);
+      prey.object.quaternion.identity();
+      prey.object.position.set(p.x, p.y, p.z + 40);
+      shooter.ai.target = prey;
+      tick(1, label);
+      evs.push(...ctx.lastEvents);
+    }
+    return evs.filter((e) => e.type === 'npcFire' && e.ship === shooter);
+  }
+  function w101firesPlayer(live, n, label) {
+    const evs = [];
+    const p = ctx.ship.object.position;
+    for (let i = 0; i < n && live; i++) {
+      live.object.quaternion.identity();
+      live.object.position.set(p.x, p.y, p.z + 80);
+      live.ai.target = 'player';
+      tick(1, label);
+      evs.push(...ctx.lastEvents);
+    }
+    return evs.filter((e) => e.type === 'npcFire' && e.ship === live);
+  }
+
+  const prey101 = w101spawn('trader', 'cutter', 'veridian', 'prey');
+  const ace101 = w101spawn('ace', 'ace', 'redledger', 'ace', { alwaysHunts: true });
+  const aceVsNpcFires = w101firesVsNpc(ace101, prey101, 90, 'w101 ace vsNPC turret');
+  const aceVsNpcEmits = !!ace101 && aceVsNpcFires.some((e) => e.weapon === 'turret' && e.target === prey101);
+  w101drop(ace101);
+  const cutter101 = w101spawn('pirate', 'cutter', 'redledger', 'cutter', { alwaysHunts: true });
+  const cutterVsNpcFires = w101firesVsNpc(cutter101, prey101, 60, 'w101 cutter vsNPC turret');
+  w101drop(cutter101);
+  const traderGun101 = w101spawn('trader', 'heavy', 'veridian', 'traderGun');
+  if (traderGun101) {
+    traderGun101.ai.mode = 'hunt';
+    traderGun101.ai.phase = 'attack';
+  }
+  const traderVsNpcFires = w101firesVsNpc(traderGun101, prey101, 40, 'w101 trader vsNPC turret');
+  w101drop(traderGun101);
+  const unkAce101 = w101spawn('ace', 'ace', 'unknowables', 'unk', { alwaysHunts: true });
+  const unkVsNpcFires = w101firesVsNpc(unkAce101, prey101, 60, 'w101 unk vsNPC turret');
+  w101drop(unkAce101);
+  const tel101 = w101spawn('ace', 'ace', 'redledger', 'tel', {
+    alwaysHunts: true, phase: 'telegraph', phaseStart: ctx.world.time,
+  });
+  const telVsNpcFires = w101firesVsNpc(tel101, prey101, 90, 'w101 telegraph vsNPC turret');
+  w101drop(tel101);
+  const vsPAce = w101spawn('ace', 'ace', 'redledger', 'vsP', { alwaysHunts: true });
+  const vsPFires = w101firesPlayer(vsPAce, 90, 'w101 ace vsPlayer turret');
+  w101drop(vsPAce);
+  w101drop(prey101);
+
+  ctx.flags.docked = savedDock101;
+  ctx.ship.object.position.copy(savedPos101);
+
+  const w101 = {
+    heavyPatrol: w101canTurret(w101ctxHunt, w101live('patrol', 'heavy', 'freehold')) === true,
+    ace: w101canTurret(w101ctxHunt, w101live('ace', 'ace', 'redledger')) === true,
+    frigate: w101canTurret(w101ctxHunt, w101live('patrol', 'frigate', 'freehold')) === true,
+    seat0: w101canTurret(w101ctxHunt, w101live('pirate', 'cutter', 'redledger')) === false
+      && w101canSeat('cutter', 'turret') === false,
+    civilian: w101canTurret(w101ctxHunt, w101live('trader', 'heavy', 'veridian')) === false,
+    unk: w101canTurret(w101ctxHunt, w101live('ace', 'ace', 'unknowables')) === false,
+    huntUnchanged: !huntGate101.includes('turret') && huntGate101.includes('isCivilianRole'),
+    noBeautifulWord: !/beautiful/i.test(turretGate101),
+    explicitPlayerLiteral: npc101src.includes("weapon: 'turret', target: 'player'"),
+    vsPlayerContinue: turretEvt101.includes("if (e.target !== 'player') continue"),
+    vsNpcBoltFalse: turretEvt101.includes('bolt.vsPlayer = false'),
+    vsPlayerBoltTrue: turretEvt101.includes('bolt.vsPlayer = true'),
+    npcCapConst: combat101src.includes('const NPC_TURRET_LIVE_CAP = 4'),
+    noTurretToast: !helper101src.includes('Incoming turret')
+      && helper101src.includes("if (target !== 'player') return null"),
+    toastVsNpc,
+    toastVsPlayer: toastVsPlayer && toastVsPlayer.text === w101fire,
+    dartUnchanged: dartUnchanged101 && dartUnchanged101.text === w101dart,
+    missingDrops: missingDrops101,
+    vsPlayerWorks,
+    unkShooterDrops: unkShooterDrops101,
+    cap4shared,
+    vsNpcSpawned,
+    playerUnbruised,
+    lastAtkNotPlayer,
+    aceVsNpcEmits,
+    seat0NeverVsNpc: !cutterVsNpcFires.some((e) => e.weapon === 'turret')
+      && !traderVsNpcFires.some((e) => e.weapon === 'turret'),
+    unkNeverEmitVsNpc: !unkVsNpcFires.some((e) => e.weapon === 'turret'),
+    telegraphColdVsNpc: !telVsNpcFires.some((e) => e.weapon === 'turret'),
+    vsPlayerStillEmits: !!vsPAce && vsPFires.some((e) => e.weapon === 'turret' && e.target === 'player'),
+    digit0Shipyard: station101src.includes("DOCK_KEY_SERVICES")
+      && /shipyard/.test(station101src)
+      && hangar101src.includes('turret'),
+    hudEmpty: inbound101 === false
+      && hud101src.includes('keep the 80 px hub on glass')
+      && !hud101src.includes('6 ·'),
+    noInnerHtml: !npc101src.includes('innerHTML') && !helper101src.includes('innerHTML'),
+    noStateFork: !combat101src.includes('WEAPONS.npcTurret'),
+    noHangarWrite: !combat101src.slice(
+      combat101src.indexOf('function spawnNpcShot'),
+      combat101src.indexOf('function updateMining'),
+    ).includes('world.turret'),
+  };
+  console.log('wave101 turrets:', JSON.stringify(w101));
+  if (!Object.values(w101).every(Boolean)) { console.log('WAVE101 TURRETS FAIL'); errors++; }
+}
+
+// ---- WAVE102 TGT-03 remaining: tgt-rail CLOS rate next to DIST ----
+{
+  const { losCloseRate: w102los } = await import('../src/game/los-close.js');
+  const here102 = dirname(fileURLToPath(import.meta.url));
+  const src102 = (rel) => readFileSync(join(here102, '..', rel), 'utf8');
+  const hud102src = src102('src/systems/hud.js');
+  const css102src = src102('src/ui/hud.css');
+  const helper102src = src102('src/game/los-close.js');
+  const save102src = src102('src/game/save.js');
+  const ctrl102src = src102('src/systems/controls.js');
+  const station102src = src102('src/systems/station.js');
+  const npc102src = src102('src/systems/npc.js');
+  const worldFields102 = save102src.slice(
+    save102src.indexOf('export const WORLD_FIELDS'),
+    save102src.indexOf('const SURVIVOR'),
+  );
+  const distIdx102 = hud102src.indexOf("el('div', 'rw-label', tgtDistRow, 'DIST')");
+  const closIdx102 = hud102src.indexOf("el('div', 'rw-label', tgtClosRow, 'CLOS')");
+  const from102 = { x: 0, y: 0, z: 0 };
+  const tgt102 = { x: 0, y: 0, z: 100 };
+  const approach102 = w102los(from102, tgt102, { x: 0, y: 0, z: -12 });
+  const recede102 = w102los(from102, tgt102, { x: 0, y: 0, z: 9 });
+  const zeroAlong102 = w102los(from102, tgt102, { x: 5, y: 0, z: 0 });
+  const epsExact102 = w102los(from102, { x: 0, y: 0, z: 0.01 }, { x: 0, y: 0, z: 40 });
+  const epsTiny102 = w102los(from102, { x: 0, y: 0, z: 0.001 }, { x: 0, y: 0, z: 40 });
+  const failNull102 = w102los(null, tgt102, { x: 0, y: 0, z: -4 }) === 0
+    && w102los(from102, undefined, { x: 0, y: 0, z: -4 }) === 0
+    && w102los(from102, tgt102, null) === 0
+    && w102los({ x: NaN, y: 0, z: 0 }, tgt102, { x: 0, y: 0, z: -4 }) === 0;
+  const fmt102 = (along) => {
+    const n = Math.round(along);
+    if (!Number.isFinite(n) || n === 0) return '0 u/s';
+    if (n > 0) return '+' + n + ' u/s';
+    return n + ' u/s';
+  };
+
+  const hudRoot102 = document.getElementById('hud');
+  const has102 = (n, cls) => typeof n?.className === 'string' && n.className.split(/\s+/).includes(cls);
+  const walk102 = (root) => [...walkDom(root ?? { children: [] })];
+  const reticle102 = walk102(hudRoot102).find((n) => has102(n, 'rw-reticle'));
+  const tgtRail102 = walk102(hudRoot102).find((n) => has102(n, 'rw-combat-target'));
+  const contacts102 = walk102(hudRoot102).find((n) => has102(n, 'rw-contacts') && n.tagName === 'DIV');
+  const closNodes102 = walk102(hudRoot102).filter((n) => has102(n, 'rw-combat-clos'));
+  const hubHasClos102 = !!(reticle102 && walk102(reticle102).some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    return c.split(/\s+/).includes('rw-combat-clos') || n.textContent === 'CLOS';
+  }));
+  const labelOf102 = (row) => {
+    if (!row) return '';
+    for (const n of walk102(row)) {
+      if (has102(n, 'rw-label')) return n.textContent;
+    }
+    return '';
+  };
+  const railKids102 = tgtRail102 ? [...tgtRail102.children] : [];
+  const distI102 = railKids102.findIndex((n) => labelOf102(n) === 'DIST');
+  const closRow102 = distI102 >= 0 ? railKids102[distI102 + 1] : null;
+  const distVal102 = walk102(tgtRail102).find((n) => has102(n, 'rw-combat-dist'));
+  const closVal102 = closNodes102[0] || walk102(tgtRail102).find((n) => has102(n, 'rw-combat-clos'));
+  const distLab102 = walk102(tgtRail102).find((n) => has102(n, 'rw-label') && n.textContent === 'DIST');
+  const closLab102 = walk102(tgtRail102).find((n) => has102(n, 'rw-label') && n.textContent === 'CLOS');
+  const forbiddenCls102 = /rw-contacts|rw-contact-close|rw-contact-pip|rw-edge-arrow|rw-nav-gate-cue|rw-reticle|rw-lead/;
+  const closClassOk102 = !!(closVal102 && has102(closVal102, 'rw-combat-clos')
+    && !forbiddenCls102.test(typeof closVal102.className === 'string' ? closVal102.className : ''));
+
+  const hudSys102 = systems.find((pair) => pair[0] === 'hud')[1];
+  const savedDock102 = ctx.flags.docked;
+  const savedJump102 = ctx.gate.jumping;
+  const savedLock102 = ctx.targets.current;
+  const savedScan102 = ctx.world.scanner;
+  const savedVel102 = ctx.ship.velocity.clone();
+  ctx.flags.docked = false;
+  ctx.gate.jumping = false;
+  ctx.world.scanner = 0;
+  ctx.ship.velocity.set(0, 0, 0);
+  const origin102 = ctx.ship.object.position.clone();
+  const rec102 = {
+    id: 'wave102-clos', name: 'ClosLive', classKey: 'cutter',
+    faction: 'independent', role: 'trader', resolve: 50,
+  };
+  let live102 = spawnLiveShip(ctx, rec102, origin102.clone().add(new THREE.Vector3(0, 0, -80)));
+  let spawned102 = false;
+  if (live102) {
+    ctx.ships.push(live102);
+    spawned102 = true;
+  } else {
+    live102 = (ctx.ships ?? []).find((s) => s?.state && !s.state.destroyed && s.object) ?? null;
+  }
+  ctx.targets.current = live102;
+  hudSys102.update(0.2);
+  const firstClos102 = closVal102 ? closVal102.textContent : '';
+  tick(15, 'w102 live ship clos');
+  if (live102?.object?.position) {
+    live102.object.position.copy(origin102).add(new THREE.Vector3(0, 0, -60));
+  }
+  tick(15, 'w102 clos rate');
+  const liveRailShown102 = !!(tgtRail102 && tgtRail102.classList && !tgtRail102.classList.contains('is-hidden'));
+  const liveDist102 = !!(distVal102 && /u/.test(distVal102.textContent || ''));
+  const liveClos102 = closVal102 ? closVal102.textContent : '';
+  const liveClosSigned102 = /^-?\d+ u\/s$/.test(liveClos102) || /^\+\d+ u\/s$/.test(liveClos102);
+  const liveNoGlyph102 = !!(liveClos102 && !liveClos102.includes('«') && !liveClos102.includes('»'));
+  const scanner0ArcHidden102 = !contacts102 || (contacts102.classList && contacts102.classList.contains('is-hidden'));
+
+  function w102kindHidden(lock) {
+    ctx.targets.current = lock;
+    hudSys102.update(0.2);
+    return !!(tgtRail102 && tgtRail102.classList && tgtRail102.classList.contains('is-hidden'));
+  }
+  const kindPos102 = origin102.clone().add(new THREE.Vector3(0, 0, -40));
+  const rock102 = ctx.asteroids && ctx.asteroids.list && ctx.asteroids.list[0];
+  const rockHidden102 = rock102
+    ? w102kindHidden(rock102)
+    : w102kindHidden({ position: kindPos102, lockKind: 'rock' });
+  const stationHidden102 = w102kindHidden({ lockKind: 'station', position: kindPos102 });
+  const gateHidden102 = w102kindHidden({ lockKind: 'gate', position: kindPos102, to: 'freehold' });
+  const podHidden102 = w102kindHidden({ lockKind: 'pod', position: kindPos102, pod: {} });
+  const landmarkHidden102 = w102kindHidden({ lockKind: 'landmark', id: 'lm', position: kindPos102 });
+
+  ctx.flags.docked = savedDock102;
+  ctx.gate.jumping = savedJump102;
+  ctx.targets.current = savedLock102;
+  ctx.world.scanner = savedScan102;
+  ctx.ship.velocity.copy(savedVel102);
+  ctx.events.length = 0;
+  if (spawned102 && live102) {
+    const i102 = ctx.ships.indexOf(live102);
+    if (i102 >= 0) ctx.ships.splice(i102, 1);
+    removeLiveShip(ctx, live102);
+  }
+
+  const w102 = {
+    helperSign: approach102 < 0 && recede102 > 0 && Math.round(approach102) === -12 && Math.round(recede102) === 9,
+    helperEps: zeroAlong102 === 0 && epsExact102 === 0 && epsTiny102 === 0,
+    helperFailClosed: failNull102 && w102los(from102, from102, { x: 0, y: 0, z: -40 }) === 0,
+    helperNotSpd: Math.abs(zeroAlong102) < 1e-9 && Math.hypot(5, 0, 0) === 5,
+    fmtDeputize: fmt102(-12) === '-12 u/s' && fmt102(12) === '+12 u/s' && fmt102(0.2) === '0 u/s'
+      && fmt102(-0.2) === '0 u/s' && !fmt102(-12).includes('«'),
+    hubEmpty: hubHasClos102 === false && hud102src.includes('keep the 80 px hub on glass'),
+    closAfterDist: distIdx102 >= 0 && closIdx102 > distIdx102
+      && !!distLab102 && !!closLab102
+      && !!(closRow102 && labelOf102(closRow102) === 'CLOS')
+      && closClassOk102
+      && css102src.includes('.rw-combat-clos')
+      && !!closVal102
+      && has102(tgtRail102, 'rw-combat-target'),
+    liveShipLock: liveRailShown102 && liveDist102 && liveClosSigned102 && liveNoGlyph102
+      && (firstClos102 === '0 u/s' || firstClos102 === '—'),
+    scanner0ShowsRail: liveRailShown102 && liveDist102 && liveClosSigned102 && scanner0ArcHidden102
+      && hud102src.includes('losCloseRate')
+      && !/contactsGate\([^)]*targetClos/.test(hud102src),
+    nonShipNoRate: rockHidden102 && stationHidden102 && gateHidden102 && podHidden102 && landmarkHidden102,
+    noWorldField: !/closure|tgtRate|closRate/.test(worldFields102),
+    noInnerHtml: !hud102src.includes('innerHTML') && !helper102src.includes('innerHTML'),
+    digit0Shipyard: station102src.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && station102src.includes("'shipyard'"),
+    keyKEngine: ctrl102src.includes("'KeyK'") && ctrl102src.includes('toggleEnginePart')
+      && ctrl102src.includes('pendingEnginePart'),
+    contactsFloor: hud102src.includes('CONTACT_CLOSE_FLOOR = 4')
+      && hud102src.includes('along < -CONTACT_CLOSE_FLOOR')
+      && hud102src.includes("closeState === 'in' ? '«'")
+      && !helper102src.includes('ENVELOPE_CLOSE_RATE')
+      && npc102src.includes('ENVELOPE_CLOSE_RATE = 40')
+      && !hud102src.includes('ENVELOPE_CLOSE_RATE'),
+    noNewCtxField: !hud102src.includes('targets.closure') && !hud102src.includes("emit('clos"),
+    noKeyframes: !css102src.includes('rw-combat-clos') || !css102src.slice(
+      css102src.indexOf('.rw-combat-clos'),
+      css102src.indexOf('.rw-combat-clos') + 180,
+    ).includes('@keyframes'),
+    measureRails: hud102src.includes('measureRails()')
+      && hud102src.includes("tgtClosVal.textContent = closText"),
+  };
+  console.log('wave102 clos:', JSON.stringify(w102));
+  if (!Object.values(w102).every(Boolean)) { console.log('WAVE102 CLOS FAIL'); errors++; }
+}
+
+// ---- WAVE103 HUD-03 remaining: optional HUD audio alerts (KeyO + song gate) ----
+{
+  const { HUD_ALERT_TYPES: w103alerts } = await import('../src/systems/song.js');
+  const here103 = dirname(fileURLToPath(import.meta.url));
+  const src103 = (rel) => readFileSync(join(here103, '..', rel), 'utf8');
+  const settings103src = src103('src/systems/settings.js');
+  const ctx103src = src103('src/core/ctx.js');
+  const song103src = src103('src/systems/song.js');
+  const hud103src = src103('src/systems/hud.js');
+  const css103src = src103('src/ui/hud.css');
+  const station103src = src103('src/systems/station.js');
+  const save103src = src103('src/game/save.js');
+  const toast103src = src103('src/game/npc-fire-toast.js');
+  const ctrl103src = src103('src/systems/controls.js');
+  const worldFields103 = save103src.slice(
+    save103src.indexOf('export const WORLD_FIELDS'),
+    save103src.indexOf('const SURVIVOR'),
+  );
+  const checkboxBlock103 = settings103src.slice(
+    settings103src.indexOf('const CHECKBOXES'),
+    settings103src.indexOf('export function initSettings'),
+  );
+  const reducedI103 = checkboxBlock103.indexOf("['reducedMotion', 'Reduced motion']");
+  const hudAlertI103 = checkboxBlock103.indexOf("['hudAlerts', 'HUD audio alerts']");
+  const muteI103 = checkboxBlock103.indexOf("['muted', 'Mute all audio']");
+  const fields103 = {
+    colorblind: (v) => typeof v === 'boolean',
+    highContrast: (v) => typeof v === 'boolean',
+    reducedMotion: (v) => typeof v === 'boolean',
+    muted: (v) => typeof v === 'boolean',
+    hudAlerts: (v) => typeof v === 'boolean',
+    hints: (v) => typeof v === 'boolean',
+    textScale: (v) => [0.85, 1, 1.2, 1.5].includes(v),
+    masterVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  };
+  const reserved103 = new Set(['__proto__', 'constructor', 'prototype']);
+  function restoreObj103(data, seed) {
+    const s = { ...seed };
+    if (data && typeof data === 'object') {
+      for (const key of Object.keys(fields103)) {
+        if (Object.prototype.hasOwnProperty.call(data, key) && fields103[key](data[key])) s[key] = data[key];
+      }
+    }
+    return s;
+  }
+  function restore103(blob, seed) {
+    try {
+      return restoreObj103(JSON.parse(blob), seed);
+    } catch {
+      return { ...seed };
+    }
+  }
+  const def103 = { hudAlerts: false, muted: false, colorblind: false };
+  const restoredOn103 = restore103('{"hudAlerts":true}', def103);
+  const restoredBad103 = restore103('{"hudAlerts":"true","muted":1}', def103);
+  const restoredExtra103 = restore103('{"hudAlerts":true,"klaxonSku":true}', def103);
+  const restoredProto103 = restore103('{"__proto__":{"hudAlerts":true},"constructor":true,"prototype":true}', def103);
+  const restoredCorrupt103 = restore103('{not json', def103);
+  let protoPollute103 = false;
+  try {
+    JSON.parse('{"__proto__":{"hudAlerts":true}}');
+    protoPollute103 = Object.prototype.hudAlerts === true;
+  } catch { protoPollute103 = true; }
+  const MASTER_GAIN_103 = 0.15;
+  const silentMuted103 = MASTER_GAIN_103 * (true ? 0 : 1) === 0;
+  const silentVol0103 = MASTER_GAIN_103 * (false ? 0 : 0) === 0;
+  const combatKeys103 = ['npcFire', 'npcFireMissile', 'playerHit'];
+  const subset103 = ['hudMechRange', 'hudMechMatch', 'hudMechContact', 'hostileEnter', 'hullBand', 'reticleLock'];
+  const hudRoot103 = document.getElementById('hud');
+  const walk103 = (root) => [...walkDom(root ?? { children: [] })];
+  const has103 = (n, cls) => typeof n?.className === 'string' && n.className.split(/\s+/).includes(cls);
+  const reticle103 = walk103(hudRoot103).find((n) => has103(n, 'rw-reticle'));
+  const hubAlert103 = !!(reticle103 && walk103(reticle103).some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    const t = typeof n.textContent === 'string' ? n.textContent : '';
+    return /hud-alert|klaxon|alert-pip|alert-gauge/i.test(c) || t === 'HUD audio alerts';
+  }));
+  function findCb103(label) {
+    for (const n of walkDom(document.body)) {
+      if (n.tagName === 'INPUT' && n.type === 'checkbox' &&
+        (n.parent?.children ?? []).some((c) => typeof c.textContent === 'string' && c.textContent === label)) {
+        return n;
+      }
+    }
+    return null;
+  }
+  const hudAlertsInput103 = findCb103('HUD audio alerts');
+  const muteInput103 = findCb103('Mute all audio');
+  const reducedInput103 = findCb103('Reduced motion');
+  const savedHudAlerts103 = ctx.settings.hudAlerts;
+  const savedMuted103 = ctx.settings.muted;
+  const defaultOff103 = ctx.settings.hudAlerts === false && hudAlertsInput103 && hudAlertsInput103.checked === false;
+  hudAlertsInput103?.click();
+  let persistedOn103 = false;
+  try { persistedOn103 = JSON.parse(store.get('rimward-settings-v1') ?? 'null')?.hudAlerts === true; } catch { persistedOn103 = false; }
+  const toggledOn103 = ctx.settings.hudAlerts === true && hudAlertsInput103?.checked === true;
+  hudAlertsInput103?.click();
+  let persistedOff103 = false;
+  try { persistedOff103 = JSON.parse(store.get('rimward-settings-v1') ?? 'null')?.hudAlerts === false; } catch { persistedOff103 = false; }
+  ctx.settings.hudAlerts = savedHudAlerts103;
+  ctx.settings.muted = savedMuted103;
+
+  const applySlice103 = settings103src.slice(
+    settings103src.indexOf('function apply()'),
+    settings103src.indexOf('function persist()'),
+  );
+  const songCueSlice103 = song103src.slice(
+    song103src.indexOf('const cue ='),
+    song103src.indexOf('if (typ === \'songShift\')'),
+  );
+
+  const w103 = {
+    defaultFalse: ctx103src.includes('hudAlerts: false') && ctx.settings.hudAlerts === false,
+    fieldsBool: settings103src.includes('hudAlerts: (v) => typeof v === \'boolean\''),
+    checkboxOrder: reducedI103 >= 0 && hudAlertI103 > reducedI103 && muteI103 > hudAlertI103,
+    persistKey: settings103src.includes("STORAGE_KEY = 'rimward-settings-v1'")
+      && !settings103src.includes('rimward-hud-alerts'),
+    loadWalk: settings103src.includes('for (const key of Object.keys(FIELDS))')
+      && settings103src.includes('Object.prototype.hasOwnProperty.call(data, key)')
+      && !/for\s*\(\s*const\s+\w+\s+in\s+data\s*\)/.test(settings103src),
+    reservedNotFields: [...reserved103].every((k) => !Object.prototype.hasOwnProperty.call(fields103, k)),
+    restoreOn: restoredOn103.hudAlerts === true,
+    restoreType: restoredBad103.hudAlerts === false,
+    restoreUnknown: restoredExtra103.klaxonSku === undefined && restoredExtra103.hudAlerts === true,
+    restoreProto: restoredProto103.hudAlerts === false && protoPollute103 === false
+      && restoreObj103(Object.create({ hudAlerts: true }), def103).hudAlerts === false,
+    restoreCorrupt: restoredCorrupt103.hudAlerts === false,
+    panelCheckbox: defaultOff103 && toggledOn103 && persistedOn103 && persistedOff103 && !!muteInput103 && !!reducedInput103,
+    noInnerHtml: !settings103src.includes('innerHTML') && !song103src.includes('innerHTML'),
+    subsetSet: subset103.every((k) => w103alerts.has(k)) && w103alerts.size === 6
+      && combatKeys103.every((k) => !w103alerts.has(k)),
+    songGate: songCueSlice103.includes('HUD_ALERT_TYPES.has(typ)')
+      && songCueSlice103.includes('hudAlerts === true')
+      && song103src.includes('ctx.settings?.muted ? 0'),
+    combatNotGated: combatKeys103.every((k) => !w103alerts.has(k))
+      && song103src.includes('\n  npcFire:')
+      && song103src.includes('\n  npcFireMissile:')
+      && song103src.includes('\n  playerHit:')
+      && !song103src.includes('incomingFire')
+      && !song103src.includes('incomingDart'),
+    muteWins: silentMuted103 && silentVol0103
+      && song103src.includes('ctx.settings?.muted ? 0 : (ctx.settings?.masterVolume ?? 1)'),
+    familyStill: song103src.includes('const FAMILY_CUES') && songCueSlice103.includes('FAMILY_CUES[typ]'),
+    incomingFreeze: toast103src.includes("INCOMING_FIRE_TOAST = 'Incoming fire.'")
+      && toast103src.includes("INCOMING_DART_TOAST = 'Incoming dart.'")
+      && hud103src.includes('npcFireToast')
+      && hud103src.includes('Incoming dart.'),
+    noNewEmit: !ctx103src.includes("'hudAlert'") && !song103src.includes("emit('hud"),
+    hubEmpty: hubAlert103 === false && hud103src.includes('keep the 80 px hub on glass'),
+    noReticleWidget: !hud103src.includes('HUD audio alerts') && !css103src.includes('rw-hud-alert'),
+    digit0Shipyard: station103src.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && station103src.includes("'shipyard'")
+      && station103src.includes('d === 0')
+      && station103src.includes("DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1]"),
+    digit89: station103src.includes("Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard'])")
+      && station103src.includes('else if (n === 8 || n === 9)')
+      && station103src.includes('armOutfitPapers'),
+    keysStay: ctrl103src.includes("'KeyT'") && ctrl103src.includes("'KeyV'")
+      && ctrl103src.includes("'KeyK'") && ctrl103src.includes("'KeyX'")
+      && settings103src.includes("e.code === 'KeyO'"),
+    visualHud03: applySlice103.includes('rw-colorblind')
+      && applySlice103.includes('rw-contrast')
+      && applySlice103.includes('rw-reduced-motion')
+      && !applySlice103.includes('hudAlerts')
+      && !/hud-alert|hudAlert/.test(css103src),
+    noWorldField: !/hudAlert/.test(worldFields103),
+    noBodyClass: !document.body.className.split(/\s+/).includes('rw-hud-alerts'),
+  };
+  console.log('wave103 hud-alerts:', JSON.stringify(w103));
+  if (!Object.values(w103).every(Boolean)) { console.log('WAVE103 HUD-ALERTS FAIL'); errors++; }
+}
+
+// ---- WAVE104 REP-05 remaining: covering + inbound jump refuse (PR1+PR2) ----
+{
+  const {
+    COVERING_LINE: w104CoverLine,
+    COVERING_STANDING_MIN: w104CoverMin,
+    COVERING_RADIUS: w104CoverR,
+    findCoveringWork: w104FindCover,
+    tickPoliceCover: w104TickCover,
+    resetPoliceCoverVisit: w104ResetCover,
+  } = await import('../src/game/police-cover.js');
+  const {
+    destJumpRefused: w104DestRefused,
+    JUMP_REFUSE_LINE: w104JumpLine,
+    JUMP_REFUSE_STANDING: w104JumpGate,
+    JUMP_REFUSE_SKIP: w104JumpSkip,
+    resetJumpRefuseVisit: w104ResetJump,
+    initJump: w104InitJump,
+  } = await import('../src/game/jump.js');
+  const { POLICE_LEAVE_LINE: w104LeaveLine } = await import('../src/game/police-leave.js');
+  const { standingRead: w104StandingRead } = await import('../src/game/data-trade.js');
+  const { WORLD_FIELDS: w104Fields } = await import('../src/game/save.js');
+  const here104 = dirname(fileURLToPath(import.meta.url));
+  const src104 = (rel) => readFileSync(join(here104, '..', rel), 'utf8');
+  const cover104src = src104('src/game/police-cover.js');
+  const jump104src = src104('src/game/jump.js');
+  const npc104src = src104('src/systems/npc.js');
+  const leave104src = src104('src/game/police-leave.js');
+  const station104src = src104('src/systems/station.js');
+  const save104src = src104('src/game/save.js');
+  const worldFields104 = save104src.slice(
+    save104src.indexOf('export const WORLD_FIELDS'),
+    save104src.indexOf('const SURVIVOR'),
+  );
+
+  function vec104(x, y, z) {
+    return {
+      x, y, z,
+      distanceTo(o) { return Math.hypot(x - o.x, y - o.y, z - o.z); },
+    };
+  }
+  function hull104(role, faction, extra = {}) {
+    return {
+      role,
+      record: { role, faction, ...(extra.record || {}) },
+      state: {
+        hull: 100, hullMax: 100, screen: 50, screenMax: 50,
+        destroyed: false, disabled: false, surrendered: false, faction,
+        ...(extra.state || {}),
+      },
+      ai: {
+        role,
+        mode: extra.mode ?? (role === 'patrol' ? 'loiter' : 'hunt'),
+        target: extra.target ?? null,
+        intent: extra.intent ?? false,
+        lastAttacker: extra.lastAttacker ?? null,
+      },
+      object: { position: extra.pos ?? vec104(0, 0, 500) },
+    };
+  }
+  function coverCtx104(extra = {}) {
+    const events = [];
+    const station = extra.station ?? vec104(0, 0, 0);
+    return {
+      events,
+      lastEvents: extra.lastEvents ?? [],
+      emit(type, data = {}) { events.push({ type, ...data }); },
+      world: {
+        currentSystem: extra.system ?? 'freehold',
+        reputation: extra.reputation ?? { freehold: 10 },
+        time: 0,
+      },
+      ship: extra.ship ?? { object: { position: extra.playerPos ?? vec104(0, 0, 500) } },
+      config: { world: { stationPosition: station } },
+      ships: extra.ships ?? [],
+      flags: extra.flags ?? { docked: false },
+      gate: extra.gate ?? { jumping: false },
+      targets: extra.targets ?? { current: null },
+    };
+  }
+  function fireCover104(c) {
+    return c.events.filter((e) => e.type === 'commLine' && e.text === w104CoverLine).length;
+  }
+  function fireJump104(c) {
+    return c.events.filter((e) => e.type === 'commLine' && e.text === w104JumpLine).length;
+  }
+
+  const patrol = hull104('patrol', 'freehold', { pos: vec104(0, 0, 500) });
+  const pirate = hull104('pirate', 'independent', {
+    pos: vec104(40, 0, 500),
+    lastAttacker: 'player',
+    target: 'player',
+    intent: true,
+    mode: 'hunt',
+  });
+  const ace = hull104('ace', 'redledger', {
+    pos: vec104(-40, 0, 520),
+    lastAttacker: null,
+    mode: 'duel',
+  });
+  const trader = hull104('trader', 'freehold', {
+    pos: vec104(20, 0, 510),
+    lastAttacker: 'player',
+  });
+  const unk = hull104('pirate', 'unknowables', {
+    pos: vec104(10, 0, 530),
+    lastAttacker: 'player',
+  });
+  const vsPlayerCtx = coverCtx104({
+    ships: [patrol, pirate],
+    reputation: { freehold: 10 },
+  });
+  const coverHit = w104FindCover(vsPlayerCtx, patrol);
+  const coverVsPlayer = coverHit !== 'player' && coverHit !== vsPlayerCtx.ship && coverHit === pirate;
+
+  w104ResetCover();
+  const tickHit = w104TickCover(vsPlayerCtx);
+  w104TickCover(vsPlayerCtx);
+  const coverOnce = tickHit === true && fireCover104(vsPlayerCtx) === 1;
+
+  const nine = coverCtx104({
+    ships: [patrol, pirate],
+    reputation: { freehold: 9 },
+  });
+  w104ResetCover();
+  const noNine = w104FindCover(nine, patrol) === null && w104TickCover(nine) === false;
+
+  const zero = coverCtx104({
+    ships: [patrol, pirate],
+    reputation: { freehold: 0 },
+  });
+  w104ResetCover();
+  const noZero = w104FindCover(zero, patrol) === null && w104TickCover(zero) === false;
+
+  const protoBag = Object.create({ freehold: 50, veridian: -100 });
+  const protoRead = w104StandingRead(protoBag, 'freehold') === 0
+    && w104StandingRead(protoBag, 'veridian') === 0;
+  const protoCoverCtx = coverCtx104({
+    ships: [patrol, pirate],
+    reputation: protoBag,
+  });
+  w104ResetCover();
+  const protoNoCover = w104FindCover(protoCoverCtx, patrol) === null && w104TickCover(protoCoverCtx) === false;
+  const protoNoRefuse = w104DestRefused('veridian', protoBag) === false
+    && w104DestRefused('freehold', protoBag) === false;
+
+  const lockCtx = coverCtx104({
+    ships: [patrol, ace],
+    reputation: { freehold: 10 },
+    targets: { current: ace },
+  });
+  const coverLock = w104FindCover(lockCtx, patrol) === ace;
+
+  const traderCtx = coverCtx104({
+    ships: [patrol, trader],
+    reputation: { freehold: 10 },
+    targets: { current: trader },
+  });
+  const noTrader = w104FindCover(traderCtx, patrol) === null;
+
+  const unkCtx = coverCtx104({
+    ships: [patrol, unk],
+    reputation: { freehold: 10 },
+  });
+  const noUnk = w104FindCover(unkCtx, patrol) === null;
+
+  const patrolInZone = hull104('patrol', 'freehold', { pos: vec104(0, 0, 10) });
+  const pirateOut = hull104('pirate', 'independent', {
+    pos: vec104(0, 0, 500),
+    lastAttacker: 'player',
+  });
+  const zoneCtx = coverCtx104({
+    ships: [patrolInZone, pirateOut],
+    reputation: { freehold: 10 },
+  });
+  const noZone = w104FindCover(zoneCtx, patrolInZone) === null;
+
+  const hollowCover = coverCtx104({
+    system: 'hollowreach',
+    ships: [hull104('patrol', 'hollow', { pos: vec104(0, 0, 500) }), pirate],
+    reputation: { hollow: 50 },
+  });
+  w104ResetCover();
+  const noHollowCover = w104FindCover(hollowCover, hollowCover.ships[0]) === null;
+
+  const huntPlayerPatrol = hull104('patrol', 'freehold', {
+    pos: vec104(0, 0, 500),
+    lastAttacker: 'player',
+    target: 'player',
+    intent: true,
+    mode: 'hunt',
+  });
+  const vsP = coverCtx104({
+    ships: [huntPlayerPatrol, pirate],
+    reputation: { freehold: 10 },
+  });
+  const coverSkipVsPlayerPatrol = w104FindCover(vsP, huntPlayerPatrol) === null;
+
+  w104ResetJump();
+  const jumpEvents = [];
+  const jumpCtx = {
+    events: jumpEvents,
+    lastEvents: [],
+    emit(type, data = {}) { jumpEvents.push({ type, ...data }); },
+    world: { reputation: { veridian: -26, freehold: 0, redledger: -1000 }, currentSystem: 'freehold', time: 0 },
+    gate: { jumping: false, progress: 0, destination: null },
+    flags: { docked: false },
+    ships: [],
+    targets: { current: null },
+    ship: { object: null, velocity: { set() {} } },
+  };
+  const jumpCtl = w104InitJump(jumpCtx);
+  jumpCtx.emit('jumpRequested', { to: 'veridian' });
+  jumpCtl.update(0);
+  const refuseOnce = jumpCtx.gate.jumping === false && jumpCtx.gate.destination == null
+    && fireJump104(jumpCtx) === 1;
+  jumpEvents.length = 0;
+  jumpCtx.emit('jumpRequested', { to: 'veridian' });
+  jumpCtl.update(0);
+  const refuseNoSpam = jumpCtx.gate.jumping === false && fireJump104(jumpCtx) === 0;
+
+  w104ResetJump();
+  const outEvents = [];
+  const outCtx = {
+    events: outEvents,
+    lastEvents: [],
+    emit(type, data = {}) { outEvents.push({ type, ...data }); },
+    world: { reputation: { freehold: -1000, veridian: 0 }, currentSystem: 'freehold', time: 0 },
+    gate: { jumping: false, progress: 0, destination: null },
+    flags: { docked: false },
+    ships: [],
+    targets: { current: null },
+    ship: { object: null, velocity: { set() {} } },
+  };
+  const outCtl = w104InitJump(outCtx);
+  outCtx.emit('jumpRequested', { to: 'veridian' });
+  outCtl.update(0);
+  const outboundOk = outCtx.gate.jumping === true && fireJump104(outCtx) === 0;
+  outCtx.gate.jumping = false;
+  outCtx.gate.destination = null;
+
+  const indyId = Object.keys(SYSTEMS).find((id) => Object.hasOwn(SYSTEMS, id) && SYSTEMS[id].faction === 'independent')
+    || 'blackstation';
+  const bagMarked = {
+    freehold: -26,
+    veridian: -26,
+    redledger: -26,
+    hollow: -1000,
+    independent: -1000,
+    unknowables: -1000,
+  };
+  const lockableRefuse = w104DestRefused('veridian', bagMarked) === true
+    && w104DestRefused('freehold', { freehold: -25 }) === false
+    && w104DestRefused('freehold', { freehold: -26 }) === true;
+  const skipDest = w104DestRefused('hollowreach', bagMarked) === false
+    && w104DestRefused('veil', bagMarked) === false
+    && w104DestRefused(indyId, bagMarked) === false;
+  const missingDest = w104DestRefused('__proto__', bagMarked) === false
+    && w104DestRefused('constructor', bagMarked) === false
+    && w104DestRefused('not_a_system', bagMarked) === false;
+
+  const dockOpen = !/standingRead\(/.test(
+    station104src.slice(
+      station104src.indexOf('export function dock('),
+      station104src.indexOf('export function dock(') + 800,
+    ),
+  ) && station104src.includes('ctx.flags.docked = true');
+
+  const w104 = {
+    noWanted: !worldFields104.includes("'wanted'") && !worldFields104.includes("'crimeScore'")
+      && !cover104src.includes('wanted') && !jump104src.includes('crimeScore')
+      && !w104Fields.includes('wanted') && !w104Fields.includes('crimeScore'),
+    coverSkipVsPlayer: coverVsPlayer && coverSkipVsPlayerPatrol && noTrader && noUnk
+      && !cover104src.includes('standingOf')
+      && !cover104src.includes("setTarget(ai, 'player')"),
+    destSkipFlags: w104JumpSkip.has('independent') && w104JumpSkip.has('hollow')
+      && w104JumpSkip.has('unknowables') && !w104JumpSkip.has('beautiful') && skipDest,
+    protoBag: protoRead && protoNoCover && protoNoRefuse,
+    digit0Shipyard: station104src.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && station104src.includes("'shipyard'"),
+    leaveLine: w104LeaveLine === 'Leave this space.'
+      && leave104src.includes("export const POLICE_LEAVE_LINE = 'Leave this space.'"),
+    coverLine: w104CoverLine === 'Patrol covering.'
+      && cover104src.includes("export const COVERING_LINE = 'Patrol covering.'"),
+    jumpLine: w104JumpLine === 'No passage.'
+      && jump104src.includes("export const JUMP_REFUSE_LINE = 'No passage.'")
+      && !jump104src.includes('Leave this space.') && !jump104src.includes('No sale.'),
+    hasOwnDest: jump104src.includes('Object.hasOwn(SYSTEMS, to)')
+      && jump104src.includes('Object.hasOwn(FACTIONS, fac)')
+      && cover104src.includes('Object.hasOwn(SYSTEMS, id)')
+      && cover104src.includes('Object.hasOwn(FACTIONS, fac)'),
+    coverGate: w104CoverMin === 10 && w104CoverR === 300
+      && cover104src.includes('standingRead(ctx.world?.reputation, systemFaction)')
+      && npc104src.includes('findCoveringWork(ctx, live)')
+      && npc104src.includes('tickPoliceCover(ctx)')
+      && npc104src.includes('findPirateWork(ctx, live) || findCoveringWork(ctx, live)'),
+    coverOnce,
+    coverLock,
+    noNine,
+    noZero,
+    noZone,
+    noHollowCover,
+    jumpRefuse: w104JumpGate === -25 && lockableRefuse && missingDest && refuseOnce && refuseNoSpam,
+    outboundOk,
+    dockOpen,
+    pirateWorkUngated: npc104src.includes('export function findPirateWork')
+      && !/function findPirateWork[\s\S]{0,400}standingRead/.test(npc104src),
+  };
+
+  console.log('wave104 covering-jump:', JSON.stringify(w104));
+  if (!Object.values(w104).every(Boolean)) { console.log('WAVE104 COVERING-JUMP FAIL'); errors++; }
+}
+
+// ---- WAVE107 BIO-06 class-scaled living fin cadence (PR1–PR4) ----
+{
+  const {
+    LIVING_CADENCE: w107Cadence,
+    SWIM_IDLE_HZ: w107IdleHz,
+    SWIM_CRUISE_HZ: w107CruiseHz,
+    cadenceFor: w107CadenceFor,
+    classCruise: w107ClassCruise,
+  } = await import('../src/game/living-cadence.js');
+  const here107 = dirname(fileURLToPath(import.meta.url));
+  const src107 = (rel) => readFileSync(join(here107, '..', rel), 'utf8');
+  const ship107 = src107('src/systems/ship.js');
+  const assets107 = src107('src/systems/ship-assets.js');
+  const station107 = src107('src/systems/station.js');
+  const save107 = src107('src/game/save.js');
+  const worldFields107 = save107.slice(
+    save107.indexOf('export const WORLD_FIELDS'),
+    save107.indexOf('const SURVIVOR'),
+  );
+  const makeSwim107 = assets107.slice(
+    assets107.indexOf('function makeSwimUniforms()'),
+    assets107.indexOf('function injectSwim('),
+  );
+  const injectSwim107 = assets107.slice(
+    assets107.indexOf('function injectSwim('),
+    assets107.indexOf('function cloneSwimMaterials('),
+  );
+  const updateAsset107 = assets107.slice(
+    assets107.indexOf('export function updateShipAsset'),
+  );
+
+  const hzLight = w107CadenceFor('light').hzScale;
+  const hzAce = w107CadenceFor('ace').hzScale;
+  const hzCutter = w107CadenceFor('cutter').hzScale;
+  const hzHeavy = w107CadenceFor('heavy').hzScale;
+  const hzFrigate = w107CadenceFor('frigate').hzScale;
+  const hzFreighter = w107CadenceFor('freighter').hzScale;
+
+  const w107 = {
+    lightEnvelope: w107IdleHz === 0.5 && w107CruiseHz === 2.3
+      && /serene:\s*\{\s*rate:\s*1(?:\.0)?/.test(ship107)
+      && /keen:\s*\{\s*rate:\s*1\.25/.test(ship107)
+      && /feral:\s*\{\s*rate:\s*1\.5/.test(ship107)
+      && /pained:\s*\{\s*rate:\s*0\.6/.test(ship107)
+      && ship107.includes('cadence !== LIVING_CADENCE.light'),
+    lightCadence: w107CadenceFor('light').hzScale === 1
+      && w107CadenceFor('light').sweepScale === 1
+      && w107Cadence.light.hzScale === 1
+      && w107Cadence.light.sweepScale === 1,
+    monotonicHz: hzLight >= hzAce && hzAce > hzCutter && hzCutter > hzHeavy
+      && hzHeavy > hzFrigate && hzFrigate > hzFreighter,
+    protoSafe: w107CadenceFor('__proto__') === w107Cadence.light
+      && w107CadenceFor('constructor') === w107Cadence.light
+      && w107CadenceFor('toString') === w107Cadence.light
+      && w107CadenceFor(null) === w107Cadence.light
+      && w107CadenceFor(undefined) === w107Cadence.light
+      && w107CadenceFor(12) === w107Cadence.light
+      && w107CadenceFor({}) === w107Cadence.light
+      && w107CadenceFor('not-a-class') === w107Cadence.light
+      && w107ClassCruise('__proto__') === 120
+      && w107ClassCruise('nope') === 120,
+    noCadenceWorldField: !/\bcadence\b/.test(worldFields107),
+    digit0Shipyard: station107.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && station107.includes("'shipyard'"),
+    npcReducedAmp0: /uSwimAmp\.value\s*=\s*reducedMotion\s*\?\s*0\s*:\s*1/.test(updateAsset107),
+    swimHzMatch: assets107.includes('SWIM_IDLE_HZ')
+      && assets107.includes('SWIM_CRUISE_HZ')
+      && assets107.includes("from '../game/living-cadence.js'")
+      && w107IdleHz === 0.5 && w107CruiseHz === 2.3,
+    uSwimSweep: makeSwim107.includes('uSwimSweep')
+      && injectSwim107.includes('uSwimSweep')
+      && injectSwim107.includes('uniform float uSwimSweep')
+      && /flap \* uSwimSweep/.test(injectSwim107)
+      && !/uSwimAmp.*sweepScale/.test(updateAsset107),
+  };
+
+  console.log('wave107 bio-06:', JSON.stringify(w107));
+  if (!Object.values(w107).every(Boolean)) { console.log('WAVE107 BIO-06 FAIL'); errors++; }
 }
 
 if (errors === 0) {

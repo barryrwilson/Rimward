@@ -1,0 +1,17 @@
+wave85 ap-stub probe: {
+  "channelDefaults": true,
+  "stubIdleZeros": true,
+  "mirrorPersistFlag": true,
+  "stringAutopilotNotEngaged": true,
+  "noInputThrottleWrite": true,
+  "noJumpRequested": true,
+  "noTargetsWrite": true,
+  "noMeshWrite": true,
+  "noInnerHTML": true,
+  "noTypeSmashInStub": true,
+  "tickOrder": true,
+  "noSecondWorldField": true,
+  "stateUntouched": true,
+  "allowlistStrip": true
+}
+PASS

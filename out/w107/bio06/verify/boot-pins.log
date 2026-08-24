@@ -1,0 +1,12 @@
+{
+  "lightEnvelope": true,
+  "lightCadence": true,
+  "monotonicHz": true,
+  "protoSafe": true,
+  "noCadenceWorldField": true,
+  "digit0Shipyard": true,
+  "npcReducedAmp0": true,
+  "swimHzMatch": true,
+  "uSwimSweep": true
+}
+WAVE107 BIO-06 pins all true

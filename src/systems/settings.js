@@ -1,7 +1,7 @@
 /**
  * Client settings + accessibility (doc §18.4/§20: "important states are
  * legible without relying on color"). settings.js is the ONLY writer of
- * ctx.settings; every other system reads it live (song.js volume/mute,
+ * ctx.settings; every other system reads it live (song.js volume/mute/hudAlerts,
  * onboarding.js hints, ship/gate/hud reducedMotion).
  *
  * Persisted under its own localStorage key 'rimward-settings-v1' — client
@@ -17,7 +17,8 @@
  *
  * Apply side effects: body classes rw-colorblind / rw-contrast /
  * rw-reduced-motion (CSS in hud.css/screens.css reacts), and --rw-text-scale
- * on #hud (font sizes multiply by it).
+ * on #hud (font sizes multiply by it). hudAlerts has no body class; song.js
+ * reads the bool live, same as mute.
  */
 
 const STORAGE_KEY = 'rimward-settings-v1';
@@ -30,6 +31,7 @@ const FIELDS = {
   highContrast: (v) => typeof v === 'boolean',
   reducedMotion: (v) => typeof v === 'boolean',
   muted: (v) => typeof v === 'boolean',
+  hudAlerts: (v) => typeof v === 'boolean',
   hints: (v) => typeof v === 'boolean',
   textScale: (v) => TEXT_SCALES.includes(v),
   masterVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
@@ -39,6 +41,7 @@ const CHECKBOXES = [
   ['colorblind', 'Colorblind-safe palette'],
   ['highContrast', 'High contrast HUD'],
   ['reducedMotion', 'Reduced motion'],
+  ['hudAlerts', 'HUD audio alerts'],
   ['muted', 'Mute all audio'],
   ['hints', 'Onboarding hints'],
 ];
@@ -53,7 +56,7 @@ export function initSettings(ctx) {
       const data = JSON.parse(raw);
       if (data && typeof data === 'object') {
         for (const key of Object.keys(FIELDS)) {
-          if (key in data && FIELDS[key](data[key])) s[key] = data[key];
+          if (Object.prototype.hasOwnProperty.call(data, key) && FIELDS[key](data[key])) s[key] = data[key];
         }
       }
     }

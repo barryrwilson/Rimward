@@ -1,0 +1,4 @@
+WAVE85 GUIDANCE PROBE PASS
+node out/w85/guide/probe.mjs
+ARIA: role=status + aria-live polite on .rw-nav-readout-live only; section aria-live=off aria-atomic=false; GATE sibling.
+Did not run full scripts/boot-test.mjs (skip full suite). WAVE85 persist+chart source files were not edited in this slice.

@@ -1,0 +1,81 @@
+MUST CALLS
+  shark_dorsal: [(192, 'an', 'shark_dorsal')]
+  shark_caudal: [(199, 'an', 'shark_caudal')]
+  shark_pectoral: [(212, 'an', 'shark_pectoral')]
+  gill_slits: [(249, 'an', 'gill_slits')]
+  belly_chamber: [(236, 'org', 'belly_chamber')]
+FORBIDDEN CALLS
+  squid_mantle_fins: none
+  octopus_arm: none
+  whale_fluke: none
+  fin_membrane: none
+  box: none
+ATTRIBUTE CALLS
+  L65 sf.fair
+  L66 sf.fair
+  L67 sf.fair
+  L68 sf.fair
+  L69 sf.fair
+  L71 sf.fair
+  L72 sf.fair
+  L74 sf.fair
+  L75 sf.fair
+  L76 sf.fair
+  L77 sf.fair
+  L78 sf.fair
+  L80 sf.fair
+  L81 sf.fair
+  L82 sf.fair
+  L83 sf.fair
+  L101 sf.top_y
+  L104 sf.fair
+  L117 sf.section
+  L118 sf.top_y
+  L129 sf.flank_x
+  L142 sf.section
+  L170 sf.grown_loft
+  L174 sf.grown_loft
+  L178 sf.section
+  L181 kit.sphere
+  L185 kit.sphere
+  L191 sf.top_y
+  L192 an.shark_dorsal
+  L198 sf.section
+  L199 an.shark_caudal
+  L206 sf.section
+  L208 sf.flank_x
+  L212 an.shark_pectoral
+  L216 kit.sphere
+  L221 sf.span_ray
+  L222 kit.sphere
+  L232 sf.bottom_y
+  L236 org.belly_chamber
+  L238 an.grown_lip
+  L247 sf.surf_flank
+  L249 an.gill_slits
+  L255 sf.section
+  L261 sf.top_y
+  L263 an.nacre_pads
+  L267 org.sensory_crown
+  L274 an.muscle_fold
+  L276 sf.surf_flank
+  L281 sf.flank_x
+  L290 an.vein_fan
+  L300 an.flow_line
+  L304 sf.section
+  L312 an.healed_scar
+ENVELOPE 11.0 5.279999999999999 3.3
+FOIL_Z -4.598
+FOIL_HALF_W 2.7455999999999996
+FOIL_BEAM 5.491199999999999
+FOIL_HALF_H 0.33
+NECK_HALF_W 1.2038399999999998
+THORAX_HALF_W 1.5734399999999997
+THORAX_BEAM 3.1468799999999995
+THORAX_HALF_H 0.9437999999999999
+EXTRA_BROW_BEAM 2.3443199999999997
+EXTRA_OVER_L 0.21311999999999998
+MIN_15PCT 1.65
+FOIL_Z_SPAN 1.3860000000000001
+HULL_Z_SPAN 10.34
+FOIL_FRAC_OF_HULL_Z 0.13404255319148936

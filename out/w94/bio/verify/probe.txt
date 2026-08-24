@@ -1,0 +1,81 @@
+# Wave 94 STOCK+TRAIN+SEED verifier — node
+
+Command: node --import ./out/w94/bio/css-register.mjs out/w94/bio/probe.mjs
+Exit: 0
+
+ok stock.const
+ok stock.beautiful
+ok stock.unk
+ok kind.living
+ok price.table
+ok minRep.table
+ok offers.beautiful
+ok offers.unk
+ok buy.frigate
+ok buy.noremount
+ok buy.ace.rank
+ok buy.hostile
+ok dests.light
+ok dests.same
+ok dests.proto
+ok dest.single
+ok price.dest
+ok price.missing
+ok train.ok
+ok train.class
+ok train.kind
+ok train.mounted
+ok train.cargo
+ok train.envelope
+ok train.debit
+ok train.stand
+ok train.same
+ok train.minrep
+ok train.hostile
+ok train.short
+ok train.unk
+ok train.graft
+ok train.nodest
+ok train.full
+ok seed.price
+ok seed.notCommodity
+ok seed.ok
+ok seed.row
+ok seed.id
+ok seed.noremount
+ok seed.debit
+ok seed.repeat
+ok seed.hostile
+ok seed.credits
+ok seed.visible
+ok seed.banner
+ok seed.full
+ok seed.giftIntact
+ok digit.swallow
+ok pane.clear
+ok cancel
+ok src.stock
+ok src.dests
+ok src.noHardHeavy
+ok src.seedConst
+ok src.seedMarket
+ok src.giftPeople
+ok src.noInner
+ok src.digit0
+ok src.envelope
+ok src.noSwitch
+PROBE PASS
+
+# Extra pins: node --import ./out/w94/bio/css-register.mjs out/w94/bio/verify/extra.mjs
+# Exit: 0
+
+nextTrainClass(light)= cutter
+nextTrainClass.validDest true
+bootPin.nextTrainClass_light_heavy false
+bootPin.livingTrainDest_frigate_null false
+trainListPrice.eqYard true
+stock light,cutter,heavy,freighter,ace,frigate
+commodities.seed false
+commodities.seed_market false
+digit0.shipyard true
+buy.full true

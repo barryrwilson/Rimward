@@ -1,0 +1,51 @@
+## Status
+BUGS_FOUND
+
+## What I tested
+- Probe: `node --import ./scripts/with-css-stub.mjs out/w88/ap-path/probe.mjs` → `AP PATH PROBE PASS` (log: out/w88/ap-path/verify/probe.log).
+- Independent math (do not trust the probe): out/w88/ap-path/verify/math-check.mjs against planApPath / sphereChordHit. Cases: probe sun chord, closer 200u sun chord, Freehold station-ish spawn, greedy 20u steps, close frigate, aligned close, light close, ship inside keep, gate inside keep, far-side gate outside keep, two obstacles (sun+station).
+- Trace of aimAtGate in src/game/autopilot.js: writer split, blocked timer, wantJump predicate, applyAvoidBias then sun-keep restore.
+- Extra: PHY.AVOID_LOOKAHEAD still 40.
+- Browser: Playwright MCP was locked (`Browser is already in use ... use --isolated`). Real attempt via Chrome CDP against Vite http://127.0.0.1:5189/. New Game → plot Veridian → tryEngage. Samples + jpeg.
+
+## Bugs found
+### Bug 1: Detour waypoint sits on the keep sphere; ship→aim chord still cuts the keep-out (heat at close range)
+- Severity: HIGH
+- Repro: planApPath ship (0,30,800) → gate (0,60,-900), sun at origin, r = sunRadius*SUN_HEAT_MULT. keep = 158.4. Planner returns hold=detour, aim=(158.4, 0, 0) on the sphere. sphereChordHit(ship, aim, keep) hit=true, dist=155.39, t=0.962. From (0,0,200) the same aim has dist=124.17 (inside heat 144). Freehold (120,20,620)→aim also hits keep (dist=156.88). Greedy 20u steps from the probe spawn enter keep (min sun dist 150.75).
+- Expected: The flight chord from the ship to the current aim must not enter sun heat keep-out (sunRadius * PHY.SUN_HEAT_MULT + PLAYER_RADIUS + pad). A waypoint on/outside the sphere is not enough.
+- Actual: detourForObstacles places aim at center + perp * keep (surface). That is a secant, not a tangent. Probe only checks sunAimD >= keepSun, so it PASSes while the owner chord rule fails. At ~200u the commanded chord goes through the heat zone (original “flies through the sun” class).
+- Evidence: out/w88/ap-path/verify/math-check.log; src/game/ap-path.js detourForObstacles return `{ x: best.x + u.x * bestKeep * sign, ... }`.
+
+### Bug 2: One-body detour; ship→aim can still hit a second keep-out
+- Severity: MEDIUM
+- Repro: sun at origin plus station {x:80,y:0,z:200,r:40} on the same gate chord. planApPath offsets only the nearest hit (sun) to (158.4,0,0). sphereChordHit vs station keep (~59) still hit=true, dist=38.06. Sun keep still hit as in Bug 1.
+- Expected: Current aim chord clears every keep-out body the planner claims to honor.
+- Actual: detourForObstacles picks min t only; no second pass.
+- Evidence: math-check.log `twoObst`.
+
+### Bug 3: sphereChordHit misses an interior endpoint when closest t is outside [0,1]
+- Severity: LOW
+- Repro: ship (0,0,800) → gate (0,0,40) inside keep 158.4. Closest point to origin is t=1.05 > 1, so hit=false even though B is inside the sphere. detourForObstacles also skips the body when gateClear < keep, so AP aims at the gate (hold=none). Far-side gate at z=-400 (outside keep) does detour (does not skip).
+- Expected: Segment-sphere test must hit if either endpoint is inside, or if the closest point on the segment is inside.
+- Actual: Only A is tested for inside; tUn outside [0,1] returns hit=false with no B test. Gate-inside skip is intentional so AP does not loop a detour, but it will command a straight chord into a keep-out if the gate is authored inside it. Far-side gates outside keep are not skipped.
+- Evidence: math-check.log `gateInsideKeep` / `farGate`; ap-path.js sphereChordHit tUn branch and detourForObstacles `if (gateClear < keep) continue`.
+
+## Environmental issues
+- Playwright MCP navigate/close/tabs failed: browser profile already in use. Drove Chrome CDP instead (port 9405, Vite 127.0.0.1:5189). Not [NO BROWSER COVERAGE].
+- First Vite on 5188 was killed by a 120s wrapper; restarted with `--host 127.0.0.1 --port 5189`.
+- Probe itself is green; it does not pin the owner chord rule.
+
+## What passed (not bugs)
+- Probe PASS: detour waypoint on/outside sphere, NaN fail-closed, close frigate widen+throttle 0, live stub yaw off gate line, wantJump only when inZone && nearTo===hop.
+- Close intercept: frigate at 80u, heading 90°, speed 40 → hold=widen, throttle 0, aim farther than the gate (aimFromGate=540), intercept=false. Light class same. Aligned close: intercept=true, hold=none, throttle=1 (still approaches).
+- wantJump: ap.wantJump = !!(inZone && !docked && nearTo === hop). No jumpRequested writes.
+- Writer split: autopilot.js writes only the AP channel. Reads input.* for cancel. No mesh / input.* / jumpRequested writes.
+- Blocked timer: if pathHold (detour/widen), blockedAt = now (frozen). avoidHits only set blockedHit when !pathHold.
+- applyAvoidBias still runs after plan; if hold==='detour' and bias pulls aim inside sun keepRadius, aim is restored to planned.ax/ay/az. Restore tests the aim *point*, not the chord (chord already clips per Bug 1).
+- PHY.AVOID_LOOKAHEAD remains 40.
+- Browser (~5s after engage): flying=true, yawedOff maxAbsYaw=0.256, heading +X, pos → (99, 11, 232), sunDist min 253 (not yet at keep), wantJump false, no teleport. HUD dest/next Veridian Reach. Did not fly the full chord into the keep in this window.
+
+## Evidence
+- Screenshots: out/w88/ap-path/verify/browser-ap.jpg (origin picker overlay still up; HUD shows dest Veridian Reach / HOLD).
+- Logs: out/w88/ap-path/verify/probe.log, math-check.log, cdp-live.log, cdp-summary.json.
+- Test output: AP PATH PROBE PASS; MATH CHECK FAIL (8 chord/keep assertions).

@@ -1,0 +1,40 @@
+C:\Projects\WebSim\scripts\build-ship-assets.py:85: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  value.use_nodes = True
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+02:23:27 | INFO: Starting glTF 2.0 export
+02:23:27 | INFO: Extracting primitive: Sphere.070
+02:23:27 | INFO: Primitives created: 1
+02:23:27 | INFO: Extracting primitive: Sphere.099
+02:23:27 | INFO: Primitives created: 1
+02:23:27 | INFO: Extracting primitive: living-body-reef
+02:23:27 | INFO: Primitives created: 1
+02:23:27 | INFO: Finished glTF 2.0 export in 0.24413132667541504 s
+
+built beautiful/light/lod0
+C:\Projects\WebSim\scripts\build-ship-assets.py:85: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  value.use_nodes = True
+Info: Saved as "light.blend"
+02:23:29 | INFO: Starting glTF 2.0 export
+02:23:29 | INFO: Extracting primitive: Sphere.070
+02:23:29 | INFO: Primitives created: 1
+02:23:29 | INFO: Extracting primitive: Sphere.086
+02:23:29 | INFO: Primitives created: 1
+02:23:29 | INFO: Extracting primitive: living-body-reef
+02:23:29 | INFO: Primitives created: 1
+02:23:29 | INFO: Finished glTF 2.0 export in 0.1542196273803711 s
+
+built beautiful/light/lod1
+02:23:30 | INFO: Starting glTF 2.0 export
+02:23:30 | INFO: Extracting primitive: Sphere.024
+02:23:30 | INFO: Primitives created: 1
+02:23:30 | INFO: Extracting primitive: Sphere.036
+02:23:30 | INFO: Primitives created: 1
+02:23:30 | INFO: Extracting primitive: living-body-reef
+02:23:30 | INFO: Primitives created: 1
+02:23:30 | INFO: Finished glTF 2.0 export in 0.09153294563293457 s
+
+built beautiful/light/lod2
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

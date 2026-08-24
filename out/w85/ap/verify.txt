@@ -1,0 +1,25 @@
+## Status
+CLEAN
+
+## What I tested
+- Probe: `node --import ./scripts/with-css-stub.mjs out/w85/ap/probe.mjs` → PASS (all keys true). Log: `out/w85/ap/probe-run.log`.
+- Pin-check: `node out/w85/ap/pin-check.mjs` → PASS. Persist/chart `ctx.autopilot` substring still absent in `ctx.js`. Chart `noPrevent` still true (`preventDefault` lives in `autopilot.js` `guardAutopilotSpace`). Guidance `path[1]` and no `innerHTML` still true. Log: `out/w85/ap/pin-check.log`.
+- Full `scripts/boot-test.mjs`: WAVE4/26/35 ignored per brief. WAVE85 persist all true. WAVE85 chart all true (incl. Digit0 shipyard, noPrevent). WAVE85 AP live: first run failed `predicate` (grep wanted `world.nav.autopilot`), `wasdCancel`/`afterArm` (full tick lets `controls.js` overwrite axes). Gate predicate now contains `world.nav.autopilot`. WASD/steer pins now call `autopilot.update` so they do not lose axes. Probe covers those paths. WAVE85 guidance `hideJumping`/`markerRay` failed on that long run; write-set did not edit `nav-guidance.js` / jump.js. Likely leftover jump timer when the pin pokes `gate.jumping = true`.
+- Live localhost:5173: plot Veridian, Autopilot engages (chip on, no dest teleport, still freehold). Cancel keeps dest. MATCH refuse prints `Autopilot refused — MATCH is on.` on the chart live region; MATCH stays; throttle unchanged.
+
+## Bugs found
+[Empty if CLEAN]
+
+Combat at spawn often interrupts AP on the next frame. Contract table. Not a product bug.
+
+## Environmental issues
+- graph_resolve first matched CRM / review stacks; owner named browser-assisted-work. Used local Vite. No external send.
+- Full boot-test ~9 min. WAVE4/26/35 fail as briefed.
+- Playwright live: NPCs set `flags.combat` so helm-cancel can lose the race to `combat` across rAF frames. Probe WASD pin is same-turn.
+
+## Evidence
+- Probe: `out/w85/ap/probe-run.log`
+- Pin-check: `out/w85/ap/pin-check.log`
+- Boot log: `out/w85/ap/boot-test.log` (persist/chart WAVE85 true)
+- Live shots: `out/w85/ap/live/01-chart-ap.png`, `out/w85/ap/live/02-match-refuse.png`
+- Reviews: `out/w85/ap/security-review.md`, `out/w85/ap/code-review.md`, `out/w85/ap/ui-audit.md`

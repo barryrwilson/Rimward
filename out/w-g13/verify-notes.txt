@@ -1,0 +1,17 @@
+G13 verifier notes
+catalog-probe: PASS (12 factions, named, hull verts>500, no *-overlay child)
+boot-test: FAIL 1 error — WAVE49 SHIP CHARTER FAIL (unknowablesClassOrdering=false)
+  not G13: ship class ladder, not gate.js
+g13 closeout: all true
+wave38 gates: all true
+wave38 gate negatives: all true
+wave39 ten-jump leak: all true
+  disposed=428/428 sharedDisposed=0 liveAfter1=192 liveAfter10=230
+  |230-192|=38 <= 60 (threshold unchanged in boot-test.mjs)
+wave42d gate overlay: all true
+chassis grep: only TorusGeometry is Unknowables arcRing (1, 0.02, ...)
+no ringGeo / chevronGeo / TorusGeometry(RING_RADIUS
+HUD fade present in initGate
+attachUnknowablesFx: 4 lenses + plasma group
+w38overlayCensus / w38overlayOf: deleted
+[NO BROWSER COVERAGE]

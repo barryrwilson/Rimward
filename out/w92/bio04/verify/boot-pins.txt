@@ -1,0 +1,14 @@
+command: node out/w92/bio04/boot-pins.mjs
+exit: 0
+WAVE92 BIO04 PASS {
+  catalog: 'Psionic bolt',
+  hex: '0xff6ad5',
+  livingHeat: 8,
+  builtDry: 0,
+  graftedHeat: 8
+}
+
+Pins covered by that runner (source: out/w92/bio04/boot-pins.mjs):
+living heat, built dry, grafted fire, unknown group not cannon,
+no psi/power on createShipState, Unknowables miss, NPC refuse family psionic,
+Digit 1–2 still shoot, dock cold, proto grafted dry, reduced-motion still simulates.

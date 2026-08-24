@@ -1,0 +1,38 @@
+cdp page {"url":"http://127.0.0.1:5189/","title":"RIMWARD ΓÇö A Living Frontier","ws":true}
+already {"href":"http://127.0.0.1:5189/","ctx":true,"ready":"complete"}
+skip navigate, target already on vite
+reloaded
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5189/","ready":"interactive","ctx":true,"title":true,"newBtn":true,"canvas":1,"sys":"freehold","paused":true}
+flight {"sys":"freehold","paused":false,"pos":{"x":120,"y":30,"z":654.4}}
+plot {"hit":true,"dest":"veridian","path":["freehold","veridian"],"next":"veridian","open":true}
+engage {"flying":true,"btn":"Cancel autopilot","yaw":0,"throttle":0,"wantJump":false,"pos":{"x":120,"y":30,"z":654.4}}
+sample {"flying":true,"sys":"freehold","yaw":-1,"pitch":0.05550879997404328,"throttle":0.2,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":119.9356579290346,"y":30.016215885940035,"z":654.3999398269518},"heading":{"x":-0.09066690487333863,"y":0.02703618572910672,"z":-0.9955142173881346},"sunDist":665.976588555859,"headingDotGate":0.9998740834657683,"speed":0.6186920221092841,"i":0}
+sample {"flying":true,"sys":"freehold","yaw":-1,"pitch":0.15975492033602398,"throttle":0.2,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":119.19894082152422,"y":30.32899484604748,"z":654.390671761287},"heading":{"x":-0.26713130120568623,"y":0.11626866273035907,"z":-0.9566203353384513},"sunDist":665.8493723880298,"headingDotGate":0.9762810820003711,"speed":2.485813893892415,"i":1}
+sample {"flying":true,"sys":"freehold","yaw":-1,"pitch":0.6449565695360104,"throttle":0.3288721697651282,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":117.6087684711724,"y":30.974358464809836,"z":654.3167890656388},"heading":{"x":-0.4229787170204696,"y":0.17940917936817072,"z":-0.8882011885300296},"sunDist":665.5236237405702,"headingDotGate":0.9207644233881688,"speed":4.2511678723469855,"i":2}
+sample {"flying":true,"sys":"freehold","yaw":-1,"pitch":0.5632465916261611,"throttle":0.41493560884329744,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":114.89454696686958,"y":31.988281281937557,"z":654.0190292237521},"heading":{"x":-0.5620283027046928,"y":0.24674300685276662,"z":-0.7894568230930288},"sunDist":664.80440555766,"headingDotGate":0.8330486820772227,"speed":8.224581386452636,"i":3}
+sample {"flying":true,"sys":"freehold","yaw":-1,"pitch":0.26517554946721383,"throttle":0.2,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":111.32405187799921,"y":33.301112689771045,"z":653.2879546410462},"heading":{"x":-0.6953994855704969,"y":0.29364644368423454,"z":-0.655889717543956},"sunDist":663.5413779953697,"headingDotGate":0.708853685531753,"speed":5.381285591424693,"i":4}
+sample {"flying":true,"sys":"freehold","yaw":-1,"pitch":0.4513498223537474,"throttle":0.6035050406573064,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":108.14833435879683,"y":34.470201763822175,"z":652.293931651769},"heading":{"x":-0.7940728899002808,"y":0.3273478148846761,"z":-0.5121441726854308},"sunDist":662.0963904930636,"headingDotGate":0.5713888231835532,"speed":8.621773444528078,"i":5}
+sample {"flying":true,"sys":"freehold","yaw":-0.211514027874599,"pitch":-0.34071789297645183,"throttle":0.9651673841540278,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":104.5369810864684,"y":35.874169100123,"z":650.7523986541204},"heading":{"x":-0.8596242141437905,"y":0.3271925966390499,"z":-0.3924171443276485},"sunDist":660.0709210209068,"headingDotGate":0.4543690788812184,"speed":16.08830999933055,"i":6}
+sample {"flying":true,"sys":"freehold","yaw":0.57472917735842,"pitch":-0.4595210148271169,"throttle":0.8867892530461037,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":87.63290216893951,"y":41.90638212391884,"z":642.9663739729948},"heading":{"x":-0.8526396875178133,"y":0.24717295487852567,"z":-0.46033802107380073},"sunDist":650.2625842421259,"headingDotGate":0.5108039944929107,"speed":60.3271004749868,"i":7}
+sample {"flying":true,"sys":"freehold","yaw":0.506924152103242,"pitch":-0.35897181829183517,"throttle":0.9181027213150565,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":61.07903539138753,"y":49.61900632593296,"z":626.4404932432242},"heading":{"x":-0.6774442571568333,"y":0.1360228554020152,"z":-0.7228880004907454},"sunDist":631.3639092693923,"headingDotGate":0.7503025775025334,"speed":90.1426229229441,"i":8}
+sample {"flying":true,"sys":"freehold","yaw":0.33519048689078723,"pitch":-0.24496630433521016,"throttle":0.9627356900918052,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":32.88719138906676,"y":55.1069257813809,"z":596.2482581328529},"heading":{"x":-0.5542414147149152,"y":0.05306619081614085,"z":-0.8306626472925538},"sunDist":599.6918591685208,"headingDotGate":0.842810218140637,"speed":112.98530397087583,"i":9}
+sample {"flying":true,"sys":"freehold","yaw":0.2191433552420244,"pitch":-0.1611114331994479,"throttle":0.9838674972201273,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":8.966509991582448,"y":56.29426140812214,"z":555.9908235238008},"heading":{"x":-0.46398672752235043,"y":-0.0030489453289275457,"z":-0.8858369040717828},"sunDist":558.9053927200823,"headingDotGate":0.8886668098847181,"speed":118.54807474981145,"i":10}
+sample {"flying":true,"sys":"freehold","yaw":0.1439298211542668,"pitch":-0.10438609276188411,"throttle":0.9930808520376602,"wantJump":false,"inZone":false,"nearTo":null,"pos":{"x":-12.961931866856519,"y":55.01239961070058,"z":509.5512277923284},"heading":{"x":-0.3960363052801089,"y":-0.04258899468828369,"z":-0.9172466529955404},"sunDist":512.6761448841927,"headingDotGate":0.9134097523323359,"speed":119.3772766833894,"i":11}
+screenshot saved browser-ap.jpg bytes=72559
+SUMMARY {"flying":true,"yawedOff":true,"maxAbsYaw":1,"minSun":512.6761448841927,"throughKeep":false,"throughHeat":false,"wantJumpEarly":false,"stayedOnDirect":false,"dest":"veridian","next":"veridian","shotErr":null}

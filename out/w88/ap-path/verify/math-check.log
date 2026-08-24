@@ -1,0 +1,37 @@
+sunPlan {"hold":"detour","ax":158.4,"ay":0,"az":0,"aimD":158.4,"keepSun":158.4,"heatR":144,"chordKeep":{"hit":true,"t":0.9623259524879751,"dist":155.38757045033137,"px":152.43243087409527,"py":1.1302214253607445,"pz":30.13923800961993},"chordHeat":{"hit":false,"t":0.9623259524879751,"dist":155.38757045033137,"px":152.43243087409527,"py":1.1302214253607445,"pz":30.13923800961993}}
+ok waypoint on/outside keep sphere
+FAIL OWNER: shipΓåÆaim chord must not enter keep interior {"hit":true,"dist":155.38757045033137,"t":0.9623259524879751,"inside":false}
+ok shipΓåÆaim chord stays outside heat radius
+closeSun {"hold":"detour","ax":158.4,"ay":0,"az":0,"closeKeep":{"hit":true,"t":0.6145284354597657,"dist":124.17271270939271,"px":97.34130417682688,"py":0,"pz":77.09431290804687},"closeHeat":{"hit":true,"t":0.6145284354597657,"dist":124.17271270939271,"px":97.34130417682688,"py":0,"pz":77.09431290804687}}
+FAIL closer shipΓåÆaim chord clears keep {"hit":true,"dist":124.17271270939271,"t":0.6145284354597657,"heatHit":true,"heatDist":124.17271270939271}
+FAIL closer shipΓåÆaim chord clears heat (original flies-through-sun) {"hit":true,"dist":124.17271270939271,"t":0.6145284354597657}
+freehold {"hold":"detour","ax":157.90866674670943,"ay":0,"az":-12.466473690529693,"fhKeep":{"hit":true,"t":0.96548288575544,"dist":156.8814275207953,"px":156.6001689657543,"py":0.6903422848912015,"pz":9.364443837700378},"fhHeat":{"hit":false,"t":0.96548288575544,"dist":156.8814275207953,"px":156.6001689657543,"py":0.6903422848912015,"pz":9.364443837700378},"fhDirect":{"hit":true,"t":0.4109353507565337,"dist":79.66055910394918,"px":70.68775790921595,"py":36.43741403026135,"pz":-4.621733149931174}}
+ok freehold direct chord hits keep (scenario valid)
+FAIL freehold shipΓåÆaim chord clears keep {"hit":true,"dist":156.8814275207953,"t":0.96548288575544}
+stepSim minSunDist=150.75117436392426 keep=158.4 heat=144 enteredKeep=true enteredHeat=false end={"sx":23.5965227931097,"sy":50.89694385723096,"sz":-770.9764032523948}
+FAIL greedy steps toward planned aim stay outside keep {"minKeep":150.75117436392426,"keepSun":158.4}
+ok greedy steps toward planned aim stay outside heat {"minHeat":150.75117436392426,"heatR":144}
+closeFrigate {"hold":"widen","intercept":false,"th":0,"aimFromShip":460,"aimFromGate":540,"turnR":420,"distGate":80}
+ok close frigate does not interceptOk
+ok close frigate throttle 0 while turning
+ok close frigate widen not a gate-circle
+alignedClose {"hold":"none","intercept":true,"thA":1,"ok":true}
+ok aligned close still intercepts / approaches
+lightClose {"hold":"widen","intercept":false,"thL":0,"turnR":90}
+ok light close misaligned does not interceptOk
+ok light close throttle 0 or widen, no orbit
+inside {"hold":"detour","ax":158.4,"ay":0,"az":0,"inAimD":158.4,"inHit":{"hit":true,"t":0,"dist":50,"px":0,"py":0,"pz":50,"inside":true}}
+ok inside keep: sphereChordHit.inside
+ok inside keep: still plans a finite detour
+ok inside keep: aim not NaN
+gateInsideKeep {"hold":"none","ax":0,"ay":0,"az":40,"giChord":{"hit":false,"t":1.0526315789473684,"dist":800,"px":0,"py":0,"pz":800}}
+ok gate inside keep: skip body (aim is gate, chord through sun) {"hold":"none","aim":[0,0,40],"chordHit":false}
+farGate {"hold":"detour","ax":158.4,"ay":0,"az":0,"farChord":{"hit":true,"t":0.9622749719977982,"dist":155.38345446478232,"px":152.42435556445125,"py":0,"pz":30.18002240176145},"gateClear":400,"keepSun":158.4}
+ok far-side gate outside keep still detours
+FAIL far-side shipΓåÆaim chord clears keep {"hit":true,"dist":155.38345446478232,"t":0.9622749719977982}
+twoObst {"hold":"detour","ax":158.4,"ay":0,"az":0,"stKeep":59.121359549995795,"twoSun":{"hit":true,"t":0.9622749719977982,"dist":155.38345446478232,"px":152.42435556445125,"py":0,"pz":30.18002240176145},"twoSt":{"hit":true,"t":0.7407592734439051,"dist":38.06109869465628,"px":117.33626891351457,"py":0,"pz":207.39258124487594}}
+FAIL two obstacles: shipΓåÆaim misses sun keep {"hit":true,"dist":155.38345446478232}
+FAIL two obstacles: shipΓåÆaim misses station keep {"hit":true,"dist":38.06109869465628,"stKeep":59.121359549995795}
+ok keepRadius sun = heat + ship + pad
+ok AP_LEAD_MARGIN is 1.25
+MATH CHECK FAIL ["OWNER: shipΓåÆaim chord must not enter keep interior","closer shipΓåÆaim chord clears keep","closer shipΓåÆaim chord clears heat (original flies-through-sun)","freehold shipΓåÆaim chord clears keep","greedy steps toward planned aim stay outside keep","far-side shipΓåÆaim chord clears keep","two obstacles: shipΓåÆaim misses sun keep","two obstacles: shipΓåÆaim misses station keep"]

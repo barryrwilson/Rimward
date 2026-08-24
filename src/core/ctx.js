@@ -13,6 +13,8 @@ import * as THREE from 'three';
  * Ownership rules (violating these breaks parallel-safety):
  * - scene/camera/renderer: created in main.js. camera positioned by ship.js.
  * - input: written ONLY by controls.js; read-only for everyone else.
+ * - autopilot: written ONLY by autopilot.js (live command channel; not persist).
+ * - automine: written ONLY by automine.js (live command channel; not persist).
  * - ship (flight transform): written ONLY by ship.js.
  * - player (ship state record): created by ship.js via createShipState;
  *   mutated by combat.js (damage) and state.js helpers only.
@@ -25,6 +27,7 @@ import * as THREE from 'three';
  * - ships (live NPC list): written by traffic.js (spawn/despawn) and npc.js
  *   (AI state); combat.js may damage their state records.
  * - targets: written by controls.js (selection) + npc.js (availability).
+ *   targets.part is controls.js only, live `'engine'|null`, not WORLD_FIELDS.
  * - flags.docked: written by station.js only. flags.combat: written by npc.js.
  * - flags.camera / flags.firstPerson: written by controls.js only.
  * - flags.matchSpeed: written by ship.js only (toggle). npc.js does not write it.
@@ -33,7 +36,7 @@ import * as THREE from 'three';
  * - events: any system may ctx.emit(); main.js clears the queue AFTER the
  *   last consumer (hud.js) each frame. Event types are frozen — see EVENTS.
  * - ship.js may emit bodyHit; combat.js applies impact/sun damage via applyHit.
- * - combat.js emits playerFire { weapon } when a player cannon/disruptor/missile/turret shot actually spawns.
+ * - combat.js emits playerFire { weapon } when a player cannon/disruptor/missile/turret/psionic shot actually spawns.
  */
 export function createCtx({ scene, camera, renderer }) {
   const ctx = {
@@ -79,7 +82,7 @@ export function createCtx({ scene, camera, renderer }) {
       afterburnerPressed: false, // edge: Space tapped (burn if ready)
       driftHeld: false, // Shift held = vector-hold
       fireHeld: false, // LMB
-      weaponGroup: 1, // 1=cannon 2=disruptor 3=mining 4=missiles (keys 1/2/3/4)
+      weaponGroup: 1, // 1=cannon 2=disruptor 3=mining 4=missiles 5=psionic (keys 1/2/3/4/5)
       targetPressed: false, // edge: T (cycle nearest hostiles)
       hailPressed: false, // edge: H
       dockPressed: false, // edge: D
@@ -88,6 +91,27 @@ export function createCtx({ scene, camera, renderer }) {
       reticleLockPressed: false, // edge: V (lock under reticle)
       throttleHeld: false, // R or F held — ship.js cancels MATCH
       pausePressed: false, // edge: P
+    },
+
+    // --- live command channel (autopilot.js only). Not WORLD_FIELDS. ---
+    autopilot: {
+      engaged: false,
+      yaw: 0,
+      pitch: 0,
+      throttle: 0,
+      wantJump: false,
+      cycleHub: false,
+      reason: '',
+    },
+
+    // --- live command channel (automine.js only). Not WORLD_FIELDS. ---
+    automine: {
+      engaged: false,
+      yaw: 0,
+      pitch: 0,
+      throttle: 0,
+      wantMine: false,
+      reason: '',
     },
 
     // --- flight transform channel (ship.js only) ---
@@ -168,6 +192,7 @@ export function createCtx({ scene, camera, renderer }) {
     // --- targeting (controls.js writes selection; combat/hud read) ---
     targets: {
       current: null, // live ship object from ctx.ships, or asteroid ref
+      part: null, // Wave 100: 'engine' | null. controls.js only. Not persist.
       reticleScreen: { x: 0, y: 0 }, // reticle position in pixels (controls.js)
     },
 
@@ -180,6 +205,7 @@ export function createCtx({ scene, camera, renderer }) {
       camera: 'chase', // 'chase' | 'third' | 'first' — C cycles; ship.js reads
       matchSpeed: false, // ship.js: hold lock speed; HUD shows MATCH
       saveRestored: false, // save.js sets true when a snapshot is restored
+      chartOpen: false, // galaxychart.js owns; session only, not WORLD_FIELDS
     },
 
     // --- client settings (settings.js ONLY writes; song/hud/gate/ship read) ---
@@ -192,6 +218,7 @@ export function createCtx({ scene, camera, renderer }) {
       textScale: 1, // 0.85|1|1.2|1.5 → --rw-text-scale on #hud
       masterVolume: 1, // 0..1 multiplier song.js applies to every cue
       muted: false, // song.js runs silent when true
+      hudAlerts: false, // optional HUD ticks + reticleLock; mute still zeros master
       hints: true, // onboarding.js one-time hint overlays on/off
     },
 
@@ -216,8 +243,8 @@ export function createCtx({ scene, camera, renderer }) {
     // 'bodyHit' { kind, speed, damage }   // ship.js bounce; combat.js may fill damage
     // 'sunHeat' { t, dps }                // combat.js, throttled
     // 'sunKill' { reason: 'sun' }         // combat.js lethal core
-    // 'playerFire' { weapon }             // combat.js: real spawn only (cannon/disruptor/'missile'/turret wkey)
-    // 'npcFire' { ship, weapon:'cannon'|'missile', target }  // missiles always set target ('player' this slice)
+    // 'playerFire' { weapon }             // combat.js: real spawn only (cannon/disruptor/'missile'/turret/'psionic')
+    // 'npcFire' { ship, weapon:'cannon'|'missile'|'turret', target }  // missiles always set target ('player' this slice); turret always sets target ('player' or a live NPC); missing turret target drops
     // 'survivorRescued' { faction, source, count, repDelta }  (station.js, wave 60)
     // 'survivorSold' { faction, source, count, credits, repDelta }  (trafficking.js / station.js, wave 66)
     // 'hudMechRange' {}           // hud.js: rising .in-range (mech)
@@ -226,6 +253,12 @@ export function createCtx({ scene, camera, renderer }) {
     // 'hostileEnter' { id }       // hud.js: first hostile in scanner arc (bio, ≤1/0.5s)
     // 'hullBand' { band }         // hud.js: self hull warn|crit (bio, ≤1/2s)
     // 'reticleLock' { hit }       // controls.js: V pick; payload is { hit: boolean } only
+    // 'navRoute' { dest, hops, status }  // nav.js plot/clear/recalc; fresh literal only
+    // 'autopilotEngaged' { dest }         // dest = SYSTEMS key string; primitives only
+    // 'autopilotDisengaged' { reason }    // reason = interrupt token; primitives only
+    // 'automineEngaged' { asteroidId }    // primitives only
+    // 'automineDisengaged' { reason }     // primitives only
+    // flags.chartOpen: galaxychart.js setOpen is the only writer (session boolean)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

@@ -1,0 +1,49 @@
+{
+  "gate": {
+    "inZone": true,
+    "nearTo": "veridian",
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "pos": {
+    "x": 0.002219326404750584,
+    "y": 60.00436950536474,
+    "z": -899.984713916209
+  },
+  "jumpClass": "rw-jump is-hidden",
+  "jumpDisplay": "none",
+  "jumpHidden": true,
+  "hudGate": "GATE\n0u\nPOS\nFREEHOLD DRIFT\nX",
+  "innerHasJump": true,
+  "prompts": [
+    {
+      "cls": "rw-jump is-hidden",
+      "t": "JUMP",
+      "display": "none"
+    },
+    {
+      "cls": "rw-jump-label",
+      "t": "JUMP",
+      "display": "block"
+    },
+    {
+      "cls": "rw-prompt",
+      "t": "D\nJUMP TO VERIDIAN REACH",
+      "display": "flex"
+    },
+    {
+      "cls": "rw-prompt-key",
+      "t": "D",
+      "display": "block"
+    },
+    {
+      "cls": "rw-prompt-verb",
+      "t": "JUMP TO VERIDIAN REACH",
+      "display": "block"
+    }
+  ]
+}

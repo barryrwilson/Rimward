@@ -1,0 +1,22 @@
+VITE pid 158812
+VITE ready
+CHROME pid 23240
+BROWSER ws ws://127.0.0.1:9411/devtools/browser/a8f0411f-f1aa-4b17-baa0-6c3b6d94f9b6
+TARGET BAFB57E2C5EB550192336EFECCC786D7
+SESSION DB528E8AE530A5F675E4C4B5979E5AAF
+HREF0 about:blank
+LOAD event timeout Page.loadEventFired
+HREF http://127.0.0.1:5174/
+BOOT {"ctx":false,"title":false,"newLabel":null,"ready":"interactive","scripts":3,"bodyLen":989,"text":"","fatal":"","fatalOn":"none"}
+CTX late 39
+PLAYER probe {"living":true,"verts":0,"hasSwimUniforms":false,"faction":"independent","classKey":"light"}
+MODELS open true
+SHOT 02-models-player.png true
+SHOT 03-models-beautiful-light.png true
+SHOT 04-models-beautiful-ace.png true
+SHOT 05-models-beautiful-cutter.png true
+SHOT 06-models-beautiful-heavy.png true
+SHOT 07-models-beautiful-frigate.png true
+SHOT 08-models-beautiful-freighter.png true
+NPC probe fail cdp timeout Runtime.evaluate
+TRAFFIC []

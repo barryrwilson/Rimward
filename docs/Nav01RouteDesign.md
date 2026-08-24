@@ -5,7 +5,7 @@
 | **Title** | RIMWARD NAV-01 plot a multi-system route |
 | **Author** | Wave 84 NAV-01 integrator |
 | **Date** | 2026-08-21 |
-| **Status** | Wave 84 — design freeze. Later serial — impl. |
+| **Status** | Implemented. Wave 85 persist + chart click + recalc. |
 | **Wave** | 84 — design. Later — impl. |
 | **Owner request** | NAV-01 plotted route brief. Do not ship `src/` or live bindings in this wave. |
 | **Merge law** | [`out/w84/nav01/shared-contract.md`](../out/w84/nav01/shared-contract.md). If this brief and that file conflict, the contract wins. |

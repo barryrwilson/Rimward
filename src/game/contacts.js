@@ -94,6 +94,7 @@ const CONTACT_NAMES = {
   hollowreach: { dockmaster: 'Keeper Voss' },
   hush: { dockmaster: 'Keeper Ond' },
   verge: { dockmaster: 'Keeper Leth' },
+  veil: { dockmaster: 'Voice-Without' },
   fx_bastion: { dockmaster: 'Warden Korrh' },
   gc_auction: { dockmaster: 'Auctioneer Mavra' },
   blackstation: { dockmaster: 'Driftcaller Oss' },
@@ -110,6 +111,7 @@ const CONTACT_ROLES = {
   hollowreach: ['dockmaster'],
   hush: ['dockmaster'],
   verge: ['dockmaster'],
+  veil: ['dockmaster'],
   fx_bastion: ['dockmaster'],
   gc_auction: ['dockmaster'],
   blackstation: ['dockmaster'],
@@ -169,25 +171,131 @@ function buildRoster() {
   return roster;
 }
 
+const favorBank = new Map();
+const favorHandles = new Map();
+
+function trackFavorHandle(contact) {
+  if (!contact || typeof contact !== 'object') return;
+  const id = contact.id;
+  if (typeof id !== 'string' || !id) return;
+  let set = favorHandles.get(id);
+  if (!set) {
+    set = new Set();
+    favorHandles.set(id, set);
+  }
+  set.add(contact);
+}
+
+function writeFavorHandles(id, value) {
+  const set = favorHandles.get(id);
+  if (!set) return;
+  for (const row of set) {
+    if (row && typeof row === 'object') row.favors = value;
+  }
+}
+
 /** Contacts stationed in the given system (live refs — UI-time call). */
 export function contactsForSystem(ctx, sysId) {
-  return ctx.world.contacts.filter((c) => c.system === sysId);
+  const rows = ctx.world.contacts.filter((c) => c.system === sysId);
+  for (let i = 0; i < rows.length; i++) {
+    const c = rows[i];
+    if (!c || typeof c.id !== 'string' || !c.id) continue;
+    const known = favorHandles.get(c.id)?.has(c) === true;
+    if (known && favorCount(c) === 0) {
+      favorBank.set(c.id, 0);
+    } else if (!known && favorCount(c) === 0) {
+      const banked = favorBank.get(c.id);
+      if (typeof banked === 'number' && banked > 0) c.favors = banked;
+    }
+    trackFavorHandle(c);
+  }
+  return rows;
+}
+
+/** Live roster row for a contact handle (jump/rebuild may replace the array). */
+function liveContact(ctx, contact) {
+  if (!contact || typeof contact !== 'object') return null;
+  const list = ctx?.world?.contacts;
+  if (!Array.isArray(list)) return contact;
+  const id = contact.id;
+  if (typeof id === 'string' && id) {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === id) return list[i];
+    }
+  }
+  const system = contact.system;
+  const role = contact.role;
+  if (typeof system === 'string' && typeof role === 'string') {
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      if (row && row.system === system && row.role === role) return row;
+    }
+  }
+  return contact;
+}
+
+function favorCount(contact) {
+  const n = contact?.favors;
+  return typeof n === 'number' && Number.isFinite(n) ? n : 0;
 }
 
 /** Adjust trust, clamped 0..100. */
 export function bumpTrust(ctx, contact, delta) {
-  contact.trust = Math.max(0, Math.min(100, contact.trust + delta));
+  const live = liveContact(ctx, contact) ?? contact;
+  live.trust = Math.max(0, Math.min(100, live.trust + delta));
+  if (contact && contact !== live) contact.trust = live.trust;
 }
 
-/** Grant n favors (default 1). */
+function syncFavorRows(ctx, contact, value) {
+  if (contact) contact.favors = value;
+  const list = ctx?.world?.contacts;
+  if (!Array.isArray(list) || !contact) return;
+  const id = contact.id;
+  const system = contact.system;
+  const role = contact.role;
+  for (let i = 0; i < list.length; i++) {
+    const row = list[i];
+    if (!row || row === contact) continue;
+    if ((typeof id === 'string' && id && row.id === id)
+      || (row.system === system && row.role === role)) {
+      row.favors = value;
+    }
+  }
+}
+
+/** Grant n favors (default 1). Writes the live roster row, then mirrors the handle. */
 export function addFavor(ctx, contact, n = 1) {
-  contact.favors += n;
+  const live = liveContact(ctx, contact);
+  if (!live) return;
+  const add = typeof n === 'number' && Number.isFinite(n) ? n : 1;
+  const next = favorCount(live) + add;
+  live.favors = next;
+  if (typeof live.id === 'string' && live.id) {
+    favorBank.set(live.id, next);
+    trackFavorHandle(live);
+    trackFavorHandle(contact);
+    writeFavorHandles(live.id, next);
+  }
+  syncFavorRows(ctx, live, next);
+  if (contact && contact !== live) contact.favors = next;
 }
 
 /** Spend one favor if any are banked; true when the call went through. */
 export function spendFavor(ctx, contact) {
-  if (contact.favors <= 0) return false;
-  contact.favors -= 1;
+  const live = liveContact(ctx, contact);
+  if (!live) return false;
+  const n = favorCount(live);
+  if (n <= 0) return false;
+  const next = n - 1;
+  live.favors = next;
+  if (typeof live.id === 'string' && live.id) {
+    favorBank.set(live.id, next);
+    trackFavorHandle(live);
+    trackFavorHandle(contact);
+    writeFavorHandles(live.id, next);
+  }
+  syncFavorRows(ctx, live, next);
+  if (contact && contact !== live) contact.favors = next;
   return true;
 }
 

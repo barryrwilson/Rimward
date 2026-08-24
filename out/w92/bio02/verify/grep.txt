@@ -1,0 +1,163 @@
+src/game/bio-seed.js:3:  grantLivingSeedRow,
+src/game/bio-seed.js:64:  return grantLivingSeedRow(ctx, { id: GIFT_HULL_ID });
+src/game/bio-seed.js:138:  const result = grantLivingSeedRow(ctx, { stem: PIRATE_SEED_STEM });
+src/game/bio-seed.js:146:    || row.hullKind !== 'living' || row.classKey !== 'light') {
+src/systems/shipyard-desk.js:1:import { sanitizeHangar, switchTo, graftMounted, trainMounted, nextTrainClass } from '../game/hangar.js';
+src/systems/shipyard-desk.js:138:function classLabel(classKey) {
+src/systems/shipyard-desk.js:139:  return Object.prototype.hasOwnProperty.call(SHIP_CLASSES, classKey) ? classKey : 'light';
+src/systems/shipyard-desk.js:164:    classKey: offer.classKey,
+src/systems/shipyard-desk.js:168:function setYardPending(ui, classKey) {
+src/systems/shipyard-desk.js:169:  ui.yardPending = { classKey };
+src/systems/shipyard-desk.js:174:  const classKey = ui.yardPending?.classKey;
+src/systems/shipyard-desk.js:176:  const result = purchaseYardHull(ctx, classKey);
+src/systems/shipyard-desk.js:216:  const dest = livingTrainDest(row.classKey) ?? nextTrainClass(row.classKey);
+src/systems/shipyard-desk.js:218:    const note = row.classKey === 'heavy' ? TRAIN_HEAVY_NOTE : TRAIN_REFUSE_LINES.class;
+src/systems/shipyard-desk.js:225:  return { kind: 'offer', fromClass: row.classKey, destClass: dest, price };
+src/systems/shipyard-desk.js:230:  const dest = livingTrainDest(row?.classKey);
+src/systems/shipyard-desk.js:233:    fromClass: row.classKey,
+src/systems/shipyard-desk.js:257:    const result = trainMounted(ctx);
+src/systems/shipyard-desk.js:303:  const pendingKey = ui.yardPending?.classKey;
+src/systems/shipyard-desk.js:304:  const pending = pendingKey && offers.find((o) => o.classKey === pendingKey);
+src/systems/shipyard-desk.js:306:    const price = yardPrice(pending.classKey, rep);
+src/systems/shipyard-desk.js:310:    h('div', 'shipyard-buy-name', copy, classLabel(pending.classKey));
+src/systems/shipyard-desk.js:329:    const price = yardPrice(offer.classKey, rep);
+src/systems/shipyard-desk.js:333:    h('div', 'shipyard-buy-name', copy, classLabel(offer.classKey));
+src/systems/shipyard-desk.js:336:      setYardPending(ui, offer.classKey);
+src/systems/shipyard-desk.js:388:    const name = row.name || SHIP_CLASSES[row.classKey]?.role || 'hull';
+src/systems/shipyard-desk.js:392:      `${classLabel(row.classKey)} ┬╖ ${factionLabel(row.faction)}${mounted}`);
+src/systems/shipyard-desk.js:395:      const result = switchTo(ctx, row.id);
+src/systems/shipyard-desk.js:470:    setYardPending(ui, offer.classKey);
+src/systems/shipyard-desk.js:479:  const result = switchTo(ctx, row.id);
+src/systems/shipyard-desk.js:480:  const name = row.name || SHIP_CLASSES[row.classKey]?.role || 'hull';
+src/game/shipyard.js:86:export function minRepFor(classKey) {
+src/game/shipyard.js:87:  if (!hasOwn(MIN_REP, classKey)) return 0;
+src/game/shipyard.js:88:  const n = MIN_REP[classKey];
+src/game/shipyard.js:100:export function yardPrice(classKey, rep) {
+src/game/shipyard.js:101:  if (!hasOwn(YARD_LIST_UU, classKey)) return null;
+src/game/shipyard.js:102:  const list = YARD_LIST_UU[classKey];
+src/game/shipyard.js:117:export function canReleaseSku(classKey, hullKind) {
+src/game/shipyard.js:118:  if (!hasOwn(SHIP_CLASSES, classKey)) return false;
+src/game/shipyard.js:126:  for (const classKey of stock) {
+src/game/shipyard.js:127:    if (!hasOwn(SHIP_CLASSES, classKey)) continue;
+src/game/shipyard.js:128:    if (!hasOwn(YARD_LIST_UU, classKey)) continue;
+src/game/shipyard.js:130:      classKey,
+src/game/shipyard.js:131:      minRep: minRepFor(classKey),
+src/game/shipyard.js:138:function nextHullId(hangar, classKey) {
+src/game/shipyard.js:143:  const stem = typeof classKey === 'string' && /^[a-z0-9_]+$/i.test(classKey) ? classKey : 'hull';
+src/game/shipyard.js:155:function buildStockRow(ctx, classKey, faction, hullKind) {
+src/game/shipyard.js:157:  const id = nextHullId(hangar, classKey);
+src/game/shipyard.js:159:  const fresh = createShipState(classKey, { name: classKey, faction });
+src/game/shipyard.js:164:    classKey,
+src/game/shipyard.js:165:    name: classKey,
+src/game/shipyard.js:172:    cargoCapacity: cargoHoldFor(classKey),
+src/game/shipyard.js:190:function purchaseYardHullUnlocked(ctx, classKey) {
+src/game/shipyard.js:192:  if (typeof classKey !== 'string' || !hasOwn(SHIP_CLASSES, classKey)) {
+src/game/shipyard.js:197:  if (!stock.includes(classKey)) return { ok: false, reason: 'stock' };
+src/game/shipyard.js:202:  if (!canReleaseSku(classKey, hullKind)) return { ok: false, reason: 'release' };
+src/game/shipyard.js:208:  if (rep < 0 || rep < minRepFor(classKey)) return { ok: false, reason: 'reputation' };
+src/game/shipyard.js:210:  const price = yardPrice(classKey, rep);
+src/game/shipyard.js:219:  const row = buildStockRow(ctx, classKey, faction, hullKind);
+src/game/shipyard.js:224:  if (row.classKey !== classKey) return { ok: false, reason: 'release' };
+src/game/shipyard.js:239:export function purchaseYardHull(ctx, classKey) {
+src/game/shipyard.js:243:    return purchaseYardHullUnlocked(ctx, classKey);
+src/systems/station.js:180:export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard']);
+src/systems/station.js:1578:  if (row && typeof row.classKey === 'string') return row.classKey;
+src/systems/station.js:1579:  const playerKey = ctx?.player?.classKey;
+src/systems/station.js:1609:export function outfitLauncherState(classKey, launcher, ammo) {
+src/systems/station.js:1611:  if (!canSeat(classKey, 'missile')) return { kind: 'noseat', cost: 0, id: '' };
+src/systems/station.js:1623:export function outfitTurretState(classKey, turret) {
+src/systems/station.js:1624:  if (!canSeat(classKey, 'turret')) return { kind: 'noseat', cost: 0, id: '' };
+src/systems/station.js:1643:  const classKey = mountedClassKey(ctx);
+src/systems/station.js:1645:    const st = outfitLauncherState(classKey, liveLauncher(ctx), liveMissileAmmo(ctx));
+src/systems/station.js:1657:  const st = outfitTurretState(classKey, liveTurret(ctx));
+src/systems/station.js:1684:  const classKey = mountedClassKey(ctx);
+src/systems/station.js:1687:    const live = outfitLauncherState(classKey, liveLauncher(ctx), liveMissileAmmo(ctx));
+src/systems/station.js:1703:      if (!canSeat(classKey, 'missile')) {
+src/systems/station.js:1732:  const live = outfitTurretState(classKey, liveTurret(ctx));
+src/systems/station.js:1747:  if (!canSeat(classKey, 'turret')) {
+src/systems/station.js:1988:  for (const r of recs) if (r.role === 'ace' || r.classKey === 'ace') return r;
+src/systems/station.js:2475:  if (rec.role === 'ace' || rec.classKey === 'ace') return null;
+src/systems/station.js:2489:  if (rec.classKey === 'ace' || rec.role === 'ace') return false;
+src/systems/station.js:2570:  if (rec.role === 'ace' || rec.classKey === 'ace') return true;
+src/systems/station.js:3177:  if (rec.classKey === 'ace' || rec.role === 'ace') return false;
+src/systems/station.js:3205:  if (rec.role !== 'patrol' || rec.role === 'ace' || rec.classKey === 'ace') return null;
+src/systems/station.js:3302:  if (rec.role !== 'patrol' || rec.role === 'ace' || rec.classKey === 'ace') return true;
+src/systems/station.js:3412:  const classKey = mountedClassKey(ctx);
+src/systems/station.js:3413:  if (!canSeat(classKey, spec.seat)) return false;
+src/systems/station.js:4235:    giftPending: false,
+src/systems/station.js:4302:      const fresh = createShipState(SHIP_CLASSES[p.classKey] ? p.classKey : 'light', { name: p.name, faction: p.faction });
+src/systems/station.js:4313:      const used = Math.round((ctx.cargoCapacity - cargoHoldFor(ctx.player?.classKey)) / CARGO_UPGRADE_STEP);
+src/systems/station.js:5215:    const used = Math.round((ctx.cargoCapacity - cargoHoldFor(ctx.player?.classKey)) / CARGO_UPGRADE_STEP);
+src/systems/station.js:5260:    const classKey = mountedClassKey(ctx);
+src/systems/station.js:5264:    const launchSt = outfitLauncherState(classKey, launcher, ammo);
+src/systems/station.js:5265:    const turretSt = outfitTurretState(classKey, turret);
+src/systems/station.js:5348:    if (!ui.giftPending) return false;
+src/systems/station.js:5349:    ui.giftPending = false;
+src/systems/station.js:5358:      ui.giftPending = false;
+src/systems/station.js:5368:    ui.giftPending = true;
+src/systems/station.js:5375:      ui.giftPending = false;
+src/systems/station.js:5378:    if (ui.giftPending) {
+src/systems/station.js:5678:      DOCK_KEY_SERVICES.forEach((key, i) => {
+src/systems/station.js:5679:        const hot = i === DOCK_KEY_SERVICES.length - 1 ? 0 : i + 1;
+src/systems/station.js:5701:        ui.giftPending = false;
+src/systems/station.js:5725:    ui.giftPending = false;
+src/systems/station.js:5746:    ui.giftPending = false;
+src/systems/station.js:5772:    ui.giftPending = false;
+src/systems/station.js:5788:          selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1]);
+src/systems/station.js:5792:        if (i >= 0 && i < DOCK_KEY_SERVICES.length) selectService(DOCK_KEY_SERVICES[i]);
+src/systems/station.js:5810:      ui.giftPending = false;
+src/systems/station.js:5853:      if (n === 1 && isSwornGiftVisible(ctx) && !ui.giftPending) {
+src/game/hangar.js:40:function classKeyOf(value) {
+src/game/hangar.js:56:function healLauncher(classKey, value) {
+src/game/hangar.js:57:  if (!canSeat(classKey, 'missile')) return '';
+src/game/hangar.js:61:function healTurret(classKey, value) {
+src/game/hangar.js:62:  if (!canSeat(classKey, 'turret')) return '';
+src/game/hangar.js:66:function healCargoCapacity(value, classKey) {
+src/game/hangar.js:67:  const floor = cargoHoldFor(classKey);
+src/game/hangar.js:68:  const max = cargoHoldMax(classKey);
+src/game/hangar.js:169:function sanitizeName(value, classKey) {
+src/game/hangar.js:170:  if (typeof value !== 'string') return SHIP_CLASSES[classKey]?.role ?? 'hull';
+src/game/hangar.js:172:  return cleaned || (SHIP_CLASSES[classKey]?.role ?? 'hull');
+src/game/hangar.js:181:function vitalsFromClass(classKey, raw) {
+src/game/hangar.js:182:  const fresh = createShipState(classKey);
+src/game/hangar.js:227:  const classKey = classKeyOf(own(raw, 'classKey'));
+src/game/hangar.js:230:  const vitals = vitalsFromClass(classKey, raw);
+src/game/hangar.js:231:  const cargoCapacity = healCargoCapacity(own(raw, 'cargoCapacity'), classKey);
+src/game/hangar.js:232:  const launcher = healLauncher(classKey, own(raw, 'launcher'));
+src/game/hangar.js:233:  const turret = healTurret(classKey, own(raw, 'turret'));
+src/game/hangar.js:237:    classKey,
+src/game/hangar.js:238:    name: sanitizeName(own(raw, 'name'), classKey),
+src/game/hangar.js:258:  const classKey = classKeyOf(p?.classKey);
+src/game/hangar.js:264:    classKey,
+src/game/hangar.js:292:  const classKey = classKeyOf(p?.classKey);
+src/game/hangar.js:298:    classKey,
+src/game/hangar.js:303:    cargoCapacity: stock ? cargoHoldFor(classKey) : ctx.cargoCapacity,
+src/game/hangar.js:327:    classKey: 'light',
+src/game/hangar.js:420:  p.classKey = classKeyOf(p.classKey);
+src/game/hangar.js:441:  p.classKey = row.classKey;
+src/game/hangar.js:507:    row.cargoCapacity = healCargoCapacity(patch.cargoCapacity, row.classKey);
+src/game/hangar.js:512:    row.launcher = healLauncher(row.classKey, patch.launcher);
+src/game/hangar.js:522:    row.turret = healTurret(row.classKey, patch.turret);
+src/game/hangar.js:563:export function applyFlightEnvelope(ctx, classKey) {
+src/game/hangar.js:564:  const key = classKeyOf(classKey);
+src/game/hangar.js:573:  ship.afterburner.multiplier = cls.cruise > 0 ? cls.burn / cls.cruise : 2;
+src/game/hangar.js:658:  const baseline = createShipState(row.classKey, { name: row.name, faction: row.faction });
+src/game/hangar.js:671:    p.classKey = row.classKey;
+src/game/hangar.js:709:export function switchTo(ctx, id) {
+src/game/hangar.js:722:    applyFlightEnvelope(ctx, row.classKey);
+src/game/hangar.js:735:  const key = ctx.player?.classKey;
+src/game/hangar.js:779:export function nextTrainClass(classKey) {
+src/game/hangar.js:780:  return livingTrainDest(classKey);
+src/game/hangar.js:785:function trainMountedUnlocked(ctx) {
+src/game/hangar.js:802:  const dest = nextTrainClass(row.classKey);
+src/game/hangar.js:826:    if (nextTrainClass(parked.classKey) !== dest) throw new Error('train-class');
+src/game/hangar.js:831:      classKey: dest,
+src/game/hangar.js:852:    if (!rec || rec.id !== parked.id || rec.classKey !== dest || rec.hullKind !== 'living') {
+src/game/hangar.js:874:export function trainMounted(ctx) {
+src/game/hangar.js:878:    return trainMountedUnlocked(ctx);
+src/game/hangar.js:903:    classKey: 'light',
+src/game/hangar.js:929:export function grantLivingSeedRow(ctx, spec) {
+src/game/hangar.js:958:  if (rec.id !== id || rec.classKey !== 'light' || rec.faction !== 'beautiful') {
+src/game/hangar.js:978:  ctx.cargoCapacity = cargoHoldFor(starter?.classKey);
+
+20343:// ---- WAVE92: BIO-02 class-ladder train (Beautiful Hangar papers) ----

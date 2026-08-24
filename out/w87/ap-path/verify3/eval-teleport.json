@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "pos": {
+    "x": 0,
+    "y": 60,
+    "z": -870
+  },
+  "combat": false,
+  "gate": {
+    "inZone": false,
+    "nearTo": null,
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "ap": {
+    "engaged": false,
+    "yaw": 0,
+    "pitch": 0,
+    "throttle": 0,
+    "wantJump": false,
+    "cycleHub": false,
+    "reason": "combat"
+  },
+  "nav": {
+    "dest": "veridian",
+    "path": [
+      "freehold",
+      "veridian"
+    ],
+    "remaining": 1,
+    "status": "plotted",
+    "autopilot": false
+  }
+}

@@ -1,0 +1,6 @@
+light lod0.glb HAS_MESHOPT bytes=331588
+ace lod0.glb HAS_MESHOPT bytes=278876
+cutter lod0.glb HAS_MESHOPT bytes=422608
+heavy lod0.glb HAS_MESHOPT bytes=373520
+frigate lod0.glb HAS_MESHOPT bytes=1011336
+freighter lod0.glb HAS_MESHOPT bytes=522320

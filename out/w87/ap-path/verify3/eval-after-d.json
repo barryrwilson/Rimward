@@ -1,0 +1,31 @@
+{
+  "currentSystem": "veridian",
+  "gate": {
+    "inZone": false,
+    "nearTo": null,
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "nav": {
+    "dest": "veridian",
+    "path": [
+      "veridian"
+    ],
+    "remaining": 0,
+    "status": "arrived",
+    "autopilot": false
+  },
+  "jumpClass": "rw-jump is-hidden",
+  "jumpDisplay": "none",
+  "jumpOpacity": "1",
+  "pos": {
+    "x": 0,
+    "y": 60,
+    "z": -900
+  },
+  "hudPos": "POS\nVERIDIAN REACH\nX 0 Y 60 Z -900\nMANIFEST\nUU\n350\nFEAR\n0\nCARGO"
+}

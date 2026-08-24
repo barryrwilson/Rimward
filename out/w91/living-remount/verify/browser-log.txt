@@ -1,0 +1,44 @@
+Wave 91 living remount browser verify
+Vite: http://127.0.0.1:5174/
+Title skip: sessionStorage rimward-title-skip=1
+Save: localStorage rimward-save-v1 removed
+
+HEADLESS (makeLivingHull via css stub)
+P=6.6
+default/light max=6.60 spanX=6.60 spanY=0.70 spanZ=4.20 restScale=1
+cutter max=9.68 spanX=9.68 spanY=0.91 spanZ=8.12 restScale=1.666... (Z longer than light)
+heavy max=18.70 spanX=18.70 spanY=2.39 spanZ=11.47 restScale=2.575...
+junk keys nope/junk-class/0/null: no throw, same as light
+purchaseYardHull(heavy) at beautiful dock: ok, mountedId unchanged, player classKey still light
+node remountPlayerHull needs document (makeVeinTexture canvas); browser covers remount
+
+BROWSER Cradle (bt_cradle)
+origin Digit1, jump to bt_cradle, dock The Cradle
+Yard: light/cutter/heavy living papers
+Digit5 Confirm papers: credits 100000->80000, hull_heavy_1 living heavy added
+mountedId stayed hull_starter, player classKey stayed light (buy did not remount)
+Hangar Digit4 Mount: mountedId hull_heavy_1, player classKey heavy, notice "Mounted heavy."
+Undock chase: light restScale 1 max~6.55 (swim); heavy restScale 2.575 max~19.34 (swim)
+visibly larger in 01-chase-light.png vs 08-chase-heavy.png
+swimMaxDelta 0.027 over 1.6s, swim/breath/heartbeat true
+
+OPTIONAL plated Freehold
+First chained attempt: context destroyed (page recovered to origin pick). Likely WebGL/PMREM after jump+remount in Playwright.
+Retry from fresh boot: buy Freehold light built, Hangar Digit4 Mount
+after: hullPath=built kind=built platedIsAsset=true platedFallback=false platedName=npc-ship-asset living=null
+meshes RIMWARD_HULL / RIMWARD_EMISSIVE / RIMWARD_ENGINE_GLOW (GLB, not blob)
+
+CONSOLE
+Repeated: Ship reflection rig load failed TypeError: Cannot read properties of null (reading 'trim') in PMREMGenerator (Playwright WebGL). Not living remount.
+
+SHOTS
+01-chase-light.png
+02-dock-cradle.png
+03-yard.png
+04-heavy-papers.png
+05-after-buy.png
+06-hangar.png
+07-after-mount.png
+08-chase-heavy.png
+09-plated-hangar.png
+10-plated-after-mount.png

@@ -1,0 +1,5 @@
+spawn chrome pid=172996
+boot {"ctx":true,"title":true}
+picked {"paused":false,"overlay":false}
+parked {"sys":"gc_auction","paused":false,"overlay":false,"live":{"x":368,"y":76,"z":-747},"hub":{"x":368,"y":76,"z":-747,"visible":true},"marker":{"x":368,"y":76,"z":-747,"visible":true},"flying":true}
+screenshot flow-a-hub-visual.png bytes=277580

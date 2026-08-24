@@ -1,4 +1,4 @@
-"""Beautiful Ones Freighter - GARDENBACK MIGRATION VESSEL.
+"""Beautiful Ones Freighter - BLUE-WHALE GARDENBACK.
 
 Bible §4.6: "A colossal living carrier whose back and ventral folds support
 symbiotic gardens, nursery hollows, and sheltered companion spaces. Slow
@@ -6,103 +6,38 @@ breathing must travel across separate body regions. Its body should dwarf
 stations' ordinary berths and accept external cradle branches rather than
 enter a hangar."
 
-Reference plate (docs/SpaceShipIdeas/reference-images/beautiful-ones/
-beautiful-freighter-gardenback.png): a migrating ecosystem on the body of a
-colossal whale-manta. The plate's dense coral is simplified to game scale:
-a few LARGE readable ridge swells per biome, and the plate's dozens of
-hollows and juveniles are bounded to the implementation's counts, with
-nearby companions carrying the living-migration scale cue.
+Body plan — a COLOSSAL elongate blue whale, not a humpback and not a manta:
 
-Envelope (driver): l = 85.0, b = 46.75, h = 25.5. Authored largest
-dimension ~83.5 world units (spanZ, crown tips to tail whip tip; SHIP_SCALE
-freighter span band [66.00, 109.20]; fleet ladder: largest, >> frigate
-~29.0). The driver's engine-glow sphere sits at the stern (z = +l*0.47 =
-+39.95); the tail loft tapers to a whip tip at z = +39.5 so the glow reads
-as the body's own bioluminescent wake, never an exhaust. (Measured numbers
-are filled in by the orchestrator after bake.)
+- ONE grown fusiform loft ('body-main'), extreme length, relatively small
+  head toward -Z, long torso, long tail. Tail tip at z = l*+0.462 so the
+  driver glow at z = l*+0.47 reads as a vast bioluminescent wake.
+- TINY pectorals: an.whale_pectoral style='blue'. HUGE HORIZONTAL fluke:
+  an.whale_fluke. Soft an.dorsal_ridge only — never a shark triangle.
+- Blunt-to-slightly-pointed head. Ventral throat grooves are nacre pads
+  on the forward belly. an.blowhole plus org.breathing_vents in the
+  calm gaps between gardens.
+- THREE SEPARATED dorsal garden biomes. Each biome is a pearl mass loft
+  on the whale back (primary mass at every LOD) plus org.garden_fold.
+  Breathing gaps stay bare. Gardens sit ON the silhouette; they do not
+  replace it.
+- Flank nursery / sanctuary hollows with nested companions. One great
+  belly_chamber for transfer. Free companions give scale.
+- Ancient sensory crown. ONE port healed scar.
 
-Body plan
----------
-A colossal blunt whale-manta, the fleet's deep-end sculpt:
+Envelope (driver): l = 85.0, b = l*0.55 = 46.75, h = l*0.30 = 25.5.
+Authored largest-dimension target ~78 (spanZ, nose to tail tip). SHIP_SCALE
+freighter span band [66.00, 109.20]. Hull vertex aim [34000, 154000].
+minLengthOverBeam 1.05. maxHeightOverLength 0.62. beam/length >= 0.16.
+Freighter is the only class with lod3 (detail=0).
 
-- ONE grown main loft ('body-main', indigo living tissue, 18 fair stations):
-  a blunt head, a thorax far broader and deeper than the frigate's (max
-  half-beam b*0.4385 = 20.5, half-height h*0.4431 = 11.3 just aft of the
-  head at l*-0.247), then a long gentle tail taper ending just short of
-  the wake glow. No zones, no transom, no drive face.
-- A second pearl loft ('living-body-swell', 14 fair stations) rides the
-  dorsal back with THREE gentle crests — one under each garden biome —
-  separated by bare breathing-gap dips, so the three biomes read in the
-  bare silhouette even at lod3. Its upper half stands proud of the indigo
-  body and its lower half is buried — pearl-bone back over indigo flanks,
-  two shells deeply interpenetrating (the connectivity is the overlap).
-- A swollen pearl brow and an immense indigo throat give the head its
-  whale read; the ancient sensory crown (fan 0.9, 14 filaments, deep
-  sea-grass arc) erupts through the brow and ends in cool cyan points.
-- THREE fin pairs carry the outline: a broad slow wing pair sweeping back
-  past the mid-body (span sets the ship's beam, ~76 world units), a second
-  smaller pair, and a stabiliser pair aft by the tail — rounded paddles,
-  never knife edges.
-- THREE separated dorsal GARDEN BIOMES: each is a pearl mass mound
-  ('living-body-garden-…', primary mass, all LODs) carrying one
-  organs.garden_fold ridge field (2-3 large swells at full detail). Bare
-  breathing gaps between the biomes hold the dorsal vent row — the plate's
-  "distinct symbiotic zones, not one forest".
-- A bounded ROW of deep violet NURSERY HOLLOWS along each flank (three
-  starboard, two port — grown, not mirrored): grown irregular lips, some
-  nested with juvenile companion craft, one starboard hollow left open
-  into shadowed shelter. One ventral nursery and one great protected
-  belly chamber under the thorax cover the ventral folds.
-- Companion scale cue: up to three tiny free companion craft graze the
-  hull (bellies piercing the skin — no floating islands) beside the
-  nested nursery young.
-- The ONE deliberate functional asymmetry: a healed scar welt crossing the
-  PORT upper forward flank (an.healed_scar), pale healed tissue sweeping
-  up across the fold. Garden lateral offsets and nursery occupancy also
-  vary region to region, but the scar is the named mark.
-
-LOD ladder and per-LOD triangle budget plan MEASURED 2026-08-14 (measure-ships, gltf-transform tri count; wave-8 left this class RED on lod1 29000/24000, lod2 13808/8000, lod3 8132/4000, so the low-detail branches trim organs FIRST and never the silhouette):
-
-- lod0 (detail 3), cap 60000 — MEASURED verts 79980; tris 47956/21268/7412/3024 (~52000 total, ~44000 hull + ~8000 emissive): full build — 6 nursery hollows with 7 nested young,
-  3 free companions, 12 vents with breath glows in four separated body
-  regions, 4 fold creases with lips + 4 vein fans, 3 gardens x 3 swells
-  with fronds and cyan buds, crown of 14, 5 flow lines at full path
-  density, scar with swells, fin lofts at full rings with spanwise flow
-  lines. Hull verts MEASURED ~88000 (band [34000, 154000]).
-```
-  density, scar with swells, fin lofts at full rings with spanwise flow
-  lines. Hull verts ~88000 (band [34000, 154000]).
-- lod1 (detail 2), cap 24000 — plan ~21500 (target <=22800): hollows thin
-  to 5 shells / 4 nested (lip beads 10 -> 8), free companions 3 -> 1,
-  vents 12 -> 9 without breath glow, lower crease pair drops, crease
-  pitch widens, vein branches halve, gardens 2 swells per biome without
-  buds, fin lofts 10 rings x 8 radial, head and garden masses seg 12.
-- lod2 (detail 1), cap 8000 — plan ~7200 (target <=7600): crown 14 -> 4,
-  fin lofts 9/7 rings x 6 radial with one centreline flow line, crease
-  floors only (no lips) shortened to the mid 60 % of the run, one vein
-  branch per fan, one garden swell per biome, nurseries 2 occupied plus
-  the ventral well, vents 4 dark bowls, flow lines 3 lines decimated to
-  every second point, scar a single chord, belly pouch + mouth.
-- lod3 (detail 0), cap 4000 — plan ~2800 (target <=3800): primary masses
-  only — the two grown lofts, brow and throat, the three garden mass
-  pearls, the six fin lofts (7-9 rings x 5 radial — the wing pair keeps
-  one extra ring step so the outline never moves), the belly pouch, 3
-  hollow wells with 2 nested young, single-chord flow lines. Crown,
-  vents, veins, creases, scar and free companions drop out (the
-  constructs return nothing at detail 0); the colossal silhouette — wing
-  sweep, three garden crests in the swell loft, blunt brow over dark
-  throat, long whip tail into the wake glow — survives.
-
-Connectivity: every separate volume pierces the hull or another seated
-part — fin roots are given inside the body, the swell interpenetrates the
-main loft along its full run, garden mounds bury 40 % into the swell
-crown, hollow wells are flush-well idioms sunk inboard from skins sampled
-with sf.flank_x / sf.bottom_y at their OWN stations, companions pierce
-the mouth planes and the belly/flank skins, the brow/throat overlap the
-head run, the crown root sits inside the brow mass, and every path
-endpoint is pulled inboard to bury. No typed y fractions anywhere: every
-anchor is read off the station lists through sf.* queries or the surf_*
-factories.
+LOD ladder
+----------
+detail=3  full gardens, hollows, nested and free companions, vents,
+          throat grooves, crown, scar, veins, flow.
+detail=2  fewer repeats (hollows, occupants, vents, folds, veins).
+detail=1  primary masses + garden_fold hint + a few hollows/vents.
+detail=0  loft + fluke + tiny pectorals + garden masses + ridge +
+          throat mass + belly chamber. Silhouette never trimmed.
 """
 import math
 import sys
@@ -111,184 +46,268 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import ship_kit as kit
 
-from . import surface as sf
 from . import anatomy as an
 from . import organs as org
+from . import surface as sf
+
+
+# Garden biomes: (tag, z0_frac, z1_frac, seed). Calm gaps live between.
+_GARDENS = (
+    ('fore', -0.195, -0.055, 21),
+    ('mid',   0.025,  0.155, 22),
+    ('aft',   0.225,  0.345, 23),
+)
+
+# grown_loft is a true ellipse. Chamfer queries (sf.flank_x / top_y) sit
+# outboard of that shell — inset and sample the ellipse instead.
+_ELL_CLIP = 0.97
+_SKIN_INSET = 0.22
+_FLOW_INSET = 0.18
+_FLOW_THICK = 0.08
+# nacre_pads rx minus this = outboard overlap on the ellipse (> 0.10).
+_NACRE_RX = 0.38
+_NACRE_RY = 0.22
+_NACRE_RZ = 0.60
+_NACRE_OVERLAP = 0.14
+_GROOVE_FRACS = (0.50, 0.34)
 
 
 # ===========================================================================
-# STATION LISTS
+# ELLIPSE SKIN (matches grown_loft rings)
 # ===========================================================================
 
-def _main_stations(l, b, h):
-    """Main grown-body loft stations: blunt head, thick thorax, whip tail.
+def _ell_hw(stations, z, y):
+    """True-ellipse half-beam at (z, y), or 0.0 off the section."""
+    hw, hh, yo, _ch = sf.section(stations, z)
+    if hw <= 1e-6 or hh <= 1e-6:
+        return 0.0
+    t = (y - yo) / hh
+    if abs(t) >= _ELL_CLIP:
+        return 0.0
+    return hw * math.sqrt(max(0.0, 1.0 - t * t))
 
-    All sections are sf.fair near-ellipses (k = 0.49 at the kit clamp): a
-    swollen living section with no flat face and no corner. Nose cap at
-    l*-0.500 = -42.5; thickest just aft of the head at l*-0.247 = -21.0
-    (half-beam b*0.4385 = 20.5, half-height h*0.4431 = 11.3); tail tip at
-    l*+0.465 = +39.5, just short of the driver's wake glow at +39.95.
-    y_offset stays small and positive so the vertex centroid stays near the
-    origin under the idle breathing scale.
+
+def _ell_top(stations, z, x=0.0):
+    """True-ellipse back height at (z, x), or 0.0 off the section."""
+    hw, hh, yo, _ch = sf.section(stations, z)
+    if hw <= 1e-6 or hh <= 1e-6:
+        return 0.0
+    t = abs(x) / hw
+    if t >= _ELL_CLIP:
+        return 0.0
+    return yo + hh * math.sqrt(max(0.0, 1.0 - t * t))
+
+
+def _ell_bot(stations, z, x=0.0):
+    """True-ellipse belly height at (z, x), or 0.0 off the section."""
+    hw, hh, yo, _ch = sf.section(stations, z)
+    if hw <= 1e-6 or hh <= 1e-6:
+        return 0.0
+    t = abs(x) / hw
+    if t >= _ELL_CLIP:
+        return 0.0
+    return yo - hh * math.sqrt(max(0.0, 1.0 - t * t))
+
+
+def _surf_ell_top(stations, x=0.0, drop=0.0):
+    """surf(z) -> ellipse back height minus drop. 0.0 off the run."""
+    z0 = stations[0][0]
+    z1 = stations[-1][0]
+
+    def at(z):
+        if z < z0 or z > z1:
+            return 0.0
+        hy = _ell_top(stations, z, x)
+        if hy == 0.0:
+            return 0.0
+        return hy - drop
+    return at
+
+
+# ===========================================================================
+# STATION LIST
+# ===========================================================================
+
+def _main_stations(l, _b, _h):
+    """Elongate blue-whale stations. Small head, long torso, long tail.
+
+    Nose at l*-0.450. Peak girth just aft of the nape (l*-0.145). Tail
+    tip at l*+0.462, short of the wake glow at l*+0.47. Half-extents stay
+    well inside the class envelope; the fluke carries spanX.
     """
     return [
-        # -- HEAD: blunt manta rostrum, swelling fast aft --
-        sf.fair(l * -0.500, b * 0.075, h * 0.094, h * 0.024),  # nose cap
-        sf.fair(l * -0.471, b * 0.193, h * 0.216, h * 0.020),
-        sf.fair(l * -0.424, b * 0.299, h * 0.314, h * 0.014),
-        sf.fair(l * -0.365, b * 0.374, h * 0.384, h * 0.010),
-        # -- THORAX: thickest just aft of the head, then a slow fall --
-        sf.fair(l * -0.306, b * 0.417, h * 0.424, h * 0.008),
-        sf.fair(l * -0.247, b * 0.439, h * 0.443, h * 0.008),  # max section
-        sf.fair(l * -0.176, b * 0.428, h * 0.431, h * 0.010),
-        sf.fair(l * -0.106, b * 0.396, h * 0.400, h * 0.012),
-        sf.fair(l * -0.035, b * 0.353, h * 0.361, h * 0.014),
-        sf.fair(l *  0.035, b * 0.310, h * 0.322, h * 0.014),
-        sf.fair(l *  0.106, b * 0.267, h * 0.282, h * 0.012),
-        # -- TAIL: the long taper that ends at the wake glow --
-        sf.fair(l *  0.176, b * 0.225, h * 0.243, h * 0.010),
-        sf.fair(l *  0.235, b * 0.188, h * 0.208, h * 0.008),
-        sf.fair(l *  0.294, b * 0.150, h * 0.173, h * 0.006),
-        sf.fair(l *  0.341, b * 0.118, h * 0.141, h * 0.004),
-        sf.fair(l *  0.388, b * 0.086, h * 0.110, h * 0.002),
-        sf.fair(l *  0.429, b * 0.056, h * 0.078, h * 0.000),
-        sf.fair(l *  0.465, b * 0.026, h * 0.043, h * 0.000),  # whip tip
+        # -- HEAD: relatively small, blunt then slightly pointed ----------
+        sf.fair(l * -0.4500, 0.38, 0.34,  0.05),
+        sf.fair(l * -0.4220, 1.05, 0.95,  0.12),
+        sf.fair(l * -0.3900, 1.95, 1.75,  0.20),
+        sf.fair(l * -0.3480, 3.05, 2.70,  0.30),
+        sf.fair(l * -0.3000, 4.35, 3.80,  0.38),
+        # -- NAPE into long torso ----------------------------------------
+        sf.fair(l * -0.2400, 5.55, 4.70,  0.42),
+        sf.fair(l * -0.1850, 6.25, 5.20,  0.42),
+        sf.fair(l * -0.1450, 6.50, 5.35,  0.40),
+        sf.fair(l * -0.0800, 6.48, 5.30,  0.36),
+        sf.fair(l * -0.0100, 6.40, 5.18,  0.32),
+        sf.fair(l *  0.0600, 6.22, 4.95,  0.26),
+        sf.fair(l *  0.1300, 5.90, 4.60,  0.20),
+        sf.fair(l *  0.2000, 5.40, 4.15,  0.12),
+        # -- LONG TAIL into the wake -------------------------------------
+        sf.fair(l *  0.2650, 4.55, 3.40,  0.06),
+        sf.fair(l *  0.3250, 3.40, 2.45,  0.01),
+        sf.fair(l *  0.3750, 2.20, 1.60, -0.02),
+        sf.fair(l *  0.4150, 1.25, 0.95, -0.04),
+        sf.fair(l *  0.4420, 0.62, 0.50, -0.04),
+        sf.fair(l *  0.4550, 0.28, 0.24, -0.03),
+        sf.fair(l *  0.4620, 0.13, 0.11, -0.02),
     ]
 
 
-def _swell_stations(l, b, h):
-    """Pearl dorsal swell stations: the garden-carrying back, THREE crests.
+def _garden_mass_stations(stations, z0, z1, n, hw_frac, proud, bury):
+    """Pearl garden mound on the back. Ends taper. Lower half is buried."""
+    out = []
+    span = z1 - z0
+    if span <= 0.0 or n < 2:
+        return out
+    for i in range(n):
+        t = i / (n - 1.0)
+        env = math.sin(math.pi * t)
+        z = z0 + t * span
+        ty = _ell_top(stations, z, 0.0)
+        if ty == 0.0:
+            continue
+        hw = _ell_hw(stations, z, ty - 0.90) * hw_frac * max(0.28, env)
+        if hw <= 0.22:
+            continue
+        pr = proud * max(0.22, env)
+        hh = (pr + bury) * 0.5
+        yo = ty + (pr - bury) * 0.5
+        out.append(sf.fair(z, hw, hh, yo))
+    return out
 
-    A second grown loft whose upper half stands proud of the main body's
-    crown and whose lower half is buried deep inside it — the pearl-bone
-    back emerging from the indigo flanks. The crest line rises under each
-    of the three garden biomes (peaks at l*-0.19, l*-0.03 and l*+0.10) and
-    sags in the two bare breathing gaps between them, so the separated
-    biomes read in the bare loft even when garden_fold detail drops out at
-    lod3. Runs from just aft of the head (l*-0.447 = -38.0) to mid-tail
-    (l*+0.365 = +31.0), where it fades flush into the taper. Both end caps
-    sit inside the main body.
-    """
-    return [
-        sf.fair(l * -0.447, b * 0.118, h * 0.086, h * 0.231),  # aft of head
-        sf.fair(l * -0.388, b * 0.193, h * 0.118, h * 0.310),
-        sf.fair(l * -0.318, b * 0.250, h * 0.138, h * 0.352),
-        sf.fair(l * -0.247, b * 0.272, h * 0.150, h * 0.368),  # FORE crest
-        sf.fair(l * -0.190, b * 0.276, h * 0.152, h * 0.366),  #   (garden 1)
-        sf.fair(l * -0.130, b * 0.258, h * 0.132, h * 0.320),  # gap 1 dip
-        sf.fair(l * -0.065, b * 0.240, h * 0.138, h * 0.350),
-        sf.fair(l *  0.000, b * 0.222, h * 0.134, h * 0.352),  # MID crest
-        sf.fair(l *  0.060, b * 0.190, h * 0.105, h * 0.290),  # gap 2 dip
-        sf.fair(l *  0.100, b * 0.168, h * 0.112, h * 0.315),  # AFT crest
-        sf.fair(l *  0.165, b * 0.133, h * 0.086, h * 0.240),
-        sf.fair(l *  0.235, b * 0.098, h * 0.067, h * 0.169),
-        sf.fair(l *  0.306, b * 0.068, h * 0.051, h * 0.129),
-        sf.fair(l *  0.365, b * 0.043, h * 0.035, h * 0.102),  # fades flush
-    ]
+
+def _throat_mass_stations(stations, zs):
+    """Indigo ventral throat swell under the head and chest."""
+    out = []
+    for z in zs:
+        by = _ell_bot(stations, z, 0.0)
+        if by == 0.0:
+            continue
+        hw = _ell_hw(stations, z, by + 1.15)
+        if hw <= 0.28:
+            continue
+        hh = 1.45
+        yo = by + 0.55
+        out.append(sf.fair(z, hw * 0.58, hh, yo))
+    return out
+
+
+def _brow_stations(stations, zs):
+    """Small pearl brow over the snout. Buried into the head loft."""
+    out = []
+    for z in zs:
+        ty = _ell_top(stations, z, 0.0)
+        if ty == 0.0:
+            continue
+        hw = _ell_hw(stations, z, ty - 0.28)
+        if hw <= 0.18:
+            continue
+        hh = 0.55
+        out.append(sf.fair(z, hw * 0.48, hh, ty - 0.28 + hh * 0.15))
+    return out
+
+
+def _garden_surf(stations, z0, z1, x, drop):
+    """Back height through a garden biome, sunk into the skin, or 0.0."""
+    def at(z):
+        if z < z0 or z > z1:
+            return 0.0
+        hy = _ell_top(stations, z, x)
+        if hy == 0.0:
+            return 0.0
+        span = z1 - z0
+        t = (z - z0) / span
+        env = math.sin(math.pi * max(0.0, min(1.0, t)))
+        return hy - drop + 0.10 * max(0.20, env)
+
+    return at
 
 
 # ===========================================================================
-# PATH HELPERS — every point sampled from the station lists, never a typed y
+# SURFACE PATH HELPERS
 # ===========================================================================
 
-def _flank_path(stations, side, z0, z1, n, y_frac, inset=0.03, bury=0.50):
-    """Points riding the flank at a section-following height fraction.
-
-    The ride height is ``yo + y_frac * hh`` re-sampled at every z, so the
-    line holds the same fold height through the tapers instead of a typed
-    absolute y. ``y_frac`` may be a ``(start, end)`` tuple: the height then
-    sweeps along the run — the scar crosses the fold, it does not parallel
-    it. Stations where the section has fallen away at that height are
-    skipped (flank_x returns 0.0), so the run self-trims; both endpoints
-    are pulled ``bury`` inboard so the chain ends inside the body. With
-    ``y_frac`` inside the straight-flank band the points ride exactly on
-    the skin, half a strut-radius buried along the whole run.
-    """
-    sweep = isinstance(y_frac, tuple)
+def _flank_path(stations, side, z0, z1, n, y0, y1, inset=_FLOW_INSET):
+    """Points on the ellipse flank from (z0, y0) to (z1, y1). Ends buried."""
     pts = []
     for i in range(n):
-        z = z0 + (z1 - z0) * i / (n - 1.0)
-        hw, hh, yo, ch = sf.section(stations, z)
-        f = (y_frac[0] + (y_frac[1] - y_frac[0]) * i / (n - 1.0)
-             if sweep else y_frac)
-        y = yo + f * hh
-        fx = sf.flank_x(stations, z, y)
-        if fx <= inset:
+        t = i / (n - 1.0)
+        z = z0 + (z1 - z0) * t
+        y = y0 + (y1 - y0) * t
+        fx = _ell_hw(stations, z, y)
+        if fx <= 0.08:
             continue
-        pts.append([side * (fx - inset), y, z])
-    if pts:
-        pts[0][0] -= side * bury
-        pts[-1][0] -= side * bury
-    return [tuple(p) for p in pts]
-
-
-def _crest_path(stations, z0, z1, n, bury=0.50):
-    """Points riding the swell's crown line; both ends pulled down inboard."""
-    pts = []
-    for i in range(n):
-        z = z0 + (z1 - z0) * i / (n - 1.0)
-        sy = sf.top_y(stations, z, 0.0)
-        if sy == 0.0:
+        x = fx - inset
+        if not pts or i == n - 1:
+            x -= 0.12
+        if x <= 0.04:
             continue
-        pts.append([0.0, sy, z])
-    if pts:
-        pts[0][1] -= bury
-        pts[-1][1] -= bury
-    return [tuple(p) for p in pts]
-
-
-def _vent_row_top(stations, x, z_list):
-    """Dorsal vent mouth centres sampled on the swell skin at offset ``x``."""
-    return [(x, sf.top_y(stations, z, x), z) for z in z_list]
-
-
-def _vent_row_bottom(stations, x, z_list):
-    """Ventral vent mouth centres sampled on the belly skin at offset ``x``."""
-    return [(x, sf.bottom_y(stations, z, x), z) for z in z_list]
-
-
-def _vent_row_flank(stations, side, y, z_list):
-    """Flank vent mouth centres sampled on the side skin at height ``y``."""
-    pts = []
-    for z in z_list:
-        fx = sf.flank_x(stations, z, y)
-        if fx <= 0.0:
-            continue                    # section fell away — never a float
-        pts.append((side * fx, y, z))
+        pts.append((side * x, y, z))
     return pts
 
 
-# Garden biomes: name, lateral offset, mound centre z, mound radii, and the
-# z-span the ridge field is scattered over. Grown, not mirrored: each biome
-# sits at its own offset with its own mass.
-_GARDENS = (
-    ('fore', 0.053, -0.190, (1.8, 0.60, 3.0), -0.224, -0.147),
-    ('mid', -0.096, -0.033, (1.5, 0.52, 2.4), -0.065, 0.000),
-    ('aft', 0.075,  0.100, (1.2, 0.45, 2.0),  0.071, 0.129),
-)
+def _keel_path(stations, z0, z1, n, rise=0.16):
+    """Belly-centreline points. Lifted into the body."""
+    pts = []
+    for i in range(n):
+        t = i / (n - 1.0)
+        z = z0 + (z1 - z0) * t
+        y = _ell_bot(stations, z, 0.0)
+        if y == 0.0:
+            continue
+        y = y + rise
+        if not pts or i == n - 1:
+            y += 0.14
+        pts.append((0.0, y, z))
+    return pts
 
 
-def _mound_surf(swell, gx, gz, gr):
-    """callable(z) -> crown height of one garden mound at (``gx``, z).
+def _groove_path(stations, side, z0, z1, n, y_frac, inset):
+    """Ventral-flank nacre centres. Local Y. X inset so pads cut the ellipse."""
+    pts = []
+    if n < 2:
+        return pts
+    for i in range(n):
+        t = i / (n - 1.0)
+        z = z0 + (z1 - z0) * t
+        _hw, hh, yo, _ch = sf.section(stations, z)
+        if hh <= 1e-6:
+            continue
+        y = yo - hh * y_frac
+        fx = _ell_hw(stations, z, y)
+        if fx <= 0.22:
+            continue
+        x = fx - inset
+        if x <= 0.06:
+            continue
+        pts.append((side * x, y, z))
+    return pts
 
-    The mound is an ellipsoid seated 40 % into the swell crown; the closure
-    answers its upper ellipse and returns 0.0 off the mound's z-extent, so
-    a garden_fold scattered over a wider span self-trims to the mound —
-    the ridge swells grow OUT OF the folded pearl tissue, never hover
-    beside it. Returns None when the mound seat itself fell off the back.
-    """
-    seat = sf.top_y(swell, gz, gx)
-    if seat == 0.0:
-        return None
-    cy = seat - gr[1] * 0.4
 
-    def at(z):
-        f = 1.0 - ((z - gz) / gr[2]) ** 2
-        if f <= 0.0:
-            return 0.0
-        return cy + gr[1] * math.sqrt(f)
-
-    return at
+def _garden_vein_tips(stations, side, z_root, y, spread):
+    """Vein tips inboard of the ellipse at a garden's skirt."""
+    fx = _ell_hw(stations, z_root, y)
+    if fx <= 0.30:
+        return None, []
+    root = (side * (fx - 0.40), y, z_root)
+    tips = []
+    for dz, dy in spread:
+        tz = z_root + dz
+        ty = y + dy
+        tx = _ell_hw(stations, tz, ty)
+        if tx <= 0.30:
+            continue
+        tips.append((side * (tx - 0.40), ty, tz))
+    return root, tips
 
 
 # ===========================================================================
@@ -296,249 +315,173 @@ def _mound_surf(swell, gx, gz, gr):
 # ===========================================================================
 
 def build_freighter(parts, glow, l, b, h, hull_mat, glow_mat, detail):
-    """Build the Beautiful Ones gardenback migration vessel (freighter).
+    """Build the Beautiful Ones blue-whale gardenback (freighter).
 
     parts / glow -- object lists the driver joins into RIMWARD_HULL and
                     RIMWARD_EMISSIVE.
     l, b, h      -- class envelope 85.0 x 46.75 x 25.5.
-    detail       -- 3 (lod0) … 0 (lod3); the per-LOD plan is in the module
-                    docstring.
+    detail       -- 3 (lod0) … 0 (lod3).
     """
     d = min(max(int(detail), 0), 3)
     stations = _main_stations(l, b, h)
-    swell = _swell_stations(l, b, h)
+    radial = {3: 28, 2: 22, 1: 16, 0: 12}[d]
+    # detail=3 organs drop one ladder step so lod0 stays under 60000 tris.
+    trim = 2 if d >= 3 else d
 
-    # -- PRIMARY MASSES -----------------------------------------------------
-    # The one grown body: indigo living tissue.
-    sf.grown_loft(parts, 'body-main', kit.ROLE_HULL, stations, hull_mat)
-    # The pearl-bone back: a second loft interpenetrating the first, its
-    # three crests carrying the separated garden biomes.
-    sf.grown_loft(parts, 'living-body-swell', kit.ROLE_ARMOUR, swell, hull_mat)
-    # Whale head: blunt pearl brow over an immense dark indigo throat, both
-    # deeply overlapping the nose run (kit.sphere takes RADII per axis).
-    head_segs = {3: 16, 2: 12, 1: 8, 0: 8}[d]
-    kit.sphere(parts, 'living-body-brow', kit.ROLE_ARMOUR,
-               (0.0, h * 0.115, l * -0.406), (b * 0.260, h * 0.290, l * 0.105),
-               hull_mat, segments=head_segs)
-    kit.sphere(parts, 'body-throat', kit.ROLE_HULL,
-               (0.0, h * -0.160, l * -0.388), (b * 0.260, h * 0.240, l * 0.110),
-               hull_mat, segments=head_segs)
-    # Garden biome mounds: folded pearl tissue the ridge swells grow from —
-    # primary mass, present at every LOD so the three separated biomes
-    # survive to lod3. Each buries 40 % into the swell crown at its own
-    # station (grown lateral offsets, never mirrored).
-    for gtag, gxf, gzf, gr, _gz0, _gz1 in _GARDENS:
-        gy = sf.top_y(swell, l * gzf, b * gxf)
-        if gy == 0.0:
+    # ── PRIMARY MASS: elongate indigo body (always) ──────────────────────
+    sf.grown_loft(parts, 'body-main', kit.ROLE_HULL, stations, hull_mat,
+                  radial=radial)
+
+    # ── PRIMARY MASS: small pearl brow (always) ──────────────────────────
+    brow = _brow_stations(stations, (
+        l * -0.415, l * -0.385, l * -0.355, l * -0.325,
+    ))
+    if len(brow) >= 2:
+        sf.grown_loft(parts, 'living-body-brow', kit.ROLE_ARMOUR, brow,
+                      hull_mat, radial=max(8, radial - 6))
+
+    # ── PRIMARY MASS: indigo throat swell (always) ───────────────────────
+    throat = _throat_mass_stations(stations, (
+        l * -0.360, l * -0.310, l * -0.250, l * -0.190, l * -0.130,
+    ))
+    if len(throat) >= 2:
+        sf.grown_loft(parts, 'body-throat', kit.ROLE_HULL, throat, hull_mat,
+                      radial=max(8, radial - 4))
+
+    # ── PRIMARY MASS: three SEPARATED garden mounds (always) ─────────────
+    # Pearl masses on the whale back. Gaps between biomes stay bare.
+    # Bury > proud so the mound interpenetrates the loft by > 0.15.
+    garden_proud = 1.15
+    garden_bury = 2.20
+    garden_n = 5
+    for tag, z0f, z1f, _seed in _GARDENS:
+        z0, z1 = l * z0f, l * z1f
+        mass = _garden_mass_stations(
+            stations, z0, z1, n=garden_n, hw_frac=0.48,
+            proud=garden_proud, bury=garden_bury)
+        if len(mass) >= 2:
+            sf.grown_loft(parts, 'living-body-garden-' + tag, kit.ROLE_ARMOUR,
+                          mass, hull_mat, radial=max(10, radial - 4))
+
+    # ── PRIMARY MASS: tiny soft dorsal ridge (always) ────────────────────
+    # Far back, in the last breathing gap. Soft pads, not a shark triangle.
+    ridge_z0, ridge_z1 = l * 0.168, l * 0.218
+    an.dorsal_ridge(parts, 'ridge-freighter', hull_mat,
+                    ridge_z0, ridge_z1,
+                    _surf_ell_top(stations, 0.0, drop=0.20),
+                    x=0.0, height=0.48, detail=d)
+
+    # ── PRIMARY MASS: tiny blue-whale pectorals (always) ─────────────────
+    # Short triangle paddles. Roots buried in the flank at max girth.
+    z_pec = l * -0.125
+    y_pec = sf.section(stations, z_pec)[2] - 0.85
+    fx_pec = _ell_hw(stations, z_pec, y_pec)
+    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
+        if fx_pec <= 0.40:
             continue
-        kit.sphere(parts, 'living-body-garden-%s' % gtag, kit.ROLE_ARMOUR,
-                   (b * gxf, gy - gr[1] * 0.4, l * gzf), gr, hull_mat,
-                   segments=head_segs)
+        root = (side * (fx_pec - 0.70), y_pec, z_pec)
+        tip = (side * (fx_pec + 5.60), y_pec - 0.55, z_pec + 2.10)
+        an.whale_pectoral(parts, 'fin-pectoral-' + tag, hull_mat,
+                          root, tip, root_chord=2.55, tip_chord=0.95,
+                          thick=0.42, style='blue', detail=d)
 
-    # -- SENSORY CROWN: ancient and wide, erupting through the brow ---------
-    # Root inside the brow mass; long filaments fan forward of the nose in a
-    # deep sea-grass arc and end in cool cyan points. Fan 0.9 against the
-    # default 0.34, count 14 (the brow signature — it holds at lod1).
-    org.sensory_crown(parts, glow, 'elder', hull_mat, glow_mat,
-                      (0.0, h * 0.071, l * -0.498),
-                      forward=(0.0, 0.12, -1.0), fan=0.9, count=14,
-                      detail=d, seed=5, arc=0.30)
+    # ── PRIMARY MASS: huge HORIZONTAL fluke (always) ─────────────────────
+    z_ped = l * 0.438
+    _hw, _hh, yo, _ch = sf.section(stations, z_ped)
+    peduncle = (0.0, yo, z_ped)
+    an.whale_fluke(parts, 'fluke', hull_mat, peduncle,
+                   span=28.0, chord=7.6, thick=0.95, detail=d)
 
-    # -- FIN SET: the outline (broad slow wing pair, second pair, aft pair) -
-    # Roots are given INSIDE the body; the wing tips carry the beam to ~76
-    # world units. Below detail 2 the bead override trims ring density
-    # (rings = 2 * beads + 3, same roots, same tips — the paddle reach and
-    # the silhouette never move).
-    fin_beads = (None, None, None) if d >= 2 else (3, 2, 2)
-    for side, tag in ((1.0, 's'), (-1.0, 'p')):
-        an.fin_membrane(parts, 'fin-wing-%s' % tag, hull_mat,
-                        (side * b * 0.150, h * 0.039, l * -0.330),
-                        (side * b * 0.813, 0.0, l * -0.035),
-                        root_chord=l * 0.200, tip_chord=l * 0.053,
-                        thick=0.55, detail=d, flow=3,
-                        beads=fin_beads[0], seed=11)
-        an.fin_membrane(parts, 'fin-mid-%s' % tag, hull_mat,
-                        (side * b * 0.128, h * 0.020, l * -0.094),
-                        (side * b * 0.642, h * -0.020, l * 0.141),
-                        root_chord=l * 0.118, tip_chord=l * 0.035,
-                        thick=0.40, detail=d, flow=2,
-                        beads=fin_beads[1], seed=23)
-        an.fin_membrane(parts, 'fin-aft-%s' % tag, hull_mat,
-                        (side * b * 0.086, h * 0.012, l * 0.165),
-                        (side * b * 0.385, h * -0.020, l * 0.353),
-                        root_chord=l * 0.082, tip_chord=l * 0.024,
-                        thick=0.30, detail=d, flow=2,
-                        beads=fin_beads[2], seed=37)
+    # ── PRIMARY MASS: great transfer belly chamber (always) ──────────────
+    z_belly = l * -0.095
+    by = _ell_bot(stations, z_belly, 0.0)
+    org.belly_chamber(parts, glow, 'freighter', hull_mat, glow_mat,
+                      (0.0, by - 0.20, z_belly), (5.6, 2.35, 8.2),
+                      detail=d)
 
-    # -- GARDEN FOLDS: three separated biomes on the pearl back -------------
-    # Each biome's ridge field grows out of its own mound through the
-    # mound-crown callback (self-trimming to the mound's z-extent), at its
-    # own lateral offset. The BARE GAPS between the z-ranges are where the
-    # dorsal breathing vents sit — the plate's distinct symbiotic zones,
-    # not one forest.
-    for k, (gtag, gxf, gzf, gr, gz0, gz1) in enumerate(_GARDENS):
-        gsurf = _mound_surf(swell, b * gxf, l * gzf, gr)
-        if gsurf is None:
+    # ── PRIMARY MASS: wake motes inside the last taper (always) ──────────
+    # Two motes at detail 0 so the glow join is never a single empty mesh.
+    for i, zf in enumerate((0.448, 0.456, 0.461)):
+        if d < 1 and i > 1:
             continue
-        org.garden_fold(parts, glow, 'garden-%s' % gtag, hull_mat, glow_mat,
-                        l * gz0, l * gz1, gsurf,
-                        x=b * gxf, detail=d, seed=41 + 12 * k)
+        zw = l * zf
+        _hw, _hh, wy, _c = sf.section(stations, zw)
+        kit.sphere(glow, 'wake-freighter.%02d' % i, 'glow',
+                   (0.0, wy, zw), (0.22 + i * 0.06, 0.18, 0.38 + i * 0.10),
+                   glow_mat, segments=8)
 
-    # -- BREATHING VENTS: rows in FOUR separated body regions ---------------
-    # Dorsal row in the calm gap between the fore and mid gardens, on the
-    # swell skin; flank rows aft (starboard) and forward (port); a ventral
-    # row beside the belly chamber. Breath travels across the whole body.
-    # Row lengths count down below detail 2; the organ halves again at
-    # detail 1 (four dark bowls carry the read at lod2).
-    vent_keep = {3: (3, 3, 3, 3), 2: (3, 2, 2, 2), 1: (2, 1, 1, 1),
-                 0: (0, 0, 0, 0)}[d]
-    vent_rows = (
-        ('vents-dorsal', 'y', _vent_row_top(swell, b * 0.150,
-                                            [l * -0.146, l * -0.118,
-                                             l * -0.089])),
-        ('vents-flank-s', 'x', _vent_row_flank(stations, 1.0, h * 0.078,
-                                               [l * 0.047, l * 0.094,
-                                                l * 0.141])),
-        ('vents-belly', 'y', _vent_row_bottom(stations, b * -0.128,
-                                              [l * -0.153, l * -0.124,
-                                               l * -0.094])),
-        ('vents-flank-p', 'x', _vent_row_flank(stations, -1.0, h * -0.039,
-                                               [l * -0.271, l * -0.241,
-                                                l * -0.212])),
+    if d < 1:
+        return
+
+    # ── GARDEN FOLDS on the three biomes (detail 1+) ─────────────────────
+    garden_drop = 0.32
+    for tag, z0f, z1f, seed in _GARDENS:
+        z0, z1 = l * z0f, l * z1f
+        org.garden_fold(parts, glow, 'garden-' + tag, hull_mat, glow_mat,
+                        z0, z1, _garden_surf(stations, z0, z1, 0.0, garden_drop),
+                        x=0.0, detail=trim, seed=seed)
+
+    # ── BLOWHOLE on the nape, ahead of the first garden (detail 1+) ──────
+    z_blow = l * -0.248
+    y_blow = _ell_top(stations, z_blow, 0.0)
+    if y_blow != 0.0:
+        an.blowhole(parts, glow, 'blowhole-freighter', hull_mat, glow_mat,
+                    (0.0, y_blow - 0.10, z_blow), radius=0.42, detail=d, seed=31)
+
+    # ── BREATHING VENTS in the calm garden gaps (detail 1+) ──────────────
+    gap_pts = []
+    for zf, xf in ((-0.028, 0.0), (-0.010, 0.55), (0.008, -0.40),
+                   (0.178, 0.0), (0.195, 0.45), (0.210, -0.35)):
+        vz = l * zf
+        vy = _ell_top(stations, vz, xf)
+        if vy == 0.0:
+            continue
+        gap_pts.append((xf, vy - 0.08, vz))
+    if d == 1:
+        gap_pts = gap_pts[:3]
+    elif d >= 2:
+        gap_pts = gap_pts[:4]
+    if gap_pts:
+        org.breathing_vents(parts, glow, 'vents-gap', hull_mat, glow_mat,
+                            (0.0, 0.0, 0.0), face='y', detail=trim,
+                            points=gap_pts)
+
+    # ── NURSERY / SANCTUARY HOLLOWS along the flanks (detail 1+) ─────────
+    # Absolute hollow size. Occupancy is the scale cue, not a scaled craft.
+    # Starboard carries more nests. One port hollow stays empty sanctuary.
+    hollow_spec = (
+        (1.0, 'stbd', l * -0.175, 1, 41),
+        (1.0, 'stbd', l * -0.040, 1, 42),
+        (1.0, 'stbd', l *  0.090, 1, 43),
+        (-1.0, 'port', l * -0.150, 1, 45),
+        (-1.0, 'port', l *  0.020, 0, 46),
+        (-1.0, 'port', l *  0.155, 1, 47),
     )
-    for (vname, vface, vpts), vkeep in zip(vent_rows, vent_keep):
-        if not vkeep:
+    if d == 1:
+        hollow_spec = (hollow_spec[1], hollow_spec[4])
+    elif d == 2:
+        hollow_spec = hollow_spec[:2] + hollow_spec[3:5]
+    y_hol = sf.section(stations, l * -0.040)[2] - 0.15
+    for side, tag, hz, occ, seed in hollow_spec:
+        hy = y_hol
+        fx = _ell_hw(stations, hz, hy)
+        if fx <= 0.80:
             continue
-        org.breathing_vents(parts, glow, vname, hull_mat, glow_mat,
-                            (0.0, 0.0, 0.0), face=vface, detail=d,
-                            points=vpts[:vkeep])
+        loc = (side * (fx - 0.10), hy, hz)
+        name = 'hollow-%s-%.0f' % (tag, hz)
+        if occ > 0:
+            if d < 3:
+                occ = 1
+            org.nursery_hollow(parts, glow, name, hull_mat, glow_mat, loc,
+                               face='x', occupants=occ, detail=trim, seed=seed)
+        else:
+            org.sanctuary_hollow(parts, glow, name, hull_mat, glow_mat, loc,
+                                 face='x', detail=trim, seed=seed)
 
-    # -- FOLD CREASES + VEIN FANS: the deep folds and their light -----------
-    # One upper and one lower crease per flank; each crease carries one
-    # branching vein fan rooted in its floor. The lower pair drops below
-    # detail 3 and the surviving pair shortens to the mid 60 % of its run
-    # at detail 1 — the crease reads as a dark line before it costs lips.
-    crease_specs = (
-        ('up', h * 0.157, l * -0.259, l * -0.024),   # y +4.0, z -22..-2
-        ('lo', h * -0.137, l * -0.188, l * 0.000),   # y -3.5, z -16..0
-    )
-    crease_rows = 2 if d >= 3 else 1
-    for side, stag in ((1.0, 's'), (-1.0, 'p')):
-        for ctag, cy, cz0, cz1 in crease_specs[:crease_rows]:
-            if d <= 1:
-                cmid = (cz0 + cz1) * 0.5
-                cspan = (cz1 - cz0) * 0.6
-                cz0, cz1 = cmid - cspan * 0.5, cmid + cspan * 0.5
-            an.fold_crease(parts, 'fold-%s-%s' % (stag, ctag), hull_mat,
-                           cz0, cz1, cy, sf.surf_flank(stations, cy),
-                           side=side, detail=d)
-            # vein fan: root and tips sampled inside the crease channel
-            zmid = (cz0 + cz1) * 0.5
-            fxr = sf.flank_x(stations, zmid, cy)
-            if fxr <= 0.0:
-                continue
-            root = (side * (fxr - 0.20), cy, zmid)
-            tips = []
-            for k in range(6):
-                tz = cz0 + (cz1 - cz0) * (k + 0.5) / 6.0
-                ty = cy + (0.30 if k % 2 == 0 else -0.30)
-                fxt = sf.flank_x(stations, tz, ty)
-                if fxt <= 0.12:
-                    continue
-                tips.append((side * (fxt - 0.12), ty, tz))
-            an.vein_fan(parts, glow, 'fold-%s-%s' % (stag, ctag),
-                        hull_mat, glow_mat, root, tips, (side, 0.0, 0.0),
-                        detail=d)
-
-    # -- FLOW LINES: the pearl/indigo boundary and the garden spine ---------
-    # Two long tonal boundary lines per flank, riding section-following
-    # heights so they hold through the tapers; one bright crest line along
-    # the swell's three-crest crown — the spine connecting the biomes. The
-    # lower flank pair rests below detail 2; the survivors decimate at
-    # detail 1 and collapse to single buried chords at detail 0.
-    flow_n = {3: 13, 2: 9, 1: 7, 0: 5}[d]
-    for side, stag in ((1.0, 's'), (-1.0, 'p')):
-        an.flow_line(parts, 'flow-%s-up' % stag, hull_mat,
-                     _flank_path(stations, side, l * -0.376, l * 0.353,
-                                 flow_n, 0.55),
-                     detail=d)
-        if d >= 2:
-            an.flow_line(parts, 'flow-%s-lo' % stag, hull_mat,
-                         _flank_path(stations, side, l * -0.353, l * 0.306,
-                                     flow_n, -0.50),
-                         detail=d)
-    an.flow_line(parts, 'flow-crest', hull_mat,
-                 _crest_path(swell, l * -0.424, l * 0.341, flow_n),
-                 detail=d)
-
-    # -- HEALED SCAR: the one deliberate asymmetry, PORT upper forward flank
-    # A pale welt sweeping UP across the fold — healed history, not a wound.
-    an.healed_scar(parts, 'scar-port', hull_mat,
-                   _flank_path(stations, -1.0, l * -0.235, l * -0.106,
-                               7, (0.14, 0.44), inset=0.02),
-                   thick=0.08, detail=d)
-
-    # -- BELLY CHAMBER: the great protected pouch under the thorax ----------
-    belly_z = l * -0.188
-    belly_skin = sf.bottom_y(stations, belly_z, 0.0)
-    pouch_half_h = 5.2 * 0.5
-    org.belly_chamber(parts, glow, 'thorax', hull_mat, glow_mat,
-                      (0.0, belly_skin - pouch_half_h + 0.5, belly_z),
-                      (9.0, 5.2, 11.0), detail=d)
-
-    # -- NURSERY HOLLOWS: the flank row and the ventral berth ---------------
-    # A bounded row of deep violet hollows with grown irregular lips runs
-    # along each flank — three starboard, two port, staggered in z and
-    # height because the row is grown, not machined. Occupancy varies per
-    # hollow and counts down with detail; 'nursery-s3' is always left OPEN
-    # into shadowed shelter (its dim glow panel reads at detail 2+). Every
-    # loc is sampled on the skin at its own station; ``min_d`` is the last
-    # LOD the hollow survives to (inclusion is monotonic down the ladder).
-    nursery_specs = (
-        # name, side, mouth y, mouth z, occupants (d3, d2, d1, d0), min_d
-        ('nursery-s1', 1.0, h * -0.078, l * -0.130, (2, 2, 1, 1), 0),
-        ('nursery-s2', 1.0, h * -0.059, l * -0.024, (1, 1, 1, 1), 0),
-        ('nursery-s3', 1.0, h * -0.039, l *  0.082, (0, 0, 0, 0), 2),
-        ('nursery-p1', -1.0, h * -0.070, l * -0.106, (2, 1, 0, 0), 2),
-        ('nursery-p2', -1.0, h * -0.051, l *  0.047, (1, 0, 0, 0), 3),
-    )
-    for k, (nname, nside, ny, nz, occs, min_d) in enumerate(nursery_specs):
-        if d < min_d:
-            continue
-        occ = occs[3 - d]
-        fx = sf.flank_x(stations, nz, ny)
-        if fx <= 0.0:
-            continue
-        org.nursery_hollow(parts, glow, nname, hull_mat, glow_mat,
-                           (nside * fx, ny, nz), face='x', occupants=occ,
-                           detail=d, seed=101 + 17 * k)
-    # Ventral nursery seated on the belly skin — present at every LOD
-    # (a bare well at lod3), occupied only at lod0.
-    vn_x, vn_z = b * 0.150, l * 0.012
-    org.nursery_hollow(parts, glow, 'nursery-ventral', hull_mat, glow_mat,
-                       (vn_x, sf.bottom_y(stations, vn_z, vn_x), vn_z),
-                       face='y', occupants=1 if d >= 3 else 0,
-                       detail=d, seed=191)
-
-    # -- FREE COMPANIONS: the living-migration scale cue --------------------
-    # Tiny young wayfinders grazing the colossal hull. Every one is seated
-    # with its belly PIERCING a skin sampled at its own station — 0.08 of
-    # bite — so no companion ever floats as an island. The flank pair is
-    # full-detail only; the belly grazer holds to lod1.
-    free_specs = (
-        ('school-belly-aft',
-         (b * -0.100,
-          sf.bottom_y(stations, l * 0.060, b * -0.100) + 0.08,
-          l * 0.060), 2),
-        ('school-flank-s',
-         (sf.flank_x(stations, l * -0.165, h * -0.020) - 0.08,
-          h * -0.020, l * -0.165), 3),
-        ('school-flank-p',
-         (-(sf.flank_x(stations, l * -0.300, h * -0.060) - 0.08),
-          h * -0.060, l * -0.300), 3),
-    )
-    for fname, floc, min_d in free_specs:
-        if d < min_d:
-            continue
-        org.companion_craft(parts, glow, fname, hull_mat, glow_mat,
-                            floc, detail=d)
+    # ── ONE PORT SCAR on the upper forward flank (detail 1+) ─────────────
+    y_fold = _ell_top(stations, l * -0.080, 0.0) - 1.55
+    welt = _flank_path(stations, -1.0, l * -0.305, l * -0.175, 5,
+                       y_fold + 0.45, y_fold - 0.35)
+    if len(welt) >= 2:
+        an.healed_scar(parts, 'scar-port', hull_mat, welt, thick=0.12,
+                       detail=d)

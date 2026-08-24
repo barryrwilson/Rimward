@@ -1,0 +1,83 @@
+{
+  "probePass": true,
+  "probeLastLine": "W90 AP GATE PROBE PASS",
+  "boot": {
+    "exitCode": 1,
+    "errorBanner": "BOOT TEST FAIL — 57 errors",
+    "wave85NavApPath": {
+      "directedSrc": true,
+      "cycleStop": true,
+      "liveLookup": true,
+      "noApJump": true,
+      "noCtxLit": true,
+      "noInnerP": true,
+      "localGate": true,
+      "localHub": true,
+      "noPhantom": true,
+      "backGate": true,
+      "noFakeTwoWay": true,
+      "plotVia": true,
+      "healPhantom": true,
+      "authStay": true,
+      "liveMatch": true,
+      "posUsesLive": true,
+      "zoneJump": true
+    },
+    "wave88ApPath": {
+      "chordThroughSun": true,
+      "nanFailClosed": true,
+      "noOrbitMath": true,
+      "resumeGate": true,
+      "wired": true,
+      "noOrbitCmd": true,
+      "wantJumpStay": true
+    },
+    "wave85NavGuidance": {
+      "hideJumping": false,
+      "markerRay": false,
+      "banner": "WAVE85 NAV GUIDANCE FAIL",
+      "preexisting": true
+    }
+  },
+  "probePins": {
+    "boot.liveMatch": true,
+    "boot.zoneJump": true,
+    "boot.noOrbitCmd": true,
+    "auction.hub.meshAtOrigin": true,
+    "auction.cradle.liveEqualsHubMesh": true,
+    "auction.veridian.physicalRing": true
+  },
+  "failBannersVsW89": {
+    "w89": [
+      "WAVE4 FENCE FAVOR FAIL",
+      "WAVE26 FERRY QUOTE FAIL",
+      "WAVE26 HAUL QUOTE FAIL",
+      "WAVE26 LANE DELIVERY FAIL",
+      "WAVE26 OLD-SAVE FALLBACK FAIL",
+      "WAVE26 SAVE FIELDS FAIL",
+      "WAVE26 RESTORE FAIL",
+      "WAVE30 DEMAND HAIL FAIL",
+      "WAVE30 PAYTRIBUTE FAIL",
+      "WAVE30 SHOWTEETH FAIL",
+      "WAVE30 VOID ON HIT FAIL",
+      "WAVE31 REVEAL ON ACQUIRE FAIL",
+      "WAVE31 REVEAL ON SCRATCH FAIL",
+      "WAVE35 HAUL GATE DELIVERY FAIL",
+      "WAVE35 HAILCLOSED CROSS-SCOPE FAIL",
+      "WAVE35 HAILCLOSED BACKSTOP FAIL",
+      "WAVE35 HAILCLOSED HOLD SCOPE FAIL",
+      "WAVE80 REP-04 FAIL",
+      "WAVE85 NAV GUIDANCE FAIL"
+    ],
+    "verify2NewBanners": ["WAVE78 EXPLORE FAIL"],
+    "gateJsCouldCauseNewBanner": false,
+    "wave78ExploreCompletePay": false,
+    "wave78Note": "completePay is docked survey credits after 60s tick; completeAgain true. Not live-assembly lookup."
+  },
+  "ports": {
+    "5189": "not LISTENING",
+    "9489": "not LISTENING",
+    "5173": "LISTENING (left running; not started by this verifier)"
+  },
+  "browser": "skipped"
+}

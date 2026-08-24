@@ -1,0 +1,18 @@
+CLEAN
+
+PROBE PASS all
+node out/w94/unk/probe.mjs
+
+§5 pins:
+SYSTEMS.veil.faction === unknowables
+hush.gates include to: veil
+DETAIL_STATIONS has no unknowables
+archiveDeskAllowed('unknowables') true
+archiveDeskAllowed('assembly') still true
+seed papers still in station.js (grantMarketSeed / seedPending)
+no EPICS.unknowables
+hush clues 2; authored clue total 6
+
+galaxychart AUTHORED_IDS includes veil (no omission flag)
+
+[NO BROWSER COVERAGE]

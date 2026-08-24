@@ -1,0 +1,107 @@
+{
+  "url": "http://127.0.0.1:5178/",
+  "console": [],
+  "panel": {
+    "labels": [
+      {
+        "text": "Colorblind-safe palette",
+        "checked": false,
+        "type": "checkbox"
+      },
+      {
+        "text": "High contrast HUD",
+        "checked": false,
+        "type": "checkbox"
+      },
+      {
+        "text": "Reduced motion",
+        "checked": false,
+        "type": "checkbox"
+      },
+      {
+        "text": "HUD audio alerts",
+        "checked": false,
+        "type": "checkbox"
+      },
+      {
+        "text": "Mute all audio",
+        "checked": false,
+        "type": "checkbox"
+      },
+      {
+        "text": "Onboarding hints",
+        "checked": true,
+        "type": "checkbox"
+      }
+    ],
+    "hudRow": {
+      "text": "HUD audio alerts",
+      "checked": false,
+      "type": "checkbox"
+    },
+    "reducedI": 2,
+    "hudI": 3,
+    "muteI": 4,
+    "dialogDisplay": "flex",
+    "settingsTitle": true,
+    "hudAlertsLive": false,
+    "mutedLive": false,
+    "reticle": {
+      "w": 80,
+      "h": 80
+    },
+    "reticleKids": [
+      {
+        "tag": "DIV",
+        "className": "rw-reticle-pupil",
+        "text": ""
+      },
+      {
+        "tag": "SPAN",
+        "className": "rw-reticle-cilia",
+        "text": ""
+      },
+      {
+        "tag": "SPAN",
+        "className": "rw-reticle-cilia",
+        "text": ""
+      },
+      {
+        "tag": "SPAN",
+        "className": "rw-reticle-cilia",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "className": "rw-reticle-range",
+        "text": "RANGE"
+      }
+    ],
+    "alertChild": false,
+    "stored": null,
+    "bodyClass": "",
+    "innerHtmlSettings": false,
+    "keyOStillSettings": true
+  },
+  "toggled": {
+    "checked": true,
+    "live": true,
+    "storedHud": true
+  },
+  "afterDigit": {
+    "settingsVisible": true,
+    "display": "flex",
+    "shipyardHint": false,
+    "docked": false
+  },
+  "protoReload": {
+    "live": false,
+    "checked": false,
+    "protoPollute": false,
+    "ownOnPrototype": false
+  },
+  "badType": {
+    "live": false,
+    "muted": false
+  }
+}

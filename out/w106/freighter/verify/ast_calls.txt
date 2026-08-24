@@ -1,0 +1,44 @@
+py_compile: python -m py_compile scripts/ship_builders/beautiful/freighter.py
+exit: 0
+
+MUST CALLS
+  whale_fluke: [(291, an, whale_fluke)]
+  whale_pectoral: [(283, an, whale_pectoral)]
+  dorsal_ridge: [(270, an, dorsal_ridge)]
+  garden_fold: [(317, org, garden_fold)]
+  nursery_hollow: [(405, org, nursery_hollow)]
+  sanctuary_hollow: [(408, org, sanctuary_hollow)]
+
+FORBIDDEN CALLS
+  shark_dorsal: none
+  squid_mantle_fins: none
+  fin_membrane: none
+  box: none
+
+WHALE_PECTORAL KW
+  L283 {'root_chord': 2.55, 'tip_chord': 0.95, 'thick': 0.42, 'style': 'blue'}
+
+_GARDENS AST
+  ('fore', -0.195, -0.055, 21)
+  ('mid',   0.025,  0.155, 22)
+  ('aft',   0.225,  0.345, 23)
+  gap mid-fore zfrac = 0.080 (>0, separated)
+  gap aft-mid  zfrac = 0.070 (>0, separated)
+  l=85: fore z [-16.575, -4.675], mid [2.125, 13.175], aft [19.125, 29.325]
+  gap metres: 6.800 and 5.950
+
+TOKEN COUNTS in freighter.py
+  kit.box 0
+  .box( 0
+  manta 1 (docstring: "not a manta")
+  wing 0
+  shark_dorsal 0
+  squid_mantle_fins 0
+  fin_membrane 0
+  grown_loft 4 (body-main, living-body-brow, body-throat, living-body-garden-{tag})
+
+anatomy.py whale_pectoral: style 'blue' uses profile='triangle' (short), not humpback paddle.
+anatomy.py whale_fluke: horizontal XZ lobes.
+anatomy.py dorsal_ridge: overlapping muscle ellipsoids, not a triangle.
+
+Did not bake. Did not start Vite or Blender.

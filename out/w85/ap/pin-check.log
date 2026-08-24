@@ -1,0 +1,14 @@
+wave85 ap pin-check: {
+  "persistNoCtxLiteral": true,
+  "chartNoCtxLiteral": true,
+  "chartNoPrevent": true,
+  "chartNoInner": true,
+  "guideNoInner": true,
+  "guidePath1": true,
+  "apPredicate": true,
+  "bootHasApBlock": true,
+  "bootHasPersist": true,
+  "bootHasChart": true,
+  "bootHasGuide": true
+}
+PASS

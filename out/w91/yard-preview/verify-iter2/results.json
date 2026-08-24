@@ -1,0 +1,66 @@
+{
+  "status": "CLEAN",
+  "severityMax": null,
+  "port": 5177,
+  "boot": { "system": "freehold", "faction": "freehold", "classKey": "light" },
+  "living": {
+    "allHaveCanvas": true,
+    "previewHosts": 3,
+    "previewCanvases": 3,
+    "occupancy": {
+      "light": { "occ": 49, "occFrac": 0.0046, "bbox": { "w": 12, "h": 6, "area": 72 } },
+      "cutter": { "occ": 126, "occFrac": 0.0117, "bbox": { "w": 21, "h": 8, "area": 168 } },
+      "heavy": { "occ": 395, "occFrac": 0.0367, "bbox": { "w": 34, "h": 16, "area": 544 } }
+    },
+    "occRatioHeavyOverLight": 7.978,
+    "bboxAreaRatioHeavyOverLight": 7.556,
+    "cutterLonger": true,
+    "heavyClearlyLarger": true,
+    "sameSizeBug": false,
+    "pairwiseRmse16x10": [
+      { "a": "light", "b": "cutter", "rmse": 3.315 },
+      { "a": "light", "b": "heavy", "rmse": 19.799 },
+      { "a": "cutter", "b": "heavy", "rmse": 18.491 }
+    ],
+    "prevIterLightVsHeavyRmse": 1.65
+  },
+  "confirmHeavy": {
+    "name": "heavy",
+    "hasCanvas": true,
+    "cssSize": { "w": 166, "h": 106 },
+    "buffer": { "w": 168, "h": 108 },
+    "occFrac": 0.0362,
+    "bbox": { "w": 43, "h": 21, "area": 903 },
+    "confirmVsLightOcc": 7.87,
+    "looksZoomedLight": false,
+    "livingManta": true
+  },
+  "reducedMotionFrozen": true,
+  "plated": {
+    "system": "freehold",
+    "faction": "Freehold Compact",
+    "previewCanvases": 6,
+    "looksLikeShip": true,
+    "blob": false,
+    "greyBoxSeen": false,
+    "occupancy": {
+      "light": { "occ": 110, "occFrac": 0.0102, "bbox": { "w": 20, "h": 9, "area": 180 } },
+      "cutter": { "occ": 215, "occFrac": 0.02, "bbox": { "w": 31, "h": 12, "area": 372 } },
+      "heavy": { "occ": 821, "occFrac": 0.0764, "bbox": { "w": 49, "h": 26, "area": 1274 } },
+      "freighter": { "occ": 309, "occFrac": 0.0287, "bbox": { "w": 49, "h": 12, "area": 588 } },
+      "ace": { "occ": 72, "occFrac": 0.0067, "bbox": { "w": 19, "h": 7, "area": 133 } },
+      "frigate": { "occ": 515, "occFrac": 0.0479, "bbox": { "w": 46, "h": 23, "area": 1058 } }
+    },
+    "occRatioHeavyOverLight": 7.49,
+    "bboxAreaRatioHeavyOverLight": 7.078,
+    "platedHeavyLarger": true,
+    "note": "ace vs light 16x10 RMSE 3.357 is class-near, not a fill-to-fit fail. Heavy vs light RMSE 24.419."
+  },
+  "console": {
+    "errors": 0,
+    "pageErrors": 0,
+    "yardPreviewErrors": 0,
+    "warnings": 1,
+    "warningNote": "Canvas2D willReadFrequently from verifier getImageData, not yard-preview."
+  }
+}

@@ -10,6 +10,7 @@ import {
   applyMountedFlight,
 } from './hangar.js';
 import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
+import { sanitizeNav } from './nav.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -95,6 +96,8 @@ export const WORLD_FIELDS = [
   'launcher', 'missileAmmo', 'turret',
   // AST: sparse remaining units { [systemId]: { [indexString]: remainingInt } }
   'fieldOre',
+  // wave 85: plotted route { dest, path, remaining, status, autopilot }
+  'nav',
 ];
 
 const SURVIVOR = 'survivor';
@@ -945,8 +948,31 @@ export function sanitizeCargoList(list) {
   return out;
 }
 
+function replaceCargo(ctx, list) {
+  if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
+  else ctx.cargo.length = 0;
+  for (let i = 0; i < list.length; i++) ctx.cargo.push(list[i]);
+}
+
+/** Keep the mounted hangar row aligned with the live hold after a cargo reseal. */
+function replaceMountedHangarCargo(ctx, list) {
+  const hangar = ctx.world && ctx.world.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return;
+  let mounted = null;
+  for (let i = 0; i < hangar.hulls.length; i++) {
+    const row = hangar.hulls[i];
+    if (row && row.id === hangar.mountedId) {
+      mounted = row;
+      break;
+    }
+  }
+  if (!mounted) return;
+  mounted.cargo = sanitizeCargoList(list);
+}
+
 export function snapshot(ctx) {
   sanitizeHangar(ctx);
+  sanitizeNav(ctx);
   parkMounted(ctx);
   healPlayerHullKind(ctx);
   const world = {};
@@ -1161,11 +1187,14 @@ export function restore(ctx, snap) {
     if (snap.world[k] !== undefined) ctx.world[k] = snap.world[k];
   }
   // Legacy blob with no hangar must not keep a prior session's hulls.
-  if (snap.world.hangar === undefined) delete ctx.world.hangar;
+  const omitHangar = snap.world.hangar === undefined;
+  if (omitHangar) delete ctx.world.hangar;
   // Omitted fieldOre is missing (contract §6.3) — do not keep a live bag.
   if (snap.world.fieldOre === undefined) delete ctx.world.fieldOre;
   // Omitted jobs is missing (MSN contract §1.2) — do not keep a live board.
   if (snap.world.jobs === undefined) delete ctx.world.jobs;
+  // Omitted nav is idle — do not keep a live plot from a prior session.
+  if (snap.world.nav === undefined) delete ctx.world.nav;
   // A system id the current build doesn't know (stale/modded save) must not
   // propagate — every module indexes SYSTEMS with it.
   if (!ctx.systems?.[ctx.world.currentSystem]) ctx.world.currentSystem = 'freehold';
@@ -1186,9 +1215,8 @@ export function restore(ctx, snap) {
     ctx.world.markets[ctx.world.currentSystem] = ctx.world.prices;
   }
   rebindPrices(ctx);
-  if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
-  else ctx.cargo.length = 0;
-  for (const row of sanitizeCargoList(snap.cargo)) ctx.cargo.push(row);
+  const restoredCargo = sanitizeCargoList(snap.cargo);
+  replaceCargo(ctx, restoredCargo);
   if (typeof snap.cargoCapacity === 'number') ctx.cargoCapacity = snap.cargoCapacity;
   if (snap.bio) {
     Object.assign(ctx.bio, snap.bio);
@@ -1208,10 +1236,19 @@ export function restore(ctx, snap) {
   if (sys && sys !== fromSystem) ctx.emit('systemLoaded', { to: sys });
   sanitizeRestored(ctx);
   sanitizeHangar(ctx);
+  sanitizeNav(ctx);
   healPlayerHullKind(ctx);
   syncMountedToPlayer(ctx);
   syncMountedWeaponMirrors(ctx);
   applyMountedFlight(ctx);
+  // Missing hangar rebuilds a starter and trims the hold to class max.
+  // Re-seal snap cargo so a legacy blob cannot drop restored units.
+  // Present hangar rows stay the source of truth (WAVE64 cargo swap).
+  if (omitHangar) {
+    const cargo = sanitizeCargoList(restoredCargo);
+    replaceCargo(ctx, cargo);
+    replaceMountedHangarCargo(ctx, cargo);
+  }
 }
 
 /** Fresh start at the Freehold station when death finds no save (§4.4). */

@@ -40,6 +40,8 @@
  */
 
 import { hasAutosave, clearAutosave } from '../game/save.js';
+import { disengage } from '../game/autopilot.js';
+import { disengageAutomine } from '../game/automine.js';
 
 /**
  * Initialize the title screen.
@@ -55,6 +57,8 @@ export function initTitle(ctx) {
 
   // Pause the simulation while the title is open.
   ctx.flags.paused = true;
+  disengage(ctx, 'pause');
+  disengageAutomine(ctx, 'pause');
 
   // Confirm arming + the rendered NEW GAME button. Both are declared before
   // the entry table because the table's run() closures capture them.

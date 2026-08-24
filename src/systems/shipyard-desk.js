@@ -1,15 +1,19 @@
-import { sanitizeHangar, switchTo, graftMounted } from '../game/hangar.js';
+import { sanitizeHangar, switchTo, graftMounted, trainMounted } from '../game/hangar.js';
 import {
   dockFactionOf,
   dockReputation,
   GRAFT_LIST_UU,
   listYardOffers,
+  livingTrainDests,
+  minRepFor,
   purchaseYardHull,
+  trainListPrice,
   yardPrice,
   yardStockFor,
 } from '../game/shipyard.js';
 import { FACTIONS, SHIP_CLASSES } from '../game/state.js';
 import { requestAutosave } from '../game/save.js';
+import { mountYardPreview } from './yard-preview.js';
 
 /** Desk panes. Digit 1 Hangar, Digit 2 Yard. Not dock services. */
 export const SHIPYARD_PANE_HANGAR = 'hangar';
@@ -68,6 +72,52 @@ export function graftRefuseLine(reason) {
   return GRAFT_REFUSE_LINES[reason] ?? 'Cannot graft that hull.';
 }
 
+export const TRAIN_REFUSE_LINES = Object.freeze({
+  dock: 'Dock first to train this hull.',
+  combat: SWITCH_REFUSE_LINES.combat,
+  jump: SWITCH_REFUSE_LINES.jump,
+  destroyed: SWITCH_REFUSE_LINES.destroyed,
+  paused: SWITCH_REFUSE_LINES.paused,
+  missing: SWITCH_REFUSE_LINES.missing,
+  living: 'Training is for living hulls.',
+  faction: 'The Unknowables do not train here.',
+  class: 'This dock does not train that class.',
+  banner: 'This dock does not train that class.',
+  reputation: 'No sale.',
+  credits: 'Not enough credits.',
+  busy: 'Papers are already in flight.',
+  failed: SWITCH_REFUSE_LINES.failed,
+});
+
+export const TRAIN_OK_LINE = 'The hull takes the new form.';
+export const TRAIN_CARGO_NOTE = 'Hold stays with this hull. The yard does not dump cargo.';
+export const TRAIN_HEAVY_NOTE = 'This hull is already as large as this dock trains.';
+export const TRAIN_HULL_LINE = 'Train hull';
+
+/** Dest strings that must not resolve as career words. */
+const RESERVED_DEST = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Static career words on Hangar train Offers. Dest stays the class key. */
+export const CAREER_WORD = Object.freeze(Object.assign(Object.create(null), {
+  heavy: 'combat',
+  ace: 'hunter',
+  freighter: 'trade',
+  light: 'explore',
+  cutter: 'cutter',
+  frigate: 'capital',
+}));
+
+export function careerWordFor(dest) {
+  if (typeof dest !== 'string' || RESERVED_DEST.has(dest)) return '';
+  if (!Object.prototype.hasOwnProperty.call(CAREER_WORD, dest)) return '';
+  const word = CAREER_WORD[dest];
+  return typeof word === 'string' ? word : '';
+}
+
+export function trainRefuseLine(reason) {
+  return TRAIN_REFUSE_LINES[reason] ?? 'Cannot train that hull.';
+}
+
 export function shipyardPaneOf(ui) {
   return ui?.shipyardPane === SHIPYARD_PANE_BUY ? SHIPYARD_PANE_BUY : SHIPYARD_PANE_HANGAR;
 }
@@ -76,7 +126,10 @@ export function setShipyardPane(ui, pane) {
   if (!ui) return;
   ui.shipyardPane = pane === SHIPYARD_PANE_BUY ? SHIPYARD_PANE_BUY : SHIPYARD_PANE_HANGAR;
   if (ui.shipyardPane !== SHIPYARD_PANE_BUY) ui.yardPending = null;
-  if (ui.shipyardPane !== SHIPYARD_PANE_HANGAR) ui.graftPending = null;
+  if (ui.shipyardPane !== SHIPYARD_PANE_HANGAR) {
+    ui.graftPending = null;
+    ui.trainPending = null;
+  }
 }
 
 export function cancelYardPending(ui) {
@@ -93,12 +146,28 @@ export function cancelGraftPending(ui) {
   return true;
 }
 
+export function cancelTrainPending(ui) {
+  if (!ui?.trainPending) return false;
+  ui.trainPending = null;
+  ui.notice = '';
+  return true;
+}
+
 function factionLabel(faction) {
   return FACTIONS[faction]?.name ?? faction ?? 'Independent';
 }
 
 function classLabel(classKey) {
   return Object.prototype.hasOwnProperty.call(SHIP_CLASSES, classKey) ? classKey : 'light';
+}
+
+export function careerOfferLabel(dest) {
+  const key = classLabel(dest);
+  if (typeof dest !== 'string' || RESERVED_DEST.has(dest)) return key;
+  if (!Object.prototype.hasOwnProperty.call(SHIP_CLASSES, dest)) return key;
+  const word = careerWordFor(dest);
+  if (!word || word === key) return key;
+  return `${key} ${word}`;
 }
 
 function hullDigitLabel(index) {
@@ -116,6 +185,15 @@ function offerAtDigit(ctx, n) {
   const idx = hullIndexForDigit(n);
   if (idx < 0) return null;
   return listYardOffers(ctx)[idx] ?? null;
+}
+
+function attachHullPreview(h, parent, ctx, offer, faction) {
+  const host = h('div', 'shipyard-preview', parent);
+  mountYardPreview(host, {
+    hullKind: offer.hullKind,
+    faction,
+    classKey: offer.classKey,
+  }, ctx);
 }
 
 function setYardPending(ui, classKey) {
@@ -152,7 +230,77 @@ function graftOfferVisible(ctx) {
 
 function setGraftPending(ui, ctx) {
   ui.graftPending = { mountedId: ctx?.world?.hangar?.mountedId ?? '' };
+  ui.trainPending = null;
   ui.notice = '';
+}
+
+function trainPaint(ctx) {
+  if (dockFactionOf(ctx) !== 'beautiful') return { kind: 'hide' };
+  const row = mountedHangarRowOf(ctx);
+  if (!row) return { kind: 'hide' };
+  if (row.faction === 'unknowables' || ctx.player?.faction === 'unknowables') {
+    return { kind: 'note', note: TRAIN_REFUSE_LINES.faction };
+  }
+  if (row.hullKind !== 'living' || row.grafted === true) {
+    return { kind: 'note', note: TRAIN_REFUSE_LINES.living };
+  }
+  const dests = livingTrainDests(row.classKey);
+  if (!dests.length) {
+    return { kind: 'note', note: TRAIN_REFUSE_LINES.class };
+  }
+  const rep = dockReputation(ctx, 'beautiful');
+  if (rep < 0) return { kind: 'note', note: TRAIN_REFUSE_LINES.reputation };
+  const offers = [];
+  for (const dest of dests) {
+    if (rep < minRepFor(dest)) continue;
+    const price = trainListPrice(rep, dest);
+    if (price == null || !Number.isInteger(price) || price < 0) continue;
+    offers.push({ destClass: dest, price });
+  }
+  if (!offers.length) return { kind: 'hide' };
+  return { kind: 'offers', fromClass: row.classKey, dests: offers };
+}
+
+function setTrainPending(ui, ctx, destClass) {
+  const row = mountedHangarRowOf(ctx);
+  if (!row) return;
+  const dest = typeof destClass === 'string' ? destClass : '';
+  if (!dest || dest === row.classKey) return;
+  if (!livingTrainDests(row.classKey).includes(dest)) return;
+  if (!Object.prototype.hasOwnProperty.call(SHIP_CLASSES, dest)) return;
+  ui.trainPending = {
+    fromClass: row.classKey,
+    destClass: dest,
+    mountedId: ctx?.world?.hangar?.mountedId ?? '',
+  };
+  ui.graftPending = null;
+  ui.notice = '';
+}
+
+function confirmTrain(ctx, ui) {
+  if (ui.trainBusy) return { ok: false, reason: 'busy' };
+  const pending = ui.trainPending;
+  if (!pending) return { ok: false, reason: 'missing' };
+  ui.trainBusy = true;
+  try {
+    ui.trainPending = null;
+    if (pending.mountedId && pending.mountedId !== ctx.world?.hangar?.mountedId) {
+      ui.notice = trainRefuseLine('missing');
+      return { ok: false, reason: 'missing' };
+    }
+    const dest = pending.destClass;
+    if (typeof dest !== 'string' || dest === pending.fromClass
+      || !Object.prototype.hasOwnProperty.call(SHIP_CLASSES, dest)
+      || !livingTrainDests(pending.fromClass).includes(dest)) {
+      ui.notice = trainRefuseLine('class');
+      return { ok: false, reason: 'class' };
+    }
+    const result = trainMounted(ctx, dest);
+    ui.notice = result.ok ? TRAIN_OK_LINE : trainRefuseLine(result.reason);
+    return result;
+  } finally {
+    ui.trainBusy = false;
+  }
 }
 
 function confirmGraft(ctx, ui) {
@@ -197,14 +345,16 @@ function renderBuyPane(h, btn, panel, ctx, ui, redraw) {
   const pending = pendingKey && offers.find((o) => o.classKey === pendingKey);
   if (pending) {
     const price = yardPrice(pending.classKey, rep);
-    const box = h('div', 'shipyard-buy-row shipyard-confirm', yard);
-    h('div', 'shipyard-buy-name', box, classLabel(pending.classKey));
-    h('div', 'shipyard-buy-meta', box, `${price} UU · Confirm papers`);
-    btn(box, 'Confirm papers', () => {
+    const box = h('div', 'shipyard-buy-row shipyard-confirm shipyard-buy-has-preview', yard);
+    attachHullPreview(h, box, ctx, pending, faction);
+    const copy = h('div', 'shipyard-buy-copy', box);
+    h('div', 'shipyard-buy-name', copy, classLabel(pending.classKey));
+    h('div', 'shipyard-buy-meta', copy, `${price} UU · Confirm papers`);
+    btn(copy, 'Confirm papers', () => {
       confirmYardBuy(ctx, ui);
       redraw();
     }, 'screen-btn screen-btn-warm');
-    btn(box, 'Esc — Cancel', () => {
+    btn(copy, 'Esc — Cancel', () => {
       cancelYardPending(ui);
       redraw();
     });
@@ -218,10 +368,12 @@ function renderBuyPane(h, btn, panel, ctx, ui, redraw) {
   offers.forEach((offer, i) => {
     if (i > 7) return;
     const price = yardPrice(offer.classKey, rep);
-    const card = h('div', 'shipyard-buy-row', yard);
-    h('div', 'shipyard-buy-name', card, classLabel(offer.classKey));
-    h('div', 'shipyard-buy-meta', card, `${price} UU`);
-    btn(card, `${hullDigitLabel(i)} — Papers`, () => {
+    const card = h('div', 'shipyard-buy-row shipyard-buy-has-preview', yard);
+    attachHullPreview(h, card, ctx, offer, faction);
+    const copy = h('div', 'shipyard-buy-copy', card);
+    h('div', 'shipyard-buy-name', copy, classLabel(offer.classKey));
+    h('div', 'shipyard-buy-meta', copy, `${price} UU`);
+    btn(copy, `${hullDigitLabel(i)} — Papers`, () => {
       setYardPending(ui, offer.classKey);
       redraw();
     });
@@ -251,6 +403,27 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
     });
     return;
   }
+  if (ui.trainPending) {
+    const pending = ui.trainPending;
+    const fromClass = classLabel(pending.fromClass);
+    const destClass = Object.prototype.hasOwnProperty.call(SHIP_CLASSES, pending.destClass)
+      ? classLabel(pending.destClass) : classLabel('light');
+    const hop = `${fromClass} → ${destClass}`;
+    const price = trainListPrice(dockReputation(ctx, 'beautiful'), pending.destClass);
+    const box = h('div', 'shipyard-buy-row shipyard-confirm', panel);
+    h('div', 'shipyard-buy-name', box, hop);
+    h('div', 'shipyard-buy-meta', box, `${price} UU · Confirm papers`);
+    h('div', 'screen-note', box, TRAIN_CARGO_NOTE);
+    btn(box, 'Confirm papers', () => {
+      confirmTrain(ctx, ui);
+      redraw();
+    }, 'screen-btn screen-btn-warm');
+    btn(box, 'Esc — Cancel', () => {
+      cancelTrainPending(ui);
+      redraw();
+    });
+    return;
+  }
   hulls.forEach((row, i) => {
     const card = h('div', 'shipyard-hull', panel);
     const name = row.name || SHIP_CLASSES[row.classKey]?.role || 'hull';
@@ -265,14 +438,34 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
       redraw();
     });
   });
-  if (!graftOfferVisible(ctx)) return;
-  const card = h('div', 'shipyard-buy-row', panel);
-  h('div', 'shipyard-buy-name', card, 'Graft tissue');
-  h('div', 'shipyard-buy-meta', card, `${GRAFT_LIST_UU} UU · Mounted plated hull.`);
-  btn(card, 'Offer graft', () => {
-    setGraftPending(ui, ctx);
-    redraw();
-  });
+  if (graftOfferVisible(ctx)) {
+    const card = h('div', 'shipyard-buy-row', panel);
+    h('div', 'shipyard-buy-name', card, 'Graft tissue');
+    h('div', 'shipyard-buy-meta', card, `${GRAFT_LIST_UU} UU · Mounted plated hull.`);
+    btn(card, 'Offer graft', () => {
+      setGraftPending(ui, ctx);
+      redraw();
+    });
+  }
+  const paint = trainPaint(ctx);
+  if (paint.kind === 'hide') return;
+  if (paint.kind === 'note') {
+    h('div', 'screen-note', panel, paint.note);
+    return;
+  }
+  for (const offer of paint.dests) {
+    const destKey = classLabel(offer.destClass);
+    const hop = `${classLabel(paint.fromClass)} → ${destKey}`;
+    const word = careerWordFor(offer.destClass);
+    const offerName = word && word !== destKey ? `${hop} ${word}` : hop;
+    const trainCard = h('div', 'shipyard-buy-row', panel);
+    h('div', 'shipyard-buy-name', trainCard, offerName);
+    h('div', 'shipyard-buy-meta', trainCard, `${offer.price} UU`);
+    btn(trainCard, `Offer ${classLabel(offer.destClass)}`, () => {
+      setTrainPending(ui, ctx, offer.destClass);
+      redraw();
+    });
+  }
 }
 
 /** Render Hangar + Yard panes. Host supplies h/btn and redraw. */
@@ -294,8 +487,11 @@ export function renderShipyardDesk(h, btn, panel, ctx, ui, redraw) {
   }, pane === SHIPYARD_PANE_BUY ? 'screen-btn screen-btn-warm' : 'screen-btn');
   if (pane === SHIPYARD_PANE_BUY) renderBuyPane(h, btn, panel, ctx, ui, redraw);
   else renderHangarPane(h, btn, panel, ctx, ui, redraw);
-  h('div', 'screen-note shipyard-legend', panel,
-    '1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc back');
+  let legend = '1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc back';
+  if (dockFactionOf(ctx) === 'beautiful' && pane === SHIPYARD_PANE_HANGAR) {
+    legend += ` · Train on Hangar · ${TRAIN_HULL_LINE} · Esc cancels papers`;
+  }
+  h('div', 'screen-note shipyard-legend', panel, legend);
 }
 
 /**
@@ -321,7 +517,7 @@ export function handleShipyardDigit(n, ctx, ui) {
     setYardPending(ui, offer.classKey);
     return true;
   }
-  if (ui.graftPending) return true;
+  if (ui.graftPending || ui.trainPending) return true;
   const idx = hullIndexForDigit(n);
   if (idx < 0) return false;
   sanitizeHangar(ctx);

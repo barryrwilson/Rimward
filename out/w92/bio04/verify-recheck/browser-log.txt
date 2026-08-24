@@ -1,0 +1,38 @@
+VITE spawn pid 95608
+VITE ready http://127.0.0.1:5184/
+CHROME spawn pid 98292
+CDP ws from stderr ws://127.0.0.1:9444/devtools/browser/20c70c51-6d57-4d8c-a8ec-bc26c0da0877
+PAGE url http://127.0.0.1:5184/
+PAGE ws ws://127.0.0.1:9444/devtools/page/5AD137177C1897871A415F94ACDB0508
+NAV {"frameId":"5AD137177C1897871A415F94ACDB0508","loaderId":"C515EBECFCB3B31B48BCBFDCDA12734C","isDownload":false}
+LOAD event timeout Page.loadEventFired
+HREF http://127.0.0.1:5184/ | RIMWARD — A Living Frontier | 5
+DIAG {"href":"http://127.0.0.1:5184/","kids":16,"fatal":"","fatalOn":"none","hasCtx":true,"canvas":true,"titleEl":true}
+CONSOLE so far [{"type":"debug","text":"[vite] connecting..."},{"type":"debug","text":"[vite] connected."}]
+EXCEPTIONS so far []
+PASS ctx present 
+BOOT {"title":true,"newLabel":"[1] NEW GAME","who":true,"paused":true}
+ORIGIN overlay true
+PASS flight ready 
+STARTER KIND {"has":false,"value":null,"docked":false}
+PASS not docked 
+PASS hullKind missing or not built {"has":false,"value":null,"docked":false}
+DIGIT5 {"ready":true,"hullKind":"__missing__","hullKindRaw":null,"hasHullKindOwn":false,"heat":0,"overheated":false,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":5,"fireHeld":false,"docked":false,"paused":false,"firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · Psionic bolt","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"stationOpen":false,"family":"bio"}
+PASS still undocked at Digit 5 false
+PASS WPN Psionic bolt before dock 5 · Psionic bolt
+PASS weaponGroup 5 5
+PASS no triad fields 
+FIRE5 {"ready":true,"hullKind":"__missing__","hullKindRaw":null,"hasHullKindOwn":false,"heat":8,"overheated":false,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality"],"group":5,"fireHeld":true,"docked":false,"paused":false,"firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · Psionic bolt","psiBolts":1,"energy":0,"disruptor":0,"mining":0,"missile":0,"stationOpen":false,"family":"bio"}
+PASS LMB heat rose before dock 8
+PASS magenta 0xff6ad5 bolts before dock 1
+PASS no energy tint on group 5 0
+PASS still undocked after fire 
+BUILT {"ready":true,"hullKind":"built","hullKindRaw":"built","hasHullKindOwn":true,"heat":0,"overheated":false,"playerKeys":["classKey","name","faction","hull","hullMax","screen","screenMax","shell","shellMax","engine","engineMax","heat","overheated","lastHitAt","lastCombatAt","engineOut","disabled","destroyed","surrendered","disabledDamage","disabledSince","cargo","bookValue","bounty","resolve","personality","hullKind"],"group":5,"fireHeld":true,"docked":false,"paused":false,"firstPerson":true,"origin":"greenhand","system":"freehold","wpn":"5 · —","psiBolts":0,"energy":0,"disruptor":0,"mining":0,"missile":0,"stationOpen":false,"family":"mech"}
+PASS forced built 
+PASS built WPN 5 · — 5 · —
+PASS built no heat 0
+PASS built no magenta spawn 0
+CONSOLE errors 0 []
+PAGE exceptions 0 []
+PASS no page exceptions []
+PASS console clean of app errors []

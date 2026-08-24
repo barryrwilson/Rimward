@@ -1,0 +1,26 @@
+{
+  "url": "http://127.0.0.1:5174/",
+  "boot": "CONTINUE existing autosave; Freehold Drift; unpaused",
+  "probe": "WAVE99 contactsGate PASS exit 0",
+  "console": { "errors": 0, "warnings": 0 },
+  "hub": { "width": "80px", "height": "80px" },
+  "classes": {
+    "rw-contacts": true,
+    "rw-edge-arrow": true,
+    "rw-nav-gate-cue": true,
+    "rw-radar": 0
+  },
+  "states": {
+    "baseline_scanner0": { "hiddenClass": true, "display": "none", "scanner": 0 },
+    "space_mk1": { "hiddenClass": false, "display": "block", "scanner": 1, "pipVisible": 5 },
+    "space_mk2": { "hiddenClass": false, "display": "block", "scanner": 2, "pipVisible": 5 },
+    "jumping_mk2": { "hiddenClass": true, "display": "none", "scanner": 2, "jump_scanner_unchanged": true },
+    "docked_mk2": { "hiddenClass": true, "display": "none", "scanner": 2, "dock_scanner_unchanged": true },
+    "space_scanner0": { "hiddenClass": true, "display": "none", "scanner": 0 }
+  },
+  "notes": [
+    "Dock/jump used ctx.flags.docked and ctx.gate.jumping (same fields HUD reads).",
+    "Did not buy Wolfeye in outfitting; set ctx.world.scanner.",
+    "Incoming fire. / SAVE BLOCKED toasts come from the Continue save, not this change."
+  ]
+}

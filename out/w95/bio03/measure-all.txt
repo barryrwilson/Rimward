@@ -1,0 +1,89 @@
+
+> websim@0.1.0 ships:measure
+> node scripts/measure-ships.mjs
+
+veridian      light      verts=  1152 size=7.4(Z) len/beam=2.53 ht/len=0.11 beam/len=0.39 ctr x=0.0 y=0.0 z=-0.0 cover=99.4% fit:w=24%,h=24%,l=34%
+veridian      ace        verts=  1236 size=7.4(Z) len/beam=4.86 ht/len=0.13 beam/len=0.21 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+veridian      cutter     verts=  2520 size=10.5(Z) len/beam=3.39 ht/len=0.15 beam/len=0.29 ctr x=0.0 y=0.0 z=-0.0 cover=99.7% fit:w=24%,h=24%,l=34%
+veridian      heavy      verts=  2184 size=16.5(Z) len/beam=3.36 ht/len=0.11 beam/len=0.30 ctr x=0.0 y=0.0 z=-0.0 cover=99.8% fit:w=24%,h=24%,l=34%
+veridian      frigate    verts=  3324 size=31.0(Z) len/beam=4.42 ht/len=0.05 beam/len=0.23 ctr x=0.0 y=0.0 z=-0.0 cover=99.3% fit:w=24%,h=24%,l=34%
+veridian      freighter  verts=  4632 size=76.9(Z) len/beam=4.75 ht/len=0.03 beam/len=0.21 ctr x=0.0 y=-0.1 z=-1.5 cover=100.0% fit:w=24%,h=24%,l=34%
+veridian class order OK: light=7.4 < ace=7.4 < cutter=10.5 < heavy=16.5 < frigate=31.0 < freighter=76.9
+ferrous       light      verts=  2510 size=6.3(Z) len/beam=2.65 ht/len=0.27 beam/len=0.38 ctr x=0.0 y=-0.0 z=-0.3 cover=100.0% fit:w=24%,h=24%,l=34%
+ferrous       ace        verts= 19720 size=7.3(Z) len/beam=2.36 ht/len=0.18 beam/len=0.42 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+ferrous       cutter     verts=  4824 size=9.8(Z) len/beam=2.38 ht/len=0.33 beam/len=0.42 ctr x=0.0 y=-0.0 z=-0.3 cover=100.0% fit:w=24%,h=24%,l=34%
+ferrous       heavy      verts=  4392 size=17.1(Z) len/beam=1.77 ht/len=0.23 beam/len=0.57 ctr x=0.0 y=0.0 z=0.0 cover=92.3% fit:w=24%,h=24%,l=34%
+ferrous       frigate    verts= 47712 size=32.1(Z) len/beam=1.87 ht/len=0.21 beam/len=0.53 ctr x=0.0 y=0.0 z=-0.0 cover=98.4% fit:w=24%,h=24%,l=34%
+ferrous       freighter  verts=  7044 size=74.4(Z) len/beam=2.12 ht/len=0.25 beam/len=0.47 ctr x=0.0 y=0.0 z=-2.3 cover=99.9% fit:w=24%,h=24%,l=34%
+ferrous class order OK: light=6.3 < ace=7.3 < cutter=9.8 < heavy=17.1 < frigate=32.1 < freighter=74.4
+freehold      light      verts=  6000 size=7.2(Z) len/beam=2.28 ht/len=0.30 beam/len=0.44 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+freehold      ace        verts=  4720 size=7.1(Z) len/beam=3.53 ht/len=0.24 beam/len=0.28 ctr x=0.0 y=0.0 z=-0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+freehold      cutter     verts= 10988 size=10.3(Z) len/beam=2.28 ht/len=0.31 beam/len=0.44 ctr x=0.0 y=-0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+freehold      heavy      verts= 14340 size=17.0(Z) len/beam=1.76 ht/len=0.43 beam/len=0.57 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+freehold      frigate    verts= 18236 size=29.7(Z) len/beam=2.25 ht/len=0.32 beam/len=0.45 ctr x=0.0 y=0.0 z=-0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+freehold      freighter  verts= 78868 size=76.6(Z) len/beam=4.26 ht/len=0.19 beam/len=0.23 ctr x=0.0 y=0.0 z=-1.7 cover=100.0% fit:w=24%,h=24%,l=34%
+freehold class order OK: light=7.2 < ace=7.1 < cutter=10.3 < heavy=17.0 < frigate=29.7 < freighter=76.6
+redledger     light      verts= 19072 size=7.1(Z) len/beam=3.83 ht/len=0.36 beam/len=0.26 ctr x=-0.0 y=-0.0 z=-0.3 cover=100.0% fit:w=24%,h=24%,l=34%
+redledger     ace        verts= 13764 size=7.4(Z) len/beam=4.01 ht/len=0.19 beam/len=0.25 ctr x=0.0 y=0.0 z=-0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+redledger     cutter     verts= 24522 size=11.9(Z) len/beam=3.33 ht/len=0.32 beam/len=0.30 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+redledger     heavy      verts= 30682 size=17.1(Z) len/beam=2.37 ht/len=0.39 beam/len=0.42 ctr x=-0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+redledger     frigate    verts= 58336 size=33.4(Z) len/beam=4.29 ht/len=0.39 beam/len=0.23 ctr x=0.0 y=0.0 z=0.0 cover=99.2% fit:w=24%,h=24%,l=34%
+redledger     freighter  verts=110560 size=79.3(Z) len/beam=2.71 ht/len=0.26 beam/len=0.37 ctr x=0.0 y=0.0 z=-1.2 cover=100.0% fit:w=24%,h=24%,l=34%
+redledger class order OK: light=7.1 < ace=7.4 < cutter=11.9 < heavy=17.1 < frigate=33.4 < freighter=79.3
+gilded        light      verts= 10756 size=7.2(Z) len/beam=3.98 ht/len=0.15 beam/len=0.25 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+gilded        ace        verts= 12288 size=7.3(Z) len/beam=4.33 ht/len=0.13 beam/len=0.23 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+gilded        cutter     verts= 17776 size=10.0(Z) len/beam=3.42 ht/len=0.14 beam/len=0.29 ctr x=0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+gilded        heavy      verts= 22056 size=16.3(Z) len/beam=3.42 ht/len=0.25 beam/len=0.29 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+gilded        frigate    verts= 42624 size=29.6(Z) len/beam=3.63 ht/len=0.13 beam/len=0.28 ctr x=0.0 y=0.0 z=-0.5 cover=100.0% fit:w=24%,h=24%,l=34%
+gilded        freighter  verts= 98912 size=76.6(Z) len/beam=4.04 ht/len=0.13 beam/len=0.25 ctr x=0.0 y=-0.0 z=-2.0 cover=100.0% fit:w=24%,h=24%,l=34%
+gilded class order OK: light=7.2 < ace=7.3 < cutter=10.0 < heavy=16.3 < frigate=29.6 < freighter=76.6
+beautiful     light      verts= 19260 size=8.0(Z) len/beam=1.15 ht/len=0.39 beam/len=0.87 ctr x=0.0 y=0.0 z=-0.1 cover=83.5% fit:w=24%,h=24%,l=34%
+beautiful     ace        verts= 19044 size=7.7(Z) len/beam=1.11 ht/len=0.17 beam/len=0.90 ctr x=0.0 y=0.0 z=-0.0 cover=86.3% fit:w=24%,h=24%,l=34%
+beautiful     cutter     verts= 23780 size=10.7(Z) len/beam=1.01 ht/len=0.25 beam/len=0.99 ctr x=0.0 y=0.0 z=-0.1 cover=83.9% fit:w=24%,h=24%,l=34%
+beautiful     heavy      verts= 40900 size=15.3(Z) len/beam=1.28 ht/len=0.48 beam/len=0.78 ctr x=0.0 y=0.0 z=-0.2 cover=98.4% fit:w=24%,h=24%,l=34%
+beautiful     frigate    verts= 73152 size=29.0(Z) len/beam=1.00 ht/len=0.24 beam/len=1.00 ctr x=0.0 y=0.0 z=-0.5 cover=87.6% fit:w=24%,h=24%,l=34%
+beautiful     freighter  verts= 79980 size=83.2(Z) len/beam=1.09 ht/len=0.40 beam/len=0.91 ctr x=0.0 y=-0.0 z=-1.0 cover=93.6% fit:w=24%,h=24%,l=34%
+beautiful class order OK: light=8.0 < ace=7.7 < cutter=10.7 < heavy=15.3 < frigate=29.0 < freighter=83.2
+unknowables   light      verts= 12420 size=6.6(Z) len/beam=1.95 ht/len=0.42 beam/len=0.51 ctr x=0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+unknowables   ace        verts= 20410 size=7.2(Z) len/beam=1.57 ht/len=0.42 beam/len=0.64 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+unknowables   cutter     verts= 57118 size=10.7(Z) len/beam=2.04 ht/len=0.48 beam/len=0.49 ctr x=0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+unknowables   heavy      verts= 46692 size=16.9(Z) len/beam=1.44 ht/len=0.66 beam/len=0.70 ctr x=0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+unknowables   frigate    verts= 76362 size=31.6(Z) len/beam=2.03 ht/len=0.26 beam/len=0.49 ctr x=-0.0 y=-0.0 z=-0.5 cover=100.0% fit:w=24%,h=24%,l=34%
+unknowables   freighter  verts= 94836 size=90.0(Z) len/beam=2.07 ht/len=0.50 beam/len=0.48 ctr x=0.0 y=0.0 z=0.6 cover=100.0% fit:w=24%,h=24%,l=34%
+unknowables class order OK: light=6.6 < ace=7.2 < cutter=10.7 < heavy=16.9 < frigate=31.6 < freighter=90.0
+assembly      light      verts= 12708 size=7.5(Z) len/beam=2.11 ht/len=0.41 beam/len=0.47 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+assembly      ace        verts= 17672 size=7.9(Z) len/beam=2.45 ht/len=0.41 beam/len=0.41 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+assembly      cutter     verts= 27240 size=11.0(Z) len/beam=1.37 ht/len=0.44 beam/len=0.73 ctr x=0.0 y=0.0 z=0.0 cover=99.7% fit:w=24%,h=24%,l=34%
+assembly      heavy      verts= 32680 size=17.4(Z) len/beam=2.55 ht/len=0.30 beam/len=0.39 ctr x=0.0 y=-0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+assembly      frigate    verts= 52668 size=29.0(Z) len/beam=3.04 ht/len=0.32 beam/len=0.33 ctr x=0.0 y=-0.0 z=-0.6 cover=100.0% fit:w=24%,h=24%,l=34%
+assembly      freighter  verts= 79668 size=83.3(Z) len/beam=3.13 ht/len=0.32 beam/len=0.32 ctr x=0.0 y=0.0 z=-0.3 cover=100.0% fit:w=24%,h=24%,l=34%
+assembly class order OK: light=7.5 < ace=7.9 < cutter=11.0 < heavy=17.4 < frigate=29.0 < freighter=83.3
+congregation  light      verts=  9484 size=7.7(Z) len/beam=2.06 ht/len=0.29 beam/len=0.49 ctr x=0.0 y=-0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+congregation  ace        verts=  9364 size=7.6(Z) len/beam=1.89 ht/len=0.46 beam/len=0.53 ctr x=0.0 y=0.0 z=-0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+congregation  cutter     verts= 13336 size=10.8(Z) len/beam=2.40 ht/len=0.44 beam/len=0.42 ctr x=0.0 y=0.0 z=-0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+congregation  heavy      verts= 26188 size=16.8(Z) len/beam=2.69 ht/len=0.49 beam/len=0.37 ctr x=0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+congregation  frigate    verts= 30580 size=30.4(Z) len/beam=4.63 ht/len=0.24 beam/len=0.22 ctr x=-0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+congregation  freighter  verts= 86476 size=83.1(Z) len/beam=6.05 ht/len=0.27 beam/len=0.17 ctr x=0.0 y=0.0 z=-0.6 cover=100.0% fit:w=24%,h=24%,l=34%
+congregation class order OK: light=7.7 < ace=7.6 < cutter=10.8 < heavy=16.8 < frigate=30.4 < freighter=83.1
+lamplighter   light      verts=  6884 size=7.9(Z) len/beam=3.20 ht/len=0.24 beam/len=0.31 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+lamplighter   ace        verts=  7316 size=7.5(Z) len/beam=4.72 ht/len=0.19 beam/len=0.21 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+lamplighter   cutter     verts=  6436 size=11.2(Z) len/beam=4.52 ht/len=0.16 beam/len=0.22 ctr x=0.0 y=0.0 z=-0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+lamplighter   heavy      verts= 14520 size=16.6(Z) len/beam=3.02 ht/len=0.34 beam/len=0.33 ctr x=0.0 y=0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+lamplighter   frigate    verts= 16180 size=32.4(Z) len/beam=3.74 ht/len=0.23 beam/len=0.27 ctr x=0.0 y=0.0 z=-0.2 cover=98.3% fit:w=24%,h=24%,l=34%
+lamplighter   freighter  verts= 53156 size=80.2(Z) len/beam=1.56 ht/len=0.16 beam/len=0.64 ctr x=0.0 y=0.0 z=-0.7 cover=98.1% fit:w=24%,h=24%,l=34%
+lamplighter class order OK: light=7.9 < ace=7.5 < cutter=11.2 < heavy=16.6 < frigate=32.4 < freighter=80.2
+independent   light      verts= 20252 size=6.8(Z) len/beam=3.44 ht/len=0.26 beam/len=0.29 ctr x=0.0 y=0.0 z=-0.0 cover=99.5% fit:w=24%,h=24%,l=34%
+independent   ace        verts= 23980 size=7.3(Z) len/beam=4.66 ht/len=0.19 beam/len=0.21 ctr x=0.0 y=0.0 z=0.0 cover=99.9% fit:w=24%,h=24%,l=34%
+independent   cutter     verts= 10512 size=11.0(Z) len/beam=4.49 ht/len=0.20 beam/len=0.22 ctr x=0.0 y=0.0 z=-0.0 cover=99.4% fit:w=24%,h=24%,l=34%
+independent   heavy      verts= 10200 size=17.0(Z) len/beam=2.44 ht/len=0.21 beam/len=0.41 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+independent   frigate    verts= 64058 size=32.3(Z) len/beam=3.87 ht/len=0.12 beam/len=0.26 ctr x=0.0 y=-0.0 z=-0.2 cover=100.0% fit:w=24%,h=24%,l=34%
+independent   freighter  verts= 67696 size=78.4(Z) len/beam=2.46 ht/len=0.07 beam/len=0.41 ctr x=0.0 y=-0.0 z=-0.7 cover=97.6% fit:w=24%,h=24%,l=34%
+independent class order OK: light=6.8 < ace=7.3 < cutter=11.0 < heavy=17.0 < frigate=32.3 < freighter=78.4
+hollow        light      verts= 21368 size=6.8(Z) len/beam=5.17 ht/len=0.51 beam/len=0.19 ctr x=0.0 y=0.0 z=-0.0 cover=99.8% fit:w=24%,h=24%,l=34%
+hollow        ace        verts= 19756 size=7.4(Z) len/beam=1.55 ht/len=0.09 beam/len=0.64 ctr x=0.0 y=0.0 z=0.0 cover=89.0% fit:w=24%,h=24%,l=34%
+hollow        cutter     verts=  3084 size=10.8(Z) len/beam=4.38 ht/len=0.45 beam/len=0.23 ctr x=0.0 y=-0.0 z=-0.0 cover=99.5% fit:w=24%,h=24%,l=34%
+hollow        heavy      verts=  4308 size=17.4(Z) len/beam=2.50 ht/len=0.42 beam/len=0.40 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+hollow        frigate    verts=  6204 size=32.1(Z) len/beam=5.37 ht/len=0.28 beam/len=0.19 ctr x=0.0 y=0.0 z=-0.2 cover=98.8% fit:w=24%,h=24%,l=34%
+hollow        freighter  verts= 23236 size=78.2(Z) len/beam=2.34 ht/len=0.29 beam/len=0.43 ctr x=0.0 y=-0.0 z=-0.7 cover=100.0% fit:w=24%,h=24%,l=34%
+hollow class order OK: light=6.8 < ace=7.4 < cutter=10.8 < heavy=17.4 < frigate=32.1 < freighter=78.2
+measure-ships: ALL PASS

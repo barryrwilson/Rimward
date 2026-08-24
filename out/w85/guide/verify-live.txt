@@ -1,0 +1,64 @@
+NAV-02 live verify
+Status: CLEAN
+Date: 2026-08-22
+Viewport: 1280x720
+URL: http://localhost:5173
+Playwright MCP (one session). No Puppeteer.
+
+1. Probe
+   node --import ./scripts/with-css-stub.mjs out/w85/guide/probe.mjs
+   WAVE85 GUIDANCE PROBE PASS (all keys true). Log: out/w85/guide/probe-run.log
+
+2. Live flight
+   CONTINUE from title. Freehold Drift. paused=false, docked=false, jumping=false.
+   KeyM opened galaxy chart. Click .rw-galaxy-hit[data-system-id=veridian].
+   world.nav = { dest:veridian, path:[freehold,veridian], remaining:1, status:plotted }
+   Escape closed chart.
+
+3. Readout above POS
+   .rw-nav-readout not hidden.
+   Labels: NEXT, DEST, JUMPS, GATE.
+   Values: Veridian Reach / Veridian Reach / 1 / distance (1.8k at spawn, 80u at gate).
+   getComputedStyle max-width: 180px. Live width 163px. min-width 0.
+   Readout bottom 645, POS top 653 (above POS).
+   Screenshot: out/w85/guide/live/01-readout.png
+
+4. Face away: gate cue
+   .rw-nav-gate-cue visible (class without is-hidden).
+   Children: tick-a, tick-b, notch (chevron, not contacts pip).
+   Not inside .rw-contacts. contacts class is-hidden.
+   .rw-edge-arrow is-hidden (amber lock arrow not the only cue).
+   Cue class is not rw-edge-arrow.
+   Screenshot: out/w85/guide/live/02-cue.png (cyan chevron, top-left)
+
+5. Face the gate: cue hides; 3D ring
+   First-person look at authored Veridian gate (0, 60, -900).
+   .rw-nav-gate-cue is-hidden. .rw-edge-arrow is-hidden at that moment.
+   Scene: one object name=nav-gate-marker, visible=true, child nav-gate-ring.
+   Marker position [0, 60, -900] only. Count=1.
+   Screenshot: out/w85/guide/live/03-ring.png (physical gate on-glass, no off-screen chevron)
+
+6. Lock does not steal route
+   KeyT locked ship "Sable Ilex" (independent, has state, lockKind null).
+   After 0.6s: lock still Sable Ilex. world.nav dest still veridian.
+   Readout still shown: NEXT Veridian Reach, DEST Veridian Reach, JUMPS 1.
+   Nav-guidance does not assign targets.current.
+   KeyV under the gate reticle locked lockKind=gate; readout still shown.
+
+7. Dock hide
+   Did not dock. Source pin: navPark = ctx.flags.docked || ctx.gate.jumping
+   hides readout, cue, and marker update. Probe hideDocked=true.
+
+8. innerHTML / lock steal (source)
+   src/systems/hud.js innerHTML count: 0
+   src/systems/nav-guidance.js innerHTML count: 0
+   nav-guidance.js has no targets.current =
+   hud.js has no targets.current =
+
+Screenshots
+  out/w85/guide/live/01-readout.png
+  out/w85/guide/live/02-cue.png
+  out/w85/guide/live/03-ring.png
+
+Did not flag missing Autopilot. Did not score WAVE4/26/35.
+Did not run full scripts/boot-test.mjs.

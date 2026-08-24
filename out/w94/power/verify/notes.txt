@@ -1,0 +1,35 @@
+Wave 94 POWER ledger — verifier evidence
+Date: 2026-08-23
+Verdict: CLEAN
+
+Probe:
+  node out/w94/power/probe.mjs
+  Result: WAVE94 POWER PASS { max: 100, regen: 8, psi: 10 }
+  Log: probe-log.txt
+
+Binding vs source:
+  POWER = { max: 100, regenPerSec: 8, afterburnerPerSec: 16, afterburnerMin: 15 }
+  WEAPONS.psionic.powerPerShot = 10, heatPerShot = 8
+  createShipState.power = POWER.max
+  WORLD_FIELDS has no power key (save.js)
+  SHIP_CLASSES has no power field
+  cannon/disruptor/mining/missile/turret have no powerPerShot
+  HUD: makeBar(powerPanel, 'PWR', 'rw-power') inside .rw-side-col
+  Aim glass: .rw-reticle / .rw-lead have no PWR node
+  Afterburner start: (ctx.player?.power ?? 0) >= POWER.afterburnerMin
+  Drain: POWER.afterburnerPerSec * dt, powerDrainThisFrame = true
+  Cut at 0: burnerActive=false and burnerReadyAt = time + cooldown
+  Regen: tickShipState skips when powerDrainThisFrame (combat after ship)
+  Psionic: psiDry if power < powerPerShot; spend only if bolt occupies a slot
+
+Browser:
+  Vite http://localhost:5174 (stopped after capture)
+  Playwright MCP screenshots:
+    hud-flight.png   — full HUD, PWR in bottom-right side column
+    hud-side-col.png — PWR / Bio / POS
+    hud-reticle.png  — iris only, no PWR gauge
+    hud-full.png     — earlier title-overlaid capture
+  Live DOM: pwrInSide true, fill 100%, reticleHasBar false, lead text "LEAD"
+  Live cut-at-zero: set burnerActive with power 0.2 → drain hit 0, burnerReadyAt = t+cooldown
+
+No Blocker. No Major.

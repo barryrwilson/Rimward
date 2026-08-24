@@ -136,6 +136,14 @@ stations.push({
   faction: 'beautiful',
   build: () => buildStationModel('beautiful'),
 });
+// Unknowables origin — dedicated builder, not DETAIL_STATIONS (Wave 94)
+stations.push({
+  id: 'station:unknowables',
+  label: `${FACTIONS.unknowables.name} Station`,
+  category: 'Stations',
+  faction: 'unknowables',
+  build: () => buildStationModel('unknowables'),
+});
 // Fallback placeholder sculpt
 stations.push({
   id: 'station:placeholder',

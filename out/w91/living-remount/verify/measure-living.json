@@ -1,0 +1,137 @@
+{
+  "allPass": false,
+  "P": 6.6,
+  "checks": {
+    "noThrow": true,
+    "P": true,
+    "lightMax660": true,
+    "defaultEqualsLight": true,
+    "cutterMax968": true,
+    "cutterLongerZ": true,
+    "heavyMax1870": true,
+    "heavyBiggerThanLight": true,
+    "junkEqualsLight": true
+  },
+  "threw": null,
+  "rows": [
+    {
+      "classKey": "(default)",
+      "restScale": 1,
+      "sx": 1,
+      "sy": 1,
+      "sz": 1,
+      "spanX": 6.6,
+      "spanY": 0.7,
+      "spanZ": 4.2,
+      "max": 6.6,
+      "rawMax": 6.599999904632568
+    },
+    {
+      "classKey": "light",
+      "restScale": 1,
+      "sx": 1,
+      "sy": 1,
+      "sz": 1,
+      "spanX": 6.6,
+      "spanY": 0.7,
+      "spanZ": 4.2,
+      "max": 6.6,
+      "rawMax": 6.599999904632568
+    },
+    {
+      "classKey": "cutter",
+      "restScale": 1.6666666666666667,
+      "sx": 1.4666666666666668,
+      "sy": 1.3,
+      "sz": 1.9333333333333333,
+      "spanX": 9.68,
+      "spanY": 0.91,
+      "spanZ": 8.12,
+      "max": 9.68,
+      "rawMax": 9.680000305175781
+    },
+    {
+      "classKey": "heavy",
+      "restScale": 2.5757575757575757,
+      "sx": 2.8333333333333335,
+      "sy": 3.4,
+      "sz": 2.7303030303030305,
+      "spanX": 18.7,
+      "spanY": 2.39,
+      "spanZ": 11.47,
+      "max": 18.7,
+      "rawMax": 18.700000762939453
+    },
+    {
+      "classKey": "nope",
+      "restScale": 1,
+      "sx": 1,
+      "sy": 1,
+      "sz": 1,
+      "spanX": 6.6,
+      "spanY": 0.7,
+      "spanZ": 4.2,
+      "max": 6.6,
+      "rawMax": 6.599999904632568
+    },
+    {
+      "classKey": "junk-class",
+      "restScale": 1,
+      "sx": 1,
+      "sy": 1,
+      "sz": 1,
+      "spanX": 6.6,
+      "spanY": 0.7,
+      "spanZ": 4.2,
+      "max": 6.6,
+      "rawMax": 6.599999904632568
+    },
+    {
+      "classKey": "0",
+      "restScale": 1,
+      "sx": 1,
+      "sy": 1,
+      "sz": 1,
+      "spanX": 6.6,
+      "spanY": 0.7,
+      "spanZ": 4.2,
+      "max": 6.6,
+      "rawMax": 6.599999904632568
+    },
+    {
+      "classKey": "null",
+      "restScale": 1,
+      "sx": 1,
+      "sy": 1,
+      "sz": 1,
+      "spanX": 6.6,
+      "spanY": 0.7,
+      "spanZ": 4.2,
+      "max": 6.6,
+      "rawMax": 6.599999904632568
+    }
+  ],
+  "remount": {
+    "ok": false,
+    "error": "ReferenceError: document is not defined\n    at makeVeinTexture (file:///C:/Projects/WebSim/src/systems/ship.js:182:18)\n    at buildLivingVisual (file:///C:/Projects/WebSim/src/systems/ship.js:388:19)\n    at remountPlayerHull (file:///C:/Projects/WebSim/src/systems/ship.js:558:7)\n    at file:///C:/Projects/WebSim/out/w91/living-remount/verify/measure-living.mjs:101:3\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)"
+  },
+  "buy": {
+    "ok": true,
+    "purchaseOk": true,
+    "reason": null,
+    "mountedSame": true,
+    "classSame": true,
+    "hulls": [
+      {
+        "id": "hull_starter",
+        "classKey": "light",
+        "hullKind": "living"
+      },
+      {
+        "id": "hull_heavy_1",
+        "classKey": "heavy",
+        "hullKind": "living"
+      }
+    ]
+  }
+}

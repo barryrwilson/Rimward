@@ -1,0 +1,56 @@
+{
+  "pause.start.freeholdLive": true,
+  "pause.start.notHubMesh": true,
+  "pause.start.notHubMesh:extra": {
+    "x": 120,
+    "y": 70,
+    "z": -820,
+    "parent": true,
+    "visible": true
+  },
+  "pause.events.noSystemLoaded": true,
+  "pause.noUpdate.expectSystemNull": true,
+  "pause.noUpdate.resolveNavNull": true,
+  "pause.authoredGhostStillHub": true,
+  "pause.authoredGhostStillHub:extra": {
+    "x": 368,
+    "y": 76,
+    "z": -747
+  },
+  "pause.noUpdate.notFreeholdCoord": true,
+  "pause.unpause.liveHubOrigin": true,
+  "pause.unpause.liveHubOrigin:extra": {
+    "live": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "pos": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "hubMesh": {
+      "x": 368,
+      "y": 76,
+      "z": -747,
+      "parent": true,
+      "visible": true
+    }
+  },
+  "pause.unpause.notNull": true,
+  "pause.unpause.notFreeholdCoord": true,
+  "pause.unpause.notFreeholdCoord:extra": {
+    "live": {
+      "x": 368,
+      "y": 76,
+      "z": -747
+    },
+    "freeholdGate0": {
+      "x": 0,
+      "y": 60,
+      "z": -900
+    }
+  }
+}
+W90 TITLE-PAUSE DRIFT PASS

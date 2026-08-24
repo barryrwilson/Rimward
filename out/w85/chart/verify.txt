@@ -1,0 +1,35 @@
+## Status
+CLEAN
+
+## What I tested
+- Pin probe: `node --import ./scripts/with-css-stub.mjs out/w85/chart/probe.mjs` — WAVE85 CHART PROBE PASS (all keys true). Covers persist field `'nav'`, sanitize export, off-path blocked (dest kept), dest arrival, first-update recalc of a blocked bag, Echo templates (plot/clear/blocked/updated/arrived), chartOpen default, fireHeld gate, no preventDefault/stopPropagation, no innerHTML, hit disc fill transparent, hub-ring pointer-events none, plot class, Clear `type=button`, KeyM, Digit 0 shipyard pin, initJump→initNav, no jumpRequested/dockPressed listen.
+- WAVE85 persist object in `out/w85/persist/verify-boot.log` is still all true.
+- Live Playwright MCP at http://localhost:5173 (1280×720). CONTINUE into flight at Freehold (not paused, not docked).
+- KeyM opens chart (`chartOpen` true). Click Veridian hit disc: cyan solid `.rw-galaxy-plot` (not gold hub dashes), dest highlight, status `Veridian Reach · 1 jump`, Echo `Route plotted: 1 jump to Veridian Reach.`
+- Escape close + KeyM reopen: route still painted (persist).
+- Click current system (Freehold): route clears; Echo `Route cleared.`
+- Clear route button `type=button`; click clears a replotted route.
+- LMB hold on empty panel while open: `fireHeld` false, no `playerFire`.
+- Hub ring `pointer-events: none`; click Last Beacon hub still plots.
+- Hit discs ≥ 24 CSS px. Labels/marker/plot strokes `pointer-events: none`.
+- Recalc algorithm: probe + boot-test source pins (off-path blocked / arrived / first recalc / Echo). Live jump not attempted (combat hail in session).
+- Digit 0 shipyard: source pin (`station.js` Digit 0 → last `DOCK_KEY_SERVICES` = shipyard). Live dock skipped.
+
+## Bugs found
+[Empty if CLEAN]
+
+## Environmental issues
+- Full `npm run test:boot` this session timed out at 300s before the WAVE85 console lines. WAVE85 persist keys remain all-true in `out/w85/persist/verify-boot.log`. Chart live pins were exercised in Playwright instead of jsdom boot-test. Ignore pre-existing WAVE4/26/35/78/80 boot FAILs.
+- Independent pirate hail stayed open under the chart. Chart plot/clear still worked. No live jump coverage because of that fight.
+
+## Evidence
+- Probe log: `out/w85/chart/probe-run.log` (WAVE85 CHART PROBE PASS)
+- Persist boot: `out/w85/persist/verify-boot.log` (`wave85 nav persist` all true)
+- Live notes: `out/w85/chart/live/notes.txt`
+- Screenshots:
+  - `out/w85/chart/live/01-open.png` — chart open, no plot
+  - `out/w85/chart/live/02-plotted.png` — persist reopen, cyan plot to Veridian Reach, 1 jump
+  - `out/w85/chart/live/03-cleared.png` — after click current system
+  - `out/w85/chart/live/04-clear-button.png` — after Clear route button
+  - `out/w85/chart/live/05-multihop.png` — Hollow Reach · 3 jumps, solid plot overlay
+  - `out/w85/chart/live/06-hub.png` — Last Beacon hub click plotted

@@ -1,4 +1,4 @@
-import { createShipState, SHIP_CLASSES, rankFor } from './state.js';
+import { createShipState, SHIP_CLASSES, rankFor, cargoHoldFor } from './state.js';
 import { requestAutosave } from './save.js';
 import {
   HANGAR_CAP,
@@ -10,7 +10,7 @@ import {
 
 /**
  * Authored yard catalog. Prices and min-rep live here, not on the save blob.
- * Plated CORE_STOCK includes frigate (Trusted). Beautiful Ones and Unknowables omit it.
+ * Beautiful Ones and Unknowables sell the full live class set as living hulls.
  */
 
 export const YARD_LIST_UU = Object.freeze({
@@ -26,8 +26,27 @@ export const YARD_LIST_UU = Object.freeze({
 export const GRAFT_LIST_UU = 4000;
 
 const CORE_STOCK = Object.freeze(['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate']);
-const LIVING_STOCK = Object.freeze(['light', 'cutter', 'heavy']);
-const UNKNOWABLES_STOCK = Object.freeze(['light']);
+export const LIVING_STOCK = Object.freeze(['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate']);
+const UNKNOWABLES_STOCK = LIVING_STOCK;
+
+/** Other living stock keys. Same class is never a dest. */
+export function livingTrainDests(fromClass) {
+  if (typeof fromClass !== 'string' || !LIVING_STOCK.includes(fromClass)) return [];
+  if (!hasOwn(SHIP_CLASSES, fromClass)) return [];
+  const dests = [];
+  for (const key of LIVING_STOCK) {
+    if (key === fromClass) continue;
+    if (!hasOwn(SHIP_CLASSES, key)) continue;
+    dests.push(key);
+  }
+  return dests;
+}
+
+/** First dest in livingTrainDests, or null. */
+export function livingTrainDest(fromClass) {
+  const dests = livingTrainDests(fromClass);
+  return dests.length ? dests[0] : null;
+}
 
 const YARD_STOCK = Object.freeze({
   freehold: CORE_STOCK,
@@ -100,6 +119,12 @@ export function yardPrice(classKey, rep) {
   return Math.round(list * (1 - disc));
 }
 
+/** Train debit. Reuses live dest yardPrice. No new integer. */
+export function trainListPrice(beautifulRep, dest) {
+  if (typeof dest !== 'string' || !LIVING_STOCK.includes(dest)) return null;
+  return yardPrice(dest, beautifulRep);
+}
+
 export function canReleaseSku(classKey, hullKind) {
   if (!hasOwn(SHIP_CLASSES, classKey)) return false;
   return hullKind === 'living' || hullKind === 'built';
@@ -155,7 +180,7 @@ function buildStockRow(ctx, classKey, faction, hullKind) {
     launcher: '',
     missileAmmo: 0,
     turret: '',
-    cargoCapacity: 20,
+    cargoCapacity: cargoHoldFor(classKey),
     cargo: [],
     hull: fresh.hull,
     hullMax: fresh.hullMax,

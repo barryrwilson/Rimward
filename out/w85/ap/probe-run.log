@@ -1,0 +1,27 @@
+wave85 ap probe: {
+  "steerBreakConst": true,
+  "disengageExport": true,
+  "applyAvoidBiasExport": true,
+  "matchLine": true,
+  "cancelLine": true,
+  "arriveLine": true,
+  "matchRefuse": true,
+  "wasdKeepsDest": true,
+  "chartOpenSuppressesSteer": true,
+  "arriveDisengages": true,
+  "stuffedRestoreFalse": true,
+  "noJumpFromAp": true,
+  "wantJumpNextHop": true,
+  "noTargetsWrite": true,
+  "noInputThrottleWrite": true,
+  "noInnerHTML": true,
+  "spaceOnApButtons": true,
+  "chipPin": true,
+  "ctxNoLiteral": true,
+  "noSecondWorldField": true,
+  "stateUntouched": true,
+  "jumpChargeUntouched": true,
+  "tickOrder": true,
+  "pauseDisengage": true
+}
+PASS

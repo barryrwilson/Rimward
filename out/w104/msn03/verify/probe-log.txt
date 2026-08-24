@@ -1,0 +1,36 @@
+PASS  boardJobs function present
+PASS  chain done skip stays in boardJobs
+PASS  unique done skip next to chain skip
+PASS  unique skip uses exact ids not in-operator
+PASS  completeJob present
+PASS  completeJob has no splice
+PASS  completeJob stamps done
+PASS  uniqueRetry source in renderJobs
+PASS  uniqueRetry Accept branch
+PASS  ferry DONE accept reset still in acceptJob
+PASS  Digit 2 Jobs (DOCK_KEY_SERVICES[1])
+PASS  Digit 0 shipyard (last service)
+PASS  Digit 0 selects last service
+PASS  JOBS BOARD header stays
+PASS  no innerHTML in station.js
+PASS  UNIQUE_JOB_KIND present
+PASS  UNIQUE map has bounty-ace
+PASS  UNIQUE map has patrol-lane
+PASS  UNIQUE map has haul-provisions
+PASS  UNIQUE map has ferry-consignment
+PASS  uniqueJobId is Object.hasOwn
+PASS  uniqueJobId not exported
+PASS  WORLD_FIELDS present
+PASS  WORLD_FIELDS has no uniqueDone key
+PASS  WORLD_FIELDS still lists jobs
+PASS  unique done hidden on board
+PASS  unique offered still on board
+PASS  unique accepted still on board
+PASS  persist still holds unique done rows
+PASS  chain done still hidden
+PASS  chain offered still visible
+PASS  overlay pirate DONE not hidden
+PASS  family offered not hidden
+PASS  proto id is not unique-done hide
+PASS  all pins
+exit 0

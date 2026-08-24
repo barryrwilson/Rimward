@@ -1,0 +1,28 @@
+command: node out/w98/tgt03/probe.mjs
+exit: 0
+
+PASS  missile+player: got "Incoming dart." expect "Incoming dart."
+PASS  cannon+player: got "Incoming fire." expect "Incoming fire."
+PASS  cannon+omit: got "Incoming fire." expect "Incoming fire."
+PASS  cannon+null: got "Incoming fire." expect "Incoming fire."
+PASS  cannon+ship: got null expect null
+PASS  unknown weapon: got null expect null
+PASS  missing weapon: got null expect null
+PASS  __proto__ weapon: got null expect null
+PASS  inherited weapon: got null expect null
+PASS  empty weapon: got null expect null
+PASS  missile omit target: got null expect null
+PASS  psionic no emit: got null expect null
+PASS  dart then fire (dart): got "Incoming dart." expect "Incoming dart."
+PASS  dart then fire (fire): got "Incoming fire." expect "Incoming fire."
+PASS  fire first: got "Incoming fire." expect "Incoming fire."
+PASS  fire gap 1s: got null expect null
+PASS  fire gap 2.5s: got "Incoming fire." expect "Incoming fire."
+PASS  dart first: got "Incoming dart." expect "Incoming dart."
+PASS  dart gap 1s: got null expect null
+PASS  dart gap 2.5s: got "Incoming dart." expect "Incoming dart."
+PASS  dock suppress fire: got null expect null
+PASS  jump suppress fire: got null expect null
+PASS  dock dart unchanged: got "Incoming dart." expect "Incoming dart."
+PASS  fire cls warn
+WAVE98 helper matrix PASS

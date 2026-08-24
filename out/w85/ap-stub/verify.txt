@@ -1,0 +1,32 @@
+## Status
+CLEAN
+
+## What I tested
+- Ran `node --import ./scripts/with-css-stub.mjs out/w85/ap-stub/probe.mjs`. Exit 0. All 14 keys true. PASS.
+- Static: `src/main.js` init list is initGate → initControls → initAutopilot → initSettings → initBio → initShip. Tick is after controls, before ship.
+- Static: `src/game/autopilot.js` has no `emit('jumpRequested')`, no `input.throttle` write, no `targets.current`.
+- Static: sole live `jumpRequested` emit remains `src/systems/gate.js` (~559).
+- Static: `WORLD_FIELDS` has one `'nav'` key. No `'autopilot'` / `'ap'` persist key.
+- Static: healer still forces `world.nav.autopilot = false`. `writeNav` in `src/game/nav.js` always writes `autopilot: false`. `save.js` still calls `sanitizeNav(ctx)` from snapshot (~953) and restore (~1217). save.js not edited for this check.
+- Static: no Autopilot button, no HUD chip, no chart chrome in src (no `rw-ap` / Autopilot UI). Stub is command channel only.
+- Static: `src/core/ctx.js` adds live `autopilot: { engaged, yaw, pitch, throttle, wantJump, cycleHub, reason }`. Ownership comment: written ONLY by autopilot.js. Event freeze comments list `autopilotEngaged` / `autopilotDisengaged` primitives.
+- WAVE85 persist pin (`noChartFlag = !ctx85src.includes('ctx.autopilot')`) and chart pin (`!ctxSrc.includes('ctx.autopilot')`) still live in `scripts/boot-test.mjs` ~19010 and ~19073.
+- Independent pin eval `out/w85/ap-stub/pin-check.mjs`: `ctx.js` does **not** contain the literal substring `ctx.autopilot`. Pins would still pass. Channel lives as property `autopilot:` in createCtx. Legal `ctx.autopilot` writes are only in `autopilot.js`.
+
+## Bugs found
+[Empty if CLEAN]
+
+WAVE85 persist/chart `ctx.autopilot` pins: **not a HIGH pin-contract bug this slice.** The pins would **not** fail against the landed stub. They grep the literal `ctx.autopilot` in `ctx.js`. PR2 did not write that substring into `ctx.js`. The stub wrote the legal channel as `autopilot: { ... }` plus `autopilot.js` `ctx.autopilot` binds (allowed writer). Do not treat this as a worker product bug.
+
+Latent (not firing): those WAVE85 pins remain stale vs NAV-03 PR2 intent (they still forbid a `ctx.autopilot` substring in ctx.js). A later freeze comment that types `ctx.autopilot` in ctx.js would trip persist/chart for a legal channel. Flag then as pin-contract, not product.
+
+## Environmental issues
+- graph_resolve bound `codex/workflow-drive-artifact-publishing` on "doc/edit/verify". Trigger is Drive/Docs/Sheets/Slides. This task is a local verify under `out/w85/ap-stub/`. No Drive publish. No external share. Owner local evidence path binds.
+- Did not run full `npm run test:boot`. WAVE4/26/35 ignored per brief. WAVE85 persist/chart substring pins evaluated independently against current `ctx.js`.
+- No Playwright (backend). No designer.
+
+## Evidence
+- Probe log: `out/w85/ap-stub/probe-run.log` (wave85 ap-stub probe PASS, all keys true)
+- Pin log: `out/w85/ap-stub/pin-check.log` (WAVE85 `ctx.autopilot` substring still absent in ctx.js)
+- Source (read-only): `src/game/autopilot.js`, `src/core/ctx.js` (channel + freeze comments), `src/main.js` (tick insert), `src/game/nav.js` `writeNav` healer, `src/game/save.js` WORLD_FIELDS + sanitizeNav hooks, `scripts/boot-test.mjs` WAVE85 persist/chart pins
+- Screenshots: none expected (backend)

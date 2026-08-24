@@ -7,6 +7,8 @@
  * This file is READ-ONLY for feature workers: import, don't modify. If a
  * worker needs a change here, it must report back instead.
  * Wave 68 PR0 is the exclusive writer of WEAPONS and MOUNT_TABLE catalog rows.
+ * Wave 92 BIO-04 writes WEAPONS.psionic only (OwnerDecisionsWave92.md).
+ * Wave 94 writes POWER and WEAPONS.psionic.powerPerShot (OwnerDecisionsWave94.md).
  */
 
 // Wave 19 (100-system rim): authored systems live in authored-systems.js,
@@ -33,13 +35,31 @@ export const U = {
 
 // ---------- Ship classes (§5.3, ×1.5) ----------
 export const SHIP_CLASSES = {
-  light: { cruise: 120, burn: 240, creep: 30, stopTime: 2.0, turn: 1.6, hull: 100, shield: 100, engine: 100, role: 'player' },
-  heavy: { cruise: 90, burn: 180, creep: 22, stopTime: 2.5, turn: 1.1, hull: 160, shield: 140, engine: 120, role: 'combat' },
-  freighter: { cruise: 60, burn: 120, creep: 15, stopTime: 3.5, turn: 0.7, hull: 220, shield: 120, engine: 140, role: 'trade' },
-  ace: { cruise: 135, burn: 270, creep: 30, stopTime: 1.8, turn: 2.0, hull: 140, shield: 160, engine: 120, role: 'ace' },
-  cutter: { cruise: 105, burn: 210, creep: 25, stopTime: 2.2, turn: 1.5, hull: 80, shield: 80, engine: 90, role: 'pirate' },
-  frigate: { cruise: 22, burn: 45, creep: 8, stopTime: 5.0, turn: 0.35, hull: 900, shield: 600, engine: 300, role: 'capital' },
+  light: { cruise: 120, burn: 240, creep: 30, stopTime: 2.0, turn: 1.6, hull: 100, shield: 100, engine: 100, cargo: 20, role: 'player' },
+  heavy: { cruise: 90, burn: 180, creep: 22, stopTime: 2.5, turn: 1.1, hull: 160, shield: 140, engine: 120, cargo: 48, role: 'combat' },
+  freighter: { cruise: 60, burn: 120, creep: 15, stopTime: 3.5, turn: 0.7, hull: 220, shield: 120, engine: 140, cargo: 160, role: 'trade' },
+  ace: { cruise: 135, burn: 270, creep: 30, stopTime: 1.8, turn: 2.0, hull: 140, shield: 160, engine: 120, cargo: 20, role: 'ace' },
+  cutter: { cruise: 105, burn: 210, creep: 25, stopTime: 2.2, turn: 1.5, hull: 80, shield: 80, engine: 90, cargo: 32, role: 'pirate' },
+  frigate: { cruise: 22, burn: 45, creep: 8, stopTime: 5.0, turn: 0.35, hull: 900, shield: 600, engine: 300, cargo: 80, role: 'capital' },
 };
+
+/** Outfitter hold racks. Extra on top of class cargo. Not persisted as a count. */
+export const HOLD_RACK_STEP = 10;
+export const HOLD_RACK_MAX = 2;
+
+/** Authored class hold. Unknown classKey → light 20. */
+export function cargoHoldFor(classKey) {
+  const cls = Object.prototype.hasOwnProperty.call(SHIP_CLASSES, classKey)
+    ? SHIP_CLASSES[classKey]
+    : SHIP_CLASSES.light;
+  const n = cls?.cargo;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.round(n) : 20;
+}
+
+/** Class hold plus two outfitter racks. */
+export function cargoHoldMax(classKey) {
+  return cargoHoldFor(classKey) + HOLD_RACK_STEP * HOLD_RACK_MAX;
+}
 
 // Seat counts are the mass law. Do not persist. Unknown classKey → light at
 // weapon-fit.js call sites — never by mutating this table.
@@ -116,8 +136,15 @@ export const WEAPONS = {
     name: 'Auto turret', damage: 4, rof: 3, speed: 800, range: 380, heatPerShot: 2,
     family: 'energy',
   },
+  // Wave 92 BIO-04: Digit 5 projectile. Not beam, not seeker. Owner numbers.
+  psionic: {
+    name: 'Psionic bolt', damage: 12, rof: 3, speed: 520, range: 420, heatPerShot: 8,
+    powerPerShot: 10,
+    family: 'psionic',
+  },
 };
 export const HEAT = { max: 100, coolPerSec: 12, overheatUnlockAt: 40 }; // §6.3 heat-limited
+export const POWER = { max: 100, regenPerSec: 8, afterburnerPerSec: 16, afterburnerMin: 15 };
 
 // ---------- Defense model (§6.4/§6.5) ----------
 export const DEFENSE = {
@@ -149,6 +176,7 @@ export function createShipState(classKey, opts = {}) {
     shell: cls.shield - screenMax, shellMax: cls.shield - screenMax,
     engine: cls.engine, engineMax: cls.engine,
     heat: 0, overheated: false,
+    power: POWER.max,
     lastHitAt: -1e9, lastCombatAt: -1e9,
     engineOut: false, disabled: false, destroyed: false, surrendered: false,
     disabledDamage: 0, disabledSince: null,
@@ -163,8 +191,10 @@ export function createShipState(classKey, opts = {}) {
 /**
  * Apply a hit. Returns an array of event descriptors (may be empty).
  * facet: 'fore'|'aft' — determined by attacker geometry at call site.
+ * preferEngine: Wave 100 player engine-select after shields; skip hull
+ * on that hit until engineOut. NPC shots must pass false/omit.
  */
-export function applyHit(state, { damage, family = 'energy', facet = 'fore', now }) {
+export function applyHit(state, { damage, family = 'energy', facet = 'fore', now, preferEngine = false }) {
   const w = Object.hasOwn(WEAPONS, family) ? WEAPONS[family] : {};
   // Unknowable fields couple only to beam weapons; a projectile miss must
   // not stall screen/shell recharge.
@@ -191,16 +221,21 @@ export function applyHit(state, { damage, family = 'energy', facet = 'fore', now
     if (state.shell <= 0) { state.shell = 0; events.push({ type: 'shieldDown', layer: 'shell' }); }
   }
   if (remaining > 0) {
-    // Aft hits pressure engines first (§6.5).
-    if (facet === 'aft' && !state.engineOut) {
-      const engineDmg = remaining * (w.engineMult ?? 1) * DEFENSE.aftEngineMult;
+    const engineFirst = preferEngine === true && !state.engineOut && state.engineMax > 0;
+    // Aft hits pressure engines first (§6.5). Engine-select (Wave 100)
+    // does the same after shields, from any aspect, and skips hull until out.
+    if (engineFirst || (facet === 'aft' && !state.engineOut)) {
+      const aftMul = facet === 'aft' ? DEFENSE.aftEngineMult : 1;
+      const engineDmg = remaining * (w.engineMult ?? 1) * aftMul;
       state.engine = Math.max(0, state.engine - engineDmg);
-      if (state.engine / state.engineMax <= DEFENSE.engineOutAt) {
+      if (state.engineMax > 0 && state.engine / state.engineMax <= DEFENSE.engineOutAt) {
         state.engineOut = true;
         events.push({ type: 'engineOut' });
       }
     }
-    state.hull = Math.max(0, state.hull - remaining * hullMult);
+    if (!engineFirst) {
+      state.hull = Math.max(0, state.hull - remaining * hullMult);
+    }
   }
 
   // Disabled vs destroyed (§6.5): disabled at 15% hull; overkill destroys.
@@ -237,6 +272,13 @@ export function tickShipState(state, now, dt) {
   if (state.heat > 0) {
     state.heat = Math.max(0, state.heat - HEAT.coolPerSec * dt);
     if (state.overheated && state.heat <= HEAT.overheatUnlockAt) state.overheated = false;
+  }
+  if (Number.isFinite(state.power)) {
+    if (state.powerDrainThisFrame !== true) {
+      state.power += POWER.regenPerSec * dt;
+    }
+    state.power = Math.max(0, Math.min(POWER.max, state.power));
+    state.powerDrainThisFrame = false;
   }
   // Engine-out ships limp back slowly when left alone (no hard lockout §4.4).
   if (state.engineOut && now - state.lastCombatAt >= 30 && state.engine / state.engineMax < DEFENSE.engineOutAt + 0.05) {
@@ -543,7 +585,7 @@ export const JUMP = {
   zone: 60, // activation range from gate
   chargeTime: 2.5, // s of tunnel/fade before arrival
   arrivalOffset: 50, // u past the destination gate toward system center
-  graceSeconds: 5, // no hostile intent on arrival
+  graceSeconds: 60, // no hostile intent on arrival or new-game start (covers a gate hop)
   saveOnJump: true, // like dock/undock autosave §4.4
 };
 export const FACTIONS = {

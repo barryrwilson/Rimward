@@ -1,0 +1,51 @@
+{
+  "status": "BUGS_FOUND",
+  "severityMax": "P3",
+  "boot": { "system": "freehold", "faction": "freehold", "classKey": "light" },
+  "living": {
+    "allHaveCanvas": true,
+    "previewHosts": 3,
+    "previewCanvases": 3,
+    "pairwiseRmse16x10": [
+      { "a": "light", "b": "cutter", "rmse": 8.579 },
+      { "a": "light", "b": "heavy", "rmse": 1.646 },
+      { "a": "cutter", "b": "heavy", "rmse": 8.313 }
+    ],
+    "cutterDistinct": true,
+    "lightVsHeavySubtle": true
+  },
+  "confirmHeavy": {
+    "name": "heavy",
+    "hasCanvas": true,
+    "cssSize": { "w": 168, "h": 108 }
+  },
+  "reducedMotionFrozen": true,
+  "digits": {
+    "digit3ArmsPapers": true,
+    "digit1Hangar": true,
+    "digit2Yard": true
+  },
+  "plated": {
+    "system": "freehold",
+    "faction": "Freehold Compact",
+    "previewCanvases": 6,
+    "looksLikeShip": true,
+    "distinct": true,
+    "greyBoxSeen": false
+  },
+  "buy": {
+    "clicked": true,
+    "buyDidNotRemount": true,
+    "mountedBefore": "hull_starter",
+    "mountedAfter": "hull_starter",
+    "creditsBefore": 100000,
+    "creditsAfter": 82000,
+    "hullsAfter": ["hull_starter", "hull_heavy_1"]
+  },
+  "rapidSwitch": {
+    "maxPreviewCanvases": 3,
+    "maxOffscreenGl": 1,
+    "hangarClearsPreviewAndGl": true
+  },
+  "console": { "errors": 0, "warnings": 0, "pageErrors": 0 }
+}

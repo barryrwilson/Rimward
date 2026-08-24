@@ -1,0 +1,50 @@
+C:\Projects\WebSim\scripts\build-ship-assets.py:85: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  value.use_nodes = True
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+03:11:41 | INFO: Starting glTF 2.0 export
+03:11:41 | INFO: Extracting primitive: Sphere.009
+03:11:41 | INFO: Primitives created: 1
+03:11:41 | INFO: Extracting primitive: Sphere.220
+03:11:41 | INFO: Primitives created: 1
+03:11:41 | INFO: Extracting primitive: body-main
+03:11:41 | INFO: Primitives created: 1
+03:11:41 | INFO: Finished glTF 2.0 export in 0.2505030632019043 s
+
+built beautiful/freighter/lod0
+C:\Projects\WebSim\scripts\build-ship-assets.py:85: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  value.use_nodes = True
+Info: Saved as "freighter.blend"
+03:11:49 | INFO: Starting glTF 2.0 export
+03:11:49 | INFO: Extracting primitive: Sphere.008
+03:11:49 | INFO: Primitives created: 1
+03:11:49 | INFO: Extracting primitive: Sphere.186
+03:11:49 | INFO: Primitives created: 1
+03:11:49 | INFO: Extracting primitive: body-main
+03:11:49 | INFO: Primitives created: 1
+03:11:49 | INFO: Finished glTF 2.0 export in 0.09813904762268066 s
+
+built beautiful/freighter/lod1
+03:11:50 | INFO: Starting glTF 2.0 export
+03:11:50 | INFO: Extracting primitive: Sphere.007
+03:11:50 | INFO: Primitives created: 1
+03:11:50 | INFO: Extracting primitive: Sphere.046
+03:11:50 | INFO: Primitives created: 1
+03:11:50 | INFO: Extracting primitive: body-main
+03:11:50 | INFO: Primitives created: 1
+03:11:50 | INFO: Finished glTF 2.0 export in 0.05569720268249512 s
+
+built beautiful/freighter/lod2
+03:11:50 | INFO: Starting glTF 2.0 export
+03:11:50 | INFO: Extracting primitive: Sphere.003
+03:11:50 | INFO: Primitives created: 1
+03:11:50 | INFO: Extracting primitive: Sphere.005
+03:11:50 | INFO: Primitives created: 1
+03:11:50 | INFO: Extracting primitive: body-main
+03:11:50 | INFO: Primitives created: 1
+03:11:50 | INFO: Finished glTF 2.0 export in 0.08339476585388184 s
+
+built beautiful/freighter/lod3
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

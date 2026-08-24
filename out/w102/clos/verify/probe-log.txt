@@ -1,0 +1,2 @@
+wave102 probe: {"approach":-12,"recede":9,"perp":0,"eps":0,"pins":{"helperSign":true,"helperEps":true,"helperFailClosed":true}}
+exit: 0

@@ -1,0 +1,37 @@
+{
+  "status": "CLEAN",
+  "url": "http://127.0.0.1:5173/",
+  "consoleErrors": 0,
+  "flows": {
+    "digit3LockAsteroidAutomineButton": "pass",
+    "clickAutomineChipAndWeaponGroup3": "pass",
+    "wantMineCuttingBeamWithoutLmb": "pass",
+    "approachWhenOutOfRange": "pass",
+    "cancelChip": "pass",
+    "cancelKeyN": "pass",
+    "cancelBracket": "pass",
+    "keyNNoLockRefuses": "pass",
+    "tAndLmbMineWithAutomineOff": "pass",
+    "apAmChipNoPixelOverlap": "pass",
+    "narrow400ButtonsVisible": "pass"
+  },
+  "geometry": {
+    "chipStackTopPx": 14,
+    "amChipSolo": { "x": 428.47, "y": 14, "w": 199.06, "h": 33.6, "bottom": 47.6 },
+    "apForced": { "x": 450.11, "y": 14, "w": 155.79, "h": 33.6, "bottom": 47.6 },
+    "amUnderAp": { "x": 425.14, "y": 53.6, "w": 205.71, "h": 33.6, "bottom": 87.2 },
+    "overlapApAm": false,
+    "narrow400": { "vw": 400, "vh": 720, "btn": { "x": 106.56, "y": 431, "w": 70.88, "h": 24 }, "visible": true }
+  },
+  "notes": [
+    "KeyN with no lock: toast 'Automine refused — lock an asteroid first.'; automine.engaged stayed false.",
+    "HUD help includes 'N — automine locked asteroid'.",
+    "Engage via rock button or KeyN sets input.weaponGroup to 3.",
+    "CUTTING: wantMine true, mine-beam visible, fireHeld false.",
+    "APPROACH: dist 122u, wantMine false, chip AUTOMINE APPROACH.",
+    "Chip Cancel, KeyN, and bracket 'Cancel automine' all emit automineDisengaged reason cancel.",
+    "When only automine is shown, chip top is 14px. When AP is also shown, automine top is 53.6px (below 48px).",
+    "Screenshot 08: SAVE BLOCKED banner occupies the same top-center band as the automine chip (occlusion, same as ui-audit minor).",
+    "Did not kill PID on 5173. Did not start 5175."
+  ]
+}

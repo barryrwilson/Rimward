@@ -1,0 +1,45 @@
+PASS power.nums
+PASS psi.powerPerShot
+PASS heat.untouched
+PASS cannon.noPowerField
+PASS class.noPowerField
+PASS ship.powerMax
+PASS ship.noPsiCap
+PASS regen.oneSec 58
+PASS regen.skipWhenBurn 40
+PASS regen.clampMax 100
+PASS regen.clampMin 0
+PASS save.noPowerKey
+PASS state.noWorldField
+PASS hud.pwrLabel
+PASS hud.sideCol
+PASS hud.noAimPwr
+PASS css.pwrFill
+PASS css.noAimGauge
+PASS css.noPwrPulse
+PASS css.reducedKeepsBar
+PASS ship.gateMin
+PASS ship.drain
+PASS ship.cutCooldown
+PASS combat.psiDry
+PASS combat.spendOnSpawn
+PASS combat.noInnerHTML
+PASS hud.noInnerHTML
+PASS live.psiBolt
+PASS live.psiHeat 8
+PASS live.psiPower 90
+PASS live.emit
+PASS dry.noBolt
+PASS dry.noHeat 0
+PASS dry.regenOnly 9.133333333333333
+PASS dry.noEmit
+PASS cannon.heatOnly
+PASS cannon.noPowerSpend 80.13333333333334
+PASS reduced.psiSpends
+PASS hud.live.sideCol
+PASS hud.live.pwrInSide
+PASS hud.live.pwrLabel
+PASS hud.live.barReads
+PASS hud.live.aimNoPwr
+PASS hud.live.barUpdates
+WAVE94 POWER PASS { max: 100, regen: 8, psi: 10 }

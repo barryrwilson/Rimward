@@ -1,0 +1,12 @@
+wave107 bio-06: {"lightEnvelope":true,"lightCadence":true,"monotonicHz":true,"protoSafe":true,"noCadenceWorldField":true,"digit0Shipyard":true,"npcReducedAmp0":true,"swimHzMatch":true,"uSwimSweep":true}
+BOOT TEST FAIL — 5 errors
+
+Pre-existing (not BIO-06):
+WAVE26 FERRY QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+
+WAVE4 / WAVE35 / WAVE80 / WAVE85 / WAVE92: no FAIL lines in this run.
+WAVE107 BIO-06 pins all true. Harness exit 1 is the five WAVE26 errors.

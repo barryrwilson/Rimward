@@ -1,0 +1,63 @@
+## Status
+CLEAN
+
+## What I tested
+- Did not re-run the headless probe. Prior verify2 log is PASS.
+- Vite answered at http://localhost:5173/ (title: RIMWARD — A Living Frontier).
+- Playwright MCP only. Tab started at about:blank. No user-data-dir. No chrome-profile folders.
+- Live path:
+  1. browser_navigate http://localhost:5173
+  2. Click [2] NEW GAME, then confirm erase autosave.
+  3. Click first origin: [1] Freehold Greenhand.
+  4. Flight HUD. POS Freehold Drift. SPD ~30u/s.
+  5. Press M. Galaxy chart opened.
+  6. Click .rw-galaxy-hits circle[data-system-id="veridian"].
+  7. Status: "Route plotted: 1 jump to Veridian Reach." Autopilot enabled.
+  8. Click Autopilot. Status: "Autopilot cancelled — combat." (WAVE85 known.)
+  9. HUD still showed NEXT/DEST Veridian Reach, JUMPS 1, GATE range.
+  10. Escape closed the chart.
+- window.__ctx exists (window.ctx does not).
+- ctx.world.nav: dest=veridian, path=[freehold,veridian], remaining=1, status=plotted, autopilot=false.
+- ctx.autopilot: engaged=false, wantJump=false, reason=combat.
+- Teleport-eval (page JS only): pin ship to authored Freehold→Veridian gate (0,60,-900).
+  After hold: gate.inZone=true, nearTo=veridian, GATE 0u.
+  HUD prompt: "D JUMP TO VERIDIAN REACH".
+  Full-screen .rw-jump stayed is-hidden (charge overlay, not the zone prompt).
+- Press D while in zone. After ~1s: currentSystem=veridian, nav.status=arrived, remaining=0.
+  HUD POS VERIDIAN REACH. Jump hop completed.
+- Full-screen JUMP charge overlay was not captured (wait landed after hop).
+- browser_console_messages level=error: 0 errors.
+
+## Bugs found
+None for this AP-path task.
+
+WAVE85 (known, not scored as product bug):
+- NPC hail "Heave to. Cargo or hull." / "Incoming dart." set flags.combat.
+- Autopilot click then cancelled. HUD: "Autopilot cancelled — combat."
+- AP chip .rw-autopilot stayed is-hidden. Route chrome (DEST/JUMPS/GATE) stayed visible.
+
+Not a product fail:
+- Black/space canvas is the 3D view. HUD DOM worked.
+- Full-screen JUMP overlay not photographed. Zone prompt + arrived Veridian is enough.
+
+## Environmental issues
+- First Invoke-WebRequest to :5173 timed out; Playwright page.goto to :5173 then succeeded.
+- npm run dev then bound :5174 because :5173 was already in use. Live run used :5173.
+- Console warnings (not errors):
+  - 90x THREE.Texture: Unable to serialize Texture — caused by verifier scene.traverse + JSON.stringify, not gameplay.
+  - 1x aria-hidden on .rw-galaxy-chart while focused descendant was .rw-galaxy-ap after Escape close. A11y warning only.
+- Playwright screenshot path honored: out/w87/ap-path/verify3/*.png
+
+## Evidence
+- out/w87/ap-path/verify3/live-chart.png — chart, Veridian Reach · 1 jump, Autopilot live
+- out/w87/ap-path/verify3/live-chart-before.png — chart before node click
+- out/w87/ap-path/verify3/live-flight.png — HUD DEST/JUMPS/GATE Veridian, Freehold Drift
+- out/w87/ap-path/verify3/live-jump-hold.png — D JUMP TO VERIDIAN REACH, GATE 0u, inZone
+- out/w87/ap-path/verify3/live-after-d.png — POS VERIDIAN REACH after hop
+- out/w87/ap-path/verify3/eval-window.json — HUD chrome + __ctx
+- out/w87/ap-path/verify3/eval-ctx.json — nav plotted, AP reason combat
+- out/w87/ap-path/verify3/eval-hold-result.json — inZone true, nearTo veridian
+- out/w87/ap-path/verify3/eval-after-d.json — currentSystem veridian, status arrived
+- out/w87/ap-path/verify3/console-errors.txt — 0 errors
+- out/w87/ap-path/verify3/console-warnings.txt — 91 warnings (probe serialize + aria-hidden)
+- Headless probe: out/w87/ap-path/verify2/probe.log (prior PASS; not re-run)

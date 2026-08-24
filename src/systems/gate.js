@@ -413,6 +413,68 @@ function buildAssembly(gateDef, faction, beautiful) {
   return a;
 }
 
+// Live transit coords for NAV-02 / autopilot. Physical rings win over hub
+// routes. Primitives only — never return a mesh. Walk the live assemblies so
+// a dropped systemLoaded cannot serve authored ghosts.
+const RESERVED_NAV_IDS = new Set([
+  '__proto__', 'prototype', 'constructor', 'toString', 'valueOf',
+  'hasOwnProperty', '__defineGetter__', '__defineSetter__',
+  '__lookupGetter__', '__lookupSetter__',
+]);
+
+let _liveAssemblies = null;
+let _liveReady = false;
+let _builtSystem = '';
+
+function reservedNavId(value) {
+  if (typeof value !== 'string' || !value) return true;
+  return RESERVED_NAV_IDS.has(value) || RESERVED_NAV_IDS.has(value.toLowerCase());
+}
+
+function liveAssemblyOrigin(a) {
+  if (!a) return null;
+  // Zone checks read a.x; lookup must match that origin.
+  if (Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)) {
+    return { x: a.x, y: a.y, z: a.z };
+  }
+  const g = a.group;
+  if (!g) return null;
+  const x = g.position.x;
+  const y = g.position.y;
+  const z = g.position.z;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  return { x, y, z };
+}
+
+function hubListsHop(a, to) {
+  const routes = a && a.routes;
+  if (!Array.isArray(routes)) return false;
+  for (let i = 0; i < routes.length; i++) {
+    if (routes[i] === to) return true;
+  }
+  return false;
+}
+
+/** Zone origin for the live assembly that transits `to`, or null. */
+export function lookupLiveNavGate(to, expectSystem) {
+  if (reservedNavId(to) || !_liveReady || !_liveAssemblies) return null;
+  if (expectSystem !== undefined && expectSystem !== _builtSystem) return null;
+  let hubPos = null;
+  for (let i = 0; i < _liveAssemblies.length; i++) {
+    const a = _liveAssemblies[i];
+    if (!a) continue;
+    if (a.isHub) {
+      if (!hubPos && hubListsHop(a, to)) hubPos = liveAssemblyOrigin(a);
+      continue;
+    }
+    if (a.to === to) {
+      const pos = liveAssemblyOrigin(a);
+      if (pos) return pos;
+    }
+  }
+  return hubPos;
+}
+
 // =============================================================================
 // LIVE GATE SYSTEM (initGate)
 // =============================================================================
@@ -427,9 +489,14 @@ export function initGate(ctx) {
 
   // One preallocated assembly per gate.
   const assemblies = [];
+  _liveAssemblies = assemblies;
+  _liveReady = false;
 
-  // Rebuild every assembly for the current system (on 'systemLoaded').
+  // Rebuild every assembly for the current system (on 'systemLoaded'
+  // or when currentSystem drifted while paused — title drops events).
   function rebuild() {
+    _liveReady = false;
+    _liveAssemblies = assemblies; // this instance owns lookup after rebuild
     for (let i = 0; i < assemblies.length; i++) {
       const a = assemblies[i];
       root.remove(a.group);
@@ -454,10 +521,19 @@ export function initGate(ctx) {
       }
     }
     assemblies.length = 0;
-    const def = SYSTEMS[ctx.world.currentSystem];
+    const sys = ctx.world.currentSystem;
+    if (reservedNavId(sys) || !Object.hasOwn(SYSTEMS, sys)) {
+      _builtSystem = typeof sys === 'string' ? sys : '';
+      return;
+    }
+    const def = SYSTEMS[sys];
+    if (!def || typeof def !== 'object') {
+      _builtSystem = sys;
+      return;
+    }
     currentBeautiful = isBeautiful(def.faction);
     currentFaction = def.faction ?? 'independent';
-    const gates = def.gates;
+    const gates = Array.isArray(def.gates) ? def.gates : [];
     for (let i = 0; i < gates.length; i++) {
       const a = buildAssembly(gates[i], currentFaction, currentBeautiful);
       a.group.name = `${currentFaction}-gate`;
@@ -476,6 +552,8 @@ export function initGate(ctx) {
       root.add(a.group);
       assemblies.push(a);
     }
+    _builtSystem = sys;
+    _liveReady = true;
   }
   rebuild();
 
@@ -507,14 +585,19 @@ export function initGate(ctx) {
   });
 
   function update(dt) {
-    // Rebuild for a system swap announced last frame.
-    for (let i = 0; i < ctx.lastEvents.length; i++) {
-      const e = ctx.lastEvents[i];
-      if (e.type === 'systemLoaded') {
-        rebuild();
-        break;
+    // Rebuild for a system swap. lastEvents can drop while paused (title),
+    // so also rebuild when currentSystem drifted away from the live set.
+    let needRebuild = ctx.world.currentSystem !== _builtSystem;
+    if (!needRebuild) {
+      for (let i = 0; i < ctx.lastEvents.length; i++) {
+        const e = ctx.lastEvents[i];
+        if (e.type === 'systemLoaded') {
+          needRebuild = true;
+          break;
+        }
       }
     }
+    if (needRebuild) rebuild();
 
     const jumping = ctx.gate.jumping;
     const reducedMotion = ctx.settings?.reducedMotion === true;
@@ -555,8 +638,31 @@ export function initGate(ctx) {
     ctx.gate.nearRouteIndex = nearIsHub ? near.routeIndex : -1;
     ctx.gate.nearRouteCount = nearIsHub ? near.routes.length : 0;
 
-    if (inZone && ctx.input.dockPressed) {
+    const nav = ctx.world && ctx.world.nav;
+    const nextHop = nav && Array.isArray(nav.path) && nav.path.length >= 2 ? nav.path[1] : null;
+    const apJump = !!(
+      nav && ctx.world.nav.autopilot === true
+      && ctx.autopilot && ctx.autopilot.wantJump === true
+      && near && near.to === nextHop
+    );
+    if (inZone && !ctx.flags.docked && !jumping && (ctx.input.dockPressed || apJump)) {
       ctx.emit('jumpRequested', { to: near.to });
+    }
+
+    if (
+      nav && nav.autopilot === true
+      && ctx.autopilot && ctx.autopilot.cycleHub === true
+      && zoneHub
+      && nextHop
+      && zoneHub.to !== nextHop
+      && !ctx.flags.docked
+      && !ctx.flags.paused
+      && !jumping
+    ) {
+      const routes = zoneHub.routes;
+      zoneHub.routeIndex = (zoneHub.routeIndex + 1) % routes.length;
+      zoneHub.to = routes[zoneHub.routeIndex];
+      ctx.gate.nearTo = zoneHub.to;
     }
 
     // Jump overlay: fade in/out.

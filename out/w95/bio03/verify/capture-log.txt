@@ -1,0 +1,16 @@
+VITE pid 20912
+VITE ready
+CHROME pid 11380
+BROWSER ws ws://127.0.0.1:9413/devtools/browser/a4e2922b-bcfb-4cd0-a1d9-8c49a345a4d3
+TARGET 8177CF4E8C87F515D248AE672F648F72
+SESSION F093E4E63C93B21FAF81A9E8D3721671
+HREF0 about:blank
+LOAD event timeout Page.loadEventFired
+HREF http://127.0.0.1:5176/
+BOOT {"ctx":false,"title":false,"newLabel":null,"ready":"interactive","fatal":""}
+PLAYER {"faction":"independent","classKey":"light","living":true,"hullPath":"living","verts":2883,"names":["Mesh","Mesh","Mesh","Mesh","Mesh","Mesh","Mesh","Mesh"],"hasSwimUniforms":false,"sys":"freehold"}
+HAS_MODELS true
+MODELS player {"ok":true,"loading":false,"text":"MODELS\n✕\nALL\nSHIPS\nSTATIONS\nGATES\nLANDMARKS\nCELESTIAL\nPROPS\nFreehold Compact — Light\nFreehold Compact — Light (pirate)\nFreehold Compact — Ace\nFreehold Compact — Ace (pirate)\nFreeho"}
+MODELS light {"ok":true,"loading":true,"text":"MODELS\n✕\nALL\nSHIPS\nSTATIONS\nGATES\nLANDMARKS\nCELESTIAL\nPROPS\nFreehold Compact — Light\nFreehold Compact — Light (pirate)\nFreehold Compact — Ace\nFreehold Compact — Ace (pirate)\nFreeho"}
+NPC probe fail cdp timeout Runtime.evaluate
+TRAFFIC {"sys":"bt_cradle","nShips":0,"nBeautiful":0,"sample":[]}

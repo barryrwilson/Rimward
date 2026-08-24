@@ -1,0 +1,3 @@
+== beautiful/light/lod0  voxel=0.06  triangles=16228  cells=17075
+main  cells= 17075  x[ -2.40,  2.40]  y[ -1.08,  1.08]  z[ -4.26,  4.26]
+probe-ship-islands: ONE CONNECTED BODY

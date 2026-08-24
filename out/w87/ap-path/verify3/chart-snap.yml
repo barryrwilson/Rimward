@@ -1,0 +1,221 @@
+- generic [active] [ref=f1e1]:
+  - generic:
+    - status:
+      - generic: Heave to. Cargo or hull.
+      - generic: Heave to. Cargo or hull.
+      - generic: Heave to. Cargo or hull.
+      - generic: ★ The lane wears masks. You saw one come off.
+      - generic: Heave to. Cargo or hull.
+    - generic:
+      - generic: T
+      - generic: Target
+    - generic:
+      - generic:
+        - generic:
+          - generic: FORE
+          - generic: AFT
+      - generic: SCREEN
+      - generic: SHELL
+      - generic: HULL
+      - generic:
+        - generic: SPD
+        - generic: 30u/s
+      - generic:
+        - generic: WPN
+        - generic: 1 · Energy cannon
+    - generic:
+      - generic:
+        - generic: Plant
+        - generic: STRAIN
+        - generic:
+          - generic: ENGINE
+          - generic: OK
+      - generic:
+        - generic: Flight
+        - generic: THR
+        - generic:
+          - generic: BURN
+          - generic: READY
+        - generic:
+          - generic: DRIFT
+          - generic: READY
+      - generic:
+        - generic: Heat
+        - generic:
+          - generic: STRAIN
+          - generic: 0%
+      - generic:
+        - generic:
+          - generic: Bio
+          - generic: KEEN
+          - generic: HUNGER
+          - generic: WOUNDS
+          - generic:
+            - generic: ECHOES
+            - generic: "0"
+        - generic:
+          - generic: POS
+          - generic: Freehold Drift
+          - generic: X 0 Y 80 Z 668
+    - generic:
+      - generic: Manifest
+      - generic:
+        - generic: UU
+        - generic: "350"
+      - generic:
+        - generic: FEAR
+        - generic: "0"
+      - generic:
+        - generic: CARGO
+        - generic: 0/20
+    - generic:
+      - button "CONTROLS ▾" [ref=f1e4] [cursor=pointer]
+      - generic:
+        - list:
+          - listitem: Mouse — steer toward reticle
+          - listitem: W/S — vertical strafe (W = up)
+          - listitem: A/D — lateral strafe (D = right)
+          - listitem: Q/E — roll left / right (set your up)
+          - listitem: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem: Space — afterburner
+          - listitem: Shift (hold) — vector-hold drift
+          - listitem: LMB (hold) — fire
+          - listitem: "1/2/3/4 — weapon group: cannon / disruptor / mining / missiles"
+          - listitem: T — cycle target
+          - listitem: V — lock under reticle
+          - listitem: H — hail · D — dock · C — camera (chase / third / first-person)
+          - listitem: X — match lock speed
+          - listitem: G — cycle hub route at a Lamplighter junction
+          - listitem: M — galaxy chart
+          - listitem: L — berth records (save/load)
+          - listitem: P — pause
+  - dialog [ref=f1e14]:
+    - generic [ref=f1e15]:
+      - generic [ref=f1e16]:
+        - heading "Galaxy Chart" [level=2] [ref=f1e17]
+        - status [ref=f1e18]
+        - generic [ref=f1e19]:
+          - button "Clear route" [ref=f1e20] [cursor=pointer]
+          - generic [ref=f1e21]:
+            - button "Autopilot unavailable — plot a destination first." [disabled] [ref=f1e22] [cursor=pointer]: Autopilot
+            - button "Close galaxy chart" [ref=f1e23] [cursor=pointer]: ×
+      - paragraph [ref=f1e24]: Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashed gold lines are one-way Lamplighter hub routes. Click a system to plot a route. M or Escape closes.
+      - img "Map of 100 rim systems and their gate connections" [ref=f1e25]:
+        - generic [ref=f1e187]:
+          - generic [ref=f1e188] [cursor=pointer]
+          - generic [ref=f1e189] [cursor=pointer]
+          - generic [ref=f1e190] [cursor=pointer]
+          - generic [ref=f1e191] [cursor=pointer]
+          - generic [ref=f1e192] [cursor=pointer]
+          - generic [ref=f1e193] [cursor=pointer]
+          - generic [ref=f1e194] [cursor=pointer]
+          - generic [ref=f1e195] [cursor=pointer]
+          - generic [ref=f1e196] [cursor=pointer]
+          - generic [ref=f1e197] [cursor=pointer]
+          - generic [ref=f1e198] [cursor=pointer]
+          - generic [ref=f1e199] [cursor=pointer]
+          - generic [ref=f1e200] [cursor=pointer]
+          - generic [ref=f1e201] [cursor=pointer]
+          - generic [ref=f1e202] [cursor=pointer]
+          - generic [ref=f1e203] [cursor=pointer]
+          - generic [ref=f1e204] [cursor=pointer]
+          - generic [ref=f1e205] [cursor=pointer]
+          - generic [ref=f1e206] [cursor=pointer]
+          - generic [ref=f1e207] [cursor=pointer]
+          - generic [ref=f1e208] [cursor=pointer]
+          - generic [ref=f1e209] [cursor=pointer]
+          - generic [ref=f1e210] [cursor=pointer]
+          - generic [ref=f1e211] [cursor=pointer]
+          - generic [ref=f1e212] [cursor=pointer]
+          - generic [ref=f1e213] [cursor=pointer]
+          - generic [ref=f1e214] [cursor=pointer]
+          - generic [ref=f1e215] [cursor=pointer]
+          - generic [ref=f1e216] [cursor=pointer]
+          - generic [ref=f1e217] [cursor=pointer]
+          - generic [ref=f1e218] [cursor=pointer]
+          - generic [ref=f1e219] [cursor=pointer]
+          - generic [ref=f1e220] [cursor=pointer]
+          - generic [ref=f1e221] [cursor=pointer]
+          - generic [ref=f1e222] [cursor=pointer]
+          - generic [ref=f1e223] [cursor=pointer]
+          - generic [ref=f1e224] [cursor=pointer]
+          - generic [ref=f1e225] [cursor=pointer]
+          - generic [ref=f1e226] [cursor=pointer]
+          - generic [ref=f1e227] [cursor=pointer]
+          - generic [ref=f1e228] [cursor=pointer]
+          - generic [ref=f1e229] [cursor=pointer]
+          - generic [ref=f1e230] [cursor=pointer]
+          - generic [ref=f1e231] [cursor=pointer]
+          - generic [ref=f1e232] [cursor=pointer]
+          - generic [ref=f1e233] [cursor=pointer]
+          - generic [ref=f1e234] [cursor=pointer]
+          - generic [ref=f1e235] [cursor=pointer]
+          - generic [ref=f1e236] [cursor=pointer]
+          - generic [ref=f1e237] [cursor=pointer]
+          - generic [ref=f1e238] [cursor=pointer]
+          - generic [ref=f1e239] [cursor=pointer]
+          - generic [ref=f1e240] [cursor=pointer]
+          - generic [ref=f1e241] [cursor=pointer]
+          - generic [ref=f1e242] [cursor=pointer]
+          - generic [ref=f1e243] [cursor=pointer]
+          - generic [ref=f1e244] [cursor=pointer]
+          - generic [ref=f1e245] [cursor=pointer]
+          - generic [ref=f1e246] [cursor=pointer]
+          - generic [ref=f1e247] [cursor=pointer]
+          - generic [ref=f1e248] [cursor=pointer]
+          - generic [ref=f1e249] [cursor=pointer]
+          - generic [ref=f1e250] [cursor=pointer]
+          - generic [ref=f1e251] [cursor=pointer]
+          - generic [ref=f1e252] [cursor=pointer]
+          - generic [ref=f1e253] [cursor=pointer]
+          - generic [ref=f1e254] [cursor=pointer]
+          - generic [ref=f1e255] [cursor=pointer]
+          - generic [ref=f1e256] [cursor=pointer]
+          - generic [ref=f1e257] [cursor=pointer]
+          - generic [ref=f1e258] [cursor=pointer]
+          - generic [ref=f1e259] [cursor=pointer]
+          - generic [ref=f1e260] [cursor=pointer]
+          - generic [ref=f1e261] [cursor=pointer]
+          - generic [ref=f1e262] [cursor=pointer]
+          - generic [ref=f1e263] [cursor=pointer]
+          - generic [ref=f1e264] [cursor=pointer]
+          - generic [ref=f1e265] [cursor=pointer]
+          - generic [ref=f1e266] [cursor=pointer]
+          - generic [ref=f1e267] [cursor=pointer]
+          - generic [ref=f1e268] [cursor=pointer]
+          - generic [ref=f1e269] [cursor=pointer]
+          - generic [ref=f1e270] [cursor=pointer]
+          - generic [ref=f1e271] [cursor=pointer]
+          - generic [ref=f1e272] [cursor=pointer]
+          - generic [ref=f1e273] [cursor=pointer]
+          - generic [ref=f1e274] [cursor=pointer]
+          - generic [ref=f1e275] [cursor=pointer]
+          - generic [ref=f1e276] [cursor=pointer]
+          - generic [ref=f1e277] [cursor=pointer]
+          - generic [ref=f1e278] [cursor=pointer]
+          - generic [ref=f1e279] [cursor=pointer]
+          - generic [ref=f1e280] [cursor=pointer]
+          - generic [ref=f1e281] [cursor=pointer]
+          - generic [ref=f1e282] [cursor=pointer]
+          - generic [ref=f1e283] [cursor=pointer]
+          - generic [ref=f1e284] [cursor=pointer]
+          - generic [ref=f1e285] [cursor=pointer]
+          - generic [ref=f1e286] [cursor=pointer]
+          - generic [ref=f1e287] [cursor=pointer]
+        - generic [ref=f1e288]:
+          - generic: Freehold Drift
+          - generic: Veridian Reach
+          - generic: The Redmarch
+          - generic: Hollow Reach
+          - generic: The Hush
+          - generic: The Verge
+          - generic: Bastion
+          - generic: The Auction
+          - generic: The Stolen Womb
+          - generic: The Black Station
+          - generic: The Last Beacon
+      - generic [ref=f1e289]:
+        - generic [ref=f1e290]: gate
+        - generic [ref=f1e291]: hub route
+        - generic [ref=f1e292]: hub
+        - generic [ref=f1e293]: plotted route

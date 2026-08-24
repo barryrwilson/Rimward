@@ -1,0 +1,45 @@
+{
+  "pos": {
+    "x": 18.60098703058107,
+    "y": -0.3440335638363974,
+    "z": -774.2305369947283
+  },
+  "gate": {
+    "inZone": false,
+    "nearTo": null,
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "ap": {
+    "engaged": false,
+    "yaw": 0,
+    "pitch": 0,
+    "throttle": 0,
+    "wantJump": false,
+    "cycleHub": false,
+    "reason": "combat"
+  },
+  "nav": {
+    "dest": "veridian",
+    "path": [
+      "freehold",
+      "veridian"
+    ],
+    "remaining": 1,
+    "status": "plotted",
+    "autopilot": false
+  },
+  "combat": true,
+  "jumpClass": "rw-jump is-hidden",
+  "jumpDisplay": "none",
+  "jumpOpacity": "1",
+  "jumpHidden": true,
+  "hudJumpSnippet": "JUMPS\n1\nGATE\n141u\nPOS\nFREEHOLD DRIFT\nX 19 Y -2 Z -774\nMANIFEST\nUU\n350\nFEAR\n0\nCARGO\n0",
+  "dest": "DEST\nVeridian Reach\nJUMPS\n1\nGATE\n141u\nPOS\nFR",
+  "posHud": "POS\nFREEHOLD DRIFT\nX 19 Y -2 Z -774\nMANIFEST\nUU\n350\nFEAR\n0\nCARGO\n0/20\nCONTROLS ▸",
+  "combatCancel": false
+}

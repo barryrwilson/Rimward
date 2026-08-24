@@ -1,18 +1,30 @@
 import * as THREE from 'three';
 import '../ui/hud.css';
-import { WEAPONS, HEAT, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor } from '../game/state.js';
+import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor } from '../game/state.js';
 import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
+import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
+import {
+  initNavGuidance, readNavGuidance, formatNavDist,
+} from './nav-guidance.js';
+import { disengage, guardAutopilotSpace, apDestName, apNextName } from '../game/autopilot.js';
+import {
+  tryEngageAutomine, disengageAutomine, amRefuseToken, amLine, guardAutomineSpace,
+} from '../game/automine.js';
+import { npcFireToast, INCOMING_FIRE_TOAST } from '../game/npc-fire-toast.js';
+import { contactsGate, contactsScanner } from '../game/contacts-gate.js';
+import { healSubsysPart, SUBSYS_PART_ENGINE } from '../game/subsys-aim.js';
+import { losCloseRate } from '../game/los-close.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
  *
  * Combat-critical set (§13.2 / HUD-01): reticle + lead indicator, target
  * bracket with resolve band, mirrored Screen/Shell/hull/speed rails left and
- * right of center, current weapon on the self rail, target distance on the
- * target rail, plus one focused context prompt. Bottom aux (strain/engine/
- * throttle/burner/drift) stays but dims in combat. Non-critical panels
- * (resources, controls, bio, pos) fade while ctx.flags.combat is set.
+ * right of center, current weapon on the self rail, target distance and
+ * signed LOS close rate on the target rail, plus one focused context prompt.
+ * Bottom aux (strain/engine/throttle/burner/drift) stays but dims in combat.
+ * Non-critical panels (resources, controls, bio, pos) fade while ctx.flags.combat is set.
  * Same overlay in chase, third, and first-person. First-person only
  * recenters the reticle; it does not swap instruments.
  *
@@ -45,6 +57,7 @@ import { isBeautiful } from './organic.js';
  * Tier 0 has no arc. Mk I shows ships inside U.ENCOUNTER_BUBBLE. Mk II
  * doubles the bubble and adds a closure glyph on the lock pip. Shape is
  * the friend/foe cue (tick / chevron / hollow diamond). Not a reticle ring.
+ * Hide while docked or jumping. Do not clear scanner.
  */
 
 const TEXT_UPDATE_INTERVAL = 0.2; // s between throttled text refreshes
@@ -185,9 +198,9 @@ function contactsArcPath() {
   return d;
 }
 
-const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // groups 1–3; group 4 is hudWeaponKey
+const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // groups 1–3; group 4 is hudWeaponKey; group 5 is psionic
 
-/** Empty group 4 must not fall through to cannon. */
+/** Empty group 4 / unknown groups must not fall through to cannon. */
 export function hudWeaponKey(ctx) {
   const g = ctx.input.weaponGroup | 0;
   if (g === 4) {
@@ -195,7 +208,8 @@ export function hudWeaponKey(ctx) {
     if (!isLauncherId(id)) return null;
     return LAUNCHER_IDS[id].wkey;
   }
-  return WEAPON_KEYS[g - 1] ?? 'cannon';
+  if (g === 5) return psionicCatalogOk() ? 'psionic' : null;
+  return WEAPON_KEYS[g - 1] ?? null;
 }
 
 /** WPN rail copy. Names and ammo stay textContent; HUD never writes world keys. */
@@ -209,6 +223,10 @@ export function weaponHudLabel(ctx) {
     const ammo = ctx.world.missileAmmo;
     const n = Number.isInteger(ammo) && ammo >= 0 ? ammo : 0;
     return '4 · ' + wName + ' · ' + n;
+  }
+  if (g === 5) {
+    if (!wKey || !canFirePsionic(ctx)) return '5 · —';
+    return '5 · ' + (WEAPONS.psionic.name || '—');
   }
   const wName = wKey === 'mining'
     ? miningLaserFor(ctx.world.miningLaser).name
@@ -229,6 +247,14 @@ function el(tag, className, parent, text) {
   if (text !== undefined) node.textContent = text;
   parent.appendChild(node);
   return node;
+}
+
+/** Authored CLOS string. Recede always ASCII +; zero has no sign and no «/». */
+function formatClosRate(along) {
+  const n = Math.round(along);
+  if (!Number.isFinite(n) || n === 0) return '0 u/s';
+  if (n > 0) return '+' + n + ' u/s';
+  return n + ' u/s';
 }
 
 /** Labeled horizontal bar; returns { row, fill, set(pct) } with change caching. */
@@ -551,11 +577,13 @@ function toastForEvent(e, ctx, mem) {
     }
     case 'marketShift':
       return { text: '› Prices are moving.', cls: 'comm' };
-    case 'npcFire':
-      if (e.weapon !== 'missile' || e.target !== 'player') return null;
-      if ((ctx.elapsed ?? 0) - (mem.lastIncomingDartAt ?? -1e9) < DART_TOAST_GAP) return null;
-      mem.lastIncomingDartAt = ctx.elapsed ?? 0;
-      return { text: INCOMING_DART_TOAST, cls: 'warn' };
+    case 'npcFire': {
+      const t = npcFireToast(e, ctx, mem);
+      if (!t) return null;
+      if (t.text === INCOMING_DART_TOAST) return { text: INCOMING_DART_TOAST, cls: 'warn' };
+      if (t.text === INCOMING_FIRE_TOAST) return { text: INCOMING_FIRE_TOAST, cls: 'warn' };
+      return null;
+    }
     case 'sunHeat':
       return { text: '▲ STAR HEAT — turn away.', cls: 'warn' };
     case 'sunKill':
@@ -696,10 +724,33 @@ export function initHud(ctx) {
   const tName = el('div', 'rw-target-name', bracketInfo);
   const tMeta = el('div', 'rw-target-meta', bracketInfo);
   const tResolve = el('div', 'rw-target-resolve', bracketInfo);
+  const amRockBtn = el('button', 'rw-automine-rock is-hidden', bracketInfo, 'Automine');
+  amRockBtn.type = 'button';
+  amRockBtn.setAttribute('aria-label', 'Automine');
+  amRockBtn.addEventListener('keydown', guardAutomineSpace);
+  amRockBtn.addEventListener('click', () => {
+    if (ctx.automine && ctx.automine.engaged) {
+      disengageAutomine(ctx, 'cancel');
+      return;
+    }
+    const token = tryEngageAutomine(ctx);
+    if (!token) {
+      ctx.input.weaponGroup = 3;
+    } else {
+      const line = amLine(token);
+      if (line) ctx.emit('commLine', { text: line });
+    }
+  });
   const lead = el('div', 'rw-lead is-hidden', root);
   el('div', 'rw-lead-ring', lead);
   el('div', 'rw-lead-label', lead, 'LEAD');
   const edgeArrow = el('div', 'rw-edge-arrow is-hidden', root);
+  edgeArrow.setAttribute('aria-hidden', 'true');
+  const gateCue = el('div', 'rw-nav-gate-cue is-hidden', root);
+  gateCue.setAttribute('aria-hidden', 'true');
+  el('span', 'rw-nav-gate-cue-tick rw-nav-gate-cue-tick-a', gateCue);
+  el('span', 'rw-nav-gate-cue-tick rw-nav-gate-cue-tick-b', gateCue);
+  el('span', 'rw-nav-gate-cue-notch', gateCue);
 
   // ---------- wave 15: charted landmark markers (keeper chart marks) ----------
   // One slot per possible mark: pool sized to the largest authored landmark
@@ -807,11 +858,15 @@ export function initHud(ctx) {
   const tgtFacing = makeFacing(tgtRail);
   const tgtScreen = makeBar(tgtRail, 'SCREEN', 'rw-screen');
   const tgtShell = makeBar(tgtRail, 'SHELL', 'rw-shell');
+  const tgtEngine = makeBar(tgtRail, 'ENGINE', 'rw-engine-tgt');
   const tgtHull = makeHull(tgtRail);
   const tgtSpeed = makeSpeed(tgtRail);
   const tgtDistRow = el('div', 'rw-meter', tgtRail);
   el('div', 'rw-label', tgtDistRow, 'DIST');
   const tgtDistVal = el('div', 'rw-value rw-combat-dist', tgtDistRow, '—');
+  const tgtClosRow = el('div', 'rw-meter', tgtRail);
+  el('div', 'rw-label', tgtClosRow, 'CLOS');
+  const tgtClosVal = el('div', 'rw-value rw-combat-clos', tgtClosRow, '—');
 
   const selfSize = { width: 168, height: 120 };
   const tgtSize = { width: 168, height: 120 };
@@ -864,6 +919,8 @@ export function initHud(ctx) {
   const weaponStrain = el('div', 'rw-value', weaponStrainRow, '0%');
 
   const sideCol = el('div', 'rw-side-col', bottom);
+  const powerPanel = el('section', 'rw-panel rw-power-panel rw-aux', sideCol);
+  const powerBar = makeBar(powerPanel, 'PWR', 'rw-power');
   const bio = el('section', 'rw-panel rw-bio rw-fade', sideCol);
   el('div', 'rw-panel-title rw-bio-title', bio, 'Bio');
   const moodRow = el('div', 'rw-meter rw-mood', bio);
@@ -874,6 +931,26 @@ export function initHud(ctx) {
   const echoesRow = el('div', 'rw-meter rw-echoes', bio);
   el('div', 'rw-label', echoesRow, 'ECHOES');
   const echoesValue = el('div', 'rw-value', echoesRow, '0');
+
+  const navReadout = el('section', 'rw-panel rw-nav-readout rw-aux is-hidden', sideCol);
+  navReadout.setAttribute('aria-live', 'off');
+  navReadout.setAttribute('aria-atomic', 'false');
+  const navLive = el('div', 'rw-nav-readout-live', navReadout);
+  navLive.setAttribute('role', 'status');
+  navLive.setAttribute('aria-live', 'polite');
+  const navNextRow = el('div', 'rw-meter', navLive);
+  el('div', 'rw-label', navNextRow, 'NEXT');
+  const navNextVal = el('div', 'rw-value', navNextRow, '—');
+  const navDestRow = el('div', 'rw-meter', navLive);
+  el('div', 'rw-label', navDestRow, 'DEST');
+  const navDestVal = el('div', 'rw-value', navDestRow, '—');
+  const navJumpsRow = el('div', 'rw-meter', navLive);
+  el('div', 'rw-label', navJumpsRow, 'JUMPS');
+  const navJumpsVal = el('div', 'rw-value', navJumpsRow, '—');
+  const navStatusVal = el('div', 'rw-nav-readout-status', navLive, '');
+  const navDistRow = el('div', 'rw-meter rw-nav-readout-dist', navReadout);
+  el('div', 'rw-label', navDistRow, 'GATE');
+  const navDistVal = el('div', 'rw-value', navDistRow, '—');
 
   const posPanel = el('section', 'rw-panel rw-pos rw-fade', sideCol);
   el('div', 'rw-label', posPanel, 'POS');
@@ -914,6 +991,26 @@ export function initHud(ctx) {
     controlsToggle.textContent = controlsCollapsed ? 'CONTROLS ▸' : 'CONTROLS ▾';
   });
 
+  const chipStack = el('div', 'rw-chip-stack', root);
+  const apChip = el('div', 'rw-autopilot is-hidden', chipStack);
+  const apChipDest = el('span', 'rw-autopilot-dest', apChip, '');
+  const apChipNext = el('span', 'rw-autopilot-next', apChip, '');
+  const apChipRem = el('span', 'rw-autopilot-rem', apChip, '');
+  const apChipCancel = el('button', 'rw-autopilot-cancel', apChip, 'Cancel');
+  apChipCancel.type = 'button';
+  apChipCancel.setAttribute('aria-label', 'Cancel autopilot');
+  apChipCancel.addEventListener('keydown', guardAutopilotSpace);
+  apChipCancel.addEventListener('click', () => disengage(ctx, 'cancel'));
+
+  const amChip = el('div', 'rw-automine is-hidden', chipStack);
+  el('span', 'rw-automine-label', amChip, 'AUTOMINE');
+  const amChipState = el('span', 'rw-automine-state', amChip, 'APPROACH');
+  const amChipCancel = el('button', 'rw-automine-cancel', amChip, 'Cancel');
+  amChipCancel.type = 'button';
+  amChipCancel.setAttribute('aria-label', 'Cancel automine');
+  amChipCancel.addEventListener('keydown', guardAutomineSpace);
+  amChipCancel.addEventListener('click', () => disengageAutomine(ctx, 'cancel'));
+
   // ---------- scratch (no per-frame allocation) ----------
   const proj = new THREE.Vector3(); // projected target NDC
   const leadProj = new THREE.Vector3(); // projected lead point
@@ -929,9 +1026,20 @@ export function initHud(ctx) {
   const contactRight = new THREE.Vector3();
   const contactVel = new THREE.Vector3();
   const chartProj = new THREE.Vector3(); // charted landmark world→NDC (wave 15)
+  const navProj = new THREE.Vector3();
+  const navGuide = initNavGuidance(ctx);
   let lastTargetRef = null;
   let targetDistNow = 0;
   let targetSpeedNow = 0;
+  let targetClosNow = 0;
+  let haveTargetVel = false;
+  let navDistNow = 0;
+  let navHavePos = false;
+  let navLastNext = '';
+  let navLastDest = '';
+  let navReroute = false;
+  let navRerouteSig = null;
+  let navArrivedWritten = false;
 
   // ---------- change-detection cache ----------
   const last = {
@@ -942,7 +1050,7 @@ export function initHud(ctx) {
     burner: '', drift: '', driftActive: null,
     burnerPct: -1, driftPct: -1,
     weapon: '', weaponStrain: '',
-    targetRail: null, railName: '', railDist: -1, inRange: null,
+    targetRail: null, railName: '', railDist: -1, railClos: '', railEnginePart: null, inRange: null,
     credits: -1, fear: -1, cargo: '',
     mood: '', echoes: -1, combat: null, contactsShown: null,
     prompt: '',
@@ -953,8 +1061,18 @@ export function initHud(ctx) {
     leadX: 0, leadY: 0, selfHairOff: true, tgtHairOff: true,
     bioPeriod: 4, textScale: ctx.settings?.textScale ?? 1,
     matchLamp: null, hullBand: '',
+    navShown: null, cueShown: null, cueX: -1, cueY: -1, cueAng: NaN,
+    navNext: '', navDest: '', navJumps: '', navStatus: '', navDist: '',
+    navNextRow: null, navJumpsRow: null, navDistRow: null,
+    apShown: null, apDest: '', apNext: '', apRem: '',
+    amShown: null, amState: '', amRockShown: null, amRockLabel: '', amRockDim: null,
   };
-  const mem = { lastFear: Math.round(ctx.world.fear ?? 0), frameLines: [], lastIncomingDartAt: -1e9 };
+  const mem = {
+    lastFear: Math.round(ctx.world.fear ?? 0),
+    frameLines: [],
+    lastIncomingDartAt: -1e9,
+    lastIncomingFireAt: -1e9,
+  };
 
   {
     const p0 = ctx.player;
@@ -970,6 +1088,21 @@ export function initHud(ctx) {
     if (ctx.settings && ctx.settings.reducedMotion) return;
     if (hudFamily(ctx) !== family) return;
     ctx.emit(type, data);
+  }
+
+  function considerNavEvent(ev) {
+    if (!ev) return;
+    if (ev.type !== 'systemLoaded' && ev.type !== 'navRoute') return;
+    const info = readNavGuidance(ctx);
+    if (info.kind !== 'plotted') {
+      navReroute = false;
+      navRerouteSig = null;
+      return;
+    }
+    if (navLastDest && info.destId === navLastDest && info.nextId && info.nextId !== navLastNext) {
+      navReroute = true;
+      navRerouteSig = null;
+    }
   }
 
   let textAccum = TEXT_UPDATE_INTERVAL; // refresh text on first frame
@@ -1012,6 +1145,7 @@ export function initHud(ctx) {
       const evs = ctx.events;
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
+        considerNavEvent(ev);
         if (ev.type === 'playerHit') {
           selfHitFlashUntil = ctx.elapsed + 0.4;
           selfHitFlashAft = !!ev.fromAft;
@@ -1034,6 +1168,7 @@ export function initHud(ctx) {
       const prevEvs = ctx.lastEvents;
       for (let i = 0; i < prevEvs.length; i++) {
         const e = prevEvs[i];
+        considerNavEvent(e);
         if (e.type !== 'systemLoaded') continue;
         const def = SYSTEMS[e.to];
         const fac = def && FACTIONS[def.faction];
@@ -1106,6 +1241,9 @@ export function initHud(ctx) {
         if (!shipTgt) {
           last.railName = '';
           last.railDist = -1;
+          last.railClos = '';
+          last.railEnginePart = null;
+          tgtEngine.row.classList.remove('is-part');
         } else {
           textAccum = TEXT_UPDATE_INTERVAL;
         }
@@ -1116,8 +1254,10 @@ export function initHud(ctx) {
         if (last.leadShown !== false) { last.leadShown = false; lead.classList.add('is-hidden'); }
         if (last.arrowShown !== false) { last.arrowShown = false; edgeArrow.classList.add('is-hidden'); }
         lastTargetRef = null;
+        haveTargetVel = false;
         targetDistNow = 0;
         targetSpeedNow = 0;
+        targetClosNow = 0;
       } else {
         // estimate target velocity from position deltas (works for live ships;
         // asteroids sit still so their pip hides itself)
@@ -1125,17 +1265,26 @@ export function initHud(ctx) {
           lastTargetRef = target;
           lastTargetPos.copy(targetPos);
           targetVel.set(0, 0, 0);
+          haveTargetVel = false;
         } else if (dt > 0) {
           // clamp dt so a hiccup frame can't blow up (or zero out) the estimate
           const vdt = Math.min(dt, 0.1);
           velInst.copy(targetPos).sub(lastTargetPos).divideScalar(vdt);
           targetVel.lerp(velInst, Math.min(1, vdt * 8));
           lastTargetPos.copy(targetPos);
+          haveTargetVel = true;
         }
 
         const dist = fromPos.distanceTo(targetPos);
         targetDistNow = dist;
         targetSpeedNow = shipTgt ? targetVel.length() : 0;
+        const shipVel = ctx.ship.velocity;
+        if (shipTgt && shipVel && haveTargetVel) {
+          relVel.copy(targetVel).sub(shipVel);
+          targetClosNow = losCloseRate(fromPos, targetPos, relVel);
+        } else {
+          targetClosNow = 0;
+        }
         proj.copy(targetPos).project(cam);
         let ndcX = proj.x, ndcY = proj.y;
         const behind = proj.z > 1;
@@ -1157,7 +1306,8 @@ export function initHud(ctx) {
           // speed; the pip is advisory because the shot then turns.
           const wKeyLead = hudWeaponKey(ctx);
           const wLead = WEAPONS[wKeyLead];
-          const wSpeed = wKeyLead === 'mining' ? 0 : (wLead?.speed ?? 0);
+          let wSpeed = wKeyLead === 'mining' ? 0 : (wLead?.speed ?? 0);
+          if (wKeyLead === 'psionic' && !canFirePsionic(ctx)) wSpeed = 0;
           relVel.copy(targetVel).sub(ctx.ship.velocity);
           const showLead = shipTgt && wSpeed > 0;
           if (showLead) {
@@ -1182,18 +1332,23 @@ export function initHud(ctx) {
           // off-screen: edge arrow pointing toward the target
           if (last.bracketShown !== false) { last.bracketShown = false; bracket.classList.add('is-hidden'); }
           if (last.leadShown !== false) { last.leadShown = false; lead.classList.add('is-hidden'); }
-          if (last.arrowShown !== true) { last.arrowShown = true; edgeArrow.classList.remove('is-hidden'); }
-          const dirX = ndcX * cx;
-          const dirY = -ndcY * cy;
-          const ax = Math.abs(dirX), ay = Math.abs(dirY);
-          let s = Infinity;
-          if (ax > 1e-4) s = (cx - EDGE_MARGIN) / ax;
-          if (ay > 1e-4) s = Math.min(s, (cy - EDGE_MARGIN) / ay);
-          if (!Number.isFinite(s)) s = 1;
-          const px = cx + dirX * s;
-          const py = cy + dirY * s;
-          const ang = Math.atan2(dirY, dirX) + Math.PI / 2; // glyph points up at 0
-          edgeArrow.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) rotate(' + ang + 'rad)';
+          const lockPark = !!(ctx.flags.docked || (ctx.gate && ctx.gate.jumping));
+          if (lockPark) {
+            if (last.arrowShown !== false) { last.arrowShown = false; edgeArrow.classList.add('is-hidden'); }
+          } else {
+            if (last.arrowShown !== true) { last.arrowShown = true; edgeArrow.classList.remove('is-hidden'); }
+            const dirX = ndcX * cx;
+            const dirY = -ndcY * cy;
+            const ax = Math.abs(dirX), ay = Math.abs(dirY);
+            let s = Infinity;
+            if (ax > 1e-4) s = (cx - EDGE_MARGIN) / ax;
+            if (ay > 1e-4) s = Math.min(s, (cy - EDGE_MARGIN) / ay);
+            if (!Number.isFinite(s)) s = 1;
+            const px = cx + dirX * s;
+            const py = cy + dirY * s;
+            const ang = Math.atan2(dirY, dirX) + Math.PI / 2; // glyph points up at 0
+            edgeArrow.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) rotate(' + ang + 'rad)';
+          }
         }
       }
 
@@ -1219,9 +1374,10 @@ export function initHud(ctx) {
       // Range pop (Wave D): selected weapon envelope. Mining uses the head.
       {
         const wKeyR = hudWeaponKey(ctx);
-        const range = wKeyR === 'mining'
+        let range = wKeyR === 'mining'
           ? miningLaserFor(ctx.world.miningLaser).range
           : (WEAPONS[wKeyR]?.range ?? 0);
+        if (wKeyR === 'psionic' && !canFirePsionic(ctx)) range = 0;
         const inRange = !!(shipTgt && range > 0 && targetDistNow <= range);
         if (inRange !== last.inRange) {
           last.inRange = inRange;
@@ -1253,10 +1409,10 @@ export function initHud(ctx) {
       }
 
       // Wave F contacts: scanner-gated bottom arc. Core ships keep DIST /
-      // edge / lead / MATCH. Hide while docked. No reticle ring.
+      // edge / lead / MATCH. Hide while docked or jumping. No reticle ring.
       {
-        const scanner = ctx.world.scanner ?? 0;
-        const showArc = scanner >= 1 && !ctx.flags.docked && !!shipObj;
+        const scanner = contactsScanner(ctx.world.scanner);
+        const showArc = contactsGate(scanner, ctx.flags.docked, jumping) && !!shipObj;
         if (showArc !== last.contactsShown) {
           last.contactsShown = showArc;
           contacts.classList.toggle('is-hidden', !showArc);
@@ -1448,6 +1604,113 @@ export function initHud(ctx) {
         s.lmId = '';
       }
 
+      // NAV-02: re-read world.nav every frame (restore has no systemLoaded).
+      const navInfo = readNavGuidance(ctx);
+      const navPark = !!(ctx.flags.docked || (ctx.gate && ctx.gate.jumping));
+      if (navInfo.kind !== 'arrived') navArrivedWritten = false;
+      if (navInfo.kind === 'omit') {
+        navLastNext = '';
+        navLastDest = '';
+      }
+      const navReadoutOn = !navPark && (
+        navInfo.kind === 'plotted'
+        || navInfo.kind === 'blocked'
+        || navInfo.kind === 'dest-only'
+        || (navInfo.kind === 'arrived' && !navArrivedWritten)
+      );
+      if (navReadoutOn !== last.navShown) {
+        last.navShown = navReadoutOn;
+        navReadout.classList.toggle('is-hidden', !navReadoutOn);
+      }
+      const navMark = !navPark && navInfo.kind === 'plotted' && !!navInfo.pos;
+      navHavePos = navMark;
+      if (navMark) {
+        navProj.set(navInfo.pos.x, navInfo.pos.y, navInfo.pos.z);
+        navDistNow = fromPos.distanceTo(navProj);
+      } else {
+        navDistNow = 0;
+      }
+      navGuide.update(navInfo, navMark, !!(ctx.settings && ctx.settings.reducedMotion), dt);
+
+      if (!navMark) {
+        if (last.cueShown !== false) {
+          last.cueShown = false;
+          gateCue.classList.add('is-hidden');
+        }
+      } else {
+        navProj.project(cam);
+        let ndx = navProj.x, ndy = navProj.y;
+        const behindNav = navProj.z > 1;
+        if (behindNav) { ndx = -ndx; ndy = -ndy; }
+        const navOnGlass = !behindNav && ndx >= -0.95 && ndx <= 0.95 && ndy >= -0.92 && ndy <= 0.92;
+        if (navOnGlass) {
+          if (last.cueShown !== false) {
+            last.cueShown = false;
+            gateCue.classList.add('is-hidden');
+          }
+        } else {
+          if (last.cueShown !== true) {
+            last.cueShown = true;
+            gateCue.classList.remove('is-hidden');
+          }
+          const dirX = ndx * cx;
+          const dirY = -ndy * cy;
+          const ax = Math.abs(dirX), ay = Math.abs(dirY);
+          let s = Infinity;
+          if (ax > 1e-4) s = (cx - EDGE_MARGIN) / ax;
+          if (ay > 1e-4) s = Math.min(s, (cy - EDGE_MARGIN) / ay);
+          if (!Number.isFinite(s)) s = 1;
+          const px = cx + dirX * s;
+          const py = cy + dirY * s;
+          const ang = Math.atan2(dirY, dirX) + Math.PI / 2;
+          if (px !== last.cueX || py !== last.cueY || ang !== last.cueAng) {
+            last.cueX = px; last.cueY = py; last.cueAng = ang;
+            gateCue.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) rotate(' + ang + 'rad)';
+          }
+        }
+      }
+
+      const apOnFrame = !!(ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true);
+      if (apOnFrame !== last.apShown) {
+        last.apShown = apOnFrame;
+        apChip.classList.toggle('is-hidden', !apOnFrame);
+      }
+
+      const amOnFrame = !!(ctx.automine && ctx.automine.engaged);
+      if (amOnFrame !== last.amShown) {
+        last.amShown = amOnFrame;
+        amChip.classList.toggle('is-hidden', !amOnFrame);
+      }
+      if (amOnFrame) {
+        const amState = ctx.automine.wantMine ? 'CUTTING' : 'APPROACH';
+        if (amState !== last.amState) {
+          last.amState = amState;
+          amChipState.textContent = amState;
+        }
+      }
+
+      const amRockOn = !!(last.bracketShown && rockOk);
+      if (amRockOn !== last.amRockShown) {
+        last.amRockShown = amRockOn;
+        amRockBtn.classList.toggle('is-hidden', !amRockOn);
+      }
+      if (amRockOn) {
+        const amEngaged = !!(ctx.automine && ctx.automine.engaged);
+        const rockLabel = amEngaged ? 'Cancel automine' : 'Automine';
+        if (rockLabel !== last.amRockLabel) {
+          last.amRockLabel = rockLabel;
+          amRockBtn.textContent = rockLabel;
+          amRockBtn.setAttribute('aria-label', rockLabel);
+        }
+        const rockDim = !amEngaged && !!amRefuseToken(ctx);
+        if (rockDim !== last.amRockDim) {
+          last.amRockDim = rockDim;
+          amRockBtn.classList.toggle('is-dim', rockDim);
+          if (rockDim) amRockBtn.setAttribute('aria-disabled', 'true');
+          else amRockBtn.removeAttribute('aria-disabled');
+        }
+      }
+
       // ---------- throttled text / bars (~5 Hz, write-on-change) ----------
       textAccum += dt;
       if (textAccum < TEXT_UPDATE_INTERVAL) return;
@@ -1526,6 +1789,9 @@ export function initHud(ctx) {
           }
         }
         strainBar.set((player.heat / HEAT.max) * 100);
+        const pwrMax = POWER.max > 0 ? POWER.max : 1;
+        const pwr = Number.isFinite(player.power) ? player.power : 0;
+        powerBar.set((pwr / pwrMax) * 100);
         const oh = !!player.overheated;
         if (oh !== last.strainFlag) {
           last.strainFlag = oh;
@@ -1635,7 +1901,59 @@ export function initHud(ctx) {
         }
       }
 
-      // target bracket text: name/faction, distance, resolve band (+numeric
+      {
+        const plotted = navInfo.kind === 'plotted';
+        const nextOn = plotted;
+        const jumpsOn = plotted && navInfo.remaining !== null;
+        const distOn = plotted && navHavePos;
+        if (nextOn !== last.navNextRow) {
+          last.navNextRow = nextOn;
+          navNextRow.classList.toggle('is-hidden', !nextOn);
+        }
+        if (jumpsOn !== last.navJumpsRow) {
+          last.navJumpsRow = jumpsOn;
+          navJumpsRow.classList.toggle('is-hidden', !jumpsOn);
+        }
+        if (distOn !== last.navDistRow) {
+          last.navDistRow = distOn;
+          navDistRow.classList.toggle('is-hidden', !distOn);
+        }
+        const nextText = nextOn ? (navInfo.nextName || '—') : '';
+        const destText = navReadoutOn ? (navInfo.destName || '—') : '';
+        const jumpsText = jumpsOn ? String(navInfo.remaining) : '';
+        let statusText = '';
+        if (navInfo.kind === 'blocked') statusText = 'NO ROUTE';
+        else if (navInfo.kind === 'arrived' && navReadoutOn) statusText = 'ARRIVED';
+        const sig = nextText + '|' + destText + '|' + jumpsText;
+        if (navReroute) {
+          if (navRerouteSig === sig) navReroute = false;
+          else navRerouteSig = sig;
+        }
+        if (navReroute && plotted) statusText = 'REROUTE';
+        if (apOnFrame) {
+          const bag = ctx.world.nav;
+          const dName = apDestName(bag) || '—';
+          const nName = apNextName(bag) || '—';
+          const rem = bag && Number.isFinite(bag.remaining) ? String(Math.trunc(bag.remaining)) : '—';
+          if (dName !== last.apDest) { last.apDest = dName; apChipDest.textContent = dName; }
+          if (nName !== last.apNext) { last.apNext = nName; apChipNext.textContent = nName; }
+          if (rem !== last.apRem) { last.apRem = rem; apChipRem.textContent = rem; }
+        }
+
+        if (nextText !== last.navNext) { last.navNext = nextText; navNextVal.textContent = nextText || '—'; }
+        if (destText !== last.navDest) { last.navDest = destText; navDestVal.textContent = destText || '—'; }
+        if (jumpsText !== last.navJumps) { last.navJumps = jumpsText; navJumpsVal.textContent = jumpsText || '—'; }
+        if (statusText !== last.navStatus) { last.navStatus = statusText; navStatusVal.textContent = statusText; }
+        const distText = distOn ? formatNavDist(navDistNow) : '';
+        if (distText !== last.navDist) { last.navDist = distText; navDistVal.textContent = distText || '—'; }
+        if (navReadoutOn && plotted) {
+          navLastNext = navInfo.nextId;
+          navLastDest = navInfo.destId;
+        }
+        if (navInfo.kind === 'arrived' && navReadoutOn) navArrivedWritten = true;
+      }
+
+      // target bracket text: name/faction, distance, resolve band (+numeric)
       // with a Wolfeye scanner, §7.4); band also changes bracket shape (§7.3)
       if (last.bracketShown && target && lockOk) {
         const isShip = isShipLock;
@@ -1741,10 +2059,22 @@ export function initHud(ctx) {
           last.railDist = distU;
           tgtDistVal.textContent = distU + ' u';
         }
+        const closText = haveTargetVel ? formatClosRate(targetClosNow) : '0 u/s';
+        if (closText !== last.railClos) {
+          last.railClos = closText;
+          tgtClosVal.textContent = closText;
+          measureRails();
+        }
         tgtScreen.set(st.screenMax > 0 ? (st.screen / st.screenMax) * 100 : 0);
         tgtShell.set(st.shellMax > 0 ? (st.shell / st.shellMax) * 100 : 0);
+        tgtEngine.set(st.engineMax > 0 ? (st.engine / st.engineMax) * 100 : 0);
         tgtHull.set(st.hullMax > 0 ? st.hull / st.hullMax : 0);
         tgtSpeed.set(targetSpeedNow);
+        const engPart = healSubsysPart(ctx.targets.part) === SUBSYS_PART_ENGINE;
+        if (engPart !== last.railEnginePart) {
+          last.railEnginePart = engPart;
+          tgtEngine.row.classList.toggle('is-part', engPart);
+        }
       }
 
       // context prompt (§13.4): one verb, explicit focus, priority order.

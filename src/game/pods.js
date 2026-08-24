@@ -9,6 +9,8 @@ import { copyDataCargoEntry, dataRowsMatch, isDataCargo } from './data-trade.js'
  *
  * Pods drift, glitter, and auto-scoop within U.SCOOP_RANGE of the player ship
  * (doc §4.1 "scoop" verb made physical; cargo capacity enforced).
+ * Ore pods may set `home: true`; those steer at the ship each frame so belt
+ * motion does not carry crumbs away from the hull.
  *
  * Wave 51: spawnPod takes an optional 5th `tint` (hex int) so mined ore reads
  * as what it is while it drifts — asteroids.js passes ORE_TYPES[oreKey].podTint.
@@ -29,6 +31,11 @@ import { copyDataCargoEntry, dataRowsMatch, isDataCargo } from './data-trade.js'
  */
 
 const _toPlayer = new THREE.Vector3();
+const _shipLast = new THREE.Vector3();
+const _shipDelta = new THREE.Vector3();
+const HOME_SPEED = 32;
+const HOME_TELEPORT = 20;
+let shipLastOk = false;
 let podGeo = null;
 let podMaps = null;
 
@@ -588,9 +595,19 @@ export function initPods(ctx) {
     update(dt) {
       spin += dt;
       const playerObj = ctx.ship.object;
+      _shipDelta.set(0, 0, 0);
+      if (playerObj && shipLastOk) {
+        _shipDelta.subVectors(playerObj.position, _shipLast);
+        if (_shipDelta.lengthSq() > HOME_TELEPORT * HOME_TELEPORT) _shipDelta.set(0, 0, 0);
+      }
+      if (playerObj) {
+        _shipLast.copy(playerObj.position);
+        shipLastOk = true;
+      } else {
+        shipLastOk = false;
+      }
       for (let i = ctx.pods.length - 1; i >= 0; i--) {
         const pod = ctx.pods[i];
-        pod.mesh.position.addScaledVector(pod.velocity, dt);
         pod.mesh.rotation.set(spin * 0.7 + i, spin * 1.1 + i * 2, 0);
         pod.mesh.material.emissiveIntensity = 0.8 + 0.4 * Math.sin(spin * 3 + i); // glitter
 
@@ -601,10 +618,29 @@ export function initPods(ctx) {
         }
 
         // Auto-scoop: magnet in, collect at contact. Respects cargo capacity.
+        // Homing ore flies at the live hull, not along the rock's orbit.
         if (playerObj && !ctx.flags.docked) {
           _toPlayer.subVectors(playerObj.position, pod.mesh.position);
-          const dist = _toPlayer.length();
-          if (dist < U.SCOOP_RANGE * 3) pod.mesh.position.addScaledVector(_toPlayer.normalize(), dt * 15);
+          let dist = _toPlayer.length();
+          if (pod.home === true) {
+            pod.mesh.position.add(_shipDelta);
+            _toPlayer.subVectors(playerObj.position, pod.mesh.position);
+            dist = _toPlayer.length();
+            if (dist > 1e-4) {
+              const step = Math.min(HOME_SPEED * dt, dist);
+              pod.mesh.position.addScaledVector(_toPlayer, step / dist);
+              dist -= step;
+            }
+          } else {
+            pod.mesh.position.addScaledVector(pod.velocity, dt);
+            _toPlayer.subVectors(playerObj.position, pod.mesh.position);
+            dist = _toPlayer.length();
+            if (dist < U.SCOOP_RANGE * 3 && dist > 1e-4) {
+              pod.mesh.position.addScaledVector(_toPlayer.normalize(), dt * 15);
+              _toPlayer.subVectors(playerObj.position, pod.mesh.position);
+              dist = _toPlayer.length();
+            }
+          }
           if (dist < U.SCOOP_RANGE) {
             const used = ctx.cargo.reduce((n, c) => n + c.units, 0);
             const incoming = pod.contents.reduce((n, c) => n + c.units, 0);
@@ -615,6 +651,8 @@ export function initPods(ctx) {
               ctx.pods.splice(i, 1);
             }
           }
+        } else {
+          pod.mesh.position.addScaledVector(pod.velocity, dt);
         }
       }
     },

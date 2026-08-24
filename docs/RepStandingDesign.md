@@ -5,7 +5,7 @@
 | **Title** | RIMWARD REP faction reputation and law |
 | **Author** | Wave 73 REP integrator |
 | **Date** | 2026-08-20 |
-| **Status** | Implemented. Wave 83: restitution desk Digit 9 (`RESTITUTION_UU` 1200). Police leave still deferred. |
+| **Status** | Implemented. Wave 83: restitution desk Digit 9 (`RESTITUTION_UU` 1200). Wave 95: police leave (hostile band `< 0` and `> −10`, 300 u, once per visit). |
 | **Wave** | 73 — design. 74 — first impl. |
 | **Owner request** | REP design brief. Do not ship standing UI, police, or `src/` in this wave. |
 | **Merge law** | [`out/w73/rep/shared-contract.md`](../out/w73/rep/shared-contract.md). If this brief and that file conflict, the contract wins. |

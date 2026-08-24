@@ -1,0 +1,28 @@
+{
+  "title": false,
+  "chart": false,
+  "apBtn": "Autopilot",
+  "sys": "freehold",
+  "jumping": false,
+  "dest": null,
+  "inZone": false,
+  "nearTo": null,
+  "wantJump": false,
+  "pos": {
+    "x": 0,
+    "y": 30,
+    "z": 799.1438935179493
+  },
+  "ring": {
+    "visible": false,
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "overlay": {
+    "display": "",
+    "text": "JUMP",
+    "opacity": ""
+  },
+  "hud": "✦ A BERTH, A LIVING SHIP, AND NO STORY YET.\nV\nLOCK\nFORE\nAFT\nSCREEN\nSHELL\nHULL\nSPD\n9u/s\nWPN\n1 · Energy cannon\nPLANT\nSTRAIN\nENGINE\nOK\nFLIGHT\nTHR\nBURN\nREADY\nDRIFT\nREADY\nHEAT\nSTRAIN\n0%\nBIO\nSERENE\nHUNGER\nWOUNDS\nECHOES\n0\nPOS\nF"
+}

@@ -1,0 +1,8 @@
+beautiful     light      verts= 31644 size=8.5(Z) len/beam=1.77 ht/len=0.26 beam/len=0.57 ctr x=0.0 y=0.0 z=-0.0 cover=98.3% fit:w=24%,h=24%,l=34%
+beautiful     ace        verts= 28354 size=8.8(Z) len/beam=2.84 ht/len=0.16 beam/len=0.35 ctr x=0.0 y=0.0 z=0.0 cover=100.0% fit:w=24%,h=24%,l=34%
+beautiful     cutter     verts= 40704 size=11.0(Z) len/beam=1.58 ht/len=0.40 beam/len=0.63 ctr x=0.0 y=0.0 z=-0.1 cover=100.0% fit:w=24%,h=24%,l=34%
+beautiful     heavy      verts= 36224 size=15.9(Z) len/beam=1.21 ht/len=0.51 beam/len=0.83 ctr x=0.0 y=0.0 z=-0.1 cover=97.8% fit:w=24%,h=24%,l=34%
+beautiful     frigate    verts=103200 size=29.9(Z) len/beam=2.39 ht/len=0.35 beam/len=0.42 ctr x=0.0 y=0.0 z=-0.4 cover=100.0% fit:w=24%,h=24%,l=34%
+beautiful     freighter  verts= 58880 size=78.9(Z) len/beam=2.79 ht/len=0.17 beam/len=0.36 ctr x=0.0 y=0.0 z=-0.4 cover=100.0% fit:w=24%,h=24%,l=34%
+beautiful class order OK: light=8.5 < ace=8.8 < cutter=11.0 < heavy=15.9 < frigate=29.9 < freighter=78.9
+measure-ships: ALL PASS

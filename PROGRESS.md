@@ -3746,6 +3746,556 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
   `out/w84/`.
   No `src/` edits.
+- Wave 85 (2026-08-21): first impl of Wave 84 NAV briefs
+  (orchestrated; persist then chart serial, then NAV-02
+  parallel with NAV-03 stub, then NAV-03 flight).
+  One `WORLD_FIELDS` key `nav`. Sanitize drops proto /
+  hopIndex / `active`. Restore slices mid-route. Off-path
+  current → `blocked` keep dest. `autopilot` stuffed true
+  → false. BFS walks `gates[].to` and one-way `hub.routes`.
+  Chart click plots; hit disc ≥ 24 CSS px; hub rings
+  `pointer-events: none`; plot class `.rw-galaxy-plot`.
+  KeyM stays. LMB does not fire while `flags.chartOpen`.
+  Recalc on `systemLoaded`. Guidance: readout above POS
+  (180 px, hide docked/jumping); `.rw-nav-gate-cue`; 3D
+  ring empty raycast. Autopilot: `autopilot.js` commands,
+  `ship.js` mesh; `gate.js` sole `jumpRequested`; MATCH
+  refuse on chart live region; Cancel / WASD keep dest.
+  OPEN: police leave; gift; pirate seed; BIO-03 bake;
+  Unknowables dock; BIO-04; power ledger.
+  `npm run test:boot` still FAIL. WAVE85 persist / chart /
+  guidance / AP probes CLEAN. Known FAILs still WAVE4 fence,
+  WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w85/persist/verify.txt` CLEAN;
+  `out/w85/chart/verify.txt` CLEAN (live Chrome);
+  `out/w85/guide/verify-live.txt` CLEAN;
+  `out/w85/ap-stub/verify.txt` CLEAN;
+  `out/w85/ap/verify-live.txt` CLEAN.
+  Designer: `out/w85/chart/designer-audit.md` CLEAN;
+  `out/w85/guide/designer-audit-recheck.md` CLEAN;
+  `out/w85/ap/designer-audit.md` CLEAN.
+  FILES: `src/game/nav.js`, `src/game/save.js`,
+  `src/game/autopilot.js`, `src/core/ctx.js`,
+  `src/main.js`, `src/systems/galaxychart.js`,
+  `src/systems/controls.js`, `src/systems/hud.js`,
+  `src/systems/nav-guidance.js`, `src/systems/ship.js`,
+  `src/systems/gate.js`, `src/systems/npc.js`,
+  `src/systems/title.js`, `src/systems/modelsbrowser.js`,
+  `src/game/origins.js`, `src/ui/hud.css`,
+  `scripts/boot-test.mjs`, design status lines, wishlist,
+  `PROGRESS.md`, `out/w85/`.
+- Wave 86 (2026-08-21): three design briefs (orchestrated;
+  BIO-01 remaining obtain + BIO-02 class training +
+  BIO-04 psionics parallel, markdown only). No `src/`.
+  BIO-01: gift id `hull_seed_gift`, Sworn ≥ 50, living
+  `light`, price 0, People Confirm papers, hangar cap 8
+  fail-closed, no remount. Pirate seed same persist
+  shape; drop % owner-open (Wave 82). Commodity deferred
+  (no live SKU).
+  BIO-02: `bio.growth` stays scale. Train living
+  `light`/`cutter` → `heavy` at Beautiful Hangar papers.
+  No new class keys. No new Digit. Digit 0 stays
+  Shipyard. Hostile paints `No sale.`; short credits
+  keep Offer. `trainPending` dies on graft chrome paths.
+  Frigate evolution fail-closed. UU owner-open.
+  BIO-04: flight Digit 5 `WEAPONS.psionic`; dock Digit 5
+  stays repair. Living + grafted only. Built non-grafted
+  `5 · —`. Heat only. No power ledger. No aim glass.
+  Unknowables miss. Catalog numbers owner-open.
+  OPEN: police leave; BIO-03 bake; Unknowables dock;
+  power ledger; BIO-01/02/04 impl.
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w86/bio01/verify.txt` CLEAN;
+  `out/w86/bio02/verify.txt` CLEAN then
+  `out/w86/bio02/verify-recheck.txt` CLEAN;
+  `out/w86/bio04/verify.txt` CLEAN.
+  Designer: `out/w86/bio01/designer-audit.md` CLEAN;
+  `out/w86/bio02/designer-audit.md` 2 majors, then
+  `out/w86/bio02/designer-audit-recheck.md` CLEAN;
+  `out/w86/bio04/designer-audit.md` CLEAN.
+  FILES: `docs/Bio01ObtainDesign.md`,
+  `docs/Bio02EvolutionDesign.md`,
+  `docs/Bio04PsionicsDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`, `PROGRESS.md`,
+  `out/w86/`.
+  No `src/` edits.
+- Waves 87–91 (2026-08-22, working tree; not a separate
+  git commit): NAV leftovers after Wave 85 — AP path
+  (`src/game/ap-path.js`), automine (`src/game/automine.js`),
+  AP gate hold, yard GLB preview (`src/systems/yard-preview.js`),
+  living class remount silhouette. Evidence `out/w87/`–
+  `out/w91/`. OPEN items below still stood after those
+  leftovers.
+- Wave 92 (2026-08-22): first impl of Wave 86 BIO briefs
+  plus Unknowables dock design (orchestrated; BIO-01 and
+  BIO-04 parallel, BIO-02 after hangar/station free).
+  BIO-01: Sworn gift `hull_seed_gift` living light, price 0,
+  People Confirm papers, cap 8 refuse, no remount.
+  Pirate `PIRATE_SEED_DROP_RATE` 0.05, hangar row not cargo.
+  BIO-02: Hangar papers train living light/cutter → heavy;
+  debit `yardPrice('heavy')`; cargo keep; envelope
+  burn/cruise; no switchTo. Hostile `No sale.`
+  BIO-04: Digit 5 `WEAPONS.psionic` (12/3/520/420/8,
+  family hex `0xff6ad5`); living or unset hullKind or
+  own-key grafted; built dry `5 · —`; Unknowables miss;
+  unknown group not cannon. Unknowables dock brief:
+  first live site is hush presence `th_veil`, not a
+  generated SYSTEM with a station. Dock stays Wait.
+  OPEN: police leave; BIO-03 bake; Unknowables presence
+  impl; power ledger; living-frigate buy; seed commodity.
+  `npm run test:boot` not used as the gate. Known FAILs
+  still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w92/bio01/probe.mjs` PASS then
+  `out/w92/bio01/verify/pin-recheck.txt` CLEAN;
+  `out/w92/bio02/probe.mjs` PASS then
+  `out/w92/bio02/verify` CDP CLEAN;
+  `out/w92/bio04/boot-pins.mjs` PASS then
+  `out/w92/bio04/verify-recheck/` CLEAN;
+  `out/w92/unk/verify.txt` CLEAN.
+  Designer: `out/w92/bio01/designer-audit.md` CLEAN;
+  `out/w92/bio02/designer-audit.md` CLEAN;
+  `out/w92/bio04/designer-audit.md` CLEAN.
+  FILES: `src/game/bio-seed.js`, `hangar.js`, `psionic.js`,
+  `shipyard.js`, `state.js`, `src/systems/station.js`,
+  `npc.js`, `shipyard-desk.js`, `combat.js`, `controls.js`,
+  `hud.js`, `src/core/ctx.js`, `scripts/boot-test.mjs`,
+  `docs/UnknowablesDockDesign.md`,
+  `docs/OwnerDecisionsWave92.md`, Bio01/02/04 status,
+  wishlist, `PROGRESS.md`, `out/w92/`.
+- Wave 93 (2026-08-23): owner judgement calls
+  (`docs/OwnerDecisionsWave93.md`). Markdown only. No `src/`.
+  Police leave: patrol toast+`commLine` `Leave this space.`
+  when local standing `< 0` and `> −10`, once per visit,
+  300 u; hunt ≤ −10 unchanged. Power ledger / aim-glass
+  **out**. Living frigate buy **omit**. Seed commodity
+  **omit**. Owned living `heavy` → `frigate` train **yes**
+  (`yardPrice('frigate')`, Trusted 25); ace/freighter **no**.
+  Unknowables presence unblocked (`th_veil` / The Veil /
+  `hush` / `anomaly`; visitor hulls off; epic omit; clue
+  count 6). Unknowables dock **Wait**. BIO-03 bake serial
+  open (GLB + GPU).
+  OPEN: police leave impl; BIO-03 bake impl; Unknowables
+  presence impl; BIO-02 frigate-train impl.
+  `npm run test:boot` was not re-run (no `src/`). Known
+  FAILs still WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  FILES: `docs/OwnerDecisionsWave93.md`, Bio01/02,
+  Unknowables, REP briefs, wishlist, `PROGRESS.md`.
+  No `src/` edits.
+- Wave 94 (2026-08-23): owner rejected Wave 93 parks
+  (`docs/OwnerDecisionsWave94.md`) and first impl.
+  Living Beautiful/Unknowables yards sell six classes.
+  Hangar train dest = any other living class
+  (`yardPrice(dest)`). Beautiful Market seed 40000 UU
+  hangar row (`seed_market`), not cargo. POWER pool 100;
+  PWR bar in side column; afterburner + psionic drain;
+  aim glass empty. Unknowables origin `veil` / The Quiet;
+  dedicated station builder; Archive 400/900; chart id
+  `veil`; epic omit; clue count on hush stays 2.
+  OPEN: police leave impl; BIO-03 bake impl.
+  VERIFY: `out/w94/power/probe.mjs` PASS + live HUD CLEAN;
+  `out/w94/bio/probe.mjs` PASS; `out/w94/unk/probe.mjs` PASS.
+  Designer: `out/w94/power/designer-audit.md` CLEAN;
+  `out/w94/bio/designer-audit.md` CLEAN;
+  `out/w94/unk/designer-audit.md` CLEAN.
+  FILES: `src/game/state.js`, `shipyard.js`, `hangar.js`,
+  `bio-seed.js`, `authored-systems.js`, `contacts.js`,
+  `model-catalog.js`, `src/systems/ship.js`, `combat.js`,
+  `hud.js`, `station.js`, `shipyard-desk.js`,
+  `galaxychart.js`, `stations/unknowables.js`,
+  `src/ui/hud.css`, `scripts/boot-test.mjs`,
+  `docs/OwnerDecisionsWave94.md`, `out/w94/`.
+- Wave 95 (2026-08-23): police leave first impl, BIO-03
+  Beautiful look+bake, NAV-04 hover brief.
+  Police: local-system-faction patrols emit one `commLine`
+  `Leave this space.` when standing `< 0` and `> −10`,
+  player inside 300 u of the station, once per
+  `systemLoaded`. Hunt `≤ −10` unchanged. No persist key.
+  BIO-03: six Beautiful NPC classes rebaked (GLB + GPU).
+  Player `makeLivingHull` stays unique. Measure ALL PASS
+  (light 8.0, ace 7.7 inside 15% slack, cutter 10.7,
+  heavy 15.3, frigate 29.0, freighter 83.2).
+  NAV-04: markdown only (`docs/Nav04HoverDesign.md`);
+  reserved strip; no `src/`; no new persist.
+  OPEN: NAV-04 impl (later serial). Boot pins still
+  expect 100 systems (Wave 94 `veil` makes 101) and
+  crash at `lmSeparationOk23` — not a Wave 95 write.
+  VERIFY: `out/w95/police/probe.mjs` PASS; NAV-04 verifier
+  CLEAN; `npm run ships:measure` / `ships:validate` PASS.
+  Designer: police CLEAN; BIO-03 glance sheets pass;
+  Models Browser GLB overlay hang is headless ENV (not a
+  mesh hole). Police live toast was probe-only
+  `[NO BROWSER COVERAGE]`.
+  FILES: `src/game/police-leave.js`, `src/systems/npc.js`,
+  `scripts/ship_builders/beautiful/*.py`,
+  `public/assets/ships/beautiful/**`,
+  `docs/Nav04HoverDesign.md`, `out/w95/`.
+- Wave 96 (2026-08-23): NAV-04 first impl, boot `veil`/101
+  harness heal, BIO-05 remaining brief.
+  NAV-04: `hoverModel` in `src/game/chart-hover.js`; KeyM
+  hit-disc hover; reserved `.rw-galaxy-hover` strip under
+  the SVG; Digit 9 standing; Independent / Unknown /
+  Unknowables / Hollow Reach explicit; click still plots;
+  no `world.nav` write; no persist key; `state.js` unread
+  as write. Boot: `AUTHORED_IDS23` includes `veil`; hush
+  landmark pin includes `th_veil`; galaxy count 101;
+  roster 104 / dockmasters 101; generated stays 94.
+  BIO-05: markdown only (`docs/Bio05AbominationsDesign.md`).
+  Player graft loop frozen DONE (Wave 72 / 82). Remaining
+  NPC grafted traffic and plated tissue overlay wait on
+  an owner line.
+  OPEN: BIO-05 NPC/visual (owner). Known boot FAILs still
+  WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.
+  VERIFY: `out/w96/nav04/probe.mjs` PASS (82 pins) + live
+  KeyM hover CLEAN; `out/w96/boot/probe.mjs` PASS; WAVE23
+  `lmSeparationOk23` no crash (`countOk` 101).
+  Designer: NAV-04 CLEAN; BIO-05 CLEAN.
+  FILES: `src/game/chart-hover.js`,
+  `src/systems/galaxychart.js`, `src/ui/hud.css`,
+  `scripts/boot-test.mjs`, `docs/Nav04HoverDesign.md`,
+  `docs/Bio05AbominationsDesign.md`, `out/w96/`.
+- Wave 97 (2026-08-23): three design-only leftovers.
+  TGT-03 awareness: lock off-screen already uses
+  `.rw-edge-arrow` (distinct from NAV-02
+  `.rw-nav-gate-cue`). Later serial adds toast
+  `Incoming fire.` for cannon-vs-player; keep
+  `Incoming dart.`; no aim-glass gauge.
+  NPC turrets: supersedes NpcMissiles “no NPC auto
+  turret” for a later serial only. Player `auto`
+  stays. Default-off who (proposed heavy/ace/frigate
+  + already-hostile). No fire percent. No `src/`.
+  BIO-05 remaining: owner close
+  (`docs/OwnerDecisionsWave97.md`) — NPC grafted
+  **off**, plated overlay **omit**, hangar badge
+  **omit**, ungraft **forbidden**. Player graft loop
+  stays closed (4000 / −10 / −5 / +5).
+  OPEN: TGT-03 `Incoming fire.` impl; NPC turret
+  impl (owner Q1/Q2). Known boot FAILs still WAVE4
+  fence, WAVE26 ferry/haul, WAVE35 haul.
+  CLOSED by Wave 98: Incoming fire. impl + Q1/Q2 owner.
+  VERIFY: `out/w97/tgt03/verify/notes.md` CLEAN;
+  `out/w97/turrets/verify/notes.md` CLEAN;
+  `out/w97/bio05/verify/notes.md` CLEAN.
+  Designer: TGT-03 CLEAN; turrets CLEAN; BIO-05 CLEAN.
+  FILES: `docs/Tgt03AwarenessDesign.md`,
+  `docs/NpcTurretsDesign.md`,
+  `docs/OwnerDecisionsWave97.md`,
+  `docs/Bio05AbominationsDesign.md`, `out/w97/`.
+  No `src/` edits.
+- Wave 98 (2026-08-23): TGT-03 first impl + turret
+  owner Q1/Q2 + radar brief.
+  Incoming fire.: helper `npcFireToast` in
+  `src/game/npc-fire-toast.js`; HUD binds
+  `Incoming fire.` for cannon-vs-player (ace omit
+  included) on a 2.5 s clock separate from dart;
+  `Incoming dart.` unchanged; unknown weapon
+  fail-closed; dock/jump suppress. Lock
+  `.rw-edge-arrow` parks docked/jumping and sets
+  `aria-hidden="true"`. No second arrow. No hub
+  gauge. `state.js` / `npc.js` / `combat.js`
+  untouched.
+  NPC turrets: owner close
+  (`docs/OwnerDecisionsWave98.md`) — Q1 class-gated
+  `heavy` / `ace` / `frigate` + already-hostile;
+  Q2 vsPlayer only, missing target drops. No fire
+  percent. No turret toast. No `src/` fire.
+  Radar: markdown only (`docs/Tgt03RadarDesign.md`)
+  — reuse `.rw-contacts`; no hub PPI; scanner still
+  gates; later serial named only.
+  OPEN: NPC turret impl (Q1/Q2 closed); radar
+  jump-park polish serial; subsystem targeting
+  still later. Known boot FAILs still WAVE4 fence,
+  WAVE26 ferry/haul, WAVE35 haul.
+  CLOSED by Wave 99: turret first impl + radar
+  jump-park; subsystem brief.
+  VERIFY: `out/w98/tgt03/probe.mjs` PASS;
+  WAVE98 boot pins all true (`npm run test:boot`
+  still FAIL on pre-existing WAVE4 fence, WAVE80
+  REP-04, WAVE85 nav guidance, WAVE92 BIO-01/02);
+  `out/w98/tgt03/verify/notes.md` CLEAN (browser
+  idle + docked park); `out/w98/turrets/verify/notes.md`
+  CLEAN; `out/w98/radar/verify/notes-recheck.md` CLEAN.
+  Designer: TGT-03 CLEAN; turrets CLEAN; radar CLEAN.
+  FILES: `src/game/npc-fire-toast.js`,
+  `src/systems/hud.js`, `scripts/boot-test.mjs`,
+  `docs/Tgt03AwarenessDesign.md`,
+  `docs/Tgt03RadarDesign.md`,
+  `docs/NpcTurretsDesign.md`,
+  `docs/OwnerDecisionsWave98.md`, `out/w98/`.
+- Wave 99 (2026-08-23): NPC turret first impl +
+  radar jump-park + subsystem targeting brief.
+  Turrets: hostile `heavy` / `ace` / `frigate` emit
+  `npcFire` `weapon: 'turret'` `target: 'player'`
+  after telegraph; independent clock 0.5× player
+  turret ROF; missing turret target drops; cannon
+  omit still hits the player; NPC live cap 4
+  separate from player cap 2; Unknowable miss;
+  seat-0 / trader / miner / cutter-pirate never
+  emit. Toast reuses `Incoming fire.` (same 2.5 s
+  clock). No turret-specific string. No HUD child.
+  Radar: `contactsGate` in `src/game/contacts-gate.js`;
+  `.rw-contacts` hides while docked or jumping;
+  scanner not cleared; no PPI; no new class.
+  Subsystem targeting: markdown only
+  (`docs/Tgt03SubsystemDesign.md`); empty hub freeze;
+  later serial fail-closed without owner numbers.
+  CLOSED by Wave 100: engine-select owner + impl.
+  OPEN: turret vsNPC later. Known boot FAILs still WAVE4 fence,
+  WAVE26 ferry/haul, WAVE35 haul, WAVE80 REP-04,
+  WAVE85 nav, WAVE92 BIO.
+  VERIFY: `out/w99/turrets/probe.mjs` PASS;
+  WAVE99 boot pins all true; turret live-fire
+  browser `[NO BROWSER COVERAGE]`;
+  `out/w99/radar/probe.mjs` PASS + live dock/jump
+  park CLEAN; `out/w99/subsys/verify/notes-recheck.md`
+  CLEAN.
+  Designer: turrets CLEAN; radar CLEAN; subsys CLEAN.
+  FILES: `src/systems/npc.js`, `combat.js`,
+  `src/core/ctx.js`, `src/game/npc-fire-toast.js`,
+  `src/game/contacts-gate.js`, `src/systems/hud.js`,
+  `scripts/boot-test.mjs`, `docs/NpcTurretsDesign.md`,
+  `docs/Tgt03RadarDesign.md`,
+  `docs/Tgt03SubsystemDesign.md`, `out/w99/`.
+- Wave 100 (2026-08-23): owner deputize on TGT-03
+  subsystem (`docs/OwnerDecisionsWave100.md`) + first
+  impl. Standing rule: pick, note, keep going.
+  KeyK toggles live `ctx.targets.part` `'engine'|null`
+  on a ship lock. No persist. No SKU. No extra Digit.
+  ENGINE bar on `.rw-combat-target`. After screen and
+  shell are 0, player shots with engine-select hit
+  engine and skip hull until `engineOut`. Peel still
+  screens first. NPC shots ignore the part.
+  OPEN: turret vsNPC later. Owner may override
+  engine-select after playtest. Known boot FAILs still
+  WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul, WAVE80
+  REP-04, WAVE85 nav, WAVE92 BIO.
+  CLOSED by Wave 101: turret vsNPC leftover.
+  VERIFY: `out/w100/subsys/probe.mjs` PASS; WAVE100
+  boot pins all true; live HUD `[NO BROWSER COVERAGE]`.
+  FILES: `src/game/subsys-aim.js`, `src/game/state.js`,
+  `src/core/ctx.js`, `src/systems/controls.js`,
+  `src/systems/combat.js`, `src/systems/hud.js`,
+  `src/ui/hud.css`, `scripts/boot-test.mjs`,
+  `docs/OwnerDecisionsWave100.md`,
+  `docs/Tgt03SubsystemDesign.md`, `out/w100/`.
+- Wave 101 (2026-08-23): NPC turret vs already-hostile
+  NPC leftover (`docs/OwnerDecisionsWave101.md`) + two
+  design briefs. Turrets: same class gate as vsPlayer;
+  emit on live `ai.target` in attack; `bolt.vsPlayer =
+  false`; never `testPlayerHit` on vsNPC; toast still
+  vsPlayer only; cap 4 shared; `mayHuntPlayer` not
+  widened. TGT-03 remaining CLOS brief
+  (`docs/Tgt03ClosureDesign.md`): core rail next to
+  DIST; `+N`/`-N`/`0 u/s`; exclusive Mk II sibling;
+  no hub; no SKU; no persist. BIO-02 remaining career
+  (`docs/Bio02CareerDesign.md`): no new class keys;
+  careers = loadout + live six `LIVING_STOCK`; Digit 0
+  stays Shipyard; kit mutate omit. Live yards already
+  sell six living keys including frigate (Wave 86 omit
+  is stale).
+  OPEN: CLOS impl (later serial). Career labels later
+  (no kit mutate). Owner may override vsNPC after
+  playtest.
+  CLOSED by Wave 102: CLOS first impl + career labels
+  + HUD-03 audio-alerts brief.
+  VERIFY: `out/w101/turrets/probe.mjs` PASS; WAVE101
+  and WAVE99 turret pins all true; player-hit guard
+  PASS; turret live `[NO BROWSER COVERAGE]`. Closure
+  verifier CLEAN after freeze recheck; designer CLEAN.
+  Career verifier CLEAN; designer CLEAN.
+  FILES: `src/systems/npc.js`, `combat.js`,
+  `src/core/ctx.js`, `scripts/boot-test.mjs`,
+  `docs/OwnerDecisionsWave101.md`,
+  `docs/NpcTurretsDesign.md`,
+  `docs/Tgt03ClosureDesign.md`,
+  `docs/Bio02CareerDesign.md`, `out/w101/`.
+- Wave 102 (2026-08-23): TGT-03 CLOS first impl +
+  BIO-02 career labels + HUD-03 remaining brief.
+  CLOS: helper `losCloseRate` in `src/game/los-close.js`;
+  `.rw-combat-clos` next to DIST on a live ship lock;
+  `+N u/s` / `-N u/s` / `0 u/s`; scanner does not gate;
+  no hub child; no persist; no SKU; KeyK stays engine.
+  Career: Hangar Offer **name** appends static words
+  (heavy combat, ace hunter, freighter trade, light
+  explore, cutter cutter, frigate capital). Offer
+  **button** stays `Offer {class}` so WAVE92 `Offer
+  heavy` still clicks. Confirm hop stays `{from} →
+  {dest}` keys. Kit mutate omit. Digit 0 shipyard.
+  HUD-03: markdown only (`docs/Hud03AlertsDesign.md`).
+  Later KeyO `hudAlerts` default off; reuse family
+  ticks; mute fail-closed; Incoming copy stays.
+  OPEN: HUD-03 audio impl (later serial). Kit mutate
+  still omit. Owner may override CLOS format / vsNPC
+  / `hudAlerts` default after playtest.
+  CLOSED by Wave 103: HUD-03 audio-alerts serial.
+  VERIFY: WAVE102 CLOS pins all true
+  (`out/w102/clos/verify/`); career probe PASS
+  (`out/w102/career/probe.mjs`); WAVE92 BIO-02 true
+  after button restore; HUD-03 verifier CLEAN.
+  Designer: CLOS CLEAN; career CLEAN; HUD-03 spec
+  CLEAN. CLOS live HUD `[NO BROWSER COVERAGE]`.
+  FILES: `src/game/los-close.js`, `src/systems/hud.js`,
+  `src/ui/hud.css`, `src/systems/shipyard-desk.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Tgt03ClosureDesign.md`,
+  `docs/Bio02CareerDesign.md`,
+  `docs/Hud03AlertsDesign.md`, `out/w102/`.
+- Wave 103 (2026-08-23): HUD-03 audio-alerts first
+  impl + REP-05 remaining brief + MSN-03 unique
+  DONE brief. HUD-03: KeyO checkbox `hudAlerts`
+  default false; copy **HUD audio alerts** after
+  Reduced motion, before Mute all audio; `song.js`
+  `HUD_ALERT_TYPES` gate; mute/volume still win;
+  Incoming copy stays; no `hud.js` edit; no hub
+  child; no new Digit; no WORLD_FIELDS; persist
+  `rimward-settings-v1`. REP-05 markdown
+  (`docs/Rep05ConsequencesDesign.md`): covering
+  patrol Known+; inbound Marked jump refuse;
+  police leave stays live; dock stays open.
+  MSN-03 markdown (`docs/Msn03UniqueDoneDesign.md`):
+  hide unique four `done` on Digit 2; persist keep;
+  no memorial pane. Kit mutate still omit.
+  OPEN: REP-05 covering + jump refuse (later
+  serial). MSN-03 unique DONE hide (later serial).
+  Owner may override `hudAlerts` default / CLOS
+  format / vsNPC after playtest.
+  CLOSED by Wave 104: covering + inbound jump +
+  unique DONE hide.
+  VERIFY: `out/w103/hud03/probe.mjs` PASS (23/23);
+  WAVE103 pins in `scripts/boot-test.mjs`; HUD-03
+  verifier CLEAN with browser stills
+  (`out/w103/hud03/verify/`); designer CLEAN.
+  REP-05 verifier CLEAN; designer CLEAN.
+  MSN-03 verifier CLEAN; designer CLEAN.
+  FILES: `src/core/ctx.js`, `src/systems/settings.js`,
+  `src/systems/song.js`, `scripts/boot-test.mjs`,
+  `docs/Hud03AlertsDesign.md`,
+  `docs/Rep05ConsequencesDesign.md`,
+  `docs/Msn03UniqueDoneDesign.md`, `out/w103/`.
+- Wave 104 (2026-08-24): REP-05 covering + inbound
+  jump first impl + MSN-03 unique DONE hide + BIO-06
+  remaining brief. Covering: Known ≥ 10 local patrol
+  hunts the pirate/ace the player fights; additive
+  to ungated pirate-work hunt; `Patrol covering.`
+  once/visit; vsPlayer never; law zone 300; skip
+  beautiful/unknowables/hollow/independent.
+  Jump: `beginJump` refuses dest standing < −25;
+  skip unknowables/hollow/independent; `No passage.`
+  once/dest/visit; dock stays open; outbound stays
+  open. Digit 9 copy waits PR3. Unique DONE: hide
+  exact four ids on Digit 2 `boardJobs`; persist
+  keep; uniqueRetry source stays; no memorial.
+  BIO-06 markdown (`docs/Bio06CadenceDesign.md`):
+  per-class hzScale light 1.00 … freighter 0.30;
+  player CPU `makeLivingHull` preserve; NPC `/120`
+  named later. Kit mutate still omit.
+  OPEN: REP-05 Digit 9 copy (PR3). BIO-06 cadence
+  serial (later). Owner may override covering
+  Known 10 / jump −25 / cadence table / `hudAlerts`
+  / CLOS / vsNPC after playtest.
+  CLOSED by Wave 105: BIO-07 freeze + light/heavy
+  organic NPC slices.
+  VERIFY: `out/w104/rep05/probe.mjs` PASS; WAVE104
+  covering-jump pins all true; WAVE103 still true;
+  covering toast `[NO BROWSER COVERAGE]`; designer
+  CLEAN. MSN-03 probe PASS; live Digit 2 hide CLEAN
+  (`out/w104/msn03/verify/`); designer CLEAN.
+  BIO-06 verifier CLEAN; designer CLEAN.
+  FILES: `src/game/police-cover.js`,
+  `src/systems/npc.js`, `src/game/jump.js`,
+  `src/systems/station.js`, `scripts/boot-test.mjs`,
+  `docs/Rep05ConsequencesDesign.md`,
+  `docs/Msn03UniqueDoneDesign.md`,
+  `docs/Bio06CadenceDesign.md`, `out/w104/`.
+- Wave 105 (2026-08-24): BIO-07 species-bodies freeze
+  + Beautiful NPC light and heavy organic slices.
+  Owner: player CPU hull stays the bar; NPC fleet
+  must read as sea creatures, not creature+machine
+  fusions. Brief (`docs/Bio07BodiesDesign.md`):
+  kill rigid panels / box wells / plate mantles;
+  shared organs stay serial; fail-closed keep Wave
+  95 GLB; remaining ace/cutter/frigate/freighter
+  later. Light: young wayfinder; nacre pads not
+  helmet; span 7.8. Heavy: shieldback; grown mantle
+  lofts; Wave 95 turret gone; span 15.3. Player
+  `makeLivingHull` untouched. Kit mutate still omit.
+  OPEN: BIO-07 remaining four classes. BIO-06
+  cadence serial. REP-05 Digit 9 copy. Shared
+  `organs.py` box wells still live (serial PR7).
+  CLOSED by Wave 106: remaining four BIO-07
+  classes + foundation rewrite + bake.
+  CLOSED by Wave 107: BIO-06 cadence + REP-05
+  Digit 9 copy.
+  VERIFY: BIO-07 verifier CLEAN; designer freeze
+  CLEAN for markdown (stills scores belong to
+  class workers). Light measure/islands/meshopt
+  CLEAN (`out/w105/light/verify/`); designer CLEAN;
+  `[NO BROWSER COVERAGE]`. Heavy measure/islands
+  CLEAN (`out/w105/heavy/verify/`); designer CLEAN;
+  `[NO BROWSER COVERAGE]`.
+  FILES: `docs/Bio07BodiesDesign.md`,
+  `scripts/ship_builders/beautiful/light.py`,
+  `scripts/ship_builders/beautiful/heavy.py`,
+  `assets-source/ships/beautiful/light.blend*`,
+  `assets-source/ships/beautiful/heavy.blend*`,
+  `public/assets/ships/beautiful/light/**`,
+  `public/assets/ships/beautiful/heavy/**`,
+  `out/w105/`.
+- Wave 106 (2026-08-24): BIO-07 remaining four
+  Beautiful NPC class bodies + shared foundation
+  rewrite + bake. Foundation (`surface.py` /
+  `anatomy.py` / `organs.py`): four body plans
+  (shark / squid / octopus / whale), grown lofts,
+  no restored flipper API. Ace hunting squid;
+  cutter shark (not a scaled light); frigate
+  octopus travel pose; freighter blue-whale
+  gardenback. Light/heavy rebaked against the
+  new primitives. Player `makeLivingHull`
+  untouched. `state.js` READ-ONLY. No new SKU.
+  OPEN: BIO-06 cadence serial. REP-05 Digit 9
+  copy. Anatomy-native gait later.
+  CLOSED by Wave 107: cadence + Digit 9 copy +
+  BIO-08 gait brief.
+  VERIFY: bake3 measure ALL PASS; islands ONE
+  CONNECTED BODY on all six; `py_compile` exit 0;
+  silhouettes six distinct animals
+  (`out/w106/bake3/verify/report.md` CLEAN).
+  FILES: `scripts/ship_builders/beautiful/**`,
+  `assets-source/ships/beautiful/**`,
+  `public/assets/ships/beautiful/**`,
+  `out/silhouettes/beautiful-*.png`, `out/w106/`.
+- Wave 107 (2026-08-24): BIO-06 cadence first
+  impl + REP-05 Digit 9 copy + BIO-08 gait brief.
+  Cadence: THREE-free `src/game/living-cadence.js`
+  table (light 1.00/1.00 … freighter 0.30/2.00);
+  player light idle 0.5 / cruise 2.3 bit-identical;
+  larger living remounts scale Hz + flap sweep;
+  Beautiful NPC `uSwimSweep` + class-cruise
+  speed-norm; mixer `timeScale` untouched; no
+  persist key; Digit 0 shipyard. Digit 9 LIVE
+  CONSEQUENCES copies `Leave this space.` /
+  `Patrol covering.` / `No passage.` from live
+  LINE constants. BIO-08 markdown
+  (`docs/Bio08LocomotionDesign.md`): anatomy-native
+  gait later; fail-closed live spine+flap; do not
+  retune `LIVING_CADENCE`. Kit mutate still omit.
+  OPEN: BIO-08 gait serial (later). Owner may
+  override cadence floats / Digit 9 wrap after
+  playtest.
+  VERIFY: `out/w107/bio06/probe.mjs` PASS;
+  WAVE107 BIO-06 pins all true (`npm run test:boot`
+  still FAIL on pre-existing WAVE26); live hub
+  CLEAN, heavier-class flap Hz
+  `[NO BROWSER COVERAGE]`; designer CLEAN.
+  Digit 9 live stills CLEAN
+  (`out/w107/rep05/verify/`); designer CLEAN.
+  BIO-08 verifier CLEAN; designer CLEAN.
+  FILES: `src/game/living-cadence.js`,
+  `src/systems/ship.js`, `src/systems/ship-assets.js`,
+  `src/systems/station.js`, `scripts/boot-test.mjs`,
+  `docs/Bio06CadenceDesign.md`,
+  `docs/Rep05ConsequencesDesign.md`,
+  `docs/Bio08LocomotionDesign.md`, `out/w107/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

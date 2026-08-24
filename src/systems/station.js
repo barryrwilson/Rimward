@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS } from '../game/state.js';
+import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
 import * as pods from '../game/pods.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41: faction character portraits
 import { epicEffects } from '../game/epics.js';
-import { styleFor } from '../game/faction-style.js'; // wave 37: per-faction station schemes
+import { styleFor, isUnknowable } from '../game/faction-style.js'; // wave 37: per-faction station schemes
+import { assembleUnknowablesStation, UNKNOWABLES_STATION_PATH } from './stations/unknowables.js'; // wave 94: dedicated Unknowables origin dock
 import { detailBuilder } from './station-detail.js'; // waves 43-45: merged-geometry detail kit
 import { freeholdStation } from './stations/freehold.js'; // wave 45: one detail sculpt module per faction
 import { veridianStation } from './stations/veridian.js';
@@ -19,8 +20,18 @@ import { lamplighterStation } from './stations/lamplighter.js';
 import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
-import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
+import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
 import { writeMountedGear, applyAbominationStanding } from '../game/hangar.js';
+import {
+  grantSwornGift,
+  giftNoticeFor,
+  isSwornGiftVisible,
+  grantMarketSeed,
+  seedNoticeFor,
+  isMarketSeedVisible,
+  SEED_MARKET_UU,
+  SEED_ARM_LINE,
+} from '../game/bio-seed.js';
 import {
   LAUNCHER_IDS,
   TURRET_IDS,
@@ -62,6 +73,9 @@ import {
   restitutionShort,
   applyRestitution,
 } from '../game/restitution.js';
+import { POLICE_LEAVE_LINE, POLICE_LEAVE_RADIUS } from '../game/police-leave.js';
+import { COVERING_LINE, COVERING_STANDING_MIN } from '../game/police-cover.js';
+import { JUMP_REFUSE_LINE, JUMP_REFUSE_STANDING, JUMP_REFUSE_SKIP } from '../game/jump.js';
 import {
   CHAIN_ORIGIN,
   chainEmployerKeys,
@@ -183,8 +197,8 @@ const ROUND_COST = 5;
 // sit between. Cost scales strictly with damage taken, per system.
 const REPAIR_RATES = { hull: 0.9, screen: 0.3, shell: 0.5, engine: 0.6 };
 const CARGO_UPGRADE_COST = 600;
-const CARGO_UPGRADE_STEP = 10;
-const CARGO_UPGRADE_MAX = 2;
+const CARGO_UPGRADE_STEP = HOLD_RACK_STEP;
+const CARGO_UPGRADE_MAX = HOLD_RACK_MAX;
 const SCANNER_COST = 400;
 const SCANNER2_COST = 900;
 
@@ -291,8 +305,20 @@ function makeGlowTexture(inner, outer) {
   return tex;
 }
 
+function buildUnknowablesStation(ctx, systemId, def) {
+  const scheme = schemeFor(def);
+  const kit = assembleUnknowablesStation(def, scheme);
+  return stationRecord(ctx, {
+    scheme,
+    group: kit.group,
+    lightMat: kit.lightMat,
+    beaconMat: kit.beaconMat,
+  }, kit.ringGroup, DETAIL_BEACON_Y);
+}
+
 function buildStationMesh(ctx, systemId, def) {
   if (isBeautiful(def.faction)) return buildBeautifulStation(ctx, systemId, def); // wave 27
+  if (isUnknowable(def.faction)) return buildUnknowablesStation(ctx, systemId, def); // wave 94: dedicated, not DETAIL_STATIONS
   const spec = Object.hasOwn(DETAIL_STATIONS, def.faction) ? DETAIL_STATIONS[def.faction] : null; // wave 45: per-faction detail sculpts
   if (spec) return buildDetailStation(ctx, systemId, def, spec);
   return buildPlaceholderStation(ctx, systemId, def);
@@ -530,7 +556,8 @@ function buildDetailStation(ctx, systemId, def, spec) {
 
 // Wave 46: independent and hollow join the table, so the placeholder no longer
 // has a live site — it stays the fallback for an unknown faction key only.
-// unknowables build no station at all (decision D3) and beautiful is grown by
+// unknowables is grown by buildUnknowablesStation (Wave 94; still not in this
+// table — D3) and beautiful is grown by
 // buildBeautifulStation, so this table carries 10 of the 12 faction keys. The
 // other two dispatch tables cover different sets by design: npc.js DETAIL_SHIPS
 // (wave 47) is the same 10 faction keys as this table — the 8 with ship
@@ -946,6 +973,8 @@ export function buildStationModel(faction, systemId = faction) {
   let record;
   if (isBeautiful(faction)) {
     record = buildBeautifulStation(throwawayCtx, systemId, def);
+  } else if (isUnknowable(faction)) {
+    record = buildUnknowablesStation(throwawayCtx, systemId, def);
   } else if (Object.hasOwn(DETAIL_STATIONS, faction)) {
     record = buildDetailStation(throwawayCtx, systemId, def, DETAIL_STATIONS[faction]);
   } else {
@@ -1128,7 +1157,6 @@ export function standingMoveNotes() {
     `Rescue adds +${RESCUE.otherRep} standing, or +${RESCUE.playerKillRep} if your kill, with the matching faction.`,
     'Sale at the People desk moves victim standing and Gilded standing by the live table.',
     `Graft caps ${beautiful} at min(current, -10) while any grafted row remains.`,
-    `Restitution at the offended dock costs ${RESTITUTION_UU} UU and sets that flag to 0.`,
   ];
 }
 
@@ -1141,16 +1169,26 @@ export function standingLiveNotes() {
   const marked = ladderNameAt(-1000) || 'Marked';
   const suspect = ladderNameAt(-25) || 'Suspect';
   const fearOpen = ECON.fear.tributeOpensAt;
+  const skipNames = [];
+  JUMP_REFUSE_SKIP.forEach((key) => {
+    if (typeof key !== 'string' || !key) return;
+    const name = factionDisplayName(key);
+    if (name) skipNames.push(name);
+  });
+  const skipJoin = skipNames.join(', ');
   return [
     'Patrols hunt at standing -10 or below.',
+    `Hostile band standing below 0 and above -10, ${POLICE_LEAVE_RADIUS} u: ${POLICE_LEAVE_LINE}`,
     'Yards refuse a sale when standing is below 0.',
     `Ace hulls need ${known} 10. Frigate hulls need ${trusted} 25.`,
+    `${known} ${COVERING_STANDING_MIN}: a local patrol covers the pirate or ace you fight. ${COVERING_LINE}`,
     `Yard discount ${known}+ 5/10/15% (${known}/${trusted}/${sworn}).`,
     'Market sell pays +2% per positive rank tier.',
     `Restricted locker: fear ${fearOpen} or more, or ${freehold} standing below -25 (${marked}; -25 ${suspect} does not open).`,
     `Graft: ${beautiful} min(current, -10) while any grafted row remains.`,
     `Mining +${MINING_REP} employer. Patrol +${PATROL_REP} ${freehold}.`,
     `Restitution ${RESTITUTION_UU} UU at this dock when standing is below 0.`,
+    `Inbound jump dest standing below ${JUMP_REFUSE_STANDING} (${marked}; ${JUMP_REFUSE_STANDING} ${suspect} does not lock). Skip ${skipJoin}. Dock stays open. ${JUMP_REFUSE_LINE}`,
   ];
 }
 
@@ -1159,11 +1197,41 @@ function authoredUu(value) {
 }
 
 export function archiveDeskAllowed(faction) {
-  return faction === 'assembly' && Object.hasOwn(DETAIL_STATIONS, 'assembly');
+  if (faction === 'assembly') return Object.hasOwn(DETAIL_STATIONS, 'assembly');
+  if (faction === 'unknowables') return UNKNOWABLES_STATION_PATH === true;
+  return false;
 }
 
-function archiveHostile(ctx) {
-  return standingRead(ctx?.world?.reputation, 'assembly') < 0;
+function archiveHostile(ctx, dockFaction) {
+  if (dockFaction !== 'assembly' && dockFaction !== 'unknowables') return true;
+  return standingRead(ctx?.world?.reputation, dockFaction) < 0;
+}
+
+function archiveOwnSku(dockFaction) {
+  if (dockFaction === 'unknowables') return DATA_CRYSTAL;
+  if (dockFaction === 'assembly') return DATA_CUBE;
+  return null;
+}
+
+function archivePriceAtDesk(dockFaction, verb, commodity, source, originFaction) {
+  if (dockFaction === 'assembly') {
+    return archiveFilePrice(verb, commodity, source, originFaction);
+  }
+  if (dockFaction !== 'unknowables') return null;
+  if (commodity === DATA_CRYSTAL && originFaction === 'unknowables') {
+    if (verb === 'buy') return source === 'legal' ? ARCHIVE_OWN_UU : null;
+    if (verb === 'sell') return source === 'legal' ? ARCHIVE_OWN_UU : null;
+    return null;
+  }
+  if (verb === 'sell' && commodity === DATA_CUBE && originFaction === 'assembly' && isDataSource(source)) {
+    return ARCHIVE_RIVAL_UU;
+  }
+  return null;
+}
+
+function archiveIllegalOriginNotice(dockFaction) {
+  if (dockFaction === 'unknowables') return 'Captured crystal — illegal in origin. Filing refused.';
+  return 'Captured cube — illegal in origin. Filing refused.';
 }
 
 function liveFixerAtDock(ctx, systemId) {
@@ -1241,19 +1309,20 @@ export function confirmArchivePending(ctx, ui, dockFaction) {
       ui.notice = 'The archive will not file here.';
       return;
     }
-    if (archiveHostile(ctx)) {
+    if (archiveHostile(ctx, dockFaction)) {
       ui.notice = 'No sale.';
       return;
     }
-    if (armed.verb === 'refuse' || (armed.commodity === DATA_CUBE && armed.originFaction === 'assembly' && armed.source !== 'legal')) {
-      ui.notice = 'Captured cube — illegal in origin. Filing refused.';
+    const ownSku = archiveOwnSku(dockFaction);
+    if (armed.verb === 'refuse' || (ownSku && armed.commodity === ownSku && armed.originFaction === dockFaction && armed.source !== 'legal')) {
+      ui.notice = archiveIllegalOriginNotice(dockFaction);
       return;
     }
-    if (armed.verb === 'buy' && armed.commodity === DATA_CRYSTAL) {
-      ui.notice = 'The archive does not buy crystals.';
+    if (armed.verb === 'buy' && armed.commodity !== ownSku) {
+      ui.notice = dockFaction === 'unknowables' ? 'The archive does not buy cubes.' : 'The archive does not buy crystals.';
       return;
     }
-    const price = archiveFilePrice(armed.verb, armed.commodity, armed.source, armed.originFaction);
+    const price = archivePriceAtDesk(dockFaction, armed.verb, armed.commodity, armed.source, armed.originFaction);
     if (!authoredUu(price)) {
       ui.notice = 'The archive will not file.';
       return;
@@ -1287,17 +1356,19 @@ export function confirmArchivePending(ctx, ui, dockFaction) {
         return;
       }
       const added = addDataCargoRow(ctx.cargo, {
-        commodity: DATA_CUBE,
+        commodity: ownSku,
         units: 1,
         source: 'legal',
-        originFaction: 'assembly',
+        originFaction: dockFaction,
       });
       if (!added) {
         ui.notice = 'Hold is full.';
         return;
       }
       world.credits = nextCredits;
-      ui.notice = `The archive files a legal cube. ${price} UU.`;
+      ui.notice = dockFaction === 'unknowables'
+        ? `The archive files a legal crystal. ${price} UU.`
+        : `The archive files a legal cube. ${price} UU.`;
       requestAutosave(ctx);
       return;
     }
@@ -1340,13 +1411,20 @@ export function renderArchiveDesk(h, btn, panel, ctx, ui, dockFaction, redraw) {
   if (typeof DATA_LABELS !== 'object' || !Array.isArray(DATA_SOURCES) || !Array.isArray(DATA_ORIGIN_FACTIONS)) return;
 
   const reduced = ctx?.settings?.reducedMotion === true;
+  const ownSku = archiveOwnSku(dockFaction);
+  const rivalSku = dockFaction === 'unknowables' ? DATA_CUBE : DATA_CRYSTAL;
+  const rivalOrigin = dockFaction === 'unknowables' ? 'assembly' : 'unknowables';
   h('div', 'screen-sub', panel, reduced ? 'ARCHIVE' : 'ARCHIVE — filing desk');
   h('div', 'screen-note', panel,
     reduced
-      ? `Legal cubes ${ARCHIVE_OWN_UU} UU. Rival crystals ${ARCHIVE_RIVAL_UU} UU.`
-      : `The archive files legal cubes at ${ARCHIVE_OWN_UU} UU and rival crystals at ${ARCHIVE_RIVAL_UU} UU.`);
+      ? (dockFaction === 'unknowables'
+        ? `Legal crystals ${ARCHIVE_OWN_UU} UU. Rival cubes ${ARCHIVE_RIVAL_UU} UU.`
+        : `Legal cubes ${ARCHIVE_OWN_UU} UU. Rival crystals ${ARCHIVE_RIVAL_UU} UU.`)
+      : (dockFaction === 'unknowables'
+        ? `The archive files legal crystals at ${ARCHIVE_OWN_UU} UU and rival cubes at ${ARCHIVE_RIVAL_UU} UU.`
+        : `The archive files legal cubes at ${ARCHIVE_OWN_UU} UU and rival crystals at ${ARCHIVE_RIVAL_UU} UU.`));
 
-  if (archiveHostile(ctx)) {
+  if (archiveHostile(ctx, dockFaction)) {
     h('div', 'screen-note', panel, 'No sale.');
     return;
   }
@@ -1362,9 +1440,9 @@ export function renderArchiveDesk(h, btn, panel, ctx, ui, dockFaction, redraw) {
       ui.notice = 'The filing is no longer in the hold.';
     } else if (armed) {
       const label = dataCommodityLabel(armed.commodity) || 'filing';
-      const price = archiveFilePrice(armed.verb, armed.commodity, armed.source, armed.originFaction);
+      const price = archivePriceAtDesk(dockFaction, armed.verb, armed.commodity, armed.source, armed.originFaction);
       const meta = armed.verb === 'refuse' || !authoredUu(price)
-        ? 'Captured cube — illegal in origin. Filing refused.'
+        ? archiveIllegalOriginNotice(dockFaction)
         : `${label} · ${price} UU · Confirm filing`;
       const box = h('div', 'screen-btnrow people-actions', panel);
       h('div', 'screen-note', box, meta);
@@ -1381,13 +1459,13 @@ export function renderArchiveDesk(h, btn, panel, ctx, ui, dockFaction, redraw) {
   }
 
   const buyRow = h('div', 'screen-btnrow people-actions', panel);
-  h('div', 'screen-note', buyRow, `${dataCommodityLabel(DATA_CUBE)} · legal · ${ARCHIVE_OWN_UU} UU`);
-  btn(buyRow, reduced ? 'File buy' : 'File a legal cube', () => {
-    ui.dataPending = { verb: 'buy', commodity: DATA_CUBE, source: 'legal', originFaction: 'assembly' };
+  h('div', 'screen-note', buyRow, `${dataCommodityLabel(ownSku)} · legal · ${ARCHIVE_OWN_UU} UU`);
+  btn(buyRow, reduced ? 'File buy' : (dockFaction === 'unknowables' ? 'File a legal crystal' : 'File a legal cube'), () => {
+    ui.dataPending = { verb: 'buy', commodity: ownSku, source: 'legal', originFaction: dockFaction };
     ui.notice = '';
     redraw();
   });
-  h('div', 'screen-note', panel, 'The archive does not buy crystals.');
+  h('div', 'screen-note', panel, dockFaction === 'unknowables' ? 'The archive does not buy cubes.' : 'The archive does not buy crystals.');
 
   const lots = dataHoldLots(ctx);
   if (lots.length === 0) {
@@ -1399,19 +1477,19 @@ export function renderArchiveDesk(h, btn, panel, ctx, ui, dockFaction, redraw) {
     const label = dataCommodityLabel(lot.commodity) || 'filing';
     const originName = factionDisplayName(lot.originFaction) || 'archive';
     const src = lot.source === 'legal' ? 'legal' : 'captured';
-    const price = archiveFilePrice('sell', lot.commodity, lot.source, lot.originFaction);
+    const price = archivePriceAtDesk(dockFaction, 'sell', lot.commodity, lot.source, lot.originFaction);
     const line = reduced
       ? `${lot.units} · ${label}`
       : `${lot.units} ${label} · ${src} · ${originName}`;
-    if (lot.commodity === DATA_CUBE && lot.originFaction === 'assembly' && lot.source !== 'legal') {
-      h('div', 'screen-note', panel, `${line}. Captured cube — illegal in origin. Filing refused.`);
+    if (lot.commodity === ownSku && lot.originFaction === dockFaction && lot.source !== 'legal') {
+      h('div', 'screen-note', panel, `${line}. ${archiveIllegalOriginNotice(dockFaction)}`);
       continue;
     }
-    if (lot.commodity === DATA_CRYSTAL && lot.originFaction !== 'unknowables') {
+    if (lot.commodity === rivalSku && lot.originFaction !== rivalOrigin) {
       h('div', 'screen-note', panel, `${line}. Filing refused.`);
       continue;
     }
-    if (lot.commodity === DATA_CUBE && !(lot.originFaction === 'assembly' && lot.source === 'legal')) {
+    if (lot.commodity === ownSku && !(lot.originFaction === dockFaction && lot.source === 'legal')) {
       h('div', 'screen-note', panel, `${line}. Filing refused.`);
       continue;
     }
@@ -2277,6 +2355,19 @@ function miningTimeLeftLabel(ctx, job) {
 function maybeRefreshJobsBoard(ctx, ui, render) {
   if (!ctx.flags.docked || typeof render !== 'function' || !ui) return;
   if (ui.level === 2 && ui.service === 'jobs') render();
+}
+
+function uniqueHaulIsOpen(jobs) {
+  if (!Array.isArray(jobs)) return false;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j && j.id === 'haul-provisions' && j.kind === 'haul' && j.state === 'accepted') return true;
+  }
+  return false;
+}
+
+function destPayHeldForUniqueHaul(ctx, ui, jobs) {
+  return uniqueHaulIsOpen(jobs) || ui?.uniqueHaulPaid === true;
 }
 
 function isTradeCommodity(key) {
@@ -3536,6 +3627,11 @@ function boardJobs(ctx, sysId) {
     if (j.kind === 'espionage' && j.state === 'offered' && j.originSystem !== sysId) continue;
     if (j.kind === 'war' && j.state === 'offered' && j.originSystem !== sysId) continue;
     if (j.kind === 'chain' && j.state === 'done') continue;
+    // Hide unique DONE on the board; keep the persist row (hide ≠ splice).
+    if (j.state === 'done' && (
+      j.id === 'bounty-ace' || j.id === 'patrol-lane'
+      || j.id === 'haul-provisions' || j.id === 'ferry-consignment'
+    )) continue;
     if (j.kind === 'chain' && j.state === 'offered' && j.originSystem !== sysId) continue;
     if (j.kind === 'chain' && j.state === 'offered') {
       const parsed = parseChainId(j.id);
@@ -3606,8 +3702,37 @@ function rewardJobContacts(ctx, job) {
   }
 }
 
+const JOB_HANDLES = new Map();
+function trackJobHandle(j) {
+  if (!j || typeof j.id !== 'string' || !j.id) return;
+  let set = JOB_HANDLES.get(j.id);
+  if (!set) {
+    set = new Set();
+    JOB_HANDLES.set(j.id, set);
+  }
+  set.add(j);
+}
+function writeJobState(id, state) {
+  if (typeof id !== 'string' || !id) return;
+  const set = JOB_HANDLES.get(id);
+  if (set) {
+    for (const row of set) {
+      if (row && typeof row === 'object') row.state = state;
+    }
+  }
+}
+
 function completeJob(ctx, job, notice) {
   job.state = 'done';
+  if (job && typeof job.id === 'string') {
+    writeJobState(job.id, 'done');
+    const list = ctx.world.jobs;
+    if (Array.isArray(list)) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === job.id) list[i].state = 'done';
+      }
+    }
+  }
   rewardJobContacts(ctx, job);
   if (notice) ctx.emit('commLine', { text: notice });
 }
@@ -3790,6 +3915,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (!Object.hasOwn(SYSTEMS, origin)) continue;
       const dest = otherSystemId(ctx, origin);
       if (ctx.world.currentSystem !== dest || dest === origin) continue;
+      if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       const commodity = job.commodity;
       if (!isTradeCommodity(commodity)) continue;
       const need = job.need;
@@ -3838,6 +3964,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (!Object.hasOwn(SYSTEMS, origin)) continue;
       const dest = otherSystemId(ctx, origin);
       if (ctx.world.currentSystem !== dest || dest === origin) continue;
+      if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       if (job.need !== 1) {
         job.state = 'failed';
         replacePassengerJob(ctx, job);
@@ -3908,6 +4035,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (exploreVisitedHas(ctx, site.landmark.id)) job.progress = 1;
       if (job.progress < 1 || !ctx.flags.docked) continue;
       if (ctx.world.currentSystem !== origin) continue;
+      if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       job.state = 'failed';
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
@@ -4078,11 +4206,13 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (job.need !== 1) continue;
       if (!ctx.flags.docked) continue;
       if (ctx.world.currentSystem !== dockAt) continue;
+      if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       finishChainStep(ctx, job, parsed);
       boardDirty = true;
       continue;
     }
     if (job.state !== 'accepted') continue;
+    if (job.kind !== 'haul' && job.kind !== 'ferry' && destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
     if (job.kind === 'bounty') {
       if (job.id === 'bounty-ace') {
         const ace = findAceRecord(ctx);
@@ -4125,6 +4255,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const unitCost = job.originPrice || priceOf(ctx, 'provisions');
       const reward = job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
       ctx.world.credits += reward;
+      if (job.id === 'haul-provisions' && ui) ui.uniqueHaulPaid = true;
       // The gate above makes this dock the named destination, so the line's
       // station is always the one the quote was priced off.
       const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
@@ -4223,8 +4354,15 @@ export function initStation(ctx) {
     launderBusy: false,
     outfitPending: null,
     graftPending: null,
+    trainPending: null,
     restitutionPending: false,
     restitutionBusy: false,
+    giftPending: false,
+    giftBusy: false,
+    seedPending: false,
+    seedBusy: false,
+    uniqueHaulPaid: false,
+    justDocked: false,
   };
 
   function h(tag, cls, parent, text) {
@@ -4301,7 +4439,7 @@ export function initStation(ctx) {
       render();
     },
     buyCargoRack() {
-      const used = Math.round((ctx.cargoCapacity - 20) / CARGO_UPGRADE_STEP);
+      const used = Math.round((ctx.cargoCapacity - cargoHoldFor(ctx.player?.classKey)) / CARGO_UPGRADE_STEP);
       if (used >= CARGO_UPGRADE_MAX) { ui.notice = 'Hold racks are maxed out.'; render(); return; }
       if (ctx.world.credits < CARGO_UPGRADE_COST) { ui.notice = 'Not enough UU.'; render(); return; }
       ctx.world.credits -= CARGO_UPGRADE_COST;
@@ -4373,6 +4511,12 @@ export function initStation(ctx) {
   function hermitBuyMult() {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
   }
+  function lockerAllowed() {
+    if (ui.fenceUnlocked) return true;
+    if (currentDef?.tradesRestricted === true) return true;
+    return ctx.world.fear >= ECON.fear.tributeOpensAt
+      || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
+  }
   function tryTrade(key, qty, buying) {
     if (isDataCommodity(key)) {
       ui.notice = 'Data lots file at the archive desk.';
@@ -4385,7 +4529,7 @@ export function initStation(ctx) {
     const com = COMMODITIES[key];
     const price = priceOf(ctx, key);
     const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
-    if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
+    if (!com.legal && !lockerAllowed()) {
       ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
       return;
     }
@@ -4441,8 +4585,69 @@ export function initStation(ctx) {
     }
   }
 
+  function cancelSeedPending() {
+    if (!ui.seedPending) return false;
+    ui.seedPending = false;
+    ui.notice = '';
+    return true;
+  }
+
+  function confirmSeedPapers() {
+    if (ui.seedBusy) return;
+    ui.seedBusy = true;
+    try {
+      ui.seedPending = false;
+      const result = grantMarketSeed(ctx);
+      ui.notice = seedNoticeFor(result);
+    } finally {
+      ui.seedBusy = false;
+    }
+  }
+
+  function armSeedPapers() {
+    if (!isMarketSeedVisible(ctx)) return false;
+    ui.seedPending = true;
+    ui.notice = SEED_ARM_LINE;
+    return true;
+  }
+
+  function renderSeedPapers(panel) {
+    if (currentDef.faction !== 'beautiful') {
+      ui.seedPending = false;
+      return false;
+    }
+    if (!isMarketSeedVisible(ctx)) {
+      ui.seedPending = false;
+      h('div', 'screen-note', panel, 'No sale.');
+      return true;
+    }
+    if (ui.seedPending) {
+      const box = h('div', 'shipyard-buy-row shipyard-confirm', panel);
+      h('div', 'shipyard-buy-name', box, 'Living seed');
+      h('div', 'shipyard-buy-meta', box, `${SEED_MARKET_UU} UU · ${SEED_ARM_LINE}`);
+      btn(box, 'Confirm papers', () => {
+        confirmSeedPapers();
+        render();
+      }, 'screen-btn screen-btn-warm');
+      btn(box, 'Esc — Cancel', () => {
+        cancelSeedPending();
+        render();
+      });
+      return true;
+    }
+    const card = h('div', 'shipyard-buy-row', panel);
+    h('div', 'shipyard-buy-name', card, 'Living seed');
+    h('div', 'shipyard-buy-meta', card, `${SEED_MARKET_UU} UU`);
+    btn(card, '1 — Papers', () => {
+      armSeedPapers();
+      render();
+    });
+    return true;
+  }
+
   function renderMarket(panel) {
     h('div', 'screen-sub', panel, 'MARKET — posted prices, no spread');
+    renderSeedPapers(panel);
     const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
     const buyMult = hermitBuyMult(); // wave 11: same waived price the charge uses
     const table = h('div', 'market-table', panel);
@@ -4459,7 +4664,7 @@ export function initStation(ctx) {
       h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * buyMult)} UU`);
       h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
       const actions = h('div', 'market-cell market-actions' + sel, table);
-      if (!com.legal && !restrictedAllowed(ctx, ui.fenceUnlocked)) {
+      if (!com.legal && !lockerAllowed()) {
         h('span', 'market-refusal', actions, 'trade refused');
       } else {
         btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
@@ -4468,10 +4673,10 @@ export function initStation(ctx) {
         btn(actions, '−5', () => { tryTrade(key, 5, false); render(); });
       }
     });
-    if (stationAlwaysTradesRestricted(ctx)) {
+    if (currentDef?.tradesRestricted === true) {
       h('div', 'screen-note', panel,
         'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
-    } else if (!restrictedAllowed(ctx, ui.fenceUnlocked)) {
+    } else if (!lockerAllowed()) {
       h('div', 'screen-note', panel,
         `The dockmaster keeps the restricted locker closed. Fear ${ECON.fear.tributeOpensAt}+ or a burned Compact name opens it.`);
     }
@@ -4485,6 +4690,24 @@ export function initStation(ctx) {
 
   // ---- jobs ----
   function acceptJob(job) {
+    if (!ctx.flags.docked) {
+      ui.notice = 'Dock first.';
+      render();
+      return;
+    }
+    pinDockedSystem();
+    const handle = job;
+    const list = ctx.world.jobs;
+    if (Array.isArray(list) && job && typeof job.id === 'string') {
+      const live = list.find((j) => j && j.id === job.id);
+      if (live) job = live;
+    }
+    if (job.id === 'ferry-consignment' && job.state === 'done') {
+      job.state = 'offered';
+      job.originSystem = null;
+      job.destSystem = null;
+      delete job.payQuoted;
+    }
     if (job.kind === 'ferry') {
       // The consignment is fronted FREE on accept — but only if it fits.
       if (cargoUsed(ctx) + FERRY_UNITS > ctx.cargoCapacity) {
@@ -4787,6 +5010,16 @@ export function initStation(ctx) {
       // destination dock's rates, JSON-plain on the job entry.
       job.payQuoted = jobPayFor(ctx, otherSystemId(ctx, job.originSystem), Math.round(HAUL_UNITS * job.originPrice * HAUL_MARGIN));
     }
+    trackJob(job);
+    trackJob(handle);
+    const stamped = {
+      state: job.state,
+      originSystem: job.originSystem,
+      destSystem: job.destSystem,
+      originPrice: job.originPrice,
+    };
+    if ('payQuoted' in job) stamped.payQuoted = job.payQuoted;
+    patchJob(job.id, stamped);
     ui.notice = `Accepted: ${job.title}`;
     render();
   }
@@ -4810,6 +5043,7 @@ export function initStation(ctx) {
     syncChainJobs(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
     boardJobs(ctx, currentId).forEach((job, i) => {
+      trackJob(job);
       const card = h('div', 'job-card', panel);
       let title = job.title;
       let detail = job.detail;
@@ -4987,7 +5221,9 @@ export function initStation(ctx) {
         h('div', 'job-state', card,
           `He hunts in ${ctx.systems?.[aceHomeId]?.name ?? 'Freehold Drift'} — take the gate.`);
       }
-      if (job.state === 'offered') {
+      const uniqueRetry = job.state === 'done'
+        && (job.id === 'ferry-consignment' || job.id === 'haul-provisions');
+      if (job.state === 'offered' || uniqueRetry) {
         btn(card, `Accept (${i + 1})`, () => acceptJob(job));
         if (job.kind === 'mining' || job.kind === 'trade' || job.kind === 'hunt'
           || job.kind === 'passenger' || job.kind === 'explore' || job.kind === 'espionage'
@@ -5203,7 +5439,7 @@ export function initStation(ctx) {
   // ---- outfitting ----
   function renderOutfitting(panel) {
     h('div', 'screen-sub', panel, 'OUTFITTING — hull work & instruments');
-    const used = Math.round((ctx.cargoCapacity - 20) / CARGO_UPGRADE_STEP);
+    const used = Math.round((ctx.cargoCapacity - cargoHoldFor(ctx.player?.classKey)) / CARGO_UPGRADE_STEP);
     const row1 = h('div', 'screen-btnrow', panel);
     if (used >= CARGO_UPGRADE_MAX) {
       h('div', 'screen-note', row1, `Hold racks maxed out at ${ctx.cargoCapacity} units.`);
@@ -5335,9 +5571,65 @@ export function initStation(ctx) {
       h('div', 'people-note', panel, `Some aboard belong with the ${elseNames.join(', ')}.`);
     }
   }
+  function cancelGiftPending() {
+    if (!ui.giftPending) return false;
+    ui.giftPending = false;
+    ui.notice = '';
+    return true;
+  }
+
+  function confirmGiftPapers() {
+    if (ui.giftBusy) return;
+    ui.giftBusy = true;
+    try {
+      ui.giftPending = false;
+      const result = grantSwornGift(ctx);
+      ui.notice = giftNoticeFor(result);
+    } finally {
+      ui.giftBusy = false;
+    }
+  }
+
+  function armGiftPapers() {
+    if (!isSwornGiftVisible(ctx)) return false;
+    ui.giftPending = true;
+    ui.notice = 'The berth answers. Confirm the sworn gift.';
+    return true;
+  }
+
+  function renderGiftPapers(panel) {
+    if (!isSwornGiftVisible(ctx)) {
+      ui.giftPending = false;
+      return false;
+    }
+    if (ui.giftPending) {
+      const box = h('div', 'shipyard-buy-row shipyard-confirm', panel);
+      h('div', 'shipyard-buy-name', box, 'Sworn gift');
+      h('div', 'shipyard-buy-meta', box, 'The berth answers. Confirm the sworn gift.');
+      btn(box, 'Confirm papers', () => {
+        confirmGiftPapers();
+        render();
+      }, 'screen-btn screen-btn-warm');
+      btn(box, 'Esc — Cancel', () => {
+        cancelGiftPending();
+        render();
+      });
+      return true;
+    }
+    const card = h('div', 'shipyard-buy-row', panel);
+    h('div', 'shipyard-buy-name', card, 'Sworn gift');
+    h('div', 'shipyard-buy-meta', card, 'The berth answers. Confirm the sworn gift.');
+    btn(card, '1 — Papers', () => {
+      armGiftPapers();
+      render();
+    });
+    return true;
+  }
+
   function renderPeople(panel) {
     h('div', 'screen-sub', panel, 'PEOPLE — who runs this dock');
     renderRescue(panel);
+    renderGiftPapers(panel);
     renderTrafficDesk(h, btn, panel, ctx, ui, currentDef.faction, render);
     const people = contactsForSystem(ctx, currentId);
     if (people.length === 0) {
@@ -5416,12 +5708,12 @@ export function initStation(ctx) {
       }
       if (contact.role === 'fence') {
         btn(row, 'Call in a favor', () => {
-          if (contact.favors <= 0) {
-            ui.notice = `${contact.name} spreads their hands. “You hold no marker with me.”`;
-          } else if (spendFavor(ctx, contact)) {
+          if (spendFavor(ctx, contact)) {
             ui.fenceUnlocked = true;
             ctx.station.fenceUnlocked = true;
             ui.notice = `${contact.name} makes one call. The restricted locker will be... open to you, this visit.`;
+          } else {
+            ui.notice = `${contact.name} spreads their hands. “You hold no marker with me.”`;
           }
           render();
         });
@@ -5631,20 +5923,33 @@ export function initStation(ctx) {
         ui.launderPending = null;
         ui.outfitPending = null;
         ui.graftPending = null;
+        ui.trainPending = null;
         ui.restitutionPending = false;
+        ui.giftPending = false;
+        ui.seedPending = false;
         ui.level = 1; ui.service = null; ui.notice = ''; render();
       });
       RENDERERS[ui.service](panel);
       h('div', 'screen-legend', panel, 'Esc back · Esc again / B launch');
     }
 
-    if (ui.notice) h('div', 'station-notice', panel, ui.notice);
+    if (ui.notice) {
+      const note = h('div', 'station-notice', panel, ui.notice);
+      note.setAttribute('aria-live', 'polite');
+    }
     panel.scrollTop = scrollY; // after content: clamped against the new scrollHeight
     renderedView = view;
   }
 
+  function pinDockedSystem() {
+    if (!ctx.flags.docked || !currentId || !ctx.systems?.[currentId]) return;
+    if (ctx.world.currentSystem !== currentId) ctx.world.currentSystem = currentId;
+  }
+
   function selectService(key) {
     if (key === 'launch') { undock(); return; }
+    if (!ctx.flags.docked) return;
+    pinDockedSystem();
     ui.level = 2;
     ui.service = key;
     ui.notice = '';
@@ -5653,7 +5958,10 @@ export function initStation(ctx) {
     ui.launderPending = null;
     ui.outfitPending = null;
     ui.graftPending = null;
+    ui.trainPending = null;
     ui.restitutionPending = false;
+    ui.giftPending = false;
+    ui.seedPending = false;
     if (key === 'shipyard') setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     render();
   }
@@ -5672,7 +5980,16 @@ export function initStation(ctx) {
     ui.launderBusy = false;
     ui.outfitPending = null;
     ui.graftPending = null;
+    ui.trainPending = null;
     ui.restitutionPending = false;
+    ui.giftPending = false;
+    ui.giftBusy = false;
+    ui.seedPending = false;
+    ui.seedBusy = false;
+    ui.uniqueHaulPaid = false;
+    ui.justDocked = true;
+    // leftover throttle must not deliver during dock settle
+    jobTick = 0;
     setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     overlay.style.display = 'flex';
     ctx.emit('docked');
@@ -5695,8 +6012,14 @@ export function initStation(ctx) {
     ui.launderBusy = false;
     ui.outfitPending = null;
     ui.graftPending = null;
+    ui.trainPending = null;
     ui.restitutionPending = false;
+    ui.giftPending = false;
+    ui.giftBusy = false;
+    ui.seedPending = false;
+    ui.seedBusy = false;
     overlay.style.display = 'none';
+    overlay.textContent = '';
     ctx.emit('undocked');
   }
 
@@ -5705,7 +6028,13 @@ export function initStation(ctx) {
     if (!ui.open) return;
     const code = e.code;
     if (ui.level === 1) {
-      if (code === 'Escape' || code === 'KeyB') { undock(); return; }
+      if (code === 'Escape') {
+        if (ui.justDocked) { ui.justDocked = false; return; }
+        undock();
+        return;
+      }
+      if (code === 'KeyB') { undock(); return; }
+      ui.justDocked = false;
       if (code === 'KeyY') { selectService('shipyard'); return; }
       if (code.startsWith('Digit')) {
         const d = Number(code.slice(5));
@@ -5720,9 +6049,9 @@ export function initStation(ctx) {
     }
     // level 2
     if (code === 'Escape') {
-      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui))) { render(); return; }
-      if (ui.service === 'people' && (cancelTrafficPending(ui) || cancelLaunderPending(ui))) { render(); return; }
-      if (ui.service === 'market' && cancelDataPending(ui)) { render(); return; }
+      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui) || cancelTrainPending(ui))) { render(); return; }
+      if (ui.service === 'people' && (cancelGiftPending() || cancelTrafficPending(ui) || cancelLaunderPending(ui))) { render(); return; }
+      if (ui.service === 'market' && (cancelSeedPending() || cancelDataPending(ui))) { render(); return; }
       if (ui.service === 'outfitting' && cancelOutfitPending(ui)) { render(); return; }
       if (ui.service === 'epics' && cancelRestitutionPending()) { render(); return; }
       ui.trafficPending = null;
@@ -5730,17 +6059,39 @@ export function initStation(ctx) {
       ui.launderPending = null;
       ui.outfitPending = null;
       ui.graftPending = null;
+      ui.trainPending = null;
       ui.restitutionPending = false;
+      ui.giftPending = false;
+      ui.seedPending = false;
       ui.level = 1; ui.service = null; ui.notice = ''; render(); return;
     }
     if (code === 'KeyB') { undock(); return; }
     if (ui.service === 'market') {
-      if (code === 'ArrowUp') { ui.marketSel = (ui.marketSel + COMMODITY_KEYS.length - 1) % COMMODITY_KEYS.length; render(); }
-      else if (code === 'ArrowDown') { ui.marketSel = (ui.marketSel + 1) % COMMODITY_KEYS.length; render(); }
-      else if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyA' || code === 'KeyS') {
+      if (code === 'Digit1' && isMarketSeedVisible(ctx) && !ui.seedPending) {
+        armSeedPapers();
+        render();
+        return;
+      }
+      if (code === 'ArrowUp') { ui.marketSel = (ui.marketSel + COMMODITY_KEYS.length - 1) % COMMODITY_KEYS.length; render(); return; }
+      if (code === 'ArrowDown') { ui.marketSel = (ui.marketSel + 1) % COMMODITY_KEYS.length; render(); return; }
+      if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyA' || code === 'KeyS') {
         const qty = code === 'KeyQ' || code === 'KeyA' ? 1 : 5;
         tryTrade(COMMODITY_KEYS[ui.marketSel], qty, code === 'KeyQ' || code === 'KeyW');
         render();
+        return;
+      }
+      // Census archive (and any market extra) can eat Esc. Digit 2-9/0 still pick a dock service.
+      if (code.startsWith('Digit') && ctx.flags.docked) {
+        const d = Number(code.slice(5));
+        if (d === 0) {
+          selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1]);
+          return;
+        }
+        if (d >= 2 && d <= 9) {
+          const i = d - 1;
+          if (i < DOCK_KEY_SERVICES.length) selectService(DOCK_KEY_SERVICES[i]);
+          return;
+        }
       }
       return;
     }
@@ -5772,10 +6123,34 @@ export function initStation(ctx) {
       if (n === 1) undock();
     } else if (ui.service === 'shipyard') {
       if (handleShipyardDigit(n, ctx, ui)) render();
+    } else if (ui.service === 'people') {
+      if (n === 1 && isSwornGiftVisible(ctx) && !ui.giftPending) {
+        armGiftPapers();
+        render();
+      }
     }
   });
 
   // ------------------------------------------------------------ update ----
+
+  function trackJob(j) {
+    trackJobHandle(j);
+  }
+  function patchJob(id, patch) {
+    if (typeof id !== 'string' || !id || !patch) return;
+    const set = JOB_HANDLES.get(id);
+    if (set) {
+      for (const row of set) {
+        if (row && typeof row === 'object') Object.assign(row, patch);
+      }
+    }
+    const list = ctx.world.jobs;
+    if (Array.isArray(list)) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) Object.assign(list[i], patch);
+      }
+    }
+  }
 
   let jobTick = 0;
   let refreshTick = 0;
@@ -5788,44 +6163,70 @@ export function initStation(ctx) {
       for (const ev of ctx.lastEvents) {
         if (ev.type === 'systemLoaded' && ev.to && ev.to !== currentId) loadedTo = ev.to;
       }
-      if (loadedTo) rebuild(loadedTo);
-
-      const reducedMotion = ctx.settings?.reducedMotion === true;
-
-
-
-      // Mesh life: ring spin, running-light pulse, beacon blink, glow breathe.
-      // Frozen at rest pose under reducedMotion (angle kept, pulses at base,
-      // beacon lit) — lightColor is the un-pulsed base, stashed at build.
-      if (!reducedMotion) {
-        mesh.ringGroup.rotation.y += RING_SPIN * dt;
-        _pulse.copy(mesh.lightColor).multiplyScalar(0.72 + 0.28 * Math.sin(ctx.elapsed * 2));
-        mesh.lightMat.color.copy(_pulse);
-        mesh.beaconMat.visible = (ctx.elapsed % 1.6) < 1.05;
-        mesh.glowMat.opacity = 0.3 + 0.12 * Math.sin(ctx.elapsed * 0.8);
-        mesh.beaconGlowMat.opacity = mesh.beaconMat.visible ? 0.85 : 0.1;
-      } else {
-        mesh.lightMat.color.copy(mesh.lightColor);
-        mesh.beaconMat.visible = true;
-        mesh.glowMat.opacity = 0.3;
-        mesh.beaconGlowMat.opacity = 0.85;
+      if (!loadedTo && ctx.world.currentSystem !== currentId) loadedTo = ctx.world.currentSystem;
+      if (loadedTo && !(ctx.flags.docked && loadedTo !== currentId)) rebuild(loadedTo);
+      if (ctx.flags.docked && currentId && ctx.systems?.[currentId]
+        && ctx.world.currentSystem !== currentId) {
+        ctx.world.currentSystem = currentId;
       }
-      if (mesh.organicParts) animateOrganic(mesh.organicParts, ctx.elapsed, ctx.settings.reducedMotion); // wave 27
 
-      // Docking zone (hud.js reads ctx.station; we emit nothing for prompts).
+      // Dock before mesh animation so a sculpt throw cannot skip the berth.
+      const liveSysId = ctx.world.currentSystem;
+      const liveStation = ctx.systems?.[liveSysId]?.station?.position;
+      if (liveStation) stationPos.fromArray(liveStation);
       const shipObj = ctx.ship.object;
-      const inZone = shipObj ? shipObj.position.distanceTo(stationPos) <= U.DOCK_RANGE : false;
+      let dist = Infinity;
+      if (shipObj && liveStation && liveStation.length >= 3) {
+        dist = Math.hypot(
+          shipObj.position.x - liveStation[0],
+          shipObj.position.y - liveStation[1],
+          shipObj.position.z - liveStation[2],
+        );
+      } else if (shipObj) {
+        dist = shipObj.position.distanceTo(stationPos);
+      }
+      const inZone = dist <= U.DOCK_RANGE;
       ctx.station.inZone = inZone;
 
-      if (!ctx.flags.docked) {
-        if (inZone && ctx.input.dockPressed) dock();
-      } else {
+      if (ctx.input.dockPressed && shipObj && liveStation && liveStation.length >= 3) {
+        if (liveSysId !== currentId) rebuild(liveSysId);
+        if (!inZone && dist <= U.DOCK_RANGE * 2) {
+          shipObj.position.set(liveStation[0] + 36, liveStation[1], liveStation[2]);
+          if (ctx.ship.velocity) ctx.ship.velocity.set(0, 0, 0);
+          ctx.ship.speed = 0;
+          dist = 36;
+        }
+        if (dist <= U.DOCK_RANGE && !ctx.flags.docked) dock();
+        if (dist <= U.DOCK_RANGE) ctx.input.dockPressed = false;
+      }
+      if (ctx.flags.docked) {
         // Periodic refresh so prices/jobs/credits stay live behind the panel.
         refreshTick += dt;
         if (refreshTick >= 1) { refreshTick = 0; render(); }
       }
 
+      const reducedMotion = ctx.settings?.reducedMotion === true;
+      if (mesh && mesh.ringGroup && mesh.lightMat && mesh.beaconMat) {
+        if (!reducedMotion) {
+          mesh.ringGroup.rotation.y += RING_SPIN * dt;
+          _pulse.copy(mesh.lightColor).multiplyScalar(0.72 + 0.28 * Math.sin(ctx.elapsed * 2));
+          mesh.lightMat.color.copy(_pulse);
+          mesh.beaconMat.visible = (ctx.elapsed % 1.6) < 1.05;
+          if (mesh.glowMat) mesh.glowMat.opacity = 0.3 + 0.12 * Math.sin(ctx.elapsed * 0.8);
+          if (mesh.beaconGlowMat) mesh.beaconGlowMat.opacity = mesh.beaconMat.visible ? 0.85 : 0.1;
+        } else {
+          mesh.lightMat.color.copy(mesh.lightColor);
+          mesh.beaconMat.visible = true;
+          if (mesh.glowMat) mesh.glowMat.opacity = 0.3;
+          if (mesh.beaconGlowMat) mesh.beaconGlowMat.opacity = 0.85;
+        }
+      }
+      if (mesh?.organicParts) animateOrganic(mesh.organicParts, ctx.elapsed, ctx.settings.reducedMotion);
+
       // Job tracking runs docked or not.
+      if (Array.isArray(ctx.world.jobs)) {
+        for (let ji = 0; ji < ctx.world.jobs.length; ji++) trackJob(ctx.world.jobs[ji]);
+      }
       tickPatrolJob(ctx);
       tickRecoveryCollect(ctx);
       jobTick += dt;

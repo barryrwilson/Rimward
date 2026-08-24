@@ -1,0 +1,457 @@
+{
+  "passed": 48,
+  "total": 48,
+  "failed": [],
+  "results": [
+    {
+      "name": "1 noRock",
+      "pass": true,
+      "extra": {
+        "token": "noRock",
+        "engaged": false
+      }
+    },
+    {
+      "name": "2 engage empty-token + event primitive asteroidId",
+      "pass": true,
+      "extra": {
+        "token": "",
+        "engaged": true,
+        "ev": {
+          "type": "automineEngaged",
+          "t": 0,
+          "asteroidId": 42
+        },
+        "idType": "number"
+      }
+    },
+    {
+      "name": "3 hardness",
+      "pass": true,
+      "extra": {
+        "token": "hardness"
+      }
+    },
+    {
+      "name": "4 empty ore0",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "4b empty ore-1",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "5 cargo full",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "6 autopilot refuse",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "7 match refuse",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "7b combat does not refuse",
+      "pass": true,
+      "extra": {
+        "token": ""
+      }
+    },
+    {
+      "name": "8 far throttle high wantMine false",
+      "pass": true,
+      "extra": {
+        "token": "",
+        "throttle": 1,
+        "wantMine": false,
+        "yaw": -0.21418460395164193,
+        "pitch": -0.03198708914805219,
+        "dist": 506.50172753900847,
+        "range": 90
+      }
+    },
+    {
+      "name": "8b no write input/ship/nav while flying far",
+      "pass": true,
+      "extra": {
+        "writes": []
+      }
+    },
+    {
+      "name": "9 hold range facing wantMine true",
+      "pass": true,
+      "extra": {
+        "wantMine": true,
+        "throttle": 0,
+        "yaw": 0,
+        "pitch": 0,
+        "dist": 55.8,
+        "stand": 55.8,
+        "range": 90,
+        "faceHint": "nose -Z at rock"
+      }
+    },
+    {
+      "name": "9b inside range facing outside mesh wantMine true",
+      "pass": true,
+      "extra": {
+        "wantMine": true,
+        "dist": 81,
+        "range": 90,
+        "throttle": 0.45161290322580655
+      }
+    },
+    {
+      "name": "10 inside mesh wantMine false",
+      "pass": true,
+      "extra": {
+        "wantMine": false,
+        "dist": 2,
+        "radius": 8,
+        "throttle": 0
+      }
+    },
+    {
+      "name": "11 strafe disengage input",
+      "pass": true,
+      "extra": {
+        "engaged": false,
+        "reason": "input",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "input"
+        }
+      }
+    },
+    {
+      "name": "12 lostLock after list clear",
+      "pass": true,
+      "extra": {
+        "reason": "lostLock",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "lostLock"
+        }
+      }
+    },
+    {
+      "name": "12b lostLock after current null",
+      "pass": true,
+      "extra": {
+        "reason": "lostLock"
+      }
+    },
+    {
+      "name": "13 extra channel keys stripped",
+      "pass": true,
+      "extra": {
+        "keys": [
+          "engaged",
+          "pitch",
+          "reason",
+          "throttle",
+          "wantMine",
+          "yaw"
+        ],
+        "extra": []
+      }
+    },
+    {
+      "name": "14 reserved id not used as event key",
+      "pass": true,
+      "extra": [
+        {
+          "id": "__proto__",
+          "token": "",
+          "usedAsKey": false,
+          "asteroidIdPresent": false,
+          "names": [
+            "type",
+            "t"
+          ],
+          "ev": {
+            "type": "automineEngaged",
+            "t": 0
+          }
+        },
+        {
+          "id": "constructor",
+          "token": "",
+          "usedAsKey": false,
+          "asteroidIdPresent": false,
+          "names": [
+            "type",
+            "t"
+          ],
+          "ev": {
+            "type": "automineEngaged",
+            "t": 0
+          }
+        },
+        {
+          "id": "prototype",
+          "token": "",
+          "usedAsKey": false,
+          "asteroidIdPresent": false,
+          "names": [
+            "type",
+            "t"
+          ],
+          "ev": {
+            "type": "automineEngaged",
+            "t": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "combat does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "disengage cargo",
+      "pass": true,
+      "extra": {
+        "reason": "cargo",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "cargo"
+        }
+      }
+    },
+    {
+      "name": "disengage depleted",
+      "pass": true,
+      "extra": {
+        "reason": "depleted",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "depleted"
+        }
+      }
+    },
+    {
+      "name": "disengage autopilot",
+      "pass": true,
+      "extra": {
+        "reason": "autopilot",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "autopilot"
+        }
+      }
+    },
+    {
+      "name": "dock does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "pause does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "jumping does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "overheat does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "hull does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "hail does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "sun does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "impact does not disengage",
+      "pass": true,
+      "extra": {
+        "engaged": true,
+        "reason": ""
+      }
+    },
+    {
+      "name": "disengage input",
+      "pass": true,
+      "extra": {
+        "reason": "input",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "input"
+        }
+      }
+    },
+    {
+      "name": "disengage input",
+      "pass": true,
+      "extra": {
+        "reason": "input",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "input"
+        }
+      }
+    },
+    {
+      "name": "disengage input",
+      "pass": true,
+      "extra": {
+        "reason": "input",
+        "ev": {
+          "type": "automineDisengaged",
+          "t": 0,
+          "reason": "input"
+        }
+      }
+    },
+    {
+      "name": "refuse docked",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "refuse paused",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "refuse jumping",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "refuse noShip",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "hull does not refuse",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "refuse npc lock as noRock",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "hardness equal to mk1 tier engages",
+      "pass": true,
+      "extra": null
+    },
+    {
+      "name": "yaw/pitch nonzero when not facing",
+      "pass": true,
+      "extra": {
+        "yaw": -0.3179857239731655,
+        "pitch": -0.10480675818768959,
+        "wantMine": false,
+        "dist": 515.7518783291051
+      }
+    },
+    {
+      "name": "live list row no lockKind engages",
+      "pass": true,
+      "extra": {
+        "token": "",
+        "ev": {
+          "type": "automineEngaged",
+          "t": 0,
+          "asteroidId": 0
+        },
+        "wantMine": true
+      }
+    },
+    {
+      "name": "helm steerX disengage input",
+      "pass": true,
+      "extra": {
+        "reason": "input"
+      }
+    },
+    {
+      "name": "source contract no input/ship/nav writes",
+      "pass": true,
+      "extra": {
+        "bad": []
+      }
+    },
+    {
+      "name": "engage payload primitives only",
+      "pass": true,
+      "extra": {
+        "type": "automineEngaged",
+        "t": 0,
+        "asteroidId": "rock-12"
+      }
+    },
+    {
+      "name": "restore silent",
+      "pass": true,
+      "extra": {
+        "events": []
+      }
+    },
+    {
+      "name": "wantMine false when nose away at hold",
+      "pass": true,
+      "extra": {
+        "wantMine": false,
+        "yaw": 1
+      }
+    }
+  ]
+}

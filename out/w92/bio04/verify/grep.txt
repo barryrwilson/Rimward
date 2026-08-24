@@ -1,0 +1,34 @@
+WAVE92 BIO04 verifier grep (src/ only; no src edits)
+
+1. hangar.js in this worker's intent
+- src/game/psionic.js: comment only — "do not import that module". No hangar.js import.
+- src/game/hangar.js: no "psionic" matches.
+- Listed BIO-04 files (state/psionic/combat/controls/hud/ctx): hangar.js import is combat.js missile spendMissileAmmo only (pre-existing).
+
+2. family psionic 0xff6ad5
+- src/systems/combat.js: FAMILY_COLORS = { ... psionic: 0xff6ad5 }
+- src/game/state.js: family: 'psionic' on WEAPONS.psionic
+
+3. no beam:true on psionic
+- src/game/state.js WEAPONS.psionic: name/damage/rof/speed/range/heatPerShot/family only.
+- beam: true exists only on WEAPONS.mining.
+
+4. Digit5 in TRACKED
+- src/systems/controls.js TRACKED includes 'Digit5'
+- case 'Digit5': input.weaponGroup = 5
+
+5. no preventDefault Digit5
+- PREVENT_DEFAULT = new Set(['Space'])
+- preventDefault only when PREVENT_DEFAULT.has(e.code)
+
+6. hud 5 · —
+- src/systems/hud.js: if (!wKey || !canFirePsionic(ctx)) return '5 · —';
+
+7. GROUP_WEAPON unknown not cannon
+- GROUP_WEAPON = { 1: 'cannon', 2: 'disruptor', 3: 'mining' }
+- group 5: psionicCatalogOk() ? 'psionic' : null
+- return Object.hasOwn(GROUP_WEAPON, g) ? GROUP_WEAPON[g] : null
+- comment forbids ?? 'cannon'
+- hud.js: WEAPON_KEYS[g - 1] ?? null (hudWeaponKey)
+
+PASS all listed grep pins.

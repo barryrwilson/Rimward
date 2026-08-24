@@ -3,7 +3,8 @@
    beacon cyan, wake blue, threat amber, danger red, salvage green, bio vein
    green, feral ember. Color is ALWAYS paired with text, shape, or glyph.
    Near-sharp panels, monospace, small uppercase labels. Everything under
-   #hud is pointer-events:none except the controls collapse toggle. */
+   #hud is pointer-events:none except the controls collapse toggle and
+   the autopilot / automine buttons. */
 
 #hud {
   /* Accessibility state palette (wave 6): the four STATE colors are canonical
@@ -118,6 +119,8 @@
 .rw-strain .rw-bar-fill { background: var(--amber); }
 .rw-strain.overheated .rw-bar-fill { background: var(--red); }
 .rw-strain.overheated .rw-label { color: var(--red); }
+
+.rw-power .rw-bar-fill { background: var(--cyan); }
 
 .rw-strain-flag {
   display: none;
@@ -446,6 +449,49 @@ body.rw-colorblind .rw-facing-end.is-dim {
   padding: 3px 8px;
 }
 
+#hud .rw-automine-rock {
+  display: block;
+  margin: 4px auto 0;
+  pointer-events: auto;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  color: var(--cyan);
+  font: inherit;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-height: 24px;
+  padding: 2px 8px;
+}
+
+#hud .rw-automine-rock.is-hidden { display: none; }
+
+#hud .rw-automine-rock.is-dim,
+#hud .rw-automine-rock[aria-disabled='true'] {
+  color: var(--dim);
+  opacity: 0.7;
+}
+
+#hud .rw-automine-rock:hover,
+#hud .rw-automine-rock:focus-visible {
+  border-color: var(--cyan);
+  color: var(--white);
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+#hud .rw-automine-rock.is-dim:hover,
+#hud .rw-automine-rock.is-dim:focus-visible,
+#hud .rw-automine-rock[aria-disabled='true']:hover,
+#hud .rw-automine-rock[aria-disabled='true']:focus-visible {
+  border-color: var(--panel-edge);
+  color: var(--dim);
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .rw-target-name {
   font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.12em;
@@ -597,6 +643,75 @@ body.rw-colorblind .rw-facing-end.is-dim {
   align-items: flex-end;
   gap: 5px;
   pointer-events: none;
+}
+
+#hud .rw-chip-stack {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(92vw, 420px);
+  pointer-events: none;
+}
+
+#hud .rw-autopilot,
+#hud .rw-automine {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px 10px;
+  background: rgba(2, 6, 13, 0.82);
+  border: 1px solid rgba(111, 242, 224, 0.4);
+  border-radius: 2px;
+  pointer-events: none;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+#hud .rw-autopilot.is-hidden,
+#hud .rw-automine.is-hidden { display: none; }
+
+#hud .rw-autopilot-dest,
+#hud .rw-autopilot-next,
+#hud .rw-autopilot-rem,
+#hud .rw-automine-state {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+#hud .rw-autopilot-cancel,
+#hud .rw-automine-cancel {
+  pointer-events: auto;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  color: var(--cyan);
+  font: inherit;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-height: 24px;
+  padding: 2px 8px;
+}
+
+#hud .rw-autopilot-cancel:hover,
+#hud .rw-autopilot-cancel:focus-visible,
+#hud .rw-automine-cancel:hover,
+#hud .rw-automine-cancel:focus-visible {
+  border-color: var(--cyan);
+  color: var(--white);
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .rw-toast {
@@ -791,6 +906,18 @@ body.rw-contrast #hud .rw-contacts-stroke {
   flex-direction: row-reverse;
 }
 
+.rw-combat-target .rw-meter.is-part .rw-label {
+  color: var(--amber);
+}
+
+.rw-combat-clos {
+  font-variant-numeric: tabular-nums;
+}
+
+.rw-engine-tgt .rw-bar-fill {
+  background: var(--dim);
+}
+
 .rw-combat-name {
   font-size: calc(11px * var(--rw-text-scale, 1));
   letter-spacing: 0.12em;
@@ -838,6 +965,88 @@ body.rw-contrast #hud .rw-contacts-stroke {
 .rw-side-col .rw-panel { position: relative; }
 
 .rw-pos { min-width: 0; }
+
+/* NAV-02 next-gate readout: slim instrument above POS. Cap 180px so
+   textScale 1.5 cannot grow into the combat target rail. */
+.rw-nav-readout.rw-aux {
+  min-width: 0;
+  max-width: 180px;
+  padding: 6px 8px;
+  pointer-events: none;
+}
+
+.rw-nav-readout .rw-meter {
+  margin-top: 3px;
+  gap: 6px;
+}
+
+.rw-nav-readout .rw-label {
+  min-width: 40px;
+}
+
+.rw-nav-readout .rw-value {
+  font-size: calc(11px * var(--rw-text-scale, 1));
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rw-nav-readout-dist .rw-value {
+  font-size: calc(10px * var(--rw-text-scale, 1));
+}
+
+.rw-nav-readout-status {
+  margin-top: 4px;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rw-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rw-nav-readout-status:empty { display: none; }
+
+/* Gate chevron: two parallel ticks + notch. Shape carries meaning.
+   Transform only — no @keyframes. */
+.rw-nav-gate-cue {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.rw-nav-gate-cue-tick {
+  position: absolute;
+  top: 5px;
+  width: 2px;
+  height: 11px;
+  background: var(--rw-accent);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--rw-accent) 70%, transparent);
+}
+
+.rw-nav-gate-cue-tick-a { left: 4px; }
+.rw-nav-gate-cue-tick-b { right: 4px; }
+
+.rw-nav-gate-cue-notch {
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-left: 2px solid var(--rw-accent);
+  border-top: 2px solid var(--rw-accent);
+  transform: rotate(45deg);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--rw-accent) 55%, transparent);
+}
 
 .rw-coords {
   font-size: calc(10px * var(--rw-text-scale, 1));
@@ -887,7 +1096,7 @@ body.rw-contrast #hud .rw-contacts-stroke {
 }
 
 .rw-controls-toggle {
-  pointer-events: auto; /* sole interactive HUD element */
+  pointer-events: auto; /* CONTROLS toggle; flight-chip / rock buttons also click */
   cursor: pointer;
   background: none;
   border: none;
@@ -959,7 +1168,9 @@ body.rw-contrast #hud .rw-toast,
 body.rw-contrast #hud .rw-target-info,
 body.rw-contrast #hud .rw-prompt,
 body.rw-contrast #hud .rw-banner,
-body.rw-contrast #hud .rw-jump {
+body.rw-contrast #hud .rw-jump,
+body.rw-contrast #hud .rw-autopilot,
+body.rw-contrast #hud .rw-automine {
   background: rgba(0, 2, 6, 0.94);
   border-color: rgba(160, 205, 245, 0.6);
 }
@@ -1456,8 +1667,16 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   border-bottom: 1px solid rgba(111, 242, 224, 0.18);
   padding-bottom: 4px;
+}
+
+.rw-galaxy-chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .rw-galaxy-chart-title {
@@ -1469,7 +1688,25 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   color: var(--rw-accent);
 }
 
-.rw-galaxy-close {
+.rw-galaxy-ap-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rw-galaxy-ap-live {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  min-height: calc(14px * var(--rw-text-scale, 1));
+}
+
+.rw-galaxy-close,
+.rw-galaxy-clear,
+.rw-galaxy-ap {
   background: transparent;
   border: 1px solid var(--panel-edge);
   border-radius: 2px;
@@ -1477,15 +1714,35 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   font: inherit;
   font-size: calc(14px * var(--rw-text-scale, 1));
   line-height: 1;
-  padding: 2px 10px;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 4px 10px;
   cursor: pointer;
 }
 
+.rw-galaxy-clear,
+.rw-galaxy-ap {
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rw-galaxy-ap.is-dim,
+.rw-galaxy-ap[aria-disabled='true'] {
+  color: var(--dim);
+  opacity: 0.7;
+}
+
 .rw-galaxy-close:hover,
-.rw-galaxy-close:focus-visible {
+.rw-galaxy-close:focus-visible,
+.rw-galaxy-clear:hover,
+.rw-galaxy-clear:focus-visible,
+.rw-galaxy-ap:hover,
+.rw-galaxy-ap:focus-visible {
   border-color: var(--rw-accent);
   color: var(--rw-accent);
-  outline: none;
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
 }
 
 .rw-galaxy-chart-desc {
@@ -1515,16 +1772,80 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   opacity: 0.85;
 }
 
+/* player plot: thick solid accent — pattern, not hue alone */
+.rw-galaxy-plot-layer,
+.rw-galaxy-plot,
+.rw-galaxy-plot-dest,
+.rw-galaxy-plot-unreach {
+  pointer-events: none;
+}
+
+.rw-galaxy-plot {
+  fill: none;
+  stroke: var(--rw-accent);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: none;
+}
+
+.rw-galaxy-plot-dest {
+  fill: none;
+  stroke: var(--rw-accent);
+  stroke-width: 2.2;
+  stroke-dasharray: none;
+}
+
+.rw-galaxy-plot-unreach {
+  fill: none;
+  stroke: #ff6b6b;
+  stroke-width: 2.2;
+  stroke-dasharray: 5 4;
+}
+
 /* nodes: faction fill comes from the inline --rw-node-color set at build */
 .rw-galaxy-node {
   fill: var(--rw-node-color, #9aa7b8);
   stroke: rgba(2, 6, 13, 0.9);
   stroke-width: 1.5;
+  pointer-events: none;
 }
 
 .rw-galaxy-node.is-current {
   stroke: #ffffff;
   stroke-width: 3.5;
+}
+
+.rw-galaxy-node.is-hop {
+  stroke: var(--rw-accent);
+  stroke-width: 2.6;
+  stroke-dasharray: 3 2;
+}
+
+.rw-galaxy-node.is-dest {
+  stroke: var(--rw-accent);
+  stroke-width: 4;
+  stroke-dasharray: none;
+}
+
+.rw-galaxy-node.is-unreachable {
+  stroke: #ff6b6b;
+  stroke-width: 3.5;
+  stroke-dasharray: 2 3;
+}
+
+/* Hover cue is stroke + extra ring, not fill. Plot/current strokes win on
+   the node; .rw-galaxy-hover-marker stays the distinct hover shape. */
+.rw-galaxy-node.is-hover:not(.is-current):not(.is-dest):not(.is-hop):not(.is-unreachable) {
+  stroke: var(--white);
+  stroke-width: 2.2;
+  stroke-dasharray: 2 2;
+}
+
+.rw-galaxy-hit {
+  fill: transparent;
+  fill-opacity: 0;
+  cursor: pointer;
+  pointer-events: all;
 }
 
 .rw-galaxy-hub-ring {
@@ -1533,6 +1854,7 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   stroke-width: 1.5;
   stroke-dasharray: 4 4;
   opacity: 0.9;
+  pointer-events: none;
 }
 
 .rw-galaxy-label {
@@ -1555,6 +1877,16 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
 }
 
 .rw-galaxy-current-marker.is-hidden { display: none; }
+
+.rw-galaxy-hover-marker {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 1.4;
+  stroke-dasharray: 2 3;
+  pointer-events: none;
+}
+
+.rw-galaxy-hover-marker.is-hidden { display: none; }
 
 @keyframes rw-galaxy-pulse {
   0%, 100% { opacity: 1; }
@@ -1594,6 +1926,45 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   border-radius: 50%;
 }
 
+.rw-galaxy-legend-plot::before {
+  border-top: 3px solid var(--rw-accent);
+}
+
+.rw-galaxy-hover {
+  margin: 6px 0 0;
+  min-height: 4.05em;
+  font-size: calc(11px * var(--rw-text-scale, 1));
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  color: var(--white);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* Keep in-flow when idle so the SVG scale does not jump under the pointer. */
+.rw-galaxy-hover.is-hidden {
+  visibility: hidden;
+}
+
+.rw-galaxy-hover-name {
+  color: var(--white);
+}
+
+.rw-galaxy-hover-control,
+.rw-galaxy-hover-standing {
+  color: var(--dim);
+}
+
+.rw-galaxy-plot-status {
+  margin: 6px 0 0;
+  min-height: calc(14px * var(--rw-text-scale, 1));
+  font-size: calc(11px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  color: var(--rw-accent);
+}
+
+.rw-galaxy-plot-status.is-hidden { display: none; }
+
 /* galaxy chart accessibility overrides (settings.js body classes) */
 
 body.rw-colorblind .rw-galaxy-chart {
@@ -1614,6 +1985,15 @@ body.rw-contrast .rw-galaxy-chart .rw-galaxy-gate {
 
 body.rw-contrast .rw-galaxy-chart .rw-galaxy-label {
   fill: #dce8f4;
+}
+
+body.rw-contrast .rw-galaxy-chart .rw-galaxy-plot {
+  stroke-width: 4;
+}
+
+body.rw-colorblind .rw-galaxy-chart .rw-galaxy-plot-unreach,
+body.rw-colorblind .rw-galaxy-chart .rw-galaxy-node.is-unreachable {
+  stroke: #E69F00;
 }
 
 body.rw-reduced-motion .rw-galaxy-chart,

@@ -1,0 +1,26 @@
+{
+  "headless": {
+    "P": 6.6,
+    "lightMax": 6.6,
+    "cutterMax": 9.68,
+    "heavyMax": 18.7,
+    "junkEqualsLight": true,
+    "buyDoesNotRemount": true
+  },
+  "browser": {
+    "url": "http://127.0.0.1:5174/",
+    "buyDidNotRemount": true,
+    "light": { "classKey": "light", "kind": "living", "restScale": 1, "maxSwim": 6.551 },
+    "heavy": { "classKey": "heavy", "kind": "living", "restScale": 2.5757575757575757, "maxSwim": 19.338 },
+    "swimMoved": true,
+    "swimMaxDelta": 0.02743,
+    "plated": {
+      "hullPath": "built",
+      "kind": "built",
+      "platedIsAsset": true,
+      "platedFallback": false,
+      "platedName": "npc-ship-asset",
+      "living": null
+    }
+  }
+}

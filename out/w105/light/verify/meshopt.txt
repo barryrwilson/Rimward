@@ -1,0 +1,3 @@
+lod0 bytes=194152 meshopt=true
+lod1 bytes=135228 meshopt=true
+lod2 bytes=87188 meshopt=true

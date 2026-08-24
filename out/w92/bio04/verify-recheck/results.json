@@ -1,0 +1,22 @@
+{
+  "status": "CLEAN",
+  "bootPins": "WAVE92 BIO04 PASS",
+  "starterHeat": 8,
+  "builtDry": 0,
+  "frontend": {
+    "vite": "http://127.0.0.1:5184/",
+    "cdp": 9444,
+    "profile": "out/w92/bio04/verify-recheck/chrome-profile",
+    "docked": false,
+    "hullKindOwn": false,
+    "hullKindRaw": null,
+    "digit5Wpn": "5 · Psionic bolt",
+    "lmbHeat": 8,
+    "psiBolts": 1,
+    "forcedBuiltWpn": "5 · —",
+    "forcedBuiltHeat": 0,
+    "forcedBuiltPsiBolts": 0,
+    "consoleErrors": 0
+  },
+  "previousBug": "does not hold"
+}

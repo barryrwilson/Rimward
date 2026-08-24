@@ -5,7 +5,7 @@
 | **Title** | RIMWARD NAV-02 in-flight next-gate guidance |
 | **Author** | Wave 84 NAV-02 integrator |
 | **Date** | 2026-08-21 |
-| **Status** | Design freeze. Later impl **after** NAV-01 persist PR. Wave 84 is markdown only. |
+| **Status** | Implemented. Wave 85 in-flight guidance. Consume `world.nav` read-only. |
 | **Wave** | 84 — design. Later — impl. |
 | **Owner request** | While a route is active, the HUD identifies the next hop with an in-world marker **and** an off-screen cue, plus next/dest/distance/remaining jumps, without keeping the galaxy map open. Advance after the jump completes. Guidance is not a lock. |
 | **Merge law** | [`out/w84/nav02/shared-contract.md`](../out/w84/nav02/shared-contract.md). If this brief and that file conflict, the contract wins. |

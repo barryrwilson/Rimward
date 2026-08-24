@@ -1,0 +1,3 @@
+CDP LIVE FAIL Error: CDP not ready
+    at waitReady (file:///C:/Projects/WebSim/out/w87/ap-path/verify/cdp-live.mjs:48:9)
+    at async main (file:///C:/Projects/WebSim/out/w87/ap-path/verify/cdp-live.mjs:85:16)

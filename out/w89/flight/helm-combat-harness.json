@@ -1,0 +1,160 @@
+{
+  "total": 16,
+  "failed": 0,
+  "results": [
+    {
+      "name": "helm automine beats input yaw",
+      "pass": true,
+      "extra": {
+        "yAm": 0.020000000000000007,
+        "expect": "am.yaw=-1 → +Y euler"
+      }
+    },
+    {
+      "name": "helm AP wins when both on (sign follows AP yaw=+1 → -Y)",
+      "pass": true,
+      "extra": {
+        "yAp": -0.020000000000000007
+      }
+    },
+    {
+      "name": "helm AP beats automine opposite yaw",
+      "pass": true,
+      "extra": {
+        "y": -0.020000000000000007,
+        "note": "AP yaw+1 vs AM yaw-1"
+      }
+    },
+    {
+      "name": "low AM throttle suppresses creep",
+      "pass": true,
+      "extra": {
+        "speedAm": 0
+      }
+    },
+    {
+      "name": "manual zero throttle still creeps (control)",
+      "pass": true,
+      "extra": {
+        "speedCreep": 29.75103877916628
+      }
+    },
+    {
+      "name": "rock rest-frame hold tracks rock +X vel",
+      "pass": true,
+      "extra": {
+        "vx": 39.99989796518427,
+        "rockVel": 40
+      }
+    },
+    {
+      "name": "MATCH clears when automine on",
+      "pass": true,
+      "extra": {
+        "matchSpeed": false
+      }
+    },
+    {
+      "name": "amMine beam on without fireHeld",
+      "pass": true,
+      "extra": {
+        "visible": true,
+        "group": 1,
+        "fireHeld": false
+      }
+    },
+    {
+      "name": "still one mine-beam mesh",
+      "pass": true,
+      "extra": {
+        "count": 1
+      }
+    },
+    {
+      "name": "beam core also on",
+      "pass": true,
+      "extra": {
+        "visible": true
+      }
+    },
+    {
+      "name": "updateMining aims nose→rock (mostly -Z)",
+      "pass": true,
+      "extra": {
+        "dx": 0,
+        "dy": 0,
+        "dz": -29.59999990463257,
+        "nz": -1,
+        "len": 29.59999990463257
+      }
+    },
+    {
+      "name": "updateMining aims at off-axis rock (+X)",
+      "pass": true,
+      "extra": {
+        "dx2": 32.01436233520508,
+        "dz2": 1.9208617806434631,
+        "nx": 0.9982048453902251
+      }
+    },
+    {
+      "name": "beam off when wantMine false and no LMB",
+      "pass": true,
+      "extra": {
+        "visible": false
+      }
+    },
+    {
+      "name": "cannon group + LMB does not mine",
+      "pass": true,
+      "extra": {
+        "visible": false
+      }
+    },
+    {
+      "name": "WORLD_FIELDS omits automine",
+      "pass": true,
+      "extra": {
+        "listed": false
+      }
+    },
+    {
+      "name": "snapshot JSON omits automine",
+      "pass": true,
+      "extra": {
+        "keys": [
+          "v",
+          "savedAt",
+          "world",
+          "cargo",
+          "cargoCapacity",
+          "bio",
+          "player",
+          "ship"
+        ],
+        "worldKeys": [
+          "time",
+          "credits",
+          "fear",
+          "reputation",
+          "currentSystem",
+          "markets",
+          "records",
+          "incidents",
+          "aftermath",
+          "prices",
+          "activeEvent",
+          "milestones",
+          "shipName",
+          "contacts",
+          "miningLaser",
+          "hangar",
+          "launcher",
+          "missileAmmo",
+          "turret",
+          "nav"
+        ]
+      }
+    }
+  ]
+}

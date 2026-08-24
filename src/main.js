@@ -29,6 +29,9 @@ import { initCombat } from './systems/combat.js';
 import { initPods } from './game/pods.js';
 import { initGate } from './systems/gate.js';
 import { initJump } from './game/jump.js';
+import { initNav } from './game/nav.js';
+import { initAutopilot } from './game/autopilot.js';
+import { initAutomine } from './game/automine.js';
 import { initSave } from './game/save.js';
 import { initSettings } from './systems/settings.js';
 import { initOrigins } from './game/origins.js';
@@ -85,10 +88,13 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // right after contacts (lazy ctx.world.mystery default before save restore);
 // epics after mystery (stage checks read mystery.found); settings right
 // after controls (input registered; DOM-only, everyone reads ctx.settings
-// live); origins after save (ctx.flags.saveRestored is final — a restore
-// means no origin pick); onboarding after origins, before HUD; galaxy
-// chart after onboarding, before HUD (DOM-only overlay, reads SYSTEMS +
-// ctx.world.currentSystem live); models browser after galaxy chart, before
+// live); autopilot after controls and before ship (command channel, no mesh);
+// automine after autopilot and before ship (command channel, no mesh);
+// nav after jump (same-frame systemLoaded for route recalc) and
+// before or with the galaxy chart; origins after save (ctx.flags.saveRestored
+// is final — a restore means no origin pick); onboarding after origins,
+// before HUD; galaxy chart after onboarding, before HUD (DOM-only overlay,
+// reads SYSTEMS + ctx.world.currentSystem live); models browser after galaxy chart, before
 // HUD (DOM + own-renderer overlay, owns its own render loop and pause
 // save/restore, reached lazily through ctx.models at click time); wakes
 // after npc + pods (reads ctx.ships flee modes, spawns discovery pods),
@@ -104,6 +110,8 @@ const systems = [
   initLandmarks,
   initGate,
   initControls,
+  initAutopilot,
+  initAutomine,
   initSettings,
   initBio,
   initShip,
@@ -112,6 +120,7 @@ const systems = [
   initMystery,
   initEpics,
   initJump,
+  initNav,
   initTraffic,
   initNpc,
   initCombat,

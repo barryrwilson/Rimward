@@ -1,0 +1,4 @@
+lod0 bytes=294328 meshopt=true prims=3 tris=17616/60000 idle=true glowZ=7.582 PASS
+lod1 bytes=144552 meshopt=true prims=3 tris=9080/24000 idle=true glowZ=7.582 PASS
+lod2 bytes=57500 meshopt=true prims=3 tris=4160/8000 idle=true glowZ=7.582 PASS
+meshopt-inspect: ALL PASS

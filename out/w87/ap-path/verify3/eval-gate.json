@@ -1,0 +1,147 @@
+{
+  "sysKeys": [
+    "freehold",
+    "veridian",
+    "redmarch",
+    "hollowreach",
+    "hush",
+    "verge",
+    "fh_hearth",
+    "fh_haven",
+    "fh_meridian",
+    "fh_alder",
+    "fh_mercy",
+    "fh_longtable",
+    "fh_sweetwater",
+    "fh_granary",
+    "fh_kinhold",
+    "fh_tallow",
+    "fh_tamsin",
+    "fh_cloverfield",
+    "fh_bramblehome",
+    "fh_meadowlark"
+  ],
+  "sysType": "object",
+  "sysPick": {
+    "id": "freehold",
+    "name": "Freehold Drift",
+    "keys": [
+      "id",
+      "name",
+      "faction",
+      "worldSeed",
+      "chart",
+      "hub",
+      "sunColor",
+      "sunRadius",
+      "planetCount",
+      "station",
+      "field",
+      "gates",
+      "priceBase",
+      "cast",
+      "band",
+      "landmarks",
+      "clues"
+    ],
+    "gates": [
+      {
+        "position": [
+          0,
+          60,
+          -900
+        ],
+        "to": "veridian"
+      }
+    ]
+  },
+  "worldNav": {
+    "dest": "veridian",
+    "path": [
+      "freehold",
+      "veridian"
+    ],
+    "remaining": 1,
+    "status": "plotted",
+    "autopilot": false
+  },
+  "flags": {
+    "docked": false,
+    "combat": true,
+    "paused": false,
+    "firstPerson": false,
+    "camera": "chase",
+    "matchSpeed": false,
+    "saveRestored": false,
+    "chartOpen": false
+  },
+  "gateObj": {
+    "inZone": false,
+    "nearTo": null,
+    "nearHub": false,
+    "nearRouteIndex": -1,
+    "nearRouteCount": 0,
+    "jumping": false,
+    "progress": 0,
+    "destination": null
+  },
+  "inputKeys": [
+    "steerX",
+    "steerY",
+    "strafeX",
+    "strafeY",
+    "roll",
+    "throttle",
+    "fullStop",
+    "afterburnerPressed",
+    "driftHeld",
+    "fireHeld",
+    "weaponGroup",
+    "targetPressed",
+    "hailPressed",
+    "dockPressed",
+    "cameraPressed",
+    "matchSpeedPressed",
+    "reticleLockPressed",
+    "throttleHeld",
+    "pausePressed"
+  ],
+  "playerCombat": {
+    "lastCombatAt": 313.17129999983155,
+    "lastHitAt": 313.17129999983155,
+    "hull": 91.83066666634873
+  },
+  "gates": [
+    {
+      "name": "freehold-gate",
+      "type": "Group",
+      "pos": {
+        "x": 0,
+        "y": 60,
+        "z": -900
+      },
+      "userData": {}
+    },
+    {
+      "name": "nav-gate-marker",
+      "type": "Group",
+      "pos": {
+        "x": 0,
+        "y": 60,
+        "z": -900
+      },
+      "userData": {}
+    },
+    {
+      "name": "nav-gate-ring",
+      "type": "Mesh",
+      "pos": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "userData": {}
+    }
+  ],
+  "gateLen": 3
+}

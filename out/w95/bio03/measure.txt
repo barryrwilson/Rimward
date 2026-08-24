@@ -1,0 +1,10 @@
+beautiful     light      verts= 19260 size=8.0(Z) len/beam=1.15 ht/len=0.39 beam/len=0.87 ctr x=0.0 y=0.0 z=-0.1 cover=83.5% fit:w=24%,h=24%,l=34%
+beautiful     ace        verts= 19044 size=7.7(Z) len/beam=1.11 ht/len=0.17 beam/len=0.90 ctr x=0.0 y=0.0 z=-0.0 cover=86.3% fit:w=24%,h=24%,l=34%
+beautiful     cutter     verts= 23780 size=10.7(Z) len/beam=1.01 ht/len=0.25 beam/len=0.99 ctr x=0.0 y=0.0 z=-0.1 cover=83.9% fit:w=24%,h=24%,l=34%
+beautiful     heavy      verts= 40900 size=15.3(Z) len/beam=1.28 ht/len=0.48 beam/len=0.78 ctr x=0.0 y=0.0 z=-0.2 cover=98.4% fit:w=24%,h=24%,l=34%
+beautiful     frigate    verts= 73152 size=29.0(Z) len/beam=1.00 ht/len=0.24 beam/len=1.00 ctr x=0.0 y=0.0 z=-0.5 cover=87.6% fit:w=24%,h=24%,l=34%
+beautiful     freighter  verts= 79980 size=83.2(Z) len/beam=1.09 ht/len=0.40 beam/len=0.91 ctr x=0.0 y=-0.0 z=-1.0 cover=93.6% fit:w=24%,h=24%,l=34%
+beautiful class order OK: light=8.0 < ace=7.7 < cutter=10.7 < heavy=15.3 < frigate=29.0 < freighter=83.2
+measure-ships: ALL PASS
+
+Gate note: live scripts/measure-ships.mjs allows light vs ace within 15% (ace >= light*0.85). Strict light <= ace is 8.0 vs 7.7. Ace remains the thinner dart; light is the compact wayfinder.

@@ -1,8 +1,9 @@
-import { createShipState, SHIP_CLASSES, FACTIONS } from './state.js';
+import { createShipState, SHIP_CLASSES, FACTIONS, cargoHoldFor, cargoHoldMax, HOLD_RACK_STEP } from './state.js';
 import {
   sanitizeCargoList,
   sanitizeFaction,
   stripControlChars,
+  requestAutosave,
   SAFE_ID,
   ID_MAX,
   NAME_MAX,
@@ -13,7 +14,7 @@ import {
   healMissileAmmo,
   canSeat,
 } from './weapon-fit.js';
-import { GRAFT_LIST_UU } from './shipyard.js';
+import { GRAFT_LIST_UU, livingTrainDests, minRepFor, trainListPrice } from './shipyard.js';
 
 /**
  * Hangar persist + switch helpers — JSON-plain hull rows on ctx.world.hangar.
@@ -25,6 +26,7 @@ import { GRAFT_LIST_UU } from './shipyard.js';
 
 export const HANGAR_CAP = 8;
 const STARTER_ID = 'hull_starter';
+const GIFT_HULL_ID = 'hull_seed_gift';
 const RESERVED_IDS = new Set([
   '__proto__', 'prototype', 'constructor', 'toString', 'valueOf',
   'hasOwnProperty', '__defineGetter__', '__defineSetter__',
@@ -61,8 +63,18 @@ function healTurret(classKey, value) {
   return isTurretId(value) ? value : '';
 }
 
-function healCargoCapacity(value) {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 20 ? value : 20;
+function healCargoCapacity(value, classKey) {
+  const floor = cargoHoldFor(classKey);
+  const max = cargoHoldMax(classKey);
+  if (typeof value !== 'number' || !Number.isFinite(value)) return floor;
+  let n = value;
+  if (n < floor) {
+    const racks = Math.max(0, Math.round((n - 20) / HOLD_RACK_STEP) * HOLD_RACK_STEP);
+    n = floor + Math.min(racks, HOLD_RACK_STEP * 2);
+  }
+  if (n < floor) n = floor;
+  if (n > max) n = max;
+  return n;
 }
 
 function trimCargoToCapacity(list, cap) {
@@ -216,7 +228,7 @@ export function sanitizeHangarRecord(raw) {
   const factionRaw = sanitizeFaction(own(raw, 'faction'));
   const faction = (factionRaw && !RESERVED_IDS.has(factionRaw)) ? factionRaw : 'independent';
   const vitals = vitalsFromClass(classKey, raw);
-  const cargoCapacity = healCargoCapacity(own(raw, 'cargoCapacity'));
+  const cargoCapacity = healCargoCapacity(own(raw, 'cargoCapacity'), classKey);
   const launcher = healLauncher(classKey, own(raw, 'launcher'));
   const turret = healTurret(classKey, own(raw, 'turret'));
   const row = {
@@ -288,7 +300,7 @@ function buildStarterRow(ctx, { stock = false } = {}) {
     scanner: stock ? 0 : world.scanner,
     miningLaser: stock ? 0 : world.miningLaser,
     concealedMounts: stock ? false : world.concealedMounts,
-    cargoCapacity: stock ? 20 : ctx.cargoCapacity,
+    cargoCapacity: stock ? cargoHoldFor(classKey) : ctx.cargoCapacity,
     cargo: stock ? [] : ctx.cargo,
     hull: p?.hull,
     hullMax: p?.hullMax,
@@ -492,7 +504,7 @@ export function writeMountedGear(ctx, patch) {
     ctx.world.concealedMounts = row.concealedMounts;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'cargoCapacity')) {
-    row.cargoCapacity = healCargoCapacity(patch.cargoCapacity);
+    row.cargoCapacity = healCargoCapacity(patch.cargoCapacity, row.classKey);
     row.cargo = trimCargoToCapacity(sanitizeCargoList(row.cargo), row.cargoCapacity);
     ctx.cargoCapacity = row.cargoCapacity;
   }
@@ -763,6 +775,202 @@ export function graftMounted(ctx) {
   return { ok: true };
 }
 
+/** First dest in livingTrainDests, or null. */
+export function nextTrainClass(classKey) {
+  const dests = livingTrainDests(classKey);
+  return dests.length ? dests[0] : null;
+}
+
+let trainInFlight = false;
+
+function trainMountedUnlocked(ctx, destClass) {
+  if (!ctx?.flags?.docked) return { ok: false, reason: 'dock' };
+  if (ctx.flags?.combat) return { ok: false, reason: 'combat' };
+  if (ctx.gate?.jumping) return { ok: false, reason: 'jump' };
+  if (ctx.player?.destroyed) return { ok: false, reason: 'destroyed' };
+  if (ctx.flags?.paused) return { ok: false, reason: 'paused' };
+  if (dockBannerOf(ctx) !== 'beautiful') return { ok: false, reason: 'banner' };
+  sanitizeHangar(ctx);
+  const hangar = ctx.world?.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return { ok: false, reason: 'missing' };
+  const row = hangar.hulls.find((h) => h.id === hangar.mountedId);
+  if (!row) return { ok: false, reason: 'missing' };
+  if (row.faction === 'unknowables' || ctx.player?.faction === 'unknowables') {
+    return { ok: false, reason: 'faction' };
+  }
+  if (row.hullKind !== 'living') return { ok: false, reason: 'living' };
+  if (graftedOwnTrue(row) || graftedOwnTrue(ctx.player)) return { ok: false, reason: 'living' };
+  const dest = typeof destClass === 'string' ? destClass : '';
+  const dests = livingTrainDests(row.classKey);
+  if (!dest || dest === row.classKey || !dests.includes(dest)
+    || !Object.prototype.hasOwnProperty.call(SHIP_CLASSES, dest)) {
+    return { ok: false, reason: 'class' };
+  }
+  const rep = standingOf(ctx, 'beautiful');
+  if (rep < 0 || rep < minRepFor(dest)) return { ok: false, reason: 'reputation' };
+  const price = trainListPrice(rep, dest);
+  if (price == null || !Number.isInteger(price) || price < 0) {
+    return { ok: false, reason: 'credits' };
+  }
+  const credits = ctx.world.credits;
+  if (typeof credits !== 'number' || !Number.isFinite(credits) || credits < price) {
+    return { ok: false, reason: 'credits' };
+  }
+
+  const snap = captureSwitch(ctx);
+  try {
+    parkMounted(ctx);
+    const hangar2 = ctx.world.hangar;
+    const idx = hangar2.hulls.findIndex((h) => h.id === hangar2.mountedId);
+    if (idx < 0) throw new Error('train-missing');
+    const parked = hangar2.hulls[idx];
+    if (parked.faction === 'unknowables') throw new Error('train-faction');
+    if (parked.hullKind !== 'living' || graftedOwnTrue(parked)) throw new Error('train-living');
+    if (!livingTrainDests(parked.classKey).includes(dest)) throw new Error('train-class');
+    const raw = {
+      id: parked.id,
+      hullKind: 'living',
+      faction: parked.faction,
+      classKey: dest,
+      name: parked.name,
+      scanner: parked.scanner,
+      miningLaser: parked.miningLaser,
+      concealedMounts: parked.concealedMounts,
+      launcher: parked.launcher,
+      missileAmmo: parked.missileAmmo,
+      turret: parked.turret,
+      cargoCapacity: parked.cargoCapacity,
+      cargo: parked.cargo,
+      hull: parked.hull,
+      hullMax: parked.hullMax,
+      screen: parked.screen,
+      screenMax: parked.screenMax,
+      shell: parked.shell,
+      shellMax: parked.shellMax,
+      engine: parked.engine,
+      engineMax: parked.engineMax,
+      heat: parked.heat,
+    };
+    const rec = sanitizeHangarRecord(raw);
+    if (!rec || rec.id !== parked.id || rec.classKey !== dest || rec.hullKind !== 'living') {
+      throw new Error('train-record');
+    }
+    rec.hullKind = 'living';
+    delete rec.grafted;
+    hangar2.hulls[idx] = rec;
+    loadMountedRow(ctx, rec);
+    hangar2.mountedId = rec.id;
+    applyFlightEnvelope(ctx, dest);
+    callRemount(ctx);
+    ctx.world.credits = credits - price;
+    if (!(ctx.world.credits >= 0)) ctx.world.credits = 0;
+    requestAutosave(ctx);
+    return { ok: true, dest, price };
+  } catch {
+    restoreSwitch(ctx, snap);
+    try { callRemount(ctx); } catch { /* keep restored records */ }
+    return { ok: false, reason: 'failed' };
+  }
+}
+
+/** Mounted living non-grafted hull. Debits yardPrice(dest). Same-row remount. */
+export function trainMounted(ctx, destClass) {
+  if (trainInFlight) return { ok: false, reason: 'busy' };
+  trainInFlight = true;
+  try {
+    return trainMountedUnlocked(ctx, destClass);
+  } finally {
+    trainInFlight = false;
+  }
+}
+
+function nextSeedId(hangar, stem) {
+  if (typeof stem !== 'string' || !/^[a-z0-9_]+$/.test(stem)) return null;
+  const used = new Set();
+  for (const row of hangar?.hulls ?? []) {
+    if (typeof row?.id === 'string') used.add(row.id);
+  }
+  for (let i = 1; i < 100; i++) {
+    const id = `hull_${stem}_${i}`;
+    if (!used.has(id) && id !== GIFT_HULL_ID && !RESERVED_IDS.has(id)) return id;
+  }
+  return null;
+}
+
+function livingSeedRaw(id) {
+  const fresh = createShipState('light', { name: 'light', faction: 'beautiful' });
+  return {
+    id,
+    hullKind: 'living',
+    faction: 'beautiful',
+    classKey: 'light',
+    name: 'light',
+    scanner: 0,
+    miningLaser: 0,
+    concealedMounts: false,
+    launcher: '',
+    missileAmmo: 0,
+    turret: '',
+    cargoCapacity: cargoHoldFor('light'),
+    cargo: [],
+    hull: fresh.hull,
+    hullMax: fresh.hullMax,
+    screen: fresh.screen,
+    screenMax: fresh.screenMax,
+    shell: fresh.shell,
+    shellMax: fresh.shellMax,
+    engine: fresh.engine,
+    engineMax: fresh.engineMax,
+    heat: 0,
+  };
+}
+
+/**
+ * Park, then append one living light Beautiful seed. Does not remount.
+ * spec.id is an exact hull id. spec.stem mints hull_<stem>_N.
+ */
+export function grantLivingSeedRow(ctx, spec) {
+  if (!ctx?.world) return { ok: false, reason: 'invalid' };
+  sanitizeHangar(ctx);
+  if (!canAcceptPurchase(ctx)) return { ok: false, reason: 'full' };
+  const hangar = ctx.world.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return { ok: false, reason: 'full' };
+
+  const wantId = spec && Object.prototype.hasOwnProperty.call(spec, 'id')
+    ? spec.id : undefined;
+  const stem = spec && Object.prototype.hasOwnProperty.call(spec, 'stem')
+    ? spec.stem : undefined;
+  let id;
+  if (typeof wantId === 'string') id = wantId;
+  else if (typeof stem === 'string') id = nextSeedId(hangar, stem);
+  else return { ok: false, reason: 'invalid' };
+  if (typeof id !== 'string' || !isSafeHullId(id) || RESERVED_IDS.has(id)) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (typeof stem === 'string' && id === GIFT_HULL_ID) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (hangar.hulls.some((row) => row && row.id === id)) {
+    return { ok: false, reason: 'already' };
+  }
+
+  const rec = sanitizeHangarRecord(livingSeedRaw(id));
+  if (!rec) return { ok: false, reason: 'invalid' };
+  rec.hullKind = 'living';
+  delete rec.grafted;
+  if (rec.id !== id || rec.classKey !== 'light' || rec.faction !== 'beautiful') {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (rec.hullKind !== 'living') return { ok: false, reason: 'invalid' };
+
+  const mountedId = hangar.mountedId;
+  const added = addPurchasedHull(ctx, rec);
+  if (!added.ok) return { ok: false, reason: added.reason === 'full' ? 'full' : 'invalid' };
+  if (ctx.world.hangar.mountedId !== mountedId) ctx.world.hangar.mountedId = mountedId;
+  requestAutosave(ctx);
+  return { ok: true, row: added.row };
+}
+
 /** Death no-save: one living starter. Do not keep parked rows. */
 export function rebuildStarterHangar(ctx) {
   if (!ctx.world) return;
@@ -770,5 +978,5 @@ export function rebuildStarterHangar(ctx) {
   mirrorStarterGear(ctx, starter);
   if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
   else ctx.cargo.length = 0;
-  ctx.cargoCapacity = 20;
+  ctx.cargoCapacity = cargoHoldFor(starter?.classKey);
 }

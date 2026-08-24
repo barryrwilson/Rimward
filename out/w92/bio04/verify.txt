@@ -1,0 +1,8 @@
+node out/w92/bio04/boot-pins.mjs
+WAVE92 BIO04 PASS catalog=Psionic bolt hex=0xff6ad5 livingHeat=8 builtDry=0 graftedHeat=8
+
+Vite http://127.0.0.1:5179 New Game living starter.
+Digit 5 WPN `5 · Psionic bolt`; LMB heat rose; bolts 0xff6ad5.
+Digits 1–2 still spawned family bolts. Hangar had no built row.
+Forced built: `5 · —` family mech. Forced grafted: `5 · Psionic bolt` family mech.
+Ports 5179 and 9431 stopped. Console errors: 0.

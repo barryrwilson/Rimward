@@ -169,7 +169,11 @@ export const AUTHORED_SYSTEMS = {
     planetCount: 1,
     station: { name: 'Threshold', position: [260, 40, 420], palette: 0x5a4a6a },
     field: { center: [-350, -50, -280], radius: 90, count: 45, oreMult: 2.5 },
-    gates: [{ position: [0, 80, -1150], to: 'hollowreach' }, { position: [750, 90, -350], to: 'verge' }],
+    gates: [
+      { position: [0, 80, -1150], to: 'hollowreach' },
+      { position: [750, 90, -350], to: 'verge' },
+      { position: [-780, 85, 180], to: 'veil' },
+    ],
     // Band 3: hard ore underfoot, and emberglass keeps the lamps lit.
     priceBase: {
       provisions: 1.9, refinedMetals: 1.3, restrictedComponents: 0.55, rawOre: 0.85, livingRock: 0.6,
@@ -182,6 +186,7 @@ export const AUTHORED_SYSTEMS = {
     landmarks: [
       { id: 'th_lanes_end', name: "The Lane's End", kind: 'beacon', position: [-650, 120, 300], line: "The Shepherd's broadcast ends here, at a second beacon answering it across everything between. Someone built a lane to nowhere — or to this." },
       { id: 'th_first_garden', name: 'The First Garden', kind: 'monument', position: [500, -140, -500], line: 'The stones from Hollow Reach were not taken rimward. They were brought home. The garden here is older — and it is not empty.' },
+      { id: 'th_veil', name: 'The Veil', kind: 'anomaly', position: [680, 70, 780], line: 'A lens hangs in the hush that is not a gate. It does not open. It waits for a heading no chart yet carries.' },
     ],
     clues: [
       { id: 'th_c_keeper', position: [100, -60, -150], line: "The Threshold's keeper logs every arrival in two columns. The second column is arrivals that have not happened yet." },
@@ -222,6 +227,30 @@ export const AUTHORED_SYSTEMS = {
     // (cluesNeeded 3) and DEEPENING (cluesNeeded 5) math and the wave-7
     // comments stay true. The mystery chain stops at 'The Answer' — the
     // Verge is the non-verbal continuation, a place, not an explanation.
+    clues: [],
+  },
+  // Wave 94: Unknowables origin. Band 3, gated from the Hush. Empty clues
+  // so the authored mystery count stays 6 (verge precedent).
+  veil: {
+    id: 'veil',
+    name: 'The Veil',
+    faction: 'unknowables',
+    worldSeed: 173,
+    chart: [890, 640],
+    sunColor: 0x4a5a8a,
+    sunRadius: 30,
+    planetCount: 1,
+    station: { name: 'The Quiet', position: [220, 24, 380], palette: 0x404c77 },
+    field: { center: [-320, -40, -260], radius: 80, count: 40, oreMult: 2.2 },
+    gates: [{ position: [0, 80, -1100], to: 'hush' }],
+    priceBase: {
+      provisions: 1.9, refinedMetals: 1.3, restrictedComponents: 0.55, rawOre: 0.85, livingRock: 0.6,
+      slagIron: 0.75, brineIce: 0.70, chromeSalt: 0.80, gildvein: 0.85,
+      emberglass: 1.15, voidPlatinum: 0.80, wakeglass: 0.85,
+    },
+    cast: { traders: 0, pirates: 0, patrols: 0, ace: false },
+    band: 3,
+    landmarks: [],
     clues: [],
   },
 };

@@ -1,0 +1,10 @@
+{
+  "match.token": true,
+  "match.engage": true,
+  "match.noFly": true,
+  "engage.ok": true,
+  "engage.noTeleport": true,
+  "cancel.keepsRoute": true,
+  "hearth.liveHubJunction": true
+}
+EXTRA PINS PASS

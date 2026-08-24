@@ -1,0 +1,7 @@
+Added 'veil' to AUTHORED_IDS in src/systems/galaxychart.js so The Veil gets an authored chart label.
+
+Updated two comments that said "authored six" to "authored seven" (file header + AUTHORED_IDS comment). No other authored-six hardcodes in galaxychart.js.
+
+Did not restyle the chart. Did not change plot law, PINNED_IDS, geometry, CSS, or label placement.
+
+Grep of out/w94/unk/ still shows "authored total stays 6" in code-review.md (outside this write-set).

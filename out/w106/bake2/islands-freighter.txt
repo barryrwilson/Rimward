@@ -1,0 +1,9 @@
+== beautiful/freighter/lod0  voxel=0.06  triangles=39252  cells=1149830
+main  cells=1148611  x[-14.16, 14.16]  y[ -6.84,  6.84]  z[-39.84, 39.00]
+FLOAT cells=   210  x[ -5.40, -5.16]  y[ -2.82, -2.64]  z[ -8.76, -7.68]
+FLOAT cells=   208  x[  5.16,  5.40]  y[ -2.82, -2.64]  z[ -8.76, -7.68]
+FLOAT cells=   202  x[ -5.40, -5.16]  y[ -2.82, -2.64]  z[-12.84,-11.70]
+FLOAT cells=   201  x[  5.16,  5.40]  y[ -2.82, -2.64]  z[-12.84,-11.70]
+FLOAT cells=   199  x[  5.16,  5.40]  y[ -2.76, -2.64]  z[-11.46,-10.38]
+FLOAT cells=   199  x[ -5.40, -5.16]  y[ -2.76, -2.64]  z[-11.46,-10.38]
+probe-ship-islands: 6 FLOATING PART GROUP(S)

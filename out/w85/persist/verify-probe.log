@@ -1,0 +1,17 @@
+wave85 verify-probe: {
+  "hopIndexDroppedOnKeep": true,
+  "restoreRawAutopilotFalse": true,
+  "restoreProtoDestDrop": true,
+  "sameSystemClears": true,
+  "hubFromFreehold": true,
+  "directedGateFwd": true,
+  "directedGateNoReverse": true,
+  "hubFwd": true,
+  "hubNoReverse": true,
+  "unchartedNoWrite": true,
+  "omitRemainingDrops": true,
+  "idleStoredDrops": true,
+  "emitFreshLiteral": true,
+  "snapshotHeals": true
+}
+VERIFY PROBE PASS

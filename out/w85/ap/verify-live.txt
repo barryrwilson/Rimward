@@ -1,0 +1,35 @@
+Status: CLEAN
+
+## Status
+CLEAN
+
+## What I tested
+- Probe: `node --import ./scripts/with-css-stub.mjs out/w85/ap/probe.mjs` → PASS (all keys true). Log: `out/w85/ap/probe-run.log`.
+- Pin-check: `node out/w85/ap/pin-check.mjs` → PASS. WAVE85 persist/chart/guidance blocks still in `scripts/boot-test.mjs` (`wave85 nav persist|chart|guidance` plus `WAVE85 NAV-03 autopilot`). Chart Digit0 shipyard pin still reads `station.js` `d === 0` + `DOCK_KEY_SERVICES.length - 1`. innerHTML absent in `hud.js` and `galaxychart.js`. `jumpRequested` emit only in `src/systems/gate.js`.
+- Full `scripts/boot-test.mjs` not re-run (probe covers AP pins; do not wait 10 min).
+- Live Playwright MCP, one session, http://127.0.0.1:5173 at 1280×720 (local Vite PID already on 5173). No external send.
+  - CONTINUE to flight (paused false).
+  - KeyM. Click Veridian hit. Header Autopilot enabled. Shot: `out/w85/ap/live/01-chart-button.png`.
+  - Click Autopilot: `world.nav.autopilot === true`, dest `veridian`, system `freehold`. Button text `Cancel autopilot`. Chip `.rw-autopilot` display flex, not is-hidden.
+  - Close chart: chip still visible in flight (VERIDIAN REACH / 1 / CANCEL). Shot: `out/w85/ap/live/02-engaged.png`.
+  - Chip Cancel: `autopilot === false`, dest still `veridian`, path kept, reason `cancel`, chip is-hidden. Comm `AUTOPILOT CANCELLED.` Shot: `out/w85/ap/live/03-cancel.png`.
+  - Re-engage (chart Autopilot): autopilot true again. KeyW (window keydown `code: 'KeyW'`): reason `input`, autopilot false, dest `veridian`, strafeY 1.
+  - MATCH refuse: `flags.matchSpeed = true` then real Autopilot click (no lock so KeyX cannot arm MATCH). Live region `Autopilot refused — MATCH is on.` MATCH stayed true, throttle 0.42 unchanged, autopilot stayed false. Shot: `out/w85/ap/live/04-match-refuse.png` (extra).
+  - No teleport: currentSystem stayed `freehold`. Position drifted continuously (sample y -4189 → -4104 → -3822 → -3628 → -2764 → -2331 → -2178). Did not wait for a completed jump.
+  - Digit0 shipyard: source pin OK (`station.js` Digit 0 → last DOCK_KEY_SERVICES).
+  - innerHTML 0 on hud/chart source.
+
+## Bugs found
+[Empty if CLEAN]
+
+## Environmental issues
+- graph_resolve as omp/agent-omp first matched software-delivery. Owner named browser-assisted-work. Second resolve with claude/agent-claude executed `claude/workflow-browser-assisted-work` + approval-gating. No credentials, purchase, or external send.
+- Playwright `keyboard.down('w')` / `down('KeyW')` did not set `input.strafeY` in this session. Window `KeyboardEvent` with `code: 'KeyW'` did, and the AP helm-cancel path fired on the next sim ticks.
+- Console: Vite HMR leftovers `npc.js` `appendSunBody` and `autopilot.js` `flyingFlag` (source still exports `appendSunBody`; `flyingFlag` is local, not an export). App still ran. One a11y warning: chart `aria-hidden` while `.rw-galaxy-ap` kept focus after KeyM close. Not a NAV-03 contract fail.
+- MATCH live refuse needed a direct `flags.matchSpeed = true` because MATCH needs a live lock to arm via KeyX.
+
+## Evidence
+- Probe: `out/w85/ap/probe-run.log`
+- Pin-check: `out/w85/ap/pin-check.mjs` PASS this run
+- Live shots: `out/w85/ap/live/01-chart-button.png`, `02-engaged.png`, `03-cancel.png`, `04-match-refuse.png`
+- Gate emit: `src/systems/gate.js` only `emit('jumpRequested'`

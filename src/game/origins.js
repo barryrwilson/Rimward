@@ -1,4 +1,6 @@
-import { ORIGINS, COMMODITIES, SYSTEMS } from './state.js';
+import { ORIGINS, COMMODITIES, SYSTEMS, JUMP } from './state.js';
+import { disengage } from './autopilot.js';
+import { disengageAutomine } from './automine.js';
 
 /**
  * Origin selection (§25: origins create situations without imposing stories).
@@ -88,6 +90,8 @@ export function initOrigins(ctx) {
   }
 
   ctx.flags.paused = true;
+  disengage(ctx, 'pause');
+  disengageAutomine(ctx, 'pause');
 
   const root = document.createElement('div');
   root.style.cssText =
@@ -113,6 +117,7 @@ export function initOrigins(ctx) {
     window.removeEventListener('keydown', onKey);
     applyEffects(ctx, id);
     ctx.world.origin = id;
+    ctx.world.jumpGraceUntil = (ctx.world.time || 0) + JUMP.graceSeconds;
     root.remove();
     ctx.flags.paused = false;
     ctx.emit('originChosen', { id, line: ORIGINS[id].line });

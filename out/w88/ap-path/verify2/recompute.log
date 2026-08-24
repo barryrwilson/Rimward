@@ -1,0 +1,37 @@
+constants heatR=144 keepSun=158.4 PLAYER_RADIUS=2.4 pad=12 JUMP.zone=60
+ok keepSun is 158.4
+ok heatR is 144
+case1 plan {"hold":"detour","aim":[-162.6568560294246,0,0],"aimD":162.6568560294246}
+case1 indep {"t":0.9603551880168513,"dist":159.40000000000003,"d0":800.5623023850173,"d1":162.6568560294246,"px":-156.20835555436798,"py":1.1893443594944628,"pz":31.71584958651897,"hit":false,"r":158.4}
+case1 src sphereChordHit {"hit":false,"t":0.9603551880168513,"dist":159.40000000000003,"px":-156.20835555436798,"py":1.1893443594944628,"pz":31.71584958651897,"tUn":0.9603551880168513}
+ok case1 detour
+ok case1 independent: not a keep hit
+ok case1 independent: closest >= keep {"dist":159.40000000000003,"keepSun":158.4}
+ok case1 source sphereChordHit not a hit
+case2 plan {"hold":"detour","aim":[-263.9163277120953,0,0]}
+case2 indep keep {"t":0.364791,"dist":159.4,"d0":200,"d1":263.9163277120953,"px":-96.27430110242295,"py":0,"pz":127.04180000000001,"hit":false,"r":158.4}
+case2 indep heat {"t":0.364791,"dist":159.4,"d0":200,"d1":263.9163277120953,"px":-96.27430110242295,"py":0,"pz":127.04180000000001,"hit":false,"r":144}
+ok case2 detour
+ok case2 independent: chord misses keep {"dist":159.4}
+ok case2 independent: chord misses heat 144 {"dist":159.4,"heatR":144}
+case3 plan {"hold":"detour","aim":[-162.6615775109898,0,0],"stKeep":59.121359549995795}
+case3 sun {"t":0.9602994375,"dist":159.4,"d0":800,"d1":162.6615775109898,"px":-156.20382138666614,"py":0,"pz":31.76044999999999,"hit":false,"r":158.4}
+case3 station {"t":0.7006991004516667,"dist":197.94589530071076,"d0":605.3098380168622,"d1":314.45928385106095,"px":-113.9768210399996,"py":0,"pz":239.44071963866668,"hit":false,"r":59.121359549995795}
+ok case3 detour
+ok case3 independent: misses sun keep
+ok case3 independent: misses station keep
+case3 adverse {"hold":"detour","aim":[139.89011259842152,0,207.9853483464562]}
+case3 adverse sun {"t":1,"dist":250.65344348242215,"d0":800,"d1":250.65344348242215,"px":139.89011259842152,"py":0,"pz":207.98534834645625,"hit":false,"r":158.4}
+case3 adverse station {"t":0.9901348857146838,"dist":60.12135954999583,"d0":605.3098380168622,"d1":60.420123926270286,"px":138.51008065025235,"py":0,"pz":213.82564054360012,"hit":false,"r":59.121359549995795}
+ok case3 adverse: misses sun keep
+ok case3 adverse: misses station keep
+case4 indep {"t":1,"dist":40,"d0":800,"d1":40,"px":0,"py":0,"pz":40,"hit":true,"r":158.4}
+case4 src {"hit":true,"t":1,"dist":40,"px":0,"py":0,"pz":40,"tUn":1.0526315789473684}
+ok case4 independent B inside is hit {"d1":40,"t":1}
+ok case4 source sphereChordHit hit=true {"t":1,"dist":40,"tUn":1.0526315789473684}
+closeFrigate {"hold":"widen","intercept":false,"th":0,"aimFromGate":540,"turnR":420,"distGate":80}
+ok close frigate heading 90: intercept false
+ok close frigate hold=widen
+ok close frigate throttle 0
+ok close frigate aim not a gate circle
+RECOMPUTE PASS

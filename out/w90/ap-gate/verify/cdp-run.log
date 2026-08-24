@@ -1,0 +1,36 @@
+spawn chrome pid=186752
+cdp page {"url":"http://127.0.0.1:5188/","title":"","ws":true}
+already {"href":"about:blank","ctx":false}
+navigated http://127.0.0.1:5188/
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"interactive","ctx":false,"title":false,"newBtn":false,"canvas":0}
+boot {"href":"http://127.0.0.1:5188/","ready":"complete","ctx":true,"title":true,"newBtn":true,"canvas":1,"sys":"freehold","paused":true}
+flight {"sys":"freehold","paused":false,"ship":true}
+jump auction
+jumped {"sys":"gc_auction","jumping":false,"paused":false}
+keym true
+plot click {"hit":true,"dest":"bt_cradle","path":["gc_auction","bt_cradle"],"next":"bt_cradle"}
+engage {"flying":true,"btn":"Cancel autopilot","tok":null}
+snapA0 {"tag":"A0","sys":"gc_auction","paused":false,"jumping":false,"ship":{"x":1032.6240766884039,"y":50.78801940492271,"z":403.2455583394508},"hub":{"found":true,"x":368,"y":76,"z":-747,"parent":true,"visible":true},"rings":[{"name":"gilded-gate","x":987,"y":48,"z":394,"visible":true},{"name":"gilded-gate","x":-933,"y":68,"z":166,"visible":true},{"name":"gilded-gate","x":196,"y":61,"z":-1049,"visible":true}],"marker":{"found":true,"visible":true,"x":368,"y":76,"z":-747},"liveCradle":{"x":368,"y":76,"z":-747},"liveV":{"x":987,"y":48,"z":394},"posCradle":{"x":368,"y":76,"z":-747},"posV":{"x":987,"y":48,"z":394},"guide":{"kind":"plotted","nextId":"bt_cradle","destId":"bt_cradle","remaining":1,"pos":{"x":368,"y":76,"z":-747},"nextName":"Cradle","destName":"Cradle"},"distText":"1.3k","sysText":"The Auction","nav":{"dest":"bt_cradle","path":["gc_auction","bt_cradle"],"remaining":1,"status":"plotted","autopilot":true},"ap":{"flying":true,"yaw":-1,"throttle":0.2,"wantJump":false,"reason":""},"markerToHub":0,"markerToCradle":0,"markerToVeridian":1298.3936229048568,"shipToCradle":1328.693212054263,"shipToVeridian":46.63485579349175}
+screenshot flow-a-ring.png bytes=117013
+snapA1 {"tag":"A1","sys":"gc_auction","paused":false,"jumping":false,"ship":{"x":1112.516792170192,"y":63.38730609917668,"z":332.26522655783475},"hub":{"found":true,"x":368,"y":76,"z":-747,"parent":true,"visible":true},"rings":[{"name":"gilded-gate","x":987,"y":48,"z":394,"visible":true},{"name":"gilded-gate","x":-933,"y":68,"z":166,"visible":true},{"name":"gilded-gate","x":196,"y":61,"z":-1049,"visible":true}],"marker":{"found":true,"visible":true,"x":368,"y":76,"z":-747},"liveCradle":{"x":368,"y":76,"z":-747},"liveV":{"x":987,"y":48,"z":394},"posCradle":{"x":368,"y":76,"z":-747},"posV":{"x":987,"y":48,"z":394},"guide":{"kind":"plotted","nextId":"bt_cradle","destId":"bt_cradle","remaining":1,"pos":{"x":368,"y":76,"z":-747},"nextName":"Cradle","destName":"Cradle"},"distText":"1.3k","sysText":"The Auction","nav":{"dest":"bt_cradle","path":["gc_auction","bt_cradle"],"remaining":1,"status":"plotted","autopilot":true},"ap":{"flying":true,"yaw":-1,"throttle":0.742994359172491,"wantJump":false,"reason":""},"markerToHub":0,"markerToCradle":0,"markerToVeridian":1298.3936229048568,"shipToCradle":1311.2123257229405,"shipToVeridian":140.72105939638323}
+screenshot flow-a-fly.png bytes=105962
+FLOW A {"sys":"gc_auction","liveCradleHub":true,"markerOnHub":true,"distShrunk":true,"flying":true,"distText":"1.3k","shipToCradle0":1328.693212054263,"shipToCradle1":1311.2123257229405,"markerToHub":0,"engage":{"flying":true,"btn":"Cancel autopilot","tok":null}}
+keym true
+plot click {"hit":true,"dest":"veridian","path":["gc_auction","veridian"],"next":"veridian"}
+engage {"flying":true,"btn":"Cancel autopilot","tok":null}
+snapB {"tag":"B","sys":"gc_auction","paused":false,"jumping":false,"ship":{"x":1110.8192306380154,"y":70.5641745480592,"z":246.37838427053356},"hub":{"found":true,"x":368,"y":76,"z":-747,"parent":true,"visible":true},"rings":[{"name":"gilded-gate","x":987,"y":48,"z":394,"visible":true},{"name":"gilded-gate","x":-933,"y":68,"z":166,"visible":true},{"name":"gilded-gate","x":196,"y":61,"z":-1049,"visible":true}],"marker":{"found":true,"visible":true,"x":987,"y":48,"z":394},"liveCradle":{"x":368,"y":76,"z":-747},"liveV":{"x":987,"y":48,"z":394},"posCradle":{"x":368,"y":76,"z":-747},"posV":{"x":987,"y":48,"z":394},"guide":{"kind":"plotted","nextId":"veridian","destId":"veridian","remaining":1,"pos":{"x":987,"y":48,"z":394},"nextName":"Veridian Reach","destName":"Veridian Reach"},"distText":"191u","sysText":"The Auction","nav":{"dest":"veridian","path":["gc_auction","veridian"],"remaining":1,"status":"plotted","autopilot":true},"ap":{"flying":true,"yaw":-1,"throttle":0.2,"wantJump":false,"reason":""},"markerToHub":1298.3936229048568,"markerToCradle":1298.3936229048568,"markerToVeridian":0,"shipToCradle":1240.4074217530033,"shipToVeridian":193.9909412302636}
+screenshot flow-b-veridian.png bytes=127106
+FLOW B {"liveVPhysical":true,"liveVNotHub":true,"markerOnPhysical":true,"markerNotHub":true,"engage":{"flying":true,"btn":"Cancel autopilot","tok":null}}
+flow C title-pause drift
+snapC {"afterFreeholdRebuild":{"sys":"freehold","liveCradleAuction":null,"liveCradle":null,"pos":null},"whilePausedAuctionNoUpdate":{"sys":"gc_auction","paused":true,"liveCradle":null,"pos":null,"events":[]},"afterUnpause":{"sys":"gc_auction","paused":false,"liveCradle":{"x":368,"y":76,"z":-747},"pos":{"x":368,"y":76,"z":-747},"hub":{"x":368,"y":76,"z":-747,"visible":true},"marker":{"x":368,"y":76,"z":-747,"visible":true}}}
+screenshot flow-c-unpause.png bytes=130241
+missingHop {"tok":"missingHop","engage":"missingHop","flying":false}
+SUMMARY {"ok":true,"env":null,"flowA":{"sys":"gc_auction","liveCradleHub":true,"markerOnHub":true,"distShrunk":true,"flying":true,"distText":"1.3k","shipToCradle0":1328.693212054263,"shipToCradle1":1311.2123257229405,"markerToHub":0,"engage":{"flying":true,"btn":"Cancel autopilot","tok":null}},"flowB":{"liveVPhysical":true,"liveVNotHub":true,"markerOnPhysical":true,"markerNotHub":true,"engage":{"flying":true,"btn":"Cancel autopilot","tok":null}},"flowC":{"pausedLookupNull":true,"afterLiveHub":true,"afterNotNull":true,"afterHubMesh":true,"markerOnHub":true},"errors":[],"missingHop":true}

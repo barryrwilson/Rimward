@@ -1,0 +1,40 @@
+C:\Projects\WebSim\scripts\build-ship-assets.py:85: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  value.use_nodes = True
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+02:24:01 | INFO: Starting glTF 2.0 export
+02:24:01 | INFO: Extracting primitive: Cylinder.005
+02:24:01 | INFO: Primitives created: 1
+02:24:01 | INFO: Extracting primitive: Sphere.090
+02:24:01 | INFO: Primitives created: 1
+02:24:01 | INFO: Extracting primitive: ace.hull
+02:24:01 | INFO: Primitives created: 1
+02:24:01 | INFO: Finished glTF 2.0 export in 0.21115350723266602 s
+
+built beautiful/ace/lod0
+C:\Projects\WebSim\scripts\build-ship-assets.py:85: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  value.use_nodes = True
+Info: Saved as "ace.blend"
+02:24:02 | INFO: Starting glTF 2.0 export
+02:24:03 | INFO: Extracting primitive: Cylinder.005
+02:24:03 | INFO: Primitives created: 1
+02:24:03 | INFO: Extracting primitive: Sphere.054
+02:24:03 | INFO: Primitives created: 1
+02:24:03 | INFO: Extracting primitive: ace.hull
+02:24:03 | INFO: Primitives created: 1
+02:24:03 | INFO: Finished glTF 2.0 export in 0.06800150871276855 s
+
+built beautiful/ace/lod1
+02:24:03 | INFO: Starting glTF 2.0 export
+02:24:03 | INFO: Extracting primitive: Cylinder.003
+02:24:03 | INFO: Primitives created: 1
+02:24:03 | INFO: Extracting primitive: Sphere.018
+02:24:03 | INFO: Primitives created: 1
+02:24:03 | INFO: Extracting primitive: ace.hull
+02:24:03 | INFO: Primitives created: 1
+02:24:03 | INFO: Finished glTF 2.0 export in 0.056088924407958984 s
+
+built beautiful/ace/lod2
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

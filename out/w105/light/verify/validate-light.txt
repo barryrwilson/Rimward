@@ -1,0 +1,4 @@
+lod0 meshes=3 prims=3 tris=11808 mats=["RIMWARD_EMISSIVE","RIMWARD_HULL"] idle=true glow=true meshopt=true nodes=4 PASS
+lod1 meshes=3 prims=3 tris=7760 mats=["RIMWARD_EMISSIVE","RIMWARD_HULL"] idle=true glow=true meshopt=true nodes=4 PASS
+lod2 meshes=3 prims=3 tris=5000 mats=["RIMWARD_EMISSIVE","RIMWARD_HULL"] idle=true glow=true meshopt=true nodes=4 PASS
+light-validate: PASS

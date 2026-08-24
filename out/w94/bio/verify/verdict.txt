@@ -1,0 +1,7 @@
+CLEAN
+
+PROBE PASS
+nextTrainClass('light') = cutter (valid dest)
+[NO BROWSER COVERAGE]
+
+MEDIUM (harness, not worker): scripts/boot-test.mjs Wave 92 BIO-02 still pins nextTrainClass('light') === 'heavy' and livingTrainDest('frigate') == null.

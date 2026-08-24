@@ -1,0 +1,13 @@
+{
+  "persistPinNoCtxAutopilot": true,
+  "chartPinNoCtxAutopilot": true,
+  "bootTestStillHasPersistPin": true,
+  "bootTestStillHasChartPin": true,
+  "ctxContainsLiteral_ctx_dot_autopilot": false,
+  "ctxContainsAutopilotProperty": true,
+  "apJsWritesCtxAutopilot": true,
+  "healerWriteNavFalse": true,
+  "tickOrder": true,
+  "worldFieldsNavOnce": true
+}
+PIN CHECK PASS (WAVE85 ctx.autopilot substring still absent in ctx.js)

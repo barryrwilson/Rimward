@@ -1,0 +1,11 @@
+python -m py_compile
+  scripts/ship_builders/beautiful/light.py
+  scripts/ship_builders/beautiful/ace.py
+  scripts/ship_builders/beautiful/cutter.py
+  scripts/ship_builders/beautiful/heavy.py
+  scripts/ship_builders/beautiful/frigate.py
+  scripts/ship_builders/beautiful/freighter.py
+  scripts/ship_builders/beautiful/anatomy.py
+  scripts/ship_builders/beautiful/organs.py
+  scripts/ship_builders/beautiful/surface.py
+EXIT=0

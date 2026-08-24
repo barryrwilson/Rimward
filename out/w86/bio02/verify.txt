@@ -1,0 +1,51 @@
+## Status
+CLEAN
+
+## What I tested
+Static document review only (no browser, no Playwright, no formatter, no full suite).
+
+Six BIO-02 artifacts:
+- out/w86/bio02/current-bio02-inventory.md (15152 bytes)
+- out/w86/bio02/shared-contract.md (16914 bytes)
+- docs/Bio02EvolutionDesign.md (18570 bytes)
+- out/w86/bio02/security-review.md (5143 bytes)
+- out/w86/bio02/code-review.md (4403 bytes)
+- out/w86/bio02/ui-audit.md (5286 bytes)
+
+Worker src write: git porcelain for src/game/hangar.js, src/game/bio.js, src/game/shipyard.js, src/game/state.js is clean. BIO-02 listed artifacts are markdown only.
+
+Live file:line re-open (inventory + contract):
+- hangar.js switchTo 697-718; switchRefuseReason already-mounted 692; applyFlightEnvelope 551-566 (multiplier cls.burn / cls.cruise at 561); applyMountedFlight 722-729; healLauncher/healTurret 54-61; sanitizeHangarRecord 211-241
+- bio.js growth 156-161 (visual only; no classKey write)
+- shipyard.js YARD_LIST_UU 16-23; LIVING_STOCK 29; beautiful map 41
+- state.js SHIP_CLASSES 35-42 (six keys); READ-ONLY header 7-9; MOUNT_TABLE 46-53; createShipState 140-161
+- ship.js GROWTH_SCALE_MAX 98; buildLivingVisual 354-428 (no classKey); remountPlayerHull 514-528 buildLivingVisual(); flesh.scale 991-995
+- weapon-fit.js canSeat 57-61
+- station.js DOCK_KEY_SERVICES 174 (Digit 0 = last = shipyard at 5710-5714); h() textContent 4230-4235; DETAIL_STATIONS omits unknowables 540-551
+- shipyard-desk.js panes 14-16, 278-298; Confirm papers 196-206; graft Hangar 238-275; hull Digit n-3 at 104-113
+- save.js WORLD_FIELDS hangar 94; no train key; restore applyMountedFlight 1216-1221; SAFE_ID 104-110
+- hud.js hudFamily reads hullKind 72-80; no hullKind assignment
+- ctx.js emit spread 248-249
+- OwnerDecisionsWave82.md 87-99: graft 4000; living frigate buy omit; no train UU
+- wishlist 1068-1076 BIO-02
+
+Contract freeze checked: growth does not remount; no new class keys; no new Digit; no invented UU; Beautiful Hangar papers; illegal seats heal via live helpers; in-place remount must not call switchTo(same id).
+
+Forbidden paths: this worker did not edit PLAYER-EXPERIENCE-WISHLIST.md, PROGRESS.md, docs/BioLivingShipsDesign.md, Bio01/Bio03/Bio04, Shp*, Nav*. Dirty wishlist / PROGRESS / Nav* in the tree are Wave 85 NAV status lines, not BIO-02.
+
+Contradiction scan: no frigate SKU append; Digit 3 Train tab forbidden; TRAIN_LIST_UU not invented; envelope is burn/cruise not burn.
+
+## Bugs found
+None.
+
+## Notes (not bugs)
+- Inventory “station.js 178” is FEED_COST, not the Digit map. Digit 4 = feed still follows DOCK_KEY_SERVICES index 3 and station.js 5710-5717. Combined cite 178 + 5136-5143 is usable.
+- docs/BioLivingShipsDesign.md §4 still cites hangar.js 467-482. Live envelope is 551-566. BIO-02 inventory re-checked live lines and did not edit that Wave 70 file (forbidden).
+
+## Environmental issues
+- Workspace is dirty from Wave 85 NAV impl (src/systems/ship.js MATCH/autopilot, ctx.js, save.js nav field, wishlist/PROGRESS/Nav status). Unrelated to BIO-02.
+- Untracked sibling briefs: docs/Bio01ObtainDesign.md, docs/Bio04PsionicsDesign.md, out/w86/bio01/, out/w86/bio04/.
+- Playwright MCP disconnected by task. No live dock pass.
+
+## Evidence
+- Logs: out/w86/bio02/verify.txt

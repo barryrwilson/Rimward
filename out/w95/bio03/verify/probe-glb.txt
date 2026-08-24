@@ -1,0 +1,46 @@
+light/lod0 uris=0 remote=0 
+glow light type=Mesh isMesh=true childMeshes=1
+hash light/lod0 public=f1895118588c69da keep=4ee52178cfac4c57 same=false
+light/lod1 uris=0 remote=0 
+hash light/lod1 public=c19234168124cb66 keep=b8cb613810d1d2f2 same=false
+light/lod2 uris=0 remote=0 
+hash light/lod2 public=7cc81abab82f8506 keep=d85f525d452e6b88 same=false
+ace/lod0 uris=0 remote=0 
+glow ace type=Mesh isMesh=true childMeshes=1
+hash ace/lod0 public=85d1582b9da1cef7 keep=d19080ec851d1825 same=false
+ace/lod1 uris=0 remote=0 
+hash ace/lod1 public=f4edbe80d818fe62 keep=20e46963d5570af0 same=false
+ace/lod2 uris=0 remote=0 
+hash ace/lod2 public=de23e90f148b4e4f keep=791c4fc2ea713093 same=false
+cutter/lod0 uris=0 remote=0 
+glow cutter type=Mesh isMesh=true childMeshes=1
+hash cutter/lod0 public=102bb8acd5ea66d0 keep=d9af5594cae58b25 same=false
+cutter/lod1 uris=0 remote=0 
+hash cutter/lod1 public=d6224a23eef50f91 keep=da7b67df5e28917a same=false
+cutter/lod2 uris=0 remote=0 
+hash cutter/lod2 public=4c8bcd2ce7d3ceaf keep=fed08e9d63572dd0 same=false
+heavy/lod0 uris=0 remote=0 
+glow heavy type=Mesh isMesh=true childMeshes=1
+hash heavy/lod0 public=c6d09ddf33f8c883 keep=c0305a005ee7b198 same=false
+heavy/lod1 uris=0 remote=0 
+hash heavy/lod1 public=98f7a98b4c062f63 keep=0a91f663cfa665d2 same=false
+heavy/lod2 uris=0 remote=0 
+hash heavy/lod2 public=3e50358c0dece5c4 keep=d1c1a879a45e9a28 same=false
+frigate/lod0 uris=0 remote=0 
+glow frigate type=Mesh isMesh=true childMeshes=1
+hash frigate/lod0 public=4e3992f3a5d0b6fa keep=1f103711750e2fbf same=false
+frigate/lod1 uris=0 remote=0 
+hash frigate/lod1 public=622b29569010da7d keep=49a3798cc1d66970 same=false
+frigate/lod2 uris=0 remote=0 
+hash frigate/lod2 public=725ac48699891ae4 keep=1ced9dcd87b8c044 same=false
+freighter/lod0 uris=0 remote=0 
+glow freighter type=Mesh isMesh=true childMeshes=1
+hash freighter/lod0 public=0141c9afe7d340ca keep=e162e0be1fbcbee0 same=false
+freighter/lod1 uris=0 remote=0 
+hash freighter/lod1 public=8d3bd7a3e2c57b27 keep=f92286298fa32970 same=false
+freighter/lod2 uris=0 remote=0 
+hash freighter/lod2 public=2c56a64844e9c647 keep=5b18775227fa8215 same=false
+freighter/lod3 uris=0 remote=0 
+hash freighter/lod3 public=0625ed4266b23676 keep=08ef78fdb3f35337 same=false
+REMOTE_COUNT 0
+WAVE8_RESTORED 0/19

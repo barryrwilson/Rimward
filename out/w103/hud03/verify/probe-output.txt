@@ -1,0 +1,26 @@
+{
+  "defaultFalse": true,
+  "fieldsBool": true,
+  "checkboxOrder": true,
+  "persistKey": true,
+  "loadWalk": true,
+  "restoreOn": true,
+  "restoreType": true,
+  "restoreUnknown": true,
+  "restoreProto": true,
+  "restoreCorrupt": true,
+  "noInnerHtml": true,
+  "subsetSet": true,
+  "songGate": true,
+  "muteWins": true,
+  "combatCues": true,
+  "incomingFreeze": true,
+  "hubEmpty": true,
+  "digit0": true,
+  "digit89": true,
+  "keysStay": true,
+  "visualHud03": true,
+  "noWorldField": true,
+  "familyStill": true
+}
+WAVE103 PROBE PASS

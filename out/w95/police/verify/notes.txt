@@ -1,0 +1,21 @@
+Wave 95 police leave verification notes
+Date: 2026-08-23
+Probe: WAVE95 POLICE PASS (see probe.txt)
+Browser: [NO BROWSER COVERAGE] — node probe covers the standing band table.
+Vite/CDP: not started. Ports 5175 and 9412 not LISTENING.
+
+Source checks (src/game/police-leave.js, src/systems/npc.js):
+- band: standing < 0 && standing > -10
+- radius: POLICE_LEAVE_RADIUS 300 matches npc LAW_ZONE_RADIUS 300; player check is d < 300 (same as npc law zone)
+- copy: POLICE_LEAVE_LINE = 'Leave this space.'; emit commLine { text }
+- latch: firedThisVisit module bool; consumeVisitReset on lastEvents type systemLoaded; once per visit
+- persist: no WORLD_FIELDS key; police-leave.js does not import save.js
+- hail/song: police-leave.js has no hailOpened/hailClosed/song; song.js has no commLine handler
+- Beautiful/Unknowable: BLOCKED_FACTIONS beautiful, unknowables via systemFaction
+- non-patrol: isLocalSystemPatrol requires role patrol
+- pirate/ace/trader/miner: role skip (probe live.*Never PASS)
+- hunt: HOSTILE_STANDING = -10; mayHuntPlayer patrol uses standingOf <= HOSTILE_STANDING; probe hunt.neg10/neg11 true, hunt.neg9/neg1 false
+- npc call: tickPoliceLeave(ctx) at end of initNpc update
+- extra (not a contract fail): docked skip and gate.jumping skip
+
+npc.js mayHuntPlayer body unchanged for the <= -10 patrol hunt rule.

@@ -1,0 +1,23 @@
+{
+  "status": "BUGS_FOUND",
+  "bootPins": "WAVE92 BIO04 PASS",
+  "grep": "PASS",
+  "frontend": {
+    "vite": "http://127.0.0.1:5182/",
+    "cdp": 9442,
+    "origin": "greenhand",
+    "system": "freehold",
+    "livingStarterWpn": "5 · —",
+    "livingStarterHullKind": null,
+    "digit1": "PASS",
+    "digit2": "PASS",
+    "digit3": "PASS",
+    "digit4": "PASS",
+    "dockDigit5Repair": "PASS",
+    "forcedBuiltDry": "PASS",
+    "forcedGraftedFire": "PASS",
+    "aimGlassGauge": "PASS none",
+    "consoleErrors": 0
+  },
+  "bug": "New Game living starter has no player.hullKind until dock, so Digit 5 is dry"
+}

@@ -1,0 +1,11 @@
+Re-dispatch: New Game with no player.hullKind field (before dock). Digit 5 WPN `5 · Psionic bolt`. LMB heat 0 → ~11.5, two 0xff6ad5 bolts. Forced built: `5 · —`, family mech, heat 0.
+
+Vite http://127.0.0.1:5179 New Game → Freehold Greenhand (living starter).
+
+Digit 5: WPN `5 · Psionic bolt`. HUD family `bio`. LMB hold: heat 0 → ~11, two magenta-rose SphereGeometry bolts (0xff6ad5).
+
+Digit 1 still spawned energy bolts (0x53f2ff). Digit 2 spawned disruptor bolts (0xc86bff). Digit 4 empty rack `4 · —`.
+
+Hangar had only hull_starter living. No built hangar row (BIO-01 did not seed a plated hull). Forced player.hullKind='built': WPN `5 · —`, family `mech`, heat fell (no spawn). Then own-key grafted=true: WPN `5 · Psionic bolt`, family still `mech`.
+
+No aim-glass gauge. Console errors from this family: none in the Playwright error log besides pre-existing WebGL/audio noise if any.

@@ -1,0 +1,61 @@
+Status: CLEAN
+
+What I tested
+- Read docs/UnknowablesDockDesign.md and out/w92/unk/shared-contract.md.
+- Compared the brief to Wave 82 EXP numbers in docs/OwnerDecisionsWave82.md.
+- Grepped live src for DETAIL_STATIONS, GATE_BUILDERS, NPC_FACTIONS, and SYSTEMS faction unknowables.
+- Opened station.js, gates/index.js, ship-assets.js, data-trade.js, authored-systems.js, generate-galaxy.mjs, hangar.js, portraits.js, model-catalog.js, world.js, contacts.js, state.js.
+- Ran git status / git diff --stat -- src vs untracked UnknowablesDockDesign.md.
+- Confirmed Digit 0, no Unknowables train desk, no innerHTML, no third data SKU in the brief and the contract.
+
+Bugs
+None that change merge law. Brief and contract agree on the pick, Wait dock, EXP copy, PR later-only, Digit 0, no train desk, no innerHTML, no third SKU.
+
+Notes (citation drift, not law)
+- Brief inventory cites FACTIONS.unknowables at state.js 581. Live key is state.js 587. Inventory §2.1 range 567–582 also misses 587.
+- Brief table cites buildBeautifulStation / placeholder at station.js 294–299. Those lines are glow-texture code. Live dispatch is station.js 300–304. Inventory §3 already cites 300–305.
+- Brief EPICS range 773–834. Live EPICS is 779–840.
+- hangar.js lives at src/game/hangar.js. applyUnknowablesKind is 98–103 (brief 96–100 is close).
+
+Evidence
+
+1. Brief vs contract
+- First live site: wreck/beacon/anomaly presence on an existing SYSTEM. Default host hush (faction stays hollow). Default landmark th_veil, kind anomaly. Not a generated SYSTEM with a station. Not a dock.
+- DETAIL_STATIONS does not gain unknowables. GATE_BUILDERS and NPC_FACTIONS already include unknowables.
+- Wave 92 is markdown. PR1–PR5 are a later serial. PR5 Wait/skip.
+- Contract wins if they disagree. No substance conflict found.
+
+2. Live src
+- DETAIL_STATIONS (src/systems/station.js 546–557): 10 keys — freehold, veridian, ferrous, redledger, gilded, congregation, assembly, lamplighter, independent, hollow. No unknowables. No beautiful.
+- buildStationMesh (300–304): beautiful grown, else DETAIL_STATIONS, else placeholder.
+- archiveDeskAllowed (1167–1168): assembly only.
+- GATE_BUILDERS (src/systems/gates/index.js 14–27): 12 keys including unknowables.
+- NPC_FACTIONS (src/systems/ship-assets.js 7–10): includes unknowables.
+- authored-systems.js hush.faction is hollow. No authored row with faction unknowables.
+- galaxy.generated.js: no "unknowables" string.
+- generate-galaxy.mjs EXPECTED_FACTION_TOTALS (261–265): no unknowables cluster.
+- src/game grep faction: 'unknowables' on systems: no matches.
+
+3. Wave 82 numbers copied, not invented
+- docs/OwnerDecisionsWave82.md: drop 0.20, own 400, rival 900, launder 250, Unknowables system Wait.
+- Live data-trade.js: DATA_DROP_RATE 0.20, ARCHIVE_OWN_UU 400, ARCHIVE_RIVAL_UU 900, LAUNDER_UU 250. Tokens dataCrystal / dataCube only.
+- Brief key decision 4 and contract §0.4 / §3 copy those four integers. Rival cubes 900 stay on a later Unknowables dock. Own crystal 400 is origin desk, not Assembly.
+
+4. This worker did not edit src/
+- docs/UnknowablesDockDesign.md is untracked. out/w92/unk/ is untracked.
+- git diff -- src shows 21 modified files (hangar train, nav/hud, station, gate, combat, …). Those belong to other Wave 92 workers.
+- hangar.js trainMounted rejects faction unknowables. That is living-train work, not this design pack.
+
+5. PR plan does not claim Wave 92 src land
+- Brief §9 / serial plan: Wave 92 does not touch src/. Later PR1–PR5. PR5 skip unless Wave 82 Wait lifts.
+- Contract §9 Wave 92 column: not this wave / WAIT.
+
+6. Digit 0 / no train desk / no innerHTML / no third EXP SKU
+- Digit 0: DOCK_KEY_SERVICES last key is shipyard (station.js 180). Digit 0 selects that last key (5780–5784). Brief and contract freeze that.
+- No Unknowables train desk: brief non-goal and contract §5.4.
+- innerHTML forbidden. Later copy uses textContent / h() (station.js 4238–4243 already assigns textContent).
+- Third SKU forbidden. Live tokens stay two.
+
+Authored clue count is 6 (vd_c_shanty, rm_c_tally, hr_c_answer, hr_c_garden, th_c_keeper, th_c_song). Verge clues stay empty. th_veil is absent today. PORTRAIT_SOURCES.unknowables exists (portraits.js 42). Files unknowables-a.webp / b.webp exist.
+
+Did not start Vite. Did not edit src/.

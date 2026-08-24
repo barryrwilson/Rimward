@@ -1,0 +1,11 @@
+{
+  "playerProbe": {
+    "living": true,
+    "verts": 0,
+    "hasSwimUniforms": false,
+    "faction": "independent",
+    "classKey": "light"
+  },
+  "npcProbe": null,
+  "traffic": []
+}

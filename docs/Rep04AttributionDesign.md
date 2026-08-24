@@ -24,7 +24,7 @@
 
 ## Overview
 
-Wishlist REP-04 wants piracy in faction space attributed to the **victim’s faction**, not a galaxy-wide crime score. Wave 73 froze that rule. Wave 74 shipped persist sanitize and Digit 9 explain. Kill writes did not ship. Police leave did not ship. Restitution UU is still owner-open.
+Wishlist REP-04 wants piracy in faction space attributed to the **victim’s faction**, not a galaxy-wide crime score. Wave 73 froze that rule. Wave 74 shipped persist sanitize and Digit 9 explain. Kill writes shipped Wave 82/83. Restitution desk shipped Wave 83 (`RESTITUTION_UU` 1200). Police leave named Wave 93 (impl later).
 
 Live today: `ctx.world.reputation` already moves from jobs, rescue, sale, graft, and origin arcs. Combat `'npcDestroyed' { ship }` already exists. Incidents already record `causer`. **No path writes standing from a kill.**
 

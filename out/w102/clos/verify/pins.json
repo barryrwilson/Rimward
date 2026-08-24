@@ -1,0 +1,32 @@
+{
+  "wave102Clos": {
+    "helperSign": true,
+    "helperEps": true,
+    "helperFailClosed": true,
+    "helperNotSpd": true,
+    "fmtDeputize": true,
+    "hubEmpty": true,
+    "closAfterDist": true,
+    "liveShipLock": true,
+    "scanner0ShowsRail": true,
+    "nonShipNoRate": true,
+    "noWorldField": true,
+    "noInnerHtml": true,
+    "digit0Shipyard": true,
+    "keyKEngine": true,
+    "contactsFloor": true,
+    "noNewCtxField": true,
+    "noKeyframes": true,
+    "measureRails": true
+  },
+  "wave102ClosFailLine": false,
+  "wave98": true,
+  "wave99": true,
+  "wave100": true,
+  "wave92Bio02FailLine": false,
+  "redmarchTestFail": true,
+  "redmarchCastMatches": false,
+  "bootExit": 1,
+  "bootErrors": 1,
+  "probeExit": 0
+}

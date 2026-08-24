@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPONS, SYSTEMS, ORE_TYPES, COMMODITIES, pickOreType, oreKeysForBand } from '../game/state.js';
+import { WEAPONS, SYSTEMS, ORE_TYPES, COMMODITIES, pickOreType, oreKeysForBand, miningLaserFor } from '../game/state.js';
 import { spawnPod } from '../game/pods.js';
 import { PHY } from '../game/physics.js';
 import { cylinderOverlap, torusOverlap } from '../game/collision.js';
@@ -48,7 +48,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * Ownership: writes ctx.asteroids = { list } (combat.js raycasts its mining
  * beam against list entries { id, position, radius, ore, commodity, oreKey,
  * hardness }); consumes 'mineHit' events from ctx.lastEvents; spawns ore
- * pods via spawnPod. Never touches ctx.input, ctx.ship, ctx.camera.
+ * pods via spawnPod. Never writes ctx.input, ctx.ship, or ctx.camera.
+ * Ore pods that spawn within the installed laser's reach home to the ship.
  *
  * Perf: zero per-frame allocations. Tumble matrices are recomputed for a
  * round-robin subset of the FLAT rock array each frame using module-scope
@@ -62,6 +63,9 @@ const _scale = new THREE.Vector3();
 const _color = new THREE.Color();
 const _podPos = new THREE.Vector3();
 const _drift = new THREE.Vector3();
+const _rockVel = new THREE.Vector3();
+const _toShip = new THREE.Vector3();
+const ORE_HOME_SPEED = 28;
 
 // Heat-glow bookkeeping cap: mining hits one rock at a time, so 24 listed
 // rocks is generous headroom for beam flicker across overlapping frames.
@@ -101,6 +105,23 @@ function writeOrbitPose(pos, r, inc, node, phase0, omega, y0, time) {
   pos.x = r * cP * cN - r * sP * cI * sN;
   pos.z = r * cP * sN + r * sP * cI * cN;
   pos.y = r * sP * sI + y0;
+}
+
+/** World velocity of a closed-form rock pose. Matches writeOrbitPose. */
+function writeOrbitVel(out, r, inc, node, phase0, omega, time) {
+  const w = Number.isFinite(omega) ? omega : 0;
+  const rad = Number.isFinite(r) ? r : 0;
+  const phase = (Number.isFinite(phase0) ? phase0 : 0) + w * time;
+  const cP = Math.cos(phase);
+  const sP = Math.sin(phase);
+  const cN = Math.cos(node);
+  const sN = Math.sin(node);
+  const cI = Math.cos(inc);
+  const sI = Math.sin(inc);
+  const k = rad * w;
+  out.x = k * (-sP * cN - cP * cI * sN);
+  out.z = k * (-sP * sN + cP * cI * cN);
+  out.y = k * (cP * sI);
 }
 
 function omegaForR(r) {
@@ -2101,9 +2122,9 @@ export function initAsteroids(ctx) {
           rock.ore -= 1;
           list[i].ore = rock.ore;
           writeFieldOre(builtSys, i, rock.ore, rock.seedOre);
-          // Pod spawns at the beam contact point (or near the rock) with a
-          // small random drift so the player scoops it on a flyby. Wave 51:
-          // the pod carries the ore's tint (spawnPod's optional 5th arg).
+          // Pod spawns at the beam contact point (or near the rock).
+          // Inherit rock orbit velocity so crumbs do not lag the belt.
+          // If the ship is in laser reach, home the pod to the hull.
           if (rock.hitPoint) {
             _podPos.copy(rock.hitPoint);
           } else {
@@ -2112,8 +2133,34 @@ export function initAsteroids(ctx) {
           _podPos.x += (Math.random() - 0.5) * rock.baseScale;
           _podPos.y += (Math.random() - 0.5) * rock.baseScale;
           _podPos.z += (Math.random() - 0.5) * rock.baseScale;
-          _drift.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(4);
-          spawnPod(ctx, [{ commodity: rock.oreKey, units: yieldUnits }], _podPos, _drift, ORE_TYPES[rock.oreKey].podTint);
+          writeOrbitVel(
+            _rockVel,
+            rock.orbitR,
+            rock.inc,
+            rock.node,
+            rock.phase0,
+            rock.omega,
+            tOrbit,
+          );
+          _drift.copy(_rockVel);
+          let home = false;
+          const playerObj = ctx.ship && ctx.ship.object;
+          if (playerObj && !(ctx.flags && ctx.flags.docked)) {
+            _toShip.subVectors(playerObj.position, _podPos);
+            const dist = _toShip.length();
+            const reach = miningLaserFor(ctx.world.miningLaser).range * 1.5;
+            if (dist > 1e-4 && dist <= reach) {
+              _drift.addScaledVector(_toShip, ORE_HOME_SPEED / dist);
+              home = true;
+            }
+          }
+          if (!home) {
+            _drift.x += (Math.random() - 0.5) * 4;
+            _drift.y += (Math.random() - 0.5) * 4;
+            _drift.z += (Math.random() - 0.5) * 4;
+          }
+          const pod = spawnPod(ctx, [{ commodity: rock.oreKey, units: yieldUnits }], _podPos, _drift, ORE_TYPES[rock.oreKey].podTint);
+          if (pod && home) pod.home = true;
           if (rock.ore <= 0) deplete(i, rock);
         }
       }

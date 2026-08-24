@@ -1,0 +1,105 @@
+Wave 86 BIO-04 verifier
+Date: 2026-08-22
+Domain: data (design-only)
+Status: CLEAN
+
+Scope
+- Read docs/Bio04PsionicsDesign.md and out/w86/bio04/{current-bio04-inventory,shared-contract,security-review,code-review,ui-audit}.md.
+- Sample inventory file:line cites against live src/.
+- Check Digit 5 flight vs dock 0/8/9 and live dock Digit 5 (repair).
+- Check no triad, no aim-glass extras, no invented UU, Unknowables miss, HUD family not a fire test.
+- Do not run boot-test. Do not format. Do not edit src/ or the brief.
+
+Files (all exist, non-empty)
+- docs/Bio04PsionicsDesign.md (14390 bytes)
+- out/w86/bio04/current-bio04-inventory.md (12152)
+- out/w86/bio04/shared-contract.md (10736)
+- out/w86/bio04/security-review.md (4830)
+- out/w86/bio04/code-review.md (4443)
+- out/w86/bio04/ui-audit.md (4933)
+
+Worker src/
+- Listed worker files are markdown only.
+- Grep src/ for psionic / psiCap / psiAmmo / canFirePsionic: 0 hits.
+- git diff --name-only src/ is Wave 85 NAV (ctx, save, hud, controls, ship, gate, npc, …). combat.js, hangar.js, state.js, station.js, weapon-fit.js are not in that dirty set.
+- This worker did not write src/.
+
+Forbidden docs (this worker)
+- Worker list does not include wishlist, PROGRESS, BioLiving*, Bio01/02/03, ShpDesign, Shp03, Nav*.
+- git diff on those paths is Wave 85 NAV status lines, not BIO-04.
+- docs/BioLivingShipsDesign.md, docs/ShpDesign.md, docs/Shp03WeaponsDesign.md, docs/Bio03*.md: clean.
+- docs/Bio01ObtainDesign.md and docs/Bio02EvolutionDesign.md are untracked sibling Wave 86 files, not in the BIO-04 worker list.
+
+Graph
+- graph_resolve → execute_workflows claude/workflow-software-delivery (explore, test, report; destructive gate N/A).
+- No src/ edits. No formatter / linter / boot-test.
+
+Contract vs brief
+- Merge law: shared-contract.md wins. Brief states the same rule.
+- Eligibility: hullKind === 'living' OR own grafted === true. Built non-grafted: select Digit 5, HUD `5 · —`, no spawn / heat / playerFire.
+- Conventional guns stay (Digits 1–4 + auto turret). Additive group only.
+- Resources: live HEAT only. No power ledger, psi capacitor, G/S/E triad.
+- Aim glass: WPN / RANGE / lead may read group 5. No incoming gauge, lock box, psi bar.
+- Catalog numbers owner-open. No invented UU / ammo / standing.
+- Unknowables miss: beam not true; no second mining ray; testNpcHits still skips fields.
+- HUD family / sessionStorage / isBeautiful are not the fire test. Grafted stays mech and may fire.
+- Player-only. npcFire stays 'cannon'|'missile'. spawnNpcShot must refuse family === 'psionic'.
+- Innate first impl. No hangar psionic key. No nested loadout.
+- state.js READ-ONLY this wave. Later dedicated catalog PR0.
+
+Digit 5 vs live 1–4 and dock 0/8/9 (reconciled)
+- Flight today: Digit 1–4 tracked; 0 and 5–9 untracked (controls.js 37–44, 289–301).
+- Dock root Digit 5 is already repair (DOCK_KEY_SERVICES[4], station.js 174 + 5710–5717). Digit 0 shipyard, 8 launch, 9 epics.
+- Outfitting Digit 8/9 launcher/turret papers (5767–5769). Outfitting Digit 5 is mining Mk II (5765–5766) and stays.
+- Shipyard Digit 5 is hangar remount (hullIndexForDigit(5) = 2), not a gun.
+- Contract takes Digit 5 for flight only, same dual-listener pattern as 1–4. Combat cold while docked (1666–1669). Do not preventDefault Digit 5.
+- Does not steal Digit 0 / 1–4 / 8 / 9. Turret stays auto (1771–1774), not Digit 5 or 6.
+- Live hole named and closed later: GROUP_WEAPON[g] ?? 'cannon' and hudWeaponKey ?? 'cannon' (combat.js 239, hud.js 202) — stuffed group 5 already fires cannon today.
+
+Contradiction scan
+- Triad: forbidden in brief, contract, reviews. BioLiving §6 stays a named hole only.
+- Digit steal of 1–4 / 0 / 8 / 9: not taken.
+- HUD family as fire test: forbidden.
+- Fake beam vs Unknowables: beam omit / not true; mining remains the only field coupler.
+- Brief and contract agree. No remaining design blockers in code-review / security / ui-audit.
+
+Cite sample (live code)
+
+PASS state.js 97–119 — WEAPONS keys cannon, disruptor, mining (beam true), missile, turret. No psionic.
+PASS state.js 120 — HEAT.max 100 only fire resource.
+PASS state.js 35–42, 140–161 — SHIP_CLASSES / createShipState: no power, no psi.
+PASS state.js 7–9 — feature workers READ-ONLY; Wave 68 PR0 exclusive WEAPONS writer.
+PASS state.js 169–171 — Unknowable + w.beam !== true → [].
+PASS combat.js 182–184, 232–240 — groups 1–3 map; group 4 launcher or null; else ?? 'cannon'.
+PASS combat.js 185–186 — FAMILY_COLORS energy/disruptor/mining/missile.
+PASS combat.js 169, 413–432, 892–894 — 64-bolt pool; unknown family materials → energy.
+PASS combat.js 862 — nextFireAt {cannon, disruptor, missile, turret}; no psionic slot.
+PASS combat.js 1088–1126 — reticle aim + CONVERGE_DOT; playerFire on real spawn.
+PASS combat.js 1232, 1499–1500 — turret pick + testNpcHits skip Unknowable fields.
+PASS combat.js 1311–1347 — mining is the only Unknowable ray coupler.
+PASS combat.js 1267–1270 — spawnNpcShot: missing key → cannon; refuse missile family only (psionic refuse is later).
+PASS combat.js 1666–1768, 1754–1767, 1771–1774 — docked cold; LMB groups; turret auto.
+PASS combat.js 1738 — Unknowables never fire darts.
+PASS combat.js 52–53, 924, 1794, 1861–1862 — reducedMotion: sparks/muzzle hide; shots simulate.
+PASS combat.js 1581, 1640 — applyHit family: p.wkey.
+PASS controls.js 37–44, 46–47, 289–301, 334 — Digit1–4 only; Space-only preventDefault; help 1/2/3/4.
+PASS ctx.js 15, 20, 37, 83, 158–160, 232, 248–249 — input writer; HUD reads hullKind; weaponGroup 1–4 comment; launcher/missileAmmo/turret mirrors; playerFire spread.
+PASS station.js 174, 1555–1556, 5710–5717, 5760–5770 — desk map 0/5/8/9 and outfitting 8/9 papers.
+PASS shipyard-desk.js 104–113 — Digit 0 index 7; Digit 5 hangar remount.
+PASS hangar.js 82–108, 222–240, 302–339, 405–418, 421–433, 731–764 — graftedOwnTrue; living/Unknowables strip graft; flat row; starter living; heal deletes launcher/turret/missileAmmo; graft built only.
+PASS ship.js 503–508, 514–528 — meshKindFor; Unknowables force living.
+PASS hud.js 71–88, 192–221, 810–812, 1224–1249, 1288–1298, 1728–1732 — family skin; WPN textContent; group 4 `4 · —`; strain heat %; ?? 'cannon' hole on group 5.
+PASS weapon-fit.js 33–44, 46–54 — dart / auto SKUs only.
+PASS faction-style.js 163–164 — isUnknowable === 'unknowables'.
+PASS hud.js / combat.js / controls.js / station.js innerHTML — 0 hits.
+PASS wishlist 1090–1093 — BIO-04 living + Abomination restriction; family still to design.
+PASS BioLivingShipsDesign.md 180–182 — named hole; no triad in that brief.
+PASS Shp03WeaponsDesign.md 119–120 — power ledger out; HEAT + heatPerShot.
+
+Residual impl cautions (not freeze bugs)
+- Later Digit5 TRACKED also sets weaponGroup at the repair desk. Weapons stay cold. Must not preventDefault.
+- Impl must add nextFireAt.psionic; live `now >= nextFireAt[wkey]` is false when the slot is missing.
+- Catalog PR0 before combat; missing row must null-guard or w.rof throws / energy-tints the bolt.
+- canFirePsionic uses hullKind === 'living'. Live mesh/HUD treat unset hullKind as living. Starter and yard rows set the flag. Fail-closed on omit is acceptable; pin it in PR1 if old saves omit the key.
+
+Known boot FAILs (out of scope): WAVE4 fence, WAVE26 ferry/haul, WAVE35 haul.

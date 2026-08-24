@@ -1,0 +1,20 @@
+Wave 94 POWER ledger — verifier notes
+
+Run:
+  node out/w94/power/probe.mjs
+
+Expect: WAVE94 POWER PASS
+
+Live HUD / flight (manual):
+1. Boot flight. Bottom-right side column shows a PWR bar (label PWR) next to Bio/POS.
+2. Aim glass (reticle / lead) has no extra pip, ring, gauge, or PWR bar.
+3. Tap Space with PWR below 15: afterburner must refuse (BURN stays READY / not BURNING).
+4. Tap Space with PWR at 100: burn starts; PWR falls at 16/s while burning.
+5. If PWR hits 0 during a burn, the burn cuts and cooldown starts.
+6. Digit 5 psionic: each spawned bolt spends 10 PWR and 8 heat. Digit 1 cannon spends heat only.
+7. Reduced-motion: PWR bar still fills; no extra pulse.
+
+Binding:
+  POWER = { max: 100, regenPerSec: 8, afterburnerPerSec: 16, afterburnerMin: 15 }
+  WEAPONS.psionic.powerPerShot = 10
+  Live pool only. Not a WORLD_FIELDS key. No class power field. No psi capacitor. No triad.

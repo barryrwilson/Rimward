@@ -1,0 +1,8 @@
+WAVE92 BIO04 PASS {
+  catalog: 'Psionic bolt',
+  hex: '0xff6ad5',
+  livingHeat: 8,
+  starterHeat: 8,
+  builtDry: 0,
+  graftedHeat: 8
+}

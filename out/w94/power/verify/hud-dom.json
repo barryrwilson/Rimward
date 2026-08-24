@@ -1,0 +1,12 @@
+{
+  "pwrInSide": true,
+  "pwrLabel": "PWR",
+  "fill": "100%",
+  "reticleText": "",
+  "leadText": "LEAD",
+  "reticleHasBar": false,
+  "pwrBox": { "x": 1449, "y": 696, "w": 126, "h": 10 },
+  "retBox": { "x": 760, "y": 410, "w": 80, "h": 80 },
+  "livePower": 100,
+  "vite": "http://localhost:5174/"
+}

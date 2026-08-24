@@ -1,0 +1,6 @@
+{
+  "pass": 82,
+  "fail": 0,
+  "fails": [],
+  "command": "node --import ./scripts/with-css-stub.mjs out/w96/nav04/probe.mjs"
+}

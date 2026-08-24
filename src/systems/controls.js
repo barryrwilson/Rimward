@@ -1,5 +1,7 @@
 import { SYSTEMS, U } from '../game/state.js';
 import { pickReticleLock } from '../game/reticle-aim.js';
+import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
+import { dropPartIfNotShip, toggleEnginePart } from '../game/subsys-aim.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -20,9 +22,11 @@ import { pickReticleLock } from '../game/reticle-aim.js';
  *   Space (tap)  → afterburner (edge)
  *   Shift (hold) → vector-hold drift
  *   LMB (hold)   → fire current weapon group
- *   1 / 2 / 3 / 4 → weapon group (cannon / disruptor / mining / missiles)
+ *   1 / 2 / 3 / 4 / 5 → weapon group (cannon / disruptor / mining / missiles / psionic)
  *   T (tap)      → cycle target (nearest first; asteroids too in group 3)
  *   V (tap)      → lock under the visible reticle
+ *   K (tap)      → engine-select on a live ship lock (Wave 100)
+ *   N (tap)      → engage / cancel automine on a locked asteroid
  *   H (tap)      → hail   ·   D (tap) → dock   ·   C (tap) → camera toggle
  *   X (tap)      → match-speed edge (ship.js toggles flags.matchSpeed)
  *
@@ -37,8 +41,8 @@ import { pickReticleLock } from '../game/reticle-aim.js';
 const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
   'KeyQ', 'KeyE',
-  'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV',
-  'Digit1', 'Digit2', 'Digit3', 'Digit4',
+  'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV', 'KeyN', 'KeyK',
+  'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
   'ShiftLeft', 'ShiftRight',
   'Space',
 ]);
@@ -230,13 +234,15 @@ export function initControls(ctx) {
   let pendingCamera = false;
   let pendingMatchSpeed = false;
   let pendingReticleLock = false;
+  let pendingAutomine = false;
+  let pendingEnginePart = false;
 
   let lastFTapAt = -Infinity; // performance.now() ms of previous F tap
 
   const zeroAxesFireDrift = () => {
     pressed.clear();
     fireDown = false;
-    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = false;
+    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
     input.matchSpeedPressed = false;
     input.reticleLockPressed = false;
     input.throttleHeld = false;
@@ -277,6 +283,12 @@ export function initControls(ctx) {
       case 'KeyV':
         pendingReticleLock = true;
         break;
+      case 'KeyN':
+        if (!reticleLockBlocked(ctx)) pendingAutomine = true;
+        break;
+      case 'KeyK':
+        pendingEnginePart = true;
+        break;
       case 'KeyF': {
         const now = performance.now();
         if (now - lastFTapAt <= DOUBLE_TAP_MS) {
@@ -298,6 +310,9 @@ export function initControls(ctx) {
       case 'Digit4':
         // Group 4 is missiles when a launcher is seated.
         input.weaponGroup = 4;
+        break;
+      case 'Digit5':
+        input.weaponGroup = 5;
         break;
     }
   });
@@ -331,11 +346,13 @@ export function initControls(ctx) {
     'Space — afterburner',
     'Shift (hold) — vector-hold drift',
     'LMB (hold) — fire',
-    '1/2/3/4 — weapon group: cannon / disruptor / mining / missiles',
+    '1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic',
     'T — cycle target',
     'V — lock under reticle',
+    'N — automine locked asteroid',
     'H — hail · D — dock · C — camera (chase / third / first-person)',
     'X — match lock speed',
+    'K — engine on lock (after shields)',
     'G — cycle hub route at a Lamplighter junction',
     'M — galaxy chart',
     'L — berth records (save/load)',
@@ -354,8 +371,10 @@ export function initControls(ctx) {
       input.cameraPressed = pendingCamera;
       input.matchSpeedPressed = pendingMatchSpeed;
       input.reticleLockPressed = pendingReticleLock;
+      const automineTap = pendingAutomine;
+      const enginePartTap = pendingEnginePart;
       input.throttleHeld = has('KeyR') || has('KeyF');
-      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = false;
+      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
 
       if (input.cameraPressed) {
         const order = ['chase', 'third', 'first'];
@@ -380,6 +399,8 @@ export function initControls(ctx) {
       dropStaleKindLock(ctx);
 
       if (input.targetPressed) cycleTarget(ctx);
+      dropPartIfNotShip(ctx);
+      if (enginePartTap) toggleEnginePart(ctx);
 
       // --- Reticle steering: offset from screen center, clamped to radius.
       const vw = window.innerWidth;
@@ -402,13 +423,29 @@ export function initControls(ctx) {
 
       if (input.reticleLockPressed) tryReticleLock(ctx);
 
+      if (automineTap && !reticleLockBlocked(ctx)) {
+        if (ctx.automine && ctx.automine.engaged) {
+          disengageAutomine(ctx, 'cancel');
+        } else {
+          const token = tryEngageAutomine(ctx);
+          if (!token) {
+            input.weaponGroup = 3;
+          } else {
+            const line = amLine(token);
+            if (line) ctx.emit('commLine', { text: line });
+          }
+        }
+      }
+
       input.strafeX = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0);
       input.strafeY = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0);
       input.roll = (has('KeyE') ? 1 : 0) - (has('KeyQ') ? 1 : 0);
 
       // --- Held buttons.
       input.driftHeld = has('ShiftLeft') || has('ShiftRight');
-      input.fireHeld = fireDown;
+      // Chart overlay: flag is the contract (not a DOM class sniff). Held LMB
+      // from before KeyM must not keep firing while the map is open.
+      input.fireHeld = fireDown && ctx.flags.chartOpen !== true;
 
       // --- Persistent throttle setpoint: hold-to-ramp (§5.1).
       const throttleDir = (has('KeyR') ? 1 : 0) - (has('KeyF') ? 1 : 0);

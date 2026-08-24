@@ -1,0 +1,8 @@
+gates:render verify 2026-08-16
+npm run gates:render exit 0
+37 PNGs, all 89 50 4E 47 0D 0A 1A 0A
+matrix 35407 bytes; gray 4690-11072; stills 11613-28719
+argv notafaction exit 2
+no-css-stub one-faction run exit 0 (rewrites matrix; full run restored)
+visual: labels readable; silhouettes distinct; congregation/assembly disc face-on; quarters show structure
+NO BROWSER COVERAGE

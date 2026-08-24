@@ -170,6 +170,152 @@ owner SKUs. Police leave still deferred. No aim-glass gauge.
 (`docs/Nav03AutopilotDesign.md`). No `src/` that wave.
 One persist key `nav`. Next hop `path[1]`. Restore does
 not resume flying Autopilot. No aim-glass gauge.
+**Wave 85 first impl landed 2026-08-21:** NAV-01 plot
+persist + chart click; NAV-02 next-gate readout / cue /
+ring; NAV-03 Autopilot (MATCH refuse, cancel keeps dest,
+restore never resumes flying). Police leave still
+deferred. No aim-glass gauge.
+**Wave 86 design briefs landed 2026-08-21:** BIO-01
+remaining obtain (`docs/Bio01ObtainDesign.md`); BIO-02
+training (`docs/Bio02EvolutionDesign.md`); BIO-04
+psionics (`docs/Bio04PsionicsDesign.md`). No `src/`
+that wave. Gift id `hull_seed_gift`, Sworn ≥ 50, living
+`light`, cap 8 fail-closed. Train living `light`/`cutter`
+→ `heavy` at Beautiful Hangar papers. Digit 5 `psionic`,
+living + grafted only, Unknowables miss. Police leave
+still deferred. No aim-glass gauge.
+**Wave 92 first impl landed 2026-08-22:** BIO-01 gift
+`hull_seed_gift` + pirate rate 0.05; BIO-02 Hangar train
+to `heavy` (`yardPrice('heavy')`); BIO-04 Digit 5
+Psionic bolt. Unknowables dock brief
+(`docs/UnknowablesDockDesign.md`): hush presence, no
+station. Police leave still deferred. No aim-glass
+gauge.
+
+**Wave 93 owner calls landed 2026-08-23:**
+`docs/OwnerDecisionsWave93.md`. Markdown only. Police
+leave named (hostile band `< 0` and `> −10`; impl later).
+Power ledger / aim-glass **out**. Living frigate buy
+**omit**. Seed commodity **omit**. Owned living `heavy`
+→ `frigate` train named (`yardPrice('frigate')`).
+Unknowables presence unblocked (`th_veil`). Dock **Wait**.
+BIO-03 bake serial open (GLB + GPU). No aim-glass gauge.
+
+**Wave 94 first impl landed 2026-08-23:**
+`docs/OwnerDecisionsWave94.md`. Living yards sell six
+classes. Hangar trains to any other living class.
+Beautiful Market seed **40000 UU**. POWER pool 100 with
+side-column PWR. Unknowables dock `veil` / The Quiet
+(Archive 400/900). Aim-glass gauges stay off. Police
+leave still later. BIO-03 bake still later.
+
+**Wave 95 first impl + NAV-04 brief landed 2026-08-23:**
+police leave (`Leave this space.` once per visit in the
+hostile band `< 0` and `> −10`, 300 u law zone). BIO-03
+look/bake: six Beautiful NPC GLBs rebaked (keep GLB +
+GPU). NAV-04 hover brief (`docs/Nav04HoverDesign.md`);
+impl later. Aim-glass gauges stay off.
+
+**Wave 96 first impl + BIO-05 brief landed 2026-08-23:**
+NAV-04 hover (`docs/Nav04HoverDesign.md`): reserved strip
+under the KeyM SVG; Digit 9 standing; click still plots.
+Boot harness treats authored `veil` (101 systems). BIO-05
+remaining brief (`docs/Bio05AbominationsDesign.md`):
+player graft loop frozen DONE; NPC/visual later. Aim-glass
+gauges stay off.
+
+**Wave 97 design briefs + BIO-05 owner close landed
+2026-08-23:** TGT-03 remaining awareness
+(`docs/Tgt03AwarenessDesign.md`): lock off-screen reuses
+`.rw-edge-arrow`; later `Incoming fire.` toast. NPC
+turrets brief (`docs/NpcTurretsDesign.md`): later serial,
+default-off who. BIO-05 remaining closed
+(`docs/OwnerDecisionsWave97.md`): NPC grafts off, plated
+overlay omit, badge omit, ungraft forbidden. Aim-glass
+gauges stay off.
+
+**Wave 98 first impl + owner + radar brief landed
+2026-08-23:** TGT-03 `Incoming fire.` toast + lock
+park/aria (`docs/Tgt03AwarenessDesign.md`). NPC
+turret Q1/Q2 closed (`docs/OwnerDecisionsWave98.md`):
+heavy/ace/frigate + already-hostile, vsPlayer only;
+impl later. Radar brief (`docs/Tgt03RadarDesign.md`):
+reuse `.rw-contacts`; no hub PPI. Aim-glass gauges
+stay off.
+
+**Wave 99 first impl + subsystem brief landed
+2026-08-23:** NPC turret vsPlayer
+(`docs/NpcTurretsDesign.md`): heavy/ace/frigate +
+already-hostile; missing target drops; NPC cap 4;
+`Incoming fire.` reuse. Radar jump-park
+(`docs/Tgt03RadarDesign.md`): hide `.rw-contacts`
+while jumping. Subsystem targeting brief
+(`docs/Tgt03SubsystemDesign.md`); impl later.
+Aim-glass gauges stay off.
+
+**Wave 100 owner deputize + engine-select landed
+2026-08-23:** `docs/OwnerDecisionsWave100.md`.
+Standing rule: pick, note, keep going. KeyK engine
+on a ship lock after shields; ENGINE bar on the tgt
+rail; no SKU; no extra Digit; no hub gauge.
+
+**Wave 101 leftover + briefs landed 2026-08-23:**
+NPC turret vs already-hostile NPC
+(`docs/OwnerDecisionsWave101.md`). TGT-03 remaining
+CLOS brief (`docs/Tgt03ClosureDesign.md`); impl
+later. BIO-02 remaining career brief
+(`docs/Bio02CareerDesign.md`); no new class keys.
+Aim-glass gauges stay off.
+
+**Wave 102 first impl + HUD-03 brief landed
+2026-08-23:** TGT-03 CLOS (`+N`/`-N`/`0 u/s` next
+to DIST). BIO-02 Hangar Offer career words.
+HUD-03 remaining brief (`docs/Hud03AlertsDesign.md`).
+Kit mutate omit. Aim-glass gauges stay off.
+
+**Wave 103 leftover + briefs landed 2026-08-23:**
+HUD-03 KeyO `hudAlerts` default off
+(`docs/Hud03AlertsDesign.md`). Mute fail-closed.
+Family ticks reuse. Incoming copy stays.
+REP-05 remaining brief
+(`docs/Rep05ConsequencesDesign.md`): covering +
+inbound jump refuse; police leave stays live.
+MSN-03 unique DONE brief
+(`docs/Msn03UniqueDoneDesign.md`): hide on Digit 2;
+persist keep. Kit mutate omit. Aim-glass gauges
+stay off.
+
+**Wave 104 leftover + brief landed 2026-08-24:**
+REP-05 covering + inbound jump
+(`docs/Rep05ConsequencesDesign.md`): Known+ patrol
+cover; Marked dest refuse `No passage.`; dock open.
+MSN-03 unique DONE hide on Digit 2; persist keep.
+BIO-06 remaining brief (`docs/Bio06CadenceDesign.md`).
+Digit 9 covering copy later. Kit mutate omit.
+Aim-glass gauges stay off.
+
+**Wave 105 BIO-07 freeze + light/heavy slices
+landed 2026-08-24:** NPC Beautiful must read as
+sea creatures, not creature+machine fusions
+(`docs/Bio07BodiesDesign.md`). Light and heavy
+NPC GLBs rebaked. Player CPU hull stays the bar.
+Ace / cutter / frigate / freighter later. Kit
+mutate omit. Aim-glass gauges stay off.
+
+**Wave 106 BIO-07 remaining four classes landed
+2026-08-24:** Ace squid, cutter shark, frigate
+octopus travel pose, freighter gardenback. Shared
+foundation rewrite. Six GLBs rebaked. Player CPU
+hull stays the bar. Kit mutate omit. Aim-glass
+gauges stay off.
+
+**Wave 107 leftover + brief landed 2026-08-24:**
+BIO-06 cadence (`docs/Bio06CadenceDesign.md`):
+per-class Hz/sweep; light 0.5→2.3 honor; NPC
+class-cruise + `uSwimSweep`. REP-05 Digit 9 copy
+of leave / covering / jump refuse. BIO-08 gait
+brief (`docs/Bio08LocomotionDesign.md`); impl
+later. Kit mutate omit. Aim-glass gauges stay off.
 
 ### Experience references
 
@@ -202,7 +348,8 @@ mission chains.
 
 **Status:** HUD-01 DONE (implemented + play-verified 2026-08-17). HUD-02
 skins DONE (Wave 62, 2026-08-18; brief Wave 61). Family audio DONE
-(Wave 65 PR4). HUD-03 existing settings remain; no new wave.  
+(Wave 65 PR4). HUD-03 visual settings remain; optional audio
+alerts DONE (Wave 103; brief Wave 102).  
 **Player problem:** The current HUD pulls the player's eyes to screen corners,
 away from the target and projectile path. Essential combat state is difficult
 to read quickly.  
@@ -256,8 +403,10 @@ Mech follows a mounted `hullKind: 'built'` hull after Wave 64 SHP.
 ### HUD-03 — Accessibility and customization
 
 **Status:** Existing settings remain (scale, contrast, color-blind, reduced
-motion in `settings.js` / `body.rw-*`). Waves A–F did not add a new HUD-03
-wave or new HUD-03 options (including audio alerts).
+motion in `settings.js` / `body.rw-*`). Wave 102 remaining
+brief (`docs/Hud03AlertsDesign.md`). Wave 103 first impl:
+KeyO `hudAlerts` default off; reuse family ticks; mute
+fail-closed; Incoming copy stays.
 
 Both HUD families should support:
 
@@ -277,7 +426,15 @@ duplicates.
 ## Initiative TGT — Targeting, aiming, and awareness
 
 **Status:** TGT-01 and TGT-02 DONE (core ship). TGT-03 DONE for the
-scanner-gated bearing arc only. TGT-04 unchanged (not done).  
+scanner-gated bearing arc; remaining awareness first impl
+Wave 98 (`docs/Tgt03AwarenessDesign.md`). Radar jump-park
+Wave 99 (`docs/Tgt03RadarDesign.md`). Engine-select Wave 100
+(`docs/OwnerDecisionsWave100.md`). TGT-03 remaining CLOS
+brief Wave 101 (`docs/Tgt03ClosureDesign.md`); first impl
+Wave 102 (`+N`/`-N`/`0 u/s` next to DIST).
+TGT-04 player `auto` DONE (Wave 68); NPC turret vsPlayer
+Wave 99; vsNPC Wave 101 (`docs/OwnerDecisionsWave101.md`;
+brief Wave 97).  
 **Player problem:** Hitting a moving target is too difficult, range state is not
 clear, and the player lacks enough nearby situational information.  
 **Likely areas:** combat targeting/projectile logic, controls, HUD, ship
@@ -315,9 +472,16 @@ when matching is active.
 
 **Status:** DONE for the scanner-gated thin bottom bearing arc only (Wave F,
 2026-08-17). Tier 0: no arc. Mk I: ENCOUNTER_BUBBLE. Mk II: 2× bubble + lock
-closure glyph. Shape = friend/foe. Not a reticle ring. Remaining candidates
-below (missiles, subsystem targeting, and any aid not in that arc) stay out
-of scope.
+closure glyph. Shape = friend/foe. Not a reticle ring. Wave 97 remaining
+awareness brief (`docs/Tgt03AwarenessDesign.md`). Wave 98 first impl:
+toast `Incoming fire.` for cannon-vs-player; keep `Incoming dart.`;
+lock `.rw-edge-arrow` parks docked/jumping. Radar jump-park
+Wave 99 (`docs/Tgt03RadarDesign.md`): reuse `.rw-contacts`;
+hide while jumping. Subsystem targeting Wave 100 (`docs/OwnerDecisionsWave100.md`;
+brief `docs/Tgt03SubsystemDesign.md`): KeyK engine after
+shields; ENGINE tgt-rail bar. Remaining CLOS brief Wave 101
+(`docs/Tgt03ClosureDesign.md`): core rail next to DIST;
+`+N`/`-N`/`0 u/s`; first impl Wave 102.
 
 Candidate sensor/targeting-computer capabilities include:
 
@@ -336,9 +500,13 @@ standard readout even if richer radar information is upgraded.
 ### TGT-04 — Automated weapons
 
 **Status:** first impl DONE (Wave 68). Forward auto-turret
-SKU `auto`. No incoming gauge. NPC turrets later. Wave 75
-brief: `docs/NpcMissilesDesign.md` — Q1/Q2 closed Wave 82
-(pirate+ace; toast+song). Darts not shipped. No aim glass.
+SKU `auto`. No incoming gauge. NPC missiles shipped Wave 83
+(pirate+ace; toast `Incoming dart.` + song). NPC turrets
+brief Wave 97 (`docs/NpcTurretsDesign.md`). Wave 98 owner
+Q1/Q2 (`docs/OwnerDecisionsWave98.md`): heavy/ace/frigate
++ already-hostile, vsPlayer only. Wave 99 first impl
+vsPlayer. Wave 101 vsNPC (`docs/OwnerDecisionsWave101.md`).
+No aim glass.
 
 Turrets and automatic guns should be equipment upgrades with appropriate hull,
 mount, power, and balance restrictions.
@@ -474,7 +642,8 @@ environmental collisions; player and NPC turn rules drifting apart.
 `docs/ShpDesign.md`). Wave 65 added cutter + ace to authored
 buy lists. Wave 67 added plated frigate buy. Missiles /
 turrets first impl DONE (Wave 68;
-`docs/Shp03WeaponsDesign.md`). Power ledger still out.  
+`docs/Shp03WeaponsDesign.md`). Power ledger **out**
+(Wave 93 close).  
 **Player problem:** The player cannot build a collection of ships or meaningfully
 configure a hull for a chosen career.  
 **Likely areas:** station/shipyard UI, player state and saves, ship definitions,
@@ -533,8 +702,13 @@ seat-count mass first impl DONE (Wave 68,
 **Status:** first impl DONE (Wave 74; brief Wave 73:
 `docs/RepStandingDesign.md`). Wave 82 kill delta **−5**
 (`docs/Rep04AttributionDesign.md`). Restitution **1200**
-and police leave stay later. War target −2 and spy
-expose −2 are named, not written. `RANK_LADDER` stays.  
+stay. Police leave Wave 95 (`Leave this space.`).
+Wave 103 remaining brief
+(`docs/Rep05ConsequencesDesign.md`). Wave 104 first
+impl: covering Known+; inbound Marked refuse.
+Wave 107 Digit 9 copy of leave / covering /
+jump refuse. War target −2 and
+spy expose −2 shipped Wave 83. `RANK_LADDER` stays.  
 **Player problem:** The game does not adequately explain how to improve faction
 standing or show what the rating changes.  
 **Likely areas:** reputation/epic state, station UI, mission outcomes, HUD
@@ -599,7 +773,11 @@ secret success). Wave 80 MSN-02 faction-war first impl
 (two slots; cap live+WAR_ROOM; dest-faction patrols;
 employer +2 / target 0). Wave 81 MSN-03 brief:
 `docs/Msn03ChainsDesign.md`. Wave 82 names last-step SKUs
-(Freehold `dart`, Red Ledger `auto`); chains not shipped.  
+(Freehold `dart`, Red Ledger `auto`). Wave 83 chains
+shipped. Wave 103 unique DONE brief
+(`docs/Msn03UniqueDoneDesign.md`). Wave 104 first
+impl: hide unique four `done` on Digit 2; persist
+keep.  
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  
@@ -708,9 +886,10 @@ creating impossible economic quantities; neutral AI failing to defend itself.
 
 ## Initiative NAV — Galaxy route plotting and autopilot
 
-**Status:** design freeze DONE (Wave 84; briefs
+**Status:** NAV-01 / NAV-02 / NAV-03 DONE (Wave 85 first impl; Wave 84 briefs
 `docs/Nav01RouteDesign.md`, `docs/Nav02GuidanceDesign.md`,
-`docs/Nav03AutopilotDesign.md`). Impl is a later serial.
+`docs/Nav03AutopilotDesign.md`). NAV-04 DONE (Wave 96
+first impl; brief Wave 95 `docs/Nav04HoverDesign.md`).
 **Player problem:** Selecting a destination on the galaxy map does not currently
 turn that choice into useful in-flight navigation. The player must work out the
 gate sequence manually, and there is no option to delegate routine travel.
@@ -722,7 +901,7 @@ ship controls and steering, collision/hazard avoidance, save state.
 
 ### NAV-01 — Plot a multi-system route
 
-**Status:** design freeze DONE (Wave 84). Impl later.
+**Status:** DONE (Wave 85).
 
 - Selecting a reachable system on the galaxy map can create a route from the
   current system to that destination.
@@ -739,7 +918,7 @@ ship controls and steering, collision/hazard avoidance, save state.
 
 ### NAV-02 — In-flight next-gate guidance
 
-**Status:** design freeze DONE (Wave 84). Impl after NAV-01 persist.
+**Status:** DONE (Wave 85).
 
 - While a route is active, the HUD clearly identifies the gate for the next hop.
 - Use an in-world marker and an off-screen directional indicator so the next
@@ -753,7 +932,7 @@ ship controls and steering, collision/hazard avoidance, save state.
 
 ### NAV-03 — Full-route autopilot
 
-**Status:** design freeze DONE (Wave 84). Impl after NAV-01 persist.
+**Status:** DONE (Wave 85). Restore does not resume flying.
 
 - After selecting a destination system, the player can click **Autopilot** to
   have the ship fly there rather than manually steering through each gate.
@@ -772,6 +951,45 @@ ship controls and steering, collision/hazard avoidance, save state.
 - Arrival means entering the selected destination system; autopilot should stop
   and return control there unless a later feature explicitly adds an in-system
   destination.
+
+### NAV-04 — Galaxy-map system hover information
+
+**Status:** DONE (Wave 96 first impl; brief Wave 95
+`docs/Nav04HoverDesign.md`). Reserved strip under the SVG.
+No persist key. Click still plots.
+
+Hovering the mouse over a system on the galaxy map should display a compact
+information panel containing:
+
+- the system's name;
+- its controlling faction or political status;
+- the player's current standing with that faction;
+- system-specific or local standing as well, if the game tracks it separately.
+
+The hover panel should use both a readable standing label and its useful value
+or rank, making clear whether the player is friendly, neutral, unwelcome, or
+hostile. Neutral, independent, contested, unclaimed, and unknown systems need
+explicit states rather than misleading faction information. The panel should
+respect exploration knowledge: information the player has not discovered is
+shown as unknown instead of being silently revealed.
+
+**Acceptance direction**
+
+- Moving the pointer across systems updates the panel immediately and reliably.
+- The hovered system is visually highlighted so the panel's subject is clear.
+- The panel remains readable without obscuring the hovered system, nearby route
+  connections, or other important map controls.
+- Standing matches the same canonical value and rank used by reputation screens,
+  stations, law enforcement, missions, and shipyard access.
+- Systems without a conventional controlling faction display an accurate local,
+  contested, independent, unclaimed, or unknown state.
+- Keyboard or gamepad focus can expose the same information if galaxy-map
+  non-mouse navigation is supported.
+
+**Regression risks to call out:** tooltips flickering near overlapping systems;
+panels extending off-screen; stale standing after reputation changes; revealing
+undiscovered faction ownership; hover interactions interfering with selecting
+or plotting a route.
 
 **Acceptance direction**
 
@@ -1041,10 +1259,28 @@ galaxy and one another.
 **Status:** first impl DONE (Wave 72; brief Wave 70:
 `docs/BioLivingShipsDesign.md`). Wave 82 graft list
 **4000 UU**. Destroy-Abomination Beautiful **+5** (recap
-−10 while the player still wears tissue). Gift, pirate
-seed, class evolution, and BIO-04 stay later. BIO-03
-motion slice Wave 76; look/bake brief Wave 81 (impl later;
-keep GLB). Living frigate buy stays omitted.  
+−10 while the player still wears tissue). Wave 86 briefs:
+BIO-01 obtain (`docs/Bio01ObtainDesign.md`), BIO-02
+training (`docs/Bio02EvolutionDesign.md`), BIO-04
+psionics (`docs/Bio04PsionicsDesign.md`). Wave 92 impl:
+gift + pirate, Hangar train to heavy, Digit 5 psionic.
+BIO-03 motion slice Wave 76; look/bake brief Wave 81;
+look/bake impl Wave 95 (keep GLB + GPU). Living yards
+sell six classes (Wave 94). Wave 93 names owned-hull
+`heavy` → `frigate` train. Seed commodity omitted.
+Wave 96 BIO-05 remaining brief
+(`docs/Bio05AbominationsDesign.md`). Wave 97 owner close
+(`docs/OwnerDecisionsWave97.md`): NPC grafted traffic
+**off**; plated overlay **omit**; hangar badge **omit**;
+ungraft **forbidden**. Player graft loop stays closed.
+Wave 101 BIO-02 remaining career brief
+(`docs/Bio02CareerDesign.md`). Wave 104 BIO-06 remaining
+brief (`docs/Bio06CadenceDesign.md`); Wave 107 first
+impl. Wave 105 BIO-07 brief
+(`docs/Bio07BodiesDesign.md`); light + heavy NPC
+slices. Wave 106 remaining four classes + bake.
+Wave 107 BIO-08 gait brief
+(`docs/Bio08LocomotionDesign.md`); impl later.
 **Preserve:** The current living player ship is the quality benchmark. Its
 organic form, alien skin, and swimming motion that intensifies with speed are
 exactly the desired living-ship experience. Future work must not weaken it.  
@@ -1052,6 +1288,12 @@ exactly the desired living-ship experience. Future work must not weaken it.
 Beautiful Ones content, Gilded Chain services, models/animation, reputation.
 
 ### BIO-01 — Ways to obtain a living ship
+
+**Status:** yards + origin DONE (Wave 72). Remaining
+obtain DONE (Wave 92; brief Wave 86
+`docs/Bio01ObtainDesign.md`). Gift `hull_seed_gift` at
+Sworn ≥ 50. Pirate seed rate **0.05**. Commodity **omit**
+(Wave 93).
 
 A player can obtain a living ship or seed by:
 
@@ -1061,6 +1303,20 @@ A player can obtain a living ship or seed by:
 - purchasing a seed as an extremely expensive commodity.
 
 ### BIO-02 — Growth and specialized evolution
+
+**Status:** `bio.growth` scale already ships. Class
+training DONE (Wave 92; brief Wave 86
+`docs/Bio02EvolutionDesign.md`). Living `light`/`cutter`
+→ `heavy` at Beautiful Hangar papers. Debit
+`yardPrice('heavy')`. Wave 93 names living `heavy` →
+`frigate` (`yardPrice('frigate')`, Trusted 25). Live
+Wave 94 yards sell six living keys including frigate
+(Wave 86 buy-omit is stale). No new class keys. No new
+Digit. Ace / freighter train is the live dest ladder.
+Career remaining brief Wave 101
+(`docs/Bio02CareerDesign.md`): careers = loadout +
+existing keys; kit mutate omit. Wave 102 PR1 labels
+on Hangar Offers; Confirm hop stays class keys.
 
 - Living ships can use conventional components.
 - Beautiful Ones growth-and-training centers evolve a living ship into larger
@@ -1072,6 +1328,12 @@ A player can obtain a living ship or seed by:
 
 ### BIO-03 — Redesign the Beautiful Ones fleet
 
+**Status:** motion Wave 76. Look/bake Wave 95 (GLB + GPU). Wave 105
+light + heavy organic NPC slices. Wave 106 remaining four
+classes (ace squid, cutter shark, frigate octopus, freighter
+gardenback). Player CPU `makeLivingHull` stays the quality
+bar. Anatomy-native gait waits BIO-08.
+
 The present Beautiful Ones NPC ships are more organic than conventional ships
 but do not capture the magic of the living player ship. Rebuild their visual and
 motion language around the player ship benchmark:
@@ -1082,12 +1344,123 @@ motion language around the player ship benchmark:
 - marine-life *vibes* such as squid, octopus, whale, shark, dolphin, and manta;
 - inspiration rather than literal copies of Earth animals.
 
+### BIO-06 — Class-scaled living fin cadence
+
+**Status:** remaining brief Wave 104
+(`docs/Bio06CadenceDesign.md`); first impl Wave 107
+(`src/game/living-cadence.js`). Light idle 0.5 /
+cruise 2.3 honor. Larger living remounts and
+Beautiful NPC use class `hzScale` / `sweepScale`.
+NPC speed-norm is class cruise. Mixer `timeScale`
+untouched.
+
+The larger Beautiful Ones ships currently flap their fins too quickly at high
+speed. The result looks frantic and lightweight rather than like a massive
+living creature moving with strength.
+
+- Scale fin-stroke cadence progressively by ship class and physical size.
+- Small living ships can use quicker, more agile strokes.
+- Each larger class should move its fins more slowly and powerfully than the
+  class below it, producing a clear gradient across the fleet.
+- Large ships should communicate force through deliberate sweeps, stronger
+  follow-through, and the movement of their greater mass rather than rapid
+  flapping.
+- Preserve speed responsiveness within every class: acceleration and high speed
+  can intensify the animation, but a large ship's maximum cadence must still
+  remain visibly slower than a small ship's.
+- Avoid one universal animation-speed multiplier; cadence, sweep strength, and
+  body response should be tuned together so the motion remains organic.
+
+**Acceptance direction**
+
+- A side-by-side review of all Beautiful Ones classes at idle, cruise, and high
+  speed shows a smooth, monotonic cadence gradient from smallest to largest.
+- The largest ships never display the current frantic high-speed flapping.
+- Large-ship strokes feel heavier and more powerful without looking sluggish,
+  frozen, or disconnected from propulsion.
+- Small ships retain their agility and faster living motion.
+- The player living ship remains the quality benchmark and is not weakened by
+  fleet-wide tuning.
+- Reduced-motion behavior and animation performance remain intact.
+
+**Regression risks to call out:** large fins appearing frozen; lowering cadence
+without adding enough sweep authority or follow-through; class transitions that
+are abrupt instead of graduated; breaking the link between travel speed and
+living motion; unintentionally changing the player ship's established feel.
+
+### BIO-07 — Distinct species-inspired living ship bodies
+
+**Status:** remaining brief Wave 105
+(`docs/Bio07BodiesDesign.md`). First slices: light +
+heavy NPC organic rebake. Wave 106 remaining four
+classes + shared foundation + bake. Gait leftover
+is BIO-08.
+
+The current three Beautiful Ones ship sizes reuse the same basic model shape.
+They should instead represent different ocean-life inspirations while remaining
+recognizably part of the same Beautiful Ones lineage.
+
+- Do not create the size range by scaling one shared body up and down.
+- Give each class or major size tier a distinct primary silhouette, anatomy, and
+  locomotion character inspired by different marine life.
+- Draw from squid, octopus, whale, shark, dolphin, manta, and other ocean forms
+  without producing literal replicas of Earth animals.
+- Match motion to anatomy: fins can sweep, mantle-like bodies can pulse,
+  tentacular forms can trail and contract, and massive bodies can undulate with
+  slower whole-body force.
+- Maintain a coherent shared style through alien skin, biological construction,
+  color and bioluminescence language, surface detail, and the established player
+  living ship quality bar.
+- Shape and motion should communicate both class role and scale before the HUD
+  identifies the ship.
+
+**Acceptance direction**
+
+- The three current size tiers are immediately distinguishable from black
+  silhouettes alone and are not recognizable as resized copies of one mesh.
+- A side-by-side fleet view shows several marine-life inspirations within one
+  coherent alien species/culture rather than an unrelated collection of animals.
+- Each body's animation feels native to its anatomy and follows BIO-06's size-
+  based cadence gradient.
+- Surface treatment and animation retain the magic of the current living player
+  ship instead of merely adding organic textures to conventional hull shapes.
+- Revised bodies preserve their intended class roles, readable scale, targeting
+  bounds, collision behavior, LOD quality, and performance budgets.
+
+**Regression risks to call out:** creating a visually incoherent "aquarium";
+making Earth species references too literal; changing only appendages while
+leaving the same underlying silhouette; losing class readability; mismatched
+collision/targeting proxies; weakening the current living player ship to make
+the NPC fleet uniform.
+
+### BIO-08 — Anatomy-native living gait
+
+**Status:** remaining brief Wave 107
+(`docs/Bio08LocomotionDesign.md`); impl later.
+
+BIO-06 scales Hz and sweep by class. BIO-07 bodies use four
+plans. Live GPU swim is still one spine-and-flap shader.
+Later serial may bias gait per class without retuning the
+cadence table and without a universal mixer scale.
+
 ### BIO-04 — Psionic weapons
+
+**Status:** DONE (Wave 92; brief Wave 86
+`docs/Bio04PsionicsDesign.md`). Digit 5 `WEAPONS.psionic`.
+Living, unset `hullKind`, and `grafted: true` only.
+Conventional guns stay. Heat only. Unknowables miss.
 
 Living and psionic weapon families remain to be designed. Psionic weapons are
 restricted to living ships and Abominations.
 
 ### BIO-05 — Abominations
+
+**Status:** player loop DONE (Wave 72 graft; Wave 82
+4000 UU and destroy +5). Remaining brief Wave 96
+(`docs/Bio05AbominationsDesign.md`). Wave 97 owner close
+(`docs/OwnerDecisionsWave97.md`): NPC grafted traffic
+**off**; plated overlay **omit**; hangar badge **omit**;
+ungraft **forbidden**.
 
 - Gilded Chain stations or shipyards sell grafted living parts.
 - Grafts can transform any conventional hull into an Abomination.

@@ -1,0 +1,40 @@
+BIO-03 worker files (status --short):
+ M assets-source/ships/beautiful/*.blend
+ M public/assets/ships/beautiful/**/lod*.glb
+ M scripts/ship_builders/beautiful/{light,ace,cutter,heavy,frigate,freighter,organs}.py
+
+src/systems/ship-assets.js: clean (not in git status)
+src/game/ship-scale.js: clean
+public/assets/ships/materials/beautiful: clean
+
+Workspace also has dirty src/ from other waves (not in BIO-03 worker file list):
+src/core/ctx.js
+src/game/authored-systems.js
+src/game/contacts.js
+src/game/hangar.js
+src/game/model-catalog.js
+src/game/origins.js
+src/game/pods.js
+src/game/save.js
+src/game/shipyard.js
+src/game/state.js
+src/main.js
+src/systems/asteroids.js
+src/systems/combat.js
+src/systems/controls.js
+src/systems/galaxychart.js
+src/systems/gate.js
+src/systems/hud.js
+src/systems/npc.js
+src/systems/ship.js
+src/systems/shipyard-desk.js
+src/systems/station.js
+src/systems/title.js
+src/ui/hud.css
+src/ui/screens.css
+
+shipyard.js LIVING_STOCK is expanded vs HEAD, not reverted:
+export const LIVING_STOCK = Object.freeze(['light', 'cutter', 'heavy', 'freighter', 'ace', 'frigate']);
+
+ship.js still exports makeLivingHull for the player CPU manta.
+npc.js has no makeLivingHull; buildShipMesh -> buildShipAsset (GLB).

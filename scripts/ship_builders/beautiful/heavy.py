@@ -1,78 +1,35 @@
-"""Beautiful Ones Heavy - SHIELDBACK.
+"""Beautiful Ones Heavy — HUMPBACK WHALE SHIELDBACK.
 
 Bible §4.6: "A mature defender with a dense central body, layered muscular
 mantles, broad shielding fins, and luminous threat displays. Weapons should
 read as focused biological energy or symbiotic organs, never barrels."
-Plate: beautiful-heavy-shieldback.png — whale authority, defensive mass.
 
-Body plan — a whale built like a fortress, the TALLEST and densest body of
-the fleet relative to its length (spanY carries the class read):
+Body plan (wave 106): a HUMPBACK WHALE, not a manta, not a shark, not a
+blue whale. Dense cetacean fusiform. Blunt head toward -Z. Deep chest.
+Thickest in the thorax. Long tapering tail into a HORIZONTAL fluke
+(an.whale_fluke). LONG pectorals (an.whale_pectoral style='humpback') are
+the outline-breaker: whale flippers, mid-flank roots, far reach, slight
+droop, rounded paddle tips, span >= 15 % of hull length. Soft dorsal_ridge
+(not a shark triangle). Blowhole on the crown plus grown-lip vents. Overlap
+dorsal_mantles as whale muscle. Ventral pouch under the thorax. Low
+watchful crown. One port-aft scar. Threat-display veins in pectoral roots
+and mantle folds.
 
-- ONE grown loft (17 fair near-ellipse stations), thickest just aft of the
-  head (z = l*-0.125, half-height l*0.155 — much deeper than the other
-  combat classes), a broad blunt slightly DOWNTURNED snout (negative
-  y_offset at the nose stations), drawn into a long tapering tail that ends
-  at z = l*+0.462 so the driver's stern glow sphere (z = l*+0.47) reads as
-  the body's own bioluminescent wake. Indigo base tissue, ROLE_HULL.
-- THREE OVERLAPPING SWOLLEN DORSAL MANTLES (org.dorsal_mantles) from brow
-  to mid-back: visibly swollen interpenetrating muscle masses with soft
-  transitions, seeded lateral/aft jitter and the no-disc rule (every
-  mantle's ry >= 0.55*rz, authored so no clamp fires) — whale muscle, never
-  shell-plate borders, never a disc silhouette in top OR side profile. A
-  low pearl dorsal crest loft rides the spine beneath and aft of the stack,
-  carrying the pearl-bone line to the tail.
-- TWO ENORMOUS SHIELD FINS (an.fin_membrane, path-loft flippers) rise
-  steeply from thick roots buried in the shoulders, framing the torso like
-  protective walls: root chord 5.0, thick 0.60, tips lifted ~2.7 over the
-  span. A smaller lower pair continues the manta lineage, sweeping low and
-  aft along the belly flank. Roots GIVEN INSIDE the hull — the burial is
-  the connectivity.
-- CYAN THREAT-DISPLAY VEINS concentrate where the muscle loads: two
-  branching an.vein_fan clusters per flank rooted INSIDE the deep
-  mantle-fold crease, one fan astride each shield-fin root crown, one at
-  each lower-fin root. Cyan cores and branch nodes only, thin and in the
-  folds — the calm pearl back stays dark (emissive far under 5 %).
-- TWO FOLD CREASES per flank (an.fold_crease): the deep mantle fold at the
-  mantle-skirt height and a lower skirt fold, both self-trimming at the
-  head and tail tapers. The vein fans root inside these channels.
-- Sensory crown REDUCED to a low sweep of short sensing filaments along the
-  forward brow edge — watchful, not curious: count 8, raked forward-down,
-  flat arc (arc=0.10), small fan.
-- A protected ventral pouch (org.belly_chamber) beneath the thorax; its
-  mass hangs below the centreline and balances the mantle stack about the
-  pivot.
-- SCAR HISTORY (the one deliberate asymmetry, bible rule 8): three pale
-  diagonal healed welts grouped as one old defence wound on the PORT-aft
-  flank only. Nothing answers them on the starboard flank.
+Thumbnail read: bulky body, long thin pectorals, horizontal fluke.
 
-Envelope (driver): l = 17.0, b = 8.84, h = 5.78.
-AUTHORED largest-dimension target: spanZ ~15.4 (nose l*-0.440 to tail
-l*+0.462) — the fleet ladder's heavy ≈ 15.5, inside the SHIP_SCALE heavy
-span band [10.20, 23.80]; orchestrator fills measured numbers after bake.
-Estimated spans (unverified — no gates run at authoring time):
-  spanZ ~15.4; spanX ~14.2 (shield-fin tips +/-6.9 plus flesh — under the
-  ~1.05*spanZ collision-proxy clamp); spanY ~7.6 (mantle-c top ~+4.6,
-  pouch bottom ~-3.0) → height/length ~0.49, under the 0.60 ceiling.
-Estimated lod0 vertex count MEASURED 2026-08-14: verts 40900; tris 22500/12020/4484 (measure-ships, gltf-transform tri count) (band 9 000-78 000):
-  lofts ~430, mantles ~1 150 (segments=20), fins ~1 100, creases ~1 030,
-  vein fans ~3 300, vents ~3 800, crown ~690, pouch ~290, scars and flow
-  lines ~830.
+Envelope (driver CLASSES): l = 17.0, b = l*0.52, h = l*0.34.
+Span band [10.20, 23.80]. Vertex aim 9000-78000. maxHeightOverLength 0.60.
+Glow at z = +l*0.47 is wake. Stern tapers short of that sphere.
 
-LOD ladder
-----------
-detail=3  full build: both crease pairs with lips, all vein branches +
-```
-          nodes, all six vents per flank with breath glow, 8-filament
-          crown, three scar welts with swells, all flow lines.
-detail=2  constructs thin themselves: crease pitch 1.80, vein branches
-          halved (root node kept), all vents (no breath glow), full crown,
-          scars without swells, decimated boundary lines.
-detail=1  primary masses + key anatomy: crease floors only (dark lines),
-          one vein branch per fan, half the vents (bowls only), crown of
-          4, scars as single chords, minimal flow lines.
-detail=0  primary masses only: grown loft, dorsal crest, three mantles,
-          both fin pairs (membranes only), belly pouch. Silhouette NEVER
-          thins — only ring density, repeats and filaments do.
+LOD
+---
+detail=3  full: veins, pads, crown, vents, scar, flow.
+detail=2  fewer pads / veins (primitives count down).
+detail=1  masses + fluke + pectorals (mantles, pouch, blowhole).
+detail=0  loft + fluke + pectorals + ridge. Silhouette never trimmed.
+
+Paint dual rule (out/w106/foundation/notes.md): role tag AND name selector.
+No kit.box, no windows, no nozzles, no turrets.
 """
 import sys
 from pathlib import Path
@@ -86,327 +43,175 @@ from . import surface as sf
 
 
 # ===========================================================================
-# STATION LIST
+# STATIONS — dense cetacean fusiform
 # ===========================================================================
 
 def _heavy_stations(l, b, h):
-    """Hull loft stations for the shieldback.
+    """Blunt-head whale loft. Thickest in the thorax. Tail dies at the wake.
 
-    sf.fair near-ellipse sections throughout — a grown body never shows a
-    plank edge. Nose tip at l*-0.440 = -7.480, broad and blunt with a
-    negative y_offset: the snout droops slightly while the dorsal line
-    holds — the plate's downturned whale jaw. Thickest just aft of the head
-    at l*-0.125 (half-beam l*0.219 = 3.723, half-height l*0.155 = 2.635 —
-    far taller than the old combat-class sections; spanY is the class
-    read). Tail tip at l*+0.462 = +7.854, tapering to half-extents
-    (0.204, 0.170) so the stern glow at l*+0.47 = +7.990 is the body's
-    wake, not a stuck-on bead.
+    Near-ellipse sections. Nose droops. Chest is deep and round. Stern
+    station sits short of z = +l*0.47 so the driver glow reads as wake.
+    Half-beam and half-height come from the class envelope so the body
+    stays bulky (humpback), not a blue-whale needle.
     """
+    hw = b * 0.440
+    hh = h * 0.498
     return [
-        # -- HEAD: broad blunt snout, slightly downturned, never a needle --
-        sf.fair(l * -0.4400, l * 0.010, l * 0.012, l * -0.012),  # nose tip
-        sf.fair(l * -0.4120, l * 0.045, l * 0.042, l * -0.011),
-        sf.fair(l * -0.3750, l * 0.085, l * 0.070, l * -0.008),
-        sf.fair(l * -0.3250, l * 0.140, l * 0.105, l * -0.002),
-        sf.fair(l * -0.2650, l * 0.185, l * 0.130, l *  0.006),
-        sf.fair(l * -0.1950, l * 0.212, l * 0.148, l *  0.013),  # brow
-
-        # -- CENTRAL BODY: deep chest, thickest just aft of the head --
-        sf.fair(l * -0.1250, l * 0.219, l * 0.155, l *  0.018),  # max
-        sf.fair(l * -0.0450, l * 0.212, l * 0.150, l *  0.017),
-        sf.fair(l *  0.0450, l * 0.200, l * 0.141, l *  0.014),
-        sf.fair(l *  0.1350, l * 0.180, l * 0.126, l *  0.010),
-
-        # -- TAIL: the long taper that turns the stern glow into a wake --
-        sf.fair(l *  0.2150, l * 0.152, l * 0.104, l *  0.005),
-        sf.fair(l *  0.2850, l * 0.123, l * 0.084, l *  0.000),
-        sf.fair(l *  0.3450, l * 0.090, l * 0.062, l * -0.005),
-        sf.fair(l *  0.3950, l * 0.062, l * 0.043, l * -0.007),
-        sf.fair(l *  0.4280, l * 0.040, l * 0.029, l * -0.007),
-        sf.fair(l *  0.4520, l * 0.024, l * 0.018, l * -0.005),
-        sf.fair(l *  0.4620, l * 0.012, l * 0.010, l * -0.003),  # tail tip
+        # -- HEAD: blunt, slightly downturned, never a needle --
+        sf.fair(l * -0.445, hw * 0.10, hh * 0.20, hh * -0.18),
+        sf.fair(l * -0.405, hw * 0.28, hh * 0.38, hh * -0.12),
+        sf.fair(l * -0.355, hw * 0.52, hh * 0.58, hh * -0.04),
+        sf.fair(l * -0.295, hw * 0.74, hh * 0.76, hh *  0.04),
+        sf.fair(l * -0.230, hw * 0.88, hh * 0.90, hh *  0.08),
+        # -- THORAX: deep chest, the thickest station --
+        sf.fair(l * -0.145, hw * 0.98, hh * 0.98, hh *  0.10),
+        sf.fair(l * -0.070, hw * 1.00, hh * 1.00, hh *  0.10),
+        sf.fair(l *  0.020, hw * 0.96, hh * 0.94, hh *  0.08),
+        sf.fair(l *  0.110, hw * 0.88, hh * 0.84, hh *  0.05),
+        sf.fair(l *  0.200, hw * 0.76, hh * 0.72, hh *  0.02),
+        # -- TAIL: long taper into the fluke peduncle --
+        sf.fair(l *  0.280, hw * 0.60, hh * 0.56, hh *  0.00),
+        sf.fair(l *  0.345, hw * 0.44, hh * 0.42, hh * -0.02),
+        sf.fair(l *  0.395, hw * 0.30, hh * 0.28, hh * -0.03),
+        sf.fair(l *  0.430, hw * 0.18, hh * 0.18, hh * -0.03),
+        sf.fair(l *  0.452, hw * 0.10, hh * 0.10, hh * -0.02),
+        sf.fair(l *  0.462, hw * 0.05, hh * 0.055, hh * -0.01),
     ]
 
 
-def _crest_stations(stations):
-    """Dorsal crest loft stations, riding the grown loft's back.
-
-    The pearl-bone dorsal line: low beneath the mantle stack (where the
-    mantles own the silhouette) and carrying the pearl read aft to the
-    tail. Every station's y_offset is computed from sf.top_y at its OWN z
-    so the crest's lower 62 % buries into the back — never placed at a
-    typed y. Absolute half-extents: a mature defender's crest is bone, not
-    a fin.
-    """
-    zs = (-6.40, -5.40, -4.20, -3.00, -1.60, -0.20,
-          1.20, 2.60, 4.00, 5.20, 6.10, 6.70)
-    hws = (0.34, 0.46, 0.58, 0.70, 0.80, 0.82,
-           0.74, 0.60, 0.46, 0.34, 0.26, 0.18)
-    hhs = (0.30, 0.38, 0.46, 0.54, 0.60, 0.60,
-           0.54, 0.44, 0.36, 0.28, 0.23, 0.19)
-    out = []
-    for z, hw, hh in zip(zs, hws, hhs):
-        yo = sf.top_y(stations, z, 0.0) - hh * 0.62
-        out.append(sf.fair(z, hw, hh, yo))
-    return out
-
-
-# ===========================================================================
-# SURFACE PATH HELPERS (every point computed from surface queries)
-# ===========================================================================
-
-def _flank_path(stations, side, z0, z1, n, y0, y1, proud=0.01, bury=0.12):
-    """Points riding the flank from (z0, y0) to (z1, y1).
-
-    Stations whose section has fallen away at the ride height are skipped
-    (self-trim); the first and last kept points are pulled ``bury``
-    inboard so the run's ends are inside the body (gilded margin idiom).
-    """
+def _flank_run(stations, side, z0, z1, n, y0, y1, inset=0.14):
+    """Points along one flank. Skip stations that have fallen away."""
     pts = []
-    for i in range(n):
-        t = i / (n - 1.0)
+    steps = max(2, int(n))
+    for i in range(steps):
+        t = i / (steps - 1.0)
         z = z0 + (z1 - z0) * t
         y = y0 + (y1 - y0) * t
         fx = sf.flank_x(stations, z, y)
-        if fx <= 0.05:
+        if fx <= 0.06:
             continue
-        x = fx + proud
-        if not pts or i == n - 1:
-            x -= bury
+        x = fx - inset
+        if x <= 0.04:
+            continue
         pts.append((side * x, y, z))
     return pts
 
 
-def _fold_fan(stations, side, z_root, y_crease, spread):
-    """One threat-display vein fan rooted in the mantle-fold crease.
+def _pectoral_anchors(stations, l, side):
+    """Mid-flank root inside the hull; far drooped paddle tip.
 
-    Root and every tip sit 0.22 inboard of the skin at their OWN (z, y)
-    and within +/-0.05 of the crease centre height, so each sheath
-    endpoint lies past the crease floor's inner face (0.16 deep, floor
-    height 0.12) and pierces it — the fold is the connectivity. Tips
-    whose section has fallen away are skipped.
+    Root uses flank_x at the local straight-flank height. Tip is the
+    outline-breaker: long thin reach, slight drop, modest aft sweep.
     """
-    fx = sf.flank_x(stations, z_root, y_crease)
-    root = (side * (fx - 0.22), y_crease, z_root)
+    z_root = l * -0.070
+    st = sf.straight_top(stations, z_root)
+    sb = sf.straight_bottom(stations, z_root)
+    y_root = sb + (st - sb) * 0.40
+    fx = sf.flank_x(stations, z_root, y_root)
+    root = (side * (fx - 0.38), y_root, z_root)
+    tip = (side * (l * 0.372), y_root - l * 0.095, z_root + l * 0.255)
+    return root, tip
+
+
+def _pectoral_vein_tips(root, tip, count):
+    """Threat-display tips along the paddle upper face."""
+    ray = sf.span_ray(root, tip)
     tips = []
-    for dz, dy in spread:
-        tz = z_root + dz
-        ty = y_crease + dy
-        fx = sf.flank_x(stations, tz, ty)
-        if fx <= 0.30:
-            continue
-        tips.append((side * (fx - 0.22), ty, tz))
-    return root, tips
-
-
-def _fin_vein_tips(root, tip, root_chord, tip_chord, thick, seed, ts):
-    """Vein tips seated astride a flipper's lofted crown.
-
-    Each tip is anatomy.flipper_surface_point at span fraction t — the same
-    sagging bezier and radii profile the matching fin_membrane call welds
-    its path-loft over (same root, tip, chords, thick and seed), so each
-    sheath end pierces the local flesh: lifted the loft's half-thickness
-    along the crown normal plus 0.02, the sheath (radius sf.VEIN_R * 1.5)
-    sinks into the fin and stands proud, never hovering beside it. The fin
-    root burial connects the fan's inner end.
-    """
-    return [an.flipper_surface_point(root, tip, root_chord * 0.5,
-                                     tip_chord * 0.5, thick * 0.5, t,
-                                     seed=seed) for t in ts]
+    n = max(1, int(count))
+    for i in range(n):
+        t = 0.10 + (0.58 * i / max(1.0, n - 1.0))
+        px, py, pz = ray(t)
+        tips.append((px, py + 0.07, pz))
+    return tips
 
 
 # ===========================================================================
-# BUILD FUNCTION
+# BUILD
 # ===========================================================================
 
 def build_heavy(parts, glow, l, b, h, hull_mat, glow_mat, detail):
-    """Build the Beautiful Ones shieldback (heavy class).
+    """Build the Beautiful Ones heavy as a humpback-whale shieldback.
 
-    parts    -- list that receives ROLE_HULL / ROLE_ARMOUR / ROLE_RECESS /
-                ROLE_TRIM / ROLE_ACCENT objects.
-    glow     -- list that receives emissive objects (skin_role='glow').
-    l, b, h  -- class length, beam and height from the driver
-                (17.0, 8.84, 5.78).
-    detail   -- 3 full  2 thinned repeats  1 primary masses + key anatomy
-                0 primary masses only.
+    parts    -- ROLE_HULL / ROLE_ARMOUR / ROLE_RECESS / ROLE_TRIM / ROLE_ACCENT.
+    glow     -- emissive objects (skin_role='glow').
+    l, b, h  -- class length, beam, height (17.0, 8.84, 5.78).
+    detail   -- 3 full, 2 fewer repeats, 1 masses, 0 primary silhouette.
     """
     H = kit.ROLE_HULL
-    A = kit.ROLE_ARMOUR
 
     stations = _heavy_stations(l, b, h)
+    radial = 28 if detail >= 3 else (20 if detail == 2 else (16 if detail == 1 else 12))
 
-    # ── PRIMARY MASS: the grown body (always, detail 0+) ─────────────────
-    sf.grown_loft(parts, 'heavy-body', H, stations, hull_mat)
+    # ── PRIMARY MASS: grown whale body (always) ──────────────────────────
+    sf.grown_loft(parts, 'heavy-body', H, stations, hull_mat, radial=radial)
 
-    # ── PRIMARY MASS: low pearl dorsal crest, brow to tail (always) ──────
-    sf.grown_loft(parts, 'living-body-crest', A, _crest_stations(stations),
-                  hull_mat)
-
-    # ── PRIMARY MASS: three overlapping swollen dorsal mantles (always) ──
-    # org.dorsal_mantles stacks three seeded ellipsoid masses from the
-    # given lowest centre: each successive mass rises with a 40 % burial
-    # into the one below, drifts aft and takes a small lateral jitter, so
-    # the stack reads as overlapping whale muscle — scalloped in plan,
-    # humps in profile, never coaxial discs (authored ry/rz = 0.57 for
-    # every mass, above the 0.55 no-disc floor, so no clamp fires).
-    # mantle-a (FULL size 5.2 x 3.3 x 5.8) centres at the brow with half
-    # its ry buried in the hull back (top_y at z=-3.40 is ~2.74, so
-    # loc y ~1.91 buries 0.83); its forward pole reaches z=-6.30 where the
-    # hull top is ~1.05, so the brow end is swallowed too. mantle-c tops
-    # out at y ~+4.6 — spanY carries the class read and stays at ~0.49 of
-    # spanZ, under the 0.60 ceiling.
-    mantle_size = (5.20, 3.30, 5.80)
-    mantle_loc = (0.0, sf.top_y(stations, -3.40, 0.0) - 1.65 * 0.50, -3.40)
-    org.dorsal_mantles(parts, 'heavy', hull_mat, mantle_loc, mantle_size,
-                       count=3, seed=73, detail=detail)
-
-    # ── PRIMARY MASS: the fin set (always — the fins ARE the outline) ────
-    # TWO ENORMOUS SHIELD FINS rise steeply from thick roots buried in the
-    # shoulders (root x 1.90 sits ~1.7 inside the local flank at its own
-    # station), framing the torso like protective walls: root chord 5.0,
-    # full root thickness 0.60, tips lifted +2.65 over the span and swept
-    # aft past the cheek. Tips at x +/-6.90 keep spanX ~14.2 under the
-    # ~1.05*spanZ collision-proxy clamp and under spanZ itself, so the
-    # body's length stays the largest dimension (~15.4, the ladder's heavy
-    # slot). The SMALLER LOWER PAIR continues the manta lineage, sweeping
-    # low and aft along the belly flank. Roots are GIVEN INSIDE the hull —
-    # the burial is the connectivity; never inset them back out.
-    shield_root = (1.90, 0.90, -3.00)
-    shield_tip = (6.90, 3.55, -0.70)
-    lower_root = (1.50, -0.90, 0.90)
-    lower_tip = (5.30, -2.30, 3.50)
+    # ── PRIMARY MASS: long humpback pectorals (always — outline-breaker)
+    # Whale flippers, not manta wings: modest chord, long span, mid-flank
+    # burial, drooped rounded tips. Span is ~0.32 * l.
+    root_chord = l * 0.095
+    tip_chord = l * 0.022
+    pec_thick = l * 0.012
+    pec_roots = {}
+    pec_tips = {}
     for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        an.fin_membrane(parts, 'fin-shield-' + tag, hull_mat,
-                        (side * shield_root[0], shield_root[1],
-                         shield_root[2]),
-                        (side * shield_tip[0], shield_tip[1],
-                         shield_tip[2]),
-                        5.00, 1.70, thick=0.60, detail=detail, flow=3,
-                        seed=61 if side > 0.0 else 62)
-        an.fin_membrane(parts, 'fin-lower-' + tag, hull_mat,
-                        (side * lower_root[0], lower_root[1],
-                         lower_root[2]),
-                        (side * lower_tip[0], lower_tip[1], lower_tip[2]),
-                        3.20, 1.05, thick=0.30, detail=detail, flow=2,
-                        seed=63 if side > 0.0 else 64)
+        root, tip = _pectoral_anchors(stations, l, side)
+        pec_roots[tag] = root
+        pec_tips[tag] = tip
+        an.whale_pectoral(parts, 'fin-pectoral-' + tag, hull_mat,
+                          root, tip, root_chord, tip_chord=tip_chord,
+                          thick=pec_thick, style='humpback', detail=detail)
 
-    # ── PRIMARY MASS: protected ventral pouch beneath the thorax ─────────
-    # Seated so the pouch's upper 0.45 buries into the belly at its own
-    # station (sf.bottom_y at z=-0.30 is ~-2.23). Its mass hangs below the
-    # centreline and balances the mantle stack about the pivot. Pouch only
-    # at detail 0 — it is primary mass, a real bulge in the outline.
-    pouch_z = -0.30
-    pouch_y = sf.bottom_y(stations, pouch_z, 0.0) - 0.60 + 0.45
-    org.belly_chamber(parts, glow, 'heavy-chamber', hull_mat, glow_mat,
-                      (0.0, pouch_y, pouch_z), (2.60, 1.20, 3.00),
-                      detail=detail)
+    # ── PRIMARY MASS: horizontal fluke (always — whale, not shark) ───────
+    z_ped = l * 0.418
+    yo_ped = sf.section(stations, z_ped)[2]
+    peduncle = (0.0, yo_ped, z_ped)
+    an.whale_fluke(parts, 'heavy-fluke', hull_mat, peduncle,
+                   span=l * 0.34, chord=l * 0.118, thick=l * 0.013,
+                   detail=detail)
+
+    # ── PRIMARY MASS: soft dorsal ridge (always — not a shark triangle) ──
+    an.dorsal_ridge(parts, 'body-ridge', hull_mat,
+                    l * 0.040, l * 0.230, sf.surf_top(stations, 0.0, 0.02),
+                    x=0.0, height=0.28, detail=detail)
 
     if detail < 1:
         return
 
-    # ── DEEP FOLDS — the creases the threat display lives in ─────────────
-    # Two per flank, both self-trimming where the head and tail tapers fall
-    # below the ride height: the MANTLE FOLD at the mantle-skirt height
-    # (y = +1.55, under the mantle-a overhang — the loaded muscle seam) and
-    # the lower SKIRT FOLD (y = +0.55) where the pearl skirt meets the
-    # indigo flank.
-    fold_y = 1.55
-    skirt_y = 0.55
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        an.fold_crease(parts, 'heavy-fold-' + tag, hull_mat,
-                       -5.40, -0.60, fold_y,
-                       sf.surf_flank(stations, fold_y), side=side,
-                       height=0.12, detail=detail)
-        an.fold_crease(parts, 'heavy-skirt-' + tag, hull_mat,
-                       -5.60, 2.00, skirt_y,
-                       sf.surf_flank(stations, skirt_y), side=side,
-                       height=0.12, detail=detail)
+    # ── MASSES: overlapping whale muscle on the back ─────────────────────
+    mz = l * -0.080
+    my = sf.top_y(stations, mz, 0.0) - 0.20
+    org.dorsal_mantles(parts, 'heavy', hull_mat, (0.0, my, mz),
+                       (b * 0.50, h * 0.26, l * 0.30), count=3, seed=9,
+                       detail=detail)
 
-    # ── CYAN THREAT DISPLAY — glow from inside loaded muscle ─────────────
-    # Symbiotic glow organs, never barrels. The display concentrates where
-    # the plate concentrates it: two branching fans per flank rooted INSIDE
-    # the deep mantle fold (endpoints 0.22 inboard, past the crease floor's
-    # inner face), one fan astride each shield-fin root crown, one at each
-    # lower-fin root. Cyan cores and branch nodes are the only emissive
-    # here — thin, in the folds, never on the calm pearl back.
-    spread = ((-1.60, 0.00), (-0.80, 0.04), (0.00, -0.05),
-              (0.80, 0.04), (1.60, 0.00), (2.20, -0.04))
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        out = (side, 0.0, 0.0)
-        for i, z_root in enumerate((-3.60, -1.40)):
-            root, tips = _fold_fan(stations, side, z_root, fold_y, spread)
-            an.vein_fan(parts, glow, 'heavy-fold-%s-%d' % (tag, i),
-                        hull_mat, glow_mat, root, tips, out, detail=detail)
-        # shield-fin root display: brightest where the shield meets the body
-        sroot = (side * shield_root[0], shield_root[1], shield_root[2])
-        stip = (side * shield_tip[0], shield_tip[1], shield_tip[2])
-        an.vein_fan(parts, glow, 'heavy-shieldfin-' + tag, hull_mat,
-                    glow_mat, sroot,
-                    _fin_vein_tips(sroot, stip, 5.00, 1.70, 0.60,
-                                   61 if side > 0.0 else 62,
-                                   (0.12, 0.20, 0.28, 0.36, 0.44)),
-                    (0.0, 1.0, 0.0), detail=detail)
-        # lower-fin root display
-        lroot = (side * lower_root[0], lower_root[1], lower_root[2])
-        ltip = (side * lower_tip[0], lower_tip[1], lower_tip[2])
-        an.vein_fan(parts, glow, 'heavy-lowerfin-' + tag, hull_mat,
-                    glow_mat, lroot,
-                    _fin_vein_tips(lroot, ltip, 3.20, 1.05, 0.30,
-                                   63 if side > 0.0 else 64,
-                                   (0.18, 0.30, 0.42)),
-                    (0.0, 1.0, 0.0), detail=detail)
+    # ── MASS: protected ventral pouch under the thorax ───────────────────
+    pz = l * -0.055
+    by = sf.bottom_y(stations, pz, 0.0)
+    pouch_h = h * 0.24
+    pouch_y = by - pouch_h * 0.5 + 0.22
+    org.belly_chamber(parts, glow, 'heavy', hull_mat, glow_mat,
+                      (0.0, pouch_y, pz),
+                      (b * 0.28, pouch_h, l * 0.22),
+                      detail=detail)
 
-    # ── SENSORY CROWN — a low watchful sweep, not curiosity ──────────────
-    # Reduced to eight short filaments raked forward-down over the brow
-    # edge with a flat arc (a defender watches, not wonders). The root sits
-    # 0.30 inside the head mass below the skin at its own station
-    # (sf.top_y at z=-6.15 is ~1.28); the filaments exit through the skin —
-    # that pierce is the connectivity. Tips reach z ~-7.2, short of the
-    # nose tip, so the spanZ read stays the body's own.
-    crown_z = -6.15
-    crown_y = sf.top_y(stations, crown_z, 0.0) - 0.30
-    org.sensory_crown(parts, glow, 'heavy', hull_mat, glow_mat,
-                      (0.0, crown_y, crown_z),
-                      forward=(0.0, -0.30, -0.95), fan=sf.FILAMENT_FAN * 1.3,
-                      count=8, detail=detail, seed=71, arc=0.10)
+    # ── Blowhole on the crown of the head ────────────────────────────────
+    bz = l * -0.330
+    by_bh = sf.top_y(stations, bz, 0.0)
+    an.blowhole(parts, glow, 'heavy-blowhole', hull_mat, glow_mat,
+                (0.0, by_bh, bz), radius=0.30, detail=detail, seed=21)
 
-    # ── BREATHING VENTS — one absolute-size row per flank ────────────────
-    # Six mouths per flank (a denser organism breathes more), each centre
-    # sampled from sf.flank_x at its OWN station — a row along a curving
-    # flank never shares one x; vents are the absolute sf.VENT_R.
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        vpts = []
-        for vz in (-4.20, -2.40, -0.60, 1.20, 2.80, 4.40):
-            fx = sf.flank_x(stations, vz, -0.70)
-            if fx <= 0.35:
-                continue
-            vpts.append((side * fx, -0.70, vz))
-        org.breathing_vents(parts, glow, 'heavy-vents-' + tag,
-                            hull_mat, glow_mat, (0.0, 0.0, 0.0),
-                            face='x', detail=detail, points=vpts)
+    if detail < 2:
+        return
 
-    # ── PEARL / INDIGO BOUNDARY FLOW LINES ───────────────────────────────
-    # The long gradual tonal boundary where the pearl mantle skirt meets
-    # the indigo flank, one per side, riding the surface and buried at both
-    # ends. Fin-span flow lines are carried by the membranes.
-    n_flow = 9 if detail >= 3 else (6 if detail == 2 else 4)
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        path = _flank_path(stations, side, -4.80, 2.40, n_flow, 2.00, 1.30)
-        if path:
-            an.flow_line(parts, 'heavy-boundary-' + tag, hull_mat, path,
-                         detail=detail)
-
-    # ── SCAR HISTORY: pale diagonal welts, PORT-aft flank only ───────────
-    # One old defence wound (the bible rule 8 asymmetry) told as three
-    # parallel diagonal welts aft of the port shield-fin root — the plate's
-    # restrained history mark. Each welt rides the flank on a falling
-    # diagonal (~32 degrees), both ends buried in the body. Nothing on the
-    # starboard flank answers them.
-    for i, (z0, z1, y0, y1) in enumerate((
-            (0.60, 2.00, 1.15, 0.30),
-            (1.20, 2.60, 1.20, 0.35),
-            (1.80, 3.10, 1.15, 0.30))):
-        welt = _flank_path(stations, -1.0, z0, z1, 5, y0, y1)
-        if welt:
-            an.healed_scar(parts, 'heavy-scar-port-%d' % i, hull_mat, welt,
-                           thick=0.09, detail=detail)
+    # ── ONE port-aft scar (bible rule 8) ─────────────────────────────────
+    z_fold = l * -0.090
+    st_f = sf.straight_top(stations, z_fold)
+    sb_f = sf.straight_bottom(stations, z_fold)
+    fold_y = sb_f + (st_f - sb_f) * 0.70
+    y_s0 = fold_y - 0.10
+    y_s1 = fold_y - 0.55
+    welt = _flank_run(stations, -1.0, l * 0.090, l * 0.210, 5,
+                      y_s0, y_s1, inset=0.08)
+    if len(welt) >= 2:
+        an.healed_scar(parts, 'heavy-scar-port', hull_mat, welt,
+                       thick=0.09, detail=detail)

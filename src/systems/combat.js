@@ -7,6 +7,8 @@ import { PHY } from '../game/physics.js';
 import { sunZone } from '../game/collision.js';
 import { spendMissileAmmo } from '../game/hangar.js';
 import { isLauncherId, isTurretId, LAUNCHER_IDS, TURRET_IDS } from '../game/weapon-fit.js';
+import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
+import { prefersEngine } from '../game/subsys-aim.js';
 import {
   HULL_MARK_POOL,
   HULL_MARK_SIZE,
@@ -31,14 +33,17 @@ import {
  * the player's true visual bounds (PLAYER_HIT_RADIUS, no padding).
  *
  * Consumes same-frame ctx.events 'npcFire' { ship, weapon, target } from npc.js
- * (NPCs never spawn projectiles themselves). weapon is 'cannon' | 'missile'.
+ * (NPCs never spawn projectiles themselves). weapon is 'cannon' | 'missile' | 'turret'
+ * (spawnNpcShot refuses family === 'psionic').
  * Cannon target is 'player' (or missing, ace legacy) or a live ship. Missile
  * target is always set; missing missile target drops the shot (never aim the
- * player by omission). Hit tests follow vsPlayer: NPC-vs-player uses
+ * player by omission). Turret target must be 'player'; missing turret target
+ * drops (do not copy ace cannon omit). NPC turret live cap is separate from
+ * the player TURRET_LIVE_CAP. Hit tests follow vsPlayer: NPC-vs-player uses
  * testPlayerHit only; fromPlayer or NPC-vs-NPC uses testNpcHits and never
  * testPlayerHit. Emits mineHit { asteroidId,
  * point } for asteroids.js (read next frame via ctx.lastEvents). Emits
- * playerFire { weapon } only when a player cannon/disruptor/missile/turret
+ * playerFire { weapon } only when a player cannon/disruptor/missile/turret/psionic
  * shot actually leaves a pool (not dry-fire, heat-lock, mining, or a dropped shot).
  * Translates applyHit() descriptors into the frozen ctx event vocabulary.
  *
@@ -169,7 +174,8 @@ const _npcPlayerLock = { object: null, state: null };
 const POOL_SIZE = 64;
 const MISSILE_POOL = 8; // player dart rack; do not share the 64-bolt pool
 const NPC_MISSILE_POOL = 4; // separate NPC seekers; do not starve the player 8
-const TURRET_LIVE_CAP = 2; // turret bolts share the 64-pool; leave room for cannon
+const TURRET_LIVE_CAP = 2; // player turret bolts share the 64-pool; leave room for cannon
+const NPC_TURRET_LIVE_CAP = 4; // NPC turret live cap; fromPlayer === false && wkey === 'turret'
 const FLASH_POOL = 16;
 const MUZZLE_POOL = 16;
 const RIPPLE_POOL = 16;
@@ -182,8 +188,9 @@ const CONVERGE_DOT = 0.72; // ~44° frontal cone — chase targets sit wider tha
 const GROUP_WEAPON = { 1: 'cannon', 2: 'disruptor', 3: 'mining' };
 // GROUP_WEAPON[4] maps to the seated launcher wkey ('missile' for dart).
 // Empty group 4: no missile shot (HUD later shows 4 · —). Do not fall through to cannon via ?? 'cannon'.
-// §6.3 family identity: cannon = cyan bolt, disruptor = violet, mining = salvage green, missile = amber.
-const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e, missile: 0xff8a2a };
+// Group 5 → 'psionic' only when the catalog row is complete. Unknown groups (0, 6, 7, …) return null.
+// §6.3 family identity: cannon = cyan bolt, disruptor = violet, mining = salvage green, missile = amber, psionic = magenta-rose.
+const FAMILY_COLORS = { energy: 0x53f2ff, disruptor: 0xc86bff, mining: 0x51ff9e, missile: 0xff8a2a, psionic: 0xff6ad5 };
 
 // Impact sparks (wave-54: stronger than wave-6 6 / 0.35 s / 16 u/s).
 const SPARKS_PER_BURST = 11;
@@ -230,13 +237,14 @@ export function steerSeekerVel(vel, pos, lockPos, speed, turn, dt) {
 }
 
 function groupWeapon(ctx) {
-  const g = ctx.input.weaponGroup;
+  const g = ctx.input.weaponGroup | 0;
   if (g === 4) {
     const id = ctx.world.launcher;
     if (!isLauncherId(id)) return null;
     return LAUNCHER_IDS[id].wkey;
   }
-  return GROUP_WEAPON[g] ?? 'cannon';
+  if (g === 5) return psionicCatalogOk() ? 'psionic' : null;
+  return Object.hasOwn(GROUP_WEAPON, g) ? GROUP_WEAPON[g] : null;
 }
 
 // Mining particles (wave 51): two THREE.Points rings — ore-tinted chips and
@@ -429,6 +437,12 @@ export function initCombat(ctx) {
       transparent: true,
       depthWrite: false,
     }),
+    psionic: new THREE.MeshBasicMaterial({
+      color: FAMILY_COLORS.psionic,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
   };
   // Additive glow sprites: two shared family materials, one sprite child per
   // pooled bolt (built at init; visible iff the bolt is live via the parent).
@@ -458,6 +472,14 @@ export function initCombat(ctx) {
       opacity: 0.95,
       depthWrite: false,
     }),
+    psionic: new THREE.SpriteMaterial({
+      map: glowTex,
+      color: FAMILY_COLORS.psionic,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
   };
   // Visual-only streak: hit tests still use PROJ_RADIUS on mesh.position.
   const streakGeo = new THREE.CylinderGeometry(0.05, 0.2, STREAK_LEN, 6, 1, true);
@@ -481,6 +503,14 @@ export function initCombat(ctx) {
     }),
     missile: new THREE.MeshBasicMaterial({
       color: FAMILY_COLORS.missile,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+    psionic: new THREE.MeshBasicMaterial({
+      color: FAMILY_COLORS.psionic,
       blending: THREE.AdditiveBlending,
       transparent: true,
       opacity: 0.9,
@@ -859,7 +889,7 @@ export function initCombat(ctx) {
   }
 
   // Per-weapon fire cooldowns (rof), in world time.
-  const nextFireAt = { cannon: 0, disruptor: 0, missile: 0, turret: 0 };
+  const nextFireAt = { cannon: 0, disruptor: 0, missile: 0, turret: 0, psionic: 0 };
 
   // ---------- helpers ----------
 
@@ -882,6 +912,8 @@ export function initCombat(ctx) {
       p.shooter = null;
       p.vsPlayer = false;
       p.wkey = wkey;
+      p.mesh.userData.fromPlayer = fromPlayer;
+      p.mesh.userData.wkey = wkey;
       p.family = w.family;
       p.damage = w.damage;
       p.speed = w.speed;
@@ -1120,9 +1152,14 @@ export function initCombat(ctx) {
     const bolt = spawnProjectile(true, wkey, w, _nose, _dir, playerObj.position);
     if (bolt) {
       spawnMuzzle(_nose, w.family);
-      ctx.emit('playerFire', { weapon: wkey });
+      if (wkey === 'psionic') ctx.emit('playerFire', { weapon: 'psionic' });
+      else ctx.emit('playerFire', { weapon: wkey });
+      addHeat(w.heatPerShot);
+      if (wkey === 'psionic' && Number.isFinite(w.powerPerShot) && ctx.player) {
+        const cur = Number.isFinite(ctx.player.power) ? ctx.player.power : 0;
+        ctx.player.power = Math.max(0, cur - w.powerPerShot);
+      }
     }
-    addHeat(w.heatPerShot);
   }
 
   function occupySeeker(pool, fromPlayer, wkey, w, origin, dir, shooterPos) {
@@ -1214,7 +1251,17 @@ export function initCombat(ctx) {
   function countLiveTurretBolts() {
     let n = 0;
     for (let i = 0; i < pool.length; i++) {
-      if (pool[i].active && pool[i].wkey === 'turret') n++;
+      const p = pool[i];
+      if (p.active && p.fromPlayer && p.wkey === 'turret') n++;
+    }
+    return n;
+  }
+
+  function countLiveNpcTurretBolts() {
+    let n = 0;
+    for (let i = 0; i < pool.length; i++) {
+      const p = pool[i];
+      if (p.active && p.fromPlayer === false && p.wkey === 'turret') n++;
     }
     return n;
   }
@@ -1268,6 +1315,8 @@ export function initCombat(ctx) {
     if (!aimObj?.position) return;
     const wkey = WEAPONS[weapon] ? weapon : 'cannon';
     if (wkey === 'missile' || WEAPONS[wkey]?.family === 'missile') return;
+    if (wkey === 'psionic' || WEAPONS[wkey]?.family === 'psionic') return;
+    if (wkey === 'turret' && countLiveNpcTurretBolts() >= NPC_TURRET_LIVE_CAP) return;
     const w = WEAPONS[wkey];
     _fwd.set(0, 0, -1).applyQuaternion(ship.object.quaternion);
     _nose.copy(ship.object.position).addScaledVector(_fwd, NOSE_OFFSET);
@@ -1295,23 +1344,35 @@ export function initCombat(ctx) {
     const laser = miningLaserFor(ctx.world.miningLaser);
     _fwd.set(0, 0, -1).applyQuaternion(playerObj.quaternion);
     _nose.copy(playerObj.position).addScaledVector(_fwd, NOSE_OFFSET * 0.8);
-    reticleAimPoint(ctx, laser.range, _aim);
-    _dir.subVectors(_aim, _nose);
-    if (_dir.lengthSq() < 1e-6) _dir.copy(_fwd);
-    else _dir.normalize();
-    // Locked rock / Unknowable still pulls if it sits in the reticle cone.
     const t = ctx.targets.current;
     const rockList = ctx.asteroids && ctx.asteroids.list;
-    const rockPull = !!(t && t.position && !t.object && !t.lockKind
-      && rockList && rockList.indexOf(t) >= 0);
-    if (rockPull) {
+    const rockListed = !!(t && rockList && rockList.indexOf(t) >= 0);
+    const amOn = !!(ctx.automine && ctx.automine.engaged === true);
+    const amRockPos = !!(amOn && rockListed && t.position
+      && Number.isFinite(t.position.x)
+      && Number.isFinite(t.position.y)
+      && Number.isFinite(t.position.z));
+    if (amRockPos) {
+      // Automine: nose→rock, not the mouse reticle.
       _tmp.subVectors(t.position, _nose);
-      const d = _tmp.length();
-      if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
-    } else if (t && !t.lockKind && t.object && t.state && !t.state.destroyed && isUnknowable(t.state.faction)) {
-      _tmp.subVectors(t.object.position, _nose);
-      const d = _tmp.length();
-      if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
+      if (_tmp.lengthSq() < 1e-6) _dir.copy(_fwd);
+      else _dir.copy(_tmp).normalize();
+    } else {
+      reticleAimPoint(ctx, laser.range, _aim);
+      _dir.subVectors(_aim, _nose);
+      if (_dir.lengthSq() < 1e-6) _dir.copy(_fwd);
+      else _dir.normalize();
+      // Locked rock / Unknowable still pulls if it sits in the reticle cone.
+      const rockPull = !!(t && t.position && !t.object && !t.lockKind && rockListed);
+      if (rockPull) {
+        _tmp.subVectors(t.position, _nose);
+        const d = _tmp.length();
+        if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
+      } else if (t && !t.lockKind && t.object && t.state && !t.state.destroyed && isUnknowable(t.state.faction)) {
+        _tmp.subVectors(t.object.position, _nose);
+        const d = _tmp.length();
+        if (d > 1e-3 && _tmp.divideScalar(d).dot(_dir) > CONVERGE_DOT) _dir.copy(_tmp);
+      }
     }
     // Closest hit along the beam among rocks and Unknowable fields.
     const list = ctx.asteroids?.list;
@@ -1404,7 +1465,13 @@ export function initCombat(ctx) {
       _targetFwd.set(0, 0, -1).applyQuaternion(bestShip.object.quaternion);
       _tmp.subVectors(playerObj.position, bestShip.object.position);
       const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
-      const events = applyHit(bestShip.state, { damage: dmg, family: 'mining', facet, now });
+      const events = applyHit(bestShip.state, {
+        damage: dmg,
+        family: 'mining',
+        facet,
+        now,
+        preferEngine: prefersEngine(ctx, bestShip),
+      });
       if (bestShip.ai) bestShip.ai.lastAttacker = 'player';
       ctx.emit('npcHit', { ship: bestShip, damage: dmg });
       for (const ev of events) {
@@ -1578,7 +1645,13 @@ export function initCombat(ctx) {
       const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
 
       const shielded = s.state.screen > 0 || s.state.shell > 0;
-      const events = applyHit(s.state, { damage: p.damage, family: p.wkey, facet, now });
+      const events = applyHit(s.state, {
+        damage: p.damage,
+        family: p.wkey,
+        facet,
+        now,
+        preferEngine: !!(p.fromPlayer && prefersEngine(ctx, s)),
+      });
       if (s.ai) s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
       ctx.emit('npcHit', { ship: s, damage: p.damage });
       for (const ev of events) {
@@ -1740,6 +1813,24 @@ export function initCombat(ctx) {
           spawnNpcMissile(ship, playerObj, player, playerObj);
           continue;
         }
+        if (e.weapon === 'turret') {
+          // Missing target drops. Do not copy ace cannon omit.
+          if (e.target === 'player') {
+            if (isUnknowable(ship.state.faction)) continue;
+            if (!playerObj || !player || player.destroyed) continue;
+            const bolt = spawnNpcShot(ship, 'turret', playerObj);
+            if (bolt) bolt.vsPlayer = true;
+            continue;
+          }
+          if (isUnknowable(ship.state.faction)) continue;
+          const turretTgt = e.target;
+          if (turretTgt && typeof turretTgt === 'object' && turretTgt.object && turretTgt.state && !turretTgt.state.destroyed) {
+            const bolt = spawnNpcShot(ship, 'turret', turretTgt.object);
+            if (bolt) bolt.vsPlayer = false;
+            continue;
+          }
+          if (e.target !== 'player') continue;
+        }
         const tgt = e.target;
         if (tgt === 'player' || tgt == null) {
           if (!playerObj) continue;
@@ -1752,18 +1843,34 @@ export function initCombat(ctx) {
       }
 
       // 3. Player weapons (fire while held, rof-gated, heat-locked §6.3).
+      // Automine mines without fireHeld and ignores weaponGroup (Digit1 cannot cannon).
       let beamOn = false;
-      if (ctx.input.fireHeld && player && !player.destroyed && !player.overheated && playerObj) {
-        const wkey = groupWeapon(ctx);
-        // Empty group 4: wkey is null — no missile shot, no ammo, no heat. Do not fall through to cannon.
-        if (wkey === 'mining') {
+      const amMine = !!(ctx.automine && ctx.automine.engaged === true && ctx.automine.wantMine === true);
+      if (player && !player.destroyed && !player.overheated && playerObj) {
+        if (amMine) {
           beamOn = updateMining(dt, playerObj);
-        } else if (wkey && WEAPONS[wkey]?.family === 'missile') {
-          tryPlayerMissile(wkey, now, playerObj);
-        } else if (wkey && now >= nextFireAt[wkey]) {
-          const w = WEAPONS[wkey];
-          nextFireAt[wkey] = now + 1 / w.rof;
-          firePlayerGun(wkey, w, playerObj);
+        } else if (ctx.input.fireHeld) {
+          const wkey = groupWeapon(ctx);
+          // Empty group 4 / unknown group / ineligible Digit 5: wkey is null or dry — no shot, no heat. Do not fall through to cannon.
+          if (wkey === 'mining') {
+            beamOn = updateMining(dt, playerObj);
+          } else if (wkey && WEAPONS[wkey]?.family === 'missile') {
+            tryPlayerMissile(wkey, now, playerObj);
+          } else if (wkey && now >= nextFireAt[wkey]) {
+            if (wkey === 'psionic' && !canFirePsionic(ctx)) {
+              // Built non-grafted Digit 5: select only. No spawn, heat, emit, or clock.
+            } else {
+              const w = WEAPONS[wkey];
+              const psiCost = wkey === 'psionic' ? w?.powerPerShot : 0;
+              const psiDry = wkey === 'psionic' && (
+                !Number.isFinite(psiCost) || (player.power ?? 0) < psiCost
+              );
+              if (w && Number.isFinite(w.rof) && w.rof > 0 && !psiDry) {
+                nextFireAt[wkey] = now + 1 / w.rof;
+                firePlayerGun(wkey, w, playerObj);
+              }
+            }
+          }
         }
       }
       if (!beamOn) hideMiningFx(); // covers destroyed/overheated too (gate above)

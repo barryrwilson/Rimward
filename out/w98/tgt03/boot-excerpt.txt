@@ -1,0 +1,23 @@
+npm run test:boot (Wave 98 worker)
+
+wave83 missiles: all true (toastLiteral, toastGap, toastCopy, toastThrottle, missingTargetDrops, …)
+WAVE83 MISSILES: no FAIL line
+
+wave98 tgt03: {
+  missilePlayer, cannonPlayer, cannonOmit, cannonNull, cannonShip,
+  unknown, missing, proto, protoInherited, empty, missileOmit, psionic,
+  dartGapConst, fireGapConst, dartStillNamed, helperNoWeaponsIndex,
+  helperNoInnerHtml, staticFireCopy, noShipName, dartThenFire, fireThrottle,
+  dockJumpHelper, hudDartAndFire, dockJumpHud, foreAftHitOnly, noNewHudChild,
+  edgeArrowCount, edgeAriaAttr, edgeAriaSrc, noSecondArrow, noKeyframes,
+  lockPark, dartPathUnchanged
+} all true
+No WAVE98 TGT-03 FAIL line
+
+Known unrelated FAILs left in place (not this serial):
+WAVE4 FENCE FAVOR FAIL
+WAVE26 ferry/haul (orchestrator: do not fix)
+WAVE35 haul (orchestrator: do not fix)
+Other pre-existing FAILs in this run (WAVE78 explore, WAVE80 REP-04, WAVE85 nav guidance hideJumping/markerRay, WAVE92 BIO-01/BIO-02) were not touched.
+
+Vite/Chrome were not started. Ports 5178 and 9418 were not LISTENING.

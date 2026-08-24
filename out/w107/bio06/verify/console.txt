@@ -1,0 +1,11 @@
+Playwright MCP console at http://127.0.0.1:5177/ after NEW GAME + Greenhand.
+
+Errors: 0
+Warnings: 0
+
+[DEBUG] [vite] connecting... @ http://127.0.0.1:5177/@vite/client:788
+[DEBUG] [vite] connected. @ http://127.0.0.1:5177/@vite/client:911
+[DEBUG] [vite] connecting... @ http://127.0.0.1:5177/@vite/client:788
+[DEBUG] [vite] connected. @ http://127.0.0.1:5177/@vite/client:911
+
+(Two Vite client connects: first boot, then NEW GAME reload.)

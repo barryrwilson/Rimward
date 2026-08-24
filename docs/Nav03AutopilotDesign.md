@@ -5,7 +5,7 @@
 | **Title** | RIMWARD NAV-03 full-route autopilot |
 | **Author** | Wave 84 NAV-03 integrator |
 | **Date** | 2026-08-21 |
-| **Status** | Wave 84 — design. Later — impl. |
+| **Status** | Implemented. Wave 85 flying autopilot. Restore never resumes. |
 | **Wave** | 84 — design. Later — impl. |
 | **Owner request** | After a plotted dest, click Autopilot; the ship flies gates for real; cancel keeps the route; never silent-lethal; restore does not resume flying. |
 | **Merge law** | [`out/w84/nav03/shared-contract.md`](../out/w84/nav03/shared-contract.md). If this brief and that file conflict, the contract wins. |
