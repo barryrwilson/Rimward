@@ -4874,6 +4874,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   is the flood channel. Kit mutate still
   omit. Aim-glass gauges stay off.
   OPEN: none named.
+  CLOSED by Wave 122: leftover census
+  (remaining NAV CONSUME + remaining
+  TGT CONSUME + remaining REP CONSUME).
   VERIFY: chart-label probe PASS
   (`out/w121/chartlabel/verify/`); live
   Playwright CLEAN on Vite 5175; designer
@@ -4893,6 +4896,44 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/Exp04RemainingDockDesign.md`,
   `docs/Hud05RemainingFeedbackDesign.md`,
   `out/w121/`.
+- Wave 122 (2026-08-25): leftover census
+  after Wave 121 OPEN none. Markdown
+  only. No `src/`.
+  Remaining NAV
+  (`docs/Nav08RemainingNavDesign.md`):
+  leftover CONSUME. Named serial none.
+  NAV-01..07 live. Wishlist NAV-03
+  handoff “impl later” is stale vs
+  Wave 117.
+  Remaining TGT
+  (`docs/Tgt06RemainingTgtDesign.md`):
+  leftover CONSUME. Named serial none.
+  TGT-01..05 live. PPI / aim-glass /
+  incoming gauge stay omit.
+  Remaining REP
+  (`docs/Rep06RemainingRepDesign.md`):
+  leftover CONSUME. Named serial none.
+  Digit 9 / kill −5 / restitution 1200 /
+  leave / covering / inbound refuse /
+  spy-war −2 live. Patrol spawn is not
+  Freehold-only. Compact job +5 is
+  unique-four honesty, not PR1.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: none named.
+  VERIFY: NAV leftover verifier CLEAN
+  (`out/w122/navrest/verify/`); designer
+  CLEAN. TGT leftover verifier CLEAN
+  (`out/w122/tgtrest/verify/`); designer
+  CLEAN. REP leftover verifier CLEAN
+  (`out/w122/represt/verify/`); designer
+  CLEAN. No `src/` this wave. Known
+  REDMARCH `castMatches` flake is not
+  this write-set.
+  FILES: `docs/Nav08RemainingNavDesign.md`,
+  `docs/Tgt06RemainingTgtDesign.md`,
+  `docs/Rep06RemainingRepDesign.md`,
+  `out/w122/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

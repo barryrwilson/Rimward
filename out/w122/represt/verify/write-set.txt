@@ -1,0 +1,7 @@
+docs/Rep06RemainingRepDesign.md
+out/w122/represt/code-review.md
+out/w122/represt/current-rep-remaining-inventory.md
+out/w122/represt/notes.md
+out/w122/represt/security-review.md
+out/w122/represt/shared-contract.md
+out/w122/represt/ui-audit.md

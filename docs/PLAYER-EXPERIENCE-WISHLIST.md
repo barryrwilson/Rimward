@@ -504,6 +504,17 @@ Named serial none on both CONSUME packs.
 Kit mutate omit. Aim-glass gauges stay
 off.
 
+**Wave 122 leftover census landed
+2026-08-25:** remaining NAV leftover
+CONSUME (`docs/Nav08RemainingNavDesign.md`).
+Remaining TGT leftover CONSUME
+(`docs/Tgt06RemainingTgtDesign.md`).
+Remaining REP leftover CONSUME
+(`docs/Rep06RemainingRepDesign.md`).
+Named serial none on all three packs.
+No `src/`. Kit mutate omit. Aim-glass
+gauges stay off.
+
 ### Experience references
 
 Use these as experiential references rather than cloning their interfaces:
@@ -647,7 +658,9 @@ brief Wave 101 (`docs/Tgt03ClosureDesign.md`); first impl
 Wave 102 (`+N`/`-N`/`0 u/s` next to DIST).
 TGT-04 player `auto` DONE (Wave 68); NPC turret vsPlayer
 Wave 99; vsNPC Wave 101 (`docs/OwnerDecisionsWave101.md`;
-brief Wave 97).  
+brief Wave 97). Remaining TGT leftover CONSUME Wave 122
+(`docs/Tgt06RemainingTgtDesign.md`): named serial none.
+PPI / aim-glass gauges / incoming gauge stay omit.  
 **Player problem:** Hitting a moving target is too difficult, range state is not
 clear, and the player lacks enough nearby situational information.  
 **Likely areas:** combat targeting/projectile logic, controls, HUD, ship
@@ -930,7 +943,11 @@ brief (`docs/Rep03RemedialDesign.md`).
 Wave 111 first impl: Digit 9 climb copy
 after restitution-to-0; live +2 families;
 no new kind. War target −2 and
-spy expose −2 shipped Wave 83. `RANK_LADDER` stays.  
+spy expose −2 shipped Wave 83. `RANK_LADDER` stays.
+Remaining REP leftover CONSUME Wave 122
+(`docs/Rep06RemainingRepDesign.md`): named
+serial none. Patrol spawn is not
+Freehold-only.  
 **Player problem:** The game does not adequately explain how to improve faction
 standing or show what the rating changes.  
 **Likely areas:** reputation/epic state, station UI, mission outcomes, HUD
@@ -1122,6 +1139,9 @@ NAV-06 chart-close-on-AP first impl Wave 120
 (`docs/Nav06ChartCloseDesign.md`). NAV-07
 chart-label first impl Wave 121
 (`docs/Nav07ChartLabelDesign.md`).
+Remaining NAV leftover CONSUME Wave 122
+(`docs/Nav08RemainingNavDesign.md`):
+named serial none.
 **Player problem:** Selecting a destination on the galaxy map does not currently
 turn that choice into useful in-flight navigation. The player must work out the
 gate sequence manually, and there is no option to delegate routine travel.
@@ -1165,8 +1185,9 @@ ship controls and steering, collision/hazard avoidance, save state.
 ### NAV-03 — Full-route autopilot
 
 **Status:** DONE (Wave 85). Restore does not resume flying.
-Remaining zone handoff leftover: Wave 116 brief
-(`docs/Nav05HandoffDesign.md`); impl later.
+Remaining zone handoff leftover: Wave 117
+PR1 (`docs/Nav05HandoffDesign.md`). Wave 122
+remaining NAV leftover CONSUME.
 
 - After selecting a destination system, the player can click **Autopilot** to
   have the ship fly there rather than manually steering through each gate.
