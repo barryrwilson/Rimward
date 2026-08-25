@@ -2,7 +2,7 @@ import { SYSTEMS, FACTIONS } from '../game/state.js';
 import { clearRoute, plotRoute, sanitizeSystemId } from '../game/nav.js';
 import { hoverModel } from '../game/chart-hover.js';
 import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from '../game/autopilot.js';
-import { canOpenPlayCard, playSurfaceBlocked } from './overlay-policy.js';
+import { canOpenPlayCard, playSurfaceBlocked, isTypingFocus } from './overlay-policy.js';
 import '../ui/hud.css';
 
 /**
@@ -26,9 +26,11 @@ import '../ui/hud.css';
  * owns that screen), Escape or the close button closes. The chart does not
  * pause gameplay and does not intercept key or pointer events, so flight
  * keys keep working; the close control is a real <button> in tab order.
- * Click a charted hit disc to plot (or click current / Clear to drop).
- * Hover a hit disc to inspect name, control, and Digit 9 standing. Hover
- * does not plot, does not write world.nav, and does not emit.
+ * Click a charted hit disc or a system name to plot (or click current /
+ * Clear to drop). The Destination list under the description plots any
+ * charted system from the keyboard. Hover a hit disc or label to inspect
+ * name, control, and Digit 9 standing. Hover does not plot, does not write
+ * world.nav, and does not emit.
  *
  * Per-frame cost: update() only diffs ctx.world.currentSystem against a
  * cached id — on change it moves .is-current between node elements and
@@ -82,6 +84,23 @@ function isHitDisc(el) {
     if (parts[i] === 'rw-galaxy-hit') return true;
   }
   return false;
+}
+
+function isPlotTarget(el) {
+  if (!el || typeof el.getAttribute !== 'function') return false;
+  const cls = el.getAttribute('class') || '';
+  const parts = cls.split(/\s+/);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === 'rw-galaxy-hit' || parts[i] === 'rw-galaxy-label') return true;
+  }
+  return false;
+}
+
+function destLabel(id) {
+  const sid = sanitizeSystemId(id);
+  if (!sid || !Object.hasOwn(SYSTEMS, sid)) return '';
+  const n = SYSTEMS[sid].name;
+  return typeof n === 'string' && n ? n : sid;
 }
 
 function jumpPhrase(n) {
@@ -171,6 +190,44 @@ export function initGalaxyChart(ctx) {
   desc.className = 'rw-galaxy-chart-desc';
   desc.id = 'rw-galaxy-chart-desc';
   desc.textContent = 'Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashed gold lines are one-way Lamplighter hub routes. Click a system to plot a route. M or Escape closes.';
+
+  const destField = document.createElement('div');
+  destField.className = 'rw-galaxy-dest-field';
+  const destLbl = document.createElement('label');
+  destLbl.className = 'rw-galaxy-dest-label';
+  destLbl.htmlFor = 'rw-galaxy-dest';
+  destLbl.setAttribute('for', 'rw-galaxy-dest');
+  destLbl.textContent = 'Destination';
+  const destSelect = document.createElement('select');
+  destSelect.id = 'rw-galaxy-dest';
+  destSelect.className = 'rw-galaxy-dest';
+  const destPlaceholder = document.createElement('option');
+  destPlaceholder.value = '';
+  destPlaceholder.textContent = 'Plot a system';
+  destSelect.appendChild(destPlaceholder);
+  const destOpts = [];
+  for (const id of Object.keys(SYSTEMS)) {
+    if (!Object.hasOwn(SYSTEMS, id)) continue;
+    const sys = SYSTEMS[id];
+    if (!sys || !Array.isArray(sys.chart)) continue;
+    const sid = sanitizeSystemId(id);
+    if (!sid) continue;
+    destOpts.push({ id: sid, name: destLabel(sid) });
+  }
+  destOpts.sort((a, b) => {
+    const byName = String(a.name).localeCompare(String(b.name));
+    if (byName !== 0) return byName;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  for (let i = 0; i < destOpts.length; i++) {
+    const rec = destOpts[i];
+    const opt = document.createElement('option');
+    opt.value = rec.id;
+    opt.textContent = rec.name;
+    destSelect.appendChild(opt);
+  }
+  destField.appendChild(destLbl);
+  destField.appendChild(destSelect);
 
   const legend = document.createElement('div');
   legend.className = 'rw-galaxy-legend';
@@ -281,11 +338,14 @@ export function initGalaxyChart(ctx) {
     nodesById.set(id, { el: node, x, y, hit });
 
     if (AUTHORED_IDS.has(id) || PINNED_IDS.has(id) || sys.hub) {
-      const label = svgEl('text', {
+      const lid = sanitizeSystemId(id);
+      const labelAttrs = {
         class: 'rw-galaxy-label',
         x, y: y + HUB_RING_R + 16,
         'text-anchor': 'middle',
-      });
+      };
+      if (lid) labelAttrs['data-system-id'] = lid;
+      const label = svgEl('text', labelAttrs);
       label.textContent = sys.name ?? id;
       labelLayer.appendChild(label);
     }
@@ -333,6 +393,7 @@ export function initGalaxyChart(ctx) {
 
   panel.appendChild(header);
   panel.appendChild(desc);
+  panel.appendChild(destField);
   panel.appendChild(svg);
   panel.appendChild(hoverReadout);
   panel.appendChild(status);
@@ -472,13 +533,6 @@ export function initGalaxyChart(ctx) {
     return `${here || ''}|${st}|${dest}|${path}|${rem}`;
   }
 
-  function destLabel(id) {
-    const sid = sanitizeSystemId(id);
-    if (!sid || !Object.hasOwn(SYSTEMS, sid)) return '';
-    const n = SYSTEMS[sid].name;
-    return typeof n === 'string' && n ? n : sid;
-  }
-
   function setStatusText(text) {
     const line = typeof text === 'string' ? text : '';
     status.textContent = line;
@@ -497,12 +551,16 @@ export function initGalaxyChart(ctx) {
     const bag = ctx.world && ctx.world.nav;
     if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
       setStatusText('');
+      try { destSelect.value = ''; } catch { /* keep flying */ }
       return;
     }
     const dest = sanitizeSystemId(typeof bag.dest === 'string' ? bag.dest : '');
     const st = typeof bag.status === 'string' ? bag.status : '';
     const path = Array.isArray(bag.path) ? bag.path : [];
     const name = dest ? destLabel(dest) : '';
+    try {
+      destSelect.value = (st === 'plotted' || st === 'blocked') && dest ? dest : '';
+    } catch { /* keep flying */ }
 
     if (st === 'plotted') {
       for (let i = 0; i < path.length; i++) {
@@ -665,6 +723,15 @@ export function initGalaxyChart(ctx) {
     syncApButton();
   });
 
+  function activateSystem(id) {
+    const sid = sanitizeSystemId(id);
+    if (!sid) return;
+    const here = sanitizeSystemId(ctx.world.currentSystem);
+    if (sid === here) clearRoute(ctx);
+    else plotRoute(ctx, sid);
+    retargetPlot(true);
+  }
+
   closeBtn.addEventListener('click', () => setOpen(false));
   clearBtn.addEventListener('click', () => {
     clearRoute(ctx);
@@ -672,23 +739,22 @@ export function initGalaxyChart(ctx) {
     syncApButton();
   });
 
+  destSelect.addEventListener('change', () => {
+    const v = destSelect.value;
+    if (!v) return;
+    activateSystem(v);
+  });
+
   svg.addEventListener('click', (e) => {
     const t = e && e.target;
-    if (!isHitDisc(t)) return;
-    const id = sanitizeSystemId(t.getAttribute('data-system-id'));
-    if (!id) return;
-    const here = sanitizeSystemId(ctx.world.currentSystem);
-    if (id === here) clearRoute(ctx);
-    else plotRoute(ctx, id);
-    retargetPlot(true);
+    if (!isPlotTarget(t)) return;
+    activateSystem(t.getAttribute('data-system-id'));
   });
 
   svg.addEventListener('pointerover', (e) => {
     const t = e && e.target;
-    if (!isHitDisc(t)) return;
-    const id = sanitizeSystemId(t.getAttribute('data-system-id'));
-    if (!id || !nodesById.has(id)) return;
-    applyHoverId(id);
+    if (!isPlotTarget(t)) return;
+    applyHoverId(sanitizeSystemId(t.getAttribute('data-system-id')));
   });
 
   svg.addEventListener('pointerleave', () => {
@@ -701,7 +767,17 @@ export function initGalaxyChart(ctx) {
       // Do not intercept the event. While docked the station overlay owns
       // the screen, and while paused the origin pick or pause banner does —
       // only allow closing in those states.
-      if (open) setOpen(false);
+      if (open) {
+        let typing = false;
+        try { typing = isTypingFocus() === true; } catch { typing = false; }
+        if (!typing) {
+          try {
+            const ae = document.activeElement;
+            typing = !!(ae && ae.id === 'rw-galaxy-dest');
+          } catch { /* close as live */ }
+        }
+        if (!typing) setOpen(false);
+      }
       else if (!ctx.flags.docked && !ctx.flags.paused) {
         let blocked = false;
         try { blocked = playSurfaceBlocked(ctx) === true; } catch { blocked = false; }

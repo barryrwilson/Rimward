@@ -1,0 +1,57 @@
+{
+  "url": "http://127.0.0.1:5175/",
+  "probe": "PASS",
+  "origin": "NEW GAME / Freehold Greenhand",
+  "flying": { "docked": false, "paused": false, "startSystem": "freehold" },
+  "chartOpenKeyM": true,
+  "dest": {
+    "id": "rw-galaxy-dest",
+    "underDesc": true,
+    "inActions": false,
+    "optionCountIncludingPlaceholder": 102,
+    "label": "Destination"
+  },
+  "labelClick": {
+    "target": "veridian / Veridian Reach",
+    "nav": { "dest": "veridian", "path": ["freehold", "veridian"], "remaining": 1, "status": "plotted" },
+    "destSelectSync": "veridian",
+    "chartStayedOpen": true,
+    "paused": false
+  },
+  "hover": {
+    "target": "freehold label",
+    "inspectName": "Freehold Drift",
+    "navDestUnchanged": "veridian"
+  },
+  "destSelect": {
+    "value": "fx_aegis",
+    "name": "Aegis",
+    "nav": { "dest": "fx_aegis", "remaining": 4, "status": "plotted" },
+    "chartStayedOpen": true
+  },
+  "keyMWhileDestFocused": {
+    "chartOpen": true,
+    "typeaheadJumpedTo": "rl_margin / Margin Call",
+    "note": "native SELECT typeahead on KeyM; chart did not close"
+  },
+  "escape": {
+    "firstWhileListboxOpen": "closed native listbox (chart stayed)",
+    "second": "chart closed",
+    "destFocusedNoListbox": "chart closed in one Escape"
+  },
+  "autopilotButton": {
+    "chartOpen": false,
+    "autopilot": true,
+    "dest": "rl_margin",
+    "paused": false,
+    "focusInChart": false,
+    "hailOpen": false
+  },
+  "hitCssDiameterConstant": 24,
+  "hitLiveBboxPxWhileOpen": 23.15,
+  "destPipOnAimGlass": false,
+  "consoleErrors": 0,
+  "consoleWarnings": 0,
+  "digit0": "skipped (not docked)",
+  "gitSrc": "src/systems/galaxychart.js + src/ui/hud.css only"
+}

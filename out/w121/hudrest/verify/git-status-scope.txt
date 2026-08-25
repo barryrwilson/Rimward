@@ -1,0 +1,25 @@
+Worker write-set (untracked markdown only):
+?? docs/Hud05RemainingFeedbackDesign.md
+?? out/w121/hudrest/
+
+Worker did not dirty:
+  src/systems/hud.js
+  src/systems/onboarding.js
+  src/game/save.js
+  docs/Hud04ToastFloodDesign.md
+  docs/Hud03RemainingVisualDesign.md
+  docs/Hud03AlertsDesign.md
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/OwnerDecisionsWave121.md (does not exist)
+
+Sibling dirty (other workers, not this pack):
+ M docs/Nav07ChartLabelDesign.md
+ M src/systems/galaxychart.js
+ M src/ui/hud.css   (diff starts ~line 2019; toast/reticle/banner rules unchanged)
+?? out/w121/chartlabel/
+?? out/w121/expdock/
+
+Toast PR1 trees not in this worker write-set:
+  out/w120/toast/** (read-ok sibling)
+  out/w118/toast/** (read-ok sibling)

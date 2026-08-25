@@ -1,0 +1,65 @@
+PASS  root present: got true expect true
+PASS  labels exist: got true expect true
+PASS  labels have data-system-id: got true expect true
+PASS  freehold label id: got true expect true
+PASS  dest select exists: got true expect true
+PASS  dest labelled htmlFor: got true expect true
+PASS  dest label copy: got "Destination" expect "Destination"
+PASS  dest field after desc: got true expect true
+PASS  dest not in actions: got true expect true
+PASS  dest placeholder first: got true expect true
+PASS  dest option count: got 101 expect 101
+PASS  dest has charted ids: got true expect true
+PASS  generated dest option: got true expect true
+PASS  src isPlotTarget: got true expect true
+PASS  src activateSystem: got true expect true
+PASS  src hit or label: got true expect true
+PASS  src click isPlotTarget: got true expect true
+PASS  src hover isPlotTarget: got true expect true
+PASS  src hover applyHoverId: got true expect true
+PASS  src no innerHTML: got false expect false
+PASS  src no for-in dest: got false expect false
+PASS  src HIT 24: got true expect true
+PASS  src import isTypingFocus: got true expect true
+PASS  src KeyM typing skip: got true expect true
+PASS  src dest fallback: got true expect true
+PASS  src Escape still closes: got true expect true
+PASS  src no new KeyM listener: got 1 expect 1
+PASS  src showApLive body: got true expect true
+PASS  src AP success close: got true expect true
+PASS  src no paused write: got false expect false
+PASS  src no jumpRequested: got false expect false
+PASS  src no tabindex labels: got false expect false
+PASS  src dest Object.keys: got true expect true
+PASS  src dest hasOwn: got true expect true
+PASS  src dest textContent: got true expect true
+PASS  src dest empty noop: got true expect true
+PASS  src dest sync value: got true expect true
+PASS  overlay untouched import chart: got false expect false
+PASS  overlay isTypingFocus SELECT: got true expect true
+PASS  overlay isTypingFocus export: got true expect true
+PASS  overlay canOpenPlayCard: got true expect true
+PASS  overlay playSurfaceBlocked: got true expect true
+PASS  css label pointer-events all: got true expect true
+PASS  css label not none: got false expect false
+PASS  css dest focus-visible: got true expect true
+PASS  css chart z 30: got true expect true
+PASS  css no dest animation: got false expect false
+PASS  css toast untouched: got true expect true
+PASS  opens on KeyM: got true expect true
+PASS  hover does not plot: got undefined expect undefined
+PASS  label click plots: got true expect true
+PASS  dest sync after label: got "veridian" expect "veridian"
+PASS  hover after plot no rewrite: got {"dest":"veridian","path":["freehold","veridian"],"remaining":1,"status":"plotted","autopilot":false} expect {"dest":"veridian","path":["freehold","veridian"],"remaining":1,"status":"plotted","autopilot":false}
+PASS  empty dest no-op: got true expect true
+PASS  generated dest activate: got true expect true
+PASS  clear still clears: got true expect true
+PASS  dest sync after clear: got "" expect ""
+PASS  KeyM dest SELECT stays: got true expect true
+PASS  KeyM dest id fallback stays: got true expect true
+PASS  Escape dest still closes: got true expect true
+PASS  KeyM reopen: got true expect true
+PASS  KeyM no typing closes: got true expect true
+PASS  ap live node kept: got true expect true
+PASS  no overlay rewrite file: got true expect true
+chart-label probe PASS

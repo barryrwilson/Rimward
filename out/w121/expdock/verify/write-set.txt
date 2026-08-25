@@ -1,0 +1,7 @@
+docs/Exp04RemainingDockDesign.md
+out/w121/expdock/code-review.md
+out/w121/expdock/current-exp-dock-inventory.md
+out/w121/expdock/notes.md
+out/w121/expdock/security-review.md
+out/w121/expdock/shared-contract.md
+out/w121/expdock/ui-audit.md

@@ -62,12 +62,13 @@ details.
   update identical messages within a short window and distinguish manual-save
   failures from background autosave retries.
   Wave 120 PR1 `docs/Hud04ToastFloodDesign.md`.
-- [x] PLANNED (P2, NAV/A11Y): Galaxy-chart labels are not clickable and route
+- [x] DONE (P2, NAV/A11Y): Galaxy-chart labels are not clickable and route
   plotting depends on small invisible mouse-only SVG hit discs; make labels
   activate their systems, enlarge the effective targets, add accessible names
   and keyboard focus, and provide keyboard navigation or a searchable
   destination list.
-  Wave 120 brief `docs/Nav07ChartLabelDesign.md`. Impl later (PR1).
+  Wave 121 PR1 `docs/Nav07ChartLabelDesign.md`. Labels plot. Dest
+  `<select id="rw-galaxy-dest">`. KeyM typeahead skip.
 - [x] DONE (P2, NAV): Starting Autopilot from the Galaxy Chart begins moving the
   ship behind the still-open full-screen map; close the chart automatically on
   successful engagement, or present an explicit state that requires closing
@@ -488,6 +489,21 @@ chart. Chart-label leftover brief
 later. Kit mutate omit. Aim-glass
 gauges stay off.
 
+**Wave 121 leftover + leftover census
+landed 2026-08-25:** NAV-07 chart-label
+first impl (`docs/Nav07ChartLabelDesign.md`):
+labels share plot path; dest
+`<select id="rw-galaxy-dest">`; existing
+KeyM close skips `isTypingFocus()`.
+EXP Unknowables dock leftover CONSUME
+(`docs/Exp04RemainingDockDesign.md`):
+live `veil` / The Quiet / Archive
+400/900. HUD remaining feedback leftover
+CONSUME (`docs/Hud05RemainingFeedbackDesign.md`).
+Named serial none on both CONSUME packs.
+Kit mutate omit. Aim-glass gauges stay
+off.
+
 ### Experience references
 
 Use these as experiential references rather than cloning their interfaces:
@@ -528,7 +544,9 @@ Wave 114 plated class-token first impl
 (`docs/Hud02RemainingMechSilhouettesDesign.md`).
 Wave 115 remaining TARGET class-token brief
 (`docs/Hud02RemainingTargetSilhouettesDesign.md`).
-Wave 116 TARGET class-token first impl.  
+Wave 116 TARGET class-token first impl.
+Wave 121 HUD remaining feedback leftover
+CONSUME (`docs/Hud05RemainingFeedbackDesign.md`).  
 **Player problem:** The current HUD pulls the player's eyes to screen corners,
 away from the target and projectile path. Essential combat state is difficult
 to read quickly.  
@@ -1098,8 +1116,12 @@ creating impossible economic quantities; neutral AI failing to defend itself.
 `docs/Nav01RouteDesign.md`, `docs/Nav02GuidanceDesign.md`,
 `docs/Nav03AutopilotDesign.md`). NAV-04 DONE (Wave 96
 first impl; brief Wave 95 `docs/Nav04HoverDesign.md`).
-NAV-05 remaining AP handoff brief Wave 116
-(`docs/Nav05HandoffDesign.md`); impl later.
+NAV-05 remaining AP handoff first impl
+Wave 117 (`docs/Nav05HandoffDesign.md`).
+NAV-06 chart-close-on-AP first impl Wave 120
+(`docs/Nav06ChartCloseDesign.md`). NAV-07
+chart-label first impl Wave 121
+(`docs/Nav07ChartLabelDesign.md`).
 **Player problem:** Selecting a destination on the galaxy map does not currently
 turn that choice into useful in-flight navigation. The player must work out the
 gate sequence manually, and there is no option to delegate routine travel.
@@ -1443,7 +1465,9 @@ narrative presentation.
 **Status:** first impl DONE (Wave 74; brief Wave 73:
 `docs/ExpDataTradeDesign.md`). Wave 82: drop **0.20**,
 Archive own **400** / rival **900**, fixer launder **250**.
-Unknowables dock still waits.  
+Unknowables dock leftover CONSUME Wave 121
+(`docs/Exp04RemainingDockDesign.md`): live
+`veil` / The Quiet / Archive 400/900.  
 **Player goal:** Exploration should reveal valuable knowledge, not only places
 or ordinary commodities.  
 **Likely areas:** mystery, landmarks/anomalies, scanning, contacts, faction

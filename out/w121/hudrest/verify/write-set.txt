@@ -1,0 +1,7 @@
+docs/Hud05RemainingFeedbackDesign.md
+out/w121/hudrest/current-hud-feedback-inventory.md
+out/w121/hudrest/shared-contract.md
+out/w121/hudrest/security-review.md
+out/w121/hudrest/code-review.md
+out/w121/hudrest/ui-audit.md
+out/w121/hudrest/notes.md

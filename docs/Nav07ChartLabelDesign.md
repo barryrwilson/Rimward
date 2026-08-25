@@ -5,8 +5,8 @@
 | **Title** | RIMWARD NAV-07 leftover chart-label a11y |
 | **Author** | Wave 120 chart-label leftover integrator |
 | **Date** | 2026-08-25 |
-| **Status** | Wave 120 leftover freeze — markdown only. Bindings do not change here. |
-| **Wave** | 120 — markdown + merge law. Later serial **PR1 chart-label** (named only). |
+| **Status** | Wave 121 PR1 landed. Labels activate the same plot path as hit discs. Dest `<select id="rw-galaxy-dest">` is the keyboard path. Existing KeyM close skips `isTypingFocus()`. |
+| **Wave** | 121 — serial **PR1 chart-label** in `src/`. Merge law stays [`out/w120/chartlabel/shared-contract.md`](../out/w120/chartlabel/shared-contract.md). |
 | **Owner request** | Census live Galaxy Chart labels vs hit discs vs keyboard. If labels still do not activate systems, hit discs stay small/invisible/mouse-only, and there is no accessible name / keyboard focus / searchable destination list, leftover is **REAL**. Freeze later serial **PR1 chart-label** (named only). If already gone, freeze **CONSUME** and serial **none**. |
 | **Merge law** | [`out/w120/chartlabel/shared-contract.md`](../out/w120/chartlabel/shared-contract.md). If this document and that file conflict, the contract wins. |
 | **Honor** | HUD-01 empty hub. Digit 0 shipyard. Digit 8/9 stay. KeyM stays. CTL-01 KeyJ — cite, do not remap. Do not edit `controls.js`. Overlay mutex — cite, do not steal; do not raise chart z. NAV-05: later write-set must **not** rewrite `showApLive` / `#rw-galaxy-ap-live`. Wave 120 sibling **PR1 chart-close-on-AP** writes Autopilot **button** success `setOpen(false)` only — call out, do not solve, do not fight. Wave 120 sibling **PR1 toast-flood** — call out, do not solve. `state.js` READ-ONLY later. No persist key. No UU. No SKU. No new Digit. `innerHTML` forbidden later. Kit mutate omit. Aim-glass gauges stay off. Do **not** edit the wishlist, `PROGRESS.md`, `docs/Ctl02*`, `docs/Ctl01*`, `docs/Nav05HandoffDesign.md`, `docs/Nav06ChartCloseDesign.md`, `docs/Hud*`, or `docs/OwnerDecisions*`. Do **not** write `docs/OwnerDecisionsWave120.md`. Do **not** steal `out/w120/toast/**`, `out/w120/chartclose/**`, `out/w118/**` (read ok), `out/w117/**`, `out/w116/**`. |
@@ -16,15 +16,21 @@
 | Note | Path |
 |---|---|
 | Inventory (code wins; Wave 120 census) | [`out/w120/chartlabel/current-chartlabel-inventory.md`](../out/w120/chartlabel/current-chartlabel-inventory.md) |
+| Inventory (code wins; Wave 121 re-census) | [`out/w121/chartlabel/current-chartlabel-inventory.md`](../out/w121/chartlabel/current-chartlabel-inventory.md) |
 | Merge law | [`out/w120/chartlabel/shared-contract.md`](../out/w120/chartlabel/shared-contract.md) |
 | Wave 120 security review | [`out/w120/chartlabel/security-review.md`](../out/w120/chartlabel/security-review.md) |
 | Wave 120 design-doc review | [`out/w120/chartlabel/code-review.md`](../out/w120/chartlabel/code-review.md) |
 | Wave 120 UI audit | [`out/w120/chartlabel/ui-audit.md`](../out/w120/chartlabel/ui-audit.md) |
 | Wave 120 notes | [`out/w120/chartlabel/notes.md`](../out/w120/chartlabel/notes.md) |
+| Wave 121 probe | [`out/w121/chartlabel/probe.mjs`](../out/w121/chartlabel/probe.mjs) |
+| Wave 121 notes | [`out/w121/chartlabel/notes.md`](../out/w121/chartlabel/notes.md) |
+| Wave 121 security review | [`out/w121/chartlabel/security-review.md`](../out/w121/chartlabel/security-review.md) |
+| Wave 121 code review | [`out/w121/chartlabel/code-review.md`](../out/w121/chartlabel/code-review.md) |
+| Wave 121 UI audit | [`out/w121/chartlabel/ui-audit.md`](../out/w121/chartlabel/ui-audit.md) |
 
-Siblings overlay-priority / NAV-05 / CTL-01 / toast-flood / close-chart-on-AP, wishlist, `PROGRESS.md`, `docs/Ctl02*`, `docs/Ctl01*`, `docs/Nav05HandoffDesign.md`, `docs/Nav06ChartCloseDesign.md`, `docs/Hud*`, and `docs/OwnerDecisions*` are **other workers**. **Do not edit** those paths. **Do not write** `src/`. **Do not steal** sibling Wave 120 toast/chartclose paths or `out/w118/**` / `out/w117/**` / `out/w116/**`.
+Siblings overlay-priority / NAV-05 / CTL-01 / toast-flood / close-chart-on-AP, wishlist, `PROGRESS.md`, `docs/Ctl02*`, `docs/Ctl01*`, `docs/Nav05HandoffDesign.md`, `docs/Nav06ChartCloseDesign.md`, `docs/Hud*`, and `docs/OwnerDecisions*` are **other workers**. **Do not edit** those paths. **Do not steal** sibling Wave 120 toast/chartclose paths or `out/w118/**` / `out/w117/**` / `out/w116/**`.
 
-**This is not CTL-01 KeyJ.** **This is not overlay mutex.** **This is not NAV-05 `showApLive` rewrite.** **This is not P1 toast-flood.** **This is not P2 close-chart-on-AP.** Wishlist chart-label a11y is **INBOX**. Census still finds **labels do not activate; discs are invisible mouse-only; no dest list**.
+**This is not CTL-01 KeyJ.** **This is not overlay mutex.** **This is not NAV-05 `showApLive` rewrite.** **This is not P1 toast-flood.** **This is not P2 close-chart-on-AP.** Wave 121 PR1 lands label activate + dest `<select>` + KeyM typing skip. Wishlist item stays cited, not edited.
 
 ---
 

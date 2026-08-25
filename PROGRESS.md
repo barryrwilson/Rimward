@@ -4835,6 +4835,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   remap). Kit mutate still omit.
   Aim-glass gauges stay off.
   OPEN: chart-label PR1.
+  CLOSED by Wave 121: chart-label PR1
+  + EXP dock leftover CONSUME + HUD
+  remaining feedback leftover CONSUME.
   VERIFY: toast probe PASS
   (`out/w120/toast/verify/`); designer
   CLEAN. Chart-close live Playwright
@@ -4851,6 +4854,45 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/Nav06ChartCloseDesign.md`,
   `docs/Nav07ChartLabelDesign.md`,
   `out/w120/`.
+- Wave 121 (2026-08-25): leftover NAV-07
+  chart-label first impl + EXP remaining
+  Unknowables dock leftover census + HUD
+  remaining feedback leftover census.
+  Chart-label PR1
+  (`docs/Nav07ChartLabelDesign.md`):
+  labels share `activateSystem` with
+  discs; dest `<select id="rw-galaxy-dest">`
+  under desc; existing KeyM close skips
+  `isTypingFocus()`; hover inspects only;
+  `showApLive` and Autopilot success close
+  untouched. EXP leftover
+  (`docs/Exp04RemainingDockDesign.md`):
+  CONSUME. Named serial none. Live `veil`
+  / The Quiet / Archive 400/900. HUD leftover
+  (`docs/Hud05RemainingFeedbackDesign.md`):
+  CONSUME. Named serial none. Toast linger
+  is the flood channel. Kit mutate still
+  omit. Aim-glass gauges stay off.
+  OPEN: none named.
+  VERIFY: chart-label probe PASS
+  (`out/w121/chartlabel/verify/`); live
+  Playwright CLEAN on Vite 5175; designer
+  CLEAN. EXP verifier CLEAN
+  (`out/w121/expdock/verify/`); designer
+  CLEAN. HUD leftover verifier CLEAN
+  (`out/w121/hudrest/verify/`); designer
+  CLEAN. `npm run test:boot` FAIL 1 error:
+  REDMARCH `castMatches` false (traffic
+  cast). Chart-label write-set does not
+  include traffic/npc. WAVE118 overlay
+  pins all true. wave21 `keyMCloses`
+  still true.
+  FILES: `src/systems/galaxychart.js`,
+  `src/ui/hud.css`,
+  `docs/Nav07ChartLabelDesign.md`,
+  `docs/Exp04RemainingDockDesign.md`,
+  `docs/Hud05RemainingFeedbackDesign.md`,
+  `out/w121/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

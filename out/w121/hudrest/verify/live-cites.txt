@@ -1,0 +1,37 @@
+hud.js:64 | const TOAST_LIFETIME = 4; // s a toast stays fully visible
+hud.js:65 | const TOAST_SLOTS = 5;
+hud.js:66 | const TOAST_DEDUP_WINDOW = 8; // identical-key linger; covers BLOCK_RETRY 5 after lifetime 4
+hud.js:531 | function toastLingerHides(linger, key, now) {
+hud.js:544 | function toastLingerRecord(linger, key, now) {
+hud.js:560 | case 'commLine':
+hud.js:597 | if (e.source === 'autosave') {
+hud.js:598 | return { text: '▲ AUTOSAVE HELD — hostiles near', cls: 'warn' };
+hud.js:600 | return { text: '▲ SAVE BLOCKED — ' + (e.reason ?? 'hostiles near'), cls: 'warn' };
+hud.js:846 | toasts.setAttribute('role', 'status');
+hud.js:847 | toasts.setAttribute('aria-live', 'polite');
+hud.js:850 | for (let i = 0; i < TOAST_SLOTS; i++) {
+hud.js:852 | chip.setAttribute('aria-hidden', 'true');
+hud.js:859 | const banner = el('div', 'rw-banner', root);
+hud.js:860 | banner.setAttribute('aria-live', 'polite');
+hud.js:1186 | function pushToast(text, cls) {
+hud.js:1209 | slot.el.setAttribute('aria-hidden', 'false');
+hud.js:1210 | slot.el.textContent = text;
+hud.js:1235 | if (t) pushToast(t.text, t.cls);
+hud.js:1243 | s.el.setAttribute('aria-hidden', 'true');
+hud.js:1264 | banner.classList.remove('show');
+save.js:70 | const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
+save.js:84 | 'epics', 'origin', 'onboarding', 'aceRivalry',
+save.js:1040 | ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
+save.js:1422 | ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.', source: 'berth' });
+save.js:1428 | ctx.emit('saveBlocked', { reason, source: 'berth' });
+save.js:1535 | ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.', source: 'berth' });
+save.js:1540 | ctx.emit('saveBlocked', { reason, source: 'berth' });
+onboarding.js:29 | const HINT_DURATION = 8; // s before auto-dismiss
+onboarding.js:82 | el.className = 'rw-onboard-hint';
+onboarding.js:102 | el.textContent = hint.text;
+hud.css:184 | .rw-reticle {
+hud.css:188 | width: 80px;
+hud.css:189 | height: 80px;
+hud.css:635 | .rw-toasts {
+hud.css:638 | right: 168px;
+hud.css:734 | .rw-toast:not(.show) { visibility: hidden; }

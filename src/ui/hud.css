@@ -2019,6 +2019,44 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   color: var(--dim);
 }
 
+.rw-galaxy-dest-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  flex-shrink: 0;
+}
+
+.rw-galaxy-dest-label {
+  color: var(--dim);
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.rw-galaxy-dest {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  color: var(--white);
+  font: inherit;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.rw-galaxy-dest:hover,
+.rw-galaxy-dest:focus-visible {
+  border-color: var(--rw-accent);
+  color: var(--rw-accent);
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
+}
+
 .rw-galaxy-svg {
   flex: 1;
   min-height: 0;
@@ -2129,7 +2167,8 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   font-size: 15px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  pointer-events: none;
+  pointer-events: all;
+  cursor: pointer;
 }
 
 /* current-system marker: dashed accent ring, pulsing opacity — a shape/motion
