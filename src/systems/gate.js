@@ -455,10 +455,13 @@ function hubListsHop(a, to) {
   return false;
 }
 
-/** Zone origin for the live assembly that transits `to`, or null. */
-export function lookupLiveNavGate(to, expectSystem) {
-  if (reservedNavId(to) || !_liveReady || !_liveAssemblies) return null;
-  if (expectSystem !== undefined && expectSystem !== _builtSystem) return null;
+const _liveHopKind = { kind: '', x: 0, y: 0, z: 0, ok: false };
+
+function scanLiveNavHop(to, expectSystem) {
+  _liveHopKind.kind = '';
+  _liveHopKind.ok = false;
+  if (reservedNavId(to) || !_liveReady || !_liveAssemblies) return;
+  if (expectSystem !== undefined && expectSystem !== _builtSystem) return;
   let hubPos = null;
   for (let i = 0; i < _liveAssemblies.length; i++) {
     const a = _liveAssemblies[i];
@@ -469,10 +472,36 @@ export function lookupLiveNavGate(to, expectSystem) {
     }
     if (a.to === to) {
       const pos = liveAssemblyOrigin(a);
-      if (pos) return pos;
+      if (pos) {
+        _liveHopKind.kind = 'ring';
+        _liveHopKind.x = pos.x;
+        _liveHopKind.y = pos.y;
+        _liveHopKind.z = pos.z;
+        _liveHopKind.ok = true;
+        return;
+      }
     }
   }
-  return hubPos;
+  if (hubPos) {
+    _liveHopKind.kind = 'hub';
+    _liveHopKind.x = hubPos.x;
+    _liveHopKind.y = hubPos.y;
+    _liveHopKind.z = hubPos.z;
+    _liveHopKind.ok = true;
+  }
+}
+
+/** Zone origin for the live assembly that transits `to`, or null. */
+export function lookupLiveNavGate(to, expectSystem) {
+  scanLiveNavHop(to, expectSystem);
+  if (!_liveHopKind.ok) return null;
+  return { x: _liveHopKind.x, y: _liveHopKind.y, z: _liveHopKind.z };
+}
+
+/** `'ring'` if `a.to === hop` exists, `'hub'` if only a hub lists hop, else `''`. */
+export function lookupLiveNavHopKind(to, expectSystem) {
+  scanLiveNavHop(to, expectSystem);
+  return _liveHopKind.kind;
 }
 
 // =============================================================================
@@ -658,11 +687,14 @@ export function initGate(ctx) {
       && !ctx.flags.docked
       && !ctx.flags.paused
       && !jumping
+      && lookupLiveNavHopKind(nextHop, ctx.world.currentSystem) !== 'ring'
     ) {
       const routes = zoneHub.routes;
-      zoneHub.routeIndex = (zoneHub.routeIndex + 1) % routes.length;
-      zoneHub.to = routes[zoneHub.routeIndex];
-      ctx.gate.nearTo = zoneHub.to;
+      if (Array.isArray(routes) && routes.length) {
+        zoneHub.routeIndex = (zoneHub.routeIndex + 1) % routes.length;
+        zoneHub.to = routes[zoneHub.routeIndex];
+        ctx.gate.nearTo = zoneHub.to;
+      }
     }
 
     // Jump overlay: fade in/out.

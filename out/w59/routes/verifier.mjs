@@ -183,9 +183,10 @@ const near = {
 normalizeTraderRecord(near);
 ok('keep.nearPad', samePt(near.route[0], { x: station.x + 1, y: station.y, z: station.z }));
 
-// Patrol / ace pad homes are not rewritten.
+// Patrol pad homes heal to a heavy hold. Ace pad homes stay.
 const patrolRoute = [{ ...pad }, { ...gate }, { x: gate.x + 10, y: gate.y, z: gate.z }];
 const patrol = { role: 'patrol', classKey: 'heavy', system: 'freehold', route: patrolRoute.map((p) => ({ ...p })) };
+const patrolHold = writeStationHold({ x: 0, y: 0, z: 0 }, station, 'heavy', gate);
 const ace = {
   role: 'ace',
   classKey: 'ace',
@@ -196,7 +197,7 @@ healPadHome(patrol);
 healPadHome(ace);
 normalizeTraderRecord(patrol);
 normalizeMinerRecord(ace);
-ok('leave.patrol.pad', samePt(patrol.route[0], pad));
+ok('leave.patrol.pad', samePt(patrol.route[0], patrolHold) && !samePt(patrol.route[0], pad) && xzOf(patrol.route[0]) >= minXZ('heavy'));
 ok('leave.patrol.mid', samePt(patrol.route[1], gate));
 ok('leave.ace.pad', samePt(ace.route[0], pad));
 

@@ -1192,6 +1192,17 @@ export function standingLiveNotes() {
   ];
 }
 
+export function standingRemedialNotes() {
+  const stranger = ladderNameAt(-10) || 'Stranger';
+  const known = ladderNameAt(10) || 'Known';
+  const beautiful = factionDisplayName('beautiful') || 'Beautiful';
+  const freehold = factionDisplayName('freehold') || 'Freehold';
+  return [
+    `After restitution, this dock is 0 (${stranger}) unless ${beautiful} graft cap holds. Jobs board mining, trade, hunt, passenger, explore, spy, and war add +${MINING_REP} to this dock's flag.`,
+    `That is how standing climbs from 0. Five such jobs reach ${known} 10. Patrol adds +${PATROL_REP} ${freehold} only.`,
+  ];
+}
+
 function authoredUu(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
@@ -2357,6 +2368,19 @@ function maybeRefreshJobsBoard(ctx, ui, render) {
   if (ui.level === 2 && ui.service === 'jobs') render();
 }
 
+function uniqueFourId(id) {
+  return id === 'bounty-ace' || id === 'patrol-lane'
+    || id === 'haul-provisions' || id === 'ferry-consignment';
+}
+
+function persistJobById(list, id) {
+  if (!Array.isArray(list) || typeof id !== 'string' || !id) return null;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id === id) return list[i];
+  }
+  return null;
+}
+
 function uniqueHaulIsOpen(jobs) {
   if (!Array.isArray(jobs)) return false;
   for (let i = 0; i < jobs.length; i++) {
@@ -3492,13 +3516,31 @@ function chainCompleteDock(ctx, parsed) {
 }
 
 function grantChainSku(ctx, employerKey) {
+  if (typeof employerKey !== 'string') return false;
   const spec = chainGrantSpec(employerKey);
-  if (!spec) return false;
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return false;
+  if (!Object.isFrozen(spec)) return false;
+  if (!Object.hasOwn(spec, 'id') || !Object.hasOwn(spec, 'seat') || !Object.hasOwn(spec, 'slot')) {
+    return false;
+  }
+  if (typeof spec.id !== 'string' || typeof spec.seat !== 'string' || typeof spec.slot !== 'string') {
+    return false;
+  }
+  const idOk = (spec.id === 'dart' && isLauncherId(spec.id))
+    || (spec.id === 'auto' && isTurretId(spec.id));
+  if (!idOk) return false;
   const classKey = mountedClassKey(ctx);
   if (!canSeat(classKey, spec.seat)) return false;
-  if (spec.slot === 'launcher') writeMountedGear(ctx, { launcher: spec.id });
-  else if (spec.slot === 'turret') writeMountedGear(ctx, { turret: spec.id });
-  else return false;
+  let row = null;
+  if (spec.slot === 'launcher') {
+    row = writeMountedGear(ctx, { launcher: spec.id });
+    if (!row || row.launcher !== spec.id) return false;
+  } else if (spec.slot === 'turret') {
+    row = writeMountedGear(ctx, { turret: spec.id });
+    if (!row || row.turret !== spec.id) return false;
+  } else {
+    return false;
+  }
   return true;
 }
 
@@ -3521,7 +3563,8 @@ function finishChainStep(ctx, job, parsed) {
   const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
   if (pay > 0) ctx.world.credits += pay;
   const granted = grantChainSku(ctx, parsed.employerKey);
-  const grantLine = granted ? ' Gear seated.' : '';
+  if (!granted && Number.isFinite(ctx.world.credits)) ctx.world.credits += 2;
+  const grantLine = granted ? ' Gear seated.' : ' Compact thanks +2 UU.';
   completeJob(ctx, job, `Chain sealed — ${pay} UU posted.${repLine}${grantLine}`);
 }
 
@@ -3627,6 +3670,13 @@ function boardJobs(ctx, sysId) {
     if (j.kind === 'espionage' && j.state === 'offered' && j.originSystem !== sysId) continue;
     if (j.kind === 'war' && j.state === 'offered' && j.originSystem !== sysId) continue;
     if (j.kind === 'chain' && j.state === 'done') continue;
+    // Offered/accepted unique four stay on every dock (WAVE26 re-offer).
+    if ((j.id === 'bounty-ace' || j.id === 'patrol-lane'
+      || j.id === 'haul-provisions' || j.id === 'ferry-consignment')
+      && (j.state === 'offered' || j.state === 'accepted')) {
+      out.push(j);
+      continue;
+    }
     // Hide unique DONE on the board; keep the persist row (hide ≠ splice).
     if (j.state === 'done' && (
       j.id === 'bounty-ace' || j.id === 'patrol-lane'
@@ -3652,13 +3702,17 @@ function boardJobs(ctx, sysId) {
  * price the DESTINATION dock; jobPay keeps the current-system shorthand.
  */
 function jobPayFor(ctx, sysId, base) {
+  const b = Number.isFinite(base) ? base : 0;
   const faction = ctx.systems?.[sysId]?.faction;
-  const mult = epicEffects(ctx, faction).jobPayMult ?? 1;
+  const fx = epicEffects(ctx, faction);
+  const mult = Number.isFinite(fx?.jobPayMult) ? fx.jobPayMult : 1;
   // Wave 24: the faction service modifier composes multiplicatively AFTER the
   // epic multiplier (epic first, faction second); the authored six are guarded
   // by id — they hold no FACTION_SERVICES application.
-  const svcMult = AUTHORED_SYSTEMS[sysId] ? 1 : (FACTION_SERVICES[faction]?.jobPayMult ?? 1);
-  return Math.round(base * mult * svcMult);
+  const svcRaw = AUTHORED_SYSTEMS[sysId] ? 1 : (FACTION_SERVICES[faction]?.jobPayMult ?? 1);
+  const svcMult = Number.isFinite(svcRaw) ? svcRaw : 1;
+  const n = Math.round(b * mult * svcMult);
+  return Number.isFinite(n) ? n : 0;
 }
 function jobPay(ctx, base) {
   return jobPayFor(ctx, ctx.world.currentSystem, base);
@@ -3712,21 +3766,54 @@ function trackJobHandle(j) {
   }
   set.add(j);
 }
-function writeJobState(id, state) {
-  if (typeof id !== 'string' || !id) return;
+function applyToJobHandles(id, fn) {
+  if (typeof id !== 'string' || !id || typeof fn !== 'function') return;
   const set = JOB_HANDLES.get(id);
-  if (set) {
-    for (const row of set) {
-      if (row && typeof row === 'object') row.state = state;
+  if (!set) return;
+  for (const row of set) {
+    if (row && typeof row === 'object') fn(row);
+  }
+}
+function writeJobState(id, state) {
+  applyToJobHandles(id, (row) => { row.state = state; });
+}
+function reofferFerryHandles() {
+  applyToJobHandles('ferry-consignment', (row) => {
+    row.state = 'offered';
+    row.originSystem = null;
+    row.destSystem = null;
+    delete row.payQuoted;
+  });
+}
+
+function keepUniqueJobRows(list) {
+  if (!Array.isArray(list)) return;
+  const ids = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  for (let u = 0; u < ids.length; u++) {
+    const id = ids[u];
+    const live = persistJobById(list, id);
+    if (!live) continue;
+    const set = JOB_HANDLES.get(id);
+    if (set) {
+      for (const row of set) {
+        if (row && typeof row === 'object' && row !== live) Object.assign(row, live);
+      }
+    }
+    for (let i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === id) list[i] = live;
     }
   }
 }
 
 function completeJob(ctx, job, notice) {
+  const list = ctx.world.jobs;
+  if (job && typeof job.id === 'string' && uniqueFourId(job.id)) {
+    const persist = persistJobById(list, job.id);
+    if (persist) job = persist;
+  }
   job.state = 'done';
   if (job && typeof job.id === 'string') {
     writeJobState(job.id, 'done');
-    const list = ctx.world.jobs;
     if (Array.isArray(list)) {
       for (let i = 0; i < list.length; i++) {
         if (list[i] && list[i].id === job.id) list[i].state = 'done';
@@ -4259,15 +4346,24 @@ function tickDeliveryJobs(ctx, ui, render) {
       // The gate above makes this dock the named destination, so the line's
       // station is always the one the quote was priced off.
       const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
-      completeJob(ctx, job, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
+      const persistHaul = job.id === 'haul-provisions'
+        ? (persistJobById(jobs, 'haul-provisions') || job)
+        : job;
+      completeJob(ctx, persistHaul, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
     } else if (job.kind === 'ferry' && ctx.flags.docked) {
-      if (ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
+      if (!job.destSystem || ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
       if (holdUnits(ctx, 'provisions') >= FERRY_UNITS) {
         removeCargo(ctx, 'provisions', FERRY_UNITS);
-        const ferryPay = job.payQuoted ?? jobPay(ctx, job.reward);
+        const ferryBase = Number.isFinite(job.reward) ? job.reward : FERRY_REWARD;
+        const ferryPay = Number.isFinite(job.payQuoted)
+          ? clampJobPay(job.payQuoted)
+          : clampJobPay(jobPay(ctx, ferryBase));
         ctx.world.credits += ferryPay;
         const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
-        completeJob(ctx, job, `Consignment landed intact — ${ferryPay} UU from the factor at ${destName}.`);
+        const persistFerry = job.id === 'ferry-consignment'
+          ? (persistJobById(jobs, 'ferry-consignment') || job)
+          : job;
+        completeJob(ctx, persistFerry, `Consignment landed intact — ${ferryPay} UU from the factor at ${destName}.`);
       } else if (ui) {
         // Fronted goods came up short: the contract stays open but unpaid.
         ui.notice = 'Consignment short — the manifest is watched.';
@@ -4707,6 +4803,7 @@ export function initStation(ctx) {
       job.originSystem = null;
       job.destSystem = null;
       delete job.payQuoted;
+      reofferFerryHandles();
     }
     if (job.kind === 'ferry') {
       // The consignment is fronted FREE on accept — but only if it fits.
@@ -4719,7 +4816,8 @@ export function initStation(ctx) {
       job.destSystem = otherSystemId(ctx, job.originSystem);
       // Wave 26: the quote becomes the agreement — stamped with the
       // destination dock's rates, JSON-plain on the job entry.
-      job.payQuoted = jobPayFor(ctx, job.destSystem, job.reward);
+      const ferryBase = Number.isFinite(job.reward) ? job.reward : FERRY_REWARD;
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.destSystem, ferryBase));
       addCargo(ctx, 'provisions', FERRY_UNITS);
     } else if (job.kind === 'recovery') {
       // Cut the salvage pod loose at the wreck site (world.js keeps aftermath
@@ -5042,6 +5140,8 @@ export function initStation(ctx) {
     syncWarJobs(ctx, currentId);
     syncChainJobs(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
+    const liveFerry = (ctx.world.jobs ?? []).find((j) => j && j.id === 'ferry-consignment');
+    if (liveFerry && liveFerry.state === 'offered') reofferFerryHandles();
     boardJobs(ctx, currentId).forEach((job, i) => {
       trackJob(job);
       const card = h('div', 'job-card', panel);
@@ -5114,6 +5214,7 @@ export function initStation(ctx) {
       h('div', 'job-title', card, `${i + 1}. ${title}`);
       h('div', 'job-detail', card, detail);
       let rewardLine;
+      let chainSkuHint = '';
       if (job.kind === 'haul') {
         const originId = job.state === 'accepted' ? (job.originSystem ?? currentId) : currentId;
         const destId = otherSystemId(ctx, originId);
@@ -5131,9 +5232,10 @@ export function initStation(ctx) {
         const destId = job.state === 'accepted' ? job.destSystem : otherSystemId(ctx, currentId);
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
         // Wave 26: same quote/snapshot split as the haul line above.
+        const ferryBase = Number.isFinite(job.reward) ? job.reward : FERRY_REWARD;
         const ferryEst = job.state === 'accepted'
-          ? (job.payQuoted ?? jobPay(ctx, job.reward))
-          : jobPayFor(ctx, destId, job.reward);
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : clampJobPay(jobPay(ctx, ferryBase)))
+          : clampJobPay(jobPayFor(ctx, destId, ferryBase));
         rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${ferryEst} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
         rewardLine = `Scoop the salvage pod, redock here — pays ${jobPay(ctx, job.reward)} UU`;
@@ -5213,10 +5315,24 @@ export function initStation(ctx) {
         rewardLine = job.state === 'accepted'
           ? `Last paper pays ${est} UU at the home dock`
           : `Chain paper — last step pays ${est} UU`;
+        const chainParsed = parseChainId(job.id);
+        const grantSpec = chainParsed ? chainGrantSpec(chainParsed.employerKey) : null;
+        if (grantSpec) {
+          let skuName = '';
+          if (grantSpec.id === 'dart' && isLauncherId(grantSpec.id)) {
+            skuName = LAUNCHER_IDS.dart.name;
+          } else if (grantSpec.id === 'auto' && isTurretId(grantSpec.id)) {
+            skuName = TURRET_IDS.auto.name;
+          }
+          if (typeof skuName === 'string' && skuName) {
+            chainSkuHint = `Last paper may seat a ${skuName} if this hull has a hardpoint.`;
+          }
+        }
       } else {
         rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
       h('div', 'job-reward', card, rewardLine);
+      if (chainSkuHint) h('div', 'job-reward', card, chainSkuHint);
       if (job.id === 'bounty-ace' && job.state !== 'done' && currentId !== aceHomeId) {
         h('div', 'job-state', card,
           `He hunts in ${ctx.systems?.[aceHomeId]?.name ?? 'Freehold Drift'} — take the gate.`);
@@ -5810,6 +5926,20 @@ export function initStation(ctx) {
     h('div', 'screen-sub', panel, 'HOW STANDING MOVES');
     const moves = standingMoveNotes();
     for (let i = 0; i < moves.length; i++) h('div', 'screen-note', panel, moves[i]);
+    try {
+      if (typeof standingRemedialNotes === 'function') {
+        const climb = standingRemedialNotes();
+        if (Array.isArray(climb)) {
+          for (let i = 0; i < climb.length; i++) {
+            if (typeof climb[i] === 'string' && climb[i]) {
+              h('div', 'screen-note', panel, climb[i]);
+            }
+          }
+        }
+      }
+    } catch {
+      // fail closed: Pay restitution + move/live notes stay
+    }
     h('div', 'screen-sub', panel, 'LIVE CONSEQUENCES');
     const lives = standingLiveNotes();
     for (let i = 0; i < lives.length; i++) h('div', 'screen-note', panel, lives[i]);
@@ -6223,8 +6353,19 @@ export function initStation(ctx) {
       }
       if (mesh?.organicParts) animateOrganic(mesh.organicParts, ctx.elapsed, ctx.settings.reducedMotion);
 
-      // Job tracking runs docked or not.
+      // Job tracking runs docked or not. Unique four keep the persist row
+      // already in world.jobs (sanitize clones copy onto tracked handles).
+      // Unique-four handles stay so prune cannot drop a pre-accept ref.
       if (Array.isArray(ctx.world.jobs)) {
+        keepUniqueJobRows(ctx.world.jobs);
+        const live = new Set(ctx.world.jobs);
+        for (const [id, set] of JOB_HANDLES) {
+          if (uniqueFourId(id)) continue;
+          for (const row of set) {
+            if (!live.has(row)) set.delete(row);
+          }
+          if (set.size === 0) JOB_HANDLES.delete(id);
+        }
         for (let ji = 0; ji < ctx.world.jobs.length; ji++) trackJob(ctx.world.jobs[ji]);
       }
       tickPatrolJob(ctx);

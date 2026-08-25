@@ -1,0 +1,54 @@
+Wave 114 FX muzzle leftover — write-set check
+Verifier: data domain. No Playwright. No Vite. No Chrome. Port 5173 not touched.
+Checked: 2026-08-24 (local).
+
+## Claimed worker files (markdown only)
+
+  docs/Fx01RemainingMuzzleDesign.md                 2026-08-24 18:50:33  20651 bytes
+  out/w114/fxmuzzle/shared-contract.md              2026-08-24 18:49:08  16767 bytes
+  out/w114/fxmuzzle/current-fx-muzzle-inventory.md  2026-08-24 18:49:08  10909 bytes
+  out/w114/fxmuzzle/notes.md                        2026-08-24 18:50:33   1922 bytes
+  out/w114/fxmuzzle/security-review.md              2026-08-24 18:51:16   3011 bytes
+  out/w114/fxmuzzle/code-review.md                  2026-08-24 18:51:16   2301 bytes
+  out/w114/fxmuzzle/ui-audit.md                     2026-08-24 18:51:16   2533 bytes
+
+Pack directory listing: those six files under out/w114/fxmuzzle/ plus the brief.
+No .js / .mjs / .css under out/w114/fxmuzzle/.
+
+## This pack vs src/ and scripts/
+
+git status --short -- src scripts (workspace is dirty from other waves; not attributed to this pack):
+
+  M scripts/boot-test.mjs
+  M src/game/jobs-chains.js
+  M src/game/world.js
+  M src/systems/combat.js
+  M src/systems/hud.js
+  M src/systems/npc.js
+  M src/systems/ship-assets.js
+  M src/systems/ship.js
+  M src/systems/station.js
+  M src/ui/hud.css
+  ?? src/game/living-gait.js
+
+mtime vs pack (LastWriteTime):
+
+  src/systems/combat.js     2026-08-24 18:46:46  BEFORE pack (18:49–18:51)
+  src/systems/hud.js        2026-08-24 18:46:39  BEFORE pack
+  src/game/state.js         2026-08-23 12:33:37  not this wave
+  scripts/boot-test.mjs     2026-08-24 18:47:50  BEFORE pack
+  docs/Fx01RemainingScrapeDesign.md  18:48:02  sibling scrape brief
+  docs/Hud02RemainingMechSilhouettesDesign.md  18:46:39  sibling HUD plated brief
+  docs/PLAYER-EXPERIENCE-WISHLIST.md  18:09:03  earlier; pack did not edit
+  PROGRESS.md               2026-08-24 18:08:50  earlier; pack did not edit
+
+git diff --stat src/systems/combat.js: 125 lines, scrape/ripple (RIPPLE_LIFT; spawnHitFx on bodyHit 1859; WAVE111 parent).
+No spawnMuzzle / PROJ_RADIUS / makeGlowDot / makeBeamRibbon crank in that diff (Select-String on the patch).
+
+scripts/boot-test.mjs is also dirty (+932 lines) and older than this pack. Not this leftover write set.
+
+## Verdict
+
+This pack did NOT write src/ or scripts/.
+Write set is markdown: docs/Fx01RemainingMuzzleDesign.md + out/w114/fxmuzzle/*.md.
+Sibling combat.js scrape lines exist and stay out of this pack’s write set (do not flag).

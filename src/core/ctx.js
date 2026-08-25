@@ -73,7 +73,7 @@ export function createCtx({ scene, camera, renderer }) {
     input: {
       steerX: 0, // reticle offset from center, >0 = right
       steerY: 0, // >0 = up (ship pitches toward reticle)
-      strafeX: 0, // >0 = strafe right (D)
+      strafeX: 0, // >0 = strafe right (D held; KeyD is not dock)
       strafeY: 0, // >0 = strafe up (W)
       roll: 0, // >0 = roll right (E), <0 = roll left (Q)
       throttle: 0, // persistent setpoint 0..1 (R/F); double-tap F = 0
@@ -85,7 +85,7 @@ export function createCtx({ scene, camera, renderer }) {
       weaponGroup: 1, // 1=cannon 2=disruptor 3=mining 4=missiles 5=psionic (keys 1/2/3/4/5)
       targetPressed: false, // edge: T (cycle nearest hostiles)
       hailPressed: false, // edge: H
-      dockPressed: false, // edge: D
+      dockPressed: false, // edge: J (not D)
       cameraPressed: false, // edge: C (chase / third / first)
       matchSpeedPressed: false, // edge: X (ship.js toggles flags.matchSpeed)
       reticleLockPressed: false, // edge: V (lock under reticle)
@@ -206,6 +206,8 @@ export function createCtx({ scene, camera, renderer }) {
       matchSpeed: false, // ship.js: hold lock speed; HUD shows MATCH
       saveRestored: false, // save.js sets true when a snapshot is restored
       chartOpen: false, // galaxychart.js owns; session only, not WORLD_FIELDS
+      hailOpen: false, // hail.js owns; session only, not WORLD_FIELDS
+      berthOpen: false, // save.js berth overlay owns; session only, not WORLD_FIELDS
     },
 
     // --- client settings (settings.js ONLY writes; song/hud/gate/ship read) ---
@@ -259,6 +261,8 @@ export function createCtx({ scene, camera, renderer }) {
     // 'automineEngaged' { asteroidId }    // primitives only
     // 'automineDisengaged' { reason }     // primitives only
     // flags.chartOpen: galaxychart.js setOpen is the only writer (session boolean)
+    // flags.hailOpen: hail.js openCard/closeCard is the only writer (session boolean)
+    // flags.berthOpen: save.js setBerthOpen is the only writer (session boolean)
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

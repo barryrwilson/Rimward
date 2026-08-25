@@ -1,0 +1,22 @@
+PASS  CHAIN_GRANT freehold dart
+PASS  CHAIN_GRANT redledger auto
+PASS  CHAIN_GRANT veridian auto
+PASS  CHAIN_GRANT hollow dart
+PASS  no gilded key
+PASS  chainGrantSpec Object.hasOwn + unknown null
+PASS  light canSeat false +2 fail-closed
+PASS  heavy veridian seats auto
+PASS  ace hollow seats empty dart
+PASS  frigate freehold seats empty dart
+PASS  ace redledger seats auto
+PASS  grant patch launcher/turret only + verify
+PASS  proto chain drop still no pay / no +2
+PASS  unique four still does not call grantChainSku
+PASS  Digit 0 shipyard
+PASS  Digit 2 Jobs
+PASS  Digit 8/9 unchanged
+PASS  no new WORLD_FIELDS / no state.js write
+PASS  no innerHTML in station.js
+PASS  Digit 2 chain copy catalog names not shop costs
+PASS  grant never writes credits; fail UU last-step only
+PROBE PASS

@@ -1,0 +1,22 @@
+C:\Projects\WebSim\src\systems\hud.js:64:const TOAST_LIFETIME = 4; // s a toast stays fully visible
+C:\Projects\WebSim\src\systems\hud.js:65:const TOAST_SLOTS = 5;
+C:\Projects\WebSim\src\systems\hud.js:535:      // clue/landmark cases below record their lines in mem.frameLines
+C:\Projects\WebSim\src\systems\hud.js:539:      if (e.text && mem.frameLines.includes(e.text)) return null;
+C:\Projects\WebSim\src\systems\hud.js:542:      mem.frameLines.push(e.line ?? '');
+C:\Projects\WebSim\src\systems\hud.js:545:      mem.frameLines.push(e.line ?? '');
+C:\Projects\WebSim\src\systems\hud.js:568:    case 'saveBlocked':
+C:\Projects\WebSim\src\systems\hud.js:569:      return { text: '▲ SAVE BLOCKED — ' + (e.reason ?? 'hostiles near'), cls: 'warn' };
+C:\Projects\WebSim\src\systems\hud.js:815:  toasts.setAttribute('role', 'status');
+C:\Projects\WebSim\src\systems\hud.js:816:  toasts.setAttribute('aria-live', 'polite');
+C:\Projects\WebSim\src\systems\hud.js:818:  for (let i = 0; i < TOAST_SLOTS; i++) {
+C:\Projects\WebSim\src\systems\hud.js:819:    toastSlots.push({ el: el('div', 'rw-toast', toasts), until: 0, key: '' });
+C:\Projects\WebSim\src\systems\hud.js:1151:  function pushToast(text, cls) {
+C:\Projects\WebSim\src\systems\hud.js:1156:      if (s.until > now && s.key === key) { s.until = now + TOAST_LIFETIME; return; }
+C:\Projects\WebSim\src\systems\hud.js:1169:    slot.el.textContent = text;
+C:\Projects\WebSim\src\systems\hud.js:1183:      mem.frameLines.length = 0; // per-frame clue/landmark dedupe scratch
+C:\Projects\WebSim\src\systems\hud.js:1197:      for (const s of toastSlots) {
+C:\Projects\WebSim\src\systems\hud.js:1198:        if (s.until > 0 && nowReal > s.until) {
+C:\Projects\WebSim\src\systems\hud.js:1199:          s.until = 0;
+C:\Projects\WebSim\src\systems\hud.js:1200:          s.key = '';
+C:\Projects\WebSim\src\systems\hud.js:1201:          s.el.classList.remove('show');
+NO linger / lastShown / TOAST_DEDUP_WINDOW / expire aria-hidden

@@ -11,6 +11,7 @@ import {
 } from './hangar.js';
 import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
 import { sanitizeNav } from './nav.js';
+import { canOpenPlayCard, playSurfaceBlocked } from '../systems/overlay-policy.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -1036,7 +1037,7 @@ export function requestAutosave(ctx) {
   if (ctx.gate?.jumping) return false;
   const reason = hostileEncounterBlock(ctx);
   if (reason) {
-    ctx.emit?.('saveBlocked', { reason });
+    ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
     return false;
   }
   try {
@@ -1382,10 +1383,26 @@ export function initSave(ctx) {
   let berthOpen = false;
 
   function setBerthOpen(next) {
+    if (next) {
+      try {
+        if (canOpenPlayCard(ctx, 'berth') === false) return;
+      } catch { /* skip mutex */ }
+    }
     berthOpen = next;
+    try {
+      if (ctx.flags) ctx.flags.berthOpen = next;
+    } catch { /* session flag is optional */ }
     berthRoot.style.display = next ? 'flex' : 'none';
     berthRoot.setAttribute('aria-hidden', String(!next));
     if (next) refreshBerth();
+    else {
+      try {
+        const ae = typeof document !== 'undefined' ? document.activeElement : null;
+        if (ae && typeof berthRoot.contains === 'function' && berthRoot.contains(ae) && typeof ae.blur === 'function') {
+          ae.blur();
+        }
+      } catch { /* close still wins */ }
+    }
   }
 
   function saveToSlot(slotKey, n) {
@@ -1402,13 +1419,13 @@ export function initSave(ctx) {
     // restored world until the next jump. Refuse like the docked gate.
     if (ctx.flags.paused) return;
     if (ctx.gate?.jumping) {
-      ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+      ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.', source: 'berth' });
       return;
     }
     // saveBlockReason does not emit on its own (trySave does) — toast here.
     const reason = saveBlockReason();
     if (reason) {
-      ctx.emit('saveBlocked', { reason });
+      ctx.emit('saveBlocked', { reason, source: 'berth' });
       return;
     }
     const snap = loadSnapshot(slotKey);
@@ -1490,7 +1507,11 @@ export function initSave(ctx) {
       // paused other overlays own the screen, and while dead the death
       // overlay does — only allow closing in those states.
       if (berthOpen) setBerthOpen(false);
-      else if (!ctx.flags.docked && !ctx.flags.paused && !dead) setBerthOpen(true);
+      else if (!ctx.flags.docked && !ctx.flags.paused && !dead) {
+        let blocked = false;
+        try { blocked = playSurfaceBlocked(ctx) === true; } catch { blocked = false; }
+        if (!blocked) setBerthOpen(true);
+      }
     } else if (e.code === 'Escape' && berthOpen) {
       setBerthOpen(false);
     }
@@ -1511,12 +1532,12 @@ export function initSave(ctx) {
     // the 'systemLoaded' autosave fires the moment the jump completes. The
     // autosave path stays silent; a manual berth save gets a refusal toast.
     if (ctx.gate?.jumping) {
-      ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+      ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.', source: 'berth' });
       return false;
     }
     const reason = saveBlockReason();
     if (reason) {
-      ctx.emit('saveBlocked', { reason });
+      ctx.emit('saveBlocked', { reason, source: 'berth' });
       return false;
     }
     try {

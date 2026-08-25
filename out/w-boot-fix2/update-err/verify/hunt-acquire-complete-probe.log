@@ -1,0 +1,8 @@
+PASS hunt-acquire-complete-no-hole
+PASS hunt-acquired-complete-trader target=prey
+PASS incomplete-dummy-not-acquired
+PASS hunt-acquire-complete-with-null-hole
+PASS hunt-acquired-complete-trader-with-hole target=prey
+PASS findPirateWork-with-null-hole
+PASS findPirateWork-with-null-hole-did-not-throw
+HUNT COMPLETE PROBE PASS

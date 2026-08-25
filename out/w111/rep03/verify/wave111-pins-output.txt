@@ -1,0 +1,2 @@
+wave111 rep-03 climb: {"helperExists":true,"climbAtStanding0":true,"climbAtStandingPositive":true,"restitutionOnlyWhenNegative":true,"noRemedialKind":true,"digit0Shipyard":true,"digit2Jobs":true,"digit8Digit9":true,"hubEmpty":true,"noNewWorldFields":true,"noInnerHtmlNotes":true,"failClosedMoveLive":true,"copyHonesty":true,"knobsUntouched":true}
+WAVE111 REP-03 PASS

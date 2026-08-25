@@ -1,0 +1,13 @@
+wave114 hud-02 plated class tokens: {"heavyTok":true,"freighterTok":true,"lightTok":true,"protoOmit":true,"unknownOmit":true,"bioTok":true,"hubUnchanged":true,"noInnerHtml":true,"noHullWrite":true,"noPlayerClassWrite":true,"familyFnNoClass":true,"classOutsideFamilyIf":true,"initClassWrite":true,"familyGateMechBio":true,"hasOwnAllow":true,"oneWriter":true,"playerKeyOnly":true,"mechHeavy":true,"mechAce":true,"mechCutter":true,"mechFrigate":true,"mechFreighter":true,"silBox":true,"noSilGrow":true,"noMechClip":true,"noNewFacingLoop":true,"noPersistHudClass":true,"familyTokensStay":true,"digit0Shipyard":true}
+
+# Documented exceptions (not WAVE114 FAIL)
+WAVE113 HUD-02 CLASS FAIL — expected invert: mechOmit=false noMechClass=false because PR1 sets mech data-class-key and adds mech CSS.
+WAVE26 FERRY QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+BOOT TEST FAIL — 6 errors (5 WAVE26 + 1 WAVE113 invert)
+No WAVE114 FAIL line.
+WAVE62 all true.
+WAVE65 all true.

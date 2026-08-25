@@ -1,0 +1,3 @@
+lastFreeholdLight: !!lightNoDart83,
+lastVeridianAuto: !!verdAuto83,
+lastHollowDart: !!hollowDart83,

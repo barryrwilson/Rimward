@@ -1,0 +1,31 @@
+PASS velocity-plain-object
+PASS velocity-length-number
+FAIL hailClosed-with-null-hole Cannot read properties of null (reading 'ai')
+TypeError: Cannot read properties of null (reading 'ai')
+    at Object.update (file:///C:/Projects/WebSim/src/systems/npc.js:2448:19)
+    at run (file:///C:/Projects/WebSim/out/w-boot-fix2/update-err/verify/extra-probe.mjs:73:9)
+    at file:///C:/Projects/WebSim/out/w-boot-fix2/update-err/verify/extra-probe.mjs:151:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+FAIL hailOpened-with-null-hole Cannot read properties of undefined (reading 'ai')
+TypeError: Cannot read properties of undefined (reading 'ai')
+    at Object.update (file:///C:/Projects/WebSim/src/systems/npc.js:2452:19)
+    at run (file:///C:/Projects/WebSim/out/w-boot-fix2/update-err/verify/extra-probe.mjs:73:9)
+    at file:///C:/Projects/WebSim/out/w-boot-fix2/update-err/verify/extra-probe.mjs:152:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+PASS hailClosed-dummy-only
+PASS destroyed-no-object-spawn-survivor-path
+PASS removeLiveShip-no-object
+PASS animateShipMesh-no-userData
+PASS demanding-live-hailClosed-emit
+PASS demanding-emits-hailClosed count=1
+PASS demanding-cleared
+PASS hailClosed-event-releases-stamped-hold
+PASS stamped-hold-released
+PASS pirate-hunt-telegraph
+PASS telegraph-phase-set phase=telegraph
+PASS telegraph-no-npcFire ["hailOpened"]
+PASS live-velocity-copy-after-dummy
+PASS live-velocity-moved-or-kept
+EXTRA FAIL ΓÇö 2: hailClosed-with-null-hole, hailOpened-with-null-hole

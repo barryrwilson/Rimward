@@ -1,0 +1,55 @@
+{
+  "url": "http://127.0.0.1:5174/",
+  "light": {
+    "family": "mech",
+    "data-class-key": "light",
+    "sil": "22x10",
+    "flex": "0 0 22px",
+    "body": { "left": "5px", "top": "2px", "width": "16px", "height": "6px" },
+    "nose": { "borderRightWidth": "5px" },
+    "note": "generic plated plate (light has no class CSS override)"
+  },
+  "heavy": {
+    "family": "mech",
+    "data-class-key": "heavy",
+    "sil": "22x10",
+    "body": { "left": "5px", "top": "1px", "width": "16px", "height": "8px" },
+    "nose": { "borderRightWidth": "5px" }
+  },
+  "freighter": {
+    "family": "mech",
+    "data-class-key": "freighter",
+    "sil": "22x10",
+    "body": { "left": "3px", "top": "1px", "width": "18px", "height": "8px" },
+    "nose": { "borderRightWidth": "3px" }
+  },
+  "ace": {
+    "family": "mech",
+    "data-class-key": "ace",
+    "sil": "22x10",
+    "body": { "left": "4px", "top": "3px", "width": "14px", "height": "4px" },
+    "nose": { "borderRightWidth": "4px" }
+  },
+  "bioHeavy": {
+    "family": "bio",
+    "data-class-key": "heavy",
+    "sil": "22x10",
+    "looksLikeMechHeavyPlate": false,
+    "bodyClip": "polygon(0% 16%, 16% 2%, 52% 0%, 100% 18%, 100% 82%, 52% 100%, 16% 98%, 0% 84%)",
+    "noseClip": "ellipse(70% 55% at 55% 50%)"
+  },
+  "proto": { "hasAttr": false, "family": "mech", "genericMechPlate": true, "stillFlying": true },
+  "nope": { "hasAttr": false, "family": "mech", "stillFlying": true, "worldTimeAdvanced": true },
+  "hub": {
+    "reticle": "80x80",
+    "children": ["rw-reticle-pupil", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-range"],
+    "rangeText": "RANGE",
+    "foreAft": ["FORE", "AFT"]
+  },
+  "digit0": {
+    "docked": true,
+    "menuHas0Shipyard": true,
+    "opened": "SHIPYARD Hangar"
+  },
+  "console": { "errors": 0, "warnings": 0 }
+}

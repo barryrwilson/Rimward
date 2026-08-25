@@ -1,0 +1,22 @@
+PASS scrape.bodyLoopPresent
+PASS scrape.spawnHitFxInBodyLoop
+PASS scrape.shieldedBeforeApplyHit
+PASS scrape.tryCatchAroundFx
+PASS scrape.parkOnDestroy
+PASS scrape.slideNoApplyHit
+PASS sun.noSpawnHitFx
+PASS sun.stillApplyHit
+PASS phy.impactMinSpeed8
+PASS phy.impactScreenPerU035
+PASS fx.ripplePool16
+PASS fx.markPool12
+PASS state.noWeaponsImpact
+PASS combat.noInnerHTML
+PASS scrape.noInnerHTML
+PASS wave111.headerPresent
+PASS wave111.parentLaw
+PASS wave111.xorUnchanged
+PASS scrape.neverZeroSpeed
+PASS scrape.stillApplyHit
+PASS scrape.impactGapHonor
+PASS all fxscrape PR1 pins

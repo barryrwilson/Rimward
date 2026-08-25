@@ -1,0 +1,8 @@
+Vite 5174 and Chrome CDP 9414 were not started for this verify.
+Combat live fire is too heavy for a short session.
+
+netstat -ano | Select-String ":5174|:9414" → no rows
+Get-NetTCPConnection -LocalPort 5174,9414 → no rows
+No Playwright session opened; browser_close not required.
+
+Result: 5174 and 9414 are not LISTENING.

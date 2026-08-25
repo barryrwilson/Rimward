@@ -4282,6 +4282,7 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   OPEN: BIO-08 gait serial (later). Owner may
   override cadence floats / Digit 9 wrap after
   playtest.
+  CLOSED by Wave 108: BIO-08 gait first impl.
   VERIFY: `out/w107/bio06/probe.mjs` PASS;
   WAVE107 BIO-06 pins all true (`npm run test:boot`
   still FAIL on pre-existing WAVE26); live hub
@@ -4296,6 +4297,560 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/Bio06CadenceDesign.md`,
   `docs/Rep05ConsequencesDesign.md`,
   `docs/Bio08LocomotionDesign.md`, `out/w107/`.
+- Wave 108 (2026-08-24): BIO-08 gait first
+  impl + MSN-03 remaining unique SKU brief +
+  PHY-04 remaining NPC avoid brief.
+  Gait: THREE-free `src/game/living-gait.js`;
+  player light CPU unweighted (idle 0.5 /
+  cruise 2.3 honor); other living remounts
+  axis mix; Beautiful NPC four gait uniforms
+  on one shader (`rimward-beautiful-swim-gait`);
+  do not retune `LIVING_CADENCE`; no persist
+  key; Digit 0 shipyard. MSN-03 markdown
+  (`docs/Msn03UniqueSkuDesign.md`): Veridian
+  `auto`, Hollow `dart`, `canSeat` fail-closed
+  +2 UU. PHY-04 markdown
+  (`docs/Phy04AvoidDesign.md`): fail-closed
+  live 40 u bias; later two-sample steer;
+  no navmesh. Kit mutate still omit.
+  OPEN: MSN-03 unique SKU serial (later).
+  PHY-04 avoid serial (later). Owner may
+  override gait floats / Veridian `auto` /
+  Hollow `dart` / mid-sample after playtest.
+  CLOSED by Wave 109: MSN-03 unique SKU
+  first impl + PHY-04 two-sample avoid.
+  VERIFY: `out/w108/bio08/probe.mjs` PASS;
+  WAVE108 BIO-08 pins all true (`npm run
+  test:boot` still FAIL on pre-existing
+  WAVE26); live hub + Digit 0 shipyard
+  CLEAN; heavier-class flap axis
+  `[NO BROWSER COVERAGE]`; designer CLEAN.
+  MSN-03 verifier CLEAN; designer CLEAN.
+  PHY-04 verifier CLEAN after mermaid
+  recheck; designer CLEAN.
+  FILES: `src/game/living-gait.js`,
+  `src/systems/ship.js`, `src/systems/ship-assets.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Bio08LocomotionDesign.md`,
+  `docs/Msn03UniqueSkuDesign.md`,
+  `docs/Phy04AvoidDesign.md`, `out/w108/`.
+- Wave 109 (2026-08-24): MSN-03 unique SKU
+  first impl + PHY-04 two-sample avoid +
+  PHY-05 patrol pad-home brief.
+  SKU: Veridian last-step seats `auto`;
+  Hollow seats empty `dart`; `canSeat`
+  false → credits +2 UU; Digit 2 catalog
+  name hint; no shop 6500/4200; no third
+  SKU id; no persist key; Digit 0 shipyard.
+  WAVE83 last-step pins retuned
+  (`lastVeridianAuto` / `lastHollowDart`).
+  Avoid: mid-chord probe at 20 u for
+  non-station kinds; live 40 / 1.4 honor;
+  frame hold retarget when dest punches
+  D5; no `record.route` write; no navmesh;
+  PR3 80 u skipped. PHY-05 markdown
+  (`docs/Phy05PadHomeDesign.md`): persist
+  heal of pad-center patrol homes later.
+  Kit mutate still omit.
+  OPEN: PHY-05 pad-home serial (later).
+  Owner may override Veridian `auto` /
+  Hollow `dart` / mid-sample after playtest.
+  CLOSED by Wave 110: PHY-05 pad-home
+  first impl.
+  VERIFY: `out/w109/msn03sku/probe.mjs`
+  PASS; WAVE83 STATION + WAVE109 MSN pins
+  all true (`npm run test:boot` still FAIL
+  on pre-existing WAVE26); live Digit 2 /
+  Digit 0 / empty hub CLEAN; designer
+  CLEAN. PHY-04 probe + kernel-pins CLEAN;
+  live traffic `[NO BROWSER COVERAGE]`.
+  PHY-05 verifier CLEAN; designer CLEAN.
+  FILES: `src/game/jobs-chains.js`,
+  `src/systems/station.js`,
+  `src/systems/npc.js`,
+  `scripts/boot-test.mjs`,
+  `out/phy-verify/kernel-pins.mjs`,
+  `docs/Msn03UniqueSkuDesign.md`,
+  `docs/Phy04AvoidDesign.md`,
+  `docs/Phy05PadHomeDesign.md`, `out/w109/`.
+- Wave 110 (2026-08-24): PHY-05 pad-home
+  first impl + REP-03 remaining remedial
+  brief + FX-01 remaining punch brief.
+  Pad-home: patrol `route[0]` is a heavy
+  hold outside D5; `healPadHome` roles
+  trader/miner/patrol; `holdClassFor`
+  patrol known class else `heavy`;
+  rebuild/tick heal; no new persist key;
+  no navmesh; PHY-04 `applyAvoidBias`
+  untouched. `out/w58` / `out/w59`
+  leftover pins inverted to hold-off-pad.
+  REP-03 markdown
+  (`docs/Rep03RemedialDesign.md`): Digit 9
+  copy of live +2 job climb after
+  restitution-to-0; no new kind; no
+  wanted meter. FX-01 markdown
+  (`docs/Fx01RemainingDesign.md`): hull-
+  local shield ripple later; recoil/marks
+  LIVE consume. Kit mutate still omit.
+  OPEN: REP-03 Digit 9 copy serial
+  (later). FX-01 hull-local ripple serial
+  (later). Owner may override pad-home
+  hold class / climb copy / ripple parent
+  after playtest.
+  CLOSED by Wave 111: REP-03 Digit 9
+  climb copy + FX-01 hull-local ripple.
+  VERIFY: `out/w110/padhome/probe.mjs`
+  PASS; WAVE110 pins all true (`npm run
+  test:boot` still FAIL on pre-existing
+  WAVE26); live Digit 0 / empty hub CLEAN;
+  patrol spawn after save/load
+  `[NO BROWSER COVERAGE]`; designer CLEAN.
+  REP-03 verifier CLEAN; designer CLEAN.
+  FX-01 verifier CLEAN; designer CLEAN.
+  FILES: `src/game/world.js`,
+  `scripts/boot-test.mjs`,
+  `out/w58/routes/probe.mjs`,
+  `out/w58/routes/verifier.mjs`,
+  `out/w59/routes/verifier.mjs`,
+  `docs/Phy05PadHomeDesign.md`,
+  `docs/Rep03RemedialDesign.md`,
+  `docs/Fx01RemainingDesign.md`, `out/w110/`.
+- Wave 111 (2026-08-24): REP-03 Digit 9
+  climb copy first impl + FX-01 hull-local
+  shield ripple first impl + HUD-02
+  remaining class-silhouette brief.
+  Digit 9: `standingRemedialNotes` under
+  HOW STANDING MOVES names live +2
+  families after restitution-to-0; climb
+  stays at standing ≥ 0; fail-closed keep
+  Pay restitution + move/live notes; no
+  new kind; no wanted meter; no Digit
+  steal; no `state.js` write. Ripple:
+  parent `RIPPLE_POOL` ring to finite
+  host via `worldHitToLocal`; FP player
+  host stays world-space; park on
+  destroy/load/orphan; unshielded
+  sparks+marks stay; recoil/marks/shake
+  consume; pool 16 / mark pool 12 honor.
+  HUD-02 markdown
+  (`docs/Hud02RemainingSilhouettesDesign.md`):
+  later `data-class-key` on existing
+  facing chrome; fail-closed generic bio;
+  leftover real (hud.js never reads
+  `classKey`). Kit mutate still omit.
+  OPEN: HUD-02 class-silhouette serial
+  (later). Owner may override climb copy
+  / ripple parent / class tokens after
+  playtest.
+  VERIFY: `out/w111/rep03/probe.mjs`
+  PASS; WAVE111 REP-03 pins all true
+  (`npm run test:boot` still FAIL on
+  pre-existing WAVE26); live Digit 9
+  below 0 / at 0 / Digit 0 / Digit 2 /
+  empty hub CLEAN; designer CLEAN.
+  FX-01 probe PASS; live fire
+  `[NO BROWSER COVERAGE]`; designer
+  CLEAN. HUD-02 verifier CLEAN;
+  designer CLEAN.
+  FILES: `src/systems/station.js`,
+  `src/systems/combat.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Rep03RemedialDesign.md`,
+  `docs/Fx01RemainingDesign.md`,
+  `docs/Hud02RemainingSilhouettesDesign.md`,
+  `out/w111/`.
+- Wave 112 (2026-08-24): owner deputize of the
+  eleven wishlist grooming questions. Markdown
+  only (`docs/OwnerDecisionsWave112.md`). Live
+  knobs consume: no new `WEAPONS` id; no mount
+  power ledger; scanner gates the contacts arc
+  only; six class catalogs; keep yard UU / 600 s
+  / impact 0.35; mining first-slice DONE; seeds
+  are hangar hulls; ungraft forbidden; Gilded
+  Digit 7 trafficking only. No `src/`.
+  OPEN: HUD-02 class-silhouette serial (later).
+  Owner may override after playtest.
+  CLOSED by Wave 113: HUD-02 living
+  class tokens first impl.
+  FILES: `docs/OwnerDecisionsWave112.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`.
+- Wave 113 (2026-08-24): HUD-02 living
+  class-token first impl + HUD-02 remaining
+  plated silhouette brief + FX remaining
+  scrape punch brief.
+  Living: allowlisted `#hud[data-class-key]`
+  on bio family from mounted `classKey`;
+  authored 22×10 clips; light keeps live
+  organism; unknown / mech omit; no hub
+  child; no `state.js` write; no persist
+  key; Digit 0 shipyard. WAVE113 pins
+  read `dataset` like WAVE62.
+  HUD-02 markdown
+  (`docs/Hud02RemainingMechSilhouettesDesign.md`):
+  later plated tokens inside 22×10;
+  heavy 16×8 ≠ freighter 18×8; fail-closed
+  live family facing. FX scrape markdown
+  (`docs/Fx01RemainingScrapeDesign.md`):
+  later `spawnHitFx` on damaging `bodyHit`;
+  IMPACT 8 / 0.35 consume; flash map / 80 u
+  stay skippable. Kit mutate still omit.
+  OPEN: HUD-02 plated class-silhouette
+  serial (later). FX scrape punch serial
+  (later). Owner may override clip px /
+  plate budgets / scrape host after
+  playtest.
+  CLOSED by Wave 114: plated class
+  tokens first impl + scrape punch
+  first impl.
+  VERIFY: `out/w113/hud02/probe.mjs` PASS;
+  WAVE113 HUD-02 pins all true (`npm run
+  test:boot` still FAIL on pre-existing
+  WAVE26); live light / heavy / built /
+  Digit 0 / empty hub CLEAN; designer
+  CLEAN. HUD-02 mech verifier CLEAN;
+  designer CLEAN. FX scrape verifier
+  CLEAN; designer CLEAN.
+  FILES: `src/systems/hud.js`,
+  `src/ui/hud.css`,
+  `scripts/boot-test.mjs`,
+  `docs/Hud02RemainingSilhouettesDesign.md`,
+  `docs/Hud02RemainingMechSilhouettesDesign.md`,
+  `docs/Fx01RemainingScrapeDesign.md`,
+  `out/w113/`.
+- Wave 114 (2026-08-24): HUD-02 plated
+  class-token first impl + FX scrape
+  punch first impl + FX muzzle leftover
+  CONSUME.
+  Plated: extend live `classKeyToken`
+  for mech and bio (one writer);
+  authored `#hud[data-family="mech"]`
+  `[data-class-key]` plates in 22×10;
+  light keeps generic plate; heavy
+  16×8 ≠ freighter 18×8; unknown omit;
+  no hub child; no `state.js` write;
+  no persist key; Digit 0 shipyard.
+  WAVE114 pins read `dataset` like
+  WAVE62. WAVE113 leftover census keys
+  `mechOmit` / `noMechClass` retuned to
+  `mechTok` / `hasMechClass`.
+  Scrape: damaging `bodyHit` applyHit
+  calls live `spawnHitFx`; shielded
+  sample before applyHit; try/catch
+  skips world FX only; park on destroy;
+  IMPACT 8 / 0.35 consume; bounce
+  consume; WAVE111 parent call-only.
+  Muzzle markdown
+  (`docs/Fx01RemainingMuzzleDesign.md`):
+  leftover CONSUME — live `spawnMuzzle`,
+  bolt glow, mining lance already punch;
+  no fire-side PR1. Kit mutate still
+  omit. Flash map / 80 u stay skippable.
+  OPEN: none named. Owner may override
+  plate px / scrape host after playtest.
+  CLOSED by Wave 115: leftover census
+  (HUD-02 target facing leftover +
+  HUD-03 visual CONSUME + SHP catalog
+  CONSUME).
+  VERIFY: `out/w114/hud02mech/probe.mjs`
+  PASS; WAVE114 HUD-02 pins all true
+  (`npm run test:boot` still FAIL on
+  pre-existing WAVE26); live plated
+  light / heavy / freighter / bio /
+  Digit 0 / empty hub CLEAN; designer
+  CLEAN. FX scrape probe PASS; live ram
+  `[NO BROWSER COVERAGE]`; designer
+  CLEAN. FX muzzle verifier CLEAN;
+  designer CLEAN.
+  FILES: `src/systems/hud.js`,
+  `src/ui/hud.css`,
+  `src/systems/combat.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Hud02RemainingMechSilhouettesDesign.md`,
+  `docs/Fx01RemainingScrapeDesign.md`,
+  `docs/Fx01RemainingMuzzleDesign.md`,
+  `out/w114/`.
+- Wave 115 (2026-08-24): leftover census
+  after Wave 114 OPEN none. Markdown
+  only. No `src/`.
+  HUD-02 remaining TARGET class
+  tokens (`docs/Hud02RemainingTargetSilhouettesDesign.md`):
+  leftover REAL. `classKeyToken` is
+  player-only; unscoped `#hud[data-class-key]`
+  restyles both rails; `tgtFacing`
+  already exists. Later PR1 scopes
+  player CSS to `.rw-combat-self` and
+  writes allowlisted `data-class-key`
+  on `.rw-combat-target` from visible
+  lock class. Fail-closed omit.
+  Q-ship uses cover class. Do not put
+  lock class on `#hud`.
+  HUD-03 remaining visual
+  (`docs/Hud03RemainingVisualDesign.md`):
+  leftover CONSUME. KeyO already has
+  scale / contrast / color-blind /
+  reduced-motion. Both families inherit
+  `body.rw-*`. Wave 103 `hudAlerts`
+  consume. Named serial none.
+  SHP remaining catalog
+  (`docs/ShpRemainingCatalogDesign.md`):
+  leftover CONSUME. Live `CORE_STOCK`
+  and `LIVING_STOCK` both include
+  `frigate`. Wishlist SHP-01 omit is
+  stale vs Wave 94. No seventh class.
+  Named serial none. Digit 0 shipyard.
+  Kit mutate still omit. Flash map /
+  80 u stay skippable. Aim-glass gauges
+  stay off.
+  OPEN: HUD-02 target-facing class
+  token serial (later). Owner may
+  override rail writer / cover class
+  after playtest.
+  VERIFY: HUD-02 target verifier CLEAN
+  (`out/w115/hud02tgt/verify/`); designer
+  CLEAN. HUD-03 visual verifier CLEAN
+  (`out/w115/hud03vis/verify/`); designer
+  CLEAN. SHP catalog verifier CLEAN
+  (`out/w115/shp/verify/`); designer
+  CLEAN.
+  FILES: `docs/Hud02RemainingTargetSilhouettesDesign.md`,
+  `docs/Hud03RemainingVisualDesign.md`,
+  `docs/ShpRemainingCatalogDesign.md`,
+  `out/w115/`.
+- Wave 116 (2026-08-24): leftover HUD-02 target
+  class tokens first impl + two inbox P0
+  briefs. HUD-02 PR1
+  (`docs/Hud02RemainingTargetSilhouettesDesign.md`):
+  player CSS scoped to `.rw-combat-self`;
+  allowlisted `data-class-key` on
+  `.rw-combat-target` from visible lock
+  class; Q-ship cover class; fail-closed
+  omit. WAVE113/114 pin hygiene.
+  NAV-05 remaining AP handoff brief
+  (`docs/Nav05HandoffDesign.md`): leftover
+  REAL. Collapsed `missingGate` English;
+  hub-zone cancel; no live multi-hop
+  `systemLoaded` pin. Later PR1
+  `autopilot.js` + `gate.js` +
+  `galaxychart.js` `showApLive` on fly
+  cancel while the chart is open. Chart
+  does not close on engage. No teleport.
+  CTL-01 remaining dock/jump bind brief
+  (`docs/Ctl01DockBindDesign.md`): leftover
+  REAL. `KeyD` dual-bind live. Later PR1
+  deputize **KeyJ**; keep `dockPressed`;
+  AP `wantJump` independent. Kit mutate
+  still omit. Aim-glass gauges stay off.
+  OPEN: NAV-05 PR1; CTL-01 PR1. Overlay
+  stack / toast flood / chart labels /
+  chart-close-on-AP stay inbox.
+  CLOSED by Wave 117: NAV-05 PR1 +
+  CTL-01 PR1 + overlay leftover census.
+  VERIFY: HUD-02 live Playwright CLEAN
+  (`out/w116/hud02tgt/verify/`); designer
+  CLEAN. NAV-05 verifier CLEAN
+  (`out/w116/nav05/verify/`); designer
+  Major closed in freeze. CTL-01
+  verifier CLEAN (`out/w116/ctl01/verify/`);
+  designer CLEAN. `npm run test:boot`
+  still FAIL on pre-existing WAVE26.
+  FILES: `src/systems/hud.js`,
+  `src/ui/hud.css`,
+  `scripts/boot-test.mjs`,
+  `docs/Hud02RemainingTargetSilhouettesDesign.md`,
+  `docs/Nav05HandoffDesign.md`,
+  `docs/Ctl01DockBindDesign.md`,
+  `out/w116/`.
+- Wave 117 (2026-08-24): leftover NAV-05
+  AP handoff first impl + CTL-01 KeyJ
+  first impl + P1 overlay leftover
+  census. NAV-05 PR1
+  (`docs/Nav05HandoffDesign.md`): nearer
+  hub does not cancel a physical ring;
+  hub cycle/wrap hub-only; split
+  `AP_LINES`; `gate.js` sole emit;
+  `#rw-galaxy-ap-live` on fly cancel
+  while the chart is open. Chart does
+  not close on engage. No teleport.
+  CTL-01 PR1
+  (`docs/Ctl01DockBindDesign.md`): KeyJ
+  sets `pendingDock`; KeyD strafe only;
+  keep `dockPressed`; AP `wantJump`
+  independent; WAVE21 jump pins KeyJ;
+  WAVE6 `'J — dock'`. Overlay leftover
+  brief (`docs/Ctl02OverlayDesign.md`):
+  leftover REAL. Hail / chart / berth
+  still stack. `openCard` ignores calm.
+  Later PR1 overlay-priority. Kit mutate
+  still omit. Aim-glass gauges stay off.
+  OPEN: overlay PR1. Toast flood /
+  chart labels / chart-close-on-AP stay
+  inbox.
+  CLOSED by Wave 118: overlay PR1 +
+  toast leftover census + chart-close
+  leftover census.
+  VERIFY: NAV-05 probe PASS; live
+  Playwright CLEAN
+  (`out/w117/nav05/verify/`); designer
+  CLEAN (Minor: live region has no
+  `aria-label`). CTL-01 probe PASS; live
+  Playwright CLEAN
+  (`out/w117/ctl01/verify/`); designer
+  CLEAN. Overlay verifier CLEAN
+  (`out/w117/overlay/verify/`); designer
+  CLEAN. `npm run test:boot` still FAIL
+  on pre-existing WAVE26.
+  FILES: `src/game/autopilot.js`,
+  `src/systems/gate.js`,
+  `src/systems/galaxychart.js`,
+  `src/systems/controls.js`,
+  `src/core/ctx.js`,
+  `src/systems/hud.js`,
+  `src/game/onboarding.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Nav05HandoffDesign.md`,
+  `docs/Ctl01DockBindDesign.md`,
+  `docs/Ctl02OverlayDesign.md`,
+  `out/w117/`.
+- Wave 118 (2026-08-25): leftover CTL-02
+  overlay-priority first impl + P1
+  toast-flood leftover census + P2
+  chart-close-on-AP leftover census.
+  Overlay PR1
+  (`docs/Ctl02OverlayDesign.md`): mutex
+  hail/chart/berth; defer incoming hail
+  (skip `openCard` only); salvage
+  `letGo` +30 s calm; `openCard`/KeyH
+  calm gate; helper
+  `overlay-policy.js`; session
+  `hailOpen`/`berthOpen`; chart open-gate
+  only; hail Digit skip under pause /
+  settings / title / models; never pause
+  those three. `showApLive` unchanged.
+  Chart stays open on AP engage.
+  Toast leftover brief
+  (`docs/Hud04ToastFloodDesign.md`):
+  leftover REAL. Later PR1 toast-flood:
+  five-row key linger 8 s; AUTOSAVE HELD
+  vs SAVE BLOCKED; expire `aria-hidden`.
+  Chart-close leftover brief
+  (`docs/Nav06ChartCloseDesign.md`):
+  leftover REAL. Later PR1
+  chart-close-on-AP: Autopilot **button**
+  success `setOpen(false)` + blur /
+  HUD Cancel focus. Kit mutate still
+  omit. Aim-glass gauges stay off.
+  OPEN: toast PR1; chart-close PR1.
+  Chart-label a11y stays inbox.
+  VERIFY: overlay WAVE118 pins all true
+  including `digitSkipUnderPause`; live
+  Playwright CLEAN
+  (`out/w118/overlay/verify/`); designer
+  CLEAN. Toast verifier CLEAN
+  (`out/w118/toast/verify/`); designer
+  CLEAN. Chart-close verifier CLEAN
+  (`out/w118/chartclose/verify/`);
+  designer CLEAN. `npm run test:boot`
+  still FAIL on pre-existing WAVE26.
+  FILES: `src/systems/overlay-policy.js`,
+  `src/systems/hail.js`,
+  `src/game/save.js`,
+  `src/systems/galaxychart.js`,
+  `src/core/ctx.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Ctl02OverlayDesign.md`,
+  `docs/Hud04ToastFloodDesign.md`,
+  `docs/Nav06ChartCloseDesign.md`,
+  `out/w118/`.
+- Wave 119 (2026-08-25): orchestrator
+  boot-fail closeout. Owner asked to
+  fix boot failures (not as a side
+  effect of another serial). WAVE26
+  unique ferry: offered/accepted unique
+  four stay on Digit 2; unique DONE
+  still hides (persist keep, no splice);
+  `keepUniqueJobRows` keeps unique-four
+  identity across sanitize/prune;
+  WAVE26 re-finds live ferry and haul
+  after dest payout. NPC UPDATE ERR:
+  `shipClassOf` / `classCruise` /
+  `classBurn` fail-closed; unknown
+  `classKey` does not throw on
+  `speedCap` / `updateDuel` /
+  `updateFlee`; `ctx.ships` walks skip
+  null holes. WAVE83 missiles:
+  harness snapshots `Incoming dart.`
+  at capture (`dartToastText`); HUD
+  expire/recycle unchanged. Digit 2/0/8/9
+  stay. HUD-01 empty hub. No
+  `innerHTML`. No new `WORLD_FIELDS`.
+  `state.js` READ-ONLY. Kit mutate
+  still omit. Aim-glass gauges stay
+  off. OPEN: toast PR1; chart-close
+  PR1 (Wave 118 leftover). Chart-label
+  a11y stays inbox.
+  CLOSED by Wave 120: toast PR1 +
+  chart-close PR1 + chart-label leftover
+  census.
+  VERIFY: designer CLEAN
+  (`out/w-boot-fix2/wave26/designer-audit.md`).
+  NPC probes CLEAN
+  (`out/w-boot-fix2/update-err/verify/report-4.md`).
+  `npm run test:boot` BOOT TEST PASS
+  (`out/w-boot-fix2/wave83/verify/boot-test.log`).
+  FILES: `src/systems/station.js`,
+  `src/systems/npc.js`,
+  `scripts/boot-test.mjs`,
+  `out/w-boot-fix2/`.
+- Wave 120 (2026-08-25): leftover HUD-04
+  toast-flood first impl + leftover
+  NAV-06 chart-close-on-AP first impl +
+  P2 chart-label leftover census.
+  Toast PR1
+  (`docs/Hud04ToastFloodDesign.md`):
+  8 s identical-key window; five-row
+  linger ring independent of chips;
+  expire `aria-hidden`; real-show unhide
+  then `textContent`; AUTOSAVE HELD vs
+  SAVE BLOCKED; `save.js` emit `source`
+  tag only. Overlay mutex / hail /
+  `showApLive` / KeyJ untouched.
+  Chart-close PR1
+  (`docs/Nav06ChartCloseDesign.md`):
+  Autopilot **button** success real
+  `setOpen(false)` + blur / prefer HUD
+  Cancel; refuse and cancel stay open;
+  direct `tryEngage` still does not
+  close; WAVE117 `chartEngageStay`
+  retuned to the button path;
+  `chartStayOpen` still true on direct
+  engage. Overlay hail flush still
+  runs. No pause. No jump emit.
+  Chart-label leftover brief
+  (`docs/Nav07ChartLabelDesign.md`):
+  leftover REAL. Later PR1 chart-label:
+  labels share plot path; label box
+  enlarges target; named dest
+  `<select>` under desc; existing KeyM
+  close skips `isTypingFocus()` (not a
+  remap). Kit mutate still omit.
+  Aim-glass gauges stay off.
+  OPEN: chart-label PR1.
+  VERIFY: toast probe PASS
+  (`out/w120/toast/verify/`); designer
+  CLEAN. Chart-close live Playwright
+  CLEAN (`out/w120/chartclose/verify/`);
+  designer CLEAN. Chart-label verifier
+  CLEAN (`out/w120/chartlabel/verify/`);
+  designer CLEAN after KeyM freeze.
+  `npm run test:boot` BOOT TEST PASS.
+  FILES: `src/systems/hud.js`,
+  `src/game/save.js`, `src/ui/hud.css`,
+  `src/systems/galaxychart.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Hud04ToastFloodDesign.md`,
+  `docs/Nav06ChartCloseDesign.md`,
+  `docs/Nav07ChartLabelDesign.md`,
+  `out/w120/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

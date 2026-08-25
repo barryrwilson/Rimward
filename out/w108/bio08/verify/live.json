@@ -1,0 +1,15 @@
+{
+  "classKey": "light",
+  "hullPath": "living",
+  "livingSwim": true,
+  "vertexDeltaMag": 0.13207466162959736,
+  "vertexDtSec": 17.0813,
+  "hub": { "w": 80, "h": 80, "childCount": 5, "gaitNodes": 0 },
+  "reticleKids": ["rw-reticle-pupil", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-range"],
+  "dockMenu": "1 Market … 8 Launch 9 Standing 0 Shipyard",
+  "digit0": "SHIPYARD hangar hull_starter light",
+  "consoleErrors": 0,
+  "consoleWarnings": 0,
+  "viteBind": "[::1]:5178",
+  "urlUsed": "http://localhost:5178/"
+}

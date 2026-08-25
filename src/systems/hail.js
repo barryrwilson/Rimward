@@ -3,6 +3,16 @@ import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
 import { stampWakeSite, spillShipCargo } from './npc.js';
+import {
+  canOpenPlayCard,
+  canShowHail,
+  deferIncomingHail,
+  dropDeferredHail,
+  hailCalmOk,
+  hailDigitsAllowed,
+  playSurfaceBlocked,
+  takeDeferredHail,
+} from './overlay-policy.js';
 
 /**
  * Combat hail UI (doc §7.6, §12.3): a lower-left card above the aux stack.
@@ -22,7 +32,7 @@ import { stampWakeSite, spillShipCargo } from './npc.js';
  *                   no fear, no npcSurrendered.
  *   demandRansom  → credits += ransomFor(state) (fear +3)
  *   acceptTribute → credits += ECON.tributeRate × cargo value (no fear)
- *   letGo         → target flees, no fear. On a disabled hulk: close only.
+ *   letGo         → target flees, no fear. On a disabled hulk: close + 30 s session calm.
  *   respect       → a Named Gun (ace) stands down; flee + 60 s calm, no econ
  *   callowVouch   → Old Callow sells a word in the keepers' second ledger column (credits, trust, favors; no econ fear)
  *   keepFiring    → close the card, nothing else changes
@@ -124,6 +134,11 @@ export function initHail(ctx) {
   function closeCard() {
     open = null;
     root.style.display = 'none';
+    try {
+      if (ctx.flags) ctx.flags.hailOpen = false;
+    } catch {
+      /* session flag is optional */
+    }
   }
 
   function resolveIntent(ctx2, intent) {
@@ -189,10 +204,10 @@ export function initHail(ctx) {
           ai.phase = null;
           ai.intent = false;
           ai.target = null;
-          ai.calmUntil = ctx2.world.time + 30;
           stampWakeSite(live); // wave 30: pirate/ace wake-trailing contract
           ctx2.emit('commLine', { text: 'Running.', from: st.name });
         }
+        ai.calmUntil = ctx2.world.time + 30;
         break;
       }
       case 'respect': {
@@ -326,6 +341,12 @@ export function initHail(ctx) {
   function openCard(ev) {
     const live = ev.ship;
     if (!live || !live.state) return;
+    const same = !!(open && open.ship === live);
+    try {
+      if (!same && hailCalmOk(ctx, live) === false) return;
+    } catch {
+      /* missing helper: skip calm gate */
+    }
     const st = live.state;
     const intents = INTENT_ORDER.filter((i) => ev.intents && ev.intents.includes(i));
     if (intents.length === 0) return;
@@ -400,6 +421,11 @@ export function initHail(ctx) {
       return btn;
     });
     root.style.display = 'block';
+    try {
+      if (ctx.flags) ctx.flags.hailOpen = true;
+    } catch {
+      /* session flag is optional */
+    }
   }
 
   // Number-key shortcuts while the card is open. NOTE: Digit1–3 also switch
@@ -408,6 +434,13 @@ export function initHail(ctx) {
     if (!open || !open.buttons) return;
     const m = /^Digit([1-9])$/.exec(e.code);
     if (!m) return;
+    let digitsOk = true;
+    try {
+      if (typeof hailDigitsAllowed === 'function') digitsOk = hailDigitsAllowed(ctx) !== false;
+    } catch {
+      digitsOk = true;
+    }
+    if (!digitsOk) return;
     const idx = Number(m[1]) - 1;
     if (idx < open.intents.length) {
       e.preventDefault();
@@ -418,14 +451,46 @@ export function initHail(ctx) {
   return {
     update() {
       for (const ev of ctx.events) {
-        if (ev.type === 'hailOpened') openCard(ev);
-        else if (ev.type === 'hailClosed' && open && (!ev.ship || ev.ship === open.ship)) closeCard();
+        if (ev.type === 'hailOpened') {
+          if (open && open.ship === ev.ship) {
+            openCard(ev);
+            continue;
+          }
+          if (open) continue;
+          let verdict = true;
+          try {
+            verdict = canShowHail(ctx, ev.ship);
+          } catch {
+            verdict = true;
+          }
+          if (verdict === 'defer') {
+            try { deferIncomingHail(ev); } catch { /* skip mutex */ }
+            continue;
+          }
+          if (verdict === true) openCard(ev);
+        } else if (ev.type === 'hailClosed') {
+          if (open && (!ev.ship || ev.ship === open.ship)) closeCard();
+          try { dropDeferredHail(ev.ship); } catch { /* skip mutex */ }
+        }
       }
       // Player-initiated salvage hail (H). World.js may already have opened
       // a Callow card this frame; do not steal an open card.
       if (ctx.input.hailPressed && !open) {
-        const ev = tryOpenDisabledHail(ctx);
-        if (ev) openCard(ev);
+        let allow = true;
+        try {
+          if (playSurfaceBlocked(ctx)) allow = false;
+        } catch { /* skip surface gate */ }
+        try {
+          if (allow && canOpenPlayCard(ctx, 'hail') === false) allow = false;
+        } catch { /* skip mutex */ }
+        try {
+          const live = ctx.targets && ctx.targets.current;
+          if (allow && live && hailCalmOk(ctx, live) === false) allow = false;
+        } catch { /* skip calm gate */ }
+        if (allow) {
+          const ev = tryOpenDisabledHail(ctx);
+          if (ev) openCard(ev);
+        }
       }
       // Destroyed / despawned still closes. An open salvage hail stays up
       // on a disabled hull. A live bargaining or demand hail converts.
@@ -443,6 +508,12 @@ export function initHail(ctx) {
           ctx.emit('hailOpened', ev);
           openCard(ev);
         }
+      }
+      if (!open) {
+        try {
+          const slot = takeDeferredHail(ctx);
+          if (slot) openCard(slot);
+        } catch { /* skip mutex */ }
       }
     },
   };

@@ -1,0 +1,22 @@
+=== run 1 boot-full.log ===
+WAVE26 FERRY QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+wave83 station: {"spyExposeConst":true,"spyAcceptedLapse":true,"spyDestFail":true,"spyOfferedWithdraw":true,"spySuccessEmployer":true,"warTargetConst":true,"warSuccessTarget":true,"warExpireQuiet":true,"warStuffedDest":true,"restUu":true,"restConfirm":true,"restEsc":true,"restShort":true,"restGraftCap":true,"noNewDigit":true,"noInnerHtml":true,"chainKind":true,"keepUniqueFour":true,"keepMineSpyWarChain":true,"dropProtoChain":true,"capPlus7":true,"stuffedChainFields":true,"strangerHide":true,"knownSee":true,"lastFreeholdLight":true,"lastFreeholdHeavy":true,"lastVeridianAuto":true,"lastHollowDart":true,"noJobFactionWrite":true}
+wave83 missiles: {"poolCap":true,"notSpawnNpcShot":true,"noSpend":true,"vsPlayerSplit":true,"lastAttacker":true,"missileTargetDoc":true,"dartGate":true,"noBeautifulGrant":true,"toastLiteral":true,"toastGap":true,"noNewHudNode":true,"songBranch":true,"hudKidsStable":true,"playerPool8":true,"npcPool4":true,"drop5th":true,"ammoUntouched":true,"missingTargetDrops":true,"unkCombatDrop":true,"pirateOneDart":true,"aceOneDart":true,"unkNeverMissile":true,"civilianNeverMissile":true,"toastCopy":false,"toastThrottle":true}
+WAVE83 MISSILES FAIL
+wave109 msn-03 sku: {"freeholdDart":true,"redledgerAuto":true,"veridianAuto":true,"hollowDart":true,"noGildedKey":true,"specHasOwn":true,"lightFailClosed":true,"seatedWriteVerify":true,"protoDropNoPay":true,"uniqueFourNoGrant":true,"digit0Shipyard":true,"digit2Jobs":true,"digit8Digit9":true,"noNewWorldFields":true,"noStateWrite":true,"noInnerHtml":true,"jobsHintCopy":true,"noShopDebit":true,"noReducedMotionAnim":true}
+BOOT TEST FAIL ΓÇö 6 errors
+
+=== run 2 boot-full-2.log ===
+WAVE26 FERRY QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+wave83 station: {"spyExposeConst":true,"spyAcceptedLapse":true,"spyDestFail":true,"spyOfferedWithdraw":true,"spySuccessEmployer":true,"warTargetConst":true,"warSuccessTarget":true,"warExpireQuiet":true,"warStuffedDest":true,"restUu":true,"restConfirm":true,"restEsc":true,"restShort":true,"restGraftCap":true,"noNewDigit":true,"noInnerHtml":true,"chainKind":true,"keepUniqueFour":true,"keepMineSpyWarChain":true,"dropProtoChain":true,"capPlus7":true,"stuffedChainFields":true,"strangerHide":true,"knownSee":true,"lastFreeholdLight":true,"lastFreeholdHeavy":true,"lastVeridianAuto":true,"lastHollowDart":true,"noJobFactionWrite":true}
+wave83 missiles: {"poolCap":true,"notSpawnNpcShot":true,"noSpend":true,"vsPlayerSplit":true,"lastAttacker":true,"missileTargetDoc":true,"dartGate":true,"noBeautifulGrant":true,"toastLiteral":true,"toastGap":true,"noNewHudNode":true,"songBranch":true,"hudKidsStable":true,"playerPool8":true,"npcPool4":true,"drop5th":true,"ammoUntouched":true,"missingTargetDrops":true,"unkCombatDrop":true,"pirateOneDart":true,"aceOneDart":true,"unkNeverMissile":true,"civilianNeverMissile":true,"toastCopy":true,"toastThrottle":true}
+wave109 msn-03 sku: {"freeholdDart":true,"redledgerAuto":true,"veridianAuto":true,"hollowDart":true,"noGildedKey":true,"specHasOwn":true,"lightFailClosed":true,"seatedWriteVerify":true,"protoDropNoPay":true,"uniqueFourNoGrant":true,"digit0Shipyard":true,"digit2Jobs":true,"digit8Digit9":true,"noNewWorldFields":true,"noStateWrite":true,"noInnerHtml":true,"jobsHintCopy":true,"noShopDebit":true,"noReducedMotionAnim":true}
+BOOT TEST FAIL ΓÇö 5 errors

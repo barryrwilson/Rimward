@@ -1,0 +1,18 @@
+# rg -n "chartStayOpen|chartEngageStay" scripts/boot-test.mjs
+
+scripts/boot-test.mjs:23550:  const chartStayOpen = ctx.flags.chartOpen === true && chartWasOpen === true;
+scripts/boot-test.mjs:23624:  const chartEngageStay = tokChart === ''
+scripts/boot-test.mjs:23681:    chartStayOpen,
+scripts/boot-test.mjs:23693:    chartEngageStay,
+scripts/boot-test.mjs:23761:  const chartStayOpenSrc118 = chart118src.includes('function showApLive')
+scripts/boot-test.mjs:23894:    chartStayOpenSrc118,
+
+# Pin measure (live):
+# 23547 tokEng = e117(ctx)  // imported tryEngage
+# 23550 chartStayOpen after that
+# 23620 tokChart = e117(ctx)
+# 23624-23627 chartEngageStay: empty token && chartOpen && autopilot
+# 23628 then apBtn117.click() — cancel-while-open, not success-close
+
+# Overlay sibling also added WAVE118 source pin chartStayOpenSrc118 (showApLive present).
+# Product leftover still REAL: button success does not close.

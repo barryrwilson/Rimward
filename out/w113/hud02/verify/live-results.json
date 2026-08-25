@@ -1,0 +1,56 @@
+{
+  "url": "http://127.0.0.1:5174/",
+  "origin": "greenhand (CONTINUE autosave; hullKind living → family bio)",
+  "light": {
+    "family": "bio",
+    "data-class-key": "light",
+    "sil": "22x10",
+    "bodyClip": "polygon(0% 32%, 20% 4%, 58% 0%, 100% 40%, 100% 60%, 58% 100%, 20% 96%, 0% 68%)"
+  },
+  "heavy": {
+    "family": "bio",
+    "data-class-key": "heavy",
+    "sil": "22x10",
+    "bodyClip": "polygon(0% 16%, 16% 2%, 52% 0%, 100% 18%, 100% 82%, 52% 100%, 16% 98%, 0% 84%)",
+    "noseClip": "ellipse(70% 55% at 55% 50%)"
+  },
+  "ace": { "attr": "ace", "sil": "22x10" },
+  "cutter": { "attr": "cutter", "sil": "22x10" },
+  "frigate": { "attr": "frigate", "sil": "22x10" },
+  "freighter": { "attr": "freighter", "sil": "22x10" },
+  "proto": { "hasAttr": false, "fallbackGenericBio": true, "stillFlying": true },
+  "nope": { "hasAttr": false, "fallbackGenericBio": true, "stillFlying": true },
+  "constructor": { "hasAttr": false, "family": "bio" },
+  "builtHeavy": {
+    "family": "mech",
+    "hasAttr": false,
+    "sil": "22x10",
+    "bodyClip": "none",
+    "bodyBorder": "1px solid rgba(111, 242, 224, 0.45)",
+    "facingEndRadius": "0px",
+    "pupilDisplay": "none",
+    "ciliaDisplay": "none"
+  },
+  "hub": {
+    "reticle": "80x80",
+    "children": ["rw-reticle-pupil", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-range"],
+    "rangeText": "RANGE",
+    "classPip": false,
+    "foreAft": ["FORE", "AFT"]
+  },
+  "digit0": {
+    "docked": true,
+    "overlay": "0 — Shipyard on level-1 menu; Digit0 opened SHIPYARD Hangar"
+  },
+  "console": { "errors": 0, "warnings": 0 },
+  "bootWave113": {
+    "heavyTok": false,
+    "aceTok": false,
+    "lightTok": false,
+    "protoOmit": true,
+    "unknownOmit": true,
+    "mechOmit": false,
+    "hubUnchanged": false,
+    "staticSourcePins": true
+  }
+}

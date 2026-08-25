@@ -1,0 +1,19 @@
+debug: [vite] connecting...
+debug: [vite] connected.
+
+# Playwright MCP browser_run_code_unsafe on http://127.0.0.1:5173
+# pageerror: none
+# No toast-channel errors.
+
+# Autosave inject (elapsed ~1.66, paused false, 5 chips):
+# shown: "✦ A berth, a living ship, and no story yet."
+# shown: "▲ AUTOSAVE HELD — hostiles near" aria-hidden=false
+#
+# After expire (elapsed ~5.28, paused false):
+# AUTOSAVE chip show=false aria-hidden=true text kept
+#
+# Re-emit autosave inside 8s (elapsed ~5.65):
+# shownAutosave=0 (no restack)
+#
+# Berth inject (elapsed ~5.97, paused false, 5 chips):
+# shown: "▲ SAVE BLOCKED — Hostiles within the encounter bubble — berth record refused."

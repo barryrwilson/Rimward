@@ -1,0 +1,31 @@
+PASS dummy-unknown-class-no-ai
+PASS dummy-plus-hole
+PASS loiter-unknown-classKey
+PASS route-unknown-classKey-wave116-default
+PASS hunt-unknown-classKey
+PASS duel-unknown-acePhase1
+PASS duel-acePhase1-uses-speedCap
+PASS duel-unknown-acePhase2
+PASS duel-unknown-acePhase2-finite spd=0
+PASS duel-unknown-acePhase3
+PASS duel-unknown-acePhase3-finite-zero spd=0
+PASS flee-trader-no-hunter-stands-down
+PASS flee-trader-stood-down-to-route mode=route
+PASS hail-or-capitulate-pirate-flee
+PASS unknown-pirate-flee-speed-zero mode=flee spd=0
+PASS hail-or-capitulate-ace-flee
+PASS unknown-ace-flee-speed-zero mode=flee spd=0
+PASS wave116-trader-unknown-plus-hunter
+PASS wave116-mode-became-flee mode=flee
+PASS wave116-unknown-flee-finite-zero spd=0
+PASS miner-unknown-plus-hunter
+PASS miner-unknown-became-flee mode=flee
+PASS duel-proto-classKey
+PASS duel-proto-classKey-finite spd=0
+PASS known-cutter-flee
+PASS known-cutter-still-flees mode=flee
+PASS known-cutter-flee-uses-burn spd=210 burn=210
+PASS known-cutter-duel
+PASS known-cutter-still-duels mode=duel
+PASS known-cutter-duel-speed-finite-nonzero spd=73.5
+DUEL/FLEE PROBE PASS

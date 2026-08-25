@@ -17,10 +17,10 @@ import { writeStationHold } from './traffic-feel.js';
  *   first visit). The named ace 'Carver Illyx' exists ONLY in the Freehold
  *   cast — his bounty lives there.
  * - ROUTES §15.3: traders fly a station hold (outside the D5 cylinder) →
- *   one physical dest gate (def.gates). Patrols keep station → gate →
+ *   one physical dest gate (def.gates). Patrols keep a station hold → gate →
  *   planet. Miners keep a station hold → asteroid field center (never a
  *   planet). Stored JSON-plain so save.js can serialize them. Waypoint 0
- *   is the "home" stop (station hold for traders/miners).
+ *   is the "home" stop (station hold for traders/miners/patrols).
  * - INTER-SYSTEM MIGRATION §8.2: a trader that reaches its outbound gate
  *   dwells there. Only the ~90s pickMigrant interval may mark one
  *   gate-ready trader 'inTransit' toward that gate's `.to` (physical
@@ -378,7 +378,7 @@ function createRecords(ctx, sysId) {
         classKey: 'heavy',
         faction: i === 0 ? def.faction : otherFaction,
         role: 'patrol',
-        route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)],
+        route: [writeStationHold(new THREE.Vector3(), station, 'heavy', gate), jitter(gate.clone(), 50), jitter(planet.clone(), 60)],
         cargo: [],
         system: sysId,
       }),
@@ -454,6 +454,7 @@ function rebuildTransitRegistry(ctx) {
       const rec = bank[i];
       if (rec.role === 'trader') normalizeTraderRecord(rec);
       if (rec.role === 'miner') normalizeMinerRecord(rec);
+      if (rec.role === 'patrol') healPadHome(rec);
       if (rec.state === 'inTransit') inTransitRegistry.push({ rec, sysId });
     }
   }
@@ -668,6 +669,12 @@ const PAD_HOME_EPS = 0.5;
 function holdClassFor(rec) {
   if (rec.role === 'trader') return 'freighter';
   const key = rec.classKey;
+  if (rec.role === 'patrol') {
+    if (key === 'light' || key === 'ace' || key === 'cutter' || key === 'heavy' || key === 'frigate' || key === 'freighter') {
+      return key;
+    }
+    return 'heavy';
+  }
   if (key === 'light' || key === 'cutter') return key;
   return 'light';
 }
@@ -702,7 +709,8 @@ function holdFromPos(rec, def, station) {
 export function healPadHome(rec) {
   if (!rec) return rec;
   const role = rec.role;
-  if (role !== 'trader' && role !== 'miner') return rec;
+  if (role !== 'trader' && role !== 'miner' && role !== 'patrol') return rec;
+  if (typeof writeStationHold !== 'function') return rec;
   const sysId = rec.system;
   if (!sysId || !Object.hasOwn(SYSTEMS, sysId)) return rec;
   const def = SYSTEMS[sysId];
@@ -835,6 +843,7 @@ export function tickBank(bank, sysId, ctx) {
       rec.mineAt ??= 0;
       rec.mineHold ??= false;
     }
+    if (rec.role === 'patrol') healPadHome(rec);
     if (!rec.route || rec.route.length === 0) continue;
     if (rec.state === 'docked') {
       if (ctx.world.time >= rec.dwellUntil) rec.state = 'enroute';

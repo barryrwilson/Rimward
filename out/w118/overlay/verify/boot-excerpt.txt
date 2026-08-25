@@ -1,0 +1,9 @@
+wave117 nav-05 handoff: {"jumpOnlyGate":true,"linesSplit":true,"noCollapseSrc":true,"plotMulti":true,"engaged":true,"chartStayOpen":true,"ringKind":true,"hubKind":true,"hubNoCancel":true,"hubNoCycle":true,"hop1Jump":true,"hop1Sys":true,"hop2Path":true,"hop2Jump":true,"hop2Sys":true,"liveRouteSeq":true,"dockPressedStay":true,"chartEngageStay":true,"chartCancelLive":true,"missingHopTok":true,"zoneUnchanged":true}
+wave118 overlay-priority: {"helperExports":true,"helperSrcExports":true,"salvageCalmSrc":true,"openCardCalmSrc":true,"salvageCalmWrote":true,"calmRefused":true,"hailPainted":true,"keyMRefusedWhileHail":true,"keyLRefusedWhileHail":true,"hailDeferred":true,"hailFlushed":true,"berthRefusedWhileChart":true,"keyHRefusedWhileChart":true,"digitSkipUnderPause":true,"digitSkipUnderSettings":true,"noPauseAssign":true,"berthNoPauseAssign":true,"noInner118":true,"chartStayOpenSrc118":true,"digit0Shipyard118":true,"noPersist118":true,"unknownSkip":true}
+WAVE26 FERRY QUOTE FAIL
+WAVE26 LANE DELIVERY FAIL
+WAVE26 OLD-SAVE FALLBACK FAIL
+WAVE26 SAVE FIELDS FAIL
+WAVE26 RESTORE FAIL
+BOOT TEST FAIL — 20 errors
+WAVE26 FAIL is pre-existing — not a Wave 118 fail.

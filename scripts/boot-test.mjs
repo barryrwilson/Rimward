@@ -638,7 +638,7 @@ console.log(`save present: ${store.has('rimward-save-v1')}`);
 // -- 1. Lamplighter hub junction, flown through REAL input -----------------
 // The shared hub contract: gate.js builds a junction assembly at
 // SYSTEMS[id].hub.position carrying hub.routes; KeyG cycles the selection
-// (wrapping, authored order) while the junction is the nearest zone; D —
+// (wrapping, authored order) while the junction is the nearest zone; J —
 // the same dockPressed edge a physical-gate jump uses — emits
 // jumpRequested for the selected route. jump.js arrives at the
 // destination's return-pointing physical gate, and coming HOME through a
@@ -699,12 +699,12 @@ const w22hubChecks = {
   w22hubChecks.routeIndexTracks = w22junction.length === 1 && routeIndexTracks;
   w22hubChecks.routeIndexWraps = w22junction.length === 1 && routeIndexWraps;
 }
-// D on the wrapped selection (routes[0] === fh_hearth): controls.js turns
+// J on the wrapped selection (routes[0] === fh_hearth): controls.js turns
 // the keydown into dockPressed one tick after the keydown; gate.js emits
 // and jump.js consumes on the tick after that — the request rides
-// lastEvents exactly like a physical-gate D press.
-dispatchKey('KeyD');
-tick(2, 'wave21 junction D');
+// lastEvents exactly like a physical-gate J press.
+dispatchKey('KeyJ');
+tick(2, 'wave21 junction J');
 const w21jumpEv = ctx.lastEvents.find((e) => e.type === 'jumpRequested') ?? null;
 w21hubChecks.dEmitsRouteJump = w21jumpEv?.to === fhRoutes[0] && fhRoutes[0] === 'fh_hearth';
 w21hubChecks.jumpBegun = ctx.gate.jumping === true && ctx.gate.destination === 'fh_hearth';
@@ -721,7 +721,7 @@ w21hubChecks.nearHearthBackGate = !!hearthBack && hearthBack.to === 'freehold'
   && Math.hypot(p21a.x - hearthBack.position[0], p21a.y - hearthBack.position[1], p21a.z - hearthBack.position[2]) < 80;
 // Wave 22: fh_hearth is hub-less — no junction group may survive the rebuild.
 w22hubChecks.goneInHearth = w22junctionsAt().length === 0;
-// Home through the physical back-gate — the real D path again. The
+// Home through the physical back-gate — the real J path again. The
 // hub-arrival rule must land the ship at the freehold JUNCTION (~50u off
 // hub.position), never at the gates[0] fallback (~145u away — 80u
 // discriminates; the junction sits ~145u from freehold's veridian gate).
@@ -729,8 +729,8 @@ ctx.ship.object.position.set(...(hearthBack?.position ?? [0, 0, 0]));
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'wave21 at hearth back-gate');
 w21hubChecks.backGateZone = ctx.gate.inZone === true && ctx.gate.nearHub === false && ctx.gate.nearTo === 'freehold';
-dispatchKey('KeyD');
-tick(2, 'wave21 back-gate D');
+dispatchKey('KeyJ');
+tick(2, 'wave21 back-gate J');
 const w21homeOk = tickUntilJumpDone('freehold', 'wave21 junction return');
 const p21b = ctx.ship.object.position;
 w21hubChecks.returnedToFreehold = w21homeOk && ctx.world.currentSystem === 'freehold';
@@ -1729,7 +1729,7 @@ ctx.settings.hints = false;
 ctx.ship.object.position.set(...SYSTEMS.freehold.station.position);
 ctx.ship.velocity.set(0, 0, 0);
 tick(3, 'hints suppressed');
-const dockHintSuppressed = !ctx.world.onboarding.seen.includes('dock') && !hintCardVisible('D — dock');
+const dockHintSuppressed = !ctx.world.onboarding.seen.includes('dock') && !hintCardVisible('J — dock');
 ctx.settings.hints = true; // restore — later sections read settings live
 const w6onboardingChecks = {
   moveHintShown,
@@ -5677,6 +5677,23 @@ const w26JobRewardLine = (titleFrag) => {
 const svcJobMult26 = (sysId) => AUTHORED_IDS23.includes(sysId) ? 1 : (FACTION_SERVICES[SYSTEMS[sysId]?.faction]?.jobPayMult ?? 1);
 const epicJobMult26 = (sysId) => epicEffects(ctx, SYSTEMS[sysId]?.faction).jobPayMult ?? 1;
 const w26JobPayFor = (sysId, base) => Math.round(base * epicJobMult26(sysId) * svcJobMult26(sysId));
+// TEST SETUP: re-offer the persist ferry row in world.jobs (hide ≠ splice).
+// WAVE4 left it done; WAVE26 mutates the live id, not a stale clone.
+const w26ReofferFerry = () => {
+  let live = null;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return null;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || j.id !== 'ferry-consignment') continue;
+    j.state = 'offered';
+    j.originSystem = null;
+    j.destSystem = null;
+    delete j.payQuoted;
+    if (!live) live = j;
+  }
+  return live;
+};
 // A real completeJob reach (completeJob is module-private in station.js): the
 // full recovery cycle at the system the run is docked in — the wave-24 d4
 // template: expire soak wrecks for the system, seed a test wreck, accept the
@@ -5925,12 +5942,12 @@ if (!Object.values(w26laneChecks).every(Boolean)) { console.log('WAVE26 LANE PIC
 undockStation();
 if (laneO26) travelTo(laneO26, 'wave26 lane leg');
 dockAtCurrentStation(`dock ${laneO26} (wave26 quote)`);
-const ferryJob26 = ctx.world.jobs.find((j) => j.id === 'ferry-consignment') ?? null;
-const haulJob26 = ctx.world.jobs.find((j) => j.id === 'haul-provisions') ?? null;
+let ferryJob26 = ctx.world.jobs.find((j) => j.id === 'ferry-consignment') ?? null;
+let haulJob26 = ctx.world.jobs.find((j) => j.id === 'haul-provisions') ?? null;
 // TEST SETUP (self-restoring): the galaxy carries ONE ferry contract and ONE
 // haul contract; wave 4 did the freehold→veridian ferry, so re-offer it for
 // this lane — the real accept/deliver cycle below takes it back to done.
-if (ferryJob26) { ferryJob26.state = 'offered'; ferryJob26.originSystem = null; ferryJob26.destSystem = null; delete ferryJob26.payQuoted; }
+ferryJob26 = w26ReofferFerry() ?? ferryJob26;
 // Free the hold for the consignment + haul load through the REAL market path
 // (the wave-9/11 sell discipline): the recovery cycles' scooped refined
 // metals ride the hold by this point in the run — sell down whatever is
@@ -5951,6 +5968,7 @@ const provAtLaneStart26 = holdCount('provisions');
 // One tick-free window: the board render, both quote parses, and both real
 // accepts read the same provisions price (the random walk only moves on
 // ticks, and acceptJob runs synchronously inside the button click).
+ferryJob26 = w26ReofferFerry() ?? ferryJob26;
 dispatchKey('Digit2'); // jobs board
 const ferryQuoteText26 = w26JobRewardLine('Ferry a consignment');
 const haulQuoteText26 = w26JobRewardLine('Haul provisions');
@@ -6025,6 +6043,8 @@ const ferryPaidLine26 = payLines26.find((t) => t.startsWith('Consignment landed 
 const haulPaidLine26 = payLines26.find((t) => t.startsWith('Provisions delivered')) ?? null;
 const ferryPaid26 = Number((ferryPaidLine26?.match(/— (\d+) UU/) ?? [])[1]);
 const haulPaid26 = Number((haulPaidLine26?.match(/— (\d+) UU/) ?? [])[1]);
+ferryJob26 = ctx.world.jobs.find((j) => j && j.id === 'ferry-consignment') ?? ferryJob26;
+haulJob26 = ctx.world.jobs.find((j) => j && j.id === 'haul-provisions') ?? haulJob26;
 const w26deliveryChecks = {
   boughtTheLoad: bought26 === (haulJob26?.need ?? 5),
   holdLoadedForBoth: provAtDeparture26 === provAtLaneStart26 + (ferryJob26?.need ?? 4) + (haulJob26?.need ?? 5),
@@ -6045,7 +6065,7 @@ if (!Object.values(w26deliveryChecks).every(Boolean)) { console.log('WAVE26 LANE
 // returns to done by delivery. The snapshot the real accept stamps is
 // captured first (proving the stamp path ran), then deleted to simulate the
 // pre-wave-26 save.
-if (ferryJob26) { ferryJob26.state = 'offered'; ferryJob26.originSystem = null; ferryJob26.destSystem = null; delete ferryJob26.payQuoted; }
+ferryJob26 = w26ReofferFerry() ?? ferryJob26;
 dispatchKey('Digit2'); // jobs board (the delivery dock left the overlay at services)
 const ferryReacceptBtn26 = w26CardAcceptButton('Ferry a consignment');
 ferryReacceptBtn26?.click();
@@ -6082,7 +6102,7 @@ if (!Object.values(w26fallbackChecks).every(Boolean)) { console.log('WAVE26 OLD-
 // combat-blocked, cycle the dock so the 'docked' autosave carries the state,
 // assert the save, corrupt in memory, die, recover via Enter, assert the
 // restore.
-if (ferryJob26) { ferryJob26.state = 'offered'; ferryJob26.originSystem = null; ferryJob26.destSystem = null; delete ferryJob26.payQuoted; }
+ferryJob26 = w26ReofferFerry() ?? ferryJob26;
 dispatchKey('Digit2'); // jobs board
 const ferrySaveAcceptBtn26 = w26CardAcceptButton('Ferry a consignment');
 ferrySaveAcceptBtn26?.click(); // real accept: snapshot stamped, consignment fronted
@@ -18437,7 +18457,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const launchBefore = ctx.world.launcher ?? '';
   tick(40, 'wave83 chain freehold last light');
   const lightNoDart83 = (ctx.world.launcher ?? '') === launchBefore
-    && ctx.world.credits === credFh + 22
+    && ctx.world.credits === credFh + 22 + 2
     && (ctx.world.reputation.freehold ?? 0) === empFh + 2
     && (ctx.world.reputation.veridian ?? 0) === verdFh
     && lastFh.state === 'done';
@@ -18481,12 +18501,14 @@ removeLiveShip(w42indyCtx, w42indy);
   lastVd.need = 1;
   liveJobsV.push(lastVd);
   freezeSlotJobs83(lastVd);
+  const credVd = ctx.world.credits;
   const launchVd = ctx.world.launcher;
-  const turretVd = ctx.world.turret;
   tick(40, 'wave83 chain veridian last');
-  const verdNoSku83 = lastVd.state === 'done'
+  const verdAuto83 = lastVd.state === 'done'
+    && ctx.world.turret === 'auto'
+    && canSeat('heavy', 'turret')
     && ctx.world.launcher === launchVd
-    && ctx.world.turret === turretVd;
+    && ctx.world.credits === credVd + 19;
 
   if (ctx.flags.docked) undockStation();
   ctx.world.currentSystem = 'hollowreach';
@@ -18503,12 +18525,25 @@ removeLiveShip(w42indyCtx, w42indy);
   lastHl.need = 1;
   liveJobsH.push(lastHl);
   freezeSlotJobs83(lastHl);
-  const launchHl = ctx.world.launcher;
+  ctx.world.launcher = '';
+  ctx.world.missileAmmo = 0;
+  if (ctx.world.hangar && Array.isArray(ctx.world.hangar.hulls)) {
+    for (let i = 0; i < ctx.world.hangar.hulls.length; i++) {
+      const row = ctx.world.hangar.hulls[i];
+      if (row && row.id === ctx.world.hangar.mountedId) {
+        row.launcher = '';
+        row.missileAmmo = 0;
+      }
+    }
+  }
+  const credHl = ctx.world.credits;
   const turretHl = ctx.world.turret;
   tick(40, 'wave83 chain hollow last');
-  const hollowNoSku83 = lastHl.state === 'done'
-    && ctx.world.launcher === launchHl
-    && ctx.world.turret === turretHl;
+  const hollowDart83 = lastHl.state === 'done'
+    && ctx.world.launcher === 'dart'
+    && ctx.world.missileAmmo === 0
+    && ctx.world.turret === turretHl
+    && ctx.world.credits === credHl + 17;
 
   dispatchKey('Escape');
   tick(1, 'wave83 hollow back');
@@ -18554,8 +18589,8 @@ removeLiveShip(w42indyCtx, w42indy);
     knownSee: !!knownSee83,
     lastFreeholdLight: !!lightNoDart83,
     lastFreeholdHeavy: !!heavyDart83,
-    lastVeridianNoSku: !!verdNoSku83,
-    lastHollowNoSku: !!hollowNoSku83,
+    lastVeridianAuto: !!verdAuto83,
+    lastHollowDart: !!hollowDart83,
     noJobFactionWrite: !/job\.faction/.test(st83),
   };
   console.log('wave83 station:', JSON.stringify(w83));
@@ -18637,6 +18672,8 @@ removeLiveShip(w42indyCtx, w42indy);
   const dartToasts = [...walkDom(hudRoot83 ?? { children: [] })]
     .filter((n) => (typeof n.className === 'string' && n.className.includes('rw-toast')
       && n.className.includes('show') && n.textContent === 'Incoming dart.'));
+  // Capture contract is this emit, not later recycled toast-slot text.
+  const dartToastText = dartToasts.length === 1 ? dartToasts[0].textContent : '';
   ctx.events.length = 0;
   ctx.emit('npcFire', { weapon: 'cannon', target: 'player' });
   hudSys83.update(dt);
@@ -18781,7 +18818,7 @@ removeLiveShip(w42indyCtx, w42indy);
     civilianNeverMissile: !traderFires.some((e) => e.weapon === 'missile')
       && !minerFires.some((e) => e.weapon === 'missile')
       && !patrolFires.some((e) => e.weapon === 'missile'),
-    toastCopy: dartToasts.length === 1 && dartToasts[0].textContent === 'Incoming dart.',
+    toastCopy: dartToasts.length === 1 && dartToastText === 'Incoming dart.',
     toastThrottle: dartToasts.length === 1 && cannonGrewDart === false,
   };
   console.log('wave83 missiles:', JSON.stringify(w83));
@@ -22310,6 +22347,1608 @@ removeLiveShip(w42indyCtx, w42indy);
 
   console.log('wave107 bio-06:', JSON.stringify(w107));
   if (!Object.values(w107).every(Boolean)) { console.log('WAVE107 BIO-06 FAIL'); errors++; }
+}
+
+// ---- WAVE108 BIO-08 anatomy-native living gait (PR1–PR4) ----
+{
+  const {
+    LIVING_CADENCE: w108Cadence,
+    SWIM_IDLE_HZ: w108IdleHz,
+    SWIM_CRUISE_HZ: w108CruiseHz,
+    cadenceFor: w108CadenceFor,
+  } = await import('../src/game/living-cadence.js');
+  const {
+    LIVING_GAIT: w108GaitMap,
+    GAIT_AXES: w108Axes,
+    LIVE_GAIT_MIX: w108LiveMix,
+    gaitFor: w108GaitFor,
+    axesForGait: w108AxesForGait,
+  } = await import('../src/game/living-gait.js');
+  const here108 = dirname(fileURLToPath(import.meta.url));
+  const src108 = (rel) => readFileSync(join(here108, '..', rel), 'utf8');
+  const gaitSrc108 = src108('src/game/living-gait.js');
+  const ship108 = src108('src/systems/ship.js');
+  const assets108 = src108('src/systems/ship-assets.js');
+  const station108 = src108('src/systems/station.js');
+  const save108 = src108('src/game/save.js');
+  const cadenceSrc108 = src108('src/game/living-cadence.js');
+  const worldFields108 = save108.slice(
+    save108.indexOf('export const WORLD_FIELDS'),
+    save108.indexOf('const SURVIVOR'),
+  );
+  const makeSwim108 = assets108.slice(
+    assets108.indexOf('function makeSwimUniforms()'),
+    assets108.indexOf('function injectSwim('),
+  );
+  const injectSwim108 = assets108.slice(
+    assets108.indexOf('function injectSwim('),
+    assets108.indexOf('function cloneSwimMaterials('),
+  );
+  const updateAsset108 = assets108.slice(
+    assets108.indexOf('export function updateShipAsset'),
+  );
+  const livingLoop108 = ship108.slice(
+    ship108.indexOf('if (living) {'),
+    ship108.indexOf('posAttr.needsUpdate'),
+  );
+
+  const lightGait = w108GaitFor('light');
+  const aceGait = w108GaitFor('ace');
+  const frigateGait = w108GaitFor('frigate');
+
+  const w108 = {
+    protoSafe: w108GaitFor('__proto__') === lightGait
+      && w108GaitFor('constructor') === lightGait
+      && w108GaitFor('toString') === lightGait
+      && w108GaitFor('prototype') === lightGait
+      && w108GaitFor(null) === lightGait
+      && w108GaitFor(undefined) === lightGait
+      && w108GaitFor(12) === lightGait
+      && w108GaitFor({}) === lightGait
+      && w108GaitFor('not-a-class') === lightGait
+      && gaitSrc108.includes('Object.hasOwn(LIVING_GAIT, classKey)')
+      && gaitSrc108.includes('Object.hasOwn(GAIT_AXES, gaitId)'),
+    unknownClassIsLight: w108GaitFor('nope') === w108GaitFor('light')
+      && w108GaitMap.light === 'shark-caudal',
+    missingGaitLiveMix: w108AxesForGait('not-a-gait') === w108LiveMix
+      && w108AxesForGait('__proto__') === w108LiveMix
+      && w108LiveMix.spineX === 1 && w108LiveMix.flapY === 1
+      && w108LiveMix.kickZ === 0 && w108LiveMix.radial === 0
+      && !Object.hasOwn(w108Axes, 'live-spine-flap'),
+    lightPlayerCpu: w108IdleHz === 0.5 && w108CruiseHz === 2.3
+      && /serene:\s*\{\s*rate:\s*1(?:\.0)?/.test(ship108)
+      && /keen:\s*\{\s*rate:\s*1\.25/.test(ship108)
+      && /feral:\s*\{\s*rate:\s*1\.5/.test(ship108)
+      && /pained:\s*\{\s*rate:\s*0\.6/.test(ship108)
+      && ship108.includes('cadence !== LIVING_CADENCE.light')
+      && ship108.includes('BREATH_HZ = 0.25')
+      && ship108.includes('HEART_HZ = 1.1')
+      && livingLoop108.includes('playerClass !== \'light\'')
+      && livingLoop108.includes('x += bodyAmp * zn * zn * Math.sin(6.9 * zn - swimPhase);'),
+    cadenceUnchanged: w108Cadence.light.hzScale === 1
+      && w108Cadence.light.sweepScale === 1
+      && w108Cadence.ace.hzScale === 0.96
+      && w108Cadence.cutter.hzScale === 0.80
+      && w108Cadence.heavy.hzScale === 0.62
+      && w108Cadence.frigate.hzScale === 0.44
+      && w108Cadence.freighter.hzScale === 0.30
+      && w108CadenceFor('__proto__') === w108Cadence.light
+      && cadenceSrc108.includes('hzScale: 1.00')
+      && !cadenceSrc108.includes('gait'),
+    digit0Shipyard: station108.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && station108.includes("'shipyard'"),
+    digit8Digit9: station108.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard'])"),
+    noGaitWorldField: !/\bgait\b/i.test(worldFields108),
+    gpuGaitUniforms: makeSwim108.includes('uSwimSpineX')
+      && makeSwim108.includes('uSwimFlapY')
+      && makeSwim108.includes('uSwimKickZ')
+      && makeSwim108.includes('uSwimRadial')
+      && injectSwim108.includes('uniform float uSwimSpineX')
+      && injectSwim108.includes('uniform float uSwimFlapY')
+      && injectSwim108.includes('uniform float uSwimKickZ')
+      && injectSwim108.includes('uniform float uSwimRadial')
+      && /flap \* uSwimSweep/.test(injectSwim108)
+      && injectSwim108.includes('uSwimKickZ')
+      && injectSwim108.includes('uSwimRadial')
+      && updateAsset108.includes('uSwimSpineX')
+      && assets108.includes("customProgramCacheKey = () => SWIM_PROGRAM_KEY")
+      && assets108.includes("rimward-beautiful-swim-gait")
+      && !injectSwim108.includes('${')
+      && !injectSwim108.includes('gaitId')
+      && !injectSwim108.includes('classKey'),
+    mixerNotGait: !assets108.includes('mixer.timeScale')
+      && !ship108.includes('mixer.timeScale'),
+    tableDeputize: lightGait.gaitId === 'shark-caudal'
+      && lightGait.spineX === 0.55 && lightGait.flapY === 1 && lightGait.kickZ === 0.7 && lightGait.radial === 0
+      && w108GaitFor('cutter').gaitId === 'shark-caudal'
+      && aceGait.gaitId === 'squid-mantle' && aceGait.flapY === 0.12 && aceGait.radial === 1
+      && w108GaitFor('heavy').gaitId === 'whale-fluke'
+      && w108GaitFor('freighter').gaitId === 'whale-fluke'
+      && frigateGait.gaitId === 'octopus-trail' && frigateGait.kickZ === 1
+      && frigateGait.radial === 0.28 && frigateGait.radial < aceGait.radial,
+    npcReducedAmp0: /uSwimAmp\.value\s*=\s*reducedMotion\s*\?\s*0\s*:\s*1/.test(updateAsset108),
+    threeFree: !/from ['"]three['"]/.test(gaitSrc108)
+      && !/import\s+\*\s+as\s+THREE/.test(gaitSrc108),
+  };
+
+  console.log('wave108 bio-08:', JSON.stringify(w108));
+  if (!Object.values(w108).every(Boolean)) { console.log('WAVE108 BIO-08 FAIL'); errors++; }
+}
+
+// ---- WAVE109 MSN-03 remaining unique SKU grants (PR1–PR4) ----
+{
+  const {
+    CHAIN_GRANT: w109Grant,
+    chainGrantSpec: w109Spec,
+    parseChainId: w109Parse,
+    CHAIN_IDS: w109Ids,
+    chainEmployerKeys: w109Keys,
+  } = await import('../src/game/jobs-chains.js');
+  const {
+    canSeat: w109CanSeat,
+    isLauncherId: w109IsLaunch,
+    isTurretId: w109IsTurret,
+    LAUNCHER_IDS: w109LaunchIds,
+    TURRET_IDS: w109TurretIds,
+  } = await import('../src/game/weapon-fit.js');
+  const { writeMountedGear: w109WriteGear } = await import('../src/game/hangar.js');
+  const { WORLD_FIELDS: w109Fields } = await import('../src/game/save.js');
+  const { MOUNT_TABLE: w109Mount } = await import('../src/game/state.js');
+  const here109 = dirname(fileURLToPath(import.meta.url));
+  const src109 = (rel) => readFileSync(join(here109, '..', rel), 'utf8');
+  const st109 = src109('src/systems/station.js');
+  const chains109 = src109('src/game/jobs-chains.js');
+  const state109 = src109('src/game/state.js');
+  const save109 = src109('src/game/save.js');
+  const grantSrc109 = (() => {
+    const start = st109.indexOf('function grantChainSku(ctx, employerKey)');
+    const finish = st109.indexOf('function finishChainStep(ctx, job, parsed)');
+    return start >= 0 && finish > start ? st109.slice(start, finish) : '';
+  })();
+  const finishSrc109 = (() => {
+    const start = st109.indexOf('function finishChainStep(ctx, job, parsed)');
+    const next = st109.indexOf('function warPayComplete(ctx, job, rec)');
+    return start >= 0 && next > start ? st109.slice(start, next) : '';
+  })();
+  const chainTick109 = (() => {
+    const start = st109.indexOf("if (job.kind === 'chain')");
+    const next = st109.indexOf("if (job.state !== 'accepted') continue;", start);
+    return start >= 0 && next > start ? st109.slice(start, next) : '';
+  })();
+  const jobsRender109 = (() => {
+    const start = st109.indexOf('function renderJobs(panel)');
+    const next = st109.indexOf('function renderBar(panel)');
+    return start >= 0 && next > start ? st109.slice(start, next) : '';
+  })();
+  const worldFields109 = save109.slice(
+    save109.indexOf('export const WORLD_FIELDS'),
+    save109.indexOf('const SURVIVOR'),
+  );
+  const uniqueComplete109 = st109.includes("if (job.id === 'bounty-ace')")
+    && st109.includes("if (job.id === 'haul-provisions' && ui) ui.uniqueHaulPaid = true")
+    && st109.includes("if (job.id === 'ferry-consignment' && job.state === 'done')")
+    && st109.includes("id: 'patrol-lane'");
+  const grantCallCount109 = (st109.match(/grantChainSku\(/g) || []).length;
+  const uniqueGrantCall109 = /bounty-ace[\s\S]{0,800}grantChainSku\(/.test(st109)
+    || /patrol-lane[\s\S]{0,800}grantChainSku\(/.test(st109)
+    || /haul-provisions[\s\S]{0,800}grantChainSku\(/.test(st109)
+    || /ferry-consignment[\s\S]{0,800}grantChainSku\(/.test(st109);
+
+  function w109Hull(classKey) {
+    return {
+      world: {
+        credits: 100,
+        launcher: '',
+        missileAmmo: 0,
+        turret: '',
+        hangar: {
+          mountedId: 'w109',
+          hulls: [{
+            id: 'w109',
+            classKey,
+            hullKind: 'built',
+            faction: 'independent',
+            name: 'W109',
+            scanner: 0,
+            miningLaser: 0,
+            concealedMounts: false,
+            cargoCapacity: 20,
+            cargo: [],
+            launcher: '',
+            turret: '',
+            missileAmmo: 0,
+          }],
+        },
+      },
+      player: { classKey },
+    };
+  }
+  function w109GrantLike(ctx, employerKey) {
+    if (typeof employerKey !== 'string') return false;
+    const spec = w109Spec(employerKey);
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return false;
+    if (!Object.isFrozen(spec)) return false;
+    if (!Object.hasOwn(spec, 'id') || !Object.hasOwn(spec, 'seat') || !Object.hasOwn(spec, 'slot')) {
+      return false;
+    }
+    const idOk = (spec.id === 'dart' && w109IsLaunch(spec.id))
+      || (spec.id === 'auto' && w109IsTurret(spec.id));
+    if (!idOk) return false;
+    const classKey = ctx?.player?.classKey;
+    if (!w109CanSeat(classKey, spec.seat)) return false;
+    let row = null;
+    if (spec.slot === 'launcher') {
+      row = w109WriteGear(ctx, { launcher: spec.id });
+      if (!row || row.launcher !== spec.id) return false;
+    } else if (spec.slot === 'turret') {
+      row = w109WriteGear(ctx, { turret: spec.id });
+      if (!row || row.turret !== spec.id) return false;
+    } else {
+      return false;
+    }
+    return true;
+  }
+  function w109FailUu(granted, credits) {
+    if (!granted && Number.isFinite(credits)) return credits + 2;
+    return credits;
+  }
+
+  const lightCtx = w109Hull('light');
+  const lightGrant = w109GrantLike(lightCtx, 'veridian');
+  const lightCredits = w109FailUu(lightGrant, lightCtx.world.credits);
+
+  const heavyV = w109Hull('heavy');
+  const heavyVOk = w109GrantLike(heavyV, 'veridian');
+  const aceH = w109Hull('ace');
+  const aceHOk = w109GrantLike(aceH, 'hollow');
+  const frigF = w109Hull('frigate');
+  const frigFOk = w109GrantLike(frigF, 'freehold');
+  const aceR = w109Hull('ace');
+  const aceROk = w109GrantLike(aceR, 'redledger');
+
+  const protoTickHasPay = /\+=\s*2/.test(chainTick109)
+    || /credits/.test(chainTick109)
+    || /grantChainSku/.test(chainTick109);
+
+  const w109 = {
+    freeholdDart: w109Grant.freehold?.id === 'dart' && w109Grant.freehold?.slot === 'launcher'
+      && w109Grant.freehold?.seat === 'missile' && Object.isFrozen(w109Grant.freehold),
+    redledgerAuto: w109Grant.redledger?.id === 'auto' && w109Grant.redledger?.slot === 'turret'
+      && w109Grant.redledger?.seat === 'turret' && Object.isFrozen(w109Grant.redledger),
+    veridianAuto: w109Grant.veridian?.id === 'auto' && w109Grant.veridian?.slot === 'turret'
+      && w109Grant.veridian?.seat === 'turret' && Object.isFrozen(w109Grant.veridian)
+      && w109Spec('veridian') === w109Grant.veridian,
+    hollowDart: w109Grant.hollow?.id === 'dart' && w109Grant.hollow?.slot === 'launcher'
+      && w109Grant.hollow?.seat === 'missile' && Object.isFrozen(w109Grant.hollow)
+      && w109Spec('hollow') === w109Grant.hollow,
+    noGildedKey: !Object.hasOwn(w109Grant, 'gilded')
+      && w109Spec('gilded') === null
+      && !w109Keys().includes('gilded')
+      && w109Parse('chain-gilded-1') === null
+      && !w109Ids.has('chain-gilded-1'),
+    specHasOwn: chains109.includes('Object.hasOwn(CHAIN_GRANT, employerKey)')
+      && w109Spec('__proto__') === null
+      && w109Spec(12) === null
+      && w109Spec(null) === null,
+    lightFailClosed: !w109CanSeat('light', 'missile') && !w109CanSeat('light', 'turret')
+      && w109Mount.light.missile === 0 && w109Mount.light.turret === 0
+      && lightGrant === false
+      && lightCtx.world.launcher === '' && lightCtx.world.turret === ''
+      && lightCredits === 102
+      && finishSrc109.includes('ctx.world.credits += 2')
+      && finishSrc109.includes('Number.isFinite(ctx.world.credits)')
+      && !grantSrc109.includes('credits'),
+    seatedWriteVerify: heavyVOk && heavyV.world.turret === 'auto'
+      && heavyV.world.hangar.hulls[0].scanner === 0
+      && heavyV.world.hangar.hulls[0].miningLaser === 0
+      && aceHOk && aceH.world.launcher === 'dart' && aceH.world.missileAmmo === 0
+      && frigFOk && frigF.world.launcher === 'dart' && frigF.world.missileAmmo === 0
+      && aceROk && aceR.world.turret === 'auto'
+      && grantSrc109.includes("{ launcher: spec.id }")
+      && grantSrc109.includes("{ turret: spec.id }")
+      && !grantSrc109.includes('missileAmmo')
+      && grantSrc109.includes('row.launcher !== spec.id')
+      && grantSrc109.includes('row.turret !== spec.id'),
+    protoDropNoPay: w109Parse('chain-__proto__-1') === null
+      && !w109Ids.has('chain-__proto__-1')
+      && chainTick109.includes('jobs.splice(idx, 1)')
+      && !protoTickHasPay
+      && !chainTick109.includes('+= 2'),
+    uniqueFourNoGrant: grantCallCount109 === 2
+      && finishSrc109.includes('grantChainSku(ctx, parsed.employerKey)')
+      && uniqueComplete109
+      && !uniqueGrantCall109,
+    digit0Shipyard: st109.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && st109.includes("'shipyard'")
+      && st109.includes('selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1])'),
+    digit2Jobs: st109.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard'])")
+      && jobsRender109.includes('JOBS BOARD'),
+    digit8Digit9: st109.includes("'launch', 'epics'")
+      && st109.includes('Digit 8 on the dock root is Launch; Digit 9 is Standing.'),
+    noNewWorldFields: !/chainSku/.test(worldFields109)
+      && w109Fields.includes('hangar')
+      && w109Fields.includes('launcher')
+      && w109Fields.includes('turret')
+      && w109Fields.includes('missileAmmo'),
+    noStateWrite: !/CHAIN_GRANT/.test(state109)
+      && !/grantChainSku/.test(state109)
+      && !/chainSku/.test(state109),
+    noInnerHtml: !/innerHTML/.test(st109)
+      && st109.includes("overlay.textContent = ''"),
+    jobsHintCopy: jobsRender109.includes('Last paper may seat a ${skuName} if this hull has a hardpoint.')
+      && jobsRender109.includes('Last paper pays ${est} UU at the home dock')
+      && jobsRender109.includes('Chain paper — last step pays ${est} UU')
+      && !jobsRender109.includes('6500')
+      && !jobsRender109.includes('4200')
+      && w109LaunchIds.dart.name === 'Dart rack'
+      && w109TurretIds.auto.name === 'Auto turret'
+      && w109LaunchIds.dart.cost === 6500
+      && w109TurretIds.auto.cost === 4200
+      && finishSrc109.includes("' Gear seated.'")
+      && finishSrc109.includes("' Compact thanks +2 UU.'"),
+    noShopDebit: !grantSrc109.includes('6500') && !grantSrc109.includes('4200')
+      && !finishSrc109.includes('6500') && !finishSrc109.includes('4200')
+      && finishSrc109.includes('writeFactionStanding(ctx, employer, MINING_REP)')
+      && !finishSrc109.includes('credits += MINING_REP'),
+    noReducedMotionAnim: !/requestAnimationFrame/.test(jobsRender109)
+      && !/reducedMotion/.test(jobsRender109),
+  };
+
+  console.log('wave109 msn-03 sku:', JSON.stringify(w109));
+  if (!Object.values(w109).every(Boolean)) { console.log('WAVE109 MSN-03 FAIL'); errors++; }
+}
+
+// ---- WAVE110 PHY-05 remaining pad-home (PR1 persist heal + PR2 pins) ----
+{
+  const {
+    healPadHome: heal110, tickBank: tick110,
+  } = await import('../src/game/world.js');
+  const {
+    hullRadiusFor: hull110, STATION_HOLD_PAD: pad110, writeStationHold: hold110,
+  } = await import('../src/game/traffic-feel.js');
+  const { WORLD_FIELDS: fields110 } = await import('../src/game/save.js');
+  const here110 = dirname(fileURLToPath(import.meta.url));
+  const src110 = (rel) => readFileSync(join(here110, '..', rel), 'utf8');
+  const world110 = src110('src/game/world.js');
+  const save110 = src110('src/game/save.js');
+  const st110 = src110('src/systems/station.js');
+  const hud110 = src110('src/systems/hud.js');
+  const hudCss110 = src110('src/ui/hud.css');
+  const stPos110 = SYSTEMS.freehold.station.position;
+  const gp110 = SYSTEMS.freehold.gates[0].position;
+  const station110 = { x: stPos110[0], y: stPos110[1], z: stPos110[2] };
+  const gate110 = { x: gp110[0], y: gp110[1], z: gp110[2] };
+  const padPt110 = { x: station110.x, y: station110.y, z: station110.z };
+  const holdMin110 = PHY.STATION_CYL_RADIUS + hull110('heavy') + pad110;
+  const expected110 = hold110({ x: 0, y: 0, z: 0 }, station110, 'heavy', gate110);
+  const expectedXZ110 = Math.hypot(expected110.x - station110.x, expected110.z - station110.z);
+  const authorStr110 = 'route: [writeStationHold(new THREE.Vector3(), station, \'heavy\', gate), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]';
+  const oldPadStr110 = 'route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]';
+  const livePatrols110 = [];
+  const banks110 = ctx.world.recordBanks ?? {};
+  for (const sysId of Object.keys(banks110)) {
+    if (!Object.hasOwn(banks110, sysId)) continue;
+    const bank = banks110[sysId];
+    if (!Array.isArray(bank)) continue;
+    for (let i = 0; i < bank.length; i++) {
+      const rec = bank[i];
+      if (rec && rec.role === 'patrol') livePatrols110.push(rec);
+    }
+  }
+  const live110 = livePatrols110.find((r) => r.system === 'freehold') ?? livePatrols110[0];
+  const liveWp0110 = live110 && live110.route && live110.route[0];
+  const liveSys110 = live110 && live110.system && Object.hasOwn(SYSTEMS, live110.system)
+    ? SYSTEMS[live110.system]
+    : SYSTEMS.freehold;
+  const liveSt110 = liveSys110.station.position;
+  const liveSx110 = Number.isFinite(liveSt110.x) ? liveSt110.x : liveSt110[0];
+  const liveSz110 = Number.isFinite(liveSt110.z) ? liveSt110.z : liveSt110[2];
+  const liveXZ110 = liveWp0110
+    ? Math.hypot(liveWp0110.x - liveSx110, liveWp0110.z - liveSz110)
+    : 0;
+  const oldPatrol110 = {
+    role: 'patrol',
+    classKey: 'heavy',
+    system: 'freehold',
+    speed: 90,
+    route: [{ ...padPt110 }, { ...gate110 }, { x: gate110.x + 10, y: gate110.y, z: gate110.z }],
+  };
+  heal110(oldPatrol110);
+  const healedXZ110 = Math.hypot(oldPatrol110.route[0].x - station110.x, oldPatrol110.route[0].z - station110.z);
+  const good110 = { x: oldPatrol110.route[0].x, y: oldPatrol110.route[0].y, z: oldPatrol110.route[0].z };
+  const again110 = heal110({
+    role: 'patrol',
+    classKey: 'heavy',
+    system: 'freehold',
+    route: [{ ...good110 }, { ...gate110 }, { x: gate110.x + 10, y: gate110.y, z: gate110.z }],
+  });
+  const trader110 = heal110({
+    role: 'trader',
+    classKey: 'light',
+    system: 'freehold',
+    route: [{ ...padPt110 }, { ...gate110 }],
+  });
+  const miner110 = heal110({
+    role: 'miner',
+    classKey: 'light',
+    system: 'freehold',
+    route: [{ ...padPt110 }, { ...gate110 }],
+  });
+  const pirate110 = {
+    role: 'pirate',
+    classKey: 'cutter',
+    system: 'freehold',
+    route: [{ ...padPt110 }, { ...gate110 }],
+  };
+  const ace110 = {
+    role: 'ace',
+    classKey: 'ace',
+    system: 'freehold',
+    route: [{ ...padPt110 }, { ...gate110 }],
+  };
+  heal110(pirate110);
+  heal110(ace110);
+  let nanThrew110 = false;
+  const nan110 = { role: 'patrol', classKey: 'heavy', system: 'nope', speed: 77, route: [{ x: NaN, y: 0, z: 0 }] };
+  const unk110 = { role: 'patrol', classKey: 'heavy', system: 'nope', speed: 88, route: [{ ...padPt110 }, { ...gate110 }] };
+  const copyUnk110 = JSON.stringify(unk110);
+  try {
+    heal110(nan110);
+    heal110(unk110);
+  } catch {
+    nanThrew110 = true;
+  }
+  const tickRec110 = {
+    role: 'patrol',
+    classKey: 'heavy',
+    system: 'freehold',
+    state: 'enroute',
+    speed: 90,
+    dir: 1,
+    leg: 0,
+    legT: 0,
+    dwellUntil: 1,
+    route: [{ ...padPt110 }, { ...gate110 }, { x: gate110.x + 10, y: gate110.y, z: gate110.z }],
+  };
+  tick110([tickRec110], 'freehold', { world: { time: 0, activeEvent: null } });
+  const tickXZ110 = Math.hypot(tickRec110.route[0].x - station110.x, tickRec110.route[0].z - station110.z);
+  const traderXZ110 = Math.hypot(trader110.route[0].x - station110.x, trader110.route[0].z - station110.z);
+  const minerXZ110 = Math.hypot(miner110.route[0].x - station110.x, miner110.route[0].z - station110.z);
+  const freightMin110 = PHY.STATION_CYL_RADIUS + hull110('freighter') + pad110 - 0.01;
+  const worldFields110 = save110.slice(
+    save110.indexOf('export const WORLD_FIELDS'),
+    save110.indexOf('const SURVIVOR'),
+  );
+  const w110 = {
+    authorHold: world110.includes(authorStr110) && !world110.includes(oldPadStr110),
+    authorClassHeavy: world110.includes("classKey: 'heavy'")
+      && world110.includes("writeStationHold(new THREE.Vector3(), station, 'heavy', gate)"),
+    expectedHold: expectedXZ110 >= holdMin110,
+    livePatrolOffPad: !!liveWp0110
+      && liveXZ110 > 0.5
+      && liveXZ110 >= holdMin110 - 1,
+    oldPadHeals: healedXZ110 >= holdMin110
+      && oldPatrol110.route.length === 3
+      && oldPatrol110.speed === 90
+      && oldPatrol110.route[0] !== padPt110
+      && Object.keys(oldPatrol110.route[0]).sort().join(',') === 'x,y,z',
+    idempotent: again110.route[0].x === good110.x && again110.route[0].z === good110.z,
+    nanUnknownNoThrow: nanThrew110 === false
+      && Number.isNaN(nan110.route[0].x)
+      && nan110.speed === 77
+      && JSON.stringify(unk110) === copyUnk110
+      && unk110.speed === 88,
+    traderMinerStill: traderXZ110 >= freightMin110
+      && minerXZ110 > PHY.STATION_CYL_RADIUS
+      && minerXZ110 < traderXZ110,
+    pirateAceUnchanged: pirate110.route[0].x === padPt110.x
+      && pirate110.route[0].z === padPt110.z
+      && ace110.route[0].x === padPt110.x
+      && ace110.route[0].z === padPt110.z
+      && world110.includes('route: [jitter(gate.clone(), 90), laneMid, jitter(gate.clone(), 120)]')
+      && world110.includes('route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)]'),
+    rebuildTickHeal: world110.includes("if (rec.role === 'patrol') healPadHome(rec)")
+      && (world110.match(/if \(rec\.role === 'patrol'\) healPadHome\(rec\)/g) || []).length >= 2
+      && tickXZ110 >= holdMin110
+      && tickRec110.speed === 90,
+    holdClass: world110.includes("if (rec.role === 'patrol')")
+      && world110.includes("return 'heavy'"),
+    noPadHomeField: !/padHome/.test(worldFields110)
+      && !fields110.includes('padHome')
+      && fields110.includes('recordBanks')
+      && fields110.includes('records'),
+    noInnerHtml: !/innerHTML/.test(world110),
+    digit0Shipyard: st110.includes("'shipyard'")
+      && st110.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0"),
+    digit8Digit9: st110.includes("'launch', 'epics'"),
+    hubEmpty: hudCss110.includes('80px')
+      && !/padHome|pad-home/.test(hud110)
+      && !/padHome|pad-home/.test(world110),
+  };
+  console.log('wave110 phy-05 padhome:', JSON.stringify(w110));
+  if (!Object.values(w110).every(Boolean)) { console.log('WAVE110 PHY-05 FAIL'); errors++; }
+}
+
+// ---- WAVE111 REP-03 remaining: Digit 9 climb copy after restitution-to-0 (PR1) ----
+{
+  const {
+    standingRemedialNotes: climb111,
+    standingMoveNotes: move111,
+    standingLiveNotes: live111,
+    DOCK_KEY_SERVICES: keys111,
+  } = await import('../src/systems/station.js');
+  const { WORLD_FIELDS: fields111 } = await import('../src/game/save.js');
+  const here111 = dirname(fileURLToPath(import.meta.url));
+  const src111 = (rel) => readFileSync(join(here111, '..', rel), 'utf8');
+  const st111 = src111('src/systems/station.js');
+  const save111 = src111('src/game/save.js');
+  const hud111 = src111('src/systems/hud.js');
+  const hudCss111 = src111('src/ui/hud.css');
+  const state111 = src111('src/game/state.js');
+  const helperStart111 = st111.indexOf('export function standingRemedialNotes()');
+  const helperEnd111 = st111.indexOf('function authoredUu(');
+  const helperSrc111 = helperStart111 >= 0 && helperEnd111 > helperStart111
+    ? st111.slice(helperStart111, helperEnd111)
+    : '';
+  const epicsStart111 = st111.indexOf('function renderEpics(panel)');
+  const epicsEnd111 = st111.indexOf('function renderLaunch(panel)');
+  const epicsSrc111 = epicsStart111 >= 0 && epicsEnd111 > epicsStart111
+    ? st111.slice(epicsStart111, epicsEnd111)
+    : '';
+  const restIf111 = epicsSrc111.indexOf('standingRead(ctx.world?.reputation, dockFac) < 0');
+  const restHead111 = epicsSrc111.indexOf("'RESTITUTION'");
+  const howHead111 = epicsSrc111.indexOf('HOW STANDING MOVES');
+  const climbCall111 = epicsSrc111.indexOf('standingRemedialNotes');
+  const liveHead111 = epicsSrc111.indexOf('LIVE CONSEQUENCES');
+  const restBlock111 = restIf111 >= 0 && howHead111 > restIf111
+    ? epicsSrc111.slice(restIf111, howHead111)
+    : '';
+  const worldFields111 = save111.slice(
+    save111.indexOf('export const WORLD_FIELDS'),
+    save111.indexOf('const SURVIVOR'),
+  );
+  const reticle111 = hud111.slice(
+    hud111.indexOf("const reticle = el('div', 'rw-reticle', root);"),
+    hud111.indexOf("const crosshair = el('div', 'rw-crosshair', root);"),
+  );
+  const notes111 = typeof climb111 === 'function' ? climb111() : null;
+  const notesText111 = Array.isArray(notes111) ? notes111.join(' ') : '';
+  const moves111 = typeof move111 === 'function' ? move111() : null;
+  const lives111 = typeof live111 === 'function' ? live111() : null;
+  const w111 = {
+    helperExists: typeof climb111 === 'function' && helperSrc111.includes('export function standingRemedialNotes()'),
+    climbAtStanding0: climbCall111 > howHead111
+      && howHead111 > restHead111
+      && !/standingRead\([^)]*\)\s*(>=|>)\s*0/.test(epicsSrc111.slice(howHead111, climbCall111 + 40)),
+    climbAtStandingPositive: climbCall111 > howHead111
+      && climbCall111 < liveHead111
+      && !restBlock111.includes('standingRemedialNotes'),
+    restitutionOnlyWhenNegative: restIf111 >= 0
+      && restHead111 > restIf111
+      && restHead111 < howHead111
+      && restBlock111.includes("'RESTITUTION'")
+      && !restBlock111.includes('standingRemedialNotes'),
+    noRemedialKind: !/kind:\s*['"]remedial['"]/.test(st111),
+    digit0Shipyard: keys111[keys111.length - 1] === 'shipyard'
+      && st111.includes("i === DOCK_KEY_SERVICES.length - 1 ? 0")
+      && st111.includes("d === 0")
+      && st111.includes("selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1])"),
+    digit2Jobs: keys111[1] === 'jobs'
+      && st111.includes("'Jobs board'"),
+    digit8Digit9: keys111[7] === 'launch'
+      && keys111[8] === 'epics'
+      && st111.includes("'launch', 'epics'"),
+    hubEmpty: hudCss111.includes('80px')
+      && reticle111.includes("el('div', 'rw-reticle-pupil', reticle)")
+      && reticle111.includes("el('div', 'rw-reticle-range', reticle, 'RANGE')")
+      && !/remedial|wanted|standing/.test(reticle111),
+    noNewWorldFields: !/wanted|remedial/.test(worldFields111)
+      && fields111.includes('reputation')
+      && fields111.includes('jobs')
+      && !fields111.includes('wanted')
+      && !fields111.includes('remedial'),
+    noInnerHtmlNotes: Array.isArray(notes111)
+      && notes111.every((n) => typeof n === 'string' && n.length > 0 && !n.includes('innerHTML'))
+      && !helperSrc111.includes('innerHTML')
+      && !epicsSrc111.includes('innerHTML')
+      && st111.includes('if (text !== undefined) node.textContent = text;'),
+    failClosedMoveLive: typeof move111 === 'function'
+      && typeof live111 === 'function'
+      && Array.isArray(moves111) && moves111.length > 0
+      && Array.isArray(lives111) && lives111.length > 0
+      && epicsSrc111.includes('standingMoveNotes()')
+      && epicsSrc111.includes('standingLiveNotes()')
+      && epicsSrc111.includes("typeof standingRemedialNotes === 'function'"),
+    copyHonesty: /After restitution/.test(notesText111)
+      && /Jobs board/.test(notesText111)
+      && /mining, trade, hunt, passenger, explore, spy, and war/.test(notesText111)
+      && /\+2/.test(notesText111)
+      && /climbs from 0/.test(notesText111)
+      && /Known 10/.test(notesText111)
+      && /Patrol adds \+5/.test(notesText111)
+      && /Freehold Compact only/.test(notesText111)
+      && /graft cap/.test(notesText111)
+      && !/locked until restitution/i.test(notesText111)
+      && !/jobs are locked/i.test(notesText111),
+    knobsUntouched: st111.includes('const MINING_REP = 2')
+      && st111.includes('const PATROL_REP = 5')
+      && state111.includes("min: 10, name: 'Known'")
+      && !/REMEDIAL_/.test(state111),
+  };
+  console.log('wave111 rep-03 climb:', JSON.stringify(w111));
+  if (!Object.values(w111).every(Boolean)) { console.log('WAVE111 REP-03 FAIL'); errors++; }
+}
+
+// ---- WAVE113: HUD-02 PR1 living facing class tokens ----
+{
+  const here113 = dirname(fileURLToPath(import.meta.url));
+  const hudSrc113 = readFileSync(join(here113, '..', 'src/systems/hud.js'), 'utf8');
+  const hudCss113 = readFileSync(join(here113, '..', 'src/ui/hud.css'), 'utf8');
+  const hudRoot113 = document.getElementById('hud');
+  let reticle113 = null;
+  if (hudRoot113) {
+    for (const n of hudRoot113.children) {
+      if (typeof n.className === 'string' && n.className.split(' ').includes('rw-reticle')) {
+        reticle113 = n;
+        break;
+      }
+    }
+  }
+  const hubKids0 = reticle113 && reticle113.children ? reticle113.children.length : -1;
+  const famFn113 = hudSrc113.slice(
+    hudSrc113.indexOf('export function hudFamily'),
+    hudSrc113.indexOf('function sessionHudFamilyOverride'),
+  );
+  const familyIf113 = hudSrc113.slice(
+    hudSrc113.indexOf('if (kindNow !== last.kind || facNow !== last.faction || overNow !== last.hudOverride)'),
+    hudSrc113.indexOf("tgtRail.classList.add('rw-hair-off')"),
+  );
+  const afterFamilyIf113 = hudSrc113.slice(
+    hudSrc113.indexOf("tgtRail.classList.add('rw-hair-off')"),
+    hudSrc113.indexOf('const tsNow = ctx.settings'),
+  );
+  const initClass113 = hudSrc113.slice(
+    hudSrc113.indexOf('last.family = hudFamily(ctx)'),
+    hudSrc113.indexOf("root.style.setProperty('--rw-bio-period'"),
+  );
+  const facingDom113 = hudSrc113.slice(
+    hudSrc113.indexOf("const sil = el('div', 'rw-facing-sil', row);"),
+    hudSrc113.indexOf("const ends = el('div', 'rw-facing-ends', row);"),
+  );
+
+  const p113 = ctx.player;
+  const hadClass113 = !!(p113 && Object.prototype.hasOwnProperty.call(p113, 'classKey'));
+  const prevClass113 = p113 ? p113.classKey : undefined;
+  const hadKind113 = !!(p113 && Object.prototype.hasOwnProperty.call(p113, 'hullKind'));
+  const prevKind113 = p113 ? p113.hullKind : undefined;
+  const prevOver113 = sessionStorage.getItem('rw-hud-family');
+  sessionStorage.removeItem('rw-hud-family');
+
+  if (p113) {
+    p113.hullKind = 'living';
+    p113.classKey = 'heavy';
+  }
+  tick(15, 'wave113 living heavy');
+  const heavyTok = hudRoot113?.dataset?.classKey === 'heavy'
+    && hudRoot113?.dataset?.family === 'bio';
+
+  if (p113) p113.classKey = 'ace';
+  tick(15, 'wave113 living ace');
+  const aceTok = hudRoot113?.dataset?.classKey === 'ace';
+
+  if (p113) p113.classKey = 'light';
+  tick(15, 'wave113 living light');
+  const lightTok = hudRoot113?.dataset?.classKey === 'light'
+    && hudRoot113?.dataset?.family === 'bio';
+
+  if (p113) p113.classKey = '__proto__';
+  tick(15, 'wave113 proto');
+  const protoOmit = !hudRoot113?.dataset?.classKey;
+
+  if (p113) p113.classKey = 'nope';
+  tick(15, 'wave113 unknown');
+  const unknownOmit = !hudRoot113?.dataset?.classKey;
+
+  if (p113) {
+    p113.classKey = 'heavy';
+    p113.hullKind = 'built';
+  }
+  tick(15, 'wave113 built heavy');
+  // Wave 114 PR1 inverted the leftover census: mech now sets allowlisted classKey.
+  const mechTok = hudRoot113?.dataset?.family === 'mech'
+    && hudRoot113?.dataset?.classKey === 'heavy';
+
+  if (p113) {
+    if (hadKind113) p113.hullKind = prevKind113;
+    else delete p113.hullKind;
+    if (hadClass113) p113.classKey = prevClass113;
+    else delete p113.classKey;
+  }
+  if (prevOver113 != null) sessionStorage.setItem('rw-hud-family', prevOver113);
+  else sessionStorage.removeItem('rw-hud-family');
+  tick(15, 'wave113 restore');
+
+  const hubKids1 = reticle113 && reticle113.children ? reticle113.children.length : -1;
+  const w113 = {
+    heavyTok,
+    aceTok,
+    lightTok,
+    protoOmit,
+    unknownOmit,
+    mechTok,
+    hubUnchanged: hubKids0 === hubKids1 && hubKids0 >= 2,
+    noInnerHtml: !/innerHTML|insertAdjacentHTML|document\.write/.test(hudSrc113),
+    noHullWrite: !/hullKind\s*=(?!=)/.test(hudSrc113),
+    noPlayerClassWrite: !/player\.classKey\s*=/.test(hudSrc113)
+      && !/p0\.classKey\s*=/.test(hudSrc113)
+      && !/pFam\.classKey\s*=/.test(hudSrc113),
+    familyFnNoClass: !/classKey/.test(famFn113),
+    classOutsideFamilyIf: !/classKey/.test(familyIf113)
+      && /applyClassKeyAttr\(root, last, classKeyToken\(ctx, last\.family\)\)/.test(afterFamilyIf113),
+    initClassWrite: /applyClassKeyAttr\(root, last, classKeyToken\(ctx, last\.family\)\)/.test(initClass113),
+    importShipClasses: /SHIP_CLASSES/.test(hudSrc113)
+      && /from '\.\.\/game\/state\.js'/.test(hudSrc113),
+    hasOwnAllow: hudSrc113.includes('Object.prototype.hasOwnProperty.call(SHIP_CLASSES, raw)'),
+    facingNoseBodyOnly: facingDom113.includes("el('span', 'rw-facing-nose', sil)")
+      && facingDom113.includes("el('span', 'rw-facing-body', sil)")
+      && !facingDom113.includes('innerHTML'),
+    bioHeavy: hudCss113.includes('#hud[data-family="bio"][data-class-key="heavy"] .rw-combat-self .rw-facing-body'),
+    bioAce: hudCss113.includes('#hud[data-family="bio"][data-class-key="ace"] .rw-combat-self .rw-facing-body'),
+    bioCutter: hudCss113.includes('#hud[data-family="bio"][data-class-key="cutter"] .rw-combat-self .rw-facing-body'),
+    bioFrigate: hudCss113.includes('#hud[data-family="bio"][data-class-key="frigate"] .rw-combat-self .rw-facing-body'),
+    bioFreighter: hudCss113.includes('#hud[data-family="bio"][data-class-key="freighter"] .rw-combat-self .rw-facing-body'),
+    silBox: /#hud\[data-family=['"]bio['"]\] \.rw-facing-sil\s*\{[^}]*width:\s*22px/.test(hudCss113)
+      && /#hud\[data-family=['"]bio['"]\] \.rw-facing-sil\s*\{[^}]*height:\s*10px/.test(hudCss113),
+    hasMechClass: /#hud\[data-family=['"]mech['"]\]\[data-class-key/.test(hudCss113),
+    noNewFacingLoop: !/@keyframes\s+rw-class/.test(hudCss113)
+      && !/#hud\[data-family="bio"\]\[data-class-key[^{]+\{[^}]*animation:/.test(hudCss113),
+    noPersistHudClass: !/world\.hudClass|rw-hud-class/.test(hudSrc113),
+    familyTokensStay: hudSrc113.includes("/** @returns {'mech' | 'bio'} */"),
+  };
+  console.log('wave113 hud-02 class tokens:', JSON.stringify(w113));
+  if (!Object.values(w113).every(Boolean)) { console.log('WAVE113 HUD-02 CLASS FAIL'); errors++; }
+}
+
+// ---- WAVE114: HUD-02 PR1 plated facing class tokens ----
+{
+  const here114 = dirname(fileURLToPath(import.meta.url));
+  const hudSrc114 = readFileSync(join(here114, '..', 'src/systems/hud.js'), 'utf8');
+  const hudCss114 = readFileSync(join(here114, '..', 'src/ui/hud.css'), 'utf8');
+  const station114 = readFileSync(join(here114, '..', 'src/systems/station.js'), 'utf8');
+  const hudRoot114 = document.getElementById('hud');
+  let reticle114 = null;
+  if (hudRoot114) {
+    for (const n of hudRoot114.children) {
+      if (typeof n.className === 'string' && n.className.split(' ').includes('rw-reticle')) {
+        reticle114 = n;
+        break;
+      }
+    }
+  }
+  const hubKids0 = reticle114 && reticle114.children ? reticle114.children.length : -1;
+  const famFn114 = hudSrc114.slice(
+    hudSrc114.indexOf('export function hudFamily'),
+    hudSrc114.indexOf('function sessionHudFamilyOverride'),
+  );
+  const familyIf114 = hudSrc114.slice(
+    hudSrc114.indexOf('if (kindNow !== last.kind || facNow !== last.faction || overNow !== last.hudOverride)'),
+    hudSrc114.indexOf("tgtRail.classList.add('rw-hair-off')"),
+  );
+  const afterFamilyIf114 = hudSrc114.slice(
+    hudSrc114.indexOf("tgtRail.classList.add('rw-hair-off')"),
+    hudSrc114.indexOf('const tsNow = ctx.settings'),
+  );
+  const initClass114 = hudSrc114.slice(
+    hudSrc114.indexOf('last.family = hudFamily(ctx)'),
+    hudSrc114.indexOf("root.style.setProperty('--rw-bio-period'"),
+  );
+  const tokFn114 = hudSrc114.slice(
+    hudSrc114.indexOf('function classKeyToken'),
+    hudSrc114.indexOf('function applyClassKeyAttr'),
+  );
+
+  const p114 = ctx.player;
+  const hadClass114 = !!(p114 && Object.prototype.hasOwnProperty.call(p114, 'classKey'));
+  const prevClass114 = p114 ? p114.classKey : undefined;
+  const hadKind114 = !!(p114 && Object.prototype.hasOwnProperty.call(p114, 'hullKind'));
+  const prevKind114 = p114 ? p114.hullKind : undefined;
+  const prevOver114 = sessionStorage.getItem('rw-hud-family');
+  sessionStorage.removeItem('rw-hud-family');
+
+  if (p114) {
+    p114.hullKind = 'built';
+    p114.classKey = 'heavy';
+  }
+  tick(15, 'wave114 plated heavy');
+  const heavyTok = hudRoot114?.dataset?.classKey === 'heavy'
+    && hudRoot114?.dataset?.family === 'mech';
+
+  if (p114) p114.classKey = 'freighter';
+  tick(15, 'wave114 plated freighter');
+  const freighterTok = hudRoot114?.dataset?.classKey === 'freighter'
+    && hudRoot114?.dataset?.family === 'mech';
+
+  if (p114) p114.classKey = 'light';
+  tick(15, 'wave114 plated light');
+  const lightTok = hudRoot114?.dataset?.classKey === 'light'
+    && hudRoot114?.dataset?.family === 'mech';
+
+  if (p114) p114.classKey = '__proto__';
+  tick(15, 'wave114 proto');
+  const protoOmit = !hudRoot114?.dataset?.classKey;
+
+  if (p114) p114.classKey = 'nope';
+  tick(15, 'wave114 unknown');
+  const unknownOmit = !hudRoot114?.dataset?.classKey;
+
+  if (p114) {
+    p114.classKey = 'heavy';
+    p114.hullKind = 'living';
+  }
+  tick(15, 'wave114 living heavy');
+  const bioTok = hudRoot114?.dataset?.classKey === 'heavy'
+    && hudRoot114?.dataset?.family === 'bio';
+
+  if (p114) {
+    if (hadKind114) p114.hullKind = prevKind114;
+    else delete p114.hullKind;
+    if (hadClass114) p114.classKey = prevClass114;
+    else delete p114.classKey;
+  }
+  if (prevOver114 != null) sessionStorage.setItem('rw-hud-family', prevOver114);
+  else sessionStorage.removeItem('rw-hud-family');
+  tick(15, 'wave114 restore');
+
+  const hubKids1 = reticle114 && reticle114.children ? reticle114.children.length : -1;
+  const mechClassCss = hudCss114.slice(
+    hudCss114.indexOf('/* HUD-02 PR1: plated class hint'),
+    hudCss114.indexOf('#hud[data-family="mech"] .rw-contact-pip.is-civ'),
+  );
+  const w114 = {
+    heavyTok,
+    freighterTok,
+    lightTok,
+    protoOmit,
+    unknownOmit,
+    bioTok,
+    hubUnchanged: hubKids0 === hubKids1 && hubKids0 >= 2,
+    noInnerHtml: !/innerHTML|insertAdjacentHTML|document\.write/.test(hudSrc114),
+    noHullWrite: !/hullKind\s*=(?!=)/.test(hudSrc114),
+    noPlayerClassWrite: !/player\.classKey\s*=/.test(hudSrc114)
+      && !/p0\.classKey\s*=/.test(hudSrc114)
+      && !/pFam\.classKey\s*=/.test(hudSrc114),
+    familyFnNoClass: !/classKey/.test(famFn114),
+    classOutsideFamilyIf: !/classKey/.test(familyIf114)
+      && /applyClassKeyAttr\(root, last, classKeyToken\(ctx, last\.family\)\)/.test(afterFamilyIf114),
+    initClassWrite: /applyClassKeyAttr\(root, last, classKeyToken\(ctx, last\.family\)\)/.test(initClass114),
+    familyGateMechBio: tokFn114.includes("if (family !== 'bio' && family !== 'mech') return ''"),
+    hasOwnAllow: hudSrc114.includes('Object.prototype.hasOwnProperty.call(SHIP_CLASSES, raw)'),
+    oneWriter: (hudSrc114.match(/function classKeyToken/g) || []).length === 1
+      && (hudSrc114.match(/function applyClassKeyAttr/g) || []).length === 1,
+    playerKeyOnly: tokFn114.includes('ctx.player') && !/lock|target/.test(tokFn114),
+    mechHeavy: hudCss114.includes('#hud[data-family="mech"][data-class-key="heavy"] .rw-combat-self .rw-facing-body'),
+    mechAce: hudCss114.includes('#hud[data-family="mech"][data-class-key="ace"] .rw-combat-self .rw-facing-body'),
+    mechCutter: hudCss114.includes('#hud[data-family="mech"][data-class-key="cutter"] .rw-combat-self .rw-facing-body'),
+    mechFrigate: hudCss114.includes('#hud[data-family="mech"][data-class-key="frigate"] .rw-combat-self .rw-facing-body'),
+    mechFreighter: hudCss114.includes('#hud[data-family="mech"][data-class-key="freighter"] .rw-combat-self .rw-facing-body'),
+    silBox: /#hud\[data-family=['"]mech['"]\] \.rw-facing-sil\s*\{[^}]*width:\s*22px/.test(hudCss114)
+      && /#hud\[data-family=['"]mech['"]\] \.rw-facing-sil\s*\{[^}]*height:\s*10px/.test(hudCss114),
+    noSilGrow: !/#hud\[data-family="mech"\]\[data-class-key=[^\]]+\] \.rw-facing-sil/.test(hudCss114),
+    noMechClip: !/clip-path/.test(mechClassCss),
+    noNewFacingLoop: !/@keyframes\s+rw-class/.test(hudCss114)
+      && !/#hud\[data-family="mech"\]\[data-class-key[^{]+\{[^}]*animation:/.test(hudCss114),
+    noPersistHudClass: !/world\.hudClass|rw-hud-class/.test(hudSrc114),
+    familyTokensStay: hudSrc114.includes("/** @returns {'mech' | 'bio'} */"),
+    digit0Shipyard: station114.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard'])")
+      && station114.includes('if (d === 0)')
+      && station114.includes('selectService(DOCK_KEY_SERVICES[DOCK_KEY_SERVICES.length - 1])'),
+  };
+  console.log('wave114 hud-02 plated class tokens:', JSON.stringify(w114));
+  if (!Object.values(w114).every(Boolean)) { console.log('WAVE114 HUD-02 MECH CLASS FAIL'); errors++; }
+}
+
+// ---- WAVE116: HUD-02 PR1 target facing class tokens ----
+{
+  const here116 = dirname(fileURLToPath(import.meta.url));
+  const hudSrc116 = readFileSync(join(here116, '..', 'src/systems/hud.js'), 'utf8');
+  const hudCss116 = readFileSync(join(here116, '..', 'src/ui/hud.css'), 'utf8');
+  const station116 = readFileSync(join(here116, '..', 'src/systems/station.js'), 'utf8');
+  const hudRoot116 = document.getElementById('hud');
+  const hud116has = (n, cls) => typeof n.className === 'string' && n.className.split(' ').includes(cls);
+  const hud116nodes = (cls) => [...walkDom(hudRoot116)].filter((n) => hud116has(n, cls));
+  let reticle116 = null;
+  if (hudRoot116) {
+    for (const n of hudRoot116.children) {
+      if (hud116has(n, 'rw-reticle')) { reticle116 = n; break; }
+    }
+  }
+  const hubKids0 = reticle116 && reticle116.children ? reticle116.children.length : -1;
+  const tokFn116 = hudSrc116.slice(
+    hudSrc116.indexOf('function classKeyToken'),
+    hudSrc116.indexOf('function applyClassKeyAttr'),
+  );
+  const lockFn116 = hudSrc116.slice(
+    hudSrc116.indexOf('function lockClassToken'),
+    hudSrc116.indexOf('function applyTgtClassKeyAttr'),
+  );
+  const famFn116 = hudSrc116.slice(
+    hudSrc116.indexOf('export function hudFamily'),
+    hudSrc116.indexOf('function sessionHudFamilyOverride'),
+  );
+  const hideSlice116 = hudSrc116.slice(
+    hudSrc116.indexOf("tgtRail.classList.toggle('is-hidden', !shipTgt)"),
+    hudSrc116.indexOf('if (!targetPos || targetDead)'),
+  );
+
+  const tgtRail116 = hud116nodes('rw-combat-target')[0] || null;
+  const p116 = ctx.player;
+  const hadClass116 = !!(p116 && Object.prototype.hasOwnProperty.call(p116, 'classKey'));
+  const prevClass116 = p116 ? p116.classKey : undefined;
+  const hadKind116 = !!(p116 && Object.prototype.hasOwnProperty.call(p116, 'hullKind'));
+  const prevKind116 = p116 ? p116.hullKind : undefined;
+  const prevOver116 = sessionStorage.getItem('rw-hud-family');
+  const prevTgt116 = ctx.targets.current;
+  const prevScan116 = ctx.world.scanner;
+  sessionStorage.removeItem('rw-hud-family');
+
+  const origin116 = ctx.ship.object ? ctx.ship.object.position.clone() : new THREE.Vector3();
+  const rec116 = {
+    id: 'w116-lock', name: 'W116 LOCK', classKey: 'heavy',
+    faction: 'independent', role: 'trader', resolve: 50,
+  };
+  let live116 = spawnLiveShip(ctx, rec116, origin116.clone().add(new THREE.Vector3(90, 0, 0)));
+  let spawned116 = false;
+  if (live116) {
+    ctx.ships.push(live116);
+    spawned116 = true;
+  } else {
+    live116 = (ctx.ships ?? []).find((s) => s?.state && !s.state.destroyed && s.object) ?? null;
+  }
+  if (live116) {
+    live116.role = 'trader';
+    if (live116.ai) {
+      live116.ai.role = 'trader';
+      live116.ai.playerRolled = true;
+      live116.ai.playerInterested = false;
+      live116.ai.target = null;
+    }
+    if (live116.record) {
+      live116.record.classKey = 'heavy';
+      live116.record.qship = false;
+      live116.record.revealed = true;
+    }
+    if (live116.state) live116.state.classKey = 'heavy';
+  }
+
+  if (p116) {
+    p116.hullKind = 'built';
+    p116.classKey = 'light';
+  }
+  ctx.targets.current = live116;
+  tick(15, 'wave116 mech player light lock heavy');
+  const mismatchTok = hudRoot116?.dataset?.family === 'mech'
+    && hudRoot116?.dataset?.classKey === 'light'
+    && tgtRail116?.dataset?.classKey === 'heavy'
+    && !tgtRail116?.classList.contains('is-hidden');
+
+  if (live116?.record) live116.record.classKey = 'ace';
+  if (live116?.state) live116.state.classKey = 'ace';
+  if (p116) {
+    p116.hullKind = 'living';
+    p116.classKey = 'heavy';
+  }
+  tick(15, 'wave116 bio player lock plated ace');
+  const bioLockTok = hudRoot116?.dataset?.family === 'bio'
+    && hudRoot116?.dataset?.classKey === 'heavy'
+    && tgtRail116?.dataset?.classKey === 'ace';
+
+  if (live116?.record) live116.record.classKey = '__proto__';
+  if (live116?.state) live116.state.classKey = '__proto__';
+  tick(15, 'wave116 proto lock omit');
+  const protoTgtOmit = !tgtRail116?.dataset?.classKey
+    && hudRoot116?.dataset?.classKey === 'heavy';
+
+  if (live116?.record) live116.record.classKey = 'nope';
+  if (live116?.state) live116.state.classKey = 'nope';
+  tick(15, 'wave116 unknown lock omit');
+  const unknownTgtOmit = !tgtRail116?.dataset?.classKey;
+
+  if (live116?.record) {
+    live116.record.qship = true;
+    live116.record.revealed = false;
+    live116.record.classKey = 'cutter';
+    live116.record.coverClass = 'freighter';
+    live116.record.coverName = 'W116 COVER';
+  }
+  if (live116?.state) live116.state.classKey = 'cutter';
+  ctx.world.scanner = 2;
+  tick(15, 'wave116 qship cover mk2 pierce');
+  const qCoverTok = tgtRail116?.dataset?.classKey === 'freighter'
+    && live116?.record?.classKey === 'cutter'
+    && live116?.record?.revealed !== true;
+
+  ctx.targets.current = live116
+    ? { object: live116.object, state: { ...live116.state, destroyed: true }, record: live116.record }
+    : null;
+  tick(3, 'wave116 hide rail omit');
+  const hideOmit = !tgtRail116?.dataset?.classKey
+    && !!tgtRail116?.classList.contains('is-hidden');
+
+  ctx.targets.current = prevTgt116;
+  ctx.world.scanner = prevScan116;
+  if (p116) {
+    if (hadKind116) p116.hullKind = prevKind116;
+    else delete p116.hullKind;
+    if (hadClass116) p116.classKey = prevClass116;
+    else delete p116.classKey;
+  }
+  if (prevOver116 != null) sessionStorage.setItem('rw-hud-family', prevOver116);
+  else sessionStorage.removeItem('rw-hud-family');
+  if (spawned116 && live116) {
+    const i = ctx.ships.indexOf(live116);
+    if (i >= 0) ctx.ships.splice(i, 1);
+    removeLiveShip(ctx, live116);
+  }
+  tick(15, 'wave116 restore');
+
+  const hubKids1 = reticle116 && reticle116.children ? reticle116.children.length : -1;
+  const w116 = {
+    mismatchTok,
+    bioLockTok,
+    protoTgtOmit,
+    unknownTgtOmit,
+    qCoverTok,
+    hideOmit,
+    hubUnchanged: hubKids0 === hubKids1 && hubKids0 >= 2,
+    playerSelfScope: hudCss116.includes('#hud[data-family="mech"][data-class-key="heavy"] .rw-combat-self .rw-facing-body')
+      && hudCss116.includes('#hud[data-family="bio"][data-class-key="heavy"] .rw-combat-self .rw-facing-body'),
+    playerNoTgtLeak: !/#hud\[data-family="mech"\]\[data-class-key="heavy"\] \.rw-facing-body/.test(hudCss116)
+      && !/#hud\[data-family="bio"\]\[data-class-key="heavy"\] \.rw-facing-body/.test(hudCss116),
+    tgtMechCite: hudCss116.includes('#hud[data-family="mech"] .rw-combat-target[data-class-key="heavy"] .rw-facing-body')
+      && hudCss116.includes('#hud[data-family="mech"] .rw-combat-target[data-class-key="ace"] .rw-facing-body')
+      && hudCss116.includes('#hud[data-family="mech"] .rw-combat-target[data-class-key="freighter"] .rw-facing-body'),
+    tgtBioCite: hudCss116.includes('#hud[data-family="bio"] .rw-combat-target[data-class-key="heavy"] .rw-facing-body')
+      && hudCss116.includes('#hud[data-family="bio"] .rw-combat-target[data-class-key="ace"] .rw-facing-body')
+      && hudCss116.includes('#hud[data-family="bio"] .rw-combat-target[data-class-key="freighter"] .rw-facing-body'),
+    lockWriter: hudSrc116.includes('function lockClassToken')
+      && hudSrc116.includes('function applyTgtClassKeyAttr')
+      && lockFn116.includes('rec.qship === true')
+      && lockFn116.includes('coverClass')
+      && lockFn116.includes("Object.prototype.hasOwnProperty.call(SHIP_CLASSES, raw)"),
+    hideOmitsAttr: hideSlice116.includes("applyTgtClassKeyAttr(tgtRail, last, '')"),
+    oneRootWriter: (hudSrc116.match(/function classKeyToken/g) || []).length === 1
+      && (hudSrc116.match(/function applyClassKeyAttr/g) || []).length === 1
+      && tokFn116.includes('ctx.player')
+      && !/lock|target/.test(tokFn116),
+    familyFnNoClass: !/classKey/.test(famFn116),
+    noInnerHtml: !/innerHTML|insertAdjacentHTML|document\.write/.test(hudSrc116),
+    noLockOnHud: !/applyClassKeyAttr\(root, last, lockClassToken/.test(hudSrc116)
+      && hudSrc116.includes('applyTgtClassKeyAttr(tgtRail, last,'),
+    noPersistHudClass: !/world\.hudClass|world\.tgtClass|rw-hud-class/.test(hudSrc116),
+    noNewFacingLoop: !/@keyframes\s+rw-class/.test(hudCss116),
+    silBox: /\.rw-facing-sil\s*\{[^}]*width:\s*22px/.test(hudCss116)
+      && /\.rw-facing-sil\s*\{[^}]*height:\s*10px/.test(hudCss116),
+    digit0Shipyard: station116.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard'])")
+      && station116.includes('if (d === 0)'),
+    noReticleClassPip: !/\.rw-reticle[^{]*data-class-key/.test(hudCss116),
+  };
+  console.log('wave116 hud-02 target class tokens:', JSON.stringify(w116));
+  if (!Object.values(w116).every(Boolean)) { console.log('WAVE116 HUD-02 TARGET CLASS FAIL'); errors++; }
+}
+
+// ---- WAVE117 NAV-05 PR1 autopilot gate handoff ----
+{
+  const here117 = dirname(fileURLToPath(import.meta.url));
+  const src117 = (rel) => readFileSync(join(here117, '..', rel), 'utf8');
+  const ap117src = src117('src/game/autopilot.js');
+  const gate117src = src117('src/systems/gate.js');
+  const chart117src = src117('src/systems/galaxychart.js');
+  const {
+    tryEngage: e117,
+    disengage: d117,
+    AP_LINES: lines117,
+    apLine: apLine117,
+    apRefuseToken: refuse117,
+  } = await import('../src/game/autopilot.js');
+  const { plotRoute: plot117 } = await import('../src/game/nav.js');
+  const { lookupLiveNavGate: live117, lookupLiveNavHopKind: kind117 } = await import('../src/systems/gate.js');
+  const { JUMP: jump117 } = await import('../src/game/state.js');
+
+  const jumpEmitSites117 = [
+    ap117src,
+    src117('src/systems/ship.js'),
+    src117('src/systems/hud.js'),
+    chart117src,
+    src117('src/systems/npc.js'),
+  ].filter((s) => /emit\s*\(\s*['"]jumpRequested['"]/.test(s));
+  const jumpOnlyGate = /emit\s*\(\s*['"]jumpRequested['"]/.test(gate117src)
+    && jumpEmitSites117.length === 0
+    && /to:\s*near\.to/.test(gate117src)
+    && !/emit\s*\(\s*['"]jumpRequested['"]/.test(ap117src);
+
+  const linesSplit = lines117.missingHop === 'Autopilot refused — next hop is not on the route.'
+    && lines117.missingLookup === 'Autopilot refused — next gate is not in this system.'
+    && lines117.lookupFail === 'Autopilot cancelled — next gate is not in this system.'
+    && lines117.missingPath === 'Autopilot cancelled — approach path failed.'
+    && lines117.missingHub === 'Autopilot cancelled — hub does not list the next hop.'
+    && lines117.hubWrap === 'Autopilot cancelled — hub spoke cycle failed.'
+    && lines117.missingGate === 'Autopilot cancelled — next gate is missing.'
+    && lines117.arrive === 'Arrived — autopilot off.'
+    && lines117.missingHop !== lines117.missingGate
+    && lines117.missingLookup !== lines117.lookupFail
+    && lines117.lookupFail !== lines117.missingGate
+    && lines117.missingPath !== lines117.missingGate
+    && lines117.missingHub !== lines117.missingGate
+    && lines117.hubWrap !== lines117.missingGate
+    && apLine117('missingHop') === lines117.missingHop
+    && apLine117('lookupFail') === lines117.lookupFail;
+
+  const noCollapseSrc = ap117src.includes("'lookupFail'")
+    && ap117src.includes("'missingPath'")
+    && ap117src.includes("'missingHub'")
+    && ap117src.includes("'hubWrap'")
+    && ap117src.includes("'missingLookup'")
+    && gate117src.includes('lookupLiveNavHopKind')
+    && gate117src.includes("!== 'ring'")
+    && chart117src.includes("showApLive(apLine(reason))")
+    && chart117src.includes("showApLive(apLine('cancel'))")
+    && !chart117src.includes('innerHTML')
+    && !ap117src.includes('innerHTML');
+
+  const savedSys117 = ctx.world.currentSystem;
+  const savedNav117 = ctx.world.nav;
+  const savedApFlag117 = ctx.world.nav && ctx.world.nav.autopilot;
+  const savedOpen117 = ctx.flags.chartOpen;
+  const savedDock117 = ctx.flags.docked;
+  const savedPaused117 = ctx.flags.paused;
+  const savedMatch117 = ctx.flags.matchSpeed;
+  const savedCombat117 = ctx.flags.combat;
+  const savedJump117 = ctx.gate.jumping;
+  const savedDest117 = ctx.gate.destination;
+  const savedPos117 = ctx.ship.object ? ctx.ship.object.position.clone() : null;
+  const savedQuat117 = ctx.ship.object ? ctx.ship.object.quaternion.clone() : null;
+  const savedSpeed117 = ctx.ship.speed;
+  const savedDockPressed117 = ctx.input.dockPressed;
+  const savedSteerX117 = ctx.input.steerX;
+  const savedSteerY117 = ctx.input.steerY;
+  const savedStrafeX117 = ctx.input.strafeX;
+  const savedStrafeY117 = ctx.input.strafeY;
+
+  function clearHelm117() {
+    ctx.input.steerX = 0;
+    ctx.input.steerY = 0;
+    ctx.input.strafeX = 0;
+    ctx.input.strafeY = 0;
+    ctx.input.roll = 0;
+    ctx.input.throttleHeld = false;
+    ctx.input.afterburnerPressed = false;
+    ctx.input.driftHeld = false;
+    ctx.input.fullStop = false;
+    ctx.input.dockPressed = false;
+    ctx.input.throttle = 0;
+    ctx.flags.matchSpeed = false;
+    ctx.flags.combat = false;
+    ctx.flags.docked = false;
+    ctx.flags.paused = false;
+    ctx.gate.jumping = false;
+    ctx.gate.destination = null;
+    ctx.gate.progress = 0;
+  }
+
+  function noteLoaded117(bag) {
+    const evs = ctx.lastEvents || [];
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i];
+      if (e && e.type === 'systemLoaded') bag.push(e.to);
+    }
+  }
+
+  function jumpUntil117(to, label, loaded) {
+    for (let i = 0; i < 60 * 10; i++) {
+      tick(1, label);
+      noteLoaded117(loaded);
+      if (ctx.world.currentSystem === to && !ctx.gate.jumping) return true;
+    }
+    return false;
+  }
+
+  clearHelm117();
+  ctx.world.currentSystem = 'freehold';
+  ctx.lastEvents = [{ type: 'systemLoaded', t: ctx.world.time, to: 'freehold' }];
+  tick(2, 'w117 freehold rebuild');
+  ctx.world.nav = undefined;
+  if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w117 chart open');
+  const chartWasOpen = ctx.flags.chartOpen === true;
+
+  plot117(ctx, 'vd_survey');
+  const plotMulti = !!(ctx.world.nav
+    && ctx.world.nav.dest === 'vd_survey'
+    && ctx.world.nav.path
+    && ctx.world.nav.path[1] === 'veridian'
+    && ctx.world.nav.path[ctx.world.nav.path.length - 1] === 'vd_survey');
+  const tokEng = e117(ctx);
+  const engaged = tokEng === '' && ctx.world.nav && ctx.world.nav.autopilot === true;
+  const chartStayOpen = ctx.flags.chartOpen === true && chartWasOpen === true;
+
+  const hubPos = live117('fh_hearth');
+  const ringPos = live117('veridian');
+  const ringKind = kind117('veridian') === 'ring';
+  const hubKind = kind117('fh_hearth') === 'hub';
+  let hubNoCancel = false;
+  let hubNoCycle = false;
+  if (hubPos && ctx.ship.object && engaged) {
+    ctx.ship.object.position.set(hubPos.x, hubPos.y, hubPos.z);
+    ctx.ship.speed = 0;
+    let cancelled = false;
+    let cycled = false;
+    for (let i = 0; i < 8; i++) {
+      tick(1, 'w117 hub overlap');
+      if (!(ctx.world.nav && ctx.world.nav.autopilot === true)) { cancelled = true; break; }
+      if (ctx.autopilot && ctx.autopilot.cycleHub === true) cycled = true;
+      if (ctx.autopilot && ctx.autopilot.reason === 'missingGate') cancelled = true;
+      if (ctx.autopilot && ctx.autopilot.reason === 'missingHub') cancelled = true;
+    }
+    hubNoCancel = !cancelled && ctx.world.nav && ctx.world.nav.autopilot === true;
+    hubNoCycle = !cycled && ctx.autopilot && ctx.autopilot.cycleHub === false;
+  }
+
+  const loadedSeq = [];
+  let hop1Jump = false;
+  let hop1Sys = false;
+  let dockPressedStay = false;
+  if (ringPos && ctx.ship.object && ctx.world.nav && ctx.world.nav.autopilot === true) {
+    ctx.input.dockPressed = false;
+    ctx.ship.object.position.set(ringPos.x, ringPos.y, ringPos.z);
+    ctx.ship.speed = 0;
+    hop1Jump = jumpUntil117('veridian', 'w117 hop veridian', loadedSeq);
+    hop1Sys = ctx.world.currentSystem === 'veridian';
+    dockPressedStay = ctx.input.dockPressed === false;
+  }
+
+  if (ctx.world.nav && ctx.world.nav.autopilot !== true && ctx.world.currentSystem === 'veridian') {
+    e117(ctx);
+  }
+  const hop2Path = !!(ctx.world.nav
+    && ctx.world.nav.dest === 'vd_survey'
+    && ctx.world.nav.path
+    && ctx.world.nav.path[1] === 'vd_survey');
+  const surveyLive = live117('vd_survey');
+  let hop2Jump = false;
+  let hop2Sys = false;
+  if (surveyLive && ctx.ship.object && hop2Path) {
+    if (!(ctx.world.nav && ctx.world.nav.autopilot === true)) e117(ctx);
+    ctx.input.dockPressed = false;
+    ctx.ship.object.position.set(surveyLive.x, surveyLive.y, surveyLive.z);
+    ctx.ship.speed = 0;
+    hop2Jump = jumpUntil117('vd_survey', 'w117 hop vd_survey', loadedSeq);
+    hop2Sys = ctx.world.currentSystem === 'vd_survey';
+  }
+  const liveRouteSeq = hop1Jump && hop2Jump && hop1Sys && hop2Sys
+    && loadedSeq[0] === 'veridian'
+    && loadedSeq[1] === 'vd_survey'
+    && loadedSeq.length === 2;
+
+  ctx.world.currentSystem = 'freehold';
+  ctx.lastEvents = [{ type: 'systemLoaded', t: ctx.world.time, to: 'freehold' }];
+  ctx.gate.jumping = false;
+  ctx.gate.destination = null;
+  tick(2, 'w117 back freehold for chart');
+  ctx.world.nav = undefined;
+  clearHelm117();
+  if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w117 chart reopen');
+  plot117(ctx, 'veridian');
+  const tokChart = e117(ctx);
+  tick(1, 'w117 chart after direct engage');
+  const liveEl = chartClass('rw-galaxy-ap-live')[0];
+  const apBtn117 = chartClass('rw-galaxy-ap')[0];
+  // Direct tryEngage must not close. Cancel-while-open still needs the chart.
+  if (apBtn117 && typeof apBtn117.click === 'function') apBtn117.click();
+  tick(1, 'w117 chart cancel');
+  const chartCancelLive = !!(liveEl
+    && liveEl.textContent === lines117.cancel
+    && ctx.world.nav
+    && ctx.world.nav.autopilot === false);
+
+  if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w117 chart reopen for button engage');
+  plot117(ctx, 'veridian');
+  if (ctx.world.nav) ctx.world.nav.autopilot = false;
+  tick(1, 'w117 plot before button engage');
+  if (apBtn117 && typeof apBtn117.click === 'function') apBtn117.click();
+  // Button success close (PR1). Direct e117 above must still leave chartOpen.
+  const chartEngageStay = tokChart === ''
+    && ctx.flags.chartOpen === false
+    && ctx.world.nav
+    && ctx.world.nav.autopilot === true;
+
+  const missingHopTok = (() => {
+    const hold = ctx.world.nav;
+    ctx.world.nav = {
+      dest: 'veridian', path: ['freehold'], remaining: 1, status: 'plotted', autopilot: false,
+    };
+    const tok = refuse117(ctx);
+    ctx.world.nav = hold;
+    return tok === 'missingHop';
+  })();
+
+  d117(ctx, 'restore');
+  if (savedPos117 && ctx.ship.object) ctx.ship.object.position.copy(savedPos117);
+  if (savedQuat117 && ctx.ship.object) ctx.ship.object.quaternion.copy(savedQuat117);
+  ctx.ship.speed = savedSpeed117;
+  ctx.world.currentSystem = savedSys117;
+  ctx.lastEvents = [{ type: 'systemLoaded', t: ctx.world.time, to: savedSys117 }];
+  ctx.gate.jumping = savedJump117;
+  ctx.gate.destination = savedDest117;
+  ctx.flags.docked = savedDock117;
+  ctx.flags.paused = savedPaused117;
+  ctx.flags.matchSpeed = savedMatch117;
+  ctx.flags.combat = savedCombat117;
+  ctx.input.dockPressed = savedDockPressed117;
+  ctx.input.steerX = savedSteerX117;
+  ctx.input.steerY = savedSteerY117;
+  ctx.input.strafeX = savedStrafeX117;
+  ctx.input.strafeY = savedStrafeY117;
+  if (savedNav117) ctx.world.nav = savedNav117;
+  else delete ctx.world.nav;
+  if (ctx.world.nav && savedApFlag117 !== undefined) ctx.world.nav.autopilot = savedApFlag117;
+  if (savedOpen117 && !ctx.flags.chartOpen) dispatchKey('KeyM');
+  if (!savedOpen117 && ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(2, 'w117 restore');
+  ctx.autopilot.wantJump = false;
+  ctx.autopilot.cycleHub = false;
+  ctx.autopilot.engaged = false;
+  ctx.autopilot.yaw = 0;
+  ctx.autopilot.pitch = 0;
+  ctx.autopilot.throttle = 0;
+
+  const w117 = {
+    jumpOnlyGate,
+    linesSplit,
+    noCollapseSrc,
+    plotMulti,
+    engaged,
+    chartStayOpen,
+    ringKind,
+    hubKind,
+    hubNoCancel,
+    hubNoCycle,
+    hop1Jump,
+    hop1Sys,
+    hop2Path,
+    hop2Jump,
+    hop2Sys,
+    liveRouteSeq,
+    dockPressedStay,
+    chartEngageStay,
+    chartCancelLive,
+    missingHopTok,
+    zoneUnchanged: jump117.zone === 60,
+  };
+  console.log('wave117 nav-05 handoff:', JSON.stringify(w117));
+  if (!Object.values(w117).every(Boolean)) { console.log('WAVE117 NAV-05 HANDOFF FAIL'); errors++; }
+}
+
+// ---- WAVE118 CTL-02 PR1 overlay-priority (mutex + defer + hail calm) ----
+{
+  const here118 = dirname(fileURLToPath(import.meta.url));
+  const src118 = (rel) => readFileSync(join(here118, '..', rel), 'utf8');
+  const policy118src = src118('src/systems/overlay-policy.js');
+  const hail118src = src118('src/systems/hail.js');
+  const chart118src = src118('src/systems/galaxychart.js');
+  const save118src = src118('src/game/save.js');
+  const ctx118src = src118('src/core/ctx.js');
+  const station118src = src118('src/systems/station.js');
+  const policy118 = await import('../src/systems/overlay-policy.js');
+
+  const savedHail118 = ctx.flags.hailOpen;
+  const savedBerth118 = ctx.flags.berthOpen;
+  const savedChart118 = ctx.flags.chartOpen;
+  const savedDock118 = ctx.flags.docked;
+  const savedPaused118 = ctx.flags.paused;
+  const savedHailPressed118 = ctx.input.hailPressed;
+  const savedTarget118 = ctx.targets && ctx.targets.current;
+
+  ctx.flags.docked = false;
+  ctx.flags.paused = false;
+  ctx.input.hailPressed = false;
+  ctx.emit('hailClosed', {});
+  if (ctx.flags.chartOpen) dispatchKey('KeyM');
+  if (ctx.flags.berthOpen || (typeof w28Panel === 'function' && w28Panel()?.style?.display === 'flex')) {
+    dispatchKey('KeyL');
+  }
+  tick(1, 'w118 close play cards');
+
+  const helperExports = typeof policy118.canOpenPlayCard === 'function'
+    && typeof policy118.canShowHail === 'function'
+    && typeof policy118.deferIncomingHail === 'function'
+    && typeof policy118.takeDeferredHail === 'function'
+    && typeof policy118.hailCalmOk === 'function'
+    && typeof policy118.hailDigitsAllowed === 'function'
+    && Array.isArray(policy118.OVERLAY_IDS)
+    && policy118.OVERLAY_IDS.join(',') === 'hail,chart,berth';
+  const helperSrcExports = /export function canOpenPlayCard/.test(policy118src)
+    && /export function canShowHail/.test(policy118src)
+    && /export function deferIncomingHail/.test(policy118src)
+    && /export function hailCalmOk/.test(policy118src)
+    && /calmUntil/.test(policy118src)
+    && hail118src.includes("from './overlay-policy.js'")
+    && hail118src.includes('hailCalmOk')
+    && hail118src.includes('canShowHail')
+    && /hailDigitsAllowed[\s\S]*flags\.paused/.test(policy118src)
+    && !/flags\.paused\s*=/.test(policy118src);
+  const salvageCalmSrc = /case 'letGo':[\s\S]*?ai\.calmUntil = ctx2\.world\.time \+ 30/.test(hail118src);
+  const openCardCalmSrc = hail118src.includes('function openCard')
+    && hail118src.includes('hailCalmOk(ctx, live)');
+  const noPauseAssign = !/flags\.paused\s*=/.test(policy118src)
+    && !/flags\.paused\s*=/.test(hail118src)
+    && !/flags\.paused\s*=/.test(chart118src);
+  const berthSlice118 = save118src.slice(
+    save118src.indexOf('berth records panel'),
+    save118src.indexOf('// ---- save gating ----'),
+  );
+  const berthNoPauseAssign = berthSlice118.length > 200 && !/flags\.paused\s*=/.test(berthSlice118);
+  const noInner118 = !/innerHTML|insertAdjacentHTML|document\.write/.test(policy118src)
+    && !/innerHTML|insertAdjacentHTML|document\.write/.test(hail118src);
+  // Overlay mutex grep: live-line helpers stay. Button close is WAVE117, not this pin.
+  const chartStayOpenSrc118 = chart118src.includes('function showApLive')
+    && chart118src.includes("showApLive(apLine('cancel'))")
+    && chart118src.includes('showApLive(line)')
+    && chart118src.includes("showApLive(apLine(reason))");
+  const digit0Shipyard118 = station118src.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard'])")
+    && station118src.includes('if (d === 0)');
+  const worldFields118 = save118src.slice(
+    save118src.indexOf('export const WORLD_FIELDS'),
+    save118src.indexOf('const SURVIVOR'),
+  );
+  const noPersist118 = worldFields118.length > 80
+    && !/'hailOpen'/.test(worldFields118)
+    && !/'berthOpen'/.test(worldFields118)
+    && !/'hailCalm'/.test(worldFields118)
+    && !/'chartOpen'/.test(worldFields118)
+    && ctx118src.includes('hailOpen: false')
+    && ctx118src.includes('berthOpen: false');
+  const unknownSkip = policy118.canOpenPlayCard(ctx, 'toast') === false
+    && policy118.canOpenPlayCard(ctx, 'fatal') === false;
+
+  const hullA = w30spawnPirate('w118-a', 95, [220, 0, 0]);
+  hullA.state.disabled = true;
+  hullA.state.destroyed = false;
+  hullA.state.cargo = [];
+  hullA.ai.calmUntil = 0;
+  ctx.emit('hailOpened', {
+    ship: hullA,
+    intents: ['letGo', 'keepFiring'],
+    line: 'Hull is dead in space. Holds are empty.',
+    salvage: true,
+  });
+  tick(1, 'w118 hail open');
+  const hailPainted = ctx.flags.hailOpen === true && w30hailDisplay() === 'block';
+  dispatchKey('KeyM');
+  dispatchKey('KeyL');
+  tick(1, 'w118 KeyM/L while hail');
+  const keyMRefusedWhileHail = ctx.flags.chartOpen !== true && hailPainted;
+  const keyLRefusedWhileHail = ctx.flags.berthOpen !== true
+    && w28Panel()?.style?.display !== 'flex';
+
+  const pausedBeforeDigit118 = ctx.flags.paused;
+  ctx.flags.paused = true;
+  const calmBeforePauseDigit = hullA.ai.calmUntil;
+  dispatchKey('Digit1');
+  const digitSkipUnderPause = hullA.ai.calmUntil === calmBeforePauseDigit
+    && ctx.flags.hailOpen === true
+    && policy118.hailDigitsAllowed(ctx) === false;
+  ctx.flags.paused = pausedBeforeDigit118;
+
+  dispatchKey('KeyO');
+  const calmBeforeDigit = hullA.ai.calmUntil;
+  dispatchKey('Digit1');
+  const digitSkipUnderSettings = hullA.ai.calmUntil === calmBeforeDigit
+    && ctx.flags.hailOpen === true;
+  dispatchKey('KeyO');
+  const tLetGo = ctx.world.time;
+  dispatchKey('Digit1');
+  tick(1, 'w118 salvage letGo');
+  const salvageCalmWrote = hullA.ai.calmUntil >= tLetGo + 30 - 0.02
+    && hullA.ai.calmUntil <= tLetGo + 30 + 0.02
+    && ctx.flags.hailOpen !== true;
+
+  hullA.ai.calmUntil = ctx.world.time + 30;
+  ctx.emit('hailOpened', {
+    ship: hullA,
+    intents: ['letGo', 'keepFiring'],
+    line: 'quiet',
+    salvage: true,
+  });
+  tick(1, 'w118 calm refuse');
+  const calmRefused = ctx.flags.hailOpen !== true && w30hailDisplay() !== 'block';
+
+  hullA.ai.calmUntil = 0;
+  if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w118 chart open');
+  const chartWasOpen118 = ctx.flags.chartOpen === true;
+  ctx.emit('hailOpened', {
+    ship: hullA,
+    intents: ['letGo', 'keepFiring'],
+    line: 'deferred hail',
+    salvage: true,
+  });
+  tick(1, 'w118 hail while chart');
+  const hailOpenedKept = ctx.lastEvents.some((e) => e && e.type === 'hailOpened' && e.ship === hullA);
+  const hailDeferred = chartWasOpen118
+    && ctx.flags.hailOpen !== true
+    && w30hailDisplay() !== 'block'
+    && hailOpenedKept;
+  dispatchKey('KeyL');
+  const berthRefusedWhileChart = ctx.flags.berthOpen !== true;
+  dispatchKey('KeyM');
+  tick(1, 'w118 chart close flush');
+  const hailFlushed = ctx.flags.hailOpen === true && w30hailDisplay() === 'block';
+  ctx.emit('hailClosed', { ship: hullA });
+  tick(1, 'w118 close flushed hail');
+
+  const hullB = w30spawnPirate('w118-b', 95, [240, 0, 0]);
+  hullB.state.disabled = true;
+  hullB.state.destroyed = false;
+  hullB.state.cargo = [];
+  hullB.ai.calmUntil = 0;
+  ctx.targets.current = hullB;
+  if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+  tick(1, 'w118 chart for KeyH');
+  dispatchKey('KeyH');
+  tick(1, 'w118 KeyH while chart');
+  const keyHRefusedWhileChart = ctx.flags.hailOpen !== true && ctx.flags.chartOpen === true;
+  dispatchKey('KeyM');
+  tick(1, 'w118 close chart after KeyH');
+
+  ctx.emit('hailClosed', {});
+  if (ctx.flags.chartOpen) dispatchKey('KeyM');
+  if (ctx.flags.berthOpen) dispatchKey('KeyL');
+  tick(1, 'w118 cleanup cards');
+  w30removeShip(hullA);
+  w30removeShip(hullB);
+
+  ctx.flags.docked = savedDock118;
+  ctx.flags.paused = savedPaused118;
+  ctx.input.hailPressed = savedHailPressed118;
+  if (ctx.targets) ctx.targets.current = savedTarget118;
+  if (savedChart118 && !ctx.flags.chartOpen) dispatchKey('KeyM');
+  if (!savedChart118 && ctx.flags.chartOpen) dispatchKey('KeyM');
+  if (savedBerth118 && !ctx.flags.berthOpen) dispatchKey('KeyL');
+  if (!savedBerth118 && ctx.flags.berthOpen) dispatchKey('KeyL');
+  if (savedHail118 && !ctx.flags.hailOpen) {
+    /* hail session flag is not restored by key; leave closed */
+  }
+  ctx.flags.hailOpen = !!savedHail118;
+  tick(1, 'w118 restore');
+
+  const w118 = {
+    helperExports,
+    helperSrcExports,
+    salvageCalmSrc,
+    openCardCalmSrc,
+    salvageCalmWrote,
+    calmRefused,
+    hailPainted,
+    keyMRefusedWhileHail,
+    keyLRefusedWhileHail,
+    hailDeferred,
+    hailFlushed,
+    berthRefusedWhileChart,
+    keyHRefusedWhileChart,
+    digitSkipUnderPause,
+    digitSkipUnderSettings,
+    noPauseAssign,
+    berthNoPauseAssign,
+    noInner118,
+    chartStayOpenSrc118,
+    digit0Shipyard118,
+    noPersist118,
+    unknownSkip,
+  };
+  console.log('wave118 overlay-priority:', JSON.stringify(w118));
+  if (!Object.values(w118).every(Boolean)) { console.log('WAVE118 OVERLAY-PRIORITY FAIL'); errors++; }
 }
 
 if (errors === 0) {

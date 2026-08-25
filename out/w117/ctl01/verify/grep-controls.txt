@@ -1,0 +1,55 @@
+7:* Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
+33:* Edge inputs (afterburnerPressed/targetPressed/hailPressed/dockPressed/
+58:function titleOverlayAttached() {
+68:/** Title overlay, models filter, or typing focus: do not pulse pendingDock. Never throw. */
+69:function shouldSkipDockPulse(ctx) {
+73:focus.tagName === 'INPUT' || focus.tagName === 'TEXTAREA' ||
+77:if (ctx?.models?.isOpen?.()) return true;
+78:if (titleOverlayAttached()) return true;
+101:if (ctx.input.weaponGroup === 3 && ctx.asteroids?.list) {
+219:if (ctx.models?.isOpen?.()) return true;
+249:const { input, config } = ctx;
+261:let pendingDock = false;
+273:pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+274:input.matchSpeedPressed = false;
+275:input.reticleLockPressed = false;
+276:input.throttleHeld = false;
+277:input.steerX = 0;
+278:input.steerY = 0;
+279:input.strafeX = 0;
+280:input.strafeY = 0;
+281:input.roll = 0;
+282:input.fireHeld = false;
+283:input.driftHeld = false;
+302:case 'KeyJ':
+303:if (!shouldSkipDockPulse(ctx)) pendingDock = true;
+323:input.throttle = 0;
+324:input.fullStop = true; // doc §5.1: double-tap commands FULL stop (not creep)
+330:input.weaponGroup = 1;
+333:input.weaponGroup = 2;
+336:input.weaponGroup = 3;
+340:input.weaponGroup = 4;
+343:input.weaponGroup = 5;
+395:input.afterburnerPressed = pendingAfterburner;
+396:input.targetPressed = pendingTarget;
+397:input.hailPressed = pendingHail;
+398:input.dockPressed = pendingDock;
+399:input.cameraPressed = pendingCamera;
+400:input.matchSpeedPressed = pendingMatchSpeed;
+401:input.reticleLockPressed = pendingReticleLock;
+404:input.throttleHeld = has('KeyR') || has('KeyF');
+405:pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+407:if (input.cameraPressed) {
+429:if (input.targetPressed) cycleTarget(ctx);
+446:input.steerX = ox / radius; // >0 = reticle right
+447:input.steerY = -oy / radius; // >0 = reticle up (screen y is down-positive)
+452:if (input.reticleLockPressed) tryReticleLock(ctx);
+460:input.weaponGroup = 3;
+468:input.strafeX = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0);
+469:input.strafeY = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0);
+470:input.roll = (has('KeyE') ? 1 : 0) - (has('KeyQ') ? 1 : 0);
+473:input.driftHeld = has('ShiftLeft') || has('ShiftRight');
+476:input.fireHeld = fireDown && ctx.flags.chartOpen !== true;
+480:if (throttleDir > 0) input.fullStop = false; // thrust command cancels full stop
+482:input.throttle = Math.min(
+484:Math.max(0, input.throttle + throttleDir * THROTTLE_RAMP_RATE * dt),

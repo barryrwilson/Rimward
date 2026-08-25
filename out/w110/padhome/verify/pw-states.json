@@ -1,0 +1,24 @@
+{
+  "hub": {
+    "reticle": { "w": 80, "h": 80 },
+    "kids": [
+      { "className": "rw-reticle-pupil", "text": "" },
+      { "className": "rw-reticle-cilia", "text": "" },
+      { "className": "rw-reticle-cilia", "text": "" },
+      { "className": "rw-reticle-cilia", "text": "" },
+      { "className": "rw-reticle-range", "text": "RANGE" }
+    ],
+    "padHomeChild": false,
+    "docked": false,
+    "patrols": [
+      { "name": "Watchful Apt", "classKey": "heavy", "xz": 52.55, "n": 3, "speed": null },
+      { "name": "Lancer Po", "classKey": "heavy", "xz": 52.55, "n": 3, "speed": null }
+    ]
+  },
+  "digit0Docked": {
+    "docked": true,
+    "hasShipyard": true,
+    "hasPadHome": false,
+    "snippet": "FREEHOLD LANDING ... SHIPYARD Hangar at every dock."
+  }
+}

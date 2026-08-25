@@ -1,0 +1,2 @@
+76:      strafeX: 0, // >0 = strafe right (D held; KeyD is not dock)
+88:      dockPressed: false, // edge: J (not D)

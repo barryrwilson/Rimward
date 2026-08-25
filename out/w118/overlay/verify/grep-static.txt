@@ -1,0 +1,9 @@
+hailDigitsAllowed overlay-policy.js: export at 175; reads ctx.flags.paused at 177 (return false)
+overlay-policy.js innerHTML/insertAdjacentHTML/document.write: none
+flags.paused = in overlay-policy.js: none
+flags.paused = in hail.js: none
+flags.paused = in galaxychart.js: none
+showApLive galaxychart.js: 6 hits (fn 586 + cancel 637 + engage line 644 + clear 647 + timeout 726 + disengage reason 735)
+chart/berth close blur: galaxychart.js setOpen else ae.blur; save.js berth close ae.blur
+WAVE117 chartStayOpen / chartEngageStay: true (boot)
+WAVE118 all pins true including digitSkipUnderPause and noPauseAssign (boot)

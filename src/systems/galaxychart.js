@@ -2,6 +2,7 @@ import { SYSTEMS, FACTIONS } from '../game/state.js';
 import { clearRoute, plotRoute, sanitizeSystemId } from '../game/nav.js';
 import { hoverModel } from '../game/chart-hover.js';
 import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from '../game/autopilot.js';
+import { canOpenPlayCard, playSurfaceBlocked } from './overlay-policy.js';
 import '../ui/hud.css';
 
 /**
@@ -418,12 +419,25 @@ export function initGalaxyChart(ctx) {
   }
 
   function setOpen(next) {
+    if (next) {
+      try {
+        if (canOpenPlayCard(ctx, 'chart') === false) return;
+      } catch { /* skip mutex */ }
+    }
     open = next;
     ctx.flags.chartOpen = next;
     root.classList.toggle('is-hidden', !next);
     root.setAttribute('aria-hidden', String(!next));
     if (next) updateHitRadii();
-    else clearHover();
+    else {
+      clearHover();
+      try {
+        const ae = typeof document !== 'undefined' ? document.activeElement : null;
+        if (ae && typeof root.contains === 'function' && root.contains(ae) && typeof ae.blur === 'function') {
+          ae.blur();
+        }
+      } catch { /* close still wins */ }
+    }
   }
 
   function hitRadiusChart() {
@@ -620,6 +634,7 @@ export function initGalaxyChart(ctx) {
     if (apBtn.disabled) return;
     if (apFlying()) {
       disengage(ctx, 'cancel');
+      if (ctx.flags && ctx.flags.chartOpen === true) showApLive(apLine('cancel'));
       syncApButton();
       return;
     }
@@ -630,6 +645,22 @@ export function initGalaxyChart(ctx) {
       if (line) ctx.emit('commLine', { text: line });
     } else {
       showApLive('');
+      setOpen(false);
+      try {
+        const doc = typeof document !== 'undefined' ? document : null;
+        if (doc) {
+          const ae = doc.activeElement;
+          if (ae && typeof root.contains === 'function' && root.contains(ae) && typeof ae.blur === 'function') {
+            ae.blur();
+          }
+          const chip = typeof doc.querySelector === 'function'
+            ? doc.querySelector('#hud .rw-autopilot-cancel')
+            : null;
+          const wrap = chip && typeof chip.closest === 'function' ? chip.closest('.rw-autopilot') : null;
+          const visible = !!(wrap && wrap.classList && !wrap.classList.contains('is-hidden'));
+          if (visible && typeof chip.focus === 'function') chip.focus();
+        }
+      } catch { /* close still wins; chip may still be is-hidden this frame */ }
     }
     syncApButton();
   });
@@ -671,7 +702,11 @@ export function initGalaxyChart(ctx) {
       // the screen, and while paused the origin pick or pause banner does —
       // only allow closing in those states.
       if (open) setOpen(false);
-      else if (!ctx.flags.docked && !ctx.flags.paused) setOpen(true);
+      else if (!ctx.flags.docked && !ctx.flags.paused) {
+        let blocked = false;
+        try { blocked = playSurfaceBlocked(ctx) === true; } catch { blocked = false; }
+        if (!blocked) setOpen(true);
+      }
     } else if (e.code === 'Escape' && open) {
       setOpen(false);
     }
@@ -705,6 +740,18 @@ export function initGalaxyChart(ctx) {
     retargetPlot(false);
     syncApButton();
     if (apLiveUntil && ctx.elapsed >= apLiveUntil) showApLive('');
+    if (ctx.flags && ctx.flags.chartOpen === true) {
+      const evs = ctx.events;
+      if (Array.isArray(evs)) {
+        for (let i = 0; i < evs.length; i++) {
+          const e = evs[i];
+          if (!e || e.type !== 'autopilotDisengaged') continue;
+          const reason = e.reason;
+          if (!reason || reason === 'restore') continue;
+          showApLive(apLine(reason));
+        }
+      }
+    }
     if (open) {
       const scale = ctx.settings.textScale;
       if (scale !== appliedScale) {

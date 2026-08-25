@@ -1,0 +1,66 @@
+PASS allowlist.six
+PASS lock.ship.heavy
+PASS lock.omit.none
+PASS lock.omit.nostate
+PASS lock.omit.proto
+PASS lock.omit.constructor
+PASS lock.omit.unknown
+PASS lock.omit.empty
+PASS lock.qship.cover
+PASS lock.qship.default.cover
+PASS lock.qship.revealed
+PASS lock.qship.mk2.still.cover
+PASS lock.qship.bad.cover.omit
+PASS js.lockClassToken
+PASS js.applyTgtClassKeyAttr
+PASS js.hasOwn.lock
+PASS js.qship.coverOn
+PASS js.hide.omit
+PASS js.one.root.writer
+PASS js.player.key.only
+PASS js.no.lock.on.hud
+PASS js.no.innerHTML
+PASS js.no.player.classKey.write
+PASS js.no.hudFamily.classKey
+PASS js.no.persist.class
+PASS js.session.family.only
+PASS js.no.forin.dataset
+PASS css.player.self.mech
+PASS css.player.self.bio
+PASS css.player.no.tgt.leak.mech
+PASS css.player.no.tgt.leak.bio
+PASS css.tgt.mech.heavy
+PASS css.tgt.mech.ace
+PASS css.tgt.mech.cutter
+PASS css.tgt.mech.frigate
+PASS css.tgt.mech.freighter
+PASS css.tgt.bio.heavy
+PASS css.tgt.bio.ace
+PASS css.tgt.bio.cutter
+PASS css.tgt.bio.frigate
+PASS css.tgt.bio.freighter
+PASS css.light.keeps.generic
+PASS css.sil.22x10
+PASS css.no.sil.grow
+PASS css.no.class.keyframes
+PASS css.hub.80
+PASS css.no.reticle.class.pip
+PASS css.no.lock.family.attr
+PASS css.cite.mech.body.heavy left: 5px; top: 1px; width: 16px; height: 8px;
+PASS css.cite.bio.body.heavy
+PASS css.cite.mech.body.ace left: 4px; top: 3px; width: 14px; height: 4px;
+PASS css.cite.bio.body.ace
+PASS css.cite.mech.body.cutter left: 4px; top: 2px; width: 17px; height: 6px;
+PASS css.cite.bio.body.cutter
+PASS css.cite.mech.body.frigate left: 3px; top: 3px; width: 18px; height: 4px;
+PASS css.cite.bio.body.frigate
+PASS css.cite.mech.body.freighter left: 3px; top: 1px; width: 18px; height: 8px;
+PASS css.cite.bio.body.freighter
+PASS hub.children.unchanged
+PASS state.readonly.no.hud.field
+PASS save.no.new.world.tgtClass
+PASS digit0.shipyard
+PASS boot.wave116.pin
+PASS boot.wave113.self.hygiene
+PASS boot.wave114.self.hygiene
+PROBE PASS

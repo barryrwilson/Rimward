@@ -1,0 +1,10 @@
+save.js:25:*   combat flag is set → emit('saveBlocked', {reason}) and retry in 5 s.
+save.js:46:*   → 'saveBlocked'), except a mid-jump manual save is refused with a
+save.js:70:const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
+save.js:903:source: raw.source === 'playerKill' ? 'playerKill' : 'other',
+save.js:1040:ctx.emit?.('saveBlocked', { reason });
+save.js:1422:ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+save.js:1428:ctx.emit('saveBlocked', { reason });
+save.js:1535:ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.' });
+save.js:1540:ctx.emit('saveBlocked', { reason });
+save.js:1598:nextDue = trySave() ? IDLE_INTERVAL : BLOCK_RETRY;

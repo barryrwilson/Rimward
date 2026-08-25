@@ -1,0 +1,4 @@
+2128:        pKey = 'J'; pVerb = 'Dock';
+2134:          pKey = 'G';
+2135:          pVerb = 'route ' + (ctx.gate.nearRouteIndex + 1) + '/' + ctx.gate.nearRouteCount + ' ┬╖ J ΓÇö Jump to ' + destName;
+2137:          pKey = 'J'; pVerb = 'Jump to ' + destName;

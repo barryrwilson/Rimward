@@ -1,0 +1,114 @@
+- generic [active] [ref=f1e1]:
+  - generic:
+    - status:
+      - generic: Heave to. Cargo or hull.
+      - generic: Heave to. Cargo or hull.
+      - generic: Heave to. Cargo or hull.
+      - generic: Heave to. Cargo or hull.
+      - generic: › Docked.
+    - generic:
+      - generic: T
+      - generic: Target
+    - generic:
+      - generic:
+        - generic:
+          - generic: FORE
+          - generic: AFT
+      - generic: SCREEN
+      - generic: SHELL
+      - generic: HULL
+      - generic:
+        - generic: SPD
+        - generic: 0u/s
+      - generic:
+        - generic: WPN
+        - generic: 1 · Energy cannon
+    - generic:
+      - generic:
+        - generic: Plant
+        - generic: STRAIN
+        - generic:
+          - generic: ENGINE
+          - generic: OK
+      - generic:
+        - generic: Flight
+        - generic: THR
+        - generic:
+          - generic: BURN
+          - generic: READY
+        - generic:
+          - generic: DRIFT
+          - generic: READY
+      - generic:
+        - generic: Heat
+        - generic:
+          - generic: STRAIN
+          - generic: 0%
+      - generic:
+        - generic: PWR
+        - generic:
+          - generic: Bio
+          - generic: KEEN
+          - generic: HUNGER
+          - generic: WOUNDS
+          - generic:
+            - generic: ECHOES
+            - generic: "0"
+        - generic:
+          - generic: POS
+          - generic: Freehold Drift
+          - generic: X 120 Y 25 Z 654
+    - generic:
+      - generic: Manifest
+      - generic:
+        - generic: UU
+        - generic: "350"
+      - generic:
+        - generic: FEAR
+        - generic: "0"
+      - generic:
+        - generic: CARGO
+        - generic: 0/20
+    - generic:
+      - button "CONTROLS ▾" [ref=f1e4] [cursor=pointer]
+      - generic:
+        - list:
+          - listitem: Mouse — steer toward reticle
+          - listitem: W/S — vertical strafe (W = up)
+          - listitem: A/D — lateral strafe (D = right)
+          - listitem: Q/E — roll left / right (set your up)
+          - listitem: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem: Space — afterburner
+          - listitem: Shift (hold) — vector-hold drift
+          - listitem: LMB (hold) — fire
+          - listitem: "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic"
+          - listitem: T — cycle target
+          - listitem: V — lock under reticle
+          - listitem: N — automine locked asteroid
+          - listitem: H — hail · D — dock · C — camera (chase / third / first-person)
+          - listitem: X — match lock speed
+          - listitem: K — engine on lock (after shields)
+          - listitem: G — cycle hub route at a Lamplighter junction
+          - listitem: M — galaxy chart
+          - listitem: L — berth records (save/load)
+          - listitem: P — pause
+  - generic [ref=f1e62]:
+    - generic [ref=f1e63]:
+      - generic [ref=f1e64]: FREEHOLD LANDING
+      - generic [ref=f1e65]: FREEHOLD COMPACT · BERTH 7
+      - generic [ref=f1e66]: “she” made fast
+      - generic [ref=f1e67]: CREDITS 350 UU · HOLD 0/20
+    - button "← Back (Esc)" [ref=f1e69] [cursor=pointer]
+    - generic [ref=f1e70]: SHIPYARD
+    - generic [ref=f1e71]: Hangar at every dock. Yard sales wait on papers.
+    - generic [ref=f1e72]:
+      - button "1 — Hangar" [ref=f1e73] [cursor=pointer]
+      - button "2 — Yard" [ref=f1e74] [cursor=pointer]
+    - generic [ref=f1e75]: HANGAR
+    - generic [ref=f1e76]: Mounted id hull_starter
+    - generic [ref=f1e77]:
+      - generic [ref=f1e78]: she
+      - generic [ref=f1e79]: light · Independent · mounted
+      - button "3 — Mount" [ref=f1e80] [cursor=pointer]
+    - generic [ref=f1e81]: 1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc back
+    - generic [ref=f1e82]: Esc back · Esc again / B launch

@@ -1,0 +1,38 @@
+# NAV-05 leftover freeze — later impl write-set (named only; Wave 116 did not land src)
+
+ALLOWED later serial (named only; not landed this wave):
+  src/game/autopilot.js
+  src/systems/gate.js          # optional cycle/predicate hygiene; still sole jumpRequested emit
+  scripts/boot-test.mjs        # PR3 live multi-hop systemLoaded / currentSystem pin
+  src/systems/galaxychart.js   # later PR1 named serial ONLY: existing #rw-galaxy-ap-live
+                               # showApLive(apLine(reason)) on fly disengage while chartOpen
+                               # (incl. chart Cancel). Not landed src this wave.
+                               # Not chart layout. Not close-on-engage.
+
+FORBIDDEN later serial (this leftover):
+  src/systems/hud.js
+  src/ui/hud.css
+  src/systems/controls.js
+  src/game/state.js
+  package.json
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/Nav01RouteDesign.md
+  docs/Nav02GuidanceDesign.md
+  docs/Nav03AutopilotDesign.md
+  docs/Nav04HoverDesign.md
+  docs/Ctl01DockBindDesign.md
+  docs/Hud02RemainingTargetSilhouettesDesign.md
+  docs/OwnerDecisionsWave116.md
+  out/w84/nav03/**
+  out/w116/hud02tgt/**
+  out/w116/ctl01/**
+
+Wave 116 this worker (markdown only; already landed):
+  docs/Nav05HandoffDesign.md
+  out/w116/nav05/current-nav05-handoff-inventory.md
+  out/w116/nav05/shared-contract.md
+  out/w116/nav05/security-review.md
+  out/w116/nav05/code-review.md
+  out/w116/nav05/ui-audit.md
+  out/w116/nav05/notes.md

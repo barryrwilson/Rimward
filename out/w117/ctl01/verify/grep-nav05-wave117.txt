@@ -1,0 +1,17 @@
+821:dispatchKey('KeyM');
+838:dispatchKey('KeyM'); // toggle back open…
+841:dispatchKey('KeyM'); // …and toggle closed — the state later sections inherit
+19266:if (ctx.flags.chartOpen) dispatchKey('KeyM');
+19269:dispatchKey('KeyM');
+19315:dispatchKey('KeyM');
+19320:if (savedOpen && !ctx.flags.chartOpen) dispatchKey('KeyM');
+19321:if (!savedOpen && ctx.flags.chartOpen) dispatchKey('KeyM');
+23417:// ---- WAVE117 NAV-05 PR1 autopilot gate handoff ----
+23538:if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+23605:const liveRouteSeq = hop1Jump && hop2Jump && hop1Sys && hop2Sys
+23617:if (!ctx.flags.chartOpen) dispatchKey('KeyM');
+23665:if (savedOpen117 && !ctx.flags.chartOpen) dispatchKey('KeyM');
+23666:if (!savedOpen117 && ctx.flags.chartOpen) dispatchKey('KeyM');
+23691:liveRouteSeq,
+23698:console.log('wave117 nav-05 handoff:', JSON.stringify(w117));
+23699:if (!Object.values(w117).every(Boolean)) { console.log('WAVE117 NAV-05 HANDOFF FAIL'); errors++; }

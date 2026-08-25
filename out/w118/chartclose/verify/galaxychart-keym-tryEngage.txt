@@ -1,0 +1,33 @@
+# KeyM + tryEngage + Autopilot click (live galaxychart.js)
+
+# Header
+src/systems/galaxychart.js:25: * Interaction: KeyM toggles (suppressed while docked — the station overlay
+
+# Import
+src/systems/galaxychart.js:4:import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from '../game/autopilot.js';
+src/systems/galaxychart.js:5:import { canOpenPlayCard, playSurfaceBlocked } from './overlay-policy.js';
+
+# Click handler (live 625-642) — success branch has showApLive('') then syncApButton; no setOpen(false)
+# 625  apBtn.addEventListener('click', () => {
+# 626    if (apBtn.disabled) return;
+# 627    if (apFlying()) {
+# 628      disengage(ctx, 'cancel');
+# 629      if (ctx.flags && ctx.flags.chartOpen === true) showApLive(apLine('cancel'));
+# 630      syncApButton();
+# 631      return;
+# 632    }
+# 633    const token = tryEngage(ctx);
+# 634    if (token) {
+# 635      const line = apLine(token);
+# 636      showApLive(line);
+# 637      if (line) ctx.emit('commLine', { text: line });
+# 638    } else {
+# 639      showApLive('');
+# 640    }
+# 641    syncApButton();
+# 642  });
+
+src/systems/galaxychart.js:633:    const token = tryEngage(ctx);
+src/systems/galaxychart.js:676:    if (e.code === 'KeyM') {
+
+# KeyM toggle exists. Overlay sibling gates OPEN only (playSurfaceBlocked / canOpenPlayCard). Close still setOpen(false).

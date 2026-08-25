@@ -1,0 +1,17 @@
+PASS wave74-dummy-alone
+PASS no-ai
+PASS ai-without-velocity
+PASS missing-object
+PASS missing-state
+PASS hole-in-list
+PASS hailClosed-with-null-hole
+PASS hailOpened-with-null-hole
+PASS destroyed-wreck-no-object
+PASS mix-dummy-and-live
+PASS live-npc-still-ticks
+PASS live-velocity-written-or-kept
+PASS speedCap-unknown-classKey
+PASS speedCap-unknown-class-finite
+PASS findHunterOf-trader-with-null-hole
+PASS findPirateWork-patrol-with-null-hole
+PROBE PASS

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import '../ui/hud.css';
-import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor } from '../game/state.js';
+import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor, SHIP_CLASSES } from '../game/state.js';
 import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
@@ -63,6 +63,7 @@ import { losCloseRate } from '../game/los-close.js';
 const TEXT_UPDATE_INTERVAL = 0.2; // s between throttled text refreshes
 const TOAST_LIFETIME = 4; // s a toast stays fully visible
 const TOAST_SLOTS = 5;
+const TOAST_DEDUP_WINDOW = 8; // identical-key linger; covers BLOCK_RETRY 5 after lifetime 4
 const INCOMING_DART_TOAST = 'Incoming dart.';
 const DART_TOAST_GAP = 2.5;
 const HULL_PETALS = 10;
@@ -95,6 +96,44 @@ function sessionHudFamilyOverride() {
     if (v === 'mech' || v === 'bio') return v;
   } catch (_) { /* private / blocked storage */ }
   return null;
+}
+
+/** Allowlisted mounted class token for bio and mech chrome. Empty omit. Never throw. */
+function classKeyToken(ctx, family) {
+  if (family !== 'bio' && family !== 'mech') return '';
+  const raw = ctx.player && ctx.player.classKey;
+  if (typeof raw === 'string' && Object.prototype.hasOwnProperty.call(SHIP_CLASSES, raw)) {
+    return raw;
+  }
+  return '';
+}
+
+function applyClassKeyAttr(root, last, key) {
+  if (key === last.classKey) return;
+  last.classKey = key;
+  if (key) root.dataset.classKey = key;
+  else delete root.dataset.classKey;
+}
+
+/** Allowlisted visible lock class for the target rail. Empty omit. Never throw. */
+function lockClassToken(target) {
+  if (!target || !target.state) return '';
+  const rec = target.record;
+  const coverOn = !!(rec && rec.qship === true && rec.revealed !== true);
+  const raw = coverOn
+    ? (rec.coverClass ?? 'freighter')
+    : (rec && rec.classKey) || (target.state && target.state.classKey);
+  if (typeof raw === 'string' && Object.prototype.hasOwnProperty.call(SHIP_CLASSES, raw)) {
+    return raw;
+  }
+  return '';
+}
+
+function applyTgtClassKeyAttr(rail, last, key) {
+  if (key === last.tgtClassKey) return;
+  last.tgtClassKey = key;
+  if (key) rail.dataset.classKey = key;
+  else delete rail.dataset.classKey;
 }
 
 const RAIL_GAP = 78;
@@ -488,6 +527,33 @@ function beltMineDist(ctx, shipPos) {
   return 0;
 }
 
+/** Clear a linger row only after WINDOW. Never because a chip was reused. */
+function toastLingerHides(linger, key, now) {
+  for (let i = 0; i < TOAST_SLOTS; i++) {
+    const row = linger[i];
+    if (now > row.lastShown + TOAST_DEDUP_WINDOW) {
+      row.key = '';
+      row.lastShown = -1e9;
+      continue;
+    }
+    if (row.key === key && now < row.lastShown + TOAST_DEDUP_WINDOW) return true;
+  }
+  return false;
+}
+
+function toastLingerRecord(linger, key, now) {
+  let same = -1;
+  let oldest = 0;
+  for (let i = 0; i < TOAST_SLOTS; i++) {
+    const row = linger[i];
+    if (row.key === key) same = i;
+    if (row.lastShown < linger[oldest].lastShown) oldest = i;
+  }
+  const row = linger[same >= 0 ? same : oldest];
+  row.key = key;
+  row.lastShown = now;
+}
+
 /** Terse pilot-voice toast copy for a ctx event (§13.5). null = not toastable. */
 function toastForEvent(e, ctx, mem) {
   switch (e.type) {
@@ -528,6 +594,9 @@ function toastForEvent(e, ctx, mem) {
     case 'milestone':
       return { text: '★ ' + (e.line ?? e.id ?? 'A first.'), cls: 'sting' };
     case 'saveBlocked':
+      if (e.source === 'autosave') {
+        return { text: '▲ AUTOSAVE HELD — hostiles near', cls: 'warn' };
+      }
       return { text: '▲ SAVE BLOCKED — ' + (e.reason ?? 'hostiles near'), cls: 'warn' };
     case 'podCollected':
       return { text: '■ Cargo secured.', cls: 'good' };
@@ -777,8 +846,12 @@ export function initHud(ctx) {
   toasts.setAttribute('role', 'status');
   toasts.setAttribute('aria-live', 'polite');
   const toastSlots = [];
+  const toastLinger = [];
   for (let i = 0; i < TOAST_SLOTS; i++) {
-    toastSlots.push({ el: el('div', 'rw-toast', toasts), until: 0, key: '' });
+    const chip = el('div', 'rw-toast', toasts);
+    chip.setAttribute('aria-hidden', 'true');
+    toastSlots.push({ el: chip, until: 0, key: '' });
+    toastLinger.push({ key: '', lastShown: -1e9 });
   }
   let toastCursor = 0;
 
@@ -1057,7 +1130,7 @@ export function initHud(ctx) {
     promptSalvage: false,
     posX: NaN, posY: NaN, posZ: NaN,
     system: '', jumpShown: null, jumpPct: -1, jumpDest: null,
-    family: '', kind: undefined, faction: undefined, hudOverride: undefined,
+    family: '', classKey: '', tgtClassKey: '', kind: undefined, faction: undefined, hudOverride: undefined,
     leadX: 0, leadY: 0, selfHairOff: true, tgtHairOff: true,
     bioPeriod: 4, textScale: ctx.settings?.textScale ?? 1,
     matchLamp: null, hullBand: '',
@@ -1081,6 +1154,7 @@ export function initHud(ctx) {
     last.hudOverride = sessionHudFamilyOverride();
     last.family = hudFamily(ctx);
     root.dataset.family = last.family;
+    applyClassKeyAttr(root, last, classKeyToken(ctx, last.family));
     root.style.setProperty('--rw-bio-period', '4s');
   }
 
@@ -1114,8 +1188,13 @@ export function initHud(ctx) {
     const now = ctx.elapsed;
     const key = cls + '|' + text;
     for (const s of toastSlots) {
-      if (s.until > now && s.key === key) { s.until = now + TOAST_LIFETIME; return; }
+      if (s.until > now && s.key === key) {
+        s.until = now + TOAST_LIFETIME;
+        toastLingerRecord(toastLinger, key, now);
+        return;
+      }
     }
+    if (toastLingerHides(toastLinger, key, now)) return;
     let slot = null;
     for (let i = 0; i < TOAST_SLOTS; i++) {
       const s = toastSlots[(toastCursor + i) % TOAST_SLOTS];
@@ -1127,8 +1206,10 @@ export function initHud(ctx) {
     }
     slot.key = key;
     slot.until = now + TOAST_LIFETIME;
+    slot.el.setAttribute('aria-hidden', 'false');
     slot.el.textContent = text;
     slot.el.className = 'rw-toast show ' + cls;
+    toastLingerRecord(toastLinger, key, now);
   }
 
   return {
@@ -1158,8 +1239,8 @@ export function initHud(ctx) {
       for (const s of toastSlots) {
         if (s.until > 0 && nowReal > s.until) {
           s.until = 0;
-          s.key = '';
           s.el.classList.remove('show');
+          s.el.setAttribute('aria-hidden', 'true');
         }
       }
 
@@ -1244,8 +1325,10 @@ export function initHud(ctx) {
           last.railClos = '';
           last.railEnginePart = null;
           tgtEngine.row.classList.remove('is-part');
+          applyTgtClassKeyAttr(tgtRail, last, '');
         } else {
           textAccum = TEXT_UPDATE_INTERVAL;
+          applyTgtClassKeyAttr(tgtRail, last, lockClassToken(target));
         }
       }
 
@@ -1736,6 +1819,9 @@ export function initHud(ctx) {
           }
         }
       }
+      // Class swap does not change hullKind. Compare every 5 Hz, not inside the family if.
+      applyClassKeyAttr(root, last, classKeyToken(ctx, last.family));
+      applyTgtClassKeyAttr(tgtRail, last, shipTgt ? lockClassToken(target) : '');
 
       const tsNow = ctx.settings ? ctx.settings.textScale : 1;
       if (tsNow !== last.textScale) {
@@ -2081,16 +2167,16 @@ export function initHud(ctx) {
       // Gate sits below dock (zones never overlap in practice).
       let pKey = '', pVerb = '';
       if (ctx.station?.inZone && !ctx.flags.docked) {
-        pKey = 'D'; pVerb = 'Dock';
+        pKey = 'J'; pVerb = 'Dock';
       } else if (ctx.gate.inZone && ctx.gate.nearTo && !ctx.flags.docked && !ctx.gate.jumping) {
         const destDef = SYSTEMS[ctx.gate.nearTo];
         const destName = destDef ? destDef.name : String(ctx.gate.nearTo);
         if (ctx.gate.nearHub) {
-          // Lamplighter junction: G cycles hub.routes, D jumps the selection.
+          // Lamplighter junction: G cycles hub.routes, J jumps the selection.
           pKey = 'G';
-          pVerb = 'route ' + (ctx.gate.nearRouteIndex + 1) + '/' + ctx.gate.nearRouteCount + ' · D — Jump to ' + destName;
+          pVerb = 'route ' + (ctx.gate.nearRouteIndex + 1) + '/' + ctx.gate.nearRouteCount + ' · J — Jump to ' + destName;
         } else {
-          pKey = 'D'; pVerb = 'Jump to ' + destName;
+          pKey = 'J'; pVerb = 'Jump to ' + destName;
         }
       } else if (target && !kind && target.state && !target.state.destroyed) {
         if (target.state.disabled && targetDistNow <= U.TARGET_RANGE) {

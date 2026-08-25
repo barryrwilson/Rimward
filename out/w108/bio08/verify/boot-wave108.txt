@@ -1,0 +1,20 @@
+wave26 faction comp table: {"servicesKeys10":true,"compKeys10":true,"compKeyOrderMatchesServices":true,"hollowAbsent":true,"compCoversGeneratedFactions":true,"compAllNonEmpty":true,"jobPayMultTablePins":true}
+wave26 earn below gate: {"dockedAtHearth":true,"dockmasterFound":true,"pinsStraddleGate":true,"favorsStartedAt0":true,"cycleRan":true,"jobDone":true,"postBumpTrustBelowGate":true,"noFavorBelowGate":true}
+wave26 earn at gate: {"cycleRan":true,"jobDone":true,"postBumpTrustAtGate":true,"favorBankedAtGate":true}
+wave26 earn authored control: {"dockedAtFreehold":true,"tarnFound":true,"favorsStartedAt0":true,"cycleRan":true,"jobDone":true,"trustClamped100":true,"authoredNoFavorAt100":true}
+wave26 dockmaster favor spend: {"dockedAtHearth":true,"hearthIsFreeholdFlag":true,"bankedFromEarn":true,"noMarkerButtonFound":true,"noMarkerNotice":true,"noMarkerNoSpend":true,"noMarkerNoFlag":true,"spendButtonFound":true,"favorSpent":true,"compFlagSet":true,"spendNotice":true,"compLineDiscriminates":true,"repairButtonFound":true,"compedTotalZero":true,"compNoteIsFactionLine":true,"keeperLineNotShown":true,"repairAllDeducts0":true,"madeWhole":true,"undockClearsCompFlag":true,"redockNoCompNote":true,"redockRealBill":true} comp="The grange covers a neighborΓÇÖs yard bill ΓÇö mend her and sit a spell."
+wave26 keeper comp pin: {"keeperSystemPicked":true,"dockedAtKeeper":true,"keeperFound":true,"favorButtonFound":true,"favorSpent":true,"compFlagSet":true,"keeperNoticeKept":true,"keeperLineShownVerbatim":true,"compedTotalZero":true,"repairAllDeducts0":true,"madeWhole":true} keeper=hush
+wave26 lane pick: {"laneFound":true,"svcMultsDiffer":true,"laneEpicNeutral":true} lane=as_census->blackstation
+wave26 ferry quote: {"dockedAtLaneOrigin":true,"jobsFound":true,"holdRoomFor9":true,"ferryCardQuoted":false,"quoteIsDestChain":false,"destChainDiscriminates":true,"acceptButtonFound":false,"jobAccepted":false,"destStamped":false,"payQuotedStamped":false,"provisionsFronted":false,"acceptedCardShowsQuote":true} quoted=NaN
+WAVE26 FERRY QUOTE FAIL
+wave26 haul quote: {"haulCardQuoted":true,"marginPinnedInCardText":true,"quoteIsDestChain":true,"destChainDiscriminates":true,"acceptButtonFound":true,"jobAccepted":true,"originStamped":true,"payQuotedStamped":true,"acceptedCardShowsQuote":true} quoted=770
+wave26 lane delivery: {"boughtTheLoad":true,"holdLoadedForBoth":false,"dockedAtLaneDest":true,"ferryPaidExactlyQuoted":false,"haulPaidExactlyQuoted":true,"haulPaidIs140UnderDestChain":true,"creditsDeltaIsBothQuotes":false,"ferryDone":false,"haulDone":true} ferryPaid=NaN haulPaid=770
+WAVE26 LANE DELIVERY FAIL
+wave26 old-save fallback: {"reacceptButtonFound":false,"acceptStampedSnapshot":false,"snapshotDeleted":true,"dockedAtFallbackDest":false,"deliveryFired":false,"paidViaLiveChain":false} dest=null paid=0
+WAVE26 OLD-SAVE FALLBACK FAIL
+wave26 save fields: {"saveWritten":true,"rosterInSave104":true,"acceptButtonFound":false,"contractOpenInSave":false,"payQuotedInSave":false,"favorsInSave":true} snapJob={"id":"ferry-consignment","kind":"ferry","state":"done","title":"Ferry a consignment","detail":"A dockside factor fronts you 4 Provisions ΓÇö no buy-in, no questions ΓÇö and pays 350 UU when the consignment crosses the gate and lands intact at the far station. The manifest is watched: deliver short and the deal is off.","reward":350,"need":4,"progress":0,"originSystem":"freehold","destSystem":"veridian","payQuoted":350}
+WAVE26 SAVE FIELDS FAIL
+wave26 restore: {"corruptedFirst":true,"rosterRestored104":true,"payQuotedRestored":false,"favorsRestored":true}
+WAVE26 RESTORE FAIL
+wave107 bio-06: {"lightEnvelope":true,"lightCadence":true,"monotonicHz":true,"protoSafe":true,"noCadenceWorldField":true,"digit0Shipyard":true,"npcReducedAmp0":true,"swimHzMatch":true,"uSwimSweep":true}
+wave108 bio-08: {"protoSafe":true,"unknownClassIsLight":true,"missingGaitLiveMix":true,"lightPlayerCpu":true,"cadenceUnchanged":true,"digit0Shipyard":true,"digit8Digit9":true,"noGaitWorldField":true,"gpuGaitUniforms":true,"mixerNotGait":true,"tableDeputize":true,"npcReducedAmp0":true,"threeFree":true}

@@ -1,0 +1,35 @@
+{
+  "url": "http://localhost:5178/",
+  "vitePort": 5178,
+  "title": {
+    "rwTitlePresent": true,
+    "pressedJ": true,
+    "jumping": false,
+    "docked": false,
+    "dockPressed": false,
+    "lastEvents": [],
+    "posUnchanged": [120, 25, 654.4]
+  },
+  "hud": {
+    "helpStrafe": "A/D — lateral strafe (D = right)",
+    "helpDock": "H — hail · J — dock · C — camera (chase / third / first-person)"
+  },
+  "station": {
+    "prompt": { "pKey": "J", "pVerb": "Dock", "inZone": true },
+    "holdD": { "docked": false, "dockPressed": false, "strafeX": 1, "dx": 24.718 },
+    "tapJ": { "docked": true, "status": "› Docked." },
+    "digit0": "0 — Shipyard"
+  },
+  "gate": {
+    "prompt": { "pKey": "J", "pVerb": "Jump to Veridian Reach", "nearTo": "veridian", "nearHub": false },
+    "holdD": { "jumping": false, "strafeX": 1, "dockPressed": false, "system": "freehold" },
+    "tapJ": { "jumping": true, "dest": "veridian", "progress": 0.16 },
+    "arrived": { "system": "veridian" }
+  },
+  "autopilot": {
+    "method": "set world.nav plotted veridian->freehold, nav.autopilot true, teleport to return gate; no KeyJ",
+    "mid": { "jumping": true, "dest": "freehold", "dockPressed": false, "engaged": true },
+    "late": { "system": "freehold", "jumping": false, "dockPressed": false, "navAp": false }
+  },
+  "console": { "errors": 0, "warnings": 0 }
+}

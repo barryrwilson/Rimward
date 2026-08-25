@@ -1,0 +1,88 @@
+PASS  light gaitId
+PASS  light spineX
+PASS  light flapY
+PASS  light kickZ
+PASS  light radial
+PASS  light map own
+PASS  cutter gaitId
+PASS  cutter spineX
+PASS  cutter flapY
+PASS  cutter kickZ
+PASS  cutter radial
+PASS  cutter map own
+PASS  ace gaitId
+PASS  ace spineX
+PASS  ace flapY
+PASS  ace kickZ
+PASS  ace radial
+PASS  ace map own
+PASS  heavy gaitId
+PASS  heavy spineX
+PASS  heavy flapY
+PASS  heavy kickZ
+PASS  heavy radial
+PASS  heavy map own
+PASS  freighter gaitId
+PASS  freighter spineX
+PASS  freighter flapY
+PASS  freighter kickZ
+PASS  freighter radial
+PASS  freighter map own
+PASS  frigate gaitId
+PASS  frigate spineX
+PASS  frigate flapY
+PASS  frigate kickZ
+PASS  frigate radial
+PASS  frigate map own
+PASS  ace not manta
+PASS  frigate not sunburst
+PASS  unknown class ΓåÆ light
+PASS  empty class ΓåÆ light
+PASS  proto ΓåÆ light
+PASS  constructor ΓåÆ light
+PASS  prototype ΓåÆ light
+PASS  toString ΓåÆ light
+PASS  number ΓåÆ light
+PASS  object ΓåÆ light
+PASS  null ΓåÆ light
+PASS  undefined ΓåÆ light
+PASS  hasOwn not inherited class
+PASS  unknown gait ΓåÆ live mix
+PASS  proto gait ΓåÆ live mix
+PASS  null gait ΓåÆ live mix
+PASS  live mix 1,1,0,0
+PASS  axes own shark
+PASS  axes reject proto
+PASS  gait hasOwn classKey
+PASS  gait hasOwn gaitId
+PASS  gait THREE-free import
+PASS  gait no SHIP_CLASSES copy
+PASS  cadence idle 0.5
+PASS  cadence cruise 2.3
+PASS  cadence light 1/1
+PASS  cadence numbers frozen
+PASS  cadence src has no gait
+PASS  player light Hz branch
+PASS  player light sculpt skip
+PASS  player live spine line
+PASS  player gait multiply spine
+PASS  player gait add kickZ
+PASS  player gait add radial
+PASS  player mood rates
+PASS  player breath 0.25
+PASS  player heart 1.1
+PASS  no makeLivingHull clone comment path
+PASS  gpu four gait uniforms
+PASS  gpu sweep still flap
+PASS  gpu one program key
+PASS  gpu no classKey in GLSL prefix
+PASS  gpu mixer not gait
+PASS  gpu reducedMotion amp 0
+PASS  gpu classKey stash
+PASS  gpu beautiful only
+PASS  no gait persist
+PASS  digit 0 shipyard
+PASS  digit 8/9 stay
+PASS  yard living update null
+PASS  no innerHTML on gait paths
+BIO08 PROBE PASS

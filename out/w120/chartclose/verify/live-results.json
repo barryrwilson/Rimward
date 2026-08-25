@@ -1,0 +1,52 @@
+{
+  "port": 5174,
+  "url": "http://127.0.0.1:5174/",
+  "directTryEngage": {
+    "tok": "",
+    "chartOpen": true,
+    "autopilot": true,
+    "note": "Imported tryEngage does not close the chart."
+  },
+  "buttonSuccess": {
+    "before": { "chartOpen": true, "autopilot": false, "sys": "veridian", "dest": "freehold" },
+    "immediate": {
+      "chartOpen": false,
+      "display": "none",
+      "ariaHidden": "true",
+      "autopilot": true,
+      "engaged": true,
+      "paused": false,
+      "jumping": false,
+      "inChart": false,
+      "activeElement": "BODY",
+      "chipVisible": false,
+      "chipFocused": false
+    },
+    "later300ms": {
+      "chartOpen": false,
+      "autopilot": true,
+      "paused": false,
+      "hailOpen": true,
+      "chipVisible": true,
+      "chipFocused": false,
+      "inChart": false
+    }
+  },
+  "refuse": {
+    "live": "Autopilot refused — already in the destination system.",
+    "chartOpen": true,
+    "autopilot": false
+  },
+  "cancelWhileOpen": {
+    "afterDirectEngage": { "chartOpen": true, "autopilot": true, "btn": "Cancel autopilot" },
+    "afterCancelClick": {
+      "chartOpen": true,
+      "display": "flex",
+      "autopilot": false,
+      "reason": "cancel",
+      "live": "Autopilot cancelled.",
+      "paused": false
+    }
+  },
+  "console": { "errors": 0, "warnings": 0, "totalMessagesSeen": 2 }
+}

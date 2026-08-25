@@ -24,12 +24,12 @@ export const CHAIN_DEST2 = Object.freeze({
   hollow: 'redmarch',
 });
 
-/** Last-step SKU. dart/auto only when canSeat; Veridian/Hollow none. */
+/** Last-step SKU. dart/auto when canSeat; unknown employer none. */
 export const CHAIN_GRANT = Object.freeze({
   freehold: Object.freeze({ id: 'dart', seat: 'missile', slot: 'launcher' }),
   redledger: Object.freeze({ id: 'auto', seat: 'turret', slot: 'turret' }),
-  veridian: null,
-  hollow: null,
+  veridian: Object.freeze({ id: 'auto', seat: 'turret', slot: 'turret' }),
+  hollow: Object.freeze({ id: 'dart', seat: 'missile', slot: 'launcher' }),
 });
 
 const CHAIN_ID_SET = new Set();

@@ -1,0 +1,26 @@
+PHY kernel verify — 2026-08-17
+Status: CLEAN
+Full npm run test:boot: not run (long harness; WAVE53 math replayed here)
+
+PHY keys (frozen): PLAYER_RADIUS 2.4, STATION_CYL_RADIUS 32,
+STATION_CYL_Y0 -26, STATION_CYL_Y1 33, IMPACT_SCREEN_PER_U 0.35,
+IMPACT_MIN_SPEED 8, RESTITUTION 0.15, SLIDE_FRICTION 0.85,
+SUN_HEAT_MULT 2.4, SUN_LETHAL_MULT 1.12, SUN_HEAT_DPS 6,
+SUN_HEAT_RAMP 18, AVOID_LOOKAHEAD 40, AVOID_GAIN 1.4
+
+Exports: distSq(6), sphereOverlap(9), cylinderOverlap(11),
+resolveVelocity(9), sunZone(8), collectBodies(2), resolveMover(11)
+
+Pins (node out/phy-verify/kernel-pins.mjs): all PASS
+- sphereOverlap r=2,2 d=3 hit overlap=1 nx=-1; d=5 miss
+- cylinderOverlap (33,0,0) pr=2 vs r=32 y[-26,33] hit overlap=1 nx=1
+- y = y1+80 miss
+- resolveVelocity vx=-10 n=+x rest=0.15 → vx=1.5
+- sunZone 2.4R zone=1 t=0 (boundary); 1.5R zone=1 t≈0.703; 1.0R zone=2 t=1
+- NaN: no throw; hit/zone cleared
+- resolveMover station origin, mover (33,0,0) r=2 vx=-10 → px=34 vx=1.5
+- skip is AND of skipKind+skipId (intended): skip station/0 still hits asteroid/0
+
+collision.js: no THREE import (comment only)
+ctx.js events comment lists bodyHit, sunHeat, sunKill (lines 204-206)
+scripts/boot-test.mjs WAVE53 block present at line 11523

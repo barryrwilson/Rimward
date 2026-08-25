@@ -1,0 +1,56 @@
+PHY-02 NPC verify 2026-08-17
+Status: CLEAN
+App: http://localhost:5173/ (existing Vite reused)
+System: freehold / Freehold Drift / origin greenhand
+Scope: src/systems/npc.js lookahead avoid + resolveMover bounce + sun heat body
+
+SESSION
+  Prior save had the player at x~19344 (no live ships). Harness parked the ship
+  at station+(80,20,80) so traffic could instantiate. Then watched ~20 s, KeyP.
+
+LIVE CHECK (KeyP, window.__ctx)
+  npcCount=6 then 7  all positions finite  insideCylinder=0
+  Station (120, 20, 620)  cyl r=32  y0=-26 y1=33
+  Flag rule: hypot(dx,dz) < 32 - shipRadius + 1
+  Radii from object.userData.radius (cutter ~5.8, heavy ~8.6–10.5, freighter ~39.3)
+
+  Pause sample (after 20 s watch):
+    Gallows Wren   pirate  hunt  horiz 637
+    Sable Ilex     pirate  hunt  horiz 625
+    Red Marlow     pirate  hunt  horiz 322
+    Innisfree      trader  route horiz 151
+    Watchful Apt   patrol  loiter horiz 602
+    Ninth Tooth    pirate  hunt  horiz 914
+    none < threshold (~22–30)
+
+  8 s follow sample (real radii): flags2d=0 flags3d=0
+    closest Sable Ilex horiz 87.4 vs thresh 27.2
+    closest Red Marlow horiz 87.6 vs thresh 26.5
+
+  Later pause (chase cam): 7 ships, inside=0
+    closest Lancer Po patrol loiter horiz 46.4 r=8.63 thresh=24.4  y=-13.8
+    (below cyl floor station.y+y0=-6; not in volume)
+
+HOSTILES
+  Four pirates in ai.mode=hunt. None parked in the station cylinder.
+  Live telegraph: comm "HEAVE TO. CARGO OR HULL." and later phase=telegraph
+  on Gallows Wren / Sable Ilex / Red Marlow / Ninth Tooth.
+  No full duel required. intent/demanding were false in law-zone traffic.
+
+CODE HUNT / HAIL / ENVELOPE (unchanged paths still present)
+  controls.js KeyH + help: "H — hail · D — dock · C — camera..."
+  npc.js ENVELOPE_ABEAM=160  ENVELOPE_EXTEND_DIST=140
+         ENVELOPE_EXTEND_PAST=80  ENVELOPE_APPROACH_OFFSET=80  GUN_PASS_MIN=80
+  applyCombatEnvelope still returns ENV_PRESS | ENV_EXTEND | ENV_APPROACH
+  phase null | telegraph | attack; demand hail block + hailOpened still in update
+
+PHY-02 WIRING (read-only)
+  collectBodies + appendSunBody (sunRadius * PHY.SUN_HEAT_MULT) then bounceLive
+  via resolveMover; applyAvoidBias lookahead PHY.AVOID_LOOKAHEAD=40
+
+CONSOLE
+  No error, no warning. Vite debug connect only.
+
+SCREENSHOTS
+  out/phy-verify/npc-station-traffic.png  station + player + NPC traffic
+  out/phy-verify/npc-paused.png           same view after KeyP

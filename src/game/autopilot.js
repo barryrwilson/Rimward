@@ -9,6 +9,7 @@ import { collectBodies } from './collision.js';
 import { JUMP } from './state.js';
 import { applyAvoidBias, appendSunBody } from '../systems/npc.js';
 import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
+import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 
 export const AP_STEER_BREAK = 0.65;
@@ -24,7 +25,12 @@ export const AP_LINES = Object.freeze({
   docked: 'Autopilot refused — docked.',
   jumping: 'Autopilot refused — jump in progress.',
   paused: 'Autopilot refused — game paused.',
-  missingHop: 'Autopilot refused — next gate is missing.',
+  missingHop: 'Autopilot refused — next hop is not on the route.',
+  missingLookup: 'Autopilot refused — next gate is not in this system.',
+  lookupFail: 'Autopilot cancelled — next gate is not in this system.',
+  missingPath: 'Autopilot cancelled — approach path failed.',
+  missingHub: 'Autopilot cancelled — hub does not list the next hop.',
+  hubWrap: 'Autopilot cancelled — hub spoke cycle failed.',
   cancel: 'Autopilot cancelled.',
   input: 'Autopilot cancelled — manual helm.',
   missingGate: 'Autopilot cancelled — next gate is missing.',
@@ -34,6 +40,10 @@ export const AP_LINES = Object.freeze({
 const BREAK_LINE = Object.freeze({
   cancel: AP_LINES.cancel,
   input: AP_LINES.input,
+  lookupFail: AP_LINES.lookupFail,
+  missingPath: AP_LINES.missingPath,
+  missingHub: AP_LINES.missingHub,
+  hubWrap: AP_LINES.hubWrap,
   missingGate: AP_LINES.missingGate,
   arrive: AP_LINES.arrive,
 });
@@ -174,7 +184,7 @@ export function apRefuseToken(ctx) {
   if (ctx.flags && ctx.flags.matchSpeed) return 'match';
   const hop = nextHopId(nav);
   if (dest !== here && !hop) return 'missingHop';
-  if (dest !== here && !resolveNavGatePos(ctx, hop)) return 'missingHop';
+  if (dest !== here && !resolveNavGatePos(ctx, hop)) return 'missingLookup';
   return '';
 }
 
@@ -225,9 +235,15 @@ export function apLine(token) {
 
 function aimAtGate(ctx, ap, hop, dt) {
   const obj = ctx.ship && ctx.ship.object;
+  const cur = ctx.world && ctx.world.currentSystem;
+  const hopKind = lookupLiveNavHopKind(hop, cur);
   const pos = resolveNavGatePos(ctx, hop);
-  if (!obj || !pos) {
-    disengage(ctx, 'missingGate');
+  if (!pos) {
+    disengage(ctx, 'lookupFail');
+    return;
+  }
+  if (!obj) {
+    zeroCmd(ap);
     return;
   }
   if (ctx.gate && ctx.gate.jumping) {
@@ -238,7 +254,7 @@ function aimAtGate(ctx, ap, hop, dt) {
   const p = obj.position;
   if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)
     || !Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) {
-    disengage(ctx, 'missingGate');
+    disengage(ctx, 'lookupFail');
     return;
   }
 
@@ -261,7 +277,7 @@ function aimAtGate(ctx, ap, hop, dt) {
     sideHint: hop === pathHop ? pathSign : 0,
   });
   if (!planned.ok || !Number.isFinite(planned.ax) || !Number.isFinite(planned.ay) || !Number.isFinite(planned.az)) {
-    disengage(ctx, 'missingGate');
+    disengage(ctx, 'missingPath');
     return;
   }
   if (planned.hold === 'detour' || planned.hold === 'widen') {
@@ -317,30 +333,35 @@ function aimAtGate(ctx, ap, hop, dt) {
   ap.wantJump = !!(inZone && !docked && nearTo === hop);
 
   if (inZone && ctx.gate.nearHub && nearTo !== hop) {
-    const routes = ctx.systems && ctx.systems[ctx.world.currentSystem]
-      && ctx.systems[ctx.world.currentSystem].hub
-      && ctx.systems[ctx.world.currentSystem].hub.routes;
-    let listed = false;
-    if (Array.isArray(routes)) {
-      for (let i = 0; i < routes.length; i++) {
-        if (routes[i] === hop) { listed = true; break; }
+    if (hopKind !== 'hub') {
+      ap.cycleHub = false;
+    } else if (!nearTo) {
+      ap.cycleHub = false;
+    } else {
+      const sys = ctx.systems && ctx.world && ctx.systems[ctx.world.currentSystem];
+      const routes = sys && sys.hub && sys.hub.routes;
+      let listed = false;
+      if (Array.isArray(routes)) {
+        for (let i = 0; i < routes.length; i++) {
+          if (routes[i] === hop) { listed = true; break; }
+        }
       }
+      if (!listed) {
+        disengage(ctx, 'missingHub');
+        return;
+      }
+      if (hop !== hubHop) {
+        hubHop = hop;
+        hubWrap = 0;
+      }
+      const cap = ctx.gate.nearRouteCount || 0;
+      if (hubWrap > cap) {
+        disengage(ctx, 'hubWrap');
+        return;
+      }
+      ap.cycleHub = true;
+      hubWrap += 1;
     }
-    if (!listed) {
-      disengage(ctx, 'missingGate');
-      return;
-    }
-    if (hop !== hubHop) {
-      hubHop = hop;
-      hubWrap = 0;
-    }
-    const cap = ctx.gate.nearRouteCount || 0;
-    if (hubWrap > cap) {
-      disengage(ctx, 'missingGate');
-      return;
-    }
-    ap.cycleHub = true;
-    hubWrap += 1;
   } else {
     ap.cycleHub = false;
     if (!inZone || !ctx.gate.nearHub) {

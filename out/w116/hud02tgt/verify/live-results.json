@@ -1,0 +1,78 @@
+{
+  "url": "http://127.0.0.1:5176/",
+  "vite": "npx vite --host 127.0.0.1 --port 5176 --strictPort",
+  "bind": "127.0.0.1:5176",
+  "mechLightLockHeavy": {
+    "hudFamily": "mech",
+    "hudClass": "light",
+    "tgtClass": "heavy",
+    "tgtHidden": false,
+    "differ": true,
+    "self": {
+      "sil": "22x10",
+      "flex": "0 0 22px",
+      "body": { "left": "5px", "top": "2px", "width": "16px", "height": "6px" },
+      "nose": { "borderRightWidth": "5px" },
+      "facingText": "FOREAFT",
+      "note": "generic plated plate (light has no class CSS override)"
+    },
+    "tgt": {
+      "sil": "22x10",
+      "flex": "0 0 22px",
+      "body": { "left": "5px", "top": "1px", "width": "16px", "height": "8px" },
+      "nose": { "borderRightWidth": "5px" },
+      "facingText": "FOREAFT",
+      "note": "WAVE114 heavy plate on the lock rail only"
+    }
+  },
+  "bioHeavyLockAce": {
+    "hudFamily": "bio",
+    "hudClass": "heavy",
+    "tgtClass": "ace",
+    "tgtHidden": false,
+    "looksLikeMechHeavyPlate": false,
+    "self": {
+      "sil": "22x10",
+      "bodyClip": "polygon(0% 16%, 16% 2%, 52% 0%, 100% 18%, 100% 82%, 52% 100%, 16% 98%, 0% 84%)",
+      "noseClip": "ellipse(70% 55% at 55% 50%)"
+    },
+    "tgt": {
+      "sil": "22x10",
+      "body": { "left": "6px", "top": "2px", "width": "13px", "height": "6px" },
+      "bodyClip": "polygon(0% 38%, 28% 6%, 78% 0%, 100% 50%, 78% 100%, 28% 94%, 0% 62%)",
+      "noseClip": "polygon(100% 8%, 100% 92%, 0% 50%)",
+      "note": "player-family bio clips on the lock (contract freeze; no lock-family attr)"
+    }
+  },
+  "proto": {
+    "hasAttr": false,
+    "family": "mech",
+    "genericMechPlate": true,
+    "playerRaw": "__proto__"
+  },
+  "nope": {
+    "hasAttr": false,
+    "family": "mech",
+    "playerRaw": "nope",
+    "worldTimeAdvanced": true,
+    "sil22": true,
+    "note": "HUD 5 Hz omit. Hangar classKeyOf later heals unknown keys to light if left dirty."
+  },
+  "hub": {
+    "reticle": "80x80",
+    "children": ["rw-reticle-pupil", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-range"],
+    "rangeText": "RANGE",
+    "foreAft": ["FORE", "AFT"]
+  },
+  "digit0": {
+    "docked": true,
+    "menuHas0Shipyard": true,
+    "opened": "SHIPYARD Hangar"
+  },
+  "save": {
+    "key": "rimward-save-v1",
+    "snapLen": 55808,
+    "restored": true
+  },
+  "console": { "errors": 0, "warnings": 0 }
+}

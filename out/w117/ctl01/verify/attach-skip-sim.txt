@@ -1,0 +1,10 @@
+{
+  "detachedBootStubDoesNotSkip": true,
+  "attachedIsConnectedSkips": true,
+  "attachedParentSkips": true,
+  "attachedParentNodeSkips": true,
+  "missingTitleDoesNotSkip": true,
+  "modelsOpenSkips": true,
+  "typingSkips": true
+}
+ATTACH SKIP SIM OK

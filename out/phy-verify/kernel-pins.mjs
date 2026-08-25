@@ -1,4 +1,7 @@
 // PHY kernel pin checks. Imports game modules only. Does not start the boot harness.
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PHY } from '../../src/game/physics.js';
 import {
   distSq,
@@ -165,6 +168,30 @@ for (let i = 0; i < liveDest.count; i++) {
   if (liveDest.items[i]?.kind === 'player') hasPlayer = true;
 }
 check('collectBodies.stationPlayer', hasStation && hasPlayer && liveDest.count >= 2, `count=${liveDest.count}`);
+
+const npcSrc = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../../src/systems/npc.js'),
+  'utf8',
+);
+check(
+  'phy04.avoidKeysUnchanged',
+  PHY.AVOID_LOOKAHEAD === 40 && PHY.AVOID_GAIN === 1.4,
+  `look=${PHY.AVOID_LOOKAHEAD} gain=${PHY.AVOID_GAIN}`,
+);
+check(
+  'phy04.midSample',
+  npcSrc.includes('function addMidChordHit') && /const mid = look \* 0\.5/.test(npcSrc),
+);
+check('phy04.bounceLive', npcSrc.includes('if (_phyOn) bounceLive(live, dt)'));
+check(
+  'phy04.noNavmeshPlan',
+  !npcSrc.includes('planApPath') && !/navmesh/i.test(npcSrc),
+);
+check(
+  'phy04.sunRadii',
+  PHY.SUN_HEAT_MULT === 2.4 && PHY.SUN_LETHAL_MULT === 1.12,
+  `heat=${PHY.SUN_HEAT_MULT} lethal=${PHY.SUN_LETHAL_MULT}`,
+);
 
 console.log(`\n${fails.length === 0 ? 'KERNEL PINS PASS' : `KERNEL PINS FAIL ${fails.length}`}`);
 if (fails.length) console.log(JSON.stringify(fails, null, 2));

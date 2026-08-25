@@ -92,7 +92,11 @@ const arrivalSrc = worldSrc.slice(
 ok('src.arrivalHold', arrivalSrc.includes('stationHoldVec(station, gate)'));
 ok('src.arrivalNoCenter', !arrivalSrc.includes('station.clone()'));
 ok('src.minerHold', worldSrc.includes('writeStationHold(new THREE.Vector3()'));
-ok('src.patrolCenter', worldSrc.includes('route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]'));
+ok(
+  'src.patrolCenter',
+  worldSrc.includes('route: [writeStationHold(new THREE.Vector3(), station, \'heavy\', gate), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]')
+    && !worldSrc.includes('route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]'),
+);
 ok('src.plainRoute', worldSrc.includes('return waypoints.map((w) => ({ x: Math.round(w.x), y: Math.round(w.y), z: Math.round(w.z) }))'));
 
 if (fails.length) {

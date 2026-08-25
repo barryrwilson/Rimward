@@ -24,6 +24,7 @@ import { turnRateFor } from '../game/flight-feel.js';
 import { scaleFor } from '../game/ship-scale.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
+import { writeStationHold } from '../game/traffic-feel.js';
 import { isUnknowable } from '../game/faction-style.js';
 import { tickPoliceLeave } from '../game/police-leave.js';
 import { tickPoliceCover, findCoveringWork } from '../game/police-cover.js';
@@ -56,8 +57,8 @@ import { canSeat } from '../game/weapon-fit.js';
  *
  * update() performs zero allocations: all scratch vectors/quaternions are
  * module-scope; allocations happen only on spawn, hail, or capitulation
- * (event-time, not per-frame). Death FX is a fixed pool. PHY-02 lookahead
- * steer and resolveMover bounce reuse module dest/out records.
+ * (event-time, not per-frame). Death FX is a fixed pool. PHY-04 two-sample
+ * lookahead steer and resolveMover bounce reuse module dest/out records.
  *
  * GLB templates provide all NPC hull forms. Each live root exposes its
  * collision proxy, outer engine-effect group, and LOD visual to AI and combat.
@@ -186,6 +187,7 @@ export function buildPlayerPlatedMesh(classKey, faction) {
 
 /** Advance asset animation and choose the active distance LOD. Speed is optional; omit = idle swim Hz. */
 export function animateShipMesh(object, elapsed, reducedMotion = false, camera, speed) {
+  if (!object || !object.userData) return;
   updateShipAsset(object, elapsed, reducedMotion, camera, speed);
 }
 
@@ -323,8 +325,10 @@ export function spawnLiveShip(ctx, record, position) {
 }
 
 export function removeLiveShip(ctx, liveShip) {
-  releaseShipAsset(liveShip.object);
-  ctx.scene.remove(liveShip.object);
+  const object = liveShip && liveShip.object;
+  if (!object) return;
+  if (object.userData) releaseShipAsset(object);
+  if (ctx && ctx.scene) ctx.scene.remove(object);
 }
 
 // ---------- shared helpers ----------
@@ -403,9 +407,25 @@ function revealQship(ctx, live) {
   }
 }
 
+function shipClassOf(live) {
+  const key = live && live.state && live.state.classKey;
+  return typeof key === 'string' && Object.prototype.hasOwnProperty.call(SHIP_CLASSES, key)
+    ? SHIP_CLASSES[key]
+    : undefined;
+}
+
+function classCruise(cls) {
+  return cls && Number.isFinite(cls.cruise) ? cls.cruise : 0;
+}
+
+function classBurn(cls) {
+  return cls && Number.isFinite(cls.burn) ? cls.burn : 0;
+}
+
 function speedCap(live) {
-  const cls = SHIP_CLASSES[live.state.classKey];
-  return live.state.engineOut ? cls.cruise * 0.3 : cls.cruise;
+  const st = live && live.state;
+  const cruise = classCruise(shipClassOf(live));
+  return st && st.engineOut ? cruise * 0.3 : cruise;
 }
 
 /** Collision sphere for bounce/avoid. Prefer scale.maxRadius; else 3. */
@@ -582,6 +602,20 @@ function addLateralAway(ox, oy, oz, px, py, pz) {
   _v2.addScaledVector(_away, 1 / len);
 }
 
+/** Extra heading probe at half lookahead. Station uses path keep-out instead. */
+function addMidChordHit(mx, my, mz, rad, body) {
+  if (!body || body.kind === 'station') return 0;
+  if (!Number.isFinite(mx) || !Number.isFinite(my) || !Number.isFinite(mz)) return 0;
+  if (!probeHitsBody(mx, my, mz, rad, body)) return 0;
+  if (body.kind === 'gate') {
+    nearestGateRing(mx, my, mz, body, _v3);
+    addLateralAway(_v3.x, _v3.y, _v3.z, mx, my, mz);
+  } else {
+    addLateralAway(body.x, body.y, body.z, mx, my, mz);
+  }
+  return 1;
+}
+
 function addStationOutXZ(sx, sz, cx, cz) {
   let ox = sx - cx;
   let oz = sz - cz;
@@ -604,6 +638,7 @@ function addStationOutXZ(sx, sz, cx, cz) {
  * Bias an aim point laterally around the nearest lookahead obstacle.
  * Writes outAim. Does not replace combat / waypoint aims — only adds offset.
  * Optional `bodies` bag: player AP fills its own world; NPC uses module `_bodies`.
+ * Non-station kinds also sample half lookahead. Missing mid helper keeps 40 u.
  */
 export function applyAvoidBias(live, targetPos, outAim, bodies) {
   outAim.copy(targetPos);
@@ -619,13 +654,19 @@ export function applyAvoidBias(live, targetPos, outAim, bodies) {
   const px = pos.x + _fwd.x * look;
   const py = pos.y + _fwd.y * look;
   const pz = pos.z + _fwd.z * look;
+  const mid = look * 0.5;
+  const mx = pos.x + _fwd.x * mid;
+  const my = pos.y + _fwd.y * mid;
+  const mz = pos.z + _fwd.z * mid;
   const rad = npcRadius(live);
   _v2.set(0, 0, 0);
   let hits = 0;
   let insideStation = false;
   const n = bag.count;
+  const items = bag.items;
+  if (!items) return outAim;
   for (let i = 0; i < n; i++) {
-    const body = bag.items[i];
+    const body = items[i];
     if (!body || skipAvoidBody(live, body)) continue;
     if (body.kind === 'station') {
       const how = stationKeepOutHits(px, py, pz, pos.x, pos.y, pos.z, rad, body);
@@ -639,14 +680,18 @@ export function applyAvoidBias(live, targetPos, outAim, bodies) {
       hits += 1;
       continue;
     }
-    if (!probeHitsBody(px, py, pz, rad, body)) continue;
-    if (body.kind === 'gate') {
-      nearestGateRing(px, py, pz, body, _v3);
-      addLateralAway(_v3.x, _v3.y, _v3.z, px, py, pz);
-    } else {
-      addLateralAway(body.x, body.y, body.z, px, py, pz);
+    if (probeHitsBody(px, py, pz, rad, body)) {
+      if (body.kind === 'gate') {
+        nearestGateRing(px, py, pz, body, _v3);
+        addLateralAway(_v3.x, _v3.y, _v3.z, px, py, pz);
+      } else {
+        addLateralAway(body.x, body.y, body.z, px, py, pz);
+      }
+      hits += 1;
     }
-    hits += 1;
+    if (typeof addMidChordHit === 'function') {
+      hits += addMidChordHit(mx, my, mz, rad, body);
+    }
   }
   if (hits > 0 && _v2.lengthSq() > 1e-8) {
     _v2.normalize();
@@ -729,6 +774,48 @@ function bounceLive(live, dt) {
   ai._pz = p.z;
 }
 
+/**
+ * Frame-only station hold when a route/loiter dest is inside the D5 cylinder.
+ * Does not write record.route. Missing writer or bag keeps dest.
+ */
+function writeFrameHold(live, dest, out) {
+  if (!live || !dest || !out) return dest;
+  const ai = live.ai;
+  if (!ai || (ai.mode !== 'route' && ai.mode !== 'loiter')) return dest;
+  if (live.role === 'player') return dest;
+  const bag = _bodies;
+  if (!bag || !bag.items || !bag.count) return dest;
+  const object = live.object;
+  if (!object || !object.position) return dest;
+  if (!Number.isFinite(dest.x) || !Number.isFinite(dest.y) || !Number.isFinite(dest.z)) return dest;
+  let station = null;
+  const n = bag.count;
+  for (let i = 0; i < n; i++) {
+    const body = bag.items[i];
+    if (body && body.kind === 'station') {
+      station = body;
+      break;
+    }
+  }
+  if (!station) return dest;
+  const pos = object.position;
+  const rad = npcRadius(live);
+  const how = stationKeepOutHits(dest.x, dest.y, dest.z, pos.x, pos.y, pos.z, rad, station);
+  if (how !== 1 && how !== 2) return dest;
+  if (!stationCylHits(dest.x, dest.y, dest.z, rad, station)) return dest;
+  if (live.role === 'miner') {
+    if (typeof minerHoldFromStation !== 'function') return dest;
+    minerHoldFromStation(station, pos, rad, out);
+  } else if (typeof writeStationHold === 'function') {
+    const classKey = live.state && live.state.classKey;
+    writeStationHold(out, station, classKey, pos);
+  } else {
+    return dest;
+  }
+  if (!Number.isFinite(out.x) || !Number.isFinite(out.y) || !Number.isFinite(out.z)) return dest;
+  return out;
+}
+
 /** Rotate toward target and advance along -Z. Returns distance to target. */
 function steer(object, targetPos, speed, turnRate, dt) {
   _v1.subVectors(targetPos, object.position);
@@ -746,10 +833,16 @@ function steer(object, targetPos, speed, turnRate, dt) {
 }
 
 function steerLive(live, targetPos, speed, dt) {
-  const aim = _phyOn ? applyAvoidBias(live, targetPos, _aimAvoid) : targetPos;
+  let dest = targetPos;
+  if (_phyOn) {
+    dest = writeFrameHold(live, targetPos, _aimAvoid);
+    dest = applyAvoidBias(live, dest, _aimAvoid);
+  }
+  const aim = dest;
   const dist = steer(live.object, aim, speed, turnRateFor(live.state.classKey, speed), dt);
   _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
-  live.ai.velocity.copy(_fwd).multiplyScalar(speed);
+  const vel = live.ai && live.ai.velocity;
+  if (vel && typeof vel.copy === 'function') vel.copy(_fwd).multiplyScalar(speed);
   return dist;
 }
 
@@ -1167,7 +1260,7 @@ export function findHunterOf(ctx, live) {
   if (!ships) return null;
   for (let i = 0; i < ships.length; i++) {
     const other = ships[i];
-    if (other === live || !other.ai) continue;
+    if (!other || other === live || !other.ai) continue;
     const st = other.state;
     if (!st || st.destroyed || st.disabled || st.surrendered) continue;
     const role = hunterRole(other);
@@ -1187,7 +1280,7 @@ export function findPirateWork(ctx, live) {
   let bestD = U.ENCOUNTER_BUBBLE;
   for (let i = 0; i < ships.length; i++) {
     const other = ships[i];
-    if (other === live || !other.ai || !other.object) continue;
+    if (!other || other === live || !other.ai || !other.object) continue;
     const st = other.state;
     if (!st || st.destroyed || st.disabled || st.surrendered) continue;
     if (!hunterHasWork(other, station)) continue;
@@ -1758,9 +1851,9 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
         let best = null;
         let bestD = U.ENCOUNTER_BUBBLE;
         for (const other of ctx.ships) {
-          if (other === live || !isCivilianRole(other.role)) continue;
-          if (other.state.destroyed || other.state.disabled || other.state.surrendered) continue;
-          if (other.object.position.distanceTo(station) < LAW_ZONE_RADIUS) continue;
+          if (!other || other === live || !isCivilianRole(other.role)) continue;
+          if (!other.state || other.state.destroyed || other.state.disabled || other.state.surrendered) continue;
+          if (!other.object || other.object.position.distanceTo(station) < LAW_ZONE_RADIUS) continue;
           const d = live.object.position.distanceTo(other.object.position);
           if (d < bestD) {
             best = other;
@@ -1819,7 +1912,8 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
 function updateDuel(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
   const st = live.state;
-  const cls = SHIP_CLASSES[st.classKey];
+  const cls = shipClassOf(live);
+  const burn = classBurn(cls);
   const pObj = ctx.ship.object;
   if (!pObj || ctx.flags.docked) {
     ai.intent = false;
@@ -1907,7 +2001,7 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
       speed = cap * 0.70;
     } else if (cycle < 3) {
       _aim.copy(playerPos);
-      speed = burning ? cls.burn : cap;
+      speed = burning ? burn : cap;
     } else {
       _v2.subVectors(live.object.position, playerPos).normalize();
       _aim.copy(playerPos).addScaledVector(_v2, 250);
@@ -1915,8 +2009,8 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
     }
   } else {
     // Fury: abeam / extend, never copy the player position.
-    const mode = applyCombatEnvelope(live.object, playerPos, burning ? cls.burn : cap, pVel, sign, _aim);
-    speed = mode === ENV_EXTEND ? cap * 0.70 : burning ? cls.burn : cap;
+    const mode = applyCombatEnvelope(live.object, playerPos, burning ? burn : cap, pVel, sign, _aim);
+    speed = mode === ENV_EXTEND ? cap * 0.70 : burning ? burn : cap;
   }
   if (canGunPass(ai, now, dist)) _aim.copy(playerPos);
   steerLive(live, _aim, speed, dt);
@@ -1989,7 +2083,7 @@ function threatPos(ctx, live) {
 
 function updateFlee(ctx, live, dt) {
   const st = live.state;
-  const cls = SHIP_CLASSES[st.classKey];
+  const cls = shipClassOf(live);
   const threat = threatPos(ctx, live);
   if (threat) {
     _v2.subVectors(live.object.position, threat);
@@ -2013,7 +2107,7 @@ function updateFlee(ctx, live, dt) {
       _aim.copy(live.object.position).addScaledVector(_fwd, 300);
     }
   }
-  const fleeSpeed = st.engineOut ? cls.cruise * 0.3 : cls.burn;
+  const fleeSpeed = st.engineOut ? classCruise(cls) * 0.3 : classBurn(cls);
   steerLive(live, _aim, fleeSpeed, dt);
   live.object.userData.glow.scale.setScalar(1.6);
   // traffic.js despawns at DEINSTANTIATE_RANGE — we just run.
@@ -2269,7 +2363,9 @@ export function initNpc(ctx) {
       hideMinerBeams();
       for (let i = ctx.ships.length - 1; i >= 0; i--) {
         const live = ctx.ships[i];
+        if (!live) continue;
         const st = live.state;
+        if (!st) continue;
         if (st.destroyed) {
           // traffic.js splices destroyed ships from the list on its own
           // schedule, so guard against processing the same wreck twice.
@@ -2279,11 +2375,12 @@ export function initNpc(ctx) {
           }
           continue;
         }
-        // Boot pins (WAVE74 KeyT dummy) and other non-NPC entries share
-        // ctx.ships without an ai block. traffic.js only pushes spawnLiveShip.
-        if (!live.ai) continue;
-        tickShipState(st, now, dt);
         const ai = live.ai;
+        // WAVE74 KeyT dummy and other harness entries share ctx.ships.
+        // Missing ai or velocity: skip this hull this frame.
+        if (!ai || !ai.velocity || typeof ai.velocity.length !== 'function') continue;
+        if (!live.object) continue;
+        tickShipState(st, now, dt);
         animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : ai.velocity.length());
         // Wave 30 demand-hail upkeep: the parley dies with the hail target
         // (disabled here; destroyed/despawned discard the ai outright, and
@@ -2365,11 +2462,13 @@ export function initNpc(ctx) {
       for (const e of ctx.lastEvents) {
         if (e.type === 'hailClosed') {
           for (const s of ctx.ships) {
-            if (s.ai && s.ai.demanding && s.ai.demandOutcome && (!e.ship || s === e.ship)) s.ai.demanding = false;
+            if (!s || !s.ai) continue;
+            if (s.ai.demanding && s.ai.demandOutcome && (!e.ship || s === e.ship)) s.ai.demanding = false;
           }
         } else if (e.type === 'hailOpened') {
           for (const s of ctx.ships) {
-            if (s.ai && s.ai.demanding && s !== e.ship) s.ai.demanding = false;
+            if (!s || !s.ai) continue;
+            if (s.ai.demanding && s !== e.ship) s.ai.demanding = false;
           }
         }
       }

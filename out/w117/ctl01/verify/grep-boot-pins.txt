@@ -1,0 +1,7 @@
+706:dispatchKey('KeyJ');
+707:tick(2, 'wave21 junction J');
+711:const w21hearthOk = tickUntilJumpDone('fh_hearth', 'wave21 junction jump');
+732:dispatchKey('KeyJ');
+733:tick(2, 'wave21 back-gate J');
+739:console.log('wave21 hub junction:', JSON.stringify(w21hubChecks));
+740:if (!Object.values(w21hubChecks).every(Boolean)) { console.log('WAVE21 HUB JUNCTION FAIL'); errors++; }

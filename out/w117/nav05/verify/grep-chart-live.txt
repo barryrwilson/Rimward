@@ -1,0 +1,2 @@
+623:      if (ctx.flags && ctx.flags.chartOpen === true) showApLive(apLine('cancel'));
+717:          showApLive(apLine(reason));

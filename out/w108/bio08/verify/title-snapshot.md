@@ -1,0 +1,101 @@
+- generic [active] [ref=f1e1]:
+  - generic:
+    - status
+    - generic:
+      - generic:
+        - generic:
+          - generic: FORE
+          - generic: AFT
+      - generic: SCREEN
+      - generic: SHELL
+      - generic: HULL
+      - generic:
+        - generic: SPD
+        - generic: 0u/s
+      - generic:
+        - generic: WPN
+        - generic: —
+    - generic:
+      - generic:
+        - generic: Plant
+        - generic: STRAIN
+        - generic:
+          - generic: ENGINE
+          - generic: OK
+      - generic:
+        - generic: Flight
+        - generic: THR
+        - generic:
+          - generic: BURN
+          - generic: READY
+        - generic:
+          - generic: DRIFT
+          - generic: READY
+      - generic:
+        - generic: Heat
+        - generic:
+          - generic: STRAIN
+          - generic: 0%
+      - generic:
+        - generic: PWR
+        - generic:
+          - generic: Bio
+          - generic: SERENE
+          - generic: HUNGER
+          - generic: WOUNDS
+          - generic:
+            - generic: ECHOES
+            - generic: "0"
+        - generic:
+          - generic: POS
+          - generic: —
+          - generic: —
+    - generic:
+      - generic: Manifest
+      - generic:
+        - generic: UU
+        - generic: "0"
+      - generic:
+        - generic: FEAR
+        - generic: "0"
+      - generic:
+        - generic: CARGO
+        - generic: 0/0
+    - generic:
+      - button "CONTROLS ▾" [ref=f1e4] [cursor=pointer]
+      - generic:
+        - list:
+          - listitem: Mouse — steer toward reticle
+          - listitem: W/S — vertical strafe (W = up)
+          - listitem: A/D — lateral strafe (D = right)
+          - listitem: Q/E — roll left / right (set your up)
+          - listitem: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem: Space — afterburner
+          - listitem: Shift (hold) — vector-hold drift
+          - listitem: LMB (hold) — fire
+          - listitem: "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic"
+          - listitem: T — cycle target
+          - listitem: V — lock under reticle
+          - listitem: N — automine locked asteroid
+          - listitem: H — hail · D — dock · C — camera (chase / third / first-person)
+          - listitem: X — match lock speed
+          - listitem: K — engine on lock (after shields)
+          - listitem: G — cycle hub route at a Lamplighter junction
+          - listitem: M — galaxy chart
+          - listitem: L — berth records (save/load)
+          - listitem: P — pause
+  - dialog "RIMWARD title screen" [ref=f1e5]:
+    - generic [ref=f1e6]:
+      - generic [ref=f1e7]: A LIVING FRONTIER
+      - button "[1] NEW GAME" [ref=f1e8] [cursor=pointer]
+      - button "[2] MODELS" [ref=f1e9] [cursor=pointer]
+      - button "[3] SETTINGS" [ref=f1e10] [cursor=pointer]
+      - generic [ref=f1e11]: PRESS 1-3 OR CLICK
+  - generic [ref=f1e13]:
+    - generic [ref=f1e14]: RIMWARD — who are you?
+    - generic [ref=f1e15] [cursor=pointer]: "[1] Freehold Greenhand — A berth, a living ship, and no story yet."
+    - generic [ref=f1e16] [cursor=pointer]: "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off."
+    - generic [ref=f1e17] [cursor=pointer]: "[3] Marked — Veridian space has your face on a board. Someone downstream taught them to be careful."
+    - generic [ref=f1e18] [cursor=pointer]: "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back."
+    - generic [ref=f1e19] [cursor=pointer]: "[5] Rim Drifter — You came in from the Redmarch with more questions than money."
+    - generic [ref=f1e20]: press 1-5 or click — this choice is permanent

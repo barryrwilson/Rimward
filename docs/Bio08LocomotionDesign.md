@@ -5,8 +5,8 @@
 | **Title** | RIMWARD BIO-08 anatomy-native living locomotion |
 | **Author** | Wave 107 BIO-08 integrator |
 | **Date** | 2026-08-24 |
-| **Status** | design-only |
-| **Wave** | 107 — markdown only. Later serials land per-class gait bias. |
+| **Status** | first impl Wave 108 |
+| **Wave** | 108 — PR1–PR4 gait bias landed. Wave 107 freeze stands. |
 | **Owner request** | Remaining BIO motion after BIO-06 cadence (Hz/sweep) and BIO-07 species bodies: locomotion native to anatomy for Beautiful Ones NPC (and living player remounts). Fins sweep, mantle pulse, tentacles trail, massive bodies undulate. Live GPU swim is still **one** spine+flap shader for every Beautiful class. |
 | **Merge law** | [`out/w107/bio08/shared-contract.md`](../out/w107/bio08/shared-contract.md). If this brief and that file conflict, the contract wins. |
 | **Honor** | HUD-01 empty hub. Digit 0 shipyard. Digit 8/9 stay. HUD never writes `hullKind`. `state.js` READ-ONLY; later default **no** `state.js` write and **no** new class keys. Player CPU `makeLivingHull` stays the quality bar. Do **not** clone it onto NPCs. BIO-05 graft closed (Wave 97). BIO-02 kit mutate omit. Do **not** retune BIO-06 `LIVING_CADENCE`. BIO-07 meshes = **other worker**. No persist key. No new Digit. `innerHTML` forbidden later. **Do not edit** sibling Bio/Rep/Msn/Owner docs or the wishlist. |
@@ -20,6 +20,11 @@
 | Security review | [`out/w107/bio08/security-review.md`](../out/w107/bio08/security-review.md) |
 | Design-doc review | [`out/w107/bio08/code-review.md`](../out/w107/bio08/code-review.md) |
 | UI audit | [`out/w107/bio08/ui-audit.md`](../out/w107/bio08/ui-audit.md) |
+| Wave 108 first impl probe | [`out/w108/bio08/probe.mjs`](../out/w108/bio08/probe.mjs) |
+| Wave 108 notes | [`out/w108/bio08/notes.md`](../out/w108/bio08/notes.md) |
+| Wave 108 security | [`out/w108/bio08/security-review.md`](../out/w108/bio08/security-review.md) |
+| Wave 108 code review | [`out/w108/bio08/code-review.md`](../out/w108/bio08/code-review.md) |
+| Wave 108 UI audit | [`out/w108/bio08/ui-audit.md`](../out/w108/bio08/ui-audit.md) |
 
 Siblings BIO-06, BIO-07, REP-05, HUD, TGT, NAV, SHP, BIO-01..05, `docs/BioLivingShipsDesign.md`, wishlist, `PROGRESS.md`, and `docs/OwnerDecisions*.md` are **other workers**. **Do not edit** those paths. Those sibling files need not exist for this brief to stand. Do **not** write `docs/OwnerDecisionsWave107.md`. Sibling Wave 107 workers own `src/systems/ship.js`, `src/systems/ship-assets.js`, `src/game/living-cadence.js`, `scripts/boot-test.mjs`, `src/systems/station.js` — do not edit those paths.
 

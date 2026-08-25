@@ -1,0 +1,7 @@
+706:dispatchKey('KeyD');
+732:dispatchKey('KeyD');
+1732:const dockHintSuppressed = !ctx.world.onboarding.seen.includes('dock') && !hintCardVisible('D ΓÇö dock');
+19713:  if (!Object.values(w85ap).every(Boolean)) { console.log('WAVE85 NAV AUTOPILOT FAIL'); errors++; }
+20042:  if (!Object.values(w88ap).every(Boolean)) { console.log('WAVE88 AP PATH FAIL'); errors++; }
+23417:// ---- WAVE117 NAV-05 PR1 autopilot gate handoff ----
+23699:  if (!Object.values(w117).every(Boolean)) { console.log('WAVE117 NAV-05 HANDOFF FAIL'); errors++; }

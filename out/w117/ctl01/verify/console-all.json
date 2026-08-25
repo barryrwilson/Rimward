@@ -1,0 +1,7 @@
+Total messages: 2 (Errors: 0, Warnings: 0)
+Returning 4 messages for level "debug"
+
+[DEBUG] [vite] connecting... @ http://localhost:5178/@vite/client:788
+[DEBUG] [vite] connected. @ http://localhost:5178/@vite/client:911
+[DEBUG] [vite] connecting... @ http://localhost:5178/@vite/client:788
+[DEBUG] [vite] connected. @ http://localhost:5178/@vite/client:911

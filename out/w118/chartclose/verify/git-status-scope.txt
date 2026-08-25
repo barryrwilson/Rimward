@@ -1,0 +1,20 @@
+# git status --short (relevant). Chartclose worker listed files vs siblings.
+
+?? docs/Nav06ChartCloseDesign.md
+?? out/w118/chartclose/
+
+# Sibling / prior (NOT this worker; timestamps differ)
+ M PROGRESS.md                         # 2026-08-25 00:40
+ M docs/PLAYER-EXPERIENCE-WISHLIST.md  # 2026-08-25 00:40
+ M scripts/boot-test.mjs
+ M src/systems/galaxychart.js          # overlay open-gate + NAV-05 showApLive; no engage close
+?? docs/Nav05HandoffDesign.md          # 2026-08-24 23:56
+?? docs/Ctl02OverlayDesign.md          # 2026-08-25 09:26 (overlay sibling)
+?? docs/Ctl01DockBindDesign.md         # 2026-08-25 00:46
+?? out/w118/toast/                     # 2026-08-25 09:26-09:27 (toast sibling)
+?? src/systems/overlay-policy.js       # 2026-08-25 09:24 (overlay sibling; census 09:21 said absent)
+
+# MISSING out/w118/overlay/** — this worker did not steal that path.
+
+# Chartclose pack mtimes 2026-08-25 09:21:21 (core) and 09:23:42 (reviews).
+# galaxychart.js git diff: overlay import + canOpenPlayCard + playSurfaceBlocked + NAV-05 showApLive cancel/fly. No setOpen(false) on tryEngage success.

@@ -10,6 +10,7 @@ import {
   cadenceFor,
   classCruise,
 } from '../game/living-cadence.js';
+import { gaitFor } from '../game/living-gait.js';
 
 export { SWIM_IDLE_HZ, SWIM_CRUISE_HZ };
 
@@ -52,7 +53,8 @@ let ktx2Loader = null;
 // Beautiful NPC GPU swim. Matches player idle→cruise Hz (ship.js) without a
 // CPU vertex loop. Per-instance uniform objects: shared module uniforms would
 // lock every Beautiful NPC to one speed. Hz/sweep scales live in living-cadence.js.
-const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-hz-sweep';
+// Gait axis mix lives in living-gait.js (floats, one program).
+const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-gait';
 
 function makeSwimUniforms() {
   return {
@@ -60,6 +62,10 @@ function makeSwimUniforms() {
     uSwimAmp: { value: 1 },
     uSwimHz: { value: SWIM_IDLE_HZ },
     uSwimSweep: { value: 1 },
+    uSwimSpineX: { value: 1 },
+    uSwimFlapY: { value: 1 },
+    uSwimKickZ: { value: 0 },
+    uSwimRadial: { value: 0 },
   };
 }
 
@@ -69,7 +75,11 @@ function injectSwim(uniforms) {
     shader.uniforms.uSwimAmp = uniforms.uSwimAmp;
     shader.uniforms.uSwimHz = uniforms.uSwimHz;
     shader.uniforms.uSwimSweep = uniforms.uSwimSweep;
-    shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nuniform float uSwimHz;\nuniform float uSwimSweep;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
+    shader.uniforms.uSwimSpineX = uniforms.uSwimSpineX;
+    shader.uniforms.uSwimFlapY = uniforms.uSwimFlapY;
+    shader.uniforms.uSwimKickZ = uniforms.uSwimKickZ;
+    shader.uniforms.uSwimRadial = uniforms.uSwimRadial;
+    shader.vertexShader = 'uniform float uSwimTime;\nuniform float uSwimAmp;\nuniform float uSwimHz;\nuniform float uSwimSweep;\nuniform float uSwimSpineX;\nuniform float uSwimFlapY;\nuniform float uSwimKickZ;\nuniform float uSwimRadial;\nattribute vec4 aSwim;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
 {
@@ -88,8 +98,12 @@ function injectSwim(uniforms) {
   transformed *= breath;
   float spineWave = sin(6.9 * zn - swimPhase);
   float flap = sin(swimPhase - lag);
-  transformed.x += uSwimAmp * bodyAmp * zn * zn * spineWave;
-  transformed.y += uSwimAmp * flapAmp * wing * flap * uSwimSweep;
+  float kick = sin(swimPhase - 2.1 * zn);
+  transformed.x += uSwimAmp * bodyAmp * zn * zn * spineWave * uSwimSpineX;
+  transformed.y += uSwimAmp * flapAmp * wing * flap * uSwimSweep * uSwimFlapY;
+  transformed.z += uSwimAmp * bodyAmp * zn * zn * kick * uSwimKickZ;
+  float pulse = 1.0 + uSwimAmp * 0.04 * uSwimRadial * sin(swimPhase);
+  transformed *= pulse;
 }`
     );
   };
@@ -461,6 +475,11 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   }
   // Beautiful Ones swim phase: per-ship random phase offset (visual only).
   if (swimUniforms) {
+    const gait = gaitFor(resolvedClass);
+    swimUniforms.uSwimSpineX.value = gait.spineX;
+    swimUniforms.uSwimFlapY.value = gait.flapY;
+    swimUniforms.uSwimKickZ.value = gait.kickZ;
+    swimUniforms.uSwimRadial.value = gait.radial;
     root.userData.swimUniforms = swimUniforms;
     root.userData.swimPhase = Math.random() * Math.PI * 2;
     // Set morphTargetInfluences on all meshes (visual + glow engine)
@@ -507,4 +526,9 @@ export function updateShipAsset(object, elapsed, reducedMotion = false, camera, 
   uniforms.uSwimHz.value =
     (SWIM_IDLE_HZ + (SWIM_CRUISE_HZ - SWIM_IDLE_HZ) * speedNorm) * cadence.hzScale;
   uniforms.uSwimSweep.value = reducedMotion ? 0 : cadence.sweepScale;
+  const gait = gaitFor(object.userData.classKey);
+  uniforms.uSwimSpineX.value = gait.spineX;
+  uniforms.uSwimFlapY.value = gait.flapY;
+  uniforms.uSwimKickZ.value = gait.kickZ;
+  uniforms.uSwimRadial.value = gait.radial;
 }

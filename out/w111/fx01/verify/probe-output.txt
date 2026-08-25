@@ -1,0 +1,40 @@
+PASS ripple.pool16
+PASS ripple.ttl02
+PASS ripple.slotHost
+PASS ripple.liftOwn
+PASS hit.xorShielded
+PASS hit.xorUnshielded
+PASS hit.unshieldedNoRipple
+PASS ripple.parentWhenFinite
+PASS ripple.fpNoFullParent
+PASS ripple.fpUsesWorldCopy
+PASS ripple.missingHelperFallback
+PASS ripple.tryCatch
+PASS ripple.parkScene
+PASS ripple.parkEvents
+PASS ripple.orphan
+PASS ripple.reducedSnap
+PASS ripple.reducedNoExtraPulse
+PASS ripple.scaleLocal
+PASS ripple.noThirdPool
+PASS ripple.noUserShader
+PASS ripple.noInnerHTML
+PASS marks.pool12
+PASS persist.noNewWorldField
+PASS state.readOnlyHonor
+PASS hud.noHubChild
+PASS hub.reticleUntouched
+PASS wave54.hold {"playerFireEmit":true,"playerFireDoc":true,"muzzlePool":true,"ripple":true,"sparksUp":true,"projRadius":true,"cues":true,"shakeLastEvents":true,"shakeZeros":true,"deathPool":true,"noPerKillMat":true}
+PASS wave59.hold {"recoilEvent":true,"recoilFlesh":true,"recoilZero":true,"noThrottle":true,"hullPool":true,"stampUnshielded":true,"parkDestroy":true}
+PASS sim.npcParents
+PASS sim.chasePlayerMayParent
+PASS sim.fpPlayerWorld
+PASS sim.missingHelperWorld
+PASS sim.nanPoseWorld
+PASS sim.noHostWorld
+PASS sim.helperFalse
+PASS sim.helperThrowCaughtByCombatTry
+PASS combat.noSpeedZero
+PASS combat.keepApplyHit
+PASS
+exit=0

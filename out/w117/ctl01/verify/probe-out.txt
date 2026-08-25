@@ -1,0 +1,31 @@
+ok TRACKED has KeyJ
+ok case KeyJ pendingDock
+ok KeyD does not set pendingDock
+ok strafeX still KeyD
+ok help A/D strafe
+ok help J dock
+ok skip helper
+ok skip title attached helper
+ok skip title parent checks
+ok skip title getElementById
+ok skip models
+ok no innerHTML controls
+ok ctx dockPressed comment J
+ok ctx strafeX still D
+ok no jumpPressed field
+ok prompt dock J
+ok prompt jump J
+ok hub G + J jump
+ok hub pKey G
+ok prompt textContent
+ok no innerHTML hud prompt block
+ok onboarding J dock
+ok onboarding J jump
+ok no D dock hint
+ok boot WAVE21 KeyJ jump
+ok boot no KeyD dispatch
+ok boot J dock string
+ok boot no D dock string
+ok boot dock helper dockPressed
+ok boot KeyZ dismiss stays
+PROBE OK

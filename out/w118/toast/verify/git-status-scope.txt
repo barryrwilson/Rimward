@@ -1,0 +1,17 @@
+Toast worker pack (untracked markdown):
+?? docs/Hud04ToastFloodDesign.md
+?? out/w118/toast/
+
+This verify wrote only:
+out/w118/toast/verify/report.md
+out/w118/toast/verify/*.txt (dumps)
+
+Dirty src/ is sibling / other waves (not this toast re-dispatch):
+ M src/game/save.js
+ M src/systems/galaxychart.js
+ M src/systems/hail.js
+ M src/systems/hud.js
+?? src/systems/overlay-policy.js
+(plus other src/ files outside toast write-set)
+
+hud.js dirty hunks: classKey rails + Dock/Jump prompt D→J. Not toast linger / not expire aria-hidden.

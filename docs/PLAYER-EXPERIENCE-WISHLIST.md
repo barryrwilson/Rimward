@@ -41,7 +41,38 @@ details.
 
 ## Idea inbox
 
-- [ ] IDEA:
+- [x] DONE (P0, NAV): Autopilot can reach the plotted gate's activation zone
+  and then cancel with "next gate is missing" instead of jumping; make the
+  gate handoff reliable, retain enough reason detail to diagnose lookup/path/
+  hub failures separately, and verify a live plotted route through
+  `systemLoaded` rather than only checking steering commands.
+  Wave 117 PR1 `docs/Nav05HandoffDesign.md`.
+- [x] DONE (P0, CONTROLS): `D` currently means both lateral strafe-right and
+  dock/jump, so using the displayed gate or dock prompt can move the ship out
+  of interaction range; give dock/jump a dedicated non-movement interaction
+  binding so movement and contextual actions cannot fire from the same key.
+  Wave 117 PR1 `docs/Ctl01DockBindDesign.md`. KeyJ dock/jump. KeyD strafe.
+- [x] DONE (P1, OVERLAYS): Hail, Galaxy Chart, and Berth Records can stack while
+  the simulation continues, and a resolved "Let them go" hail can return;
+  establish one overlay-priority/pause policy, defer incompatible cards, and
+  ensure a resolved hail cannot reopen during its calm period.
+  Wave 118 PR1 `docs/Ctl02OverlayDesign.md`. Mutex hail/chart/berth.
+- [x] DONE (P1, FEEDBACK): Repeated autosave refusals and encounter lines can
+  flood the notification stack and obscure new information; deduplicate or
+  update identical messages within a short window and distinguish manual-save
+  failures from background autosave retries.
+  Wave 120 PR1 `docs/Hud04ToastFloodDesign.md`.
+- [x] PLANNED (P2, NAV/A11Y): Galaxy-chart labels are not clickable and route
+  plotting depends on small invisible mouse-only SVG hit discs; make labels
+  activate their systems, enlarge the effective targets, add accessible names
+  and keyboard focus, and provide keyboard navigation or a searchable
+  destination list.
+  Wave 120 brief `docs/Nav07ChartLabelDesign.md`. Impl later (PR1).
+- [x] DONE (P2, NAV): Starting Autopilot from the Galaxy Chart begins moving the
+  ship behind the still-open full-screen map; close the chart automatically on
+  successful engagement, or present an explicit state that requires closing
+  the chart before flight resumes.
+  Wave 120 PR1 `docs/Nav06ChartCloseDesign.md`.
 
 ---
 
@@ -317,6 +348,146 @@ of leave / covering / jump refuse. BIO-08 gait
 brief (`docs/Bio08LocomotionDesign.md`); impl
 later. Kit mutate omit. Aim-glass gauges stay off.
 
+**Wave 108 leftover + briefs landed 2026-08-24:**
+BIO-08 gait first impl (`docs/Bio08LocomotionDesign.md`):
+per-class axis mix; light CPU honor; one GPU
+shader. MSN-03 remaining unique SKU brief
+(`docs/Msn03UniqueSkuDesign.md`): Veridian `auto`,
+Hollow `dart`. PHY-04 remaining NPC avoid brief
+(`docs/Phy04AvoidDesign.md`); impl later. Kit
+mutate omit. Aim-glass gauges stay off.
+
+**Wave 109 leftover + brief landed 2026-08-24:**
+MSN-03 unique SKU first impl
+(`docs/Msn03UniqueSkuDesign.md`): Veridian `auto`,
+Hollow empty `dart`, light +2 UU. PHY-04
+two-sample avoid (`docs/Phy04AvoidDesign.md`):
+20 u mid probe + frame hold; no navmesh.
+PHY-05 remaining pad-home brief
+(`docs/Phy05PadHomeDesign.md`); impl later.
+Kit mutate omit. Aim-glass gauges stay off.
+
+**Wave 110 leftover + briefs landed 2026-08-24:**
+PHY-05 pad-home first impl
+(`docs/Phy05PadHomeDesign.md`): patrol
+heavy hold outside D5; persist heal on
+existing `record.route`. REP-03 remaining
+remedial brief (`docs/Rep03RemedialDesign.md`):
+Digit 9 copy of live +2 climb after
+restitution-to-0; impl later. FX-01
+remaining punch brief
+(`docs/Fx01RemainingDesign.md`): hull-local
+shield ripple; recoil/marks consume;
+impl later. Kit mutate omit. Aim-glass
+gauges stay off.
+
+**Wave 111 leftover + brief landed 2026-08-24:**
+REP-03 Digit 9 climb copy first impl
+(`docs/Rep03RemedialDesign.md`): live +2
+families after restitution-to-0. FX-01
+hull-local shield ripple first impl
+(`docs/Fx01RemainingDesign.md`): ring
+parents to host; FP world-space; recoil
+/ marks consume. HUD-02 remaining
+class-silhouette brief
+(`docs/Hud02RemainingSilhouettesDesign.md`);
+impl later. Kit mutate omit. Aim-glass
+gauges stay off.
+
+**Wave 112 owner deputize landed 2026-08-24:**
+`docs/OwnerDecisionsWave112.md`. Live knobs
+consume. HUD-02 class silhouettes later.
+
+**Wave 113 leftover + briefs landed 2026-08-24:**
+HUD-02 living class tokens first impl
+(`docs/Hud02RemainingSilhouettesDesign.md`):
+`data-class-key` on bio facing chrome.
+HUD-02 remaining plated silhouette brief
+(`docs/Hud02RemainingMechSilhouettesDesign.md`);
+impl later. FX remaining scrape punch brief
+(`docs/Fx01RemainingScrapeDesign.md`);
+impl later. Kit mutate omit. Aim-glass
+gauges stay off.
+
+**Wave 114 leftover + briefs landed 2026-08-24:**
+HUD-02 plated class tokens first impl
+(`docs/Hud02RemainingMechSilhouettesDesign.md`):
+`data-class-key` on mech facing chrome.
+FX scrape punch first impl
+(`docs/Fx01RemainingScrapeDesign.md`):
+`spawnHitFx` on damaging ram. FX muzzle
+leftover CONSUME
+(`docs/Fx01RemainingMuzzleDesign.md`).
+Kit mutate omit. Aim-glass gauges stay
+off.
+
+**Wave 115 leftover census landed 2026-08-24:**
+HUD-02 remaining TARGET class tokens
+brief (`docs/Hud02RemainingTargetSilhouettesDesign.md`);
+impl later. HUD-03 visual leftover
+CONSUME (`docs/Hud03RemainingVisualDesign.md`).
+SHP remaining catalog leftover CONSUME
+(`docs/ShpRemainingCatalogDesign.md`).
+No `src/`. Kit mutate omit. Aim-glass
+gauges stay off.
+
+**Wave 116 leftover + inbox briefs landed
+2026-08-24:** HUD-02 TARGET class tokens
+first impl (`docs/Hud02RemainingTargetSilhouettesDesign.md`):
+lock class on `.rw-combat-target`;
+player CSS scoped to `.rw-combat-self`.
+NAV-05 AP handoff brief
+(`docs/Nav05HandoffDesign.md`); impl later.
+CTL-01 dock/jump KeyJ brief
+(`docs/Ctl01DockBindDesign.md`); impl later.
+Kit mutate omit. Aim-glass gauges stay
+off.
+
+**Wave 117 leftover + inbox census landed
+2026-08-24:** NAV-05 AP handoff first impl
+(`docs/Nav05HandoffDesign.md`): ring hop
+keeps flying; split cancel English; live
+`systemLoaded` pin; chart-open
+`showApLive`. CTL-01 KeyJ first impl
+(`docs/Ctl01DockBindDesign.md`): dock/jump
+J; D strafe only. Overlay leftover brief
+(`docs/Ctl02OverlayDesign.md`); impl later.
+Toast flood, chart-label a11y, and
+close-chart-on-AP stay inbox. Kit mutate
+omit. Aim-glass gauges stay off.
+
+**Wave 118 leftover + inbox census landed
+2026-08-25:** CTL-02 overlay-priority
+first impl (`docs/Ctl02OverlayDesign.md`):
+mutex hail/chart/berth; defer hail;
+salvage calm; Digit skip under pause.
+Toast leftover brief
+(`docs/Hud04ToastFloodDesign.md`); impl
+later. Chart-close leftover brief
+(`docs/Nav06ChartCloseDesign.md`); impl
+later. Chart-label a11y stays inbox.
+Kit mutate omit. Aim-glass gauges stay
+off.
+
+**Wave 119 boot-fail closeout landed
+2026-08-25:** WAVE26 unique ferry/haul
+keep; NPC UPDATE ERR fail-closed;
+WAVE83 dart toast capture. `npm run
+test:boot` PASS. Toast PR1 and
+chart-close PR1 stayed OPEN.
+
+**Wave 120 leftover + inbox census landed
+2026-08-25:** HUD-04 toast-flood first
+impl (`docs/Hud04ToastFloodDesign.md`):
+8 s linger; AUTOSAVE HELD vs SAVE
+BLOCKED. NAV-06 chart-close-on-AP first
+impl (`docs/Nav06ChartCloseDesign.md`):
+Autopilot button success closes the
+chart. Chart-label leftover brief
+(`docs/Nav07ChartLabelDesign.md`); impl
+later. Kit mutate omit. Aim-glass
+gauges stay off.
+
 ### Experience references
 
 Use these as experiential references rather than cloning their interfaces:
@@ -348,8 +519,16 @@ mission chains.
 
 **Status:** HUD-01 DONE (implemented + play-verified 2026-08-17). HUD-02
 skins DONE (Wave 62, 2026-08-18; brief Wave 61). Family audio DONE
-(Wave 65 PR4). HUD-03 visual settings remain; optional audio
-alerts DONE (Wave 103; brief Wave 102).  
+(Wave 65 PR4). HUD-03 visual leftover CONSUME (Wave 115;
+`docs/Hud03RemainingVisualDesign.md`). Optional audio
+alerts DONE (Wave 103; brief Wave 102). Wave 113 living
+class-token first impl
+(`docs/Hud02RemainingSilhouettesDesign.md`).
+Wave 114 plated class-token first impl
+(`docs/Hud02RemainingMechSilhouettesDesign.md`).
+Wave 115 remaining TARGET class-token brief
+(`docs/Hud02RemainingTargetSilhouettesDesign.md`).
+Wave 116 TARGET class-token first impl.  
 **Player problem:** The current HUD pulls the player's eyes to screen corners,
 away from the target and projectile path. Essential combat state is difficult
 to read quickly.  
@@ -391,6 +570,20 @@ a targeting-computer upgrade.
 **Status:** DONE for hook + mech + first-wave bio (Wave 62) and
 family audio (Wave 65 PR4). Brief: `docs/Hud02IdentitiesDesign.md`.
 Mech follows a mounted `hullKind: 'built'` hull after Wave 64 SHP.
+Wave 113 living class tokens first impl
+(`docs/Hud02RemainingSilhouettesDesign.md`):
+allowlisted `data-class-key` on bio facing
+chrome. Wave 114 plated class tokens
+first impl
+(`docs/Hud02RemainingMechSilhouettesDesign.md`):
+allowlisted `data-class-key` under mech
+only; light keeps generic plate.
+Wave 115 remaining TARGET class tokens
+brief (`docs/Hud02RemainingTargetSilhouettesDesign.md`):
+player-only `classKeyToken` still restyles
+both rails. Wave 116 PR1 scopes player CSS
+to `.rw-combat-self` and writes lock class
+on `.rw-combat-target`.
 
 - Conventional ships use one consistent mechanical HUD family.
 - Living ships use an organic HUD family with animated tendrils, pulsing
@@ -406,7 +599,9 @@ Mech follows a mounted `hullKind: 'built'` hull after Wave 64 SHP.
 motion in `settings.js` / `body.rw-*`). Wave 102 remaining
 brief (`docs/Hud03AlertsDesign.md`). Wave 103 first impl:
 KeyO `hudAlerts` default off; reuse family ticks; mute
-fail-closed; Incoming copy stays.
+fail-closed; Incoming copy stays. Wave 115 visual leftover
+CONSUME (`docs/Hud03RemainingVisualDesign.md`): named
+serial none.
 
 Both HUD families should support:
 
@@ -643,7 +838,10 @@ environmental collisions; player and NPC turn rules drifting apart.
 buy lists. Wave 67 added plated frigate buy. Missiles /
 turrets first impl DONE (Wave 68;
 `docs/Shp03WeaponsDesign.md`). Power ledger **out**
-(Wave 93 close).  
+(Wave 93 close). Wave 115 remaining catalog leftover
+CONSUME (`docs/ShpRemainingCatalogDesign.md`): named
+serial none. Living and plated catalogs already include
+`frigate`.  
 **Player problem:** The player cannot build a collection of ships or meaningfully
 configure a hull for a chosen career.  
 **Likely areas:** station/shipyard UI, player state and saves, ship definitions,
@@ -654,7 +852,9 @@ equipment and combat systems.
 **Status:** first slice DONE (Wave 64). Authored faction catalogs,
 reputation + price gate, Digit 0 desk. Cutter + ace buy lists
 DONE (Wave 65). Plated frigate buy DONE (Wave 67; 80000 UU,
-Trusted 25). Beautiful and Unknowables still omit frigate.
+Trusted 25). Wave 94 living yards sell six keys including
+frigate. Wave 115 CONSUME: SHP-01 omit-frigate copy is
+stale. Independent and Hollow yards stay empty.
 
 - Give each faction at least one shipyard where its ships can be purchased.
 - Gate faction hulls by sufficient reputation as well as price.
@@ -707,7 +907,11 @@ Wave 103 remaining brief
 (`docs/Rep05ConsequencesDesign.md`). Wave 104 first
 impl: covering Known+; inbound Marked refuse.
 Wave 107 Digit 9 copy of leave / covering /
-jump refuse. War target −2 and
+jump refuse. Wave 110 remaining remedial
+brief (`docs/Rep03RemedialDesign.md`).
+Wave 111 first impl: Digit 9 climb copy
+after restitution-to-0; live +2 families;
+no new kind. War target −2 and
 spy expose −2 shipped Wave 83. `RANK_LADDER` stays.  
 **Player problem:** The game does not adequately explain how to improve faction
 standing or show what the rating changes.  
@@ -777,7 +981,11 @@ employer +2 / target 0). Wave 81 MSN-03 brief:
 shipped. Wave 103 unique DONE brief
 (`docs/Msn03UniqueDoneDesign.md`). Wave 104 first
 impl: hide unique four `done` on Digit 2; persist
-keep.  
+keep. Wave 108 remaining unique SKU brief
+(`docs/Msn03UniqueSkuDesign.md`): Veridian `auto`,
+Hollow `dart`; `canSeat` fail-closed +2 UU.
+Wave 109 first impl: remaining employers
+seat dart/auto; light +2 UU.  
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  
@@ -890,6 +1098,8 @@ creating impossible economic quantities; neutral AI failing to defend itself.
 `docs/Nav01RouteDesign.md`, `docs/Nav02GuidanceDesign.md`,
 `docs/Nav03AutopilotDesign.md`). NAV-04 DONE (Wave 96
 first impl; brief Wave 95 `docs/Nav04HoverDesign.md`).
+NAV-05 remaining AP handoff brief Wave 116
+(`docs/Nav05HandoffDesign.md`); impl later.
 **Player problem:** Selecting a destination on the galaxy map does not currently
 turn that choice into useful in-flight navigation. The player must work out the
 gate sequence manually, and there is no option to delegate routine travel.
@@ -933,6 +1143,8 @@ ship controls and steering, collision/hazard avoidance, save state.
 ### NAV-03 — Full-route autopilot
 
 **Status:** DONE (Wave 85). Restore does not resume flying.
+Remaining zone handoff leftover: Wave 116 brief
+(`docs/Nav05HandoffDesign.md`); impl later.
 
 - After selecting a destination system, the player can click **Autopilot** to
   have the ship fly there rather than manually steering through each gate.
@@ -1019,8 +1231,13 @@ mid-route restoring unsafe steering state.
 
 **Status:** PHY-01 / PHY-02 / PHY-03 first pass DONE (Wave 53, 2026-08-17).
 Wave 58 closed gate torus collision, station hold waypoints, and
-stronger station/gate avoid. NPC avoid is still a lookahead bias,
-not full path planning.  
+stronger station/gate avoid. PHY-04 remaining avoid brief Wave 108
+(`docs/Phy04AvoidDesign.md`): live 40 u lookahead stays fail-closed;
+two-sample steer first impl Wave 109 (mid 20 u +
+frame hold; no navmesh). PHY-05 pad-home persist
+brief Wave 109 (`docs/Phy05PadHomeDesign.md`);
+first impl Wave 110 (patrol heavy hold +
+heal; no new persist key).  
 **Player problem:** The player and NPCs can fly through suns, stations,
 asteroids, and ships, removing risk and breaking visual credibility.  
 **Likely areas:** player ship movement, NPC steering, solar-system bodies,
@@ -1120,7 +1337,13 @@ stations/gates; an Oort-scale region becoming too distant to be useful in play.
 
 **Status:** FX-01 / FX-02 / FX-03 first pass DONE (Wave 54, 2026-08-17).
 Recoil and pooled hull scorches landed Wave 59. Lasting wrecks / cargo /
-pods already lived in `world.js`.
+pods already lived in `world.js`. Wave 110 remaining punch brief
+(`docs/Fx01RemainingDesign.md`). Wave 111
+first impl: hull-local shield ripple;
+recoil/marks consume. Wave 114 scrape punch first impl
+(`docs/Fx01RemainingScrapeDesign.md`).
+Wave 114 muzzle leftover CONSUME
+(`docs/Fx01RemainingMuzzleDesign.md`).
 **Player problem:** Weapon effects look weak and hits do not feel impactful.  
 **Likely areas:** combat rendering, projectile and beam effects, shields, ship
 damage, camera feedback, audio, teardown/performance tests.
@@ -1129,6 +1352,12 @@ damage, camera feedback, audio, teardown/performance tests.
 
 **Status:** First pass DONE (Wave 54). Recoil + pooled scorch marks
 landed Wave 59. Marks park on a kill shot so wrecks stay clean.
+Remaining hull-local shield ripple brief Wave 110
+(`docs/Fx01RemainingDesign.md`); first impl
+Wave 111. Remaining scrape punch first impl
+Wave 114 (`docs/Fx01RemainingScrapeDesign.md`).
+Muzzle leftover CONSUME Wave 114
+(`docs/Fx01RemainingMuzzleDesign.md`).
 
 Use the full feedback stack where appropriate:
 
@@ -1280,7 +1509,8 @@ impl. Wave 105 BIO-07 brief
 (`docs/Bio07BodiesDesign.md`); light + heavy NPC
 slices. Wave 106 remaining four classes + bake.
 Wave 107 BIO-08 gait brief
-(`docs/Bio08LocomotionDesign.md`); impl later.
+(`docs/Bio08LocomotionDesign.md`); first impl
+Wave 108.
 **Preserve:** The current living player ship is the quality benchmark. Its
 organic form, alien skin, and swimming motion that intensifies with speed are
 exactly the desired living-ship experience. Future work must not weaken it.  
@@ -1332,7 +1562,7 @@ on Hangar Offers; Confirm hop stays class keys.
 light + heavy organic NPC slices. Wave 106 remaining four
 classes (ace squid, cutter shark, frigate octopus, freighter
 gardenback). Player CPU `makeLivingHull` stays the quality
-bar. Anatomy-native gait waits BIO-08.
+bar. Anatomy-native gait first impl Wave 108.
 
 The present Beautiful Ones NPC ships are more organic than conventional ships
 but do not capture the magic of the living player ship. Rebuild their visual and
@@ -1436,12 +1666,14 @@ the NPC fleet uniform.
 ### BIO-08 — Anatomy-native living gait
 
 **Status:** remaining brief Wave 107
-(`docs/Bio08LocomotionDesign.md`); impl later.
+(`docs/Bio08LocomotionDesign.md`); first impl
+Wave 108 (`src/game/living-gait.js`). Light CPU
+honor. Beautiful NPC one shader + gait floats.
 
 BIO-06 scales Hz and sweep by class. BIO-07 bodies use four
 plans. Live GPU swim is still one spine-and-flap shader.
-Later serial may bias gait per class without retuning the
-cadence table and without a universal mixer scale.
+Gait biases axes per class without retuning the cadence
+table and without a universal mixer scale.
 
 ### BIO-04 — Psionic weapons
 
@@ -1493,23 +1725,21 @@ done even though it is not itself mined as a player-facing wishlist item.
 
 ## Open questions for future grooming
 
-Ask only when an answer is needed to shape a selected wave:
+**Closed Wave 112** (`docs/OwnerDecisionsWave112.md`).
+Live knobs consume. No new family, Digit, SKU, or
+persist key. Owner may override after playtest.
 
-- What conventional weapon families should complement guns, mining lasers, and
-  missiles?
-- How should mount, ammunition, power, heat, and mass limits interact?
-- What exact targeting aids belong to each sensor/computer tier?
-- Which ship classes and faction shipyard inventories launch first?
-- What prices and reputation thresholds make ship progression satisfying?
-- What numerical collision damage curve feels fair above low-speed contact?
-- How long are "generous" mission deadlines in play?
-- Which procedural mission family is the best first vertical slice?
-- How are rare living-ship seeds signaled, stored, and prevented from accidental
-  sale?
-- Can an Abomination ever be cleansed, and how explicitly is its Beautiful Ones
-  consequence warned?
-- How should trafficking survivors be presented, restricted, and reacted to by
-  factions and contacts?
+- Extra weapon families: **none** (live `WEAPONS` is the set).
+- Mount / ammo / power / heat / mass: **four live laws**; no mount power ledger.
+- Scanner tiers: **arc only**; core HUD stays ungated; no Mk III.
+- Yard inventories: **six live classes**; no seventh class.
+- Prices / ranks: **keep** `YARD_LIST_UU` / `MIN_REP` / `RANK_LADDER`.
+- Collision curve: **keep** `IMPACT_MIN_SPEED` 8 and `0.35` / u/s.
+- Ordinary deadlines: **600 s** for every renewable family.
+- First mission family: **mining** (Wave 71 DONE).
+- Seeds: hangar hulls (gift / pirate 0.05 / market 40000); not cargo.
+- Abomination cleanse: **no**; ungraft forbidden; Confirm is the warning.
+- Trafficking: Gilded Digit 7 only; 160 / 240 UU; Market never sells people.
 
 ## Interview provenance
 

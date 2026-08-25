@@ -1,0 +1,11 @@
+Playwright MCP console (all, debug), Vite 5174 session.
+
+Errors: 0
+Warnings: 0
+Total messages seen: 2 (plus Vite debug connect lines)
+
+[DEBUG] [vite] connecting... @ http://127.0.0.1:5174/@vite/client
+[DEBUG] [vite] connected. @ http://127.0.0.1:5174/@vite/client
+
+No new errors from Autopilot success close, refuse, or cancel-while-open.
+MCP also recorded 5173 Vite debug connect lines from sibling tabs in the shared browser. Those are not this product path.

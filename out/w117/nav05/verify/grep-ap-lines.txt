@@ -1,0 +1,33 @@
+21:export const AP_LINES = Object.freeze({
+28:  missingHop: 'Autopilot refused ΓÇö next hop is not on the route.',
+29:  missingLookup: 'Autopilot refused ΓÇö next gate is not in this system.',
+30:  lookupFail: 'Autopilot cancelled ΓÇö next gate is not in this system.',
+31:  missingPath: 'Autopilot cancelled ΓÇö approach path failed.',
+32:  missingHub: 'Autopilot cancelled ΓÇö hub does not list the next hop.',
+33:  hubWrap: 'Autopilot cancelled ΓÇö hub spoke cycle failed.',
+36:  missingGate: 'Autopilot cancelled ΓÇö next gate is missing.',
+40:const BREAK_LINE = Object.freeze({
+41:  cancel: AP_LINES.cancel,
+42:  input: AP_LINES.input,
+43:  lookupFail: AP_LINES.lookupFail,
+44:  missingPath: AP_LINES.missingPath,
+45:  missingHub: AP_LINES.missingHub,
+46:  hubWrap: AP_LINES.hubWrap,
+47:  missingGate: AP_LINES.missingGate,
+48:  arrive: AP_LINES.arrive,
+67:let hubWrap = 0;
+131:  hubWrap = 0;
+186:  if (dest !== here && !hop) return 'missingHop';
+187:  if (dest !== here && !resolveNavGatePos(ctx, hop)) return 'missingLookup';
+204:    const line = Object.hasOwn(BREAK_LINE, reason) ? BREAK_LINE[reason] : '';
+232:  if (Object.hasOwn(AP_LINES, token)) return AP_LINES[token];
+242:    disengage(ctx, 'lookupFail');
+257:    disengage(ctx, 'lookupFail');
+280:    disengage(ctx, 'missingPath');
+350:        disengage(ctx, 'missingHub');
+355:        hubWrap = 0;
+358:      if (hubWrap > cap) {
+359:        disengage(ctx, 'hubWrap');
+363:      hubWrap += 1;
+368:      hubWrap = 0;
+407:    else disengage(ctx, 'missingGate');

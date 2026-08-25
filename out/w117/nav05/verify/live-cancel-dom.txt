@@ -1,0 +1,16 @@
+Chart Cancel via document.querySelector('.rw-galaxy-ap').click()
+before: label=Cancel autopilot, live=""
+after:  label=Autopilot, live="Autopilot cancelled.", chartDisplay=flex
+not raw hop id, not blank at click.
+
+Second pass:
+{ label: "Autopilot", live: "Autopilot cancelled.", chartOpen: "flex" }
+
+Engage while chart open:
+aria-label Cancel autopilot; chip dest Survey / next Veridian Reach then Survey; POS jumped Freehold Drift -> Veridian Reach with chart still flex/visible.
+
+HUD chip Cancel (Playwright getByText first match): comm toast "Autopilot cancelled."; #rw-galaxy-ap-live stayed "". Event consumer reads ctx.events same-frame only; DOM click after chart update misses lastEvents. Chart button has immediate showApLive.
+
+Console: Errors 0, Warnings 0 (Playwright info dump). Pre-existing toasts "Heave to. Cargo or hull." No "next gate is missing" during live pass.
+
+Hub-nearer ring overlap: not reached in browser. Probe hopKind/ringNoCycle true. WAVE117 boot pin hubNoCancel/hubNoCycle present in scripts/boot-test.mjs (not executed this pass).

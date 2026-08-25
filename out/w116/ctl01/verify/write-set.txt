@@ -1,0 +1,22 @@
+# Wave 116 CTL-01 leftover — worker write-set (verified markdown only)
+# Worker (do not treat as src remap)
+C:\Projects\WebSim\docs\Ctl01DockBindDesign.md
+C:\Projects\WebSim\out\w116\ctl01\current-ctl01-dock-bind-inventory.md
+C:\Projects\WebSim\out\w116\ctl01\shared-contract.md
+C:\Projects\WebSim\out\w116\ctl01\security-review.md
+C:\Projects\WebSim\out\w116\ctl01\code-review.md
+C:\Projects\WebSim\out\w116\ctl01\ui-audit.md
+C:\Projects\WebSim\out\w116\ctl01\notes.md
+
+# Not in worker write-set (confirmed absent / sibling-owned)
+# src/**
+# scripts/**
+# docs/PLAYER-EXPERIENCE-WISHLIST.md
+# PROGRESS.md
+# out/w116/hud02tgt/**
+# out/w116/nav05/**
+# docs/OwnerDecisionsWave116.md
+
+# Verifier (this pass)
+C:\Projects\WebSim\out\w116\ctl01\verify\report.md
+C:\Projects\WebSim\out\w116\ctl01\verify\write-set.txt

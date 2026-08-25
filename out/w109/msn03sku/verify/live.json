@@ -1,0 +1,57 @@
+{
+  "probe": "PROBE PASS",
+  "wave109": {
+    "freeholdDart": true,
+    "redledgerAuto": true,
+    "veridianAuto": true,
+    "hollowDart": true,
+    "noGildedKey": true,
+    "specHasOwn": true,
+    "lightFailClosed": true,
+    "seatedWriteVerify": true,
+    "protoDropNoPay": true,
+    "uniqueFourNoGrant": true,
+    "digit0Shipyard": true,
+    "digit2Jobs": true,
+    "digit8Digit9": true,
+    "noNewWorldFields": true,
+    "noStateWrite": true,
+    "noInnerHtml": true,
+    "jobsHintCopy": true,
+    "noShopDebit": true,
+    "noReducedMotionAnim": true
+  },
+  "wave83station": {
+    "lastFreeholdLight": false,
+    "lastFreeholdHeavy": true,
+    "lastVeridianNoSku": false,
+    "lastHollowNoSku": true
+  },
+  "bootErrors": 6,
+  "wave26Fails": 5,
+  "hub": { "w": 80, "h": 80, "childCount": 5, "skuKids": 0 },
+  "jobsHint": {
+    "dartRack": true,
+    "autoTurret": true,
+    "has6500": false,
+    "has4200": false
+  },
+  "liveGrants": {
+    "lightFreehold": { "creditsDelta": 24, "payQuoted": 22, "failUu": 2, "launcher": "", "turret": "" },
+    "heavyFreehold": { "creditsDelta": 22, "launcher": "dart", "missileAmmo": 0, "scanner": 0, "mining": 0 },
+    "heavyVeridian": { "creditsDelta": 19, "turret": "auto" },
+    "aceHollow": { "creditsDelta": 17, "launcher": "dart", "missileAmmo": 0 },
+    "step1NoPlus2": { "creditsUnchanged": true, "next": "chain-veridian-2" },
+    "protoDropped": true
+  },
+  "digits": {
+    "d0": "SHIPYARD",
+    "d2": "JOBS BOARD",
+    "d8": "Launch undock overlay empty",
+    "d9": "STANDING"
+  },
+  "gitDiff": ["scripts/boot-test.mjs", "src/game/jobs-chains.js", "src/systems/station.js"],
+  "stateJsWrite": false,
+  "consoleErrors": 0,
+  "url": "http://localhost:5179/"
+}

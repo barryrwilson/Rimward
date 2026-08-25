@@ -1,0 +1,71 @@
+{
+  "url": "http://127.0.0.1:5178/",
+  "vitePort": 5178,
+  "viteBind": "127.0.0.1",
+  "wave118Boot": {
+    "helperExports": true,
+    "helperSrcExports": true,
+    "salvageCalmSrc": true,
+    "openCardCalmSrc": true,
+    "salvageCalmWrote": true,
+    "calmRefused": true,
+    "hailPainted": true,
+    "keyMRefusedWhileHail": true,
+    "keyLRefusedWhileHail": true,
+    "hailDeferred": true,
+    "hailFlushed": true,
+    "berthRefusedWhileChart": true,
+    "keyHRefusedWhileChart": true,
+    "digitSkipUnderPause": true,
+    "digitSkipUnderSettings": true,
+    "noPauseAssign": true,
+    "berthNoPauseAssign": true,
+    "noInner118": true,
+    "chartStayOpenSrc118": true,
+    "digit0Shipyard118": true,
+    "noPersist118": true,
+    "unknownSkip": true
+  },
+  "wave117Boot": {
+    "chartStayOpen": true,
+    "chartEngageStay": true,
+    "chartCancelLive": true,
+    "handoffFail": false
+  },
+  "wave26": "pre-existing FAIL (ferry quote / lane delivery / old-save / save fields / restore)",
+  "static": {
+    "hailDigitsAllowedReadsPaused": true,
+    "hailDigitsAllowedLine": "src/systems/overlay-policy.js:177 if (ctx && ctx.flags && ctx.flags.paused) return false",
+    "showApLiveHits": 6,
+    "overlayPolicyInnerHTML": false,
+    "hailChartBerthPausedAssign": false,
+    "chartCloseBlur": true,
+    "berthCloseBlur": true
+  },
+  "live": {
+    "titleNewGame": true,
+    "originDigit1": "greenhand",
+    "hailOpenedViaCtx": true,
+    "pauseBannerZ": "50",
+    "hailZ": "40",
+    "pauseThenDigit1": {
+      "hailOpenStayed": true,
+      "calmUntilBefore": 0,
+      "calmUntilAfter": 0,
+      "letGoDidNotFire": true
+    },
+    "resumeThenMutexML": {
+      "hailOpen": true,
+      "chartOpen": false,
+      "berthOpen": false
+    },
+    "unpausedDigit1LetGo": {
+      "hailClosed": true,
+      "calmUntil": 135.5420999999936,
+      "worldTime": 105.86859999999356
+    },
+    "chartStayOpenOnApEngage": true,
+    "autopilotEngagedWhileChartOpen": true,
+    "consoleErrors": 0
+  }
+}

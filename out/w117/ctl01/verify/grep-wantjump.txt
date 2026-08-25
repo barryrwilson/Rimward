@@ -1,0 +1,6 @@
+src/game/autopilot.js:18:  'engaged', 'yaw', 'pitch', 'throttle', 'wantJump', 'cycleHub', 'reason',
+src/game/autopilot.js:78:    wantJump: false,
+src/game/autopilot.js:126:  ap.wantJump = false;
+src/game/autopilot.js:333:  ap.wantJump = !!(inZone && !docked && nearTo === hop);
+src/systems/gate.js:674:      && ctx.autopilot && ctx.autopilot.wantJump === true
+src/systems/gate.js:677:    if (inZone && !ctx.flags.docked && !jumping && (ctx.input.dockPressed || apJump)) {

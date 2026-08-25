@@ -1,0 +1,23 @@
+PASS velocity-plain-object
+PASS velocity-length-number
+PASS hailClosed-with-null-hole
+PASS hailOpened-with-null-hole
+PASS hailClosed-dummy-only
+PASS hunt-acquire-with-null-hole
+PASS hunt-acquire-did-not-throw
+PASS hailClosed-hunt-with-null-hole
+PASS hailClosed-hunt-hold-released
+PASS destroyed-no-object-spawn-survivor-path
+PASS removeLiveShip-no-object
+PASS animateShipMesh-no-userData
+PASS demanding-live-hailClosed-emit
+PASS demanding-emits-hailClosed count=1
+PASS demanding-cleared
+PASS hailClosed-event-releases-stamped-hold
+PASS stamped-hold-released
+PASS pirate-hunt-telegraph
+PASS telegraph-phase-set phase=telegraph
+PASS telegraph-no-npcFire ["hailOpened"]
+PASS live-velocity-copy-after-dummy
+PASS live-velocity-moved-or-kept
+EXTRA PROBE PASS

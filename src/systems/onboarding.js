@@ -47,10 +47,10 @@ const HINTS = [
       const dx = o.x - p[0], dy = o.y - p[1], dz = o.z - p[2];
       return dx * dx + dy * dy + dz * dz <= U.DOCK_RANGE * U.DOCK_RANGE;
     },
-    text: 'D — dock' },
+    text: 'J — dock' },
   { id: 'gate',
     when: (ctx) => ctx.gate.inZone === true,
-    text: 'D — jump the gate' },
+    text: 'J — jump the gate' },
   { id: 'combat',
     when: (ctx) => ctx.flags.combat === true,
     text: 'T — target · H — hail · a surrendered rival pays better than a dead one' },

@@ -97,6 +97,9 @@ import {
  * Wave 59 FX-DECALS: a fixed pool of dark scorch sprites parents to the
  * scored hull (shields already down). Recycle oldest. Park on
  * npcDestroyed / player death / despawn so teardown cannot dispose them.
+ *
+ * Wave 111: shielded ripples parent to the host at a local offset. Fail
+ * closed to world-space. First-person player host stays world-space.
  */
 
 // ---- module-scope scratch (reused every frame) ----
@@ -165,6 +168,8 @@ let _sunKillEmitted = false;
 // Hull-mark stamp scratch. Combat writes sprite.position from these.
 const _markPose = { px: 0, py: 0, pz: 0, qx: 0, qy: 0, qz: 0, qw: 1, sx: 1, sy: 1, sz: 1 };
 const _markLocal = { x: 0, y: 0, z: 0 };
+const _ripplePose = { px: 0, py: 0, pz: 0, qx: 0, qy: 0, qz: 0, qw: 1, sx: 1, sy: 1, sz: 1 };
+const _rippleLocal = { x: 0, y: 0, z: 0 };
 // Seeker scratch — module-scope, no per-frame alloc on the missile path.
 const _seekFwd = new THREE.Vector3();
 const _seekWant = new THREE.Vector3();
@@ -199,6 +204,7 @@ const SPARK_SPEED = 24; // u/s outward drift
 const SPARK_SIZE = 0.85;
 const MUZZLE_TTL = 0.1; // s — short pop, 0.08–0.12 band
 const RIPPLE_TTL = 0.2; // s — brief expanding shield ring
+const RIPPLE_LIFT = 0.16; // local lift; not HULL_MARK_LIFT
 const GLOW_SCALE_ENERGY = 7.2;
 const GLOW_SCALE_DISRUPTOR = 9.0;
 const GLOW_SCALE_MISSILE = 8.6;
@@ -631,7 +637,7 @@ export function initCombat(ctx) {
     const sprite = new THREE.Sprite(mat);
     sprite.visible = false;
     scene.add(sprite);
-    ripples.push({ sprite, t: 0, ttl: RIPPLE_TTL, snap: false, seen: false });
+    ripples.push({ sprite, t: 0, ttl: RIPPLE_TTL, snap: false, seen: false, host: null });
   }
 
   // --- Impact spark pool (wave-6): one burst per flash, each a THREE.Points
@@ -1022,8 +1028,26 @@ export function initCombat(ctx) {
     }
   }
 
+  function parkRipple(slot) {
+    slot.host = null;
+    slot.snap = false;
+    slot.sprite.visible = false;
+    if (slot.sprite.parent !== scene) scene.add(slot.sprite);
+  }
+
+  function parkRipplesOnHost(host) {
+    if (!host) return;
+    for (let i = 0; i < ripples.length; i++) {
+      if (ripples[i].host === host) parkRipple(ripples[i]);
+    }
+  }
+
+  function parkAllRipples() {
+    for (let i = 0; i < ripples.length; i++) parkRipple(ripples[i]);
+  }
+
   /** Expanding shield ring. Skip when both layers are already 0. */
-  function spawnRipple(pos, family) {
+  function spawnRipple(pos, family, host) {
     const reduced = ctx.settings?.reducedMotion === true;
     for (let i = 0; i < ripples.length; i++) {
       const f = ripples[i];
@@ -1032,11 +1056,51 @@ export function initCombat(ctx) {
       f.ttl = RIPPLE_TTL;
       f.snap = reduced;
       f.seen = false;
+      f.host = null;
       f.sprite.material.color.set(FAMILY_COLORS[family] ?? FAMILY_COLORS.energy);
       f.sprite.material.opacity = reduced ? 0.75 : 1;
       const s = reduced ? 5.5 : 2.2;
       f.sprite.scale.set(s, s, 1);
-      f.sprite.position.copy(pos);
+
+      const playerObj = ctx.ship?.object;
+      const fpPlayer = !!(host && playerObj && host === playerObj && ctx.flags.firstPerson === true);
+      let parented = false;
+      if (!fpPlayer && host && pos) {
+        try {
+          const wx = pos.x, wy = pos.y, wz = pos.z;
+          const p = host.position;
+          const q = host.quaternion;
+          const sc = host.scale;
+          if (
+            p && q && sc &&
+            isFiniteVec3(wx, wy, wz) &&
+            typeof worldHitToLocal === 'function'
+          ) {
+            _ripplePose.px = p.x; _ripplePose.py = p.y; _ripplePose.pz = p.z;
+            _ripplePose.qx = q.x; _ripplePose.qy = q.y; _ripplePose.qz = q.z; _ripplePose.qw = q.w;
+            _ripplePose.sx = sc.x; _ripplePose.sy = sc.y; _ripplePose.sz = sc.z;
+            if (worldHitToLocal(wx, wy, wz, _ripplePose, _rippleLocal)) {
+              liftLocalOffset(_rippleLocal, RIPPLE_LIFT);
+              if (isFiniteVec3(_rippleLocal.x, _rippleLocal.y, _rippleLocal.z)) {
+                f.sprite.position.set(_rippleLocal.x, _rippleLocal.y, _rippleLocal.z);
+                host.add(f.sprite);
+                f.host = host;
+                parented = true;
+              }
+            }
+          }
+        } catch {
+          parented = false;
+          f.host = null;
+        }
+      }
+      if (!parented) {
+        try {
+          if (f.sprite.parent !== scene) scene.add(f.sprite);
+          if (pos) f.sprite.position.copy(pos);
+        } catch { /* fail closed: never freeze sim */ }
+        f.host = null;
+      }
       f.sprite.visible = true;
       return;
     }
@@ -1045,7 +1109,7 @@ export function initCombat(ctx) {
   /** Ship impact: ripple if shielded, hull sparks + lasting mark otherwise. */
   function spawnHitFx(pos, family, shielded, host) {
     spawnFlash(pos, family);
-    if (shielded) spawnRipple(pos, family);
+    if (shielded) spawnRipple(pos, family, host);
     else {
       spawnSparks(pos, family);
       stampHullMark(pos, host);
@@ -1100,9 +1164,16 @@ export function initCombat(ctx) {
     if (!evs) return;
     for (let i = 0; i < evs.length; i++) {
       const e = evs[i];
-      if (e.type === 'npcDestroyed' && e.ship?.object) parkMarksOnHost(e.ship.object);
-      else if (e.type === 'playerDestroyed') parkMarksOnHost(ctx.ship?.object);
-      else if (e.type === 'systemLoaded') parkAllHullMarks();
+      if (e.type === 'npcDestroyed' && e.ship?.object) {
+        parkMarksOnHost(e.ship.object);
+        parkRipplesOnHost(e.ship.object);
+      } else if (e.type === 'playerDestroyed') {
+        parkMarksOnHost(ctx.ship?.object);
+        parkRipplesOnHost(ctx.ship?.object);
+      } else if (e.type === 'systemLoaded') {
+        parkAllHullMarks();
+        parkAllRipples();
+      }
     }
   }
 
@@ -1112,9 +1183,17 @@ export function initCombat(ctx) {
       if (!slot.live) continue;
       if (!slot.host || slot.host.parent == null) parkHullMark(slot);
     }
+    for (let i = 0; i < ripples.length; i++) {
+      const f = ripples[i];
+      if (!f.host) continue;
+      if (f.host.parent == null) parkRipple(f);
+    }
     reclaimFromEvents(ctx.lastEvents);
     reclaimFromEvents(ctx.events);
-    if (ctx.player?.destroyed) parkMarksOnHost(ctx.ship?.object);
+    if (ctx.player?.destroyed) {
+      parkMarksOnHost(ctx.ship?.object);
+      parkRipplesOnHost(ctx.ship?.object);
+    }
   }
 
   /** Nose + reticle ray (same as guns). Writes _fwd/_nose/_dir. Does not snap spawn onto a lock. */
@@ -1661,7 +1740,10 @@ export function initCombat(ctx) {
         else if (ev.type === 'destroyed') ctx.emit('npcDestroyed', { ship: s });
       }
       spawnHitFx(p.mesh.position, p.family, shielded, s.object);
-      if (s.state.destroyed) parkMarksOnHost(s.object);
+      if (s.state.destroyed) {
+        parkMarksOnHost(s.object);
+        parkRipplesOnHost(s.object);
+      }
       return true;
     }
     return false;
@@ -1715,7 +1797,10 @@ export function initCombat(ctx) {
     ctx.emit('playerHit', { damage: p.damage, family: p.family, fromAft, shielded });
     emitPlayerApplyHits(events);
     spawnHitFx(p.mesh.position, p.family, shielded, playerObj);
-    if (player.destroyed) parkMarksOnHost(playerObj);
+    if (player.destroyed) {
+      parkMarksOnHost(playerObj);
+      parkRipplesOnHost(playerObj);
+    }
     return true;
   }
 
@@ -1733,6 +1818,7 @@ export function initCombat(ctx) {
           _lastBlockedAt = -1e9;
           _sunKillEmitted = false;
           parkAllHullMarks();
+          parkAllRipples();
           break;
         }
       }
@@ -1761,10 +1847,24 @@ export function initCombat(ctx) {
           const speed = e.speed || 0;
           if (speed < PHY.IMPACT_MIN_SPEED) continue;
           const damage = speed * PHY.IMPACT_SCREEN_PER_U;
+          // Sample screens before applyHit so XOR still sees a live layer.
+          const shielded = player.screen > 0 || player.shell > 0;
           const events = applyHit(player, { damage, family: 'impact', facet: 'fore', now });
           e.damage = damage;
           ctx.emit('playerHit', { damage, family: 'impact', fromAft: false });
           emitPlayerApplyHits(events);
+          const host = playerObj;
+          const pos = host && host.position;
+          if (host && pos && isFiniteVec3(pos.x, pos.y, pos.z)) {
+            try { spawnHitFx(pos, 'impact', shielded, host); }
+            catch { /* skip FX; never freeze */ }
+          }
+          if (player.destroyed) {
+            try {
+              parkMarksOnHost(host);
+              parkRipplesOnHost(host);
+            } catch { /* skip FX; never freeze */ }
+          }
           _lastImpactAt = now;
           break;
         }
@@ -1946,8 +2046,7 @@ export function initCombat(ctx) {
         if (!f.sprite.visible) continue;
         if (f.snap) {
           if (f.seen) {
-            f.sprite.visible = false;
-            f.snap = false;
+            parkRipple(f);
             continue;
           }
           f.seen = true;
@@ -1956,7 +2055,7 @@ export function initCombat(ctx) {
         f.t += dt;
         const k = f.t / f.ttl;
         if (k >= 1) {
-          f.sprite.visible = false;
+          parkRipple(f);
           continue;
         }
         const s = 2.2 + 7.2 * k;

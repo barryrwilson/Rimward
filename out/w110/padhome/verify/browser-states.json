@@ -1,0 +1,76 @@
+{
+  "hub": {
+    "reticle": {
+      "w": 80,
+      "h": 80
+    },
+    "kids": [
+      {
+        "tag": "DIV",
+        "className": "rw-reticle-pupil",
+        "text": ""
+      },
+      {
+        "tag": "SPAN",
+        "className": "rw-reticle-cilia",
+        "text": ""
+      },
+      {
+        "tag": "SPAN",
+        "className": "rw-reticle-cilia",
+        "text": ""
+      },
+      {
+        "tag": "SPAN",
+        "className": "rw-reticle-cilia",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "className": "rw-reticle-range",
+        "text": "RANGE"
+      }
+    ],
+    "padHomeChild": false,
+    "rangeText": "RANGE",
+    "docked": false,
+    "service": null,
+    "patrols": [
+      {
+        "name": "Watchful Apt",
+        "classKey": "heavy",
+        "xz": 52.15361924162119,
+        "n": 3
+      },
+      {
+        "name": "Lancer Po",
+        "classKey": "heavy",
+        "xz": 52.15361924162119,
+        "n": 3
+      }
+    ]
+  },
+  "digit": {
+    "docked": false,
+    "overlayPresent": true,
+    "overlayVisible": false,
+    "overlayText": ""
+  },
+  "after0": {
+    "docked": false,
+    "shipyardOnPage": false,
+    "overlayClass": "screen-overlay station-overlay"
+  },
+  "docked": {
+    "docked": true,
+    "inZone": true,
+    "overlayDisplay": "flex"
+  },
+  "shipyard": {
+    "docked": true,
+    "service": null,
+    "hasShipyard": true,
+    "hasPadHome": false,
+    "snippet": "FREEHOLD LANDINGFREEHOLD COMPACT · BERTH 7“she” made fastCREDITS 350 UU · HOLD 0/20← Back (Esc)SHIPYARDHangar at every dock. Yard sales wait on papers.1 — Hangar2 — YardHANGARMounted id hull_startershelight · Independent · mounted3 — Mount1"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "cylR": 32,
+  "heavyHull": 8.5,
+  "lightHull": 3.4,
+  "pad": 12,
+  "holdMin": 52.5,
+  "lightMin": 47.4,
+  "authoredXZ": 52.55000000000004,
+  "roundedXZ": 52.15361924162119,
+  "lightHoldXZ": 47.44999999999998,
+  "heavyVsLight": 5.100000000000058,
+  "livePatrols": [
+    { "classKey": "heavy", "n": 3, "xz": 52.15361924162119, "keys": "x,y,z" },
+    { "classKey": "heavy", "n": 3, "xz": 52.15361924162119, "keys": "x,y,z" }
+  ],
+  "liveTrader0xz": 83.2946576918352,
+  "liveMiner0xz": 47.70744176750625,
+  "livePirate0xz": 1481.3433092973419,
+  "healedXZ": 52.55000000000004,
+  "healedSpeed": 90,
+  "tickXZ": 52.55000000000004,
+  "tickSpeed": 90
+}

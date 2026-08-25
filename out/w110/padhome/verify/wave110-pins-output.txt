@@ -1,0 +1,2 @@
+{"authorHold":true,"authorClassHeavy":true,"expectedHold":true,"livePatrolOffPad":true,"oldPadHeals":true,"idempotent":true,"nanUnknownNoThrow":true,"traderMinerStill":true,"pirateAceUnchanged":true,"rebuildTickHeal":true,"holdClass":true,"noPadHomeField":true,"noInnerHtml":true,"digit0Shipyard":true,"digit8Digit9":true,"hubEmpty":true}
+WAVE110 ALL TRUE

@@ -1,0 +1,37 @@
+BIO-08 source contracts (read-only)
+
+gaitFor('__proto__') / constructor / non-string
+  living-gait.js uses Object.hasOwn(LIVING_GAIT, classKey); miss → LIVING_GAIT.light
+  Probe PASS: proto, constructor, prototype, toString, number, object, null, undefined → light
+
+LIVING_CADENCE vs Wave 107
+  light 1.00, ace 0.96, cutter 0.80, heavy 0.62, frigate 0.44, freighter 0.30
+  SWIM_IDLE_HZ 0.5, SWIM_CRUISE_HZ 2.3
+  living-cadence.js has no gait token
+  WAVE107 + WAVE108 cadenceUnchanged true
+
+Player light CPU
+  ship.js: gait only if playerClass string AND !== 'light' AND hasOwn(LIVING_GAIT)
+  else unweighted spine/flap, no kickZ, no gait radial
+  Probe PASS: player light sculpt skip
+
+GPU
+  uniforms uSwimSpineX/FlapY/KickZ/Radial
+  program key rimward-beautiful-swim-gait
+  no mixer.timeScale (mixer.setTime only)
+  one injectSwim program
+
+WORLD_FIELDS
+  no gait key (save.js WORLD_FIELDS)
+
+Digit 0
+  station.js: i === DOCK_KEY_SERVICES.length - 1 ? 0
+  last service shipyard
+  DOCK_KEY_SERVICES[8]=epics (digit 9), [7]=launch (digit 8)
+
+Table
+  ace flapY 0.12 (squid-mantle)
+  frigate radial 0.28 < squid 1.00
+
+innerHTML
+  none in ship.js, ship-assets.js, living-gait.js

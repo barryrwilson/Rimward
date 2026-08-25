@@ -1,0 +1,53 @@
+# Wave 117 CTL-02 leftover — worker write-set (verified markdown only)
+# Worker (do not treat as src overlay mutex)
+C:\Projects\WebSim\docs\Ctl02OverlayDesign.md
+C:\Projects\WebSim\out\w117\overlay\current-overlay-inventory.md
+C:\Projects\WebSim\out\w117\overlay\shared-contract.md
+C:\Projects\WebSim\out\w117\overlay\security-review.md
+C:\Projects\WebSim\out\w117\overlay\code-review.md
+C:\Projects\WebSim\out\w117\overlay\ui-audit.md
+C:\Projects\WebSim\out\w117\overlay\notes.md
+
+# Later serial PR1 overlay-priority — ALLOWED (named only; not this wave)
+# src/systems/hail.js
+# src/game/save.js          (berth overlay only: setBerthOpen / KeyL / update close)
+# src/systems/overlay-policy.js  (new helper)
+# src/systems/galaxychart.js     (setOpen / KeyM open gate ONLY)
+# src/core/ctx.js                (optional flags.hailOpen / flags.berthOpen defaults + comments)
+# src/ui/hud.css                 (z-index only if required; prefer none)
+
+# Later serial — FORBIDDEN
+# src/game/autopilot.js
+# src/systems/controls.js        (CTL-01 KeyJ remap / TRACKED / help)
+# src/systems/galaxychart.js showApLive / #rw-galaxy-ap-live
+# src/systems/hud.js             (HUD-02 combat rails / toasts)
+# src/game/state.js
+# src/systems/station.js         (Digit 0/8/9)
+# src/** otherwise
+# scripts/**
+# public/**
+# package.json
+# docs/PLAYER-EXPERIENCE-WISHLIST.md
+# PROGRESS.md
+# docs/Ctl01DockBindDesign.md
+# docs/Nav05HandoffDesign.md
+# docs/Nav*.md
+# docs/Hud*.md
+# docs/OwnerDecisions*.md
+# docs/OwnerDecisionsWave117.md
+# out/w116/**
+# out/w117/nav05/**
+# out/w117/ctl01/**
+
+# Not in worker write-set (confirmed absent / sibling-owned)
+# src/**
+# scripts/**
+# docs/PLAYER-EXPERIENCE-WISHLIST.md
+# PROGRESS.md
+# out/w117/nav05/**
+# out/w117/ctl01/**
+# out/w116/**
+# docs/OwnerDecisionsWave117.md
+
+# Verifier (this pass)
+C:\Projects\WebSim\out\w117\overlay\verify\write-set.txt

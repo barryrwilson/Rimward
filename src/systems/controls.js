@@ -27,7 +27,7 @@ import { dropPartIfNotShip, toggleEnginePart } from '../game/subsys-aim.js';
  *   V (tap)      → lock under the visible reticle
  *   K (tap)      → engine-select on a live ship lock (Wave 100)
  *   N (tap)      → engage / cancel automine on a locked asteroid
- *   H (tap)      → hail   ·   D (tap) → dock   ·   C (tap) → camera toggle
+ *   H (tap)      → hail   ·   J (tap) → dock   ·   C (tap) → camera toggle
  *   X (tap)      → match-speed edge (ship.js toggles flags.matchSpeed)
  *
  * Edge inputs (afterburnerPressed/targetPressed/hailPressed/dockPressed/
@@ -41,7 +41,7 @@ import { dropPartIfNotShip, toggleEnginePart } from '../game/subsys-aim.js';
 const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
   'KeyQ', 'KeyE',
-  'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV', 'KeyN', 'KeyK',
+  'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV', 'KeyN', 'KeyK', 'KeyJ',
   'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
   'ShiftLeft', 'ShiftRight',
   'Space',
@@ -53,6 +53,34 @@ const PREVENT_DEFAULT = new Set(['Space']);
 const THROTTLE_RAMP_RATE = 0.5; // setpoint/s while R or F held (§5.1)
 const DOUBLE_TAP_MS = 350; // F double-tap window → full stop (§5.1)
 const RETICLE_RADIUS_FRACTION = 0.35; // of min(vw, vh)
+
+/** True only when the title overlay is attached. Create-on-miss getElementById is not open. */
+function titleOverlayAttached() {
+  if (typeof document === 'undefined') return false;
+  const el = document.getElementById('rw-title');
+  if (!el) return false;
+  if (el.isConnected === true) return true;
+  if (el.parentNode) return true;
+  if (el.parent) return true;
+  return false;
+}
+
+/** Title overlay, models filter, or typing focus: do not pulse pendingDock. Never throw. */
+function shouldSkipDockPulse(ctx) {
+  try {
+    const focus = typeof document !== 'undefined' ? document.activeElement : null;
+    const typing = !!focus && (
+      focus.tagName === 'INPUT' || focus.tagName === 'TEXTAREA' ||
+      focus.tagName === 'SELECT' || focus.isContentEditable
+    );
+    if (typing) return true;
+    if (ctx?.models?.isOpen?.()) return true;
+    if (titleOverlayAttached()) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 /** Cycle ctx.targets.current through in-range candidates, nearest first. */
 function cycleTarget(ctx) {
@@ -271,8 +299,8 @@ export function initControls(ctx) {
       case 'KeyH':
         pendingHail = true;
         break;
-      case 'KeyD':
-        pendingDock = true;
+      case 'KeyJ':
+        if (!shouldSkipDockPulse(ctx)) pendingDock = true;
         break;
       case 'KeyC':
         pendingCamera = true;
@@ -350,7 +378,7 @@ export function initControls(ctx) {
     'T — cycle target',
     'V — lock under reticle',
     'N — automine locked asteroid',
-    'H — hail · D — dock · C — camera (chase / third / first-person)',
+    'H — hail · J — dock · C — camera (chase / third / first-person)',
     'X — match lock speed',
     'K — engine on lock (after shields)',
     'G — cycle hub route at a Lamplighter junction',

@@ -1,0 +1,11 @@
+# rg -n "showApLive" src/systems/galaxychart.js
+
+src/systems/galaxychart.js:578:  function showApLive(text) {
+src/systems/galaxychart.js:629:      if (ctx.flags && ctx.flags.chartOpen === true) showApLive(apLine('cancel'));
+src/systems/galaxychart.js:636:      showApLive(line);
+src/systems/galaxychart.js:639:      showApLive('');
+src/systems/galaxychart.js:718:    if (apLiveUntil && ctx.elapsed >= apLiveUntil) showApLive('');
+src/systems/galaxychart.js:727:          showApLive(apLine(reason));
+
+# Census: function 572-576; cancel 623; success 632-633; fly 709-718.
+# Live function 578-582 (textContent). showApLive exists. Do not rewrite.

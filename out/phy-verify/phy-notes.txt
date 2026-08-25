@@ -1,0 +1,35 @@
+PHY verify 2026-08-17
+App: http://localhost:5173/
+Origin: Freehold Greenhand
+Exports: physics.js PHY; collision.js collectBodies, resolveMover
+
+STATION RAM (equator, west, 70u, vx=50, throttle 0.85)
+  minRadial=34.4 (32+2.4)  minY=maxY=20  tunneled=false
+  first contact t=0.49s at x=85.6 speed~14 after bounce (peak ~94)
+  bodyHit kind=station first speed=94.17
+
+DOCK
+  parked dist=40 (shell 34.4..45)
+  Key D -> flags.docked=true, FREEHOLD LANDING overlay
+
+ASTEROID RAM (id 14 r=15.968)
+  surface=18.368  minDist=18.368  tunneled=false
+  bodyHit kind=asteroid first speed=93
+
+MATCH
+  lock rec-14, throttle set 0.42, KeyX
+  flags.matchSpeed=true, input.throttle still 0.42
+  ship.js has no input.throttle assignment
+
+CAMERA C
+  chase -> third -> first -> chase
+  firstPerson true only on first
+
+CONSOLE
+  no error, no warning (vite debug connect only)
+
+SCREENSHOTS
+  player-station-ram.png
+  player-dock.png
+  player-asteroid-ram.png
+  player-first.png

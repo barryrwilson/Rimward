@@ -1,0 +1,41 @@
+PASS  window const: got true expect true
+PASS  lifetime 4: got true expect true
+PASS  slots 5: got true expect true
+PASS  no extra slots: got false expect false
+PASS  linger not Map: got false expect false
+PASS  no innerHTML hud: got false expect false
+PASS  aria-live polite: got true expect true
+PASS  no assertive: got false expect false
+PASS  autosave copy: got true expect true
+PASS  berth copy prefix: got true expect true
+PASS  autosave emit: got true expect true
+PASS  berth emit: got true expect true
+PASS  no WORLD_FIELDS toast: got false expect false
+PASS  css hide only: got true expect true
+PASS  css no toast z: got false expect false
+PASS  expire keeps text: got true expect true
+PASS  frameLines kept: got true expect true
+PASS  boot five chips: got 5 expect 5
+PASS  boot aria-hidden: got true expect true
+PASS  boot no show: got true expect true
+PASS  boot live polite: got "polite" expect "polite"
+PASS  autosave one slot: got 1 expect 1
+PASS  autosave copy live: got "Γû▓ AUTOSAVE HELD ΓÇö hostiles near" expect "Γû▓ AUTOSAVE HELD ΓÇö hostiles near"
+PASS  autosave unhidden: got "false" expect "false"
+PASS  autosave no berth reason: got false expect false
+PASS  visible refresh still one: got 1 expect 1
+PASS  visible refresh no rewrite: got "Γû▓ AUTOSAVE HELD ΓÇö hostiles near" expect "Γû▓ AUTOSAVE HELD ΓÇö hostiles near"
+PASS  expire hides show: got 0 expect 0
+PASS  expire aria-hidden: got "true" expect "true"
+PASS  expire keeps text: got "Γû▓ AUTOSAVE HELD ΓÇö hostiles near" expect "Γû▓ AUTOSAVE HELD ΓÇö hostiles near"
+PASS  linger suppress after expire: got 0 expect 0
+PASS  linger no blink text change: got "Γû▓ AUTOSAVE HELD ΓÇö hostiles near" expect "Γû▓ AUTOSAVE HELD ΓÇö hostiles near"
+PASS  five distinct slots: got 5 expect 5
+PASS  key linger survives chip reuse: got 0 expect 0
+PASS  still five chips: got 5 expect 5
+PASS  berth copy: got "Γû▓ SAVE BLOCKED ΓÇö Mid-jump ΓÇö berth record refused." expect "Γû▓ SAVE BLOCKED ΓÇö Mid-jump ΓÇö berth record refused."
+PASS  missing source is berth copy: got true expect true
+PASS  unknown source is berth copy: got true expect true
+PASS  empty text skip: got 1 expect 1
+PASS  sim not paused: got false expect false
+PASS  toast-flood probe

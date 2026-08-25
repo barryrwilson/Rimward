@@ -1,0 +1,53 @@
+# FX-01 Wave 111 PR1 static greps (verifier)
+
+## RIPPLE_POOL === 16
+src/systems/combat.js:186: const RIPPLE_POOL = 16;
+src/systems/combat.js:206: const RIPPLE_TTL = 0.2
+src/systems/combat.js:207: const RIPPLE_LIFT = 0.16
+src/systems/combat.js:629: for (let i = 0; i < RIPPLE_POOL; i++)
+No HITFX_POOL / RIPPLE_POOL_2 / THIRD_*POOL in combat.js.
+ship.js THIRD_HEIGHT / THIRD_BACK / THIRD_LOOK_AHEAD / THIRD_SHIP_SCALE are camera constants, not a hit FX pool.
+
+## HULL_MARK_POOL still 12
+src/game/hull-marks.js:7: export const HULL_MARK_POOL = 12;
+src/systems/combat.js:686: for (let i = 0; i < HULL_MARK_POOL; i++)
+
+## spawnHitFx XOR
+src/systems/combat.js:1109-1116
+  spawnFlash(pos, family);
+  if (shielded) spawnRipple(pos, family, host);
+  else { spawnSparks(pos, family); stampHullMark(pos, host); }
+
+## FP player host not full-size parent
+src/systems/combat.js:1065-1103
+  fpPlayer = host === playerObj && ctx.flags.firstPerson === true
+  parent via worldHitToLocal + RIPPLE_LIFT only when !fpPlayer
+  fail closed: try/catch then scene.add + position.copy(pos)
+
+## park on destroy/load
+parkRipple / parkRipplesOnHost / parkAllRipples
+reclaimFromEvents: npcDestroyed, playerDestroyed, systemLoaded
+update(): systemLoaded → parkAllRipples
+testNpcHits / testPlayerHit: park on destroyed
+orphan: if (f.host.parent == null) parkRipple(f)
+
+## WAVE54 / WAVE59 boot pins not inverted
+scripts/boot-test.mjs:11641 WAVE54 present; fail logs "WAVE54 FX FAIL"
+scripts/boot-test.mjs:11818 WAVE59 present; fail logs "WAVE59 FX FAIL"
+w54 still requires spawnRipple + spawnHitFx, muzzle, sparks 11, PROJ_RADIUS 0.4, shake caps, death pool.
+w59 still requires recoil event/flesh/zero, no throttle write, HULL_MARK_POOL === 12, stampHullMark + spawnSparks, parkMarksOnHost + npcDestroyed.
+Did not run full npm run test:boot.
+
+## No .rw-reticle punch pip
+combat.js: no rw-reticle
+hud.js:709-712 still iris + pupil + 3 cilia + RANGE only
+No punch-pip class under src/systems or src/ui.
+
+## No state.js FX keys
+src/game/state.js: no ripple / hullMark matches
+src/game/save.js WORLD_FIELDS: no hullMark / ripple keys
+
+## No third pool
+RIPPLE_POOL 16 (existing ring, now parented)
+HULL_MARK_POOL 12 (unchanged)
+FLASH_POOL 16 / MUZZLE_POOL 16 remain

@@ -1,0 +1,9 @@
+# rg -n "setOpen\\(false\\)" src/systems/galaxychart.js
+# Live 2026-08-25 verifier. Autopilot engage success does NOT appear.
+
+src/systems/galaxychart.js:644:  closeBtn.addEventListener('click', () => setOpen(false));
+src/systems/galaxychart.js:680:      if (open) setOpen(false);
+src/systems/galaxychart.js:687:      setOpen(false);
+src/systems/galaxychart.js:700:    if (open && ctx.flags.docked) setOpen(false); // station overlay owns the docked screen
+
+# Census cited 638, 674, 677, 690 (pre overlay-mutex insert). Sites match: Close, KeyM-while-open, Escape, docked. Not engage.

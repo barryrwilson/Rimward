@@ -1,0 +1,15 @@
+# rg -n "jumpRequested" src
+# Do not flag NAV-05. Writer vs consumer vs comment vs song map.
+
+src/main.js:86:// (consumes jumpRequested same-frame, before traffic reacts); contacts
+src/core/ctx.js:236:    // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
+src/game/autopilot.js:3: * Does not move the mesh. Does not write input.*. Does not emit jumpRequested.
+src/game/jump.js:64: * Consumes 'jumpRequested' { to } from ctx.events the same frame gate.js
+src/game/jump.js:206:        if (e.type === 'jumpRequested') {
+src/systems/gate.js:678:      ctx.emit('jumpRequested', { to: near.to });
+src/systems/song.js:81:  jumpRequested: [['sine', 90, 320, 2.2, 0.07, 600, 0]], // rising charge hum (matches 2.5s gate charge)
+
+# rg emit('jumpRequested
+src/systems/gate.js:678:      ctx.emit('jumpRequested', { to: near.to });
+
+# Sole writer: gate.js. Chart and autopilot do not emit.

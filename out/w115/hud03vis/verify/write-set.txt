@@ -1,0 +1,41 @@
+# HUD-03 visual leftover — write-set (verifier 2026-08-24)
+
+## This worker (claimed + observed)
+
+?? docs/Hud03RemainingVisualDesign.md
+?? out/w115/hud03vis/code-review.md
+?? out/w115/hud03vis/current-hud03-visual-inventory.md
+?? out/w115/hud03vis/notes.md
+?? out/w115/hud03vis/security-review.md
+?? out/w115/hud03vis/shared-contract.md
+?? out/w115/hud03vis/ui-audit.md
+
+Verifier adds (this pass):
+?? out/w115/hud03vis/verify/report.md
+?? out/w115/hud03vis/verify/write-set.txt
+
+git status --short on live HUD-03 visual surfaces:
+(empty) src/systems/settings.js
+(empty) src/core/ctx.js
+(empty) src/game/save.js
+(empty) src/systems/song.js
+(empty) src/systems/controls.js
+(empty) src/game/state.js
+(empty) docs/Hud03AlertsDesign.md
+
+## Dirty tree NOT attributed to this worker
+
+M  PROGRESS.md                         (no hud03vis / HUD-03 leftover string)
+M  docs/PLAYER-EXPERIENCE-WISHLIST.md  (HUD initiative adds Wave 113/114 class-token lines; HUD-03 subsection not rewritten by this pack)
+M  src/systems/hud.js                  (SHIP_CLASSES / data-class-key — HUD-02 sibling)
+M  src/ui/hud.css                      (+133 lines; class-token chrome near existing body.rw-* selectors)
+M  src/systems/station.js              (not settings/KeyO)
+?? out/w115/hud02tgt/**                (sibling pack; timestamps after hud03vis)
+?? out/w115/shp/**                     (sibling pack)
+
+No steal of hud02tgt/shp content into hud03vis. Sibling packs cite hud03vis as do-not-steal.
+
+## git log HEAD (repo)
+
+cde92ad Waves 85-107: NAV, BIO fleet, cadence, and Digit 9 copy
+(this pack is untracked markdown; not in HEAD)

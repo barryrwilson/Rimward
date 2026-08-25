@@ -1,0 +1,42 @@
+{
+  "origin": "greenhand",
+  "system": "freehold",
+  "faction": "freehold",
+  "below0": {
+    "standing": -8,
+    "credits": 2500,
+    "hasRestitutionHead": true,
+    "hasPay": true,
+    "climb": [
+      "After restitution, this dock is 0 (Stranger) unless Beautiful Ones graft cap holds. Jobs board mining, trade, hunt, passenger, explore, spy, and war add +2 to this dock's flag.",
+      "That is how standing climbs from 0. Five such jobs reach Known 10. Patrol adds +5 Freehold Compact only."
+    ]
+  },
+  "afterPay": {
+    "standing": 0,
+    "credits": 1300,
+    "hasRestitutionHead": false,
+    "hasPay": false,
+    "hasHowMoves": true,
+    "climb": [
+      "After restitution, this dock is 0 (Stranger) unless Beautiful Ones graft cap holds. Jobs board mining, trade, hunt, passenger, explore, spy, and war add +2 to this dock's flag.",
+      "That is how standing climbs from 0. Five such jobs reach Known 10. Patrol adds +5 Freehold Compact only."
+    ],
+    "families": true,
+    "known": true,
+    "plus2": true
+  },
+  "hub": {
+    "w": 80,
+    "h": 80,
+    "kids": ["rw-reticle-pupil", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-range"],
+    "extra": [],
+    "range": "RANGE"
+  },
+  "digits": {
+    "digit0": "shipyard hangar",
+    "digit2": "Jobs board",
+    "digit8": "Launch undocks via selectService('launch')",
+    "digit9": "Standing / epics"
+  }
+}

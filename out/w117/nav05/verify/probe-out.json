@@ -1,0 +1,20 @@
+{
+  "pins": {
+    "jumpOnlyGate": true,
+    "wantJumpNear": true,
+    "noDockPressedWrite": true,
+    "noKeyJ": true,
+    "hopKind": true,
+    "ringNoCycle": true,
+    "tokens": true,
+    "chartLive": true,
+    "noInnerAp": true,
+    "wave117Pin": true,
+    "wave85Stay": true,
+    "wave21Untouched": true,
+    "noWave87": true,
+    "linesSplit": true
+  },
+  "fail": []
+}
+WAVE117 NAV-05 PROBE PASS

@@ -17,6 +17,7 @@ import {
   cadenceFor,
   classCruise,
 } from '../game/living-cadence.js';
+import { LIVING_GAIT, gaitFor } from '../game/living-gait.js';
 
 export { applyFlightEnvelope };
 
@@ -985,7 +986,15 @@ export function initShip(ctx) {
 
       if (living) {
         // Deform vertices in place: breath/heart scale → spine wave → wing flap
-        // → amoeba shimmer.
+        // → amoeba shimmer. Light (and unknown → light) stays bit-identical.
+        // Other living remounts multiply spine/flap by gait and add Z + radial.
+        const playerClass = ctx.player?.classKey;
+        const gait =
+          typeof playerClass === 'string' &&
+          playerClass !== 'light' &&
+          Object.hasOwn(LIVING_GAIT, playerClass)
+            ? gaitFor(playerClass)
+            : null;
         for (let i = 0; i < count; i++) {
           const i3 = i * 3;
           const bx = base[i3];
@@ -994,13 +1003,22 @@ export function initShip(ctx) {
 
           let x = bx * radialScale;
           let y = by * radialScale;
-          const z = bz * radialScale;
+          let z = bz * radialScale;
 
           const zn = zNorm[i];
-          x += bodyAmp * zn * zn * Math.sin(6.9 * zn - swimPhase);
-
           const w = wingness[i];
-          if (w > 0) y += flapAmp * w * Math.sin(swimPhase - 1.4 * Math.abs(bx));
+          if (gait) {
+            x += bodyAmp * zn * zn * Math.sin(6.9 * zn - swimPhase) * gait.spineX;
+            if (w > 0) y += flapAmp * w * Math.sin(swimPhase - 1.4 * Math.abs(bx)) * gait.flapY;
+            z += bodyAmp * zn * zn * Math.sin(swimPhase - 2.1 * zn) * gait.kickZ;
+            const pulse = 1 + 0.04 * gait.radial * Math.sin(swimPhase);
+            x *= pulse;
+            y *= pulse;
+            z *= pulse;
+          } else {
+            x += bodyAmp * zn * zn * Math.sin(6.9 * zn - swimPhase);
+            if (w > 0) y += flapAmp * w * Math.sin(swimPhase - 1.4 * Math.abs(bx));
+          }
 
           y += 0.03 * restScale * Math.sin(1.7 * bx + t * 0.9) * Math.sin(2.3 * bz - t * 1.3);
 

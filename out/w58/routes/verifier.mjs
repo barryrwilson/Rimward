@@ -123,7 +123,11 @@ ok('miner.cutterCloserThanFreight', dCut < dFr, `cutter=${dCut} freight=${dFr}`)
 
 ok('src.minerClassHold', worldSrc.includes("writeStationHold(new THREE.Vector3(), station, i % 2 === 0 ? 'light' : 'cutter', destWp)"));
 ok('src.traderFreighter', worldSrc.includes("writeStationHold(hold, station, 'freighter', fromPos)"));
-ok('src.patrolCenter', worldSrc.includes('route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]'));
+ok(
+  'src.patrolCenter',
+  worldSrc.includes('route: [writeStationHold(new THREE.Vector3(), station, \'heavy\', gate), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]')
+    && !worldSrc.includes('route: [station.clone(), jitter(gate.clone(), 50), jitter(planet.clone(), 60)]'),
+);
 ok('src.pirateGate', worldSrc.includes('route: [jitter(gate.clone(), 90), laneMid, jitter(gate.clone(), 120)]'));
 ok('src.aceGate', worldSrc.includes('route: [jitter(gate.clone(), 70), jitter(planet.clone(), 100), jitter(gate.clone(), 150)]'));
 ok('src.plainRoute', worldSrc.includes('return waypoints.map((w) => ({ x: Math.round(w.x), y: Math.round(w.y), z: Math.round(w.z) }))'));
@@ -149,7 +153,12 @@ const old = {
   dir: 1,
 };
 normalizeTraderRecord(old);
-ok('heal.keepsWp0AtPad', old.route[0].x === fh.station.position[0] && old.route[0].z === fh.station.position[2]);
+const healedXZ = Math.hypot(old.route[0].x - fh.station.position[0], old.route[0].z - fh.station.position[2]);
+ok(
+  'heal.keepsWp0AtPad',
+  healedXZ >= minDist && (old.route[0].x !== fh.station.position[0] || old.route[0].z !== fh.station.position[2]),
+  `xz=${healedXZ}`,
+);
 ok('heal.clampsToTwo', old.route.length === 2, `${old.route.length}`);
 ok('heal.outboundPhysical', fh.gates.some((g) => g.to === old.outboundTo), `${old.outboundTo}`);
 ok('heal.lingerFlag', old.gateLinger === false);

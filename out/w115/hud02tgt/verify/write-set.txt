@@ -1,0 +1,43 @@
+# HUD-02 target leftover — write-set (verifier 2026-08-24)
+
+## This worker (claimed + observed)
+
+?? docs/Hud02RemainingTargetSilhouettesDesign.md
+?? out/w115/hud02tgt/code-review.md
+?? out/w115/hud02tgt/current-hud02-target-silhouette-inventory.md
+?? out/w115/hud02tgt/notes.md
+?? out/w115/hud02tgt/security-review.md
+?? out/w115/hud02tgt/shared-contract.md
+?? out/w115/hud02tgt/ui-audit.md
+
+Verifier adds (this pass):
+?? out/w115/hud02tgt/verify/report.md
+?? out/w115/hud02tgt/verify/write-set.txt
+
+No src/ from this worker. No docs/OwnerDecisionsWave115.md.
+
+## Sibling leftover docs (untracked, older mtimes — not this worker)
+
+?? docs/Hud02RemainingSilhouettesDesign.md     (17:33)
+?? docs/Hud02RemainingMechSilhouettesDesign.md (18:46)
+?? docs/Hud02RemainingTargetSilhouettesDesign.md (19:24 this worker)
+
+## Dirty tree NOT attributed to this worker
+
+M  PROGRESS.md                         (19:06; no hud02tgt / Target leftover string)
+M  docs/PLAYER-EXPERIENCE-WISHLIST.md  (19:06; Wave 113/114 player class-token lines)
+M  src/systems/hud.js                  (18:46; SHIP_CLASSES + classKeyToken player writer)
+M  src/ui/hud.css                      (18:46; unscoped #hud[data-class-key] player CSS)
+M  scripts/boot-test.mjs               (WAVE113/114 player pins; no WAVE115 target pin)
+M  src/systems/station.js / npc.js / combat.js / ship.js / world.js / jobs-chains.js
+   (other waves)
+
+?? out/w115/hud03vis/**                (sibling; 19:22–19:23)
+?? out/w115/shp/**                     (sibling; 19:23–19:24)
+
+No steal of hud03vis/shp content into hud02tgt. Sibling packs cite hud02tgt as do-not-steal.
+
+## git log HEAD (repo)
+
+cde92ad Waves 85-107: NAV, BIO fleet, cadence, and Digit 9 copy
+(this pack is untracked markdown; not in HEAD)
