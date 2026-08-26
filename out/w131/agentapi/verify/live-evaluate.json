@@ -1,0 +1,84 @@
+{
+  "url": "http://127.0.0.1:5181/?agent=1",
+  "query": "?agent=1",
+  "observe": {
+    "ok": true,
+    "agentOptIn": true,
+    "v": 1,
+    "currentSystem": "freehold",
+    "credits": 350,
+    "docked": false,
+    "paused": false
+  },
+  "ping": {
+    "v": 1,
+    "ok": true,
+    "error": "",
+    "name": "ping",
+    "token": ""
+  },
+  "teleport": {
+    "v": 1,
+    "ok": false,
+    "error": "forbidden",
+    "name": "teleport",
+    "token": "forbidden"
+  },
+  "plotRoute": {
+    "dest": "veridian",
+    "result": {
+      "v": 1,
+      "ok": true,
+      "error": "",
+      "name": "plotRoute",
+      "token": ""
+    },
+    "navDest": "veridian"
+  },
+  "pr3": {
+    "dock": { "v": 1, "ok": false, "error": "unknown", "name": "dock", "token": "unknown" },
+    "hail": { "v": 1, "ok": false, "error": "unknown", "name": "hail", "token": "unknown" },
+    "pulse": { "v": 1, "ok": false, "error": "unknown", "name": "pulse", "token": "unknown" },
+    "selectTarget": { "v": 1, "ok": false, "error": "unknown", "name": "selectTarget", "token": "unknown" },
+    "setWeaponGroup": { "v": 1, "ok": false, "error": "unknown", "name": "setWeaponGroup", "token": "unknown" }
+  },
+  "openInSpace": {
+    "v": 1,
+    "ok": false,
+    "error": "no-service",
+    "name": "openService",
+    "token": "no-service"
+  },
+  "hailClosed": {
+    "v": 1,
+    "ok": false,
+    "error": "no-service",
+    "name": "hailResolve",
+    "token": "no-service"
+  },
+  "hailPeek": { "intents": [] },
+  "gates": {
+    "plotWhilePaused": { "v": 1, "ok": false, "error": "paused", "name": "plotRoute", "token": "paused" },
+    "pingWhilePaused": { "v": 1, "ok": true, "error": "", "name": "ping", "token": "" },
+    "plotWhileHeld": { "v": 1, "ok": false, "error": "held", "name": "plotRoute", "token": "held" },
+    "pingWhileHeld": { "v": 1, "ok": true, "error": "", "name": "ping", "token": "" }
+  },
+  "tradeNoUu": {
+    "openMarket": { "v": 1, "ok": true, "error": "", "name": "openService", "token": "" },
+    "result": { "v": 1, "ok": true, "error": "", "name": "trade", "token": "" },
+    "creditsAfterTrade": 0,
+    "cargoAfter": [],
+    "cargoBefore": [],
+    "restoredCredits": 350,
+    "restoredDocked": false
+  },
+  "acceptMissingJob": {
+    "openJobs": { "v": 1, "ok": true, "error": "", "name": "openService", "token": "" },
+    "acceptMissing": { "v": 1, "ok": true, "error": "", "name": "acceptJob", "token": "" }
+  },
+  "console": {
+    "errors": 0,
+    "warnings": 1,
+    "warningText": "rimward: forbidden act teleport"
+  }
+}

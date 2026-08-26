@@ -4,6 +4,7 @@ import { hoverModel } from '../game/chart-hover.js';
 import { standingRead } from '../game/data-trade.js';
 import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from '../game/autopilot.js';
 import { canOpenPlayCard, playSurfaceBlocked, isTypingFocus } from './overlay-policy.js';
+import { decodeKeyCode } from './key-code.js';
 import '../ui/hud.css';
 
 /**
@@ -1316,7 +1317,8 @@ export function initGalaxyChart(ctx) {
 
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
-    if (e.code === 'KeyM') {
+    const code = decodeKeyCode(e);
+    if (code === 'KeyM') {
       // Do not intercept the event. While docked the station overlay owns
       // the screen, and while paused the origin pick or pause banner does —
       // only allow closing in those states.
@@ -1340,7 +1342,7 @@ export function initGalaxyChart(ctx) {
         try { blocked = playSurfaceBlocked(ctx) === true; } catch { blocked = false; }
         if (!blocked) setOpen(true);
       }
-    } else if (e.code === 'Escape' && open) {
+    } else if (code === 'Escape' && open) {
       setOpen(false);
     }
   });

@@ -5366,6 +5366,126 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/Tgt07CombatCycleDesign.md`,
   `docs/Msn04JobDedupDesign.md`,
   `out/w130/`.
+- Wave 131 (2026-08-26): Agent API PR2
+  command intents
+  (`docs/AgentApiDesign.md`).
+  `ctx.stationDesk` at `initStation`.
+  `ctx.hailApi` at `initHail`.
+  Live acts: plotRoute, clearRoute,
+  AP/AM engage/cancel, hailResolve,
+  openService, acceptJob, trade,
+  repairAll, feed, undock.
+  PR3 names stay `unknown`.
+  Forbidden first. No HTTP. No helm.
+  No persist. No badge. Attach helpers
+  only. WAVE127 unknown probe moved
+  to `notACommand`.
+  OPEN: Agent API PR3 pulse/latch;
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / NAV-10 / TGT-07 / MSN-04 /
+  CTL-03 / AI-05 / CTL-04 PR2 still
+  optional.
+  VERIFY: `npm run test:boot`
+  WAVE127 agent-observe + WAVE131
+  agent-intents + BOOT TEST PASS.
+  FILES: `src/systems/agent-api.js`,
+  `src/game/agent-schema.js`,
+  `src/systems/station.js`,
+  `src/systems/hail.js`,
+  `scripts/boot-test.mjs`,
+  `docs/AgentApiDesign.md`,
+  `out/w131/agentapi/`.
+- Wave 132 (2026-08-26): Agent API PR3
+  pulse sink + watch hypot latch
+  (`docs/AgentApiDesign.md`).
+  Named boot pins: dock/hail one-frame
+  edges after one `tick`; bad pulse
+  `unknown` (`camera` / afterburner /
+  `__proto__`); `setWeaponGroup` 3 ok,
+  docked `no-service`; empty
+  `selectTarget` `no-service`;
+  teleport `forbidden`; opt-in hypot
+  does not cancel AP; strafe still
+  steals; AM helm latch has `optIn`
+  and no berthHold. WAVE131
+  `pr3Unknown` retired (WAVE132 owns
+  PR3). No HTTP. No badge. No PR4.
+  No third helm. No innerHTML.
+  OPEN: Agent API PR4 key-code;
+  PR5 badge; PR6 bridge; Hail01 /
+  HUD-06 / Hail02 / HUD-07 / NAV-09 /
+  NAV-10 / TGT-07 / MSN-04 / CTL-03 /
+  AI-05 / CTL-04 PR2 still optional.
+  VERIFY: `npm run test:boot`
+  WAVE127 agent-observe + WAVE131
+  agent-intents + WAVE132 pulse-latch
+  + BOOT TEST PASS.
+  FILES: `scripts/boot-test.mjs`,
+  `docs/AgentApiDesign.md`,
+  `PROGRESS.md`,
+  `out/w132/agentapi/notes.md`.
+- Wave 133 (2026-08-26): Agent API PR4
+  empty `e.code` fallback
+  (`docs/AgentApiDesign.md`).
+  Named boot pins: `decodeKeyCode`
+  unit (code wins; empty key map;
+  `__proto__` / null drop); empty
+  `j` one-frame `dockPressed` after
+  one `tick`; `dispatchKey('KeyJ')`
+  still wins; both empty does not
+  pulse dock; empty `p` toggles
+  pause like KeyP; five callers
+  import helper; title and
+  overlay-policy do not; TRACKED
+  Digit1–5 not Digit0; noThrow.
+  C85 chart pin reads
+  `decodeKeyCode` + `code === 'KeyM'`.
+  No src this wave. No HTTP. No
+  badge. No innerHTML. No teleport.
+  OPEN: Agent API PR5 badge; PR6
+  bridge; Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 / TGT-07 /
+  MSN-04 / CTL-03 / AI-05 / CTL-04
+  PR2 still optional.
+  VERIFY: `npm run test:boot`
+  WAVE127 agent-observe + WAVE131
+  agent-intents + WAVE132 pulse-latch
+  + WAVE133 key-code + BOOT TEST PASS.
+  FILES: `scripts/boot-test.mjs`,
+  `docs/AgentApiDesign.md`,
+  `PROGRESS.md`,
+  `out/w133/keycode/notes.md`.
+- Wave 134 (2026-08-26): Agent API PR5
+  Agent play badge
+  (`docs/AgentApiDesign.md`).
+  Named boot pins: badge mounted
+  on `document.body` (not `#hud`);
+  frozen copy; `aria-live` status;
+  Enable/Stop `type="button"`;
+  no innerHTML; default `off`;
+  untrusted enable stays `opt-in`;
+  trusted Enable sets `on` and
+  `ping` ok; Stop clears `optIn`
+  without cancelling Autopilot;
+  last line authored name only;
+  noThrow. No HTTP. No PR6. No
+  innerHTML. No teleport. No HUD
+  hub child. OPEN: Agent API PR6
+  bridge; Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 / TGT-07 /
+  MSN-04 / CTL-03 / AI-05 / CTL-04
+  PR2 still optional.
+  VERIFY: `npm run test:boot`
+  WAVE127 agent-observe + WAVE131
+  agent-intents + WAVE132 pulse-latch
+  + WAVE133 key-code + WAVE134
+  agent-badge + BOOT TEST PASS.
+  FILES: `src/systems/agent-api.js`,
+  `src/style.css`,
+  `scripts/boot-test.mjs`,
+  `docs/AgentApiDesign.md`,
+  `PROGRESS.md`,
+  `out/w134/agentapi/notes.md`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

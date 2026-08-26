@@ -1,0 +1,115 @@
+pass 113
+fail 0
+ok live dock
+ok live hail
+ok live selectTarget
+ok live pulse
+ok live setWeaponGroup
+ok pr1 ping
+ok pr1 not dock
+ok teleport forbidden
+ok no fireHeld name
+ok no camera name
+ok no afterburner name
+ok api imports agentPulse
+ok api imports agentSetWeaponGroup
+ok api imports agentSelectTarget
+ok api no ctx.input assign
+ok api no berthHold write
+ok api no position write
+ok api no credits write
+ok api no targets.current write
+ok api no fireHeld
+ok api no camera pulse
+ok api no afterburner pulse
+ok gate order source
+ok four pulse edges
+ok KeyJ pendingDock
+ok KeyH pendingHail
+ok KeyT pendingTarget
+ok KeyV pendingReticleLock
+ok timing comment
+ok wg uses skip helper
+ok no agentSetFireHeld
+ok no camera in PULSE_EDGES
+ok bad edge camera
+ok bad edge afterburner
+ok bad edge fire
+ok proto edge
+ok constructor edge
+ok missing edge type
+ok numeric edge
+ok target edge ok
+ok reticle edge ok
+ok hail chart overlay
+ok hail berth overlay
+ok hail never throws
+ok hail isOpen throw token string
+ok dock skip models
+ok dock ok
+ok wg 3
+ok wg 0
+ok wg 6
+ok wg 1.5
+ok wg string
+ok wg skip docked
+ok wg skip hailOpen
+ok wg skip chart
+ok wg skip does not write
+ok none in range
+ok select by id
+ok select proto id
+ok select constructor id
+ok select far id
+ok select cycle pulses
+ok select rock index
+ok rock refused off group 3
+ok teleport forbidden before opt-in
+ok dock without opt-in
+ok ping while paused+held
+ok disable while paused
+ok dock paused
+ok hail paused
+ok selectTarget paused
+ok pulse paused
+ok setWeaponGroup paused
+ok dock held
+ok hail held
+ok selectTarget held
+ok pulse held
+ok setWeaponGroup held
+ok ping while held
+ok act dock ok
+ok act hail ok
+ok act pulse target ok
+ok act pulse camera unknown
+ok act pulse missing edge
+ok act setWeaponGroup 2
+ok act wg bad-qty
+ok act select none
+ok credits unchanged
+ok position object unchanged
+ok berthHold still false
+ok fireHeld still false
+ok act selectTarget id
+ok act hail overlay no-service
+ok pulse inherited edge unknown
+ok pulse dock pending token
+ok frame1 dockPressed
+ok frame1 hail clear
+ok frame2 dock cleared
+ok frame1 hailPressed
+ok frame1 targetPressed
+ok frame1 reticleLockPressed
+ok frame2 hail cleared
+ok frame2 target cleared
+ok frame2 reticle cleared
+ok act dock before update not dockPressed yet
+ok act dock next update dockPressed
+ok act dock second update cleared
+ok KeyJ dockPressed
+ok KeyH hailPressed
+ok KeyT targetPressed
+ok KeyV reticleLockPressed
+ok Digit2 skipped when docked
+ok Digit2 writes when flight

@@ -262,6 +262,11 @@ function dispatchKey(code) {
   for (const fn of winListeners.keydown ?? []) fn({ code, repeat: false, preventDefault() {} });
   for (const fn of winListeners.keyup ?? []) fn({ code, preventDefault() {} });
 }
+// Empty e.code a11y path (WAVE133 / PR4). Existing dispatchKey(code) stays code-only.
+function dispatchKeyFallback(key) {
+  for (const fn of winListeners.keydown ?? []) fn({ code: '', key, repeat: false, preventDefault() {} });
+  for (const fn of winListeners.keyup ?? []) fn({ code: '', key, preventDefault() {} });
+}
 const store = new Map();
 globalThis.localStorage = {
   getItem: (k) => (store.has(k) ? store.get(k) : null),
@@ -19149,7 +19154,7 @@ removeLiveShip(w42indyCtx, w42indy);
     && !/class: 'rw-galaxy-plot'[\s\S]{0,80}rw-galaxy-route/.test(chartSrc);
   const clearBtnType = chartSrc.includes("clearBtn.type = 'button'")
     || chartSrc.includes('clearBtn.type = "button"');
-  const keyMToggle = chartSrc.includes("e.code === 'KeyM'");
+  const keyMToggle = chartSrc.includes('decodeKeyCode') && chartSrc.includes("code === 'KeyM'");
   const digit0Shipyard = stationSrc.includes("code.startsWith('Digit')")
     && stationSrc.includes('d === 0')
     && stationSrc.includes("selectService('shipyard')")
@@ -24023,7 +24028,7 @@ removeLiveShip(w42indyCtx, w42indy);
   let pingOk = null;
   try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { pingThrew = true; }
   const pingWhenIn = pingThrew === false && pingOk?.ok === true && pingOk?.token === '';
-  const unk = rw?.act?.({ v: 1, name: 'plotRoute', args: { dest: 'veridian' } });
+  const unk = rw?.act?.({ v: 1, name: 'notACommand', args: {} });
   const unknown = unk?.ok === false && unk?.token === 'unknown';
   ctx.emit('commLine', { text: 'wave127-ring', from: 'Echo' });
   tick(1, 'wave127 harvest');
@@ -24296,6 +24301,787 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave129 hailmiss:', JSON.stringify(w129miss));
   if (!Object.values(w129miss).every(Boolean)) { console.log('WAVE129 HAILMISS FAIL'); errors++; }
+}
+
+// ---- Wave 131 PR2: agent command intents ----
+{
+  const { tryEngage: engage131, disengage: cancel131 } = await import('../src/game/autopilot.js');
+  const rw = globalThis.window?.rimward;
+  const savedOpt131 = ctx.agent?.optIn === true;
+  const savedHold131 = ctx.flags.berthHold === true;
+  const savedPause131 = ctx.flags.paused === true;
+  const savedDock131 = ctx.flags.docked === true;
+  const savedNav131 = ctx.world.nav && typeof ctx.world.nav === 'object'
+    ? {
+      dest: ctx.world.nav.dest,
+      path: Array.isArray(ctx.world.nav.path) ? ctx.world.nav.path.slice() : [],
+      remaining: ctx.world.nav.remaining,
+      status: ctx.world.nav.status,
+      autopilot: ctx.world.nav.autopilot === true,
+    }
+    : null;
+  const savedApEngaged131 = ctx.autopilot?.engaged === true;
+  const desk = ctx.stationDesk;
+  const hail = ctx.hailApi;
+  ctx.flags.berthHold = false;
+  ctx.flags.paused = false;
+  ctx.agent.optIn = true;
+  ctx.flags.docked = false;
+
+  const here131 = ctx.world.currentSystem;
+  const dest131 = here131 === 'veridian' ? 'freehold' : 'veridian';
+  let threw131 = false;
+
+  const stationDesk = !!(desk
+    && typeof desk.selectService === 'function'
+    && typeof desk.acceptJob === 'function'
+    && typeof desk.trade === 'function'
+    && typeof desk.repairAll === 'function'
+    && typeof desk.feed === 'function'
+    && typeof desk.undock === 'function'
+    && typeof desk.peekService === 'function');
+  const hailApi = !!(hail && typeof hail.resolve === 'function' && typeof hail.peek === 'function');
+
+  let plotOk = null;
+  try { plotOk = rw.act({ v: 1, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
+  const plotCharted = plotOk?.ok === true && plotOk?.token === '' && ctx.world.nav?.dest === dest131;
+
+  let plotProto = null;
+  try { plotProto = rw.act({ v: 1, name: 'plotRoute', args: { dest: '__proto__' } }); } catch { threw131 = true; }
+  const plotUncharted = plotProto?.ok === false && !!plotProto?.token && plotProto.token !== 'unknown';
+
+  let apEng = null;
+  try { apEng = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
+  const apEngage = !!(apEng && apEng.token !== 'unknown'
+    && ((apEng.ok === true && apEng.token === '') || (apEng.ok === false && !!apEng.token)));
+
+  const apWas = ctx.autopilot?.engaged === true;
+  let apCancel = null;
+  try { apCancel = rw.act({ v: 1, name: 'cancelAutopilot', args: {} }); } catch { threw131 = true; }
+  const apCancelOk = apCancel?.ok === true && (apWas ? ctx.autopilot?.engaged !== true : true);
+
+  let amEng = null;
+  try { amEng = rw.act({ v: 1, name: 'engageAutomine', args: {} }); } catch { threw131 = true; }
+  const amNoRock = amEng?.ok === false && amEng?.token === 'noRock';
+
+  ctx.flags.docked = false;
+  let openFlight = null;
+  try { openFlight = rw.act({ v: 1, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
+  const openNotDocked = openFlight?.ok === false && !!openFlight?.token && openFlight.token !== 'unknown';
+
+  ctx.flags.docked = true;
+  let openMkt = null;
+  try { openMkt = rw.act({ v: 1, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
+  tick(1, 'w131 open market');
+  let tradeBad = null;
+  try {
+    tradeBad = rw.act({
+      v: 1,
+      name: 'trade',
+      args: { commodity: 'provisions', qty: 0, side: 'buy' },
+    });
+  } catch { threw131 = true; }
+  const tradeBadQty = tradeBad?.ok === false && tradeBad?.token === 'bad-qty';
+
+  const savedCredits131 = ctx.world.credits;
+  const cargoLenBefore = Array.isArray(ctx.cargo) ? ctx.cargo.length : 0;
+  ctx.world.credits = 0;
+  let tradeNoUu = null;
+  try {
+    tradeNoUu = rw.act({
+      v: 1,
+      name: 'trade',
+      args: { commodity: 'provisions', qty: 1, side: 'buy' },
+    });
+  } catch { threw131 = true; }
+  const tradeNoUuOk = tradeNoUu?.ok === false
+    && tradeNoUu?.token !== 'unknown'
+    && ctx.world.credits === 0
+    && (Array.isArray(ctx.cargo) ? ctx.cargo.length : 0) === cargoLenBefore;
+  ctx.world.credits = savedCredits131;
+
+  let acceptOnMkt = null;
+  try { acceptOnMkt = rw.act({ v: 1, name: 'acceptJob', args: { id: 'ferry-consignment' } }); } catch { threw131 = true; }
+  const acceptWrongService = acceptOnMkt?.ok === false && !!acceptOnMkt?.token && acceptOnMkt.token !== 'unknown';
+
+  try { rw.act({ v: 1, name: 'openService', args: { id: 'jobs' } }); } catch { threw131 = true; }
+  tick(1, 'w131 open jobs');
+  let acceptMissing = null;
+  try { acceptMissing = rw.act({ v: 1, name: 'acceptJob', args: { id: 'no-such-job-w131' } }); } catch { threw131 = true; }
+  const acceptMissingJob = acceptMissing?.ok === false && !!acceptMissing?.token && acceptMissing.token !== 'unknown';
+
+  let repairOnMkt = null;
+  try { repairOnMkt = rw.act({ v: 1, name: 'repairAll', args: {} }); } catch { threw131 = true; }
+  const repairWrong = repairOnMkt?.ok === false && !!repairOnMkt?.token && repairOnMkt.token !== 'unknown';
+
+  try { rw.act({ v: 1, name: 'openService', args: { id: 'repair' } }); } catch { threw131 = true; }
+  tick(1, 'w131 open repair');
+  const p131 = ctx.player;
+  if (p131) {
+    if (Number.isFinite(p131.hullMax)) p131.hull = p131.hullMax;
+    if (Number.isFinite(p131.screenMax)) p131.screen = p131.screenMax;
+    if (Number.isFinite(p131.shellMax)) p131.shell = p131.shellMax;
+    if (Number.isFinite(p131.engineMax)) p131.engine = p131.engineMax;
+  }
+  const creditsBeforeRepair = ctx.world.credits;
+  let repairWhole = null;
+  try { repairWhole = rw.act({ v: 1, name: 'repairAll', args: {} }); } catch { threw131 = true; }
+  const repairRefuse = repairWhole?.ok === false
+    && !!repairWhole?.token
+    && repairWhole.token !== 'unknown'
+    && ctx.world.credits === creditsBeforeRepair;
+
+  const savedHunger131 = ctx.bio && typeof ctx.bio.hunger === 'number' ? ctx.bio.hunger : 0;
+  if (ctx.bio) ctx.bio.hunger = 0;
+  try { rw.act({ v: 1, name: 'openService', args: { id: 'feed' } }); } catch { threw131 = true; }
+  tick(1, 'w131 open feed');
+  const creditsBeforeFeed = ctx.world.credits;
+  let feedSated = null;
+  try { feedSated = rw.act({ v: 1, name: 'feed', args: { kind: 'biomass' } }); } catch { threw131 = true; }
+  const feedRefuse = feedSated?.ok === false
+    && !!feedSated?.token
+    && feedSated.token !== 'unknown'
+    && ctx.world.credits === creditsBeforeFeed;
+  if (ctx.bio) ctx.bio.hunger = savedHunger131;
+
+  let feedBad = null;
+  try { feedBad = rw.act({ v: 1, name: 'feed', args: { kind: 'pizza' } }); } catch { threw131 = true; }
+  const feedBadKind = feedBad?.ok === false && !!feedBad?.token && feedBad.token !== 'unknown';
+
+  let hailClosed = null;
+  try { hailClosed = rw.act({ v: 1, name: 'hailResolve', args: { intent: 'payTribute' } }); } catch { threw131 = true; }
+  const hailClosedRefuse = hailClosed?.ok === false && !!hailClosed?.token && hailClosed.token !== 'unknown';
+
+  ctx.flags.docked = true;
+  let undockAct = null;
+  try { undockAct = rw.act({ v: 1, name: 'undock', args: {} }); } catch { threw131 = true; }
+  const undockOk = undockAct?.ok === true && ctx.flags.docked === false;
+
+  let tel131 = null;
+  try { tel131 = rw.act({ v: 1, name: 'teleport', args: {} }); } catch { threw131 = true; }
+  const teleportForbidden = tel131?.ok === false && tel131?.token === 'forbidden';
+
+  try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
+  let apEng2 = null;
+  try { apEng2 = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
+  const apBeforeDisable = ctx.autopilot?.engaged === true;
+  let dis131 = null;
+  try { dis131 = rw.act({ v: 1, name: 'disable', args: {} }); } catch { threw131 = true; }
+  const disableNoCancelAp = dis131?.ok === true
+    && (!apBeforeDisable || ctx.autopilot?.engaged === true);
+
+  if (savedApEngaged131) {
+    engage131(ctx);
+  } else {
+    cancel131(ctx, 'cancel');
+  }
+  if (savedNav131) ctx.world.nav = savedNav131;
+  else delete ctx.world.nav;
+  ctx.agent.optIn = savedOpt131;
+  ctx.flags.berthHold = savedHold131;
+  ctx.flags.paused = savedPause131;
+  ctx.flags.docked = savedDock131;
+
+  const w131 = {
+    stationDesk: !!stationDesk,
+    hailApi: !!hailApi,
+    plotCharted: !!plotCharted,
+    plotUncharted: !!plotUncharted,
+    apEngage: !!apEngage,
+    apCancelOk: !!apCancelOk,
+    amNoRock: !!amNoRock,
+    openNotDocked: !!openNotDocked,
+    tradeBadQty: !!tradeBadQty,
+    tradeNoUu: !!tradeNoUuOk,
+    acceptWrongService: !!acceptWrongService,
+    acceptMissingJob: !!acceptMissingJob,
+    repairWrong: !!repairWrong,
+    repairRefuse: !!repairRefuse,
+    feedRefuse: !!feedRefuse,
+    feedBadKind: !!feedBadKind,
+    hailClosedRefuse: !!hailClosedRefuse,
+    undockOk: !!undockOk,
+    teleportForbidden: !!teleportForbidden,
+    disableNoCancelAp: !!disableNoCancelAp,
+    noThrow: threw131 === false,
+  };
+  console.log('wave131 agent-intents:', JSON.stringify(w131));
+  if (!Object.values(w131).every(Boolean)) { console.log('WAVE131 AGENT-INTENTS FAIL'); errors++; }
+}
+
+// ---- Wave 132 PR3: pulse sink + watch hypot latch ----
+{
+  const { tryEngage: engage132, disengage: cancel132 } = await import('../src/game/autopilot.js');
+  const rw = globalThis.window?.rimward;
+  const here132 = dirname(fileURLToPath(import.meta.url));
+  const amSrc132 = readFileSync(join(here132, '..', 'src/game/automine.js'), 'utf8');
+  const savedOpt132 = ctx.agent?.optIn === true;
+  const savedHold132 = ctx.flags.berthHold === true;
+  const savedPause132 = ctx.flags.paused === true;
+  const savedDock132 = ctx.flags.docked === true;
+  const savedHailOpen132 = ctx.flags.hailOpen === true;
+  const savedChart132 = ctx.flags.chartOpen === true;
+  const savedBerthOpen132 = ctx.flags.berthOpen === true;
+  const savedMatch132 = ctx.flags.matchSpeed === true;
+  const savedWpn132 = ctx.input.weaponGroup;
+  const savedSteerX132 = ctx.input.steerX;
+  const savedSteerY132 = ctx.input.steerY;
+  const savedStrafeX132 = ctx.input.strafeX;
+  const savedStrafeY132 = ctx.input.strafeY;
+  const savedThrottleHeld132 = ctx.input.throttleHeld;
+  const savedFullStop132 = ctx.input.fullStop;
+  const savedRoll132 = ctx.input.roll;
+  const savedBurner132 = ctx.input.afterburnerPressed;
+  const savedDrift132 = ctx.input.driftHeld;
+  const savedDockPressed132 = ctx.input.dockPressed;
+  const savedHailPressed132 = ctx.input.hailPressed;
+  const savedNav132 = ctx.world.nav && typeof ctx.world.nav === 'object'
+    ? {
+      dest: ctx.world.nav.dest,
+      path: Array.isArray(ctx.world.nav.path) ? ctx.world.nav.path.slice() : [],
+      remaining: ctx.world.nav.remaining,
+      status: ctx.world.nav.status,
+      autopilot: ctx.world.nav.autopilot === true,
+    }
+    : null;
+  const savedApEngaged132 = ctx.autopilot?.engaged === true;
+  const savedPos132 = ctx.ship?.object?.position?.clone?.() || null;
+
+  ctx.flags.berthHold = false;
+  ctx.flags.paused = false;
+  ctx.flags.docked = false;
+  ctx.flags.hailOpen = false;
+  ctx.flags.chartOpen = false;
+  ctx.flags.berthOpen = false;
+  ctx.flags.matchSpeed = false;
+  ctx.agent.optIn = true;
+  ctx.input.dockPressed = false;
+  ctx.input.hailPressed = false;
+  ctx.input.strafeX = 0;
+  ctx.input.strafeY = 0;
+  ctx.input.throttleHeld = false;
+  ctx.input.fullStop = false;
+  ctx.input.roll = 0;
+  ctx.input.afterburnerPressed = false;
+  ctx.input.driftHeld = false;
+
+  // Keep the hull out of the pad envelope so a dock pulse is an edge, not a berth.
+  if (ctx.ship?.object?.position) ctx.ship.object.position.set(800, 40, 800);
+
+  let threw132 = false;
+
+  let dockAct = null;
+  try { dockAct = rw.act({ v: 1, name: 'dock', args: {} }); } catch { threw132 = true; }
+  const dockNotSameTick = ctx.input.dockPressed !== true && ctx.flags.docked !== true;
+  tick(1, 'w132 dock pulse');
+  const dockEdgeOn = ctx.input.dockPressed === true;
+  tick(1, 'w132 dock clear');
+  const dockOneFrame = dockAct?.ok === true
+    && dockAct?.token === ''
+    && dockNotSameTick
+    && dockEdgeOn
+    && ctx.input.dockPressed === false;
+
+  let hailPulse = null;
+  try { hailPulse = rw.act({ v: 1, name: 'pulse', args: { edge: 'hail' } }); } catch { threw132 = true; }
+  const hailNotSameTick = ctx.input.hailPressed !== true;
+  tick(1, 'w132 hail pulse');
+  const hailEdgeOn = ctx.input.hailPressed === true;
+  tick(1, 'w132 hail clear');
+  const hailOneFrame = hailPulse?.ok === true
+    && hailPulse?.token === ''
+    && hailNotSameTick
+    && hailEdgeOn
+    && ctx.input.hailPressed === false;
+
+  let pulseCam = null;
+  let pulseBurn = null;
+  let pulseProto = null;
+  try { pulseCam = rw.act({ v: 1, name: 'pulse', args: { edge: 'camera' } }); } catch { threw132 = true; }
+  try { pulseBurn = rw.act({ v: 1, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw132 = true; }
+  try { pulseProto = rw.act({ v: 1, name: 'pulse', args: { edge: '__proto__' } }); } catch { threw132 = true; }
+  const pulseUnknown = pulseCam?.ok === false && pulseCam?.token === 'unknown'
+    && pulseBurn?.ok === false && pulseBurn?.token === 'unknown'
+    && pulseProto?.ok === false && pulseProto?.token === 'unknown';
+
+  let wgOk = null;
+  try { wgOk = rw.act({ v: 1, name: 'setWeaponGroup', args: { n: 3 } }); } catch { threw132 = true; }
+  const wgSet = wgOk?.ok === true && ctx.input.weaponGroup === 3;
+  ctx.flags.docked = true;
+  let wgHeld = null;
+  try { wgHeld = rw.act({ v: 1, name: 'setWeaponGroup', args: { n: 1 } }); } catch { threw132 = true; }
+  const weaponGroup = !!wgSet
+    && wgHeld?.ok === false
+    && wgHeld?.token === 'no-service'
+    && ctx.input.weaponGroup === 3;
+  ctx.flags.docked = false;
+
+  const savedSelPos = ctx.ship?.object?.position?.clone?.() || null;
+  if (ctx.ship?.object?.position) ctx.ship.object.position.set(1e9, 1e9, 1e9);
+  ctx.input.weaponGroup = 1;
+  let selNone = null;
+  try { selNone = rw.act({ v: 1, name: 'selectTarget', args: {} }); } catch { threw132 = true; }
+  const selectNoCand = selNone?.ok === false && selNone?.token === 'no-service';
+  if (savedSelPos && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedSelPos);
+  ctx.input.weaponGroup = 3;
+
+  let tel132 = null;
+  try { tel132 = rw.act({ v: 1, name: 'teleport', args: {} }); } catch { threw132 = true; }
+  const teleportForbidden = tel132?.ok === false && tel132?.token === 'forbidden';
+
+  if (savedPos132 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos132);
+  const dest132 = ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian';
+  try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest132 } }); } catch { threw132 = true; }
+  let apEng132 = null;
+  try { apEng132 = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw132 = true; }
+  ctx.input.steerX = 1;
+  ctx.input.steerY = 1;
+  for (const fn of winListeners.mousemove ?? []) {
+    fn({ clientX: window.innerWidth, clientY: 0 });
+  }
+  tick(1, 'w132 hypot latch');
+  const hypotHeld = apEng132?.ok === true && ctx.autopilot?.engaged === true;
+  ctx.input.strafeX = 1;
+  for (const fn of winListeners.keydown ?? []) {
+    fn({ code: 'KeyD', repeat: false, preventDefault() {} });
+  }
+  tick(1, 'w132 strafe steal');
+  const hypotLatch = !!hypotHeld
+    && ctx.autopilot?.engaged === false
+    && ctx.autopilot?.reason === 'input';
+  for (const fn of winListeners.keyup ?? []) {
+    fn({ code: 'KeyD', preventDefault() {} });
+  }
+  for (const fn of winListeners.mousemove ?? []) {
+    fn({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+  }
+  ctx.input.steerX = 0;
+  ctx.input.steerY = 0;
+  ctx.input.strafeX = 0;
+
+  const helmStart132 = amSrc132.indexOf('function helmSteerLatched');
+  const helmEnd132 = amSrc132.indexOf('function inputBreak', helmStart132);
+  const amHelm132 = helmStart132 >= 0 && helmEnd132 > helmStart132
+    ? amSrc132.slice(helmStart132, helmEnd132)
+    : '';
+  const amOptInNoBerth = amHelm132.includes('optIn')
+    && !amHelm132.includes('berthHold')
+    && !amHelm132.includes('berthHeld');
+
+  if (savedApEngaged132) {
+    engage132(ctx);
+  } else {
+    cancel132(ctx, 'cancel');
+  }
+  if (savedNav132) ctx.world.nav = savedNav132;
+  else delete ctx.world.nav;
+  ctx.agent.optIn = savedOpt132;
+  ctx.flags.berthHold = savedHold132;
+  ctx.flags.paused = savedPause132;
+  ctx.flags.docked = savedDock132;
+  ctx.flags.hailOpen = savedHailOpen132;
+  ctx.flags.chartOpen = savedChart132;
+  ctx.flags.berthOpen = savedBerthOpen132;
+  ctx.flags.matchSpeed = savedMatch132;
+  ctx.input.weaponGroup = savedWpn132;
+  ctx.input.steerX = savedSteerX132;
+  ctx.input.steerY = savedSteerY132;
+  ctx.input.strafeX = savedStrafeX132;
+  ctx.input.strafeY = savedStrafeY132;
+  ctx.input.throttleHeld = savedThrottleHeld132;
+  ctx.input.fullStop = savedFullStop132;
+  ctx.input.roll = savedRoll132;
+  ctx.input.afterburnerPressed = savedBurner132;
+  ctx.input.driftHeld = savedDrift132;
+  ctx.input.dockPressed = savedDockPressed132;
+  ctx.input.hailPressed = savedHailPressed132;
+  if (savedPos132 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos132);
+
+  const w132 = {
+    dockOneFrame: !!dockOneFrame,
+    hailOneFrame: !!hailOneFrame,
+    pulseUnknown: !!pulseUnknown,
+    weaponGroup: !!weaponGroup,
+    selectNoCand: !!selectNoCand,
+    teleportForbidden: !!teleportForbidden,
+    hypotLatch: !!hypotLatch,
+    amOptInNoBerth: !!amOptInNoBerth,
+    noThrow: threw132 === false,
+  };
+  console.log('wave132 pulse-latch:', JSON.stringify(w132));
+  if (!Object.values(w132).every(Boolean)) { console.log('WAVE132 PULSE-LATCH FAIL'); errors++; }
+}
+
+// ---- Wave 133 PR4: empty e.code fallback (decodeKeyCode) ----
+{
+  const { decodeKeyCode } = await import('../src/systems/key-code.js');
+  const here133 = dirname(fileURLToPath(import.meta.url));
+  const src133 = (rel) => readFileSync(join(here133, '..', rel), 'utf8');
+  const mainSrc133 = src133('src/main.js');
+  const ctrlSrc133 = src133('src/systems/controls.js');
+  const stationSrc133 = src133('src/systems/station.js');
+  const hailSrc133 = src133('src/systems/hail.js');
+  const chartSrc133 = src133('src/systems/galaxychart.js');
+  const titleSrc133 = src133('src/systems/title.js');
+  const policySrc133 = src133('src/systems/overlay-policy.js');
+
+  let threw133 = false;
+
+  let unit = false;
+  try {
+    unit = decodeKeyCode({ code: 'KeyW', key: 'p' }) === 'KeyW'
+      && decodeKeyCode({ code: '', key: 'w' }) === 'KeyW'
+      && decodeKeyCode({ code: '', key: '0' }) === 'Digit0'
+      && decodeKeyCode({ code: '', key: ' ' }) === 'Space'
+      && decodeKeyCode({ code: '', key: 'Shift' }) === 'ShiftLeft'
+      && decodeKeyCode({ code: '', key: 'Escape' }) === 'Escape'
+      && decodeKeyCode({ code: '', key: '__proto__' }) === ''
+      && decodeKeyCode(null) === '';
+  } catch { threw133 = true; unit = false; }
+
+  const savedPause133 = ctx.flags.paused === true;
+  const savedDock133 = ctx.flags.docked === true;
+  const savedHailOpen133 = ctx.flags.hailOpen === true;
+  const savedChart133 = ctx.flags.chartOpen === true;
+  const savedBerthOpen133 = ctx.flags.berthOpen === true;
+  const savedDockPressed133 = ctx.input.dockPressed;
+  const savedPos133 = ctx.ship?.object?.position?.clone?.() || null;
+
+  ctx.flags.paused = false;
+  ctx.flags.docked = false;
+  ctx.flags.hailOpen = false;
+  ctx.flags.chartOpen = false;
+  ctx.flags.berthOpen = false;
+  ctx.input.dockPressed = false;
+  if (ctx.ship?.object?.position) ctx.ship.object.position.set(800, 40, 800);
+
+  let dockFallback = false;
+  try {
+    ctx.input.dockPressed = false;
+    dispatchKeyFallback('j');
+    const dockNotSameTick = ctx.input.dockPressed !== true;
+    tick(1, 'w133 dock fallback');
+    const dockEdgeOn = ctx.input.dockPressed === true;
+    tick(1, 'w133 dock fallback clear');
+    dockFallback = dockNotSameTick && dockEdgeOn && ctx.input.dockPressed === false;
+  } catch { threw133 = true; }
+
+  let dockCodeWins = false;
+  try {
+    ctx.input.dockPressed = false;
+    dispatchKey('KeyJ');
+    const dockNotSameTick = ctx.input.dockPressed !== true;
+    tick(1, 'w133 dock KeyJ');
+    const dockEdgeOn = ctx.input.dockPressed === true;
+    tick(1, 'w133 dock KeyJ clear');
+    dockCodeWins = dockNotSameTick && dockEdgeOn && ctx.input.dockPressed === false;
+  } catch { threw133 = true; }
+
+  let dockBothEmpty = false;
+  try {
+    ctx.input.dockPressed = false;
+    for (const fn of winListeners.keydown ?? []) fn({ code: '', key: '', repeat: false, preventDefault() {} });
+    for (const fn of winListeners.keyup ?? []) fn({ code: '', key: '', preventDefault() {} });
+    tick(1, 'w133 dock both empty');
+    dockBothEmpty = ctx.input.dockPressed !== true;
+    tick(1, 'w133 dock both empty clear');
+    dockBothEmpty = dockBothEmpty && ctx.input.dockPressed !== true;
+  } catch { threw133 = true; }
+
+  function pauseListen133(e) {
+    const code = decodeKeyCode(e);
+    if (code !== 'KeyP') return;
+    const focus = document.activeElement;
+    const typing = !!focus && (
+      focus.tagName === 'INPUT' || focus.tagName === 'TEXTAREA' ||
+      focus.tagName === 'SELECT' || focus.isContentEditable
+    );
+    // Harness getElementById is create-on-miss; skip only if the overlay is on body.
+    const titleOnBody = [...walkDom(document.body)].some((n) => n.id === 'rw-title');
+    if (typing || ctx.models?.isOpen?.() || titleOnBody) return;
+    ctx.flags.paused = !ctx.flags.paused;
+  }
+  window.addEventListener('keydown', pauseListen133);
+  let pauseFallback = false;
+  try {
+    ctx.flags.paused = false;
+    dispatchKeyFallback('p');
+    const fallbackOn = ctx.flags.paused === true;
+    ctx.flags.paused = false;
+    dispatchKey('KeyP');
+    const codeOn = ctx.flags.paused === true;
+    pauseFallback = fallbackOn && codeOn;
+  } catch { threw133 = true; }
+  window.removeEventListener('keydown', pauseListen133);
+
+  const importDecode133 = (src) => src.includes('decodeKeyCode') && src.includes('key-code.js');
+  const callers = importDecode133(mainSrc133)
+    && importDecode133(ctrlSrc133)
+    && importDecode133(stationSrc133)
+    && importDecode133(hailSrc133)
+    && importDecode133(chartSrc133)
+    && !titleSrc133.includes('decodeKeyCode')
+    && !titleSrc133.includes('key-code.js')
+    && !policySrc133.includes('decodeKeyCode')
+    && !policySrc133.includes('key-code.js');
+
+  const trackedStart133 = ctrlSrc133.indexOf('const TRACKED = new Set([');
+  const trackedEnd133 = ctrlSrc133.indexOf(']);', trackedStart133);
+  const trackedSrc133 = trackedStart133 >= 0 && trackedEnd133 > trackedStart133
+    ? ctrlSrc133.slice(trackedStart133, trackedEnd133 + 3)
+    : '';
+  const trackedDigits = trackedSrc133.includes("'Digit1'")
+    && trackedSrc133.includes("'Digit2'")
+    && trackedSrc133.includes("'Digit3'")
+    && trackedSrc133.includes("'Digit4'")
+    && trackedSrc133.includes("'Digit5'")
+    && !trackedSrc133.includes("'Digit0'");
+
+  ctx.flags.paused = savedPause133;
+  ctx.flags.docked = savedDock133;
+  ctx.flags.hailOpen = savedHailOpen133;
+  ctx.flags.chartOpen = savedChart133;
+  ctx.flags.berthOpen = savedBerthOpen133;
+  ctx.input.dockPressed = savedDockPressed133;
+  if (savedPos133 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos133);
+
+  const w133 = {
+    unit: !!unit,
+    dockFallback: !!dockFallback,
+    dockCodeWins: !!dockCodeWins,
+    dockBothEmpty: !!dockBothEmpty,
+    pauseFallback: !!pauseFallback,
+    callers: !!callers,
+    trackedDigits: !!trackedDigits,
+    noThrow: threw133 === false,
+  };
+  console.log('wave133 key-code:', JSON.stringify(w133));
+  if (!Object.values(w133).every(Boolean)) { console.log('WAVE133 KEY-CODE FAIL'); errors++; }
+}
+
+// ---- Wave 134 PR5: Agent play badge chrome ----
+{
+  const { tryEngage: engage134, disengage: cancel134 } = await import('../src/game/autopilot.js');
+  const here134 = dirname(fileURLToPath(import.meta.url));
+  const src134 = (rel) => readFileSync(join(here134, '..', rel), 'utf8');
+  const apiSrc134 = src134('src/systems/agent-api.js');
+  const styleSrc134 = src134('src/style.css');
+  const hudJs134 = src134('src/systems/hud.js');
+  const rw = globalThis.window?.rimward;
+
+  let threw134 = false;
+
+  const savedOpt134 = ctx.agent?.optIn === true;
+  const savedPause134 = ctx.flags.paused === true;
+  const savedHold134 = ctx.flags.berthHold === true;
+  const savedDock134 = ctx.flags.docked === true;
+  const savedChart134 = ctx.flags.chartOpen === true;
+  const savedAp134 = ctx.autopilot?.engaged === true;
+  const savedNav134 = ctx.world.nav && typeof ctx.world.nav === 'object'
+    ? {
+      dest: ctx.world.nav.dest,
+      path: Array.isArray(ctx.world.nav.path) ? ctx.world.nav.path.slice() : [],
+      remaining: ctx.world.nav.remaining,
+      status: ctx.world.nav.status,
+      autopilot: ctx.world.nav.autopilot === true,
+    }
+    : null;
+  const savedSearch134 = window.location.search;
+  const savedHref134 = window.location.href;
+  const savedLast134 = ctx.agent?.lastIntent && typeof ctx.agent.lastIntent === 'object'
+    ? { ...ctx.agent.lastIntent }
+    : null;
+
+  function textsOf134(node) {
+    return [...walkDom(node)].map((n) => (typeof n.textContent === 'string' ? n.textContent : ''));
+  }
+
+  function findBadge134() {
+    for (const n of document.body.children ?? []) {
+      if (!n) continue;
+      const texts = textsOf134(n);
+      if (n.classList?.contains('rw-agent-badge') || texts.includes('Agent play')) return n;
+    }
+    return null;
+  }
+
+  function underHud134(node) {
+    let p = node;
+    while (p) {
+      if (p.id === 'hud') return true;
+      p = p.parent;
+    }
+    return false;
+  }
+
+  function isButton134(n) {
+    if (!n || n.tagName !== 'BUTTON') return false;
+    const typed = n.type === 'button' || n.getAttribute?.('type') === 'button';
+    return typed;
+  }
+
+  function fireTrusted134(btn) {
+    for (const fn of btn._listeners?.click ?? []) {
+      fn({ type: 'click', isTrusted: true, target: btn });
+    }
+  }
+
+  let mounted = false;
+  try {
+    const badge = findBadge134();
+    const nodes = badge ? [...walkDom(badge)] : [];
+    const buttons = nodes.filter((n) => n.tagName === 'BUTTON');
+    const statusLive = nodes.some((n) => n.getAttribute?.('aria-live') === 'polite');
+    const hasEnable = buttons.some((b) => isButton134(b) && b.textContent === 'Enable agent play');
+    const hasStop = buttons.some((b) => isButton134(b) && b.textContent === 'Stop agent play');
+    const hasHint = nodes.some((n) => n.textContent === 'Stop does not cancel Autopilot.');
+    const hasTitle = nodes.some((n) => n.textContent === 'Agent play');
+    mounted = !!(
+      badge
+      && badge.parent === document.body
+      && !underHud134(badge)
+      && hasTitle
+      && statusLive
+      && hasEnable
+      && hasStop
+      && hasHint
+      && buttons.length >= 2
+    );
+  } catch { threw134 = true; }
+
+  const noInnerHtml = !apiSrc134.includes('innerHTML')
+    && !apiSrc134.includes('insertAdjacentHTML')
+    && styleSrc134.includes('.rw-agent-badge')
+    && !hudJs134.includes('rw-agent-badge');
+
+  ctx.flags.paused = false;
+  ctx.flags.berthHold = false;
+  ctx.flags.docked = false;
+  ctx.flags.chartOpen = false;
+  ctx.agent.optIn = false;
+  window.location.search = '';
+  tick(1, 'w134 default off');
+
+  let queryOffDefault = false;
+  try {
+    const badge = findBadge134();
+    const texts = badge ? textsOf134(badge) : [];
+    queryOffDefault = ctx.agent?.optIn !== true && texts.includes('off');
+  } catch { threw134 = true; }
+
+  let untrustedEnable = false;
+  try {
+    const before = ctx.agent?.optIn === true;
+    let viaHandle = null;
+    try { viaHandle = rw.enable(); } catch { threw134 = true; }
+    const badge = findBadge134();
+    const enableBtn = badge
+      ? [...walkDom(badge)].find((n) => n.tagName === 'BUTTON' && n.textContent === 'Enable agent play')
+      : null;
+    if (enableBtn && typeof enableBtn.click === 'function') enableBtn.click();
+    const pingClosed = rw?.act?.({ v: 1, name: 'ping', args: {} });
+    untrustedEnable = before === false
+      && ctx.agent?.optIn !== true
+      && viaHandle?.ok === false
+      && viaHandle?.token === 'opt-in'
+      && pingClosed?.ok === false
+      && pingClosed?.token === 'opt-in';
+  } catch { threw134 = true; }
+
+  let trustedEnable = false;
+  try {
+    const badge = findBadge134();
+    const enableBtn = badge
+      ? [...walkDom(badge)].find((n) => n.tagName === 'BUTTON' && n.textContent === 'Enable agent play')
+      : null;
+    if (enableBtn) fireTrusted134(enableBtn);
+    const texts = badge ? textsOf134(badge) : [];
+    let pingOk = null;
+    try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    trustedEnable = ctx.agent?.optIn === true
+      && texts.includes('on')
+      && pingOk?.ok === true;
+  } catch { threw134 = true; }
+
+  let lastLine = false;
+  try {
+    const destPin = 'veridian-dest-pin';
+    const idPin = 'id-pin-zz';
+    let pingOk = null;
+    try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    const badgeAfterPing = findBadge134();
+    const textsPing = badgeAfterPing ? textsOf134(badgeAfterPing) : [];
+    const lastPing = pingOk?.ok === true && textsPing.includes('Last: ping');
+    const errNone = !textsPing.some((t) => typeof t === 'string' && t.startsWith('Error: '));
+    let tel = null;
+    try { tel = rw.act({ v: 1, name: 'teleport', args: { dest: destPin, id: idPin } }); } catch { threw134 = true; }
+    const badgeAfterTel = findBadge134();
+    const textsTel = badgeAfterTel ? textsOf134(badgeAfterTel) : [];
+    const joined = textsTel.join('\n');
+    const liveErr = typeof tel?.error === 'string' ? tel.error : '';
+    const errShown = liveErr
+      ? textsTel.includes(`Error: ${liveErr}`)
+      : !textsTel.some((t) => typeof t === 'string' && t.startsWith('Error: '));
+    lastLine = lastPing
+      && errNone
+      && tel?.ok === false
+      && errShown
+      && !joined.includes(destPin)
+      && !joined.includes(idPin);
+  } catch { threw134 = true; }
+
+  let stopClears = false;
+  try {
+    ctx.agent.optIn = true;
+    const dest134 = ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian';
+    try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest134 } }); } catch { threw134 = true; }
+    let apEng = null;
+    try { apEng = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw134 = true; }
+    const apWas = apEng?.ok === true && ctx.autopilot?.engaged === true;
+    const badge = findBadge134();
+    const stopBtn = badge
+      ? [...walkDom(badge)].find((n) => n.tagName === 'BUTTON' && n.textContent === 'Stop agent play')
+      : null;
+    if (stopBtn && typeof stopBtn.click === 'function') stopBtn.click();
+    const texts = badge ? textsOf134(badge) : [];
+    let pingAfter = null;
+    try { pingAfter = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    stopClears = ctx.agent?.optIn !== true
+      && texts.includes('off')
+      && pingAfter?.ok === false
+      && pingAfter?.token === 'opt-in'
+      && (!apWas || ctx.autopilot?.engaged === true);
+  } catch { threw134 = true; }
+
+  if (savedAp134) {
+    engage134(ctx);
+  } else {
+    cancel134(ctx, 'cancel');
+  }
+  if (savedNav134) ctx.world.nav = savedNav134;
+  else delete ctx.world.nav;
+  ctx.agent.optIn = savedOpt134;
+  if (savedLast134) ctx.agent.lastIntent = savedLast134;
+  ctx.flags.paused = savedPause134;
+  ctx.flags.berthHold = savedHold134;
+  ctx.flags.docked = savedDock134;
+  ctx.flags.chartOpen = savedChart134;
+  window.location.search = savedSearch134;
+  window.location.href = savedHref134;
+  tick(1, 'w134 restore');
+
+  const w134 = {
+    mounted: !!mounted,
+    noInnerHtml: !!noInnerHtml,
+    queryOffDefault: !!queryOffDefault,
+    untrustedEnable: !!untrustedEnable,
+    trustedEnable: !!trustedEnable,
+    stopClears: !!stopClears,
+    lastLine: !!lastLine,
+    noThrow: threw134 === false,
+  };
+  console.log('wave134 agent-badge:', JSON.stringify(w134));
+  if (!Object.values(w134).every(Boolean)) { console.log('WAVE134 AGENT-BADGE FAIL'); errors++; }
 }
 
 if (errors === 0) {

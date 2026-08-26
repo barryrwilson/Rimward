@@ -3,10 +3,12 @@ import { pickReticleLock } from '../game/reticle-aim.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { dropPartIfNotShip, toggleEnginePart } from '../game/subsys-aim.js';
 import {
+  canOpenPlayCard,
   hailDigitsAllowed,
   playSurfaceBlocked,
   settingsOwnsScreen,
 } from './overlay-policy.js';
+import { decodeKeyCode } from './key-code.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -59,6 +61,14 @@ const THROTTLE_RAMP_RATE = 0.5; // setpoint/s while R or F held (§5.1)
 const DOUBLE_TAP_MS = 350; // F double-tap window → full stop (§5.1)
 const RETICLE_RADIUS_FRACTION = 0.35; // of min(vw, vh)
 
+const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock']);
+
+// Shared with KeyT/H/J/V. agentPulse sets these; next update publishes one frame.
+let pendingTarget = false;
+let pendingHail = false;
+let pendingDock = false;
+let pendingReticleLock = false;
+
 /** True only when the title overlay is attached. Create-on-miss getElementById is not open. */
 function titleOverlayAttached() {
   if (typeof document === 'undefined') return false;
@@ -110,35 +120,150 @@ function shouldSkipWeaponGroupDigits(ctx) {
   }
 }
 
-/** Cycle ctx.targets.current through in-range candidates, nearest first. */
-function cycleTarget(ctx) {
-  const shipObj = ctx.ship.object;
-  if (!shipObj) {
-    ctx.targets.current = null;
-    return;
-  }
+/** In-range cycle candidates: ships, plus rocks when mining group is 3. Nearest first later. */
+function collectCycleCands(ctx) {
+  const cands = [];
+  const shipObj = ctx && ctx.ship && ctx.ship.object;
+  if (!shipObj || !shipObj.position) return cands;
   const p = shipObj.position;
   const range2 = U.TARGET_RANGE * U.TARGET_RANGE;
-  const cands = [];
-  for (const s of ctx.ships) {
-    if (!s?.object || s.state?.destroyed) continue;
-    const d2 = s.object.position.distanceToSquared(p);
-    if (d2 <= range2) cands.push({ ref: s, d2 });
+  const ships = ctx.ships;
+  if (ships) {
+    for (const s of ships) {
+      if (!s?.object || s.state?.destroyed) continue;
+      const d2 = s.object.position.distanceToSquared(p);
+      if (d2 <= range2) cands.push({ ref: s, d2 });
+    }
   }
   // Mining group (3) may also target asteroids (§6.2 mining beam).
-  if (ctx.input.weaponGroup === 3 && ctx.asteroids?.list) {
+  if (ctx.input && ctx.input.weaponGroup === 3 && ctx.asteroids?.list) {
     for (const a of ctx.asteroids.list) {
+      if (!a || !a.position) continue;
       const d2 = a.position.distanceToSquared(p);
       if (d2 <= range2) cands.push({ ref: a, d2 });
     }
   }
+  return cands;
+}
+
+/** Cycle ctx.targets.current through in-range candidates, nearest first. */
+function cycleTarget(ctx) {
+  const cands = collectCycleCands(ctx);
   if (!cands.length) {
-    ctx.targets.current = null;
+    if (ctx && ctx.targets) ctx.targets.current = null;
     return;
   }
   cands.sort((a, b) => a.d2 - b.d2);
   const idx = cands.findIndex((c) => c.ref === ctx.targets.current);
   ctx.targets.current = cands[(idx + 1) % cands.length].ref;
+}
+
+function hailPulseBlocked(ctx) {
+  try {
+    if (typeof playSurfaceBlocked === 'function' && playSurfaceBlocked(ctx) === true) return true;
+    if (typeof canOpenPlayCard === 'function' && canOpenPlayCard(ctx, 'hail') === false) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function idsEqual(want, got) {
+  if (got === undefined || got === null) return false;
+  if (want === got) return true;
+  if (typeof want === 'number' && typeof got === 'number') return want === got;
+  if (typeof want === 'string' && typeof got === 'string') return want === got;
+  if (typeof want === 'number' && Number.isInteger(want) && typeof got === 'string' && got === String(want)) {
+    return true;
+  }
+  if (typeof got === 'number' && Number.isInteger(got) && typeof want === 'string' && want === String(got)) {
+    return true;
+  }
+  return false;
+}
+
+function matchCycleCand(ctx, cands, id) {
+  const list = ctx && ctx.asteroids && ctx.asteroids.list;
+  for (let i = 0; i < cands.length; i++) {
+    const ref = cands[i] && cands[i].ref;
+    if (!ref) continue;
+    if (ref.object && ref.state && !ref.lockKind) {
+      const sid = Object.hasOwn(ref, 'id') ? ref.id : undefined;
+      if (idsEqual(id, sid)) return ref;
+      continue;
+    }
+    if (list) {
+      const idx = list.indexOf(ref);
+      if (idx >= 0 && idsEqual(id, idx)) return ref;
+    }
+  }
+  return null;
+}
+
+/**
+ * Authored pulse: dock | hail | target | reticleLock.
+ * Same pending* flags as KeyJ/H/T/V. Next update publishes *Pressed one frame, then clears.
+ */
+export function agentPulse(ctx, edge) {
+  try {
+    if (typeof edge !== 'string' || !PULSE_EDGES.has(edge)) return 'unknown';
+    if (edge === 'dock') {
+      if (shouldSkipDockPulse(ctx)) return 'no-service';
+      pendingDock = true;
+      return '';
+    }
+    if (edge === 'hail') {
+      if (hailPulseBlocked(ctx)) return 'no-service';
+      pendingHail = true;
+      return '';
+    }
+    if (edge === 'target') {
+      pendingTarget = true;
+      return '';
+    }
+    if (edge === 'reticleLock') {
+      pendingReticleLock = true;
+      return '';
+    }
+    return 'unknown';
+  } catch {
+    return edge === 'dock' || edge === 'hail' ? 'no-service' : 'unknown';
+  }
+}
+
+/** Digit1–5 law. Writes ctx.input.weaponGroup only. Token on skip or bad n. */
+export function agentSetWeaponGroup(ctx, n) {
+  try {
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 5) return 'bad-qty';
+    if (shouldSkipWeaponGroupDigits(ctx)) return 'no-service';
+    if (!ctx || !ctx.input || typeof ctx.input !== 'object') return 'no-service';
+    ctx.input.weaponGroup = n;
+    return '';
+  } catch {
+    return 'no-service';
+  }
+}
+
+/** Cycle (no id) pulses KeyT. id selects an in-range cycle candidate. Does not warp. */
+export function agentSelectTarget(ctx, id) {
+  try {
+    if (!ctx || !ctx.targets || typeof ctx.targets !== 'object') return 'no-service';
+    const cands = collectCycleCands(ctx);
+    if (!cands.length) return 'no-service';
+    if (id === undefined) {
+      pendingTarget = true;
+      return '';
+    }
+    if (typeof id !== 'string' && typeof id !== 'number') return 'no-service';
+    if (typeof id === 'string' && reservedToken(id)) return 'no-service';
+    if (typeof id === 'number' && !Number.isFinite(id)) return 'no-service';
+    const hit = matchCycleCand(ctx, cands, id);
+    if (!hit) return 'no-service';
+    ctx.targets.current = hit;
+    return '';
+  } catch {
+    return 'no-service';
+  }
 }
 
 function reservedToken(value) {
@@ -283,13 +408,10 @@ export function initControls(ctx) {
   let fireDown = false;
 
   // One-frame edge pulses, captured in handlers and published in update().
+  // pendingTarget/Hail/Dock/ReticleLock live at module scope (agentPulse).
   let pendingAfterburner = false;
-  let pendingTarget = false;
-  let pendingHail = false;
-  let pendingDock = false;
   let pendingCamera = false;
   let pendingMatchSpeed = false;
-  let pendingReticleLock = false;
   let pendingAutomine = false;
   let pendingEnginePart = false;
 
@@ -313,11 +435,12 @@ export function initControls(ctx) {
   };
 
   window.addEventListener('keydown', (e) => {
-    if (e.repeat || !TRACKED.has(e.code)) return;
-    pressed.add(e.code);
-    if (PREVENT_DEFAULT.has(e.code)) e.preventDefault();
+    const code = decodeKeyCode(e);
+    if (e.repeat || !TRACKED.has(code)) return;
+    pressed.add(code);
+    if (PREVENT_DEFAULT.has(code)) e.preventDefault();
 
-    switch (e.code) {
+    switch (code) {
       case 'Space':
         pendingAfterburner = true;
         break;
@@ -374,7 +497,9 @@ export function initControls(ctx) {
   });
 
   window.addEventListener('keyup', (e) => {
-    pressed.delete(e.code);
+    const code = decodeKeyCode(e);
+    if (!code) return;
+    pressed.delete(code);
   });
 
   window.addEventListener('mousemove', (e) => {
@@ -420,6 +545,7 @@ export function initControls(ctx) {
       const has = (code) => pressed.has(code);
 
       // --- Publish one-frame edge pulses (later systems see them this frame).
+      // Agent act({ name:'dock' }) sets pendingDock; this publish is the next update.
       input.afterburnerPressed = pendingAfterburner;
       input.targetPressed = pendingTarget;
       input.hailPressed = pendingHail;

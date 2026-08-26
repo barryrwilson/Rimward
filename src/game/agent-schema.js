@@ -38,6 +38,29 @@ export const COMMAND_NAMES = Object.freeze([
 
 const COMMAND_SET = new Set(COMMAND_NAMES);
 const PR1_LIVE = new Set(['ping', 'disable']);
+const PR2_LIVE = new Set([
+  'plotRoute',
+  'clearRoute',
+  'engageAutopilot',
+  'cancelAutopilot',
+  'engageAutomine',
+  'cancelAutomine',
+  'hailResolve',
+  'openService',
+  'acceptJob',
+  'trade',
+  'repairAll',
+  'feed',
+  'undock',
+]);
+const PR3_LIVE = new Set([
+  'dock',
+  'hail',
+  'selectTarget',
+  'pulse',
+  'setWeaponGroup',
+]);
+const LIVE = new Set([...PR1_LIVE, ...PR2_LIVE, ...PR3_LIVE]);
 
 export const FORBIDDEN_NAMES = Object.freeze([
   'teleport',
@@ -120,6 +143,10 @@ export function isAuthoredCommand(name) {
 
 export function isPr1LiveCommand(name) {
   return typeof name === 'string' && PR1_LIVE.has(name);
+}
+
+export function isLiveCommand(name) {
+  return typeof name === 'string' && LIVE.has(name);
 }
 
 export function isAuthoredEventType(type) {

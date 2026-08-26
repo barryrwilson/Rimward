@@ -16,6 +16,7 @@ import {
   settingsOwnsScreen,
   takeDeferredHail,
 } from './overlay-policy.js';
+import { decodeKeyCode } from './key-code.js';
 
 /**
  * Combat hail UI (doc §7.6, §12.3): a lower-left card above the aux stack.
@@ -794,7 +795,8 @@ export function initHail(ctx) {
   // player weapon groups (controls.js) — known overlap, flagged to orchestrator.
   window.addEventListener('keydown', (e) => {
     if (!open || !open.buttons) return;
-    const m = /^Digit([1-9])$/.exec(e.code);
+    const code = decodeKeyCode(e);
+    const m = /^Digit([1-9])$/.exec(code);
     if (!m) return;
     let digitsOk = true;
     try {
@@ -809,6 +811,43 @@ export function initHail(ctx) {
       resolveIntent(ctx, open.intents[idx]);
     }
   });
+
+  function peek() {
+    if (!open) return { intents: [] };
+    const intents = [];
+    const list = open.intents;
+    if (Array.isArray(list)) {
+      for (let i = 0; i < list.length; i++) {
+        if (typeof list[i] === 'string') intents.push(list[i]);
+      }
+    }
+    return { intents };
+  }
+
+  function resolve(intentOrIndex) {
+    if (!open) return;
+    let intent = '';
+    if (typeof intentOrIndex === 'number' && Number.isFinite(intentOrIndex)) {
+      const idx = (intentOrIndex | 0) - 1;
+      if (idx >= 0 && Array.isArray(open.intents) && idx < open.intents.length) {
+        intent = open.intents[idx];
+      }
+    } else if (typeof intentOrIndex === 'string') {
+      const list = open.intents;
+      if (Array.isArray(list)) {
+        for (let i = 0; i < list.length; i++) {
+          if (list[i] === intentOrIndex) {
+            intent = intentOrIndex;
+            break;
+          }
+        }
+      }
+    }
+    if (!intent) return;
+    resolveIntent(ctx, intent);
+  }
+
+  ctx.hailApi = { resolve, peek };
 
   return {
     update() {

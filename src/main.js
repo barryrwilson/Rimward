@@ -18,6 +18,7 @@ import { applyShipLighting, applyShipToneMapping } from './systems/ship-lighting
 
 // Input + simulation systems
 import { initControls } from './systems/controls.js';
+import { decodeKeyCode } from './systems/key-code.js';
 import { initBio } from './game/bio.js';
 import { initWorld } from './game/world.js';
 import { initContacts } from './game/contacts.js';
@@ -169,7 +170,8 @@ pauseEl.style.cssText =
 pauseEl.textContent = 'PAUSED — P to resume';
 document.body.appendChild(pauseEl);
 window.addEventListener('keydown', (e) => {
-  if (e.code !== 'KeyP') return;
+  const code = decodeKeyCode(e);
+  if (code !== 'KeyP') return;
   // The models filter is an INPUT. Typing "Lamp" sends KeyP, which used to
   // unpause the title sim and spawn unprimed traffic (independent:cutter:pirate).
   const focus = document.activeElement;

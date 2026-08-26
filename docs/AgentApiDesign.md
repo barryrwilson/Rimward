@@ -4,9 +4,9 @@
 |---|---|
 | **Title** | RIMWARD AGENT API (AI play surface) |
 | **Author** | Wave 126 leftover integrator |
-| **Date** | 2026-08-25 (rev 3 leftover freeze after Wave 125 census) |
-| **Status** | Wave 127 PR1 implemented. `window.rimward` observe handle is live. Leftover was **REAL**. Merge law: shared-contract.md wins. |
-| **Wave** | 127 — PR1 observe handle. PR2–PR6 still named later. |
+| **Date** | 2026-08-26 (rev 3 leftover freeze after Wave 125 census) |
+| **Status** | Wave 134 PR5 implemented. `window.rimward` observe, command intents, pulse sink, hypot latch, `decodeKeyCode`, and Agent play badge chrome are live. Leftover was **REAL**. Merge law: shared-contract.md wins. |
+| **Wave** | 134 — PR5 Agent play badge. PR6 still named later. |
 | **Owner request** | Inbox P2 AGENT API: add a stable documented AI play API so an agent can play on a user's behalf, plus a live watch surface. Screenshot loops are too slow. Empty `e.code` never reaches TRACKED. Owner: write the design first. Do not implement. |
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
@@ -715,7 +715,7 @@ Concrete, ordered, independently reviewable. **No HTTP in PR1. No third helm in 
 - **Title:** Wave 126 PR3 — Controls agent pulse sink
 - **Files / components:** `src/systems/controls.js` (`agentPulse`, `agentSetWeaponGroup`; input writer stays this file), `src/game/autopilot.js` / `src/game/automine.js` (`optIn` hypot latch like `chartOpen`), `src/systems/agent-api.js` (`dock`, `hail`, `selectTarget`, `pulse`, `setWeaponGroup`), named boot pins (`act` then one `update`; not raw `ctx.input` for new pins)
 - **Depends on:** PR1; may land with or right after PR2
-- **Description:** Pulse edges `dock` \| `hail` \| `target` \| `reticleLock`. Dock/jump stay the KeyJ `dockPressed` path (`gate.js` **678–679**, `station.js` **6321–6330**). Weapon group honors `shouldSkipWeaponGroupDigits`. While `optIn`, mouse hypot does **not** cancel AP/AM; strafe/roll/throttle/burner/drift/fullStop still steal. This is the first PR that makes the **canvas a watch surface**. No `fireHeld`. No HTTP. No third helm.
+- **Description:** Pulse edges `dock` \| `hail` \| `target` \| `reticleLock`. Dock/jump stay the KeyJ `dockPressed` path (`gate.js` **678–679**, `station.js` **6321–6330**). Weapon group honors `shouldSkipWeaponGroupDigits`. While `optIn`, mouse hypot does **not** cancel AP/AM; strafe/roll/throttle/burner/drift/fullStop still steal. This is the first PR that makes the **canvas a watch surface**. No `fireHeld`. No HTTP. No third helm. **Wave 132 status:** pulse sink + `optIn` hypot latch are implemented. Boot pins use `act` then one systems `update` (law 19). Do not assert `flags.docked` on the same tick as `act({ name:'dock' })`.
 
 ### PR4 — Accessibility empty `e.code` fallback
 

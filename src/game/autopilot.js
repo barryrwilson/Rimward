@@ -151,14 +151,16 @@ function scanEvents(ctx, type) {
 }
 
 function helmSteerLatched(ctx) {
-  return (ctx.flags && ctx.flags.chartOpen === true) || berthHeld(ctx);
+  return (ctx.flags && ctx.flags.chartOpen === true)
+    || berthHeld(ctx)
+    || (ctx.agent && ctx.agent.optIn === true);
 }
 
 function inputBreak(ctx) {
   const input = ctx.input;
   if (!input) return '';
   const held = berthHeld(ctx);
-  // Unlatch reticle so leftover hypot cannot cancel on close/RESUME.
+  // Unlatch reticle so leftover hypot cannot cancel on close/RESUME/disable.
   if (helmSteerLatched(ctx)) {
     steerArmed = false;
   } else if (!steerArmed) {

@@ -163,11 +163,16 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
 
+function helmSteerLatched(ctx) {
+  return (ctx.flags && ctx.flags.chartOpen === true)
+    || (ctx.agent && ctx.agent.optIn === true);
+}
+
 function inputBreak(ctx) {
   const input = ctx.input;
   if (!input) return '';
-  const chartOpen = ctx.flags && ctx.flags.chartOpen === true;
-  if (chartOpen) {
+  // Unlatch reticle so leftover hypot cannot cancel on chart close / disable.
+  if (helmSteerLatched(ctx)) {
     steerArmed = false;
   } else if (!steerArmed) {
     if (Math.hypot(input.steerX || 0, input.steerY || 0) < STEER_BREAK) {
@@ -238,7 +243,7 @@ export function tryEngageAutomine(ctx) {
   am.engaged = true;
   am.reason = '';
   zeroCmd(am);
-  steerArmed = ctx.flags && ctx.flags.chartOpen === true ? false : true;
+  steerArmed = helmSteerLatched(ctx) ? false : true;
   const asteroidId = primitiveRockId(rock);
   if (asteroidId !== undefined) ctx.emit('automineEngaged', { asteroidId });
   else ctx.emit('automineEngaged', {});

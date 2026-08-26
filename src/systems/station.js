@@ -21,6 +21,7 @@ import { independentStation } from './stations/independent.js'; // wave 46: the 
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
+import { decodeKeyCode } from './key-code.js';
 import { writeMountedGear, applyAbominationStanding } from '../game/hangar.js';
 import {
   grantSwornGift,
@@ -4487,37 +4488,40 @@ export function initStation(ctx) {
       render();
     },
     feedBiomass() {
-      if (ctx.bio.hunger <= 0) { ui.notice = 'She is sated; she noses the berth lights instead.'; render(); return; }
-      if (ctx.world.credits < FEED_COST) { ui.notice = 'Not enough UU.'; render(); return; }
+      if (ctx.bio.hunger <= 0) { ui.notice = 'She is sated; she noses the berth lights instead.'; render(); return false; }
+      if (ctx.world.credits < FEED_COST) { ui.notice = 'Not enough UU.'; render(); return false; }
       ctx.world.credits -= FEED_COST;
       ctx.bio.hunger = 0;
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.05);
       ui.notice = 'She feeds slowly, and the berth lights dim with contentment.';
       render();
+      return true;
     },
     feedRock() {
-      if (holdUnits(ctx, 'livingRock') < 1) { ui.notice = 'No living rock in the hold.'; render(); return; }
+      if (holdUnits(ctx, 'livingRock') < 1) { ui.notice = 'No living rock in the hold.'; render(); return false; }
       removeCargo(ctx, 'livingRock', 1);
       ctx.bio.hunger = 0;
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.2);
       ui.notice = 'She takes the living rock gently. The song through the hull runs warm for hours.';
       render();
+      return true;
     },
     tendWounds() {
-      if (ctx.bio.wounds <= 0) { ui.notice = 'No wounds to tend.'; render(); return; }
-      if (ctx.world.credits < TEND_COST) { ui.notice = 'Not enough UU.'; render(); return; }
+      if (ctx.bio.wounds <= 0) { ui.notice = 'No wounds to tend.'; render(); return false; }
+      if (ctx.world.credits < TEND_COST) { ui.notice = 'Not enough UU.'; render(); return false; }
       ctx.world.credits -= TEND_COST;
       ctx.bio.wounds = Math.max(0, ctx.bio.wounds - 0.4);
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.03);
       ui.notice = 'You work the membrane seams by hand. She leans into it.';
       render();
+      return true;
     },
     repairAll() {
       const { missing, cost, corrupt } = repairCost();
       if ((missing < 1 && !corrupt) || ctx.world.credits < cost) {
         ui.notice = missing < 1 && !corrupt ? 'She reads whole on every channel.' : 'Not enough UU for the yard.';
         render();
-        return;
+        return false;
       }
       ctx.world.credits -= cost;
       const p = ctx.player;
@@ -4533,6 +4537,7 @@ export function initStation(ctx) {
       p.engineOut = false; p.disabled = false;
       ui.notice = 'Yard crews make her whole.';
       render();
+      return true;
     },
     buyCargoRack() {
       const used = Math.round((ctx.cargoCapacity - cargoHoldFor(ctx.player?.classKey)) / CARGO_UPGRADE_STEP);
@@ -4616,18 +4621,18 @@ export function initStation(ctx) {
   function tryTrade(key, qty, buying) {
     if (isDataCommodity(key)) {
       ui.notice = 'Data lots file at the archive desk.';
-      return;
+      return false;
     }
     if (!isMarketCommodity(key) || key === 'survivor') {
       ui.notice = 'This dock does not trade in people.';
-      return;
+      return false;
     }
     const com = COMMODITIES[key];
     const price = priceOf(ctx, key);
     const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
     if (!com.legal && !lockerAllowed()) {
       ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
-      return;
+      return false;
     }
     if (buying) {
       // Wave 9: hermit stations charge scarcity prices (HERMIT.buyMult).
@@ -4638,13 +4643,13 @@ export function initStation(ctx) {
       // renderMarket uses this exact chain (wave-11 agreement precedent).
       const unit = Math.round(price * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
       const cost = unit * qty;
-      if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return; }
-      if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return; }
+      if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return false; }
+      if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return false; }
       ctx.world.credits -= cost;
       addCargo(ctx, key, qty);
       ui.notice = `Bought ${qty} ${com.name} for ${cost} UU.`;
     } else {
-      if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return; }
+      if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return false; }
       // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
       const tier = rankFor(standingRead(ctx.world?.reputation, currentDef.faction)).tier;
       let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
@@ -4679,6 +4684,7 @@ export function initStation(ctx) {
       ctx.world.milestones.push('hermitMarket');
       ctx.emit('milestone', { id: 'hermitMarket', line: HERMIT.line });
     }
+    return true;
   }
 
   function cancelSeedPending() {
@@ -5120,6 +5126,7 @@ export function initStation(ctx) {
     patchJob(job.id, stamped);
     ui.notice = `Accepted: ${job.title}`;
     render();
+    return true;
   }
 
   function renderJobs(panel) {
@@ -6156,7 +6163,7 @@ export function initStation(ctx) {
   // UI-level keyboard (menu chrome — never writes ctx.input).
   window.addEventListener('keydown', (e) => {
     if (!ui.open) return;
-    const code = e.code;
+    const code = decodeKeyCode(e);
     if (ui.level === 1) {
       if (code === 'Escape') {
         if (ui.justDocked) { ui.justDocked = false; return; }
@@ -6284,6 +6291,73 @@ export function initStation(ctx) {
 
   let jobTick = 0;
   let refreshTick = 0;
+
+  function peekService() {
+    const id = ui.service;
+    if (typeof id !== 'string' || !id) return null;
+    return id;
+  }
+
+  function deskResult(ok) {
+    return {
+      ok: ok === true,
+      notice: typeof ui.notice === 'string' ? ui.notice : '',
+    };
+  }
+
+  function trade(spec) {
+    const bag = spec && typeof spec === 'object' && !Array.isArray(spec) ? spec : {};
+    const commodity = Object.hasOwn(bag, 'commodity') ? bag.commodity : '';
+    const qty = Object.hasOwn(bag, 'qty') ? bag.qty : 0;
+    const side = Object.hasOwn(bag, 'side') ? bag.side : '';
+    const ok = tryTrade(commodity, qty, side === 'buy') === true;
+    render();
+    return deskResult(ok);
+  }
+
+  function repairAll() {
+    return deskResult(act.repairAll() === true);
+  }
+
+  function feed(spec) {
+    const bag = spec && typeof spec === 'object' && !Array.isArray(spec) ? spec : {};
+    const kind = Object.hasOwn(bag, 'kind') ? bag.kind : '';
+    if (kind === 'biomass') return deskResult(act.feedBiomass() === true);
+    if (kind === 'rock') return deskResult(act.feedRock() === true);
+    if (kind === 'tend') return deskResult(act.tendWounds() === true);
+    return deskResult(false);
+  }
+
+  function acceptJobDesk(jobOrHandle) {
+    let job = jobOrHandle;
+    if (typeof jobOrHandle === 'string') job = { id: jobOrHandle };
+    if (!job || typeof job !== 'object') {
+      ui.notice = 'That posting is not valid.';
+      render();
+      return deskResult(false);
+    }
+    const list = ctx.world && Array.isArray(ctx.world.jobs) ? ctx.world.jobs : null;
+    if (typeof job.id === 'string' && list) {
+      const live = list.find((j) => j && j.id === job.id);
+      if (live) return deskResult(acceptJob(live) === true);
+      if (!Object.hasOwn(job, 'kind')) {
+        ui.notice = 'That posting is not valid.';
+        render();
+        return deskResult(false);
+      }
+    }
+    return deskResult(acceptJob(job) === true);
+  }
+
+  ctx.stationDesk = {
+    selectService,
+    acceptJob: acceptJobDesk,
+    trade,
+    repairAll,
+    feed,
+    undock,
+    peekService,
+  };
 
   return {
     update(dt) {

@@ -27,3 +27,102 @@ body {
   pointer-events: none;
   z-index: 10;
 }
+
+/* Agent play badge (PR5). Body child, not a HUD hub child. Tokens match hud.css 12–21. */
+.rw-agent-badge {
+  --rw-accent: #6ff2e0;
+  --panel: rgba(9, 16, 30, 0.78);
+  --white: #dce8f4;
+  --panel-edge: rgba(96, 150, 196, 0.28);
+  --void: #02060d;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 10px 12px;
+  background: var(--panel);
+  color: var(--white);
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  box-shadow: 0 0 0 1px rgba(2, 6, 13, 0.6), 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.rw-agent-badge.is-on {
+  border-left: 4px solid var(--rw-accent);
+}
+
+.rw-agent-badge.is-off {
+  border-left: 4px dashed var(--panel-edge);
+}
+
+.rw-agent-badge-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.rw-agent-badge-title {
+  letter-spacing: 0.08em;
+  color: var(--rw-accent);
+  font-size: 11px;
+}
+
+.rw-agent-badge-state {
+  color: var(--white);
+  font-size: 14px;
+}
+
+.rw-agent-badge-last,
+.rw-agent-badge-error,
+.rw-agent-badge-hint {
+  color: var(--white);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.rw-agent-badge-error:empty {
+  display: none;
+}
+
+.rw-agent-badge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rw-agent-badge-btn {
+  pointer-events: auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--white);
+  background: var(--void);
+  border: 1px solid var(--rw-accent);
+  border-radius: 2px;
+  font: inherit;
+}
+
+.rw-agent-badge-btn:hover {
+  color: var(--rw-accent);
+}
+
+.rw-agent-badge-btn:focus,
+.rw-agent-badge-btn:focus-visible {
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
+}
+
+body.rw-reduced-motion .rw-agent-badge,
+body.rw-reduced-motion .rw-agent-badge * {
+  animation: none !important;
+  transition: none !important;
+}
