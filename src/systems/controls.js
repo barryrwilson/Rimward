@@ -2,6 +2,11 @@ import { SYSTEMS, U } from '../game/state.js';
 import { pickReticleLock } from '../game/reticle-aim.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { dropPartIfNotShip, toggleEnginePart } from '../game/subsys-aim.js';
+import {
+  hailDigitsAllowed,
+  playSurfaceBlocked,
+  settingsOwnsScreen,
+} from './overlay-policy.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -79,6 +84,29 @@ function shouldSkipDockPulse(ctx) {
     return false;
   } catch {
     return true;
+  }
+}
+
+/** Digit1–5 stay flight WPN; do not write while a dock menu or play surface owns those digits. Never throw. */
+function shouldSkipWeaponGroupDigits(ctx) {
+  try {
+    const f = ctx && ctx.flags;
+    if (f && f.docked === true) return true;
+    if (f && f.hailOpen === true) return true;
+    try {
+      if (typeof hailDigitsAllowed === 'function' && hailDigitsAllowed(ctx) === false) return true;
+    } catch { /* helper miss */ }
+    try {
+      if (typeof playSurfaceBlocked === 'function' && playSurfaceBlocked(ctx) === true) return true;
+    } catch { /* */ }
+    try {
+      if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return true;
+    } catch { /* */ }
+    if (f && (f.paused === true || f.chartOpen === true || f.berthOpen === true)) return true;
+    if (shouldSkipDockPulse(ctx)) return true;
+    return false;
+  } catch {
+    return !!(ctx && ctx.flags && ctx.flags.docked === true);
   }
 }
 
@@ -327,20 +355,20 @@ export function initControls(ctx) {
         break;
       }
       case 'Digit1':
-        input.weaponGroup = 1;
+        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 1;
         break;
       case 'Digit2':
-        input.weaponGroup = 2;
+        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 2;
         break;
       case 'Digit3':
-        input.weaponGroup = 3;
+        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 3;
         break;
       case 'Digit4':
         // Group 4 is missiles when a launcher is seated.
-        input.weaponGroup = 4;
+        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 4;
         break;
       case 'Digit5':
-        input.weaponGroup = 5;
+        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 5;
         break;
     }
   });

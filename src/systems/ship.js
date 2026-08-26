@@ -18,6 +18,7 @@ import {
   classCruise,
 } from '../game/living-cadence.js';
 import { LIVING_GAIT, gaitFor } from '../game/living-gait.js';
+import { berthHeld } from './overlay-policy.js';
 
 export { applyFlightEnvelope };
 
@@ -750,7 +751,8 @@ export function initShip(ctx) {
         ctx.flags.matchSpeed = false;
       }
 
-      if (!docked) {
+      const held = berthHeld(ctx);
+      if (!docked && !held) {
         // --- Afterburner state machine (§5.2): tap Space → ×2 for burnTime,
         // then cooldown before the next burn is allowed.
         if (
@@ -939,6 +941,10 @@ export function initShip(ctx) {
 
         // Player roll is a real axis now. Do not add a fake visual bank.
         bankAngle += (0 - bankAngle) * (1 - Math.exp(-AUTOBANK_LERP_RATE * dt));
+      } else if (held && !docked) {
+        // Berth hold: skip player flight integrate. Keep velocity for RESUME.
+        bankAngle += (0 - bankAngle) * (1 - Math.exp(-AUTOBANK_LERP_RATE * dt));
+        _forward.set(0, 0, -1).applyQuaternion(root.quaternion);
       } else {
         // Docked: park — no thrust, drift, or steering; hold position.
         ship.velocity.set(0, 0, 0);

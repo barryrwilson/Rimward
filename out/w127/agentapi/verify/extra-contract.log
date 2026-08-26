@@ -1,0 +1,194 @@
+rimward: forbidden act teleport
+rimward: forbidden act setCredits
+rimward: forbidden act setHull
+rimward: forbidden act setCargo
+rimward: forbidden act god
+rimward: forbidden act win
+rimward: forbidden act teleport
+rimward: forbidden act teleport
+rimward: forbidden act teleport
+rimward: forbidden act setHull
+rimward: forbidden act setCargo
+rimward: forbidden act win
+{
+  "passed": 35,
+  "failed": 0,
+  "results": [
+    {
+      "name": "code-no-stringify-ctx",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "code-no-three-import",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "code-no-for-in",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "code-no-http",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "api-no-innerHTML",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "api-harvest-events",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "main-__ctx-debug",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "save-no-agent",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "world-fields-no-agent",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-wave127-block",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-before-errors-block",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-pins-handle",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-pins-no-ctx",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-pins-forbidden",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-pins-ping",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-pins-unknown",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "boot-pins-ring-30",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-shape",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-teleport",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-setCredits",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-setHull",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-setCargo",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-god",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-win",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-before-unknown-with-optin",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-before-paused",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ping-paused",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "forbidden-before-held",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ping-held",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "plot-held",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "disable-held-ok",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "disable-no-cancel-ap",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "disable-no-cancel-am",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "disable-did-not-clear-hold",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-writes",
+      "ok": true,
+      "detail": "ok"
+    }
+  ]
+}
+EXTRA CONTRACT PASS

@@ -1,0 +1,17 @@
+# verify-r2 static grep (2026-08-26)
+
+src/systems/hud.js:75:const HOME_EDGE_INSET = 108; // px; TGT/NAV-02 keep 84
+src/systems/hud.js:1949:                if (ax > 1e-4) s = (cx - HOME_EDGE_INSET) / ax;
+src/systems/hud.js:1950:                if (ay > 1e-4) s = Math.min(s, (cy - HOME_EDGE_INSET) / ay);
+
+scripts/boot-test.mjs:24053:  if (!Object.values(w127).every(Boolean)) { console.log('WAVE127 AGENT-OBSERVE FAIL'); errors++; }
+
+scripts/boot-test.mjs:24112:    toastNamed: toastHit,
+scripts/boot-test.mjs:24118:  if (!Object.values(namedOpen).every(Boolean)) { console.log('WAVE127 HAIL01 OPEN FAIL'); errors++; }
+scripts/boot-test.mjs:24165:  const heaveSuppressed = !heaveEvs.some((e) => (
+scripts/boot-test.mjs:24171:  console.log('wave127 hail01 heave:', JSON.stringify({ heaveSuppressed, noDemandYet }));
+scripts/boot-test.mjs:24172:  if (!(heaveSuppressed && noDemandYet)) { console.log('WAVE127 HAIL01 HEAVE FAIL'); errors++; }
+
+src/systems/hud.js:692-700: hailClosed look-ahead requires o.demandHail === true && o.ship === e.ship
+src/systems/npc.js:364: function suppressPirateHeaveTo
+src/systems/npc.js:1747: suppressPirateHeaveTo(ctx, live) || ai.target === 'player'

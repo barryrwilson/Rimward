@@ -1,0 +1,55 @@
+# Wave 124 AI-05 starter grace — worker write-set (git untracked)
+
+docs/Ai05StarterGraceDesign.md
+out/w124/startergrace/code-review.md
+out/w124/startergrace/current-ai05-starter-grace-inventory.md
+out/w124/startergrace/notes.md
+out/w124/startergrace/security-review.md
+out/w124/startergrace/shared-contract.md
+out/w124/startergrace/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w124/startergrace/verify/report.md
+out/w124/startergrace/verify/write-set.txt
+
+# Later serial (named only; not landed this wave)
+
+ALLOWED:
+  src/systems/npc.js          # PR1 required: origin extra map, helper on acquire/demand/duel, death calm/re-roll, hop clamp-on-read
+  src/game/world.js           # only if a later census proves spawn-injection must stamp; PR1 default: none
+
+FORBIDDEN later serial (this leftover):
+  src/systems/controls.js
+  src/game/save.js            # berth panel, recover overlay, WORLD_FIELDS
+  src/systems/overlay-policy.js
+  src/systems/hail.js         # hail cards
+  src/game/origins.js
+  src/game/jump.js            # hop length stays 60
+  src/game/traffic.js
+  src/game/traffic-feel.js
+  src/systems/physics.js
+  src/game/state.js           # READ-ONLY; JUMP.graceSeconds stays 60
+  src/systems/station.js
+  src/systems/hud.js
+  src/ui/hud.css
+  src/main.js
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/Ctl*.md
+  docs/Nav*.md
+  docs/OwnerDecisions*.md
+  docs/OwnerDecisionsWave124.md
+  out/w124/berthfreeze/**
+  out/w124/menuinput/**
+
+# Not in this worker write-set
+
+src/ — no edits this wave
+scripts/ — no edits
+public/ / index.html / package.json — no edits
+docs/PLAYER-EXPERIENCE-WISHLIST.md — dirty in tree from playtest INBOX capture; not this pack
+PROGRESS.md — dirty in tree from Wave 123 leftover census; not this pack
+docs/Ctl03BerthFreezeDesign.md / out/w124/berthfreeze/** — sibling pack
+docs/Ctl04MenuInputDesign.md / out/w124/menuinput/** — sibling pack
+docs/OwnerDecisionsWave124.md — absent

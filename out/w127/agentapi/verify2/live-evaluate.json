@@ -1,0 +1,17 @@
+{
+  "url": "http://127.0.0.1:5180/?agent=1",
+  "host": "127.0.0.1",
+  "port": 5180,
+  "hasRimward": true,
+  "version": 1,
+  "hasCtx": true,
+  "optIn": true,
+  "ping": { "v": 1, "ok": true, "error": "", "name": "ping", "token": "" },
+  "teleport": { "v": 1, "ok": false, "error": "forbidden", "name": "teleport", "token": "forbidden" },
+  "plotRoute": { "v": 1, "ok": false, "error": "paused", "name": "plotRoute", "token": "paused" },
+  "observeOk": true,
+  "agentOptIn": true,
+  "paused": true,
+  "badge": false,
+  "err": null
+}

@@ -1,0 +1,19 @@
+OK open space no flags: got=false expect=false
+OK missing flags: got=false expect=false
+OK null ctx: got=false expect=false
+OK docked true: got=true expect=true
+OK docked string: got=false expect=false
+OK hailOpen true: got=true expect=true
+OK paused true: got=true expect=true
+OK chartOpen true: got=true expect=true
+OK berthOpen true: got=true expect=true
+OK hailDigitsAllowed false: got=true expect=true
+OK hailDigitsAllowed true: got=false expect=false
+OK hailDigitsAllowed throw: got=false expect=false
+OK playSurfaceBlocked true: got=true expect=true
+OK settingsOwnsScreen true: got=true expect=true
+OK shouldSkipDockPulse true: got=true expect=true
+OK helper throw + docked: got=true expect=true
+OK outer throw via pulse: got=false expect=false
+OK outer throw + docked: got=true expect=true
+FORMULA PROBE OK

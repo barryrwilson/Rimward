@@ -15,6 +15,8 @@ import * as THREE from 'three';
  * - input: written ONLY by controls.js; read-only for everyone else.
  * - autopilot: written ONLY by autopilot.js (live command channel; not persist).
  * - automine: written ONLY by automine.js (live command channel; not persist).
+ * - agent: written ONLY by agent-api.js (session; not persist; not a helm).
+ *   Restore must not set optIn. Observe copies HUD-visible JSON only.
  * - ship (flight transform): written ONLY by ship.js.
  * - player (ship state record): created by ship.js via createShipState;
  *   mutated by combat.js (damage) and state.js helpers only.
@@ -114,6 +116,13 @@ export function createCtx({ scene, camera, renderer }) {
       reason: '',
     },
 
+    // --- live session channel (agent-api.js only). Not WORLD_FIELDS. ---
+    agent: {
+      optIn: false,
+      lastIntent: { name: '', ok: true, error: '', token: '', t: 0 },
+      events: [],
+    },
+
     // --- flight transform channel (ship.js only) ---
     ship: {
       object: null,
@@ -208,6 +217,7 @@ export function createCtx({ scene, camera, renderer }) {
       chartOpen: false, // galaxychart.js owns; session only, not WORLD_FIELDS
       hailOpen: false, // hail.js owns; session only, not WORLD_FIELDS
       berthOpen: false, // save.js berth overlay owns; session only, not WORLD_FIELDS
+      berthHold: false, // save.js is the writer (optional overlay-policy helper); session only, not WORLD_FIELDS. Not flags.paused.
     },
 
     // --- client settings (settings.js ONLY writes; song/hud/gate/ship read) ---
@@ -230,6 +240,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'shieldDown' {layer:'screen'|'shell'}      'engineOut' {ship|player}
     // 'podSpawned' {pod}     'podCollected' {pod}
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
+    // 'hailMiss' { name, verb, reason, dist }    // hail.js KeyH/KeyJ miss; primitives only; no ship
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}
     // 'worldEvent' {kind}    'milestone' {id, line}  'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
@@ -263,6 +274,7 @@ export function createCtx({ scene, camera, renderer }) {
     // flags.chartOpen: galaxychart.js setOpen is the only writer (session boolean)
     // flags.hailOpen: hail.js openCard/closeCard is the only writer (session boolean)
     // flags.berthOpen: save.js setBerthOpen is the only writer (session boolean)
+    // flags.berthHold: save.js is the writer (optional overlay-policy helper); session only
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {

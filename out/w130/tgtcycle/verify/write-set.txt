@@ -1,0 +1,59 @@
+# Wave 130 TGT-07 combat cycle — worker write-set (git untracked)
+
+docs/Tgt07CombatCycleDesign.md
+out/w130/tgtcycle/code-review.md
+out/w130/tgtcycle/current-tgt07-combat-cycle-inventory.md
+out/w130/tgtcycle/notes.md
+out/w130/tgtcycle/security-review.md
+out/w130/tgtcycle/shared-contract.md
+out/w130/tgtcycle/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w130/tgtcycle/verify/report.md
+out/w130/tgtcycle/verify/write-set.txt
+
+# Later serial (named only; not landed this wave)
+
+ALLOWED:
+  src/systems/controls.js     # PR1: cycleTarget gated hostiles-first then range; optional KeyT help string
+  src/core/ctx.js             # optional one-line comment at 88 (“nearest hostiles” lie)
+
+FORBIDDEN later serial (this leftover):
+  src/systems/hud.js
+  src/ui/hud.css
+  src/systems/npc.js
+  src/systems/combat.js
+  src/game/npc-fire-toast.js
+  src/systems/agent-api.js
+  src/game/agent-observe.js
+  src/game/state.js           # READ-ONLY; TARGET_RANGE stays 600
+  src/game/save.js
+  src/game/reticle-aim.js
+  src/systems/station.js      # NAV-10
+  src/main.js
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/Tgt03*.md
+  docs/Tgt05*.md
+  docs/Tgt06RemainingTgtDesign.md
+  docs/Hud0*.md
+  docs/Nav*.md
+  docs/Ctl*.md
+  docs/AgentApiDesign.md
+  docs/Hail0*.md
+  docs/OwnerDecisions*.md
+  docs/Msn04JobDedupDesign.md
+  docs/Nav10DockApproachDesign.md
+  out/w130/dockapproach/**
+  out/w130/jobdedup/**
+
+# Not in this worker write-set
+
+src/ — no edits this pack (tree is dirty from other waves; cycleTarget still d2-only)
+scripts/ — no edits
+public/ / index.html / package.json — no edits
+docs/PLAYER-EXPERIENCE-WISHLIST.md — dirty in tree from playtest INBOX capture; not this pack
+PROGRESS.md — dirty in tree from other leftover census; not this pack
+docs/Nav10DockApproachDesign.md / out/w130/dockapproach/** — sibling pack
+docs/Msn04JobDedupDesign.md / out/w130/jobdedup/** — sibling pack

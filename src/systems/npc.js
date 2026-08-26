@@ -10,6 +10,7 @@ import {
   tickShipState,
   computeResolve,
   resolveBand,
+  cargoValue,
   HIDDEN_MOUNTS,
   ORIGIN_ARCS,
   MINING_LASERS,
@@ -29,6 +30,7 @@ import { isUnknowable } from '../game/faction-style.js';
 import { tickPoliceLeave } from '../game/police-leave.js';
 import { tickPoliceCover, findCoveringWork } from '../game/police-cover.js';
 import { canSeat } from '../game/weapon-fit.js';
+import { canShowHail } from './overlay-policy.js';
 
 /**
  * NPC system — live GLB ship assets and AI (doc §6.7, §7).
@@ -105,6 +107,7 @@ const DEATH_BURST_SLOTS = 3; // concurrent bursts; ring-reused
 const CHIP_LIFE_MIN = 0.4;
 const CHIP_LIFE_MAX = 0.8;
 const DEMAND_COOLDOWN = 300; // s before the same pirate record may demand the player again (record.demandedAt)
+const DEMAND_SECONDS = 20; // session timer from emit; expire = refuse
 const WAKE_SITE_DISTANCE = 1400; // = U.DEINSTANTIATE_RANGE (state.js; traffic.js despawns there) — the wake site sits beyond the fold
 // Abeam offsets stay inside ~35° of LOS at typical fight range so a chase
 // keeps the hull on glass. Old 160/240 parked them just off-screen.
@@ -161,6 +164,25 @@ const INTEREST = {
   min: 0.005, // the rim keeps its teeth: never fully safe
   max: 0.20, // fat cargo is still not a certainty
 };
+
+// Extra starter window in the origin system. Authored keys only; missing/unknown → 0.
+const STARTER_GRACE_SECONDS = {
+  greenhand: 180,
+  beautiful: 180,
+  marked: 0,
+  ledgerDebt: 0,
+  drifter: 0,
+};
+const STARTER_SYSTEM = {
+  greenhand: 'freehold',
+  beautiful: 'freehold',
+  marked: 'freehold',
+  ledgerDebt: 'freehold',
+  drifter: 'redmarch',
+};
+const GRACE_CLAMP_SECONDS = 180;
+const DEATH_CALM_SECONDS = 90;
+let deathCalmLeft = 0;
 
 let nextShipId = 1;
 
@@ -229,8 +251,10 @@ function makeAi(ctx, record, startPos) {
     surrenderDone: false,
     demandSent: false, // wave 30: one demand hail per instantiation (reset never)
     demanding: false, // demand card open: hold position, weapons cold
-    demandOutcome: null, // stamped by hail.js: 'paid'|'bluffed'|'refused'|'failed'
+    demandOutcome: null, // paid|bluffed|refused|failed|expired|docked|jumped|voided
     demandPeaceAt: 0, // demand open time; a player hit after this voids the parley
+    demandExpiresAt: 0, // session deadline; not persisted
+    demandAmount: 0, // session finite UU; not persisted
     resolveBoost: 0, // wave 30: failed-bluff sting (hail.js showTeeth); see updateResolve for lifecycle
     playerRolled: false, // wave 32: the interest decision is made once per instantiation
     playerInterested: false,
@@ -334,6 +358,56 @@ export function removeLiveShip(ctx, liveShip) {
 // ---------- shared helpers ----------
 function say(ctx, live, text) {
   ctx.emit('commLine', { text, from: live.state.name });
+}
+
+/** Pirate vs player in the acquire bubble, demand not yet sent — or already demanding. */
+function suppressPirateHeaveTo(ctx, live) {
+  try {
+    const ai = live && live.ai;
+    if (!ai || ai.role !== 'pirate') return false;
+    if (ai.demanding === true || ai.demandSent === true) return true;
+    if (ai.role === 'pirate' && ai.target === 'player') return true;
+    const pObj = ctx && ctx.ship && ctx.ship.object;
+    if (!pObj || !live.object) return false;
+    if (ctx.flags && ctx.flags.docked === true) return false;
+    return live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE;
+  } catch {
+    return false;
+  }
+}
+
+function demandSpeaker(live) {
+  try {
+    const name = (live && live.record && live.record.pilot) || (live && live.state && live.state.name);
+    return typeof name === 'string' && name ? name : 'Pirate';
+  } catch {
+    return 'Pirate';
+  }
+}
+
+function finiteDemandAmount(raw) {
+  const floor = HIDDEN_MOUNTS.demandMin;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= floor) return Math.round(raw);
+  return floor;
+}
+
+/** Stamp outcome, drop hold, hailClosed if the hull exists. */
+function closePirateDemand(ctx, live, outcome) {
+  try {
+    const ai = live && live.ai;
+    if (!ai || !ai.demanding) return;
+    ai.demandOutcome = outcome;
+    ai.demanding = false;
+    ctx.emit('hailClosed', {
+      ship: live,
+      demandHail: true,
+      demandOutcome: outcome,
+      speaker: demandSpeaker(live),
+      demand: finiteDemandAmount(ai.demandAmount),
+    });
+  } catch {
+    /* never throw */
+  }
 }
 
 function bumpFear(ctx, delta) {
@@ -1666,7 +1740,15 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
     }
     if (!ai.commSent) {
       ai.commSent = true;
-      say(ctx, live, ai.role === 'ace' ? 'Run if you like.' : 'Heave to. Cargo or hull.');
+      if (ai.role === 'ace') {
+        say(ctx, live, 'Run if you like.');
+      } else if (ai.role === 'pirate' && ai.target === 'player') {
+        // Hail01: nameless Heave-to is not a demand substitute. Card is the path.
+      } else if (suppressPirateHeaveTo(ctx, live) || ai.target === 'player') {
+        // Pirate in the acquire bubble (trader hunt) or any hunt vs player.
+      } else {
+        say(ctx, live, 'Heave to. Cargo or hull.');
+      }
     }
     glow.scale.setScalar(reducedMotion ? 1 : Math.max(0.3, 1 + 0.7 * Math.sin(now * 14))); // flashing warning
     if (now - ai.phaseStart >= TELEGRAPH_SECONDS) ai.phase = 'attack';
@@ -1684,6 +1766,115 @@ function engageTarget(ctx, live, dt, now, targetPos, reducedMotion) {
     }
   }
   tryNpcTurret(ctx, live, now, dist, targetPos);
+}
+
+/** Stamped absolute, or 0. Non-finite / remaining > 180 s → 0 (no sliding cap). */
+function graceUntilOrZero(until, now) {
+  if (!Number.isFinite(until) || !Number.isFinite(now)) return 0;
+  if (until > now + GRACE_CLAMP_SECONDS) return 0;
+  return until;
+}
+
+function hopGraceUntilNow(world, now) {
+  return graceUntilOrZero(world.jumpGraceUntil ?? 0, now);
+}
+
+function clampDeathCalmLeft(v) {
+  if (!Number.isFinite(v) || v <= 0) return 0;
+  if (v > GRACE_CLAMP_SECONDS) return GRACE_CLAMP_SECONDS;
+  return v;
+}
+
+/** Session remaining. Do not compare to world.time. Tamper / NaN → 0. */
+function tickDeathCalm(dt) {
+  if (!Number.isFinite(dt) || dt <= 0) return;
+  if (!Number.isFinite(deathCalmLeft) || deathCalmLeft > GRACE_CLAMP_SECONDS) {
+    deathCalmLeft = 0;
+    return;
+  }
+  if (deathCalmLeft <= 0) {
+    deathCalmLeft = 0;
+    return;
+  }
+  deathCalmLeft = Math.max(0, deathCalmLeft - dt);
+}
+
+function deathCalmBlocks() {
+  return Number.isFinite(deathCalmLeft) && deathCalmLeft > 0 && deathCalmLeft <= GRACE_CLAMP_SECONDS;
+}
+
+/** Boot-test pin only. Live play never calls this. */
+export function expireSessionDeathCalm() {
+  deathCalmLeft = 0;
+}
+
+/**
+ * Block unsolicited player acquire / demand / duel during hop grace, extra
+ * starter window, or session death remaining. Catch → false (live AI-04).
+ * alwaysHuntsPlayer bypasses extra starter only. Tampered hop clocks fail
+ * closed to 0. Death remaining is not an absolute world.time stamp.
+ * Scratch path does not call this.
+ */
+export function starterGraceBlocksAcquire(ctx, live, now) {
+  try {
+    const world = ctx.world;
+    const hopBlock = now < hopGraceUntilNow(world, now);
+
+    const origin = world.origin;
+    const extra = Object.hasOwn(STARTER_GRACE_SECONDS, origin) ? STARTER_GRACE_SECONDS[origin] : 0;
+    const startSystem = Object.hasOwn(STARTER_SYSTEM, origin) ? STARTER_SYSTEM[origin] : null;
+    const time = world.time;
+    const starterExtraBlock =
+      live?.record?.alwaysHuntsPlayer !== true &&
+      Number.isFinite(time) &&
+      Number.isFinite(extra) &&
+      extra > 0 &&
+      time < extra &&
+      world.currentSystem === startSystem;
+
+    const deathBlock = deathCalmBlocks();
+
+    return hopBlock || starterExtraBlock || deathBlock;
+  } catch {
+    return false;
+  }
+}
+
+function applyPlayerDestroyedCalm(ctx) {
+  try {
+    let seen = false;
+    const lists = [ctx.events, ctx.lastEvents];
+    for (let i = 0; i < lists.length; i++) {
+      const list = lists[i];
+      if (!list) continue;
+      for (let j = 0; j < list.length; j++) {
+        if (list[j] && list[j].type === 'playerDestroyed') {
+          seen = true;
+          break;
+        }
+      }
+      if (seen) break;
+    }
+    if (!seen) return;
+    deathCalmLeft = clampDeathCalmLeft(DEATH_CALM_SECONDS);
+    const ships = ctx.ships;
+    if (!ships) return;
+    for (let i = 0; i < ships.length; i++) {
+      const live = ships[i];
+      if (!live || !live.ai) continue;
+      const role = live.ai.role;
+      if (role !== 'pirate' && role !== 'ace') continue;
+      if (live.state && live.state.destroyed) continue;
+      const ai = live.ai;
+      if (ai.target === 'player') breakOff(ai);
+      if (live.record?.alwaysHuntsPlayer !== true) {
+        ai.playerRolled = false;
+        ai.playerInterested = false;
+      }
+    }
+  } catch {
+    // fail closed: session calm skipped this frame
+  }
 }
 
 /**
@@ -1835,7 +2026,8 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
       if (
         pObj &&
         !ctx.flags.docked &&
-        now >= (ctx.world.jumpGraceUntil ?? 0) &&
+        now >= hopGraceUntilNow(ctx.world, now) &&
+        !starterGraceBlocksAcquire(ctx, live, now) &&
         pObj.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
         live.object.position.distanceTo(station) >= LAW_ZONE_RADIUS &&
         live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE &&
@@ -1890,20 +2082,60 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
     ai.target === 'player' &&
     ai.role === 'pirate' &&
     !ai.demandSent &&
-    now >= (ctx.world.jumpGraceUntil ?? 0) &&
+    now >= hopGraceUntilNow(ctx.world, now) &&
+    !starterGraceBlocksAcquire(ctx, live, now) &&
     now - (live.record?.demandedAt ?? -Infinity) >= DEMAND_COOLDOWN &&
     live.object.position.distanceTo(targetPos) < U.TARGET_RANGE
   ) {
-    ai.demandSent = true; // reset never — one demand per instantiation
-    ai.demanding = true;
-    ai.demandOutcome = null;
-    ai.demandPeaceAt = now; // a player hit stamped after this voids the parley
-    if (live.record) live.record.demandedAt = now;
-    const demand = Math.max(
-      HIDDEN_MOUNTS.demandMin,
-      Math.round(ECON.tributeRate * cargoValueSafe(ctx.cargo, ctx.world.prices) * 10),
-    );
-    ctx.emit('hailOpened', { ship: live, intents: demandIntentsFor(ctx, live), line: 'Your cargo or your hull.', demand });
+    let show = true;
+    try {
+      show = canShowHail(ctx, live);
+    } catch {
+      show = true;
+    }
+    if (show === false) {
+      // Calm: skip emit. Do not leave demanding with no card.
+    } else {
+      let rolled = NaN;
+      try {
+        rolled = Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10);
+      } catch {
+        rolled = NaN;
+      }
+      if (!Number.isFinite(rolled)) {
+        try {
+          rolled = Math.round(ECON.tributeRate * cargoValueSafe(ctx.cargo, ctx.world.prices) * 10);
+        } catch {
+          rolled = NaN;
+        }
+      }
+      const demand = finiteDemandAmount(rolled);
+      ai.demandSent = true; // reset never — one demand per instantiation
+      ai.demanding = true;
+      ai.demandOutcome = null;
+      ai.demandPeaceAt = now; // a player hit stamped after this voids the parley
+      ai.demandExpiresAt = now + DEMAND_SECONDS;
+      ai.demandAmount = demand;
+      if (live.record) live.record.demandedAt = now;
+      try {
+        ctx.emit('hailOpened', {
+          ship: live,
+          intents: demandIntentsFor(ctx, live),
+          line: 'Your cargo or your hull.',
+          demand,
+          demandHail: true,
+          speaker: demandSpeaker(live),
+          demandExpiresAt: ai.demandExpiresAt,
+          t: DEMAND_SECONDS,
+        });
+      } catch {
+        ai.demanding = false;
+        ai.demandSent = false;
+        ai.demandPeaceAt = 0;
+        ai.demandExpiresAt = 0;
+        ai.demandAmount = 0;
+      }
+    }
   }
 
   engageTarget(ctx, live, dt, now, targetPos, reducedMotion);
@@ -1926,7 +2158,10 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
 
   // Arrival / new-game grace: same shield as hunt acquire. Illyx sits on the
   // gate lane; without this, the first autopilot hop is a guaranteed duel.
-  if (now < (ctx.world.jumpGraceUntil ?? 0)) {
+  if (
+    now < hopGraceUntilNow(ctx.world, now) ||
+    starterGraceBlocksAcquire(ctx, live, now)
+  ) {
     ai.intent = false;
     ai.target = null;
     ai.phase = null;
@@ -2350,6 +2585,8 @@ export function initNpc(ctx) {
   return {
     update(dt) {
       const now = ctx.world.time;
+      tickDeathCalm(dt);
+      applyPlayerDestroyedCalm(ctx);
       const reducedMotion = ctx.settings.reducedMotion;
       const playerObj = ctx.ship.object;
       _phyOn = !ctx.gate.jumping;
@@ -2388,11 +2625,19 @@ export function initNpc(ctx) {
         // and opening fire on the demanding pirate voids the offer — any hit
         // stamped after the demand opened ends the hold and closes the card.
         if (ai.demanding) {
-          if (st.disabled) {
+          if (ctx.flags && ctx.flags.docked === true) {
+            closePirateDemand(ctx, live, 'docked');
+          } else if (st.disabled) {
             ai.demanding = false;
           } else if (st.lastHitAt > ai.demandPeaceAt) {
-            ai.demanding = false;
-            ctx.emit('hailClosed', { ship: live }); // card closes; the fight is on — ship-scoped (wave 35)
+            closePirateDemand(ctx, live, 'voided');
+          } else if (
+            typeof ai.demandExpiresAt === 'number' &&
+            Number.isFinite(ai.demandExpiresAt) &&
+            ai.demandExpiresAt > 0 &&
+            now >= ai.demandExpiresAt
+          ) {
+            closePirateDemand(ctx, live, 'expired');
           }
         }
         if (st.disabled) {
@@ -2456,19 +2701,13 @@ export function initNpc(ctx) {
       // stale hailClosed never steals a demand that opened this frame).
       // Wave 35: the event is ship-scoped — a close names its own ship, and
       // only that ship's hold releases (an unscoped payload is a legacy
-      // backstop that releases all). On a 'hailOpened' for ANOTHER ship the
-      // single hail card was stolen — release the hold so the pirate stops
-      // waiting on a dead parley.
+      // backstop that releases all). Hail01 defers a demand when another
+      // hail is open — do not steal-release demanding on hailOpened.
       for (const e of ctx.lastEvents) {
         if (e.type === 'hailClosed') {
           for (const s of ctx.ships) {
             if (!s || !s.ai) continue;
             if (s.ai.demanding && s.ai.demandOutcome && (!e.ship || s === e.ship)) s.ai.demanding = false;
-          }
-        } else if (e.type === 'hailOpened') {
-          for (const s of ctx.ships) {
-            if (!s || !s.ai) continue;
-            if (s.ai.demanding && s !== e.ship) s.ai.demanding = false;
           }
         }
       }

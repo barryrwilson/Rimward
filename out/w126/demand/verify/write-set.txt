@@ -1,0 +1,52 @@
+# Wave 126 Hail01 pirate demand lifecycle — worker write-set (git untracked)
+
+docs/Hail01DemandLifecycleDesign.md
+out/w126/demand/code-review.md
+out/w126/demand/current-hail-demand-inventory.md
+out/w126/demand/notes.md
+out/w126/demand/security-review.md
+out/w126/demand/shared-contract.md
+out/w126/demand/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w126/demand/verify/report.md
+out/w126/demand/verify/write-set.txt
+
+# Later serial (named only; not landed this wave)
+
+ALLOWED:
+  src/systems/hail.js         # PR1 required: timer text, dock/jump/despawn outcome + hailClosed, defer-if-busy, finite debit
+  src/systems/npc.js          # PR1 required: emit clamp; suppress orphan HEAVE-TO; expire/dock/jump clear demanding; keep Wave 30 intents
+  src/systems/hud.js          # listeners only: toastForEvent demand announce/outcome (or demand-tagged commLine). NOT layout
+
+FORBIDDEN later serial (this leftover):
+  src/systems/controls.js     # CTL-04
+  src/systems/agent-api.js    # no off-card payTribute; no observe hailOpened.ship
+  src/systems/overlay-policy.js  # pause / mutex rewrite (read canShowHail / defer / hailDigitsAllowed / berthHeld)
+  src/game/state.js           # READ-ONLY; no new WORLD_FIELDS; no UU/SKU/Digit
+  src/game/jump.js            # no second jumpRequested writer; hail/npc observe empty ships / systemLoaded
+  src/game/world.js           # no Illyx tribute; no spawn mix
+  src/ui/hud.css              # HUD-06 / HUD-01 layout
+  src/main.js
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/AgentApiDesign.md
+  docs/Hud06HomeMarkerDesign.md
+  docs/Ctl*.md
+  docs/Nav*.md
+  docs/Hud04ToastFloodDesign.md
+  docs/Ctl02OverlayDesign.md
+  docs/OwnerDecisions*.md
+  out/w126/agentapi/**
+  out/w126/homemarker/**
+
+# Not in this worker write-set
+
+src/ — no edits this wave (hail.js clean; npc.js dirty in tree is other Wave 126 work, not Hail01 PR1)
+scripts/ — no edits
+public/ / index.html / package.json — no edits
+docs/AgentApiDesign.md — sibling Agent leftover pack
+docs/Hud06HomeMarkerDesign.md — sibling HUD-06 leftover pack
+out/w126/agentapi/** — sibling
+out/w126/homemarker/** — sibling

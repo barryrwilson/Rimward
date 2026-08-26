@@ -1,0 +1,4 @@
+Total messages: 3 (Errors: 0, Warnings: 1)
+Returning 1 messages for level "warning"
+
+[WARNING] rimward: forbidden act teleport @ http://127.0.0.1:5180/src/systems/agent-api.js:131

@@ -1,16 +1,19 @@
-import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS } from '../game/state.js';
+import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS, SYSTEMS } from '../game/state.js';
 import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
 import { stampWakeSite, spillShipCargo } from './npc.js';
 import {
+  berthHeld,
   canOpenPlayCard,
   canShowHail,
   deferIncomingHail,
   dropDeferredHail,
   hailCalmOk,
   hailDigitsAllowed,
+  overlayIsOpen,
   playSurfaceBlocked,
+  settingsOwnsScreen,
   takeDeferredHail,
 } from './overlay-policy.js';
 
@@ -36,7 +39,7 @@ import {
  *   respect       → a Named Gun (ace) stands down; flee + 60 s calm, no econ
  *   callowVouch   → Old Callow sells a word in the keepers' second ledger column (credits, trust, favors; no econ fear)
  *   keepFiring    → close the card, nothing else changes
- *   payTribute    → demand-hail: credits -= demand (clamped at 0; a short pilot pays what they have); pirate flees + 60 s calm
+ *   payTribute    → demand-hail: finite credits -= finite demand only; else skip debit, still close. pirate flees + 60 s calm
  *   showTeeth     → hidden-mounts bluff (offered only with concealedMounts): success → pirate flees + 90 s calm, fear +1; failure → pirate resolve +20 and it presses the attack
  *   refuseFight   → wave the demand off; the card closes and the pirate attacks
  * Demand hails carry ev.demand (integer UU rolled once at emit time — the
@@ -56,6 +59,69 @@ import {
 // unchanged; demand hails offer only these three ([1] pay, [2] teeth,
 // [3] refuse).
 const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect', 'payTribute', 'showTeeth', 'refuseFight'];
+
+const DEMAND_SECONDS = 20;
+
+function demandSpeaker(live) {
+  try {
+    const name = (live && live.record && live.record.pilot) || (live && live.state && live.state.name);
+    return typeof name === 'string' && name ? name : 'Pirate';
+  } catch {
+    return 'Pirate';
+  }
+}
+
+/** Floor at demandMin. Non-finite → demandMin. Never NaN. */
+export function finiteDemandAmount(raw) {
+  const floor = HIDDEN_MOUNTS.demandMin;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= floor) return Math.round(raw);
+  return floor;
+}
+
+function isDemandHail(ev) {
+  if (!ev) return false;
+  if (ev.demandHail === true) return true;
+  const intents = ev.intents;
+  if (intents && intents.includes('payTribute')) return true;
+  return typeof ev.demand === 'number' && Number.isFinite(ev.demand);
+}
+
+function demandRemainS(live, now) {
+  try {
+    const ai = live && live.ai;
+    const exp = ai && ai.demandExpiresAt;
+    if (typeof exp === 'number' && Number.isFinite(exp) && exp > 0) {
+      const left = Math.ceil(exp - now);
+      if (!Number.isFinite(left)) return 0;
+      return left > 0 ? left : 0;
+    }
+    const start = ai && ai.demandPeaceAt;
+    if (typeof start !== 'number' || !Number.isFinite(start) || start <= 0) return DEMAND_SECONDS;
+    const left = Math.ceil(start + DEMAND_SECONDS - now);
+    if (!Number.isFinite(left)) return 0;
+    return left > 0 ? left : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function emitDemandClosed(ctx2, live, outcome, name, n) {
+  try {
+    ctx2.emit('hailClosed', {
+      ship: live,
+      demandHail: true,
+      demandOutcome: outcome,
+      speaker: name,
+      demand: n,
+    });
+  } catch {
+    /* never throw out of demand close */
+  }
+}
+
+function demandLineText(name, n, t) {
+  return `${name} heaves to — ${n} UU or hull. ${t}s.`;
+}
 
 /** True when the live manifest still holds at least one unit. */
 export function shipHasCargo(st) {
@@ -106,6 +172,206 @@ export function tryOpenDisabledHail(ctx) {
   return ev;
 }
 
+const HAIL_MISS_VERBS = Object.freeze(['salvage', 'hail', 'dock', 'jump']);
+const HAIL_MISS_REASONS = Object.freeze([
+  'none',
+  'range',
+  'overlay-chart',
+  'overlay-berth',
+  'calm',
+  'no-hail',
+  'dock-range',
+  'jump-zone',
+]);
+
+/** Primitive miss event. Never throws. Never includes `ship`. */
+export function emitHailMiss(ctx, raw) {
+  try {
+    if (!ctx || typeof ctx.emit !== 'function') return;
+    const verb = raw && typeof raw.verb === 'string' ? raw.verb : '';
+    const reason = raw && typeof raw.reason === 'string' ? raw.reason : '';
+    if (HAIL_MISS_VERBS.indexOf(verb) < 0) return;
+    if (HAIL_MISS_REASONS.indexOf(reason) < 0) return;
+    let name = raw && typeof raw.name === 'string' ? raw.name : '';
+    if (!name) {
+      if (reason === 'none') name = 'No lock';
+      else if (verb === 'dock') name = 'Station';
+      else if (verb === 'jump') name = 'Gate';
+      else name = 'No lock';
+    }
+    const payload = { name, verb, reason };
+    const dist = raw && typeof raw.dist === 'number' ? raw.dist : NaN;
+    if (Number.isFinite(dist)) payload.dist = Math.round(dist);
+    ctx.emit('hailMiss', payload);
+  } catch {
+    /* never throw from miss emit */
+  }
+}
+
+function hailMissLockName(ctx) {
+  try {
+    const live = ctx && ctx.targets && ctx.targets.current;
+    if (!live) return 'No lock';
+    if (live.lockKind === 'rock') return 'Rock';
+    const list = ctx.asteroids && ctx.asteroids.list;
+    if (list && list.indexOf(live) >= 0 && (live.lockKind === 'rock' || (!live.object && !live.state))) {
+      return 'Rock';
+    }
+    const n = (live.record && live.record.pilot) || (live.state && live.state.name);
+    if (typeof n === 'string' && n) return n;
+    if (live.lockKind === 'station') {
+      const sn = ctx.station && ctx.station.name;
+      return typeof sn === 'string' && sn ? sn : 'Station';
+    }
+    if (live.lockKind === 'gate') return 'Gate';
+    return 'No lock';
+  } catch {
+    return 'No lock';
+  }
+}
+
+function hailMissLockDist(ctx) {
+  try {
+    const player = ctx && ctx.ship && ctx.ship.object;
+    const live = ctx && ctx.targets && ctx.targets.current;
+    if (!player || !live) return NaN;
+    if (live.object && live.object.position) return player.position.distanceTo(live.object.position);
+    if (live.position && typeof live.position.distanceTo === 'function') {
+      return player.position.distanceTo(live.position);
+    }
+    return NaN;
+  } catch {
+    return NaN;
+  }
+}
+
+function classifyLockHailMiss(ctx) {
+  const live = ctx && ctx.targets && ctx.targets.current;
+  const name = hailMissLockName(ctx);
+  const dist = hailMissLockDist(ctx);
+  if (!live) return { name: 'No lock', verb: 'hail', reason: 'none', dist };
+  try {
+    if (
+      live.lockKind
+      || !live.state
+      || !live.object
+      || live.state.destroyed
+      || !ctx.ships
+      || !ctx.ships.includes(live)
+    ) {
+      return { name, verb: 'hail', reason: 'no-hail', dist };
+    }
+    if (live.state.disabled) return { name, verb: 'salvage', reason: 'range', dist };
+    return { name, verb: 'hail', reason: 'no-hail', dist };
+  } catch {
+    return { name, verb: 'hail', reason: 'no-hail', dist };
+  }
+}
+
+function hailMissSkipSurface(ctx) {
+  try {
+    if (playSurfaceBlocked(ctx)) return true;
+  } catch {
+    /* missing helper → do not pause; still toast */
+  }
+  try {
+    if (settingsOwnsScreen()) return true;
+  } catch {
+    /* skip settings helper */
+  }
+  return false;
+}
+
+function hailMissFrameHas(ctx, type, text) {
+  try {
+    const evs = ctx && ctx.events;
+    if (!evs) return false;
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i];
+      if (!e || e.type !== type) continue;
+      if (text !== undefined && e.text !== text) continue;
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function emitDockJumpMiss(ctx) {
+  try {
+    if (!ctx || !ctx.input || !ctx.input.dockPressed) return;
+    if (hailMissSkipSurface(ctx)) return;
+    if (ctx.flags && ctx.flags.docked === true) return;
+    if (ctx.gate && ctx.gate.jumping) return;
+    try {
+      if (berthHeld(ctx)) return;
+    } catch {
+      /* skip hold; do not pause */
+    }
+    if (hailMissFrameHas(ctx, 'hailOpened')) return;
+    if (hailMissFrameHas(ctx, 'docked')) return;
+    if (hailMissFrameHas(ctx, 'jumpRequested')) return;
+    if (hailMissFrameHas(ctx, 'commLine', 'No passage.')) return;
+    if (hailMissFrameHas(ctx, 'hailMiss')) return;
+
+    const player = ctx.ship && ctx.ship.object && ctx.ship.object.position;
+    let stationDist = NaN;
+    try {
+      const st = ctx.station && ctx.station.position;
+      if (player && st && typeof st.distanceTo === 'function') stationDist = player.distanceTo(st);
+    } catch {
+      stationDist = NaN;
+    }
+    let gateDist = NaN;
+    let gateTo = null;
+    try {
+      const sysId = ctx.world && ctx.world.currentSystem;
+      const bag = ctx.systems || SYSTEMS;
+      const def = typeof sysId === 'string' && sysId && Object.hasOwn(bag, sysId) ? bag[sysId] : null;
+      const gates = def && def.gates;
+      if (player && Array.isArray(gates)) {
+        for (let i = 0; i < gates.length; i++) {
+          const g = gates[i];
+          const pos = g && g.position;
+          if (!pos || pos.length < 3) continue;
+          const d = Math.hypot(player.x - pos[0], player.y - pos[1], player.z - pos[2]);
+          if (!Number.isFinite(d)) continue;
+          if (!Number.isFinite(gateDist) || d < gateDist) {
+            gateDist = d;
+            if (typeof g.to === 'string' && g.to) gateTo = g.to;
+          }
+        }
+      }
+    } catch {
+      gateDist = NaN;
+    }
+    const useJump = Number.isFinite(gateDist) && (!Number.isFinite(stationDist) || gateDist < stationDist);
+    if (useJump) {
+      let destName = 'Gate';
+      try {
+        const bag = ctx.systems || SYSTEMS;
+        const dest = typeof gateTo === 'string' && gateTo && Object.hasOwn(bag, gateTo) ? bag[gateTo] : null;
+        if (dest && typeof dest.name === 'string' && dest.name) destName = dest.name;
+      } catch {
+        destName = 'Gate';
+      }
+      emitHailMiss(ctx, { name: destName, verb: 'jump', reason: 'jump-zone' });
+      return;
+    }
+    let stName = 'Station';
+    try {
+      const n = ctx.station && ctx.station.name;
+      if (typeof n === 'string' && n) stName = n;
+    } catch {
+      stName = 'Station';
+    }
+    emitHailMiss(ctx, { name: stName, verb: 'dock', reason: 'dock-range', dist: stationDist });
+  } catch {
+    /* never throw from miss emit */
+  }
+}
+
 function bumpFear(ctx, delta) {
   ctx.world.fear = Math.max(0, Math.min(100, ctx.world.fear + delta));
   ctx.emit('fearChanged', { fear: ctx.world.fear });
@@ -129,7 +395,8 @@ export function initHail(ctx) {
   root.appendChild(card);
   document.body.appendChild(root);
 
-  let open = null; // { ship, intents, ransom, tribute, salvage, buttons }
+  let open = null; // { ship, intents, ransom, tribute, salvage, buttons, demandHail?, speaker?, lineEl? }
+  let deferredDemand = null; // { ship, name, n } — hail.js copy of the one overlay defer slot when it is a demand
 
   function closeCard() {
     open = null;
@@ -139,6 +406,87 @@ export function initHail(ctx) {
     } catch {
       /* session flag is optional */
     }
+  }
+
+  function rememberDeferredDemand(ev) {
+    const nextShip = ev && ev.ship;
+    if (deferredDemand && deferredDemand.ship && deferredDemand.ship !== nextShip) {
+      closeDeferredDemand('voided');
+    }
+    deferredDemand = {
+      ship: nextShip,
+      name: demandSpeaker(nextShip),
+      n: finiteDemandAmount(ev && ev.demand),
+    };
+  }
+
+  function clearDeferredDemand(ship) {
+    if (!deferredDemand) return;
+    if (!ship || deferredDemand.ship === ship) deferredDemand = null;
+  }
+
+  function failCloseDemand(ev, outcome) {
+    const live = ev && ev.ship;
+    const ai = live && live.ai;
+    if (ai) {
+      ai.demandOutcome = outcome;
+      ai.demanding = false;
+    }
+    emitDemandClosed(ctx, live, outcome, demandSpeaker(live), finiteDemandAmount(ev && ev.demand));
+  }
+
+  function resolveOpenDemand(outcome) {
+    if (!open || !open.demandHail) return false;
+    const live = open.ship;
+    const ai = live && live.ai;
+    if (ai && !ai.demanding && ai.demandOutcome) {
+      closeCard();
+      return false;
+    }
+    if (ai) {
+      ai.demandOutcome = outcome;
+      ai.demanding = false;
+    }
+    emitDemandClosed(ctx, live, outcome, open.speaker || demandSpeaker(live), open.demand);
+    closeCard();
+    return true;
+  }
+
+  function closeDeferredDemand(outcome) {
+    if (!deferredDemand) return;
+    const live = deferredDemand.ship;
+    const ai = live && live.ai;
+    const already = !!(ai && !ai.demanding && ai.demandOutcome);
+    if (ai && ai.demanding) {
+      ai.demandOutcome = outcome;
+      ai.demanding = false;
+    }
+    if (!already) {
+      emitDemandClosed(ctx, live, outcome, deferredDemand.name, deferredDemand.n);
+    }
+    deferredDemand = null;
+    try {
+      dropDeferredHail();
+    } catch {
+      /* skip mutex */
+    }
+  }
+
+  function jumpDemandClose() {
+    resolveOpenDemand('jumped');
+    closeDeferredDemand('jumped');
+  }
+
+  function frameHas(type) {
+    try {
+      const evs = ctx.events;
+      for (let i = 0; i < evs.length; i++) {
+        if (evs[i] && evs[i].type === type) return true;
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
   }
 
   function resolveIntent(ctx2, intent) {
@@ -246,11 +594,13 @@ export function initHail(ctx) {
       case 'keepFiring':
         break; // close only; the fight continues
       case 'payTribute': {
-        // Wave 30 demand-hail: buy the pirate off. Clamped at 0 — a pilot
-        // who can't cover the full demand pays what they have; partial
-        // payment still counts. The paid-off pirate runs and stays calm a
-        // while; npc.js releases the weapons-cold hold on 'hailClosed'.
-        ctx2.world.credits = Math.max(0, ctx2.world.credits - (h.demand ?? 0));
+        // Wave 30 demand-hail: buy the pirate off. Debit only when both
+        // credits and demand are finite; else skip debit and still close.
+        const credits = ctx2.world.credits;
+        const demand = h.demand;
+        if (Number.isFinite(credits) && Number.isFinite(demand)) {
+          ctx2.world.credits = Math.max(0, credits - demand);
+        }
         ai.mode = 'flee';
         ai.phase = null;
         ai.intent = false;
@@ -300,13 +650,12 @@ export function initHail(ctx) {
       default:
         break;
     }
-    // Wave 35: ship-scoped close (the wave-30 review's prescribed fix). A
-    // pirate's resolve-hail and a void-on-hit both close the card, but the
-    // ~1-frame card-steal window must not let ship B's close kill ship A's
-    // open bargaining card. Unscoped emits remain a legacy backstop — both
-    // listeners close/release on a missing ship — but every in-repo emitter
-    // now carries the ship.
-    ctx2.emit('hailClosed', { ship: live });
+    const dOut = ai.demandOutcome;
+    if (h.demandHail && (dOut === 'paid' || dOut === 'bluffed' || dOut === 'failed' || dOut === 'refused')) {
+      emitDemandClosed(ctx2, live, dOut, h.speaker || demandSpeaker(live), h.demand);
+    } else {
+      ctx2.emit('hailClosed', { ship: live });
+    }
     closeCard();
   }
 
@@ -328,7 +677,7 @@ export function initHail(ctx) {
       case 'keepFiring':
         return salvage ? 'Keep firing — finish them' : 'Keep firing';
       case 'payTribute':
-        return `Pay tribute — ${h.demand} UU`;
+        return `Pay tribute — ${Number.isFinite(h.demand) ? h.demand : HIDDEN_MOUNTS.demandMin} UU`;
       case 'showTeeth':
         return 'Show teeth — reveal the hidden mounts';
       case 'refuseFight':
@@ -350,19 +699,29 @@ export function initHail(ctx) {
     const st = live.state;
     const intents = INTENT_ORDER.filter((i) => ev.intents && ev.intents.includes(i));
     if (intents.length === 0) return;
+    const demandHail = isDemandHail(ev);
+    const demandN = demandHail ? finiteDemandAmount(ev.demand) : (ev.demand ?? null);
+    const speaker = live.record?.pilot ?? st.name;
+    const now = ctx.world && typeof ctx.world.time === 'number' ? ctx.world.time : 0;
     open = {
       ship: live,
       intents,
       ransom: ransomFor(st), // rolled once so the offer is stable
       tribute: Math.round(ECON.tributeRate * cargoValueSafe(st.cargo, ctx.world.prices)),
-      demand: ev.demand ?? null, // wave 30: pirate demand-hail amount, rolled at emit time
+      demand: demandN, // wave 30: pirate demand-hail amount, rolled at emit time
       salvage: ev.salvage === true || !!st.disabled,
       buttons: null,
+      demandHail,
+      speaker,
+      lineEl: null,
     };
 
     // Rebuild card contents (hail-time allocation only).
+    const kids = card.children;
+    if (kids && kids.length) {
+      while (kids.length) card.removeChild(kids[kids.length - 1]);
+    }
     card.textContent = '';
-    const speaker = live.record?.pilot ?? st.name;
     const factionName = FACTIONS[st.faction]?.name ?? st.faction;
     const header = document.createElement('div');
     header.style.cssText = 'font-size:13px;letter-spacing:.12em;color:#6ff2e0;';
@@ -372,7 +731,10 @@ export function initHail(ctx) {
     sub.textContent = `${factionName} · ${st.name}`;
     const line = document.createElement('div');
     line.style.cssText = 'font-size:12px;color:#d7e4ea;margin:8px 0 10px;';
-    line.textContent = `“${ev.line ?? 'They are breaking.'}”`;
+    line.textContent = demandHail
+      ? demandLineText(speaker, demandN, demandRemainS(live, now))
+      : `“${ev.line ?? 'They are breaking.'}”`;
+    open.lineEl = line;
     // Wave 41: faction portrait (when available) in a flex row.
     const portrait = portraitFor(st.faction, speaker);
     const row = document.createElement('div');
@@ -451,12 +813,21 @@ export function initHail(ctx) {
   return {
     update() {
       for (const ev of ctx.events) {
-        if (ev.type === 'hailOpened') {
+        if (ev.type === 'systemLoaded') {
+          jumpDemandClose();
+        } else if (ev.type === 'hailOpened') {
+          const demandHail = isDemandHail(ev);
           if (open && open.ship === ev.ship) {
             openCard(ev);
             continue;
           }
-          if (open) continue;
+          if (open) {
+            if (demandHail) {
+              try { deferIncomingHail(ev); } catch { /* skip mutex */ }
+              rememberDeferredDemand(ev);
+            }
+            continue;
+          }
           let verdict = true;
           try {
             verdict = canShowHail(ctx, ev.ship);
@@ -465,39 +836,106 @@ export function initHail(ctx) {
           }
           if (verdict === 'defer') {
             try { deferIncomingHail(ev); } catch { /* skip mutex */ }
+            if (demandHail) rememberDeferredDemand(ev);
             continue;
           }
-          if (verdict === true) openCard(ev);
+          if (verdict === true) {
+            openCard(ev);
+            continue;
+          }
+          if (demandHail) failCloseDemand(ev, 'voided');
         } else if (ev.type === 'hailClosed') {
           if (open && (!ev.ship || ev.ship === open.ship)) closeCard();
           try { dropDeferredHail(ev.ship); } catch { /* skip mutex */ }
+          clearDeferredDemand(ev.ship);
         }
       }
       // Player-initiated salvage hail (H). World.js may already have opened
       // a Callow card this frame; do not steal an open card.
       if (ctx.input.hailPressed && !open) {
         let allow = true;
+        let skipMiss = hailMissSkipSurface(ctx);
+        let overlayToken = '';
         try {
-          if (playSurfaceBlocked(ctx)) allow = false;
+          if (playSurfaceBlocked(ctx)) { allow = false; skipMiss = true; }
         } catch { /* skip surface gate */ }
         try {
-          if (allow && canOpenPlayCard(ctx, 'hail') === false) allow = false;
+          if (allow && canOpenPlayCard(ctx, 'hail') === false) {
+            allow = false;
+            try {
+              if (overlayIsOpen(ctx, 'chart')) overlayToken = 'overlay-chart';
+              else if (overlayIsOpen(ctx, 'berth')) overlayToken = 'overlay-berth';
+              else skipMiss = true;
+            } catch {
+              skipMiss = true;
+            }
+          }
         } catch { /* skip mutex */ }
         try {
           const live = ctx.targets && ctx.targets.current;
-          if (allow && live && hailCalmOk(ctx, live) === false) allow = false;
+          if (allow && live && live.state && !live.state.destroyed && hailCalmOk(ctx, live) === false) {
+            allow = false;
+          }
         } catch { /* skip calm gate */ }
+        if (hailMissFrameHas(ctx, 'hailOpened')) skipMiss = true;
         if (allow) {
           const ev = tryOpenDisabledHail(ctx);
           if (ev) openCard(ev);
+          else if (!skipMiss) emitHailMiss(ctx, classifyLockHailMiss(ctx));
+        } else if (!skipMiss) {
+          const lock = classifyLockHailMiss(ctx);
+          if (overlayToken) {
+            emitHailMiss(ctx, { name: lock.name, verb: 'hail', reason: overlayToken });
+          } else {
+            emitHailMiss(ctx, { name: lock.name, verb: 'hail', reason: 'calm' });
+          }
         }
+      }
+      try {
+        if (!open) emitDockJumpMiss(ctx);
+      } catch {
+        /* leftover KeyJ miss must not throw */
+      }
+      try {
+        if (open && open.demandHail && open.lineEl) {
+          const now = ctx.world && typeof ctx.world.time === 'number' ? ctx.world.time : 0;
+          const t = demandRemainS(open.ship, now);
+          open.lineEl.textContent = demandLineText(open.speaker, open.demand, t);
+          if (t <= 0) resolveOpenDemand('expired');
+        }
+      } catch {
+        /* timer text must not throw */
+      }
+      try {
+        if (ctx.flags && ctx.flags.docked === true) {
+          resolveOpenDemand('docked');
+          closeDeferredDemand('docked');
+        }
+      } catch {
+        /* dock close must not throw */
+      }
+      try {
+        if (!ctx.ships || ctx.ships.length === 0) jumpDemandClose();
+      } catch {
+        /* jump close must not throw */
       }
       // Destroyed / despawned still closes. An open salvage hail stays up
       // on a disabled hull. A live bargaining or demand hail converts.
       if (open) {
-        const st = open.ship.state;
+        const st = open.ship && open.ship.state;
         if (!st || st.destroyed || !ctx.ships.includes(open.ship)) {
-          closeCard();
+          if (open.demandHail) {
+            const jumped = frameHas('systemLoaded') || !!(ctx.gate && ctx.gate.jumping);
+            if (st && st.destroyed && !jumped) {
+              const ai = open.ship && open.ship.ai;
+              if (ai) ai.demanding = false;
+              closeCard();
+            } else {
+              resolveOpenDemand(jumped ? 'jumped' : 'voided');
+            }
+          } else {
+            closeCard();
+          }
         } else if (st.disabled && !open.salvage) {
           const ev = {
             ship: open.ship,
@@ -512,7 +950,10 @@ export function initHail(ctx) {
       if (!open) {
         try {
           const slot = takeDeferredHail(ctx);
-          if (slot) openCard(slot);
+          if (slot) {
+            openCard(slot);
+            clearDeferredDemand(slot.ship);
+          }
         } catch { /* skip mutex */ }
       }
     },

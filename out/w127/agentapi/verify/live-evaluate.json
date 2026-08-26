@@ -1,0 +1,26 @@
+{
+  "href": "http://localhost:5177/?agent=1",
+  "hasRimward": true,
+  "version": 1,
+  "keys": ["version", "observe", "act", "enable", "disable"],
+  "frozen": true,
+  "hasCtxDebug": true,
+  "ctxOptIn": true,
+  "observe": {
+    "v": 1,
+    "ok": true,
+    "error": "",
+    "agentOptIn": true,
+    "hasShip": true,
+    "credits": 350,
+    "camera": "chase",
+    "eventsCap": 0
+  },
+  "jsonPlain": true,
+  "ping": { "v": 1, "ok": true, "error": "", "name": "ping", "token": "" },
+  "tel": { "v": 1, "ok": false, "error": "forbidden", "name": "teleport", "token": "forbidden" },
+  "plot": { "v": 1, "ok": false, "error": "paused", "name": "plotRoute", "token": "paused" },
+  "badge": false,
+  "titleOpen": true,
+  "note": "Vite bound [::1]:5177. Playwright http://127.0.0.1:5177 refused; http://localhost:5177 worked."
+}

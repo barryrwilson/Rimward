@@ -1,0 +1,54 @@
+# Wave 126 HUD-06 home-station marker — worker write-set (git untracked)
+
+docs/Hud06HomeMarkerDesign.md
+out/w126/homemarker/code-review.md
+out/w126/homemarker/current-hud06-home-marker-inventory.md
+out/w126/homemarker/notes.md
+out/w126/homemarker/security-review.md
+out/w126/homemarker/shared-contract.md
+out/w126/homemarker/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w126/homemarker/verify/report.md
+out/w126/homemarker/verify/write-set.txt
+
+# Later serial (named only; not landed this wave)
+
+ALLOWED later (contract §0.6 / §5; Wave 126 markdown did not land these):
+  src/systems/hud.js
+  src/ui/hud.css
+
+FORBIDDEN later serial (this leftover):
+  src/game/state.js
+  src/game/save.js
+  src/game/nav.js
+  src/game/agent-api.js
+  src/systems/station.js          # read pose/name/inZone only
+  src/systems/galaxychart.js
+  src/systems/controls.js
+  src/systems/hail.js
+  src/systems/npc.js
+  src/systems/overlay-policy.js
+  src/systems/nav-guidance.js     # optional formatNavDist call from hud.js; no edit
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/AgentApiDesign.md
+  docs/Hail01DemandLifecycleDesign.md
+  docs/Ctl*.md
+  docs/Nav*.md
+  docs/Hud01* .. docs/Hud05*
+  docs/Tgt*.md
+  docs/OwnerDecisions*.md
+  docs/OwnerDecisionsWave126.md
+
+# Not in this worker write-set
+
+src/ — dirty in tree from Wave 125 (berthHold / Digit skip / npc / save); hud.js + hud.css clean; not this pack
+scripts/ — no edits
+public/ / index.html / package.json — no edits
+docs/AgentApiDesign.md / out/w126/agentapi/** — sibling leftover (cite)
+docs/Hail01DemandLifecycleDesign.md / out/w126/demand/** — sibling leftover (cite)
+docs/PLAYER-EXPERIENCE-WISHLIST.md — cite only; dirty in tree; not this pack
+PROGRESS.md — dirty in tree; not this pack
+docs/OwnerDecisionsWave126.md — must stay absent this wave

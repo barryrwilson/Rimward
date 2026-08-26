@@ -1,0 +1,7 @@
+docs/Hud07DeconflictionDesign.md
+out/w128/deconflict/current-hud07-deconflict-inventory.md
+out/w128/deconflict/shared-contract.md
+out/w128/deconflict/notes.md
+out/w128/deconflict/security-review.md
+out/w128/deconflict/code-review.md
+out/w128/deconflict/ui-audit.md

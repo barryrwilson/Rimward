@@ -183,3 +183,22 @@ export function hailDigitsAllowed(ctx) {
     return false;
   }
 }
+
+/** Session berth hold. Missing flag / throw → false. Never reads as pause. */
+export function berthHeld(ctx) {
+  try {
+    return !!(ctx && ctx.flags && ctx.flags.berthHold === true);
+  } catch {
+    return false;
+  }
+}
+
+/** Session berth hold writer. Never writes flags.paused. Never throws. */
+export function setBerthHold(ctx, next) {
+  try {
+    if (!ctx || !ctx.flags) return;
+    ctx.flags.berthHold = next === true;
+  } catch {
+    /* skip hold write; never fall back to paused */
+  }
+}

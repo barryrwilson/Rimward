@@ -29,9 +29,13 @@ import { losCloseRate } from '../game/los-close.js';
  * recenters the reticle; it does not swap instruments.
  *
  * Performance contract: every DOM node is created once here. update() writes
- * transforms (reticle/bracket/lead/edge-arrow) per frame; ALL text and bar
- * writes are throttled to ~5 Hz and only when the value actually changed.
- * No per-frame object allocations — scratch Vector3s live at init scope.
+ * transforms (reticle/bracket/lead/edge-arrow/home-mark) per frame; ALL text
+ * and bar writes are throttled to ~5 Hz and only when the value actually
+ * changed. No per-frame object allocations — scratch Vector3s live at init
+ * scope.
+ *
+ * HUD-06: current-system station pip + off-screen home chevron + POS HOME.
+ * Not a lock, not NAV-02, not a reticle child. Distance text is mandatory.
  *
  * Wave 15: charted landmarks surface as POI markers while flying their
  * system — the keeper's chart mark (wave 14 mystery.charted) becomes a
@@ -68,6 +72,7 @@ const INCOMING_DART_TOAST = 'Incoming dart.';
 const DART_TOAST_GAP = 2.5;
 const HULL_PETALS = 10;
 const EDGE_MARGIN = 84; // px inset for the off-screen target arrow
+const HOME_EDGE_INSET = 108; // px; TGT/NAV-02 keep 84
 const LEAD_MIN_SPEED = 6; // u/s — still used to skip a useless tiny offset draw
 const EMPTY_LIST = []; // shared ?? fallback — never mutated, avoids per-frame []
 const CONTACT_SLOTS = 24;
@@ -176,6 +181,31 @@ function distPointBox(x, y, b) {
   const dx = x < b.l ? b.l - x : (x > b.r ? x - b.r : 0);
   const dy = y < b.t ? b.t - y : (y > b.b ? y - b.b : 0);
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+function setAabb(out, l, t, r, b) {
+  out.l = l;
+  out.t = t;
+  out.r = r;
+  out.b = b;
+  return out;
+}
+
+function boxesOverlap(a, b) {
+  if (!a || !b) return false;
+  if (!Number.isFinite(a.l) || !Number.isFinite(a.t) || !Number.isFinite(a.r) || !Number.isFinite(a.b)) return false;
+  if (!Number.isFinite(b.l) || !Number.isFinite(b.t) || !Number.isFinite(b.r) || !Number.isFinite(b.b)) return false;
+  return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
+}
+
+/** True when a lower-priority word/label box hits hub, bracket, or lead path. */
+function hitsSightProtect(box, hub, brackOn, brack, pathOn, hx, hy, lx, ly) {
+  if (boxesOverlap(box, hub)) return true;
+  if (brackOn && boxesOverlap(box, brack)) return true;
+  if (pathOn && Number.isFinite(hx) && Number.isFinite(hy) && Number.isFinite(lx) && Number.isFinite(ly)) {
+    if (segmentHitsBox(hx, hy, lx, ly, box)) return true;
+  }
+  return false;
 }
 
 function clipSeg(p, q) {
@@ -674,9 +704,132 @@ function toastForEvent(e, ctx, mem) {
       const text = n === 1 ? '■ The Chain took one.' : `■ The Chain took ${n}.`;
       return { text, cls: 'warn' };
     }
+    case 'hailOpened': {
+      const demandOpen = e.demandHail === true
+        || (e.intents && e.intents.includes('payTribute'))
+        || (typeof e.demand === 'number' && Number.isFinite(e.demand));
+      if (!demandOpen) return null;
+      try {
+        const evs = ctx && ctx.events;
+        if (evs) {
+          for (let i = 0; i < evs.length; i++) {
+            const o = evs[i];
+            // Only a demand-tagged close of THIS hull skips announce.
+            // Unscoped hailClosed must not eat a Wave 30 open toast.
+            if (
+              o
+              && o.type === 'hailClosed'
+              && o.demandHail === true
+              && o.demandOutcome
+              && o.ship
+              && o.ship === e.ship
+            ) {
+              return null;
+            }
+          }
+        }
+      } catch {
+        /* skip look-ahead */
+      }
+      const name = demandToastName(e);
+      const n = Number.isFinite(e.demand) ? Math.round(e.demand) : 50;
+      let t = 20;
+      if (Number.isFinite(e.t)) t = Math.max(0, Math.floor(e.t));
+      else if (Number.isFinite(e.demandExpiresAt) && ctx && ctx.world && Number.isFinite(ctx.world.time)) {
+        t = Math.max(0, Math.ceil(e.demandExpiresAt - ctx.world.time));
+      }
+      const text = `${name} — heave to. Pay ${n} UU or fight. ${t}s.`;
+      if (mem.frameLines.includes(text)) return null;
+      mem.frameLines.push(text);
+      return { text, cls: 'warn', key: `warn|demand|${name}` };
+    }
+    case 'hailClosed': {
+      const outcome = e.demandOutcome;
+      const name = demandToastName(e);
+      let text = null;
+      let cls = 'warn';
+      if (outcome === 'paid') { text = `${name} — tribute taken. They run.`; cls = 'good'; }
+      else if (outcome === 'bluffed') { text = `${name} — they break off.`; cls = 'good'; }
+      else if (outcome === 'failed') text = `${name} — bluff failed. They fire.`;
+      else if (outcome === 'refused') text = `${name} — demand refused. They fire.`;
+      else if (outcome === 'expired') text = `${name} — demand expired. They fire.`;
+      else if (outcome === 'docked') text = `${name} — demand broken. You docked.`;
+      else if (outcome === 'jumped') text = `${name} — demand dropped. You jumped.`;
+      else if (outcome === 'voided') text = `${name} — parley void. They fire.`;
+      if (!text) return null;
+      if (mem.frameLines.includes(text)) return null;
+      mem.frameLines.push(text);
+      return { text, cls, key: `warn|demand|${name}|${outcome}` };
+    }
+    case 'hailMiss':
+      return hailMissToast(e, ctx, mem);
     default:
       return null;
   }
+}
+
+function hailMissKeyName(name) {
+  const src = typeof name === 'string' ? name : '';
+  let out = '';
+  for (let i = 0; i < src.length && out.length < 48; i++) {
+    const c = src.charCodeAt(i);
+    if (c < 32 || c === 127) continue;
+    if (src.charAt(i) === '|') continue;
+    out += src.charAt(i);
+  }
+  return out;
+}
+
+function hailMissToast(e, ctx, mem) {
+  try {
+    if (!e) return null;
+    const evs = ctx && ctx.events;
+    if (evs) {
+      for (let i = 0; i < evs.length; i++) {
+        const o = evs[i];
+        if (!o) continue;
+        if (o.type === 'hailOpened' || o.type === 'docked' || o.type === 'jumpRequested') return null;
+        if (o.type === 'commLine' && o.text === 'No passage.') return null;
+      }
+    }
+    const reason = typeof e.reason === 'string' ? e.reason : '';
+    const verb = typeof e.verb === 'string' ? e.verb : '';
+    const name = typeof e.name === 'string' && e.name ? e.name : 'No lock';
+    const n = Number.isFinite(e.dist) ? Math.round(e.dist) : null;
+    const rangeBit = n === null ? '' : ` (${n} u)`;
+    let text = null;
+    if (reason === 'none') text = 'No lock — hail';
+    else if (reason === 'range' && verb === 'salvage') text = `${name} — salvage out of range${rangeBit}`;
+    else if (reason === 'range') text = `${name} — hail out of range${rangeBit}`;
+    else if (reason === 'overlay-chart') text = `${name} — hail blocked (chart)`;
+    else if (reason === 'overlay-berth') text = `${name} — hail blocked (berth)`;
+    else if (reason === 'calm') text = `${name} — hail calm`;
+    else if (reason === 'no-hail') text = `${name} — no hail`;
+    else if (reason === 'dock-range') text = `${name} — dock out of range${rangeBit}`;
+    else if (reason === 'jump-zone') text = `${name} — jump not in zone`;
+    else return null;
+    if (mem && Array.isArray(mem.frameLines)) {
+      if (mem.frameLines.includes(text)) return null;
+      mem.frameLines.push(text);
+    }
+    const keyName = hailMissKeyName(name);
+    return { text, cls: 'warn', key: `warn|hailmiss|${verb}|${reason}|${keyName}` };
+  } catch {
+    return null;
+  }
+}
+
+function demandToastName(e) {
+  if (e && typeof e.speaker === 'string' && e.speaker) return e.speaker;
+  if (e && typeof e.name === 'string' && e.name) return e.name;
+  try {
+    const live = e && e.ship;
+    const n = (live && live.record && live.record.pilot) || (live && live.state && live.state.name);
+    if (typeof n === 'string' && n) return n;
+  } catch {
+    /* missing hull */
+  }
+  return 'Pirate';
 }
 
 /**
@@ -772,13 +925,18 @@ export function initHud(ctx) {
     console.warn('hud.js: #hud root missing; HUD disabled');
     return { update() {} };
   }
+  try {
+    if (!root.parent && document.body) document.body.appendChild(root);
+  } catch {
+    /* live index.html already parents #hud */
+  }
   ensureW2Styles();
 
   // ---------- center: alien-iris reticle (§14.9) + subtle crosshair ----------
   const reticle = el('div', 'rw-reticle', root);
   el('div', 'rw-reticle-pupil', reticle);
   for (let i = 0; i < 3; i++) el('span', 'rw-reticle-cilia', reticle);
-  el('div', 'rw-reticle-range', reticle, 'RANGE');
+  const rangeWord = el('div', 'rw-reticle-range', reticle, 'RANGE');
   const crosshair = el('div', 'rw-crosshair', root);
   el('div', 'rw-crosshair-dot', crosshair);
 
@@ -812,7 +970,7 @@ export function initHud(ctx) {
   });
   const lead = el('div', 'rw-lead is-hidden', root);
   el('div', 'rw-lead-ring', lead);
-  el('div', 'rw-lead-label', lead, 'LEAD');
+  const leadLabel = el('div', 'rw-lead-label', lead, 'LEAD');
   const edgeArrow = el('div', 'rw-edge-arrow is-hidden', root);
   edgeArrow.setAttribute('aria-hidden', 'true');
   const gateCue = el('div', 'rw-nav-gate-cue is-hidden', root);
@@ -820,6 +978,13 @@ export function initHud(ctx) {
   el('span', 'rw-nav-gate-cue-tick rw-nav-gate-cue-tick-a', gateCue);
   el('span', 'rw-nav-gate-cue-tick rw-nav-gate-cue-tick-b', gateCue);
   el('span', 'rw-nav-gate-cue-notch', gateCue);
+  const homePip = el('div', 'rw-home-mark rw-home-pip is-hidden', root);
+  homePip.setAttribute('aria-hidden', 'true');
+  el('span', 'rw-home-pip-glyph', homePip);
+  const homePipLabel = el('span', 'rw-home-pip-label', homePip);
+  const homeChev = el('div', 'rw-home-mark rw-home-chevron is-hidden', root);
+  homeChev.setAttribute('aria-hidden', 'true');
+  el('span', 'rw-home-chevron-glyph', homeChev);
 
   // ---------- wave 15: charted landmark markers (keeper chart marks) ----------
   // One slot per possible mark: pool sized to the largest authored landmark
@@ -837,7 +1002,7 @@ export function initHud(ctx) {
     box.setAttribute('aria-hidden', 'true');
     el('span', 'rw-chartmark-glyph', box);
     const label = el('span', 'rw-chartmark-label', box);
-    chartSlots.push({ box, label, lmId: '', lmName: '', dist: 0, shown: null, x: -1, y: -1, textId: '', textBucket: -1 });
+    chartSlots.push({ box, label, lmId: '', lmName: '', dist: 0, shown: null, x: -1, y: -1, textId: '', textBucket: -1, yield: false });
   }
 
   // ---------- top-center toasts (comm lines + milestone stings) ----------
@@ -945,6 +1110,9 @@ export function initHud(ctx) {
   const tgtSize = { width: 168, height: 120 };
   const selfHairBox = { l: 0, t: 0, r: 0, b: 0 };
   const tgtHairBox = { l: 0, t: 0, r: 0, b: 0 };
+  const hubBox = { l: 0, t: 0, r: 0, b: 0 };
+  const brackBox = { l: 0, t: 0, r: 0, b: 0 };
+  const yieldBox = { l: 0, t: 0, r: 0, b: 0 };
   function measureRails() {
     const sw = selfRail.offsetWidth | 0;
     const sh = selfRail.offsetHeight | 0;
@@ -1029,6 +1197,9 @@ export function initHud(ctx) {
   el('div', 'rw-label', posPanel, 'POS');
   const sysValue = el('div', 'rw-sysname', posPanel, '—'); // current system, above coords
   const posValue = el('div', 'rw-coords', posPanel, '—');
+  const homeRow = el('div', 'rw-meter rw-pos-home is-hidden', posPanel);
+  el('div', 'rw-label', homeRow, 'HOME');
+  const homeVal = el('div', 'rw-value', homeRow, '—');
 
   // ---------- top-right resources (fades in combat §13.2) ----------
   const resources = el('section', 'rw-panel rw-resources rw-fade', root);
@@ -1099,6 +1270,7 @@ export function initHud(ctx) {
   const contactRight = new THREE.Vector3();
   const contactVel = new THREE.Vector3();
   const chartProj = new THREE.Vector3(); // charted landmark world→NDC (wave 15)
+  const homeProj = new THREE.Vector3();
   const navProj = new THREE.Vector3();
   const navGuide = initNavGuidance(ctx);
   let lastTargetRef = null;
@@ -1107,6 +1279,8 @@ export function initHud(ctx) {
   let targetClosNow = 0;
   let haveTargetVel = false;
   let navDistNow = 0;
+  let homeDistNow = 0;
+  let homeCue = false;
   let navHavePos = false;
   let navLastNext = '';
   let navLastDest = '';
@@ -1129,6 +1303,9 @@ export function initHud(ctx) {
     prompt: '',
     promptSalvage: false,
     posX: NaN, posY: NaN, posZ: NaN,
+    homeRowShown: null, homeVal: '', homePipDist: '',
+    homePipShown: null, homeChevShown: null,
+    homePipX: -1, homePipY: -1, homeChevX: -1, homeChevY: -1, homeChevAng: NaN,
     system: '', jumpShown: null, jumpPct: -1, jumpDest: null,
     family: '', classKey: '', tgtClassKey: '', kind: undefined, faction: undefined, hudOverride: undefined,
     leadX: 0, leadY: 0, selfHairOff: true, tgtHairOff: true,
@@ -1139,6 +1316,7 @@ export function initHud(ctx) {
     navNextRow: null, navJumpsRow: null, navDistRow: null,
     apShown: null, apDest: '', apNext: '', apRem: '',
     amShown: null, amState: '', amRockShown: null, amRockLabel: '', amRockDim: null,
+    yieldName: false, yieldRange: false, yieldLead: false, yieldHome: false,
   };
   const mem = {
     lastFear: Math.round(ctx.world.fear ?? 0),
@@ -1179,14 +1357,39 @@ export function initHud(ctx) {
     }
   }
 
+  function hideHomeGlass() {
+    if (last.homePipShown !== false) {
+      last.homePipShown = false;
+      homePip.classList.add('is-hidden');
+    }
+    if (last.homeChevShown !== false) {
+      last.homeChevShown = false;
+      homeChev.classList.add('is-hidden');
+    }
+  }
+
+  function applyYield(node, key, on) {
+    const v = !!on;
+    if (last[key] === v) return;
+    last[key] = v;
+    if (node) node.classList.toggle('rw-yield', v);
+  }
+
+  function applyChartYield(slot, on) {
+    const v = !!on;
+    if (!slot || slot.yield === v) return;
+    slot.yield = v;
+    if (slot.label) slot.label.classList.toggle('rw-yield', v);
+  }
+
   let textAccum = TEXT_UPDATE_INTERVAL; // refresh text on first frame
   let selfHitFlashUntil = 0;
   let selfHitFlashAft = false;
 
-  function pushToast(text, cls) {
+  function pushToast(text, cls, keyOverride) {
     if (!text) return;
     const now = ctx.elapsed;
-    const key = cls + '|' + text;
+    const key = typeof keyOverride === 'string' && keyOverride ? keyOverride : (cls + '|' + text);
     for (const s of toastSlots) {
       if (s.until > now && s.key === key) {
         s.until = now + TOAST_LIFETIME;
@@ -1232,7 +1435,7 @@ export function initHud(ctx) {
           selfHitFlashAft = !!ev.fromAft;
         }
         const t = toastForEvent(ev, ctx, mem);
-        if (t) pushToast(t.text, t.cls);
+        if (t) pushToast(t.text, t.cls, t.key);
       }
       // expire toasts
       const nowReal = ctx.elapsed;
@@ -1772,6 +1975,150 @@ export function initHud(ctx) {
         }
       }
 
+      {
+        const st = ctx.station;
+        const sp = st && st.position;
+        const flags = ctx.flags;
+        const homePosOk = !!(sp
+          && Number.isFinite(sp.x)
+          && Number.isFinite(sp.y)
+          && Number.isFinite(sp.z));
+        homeCue = !!(homePosOk
+          && flags
+          && !flags.docked
+          && !(ctx.gate && ctx.gate.jumping)
+          && flags.hailOpen !== true
+          && flags.chartOpen !== true
+          && flags.berthOpen !== true);
+        if (!homeCue) {
+          homeDistNow = 0;
+          hideHomeGlass();
+        } else {
+          homeProj.set(sp.x, sp.y, sp.z);
+          homeDistNow = fromPos.distanceTo(homeProj);
+          if (!Number.isFinite(homeDistNow)) {
+            homeCue = false;
+            homeDistNow = 0;
+            hideHomeGlass();
+          } else if (kind === 'station') {
+            hideHomeGlass();
+          } else {
+            homeProj.project(cam);
+            let hdx = homeProj.x, hdy = homeProj.y;
+            if (!Number.isFinite(hdx) || !Number.isFinite(hdy)) {
+              hideHomeGlass();
+            } else {
+              const behindHome = homeProj.z > 1;
+              if (behindHome) { hdx = -hdx; hdy = -hdy; }
+              const homeOnGlass = !behindHome
+                && hdx >= -0.95 && hdx <= 0.95
+                && hdy >= -0.92 && hdy <= 0.92;
+              if (homeOnGlass) {
+                if (last.homeChevShown !== false) {
+                  last.homeChevShown = false;
+                  homeChev.classList.add('is-hidden');
+                }
+                if (last.homePipShown !== true) {
+                  last.homePipShown = true;
+                  homePip.classList.remove('is-hidden');
+                }
+                const hpx = Math.round((hdx * 0.5 + 0.5) * vw);
+                const hpy = Math.round((-hdy * 0.5 + 0.5) * vh);
+                if (hpx !== last.homePipX || hpy !== last.homePipY) {
+                  last.homePipX = hpx;
+                  last.homePipY = hpy;
+                  homePip.style.transform = 'translate3d(' + hpx + 'px,' + hpy + 'px,0)';
+                }
+              } else {
+                if (last.homePipShown !== false) {
+                  last.homePipShown = false;
+                  homePip.classList.add('is-hidden');
+                }
+                if (last.homeChevShown !== true) {
+                  last.homeChevShown = true;
+                  homeChev.classList.remove('is-hidden');
+                }
+                const dirX = hdx * cx;
+                const dirY = -hdy * cy;
+                const ax = Math.abs(dirX), ay = Math.abs(dirY);
+                let s = Infinity;
+                if (ax > 1e-4) s = (cx - HOME_EDGE_INSET) / ax;
+                if (ay > 1e-4) s = Math.min(s, (cy - HOME_EDGE_INSET) / ay);
+                if (!Number.isFinite(s)) s = 1;
+                const px = cx + dirX * s;
+                const py = cy + dirY * s;
+                const ang = Math.atan2(dirY, dirX) + Math.PI / 2;
+                if (px !== last.homeChevX || py !== last.homeChevY || ang !== last.homeChevAng) {
+                  last.homeChevX = px;
+                  last.homeChevY = py;
+                  last.homeChevAng = ang;
+                  homeChev.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) rotate(' + ang + 'rad)';
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Duplicate names / RANGE+LEAD words / overlapping labels yield.
+      // Never throw; never remove pooled nodes.
+      try {
+        const hx = cx + rx;
+        const hy = cy + ry;
+        const okY = vw > 0 && vh > 0 && Number.isFinite(hx) && Number.isFinite(hy);
+        if (okY) {
+          setAabb(hubBox, hx - 40, hy - 40, hx + 40, hy + 40);
+          const brackOn = last.bracketShown === true
+            && Number.isFinite(last.bx) && Number.isFinite(last.by);
+          if (brackOn) setAabb(brackBox, last.bx - 30, last.by - 30, last.bx + 30, last.by + 30);
+          const pathOn = last.leadShown === true
+            && Number.isFinite(last.leadX) && Number.isFinite(last.leadY);
+          const lx = last.leadX;
+          const ly = last.leadY;
+          const inCombat = !!(ctx.flags && ctx.flags.combat);
+          const ts = Number.isFinite(last.textScale) && last.textScale > 0 ? last.textScale : 1;
+
+          applyYield(tName, 'yieldName', !!shipTgt);
+
+          const distShown = !!(shipTgt || (last.bracketShown && last.tMeta));
+          setAabb(yieldBox, hx - 28, hy + 40, hx + 28, hy + 58);
+          applyYield(rangeWord, 'yieldRange', distShown
+            || hitsSightProtect(yieldBox, hubBox, brackOn, brackBox, pathOn, hx, hy, lx, ly));
+
+          if (pathOn) {
+            setAabb(yieldBox, lx - 22, ly + 14, lx + 22, ly + 30);
+            applyYield(leadLabel, 'yieldLead', !inCombat
+              || hitsSightProtect(yieldBox, hubBox, brackOn, brackBox, true, hx, hy, lx, ly));
+          } else {
+            applyYield(leadLabel, 'yieldLead', !inCombat);
+          }
+
+          if (last.homePipShown === true && Number.isFinite(last.homePipX) && Number.isFinite(last.homePipY)) {
+            const lw = 56 * ts;
+            const lh = 16 * ts;
+            setAabb(yieldBox, last.homePipX + 9, last.homePipY, last.homePipX + 9 + lw, last.homePipY + lh);
+            applyYield(homePipLabel, 'yieldHome',
+              hitsSightProtect(yieldBox, hubBox, brackOn, brackBox, pathOn, hx, hy, lx, ly));
+          } else {
+            applyYield(homePipLabel, 'yieldHome', false);
+          }
+
+          for (let ci = 0; ci < CHARTMARK_SLOTS; ci++) {
+            const s = chartSlots[ci];
+            if (!s.shown || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
+              applyChartYield(s, false);
+              continue;
+            }
+            const lw = 96 * ts;
+            const lh = 16 * ts;
+            setAabb(yieldBox, s.x + 9, s.y, s.x + 9 + lw, s.y + lh);
+            applyChartYield(s, hitsSightProtect(yieldBox, hubBox, brackOn, brackBox, pathOn, hx, hy, lx, ly));
+          }
+        }
+      } catch (_yieldErr) {
+        /* skip yield */
+      }
+
       const amRockOn = !!(last.bracketShown && rockOk);
       if (amRockOn !== last.amRockShown) {
         last.amRockShown = amRockOn;
@@ -1986,6 +2333,23 @@ export function initHud(ctx) {
           posValue.textContent = 'X ' + x + '  Y ' + y + '  Z ' + z;
         }
       }
+      if (homeCue !== last.homeRowShown) {
+        last.homeRowShown = homeCue;
+        homeRow.classList.toggle('is-hidden', !homeCue);
+      }
+      if (homeCue) {
+        const distText = formatNavDist(homeDistNow);
+        const stName = stripHudText(ctx.station && ctx.station.name);
+        const homeText = (stName || 'HOME') + ' · ' + distText;
+        if (homeText !== last.homeVal) {
+          last.homeVal = homeText;
+          homeVal.textContent = homeText;
+        }
+        if (distText !== last.homePipDist) {
+          last.homePipDist = distText;
+          homePipLabel.textContent = distText;
+        }
+      }
 
       {
         const plotted = navInfo.kind === 'plotted';
@@ -2135,6 +2499,8 @@ export function initHud(ctx) {
         const pierced = masked && (ctx.world.scanner ?? 0) >= 2;
         let railName = rec?.name ?? st.name ?? 'CONTACT';
         if (masked && !pierced) railName = rec.coverName ?? railName;
+        railName = stripHudText(typeof railName === 'string' ? railName : '');
+        if (!railName) railName = 'CONTACT';
         if (railName !== last.railName) {
           last.railName = railName;
           tgtNameEl.textContent = railName;

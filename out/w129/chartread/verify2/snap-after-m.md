@@ -1,0 +1,356 @@
+- generic [active] [ref=f1e1]:
+  - dialog [ref=f1e14]:
+    - generic [ref=f1e15]:
+      - generic [ref=f1e16]:
+        - heading "Galaxy Chart" [level=2] [ref=f1e17]
+        - status [ref=f1e18]
+        - generic [ref=f1e19]:
+          - button "Clear route" [ref=f1e20] [cursor=pointer]
+          - generic [ref=f1e21]:
+            - button "Autopilot unavailable — plot a destination first." [disabled] [ref=f1e22] [cursor=pointer]: Autopilot
+            - button "Close galaxy chart" [ref=f1e23] [cursor=pointer]: ×
+      - paragraph [ref=f1e24]: Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashed gold lines are one-way Lamplighter hub routes. Click a system to plot a route. M or Escape closes.
+      - generic [ref=f1e25]:
+        - generic [ref=f1e26]: Destination
+        - combobox "Destination" [ref=f1e27] [cursor=pointer]:
+          - option "Plot a system" [selected]
+          - option "Aegis"
+          - option "Alder's Rest"
+          - option "Annex Claim"
+          - option "Applebough"
+          - option "Appraisal"
+          - option "Archive"
+          - option "Arrears"
+          - option "Ashfall"
+          - option "Assay"
+          - option "Bastion"
+          - option "Bramblehome"
+          - option "Bulwark"
+          - option "Canaan"
+          - option "Census"
+          - option "Cinder"
+          - option "Citadel"
+          - option "Claim 44"
+          - option "Claim Nine"
+          - option "Cloverfield"
+          - option "Compound"
+          - option "Core Sample"
+          - option "Cradle"
+          - option "Cutter"
+          - option "Default"
+          - option "Drift"
+          - option "Due"
+          - option "Ember"
+          - option "Faint"
+          - option "Filing 12-C"
+          - option "Filing Seven"
+          - option "Fort Liron"
+          - option "Fort Merit"
+          - option "Freehold Drift"
+          - option "Garrison Nine"
+          - option "Gavel"
+          - option "Gone"
+          - option "Goodrest"
+          - option "Granary"
+          - option "Gridmark"
+          - option "Hammerfall"
+          - option "Harvest Home"
+          - option "Haven"
+          - option "Hearth"
+          - option "Hollow Reach"
+          - option "Honorhold"
+          - option "Husk"
+          - option "Interest"
+          - option "Ironhold"
+          - option "Kinhold"
+          - option "Longtable"
+          - option "Lot Seven"
+          - option "Margin Call"
+          - option "Meadowlark"
+          - option "Mercy"
+          - option "Meridian"
+          - option "Moss"
+          - option "Motherlode"
+          - option "Nowhere"
+          - option "Oathkeep"
+          - option "Palisade"
+          - option "Paydirt"
+          - option "Plat Twelve"
+          - option "Principal"
+          - option "Prospect"
+          - option "Provenance"
+          - option "Psalm"
+          - option "Rampart"
+          - option "Reckoning"
+          - option "Reserve"
+          - option "Saltbox"
+          - option "Sentry"
+          - option "Shieldwall"
+          - option "Showcase"
+          - option "Sorrow"
+          - option "Stakedown"
+          - option "Stakeside"
+          - option "Steelhaven"
+          - option "Stray"
+          - option "Survey"
+          - option "Survey Delta"
+          - option "Sweetwater"
+          - option "Tallow"
+          - option "Tamsin's Rest"
+          - option "The Auction"
+          - option "The Black Station"
+          - option "The Further Shore"
+          - option "The Hush"
+          - option "The Last Beacon"
+          - option "The Redmarch"
+          - option "The Stolen Womb"
+          - option "The Veil"
+          - option "The Verge"
+          - option "The Ward"
+          - option "Tithemark"
+          - option "Toll"
+          - option "Tumble"
+          - option "Vanguard"
+          - option "Veridian Reach"
+          - option "Vigil"
+          - option "Wellspring"
+          - option "Wisp"
+      - generic [ref=f1e28]:
+        - generic [ref=f1e29]: Faction
+        - combobox "Faction" [ref=f1e30] [cursor=pointer]:
+          - option "All" [selected]
+          - option "Freehold Compact"
+          - option "Red Ledger"
+          - option "Veridian Combine"
+          - option "Hollow Reach"
+          - option "Independent"
+          - option "Ferrous Hegemony"
+          - option "Gilded Chain"
+          - option "Beautiful Ones"
+          - option "Congregation of the Further Shore"
+          - option "The Assembly"
+          - option "Lamplighter Guild"
+          - option "Unknowables"
+        - generic [ref=f1e31]: Standing
+        - combobox "Standing" [ref=f1e32] [cursor=pointer]:
+          - option "All" [selected]
+          - option "Sworn"
+          - option "Trusted"
+          - option "Known"
+          - option "Stranger"
+          - option "Suspect"
+          - option "Marked"
+          - option "Unknown"
+        - generic [ref=f1e33]:
+          - button "Zoom in" [ref=f1e34] [cursor=pointer]
+          - button "Zoom out" [ref=f1e35] [cursor=pointer]
+          - button "Reset view" [ref=f1e36] [cursor=pointer]
+      - img "Map of 101 rim systems and their gate connections" [ref=f1e37]:
+        - generic [ref=f1e200]:
+          - generic [ref=f1e201] [cursor=pointer]
+          - generic [ref=f1e202] [cursor=pointer]
+          - generic [ref=f1e203] [cursor=pointer]
+          - generic [ref=f1e204] [cursor=pointer]
+          - generic [ref=f1e205] [cursor=pointer]
+          - generic [ref=f1e206] [cursor=pointer]
+          - generic [ref=f1e207] [cursor=pointer]
+          - generic [ref=f1e208] [cursor=pointer]
+          - generic [ref=f1e209] [cursor=pointer]
+          - generic [ref=f1e210] [cursor=pointer]
+          - generic [ref=f1e211] [cursor=pointer]
+          - generic [ref=f1e212] [cursor=pointer]
+          - generic [ref=f1e213] [cursor=pointer]
+          - generic [ref=f1e214] [cursor=pointer]
+          - generic [ref=f1e215] [cursor=pointer]
+          - generic [ref=f1e216] [cursor=pointer]
+          - generic [ref=f1e217] [cursor=pointer]
+          - generic [ref=f1e218] [cursor=pointer]
+          - generic [ref=f1e219] [cursor=pointer]
+          - generic [ref=f1e220] [cursor=pointer]
+          - generic [ref=f1e221] [cursor=pointer]
+          - generic [ref=f1e222] [cursor=pointer]
+          - generic [ref=f1e223] [cursor=pointer]
+          - generic [ref=f1e224] [cursor=pointer]
+          - generic [ref=f1e225] [cursor=pointer]
+          - generic [ref=f1e226] [cursor=pointer]
+          - generic [ref=f1e227] [cursor=pointer]
+          - generic [ref=f1e228] [cursor=pointer]
+          - generic [ref=f1e229] [cursor=pointer]
+          - generic [ref=f1e230] [cursor=pointer]
+          - generic [ref=f1e231] [cursor=pointer]
+          - generic [ref=f1e232] [cursor=pointer]
+          - generic [ref=f1e233] [cursor=pointer]
+          - generic [ref=f1e234] [cursor=pointer]
+          - generic [ref=f1e235] [cursor=pointer]
+          - generic [ref=f1e236] [cursor=pointer]
+          - generic [ref=f1e237] [cursor=pointer]
+          - generic [ref=f1e238] [cursor=pointer]
+          - generic [ref=f1e239] [cursor=pointer]
+          - generic [ref=f1e240] [cursor=pointer]
+          - generic [ref=f1e241] [cursor=pointer]
+          - generic [ref=f1e242] [cursor=pointer]
+          - generic [ref=f1e243] [cursor=pointer]
+          - generic [ref=f1e244] [cursor=pointer]
+          - generic [ref=f1e245] [cursor=pointer]
+          - generic [ref=f1e246] [cursor=pointer]
+          - generic [ref=f1e247] [cursor=pointer]
+          - generic [ref=f1e248] [cursor=pointer]
+          - generic [ref=f1e249] [cursor=pointer]
+          - generic [ref=f1e250] [cursor=pointer]
+          - generic [ref=f1e251] [cursor=pointer]
+          - generic [ref=f1e252] [cursor=pointer]
+          - generic [ref=f1e253] [cursor=pointer]
+          - generic [ref=f1e254] [cursor=pointer]
+          - generic [ref=f1e255] [cursor=pointer]
+          - generic [ref=f1e256] [cursor=pointer]
+          - generic [ref=f1e257] [cursor=pointer]
+          - generic [ref=f1e258] [cursor=pointer]
+          - generic [ref=f1e259] [cursor=pointer]
+          - generic [ref=f1e260] [cursor=pointer]
+          - generic [ref=f1e261] [cursor=pointer]
+          - generic [ref=f1e262] [cursor=pointer]
+          - generic [ref=f1e263] [cursor=pointer]
+          - generic [ref=f1e264] [cursor=pointer]
+          - generic [ref=f1e265] [cursor=pointer]
+          - generic [ref=f1e266] [cursor=pointer]
+          - generic [ref=f1e267] [cursor=pointer]
+          - generic [ref=f1e268] [cursor=pointer]
+          - generic [ref=f1e269] [cursor=pointer]
+          - generic [ref=f1e270] [cursor=pointer]
+          - generic [ref=f1e271] [cursor=pointer]
+          - generic [ref=f1e272] [cursor=pointer]
+          - generic [ref=f1e273] [cursor=pointer]
+          - generic [ref=f1e274] [cursor=pointer]
+          - generic [ref=f1e275] [cursor=pointer]
+          - generic [ref=f1e276] [cursor=pointer]
+          - generic [ref=f1e277] [cursor=pointer]
+          - generic [ref=f1e278] [cursor=pointer]
+          - generic [ref=f1e279] [cursor=pointer]
+          - generic [ref=f1e280] [cursor=pointer]
+          - generic [ref=f1e281] [cursor=pointer]
+          - generic [ref=f1e282] [cursor=pointer]
+          - generic [ref=f1e283] [cursor=pointer]
+          - generic [ref=f1e284] [cursor=pointer]
+          - generic [ref=f1e285] [cursor=pointer]
+          - generic [ref=f1e286] [cursor=pointer]
+          - generic [ref=f1e287] [cursor=pointer]
+          - generic [ref=f1e288] [cursor=pointer]
+          - generic [ref=f1e289] [cursor=pointer]
+          - generic [ref=f1e290] [cursor=pointer]
+          - generic [ref=f1e291] [cursor=pointer]
+          - generic [ref=f1e292] [cursor=pointer]
+          - generic [ref=f1e293] [cursor=pointer]
+          - generic [ref=f1e294] [cursor=pointer]
+          - generic [ref=f1e295] [cursor=pointer]
+          - generic [ref=f1e296] [cursor=pointer]
+          - generic [ref=f1e297] [cursor=pointer]
+          - generic [ref=f1e298] [cursor=pointer]
+          - generic [ref=f1e299] [cursor=pointer]
+          - generic [ref=f1e300] [cursor=pointer]
+          - generic [ref=f1e301] [cursor=pointer]
+        - generic [ref=f1e302]:
+          - generic [ref=f1e303] [cursor=pointer]: Freehold Drift
+          - generic [ref=f1e304] [cursor=pointer]: Veridian Reach
+          - generic [ref=f1e305] [cursor=pointer]: The Redmarch
+          - generic [ref=f1e306] [cursor=pointer]: Hollow Reach
+          - generic [ref=f1e307] [cursor=pointer]: The Hush
+          - generic [ref=f1e308] [cursor=pointer]: The Verge
+          - generic [ref=f1e309] [cursor=pointer]: The Veil
+          - generic [ref=f1e310] [cursor=pointer]: Bastion
+          - generic [ref=f1e311] [cursor=pointer]: The Auction
+          - generic [ref=f1e312] [cursor=pointer]: The Stolen Womb
+          - generic [ref=f1e313] [cursor=pointer]: The Black Station
+          - generic [ref=f1e314] [cursor=pointer]: The Last Beacon
+      - generic [ref=f1e315]:
+        - generic [ref=f1e316]: gate
+        - generic [ref=f1e317]: hub route
+        - generic [ref=f1e318]: hub
+        - generic [ref=f1e319]: plotted route
+  - generic:
+    - status
+    - generic:
+      - generic: T
+      - generic: Target
+    - generic:
+      - generic:
+        - generic:
+          - generic: FORE
+          - generic: AFT
+      - generic: SCREEN
+      - generic: SHELL
+      - generic: HULL
+      - generic:
+        - generic: SPD
+        - generic: 27u/s
+      - generic:
+        - generic: WPN
+        - generic: 1 · Energy cannon
+    - generic:
+      - generic:
+        - generic: Plant
+        - generic: STRAIN
+        - generic:
+          - generic: ENGINE
+          - generic: OK
+      - generic:
+        - generic: Flight
+        - generic: THR
+        - generic:
+          - generic: BURN
+          - generic: READY
+        - generic:
+          - generic: DRIFT
+          - generic: READY
+      - generic:
+        - generic: Heat
+        - generic:
+          - generic: STRAIN
+          - generic: 0%
+      - generic:
+        - generic: PWR
+        - generic:
+          - generic: Bio
+          - generic: PAINED
+          - generic: HUNGER
+          - generic: WOUNDS
+          - generic:
+            - generic: ECHOES
+            - generic: "0"
+        - generic:
+          - generic: POS
+          - generic: Freehold Drift
+          - generic: X 80 Y 40 Z -1247
+    - generic:
+      - generic: Manifest
+      - generic:
+        - generic: UU
+        - generic: "350"
+      - generic:
+        - generic: FEAR
+        - generic: "0"
+      - generic:
+        - generic: CARGO
+        - generic: 0/20
+    - generic:
+      - button "CONTROLS ▾" [ref=f1e13] [cursor=pointer]
+      - generic:
+        - list:
+          - listitem: Mouse — steer toward reticle
+          - listitem: W/S — vertical strafe (W = up)
+          - listitem: A/D — lateral strafe (D = right)
+          - listitem: Q/E — roll left / right (set your up)
+          - listitem: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem: Space — afterburner
+          - listitem: Shift (hold) — vector-hold drift
+          - listitem: LMB (hold) — fire
+          - listitem: "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic"
+          - listitem: T — cycle target
+          - listitem: V — lock under reticle
+          - listitem: N — automine locked asteroid
+          - listitem: H — hail · J — dock · C — camera (chase / third / first-person)
+          - listitem: X — match lock speed
+          - listitem: K — engine on lock (after shields)
+          - listitem: G — cycle hub route at a Lamplighter junction
+          - listitem: M — galaxy chart
+          - listitem: L — berth records (save/load)
+          - listitem: P — pause

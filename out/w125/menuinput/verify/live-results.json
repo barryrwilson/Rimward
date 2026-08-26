@@ -1,0 +1,40 @@
+{
+  "port": 5178,
+  "cdp": 9432,
+  "formulaProbe": "FORMULA PROBE OK",
+  "consoleErrors": [],
+  "dock": {
+    "station": "Freehold Landing",
+    "digit5": { "service": "REPAIR BAYS", "weaponGroup": 1, "wpnHud": "1 · Energy cannon" },
+    "digit4": { "service": "FEED & TEND", "weaponGroup": 1, "wpnHud": "1 · Energy cannon" },
+    "digit0": { "service": "SHIPYARD", "weaponGroup": 1 },
+    "digit9": { "service": "STANDING", "weaponGroup": 1 },
+    "digit8": { "service": "Launch", "dockedAfter": false, "weaponGroup": 1 }
+  },
+  "openSpace": {
+    "digit2": { "weaponGroup": 2, "wpnHud": "2 · Disruptor" },
+    "digit3": { "weaponGroup": 3, "wpnHud": "3 · Mining laser Mk I" },
+    "digit4": { "weaponGroup": 4, "wpnHud": "4 · —" },
+    "digit5": { "weaponGroup": 5, "wpnHud": "5 · Psionic bolt" },
+    "digit1": { "weaponGroup": 1, "wpnHud": "1 · Energy cannon" }
+  },
+  "overlays": {
+    "chart": { "chartOpen": true, "digit5weaponGroup": 1, "closed": true },
+    "berth": { "berthOpen": true, "digit5weaponGroup": 1, "closed": true },
+    "settings": { "settingsVisible": true, "digit5weaponGroup": 1, "closed": true },
+    "pause": { "paused": true, "digit5weaponGroup": 1, "closedWithKeyP": true }
+  },
+  "hail": {
+    "playerH": "no card (rec-11 targeted)",
+    "emittedCard": "HAIL — Ninth Tooth [1] Let them go [2] Keep firing",
+    "digit1": { "resolved": true, "hailOpenAfter": false, "weaponGroup": 1 }
+  },
+  "directAssign": {
+    "weaponGroup": 2,
+    "wpnHudLive": "2 · Disruptor"
+  },
+  "scopeDiff": {
+    "controls.js": "PR1 skip",
+    "overlay-policy.js": "unrelated sibling berthHeld/setBerthHold in working tree; PR1 did not import those"
+  }
+}

@@ -4921,6 +4921,9 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   Kit mutate still omit. Aim-glass
   gauges stay off.
   OPEN: none named.
+  CLOSED by Wave 123: leftover census
+  (remaining PHY CONSUME + remaining
+  AST CONSUME + remaining FX CONSUME).
   VERIFY: NAV leftover verifier CLEAN
   (`out/w122/navrest/verify/`); designer
   CLEAN. TGT leftover verifier CLEAN
@@ -4934,6 +4937,435 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/Tgt06RemainingTgtDesign.md`,
   `docs/Rep06RemainingRepDesign.md`,
   `out/w122/`.
+- Wave 123 (2026-08-25): leftover census
+  after Wave 122 OPEN none. Markdown
+  only. No `src/`.
+  Remaining PHY
+  (`docs/Phy06RemainingPhyDesign.md`):
+  leftover CONSUME. Named serial none.
+  PHY-01 bounce/slide live. PHY-02
+  keep-out + two-sample 20 u mid +
+  frame hold live. PHY-03 sun heat/kill
+  live. PHY-05 patrol heavy pad-home
+  heal live. PHY-04 80 u skippable.
+  Remaining AST
+  (`docs/Ast03RemainingAstDesign.md`):
+  leftover CONSUME. Named serial none.
+  Kepler-lite belts / work sector /
+  `fieldOre` / group-3 cue live. Rock
+  MATCH rest-frame + MATCH lamp live.
+  `id === index` stays.
+  Remaining FX
+  (`docs/Fx02RemainingFxDesign.md`):
+  leftover CONSUME. Named serial none.
+  Wave 54 first pass live. Recoil +
+  marks live. Hull-local ripple live.
+  Scrape `spawnHitFx` live. Muzzle
+  leftover stays CONSUME.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: none named.
+  CLOSED by Wave 124: playtest inbox
+  briefs (CTL-03 berth hold + AI-05
+  starter grace + CTL-04 menu digits).
+  VERIFY: PHY leftover verifier CLEAN
+  (`out/w123/phyrest/verify/`); designer
+  CLEAN. AST leftover verifier CLEAN
+  (`out/w123/astrest/verify/`); designer
+  CLEAN. FX leftover verifier CLEAN
+  (`out/w123/fxrest/verify/`); designer
+  CLEAN. No `src/` this wave. Known
+  REDMARCH `castMatches` flake is not
+  this write-set.
+  FILES: `docs/Phy06RemainingPhyDesign.md`,
+  `docs/Ast03RemainingAstDesign.md`,
+  `docs/Fx02RemainingFxDesign.md`,
+  `out/w123/`.
+- Wave 124 (2026-08-25): playtest inbox
+  briefs after Wave 123 OPEN none.
+  Markdown only. No `src/`.
+  CTL-03 Berth freeze
+  (`docs/Ctl03BerthFreezeDesign.md`):
+  leftover REAL. Named serial PR1.
+  Session `berthHold` is not KeyP.
+  LOAD stays possible. Interrupt desk
+  stays; SAVE/LOAD stay; RESUME below
+  slots. Hail/chart still do not pause.
+  AI-05 starter grace
+  (`docs/Ai05StarterGraceDesign.md`):
+  leftover REAL. Named serial PR1.
+  Hop 60 s stays. Greenhand/Beautiful
+  extra 180 s in start system. Marked /
+  ledgerDebt / drifter 0 extra. Death
+  calm 90 s + re-roll cold. Dresk not
+  cancelled. Home-berth bubble PR2.
+  CTL-04 menu digits
+  (`docs/Ctl04MenuInputDesign.md`):
+  leftover REAL. Named serial PR1.
+  Later write-set `controls.js` only.
+  Digit1–5 skip while docked / overlay
+  owns digits. Digit 0/8/9 stay station.
+  In-flight 1–5 stay WPN. `fireHeld`
+  docked skip is PR2.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: CTL-03 PR1; AI-05 PR1;
+  CTL-04 PR1.
+  CLOSED by Wave 125: CTL-03 PR1
+  + AI-05 PR1 + CTL-04 PR1.
+  VERIFY: berth freeze verifier CLEAN
+  (`out/w124/berthfreeze/verify/`);
+  designer CLEAN after remainder lock.
+  Starter grace verifier CLEAN
+  (`out/w124/startergrace/verify/`);
+  designer CLEAN. Menu input verifier
+  CLEAN (`out/w124/menuinput/verify/`);
+  designer CLEAN. No `src/` this wave.
+  Known REDMARCH `castMatches` flake
+  is not this write-set.
+  FILES: `docs/Ctl03BerthFreezeDesign.md`,
+  `docs/Ai05StarterGraceDesign.md`,
+  `docs/Ctl04MenuInputDesign.md`,
+  `out/w124/`.
+- Wave 125 (2026-08-25): first impl of Wave 124
+  OPEN serials. Src + named boot pins.
+  CTL-03 PR1 berth hold
+  (`docs/Ctl03BerthFreezeDesign.md`):
+  session `ctx.flags.berthHold` is not KeyP.
+  Readers freeze player flight, AP steer
+  (helm skip like chart), gate emit, jump
+  charge, sun/NPC DPS vs player. Distant
+  traffic keeps. Interrupt keeps SAVE/LOAD
+  + named RESUME below slots. LOAD clears
+  hold same click. Hint names hold, not Pause.
+  AI-05 PR1 starter grace
+  (`docs/Ai05StarterGraceDesign.md`):
+  Greenhand/Beautiful extra 180 s in start
+  system. Marked / ledgerDebt / drifter 0
+  extra. Hop 60 s stays. Death remaining
+  90 s of dt (not absolute world.time).
+  Huge hop fail-closes. Dresk extra bypass;
+  hop + death honor. Scratch still acquires
+  that hull. Named boot pin
+  `expireSessionDeathCalm` + `world.time`
+  180 TEST SETUP on demand/ace legs.
+  CTL-04 PR1 menu digits
+  (`docs/Ctl04MenuInputDesign.md`):
+  Digit1–5 skip `weaponGroup` while docked /
+  hail / overlay owns digits. Open space
+  1–5 stay WPN. Digit 0/8/9 stay station.
+  `fireHeld` docked skip still PR2.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: CTL-03 PR2 stills optional;
+  AI-05 PR2 home-berth bubble optional;
+  CTL-04 PR2 fireHeld optional.
+  CLOSED by Wave 126: playtest inbox
+  briefs (Agent API + Hail01 demand +
+  HUD-06 home marker).
+  VERIFY: berth hold live Playwright CLEAN
+  (`out/w125/berthfreeze/verify/`); designer
+  CLEAN. Starter-grace node probe CLEAN
+  (`out/w125/startergrace/verify/`); no chrome.
+  Menu-digit live Playwright CLEAN
+  (`out/w125/menuinput/verify/`); designer
+  CLEAN. `npm run test:boot` BOOT TEST PASS
+  (`out/w125/boot-test-pass.log`).
+  FILES: `src/core/ctx.js`,
+  `src/game/save.js`,
+  `src/systems/overlay-policy.js`,
+  `src/systems/ship.js`,
+  `src/systems/combat.js`,
+  `src/systems/gate.js`,
+  `src/game/jump.js`,
+  `src/game/autopilot.js`,
+  `src/main.js`,
+  `src/systems/npc.js`,
+  `src/systems/controls.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Ctl03BerthFreezeDesign.md`,
+  `docs/Ai05StarterGraceDesign.md`,
+  `docs/Ctl04MenuInputDesign.md`,
+  `out/w125/`.
+- Wave 126 (2026-08-26): playtest inbox
+  briefs after Wave 125 OPEN optional
+  PR2s (not stolen). Markdown only.
+  No `src/`.
+  Agent API
+  (`docs/AgentApiDesign.md`):
+  leftover REAL. Named serial PR1
+  (observe handle). `window.rimward`
+  absent. `__ctx` stays debug. Empty
+  `e.code` drops. No teleport. No
+  in-repo LLM. No HTTP in PR1. No
+  third helm. PR2–PR6 named later.
+  Hail01 demand lifecycle
+  (`docs/Hail01DemandLifecycleDesign.md`):
+  leftover REAL. Named serial PR1.
+  HEAVE-TO is hunt telegraph with no
+  ship name. Wave 30 card in 600 u.
+  Illyx is ace duel, not demand. Jump
+  hides card with no `hailClosed`.
+  Later write-set hail.js + npc.js.
+  HUD-06 home-station marker
+  (`docs/Hud06HomeMarkerDesign.md`):
+  leftover REAL. Named serial PR1.
+  TGT edge arrow live. Station mark
+  absent. POS is XYZ only. Later
+  write-set hud.js + hud.css only.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: Agent API PR1; Hail01 PR1;
+  HUD-06 PR1. CTL-03 / AI-05 / CTL-04
+  PR2 still optional.
+  CLOSED by Wave 127: Agent API PR1
+  + Hail01 PR1 + HUD-06 PR1.
+  VERIFY: Agent API verifier CLEAN
+  (`out/w126/agentapi/verify/`);
+  designer CLEAN
+  (`out/w126/designer/agentapi-ui-audit.md`).
+  Hail01 verifier CLEAN
+  (`out/w126/demand/verify/`);
+  designer OPEN tracks live leftover
+  until later PR1 (freeze CLEAN).
+  HUD-06 verifier CLEAN
+  (`out/w126/homemarker/verify/`);
+  designer CLEAN. No `src/` this wave.
+  Known REDMARCH `castMatches` flake
+  is not this write-set.
+  FILES: `docs/AgentApiDesign.md`,
+  `docs/Hail01DemandLifecycleDesign.md`,
+  `docs/Hud06HomeMarkerDesign.md`,
+  `out/w126/`.
+- Wave 127 (2026-08-26): first impl of Wave 126
+  OPEN serials. Src + named boot pins.
+  Agent API PR1 observe handle
+  (`docs/AgentApiDesign.md`):
+  `window.rimward` v1 `{ observe, act,
+  enable, disable }`. Session `ctx.agent`.
+  `?agent=1` sets optIn (no badge).
+  Forbidden first. No HTTP. No third helm.
+  No persist. `__ctx` stays debug.
+  Hail01 PR1 demand lifecycle
+  (`docs/Hail01DemandLifecycleDesign.md`):
+  named source; 20 s `demandExpiresAt`;
+  Wave 30 card; dock/jump/expire/void
+  outcomes; pirate-vs-player HEAVE-TO
+  suppressed in acquire bubble; Illyx
+  stays duel; finite pay debit.
+  HUD-06 PR1 home-station marker
+  (`docs/Hud06HomeMarkerDesign.md`):
+  square pip + chevron inset 108; POS
+  HOME distance; hide dock/jump/hail/
+  chart/berth; station lock hides glass
+  only. `hud.js` + `hud.css` only.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: Agent API PR2 intents; Hail01
+  PR2 stills optional; HUD-06 PR2
+  stills optional. CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  CLOSED by Wave 128: Hail02 PR1
+  + HUD-07 PR1 + NAV-09 PR1 briefs.
+  VERIFY: Agent API first verify
+  BUGS_FOUND (nested `bootFreshHarness`
+  stale handle); re-dispatch first-install
+  + live `__ctx`. Verifier2 CLEAN
+  (`out/w127/agentapi/verify2/`); no
+  designer (PR1 has no UI). HUD-06
+  live verifier CLEAN
+  (`out/w127/homemarker/verify/`);
+  designer CLEAN
+  (`out/w127/designer/homemarker-ui-audit.md`).
+  Hail01 live verifier CLEAN
+  (`out/w127/demand/verify/`); designer
+  CLEAN (`out/w127/designer/demand-ui-audit.md`
+  + r2). Boot pin re-dispatch: OPEN
+  toast + HEAVE suppress; verifier2
+  CLEAN (`out/w127/demand/verify2/`
+  and `out/w127/demand/verify-r2/`).
+  `npm run test:boot` BOOT TEST PASS
+  (`out/w127/boot-test-pass.log`).
+  FILES: `src/game/agent-schema.js`,
+  `src/game/agent-observe.js`,
+  `src/systems/agent-api.js`,
+  `src/core/ctx.js`,
+  `src/main.js`,
+  `src/systems/hail.js`,
+  `src/systems/npc.js`,
+  `src/systems/hud.js`,
+  `src/ui/hud.css`,
+  `scripts/boot-test.mjs`,
+  `docs/AgentApiDesign.md`,
+  `docs/Hail01DemandLifecycleDesign.md`,
+  `docs/Hud06HomeMarkerDesign.md`,
+  `out/w127/`.
+- Wave 128 (2026-08-26): playtest inbox
+  briefs after Wave 127 OPEN optional
+  PR2s (not stolen). Markdown only.
+  No `src/`.
+  Hail02 miss-feedback
+  (`docs/Hail02MissFeedbackDesign.md`):
+  leftover REAL. Named serial PR1.
+  Silent KeyH and silent KeyJ. Named
+  HUD-04 toast `{name} — verb reason`.
+  Later write-set hail.js + HUD
+  `toastForEvent` listeners only. No
+  fake card. No Fear-as-feedback.
+  HUD-07 deconfliction
+  (`docs/Hud07DeconflictionDesign.md`):
+  leftover REAL. Named serial PR1.
+  Four protected regions. Duplicate
+  lock names + RANGE/LEAD on aim
+  column. Later write-set hud.js +
+  hud.css only. 80 px hub stays empty.
+  HUD-06 inset 108 stays.
+  NAV-09 chart readability
+  (`docs/Nav09ChartReadabilityDesign.md`):
+  leftover REAL. Named serial PR1.
+  101 systems one viewBox. Dest
+  `<select id="rw-galaxy-dest">` stays.
+  Later write-set galaxychart.js.
+  Zoom/pan session. Filter. Itinerary.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: Hail02 PR1; HUD-07 PR1;
+  NAV-09 PR1. Agent API PR2 intents;
+  Hail01 / HUD-06 / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  CLOSED by Wave 129: Hail02 PR1
+  + HUD-07 PR1 + NAV-09 PR1.
+  VERIFY: Hail02 verifier CLEAN
+  (`out/w128/hailmiss/verify/`);
+  designer CLEAN
+  (`out/w128/designer/hailmiss-ui-audit.md`).
+  HUD-07 verifier CLEAN
+  (`out/w128/deconflict/verify/`);
+  designer CLEAN
+  (`out/w128/designer/deconflict-ui-audit.md`).
+  NAV-09 verifier CLEAN
+  (`out/w128/chartread/verify/`);
+  designer CLEAN
+  (`out/w128/designer/chartread-ui-audit.md`).
+  No `src/` this wave. Known REDMARCH
+  `castMatches` flake is not this
+  write-set.
+  FILES: `docs/Hail02MissFeedbackDesign.md`,
+  `docs/Hud07DeconflictionDesign.md`,
+  `docs/Nav09ChartReadabilityDesign.md`,
+  `out/w128/`.
+- Wave 129 (2026-08-26): first impl of Wave 128
+  OPEN serials. Src + named boot pins.
+  Hail02 PR1 miss-feedback
+  (`docs/Hail02MissFeedbackDesign.md`):
+  named KeyH/KeyJ miss; `'hailMiss'`
+  primitives; HUD-04 toast; no fake
+  card; no Fear; no pause.
+  HUD-07 PR1 deconflict
+  (`docs/Hud07DeconflictionDesign.md`):
+  yield duplicate name / RANGE+LEAD
+  words / overlapping labels; cruise
+  quiet those words; hide-not-delete;
+  hub empty; HOME 108 stays.
+  NAV-09 PR1 chart readability
+  (`docs/Nav09ChartReadabilityDesign.md`):
+  session zoom/pan + filters + zoom
+  labels; dest select kept; itinerary
+  as leg rows (last hop is not
+  `unknown` on a live gate).
+  OPEN: Agent API PR2 intents;
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / CTL-03 / AI-05 / CTL-04
+  PR2 still optional.
+  CLOSED by Wave 130: playtest inbox
+  briefs (NAV-10 dock approach +
+  TGT-07 combat cycle + MSN-04 job
+  identity).
+  VERIFY: Hail02 verifier CLEAN
+  (`out/w129/hailmiss/verify/`);
+  designer CLEAN
+  (`out/w129/designer/hailmiss-ui-audit.md`).
+  HUD-07 verifier CLEAN
+  (`out/w129/deconflict/verify/`);
+  designer CLEAN
+  (`out/w129/designer/deconflict-ui-audit.md`).
+  NAV-09 verifier2 CLEAN
+  (`out/w129/chartread/verify2/`);
+  designer CLEAN
+  (`out/w129/designer/chartread-ui-audit.md`
+  + r2). First NAV-09 verify
+  BUGS_FOUND (last hop `unknown`);
+  re-dispatch leg rows. Known
+  REDMARCH `castMatches` flake is
+  not this write-set.
+  FILES: `src/systems/hail.js`,
+  `src/systems/hud.js`,
+  `src/core/ctx.js`,
+  `src/systems/galaxychart.js`,
+  `src/ui/hud.css`,
+  `scripts/boot-test.mjs`,
+  `docs/Hail02MissFeedbackDesign.md`,
+  `docs/Hud07DeconflictionDesign.md`,
+  `docs/Nav09ChartReadabilityDesign.md`,
+  `out/w129/`.
+- Wave 130 (2026-08-26): playtest inbox
+  briefs after Wave 129 OPEN optional
+  PR2s (not stolen). Markdown only.
+  No `src/`.
+  NAV-10 dock approach
+  (`docs/Nav10DockApproachDesign.md`):
+  leftover REAL. Named serial PR1.
+  `J — Dock` in zone 45. No SLOW cue.
+  No speed gate. 2× snap zeros speed.
+  PHY-01 bounce stays. Deputize HUD
+  cue + self-only `.rw-slow-lamp`.
+  Do not reuse MATCH. Do not put
+  SLOW on `tgtSpeed`. KeyJ stays tap.
+  Later write-set `hud.js` + `hud.css`.
+  TGT-07 combat cycle
+  (`docs/Tgt07CombatCycleDesign.md`):
+  leftover REAL. Named serial PR1.
+  `cycleTarget` sorts `d2` only. No
+  attacker-lock key. One law:
+  hostiles-first then range on KeyT
+  when an in-envelope candidate has
+  `ai.intent === true`. Later
+  write-set `controls.js` `cycleTarget`.
+  MSN-04 job identity
+  (`docs/Msn04JobDedupDesign.md`):
+  leftover REAL. Named serial PR1.
+  Two mining slots can paint the same
+  `Mine Raw ore` + UU. Distinct ids
+  do not close it. PR1 mining-only
+  exclude/omit/heal. Digit 2 stays
+  Jobs. Ore-scanner guidance stays
+  inbox. Unique-four stay.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: NAV-10 PR1; TGT-07 PR1;
+  MSN-04 PR1. Agent API PR2 intents;
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / CTL-03 / AI-05 / CTL-04
+  PR2 still optional.
+  VERIFY: NAV-10 verifier2 CLEAN
+  (`out/w130/dockapproach/verify/`);
+  designer CLEAN after MATCH freeze
+  (`out/w130/designer/dockapproach-ui-audit.md`).
+  TGT-07 verifier CLEAN
+  (`out/w130/tgtcycle/verify/`);
+  designer CLEAN
+  (`out/w130/designer/tgtcycle-ui-audit.md`).
+  MSN-04 verifier CLEAN
+  (`out/w130/jobdedup/verify/`);
+  designer CLEAN
+  (`out/w130/designer/jobdedup-ui-audit.md`).
+  No `src/` this wave. Known REDMARCH
+  `castMatches` flake is not this
+  write-set.
+  FILES: `docs/Nav10DockApproachDesign.md`,
+  `docs/Tgt07CombatCycleDesign.md`,
+  `docs/Msn04JobDedupDesign.md`,
+  `out/w130/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

@@ -1,0 +1,46 @@
+{
+  "vite": "http://127.0.0.1:5174/",
+  "origin": "Digit1 Freehold Greenhand after New Game confirm",
+  "currentSystem": "freehold",
+  "plot": {
+    "dest": "veridian",
+    "path": ["freehold", "veridian"],
+    "remaining": 1,
+    "status": "plotted"
+  },
+  "itineraryVeridian": [
+    "Veridian Reach — Veridian Combine — Stranger — gate — Stranger; pirate traffic 3"
+  ],
+  "hopCount": 1,
+  "hopsHaveUnknown": false,
+  "previousBugStillPresent": false,
+  "clearHidesItinerary": {
+    "hidden": true,
+    "ariaHidden": "true",
+    "hopCount": 0
+  },
+  "destId": "rw-galaxy-dest",
+  "destExistsAfterClear": true,
+  "zoom": {
+    "ids": ["rw-galaxy-zoom-in", "rw-galaxy-zoom-out", "rw-galaxy-zoom-reset"],
+    "copy": { "in": "Zoom in", "out": "Zoom out", "reset": "Reset view" },
+    "cssPx": {
+      "in": { "w": 68.625, "h": 24 },
+      "out": { "w": 75.28125, "h": 24 },
+      "reset": { "w": 88.59375, "h": 24 }
+    },
+    "fitViewBox": "665 367 1258 1006",
+    "viewBoxAfterZoomIn": "874.6666666666667 534.6666666666667 838.6666666666666 670.6666666666666"
+  },
+  "filters": {
+    "factionId": "rw-galaxy-filter-faction",
+    "standingId": "rw-galaxy-filter-standing",
+    "factionLabel": "Faction",
+    "standingLabel": "Standing"
+  },
+  "pausedDuringChart": false,
+  "chartSrcFlagsPausedAssign": false,
+  "chartSrcInnerHTML": false,
+  "consoleErrors": 0,
+  "consoleWarnings": 0
+}

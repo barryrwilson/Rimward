@@ -11,6 +11,7 @@ import { applyAvoidBias, appendSunBody } from '../systems/npc.js';
 import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
+import { berthHeld } from '../systems/overlay-policy.js';
 
 export const AP_STEER_BREAK = 0.65;
 
@@ -149,17 +150,23 @@ function scanEvents(ctx, type) {
   return null;
 }
 
+function helmSteerLatched(ctx) {
+  return (ctx.flags && ctx.flags.chartOpen === true) || berthHeld(ctx);
+}
+
 function inputBreak(ctx) {
   const input = ctx.input;
   if (!input) return '';
-  const chartOpen = ctx.flags && ctx.flags.chartOpen === true;
-  if (chartOpen) {
+  const held = berthHeld(ctx);
+  // Unlatch reticle so leftover hypot cannot cancel on close/RESUME.
+  if (helmSteerLatched(ctx)) {
     steerArmed = false;
   } else if (!steerArmed) {
     if (Math.hypot(input.steerX || 0, input.steerY || 0) < AP_STEER_BREAK) {
       steerArmed = true;
     }
   }
+  if (held) return '';
   if (input.strafeX || input.strafeY) return 'input';
   if (input.roll) return 'input';
   if (input.throttleHeld) return 'input';
@@ -217,7 +224,7 @@ export function tryEngage(ctx) {
   ap.reason = '';
   zeroCmd(ap);
   resetApproach();
-  steerArmed = ctx.flags && ctx.flags.chartOpen === true ? false : true;
+  steerArmed = helmSteerLatched(ctx) ? false : true;
   ctx.emit('autopilotEngaged', { dest: String(dest) });
   return '';
 }
@@ -385,7 +392,7 @@ function flyTick(ctx, dt) {
   const brk = inputBreak(ctx);
   if (brk) { disengage(ctx, brk); return; }
 
-  if ((ctx.flags && ctx.flags.paused) || (ctx.flags && ctx.flags.docked)) {
+  if ((ctx.flags && ctx.flags.paused) || (ctx.flags && ctx.flags.docked) || berthHeld(ctx)) {
     zeroCmd(ap);
     return;
   }

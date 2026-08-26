@@ -1,0 +1,94 @@
+- generic [active] [ref=e1]:
+  - dialog "RIMWARD title screen" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: A LIVING FRONTIER
+      - button "[1] CONTINUE" [ref=e7] [cursor=pointer]
+      - button "[2] NEW GAME" [ref=e8] [cursor=pointer]
+      - button "[3] MODELS" [ref=e9] [cursor=pointer]
+      - button "[4] SETTINGS" [ref=e10] [cursor=pointer]
+      - generic [ref=e11]: PRESS 1-4 OR CLICK
+  - generic:
+    - status
+    - generic:
+      - generic:
+        - generic:
+          - generic: FORE
+          - generic: AFT
+      - generic: SCREEN
+      - generic: SHELL
+      - generic: HULL
+      - generic:
+        - generic: SPD
+        - generic: 0u/s
+      - generic:
+        - generic: WPN
+        - generic: —
+    - generic:
+      - generic:
+        - generic: Plant
+        - generic: STRAIN
+        - generic:
+          - generic: ENGINE
+          - generic: OK
+      - generic:
+        - generic: Flight
+        - generic: THR
+        - generic:
+          - generic: BURN
+          - generic: READY
+        - generic:
+          - generic: DRIFT
+          - generic: READY
+      - generic:
+        - generic: Heat
+        - generic:
+          - generic: STRAIN
+          - generic: 0%
+      - generic:
+        - generic: PWR
+        - generic:
+          - generic: Bio
+          - generic: SERENE
+          - generic: HUNGER
+          - generic: WOUNDS
+          - generic:
+            - generic: ECHOES
+            - generic: "0"
+        - generic:
+          - generic: POS
+          - generic: —
+          - generic: —
+    - generic:
+      - generic: Manifest
+      - generic:
+        - generic: UU
+        - generic: "0"
+      - generic:
+        - generic: FEAR
+        - generic: "0"
+      - generic:
+        - generic: CARGO
+        - generic: 0/0
+    - generic:
+      - button "CONTROLS ▾" [ref=e12] [cursor=pointer]
+      - generic:
+        - list:
+          - listitem: Mouse — steer toward reticle
+          - listitem: W/S — vertical strafe (W = up)
+          - listitem: A/D — lateral strafe (D = right)
+          - listitem: Q/E — roll left / right (set your up)
+          - listitem: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem: Space — afterburner
+          - listitem: Shift (hold) — vector-hold drift
+          - listitem: LMB (hold) — fire
+          - listitem: "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic"
+          - listitem: T — cycle target
+          - listitem: V — lock under reticle
+          - listitem: N — automine locked asteroid
+          - listitem: H — hail · J — dock · C — camera (chase / third / first-person)
+          - listitem: X — match lock speed
+          - listitem: K — engine on lock (after shields)
+          - listitem: G — cycle hub route at a Lamplighter junction
+          - listitem: M — galaxy chart
+          - listitem: L — berth records (save/load)
+          - listitem: P — pause

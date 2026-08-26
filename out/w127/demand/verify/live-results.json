@@ -1,0 +1,190 @@
+{
+  "port": 5180,
+  "cdp": 9480,
+  "boot": {
+    "href": "http://127.0.0.1:5180/",
+    "hasCtx": true,
+    "origin": "greenhand",
+    "sys": "freehold",
+    "paused": false,
+    "docked": false,
+    "hailOpen": false,
+    "credits": 350,
+    "time": 0.30000000000000004,
+    "hailRootDisplay": null,
+    "hailText": "",
+    "toasts": [
+      "✦ A berth, a living ship, and no story yet.",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "homeExists": true,
+    "homeText": "HOMEFreehold Landing · 212u",
+    "homeHidden": false,
+    "shipCount": 0
+  },
+  "flows": {
+    "demandCard": {
+      "spawn": {
+        "ok": true,
+        "id": "w127-card-1787718121812-independent",
+        "demand": 80,
+        "credits": 500,
+        "speaker": "Vane Rook",
+        "used": {
+          "faction": "independent",
+          "classKey": "freighter",
+          "role": "trader"
+        },
+        "cloned": false
+      },
+      "hailOpen": true,
+      "hailText": "HAIL — Vane RookIndependent · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight",
+      "named": true,
+      "timer": false,
+      "pay": true,
+      "teeth": true,
+      "refuse": true
+    },
+    "announce": {
+      "toasts": [
+        "✦ A berth, a living ship, and no story yet.",
+        "Vane Rook — parley void. They fire.",
+        "★ They are breaking. First scare.",
+        "",
+        ""
+      ],
+      "named": false
+    },
+    "refused": {
+      "hailOpen": false,
+      "toasts": [
+        "✦ A berth, a living ship, and no story yet.",
+        "Vane Rook — parley void. They fire.",
+        "★ They are breaking. First scare.",
+        "Vane Rook — demand refused. They fire.",
+        ""
+      ],
+      "toast": true,
+      "demanding": {
+        "demanding": false,
+        "outcome": "refused"
+      }
+    },
+    "paid": {
+      "creditsBefore": 500,
+      "after": {
+        "demanding": false,
+        "outcome": "paid",
+        "credits": 420
+      },
+      "delta": 80,
+      "toast": true,
+      "hailOpen": false
+    },
+    "docked": {
+      "hailOpen": false,
+      "toasts": [
+        "Smart. Run along.",
+        "Vane Rook — tribute taken. They run.",
+        "Vane Rook — parley void. They fire.",
+        "Vane Rook — demand broken. You docked.",
+        "Heave to. Cargo or hull."
+      ],
+      "toast": true,
+      "ai": {
+        "demanding": false,
+        "outcome": "docked"
+      }
+    },
+    "jumped": {
+      "emit": {
+        "kept": 3
+      },
+      "hailOpen": false,
+      "toasts": [
+        "Vane Rook — demand dropped. You jumped.",
+        "Vane Rook — tribute taken. They run.",
+        "Vane Rook — parley void. They fire.",
+        "Vane Rook — demand broken. You docked.",
+        "Heave to. Cargo or hull."
+      ],
+      "toast": true,
+      "ai": {
+        "demanding": false,
+        "outcome": "jumped"
+      }
+    },
+    "expired": {
+      "hailOpen": false,
+      "toasts": [
+        "Vane Rook — demand dropped. You jumped.",
+        "Vane Rook — demand expired. They fire.",
+        "Vane Rook — parley void. They fire.",
+        "Vane Rook — demand broken. You docked.",
+        "Heave to. Cargo or hull."
+      ],
+      "toast": true,
+      "ai": {
+        "demanding": false,
+        "outcome": "expired"
+      }
+    },
+    "home": {
+      "docked": false,
+      "homeExists": true,
+      "homeText": "HOMEFreehold Landing · 393u",
+      "homeHidden": false
+    }
+  },
+  "npcProof": {
+    "expire": {
+      "demanding": false,
+      "outcome": "expired",
+      "last": []
+    },
+    "dock": {
+      "demanding": false,
+      "outcome": "docked"
+    },
+    "jump": {
+      "demanding": false,
+      "outcome": "jumped",
+      "hailOpen": false
+    },
+    "heave": {
+      "commSent": true,
+      "heaveTo": true,
+      "hailOpened": false
+    },
+    "ace": {
+      "commSent": false,
+      "payTribute": false,
+      "runLine": false,
+      "hailOpened": []
+    }
+  },
+  "consoleErrors": [],
+  "hailJsErrors": [],
+  "exceptions": [],
+  "consoleAll": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    }
+  ]
+}

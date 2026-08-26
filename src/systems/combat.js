@@ -9,6 +9,7 @@ import { spendMissileAmmo } from '../game/hangar.js';
 import { isLauncherId, isTurretId, LAUNCHER_IDS, TURRET_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { prefersEngine } from '../game/subsys-aim.js';
+import { berthHeld } from './overlay-policy.js';
 import {
   HULL_MARK_POOL,
   HULL_MARK_SIZE,
@@ -1783,6 +1784,7 @@ export function initCombat(ctx) {
   }
 
   function testPlayerHit(p, now, player, playerObj) {
+    if (berthHeld(ctx)) return false;
     if (!player || player.destroyed || !playerObj) return false;
     const rr = PLAYER_HIT_RADIUS + PROJ_RADIUS; // TRUE bounds, no padding (§6.1)
     if (!sweptHit(p, playerObj.position, rr)) return false;
@@ -1840,7 +1842,8 @@ export function initCombat(ctx) {
       // 1b. Body impact (same-frame bodyHit from ship.js; combat ticks after ship).
       // Family 'impact' is not a WEAPONS key — applyHit falls back to 1:1
       // screen/shell then hull. One damaging scrape per IMPACT_GAP.
-      if (player && !player.destroyed && now - _lastImpactAt >= IMPACT_GAP) {
+      const hold = berthHeld(ctx);
+      if (player && !player.destroyed && !hold && now - _lastImpactAt >= IMPACT_GAP) {
         for (let i = 0; i < ctx.events.length; i++) {
           const e = ctx.events[i];
           if (e.type !== 'bodyHit' || e.kind === 'player') continue;
@@ -1871,7 +1874,7 @@ export function initCombat(ctx) {
       }
 
       // 1c. Star heat / lethal core. Skip while jumping; docked already returned.
-      if (player && !player.destroyed && !ctx.gate?.jumping && playerObj) {
+      if (player && !player.destroyed && !hold && !ctx.gate?.jumping && playerObj) {
         // Live star only. Scoped harness ctxs copy SYSTEMS but never
         // init solarsystem, so sunRadius stays 0 and mining pins do not
         // die at the origin.
@@ -1908,6 +1911,7 @@ export function initCombat(ctx) {
         if (e.weapon === 'missile') {
           // Missing target must not default to the player. First slice: vsPlayer only.
           if (e.target !== 'player') continue;
+          if (hold) continue;
           if (isUnknowable(ship.state.faction)) continue;
           if (!playerObj || !player || player.destroyed) continue;
           spawnNpcMissile(ship, playerObj, player, playerObj);
@@ -1916,6 +1920,7 @@ export function initCombat(ctx) {
         if (e.weapon === 'turret') {
           // Missing target drops. Do not copy ace cannon omit.
           if (e.target === 'player') {
+            if (hold) continue;
             if (isUnknowable(ship.state.faction)) continue;
             if (!playerObj || !player || player.destroyed) continue;
             const bolt = spawnNpcShot(ship, 'turret', playerObj);
@@ -1933,6 +1938,7 @@ export function initCombat(ctx) {
         }
         const tgt = e.target;
         if (tgt === 'player' || tgt == null) {
+          if (hold) continue;
           if (!playerObj) continue;
           const bolt = spawnNpcShot(ship, e.weapon, playerObj);
           if (bolt) bolt.vsPlayer = true;

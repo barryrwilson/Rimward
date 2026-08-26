@@ -1,0 +1,26 @@
+# Hail02 Wave 128 leftover integrator — worker write-set
+
+Pack domain: markdown freeze only. No src/. No Hail01 rewrite. No HUD-07/NAV-09 rewrite.
+
+UNTRACKED (this pack):
+docs/Hail02MissFeedbackDesign.md
+out/w128/hailmiss/code-review.md
+out/w128/hailmiss/current-hail02-miss-inventory.md
+out/w128/hailmiss/notes.md
+out/w128/hailmiss/security-review.md
+out/w128/hailmiss/shared-contract.md
+out/w128/hailmiss/ui-audit.md
+
+NOT this pack (sibling / other waves; git status dirty or untracked elsewhere):
+src/** (Wave 127 hail demand, agent-api, hud home marker, overlay, npc, …)
+docs/Hail01DemandLifecycleDesign.md
+docs/Hud07DeconflictionDesign.md
+docs/Nav09ChartReadabilityDesign.md
+docs/PLAYER-EXPERIENCE-WISHLIST.md
+PROGRESS.md
+out/w128/deconflict/**
+out/w128/chartread/**
+
+Verifier-only (this check; not worker):
+out/w128/hailmiss/verify/report.md
+out/w128/hailmiss/verify/write-set.txt

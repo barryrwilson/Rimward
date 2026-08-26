@@ -1,0 +1,19 @@
+exceptions:
+(none)
+
+console:
+debug [vite] connecting...
+debug [vite] connected.
+debug [vite] connecting...
+debug [vite] connected.
+
+hail.js errors:
+(none)
+
+notes:
+- Live session used constructed hulls via spawnLiveShip (independent cutter/freighter trader mesh, then pirate demand stamp) plus ctx.emit('hailOpened').
+- Digit3 refuse, Digit1 pay, flags.docked, systemLoaded jump, demandExpiresAt past all ran on the live hail card.
+- npc.js expire/dock/jump proved by evaluate of live hulls: demanding false, outcomes expired/docked/jumped.
+- Nameless toast "Heave to. Cargo or hull." appeared during the session. commLine toasts drop `from` (hud.js). Pirate-vs-NPC telegraph is still allowed. Pirate-vs-player gate is in npc.js engageTarget. npcProof heaveTo used lastEvents without matching ship, so it can see world pirate-vs-NPC lines.
+- Ace: no hailOpened payTribute. updateDuel telegraph did not fire in 16 frames (commSent false). Static duel slice has no payTribute and keeps 'Run if you like.'
+- Announce toast on 01-demand-card was skipped because the harness emitted hailClosed (no ship) in the same events queue as hailOpened. HUD look-ahead skips demand announce when any demand hailClosed is in that frame. Pay screenshot still shows linger "HEAVE TO. PAY 80 UU OR FIGHT. 20S."

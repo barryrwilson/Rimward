@@ -1,0 +1,87 @@
+{
+  "url": "http://127.0.0.1:5175/",
+  "vitePort": 5175,
+  "cdpPort": 9412,
+  "cdpUsed": false,
+  "origin": "Freehold Greenhand",
+  "static": {
+    "innerHTML": 0,
+    "insertAdjacentHTML": 0,
+    "ariaLiveInHudJs": 4,
+    "hailMissCase": true,
+    "hailMissToast": true,
+    "yieldToggle": true,
+    "yieldCss": "#hud .rw-yield { display: none; }",
+    "cruiseQuietCss": "#hud:not(.in-combat) .rw-reticle-range, #hud:not(.in-combat) .rw-lead-label { opacity: 0.14; }",
+    "HOME_EDGE_INSET": 108,
+    "EDGE_MARGIN": 84,
+    "rwDeconflictEl": false,
+    "galaxyClassHitsInHudCss": 101,
+    "hud07Keyframes": false,
+    "stripRailName": true,
+    "WORLD_FIELDSInHudJs": false
+  },
+  "cruise": {
+    "inCombat": false,
+    "rangeOpacity": "0.14",
+    "leadYield": true,
+    "leadOpacity": "0.14",
+    "posHome": "HOMEFreehold Landing · 499u",
+    "posHomeOpacity": "1",
+    "reticleKids": ["rw-reticle-pupil", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-cilia", "rw-reticle-range"],
+    "reticlePx": 80
+  },
+  "lockCruise": {
+    "name": "Red Marlow",
+    "tNameYield": true,
+    "tNameDisplay": "none",
+    "cName": "Red Marlow",
+    "cNameDisplay": "block",
+    "namesSameVisible": false,
+    "rangeYield": true,
+    "distOnRail": true,
+    "leadLabelYield": true,
+    "tgtEdgeY": 84
+  },
+  "lockCombat": {
+    "name": "Carver Illyx",
+    "hudInCombat": true,
+    "tNameYield": true,
+    "cName": "Carver Illyx",
+    "visCorners": 4,
+    "leadShown": true,
+    "leadRing": true,
+    "leadLabelYield": false,
+    "leadLabelDisplay": "block",
+    "rangeYield": true,
+    "inRangeRing": true,
+    "posFade": "0.14",
+    "posHomeDisplay": "flex",
+    "homeChevOpacity": "0.14",
+    "homeChevNotYield": true
+  },
+  "insets": {
+    "homeChevronCenterY": 108,
+    "homeChevronInset": 108,
+    "gateCueCenterY": 84,
+    "gateCueInset": 84,
+    "tgtEdgeY": 84
+  },
+  "hail02": {
+    "toast": "No lock — hail",
+    "cls": "rw-toast show warn"
+  },
+  "nav09": {
+    "zoomIn": { "id": "rw-galaxy-zoom-in", "h": 24, "minH": "24px", "minW": "24px" },
+    "zoomOut": { "id": "rw-galaxy-zoom-out", "h": 24 },
+    "zoomReset": { "id": "rw-galaxy-zoom-reset", "h": 24 },
+    "galaxyCssRulesLive": 68
+  },
+  "reducedMotion": {
+    "rangeAnimationName": "none",
+    "leadAnimationName": "none",
+    "yieldRule": "#hud .rw-yield { display: none; }",
+    "yieldKeyframes": []
+  },
+  "console": { "errors": 0, "warnings": 0 }
+}

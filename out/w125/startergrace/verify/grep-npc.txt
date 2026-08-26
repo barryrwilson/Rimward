@@ -1,0 +1,41 @@
+src/systems/npc.js
+166:const STARTER_GRACE_SECONDS = {
+180:const GRACE_CLAMP_SECONDS = 180;
+181:const DEATH_CALM_SECONDS = 90;
+182:let deathCalmLeft = 0;
+1709:function graceUntilOrZero(until, now) {
+1711:  if (until > now + GRACE_CLAMP_SECONDS) return 0;
+1715:function hopGraceUntilNow(world, now) {
+1716:  return graceUntilOrZero(world.jumpGraceUntil ?? 0, now);
+1719:function clampDeathCalmLeft(v) {
+1721:  if (v > GRACE_CLAMP_SECONDS) return GRACE_CLAMP_SECONDS;
+1726:function tickDeathCalm(dt) {
+1728:  if (!Number.isFinite(deathCalmLeft) || deathCalmLeft > GRACE_CLAMP_SECONDS) {
+1729:    deathCalmLeft = 0;
+1732:  if (deathCalmLeft <= 0) {
+1733:    deathCalmLeft = 0;
+1736:  deathCalmLeft = Math.max(0, deathCalmLeft - dt);
+1739:function deathCalmBlocks() {
+1740:  return Number.isFinite(deathCalmLeft) && deathCalmLeft > 0 && deathCalmLeft <= GRACE_CLAMP_SECONDS;
+1750:export function starterGraceBlocksAcquire(ctx, live, now) {
+1753:    const hopBlock = now < hopGraceUntilNow(world, now);
+1756:    const extra = Object.hasOwn(STARTER_GRACE_SECONDS, origin) ? STARTER_GRACE_SECONDS[origin] : 0;
+1767:    const deathBlock = deathCalmBlocks();
+1775:function applyPlayerDestroyedCalm(ctx) {
+1783:        if (list[j] && list[j].type === 'playerDestroyed') {
+1791:    deathCalmLeft = clampDeathCalmLeft(DEATH_CALM_SECONDS);
+1831:function playerInterestedIn(ctx, live) {
+1961:        now >= hopGraceUntilNow(ctx.world, now) &&
+1962:        !starterGraceBlocksAcquire(ctx, live, now) &&
+1966:        playerInterestedIn(ctx, live)
+2017:    now >= hopGraceUntilNow(ctx.world, now) &&
+2018:    !starterGraceBlocksAcquire(ctx, live, now) &&
+2055:    now < hopGraceUntilNow(ctx.world, now) ||
+2056:    starterGraceBlocksAcquire(ctx, live, now)
+2481:      tickDeathCalm(dt);
+2482:      applyPlayerDestroyedCalm(ctx);
+
+deathCalmUntil: 0 hits in src/systems/npc.js
+deathCalmLeft / starterGrace in src/game/save.js: 0 hits
+WORLD_FIELDS includes jumpGraceUntil; no deathCalmLeft / deathCalmUntil / starterGrace
+JUMP.graceSeconds: src/game/state.js:588 graceSeconds: 60

@@ -1,0 +1,15 @@
+HUD-06 PR1 static census (Wave 127)
+
+rw-home-mark: yes (hud.js create-once pip+chevron; hud.css)
+innerHTML in hud.js: 0
+insertAdjacentHTML: 0
+HOME_EDGE_INSET = 108: yes
+EDGE_MARGIN = 84: unchanged
+edgeArrow.style.transform: TGT path only
+gateCue.style.transform: NAV-02 path only
+POS HOME label: yes
+navDistVal home write: no
+@keyframes on .rw-home-mark: no
+#hud.in-combat .rw-home-mark opacity 0.14: yes
+node --check src/systems/hud.js: exit 0
+Vite 5178 / CDP 9471: not started; not LISTENING at report

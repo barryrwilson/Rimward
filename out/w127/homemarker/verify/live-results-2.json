@@ -1,0 +1,72 @@
+{
+  "boot": {
+    "docked": false,
+    "fp": false,
+    "pipHidden": false,
+    "chevHidden": true,
+    "rowHidden": false,
+    "rowClass": "rw-meter rw-pos-home",
+    "rowDisplay": "flex",
+    "homeVal": "Freehold Landing · 216u",
+    "pipLabel": "216u",
+    "pipParentId": "hud",
+    "pipInsideReticle": false,
+    "pipRect": {
+      "x": 1154,
+      "y": 383,
+      "w": 49.140625,
+      "h": 16
+    },
+    "retRect": {
+      "x": 752,
+      "y": 362.5,
+      "w": 80,
+      "h": 80
+    },
+    "stationName": "Freehold Landing"
+  },
+  "onGlass": {
+    "docked": false,
+    "cam": "first",
+    "fp": true,
+    "pipHidden": true,
+    "chevHidden": false,
+    "rowHidden": false,
+    "rowClass": "rw-meter rw-pos-home",
+    "rowDisplay": "flex",
+    "homeVal": "Freehold Landing · 155u",
+    "pipLabel": "155u",
+    "pipParentId": "hud",
+    "pipInsideReticle": false,
+    "pipRect": null,
+    "retRect": {
+      "x": 752,
+      "y": 362.5,
+      "w": 80,
+      "h": 80
+    },
+    "stationName": "Freehold Landing"
+  },
+  "dock": {
+    "docked": true,
+    "cam": "first",
+    "fp": true,
+    "pipHidden": true,
+    "chevHidden": true,
+    "rowHidden": true,
+    "rowClass": "rw-meter rw-pos-home is-hidden",
+    "rowDisplay": "none",
+    "homeVal": "Freehold Landing · 169u",
+    "pipLabel": "169u",
+    "pipParentId": "hud",
+    "pipInsideReticle": false,
+    "pipRect": null,
+    "retRect": {
+      "x": 752,
+      "y": 362.5,
+      "w": 80,
+      "h": 80
+    },
+    "stationName": "Freehold Landing"
+  }
+}

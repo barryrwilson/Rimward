@@ -1,0 +1,7 @@
+wave127 agent-observe: {"handle":true,"snapOk":true,"jsonPlain":true,"noThree":true,"noThrow":true,"noCtx":true,"forbidden":true,"pingWhenIn":false,"unknown":false,"noOptIn":true,"ringHeld":true,"sessionBag":true}
+WAVE127 AGENT-OBSERVE FAIL
+BOOT TEST FAIL — 1 errors
+
+Root cause (act spy): window.rimward.act remains closed over the last bootFreshHarness ctx.
+WAVE127 mutates the original ctx.agent.optIn; ping still returns token opt-in.
+bootFreshHarness (scripts/boot-test.mjs ~2485) re-runs inits including initAgentApi, which always assigns window.rimward = api.

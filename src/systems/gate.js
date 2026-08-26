@@ -22,6 +22,7 @@ import {
   isBeautiful,
   makeOrganicGlowTexture,
 } from './organic.js';
+import { berthHeld } from './overlay-policy.js';
 
 /**
  * Jump gates — one live assembly per system gate plus one hub junction
@@ -674,7 +675,7 @@ export function initGate(ctx) {
       && ctx.autopilot && ctx.autopilot.wantJump === true
       && near && near.to === nextHop
     );
-    if (inZone && !ctx.flags.docked && !jumping && (ctx.input.dockPressed || apJump)) {
+    if (inZone && !ctx.flags.docked && !jumping && !berthHeld(ctx) && (ctx.input.dockPressed || apJump)) {
       ctx.emit('jumpRequested', { to: near.to });
     }
 

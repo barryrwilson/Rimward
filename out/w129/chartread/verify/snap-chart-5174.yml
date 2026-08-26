@@ -1,0 +1,109 @@
+- generic [active] [ref=f1e1] [box=0,0,1400,900]:
+  - generic [ref=f1e340] [box=420,127,560,647]:
+    - generic [ref=f1e341] [box=443,146,514,73]:
+      - generic [ref=f1e342] [box=443,146,278,26]: FREEHOLD LANDING
+      - generic [ref=f1e343] [box=443,174,278,16]: FREEHOLD COMPACT · BERTH 7
+      - generic [ref=f1e344] [box=443,192,278,16]: “she” made fast
+      - generic [ref=f1e345] [box=737,167,220,19]: CREDITS 350 UU · HOLD 0/20
+    - generic [ref=f1e346] [box=443,233,514,435]:
+      - button "1 — Market" [ref=f1e347] [cursor=pointer] [box=443,233,514,36]
+      - button "2 — Jobs board" [ref=f1e348] [cursor=pointer] [box=443,277,514,36]
+      - button "3 — Bar" [ref=f1e349] [cursor=pointer] [box=443,321,514,36]
+      - button "4 — Feed & tend" [ref=f1e350] [cursor=pointer] [box=443,366,514,36]
+      - button "5 — Repair" [ref=f1e351] [cursor=pointer] [box=443,410,514,36]
+      - button "6 — Outfitting" [ref=f1e352] [cursor=pointer] [box=443,454,514,36]
+      - button "7 — People" [ref=f1e353] [cursor=pointer] [box=443,498,514,36]
+      - button "8 — Launch" [ref=f1e354] [cursor=pointer] [box=443,543,514,36]
+      - button "9 — Standing" [ref=f1e355] [cursor=pointer] [box=443,587,514,36]
+      - button "0 — Shipyard" [ref=f1e356] [cursor=pointer] [box=443,631,514,36]
+    - generic [ref=f1e357] [box=443,680,514,17]: "Freehold Compact: Stranger (+0 rep)"
+    - generic [ref=f1e358] [box=443,709,514,17]: "Next: Known (10)"
+    - generic [ref=f1e359] [box=443,740,514,16]: 1-9, 0 select service · Esc/B launch
+  - generic [box=0,0,1400,900]:
+    - status [box=847,14,385,135]
+    - generic [box=647,691,105,29]:
+      - generic [box=660,697,18,17]: T
+      - generic [box=686,699,53,13]: Target
+    - generic [box=414,513,208,112]:
+      - generic [box=422,519,192,14]:
+        - generic [box=452,519,69,14]:
+          - generic [box=452,519,35,14]: FORE
+          - generic [box=493,519,29,14]: AFT
+      - generic [box=422,538,192,10]: SCREEN
+      - generic [box=422,553,192,10]: SHELL
+      - generic [box=422,568,192,13]: HULL
+      - generic [box=422,586,192,14]:
+        - generic [box=422,588,52,10]: SPD
+        - generic [box=482,586,30,14]: 0u/s
+      - generic [box=422,605,192,14]:
+        - generic [box=422,607,52,10]: WPN
+        - generic [box=482,605,132,14]: 1 · Energy cannon
+    - generic [box=14,684,1372,204]:
+      - generic [box=14,821,120,67]:
+        - generic [box=25,830,98,14]: Plant
+        - generic [box=25,850,98,10]: STRAIN
+        - generic [box=25,865,98,14]:
+          - generic [box=25,867,52,10]: ENGINE
+          - generic [box=85,865,30,14]: OK
+      - generic [box=146,802,131,86]:
+        - generic [box=157,811,109,14]: Flight
+        - generic [box=157,831,109,10]: THR
+        - generic [box=157,846,109,14]:
+          - generic [box=157,848,52,10]: BURN
+          - generic [box=217,846,39,14]: READY
+        - generic [box=157,865,109,14]:
+          - generic [box=157,867,52,10]: DRIFT
+          - generic [box=217,865,39,14]: READY
+      - generic [box=289,836,120,52]:
+        - generic [box=300,845,98,14]: Heat
+        - generic [box=300,865,98,14]:
+          - generic [box=300,867,52,10]: STRAIN
+          - generic [box=360,865,16,14]: 0%
+      - generic [box=1238,684,148,204]:
+        - generic [box=1238,684,148,33]: PWR
+        - generic [box=1238,725,148,101]:
+          - generic [box=1249,734,126,14]: Bio
+          - generic [box=1249,754,126,14]: KEEN
+          - generic [box=1249,773,126,10]: HUNGER
+          - generic [box=1249,788,126,10]: WOUNDS
+          - generic [box=1249,803,126,14]:
+            - generic [box=1249,805,52,10]: ECHOES
+            - generic [box=1309,803,8,14]: "0"
+        - generic [box=1238,834,148,54]:
+          - generic [box=1249,843,126,10]: POS
+          - generic [box=1249,853,126,13]: Freehold Drift
+          - generic [box=1249,868,126,11]: X 156 Y 20 Z 620
+    - generic [box=1254,14,132,90]:
+      - generic [box=1265,23,110,14]: Manifest
+      - generic [box=1265,43,110,14]:
+        - generic [box=1265,45,52,10]: UU
+        - generic [box=1325,43,23,14]: "350"
+      - generic [box=1265,62,110,14]:
+        - generic [box=1265,64,52,10]: FEAR
+        - generic [box=1325,62,8,14]: "0"
+      - generic [box=1265,81,110,14]:
+        - generic [box=1265,83,52,10]: CARGO
+        - generic [box=1325,81,31,14]: 0/20
+    - generic [box=14,14,280,325]:
+      - button "CONTROLS ▾" [ref=f1e13] [cursor=pointer] [box=25,24,78,10]
+      - generic [box=25,41,258,289]:
+        - list [box=25,41,258,289]:
+          - listitem [box=25,41,258,11]: Mouse — steer toward reticle
+          - listitem [box=25,54,258,11]: W/S — vertical strafe (W = up)
+          - listitem [box=25,67,258,11]: A/D — lateral strafe (D = right)
+          - listitem [box=25,80,258,11]: Q/E — roll left / right (set your up)
+          - listitem [box=25,93,258,22]: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem [box=25,117,258,11]: Space — afterburner
+          - listitem [box=25,130,258,11]: Shift (hold) — vector-hold drift
+          - listitem [box=25,143,258,11]: LMB (hold) — fire
+          - listitem [box=25,156,258,22]: "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic"
+          - listitem [box=25,180,258,11]: T — cycle target
+          - listitem [box=25,193,258,11]: V — lock under reticle
+          - listitem [box=25,206,258,11]: N — automine locked asteroid
+          - listitem [box=25,219,258,22]: H — hail · J — dock · C — camera (chase / third / first-person)
+          - listitem [box=25,243,258,11]: X — match lock speed
+          - listitem [box=25,256,258,11]: K — engine on lock (after shields)
+          - listitem [box=25,269,258,22]: G — cycle hub route at a Lamplighter junction
+          - listitem [box=25,293,258,11]: M — galaxy chart
+          - listitem [box=25,306,258,11]: L — berth records (save/load)
+          - listitem [box=25,319,258,11]: P — pause

@@ -1,0 +1,25 @@
+# Wave 123 remaining AST leftover — worker write-set (git untracked)
+
+docs/Ast03RemainingAstDesign.md
+out/w123/astrest/code-review.md
+out/w123/astrest/current-ast-remaining-inventory.md
+out/w123/astrest/notes.md
+out/w123/astrest/security-review.md
+out/w123/astrest/shared-contract.md
+out/w123/astrest/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w123/astrest/verify/report.md
+out/w123/astrest/verify/write-set.txt
+
+# Not in this worker write-set
+
+src/ — no edits
+scripts/ — no edits
+docs/PLAYER-EXPERIENCE-WISHLIST.md — untouched
+docs/AstOrbitsDesign.md — untouched
+PROGRESS.md — untouched
+docs/OwnerDecisionsWave123.md — absent
+out/w123/phyrest/** — sibling pack on disk; not AST leftover
+out/w123/fxrest/** — sibling pack on disk; not AST leftover

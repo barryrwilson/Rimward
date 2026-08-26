@@ -1,0 +1,39 @@
+=== Heave to (npc.js) ===
+1729:        say(ctx, live, 'Heave to. Cargo or hull.');
+
+=== Run if you like (npc.js) ===
+1727:        say(ctx, live, 'Run if you like.');
+2227:      let line = 'Run if you like.';
+
+=== flags.paused = in hail.js ===
+(none)
+
+=== innerHTML in hail.js ===
+(none)
+
+=== HOME_EDGE_INSET hud.js ===
+75:const HOME_EDGE_INSET = 108; // px; TGT/NAV-02 keep 84
+1935:                if (ax > 1e-4) s = (cx - HOME_EDGE_INSET) / ax;
+1936:                if (ay > 1e-4) s = Math.min(s, (cy - HOME_EDGE_INSET) / ay);
+
+=== WAVE127 Hail01 boot-test ===
+24080:  console.log('wave127 hail01 src:', JSON.stringify(srcPins127h));
+24081:  if (!Object.values(srcPins127h).every(Boolean)) { console.log('WAVE127 HAIL01 SRC FAIL'); errors++; }
+24114:  console.log('wave127 hail01 open:', JSON.stringify(namedOpen));
+24115:  if (!Object.values(namedOpen).every(Boolean)) { console.log('WAVE127 HAIL01 OPEN FAIL'); errors++; }
+24124:  console.log('wave127 hail01 expire:', JSON.stringify(expired));
+24125:  if (!Object.values(expired).every(Boolean)) { console.log('WAVE127 HAIL01 EXPIRE FAIL'); errors++; }
+24137:  console.log('wave127 hail01 dock:', JSON.stringify(docked));
+24138:  if (!Object.values(docked).every(Boolean)) { console.log('WAVE127 HAIL01 DOCK FAIL'); errors++; }
+24155:  console.log('wave127 hail01 jump:', JSON.stringify(jumped));
+24156:  if (!Object.values(jumped).every(Boolean)) { console.log('WAVE127 HAIL01 JUMP FAIL'); errors++; }
+24163:  console.log('wave127 hail01 heave:', JSON.stringify({ heaveSuppressed, noDemandYet }));
+24164:  if (!(heaveSuppressed && noDemandYet)) { console.log('WAVE127 HAIL01 HEAVE FAIL'); errors++; }
+24176:  console.log('wave127 hail01 ace:', JSON.stringify({ aceNoTribute }));
+24177:  if (!aceNoTribute) { console.log('WAVE127 HAIL01 ACE FAIL'); errors++; }
+24191:  console.log('wave127 hail01 nan:', JSON.stringify({ skipped: nanPay.skipped, resolved: nanPay.resolved, floorFn: nanPay.floorFn }));
+24192:  if (!Object.values(nanPay).every(Boolean)) { console.log('WAVE127 HAIL01 NAN FAIL'); errors++; }
+
+=== WAVE127 Agent API boot-test ===
+24052:  console.log('wave127 agent-observe:', JSON.stringify(w127));
+24053:  if (!Object.values(w127).every(Boolean)) { console.log('WAVE127 AGENT-OBSERVE FAIL'); errors++; }

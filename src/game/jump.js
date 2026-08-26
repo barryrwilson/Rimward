@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SYSTEMS, JUMP, FACTIONS } from '../game/state.js';
 import { removeLiveShip } from '../systems/npc.js';
 import { standingRead } from './data-trade.js';
+import { berthHeld } from '../systems/overlay-policy.js';
 
 /** Exact commLine / toast copy (Wave 104 REP-05). */
 export const JUMP_REFUSE_LINE = 'No passage.';
@@ -199,6 +200,7 @@ export function initJump(ctx) {
 
   function update(dt) {
     consumeVisitReset();
+    if (berthHeld(ctx)) return;
     if (!ctx.gate.jumping) {
       // Same-frame consumption of gate.js's request.
       for (let i = 0; i < ctx.events.length; i++) {

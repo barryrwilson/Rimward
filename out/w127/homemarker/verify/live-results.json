@@ -1,0 +1,107 @@
+{
+  "status": "CLEAN",
+  "startedAt": "2026-08-26T03:39:02.020Z",
+  "endedAt": "2026-08-26T03:42:00.000Z",
+  "vite": {
+    "reusedExisting": false,
+    "startedByVerifier": true,
+    "port": 5178,
+    "host": "127.0.0.1",
+    "stopped": true,
+    "listeningAfterTeardown": false
+  },
+  "browser": {
+    "playwrightMcp": "locked (mcp-chrome-7d372dc already in use)",
+    "fallback": "Chrome CDP headless swiftshader",
+    "cdpPorts": [9472, 9473],
+    "userDataDirs": [
+      "out/w127/homemarker/verify/chrome-profile",
+      "out/w127/homemarker/verify/chrome-profile-2"
+    ],
+    "chromeStopped": true
+  },
+  "static": {
+    "nodeCheckHudJs": 0,
+    "innerHTML": 0,
+    "insertAdjacentHTML": 0,
+    "HOME_EDGE_INSET": 108,
+    "EDGE_MARGIN_tgt_nav": 84,
+    "posHomeLabel": "HOME",
+    "homeMarkOnHudNotReticle": true,
+    "homeProjScratch": true,
+    "homeKeyframes": false,
+    "combatDim": "#hud.in-combat .rw-home-mark { opacity: 0.14 }",
+    "edgeArrowStyleFromHome": false,
+    "gateCueWriteFromHome": false
+  },
+  "flows": {
+    "a_posHome": {
+      "ok": true,
+      "homeLabel": "HOME",
+      "homeVal": "Freehold Landing · 217u",
+      "pipParentId": "hud",
+      "pipInsideReticle": false
+    },
+    "b_onGlassPip": {
+      "ok": true,
+      "run2BootPipHidden": false,
+      "run2BootPipRect": { "x": 1154, "y": 383, "w": 49.140625, "h": 16 },
+      "run2BootReticle": { "x": 752, "y": 362.5, "w": 80, "h": 80 },
+      "note": "Spawn can be off-glass (chase). Run2 boot had pip on glass, not inside .rw-reticle."
+    },
+    "c_offGlassChevron": {
+      "ok": true,
+      "chevHidden": false,
+      "pipHidden": true,
+      "chevInsetMin": 108,
+      "notAmberTgt": true,
+      "edgeArrowHidden": true
+    },
+    "d_dock": {
+      "ok": true,
+      "run1_800ms_rowHidden": false,
+      "run2_2000ms_rowHidden": true,
+      "run2_rowDisplay": "none",
+      "pipHidden": true,
+      "chevHidden": true,
+      "note": "800ms inspect raced HUD text throttle. 2s wait: POS HOME display:none."
+    },
+    "e_hail": {
+      "ok": true,
+      "method": "ctx.flags.hailOpen = true via evaluate, then restore",
+      "rowHidden": true,
+      "pipHidden": true,
+      "chevHidden": true
+    },
+    "e_chart": {
+      "ok": true,
+      "chartOpen": true,
+      "rowHidden": true,
+      "pipHidden": true,
+      "chevHidden": true
+    },
+    "e_berth": {
+      "ok": true,
+      "berthOpen": true,
+      "rowHidden": true,
+      "pipHidden": true,
+      "chevHidden": true
+    },
+    "f_stationLock": {
+      "ok": true,
+      "lockKind": "station",
+      "pipHidden": true,
+      "chevHidden": true,
+      "rowHidden": false,
+      "homeVal": "Freehold Landing · 136u",
+      "edgeArrowHidden": false
+    },
+    "console": {
+      "exceptions": [],
+      "errorWarning": [],
+      "hud06Hits": [],
+      "ok": true
+    }
+  },
+  "bugs": []
+}

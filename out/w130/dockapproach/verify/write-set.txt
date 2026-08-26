@@ -1,0 +1,45 @@
+# Wave 130 NAV-10 dock approach leftover — write-set (verify round 2)
+
+Pack domain: markdown freeze only. Designer Major freeze: distinct .rw-slow-lamp on self SPD only. No MATCH reuse. No tgtSpeed SLOW. No src/. No KeyJ remap. No PHY/NAV-03/HUD-06/Hail02/TGT-07/MSN-04 steal.
+
+UNTRACKED (this pack; designer):
+docs/Nav10DockApproachDesign.md
+out/w130/dockapproach/code-review.md
+out/w130/dockapproach/current-nav10-dock-approach-inventory.md
+out/w130/dockapproach/notes.md
+out/w130/dockapproach/security-review.md
+out/w130/dockapproach/shared-contract.md
+out/w130/dockapproach/ui-audit.md
+
+Later serial PR1 (named only; not this wave):
+src/systems/hud.js
+src/ui/hud.css
+
+Later serial — FORBIDDEN:
+src/systems/controls.js
+src/systems/station.js
+src/systems/ship.js
+src/game/collision.js
+src/game/physics.js
+src/systems/hail.js
+src/systems/agent-api.js
+src/systems/overlay-policy.js
+src/game/autopilot.js
+src/systems/gate.js
+src/systems/galaxychart.js
+src/game/state.js
+src/game/save.js
+HUD-06 pip / POS HOME / chevron 108
+Hail02 miss toast keys
+TGT-07 / MSN-04
+docs/PLAYER-EXPERIENCE-WISHLIST.md
+PROGRESS.md
+
+NOT this pack (sibling / other waves; git status dirty or untracked elsewhere):
+src/**
+out/w130/tgtcycle/**
+out/w130/jobdedup/**
+
+Verifier-only (this check round 2; not worker):
+out/w130/dockapproach/verify/report.md
+out/w130/dockapproach/verify/write-set.txt

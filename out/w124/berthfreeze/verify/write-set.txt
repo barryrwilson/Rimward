@@ -1,0 +1,30 @@
+# Wave 124 remaining CTL-03 Berth Freeze — worker write-set (git untracked)
+
+docs/Ctl03BerthFreezeDesign.md
+out/w124/berthfreeze/code-review.md
+out/w124/berthfreeze/current-ctl03-berth-freeze-inventory.md
+out/w124/berthfreeze/notes.md
+out/w124/berthfreeze/security-review.md
+out/w124/berthfreeze/shared-contract.md
+out/w124/berthfreeze/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w124/berthfreeze/verify/report.md
+out/w124/berthfreeze/verify/write-set.txt
+
+# Not in this worker write-set
+
+src/ — no edits
+scripts/ — no edits
+index.html / package.json — no edits
+docs/PLAYER-EXPERIENCE-WISHLIST.md — dirty in tree (playtest INBOX capture); not this pack
+PROGRESS.md — dirty in tree (Wave 123 leftover census); not this pack
+docs/Ctl01DockBindDesign.md — untouched
+docs/Ctl02OverlayDesign.md — untouched
+docs/Nav*.md — untouched
+docs/OwnerDecisions*.md — untouched
+docs/OwnerDecisionsWave124.md — absent
+docs/Ctl04MenuInputDesign.md / out/w124/menuinput/** — sibling CTL-04 pack; not this leftover
+docs/Ai05StarterGraceDesign.md / out/w124/startergrace/** — sibling AI-05 pack; not this leftover
+out/w124/designer/berthfreeze-ui-audit.md — prior designer audit (Major now closed in freeze); not this worker

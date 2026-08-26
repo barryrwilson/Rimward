@@ -1,0 +1,277 @@
+rimward: forbidden act teleport
+rimward: forbidden act god
+rimward: forbidden act setCredits
+rimward: forbidden act setCredits
+rimward: forbidden act teleport
+{
+  "passed": 52,
+  "failed": 1,
+  "results": [
+    {
+      "name": "observe-src-no-three-import",
+      "ok": true,
+      "detail": "direct import scan"
+    },
+    {
+      "name": "observe-src-no-from-three",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "schema-src-no-from-three",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "api-src-no-from-three",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-src-no-stringify-ctx",
+      "ok": false,
+      "detail": "FAIL"
+    },
+    {
+      "name": "api-harvests-ctx-events",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "api-window-rimward",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "api-no-http",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "api-no-badge-dom",
+      "ok": true,
+      "detail": "ok"
+NODE CONTRACT FAIL
+    },
+    {
+      "name": "main-__ctx-debug",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "main-agent-before-hud",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ctx-agent-session",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ctx-no-world-fields-agent",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-ok-false",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-v1",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-omit-ship",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-events-empty",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-undefined",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "handle-installed",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "handle-frozen",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-no-throw",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-json-plain",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-no-function",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-pos",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-credits-hud",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-optin-false",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "teleport-forbidden-no-optin",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "god-forbidden",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "setCredits-forbidden",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ping-opt-in",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ping-when-in",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "plotRoute-unknown-pr1",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ping-ok-while-paused",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "later-name-paused",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "disable-ok-while-paused",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ping-ok-while-held",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "later-name-held",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "act-does-not-write-berthHold",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "enable-untrusted-opt-in",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "enable-trusted",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-credit-write",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-pos-write",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-input-write",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "harvest-ctx-events",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "harvest-not-lastEvents",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "hailOpened-no-ship",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ring-cap-16",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "ring-dropped-oldest",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-copies-ring",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-not-same-array",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "query-agent-1-optin",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "query-installs-rimward",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "query-ping-ok",
+      "ok": true,
+      "detail": "ok"
+    }
+  ]
+}

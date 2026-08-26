@@ -1,0 +1,43 @@
+# NAV-09 Wave 128 write-set (verifier)
+
+## This worker landed (markdown only)
+
+docs/Nav09ChartReadabilityDesign.md
+out/w128/chartread/current-nav09-chart-inventory.md
+out/w128/chartread/shared-contract.md
+out/w128/chartread/notes.md
+out/w128/chartread/security-review.md
+out/w128/chartread/code-review.md
+out/w128/chartread/ui-audit.md
+
+## Later impl write-set (named PR1; not this wave)
+
+src/systems/galaxychart.js
+src/ui/hud.css   (.rw-galaxy-* only)
+
+## Not this leftover
+
+src/systems/hud.js
+src/game/state.js
+src/game/nav.js (call/read only)
+src/game/jump.js
+src/systems/gate.js
+src/systems/controls.js
+src/game/autopilot.js
+src/systems/agent-api.js
+src/systems/overlay-policy.js (call only)
+docs/Nav01*–docs/Nav08*
+docs/Hail02MissFeedbackDesign.md
+docs/Hud07DeconflictionDesign.md
+docs/Hud06HomeMarkerDesign.md
+docs/PLAYER-EXPERIENCE-WISHLIST.md
+PROGRESS.md
+out/w128/hailmiss/**
+out/w128/deconflict/**
+out/w127/**
+src/** dirty from Wave 127 / sibling Wave 128 workers
+
+## Verifier evidence (this subagent)
+
+out/w128/chartread/verify/report.md
+out/w128/chartread/verify/write-set.txt

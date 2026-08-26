@@ -1,0 +1,9 @@
+docs/Fx02RemainingFxDesign.md
+out/w123/fxrest/code-review.md
+out/w123/fxrest/current-fx-remaining-inventory.md
+out/w123/fxrest/notes.md
+out/w123/fxrest/security-review.md
+out/w123/fxrest/shared-contract.md
+out/w123/fxrest/ui-audit.md
+out/w123/fxrest/verify/report.md
+out/w123/fxrest/verify/write-set.txt

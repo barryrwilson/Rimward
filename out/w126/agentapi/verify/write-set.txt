@@ -1,0 +1,61 @@
+# Wave 126 Agent API leftover — worker write-set (git untracked)
+
+docs/AgentApiDesign.md
+out/w126/agentapi/code-review.md
+out/w126/agentapi/current-agent-api-inventory.md
+out/w126/agentapi/notes.md
+out/w126/agentapi/security-review.md
+out/w126/agentapi/shared-contract.md
+out/w126/agentapi/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w126/agentapi/verify/report.md
+out/w126/agentapi/verify/write-set.txt
+
+# Later serial (named only; not landed this wave)
+
+ALLOWED later (contract §0.3; Wave 126 markdown did not land these):
+  src/game/agent-schema.js        # new, PR1
+  src/game/agent-observe.js       # new, PR1
+  src/systems/agent-api.js        # new, PR1
+  src/main.js                     # init + PR4 pause key fallback
+  src/core/ctx.js                 # header + ctx.agent session
+  src/systems/controls.js         # pulse sink; empty-code helper use
+  src/game/autopilot.js           # PR3 optIn hypot latch
+  src/game/automine.js            # PR3 optIn hypot latch
+  src/game/nav.js                 # call plotRoute / clearRoute only
+  src/systems/station.js          # ctx.stationDesk attach helpers only
+  src/systems/hail.js             # ctx.hailApi attach
+  src/systems/key-code.js         # new, PR4
+  scripts/boot-test.mjs           # named observe/act pins later
+  later scripts/agent-bridge.mjs  # PR6 127.0.0.1 + CDP only
+
+FORBIDDEN later serial (this leftover):
+  scripts/agent-demo.mjs          # never in-repo LLM
+  src/game/state.js               # READ-ONLY
+  src/game/save.js                # no WORLD_FIELDS agent key
+  src/systems/hud.js              # none PR1–PR6 except cite; no hub child
+  src/systems/overlay-policy.js   # read only
+  src/systems/title.js            # none in PR4
+  src/systems/ship.js             # no third helm
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/Ctl*.md
+  docs/Nav*.md
+  docs/Hud*.md
+  docs/OwnerDecisions*.md
+  docs/OwnerDecisionsWave126.md
+  docs/Hail01DemandLifecycleDesign.md
+  docs/Hud06HomeMarkerDesign.md
+
+# Not in this worker write-set
+
+src/ — dirty in tree from Wave 125 (berthHold / Digit skip / npc / save); not this pack
+scripts/ — no edits
+public/ / index.html / package.json — no edits
+docs/Hail01DemandLifecycleDesign.md / out/w126/demand/** — sibling leftover (cite)
+docs/Hud06HomeMarkerDesign.md / out/w126/homemarker/** — sibling leftover (cite)
+docs/PLAYER-EXPERIENCE-WISHLIST.md — cite only
+PROGRESS.md — not this pack
+docs/OwnerDecisionsWave126.md — must stay absent this wave

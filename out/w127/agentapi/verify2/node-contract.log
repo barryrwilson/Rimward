@@ -1,0 +1,144 @@
+rimward: forbidden act teleport
+rimward: forbidden act teleport
+{
+  "passed": 26,
+  "failed": 1,
+  "results": [
+    {
+      "name": "src-first-install-guard",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "src-readLiveCtx",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "src-observe-live",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "src-act-live",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "src-rimward-assign-once",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "src-assign-inside-guard",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "src-no-always-replace",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-src-no-from-three",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "observe-src-no-stringify-ctx",
+      "ok": false,
+      "detail": "FAIL"
+    },
+    {
+      "name": "no-ctx-ok-false",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-v1",
+      "ok": true,
+      "detail": "ok"
+NODE CONTRACT FAIL
+    },
+    {
+      "name": "no-ctx-omit-ship",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-events-empty",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "no-ctx-undefined",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "handle-installed",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "handle-frozen",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "teleport-forbidden-no-optin",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "nested-init-same-handle",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "wave127-first-ctx-ping-no-__ctx",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "wave127-first-ctx-unknown-no-__ctx",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "live-__ctx-ping",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "live-__ctx-teleport-forbidden",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "live-__ctx-unknown",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "live-__ctx-observe-credits",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "live-__ctx-observe-follows",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "fallback-first-ctx-after-delete-__ctx",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "fallback-first-ctx-ping",
+      "ok": true,
+      "detail": "ok"
+    }
+  ]
+}

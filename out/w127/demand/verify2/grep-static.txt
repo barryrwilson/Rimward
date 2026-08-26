@@ -1,0 +1,66 @@
+=== HUD-06 .rw-home-mark ===
+C:\Projects\WebSim\src\systems\hud.js:903:const homePip = el('div', 'rw-home-mark rw-home-pip is-hidden', root);
+C:\Projects\WebSim\src\systems\hud.js:907:const homeChev = el('div', 'rw-home-mark rw-home-chevron is-hidden', root);
+C:\Projects\WebSim\src\ui\hud.css:636:.rw-home-mark {
+C:\Projects\WebSim\src\ui\hud.css:688:#hud.in-combat .rw-home-mark { opacity: 0.14; }
+
+=== POS HOME / rw-pos-home ===
+C:\Projects\WebSim\src\systems\hud.js:37:* HUD-06: current-system station pip + off-screen home chevron + POS HOME.
+C:\Projects\WebSim\src\systems\hud.js:1119:const homeRow = el('div', 'rw-meter rw-pos-home is-hidden', posPanel);
+C:\Projects\WebSim\src\ui\hud.css:1115:.rw-pos-home {
+C:\Projects\WebSim\src\ui\hud.css:1119:.rw-pos-home .rw-value {
+
+=== HOME_EDGE_INSET ===
+C:\Projects\WebSim\src\systems\hud.js:75:const HOME_EDGE_INSET = 108; // px; TGT/NAV-02 keep 84
+C:\Projects\WebSim\src\systems\hud.js:1949:if (ax > 1e-4) s = (cx - HOME_EDGE_INSET) / ax;
+C:\Projects\WebSim\src\systems\hud.js:1950:if (ay > 1e-4) s = Math.min(s, (cy - HOME_EDGE_INSET) / ay);
+
+=== hail.js innerHTML / insertAdjacentHTML / document.write ===
+NONE
+
+=== updateDuel payTribute ===
+sliceLen=4500
+hasPayTribute=False
+hasRunIfYouLike=True
+
+=== npc.js payTribute (all) ===
+C:\Projects\WebSim\src\systems\npc.js:1534:const intents = ['payTribute'];
+
+=== hail.js payTribute (intent; expected) ===
+C:\Projects\WebSim\src\systems\hail.js:39:*   payTribute    → demand-hail: finite credits -= finite demand only; else skip debit, still close. pirate flees + 60 s calm
+C:\Projects\WebSim\src\systems\hail.js:54:// Wave 30: the demand-hail intents ('payTribute','showTeeth','refuseFight')
+C:\Projects\WebSim\src\systems\hail.js:58:const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect', 'payTribute', 'showTeeth', 'refuseFight'];
+C:\Projects\WebSim\src\systems\hail.js:82:if (intents && intents.includes('payTribute')) return true;
+C:\Projects\WebSim\src\systems\hail.js:393:case 'payTribute': {
+C:\Projects\WebSim\src\systems\hail.js:476:case 'payTribute':
+
+=== suppressPirateHeaveTo / Heave to ===
+C:\Projects\WebSim\src\systems\npc.js:364:function suppressPirateHeaveTo(ctx, live) {
+C:\Projects\WebSim\src\systems\npc.js:1747:} else if (suppressPirateHeaveTo(ctx, live) || ai.target === 'player') {
+C:\Projects\WebSim\src\systems\npc.js:1750:say(ctx, live, 'Heave to. Cargo or hull.');
+
+=== hailOpened look-ahead / initHud parent ===
+C:\Projects\WebSim\src\systems\hud.js:563:function toastForEvent(e, ctx, mem) {
+C:\Projects\WebSim\src\systems\hud.js:683:const demandOpen = e.demandHail === true
+C:\Projects\WebSim\src\systems\hud.js:697:&& o.demandHail === true
+C:\Projects\WebSim\src\systems\hud.js:851:if (!root.parent && document.body) document.body.appendChild(root);
+
+=== boot-test hail01 toast roots ===
+scripts\boot-test.mjs:24080:console.log('wave127 hail01 src:', JSON.stringify(srcPins127h));
+scripts\boot-test.mjs:24081:if (!Object.values(srcPins127h).every(Boolean)) { console.log('WAVE127 HAIL01 SRC FAIL'); errors++; }
+scripts\boot-test.mjs:24099:const toastRoots127 = [document.body, document.getElementById('hud')];
+scripts\boot-test.mjs:24100:const toastHit = toastRoots127.some((root) => root && [...walkDom(root)].some((n) => {
+scripts\boot-test.mjs:24117:console.log('wave127 hail01 open:', JSON.stringify(namedOpen));
+scripts\boot-test.mjs:24118:if (!Object.values(namedOpen).every(Boolean)) { console.log('WAVE127 HAIL01 OPEN FAIL'); errors++; }
+scripts\boot-test.mjs:24127:console.log('wave127 hail01 expire:', JSON.stringify(expired));
+scripts\boot-test.mjs:24128:if (!Object.values(expired).every(Boolean)) { console.log('WAVE127 HAIL01 EXPIRE FAIL'); errors++; }
+scripts\boot-test.mjs:24140:console.log('wave127 hail01 dock:', JSON.stringify(docked));
+scripts\boot-test.mjs:24141:if (!Object.values(docked).every(Boolean)) { console.log('WAVE127 HAIL01 DOCK FAIL'); errors++; }
+scripts\boot-test.mjs:24158:console.log('wave127 hail01 jump:', JSON.stringify(jumped));
+scripts\boot-test.mjs:24159:if (!Object.values(jumped).every(Boolean)) { console.log('WAVE127 HAIL01 JUMP FAIL'); errors++; }
+scripts\boot-test.mjs:24171:console.log('wave127 hail01 heave:', JSON.stringify({ heaveSuppressed, noDemandYet }));
+scripts\boot-test.mjs:24172:if (!(heaveSuppressed && noDemandYet)) { console.log('WAVE127 HAIL01 HEAVE FAIL'); errors++; }
+scripts\boot-test.mjs:24184:console.log('wave127 hail01 ace:', JSON.stringify({ aceNoTribute }));
+scripts\boot-test.mjs:24185:if (!aceNoTribute) { console.log('WAVE127 HAIL01 ACE FAIL'); errors++; }
+scripts\boot-test.mjs:24199:console.log('wave127 hail01 nan:', JSON.stringify({ skipped: nanPay.skipped, resolved: nanPay.resolved, floorFn: nanPay.floorFn }));
+scripts\boot-test.mjs:24200:if (!Object.values(nanPay).every(Boolean)) { console.log('WAVE127 HAIL01 NAN FAIL'); errors++; }

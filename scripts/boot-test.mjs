@@ -251,6 +251,7 @@ globalThis.window = {
   innerWidth: 1280,
   innerHeight: 720,
   devicePixelRatio: 1,
+  location: { search: '', href: 'http://127.0.0.1/boot' },
   addEventListener(type, fn) { (winListeners[type] ??= []).push(fn); },
   removeEventListener(type, fn) { const a = winListeners[type]; if (!a) return; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); },
   dispatchEvent() {},
@@ -316,6 +317,7 @@ const { initOnboarding } = await import('../src/systems/onboarding.js');
 const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
 const { initWakes } = await import('../src/systems/wakes.js'); // wave 30: flee wake trails + wreck-field discovery (same init slot as main.js)
 const { initTitle } = await import('../src/systems/title.js'); // wave 40: title screen front door
+const { initAgentApi } = await import('../src/systems/agent-api.js');
 const { initHud, hudFamily, hairBoxForRail, agezHairOff } = await import('../src/systems/hud.js');
 const {
   isBeautiful, makePetalGeometry, makeTendrilGeometry,
@@ -336,7 +338,7 @@ const inits = [
   ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['settings', initSettings], ['bio', initBio],
   ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
   ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
-  ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['hud', initHud],
+  ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['agentapi', initAgentApi], ['hud', initHud],
 ];
 const systems = [];
 for (const [name, init] of inits) {
@@ -6746,6 +6748,14 @@ const w30demandExpected = Math.max(
 for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave30 jump grace wait');
 // TEST SETUP: live JUMP.graceSeconds is 60; 300 ticks cannot expire it.
 if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
+const { expireSessionDeathCalm: w125ExpireDeathCalm } = await import('../src/systems/npc.js');
+const w125ExpireAi05 = (label) => {
+  // TEST SETUP: extra starter elapsed (Greenhand 180s). Session death remaining is 90s of dt (tick is 1/60 s).
+  if (Number.isFinite(ctx.world.time) && ctx.world.time < 180) ctx.world.time = 180;
+  try { w125ExpireDeathCalm(); } catch { /* pin must not throw */ }
+  void label;
+};
+w125ExpireAi05('wave30');
 const w30graceExpired = ctx.world.time >= (ctx.world.jumpGraceUntil ?? 0);
 const p1refuse = w30spawnPirate('refuse', 95, [250, 0, 0]); // 250u: inside TARGET_RANGE, outside the bubble edge
 const p1openEvs = w30demandEvs(p1refuse, 'wave30 p1 demand');
@@ -6833,6 +6843,7 @@ ctx.emit('playerDestroyed', {});
 tick(2, 'wave30 death consumed (corrupt restore)');
 dispatchKey('Enter');
 tick(2, 'wave30 corrupt restore settle');
+w125ExpireAi05('wave30 restore');
 const w30healedFalse = ctx.world.concealedMounts === false;
 // Re-buy through the real path (fresh dock → services root) — the demand
 // legs below need the bluff fitted, and this proves purchase after a heal.
@@ -7094,6 +7105,7 @@ console.log('wave30 law zone:', JSON.stringify(w30lawChecks));
 if (!Object.values(w30lawChecks).every(Boolean)) { console.log('WAVE30 LAW ZONE FAIL'); errors++; }
 w30removeShip(p6law);
 tick(5, 'wave30 p6 cleanup');
+w125ExpireAi05('wave31');
 
 // ---- Wave 31: Q-ship counterplay — Wolfeye Mk II, bracket tells, reveals --
 // The wave-31 contract: world.js flags every ODD-index pirate as a Q-ship
@@ -7448,6 +7460,7 @@ ctx.emit('playerDestroyed', {});
 tick(2, 'wave31 death consumed (scanner restore)');
 dispatchKey('Enter'); // recover(): restore(last save)
 tick(2, 'wave31 scanner restore settle');
+w125ExpireAi05('wave31 restore');
 const w31wrenRestored = ctx.world.records.find((r) => r.role === 'pirate' && r.name === 'Gallows Wren') ?? null;
 const w31saveChecks = {
   wrenRevealedPreSave: w31wrenRevealed,
@@ -7495,6 +7508,7 @@ console.log('wave31 plain-pirate bracket:', JSON.stringify(w31plainChecks), `met
 if (!Object.values(w31plainChecks).every(Boolean)) { console.log('WAVE31 PLAIN BRACKET FAIL'); errors++; }
 w30removeShip(w31plain);
 tick(3, 'wave31 plain cleanup');
+w125ExpireAi05('wave32');
 
 // ---- Wave 32: pirate player-interest — temper, grace, apathy, Dresk ------
 // The wave-32 contract: playerInterestChance (npc.js, exported) prices a
@@ -7776,6 +7790,7 @@ ctx.emit('playerDestroyed', {});
 tick(2, 'wave32 death consumed (temper restore)');
 dispatchKey('Enter'); // recover(): restore(last save)
 tick(2, 'wave32 temper restore settle');
+w125ExpireAi05('wave32 temper restore');
 const w32toothRestored = ctx.world.records.find((r) => r.role === 'pirate' && r.name === 'Ninth Tooth') ?? null;
 const w32temperChecks = {
   toothFound: !!w32tooth,
@@ -8378,6 +8393,7 @@ ctx.cargo.push({ commodity: 'provisions', units: 10 }); // cargo aboard: the dem
 for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave35b jump grace wait');
 // TEST SETUP: live JUMP.graceSeconds is 60; 300 ticks cannot expire it.
 if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
+w125ExpireAi05('wave35b');
 
 // -- a. cross-scoped close: pirate A's demand card is open; a hailClosed ---
 // naming a DIFFERENT ship B must NOT close it (pre-wave-35 the empty
@@ -18733,6 +18749,7 @@ removeLiveShip(w42indyCtx, w42indy);
     removeLiveShip(ctx, live);
   }
 
+  w125ExpireAi05('wave83');
   const pirate83 = w83spawn('pirate', 'redledger', 'pirate');
   const pirateFires = w83fires(pirate83, 90, 'w83 pirate dart');
   const pirateMissile = pirateFires.filter((e) => e.weapon === 'missile');
@@ -21157,6 +21174,7 @@ removeLiveShip(w42indyCtx, w42indy);
     removeLiveShip(ctx, live);
   }
 
+  w125ExpireAi05('wave99');
   const heavy99 = w99spawn('patrol', 'heavy', 'freehold', 'heavy', { scratched: true, lastAttacker: 'player' });
   const heavyFires = w99fires(heavy99, 90, 'w99 heavy turret');
   w99drop(heavy99);
@@ -23949,6 +23967,335 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave118 overlay-priority:', JSON.stringify(w118));
   if (!Object.values(w118).every(Boolean)) { console.log('WAVE118 OVERLAY-PRIORITY FAIL'); errors++; }
+}
+
+// ---- Wave 127 PR1: agent observe handle (window.rimward) --------------------
+{
+  const { buildObservation } = await import('../src/game/agent-observe.js');
+  const looksLikeThree = (v, seen = new Set()) => {
+    if (v == null) return false;
+    if (typeof v === 'function') return true;
+    if (typeof v !== 'object') return false;
+    if (seen.has(v)) return false;
+    seen.add(v);
+    if (v.isVector3 || v.isObject3D || v.isBufferGeometry || v.isMaterial || v.isTexture || v.isCamera) return true;
+    if (typeof v.updateMatrixWorld === 'function' && v.position && v.quaternion) return true;
+    if (Array.isArray(v)) {
+      for (const x of v) if (looksLikeThree(x, seen)) return true;
+      return false;
+    }
+    for (const k of Object.keys(v)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (looksLikeThree(v[k], seen)) return true;
+    }
+    return false;
+  };
+  const rw = globalThis.window?.rimward;
+  let threw = false;
+  let snap = null;
+  try { snap = rw.observe(); } catch { threw = true; }
+  let jsonPlain = false;
+  try { JSON.stringify(snap); jsonPlain = true; } catch { jsonPlain = false; }
+  const noThree = snap && !looksLikeThree(snap) && jsonPlain;
+  const missing = buildObservation(null);
+  const noCtx = missing
+    && missing.v === 1
+    && missing.t === 0
+    && missing.ok === false
+    && missing.error === 'no-ctx'
+    && missing.agentOptIn === false
+    && Array.isArray(missing.events)
+    && missing.events.length === 0
+    && !Object.hasOwn(missing, 'ship')
+    && !Object.hasOwn(missing, 'world');
+  const savedOpt127 = ctx.agent?.optIn === true;
+  const savedHold127 = ctx.flags.berthHold === true;
+  const savedPause127 = ctx.flags.paused === true;
+  ctx.flags.berthHold = false;
+  ctx.flags.paused = false;
+  ctx.agent.optIn = false;
+  const pingClosed = rw?.act?.({ v: 1, name: 'ping', args: {} });
+  const noOptIn = pingClosed?.ok === false && pingClosed?.token === 'opt-in';
+  const tel = rw?.act?.({ v: 1, name: 'teleport', args: {} });
+  const forbidden = tel?.ok === false && tel?.token === 'forbidden';
+  ctx.agent.optIn = true;
+  let pingThrew = false;
+  let pingOk = null;
+  try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { pingThrew = true; }
+  const pingWhenIn = pingThrew === false && pingOk?.ok === true && pingOk?.token === '';
+  const unk = rw?.act?.({ v: 1, name: 'plotRoute', args: { dest: 'veridian' } });
+  const unknown = unk?.ok === false && unk?.token === 'unknown';
+  ctx.emit('commLine', { text: 'wave127-ring', from: 'Echo' });
+  tick(1, 'wave127 harvest');
+  const harvested = Array.isArray(ctx.agent?.events)
+    && ctx.agent.events.some((e) => e && e.type === 'commLine' && e.text === 'wave127-ring');
+  tick(30, 'wave127 ring hold');
+  const ringHeld = Array.isArray(ctx.agent?.events)
+    && ctx.agent.events.some((e) => e && e.type === 'commLine' && e.text === 'wave127-ring');
+  ctx.agent.optIn = savedOpt127;
+  ctx.flags.berthHold = savedHold127;
+  ctx.flags.paused = savedPause127;
+  const w127 = {
+    handle: !!(rw && rw.version === 1 && typeof rw.observe === 'function' && typeof rw.act === 'function'),
+    snapOk: snap?.ok === true && snap?.v === 1,
+    jsonPlain: !!jsonPlain,
+    noThree: !!noThree,
+    noThrow: threw === false && pingThrew === false,
+    noCtx: !!noCtx,
+    forbidden: !!forbidden,
+    pingWhenIn: !!pingWhenIn,
+    unknown: !!unknown,
+    noOptIn: !!noOptIn,
+    ringHeld: !!(harvested && ringHeld),
+    sessionBag: Array.isArray(ctx.agent?.events) && ctx.agent.optIn !== undefined,
+  };
+  console.log('wave127 agent-observe:', JSON.stringify(w127));
+  if (!Object.values(w127).every(Boolean)) { console.log('WAVE127 AGENT-OBSERVE FAIL'); errors++; }
+}
+
+// ---- Wave 127 PR1: Hail01 incoming pirate demand lifecycle ------------------
+{
+  const here127h = dirname(fileURLToPath(import.meta.url));
+  const hailSrc127h = readFileSync(join(here127h, '..', 'src/systems/hail.js'), 'utf8');
+  const npcSrc127h = readFileSync(join(here127h, '..', 'src/systems/npc.js'), 'utf8');
+  const hudSrc127h = readFileSync(join(here127h, '..', 'src/systems/hud.js'), 'utf8');
+  const duel127h = (() => {
+    const i = npcSrc127h.indexOf('function updateDuel');
+    if (i < 0) return '';
+    return npcSrc127h.slice(i, i + 4500);
+  })();
+  const srcPins127h = {
+    demandSeconds: /const DEMAND_SECONDS = 20/.test(hailSrc127h) && /const DEMAND_SECONDS = 20/.test(npcSrc127h),
+    expiresAt: hailSrc127h.includes('demandExpiresAt') && npcSrc127h.includes('demandExpiresAt'),
+    finiteFloor: hailSrc127h.includes('export function finiteDemandAmount') && hailSrc127h.includes('Number.isFinite(credits) && Number.isFinite(demand)'),
+    noPaused: !/flags\.paused\s*=/.test(hailSrc127h) && !/flags\.paused\s*=/.test(npcSrc127h),
+    noNewEvent: !/hailDemand/.test(hailSrc127h) && !/hailDemand/.test(npcSrc127h) && !/case 'hailDemand'/.test(hudSrc127h),
+    toastBranch: hudSrc127h.includes('case \'hailOpened\'') && hudSrc127h.includes('heave to. Pay') && hudSrc127h.includes('demand dropped. You jumped.') && hudSrc127h.includes('parley void. They fire.'),
+    toastKey: hudSrc127h.includes('warn|demand|'),
+    heaveGated: npcSrc127h.includes("Heave to. Cargo or hull.") && npcSrc127h.includes("ai.role === 'pirate' && ai.target === 'player'"),
+    aceNoTribute: duel127h.length > 200 && !duel127h.includes('payTribute') && duel127h.includes("Run if you like."),
+    noInner: !/innerHTML|insertAdjacentHTML|document\.write/.test(hailSrc127h),
+    digitsStay: /Digit\(\[1-9\]\)/.test(hailSrc127h) && hailSrc127h.includes('hailDigitsAllowed'),
+  };
+  console.log('wave127 hail01 src:', JSON.stringify(srcPins127h));
+  if (!Object.values(srcPins127h).every(Boolean)) { console.log('WAVE127 HAIL01 SRC FAIL'); errors++; }
+
+  if (ctx.flags.docked) undockStation();
+  w30parkHostiles('w127 hail01 park');
+  ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+  ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+  ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+  ctx.world.credits = 4000;
+  ctx.cargo.length = 0;
+  ctx.cargo.push({ commodity: 'provisions', units: 10 });
+  if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
+  w125ExpireAi05('w127 hail01');
+
+  const { finiteDemandAmount: floor127h } = await import('../src/systems/hail.js');
+  const pOpen = w30spawnPirate('w127-open', 95, [250, 0, 0]);
+  const openEvs = w30demandEvs(pOpen, 'w127 demand open');
+  const hailEv = openEvs.find((e) => e.type === 'hailOpened' && e.ship === pOpen) ?? null;
+  const speaker = pOpen.record?.pilot ?? pOpen.state?.name;
+  const toastRoots127 = [document.body, document.getElementById('hud')];
+  const toastHit = toastRoots127.some((root) => root && [...walkDom(root)].some((n) => {
+    const c = typeof n.className === 'string' ? n.className : '';
+    if (!c.includes('rw-toast')) return false;
+    const tx = typeof n.textContent === 'string' ? n.textContent : '';
+    return tx.includes(`${speaker} — heave to.`) || tx.includes(`${speaker} — heave to. Pay`);
+  }));
+  const cardLine = [...walkDom(document.body)].some((n) => typeof n.textContent === 'string' && n.textContent.includes('heaves to') && n.textContent.includes('UU or hull'));
+  const namedOpen = {
+    hailOpened: !!hailEv,
+    speakerOnEv: hailEv?.speaker === speaker,
+    demandHail: hailEv?.demandHail === true,
+    expiresAt: Number.isFinite(pOpen.ai.demandExpiresAt) && pOpen.ai.demandExpiresAt > pOpen.ai.demandPeaceAt,
+    toastNamed: toastHit,
+    cardNamedTimer: cardLine && w30hailDisplay() === 'block',
+    intents: JSON.stringify(hailEv?.intents) === JSON.stringify(['payTribute', 'showTeeth', 'refuseFight'])
+      || JSON.stringify(hailEv?.intents) === JSON.stringify(['payTribute', 'refuseFight']),
+  };
+  console.log('wave127 hail01 open:', JSON.stringify(namedOpen));
+  if (!Object.values(namedOpen).every(Boolean)) { console.log('WAVE127 HAIL01 OPEN FAIL'); errors++; }
+
+  pOpen.ai.demandExpiresAt = ctx.world.time;
+  const expEvs = w30collect(3, 'w127 expire');
+  const expired = {
+    outcome: pOpen.ai.demandOutcome === 'expired' && pOpen.ai.demanding === false,
+    hailClosed: expEvs.some((e) => e.type === 'hailClosed' && e.demandOutcome === 'expired'),
+    cardDown: w30hailDisplay() === 'none',
+  };
+  console.log('wave127 hail01 expire:', JSON.stringify(expired));
+  if (!Object.values(expired).every(Boolean)) { console.log('WAVE127 HAIL01 EXPIRE FAIL'); errors++; }
+  w30removeShip(pOpen);
+
+  const pDock = w30spawnPirate('w127-dock', 95, [250, 0, 0]);
+  w30demandEvs(pDock, 'w127 dock demand');
+  ctx.flags.docked = true;
+  const dockEvs = w30collect(3, 'w127 dock close');
+  const docked = {
+    outcome: pDock.ai.demandOutcome === 'docked' && pDock.ai.demanding === false,
+    hailClosed: dockEvs.some((e) => e.type === 'hailClosed' && e.demandOutcome === 'docked'),
+    cardDown: w30hailDisplay() === 'none',
+  };
+  console.log('wave127 hail01 dock:', JSON.stringify(docked));
+  if (!Object.values(docked).every(Boolean)) { console.log('WAVE127 HAIL01 DOCK FAIL'); errors++; }
+  ctx.flags.docked = false;
+  w30removeShip(pDock);
+
+  const pJump = w30spawnPirate('w127-jump', 95, [250, 0, 0]);
+  w30demandEvs(pJump, 'w127 jump demand');
+  const keptShips = ctx.ships.slice();
+  ctx.ships.length = 0;
+  ctx.emit('systemLoaded', { to: ctx.world.currentSystem });
+  const jumpEvs = w30collect(2, 'w127 jump empty');
+  const jumped = {
+    outcome: pJump.ai.demandOutcome === 'jumped' || jumpEvs.some((e) => e.type === 'hailClosed' && e.demandOutcome === 'jumped'),
+    cardDown: w30hailDisplay() === 'none',
+    demandingFalse: pJump.ai.demanding === false,
+  };
+  ctx.ships.length = 0;
+  for (const s of keptShips) ctx.ships.push(s);
+  console.log('wave127 hail01 jump:', JSON.stringify(jumped));
+  if (!Object.values(jumped).every(Boolean)) { console.log('WAVE127 HAIL01 JUMP FAIL'); errors++; }
+  w30removeShip(pJump);
+
+  const pHeave = w30spawnPirate('w127-heave', 95, [700, 0, 0]);
+  const heaveEvs = w30collect(20, 'w127 heave telegraph');
+  const heaveFrom = pHeave.state?.name;
+  const heaveSuppressed = !heaveEvs.some((e) => (
+    e.type === 'commLine'
+    && e.text === 'Heave to. Cargo or hull.'
+    && (e.from === heaveFrom || e.ship === pHeave)
+  ));
+  const noDemandYet = !heaveEvs.some((e) => e.type === 'hailOpened' && e.ship === pHeave);
+  console.log('wave127 hail01 heave:', JSON.stringify({ heaveSuppressed, noDemandYet }));
+  if (!(heaveSuppressed && noDemandYet)) { console.log('WAVE127 HAIL01 HEAVE FAIL'); errors++; }
+  w30removeShip(pHeave);
+
+  const pAce = w30spawnPirate('w127-ace', 95, [250, 0, 0]);
+  pAce.ai.role = 'ace';
+  pAce.role = 'ace';
+  if (pAce.record) pAce.record.role = 'ace';
+  pAce.ai.mode = 'duel';
+  pAce.ai.demandSent = false;
+  pAce.ai.demanding = false;
+  const aceEvs = w30collect(20, 'w127 ace duel');
+  const aceNoTribute = !aceEvs.some((e) => e.type === 'hailOpened' && e.intents && e.intents.includes('payTribute'));
+  console.log('wave127 hail01 ace:', JSON.stringify({ aceNoTribute }));
+  if (!aceNoTribute) { console.log('WAVE127 HAIL01 ACE FAIL'); errors++; }
+  w30removeShip(pAce);
+
+  const pPay = w30spawnPirate('w127-nan', 95, [250, 0, 0]);
+  w30demandEvs(pPay, 'w127 nan demand');
+  const savedCredits = ctx.world.credits;
+  ctx.world.credits = NaN;
+  const payBtn = w30hailBtn('[1] Pay tribute');
+  payBtn?.click();
+  const nanPay = {
+    skipped: Number.isNaN(ctx.world.credits),
+    resolved: pPay.ai.demandOutcome === 'paid',
+    floorFn: floor127h(NaN) === HIDDEN_MOUNTS.demandMin && floor127h(10) === HIDDEN_MOUNTS.demandMin,
+  };
+  console.log('wave127 hail01 nan:', JSON.stringify({ skipped: nanPay.skipped, resolved: nanPay.resolved, floorFn: nanPay.floorFn }));
+  if (!Object.values(nanPay).every(Boolean)) { console.log('WAVE127 HAIL01 NAN FAIL'); errors++; }
+  ctx.world.credits = Number.isFinite(savedCredits) ? savedCredits : 4000;
+  w30removeShip(pPay);
+  tick(3, 'w127 hail01 cleanup');
+}
+
+// ---- Wave 129 PR1: Hail02 miss + HUD-07 yield + NAV-09 chart ----------------
+{
+  const here129 = dirname(fileURLToPath(import.meta.url));
+  const hail129 = readFileSync(join(here129, '..', 'src/systems/hail.js'), 'utf8');
+  const hud129 = readFileSync(join(here129, '..', 'src/systems/hud.js'), 'utf8');
+  const ctx129 = readFileSync(join(here129, '..', 'src/core/ctx.js'), 'utf8');
+  const chart129 = readFileSync(join(here129, '..', 'src/systems/galaxychart.js'), 'utf8');
+  const css129 = readFileSync(join(here129, '..', 'src/ui/hud.css'), 'utf8');
+  const npc129 = readFileSync(join(here129, '..', 'src/systems/npc.js'), 'utf8');
+  const agent129 = readFileSync(join(here129, '..', 'src/systems/agent-api.js'), 'utf8');
+  const controls129 = readFileSync(join(here129, '..', 'src/systems/controls.js'), 'utf8');
+
+  const w129src = {
+    emitHelper: hail129.includes('export function emitHailMiss')
+      && hail129.includes("ctx.emit('hailMiss', payload)"),
+    primitivesOnly: hail129.includes('const payload = { name, verb, reason }')
+      && !/emit\('hailMiss'[\s\S]{0,200}ship:/.test(hail129),
+    authoredTokens: hail129.includes("'overlay-chart'")
+      && hail129.includes("'overlay-berth'")
+      && hail129.includes("'dock-range'")
+      && hail129.includes("'jump-zone'")
+      && hail129.includes("'no-hail'"),
+    ctxComment: ctx129.includes("'hailMiss' { name, verb, reason, dist }"),
+    hudBranch: hud129.includes("case 'hailMiss':")
+      && hud129.includes('function hailMissToast')
+      && hud129.includes("cls: 'warn'")
+      && hud129.includes('warn|hailmiss|'),
+    lingerKeyNoDist: hud129.includes('`warn|hailmiss|${verb}|${reason}|${keyName}`')
+      && hud129.includes('out.length < 48'),
+    noPause: !/flags\.paused\s*=/.test(hail129) && !/flags\.paused\s*=/.test(chart129),
+    noFearOnMiss: (() => {
+      const a = hail129.indexOf('export function emitHailMiss');
+      const b = hail129.indexOf('function bumpFear');
+      if (a < 0 || b < 0 || b <= a) return false;
+      return !hail129.slice(a, b).includes('bumpFear(');
+    })(),
+    noAgentHail: !agent129.includes("act({ name: 'hail'")
+      && !hail129.includes("act({ name: 'hail'"),
+    noControlsRemap: controls129.includes('hailPressed')
+      && controls129.includes('dockPressed'),
+    hail01timer: /const DEMAND_SECONDS = 20/.test(hail129),
+    toastSlots: hud129.includes('const TOAST_SLOTS = 5')
+      && hud129.includes('const TOAST_DEDUP_WINDOW = 8'),
+    noNpcHailPressed: !npc129.includes('hailPressed'),
+    yieldClass: hud129.includes("classList.toggle('rw-yield'")
+      && css129.includes('#hud .rw-yield { display: none; }'),
+    cruiseQuiet: css129.includes('#hud:not(.in-combat) .rw-reticle-range')
+      && css129.includes('#hud:not(.in-combat) .rw-lead-label'),
+    stripRailName: hud129.includes('tgtNameEl.textContent = railName')
+      && /railName = stripHudText\(typeof railName === 'string'/.test(hud129),
+    reuseAgez: hud129.includes('function hitsSightProtect')
+      && hud129.includes('segmentHitsBox(hx, hy, lx, ly, box)'),
+    homeInset: hud129.includes('const HOME_EDGE_INSET = 108')
+      && hud129.includes('const EDGE_MARGIN = 84'),
+    noHubChild: hud129.includes("el('div', 'rw-reticle-range', reticle, 'RANGE')")
+      && !hud129.includes("el('div', 'rw-deconflict"),
+    noInnerHtml: !hud129.includes('innerHTML') && !hail129.includes('innerHTML')
+      && !chart129.includes('innerHTML'),
+    noThirdLive: (hud129.match(/aria-live/g) || []).length === 4,
+    destKept: chart129.includes("id = 'rw-galaxy-dest'"),
+    zoomIds: chart129.includes("id = 'rw-galaxy-zoom-in'")
+      && chart129.includes("id = 'rw-galaxy-zoom-out'")
+      && chart129.includes("id = 'rw-galaxy-zoom-reset'"),
+    filters: chart129.includes("id = 'rw-galaxy-filter-faction'")
+      && chart129.includes("id = 'rw-galaxy-filter-standing'"),
+    itinerary: chart129.includes("id = 'rw-galaxy-itinerary'")
+      && chart129.includes('path.length - 1'),
+    dragPx: chart129.includes('MAP_DRAG_PX = 4'),
+    labelScale: chart129.includes('MAP_LABEL_SCALE = 2'),
+    hit24: chart129.includes('HIT_CSS_DIAMETER = 24'),
+    noJump: !chart129.includes('jumpRequested'),
+    noPrevent: !chart129.includes('preventDefault('),
+    cssZoom: css129.includes('.rw-galaxy-zoom') && css129.includes('min-height: 24px'),
+    cssItin: css129.includes('.rw-galaxy-itinerary') && css129.includes('overflow: auto'),
+  };
+  console.log('wave129 src:', JSON.stringify(w129src));
+  if (!Object.values(w129src).every(Boolean)) { console.log('WAVE129 SRC FAIL'); errors++; }
+
+  const fear129 = ctx.world.fear;
+  const savedLock129 = ctx.targets.current;
+  ctx.targets.current = null;
+  dispatchKey('KeyH');
+  tick(1, 'w129 hail miss no lock');
+  ctx.targets.current = savedLock129;
+  const miss129 = (ctx.lastEvents || []).find((e) => e && e.type === 'hailMiss');
+  const w129miss = {
+    emit: !!(miss129 && miss129.name === 'No lock' && miss129.verb === 'hail' && miss129.reason === 'none'),
+    noShip: !!(miss129 && !Object.hasOwn(miss129, 'ship')),
+    noFear: ctx.world.fear === fear129,
+    noPause: ctx.flags.paused !== true,
+  };
+  console.log('wave129 hailmiss:', JSON.stringify(w129miss));
+  if (!Object.values(w129miss).every(Boolean)) { console.log('WAVE129 HAILMISS FAIL'); errors++; }
 }
 
 if (errors === 0) {

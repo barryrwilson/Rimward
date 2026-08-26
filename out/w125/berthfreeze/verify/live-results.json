@@ -1,0 +1,102 @@
+{
+  "wave": 125,
+  "pr": "CTL-03 PR1 berthHold helm retest",
+  "url": "http://127.0.0.1:5176/",
+  "origin": "greenhand",
+  "graph": {
+    "resolution_id": "r-mt9bijx0-e8540a62",
+    "decision": "execute_workflows",
+    "primary_workflow": "codex/workflow-software-delivery",
+    "coverage": 0.33,
+    "followed": true,
+    "first_resolve": {
+      "resolution_id": "r-mt9bi3d3-02cdaffb",
+      "decision": "blocked_ambiguous",
+      "retry": "narrowed task_description; software-delivery then bound"
+    }
+  },
+  "helmFixStatic": {
+    "file": "src/game/autopilot.js",
+    "helmSteerLatched": "chartOpen || berthHeld",
+    "inputBreakHeldReturnsEmpty": true,
+    "steerArmedFalseWhileLatched": true,
+    "flyTickZeroCmdKeepAp": true
+  },
+  "flow1": {
+    "berthHold": true,
+    "paused": false,
+    "hint": "L or ESC to close — your ship holds. This is not Pause (P).",
+    "playerMovedWhileHold": 0,
+    "npcMovedMax": 108.4238,
+    "worldTimeDelta": 0.907,
+    "closeNoInterruptClearsHold": true,
+    "playerMovedAfterClose": 12.05
+  },
+  "flow2Helm": {
+    "plottedDest": "veridian",
+    "engagedViaChartApButton": true,
+    "openBeforeZone": true,
+    "cmdZeroed": { "yaw": 0, "pitch": 0, "throttle": 0 },
+    "navAutopilotKeptOnOpen": true,
+    "hintInterrupt": "Ship holds. RESUME continues the interrupted leg. This is not Pause (P).",
+    "why": "Autopilot is waiting. RESUME continues that leg.",
+    "saveLoadVisible": true,
+    "injectSteerHypot1KeptAp": true,
+    "mouseOnDeskKeptAp": true,
+    "resumeHoverKeptAp": true,
+    "L_keepsDesk": true,
+    "ESC_keepsDesk": true,
+    "resumeContinuesDest": "veridian",
+    "resumeSamePath": ["freehold", "veridian"],
+    "leftoverHypotAfterResume": {
+      "hypot": 1,
+      "instantlyCancelled": false,
+      "apStayedTrueFor500ms": true
+    },
+    "sessionContinuedUntilArriveVeridian": true,
+    "mouseOffDeskCancelledOnce": {
+      "apBecameFalse": true,
+      "holdStayedTrue": true,
+      "controlsCollapsed": true,
+      "reason": "pointer left the desk onto HUD (pointer-events none on berth root). CONTROLS toggled. Not inputBreak helm."
+    }
+  },
+  "flow3": {
+    "openDuringCharge": {
+      "jumping": true,
+      "progressFrozen": 0.01976,
+      "progressDeltaOver1_2s": 0,
+      "system": "veridian",
+      "dest": "freehold",
+      "systemChanged": false,
+      "why": "Gate charge is waiting. RESUME continues that jump."
+    },
+    "inZoneHoldBlocksNewEmit": true,
+    "ESC_keepsDesk": true,
+    "resumeContinuesSameDest": true,
+    "progressAfterResume400ms": 0.1864
+  },
+  "flow4": {
+    "KeyH_hailOpen": false,
+    "KeyH_paused": false,
+    "KeyM_chartOpen": true,
+    "KeyM_paused": false,
+    "KeyL_berthHold": true,
+    "KeyL_paused": false,
+    "LOAD_while_hold_not_paused": {
+      "allowed": true,
+      "after": { "berthOpen": false, "berthHold": false, "autopilot": false }
+    },
+    "KeyP_paused": true,
+    "LOAD_while_paused_refused": true,
+    "LOAD_while_paused_panelStayed": true,
+    "LOAD_while_paused_timeDelta": 0
+  },
+  "console": { "errors": 0, "warnings": 0 },
+  "static": {
+    "saveJsInnerHTML": false,
+    "berthHoldInWORLD_FIELDS": false,
+    "jumpRequestedWriter": "src/systems/gate.js:679 only",
+    "overlayPolicyWritesPaused": false
+  }
+}

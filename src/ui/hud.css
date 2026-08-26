@@ -631,6 +631,71 @@ body.rw-colorblind .rw-facing-end.is-dim {
 /* chart marks are non-critical instruments — fade like the manifest (§13.2) */
 #hud.in-combat .rw-chartmark { opacity: 0.14; }
 
+/* HUD-06 current-system station: square pip + off-screen chevron.
+   Shape + distance text; no pulse; not TGT triangle, not chartmark diamond. */
+.rw-home-mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.rw-home-pip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.rw-home-pip-glyph {
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 5px rgba(111, 242, 224, 0.55);
+}
+
+.rw-home-pip-label {
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: rgba(2, 6, 13, 0.72);
+  border: 1px solid rgba(96, 150, 196, 0.2);
+  border-radius: 2px;
+  padding: 2px 6px;
+}
+
+.rw-home-chevron {
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+}
+
+.rw-home-chevron-glyph {
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  border-left: 2px solid var(--cyan);
+  border-top: 2px solid var(--cyan);
+  transform: rotate(45deg);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--cyan) 55%, transparent);
+}
+
+#hud.in-combat .rw-home-mark { opacity: 0.14; }
+
+/* HUD-07: hide yielded words/labels. Nodes stay in the tree. */
+#hud .rw-yield { display: none; }
+
+/* Cruise: RANGE / LEAD words quieter. HOME, GATE, dock J, POS stay. */
+#hud:not(.in-combat) .rw-reticle-range,
+#hud:not(.in-combat) .rw-lead-label {
+  opacity: 0.14;
+}
+
 /* ---------- toasts: comm lines + milestone stings (off the aim column) ---------- */
 .rw-toasts {
   position: absolute;
@@ -1054,6 +1119,18 @@ body.rw-contrast #hud .rw-contacts-stroke {
   letter-spacing: 0.1em;
   color: var(--dim);
   white-space: nowrap;
+}
+
+.rw-pos-home {
+  min-width: 0;
+}
+
+.rw-pos-home .rw-value {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- bio companion (vein-green accents) ---------- */
@@ -2057,10 +2134,120 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   outline-offset: 2px;
 }
 
+.rw-galaxy-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  flex-shrink: 0;
+}
+
+.rw-galaxy-filter-label {
+  color: var(--dim);
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.rw-galaxy-filter-faction,
+.rw-galaxy-filter-standing {
+  min-width: 8.5em;
+  min-height: 24px;
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  color: var(--white);
+  font: inherit;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.rw-galaxy-filter-faction:hover,
+.rw-galaxy-filter-faction:focus-visible,
+.rw-galaxy-filter-standing:hover,
+.rw-galaxy-filter-standing:focus-visible {
+  border-color: var(--rw-accent);
+  color: var(--rw-accent);
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
+}
+
+.rw-galaxy-zoom-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.rw-galaxy-zoom {
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  color: var(--white);
+  font: inherit;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.rw-galaxy-zoom:hover,
+.rw-galaxy-zoom:focus-visible {
+  border-color: var(--rw-accent);
+  color: var(--rw-accent);
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
+}
+
+.rw-galaxy-itinerary {
+  flex-shrink: 0;
+  max-height: min(22vh, 160px);
+  overflow: auto;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 1px solid rgba(111, 242, 224, 0.12);
+  border-radius: 2px;
+}
+
+.rw-galaxy-itinerary-title {
+  margin: 6px 8px 4px;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.rw-galaxy-itinerary-list {
+  margin: 0 8px 8px;
+  padding-left: 1.4em;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.04em;
+  color: var(--white);
+}
+
+.rw-galaxy-itinerary-list li {
+  margin: 0 0 4px;
+}
+
 .rw-galaxy-svg {
   flex: 1;
   min-height: 0;
   width: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.rw-galaxy-svg.is-panning {
+  cursor: grabbing;
 }
 
 /* physical gates: solid, dim slate */
@@ -2169,6 +2356,17 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
   text-transform: uppercase;
   pointer-events: all;
   cursor: pointer;
+}
+
+.rw-galaxy-node.is-filter-hidden,
+.rw-galaxy-hit.is-filter-hidden,
+.rw-galaxy-label.is-filter-hidden,
+.rw-galaxy-hub-ring.is-filter-hidden,
+.rw-galaxy-gate.is-filter-hidden,
+.rw-galaxy-route.is-filter-hidden,
+.rw-galaxy-label.is-zoom-hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* current-system marker: dashed accent ring, pulsing opacity — a shape/motion

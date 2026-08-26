@@ -37,6 +37,7 @@ import { initSettings } from './systems/settings.js';
 import { initOrigins } from './game/origins.js';
 import { initOnboarding } from './systems/onboarding.js';
 import { initGalaxyChart } from './systems/galaxychart.js';
+import { initAgentApi } from './systems/agent-api.js';
 import { initWakes } from './systems/wakes.js';
 import { SYSTEMS } from './game/state.js';
 
@@ -96,9 +97,11 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // before HUD; galaxy chart after onboarding, before HUD (DOM-only overlay,
 // reads SYSTEMS + ctx.world.currentSystem live); models browser after galaxy chart, before
 // HUD (DOM + own-renderer overlay, owns its own render loop and pause
-// save/restore, reached lazily through ctx.models at click time); wakes
-// after npc + pods (reads ctx.ships flee modes, spawns discovery pods),
-// before HUD (consumes its events); title runs FIRST so its capture-phase
+// save/restore, reached lazily through ctx.models at click time); agent-api
+// after hail/save/chart (and models), before HUD so it harvests this-frame
+// ctx.events into ctx.agent.events; HUD remains last consumer of the live
+// queue. wakes after npc + pods (reads ctx.ships flee modes, spawns discovery
+// pods), before HUD (consumes its events); title runs FIRST so its capture-phase
 // keydown listener registers before controls.js and origins.js, and it
 // pauses the sim until the player chooses Continue or New Game.
 const systems = [
@@ -133,6 +136,7 @@ const systems = [
   initOnboarding,
   initGalaxyChart,
   initModelsBrowser,
+  initAgentApi,
   initHud,
 ].map((init) => init(ctx));
 
@@ -146,6 +150,8 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
   ctx.elapsed += dt;
+  // KeyP pause is the only full-loop skip. Berth hold (ctx.flags.berthHold)
+  // is not pause — readers freeze flight/gate/jump/AP/player DPS; this loop still runs.
   if (!ctx.flags.paused) {
     ctx.world.time += dt;
     for (const system of systems) system?.update?.(dt, ctx);

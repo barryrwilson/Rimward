@@ -1,0 +1,33 @@
+# Wave 123 remaining PHY leftover — verifier write-set
+
+Worker pack (markdown only):
+docs/Phy06RemainingPhyDesign.md
+out/w123/phyrest/code-review.md
+out/w123/phyrest/current-phy-remaining-inventory.md
+out/w123/phyrest/notes.md
+out/w123/phyrest/security-review.md
+out/w123/phyrest/shared-contract.md
+out/w123/phyrest/ui-audit.md
+
+Verifier (this pass):
+out/w123/phyrest/verify/report.md
+out/w123/phyrest/verify/write-set.txt
+
+Not in this worker write-set:
+src/** (git diff empty; no src/systems/physics.js)
+scripts/**
+docs/PLAYER-EXPERIENCE-WISHLIST.md
+PROGRESS.md
+docs/Phy04AvoidDesign.md
+docs/Phy05PadHomeDesign.md
+docs/OwnerDecisionsWave123.md
+docs/OwnerDecisions*
+out/w123/astrest/** (sibling pack present; not mixed into phyrest)
+out/w123/fxrest/** (sibling pack present; not mixed into phyrest)
+out/w123/designer/**
+
+git scoped status (worker + honor paths):
+?? docs/Phy06RemainingPhyDesign.md
+?? out/w123/phyrest/
+Honor/src paths: clean (not listed).
+Sibling ?? out/w123/astrest/ and ?? out/w123/fxrest/ exist as other leftover packs.

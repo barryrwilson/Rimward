@@ -1,0 +1,372 @@
+- generic [active] [ref=f1e1] [box=0,0,1920,889]:
+  - dialog [ref=f1e14] [box=0,0,1920,889]:
+    - generic [ref=f1e15] [box=410,65,1100,760]:
+      - generic [ref=f1e16] [box=425,76,1070,29]:
+        - heading "Galaxy Chart" [level=2] [ref=f1e17] [box=425,81,114,13]
+        - status [ref=f1e18] [box=549,81,712,14]
+        - generic [ref=f1e19] [box=1272,76,223,24]:
+          - button "Clear route" [ref=f1e20] [cursor=pointer] [box=1272,76,95,24]
+          - generic [ref=f1e21] [box=1375,76,120,24]:
+            - button "Autopilot unavailable — plot a destination first." [disabled] [ref=f1e22] [cursor=pointer] [box=1375,76,82,24]: Autopilot
+            - button "Close galaxy chart" [ref=f1e23] [cursor=pointer] [box=1465,76,30,24]: ×
+      - paragraph [ref=f1e24] [box=425,111,1070,22]: Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashed gold lines are one-way Lamplighter hub routes. Click a system to plot a route. M or Escape closes.
+      - generic [ref=f1e25] [box=425,141,1070,24]:
+        - generic [ref=f1e26] [box=425,147,73,11]: Destination
+        - combobox "Destination" [ref=f1e27] [cursor=pointer] [box=506,141,989,24]:
+          - option "Plot a system" [selected] [box=0,0,0,0]
+          - option "Aegis" [box=0,0,0,0]
+          - option "Alder's Rest" [box=0,0,0,0]
+          - option "Annex Claim" [box=0,0,0,0]
+          - option "Applebough" [box=0,0,0,0]
+          - option "Appraisal" [box=0,0,0,0]
+          - option "Archive" [box=0,0,0,0]
+          - option "Arrears" [box=0,0,0,0]
+          - option "Ashfall" [box=0,0,0,0]
+          - option "Assay" [box=0,0,0,0]
+          - option "Bastion" [box=0,0,0,0]
+          - option "Bramblehome" [box=0,0,0,0]
+          - option "Bulwark" [box=0,0,0,0]
+          - option "Canaan" [box=0,0,0,0]
+          - option "Census" [box=0,0,0,0]
+          - option "Cinder" [box=0,0,0,0]
+          - option "Citadel" [box=0,0,0,0]
+          - option "Claim 44" [box=0,0,0,0]
+          - option "Claim Nine" [box=0,0,0,0]
+          - option "Cloverfield" [box=0,0,0,0]
+          - option "Compound" [box=0,0,0,0]
+          - option "Core Sample" [box=0,0,0,0]
+          - option "Cradle" [box=0,0,0,0]
+          - option "Cutter" [box=0,0,0,0]
+          - option "Default" [box=0,0,0,0]
+          - option "Drift" [box=0,0,0,0]
+          - option "Due" [box=0,0,0,0]
+          - option "Ember" [box=0,0,0,0]
+          - option "Faint" [box=0,0,0,0]
+          - option "Filing 12-C" [box=0,0,0,0]
+          - option "Filing Seven" [box=0,0,0,0]
+          - option "Fort Liron" [box=0,0,0,0]
+          - option "Fort Merit" [box=0,0,0,0]
+          - option "Freehold Drift" [box=0,0,0,0]
+          - option "Garrison Nine" [box=0,0,0,0]
+          - option "Gavel" [box=0,0,0,0]
+          - option "Gone" [box=0,0,0,0]
+          - option "Goodrest" [box=0,0,0,0]
+          - option "Granary" [box=0,0,0,0]
+          - option "Gridmark" [box=0,0,0,0]
+          - option "Hammerfall" [box=0,0,0,0]
+          - option "Harvest Home" [box=0,0,0,0]
+          - option "Haven" [box=0,0,0,0]
+          - option "Hearth" [box=0,0,0,0]
+          - option "Hollow Reach" [box=0,0,0,0]
+          - option "Honorhold" [box=0,0,0,0]
+          - option "Husk" [box=0,0,0,0]
+          - option "Interest" [box=0,0,0,0]
+          - option "Ironhold" [box=0,0,0,0]
+          - option "Kinhold" [box=0,0,0,0]
+          - option "Longtable" [box=0,0,0,0]
+          - option "Lot Seven" [box=0,0,0,0]
+          - option "Margin Call" [box=0,0,0,0]
+          - option "Meadowlark" [box=0,0,0,0]
+          - option "Mercy" [box=0,0,0,0]
+          - option "Meridian" [box=0,0,0,0]
+          - option "Moss" [box=0,0,0,0]
+          - option "Motherlode" [box=0,0,0,0]
+          - option "Nowhere" [box=0,0,0,0]
+          - option "Oathkeep" [box=0,0,0,0]
+          - option "Palisade" [box=0,0,0,0]
+          - option "Paydirt" [box=0,0,0,0]
+          - option "Plat Twelve" [box=0,0,0,0]
+          - option "Principal" [box=0,0,0,0]
+          - option "Prospect" [box=0,0,0,0]
+          - option "Provenance" [box=0,0,0,0]
+          - option "Psalm" [box=0,0,0,0]
+          - option "Rampart" [box=0,0,0,0]
+          - option "Reckoning" [box=0,0,0,0]
+          - option "Reserve" [box=0,0,0,0]
+          - option "Saltbox" [box=0,0,0,0]
+          - option "Sentry" [box=0,0,0,0]
+          - option "Shieldwall" [box=0,0,0,0]
+          - option "Showcase" [box=0,0,0,0]
+          - option "Sorrow" [box=0,0,0,0]
+          - option "Stakedown" [box=0,0,0,0]
+          - option "Stakeside" [box=0,0,0,0]
+          - option "Steelhaven" [box=0,0,0,0]
+          - option "Stray" [box=0,0,0,0]
+          - option "Survey" [box=0,0,0,0]
+          - option "Survey Delta" [box=0,0,0,0]
+          - option "Sweetwater" [box=0,0,0,0]
+          - option "Tallow" [box=0,0,0,0]
+          - option "Tamsin's Rest" [box=0,0,0,0]
+          - option "The Auction" [box=0,0,0,0]
+          - option "The Black Station" [box=0,0,0,0]
+          - option "The Further Shore" [box=0,0,0,0]
+          - option "The Hush" [box=0,0,0,0]
+          - option "The Last Beacon" [box=0,0,0,0]
+          - option "The Redmarch" [box=0,0,0,0]
+          - option "The Stolen Womb" [box=0,0,0,0]
+          - option "The Veil" [box=0,0,0,0]
+          - option "The Verge" [box=0,0,0,0]
+          - option "The Ward" [box=0,0,0,0]
+          - option "Tithemark" [box=0,0,0,0]
+          - option "Toll" [box=0,0,0,0]
+          - option "Tumble" [box=0,0,0,0]
+          - option "Vanguard" [box=0,0,0,0]
+          - option "Veridian Reach" [box=0,0,0,0]
+          - option "Vigil" [box=0,0,0,0]
+          - option "Wellspring" [box=0,0,0,0]
+          - option "Wisp" [box=0,0,0,0]
+      - generic [ref=f1e28] [box=425,173,1070,24]:
+        - generic [ref=f1e29] [box=425,179,47,11]: Faction
+        - combobox "Faction" [ref=f1e30] [cursor=pointer] [box=480,173,232,24]:
+          - option "All" [selected] [box=0,0,0,0]
+          - option "Freehold Compact" [box=0,0,0,0]
+          - option "Red Ledger" [box=0,0,0,0]
+          - option "Veridian Combine" [box=0,0,0,0]
+          - option "Hollow Reach" [box=0,0,0,0]
+          - option "Independent" [box=0,0,0,0]
+          - option "Ferrous Hegemony" [box=0,0,0,0]
+          - option "Gilded Chain" [box=0,0,0,0]
+          - option "Beautiful Ones" [box=0,0,0,0]
+          - option "Congregation of the Further Shore" [box=0,0,0,0]
+          - option "The Assembly" [box=0,0,0,0]
+          - option "Lamplighter Guild" [box=0,0,0,0]
+          - option "Unknowables" [box=0,0,0,0]
+        - generic [ref=f1e31] [box=720,179,53,11]: Standing
+        - combobox "Standing" [ref=f1e32] [cursor=pointer] [box=781,173,85,24]:
+          - option "All" [selected] [box=0,0,0,0]
+          - option "Sworn" [box=0,0,0,0]
+          - option "Trusted" [box=0,0,0,0]
+          - option "Known" [box=0,0,0,0]
+          - option "Stranger" [box=0,0,0,0]
+          - option "Suspect" [box=0,0,0,0]
+          - option "Marked" [box=0,0,0,0]
+          - option "Unknown" [box=0,0,0,0]
+        - generic [ref=f1e33] [box=1247,173,249,24]:
+          - button "Zoom in" [ref=f1e34] [cursor=pointer] [box=1247,173,69,24]
+          - button "Zoom out" [ref=f1e35] [cursor=pointer] [box=1323,173,75,24]
+          - button "Reset view" [ref=f1e36] [cursor=pointer] [box=1406,173,89,24]
+      - img "Map of 101 rim systems and their gate connections" [ref=f1e37] [box=425,205,1070,531]:
+        - generic [ref=f1e200] [box=658,235,604,471]:
+          - generic [ref=f1e201] [cursor=pointer] [box=1120,400,24,24]
+          - generic [ref=f1e202] [cursor=pointer] [box=1041,437,24,24]
+          - generic [ref=f1e203] [cursor=pointer] [box=951,411,24,24]
+          - generic [ref=f1e204] [cursor=pointer] [box=861,442,24,24]
+          - generic [ref=f1e205] [cursor=pointer] [box=782,421,24,24]
+          - generic [ref=f1e206] [cursor=pointer] [box=713,437,24,24]
+          - generic [ref=f1e207] [cursor=pointer] [box=735,337,24,24]
+          - generic [ref=f1e208] [cursor=pointer] [box=1162,289,24,24]
+          - generic [ref=f1e209] [cursor=pointer] [box=1149,479,24,24]
+          - generic [ref=f1e210] [cursor=pointer] [box=1218,296,24,24]
+          - generic [ref=f1e211] [cursor=pointer] [box=1110,479,24,24]
+          - generic [ref=f1e212] [cursor=pointer] [box=1187,357,24,24]
+          - generic [ref=f1e213] [cursor=pointer] [box=1205,371,24,24]
+          - generic [ref=f1e214] [cursor=pointer] [box=1128,345,24,24]
+          - generic [ref=f1e215] [cursor=pointer] [box=1137,448,24,24]
+          - generic [ref=f1e216] [cursor=pointer] [box=1238,375,24,24]
+          - generic [ref=f1e217] [cursor=pointer] [box=1082,353,24,24]
+          - generic [ref=f1e218] [cursor=pointer] [box=1064,457,24,24]
+          - generic [ref=f1e219] [cursor=pointer] [box=1112,437,24,24]
+          - generic [ref=f1e220] [cursor=pointer] [box=1134,502,24,24]
+          - generic [ref=f1e221] [cursor=pointer] [box=1097,405,24,24]
+          - generic [ref=f1e222] [cursor=pointer] [box=1237,280,24,24]
+          - generic [ref=f1e223] [cursor=pointer] [box=1058,367,24,24]
+          - generic [ref=f1e224] [cursor=pointer] [box=1108,518,24,24]
+          - generic [ref=f1e225] [cursor=pointer] [box=1234,516,24,24]
+          - generic [ref=f1e226] [cursor=pointer] [box=1086,503,24,24]
+          - generic [ref=f1e227] [cursor=pointer] [box=1027,536,24,24]
+          - generic [ref=f1e228] [cursor=pointer] [box=925,478,24,24]
+          - generic [ref=f1e229] [cursor=pointer] [box=933,578,24,24]
+          - generic [ref=f1e230] [cursor=pointer] [box=955,508,24,24]
+          - generic [ref=f1e231] [cursor=pointer] [box=993,595,24,24]
+          - generic [ref=f1e232] [cursor=pointer] [box=1031,596,24,24]
+          - generic [ref=f1e233] [cursor=pointer] [box=999,544,24,24]
+          - generic [ref=f1e234] [cursor=pointer] [box=972,531,24,24]
+          - generic [ref=f1e235] [cursor=pointer] [box=956,585,24,24]
+          - generic [ref=f1e236] [cursor=pointer] [box=1068,585,24,24]
+          - generic [ref=f1e237] [cursor=pointer] [box=1075,530,24,24]
+          - generic [ref=f1e238] [cursor=pointer] [box=959,563,24,24]
+          - generic [ref=f1e239] [cursor=pointer] [box=1082,471,24,24]
+          - generic [ref=f1e240] [cursor=pointer] [box=968,468,24,24]
+          - generic [ref=f1e241] [cursor=pointer] [box=974,493,24,24]
+          - generic [ref=f1e242] [cursor=pointer] [box=931,507,24,24]
+          - generic [ref=f1e243] [cursor=pointer] [box=997,498,24,24]
+          - generic [ref=f1e244] [cursor=pointer] [box=1054,635,24,24]
+          - generic [ref=f1e245] [cursor=pointer] [box=1152,682,24,24]
+          - generic [ref=f1e246] [cursor=pointer] [box=1096,554,24,24]
+          - generic [ref=f1e247] [cursor=pointer] [box=1157,608,24,24]
+          - generic [ref=f1e248] [cursor=pointer] [box=1164,662,24,24]
+          - generic [ref=f1e249] [cursor=pointer] [box=1138,623,24,24]
+          - generic [ref=f1e250] [cursor=pointer] [box=1080,635,24,24]
+          - generic [ref=f1e251] [cursor=pointer] [box=1165,550,24,24]
+          - generic [ref=f1e252] [cursor=pointer] [box=1058,679,24,24]
+          - generic [ref=f1e253] [cursor=pointer] [box=1092,674,24,24]
+          - generic [ref=f1e254] [cursor=pointer] [box=1140,563,24,24]
+          - generic [ref=f1e255] [cursor=pointer] [box=1098,583,24,24]
+          - generic [ref=f1e256] [cursor=pointer] [box=1128,660,24,24]
+          - generic [ref=f1e257] [cursor=pointer] [box=1172,636,24,24]
+          - generic [ref=f1e258] [cursor=pointer] [box=1188,574,24,24]
+          - generic [ref=f1e259] [cursor=pointer] [box=1044,574,24,24]
+          - generic [ref=f1e260] [cursor=pointer] [box=1164,571,24,24]
+          - generic [ref=f1e261] [cursor=pointer] [box=902,301,24,24]
+          - generic [ref=f1e262] [cursor=pointer] [box=874,346,24,24]
+          - generic [ref=f1e263] [cursor=pointer] [box=919,354,24,24]
+          - generic [ref=f1e264] [cursor=pointer] [box=954,317,24,24]
+          - generic [ref=f1e265] [cursor=pointer] [box=993,386,24,24]
+          - generic [ref=f1e266] [cursor=pointer] [box=964,354,24,24]
+          - generic [ref=f1e267] [cursor=pointer] [box=904,375,24,24]
+          - generic [ref=f1e268] [cursor=pointer] [box=897,332,24,24]
+          - generic [ref=f1e269] [cursor=pointer] [box=856,310,24,24]
+          - generic [ref=f1e270] [cursor=pointer] [box=861,386,24,24]
+          - generic [ref=f1e271] [cursor=pointer] [box=891,414,24,24]
+          - generic [ref=f1e272] [cursor=pointer] [box=908,269,24,24]
+          - generic [ref=f1e273] [cursor=pointer] [box=791,275,24,24]
+          - generic [ref=f1e274] [cursor=pointer] [box=822,335,24,24]
+          - generic [ref=f1e275] [cursor=pointer] [box=879,293,24,24]
+          - generic [ref=f1e276] [cursor=pointer] [box=834,297,24,24]
+          - generic [ref=f1e277] [cursor=pointer] [box=847,341,24,24]
+          - generic [ref=f1e278] [cursor=pointer] [box=789,359,24,24]
+          - generic [ref=f1e279] [cursor=pointer] [box=835,264,24,24]
+          - generic [ref=f1e280] [cursor=pointer] [box=847,235,24,24]
+          - generic [ref=f1e281] [cursor=pointer] [box=865,247,24,24]
+          - generic [ref=f1e282] [cursor=pointer] [box=895,235,24,24]
+          - generic [ref=f1e283] [cursor=pointer] [box=869,546,24,24]
+          - generic [ref=f1e284] [cursor=pointer] [box=815,541,24,24]
+          - generic [ref=f1e285] [cursor=pointer] [box=803,477,24,24]
+          - generic [ref=f1e286] [cursor=pointer] [box=666,337,24,24]
+          - generic [ref=f1e287] [cursor=pointer] [box=717,357,24,24]
+          - generic [ref=f1e288] [cursor=pointer] [box=766,326,24,24]
+          - generic [ref=f1e289] [cursor=pointer] [box=756,369,24,24]
+          - generic [ref=f1e290] [cursor=pointer] [box=784,500,24,24]
+          - generic [ref=f1e291] [cursor=pointer] [box=791,458,24,24]
+          - generic [ref=f1e292] [cursor=pointer] [box=890,487,24,24]
+          - generic [ref=f1e293] [cursor=pointer] [box=684,442,24,24]
+          - generic [ref=f1e294] [cursor=pointer] [box=736,342,24,24]
+          - generic [ref=f1e295] [cursor=pointer] [box=658,452,24,24]
+          - generic [ref=f1e296] [cursor=pointer] [box=743,438,24,24]
+          - generic [ref=f1e297] [cursor=pointer] [box=727,414,24,24]
+          - generic [ref=f1e298] [cursor=pointer] [box=724,481,24,24]
+          - generic [ref=f1e299] [cursor=pointer] [box=803,514,24,24]
+          - generic [ref=f1e300] [cursor=pointer] [box=841,428,24,24]
+          - generic [ref=f1e301] [cursor=pointer] [box=835,474,24,24]
+        - generic [ref=f1e302] [box=658,256,623,456]:
+          - generic [ref=f1e303] [cursor=pointer] [box=1095,421,74,9]: Freehold Drift
+          - generic [ref=f1e304] [cursor=pointer] [box=1015,458,75,9]: Veridian Reach
+          - generic [ref=f1e305] [cursor=pointer] [box=932,432,63,9]: The Redmarch
+          - generic [ref=f1e306] [cursor=pointer] [box=842,464,63,9]: Hollow Reach
+          - generic [ref=f1e307] [cursor=pointer] [box=773,443,42,9]: The Hush
+          - generic [ref=f1e308] [cursor=pointer] [box=702,458,47,9]: The Verge
+          - generic [ref=f1e309] [cursor=pointer] [box=725,358,42,9]: The Veil
+          - generic [ref=f1e310] [cursor=pointer] [box=1048,657,37,9]: Bastion
+          - generic [ref=f1e311] [cursor=pointer] [box=891,290,58,9]: The Auction
+          - generic [ref=f1e312] [cursor=pointer] [box=837,268,79,9]: The Stolen Womb
+          - generic [ref=f1e313] [cursor=pointer] [box=733,348,90,9]: The Black Station
+          - generic [ref=f1e314] [cursor=pointer] [box=807,495,79,9]: The Last Beacon
+      - generic [ref=f1e315] [box=425,795,1070,19]:
+        - generic [ref=f1e316] [box=425,802,56,12]: gate
+        - generic [ref=f1e317] [box=499,802,90,12]: hub route
+        - generic [ref=f1e318] [box=607,802,39,12]: hub
+        - generic [ref=f1e319] [box=663,802,118,12]: plotted route
+  - generic [box=0,0,1920,889]:
+    - status [box=1523,14,229,135]
+    - generic [box=674,507,208,112]:
+      - generic [box=682,513,192,14]:
+        - generic [box=712,513,69,14]:
+          - generic [box=712,513,35,14]: FORE
+          - generic [box=753,513,29,14]: AFT
+      - generic [box=682,532,192,10]: SCREEN
+      - generic [box=682,547,192,10]: SHELL
+      - generic [box=682,562,192,13]: HULL
+      - generic [box=682,580,192,14]:
+        - generic [box=682,582,52,10]: SPD
+        - generic [box=742,580,38,14]: 30u/s
+      - generic [box=682,599,192,14]:
+        - generic [box=682,601,52,10]: WPN
+        - generic [box=742,599,132,14]: 1 · Energy cannon
+    - generic [box=1038,507,183,163]:
+      - generic [box=1046,513,167,13]: Watchful Apt
+      - generic [box=1046,530,167,14]:
+        - generic [box=1076,530,69,14]:
+          - generic [box=1076,530,35,14]: FORE
+          - generic [box=1117,530,29,14]: AFT
+      - generic [box=1046,549,167,10]: SCREEN
+      - generic [box=1046,564,167,10]: SHELL
+      - generic [box=1046,579,167,10]: ENGINE
+      - generic [box=1046,594,167,13]: HULL
+      - generic [box=1046,612,167,14]:
+        - generic [box=1161,614,52,10]: SPD
+        - generic [box=1116,612,38,14]: 45u/s
+      - generic [box=1046,631,167,14]:
+        - generic [box=1161,633,52,10]: DIST
+        - generic [box=1106,631,47,14]: 1188 u
+      - generic [box=1046,650,167,14]:
+        - generic [box=1161,652,52,10]: CLOS
+        - generic [box=1099,650,54,14]: +39 u/s
+    - generic [box=14,673,1892,204]:
+      - generic [box=14,810,120,67]:
+        - generic [box=25,819,98,14]: Plant
+        - generic [box=25,839,98,10]: STRAIN
+        - generic [box=25,854,98,14]:
+          - generic [box=25,856,52,10]: ENGINE
+          - generic [box=85,854,30,14]: OK
+      - generic [box=146,791,131,86]:
+        - generic [box=157,800,109,14]: Flight
+        - generic [box=157,820,109,10]: THR
+        - generic [box=157,835,109,14]:
+          - generic [box=157,837,52,10]: BURN
+          - generic [box=217,835,39,14]: READY
+        - generic [box=157,854,109,14]:
+          - generic [box=157,856,52,10]: DRIFT
+          - generic [box=217,854,39,14]: READY
+      - generic [box=289,825,120,52]:
+        - generic [box=300,834,98,14]: Heat
+        - generic [box=300,854,98,14]:
+          - generic [box=300,856,52,10]: STRAIN
+          - generic [box=360,854,16,14]: 0%
+      - generic [box=1758,673,148,204]:
+        - generic [box=1758,673,148,33]: PWR
+        - generic [box=1758,714,148,101]:
+          - generic [box=1769,723,126,14]: Bio
+          - generic [box=1769,743,126,14]: KEEN
+          - generic [box=1769,762,126,10]: HUNGER
+          - generic [box=1769,777,126,10]: WOUNDS
+          - generic [box=1769,792,126,14]:
+            - generic [box=1769,794,52,10]: ECHOES
+            - generic [box=1829,792,8,14]: "0"
+        - generic [box=1758,823,148,54]:
+          - generic [box=1769,832,126,10]: POS
+          - generic [box=1769,842,126,13]: Freehold Drift
+          - generic [box=1769,857,126,11]: X -19 Y 733 Z 1216
+    - generic [box=1774,14,132,90]:
+      - generic [box=1785,23,110,14]: Manifest
+      - generic [box=1785,43,110,14]:
+        - generic [box=1785,45,52,10]: UU
+        - generic [box=1845,43,23,14]: "350"
+      - generic [box=1785,62,110,14]:
+        - generic [box=1785,64,52,10]: FEAR
+        - generic [box=1845,62,8,14]: "0"
+      - generic [box=1785,81,110,14]:
+        - generic [box=1785,83,52,10]: CARGO
+        - generic [box=1845,81,31,14]: 0/20
+    - generic [box=14,14,280,325]:
+      - button "CONTROLS ▾" [ref=f1e13] [cursor=pointer] [box=25,24,78,10]
+      - generic [box=25,41,258,289]:
+        - list [box=25,41,258,289]:
+          - listitem [box=25,41,258,11]: Mouse — steer toward reticle
+          - listitem [box=25,54,258,11]: W/S — vertical strafe (W = up)
+          - listitem [box=25,67,258,11]: A/D — lateral strafe (D = right)
+          - listitem [box=25,80,258,11]: Q/E — roll left / right (set your up)
+          - listitem [box=25,93,258,22]: R/F (hold) — throttle up / down · double-tap F — full stop
+          - listitem [box=25,117,258,11]: Space — afterburner
+          - listitem [box=25,130,258,11]: Shift (hold) — vector-hold drift
+          - listitem [box=25,143,258,11]: LMB (hold) — fire
+          - listitem [box=25,156,258,22]: "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic"
+          - listitem [box=25,180,258,11]: T — cycle target
+          - listitem [box=25,193,258,11]: V — lock under reticle
+          - listitem [box=25,206,258,11]: N — automine locked asteroid
+          - listitem [box=25,219,258,22]: H — hail · J — dock · C — camera (chase / third / first-person)
+          - listitem [box=25,243,258,11]: X — match lock speed
+          - listitem [box=25,256,258,11]: K — engine on lock (after shields)
+          - listitem [box=25,269,258,22]: G — cycle hub route at a Lamplighter junction
+          - listitem [box=25,293,258,11]: M — galaxy chart
+          - listitem [box=25,306,258,11]: L — berth records (save/load)
+          - listitem [box=25,319,258,11]: P — pause

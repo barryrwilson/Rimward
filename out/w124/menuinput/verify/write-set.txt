@@ -1,0 +1,26 @@
+# Wave 124 CTL-04 menu-input leftover — worker write-set (git untracked)
+
+docs/Ctl04MenuInputDesign.md
+out/w124/menuinput/code-review.md
+out/w124/menuinput/current-ctl04-menu-input-inventory.md
+out/w124/menuinput/notes.md
+out/w124/menuinput/security-review.md
+out/w124/menuinput/shared-contract.md
+out/w124/menuinput/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w124/menuinput/verify/report.md
+out/w124/menuinput/verify/write-set.txt
+
+# Not in this worker write-set
+
+src/ — no edits
+scripts/ — no edits
+docs/PLAYER-EXPERIENCE-WISHLIST.md — dirty in tree (Wave 123 leftover census + playtest capture); not this pack
+PROGRESS.md — dirty in tree (Wave 123 leftover census); not this pack
+docs/Ctl01DockBindDesign.md — untouched
+docs/Ctl02OverlayDesign.md — untouched
+docs/OwnerDecisionsWave124.md — absent
+out/w124/berthfreeze/** — sibling CTL-03 pack
+out/w124/startergrace/** — sibling AI-05 pack

@@ -11,7 +11,7 @@ import {
 } from './hangar.js';
 import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
 import { sanitizeNav } from './nav.js';
-import { canOpenPlayCard, playSurfaceBlocked } from '../systems/overlay-policy.js';
+import { canOpenPlayCard, playSurfaceBlocked, setBerthHold } from '../systems/overlay-policy.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -38,8 +38,11 @@ import { canOpenPlayCard, playSurfaceBlocked } from '../systems/overlay-policy.j
  * - MANUAL SLOTS ("Berth Records", KeyL — SPACE ONLY): three manual slots
  *   beside the autosave, localStorage keys 'rimward-save-v1-slot-1..3' with
  *   the same {v:1} snapshot envelope. KeyL toggles the panel — opens only
- *   while flying (!docked, !paused, not dead; Escape always closes; the
- *   game keeps running underneath). Each row shows its berth's date,
+ *   while flying (!docked, !paused, not dead). Session berthHold freezes
+ *   player flight, AP steering, gate emit, jump charge, and player DPS.
+ *   This is not KeyP pause. L/Escape close unless a gate charge, jump, or
+ *   flying Autopilot was interrupted — then the desk stays until RESUME
+ *   or LOAD. Each row shows its berth's date,
  *   system name, and credits; manual rows get a Save button, every row a
  *   Load button (disabled while the berth is empty or corrupt). Manual
  *   saves share the autosave gating (hostile within the encounter bubble
@@ -1373,14 +1376,53 @@ export function initSave(ctx) {
     'border-bottom:1px solid #22303f;padding-bottom:8px;';
   berthPanel.appendChild(berthTitle);
 
+  const BERTH_HINT_HOLD = 'L or ESC to close — your ship holds. This is not Pause (P).';
+  const BERTH_HINT_INTERRUPT = 'Ship holds. RESUME continues the interrupted leg. This is not Pause (P).';
+  const BERTH_RESUME_AP = 'Autopilot is waiting. RESUME continues that leg.';
+  const BERTH_RESUME_GATE = 'Gate charge is waiting. RESUME continues that jump.';
+  const BERTH_RESUME_BOTH = 'Autopilot and gate charge are waiting. RESUME continues.';
+
   const berthHint = document.createElement('div');
-  berthHint.textContent = 'L or ESC to close — records hold while you fly';
+  berthHint.textContent = BERTH_HINT_HOLD;
   berthHint.style.cssText = 'color:#5f7185;font-size:11px;letter-spacing:0.1em;margin:6px 0 12px;';
   berthPanel.appendChild(berthHint);
 
   document.body.appendChild(berthRoot);
 
   let berthOpen = false;
+  let berthInterruptAp = false;
+  let berthInterruptGate = false;
+
+  function captureBerthInterrupt() {
+    try {
+      if (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true) berthInterruptAp = true;
+    } catch { /* missing nav is not interrupt */ }
+    try {
+      const g = ctx.gate;
+      if (g && (g.jumping || (typeof g.progress === 'number' && g.progress > 0))) {
+        berthInterruptGate = true;
+      }
+    } catch { /* missing gate is not interrupt */ }
+  }
+
+  function clearBerthInterrupt() {
+    berthInterruptAp = false;
+    berthInterruptGate = false;
+  }
+
+  function berthInterruptArmed() {
+    return berthInterruptAp === true || berthInterruptGate === true;
+  }
+
+  function applyBerthHoldFlag(next) {
+    try {
+      setBerthHold(ctx, next === true);
+    } catch {
+      try {
+        if (ctx.flags) ctx.flags.berthHold = next === true;
+      } catch { /* never fall back to paused */ }
+    }
+  }
 
   function setBerthOpen(next) {
     if (next) {
@@ -1392,10 +1434,20 @@ export function initSave(ctx) {
     try {
       if (ctx.flags) ctx.flags.berthOpen = next;
     } catch { /* session flag is optional */ }
+    if (next) {
+      applyBerthHoldFlag(true);
+      captureBerthInterrupt();
+    } else {
+      applyBerthHoldFlag(false);
+      clearBerthInterrupt();
+    }
     berthRoot.style.display = next ? 'flex' : 'none';
     berthRoot.setAttribute('aria-hidden', String(!next));
-    if (next) refreshBerth();
-    else {
+    if (next) {
+      refreshBerth();
+      syncBerthHoldUi();
+    } else {
+      syncBerthHoldUi();
       try {
         const ae = typeof document !== 'undefined' ? document.activeElement : null;
         if (ae && typeof berthRoot.contains === 'function' && berthRoot.contains(ae) && typeof ae.blur === 'function') {
@@ -1403,6 +1455,20 @@ export function initSave(ctx) {
         }
       } catch { /* close still wins */ }
     }
+  }
+
+  function requestBerthClose() {
+    captureBerthInterrupt();
+    if (berthInterruptArmed()) {
+      syncBerthHoldUi();
+      return;
+    }
+    setBerthOpen(false);
+  }
+
+  function resumeBerthHold() {
+    clearBerthInterrupt();
+    setBerthOpen(false);
   }
 
   function saveToSlot(slotKey, n) {
@@ -1431,6 +1497,8 @@ export function initSave(ctx) {
     const snap = loadSnapshot(slotKey);
     if (!snap) return; // empty or corrupt berth — nothing to restore
     restore(ctx, snap);
+    clearBerthInterrupt();
+    applyBerthHoldFlag(false);
     setBerthOpen(false);
     ctx.emit('commLine', { text: 'Berth record restored.' });
   }
@@ -1484,6 +1552,37 @@ export function initSave(ctx) {
     berthRows.push({ key: slotKey, meta, loadBtn });
   }
 
+  const berthResumeWrap = document.createElement('div');
+  berthResumeWrap.setAttribute('aria-hidden', 'true');
+  berthResumeWrap.style.cssText = 'display:none;margin-top:14px;padding-top:12px;border-top:1px solid #2c3d52;';
+  const berthResumeWhy = document.createElement('div');
+  berthResumeWhy.style.cssText = 'color:#9fb2c6;font-size:12px;line-height:1.45;margin:0 0 10px;';
+  berthResumeWhy.id = 'rw-berth-resume-why';
+  const berthResumeBtn = document.createElement('button');
+  berthResumeBtn.type = 'button';
+  berthResumeBtn.className = 'screen-btn screen-btn-warm rw-berth-resume';
+  berthResumeBtn.textContent = 'RESUME';
+  berthResumeBtn.setAttribute('aria-describedby', 'rw-berth-resume-why');
+  berthResumeBtn.style.cssText =
+    'width:100%;padding:10px 16px;font-size:14px;letter-spacing:0.18em;text-align:center;';
+  berthResumeBtn.addEventListener('click', resumeBerthHold);
+  berthResumeWrap.appendChild(berthResumeWhy);
+  berthResumeWrap.appendChild(berthResumeBtn);
+  berthPanel.appendChild(berthResumeWrap);
+
+  function syncBerthHoldUi() {
+    try {
+      const interrupt = berthInterruptArmed();
+      berthHint.textContent = interrupt ? BERTH_HINT_INTERRUPT : BERTH_HINT_HOLD;
+      berthResumeWrap.style.display = interrupt ? 'block' : 'none';
+      berthResumeWrap.setAttribute('aria-hidden', interrupt ? 'false' : 'true');
+      if (berthInterruptAp && berthInterruptGate) berthResumeWhy.textContent = BERTH_RESUME_BOTH;
+      else if (berthInterruptAp) berthResumeWhy.textContent = BERTH_RESUME_AP;
+      else if (berthInterruptGate) berthResumeWhy.textContent = BERTH_RESUME_GATE;
+      else berthResumeWhy.textContent = '';
+    } catch { /* skip UI; never throw; never pause */ }
+  }
+
   function refreshBerth() {
     for (const row of berthRows) {
       const snap = loadSnapshot(row.key);
@@ -1506,14 +1605,14 @@ export function initSave(ctx) {
       // Never intercept: no preventDefault/stopPropagation. While docked or
       // paused other overlays own the screen, and while dead the death
       // overlay does — only allow closing in those states.
-      if (berthOpen) setBerthOpen(false);
+      if (berthOpen) requestBerthClose();
       else if (!ctx.flags.docked && !ctx.flags.paused && !dead) {
         let blocked = false;
         try { blocked = playSurfaceBlocked(ctx) === true; } catch { blocked = false; }
         if (!blocked) setBerthOpen(true);
       }
     } else if (e.code === 'Escape' && berthOpen) {
-      setBerthOpen(false);
+      requestBerthClose();
     }
   });
 

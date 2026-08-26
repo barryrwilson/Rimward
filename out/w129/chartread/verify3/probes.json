@@ -1,0 +1,61 @@
+{
+  "vite": "http://127.0.0.1:5174/",
+  "static": {
+    "svgClickListener": "src/systems/galaxychart.js:1294 svg.addEventListener('click'",
+    "panPointerDown": "src/systems/galaxychart.js:1250",
+    "panPointerMove": "src/systems/galaxychart.js:1269",
+    "panPointerUp": "src/systems/galaxychart.js:1287",
+    "plotSkipsIfPanned": true,
+    "destSelectId": "rw-galaxy-dest",
+    "itineraryLegs": "paintItinerary i in 0..path.length-2; gateTypeToken(from,to)"
+  },
+  "boot": {
+    "command": "npm run test:boot",
+    "overall": "BOOT TEST FAIL — 1 errors",
+    "wave85NavChart": {
+      "pass": true,
+      "livePlot": true,
+      "liveCleared": true,
+      "clickCurrentClears": true,
+      "failLine": false
+    },
+    "wave30PayTribute": {
+      "pass": true,
+      "note": "known flake; this run all true"
+    },
+    "wave129Src": {
+      "pass": false,
+      "noFearOnMiss": false,
+      "note": "hail.js emitHailMiss then bumpFear helper within 80 chars; not galaxychart write-set. destKept/zoomIds/filters/itinerary/dragPx/hit24/noPrevent true"
+    },
+    "wave129Hailmiss": {
+      "pass": true,
+      "emit": true,
+      "noShip": true,
+      "noFear": true,
+      "noPause": true
+    }
+  },
+  "live": {
+    "origin": "Digit1 Freehold Greenhand after New Game confirm",
+    "clickPlot": {
+      "target": ".rw-galaxy-hit[data-system-id=veridian]",
+      "plotCount": 1,
+      "destValue": "veridian",
+      "hopCount": 1,
+      "hops": ["Veridian Reach — Veridian Combine — Stranger — gate — Stranger; pirate traffic 3"],
+      "unknown": false
+    },
+    "zoomThenPan": {
+      "fitViewBox": "665 367 1258 1006",
+      "afterZoomIn": "874.6666666666667 534.6666666666667 838.6666666666666 670.6666666666666",
+      "afterPan": "743.8624815178501 461.9976749173242 838.6666666666666 670.6666666666666",
+      "destExists": true,
+      "destId": "rw-galaxy-dest",
+      "destValue": "veridian",
+      "hopCount": 1
+    },
+    "consoleErrors": 0,
+    "consoleWarnings": 0
+  }
+}

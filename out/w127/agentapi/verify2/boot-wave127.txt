@@ -1,0 +1,637 @@
+
+> websim@0.1.0 test:boot
+> node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs
+
+INIT OK   title
+INIT OK   starfield
+INIT OK   solarsystem
+INIT OK   asteroids
+INIT OK   station
+INIT OK   landmarks
+INIT OK   gate
+INIT OK   controls
+INIT OK   autopilot
+INIT OK   settings
+INIT OK   bio
+INIT OK   ship
+INIT OK   world
+INIT OK   contacts
+INIT OK   mystery
+INIT OK   epics
+INIT OK   jump
+INIT OK   nav
+INIT OK   traffic
+INIT OK   npc
+INIT OK   combat
+INIT OK   pods
+INIT OK   wakes
+INIT OK   hail
+INIT OK   song
+INIT OK   save
+INIT OK   origins
+INIT OK   onboarding
+INIT OK   galaxychart
+INIT OK   agentapi
+INIT OK   hud
+wave40 title screen dismiss: {"overlayShown":true,"pausedWhileOpen":true,"overlayRemoved":true,"pauseLeftForOrigins":true}
+wave6 origin pick: {"overlayShown":true,"pausedWhileOpen":true,"originRecorded":true,"unpausedAfterPick":true,"originChosenEmitted":true,"overlayRemoved":true}
+after boot: ships=8 records=17 prices=12 pods=0
+gate network: systems=101 {"gateDataOk":true,"gateSymmetryOk":true,"hubRoutesOk":true,"connectedOk":true,"bandsOk":true,"fieldsOk":true,"countOk":true,"pinnedOk":true,"degreeOk":true,"pinnedBandsOk":true}
+after cruise: speed=120.0 pos=-1121,30,800
+wave53 cruise clear: {"zone":0,"hull":100,"speed":120}
+burner: active=false speed=120.0
+target: none
+after firing: heat=0.0 playerHull=100 ships=0
+drift: active=false
+full stop: speed=0.0 (expect <2)
+creep resumes: speed=29.8 (expect ~30)
+after soak: time=214s ships=0 incidents=0 aftermath=0 event=none milestones=1
+bio: mood=serene hunger=0.19 wounds=0.00
+save present: true
+wave21 hub junction: {"hubDataOk":true,"inZone":true,"nearHub":true,"routeCount":true,"initialSelection":true,"cyclesInOrder":true,"wrapsToFirst":true,"dEmitsRouteJump":true,"jumpBegun":true,"arrivedAtHearth":true,"nearHearthBackGate":true,"backGateZone":true,"returnedToFreehold":true,"hubArrivalRule":true}
+wave22 junction visual: {"singleJunction":true,"routeCountHook":true,"armLamps":true,"routeIndexTracks":true,"routeIndexWraps":true,"goneInHearth":true,"rebuiltOnReturn":true}
+wave38 live freehold: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionSingle":true,"junctionCoexists":true}
+wave21 galaxy chart: {"rootPresent":true,"opensOnKeyM":true,"nodeCount101":true,"currentMarked":true,"gateEdges":true,"routeEdges":true,"escapeCloses":true,"keyMReopens":true,"keyMCloses":true} nodes=101 gates=134 routes=25
+wave21 migrant restore: {"migrantForced":true,"savedInTransit":true,"sameSystemRestore":true,"restoredStillInTransit":true,"migrantArrives":true,"landsInDestBank":true} name="Vesper-9" dest=veridian time=249.5
+gate inZone (expect true): true
+jump checks: {"currentSystem":true,"jumpingDone":true,"shipsCleared":true,"asteroidsSwapped":true,"priceRebound":true,"veridianSpread":true,"nearDestGate":true}
+veridian: ships=9 station=present prices.provisions=135
+wave38 live veridian: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionCoexists":true}
+gate inZone (expect true): true nearTo (expect redmarch): redmarch
+redmarch checks: {"currentSystem":true,"jumpingDone":true,"shipsRespawned":true,"castMatches":true,"stationPresent":true,"pricesTable":true,"provisionsSpread":true,"tradesRestricted":true,"planetsGenerated":true}
+redmarch: ships=8 records=14 prices.provisions=127 planets=4
+wave38 live redmarch: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionCoexists":true}
+back to veridian: currentSystem=veridian (expect veridian) nearReturnGate (expect true): true pos=877,46,103
+round trip: currentSystem=freehold (expect freehold), prices.provisions=101
+wave4 contacts data: {"fullRoster104":true,"dockmasterX101":true,"fenceX1":true,"fixerX2":true,"jsonRoundTrip":true}
+wave4 rank ladder: {"ladderDescending":true,"swornAt60":true,"knownAt10":true,"strangerAt0":true,"suspectAtMinus20":true,"markedAtMinus30":true}
+wave4 contacts api: {"dockmastersFound":true,"trustClampedAt65":true,"recognitionAt65":true,"recognitionNullAt10":true,"rumorNullWithoutIncidents":true}
+wave4 ferry accept: {"dockedAtFreehold":true,"ferryOffered":true,"acceptButtonFound":true,"holdHadRoomFor4":true,"provisionsGranted4":true,"jobAccepted":true,"destStampedVeridian":true}
+wave4 ferry delivery: {"dockedAtVeridian":true,"jobDone":true,"paidExactly350":true,"provisionsConsumed":true}
+wave4 recovery accept: {"recoveryCollisionCleared":true,"recoveryCollisionPulled":true,"recoveryOffered":true,"acceptButtonFound":true,"podSpawnedAtWreck":true,"jobAccepted":true}
+wave4 recovery delivery: {"podScooped":true,"jobCollected":true,"redockedAtVeridian":true,"jobDone":true,"paidExactly300":true}
+wave4 fence favor: {"fenceFound":true,"spendFavorUnit":true,"gatesUnmet":true,"lockerShutBefore":true,"favorButtonFound":true,"favorSpent":true,"sessionFlagSet":true,"restrictedListed":true,"lockerOpenAfter":true} fear=2 rep.freehold=0
+wave5 hollowreach jump: {"gateDefRoundTrip":true,"inZoneAtGate":true,"arrived":true,"jumpingDone":true,"systemLoadedFired":true,"band2SilentLine":true,"nearReturnGate":true} line="Hollow Reach. ΓÇªno traffic on scope."
+wave38 live hollow: {"noOverlay":true,"hollowStationSculpt":true,"gatesPresent":true,"junctionLanternNoOverlay":true}
+wave5 band pacing: {"freeholdBand0":true,"veridianBand0":true,"redmarchBand1":true,"hollowreachBand2":true,"eventGapStretches":true,"songGapStretches":true}
+wave5 clue discovery: {"clueFound":true,"eventFired":true,"eventCarriesLine":true,"permanentNoRefire":true} found=["hr_c_answer"]
+wave5 landmark discovery: {"landmarkVisited":true,"eventFired":true,"eventCarriesNameAndLine":true,"authoredSculpt":true} visited=["hr_quiet_beacon"]
+wave5 mystery save: {"saveWritten":true,"mysteryInSave":true,"bioInSave":true}
+wave5 death tenderness: {"corruptedFirst":true,"mysteryRestored":true,"moodAnxious":true,"bondPreserved":true,"hungerPreserved":true,"bioNotDefaults":true} mood=anxious bond=0.5391666666666184 saved=0.5391666666666184 mystery={"found":["hr_c_answer"],"visited":["hr_quiet_beacon"]}
+wave5 bio visuals: {"moodIsFeral":true,"growthResolved":true,"hullMeshFound":true,"fleshScaledUp":true,"scarsPresent":true,"scarVisible":true,"redExceedsSerene":true,"redMovedFeral":true} fleshScale=1.144 scars=5/5 emissiveR=0.978 (serene 0.310, before 0.525)
+repair pricing: {"buttonFound":true,"itemizedCost":true,"chargedExactly":true,"madeWhole":true} cost=123 expect=123
+repair refit: {"screenRetrued":true,"shellRetrued":true,"noCharge":true,"creditsFinite":true}
+save boundary heal: {"creditsRestored":true,"hullFinite":true,"engineMaxRetrued":true,"bondFinite":true}
+wave6 onboarding: {"moveHintShown":true,"moveSeenOnce":true,"dismissedOnKey":true,"suppressionRespected":true,"hintsRestored":true} seen=["move","gate"]
+wave6 epics: {"stagesRecorded":true,"stageEventsSeen":true,"stageLinesVoiced":true,"mergedEffects":true,"standingShowsEpicName":true,"standingShowsAchieved":true} stages=1,2,3 fx={"repairMult":0.9,"jobPayMult":1.15,"sellMult":1.1}
+wave6 ace arc: {"hunterSpawned":true,"vaneInRedmarchBank":true,"roleAce":true,"bounty4000":true,"whisperVoiced":true} line="The Ledger has bought a Named Gun. Sister Vane flies the Redmarch now."
+wave6 convergence: {"hintFlagSet":true,"hintLineVoiced":true,"converged":true,"milestoneEvent":true,"convergenceEvent":true,"songShiftEvent":true,"siteRendered":true} found=["hr_c_answer","rm_c_tally","vd_c_shanty"]
+wave6 audio: {"noUpdateErrors":true,"bogusJumpIgnored":true}
+wave6 settings: {"panelOpened":true,"checkboxFound":true,"bodyClassApplied":true,"persisted":true,"panelClosed":true,"resetClean":true}
+wave6 save fields: {"saveWritten":true,"epicsPersisted":true,"originPersisted":true,"onboardingPersisted":true,"aceRivalryPersisted":true,"convergedPersisted":true}
+wave7 hush jump: {"gateIsSecondEntry":true,"inZoneAtGate":true,"arrived":true,"jumpingDone":true,"band3":true,"bandTable3":true,"stationThreshold":true,"nearArrivalGate":true}
+wave7 deepening: {"convergedAlready":true,"bothHushCluesFound":true,"fiveCluesHeld":true,"clueEventsCarriedLines":true,"hintFlagSet":true,"hintLineVoiced":true,"deepened":true,"milestoneEvent":true,"deepeningEvent":true,"songShiftEvent":true} found=["hr_c_answer","rm_c_tally","vd_c_shanty","th_c_keeper","th_c_song"]
+wave7 lineage: {"gen0Spawned":true,"downStamped0":true,"gen1Successor":true,"generationBumped1":true,"lineagePassed1":true,"downStamped1":true,"gen2Successor":true,"generationBumped2":true,"lineagePassed2":true,"lineBroken":true,"noFourthVane":true} defeats=3
+wave7 illyx ladder: {"defeatsBanked":true,"recordFound":true,"rematchCount2":true,"resolvePlus30":true} resolve=85 rematches=2
+wave7 epic capstones: {"freehold4":true,"freeholdSellTotal":true,"redledger4":true,"redledgerBuyTotal":true,"veridian4":true,"veridianRepairTotal":true,"hollow4":true,"hollowRepairTotal":true} epics={"hollow":4,"freehold":4,"redledger":4,"veridian":4}
+wave7 creditor: {"stagesArrivedSpaced":true,"callLinesMatch":true,"repDropped3PerCall":true,"collectorSentFlag":true,"collectorInBank":true,"debtClearedFlag":true,"debtClearedMilestone":true,"clearRepBonus":true,"clearEventVoiced":true} calls=3 rep.redledger=51
+wave7 origin payoff: {"firedOnce":true,"carriesLine":true,"arcFlagSet":true,"noRefire":true}
+wave7 save fields: {"saveWritten":true,"originArcPersisted":true,"hunterGenerationPersisted":true,"deepeningPersisted":true}
+wave7 restore: {"corruptedFirst":true,"originArcRestored":true,"hunterGenerationRestored":true,"deepeningRestored":true}
+wave8 verge jump: {"gateIsSecondEntry":true,"inZoneAtGate":true,"arrived":true,"jumpingDone":true,"systemLoadedFired":true,"band4":true,"bandTable4":true,"band4SilentLine":true,"stationTheVigil":true,"nearArrivalGate":true} line="The Verge. No hail. No echo of a hail. Out here even the quiet has stopped listening."
+wave8 verge content: {"vergeCluesEmpty":true,"authoredCluesStill6":true,"twoLandmarks":true,"choirStonesVisited":true,"unfinishedVisited":true,"choirEventCarriesLine":true,"unfinishedEventCarriesLine":true} visited=["hr_quiet_beacon","th_lanes_end","vd_hulk_row","vg_choir_stones","vg_unfinished"]
+wave8 illyx lineage: {"gen0Found":true,"downStamped0":true,"gen1Successor":true,"successorFresh":true,"generationBumped1":true,"lineagePassed1":true,"lineBroken":true,"lineBrokenEvent":true,"downClearedAfterBreak":true,"noThirdIllyx":true} gen=1
+wave8 repeat debtor: {"reenteredDebtFlag":true,"stagesArrivedSpaced":true,"round2LinesMatch":true,"repDropped5PerCall":true,"collectorSent2Flag":true,"secondDreskInVerge":true,"dreskTotalTwo":true,"whisperVoiced":true,"debtClearedAgainFlag":true,"debtClearedAgainMilestone":true,"clearRepBonus5":true,"noThirdRound":true} calls2=2 rep.redledger=46
+wave8 save fields: {"saveWritten":true,"systemIsVerge":true,"round2Persisted":true,"illyxGenerationPersisted":true}
+wave8 restore: {"corruptedFirst":true,"round2Restored":true,"illyxGenerationRestored":true}
+INIT OK   title (beautiful)
+INIT OK   starfield (beautiful)
+INIT OK   solarsystem (beautiful)
+INIT OK   asteroids (beautiful)
+INIT OK   station (beautiful)
+INIT OK   landmarks (beautiful)
+INIT OK   gate (beautiful)
+INIT OK   controls (beautiful)
+INIT OK   autopilot (beautiful)
+INIT OK   settings (beautiful)
+INIT OK   bio (beautiful)
+INIT OK   ship (beautiful)
+INIT OK   world (beautiful)
+INIT OK   contacts (beautiful)
+INIT OK   mystery (beautiful)
+INIT OK   epics (beautiful)
+INIT OK   jump (beautiful)
+INIT OK   nav (beautiful)
+INIT OK   traffic (beautiful)
+INIT OK   npc (beautiful)
+INIT OK   combat (beautiful)
+INIT OK   pods (beautiful)
+INIT OK   wakes (beautiful)
+INIT OK   hail (beautiful)
+INIT OK   song (beautiful)
+INIT OK   save (beautiful)
+INIT OK   origins (beautiful)
+INIT OK   onboarding (beautiful)
+INIT OK   galaxychart (beautiful)
+INIT OK   agentapi (beautiful)
+INIT OK   hud (beautiful)
+wave8 beautiful beats: {"overlayShown":true,"originRecorded":true,"originChosenEmitted":true,"growthReachedFull":true,"beat1Once":true,"beat1Line":true,"beat2Once":true,"beat2Line":true,"payoffOnce":true,"payoffLine":true,"arcFlags":true}
+INIT OK   title (marked)
+INIT OK   starfield (marked)
+INIT OK   solarsystem (marked)
+INIT OK   asteroids (marked)
+INIT OK   station (marked)
+INIT OK   landmarks (marked)
+INIT OK   gate (marked)
+INIT OK   controls (marked)
+INIT OK   autopilot (marked)
+INIT OK   settings (marked)
+INIT OK   bio (marked)
+INIT OK   ship (marked)
+INIT OK   world (marked)
+INIT OK   contacts (marked)
+INIT OK   mystery (marked)
+INIT OK   epics (marked)
+INIT OK   jump (marked)
+INIT OK   nav (marked)
+INIT OK   traffic (marked)
+INIT OK   npc (marked)
+INIT OK   combat (marked)
+INIT OK   pods (marked)
+INIT OK   wakes (marked)
+INIT OK   hail (marked)
+INIT OK   song (marked)
+INIT OK   save (marked)
+INIT OK   origins (marked)
+INIT OK   onboarding (marked)
+INIT OK   galaxychart (marked)
+INIT OK   agentapi (marked)
+INIT OK   hud (marked)
+wave8 marked beats: {"overlayShown":true,"originRecorded":true,"originChosenEmitted":true,"beat1Once":true,"beat1Line":true,"beat2Once":true,"beat2Line":true,"payoffOnce":true,"payoffLine":true,"arcFlags":true}
+wave9 rimWithoutGuns: {"milestoneFiredInRun":true,"refiredOnce":true,"fearBumpExact":true,"noSecondRefire":true,"pirateFound":true,"resolveDeltaExact":true,"milestoneRestored":true} resolve=39ΓåÆ44 fear=35
+INIT OK   title (greenhand)
+INIT OK   starfield (greenhand)
+INIT OK   solarsystem (greenhand)
+INIT OK   asteroids (greenhand)
+INIT OK   station (greenhand)
+INIT OK   landmarks (greenhand)
+INIT OK   gate (greenhand)
+INIT OK   controls (greenhand)
+INIT OK   autopilot (greenhand)
+INIT OK   settings (greenhand)
+INIT OK   bio (greenhand)
+INIT OK   ship (greenhand)
+INIT OK   world (greenhand)
+INIT OK   contacts (greenhand)
+INIT OK   mystery (greenhand)
+INIT OK   epics (greenhand)
+INIT OK   jump (greenhand)
+INIT OK   nav (greenhand)
+INIT OK   traffic (greenhand)
+INIT OK   npc (greenhand)
+INIT OK   combat (greenhand)
+INIT OK   pods (greenhand)
+INIT OK   wakes (greenhand)
+INIT OK   hail (greenhand)
+INIT OK   song (greenhand)
+INIT OK   save (greenhand)
+INIT OK   origins (greenhand)
+INIT OK   onboarding (greenhand)
+INIT OK   galaxychart (greenhand)
+INIT OK   agentapi (greenhand)
+INIT OK   hud (greenhand)
+wave9 greenhand beats: {"overlayShown":true,"originRecorded":true,"originChosenEmitted":true,"beat1Once":true,"beat1Line":true,"beat2Once":true,"beat2Line":true,"payoffOnce":true,"payoffLine":true,"arcFlags":true}
+INIT OK   title (drifter)
+INIT OK   starfield (drifter)
+INIT OK   solarsystem (drifter)
+INIT OK   asteroids (drifter)
+INIT OK   station (drifter)
+INIT OK   landmarks (drifter)
+INIT OK   gate (drifter)
+INIT OK   controls (drifter)
+INIT OK   autopilot (drifter)
+INIT OK   settings (drifter)
+INIT OK   bio (drifter)
+INIT OK   ship (drifter)
+INIT OK   world (drifter)
+INIT OK   contacts (drifter)
+INIT OK   mystery (drifter)
+INIT OK   epics (drifter)
+INIT OK   jump (drifter)
+INIT OK   nav (drifter)
+INIT OK   traffic (drifter)
+INIT OK   npc (drifter)
+INIT OK   combat (drifter)
+INIT OK   pods (drifter)
+INIT OK   wakes (drifter)
+INIT OK   hail (drifter)
+INIT OK   song (drifter)
+INIT OK   save (drifter)
+INIT OK   origins (drifter)
+INIT OK   onboarding (drifter)
+INIT OK   galaxychart (drifter)
+INIT OK   agentapi (drifter)
+INIT OK   hud (drifter)
+wave9 drifter beats: {"overlayShown":true,"originRecorded":true,"originChosenEmitted":true,"grantedTally":true,"beat1Once":true,"beat1Line":true,"beat2Once":true,"beat2Line":true,"payoffOnce":true,"payoffLine":true,"arcFlags":true}
+wave9 hermit data: {"vergeIsHermit":true,"walkMult":true,"buyMult":true,"sellMult":true}
+wave9 hermit trades: {"priceCellShowsHermitBuy":true,"buyButtonFound":true,"buyChargedExact":true,"milestoneOnce":true,"milestoneBanked":true,"secondBuyButtonFound":true,"secondBuyChargedExact":true,"noSecondMilestone":true,"sellButtonFound":true,"sellPaidExact":true} buy=248 sell=316
+wave9 hermit walk: {"vergeWalkedUp":true,"hushWalkedUp":true,"hermitWalkSlower":true} driftV=4 driftH=13
+wave9 save fields: {"saveWritten":true,"systemIsHush":true,"greenhandBeatPersisted":true,"rimWithoutGunsPersisted":true,"hermitMarketPersisted":true}
+wave9 restore: {"corruptedFirst":true,"greenhandBeatRestored":true,"rimWithoutGunsRestored":true,"hermitMarketRestored":true}
+wave10 aspirants: {"firstRiseOnce":true,"firstName":true,"firstLine":true,"recordInVergeBank":true,"recordSpecs":true,"flyingAfterRise":true,"downedAfterDefeat":true,"brokenMilestoneBanked":true,"brokenMilestoneEvent":true,"secondRise":true,"thirdRise":true,"noFourthRise":true,"brokenMilestoneOnceEver":true} rises=Harrow Quist|Saint Ruvic|Ash Bell
+wave10 hermit pirate: {"callowInVergeBank":true,"beatKeysOnCallow":true,"coldPrecondition":true,"silentFromFar":true,"coldHailOnceNear":true,"coldVariant":true,"milestoneBanked":true,"noSecondHail":true} text="You broke the Guns. This lane had teeth once. I remember teeth."
+wave10 deep-rim keepers: {"fullRoster104":true,"dockmasterX101":true,"keepersFound":true,"deepenedPrecondition":true,"vergeDeepenedLine":true,"vergeFlagsBoth":true,"deepenedNotRepeated":true,"hushDeepenedLine":true,"hushFlagsBoth":true,"shallowNeverDeep":true} shallow=null
+INIT OK   title (wave10-converged)
+INIT OK   starfield (wave10-converged)
+INIT OK   solarsystem (wave10-converged)
+INIT OK   asteroids (wave10-converged)
+INIT OK   station (wave10-converged)
+INIT OK   landmarks (wave10-converged)
+INIT OK   gate (wave10-converged)
+INIT OK   controls (wave10-converged)
+INIT OK   autopilot (wave10-converged)
+INIT OK   settings (wave10-converged)
+INIT OK   bio (wave10-converged)
+INIT OK   ship (wave10-converged)
+INIT OK   world (wave10-converged)
+INIT OK   contacts (wave10-converged)
+INIT OK   mystery (wave10-converged)
+INIT OK   epics (wave10-converged)
+INIT OK   jump (wave10-converged)
+INIT OK   nav (wave10-converged)
+INIT OK   traffic (wave10-converged)
+INIT OK   npc (wave10-converged)
+INIT OK   combat (wave10-converged)
+INIT OK   pods (wave10-converged)
+INIT OK   wakes (wave10-converged)
+INIT OK   hail (wave10-converged)
+INIT OK   song (wave10-converged)
+INIT OK   save (wave10-converged)
+INIT OK   origins (wave10-converged)
+INIT OK   onboarding (wave10-converged)
+INIT OK   galaxychart (wave10-converged)
+INIT OK   agentapi (wave10-converged)
+INIT OK   hud (wave10-converged)
+wave10 converged ack: {"overlayShown":true,"originRecorded":true,"originChosenEmitted":true,"vossFound":true,"deepenedFalsy":true,"convergedLine":true,"deepAck1Only":true,"convergedNotRepeated":true} line="Two columns, always ΓÇö arrivals, and arrivals that have not happened yet. Your return goes in neither."
+wave10 save fields: {"saveWritten":true,"systemIsVerge":true,"aspirantsPersisted":true,"brokenPersisted":true,"hermitMetPersisted":true,"deepAcksPersisted":true}
+wave10 restore: {"corruptedFirst":true,"aspirantRisenRestored":true,"downAtRestored":true,"brokenRestored":true,"hermitMetRestored":true,"deepAcksRestored":true,"noGunRisenPostRestore":true}
+wave11 aftermath: {"rimAnsweredOnce":true,"rimAnsweredLine":true,"aftermathSongShiftOnce":true,"milestonePersistedPostRestore":true,"noGunRisenAfter":true,"noAftermathShiftRefire":true}
+wave11 callow returns: {"callowInVergeBank":true,"returnLinesShape":true,"firstVisitLineOnce":true,"counterAfterFirst":true,"noSecondLineSameVisit":true,"secondVisitLineOnce":true,"counterAfterSecond":true} lines=["Nothing comes through here that I don't count. You're counted twice over."]|["The quiet out here isn't empty. You know that better than most."]
+wave11 callow vouch: {"callowData":true,"hermitMetPrecondition":true,"liveShipFound":true,"keepersFound":true,"hailOpenedOnce":true,"hailIntents":true,"hailLine":true,"creditsDroppedExact":true,"vouched":true,"vergeKeeperTrust":true,"vergeKeeperFavor":true,"hushKeeperTrust":true,"hushKeeperFavor":true,"milestoneOnce":true,"milestoneBanked":true,"vouchCommLineOnce":true,"noMilestoneRefire":true,"secondHailSilent":true} credits=50 vergeTrust=15 hushTrust=15
+wave11 keeper ledger: {"exportValue":true,"belowThresholdNull":true,"line1Shape":true,"line2Shape":true,"twoCallsRotate":true,"line1NamesUnvisited":true,"line2NamesUnvisited":true,"closingExact":true} l1="The second column holds: The Shepherd, in Freehold Drift. Marked awaiting." l2="The second column holds: The Tithe Stone, in The Redmarch. Marked awaiting."
+wave11 keeper service: {"waivedPriceCell":true,"waivedBuyButtonFound":true,"waivedChargedExact":true,"fullPriceCellReturns":true,"sellButtonFound":true,"sellPremiumUnchanged":true} waived=199 full=249 sell=318
+wave11 keeper comp: {"favorButtonFound":true,"compedTotalZero":true,"breakdownMentionsKeepers":true,"creditsUnchanged":true,"madeWhole":true} label=0
+wave11 save fields: {"saveWritten":true,"systemIsVerge":true,"callowInSavedBank":true,"vouchedPersisted":true,"returnsPersisted":true}
+wave11 restore: {"corruptedFirst":true,"callowInRestoredBank":true,"vouchedRestored":true,"returnsRestored":true}
+wave12 callow books: {"vouchedPrecondition":true,"returnsBaseline":true,"refusalsBaselineFromWave11":true,"vouchedLinesShape":true,"refuseLinesShape":true,"firstVouchedLineOnce":true,"noOldReturnLines":true,"noSecondLineSameVisit":true,"returnsCursorAfterFirst":true,"liveShipFound":true,"refusalFiredOnce":true,"refusalCursorAfterFirst":true,"refusalNoHailCard":true,"secondPressSilent":true,"secondVouchedLineOnce":true,"refusalRearmedSecond":true,"refusal2NoHailCard":true,"refusalsRotatedTwoTotal":true,"returnsCursorAfterSecond":true} lines=["Your name is in their column now. I keep the books that say so."]|["Back again. Some entries I balance in one column. Yours I balance in two."] refusals=["It's entered. It's balanced. Books like mine don't sell the same line twice."]|["One word is what I sold. The column doesn't take seconds."]
+wave12 keeper clue tier: {"contactFound":true,"sixCluesAuthored":true,"clueTierShape":true,"clueTierNamesHush":true,"clueTierNamesOnlySystem":true,"rotationShape":true,"rotationDiffers":true,"rotSys1HoldsUnfound":true,"rotSys2HoldsUnfound":true,"closingExact12":true} clue="The second column balances. A page stays open in The Hush ΓÇö something there waits to be read." rot="The second column balances. A page stays open in Veridian Reach ΓÇö something there waits to be read."|"The second column balances. A page stays open in The Redmarch ΓÇö something there waits to be read."
+wave12 restore heal: {"saveWritten":true,"callowInSavedBank":true,"liveShipPresentPreRestore":true,"recordIdentityPreRestore":true,"liveShipSurvivedRestore":true,"recordRepointed":true,"restoredRecordLive":true,"noOrphanedLiveFlags":true}
+wave13 keeper vouch ack: {"milestoneStands":true,"keepersFound":true,"vergeVouchExact":true,"vergeAckSet":true,"vergeSecondShipLine":true,"vergeAckStaysTrue":true,"hushVouchIndependent":true,"hollowShipLineDirect":true,"hollowAckStaysFalsy":true,"belowCompNoVouch":true,"noMilestoneNoVouch":true} verge="Callow's word arrived ahead of you ΓÇö your name sits in our second column. The yard is yours."|"she, back on my pad. Good to see her in one piece." hush="Callow's word arrived ahead of you ΓÇö your name sits in our second column. The yard is yours." hollow="she, back on my pad. Good to see her in one piece."
+wave13 keeper ledger comp tier: {"contactFound":true,"hushClueAuthored":true,"nearShape":true,"nearNamesHush":true,"nearNamesNearestLm":true,"nearLmBelongsToHush":true,"nearNoLeak":true,"compGateOldShape":true,"compGateNamesHush":true,"rotationShape":true,"rotationDiffers":true,"rot1NearestInSystem":true,"rot2NearestInSystem":true,"closingExact13":true} near="The second column balances. A page stays open in The Hush ΓÇö the page near The First Garden waits to be read." low="The second column balances. A page stays open in The Hush ΓÇö something there waits to be read." rot="The second column balances. A page stays open in Veridian Reach ΓÇö the page near Hulk Row waits to be read."|"The second column balances. A page stays open in The Redmarch ΓÇö the page near The Tithe Stone waits to be read."
+wave14 vouch arrival gates: {"milestoneStands":true,"keepersFound":true,"hollowNeverNull":true,"belowCompNull":true,"noMilestoneNull":true,"hushArrivalExact":true,"hushAckSet":true,"secondCallSilent":true} hollow=null low=null hush="Callow's word arrived ahead of you ΓÇö your name sits in our second column. The yard is yours."|null
+wave14 arrival comms: {"arrivedHush":true,"keeperOndNamed":true,"vouchCommLineOnce":true,"ackSetByArrival":true,"noRefire":true,"peopleCardShipLine":true,"vergeFlagUntouched":true,"vergeCardStillHolds":true} lines=["Callow's word arrived ahead of you ΓÇö your name sits in our second column. The yard is yours."] people="she, back on my pad. Good to see her in one piece." verge="Callow's word arrived ahead of you ΓÇö your name sits in our second column. The yard is yours."
+wave14 same-system re-emit: {"stillInHush":true,"noKeeperOndLine":true,"ackStaysFalsy":true} keeperLines=0
+wave14 chart mark gates: {"keepersFound":true,"hushClueAuthored":true,"nearestLmComputed":true,"naturalAwaitingNull":true,"naturalChartedUntouched":true,"allFoundNull":true,"belowCompMarkNull":true,"markExact":true,"markChartedId":true,"secondMarkNull":true,"markNoLeak":true,"hollowCanMark":true,"freeholdNeverMarks":true} mark="A mark on your charts ΓÇö The First Garden, in The Hush. The page near it is yours to read." hollow="A mark on your charts ΓÇö The First Garden, in The Hush. The page near it is yours to read." freehold=null
+wave14 docked chart mark: {"dockedInHush":true,"markCommLineOnce":true,"markCommLineExact":true,"chartedGainedId":true,"secondCycleSilent":true} lines=["A mark on your charts ΓÇö The First Garden, in The Hush. The page near it is yours to read."] charted=["th_first_garden"]
+wave15 ledger charted ack: {"keeperKnown":true,"hushLmKnown":true,"ackCompExact":true,"ackBelowExact":true,"ackBelowNamesNoLm":true,"unchartedCompByteIdentical":true,"unchartedBelowByteIdentical":true,"ackNoLeak":true,"oldSaveUncharted":true} comp="The second column balances. A page stays open in The Hush ΓÇö the mark near The First Garden is yours now; the page waits to be read." below="The second column balances. A page stays open in The Hush ΓÇö the mark on your charts is yours now; the page waits to be read." uncharted="The second column balances. A page stays open in The Hush ΓÇö the page near The First Garden waits to be read."|"The second column balances. A page stays open in The Hush ΓÇö something there waits to be read." old="The second column balances. A page stays open in The Hush ΓÇö the page near The First Garden waits to be read."
+wave15 hud chart markers: {"hudRootFound":true,"hushLmKnown":true,"poolPresent":true,"dockedAllHidden":true,"oneVisibleFlying":true,"labelNamesLandmark":true,"labelHasDistance":true,"witnessedHides":true,"veridianLmComputed":true,"crossSystemStillOne":true,"redockedInHush":true} label="The First Garden ┬╖ 963u" cross="The First Garden ┬╖ 963u"
+wave16 chart mark notes: {"landmarksKnown":true,"hushOnlyExact":true,"crossAndHushTableOrdered":true,"visitedExcluded":true,"staleIgnored":true,"oldSaveEmpty":true,"restoredInPlace":true} hush=[{"lmName":"The First Garden","systemName":"The Hush"}] cross=[{"lmName":"Hulk Row","systemName":"Veridian Reach"},{"lmName":"The Lane's End","systemName":"The Hush"},{"lmName":"The First Garden","systemName":"The Hush"}] stale=[{"lmName":"Hulk Row","systemName":"Veridian Reach"},{"lmName":"The Lane's End","systemName":"The Hush"}] old=[]
+wave16 people chart marks: {"dockedInHush":true,"peopleOpened":true,"keeperCardFound":true,"oneChartBox":true,"chartOnKeeperCard":true,"titleExact":true,"linesExact":true,"noLeak":true,"mixedRosterTwoCards":true,"nonKeeperCardNoChart":true,"chartStillOnlyKeeper":true,"contactsRestoredInPlace":true,"visitedHides":true,"restoredInPlace":true} lines=["Γùç Hulk Row ΓÇö Veridian Reach","Γùç The First Garden ΓÇö The Hush"]
+wave23 generated landmarks: {"generatedCount94":true,"landmarkShapeOk":true,"separationHolds":true,"authoredTablesUnchanged":true}
+wave23 landmark discovery: {"arrivedAtHearth":true,"landmarkVisited":true,"eventFired":true,"eventCarriesNameAndLine":true} visited=["hr_quiet_beacon","th_lanes_end","vd_hulk_row","vg_choir_stones","vg_unfinished","fh_hearth_lm"]
+wave23 ledger authored-lane: {"keeperFound":true,"gatedLineAnswered":true,"gatedNeverNamesHearth":true,"fullNeverNamesHearth":true} gated="The second column balances. A page stays open in Hollow Reach ΓÇö something there waits to be read." full="The second column balances. A page stays open in Hollow Reach ΓÇö something there waits to be read."
+wave23 hub dockmasters: {"oneContactEach":true,"dockmasterRole":true,"derivedIds":true,"systemFields":true,"zeroedShape":true}
+wave23 save fields: {"saveWritten":true,"landmarkInSave":true,"rosterInSave104":true}
+wave23 restore: {"corruptedFirst":true,"landmarkRestored":true,"rosterRestored104":true}
+wave24 generated contacts: {"generatedCount94":true,"nonHubCount91":true,"contactShapeOk":true,"hubsCarryNone":true,"namesUnique91":true,"authoredThirteenFound":true,"noAuthoredCollision":true,"noGeneratedClues":true}
+INIT OK   title (wave24 roster)
+INIT OK   starfield (wave24 roster)
+INIT OK   solarsystem (wave24 roster)
+INIT OK   asteroids (wave24 roster)
+INIT OK   station (wave24 roster)
+INIT OK   landmarks (wave24 roster)
+INIT OK   gate (wave24 roster)
+INIT OK   controls (wave24 roster)
+INIT OK   autopilot (wave24 roster)
+INIT OK   settings (wave24 roster)
+INIT OK   bio (wave24 roster)
+INIT OK   ship (wave24 roster)
+INIT OK   world (wave24 roster)
+INIT OK   contacts (wave24 roster)
+INIT OK   mystery (wave24 roster)
+INIT OK   epics (wave24 roster)
+INIT OK   jump (wave24 roster)
+INIT OK   nav (wave24 roster)
+INIT OK   traffic (wave24 roster)
+INIT OK   npc (wave24 roster)
+INIT OK   combat (wave24 roster)
+INIT OK   pods (wave24 roster)
+INIT OK   wakes (wave24 roster)
+INIT OK   hail (wave24 roster)
+INIT OK   song (wave24 roster)
+INIT OK   save (wave24 roster)
+INIT OK   origins (wave24 roster)
+INIT OK   onboarding (wave24 roster)
+INIT OK   galaxychart (wave24 roster)
+INIT OK   agentapi (wave24 roster)
+INIT OK   hud (wave24 roster)
+wave24 generated roster: {"freshRoster104":true,"twoSystemsPicked":true,"factionsDiffer":true,"genAContactOk":true,"genBContactOk":true,"keeperLedgerNull":true,"keeperVouchNull":true,"keeperChartMarkNull":true} genA=fh_hearth genB=vd_survey
+wave24 hearth people card: {"dockedAtHearth":true,"oneCard":true,"cardShowsGeneratedName":true} name="Yardkeeper Stovers"
+wave24 freehold control: {"dockedAtFreehold":true,"noFactionNote":true,"repairButtonFound":true,"epicOnlyTotal":true,"guardDiscriminates":true,"chargedExactly":true,"madeWhole":true} cost=112 expect=112
+wave24 ferrous repair: {"dockedAtLiron":true,"epicNeutral":true,"factionNoteShown":true,"repairButtonFound":true,"scaledTotal":true,"multDiscriminates":true,"chargedExactly":true,"madeWhole":true} cost=106 expect=106
+wave24 lamplighter market: {"dockedAtBeacon":true,"epicNeutral":true,"factionNoteShown":true,"priceCellAgrees":true,"multInChain":true,"buyButtonFound":true,"chargedExactly":true} cell="169 UU" charged=169
+wave24 congregation job accept: {"dockedAtVigil":true,"epicNeutral":true,"factionNoteShown":true,"rewardLineScaled":true,"multDiscriminates":true,"recoveryOffered":true,"acceptButtonFound":true,"podSpawnedAtWreck":true,"jobAccepted":true} pay=360
+wave24 congregation job payout: {"podScooped":true,"jobCollected":true,"redockedAtVigil":true,"paidScaled":true,"jobDone":true} delta=360 expect=360
+wave24 save fields: {"saveWritten":true,"rosterInSave104":true,"bankedNonDefault":true,"dockmasterInSave":true} snap={"id":"contact-cg_vigil-dockmaster","name":"Tonsured Toll","role":"dockmaster","system":"cg_vigil","trust":30,"favors":0,"metAt":1449.4833333332297,"rumorIdx":0,"ledgerIdx":0}
+wave24 restore: {"corruptedFirst":true,"rosterRestored104":true,"dockmasterRestored":true}
+wave25 faction voice tables: {"generatedFactions10":true,"recognitionKeySetMatches":true,"rumorKeySetMatches":true,"hollowAbsent":true,"recognitionAllNonEmpty":true,"rumorAllNonEmpty":true} factions=["assembly","beautiful","congregation","ferrous","freehold","gilded","independent","lamplighter","redledger","veridian"]
+INIT OK   title (wave25 gates)
+INIT OK   starfield (wave25 gates)
+INIT OK   solarsystem (wave25 gates)
+INIT OK   asteroids (wave25 gates)
+INIT OK   station (wave25 gates)
+INIT OK   landmarks (wave25 gates)
+INIT OK   gate (wave25 gates)
+INIT OK   controls (wave25 gates)
+INIT OK   autopilot (wave25 gates)
+INIT OK   settings (wave25 gates)
+INIT OK   bio (wave25 gates)
+INIT OK   ship (wave25 gates)
+INIT OK   world (wave25 gates)
+INIT OK   contacts (wave25 gates)
+INIT OK   mystery (wave25 gates)
+INIT OK   epics (wave25 gates)
+INIT OK   jump (wave25 gates)
+INIT OK   nav (wave25 gates)
+INIT OK   traffic (wave25 gates)
+INIT OK   npc (wave25 gates)
+INIT OK   combat (wave25 gates)
+INIT OK   pods (wave25 gates)
+INIT OK   wakes (wave25 gates)
+INIT OK   hail (wave25 gates)
+INIT OK   song (wave25 gates)
+INIT OK   save (wave25 gates)
+INIT OK   origins (wave25 gates)
+INIT OK   onboarding (wave25 gates)
+INIT OK   galaxychart (wave25 gates)
+INIT OK   agentapi (wave25 gates)
+INIT OK   hud (wave25 gates)
+wave25 recognition gates: {"contactsFound":true,"factionsDiffer":true,"knownTrustLanded":true,"knownAIsFactionLine":true,"knownBIsFactionLine":true,"belowTrustLanded":true,"belowANull":true,"belowBNull":true,"midTrustLanded":true,"midAIsFactionLine":true,"midBIsFactionLine":true,"compTrustLanded":true,"compAIsShipLine":true,"compBIsShipLine":true,"compDominatesFaction":true,"authoredTarnNullAt30":true} genA=fh_hearth genB=vd_survey
+wave25 faction rumor: {"genAPrefixed":true,"genBPrefixed":true,"authoredBare":true,"prefaceDiscriminates":true,"emptyGenNull":true,"emptyAuthoredNull":true} genA="Word travels porch to porch. Kestrel of the Tenth came apart out in the drift. Happens more than it should." tarn="Kestrel of the Tenth came apart out in the drift. Happens more than it should."
+wave25 hearth people recognition: {"dockmasterFound":true,"trustAtKnownTier":true,"dockedAtHearth":true,"oneCard":true,"recognitionRendered":true} line="ΓÇ£Back on the porch already? ThereΓÇÖs always a berth for a neighbor.ΓÇ¥"
+wave26 faction comp table: {"servicesKeys10":true,"compKeys10":true,"compKeyOrderMatchesServices":true,"hollowAbsent":true,"compCoversGeneratedFactions":true,"compAllNonEmpty":true,"jobPayMultTablePins":true}
+wave26 earn below gate: {"dockedAtHearth":true,"dockmasterFound":true,"pinsStraddleGate":true,"favorsStartedAt0":true,"cycleRan":true,"jobDone":true,"postBumpTrustBelowGate":true,"noFavorBelowGate":true}
+wave26 earn at gate: {"cycleRan":true,"jobDone":true,"postBumpTrustAtGate":true,"favorBankedAtGate":true}
+wave26 earn authored control: {"dockedAtFreehold":true,"tarnFound":true,"favorsStartedAt0":true,"cycleRan":true,"jobDone":true,"trustClamped100":true,"authoredNoFavorAt100":true}
+wave26 dockmaster favor spend: {"dockedAtHearth":true,"hearthIsFreeholdFlag":true,"bankedFromEarn":true,"noMarkerButtonFound":true,"noMarkerNotice":true,"noMarkerNoSpend":true,"noMarkerNoFlag":true,"spendButtonFound":true,"favorSpent":true,"compFlagSet":true,"spendNotice":true,"compLineDiscriminates":true,"repairButtonFound":true,"compedTotalZero":true,"compNoteIsFactionLine":true,"keeperLineNotShown":true,"repairAllDeducts0":true,"madeWhole":true,"undockClearsCompFlag":true,"redockNoCompNote":true,"redockRealBill":true} comp="The grange covers a neighborΓÇÖs yard bill ΓÇö mend her and sit a spell."
+wave26 keeper comp pin: {"keeperSystemPicked":true,"dockedAtKeeper":true,"keeperFound":true,"favorButtonFound":true,"favorSpent":true,"compFlagSet":true,"keeperNoticeKept":true,"keeperLineShownVerbatim":true,"compedTotalZero":true,"repairAllDeducts0":true,"madeWhole":true} keeper=hush
+wave26 lane pick: {"laneFound":true,"svcMultsDiffer":true,"laneEpicNeutral":true} lane=as_census->blackstation
+wave26 ferry quote: {"dockedAtLaneOrigin":true,"jobsFound":true,"holdRoomFor9":true,"ferryCardQuoted":true,"quoteIsDestChain":true,"destChainDiscriminates":true,"acceptButtonFound":true,"jobAccepted":true,"destStamped":true,"payQuotedStamped":true,"provisionsFronted":true,"acceptedCardShowsQuote":true} quoted=385
+wave26 haul quote: {"haulCardQuoted":true,"marginPinnedInCardText":true,"quoteIsDestChain":true,"destChainDiscriminates":true,"acceptButtonFound":true,"jobAccepted":true,"originStamped":true,"payQuotedStamped":true,"acceptedCardShowsQuote":true} quoted=770
+wave26 lane delivery: {"boughtTheLoad":true,"holdLoadedForBoth":true,"dockedAtLaneDest":true,"ferryPaidExactlyQuoted":true,"haulPaidExactlyQuoted":true,"haulPaidIs140UnderDestChain":true,"creditsDeltaIsBothQuotes":true,"ferryDone":true,"haulDone":true} ferryPaid=385 haulPaid=770
+wave26 old-save fallback: {"reacceptButtonFound":true,"acceptStampedSnapshot":true,"snapshotDeleted":true,"dockedAtFallbackDest":true,"deliveryFired":true,"paidViaLiveChain":true} dest=redmarch paid=350
+wave26 save fields: {"saveWritten":true,"rosterInSave104":true,"acceptButtonFound":true,"contractOpenInSave":true,"payQuotedInSave":true,"favorsInSave":true} snapJob={"id":"ferry-consignment","kind":"ferry","state":"accepted","title":"Ferry a consignment","detail":"A dockside factor fronts you 4 Provisions ΓÇö no buy-in, no questions ΓÇö and pays 350 UU when the consignment crosses the gate and lands intact at the far station. The manifest is watched: deliver short and the deal is off.","reward":350,"need":4,"progress":0,"originSystem":"redmarch","destSystem":"veridian","payQuoted":438}
+wave26 restore: {"corruptedFirst":true,"rosterRestored104":true,"payQuotedRestored":true,"favorsRestored":true}
+wave27 toolkit: {"petalShape":true,"tendrilShape":true,"matsIdentityCached":true,"matsMarkedShared":true,"collectFindsTags":true,"swayFormulaExact":true,"breathFormulaExact":true,"pulseFormulaExact":true,"frozenUnderReducedMotion":true}
+wave27 freehold controls: {"factionGuard":true,"noBeautifulStation":true,"noOvergrowth":true,"noBuds":true,"noOrganicPois":true}
+wave27 cradle scene: {"arrivedAtCradle":true,"oneBeautifulStation":true,"stationAtDataPosition":true,"gateCountMatchesData":true,"overgrowthPerGate":true,"fourBudSpritesPerGate":true,"landmarkTagsKept":true,"landmarkGlazeRoot":true}
+wave27 cradle dock: {"docked":true,"atTheCradle":true,"overlayOpen":true,"undockedClean":true}
+wave27 station animation: {"stationFound":true,"swayAndBreathTagged":true,"swayFormulaExact":true,"breathFormulaExact":true,"frozenUnderReducedMotion":true,"restoredAfterDrive":true}
+wave27 death-restore: {"saveWritten":true,"restoredAtCradle":true,"stillDocked":true,"stationPresent":true,"stationSameObject":true,"overgrowthStable":true,"glazeRootSurvives":true}
+wave27 rebuild re-emit: {"stationGuarded":true,"gatesRebuilt":true,"overgrownShapeStable":true,"glazeRootRebuilt":true}
+wave28 berth records: {"openedInSpace":true,"fourRowsInOrder":true,"calmBeforeSave":true,"calmBeforeLoad":true,"manualSaveWritten":true,"envelopeShape":true,"envelopeCaptured":true,"sealedToast":true,"creditsRestored":true,"positionRestored":true,"loadClosesPanel":true,"restoredToast":true,"pausedLoadRefused":true,"autosaveBerthOccupied":true,"slot1BerthOccupied":true,"emptyBerthsReadEmpty":true,"toggleCloses":true,"dockedRefusesOpen":true,"dockAutosavePresent":true,"reopenedAfterUndock":true,"autoRowHasNoSave":true,"loadButtonsAreReal":true,"occupiedLoadEnabled":true,"emptyLoadsDisabled":true,"escapeCloses":true}
+wave30 demand hail: {"graceExpired":true,"hailOpened":true,"demandLine":true,"intentsWithoutMounts":true,"demandRolledOnce":true,"demandFlagAndRecord":true,"weaponsColdWhileDemanding":true,"stillDemandingAfterHold":true,"cardOpenDuringHold":true,"oneDemandPerRecord":true,"refuseButtonFound":true,"refusedOutcome":true,"cardClosedAfterRefuse":true,"pirateAttacks":true} demand=200
+wave30 concealed mounts: {"outfittingOpened":true,"mountsButtonFound":true,"boughtExact":true,"fittedNoteShown":true,"secondBuyRefused":true,"saveCarriesTrue":true,"restoreKeepsTrue":true,"corruptRestoreHeals":true,"reboughtAfterHeal":true} credits=3200
+wave30 payTribute: {"hailOpened":true,"intentsWithMounts":true,"payButtonLabeled":true,"creditsPaidExact":true,"pirateFleesPaid":true,"calmStamped60":true,"wakeSiteShape":true,"wakeSite1400":true,"holdReleased":true,"paidLine":true} siteDist=1400.00
+wave30 wake trail: {"pointsObjectFound":true,"emittedWhileFleeing":true,"visibleWhileLive":true,"noEmissionWhenMuted":true,"hiddenWhenMuted":true} emitted=27
+wave30 showTeeth: {"successButtonFound":true,"successFlees":true,"successFearBump":true,"successCalm90":true,"successWakeSite":true,"successLine":true,"successHoldReleased":true,"failureButtonFound":true,"failureResolveBump":true,"failureOutcome":true,"failureNoWakeSite":true,"failureLine":true,"failurePressesAttack":true} resolve=55ΓåÆ75
+wave30 void on hit: {"demandWasOpen":true,"hitLanded":true,"demandingCleared":true,"hailClosedEmitted":true,"cardClosed":true}
+wave30 wake discovery: {"recordFound":true,"siteFound":true,"pods2to3":true,"podEventsMatch":true,"podsCarryMetals":true,"trailLineOnce":true,"milestoneOnce":true,"noRefire":true} pods=3
+wave30 law zone: {"noDemandHail":true,"demandNeverSent":true,"targetNeverDevelops":true,"noDemandOnRecord":true}
+wave31 Mk II purchase: {"outfittingOpened":true,"scannerStartsZero":true,"prereqNoteShown":true,"refusedWithoutMk1":true,"mk1Exact400":true,"mk2ButtonAtScanner1":true,"mk2Exact900":true,"installedNoteShown":true,"secondBuyRefused":true} credits=3700
+wave31 qship records: {"authoredPiratesFound":true,"oddPiratesCarryCover":true,"evenPiratesClean":true,"nonPiratesCarryNothing":true,"migrantPiratesShaped":true,"revealedOnlyTrueOnQships":true} pristineQships=0/2
+wave31 bracket cover/pierce: {"bracketShown":true,"coverNameShown":true,"coverMetaFaction":true,"coverMetaNoTell":true,"coverDistSane":true,"pierceShowsRealName":true,"pierceMetaRealFaction":true,"pierceMetaSuffix":true,"pierceDistSane":true,"neverRevealed":true} cover={"name":"Wave31 Cover","meta":"Freehold Compact ┬╖ 201u","shown":true} pierce={"name":"Wave31 Veiled","meta":"Red Ledger ┬╖ 200u ┬╖ CONCEALED MOUNTS","shown":true}
+wave31 reveal on acquire: {"revealedOnAcquire":true,"objectSwapped":true,"swapInPlace":true,"realStatsUnderSkin":true,"liedLineRealName":true,"milestoneOnce":true} swapDelta=0.26
+wave31 reveal on scratch: {"keptFromAcquiring":true,"scratchReveals":true,"liedLineAgain":true,"noSecondMilestone":true}
+wave31 scanner save roundtrip: {"wrenRevealedPreSave":true,"saveCarriesBoth":true,"scannerRestored":true,"revealRestored":true,"milestoneRidesRestore":true}
+wave31 plain-pirate bracket: {"bracketShown":true,"nameIsRecordName":true,"metaExactShape":true,"metaNoSuffix":true,"distSane":true} meta="Red Ledger ┬╖ 201u"
+wave32 interest chance: {"temperHalfExact":true,"manifestRichEnough":true,"temperOneMaxClamp":true,"temperZeroFearMinClamp":true,"alwaysHuntsIsOne":true,"lazyTemperStamped":true,"lazyTemperSticky":true} p=0.01|0.115|0.005|1
+wave32 grace gate: {"targetStaysNull":true,"noHailDuringGrace":true,"noIntentDuringGrace":true,"acquiresAfterGrace":true,"demandHailAfterGrace":true}
+wave32 positive control: {"rollPinnedAndPassed":true,"acquiresPlayer":true,"temperUntouched":true}
+wave32 disinterest trader preference: {"rollPinnedAndFailed":true,"targetIsTheTrader":true,"neverTargetsPlayer":true,"noHailFromPirate":true}
+wave32 masked by apathy: {"rollPinnedAndFailed":true,"neverAcquires":true,"staysMasked":true,"bracketShowsCover":true,"bracketCoverFaction":true,"bracketNoTell":true} bracket={"name":"Wave32 Masque","meta":"Freehold Compact ┬╖ 200u","shown":true}
+wave32 collector bypass: {"selfHealStampsFlag":true,"chanceIsOne":true,"interestedDespiteHighPin":true,"acquiresPlayer":true}
+wave32 temper save roundtrip: {"toothFound":true,"saveCarriesTemper":true,"temperRestoredExact":true}
+wave32 retaliation: {"apatheticUntilScratched":true,"scratchLatchesPlayer":true,"telegraphRearmed":true,"playerAlive":true}
+wave32 retaliation law zone: {"noRetaliationInZone":true,"noLatchInZone":true}
+wave32 retaliation qship: {"maskedAndApatheticPreScratch":true,"scratchReveals":true,"meshSwapped":true,"scratchLatchesPlayer":true,"milestoneStillOnce":true}
+wave33 bloom v2 structure: {"arrivedAtCradle":true,"stationLive":true,"fivePads":true,"padIndicesExact":true,"fiveHearths":true,"fiveNodes":true,"padsRideFlexSway":true,"crownFound":true,"crownNineteenPetals":true,"translucentSharedSkin":true,"hearthsGlowWarm":true}
+wave34 scanner restore heal: [{"poke":"99","saveCarriesPoke":true,"scannerHealed":true,"restoreReadOurSave":true},{"poke":"2","saveCarriesPoke":true,"scannerHealed":true,"restoreReadOurSave":true},{"poke":"null","saveCarriesPoke":true,"scannerHealed":true,"restoreReadOurSave":true},{"poke":"0","saveCarriesPoke":true,"scannerHealed":true,"restoreReadOurSave":true},{"poke":"1","saveCarriesPoke":true,"scannerHealed":true,"restoreReadOurSave":true},{"poke":"2","saveCarriesPoke":true,"scannerHealed":true,"restoreReadOurSave":true}]
+wave34 temper finite reroll: {"rerollFinite":true,"rerollIsOneRandomCall":true,"chanceFinite":true,"chanceClamped":true,"rerollSticky":true,"finiteTemperByteSticky":true,"finiteTemperZeroRandomCalls":true}
+wave34 hearth containment: {"arrivedAtCradle":true,"fiveHearths":true,"scaleZPinned":true,"containedHalfUnit":true} worstMargin=0.782
+wave35a accept: {"tripleFound":true,"dockedAtOrigin":true,"jobFound":true,"holdRoomForLoad":true,"acceptButtonFound":true,"jobAccepted":true,"originStamped":true,"payQuotedStamped":true,"quoteNamesSameDest":true,"ferryClearsTriple":true} lane=hush->hollowreach->redmarch quoted=1337 ferryDest=veridian
+wave35a load: {"boughtTheLoad":true,"jobUnpaidAtOriginDock":true} bought=5 prov=15
+wave35a overshoot: {"thirdIsNeitherEnd":true,"dockedAtThird":true,"jobStillAccepted":true,"noDeliveryLine":true,"creditsUnchangedByJob":true,"provisionsIntact":true} third=redmarch
+wave35a delivery: {"dockedAtNamedDest":true,"paidExactlyQuoted":true,"creditsDeltaIsQuote":true,"provisionsRemoved":true,"jobDone":true} paid=1337 quoted=1337
+wave35b hailClosed cross-scope: {"cardWasOpen":true,"cardStillOpen":true,"holdStands":true}
+wave35b hailClosed own-scope: {"cardClosed":true}
+wave35b hailClosed backstop: {"cardWasOpen":true,"cardClosed":true}
+wave35b hailClosed hold scope: {"cardWasOpen":true,"holdBReleased":true,"holdAStands":true,"cardStillOpen":true}
+wave36 lighting: {"arrivedAtCradle":true,"stationLive":true,"skinUniqueSharedInstance":true,"skinOpacity":true,"skinRoughness":true,"skinPulseProp":true,"skinPulseBase":true,"skinPulseAmp":true,"skinPulseHz":true,"skinStillShared":true,"fleshUnique":true,"fleshIntensity":true,"fleshDistance":true,"fleshDecay":true,"fleshPosition":true}
+wave36 sun directional key: {"sunDirectionalExists":true,"sunPositiveIntensity":true}
+wave38 ship kits: {"spawnHasProxy":true,"spawnHasGlowGroup":true,"spawnHasShipVisual":true}
+wave38 ship pirates: {"pirateUsesDistinctMaterials":true}
+wave38 ship fallback + qship: {"qshipBuildsWithProxy":true,"qshipCoverFreighterSized":true}
+wave45 freehold census: chunks=3+3 geos=8 mats=6 verts=368687 glowVerts=33252 bbox=x[-28.5,27.6] y[-18.7,32.4] z[-28.7,28.7]
+wave45 veridian census: chunks=3+3 geos=8 mats=6 verts=221495 glowVerts=38544 bbox=x[-23.5,22.1] y[-19.7,32.4] z[-21.4,21.3]
+wave45 ferrous census: chunks=3+3 geos=8 mats=6 verts=387779 glowVerts=32880 bbox=x[-22.7,22.7] y[-25.5,32.4] z[-22.6,22.6]
+wave45 redledger census: chunks=3+3 geos=8 mats=6 verts=165371 glowVerts=30828 bbox=x[-19.9,25.1] y[-19.6,32.4] z[-14.8,19.8]
+wave45 gilded census: chunks=3+3 geos=8 mats=6 verts=373067 glowVerts=54672 bbox=x[-17.1,17.1] y[-12.6,32.4] z[-17.1,17.1]
+wave45 congregation census: chunks=3+3 geos=8 mats=6 verts=291497 glowVerts=31356 bbox=x[-21.4,22.2] y[-16.8,32.4] z[-17.1,28.3]
+wave45 assembly census: chunks=3+3 geos=8 mats=6 verts=183371 glowVerts=30024 bbox=x[-20.3,20.8] y[-11.0,32.4] z[-15.0,16.1]
+wave45 lamplighter census: chunks=3+3 geos=8 mats=6 verts=245339 glowVerts=38004 bbox=x[-22.4,20.4] y[-19.7,32.4] z[-17.5,18.7]
+wave45 independent census: chunks=3+3 geos=8 mats=6 verts=188975 glowVerts=33864 bbox=x[-27.6,28.1] y[-17.8,32.4] z[-17.4,26.0]
+wave45 hollow census: chunks=3+3 geos=8 mats=6 verts=155237 glowVerts=36684 bbox=x[-12.4,12.4] y[-23.0,32.4] z[-12.3,12.4]
+wave38 stations: {"freeholdNamed":true,"freeholdMergedChunks":true,"freeholdVertexColoured":true,"freeholdMergeDiscipline":true,"freeholdDetailDensity":true,"freeholdWindowDensity":true,"freeholdEnvelope":true,"veridianNamed":true,"veridianMergedChunks":true,"veridianVertexColoured":true,"veridianMergeDiscipline":true,"veridianDetailDensity":true,"veridianWindowDensity":true,"veridianEnvelope":true,"ferrousNamed":true,"ferrousMergedChunks":true,"ferrousVertexColoured":true,"ferrousMergeDiscipline":true,"ferrousDetailDensity":true,"ferrousWindowDensity":true,"ferrousEnvelope":true,"redledgerNamed":true,"redledgerMergedChunks":true,"redledgerVertexColoured":true,"redledgerMergeDiscipline":true,"redledgerDetailDensity":true,"redledgerWindowDensity":true,"redledgerEnvelope":true,"gildedNamed":true,"gildedMergedChunks":true,"gildedVertexColoured":true,"gildedMergeDiscipline":true,"gildedDetailDensity":true,"gildedWindowDensity":true,"gildedEnvelope":true,"congregationNamed":true,"congregationMergedChunks":true,"congregationVertexColoured":true,"congregationMergeDiscipline":true,"congregationDetailDensity":true,"congregationWindowDensity":true,"congregationEnvelope":true,"assemblyNamed":true,"assemblyMergedChunks":true,"assemblyVertexColoured":true,"assemblyMergeDiscipline":true,"assemblyDetailDensity":true,"assemblyWindowDensity":true,"assemblyEnvelope":true,"lamplighterNamed":true,"lamplighterMergedChunks":true,"lamplighterVertexColoured":true,"lamplighterMergeDiscipline":true,"lamplighterDetailDensity":true,"lamplighterWindowDensity":true,"lamplighterEnvelope":true,"independentNamed":true,"independentMergedChunks":true,"independentVertexColoured":true,"independentMergeDiscipline":true,"independentDetailDensity":true,"independentWindowDensity":true,"independentEnvelope":true,"hollowNamed":true,"hollowMergedChunks":true,"hollowVertexColoured":true,"hollowMergeDiscipline":true,"hollowDetailDensity":true,"hollowWindowDensity":true,"hollowEnvelope":true,"ringGroupUnique":true,"positionedAtDef":true,"noPointLights":true}
+wave38 station placeholder (synthetic unknown faction): {"unnamedPlaceholder":true,"placeholderShapeIntact":true}
+wave38 station rebuild: {"assetsTracked":true,"everyAssetDisposed":true,"oldGroupRemoved":true,"rebuiltNamed":true,"newRingGroupSpun":true} disposed=16/16
+wave38 gates: {"freeholdParts":true,"veridianParts":true,"ferrousParts":true,"redledgerParts":true,"gildedParts":true,"congregationParts":true,"assemblyParts":true,"lamplighterParts":true,"gateCountMatchesDef":true,"everyGateOverlain":true} 
+wave38 gate negatives: {"noOverlayIndependentHollow":true,"plainBrassIntact":true,"beautifulOvergrowth":true,"beautifulNoBuiltOverlay":true}
+wave38 gate junctions: {"ferrousJunctionCoexists":true,"gildedJunctionCoexists":true}
+wave38 gate reducedMotion: {"animSurfaceFound":true,"opacityBlinksUnfrozen":true,"mountSpinsUnfrozen":true,"frozenUnderReducedMotion":true,"frozenAtBase":true,"animationResumes":true}
+wave39 ten-jump leak: {"chainCompleted":true,"stationGroupFoundEverySystem":true,"perBuildAssetsSeen":true,"everyPerBuildAssetDisposed":true,"sharedNeverDisposed":true,"liveCountStable":true} disposed=428/428 sharedDisposed=0 liveAfter1=261 liveAfter10=296
+wave39 zero-alloc update: {"freeholdStationNoNewResources":true,"freeholdStationAnimKeysStable":true,"veridianStationNoNewResources":true,"veridianStationAnimKeysStable":true,"assemblyStationNoNewResources":true,"assemblyStationAnimKeysStable":true,"freeholdGateNoNewResources":true,"freeholdGateAnimKeysStable":true,"redledgerGateNoNewResources":true,"redledgerGateAnimKeysStable":true,"assemblyGateNoNewResources":true,"assemblyGateAnimKeysStable":true,"gateFadeWritesQuantised":true,"gateFadeReachesEndpoints":true,"shipUpdateNoNewResources":true,"shipAnimKeysStable":true}
+wave39 station reducedMotion: {"freeholdAnimSurfaceFound":true,"freeholdAnimatesUnfrozen":true,"freeholdFrozenUnderReducedMotion":true,"freeholdFrozenRingKeepsAngle":true,"freeholdFrozenAtBase":true,"freeholdAnimationResumes":true,"veridianAnimSurfaceFound":true,"veridianAnimatesUnfrozen":true,"veridianFrozenUnderReducedMotion":true,"veridianFrozenRingKeepsAngle":true,"veridianFrozenAtBase":true,"veridianAnimationResumes":true,"assemblyAnimSurfaceFound":true,"assemblyAnimatesUnfrozen":true,"assemblyFrozenUnderReducedMotion":true,"assemblyFrozenRingKeepsAngle":true,"assemblyFrozenAtBase":true,"assemblyAnimationResumes":true,"lamplighterAnimSurfaceFound":true,"lamplighterAnimatesUnfrozen":true,"lamplighterFrozenUnderReducedMotion":true,"lamplighterFrozenRingKeepsAngle":true,"lamplighterFrozenAtBase":true,"lamplighterAnimationResumes":true}
+wave39 ship glow reducedMotion: {"freeholdWaverAnimatesUnfrozen":true,"freeholdFrozenAtExactlyOne":true,"freeholdWaverResumes":true,"ferrousWaverAnimatesUnfrozen":true,"ferrousFrozenAtExactlyOne":true,"ferrousWaverResumes":true,"lamplighterWaverAnimatesUnfrozen":true,"lamplighterFrozenAtExactlyOne":true,"lamplighterWaverResumes":true,"pirateTelegraphReached":true,"pirateFlashAnimatesUnfrozen":true,"pirateFrozenAtExactlyOne":true,"pirateFlashResumes":true,"disabledFlickerAnimates":true,"disabledFlickerFrozenDim":true}
+wave40a fresh boot menu: {"pausedWhileOpen":true,"rootClassed":true,"threeEntries":true,"noContinueEntry":true,"labelsExact":true,"legendExact":true,"taglineExact":true}
+wave40b new game no autosave: {"rootRemoved":true,"pauseLeftForOrigins":true}
+wave40c autosave continue: {"fourEntries":true,"continueLeads":true,"legendExact":true,"pausedWhileOpen":true,"continueUnpauses":true,"continueRemovesRoot":true}
+wave40d new game confirm: {"autosaveSurvivesArming":true,"labelWarnsWithIndex":true,"warmClassAdded":true,"rootStandsWhileArmed":true,"autosaveCleared":true,"berthSlotsSurvive":true,"skipMarkerSet":true,"overlayStandsWithoutReload":true}
+wave40e skip marker: {"noOverlay":true,"neverPauses":true,"markerConsumed":true}
+wave40f settings + unmapped keys: {"settingsKeepsTitleOpen":true,"settingsKeepsPause":true,"unmappedKeysInert":true}
+wave41a API contract: {"deterministic":true,"bothVariantsPossible":true,"nullForHollow":true,"nullForIndependent":true,"nullForUndefined":true,"nullForUnknown":true}
+wave41b PORTRAIT_SOURCES: {"exactlyTenKeys":true,"allKeysHaveArtEntries":true,"allKeysProduceValidPattern":true,"noHollowKey":true,"noIndependentKey":true} keys=10
+wave41c PEOPLE with art (redledger at redmarch): {"cardExists":true,"headExists":true,"portraitExists":true,"portraitClassCorrect":true,"portraitSrcStartsCorrect":true,"portraitNonEmptyAlt":true,"altNamesContact":true,"everyCardHasAFace":true,"firstTwoFacesDiffer":true,"portraitLazy":true,"portraitAsync":true,"portraitWidth":true,"portraitHeight":true,"headtextExists":true,"nameInHeadtext":true,"metaInHeadtext":true}
+wave41d PEOPLE without art (hollow at hollowreach): {"cardExists":true,"headExists":true,"noPortraitInHead":true}
+wave41e HAIL with art (redledger): {"hailCardExists":true,"portraitRowExists":true,"portraitExists":true,"portraitClass":true,"portraitSrc":true,"portraitAlt":true,"portraitWidth":true,"portraitHeight":true,"hasIntentButtons":true,"firstBtnLabel":true}
+wave41f HAIL without art (independent): {"hailCardExists":true,"rowExists":true,"noPortrait":true,"hasIntentButtons":true,"firstBtnLabel":true}
+wave42a asset contract (144 builds): {"all144Build":true,"allHaveProxy":true,"allGlowPresent":true,"allGlowIsGroup":true,"glowSeparateFromLod":true,"allHaveShipVisual":true}
+wave42b canonical fallback: {"canonicalFallbackBuilds":true}
+wave42c Q-ship proxy swap: {"coverHasProxy":true,"realHasProxy":true,"proxiesDiffer":true}
+wave42d gate overlay: {"overlayExists":true,"fourLenses":true,"plasmaGroupExists":true,"eightPlasmaCells":true,"plasmaHiddenIdle":true,"plasmaVisibleTransit":true,"plasmaVisibleUnderReducedMotion":true,"plasmaHiddenAfterTransit":true}
+wave42e gate negatives: {"independentNoUnknowablesParts":true,"veridianNoUnknowablesOverlay":true,"veridianKeepsOwnOverlay":true}
+wave45 freehold detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/738 largest=738/738 comps=1 orphanDetail=0.54%/0.00%/0.00%/0.00%
+wave45 veridian detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->freehold-station connectedness=0/744 largest=744/744 comps=1 orphanDetail=0.00%/0.00%/0.00%/0.00%
+wave45 ferrous detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/662 largest=660/662 comps=2 orphanDetail=0.00%/0.00%/0.00%/0.00%
+wave45 redledger detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/414 largest=414/414 comps=1 orphanDetail=0.38%/0.00%/0.00%/0.00%
+wave45 gilded detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/365 largest=365/365 comps=1 orphanDetail=0.00%/0.00%/0.00%/0.00%
+wave45 congregation detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/589 largest=589/589 comps=1 orphanDetail=0.00%/0.00%/0.00%/0.00%
+wave45 assembly detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=1/277 largest=276/277 comps=2 orphanDetail=0.00%/0.00%/0.00%/0.00%
+wave45 lamplighter detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=2/406 largest=404/406 comps=3 orphanDetail=0.09%/0.00%/0.00%/0.00%
+wave45 independent detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/312 largest=312/312 comps=1 orphanDetail=0.32%/0.00%/0.00%/0.00%
+wave45 hollow detail: paletteStray=none glowWorstChannel=#e8dcc8 teardown=16/16->veridian-station connectedness=0/209 largest=209/209 comps=1 orphanDetail=0.00%/0.00%/0.00%/0.00%
+wave45 detail stations: {"freeholdDeterminism":true,"freeholdPaletteFromStyle":true,"freeholdGlowNearWhite":true,"freeholdConnectedness":true,"freeholdSingleMass":true,"freeholdSeatedDetail":true,"freeholdTeardownDisposesAll":true,"veridianDeterminism":true,"veridianPaletteFromStyle":true,"veridianGlowNearWhite":true,"veridianConnectedness":true,"veridianSingleMass":true,"veridianSeatedDetail":true,"veridianTeardownDisposesAll":true,"ferrousDeterminism":true,"ferrousPaletteFromStyle":true,"ferrousGlowNearWhite":true,"ferrousConnectedness":true,"ferrousSingleMass":true,"ferrousSeatedDetail":true,"ferrousTeardownDisposesAll":true,"redledgerDeterminism":true,"redledgerPaletteFromStyle":true,"redledgerGlowNearWhite":true,"redledgerConnectedness":true,"redledgerSingleMass":true,"redledgerSeatedDetail":true,"redledgerTeardownDisposesAll":true,"gildedDeterminism":true,"gildedPaletteFromStyle":true,"gildedGlowNearWhite":true,"gildedConnectedness":true,"gildedSingleMass":true,"gildedSeatedDetail":true,"gildedTeardownDisposesAll":true,"congregationDeterminism":true,"congregationPaletteFromStyle":true,"congregationGlowNearWhite":true,"congregationConnectedness":true,"congregationSingleMass":true,"congregationSeatedDetail":true,"congregationTeardownDisposesAll":true,"assemblyDeterminism":true,"assemblyPaletteFromStyle":true,"assemblyGlowNearWhite":true,"assemblyConnectedness":true,"assemblySingleMass":true,"assemblySeatedDetail":true,"assemblyTeardownDisposesAll":true,"lamplighterDeterminism":true,"lamplighterPaletteFromStyle":true,"lamplighterGlowNearWhite":true,"lamplighterConnectedness":true,"lamplighterSingleMass":true,"lamplighterSeatedDetail":true,"lamplighterTeardownDisposesAll":true,"independentDeterminism":true,"independentPaletteFromStyle":true,"independentGlowNearWhite":true,"independentConnectedness":true,"independentSingleMass":true,"independentSeatedDetail":true,"independentTeardownDisposesAll":true,"hollowDeterminism":true,"hollowPaletteFromStyle":true,"hollowGlowNearWhite":true,"hollowConnectedness":true,"hollowSingleMass":true,"hollowSeatedDetail":true,"hollowTeardownDisposesAll":true}
+wave46 independent: systems=13 distinctHulls=13 worstVerts=188975 worstGlow=33864 worstFloor=-17.8 worstSingleMass=100.0%
+wave46 hollow: systems=3 distinctHulls=3 worstVerts=155093 worstGlow=36684 worstFloor=-23.0 worstSingleMass=100.0%
+wave46 seeded factions: {"independentEverySystemDense":true,"independentEverySystemGlow":true,"independentEverySystemEnvelope":true,"independentEverySystemSeated":true,"independentEverySystemPacked":true,"independentEverySystemSingleMass":true,"independentSeedVaries":true,"hollowEverySystemDense":true,"hollowEverySystemGlow":true,"hollowEverySystemEnvelope":true,"hollowEverySystemSeated":true,"hollowEverySystemPacked":true,"hollowEverySystemSingleMass":true,"hollowSeedVaries":true}
+wave49 veridian: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.4,ace=7.4,cutter=10.5,heavy=16.5,frigate=31.0,freighter=76.9
+wave49 ferrous: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=6.3,ace=7.3,cutter=9.8,heavy=17.1,frigate=32.1,freighter=74.4
+wave49 freehold: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.2,ace=7.1,cutter=10.3,heavy=17.0,frigate=29.7,freighter=76.6
+wave49 redledger: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.1,ace=7.4,cutter=11.9,heavy=17.1,frigate=33.4,freighter=79.3
+wave49 gilded: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.2,ace=7.3,cutter=10.0,heavy=16.3,frigate=29.6,freighter=76.6
+wave49 beautiful: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.7,ace=8.8,cutter=10.3,heavy=15.6,frigate=29.9,freighter=78.9
+wave49 unknowables: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=6.6,ace=7.2,cutter=11.6,heavy=16.9,frigate=31.6,freighter=90.0
+wave49 assembly: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.5,ace=7.9,cutter=11.0,heavy=17.4,frigate=29.0,freighter=83.3
+wave49 congregation: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.7,ace=7.6,cutter=10.8,heavy=16.8,frigate=30.4,freighter=83.1
+wave49 lamplighter: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=7.9,ace=7.5,cutter=11.2,heavy=16.6,frigate=32.4,freighter=80.2
+wave49 independent: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=6.8,ace=7.3,cutter=11.0,heavy=17.0,frigate=32.3,freighter=78.4
+wave49 hollow: span=none@0.0@0% proportion=none:ok pivot=none:ok0.00 proxyCover=none@100.0% ladder=light=6.8,ace=7.4,cutter=10.8,heavy=17.4,frigate=32.1,freighter=78.2
+wave49 ship charter: {"veridianSpan":true,"veridianProportion":true,"veridianPivot":true,"veridianProxyCover":true,"veridianClassOrdering":true,"ferrousSpan":true,"ferrousProportion":true,"ferrousPivot":true,"ferrousProxyCover":true,"ferrousClassOrdering":true,"freeholdSpan":true,"freeholdProportion":true,"freeholdPivot":true,"freeholdProxyCover":true,"freeholdClassOrdering":true,"redledgerSpan":true,"redledgerProportion":true,"redledgerPivot":true,"redledgerProxyCover":true,"redledgerClassOrdering":true,"gildedSpan":true,"gildedProportion":true,"gildedPivot":true,"gildedProxyCover":true,"gildedClassOrdering":true,"beautifulSpan":true,"beautifulProportion":true,"beautifulPivot":true,"beautifulProxyCover":true,"beautifulClassOrdering":true,"unknowablesSpan":true,"unknowablesProportion":true,"unknowablesPivot":true,"unknowablesProxyCover":true,"unknowablesClassOrdering":true,"assemblySpan":true,"assemblyProportion":true,"assemblyPivot":true,"assemblyProxyCover":true,"assemblyClassOrdering":true,"congregationSpan":true,"congregationProportion":true,"congregationPivot":true,"congregationProxyCover":true,"congregationClassOrdering":true,"lamplighterSpan":true,"lamplighterProportion":true,"lamplighterPivot":true,"lamplighterProxyCover":true,"lamplighterClassOrdering":true,"independentSpan":true,"independentProportion":true,"independentPivot":true,"independentProxyCover":true,"independentClassOrdering":true,"hollowSpan":true,"hollowProportion":true,"hollowPivot":true,"hollowProxyCover":true,"hollowClassOrdering":true}
+wave51a ore ladder contract: {"keysHaveCommodities":true,"commoditySelfNamed":true,"hardnessBounded":true,"nineOres":true,"hardnessCensus":true,"bandWeightsReal":true,"fourHeads":true,"tiersAscending":true,"costsAscending":true,"laserForHeals":true,"laserForLadder":true,"weaponsMiningStock":true}
+wave51b pickOreType sweep: {"keysInBandTable":true,"sameRollSameKey":true,"livingRockShareFivePct":true,"band4YieldsH4Pair":true,"band0YieldsNeither":true} livingRockShare=5.0%
+wave51c freehold field fan-out: {"atFreehold":true,"atLeastTwoMeshes":true,"oreKeysReal":true,"oreKeysInBand":true,"noOutOfBandMesh":true,"instanceSumIsCount":true,"listLengthIsCount":true,"entriesWellFormed":true} meshes=rawOre:73,livingRock:12,slagIron:30,brineIce:13,chromeSalt:2
+wave51d field determinism: {"compositionStableRunToRun":true} rocks=130
+wave51e deep-rim composition: {"vergeFieldsH4":true,"freeholdH4ShareZero":true,"vergeShareStrictlyGreater":true} vergeH4=5/35 freeholdH4share=0
+wave51f jump teardown: {"meshesCaptured":true,"oldMeshesLeaveScene":true,"everyResourceDisposed":true,"listIsNewArray":true} disposed=10/10
+wave51g1 hardness gate blocked half: {"aimedAtRealHardRock":true,"blockedFired":true,"blockedNamesRock":true,"blockedNeedsLowestHead":true,"blockedLineVerbatim":true,"noMineHitWhileBlocked":true,"oreUntouched":true,"throttledToOnePerSec":true} rock=0:brineIce:h2
+wave51g2 hardness gate mk4 half: {"mk4Cuts":true,"hitNamesInstalledHead":true,"oreDrops":true,"noBlockedNow":true}
+wave51h mining fx visibility: {"allFiveExist":true,"allHiddenWhileCold":true,"aimedAtSoftRock":true,"glowHasRadialMap":true,"ribbonHasFadeMap":true,"beamShownWhileFiring":true,"lanceThin":true,"glowTight":true,"dockHidesBeamCoreGlow":true}
+wave51i extraction resist + pod tint: {"softRockFound":true,"resistRockFound":true,"softPodsCarryRawOre":true,"softPodsTinted":true,"softRunProductive":true,"resistRunProductive":true,"resistStrictlySlower":true,"resistPodsCarryChromeSalt":true} rawOre=8u chromeSalt=4u frames=120
+wave51j outfitter ladder: {"outfittingOpen":true,"oneLiveButtonAtStock":true,"poorClickRefused":true,"mk2BuyExact1400":true,"noRungSkipping":true,"mk3BuyExact4200":true,"mk4BuyExact11000":true,"threeInstalledNoLiveButton":true} credits=3400
+wave51k miningLaser restore heal: [{"poke":"2","saveCarriesPoke":true,"miningLaserHealed":true,"restoreReadOurSave":true},{"poke":"99","saveCarriesPoke":true,"miningLaserHealed":true,"restoreReadOurSave":true},{"poke":"2","saveCarriesPoke":true,"miningLaserHealed":true,"restoreReadOurSave":true},{"poke":"null","saveCarriesPoke":true,"miningLaserHealed":true,"restoreReadOurSave":true},{"poke":"2.5","saveCarriesPoke":true,"miningLaserHealed":true,"restoreReadOurSave":true}]
+wave51l economy negatives: {"legalKeysExact":true,"strikeCrashesH2":true,"strikeLeavesH4Alone":true,"rushCrashesH2H3":true,"rushLiftsH4":true} slagIron=147ΓåÆ118/121 voidPlatinum=826ΓåÆ826/876
+wave51m authored price spread: {"authoredCarryAllSeven":true,"generatedCarryNone":true,"vergeBelowEveryCore":true,"hushBelowFreehold":true} wakeglassEff=freehold:2029.9999999999998,veridian:1232.5,redmarch:1305,hollowreach:1450,hush:1232.5,verge:1014.9999999999999,veil:1232.5
+wave51n models catalog props: {"propsCountIsOresPlusPod":true,"onePropPerOre":true,"cargoPodPresent":true,"buildShapeAndLabel":true,"vertexCountDeterministic":true} props=10
+landmark redesign catalog: {"catalogCount22":true,"authoredNamed":true,"authoredDispatch":true,"kindDeterministic":true} verts=1824
+unknowable weapon coupling: {"cannonNoOp":true,"energyNoOp":true,"disruptorNoOp":true,"miningHurts":true,"independentHurts":true}
+g0 gate kit: {"zone":true,"arrival":true,"bore":true,"tunnelDeterministic":true,"catalogBuilds":true,"hubLantern":true,"censusHead":true}
+g13 closeout: {"allNamed":true,"noOverlayChild":true,"hasHullMesh":true,"independentSculpt":true,"hollowSculpt":true,"hubLantern":true}
+hud01 mirrored combat rails: {"selfPresent":true,"targetPresent":true,"hiddenWithoutTarget":true,"shownOnLiveShip":true,"nameShown":true,"distShown":true,"hiddenWhenDestroyed":true,"hiddenOnAsteroid":true,"chartmarkSelector":true,"targetBracketSelector":true}
+hud wave B hail/onboard: {"hailCard":true,"hailLowerLeft":true,"hailMax360":true,"hintOffBottom":true}
+hud wave C facing: {"facingPresent":true,"aftFlash":true,"foreQuiet":true}
+hud wave D aim/match: {"matchOn":true,"throttleUntouched":true,"leadHidden":true,"matchOff":true}
+hud wave E first-person: {"pastTip":true,"noseMoved":true}
+hud wave F contacts: {"arcPresent":true,"hiddenCore":true,"shownMk1":true,"civPip":true,"hostilePip":true,"lockPip":true,"hiddenDocked":true,"shownMk2":true,"lockStill":true,"bottomNotRing":true}
+flt turn law: {"lightCreep":true,"lightCruise":true,"aceCap":true,"freightMinR":true,"frigateMinR":true,"aceBeatsFreight":true,"unknownFallsToLight":true,"nanSafe":true}
+wave53 phy: {"phyFrozen":true,"dist3":true,"sphereHit":true,"sphereMiss":true,"cylHit":true,"cylHigh":true,"bounce":true,"sunBoundary":true,"sunHeat":true,"sunKill":true,"sunTRamp":true,"bodiesStation":true,"bodiesPlayer":true,"bodiesFinite":true,"nanSafe":true,"earlyCollect":true,"resolveApi":true}
+wave54 fx: {"playerFireEmit":true,"playerFireDoc":true,"muzzlePool":true,"ripple":true,"sparksUp":true,"projRadius":true,"cues":true,"shakeLastEvents":true,"shakeZeros":true,"deathPool":true,"noPerKillMat":true}
+wave55 mining lance: {"glowUsesSharedDot":true,"ribbonFade":true,"lanceConsts":true,"mk1Pencil":true,"headsStayThin":true}
+wave56 ai first pass: {"feelTable":true,"spawnVisual":true,"coverClass":true,"traderGateRoute":true,"noTickTransit":true,"pickStartsTransit":true,"hostileStanding":true,"traderPanic":true,"noTraderHuntPlayer":true}
+wave57 ai leftovers: {"aimNotPlayerOnly":true,"vsPlayerFlag":true,"skipShooter":true,"lastAttackerStamp":true,"playerOnlyRetaliation":true,"destTicksAllBanks":true,"tickBankNoTransit":true,"minerCount":true,"minerRole":true,"minersDoNotMigrate":true}
+wave58 phy leftovers: {"phyGate":true,"boreEmpty":true,"tubeSolid":true,"freighterBlocked":true,"collectGate":true,"holdOffPad":true,"gateEndFixed":true,"outboundPhysical":true,"minerHoldOut":true,"gateBoreMiss":true,"gateTubeHit":true,"torusFn":true,"srcGateKind":true,"srcHold":true}
+wave59 fx leftovers: {"recoilEvent":true,"recoilFlesh":true,"recoilZero":true,"noThrottle":true,"hullPool":true,"stampUnshielded":true,"parkDestroy":true,"traderHold":true,"minerCloser":true,"idempotent":true,"nanSafe":true,"outboundKept":true}
+wave62 hud family hook: {"independentBio":true,"beautifulBio":true,"builtMech":true,"livingBio":true,"defaultFamily":true,"afterBuilt":true,"overrideMech":true,"overrideOff":true,"blockedBio":true,"noHullWrite":true,"hairSelf":true,"hairTgt":true,"mechHook":true,"mechIrisHide":true,"mechAfter":true,"mechHubNoVein":true,"agezH600":true,"bioPeriodTok":true,"hairOffCss":true,"bioCapRound":true,"rmHairHide":true,"noFrameRect":true,"noBioCorner":true,"noContactExtra":true}
+wave64 hangar persist: {"miss.oneRow":true,"miss.living":true,"miss.mountedMatches":true,"miss.playerLiving":true,"miss.worldGearKept":true,"miss.mountedGear":true,"cap.length":true,"cap.mountedKept":true,"cap.tailDropped":true,"cap.earlyKept":true,"keys.noLoadout":true,"keys.noPrice":true,"keys.noCtor":true,"keys.noProtoField":true,"keys.noDunder":true,"keys.noPollute":true,"kind.rowDropped":true,"kind.playerDropped":true,"kind.hudBio":true,"kind.hudBioNope":true,"kind.liveDeleted":true,"unk.rowLiving":true,"unk.playerLiving":true,"unk.hudBio":true,"class.rowLight":true,"class.playerLight":true,"gear.worldScanner":true,"gear.worldMining":true,"gear.worldConcealed":true,"gear.mountedScanner":true,"gear.mountedMining":true,"gear.mountedConcealed":true,"gear.otherKept":true,"gearOk.worldOk":true,"gearOk.rowOk":true,"snap.hasHangar":true,"snap.parkedScanner":true,"snap.parkedName":true,"snap.parkedHull":true,"snap.cargoSanitized":true,"berth.autosaveGone":true,"berth.slotsKept":true,"fresh.oneLiving":true,"fresh.mounted":true,"fresh.leftoverGone":true,"fresh.cargoEmpty":true,"fresh.cap20":true,"fresh.worldZeros":true}
+wave64 remount: {"envH.cruise":true,"envH.creep":true,"envH.burn":true,"envH.damping":true,"envF.cruise":true,"envF.creep":true,"tamper.switched":true,"tamper.notBlobCruise":true,"tamper.notBlobCreep":true,"tamper.cargoReplaced":true,"tamper.capFromRow":true,"refuseSpace":true,"refuseSame":true,"unk.switched":true,"unk.kindLiving":true,"unk.hudBio":true,"hud.mech":true,"hud.playerBuilt":true,"hud.hudDidNotWrite":true,"familyAfterLive":true,"liveL.path":true,"liveL.fields":true,"liveL.make":true,"plate.ok":true,"plate.hullPath":true,"plate.noLivingSwim":true,"plate.cruise":true,"plate.hudMech":true,"plate.kindBuilt":true,"plate.oneObject":true,"plate.notNpcList":true,"plate.shipsLen":true,"plate.throttle":true,"plate.matchLeft":true,"plate.bioMood":true,"plate.bioBond":true,"plate.dockKept":true,"plate.cargoReplaced":true,"back.ok":true,"back.path":true,"back.fields":true,"back.hudBio":true,"lunk.ok":true,"lunk.kind":true,"lunk.path":true,"lunk.hudBio":true,"refuseLive":true}
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+wave64 shipyard desk: {"key.length10":true,"key.lastShipyard":true,"key.d1":true,"key.d2":true,"key.d3":true,"key.d4":true,"key.d5":true,"key.d6":true,"key.d7":true,"key.d8":true,"key.d9":true,"menu.legend0":true,"menu.btnShipyard":true,"menu.noTen":true,"menu.btnLaunch":true,"menu.btnStanding":true,"menu.btnPeople":true,"digit7People":true,"digit9Standing":true,"digit8Launch":true,"hangar.shipyardHead":true,"hangar.hangarHead":true,"hangar.mountedId":true,"hangar.starterName":true,"hangar.noThrow":true,"buy.emptyNote":true,"buy.creditsSame":true,"buy.stillShipyard":true,"buy.noFakeSku":true,"xss.nameAsText":true,"xss.noImgNode":true,"sw.ok":true,"sw.kindBuilt":true,"sw.hudDidNotWrite":true,"back.ok":true,"back.kindRestored":true,"familyReadOnly":true,"hudNoWrite":true}
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+THREE.WebGLRenderer: Error creating WebGL context.
+wave64 yard buy: {"stock.freeholdLight":true,"stock.freeholdHasFrigate":true,"stock.compactSame":true,"stock.plated":true,"stock.independentEmpty":true,"stock.hollowEmpty":true,"stock.noClassDump":true,"kind.platedBuilt":true,"kind.beautifulLiving":true,"kind.unknowablesLiving":true,"price.lightList":true,"price.stranger":true,"price.known":true,"price.trusted":true,"price.sworn":true,"price.blobIgnored":true,"price.rankMatches":true,"empty.note":true,"buy.dockFaction":true,"buy.listsLight":true,"buy.ok":true,"buy.priceAuthored":true,"buy.credits":true,"buy.hullPlus":true,"buy.mountedSame":true,"buy.noRemount":true,"buy.stockGear":true,"buy.built":true,"buy.factionDock":true,"buy.classKey":true,"buy.noBook":true,"hostile.refused":true,"hostile.credits":true,"hostile.hulls":true,"broke.refused":true,"broke.credits":true,"full.cap":true,"full.refused":true,"full.credits":true,"unk.ok":true,"unk.living":true,"proto.noProto":true,"proto.noCtor":true,"proto.noPrice":true,"save.exported":true,"live.listed":true,"live.confirmShown":true,"live.digit3NoDebit":true,"live.clicked":true,"live.credits":true,"live.hullPlus":true,"live.mountedSame":true,"live.noRemount":true,"liveH.noSale":true,"liveH.credits":true,"liveH.hulls":true}
+wave64 equipment: {"mig.oneRow":true,"mig.mountedDeepcore":true,"mig.mountedHold":true,"mig.worldKept":true,"stock.mountedNotCopiedWorld":true,"stock.otherZeros":true,"stock.worldMirrorsStay":true,"heal.scanner0":true,"heal.mining0":true,"heal.concealedFalse":true,"heal.noLoadout":true,"heal.noMissiles":true,"heal.launcherEmpty":true,"heal.missileAmmo0":true,"heal.turretEmpty":true,"write.mk4Row":true,"write.mk4World":true,"write.scanRow":true,"write.scanWorld":true,"write.noJunk":true,"write.otherStillZero":true,"onB.switched":true,"onB.worldMining":true,"onB.worldScan":true,"onB.worldConcealed":true,"onB.worldCap":true,"onB.aKept":true,"onB.bStock":true,"back.switched":true,"back.worldMining":true,"back.worldScan":true,"back.worldConcealed":true,"back.worldCap":true,"snap.worldScanner":true,"snap.worldMining":true,"snap.worldConcealed":true,"snap.hangarPresent":true,"snap.noLoadout":true,"liveP.kind":true,"liveP.scanner":true,"liveP.mining":true,"liveP.concealed":true,"unk.living":true,"unk.gear":true,"yard.ok":true,"yard.mountedKeptDeepcore":true,"yard.newStock":true,"yard.mountedSame":true,"digit.hold":true,"digit.mk1":true,"digit.concealed":true,"digit.mk2Need":true,"digit.mk2Head":true,"digit.mk3Need":true,"digit.mk4Need":true,"uiReadsMirror":true,"buyS.world":true,"buyS.row":true,"buyS.otherZero":true,"liveG.scan2":true,"liveG.concealed":true,"liveG.mk4":true,"liveG.hold":true,"liveG.otherHold":true,"liveG.otherMine":true,"liveG.otherScan":true,"liveG.otherCon":true,"liveG.hiddenCost":true,"liveG.noLoadout":true,"liveB.ok":true,"liveB.worldMine":true,"liveB.worldScan":true,"liveB.worldCon":true,"liveB.cap":true,"liveB.aKept":true,"liveA.ok":true,"liveA.worldMine":true,"liveA.worldScan":true,"liveA.cap":true}
+wave65 catalog+audio: {"platedCutterAce":true,"platedHasFrigate":true,"beautifulCutter":true,"unkLight":true,"indieEmpty":true,"hollowEmpty":true,"aceFloor":true,"cutterOpen":true,"cutterList":true,"aceList":true,"offersFh":true,"cues":true,"noPlayCue":true,"ctxComment":true}
+wave67 catalog: {"platedHasFrigate":true,"platedOrder":true,"beautifulOmits":true,"unkOmits":true,"indieEmpty":true,"hollowEmpty":true,"minRepFrigate":true,"aceStays":true,"openFloors":true,"listPrice":true,"strangerList":true,"trustedOff":true,"swornOff":true,"knownListed":true,"knownRefuse":true,"knownNoDebit":true,"trustedBuy":true,"digit8Index":true}
+wave68 weapons: {"cat.missileFamily":true,"cat.missileStats":true,"cat.turretFamily":true,"cat.mountLight":true,"cat.mountHeavy":true,"cat.dartId":true,"cat.noGod":true,"cat.heal99":true,"cat.healStr":true,"heal.lightEmpty":true,"heal.heavyCapped":true,"lightW.empty":true,"lightW.noJunk":true,"rest.worldEmpty":true,"rest.rowEmpty":true,"write.switched":true,"write.seated":true,"write.spent":true,"write.otherEmpty":true,"stock.ok":true,"stock.emptyRacks":true,"stock.mountedKept":true,"fields.worldFields":true,"arm.ok":true,"arm.pending":true,"arm.noDebit":true,"buy.ok":true,"buy.debit":true,"buy.seated":true,"d8.level1Launch":true,"d8.level1NoArm":true,"hud.digit4":true,"hud.emptyKey":true,"hud.emptyLabel":true,"fire.missilePool":true,"fire.emptyNoCannon":true,"fire.noIncoming":true}
+wave66 save pins: {"extraKeysDrop":true,"enumerableProtoDrop":true,"sourceHack":true,"sourceKill":true,"nameCap":true,"nameControls":true,"reservedFaction":true,"validRoundTrip":true,"noWorldPeopleField":true,"peopleTraffickedNotRestored":true,"oreNoLeak":true}
+wave66 desk: {"key.length10":true,"key.d7":true,"key.d0":true,"src.ctxSurvivorSold":true,"src.tryTradeRefuse":true,"src.noWorldField":true,"src.rescueFn":true,"gildedDock":true,"emptyNoOffer":true,"emptyNoConfirm":true,"mixedTwoOffers":true,"mixedConfirmOne":true,"mixedOtherRemains":true,"mixedOtherUu":true,"unkNoOffer":true,"unkRefuse":true,"protoNoOffer":true,"protoNoThrow":true,"oversizeNoSale":true,"oversizeRowKept":true,"doubleNoSecondPay":true,"fhReturn":true,"fhNoOffer":true,"returnWorks":true,"marketNoSurvivor":true,"asNoSellPeople":true,"priceOfZero":true,"digit7People":true,"digit0Shipyard":true,"digitPendingNoDebit":true,"milestoneOnce":true,"noWorldPeople":true}
+wave69 ast: {"idEqIndex":true,"countFreehold":true,"notClump":true,"workSector":true,"wave51tuples":true,"fieldOreWorldField":true,"depleteRoundtrip":true,"sunMiss":true,"cap160":true,"beltLine":true,"hudMineCue":true,"staleLock":true}
+wave70 minehold: {"rockArm":true,"noLock":true,"throttleCancel":true,"shipArm":true,"throttleUntouched":true}
+wave71 msn: {"lampRock":true,"sanitizeJobs":true,"omitJobs":true,"noFullSafeId":true,"dropProto":true,"keepAce":true,"keepMineFh":true,"keepMineHearth":true,"capFits":true,"fieldsJobs":true,"fillTwo":true,"fillSoft":true,"noHard4Sync":true,"noAsteroidId":true,"uniqueFour":true,"completeReplace":true,"completePay":true,"expireNoPay":true,"noInnerHtml":true,"replaceHelper":true}
+wave72 bio: {"swim.swim":true,"swim.breath":true,"swim.heartbeat":true,"swim.base":true,"swim.make":true,"hud.noWriteKind":true,"hud.noWriteGraft":true,"hud.graftedMech":true,"omit.beauStock":true,"omit.unkStock":true,"omit.fhStock":true,"omit.beauOffers":true,"omit.unkOffers":true,"omit.fhOffers":true,"buy.ok":true,"buy.living":true,"buy.hullPlus":true,"buy.mountedSame":true,"buy.noRemount":true,"src.noInnerHtml":true,"src.warn":true,"src.ctxNoGrafted":true,"src.ctxNoAbom":true,"src.ctxNoKindChanged":true,"src.lastShipyard":true,"src.keyCount":true,"src.noNewService":true,"unkBanner":true,"unkRow":true,"restoreCap":true,"restoreLivingDrop":true,"gildedDock":true,"digit0Shipyard":true,"graftWarnShown":true,"graftConfirmShown":true,"graftArmedNoWrite":true,"graftArmedCredits":true,"graftedRow":true,"graftedPlayer":true,"graftKindBuilt":true,"graftCredits":true,"graftStanding":true,"graftHudMech":true,"escClears":true,"escNoGrafted":true,"escStanding":true,"livingNoOffer":true}
+wave74 pins: {"keyTCycles":true,"group3AddsRocks":true,"group1NoRock":true,"keyVInTracked":true,"notKeyT":true,"notLmb":true,"notDigit0":true,"skipDestroyed":true,"rockLockRow":true,"livePick":true,"missNoInnerHtml":true,"missileNullOnRock":true,"noReticleU":true,"protoDropped":true,"nanToZero":true,"beautifulMissing":true,"markedKept":true,"restoreProto":true,"restoreNan":true,"restoreBeautiful":true,"digit9Epics":true,"digit0Shipyard":true,"noCrimeScore":true,"rankLadder":true,"dataRoundtrip":true,"missingSourceDropped":true,"unknownDropped":true,"priceOfDataCube0":true,"archiveAssembly":true,"archiveFreeholdClosed":true,"unknowablesDockAbsent":true,"spawnSkip":true,"survivorUnchanged":true}
+wave76 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"dropProto":true,"dropNeed1":true,"dropBadCargo":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needFive":true,"commodityAllow":true,"destOther":true,"noAsteroidId":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"expireNoPay":true,"noInnerHtml":true,"miningNeedUntouched":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+wave78 msn: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropAceRecord":true,"dropCommodity":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"needOne":true,"recordBind":true,"noAsteroidId":true,"titlesHideRec":true,"stuffedTargetIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"overlaySkip":true,"overlayCap":true,"expireNoPay":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true}
+wave78 passenger: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"keepPassengerFh":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropCommodity":true,"dropSameDest":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"huntStillTwo":true,"needOne":true,"noCommodityLive":true,"destOther":true,"noAsteroidId":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"cargoUnchanged":true,"expireNoPay":true,"uniqueFerryKind":true,"uniqueFerryDone":true,"passTickNoCargo":true,"noFerryAlloc":true,"extraHuntKept":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"passengerDestBind":true,"uniqueHaulIds":true,"replaceHelper":true,"mouseAccept":true}
+wave78 explore: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"keepPassengerFh":true,"keepExploreFh":true,"keepExploreHearth":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropCommodityField":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillTwo":true,"huntStillTwo":true,"passengerStillTwo":true,"needOne":true,"noCommodityLive":true,"noAsteroidId":true,"titlesHideIds":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"cargoUnchanged":true,"noDataGrant":true,"expireNoPay":true,"exploreTickNoGrant":true,"extraAfterPassenger":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"uniqueHaulIds":true,"replaceHelper":true,"mouseAccept":true,"huntPassengerHelpers":true}
+wave80 rep04: {"noCrimeScore":true,"npcVsNpcNoWrite":true,"pirateNoWrite":true,"traderWriteMinus5":true,"protoNeverBagKey":true,"ladderUnchanged":true,"restoreSanitize":true,"digitsStay":true,"digit9NoKillClaim":true,"oneBind":true,"bioPodStay":true}
+wave80 espionage: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"keepPassengerFh":true,"keepExploreFh":true,"keepSpyFh":true,"keepSpyHearth":true,"dropProto":true,"dropShortId":true,"dropWrongPrefix":true,"dropNeed2":true,"dropBadSys":true,"dropSameDest":true,"dropCommodityField":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillHome":true,"exploreStillTwo":true,"needOne":true,"noAsteroidId":true,"titlesHideKeys":true,"cardsShowStation":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"gatheredAtDest":true,"completeReplace":true,"completePay":true,"completeAgain":true,"cargoUnchanged":true,"noDataGrant":true,"employerPlus2":true,"targetZero":true,"expireNoPay":true,"expireDestMinus2":true,"offeredWithdrawQuiet":true,"spyTickNoGrant":true,"extraAfterExplore":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"uniqueHaulIds":true,"uniqueHaulMake":true,"spyKindStays":true,"digit2Jobs":true,"digit0Shipyard":true,"replaceHelper":true,"mouseAccept":true,"originOnlyAccept":true,"acceptedNamesHome":true,"acceptedNoFileHere":true,"acceptedPayFallback":true}
+wave80 war: {"uniqueFour":true,"keepMineFh":true,"keepTradeFh":true,"keepHuntFh":true,"keepPassengerFh":true,"keepExploreFh":true,"keepSpyFh":true,"keepWarFh":true,"keepWarHearth":true,"dropProto":true,"dropShortId":true,"dropNeed2":true,"dropBadSys":true,"dropSameDest":true,"dropCommodityAndFaction":true,"dropAceRecord":true,"capFormula":true,"capFits":true,"floodHeal":true,"fieldsJobs":true,"fillHome":true,"spyStillPresent":true,"needOne":true,"noAsteroidId":true,"titlesHideRec":true,"cardsNameQuarry":true,"stuffedDestIgnored":true,"stuffedRestoreKept":true,"completeReplace":true,"completePay":true,"completeAgain":true,"employerPlus2":true,"destMinus2":true,"expireNoPay":true,"bountyAceStays":true,"huntStillPirates":true,"namedGunsNotWar":true,"warTickNoTargetWrite":true,"extraAfterSpy":true,"noInnerHtml":true,"noFullSafeId":true,"haulDestBind":true,"uniqueHaulIds":true,"uniqueHaulMake":true,"digit2Jobs":true,"replaceHelper":true,"mouseAccept":true,"originOnlyAccept":true,"acceptedStrikeCopy":true,"acceptedNoFileHere":true}
+wave82 owner: {"cone12":true,"killDelta":true,"abomBonus":true,"graft4000":true,"expUu":true,"kindAllowlist":true,"refuseKinds":true,"noRaycaster":true,"stationPickKind":true,"rockHelper":true}
+wave83 station: {"spyExposeConst":true,"spyAcceptedLapse":true,"spyDestFail":true,"spyOfferedWithdraw":true,"spySuccessEmployer":true,"warTargetConst":true,"warSuccessTarget":true,"warExpireQuiet":true,"warStuffedDest":true,"restUu":true,"restConfirm":true,"restEsc":true,"restShort":true,"restGraftCap":true,"noNewDigit":true,"noInnerHtml":true,"chainKind":true,"keepUniqueFour":true,"keepMineSpyWarChain":true,"dropProtoChain":true,"capPlus7":true,"stuffedChainFields":true,"strangerHide":true,"knownSee":true,"lastFreeholdLight":true,"lastFreeholdHeavy":true,"lastVeridianAuto":true,"lastHollowDart":true,"noJobFactionWrite":true}
+wave83 missiles: {"poolCap":true,"notSpawnNpcShot":true,"noSpend":true,"vsPlayerSplit":true,"lastAttacker":true,"missileTargetDoc":true,"dartGate":true,"noBeautifulGrant":true,"toastLiteral":true,"toastGap":true,"noNewHudNode":true,"songBranch":true,"hudKidsStable":true,"playerPool8":true,"npcPool4":true,"drop5th":true,"ammoUntouched":true,"missingTargetDrops":true,"unkCombatDrop":true,"pirateOneDart":true,"aceOneDart":true,"unkNeverMissile":true,"civilianNeverMissile":true,"toastCopy":true,"toastThrottle":true}
+wave85 nav persist: {"fieldsNav":true,"omitDelete":true,"protoDestDrop":true,"reservedDrop":true,"stuffedDrop":true,"blockedEmptyKeep":true,"midSlice":true,"offPathBlocked":true,"arrivedOk":true,"remainingOk":true,"apNoRoundtrip":true,"twoWayPlot":true,"hubOneWay":true,"unknownFail":true,"unchartedFail":true,"plotFresh":true,"clearFresh":true,"emitSrc":true,"noInner":true,"stateNoNav":true,"ctxFreeze":true,"autosaveKey":true,"noChartFlag":true}
+wave85 nav chart: {"flagDefault":true,"setOpenWrites":true,"fireHeldGate":true,"noPrevent":true,"noInnerChart":true,"hitDisc":true,"plotClass":true,"clearBtnType":true,"clearType":true,"keyMToggle":true,"digit0Shipyard":true,"noMystery":true,"noLockSteal":true,"initOrder":true,"noJumpListen":true,"offPathBlocked":true,"destArrival":true,"firstRecalc":true,"commEcho":true,"chartClosedFlag":true,"chartOpenFlag":true,"fireHeldGated":true,"livePlot":true,"liveCleared":true,"clickCurrentClears":true}
+wave85 nav guidance: {"readoutExists":true,"cap180":true,"hideDocked":true,"hideJumping":true,"noHopNeed":true,"nextFromPath1":true,"nextIsPath1":true,"destIsBag":true,"noInner":true,"noTgtWrite":true,"lockStay":true,"cueDistinct":true,"markerRay":true,"ringRay":true,"notInShips":true,"reducedStatic":true,"noRouteCopy":true,"noRouteLive":true,"stuffedHide":true,"unknownHide":true,"physPos":true,"hubPos":true,"noGuidanceEmit":true,"distAbbrev":true,"ariaSrc":true,"ariaLive":true}
+wave85 nav autopilot: {"jumpOnlyGate":true,"predicate":true,"noInner":true,"noDigit":true,"noKeyM":true,"noTgt":true,"avoidExport":true,"steerBreak":true,"spaceGuard":true,"chipCss":true,"chargeStay":true,"ctxNoLiteral":true,"shipConsume":true,"matchIgnore":true,"matchRefuse":true,"engaged":true,"destKeep":true,"wasdCancel":true,"chartNoBreak":true,"stillOn":true,"afterArm":true,"arrived":true,"stuffedFalse":true,"noJumpOut":true,"lockStay":true}
+wave85 nav ap path: {"directedSrc":true,"cycleStop":true,"liveLookup":true,"noApJump":true,"noCtxLit":true,"noInnerP":true,"localGate":true,"localHub":true,"noPhantom":true,"backGate":true,"noFakeTwoWay":true,"plotVia":true,"healPhantom":true,"authStay":true,"liveMatch":true,"posUsesLive":true,"zoneJump":true}
+wave88 ap path: {"chordThroughSun":true,"nanFailClosed":true,"noOrbitMath":true,"resumeGate":true,"wired":true,"noOrbitCmd":true,"wantJumpStay":true}
+wave92 bio01: {"giftOk":true,"alreadyOk":true,"fullGiftOk":true,"rankOk":true,"pirateOk":true,"missOk":true,"npcOk":true,"fullPirateOk":true,"protoOk":true,"graftDrop":true,"rate":true,"noInnerHtml":true,"hudNoWrite":true,"bioNoWriteKind":true,"noNewWorldField":true,"noStateSku":true,"digit0":true,"npcHook":true,"armCopy":true,"visibleGate":true,"digit0Shipyard":true,"giftDeskArm":true,"giftDeskOk":true,"giftEscNoWrite":true,"giftDigit1Arm":true,"reachedCradle":true}
+wave92 bio02: {"helperOk":true,"growthOk":true,"refuseOk":true,"cancelOk":true,"noInner":true,"noField":true,"digit0":true,"growthSrc":true,"hudRead":true,"ungated":true,"giftKeep":true,"deskCopy":true,"cancelSites":true,"stock":true,"noSwitch":true,"digit0ShipyardB":true,"trainOffer":true,"trainHostile":true,"trainShort":true,"trainConfirm":true,"trainMesh":true,"giftStill":true,"hudFamily":true,"reachedCradleB":true}
+wave94 open-outs: {"power":true,"stock":true,"train":true,"seed":true,"veil":true}
+wave98 tgt03: {"missilePlayer":true,"cannonPlayer":true,"cannonOmit":true,"cannonNull":true,"cannonShip":true,"unknown":true,"missing":true,"proto":true,"protoInherited":true,"empty":true,"missileOmit":true,"psionic":true,"dartGapConst":true,"fireGapConst":true,"dartStillNamed":true,"helperNoWeaponsIndex":true,"helperNoInnerHtml":true,"staticFireCopy":true,"noShipName":true,"dartThenFire":true,"fireThrottle":true,"dockJumpHelper":true,"hudDartAndFire":true,"dockJumpHud":true,"foreAftHitOnly":true,"noNewHudChild":true,"edgeArrowCount":true,"edgeAriaAttr":true,"edgeAriaSrc":true,"noSecondArrow":true,"noKeyframes":true,"lockPark":true,"dartPathUnchanged":true}
+wave99 turrets: {"turretPlayer":true,"turretOmit":true,"turretShip":true,"dartUnchanged":true,"sameClock":true,"dock":true,"jump":true,"noDartSteal":true,"heavyPatrol":true,"ace":true,"frigate":true,"seat0":true,"civilian":true,"unk":true,"unknownClass":true,"calmPatrol":true,"huntUnchanged":true,"noBeautifulWord":true,"namedCadence":true,"independentClock":true,"explicitTarget":true,"ctxVocab":true,"missingDrops":true,"cannonOmitHits":true,"cap4":true,"playerCapFree":true,"vsNpcDrops":true,"unkShooterDrops":true,"unkMiss":true,"wave57":true,"npcCapConst":true,"playerCapFiltered":true,"playerAuto":true,"noAddHeatNpc":true,"noHangarWrite":true,"noMissilePath":true,"songCannon":true,"digitCopy":true,"hudTree":true,"heavyEmits":true,"aceEmits":true,"frigEmits":true,"seat0Never":true,"unkNeverEmit":true,"telegraphCold":true,"demandCold":true,"noInnerHtml":true,"noStateFork":true}
+wave100 subsys: {"keyK":true,"noDigitSteal":true,"noSku":true,"partHeal":true,"prefers":true,"peelScreen":true,"engineThen":true,"dropRock":true,"engineBar":true,"hubEmpty":true,"noInnerHtml":true,"noPersist":true,"noLockKindEngine":true}
+wave101 turrets: {"heavyPatrol":true,"ace":true,"frigate":true,"seat0":true,"civilian":true,"unk":true,"huntUnchanged":true,"noBeautifulWord":true,"explicitPlayerLiteral":true,"vsPlayerContinue":true,"vsNpcBoltFalse":true,"vsPlayerBoltTrue":true,"npcCapConst":true,"noTurretToast":true,"toastVsNpc":true,"toastVsPlayer":true,"dartUnchanged":true,"missingDrops":true,"vsPlayerWorks":true,"unkShooterDrops":true,"cap4shared":true,"vsNpcSpawned":true,"playerUnbruised":true,"lastAtkNotPlayer":true,"aceVsNpcEmits":true,"seat0NeverVsNpc":true,"unkNeverEmitVsNpc":true,"telegraphColdVsNpc":true,"vsPlayerStillEmits":true,"digit0Shipyard":true,"hudEmpty":true,"noInnerHtml":true,"noStateFork":true,"noHangarWrite":true}
+wave102 clos: {"helperSign":true,"helperEps":true,"helperFailClosed":true,"helperNotSpd":true,"fmtDeputize":true,"hubEmpty":true,"closAfterDist":true,"liveShipLock":true,"scanner0ShowsRail":true,"nonShipNoRate":true,"noWorldField":true,"noInnerHtml":true,"digit0Shipyard":true,"keyKEngine":true,"contactsFloor":true,"noNewCtxField":true,"noKeyframes":true,"measureRails":true}
+wave103 hud-alerts: {"defaultFalse":true,"fieldsBool":true,"checkboxOrder":true,"persistKey":true,"loadWalk":true,"reservedNotFields":true,"restoreOn":true,"restoreType":true,"restoreUnknown":true,"restoreProto":true,"restoreCorrupt":true,"panelCheckbox":true,"noInnerHtml":true,"subsetSet":true,"songGate":true,"combatNotGated":true,"muteWins":true,"familyStill":true,"incomingFreeze":true,"noNewEmit":true,"hubEmpty":true,"noReticleWidget":true,"digit0Shipyard":true,"digit89":true,"keysStay":true,"visualHud03":true,"noWorldField":true,"noBodyClass":true}
+wave104 covering-jump: {"noWanted":true,"coverSkipVsPlayer":true,"destSkipFlags":true,"protoBag":true,"digit0Shipyard":true,"leaveLine":true,"coverLine":true,"jumpLine":true,"hasOwnDest":true,"coverGate":true,"coverOnce":true,"coverLock":true,"noNine":true,"noZero":true,"noZone":true,"noHollowCover":true,"jumpRefuse":true,"outboundOk":true,"dockOpen":true,"pirateWorkUngated":true}
+wave107 bio-06: {"lightEnvelope":true,"lightCadence":true,"monotonicHz":true,"protoSafe":true,"noCadenceWorldField":true,"digit0Shipyard":true,"npcReducedAmp0":true,"swimHzMatch":true,"uSwimSweep":true}
+wave108 bio-08: {"protoSafe":true,"unknownClassIsLight":true,"missingGaitLiveMix":true,"lightPlayerCpu":true,"cadenceUnchanged":true,"digit0Shipyard":true,"digit8Digit9":true,"noGaitWorldField":true,"gpuGaitUniforms":true,"mixerNotGait":true,"tableDeputize":true,"npcReducedAmp0":true,"threeFree":true}
+wave109 msn-03 sku: {"freeholdDart":true,"redledgerAuto":true,"veridianAuto":true,"hollowDart":true,"noGildedKey":true,"specHasOwn":true,"lightFailClosed":true,"seatedWriteVerify":true,"protoDropNoPay":true,"uniqueFourNoGrant":true,"digit0Shipyard":true,"digit2Jobs":true,"digit8Digit9":true,"noNewWorldFields":true,"noStateWrite":true,"noInnerHtml":true,"jobsHintCopy":true,"noShopDebit":true,"noReducedMotionAnim":true}
+wave110 phy-05 padhome: {"authorHold":true,"authorClassHeavy":true,"expectedHold":true,"livePatrolOffPad":true,"oldPadHeals":true,"idempotent":true,"nanUnknownNoThrow":true,"traderMinerStill":true,"pirateAceUnchanged":true,"rebuildTickHeal":true,"holdClass":true,"noPadHomeField":true,"noInnerHtml":true,"digit0Shipyard":true,"digit8Digit9":true,"hubEmpty":true}
+wave111 rep-03 climb: {"helperExists":true,"climbAtStanding0":true,"climbAtStandingPositive":true,"restitutionOnlyWhenNegative":true,"noRemedialKind":true,"digit0Shipyard":true,"digit2Jobs":true,"digit8Digit9":true,"hubEmpty":true,"noNewWorldFields":true,"noInnerHtmlNotes":true,"failClosedMoveLive":true,"copyHonesty":true,"knobsUntouched":true}
+wave113 hud-02 class tokens: {"heavyTok":true,"aceTok":true,"lightTok":true,"protoOmit":true,"unknownOmit":true,"mechTok":true,"hubUnchanged":true,"noInnerHtml":true,"noHullWrite":true,"noPlayerClassWrite":true,"familyFnNoClass":true,"classOutsideFamilyIf":true,"initClassWrite":true,"importShipClasses":true,"hasOwnAllow":true,"facingNoseBodyOnly":true,"bioHeavy":true,"bioAce":true,"bioCutter":true,"bioFrigate":true,"bioFreighter":true,"silBox":true,"hasMechClass":true,"noNewFacingLoop":true,"noPersistHudClass":true,"familyTokensStay":true}
+wave114 hud-02 plated class tokens: {"heavyTok":true,"freighterTok":true,"lightTok":true,"protoOmit":true,"unknownOmit":true,"bioTok":true,"hubUnchanged":true,"noInnerHtml":true,"noHullWrite":true,"noPlayerClassWrite":true,"familyFnNoClass":true,"classOutsideFamilyIf":true,"initClassWrite":true,"familyGateMechBio":true,"hasOwnAllow":true,"oneWriter":true,"playerKeyOnly":true,"mechHeavy":true,"mechAce":true,"mechCutter":true,"mechFrigate":true,"mechFreighter":true,"silBox":true,"noSilGrow":true,"noMechClip":true,"noNewFacingLoop":true,"noPersistHudClass":true,"familyTokensStay":true,"digit0Shipyard":true}
+wave116 hud-02 target class tokens: {"mismatchTok":true,"bioLockTok":true,"protoTgtOmit":true,"unknownTgtOmit":true,"qCoverTok":true,"hideOmit":true,"hubUnchanged":true,"playerSelfScope":true,"playerNoTgtLeak":true,"tgtMechCite":true,"tgtBioCite":true,"lockWriter":true,"hideOmitsAttr":true,"oneRootWriter":true,"familyFnNoClass":true,"noInnerHtml":true,"noLockOnHud":true,"noPersistHudClass":true,"noNewFacingLoop":true,"silBox":true,"digit0Shipyard":true,"noReticleClassPip":true}
+wave117 nav-05 handoff: {"jumpOnlyGate":true,"linesSplit":true,"noCollapseSrc":true,"plotMulti":true,"engaged":true,"chartStayOpen":true,"ringKind":true,"hubKind":true,"hubNoCancel":true,"hubNoCycle":true,"hop1Jump":true,"hop1Sys":true,"hop2Path":true,"hop2Jump":true,"hop2Sys":true,"liveRouteSeq":true,"dockPressedStay":true,"chartEngageStay":true,"chartCancelLive":true,"missingHopTok":true,"zoneUnchanged":true}
+wave118 overlay-priority: {"helperExports":true,"helperSrcExports":true,"salvageCalmSrc":true,"openCardCalmSrc":true,"salvageCalmWrote":true,"calmRefused":true,"hailPainted":true,"keyMRefusedWhileHail":true,"keyLRefusedWhileHail":true,"hailDeferred":true,"hailFlushed":true,"berthRefusedWhileChart":true,"keyHRefusedWhileChart":true,"digitSkipUnderPause":true,"digitSkipUnderSettings":true,"noPauseAssign":true,"berthNoPauseAssign":true,"noInner118":true,"chartStayOpenSrc118":true,"digit0Shipyard118":true,"noPersist118":true,"unknownSkip":true}
+rimward: forbidden act teleport
+wave127 agent-observe: {"handle":true,"snapOk":true,"jsonPlain":true,"noThree":true,"noThrow":true,"noCtx":true,"forbidden":true,"pingWhenIn":true,"unknown":true,"noOptIn":true,"ringHeld":true,"sessionBag":true}
+BOOT TEST PASS ΓÇö no update errors

@@ -1,0 +1,10 @@
+controls.js TRACKED includes Digit1-5 only (no Digit6-9/0).
+shouldSkipWeaponGroupDigits matches shared-contract.md formula (docked, hailOpen, hailDigitsAllowed===false, playSurfaceBlocked===true, settingsOwnsScreen===true, paused/chartOpen/berthOpen, shouldSkipDockPulse; outer catch docked===true).
+Digit1-5 cases: if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = n.
+No stopImmediatePropagation in controls.js.
+fireHeld still: fireDown && ctx.flags.chartOpen !== true.
+KeyJ still shouldSkipDockPulse only. KeyD still strafeX.
+Import read of hailDigitsAllowed, playSurfaceBlocked, settingsOwnsScreen from overlay-policy.js.
+overlay-policy.js working-tree extra: berthHeld/setBerthHold (CTL-03 sibling, not this PR1 write-set).
+station.js / hail.js / save.js / state.js / boot-test.mjs not in this PR1 diff.
+}

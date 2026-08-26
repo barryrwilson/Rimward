@@ -75,6 +75,163 @@ details.
   the chart before flight resumes.
   Wave 120 PR1 `docs/Nav06ChartCloseDesign.md`.
 
+### Playtest capture — 2026-08-25 (latest `67fb1a0` build)
+
+- [x] DONE (P0, RECORDS/OVERLAYS): Opening Berth Records during an active
+  routed flight allowed the ship to enter a gate and arrive in another system
+  behind the modal. Suspend flight, autopilot, hazards, and gate activation
+  while save/load UI is open; on close, require an explicit resume when a
+  transition or autopilot leg was interrupted. A save/load screen must be a
+  safe place to stop and understand the current state.
+  Wave 125 PR1 `docs/Ctl03BerthFreezeDesign.md`. Session `berthHold`.
+  CTL-03 PR2 stills optional.
+- [ ] INBOX (P2, ONBOARDING): Replace the first-minute information dump with a
+  short contextual flight lesson. Immediately after the permanent origin pick,
+  the expanded controls encyclopedia and several simultaneous narrative lines
+  compete with the ship, station, targets, and reticle. Teach look/turn,
+  throttle, target, hail, dock, and chart one at a time, then leave the full
+  control reference available on demand.
+- [x] DONE (P1, HAIL/CONTEXT): Make contextual actions name their subject,
+  eligibility, and outcome. Pressing H while a friendly ship was selected did
+  not open a visible hail or explain why, while encounter state and Fear
+  changed. Hail, dock, jump, salvage, and similar actions should never appear
+  to affect an unseen or unselected contact; show concise feedback such as
+  `Cinder Halvard — hail out of range (732 u)` or the actual resolved result.
+  Wave 129 PR1 `docs/Hail02MissFeedbackDesign.md`. Named HUD-04 toast.
+  KeyH and KeyJ miss. Hail02 PR2 stills optional.
+- [x] DONE (P1, HUD): Add dynamic deconfliction and a quieter exploration
+  layout for the central HUD. In live targeting, player and target cards,
+  duplicated target labels, range/lead cues, bright suns, stations/gates, and
+  narrative banners can stack across the same central sight picture. Protect
+  the reticle, ship silhouette, selected target, and projectile path; collapse
+  or relocate lower-priority data when those regions collide.
+  Wave 129 PR1 `docs/Hud07DeconflictionDesign.md`. `hud.js` + `hud.css`.
+  80 px hub stays empty. HUD-07 PR2 stills optional.
+- [x] DONE (P1, NAV): Make the 101-system chart readable as an exploration and
+  decision tool, not only a route picker. Add zoom/pan, search and faction/
+  standing filters, clearer labels at the active zoom, and a route itinerary
+  listing every hop with faction, standing, gate type, and known risk. The
+  current full-network view and very long destination list make individual
+  systems and route consequences hard to inspect.
+  Wave 129 PR1 `docs/Nav09ChartReadabilityDesign.md`. Zoom/pan + filter.
+  Dest select stays. Itinerary as leg rows. NAV-09 PR2 stills optional.
+- [ ] INBOX (P2, ORIGINS): Preview the gameplay consequences of each permanent
+  origin before confirmation: starting hull and equipment, money/debt, faction
+  standings, immediate danger, and recommended experience level. The current
+  prose establishes flavor well but does not support an informed permanent
+  choice.
+- [ ] INBOX (P2, CONTROLS/SETTINGS): Expand Settings with mouse sensitivity,
+  invert-X/invert-Y, complete key rebinding with conflict detection, and
+  separate music/effects/voice/UI volume. The current accessibility toggles and
+  text sizes are a strong base, but flight comfort still depends on fixed input
+  behavior and one master-volume control.
+- [ ] INBOX (P2, MODEL VIEWER): Turn Models into a browsable ship reference.
+  Group the long flat list by faction and class, hide pirate duplicates behind
+  a variant toggle, add role/scale/lore summaries, and make loading progress
+  visually unambiguous. The current viewer is useful for asset inspection but
+  not yet inviting as a player-facing title-menu feature.
+
+### Playtest capture — 2026-08-25, second pass (agent playtest, `67fb1a0` build)
+
+Fresh Freehold Greenhand run: two pirate fights, one ship loss and respawn,
+docking, market trade, job accept, repair, feed, a mining attempt, a plotted
+route, an autopilot gate jump, save slots, and pause. Each item below was
+checked against the current initiative text before capture.
+
+- [x] DONE (P0, ONBOARDING/AI): Give the starter system a new-player grace
+  period. A pirate ace attacked ~1 minute after the origin pick and destroyed
+  the ship; after respawn a new demand arrived within another minute; four
+  attacks landed in ~10 minutes. Mining and trade are not playable under this
+  pressure. Add a spawn-area grace window, a pirate interest cooldown after a
+  player death, or a patrolled safe bubble near the home berth. AI-04 defines
+  who is hostile; nothing covers hostility pacing or starter difficulty.
+  Wave 125 PR1 `docs/Ai05StarterGraceDesign.md`. Hop 60 s + extra 180 s
+  Greenhand/Beautiful + death calm 90 s. AI-05 PR2 home-berth bubble optional.
+- [x] DONE (P1, HAIL/ENCOUNTERS): Give pirate demands a full lifecycle. The
+  "HEAVE TO. CARGO OR HULL." toast names no ship, range, deadline, or way to
+  comply; it persisted while docked, reappeared after a gate jump, and expired
+  silently. One demand (Ninth Tooth) opened a proper pay-or-fight card; the
+  Carver Illyx demands never did, and a gate jump closed an open card
+  mid-choice with no resolution. Every demand needs a source, a timer, a
+  compliance path, and a visible outcome. Extends the captured hail-feedback
+  item, which covers player-initiated actions only.
+  Wave 127 PR1 `docs/Hail01DemandLifecycleDesign.md`. Named 20 s
+  card. Dock/jump/expire/void outcomes. Illyx stays duel. Hail02 later.
+- [x] DONE (P1, CONTROLS): Scope keyboard input while station menus are open.
+  Digit keys inside the landing menus also fire the weapon-group binding:
+  pressing 5 for Repair set WPN to "5 · Psionic bolt"; pressing 4 for Feed &
+  tend set WPN to "4 · —", an empty group that cannot fire. Wave 117 fixed
+  only the D/J dock conflict. Menu input must not reach flight or weapon
+  handlers.
+  Wave 125 PR1 `docs/Ctl04MenuInputDesign.md`. Digit1–5 skip WPN while
+  docked / overlay owns digits. CTL-04 PR2 `fireHeld` optional.
+- [x] DONE (P1, HUD/NAV): Add a persistent home-station marker with distance.
+  Nothing on the HUD points to the station once it leaves the screen; a drift
+  to 8,900 u out left only raw POS coordinates as a navigation aid. Threats
+  get an edge arrow; the station does not. Mark the home station (or a
+  selected point of interest) with bearing and distance.
+  Wave 127 PR1 `docs/Hud06HomeMarkerDesign.md`. POS HOME + pip +
+  chevron 108. Selected POI omit.
+- [ ] PLANNED (P2, NAV/DOCKING): Add docking approach assistance. The J prompt
+  appears, but there is no approach-speed cue or brake assist, so a cruise-
+  speed approach ends in a bounce off the station hull. A "SLOW — approach
+  under 20 u/s" cue or an approach governor on J would close the loop. NAV-03
+  covers system-to-system autopilot only.
+  Wave 130 PR1 `docs/Nav10DockApproachDesign.md`. HUD cue + self
+  `.rw-slow-lamp`. KeyJ tap. MATCH stays MATCH. Governor PR2 optional.
+- [ ] PLANNED (P2, TGT): Sort the T target cycle hostiles-first during combat,
+  or add a "target my attacker" key. While an ace fired from 59 u, T selected
+  a friendly hauler, then a neutral freighter, and reached the attacker on
+  the third press. TGT-03 lists attacker warnings but not selection priority.
+  Wave 130 PR1 `docs/Tgt07CombatCycleDesign.md`. KeyT hostiles-first
+  then range. `ai.intent`. No new key.
+- [ ] PLANNED (P2, MSN): Deduplicate procedural job postings. The Freehold board
+  showed two identical "Mine Raw ore, 784 UU" postings as jobs 8 and 9.
+  MSN-01 covers replacement of completed jobs, not duplicate generation.
+  Wave 130 PR1 `docs/Msn04JobDedupDesign.md`. Mining-only identity.
+  Digit 2 stays Jobs.
+- [ ] INBOX (P2, MSN/AST): Give mining contracts ore-type guidance. The
+  contract asks for Raw ore, but a rock reveals its type only after a lock,
+  one rock at a time (nearest rock was brine ice; next lock slag iron at
+  434 u). The refusal toast and lock card are good. Add an ore filter to the
+  scanner or attach a field marker to the contract. AST-02 covers finding
+  rich regions, not matching a rock to a contract.
+- [ ] INBOX (P2, NAV): Keep a plotted route when the chart closes. A plotted
+  "Veridian Reach · 1 jump" route was gone after closing and reopening the
+  chart without engaging, and the Autopilot button read "plot a destination
+  first". A plotted route should persist until cleared or replaced.
+- [ ] INBOX (P2, CONTROLS/SETTINGS): Add a real pause menu. P shows only
+  "PAUSED — P to resume"; there is no path to Settings, save, or the title
+  screen from inside a run — Settings exist only on the title menu. The
+  captured Settings item covers new options, not in-game access.
+- [ ] INBOX (P3, RELIABILITY): Soften the runtime-error screen. An uncaught
+  error mid-flight shows "WebSim failed to start" with no reload control and
+  no word about the autosave. (The trigger in this playtest was injected test
+  code, not game code; the handler behavior is the game's.) Say "something
+  broke", confirm the last save time, and offer a reload.
+- [ ] INBOX (P3, DEATH): Confirm the death penalty is intended. Ship loss kept
+  all 350 UU and restored the hull free at the last berth; loss currently has
+  no cost.
+- [ ] PLANNED (P2, AGENT API): Add an AI-agent play API so agents can play the
+  game on a user's behalf. This playtest needed injected synthetic
+  key/mouse events, a hand-rolled steering loop against `window.__ctx`, and
+  screen-scraping to act at all — and stock agent keyboard events (empty
+  `e.code`) never reached the game. Desired: a stable, documented interface
+  (for example a versioned `window.rimward` handle or local endpoint) with
+  read access to game state (ship, HUD, targets, station services, jobs,
+  chart) and command access to intents (steer to, approach and dock, select
+  target, accept job, trade, plot route, engage autopilot), plus an
+  accessibility fallback so keys with `key` but empty `code` still work.
+  Owner note: users may want their agents to play for them; this also makes
+  future playtests and verification passes far cheaper.
+  Wave 127 PR1 `docs/AgentApiDesign.md`. `window.rimward` observe +
+  `ping`/`disable`. Later PR2–PR6 commands / pulse / key fallback /
+  badge / loopback. Pad approach is a v1 non-goal.
+
+Working well and needing no capture: the standing screen, the lock card with
+hardness and required laser, the automine refusal toast, the Ninth Tooth
+demand card, and the autopilot NAV panel with its cancel bar.
+
 ---
 
 ## Priority and product direction
@@ -514,6 +671,61 @@ Remaining REP leftover CONSUME
 Named serial none on all three packs.
 No `src/`. Kit mutate omit. Aim-glass
 gauges stay off.
+
+**Wave 123 leftover census landed
+2026-08-25:** remaining PHY leftover
+CONSUME (`docs/Phy06RemainingPhyDesign.md`).
+Remaining AST leftover CONSUME
+(`docs/Ast03RemainingAstDesign.md`).
+Remaining FX leftover CONSUME
+(`docs/Fx02RemainingFxDesign.md`).
+Named serial none on all three packs.
+No `src/`. Kit mutate omit. Aim-glass
+gauges stay off.
+
+**Wave 124 playtest inbox briefs landed
+2026-08-25:** CTL-03 Berth freeze
+(`docs/Ctl03BerthFreezeDesign.md`):
+leftover REAL; later PR1 session hold
+not KeyP; LOAD stays; interrupt desk
+keeps SAVE/LOAD. AI-05 starter grace
+(`docs/Ai05StarterGraceDesign.md`):
+leftover REAL; later PR1 extra 180 s
+Greenhand/Beautiful; death calm 90 s;
+Dresk not cancelled. CTL-04 menu digits
+(`docs/Ctl04MenuInputDesign.md`):
+leftover REAL; later PR1 skip Digit1–5
+→ WPN while docked. No `src/`. Kit
+mutate omit. Aim-glass gauges stay off.
+
+**Wave 125 first impl landed 2026-08-25:**
+CTL-03 berth hold, AI-05 starter grace,
+CTL-04 menu digits. PR2 stills optional.
+
+**Wave 126 playtest inbox briefs landed
+2026-08-26:** Agent API, Hail01 demand,
+HUD-06 home marker. Markdown only. No
+`src/`. Named serial PR1 on each.
+
+**Wave 127 first impl landed 2026-08-26:**
+Agent API PR1 observe handle
+(`docs/AgentApiDesign.md`):
+`window.rimward` observe + ping/disable.
+Hail01 PR1 demand lifecycle
+(`docs/Hail01DemandLifecycleDesign.md`):
+named 20 s card; dock/jump/expire/void.
+HUD-06 PR1 home marker
+(`docs/Hud06HomeMarkerDesign.md`):
+POS HOME + pip + chevron 108.
+Kit mutate omit. Aim-glass gauges stay
+off.
+
+**Wave 128 playtest inbox briefs landed
+2026-08-26:** Hail02 miss-feedback,
+HUD-07 deconfliction, NAV-09 chart
+readability. Markdown only. No `src/`.
+Named serial PR1 on each. Optional
+PR2s not stolen.
 
 ### Experience references
 
@@ -1280,7 +1492,10 @@ two-sample steer first impl Wave 109 (mid 20 u +
 frame hold; no navmesh). PHY-05 pad-home persist
 brief Wave 109 (`docs/Phy05PadHomeDesign.md`);
 first impl Wave 110 (patrol heavy hold +
-heal; no new persist key).  
+heal; no new persist key). Remaining PHY
+leftover CONSUME Wave 123
+(`docs/Phy06RemainingPhyDesign.md`):
+named serial none. PHY-04 80 u skippable.  
 **Player problem:** The player and NPCs can fly through suns, stations,
 asteroids, and ships, removing risk and breaking visual credibility.  
 **Likely areas:** player ship movement, NPC steering, solar-system bodies,
@@ -1321,7 +1536,9 @@ is a safety net, not the normal way traffic navigates.
 work sector, `fieldOre` persist, arrival line + group-3 cue.
 Wave 70 leftover: MATCH on a locked rock holds in the rock
 rest frame. Wave 71: MATCH lamp lights on that rock lock.
-NPC miners already held relative.
+NPC miners already held relative. Remaining AST leftover
+CONSUME Wave 123 (`docs/Ast03RemainingAstDesign.md`):
+named serial none.
 **Player problem:** Asteroids currently appear as a single local cluster in each
 solar system. The cluster feels placed rather than like a natural part of the
 system.
@@ -1387,6 +1604,9 @@ recoil/marks consume. Wave 114 scrape punch first impl
 (`docs/Fx01RemainingScrapeDesign.md`).
 Wave 114 muzzle leftover CONSUME
 (`docs/Fx01RemainingMuzzleDesign.md`).
+Remaining FX leftover CONSUME Wave 123
+(`docs/Fx02RemainingFxDesign.md`):
+named serial none.
 **Player problem:** Weapon effects look weak and hits do not feel impactful.  
 **Likely areas:** combat rendering, projectile and beam effects, shields, ship
 damage, camera feedback, audio, teardown/performance tests.
@@ -1401,6 +1621,8 @@ Wave 111. Remaining scrape punch first impl
 Wave 114 (`docs/Fx01RemainingScrapeDesign.md`).
 Muzzle leftover CONSUME Wave 114
 (`docs/Fx01RemainingMuzzleDesign.md`).
+Remaining FX leftover CONSUME Wave 123
+(`docs/Fx02RemainingFxDesign.md`).
 
 Use the full feedback stack where appropriate:
 

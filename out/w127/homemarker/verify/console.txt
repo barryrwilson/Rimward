@@ -1,0 +1,23 @@
+# HUD-06 PR1 console (Chrome CDP Runtime.consoleAPICalled)
+started 2026-08-26T03:39:02.020Z
+vite http://127.0.0.1:5178/ (verifier started; stopped after live)
+cdp 9472 then 9473
+Playwright MCP was locked (profile mcp-chrome-7d372dc).
+
+## exceptions
+(none)
+
+## error/warning
+(none)
+
+## HUD-06
+No console.error / warning named home, HUD-06, or rw-home.
+
+## all (truncated, run 1)
+debug [vite] connecting...
+debug [vite] connected.
+debug [vite] connecting...
+debug [vite] connected.
+
+## notes
+Run 2 follow-up did not attach a console listener. Dock hide at 2s used the same origin. No new HUD-06 errors in run 1.

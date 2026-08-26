@@ -1,0 +1,7 @@
+Total messages: 2 (Errors: 0, Warnings: 0)
+Returning 4 messages for level "debug"
+
+[DEBUG] [vite] connecting... @ http://127.0.0.1:5174/@vite/client:788
+[DEBUG] [vite] connected. @ http://127.0.0.1:5174/@vite/client:911
+[DEBUG] [vite] connecting... @ http://127.0.0.1:5174/@vite/client:788
+[DEBUG] [vite] connected. @ http://127.0.0.1:5174/@vite/client:911

@@ -1,0 +1,30 @@
+{
+  "vite": "http://127.0.0.1:5174/",
+  "origin": "Digit1 after New Game confirm",
+  "currentSystem": "freehold",
+  "fitViewBox": "665 367 1258 1006",
+  "destOptionCountIncludingPlaceholder": 102,
+  "fitZoomHiddenLabels": 89,
+  "fitShownLabels": 12,
+  "zoomButtonsCssPx": {
+    "in": { "w": 68.625, "h": 24 },
+    "out": { "w": 75.28125, "h": 24 },
+    "reset": { "w": 88.59375, "h": 24 }
+  },
+  "factionRedledger": { "destVisible": 14, "hiddenNodes": 87, "currentVisible": true },
+  "standingSworn": { "destVis": ["freehold", "veridian"] },
+  "standingUnknownMissingBag": { "threw": false, "paused": false },
+  "keyMOnDest": { "chartOpen": true, "activeId": "rw-galaxy-dest" },
+  "itineraryVeridian": [
+    "Freehold Drift — Freehold Compact — Stranger — gate — Stranger; pirate traffic 4",
+    "Veridian Reach — Veridian Combine — Stranger — unknown — Stranger; pirate traffic 3"
+  ],
+  "clearHidesItinerary": true,
+  "reopenFitViewBox": "665 367 1258 1006",
+  "apButtonSuccess": { "chartOpen": false, "autopilot": true, "paused": false },
+  "directTryEngage": { "token": "", "chartOpen": true, "autopilot": true, "paused": false },
+  "persistZoom": false,
+  "consoleErrors": 0,
+  "wave85NoPrevent": true,
+  "hitCssDiameter": 24
+}
