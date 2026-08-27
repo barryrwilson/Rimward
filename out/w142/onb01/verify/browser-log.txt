@@ -1,0 +1,79 @@
+chrome-ws ws://127.0.0.1:9474/devtools/browser/b050c687-bcb8-4576-8d71-cb2829e3c789
+goto http://127.0.0.1:5174/
+committed http://127.0.0.1:5174/
+title-new-visible
+title-new-visible-after-clear
+SHOT 01-title.png
+SHOT 02-origin-overlay.png
+overlay {"title":"RIMWARD — who are you?","origin":null,"paused":true}
+PASS origin overlay open RIMWARD — who are you?
+SHOT 03-hint-look-controls-collapsed.png
+DUMP look {"origin":"greenhand","seen":["look"],"hintCount":1,"hintText":"Mouse — look and turn toward the reticle","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+PASS origin greenhand after Digit1 greenhand
+PASS CONTROLS starts collapsed class true
+PASS CONTROLS body hidden none
+PASS toggle text CONTROLS ▸ CONTROLS ▸
+PASS aria-expanded false false
+PASS first hint look/turn Mouse — look and turn toward the reticle
+PASS no 19-line dump while collapsed 19 none
+PASS one hint node 1
+PASS hint role=status status
+PASS hint aria-live=polite polite
+PASS hint aria-atomic=true true
+PASS hint not inside reticle false
+PASS hint parent is hud not reticle hud
+PASS seen has look not move ["look"]
+PASS pause unused (not paused after pick) false
+PASS hint pointer-events none none
+SHOT 04-hint-throttle.png
+DUMP throttle {"origin":"greenhand","seen":["look","throttle"],"hintCount":1,"hintText":"R/F — throttle · double-tap F — stop","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+PASS hint throttle one at a time R/F — throttle · double-tap F — stop
+PASS hint throttle still one node 1
+PASS hint throttle CONTROLS still collapsed CONTROLS ▸ false
+SHOT 05-hint-target.png
+DUMP target {"origin":"greenhand","seen":["look","throttle","target"],"hintCount":1,"hintText":"T — cycle target","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+PASS hint target one at a time T — cycle target
+PASS hint target still one node 1
+PASS hint target CONTROLS still collapsed CONTROLS ▸ false
+SHOT 06-hint-hail.png
+DUMP hail {"origin":"greenhand","seen":["look","throttle","target","hail"],"hintCount":1,"hintText":"H — hail the lock","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+PASS hint hail one at a time H — hail the lock
+PASS hint hail still one node 1
+PASS hint hail CONTROLS still collapsed CONTROLS ▸ false
+SHOT 07-hint-dock.png
+DUMP dock {"origin":"greenhand","seen":["look","throttle","target","hail","dock"],"hintCount":1,"hintText":"J — dock when the station is in range","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+PASS hint dock one at a time J — dock when the station is in range
+PASS hint dock still one node 1
+PASS hint dock CONTROLS still collapsed CONTROLS ▸ false
+SHOT 08-hint-chart.png
+DUMP chart {"origin":"greenhand","seen":["look","throttle","target","hail","dock","chart"],"hintCount":1,"hintText":"M — galaxy chart","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+PASS hint chart one at a time M — galaxy chart
+PASS hint chart still one node 1
+PASS hint chart CONTROLS still collapsed CONTROLS ▸ false
+PASS sequence order look-throttle-target-hail-dock-chart look,throttle,target,hail,dock,chart
+DUMP expanded {"origin":"greenhand","seen":["look","throttle","target","hail","dock","chart"],"hintCount":1,"hintText":"M — galaxy chart","toggleText":"CONTROLS ▾","ariaExpanded":"true","bodyDisplay":"block","lineCount":19}
+SHOT 09-controls-expanded.png
+PASS CONTROLS expanded label CONTROLS ▾
+PASS aria-expanded true true
+PASS 19 control lines 19
+PASS body visible when expanded block
+PASS KeyH hail in encyclopedia Mouse — steer toward reticle
+W/S — vertical strafe (W = up)
+A/D — lateral strafe (D = right)
+Q/E — roll left / right (set your up)
+R/F (hold) — throttle up / down · double-tap F — full stop
+Space — afterburner
+Shift (hold) — vector-hold drift
+LMB (hold) — fire
+1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic
+T — cycle target (hostiles first in combat)
+V — lock under retic
+PASS KeyJ dock in encyclopedia 
+PASS KeyL berth in encyclopedia 
+PASS KeyM chart in encyclopedia 
+PASS KeyP pause in encyclopedia 
+PASS KeyD strafe in encyclopedia 
+DUMP recollapsed {"origin":"greenhand","seen":["look","throttle","target","hail","dock","chart"],"hintCount":1,"hintText":"M — galaxy chart","toggleText":"CONTROLS ▸","ariaExpanded":"false","bodyDisplay":"none","lineCount":19}
+SHOT 10-controls-collapsed-again.png
+PASS CONTROLS hide again CONTROLS ▸ false none
+keyBindings-spot {"encyclopedia":true,"flagsPausedWritesFromOnboarding":false,"src":{"hail":"KeyH pendingHail","dock":"KeyJ pendingDock","strafe":"KeyD strafeX"}}

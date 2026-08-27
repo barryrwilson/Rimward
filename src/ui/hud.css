@@ -1196,7 +1196,12 @@ body.rw-contrast #hud .rw-contacts-stroke {
   color: var(--cyan);
 }
 
-.rw-controls-toggle:hover { color: var(--white); }
+.rw-controls-toggle:hover,
+.rw-controls-toggle:focus-visible {
+  color: var(--white);
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
 
 .rw-controls ul {
   list-style: none;
@@ -1212,6 +1217,28 @@ body.rw-contrast #hud .rw-contacts-stroke {
 }
 
 .rw-controls.collapsed .rw-controls-body { display: none; }
+
+/* First-minute lesson rail (Onb01). One node, not the 80 px reticle.
+   Tokens work on #hud (after reparent) and on body (if #hud is missing). */
+.rw-onboard-hint {
+  position: absolute;
+  left: 14px;
+  top: 48px;
+  z-index: 35;
+  padding: 6px 14px;
+  background: var(--panel, rgba(9, 16, 30, 0.78));
+  border: 1px solid rgba(111, 242, 224, 0.25);
+  border-radius: 2px;
+  font-family: 'Cascadia Mono', Consolas, Menlo, 'Courier New', monospace;
+  font-size: calc(11px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  color: var(--cyan, var(--rw-accent, #6ff2e0));
+  pointer-events: none;
+}
+
+body > .rw-onboard-hint {
+  position: fixed;
+}
 
 /* hull state text flag: redundant cue beside the petals (color/blink alone
    never carries state, §18.4/§20) — hidden while hull is in the ok band */
@@ -1258,9 +1285,14 @@ body.rw-contrast #hud .rw-prompt,
 body.rw-contrast #hud .rw-banner,
 body.rw-contrast #hud .rw-jump,
 body.rw-contrast #hud .rw-autopilot,
-body.rw-contrast #hud .rw-automine {
+body.rw-contrast #hud .rw-automine,
+body.rw-contrast .rw-onboard-hint {
   background: rgba(0, 2, 6, 0.94);
   border-color: rgba(160, 205, 245, 0.6);
+}
+
+body.rw-colorblind .rw-onboard-hint {
+  --rw-accent: #56B4E9;
 }
 
 body.rw-contrast #hud .rw-combat-rail {
@@ -1271,7 +1303,9 @@ body.rw-contrast #hud .rw-combat-rail {
 /* Reduced motion: kill every HUD animation/transition (banner slide, toast
    fades, blinks, iris breathe/spin, bar tweens) */
 body.rw-reduced-motion #hud,
-body.rw-reduced-motion #hud * {
+body.rw-reduced-motion #hud *,
+body.rw-reduced-motion .rw-onboard-hint,
+body.rw-reduced-motion .rw-onboard-hint * {
   animation: none !important;
   transition: none !important;
 }

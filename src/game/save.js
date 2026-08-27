@@ -1603,6 +1603,8 @@ export function initSave(ctx) {
   }
 
   function refreshBerth() {
+    let paused = false;
+    try { paused = !!(ctx.flags && ctx.flags.paused); } catch { paused = false; }
     for (const row of berthRows) {
       const snap = loadSnapshot(row.key);
       if (snap) {
@@ -1610,10 +1612,17 @@ export function initSave(ctx) {
         const sysName = SYSTEMS[sysId] ? SYSTEMS[sysId].name : sysId;
         row.meta.textContent =
           new Date(snap.savedAt).toLocaleString() + ' · ' + sysName + ' · ' + snap.world.credits + ' UU';
-        row.loadBtn.disabled = false;
+        if (paused) {
+          row.loadBtn.disabled = true;
+          row.loadBtn.textContent = 'LOAD — resume first';
+        } else {
+          row.loadBtn.disabled = false;
+          row.loadBtn.textContent = 'LOAD';
+        }
       } else {
         row.meta.textContent = '— empty berth —';
         row.loadBtn.disabled = true;
+        row.loadBtn.textContent = 'LOAD';
       }
     }
   }
@@ -1634,6 +1643,26 @@ export function initSave(ctx) {
       requestBerthClose();
     }
   });
+
+  ctx.berthApi = {
+    isOpen() { return berthOpen === true; },
+    openFromPause() {
+      try {
+        if (berthOpen) return;
+        if (dead) return;
+        try { if (ctx.flags && ctx.flags.docked) return; } catch { /* docked read is optional */ }
+        setBerthOpen(true);
+      } catch { /* mutex / pause-open skip; never throw */ }
+    },
+    closeIfOpen() {
+      try {
+        if (berthOpen) setBerthOpen(false);
+      } catch { /* close is best-effort */ }
+    },
+    syncPausedLoad() {
+      try { if (berthOpen) refreshBerth(); } catch { /* LOAD label is optional */ }
+    },
+  };
 
   // ---- save gating ----
 

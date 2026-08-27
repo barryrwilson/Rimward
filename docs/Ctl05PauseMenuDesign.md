@@ -5,11 +5,13 @@
 | **Title** | RIMWARD CTL-05 remaining pause menu |
 | **Author** | Wave 141 CTL-05 leftover integrator |
 | **Date** | 2026-08-27 |
-| **Status** | Wave 141 leftover census + brief. No `src/`. KeyP stays pause. KeyH/J/L/M stay. KeyD strafe. Digit 0/8/9 stay. |
+| **Status** | Implemented Wave 142 PR1. In-run pause is a menu (RESUME / SETTINGS / BERTH RECORDS / TITLE). KeyP stays pause. |
 | **Wave** | 141 — leftover census + brief. Banner is copy-only. Leftover **REAL**. Named serial **PR1**. |
 | **Owner request** | Inbox P2 CONTROLS/SETTINGS leftover: Add a real pause menu. P shows only "PAUSED — P to resume"; there is no path to Settings, save, or the title screen from inside a run. Census live `main.js` pause listener and `pauseEl`. Code wins. If pause already offers Settings, save, and title from inside a run, freeze leftover **CONSUME** and named serial **none**. Name: **no remaining Ctl05 leftover.** Census: banner is copy-only. Freeze leftover **REAL** and name later serial **PR1**. Deputize: ACCESS to existing Settings / berth / title / resume. Do **not** steal Settings expansion (mouse sensitivity, invert, rebinding, split volume). |
-| **Merge law** | [`out/w141/pause/shared-contract.md`](../out/w141/pause/shared-contract.md). If this document and that file conflict, **the contract wins**. |
+| **Merge law** | [`out/w142/pause/shared-contract.md`](../out/w142/pause/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay. No new Digit. KeyP pause, KeyH hail, KeyJ dock/jump, KeyL berth, KeyM chart stay. KeyD strafe. Do not remap. CTL-02 never writes `flags.paused`. Pause already writes `flags.paused` in `main.js`. Later keep one in-run display owner for that flag. CTL-03 `berthHold` is session hold, not pause — do not merge. LOAD while paused stays gated (Wave 28). SAVE while paused still writes. Title z 70, settings z 80, pause z 50. Opening Settings from pause must not break title-first capture-phase keys. `innerHTML` forbidden later. Menu labels `textContent`. Color is not the only cue. `reducedMotion`: no new animation that ignores it. Fail closed: never throw from pause paint; unknown action skip; do not unpause into a title-filter KeyP. `state.js` READ-ONLY. Default persist **none**. Do not teleport. Do not grant credits. This is not Onb01. This is not Org01. This is not CTL-04 `fireHeld`. This is not pad 2B. Do not steal Hail01 / HUD-06 / Hail02 / HUD-07 / NAV-09 / NAV-10 governor / TGT-07 stills / MSN-04 other families / CTL-03 / AI-05 / CTL-04. Pad 2B still owner lock. No in-repo LLM. NAV-11 serial none. Do not steal sibling Wave 141 packs. Do not edit the wishlist or `PROGRESS.md`. |
+
+**Wave 142 PR1 impl:** `main.js` `setPaused` + `pauseEl` dialog buttons (`textContent`); `title.js` remount `openFromPause` (no skip, no reload; CONTINUE uses `setPaused`); `save.js` `berthApi.openFromPause` while paused, LOAD named-disabled. Settings FIELDS unchanged (synthetic KeyO). Overlay-policy still never writes `paused`.
 
 **Verifier record:**
 

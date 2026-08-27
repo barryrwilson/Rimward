@@ -1,0 +1,87 @@
+{
+  "title": "RIMWARD — who are you?",
+  "footer": "press 1-5 or click — this choice is permanent",
+  "rowCount": 5,
+  "rows": [
+    {
+      "i": 0,
+      "choice": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.",
+      "lines": [
+        "Hull light 100 · Mk I · hold 20",
+        "Money 350 UU",
+        "Standings even",
+        "Start Freehold Drift",
+        "New player"
+      ],
+      "previewHtml": "<div class=\"rw-origin-preview-line\">Hull light 100 · Mk I · hold 20</div><div class=\"rw-origin-preview-line\">Money 350 UU</div><div class=\"rw-origin-preview-line\">Standings even</div><div class=\"rw-origin-preview-line\">Start Freehold Drift</div><div class=\"rw-origin-preview-line\">New player</div>",
+      "choiceHtml": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.",
+      "choiceFont": "12px",
+      "previewFont": "10px"
+    },
+    {
+      "i": 1,
+      "choice": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.",
+      "lines": [
+        "Hull light 100 · Mk I · hold 20",
+        "Money −1150 UU (debt)",
+        "Red Ledger −10 (Stranger) · Freehold +10 (Known)",
+        "Start Freehold Drift · in debt",
+        "Experienced"
+      ],
+      "previewHtml": "<div class=\"rw-origin-preview-line\">Hull light 100 · Mk I · hold 20</div><div class=\"rw-origin-preview-line\">Money −1150 UU (debt)</div><div class=\"rw-origin-preview-line\">Red Ledger −10 (Stranger) · Freehold +10 (Known)</div><div class=\"rw-origin-preview-line\">Start Freehold Drift · in debt</div><div class=\"rw-origin-preview-line\">Experienced</div>",
+      "choiceHtml": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.",
+      "choiceFont": "12px",
+      "previewFont": "10px"
+    },
+    {
+      "i": 2,
+      "choice": "[3] Marked — Veridian space has your face on a board. Someone downstream taught them to be careful.",
+      "lines": [
+        "Hull light 100 · Mk I · hold 20",
+        "Money 350 UU",
+        "Veridian Combine −15 (Suspect) · Red Ledger +10 (Known)",
+        "Start Freehold Drift · fear 15",
+        "Experienced"
+      ],
+      "previewHtml": "<div class=\"rw-origin-preview-line\">Hull light 100 · Mk I · hold 20</div><div class=\"rw-origin-preview-line\">Money 350 UU</div><div class=\"rw-origin-preview-line\">Veridian Combine −15 (Suspect) · Red Ledger +10 (Known)</div><div class=\"rw-origin-preview-line\">Start Freehold Drift · fear 15</div><div class=\"rw-origin-preview-line\">Experienced</div>",
+      "choiceHtml": "[3] Marked — Veridian space has your face on a board. Someone downstream taught them to be careful.",
+      "choiceFont": "12px",
+      "previewFont": "10px"
+    },
+    {
+      "i": 3,
+      "choice": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.",
+      "lines": [
+        "Hull light 100 · Mk I · hold 20",
+        "Money 350 UU",
+        "Standings even",
+        "Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2",
+        "New player — living-ship care"
+      ],
+      "previewHtml": "<div class=\"rw-origin-preview-line\">Hull light 100 · Mk I · hold 20</div><div class=\"rw-origin-preview-line\">Money 350 UU</div><div class=\"rw-origin-preview-line\">Standings even</div><div class=\"rw-origin-preview-line\">Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2</div><div class=\"rw-origin-preview-line\">New player — living-ship care</div>",
+      "choiceHtml": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.",
+      "choiceFont": "12px",
+      "previewFont": "10px"
+    },
+    {
+      "i": 4,
+      "choice": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.",
+      "lines": [
+        "Hull light 100 · Mk I · hold 20",
+        "Money 600 UU",
+        "Standings even",
+        "Start The Redmarch · fear 5 · clue tally-board",
+        "Experienced"
+      ],
+      "previewHtml": "<div class=\"rw-origin-preview-line\">Hull light 100 · Mk I · hold 20</div><div class=\"rw-origin-preview-line\">Money 600 UU</div><div class=\"rw-origin-preview-line\">Standings even</div><div class=\"rw-origin-preview-line\">Start The Redmarch · fear 5 · clue tally-board</div><div class=\"rw-origin-preview-line\">Experienced</div>",
+      "choiceHtml": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.",
+      "choiceFont": "12px",
+      "previewFont": "10px"
+    }
+  ],
+  "listOverflow": "auto",
+  "paused": true,
+  "origin": null,
+  "originsOpen": true,
+  "weaponGroup": 1
+}

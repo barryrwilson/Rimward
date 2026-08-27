@@ -1,0 +1,160 @@
+chrome-ws ws://127.0.0.1:9475/devtools/browser/45f3d6cc-53d5-425b-9438-4162eaf6d3b6
+goto http://127.0.0.1:5175/
+committed http://127.0.0.1:5175/
+title-new-visible
+titleState {"hasNew":true,"newText":"[1] NEW GAME","titlePresent":true,"originTitle":true,"paused":true}
+PASS title New Game button [1] NEW GAME
+overlay-title RIMWARD — who are you?
+paused-before true
+PASS origin overlay before confirm RIMWARD — who are you?
+PASS five origin rows 5
+PASS paused until pick true
+PASS origin not yet written 
+PASS Digit1 label [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+PASS Digit2 label [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+PASS Digit3 label [3] Marked — Veridian space has your face on a board. Someone downstream taught them to be careful.
+PASS Digit4 label [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+PASS Digit5 label [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+PASS Digit1 Greenhand name [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+PASS Digit1 hull [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift
+New player
+PASS Digit1 money [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift
+New player
+PASS Digit1 standings even [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift
+New player
+PASS Digit1 start Freehold Drift [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift
+New player
+PASS Digit1 New player [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift
+New player
+PASS Digit1 omits fear 0 [1] Freehold Greenhand — A berth, a living ship, and no story yet.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift
+New player
+PASS Digit2 Ledger Debt [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+PASS Digit2 money debt [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+Hull light 100 · Mk I · hold 20
+Money −1150 UU (debt)
+Red Ledger −10 (Stranger) · Freehold +10 (Known)
+Start Freehold Drift · in debt
+Experienced
+PASS Digit2 Red Ledger standing [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+Hull light 100 · Mk I · hold 20
+Money −1150 UU (debt)
+Red Ledger −10 (Stranger) · Freehold +10 (Known)
+Start Freehold Drift · in debt
+Experienced
+PASS Digit2 Freehold standing [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+Hull light 100 · Mk I · hold 20
+Money −1150 UU (debt)
+Red Ledger −10 (Stranger) · Freehold +10 (Known)
+Start Freehold Drift · in debt
+Experienced
+PASS Digit2 Experienced [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+Hull light 100 · Mk I · hold 20
+Money −1150 UU (debt)
+Red Ledger −10 (Stranger) · Freehold +10 (Known)
+Start Freehold Drift · in debt
+Experienced
+PASS Digit2 in debt [2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.
+Hull light 100 · Mk I · hold 20
+Money −1150 UU (debt)
+Red Ledger −10 (Stranger) · Freehold +10 (Known)
+Start Freehold Drift · in debt
+Experienced
+PASS Digit4 Beautiful [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+PASS Digit4 living-ship care [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2
+New player — living-ship care
+PASS Digit4 Living rock [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2
+New player — living-ship care
+PASS Digit4 bond [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2
+New player — living-ship care
+PASS Digit4 hunger [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2
+New player — living-ship care
+PASS Digit4 not kit mutate [4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.
+Hull light 100 · Mk I · hold 20
+Money 350 UU
+Standings even
+Start Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2
+New player — living-ship care
+PASS Digit5 Rim Drifter [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+PASS Digit5 money 600 [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+Hull light 100 · Mk I · hold 20
+Money 600 UU
+Standings even
+Start The Redmarch · fear 5 · clue tally-board
+Experienced
+PASS Digit5 Start The Redmarch [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+Hull light 100 · Mk I · hold 20
+Money 600 UU
+Standings even
+Start The Redmarch · fear 5 · clue tally-board
+Experienced
+PASS Digit5 fear 5 [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+Hull light 100 · Mk I · hold 20
+Money 600 UU
+Standings even
+Start The Redmarch · fear 5 · clue tally-board
+Experienced
+PASS Digit5 tally-board [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+Hull light 100 · Mk I · hold 20
+Money 600 UU
+Standings even
+Start The Redmarch · fear 5 · clue tally-board
+Experienced
+PASS Digit5 Experienced [5] Rim Drifter — You came in from the Redmarch with more questions than money.
+Hull light 100 · Mk I · hold 20
+Money 600 UU
+Standings even
+Start The Redmarch · fear 5 · clue tally-board
+Experienced
+PASS compact sublines present 5,5,5,5,5
+PASS preview ~10px 10px,10px,10px,10px,10px
+PASS choice ~12px 12px,12px,12px,12px,12px
+weaponGroup-before 1
+weaponGroup-armed 3
+afterPick {"overlay":false,"rowCount":0,"paused":false,"origin":"greenhand","originsOpen":false,"weaponGroup":3}
+PASS overlay gone after Digit1 {"overlay":false,"rowCount":0,"paused":false,"origin":"greenhand","originsOpen":false,"weaponGroup":3}
+PASS origin is greenhand greenhand
+PASS unpaused after pick false
+PASS confirm Digit1 did not steal WPN armed=3 after=3
+weaponGroup-after-second-digit1 1
+PASS Digit1 becomes WPN after pick 1
+PASS no new pack console errors 

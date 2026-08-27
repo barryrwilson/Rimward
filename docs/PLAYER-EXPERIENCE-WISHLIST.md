@@ -93,13 +93,13 @@ durable next-wave capture is mandatory, not optional.
   safe place to stop and understand the current state.
   Wave 125 PR1 `docs/Ctl03BerthFreezeDesign.md`. Session `berthHold`.
   CTL-03 PR2 stills optional.
-- [ ] PLANNED (P2, ONBOARDING): Replace the first-minute information dump with a
+- [x] DONE (P2, ONBOARDING): Replace the first-minute information dump with a
   short contextual flight lesson. Immediately after the permanent origin pick,
   the expanded controls encyclopedia and several simultaneous narrative lines
   compete with the ship, station, targets, and reticle. Teach look/turn,
   throttle, target, hail, dock, and chart one at a time, then leave the full
   control reference available on demand.
-  Wave 141 leftover REAL PR1 `docs/Onb01FlightLessonDesign.md`.
+  Wave 142 PR1 `docs/Onb01FlightLessonDesign.md`.
   Collapse CONTROLS by default; six hint steps on the live rail.
 - [x] DONE (P1, HAIL/CONTEXT): Make contextual actions name their subject,
   eligibility, and outcome. Pressing H while a friendly ship was selected did
@@ -125,12 +125,12 @@ durable next-wave capture is mandatory, not optional.
   systems and route consequences hard to inspect.
   Wave 129 PR1 `docs/Nav09ChartReadabilityDesign.md`. Zoom/pan + filter.
   Dest select stays. Itinerary as leg rows. NAV-09 PR2 stills optional.
-- [ ] PLANNED (P2, ORIGINS): Preview the gameplay consequences of each permanent
+- [x] DONE (P2, ORIGINS): Preview the gameplay consequences of each permanent
   origin before confirmation: starting hull and equipment, money/debt, faction
   standings, immediate danger, and recommended experience level. The current
   prose establishes flavor well but does not support an informed permanent
   choice.
-  Wave 141 leftover REAL PR1 `docs/Org01OriginPreviewDesign.md`.
+  Wave 142 PR1 `docs/Org01OriginPreviewDesign.md`.
   Derive preview rows from live ORIGINS. Compact sublines first.
 - [ ] INBOX (P2, CONTROLS/SETTINGS): Expand Settings with mouse sensitivity,
   invert-X/invert-Y, complete key rebinding with conflict detection, and
@@ -218,11 +218,11 @@ checked against the current initiative text before capture.
   Wave 137 leftover CONSUME `docs/Nav11RoutePersistDesign.md`.
   Census: `setOpen(false)` does not `clearRoute`. `world.nav` stays.
   AP plot-first is idle-only. Playtest dest-drop is stale vs live code.
-- [ ] PLANNED (P2, CONTROLS/SETTINGS): Add a real pause menu. P shows only
+- [x] DONE (P2, CONTROLS/SETTINGS): Add a real pause menu. P shows only
   "PAUSED — P to resume"; there is no path to Settings, save, or the title
   screen from inside a run — Settings exist only on the title menu. The
   captured Settings item covers new options, not in-game access.
-  Wave 141 leftover REAL PR1 `docs/Ctl05PauseMenuDesign.md`.
+  Wave 142 PR1 `docs/Ctl05PauseMenuDesign.md`.
   ACCESS: RESUME / SETTINGS / BERTH RECORDS / TITLE. KeyP stays.
 - [ ] INBOX (P3, RELIABILITY): Soften the runtime-error screen. An uncaught
   error mid-flight shows "WebSim failed to start" with no reload control and
@@ -903,6 +903,17 @@ Ctl05 pause menu leftover REAL PR1
 Markdown only. No `src/`. Pad 2B not
 stolen. Optional PR2s not stolen.
 Settings expansion not stolen.
+
+**Wave 142 first impl landed 2026-08-27:**
+Onb01 flight lesson PR1
+(`docs/Onb01FlightLessonDesign.md`).
+Org01 origin preview PR1
+(`docs/Org01OriginPreviewDesign.md`).
+Ctl05 pause menu PR1
+(`docs/Ctl05PauseMenuDesign.md`).
+Kit mutate omit. Aim-glass gauges stay
+off. Optional PR2s not stolen. Pad 2B
+not stolen. Settings expansion not stolen.
 
 ### Experience references
 

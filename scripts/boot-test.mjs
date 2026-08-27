@@ -1718,19 +1718,21 @@ travelTo('freehold', 'wave6 return');
 
 // -- a. onboarding: one-time hint shows, key-dismisses, honors the setting ---
 // Test SETUP: replay the teaching pass from scratch — earlier waves already
-// showed (and banked) most hints. world.time is long past the 20s gate. The
-// module re-resolves ctx.world.onboarding every frame (save restores swap the
-// field wholesale), so resetting the current record's seen is enough.
+// showed (and banked) most hints. Pin origin so the lesson gate holds even if
+// a prior section cleared it. The module re-resolves ctx.world.onboarding
+// every frame (save restores swap the field wholesale), so resetting the
+// current record's seen is enough. First visible lesson card is look.
+ctx.world.origin = 'greenhand';
 ctx.world.onboarding ??= { seen: [] };
 ctx.world.onboarding.seen.length = 0;
-tick(2, 'onboarding move hint');
+tick(2, 'onboarding look hint');
 const hintCardVisible = (frag) => [...walkDom(document.body)]
   .some((n) => typeof n.textContent === 'string' && n.textContent.includes(frag) && n.style?.display === 'block');
-const moveHintShown = hintCardVisible('throttle');
-const moveSeen = ctx.world.onboarding.seen.includes('move');
+const lookHintShown = hintCardVisible('look and turn');
+const lookSeen = ctx.world.onboarding.seen.includes('look');
 dispatchKey('KeyZ'); // any key dismisses the visible hint; KeyZ is unbound
 tick(1, 'hint dismiss');
-const moveHintHidden = !hintCardVisible('throttle');
+const lookHintHidden = !hintCardVisible('look and turn');
 // Suppression: hints off, fresh 'dock' condition (parked by the station) —
 // no card, no seen entry.
 ctx.settings.hints = false;
@@ -1740,9 +1742,9 @@ tick(3, 'hints suppressed');
 const dockHintSuppressed = !ctx.world.onboarding.seen.includes('dock') && !hintCardVisible('J — dock');
 ctx.settings.hints = true; // restore — later sections read settings live
 const w6onboardingChecks = {
-  moveHintShown,
-  moveSeenOnce: moveSeen && ctx.world.onboarding.seen.filter((id) => id === 'move').length === 1,
-  dismissedOnKey: moveHintHidden,
+  lookHintShown,
+  lookSeenOnce: lookSeen && ctx.world.onboarding.seen.filter((id) => id === 'look').length === 1,
+  dismissedOnKey: lookHintHidden,
   suppressionRespected: dockHintSuppressed,
   hintsRestored: ctx.settings.hints === true,
 };
@@ -1926,7 +1928,7 @@ const w6saveChecks = {
   epicsPersisted: w6snap?.world?.epics?.freehold === 3,
   originPersisted: w6snap?.world?.origin === 'greenhand',
   onboardingPersisted: Array.isArray(w6snap?.world?.onboarding?.seen) &&
-    w6snap.world.onboarding.seen.includes('move'),
+    w6snap.world.onboarding.seen.includes('look'),
   aceRivalryPersisted: w6snap?.world?.aceRivalry?.hunterSpawned === true,
   convergedPersisted: w6snap?.world?.mystery?.converged === true,
 };
@@ -11431,14 +11433,20 @@ removeLiveShip(w42indyCtx, w42indy);
 {
   const hailCard = [...walkDom(document.body)].find((n) => n.className === 'rw-hail-card');
   const hailCss = hailCard?.style?.cssText || '';
-  const hintEl = [...walkDom(document.body)].find((n) => n.className === 'rw-onboard-hint');
+  const hintEl = [...walkDom(document.body)].find((n) =>
+    typeof n.className === 'string' && n.className.split(/\s+/).includes('rw-onboard-hint'));
   const hintCss = hintEl?.style?.cssText || '';
+  // Position tokens live in hud.css (.rw-onboard-hint left/top). The CSS stub
+  // does not apply those pixels to cssText, so do not pin inline top/left.
+  // Match class by token: the stub can desync className after classList flips
+  // (wave-15 chartmark precedent). querySelector is null so reparent never runs.
   const waveB = {
     hailCard: !!hailCard,
     hailLowerLeft: hailCss.includes('left:14px') && hailCss.includes('bottom:22%'),
     hailMax360: hailCss.includes('360px'),
-    hintOffBottom: hintCss.includes('top:48px') && hintCss.includes('left:14px')
-      && !hintCss.includes('bottom:6%'),
+    hintOffBottom: !!hintEl
+      && !hintCss.includes('bottom:6%')
+      && !hintCss.includes('bottom:22%'),
   };
   console.log('hud wave B hail/onboard:', JSON.stringify(waveB));
   if (!Object.values(waveB).every(Boolean)) { console.log('HUD WAVE B FAIL'); errors++; }

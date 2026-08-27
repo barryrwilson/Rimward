@@ -19,6 +19,7 @@ import { applyShipLighting, applyShipToneMapping } from './systems/ship-lighting
 // Input + simulation systems
 import { initControls } from './systems/controls.js';
 import { decodeKeyCode } from './systems/key-code.js';
+import { overlayIsOpen, settingsOwnsScreen, titleOwnsScreen } from './systems/overlay-policy.js';
 import { initBio } from './game/bio.js';
 import { initWorld } from './game/world.js';
 import { initContacts } from './game/contacts.js';
@@ -167,21 +168,154 @@ renderer.setAnimationLoop(() => {
 // Pause is orchestrator-owned: a direct listener so it works while the
 // system loop is frozen (controls.js doesn't run when paused).
 const pauseEl = document.createElement('div');
+pauseEl.setAttribute('role', 'dialog');
+pauseEl.setAttribute('aria-label', 'Paused');
 pauseEl.style.cssText =
-  'position:fixed;inset:0;display:none;align-items:center;justify-content:center;color:#6ff2e0;font:18px monospace;background:rgba(0,0,8,.45);z-index:50;letter-spacing:.3em;';
-pauseEl.textContent = 'PAUSED — P to resume';
+  'position:fixed;inset:0;display:none;align-items:center;justify-content:center;' +
+  'color:#6ff2e0;font:18px monospace;background:rgba(0,0,8,.45);z-index:50;' +
+  'pointer-events:none;';
+
+const pausePanel = document.createElement('div');
+pausePanel.style.cssText =
+  'pointer-events:none;display:flex;flex-direction:column;align-items:stretch;' +
+  'gap:10px;min-width:280px;max-width:92vw;padding:22px 24px;' +
+  'background:rgba(0,0,8,.55);border:1px solid rgba(111,242,224,.35);';
+pauseEl.appendChild(pausePanel);
+
+const pauseHeading = document.createElement('div');
+pauseHeading.textContent = 'PAUSED';
+pauseHeading.style.cssText =
+  'text-align:center;letter-spacing:.3em;font-size:18px;margin-bottom:2px;';
+pausePanel.appendChild(pauseHeading);
+
+const pauseLegend = document.createElement('div');
+pauseLegend.textContent = 'P to resume';
+pauseLegend.style.cssText =
+  'text-align:center;letter-spacing:.12em;font-size:13px;color:#9fd9d0;margin-bottom:8px;';
+pausePanel.appendChild(pauseLegend);
+
+const PAUSE_ACTIONS = Object.freeze(['resume', 'settings', 'berth', 'title']);
+function addPauseButton(id, label) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('data-pause-action', id);
+  btn.textContent = label;
+  btn.style.cssText =
+    'min-height:44px;min-width:44px;width:100%;padding:12px 16px;cursor:pointer;' +
+    'font:16px monospace;letter-spacing:.12em;color:#6ff2e0;background:#0a1418;' +
+    'border:1px solid rgba(111,242,224,.55);text-transform:uppercase;';
+  btn.addEventListener('focus', () => {
+    btn.style.outline = '2px solid #6ff2e0';
+    btn.style.outlineOffset = '2px';
+  });
+  btn.addEventListener('blur', () => {
+    btn.style.outline = 'none';
+  });
+  btn.addEventListener('click', (e) => {
+    try { e.stopPropagation?.(); } catch { /* ignore */ }
+    runPauseAction(id);
+  });
+  pausePanel.appendChild(btn);
+}
+addPauseButton('resume', 'RESUME');
+addPauseButton('settings', 'SETTINGS');
+addPauseButton('berth', 'BERTH RECORDS');
+addPauseButton('title', 'TITLE');
 document.body.appendChild(pauseEl);
+
+function pauseCovered() {
+  try {
+    if (titleOwnsScreen()) return true;
+    if (overlayIsOpen(ctx, 'berth')) return true;
+    if (settingsOwnsScreen()) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function syncPauseCover() {
+  try {
+    const showing = ctx.flags.paused === true && pauseEl.style.display !== 'none';
+    const hits = showing && !pauseCovered();
+    pauseEl.style.pointerEvents = hits ? 'auto' : 'none';
+    pausePanel.style.pointerEvents = hits ? 'auto' : 'none';
+  } catch { /* never throw from pause paint */ }
+}
+
+function setPaused(next) {
+  try {
+    if (!ctx.flags) return;
+    ctx.flags.paused = next === true;
+    let titleOn = false;
+    try { titleOn = !!document.getElementById('rw-title') || titleOwnsScreen(); } catch { titleOn = false; }
+    if (ctx.flags.paused && !titleOn) pauseEl.style.display = 'flex';
+    else pauseEl.style.display = 'none';
+    syncPauseCover();
+    try { ctx.berthApi?.syncPausedLoad?.(); } catch { /* berth LOAD text is optional */ }
+  } catch { /* never throw from pause paint */ }
+}
+ctx.setPaused = setPaused;
+
+function runPauseAction(id) {
+  try {
+    if (typeof id !== 'string') return;
+    if (id === '__proto__' || id === 'prototype' || id === 'constructor') return;
+    let known = false;
+    for (let i = 0; i < PAUSE_ACTIONS.length; i++) {
+      if (PAUSE_ACTIONS[i] === id) known = true;
+    }
+    if (!known) return;
+    if (pauseCovered()) return;
+    if (id === 'resume') {
+      setPaused(false);
+      return;
+    }
+    if (id === 'settings') {
+      try {
+        if (!settingsOwnsScreen() && globalThis.KeyboardEvent) {
+          const event = new KeyboardEvent('keydown', { code: 'KeyO' });
+          globalThis.window.dispatchEvent(event);
+        }
+      } catch { /* skip settings open */ }
+      syncPauseCover();
+      return;
+    }
+    if (id === 'berth') {
+      try { ctx.berthApi?.openFromPause?.(); } catch { /* mutex skip */ }
+      syncPauseCover();
+      return;
+    }
+    if (id === 'title') {
+      try { ctx.berthApi?.closeIfOpen?.(); } catch { /* close is best-effort */ }
+      try { ctx.titleApi?.openFromPause?.(); } catch { /* remount skip */ }
+      try {
+        if (document.getElementById('rw-title') && ctx.flags.paused) {
+          pauseEl.style.display = 'none';
+        }
+      } catch { /* hide chrome only when title owns */ }
+      syncPauseCover();
+    }
+  } catch { /* unknown / throw → skip; do not unpause */ }
+}
+
 window.addEventListener('keydown', (e) => {
-  const code = decodeKeyCode(e);
-  if (code !== 'KeyP') return;
-  // The models filter is an INPUT. Typing "Lamp" sends KeyP, which used to
-  // unpause the title sim and spawn unprimed traffic (independent:cutter:pirate).
-  const focus = document.activeElement;
-  const typing = !!focus && (
-    focus.tagName === 'INPUT' || focus.tagName === 'TEXTAREA' ||
-    focus.tagName === 'SELECT' || focus.isContentEditable
-  );
-  if (typing || ctx.models?.isOpen?.() || document.getElementById('rw-title')) return;
-  ctx.flags.paused = !ctx.flags.paused;
-  pauseEl.style.display = ctx.flags.paused ? 'flex' : 'none';
+  try {
+    const code = decodeKeyCode(e);
+    if (code === 'KeyP') {
+      // The models filter is an INPUT. Typing "Lamp" sends KeyP, which used to
+      // unpause the title sim and spawn unprimed traffic (independent:cutter:pirate).
+      const focus = document.activeElement;
+      const typing = !!focus && (
+        focus.tagName === 'INPUT' || focus.tagName === 'TEXTAREA' ||
+        focus.tagName === 'SELECT' || focus.isContentEditable
+      );
+      if (typing || ctx.models?.isOpen?.() || document.getElementById('rw-title')) return;
+      setPaused(!ctx.flags.paused);
+      return;
+    }
+    if (code === 'KeyO' || code === 'Escape' || code === 'KeyL') {
+      syncPauseCover();
+    }
+  } catch { /* never throw from pause keys */ }
 });

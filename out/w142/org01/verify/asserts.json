@@ -1,0 +1,226 @@
+{
+  "failCount": 0,
+  "asserts": [
+    {
+      "name": "title New Game button",
+      "ok": true,
+      "detail": "[1] NEW GAME"
+    },
+    {
+      "name": "origin overlay before confirm",
+      "ok": true,
+      "detail": "RIMWARD — who are you?"
+    },
+    {
+      "name": "five origin rows",
+      "ok": true,
+      "detail": "5"
+    },
+    {
+      "name": "paused until pick",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "origin not yet written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Digit1 label",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet."
+    },
+    {
+      "name": "Digit2 label",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off."
+    },
+    {
+      "name": "Digit3 label",
+      "ok": true,
+      "detail": "[3] Marked — Veridian space has your face on a board. Someone downstream taught them to be careful."
+    },
+    {
+      "name": "Digit4 label",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back."
+    },
+    {
+      "name": "Digit5 label",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money."
+    },
+    {
+      "name": "Digit1 Greenhand name",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet."
+    },
+    {
+      "name": "Digit1 hull",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift\nNew player"
+    },
+    {
+      "name": "Digit1 money",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift\nNew player"
+    },
+    {
+      "name": "Digit1 standings even",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift\nNew player"
+    },
+    {
+      "name": "Digit1 start Freehold Drift",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift\nNew player"
+    },
+    {
+      "name": "Digit1 New player",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift\nNew player"
+    },
+    {
+      "name": "Digit1 omits fear 0",
+      "ok": true,
+      "detail": "[1] Freehold Greenhand — A berth, a living ship, and no story yet.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift\nNew player"
+    },
+    {
+      "name": "Digit2 Ledger Debt",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off."
+    },
+    {
+      "name": "Digit2 money debt",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.\nHull light 100 · Mk I · hold 20\nMoney −1150 UU (debt)\nRed Ledger −10 (Stranger) · Freehold +10 (Known)\nStart Freehold Drift · in debt\nExperienced"
+    },
+    {
+      "name": "Digit2 Red Ledger standing",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.\nHull light 100 · Mk I · hold 20\nMoney −1150 UU (debt)\nRed Ledger −10 (Stranger) · Freehold +10 (Known)\nStart Freehold Drift · in debt\nExperienced"
+    },
+    {
+      "name": "Digit2 Freehold standing",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.\nHull light 100 · Mk I · hold 20\nMoney −1150 UU (debt)\nRed Ledger −10 (Stranger) · Freehold +10 (Known)\nStart Freehold Drift · in debt\nExperienced"
+    },
+    {
+      "name": "Digit2 Experienced",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.\nHull light 100 · Mk I · hold 20\nMoney −1150 UU (debt)\nRed Ledger −10 (Stranger) · Freehold +10 (Known)\nStart Freehold Drift · in debt\nExperienced"
+    },
+    {
+      "name": "Digit2 in debt",
+      "ok": true,
+      "detail": "[2] Ledger Debt — The Red Ledger owns your hull papers. Fly it off.\nHull light 100 · Mk I · hold 20\nMoney −1150 UU (debt)\nRed Ledger −10 (Stranger) · Freehold +10 (Known)\nStart Freehold Drift · in debt\nExperienced"
+    },
+    {
+      "name": "Digit4 Beautiful",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back."
+    },
+    {
+      "name": "Digit4 living-ship care",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2\nNew player — living-ship care"
+    },
+    {
+      "name": "Digit4 Living rock",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2\nNew player — living-ship care"
+    },
+    {
+      "name": "Digit4 bond",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2\nNew player — living-ship care"
+    },
+    {
+      "name": "Digit4 hunger",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2\nNew player — living-ship care"
+    },
+    {
+      "name": "Digit4 not kit mutate",
+      "ok": true,
+      "detail": "[4] Beautiful Ones Initiate — You were raised among grown ships. Yours chose you back.\nHull light 100 · Mk I · hold 20\nMoney 350 UU\nStandings even\nStart Freehold Drift · bond 0.35 · hunger 0.4 + cargo Living rock ×2\nNew player — living-ship care"
+    },
+    {
+      "name": "Digit5 Rim Drifter",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money."
+    },
+    {
+      "name": "Digit5 money 600",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.\nHull light 100 · Mk I · hold 20\nMoney 600 UU\nStandings even\nStart The Redmarch · fear 5 · clue tally-board\nExperienced"
+    },
+    {
+      "name": "Digit5 Start The Redmarch",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.\nHull light 100 · Mk I · hold 20\nMoney 600 UU\nStandings even\nStart The Redmarch · fear 5 · clue tally-board\nExperienced"
+    },
+    {
+      "name": "Digit5 fear 5",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.\nHull light 100 · Mk I · hold 20\nMoney 600 UU\nStandings even\nStart The Redmarch · fear 5 · clue tally-board\nExperienced"
+    },
+    {
+      "name": "Digit5 tally-board",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.\nHull light 100 · Mk I · hold 20\nMoney 600 UU\nStandings even\nStart The Redmarch · fear 5 · clue tally-board\nExperienced"
+    },
+    {
+      "name": "Digit5 Experienced",
+      "ok": true,
+      "detail": "[5] Rim Drifter — You came in from the Redmarch with more questions than money.\nHull light 100 · Mk I · hold 20\nMoney 600 UU\nStandings even\nStart The Redmarch · fear 5 · clue tally-board\nExperienced"
+    },
+    {
+      "name": "compact sublines present",
+      "ok": true,
+      "detail": "5,5,5,5,5"
+    },
+    {
+      "name": "preview ~10px",
+      "ok": true,
+      "detail": "10px,10px,10px,10px,10px"
+    },
+    {
+      "name": "choice ~12px",
+      "ok": true,
+      "detail": "12px,12px,12px,12px,12px"
+    },
+    {
+      "name": "overlay gone after Digit1",
+      "ok": true,
+      "detail": "{\"overlay\":false,\"rowCount\":0,\"paused\":false,\"origin\":\"greenhand\",\"originsOpen\":false,\"weaponGroup\":3}"
+    },
+    {
+      "name": "origin is greenhand",
+      "ok": true,
+      "detail": "greenhand"
+    },
+    {
+      "name": "unpaused after pick",
+      "ok": true,
+      "detail": "false"
+    },
+    {
+      "name": "confirm Digit1 did not steal WPN",
+      "ok": true,
+      "detail": "armed=3 after=3"
+    },
+    {
+      "name": "Digit1 becomes WPN after pick",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "no new pack console errors",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "consoleLines": []
+}

@@ -1,0 +1,435 @@
+{
+  "asserts": [
+    {
+      "name": "origin overlay open",
+      "ok": true,
+      "detail": "RIMWARD — who are you?"
+    },
+    {
+      "name": "origin greenhand after Digit1",
+      "ok": true,
+      "detail": "greenhand"
+    },
+    {
+      "name": "CONTROLS starts collapsed class",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "CONTROLS body hidden",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "name": "toggle text CONTROLS ▸",
+      "ok": true,
+      "detail": "CONTROLS ▸"
+    },
+    {
+      "name": "aria-expanded false",
+      "ok": true,
+      "detail": "false"
+    },
+    {
+      "name": "first hint look/turn",
+      "ok": true,
+      "detail": "Mouse — look and turn toward the reticle"
+    },
+    {
+      "name": "no 19-line dump while collapsed",
+      "ok": true,
+      "detail": "19 none"
+    },
+    {
+      "name": "one hint node",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "hint role=status",
+      "ok": true,
+      "detail": "status"
+    },
+    {
+      "name": "hint aria-live=polite",
+      "ok": true,
+      "detail": "polite"
+    },
+    {
+      "name": "hint aria-atomic=true",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "hint not inside reticle",
+      "ok": true,
+      "detail": "false"
+    },
+    {
+      "name": "hint parent is hud not reticle",
+      "ok": true,
+      "detail": "hud"
+    },
+    {
+      "name": "seen has look not move",
+      "ok": true,
+      "detail": "[\"look\"]"
+    },
+    {
+      "name": "pause unused (not paused after pick)",
+      "ok": true,
+      "detail": "false"
+    },
+    {
+      "name": "hint pointer-events none",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "name": "hint throttle one at a time",
+      "ok": true,
+      "detail": "R/F — throttle · double-tap F — stop"
+    },
+    {
+      "name": "hint throttle still one node",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "hint throttle CONTROLS still collapsed",
+      "ok": true,
+      "detail": "CONTROLS ▸ false"
+    },
+    {
+      "name": "hint target one at a time",
+      "ok": true,
+      "detail": "T — cycle target"
+    },
+    {
+      "name": "hint target still one node",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "hint target CONTROLS still collapsed",
+      "ok": true,
+      "detail": "CONTROLS ▸ false"
+    },
+    {
+      "name": "hint hail one at a time",
+      "ok": true,
+      "detail": "H — hail the lock"
+    },
+    {
+      "name": "hint hail still one node",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "hint hail CONTROLS still collapsed",
+      "ok": true,
+      "detail": "CONTROLS ▸ false"
+    },
+    {
+      "name": "hint dock one at a time",
+      "ok": true,
+      "detail": "J — dock when the station is in range"
+    },
+    {
+      "name": "hint dock still one node",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "hint dock CONTROLS still collapsed",
+      "ok": true,
+      "detail": "CONTROLS ▸ false"
+    },
+    {
+      "name": "hint chart one at a time",
+      "ok": true,
+      "detail": "M — galaxy chart"
+    },
+    {
+      "name": "hint chart still one node",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "hint chart CONTROLS still collapsed",
+      "ok": true,
+      "detail": "CONTROLS ▸ false"
+    },
+    {
+      "name": "sequence order look-throttle-target-hail-dock-chart",
+      "ok": true,
+      "detail": "look,throttle,target,hail,dock,chart"
+    },
+    {
+      "name": "CONTROLS expanded label",
+      "ok": true,
+      "detail": "CONTROLS ▾"
+    },
+    {
+      "name": "aria-expanded true",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "19 control lines",
+      "ok": true,
+      "detail": "19"
+    },
+    {
+      "name": "body visible when expanded",
+      "ok": true,
+      "detail": "block"
+    },
+    {
+      "name": "KeyH hail in encyclopedia",
+      "ok": true,
+      "detail": "Mouse — steer toward reticle\nW/S — vertical strafe (W = up)\nA/D — lateral strafe (D = right)\nQ/E — roll left / right (set your up)\nR/F (hold) — throttle up / down · double-tap F — full stop\nSpace — afterburner\nShift (hold) — vector-hold drift\nLMB (hold) — fire\n1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic\nT — cycle target (hostiles first in combat)\nV — lock under retic"
+    },
+    {
+      "name": "KeyJ dock in encyclopedia",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "KeyL berth in encyclopedia",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "KeyM chart in encyclopedia",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "KeyP pause in encyclopedia",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "KeyD strafe in encyclopedia",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "CONTROLS hide again",
+      "ok": true,
+      "detail": "CONTROLS ▸ false none"
+    }
+  ],
+  "sequence": [
+    {
+      "id": "look",
+      "text": "Mouse — look and turn toward the reticle",
+      "seen": [
+        "look"
+      ]
+    },
+    {
+      "id": "throttle",
+      "text": "R/F — throttle · double-tap F — stop",
+      "seen": [
+        "look",
+        "throttle"
+      ]
+    },
+    {
+      "id": "target",
+      "text": "T — cycle target",
+      "seen": [
+        "look",
+        "throttle",
+        "target"
+      ]
+    },
+    {
+      "id": "hail",
+      "text": "H — hail the lock",
+      "seen": [
+        "look",
+        "throttle",
+        "target",
+        "hail"
+      ]
+    },
+    {
+      "id": "dock",
+      "text": "J — dock when the station is in range",
+      "seen": [
+        "look",
+        "throttle",
+        "target",
+        "hail",
+        "dock"
+      ]
+    },
+    {
+      "id": "chart",
+      "text": "M — galaxy chart",
+      "seen": [
+        "look",
+        "throttle",
+        "target",
+        "hail",
+        "dock",
+        "chart"
+      ]
+    }
+  ],
+  "look": {
+    "origin": "greenhand",
+    "seen": [
+      "look"
+    ],
+    "paused": false,
+    "hintCount": 1,
+    "hintText": "Mouse — look and turn toward the reticle",
+    "hintDisplay": "block",
+    "hintRole": "status",
+    "hintLive": "polite",
+    "hintAtomic": "true",
+    "hintPointer": "none",
+    "hintParentId": "hud",
+    "hintInReticle": false,
+    "reticleSize": {
+      "w": 80,
+      "h": 80
+    },
+    "toggleText": "CONTROLS ▸",
+    "ariaExpanded": "false",
+    "controlsCollapsedClass": true,
+    "bodyDisplay": "none",
+    "lineCount": 19,
+    "lines": [
+      "Mouse — steer toward reticle",
+      "W/S — vertical strafe (W = up)",
+      "A/D — lateral strafe (D = right)",
+      "Q/E — roll left / right (set your up)",
+      "R/F (hold) — throttle up / down · double-tap F — full stop",
+      "Space — afterburner",
+      "Shift (hold) — vector-hold drift",
+      "LMB (hold) — fire",
+      "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic",
+      "T — cycle target (hostiles first in combat)",
+      "V — lock under reticle",
+      "N — automine locked asteroid",
+      "H — hail · J — dock · C — camera (chase / third / first-person)",
+      "X — match lock speed",
+      "K — engine on lock (after shields)",
+      "G — cycle hub route at a Lamplighter junction",
+      "M — galaxy chart",
+      "L — berth records (save/load)",
+      "P — pause"
+    ],
+    "hintIdsMove": false
+  },
+  "expanded": {
+    "origin": "greenhand",
+    "seen": [
+      "look",
+      "throttle",
+      "target",
+      "hail",
+      "dock",
+      "chart"
+    ],
+    "paused": false,
+    "hintCount": 1,
+    "hintText": "M — galaxy chart",
+    "hintDisplay": "block",
+    "hintRole": "status",
+    "hintLive": "polite",
+    "hintAtomic": "true",
+    "hintPointer": "none",
+    "hintParentId": "hud",
+    "hintInReticle": false,
+    "reticleSize": {
+      "w": 80,
+      "h": 80
+    },
+    "toggleText": "CONTROLS ▾",
+    "ariaExpanded": "true",
+    "controlsCollapsedClass": false,
+    "bodyDisplay": "block",
+    "lineCount": 19,
+    "lines": [
+      "Mouse — steer toward reticle",
+      "W/S — vertical strafe (W = up)",
+      "A/D — lateral strafe (D = right)",
+      "Q/E — roll left / right (set your up)",
+      "R/F (hold) — throttle up / down · double-tap F — full stop",
+      "Space — afterburner",
+      "Shift (hold) — vector-hold drift",
+      "LMB (hold) — fire",
+      "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic",
+      "T — cycle target (hostiles first in combat)",
+      "V — lock under reticle",
+      "N — automine locked asteroid",
+      "H — hail · J — dock · C — camera (chase / third / first-person)",
+      "X — match lock speed",
+      "K — engine on lock (after shields)",
+      "G — cycle hub route at a Lamplighter junction",
+      "M — galaxy chart",
+      "L — berth records (save/load)",
+      "P — pause"
+    ],
+    "hintIdsMove": false
+  },
+  "recollapsed": {
+    "origin": "greenhand",
+    "seen": [
+      "look",
+      "throttle",
+      "target",
+      "hail",
+      "dock",
+      "chart"
+    ],
+    "paused": false,
+    "hintCount": 1,
+    "hintText": "M — galaxy chart",
+    "hintDisplay": "block",
+    "hintRole": "status",
+    "hintLive": "polite",
+    "hintAtomic": "true",
+    "hintPointer": "none",
+    "hintParentId": "hud",
+    "hintInReticle": false,
+    "reticleSize": {
+      "w": 80,
+      "h": 80
+    },
+    "toggleText": "CONTROLS ▸",
+    "ariaExpanded": "false",
+    "controlsCollapsedClass": true,
+    "bodyDisplay": "none",
+    "lineCount": 19,
+    "lines": [
+      "Mouse — steer toward reticle",
+      "W/S — vertical strafe (W = up)",
+      "A/D — lateral strafe (D = right)",
+      "Q/E — roll left / right (set your up)",
+      "R/F (hold) — throttle up / down · double-tap F — full stop",
+      "Space — afterburner",
+      "Shift (hold) — vector-hold drift",
+      "LMB (hold) — fire",
+      "1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic",
+      "T — cycle target (hostiles first in combat)",
+      "V — lock under reticle",
+      "N — automine locked asteroid",
+      "H — hail · J — dock · C — camera (chase / third / first-person)",
+      "X — match lock speed",
+      "K — engine on lock (after shields)",
+      "G — cycle hub route at a Lamplighter junction",
+      "M — galaxy chart",
+      "L — berth records (save/load)",
+      "P — pause"
+    ],
+    "hintIdsMove": false
+  },
+  "consoleLines": []
+}

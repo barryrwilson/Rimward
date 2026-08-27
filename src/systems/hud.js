@@ -978,6 +978,17 @@ export function initHud(ctx) {
   const root = document.getElementById('hud');
   if (!root) {
     console.warn('hud.js: #hud root missing; HUD disabled');
+    try {
+      const hintNode = document.querySelector('.rw-onboard-hint');
+      if (hintNode) {
+        const ts = ctx.settings && ctx.settings.textScale;
+        if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+          hintNode.style.setProperty('--rw-text-scale', String(ts));
+        }
+      }
+    } catch {
+      /* stay on body; never throw */
+    }
     return { update() {} };
   }
   try {
@@ -1277,7 +1288,7 @@ export function initHud(ctx) {
   // The header button is the ONLY HUD element with pointer-events:auto so the
   // panel can actually collapse; everything else stays click-through.
   const controls = el('section', 'rw-panel rw-controls rw-fade', root);
-  const controlsToggle = el('button', 'rw-controls-toggle', controls, 'CONTROLS ▾');
+  const controlsToggle = el('button', 'rw-controls-toggle', controls, 'CONTROLS ▸');
   controlsToggle.type = 'button';
   const controlsBody = el('div', 'rw-controls-body', controls);
   const controlsList = el('ul', '', controlsBody);
@@ -1287,12 +1298,35 @@ export function initHud(ctx) {
   } else {
     for (const line of lines) el('li', '', controlsList, String(line));
   }
-  let controlsCollapsed = false;
-  controlsToggle.addEventListener('click', () => {
-    controlsCollapsed = !controlsCollapsed;
+  let controlsCollapsed = true;
+  function applyControlsCollapse() {
     controls.classList.toggle('collapsed', controlsCollapsed);
     controlsToggle.textContent = controlsCollapsed ? 'CONTROLS ▸' : 'CONTROLS ▾';
+    controlsToggle.setAttribute('aria-expanded', controlsCollapsed ? 'false' : 'true');
+  }
+  applyControlsCollapse();
+  controlsToggle.addEventListener('click', () => {
+    controlsCollapsed = !controlsCollapsed;
+    applyControlsCollapse();
   });
+
+  // Onboarding creates `.rw-onboard-hint` on body (init runs before HUD).
+  // Reparent that same node onto #hud (not the reticle) so --rw-text-scale
+  // inherits. If reparent fails, stay on body and copy textScale.
+  try {
+    const hintNode = document.querySelector('.rw-onboard-hint');
+    if (hintNode && hintNode !== reticle && !reticle.contains(hintNode)) {
+      if (hintNode.parentNode !== root) root.appendChild(hintNode);
+    }
+    if (hintNode && hintNode.parentNode !== root) {
+      const ts = ctx.settings && ctx.settings.textScale;
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+        hintNode.style.setProperty('--rw-text-scale', String(ts));
+      }
+    }
+  } catch {
+    /* stay on body; never throw */
+  }
 
   const chipStack = el('div', 'rw-chip-stack', root);
   const apChip = el('div', 'rw-autopilot is-hidden', chipStack);
@@ -2245,8 +2279,7 @@ export function initHud(ctx) {
         root.classList.toggle('in-combat', combat);
         if (combat) {
           controlsCollapsed = true;
-          controls.classList.add('collapsed');
-          controlsToggle.textContent = 'CONTROLS ▸';
+          applyControlsCollapse();
         }
       }
 

@@ -1,0 +1,13 @@
+out/w142/org01/verify/report.md
+out/w142/org01/verify/write-set.txt
+out/w142/org01/verify/capture-org01.mjs
+out/w142/org01/verify/capture-log.txt
+out/w142/org01/verify/asserts.json
+out/w142/org01/verify/overlay-dump.json
+out/w142/org01/verify/01-title.png
+out/w142/org01/verify/02-overlay.png
+out/w142/org01/verify/03-after-digit1.png
+out/w142/org01/verify/04-wpn-digit1.png
+out/w142/org01/verify/00-goto-fail.png
+out/w142/org01/verify/00-title-wait-fail.png
+out/w142/org01/verify/chrome-profile/

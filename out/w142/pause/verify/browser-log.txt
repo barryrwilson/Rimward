@@ -1,0 +1,60 @@
+chrome-ws ws://127.0.0.1:9476/devtools/browser/de57d419-b381-40be-8f12-bc944d9505f8
+goto http://127.0.0.1:5176/
+NAV http://127.0.0.1:5176/
+domcontentloaded http://127.0.0.1:5176/
+title-new-visible
+ctx-ready
+BOOT {"titleOn":true,"paused":true,"titleText":"A LIVING FRONTIER[1] NEW GAME[2] MODELS[3] SETTINGSPRESS 1-3 OR CLICK"}
+SHOT 01-boot-title.png
+SHOT 02-after-new-game.png
+AFTER-NEW {"titleOn":false,"originsOpen":true,"skip":null}
+IN-RUN {"origin":"greenhand","paused":false,"titleOn":false,"originsOpen":false,"pauseDisplay":"none"}
+SHOT 03-in-run.png
+LIVE-BEFORE-PAUSE {"paused":false,"origin":"greenhand","titleOn":false}
+SHOT 04-pause-menu.png
+PAUSE-MENU {"paused":true,"display":"flex","z":"50","pe":"auto","btns":[{"action":"resume","text":"RESUME","pe":"auto"},{"action":"settings","text":"SETTINGS","pe":"auto"},{"action":"berth","text":"BERTH RECORDS","pe":"auto"},{"action":"title","text":"TITLE","pe":"auto"}],"text":"PAUSEDP to resumeRESUMESETTINGSBERTH RECORDSTITLE"}
+SHOT 05-settings-from-pause.png
+SETTINGS {"paused":true,"settingsOn":true,"z":"80","pe":"none","invert":false,"rebind":false,"split":false}
+DIM-CLICK {"paused":true,"settingsOn":true,"pauseDisplay":"flex"}
+ESC-SETTINGS {"paused":true,"settingsOn":false}
+KEYP-WHILE-SETTINGS {"beforePaused":true,"afterPaused":false,"settingsOn":true,"pauseDisplay":"none"}
+NOTE keyp-settings-toggles KeyP while settings (from pause) still toggles pause — matches contract item 20
+SHOT 06-keyp-while-settings.png
+SHOT 07-berth-from-pause.png
+BERTH {"paused":true,"berthOpen":true,"berthHold":true,"pe":"none","load":[{"text":"LOAD","disabled":true},{"text":"LOAD","disabled":true},{"text":"LOAD","disabled":true},{"text":"LOAD","disabled":true}],"save":[{"text":"SAVE","disabled":false},{"text":"SAVE","disabled":false},{"text":"SAVE","disabled":false}]}
+NOTE berthHold-eq berthHold true while paused (hold may set on open; must not be the same flag)
+HOLD-VS-PAUSE {"sameRef":false,"paused":true,"berthHold":true,"keys":["paused","berthOpen","berthHold"]}
+NOTE berthHold-distinct berthHold is a distinct flag (toggling hold left paused true)
+SAVE {"paused":true,"load":[{"text":"LOAD","disabled":true},{"text":"LOAD — resume first","disabled":true},{"text":"LOAD","disabled":true},{"text":"LOAD","disabled":true}],"slotLen":39722}
+LOAD-CLICK {"credits":424242,"paused":true,"load":[{"text":"LOAD","disabled":true},{"text":"LOAD — resume first","disabled":true},{"text":"LOAD","disabled":true},{"text":"LOAD","disabled":true}]}
+SHOT 08-berth-load-disabled.png
+BERTH-CLOSE {"berthOpen":false,"paused":true,"pauseDisplay":"flex","pausePe":"auto","btns":[{"action":"resume","text":"RESUME","pe":"auto"},{"action":"settings","text":"SETTINGS","pe":"auto"},{"action":"berth","text":"BERTH RECORDS","pe":"auto"},{"action":"title","text":"TITLE","pe":"auto"}]}
+SHOT 09-pause-after-berth-close.png
+SHOT 10-title-from-pause.png
+TITLE {"titleOn":true,"paused":true,"skip":null,"pauseDisplay":"none","navDelta":0,"url":"http://127.0.0.1:5176/","titleText":"A LIVING FRONTIER[1] CONTINUE[2] NEW GAME[3] MODELS[4] SETTINGSPRESS 1-4 OR CLICK"}
+SHOT 11-after-continue.png
+CONTINUE {"titleOn":false,"paused":false,"pauseDisplay":"none","skip":null}
+TYPING-GUARD {"guard":true,"pausedBeforeType":false,"pausedAfterType":false}
+MODELS-GUARD {"tried":true,"open":true,"paused":true,"tag":"INPUT","afterP":true}
+OVERLAY-POLICY {"assignPaused":0,"neverWrite":true}
+SETTINGS-SRC {"invert":false,"rebind":false,"split":false}
+FINAL {"url":"http://127.0.0.1:5176/","paused":false,"berthHold":false,"berthOpen":false,"origin":"greenhand","credits":424242,"titleSkip":null,"titleOn":false,"titleText":null,"pauseDisplay":"none","pauseZ":"50","pausePe":"none","pausePanelPe":"none","pauseBtns":[{"action":"resume","text":"RESUME","pe":"none"},{"action":"settings","text":"SETTINGS","pe":"none"},{"action":"berth","text":"BERTH RECORDS","pe":"none"},{"action":"title","text":"TITLE","pe":"none"}],"pauseText":"PAUSEDP to resumeRESUMESETTINGSBERTH RECORDSTITLE","settingsOn":false,"settingsZ":"80","settingsText":"SETTINGSO or ESC to close — changes apply immediatelyColorblind-safe paletteHigh contrast HUDReduced motionHUD audio alertsMute all audioOnboarding hintsTEXT SIZESMLXLMASTER VOLUME100%","settingsHasInvert":false,"settingsHasRebind":false,"settingsHasSplitVol":false,"loadBtns":[{"text":"LOAD","disabled":true},{"text":"LOAD — resume first","disabled":true},{"text":"LOAD","disabled":true},{"text":"LOAD","disabled":true}],"saveBtns":[{"text":"SAVE","disabled":false},{"text":"SAVE","disabled":false},{"text":"SAVE","disabled":false}],"berthTitle":false,"navType":0,"navEntries":[{"type":"navigate","start":0}],"modelsOpen":false,"originsOpen":false,"activeTag":"BODY"}
+PAGE-ERRORS []
+NAV-EVENTS [{"url":"http://127.0.0.1:5176/","t":1787859345084}]
+FINDINGS [
+  {
+    "kind": "note",
+    "id": "keyp-settings-toggles",
+    "msg": "KeyP while settings (from pause) still toggles pause — matches contract item 20"
+  },
+  {
+    "kind": "note",
+    "id": "berthHold-eq",
+    "msg": "berthHold true while paused (hold may set on open; must not be the same flag)"
+  },
+  {
+    "kind": "note",
+    "id": "berthHold-distinct",
+    "msg": "berthHold is a distinct flag (toggling hold left paused true)"
+  }
+]

@@ -5881,6 +5881,8 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   gauges stay off.
   OPEN: Onb01 PR1; Org01 PR1;
   Ctl05 PR1.
+  CLOSED by Wave 142: first impl of
+  those three PR1s.
   Hail01 / HUD-06 / Hail02 / HUD-07 /
   NAV-09 / NAV-10 governor / TGT-07
   stills / MSN-04 other families /
@@ -5922,6 +5924,77 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
   `PROGRESS.md`,
   `out/w141/`.
+- Wave 142 (2026-08-27): first impl of
+  Wave 141 OPEN serials. Src + named
+  WAVE6 pins. Parallel-safe: Onb01
+  did not claim `origins.js`. Ctl05
+  did not claim `screens.css`.
+  Onb01 flight lesson PR1
+  (`docs/Onb01FlightLessonDesign.md`):
+  CONTROLS default collapsed; six
+  origin-gated HINTS (look → throttle
+  → target → hail → dock → chart);
+  retire `move`; one `.rw-onboard-hint`
+  polite live region; `hud.css` tokens;
+  `aria-expanded` on init/click/combat;
+  WAVE6 a+g pin `look`.
+  Org01 origin preview PR1
+  (`docs/Org01OriginPreviewDesign.md`):
+  derived compact sublines before
+  Digit/click; authored id list in
+  `origins.js`; Digit1–5 map kept;
+  `state.js` READ-ONLY; dedicated
+  `.rw-origin-*` overflow backup.
+  Ctl05 pause menu PR1
+  (`docs/Ctl05PauseMenuDesign.md`):
+  ACCESS RESUME / SETTINGS / BERTH
+  RECORDS / TITLE; `setPaused`; KeyP
+  stays; LOAD paused-gate + named
+  disable; title remount without
+  reload/skip; overlay-policy still
+  never writes `paused`.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 governor /
+  TGT-07 stills / MSN-04 other
+  families / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  Pad 2B still owner lock.
+  Agent API leftover: no in-repo
+  LLM. NAV-11 serial none.
+  Settings expansion inbox still
+  INBOX.
+  VERIFY: Onb01 verifier CLEAN
+  (`out/w142/onb01/verify/`);
+  designer no Blocker/Major
+  (`out/w142/designer/onb01-ui-audit.md`).
+  Org01 verifier CLEAN
+  (`out/w142/org01/verify/`);
+  designer no Blocker/Major
+  (`out/w142/designer/org01-ui-audit.md`).
+  Ctl05 verifier CLEAN
+  (`out/w142/pause/verify/`);
+  designer no Blocker/Major
+  (`out/w142/designer/pause-ui-audit.md`).
+  Known WAVE127 / WAVE132 boot
+  errors and REDMARCH `castMatches`
+  flake are not this write-set.
+  FILES: `src/systems/onboarding.js`,
+  `src/systems/hud.js`,
+  `src/ui/hud.css`,
+  `src/game/origins.js`,
+  `src/ui/screens.css`,
+  `src/main.js`,
+  `src/systems/title.js`,
+  `src/game/save.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Onb01FlightLessonDesign.md`,
+  `docs/Org01OriginPreviewDesign.md`,
+  `docs/Ctl05PauseMenuDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `PROGRESS.md`,
+  `out/w142/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now
