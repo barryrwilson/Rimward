@@ -102,12 +102,20 @@ export function createCtx({ scene, camera, renderer }) {
     // --- live command channel (autopilot.js only). Not WORLD_FIELDS. ---
     autopilot: {
       engaged: false,
+      mode: '',
+      phase: '',
       yaw: 0,
       pitch: 0,
       throttle: 0,
+      idle: false,
       wantJump: false,
+      wantDock: false,
       cycleHub: false,
       reason: '',
+      startSystem: '',
+      startRange: 0,
+      range: 0,
+      progress: 0,
     },
 
     // --- live command channel (automine.js only). Not WORLD_FIELDS. ---

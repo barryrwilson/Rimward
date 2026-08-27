@@ -4,6 +4,7 @@
  */
 
 import { U, COMMODITIES } from './state.js';
+import { losCloseRate } from './los-close.js';
 import {
   VERSION,
   NEARBY_CAP,
@@ -370,10 +371,19 @@ function channel(src, paused) {
   const o = src && typeof src === 'object' ? src : null;
   let reason = o ? str(o.reason) : '';
   if (reason === 'pause' && paused !== true) reason = '';
-  return {
+  const out = {
     engaged: !!(o && o.engaged === true),
     reason,
   };
+  const mode = o ? str(o.mode) : '';
+  if (mode) out.mode = mode;
+  const phase = o ? str(o.phase) : '';
+  if (phase) out.phase = phase;
+  if (mode === 'dock') {
+    out.range = num(o.range, 0);
+    out.progress = Math.max(0, Math.min(1, num(o.progress, 0)));
+  }
+  return out;
 }
 
 function sessionPhase(ctx) {
@@ -427,6 +437,19 @@ export function buildObservation(ctx) {
     const docked = flags.docked === true;
     const hailOpen = flags.hailOpen === true;
     const service = stationService(ctx);
+    const stationPos = station.position && typeof station.position === 'object'
+      ? station.position
+      : null;
+    const stationVec = stationPos ? vec3(stationPos) : null;
+    const stationRange = rangeTo(origin, stationVec);
+    const velocity = ship.velocity && typeof ship.velocity === 'object' ? ship.velocity : null;
+    const stationClosing = object && stationPos && velocity
+      ? losCloseRate(object.position, stationPos, {
+        x: -num(velocity.x, 0),
+        y: -num(velocity.y, 0),
+        z: -num(velocity.z, 0),
+      })
+      : 0;
 
     const shipSnap = {
       pos: origin,
@@ -498,6 +521,8 @@ export function buildObservation(ctx) {
         inZone: station.inZone === true,
         name: str(station.name),
         systemName: str(station.systemName),
+        range: num(stationRange, 0),
+        closingSpeed: num(stationClosing, 0),
         service,
         services: docked ? DOCK_KEY_SERVICES.slice() : [],
       },

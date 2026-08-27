@@ -72,6 +72,9 @@ pin('startGame live', isLiveCommand('startGame') === true);
 pin('chooseOrigin live', isLiveCommand('chooseOrigin') === true);
 pin('startGame not pr1', isPr1LiveCommand('startGame') === false);
 pin('command list has session', COMMAND_NAMES.includes('startGame') && COMMAND_NAMES.includes('chooseOrigin'));
+pin('approachDock authored', isAuthoredCommand('approachDock') === true
+  && COMMAND_NAMES.includes('approachDock'));
+pin('approachDock live', isLiveCommand('approachDock') === true);
 pin('teleport still forbidden', isForbiddenName('teleport') === true && FORBIDDEN_NAMES.includes('teleport'));
 pin('setCredits still forbidden', isForbiddenName('setCredits') === true);
 

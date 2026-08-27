@@ -96,7 +96,9 @@ function sayLine(ctx, text) {
 
 function navAutopilotOn(ctx) {
   const nav = ctx && ctx.world && ctx.world.nav;
-  return !!(nav && typeof nav === 'object' && !Array.isArray(nav) && nav.autopilot === true);
+  const channel = ctx && ctx.autopilot;
+  return !!((channel && channel.engaged === true)
+    || (nav && typeof nav === 'object' && !Array.isArray(nav) && nav.autopilot === true));
 }
 
 function laserOf(ctx) {
