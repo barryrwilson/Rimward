@@ -14,7 +14,9 @@
     "ships:sheet": "node scripts/silhouette-sheet.mjs",
     "ships:islands": "node scripts/probe-ship-islands.mjs",
     "ships:render": "node scripts/ship-render.mjs",
-    "gates:render": "node --import ./scripts/with-css-stub.mjs scripts/gate-render.mjs"
+    "gates:render": "node --import ./scripts/with-css-stub.mjs scripts/gate-render.mjs",
+    "agent:bridge": "node scripts/agent-bridge.mjs",
+    "agent:bridge:smoke": "node scripts/agent-bridge-smoke.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

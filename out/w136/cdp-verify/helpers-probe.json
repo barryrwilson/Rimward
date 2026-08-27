@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "parse-valid",
+      "ok": true
+    },
+    {
+      "name": "parse-crlf",
+      "ok": true
+    },
+    {
+      "name": "parse-reject-text",
+      "ok": true
+    },
+    {
+      "name": "parse-reject-zero",
+      "ok": true
+    },
+    {
+      "name": "parse-reject-65536",
+      "ok": true
+    },
+    {
+      "name": "parse-accept-65535",
+      "ok": true
+    },
+    {
+      "name": "parse-reject-empty",
+      "ok": true
+    },
+    {
+      "name": "parse-reject-negative",
+      "ok": true
+    },
+    {
+      "name": "read-file",
+      "ok": true
+    },
+    {
+      "name": "read-missing",
+      "ok": true
+    },
+    {
+      "name": "match-extra-query",
+      "ok": true
+    },
+    {
+      "name": "match-game-has-query",
+      "ok": true
+    },
+    {
+      "name": "match-trailing-slash",
+      "ok": true
+    },
+    {
+      "name": "mismatch-path",
+      "ok": true
+    },
+    {
+      "name": "mismatch-port",
+      "ok": true
+    },
+    {
+      "name": "mismatch-host",
+      "ok": true
+    },
+    {
+      "name": "mismatch-proto",
+      "ok": true
+    },
+    {
+      "name": "pick-matching-among-noise",
+      "ok": true
+    },
+    {
+      "name": "pick-no-unrelated-fallback",
+      "ok": true
+    },
+    {
+      "name": "pick-no-gameurl-agent-fallback",
+      "ok": true
+    },
+    {
+      "name": "bind-all-v4-throws",
+      "ok": true
+    }
+  ],
+  "failed": []
+}

@@ -228,6 +228,16 @@
 
 .rw-match-lamp.is-hidden { display: none; }
 
+.rw-slow-lamp {
+  margin-left: 4px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.04em;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.rw-slow-lamp.is-hidden { display: none; }
+
 /* Wave C: FORE / AFT glance — fill vs hollow + the word. */
 .rw-facing {
   display: flex;

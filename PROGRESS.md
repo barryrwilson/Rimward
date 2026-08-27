@@ -5347,6 +5347,8 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   Hail01 / HUD-06 / Hail02 / HUD-07 /
   NAV-09 / CTL-03 / AI-05 / CTL-04
   PR2 still optional.
+  CLOSED by Wave 136: NAV-10 PR1 +
+  TGT-07 PR1 + MSN-04 PR1.
   VERIFY: NAV-10 verifier2 CLEAN
   (`out/w130/dockapproach/verify/`);
   designer CLEAN after MATCH freeze
@@ -5486,6 +5488,440 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/AgentApiDesign.md`,
   `PROGRESS.md`,
   `out/w134/agentapi/notes.md`.
+- Wave 135 (2026-08-26): Agent API PR6
+  127.0.0.1 loopback CDP bridge
+  (`docs/AgentApiDesign.md`).
+  Node HTTP/WS on 127.0.0.1
+  (optional `::1`); refuse `0.0.0.0`
+  / `::`. Token equal-length
+  `timingSafeEqual`. CDP
+  `Runtime.evaluate` of
+  `window.rimward.observe` / `act`.
+  No page WebSocket. No
+  `XAI_API_KEY` on the socket.
+  No in-repo LLM. Human `npm run
+  dev` unchanged. OPEN leftover:
+  no in-repo LLM. PR6 closed.
+  Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  NAV-10 / TGT-07 / MSN-04 PR1
+  CLOSED by Wave 136. Their PR2s
+  still optional.
+  VERIFY: `node scripts/agent-bridge.mjs --self-test`
+  (exit 0, pins all true).
+  FILES: `scripts/agent-bridge.mjs`,
+  `package.json`,
+  `docs/AgentApiDesign.md`,
+  `PROGRESS.md`,
+  `out/w135/agentapi/notes.md`.
+- Wave 136 (2026-08-26): first impl of
+  Wave 130 OPEN serials. Src + named
+  boot pins.
+  NAV-10 PR1 dock approach
+  (`docs/Nav10DockApproachDesign.md`):
+  HUD cue; `J` + `Dock · SLOW —
+  approach under 20 u/s` in-zone
+  when speed > 20; self
+  `.rw-slow-lamp`; MATCH stays
+  MATCH; no `tgtSpeed` SLOW; 3 ×
+  `DOCK_RANGE` lamp band; KeyJ tap;
+  PHY bounce stays. Governor PR2
+  optional.
+  TGT-07 PR1 combat cycle
+  (`docs/Tgt07CombatCycleDesign.md`):
+  KeyT hostiles-first then range
+  when an in-envelope cand has
+  `ai.intent === true`; wrap live;
+  rocks group-3 non-hostile; help
+  names the order. No new key.
+  MSN-04 PR1 job identity
+  (`docs/Msn04JobDedupDesign.md`):
+  mining-only exclude/omit/heal
+  offered twins; bounded pick;
+  unique four stay; Digit 2 Jobs;
+  pay unchanged. Other families
+  PR2 optional.
+  OPEN: Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 governor /
+  TGT-07 stills / MSN-04 other
+  families / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  Agent API leftover: no in-repo
+  LLM.
+  CLOSED by Wave 137: playtest inbox
+  briefs (NAV-11 dest keep census +
+  MSN-05 ore guidance + Agent evade).
+  VERIFY: `npm run test:boot`
+  WAVE136 dockapproach + tgtcycle +
+  jobdedup + BOOT TEST PASS.
+  FILES: `src/systems/hud.js`,
+  `src/ui/hud.css`,
+  `src/systems/controls.js`,
+  `src/core/ctx.js`,
+  `src/systems/station.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Nav10DockApproachDesign.md`,
+  `docs/Tgt07CombatCycleDesign.md`,
+  `docs/Msn04JobDedupDesign.md`,
+  `PROGRESS.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `out/w136/`.
+- Wave 137 (2026-08-27): playtest inbox
+  briefs after Wave 136 OPEN optional
+  PR2s (not stolen). Markdown only.
+  No `src/`.
+  NAV-11 chart dest keep
+  (`docs/Nav11RoutePersistDesign.md`):
+  leftover CONSUME. Named serial
+  none. Name: no remaining NAV-11
+  leftover. `setOpen(false)` does
+  not `clearRoute`. `world.nav`
+  stays. AP plot-first is idle-only.
+  MSN-05 ore-type guidance
+  (`docs/Msn05OreGuidanceDesign.md`):
+  leftover REAL. Named serial PR1.
+  Jobs already name `Mine Raw ore`.
+  Group-3 KeyT still takes every
+  rock. Cue still `Mine · belt`.
+  Later T-filter + named cue.
+  MATCH stays MATCH. Digit 2 Jobs.
+  Agent evade / flee
+  (`docs/AgentApiEvadeDesign.md`):
+  leftover REAL. Named serial PR1.
+  No live `afterburner` / `evade` /
+  `flee` act. Freeze: one named
+  `act({ name: 'afterburner' })`
+  Space pulse. Pad 2B not stolen.
+  No third helm. No teleport. No
+  in-repo LLM. `evade` stays
+  unknown.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: MSN-05 PR1; Agent evade PR1.
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / NAV-10 governor / TGT-07
+  stills / MSN-04 other families /
+  CTL-03 / AI-05 / CTL-04 PR2 still
+  optional. Pad 2B still owner lock.
+  Agent API leftover: no in-repo
+  LLM. NAV-11 serial none.
+  Later impl coupling: MSN-05 and
+  Agent evade both name later
+  `controls.js` — sequence those
+  two; they are not parallel-safe.
+  CLOSED by Wave 138: MSN-05 PR1 +
+  Agent evade PR1.
+  VERIFY: NAV-11 verifier CLEAN
+  (`out/w137/routepersist/verify/`);
+  designer CLEAN
+  (`out/w137/designer/nav11-ui-audit.md`).
+  MSN-05 verifier CLEAN
+  (`out/w137/oreguide/verify/`);
+  designer CLEAN
+  (`out/w137/designer/oreguide-ui-audit.md`).
+  Agent evade verifier CLEAN
+  (`out/w137/evade/verify/`);
+  designer CLEAN
+  (`out/w137/designer/evade-ui-audit.md`).
+  No `src/` this wave. Known
+  REDMARCH `castMatches` flake is
+  not this write-set.
+  FILES: `docs/Nav11RoutePersistDesign.md`,
+  `docs/Msn05OreGuidanceDesign.md`,
+  `docs/AgentApiEvadeDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `PROGRESS.md`,
+  `out/w137/`.
+- Wave 138 (2026-08-27): first impl of
+  Wave 137 OPEN serials. Src + named
+  boot pins. Sequenced: both write
+  `controls.js`.
+  MSN-05 PR1 contract-to-rock match
+  (`docs/Msn05OreGuidanceDesign.md`):
+  helper `acceptedMiningOreKeys`;
+  group-3 T-filter; named cue
+  `Mine · {ore} Nu`; fallback
+  `Mine · belt`; MATCH stays MATCH;
+  Digit 2 Jobs; no field marker;
+  no `state.js` write; no `lockOre`.
+  Agent evade PR1 afterburner act
+  (`docs/AgentApiEvadeDesign.md`):
+  named `act({ name: 'afterburner' })`
+  Space-equivalent pulse; module-scope
+  `pendingAfterburner`; public pulse
+  stays four; `evade` unknown;
+  observe `burnerReadyAt`. Owner
+  playtest: `agent-flee.js` samples
+  headings, prefers a sun-clear
+  station ring, slows in the dock
+  band, pulses in-zone KeyJ. No
+  teleport. No in-repo LLM.
+  OPEN: Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 governor /
+  TGT-07 stills / MSN-04 other
+  families / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  Pad 2B still owner lock.
+  Agent API leftover: no in-repo
+  LLM. NAV-11 serial none.
+  CLOSED by Wave 139: playtest inbox
+  briefs (Agent market fill + Agent
+  badge layout + Market desk layout).
+  VERIFY: MSN-05 verifier CLEAN
+  (`out/w138/oreguide/verify/`);
+  designer CLEAN
+  (`out/w138/designer/oreguide-ui-audit.md`).
+  Agent evade verifier CLEAN
+  (`out/w138/evade/verify/`);
+  designer CLEAN
+  (`out/w138/designer/evade-ui-audit.md`).
+  Known WAVE127 / WAVE129 / WAVE132
+  boot errors and REDMARCH
+  `castMatches` flake are not this
+  write-set.
+  FILES: `src/game/mining-ore-keys.js`,
+  `src/systems/controls.js`,
+  `src/systems/hud.js`,
+  `src/game/agent-schema.js`,
+  `src/systems/agent-api.js`,
+  `src/game/agent-observe.js`,
+  `scripts/boot-test.mjs`,
+  `docs/Msn05OreGuidanceDesign.md`,
+  `docs/AgentApiEvadeDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `PROGRESS.md`,
+  `out/w138/`.
+- Wave 139 (2026-08-27): playtest inbox
+  briefs after Wave 138 OPEN optional
+  PR2s (not stolen). Markdown only.
+  No `src/`.
+  Agent market fill
+  (`docs/AgentApiMarketFillDesign.md`):
+  leftover REAL. Named serial PR1.
+  Observe `marketBlock` posted-only.
+  Desk `trade` already fills at
+  nested `tradeFillUnit`. Later
+  `fillBuy` / `fillSell`; keep
+  `posted`. Peek helper; do not
+  move it; do not rewrite the desk.
+  Agent badge layout
+  (`docs/AgentBadgeLayoutDesign.md`):
+  leftover REAL. Named serial PR1.
+  Combines Manifest/toast overlap
+  and missing colorblind/contrast
+  tokens. Later `src/style.css`
+  only: `top: 140px`, z-index 40,
+  body child, Okabe-Ito + contrast
+  mirrors. Do not cover PWR/RANGE.
+  Do not drop z below scrim 20.
+  Market desk layout
+  (`docs/Mkt01DeskLayoutDesign.md`):
+  leftover REAL. Named serial PR1.
+  Combines TRADE overflow at 560 px
+  and jargon subtitle. One layout
+  law: wrap `.market-actions`. Do
+  not raise the TRADE min track.
+  Later subtitle `MARKET — buy
+  price and sell price`. Keep
+  Q/W/A/S. Digit 1 Market.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 governor /
+  TGT-07 stills / MSN-04 other
+  families / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  Pad 2B still owner lock.
+  Agent API leftover: no in-repo
+  LLM. NAV-11 serial none.
+  Later impl coupling: Agent
+  market fill may export
+  `peekFillUnit` from `station.js`.
+  Market desk also writes
+  `station.js` (subtitle). Sequence
+  those two if the peek lands; they
+  are not parallel-safe then.
+  Badge `style.css` is parallel-safe
+  with both.
+  CLOSED by Wave 140: Agent market
+  fill PR1 + Agent badge layout PR1
+  + Market desk layout PR1.
+  VERIFY: Agent market fill
+  verifier CLEAN
+  (`out/w139/mktfill/verify/`);
+  designer CLEAN
+  (`out/w139/designer/mktfill-ui-audit.md`).
+  Agent badge layout verifier CLEAN
+  (`out/w139/badge/verify/`);
+  designer CLEAN
+  (`out/w139/designer/badge-ui-audit.md`).
+  Market desk layout verifier CLEAN
+  (`out/w139/mktdesk/verify/`);
+  designer CLEAN
+  (`out/w139/designer/mktdesk-ui-audit.md`).
+  No `src/` this wave. Known
+  REDMARCH `castMatches` flake is
+  not this write-set.
+  FILES: `docs/AgentApiMarketFillDesign.md`,
+  `docs/AgentBadgeLayoutDesign.md`,
+  `docs/Mkt01DeskLayoutDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `PROGRESS.md`,
+  `out/w139/`.
+- Wave 140 (2026-08-27): first impl of
+  Wave 139 OPEN serials. Src + named
+  boot pins. Sequenced: market fill
+  and market desk both write
+  `station.js`. Badge `style.css`
+  ran in parallel.
+  Agent market fill PR1
+  (`docs/AgentApiMarketFillDesign.md`):
+  observe rows keep `posted` and add
+  `fillBuy` / `fillSell` from live
+  `tradeFillUnit` via desk
+  `peekFillUnit`; omit when peek is
+  missing or non-finite; no helper
+  move; no desk rewrite; TRADE
+  offset 5 stays.
+  Agent badge layout PR1
+  (`docs/AgentBadgeLayoutDesign.md`):
+  CSS-only `top: 140px`, max-width
+  148 px, PWR-safe max-height,
+  z-index 40, body child, Okabe-Ito
+  + contrast mirrors. Do not cover
+  PWR/RANGE.
+  Market desk layout PR1
+  (`docs/Mkt01DeskLayoutDesign.md`):
+  wrap `.market-actions`; subtitle
+  `MARKET — buy price and sell
+  price`; fail-closed skip; keep
+  Q/W/A/S; Digit 1 Market; do not
+  raise the TRADE min track.
+  OPEN: Hail01 / HUD-06 / Hail02 /
+  HUD-07 / NAV-09 / NAV-10 governor /
+  TGT-07 stills / MSN-04 other
+  families / CTL-03 / AI-05 /
+  CTL-04 PR2 still optional.
+  Pad 2B still owner lock.
+  Agent API leftover: no in-repo
+  LLM. NAV-11 serial none.
+  VERIFY: Agent market fill
+  verifier CLEAN
+  (`out/w140/mktfill/verify/`);
+  no designer (JSON observe).
+  Agent badge layout verifier CLEAN
+  (`out/w140/badge/verify/`);
+  designer CLEAN
+  (`out/w140/designer/badge-ui-audit.md`).
+  Market desk layout verifier CLEAN
+  (`out/w140/mktdesk/verify/`);
+  designer CLEAN
+  (`out/w140/designer/mktdesk-ui-audit.md`).
+  Known WAVE127 / WAVE132 boot
+  errors and REDMARCH `castMatches`
+  flake are not this write-set.
+  CLOSED by Wave 141: playtest inbox
+  briefs (Onb01 flight lesson +
+  Org01 origin preview + Ctl05
+  pause menu).
+  FILES: `src/game/agent-observe.js`,
+  `src/systems/station.js`,
+  `src/style.css`,
+  `src/ui/screens.css`,
+  `scripts/agent-api-hardening-test.mjs`,
+  `scripts/boot-test.mjs`,
+  `docs/AgentApiMarketFillDesign.md`,
+  `docs/AgentBadgeLayoutDesign.md`,
+  `docs/Mkt01DeskLayoutDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `PROGRESS.md`,
+  `out/w140/`.
+- Wave 141 (2026-08-27): playtest inbox
+  briefs after Wave 140 OPEN optional
+  PR2s (not stolen). Markdown only.
+  No `src/`.
+  Onb01 flight lesson
+  (`docs/Onb01FlightLessonDesign.md`):
+  leftover REAL. Named serial PR1.
+  CONTROLS encyclopedia starts
+  expanded (19 lines). First hint
+  waits `world.time > 20` and dumps
+  four binds. Later collapse
+  CONTROLS by default; six origin-
+  gated hint steps on one
+  `.rw-onboard-hint`; `hud.css`
+  tokens; same-node `aria-live`
+  polite; persist reuses
+  `onboarding.seen`. Do not claim
+  `origins.js`.
+  Org01 origin preview
+  (`docs/Org01OriginPreviewDesign.md`):
+  leftover REAL. Named serial PR1.
+  Overlay paints `[n] name — line`
+  only. `applyEffects` writes after
+  confirm and does not write hull.
+  Later derive preview rows from
+  live ORIGINS. Compact ~10 px
+  sublines first; overflow-y backup
+  on a dedicated origin list. Digit
+  1–5 stay greenhand → drifter.
+  Ctl05 pause menu
+  (`docs/Ctl05PauseMenuDesign.md`):
+  leftover REAL. Named serial PR1.
+  Live `pauseEl` is copy-only
+  (`PAUSED — P to resume`, z 50).
+  Later ACCESS: RESUME / SETTINGS /
+  BERTH RECORDS / TITLE. KeyP stays.
+  `berthHold` stays distinct. LOAD
+  while paused stays refused.
+  Settings expansion inbox is not
+  this pack.
+  Kit mutate still omit. Aim-glass
+  gauges stay off.
+  OPEN: Onb01 PR1; Org01 PR1;
+  Ctl05 PR1.
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / NAV-10 governor / TGT-07
+  stills / MSN-04 other families /
+  CTL-03 / AI-05 / CTL-04 PR2 still
+  optional. Pad 2B still owner lock.
+  Agent API leftover: no in-repo
+  LLM. NAV-11 serial none.
+  Later impl coupling: Onb01 writes
+  `onboarding.js` + `hud.js` +
+  `hud.css` + WAVE6 boot retarget.
+  Org01 writes `origins.js` plus
+  optional dedicated origin CSS.
+  Those two stay parallel-safe if
+  Onb01 does not claim `origins.js`.
+  If later both need `origins.js`,
+  sequence Org01 overlay first.
+  Ctl05 writes `main.js` `pauseEl` +
+  `setPaused`, `title.js` remount,
+  `save.js` open-from-pause.
+  VERIFY: Onb01 verifier CLEAN
+  (`out/w141/onb01/verify/`);
+  designer CLEAN
+  (`out/w141/designer/onb01-ui-audit.md`).
+  Org01 verifier CLEAN
+  (`out/w141/org01/verify/`);
+  designer CLEAN
+  (`out/w141/designer/org01-ui-audit.md`).
+  Ctl05 verifier CLEAN
+  (`out/w141/pause/verify/`);
+  designer CLEAN
+  (`out/w141/designer/pause-ui-audit.md`).
+  No `src/` this wave. Known
+  WAVE127 / WAVE132 boot errors and
+  REDMARCH `castMatches` flake are
+  not this write-set.
+  FILES: `docs/Onb01FlightLessonDesign.md`,
+  `docs/Org01OriginPreviewDesign.md`,
+  `docs/Ctl05PauseMenuDesign.md`,
+  `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
+  `PROGRESS.md`,
+  `out/w141/`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now

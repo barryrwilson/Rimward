@@ -1,0 +1,54 @@
+# Wave 139 Mkt01 MARKET desk leftover — write-set (verified)
+
+ALLOWED later serial (named PR1 only; Wave 139 this pack did not land src):
+  src/ui/screens.css
+    .market-actions { flex-wrap: wrap }  (keep display:flex; gap: 6px)
+    TRADE min track stays minmax(10em, 1.7fr)
+    .screen-panel min-width stays 560px
+  src/systems/station.js
+    renderMarket subtitle literal 'MARKET — buy price and sell price' via h() textContent
+    fail-closed skip in COMMODITY_KEYS.forEach (unknown / non-object; missing name → key text; never throw)
+    keep Q/W/A/S, Digit 1 Market, tradeFillUnit math, illegal 'trade refused'
+
+FORBIDDEN later serial (this leftover):
+  src/game/state.js
+  src/game/save.js
+  src/game/agent-observe.js
+  src/systems/agent-api.js
+  src/game/agent-schema.js
+  src/systems/overlay-policy.js
+  src/systems/hud.js
+  src/ui/hud.css
+  src/systems/controls.js
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/ExpDataTradeDesign.md
+  docs/AgentApiDesign.md
+  docs/Ctl*.md
+  docs/Hud0*.md
+  docs/OwnerDecisions*.md
+  out/w139/badge/**
+  out/w139/mktfill/**
+  raise TRADE min track as a second required law
+  drop panel min-width
+  overflow-x as the only fit
+  innerHTML / insertAdjacentHTML
+  tradeFillUnit / tryTrade / PRICE_BAND retune
+  hide restricted rows
+  buyFill / sellFill / equal on marketBlock
+  new Digit / Q/W/A/S remap
+  flags.paused
+  pad 2B / in-repo LLM
+
+Wave 139 this worker (markdown only; already landed):
+  docs/Mkt01DeskLayoutDesign.md
+  out/w139/mktdesk/current-market-desk-layout-inventory.md
+  out/w139/mktdesk/shared-contract.md
+  out/w139/mktdesk/security-review.md
+  out/w139/mktdesk/code-review.md
+  out/w139/mktdesk/ui-audit.md
+  out/w139/mktdesk/notes.md
+
+# Verifier-only (this pass; not worker)
+  out/w139/mktdesk/verify/report.md
+  out/w139/mktdesk/verify/write-set.txt

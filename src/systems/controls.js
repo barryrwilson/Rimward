@@ -2,6 +2,7 @@ import { SYSTEMS, U } from '../game/state.js';
 import { pickReticleLock } from '../game/reticle-aim.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { dropPartIfNotShip, toggleEnginePart } from '../game/subsys-aim.js';
+import { acceptedMiningOreKeys, fieldHasMatchingOre, rockMatchesOreKeys } from '../game/mining-ore-keys.js';
 import {
   canOpenPlayCard,
   hailDigitsAllowed,
@@ -30,7 +31,7 @@ import { decodeKeyCode } from './key-code.js';
  *   Shift (hold) → vector-hold drift
  *   LMB (hold)   → fire current weapon group
  *   1 / 2 / 3 / 4 / 5 → weapon group (cannon / disruptor / mining / missiles / psionic)
- *   T (tap)      → cycle target (nearest first; asteroids too in group 3)
+ *   T (tap)      → cycle target (hostiles first in combat; asteroids too in group 3)
  *   V (tap)      → lock under the visible reticle
  *   K (tap)      → engine-select on a live ship lock (Wave 100)
  *   N (tap)      → engage / cancel automine on a locked asteroid
@@ -61,13 +62,14 @@ const THROTTLE_RAMP_RATE = 0.5; // setpoint/s while R or F held (§5.1)
 const DOUBLE_TAP_MS = 350; // F double-tap window → full stop (§5.1)
 const RETICLE_RADIUS_FRACTION = 0.35; // of min(vw, vh)
 
-const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock']);
+const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock', 'afterburner']);
 
-// Shared with KeyT/H/J/V. agentPulse sets these; next update publishes one frame.
+// Shared with KeyT/H/J/V/Space. agentPulse sets these; next update publishes one frame.
 let pendingTarget = false;
 let pendingHail = false;
 let pendingDock = false;
 let pendingReticleLock = false;
+let pendingAfterburner = false;
 
 /** True only when the title overlay is attached. Create-on-miss getElementById is not open. */
 function titleOverlayAttached() {
@@ -120,7 +122,7 @@ function shouldSkipWeaponGroupDigits(ctx) {
   }
 }
 
-/** In-range cycle candidates: ships, plus rocks when mining group is 3. Nearest first later. */
+/** In-range cycle candidates: ships, plus rocks when mining group is 3. Sort later. */
 function collectCycleCands(ctx) {
   const cands = [];
   const shipObj = ctx && ctx.ship && ctx.ship.object;
@@ -130,32 +132,84 @@ function collectCycleCands(ctx) {
   const ships = ctx.ships;
   if (ships) {
     for (const s of ships) {
-      if (!s?.object || s.state?.destroyed) continue;
+      if (!s?.object || !s.object.position || s.state?.destroyed) continue;
       const d2 = s.object.position.distanceToSquared(p);
-      if (d2 <= range2) cands.push({ ref: s, d2 });
+      if (!Number.isFinite(d2) || d2 > range2) continue;
+      cands.push({ ref: s, d2 });
     }
   }
   // Mining group (3) may also target asteroids (§6.2 mining beam).
+  // When an accepted mining job still has a matching rock in the field,
+  // skip other ores so KeyT does not hunt brine ice first.
   if (ctx.input && ctx.input.weaponGroup === 3 && ctx.asteroids?.list) {
-    for (const a of ctx.asteroids.list) {
+    const list = ctx.asteroids.list;
+    let oreKeys = null;
+    let matchOn = false;
+    try {
+      oreKeys = acceptedMiningOreKeys(ctx);
+      matchOn = !!(oreKeys && oreKeys.size > 0 && fieldHasMatchingOre(list, oreKeys));
+    } catch {
+      matchOn = false;
+      oreKeys = null;
+    }
+    for (const a of list) {
       if (!a || !a.position) continue;
+      if (matchOn) {
+        let ok = false;
+        try { ok = rockMatchesOreKeys(a, oreKeys); } catch { ok = false; }
+        if (!ok) continue;
+      }
       const d2 = a.position.distanceToSquared(p);
-      if (d2 <= range2) cands.push({ ref: a, d2 });
+      if (!Number.isFinite(d2) || d2 > range2) continue;
+      cands.push({ ref: a, d2 });
     }
   }
   return cands;
 }
 
-/** Cycle ctx.targets.current through in-range candidates, nearest first. */
-function cycleTarget(ctx) {
-  const cands = collectCycleCands(ctx);
-  if (!cands.length) {
-    if (ctx && ctx.targets) ctx.targets.current = null;
-    return;
+/** Live ship with hostile intent. Rocks and kind locks are never hostile. Missing ai is false. Never throw. */
+function isCycleHostile(ref) {
+  try {
+    if (!ref || !ref.object || ref.lockKind) return false;
+    if (!ref.state || ref.state.destroyed) return false;
+    if (ref.ai && ref.ai.intent === true) return true;
+    return false;
+  } catch {
+    return false;
   }
-  cands.sort((a, b) => a.d2 - b.d2);
-  const idx = cands.findIndex((c) => c.ref === ctx.targets.current);
-  ctx.targets.current = cands[(idx + 1) % cands.length].ref;
+}
+
+/** Cycle ctx.targets.current through in-range candidates. Hostiles first when any is in envelope. */
+function cycleTarget(ctx) {
+  try {
+    const cands = collectCycleCands(ctx);
+    if (!cands.length) {
+      if (ctx && ctx.targets) ctx.targets.current = null;
+      return;
+    }
+    let gated = false;
+    for (let i = 0; i < cands.length; i++) {
+      if (isCycleHostile(cands[i] && cands[i].ref)) {
+        gated = true;
+        break;
+      }
+    }
+    if (gated) {
+      cands.sort((a, b) => {
+        const ha = isCycleHostile(a && a.ref) ? 0 : 1;
+        const hb = isCycleHostile(b && b.ref) ? 0 : 1;
+        if (ha !== hb) return ha - hb;
+        return a.d2 - b.d2;
+      });
+    } else {
+      cands.sort((a, b) => a.d2 - b.d2);
+    }
+    const cur = ctx && ctx.targets ? ctx.targets.current : null;
+    const idx = cands.findIndex((c) => c.ref === cur);
+    ctx.targets.current = cands[(idx + 1) % cands.length].ref;
+  } catch {
+    /* never throw */
+  }
 }
 
 function hailPulseBlocked(ctx) {
@@ -200,9 +254,19 @@ function matchCycleCand(ctx, cands, id) {
   return null;
 }
 
+/** Agent AP/AM engage: clear the double-tap F latch. Does not write throttle. */
+export function agentClearFullStop(ctx) {
+  try {
+    if (!ctx || !ctx.input || typeof ctx.input !== 'object') return;
+    ctx.input.fullStop = false;
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Authored pulse: dock | hail | target | reticleLock.
- * Same pending* flags as KeyJ/H/T/V. Next update publishes *Pressed one frame, then clears.
+ * Authored pulse: dock | hail | target | reticleLock | afterburner.
+ * Same pending* flags as KeyJ/H/T/V/Space. Next update publishes *Pressed one frame, then clears.
  */
 export function agentPulse(ctx, edge) {
   try {
@@ -223,6 +287,10 @@ export function agentPulse(ctx, edge) {
     }
     if (edge === 'reticleLock') {
       pendingReticleLock = true;
+      return '';
+    }
+    if (edge === 'afterburner') {
+      pendingAfterburner = true;
       return '';
     }
     return 'unknown';
@@ -247,6 +315,7 @@ export function agentSetWeaponGroup(ctx, n) {
 /** Cycle (no id) pulses KeyT. id selects an in-range cycle candidate. Does not warp. */
 export function agentSelectTarget(ctx, id) {
   try {
+    if (ctx && ctx.flags && ctx.flags.docked === true) return 'docked';
     if (!ctx || !ctx.targets || typeof ctx.targets !== 'object') return 'no-service';
     const cands = collectCycleCands(ctx);
     if (!cands.length) return 'no-service';
@@ -408,8 +477,7 @@ export function initControls(ctx) {
   let fireDown = false;
 
   // One-frame edge pulses, captured in handlers and published in update().
-  // pendingTarget/Hail/Dock/ReticleLock live at module scope (agentPulse).
-  let pendingAfterburner = false;
+  // pendingTarget/Hail/Dock/ReticleLock/Afterburner live at module scope (agentPulse).
   let pendingCamera = false;
   let pendingMatchSpeed = false;
   let pendingAutomine = false;
@@ -528,7 +596,7 @@ export function initControls(ctx) {
     'Shift (hold) — vector-hold drift',
     'LMB (hold) — fire',
     '1/2/3/4/5 — weapon group: cannon / disruptor / mining / missiles / psionic',
-    'T — cycle target',
+    'T — cycle target (hostiles first in combat)',
     'V — lock under reticle',
     'N — automine locked asteroid',
     'H — hail · J — dock · C — camera (chase / third / first-person)',

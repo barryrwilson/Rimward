@@ -1,0 +1,37 @@
+{
+  "actVal": {
+    "threw": false,
+    "result": {
+      "v": 1,
+      "ok": true,
+      "error": "",
+      "name": "afterburner",
+      "token": "",
+      "status": "queued"
+    },
+    "pos0": [
+      0,
+      30,
+      800
+    ],
+    "originOpen": false
+  },
+  "afterVal": {
+    "burnerActive": false,
+    "lastText": "Last: afterburner",
+    "lastIntent": {
+      "name": "afterburner",
+      "ok": true,
+      "error": "",
+      "token": "",
+      "t": 0,
+      "status": "queued"
+    },
+    "pos": [
+      0,
+      30,
+      800
+    ],
+    "docked": false
+  }
+}

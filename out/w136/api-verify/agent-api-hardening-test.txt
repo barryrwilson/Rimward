@@ -1,0 +1,36 @@
+ok spot fwdFromQuat identity
+ok rimward handle
+ok phase title
+ok fwd on observe
+ok stale pause reason while paused kept
+ok ping while paused
+ok dock refused paused
+ok startGame while paused
+ok startGame no erase flag
+ok startGame closed title
+ok startGame closed no-op
+ok chooseOrigin proto refused
+ok chooseOrigin constructor refused
+ok chooseOrigin unknown
+ok chooseOrigin while paused
+ok chooseOrigin closed overlay
+ok chooseOrigin closed no-service
+ok startGame held while berth
+ok startGame needs opt-in
+ok phase playing
+ok stale automine pause cleared
+ok stale autopilot pause cleared
+ok phase origin
+ok hail queued token empty
+ok dock queued token empty
+ok pulse queued
+ok ping has no status
+ok teleport forbidden
+ok setCredits forbidden
+ok credits unchanged
+ok harvest commLine dedup
+ok ring shieldDown no ship
+rimward: forbidden act teleport
+AGENT API HARDENING PASS
+rimward: forbidden act setCredits
+HARDEN:0

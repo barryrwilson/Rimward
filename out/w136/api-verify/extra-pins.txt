@@ -1,0 +1,26 @@
+ok ORIGINS greenhand own
+ok ORIGINS proto not own
+ok reserved proto
+ok chooseOrigin held
+ok chooseOrigin opt-in
+ok chooseOrigin proto before api
+ok chooseOrigin real ORIGINS id
+ok plotRoute ok
+ok plotRoute omits status
+ok plotRoute lastIntent omits status
+ok ping omits status
+ok hail queued lastIntent
+ok observe lastIntent queued
+ok observe phase playing
+ok agent-api no credits assign
+ok agent-api no position assign
+ok agent-api no clearAutosave
+ok title start has no clearAutosave
+ok title start continue when save
+ok title start new when no save
+ok combat emitShieldDown primitives
+ok empty status omitted on actResult
+ok phase origin extra
+ok phase title wins
+EXTRA PINS PASS
+EXTRA:0

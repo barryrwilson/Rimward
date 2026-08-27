@@ -1,0 +1,40 @@
+Verifier notes (no Chrome launched by this verifier).
+
+Command:
+  node scripts/agent-bridge.mjs --self-test
+  exit 0
+  all pins true, including chromeKeepAliveFlags
+  output: out/w136/cdp-verify2/self-test.json
+
+Launch args dump (import chromeLaunchArgs; no spawn):
+  out/w136/cdp-verify2/launch-args.json
+  contains:
+    --disable-background-timer-throttling
+    --disable-renderer-backgrounding
+    --disable-backgrounding-occluded-windows
+    --window-size=1280,720
+
+Source:
+  chromeLaunchArgs (scripts/agent-bridge.mjs ~447-462)
+    launchChrome spawn uses chromeLaunchArgs
+  attachCdp (~412-425)
+    after Runtime.enable + Page.enable + URL match:
+      await cdp.send('Page.bringToFront', {}, 5000)
+    catch logs 'cdp bringToFront failed' then re-checks location.href
+  --launch-chrome path (~1100-1126)
+    launchChrome then attachCdp (bringToFront is inside attachCdp)
+
+Self-test pin chromeKeepAliveFlags (~941-951):
+  remote-debugging-port=0
+  remote-debugging-address=127.0.0.1
+  three disable flags
+  --window-size=1280,720
+  about:blank
+  pin does not cover bringToFront (source-checked instead)
+
+Did not start --launch-chrome.
+Did not kill unrelated node processes.
+Observed other session already had:
+  node scripts/agent-bridge.mjs --launch-chrome ... --port 8877
+  node scripts/agent-bridge-smoke.mjs
+Those are not from this verifier.

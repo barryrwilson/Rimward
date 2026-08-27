@@ -5,8 +5,8 @@
 | **Title** | RIMWARD AGENT API (AI play surface) |
 | **Author** | Wave 126 leftover integrator |
 | **Date** | 2026-08-26 (rev 3 leftover freeze after Wave 125 census) |
-| **Status** | Wave 134 PR5 implemented. `window.rimward` observe, command intents, pulse sink, hypot latch, `decodeKeyCode`, and Agent play badge chrome are live. Leftover was **REAL**. Merge law: shared-contract.md wins. |
-| **Wave** | 134 — PR5 Agent play badge. PR6 still named later. |
+| **Status** | Wave 135 PR6 implemented. `window.rimward` observe, command intents, pulse sink, hypot latch, `decodeKeyCode`, Agent play badge chrome, and 127.0.0.1 CDP loopback bridge are live. Leftover serial complete. Merge law: shared-contract.md wins. |
+| **Wave** | 135 — PR6 loopback CDP bridge. Serial complete. |
 | **Owner request** | Inbox P2 AGENT API: add a stable documented AI play API so an agent can play on a user's behalf, plus a live watch surface. Screenshot loops are too slow. Empty `e.code` never reaches TRACKED. Owner: write the design first. Do not implement. |
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
@@ -329,11 +329,13 @@ Builder rules:
 - Missing ctx → `{ v:1, t:0, ok:false, error:'no-ctx', agentOptIn:false, events:[] }` and omit the rest.
 - Copy authored fields only. Never `JSON.stringify(ctx)`. Never functions / THREE / `stationDesk`.
 - `jumping` lives on `gate.jumping` (`ctx.gate.jumping`, `ctx.js` **183**). **Not** `flags.jumping`.
-- `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`. `agentOptIn` is top-level.
+- `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`, and `fullStop` (from `ctx.input.fullStop`). `agentOptIn` is top-level.
 - `ship` includes hull/screen/shell/engine/power/heat/`weaponGroup` (`state.js` **167–181**; `input.weaponGroup`).
 - `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships and rocks** (AM needs the locked asteroid).
-- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`.
-- `jobs` only when `flags.docked`.
+- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact.
+- `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
+- `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.
+- `session.phase` is `'dead'` while `ctx.deathApi.isOpen()` (death overlay). Then `'title'` / `'origin'` / `'playing'` as today.
 - `station` is a **pose copy** (`inZone`, `name`, `systemName`, `service`, `services`). Never copy `ctx.station` wholesale and never serialize `stationDesk`.
 - `bio` is HUD-true (`mood`, `hunger`, `wounds`, `bond`).
 - **Omit:** `npc.ai` internals, interest rolls, scene, renderer, `__ctx`, save slots, settings storage, API keys, functions.
@@ -347,14 +349,14 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `ping` | — | none | `opt-in` if not opted in |
 | `plotRoute` | `{ dest }` | `plotRoute` | uncharted / proto id (`nav.js` already sanitizes); `paused` |
 | `clearRoute` | — | `clearRoute` | `paused` |
-| `engageAutopilot` | — | `tryEngage` | `AP_LINES` tokens; `paused` |
+| `engageAutopilot` | — | `agentClearFullStop` then `tryEngage` | `AP_LINES` tokens; `paused` |
 | `cancelAutopilot` | — | `disengage(ctx, 'cancel')` | not flying |
-| `engageAutomine` | — | `tryEngageAutomine` | `AM_LINES`; `paused` |
+| `engageAutomine` | — | `agentClearFullStop` then `tryEngageAutomine` | `AM_LINES`; `paused` |
 | `cancelAutomine` | — | `disengageAutomine(ctx, 'cancel')` | — |
-| `selectTarget` | `{ id? }` or cycle | controls export / pulse `target` | none in range; PR3 |
+| `selectTarget` | `{ id? }` or cycle | controls export / pulse `target` | `flags.docked` → `docked`; none in range; PR3 |
 | `hail` | — | pulse `pendingHail` via controls | overlay policy; PR3 |
-| `hailResolve` | `{ intent }` or `{ index }` | `ctx.hailApi.resolve` | card closed; unknown intent; `hailDigitsAllowed` false |
-| `dock` | — | pulse `pendingDock` via controls | same as KeyJ skip; **not in pad zone** (no warp); PR3 |
+| `hailResolve` | `{ intent }` or `{ index }` | `ctx.hailApi.resolve` | card closed → `closed`; missing hailApi / overlay block → `no-service`; unknown intent; `hailDigitsAllowed` false |
+| `dock` | — | pulse `pendingDock` via controls | `station.inZone !== true` → `range` immediately (no pulse, not queued); same as KeyJ skip; **not in pad zone** (no warp); PR3 |
 | `undock` | — | `ctx.stationDesk.undock` | not docked |
 | `openService` | `{ id }` authored `DOCK_KEY_SERVICES` | `ctx.stationDesk.selectService` | not docked; unknown id |
 | `acceptJob` | `{ id }` | `ctx.stationDesk.acceptJob` | not docked; **`service !== 'jobs'`**; not offered; hold full |

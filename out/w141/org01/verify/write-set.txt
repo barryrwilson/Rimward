@@ -1,0 +1,42 @@
+# Wave 141 Org01 origin consequence preview — verifier write-set
+
+Worker pack (markdown only):
+docs/Org01OriginPreviewDesign.md
+out/w141/org01/code-review.md
+out/w141/org01/current-org01-origin-preview-inventory.md
+out/w141/org01/notes.md
+out/w141/org01/security-review.md
+out/w141/org01/shared-contract.md
+out/w141/org01/ui-audit.md
+
+Verifier (this pass):
+out/w141/org01/verify/report.md
+out/w141/org01/verify/write-set.txt
+
+Later impl write-set (named in freeze; not edited this wave):
+src/game/origins.js
+src/ui/screens.css (optional dedicated .rw-origin-* only)
+
+Not in this worker write-set:
+src/**
+scripts/**
+public/**
+index.html
+package.json
+docs/PLAYER-EXPERIENCE-WISHLIST.md
+PROGRESS.md
+docs/Onb01FlightLessonDesign.md
+docs/Ctl05PauseMenuDesign.md
+docs/Ai05StarterGraceDesign.md
+docs/Ctl*.md
+docs/Hud0*.md
+docs/OwnerDecisions*
+out/w141/onb01/**
+out/w141/pause/**
+out/w141/designer/**
+
+git scoped status (worker pack):
+?? docs/Org01OriginPreviewDesign.md
+?? out/w141/org01/
+
+Honor/src note: workspace `src/` is dirty from other Wave 141 workers (originsApi, title, HUD, screens.css). `git diff -- src/game/origins.js` is originsApi only. No origin-preview paint, no ORIGINS.preview table, no .rw-origin-* class, no invented UU in src/. src/game/state.js is unmodified. This Org01 worker did not land src/. Later write-set is origins.js plus optional dedicated origin CSS, not station .screen-panel or pause classes.

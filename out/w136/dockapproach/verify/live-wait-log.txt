@@ -1,0 +1,10 @@
+chrome pid 58184
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\05-wait-inzone-slow.png
+fast {"hasCtx":true,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":false,"speed":120,"spdText":"0","dist":30,"promptHidden":true,"pKey":"","pVerb":"","selfSlowText":"SLOW","selfSlowHidden":true,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"reticleW":80,"reticleH":80}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\06-wait-inzone-dock.png
+le20 {"hasCtx":true,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":true,"speed":8,"spdText":"76","dist":30,"promptHidden":false,"pKey":"J","pVerb":"Dock · SLOW — approach under 20 u/s","selfSlowText":"SLOW","selfSlowHidden":false,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"reticleW":80,"reticleH":80}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\07-wait-band-100.png
+band100 {"hasCtx":true,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":true,"speed":120,"spdText":"8","dist":100,"promptHidden":false,"pKey":"J","pVerb":"Dock","selfSlowText":"SLOW","selfSlowHidden":true,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"reticleW":80,"reticleH":80}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\08-wait-band-200.png
+band200 {"hasCtx":true,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":false,"speed":120,"spdText":"115","dist":200,"promptHidden":false,"pKey":"V","pVerb":"Lock","selfSlowText":"SLOW","selfSlowHidden":false,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"reticleW":80,"reticleH":80}
+jumpOwns {"hasCtx":true,"docked":false,"berthHold":false,"jumping":false,"gateInZone":true,"stationInZone":false,"speed":120,"spdText":"80","dist":100,"promptHidden":false,"pKey":"V","pVerb":"Lock","selfSlowText":"SLOW","selfSlowHidden":true,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"reticleW":80,"reticleH":80}

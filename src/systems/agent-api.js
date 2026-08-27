@@ -7,8 +7,9 @@ import { COMMODITIES } from '../game/state.js';
 import { plotRoute, clearRoute, sanitizeSystemId } from '../game/nav.js';
 import { tryEngage, disengage, apLine } from '../game/autopilot.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
+import { tryEngageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
-import { agentPulse, agentSelectTarget, agentSetWeaponGroup } from './controls.js';
+import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
 import {
   VERSION,
@@ -99,13 +100,16 @@ function remember(ctx, result) {
   const agent = ensureAgent(ctx);
   if (!agent) return result;
   const t = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
-  agent.lastIntent = {
+  const last = {
     name: str(result.name),
     ok: result.ok === true,
     error: str(result.error),
     token: str(result.token),
     t,
   };
+  const status = str(result.status);
+  if (status) last.status = status;
+  agent.lastIntent = last;
   return result;
 }
 
@@ -182,8 +186,11 @@ function afterDesk(ctx, name, result) {
   return fail(ctx, name, token, notice || token);
 }
 
-function afterControls(ctx, name, token) {
+function afterControls(ctx, name, token, queued) {
   if (typeof token === 'string' && token) return fail(ctx, name, token);
+  if (queued === true) {
+    return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'queued' }));
+  }
   return ok(ctx, name);
 }
 
@@ -228,18 +235,22 @@ function actHailResolve(ctx, name, args) {
     digitsOk = false;
   }
   if (!digitsOk) return fail(ctx, name, 'no-service');
-  let peek = { intents: [] };
+  let peek = { intents: [], open: false };
   try {
     peek = api.peek();
   } catch {
-    peek = { intents: [] };
+    peek = { intents: [], open: false };
   }
   const raw = peek && Array.isArray(peek.intents) ? peek.intents : [];
   const intents = [];
   for (let i = 0; i < raw.length; i++) {
     if (typeof raw[i] === 'string') intents.push(raw[i]);
   }
-  if (intents.length === 0) return fail(ctx, name, 'no-service');
+  const hailOpen = ctx.flags && ctx.flags.hailOpen === true;
+  const cardOpen = peek && peek.open === true;
+  if ((!hailOpen && !cardOpen) || intents.length === 0) {
+    return fail(ctx, name, 'closed');
+  }
   let intent = '';
   if (Object.hasOwn(args, 'intent') && typeof args.intent === 'string') {
     intent = args.intent;
@@ -261,6 +272,48 @@ function actHailResolve(ctx, name, args) {
   return ok(ctx, name);
 }
 
+function actStartGame(ctx, name) {
+  const api = ctx && ctx.titleApi;
+  if (!api || typeof api.isOpen !== 'function' || typeof api.start !== 'function') {
+    return fail(ctx, name, 'no-service');
+  }
+  let open = false;
+  try {
+    open = api.isOpen() === true;
+  } catch {
+    return fail(ctx, name, 'no-service');
+  }
+  if (!open) return ok(ctx, name);
+  api.start();
+  return ok(ctx, name);
+}
+
+function actChooseOrigin(ctx, name, args) {
+  const api = ctx && ctx.originsApi;
+  if (!api || typeof api.choose !== 'function' || typeof api.isOpen !== 'function') {
+    return fail(ctx, name, 'no-service');
+  }
+  let open = false;
+  try {
+    open = api.isOpen() === true;
+  } catch {
+    return fail(ctx, name, 'no-service');
+  }
+  if (!open) return fail(ctx, name, 'no-service');
+  const id = Object.hasOwn(args, 'id') ? args.id : '';
+  if (typeof id !== 'string' || !id || reservedName(id)) {
+    return fail(ctx, name, 'unknown');
+  }
+  let token = '';
+  try {
+    token = api.choose(id);
+  } catch {
+    return fail(ctx, name, 'no-service');
+  }
+  if (typeof token === 'string' && token) return fail(ctx, name, token);
+  return ok(ctx, name);
+}
+
 function dispatchLive(ctx, name, args) {
   if (name === 'plotRoute') return actPlotRoute(ctx, name, args);
   if (name === 'clearRoute') {
@@ -268,6 +321,7 @@ function dispatchLive(ctx, name, args) {
     return ok(ctx, name);
   }
   if (name === 'engageAutopilot') {
+    agentClearFullStop(ctx);
     const token = tryEngage(ctx);
     if (token) return fail(ctx, name, token, apLine(token) || token);
     return ok(ctx, name);
@@ -277,6 +331,7 @@ function dispatchLive(ctx, name, args) {
     return ok(ctx, name);
   }
   if (name === 'engageAutomine') {
+    agentClearFullStop(ctx);
     const token = tryEngageAutomine(ctx);
     if (token) return fail(ctx, name, token, amLine(token) || token);
     return ok(ctx, name);
@@ -342,20 +397,42 @@ function dispatchLive(ctx, name, args) {
     if (typeof kind !== 'string' || !FEED_KINDS.has(kind)) return fail(ctx, name, 'no-service');
     return afterDesk(ctx, name, desk.feed({ kind }));
   }
-  if (name === 'dock') return afterControls(ctx, name, agentPulse(ctx, 'dock'));
-  if (name === 'hail') return afterControls(ctx, name, agentPulse(ctx, 'hail'));
+  if (name === 'dock') {
+    const st = ctx.station;
+    if (!st || typeof st !== 'object' || st.inZone !== true) {
+      return fail(ctx, name, 'range');
+    }
+    return afterControls(ctx, name, agentPulse(ctx, 'dock'), true);
+  }
+  if (name === 'hail') return afterControls(ctx, name, agentPulse(ctx, 'hail'), true);
+  if (name === 'afterburner') {
+    if (ctx.flags && ctx.flags.docked === true) return fail(ctx, name, 'docked');
+    if (!ctx.input || typeof ctx.input !== 'object') return fail(ctx, name, 'no-service');
+    agentClearFullStop(ctx);
+    tryEngageFlee(ctx);
+    return afterControls(ctx, name, agentPulse(ctx, 'afterburner'), true);
+  }
   if (name === 'selectTarget') {
+    if (ctx.flags && ctx.flags.docked === true) return fail(ctx, name, 'docked');
     if (Object.hasOwn(args, 'id')) {
       return afterControls(ctx, name, agentSelectTarget(ctx, args.id));
     }
-    return afterControls(ctx, name, agentSelectTarget(ctx));
+    return afterControls(ctx, name, agentSelectTarget(ctx), true);
   }
   if (name === 'pulse') {
     if (!Object.hasOwn(args, 'edge')) return fail(ctx, name, 'unknown');
     const edge = args.edge;
     if (typeof edge !== 'string' || !PULSE_EDGES.has(edge)) return fail(ctx, name, 'unknown');
-    return afterControls(ctx, name, agentPulse(ctx, edge));
+    if (edge === 'dock') {
+      const st = ctx.station;
+      if (!st || typeof st !== 'object' || st.inZone !== true) {
+        return fail(ctx, name, 'range');
+      }
+    }
+    return afterControls(ctx, name, agentPulse(ctx, edge), true);
   }
+  if (name === 'startGame') return actStartGame(ctx, name);
+  if (name === 'chooseOrigin') return actChooseOrigin(ctx, name, args);
   if (name === 'setWeaponGroup') {
     const n = Object.hasOwn(args, 'n') ? args.n : undefined;
     return afterControls(ctx, name, agentSetWeaponGroup(ctx, n));
@@ -548,7 +625,8 @@ function dispatchAct(ctx, command) {
   }
 
   const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
-  if (flags.paused === true) return fail(ctx, name, 'paused');
+  const pauseOk = name === 'startGame' || name === 'chooseOrigin';
+  if (flags.paused === true && !pauseOk) return fail(ctx, name, 'paused');
   if (flags.berthHold === true) return fail(ctx, name, 'held');
 
   if (!isLiveCommand(name)) return fail(ctx, name, 'unknown');

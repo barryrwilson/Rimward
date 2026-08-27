@@ -15,6 +15,9 @@ import { npcFireToast, INCOMING_FIRE_TOAST } from '../game/npc-fire-toast.js';
 import { contactsGate, contactsScanner } from '../game/contacts-gate.js';
 import { healSubsysPart, SUBSYS_PART_ENGINE } from '../game/subsys-aim.js';
 import { losCloseRate } from '../game/los-close.js';
+import {
+  acceptedMiningOreKeys, authoredOreName, fieldHasMatchingOre, rockMatchesOreKeys,
+} from '../game/mining-ore-keys.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
@@ -73,6 +76,9 @@ const DART_TOAST_GAP = 2.5;
 const HULL_PETALS = 10;
 const EDGE_MARGIN = 84; // px inset for the off-screen target arrow
 const HOME_EDGE_INSET = 108; // px; TGT/NAV-02 keep 84
+const DOCK_SLOW_SPEED = 20;
+const DOCK_SLOW_RANGE_MULT = 3; // local; do not write state.js
+const DOCK_SLOW_VERB = 'Dock · SLOW — approach under 20 u/s';
 const LEAD_MIN_SPEED = 6; // u/s — still used to skip a useless tiny offset draw
 const EMPTY_LIST = []; // shared ?? fallback — never mutated, avoids per-frame []
 const CONTACT_SLOTS = 24;
@@ -402,6 +408,30 @@ function makeSpeed(parent) {
   };
 }
 
+function padApproachDist(shipPos, stPos) {
+  if (!shipPos || !stPos) return NaN;
+  const sx = shipPos.x, sy = shipPos.y, sz = shipPos.z;
+  const px = stPos.x, py = stPos.y, pz = stPos.z;
+  if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(sz)) return NaN;
+  if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) return NaN;
+  return Math.hypot(sx - px, sy - py, sz - pz);
+}
+
+function padSlowLampOn(ctx, dist, speed) {
+  const flags = ctx.flags;
+  if (!flags || flags.docked) return false;
+  if (flags.berthHold) return false;
+  const gate = ctx.gate;
+  if (gate && gate.jumping) return false;
+  const station = ctx.station;
+  if (gate && gate.inZone && !(station && station.inZone)) return false;
+  if (!Number.isFinite(dist) || !Number.isFinite(speed)) return false;
+  if (speed <= DOCK_SLOW_SPEED) return false;
+  const band = U.DOCK_RANGE * DOCK_SLOW_RANGE_MULT;
+  if (!Number.isFinite(band) || dist > band) return false;
+  return true;
+}
+
 /** FORE / AFT glance. Words plus fill vs hollow — color is never the only cue. */
 function makeFacing(parent) {
   const row = el('div', 'rw-facing', parent);
@@ -514,47 +544,72 @@ function gateLockName(target) {
   return target.hub ? destName + ' HUB' : destName;
 }
 
-/** Distance to nearest work-sector rock, else ore>0, else field.center. */
+/**
+ * Distance to nearest work-sector rock, else ore>0, else field.center.
+ * When accepted mining ores still have a matching rock, only those rocks count.
+ * @returns {{ n: number, oreName: string|null }}
+ */
 function beltMineDist(ctx, shipPos) {
   const list = ctx.asteroids && ctx.asteroids.list;
-  let best = Infinity;
-  if (list && list.length) {
-    const def = SYSTEMS[ctx.world.currentSystem];
-    const field = def && def.field;
-    let workFrac = field && Number.isFinite(field.workFrac) ? field.workFrac : 0.6;
-    if (workFrac < 0) workFrac = 0;
-    if (workFrac > 1) workFrac = 1;
-    const workN = Math.min(list.length, Math.ceil(workFrac * list.length));
-    for (let pass = 0; pass < 2; pass++) {
-      const n = pass === 0 ? workN : list.length;
-      for (let i = 0; i < n; i++) {
-        const rock = list[i];
-        if (!rock || !(rock.ore > 0)) continue;
-        const p = rock.position;
-        if (!p) continue;
-        const dx = p.x - shipPos.x;
-        const dy = p.y - shipPos.y;
-        const dz = p.z - shipPos.z;
-        const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < best) best = d2;
-      }
-      if (best !== Infinity) {
-        const d = Math.round(Math.sqrt(best));
-        return Number.isFinite(d) ? d : 0;
+  let keys = null;
+  let matchOn = false;
+  try {
+    keys = acceptedMiningOreKeys(ctx);
+    matchOn = !!(keys && keys.size > 0 && fieldHasMatchingOre(list, keys));
+  } catch {
+    matchOn = false;
+    keys = null;
+  }
+  try {
+    let best = Infinity;
+    let bestRock = null;
+    if (list && list.length && shipPos) {
+      const def = SYSTEMS[ctx.world.currentSystem];
+      const field = def && def.field;
+      let workFrac = field && Number.isFinite(field.workFrac) ? field.workFrac : 0.6;
+      if (workFrac < 0) workFrac = 0;
+      if (workFrac > 1) workFrac = 1;
+      const workN = Math.min(list.length, Math.ceil(workFrac * list.length));
+      for (let pass = 0; pass < 2; pass++) {
+        const n = pass === 0 ? workN : list.length;
+        for (let i = 0; i < n; i++) {
+          const rock = list[i];
+          if (!rock || !(rock.ore > 0)) continue;
+          if (matchOn && !rockMatchesOreKeys(rock, keys)) continue;
+          const p = rock.position;
+          if (!p) continue;
+          const dx = p.x - shipPos.x;
+          const dy = p.y - shipPos.y;
+          const dz = p.z - shipPos.z;
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < best) {
+            best = d2;
+            bestRock = rock;
+          }
+        }
+        if (best !== Infinity) {
+          const d = Math.round(Math.sqrt(best));
+          const n = Number.isFinite(d) ? d : 0;
+          const oreName = matchOn ? authoredOreName(bestRock && bestRock.commodity) : null;
+          return { n, oreName };
+        }
       }
     }
+    if (matchOn) return { n: NaN, oreName: null };
+    const def = SYSTEMS[ctx.world.currentSystem];
+    const c = def && def.field && def.field.center;
+    if (c && shipPos) {
+      const n = Math.round(Math.hypot(
+        c[0] - shipPos.x,
+        (c[1] || 0) - shipPos.y,
+        c[2] - shipPos.z,
+      ));
+      if (Number.isFinite(n)) return { n, oreName: null };
+    }
+  } catch {
+    /* never throw */
   }
-  const def = SYSTEMS[ctx.world.currentSystem];
-  const c = def && def.field && def.field.center;
-  if (c) {
-    const n = Math.round(Math.hypot(
-      c[0] - shipPos.x,
-      (c[1] || 0) - shipPos.y,
-      c[2] - shipPos.z,
-    ));
-    if (Number.isFinite(n)) return n;
-  }
-  return 0;
+  return { n: 0, oreName: null };
 }
 
 /** Clear a linger row only after WINDOW. Never because a chip was reused. */
@@ -1087,6 +1142,10 @@ export function initHud(ctx) {
   const selfShell = makeBar(selfRail, 'SHELL', 'rw-shell');
   const selfHull = makeHull(selfRail);
   const selfSpeed = makeSpeed(selfRail);
+  const selfSpeedVal = selfRail.querySelector('.rw-speed .rw-value');
+  const selfSlowLamp = selfSpeedVal
+    ? el('span', 'rw-slow-lamp is-hidden', selfSpeedVal, 'SLOW')
+    : null;
   const selfWpnRow = el('div', 'rw-meter rw-combat-wpn', selfRail);
   el('div', 'rw-label', selfWpnRow, 'WPN');
   const weaponName = el('div', 'rw-value', selfWpnRow, '—');
@@ -1310,7 +1369,7 @@ export function initHud(ctx) {
     family: '', classKey: '', tgtClassKey: '', kind: undefined, faction: undefined, hudOverride: undefined,
     leadX: 0, leadY: 0, selfHairOff: true, tgtHairOff: true,
     bioPeriod: 4, textScale: ctx.settings?.textScale ?? 1,
-    matchLamp: null, hullBand: '',
+    matchLamp: null, slowLamp: null, hullBand: '',
     navShown: null, cueShown: null, cueX: -1, cueY: -1, cueAng: NaN,
     navNext: '', navDest: '', navJumps: '', navStatus: '', navDist: '',
     navNextRow: null, navJumpsRow: null, navDistRow: null,
@@ -2246,6 +2305,15 @@ export function initHud(ctx) {
         last.matchLamp = matchOn;
         if (matchOn) emitFamilyTick('mech', 'hudMechMatch', {});
       }
+      const padDist = padApproachDist(
+        ctx.ship && ctx.ship.object && ctx.ship.object.position,
+        ctx.station && ctx.station.position,
+      );
+      const slowOn = !!(selfSlowLamp && padSlowLampOn(ctx, padDist, ctx.ship.speed));
+      if (selfSlowLamp && slowOn !== last.slowLamp) {
+        last.slowLamp = slowOn;
+        selfSlowLamp.classList.toggle('is-hidden', !slowOn);
+      }
       throttleBar.set(ctx.input.throttle * 100);
 
       const burnerCd = ctx.config.ship.afterburner.cooldown || 1;
@@ -2533,7 +2601,12 @@ export function initHud(ctx) {
       // Gate sits below dock (zones never overlap in practice).
       let pKey = '', pVerb = '';
       if (ctx.station?.inZone && !ctx.flags.docked) {
-        pKey = 'J'; pVerb = 'Dock';
+        pKey = 'J';
+        const dockSpd = ctx.ship.speed;
+        const skipSlow = !!(ctx.flags.berthHold || (ctx.gate && ctx.gate.jumping));
+        pVerb = (!skipSlow && Number.isFinite(dockSpd) && dockSpd > DOCK_SLOW_SPEED)
+          ? DOCK_SLOW_VERB
+          : 'Dock';
       } else if (ctx.gate.inZone && ctx.gate.nearTo && !ctx.flags.docked && !ctx.gate.jumping) {
         const destDef = SYSTEMS[ctx.gate.nearTo];
         const destName = destDef ? destDef.name : String(ctx.gate.nearTo);
@@ -2565,10 +2638,21 @@ export function initHud(ctx) {
       }
       // Dock / Jump / Hail / Target win. A rock lock already has a mine target.
       if (!pKey && (ctx.input.weaponGroup | 0) === 3 && shipObj && !isRockTarget(ctx, target)) {
-        const n = beltMineDist(ctx, shipObj.position);
+        let n = NaN;
+        let oreName = null;
+        try {
+          const cue = beltMineDist(ctx, shipObj.position);
+          n = cue && cue.n;
+          oreName = cue && cue.oreName;
+        } catch {
+          n = NaN;
+          oreName = null;
+        }
         if (Number.isFinite(n)) {
           pKey = '3';
-          pVerb = 'Mine · belt ' + n + 'u';
+          pVerb = oreName
+            ? ('Mine · ' + oreName + ' ' + n + 'u')
+            : ('Mine · belt ' + n + 'u');
         }
       }
       if (!pKey && !target && shipObj) {

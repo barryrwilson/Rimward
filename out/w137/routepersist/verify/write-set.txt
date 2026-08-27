@@ -1,0 +1,60 @@
+# Wave 137 NAV-11 chart-close dest keep — worker write-set (git untracked)
+
+docs/Nav11RoutePersistDesign.md
+out/w137/routepersist/code-review.md
+out/w137/routepersist/current-nav11-route-persist-inventory.md
+out/w137/routepersist/notes.md
+out/w137/routepersist/security-review.md
+out/w137/routepersist/shared-contract.md
+out/w137/routepersist/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w137/routepersist/verify/report.md
+out/w137/routepersist/verify/write-set.txt
+
+# Later serial (named only; CONSUME)
+
+ALLOWED this leftover:
+  none
+
+If later dest-drop census re-opens REAL (named only; not this wave):
+  src/systems/galaxychart.js   # setOpen(true) retargetPlot(true) + syncApButton
+
+FORBIDDEN later serial (this leftover):
+  src/game/nav.js
+  src/game/save.js
+  src/game/state.js
+  src/game/autopilot.js
+  src/systems/agent-api.js
+  src/systems/hud.js
+  src/ui/hud.css
+  src/systems/controls.js
+  innerHTML dest names
+  new WORLD_FIELD
+  clearRoute on close
+  NAV-06 invert
+  pad 2B
+  third helm
+  teleport
+  new Digit
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/Nav10DockApproachDesign.md
+  docs/AgentApiDesign.md
+  docs/Msn05OreGuidanceDesign.md
+  docs/AgentApiEvadeDesign.md
+  out/w137/oreguide/**
+  out/w137/evade/**
+
+# Not in this worker write-set
+
+src/ — no edits this pack (tree is dirty from other waves)
+scripts/ — no edits this pack (boot-test / agent-bridge dirty from other workers)
+public/ / index.html / package.json — no edits this pack (package.json agent:bridge is other worker)
+docs/PLAYER-EXPERIENCE-WISHLIST.md — dirty in tree; not this pack
+PROGRESS.md — dirty in tree; not this pack
+docs/AgentApiDesign.md / docs/AgentApiEvadeDesign.md — sibling / other workers
+docs/Msn05OreGuidanceDesign.md / out/w137/oreguide/** — sibling pack
+out/w137/evade/** — sibling pack
+docs/Nav10DockApproachDesign.md — other leftover; not this pack

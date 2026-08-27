@@ -1,0 +1,11 @@
+Usage: node scripts/agent-bridge.mjs [options]
+  --host <addr>     127.0.0.1 (default) or ::1. Refuses 0.0.0.0 and ::.
+  --port <n>        default 8765 or AGENT_BRIDGE_PORT
+  --cdp-port <n>    default 9222
+  --game-url <url>  optional Page.navigate; query agent=1 is required
+  --launch-chrome   spawn Chrome on 127.0.0.1 CDP; kill this tree on exit
+  --self-test       mock evaluator; no Chrome
+  --help
+Env: AGENT_TOKEN (serve). Token is never in a URL query.
+HTTP: Authorization: Bearer. GET /health GET /observe POST /act
+WS: first {"token"} then {"op":"observe"} or {"op":"act","v":1,"name":"...","args":{}}

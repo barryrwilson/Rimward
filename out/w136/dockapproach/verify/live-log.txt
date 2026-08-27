@@ -1,0 +1,17 @@
+chrome pid 58112
+boot {"href":"http://127.0.0.1:5176/","ctx":true,"title":true,"newBtn":true,"originText":false}
+boot2 {"href":"http://127.0.0.1:5176/","ctx":true,"title":false,"newBtn":false,"originText":false}
+click1 origin-click
+click2 api:no-service
+click3 api:no-service
+flight {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":false,"speed":0,"dist":216.56407827707716,"promptHidden":true,"pKey":"","pVerb":"","selfSlowText":"SLOW","selfSlowHidden":true,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\01-inzone-slow.png
+inZoneFast {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":false,"speed":120,"dist":20,"promptHidden":true,"pKey":"","pVerb":"","selfSlowText":"SLOW","selfSlowHidden":true,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\02-inzone-dock.png
+inZone20 {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":true,"speed":20,"dist":20,"promptHidden":false,"pKey":"J","pVerb":"Dock · SLOW — approach under 20 u/s","selfSlowText":"SLOW","selfSlowHidden":false,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}
+nan {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":true,"speed":null,"dist":20,"promptHidden":false,"pKey":"J","pVerb":"Dock · SLOW — approach under 20 u/s","selfSlowText":"SLOW","selfSlowHidden":false,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\03-band-100.png
+band100 {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":true,"speed":120,"dist":100,"promptHidden":false,"pKey":"J","pVerb":"Dock · SLOW — approach under 20 u/s","selfSlowText":"SLOW","selfSlowHidden":false,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}
+SHOT C:\Projects\WebSim\out\w136\dockapproach\verify\04-band-200.png
+band200 {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":false,"stationInZone":false,"speed":120,"dist":200,"promptHidden":false,"pKey":"T","pVerb":"Target","selfSlowText":"SLOW","selfSlowHidden":false,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}
+jumpOwns {"hasCtx":true,"paused":false,"docked":false,"berthHold":false,"jumping":false,"gateInZone":true,"stationInZone":false,"speed":120,"dist":100,"promptHidden":false,"pKey":"T","pVerb":"Target","selfSlowText":"SLOW","selfSlowHidden":true,"tgtSlowCount":0,"matchText":"MATCH","matchHidden":true,"tgtMatchText":"MATCH","reticleW":80,"reticleH":80,"title":false,"originOpen":false}

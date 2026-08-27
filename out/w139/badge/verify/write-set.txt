@@ -1,0 +1,44 @@
+# Wave 139 Agent play badge leftover — write-set (verified)
+
+ALLOWED later serial (named PR1 only; Wave 139 this pack did not land src):
+  src/style.css
+    .rw-agent-badge pin: top 140px; right 16px; bottom auto; left auto
+    max-width: min(148px, calc(100vw - 32px))
+    max-height: calc(100vh - 156px)
+    z-index: 40 (keep)
+    body.rw-colorblind .rw-agent-badge Okabe-Ito tokens
+    body.rw-contrast .rw-agent-badge contrast panel/edge/white/dim
+    keep reduced-motion, 44 px buttons, solid/dashed ON/OFF
+
+FORBIDDEN later serial (this leftover):
+  src/ui/hud.css
+  src/systems/hud.js
+  src/systems/agent-api.js
+  src/systems/settings.js
+  src/game/state.js
+  src/game/save.js
+  src/systems/overlay-policy.js
+  docs/AgentApiDesign.md
+  docs/PLAYER-EXPERIENCE-WISHLIST.md
+  PROGRESS.md
+  docs/OwnerDecisions*.md
+  docs/Hud0*.md
+  docs/Ctl*.md
+  out/w139/mktdesk/**
+  out/w139/mktfill/**
+  HUD child remount
+  z-index below scrim 20
+  bottom-right pin
+  persist of badge geometry
+  innerHTML
+  new Digit / Key remap
+  pad 2B / in-repo LLM
+
+Wave 139 this worker (markdown only; already landed):
+  docs/AgentBadgeLayoutDesign.md
+  out/w139/badge/current-agent-badge-layout-inventory.md
+  out/w139/badge/shared-contract.md
+  out/w139/badge/security-review.md
+  out/w139/badge/code-review.md
+  out/w139/badge/ui-audit.md
+  out/w139/badge/notes.md

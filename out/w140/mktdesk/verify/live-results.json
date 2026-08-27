@@ -1,0 +1,18 @@
+{
+  "subtitle": "MARKET — buy price and sell price",
+  "fillUnitsInSubtitle": false,
+  "panelMinWidth": "560px",
+  "tradeTrackAt560": "140px",
+  "flexWrap": "wrap",
+  "gap": "6px",
+  "display": "flex",
+  "wrapAt560": true,
+  "buttonsVisibleAt560": ["+1", "+5", "−1", "−5"],
+  "rowOverlapAt560": false,
+  "plus1": { "credits": [350, 250], "hold": [{ "k": "provisions", "u": 1 }] },
+  "peekFillUnit": { "buy": 100, "sell": 100 },
+  "locker": { "row": "trade refused", "tradeOk": false },
+  "digit1Label": "1 — Market",
+  "paused": false,
+  "consoleErrors": 0
+}

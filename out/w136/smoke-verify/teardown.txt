@@ -1,0 +1,4 @@
+LISTENING 5188/8877: NONE
+chrome rw-agent-bridge-: NONE
+9222 LISTENING PID 20800 msedgewebview2 (not killed)
+TIME_WAIT on 5188 and 8877: present, allowed

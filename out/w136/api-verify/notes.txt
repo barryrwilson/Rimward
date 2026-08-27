@@ -1,0 +1,19 @@
+w136 agent API verifier
+
+Official:
+- node scripts/agent-schema-test.mjs  PASS exit 0
+- node scripts/agent-api-hardening-test.mjs  PASS exit 0
+  (console.warn "rimward: forbidden act teleport/setCredits" is expected)
+
+Extra:
+- node out/w136/api-verify/extra-pins.mjs  PASS exit 0
+
+Read:
+- src/systems/agent-api.js dispatchAct pauseOk startGame/chooseOrigin; berthHold still held
+- src/systems/title.js titleApi.start continue-if-save else new; clearAutosave only on NEW GAME confirm
+- src/game/origins.js originsApi.choose Object.hasOwn(ORIGINS)
+- src/game/agent-schema.js fwdFromQuat accessors; queued status; shieldDown fields; commLine dedup
+- src/game/agent-observe.js session.phase; pause reason filter
+- src/systems/combat.js emitShieldDown primitives plus ship on npc emit (sanitize strips ship)
+
+No Vite/Chrome. Ports 5173/4173/3000/8080 not LISTENING from this pass.

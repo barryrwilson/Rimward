@@ -84,8 +84,16 @@ function applyEffects(ctx, id) {
   }
 }
 
+function closedOriginsApi() {
+  return {
+    isOpen() { return false; },
+    choose() { return 'no-service'; },
+  };
+}
+
 export function initOrigins(ctx) {
   if (ctx.flags.saveRestored || ctx.world.origin) {
+    ctx.originsApi = closedOriginsApi();
     return { update() {} };
   }
 
@@ -113,12 +121,14 @@ export function initOrigins(ctx) {
   title.textContent = 'RIMWARD — who are you?';
   card.appendChild(title);
 
+  let overlayOpen = true;
   function choose(id) {
     window.removeEventListener('keydown', onKey);
     applyEffects(ctx, id);
     ctx.world.origin = id;
     ctx.world.jumpGraceUntil = (ctx.world.time || 0) + JUMP.graceSeconds;
     root.remove();
+    overlayOpen = false;
     ctx.flags.paused = false;
     ctx.emit('originChosen', { id, line: ORIGINS[id].line });
   }
@@ -148,6 +158,16 @@ export function initOrigins(ctx) {
   }
   window.addEventListener('keydown', onKey);
   document.body.appendChild(root);
+
+  ctx.originsApi = {
+    isOpen() { return overlayOpen; },
+    choose(id) {
+      if (!overlayOpen) return 'no-service';
+      if (typeof id !== 'string' || !id || !Object.hasOwn(ORIGINS, id)) return 'unknown';
+      choose(id);
+      return '';
+    },
+  };
 
   return { update() {} };
 }

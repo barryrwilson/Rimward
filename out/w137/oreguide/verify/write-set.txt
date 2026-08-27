@@ -1,0 +1,32 @@
+# Wave 137 Msn05 ore-guidance leftover — worker write-set (git untracked)
+
+docs/Msn05OreGuidanceDesign.md
+out/w137/oreguide/code-review.md
+out/w137/oreguide/current-msn05-ore-guidance-inventory.md
+out/w137/oreguide/notes.md
+out/w137/oreguide/security-review.md
+out/w137/oreguide/shared-contract.md
+out/w137/oreguide/ui-audit.md
+
+# Verifier-only (this pass; not worker)
+
+out/w137/oreguide/verify/report.md
+out/w137/oreguide/verify/write-set.txt
+
+# Not in this worker write-set
+
+src/ — no edits from this pack
+scripts/ — no edits from this pack
+public/ — no edits from this pack
+index.html — no edits from this pack
+package.json — no edits from this pack
+docs/PLAYER-EXPERIENCE-WISHLIST.md — ore INBOX 201–206 untouched by this pack
+PROGRESS.md — not this pack
+docs/Msn04JobDedupDesign.md — not this pack
+out/w137/routepersist/** — sibling NAV-11
+out/w137/evade/** — sibling Agent evade
+
+# Later impl write-set (named only; not landed)
+
+src/systems/controls.js — collectCycleCands rock filter
+src/systems/hud.js — named cue + match-gated beltMineDist

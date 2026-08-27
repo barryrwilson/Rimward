@@ -1,0 +1,21 @@
+WAVE138 oreguide live browser (Vite :5181, Playwright MCP)
+
+Digit 2 Jobs at Freehold Landing: unique-four plus Mine Raw ore / Mine Living rock.
+Accepted mine-freehold-0 (rawOre) via stationDesk.acceptJob.
+
+Named cue (empty lock, group 3, ships cleared so Target did not win):
+  Mine · Raw ore 16u   (nearest live rock was also rawOre 15u)
+  Mine · Raw ore 78u   (nearest live rock slagIron 32u; nearest rawOre 77u)
+Screenshot 03 shows 3 MINE · RAW ORE 45U. HUD-01 reticle 80x80, children pupil+cilia+RANGE only. MATCH word MATCH, lamp is-hidden.
+
+First T-lock while accepted rawOre + nearer wrong ores: commodity rawOre, lock card ASTEROID / Raw ore · H1. Prompt class is-hidden (rock lock skips cue).
+
+No accepted mining job: cue Mine · belt 76u; first T-lock brineIce.
+
+Hostiles-first: dummy ship ai.intent true in range; first T-lock W138HOSTILE, not a rock.
+
+Origin skip: accepted rawOre originSystem=veridian while current=freehold; first T-lock slagIron (filter off). Reserved __proto__ / notAnOre jobs: no throw, no console error.
+
+Screenshot 02 captured T TARGET because traffic ships entered 600u (Dock/Jump/Hail/Target win). Not a named-cue fail.
+
+Ports: Vite 5181 stopped after verify. CDP 9481 unused. Playwright MCP browser closed. User Chrome processes left running.

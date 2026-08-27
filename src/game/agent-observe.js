@@ -3,7 +3,7 @@
  * Never JSON.stringify(ctx). Never returns functions, THREE, desks, or npc.ai.
  */
 
-import { U } from './state.js';
+import { U, COMMODITIES } from './state.js';
 import {
   VERSION,
   NEARBY_CAP,
@@ -18,6 +18,7 @@ import {
   noCtxObservation,
   sanitizeEvent,
   isDockService,
+  reservedName,
 } from './agent-schema.js';
 
 const CAMERA = new Set(['chase', 'third', 'first']);
@@ -199,14 +200,103 @@ function jobRows(ctx, docked) {
   for (let i = 0; i < jobs.length; i++) {
     const j = jobs[i];
     if (!j || typeof j !== 'object') continue;
-    out.push({
+    const row = {
       id: str(own(j, 'id')),
       kind: str(own(j, 'kind')),
       state: str(own(j, 'state')),
       reward: num(own(j, 'reward'), 0),
-    });
+    };
+    const commodity = own(j, 'commodity');
+    if (typeof commodity === 'string' && commodity) row.commodity = commodity;
+    const count = own(j, 'count');
+    if (typeof count === 'number' && Number.isFinite(count)) row.count = count;
+    const units = own(j, 'units');
+    if (typeof units === 'number' && Number.isFinite(units)) row.units = units;
+    const need = own(j, 'need');
+    if (typeof need === 'number' && Number.isFinite(need)) row.need = need;
+    const progress = own(j, 'progress');
+    if (typeof progress === 'number' && Number.isFinite(progress)) row.progress = progress;
+    const destSystem = own(j, 'destSystem');
+    if (typeof destSystem === 'string' && destSystem) row.destSystem = destSystem;
+    const destination = own(j, 'destination');
+    if (typeof destination === 'string' && destination) row.destination = destination;
+    const deadline = own(j, 'deadline');
+    if (typeof deadline === 'number' && Number.isFinite(deadline)) row.deadline = deadline;
+    out.push(row);
   }
   return out;
+}
+
+function holdOf(cargo, key) {
+  if (!Array.isArray(cargo)) return 0;
+  let n = 0;
+  for (let i = 0; i < cargo.length; i++) {
+    const row = cargo[i];
+    if (!row || typeof row !== 'object') continue;
+    if (str(own(row, 'commodity')) !== key) continue;
+    const u = num(own(row, 'units'), 0);
+    if (u) n += u;
+  }
+  return n;
+}
+
+function postedPrice(ctx, key) {
+  // Posted table price only. Desk fill may apply hermit/epic/rank modifiers (T3 pane copy).
+  const prices = ctx && ctx.world && ctx.world.prices && typeof ctx.world.prices === 'object'
+    ? ctx.world.prices
+    : null;
+  if (prices && Object.hasOwn(prices, key)) {
+    const n = num(prices[key]);
+    if (n !== null) return n;
+  }
+  if (Object.hasOwn(COMMODITIES, key)) {
+    const n = num(COMMODITIES[key] && COMMODITIES[key].base);
+    if (n !== null) return n;
+  }
+  return 0;
+}
+
+function peekFill(ctx, key, buying) {
+  const desk = ctx && ctx.stationDesk;
+  if (!desk || typeof desk.peekFillUnit !== 'function') return null;
+  try {
+    const n = desk.peekFillUnit(key, buying);
+    if (typeof n === 'number' && Number.isFinite(n)) return n;
+  } catch {
+    // omit
+  }
+  return null;
+}
+
+function marketBlock(ctx, docked, service) {
+  if (!docked || service !== 'market') return null;
+  const rows = [];
+  try {
+    const keys = Object.keys(COMMODITIES);
+    for (let i = 0; i < keys.length; i++) {
+      const commodity = keys[i];
+      if (typeof commodity !== 'string' || !commodity) continue;
+      if (reservedName(commodity)) continue;
+      if (!Object.hasOwn(COMMODITIES, commodity)) continue;
+      const com = COMMODITIES[commodity];
+      if (!com || typeof com !== 'object') continue;
+      const row = {
+        commodity,
+        name: str(own(com, 'name')) || commodity,
+        posted: postedPrice(ctx, commodity),
+        hold: holdOf(ctx.cargo, commodity),
+        legal: com.legal === true,
+      };
+      const fillB = peekFill(ctx, commodity, true);
+      const fillS = peekFill(ctx, commodity, false);
+      if (fillB !== null) row.fillBuy = fillB;
+      if (fillS !== null) row.fillSell = fillS;
+      rows.push(row);
+    }
+  } catch {
+    // keep rows collected so far
+  }
+  return { rows };
 }
 
 function navSnap(world) {
@@ -276,12 +366,42 @@ function copyEvents(agent) {
   return out;
 }
 
-function channel(src) {
+function channel(src, paused) {
   const o = src && typeof src === 'object' ? src : null;
+  let reason = o ? str(o.reason) : '';
+  if (reason === 'pause' && paused !== true) reason = '';
   return {
     engaged: !!(o && o.engaged === true),
-    reason: o ? str(o.reason) : '',
+    reason,
   };
+}
+
+function sessionPhase(ctx) {
+  const death = ctx && ctx.deathApi;
+  if (death && typeof death.isOpen === 'function') {
+    try {
+      if (death.isOpen() === true) return 'dead';
+    } catch {
+      /* treat as closed */
+    }
+  }
+  const title = ctx && ctx.titleApi;
+  if (title && typeof title.isOpen === 'function') {
+    try {
+      if (title.isOpen() === true) return 'title';
+    } catch {
+      /* treat as closed */
+    }
+  }
+  const origins = ctx && ctx.originsApi;
+  if (origins && typeof origins.isOpen === 'function') {
+    try {
+      if (origins.isOpen() === true) return 'origin';
+    } catch {
+      /* treat as closed */
+    }
+  }
+  return 'playing';
 }
 
 /**
@@ -306,6 +426,32 @@ export function buildObservation(ctx) {
     const current = ctx.targets && ctx.targets.current ? ctx.targets.current : null;
     const docked = flags.docked === true;
     const hailOpen = flags.hailOpen === true;
+    const service = stationService(ctx);
+
+    const shipSnap = {
+      pos: origin,
+      fwd: object ? fwdFromQuat(object.quaternion) : null,
+      speed: num(ship.speed, 0),
+      throttle: num(input.throttle, 0),
+      weaponGroup: group,
+      hull: playerNum(player, 'hull'),
+      hullMax: playerNum(player, 'hullMax'),
+      screen: playerNum(player, 'screen'),
+      screenMax: playerNum(player, 'screenMax'),
+      shell: playerNum(player, 'shell'),
+      shellMax: playerNum(player, 'shellMax'),
+      engine: playerNum(player, 'engine'),
+      engineMax: playerNum(player, 'engineMax'),
+      power: playerNum(player, 'power'),
+      heat: playerNum(player, 'heat'),
+      overheated: !!(player && player.overheated === true),
+      engineOut: !!(player && player.engineOut === true),
+      burnerActive: ship.burnerActive === true,
+      driftActive: ship.driftActive === true,
+      fleeEngaged: !!(ctx.flee && ctx.flee.engaged === true),
+    };
+    const burnerReadyAt = finiteOrNull(ship.burnerReadyAt);
+    if (burnerReadyAt !== null) shipSnap.burnerReadyAt = burnerReadyAt;
 
     return {
       v: VERSION,
@@ -313,27 +459,8 @@ export function buildObservation(ctx) {
       ok: true,
       error: '',
       agentOptIn: agent ? agent.optIn === true : false,
-      ship: {
-        pos: origin,
-        fwd: object ? fwdFromQuat(object.quaternion) : null,
-        speed: num(ship.speed, 0),
-        throttle: num(input.throttle, 0),
-        weaponGroup: group,
-        hull: playerNum(player, 'hull'),
-        hullMax: playerNum(player, 'hullMax'),
-        screen: playerNum(player, 'screen'),
-        screenMax: playerNum(player, 'screenMax'),
-        shell: playerNum(player, 'shell'),
-        shellMax: playerNum(player, 'shellMax'),
-        engine: playerNum(player, 'engine'),
-        engineMax: playerNum(player, 'engineMax'),
-        power: playerNum(player, 'power'),
-        heat: playerNum(player, 'heat'),
-        overheated: !!(player && player.overheated === true),
-        engineOut: !!(player && player.engineOut === true),
-        burnerActive: ship.burnerActive === true,
-        driftActive: ship.driftActive === true,
-      },
+      session: { phase: sessionPhase(ctx) },
+      ship: shipSnap,
       flags: {
         docked,
         combat: flags.combat === true,
@@ -344,6 +471,7 @@ export function buildObservation(ctx) {
         berthHold: flags.berthHold === true,
         matchSpeed: flags.matchSpeed === true,
         camera: cameraMode(flags),
+        fullStop: input.fullStop === true,
       },
       world: {
         currentSystem: str(world.currentSystem),
@@ -370,10 +498,11 @@ export function buildObservation(ctx) {
         inZone: station.inZone === true,
         name: str(station.name),
         systemName: str(station.systemName),
-        service: stationService(ctx),
+        service,
         services: docked ? DOCK_KEY_SERVICES.slice() : [],
       },
       jobs: jobRows(ctx, docked),
+      market: marketBlock(ctx, docked, service),
       targets: {
         current: describeTarget(ctx, origin, current),
         nearby: nearbyTargets(ctx, origin, current, group),
@@ -382,8 +511,8 @@ export function buildObservation(ctx) {
         open: hailOpen,
         intents: hailIntents(ctx, hailOpen),
       },
-      autopilot: channel(ctx.autopilot),
-      automine: channel(ctx.automine),
+      autopilot: channel(ctx.autopilot, flags.paused === true),
+      automine: channel(ctx.automine, flags.paused === true),
       lastIntent: copyLastIntent(agent && agent.lastIntent),
       events: copyEvents(agent),
     };

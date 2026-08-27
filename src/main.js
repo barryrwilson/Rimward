@@ -33,6 +33,7 @@ import { initJump } from './game/jump.js';
 import { initNav } from './game/nav.js';
 import { initAutopilot } from './game/autopilot.js';
 import { initAutomine } from './game/automine.js';
+import { initAgentFlee } from './game/agent-flee.js';
 import { initSave } from './game/save.js';
 import { initSettings } from './systems/settings.js';
 import { initOrigins } from './game/origins.js';
@@ -116,6 +117,7 @@ const systems = [
   initControls,
   initAutopilot,
   initAutomine,
+  initAgentFlee,
   initSettings,
   initBio,
   initShip,

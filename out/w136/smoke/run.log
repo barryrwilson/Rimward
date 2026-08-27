@@ -1,0 +1,6 @@
+[2026-08-26T22:23:13.696Z] vitePort=5188 bridgePort=8877
+[2026-08-26T22:23:14.320Z] vite ready
+[2026-08-26T22:23:16.798Z] token captured
+[2026-08-26T22:23:25.079Z] cdp-probe {"href":"http://127.0.0.1:5188/index.html?agent=1","ready":"interactive","hasRimward":false,"agent":"1","fatal":"","title":"RIMWARD — A Living Frontier"}
+[2026-08-26T22:23:34.600Z] health ready
+[2026-08-26T22:24:00.087Z] teardownPortsFree=true

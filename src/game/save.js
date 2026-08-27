@@ -12,6 +12,8 @@ import {
 import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
 import { sanitizeNav } from './nav.js';
 import { canOpenPlayCard, playSurfaceBlocked, setBerthHold } from '../systems/overlay-policy.js';
+import { noteSessionEvent } from './agent-schema.js';
+import { disengageFlee } from './agent-flee.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -58,9 +60,12 @@ import { canOpenPlayCard, playSurfaceBlocked, setBerthHold } from '../systems/ov
  * - DEATH (§4.4): consumes 'playerDestroyed' → 'Ship lost.' overlay → reload
  *   the last save (or a fresh start at the Freehold station with a new player
  *   state record when no save exists). No corpse run, no insurance. Emits the
- *   commLine 'She limped home.' on recovery. The bio companion survives
+ *   commLine 'She limped home.' on recovery, then authored `recovered`
+ *   { source: 'autosave'|'fresh' }. The bio companion survives
  *   either path (§ Bio companion): reload-from-save leaves her mood
  *   'anxious'; freshStart keeps her, wounded +0.4, mood 'pained', bond +0.02.
+ *   Restore never copies ctx.agent (optIn / ring). recover() appends recovered
+ *   onto the session ring after restore so a world wipe cannot drop it.
  *
  * The snapshot is pure JSON: world.records/recordBanks/incidents/aftermath/
  * markets must stay JSON-plain (they are — world.js/market.js contract).
@@ -1185,6 +1190,7 @@ function healLiveRecords(ctx) {
 
 export function restore(ctx, snap) {
   if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
+  // Session channel: never copy optIn or the event ring from a blob.
   const fromSystem = ctx.world.currentSystem;
   ctx.flags.saveRestored = true; // origins.js: a restore means no origin pick
   for (const k of WORLD_FIELDS) {
@@ -1313,12 +1319,18 @@ export function initSave(ctx) {
   let dead = false;
   let deathTimer = 0;
 
+  ctx.deathApi = {
+    isOpen() { return dead === true; },
+  };
+
   function recover() {
     if (!dead) return;
+    try { disengageFlee(ctx, 'destroyed'); } catch { /* session helm must not block death recovery */ }
     dead = false;
     if (deathTimer) { clearTimeout(deathTimer); deathTimer = 0; }
     overlay.style.display = 'none';
     const snap = loadSnapshot();
+    const source = snap ? 'autosave' : 'fresh';
     if (snap) {
       restore(ctx, snap);
       // Death-recovery aftermath: she remembers the dark (§ Bio companion).
@@ -1330,9 +1342,16 @@ export function initSave(ctx) {
     idleAccum = 0;
     nextDue = IDLE_INTERVAL;
     ctx.emit('commLine', { text: 'She limped home.' });
+    ctx.emit('recovered', { source });
+    try {
+      noteSessionEvent(ctx, { type: 'recovered', t: ctx.world.time, source });
+    } catch {
+      /* session ring must not block death recovery */
+    }
   }
 
   function onPlayerDestroyed() {
+    try { disengageFlee(ctx, 'destroyed'); } catch { /* session helm must not block death overlay */ }
     if (dead) return;
     dead = true;
     overlay.style.display = 'flex';

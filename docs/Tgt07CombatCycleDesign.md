@@ -5,8 +5,8 @@
 | **Title** | RIMWARD TGT-07 combat cycle |
 | **Author** | Wave 130 TGT leftover integrator |
 | **Date** | 2026-08-26 |
-| **Status** | Wave 130 markdown only. Leftover **REAL**. Named serial **PR1**. Merge law: shared-contract.md wins. |
-| **Wave** | 130 — PR1 named only (`cycleTarget` hostiles-first then range). KeyT stays the cycle key. No `src/`. |
+| **Status** | Wave 136 PR1 implemented. Leftover **REAL**. Named serial **PR1**. Merge law: shared-contract.md wins. |
+| **Wave** | 136 — PR1 KeyT hostiles-first then range (`cycleTarget`). KeyT stays the cycle key. |
 | **Owner request** | Inbox P2 TGT leftover: Sort the T target cycle hostiles-first during combat, or add a “target my attacker” key. Census live `cycleTarget`, KeyT, TGT-03 warnings, KeyV, hostile flags, Q-ship cover. Code wins. If KeyT already cycles hostiles-first while a hostile is in envelope **or** a dedicated attacker-lock binding already exists, freeze leftover **CONSUME** and named serial **none**. Census: **not** live. Freeze leftover **REAL** and name later serial **PR1**. Prefer changing cycle **order** over a new key. One law in PR1. TGT-06 remaining leftover is **CONSUME** — this inbox item is a **new hole** after that census. |
 | **Merge law** | [`out/w130/tgtcycle/shared-contract.md`](../out/w130/tgtcycle/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay. KeyH/J/L/M/P stay. KeyT cycle ships (rocks group 3). KeyV/KeyX/KeyK stay. `state.js` READ-ONLY later. No new WORLD_FIELDS. No UU. No SKU. `innerHTML` forbidden later. Do not invent a hub PPI. Do not invent aim-glass gauges. Incoming fire toast/gauge: cite TGT-03; do not steal. Q-ship cover class stays HUD-02. Station/gate/pod/landmark KeyV locks stay TGT-05. Do not “fix” known REDMARCH `castMatches` flake. Do not steal Agent API `act({name:'target'})` beyond live cycle rules. Do not steal sibling Wave 130 packs (NAV-10 dock approach, MSN-04 job dedup). Do not steal optional PR2s (Agent API, Hail01, HUD-06, Hail02, HUD-07, NAV-09, CTL-03, AI-05, CTL-04). |

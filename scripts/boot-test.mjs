@@ -302,6 +302,7 @@ const { initGate } = await import('../src/systems/gate.js');
 const { initJump } = await import('../src/game/jump.js');
 const { initNav } = await import('../src/game/nav.js');
 const { initAutopilot } = await import('../src/game/autopilot.js');
+const { initAgentFlee } = await import('../src/game/agent-flee.js');
 const { initTraffic } = await import('../src/game/traffic.js');
 const {
   NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
@@ -340,7 +341,7 @@ ctx.systems = SYSTEMS; // mirrors main.js boot line
 const inits = [
   ['title', initTitle],
   ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
-  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['settings', initSettings], ['bio', initBio],
+  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['flee', initAgentFlee], ['settings', initSettings], ['bio', initBio],
   ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
   ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
   ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['agentapi', initAgentApi], ['hud', initHud],
@@ -2803,8 +2804,11 @@ if (!Object.values(w9hermitDataChecks).every(Boolean)) { console.log('WAVE9 HERM
 ctx.world.credits = 5000;
 dockAtCurrentStation('dock verge (wave9 hermit)');
 dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
-// The market table is a flat child list: 5 head cells, then 5 cells per
-// commodity row (name, status, price, hold, actions).
+// The market table is a flat child list: 6 head cells, then 6 cells per
+// commodity row (name, status, BUY, SELL, HOLD, TRADE). Offset 2 is BUY
+// (the buy fill); TRADE buttons live at offset 5, not HOLD at offset 4.
+const MARKET_CELL_BUY = 2;
+const MARKET_CELL_TRADE = 5;
 function marketRowCell(comName, offset) {
   const ov = stationOverlay();
   if (!ov) return null;
@@ -2819,7 +2823,7 @@ function marketRowCell(comName, offset) {
   return null;
 }
 function marketTradeButton(comName, label) {
-  const cell = marketRowCell(comName, 4);
+  const cell = marketRowCell(comName, MARKET_CELL_TRADE);
   if (!cell) return null;
   for (const b of walkDom(cell)) {
     if (b.tagName === 'BUTTON' && b.textContent === label) return b;
@@ -2831,7 +2835,7 @@ const goodwill9 = () => {
   const t = rankFor(ctx.world.reputation.hollow ?? 0).tier; // sell-only goodwill, computed station.js's way
   return t > 0 ? 1 + 0.02 * t : 1;
 };
-const priceCell9 = marketRowCell('Provisions', 2);
+const priceCell9 = marketRowCell('Provisions', MARKET_CELL_BUY);
 const expectedBuy9 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
 const creditsBeforeBuy9 = ctx.world.credits;
 const buyBtn9 = marketTradeButton('Provisions', '+1');
@@ -3612,7 +3616,7 @@ dockAtCurrentStation('dock verge (wave11 keeper service)'); // The Vigil
 const keeperTrustBeforeE = vergeKeeper11?.trust;
 if (vergeKeeper11) vergeKeeper11.trust = 60;
 dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
-const priceCellWaived = marketRowCell('Provisions', 2);
+const priceCellWaived = marketRowCell('Provisions', MARKET_CELL_BUY);
 const expectedWaived = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1));
 const creditsBeforeWaivedBuy = ctx.world.credits;
 const buyBtnWaived = marketTradeButton('Provisions', '+1');
@@ -3623,7 +3627,7 @@ const waivedCharged = creditsBeforeWaivedBuy - ctx.world.credits;
 if (vergeKeeper11) vergeKeeper11.trust = 30;
 dispatchKey('Escape'); // market → services
 dispatchKey('Digit1'); // market
-const priceCellFull = marketRowCell('Provisions', 2);
+const priceCellFull = marketRowCell('Provisions', MARKET_CELL_BUY);
 const expectedFull11 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
 // Sell one back (bought above): epic sellMult × rank goodwill × the hermit
 // premium — the sell side is unchanged by the keeper waiver.
@@ -5290,7 +5294,7 @@ const lamFx24 = epicEffects(ctx, 'lamplighter'); // no EPICS entry — neutral
 const lamPrice24 = ctx.world.prices.provisions ?? COMMODITIES.provisions.base; // station.js priceOf
 const expectedBuy24 = Math.round(lamPrice24 * (lamFx24.buyMult ?? 1) * FACTION_SERVICES.lamplighter.buyMult);
 const lamNoteShown24 = w24NoteShown(stationOverlay(), FACTION_SERVICES.lamplighter.line);
-const priceCellText24 = marketRowCell('Provisions', 2)?.textContent ?? null;
+const priceCellText24 = marketRowCell('Provisions', MARKET_CELL_BUY)?.textContent ?? null;
 const creditsBeforeBuy24 = ctx.world.credits;
 const buyBtn24 = marketTradeButton('Provisions', '+1');
 buyBtn24?.click(); // real path: stub-DOM click → tryTrade('provisions', 1, true)
@@ -25082,6 +25086,1266 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave134 agent-badge:', JSON.stringify(w134));
   if (!Object.values(w134).every(Boolean)) { console.log('WAVE134 AGENT-BADGE FAIL'); errors++; }
+}
+
+// ---- Wave 136 PR1: NAV-10 dock approach, TGT-07 cycle, MSN-04 job dedup ----
+{
+  const here136 = dirname(fileURLToPath(import.meta.url));
+  const src136 = (rel) => readFileSync(join(here136, '..', rel), 'utf8');
+  const hud136 = src136('src/systems/hud.js');
+  const css136 = src136('src/ui/hud.css');
+  const station136 = src136('src/systems/station.js');
+  const state136 = src136('src/game/state.js');
+  const controls136 = src136('src/systems/controls.js');
+  const ctx136src = src136('src/core/ctx.js');
+  const unique136 = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const hasCls136 = (n, cls) => typeof n?.className === 'string' && n.className.split(' ').includes(cls);
+  const hudNodes136 = (root, cls) => root ? [...walkDom(root)].filter((n) => hasCls136(n, cls)) : [];
+  const liveMining136 = (jobs, sysId) => (jobs ?? []).filter((j) => j && j.kind === 'mining'
+    && j.originSystem === sysId && (j.state === 'offered' || j.state === 'accepted'));
+
+  const reticle136 = css136.indexOf('.rw-reticle {');
+  const miningStart136 = station136.indexOf('function pickMiningCommodityExcluding');
+  const miningEnd136 = station136.indexOf('function miningOreName');
+  const miningRegion136 = miningStart136 >= 0 && miningEnd136 > miningStart136
+    ? station136.slice(miningStart136, miningEnd136)
+    : '';
+
+  const w136dockSrc = {
+    slowVerb: hud136.includes("const DOCK_SLOW_VERB = 'Dock · SLOW — approach under 20 u/s'"),
+    slowSpeed: hud136.includes('const DOCK_SLOW_SPEED = 20'),
+    localBand: hud136.includes('const DOCK_SLOW_RANGE_MULT = 3')
+      && hud136.includes('U.DOCK_RANGE * DOCK_SLOW_RANGE_MULT'),
+    promptKeyJ: hud136.includes("pKey = 'J'")
+      && /pVerb = \(!skipSlow && Number\.isFinite\(dockSpd\) && dockSpd > DOCK_SLOW_SPEED\)/.test(hud136),
+    promptDockFallback: hud136.includes("? DOCK_SLOW_VERB")
+      && hud136.includes(": 'Dock';"),
+    selfSlowNode: hud136.includes("el('span', 'rw-slow-lamp is-hidden', selfSpeedVal, 'SLOW')"),
+    matchStays: hud136.includes("el('span', 'rw-match-lamp is-hidden', value, 'MATCH')"),
+    tgtSpeedOnly: /tgtSpeed\.set\(targetSpeedNow\)/.test(hud136)
+      && !/tgtSpeed\.set\([^)]*SLOW/.test(hud136),
+    noMakeSpeedSlowDefault: !/function makeSpeed\([^)]*\)[\s\S]{0,500}rw-slow-lamp/.test(hud136),
+    jumpCopyUntouched: hud136.includes("pVerb = 'Jump to ' + destName"),
+    hideJumpOwns: hud136.includes('gate.inZone && !(station && station.inZone)'),
+    hideHold: hud136.includes('flags.berthHold')
+      && hud136.includes('ctx.flags.berthHold'),
+    hideJumping: hud136.includes('gate.jumping'),
+    homeInset: hud136.includes('const HOME_EDGE_INSET = 108')
+      && hud136.includes('const EDGE_MARGIN = 84'),
+    cssSlow: css136.includes('.rw-slow-lamp')
+      && css136.includes('.rw-slow-lamp.is-hidden { display: none; }')
+      && css136.includes('letter-spacing: 0.04em'),
+    cssMatch: css136.includes('.rw-match-lamp')
+      && /content:\s*'MATCH'|value, 'MATCH'/.test(hud136),
+    hub80: reticle136 >= 0
+      && /width:\s*80px/.test(css136.slice(reticle136, reticle136 + 220)),
+    noInnerHtml: !hud136.includes('innerHTML')
+      && !hud136.includes('insertAdjacentHTML')
+      && !hud136.includes('document.write'),
+    noToastSlow: !/pushToast\([^)]*SLOW/.test(hud136),
+    noPausedWrite: !/flags\.paused\s*=/.test(hud136),
+    noStateWrite: state136.includes('DOCK_RANGE: 45')
+      && !state136.includes('DOCK_SLOW'),
+    noStationEdit: !station136.includes('rw-slow-lamp')
+      && !station136.includes('DOCK_SLOW'),
+    keyJStays: controls136.includes('pendingDock')
+      && controls136.includes('dockPressed'),
+  };
+
+  let liveSlowVerb = true;
+  let liveDockVerb = true;
+  const hudRoot136 = document.getElementById('hud');
+  const promptVerb136 = hudNodes136(hudRoot136, 'rw-prompt-verb')[0] ?? null;
+  const slowLamp136 = hudNodes136(hudRoot136, 'rw-slow-lamp')[0] ?? null;
+  const savedDock136h = ctx.flags.docked === true;
+  const savedPause136h = ctx.flags.paused === true;
+  const savedHold136h = ctx.flags.berthHold === true;
+  const savedJump136h = ctx.gate?.jumping === true;
+  const savedSpeed136h = ctx.ship?.speed;
+  const savedThrottle136h = ctx.input?.throttle;
+  const savedStop136h = ctx.input?.fullStop === true;
+  const savedPos136h = ctx.ship?.object?.position?.clone?.() ?? null;
+  const savedVel136h = ctx.ship?.velocity?.clone?.() ?? null;
+  try {
+    if (promptVerb136 && ctx.ship?.object?.position && SYSTEMS[ctx.world.currentSystem]?.station?.position) {
+      if (ctx.flags.docked) undockStation();
+      ctx.flags.paused = false;
+      ctx.flags.berthHold = false;
+      if (ctx.gate) ctx.gate.jumping = false;
+      const st136 = SYSTEMS[ctx.world.currentSystem].station.position;
+      const holdHud136 = (spd, throttle, fullStop, label) => {
+        ctx.input.throttle = throttle;
+        ctx.input.fullStop = fullStop;
+        for (let i = 0; i < 15; i++) {
+          ctx.ship.object.position.set(st136[0] + 36, st136[1], st136[2]);
+          if (ctx.ship.velocity) {
+            ctx.ship.velocity.set(spd, 0, 0);
+          }
+          ctx.ship.speed = spd;
+          tick(1, label);
+        }
+      };
+      holdHud136(0, 0, true, 'wave136 hud inzone');
+      if (ctx.station?.inZone === true && ctx.flags.docked !== true) {
+        holdHud136(120, 1, false, 'wave136 hud speed 120');
+        liveSlowVerb = promptVerb136.textContent === "Dock · SLOW — approach under 20 u/s";
+        if (slowLamp136) liveSlowVerb = liveSlowVerb && !slowLamp136.classList.contains('is-hidden');
+        holdHud136(20, 0, true, 'wave136 hud speed 20');
+        liveDockVerb = promptVerb136.textContent === 'Dock';
+        if (slowLamp136) liveDockVerb = liveDockVerb && slowLamp136.classList.contains('is-hidden');
+      }
+    }
+  } finally {
+    ctx.flags.paused = savedPause136h;
+    ctx.flags.berthHold = savedHold136h;
+    if (ctx.gate) ctx.gate.jumping = savedJump136h;
+    if (savedVel136h && ctx.ship?.velocity) ctx.ship.velocity.copy(savedVel136h);
+    if (ctx.ship) ctx.ship.speed = savedSpeed136h;
+    if (ctx.input) {
+      ctx.input.throttle = savedThrottle136h;
+      ctx.input.fullStop = savedStop136h;
+    }
+    if (savedPos136h && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos136h);
+    if (savedDock136h) {
+      if (!ctx.flags.docked) dockAtCurrentStation('wave136 hud restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'wave136 hud restore');
+  }
+
+  const w136dock = { ...w136dockSrc, liveSlowVerb: !!liveSlowVerb, liveDockVerb: !!liveDockVerb };
+  console.log('wave136 dockapproach:', JSON.stringify(w136dock));
+  if (!Object.values(w136dock).every(Boolean)) { console.log('WAVE136 DOCKAPPROACH FAIL'); errors++; }
+
+  const w136tgtSrc = {
+    helpLine: controls136.includes("'T — cycle target (hostiles first in combat)'")
+      && !controls136.includes("'T — cycle target',"),
+    hostileFn: controls136.includes('function isCycleHostile(ref)')
+      && controls136.includes('ref.ai && ref.ai.intent === true'),
+    gateNotCombatFlag: controls136.includes('function cycleTarget(ctx)')
+      && !/function cycleTarget[\s\S]{0,900}flags\.combat/.test(controls136),
+    gatedSort: controls136.includes('const ha = isCycleHostile(a && a.ref) ? 0 : 1')
+      && controls136.includes('cands.sort((a, b) => a.d2 - b.d2)'),
+    wrapLive: controls136.includes('cands[(idx + 1) % cands.length].ref'),
+    oneWalk: controls136.includes('for (const s of ships)')
+      && !controls136.includes('for (const s in ships)')
+      && !controls136.includes('for (const k in ctx.ships)'),
+    noInnerHtml: !controls136.includes('innerHTML'),
+    noNewTracked: controls136.includes("'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV', 'KeyN', 'KeyK', 'KeyJ'")
+      && !controls136.includes('targetAttacker')
+      && !controls136.includes('KeyY'),
+    ctxComment: ctx136src.includes('targetPressed: false, // edge: T (cycle; hostiles first when one is in envelope)'),
+    noClassPierce: !/function isCycleHostile[\s\S]{0,400}classKey/.test(controls136)
+      && !/function isCycleHostile[\s\S]{0,400}coverClass/.test(controls136),
+  };
+
+  let firstHostile = false;
+  let nearestFirst = false;
+  const savedLock136 = ctx.targets.current;
+  const savedShips136 = Array.isArray(ctx.ships) ? ctx.ships.slice() : [];
+  const savedGroup136 = ctx.input.weaponGroup;
+  const savedPause136t = ctx.flags.paused === true;
+  try {
+    const origin136 = ctx.ship?.object?.position;
+    if (origin136 && Array.isArray(ctx.ships)) {
+      ctx.flags.paused = false;
+      ctx.input.weaponGroup = 1;
+      const stub136 = (d2, extra) => ({
+        object: {
+          position: origin136.clone().add(new THREE.Vector3(Math.sqrt(d2), 0, 0)),
+          parent: ctx.scene ?? {},
+        },
+        state: { destroyed: false, radius: 4, name: extra.name },
+        ai: extra.ai ?? {},
+        record: {
+          id: extra.id, name: extra.name, classKey: 'light',
+          faction: 'independent', role: 'trader',
+        },
+      });
+      const near136 = stub136(20, { id: 'w136-near', name: 'W136 NEAR' });
+      const mid136 = stub136(40, { id: 'w136-mid', name: 'W136 MID' });
+      const far136 = stub136(59, { id: 'w136-far', name: 'W136 FAR', ai: { intent: true } });
+      ctx.ships.length = 0;
+      ctx.ships.push(near136, mid136, far136);
+      ctx.targets.current = null;
+      dispatchKey('KeyT');
+      tick(1, 'wave136 cycle hostile');
+      firstHostile = ctx.targets.current === far136;
+      far136.ai.intent = false;
+      ctx.targets.current = null;
+      dispatchKey('KeyT');
+      tick(1, 'wave136 cycle nearest');
+      nearestFirst = ctx.targets.current === near136;
+    }
+  } finally {
+    ctx.flags.paused = savedPause136t;
+    ctx.input.weaponGroup = savedGroup136;
+    if (Array.isArray(ctx.ships)) {
+      ctx.ships.length = 0;
+      for (const s of savedShips136) ctx.ships.push(s);
+    }
+    ctx.targets.current = savedLock136;
+    tick(1, 'wave136 tgt restore');
+  }
+
+  const w136tgt = { ...w136tgtSrc, firstHostile: !!firstHostile, nearestFirst: !!nearestFirst };
+  console.log('wave136 tgtcycle:', JSON.stringify(w136tgt));
+  if (!Object.values(w136tgt).every(Boolean)) { console.log('WAVE136 TGTCYCLE FAIL'); errors++; }
+
+  const w136jobsSrc = {
+    excludeHelper: /function pickMiningCommodityExcluding\(usedSet\)/.test(station136),
+    boundedAttempts: /const attempts = n \+ 2/.test(station136)
+      && /for \(let i = 0; i < n && i < attempts; i\+\+\)/.test(station136),
+    noWhileTruePick: !/function pickMiningCommodityExcluding[\s\S]*?while\s*\(\s*true\s*\)/.test(station136),
+    failClosedCommodities: /function makeMiningJob[\s\S]*?if \(!commodity \|\| !Object\.hasOwn\(COMMODITIES, commodity\)\) return null/.test(station136),
+    needUntouched: /function makeMiningJob[\s\S]*?const need = FERRY_UNITS/.test(station136),
+    slotsCap: /const MINING_SLOTS_PER_SYSTEM = 2/.test(station136),
+    syncOmitBreak: /function syncMiningJobs[\s\S]*?if \(!job\) break/.test(station136),
+    healOffered: /function healOfferedMiningTwins/.test(station136)
+      && /ja\.slot === 1/.test(station136),
+    nextIdKept: /function nextMiningId/.test(station136)
+      && /const id = nextMiningId\(jobs, sysId\)/.test(station136),
+    noInnerHtml: !/innerHTML|insertAdjacentHTML|document\.write/.test(miningRegion136)
+      && !station136.includes('innerHTML')
+      && !station136.includes('insertAdjacentHTML')
+      && !station136.includes('document.write'),
+    uniqueFour: /id: 'bounty-ace'/.test(station136)
+      && /id: 'patrol-lane'/.test(station136)
+      && /id: 'haul-provisions'/.test(station136)
+      && /id: 'ferry-consignment'/.test(station136),
+    digit2Jobs: /DOCK_KEY_SERVICES = Object\.freeze\(\['market', 'jobs'/.test(station136),
+    paintTextContent: /function h\(tag, cls, parent, text\)[\s\S]{0,220}textContent/.test(station136)
+      && !/function renderJobs[\s\S]{0,2500}innerHTML/.test(station136),
+    noWhileTrue: !/while\s*\(\s*true\s*\)/.test(station136),
+  };
+
+  let uniqueLive136 = false;
+  let uniqueCommod136 = false;
+  let healedTwins136 = false;
+  let uniqueAfterHeal136 = false;
+  const prevSys136 = ctx.world.currentSystem;
+  const prevDock136 = ctx.flags.docked;
+  const jobsArr136 = Array.isArray(ctx.world.jobs) ? ctx.world.jobs : null;
+  const savedJobs136 = jobsArr136 ? jobsArr136.map((j) => ({ ...j })) : null;
+  try {
+    if (ctx.flags.docked) undockStation();
+    ctx.world.currentSystem = 'freehold';
+    if (prevSys136 !== 'freehold') ctx.emit('systemLoaded', { to: 'freehold' });
+    tick(2, 'wave136 warp freehold');
+    dockAtCurrentStation('wave136 dock freehold');
+    dispatchKey('Digit2');
+    tick(2, 'wave136 jobs');
+    const mines136 = liveMining136(ctx.world.jobs, 'freehold');
+    const commod136 = mines136.map((j) => j.commodity);
+    uniqueLive136 = unique136.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+    uniqueCommod136 = commod136.length === new Set(commod136).size;
+
+    dispatchKey('Escape');
+    tick(1, 'wave136 jobs back for heal');
+    const jobsLive136 = ctx.world.jobs;
+    if (Array.isArray(jobsLive136)) {
+      for (let i = jobsLive136.length - 1; i >= 0; i--) {
+        const j = jobsLive136[i];
+        if (j && j.kind === 'mining' && j.originSystem === 'freehold'
+          && (j.state === 'offered' || j.state === 'accepted')) {
+          jobsLive136.splice(i, 1);
+        }
+      }
+      jobsLive136.push(
+        {
+          id: 'mine-freehold-8', kind: 'mining', slot: 0, originSystem: 'freehold',
+          commodity: 'rawOre', title: 'Mine raw ore', detail: 'w136 twin',
+          reward: 0, need: 4, progress: 0, state: 'offered',
+        },
+        {
+          id: 'mine-freehold-9', kind: 'mining', slot: 1, originSystem: 'freehold',
+          commodity: 'rawOre', title: 'Mine raw ore', detail: 'w136 twin',
+          reward: 0, need: 4, progress: 0, state: 'offered',
+        },
+      );
+    }
+    dispatchKey('Digit2');
+    tick(2, 'wave136 jobs heal');
+    const healed136 = liveMining136(ctx.world.jobs, 'freehold');
+    const healedCommod136 = healed136.map((j) => j.commodity);
+    healedTwins136 = healedCommod136.length === new Set(healedCommod136).size
+      && !(healed136.length === 2 && healed136.every((j) => j.commodity === 'rawOre'));
+    uniqueAfterHeal136 = unique136.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+  } finally {
+    const restoreJobs136 = Array.isArray(ctx.world.jobs) ? ctx.world.jobs : jobsArr136;
+    if (restoreJobs136 && savedJobs136) {
+      restoreJobs136.length = 0;
+      for (const j of savedJobs136) restoreJobs136.push(j);
+    }
+    dispatchKey('Escape');
+    tick(1, 'wave136 jobs back');
+    if (ctx.flags.docked) undockStation();
+    if (prevSys136 && prevSys136 !== 'freehold') {
+      ctx.world.currentSystem = prevSys136;
+      ctx.emit('systemLoaded', { to: prevSys136 });
+      tick(2, 'wave136 restore sys');
+    }
+    if (prevDock136) dockAtCurrentStation('wave136 restore dock');
+  }
+
+  const w136jobs = {
+    ...w136jobsSrc,
+    uniqueLive: !!uniqueLive136,
+    uniqueCommod: !!uniqueCommod136,
+    healedTwins: !!healedTwins136,
+    uniqueAfterHeal: !!uniqueAfterHeal136,
+  };
+  console.log('wave136 jobdedup:', JSON.stringify(w136jobs));
+  if (!Object.values(w136jobs).every(Boolean)) { console.log('WAVE136 JOBDEDUP FAIL'); errors++; }
+}
+
+// ---- Wave 138 PR1: MSN-05 contract-to-rock match (oreguide) ----
+{
+  const here138 = dirname(fileURLToPath(import.meta.url));
+  const src138 = (rel) => readFileSync(join(here138, '..', rel), 'utf8');
+  const hud138 = src138('src/systems/hud.js');
+  const controls138 = src138('src/systems/controls.js');
+  const helper138 = src138('src/game/mining-ore-keys.js');
+  const station138 = src138('src/systems/station.js');
+  const save138 = src138('src/game/save.js');
+  const agentApi138 = src138('src/systems/agent-api.js');
+  const unique138 = ['bounty-ace', 'patrol-lane', 'haul-provisions', 'ferry-consignment'];
+  const hasCls138 = (n, cls) => typeof n?.className === 'string' && n.className.split(' ').includes(cls);
+  const hudNodes138 = (root, cls) => root ? [...walkDom(root)].filter((n) => hasCls138(n, cls)) : [];
+  const beltMineStart138 = hud138.indexOf('function beltMineDist');
+  const beltMineEnd138 = hud138.indexOf('function toastLingerHides');
+  const beltMineRegion138 = beltMineStart138 >= 0 && beltMineEnd138 > beltMineStart138
+    ? hud138.slice(beltMineStart138, beltMineEnd138)
+    : '';
+  const cycleStart138 = controls138.indexOf('function collectCycleCands');
+  const cycleEnd138 = controls138.indexOf('function isCycleHostile');
+  const cycleRegion138 = cycleStart138 >= 0 && cycleEnd138 > cycleStart138
+    ? controls138.slice(cycleStart138, cycleEnd138)
+    : '';
+  const cueStart138 = hud138.indexOf('// Dock / Jump / Hail / Target win.');
+  const cueEnd138 = hud138.indexOf("pKey = 'V'; pVerb = 'Lock'");
+  const cueRegion138 = cueStart138 >= 0 && cueEnd138 > cueStart138
+    ? hud138.slice(cueStart138, cueEnd138)
+    : '';
+
+  const w138src = {
+    helperKeys: helper138.includes('export function acceptedMiningOreKeys')
+      && helper138.includes("job.kind !== 'mining'")
+      && helper138.includes("job.state !== 'accepted'")
+      && helper138.includes('Object.hasOwn(ORE_TYPES')
+      && helper138.includes('Object.hasOwn(COMMODITIES'),
+    cycleFilter: cycleRegion138.includes('acceptedMiningOreKeys')
+      && cycleRegion138.includes('fieldHasMatchingOre')
+      && cycleRegion138.includes('rockMatchesOreKeys'),
+    cueNamed: cueRegion138.includes("Mine · '")
+      && cueRegion138.includes("Mine · belt '")
+      && cueRegion138.includes('oreName'),
+    beltMatchGated: beltMineRegion138.includes('acceptedMiningOreKeys')
+      && beltMineRegion138.includes('rockMatchesOreKeys')
+      && beltMineRegion138.includes('workN'),
+    lockCard: hud138.includes("name = 'ASTEROID'")
+      && hud138.includes("meta = oreName + ' · H' + hardness + ' · ' + Math.round(target.ore) + 'u left · ' + dist + 'u'"),
+    mineBlocked: hud138.includes("case 'mineBlocked':")
+      && hud138.includes("return { text: '▲ ' + (e.line ?? 'The head cannot bite this rock.'), cls: 'warn' }"),
+    matchWord: hud138.includes("el('span', 'rw-match-lamp is-hidden', value, 'MATCH')"),
+    tgt07: controls138.includes('function isCycleHostile(ref)')
+      && controls138.includes('ref.ai && ref.ai.intent === true')
+      && controls138.includes('const ha = isCycleHostile(a && a.ref) ? 0 : 1'),
+    uniqueFour: /id: 'bounty-ace'/.test(station138)
+      && /id: 'patrol-lane'/.test(station138)
+      && /id: 'haul-provisions'/.test(station138)
+      && /id: 'ferry-consignment'/.test(station138),
+    digit2Jobs: /DOCK_KEY_SERVICES = Object\.freeze\(\['market', 'jobs'/.test(station138),
+    sanitizeCap: /const JOBS_SANITIZE_MAX = 4\s*\n/.test(save138),
+    noWorldFields: !helper138.includes('WORLD_FIELDS')
+      && !cycleRegion138.includes('WORLD_FIELDS')
+      && !beltMineRegion138.includes('WORLD_FIELDS'),
+    noInnerHtml: !helper138.includes('innerHTML')
+      && !helper138.includes('insertAdjacentHTML')
+      && !helper138.includes('document.write')
+      && !cycleRegion138.includes('innerHTML')
+      && !cueRegion138.includes('innerHTML')
+      && cueRegion138.includes('pVerb'),
+    noLockOre: !agentApi138.includes('lockOre') && !helper138.includes('lockOre'),
+    noFieldMarker: !helper138.includes('InstancedMesh')
+      && !helper138.includes('scene.add')
+      && !cycleRegion138.includes('chart ore'),
+    noStateWrite: !helper138.includes('ctx.world.') || helper138.includes('world.jobs'),
+    cueTextContent: hud138.includes('promptVerb.textContent = pVerb'),
+  };
+
+  const { acceptedMiningOreKeys: oreKeys138 } = await import('../src/game/mining-ore-keys.js');
+  let unknownNoThrow = false;
+  try {
+    oreKeys138(null);
+    oreKeys138({ world: { currentSystem: '__proto__', jobs: [{ kind: 'mining', state: 'accepted', originSystem: '__proto__', commodity: '__proto__' }] } });
+    oreKeys138({ world: { currentSystem: 'constructor', jobs: 'nope' } });
+    const k = oreKeys138({
+      world: {
+        currentSystem: ctx.world.currentSystem,
+        jobs: [{
+          kind: 'mining', state: 'accepted',
+          originSystem: ctx.world.currentSystem,
+          commodity: '__proto__',
+        }],
+      },
+    });
+    unknownNoThrow = k instanceof Set && k.size === 0;
+  } catch {
+    unknownNoThrow = false;
+  }
+
+  let cycleRaw = false;
+  let cueRaw = false;
+  let cycleToday = false;
+  let cueToday = false;
+  let cycleEmptyMatch = false;
+  let cueEmptyMatch = false;
+  let cueUnion = false;
+  let uniqueLive138 = false;
+  let cueRawText = '';
+  let cueTodayText = '';
+  let cueGoneText = '';
+  let cueUnionText = '';
+  const promptVerb138 = hudNodes138(document.getElementById('hud'), 'rw-prompt-verb')[0] ?? null;
+
+  const savedSys138 = ctx.world.currentSystem;
+  const savedDock138 = ctx.flags.docked === true;
+  const savedPause138 = ctx.flags.paused === true;
+  const savedGroup138 = ctx.input.weaponGroup;
+  const savedLock138 = ctx.targets.current;
+  const savedPos138 = ctx.ship?.object?.position?.clone?.() ?? null;
+  const savedVel138 = ctx.ship?.velocity?.clone?.() ?? null;
+  const savedSpeed138 = ctx.ship?.speed;
+  const savedThrottle138 = ctx.input?.throttle;
+  const savedStop138 = ctx.input?.fullStop === true;
+  const savedShips138 = Array.isArray(ctx.ships) ? ctx.ships.slice() : [];
+  const jobsArr138 = Array.isArray(ctx.world.jobs) ? ctx.world.jobs : null;
+  const savedJobs138 = jobsArr138 ? jobsArr138.map((j) => ({ ...j })) : null;
+  const astObj138 = ctx.asteroids;
+  const origList138 = astObj138 && astObj138.list;
+  const savedGateZone138 = ctx.gate?.inZone === true;
+  const savedGateTo138 = ctx.gate?.nearTo;
+
+  try {
+    ctx.flags.paused = false;
+    if (ctx.flags.docked) undockStation();
+    ctx.input.weaponGroup = 3;
+    ctx.targets.current = null;
+    if (ctx.gate) {
+      ctx.gate.inZone = false;
+      ctx.gate.nearTo = null;
+    }
+    const origin138 = ctx.ship?.object?.position;
+    const sys138 = ctx.world.currentSystem;
+    uniqueLive138 = unique138.every((id) => (ctx.world.jobs ?? []).some((j) => j.id === id));
+    if (origin138 && origList138 && Object.hasOwn(SYSTEMS, sys138)) {
+      origin138.set(8000, 0, 0);
+      if (ctx.ship.velocity) ctx.ship.velocity.set(0, 0, 0);
+      ctx.ship.speed = 0;
+      if (Array.isArray(ctx.ships)) ctx.ships.length = 0;
+      const rock138 = (dist, commodity, ore) => ({
+        id: -1,
+        position: origin138.clone().add(new THREE.Vector3(dist, 0, 0)),
+        radius: 4,
+        ore,
+        commodity,
+        oreKey: commodity,
+        hardness: 1,
+      });
+      const setJobs138 = (rows) => {
+        const jobs = ctx.world.jobs;
+        if (!Array.isArray(jobs)) return;
+        jobs.length = 0;
+        for (const j of rows) jobs.push(j);
+      };
+      const mineJob138 = (commodity, state) => ({
+        id: 'w138-mine-' + commodity + '-' + state,
+        kind: 'mining',
+        slot: 0,
+        originSystem: sys138,
+        commodity,
+        title: 'Mine ' + (COMMODITIES[commodity]?.name ?? commodity),
+        detail: 'w138',
+        reward: 0,
+        need: 4,
+        progress: 0,
+        state,
+      });
+      const hudSys138 = systems.find((row) => row[0] === 'hud')?.[1];
+      const park138 = () => {
+        ctx.targets.current = null;
+        ctx.input.weaponGroup = 3;
+        ctx.input.throttle = 0;
+        ctx.input.fullStop = true;
+        if (ctx.gate) {
+          ctx.gate.inZone = false;
+          ctx.gate.nearTo = null;
+        }
+        if (ctx.station) ctx.station.inZone = false;
+        if (Array.isArray(ctx.ships)) ctx.ships.length = 0;
+        origin138.set(8000, 0, 0);
+        if (ctx.ship.velocity) ctx.ship.velocity.set(0, 0, 0);
+        ctx.ship.speed = 0;
+      };
+      const tickCue138 = () => {
+        park138();
+        if (hudSys138 && typeof hudSys138.update === 'function') hudSys138.update(1, ctx);
+        return promptVerb138 ? promptVerb138.textContent : '';
+      };
+      const firstRock138 = (label) => {
+        ctx.targets.current = null;
+        dispatchKey('KeyT');
+        tick(1, label);
+        return ctx.targets.current;
+      };
+
+      const field138 = SYSTEMS[sys138] && SYSTEMS[sys138].field;
+      let workFrac138 = field138 && Number.isFinite(field138.workFrac) ? field138.workFrac : 0.6;
+      if (workFrac138 < 0) workFrac138 = 0;
+      if (workFrac138 > 1) workFrac138 = 1;
+      const workN138 = Math.min(3, Math.ceil(workFrac138 * 3));
+
+      setJobs138([mineJob138('rawOre', 'accepted')]);
+      astObj138.list = [
+        rock138(200, 'rawOre', 8),
+        rock138(20, 'brineIce', 8),
+        rock138(30, 'rawOre', 8),
+      ];
+      const lockRaw = firstRock138('wave138 oreguide cycle raw');
+      cycleRaw = !!(lockRaw && lockRaw.commodity === 'rawOre');
+      cueRawText = tickCue138();
+      const expectRawN = workN138 < 3 ? 200 : 30;
+      cueRaw = cueRawText === ('Mine · Raw ore ' + expectRawN + 'u');
+
+      setJobs138([mineJob138('rawOre', 'offered')]);
+      astObj138.list = [
+        rock138(40, 'brineIce', 8),
+        rock138(80, 'slagIron', 8),
+        rock138(120, 'rawOre', 8),
+      ];
+      const lockToday = firstRock138('wave138 oreguide cycle today');
+      cycleToday = !!(lockToday && lockToday.commodity === 'brineIce');
+      cueTodayText = tickCue138();
+      cueToday = cueTodayText === 'Mine · belt 40u';
+
+      setJobs138([mineJob138('rawOre', 'accepted')]);
+      astObj138.list = [
+        rock138(40, 'brineIce', 8),
+        rock138(80, 'slagIron', 8),
+        rock138(120, 'rawOre', 0),
+      ];
+      const lockGone = firstRock138('wave138 oreguide cycle empty');
+      cycleEmptyMatch = !!(lockGone && lockGone.commodity === 'brineIce');
+      cueGoneText = tickCue138();
+      cueEmptyMatch = cueGoneText === 'Mine · belt 40u';
+
+      setJobs138([
+        mineJob138('rawOre', 'accepted'),
+        { ...mineJob138('livingRock', 'accepted'), slot: 1, id: 'w138-mine-livingRock-accepted' },
+      ]);
+      astObj138.list = [
+        rock138(90, 'livingRock', 8),
+        rock138(140, 'rawOre', 8),
+        rock138(20, 'brineIce', 8),
+      ];
+      cueUnionText = tickCue138();
+      cueUnion = cueUnionText === 'Mine · Living rock 90u';
+
+      astObj138.list = [
+        rock138(25, '__proto__', 8),
+        rock138(35, 'notAnOre', 8),
+        rock138(70, 'rawOre', 8),
+      ];
+      setJobs138([mineJob138('rawOre', 'accepted')]);
+      const lockUnk = firstRock138('wave138 oreguide cycle unknown');
+      unknownNoThrow = unknownNoThrow && !!(lockUnk && lockUnk.commodity === 'rawOre');
+    }
+  } finally {
+    ctx.flags.paused = savedPause138;
+    ctx.input.weaponGroup = savedGroup138;
+    ctx.targets.current = savedLock138;
+    if (ctx.gate) {
+      ctx.gate.inZone = savedGateZone138;
+      ctx.gate.nearTo = savedGateTo138;
+    }
+    if (savedVel138 && ctx.ship?.velocity) ctx.ship.velocity.copy(savedVel138);
+    if (ctx.ship) ctx.ship.speed = savedSpeed138;
+    if (ctx.input) {
+      ctx.input.throttle = savedThrottle138;
+      ctx.input.fullStop = savedStop138;
+    }
+    if (savedPos138 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos138);
+    if (Array.isArray(ctx.ships)) {
+      ctx.ships.length = 0;
+      for (const s of savedShips138) ctx.ships.push(s);
+    }
+    if (astObj138 && origList138) astObj138.list = origList138;
+    const restoreJobs138 = Array.isArray(ctx.world.jobs) ? ctx.world.jobs : jobsArr138;
+    if (restoreJobs138 && savedJobs138) {
+      restoreJobs138.length = 0;
+      for (const j of savedJobs138) restoreJobs138.push(j);
+    }
+    if (ctx.world.currentSystem !== savedSys138 && savedSys138) {
+      ctx.world.currentSystem = savedSys138;
+      ctx.emit('systemLoaded', { to: savedSys138 });
+      tick(2, 'wave138 oreguide restore sys');
+    }
+    if (savedDock138) {
+      if (!ctx.flags.docked) dockAtCurrentStation('wave138 oreguide restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'wave138 oreguide restore');
+  }
+
+  const w138 = {
+    ...w138src,
+    cycleRaw: !!cycleRaw,
+    cueRaw: !!cueRaw,
+    cycleToday: !!cycleToday,
+    cueToday: !!cueToday,
+    cycleEmptyMatch: !!cycleEmptyMatch,
+    cueEmptyMatch: !!cueEmptyMatch,
+    cueUnion: !!cueUnion,
+    uniqueLive: !!uniqueLive138,
+    unknownNoThrow: !!unknownNoThrow,
+  };
+  console.log('wave138 oreguide:', JSON.stringify(w138));
+  console.log('wave138 oreguide cues:', JSON.stringify({
+    cueRawText, cueTodayText, cueGoneText, cueUnionText,
+  }));
+  if (!Object.values(w138).every(Boolean)) { console.log('WAVE138 OREGUIDE FAIL'); errors++; }
+}
+
+// ---- Wave 138 PR1: named afterburner pulse (evade leftover) ----
+{
+  const { COMMAND_NAMES: names138e, isLiveCommand: live138e, isForbiddenName: forbid138e } =
+    await import('../src/game/agent-schema.js');
+  const here138e = dirname(fileURLToPath(import.meta.url));
+  const src138e = (rel) => readFileSync(join(here138e, '..', rel), 'utf8');
+  const bootSrc138e = src138e('scripts/boot-test.mjs');
+  const ctrlSrc138e = src138e('src/systems/controls.js');
+  const apiSrc138e = src138e('src/systems/agent-api.js');
+  const rw138e = globalThis.window?.rimward;
+
+  const savedOpt138e = ctx.agent?.optIn === true;
+  const savedPause138e = ctx.flags.paused === true;
+  const savedHold138e = ctx.flags.berthHold === true;
+  const savedDock138e = ctx.flags.docked === true;
+  const savedPower138e = ctx.player?.power;
+  const savedBurner138e = ctx.ship?.burnerActive === true;
+  const savedReady138e = ctx.ship?.burnerReadyAt;
+  const savedPressed138e = ctx.input?.afterburnerPressed === true;
+  const savedFullStop138e = ctx.input?.fullStop === true;
+  const savedLast138e = ctx.agent?.lastIntent && typeof ctx.agent.lastIntent === 'object'
+    ? { ...ctx.agent.lastIntent }
+    : null;
+  const savedPos138e = ctx.ship?.object?.position?.clone?.() || null;
+  const savedQuat138e = ctx.ship?.object?.quaternion?.clone?.() || null;
+  const savedVel138e = ctx.ship?.velocity?.clone?.() || null;
+  const savedSpeed138e = ctx.ship?.speed;
+  const savedFlee138e = ctx.flee && typeof ctx.flee === 'object'
+    ? { engaged: ctx.flee.engaged === true, until: ctx.flee.until } : null;
+  const savedSys138e = ctx.world && ctx.world.currentSystem;
+
+  let threw138e = false;
+  const namesHave = names138e.includes('afterburner')
+    && !live138e('evade')
+    && !live138e('flee')
+    && !live138e('warp')
+    && forbid138e('warp') === true;
+  const helpLine = ctrlSrc138e.includes("'Space — afterburner'");
+  const oreguideKeep = bootSrc138e.includes('WAVE138 OREGUIDE FAIL')
+    && bootSrc138e.includes('wave138 oreguide:');
+  const publicPulseFour = apiSrc138e.includes("const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock'])")
+    && !/const PULSE_EDGES = new Set\(\[[^\]]*afterburner/.test(apiSrc138e);
+
+  function textsOf138e(node) {
+    return [...walkDom(node)].map((n) => (typeof n.textContent === 'string' ? n.textContent : ''));
+  }
+  function findBadge138e() {
+    for (const n of document.body.children ?? []) {
+      if (!n) continue;
+      const texts = textsOf138e(n);
+      if (n.classList?.contains('rw-agent-badge') || texts.includes('Agent play')) return n;
+    }
+    return null;
+  }
+
+  let queued = false;
+  let edgeFrame = false;
+  let burnerOn = false;
+  let evadeUnknown = false;
+  let fleeUnknown = false;
+  let dockedTok = false;
+  let optInTok = false;
+  let pausedTok = false;
+  let heldTok = false;
+  let teleportForbidden = false;
+  let readyAtFinite = false;
+  let readyAtOmit = false;
+  let lastLine = false;
+  let pulseAliasUnknown = false;
+  let fleeEngaged = false;
+  let fleeFullStopKeep = false;
+  let fleeDeathOff = false;
+  let fleeRecoverOff = false;
+  let fleeTowardStation = false;
+  let fleeNotSunCore = false;
+  let fleeNoTeleport = false;
+  const fleeSrc = src138e('src/game/agent-flee.js').includes('YAW_STEPS')
+    && src138e('src/game/agent-flee.js').includes('U.DOCK_RANGE')
+    && src138e('src/game/agent-flee.js').includes("agentPulse(ctx, 'dock')");
+
+  try {
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    ctx.flags.docked = false;
+    ctx.agent.optIn = true;
+    if (ctx.player) ctx.player.power = 100;
+    if (ctx.ship) {
+      ctx.ship.burnerActive = false;
+      ctx.ship.burnerReadyAt = 0;
+    }
+    if (ctx.input) {
+      ctx.input.afterburnerPressed = false;
+      ctx.input.fullStop = true;
+    }
+    tick(1, 'w138 evade clear');
+
+    let actBurn = null;
+    try { actBurn = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    const notSameTick = ctx.input.afterburnerPressed !== true;
+    tick(1, 'w138 evade pulse');
+    edgeFrame = notSameTick && ctx.input.afterburnerPressed === true;
+    burnerOn = ctx.ship?.burnerActive === true;
+    queued = actBurn?.ok === true && actBurn?.status === 'queued' && actBurn?.token === '';
+    fleeEngaged = ctx.flee?.engaged === true;
+    fleeFullStopKeep = ctx.flee?.engaged === true;
+    try {
+      const badge = findBadge138e();
+      const texts = badge ? textsOf138e(badge) : [];
+      lastLine = texts.includes('Last: afterburner')
+        && ctx.agent?.lastIntent?.name === 'afterburner';
+    } catch { threw138e = true; }
+    tick(1, 'w138 evade clear edge');
+
+    let evadeAct = null;
+    let fleeAct = null;
+    try { evadeAct = rw138e.act({ v: 1, name: 'evade' }); } catch { threw138e = true; }
+    try { fleeAct = rw138e.act({ v: 1, name: 'flee' }); } catch { threw138e = true; }
+    evadeUnknown = evadeAct?.ok === false && evadeAct?.token === 'unknown';
+    fleeUnknown = fleeAct?.ok === false && fleeAct?.token === 'unknown';
+
+    let pulseBurn = null;
+    try { pulseBurn = rw138e.act({ v: 1, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw138e = true; }
+    pulseAliasUnknown = pulseBurn?.ok === false && pulseBurn?.token === 'unknown';
+
+    ctx.flags.docked = true;
+    if (ctx.input) ctx.input.afterburnerPressed = false;
+    let dockAct = null;
+    try { dockAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    tick(1, 'w138 evade docked');
+    dockedTok = dockAct?.ok === false && dockAct?.token === 'docked'
+      && ctx.input.afterburnerPressed !== true;
+    ctx.flags.docked = false;
+
+    ctx.agent.optIn = false;
+    let optAct = null;
+    try { optAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    optInTok = optAct?.ok === false && optAct?.token === 'opt-in';
+    ctx.agent.optIn = true;
+
+    ctx.flags.paused = true;
+    let pauseAct = null;
+    try { pauseAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    pausedTok = pauseAct?.ok === false && pauseAct?.token === 'paused';
+    ctx.flags.paused = false;
+
+    ctx.flags.berthHold = true;
+    let holdAct = null;
+    try { holdAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    heldTok = holdAct?.ok === false && holdAct?.token === 'held';
+    ctx.flags.berthHold = false;
+
+    let telAct = null;
+    try { telAct = rw138e.act({ v: 1, name: 'teleport' }); } catch { threw138e = true; }
+    teleportForbidden = telAct?.ok === false && telAct?.token === 'forbidden';
+
+    const keepReady = ctx.ship?.burnerReadyAt;
+    if (ctx.ship) ctx.ship.burnerReadyAt = 12;
+    let obsFinite = null;
+    try { obsFinite = rw138e.observe(); } catch { threw138e = true; }
+    readyAtFinite = Number.isFinite(obsFinite?.ship?.burnerReadyAt)
+      && obsFinite.ship.burnerReadyAt === 12
+      && !Object.hasOwn(obsFinite, 'npc');
+    if (ctx.ship) ctx.ship.burnerReadyAt = Number.NaN;
+    let obsOmit = null;
+    try { obsOmit = rw138e.observe(); } catch { threw138e = true; }
+    readyAtOmit = !!(obsOmit && obsOmit.ok === true && obsOmit.ship
+      && !Object.hasOwn(obsOmit.ship, 'burnerReadyAt'));
+    if (ctx.ship) ctx.ship.burnerReadyAt = keepReady;
+
+    if (ctx.world.currentSystem !== 'freehold') {
+      ctx.world.currentSystem = 'freehold';
+      ctx.emit('systemLoaded', { to: 'freehold' });
+      tick(2, 'w138 flee freehold');
+    }
+    if (ctx.flags.docked) undockStation();
+    const sun138e = ctx.config?.world?.sunPosition;
+    const st138e = ctx.station?.position || ctx.config?.world?.stationPosition;
+    const spawn138e = ctx.config?.world?.shipSpawn;
+    const obj138e = ctx.ship?.object;
+    if (sun138e && st138e && obj138e && obj138e.position && obj138e.lookAt) {
+      ctx.flags.paused = false;
+      ctx.flags.berthHold = false;
+      ctx.flags.docked = false;
+      ctx.agent.optIn = true;
+      if (ctx.player) ctx.player.power = 100;
+      ctx.ship.burnerActive = false;
+      ctx.ship.burnerReadyAt = 0;
+      ctx.ship.velocity.set(0, 0, 0);
+      ctx.ship.speed = 0;
+      if (spawn138e && Number.isFinite(spawn138e.x)) obj138e.position.copy(spawn138e);
+      else if (savedPos138e) obj138e.position.copy(savedPos138e);
+      {
+        const eye = obj138e.position;
+        const m138e = new THREE.Matrix4();
+        m138e.lookAt(eye, sun138e, new THREE.Vector3(0, 1, 0));
+        obj138e.quaternion.setFromRotationMatrix(m138e);
+      }
+      tick(1, 'w138 flee face sun');
+      const dSun0 = obj138e.position.distanceTo(sun138e);
+      const dSt0 = obj138e.position.distanceTo(st138e);
+      try { rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+      fleeEngaged = fleeEngaged || ctx.flee?.engaged === true;
+      let maxStep = 0;
+      for (let i = 0; i < 180; i++) {
+        const bx = obj138e.position.x;
+        const by = obj138e.position.y;
+        const bz = obj138e.position.z;
+        tick(1, 'w138 flee fly');
+        const step = Math.hypot(
+          obj138e.position.x - bx,
+          obj138e.position.y - by,
+          obj138e.position.z - bz,
+        );
+        if (step > maxStep) maxStep = step;
+      }
+      fleeNoTeleport = maxStep < 12;
+      const dSt1 = obj138e.position.distanceTo(st138e);
+      const dSun1 = obj138e.position.distanceTo(sun138e);
+      const toStx = st138e.x - obj138e.position.x;
+      const toSty = st138e.y - obj138e.position.y;
+      const toStz = st138e.z - obj138e.position.z;
+      const toStLen = Math.hypot(toStx, toSty, toStz) || 1;
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(obj138e.quaternion);
+      const facePad = (fwd.x * toStx + fwd.y * toSty + fwd.z * toStz) / toStLen;
+      fleeTowardStation = dSt1 + 4 < dSt0 || facePad > 0.25;
+      const sys138e = ctx.systems && ctx.world && ctx.systems[ctx.world.currentSystem];
+      const sunR0 = sys138e && Number.isFinite(sys138e.sunRadius) ? sys138e.sunRadius : 50;
+      const heatR = sunR0 * PHY.SUN_HEAT_MULT;
+      fleeNotSunCore = dSun1 > heatR * 1.05;
+    }
+
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    ctx.flags.docked = false;
+    ctx.agent.optIn = true;
+    if (ctx.player) ctx.player.power = 100;
+    if (ctx.input) {
+      ctx.input.afterburnerPressed = false;
+      ctx.input.fullStop = false;
+      ctx.input.strafeX = 0;
+      ctx.input.strafeY = 0;
+      ctx.input.roll = 0;
+      ctx.input.throttleHeld = false;
+      ctx.input.driftHeld = false;
+    }
+    if (ctx.ship) {
+      ctx.ship.burnerActive = false;
+      ctx.ship.burnerReadyAt = 0;
+    }
+    try { rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    tick(1, 'w138 flee death engage');
+    const fleeWasOn138e = ctx.flee?.engaged === true;
+    ctx.emit('playerDestroyed', {});
+    tick(2, 'w138 flee death consume');
+    fleeDeathOff = fleeWasOn138e && ctx.flee?.engaged !== true;
+    if (ctx.flee) {
+      ctx.flee.engaged = true;
+      ctx.flee.until = (ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0) + 30;
+    }
+    dispatchKey('Enter');
+    fleeRecoverOff = ctx.flee?.engaged !== true;
+  } catch {
+    threw138e = true;
+  } finally {
+    ctx.agent.optIn = savedOpt138e;
+    if (savedLast138e) ctx.agent.lastIntent = savedLast138e;
+    ctx.flags.paused = savedPause138e;
+    ctx.flags.berthHold = savedHold138e;
+    ctx.flags.docked = savedDock138e;
+    if (ctx.player && Number.isFinite(savedPower138e)) ctx.player.power = savedPower138e;
+    if (ctx.ship) {
+      ctx.ship.burnerActive = savedBurner138e;
+      ctx.ship.burnerReadyAt = savedReady138e;
+    }
+    if (ctx.input) {
+      ctx.input.afterburnerPressed = savedPressed138e;
+      ctx.input.fullStop = savedFullStop138e;
+    }
+    if (savedVel138e && ctx.ship?.velocity) ctx.ship.velocity.copy(savedVel138e);
+    if (ctx.ship && Number.isFinite(savedSpeed138e)) ctx.ship.speed = savedSpeed138e;
+    if (savedPos138e && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos138e);
+    if (savedQuat138e && ctx.ship?.object?.quaternion) ctx.ship.object.quaternion.copy(savedQuat138e);
+    if (savedFlee138e && ctx.flee) {
+      ctx.flee.engaged = savedFlee138e.engaged === true;
+      ctx.flee.until = savedFlee138e.until;
+      ctx.flee.yaw = 0;
+      ctx.flee.pitch = 0;
+      ctx.flee.throttle = 0;
+    } else if (ctx.flee) {
+      ctx.flee.engaged = false;
+      ctx.flee.until = 0;
+    }
+    if (typeof savedSys138e === 'string' && savedSys138e && ctx.world.currentSystem !== savedSys138e) {
+      ctx.world.currentSystem = savedSys138e;
+      ctx.emit('systemLoaded', { to: savedSys138e });
+      tick(2, 'w138 evade restore sys');
+    }
+    if (savedDock138e) {
+      if (!ctx.flags.docked) dockAtCurrentStation('wave138 evade restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'w138 evade restore');
+  }
+
+  const w138e = {
+    namesHave: !!namesHave,
+    queued: !!queued,
+    edgeFrame: !!edgeFrame,
+    burnerOn: !!burnerOn,
+    evadeUnknown: !!evadeUnknown,
+    fleeUnknown: !!fleeUnknown,
+    dockedTok: !!dockedTok,
+    optInTok: !!optInTok,
+    pausedTok: !!pausedTok,
+    heldTok: !!heldTok,
+    teleportForbidden: !!teleportForbidden,
+    readyAtFinite: !!readyAtFinite,
+    readyAtOmit: !!readyAtOmit,
+    lastLine: !!lastLine,
+    helpLine: !!helpLine,
+    oreguideKeep: !!oreguideKeep,
+    publicPulseFour: !!publicPulseFour,
+    pulseAliasUnknown: !!pulseAliasUnknown,
+    fleeEngaged: !!fleeEngaged,
+    fleeFullStopKeep: !!fleeFullStopKeep,
+    fleeDeathOff: !!fleeDeathOff,
+    fleeRecoverOff: !!fleeRecoverOff,
+    fleeTowardStation: !!fleeTowardStation,
+    fleeNotSunCore: !!fleeNotSunCore,
+    fleeNoTeleport: !!fleeNoTeleport,
+    fleeSrc: !!fleeSrc,
+    noThrow: threw138e === false,
+  };
+  console.log('wave138 evade:', JSON.stringify(w138e));
+  if (!Object.values(w138e).every(Boolean)) { console.log('WAVE138 EVADE FAIL'); errors++; }
+}
+
+// ---- Wave 140 PR1: observe market fillBuy/fillSell vs posted ----
+{
+  const here140 = dirname(fileURLToPath(import.meta.url));
+  const src140 = (rel) => readFileSync(join(here140, '..', rel), 'utf8');
+  const obsSrc140 = src140('src/game/agent-observe.js');
+  const stSrc140 = src140('src/systems/station.js');
+  const bootSrc140 = src140('scripts/boot-test.mjs');
+  const rw140 = globalThis.window?.rimward;
+
+  const savedOpt140 = ctx.agent?.optIn === true;
+  const savedPause140 = ctx.flags.paused === true;
+  const savedHold140 = ctx.flags.berthHold === true;
+  const savedDock140 = ctx.flags.docked === true;
+  const savedSys140 = ctx.world && ctx.world.currentSystem;
+  const savedPos140 = ctx.ship?.object?.position?.clone?.() || null;
+  const savedQuat140 = ctx.ship?.object?.quaternion?.clone?.() || null;
+  const savedVel140 = ctx.ship?.velocity?.clone?.() || null;
+  const savedSpeed140 = ctx.ship?.speed;
+
+  const tradeOff5 = MARKET_CELL_TRADE === 5
+    && bootSrc140.includes('const MARKET_CELL_TRADE = 5')
+    && stSrc140.includes("h('div', 'market-head market-head-actions', table, 'TRADE')");
+  const digit1Market = stSrc140.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'");
+  const noTryTradeObserve = !obsSrc140.includes('tryTrade')
+    && obsSrc140.includes('peekFillUnit')
+    && stSrc140.includes('function peekFillUnit(key, buying)');
+  const noForInPrices = !/for\s*\(\s*(?:const|let|var)\s+\w+\s+in\s+(?:ctx\.)?world\.prices/.test(obsSrc140);
+
+  let threw140 = false;
+  let dockedMarket = false;
+  let fillMatch = false;
+  let fillNePosted = false;
+  let undockNull = false;
+  let jobsNull = false;
+  let liveTradeOff5 = false;
+  let peekHook = false;
+  let dm140 = null;
+  let savedTrust140 = null;
+
+  try {
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    if (ctx.flags.docked) undockStation();
+    travelTo('verge', 'wave140 verge');
+    dockAtCurrentStation('wave140 dock verge');
+    dispatchKey('Digit1');
+    tick(1, 'w140 market');
+
+    const desk140 = ctx.stationDesk;
+    peekHook = !!(desk140 && typeof desk140.peekFillUnit === 'function');
+    dm140 = contactsForSystem(ctx, 'verge').find((c) => c && c.role === 'dockmaster');
+    savedTrust140 = dm140 && typeof dm140.trust === 'number' ? dm140.trust : null;
+    if (dm140 && dm140.trust >= KEEPER_COMP_TRUST) dm140.trust = 0;
+    tick(1, 'w140 hermit buyMult');
+
+    let snap140 = null;
+    try { snap140 = rw140.observe(); } catch { threw140 = true; }
+    const mkt140 = snap140 && snap140.market;
+    const rows140 = mkt140 && Array.isArray(mkt140.rows) ? mkt140.rows : [];
+    const service140 = snap140 && snap140.station && snap140.station.service;
+    dockedMarket = ctx.flags.docked === true
+      && service140 === 'market'
+      && rows140.length > 0
+      && rows140.every((r) => r
+        && typeof r.commodity === 'string'
+        && typeof r.posted === 'number'
+        && Number.isFinite(r.posted)
+        && Number.isFinite(r.fillBuy)
+        && Number.isFinite(r.fillSell));
+
+    let matchOk = peekHook && rows140.length > 0;
+    let sawDiff = false;
+    for (let i = 0; i < rows140.length; i++) {
+      const r = rows140[i];
+      if (!r || typeof r.commodity !== 'string') { matchOk = false; break; }
+      let buy;
+      let sell;
+      try {
+        buy = desk140.peekFillUnit(r.commodity, true);
+        sell = desk140.peekFillUnit(r.commodity, false);
+      } catch { threw140 = true; matchOk = false; break; }
+      if (!(typeof buy === 'number' && Number.isFinite(buy) && r.fillBuy === buy)) matchOk = false;
+      if (!(typeof sell === 'number' && Number.isFinite(sell) && r.fillSell === sell)) matchOk = false;
+      if (r.fillBuy !== r.posted) sawDiff = true;
+    }
+    fillMatch = matchOk === true;
+    fillNePosted = sawDiff === true;
+
+    const tradeCell140 = marketRowCell('Provisions', MARKET_CELL_TRADE);
+    liveTradeOff5 = !!(tradeCell140 && marketTradeButton('Provisions', '+1'));
+
+    dispatchKey('Digit2');
+    tick(1, 'w140 jobs');
+    let snapJobs140 = null;
+    try { snapJobs140 = rw140.observe(); } catch { threw140 = true; }
+    jobsNull = snapJobs140 && snapJobs140.market == null;
+
+    undockStation();
+    let snapUndock140 = null;
+    try { snapUndock140 = rw140.observe(); } catch { threw140 = true; }
+    undockNull = snapUndock140 && snapUndock140.market == null;
+  } catch {
+    threw140 = true;
+  } finally {
+    if (savedTrust140 != null && dm140) dm140.trust = savedTrust140;
+    ctx.agent.optIn = savedOpt140;
+    ctx.flags.paused = savedPause140;
+    ctx.flags.berthHold = savedHold140;
+    if (typeof savedSys140 === 'string' && savedSys140 && ctx.world.currentSystem !== savedSys140) {
+      ctx.world.currentSystem = savedSys140;
+      ctx.emit('systemLoaded', { to: savedSys140 });
+      tick(2, 'w140 restore sys');
+    }
+    if (savedVel140 && ctx.ship?.velocity) ctx.ship.velocity.copy(savedVel140);
+    if (ctx.ship && Number.isFinite(savedSpeed140)) ctx.ship.speed = savedSpeed140;
+    if (savedPos140 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos140);
+    if (savedQuat140 && ctx.ship?.object?.quaternion) ctx.ship.object.quaternion.copy(savedQuat140);
+    if (savedDock140) {
+      if (!ctx.flags.docked) dockAtCurrentStation('wave140 restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'w140 restore');
+  }
+
+  const w140 = {
+    digit1Market: !!digit1Market,
+    tradeOff5: !!tradeOff5,
+    liveTradeOff5: !!liveTradeOff5,
+    peekHook: !!peekHook,
+    noTryTradeObserve: !!noTryTradeObserve,
+    noForInPrices: !!noForInPrices,
+    dockedMarket: !!dockedMarket,
+    fillMatch: !!fillMatch,
+    fillNePosted: !!fillNePosted,
+    jobsNull: !!jobsNull,
+    undockNull: !!undockNull,
+    noThrow: threw140 === false,
+  };
+  console.log('wave140 mktfill:', JSON.stringify(w140));
+  if (!Object.values(w140).every(Boolean)) { console.log('WAVE140 MKTFILL FAIL'); errors++; }
+}
+
+// ---- Wave 140 PR1: MARKET desk wrap + player subtitle + skip ----
+{
+  const here140d = dirname(fileURLToPath(import.meta.url));
+  const src140d = (rel) => readFileSync(join(here140d, '..', rel), 'utf8');
+  const css140d = src140d('src/ui/screens.css');
+  const st140d = src140d('src/systems/station.js');
+
+  function cssBlock140d(src, sel) {
+    const needle = `${sel} {`;
+    const i = src.indexOf(needle);
+    if (i < 0) return '';
+    const start = src.indexOf('{', i);
+    const end = src.indexOf('}', start);
+    return start >= 0 && end > start ? src.slice(start + 1, end) : '';
+  }
+  const actCss140d = cssBlock140d(css140d, '.market-actions');
+  const panelCss140d = cssBlock140d(css140d, '.screen-panel');
+  const wrapCss = /\bflex-wrap:\s*wrap\b/.test(actCss140d)
+    && /\bdisplay:\s*flex\b/.test(actCss140d)
+    && /\bgap:\s*6px\b/.test(actCss140d)
+    && !/\boverflow-x\s*:/.test(actCss140d);
+  const tradeTrack = css140d.includes('minmax(10em, 1.7fr)');
+  const panelMin = /\bmin-width:\s*560px\b/.test(panelCss140d);
+  const digit1Market = st140d.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'");
+  const qwas = st140d.includes("if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyA' || code === 'KeyS')")
+    && st140d.includes("tryTrade(COMMODITY_KEYS[ui.marketSel], qty, code === 'KeyQ' || code === 'KeyW')");
+  const subSrc = st140d.includes("h('div', 'screen-sub', panel, 'MARKET — buy price and sell price')")
+    && !st140d.includes('buy and sell fill units');
+  const skipSrc = st140d.includes("typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)")
+    && st140d.includes('typeof com.name === \'string\' && com.name ? com.name : key');
+  const refusalSrc = st140d.includes("'trade refused'");
+
+  const savedOpt140d = ctx.agent?.optIn === true;
+  const savedPause140d = ctx.flags.paused === true;
+  const savedHold140d = ctx.flags.berthHold === true;
+  const savedDock140d = ctx.flags.docked === true;
+  const savedSys140d = ctx.world && ctx.world.currentSystem;
+  const savedPos140d = ctx.ship?.object?.position?.clone?.() || null;
+  const savedQuat140d = ctx.ship?.object?.quaternion?.clone?.() || null;
+  const savedVel140d = ctx.ship?.velocity?.clone?.() || null;
+  const savedSpeed140d = ctx.ship?.speed;
+  const savedProv140d = COMMODITIES.provisions;
+
+  let threw140d = false;
+  let liveSub = false;
+  let liveBtns = false;
+  let skipBad = false;
+  let nameKey = false;
+
+  try {
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    if (ctx.flags.docked) undockStation();
+    travelTo('verge', 'wave140 desk verge');
+    dockAtCurrentStation('wave140 desk dock');
+    dispatchKey('Digit1');
+    tick(1, 'w140 desk market');
+
+    const ov140d = stationOverlay();
+    for (const n of walkDom(ov140d ?? { children: [] })) {
+      if (typeof n.className === 'string' && n.className.includes('screen-sub')) {
+        const low = String(n.textContent || '').toLowerCase();
+        liveSub = low.includes('buy price') && low.includes('sell price') && !low.includes('fill units');
+      }
+    }
+    liveBtns = !!(marketTradeButton('Provisions', '+1')
+      && marketTradeButton('Provisions', '+5')
+      && marketTradeButton('Provisions', '−1')
+      && marketTradeButton('Provisions', '−5'));
+
+    COMMODITIES.provisions = null;
+    dispatchKey('ArrowDown');
+    {
+      let sawProv = false;
+      let sawOther = false;
+      let sawSub = false;
+      const ovSkip = stationOverlay();
+      for (const n of walkDom(ovSkip ?? { children: [] })) {
+        const t = typeof n.textContent === 'string' ? n.textContent : '';
+        const cls = typeof n.className === 'string' ? n.className : '';
+        if (cls.includes('screen-sub')) {
+          const low = t.toLowerCase();
+          if (low.includes('buy price') && low.includes('sell price') && !low.includes('fill units')) sawSub = true;
+        }
+        if (cls.includes('market-cell') && t === 'Provisions') sawProv = true;
+        if (cls.includes('market-cell') && t === 'Refined metals') sawOther = true;
+      }
+      skipBad = !!ovSkip && sawSub && !sawProv && sawOther;
+    }
+    COMMODITIES.provisions = savedProv140d && typeof savedProv140d === 'object'
+      ? { ...savedProv140d, name: '' }
+      : { name: '' };
+    dispatchKey('ArrowUp');
+    {
+      let sawKey = false;
+      for (const n of walkDom(stationOverlay() ?? { children: [] })) {
+        const t = typeof n.textContent === 'string' ? n.textContent : '';
+        const cls = typeof n.className === 'string' ? n.className : '';
+        if (cls.includes('market-cell') && t === 'provisions') sawKey = true;
+      }
+      nameKey = sawKey === true;
+    }
+    COMMODITIES.provisions = savedProv140d;
+    dispatchKey('ArrowDown');
+    tick(1, 'w140 desk rows');
+  } catch {
+    threw140d = true;
+  } finally {
+    COMMODITIES.provisions = savedProv140d;
+    ctx.agent.optIn = savedOpt140d;
+    ctx.flags.paused = savedPause140d;
+    ctx.flags.berthHold = savedHold140d;
+    if (typeof savedSys140d === 'string' && savedSys140d && ctx.world.currentSystem !== savedSys140d) {
+      ctx.world.currentSystem = savedSys140d;
+      ctx.emit('systemLoaded', { to: savedSys140d });
+      tick(2, 'w140 desk restore sys');
+    }
+    if (savedVel140d && ctx.ship?.velocity) ctx.ship.velocity.copy(savedVel140d);
+    if (ctx.ship && Number.isFinite(savedSpeed140d)) ctx.ship.speed = savedSpeed140d;
+    if (savedPos140d && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos140d);
+    if (savedQuat140d && ctx.ship?.object?.quaternion) ctx.ship.object.quaternion.copy(savedQuat140d);
+    if (savedDock140d) {
+      if (!ctx.flags.docked) dockAtCurrentStation('wave140 desk restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'w140 desk restore');
+  }
+
+  const w140d = {
+    wrapCss: !!wrapCss,
+    tradeTrack: !!tradeTrack,
+    panelMin: !!panelMin,
+    digit1Market: !!digit1Market,
+    qwas: !!qwas,
+    subSrc: !!subSrc,
+    skipSrc: !!skipSrc,
+    refusalSrc: !!refusalSrc,
+    liveSub: !!liveSub,
+    liveBtns: !!liveBtns,
+    skipBad: !!skipBad,
+    nameKey: !!nameKey,
+    noThrow: threw140d === false,
+  };
+  console.log('wave140 mktdesk:', JSON.stringify(w140d));
+  if (!Object.values(w140d).every(Boolean)) { console.log('WAVE140 MKTDESK FAIL'); errors++; }
 }
 
 if (errors === 0) {

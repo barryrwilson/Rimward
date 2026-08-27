@@ -5,8 +5,8 @@
 | **Title** | RIMWARD Msn04 job-posting identity |
 | **Author** | Wave 130 Msn04 leftover integrator |
 | **Date** | 2026-08-26 |
-| **Status** | Wave 130 leftover integrator. Named serial **PR1**. Merge law: shared-contract.md wins. |
-| **Wave** | 130 — leftover census + merge law. KeyH/J/L/M/P stay. Digit 2 stays Jobs. |
+| **Status** | Wave 136 PR1 implemented. Merge law: shared-contract.md wins. |
+| **Wave** | 136 — PR1 mining identity uniqueness. KeyH/J/L/M/P stay. Digit 2 stays Jobs. |
 | **Owner request** | Inbox P2 MSN leftover: Deduplicate procedural job postings. Census live mining two-slot fill. Code wins. If the live board already forbids two offered mining (or other renewable) cards with the same player-visible identity (commodity + need + reward + origin) at once, freeze leftover **CONSUME** and named serial **none**. Census: **not** live. Freeze leftover **REAL** and name later serial **PR1**. Unique-four replacement is **not** this pack. Ore-scanner guidance is **not** this pack. |
 | **Merge law** | [`out/w130/jobdedup/shared-contract.md`](../out/w130/jobdedup/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 2 stays Jobs. No new Digit. KeyH hail, KeyJ dock/jump, KeyL berth, KeyM chart, KeyP pause stay. Do not remap. `innerHTML` forbidden later. Jobs rows stay `textContent`. `state.js` READ-ONLY. Default persist **none**. No UU. No SKU. No new WORLD_FIELDS. Overlay mutex CTL-02: hail/chart/berth exclusive; hail/chart/berth **never** write `flags.paused` — **cite only**. Do not retune mining pay. Do not hide unique four. Do not merge ids. Do not add ore-scanner filter (inbox P2 MSN/AST). Do not steal AST-02. Do not steal NAV-10 or TGT-07. Agent API must not become a job-accept cheat. Fail closed: unknown commodity does not throw; sanitize still caps length. Do not “fix” known REDMARCH `castMatches` flake. |

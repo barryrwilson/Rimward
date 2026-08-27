@@ -30,6 +30,14 @@ details.
 6. Verify player-facing changes in the running game. A green harness alone is
    not sufficient for HUD, combat feel, graphics, motion, or traffic behavior.
 
+### After an AI playtest or Orchestrator wave
+
+Write remaining bugs, parked scope, and play-technique lessons into **Idea
+inbox** in the same session. Do not leave them only in chat, session todos, or
+`out/` scratch. Use INBOX or PARKED as the status. Cite the playtest agent and
+the date. Owner lock (2026-08-27): AI play-testing is how this game improves;
+durable next-wave capture is mandatory, not optional.
+
 ### Status labels
 
 - **INBOX** — raw thought that has not been discussed.
@@ -85,12 +93,14 @@ details.
   safe place to stop and understand the current state.
   Wave 125 PR1 `docs/Ctl03BerthFreezeDesign.md`. Session `berthHold`.
   CTL-03 PR2 stills optional.
-- [ ] INBOX (P2, ONBOARDING): Replace the first-minute information dump with a
+- [ ] PLANNED (P2, ONBOARDING): Replace the first-minute information dump with a
   short contextual flight lesson. Immediately after the permanent origin pick,
   the expanded controls encyclopedia and several simultaneous narrative lines
   compete with the ship, station, targets, and reticle. Teach look/turn,
   throttle, target, hail, dock, and chart one at a time, then leave the full
   control reference available on demand.
+  Wave 141 leftover REAL PR1 `docs/Onb01FlightLessonDesign.md`.
+  Collapse CONTROLS by default; six hint steps on the live rail.
 - [x] DONE (P1, HAIL/CONTEXT): Make contextual actions name their subject,
   eligibility, and outcome. Pressing H while a friendly ship was selected did
   not open a visible hail or explain why, while encounter state and Fear
@@ -115,11 +125,13 @@ details.
   systems and route consequences hard to inspect.
   Wave 129 PR1 `docs/Nav09ChartReadabilityDesign.md`. Zoom/pan + filter.
   Dest select stays. Itinerary as leg rows. NAV-09 PR2 stills optional.
-- [ ] INBOX (P2, ORIGINS): Preview the gameplay consequences of each permanent
+- [ ] PLANNED (P2, ORIGINS): Preview the gameplay consequences of each permanent
   origin before confirmation: starting hull and equipment, money/debt, faction
   standings, immediate danger, and recommended experience level. The current
   prose establishes flavor well but does not support an informed permanent
   choice.
+  Wave 141 leftover REAL PR1 `docs/Org01OriginPreviewDesign.md`.
+  Derive preview rows from live ORIGINS. Compact sublines first.
 - [ ] INBOX (P2, CONTROLS/SETTINGS): Expand Settings with mouse sensitivity,
   invert-X/invert-Y, complete key rebinding with conflict detection, and
   separate music/effects/voice/UI volume. The current accessibility toggles and
@@ -172,38 +184,46 @@ checked against the current initiative text before capture.
   selected point of interest) with bearing and distance.
   Wave 127 PR1 `docs/Hud06HomeMarkerDesign.md`. POS HOME + pip +
   chevron 108. Selected POI omit.
-- [ ] PLANNED (P2, NAV/DOCKING): Add docking approach assistance. The J prompt
+- [x] DONE (P2, NAV/DOCKING): Add docking approach assistance. The J prompt
   appears, but there is no approach-speed cue or brake assist, so a cruise-
   speed approach ends in a bounce off the station hull. A "SLOW — approach
   under 20 u/s" cue or an approach governor on J would close the loop. NAV-03
   covers system-to-system autopilot only.
-  Wave 130 PR1 `docs/Nav10DockApproachDesign.md`. HUD cue + self
+  Wave 136 PR1 `docs/Nav10DockApproachDesign.md`. HUD cue + self
   `.rw-slow-lamp`. KeyJ tap. MATCH stays MATCH. Governor PR2 optional.
-- [ ] PLANNED (P2, TGT): Sort the T target cycle hostiles-first during combat,
+- [x] DONE (P2, TGT): Sort the T target cycle hostiles-first during combat,
   or add a "target my attacker" key. While an ace fired from 59 u, T selected
   a friendly hauler, then a neutral freighter, and reached the attacker on
   the third press. TGT-03 lists attacker warnings but not selection priority.
-  Wave 130 PR1 `docs/Tgt07CombatCycleDesign.md`. KeyT hostiles-first
+  Wave 136 PR1 `docs/Tgt07CombatCycleDesign.md`. KeyT hostiles-first
   then range. `ai.intent`. No new key.
-- [ ] PLANNED (P2, MSN): Deduplicate procedural job postings. The Freehold board
+- [x] DONE (P2, MSN): Deduplicate procedural job postings. The Freehold board
   showed two identical "Mine Raw ore, 784 UU" postings as jobs 8 and 9.
   MSN-01 covers replacement of completed jobs, not duplicate generation.
-  Wave 130 PR1 `docs/Msn04JobDedupDesign.md`. Mining-only identity.
-  Digit 2 stays Jobs.
-- [ ] INBOX (P2, MSN/AST): Give mining contracts ore-type guidance. The
+  Wave 136 PR1 `docs/Msn04JobDedupDesign.md`. Mining-only identity.
+  Digit 2 stays Jobs. Other families PR2 optional.
+- [x] DONE (P2, MSN/AST): Give mining contracts ore-type guidance. The
   contract asks for Raw ore, but a rock reveals its type only after a lock,
   one rock at a time (nearest rock was brine ice; next lock slag iron at
   434 u). The refusal toast and lock card are good. Add an ore filter to the
   scanner or attach a field marker to the contract. AST-02 covers finding
   rich regions, not matching a rock to a contract.
-- [ ] INBOX (P2, NAV): Keep a plotted route when the chart closes. A plotted
+  Wave 138 PR1 `docs/Msn05OreGuidanceDesign.md`. Group-3 T-filter +
+  named cue `Mine · {ore} Nu`. MATCH stays MATCH. Digit 2 stays Jobs.
+  Field-marker mesh omit. KeyV still free.
+- [x] DONE (P2, NAV): Keep a plotted route when the chart closes. A plotted
   "Veridian Reach · 1 jump" route was gone after closing and reopening the
   chart without engaging, and the Autopilot button read "plot a destination
   first". A plotted route should persist until cleared or replaced.
-- [ ] INBOX (P2, CONTROLS/SETTINGS): Add a real pause menu. P shows only
+  Wave 137 leftover CONSUME `docs/Nav11RoutePersistDesign.md`.
+  Census: `setOpen(false)` does not `clearRoute`. `world.nav` stays.
+  AP plot-first is idle-only. Playtest dest-drop is stale vs live code.
+- [ ] PLANNED (P2, CONTROLS/SETTINGS): Add a real pause menu. P shows only
   "PAUSED — P to resume"; there is no path to Settings, save, or the title
   screen from inside a run — Settings exist only on the title menu. The
   captured Settings item covers new options, not in-game access.
+  Wave 141 leftover REAL PR1 `docs/Ctl05PauseMenuDesign.md`.
+  ACCESS: RESUME / SETTINGS / BERTH RECORDS / TITLE. KeyP stays.
 - [ ] INBOX (P3, RELIABILITY): Soften the runtime-error screen. An uncaught
   error mid-flight shows "WebSim failed to start" with no reload control and
   no word about the autosave. (The trigger in this playtest was injected test
@@ -227,10 +247,115 @@ checked against the current initiative text before capture.
   Wave 127 PR1 `docs/AgentApiDesign.md`. `window.rimward` observe +
   `ping`/`disable`. Later PR2–PR6 commands / pulse / key fallback /
   badge / loopback. Pad approach is a v1 non-goal.
+  2026-08-27 Claude Fable playtest: observe/act bugs below landed in-repo;
+  pad “approach and dock” is still a v1 non-goal pending owner pick 2B.
 
 Working well and needing no capture: the standing screen, the lock card with
 hardness and required laser, the automine refusal toast, the Ninth Tooth
 demand card, and the autopilot NAV panel with its cancel bar.
+
+### Playtest capture — 2026-08-27 (Claude Fable Agent API live play)
+
+External agent play on the live `window.rimward` handle (`?agent=1`). Fear 5
+Greenhand run: pirates killed the hull twice; death restored a dock autosave;
+market and jobs desks were used; a station ram and a far-pad dock attempt
+failed. An orchestrate pass landed the observe/act bugs marked DONE. Remaining
+items stay INBOX for a later wave. Scratch nits: `out/orch-fable/`.
+
+- [x] DONE (P0, AGENT API): Death was invisible to the agent. `session.phase`
+  stayed `playing` while the game reloaded a dock autosave; cargo and clock
+  were the only clues. Ring now harvests `playerDestroyed` and `recovered`
+  (`source` `autosave`|`fresh`). Phase is `dead` while the overlay is open.
+- [x] DONE (P0, AGENT API): The 16-slot event ring flooded with the same pirate
+  line (“Heave to. Cargo or hull.”) and pushed out death and impact. Ring now
+  collapses repeat `commLine` text+from, caps comm occupancy, and keeps
+  death/hit/impact types.
+- [x] DONE (P0, AGENT API): `input.fullStop` silently killed AP/AM. Observe now
+  exposes `flags.fullStop`. `engageAutopilot` / `engageAutomine` clear the
+  latch through `controls.js`.
+- [x] DONE (P1, AGENT API): Job rows hid the contract (id/kind/state/reward
+  only). Observe now copies commodity, count/units, dest, deadline, mining
+  `need`, and `progress` when present.
+- [x] DONE (P1, AGENT API): No market block in observe while the desk was open.
+  Observe now lists commodity keys, names, posted table prices, hold, and
+  legal when `service === 'market'`. Fill vs posted is a leftover below.
+- [x] DONE (P1, AGENT API): `dock` returned `ok` / `queued` from ~2.8 k u.
+  Out of zone now refuses with token `range` and does not pulse.
+- [x] DONE (P1, AGENT API): Stale hail and docked target used `no-service`.
+  Closed hail now returns `closed`. `selectTarget` while docked returns
+  `docked`.
+- [x] DONE (P1, AGENT API): Station ram dropped shields with no ring event.
+  Agent ring now sanitizes `bodyHit` (`kind`, `speed`, `damage`).
+- [x] DONE (P2, HUD/AGENT): Agent play badge covered PWR, the station range
+  marker, and bottom market rows. Badge pin moved to top-right (`src/style.css`).
+  Manifest/toast overlap remains INBOX.
+- [x] DONE (P2, MARKET): Pane said “posted prices, no spread” while fills
+  differed. BUY/SELL cells now share `tradeFillUnit` with `tryTrade`. Boot-test
+  TRADE offset is 5.
+- [ ] INBOX (P1, AGENT API/NAV): Add a playable outer **pad approach** intent
+  with a brake profile. Fable had to hand-roll a steering loop against
+  `window.__ctx` with synthetic mouse and key events, then rammed the station.
+  Autopilot still flies **system** dests to gates. `dock` is in-zone KeyJ
+  (45 u; 90 u snap). v1 locked this as a non-goal (owner 2A). A later owner
+  pick of **2B** starts a **new** wave; it is not Agent API PR7/PR8. NAV-10 PR1
+  is a human HUD SLOW cue only (`docs/Nav10DockApproachDesign.md`). Do not
+  teleport. Do not add a third helm unless 2B says so.
+  Cite `docs/AgentApiDesign.md` far-pad 2B.
+- [x] DONE (P1, AGENT API/AI): A Fear 5 starter drifter cannot flee under
+  agent control and dies a lot. Fable’s run was a pirate gauntlet; two hull
+  losses. AI-05 starter grace is live, but this agent still could not break
+  off, afterburner-flee, or reach a pad without a hand-rolled loop. Give the
+  outer loop a usable evade/flee path (and/or pace Fear for agent playtests)
+  without a cheat warp.
+  Wave 138 PR1 `docs/AgentApiEvadeDesign.md`. Named
+  `act({ name: 'afterburner' })` Space pulse plus a session flee helm:
+  sample headings, avoid the sun and large solids, run to the station
+  ring, in-zone dock pulse. No teleport. `evade` stays unknown.
+- [x] DONE (P2, AGENT API): Observe market rows expose **posted** table
+  prices (`priceOf` / `world.prices`). Desk fill still applies rank, faction,
+  epic, and hermit modifiers. An agent can still buy/sell on the wrong unit
+  if it trusts JSON posted instead of the pane fill. Add fill buy/sell on the
+  market block, or document that `trade` uses fill and show both.
+  Wave 140 PR1 `docs/AgentApiMarketFillDesign.md`. Observe
+  `fillBuy` / `fillSell` from live `peekFillUnit`. Keep `posted`.
+  No desk rewrite. TRADE offset 5 stays.
+- [x] DONE (P2, HUD/AGENT): After the badge move, `?agent=1` still covers
+  Manifest (UU / FEAR / CARGO) and some toasts at top-right (`z-index` 40 over
+  HUD 10). Offset the badge below Manifest, or narrow it. Do not cover PWR or
+  the range marker again. Do not lower badge `z-index` below the station scrim
+  (20). Cite `out/orch-fable/t2/ui-audit.md`.
+  Wave 140 PR1 `docs/AgentBadgeLayoutDesign.md`. CSS-only
+  `top: 140px`, max-width 148 px, z-index 40, body child.
+- [x] DONE (P3, MARKET/UI): Six-column market TRADE buttons can overflow at
+  the 560 px panel minimum. Wrap `.market-actions` or raise the TRADE min
+  track. Keep Q/W/A/S. Cite `out/orch-fable/t3/ui-audit.md`.
+  Wave 140 PR1 `docs/Mkt01DeskLayoutDesign.md`.
+  One layout law: wrap `.market-actions`. Do not raise the TRADE min
+  track.
+- [x] DONE (P3, MARKET/UI): Subtitle `MARKET — buy and sell fill units` is
+  honest but uses helper jargon. Prefer player words such as buy price and
+  sell price. Cite `out/orch-fable/t3/ui-audit.md`.
+  Wave 140 same pack `docs/Mkt01DeskLayoutDesign.md`. Subtitle
+  `MARKET — buy price and sell price`.
+- [x] DONE (P3, HUD/AGENT): Colorblind and high-contrast body classes do not
+  retint the Agent play badge tokens. Mirror HUD token overrides on
+  `.rw-agent-badge` without moving it under `#hud`. Cite
+  `out/orch-fable/t2/ui-audit.md`.
+  Wave 140 same pack `docs/AgentBadgeLayoutDesign.md`. Okabe-Ito +
+  contrast mirrors on `.rw-agent-badge`.
+
+Play-technique lessons for the next agent run (not product bugs):
+
+- Do not assume `dock` closes from cruise range until 2B exists. Place the
+  hull in 45 u, or fly a human/inner-loop approach.
+- Double-tap F latches `fullStop` and cancels AP/AM until throttle-up or
+  `engageAutopilot` / `engageAutomine`.
+- Read `session.phase` and the ring for `playerDestroyed` / `recovered`
+  after combat. Clock running backwards is a recover clue, not a sim bug.
+- Job `kind` is not the cargo key. Read `commodity`, `need`/`units`, and
+  `destSystem` before `trade`.
+- Pirate `commLine` repeats are collapsed; look for `playerHit` / `bodyHit`
+  / `shieldDown` rather than a full hail log.
 
 ---
 
@@ -726,6 +851,58 @@ HUD-07 deconfliction, NAV-09 chart
 readability. Markdown only. No `src/`.
 Named serial PR1 on each. Optional
 PR2s not stolen.
+
+**Wave 136 first impl landed 2026-08-26:**
+NAV-10 PR1 HUD SLOW cue
+(`docs/Nav10DockApproachDesign.md`).
+TGT-07 PR1 KeyT hostiles-first
+(`docs/Tgt07CombatCycleDesign.md`).
+MSN-04 PR1 mining identity
+(`docs/Msn04JobDedupDesign.md`).
+Kit mutate omit. Aim-glass gauges stay
+off. Optional PR2s not stolen.
+
+**Wave 137 playtest inbox briefs landed
+2026-08-27:** NAV-11 dest keep leftover
+CONSUME (`docs/Nav11RoutePersistDesign.md`).
+MSN-05 ore guidance leftover REAL PR1
+(`docs/Msn05OreGuidanceDesign.md`).
+Agent evade leftover REAL PR1
+(`docs/AgentApiEvadeDesign.md`).
+Markdown only. No `src/`. Pad 2B not
+stolen. Optional PR2s not stolen.
+
+**Wave 139 playtest inbox briefs landed
+2026-08-27:** Agent market fill leftover
+REAL PR1 (`docs/AgentApiMarketFillDesign.md`).
+Agent badge layout leftover REAL PR1
+(`docs/AgentBadgeLayoutDesign.md`).
+Market desk layout leftover REAL PR1
+(`docs/Mkt01DeskLayoutDesign.md`).
+Markdown only. No `src/`. Pad 2B not
+stolen. Optional PR2s not stolen.
+
+**Wave 140 first impl landed 2026-08-27:**
+Agent market fill PR1
+(`docs/AgentApiMarketFillDesign.md`).
+Agent badge layout PR1
+(`docs/AgentBadgeLayoutDesign.md`).
+Market desk layout PR1
+(`docs/Mkt01DeskLayoutDesign.md`).
+Kit mutate omit. Aim-glass gauges stay
+off. Optional PR2s not stolen. Pad 2B
+not stolen.
+
+**Wave 141 playtest inbox briefs landed
+2026-08-27:** Onb01 flight lesson leftover
+REAL PR1 (`docs/Onb01FlightLessonDesign.md`).
+Org01 origin preview leftover REAL PR1
+(`docs/Org01OriginPreviewDesign.md`).
+Ctl05 pause menu leftover REAL PR1
+(`docs/Ctl05PauseMenuDesign.md`).
+Markdown only. No `src/`. Pad 2B not
+stolen. Optional PR2s not stolen.
+Settings expansion not stolen.
 
 ### Experience references
 

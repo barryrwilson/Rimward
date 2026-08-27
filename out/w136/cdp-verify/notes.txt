@@ -1,0 +1,23 @@
+Verifier notes (no Chrome launched).
+
+Launch:
+- spawn args include --remote-debugging-port=0 and --remote-debugging-address=127.0.0.1
+- CDP port comes from DevToolsActivePort after waitDevToolsActivePort
+- --cdp-port is parsed for attach-to-existing only; launch path overwrites cdpPort from the profile file
+- --launch-chrome wait/attach failure: killTree, short stderr, return 1 before startBridge listen
+- attach-to-existing still logs no-ctx and continues (not launch mode)
+
+Page match:
+- pageUrlMatchesGame: protocol + host + port + pathname; query ignored
+- pickMatchingPage with gameUrl: no unrelated-tab fallback
+- attachCdp re-checks live location.href when gameUrl is set
+
+Health:
+- GET /health returns ok, cdpAttached, gameReady, agentOptIn only
+- no bearer required
+- foreign Origin -> 403
+- sendJson has no Access-Control-Allow-Origin
+- assertBindHost refuses 0.0.0.0 and ::
+
+Chrome flag --remote-allow-origins=* is DevTools, not HTTP CORS.
+Launch fail path does not delete the temp user-data-dir (not in spec).

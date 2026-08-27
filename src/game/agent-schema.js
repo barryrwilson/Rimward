@@ -6,6 +6,7 @@
 export const VERSION = 1;
 export const EVENT_CAP = 16;
 export const NEARBY_CAP = 12;
+export const COMM_LINE_CAP = 4;
 
 export const DOCK_KEY_SERVICES = Object.freeze([
   'market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard',
@@ -33,7 +34,10 @@ export const COMMAND_NAMES = Object.freeze([
   'hail',
   'selectTarget',
   'pulse',
+  'afterburner',
   'setWeaponGroup',
+  'startGame',
+  'chooseOrigin',
 ]);
 
 const COMMAND_SET = new Set(COMMAND_NAMES);
@@ -60,7 +64,9 @@ const PR3_LIVE = new Set([
   'pulse',
   'setWeaponGroup',
 ]);
-const LIVE = new Set([...PR1_LIVE, ...PR2_LIVE, ...PR3_LIVE]);
+const SESSION_LIVE = new Set(['startGame', 'chooseOrigin']);
+const EVADE_LIVE = new Set(['afterburner']);
+const LIVE = new Set([...PR1_LIVE, ...PR2_LIVE, ...PR3_LIVE, ...SESSION_LIVE, ...EVADE_LIVE]);
 
 export const FORBIDDEN_NAMES = Object.freeze([
   'teleport',
@@ -95,13 +101,20 @@ export const EVENT_TYPES = Object.freeze([
   'saveBlocked',
   'playerFire',
   'reticleLock',
+  'playerDestroyed',
+  'recovered',
+  'bodyHit',
+]);
+
+const KEEP_RING = new Set([
+  'playerDestroyed', 'recovered', 'playerHit', 'bodyHit', 'shieldDown',
 ]);
 
 const EVENT_TYPE_SET = new Set(EVENT_TYPES);
 
 /** Extra primitive keys copied per authored event type. hailOpened never includes ship. */
 const EVENT_FIELDS = Object.freeze({
-  commLine: Object.freeze(['text', 'from']),
+  commLine: Object.freeze(['text', 'from', 'count']),
   docked: Object.freeze([]),
   undocked: Object.freeze([]),
   hailOpened: Object.freeze(['intents', 'salvage']),
@@ -114,12 +127,15 @@ const EVENT_FIELDS = Object.freeze({
   jumpRequested: Object.freeze(['to']),
   systemLoaded: Object.freeze(['to']),
   playerHit: Object.freeze(['damage', 'family', 'fromAft']),
-  shieldDown: Object.freeze(['layer']),
+  shieldDown: Object.freeze(['layer', 'player', 'actor', 'targetId']),
   milestone: Object.freeze(['id', 'line']),
   originChosen: Object.freeze(['id', 'line']),
   saveBlocked: Object.freeze(['reason']),
   playerFire: Object.freeze(['weapon']),
   reticleLock: Object.freeze(['hit']),
+  playerDestroyed: Object.freeze([]),
+  recovered: Object.freeze(['source']),
+  bodyHit: Object.freeze(['kind', 'speed', 'damage']),
 });
 
 const RESERVED = new Set([
@@ -189,20 +205,20 @@ export function vec3(src) {
     if (x === null || y === null || z === null) return null;
     return [x, y, z];
   }
-  const x = num(Object.hasOwn(src, 'x') ? src.x : null);
-  const y = num(Object.hasOwn(src, 'y') ? src.y : null);
-  const z = num(Object.hasOwn(src, 'z') ? src.z : null);
+  const x = num(src.x);
+  const y = num(src.y);
+  const z = num(src.z);
   if (x === null || y === null || z === null) return null;
   return [x, y, z];
 }
 
-/** Local −Z through a {x,y,z,w} quaternion. No THREE. */
+/** Local −Z through a {x,y,z,w} quaternion. Accessors allowed (THREE getters). */
 export function fwdFromQuat(q) {
   if (!q || typeof q !== 'object') return null;
-  const x = num(Object.hasOwn(q, 'x') ? q.x : null);
-  const y = num(Object.hasOwn(q, 'y') ? q.y : null);
-  const z = num(Object.hasOwn(q, 'z') ? q.z : null);
-  const w = num(Object.hasOwn(q, 'w') ? q.w : null);
+  const x = num(q.x);
+  const y = num(q.y);
+  const z = num(q.z);
+  const w = num(q.w);
   if (x === null || y === null || z === null || w === null) return null;
   const tx = 2 * (y * -1 - z * 0);
   const ty = 2 * (z * 0 - x * -1);
@@ -238,27 +254,33 @@ export function emptyLastIntent() {
 
 export function copyLastIntent(raw) {
   const src = raw && typeof raw === 'object' ? raw : null;
-  return {
+  const out = {
     name: src ? str(Object.hasOwn(src, 'name') ? src.name : '') : '',
     ok: src ? Object.hasOwn(src, 'ok') && src.ok !== false : true,
     error: src ? str(Object.hasOwn(src, 'error') ? src.error : '') : '',
     token: src ? str(Object.hasOwn(src, 'token') ? src.token : '') : '',
     t: src ? num(Object.hasOwn(src, 't') ? src.t : 0, 0) : 0,
   };
+  const status = src ? str(Object.hasOwn(src, 'status') ? src.status : '') : '';
+  if (status) out.status = status;
+  return out;
 }
 
 export function noCtxObservation() {
   return { v: VERSION, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
 }
 
-export function actResult({ ok, error = '', name = '', token = '' }) {
-  return {
+export function actResult({ ok, error = '', name = '', token = '', status = '' }) {
+  const out = {
     v: VERSION,
     ok: ok === true,
     error: str(error),
     name: str(name),
     token: str(token),
   };
+  const st = str(status);
+  if (st) out.status = st;
+  return out;
 }
 
 /**
@@ -282,15 +304,98 @@ export function sanitizeEvent(raw) {
       out.intents = stringList(raw.intents);
       continue;
     }
+    if (type === 'commLine' && key === 'count') {
+      const n = primitiveValue(raw.count);
+      if (typeof n === 'number' && n >= 2) out.count = Math.floor(n);
+      continue;
+    }
+    if (type === 'recovered' && key === 'source') {
+      if (raw.source === 'autosave' || raw.source === 'fresh') out.source = raw.source;
+      continue;
+    }
     const pv = primitiveValue(raw[key]);
     if (pv !== undefined) out[key] = pv;
   }
   return out;
 }
 
+function commCountOf(row) {
+  const n = row && typeof row.count === 'number' && Number.isFinite(row.count) ? row.count : 1;
+  return n >= 1 ? Math.floor(n) : 1;
+}
+
+function dropOldestComm(events) {
+  for (let i = 0; i < events.length; i++) {
+    if (events[i] && events[i].type === 'commLine') {
+      events.splice(i, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function countCommLines(events) {
+  let n = 0;
+  for (let i = 0; i < events.length; i++) {
+    if (events[i] && events[i].type === 'commLine') n++;
+  }
+  return n;
+}
+
 export function pushRing(events, row, cap = EVENT_CAP) {
   if (!Array.isArray(events) || !row) return;
-  events.push(row);
   const limit = Number.isFinite(cap) && cap > 0 ? cap : EVENT_CAP;
-  while (events.length > limit) events.shift();
+
+  if (row.type === 'commLine') {
+    let count = commCountOf(row);
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (!e || e.type !== 'commLine') continue;
+      if (e.text === row.text && e.from === row.from) {
+        count += commCountOf(e);
+        events.splice(i, 1);
+      }
+    }
+    if (count > 1) row.count = count;
+    else if (Object.hasOwn(row, 'count')) delete row.count;
+    if (countCommLines(events) >= COMM_LINE_CAP) dropOldestComm(events);
+  } else if (row.type === 'recovered' || row.type === 'playerDestroyed') {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (!e || e.type !== row.type) continue;
+      if (e.t !== row.t) continue;
+      if (row.type === 'recovered' && e.source !== row.source) continue;
+      events.splice(i, 1);
+      break;
+    }
+  }
+
+  events.push(row);
+  while (events.length > limit) {
+    if (dropOldestComm(events)) continue;
+    let drop = -1;
+    for (let i = 0; i < events.length; i++) {
+      if (!events[i] || !KEEP_RING.has(events[i].type)) {
+        drop = i;
+        break;
+      }
+    }
+    if (drop < 0) drop = 0;
+    events.splice(drop, 1);
+  }
+}
+
+/** Append one authored row onto the session ring. Does not set optIn. */
+export function noteSessionEvent(ctx, raw) {
+  if (!ctx || typeof ctx !== 'object' || !raw || typeof raw !== 'object') return null;
+  const agent = ctx.agent;
+  if (!agent || typeof agent !== 'object') return null;
+  if (!Array.isArray(agent.events)) agent.events = [];
+  const row = sanitizeEvent(raw);
+  if (!row) return null;
+  if (!Object.hasOwn(raw, 't') && ctx.world && Number.isFinite(ctx.world.time)) {
+    row.t = ctx.world.time;
+  }
+  pushRing(agent.events, row, EVENT_CAP);
+  return row;
 }

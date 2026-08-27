@@ -2236,10 +2236,46 @@ function clampJobPay(n) {
   return x > PAY_QUOTED_MAX ? PAY_QUOTED_MAX : x;
 }
 
-function pickMiningCommodity() {
+function pickMiningCommodityExcluding(usedSet) {
   const n = MINING_ORE_KEYS.length;
-  if (n === 0) return 'rawOre';
-  return MINING_ORE_KEYS[(Math.random() * n) | 0];
+  if (n === 0) return null;
+  const used = usedSet && typeof usedSet.has === 'function' ? usedSet : null;
+  const available = [];
+  const attempts = n + 2;
+  for (let i = 0; i < n && i < attempts; i++) {
+    const key = MINING_ORE_KEYS[i];
+    if (used && used.has(key)) continue;
+    if (!Object.hasOwn(COMMODITIES, key)) continue;
+    available.push(key);
+  }
+  if (available.length === 0) return null;
+  return available[(Math.random() * available.length) | 0];
+}
+
+function pickMiningCommodity() {
+  return pickMiningCommodityExcluding(null);
+}
+
+function isAuthoredMiningKey(key) {
+  if (typeof key !== 'string' || !key) return false;
+  for (let i = 0; i < MINING_ORE_KEYS.length; i++) {
+    if (MINING_ORE_KEYS[i] === key) return true;
+  }
+  return false;
+}
+
+function miningSiblingCommodities(jobs, sysId, excludeSlot) {
+  const used = new Set();
+  if (!Array.isArray(jobs)) return used;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || j.kind !== 'mining' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    if (j.slot === excludeSlot) continue;
+    if (!isAuthoredMiningKey(j.commodity)) continue;
+    used.add(j.commodity);
+  }
+  return used;
 }
 
 function nextMiningId(jobs, sysId) {
@@ -2269,9 +2305,13 @@ function miningPayBase(ctx, commodity, need) {
 
 function makeMiningJob(ctx, sysId, slot) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return null;
-  const id = nextMiningId(ctx.world.jobs, sysId);
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return null;
+  const used = miningSiblingCommodities(jobs, sysId, slot);
+  const commodity = pickMiningCommodityExcluding(used);
+  if (!commodity || !Object.hasOwn(COMMODITIES, commodity)) return null;
+  const id = nextMiningId(jobs, sysId);
   if (!id) return null;
-  const commodity = pickMiningCommodity();
   const oreName = COMMODITIES[commodity].name;
   const stationName = SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
   const need = FERRY_UNITS;
@@ -2289,6 +2329,44 @@ function makeMiningJob(ctx, sysId, slot) {
     state: 'offered',
     deadline: ctx.world.time + MINING_DEADLINE,
   };
+}
+
+function healOfferedMiningTwins(ctx, sysId) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const live = [];
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || j.kind !== 'mining' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    live.push(j);
+  }
+  const victims = [];
+  for (let a = 0; a < live.length; a++) {
+    for (let b = a + 1; b < live.length; b++) {
+      if (live[a].commodity !== live[b].commodity) continue;
+      const ja = live[a];
+      const jb = live[b];
+      const aOff = ja.state === 'offered';
+      const bOff = jb.state === 'offered';
+      if (!aOff && !bOff) continue;
+      let victim;
+      if (aOff && bOff) {
+        victim = ja.slot === 1 ? ja : jb.slot === 1 ? jb : jb;
+      } else {
+        victim = aOff ? ja : jb;
+      }
+      if (victim.state === 'offered' && victims.indexOf(victim) < 0) victims.push(victim);
+    }
+  }
+  if (victims.length > 1) {
+    victims.sort((x, y) => (y.slot === 1) - (x.slot === 1));
+  }
+  const cap = MINING_SLOTS_PER_SYSTEM;
+  for (let i = 0; i < victims.length && i < cap; i++) {
+    if (victims[i].state !== 'offered') continue;
+    replaceMiningJob(ctx, victims[i]);
+  }
 }
 
 function syncMiningJobs(ctx, sysId) {
@@ -2312,6 +2390,7 @@ function syncMiningJobs(ctx, sysId) {
     used.add(slot);
     count += 1;
   }
+  healOfferedMiningTwins(ctx, sysId);
 }
 
 function miningSlotOf(job) {
@@ -4606,11 +4685,32 @@ export function initStation(ctx) {
     const dm = contactsForSystem(ctx, currentId).find((c) => c.role === 'dockmaster');
     return dm ? dm.trust : 0;
   }
-  // Wave 9/11: hermit scarcity markup, waived once the local keeper trusts
-  // the pilot. One helper so the PRICE cell and the charge in tryTrade can
-  // never disagree.
   function hermitBuyMult() {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
+  }
+  /** Qty-1 fill in UU. Shared by the market pane and tryTrade. */
+  function tradeFillUnit(key, buying) {
+    const price = priceOf(ctx, key);
+    const fx = epicEffects(ctx, currentDef.faction);
+    if (buying) {
+      return Math.round(price * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
+    }
+    const tier = rankFor(standingRead(ctx.world?.reputation, currentDef.faction)).tier;
+    let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
+    if (currentService) unit *= currentService.sellMult ?? 1;
+    if (currentDef.hermit) unit *= HERMIT.sellMult;
+    if (key === 'restrictedComponents') unit *= fx.restrictedSellMult ?? 1;
+    if (key === 'restrictedComponents' && stationAlwaysTradesRestricted(ctx)) {
+      const people = contactsForSystem(ctx, currentId);
+      for (let i = 0; i < people.length; i++) {
+        const c = people[i];
+        if (c.role === 'fixer' && c.trust >= FIXER_CUT_TRUST) {
+          unit *= FIXER_MARKUP;
+          break;
+        }
+      }
+    }
+    return Math.round(unit);
   }
   function lockerAllowed() {
     if (ui.fenceUnlocked) return true;
@@ -4628,20 +4728,12 @@ export function initStation(ctx) {
       return false;
     }
     const com = COMMODITIES[key];
-    const price = priceOf(ctx, key);
-    const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
     if (!com.legal && !lockerAllowed()) {
       ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
       return false;
     }
     if (buying) {
-      // Wave 9: hermit stations charge scarcity prices (HERMIT.buyMult).
-      // Wave 11: a keeper who trusts the pilot (60+) waives the markup.
-      // Wave 24: the faction service modifier composes multiplicatively AFTER
-      // the epic multiplier (epic first, faction second); hermit applies last
-      // and is authored-only, so the two never stack. The PRICE cell in
-      // renderMarket uses this exact chain (wave-11 agreement precedent).
-      const unit = Math.round(price * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
+      const unit = tradeFillUnit(key, true);
       const cost = unit * qty;
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return false; }
       if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return false; }
@@ -4650,27 +4742,14 @@ export function initStation(ctx) {
       ui.notice = `Bought ${qty} ${com.name} for ${cost} UU.`;
     } else {
       if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return false; }
-      // Sell-only goodwill: a positive faction rank pays +2%/tier here (§12.x).
-      const tier = rankFor(standingRead(ctx.world?.reputation, currentDef.faction)).tier;
-      let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
-      // Wave 24: the faction service modifier composes multiplicatively AFTER
-      // the epic multiplier (epic first, faction second) — generated systems
-      // only; the authored six are guarded out of currentService.
-      if (currentService) unit *= currentService.sellMult ?? 1;
-      // Wave 9: hermit stations pay a premium for anything hauled out this far.
-      if (currentDef.hermit) unit *= HERMIT.sellMult;
-      // Epic standing on patent stock stacks with the fixer's brokered rate.
-      if (key === 'restrictedComponents') unit *= fx.restrictedSellMult ?? 1;
-      // Fixer brokered: at tradesRestricted stations a trusted fixer (30+)
-      // skims a better rate on patent stock, and every sale buys trust (§12.x).
+      const unit = tradeFillUnit(key, false);
+      const payout = unit * qty;
       let fixer = null;
       if (key === 'restrictedComponents' && stationAlwaysTradesRestricted(ctx)) {
         for (const c of contactsForSystem(ctx, currentId)) {
           if (c.role === 'fixer') { fixer = c; break; }
         }
-        if (fixer && fixer.trust >= FIXER_CUT_TRUST) unit *= FIXER_MARKUP;
       }
-      const payout = Math.round(unit * qty);
       removeCargo(ctx, key, qty);
       ctx.world.credits += payout;
       if (fixer) bumpTrust(ctx, fixer, FIXER_TRUST_PER_SALE);
@@ -4748,46 +4827,59 @@ export function initStation(ctx) {
   }
 
   function renderMarket(panel) {
-    h('div', 'screen-sub', panel, 'MARKET — posted prices, no spread');
-    renderSeedPapers(panel);
-    const fx = epicEffects(ctx, currentDef.faction); // wave-6 epic standing
-    const buyMult = hermitBuyMult(); // wave 11: same waived price the charge uses
-    const table = h('div', 'market-table', panel);
-    h('div', 'market-head', table, 'COMMODITY');
-    h('div', 'market-head', table, 'STATUS');
-    h('div', 'market-head', table, 'PRICE');
-    h('div', 'market-head', table, 'HOLD');
-    h('div', 'market-head market-head-actions', table, 'TRADE  (↑/↓ select · Q/W buy 1/5 · A/S sell 1/5)');
-    COMMODITY_KEYS.forEach((key, i) => {
-      const com = COMMODITIES[key];
-      const sel = i === ui.marketSel ? ' market-row-sel' : '';
-      h('div', 'market-cell' + sel, table, com.name);
-      h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
-      h('div', 'market-cell' + sel, table, `${Math.round(priceOf(ctx, key) * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * buyMult)} UU`);
-      h('div', 'market-cell' + sel, table, String(holdUnits(ctx, key)));
-      const actions = h('div', 'market-cell market-actions' + sel, table);
-      if (!com.legal && !lockerAllowed()) {
-        h('span', 'market-refusal', actions, 'trade refused');
-      } else {
-        btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
-        btn(actions, '+5', () => { tryTrade(key, 5, true); render(); });
-        btn(actions, '−1', () => { tryTrade(key, 1, false); render(); });
-        btn(actions, '−5', () => { tryTrade(key, 5, false); render(); });
+    try {
+      h('div', 'screen-sub', panel, 'MARKET — buy price and sell price');
+      renderSeedPapers(panel);
+      const table = h('div', 'market-table', panel);
+      h('div', 'market-head', table, 'COMMODITY');
+      h('div', 'market-head', table, 'STATUS');
+      h('div', 'market-head', table, 'BUY');
+      h('div', 'market-head', table, 'SELL');
+      h('div', 'market-head', table, 'HOLD');
+      h('div', 'market-head market-head-actions', table, 'TRADE');
+      COMMODITY_KEYS.forEach((key, i) => {
+        if (typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)) return;
+        const com = COMMODITIES[key];
+        if (com == null || typeof com !== 'object') return;
+        try {
+          const sel = i === ui.marketSel ? ' market-row-sel' : '';
+          const buyUnit = tradeFillUnit(key, true);
+          const sellUnit = tradeFillUnit(key, false);
+          const hold = String(holdUnits(ctx, key));
+          const nameText = typeof com.name === 'string' && com.name ? com.name : key;
+          h('div', 'market-cell' + sel, table, nameText);
+          h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
+          h('div', 'market-cell market-fill' + sel, table, `${buyUnit} UU`);
+          h('div', 'market-cell market-fill' + sel, table, `${sellUnit} UU`);
+          h('div', 'market-cell' + sel, table, hold);
+          const actions = h('div', 'market-cell market-actions' + sel, table);
+          if (!com.legal && !lockerAllowed()) {
+            h('span', 'market-refusal', actions, 'trade refused');
+          } else {
+            btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
+            btn(actions, '+5', () => { tryTrade(key, 5, true); render(); });
+            btn(actions, '−1', () => { tryTrade(key, 1, false); render(); });
+            btn(actions, '−5', () => { tryTrade(key, 5, false); render(); });
+          }
+        } catch {
+          return;
+        }
+      });
+      h('div', 'screen-legend', panel, '↑/↓ select · Q/W buy 1/5 · A/S sell 1/5');
+      if (currentDef?.tradesRestricted === true) {
+        h('div', 'screen-note', panel,
+          'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
+      } else if (!lockerAllowed()) {
+        h('div', 'screen-note', panel,
+          `The dockmaster keeps the restricted locker closed. Fear ${ECON.fear.tributeOpensAt}+ or a burned Compact name opens it.`);
       }
-    });
-    if (currentDef?.tradesRestricted === true) {
-      h('div', 'screen-note', panel,
-        'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
-    } else if (!lockerAllowed()) {
-      h('div', 'screen-note', panel,
-        `The dockmaster keeps the restricted locker closed. Fear ${ECON.fear.tributeOpensAt}+ or a burned Compact name opens it.`);
-    }
-    // Wave 24: the faction's market line, surfaced the way keeper-comp notes
-    // are — one note line, not a new service.
-    if (currentService?.buyMult || currentService?.sellMult) {
-      h('div', 'screen-note', panel, currentService.line);
-    }
-    renderArchiveDesk(h, btn, panel, ctx, ui, currentDef.faction, render);
+      // Wave 24: the faction's market line, surfaced the way keeper-comp notes
+      // are — one note line, not a new service.
+      if (currentService?.buyMult || currentService?.sellMult) {
+        h('div', 'screen-note', panel, currentService.line);
+      }
+      renderArchiveDesk(h, btn, panel, ctx, ui, currentDef.faction, render);
+    } catch { /* fail-closed: keep the overlay */ }
   }
 
   // ---- jobs ----
@@ -6298,6 +6390,15 @@ export function initStation(ctx) {
     return id;
   }
 
+  /** Read-only qty-1 fill. Calls live tradeFillUnit. Never tryTrade. */
+  function peekFillUnit(key, buying) {
+    try {
+      return tradeFillUnit(key, buying);
+    } catch {
+      return undefined;
+    }
+  }
+
   function deskResult(ok) {
     return {
       ok: ok === true,
@@ -6357,6 +6458,7 @@ export function initStation(ctx) {
     feed,
     undock,
     peekService,
+    peekFillUnit,
   };
 
   return {

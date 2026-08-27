@@ -1,0 +1,38 @@
+# Wave 139 mktfill write-set (verifier)
+
+## Worker write-set (this leftover pack)
+
+docs/AgentApiMarketFillDesign.md
+out/w139/mktfill/current-agent-market-fill-inventory.md
+out/w139/mktfill/shared-contract.md
+out/w139/mktfill/security-review.md
+out/w139/mktfill/code-review.md
+out/w139/mktfill/ui-audit.md
+out/w139/mktfill/notes.md
+
+## Worker did not write (confirmed)
+
+src/**
+scripts/**
+public/**
+index.html
+package.json
+PROGRESS.md
+docs/PLAYER-EXPERIENCE-WISHLIST.md
+docs/AgentApiDesign.md
+docs/AgentApiEvadeDesign.md
+out/w139/badge/**
+out/w139/mktdesk/**
+out/w139/mktfill/verify/**   (worker freeze; verifier owns this folder)
+
+## Verifier write-set
+
+out/w139/mktfill/verify/report.md
+out/w139/mktfill/verify/write-set.txt
+
+## Dirty tree note (other packs, not this worker)
+
+Working copy also has modified src/, PROGRESS.md, wishlist, docs/AgentApiDesign.md,
+and sibling leftover dirs out/w139/badge and out/w139/mktdesk. Those paths are
+not in this worker's untracked markdown set. Git diff of those paths does not
+add fillBuy/fillSell/peekFillUnit. Live src has no fillBuy/fillSell/peekFillUnit.

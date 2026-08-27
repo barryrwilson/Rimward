@@ -813,7 +813,7 @@ export function initHail(ctx) {
   });
 
   function peek() {
-    if (!open) return { intents: [] };
+    if (!open) return { intents: [], open: false };
     const intents = [];
     const list = open.intents;
     if (Array.isArray(list)) {
@@ -821,7 +821,7 @@ export function initHail(ctx) {
         if (typeof list[i] === 'string') intents.push(list[i]);
       }
     }
-    return { intents };
+    return { intents, open: true };
   }
 
   function resolve(intentOrIndex) {

@@ -1,0 +1,125 @@
+{
+  "ok": true,
+  "miningOreKeys": [
+    "rawOre",
+    "livingRock"
+  ],
+  "pins": {
+    "src.mining.excludeHelper": true,
+    "src.mining.boundedAttempts": true,
+    "src.mining.noWhileTruePick": true,
+    "src.mining.failClosedCommodities": true,
+    "src.mining.needUntouched": true,
+    "src.mining.slotsCap": true,
+    "src.mining.syncOmitBreak": true,
+    "src.mining.healOffered": true,
+    "src.mining.nextIdKept": true,
+    "src.mining.noInnerHTML": true,
+    "src.uniqueFour.untouched": true,
+    "src.digit2.jobs": true,
+    "src.jobs.paintTextContent": true,
+    "src.mining.noWhileTrueFilePickRegion": true,
+    "src.pay.miningPayBase": true,
+    "authoredKeysOnly": true
+  },
+  "pinFailures": [],
+  "probes": [
+    {
+      "name": "A-offered-twins-heal",
+      "pass": true,
+      "failures": [],
+      "live": [
+        {
+          "id": "mine-freehold-8",
+          "slot": 0,
+          "commodity": "rawOre",
+          "state": "offered"
+        },
+        {
+          "id": "mine-freehold-20",
+          "slot": 1,
+          "commodity": "livingRock",
+          "state": "offered"
+        }
+      ]
+    },
+    {
+      "name": "B-empty-origin-fill",
+      "pass": true,
+      "failures": [],
+      "sampleSet": [
+        "livingRock+rawOre"
+      ]
+    },
+    {
+      "name": "C-accepted-twins-stay",
+      "pass": true,
+      "failures": [],
+      "live": [
+        {
+          "id": "mine-freehold-8",
+          "slot": 0,
+          "commodity": "rawOre",
+          "state": "accepted"
+        },
+        {
+          "id": "mine-freehold-9",
+          "slot": 1,
+          "commodity": "rawOre",
+          "state": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "D-replace-excludes-sibling",
+      "pass": true,
+      "failures": [],
+      "live": [
+        {
+          "id": "mine-freehold-8",
+          "slot": 0,
+          "commodity": "rawOre",
+          "state": "accepted"
+        },
+        {
+          "id": "mine-freehold-20",
+          "slot": 1,
+          "commodity": "livingRock",
+          "state": "offered"
+        }
+      ]
+    },
+    {
+      "name": "omit-size-1-table",
+      "pass": true,
+      "failures": [],
+      "count": 1
+    },
+    {
+      "name": "fail-closed-missing-COMMODITIES",
+      "pass": true,
+      "failures": []
+    },
+    {
+      "name": "authored-keys-only",
+      "pass": true,
+      "failures": [],
+      "picks": [
+        "livingRock"
+      ]
+    },
+    {
+      "name": "other-family-untouched",
+      "pass": true,
+      "failures": []
+    },
+    {
+      "name": "pay-formula",
+      "pass": true,
+      "failures": [],
+      "need": 4,
+      "reward": 784,
+      "commodity": "rawOre"
+    }
+  ]
+}

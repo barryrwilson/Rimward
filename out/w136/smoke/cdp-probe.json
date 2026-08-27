@@ -1,0 +1,42 @@
+{
+  "pages": [
+    {
+      "cdpPort": 57233,
+      "type": "background_page",
+      "url": "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaome/background.html",
+      "title": "Google Hangouts"
+    },
+    {
+      "cdpPort": 57233,
+      "type": "page",
+      "url": "http://127.0.0.1:5188/index.html?agent=1",
+      "title": "RIMWARD — A Living Frontier"
+    },
+    {
+      "cdpPort": 57233,
+      "type": "browser_ui",
+      "url": "chrome://omnibox-popup.top-chrome/",
+      "title": "Omnibox Popup"
+    },
+    {
+      "cdpPort": 57233,
+      "type": "browser_ui",
+      "url": "chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html",
+      "title": "Omnibox Popup"
+    },
+    {
+      "cdpPort": 57233,
+      "type": "service_worker",
+      "url": "chrome-extension://fignfifoniblkonapihmkfakmlgkbkcf/service_worker.js",
+      "title": "Service Worker chrome-extension://fignfifoniblkonapihmkfakmlgkbkcf/service_worker.js"
+    }
+  ],
+  "evals": {
+    "href": "http://127.0.0.1:5188/index.html?agent=1",
+    "ready": "interactive",
+    "hasRimward": false,
+    "agent": "1",
+    "fatal": "",
+    "title": "RIMWARD — A Living Frontier"
+  }
+}

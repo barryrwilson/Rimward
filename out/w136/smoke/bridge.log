@@ -1,0 +1,12 @@
+cdp attached
+AGENT_TOKEN=<redacted>
+listen 127.0.0.1:8877
+cdp attached
+AGENT_TOKEN=<redacted>
+listen 127.0.0.1:8877
+cdp attached
+AGENT_TOKEN=<redacted>
+listen 127.0.0.1:8877
+cdp attached
+AGENT_TOKEN=<redacted>
+listen 127.0.0.1:8877

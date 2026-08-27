@@ -5,8 +5,8 @@
 | **Title** | RIMWARD NAV-10 docking approach assistance |
 | **Author** | Wave 130 NAV-10 leftover integrator |
 | **Date** | 2026-08-26 |
-| **Status** | leftover **REAL**. Wave 130 markdown only. Named serial **PR1**. Not CONSUME. Merge law: shared-contract.md wins. |
-| **Wave** | 130 — leftover integrator. No `src/`. Bindings do not change here. KeyJ stays dock/jump (CTL-01). KeyD stays strafe. |
+| **Status** | leftover **REAL**. Wave 136 PR1 implemented. Named serial **PR1**. Not CONSUME. Merge law: shared-contract.md wins. |
+| **Wave** | 136 — PR1 HUD approach-speed cue. KeyJ stays dock/jump (CTL-01). KeyD stays strafe. |
 | **Owner request** | Inbox P2 NAV/DOCKING leftover: Add docking approach assistance. Census live J prompt, snap, PHY bounce, HUD, NAV-03, Hail02 miss. Code wins. If a named approach-speed cue **and** a brake/governor that prevents cruise-speed bounce-into-pad already live, freeze leftover **CONSUME** and named serial **none**. Census: **not** live. Freeze leftover **REAL** and name later serial **PR1**. |
 | **Merge law** | [`out/w130/dockapproach/shared-contract.md`](../out/w130/dockapproach/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay. No new Digit. KeyH/J/L/M/P stay. CTL-02 hail/chart/berth never write `flags.paused`. CTL-03 berthHold is not this pack. AI-05 starter grace is not this pack. CTL-04 menu digits are not this pack. NAV-03/05/06/07/09 cite only. PHY-01 bounce stays the collision law. Do not invent a third helm. Do not invent teleport beyond the existing 2× snap. Do not pause. Do not remap keys. `state.js` READ-ONLY later. No new WORLD_FIELDS. No UU. No SKU. `innerHTML` forbidden later. `reducedMotion`: no new animation that ignores it. Color is not the only cue. Do not “fix” known REDMARCH `castMatches` flake. Do not steal sibling Wave 130 packs (TGT-07, MSN-04). Do not steal Agent API PR2, Hail01/Hail02/HUD-06/HUD-07/NAV-09/CTL-03/AI-05/CTL-04 optional PR2s. |

@@ -175,10 +175,10 @@
   color: #ffd28a;
 }
 
-/* market table: name / status / price / hold / trade actions */
+/* market table: name / status / buy / sell / hold / trade */
 .market-table {
   display: grid;
-  grid-template-columns: 1.4fr 0.9fr 0.7fr 0.5fr 1.6fr;
+  grid-template-columns: minmax(6.5em, 1.3fr) minmax(5em, 0.8fr) minmax(4em, 0.6fr) minmax(4em, 0.6fr) minmax(3em, 0.4fr) minmax(10em, 1.7fr);
   gap: 4px 10px;
   align-items: center;
 }
@@ -196,6 +196,10 @@
   color: #dfe9f4;
 }
 
+.market-fill {
+  white-space: nowrap;
+}
+
 .market-row-sel {
   background: rgba(111, 210, 224, 0.08);
   box-shadow: inset 2px 0 0 var(--rw-accent);
@@ -210,6 +214,7 @@
 
 .market-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 

@@ -48,10 +48,18 @@ import { disengageAutomine } from '../game/automine.js';
  * Returns { update() {} } with no per-frame work.
  */
 export function initTitle(ctx) {
+  function closedTitleApi() {
+    return {
+      isOpen() { return false; },
+      start() {},
+    };
+  }
+
   // Skip marker check: if the player already saw the title, don't show it again.
   const skipMarker = globalThis.sessionStorage?.getItem('rimward-title-skip');
   if (skipMarker === '1') {
     globalThis.sessionStorage?.removeItem('rimward-title-skip');
+    ctx.titleApi = closedTitleApi();
     return { update() {} };
   }
 
@@ -239,10 +247,35 @@ export function initTitle(ctx) {
   globalThis.window?.addEventListener('keydown', onKey, true);
 
   // Helper to close the title: remove DOM and listener.
+  let titleOpen = true;
   function closeTitle() {
+    if (!titleOpen) return;
+    titleOpen = false;
     root.remove();
     globalThis.window?.removeEventListener('keydown', onKey, true);
   }
+
+  ctx.titleApi = {
+    isOpen() { return titleOpen; },
+    start() {
+      if (!titleOpen) return;
+      if (hasSave) {
+        for (let i = 0; i < entries.length; i++) {
+          if (entries[i].action === 'continue') {
+            entries[i].run();
+            return;
+          }
+        }
+      } else {
+        for (let i = 0; i < entries.length; i++) {
+          if (entries[i].action === 'new') {
+            entries[i].run();
+            return;
+          }
+        }
+      }
+    },
+  };
 
   // No per-frame work.
   return {

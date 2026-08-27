@@ -1,0 +1,81 @@
+{
+  "ready": true,
+  "titleOpen": true,
+  "started": true,
+  "before": {
+    "ready": true,
+    "optIn": true,
+    "paused": false,
+    "docked": false,
+    "held": false,
+    "pos": [
+      0,
+      30,
+      800
+    ],
+    "title": false
+  },
+  "act": {
+    "threw": false,
+    "result": {
+      "v": 1,
+      "ok": true,
+      "error": "",
+      "name": "afterburner",
+      "token": "",
+      "status": "queued"
+    }
+  },
+  "after": {
+    "burnerActive": true,
+    "afterburnerPressed": false,
+    "pos": [
+      0,
+      30,
+      798.9471190714927
+    ],
+    "lastIntent": {
+      "name": "teleport",
+      "ok": false,
+      "error": "forbidden",
+      "token": "forbidden",
+      "t": 0.12
+    },
+    "badgeTexts": [
+      "Agent playonLast: afterburner",
+      "Agent play",
+      "on",
+      "Last: afterburner",
+      "Enable agent playStop agent play",
+      "Enable agent play",
+      "Stop agent play",
+      "Stop does not cancel Autopilot."
+    ],
+    "badgeText": "Agent playonLast: teleportError: forbiddenEnable agent playStop agent playStop does not cancel Autopilot.",
+    "hubKids": null,
+    "observeBurnerReadyAt": 0,
+    "evade": {
+      "v": 1,
+      "ok": false,
+      "error": "unknown",
+      "name": "evade",
+      "token": "unknown"
+    },
+    "flee": {
+      "v": 1,
+      "ok": false,
+      "error": "unknown",
+      "name": "flee",
+      "token": "unknown"
+    },
+    "tel": {
+      "v": 1,
+      "ok": false,
+      "error": "forbidden",
+      "name": "teleport",
+      "token": "forbidden"
+    },
+    "docked": false
+  },
+  "pageUrl": "http://127.0.0.1:5186/?agent=1"
+}

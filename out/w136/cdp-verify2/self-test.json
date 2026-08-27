@@ -1,0 +1,21 @@
+{
+  "bindLoopbackOk": true,
+  "bindV6LoopbackOk": true,
+  "bindAllV4Refused": true,
+  "bindAllV6Refused": true,
+  "tokenLenMismatchFalse": true,
+  "tokenMatchTrue": true,
+  "tokenWrongSameLenFalse": true,
+  "httpMissingAuth401": true,
+  "httpWrongToken401": true,
+  "httpObserveForwards": true,
+  "httpActForwards": true,
+  "noCorsStar": true,
+  "noTokenOrSnapshotLogs": true,
+  "devToolsActivePortParse": true,
+  "pageUrlMatch": true,
+  "pageUrlMismatch": true,
+  "healthShape": true,
+  "healthForeignOrigin403": true,
+  "chromeKeepAliveFlags": true
+}

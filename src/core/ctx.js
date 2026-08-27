@@ -15,8 +15,12 @@ import * as THREE from 'three';
  * - input: written ONLY by controls.js; read-only for everyone else.
  * - autopilot: written ONLY by autopilot.js (live command channel; not persist).
  * - automine: written ONLY by automine.js (live command channel; not persist).
- * - agent: written ONLY by agent-api.js (session; not persist; not a helm).
- *   Restore must not set optIn. Observe copies HUD-visible JSON only.
+ * - flee: written ONLY by agent-flee.js (session; not persist). Short
+ *   burn-avoid helm toward a sun-clear station ring. Not pad auto-dock.
+ *   Not WORLD_FIELDS. Afterburner does not steal this channel.
+ * - agent: written ONLY by agent-api.js (session; not persist; not a helm),
+ *   except save.js recover() may append a sanitized `recovered` ring row.
+ *   Restore must not set optIn or empty the ring. Observe copies HUD-visible JSON only.
  * - ship (flight transform): written ONLY by ship.js.
  * - player (ship state record): created by ship.js via createShipState;
  *   mutated by combat.js (damage) and state.js helpers only.
@@ -85,7 +89,7 @@ export function createCtx({ scene, camera, renderer }) {
       driftHeld: false, // Shift held = vector-hold
       fireHeld: false, // LMB
       weaponGroup: 1, // 1=cannon 2=disruptor 3=mining 4=missiles 5=psionic (keys 1/2/3/4/5)
-      targetPressed: false, // edge: T (cycle nearest hostiles)
+      targetPressed: false, // edge: T (cycle; hostiles first when one is in envelope)
       hailPressed: false, // edge: H
       dockPressed: false, // edge: J (not D)
       cameraPressed: false, // edge: C (chase / third / first)
@@ -113,6 +117,16 @@ export function createCtx({ scene, camera, renderer }) {
       pitch: 0,
       throttle: 0,
       wantMine: false,
+      reason: '',
+    },
+
+    // --- live flee helm (agent-flee.js only). Not WORLD_FIELDS. ---
+    flee: {
+      engaged: false,
+      yaw: 0,
+      pitch: 0,
+      throttle: 0,
+      until: 0,
       reason: '',
     },
 
@@ -245,6 +259,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'worldEvent' {kind}    'milestone' {id, line}  'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
     // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
+    // 'playerDestroyed' {}   'recovered' { source:'autosave'|'fresh' }  (save.js death)
     // 'clueFound' {id,line}  'landmarkFound' {id,name,line}   (mystery.js, wave 5)
     // 'epicStage' {id,faction,stage,line}      'originChosen' {id,line}  (wave 6)
     // 'convergence' {id,line} (mystery.js)     'songShift' {reason} (mystery→song)

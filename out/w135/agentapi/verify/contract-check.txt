@@ -1,0 +1,13 @@
+tokenEqual length mismatch: dummy 32-byte timingSafeEqual then false. No throw.
+tokenEqual equal length: full-buffer crypto.timingSafeEqual. No prefix slice.
+assertBindHost refuses 0.0.0.0, ::, and 0:0:0:0:0:0:0:0. Allows 127.0.0.1 and ::1.
+sendJson has no Access-Control-Allow-Origin header. OPTIONS returns 405.
+Runtime.evaluate bodies call h.observe / h.act only. No h.enable() evaluate.
+src/systems/agent-api.js: no WebSocket / ws:// (spot-check).
+Logs: no request token dump; no snapshot dump. resolveToken prints AGENT_TOKEN once on generate (serve).
+Env reads: CHROME_PATH, AGENT_BRIDGE_PORT, AGENT_TOKEN. No XAI_API_KEY.
+package.json scripts.agent:bridge = node scripts/agent-bridge.mjs. No new dependencies.
+scripts/agent-demo.mjs: absent.
+self-test: exit 0, all pins true (includes httpMissingAuth401).
+--help: usage on stdout, exit 0, no bind of 0.0.0.0.
+Ports after tests: no LISTEN on 517x-519x, 8765, 94xx from this verifier.

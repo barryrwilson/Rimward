@@ -1555,7 +1555,7 @@ export function initCombat(ctx) {
       if (bestShip.ai) bestShip.ai.lastAttacker = 'player';
       ctx.emit('npcHit', { ship: bestShip, damage: dmg });
       for (const ev of events) {
-        if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, ship: bestShip });
+        if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { ship: bestShip });
         else if (ev.type === 'engineOut') ctx.emit('engineOut', { ship: bestShip });
         else if (ev.type === 'disabled') ctx.emit('npcDisabled', { ship: bestShip });
         else if (ev.type === 'destroyed') ctx.emit('npcDestroyed', { ship: bestShip });
@@ -1735,7 +1735,7 @@ export function initCombat(ctx) {
       if (s.ai) s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
       ctx.emit('npcHit', { ship: s, damage: p.damage });
       for (const ev of events) {
-        if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, ship: s });
+        if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { ship: s });
         else if (ev.type === 'engineOut') ctx.emit('engineOut', { ship: s });
         else if (ev.type === 'disabled') ctx.emit('npcDisabled', { ship: s });
         else if (ev.type === 'destroyed') ctx.emit('npcDestroyed', { ship: s });
@@ -1750,11 +1750,29 @@ export function initCombat(ctx) {
     return false;
   }
 
+  /** Player/NPC shield loss as primitives for the agent ring; HUD still reads ship. */
+  function emitShieldDown(layer, extra) {
+    const payload = { layer };
+    if (extra && extra.player === true) {
+      payload.player = true;
+      payload.actor = 'player';
+    } else {
+      payload.actor = 'npc';
+      const ship = extra && extra.ship;
+      if (ship) {
+        payload.ship = ship;
+        const id = ship.id;
+        if (typeof id === 'string' || typeof id === 'number') payload.targetId = id;
+      }
+    }
+    ctx.emit('shieldDown', payload);
+  }
+
   /** Translate applyHit descriptors into the frozen player event vocabulary. */
   function emitPlayerApplyHits(events) {
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
-      if (ev.type === 'shieldDown') ctx.emit('shieldDown', { layer: ev.layer, player: true });
+      if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { player: true });
       else if (ev.type === 'engineOut') ctx.emit('engineOut', { player: true });
       else if (ev.type === 'destroyed') ctx.emit('playerDestroyed', {}); // save.js owns the reload flow
     }

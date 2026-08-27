@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "t": 16.16890000003568,
+  "phase": "playing",
+  "paused": false,
+  "docked": false,
+  "berthHold": false,
+  "chartOpen": false,
+  "fwd": [
+    0,
+    0.05547001962252291,
+    0.9984603532054126
+  ],
+  "speed": 21.22954391027216,
+  "throttle": 0,
+  "currentSystem": "veridian",
+  "nav": {
+    "dest": "veridian",
+    "path": [
+      "veridian"
+    ],
+    "remaining": [],
+    "status": "arrived",
+    "autopilot": false
+  },
+  "autopilot": {
+    "engaged": false,
+    "reason": ""
+  },
+  "gate": {
+    "inZone": false,
+    "nearTo": null,
+    "jumping": true,
+    "progress": 0.6027200000047678,
+    "destination": "veridian"
+  },
+  "events": [
+    "originChosen",
+    "navRoute",
+    "commLine",
+    "autopilotEngaged",
+    "milestone",
+    "commLine",
+    "commLine",
+    "milestone",
+    "shieldDown",
+    "jumpRequested",
+    "systemLoaded",
+    "commLine",
+    "commLine",
+    "navRoute",
+    "commLine"
+  ]
+}

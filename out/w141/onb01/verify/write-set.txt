@@ -1,0 +1,51 @@
+# Wave 141 Onb01 leftover — worker write-set (verified markdown only)
+# Worker (do not treat as src flight-lesson ship)
+C:\Projects\WebSim\docs\Onb01FlightLessonDesign.md
+C:\Projects\WebSim\out\w141\onb01\current-onb01-flight-lesson-inventory.md
+C:\Projects\WebSim\out\w141\onb01\shared-contract.md
+C:\Projects\WebSim\out\w141\onb01\security-review.md
+C:\Projects\WebSim\out\w141\onb01\code-review.md
+C:\Projects\WebSim\out\w141\onb01\ui-audit.md
+C:\Projects\WebSim\out\w141\onb01\notes.md
+
+# Later serial PR1 flight lesson — ALLOWED (named only; not this wave)
+# src/systems/onboarding.js   (HINTS sequence + fail-closed skip / try; live-region attrs; drop inline color/size)
+# src/systems/hud.js          (CONTROLS default collapsed + aria-expanded on init/click/combat; reparent existing .rw-onboard-hint onto #hud, not the reticle)
+# src/ui/hud.css              (.rw-onboard-hint tokens: scale, contrast, reduced-motion; class collapsed already live; optional :focus-visible)
+# scripts/boot-test.mjs       (WAVE6 onboarding retarget with PR1)
+
+# Later serial — FORBIDDEN
+# src/game/origins.js
+# src/game/state.js
+# src/game/save.js
+# src/systems/overlay-policy.js
+# src/main.js                 (KeyP pause / Ctl05)
+# src/systems/controls.js     (bind table / remap KeyH/J/L/M/P/D / new Digit)
+# src/systems/hail.js
+# src/systems/galaxychart.js
+# src/systems/npc.js          (AI-05)
+# public/**
+# index.html
+# package.json
+# docs/PLAYER-EXPERIENCE-WISHLIST.md
+# PROGRESS.md
+# docs/Org01OriginPreviewDesign.md
+# docs/Ctl05PauseMenuDesign.md
+# docs/Ctl*.md
+# docs/Hud0*.md
+# docs/Ai05StarterGraceDesign.md
+# docs/OwnerDecisions*.md
+# out/w141/org01/**
+# out/w141/pause/**
+
+# Not in worker write-set (confirmed absent / sibling-owned / pre-existing dirty)
+# src/**
+# scripts/**
+# docs/PLAYER-EXPERIENCE-WISHLIST.md
+# PROGRESS.md
+# out/w141/org01/**
+# out/w141/pause/**
+
+# Verifier (this pass)
+C:\Projects\WebSim\out\w141\onb01\verify\report.md
+C:\Projects\WebSim\out\w141\onb01\verify\write-set.txt

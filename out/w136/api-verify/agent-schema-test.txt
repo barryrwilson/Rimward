@@ -1,0 +1,28 @@
+ok THREE quat x is getter not own
+ok identity fwd not null
+ok identity fwd local -Z
+ok rotated fwd matches applyQuaternion
+ok plain object quat still works
+ok null quat
+ok nan quat
+ok vec3 own xyz
+ok vec3 array
+ok vec3 getter/proto xyz
+ok startGame authored
+ok chooseOrigin authored
+ok startGame live
+ok chooseOrigin live
+ok startGame not pr1
+ok command list has session
+ok teleport still forbidden
+ok setCredits still forbidden
+ok ping omits status
+ok queued status
+ok shieldDown player primitives
+ok shieldDown npc primitives
+ok commLine consecutive dup skipped
+ok commLine distinct from kept
+ok commLine after other type kept
+ok ring cap 16
+AGENT SCHEMA PASS
+SCHEMA:0

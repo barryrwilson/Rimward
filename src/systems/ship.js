@@ -735,19 +735,21 @@ export function initShip(ctx) {
         && Number.isFinite(_lockVel.z);
       // NaN rock pose: fail closed. Ships still match on liveLock alone.
       const matchLive = liveLock || (rockLock && lockPosOk && velOk);
-      const apOn = !!(ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true);
+      const flee = ctx.flee;
+      const fleeOn = !!(flee && flee.engaged === true);
+      const apOn = !fleeOn && !!(ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true);
       const ap = ctx.autopilot;
       const am = ctx.automine;
-      // Autopilot wins if both channels are engaged. Automine does not write input.
-      const amOn = !apOn && !!(am && am.engaged === true);
-      if (input.matchSpeedPressed && !apOn && !amOn) {
+      // Flee wins during an agent afterburner evade. Else autopilot, then automine.
+      const amOn = !apOn && !fleeOn && !!(am && am.engaged === true);
+      if (input.matchSpeedPressed && !apOn && !amOn && !fleeOn) {
         if (ctx.flags.matchSpeed) ctx.flags.matchSpeed = false;
         else if (matchLive && !docked && !ctx.gate.jumping && !input.throttleHeld) {
           ctx.flags.matchSpeed = true;
         }
       }
       if (ctx.flags.matchSpeed
-        && (docked || ctx.gate.jumping || !matchLive || input.throttleHeld || amOn)) {
+        && (docked || ctx.gate.jumping || !matchLive || input.throttleHeld || amOn || fleeOn)) {
         ctx.flags.matchSpeed = false;
       }
 
@@ -822,12 +824,12 @@ export function initShip(ctx) {
         }
         const rs = turn * dt;
         const holdApJump = apOn && ctx.gate.jumping;
-        const steerY = holdApJump ? 0 : (apOn && ap ? ap.pitch : (amOn ? am.pitch : input.steerY));
-        const steerX = holdApJump ? 0 : (apOn && ap ? ap.yaw : (amOn ? am.yaw : input.steerX));
-        const throttleSet = holdApJump ? 0 : (apOn && ap ? ap.throttle : (amOn ? am.throttle : input.throttle));
+        const steerY = holdApJump ? 0 : (apOn && ap ? ap.pitch : (amOn ? am.pitch : (fleeOn ? flee.pitch : input.steerY)));
+        const steerX = holdApJump ? 0 : (apOn && ap ? ap.yaw : (amOn ? am.yaw : (fleeOn ? flee.yaw : input.steerX)));
+        const throttleSet = holdApJump ? 0 : (apOn && ap ? ap.throttle : (amOn ? am.throttle : (fleeOn ? flee.throttle : input.throttle)));
         if (steerY) root.rotateX(steerY * rs);
         if (steerX) root.rotateY(-steerX * rs);
-        if (!apOn && !amOn && input.roll) root.rotateZ(input.roll * rs);
+        if (!apOn && !amOn && !fleeOn && input.roll) root.rotateZ(input.roll * rs);
 
         // --- Velocity.
         _forward.set(0, 0, -1).applyQuaternion(root.quaternion);

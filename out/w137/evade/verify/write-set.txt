@@ -1,0 +1,19 @@
+# Wave 137 evade leftover — worker write-set (verifier census)
+
+# Pack files (untracked; this leftover)
+docs/AgentApiEvadeDesign.md
+out/w137/evade/current-agent-evade-inventory.md
+out/w137/evade/shared-contract.md
+out/w137/evade/security-review.md
+out/w137/evade/code-review.md
+out/w137/evade/ui-audit.md
+out/w137/evade/notes.md
+
+# Verifier only (this pass)
+out/w137/evade/verify/report.md
+out/w137/evade/verify/write-set.txt
+
+# Not this pack (dirty tree, other workers)
+# src/**, scripts/**, public/**, index.html, package.json
+# docs/AgentApiDesign.md (Wave 135 PR6 / observe header; not evade PR plan)
+# docs/PLAYER-EXPERIENCE-WISHLIST.md, PROGRESS.md
