@@ -8,3 +8,5 @@ dist
 .cache-ktx-installer.exe
 .meshopt-test.glb
 __pycache__
+out/
+/*.png

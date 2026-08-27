@@ -1,0 +1,89 @@
+name: Orca implementation task
+description: Define a bounded, verifiable task for an Orca AI worktree.
+title: "[AREA] "
+labels:
+  - "orca:triage"
+projects:
+  - "barryrwilson/1"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep one outcome per issue. Read `AGENTS.md` and `docs/REMAINING-WORK.md` before starting.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What should be observably better for the player or repository?
+      placeholder: A player can...
+    validations:
+      required: true
+  - type: input
+    id: backlog-key
+    attributes:
+      label: Backlog key
+      description: Use the RW-### or OPT-### key from docs/REMAINING-WORK.md, or NEW.
+      placeholder: RW-001
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P1
+        - P2
+        - P3
+        - Maintenance
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current evidence
+      description: Current behavior, reproduction, source links, screenshots, or design brief.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope
+      description: Bound the change and name likely files or systems.
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: Out of scope
+      description: Explicitly exclude nearby work that should not be pulled in.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ]
+        - [ ] `npm run build` passes
+        - [ ] `npm run test:boot` passes (or the documented flake is rerun and recorded)
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Live verification
+      description: Name the exact browser flow and console/network checks, or state N/A for non-player-facing work.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and decisions
+      description: Owner choices, sequencing constraints, or overlapping write sets.
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Readiness
+      options:
+        - label: This issue is bounded enough for an Orca worktree.
+          required: true
