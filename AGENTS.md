@@ -47,9 +47,8 @@ scope. Later waves often close or supersede earlier notes.
 
 1. The issue's acceptance criteria pass.
 2. `npm run build` passes.
-3. `npm run test:boot` passes. If only the documented intermittent
-   `WAVE30 DEMAND HAIL` + `WAVE30 PAYTRIBUTE` pair fails, rerun once and record
-   both results.
+3. `npm run test:boot` passes. If only a fixture documented in RW-006 or RW-007
+   fails, rerun once and record both results; do not weaken or hide the test.
 4. Relevant live browser flows are exercised and console errors are checked.
 5. Security and regression risks are reviewed in proportion to the change.
 6. The wishlist/backlog status is updated when the issue completes an outcome.

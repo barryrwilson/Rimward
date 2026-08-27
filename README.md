@@ -20,8 +20,11 @@ npm run build
 npm run test:boot
 ```
 
-`test:boot` is intentionally broad. A known intermittent demand/hail fixture is
-tracked in the active backlog; rerun once if that exact documented pair fails.
+`test:boot` is intentionally broad. Known intermittent demand/hail and Agent
+API fixtures are tracked as [RW-006](https://github.com/barryrwilson/Rimward/issues/7)
+and [RW-007](https://github.com/barryrwilson/Rimward/issues/13). The GitHub boot
+job remains visible but advisory until those fixtures are deterministic; the
+production build is the required gate.
 
 ## Work tracking
 
@@ -32,7 +35,8 @@ tracked in the active backlog; rerun once if that exact documented pair fails.
 - [Progress tracker](PROGRESS.md) is the historical implementation record and
   architecture-contract log. Older `OPEN` entries can be superseded by later
   waves.
-- GitHub Project **Rimward** is the operational task queue used by Orca AI.
+- GitHub Project [Rimward](https://github.com/users/barryrwilson/projects/1) is
+  the operational task queue used by Orca AI.
 
 Agents and contributors should read [AGENTS.md](AGENTS.md) before starting an
 issue. A GitHub issue is the authority for its bounded task; current code wins
