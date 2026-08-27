@@ -737,8 +737,9 @@ export function initShip(ctx) {
       const matchLive = liveLock || (rockLock && lockPosOk && velOk);
       const flee = ctx.flee;
       const fleeOn = !!(flee && flee.engaged === true);
-      const apOn = !fleeOn && !!(ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true);
       const ap = ctx.autopilot;
+      const apOn = !fleeOn && !!((ap && ap.engaged === true)
+        || (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true));
       const am = ctx.automine;
       // Flee wins during an agent afterburner evade. Else autopilot, then automine.
       const amOn = !apOn && !fleeOn && !!(am && am.engaged === true);
@@ -852,11 +853,14 @@ export function initShip(ctx) {
           _right.set(1, 0, 0).applyQuaternion(root.quaternion);
           _up.set(0, 1, 0).applyQuaternion(root.quaternion);
           const amIdle = amOn && throttleSet < 0.02;
+          const apIdle = apOn && ap && ap.mode === 'dock' && ap.idle === true
+            && throttleSet < 0.02;
+          const helmIdle = amIdle || apIdle;
           const rockMatch = (ctx.flags.matchSpeed || amOn) && rockLock && lockPosOk && velOk;
           if (rockMatch) {
             // Hold the rock's world vector. Scalar-along-nose misses a slide.
             // Creep/throttle/strafe ride in the rock rest frame; idle holds.
-            const relFwd = (input.fullStop || amIdle || throttleEff < 0.02)
+            const relFwd = (input.fullStop || helmIdle || throttleEff < 0.02)
               ? 0
               : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                 ctx.bio.speedFactor *
@@ -875,7 +879,7 @@ export function initShip(ctx) {
                 ? 0
                 : Math.min(lockSpeed, shipCfg.maxSpeed);
             } else {
-              fwdSpeed = (input.fullStop || amIdle)
+              fwdSpeed = (input.fullStop || helmIdle)
                 ? 0
                 : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                   ctx.bio.speedFactor *

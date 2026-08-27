@@ -18,6 +18,7 @@ const BRIDGE_BIN = path.join(ROOT, 'scripts', 'agent-bridge.mjs');
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const HEALTH_WAIT_MS = 90000;
 const JUMP_WAIT_MS = 90000;
+const DOCK_WAIT_MS = 60000;
 const VITE_WAIT_MS = 25000;
 const TOKEN_WAIT_MS = 40000;
 
@@ -28,6 +29,10 @@ const PIN_KEYS = [
   'wsPing',
   'forbiddenTeleport',
   'originChosen',
+  'approachObserved',
+  'approachBraked',
+  'approachDocked',
+  'approachUndocked',
   'loopAlive',
   'systemTransition',
   'teardownPortsFree',
@@ -83,12 +88,14 @@ function observePin(snap) {
     berthHold: flags.berthHold === true,
     chartOpen: flags.chartOpen === true,
     fwd: ship.fwd,
+    pos: ship.pos,
     speed: ship.speed,
     throttle: ship.throttle,
     currentSystem: snap.world ? snap.world.currentSystem : '',
     origin: snap.world && Object.hasOwn(snap.world, 'origin') ? snap.world.origin : undefined,
     nav: snap.nav || null,
     autopilot: snap.autopilot || null,
+    station: snap.station || null,
     gate: snap.gate || null,
     events: eventTypes(snap.events),
   };
@@ -666,6 +673,61 @@ async function main() {
     pins.originChosen = originOk === true;
     if (!pins.originChosen) {
       failNote = failNote || `origin not chosen phase=${phase}`;
+    }
+
+    const approach = await act('approachDock', {});
+    if (!approach || approach.ok !== true) {
+      snap = await observe();
+      failNote = failNote || `approachDock failed token=${approach && approach.token} diag=${JSON.stringify(observePin(snap))}`;
+    } else {
+      const dockDeadline = Date.now() + DOCK_WAIT_MS;
+      let lastDockDiag = observePin(await observe());
+      const dockTrace = [];
+      let dockTraceAt = 0;
+      while (Date.now() < dockDeadline) {
+        snap = await observe();
+        lastDockDiag = observePin(snap);
+        if (Date.now() >= dockTraceAt) {
+          dockTrace.push(lastDockDiag);
+          dockTraceAt = Date.now() + 3000;
+        }
+        const ap = snap && snap.autopilot;
+        const station = snap && snap.station;
+        const ship = snap && snap.ship;
+        if (ap && ap.mode === 'dock'
+          && typeof ap.phase === 'string' && ap.phase.length > 0
+          && typeof ap.range === 'number' && Number.isFinite(ap.range)
+          && typeof ap.progress === 'number' && Number.isFinite(ap.progress)
+          && station && typeof station.range === 'number' && Number.isFinite(station.range)
+          && typeof station.closingSpeed === 'number' && Number.isFinite(station.closingSpeed)) {
+          pins.approachObserved = true;
+        }
+        if (ap && (ap.phase === 'settle' || ap.phase === 'docking' || ap.phase === 'complete')
+          && ship && typeof ship.speed === 'number' && ship.speed <= 5) {
+          pins.approachBraked = true;
+        }
+        if (snap && snap.flags && snap.flags.docked === true) {
+          pins.approachDocked = ap && ap.mode === 'dock'
+            && ap.engaged === false
+            && ap.phase === 'complete'
+            && ap.reason === 'docked';
+          break;
+        }
+        if (ap && ap.mode === 'dock' && ap.engaged === false && ap.phase === 'failed') break;
+        await sleep(500);
+      }
+      if (!pins.approachDocked) {
+        pins.dockTrace = dockTrace;
+        failNote = failNote || `dock approach timeout/failure diag=${JSON.stringify(lastDockDiag)}`;
+      } else {
+        const undock = await act('undock', {});
+        snap = await observe();
+        pins.approachUndocked = !!(undock && undock.ok === true
+          && snap && snap.flags && snap.flags.docked === false);
+        if (!pins.approachUndocked) {
+          failNote = failNote || `undock after approach failed token=${undock && undock.token}`;
+        }
+      }
     }
 
     snap = await observe();

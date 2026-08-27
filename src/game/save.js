@@ -14,6 +14,7 @@ import { sanitizeNav } from './nav.js';
 import { canOpenPlayCard, playSurfaceBlocked, setBerthHold } from '../systems/overlay-policy.js';
 import { noteSessionEvent } from './agent-schema.js';
 import { disengageFlee } from './agent-flee.js';
+import { disengage as disengageAutopilot } from './autopilot.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -1190,6 +1191,7 @@ function healLiveRecords(ctx) {
 
 export function restore(ctx, snap) {
   if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
+  disengageAutopilot(ctx, 'restore');
   // Session channel: never copy optIn or the event ring from a blob.
   const fromSystem = ctx.world.currentSystem;
   ctx.flags.saveRestored = true; // origins.js: a restore means no origin pick

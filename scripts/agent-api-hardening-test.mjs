@@ -59,13 +59,14 @@ const ctx = {
     combat: false,
     camera: 'chase',
   },
-  world: { time: 12, credits: 350, currentSystem: 'freehold', origin: '' },
+  world: { time: 12, credits: 350, currentSystem: 'freehold', origin: '', nav: {} },
   ship: {
     object: {
       position: { x: 1, y: 2, z: 3 },
       quaternion: q,
     },
     speed: 0,
+    velocity: { x: 0, y: 0, z: 0 },
     burnerActive: false,
     driftActive: false,
   },
@@ -181,6 +182,38 @@ const hail = rw.act({ v: 1, name: 'hail', args: {} });
 pin('hail queued token empty', hail.ok === true && hail.token === '' && hail.status === 'queued');
 const dock = rw.act({ v: 1, name: 'dock', args: {} });
 pin('dock queued token empty', dock.ok === true && dock.token === '' && dock.status === 'queued');
+const approachMissing = rw.act({ v: 1, name: 'approachDock', args: {} });
+pin('approachDock missing station fail closed', approachMissing.ok === false
+  && approachMissing.token === 'no-station');
+ctx.station = {
+  inZone: true,
+  name: 'Freehold Landing',
+  systemName: 'Freehold',
+  position: { x: 120, y: 20, z: 620 },
+};
+ctx.systems = { freehold: { station: { position: [120, 20, 620] } } };
+const approach = rw.act({ v: 1, name: 'approachDock', args: {} });
+pin('approachDock engages dock mode', approach.ok === true
+  && ctx.autopilot.engaged === true
+  && ctx.autopilot.mode === 'dock'
+  && ctx.autopilot.phase === 'settle');
+const approachObs = rw.observe();
+pin('approachDock observation plain progress', approachObs.autopilot.mode === 'dock'
+  && approachObs.autopilot.phase === 'settle'
+  && approachObs.autopilot.progress === 0
+  && Number.isFinite(approachObs.station.range)
+  && Number.isFinite(approachObs.station.closingSpeed));
+const approachCancel = rw.act({ v: 1, name: 'cancelAutopilot', args: {} });
+pin('approachDock cancel', approachCancel.ok === true
+  && ctx.autopilot.engaged === false
+  && ctx.autopilot.mode === 'dock'
+  && ctx.autopilot.phase === 'failed'
+  && ctx.autopilot.reason === 'cancel');
+ctx.flags.docked = true;
+const approachDocked = rw.act({ v: 1, name: 'approachDock', args: {} });
+pin('approachDock already docked refusal', approachDocked.ok === false
+  && approachDocked.token === 'docked');
+ctx.flags.docked = false;
 const pulse = rw.act({ v: 1, name: 'pulse', args: { edge: 'target' } });
 pin('pulse queued', pulse.ok === true && pulse.token === '' && pulse.status === 'queued');
 const ping = rw.act({ v: 1, name: 'ping', args: {} });

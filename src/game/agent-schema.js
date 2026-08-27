@@ -21,6 +21,7 @@ export const COMMAND_NAMES = Object.freeze([
   'clearRoute',
   'engageAutopilot',
   'cancelAutopilot',
+  'approachDock',
   'engageAutomine',
   'cancelAutomine',
   'hailResolve',
@@ -66,7 +67,10 @@ const PR3_LIVE = new Set([
 ]);
 const SESSION_LIVE = new Set(['startGame', 'chooseOrigin']);
 const EVADE_LIVE = new Set(['afterburner']);
-const LIVE = new Set([...PR1_LIVE, ...PR2_LIVE, ...PR3_LIVE, ...SESSION_LIVE, ...EVADE_LIVE]);
+const APPROACH_LIVE = new Set(['approachDock']);
+const LIVE = new Set([
+  ...PR1_LIVE, ...PR2_LIVE, ...PR3_LIVE, ...SESSION_LIVE, ...EVADE_LIVE, ...APPROACH_LIVE,
+]);
 
 export const FORBIDDEN_NAMES = Object.freeze([
   'teleport',

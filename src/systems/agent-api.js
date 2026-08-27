@@ -5,7 +5,13 @@
 
 import { COMMODITIES } from '../game/state.js';
 import { plotRoute, clearRoute, sanitizeSystemId } from '../game/nav.js';
-import { tryEngage, disengage, apLine } from '../game/autopilot.js';
+import {
+  tryEngage,
+  tryApproachDock,
+  disengage,
+  apLine,
+  dockApproachLine,
+} from '../game/autopilot.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { tryEngageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
@@ -328,6 +334,12 @@ function dispatchLive(ctx, name, args) {
   }
   if (name === 'cancelAutopilot') {
     disengage(ctx, 'cancel');
+    return ok(ctx, name);
+  }
+  if (name === 'approachDock') {
+    const token = tryApproachDock(ctx);
+    if (token) return fail(ctx, name, token, dockApproachLine(token) || token);
+    agentClearFullStop(ctx);
     return ok(ctx, name);
   }
   if (name === 'engageAutomine') {

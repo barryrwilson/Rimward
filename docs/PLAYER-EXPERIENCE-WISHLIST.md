@@ -247,8 +247,9 @@ checked against the current initiative text before capture.
   Wave 127 PR1 `docs/AgentApiDesign.md`. `window.rimward` observe +
   `ping`/`disable`. Later PR2–PR6 commands / pulse / key fallback /
   badge / loopback. Pad approach is a v1 non-goal.
-  2026-08-27 Claude Fable playtest: observe/act bugs below landed in-repo;
-  pad “approach and dock” is still a v1 non-goal pending owner pick 2B.
+  2026-08-27 Claude Fable playtest: observe/act bugs below landed in-repo.
+  Owner choice 2B and `docs/AgentApiPadApproachDesign.md` were approved on
+  2026-08-27. RW-001 implements the bounded `approachDock` intent.
 
 Working well and needing no capture: the standing screen, the lock card with
 hardness and required laser, the automine refusal toast, the Ninth Tooth
@@ -292,15 +293,18 @@ items stay INBOX for a later wave. Scratch nits: `out/orch-fable/`.
 - [x] DONE (P2, MARKET): Pane said “posted prices, no spread” while fills
   differed. BUY/SELL cells now share `tradeFillUnit` with `tryTrade`. Boot-test
   TRADE offset is 5.
-- [ ] INBOX (P1, AGENT API/NAV): Add a playable outer **pad approach** intent
+- [x] DONE (P1, AGENT API/NAV): Add a playable outer **pad approach** intent
   with a brake profile. Fable had to hand-roll a steering loop against
   `window.__ctx` with synthetic mouse and key events, then rammed the station.
   Autopilot still flies **system** dests to gates. `dock` is in-zone KeyJ
-  (45 u; 90 u snap). v1 locked this as a non-goal (owner 2A). A later owner
-  pick of **2B** starts a **new** wave; it is not Agent API PR7/PR8. NAV-10 PR1
-  is a human HUD SLOW cue only (`docs/Nav10DockApproachDesign.md`). Do not
-  teleport. Do not add a third helm unless 2B says so.
-  Cite `docs/AgentApiDesign.md` far-pad 2B.
+  (45 u; 90 u snap). v1 locked this as a non-goal (owner 2A). Owner **2B** was
+  approved on 2026-08-27 for a **new** wave; it is not Agent API PR7/PR8.
+  Focused design: `docs/AgentApiPadApproachDesign.md`. NAV-10 PR1 remains a
+  human HUD SLOW cue only (`docs/Nav10DockApproachDesign.md`). Do not teleport
+  or add a third helm; reuse the existing Autopilot channel.
+  RW-001: additive `approachDock`; fixed `+X` stage/corridor; live braking;
+  ordinary KeyJ-equivalent dock pulse; range/closing-speed/phase/progress
+  observation; deterministic cancellation and fail-closed exits.
 - [x] DONE (P1, AGENT API/AI): A Fear 5 starter drifter cannot flee under
   agent control and dies a lot. Fable’s run was a pirate gauntlet; two hull
   losses. AI-05 starter grace is live, but this agent still could not break
