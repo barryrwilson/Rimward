@@ -80,9 +80,10 @@ less stable than the boot harness. Measured on this machine:
 | After the CTL-03 reorder and the TGT-07 staging | 5 local | 0 |
 | After the Hail02 event assertion | 3 local | 0 |
 | Same build, first CI runs | 2 CI | 2 |
-| After the fixed sleeps became bounded polls | 5 local | 1 |
+| After the fixed sleeps became bounded polls | 5 local, 1 CI | 1 local, 1 CI |
+| After the ship-asset wait | 1 local | 0 |
 
-Four staging flakes were found and fixed. None was product behaviour.
+Five staging flakes were found and fixed. None was product behaviour.
 
 1. **CTL-03** failed once when the ship reached the station late in a pass.
    The collision recovery then refused the KeyL open. CTL-03 now runs first,
@@ -101,12 +102,19 @@ Four staging flakes were found and fixed. None was product behaviour.
    poll for the expected condition, and a poll that times out returns the last
    real value, so the assertion still fails rather than passing on a retry.
 
-**Residual flake.** One local run of the polling build still failed, on TGT-07
-and Hail01, and that run's data was not captured before the next run
-overwrote it. The cause is therefore unknown, and the honest rate for the
-current build is 1 failure in 5 local runs. This is exactly why the workflow
-is not a required check, and why it uploads the evidence directory on failure
-as well as on success: the next failure will carry its own `probes.json`.
+5. **TGT-07** failed on the third CI run with `spawn-failed`. `spawnLiveShip`
+   returns `null` until the requested faction/class asset is loaded, and on a
+   cold runner none of a fixed try list was ready. The probe now takes its
+   spawn combos from the ships already flying — those assets are proven — then
+   primes the rest and waits up to 15 s for one to become ready. The last
+   local run picked `freehold / light / miner` from live traffic.
+
+**Residual flake.** One local run of the polling build failed on TGT-07 and
+Hail01, and that run's data was overwritten before capture, so its cause is
+unknown. Every failure since has carried its data and had a real cause.
+Keep the workflow off the required-check list until it runs clean for a while.
+It uploads the evidence directory on failure as well as on success, so the
+next failure arrives with its own `probes.json` and stills.
 
 ## Defects
 

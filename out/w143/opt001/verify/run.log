@@ -1,27 +1,27 @@
-vite [32m[1mVITE[22m v6.4.3[39m  [2mready in [0m[1m286[22m[2m[0m ms[22m
+vite [32m[1mVITE[22m v6.4.3[39m  [2mready in [0m[1m280[22m[2m[0m ms[22m
 vite [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5186[22m/[39m
 vite up 5186
-chrome C:\Program Files\Google\Chrome\Application\chrome.exe pid 55400
+chrome C:\Program Files\Google\Chrome\Application\chrome.exe pid 41760
 boot {"ctx":true,"title":false,"originText":false}
 click origin
-flight {"hasCtx":true,"origin":"greenhand","sys":"freehold","docked":false,"ships":6}
+flight {"hasCtx":true,"origin":"greenhand","sys":"freehold","docked":false,"ships":4}
 SHOT 09-ctl03-berth-hold.png
 SHOT 10-ctl03-resumed.png
-PASS CTL-03 {"moving":{"x":0,"y":30,"z":717.414035842793,"throttle":0.26844999998807906,"t":2.451899999976159},"openState":{"berthOpen":true,"berthHold":true,"paused":false,"x":0,"y":30,"z":717.414035842793,"t":2.451899999976159},"heldState":{"berthHold":true,"paused":false,"x":0,"y":30,"z":717.414035842793,"t":3.1518999999761594},"driftWhileHeld":0,"closed":{"berthOpen":false,"berthHold":false,"paused":false}}
-full stop {"fullStop":true,"throttle":0,"stationDist":128}
+PASS CTL-03 {"moving":{"x":0,"y":30,"z":714.1545095993962,"throttle":0.26999999999999996,"t":2.6548999999761596},"openState":{"berthOpen":true,"berthHold":true,"paused":false,"x":0,"y":30,"z":714.1545095993962,"t":2.6548999999761596},"heldState":{"berthHold":true,"paused":false,"x":0,"y":30,"z":714.1545095993962,"t":3.35489999997616},"driftWhileHeld":0,"closed":{"berthOpen":false,"berthHold":false,"paused":false}}
+full stop {"fullStop":true,"throttle":0,"stationDist":129}
 SHOT 01-hud06-home-marker.png
-PASS HUD-06 {"rowExists":true,"rowShown":true,"rowText":"HOMEFreehold Landing · 128u","pipParent":"hud","pipShown":false,"chevShown":true,"chevCenter":{"x":1316,"y":444},"docked":false,"chevInsetMin":124}
+PASS HUD-06 {"rowExists":true,"rowShown":true,"rowText":"HOMEFreehold Landing · 129u","pipParent":"hud","pipShown":false,"chevShown":true,"chevCenter":{"x":1316,"y":443},"docked":false,"chevInsetMin":124}
 SHOT 02-nav09-chart.png
 PASS NAV-09 {"chartOpen":true,"zoomIn":{"text":"Zoom in","h":24,"w":69},"zoomOut":{"text":"Zoom out","h":24,"w":75},"zoomReset":{"text":"Reset view","h":24,"w":89},"factionFilter":true,"factionOptions":13,"standingFilter":true,"itineraryExists":true,"itineraryHidden":true,"plot":{"ok":true,"dest":"Aegis"},"itineraryShown":true,"legCount":4,"firstLeg":"Bastion — Ferrous Hegemony — Stranger — hub route — Stranger; pirate traffic 3"}
 SHOT 03-hud07-deconflict.png
-PASS HUD-07 {"cruise":{"inCombat":false,"rangeOpacity":0.14,"leadOpacity":0.14,"reticle":{"w":80,"h":80},"hubChildren":["rw-reticle-pupil","rw-reticle-cilia","rw-reticle-cilia","rw-reticle-cilia","rw-reticle-range"]},"locked":{"hasLock":true,"lockName":"Pit Lamp","targetNameYield":true,"targetNameVisible":false,"combatNameText":"Pit Lamp","edgeArrowVisible":true,"edgeArrowCenter":{"y":677}},"hubExtras":[]}
-tgt07 setup {"ok":true,"nearD":120,"farD":380}
+PASS HUD-07 {"cruise":{"inCombat":false,"rangeOpacity":0.14,"leadOpacity":0.14,"reticle":{"w":80,"h":80},"hubChildren":["rw-reticle-pupil","rw-reticle-cilia","rw-reticle-cilia","rw-reticle-cilia","rw-reticle-range"]},"locked":{"hasLock":true,"lockName":"Claim Wren","targetNameYield":true,"targetNameVisible":false,"combatNameText":"Claim Wren","edgeArrowVisible":false,"edgeArrowCenter":null},"hubExtras":[]}
+tgt07 setup {"ok":true,"used":{"faction":"freehold","classKey":"light","role":"miner"},"nearD":120,"farD":380}
 SHOT 04-tgt07-hostile-first.png
-PASS TGT-07 {"setup":{"ok":true,"nearD":120,"farD":380},"gated":{"candCount":2,"hostileCount":1,"nearestDist":126,"nearestHostileDist":382,"expectedDist":382,"lockName":"OPT FAR HOSTILE","lockDist":382,"lockHostile":true,"lockIsFar":true,"lockIsNear":false,"closerNonHostileCount":1},"ungated":{"candCount":2,"hostileCount":0,"nearestDist":141,"nearestHostileDist":null,"expectedDist":141,"lockName":"OPT NEAR FRIEND","lockDist":141,"lockHostile":false,"lockIsFar":false,"lockIsNear":true,"closerNonHostileCount":0},"gatedAttempts":1,"ungatedAttempts":1,"gatedOk":true,"ungatedOk":true}
+PASS TGT-07 {"setup":{"ok":true,"used":{"faction":"freehold","classKey":"light","role":"miner"},"nearD":120,"farD":380},"gated":{"candCount":2,"hostileCount":1,"nearestDist":127,"nearestHostileDist":384,"expectedDist":384,"lockName":"OPT FAR HOSTILE","lockDist":384,"lockHostile":true,"lockIsFar":true,"lockIsNear":false,"closerNonHostileCount":1},"ungated":{"candCount":2,"hostileCount":0,"nearestDist":156,"nearestHostileDist":null,"expectedDist":156,"lockName":"OPT NEAR FRIEND","lockDist":156,"lockHostile":false,"lockIsFar":false,"lockIsNear":true,"closerNonHostileCount":0},"gatedAttempts":1,"ungatedAttemp
 SHOT 05-hail02-no-lock.png
 SHOT 06-hail02-dock-miss.png
-PASS Hail02 {"hailToast":{"toasts":[{"text":"Route plotted: 4 jumps to Aegis.","cls":"rw-toast comm"},{"text":"No lock — hail","cls":"rw-toast show warn"},{"text":"The manifest lied.","cls":"rw-toast comm"},{"text":"★ The lane wears masks. You saw one come off.","cls":"rw-toast sting"},{"text":"Heave to. Cargo or hull.","cls":"rw-toast show comm"}],"seen":{"hailMiss":1,"hailOpened":0,"misses":[{"name":"No lock","verb":"hail","reason":"none"}]},"cardDisplay":"block","paused":false},"dockMiss":{"toasts":["Route plotted: 4 jumps to Aegis.","No lock — hail","Freehold Landing — dock out of range (128 u)","★ Th
+PASS Hail02 {"hailToast":{"toasts":[{"text":"Route plotted: 4 jumps to Aegis.","cls":"rw-toast comm"},{"text":"No lock — hail","cls":"rw-toast show warn"},{"text":"The manifest lied.","cls":"rw-toast comm"},{"text":"★ The lane wears masks. You saw one come off.","cls":"rw-toast sting"},{"text":"Heave to. Cargo or hull.","cls":"rw-toast show comm"}],"seen":{"hailMiss":1,"hailOpened":0,"misses":[{"name":"No lock","verb":"hail","reason":"none"}]},"cardDisplay":"block","paused":false},"dockMiss":{"toasts":["Route plotted: 4 jumps to Aegis.","No lock — hail","Freehold Landing — dock out of range (129 u)","★ Th
 hail01 spawn {"ok":true,"credits":500}
 SHOT 07-hail01-demand-card.png
 SHOT 08-hail01-demand-outcome.png
-PASS Hail01 {"cardA":{"display":"block","namesSpeaker":true,"showsAmount":true,"timer":"20","buttons":["[1] Pay tribute — 80 UU","[2] Show teeth — reveal the hidden mounts","[3] Refuse — and fight"],"text":"HAIL — Vane RookRed Ledger · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight"},"cardB":{"timer":"18"},"ticked":true,"deadline":20,"pay":{"ok":true,"before":500},"after":{"credits":420,"cardDisplay":"block","demandOutcome":"paid","toasts":["Route plotted: 4 jumps to Aegis.","No lock — hail","Freehold Landing — dock 
+PASS Hail01 {"cardA":{"display":"block","namesSpeaker":true,"showsAmount":true,"timer":"20","buttons":["[1] Pay tribute — 80 UU","[2] Show teeth — reveal the hidden mounts","[3] Refuse — and fight"],"text":"HAIL — Vane RookRed Ledger · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight"},"cardB":{"timer":"17"},"ticked":true,"deadline":20,"pay":{"ok":true,"before":500},"after":{"credits":420,"cardDisplay":"block","demandOutcome":"paid","toasts":["Vane Rook — tribute taken. They run.","No lock — hail","Freehold Landing — d

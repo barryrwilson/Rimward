@@ -673,18 +673,45 @@ async function main() {
       const setup = await cdp.eval(`(async () => {
         const c = window.__ctx;
         const { spawnLiveShip } = await import('/src/systems/npc.js');
+        const { isShipAssetReady, primeShipAsset } =
+          await import('/src/systems/ship-assets.js');
         const base = c.ship.object.position;
+        // A ship mesh needs its asset loaded, and on a cold CI runner none of
+        // a fixed list may be ready yet. Prefer the combos already flying -
+        // their assets are proven - then prime the rest and wait for one.
+        const seen = new Set();
+        const tries = [];
+        const add = (faction, classKey, role) => {
+          if (!faction || !classKey) return;
+          const key = faction + '|' + classKey + '|' + (role || 'trader');
+          if (seen.has(key)) return;
+          seen.add(key);
+          tries.push({ faction, classKey, role: role || 'trader' });
+        };
+        for (const sh of c.ships) {
+          if (!sh || !sh.object) continue;
+          add(sh.record && sh.record.faction, sh.record && sh.record.classKey,
+            sh.record && sh.record.role);
+        }
+        add('independent', 'cutter', 'trader');
+        add('freehold', 'cutter', 'trader');
+        add('redledger', 'cutter', 'trader');
+        add('independent', 'freighter', 'trader');
+        for (const t of tries) {
+          try { primeShipAsset(t.faction, t.classKey, t.role); } catch {}
+        }
+        const deadline = Date.now() + 15000;
+        let ready = tries.filter((t) => isShipAssetReady(t.faction, t.classKey, t.role));
+        while (!ready.length && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
+          ready = tries.filter((t) => isShipAssetReady(t.faction, t.classKey, t.role));
+        }
+        if (!ready.length) return { ok: false, reason: 'no-ship-asset-ready', tried: tries.length };
         const mk = (tag, dx, hostile) => {
           const pos = base.clone();
           pos.x += dx;
-          const tries = [
-            { faction: 'independent', classKey: 'cutter', role: 'trader' },
-            { faction: 'freehold', classKey: 'cutter', role: 'trader' },
-            { faction: 'redledger', classKey: 'cutter', role: 'trader' },
-            { faction: 'independent', classKey: 'freighter', role: 'trader' },
-          ];
           let live = null;
-          for (const t of tries) {
+          for (const t of ready) {
             live = spawnLiveShip(c, {
               id: 'opt001-' + tag + '-' + Date.now(),
               name: tag,
@@ -715,11 +742,14 @@ async function main() {
         }
         const near = mk('OPT NEAR FRIEND', 120, false);
         const far = mk('OPT FAR HOSTILE', 380, true);
-        if (!near || !far) return { ok: false, reason: 'spawn-failed' };
+        if (!near || !far) {
+          return { ok: false, reason: 'spawn-failed', ready: ready.length, tried: tries.length };
+        }
         window.__opt001 = { near, far, parked };
         c.targets.current = null;
         return {
           ok: true,
+          used: ready[0],
           nearD: Math.round(near.object.position.distanceTo(base)),
           farD: Math.round(far.object.position.distanceTo(base)),
         };
