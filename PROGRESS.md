@@ -6025,8 +6025,15 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   hull/screen raised to survive
   ambient pirates; two named test
   ships spawned and removed.
-  No defect found. No separate issue
-  proposed. The optional stills for
+  No defect found in the seven
+  surfaces. Separate, pre-existing:
+  `npm run test:boot` fails at random
+  on an unchanged tree, on a
+  different check each time (WAVE117
+  NAV-05 on CI; WAVE30 DEMAND HAIL /
+  PAYTRIBUTE locally). Filed as
+  issue #20 with owner approval.
+  Not fixed here. The optional stills for
   these seven surfaces are no longer
   outstanding.
   CI: `.github/workflows/

@@ -150,9 +150,11 @@ The likely cause is an unseeded random in world or NPC generation, which
 would make the harness order-dependent rather than the product wrong.
 
 RW-007 names the hosted boot job a required check. A required check that
-fails at random blocks unrelated pull requests, so this is worth a bounded
-issue of its own. **No issue was created**; the task authorizes no external
-writes beyond this evidence.
+fails at random blocks unrelated pull requests, so it is filed on its own:
+**[#20](https://github.com/barryrwilson/Rimward/issues/20)** — `[QA] npm run
+test:boot fails at random on an unchanged tree`. The owner authorized that
+issue; it is labeled `orca:triage`, so the backlog key and the row in this
+inventory are left to triage.
 
 ## Evidence index
 
