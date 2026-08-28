@@ -504,6 +504,10 @@ export function initControls(ctx) {
 
   window.addEventListener('keydown', (e) => {
     const code = decodeKeyCode(e);
+    try {
+      // Intentional Settings mutex (RW-002 PR1): skip all TRACKED while open.
+      if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return;
+    } catch { /* helper miss: keep flight keys */ }
     if (e.repeat || !TRACKED.has(code)) return;
     pressed.add(code);
     if (PREVENT_DEFAULT.has(code)) e.preventDefault();
@@ -665,9 +669,20 @@ export function initControls(ctx) {
         ox *= radius / len;
         oy *= radius / len;
       }
-      input.steerX = ox / radius; // >0 = reticle right
-      input.steerY = -oy / radius; // >0 = reticle up (screen y is down-positive)
+      let sx = ox / radius; // >0 = reticle right
+      let sy = -oy / radius; // >0 = reticle up (screen y is down-positive)
+      let gain = ctx.settings && ctx.settings.mouseSensitivity;
+      if (typeof gain !== 'number' || !Number.isFinite(gain)) gain = 1;
+      if (gain < 0.25) gain = 0.25;
+      if (gain > 3) gain = 3;
+      sx = Math.max(-1, Math.min(1, sx * gain));
+      sy = Math.max(-1, Math.min(1, sy * gain));
+      if (ctx.settings && ctx.settings.invertX === true) sx = -sx;
+      if (ctx.settings && ctx.settings.invertY === true) sy = -sy;
+      input.steerX = sx;
+      input.steerY = sy;
       // Pixel offset from screen center (0,0 = centered) — HUD re-centers it.
+      // Helm invert/gain must not move the pip; KeyV still locks under the cursor.
       ctx.targets.reticleScreen.x = ox;
       ctx.targets.reticleScreen.y = oy;
 

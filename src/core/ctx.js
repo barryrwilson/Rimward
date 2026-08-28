@@ -254,6 +254,9 @@ export function createCtx({ scene, camera, renderer }) {
       muted: false, // song.js runs silent when true
       hudAlerts: false, // optional HUD ticks + reticleLock; mute still zeros master
       hints: true, // onboarding.js one-time hint overlays on/off
+      mouseSensitivity: 1, // helm gain after reticle clamp; 1 = live feel
+      invertX: false, // invert helm yaw only; reticle stays under the cursor
+      invertY: false, // invert helm pitch only; reticle stays under the cursor
     },
 
     // --- event queue. Frozen event types (payload documented at emit sites):

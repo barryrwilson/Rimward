@@ -35,6 +35,9 @@ const FIELDS = {
   hints: (v) => typeof v === 'boolean',
   textScale: (v) => TEXT_SCALES.includes(v),
   masterVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  mouseSensitivity: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0.25 && v <= 3,
+  invertX: (v) => typeof v === 'boolean',
+  invertY: (v) => typeof v === 'boolean',
 };
 
 const CHECKBOXES = [
@@ -75,7 +78,11 @@ export function initSettings(ctx) {
 
   function persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      const out = {};
+      for (const key of Object.keys(FIELDS)) {
+        if (Object.hasOwn(s, key)) out[key] = s[key];
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
     } catch {
       /* storage denied → session-only settings */
     }
@@ -209,6 +216,74 @@ export function initSettings(ctx) {
   volRow.appendChild(vol);
   volRow.appendChild(volValue);
 
+  // --- flight comfort (RW-002 PR1) ---
+  const flightHead = document.createElement('div');
+  flightHead.textContent = 'FLIGHT';
+  flightHead.style.cssText = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:14px 0 6px;';
+  panel.appendChild(flightHead);
+
+  const flightChecks = {};
+  const FLIGHT_CHECKS = [
+    ['invertX', 'Invert yaw (X)'],
+    ['invertY', 'Invert pitch (Y)'],
+  ];
+  for (const [key, label] of FLIGHT_CHECKS) {
+    const row = document.createElement('label');
+    row.style.cssText =
+      'display:flex;align-items:center;gap:10px;padding:5px 2px;min-height:44px;cursor:pointer;' +
+      'letter-spacing:0.06em;';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!s[key];
+    input.style.cssText = 'accent-color:#6fd2e0;width:15px;height:15px;cursor:pointer;';
+    input.setAttribute('aria-label', label);
+    input.addEventListener('change', () => {
+      s[key] = input.checked;
+      change();
+    });
+    flightChecks[key] = input;
+    row.appendChild(input);
+    row.appendChild(document.createTextNode(label));
+    panel.appendChild(row);
+  }
+
+  const sensLabel = document.createElement('div');
+  sensLabel.style.cssText = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:8px 0 6px;';
+  panel.appendChild(sensLabel);
+
+  const sensRow = document.createElement('div');
+  sensRow.style.cssText = 'display:flex;align-items:center;gap:10px;min-height:44px;';
+  panel.appendChild(sensRow);
+
+  const sens = document.createElement('input');
+  sens.type = 'range';
+  sens.min = '0.25';
+  sens.max = '3';
+  sens.step = '0.05';
+  sens.style.cssText = 'flex:1;accent-color:#6fd2e0;cursor:pointer;min-height:44px;';
+  sens.setAttribute('aria-label', 'Mouse sensitivity');
+  const sensValue = document.createElement('span');
+  sensValue.style.cssText = 'min-width:38px;text-align:right;color:#dce8f4;';
+  function clampSensitivity(v) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return 1;
+    return Math.max(0.25, Math.min(3, v));
+  }
+  function refreshSensitivity() {
+    const g = clampSensitivity(s.mouseSensitivity);
+    s.mouseSensitivity = g;
+    sens.value = String(g);
+    sensLabel.textContent = 'MOUSE SENSITIVITY';
+    sensValue.textContent = g.toFixed(2);
+  }
+  sens.addEventListener('input', () => {
+    s.mouseSensitivity = clampSensitivity(Number(sens.value));
+    refreshSensitivity();
+    change();
+  });
+  refreshSensitivity();
+  sensRow.appendChild(sens);
+  sensRow.appendChild(sensValue);
+
   document.body.appendChild(root);
 
   // ---------- open/close ----------
@@ -219,9 +294,11 @@ export function initSettings(ctx) {
     if (next) {
       // refresh widget state in case anything else restored defaults
       for (const key of Object.keys(checkboxInputs)) checkboxInputs[key].checked = !!s[key];
+      for (const key of Object.keys(flightChecks)) flightChecks[key].checked = !!s[key];
       refreshScaleButtons();
       vol.value = String(Math.round(s.masterVolume * 100));
       refreshVolume();
+      refreshSensitivity();
     }
   }
 
