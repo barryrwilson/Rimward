@@ -135,6 +135,17 @@ import {
   resolveMover,
 } from '../src/game/collision.js';
 
+// The boot harness exercises one fixed world. Production systems intentionally
+// use Math.random, but an unseeded process made the same commit produce
+// different traffic, event, hail, and navigation state from run to run. Keep
+// the full boot deterministic; scoped tests below may still save, override,
+// and restore this generator when they need to force a particular roll.
+let bootRandomState = 0x5eed1234;
+Math.random = () => {
+  bootRandomState = (Math.imul(1664525, bootRandomState) + 1013904223) >>> 0;
+  return bootRandomState / 0x100000000;
+};
+
 // ---- Minimal DOM stubs (enough for hud/station/hail/controls/song) ----
 function makeCtx2d() {
   const gradient = { addColorStop() {} };
