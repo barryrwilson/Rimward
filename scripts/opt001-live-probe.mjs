@@ -806,18 +806,30 @@ async function main() {
       await cdp.eval(`(() => {
         const c = window.__ctx;
         if (c?.targets) c.targets.current = null;
-        window.__opt001seen = { hailMiss: 0, hailOpened: 0 };
+        window.__opt001seen = { hailMiss: 0, hailOpened: 0, misses: [] };
         const raw = c.emit.bind(c);
         window.__opt001emit = raw;
         c.emit = (type, ev) => {
-          if (type === 'hailMiss') window.__opt001seen.hailMiss++;
+          if (type === 'hailMiss') {
+            window.__opt001seen.hailMiss++;
+            window.__opt001seen.misses.push({
+              name: ev && ev.name, verb: ev && ev.verb,
+              reason: ev && ev.reason, dist: ev && ev.dist,
+            });
+          }
           if (type === 'hailOpened') window.__opt001seen.hailOpened++;
           return raw(type, ev);
         };
         return true;
       })()`);
       await sleep(300);
-      await cdp.eval(`(() => { window.__opt001seen = { hailMiss: 0, hailOpened: 0 }; return true; })()`);
+      const RESET_SEEN = `(() => {
+        window.__opt001seen.hailMiss = 0;
+        window.__opt001seen.hailOpened = 0;
+        window.__opt001seen.misses = [];
+        return true;
+      })()`;
+      await cdp.eval(RESET_SEEN);
       await cdp.eval(KEY('KeyH', 'h'));
       await sleep(400);
       const hailToast = await cdp.eval(`(() => {
@@ -834,7 +846,10 @@ async function main() {
         };
       })()`);
       await cdp.shot('05-hail02-no-lock.png');
-      // Dock miss: name + integer range.
+      // Dock miss: name + integer range. The toast rail holds five slots and
+      // ambient chatter evicts a line, so the emitted event is the check and
+      // the rail text is supporting evidence.
+      await cdp.eval(RESET_SEEN);
       await cdp.eval(KEY('KeyJ', 'j'));
       await sleep(400);
       const dockMiss = await cdp.eval(`(() => {
@@ -845,6 +860,7 @@ async function main() {
         const p = c?.ship?.object?.position;
         return {
           toasts: t,
+          seen: window.__opt001seen,
           docked: !!c?.flags?.docked,
           stationDist: st && p ? Math.round(st.distanceTo(p)) : null,
         };
@@ -855,12 +871,21 @@ async function main() {
         if (window.__opt001emit) c.emit = window.__opt001emit;
         return true;
       })()`);
-      const noLockHit = hailToast.toasts.some((x) => /No lock\s+—\s+hail/.test(x.text)
+      // The no-lock press must emit one miss naming no lock, and open no card.
+      const noLockMiss = (hailToast.seen?.misses || [])
+        .find((m) => m.verb === 'hail' && m.reason === 'none' && m.name === 'No lock');
+      const noLockToast = hailToast.toasts.some((x) => /No lock\s+—\s+hail/.test(x.text)
         && /warn/.test(x.cls));
-      const dockHit = dockMiss.toasts.some((x) => /—\s+dock out of range \(\d+ u\)/.test(x));
-      record('Hail02', !!(noLockHit && dockHit && hailToast.seen?.hailMiss >= 1
-        && hailToast.seen?.hailOpened === 0
-        && !hailToast.paused && !dockMiss.docked), { hailToast, dockMiss });
+      // The dock press must emit one dock miss carrying an integer range.
+      const dockMissEv = (dockMiss.seen?.misses || [])
+        .find((m) => m.verb === 'dock' && typeof m.dist === 'number'
+          && Number.isInteger(m.dist));
+      const dockToast = dockMiss.toasts.some((x) => /—\s+dock out of range \(\d+ u\)/.test(x));
+      record('Hail02', !!(noLockMiss && noLockToast && dockMissEv
+        && hailToast.seen?.hailMiss === 1 && hailToast.seen?.hailOpened === 0
+        && dockMiss.seen?.hailOpened === 0
+        && !hailToast.paused && !dockMiss.docked),
+      { hailToast, dockMiss, noLockMiss, noLockToast, dockMissEv, dockToast });
     }
 
     // ================= Hail01 demand lifecycle =============================

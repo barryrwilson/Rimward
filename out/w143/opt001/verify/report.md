@@ -76,17 +76,63 @@ less stable than the boot harness. Measured on this machine:
 
 | Build | Runs | Failures |
 |---|---:|---:|
-| Before the CTL-03 reorder and the TGT-07 staging | 10 | 2 |
-| After | 5 | 0 |
+| First build | 10 | 2 |
+| After the CTL-03 reorder and the TGT-07 staging | 5 | 0 |
+| After the Hail02 event assertion | 3 local + 1 CI | 0 |
 
-Both earlier failures were harness staging, not product behaviour. The first
-was a late-pass collision recovery that refused the CTL-03 berth open. The
-second was ambient traffic inside the TGT-07 candidate set. Keep the workflow
-off the required-check list until it proves itself over more runs.
+Three staging flakes were found and fixed. None was product behaviour.
+
+1. **CTL-03** failed once when the ship reached the station late in a pass.
+   The collision recovery then refused the KeyL open. CTL-03 now runs first,
+   from the settled boot state, and ends in a full stop.
+2. **TGT-07** failed once when ambient traffic entered the 600 u cycle
+   envelope. The probe now re-stages the candidate set before it presses.
+3. **Hail02** failed on the first CI run. The toast rail holds five slots, and
+   ambient chatter on the slower runner evicted the dock-miss line before the
+   read. The check now reads the emitted `hailMiss` payload — `verb: 'dock'`,
+   `reason: 'dock-range'`, integer `dist` — and treats the rail text as
+   supporting evidence.
+
+Keep the workflow off the required-check list until it proves itself over more
+runs.
 
 ## Defects
 
-**None.** No separate issue is proposed. Nothing in this pass reopens completed behavior.
+**None in the seven surfaces.** Nothing in this pass reopens completed behavior.
+
+### Observed but out of scope: `npm run test:boot` is intermittent
+
+This is reported, not fixed. The issue is evidence-only, and this is not one
+of the seven surfaces.
+
+`src/`, `scripts/boot-test.mjs`, and `index.html` on this branch are identical
+to master `e38360f3`:
+
+```
+git diff --stat e38360f3 HEAD -- src/ scripts/boot-test.mjs index.html   # empty
+```
+
+The harness still fails at random, and **a different check fails each time**:
+
+| Where | Result | Failing check |
+|---|---|---|
+| CI run 33189821819 | PASS | — |
+| CI run 33190959203 | FAIL | `WAVE117 NAV-05 HANDOFF FAIL` |
+| CI run 33195085194 | PASS | — |
+| Local | FAIL | `WAVE30 DEMAND HAIL FAIL`, `WAVE30 PAYTRIBUTE FAIL` |
+| Local | FAIL | `WAVE30 DEMAND HAIL FAIL`, `WAVE30 PAYTRIBUTE FAIL` |
+| Local, 5 other runs | PASS | — |
+
+Roughly 2 failures in 8 local runs, and 1 in 3 hosted runs. `PROGRESS.md`
+already records a `REDMARCH castMatches` flake, so nondeterminism in this
+harness is a known theme; `WAVE30` and `WAVE117` look like new instances.
+The likely cause is an unseeded random in world or NPC generation, which
+would make the harness order-dependent rather than the product wrong.
+
+RW-007 names the hosted boot job a required check. A required check that
+fails at random blocks unrelated pull requests, so this is worth a bounded
+issue of its own. **No issue was created**; the task authorizes no external
+writes beyond this evidence.
 
 ## Evidence index
 
