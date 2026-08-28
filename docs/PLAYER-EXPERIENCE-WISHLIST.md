@@ -224,11 +224,13 @@ checked against the current initiative text before capture.
   captured Settings item covers new options, not in-game access.
   Wave 142 PR1 `docs/Ctl05PauseMenuDesign.md`.
   ACCESS: RESUME / SETTINGS / BERTH RECORDS / TITLE. KeyP stays.
-- [ ] INBOX (P3, RELIABILITY): Soften the runtime-error screen. An uncaught
-  error mid-flight shows "WebSim failed to start" with no reload control and
+- [x] DONE (P3, RELIABILITY): Soften the runtime-error screen. An uncaught
+  error mid-flight showed "WebSim failed to start" with no reload control and
   no word about the autosave. (The trigger in this playtest was injected test
   code, not game code; the handler behavior is the game's.) Say "something
   broke", confirm the last save time, and offer a reload.
+  RW-004: startup vs runtime copy, trustworthy `savedAt` line, Reload,
+  inert background, Tab trap. Harness `npm run test:runtime-error-ux`.
 - [ ] INBOX (P3, DEATH): Confirm the death penalty is intended. Ship loss kept
   all 350 UU and restored the hull free at the last berth; loss currently has
   no cost.
