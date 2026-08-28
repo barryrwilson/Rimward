@@ -76,11 +76,13 @@ less stable than the boot harness. Measured on this machine:
 
 | Build | Runs | Failures |
 |---|---:|---:|
-| First build | 10 | 2 |
-| After the CTL-03 reorder and the TGT-07 staging | 5 | 0 |
-| After the Hail02 event assertion | 3 local + 1 CI | 0 |
+| First build | 10 local | 2 |
+| After the CTL-03 reorder and the TGT-07 staging | 5 local | 0 |
+| After the Hail02 event assertion | 3 local | 0 |
+| Same build, first CI runs | 2 CI | 2 |
+| After the fixed sleeps became bounded polls | 5 local | 1 |
 
-Three staging flakes were found and fixed. None was product behaviour.
+Four staging flakes were found and fixed. None was product behaviour.
 
 1. **CTL-03** failed once when the ship reached the station late in a pass.
    The collision recovery then refused the KeyL open. CTL-03 now runs first,
@@ -92,9 +94,19 @@ Three staging flakes were found and fixed. None was product behaviour.
    read. The check now reads the emitted `hailMiss` payload — `verb: 'dock'`,
    `reason: 'dock-range'`, integer `dist` — and treats the rail text as
    supporting evidence.
+4. **HUD-06 and Hail02** failed on the second CI run. Both were fixed sleeps
+   that are long enough on a desktop and too short on a shared runner: the
+   POS row hides one throttled HUD tick after the chart opens, and the miss
+   event landed after the 400 ms read. Every race-prone read is now a bounded
+   poll for the expected condition, and a poll that times out returns the last
+   real value, so the assertion still fails rather than passing on a retry.
 
-Keep the workflow off the required-check list until it proves itself over more
-runs.
+**Residual flake.** One local run of the polling build still failed, on TGT-07
+and Hail01, and that run's data was not captured before the next run
+overwrote it. The cause is therefore unknown, and the honest rate for the
+current build is 1 failure in 5 local runs. This is exactly why the workflow
+is not a required check, and why it uploads the evidence directory on failure
+as well as on success: the next failure will carry its own `probes.json`.
 
 ## Defects
 

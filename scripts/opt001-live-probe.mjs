@@ -315,6 +315,25 @@ async function main() {
     await cdp.send('Runtime.enable');
     await cdp.send('Page.enable');
 
+    /**
+     * Re-evaluate `expr` until `pred` holds, then return that value. A fixed
+     * sleep races on a slow runner: HUD text is throttled to 0.2 s, and an
+     * event can land after the read. Returns the last value on timeout, so
+     * the assertion still sees real data and still fails.
+     */
+    const waitUntil = async (expr, pred, ms = 6000, step = 150) => {
+      const t0 = Date.now();
+      let last = null;
+      while (Date.now() - t0 < ms) {
+        last = await cdp.eval(expr);
+        try {
+          if (pred(last)) return last;
+        } catch { /* keep polling on a shape we did not expect */ }
+        await sleep(step);
+      }
+      return last;
+    };
+
     // ---- Boot into flight -------------------------------------------------
     const waitBoot = async (ms = 30000) => {
       const t0 = Date.now();
@@ -423,8 +442,7 @@ async function main() {
         return { x: p.x, y: p.y, z: p.z, throttle: c?.input?.throttle ?? null, t: c.world.time };
       })()`);
       await cdp.eval(KEY('KeyL', 'l'));
-      await sleep(500);
-      const openState = await cdp.eval(`(() => {
+      const openState = await waitUntil(`(() => {
         const c = window.__ctx;
         const p = c.ship.object.position;
         return {
@@ -434,7 +452,7 @@ async function main() {
           x: p.x, y: p.y, z: p.z,
           t: c.world.time,
         };
-      })()`);
+      })()`, (v) => v && v.berthOpen && v.berthHold);
       await sleep(2000);
       const heldState = await cdp.eval(`(() => {
         const c = window.__ctx;
@@ -451,15 +469,14 @@ async function main() {
         heldState.x - openState.x, heldState.y - openState.y, heldState.z - openState.z,
       );
       await cdp.eval(KEY('KeyL', 'l'));
-      await sleep(1200);
-      const closed = await cdp.eval(`(() => {
+      const closed = await waitUntil(`(() => {
         const c = window.__ctx;
         return {
           berthOpen: !!c?.flags?.berthOpen,
           berthHold: !!c?.flags?.berthHold,
           paused: !!c?.flags?.paused,
         };
-      })()`);
+      })()`, (v) => v && !v.berthOpen && !v.berthHold);
       await cdp.shot('10-ctl03-resumed.png');
       record('CTL-03', !!(openState.berthOpen && openState.berthHold && !openState.paused
         && drift < 1 && !closed.berthOpen && !closed.berthHold),
@@ -520,8 +537,7 @@ async function main() {
 
       // Overlay hide: chart open must hide the home marker + POS HOME row.
       await cdp.eval(KEY('KeyM', 'm'));
-      await sleep(700);
-      const hidden = await cdp.eval(`(() => {
+      const hidden = await waitUntil(`(() => {
         const shown = (s) => {
           const el = document.querySelector(s);
           return !!el && !el.classList.contains('is-hidden')
@@ -533,7 +549,7 @@ async function main() {
           pip: shown('.rw-home-pip'),
           chev: shown('.rw-home-chevron'),
         };
-      })()`);
+      })()`, (v) => v && v.chartOpen && !v.row && !v.pip && !v.chev);
       results.surfaces['HUD-06'].overlayHide = hidden;
       if (hidden.row || hidden.pip || hidden.chev) {
         results.surfaces['HUD-06'].pass = false;
@@ -577,8 +593,7 @@ async function main() {
         sel.dispatchEvent(new Event('change', { bubbles: true }));
         return { ok: true, dest: opt.textContent.trim().slice(0, 60) };
       })()`);
-      await sleep(900);
-      const nav09b = await cdp.eval(`(() => {
+      const nav09b = await waitUntil(`(() => {
         const it = document.getElementById('rw-galaxy-itinerary');
         const rows = [...document.querySelectorAll('.rw-galaxy-itinerary-list li')];
         return {
@@ -586,7 +601,7 @@ async function main() {
           legCount: rows.length,
           firstLeg: (rows[0]?.textContent || '').trim().slice(0, 120),
         };
-      })()`);
+      })()`, (v) => v && v.itineraryShown && v.legCount > 0);
       await cdp.shot('02-nav09-chart.png');
       const zoomOk = !!(nav09a.zoomIn && nav09a.zoomOut && nav09a.zoomReset
         && nav09a.zoomIn.h >= 24 && nav09a.zoomOut.h >= 24 && nav09a.zoomReset.h >= 24);
@@ -623,8 +638,7 @@ async function main() {
       })()`);
       // Lock a contact and check the duplicate name yields.
       await cdp.eval(KEY('KeyT', 't'));
-      await sleep(900);
-      const locked = await cdp.eval(`(() => {
+      const locked = await waitUntil(`(() => {
         const c = window.__ctx;
         const tn = document.querySelector('.rw-target-name');
         const cn = document.querySelector('.rw-combat-name');
@@ -644,7 +658,7 @@ async function main() {
           edgeArrowVisible: vis(arrow),
           edgeArrowCenter: vis(arrow) ? box(arrow) : null,
         };
-      })()`);
+      })()`, (v) => v && v.hasLock);
       await cdp.shot('03-hud07-deconflict.png');
       const hubExtras = (cruise.hubChildren || []).filter((cn) => /deconflict|ppi|compass/i.test(cn));
       record('HUD-07', !!(cruise.reticle && cruise.reticle.w === 80 && cruise.reticle.h === 80
@@ -737,8 +751,8 @@ async function main() {
               continue;
             }
             await cdp.eval(KEY('KeyT', 't'));
-            await sleep(600);
-            return { snap: await cdp.eval(SNAP), pre, attempts: a };
+            const snap = await waitUntil(SNAP, (v) => v && v.lockName !== null, 4000);
+            return { snap, pre, attempts: a };
           }
           return { snap: null, pre: null, attempts };
         };
@@ -831,8 +845,7 @@ async function main() {
       })()`;
       await cdp.eval(RESET_SEEN);
       await cdp.eval(KEY('KeyH', 'h'));
-      await sleep(400);
-      const hailToast = await cdp.eval(`(() => {
+      const hailToast = await waitUntil(`(() => {
         const c = window.__ctx;
         const t = [...document.querySelectorAll('.rw-toast')]
           .map((el) => ({ text: (el.textContent || '').trim(), cls: el.className }))
@@ -844,15 +857,14 @@ async function main() {
           cardDisplay: card ? getComputedStyle(card).display : null,
           paused: !!c?.flags?.paused,
         };
-      })()`);
+      })()`, (v) => v && v.seen && v.seen.hailMiss >= 1);
       await cdp.shot('05-hail02-no-lock.png');
       // Dock miss: name + integer range. The toast rail holds five slots and
       // ambient chatter evicts a line, so the emitted event is the check and
       // the rail text is supporting evidence.
       await cdp.eval(RESET_SEEN);
       await cdp.eval(KEY('KeyJ', 'j'));
-      await sleep(400);
-      const dockMiss = await cdp.eval(`(() => {
+      const dockMiss = await waitUntil(`(() => {
         const c = window.__ctx;
         const t = [...document.querySelectorAll('.rw-toast')]
           .map((el) => (el.textContent || '').trim()).filter(Boolean);
@@ -864,7 +876,8 @@ async function main() {
           docked: !!c?.flags?.docked,
           stationDist: st && p ? Math.round(st.distanceTo(p)) : null,
         };
-      })()`);
+      })()`, (v) => v && v.seen
+        && (v.seen.misses || []).some((m) => m.verb === 'dock' || m.verb === 'jump'));
       await cdp.shot('06-hail02-dock-miss.png');
       await cdp.eval(`(() => {
         const c = window.__ctx;
@@ -948,8 +961,7 @@ async function main() {
         return { ok: true, credits: c.world.credits };
       })()`);
       say('hail01 spawn', JSON.stringify(spawn1));
-      await sleep(900);
-      const cardA = await cdp.eval(`(() => {
+      const cardA = await waitUntil(`(() => {
         const card = document.querySelector('.rw-hail-card');
         const text = (card?.textContent || '').trim();
         const buttons = [...(card?.querySelectorAll('button') || [])]
@@ -962,7 +974,7 @@ async function main() {
           buttons,
           text: text.slice(0, 300),
         };
-      })()`);
+      })()`, (v) => v && v.display === 'block' && v.namesSpeaker && v.showsAmount);
       await cdp.shot('07-hail01-demand-card.png');
       await sleep(2500);
       const cardB = await cdp.eval(`(() => {
@@ -981,8 +993,7 @@ async function main() {
         btn.click();
         return { ok: true, before };
       })()`);
-      await sleep(1200);
-      const after = await cdp.eval(`(() => {
+      const after = await waitUntil(`(() => {
         const c = window.__ctx;
         const card = document.querySelector('.rw-hail-card');
         const live = window.__opt001demand;
@@ -993,7 +1004,7 @@ async function main() {
           toasts: [...document.querySelectorAll('.rw-toast')]
             .map((el) => (el.textContent || '').trim()).filter(Boolean),
         };
-      })()`);
+      })()`, (v) => v && v.demandOutcome === 'paid');
       await cdp.shot('08-hail01-demand-outcome.png');
       const ticked = cardA.timer != null && cardB.timer != null
         && Number(cardB.timer) < Number(cardA.timer);

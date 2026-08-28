@@ -1,5 +1,5 @@
 {
-  "commit": "e38360f38bea7faf56a8bb4445c62c880f9e31e8",
+  "commit": "x",
   "port": 5186,
   "cdp": 9486,
   "boot": {
@@ -7,7 +7,7 @@
     "origin": "greenhand",
     "sys": "freehold",
     "docked": false,
-    "ships": 4
+    "ships": 6
   },
   "surfaces": {
     "CTL-03": {
@@ -15,9 +15,9 @@
       "moving": {
         "x": 0,
         "y": 30,
-        "z": 717.3669736287633,
-        "throttle": 0.21659999999403956,
-        "t": 2.5934999999403967
+        "z": 717.414035842793,
+        "throttle": 0.26844999998807906,
+        "t": 2.451899999976159
       },
       "openState": {
         "berthOpen": true,
@@ -25,16 +25,16 @@
         "paused": false,
         "x": 0,
         "y": 30,
-        "z": 712.417573628817,
-        "t": 2.893499999940397
+        "z": 717.414035842793,
+        "t": 2.451899999976159
       },
       "heldState": {
         "berthHold": true,
         "paused": false,
         "x": 0,
         "y": 30,
-        "z": 712.417573628817,
-        "t": 3.6934999999403977
+        "z": 717.414035842793,
+        "t": 3.1518999999761594
       },
       "driftWhileHeld": 0,
       "closed": {
@@ -47,13 +47,13 @@
       "pass": true,
       "rowExists": true,
       "rowShown": true,
-      "rowText": "HOMEFreehold Landing · 121u",
+      "rowText": "HOMEFreehold Landing · 128u",
       "pipParent": "hud",
       "pipShown": false,
       "chevShown": true,
       "chevCenter": {
         "x": 1316,
-        "y": 460
+        "y": 444
       },
       "docked": false,
       "chevInsetMin": 124,
@@ -115,13 +115,13 @@
       },
       "locked": {
         "hasLock": true,
-        "lockName": "Claim Wren",
+        "lockName": "Pit Lamp",
         "targetNameYield": true,
         "targetNameVisible": false,
-        "combatNameText": "Claim Wren",
+        "combatNameText": "Pit Lamp",
         "edgeArrowVisible": true,
         "edgeArrowCenter": {
-          "y": 428
+          "y": 677
         }
       },
       "hubExtras": []
@@ -136,11 +136,11 @@
       "gated": {
         "candCount": 2,
         "hostileCount": 1,
-        "nearestDist": 136,
-        "nearestHostileDist": 390,
-        "expectedDist": 390,
+        "nearestDist": 126,
+        "nearestHostileDist": 382,
+        "expectedDist": 382,
         "lockName": "OPT FAR HOSTILE",
-        "lockDist": 390,
+        "lockDist": 382,
         "lockHostile": true,
         "lockIsFar": true,
         "lockIsNear": false,
@@ -149,11 +149,11 @@
       "ungated": {
         "candCount": 2,
         "hostileCount": 0,
-        "nearestDist": 125,
+        "nearestDist": 141,
         "nearestHostileDist": null,
-        "expectedDist": 125,
+        "expectedDist": 141,
         "lockName": "OPT NEAR FRIEND",
-        "lockDist": 125,
+        "lockDist": 141,
         "lockHostile": false,
         "lockIsFar": false,
         "lockIsNear": true,
@@ -186,7 +186,7 @@
           },
           {
             "text": "Heave to. Cargo or hull.",
-            "cls": "rw-toast comm"
+            "cls": "rw-toast show comm"
           }
         ],
         "seen": {
@@ -207,7 +207,7 @@
         "toasts": [
           "Route plotted: 4 jumps to Aegis.",
           "No lock — hail",
-          "Freehold Landing — dock out of range (121 u)",
+          "Freehold Landing — dock out of range (128 u)",
           "★ The lane wears masks. You saw one come off.",
           "Heave to. Cargo or hull."
         ],
@@ -219,12 +219,12 @@
               "name": "Freehold Landing",
               "verb": "dock",
               "reason": "dock-range",
-              "dist": 121
+              "dist": 128
             }
           ]
         },
         "docked": false,
-        "stationDist": 121
+        "stationDist": 128
       },
       "noLockMiss": {
         "name": "No lock",
@@ -236,7 +236,7 @@
         "name": "Freehold Landing",
         "verb": "dock",
         "reason": "dock-range",
-        "dist": 121
+        "dist": 128
       },
       "dockToast": true
     },
@@ -252,10 +252,10 @@
           "[2] Show teeth — reveal the hidden mounts",
           "[3] Refuse — and fight"
         ],
-        "text": "HAIL — Vane RookIndependent · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight"
+        "text": "HAIL — Vane RookRed Ledger · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight"
       },
       "cardB": {
-        "timer": "17"
+        "timer": "18"
       },
       "ticked": true,
       "deadline": 20,
@@ -268,11 +268,11 @@
         "cardDisplay": "block",
         "demandOutcome": "paid",
         "toasts": [
-          "Vane Rook — tribute taken. They run.",
+          "Route plotted: 4 jumps to Aegis.",
           "No lock — hail",
-          "Freehold Landing — dock out of range (121 u)",
+          "Freehold Landing — dock out of range (128 u)",
           "Vane Rook — heave to. Pay 80 UU or fight. 20s.",
-          "Smart. Run along."
+          "Heave to. Cargo or hull."
         ]
       },
       "outcomeToast": true
