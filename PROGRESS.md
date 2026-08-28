@@ -5995,6 +5995,57 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
   `PROGRESS.md`,
   `out/w142/`.
+- Wave 143 (2026-08-28): OPT-001 QA
+  evidence refresh. Issue #8. No
+  `src/` write. Live Chrome CDP pass
+  on master `e38360f3` (Vite 5186,
+  swiftshader, 1440x900), one New
+  Game Freehold Greenhand save.
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / TGT-07 / CTL-03 all
+  **PASS**, 7/7. 0 console errors,
+  0 exceptions. TGT-07 gets its
+  first live browser coverage: wave
+  136 shipped it `[NO BROWSER
+  COVERAGE]`; KeyT from an empty lock
+  took the 380 u hostile over the
+  120 u friendly, and took the 120 u
+  friendly again once the intent bit
+  was cleared. CTL-03 held the ship
+  at 0.000 u drift for 2 s under
+  throttle with `berthHold` true and
+  `paused` false. Hail01 card named
+  Vane Rook, 80 UU, 20 s, ticked to
+  18 s, and `[1]` paid 500 to 420
+  with outcome `paid`.
+  Harness pins (not product state):
+  `ai.intent` pinned across the KeyT
+  press because the 300 u station law
+  zone clears NPC intent every tick;
+  hull/screen raised to survive
+  ambient pirates; two named test
+  ships spawned and removed.
+  No defect found. No separate issue
+  proposed. The optional stills for
+  these seven surfaces are no longer
+  outstanding.
+  VERIFY: `out/w143/opt001/verify/`
+  (`report.md`, `probes.json`,
+  `console.txt`, logs). Harness is
+  `scripts/opt001-live-probe.mjs`;
+  rerun it to regenerate the ten
+  stills. The stills stay out of Git,
+  because Git keeps every version of
+  a binary forever. They live on the
+  pull request instead.
+  `npm run build` PASS.
+  `npm run test:boot` PASS.
+  Browser profile stayed outside the
+  repository.
+  FILES: `scripts/opt001-live-probe.mjs`,
+  `docs/REMAINING-WORK.md`,
+  `PROGRESS.md`,
+  `out/w143/opt001/verify/*.md|json|txt|log`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now
