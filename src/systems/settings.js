@@ -38,6 +38,10 @@ const FIELDS = {
   mouseSensitivity: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0.25 && v <= 3,
   invertX: (v) => typeof v === 'boolean',
   invertY: (v) => typeof v === 'boolean',
+  musicVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  effectsVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  voiceVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  uiVolume: (v) => typeof v === 'number' && v >= 0 && v <= 1,
 };
 
 const CHECKBOXES = [
@@ -122,20 +126,32 @@ export function initSettings(ctx) {
 
   const hint = document.createElement('div');
   hint.textContent = 'O or ESC to close — changes apply immediately';
-  hint.style.cssText = 'color:#5f7185;font-size:11px;letter-spacing:0.1em;margin:6px 0 12px;';
+  hint.style.cssText = 'color:#5f7185;font-size:11px;letter-spacing:0.1em;margin:6px 0 8px;';
   panel.appendChild(hint);
 
-  // --- checkboxes ---
+  const SECTION_HEAD_CSS =
+    'font-size:12px;letter-spacing:0.28em;color:#6fd2e0;margin:14px 0 8px;' +
+    'border-bottom:1px solid #22303f;padding-bottom:6px;';
+  const SLIDER_CAPTION_CSS = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:8px 0 6px;';
+
+  function addSectionHead(text) {
+    const el = document.createElement('div');
+    el.textContent = text;
+    el.style.cssText = SECTION_HEAD_CSS;
+    panel.appendChild(el);
+  }
+
   const checkboxInputs = {};
-  for (const [key, label] of CHECKBOXES) {
+  function addCheckbox(key, label, rowExtra) {
     const row = document.createElement('label');
     row.style.cssText =
       'display:flex;align-items:center;gap:10px;padding:5px 2px;cursor:pointer;' +
-      'letter-spacing:0.06em;';
+      'letter-spacing:0.06em;' + (rowExtra || '');
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = !!s[key];
     input.style.cssText = 'accent-color:#6fd2e0;width:15px;height:15px;cursor:pointer;';
+    input.setAttribute('aria-label', label);
     input.addEventListener('change', () => {
       s[key] = input.checked;
       change();
@@ -146,10 +162,16 @@ export function initSettings(ctx) {
     panel.appendChild(row);
   }
 
+  addSectionHead('ACCESSIBILITY');
+  const A11Y_KEYS = ['colorblind', 'highContrast', 'reducedMotion', 'hints'];
+  for (const [key, label] of CHECKBOXES) {
+    if (A11Y_KEYS.includes(key)) addCheckbox(key, label);
+  }
+
   // --- text scale segmented row ---
   const scaleLabel = document.createElement('div');
   scaleLabel.textContent = 'TEXT SIZE';
-  scaleLabel.style.cssText = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:14px 0 6px;';
+  scaleLabel.style.cssText = SLIDER_CAPTION_CSS;
   panel.appendChild(scaleLabel);
 
   const scaleRow = document.createElement('div');
@@ -184,43 +206,8 @@ export function initSettings(ctx) {
   }
   refreshScaleButtons();
 
-  // --- master volume slider ---
-  const volLabel = document.createElement('div');
-  volLabel.style.cssText = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:14px 0 6px;';
-  panel.appendChild(volLabel);
-
-  const volRow = document.createElement('div');
-  volRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
-  panel.appendChild(volRow);
-
-  const vol = document.createElement('input');
-  vol.type = 'range';
-  vol.min = '0';
-  vol.max = '100';
-  vol.step = '1';
-  vol.value = String(Math.round(s.masterVolume * 100));
-  vol.style.cssText = 'flex:1;accent-color:#6fd2e0;cursor:pointer;';
-  vol.setAttribute('aria-label', 'Master volume');
-  const volValue = document.createElement('span');
-  volValue.style.cssText = 'min-width:38px;text-align:right;color:#dce8f4;';
-  function refreshVolume() {
-    volLabel.textContent = 'MASTER VOLUME';
-    volValue.textContent = vol.value + '%';
-  }
-  vol.addEventListener('input', () => {
-    s.masterVolume = Math.max(0, Math.min(1, Number(vol.value) / 100));
-    refreshVolume();
-    change();
-  });
-  refreshVolume();
-  volRow.appendChild(vol);
-  volRow.appendChild(volValue);
-
   // --- flight comfort (RW-002 PR1) ---
-  const flightHead = document.createElement('div');
-  flightHead.textContent = 'FLIGHT';
-  flightHead.style.cssText = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:14px 0 6px;';
-  panel.appendChild(flightHead);
+  addSectionHead('FLIGHT');
 
   const flightChecks = {};
   const FLIGHT_CHECKS = [
@@ -248,7 +235,7 @@ export function initSettings(ctx) {
   }
 
   const sensLabel = document.createElement('div');
-  sensLabel.style.cssText = 'color:#7d93ab;font-size:11px;letter-spacing:0.2em;margin:8px 0 6px;';
+  sensLabel.style.cssText = SLIDER_CAPTION_CSS;
   panel.appendChild(sensLabel);
 
   const sensRow = document.createElement('div');
@@ -284,6 +271,112 @@ export function initSettings(ctx) {
   sensRow.appendChild(sens);
   sensRow.appendChild(sensValue);
 
+  // --- audio (RW-002 PR2). Mute + master + buses. No preview blips. Reset audio is PR4. ---
+  const busRefreshers = [];
+  let vol = null;
+  let refreshVolume = () => {};
+  try {
+    addSectionHead('AUDIO');
+    const audioNote = document.createElement('div');
+    audioNote.textContent =
+      'Master multiplies every bus; mute silences output and does not change slider values.';
+    audioNote.style.cssText = 'color:#5f7185;font-size:11px;letter-spacing:0.04em;margin:0 0 8px;';
+    panel.appendChild(audioNote);
+
+    const AUDIO_CHECK_KEYS = ['muted', 'hudAlerts'];
+    for (let i = 0; i < AUDIO_CHECK_KEYS.length; i++) {
+      const want = AUDIO_CHECK_KEYS[i];
+      let pair = null;
+      for (let j = 0; j < CHECKBOXES.length; j++) {
+        if (CHECKBOXES[j][0] === want) pair = CHECKBOXES[j];
+      }
+      if (pair) addCheckbox(pair[0], pair[1], 'min-height:44px;');
+    }
+
+    const volLabel = document.createElement('div');
+    volLabel.style.cssText = SLIDER_CAPTION_CSS;
+    panel.appendChild(volLabel);
+    const volRow = document.createElement('div');
+    volRow.style.cssText = 'display:flex;align-items:center;gap:10px;min-height:44px;';
+    panel.appendChild(volRow);
+    vol = document.createElement('input');
+    vol.type = 'range';
+    vol.min = '0';
+    vol.max = '100';
+    vol.step = '1';
+    vol.value = String(Math.round(s.masterVolume * 100));
+    vol.style.cssText = 'flex:1;accent-color:#6fd2e0;cursor:pointer;min-height:44px;';
+    vol.setAttribute('aria-label', 'Master volume');
+    const volValue = document.createElement('span');
+    volValue.style.cssText = 'min-width:38px;text-align:right;color:#dce8f4;';
+    refreshVolume = () => {
+      volLabel.textContent = 'MASTER VOLUME';
+      volValue.textContent = vol.value + '%';
+    };
+    vol.addEventListener('input', () => {
+      s.masterVolume = Math.max(0, Math.min(1, Number(vol.value) / 100));
+      refreshVolume();
+      change();
+    });
+    refreshVolume();
+    volRow.appendChild(vol);
+    volRow.appendChild(volValue);
+
+    const BUS_SLIDERS = [
+      ['musicVolume', 'MUSIC VOLUME', 'Music volume'],
+      ['effectsVolume', 'EFFECTS VOLUME', 'Effects volume'],
+      ['voiceVolume', 'VOICE VOLUME', 'Voice volume'],
+      ['uiVolume', 'UI VOLUME', 'UI volume'],
+    ];
+    function clampBusVolume(v) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) return 1;
+      return Math.max(0, Math.min(1, v));
+    }
+    for (const [key, heading, aria] of BUS_SLIDERS) {
+      const busLabel = document.createElement('div');
+      busLabel.style.cssText = SLIDER_CAPTION_CSS;
+      panel.appendChild(busLabel);
+      const busRow = document.createElement('div');
+      busRow.style.cssText = 'display:flex;align-items:center;gap:10px;min-height:44px;';
+      panel.appendChild(busRow);
+      const busSl = document.createElement('input');
+      busSl.type = 'range';
+      busSl.min = '0';
+      busSl.max = '100';
+      busSl.step = '1';
+      busSl.style.cssText = 'flex:1;accent-color:#6fd2e0;cursor:pointer;min-height:44px;';
+      busSl.setAttribute('aria-label', aria);
+      const busVal = document.createElement('span');
+      busVal.style.cssText = 'min-width:38px;text-align:right;color:#dce8f4;';
+      const refreshBus = () => {
+        try {
+          const g = clampBusVolume(s[key]);
+          s[key] = g;
+          busSl.value = String(Math.round(g * 100));
+          busLabel.textContent = heading;
+          busVal.textContent = busSl.value + '%';
+        } catch {
+          /* never throw from Settings paint */
+        }
+      };
+      busSl.addEventListener('input', () => {
+        try {
+          s[key] = clampBusVolume(Number(busSl.value) / 100);
+          refreshBus();
+          change();
+        } catch {
+          /* never throw from Settings paint */
+        }
+      });
+      refreshBus();
+      busRow.appendChild(busSl);
+      busRow.appendChild(busVal);
+      busRefreshers.push(refreshBus);
+    }
+  } catch {
+    /* never throw from Settings paint */
+  }
+
   document.body.appendChild(root);
 
   // ---------- open/close ----------
@@ -296,9 +389,12 @@ export function initSettings(ctx) {
       for (const key of Object.keys(checkboxInputs)) checkboxInputs[key].checked = !!s[key];
       for (const key of Object.keys(flightChecks)) flightChecks[key].checked = !!s[key];
       refreshScaleButtons();
-      vol.value = String(Math.round(s.masterVolume * 100));
-      refreshVolume();
+      if (vol) {
+        vol.value = String(Math.round(s.masterVolume * 100));
+        refreshVolume();
+      }
       refreshSensitivity();
+      for (let i = 0; i < busRefreshers.length; i++) busRefreshers[i]();
     }
   }
 
