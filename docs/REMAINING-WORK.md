@@ -1,6 +1,7 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-08-28, after RW-004 / RW-006 / RW-007.
+Inventory date: 2026-08-28, after RW-004 / RW-006 / RW-007 and the local
+verification for issue #20.
 
 This is the compact backlog index. GitHub Project **Rimward** is the operational
 queue used by Orca AI. The wishlist remains the product-intent and playtest
@@ -17,6 +18,7 @@ source; `PROGRESS.md` remains historical and must be read newest-first.
 | [RW-005](https://github.com/barryrwilson/Rimward/issues/6) | P3 | Needs owner decision | Decide and then make the death-loss policy explicit. Current behavior restores the hull at the last berth without charging credits. | [Second 2026-08-25 playtest](PLAYER-EXPERIENCE-WISHLIST.md#playtest-capture--2026-08-25-second-pass-agent-playtest-67fb1a0-build) |
 | [RW-006](https://github.com/barryrwilson/Rimward/issues/7) | Maintenance | Implemented; verification complete | WAVE30 demand/pay fixture pins leftover hail, jump grace, death-calm, cargo, prices, and nearby hostiles. Probe: `scripts/wave30-hail-probe.mjs` (20/20). | [`PROGRESS.md` standing notes](../PROGRESS.md) |
 | [RW-007](https://github.com/barryrwilson/Rimward/issues/13) | Maintenance | Implemented; verification complete | WAVE127 `ringHeld` drains the agent event ring; WAVE132 `dockOneFrame` sets `station.inZone` at act time. Probe: `scripts/wave127-132-probe.mjs` (20/20). Hosted boot job is a required check. | [First hosted CI evidence](https://github.com/barryrwilson/Rimward/actions/runs/33121116955); [`PROGRESS.md`](../PROGRESS.md) |
+| [#20](https://github.com/barryrwilson/Rimward/issues/20) | Maintenance | Implemented; hosted verification pending | Seed the full boot harness once so traffic, events, hail, and navigation exercise one reproducible world. Existing gate assertions are unchanged. Local verification: 20/20 consecutive `npm run test:boot` runs PASS on the same tree; three hosted runs remain before closure. | [Issue evidence and acceptance criteria](https://github.com/barryrwilson/Rimward/issues/20) |
 
 ## Optional follow-ups
 
