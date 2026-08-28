@@ -121,6 +121,10 @@ import { FACTION_STYLE } from '../src/game/faction-style.js';
 import { turnRateFor } from '../src/game/flight-feel.js';
 import { PHY } from '../src/game/physics.js';
 import {
+  applyPadSpeedGovernor,
+  padMaxClosingSpeed,
+} from '../src/game/pad-speed-governor.js';
+import {
   distSq,
   sphereOverlap,
   cylinderOverlap,
@@ -26438,6 +26442,187 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave140 mktdesk:', JSON.stringify(w140d));
   if (!Object.values(w140d).every(Boolean)) { console.log('WAVE140 MKTDESK FAIL'); errors++; }
+}
+
+// ---- OPT-002 NAV-10 pad speed governor (human envelope; not approachDock) ----
+{
+  const hereOpt002 = dirname(fileURLToPath(import.meta.url));
+  const srcOpt002 = (rel) => readFileSync(join(hereOpt002, '..', rel), 'utf8');
+  const govSrc = srcOpt002('src/game/pad-speed-governor.js');
+  const shipSrc = srcOpt002('src/systems/ship.js');
+  const apSrc = srcOpt002('src/game/autopilot.js');
+  const hudSrc = srcOpt002('src/systems/hud.js');
+  const stateSrc = srcOpt002('src/game/state.js');
+  const dockSrc = srcOpt002('src/game/dock-approach.js');
+
+  const srcPins = {
+    govFile: govSrc.includes('export function applyPadSpeedGovernor')
+      && govSrc.includes('PAD_GOV_SLOW = 20')
+      && govSrc.includes('PAD_GOV_RANGE_MULT = 3')
+      && govSrc.includes('PAD_GOV_FAR_CAP = 80')
+      && govSrc.includes('Never adds velocity toward the station'),
+    shipHooks: shipSrc.includes("import { applyPadSpeedGovernor } from '../game/pad-speed-governor.js'")
+      && shipSrc.includes('applyPadSpeedGovernor(')
+      && shipSrc.includes('_padGovFlags'),
+    cancelBurner: govSrc.includes('flags.burnerActive')
+      && shipSrc.includes('_padGovFlags.burnerActive = !!ship.burnerActive'),
+    cancelApDock: govSrc.includes('flags.apDock') && shipSrc.includes("ap.mode === 'dock'"),
+    cancelPause: govSrc.includes('flags.paused')
+      && shipSrc.includes('_padGovFlags.paused = !!ctx.flags.paused'),
+    cancelJump: shipSrc.includes('_padGovFlags.jumping = !!(ctx.gate && ctx.gate.jumping)'),
+    noStateWrite: stateSrc.includes('DOCK_RANGE: 45') && !stateSrc.includes('PAD_GOV'),
+    noAgentSteal: !dockSrc.includes('PAD_GOV') && !apSrc.includes('pad-speed-governor'),
+    cueStays: hudSrc.includes("const DOCK_SLOW_VERB = 'Dock · SLOW — approach under 20 u/s'"),
+    noInnerHtml: !govSrc.includes('innerHTML') && !govSrc.includes('insertAdjacentHTML'),
+  };
+
+  const savedDock = ctx.flags.docked === true;
+  const savedPause = ctx.flags.paused === true;
+  const savedHold = ctx.flags.berthHold === true;
+  const savedJump = ctx.gate?.jumping === true;
+  const savedSpeed = ctx.ship?.speed;
+  const savedThrottle = ctx.input?.throttle;
+  const savedStop = ctx.input?.fullStop === true;
+  const savedDockPress = ctx.input?.dockPressed === true;
+  const savedBurner = ctx.ship?.burnerActive === true;
+  const savedAp = ctx.autopilot ? { ...ctx.autopilot } : null;
+  const savedNavAp = !!(ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true);
+  const savedFlee = !!(ctx.flee && ctx.flee.engaged === true);
+  const savedAm = !!(ctx.automine && ctx.automine.engaged === true);
+  const savedPos = ctx.ship?.object?.position?.clone?.() ?? null;
+  const savedQuat = ctx.ship?.object?.quaternion?.clone?.() ?? null;
+  const savedVel = ctx.ship?.velocity?.clone?.() ?? null;
+  const savedHull = ctx.player?.hull;
+  const savedScreen = ctx.player?.screen;
+
+  let cruiseClamped = false;
+  let cruiseNoFastHit = false;
+  let recedeFree = false;
+  let slowDockOk = false;
+  let noThrow = true;
+  try {
+    if (ctx.flags.docked) undockStation();
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    if (ctx.gate) ctx.gate.jumping = false;
+    if (ctx.autopilot) {
+      ctx.autopilot.engaged = false;
+      ctx.autopilot.mode = '';
+    }
+    if (ctx.flee) ctx.flee.engaged = false;
+    if (ctx.automine) ctx.automine.engaged = false;
+    if (ctx.world && ctx.world.nav) ctx.world.nav.autopilot = false;
+    const stPos = ctx.station.position;
+    const st = [stPos.x, stPos.y, stPos.z];
+    const aimPad = () => {
+      const p = ctx.ship.object.position;
+      const dir = new THREE.Vector3(st[0] - p.x, st[1] - p.y, st[2] - p.z);
+      if (dir.lengthSq() > 1e-6) {
+        dir.normalize();
+        ctx.ship.object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
+      }
+    };
+
+    const probeVel = new THREE.Vector3(-120, 0, 0);
+    const probePos = new THREE.Vector3(st[0] + 100, st[1], st[2]);
+    const probeSt = new THREE.Vector3(st[0], st[1], st[2]);
+    const probeFlags = {
+      docked: false,
+      jumping: false,
+      berthHold: false,
+      paused: false,
+      dockPressed: false,
+      burnerActive: false,
+      apDock: false,
+    };
+    const probeApplied = applyPadSpeedGovernor(probeVel, probePos, probeSt, probeFlags, 45);
+    const probeCap = padMaxClosingSpeed(100, 45);
+    cruiseClamped = probeApplied === true && Math.abs((-probeVel.x) - probeCap) < 1e-6;
+
+    ctx.ship.object.position.set(st[0] + 150, st[1], st[2]);
+    aimPad();
+    ctx.ship.velocity.set(-120, 0, 0);
+    ctx.ship.speed = 120;
+    ctx.input.throttle = 1;
+    ctx.input.fullStop = false;
+    ctx.input.dockPressed = false;
+    ctx.ship.burnerActive = false;
+    let fastHit = false;
+    for (let i = 0; i < 90; i++) {
+      aimPad();
+      tick(1, 'opt002 cruise');
+      for (const e of ctx.lastEvents) {
+        if (e.type === 'bodyHit' && e.kind === 'station' && (e.speed || 0) > 40) fastHit = true;
+      }
+    }
+    cruiseNoFastHit = fastHit === false;
+
+    ctx.ship.object.position.set(st[0] + 80, st[1], st[2]);
+    ctx.ship.velocity.set(90, 0, 0);
+    ctx.ship.speed = 90;
+    ctx.input.throttle = 0;
+    ctx.input.fullStop = true;
+    tick(8, 'opt002 recede');
+    recedeFree = ctx.ship.object.position.x >= st[0] + 80 && ctx.ship.velocity.x >= 0;
+
+    ctx.ship.object.position.set(st[0] + 36, st[1], st[2]);
+    ctx.ship.velocity.set(0, 0, 0);
+    ctx.ship.speed = 0;
+    ctx.input.throttle = 0;
+    ctx.input.fullStop = true;
+    ctx.input.dockPressed = true;
+    tick(1, 'opt002 dock');
+    ctx.input.dockPressed = false;
+    slowDockOk = ctx.flags.docked === true;
+    if (ctx.flags.docked) undockStation();
+  } catch (e) {
+    noThrow = false;
+    console.log('OPT002 GOV ERR', e.message);
+  } finally {
+    ctx.flags.paused = savedPause;
+    ctx.flags.berthHold = savedHold;
+    if (ctx.gate) ctx.gate.jumping = savedJump;
+    if (ctx.ship) {
+      ctx.ship.burnerActive = savedBurner;
+      if (Number.isFinite(savedSpeed)) ctx.ship.speed = savedSpeed;
+    }
+    if (ctx.input) {
+      ctx.input.throttle = savedThrottle;
+      ctx.input.fullStop = savedStop;
+      ctx.input.dockPressed = savedDockPress;
+    }
+    if (savedAp && ctx.autopilot) {
+      ctx.autopilot.engaged = savedAp.engaged;
+      ctx.autopilot.mode = savedAp.mode;
+    }
+    if (ctx.world && ctx.world.nav) ctx.world.nav.autopilot = savedNavAp;
+    if (ctx.flee) ctx.flee.engaged = savedFlee;
+    if (ctx.automine) ctx.automine.engaged = savedAm;
+    if (savedVel && ctx.ship?.velocity) ctx.ship.velocity.copy(savedVel);
+    if (savedPos && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos);
+    if (savedQuat && ctx.ship?.object?.quaternion) ctx.ship.object.quaternion.copy(savedQuat);
+    if (ctx.player) {
+      if (Number.isFinite(savedHull)) ctx.player.hull = savedHull;
+      if (Number.isFinite(savedScreen)) ctx.player.screen = savedScreen;
+    }
+    if (savedDock) {
+      if (!ctx.flags.docked) dockAtCurrentStation('opt002 restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'opt002 restore');
+  }
+
+  const wOpt002 = {
+    ...srcPins,
+    cruiseClamped,
+    cruiseNoFastHit,
+    recedeFree,
+    slowDockOk,
+    noThrow,
+  };
+  console.log('opt002 pad-gov:', JSON.stringify(wOpt002));
+  if (!Object.values(wOpt002).every(Boolean)) { console.log('OPT002 PAD-GOV FAIL'); errors++; }
 }
 
 if (errors === 0) {

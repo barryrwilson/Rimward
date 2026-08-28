@@ -26,7 +26,7 @@ already marked done.
 | Key | Priority | Follow-up |
 |---|---:|---|
 | [OPT-001](https://github.com/barryrwilson/Rimward/issues/8) | P3 | Capture/update the optional live still set for Hail01, HUD-06, Hail02, HUD-07, NAV-09, TGT-07, and CTL-03. Keep this evidence-only unless a live defect is found. |
-| [OPT-002](https://github.com/barryrwilson/Rimward/issues/9) | P3 | Add the NAV-10 docking approach governor after a fresh playtest confirms the cue alone is insufficient. |
+| [OPT-002](https://github.com/barryrwilson/Rimward/issues/9) | P3 | Implemented; verification complete. Fresh playtest: SLOW cue does not stop a cruise ram without J. Human pad closing-speed envelope (20–80 u/s in the 45–135 u band). Afterburner / pause / jump / dock / agent `approachDock` cancel. Live cruise ram now hits at ~20 u/s, not 120. |
 | [OPT-003](https://github.com/barryrwilson/Rimward/issues/10) | P3 | Add the AI-05 home-berth safe bubble after a fresh starter-run pacing check. |
 | [OPT-004](https://github.com/barryrwilson/Rimward/issues/11) | P3 | Harden CTL-04 `fireHeld` behavior while station/overlay input owns the controls. |
 | [OPT-005](https://github.com/barryrwilson/Rimward/issues/12) | P3 | Extend MSN-04 duplicate prevention to non-mining mission families if current generation can still produce meaningful duplicates. |
