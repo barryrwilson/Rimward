@@ -5,7 +5,7 @@
 | **Title** | RIMWARD NAV-10 docking approach assistance |
 | **Author** | Wave 130 NAV-10 leftover integrator |
 | **Date** | 2026-08-26 |
-| **Status** | leftover **REAL**. Wave 136 PR1 implemented. Named serial **PR1**. Not CONSUME. Merge law: shared-contract.md wins. |
+| **Status** | leftover **REAL**. Wave 136 PR1 HUD cue implemented. OPT-002 / issue #9 playtest landed PR2 human pad speed envelope. Named serial **PR2**. Merge law: shared-contract.md wins. |
 | **Wave** | 136 — PR1 HUD approach-speed cue. KeyJ stays dock/jump (CTL-01). KeyD stays strafe. |
 | **Owner request** | Inbox P2 NAV/DOCKING leftover: Add docking approach assistance. Census live J prompt, snap, PHY bounce, HUD, NAV-03, Hail02 miss. Code wins. If a named approach-speed cue **and** a brake/governor that prevents cruise-speed bounce-into-pad already live, freeze leftover **CONSUME** and named serial **none**. Census: **not** live. Freeze leftover **REAL** and name later serial **PR1**. |
 | **Merge law** | [`out/w130/dockapproach/shared-contract.md`](../out/w130/dockapproach/shared-contract.md). If this document and that file conflict, **the contract wins**. |
@@ -187,7 +187,7 @@ Owner may override after playtest. Do not park.
 | MATCH | `textContent` stays `MATCH`; independent hide |
 | Target SPD | no SLOW node; `set(speed)` only |
 | Hub | 80 px unchanged |
-| Governor | **not PR1** (optional skippable PR2 tap-clamp) |
+| Governor | **PR2** human pad speed envelope (not KeyJ hold; not agent `approachDock`) |
 | Card / pause / Fear | never |
 | Persist | none |
 | Home | `hud.js` + `hud.css` only |
@@ -215,7 +215,7 @@ Matches contract §3. **Named only. Do not implement in Wave 130.**
 |---|---|---|
 | **PR1** approach cue | SLOW prompt + self `.rw-slow-lamp`; MATCH unchanged; no `tgtSpeed` SLOW; `textContent`; fail-closed | hold KeyJ; PHY rewrite; pad AP; Agent dock; MATCH reuse; hub grow; persist; Digit; `innerHTML` |
 | **PR2 stills (optional)** | playtest stills | required with PR1 |
-| **PR2 governor (optional skip)** | KeyJ **tap** in-zone clamp then dock | hold-to-approach; bounce-off |
+| **PR2 governor** | Human pad **closing-speed envelope** after playtest: cruise ram without J still hit at ~120 u/s. Subtract excess closing only. | hold-to-approach; bounce-off; agent `approachDock`; KeyJ remap |
 | **PR3 census (optional skip)** | re-grep SLOW copy live | new world field |
 
 First remaining serial is **PR1**. It must not steal Digit 0/8/9. It must not write `state.js`. It must not claim `controls.js` or `agent-api.js`.
@@ -364,4 +364,17 @@ See [`out/w130/dockapproach/security-review.md`](../out/w130/dockapproach/securi
 
 ## PR Plan
 
-See Proposed Design §5 and contract §3. First remaining serial is **PR1**. Optional PR2 stills and optional PR2 governor are skippable.
+See Proposed Design §5 and contract §3. PR1 HUD cue is live. PR2 human pad speed envelope is live (OPT-002).
+
+## PR2 pad speed envelope (issue #9)
+
+Playtest 2026-08-28: SLOW lamp shows near 127 u at cruise. Full-stop at the lamp can stop short of the hull. Cruise with no J still `bodyHit` at ~120 u/s (~42 screen). In-zone `Dock · SLOW` often never paints at cruise (HUD 5 Hz + Target prompt + 0.088 s zone). Cue is not enough to stop a routine ram.
+
+| Knob | Freeze |
+|---|---|
+| **Activation** | Not docked; not jumping; not `berthHold`; not paused; finite pad pose; `dist <= 3 × DOCK_RANGE`; closing speed toward the pad `> 0`. |
+| **Cancel** | Docked, jump, berth hold, pause, `dockPressed` (live snap/dock), afterburner (manual override), Autopilot `mode === 'dock'` (do not steal RW-001). Receding or outside the band is a no-op. |
+| **Authority** | Subtract excess **closing** component only. Never add velocity toward the pad. Never write steer, throttle, pause, or KeyJ. Never teleport past 2× snap. PHY-01 bounce stays if the hull still meets the cylinder. |
+| **Envelope** | `20` u/s at `DOCK_RANGE` (45). `80` u/s at the 135 u band edge. Linear in between. Matches the SLOW cue band. |
+
+Home: `src/game/pad-speed-governor.js` + `ship.js` call after velocity, before position integrate. `state.js` stays READ-ONLY. Agent `dock-approach.js` stays agent-only.

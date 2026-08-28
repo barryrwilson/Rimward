@@ -19,6 +19,7 @@ import {
 } from '../game/living-cadence.js';
 import { LIVING_GAIT, gaitFor } from '../game/living-gait.js';
 import { berthHeld } from './overlay-policy.js';
+import { applyPadSpeedGovernor } from '../game/pad-speed-governor.js';
 
 export { applyFlightEnvelope };
 
@@ -101,6 +102,15 @@ const _hit = {
 };
 const BODY_HIT_EMIT_GAP = 0.15;
 let lastEmitAt = -1;
+const _padGovFlags = {
+  docked: false,
+  jumping: false,
+  berthHold: false,
+  paused: false,
+  dockPressed: false,
+  burnerActive: false,
+  apDock: false,
+};
 
 // Bio-expression tuning (§14: alive before a status label).
 const COLOR_LERP_RATE = 3; // 1/s — mood color easing
@@ -905,6 +915,21 @@ export function initShip(ctx) {
             ship.velocity.multiplyScalar(Math.exp(-shipCfg.damping * dt));
           }
         }
+
+        _padGovFlags.docked = docked;
+        _padGovFlags.jumping = !!(ctx.gate && ctx.gate.jumping);
+        _padGovFlags.berthHold = held;
+        _padGovFlags.paused = !!ctx.flags.paused;
+        _padGovFlags.dockPressed = !!input.dockPressed;
+        _padGovFlags.burnerActive = !!ship.burnerActive;
+        _padGovFlags.apDock = !!(apOn && ap && ap.mode === 'dock');
+        applyPadSpeedGovernor(
+          ship.velocity,
+          root.position,
+          ctx.station && ctx.station.position,
+          _padGovFlags,
+          U.DOCK_RANGE,
+        );
 
         // --- Integrate position; publish speed for the HUD.
         root.position.addScaledVector(ship.velocity, dt);

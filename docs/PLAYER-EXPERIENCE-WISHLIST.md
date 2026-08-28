@@ -190,7 +190,9 @@ checked against the current initiative text before capture.
   under 20 u/s" cue or an approach governor on J would close the loop. NAV-03
   covers system-to-system autopilot only.
   Wave 136 PR1 `docs/Nav10DockApproachDesign.md`. HUD cue + self
-  `.rw-slow-lamp`. KeyJ tap. MATCH stays MATCH. Governor PR2 optional.
+  `.rw-slow-lamp`. KeyJ tap. MATCH stays MATCH. OPT-002 PR2 human pad
+  speed envelope after 2026-08-28 playtest (cruise ram without J still
+  hit).
 - [x] DONE (P2, TGT): Sort the T target cycle hostiles-first during combat,
   or add a "target my attacker" key. While an ace fired from 59 u, T selected
   a friendly hauler, then a neutral freighter, and reached the attacker on
@@ -867,6 +869,12 @@ MSN-04 PR1 mining identity
 (`docs/Msn04JobDedupDesign.md`).
 Kit mutate omit. Aim-glass gauges stay
 off. Optional PR2s not stolen.
+
+**OPT-002 playtest 2026-08-28:** NAV-10 SLOW lamp
+shows near 127 u at 120 u/s. Full-stop at the lamp
+can stop short. Cruise with no J still rams the
+station (~42 screen). In-zone SLOW verb often
+misses at cruise. PR2 pad speed envelope landed.
 
 **Wave 137 playtest inbox briefs landed
 2026-08-27:** NAV-11 dest keep leftover
