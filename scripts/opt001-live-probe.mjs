@@ -11,13 +11,39 @@
  * Vite 5186 / CDP 9486. The Chrome profile lives outside the repository.
  */
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 const here = process.env.OPT001_OUT || join(repo, 'out', 'w143', 'opt001', 'verify');
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const WIN = process.platform === 'win32';
+
+/** First Chrome on this machine. OPT001_CHROME / CHROME_PATH win. */
+function findChrome() {
+  const named = process.env.OPT001_CHROME || process.env.CHROME_PATH;
+  if (named) return named;
+  const candidates = WIN
+    ? [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ]
+    : [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/opt/google/chrome/chrome',
+    ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  // Let spawn resolve it on PATH; the launch error names the miss.
+  return WIN ? 'chrome.exe' : 'google-chrome';
+}
+
+const CHROME = findChrome();
 const PORT = 5186;
 const CDP_PORT = 9486;
 const APP = `http://127.0.0.1:${PORT}/`;
@@ -31,6 +57,9 @@ const say = (...a) => {
   log.push(line);
   console.log(line);
 };
+
+/** Every surface the pass must reach. A missing one fails the run. */
+const SURFACES = ['Hail01', 'HUD-06', 'Hail02', 'HUD-07', 'NAV-09', 'TGT-07', 'CTL-03'];
 
 const results = {
   commit: process.env.OPT001_SHA || null,
@@ -47,13 +76,22 @@ function record(key, pass, detail) {
   say(pass ? 'PASS' : 'FAIL', key, JSON.stringify(detail).slice(0, 600));
 }
 
+/** Stop a child and everything it started. Vite and Chrome both fork. */
 function killTree(child) {
   if (!child || child.exitCode != null) return;
-  try {
-    spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-  } catch {
-    try { child.kill(); } catch { /* already gone */ }
+  if (WIN) {
+    try {
+      spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      return;
+    } catch { /* fall through to the plain kill */ }
+  } else {
+    // POSIX children are spawned detached, so they lead a process group.
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+      return;
+    } catch { /* group gone, or never became a leader */ }
   }
+  try { child.kill('SIGKILL'); } catch { /* already gone */ }
 }
 
 class Cdp {
@@ -128,6 +166,68 @@ class Cdp {
   close() { try { this.ws.close(); } catch { /* closed */ } }
 }
 
+/**
+ * TGT-07 snapshot. Rebuilds the live KeyT candidate set from `ctx.ships` and
+ * reports what the cycle law names, so ambient traffic cannot skew the check.
+ * `expectedDist` is the nearest hostile when one is in the envelope, and the
+ * nearest candidate otherwise.
+ */
+const SNAP = `(async () => {
+  const c = window.__ctx;
+  const { U } = await import('/src/game/state.js');
+  const p = c.ship.object.position;
+  const hostile = (s) => !!(s && s.ai && s.ai.intent === true);
+  const cands = [];
+  for (const s of c.ships) {
+    if (!s || !s.object || !s.object.position) continue;
+    if (s.state && s.state.destroyed) continue;
+    const d = s.object.position.distanceTo(p);
+    if (!Number.isFinite(d) || d > U.TARGET_RANGE) continue;
+    cands.push({ s, d: Math.round(d), hostile: hostile(s) });
+  }
+  const hostiles = cands.filter((x) => x.hostile);
+  const min = (list) => (list.length ? Math.min(...list.map((x) => x.d)) : null);
+  const cur = c.targets ? c.targets.current : null;
+  const lock = cands.find((x) => x.s === cur) || null;
+  const o = window.__opt001 || {};
+  return {
+    candCount: cands.length,
+    hostileCount: hostiles.length,
+    nearestDist: min(cands),
+    nearestHostileDist: min(hostiles),
+    expectedDist: hostiles.length ? min(hostiles) : min(cands),
+    lockName: (cur && cur.state && cur.state.name) || null,
+    lockDist: lock ? lock.d : null,
+    lockHostile: lock ? lock.hostile : null,
+    lockIsFar: cur === o.far,
+    lockIsNear: cur === o.near,
+    closerNonHostileCount: lock
+      ? cands.filter((x) => !x.hostile && x.d < lock.d).length
+      : 0,
+  };
+})()`;
+
+/**
+ * Put the TGT-07 candidate set back to the spawned pair: park every other ship
+ * outside the envelope, restore the pair's offsets, and clear the lock. Only
+ * the harness ships move. Ambient traffic is parked, never destroyed.
+ */
+const RESTAGE = `(() => {
+  const c = window.__ctx;
+  const o = window.__opt001;
+  if (!c || !o) return false;
+  const base = c.ship.object.position;
+  for (const s of c.ships) {
+    if (!s || !s.object || !s.object.position) continue;
+    if (s === o.near || s === o.far) continue;
+    s.object.position.set(base.x + 5000, base.y + 5000, base.z + 5000);
+  }
+  o.near.object.position.set(base.x + 120, base.y, base.z);
+  o.far.object.position.set(base.x + 380, base.y, base.z);
+  if (c.targets) c.targets.current = null;
+  return true;
+})()`;
+
 const KEY = (code, key) => `(() => {
   window.dispatchEvent(new KeyboardEvent('keydown', { code: '${code}', key: '${key}', bubbles: true }));
   window.dispatchEvent(new KeyboardEvent('keyup', { code: '${code}', key: '${key}', bubbles: true }));
@@ -149,7 +249,7 @@ async function main() {
         join(repo, 'node_modules', 'vite', 'bin', 'vite.js'),
         '--host', '127.0.0.1', '--port', String(PORT), '--strictPort',
       ],
-      { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] },
+      { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN },
     );
     vite.stdout.on('data', (b) => say('vite', String(b).trim().slice(0, 160)));
     vite.stderr.on('data', (b) => say('vite!', String(b).trim().slice(0, 160)));
@@ -177,9 +277,12 @@ async function main() {
       '--headless=new',
       '--hide-crash-restore-bubble',
       '--disable-session-crashed-bubble',
+      // A CI container has no user namespace, so the Chrome sandbox cannot
+      // start there. Keep the sandbox on for a normal desktop run.
+      ...(WIN ? [] : ['--no-sandbox', '--disable-dev-shm-usage']),
       'about:blank',
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-    say('chrome pid', chrome.pid);
+    ], { stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN });
+    say('chrome', CHROME, 'pid', chrome.pid);
 
     let browserWs = null;
     for (let i = 0; i < 60; i++) {
@@ -297,6 +400,87 @@ async function main() {
       await sleep(300);
     }
     await sleep(2000); // HUD text is throttled to 0.2 s; let the rail settle.
+
+    // ================= CTL-03 berth freeze =================================
+    // This runs first. The ship sits about 180 u out, alive and undocked, and
+    // nothing is spawned yet. Later in a pass the ship closes on the station,
+    // and a collision recovery refuses the KeyL open.
+    {
+      // Throttle up so a frozen ship is a real observation, not a still ship.
+      await cdp.eval(`(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR', key: 'r', bubbles: true }));
+        return true;
+      })()`);
+      await sleep(1200);
+      await cdp.eval(`(() => {
+        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyR', key: 'r', bubbles: true }));
+        return true;
+      })()`);
+      await sleep(600);
+      const moving = await cdp.eval(`(() => {
+        const c = window.__ctx;
+        const p = c.ship.object.position;
+        return { x: p.x, y: p.y, z: p.z, throttle: c?.input?.throttle ?? null, t: c.world.time };
+      })()`);
+      await cdp.eval(KEY('KeyL', 'l'));
+      await sleep(500);
+      const openState = await cdp.eval(`(() => {
+        const c = window.__ctx;
+        const p = c.ship.object.position;
+        return {
+          berthOpen: !!c?.flags?.berthOpen,
+          berthHold: !!c?.flags?.berthHold,
+          paused: !!c?.flags?.paused,
+          x: p.x, y: p.y, z: p.z,
+          t: c.world.time,
+        };
+      })()`);
+      await sleep(2000);
+      const heldState = await cdp.eval(`(() => {
+        const c = window.__ctx;
+        const p = c.ship.object.position;
+        return {
+          berthHold: !!c?.flags?.berthHold,
+          paused: !!c?.flags?.paused,
+          x: p.x, y: p.y, z: p.z,
+          t: c.world.time,
+        };
+      })()`);
+      await cdp.shot('09-ctl03-berth-hold.png');
+      const drift = Math.hypot(
+        heldState.x - openState.x, heldState.y - openState.y, heldState.z - openState.z,
+      );
+      await cdp.eval(KEY('KeyL', 'l'));
+      await sleep(1200);
+      const closed = await cdp.eval(`(() => {
+        const c = window.__ctx;
+        return {
+          berthOpen: !!c?.flags?.berthOpen,
+          berthHold: !!c?.flags?.berthHold,
+          paused: !!c?.flags?.paused,
+        };
+      })()`);
+      await cdp.shot('10-ctl03-resumed.png');
+      record('CTL-03', !!(openState.berthOpen && openState.berthHold && !openState.paused
+        && drift < 1 && !closed.berthOpen && !closed.berthHold),
+      { moving, openState, heldState, driftWhileHeld: Number(drift.toFixed(3)), closed });
+
+      // Stop the ship for the rest of the pass. A double tap on F commands the
+      // full stop, so the station range stays stable for the later checks.
+      await cdp.eval(KEY('KeyF', 'f'));
+      await sleep(120);
+      await cdp.eval(KEY('KeyF', 'f'));
+      await sleep(800);
+      say('full stop', JSON.stringify(await cdp.eval(`(() => {
+        const c = window.__ctx;
+        return {
+          fullStop: c?.input?.fullStop === true,
+          throttle: c?.input?.throttle ?? null,
+          stationDist: Math.round(c.station.position.distanceTo(c.ship.object.position)),
+        };
+      })()`)));
+    }
+
 
     // ================= HUD-06 home marker ==================================
     {
@@ -537,38 +721,66 @@ async function main() {
           }, 16);
           return true;
         })()`);
-        await cdp.eval(KEY('KeyT', 't'));
-        await sleep(600);
-        const gated = await cdp.eval(`(() => {
-          const c = window.__ctx;
-          const cur = c?.targets?.current;
-          return {
-            lock: cur?.state?.name || null,
-            isFar: cur === window.__opt001.far,
-            intent: !!window.__opt001.far?.ai?.intent,
-            nearIntent: !!window.__opt001.near?.ai?.intent,
-          };
-        })()`);
+        // Ambient traffic drifts in and out of the 600 u envelope, so stage the
+        // candidate set again until it is exactly the spawned pair, then press.
+        // The retry is on the SETUP only. The assertion below never repeats.
+        const stage = async (want, attempts = 4) => {
+          for (let a = 1; a <= attempts; a++) {
+            await cdp.eval(RESTAGE);
+            await sleep(250);
+            const pre = await cdp.eval(SNAP);
+            const clean = pre.candCount === 2
+              && pre.hostileCount === want
+              && (want === 0 || pre.nearestDist < pre.nearestHostileDist);
+            if (!clean) {
+              say('tgt07 restage', a, JSON.stringify(pre));
+              continue;
+            }
+            await cdp.eval(KEY('KeyT', 't'));
+            await sleep(600);
+            return { snap: await cdp.eval(SNAP), pre, attempts: a };
+          }
+          return { snap: null, pre: null, attempts };
+        };
+
+        const gatedRun = await stage(1);
+        const gated = gatedRun.snap;
         await cdp.eval('(() => { clearInterval(window.__opt001pin); return true; })()');
-        await cdp.shot('04-tgt07-hostile-first.png');
+        if (gated) await cdp.shot('04-tgt07-hostile-first.png');
         // Control: with no hostile in the envelope the sort stays nearest-first.
-        const plain = await cdp.eval(`(() => {
-          const c = window.__ctx;
+        await cdp.eval(`(() => {
           window.__opt001.far.ai.intent = false;
-          c.targets.current = null;
           return true;
         })()`);
-        void plain;
-        await cdp.eval(KEY('KeyT', 't'));
-        await sleep(600);
-        const ungated = await cdp.eval(`(() => {
-          const c = window.__ctx;
-          const cur = c?.targets?.current;
-          return { lock: cur?.state?.name || null, isNear: cur === window.__opt001.near };
-        })()`);
-        tgt07 = { setup, gated, ungated };
-        record('TGT-07', !!(gated.isFar && gated.intent && !gated.nearIntent
-          && ungated.isNear), tgt07);
+        const ungatedRun = await stage(0);
+        const ungated = ungatedRun.snap;
+        tgt07 = {
+          setup,
+          gated,
+          ungated,
+          gatedAttempts: gatedRun.attempts,
+          ungatedAttempts: ungatedRun.attempts,
+        };
+        if (!gated || !ungated) {
+          // Never silently pass a check that did not run.
+          record('TGT-07', false, {
+            ...tgt07,
+            inconclusive: 'the candidate set never settled to the spawned pair',
+          });
+        } else {
+          // Assert the ordering law, not the identity of one spawned ship.
+          //   gated   — a hostile exists, the lock is the nearest hostile, and
+          //             a non-hostile sits closer. Hostiles beat range.
+          //   ungated — no hostile exists, so the lock is the nearest candidate.
+          const gatedOk = gated.hostileCount > 0
+            && gated.lockHostile === true
+            && gated.lockDist === gated.expectedDist
+            && gated.closerNonHostileCount > 0;
+          const ungatedOk = ungated.hostileCount === 0
+            && ungated.lockHostile === false
+            && ungated.lockDist === ungated.expectedDist;
+          record('TGT-07', !!(gatedOk && ungatedOk), { ...tgt07, gatedOk, ungatedOk });
+        }
       } else {
         record('TGT-07', false, tgt07);
       }
@@ -784,68 +996,6 @@ async function main() {
       await sleep(400);
     }
 
-    // ================= CTL-03 berth freeze =================================
-    {
-      // Throttle up so a frozen ship is a real observation, not a still ship.
-      await cdp.eval(`(() => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR', key: 'r', bubbles: true }));
-        return true;
-      })()`);
-      await sleep(1200);
-      await cdp.eval(`(() => {
-        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyR', key: 'r', bubbles: true }));
-        return true;
-      })()`);
-      await sleep(600);
-      const moving = await cdp.eval(`(() => {
-        const c = window.__ctx;
-        const p = c.ship.object.position;
-        return { x: p.x, y: p.y, z: p.z, throttle: c?.input?.throttle ?? null, t: c.world.time };
-      })()`);
-      await cdp.eval(KEY('KeyL', 'l'));
-      await sleep(500);
-      const openState = await cdp.eval(`(() => {
-        const c = window.__ctx;
-        const p = c.ship.object.position;
-        return {
-          berthOpen: !!c?.flags?.berthOpen,
-          berthHold: !!c?.flags?.berthHold,
-          paused: !!c?.flags?.paused,
-          x: p.x, y: p.y, z: p.z,
-          t: c.world.time,
-        };
-      })()`);
-      await sleep(2000);
-      const heldState = await cdp.eval(`(() => {
-        const c = window.__ctx;
-        const p = c.ship.object.position;
-        return {
-          berthHold: !!c?.flags?.berthHold,
-          paused: !!c?.flags?.paused,
-          x: p.x, y: p.y, z: p.z,
-          t: c.world.time,
-        };
-      })()`);
-      await cdp.shot('09-ctl03-berth-hold.png');
-      const drift = Math.hypot(
-        heldState.x - openState.x, heldState.y - openState.y, heldState.z - openState.z,
-      );
-      await cdp.eval(KEY('KeyL', 'l'));
-      await sleep(1200);
-      const closed = await cdp.eval(`(() => {
-        const c = window.__ctx;
-        return {
-          berthOpen: !!c?.flags?.berthOpen,
-          berthHold: !!c?.flags?.berthHold,
-          paused: !!c?.flags?.paused,
-        };
-      })()`);
-      await cdp.shot('10-ctl03-resumed.png');
-      record('CTL-03', !!(openState.berthOpen && openState.berthHold && !openState.paused
-        && drift < 1 && !closed.berthOpen && !closed.berthHold),
-      { moving, openState, heldState, driftWhileHeld: Number(drift.toFixed(3)), closed });
-    }
-
     // ---- Console ----------------------------------------------------------
     results.consoleErrors = cdp.console.filter((c) => c.type === 'error');
     results.exceptions = cdp.exceptions;
@@ -859,13 +1009,36 @@ async function main() {
     if (cdp) cdp.close();
     killTree(chrome);
     killTree(vite);
-    await writeFile(join(here, 'probes.json'), JSON.stringify(results, null, 2), 'utf8');
     await writeFile(join(here, 'run.log'), log.join('\n') + '\n', 'utf8');
-    const rows = Object.entries(results.surfaces)
-      .map(([k, v]) => `${v.pass ? 'PASS' : 'FAIL'}  ${k}`);
-    console.log('\n' + rows.join('\n'));
+    const entries = Object.entries(results.surfaces);
+    console.log('\n' + entries.map(([k, v]) => `${v.pass ? 'PASS' : 'FAIL'}  ${k}`).join('\n'));
     console.log('console errors:', results.consoleErrors.length,
       'exceptions:', results.exceptions.length);
+
+    // Gate the CI job: every surface must pass, all seven must run, and the
+    // browser console must stay clean.
+    const failed = entries.filter(([, v]) => !v.pass).map(([k]) => k);
+    const missing = SURFACES.filter((k) => !results.surfaces[k]);
+    const reasons = [];
+    if (results.error) reasons.push(`harness error: ${results.error}`);
+    if (missing.length) reasons.push(`surface not reached: ${missing.join(', ')}`);
+    if (failed.length) reasons.push(`surface failed: ${failed.join(', ')}`);
+    if (results.consoleErrors.length) {
+      reasons.push(`console errors: ${results.consoleErrors.length}`);
+    }
+    if (results.exceptions.length) {
+      reasons.push(`uncaught exceptions: ${results.exceptions.length}`);
+    }
+    results.verdict = reasons.length ? 'FAIL' : 'PASS';
+    results.reasons = reasons;
+    await writeFile(join(here, 'probes.json'), JSON.stringify(results, null, 2), 'utf8');
+    if (reasons.length) {
+      console.log('\nOPT-001 FAIL');
+      for (const r of reasons) console.log(' -', r);
+      process.exitCode = 1;
+    } else {
+      console.log('\nOPT-001 PASS — 7/7 surfaces, clean console');
+    }
   }
 }
 

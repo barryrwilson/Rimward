@@ -10,17 +10,53 @@
     "ships": 4
   },
   "surfaces": {
+    "CTL-03": {
+      "pass": true,
+      "moving": {
+        "x": 0,
+        "y": 30,
+        "z": 719.7236065552703,
+        "throttle": 0.20059999999403952,
+        "t": 2.5840000000000014
+      },
+      "openState": {
+        "berthOpen": true,
+        "berthHold": true,
+        "paused": false,
+        "x": 0,
+        "y": 30,
+        "z": 719.7236065552703,
+        "t": 2.7840000000000016
+      },
+      "heldState": {
+        "berthHold": true,
+        "paused": false,
+        "x": 0,
+        "y": 30,
+        "z": 719.7236065552703,
+        "t": 3.484000000000002
+      },
+      "driftWhileHeld": 0,
+      "closed": {
+        "berthOpen": false,
+        "berthHold": false,
+        "paused": false
+      }
+    },
     "HUD-06": {
       "pass": true,
       "rowExists": true,
       "rowShown": true,
-      "rowText": "HOMEFreehold Landing · 181u",
+      "rowText": "HOMEFreehold Landing · 125u",
       "pipParent": "hud",
-      "pipShown": true,
-      "chevShown": false,
-      "chevCenter": null,
+      "pipShown": false,
+      "chevShown": true,
+      "chevCenter": {
+        "x": 1316,
+        "y": 449
+      },
       "docked": false,
-      "chevInsetMin": null,
+      "chevInsetMin": 124,
       "overlayHide": {
         "chartOpen": true,
         "row": false,
@@ -78,11 +114,11 @@
         ]
       },
       "locked": {
-        "hasLock": true,
-        "lockName": "Vesper-9",
-        "targetNameYield": true,
-        "targetNameVisible": false,
-        "combatNameText": "Vesper-9",
+        "hasLock": false,
+        "lockName": null,
+        "targetNameYield": false,
+        "targetNameVisible": true,
+        "combatNameText": "—",
         "edgeArrowVisible": false,
         "edgeArrowCenter": null
       },
@@ -96,38 +132,58 @@
         "farD": 380
       },
       "gated": {
-        "lock": "OPT FAR HOSTILE",
-        "isFar": true,
-        "intent": true,
-        "nearIntent": false
+        "candCount": 2,
+        "hostileCount": 1,
+        "nearestDist": 157,
+        "nearestHostileDist": 393,
+        "expectedDist": 393,
+        "lockName": "OPT FAR HOSTILE",
+        "lockDist": 393,
+        "lockHostile": true,
+        "lockIsFar": true,
+        "lockIsNear": false,
+        "closerNonHostileCount": 1
       },
       "ungated": {
-        "lock": "OPT NEAR FRIEND",
-        "isNear": true
-      }
+        "candCount": 2,
+        "hostileCount": 0,
+        "nearestDist": 90,
+        "nearestHostileDist": null,
+        "expectedDist": 90,
+        "lockName": "OPT NEAR FRIEND",
+        "lockDist": 90,
+        "lockHostile": false,
+        "lockIsFar": false,
+        "lockIsNear": true,
+        "closerNonHostileCount": 0
+      },
+      "gatedAttempts": 1,
+      "ungatedAttempts": 1,
+      "gatedOk": true,
+      "ungatedOk": true
     },
     "Hail02": {
       "pass": true,
       "hailToast": {
         "toasts": [
           {
+            "text": "Route plotted: 4 jumps to Aegis.",
+            "cls": "rw-toast comm"
+          },
+          {
             "text": "Heave to. Cargo or hull.",
-            "cls": "rw-toast show comm"
+            "cls": "rw-toast comm"
           },
           {
             "text": "No lock — hail",
             "cls": "rw-toast show warn"
           },
           {
-            "text": "Route plotted: 4 jumps to Aegis.",
-            "cls": "rw-toast comm"
-          },
-          {
-            "text": "The manifest lied.",
-            "cls": "rw-toast show comm"
-          },
-          {
             "text": "★ The lane wears masks. You saw one come off.",
+            "cls": "rw-toast sting"
+          },
+          {
+            "text": "★ They are breaking. First scare.",
             "cls": "rw-toast sting"
           }
         ],
@@ -140,14 +196,14 @@
       },
       "dockMiss": {
         "toasts": [
+          "Route plotted: 4 jumps to Aegis.",
           "Heave to. Cargo or hull.",
           "No lock — hail",
-          "Freehold Landing — dock out of range (152 u)",
-          "The manifest lied.",
-          "★ The lane wears masks. You saw one come off."
+          "Freehold Landing — dock out of range (125 u)",
+          "★ They are breaking. First scare."
         ],
         "docked": false,
-        "stationDist": 157
+        "stationDist": 125
       }
     },
     "Hail01": {
@@ -165,7 +221,7 @@
         "text": "HAIL — Vane RookRed Ledger · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight"
       },
       "cardB": {
-        "timer": "16"
+        "timer": "17"
       },
       "ticked": true,
       "deadline": 20,
@@ -180,47 +236,16 @@
         "toasts": [
           "Smart. Run along.",
           "Vane Rook — tribute taken. They run.",
-          "Freehold Landing — dock out of range (152 u)",
-          "The manifest lied.",
+          "No lock — hail",
+          "Freehold Landing — dock out of range (125 u)",
           "Vane Rook — heave to. Pay 80 UU or fight. 20s."
         ]
       },
       "outcomeToast": true
-    },
-    "CTL-03": {
-      "pass": true,
-      "moving": {
-        "x": -13.930960434804657,
-        "y": 32.027890202976245,
-        "z": 187.78962210484252,
-        "throttle": 0.5091500000059604,
-        "t": 19.356199999928478
-      },
-      "openState": {
-        "berthOpen": true,
-        "berthHold": true,
-        "paused": false,
-        "x": -13.930960434804657,
-        "y": 32.027890202976245,
-        "z": 187.78962210484252,
-        "t": 19.856199999928485
-      },
-      "heldState": {
-        "berthHold": true,
-        "paused": false,
-        "x": -13.930960434804657,
-        "y": 32.027890202976245,
-        "z": 187.78962210484252,
-        "t": 21.856199999928513
-      },
-      "driftWhileHeld": 0,
-      "closed": {
-        "berthOpen": false,
-        "berthHold": false,
-        "paused": false
-      }
     }
   },
   "consoleErrors": [],
-  "exceptions": []
+  "exceptions": [],
+  "verdict": "PASS",
+  "reasons": []
 }

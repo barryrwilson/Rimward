@@ -11,6 +11,7 @@
     "test:dock-approach": "node --import ./scripts/with-css-stub.mjs scripts/dock-approach-test.mjs",
     "test:pad-governor": "node scripts/pad-speed-governor-test.mjs",
     "test:runtime-error-ux": "node --import ./scripts/with-css-stub.mjs scripts/runtime-error-ux-test.mjs",
+    "test:opt001-live": "node scripts/opt001-live-probe.mjs",
     "test:rw008-live": "node scripts/rw008-live-probe.mjs",
     "gates:probe": "node --import ./scripts/with-css-stub.mjs scripts/probe-gate-kit.mjs",
     "ships:validate": "node scripts/validate-ship-assets.mjs",

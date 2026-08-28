@@ -6029,10 +6029,33 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   proposed. The optional stills for
   these seven surfaces are no longer
   outstanding.
+  CI: `.github/workflows/
+  live-ui-evidence.yml` runs the same
+  probe on a PR that touches `src/`,
+  `index.html`, or the probe, and on
+  manual dispatch. It uploads the
+  evidence directory for 30 days.
+  Node 22 there, because the probe
+  uses the global `WebSocket`. NOT a
+  required check yet: the probe
+  renders a real WebGL frame, so it
+  is less stable than the boot
+  harness. Two staging flakes were
+  found and fixed. CTL-03 now runs
+  first, before the ship closes on
+  the station, and ends in a full
+  stop. TGT-07 re-parks ambient
+  traffic until the candidate set is
+  the spawned pair, then presses
+  once; a set that never settles
+  fails, and never passes silently.
+  Measured 2 failures in 10 runs
+  before, 0 in 5 after.
   VERIFY: `out/w143/opt001/verify/`
   (`report.md`, `probes.json`,
   `console.txt`, logs). Harness is
-  `scripts/opt001-live-probe.mjs`;
+  `scripts/opt001-live-probe.mjs`
+  (`npm run test:opt001-live`);
   rerun it to regenerate the ten
   stills. The stills stay out of Git,
   because Git keeps every version of
@@ -6043,6 +6066,8 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   Browser profile stayed outside the
   repository.
   FILES: `scripts/opt001-live-probe.mjs`,
+  `.github/workflows/live-ui-evidence.yml`,
+  `package.json` (`test:opt001-live`),
   `docs/REMAINING-WORK.md`,
   `PROGRESS.md`,
   `out/w143/opt001/verify/*.md|json|txt|log`.

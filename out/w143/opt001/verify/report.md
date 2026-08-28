@@ -21,8 +21,14 @@ One live run, one save, one browser session.
 Rerun with:
 
 ```
-node scripts/opt001-live-probe.mjs
+npm run test:opt001-live
 ```
+
+CI runs the same probe. `.github/workflows/live-ui-evidence.yml` executes it
+on a pull request that touches `src/`, `index.html`, or the probe, and on
+manual dispatch. It uploads this directory as a run artifact for 30 days.
+The workflow is deliberately **not** a required check; see the stability note
+below.
 
 The harness writes this directory. `out/` is an ignored path, so a rerun
 overwrites the stills without touching the repository index.
@@ -49,6 +55,9 @@ These are how the run was staged, not product findings.
 
 - **TGT-07 intent pin.** The pair sits inside the 300 u station law zone, where `npc.js` clears NPC hostile intent every AI tick, so a spawned trader cannot hold `ai.intent` long enough to press a key. The harness pinned `far.ai.intent = true` on a 16 ms interval across the KeyT press and read the bit back at assert time (`intent: true`, `nearIntent: false`). The contract defines "hostile" as exactly `ai.intent === true`, so this pins the documented input, not the outcome. The ungated control run used no pin.
 - **Ambient traffic.** Live pirates opened their own demand cards during the pass. Hail02 is therefore asserted on the emitted `hailMiss` / `hailOpened` counts for that one press, and Hail01 on `ai.demandOutcome` plus the credit delta, not on whether the card element happened to be empty a second later.
+- **Order.** CTL-03 runs first, right after the boot settles. The ship then sits about 180 u out, alive and undocked, with nothing spawned. Late in a pass the ship closes on the station, and a collision recovery refuses the KeyL open. The step ends with a double tap on F, so the ship holds station range for every later check.
+- **TGT-07 staging.** Ambient traffic drifts through the 600 u cycle envelope. The harness therefore re-parks every other ship and re-seats the spawned pair until the candidate set is exactly those two, and only then presses KeyT. The retry is on the setup. The assertion never repeats, and a set that never settles is recorded as a failure, not a pass.
+- **The TGT-07 assertion tests the law, not one ship.** With a hostile present, the lock must be the nearest hostile, and a non-hostile must sit closer. Without a hostile, the lock must be the nearest candidate.
 - **One assertion was corrected mid-pass.** The first Hail01 check required the deadline to read exactly `20s`. That asserts harness timing, not the contract: the card is sampled a beat after it opens, so one run read `19s` and failed. The check now requires a deadline of 15–20 s that counts down. The product behaviour did not change between runs, and the failing run recorded the same card text, the same countdown, and the same `paid` outcome.
 - **Survivability.** `player.hull` / `player.screen` were raised so a starter Greenhand run could complete all seven checks in one session. No world, save, or state field was written.
 - The three harness ships (`OPT NEAR FRIEND`, `OPT FAR HOSTILE`, `Vane Rook`) were removed from `ctx.ships` and the scene after their checks.
@@ -60,6 +69,21 @@ These are how the run was staged, not product findings.
 | `npm run build` | PASS (`✓ built in 10.06s`) | `build.log` |
 | `npm run test:boot` | PASS (`BOOT TEST PASS — no update errors`) | `boot-test.log` |
 
+## Stability
+
+The probe renders a real WebGL frame and drives a live simulation, so it is
+less stable than the boot harness. Measured on this machine:
+
+| Build | Runs | Failures |
+|---|---:|---:|
+| Before the CTL-03 reorder and the TGT-07 staging | 10 | 2 |
+| After | 5 | 0 |
+
+Both earlier failures were harness staging, not product behaviour. The first
+was a late-pass collision recovery that refused the CTL-03 berth open. The
+second was ambient traffic inside the TGT-07 candidate set. Keep the workflow
+off the required-check list until it proves itself over more runs.
+
 ## Defects
 
 **None.** No separate issue is proposed. Nothing in this pass reopens completed behavior.
@@ -69,7 +93,8 @@ These are how the run was staged, not product findings.
 Committed:
 
 ```
-scripts/opt001-live-probe.mjs         harness (rerunnable)
+scripts/opt001-live-probe.mjs         harness (rerunnable; npm run test:opt001-live)
+.github/workflows/live-ui-evidence.yml  CI job; uploads this directory
 out/w143/opt001/verify/report.md      this file
 out/w143/opt001/verify/probes.json    every measurement, keyed by surface, with the source SHA
 out/w143/opt001/verify/console.txt    full browser console + exception log

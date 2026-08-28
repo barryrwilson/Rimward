@@ -36,7 +36,7 @@ INIT OK   agentapi
 INIT OK   hud
 wave40 title screen dismiss: {"overlayShown":true,"pausedWhileOpen":true,"overlayRemoved":true,"pauseLeftForOrigins":true}
 wave6 origin pick: {"overlayShown":true,"pausedWhileOpen":true,"originRecorded":true,"unpausedAfterPick":true,"originChosenEmitted":true,"overlayRemoved":true}
-after boot: ships=7 records=17 prices=12 pods=0
+after boot: ships=4 records=17 prices=12 pods=0
 gate network: systems=101 {"gateDataOk":true,"gateSymmetryOk":true,"hubRoutesOk":true,"connectedOk":true,"bandsOk":true,"fieldsOk":true,"countOk":true,"pinnedOk":true,"degreeOk":true,"pinnedBandsOk":true}
 after cruise: speed=120.0 pos=-1121,30,800
 wave53 cruise clear: {"zone":0,"hull":100,"speed":120}
@@ -46,21 +46,21 @@ after firing: heat=0.0 playerHull=100 ships=0
 drift: active=false
 full stop: speed=0.0 (expect <2)
 creep resumes: speed=29.8 (expect ~30)
-after soak: time=214s ships=0 incidents=0 aftermath=0 event=none milestones=1
+after soak: time=214s ships=0 incidents=0 aftermath=0 event=none milestones=0
 bio: mood=serene hunger=0.19 wounds=0.00
 save present: true
 wave21 hub junction: {"hubDataOk":true,"inZone":true,"nearHub":true,"routeCount":true,"initialSelection":true,"cyclesInOrder":true,"wrapsToFirst":true,"dEmitsRouteJump":true,"jumpBegun":true,"arrivedAtHearth":true,"nearHearthBackGate":true,"backGateZone":true,"returnedToFreehold":true,"hubArrivalRule":true}
 wave22 junction visual: {"singleJunction":true,"routeCountHook":true,"armLamps":true,"routeIndexTracks":true,"routeIndexWraps":true,"goneInHearth":true,"rebuiltOnReturn":true}
 wave38 live freehold: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionSingle":true,"junctionCoexists":true}
 wave21 galaxy chart: {"rootPresent":true,"opensOnKeyM":true,"nodeCount101":true,"currentMarked":true,"gateEdges":true,"routeEdges":true,"escapeCloses":true,"keyMReopens":true,"keyMCloses":true} nodes=101 gates=134 routes=25
-wave21 migrant restore: {"migrantForced":true,"savedInTransit":true,"sameSystemRestore":true,"restoredStillInTransit":true,"migrantArrives":true,"landsInDestBank":true} name="Vesper-9" dest=veridian time=249.5
+wave21 migrant restore: {"migrantForced":true,"savedInTransit":true,"sameSystemRestore":true,"restoredStillInTransit":true,"migrantArrives":true,"landsInDestBank":true} name="Hauler Mink" dest=veridian time=249.5
 gate inZone (expect true): true
 jump checks: {"currentSystem":true,"jumpingDone":true,"shipsCleared":true,"asteroidsSwapped":true,"priceRebound":true,"veridianSpread":true,"nearDestGate":true}
-veridian: ships=10 station=present prices.provisions=135
+veridian: ships=8 station=present prices.provisions=135
 wave38 live veridian: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionCoexists":true}
 gate inZone (expect true): true nearTo (expect redmarch): redmarch
 redmarch checks: {"currentSystem":true,"jumpingDone":true,"shipsRespawned":true,"castMatches":true,"stationPresent":true,"pricesTable":true,"provisionsSpread":true,"tradesRestricted":true,"planetsGenerated":true}
-redmarch: ships=10 records=14 prices.provisions=129 planets=4
+redmarch: ships=9 records=14 prices.provisions=130 planets=4
 wave38 live redmarch: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionCoexists":true}
 back to veridian: currentSystem=veridian (expect veridian) nearReturnGate (expect true): true pos=877,46,103
 round trip: currentSystem=freehold (expect freehold), prices.provisions=100
@@ -71,15 +71,15 @@ wave4 ferry accept: {"dockedAtFreehold":true,"ferryOffered":true,"acceptButtonFo
 wave4 ferry delivery: {"dockedAtVeridian":true,"jobDone":true,"paidExactly350":true,"provisionsConsumed":true}
 wave4 recovery accept: {"recoveryCollisionCleared":true,"recoveryCollisionPulled":true,"recoveryOffered":true,"acceptButtonFound":true,"podSpawnedAtWreck":true,"jobAccepted":true}
 wave4 recovery delivery: {"podScooped":true,"jobCollected":true,"redockedAtVeridian":true,"jobDone":true,"paidExactly300":true}
-wave4 fence favor: {"fenceFound":true,"spendFavorUnit":true,"gatesUnmet":true,"lockerShutBefore":true,"favorButtonFound":true,"favorSpent":true,"sessionFlagSet":true,"restrictedListed":true,"lockerOpenAfter":true} fear=2 rep.freehold=0
+wave4 fence favor: {"fenceFound":true,"spendFavorUnit":true,"gatesUnmet":true,"lockerShutBefore":true,"favorButtonFound":true,"favorSpent":true,"sessionFlagSet":true,"restrictedListed":true,"lockerOpenAfter":true} fear=0 rep.freehold=0
 wave5 hollowreach jump: {"gateDefRoundTrip":true,"inZoneAtGate":true,"arrived":true,"jumpingDone":true,"systemLoadedFired":true,"band2SilentLine":true,"nearReturnGate":true} line="Hollow Reach. …no traffic on scope."
 wave38 live hollow: {"noOverlay":true,"hollowStationSculpt":true,"gatesPresent":true,"junctionLanternNoOverlay":true}
 wave5 band pacing: {"freeholdBand0":true,"veridianBand0":true,"redmarchBand1":true,"hollowreachBand2":true,"eventGapStretches":true,"songGapStretches":true}
 wave5 clue discovery: {"clueFound":true,"eventFired":true,"eventCarriesLine":true,"permanentNoRefire":true} found=["hr_c_answer"]
 wave5 landmark discovery: {"landmarkVisited":true,"eventFired":true,"eventCarriesNameAndLine":true,"authoredSculpt":true} visited=["hr_quiet_beacon"]
 wave5 mystery save: {"saveWritten":true,"mysteryInSave":true,"bioInSave":true}
-wave5 death tenderness: {"corruptedFirst":true,"mysteryRestored":true,"moodAnxious":true,"bondPreserved":true,"hungerPreserved":true,"bioNotDefaults":true} mood=anxious bond=0.551966666666617 saved=0.551966666666617 mystery={"found":["hr_c_answer"],"visited":["hr_quiet_beacon"]}
-wave5 bio visuals: {"moodIsFeral":true,"growthResolved":true,"hullMeshFound":true,"fleshScaledUp":true,"scarsPresent":true,"scarVisible":true,"redExceedsSerene":true,"redMovedFeral":true} fleshScale=1.145 scars=5/5 emissiveR=0.985 (serene 0.310, before 0.687)
+wave5 death tenderness: {"corruptedFirst":true,"mysteryRestored":true,"moodAnxious":true,"bondPreserved":true,"hungerPreserved":true,"bioNotDefaults":true} mood=anxious bond=0.5391666666666184 saved=0.5391666666666184 mystery={"found":["hr_c_answer"],"visited":["hr_quiet_beacon"]}
+wave5 bio visuals: {"moodIsFeral":true,"growthResolved":true,"hullMeshFound":true,"fleshScaledUp":true,"scarsPresent":true,"scarVisible":true,"redExceedsSerene":true,"redMovedFeral":true} fleshScale=1.144 scars=5/5 emissiveR=0.985 (serene 0.310, before 0.687)
 repair pricing: {"buttonFound":true,"itemizedCost":true,"chargedExactly":true,"madeWhole":true} cost=123 expect=123
 repair refit: {"screenRetrued":true,"shellRetrued":true,"noCharge":true,"creditsFinite":true}
 save boundary heal: {"creditsRestored":true,"hullFinite":true,"engineMaxRetrued":true,"bondFinite":true}
@@ -282,14 +282,14 @@ wave10 converged ack: {"overlayShown":true,"originRecorded":true,"originChosenEm
 wave10 save fields: {"saveWritten":true,"systemIsVerge":true,"aspirantsPersisted":true,"brokenPersisted":true,"hermitMetPersisted":true,"deepAcksPersisted":true}
 wave10 restore: {"corruptedFirst":true,"aspirantRisenRestored":true,"downAtRestored":true,"brokenRestored":true,"hermitMetRestored":true,"deepAcksRestored":true,"noGunRisenPostRestore":true}
 wave11 aftermath: {"rimAnsweredOnce":true,"rimAnsweredLine":true,"aftermathSongShiftOnce":true,"milestonePersistedPostRestore":true,"noGunRisenAfter":true,"noAftermathShiftRefire":true}
-wave11 callow returns: {"callowInVergeBank":true,"returnLinesShape":true,"firstVisitLineOnce":true,"counterAfterFirst":true,"noSecondLineSameVisit":true,"secondVisitLineOnce":true,"counterAfterSecond":true} lines=["Nothing comes through here that I don't count. You're counted twice over."]|["The quiet out here isn't empty. You know that better than most."]
+wave11 callow returns: {"callowInVergeBank":true,"returnLinesShape":true,"firstVisitLineOnce":true,"counterAfterFirst":true,"noSecondLineSameVisit":true,"secondVisitLineOnce":true,"counterAfterSecond":true} lines=["Back again. The lane remembers you now — I keep its books."]|["Nothing comes through here that I don't count. You're counted twice over."]
 wave11 callow vouch: {"callowData":true,"hermitMetPrecondition":true,"liveShipFound":true,"keepersFound":true,"hailOpenedOnce":true,"hailIntents":true,"hailLine":true,"creditsDroppedExact":true,"vouched":true,"vergeKeeperTrust":true,"vergeKeeperFavor":true,"hushKeeperTrust":true,"hushKeeperFavor":true,"milestoneOnce":true,"milestoneBanked":true,"vouchCommLineOnce":true,"noMilestoneRefire":true,"secondHailSilent":true} credits=50 vergeTrust=15 hushTrust=15
 wave11 keeper ledger: {"exportValue":true,"belowThresholdNull":true,"line1Shape":true,"line2Shape":true,"twoCallsRotate":true,"line1NamesUnvisited":true,"line2NamesUnvisited":true,"closingExact":true} l1="The second column holds: The Shepherd, in Freehold Drift. Marked awaiting." l2="The second column holds: The Tithe Stone, in The Redmarch. Marked awaiting."
 wave11 keeper service: {"waivedPriceCell":true,"waivedBuyButtonFound":true,"waivedChargedExact":true,"fullPriceCellReturns":true,"sellButtonFound":true,"sellPremiumUnchanged":true} waived=199 full=249 sell=318
 wave11 keeper comp: {"favorButtonFound":true,"compedTotalZero":true,"breakdownMentionsKeepers":true,"creditsUnchanged":true,"madeWhole":true} label=0
 wave11 save fields: {"saveWritten":true,"systemIsVerge":true,"callowInSavedBank":true,"vouchedPersisted":true,"returnsPersisted":true}
 wave11 restore: {"corruptedFirst":true,"callowInRestoredBank":true,"vouchedRestored":true,"returnsRestored":true}
-wave12 callow books: {"vouchedPrecondition":true,"returnsBaseline":true,"refusalsBaselineFromWave11":true,"vouchedLinesShape":true,"refuseLinesShape":true,"firstVouchedLineOnce":true,"noOldReturnLines":true,"noSecondLineSameVisit":true,"returnsCursorAfterFirst":true,"liveShipFound":true,"refusalFiredOnce":true,"refusalCursorAfterFirst":true,"refusalNoHailCard":true,"secondPressSilent":true,"secondVouchedLineOnce":true,"refusalRearmedSecond":true,"refusal2NoHailCard":true,"refusalsRotatedTwoTotal":true,"returnsCursorAfterSecond":true} lines=["Your name is in their column now. I keep the books that say so."]|["Back again. Some entries I balance in one column. Yours I balance in two."] refusals=["It's entered. It's balanced. Books like mine don't sell the same line twice."]|["One word is what I sold. The column doesn't take seconds."]
+wave12 callow books: {"vouchedPrecondition":true,"returnsBaseline":true,"refusalsBaselineFromWave11":true,"vouchedLinesShape":true,"refuseLinesShape":true,"firstVouchedLineOnce":true,"noOldReturnLines":true,"noSecondLineSameVisit":true,"returnsCursorAfterFirst":true,"liveShipFound":true,"refusalFiredOnce":true,"refusalCursorAfterFirst":true,"refusalNoHailCard":true,"secondPressSilent":true,"secondVouchedLineOnce":true,"refusalRearmedSecond":true,"refusal2NoHailCard":true,"refusalsRotatedTwoTotal":true,"returnsCursorAfterSecond":true} lines=["The keepers hold a column for owed words. You're written in it — I checked the sum."]|["Your name is in their column now. I keep the books that say so."] refusals=["It's entered. It's balanced. Books like mine don't sell the same line twice."]|["One word is what I sold. The column doesn't take seconds."]
 wave12 keeper clue tier: {"contactFound":true,"sixCluesAuthored":true,"clueTierShape":true,"clueTierNamesHush":true,"clueTierNamesOnlySystem":true,"rotationShape":true,"rotationDiffers":true,"rotSys1HoldsUnfound":true,"rotSys2HoldsUnfound":true,"closingExact12":true} clue="The second column balances. A page stays open in The Hush — something there waits to be read." rot="The second column balances. A page stays open in Veridian Reach — something there waits to be read."|"The second column balances. A page stays open in The Redmarch — something there waits to be read."
 wave12 restore heal: {"saveWritten":true,"callowInSavedBank":true,"liveShipPresentPreRestore":true,"recordIdentityPreRestore":true,"liveShipSurvivedRestore":true,"recordRepointed":true,"restoredRecordLive":true,"noOrphanedLiveFlags":true}
 wave13 keeper vouch ack: {"milestoneStands":true,"keepersFound":true,"vergeVouchExact":true,"vergeAckSet":true,"vergeSecondShipLine":true,"vergeAckStaysTrue":true,"hushVouchIndependent":true,"hollowShipLineDirect":true,"hollowAckStaysFalsy":true,"belowCompNoVouch":true,"noMilestoneNoVouch":true} verge="Callow's word arrived ahead of you — your name sits in our second column. The yard is yours."|"she, back on my pad. Good to see her in one piece." hush="Callow's word arrived ahead of you — your name sits in our second column. The yard is yours." hollow="she, back on my pad. Good to see her in one piece."
@@ -413,10 +413,10 @@ wave30 demand hail: {"graceExpired":true,"hailOpened":true,"demandLine":true,"in
 wave30 concealed mounts: {"outfittingOpened":true,"mountsButtonFound":true,"boughtExact":true,"fittedNoteShown":true,"secondBuyRefused":true,"saveCarriesTrue":true,"restoreKeepsTrue":true,"corruptRestoreHeals":true,"reboughtAfterHeal":true} credits=3200
 wave30 payTribute setup: {"undocked":true,"hailOverlayClosed":true,"chartClosed":true,"berthClosed":true,"pausedOff":true,"graceExpired":true,"cargoPinned":true,"pricesPinned":true,"creditsPinned":true,"mountsPinned":true,"demandAboveFloor":true,"noNearbyHostiles":true} demand=200
 wave30 payTribute: {"hailOpened":true,"intentsWithMounts":true,"payButtonLabeled":true,"creditsPaidExact":true,"pirateFleesPaid":true,"calmStamped60":true,"wakeSiteShape":true,"wakeSite1400":true,"holdReleased":true,"paidLine":true} siteDist=1400.00
-wave30 wake trail: {"pointsObjectFound":true,"emittedWhileFleeing":true,"visibleWhileLive":true,"noEmissionWhenMuted":true,"hiddenWhenMuted":true} emitted=27
+wave30 wake trail: {"pointsObjectFound":true,"emittedWhileFleeing":true,"visibleWhileLive":true,"noEmissionWhenMuted":true,"hiddenWhenMuted":true} emitted=37
 wave30 showTeeth: {"successButtonFound":true,"successFlees":true,"successFearBump":true,"successCalm90":true,"successWakeSite":true,"successLine":true,"successHoldReleased":true,"failureButtonFound":true,"failureResolveBump":true,"failureOutcome":true,"failureNoWakeSite":true,"failureLine":true,"failurePressesAttack":true} resolve=55→75
 wave30 void on hit: {"demandWasOpen":true,"hitLanded":true,"demandingCleared":true,"hailClosedEmitted":true,"cardClosed":true}
-wave30 wake discovery: {"recordFound":true,"siteFound":true,"pods2to3":true,"podEventsMatch":true,"podsCarryMetals":true,"trailLineOnce":true,"milestoneOnce":true,"noRefire":true} pods=3
+wave30 wake discovery: {"recordFound":true,"siteFound":true,"pods2to3":true,"podEventsMatch":true,"podsCarryMetals":true,"trailLineOnce":true,"milestoneOnce":true,"noRefire":true} pods=2
 wave30 law zone: {"noDemandHail":true,"demandNeverSent":true,"targetNeverDevelops":true,"noDemandOnRecord":true}
 wave31 Mk II purchase: {"outfittingOpened":true,"scannerStartsZero":true,"prereqNoteShown":true,"refusedWithoutMk1":true,"mk1Exact400":true,"mk2ButtonAtScanner1":true,"mk2Exact900":true,"installedNoteShown":true,"secondBuyRefused":true} credits=3700
 wave31 qship records: {"authoredPiratesFound":true,"oddPiratesCarryCover":true,"evenPiratesClean":true,"nonPiratesCarryNothing":true,"migrantPiratesShaped":true,"revealedOnlyTrueOnQships":true} pristineQships=0/2
@@ -469,7 +469,7 @@ wave38 gates: {"freeholdParts":true,"veridianParts":true,"ferrousParts":true,"re
 wave38 gate negatives: {"noOverlayIndependentHollow":true,"plainBrassIntact":true,"beautifulOvergrowth":true,"beautifulNoBuiltOverlay":true}
 wave38 gate junctions: {"ferrousJunctionCoexists":true,"gildedJunctionCoexists":true}
 wave38 gate reducedMotion: {"animSurfaceFound":true,"opacityBlinksUnfrozen":true,"mountSpinsUnfrozen":true,"frozenUnderReducedMotion":true,"frozenAtBase":true,"animationResumes":true}
-wave39 ten-jump leak: {"chainCompleted":true,"stationGroupFoundEverySystem":true,"perBuildAssetsSeen":true,"everyPerBuildAssetDisposed":true,"sharedNeverDisposed":true,"liveCountStable":true} disposed=428/428 sharedDisposed=0 liveAfter1=273 liveAfter10=297
+wave39 ten-jump leak: {"chainCompleted":true,"stationGroupFoundEverySystem":true,"perBuildAssetsSeen":true,"everyPerBuildAssetDisposed":true,"sharedNeverDisposed":true,"liveCountStable":true} disposed=428/428 sharedDisposed=0 liveAfter1=263 liveAfter10=289
 wave39 zero-alloc update: {"freeholdStationNoNewResources":true,"freeholdStationAnimKeysStable":true,"veridianStationNoNewResources":true,"veridianStationAnimKeysStable":true,"assemblyStationNoNewResources":true,"assemblyStationAnimKeysStable":true,"freeholdGateNoNewResources":true,"freeholdGateAnimKeysStable":true,"redledgerGateNoNewResources":true,"redledgerGateAnimKeysStable":true,"assemblyGateNoNewResources":true,"assemblyGateAnimKeysStable":true,"gateFadeWritesQuantised":true,"gateFadeReachesEndpoints":true,"shipUpdateNoNewResources":true,"shipAnimKeysStable":true}
 wave39 station reducedMotion: {"freeholdAnimSurfaceFound":true,"freeholdAnimatesUnfrozen":true,"freeholdFrozenUnderReducedMotion":true,"freeholdFrozenRingKeepsAngle":true,"freeholdFrozenAtBase":true,"freeholdAnimationResumes":true,"veridianAnimSurfaceFound":true,"veridianAnimatesUnfrozen":true,"veridianFrozenUnderReducedMotion":true,"veridianFrozenRingKeepsAngle":true,"veridianFrozenAtBase":true,"veridianAnimationResumes":true,"assemblyAnimSurfaceFound":true,"assemblyAnimatesUnfrozen":true,"assemblyFrozenUnderReducedMotion":true,"assemblyFrozenRingKeepsAngle":true,"assemblyFrozenAtBase":true,"assemblyAnimationResumes":true,"lamplighterAnimSurfaceFound":true,"lamplighterAnimatesUnfrozen":true,"lamplighterFrozenUnderReducedMotion":true,"lamplighterFrozenRingKeepsAngle":true,"lamplighterFrozenAtBase":true,"lamplighterAnimationResumes":true}
 wave39 ship glow reducedMotion: {"freeholdWaverAnimatesUnfrozen":true,"freeholdFrozenAtExactlyOne":true,"freeholdWaverResumes":true,"ferrousWaverAnimatesUnfrozen":true,"ferrousFrozenAtExactlyOne":true,"ferrousWaverResumes":true,"lamplighterWaverAnimatesUnfrozen":true,"lamplighterFrozenAtExactlyOne":true,"lamplighterWaverResumes":true,"pirateTelegraphReached":true,"pirateFlashAnimatesUnfrozen":true,"pirateFrozenAtExactlyOne":true,"pirateFlashResumes":true,"disabledFlickerAnimates":true,"disabledFlickerFrozenDim":true}
