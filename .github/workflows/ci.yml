@@ -30,10 +30,9 @@ jobs:
       - run: npm run build
 
   boot:
-    name: Boot harness (advisory - RW-006/RW-007)
+    name: Boot harness
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

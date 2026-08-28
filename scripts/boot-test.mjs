@@ -6697,10 +6697,12 @@ const w30removeShip = (live) => {
   if (i >= 0) ctx.ships.splice(i, 1);
   removeLiveShip(ctx, live);
 };
-// Tick (max 10) until this ship's demand hail lands in the event stream.
+// Tick until this ship's demand hail lands. Budget is 1 s (60 frames): the
+// RW-006 pin below must open on frame 1; a miss is a setup regression, not
+// a reason to wait on soak-era combat/fear/event luck.
 const w30demandEvs = (live, label) => {
   const evs = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 60; i++) {
     tick(1, label);
     evs.push(...ctx.lastEvents);
     if (evs.some((e) => e.type === 'hailOpened' && e.ship === live)) break;
@@ -6737,37 +6739,90 @@ const w30siteDist = (live) => {
   return Math.hypot(ws.position[0] - p.x, ws.position[1] - p.y, ws.position[2] - p.z);
 };
 
-// -- a. demand hail WITHOUT mounts: the card offers pay-or-fight, holds -----
-// weapons-cold while open, fires once per record, and refuseFight presses --
-// the attack through the real card button. The run is freehold/undocked off
-// the wave-28 end state; concealedMounts has never been bought. -------------
-if (ctx.flags.docked) undockStation();
-w28calm('wave30 calm (demand setup)'); // the wave-28 teleport-and-clear
-ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
-ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
-ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
-ctx.input.weaponGroup = 1; // cannon — the firing legs below pin the group
-ctx.world.credits = 4000;
-ctx.cargo.length = 0;
-ctx.cargo.push({ commodity: 'provisions', units: 10 }); // cargo aboard: the demand rides its value
-const w30demandExpected = Math.max(
-  HIDDEN_MOUNTS.demandMin,
-  Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
-);
-// The wave-28 berth restore rewound world.time into a snapshot taken inside
-// jump grace, so the demand guard (now >= jumpGraceUntil) can still be shut.
-for (let i = 0; i < 300 && ctx.world.time < (ctx.world.jumpGraceUntil ?? 0); i++) tick(1, 'wave30 jump grace wait');
-// TEST SETUP: live JUMP.graceSeconds is 60; 300 ticks cannot expire it.
-if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
+// RW-006: WAVE30 DEMAND HAIL + PAYTRIBUTE failed together (~1/10) because both
+// legs rode soak-era state. Shared causes, confirmed by scripts/wave30-hail-probe.mjs:
+// (1) leftover hailOpen / deferred hail (ambient demand during a 300-tick jump-
+// grace wait, or a prior card) so the synthetic pirate's hailOpened is deferred
+// and the card buttons belong to someone else; (2) jumpGraceUntil / session
+// death-calm still blocking acquire, so 10 frames never emit hailOpened;
+// (3) cargo/price drift (empty hold or a world-event glut) so demand hits
+// demandMin and demandRolledOnce / payButtonLabeled disagree. Combat flag
+// alone is not enough: a demanding pirate is weapons-cold. Pin every demand
+// input; do not wait out grace on the clock.
 const { expireSessionDeathCalm: w125ExpireDeathCalm } = await import('../src/systems/npc.js');
+const { dropDeferredHail: w30dropDeferredHail } = await import('../src/systems/overlay-policy.js');
 const w125ExpireAi05 = (label) => {
   // TEST SETUP: extra starter elapsed (Greenhand 180s). Session death remaining is 90s of dt (tick is 1/60 s).
   if (Number.isFinite(ctx.world.time) && ctx.world.time < 180) ctx.world.time = 180;
   try { w125ExpireDeathCalm(); } catch { /* pin must not throw */ }
   void label;
 };
-w125ExpireAi05('wave30');
-const w30graceExpired = ctx.world.time >= (ctx.world.jumpGraceUntil ?? 0);
+let w30demandExpected = 0;
+const w30pinDemandScene = (label, mounts) => {
+  if (ctx.flags.docked) undockStation();
+  w28calm(`${label} calm`);
+  ctx.world.jumpGraceUntil = 0;
+  w125ExpireAi05(label);
+  ctx.ship.object.position.set(0, 30000, 0);
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.input.throttle = 0;
+  ctx.input.fullStop = true;
+  ctx.input.hailPressed = false;
+  ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+  ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+  ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+  ctx.input.weaponGroup = 1;
+  ctx.world.credits = 4000;
+  ctx.world.fear = 0;
+  ctx.world.concealedMounts = mounts === true;
+  ctx.world.activeEvent = null;
+  ctx.cargo.length = 0;
+  ctx.cargo.push({ commodity: 'provisions', units: 10 });
+  ctx.world.prices.provisions = COMMODITIES.provisions.base;
+  ctx.flags.paused = false;
+  ctx.flags.chartOpen = false;
+  ctx.flags.berthOpen = false;
+  ctx.flags.hailOpen = false;
+  w30dropDeferredHail();
+  ctx.emit('hailClosed', {});
+  tick(2, `${label} hail close`);
+  w30dropDeferredHail();
+  ctx.emit('hailClosed', {});
+  tick(1, `${label} hail close settle`);
+  for (const s of ctx.ships) if (s?.object) s.object.position.set(9000, 9000, 9000);
+  ctx.flags.hailOpen = false;
+  ctx.world.prices.provisions = COMMODITIES.provisions.base;
+  w30demandExpected = Math.max(
+    HIDDEN_MOUNTS.demandMin,
+    Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
+  );
+  const playerPos = ctx.ship.object.position;
+  const nearbyHostile = ctx.ships.some((s) => s?.object && w30isHostile(s)
+    && s.object.position.distanceTo(playerPos) < U.ENCOUNTER_BUBBLE);
+  return {
+    undocked: ctx.flags.docked !== true,
+    hailOverlayClosed: w30hailDisplay() === 'none' && ctx.flags.hailOpen !== true,
+    chartClosed: ctx.flags.chartOpen !== true,
+    berthClosed: ctx.flags.berthOpen !== true,
+    pausedOff: ctx.flags.paused !== true,
+    graceExpired: ctx.world.time >= (ctx.world.jumpGraceUntil ?? 0),
+    cargoPinned: ctx.cargo.length === 1 && ctx.cargo[0].commodity === 'provisions' && ctx.cargo[0].units === 10,
+    pricesPinned: ctx.world.prices.provisions === COMMODITIES.provisions.base,
+    creditsPinned: ctx.world.credits === 4000,
+    mountsPinned: ctx.world.concealedMounts === (mounts === true),
+    demandAboveFloor: w30demandExpected > HIDDEN_MOUNTS.demandMin,
+    noNearbyHostiles: nearbyHostile === false,
+  };
+};
+
+// -- a. demand hail WITHOUT mounts: the card offers pay-or-fight, holds -----
+// weapons-cold while open, fires once per record, and refuseFight presses --
+// the attack through the real card button. The run is freehold/undocked off
+// the wave-28 end state; concealedMounts has never been bought. -------------
+const w30demandSetupChecks = w30pinDemandScene('wave30 demand setup', false);
+console.log('wave30 demand setup:', JSON.stringify(w30demandSetupChecks), `demand=${w30demandExpected}`);
+if (!Object.values(w30demandSetupChecks).every(Boolean)) { console.log('WAVE30 DEMAND SETUP FAIL'); errors++; }
+const w30graceExpired = w30demandSetupChecks.graceExpired;
 const p1refuse = w30spawnPirate('refuse', 95, [250, 0, 0]); // 250u: inside TARGET_RANGE, outside the bubble edge
 const p1openEvs = w30demandEvs(p1refuse, 'wave30 p1 demand');
 const p1hail = p1openEvs.find((e) => e.type === 'hailOpened' && e.ship === p1refuse) ?? null;
@@ -6882,9 +6937,9 @@ if (!Object.values(w30outfitChecks).every(Boolean)) { console.log('WAVE30 CONCEA
 
 // -- c. payTribute: the real card path pays the exact demand, the pirate ----
 // flees calm-stamped (+60 s), and the flee stamps a wake site 1400u ahead.
-undockStation();
-w28calm('wave30 calm (payTribute)');
-ctx.world.credits = 4000;
+const w30paySetupChecks = w30pinDemandScene('wave30 payTribute setup', true);
+console.log('wave30 payTribute setup:', JSON.stringify(w30paySetupChecks), `demand=${w30demandExpected}`);
+if (!Object.values(w30paySetupChecks).every(Boolean)) { console.log('WAVE30 PAYTRIBUTE SETUP FAIL'); errors++; }
 const p2pay = w30spawnPirate('pay', 95, [250, 0, 0]);
 const p2openEvs = w30demandEvs(p2pay, 'wave30 p2 demand');
 const p2hail = p2openEvs.find((e) => e.type === 'hailOpened' && e.ship === p2pay) ?? null;
@@ -24042,13 +24097,32 @@ removeLiveShip(w42indyCtx, w42indy);
   const pingWhenIn = pingThrew === false && pingOk?.ok === true && pingOk?.token === '';
   const unk = rw?.act?.({ v: 1, name: 'notACommand', args: {} });
   const unknown = unk?.ok === false && unk?.token === 'unknown';
+  // RW-007: ctx.agent.events is EVENT_CAP 16; commLines cap at COMM_LINE_CAP 4
+  // and pushRing drops the oldest commLine first on overflow. Prior waves leave
+  // the ring full, so tick(30) harvests combat/NPC/comm and evicts wave127-ring
+  // even when the harvest tick succeeded. Park live ships, drain the ring, and
+  // pause only the hold window so overflow cannot steal the row. Production
+  // cap/behavior is unchanged.
+  ctx.input.fireHeld = false;
+  const savedShipPos127 = (ctx.ships ?? []).map((s) => s?.object?.position?.clone?.() || null);
+  for (const s of ctx.ships ?? []) {
+    if (s?.object?.position) s.object.position.set(9000, 9000, 9000);
+  }
+  tick(1, 'w127 observe park');
+  if (Array.isArray(ctx.agent?.events)) ctx.agent.events.length = 0;
   ctx.emit('commLine', { text: 'wave127-ring', from: 'Echo' });
   tick(1, 'wave127 harvest');
   const harvested = Array.isArray(ctx.agent?.events)
     && ctx.agent.events.some((e) => e && e.type === 'commLine' && e.text === 'wave127-ring');
+  ctx.flags.paused = true;
   tick(30, 'wave127 ring hold');
+  ctx.flags.paused = false;
   const ringHeld = Array.isArray(ctx.agent?.events)
     && ctx.agent.events.some((e) => e && e.type === 'commLine' && e.text === 'wave127-ring');
+  (ctx.ships ?? []).forEach((s, i) => {
+    const p = savedShipPos127[i];
+    if (p && s?.object?.position) s.object.position.copy(p);
+  });
   ctx.agent.optIn = savedOpt127;
   ctx.flags.berthHold = savedHold127;
   ctx.flags.paused = savedPause127;
@@ -24579,6 +24653,16 @@ removeLiveShip(w42indyCtx, w42indy);
 
   // Keep the hull out of the pad envelope so a dock pulse is an edge, not a berth.
   if (ctx.ship?.object?.position) ctx.ship.object.position.set(800, 40, 800);
+  // RW-007: act({ name:'dock' }) refuses token 'range' unless ctx.station.inZone
+  // is already true. inZone is written only in station.update(), so moving the
+  // hull does not update the flag until the next tick. Prior waves often leave
+  // inZone false, so the pulse never queues (hail has no range gate, so that
+  // pin still passed). Flush leftover pendingDock, then pin inZone for the act
+  // only. Hull stays outside DOCK_RANGE*2 so station does not snap/berth.
+  tick(1, 'w132 flush pendingDock');
+  ctx.input.dockPressed = false;
+  ctx.input.hailPressed = false;
+  if (ctx.station) ctx.station.inZone = true;
 
   let threw132 = false;
 

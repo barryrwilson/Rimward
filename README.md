@@ -20,11 +20,10 @@ npm run build
 npm run test:boot
 ```
 
-`test:boot` is intentionally broad. Known intermittent demand/hail and Agent
-API fixtures are tracked as [RW-006](https://github.com/barryrwilson/Rimward/issues/7)
-and [RW-007](https://github.com/barryrwilson/Rimward/issues/13). The GitHub boot
-job remains visible but advisory until those fixtures are deterministic; the
-production build is the required gate.
+`test:boot` is the required headless gate. RW-006 and RW-007 pinned the
+WAVE30 demand/pay and WAVE127/WAVE132 Agent API fixtures. The GitHub boot
+job is a required merge check. Runtime-error overlay pins run with
+`npm run test:runtime-error-ux`.
 
 ## Work tracking
 

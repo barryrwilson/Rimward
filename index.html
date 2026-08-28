@@ -10,18 +10,226 @@
   <body>
     <div id="app"></div>
     <div id="hud"></div>
-    <div id="fatal" style="display:none;position:fixed;inset:0;z-index:99;background:#100;color:#f66;font:14px/1.5 monospace;padding:2rem;white-space:pre-wrap;"></div>
+    <div id="fatal" class="rw-fatal" hidden style="position:fixed;inset:0;z-index:99;"></div>
     <script>
-      // Runtime error trap: vite's overlay only covers transform errors, not
-      // runtime failures (e.g. WebGL context creation). Surface those on screen.
-      window.__websimFatal = (msg) => {
-        const el = document.getElementById('fatal');
-        if (el.style.display === 'block') return; // keep the first (most specific) message
-        el.style.display = 'block';
-        el.textContent = 'WebSim failed to start:\n\n' + msg;
-      };
-      window.addEventListener('error', (e) => window.__websimFatal(e.message + (e.filename ? `\n${e.filename}:${e.lineno}` : '')));
-      window.addEventListener('unhandledrejection', (e) => window.__websimFatal(String(e.reason)));
+      // Fatal trap: Vite's overlay covers transform errors, not runtime
+      // failures (e.g. WebGL). Keep the first message. Startup vs runtime:
+      // src/main.js sets window.__rimwardBooted after system init and the
+      // animation-loop attach. Errors before that flag are startup failures;
+      // errors after it are mid-session failures.
+      (function () {
+        const SAVE_KEY = 'rimward-save-v1';
+        const DETAIL_MAX = 2000;
+        let shown = false;
+
+        function isBooted() {
+          return window.__rimwardBooted === true;
+        }
+
+        function redactDetail(text) {
+          let s = String(text == null ? '' : text);
+          s = s.replace(/AGENT_TOKEN=\S+/g, 'AGENT_TOKEN=<redacted>');
+          if (s.length > DETAIL_MAX) s = s.slice(0, DETAIL_MAX) + '…';
+          return s;
+        }
+
+        function formatDetail(raw) {
+          if (raw && typeof raw === 'object') {
+            const msg = typeof raw.message === 'string' ? raw.message : '';
+            const stack = typeof raw.stack === 'string' ? raw.stack : '';
+            const joined = stack && msg && stack.indexOf(msg) === 0 ? stack : [msg, stack].filter(Boolean).join('\n');
+            if (joined) return redactDetail(joined);
+          }
+          const s = redactDetail(raw);
+          return s && s !== '[object Object]' ? s : 'No diagnostic text.';
+        }
+
+        function readTrustworthySaveMeta() {
+          try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (typeof raw !== 'string' || !raw) return null;
+            const snap = JSON.parse(raw);
+            if (!snap || typeof snap !== 'object' || Array.isArray(snap)) return null;
+            if (Object.getPrototypeOf(snap) !== Object.prototype) return null;
+            if (!Object.prototype.hasOwnProperty.call(snap, 'v') || snap.v !== 1) return null;
+            if (!Object.prototype.hasOwnProperty.call(snap, 'savedAt')) return null;
+            const at = snap.savedAt;
+            if (typeof at !== 'number' || !Number.isFinite(at)) return null;
+            const when = new Date(at);
+            if (Number.isNaN(when.getTime())) return null;
+            return { savedAt: at, stamp: when.toLocaleString() };
+          } catch {
+            return null;
+          }
+        }
+
+        function saveLine(meta) {
+          if (meta && meta.stamp) return 'Last save on this machine: ' + meta.stamp + '.';
+          return 'Save state on this machine is unknown.';
+        }
+
+        function fallbackText(title, body, save, detail) {
+          return title + '\n\n' + body + '\n' + save + '\n\n' + detail;
+        }
+
+        function hideBackgroundChrome() {
+          const body = document.body;
+          if (!body || !body.children) return;
+          const kids = body.children;
+          for (let i = 0; i < kids.length; i++) {
+            const node = kids[i];
+            if (!node) continue;
+            if (node.id === 'fatal') continue;
+            const tag = node.tagName ? String(node.tagName).toUpperCase() : '';
+            if (tag === 'SCRIPT' || tag === 'STYLE') continue;
+            try {
+              node.setAttribute('inert', '');
+              node.inert = true;
+            } catch { /* inert is best-effort */ }
+            try { node.setAttribute('aria-hidden', 'true'); } catch { /* ignore */ }
+          }
+        }
+
+        function tabStops() {
+          const list = [];
+          const detail = document.getElementById('rw-fatal-detail');
+          const btn = document.getElementById('rw-fatal-reload');
+          if (detail) list.push(detail);
+          if (btn) list.push(btn);
+          return list;
+        }
+
+        function cycleTab(shift) {
+          const stops = tabStops();
+          if (!stops.length) return;
+          const active = document.activeElement;
+          let i = -1;
+          for (let n = 0; n < stops.length; n++) {
+            if (stops[n] === active) { i = n; break; }
+          }
+          let next;
+          if (shift) next = i <= 0 ? stops[stops.length - 1] : stops[i - 1];
+          else next = (i < 0 || i >= stops.length - 1) ? stops[0] : stops[i + 1];
+          try { next.focus(); } catch { /* ignore */ }
+        }
+
+        function showFatal(raw) {
+          const el = document.getElementById('fatal');
+          if (!el || shown) return;
+          shown = true;
+          const runtime = isBooted();
+          const title = runtime ? 'Something broke' : 'RIMWARD failed to start';
+          const body = runtime
+            ? 'The session stopped.'
+            : 'The game did not finish starting.';
+          const save = saveLine(readTrustworthySaveMeta());
+          const detail = formatDetail(raw);
+
+          try {
+            el.textContent = '';
+            el.setAttribute('role', 'alertdialog');
+            el.setAttribute('aria-modal', 'true');
+            el.setAttribute('aria-labelledby', 'rw-fatal-title');
+            el.setAttribute('aria-describedby', 'rw-fatal-body rw-fatal-save');
+
+            const panel = document.createElement('div');
+            panel.className = 'rw-fatal-panel';
+
+            const titleEl = document.createElement('h1');
+            titleEl.id = 'rw-fatal-title';
+            titleEl.className = 'rw-fatal-title';
+            titleEl.textContent = title;
+
+            const bodyEl = document.createElement('p');
+            bodyEl.id = 'rw-fatal-body';
+            bodyEl.className = 'rw-fatal-body';
+            bodyEl.textContent = body;
+
+            const saveEl = document.createElement('p');
+            saveEl.id = 'rw-fatal-save';
+            saveEl.className = 'rw-fatal-save';
+            saveEl.textContent = save;
+
+            const detailEl = document.createElement('pre');
+            detailEl.id = 'rw-fatal-detail';
+            detailEl.className = 'rw-fatal-detail';
+            detailEl.tabIndex = 0;
+            detailEl.setAttribute('tabindex', '0');
+            detailEl.textContent = detail;
+
+            const reload = document.createElement('button');
+            reload.type = 'button';
+            reload.id = 'rw-fatal-reload';
+            reload.className = 'rw-fatal-reload';
+            reload.textContent = 'Reload';
+            reload.addEventListener('click', function () {
+              try { window.location.reload(); } catch { /* ignore */ }
+            });
+
+            panel.appendChild(titleEl);
+            panel.appendChild(bodyEl);
+            panel.appendChild(saveEl);
+            panel.appendChild(detailEl);
+            panel.appendChild(reload);
+            el.appendChild(panel);
+
+            el.hidden = false;
+            el.removeAttribute('hidden');
+            el.classList.add('is-open');
+            el.style.display = 'flex';
+            hideBackgroundChrome();
+            try { reload.focus(); } catch { /* focus is best-effort */ }
+          } catch {
+            try {
+              el.hidden = false;
+              el.removeAttribute('hidden');
+              el.style.display = 'block';
+              el.textContent = fallbackText(title, body, save, detail);
+            } catch { /* ignore */ }
+          }
+        }
+
+        window.__websimFatal = function (msg) {
+          showFatal(msg);
+        };
+
+        window.addEventListener('error', function (e) {
+          const bits = [];
+          if (e && e.message) bits.push(e.message);
+          if (e && e.filename) bits.push(e.filename + ':' + e.lineno);
+          window.__websimFatal(bits.join('\n') || 'Script error');
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          window.__websimFatal(e && e.reason);
+        });
+        // Capture-phase so title/settings cannot swallow Tab/Enter/Space
+        // while this overlay is open. stopImmediatePropagation also stops
+        // the event from reaching the button, so Enter/Space reload here
+        // when Reload is focused. Tab cycles Reload ↔ diagnostic only.
+        window.addEventListener('keydown', function (e) {
+          const el = document.getElementById('fatal');
+          if (!el || el.hidden || !el.classList.contains('is-open')) return;
+          if (e && typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          const code = e && e.code;
+          const key = e && e.key;
+          const isTab = code === 'Tab' || key === 'Tab';
+          if (isTab) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            cycleTab(!!(e && e.shiftKey));
+            return;
+          }
+          const activate = code === 'Enter' || code === 'Space' || key === 'Enter' || key === ' ';
+          if (!activate) return;
+          const detail = document.getElementById('rw-fatal-detail');
+          if (detail && document.activeElement === detail) return;
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          const btn = document.getElementById('rw-fatal-reload');
+          if (btn && typeof btn.click === 'function') btn.click();
+          else {
+            try { window.location.reload(); } catch { /* ignore */ }
+          }
+        }, true);
+      })();
     </script>
     <script type="module" src="/src/main.js"></script>
   </body>

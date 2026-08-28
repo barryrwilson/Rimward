@@ -319,3 +319,6 @@ window.addEventListener('keydown', (e) => {
     }
   } catch { /* never throw from pause keys */ }
 });
+
+// Fatal trap (index.html): errors after this flag are mid-session, not startup.
+window.__rimwardBooted = true;
