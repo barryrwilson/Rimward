@@ -257,6 +257,10 @@ export function createCtx({ scene, camera, renderer }) {
       mouseSensitivity: 1, // helm gain after reticle clamp; 1 = live feel
       invertX: false, // invert helm yaw only; reticle stays under the cursor
       invertY: false, // invert helm pitch only; reticle stays under the cursor
+      musicVolume: 1, // 0..1 music bus (pad/bed/hum/clank) before dry/wet
+      effectsVolume: 1, // 0..1 combat/world FX bus before dry/wet
+      voiceVolume: 1, // 0..1 whalesong bus before dry/wet
+      uiVolume: 1, // 0..1 UI/HUD cue bus before dry/wet
     },
 
     // --- event queue. Frozen event types (payload documented at emit sites):

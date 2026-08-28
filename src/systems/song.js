@@ -148,11 +148,72 @@ const CLANK = ['square', 300, 300, 0.05, 0.03, 800, 0];
 const COMBAT_BED_GAIN = 0.05; // low drone target while in combat
 const DOCKED_HUM_GAIN = 0.02; // pad-level station hum
 const VOL_TC = 0.05; // master-volume retarget time constant (s)
+const BUS_NAMES = ['music', 'effects', 'voice', 'ui'];
+const BUS_FIELDS = [
+  ['music', 'musicVolume'],
+  ['effects', 'effectsVolume'],
+  ['voice', 'voiceVolume'],
+  ['ui', 'uiVolume'],
+];
+
+// Cue → bus. Unknown CUES keys fail closed to effects (still muted by master).
+const CUE_BUS = {
+  playerHit: 'effects',
+  npcHit: 'effects',
+  npcDestroyed: 'effects',
+  bodyHit: 'effects',
+  playerFire: 'effects',
+  npcFire: 'effects',
+  npcFireMissile: 'effects',
+  shieldDown: 'effects',
+  engineOut: 'effects',
+  sunHeat: 'effects',
+  podCollected: 'effects',
+  npcDisabled: 'effects',
+  npcSurrendered: 'effects',
+  hailOpened: 'ui',
+  hailClosed: 'ui',
+  docked: 'ui',
+  undocked: 'ui',
+  jumpRequested: 'ui',
+  systemLoaded: 'ui',
+  milestone: 'ui',
+  marketShift: 'ui',
+  saveBlocked: 'ui',
+  clueFound: 'ui',
+  landmarkFound: 'ui',
+  epicStage: 'ui',
+  convergence: 'ui',
+  originChosen: 'ui',
+  fearChanged: 'ui',
+  worldEvent: 'ui',
+  hudMechRange: 'ui',
+  hudMechMatch: 'ui',
+  hudMechContact: 'ui',
+  hostileEnter: 'ui',
+  hullBand: 'ui',
+  reticleLock: 'ui',
+};
+
+function cueBus(key) {
+  if (HUD_ALERT_TYPES.has(key)) return 'ui';
+  const b = CUE_BUS[key];
+  return b === 'music' || b === 'effects' || b === 'voice' || b === 'ui' ? b : 'effects';
+}
+
+function channelVol(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 1;
+  if (v <= 0) return 0;
+  if (v >= 1) return 1;
+  return v;
+}
 
 export function initSong(ctx) {
   let ac = null;
   let master = null;
   let convolver = null;
+  let buses = null; // { music, effects, voice, ui } GainNodes → master
+  let busWet = null; // parallel sends → convolver; same gain as buses so tails follow the channel without wetting dry sources on that bus
   let padOscA = null;
   let padOscB = null;
   let unlocked = false;
@@ -200,6 +261,28 @@ export function initSong(ctx) {
       convolver.connect(wet);
       wet.connect(master);
 
+      buses = {
+        music: ac.createGain(),
+        effects: ac.createGain(),
+        voice: ac.createGain(),
+        ui: ac.createGain(),
+      };
+      busWet = {
+        music: ac.createGain(),
+        effects: ac.createGain(),
+        voice: ac.createGain(),
+        ui: ac.createGain(),
+      };
+      for (let i = 0; i < BUS_NAMES.length; i++) {
+        const name = BUS_NAMES[i];
+        const field = BUS_FIELDS[i][1];
+        const ch = channelVol(ctx.settings?.[field]);
+        buses[name].gain.value = ch;
+        buses[name].connect(master);
+        busWet[name].gain.value = ch;
+        busWet[name].connect(convolver);
+      }
+
       // Continuous pad at very low gain; pitch follows mood base.
       const padFilter = ac.createBiquadFilter();
       padFilter.type = 'lowpass';
@@ -207,8 +290,7 @@ export function initSong(ctx) {
       const padGain = ac.createGain();
       padGain.gain.value = PAD_GAIN;
       padGain.connect(padFilter);
-      padFilter.connect(master);
-      padFilter.connect(convolver);
+      route(padFilter, 'music', true);
       const half = MOOD_SONG[mood].base / 2;
       padOscA = ac.createOscillator();
       padOscA.type = 'sine';
@@ -240,8 +322,7 @@ export function initSong(ctx) {
       bedOsc.frequency.value = 55;
       bedOsc.connect(bedTrem);
       bedTrem.connect(bedGain);
-      bedGain.connect(master);
-      bedGain.connect(convolver);
+      route(bedGain, 'music', true);
       bedOsc.start();
       bedLfo.start();
 
@@ -256,7 +337,7 @@ export function initSong(ctx) {
       humOsc.frequency.value = 110;
       humOsc.connect(humFilter);
       humFilter.connect(humGain);
-      humGain.connect(master);
+      route(humGain, 'music', false);
       humOsc.start();
 
       if (ac.state === 'suspended') ac.resume().catch(() => {});
@@ -281,8 +362,7 @@ export function initSong(ctx) {
       lp.frequency.value = 900;
       lp.Q.value = 0.5;
       g.connect(lp);
-      lp.connect(master);
-      lp.connect(convolver);
+      route(lp, 'voice', true);
 
       const o1 = ac.createOscillator(); // warm fundamental
       o1.type = 'sine';
@@ -375,8 +455,19 @@ export function initSong(ctx) {
     }
   }
 
-  /** Short synth cue. Allocates only on (rare) events. spec[7]=1 also sends wet. */
-  function tone(spec, t) {
+  /** source → busGain → master; wet sources also → busWet → convolver. */
+  function route(node, name, wet) {
+    const b = (buses && buses[name]) || buses?.effects;
+    if (!b) return;
+    node.connect(b);
+    if (wet) {
+      const w = (busWet && busWet[name]) || busWet?.effects;
+      if (w) node.connect(w);
+    }
+  }
+
+  /** Short synth cue. Allocates only on (rare) events. spec[7]=1 taps wet after the bus. */
+  function tone(spec, t, bus) {
     const [type, f0, f1, dur, gain, lpf, delay] = spec;
     try {
       const t0 = t + delay;
@@ -397,8 +488,8 @@ export function initSong(ctx) {
         g.connect(f);
         out = f;
       }
-      out.connect(master);
-      if (spec[7]) out.connect(convolver); // generous tail (the motif)
+      const resolved = bus === 'music' || bus === 'voice' || bus === 'ui' || bus === 'effects' ? bus : 'effects';
+      route(out, resolved, !!spec[7]);
       o.start(t0);
       o.stop(t0 + dur + 0.05);
     } catch (err) {
@@ -430,12 +521,14 @@ export function initSong(ctx) {
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
         const typ = ev.type;
-        const cue = (typ === 'npcFire' && ev.weapon === 'missile') ? CUES.npcFireMissile : CUES[typ];
+        const cueKey = (typ === 'npcFire' && ev.weapon === 'missile') ? 'npcFireMissile' : typ;
+        const cue = CUES[cueKey];
         if (cue) {
           const needFam = FAMILY_CUES[typ];
           const famOk = !needFam || document.getElementById('hud')?.dataset.family === needFam;
           const alertOk = !HUD_ALERT_TYPES.has(typ) || ctx.settings?.hudAlerts === true;
           if (famOk && alertOk) {
+            const bus = cueBus(cueKey);
             let at = t;
             if (typ === 'npcFire' || typ === 'npcHit') {
               const last = typ === 'npcFire' ? lastNpcFireAt : lastNpcHitAt;
@@ -445,10 +538,10 @@ export function initSong(ctx) {
               if (at <= t + VOLLEY_GAP * (VOLLEY_MAX - 1)) {
                 if (typ === 'npcFire') lastNpcFireAt = at;
                 else lastNpcHitAt = at;
-                for (let j = 0; j < cue.length; j++) tone(cue[j], at);
+                for (let j = 0; j < cue.length; j++) tone(cue[j], at, bus);
               }
             } else {
-              for (let j = 0; j < cue.length; j++) tone(cue[j], at);
+              for (let j = 0; j < cue.length; j++) tone(cue[j], at, bus);
             }
           }
         }
@@ -460,8 +553,20 @@ export function initSong(ctx) {
       }
 
       // Live master volume/mute (settings.js owns ctx.settings; read every frame).
-      const vol = MASTER_GAIN * (ctx.settings?.muted ? 0 : (ctx.settings?.masterVolume ?? 1));
-      master.gain.setTargetAtTime(vol, t, VOL_TC);
+      try {
+        const vol = MASTER_GAIN * (ctx.settings?.muted ? 0 : (ctx.settings?.masterVolume ?? 1));
+        master.gain.setTargetAtTime(vol, t, VOL_TC);
+        if (buses && busWet) {
+          for (let i = 0; i < BUS_FIELDS.length; i++) {
+            const name = BUS_FIELDS[i][0];
+            const ch = channelVol(ctx.settings?.[BUS_FIELDS[i][1]]);
+            buses[name].gain.setTargetAtTime(ch, t, VOL_TC);
+            busWet[name].gain.setTargetAtTime(ch, t, VOL_TC);
+          }
+        }
+      } catch {
+        /* never throw from audio bus math */
+      }
 
       // Adaptive combat bed: fade in over ~2s, out over ~4s (change-only retarget).
       const inCombat = !!ctx.flags.combat;
@@ -478,7 +583,7 @@ export function initSong(ctx) {
         if (isDocked) nextClankAt = t + 7 + Math.random() * 8;
       }
       if (dockedOn && t >= nextClankAt) {
-        tone(CLANK, t);
+        tone(CLANK, t, 'music');
         nextClankAt = t + 7 + Math.random() * 8;
       }
 
