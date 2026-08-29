@@ -142,6 +142,8 @@ durable next-wave capture is mandatory, not optional.
   a variant toggle, add role/scale/lore summaries, and make loading progress
   visually unambiguous. The current viewer is useful for asset inspection but
   not yet inviting as a player-facing title-menu feature.
+  RW-003 design `docs/Mdl01ShipReferenceDesign.md` (accepted 2026-08-29).
+  Group by faction or type; pirate rows become one livery toggle.
 
 ### Playtest capture — 2026-08-25, second pass (agent playtest, `67fb1a0` build)
 
