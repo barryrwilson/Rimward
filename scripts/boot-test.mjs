@@ -1599,6 +1599,7 @@ ctx.ship.velocity.set(0, 0, 0);
 ctx.world.mystery = { found: [], visited: [] };
 tick(2, 'mystery corrupted');
 const corruptedCleared = ctx.world.mystery.found.length === 0 && ctx.world.mystery.visited.length === 0;
+const creditsBeforeDeath = ctx.world.credits;
 ctx.emit('playerDestroyed', {});
 tick(2, 'death consumed'); // save.js sees it via lastEvents, overlay opens
 dispatchKey('Enter'); // recover(): restore(last save) + mood forced 'anxious'
@@ -1610,9 +1611,27 @@ const w5deathChecks = {
   bondPreserved: typeof bondSaved === 'number' && ctx.bio.bond === bondSaved,
   hungerPreserved: typeof hungerSaved === 'number' && ctx.bio.hunger === hungerSaved,
   bioNotDefaults: !(ctx.bio.bond === 0.1 && ctx.bio.hunger === 0.15 && ctx.bio.wounds === 0),
+  creditsUnchanged: ctx.world.credits === creditsBeforeDeath
+    && ctx.world.credits === w5snap?.world?.credits,
 };
 console.log('wave5 death tenderness:', JSON.stringify(w5deathChecks), `mood=${ctx.bio.mood} bond=${ctx.bio.bond} saved=${bondSaved} mystery=${JSON.stringify(ctx.world.mystery)}`);
 if (!Object.values(w5deathChecks).every(Boolean)) { console.log('WAVE5 DEATH TENDERNESS FAIL'); errors++; }
+{
+  const saveDeathSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src/game/save.js'), 'utf8');
+  const recoverSlice = saveDeathSrc.slice(
+    saveDeathSrc.indexOf('function recover()'),
+    saveDeathSrc.indexOf('function onPlayerDestroyed()'),
+  );
+  const w5rw005 = {
+    noDarkKeeps: !saveDeathSrc.includes('the dark keeps what it takes'),
+    lineBerth: saveDeathSrc.includes('No UU charge. Credits, cargo, and hull return as they were at your last berth.'),
+    lineFresh: saveDeathSrc.includes('No berth record. Credits stay. A starter hull waits at Freehold Drift.'),
+    noChargeComment: saveDeathSrc.includes('never charge UU'),
+    recoverNoDebit: !/credits\s*([+\-]=|=\s*credits\s*-)/.test(recoverSlice),
+  };
+  console.log('wave5 rw005 death copy:', JSON.stringify(w5rw005));
+  if (!Object.values(w5rw005).every(Boolean)) { console.log('WAVE5 RW005 DEATH COPY FAIL'); errors++; }
+}
 tick(5, 'post-death settle');
 
 // -- 7. bio visuals on the ship mesh (headless observables) --------------------
@@ -19223,7 +19242,7 @@ removeLiveShip(w42indyCtx, w42indy);
     && !ctxSrc.includes('ctx.autopilot');
   const setOpenWrites = /function setOpen\(next\)[\s\S]{0,240}flags\.chartOpen\s*=/.test(chartSrc);
   const fireHeldGate = ctrlSrc.includes('chartOpen')
-    && /fireHeld\s*=\s*fireDown\s*&&\s*ctx\.flags\.chartOpen\s*!==\s*true/.test(ctrlSrc);
+    && /fireHeld\s*=\s*fireHeldNow\s*&&\s*ctx\.flags\.chartOpen\s*!==\s*true/.test(ctrlSrc);
   const noPrevent = !chartSrc.includes('preventDefault(') && !chartSrc.includes('stopPropagation(');
   const noInnerChart = !chartSrc.includes('innerHTML');
   const hitDisc = chartSrc.includes('rw-galaxy-hit')
@@ -19236,7 +19255,9 @@ removeLiveShip(w42indyCtx, w42indy);
     && !/class: 'rw-galaxy-plot'[\s\S]{0,80}rw-galaxy-route/.test(chartSrc);
   const clearBtnType = chartSrc.includes("clearBtn.type = 'button'")
     || chartSrc.includes('clearBtn.type = "button"');
-  const keyMToggle = chartSrc.includes('decodeKeyCode') && chartSrc.includes("code === 'KeyM'");
+  const keyMToggle = chartSrc.includes('decodeKeyCode')
+    && chartSrc.includes("codeOf(ctx, 'chart')")
+    && chartSrc.includes("return 'KeyM'");
   const digit0Shipyard = stationSrc.includes("code.startsWith('Digit')")
     && stationSrc.includes('d === 0')
     && stationSrc.includes("selectService('shipyard')")
@@ -22008,7 +22029,7 @@ removeLiveShip(w42indyCtx, w42indy);
     persistKey: settings103src.includes("STORAGE_KEY = 'rimward-settings-v1'")
       && !settings103src.includes('rimward-hud-alerts'),
     loadWalk: settings103src.includes('for (const key of Object.keys(FIELDS))')
-      && settings103src.includes('Object.prototype.hasOwnProperty.call(data, key)')
+      && settings103src.includes('Object.hasOwn(data, key)')
       && !/for\s*\(\s*const\s+\w+\s+in\s+data\s*\)/.test(settings103src),
     reservedNotFields: [...reserved103].every((k) => !Object.prototype.hasOwnProperty.call(fields103, k)),
     restoreOn: restoredOn103.hudAlerts === true,
@@ -22049,7 +22070,8 @@ removeLiveShip(w42indyCtx, w42indy);
       && station103src.includes('armOutfitPapers'),
     keysStay: ctrl103src.includes("'KeyT'") && ctrl103src.includes("'KeyV'")
       && ctrl103src.includes("'KeyK'") && ctrl103src.includes("'KeyX'")
-      && settings103src.includes("e.code === 'KeyO'"),
+      && settings103src.includes("codeOf(ctx, 'settings')")
+      && settings103src.includes("return 'KeyO'"),
     visualHud03: applySlice103.includes('rw-colorblind')
       && applySlice103.includes('rw-contrast')
       && applySlice103.includes('rw-reduced-motion')
@@ -25223,7 +25245,7 @@ removeLiveShip(w42indyCtx, w42indy);
     slowSpeed: hud136.includes('const DOCK_SLOW_SPEED = 20'),
     localBand: hud136.includes('const DOCK_SLOW_RANGE_MULT = 3')
       && hud136.includes('U.DOCK_RANGE * DOCK_SLOW_RANGE_MULT'),
-    promptKeyJ: hud136.includes("pKey = 'J'")
+    promptKeyJ: hud136.includes("promptKeyFor('dock', 'J')")
       && /pVerb = \(!skipSlow && Number\.isFinite\(dockSpd\) && dockSpd > DOCK_SLOW_SPEED\)/.test(hud136),
     promptDockFallback: hud136.includes("? DOCK_SLOW_VERB")
       && hud136.includes(": 'Dock';"),
@@ -25531,7 +25553,7 @@ removeLiveShip(w42indyCtx, w42indy);
     ? controls138.slice(cycleStart138, cycleEnd138)
     : '';
   const cueStart138 = hud138.indexOf('// Dock / Jump / Hail / Target win.');
-  const cueEnd138 = hud138.indexOf("pKey = 'V'; pVerb = 'Lock'");
+  const cueEnd138 = hud138.indexOf("promptKeyFor('reticleLock', 'V')");
   const cueRegion138 = cueStart138 >= 0 && cueEnd138 > cueStart138
     ? hud138.slice(cueStart138, cueEnd138)
     : '';

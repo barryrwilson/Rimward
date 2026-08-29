@@ -11,7 +11,9 @@ import {
 } from './hangar.js';
 import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
 import { sanitizeNav } from './nav.js';
-import { canOpenPlayCard, playSurfaceBlocked, setBerthHold } from '../systems/overlay-policy.js';
+import { canOpenPlayCard, playSurfaceBlocked, setBerthHold, settingsOwnsScreen } from '../systems/overlay-policy.js';
+import { decodeKeyCode } from '../systems/key-code.js';
+import { codeOf } from '../systems/bindings.js';
 import { noteSessionEvent } from './agent-schema.js';
 import { disengageFlee } from './agent-flee.js';
 import { disengage as disengageAutopilot } from './autopilot.js';
@@ -58,9 +60,9 @@ import { disengage as disengageAutopilot } from './autopilot.js';
  *   decide whether to show CONTINUE; a confirmed NEW GAME calls clearAutosave()
  *   then reloads with a sessionStorage marker — manual berths survive this
  *   path, so an explicitly-saved berth is never erased by starting fresh.
- * - DEATH (§4.4): consumes 'playerDestroyed' → 'Ship lost.' overlay → reload
- *   the last save (or a fresh start at the Freehold station with a new player
- *   state record when no save exists). No corpse run, no insurance. Emits the
+ * - DEATH (§4.4 / RW-005 option 1): consumes 'playerDestroyed' → overlay →
+ *   reload the last save (or a fresh start at Freehold when no save exists).
+ *   No corpse run, no insurance, no UU charge. Copy must say that. Emits the
  *   commLine 'She limped home.' on recovery, then authored `recovered`
  *   { source: 'autosave'|'fresh' }. The bio companion survives
  *   either path (§ Bio companion): reload-from-save leaves her mood
@@ -77,7 +79,12 @@ const KEY = 'rimward-save-v1';
 const SLOT_KEYS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
 const IDLE_INTERVAL = 60; // s between in-space autosaves
 const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
-const DEATH_HOLD_MS = 2500; // 'Ship lost.' hold before recovery
+const DEATH_HOLD_MS = 2500; // overlay hold before recovery
+const DEATH_TITLE = 'SHIP LOST';
+const DEATH_LINE_BERTH = 'No UU charge. Credits, cargo, and hull return as they were at your last berth.';
+const DEATH_LINE_FRESH = 'No berth record. Credits stay. A starter hull waits at Freehold Drift.';
+const DEATH_HINT_BERTH = 'Returning to your last berth… (Enter to skip)';
+const DEATH_HINT_FRESH = 'Returning to Freehold Drift… (Enter to skip)';
 
 // Whitelist: only these world fields persist. Anything world.js adds for the
 // multi-system swap (recordBanks et al.) must stay JSON-plain to ride along.
@@ -1303,20 +1310,37 @@ export function initSave(ctx) {
   const overlay = document.createElement('div');
   overlay.className = 'screen-overlay death-overlay';
   overlay.style.display = 'none';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'rw-death-title');
   const panel = document.createElement('div');
   panel.className = 'screen-panel death-panel';
   const title = document.createElement('div');
   title.className = 'death-title';
-  title.textContent = 'SHIP LOST';
+  title.id = 'rw-death-title';
+  title.textContent = DEATH_TITLE;
   const line = document.createElement('div');
   line.className = 'death-line';
-  line.textContent = 'Ship lost. The dark keeps what it takes — but not this time.';
+  line.setAttribute('role', 'status');
+  line.textContent = DEATH_LINE_BERTH;
   const hint = document.createElement('div');
   hint.className = 'death-hint';
-  hint.textContent = 'Returning to your last berth… (Enter to skip)';
+  hint.textContent = DEATH_HINT_BERTH;
   panel.append(title, line, hint);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+
+  function paintDeathCopy() {
+    let hasBerth = false;
+    try { hasBerth = !!loadSnapshot(); } catch { hasBerth = false; }
+    try {
+      title.textContent = DEATH_TITLE;
+      line.textContent = hasBerth ? DEATH_LINE_BERTH : DEATH_LINE_FRESH;
+      hint.textContent = hasBerth ? DEATH_HINT_BERTH : DEATH_HINT_FRESH;
+    } catch {
+      /* never throw from death overlay paint */
+    }
+  }
 
   let dead = false;
   let deathTimer = 0;
@@ -1333,6 +1357,7 @@ export function initSave(ctx) {
     overlay.style.display = 'none';
     const snap = loadSnapshot();
     const source = snap ? 'autosave' : 'fresh';
+    // RW-005 option 1: never charge UU. Restore or freshStart only.
     if (snap) {
       restore(ctx, snap);
       // Death-recovery aftermath: she remembers the dark (§ Bio companion).
@@ -1356,6 +1381,7 @@ export function initSave(ctx) {
     try { disengageFlee(ctx, 'destroyed'); } catch { /* session helm must not block death overlay */ }
     if (dead) return;
     dead = true;
+    paintDeathCopy();
     overlay.style.display = 'flex';
     deathTimer = setTimeout(recover, DEATH_HOLD_MS);
   }
@@ -1629,9 +1655,33 @@ export function initSave(ctx) {
     }
   }
 
+  function liveBerthCode() {
+    try {
+      const c = codeOf(ctx, 'berth');
+      if (typeof c === 'string' && c) return c;
+    } catch {
+      /* last-ditch */
+    }
+    return 'KeyL';
+  }
+
+  function settingsMutexOwns() {
+    try {
+      if (settingsOwnsScreen()) return true;
+      if (ctx.settingsApi && typeof ctx.settingsApi.isOpen === 'function' && ctx.settingsApi.isOpen() === true) {
+        return true;
+      }
+    } catch {
+      /* fail open to existing guards */
+    }
+    return false;
+  }
+
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
-    if (e.code === 'KeyL') {
+    const code = decodeKeyCode(e);
+    if (code === liveBerthCode()) {
+      if (settingsMutexOwns()) return;
       // Never intercept: no preventDefault/stopPropagation. While docked or
       // paused other overlays own the screen, and while dead the death
       // overlay does — only allow closing in those states.
@@ -1641,7 +1691,7 @@ export function initSave(ctx) {
         try { blocked = playSurfaceBlocked(ctx) === true; } catch { blocked = false; }
         if (!blocked) setBerthOpen(true);
       }
-    } else if (e.code === 'Escape' && berthOpen) {
+    } else if (code === 'Escape' && berthOpen) {
       requestBerthClose();
     }
   });
