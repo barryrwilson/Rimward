@@ -1006,12 +1006,14 @@ async function main() {
         };
       })()`, (v) => v && v.display === 'block' && v.namesSpeaker && v.showsAmount);
       await cdp.shot('07-hail01-demand-card.png');
-      await sleep(2500);
-      const cardB = await cdp.eval(`(() => {
+      // Math.ceil keeps 20s until more than 1 s of world.time passes.
+      // A fixed 2.5 s wall sleep loses when headless rAF is throttled.
+      const startTimer = Number(cardA.timer);
+      const cardB = await waitUntil(`(() => {
         const card = document.querySelector('.rw-hail-card');
         const text = (card?.textContent || '').trim();
         return { timer: (text.match(/(\\d+)\\s*s\\b/) || [])[1] || null };
-      })()`);
+      })()`, (v) => v && v.timer != null && Number(v.timer) < startTimer, 8000);
       // Resolve by paying: outcome must be visible and credits must move.
       const pay = await cdp.eval(`(() => {
         const c = window.__ctx;
