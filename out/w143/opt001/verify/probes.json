@@ -1,0 +1,288 @@
+{
+  "commit": "2fff72b354a1b47b7dda4fa79399915588f01ae9",
+  "port": 5186,
+  "cdp": 9486,
+  "boot": {
+    "hasCtx": true,
+    "origin": "greenhand",
+    "sys": "freehold",
+    "docked": false,
+    "ships": 5
+  },
+  "surfaces": {
+    "CTL-03": {
+      "pass": true,
+      "moving": {
+        "x": 0,
+        "y": 30,
+        "z": 709.9170147029504,
+        "throttle": 0.27549999999999997,
+        "t": 2.6995000000000013
+      },
+      "openState": {
+        "berthOpen": true,
+        "berthHold": true,
+        "paused": false,
+        "x": 0,
+        "y": 30,
+        "z": 709.9170147029504,
+        "t": 2.6995000000000013
+      },
+      "heldState": {
+        "berthHold": true,
+        "paused": false,
+        "x": 0,
+        "y": 30,
+        "z": 709.9170147029504,
+        "t": 3.499500000000002
+      },
+      "driftWhileHeld": 0,
+      "closed": {
+        "berthOpen": false,
+        "berthHold": false,
+        "paused": false
+      }
+    },
+    "HUD-06": {
+      "pass": true,
+      "rowExists": true,
+      "rowShown": true,
+      "rowText": "HOMEFreehold Landing · 126u",
+      "pipParent": "hud",
+      "pipShown": false,
+      "chevShown": true,
+      "chevCenter": {
+        "x": 1316,
+        "y": 448
+      },
+      "docked": false,
+      "chevInsetMin": 124,
+      "overlayHide": {
+        "chartOpen": true,
+        "row": false,
+        "pip": false,
+        "chev": false
+      }
+    },
+    "NAV-09": {
+      "pass": true,
+      "chartOpen": true,
+      "zoomIn": {
+        "text": "Zoom in",
+        "h": 24,
+        "w": 69
+      },
+      "zoomOut": {
+        "text": "Zoom out",
+        "h": 24,
+        "w": 75
+      },
+      "zoomReset": {
+        "text": "Reset view",
+        "h": 24,
+        "w": 89
+      },
+      "factionFilter": true,
+      "factionOptions": 13,
+      "standingFilter": true,
+      "itineraryExists": true,
+      "itineraryHidden": true,
+      "plot": {
+        "ok": true,
+        "dest": "Aegis"
+      },
+      "itineraryShown": true,
+      "legCount": 4,
+      "firstLeg": "Bastion — Ferrous Hegemony — Stranger — hub route — Stranger; pirate traffic 3"
+    },
+    "HUD-07": {
+      "pass": true,
+      "cruise": {
+        "inCombat": false,
+        "rangeOpacity": 0.14,
+        "leadOpacity": 0.14,
+        "reticle": {
+          "w": 80,
+          "h": 80
+        },
+        "hubChildren": [
+          "rw-reticle-pupil",
+          "rw-reticle-cilia",
+          "rw-reticle-cilia",
+          "rw-reticle-cilia",
+          "rw-reticle-range"
+        ]
+      },
+      "locked": {
+        "hasLock": true,
+        "lockName": "Lancer Po",
+        "targetNameYield": true,
+        "targetNameVisible": false,
+        "combatNameText": "Lancer Po",
+        "edgeArrowVisible": false,
+        "edgeArrowCenter": null
+      },
+      "hubExtras": []
+    },
+    "TGT-07": {
+      "pass": true,
+      "setup": {
+        "ok": true,
+        "used": {
+          "faction": "veridian",
+          "classKey": "heavy",
+          "role": "patrol"
+        },
+        "nearD": 120,
+        "farD": 380
+      },
+      "gated": {
+        "candCount": 2,
+        "hostileCount": 1,
+        "nearestDist": 122,
+        "nearestHostileDist": 380,
+        "expectedDist": 380,
+        "lockName": "OPT FAR HOSTILE",
+        "lockDist": 380,
+        "lockHostile": true,
+        "lockIsFar": true,
+        "lockIsNear": false,
+        "closerNonHostileCount": 1
+      },
+      "ungated": {
+        "candCount": 2,
+        "hostileCount": 0,
+        "nearestDist": 105,
+        "nearestHostileDist": null,
+        "expectedDist": 105,
+        "lockName": "OPT NEAR FRIEND",
+        "lockDist": 105,
+        "lockHostile": false,
+        "lockIsFar": false,
+        "lockIsNear": true,
+        "closerNonHostileCount": 0
+      },
+      "gatedAttempts": 1,
+      "ungatedAttempts": 1,
+      "gatedOk": true,
+      "ungatedOk": true
+    },
+    "Hail02": {
+      "pass": true,
+      "hailToast": {
+        "toasts": [
+          {
+            "text": "Route plotted: 4 jumps to Aegis.",
+            "cls": "rw-toast comm"
+          },
+          {
+            "text": "Heave to. Cargo or hull.",
+            "cls": "rw-toast show comm"
+          },
+          {
+            "text": "No lock — hail",
+            "cls": "rw-toast show warn"
+          },
+          {
+            "text": "★ The lane wears masks. You saw one come off.",
+            "cls": "rw-toast sting"
+          },
+          {
+            "text": "★ They are breaking. First scare.",
+            "cls": "rw-toast sting"
+          }
+        ],
+        "seen": {
+          "hailMiss": 1,
+          "hailOpened": 0,
+          "misses": [
+            {
+              "name": "No lock",
+              "verb": "hail",
+              "reason": "none"
+            }
+          ]
+        },
+        "cardDisplay": "block",
+        "paused": false
+      },
+      "dockMiss": {
+        "toasts": [
+          "Route plotted: 4 jumps to Aegis.",
+          "Heave to. Cargo or hull.",
+          "No lock — hail",
+          "Freehold Landing — dock out of range (125 u)",
+          "★ They are breaking. First scare."
+        ],
+        "seen": {
+          "hailMiss": 1,
+          "hailOpened": 0,
+          "misses": [
+            {
+              "name": "Freehold Landing",
+              "verb": "dock",
+              "reason": "dock-range",
+              "dist": 125
+            }
+          ]
+        },
+        "docked": false,
+        "stationDist": 125
+      },
+      "noLockMiss": {
+        "name": "No lock",
+        "verb": "hail",
+        "reason": "none"
+      },
+      "noLockToast": true,
+      "dockMissEv": {
+        "name": "Freehold Landing",
+        "verb": "dock",
+        "reason": "dock-range",
+        "dist": 125
+      },
+      "dockToast": true
+    },
+    "Hail01": {
+      "pass": true,
+      "cardA": {
+        "display": "block",
+        "namesSpeaker": true,
+        "showsAmount": true,
+        "timer": "20",
+        "buttons": [
+          "[1] Pay tribute — 80 UU",
+          "[2] Show teeth — reveal the hidden mounts",
+          "[3] Refuse — and fight"
+        ],
+        "text": "HAIL — Vane RookRed Ledger · Vane RookVane Rook heaves to — 80 UU or hull. 20s.[1] Pay tribute — 80 UU[2] Show teeth — reveal the hidden mounts[3] Refuse — and fight"
+      },
+      "cardB": {
+        "timer": "18"
+      },
+      "ticked": true,
+      "deadline": 20,
+      "pay": {
+        "ok": true,
+        "before": 500
+      },
+      "after": {
+        "credits": 420,
+        "cardDisplay": "block",
+        "demandOutcome": "paid",
+        "toasts": [
+          "Route plotted: 4 jumps to Aegis.",
+          "Heave to. Cargo or hull.",
+          "No lock — hail",
+          "Freehold Landing — dock out of range (125 u)",
+          "Vane Rook — heave to. Pay 80 UU or fight. 20s."
+        ]
+      },
+      "outcomeToast": true
+    }
+  },
+  "consoleErrors": [],
+  "exceptions": [],
+  "verdict": "PASS",
+  "reasons": []
+}

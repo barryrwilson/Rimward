@@ -5995,6 +5995,95 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
   `PROGRESS.md`,
   `out/w142/`.
+- Wave 143 (2026-08-29): OPT-001 QA
+  evidence refresh. Issue #8. No
+  `src/` write. Live Chrome CDP pass
+  re-measured on master `72f03012`
+  after rebase (Vite 5186,
+  swiftshader, 1440x900), one New
+  Game Freehold Greenhand save.
+  Hail01 / HUD-06 / Hail02 / HUD-07 /
+  NAV-09 / TGT-07 / CTL-03 all
+  **PASS**, 7/7. 0 console errors,
+  0 exceptions. TGT-07 gets its
+  first live browser coverage: wave
+  136 shipped it `[NO BROWSER
+  COVERAGE]`; KeyT from an empty lock
+  took the 380 u hostile over the
+  120 u friendly, and took the 120 u
+  friendly again once the intent bit
+  was cleared. CTL-03 held the ship
+  at 0.000 u drift for 2 s under
+  throttle with `berthHold` true and
+  `paused` false. Hail01 card named
+  Vane Rook, 80 UU, 20 s, ticked to
+  18 s, and `[1]` paid 500 to 420
+  with outcome `paid`.
+  Harness pins (not product state):
+  `ai.intent` pinned across the KeyT
+  press because the 300 u station law
+  zone clears NPC intent every tick;
+  hull/screen raised to survive
+  ambient pirates; two named test
+  ships spawned and removed.
+  No defect found in the seven
+  surfaces. Separate, pre-existing:
+  `npm run test:boot` failed at
+  random on an unchanged tree, on a
+  different gate each time (WAVE117
+  NAV-05, WAVE30 DEMAND HAIL /
+  PAYTRIBUTE, REDMARCH castMatches,
+  WAVE127 HAIL01 NAN). 5 failures in
+  22 runs, ~23%. Filed as issue #20;
+  the owner fixed and closed it with
+  `0c8cca9b` (seed `Math.random`
+  once for the boot; no gate
+  assertion changed). This branch is
+  rebased onto that fix. The optional stills for
+  these seven surfaces are no longer
+  outstanding.
+  CI: `.github/workflows/
+  live-ui-evidence.yml` runs the same
+  probe on a PR that touches `src/`,
+  `index.html`, or the probe, and on
+  manual dispatch. It uploads the
+  evidence directory for 30 days.
+  Node 22 there, because the probe
+  uses the global `WebSocket`. NOT a
+  required check yet: the probe
+  renders a real WebGL frame, so it
+  is less stable than the boot
+  harness. Two staging flakes were
+  found and fixed. CTL-03 now runs
+  first, before the ship closes on
+  the station, and ends in a full
+  stop. TGT-07 re-parks ambient
+  traffic until the candidate set is
+  the spawned pair, then presses
+  once; a set that never settles
+  fails, and never passes silently.
+  Measured 2 failures in 10 runs
+  before, 0 in 5 after.
+  VERIFY: `out/w143/opt001/verify/`
+  (`report.md`, `probes.json`,
+  `console.txt`, logs). Harness is
+  `scripts/opt001-live-probe.mjs`
+  (`npm run test:opt001-live`);
+  rerun it to regenerate the ten
+  stills. The stills stay out of Git,
+  because Git keeps every version of
+  a binary forever. They live on the
+  pull request instead.
+  `npm run build` PASS.
+  `npm run test:boot` PASS.
+  Browser profile stayed outside the
+  repository.
+  FILES: `scripts/opt001-live-probe.mjs`,
+  `.github/workflows/live-ui-evidence.yml`,
+  `package.json` (`test:opt001-live`),
+  `docs/REMAINING-WORK.md`,
+  `PROGRESS.md`,
+  `out/w143/opt001/verify/*.md|json|txt|log`.
 - Wave 45 contract notes for future work: Phase 6 of
  docs/FactionVisualUpdatePlan.md is CLOSED — all eight built factions carry
  merged-vertex-colour detail stations. The dispatch table is now
