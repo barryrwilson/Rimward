@@ -220,6 +220,26 @@ The live sidebar has one axis (category) and one flat list. The reference adds a
 - Group mode is session state only. **No new persisted field** (`state.js` is
   read-only; `settings.js` `FIELDS` is RW-002's surface, not this issue's).
 
+### 3.1.1 Opening state — settled
+
+Live `open()` (`modelsbrowser.js` **650–658**) forces `selectedCategory = 'Ships'`
+and selects the first Ships entry on **every** open, so re-opening throws away
+where the reviewer was. Grouping needs this pinned, not left to the serial.
+
+| # | Decision | Reason |
+|---|---|---|
+| **G1** | First open of a session uses **BY FACTION**. | The wave exists to make the surface read as a faction reference. Opening on BY TYPE would reproduce today's list and hide the feature behind a tab the player has no reason to press. |
+| **G2** | The first faction group is expanded; every other group is collapsed. | `FACTION_ORDER[0]` is `freehold` (`model-catalog.js` **46**), which is also the Freehold Greenhand start the playtest captures use. The player meets a faction they will actually fly against first. |
+| **G3** | The selected row is that faction's **first class in `CLASS_ORDER`** — Freehold Compact, Light. | `CLASS_ORDER[0]` is `light`, the cheapest ship in the catalog at a 101 KB mean LOD0 (§1.3). The viewport shows a model immediately without opening on the 486 KB freighter. |
+| **G4** | Re-opening **within the same session** restores the last group mode, expansion set, filter text and selection. | The model is already cached, so restoring costs nothing and honours D4 ("re-open must not re-fetch"). This repairs the live reset quirk above. |
+| **G5** | A page reload returns to G1–G3. | Session state only; nothing is persisted (§3.1). |
+| **G6** | Switching group mode keeps the current selection and expands whichever group now holds it. | The reviewer never loses the model on screen by changing how the list is sorted. Consistent with §3.2. |
+
+First paint under G1–G3 is **22 rows**: 12 faction headers, the "Not a faction"
+header, and Freehold's 9 rows (6 ships in `CLASS_ORDER`, 1 station, 1 gate, and
+the authored `fh_shepherd` beacon). That is inside budget **P1** (≤ 40) with
+room to spare, and it is the number V6 should assert.
+
 ### 3.2 Group headers
 
 A header row is a `<button>` with `aria-expanded`, showing the group name, the
@@ -445,7 +465,9 @@ would be built on sand.
 - Filter matches faction name and class key; force-expands matches.
 - `Pirate livery` / `Hub junction` variant checkbox; the 72 pirate rows leave
   the sidebar and keep their catalog ids.
-- Acceptance P1 measured.
+- Opening and restore state per **G1–G6** (§3.1.1); the live "reset to Ships on
+  every open" behaviour goes away.
+- Acceptance P1 measured (expect 22 rows at first paint).
 
 ### PR3 — Summary card and lore
 
@@ -482,7 +504,9 @@ Live browser flows, Chrome, `npm run dev`, console watched throughout:
 | V3 | Screen reader / a11y tree | Dialog is named; the info bar announces a selection change | PR1 |
 | V4 | Settings → Reduced motion on, re-open | Turntable **and** star shell are still; no CSS transition runs | PR1 |
 | V5 | Settings → High contrast on | Headers, state words and the variant checkbox all meet the contrast block | PR2 |
-| V6 | `BY FACTION`, expand Veridian | Six ships in `CLASS_ORDER`, then station, then gate | PR2 |
+| V6 | First open of a session | G1–G3: BY FACTION, Freehold expanded, `Freehold Compact — Light` selected and on screen; 22 rows in the DOM | PR2 |
+| V6b | `BY FACTION`, expand Veridian | Six ships in `CLASS_ORDER`, then station, then gate | PR2 |
+| V6c | Change mode, select a row, `Escape`, re-open | G4: mode, expansion, filter and selection all restored; no refetch. Then reload the page and confirm G5 returns to Freehold Light | PR2 |
 | V7 | `BY TYPE` | Reproduces today's six categories with no row lost; 173 canonical rows | PR2 |
 | V8 | Filter `lamp` | Lamplighter group expands and matches; no other group expands | PR2 |
 | V9 | Select Ferrous frigate, toggle `Pirate livery` | Livery changes, camera pose unchanged, no refetch of `lod0` | PR2 |
