@@ -6027,13 +6027,18 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   ships spawned and removed.
   No defect found in the seven
   surfaces. Separate, pre-existing:
-  `npm run test:boot` fails at random
-  on an unchanged tree, on a
-  different check each time (WAVE117
-  NAV-05 on CI; WAVE30 DEMAND HAIL /
-  PAYTRIBUTE locally). Filed as
-  issue #20 with owner approval.
-  Not fixed here. The optional stills for
+  `npm run test:boot` failed at
+  random on an unchanged tree, on a
+  different gate each time (WAVE117
+  NAV-05, WAVE30 DEMAND HAIL /
+  PAYTRIBUTE, REDMARCH castMatches,
+  WAVE127 HAIL01 NAN). 5 failures in
+  22 runs, ~23%. Filed as issue #20;
+  the owner fixed and closed it with
+  `0c8cca9b` (seed `Math.random`
+  once for the boot; no gate
+  assertion changed). This branch is
+  rebased onto that fix. The optional stills for
   these seven surfaces are no longer
   outstanding.
   CI: `.github/workflows/

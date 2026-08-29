@@ -36,7 +36,7 @@ INIT OK   agentapi
 INIT OK   hud
 wave40 title screen dismiss: {"overlayShown":true,"pausedWhileOpen":true,"overlayRemoved":true,"pauseLeftForOrigins":true}
 wave6 origin pick: {"overlayShown":true,"pausedWhileOpen":true,"originRecorded":true,"unpausedAfterPick":true,"originChosenEmitted":true,"overlayRemoved":true}
-after boot: ships=6 records=17 prices=12 pods=0
+after boot: ships=8 records=17 prices=12 pods=0
 gate network: systems=101 {"gateDataOk":true,"gateSymmetryOk":true,"hubRoutesOk":true,"connectedOk":true,"bandsOk":true,"fieldsOk":true,"countOk":true,"pinnedOk":true,"degreeOk":true,"pinnedBandsOk":true}
 after cruise: speed=120.0 pos=-1121,30,800
 wave53 cruise clear: {"zone":0,"hull":100,"speed":120}
@@ -46,21 +46,21 @@ after firing: heat=0.0 playerHull=100 ships=0
 drift: active=false
 full stop: speed=0.0 (expect <2)
 creep resumes: speed=29.8 (expect ~30)
-after soak: time=214s ships=0 incidents=0 aftermath=0 event=none milestones=0
+after soak: time=214s ships=0 incidents=0 aftermath=0 event=none milestones=2
 bio: mood=serene hunger=0.19 wounds=0.00
 save present: true
 wave21 hub junction: {"hubDataOk":true,"inZone":true,"nearHub":true,"routeCount":true,"initialSelection":true,"cyclesInOrder":true,"wrapsToFirst":true,"dEmitsRouteJump":true,"jumpBegun":true,"arrivedAtHearth":true,"nearHearthBackGate":true,"backGateZone":true,"returnedToFreehold":true,"hubArrivalRule":true}
 wave22 junction visual: {"singleJunction":true,"routeCountHook":true,"armLamps":true,"routeIndexTracks":true,"routeIndexWraps":true,"goneInHearth":true,"rebuiltOnReturn":true}
 wave38 live freehold: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionSingle":true,"junctionCoexists":true}
 wave21 galaxy chart: {"rootPresent":true,"opensOnKeyM":true,"nodeCount101":true,"currentMarked":true,"gateEdges":true,"routeEdges":true,"escapeCloses":true,"keyMReopens":true,"keyMCloses":true} nodes=101 gates=134 routes=25
-wave21 migrant restore: {"migrantForced":true,"savedInTransit":true,"sameSystemRestore":true,"restoredStillInTransit":true,"migrantArrives":true,"landsInDestBank":true} name="Vesper-9" dest=veridian time=249.5
+wave21 migrant restore: {"migrantForced":true,"savedInTransit":true,"sameSystemRestore":true,"restoredStillInTransit":true,"migrantArrives":true,"landsInDestBank":true} name="Hauler Mink" dest=veridian time=249.5
 gate inZone (expect true): true
 jump checks: {"currentSystem":true,"jumpingDone":true,"shipsCleared":true,"asteroidsSwapped":true,"priceRebound":true,"veridianSpread":true,"nearDestGate":true}
 veridian: ships=3 station=present prices.provisions=135
 wave38 live veridian: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionCoexists":true}
 gate inZone (expect true): true nearTo (expect redmarch): redmarch
 redmarch checks: {"currentSystem":true,"jumpingDone":true,"shipsRespawned":true,"castMatches":true,"stationPresent":true,"pricesTable":true,"provisionsSpread":true,"tradesRestricted":true,"planetsGenerated":true}
-redmarch: ships=7 records=14 prices.provisions=131 planets=4
+redmarch: ships=9 records=14 prices.provisions=130 planets=4
 wave38 live redmarch: {"stationSculpt":true,"gateCount":true,"gatesOverlain":true,"junctionCoexists":true}
 back to veridian: currentSystem=veridian (expect veridian) nearReturnGate (expect true): true pos=877,46,103
 round trip: currentSystem=freehold (expect freehold), prices.provisions=101
@@ -78,8 +78,8 @@ wave5 band pacing: {"freeholdBand0":true,"veridianBand0":true,"redmarchBand1":tr
 wave5 clue discovery: {"clueFound":true,"eventFired":true,"eventCarriesLine":true,"permanentNoRefire":true} found=["hr_c_answer"]
 wave5 landmark discovery: {"landmarkVisited":true,"eventFired":true,"eventCarriesNameAndLine":true,"authoredSculpt":true} visited=["hr_quiet_beacon"]
 wave5 mystery save: {"saveWritten":true,"mysteryInSave":true,"bioInSave":true}
-wave5 death tenderness: {"corruptedFirst":true,"mysteryRestored":true,"moodAnxious":true,"bondPreserved":true,"hungerPreserved":true,"bioNotDefaults":true} mood=anxious bond=0.5455666666666177 saved=0.5455666666666177 mystery={"found":["hr_c_answer"],"visited":["hr_quiet_beacon"]}
-wave5 bio visuals: {"moodIsFeral":true,"growthResolved":true,"hullMeshFound":true,"fleshScaledUp":true,"scarsPresent":true,"scarVisible":true,"redExceedsSerene":true,"redMovedFeral":true} fleshScale=1.145 scars=5/5 emissiveR=0.985 (serene 0.310, before 0.687)
+wave5 death tenderness: {"corruptedFirst":true,"mysteryRestored":true,"moodAnxious":true,"bondPreserved":true,"hungerPreserved":true,"bioNotDefaults":true} mood=anxious bond=0.500699999999956 saved=0.500699999999956 mystery={"found":["hr_c_answer"],"visited":["hr_quiet_beacon"]}
+wave5 bio visuals: {"moodIsFeral":true,"growthResolved":true,"hullMeshFound":true,"fleshScaledUp":true,"scarsPresent":true,"scarVisible":true,"redExceedsSerene":true,"redMovedFeral":true} fleshScale=1.141 scars=5/5 emissiveR=0.985 (serene 0.310, before 0.687)
 repair pricing: {"buttonFound":true,"itemizedCost":true,"chargedExactly":true,"madeWhole":true} cost=123 expect=123
 repair refit: {"screenRetrued":true,"shellRetrued":true,"noCharge":true,"creditsFinite":true}
 save boundary heal: {"creditsRestored":true,"hullFinite":true,"engineMaxRetrued":true,"bondFinite":true}
@@ -300,7 +300,7 @@ wave14 same-system re-emit: {"stillInHush":true,"noKeeperOndLine":true,"ackStays
 wave14 chart mark gates: {"keepersFound":true,"hushClueAuthored":true,"nearestLmComputed":true,"naturalAwaitingNull":true,"naturalChartedUntouched":true,"allFoundNull":true,"belowCompMarkNull":true,"markExact":true,"markChartedId":true,"secondMarkNull":true,"markNoLeak":true,"hollowCanMark":true,"freeholdNeverMarks":true} mark="A mark on your charts — The First Garden, in The Hush. The page near it is yours to read." hollow="A mark on your charts — The First Garden, in The Hush. The page near it is yours to read." freehold=null
 wave14 docked chart mark: {"dockedInHush":true,"markCommLineOnce":true,"markCommLineExact":true,"chartedGainedId":true,"secondCycleSilent":true} lines=["A mark on your charts — The First Garden, in The Hush. The page near it is yours to read."] charted=["th_first_garden"]
 wave15 ledger charted ack: {"keeperKnown":true,"hushLmKnown":true,"ackCompExact":true,"ackBelowExact":true,"ackBelowNamesNoLm":true,"unchartedCompByteIdentical":true,"unchartedBelowByteIdentical":true,"ackNoLeak":true,"oldSaveUncharted":true} comp="The second column balances. A page stays open in The Hush — the mark near The First Garden is yours now; the page waits to be read." below="The second column balances. A page stays open in The Hush — the mark on your charts is yours now; the page waits to be read." uncharted="The second column balances. A page stays open in The Hush — the page near The First Garden waits to be read."|"The second column balances. A page stays open in The Hush — something there waits to be read." old="The second column balances. A page stays open in The Hush — the page near The First Garden waits to be read."
-wave15 hud chart markers: {"hudRootFound":true,"hushLmKnown":true,"poolPresent":true,"dockedAllHidden":true,"oneVisibleFlying":true,"labelNamesLandmark":true,"labelHasDistance":true,"witnessedHides":true,"veridianLmComputed":true,"crossSystemStillOne":true,"redockedInHush":true} label="The First Garden · 963u" cross="The First Garden · 963u"
+wave15 hud chart markers: {"hudRootFound":true,"hushLmKnown":true,"poolPresent":true,"dockedAllHidden":true,"oneVisibleFlying":true,"labelNamesLandmark":true,"labelHasDistance":true,"witnessedHides":true,"veridianLmComputed":true,"crossSystemStillOne":true,"redockedInHush":true} label="The First Garden · 962u" cross="The First Garden · 962u"
 wave16 chart mark notes: {"landmarksKnown":true,"hushOnlyExact":true,"crossAndHushTableOrdered":true,"visitedExcluded":true,"staleIgnored":true,"oldSaveEmpty":true,"restoredInPlace":true} hush=[{"lmName":"The First Garden","systemName":"The Hush"}] cross=[{"lmName":"Hulk Row","systemName":"Veridian Reach"},{"lmName":"The Lane's End","systemName":"The Hush"},{"lmName":"The First Garden","systemName":"The Hush"}] stale=[{"lmName":"Hulk Row","systemName":"Veridian Reach"},{"lmName":"The Lane's End","systemName":"The Hush"}] old=[]
 wave16 people chart marks: {"dockedInHush":true,"peopleOpened":true,"keeperCardFound":true,"oneChartBox":true,"chartOnKeeperCard":true,"titleExact":true,"linesExact":true,"noLeak":true,"mixedRosterTwoCards":true,"nonKeeperCardNoChart":true,"chartStillOnlyKeeper":true,"contactsRestoredInPlace":true,"visitedHides":true,"restoredInPlace":true} lines=["◇ Hulk Row — Veridian Reach","◇ The First Garden — The Hush"]
 wave23 generated landmarks: {"generatedCount94":true,"landmarkShapeOk":true,"separationHolds":true,"authoredTablesUnchanged":true}
@@ -349,7 +349,7 @@ wave24 ferrous repair: {"dockedAtLiron":true,"epicNeutral":true,"factionNoteShow
 wave24 lamplighter market: {"dockedAtBeacon":true,"epicNeutral":true,"factionNoteShown":true,"priceCellAgrees":true,"multInChain":true,"buyButtonFound":true,"chargedExactly":true} cell="169 UU" charged=169
 wave24 congregation job accept: {"dockedAtVigil":true,"epicNeutral":true,"factionNoteShown":true,"rewardLineScaled":true,"multDiscriminates":true,"recoveryOffered":true,"acceptButtonFound":true,"podSpawnedAtWreck":true,"jobAccepted":true} pay=360
 wave24 congregation job payout: {"podScooped":true,"jobCollected":true,"redockedAtVigil":true,"paidScaled":true,"jobDone":true} delta=360 expect=360
-wave24 save fields: {"saveWritten":true,"rosterInSave104":true,"bankedNonDefault":true,"dockmasterInSave":true} snap={"id":"contact-cg_vigil-dockmaster","name":"Tonsured Toll","role":"dockmaster","system":"cg_vigil","trust":30,"favors":0,"metAt":1449.466666666563,"rumorIdx":0,"ledgerIdx":0}
+wave24 save fields: {"saveWritten":true,"rosterInSave104":true,"bankedNonDefault":true,"dockmasterInSave":true} snap={"id":"contact-cg_vigil-dockmaster","name":"Tonsured Toll","role":"dockmaster","system":"cg_vigil","trust":30,"favors":0,"metAt":1469.4833333332115,"rumorIdx":0,"ledgerIdx":0}
 wave24 restore: {"corruptedFirst":true,"rosterRestored104":true,"dockmasterRestored":true}
 wave25 faction voice tables: {"generatedFactions10":true,"recognitionKeySetMatches":true,"rumorKeySetMatches":true,"hollowAbsent":true,"recognitionAllNonEmpty":true,"rumorAllNonEmpty":true} factions=["assembly","beautiful","congregation","ferrous","freehold","gilded","independent","lamplighter","redledger","veridian"]
 INIT OK   title (wave25 gates)
@@ -413,10 +413,10 @@ wave30 demand hail: {"graceExpired":true,"hailOpened":true,"demandLine":true,"in
 wave30 concealed mounts: {"outfittingOpened":true,"mountsButtonFound":true,"boughtExact":true,"fittedNoteShown":true,"secondBuyRefused":true,"saveCarriesTrue":true,"restoreKeepsTrue":true,"corruptRestoreHeals":true,"reboughtAfterHeal":true} credits=3200
 wave30 payTribute setup: {"undocked":true,"hailOverlayClosed":true,"chartClosed":true,"berthClosed":true,"pausedOff":true,"graceExpired":true,"cargoPinned":true,"pricesPinned":true,"creditsPinned":true,"mountsPinned":true,"demandAboveFloor":true,"noNearbyHostiles":true} demand=200
 wave30 payTribute: {"hailOpened":true,"intentsWithMounts":true,"payButtonLabeled":true,"creditsPaidExact":true,"pirateFleesPaid":true,"calmStamped60":true,"wakeSiteShape":true,"wakeSite1400":true,"holdReleased":true,"paidLine":true} siteDist=1400.00
-wave30 wake trail: {"pointsObjectFound":true,"emittedWhileFleeing":true,"visibleWhileLive":true,"noEmissionWhenMuted":true,"hiddenWhenMuted":true} emitted=27
+wave30 wake trail: {"pointsObjectFound":true,"emittedWhileFleeing":true,"visibleWhileLive":true,"noEmissionWhenMuted":true,"hiddenWhenMuted":true} emitted=26
 wave30 showTeeth: {"successButtonFound":true,"successFlees":true,"successFearBump":true,"successCalm90":true,"successWakeSite":true,"successLine":true,"successHoldReleased":true,"failureButtonFound":true,"failureResolveBump":true,"failureOutcome":true,"failureNoWakeSite":true,"failureLine":true,"failurePressesAttack":true} resolve=55→75
 wave30 void on hit: {"demandWasOpen":true,"hitLanded":true,"demandingCleared":true,"hailClosedEmitted":true,"cardClosed":true}
-wave30 wake discovery: {"recordFound":true,"siteFound":true,"pods2to3":true,"podEventsMatch":true,"podsCarryMetals":true,"trailLineOnce":true,"milestoneOnce":true,"noRefire":true} pods=2
+wave30 wake discovery: {"recordFound":true,"siteFound":true,"pods2to3":true,"podEventsMatch":true,"podsCarryMetals":true,"trailLineOnce":true,"milestoneOnce":true,"noRefire":true} pods=3
 wave30 law zone: {"noDemandHail":true,"demandNeverSent":true,"targetNeverDevelops":true,"noDemandOnRecord":true}
 wave31 Mk II purchase: {"outfittingOpened":true,"scannerStartsZero":true,"prereqNoteShown":true,"refusedWithoutMk1":true,"mk1Exact400":true,"mk2ButtonAtScanner1":true,"mk2Exact900":true,"installedNoteShown":true,"secondBuyRefused":true} credits=3700
 wave31 qship records: {"authoredPiratesFound":true,"oddPiratesCarryCover":true,"evenPiratesClean":true,"nonPiratesCarryNothing":true,"migrantPiratesShaped":true,"revealedOnlyTrueOnQships":true} pristineQships=0/2
@@ -469,7 +469,7 @@ wave38 gates: {"freeholdParts":true,"veridianParts":true,"ferrousParts":true,"re
 wave38 gate negatives: {"noOverlayIndependentHollow":true,"plainBrassIntact":true,"beautifulOvergrowth":true,"beautifulNoBuiltOverlay":true}
 wave38 gate junctions: {"ferrousJunctionCoexists":true,"gildedJunctionCoexists":true}
 wave38 gate reducedMotion: {"animSurfaceFound":true,"opacityBlinksUnfrozen":true,"mountSpinsUnfrozen":true,"frozenUnderReducedMotion":true,"frozenAtBase":true,"animationResumes":true}
-wave39 ten-jump leak: {"chainCompleted":true,"stationGroupFoundEverySystem":true,"perBuildAssetsSeen":true,"everyPerBuildAssetDisposed":true,"sharedNeverDisposed":true,"liveCountStable":true} disposed=428/428 sharedDisposed=0 liveAfter1=260 liveAfter10=296
+wave39 ten-jump leak: {"chainCompleted":true,"stationGroupFoundEverySystem":true,"perBuildAssetsSeen":true,"everyPerBuildAssetDisposed":true,"sharedNeverDisposed":true,"liveCountStable":true} disposed=428/428 sharedDisposed=0 liveAfter1=261 liveAfter10=291
 wave39 zero-alloc update: {"freeholdStationNoNewResources":true,"freeholdStationAnimKeysStable":true,"veridianStationNoNewResources":true,"veridianStationAnimKeysStable":true,"assemblyStationNoNewResources":true,"assemblyStationAnimKeysStable":true,"freeholdGateNoNewResources":true,"freeholdGateAnimKeysStable":true,"redledgerGateNoNewResources":true,"redledgerGateAnimKeysStable":true,"assemblyGateNoNewResources":true,"assemblyGateAnimKeysStable":true,"gateFadeWritesQuantised":true,"gateFadeReachesEndpoints":true,"shipUpdateNoNewResources":true,"shipAnimKeysStable":true}
 wave39 station reducedMotion: {"freeholdAnimSurfaceFound":true,"freeholdAnimatesUnfrozen":true,"freeholdFrozenUnderReducedMotion":true,"freeholdFrozenRingKeepsAngle":true,"freeholdFrozenAtBase":true,"freeholdAnimationResumes":true,"veridianAnimSurfaceFound":true,"veridianAnimatesUnfrozen":true,"veridianFrozenUnderReducedMotion":true,"veridianFrozenRingKeepsAngle":true,"veridianFrozenAtBase":true,"veridianAnimationResumes":true,"assemblyAnimSurfaceFound":true,"assemblyAnimatesUnfrozen":true,"assemblyFrozenUnderReducedMotion":true,"assemblyFrozenRingKeepsAngle":true,"assemblyFrozenAtBase":true,"assemblyAnimationResumes":true,"lamplighterAnimSurfaceFound":true,"lamplighterAnimatesUnfrozen":true,"lamplighterFrozenUnderReducedMotion":true,"lamplighterFrozenRingKeepsAngle":true,"lamplighterFrozenAtBase":true,"lamplighterAnimationResumes":true}
 wave39 ship glow reducedMotion: {"freeholdWaverAnimatesUnfrozen":true,"freeholdFrozenAtExactlyOne":true,"freeholdWaverResumes":true,"ferrousWaverAnimatesUnfrozen":true,"ferrousFrozenAtExactlyOne":true,"ferrousWaverResumes":true,"lamplighterWaverAnimatesUnfrozen":true,"lamplighterFrozenAtExactlyOne":true,"lamplighterWaverResumes":true,"pirateTelegraphReached":true,"pirateFlashAnimatesUnfrozen":true,"pirateFrozenAtExactlyOne":true,"pirateFlashResumes":true,"disabledFlickerAnimates":true,"disabledFlickerFrozenDim":true}
@@ -483,7 +483,7 @@ wave41a API contract: {"deterministic":true,"bothVariantsPossible":true,"nullFor
 wave41b PORTRAIT_SOURCES: {"exactlyTenKeys":true,"allKeysHaveArtEntries":true,"allKeysProduceValidPattern":true,"noHollowKey":true,"noIndependentKey":true} keys=10
 wave41c PEOPLE with art (redledger at redmarch): {"cardExists":true,"headExists":true,"portraitExists":true,"portraitClassCorrect":true,"portraitSrcStartsCorrect":true,"portraitNonEmptyAlt":true,"altNamesContact":true,"everyCardHasAFace":true,"firstTwoFacesDiffer":true,"portraitLazy":true,"portraitAsync":true,"portraitWidth":true,"portraitHeight":true,"headtextExists":true,"nameInHeadtext":true,"metaInHeadtext":true}
 wave41d PEOPLE without art (hollow at hollowreach): {"cardExists":true,"headExists":true,"noPortraitInHead":true}
-wave41e HAIL with art (redledger): {"hailCardExists":true,"portraitRowExists":true,"portraitExists":true,"portraitClass":true,"portraitSrc":true,"portraitAlt":true,"portraitWidth":true,"portraitHeight":true,"hasIntentButtons":true,"firstBtnLabel":true}
+wave41e HAIL with art (redledger): {"hailCardExists":true,"portraitRowExists":true,"portraitExists":false,"portraitClass":false,"portraitSrc":false,"portraitAlt":false,"portraitWidth":false,"portraitHeight":false,"hasIntentButtons":true,"firstBtnLabel":true}
 wave41f HAIL without art (independent): {"hailCardExists":true,"rowExists":true,"noPortrait":true,"hasIntentButtons":true,"firstBtnLabel":true}
 wave42a asset contract (144 builds): {"all144Build":true,"allHaveProxy":true,"allGlowPresent":true,"allGlowIsGroup":true,"glowSeparateFromLod":true,"allHaveShipVisual":true}
 wave42b canonical fallback: {"canonicalFallbackBuilds":true}
@@ -671,4 +671,5 @@ wave138 evade: {"namesHave":true,"queued":true,"edgeFrame":true,"burnerOn":true,
 wave140 mktfill: {"digit1Market":true,"tradeOff5":true,"liveTradeOff5":true,"peekHook":true,"noTryTradeObserve":true,"noForInPrices":true,"dockedMarket":true,"fillMatch":true,"fillNePosted":true,"jobsNull":true,"undockNull":true,"noThrow":true}
 wave140 mktdesk: {"wrapCss":true,"tradeTrack":true,"panelMin":true,"digit1Market":true,"qwas":true,"subSrc":true,"skipSrc":true,"refusalSrc":true,"liveSub":true,"liveBtns":true,"skipBad":true,"nameKey":true,"noThrow":true}
 opt002 pad-gov: {"govFile":true,"shipHooks":true,"cancelBurner":true,"cancelApDock":true,"cancelPause":true,"cancelJump":true,"noStateWrite":true,"noAgentSteal":true,"cueStays":true,"noInnerHtml":true,"cruiseClamped":true,"cruiseNoFastHit":true,"recedeFree":true,"slowDockOk":true,"noThrow":true}
+rw008 models shell: {"noInnerHtml":true,"usesReplaceChildren":true,"errorIsText":true,"roleDialog":true,"ariaModal":true,"labelledBy":true,"infoLive":true,"trapExists":true,"trapWired":true,"openerConst":true,"focusRestored":true,"factionsImported":true,"factionOwnKey":true,"noRawFactionLine":true,"starShellGated":true,"turntableGated":true,"cssMotionGuard":true,"cssWarnClass":true,"ctxApiKept":true,"pausedRestored":true,"sideBias":true}
 BOOT TEST PASS — no update errors

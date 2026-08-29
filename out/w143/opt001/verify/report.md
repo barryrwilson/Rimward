@@ -1,8 +1,8 @@
 # OPT-001 optional live evidence refresh
 
 **Issue:** [#8](https://github.com/barryrwilson/Rimward/issues/8) — `[OPT-001][QA] Refresh optional live UI evidence`
-**Source under test:** `e38360f38bea7faf56a8bb4445c62c880f9e31e8` (master head; this branch adds no `src/` change)
-**Date:** 2026-08-28
+**Source under test:** `2fff72b354a1b47b7dda4fa79399915588f01ae9`, rebased onto master `72f03012`. This branch adds no `src/` change.
+**Date:** 2026-08-29 (re-measured after the rebase; first pass 2026-08-28)
 **Status:** **CLEAN** — 7 / 7 surfaces PASS. 0 console errors, 0 uncaught exceptions.
 
 ## Reproduction state
@@ -37,13 +37,13 @@ overwrites the stills without touching the repository index.
 
 | Surface | Result | What the live run showed | Still |
 |---|---|---|---|
-| **Hail01** demand lifecycle | **PASS** | Demand card names the source (`HAIL — Vane Rook`, `Red Ledger · Vane Rook`), states the amount (`80 UU or hull`) and a live deadline, and offers three compliance paths (`[1] Pay tribute`, `[2] Show teeth`, `[3] Refuse`). Deadline ticked 20 s → 16 s. `[1]` resolved it: credits 500 → 420, `ai.demandOutcome === 'paid'`, outcome toast `Vane Rook — tribute taken. They run.` | `07-hail01-demand-card.png`, `08-hail01-demand-outcome.png` |
-| **HUD-06** home marker | **PASS** | POS rail row `HOME  Freehold Landing · 181u`, on-glass square pip created on `#hud` (not on `.rw-reticle`), distance label on the pad. Opening the Galaxy Chart hid the row, the pip, and the chevron. | `01-hud06-home-marker.png` |
-| **Hail02** miss feedback | **PASS** | KeyH with no lock → one `warn` toast `No lock — hail`; exactly one `hailMiss` and **zero** `hailOpened` in that press. KeyJ out of range → `Freehold Landing — dock out of range (152 u)` with an integer range. No dock, no pause. | `05-hail02-no-lock.png`, `06-hail02-dock-miss.png` |
-| **HUD-07** deconfliction | **PASS** | Reticle is 80×80 with pupil + 3 cilia + RANGE word only — no PPI, compass, or gauge child. Cruise RANGE and LEAD words at opacity `0.14`. With a lock, `.rw-target-name` carries `.rw-yield` and is `display:none`; the name paints once on the rail (`Vesper-9`). | `03-hud07-deconflict.png` |
+| **Hail01** demand lifecycle | **PASS** | Demand card names the source (`HAIL — Vane Rook`, `Red Ledger · Vane Rook`), states the amount (`80 UU or hull`) and a live deadline, and offers three compliance paths (`[1] Pay tribute`, `[2] Show teeth`, `[3] Refuse`). Deadline ticked 20 s → 18 s. `[1]` resolved it: credits 500 → 420, `ai.demandOutcome === 'paid'`, outcome toast `Vane Rook — tribute taken. They run.` | `07-hail01-demand-card.png`, `08-hail01-demand-outcome.png` |
+| **HUD-06** home marker | **PASS** | POS rail row `HOME  Freehold Landing · 126u`, on-glass square pip created on `#hud` (not on `.rw-reticle`), distance label on the pad. Opening the Galaxy Chart hid the row, the pip, and the chevron. | `01-hud06-home-marker.png` |
+| **Hail02** miss feedback | **PASS** | KeyH with no lock → one `warn` toast `No lock — hail`; exactly one `hailMiss` and **zero** `hailOpened` in that press. KeyJ out of range → `Freehold Landing — dock out of range (125 u)` (event `dist: 125`) with an integer range. No dock, no pause. | `05-hail02-no-lock.png`, `06-hail02-dock-miss.png` |
+| **HUD-07** deconfliction | **PASS** | Reticle is 80×80 with pupil + 3 cilia + RANGE word only — no PPI, compass, or gauge child. Cruise RANGE and LEAD words at opacity `0.14`. With a lock, `.rw-target-name` carries `.rw-yield` and is `display:none`; the name paints once on the rail (`Lancer Po`). | `03-hud07-deconflict.png` |
 | **NAV-09** chart readability | **PASS** | Chart carries `Zoom in` / `Zoom out` / `Reset view` (all ≥ 24 px tall), a 13-entry faction filter and a standing filter. Plotting a route to Aegis painted a 4-leg itinerary; leg 1 reads `Bastion — Ferrous Hegemony — Stranger — hub route — Stranger; pirate traffic 3`. | `02-nav09-chart.png` |
 | **TGT-07** combat cycle | **PASS** | With a friendly at 120 u and a hostile at 380 u, KeyT from an empty lock selected the **hostile** at 380 u. With the same pair and the hostile bit cleared, KeyT selected the **nearest** ship at 120 u. Hostiles-first gates on `ai.intent`, then falls back to range. **This is the first live browser coverage for TGT-07** — wave 136 shipped it with `[NO BROWSER COVERAGE]`. | `04-tgt07-hostile-first.png` |
-| **CTL-03** berth freeze | **PASS** | Under throttle (`input.throttle 0.51`), KeyL opened Berth Records: `flags.berthOpen` and `flags.berthHold` true, `flags.paused` **false**, ship position drift over 2 s = **0.000 u**. The modal states `L or ESC to close — your ship holds. This is not Pause (P).` KeyL again cleared both flags and flight resumed. | `09-ctl03-berth-hold.png`, `10-ctl03-resumed.png` |
+| **CTL-03** berth freeze | **PASS** | Under throttle (`input.throttle 0.28`), KeyL opened Berth Records: `flags.berthOpen` and `flags.berthHold` true, `flags.paused` **false**, ship position drift over 2 s = **0.000 u**. The modal states `L or ESC to close — your ship holds. This is not Pause (P).` KeyL again cleared both flags and flight resumed. | `09-ctl03-berth-hold.png`, `10-ctl03-resumed.png` |
 
 ## Console
 
@@ -120,41 +120,30 @@ next failure arrives with its own `probes.json` and stills.
 
 **None in the seven surfaces.** Nothing in this pass reopens completed behavior.
 
-### Observed but out of scope: `npm run test:boot` is intermittent
+### Resolved while this branch was open: the `npm run test:boot` flake
 
-This is reported, not fixed. The issue is evidence-only, and this is not one
-of the seven surfaces.
+Reported from this pass as [#20](https://github.com/barryrwilson/Rimward/issues/20),
+**fixed and closed by the owner on 2026-08-28**, and this branch is now rebased
+onto that fix.
 
-`src/`, `scripts/boot-test.mjs`, and `index.html` on this branch are identical
-to master `e38360f3`:
+The harness failed at random on an unchanged tree, on a different gate each
+time — `WAVE117 NAV-05 HANDOFF`, `WAVE30 DEMAND HAIL` + `WAVE30 PAYTRIBUTE`,
+`REDMARCH TEST`, `WAVE127 HAIL01 NAN`. Measured rate across this session was 5
+failures in 22 runs, about 23%, local and hosted alike.
 
-```
-git diff --stat e38360f3 HEAD -- src/ scripts/boot-test.mjs index.html   # empty
-```
+The captured evidence isolated the cause: on the same tree, a failing and a
+passing run differed only in `records=15` versus `records=14`, with identical
+ship count, prices, and planet count — unseeded world state.
 
-The harness still fails at random, and **a different check fails each time**:
+The fix is `0c8cca9b "Stabilize boot harness randomness"`: it seeds
+`Math.random` once for the whole boot at `scripts/boot-test.mjs:143` and
+changes **no gate assertion**. Owner acceptance recorded 20/20 consecutive
+local passes and three green hosted attempts.
 
-| Where | Result | Failing check |
-|---|---|---|
-| CI run 33189821819 | PASS | — |
-| CI run 33190959203 | FAIL | `WAVE117 NAV-05 HANDOFF FAIL` |
-| CI run 33195085194 | PASS | — |
-| Local | FAIL | `WAVE30 DEMAND HAIL FAIL`, `WAVE30 PAYTRIBUTE FAIL` |
-| Local | FAIL | `WAVE30 DEMAND HAIL FAIL`, `WAVE30 PAYTRIBUTE FAIL` |
-| Local, 5 other runs | PASS | — |
-
-Roughly 2 failures in 8 local runs, and 1 in 3 hosted runs. `PROGRESS.md`
-already records a `REDMARCH castMatches` flake, so nondeterminism in this
-harness is a known theme; `WAVE30` and `WAVE117` look like new instances.
-The likely cause is an unseeded random in world or NPC generation, which
-would make the harness order-dependent rather than the product wrong.
-
-RW-007 names the hosted boot job a required check. A required check that
-fails at random blocks unrelated pull requests, so it is filed on its own:
-**[#20](https://github.com/barryrwilson/Rimward/issues/20)** — `[QA] npm run
-test:boot fails at random on an unchanged tree`. The owner authorized that
-issue; it is labeled `orca:triage`, so the backlog key and the row in this
-inventory are left to triage.
+One correction for the record: a second local loop run on 2026-08-29 found 1
+failure in 6 and was reported to #20 as if it were current. It was not — that
+loop ran on the pre-rebase base `e38360f3`, which predates the fix. #20 carries
+that correction.
 
 ## Evidence index
 
