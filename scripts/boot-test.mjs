@@ -26636,6 +26636,47 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(wOpt002).every(Boolean)) { console.log('OPT002 PAD-GOV FAIL'); errors++; }
 }
 
+// -- RW-008: Models browser hygiene and dialog shell (RW-003 PR1) ----------
+// Source pins only. The overlay owns a WebGL context and its own rAF loop, so
+// it is not constructed here; these assert the contract the design fixes.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const mbSrc = readFileSync(join(here, '..', 'src/systems/modelsbrowser.js'), 'utf8');
+  const mbCss = readFileSync(join(here, '..', 'src/ui/models.css'), 'utf8');
+
+  const wRw008 = {
+    // Text-safe DOM: every label and error string is set as text.
+    noInnerHtml: !/innerHTML/.test(mbSrc),
+    usesReplaceChildren: /replaceChildren\(\)/.test(mbSrc),
+    errorIsText: /line\.textContent = message/.test(mbSrc),
+    // Dialog semantics and the live region.
+    roleDialog: /setAttribute\('role', 'dialog'\)/.test(mbSrc),
+    ariaModal: /setAttribute\('aria-modal', 'true'\)/.test(mbSrc),
+    labelledBy: /setAttribute\('aria-labelledby', TITLE_ID\)/.test(mbSrc),
+    infoLive: /setAttribute\('aria-live', 'polite'\)/.test(mbSrc),
+    // Tab trap and focus restore.
+    trapExists: /function trapTab\(/.test(mbSrc),
+    trapWired: /if \(e\.code === 'Tab'\)/.test(mbSrc),
+    openerConst: /const OPENER_ID = 'rw-title-models'/.test(mbSrc),
+    focusRestored: /openerEl\?\.isConnected/.test(mbSrc),
+    // Faction DISPLAY name, own-key guarded.
+    factionsImported: /import \{ FACTIONS \} from '\.\.\/game\/state\.js'/.test(mbSrc),
+    factionOwnKey: /Object\.hasOwn\(FACTIONS, entry\.faction\)/.test(mbSrc),
+    noRawFactionLine: !/rw-models-faction">\$\{entry\.faction\}/.test(mbSrc),
+    // reducedMotion covers the star shell as well as the turntable.
+    starShellGated: /starShell && !ctx\.settings\.reducedMotion/.test(mbSrc),
+    turntableGated: /!userHasInteracted && !ctx\.settings\.reducedMotion/.test(mbSrc),
+    cssMotionGuard: /body\.rw-reduced-motion \.rw-models-entry/.test(mbCss),
+    cssWarnClass: /\.rw-models-warn \{/.test(mbCss),
+    // Untouched contract (design section 8).
+    ctxApiKept: /ctx\.models = \{/.test(mbSrc),
+    pausedRestored: /ctx\.flags\.paused = wasPausedBeforeOpen/.test(mbSrc),
+    sideBias: /new THREE\.Vector3\(1, 0\.42, 0\.34\)/.test(mbSrc),
+  };
+  console.log('rw008 models shell:', JSON.stringify(wRw008));
+  if (!Object.values(wRw008).every(Boolean)) { console.log('RW008 MODELS SHELL FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {

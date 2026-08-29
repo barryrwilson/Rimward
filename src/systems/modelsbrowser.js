@@ -56,6 +56,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MODEL_CATALOG, MODEL_CATEGORIES } from '../game/model-catalog.js';
+import { FACTIONS } from '../game/state.js';
 import { configureShipAssets } from './ship-assets.js';
 import { applyShipLighting, addShipLightRig, applyShipToneMapping } from './ship-lighting.js';
 import '../ui/models.css';
@@ -70,8 +71,16 @@ const CAMERA_FAR = 100000;
 
 const TURNTABLE_SPEED = 0.18; // rad per second
 
-// Warm color for errors/info bar warnings
-const WARM_COLOR = 0xffb454;
+// The warm error/warning color (#ffb454) now lives in models.css as
+// .rw-models-warn. It used to be an inline style on a markup string; the
+// text-safe DOM path sets a class instead, so no JS constant is needed.
+
+// aria-labelledby target for the dialog root.
+const TITLE_ID = 'rw-models-title';
+
+// Where focus goes when the overlay closes: the title entry that opened it
+// (title.js). Missing on a direct ctx.models.open() call, which is fine.
+const OPENER_ID = 'rw-title-models';
 
 /**
  * Initialize the models browser.
@@ -95,6 +104,7 @@ export function initModelsBrowser(ctx) {
   let userHasInteracted = false; // stops auto-turntable on first drag
   let wasPausedBeforeOpen = false;
   let keydownListener = null;
+  let openerEl = null; // element focus returns to on close
 
   let filterText = '';
   let selectedCategory = 'ALL';
@@ -107,14 +117,26 @@ export function initModelsBrowser(ctx) {
     overlayEl = document.createElement('div');
     overlayEl.className = 'rw-models';
     overlayEl.style.display = 'none';
+    // The overlay is a modal in front of the title (title.js). Screen readers
+    // need to know that, and the Tab trap below needs a root to trap inside.
+    overlayEl.setAttribute('role', 'dialog');
+    overlayEl.setAttribute('aria-modal', 'true');
+    overlayEl.setAttribute('aria-labelledby', TITLE_ID);
 
     // Header
     const header = document.createElement('div');
     header.className = 'rw-models-head';
-    header.innerHTML = `
-      <div class="rw-models-title">MODELS</div>
-      <button class="rw-models-close" aria-label="Close">✕</button>
-    `;
+    const titleEl = document.createElement('div');
+    titleEl.className = 'rw-models-title';
+    titleEl.id = TITLE_ID;
+    titleEl.textContent = 'MODELS';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'rw-models-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '✕';
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
 
     // Main layout: sidebar + viewport
     const main = document.createElement('div');
@@ -170,9 +192,12 @@ export function initModelsBrowser(ctx) {
     const viewport = document.createElement('div');
     viewport.className = 'rw-models-viewport';
 
-    // Info bar (overlay over viewport bottom)
+    // Info bar (overlay over viewport bottom). Selection, loading and error
+    // copy all land here, so it announces politely rather than interrupting.
     const infoBar = document.createElement('div');
     infoBar.className = 'rw-models-info';
+    infoBar.setAttribute('role', 'status');
+    infoBar.setAttribute('aria-live', 'polite');
     viewport.appendChild(infoBar);
 
     main.appendChild(sidebar);
@@ -187,7 +212,7 @@ export function initModelsBrowser(ctx) {
     overlayEl.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
     // Close button
-    header.querySelector('.rw-models-close').addEventListener('click', () => close());
+    closeBtn.addEventListener('click', () => close());
 
     document.body.appendChild(overlayEl);
 
@@ -313,9 +338,13 @@ export function initModelsBrowser(ctx) {
    * Show a fatal error in the info bar.
    */
   function showFatalError(message) {
-    if (overlayEl && overlayEl._infoBar) {
-      overlayEl._infoBar.innerHTML = `<span style="color:#${WARM_COLOR.toString(16)}">${message}</span>`;
-    }
+    if (!overlayEl || !overlayEl._infoBar) return;
+    const bar = overlayEl._infoBar;
+    bar.replaceChildren();
+    const span = document.createElement('span');
+    span.className = 'rw-models-warn';
+    span.textContent = message;
+    bar.appendChild(span);
   }
 
   /**
@@ -366,7 +395,7 @@ export function initModelsBrowser(ctx) {
   const entryButtons = new Map(); // Map from entry.id to button element
   function renderEntryList() {
     const listDiv = overlayEl._listDiv;
-    listDiv.innerHTML = '';
+    listDiv.replaceChildren();
     entryButtons.clear();
 
     const entries = getFilteredEntries();
@@ -457,20 +486,35 @@ export function initModelsBrowser(ctx) {
   }
 
   function showLoading(entry) {
-    overlayEl._infoBar.innerHTML = `<div class="rw-models-error"><div>${entry.label}</div><div style="color:#${WARM_COLOR.toString(16)}">Loading asset…</div></div>`;
+    paintStatus(entry, 'Loading asset…');
   }
 
   /**
    * Show a build error in the info bar.
    */
   function showBuildError(entry, error) {
+    // error.message is the least predictable string this file handles, so it
+    // is set as TEXT. A sculpt that throws must never inject markup.
+    paintStatus(entry, error?.message ? String(error.message) : 'Model failed to build');
+  }
+
+  /**
+   * Paint the info bar as "<entry label> / <warm status line>".
+   * Shared by the loading and error states so both stay text-safe.
+   */
+  function paintStatus(entry, message) {
     const infoBar = overlayEl._infoBar;
-    infoBar.innerHTML = `
-      <div class="rw-models-error">
-        <div>${entry.label}</div>
-        <div style="color:#${WARM_COLOR.toString(16)}">${error.message}</div>
-      </div>
-    `;
+    infoBar.replaceChildren();
+    const wrap = document.createElement('div');
+    wrap.className = 'rw-models-error';
+    const name = document.createElement('div');
+    name.textContent = entry.label;
+    const line = document.createElement('div');
+    line.className = 'rw-models-warn';
+    line.textContent = message;
+    wrap.appendChild(name);
+    wrap.appendChild(line);
+    infoBar.appendChild(wrap);
   }
 
   /**
@@ -596,16 +640,34 @@ export function initModelsBrowser(ctx) {
    */
   function updateInfoBar(entry, stats, radius) {
     const infoBar = overlayEl._infoBar;
-    const factionLine = entry.faction ? `<span class="rw-models-faction">${entry.faction}</span>` : '';
     const radiusStr = Number.isFinite(radius) ? radius.toFixed(1) : '?';
+    infoBar.replaceChildren();
 
-    infoBar.innerHTML = `
-      <div class="rw-models-name">${entry.label}</div>
-      ${factionLine ? `<div>${factionLine}</div>` : ''}
-      <div class="rw-models-stats">
-        Meshes: ${stats.meshCount} | Tris: ${stats.triangleCount.toLocaleString()} | Radius: ${radiusStr}
-      </div>
-    `;
+    const name = document.createElement('div');
+    name.className = 'rw-models-name';
+    name.textContent = entry.label;
+    infoBar.appendChild(name);
+
+    // The faction DISPLAY name, not the raw key. `beautiful` and `redledger`
+    // are storage keys; a reader wants "Beautiful Ones" and "Red Ledger".
+    // entry.faction is authored in model-catalog.js, but read it own-key
+    // anyway so an unknown key degrades to no line instead of throwing.
+    const factionName = entry.faction && Object.hasOwn(FACTIONS, entry.faction)
+      ? FACTIONS[entry.faction].name : null;
+    if (factionName) {
+      const row = document.createElement('div');
+      const span = document.createElement('span');
+      span.className = 'rw-models-faction';
+      span.textContent = factionName;
+      row.appendChild(span);
+      infoBar.appendChild(row);
+    }
+
+    const statsEl = document.createElement('div');
+    statsEl.className = 'rw-models-stats';
+    statsEl.textContent =
+      `Meshes: ${stats.meshCount} | Tris: ${stats.triangleCount.toLocaleString()} | Radius: ${radiusStr}`;
+    infoBar.appendChild(statsEl);
   }
 
   /**
@@ -638,6 +700,13 @@ export function initModelsBrowser(ctx) {
     // Capture paused state before we change it
     wasPausedBeforeOpen = ctx.flags.paused;
     ctx.flags.paused = true;
+
+    // Remember where focus came from so close() can put it back. Prefer the
+    // live activeElement (the title button that was clicked); fall back to the
+    // MODELS entry by id when open() was called directly.
+    const active = document.activeElement;
+    openerEl = active && active !== document.body && !overlayEl.contains(active)
+      ? active : document.getElementById(OPENER_ID);
 
     overlayEl._filterInput.focus();
 
@@ -688,6 +757,58 @@ export function initModelsBrowser(ctx) {
 
     // Restore paused state
     ctx.flags.paused = wasPausedBeforeOpen;
+
+    // Return focus to whatever opened us. Fail closed: a detached or hidden
+    // opener must not throw out of close().
+    try {
+      if (openerEl?.isConnected && typeof openerEl.focus === 'function') openerEl.focus();
+    } catch { /* focus is a courtesy, never a failure path */ }
+    openerEl = null;
+  }
+
+  /**
+   * Focusable controls inside the overlay, in DOM order.
+   * Used by the Tab trap. Hidden and disabled controls are skipped, and the
+   * collapsed/empty list simply contributes no rows.
+   */
+  function focusables() {
+    if (!overlayEl) return [];
+    const nodes = overlayEl.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])');
+    return Array.from(nodes).filter((el) => !el.disabled && el.offsetParent !== null);
+  }
+
+  /**
+   * Trap Tab inside the dialog.
+   *
+   * Before this, handleKeydown's default branch swallowed every unhandled key
+   * while the filter input was blurred, so Tab did nothing at all; and while
+   * the input WAS focused Tab escaped to the title underneath. A modal has to
+   * cycle. Returns true when the event was handled.
+   */
+  function trapTab(e) {
+    const items = focusables();
+    if (items.length === 0) return false;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    const inside = overlayEl.contains(active);
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!inside) {
+      (e.shiftKey ? last : first).focus();
+      return true;
+    }
+    const index = items.indexOf(active);
+    if (index === -1) {
+      (e.shiftKey ? last : first).focus();
+      return true;
+    }
+    const next = e.shiftKey
+      ? (index === 0 ? last : items[index - 1])
+      : (index === items.length - 1 ? first : items[index + 1]);
+    next.focus();
+    return true;
   }
 
   /**
@@ -701,6 +822,12 @@ export function initModelsBrowser(ctx) {
    * Keydown handler (capture phase).
    */
   function handleKeydown(e) {
+    // Tab cycles inside the dialog from anywhere, including the filter input.
+    if (e.code === 'Tab') {
+      trapTab(e);
+      return;
+    }
+
     // Let filter input keys pass through when input is focused
     if (document.activeElement === overlayEl._filterInput) {
       // Intercept navigation keys and Escape
@@ -816,8 +943,10 @@ export function initModelsBrowser(ctx) {
         modelGroup.rotateY(TURNTABLE_SPEED * dt);
       }
 
-      // Slowly rotate star shell (dt-based)
-      if (starShell) {
+      // Slowly rotate star shell (dt-based). Frozen under reducedMotion for
+      // the same reason as the turntable above: it is ambient motion the
+      // reviewer did not ask for, and the setting means ALL of it stops.
+      if (starShell && !ctx.settings.reducedMotion) {
         starShell.rotation.y += 0.00002 * dt * 60; // normalize to ~60fps
         starShell.rotation.x += 0.000005 * dt * 60;
       }
