@@ -283,9 +283,18 @@ async function main() {
       'about:blank',
     ], { stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN });
     say('chrome', CHROME, 'pid', chrome.pid);
+    const chromeErr = [];
+    chrome.stderr.on('data', (b) => {
+      const t = String(b).trim().slice(0, 200);
+      chromeErr.push(t);
+      say('chrome!', t);
+    });
 
     let browserWs = null;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 150; i++) {
+      if (chrome.exitCode != null) {
+        throw new Error(`Chrome exited ${chrome.exitCode} before CDP: ${chromeErr.slice(-3).join(' | ')}`);
+      }
       try {
         const ver = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`);
         if (ver.ok) {
@@ -295,7 +304,7 @@ async function main() {
       } catch { /* not up yet */ }
       await sleep(200);
     }
-    if (!browserWs) throw new Error('CDP not ready');
+    if (!browserWs) throw new Error(`CDP not ready: ${chromeErr.slice(-3).join(' | ')}`);
 
     cdp = new Cdp(browserWs);
     await cdp.ready();
