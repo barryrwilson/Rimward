@@ -26677,6 +26677,74 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(wRw008).every(Boolean)) { console.log('RW008 MODELS SHELL FAIL'); errors++; }
 }
 
+// -- RW-009: Models grouping and the livery variant (RW-003 PR2) ----------
+// Source pins plus a real count off the live catalog. The overlay itself owns
+// a WebGL context, so its runtime is covered by scripts/rw008-live-probe.mjs.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const mbSrc = readFileSync(join(here, '..', 'src/systems/modelsbrowser.js'), 'utf8');
+  const mbCss = readFileSync(join(here, '..', 'src/ui/models.css'), 'utf8');
+  const { MODEL_CATALOG, FACTION_ORDER } = await import('../src/game/model-catalog.js');
+  const { CLASS_ORDER } = await import('../src/game/ship-scale.js');
+  const { FACTIONS } = await import('../src/game/state.js');
+
+  // The canonical row set the sidebar lists: everything that is not a variant
+  // of another row. 245 - 72 pirate bakes - 1 gate hub = 172.
+  const isVariant = (id) => id.endsWith(':pirate') || id === 'gate:lamplighter:hub';
+  const canonical = MODEL_CATALOG.filter((e) => !isVariant(e.id));
+  const pirates = MODEL_CATALOG.filter((e) => e.id.endsWith(':pirate'));
+  const noFaction = canonical.filter((e) => !e.faction);
+
+  // Every pirate bake must have the trader row it collapses onto, or the
+  // sidebar would silently drop a model.
+  const ids = new Set(MODEL_CATALOG.map((e) => e.id));
+  const piratesPaired = pirates.every((e) => ids.has(e.id.replace(/:pirate$/, '')));
+
+  // Freehold group at first open: 6 ships + station + gate + fh_shepherd.
+  const freeholdRows = canonical.filter((e) => e.faction === 'freehold').length;
+
+  const wRw009 = {
+    catalogWhole: MODEL_CATALOG.length === 245,
+    canonical172: canonical.length === 172,
+    pirates72: pirates.length === 72,
+    piratesPaired,
+    noFaction53: noFaction.length === 53,
+    freehold9: freeholdRows === 9,
+    firstPaint22: 13 + freeholdRows === 22,
+    // G1-G3 depend on these two orders, so pin what "first" means.
+    factionOrderExported: Array.isArray(FACTION_ORDER) && FACTION_ORDER.length === 12,
+    firstFactionFreehold: FACTION_ORDER[0] === 'freehold',
+    firstClassLight: CLASS_ORDER[0] === 'light',
+    everyFactionNamed: FACTION_ORDER.every((f) => Object.hasOwn(FACTIONS, f) && FACTIONS[f].name),
+    // Grouping engine.
+    modeConsts: /const MODE_FACTION = 'faction'/.test(mbSrc) && /const MODE_TYPE = 'type'/.test(mbSrc),
+    noFactionBucket: /const NO_FACTION_LABEL = 'Not a faction'/.test(mbSrc),
+    buildGroups: /function buildGroups\(\)/.test(mbSrc),
+    visibleRows: /function visibleRows\(\)/.test(mbSrc),
+    classOrderUsed: /CLASS_ORDER\.indexOf\(classKeyOf\(entry\)\)/.test(mbSrc),
+    // Variant control.
+    variantResolver: /function resolveEntry\(entry\)/.test(mbSrc),
+    hubVariant: /gate:lamplighter:hub/.test(mbSrc),
+    keepCamera: /if \(!keepCamera\) frameModel/.test(mbSrc),
+    // G1-G6 opening state.
+    hasOpenedOnce: /let hasOpenedOnce = false/.test(mbSrc),
+    noPersistedMode: !/localStorage/.test(mbSrc),
+    // Keyboard.
+    arrowGroup: /case 'ArrowLeft':/.test(mbSrc) && /collapseOrExpand\(e\.code === 'ArrowRight'\)/.test(mbSrc),
+    headerToggle: /toggleGroup\(active\.dataset\.group\)/.test(mbSrc),
+    ariaExpanded: /setAttribute\('aria-expanded'/.test(mbSrc),
+    // Colour is never the only cue: a swatch always rides beside a name.
+    swatchPlusName: /rw-models-swatch/.test(mbSrc) && /rw-models-group-name/.test(mbSrc),
+    cssGroup: /\.rw-models-group \{/.test(mbCss),
+    cssContrast: /body\.rw-contrast \.rw-models-group \{/.test(mbCss),
+    cssEmpty: /\.rw-models-empty \{/.test(mbCss),
+    // PR1 contract still holds.
+    stillNoInnerHtml: !/innerHTML/.test(mbSrc),
+  };
+  console.log('rw009 models grouping:', JSON.stringify(wRw009), `canonical=${canonical.length}`);
+  if (!Object.values(wRw009).every(Boolean)) { console.log('RW009 MODELS GROUPING FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {

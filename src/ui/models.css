@@ -449,3 +449,151 @@ body.rw-reduced-motion .rw-models-entry,
 body.rw-reduced-motion .rw-models-input {
   transition: none;
 }
+
+/* ---------- Group headers (RW-009) ---------- */
+
+.rw-models-group {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  margin-top: 4px;
+  background: #16202e;
+  border: 1px solid #2c3d52;
+  border-radius: 2px;
+  color: #cfe0f0;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rw-models-group:hover {
+  background: #1d2a3b;
+  border-color: #3d5570;
+}
+
+.rw-models-group:focus-visible {
+  outline: none;
+  border-color: var(--rw-accent, #6fd2e0);
+  box-shadow: 0 0 0 2px rgba(111, 210, 224, 0.3);
+}
+
+/* Open/closed is a TEXT glyph, so the state never depends on colour. */
+.rw-models-twisty {
+  flex: 0 0 auto;
+  width: 9px;
+  color: #7e93aa;
+}
+
+/* The faction identity colour rides BESIDE the name, never instead of it. */
+.rw-models-swatch {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+
+.rw-models-group-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rw-models-group-count {
+  flex: 0 0 auto;
+  color: #7e93aa;
+  font-size: 10px;
+}
+
+/* Rows sit indented under their header. */
+.rw-models-group + .rw-models-entry,
+.rw-models-entry {
+  margin-left: 0;
+}
+
+.rw-models-list .rw-models-entry {
+  padding-left: 20px;
+}
+
+/* ---------- Empty filter result ---------- */
+
+.rw-models-empty {
+  padding: 10px 8px;
+  color: #7e93aa;
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ---------- Variant control ---------- */
+
+.rw-models-variant {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 4px 3px;
+  color: #cfe0f0;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.rw-models-variant.rw-disabled {
+  color: #5f7185;
+  cursor: not-allowed;
+}
+
+.rw-models-check {
+  accent-color: var(--rw-accent, #6fd2e0);
+  cursor: inherit;
+}
+
+.rw-models-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(111, 210, 224, 0.4);
+}
+
+/* ---------- High contrast ---------- */
+
+body.rw-contrast .rw-models-group {
+  background: #000;
+  border-color: #7fa8cc;
+  color: #fff;
+}
+
+body.rw-contrast .rw-models-group:hover {
+  background: #12243a;
+}
+
+body.rw-contrast .rw-models-twisty,
+body.rw-contrast .rw-models-group-count {
+  color: #cfe0f0;
+}
+
+body.rw-contrast .rw-models-swatch {
+  border-color: #fff;
+}
+
+body.rw-contrast .rw-models-variant {
+  color: #fff;
+}
+
+body.rw-contrast .rw-models-variant.rw-disabled {
+  color: #9fb2c6;
+}
+
+body.rw-contrast .rw-models-empty {
+  color: #cfe0f0;
+}
+
+/* ---------- Reduced motion ---------- */
+
+body.rw-reduced-motion .rw-models-group {
+  transition: none;
+}

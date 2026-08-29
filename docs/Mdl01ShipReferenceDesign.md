@@ -175,8 +175,14 @@ they repair. None is new scope invented by this brief.
 | **Celestial planets** | 35 | 5 shared `SLOTS` geometries, re-graded per system by `FACTION_STYLE.planetMood` / `planetTint` | Seven near-copies of the same five bodies. Group by system; do not flatten. |
 | **Category collision** | — | 12 faction gates and 12 faction stations are separate rows, and the Ships tab hides them | Faction browsing must cross categories (§3). |
 
-**Net:** 245 flat rows collapse to **173 canonical rows plus a variant control**
-(245 − 72 pirate rows). Ships alone go from 145 rows to 73.
+**Net:** 245 flat rows collapse to **172 canonical rows plus a variant control**
+(245 − 72 pirate bakes − 1 gate hub junction). Ships alone go from 145 rows
+to 73.
+
+> Corrected during PR2. The first stamp of this brief said 173, having
+> subtracted only the 72 pirate rows while §4 hands the Lamplighter hub to the
+> same variant control. The live count is **172**, measured by the V7 flow.
+> The 22-row first-paint figure in §3.1.1 is unaffected and was confirmed.
 
 ---
 
@@ -507,7 +513,7 @@ Live browser flows, Chrome, `npm run dev`, console watched throughout:
 | V6 | First open of a session | G1–G3: BY FACTION, Freehold expanded, `Freehold Compact — Light` selected and on screen; 22 rows in the DOM | PR2 |
 | V6b | `BY FACTION`, expand Veridian | Six ships in `CLASS_ORDER`, then station, then gate | PR2 |
 | V6c | Change mode, select a row, `Escape`, re-open | G4: mode, expansion, filter and selection all restored; no refetch. Then reload the page and confirm G5 returns to Freehold Light | PR2 |
-| V7 | `BY TYPE` | Reproduces today's six categories with no row lost; 173 canonical rows | PR2 |
+| V7 | `BY TYPE` | Reproduces today's six categories with no row lost; 172 canonical rows | PR2 |
 | V8 | Filter `lamp` | Lamplighter group expands and matches; no other group expands | PR2 |
 | V9 | Select Ferrous frigate, toggle `Pirate livery` | Livery changes, camera pose unchanged, no refetch of `lod0` | PR2 |
 | V10 | Select `ship:player` | Variant checkbox disabled with a reason; card names the scale anchor | PR2/PR3 |
