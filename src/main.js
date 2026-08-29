@@ -20,6 +20,7 @@ import { applyShipLighting, applyShipToneMapping } from './systems/ship-lighting
 import { initControls } from './systems/controls.js';
 import { decodeKeyCode } from './systems/key-code.js';
 import { overlayIsOpen, settingsOwnsScreen, titleOwnsScreen } from './systems/overlay-policy.js';
+import { codeOf, shortLabel } from './systems/bindings.js';
 import { initBio } from './game/bio.js';
 import { initWorld } from './game/world.js';
 import { initContacts } from './game/contacts.js';
@@ -234,12 +235,27 @@ function pauseCovered() {
   }
 }
 
+function refreshPauseLegend() {
+  try {
+    const lab = shortLabel(codeOf(ctx, 'pause'));
+    pauseLegend.textContent = (lab || 'P') + ' to resume';
+  } catch {
+    pauseLegend.textContent = 'P to resume';
+  }
+}
+
 function syncPauseCover() {
   try {
     const showing = ctx.flags.paused === true && pauseEl.style.display !== 'none';
     const hits = showing && !pauseCovered();
     pauseEl.style.pointerEvents = hits ? 'auto' : 'none';
     pausePanel.style.pointerEvents = hits ? 'auto' : 'none';
+    const covered = showing && !hits;
+    const nodes = pausePanel.querySelectorAll('[data-pause-action]');
+    for (let i = 0; i < nodes.length; i++) {
+      nodes[i].tabIndex = covered ? -1 : 0;
+    }
+    refreshPauseLegend();
   } catch { /* never throw from pause paint */ }
 }
 
@@ -273,11 +289,10 @@ function runPauseAction(id) {
     }
     if (id === 'settings') {
       try {
-        if (!settingsOwnsScreen() && globalThis.KeyboardEvent) {
-          const event = new KeyboardEvent('keydown', { code: 'KeyO' });
-          globalThis.window.dispatchEvent(event);
+        if (ctx.settingsApi && typeof ctx.settingsApi.setOpen === 'function') {
+          ctx.settingsApi.setOpen(true);
         }
-      } catch { /* skip settings open */ }
+      } catch { /* skip settings open; do not synthesize KeyO */ }
       syncPauseCover();
       return;
     }
@@ -299,10 +314,34 @@ function runPauseAction(id) {
   } catch { /* unknown / throw → skip; do not unpause */ }
 }
 
+function overlayBindCode(id, fallback) {
+  try {
+    const live = codeOf(ctx, id);
+    if (typeof live === 'string' && live) return live;
+  } catch {
+    /* last-ditch authored default */
+  }
+  return fallback;
+}
+
+function settingsMutexOwns() {
+  try {
+    if (settingsOwnsScreen()) return true;
+    if (ctx.settingsApi && typeof ctx.settingsApi.isOpen === 'function' && ctx.settingsApi.isOpen() === true) {
+      return true;
+    }
+  } catch {
+    /* continue to existing guards */
+  }
+  return false;
+}
+
 window.addEventListener('keydown', (e) => {
   try {
     const code = decodeKeyCode(e);
-    if (code === 'KeyP') {
+    const pauseCode = overlayBindCode('pause', 'KeyP');
+    if (code === pauseCode) {
+      if (settingsMutexOwns()) return;
       // The models filter is an INPUT. Typing "Lamp" sends KeyP, which used to
       // unpause the title sim and spawn unprimed traffic (independent:cutter:pirate).
       const focus = document.activeElement;
@@ -314,7 +353,9 @@ window.addEventListener('keydown', (e) => {
       setPaused(!ctx.flags.paused);
       return;
     }
-    if (code === 'KeyO' || code === 'Escape' || code === 'KeyL') {
+    const settingsCode = overlayBindCode('settings', 'KeyO');
+    const berthCode = overlayBindCode('berth', 'KeyL');
+    if (code === settingsCode || code === 'Escape' || code === berthCode) {
       syncPauseCover();
     }
   } catch { /* never throw from pause keys */ }

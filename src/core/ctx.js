@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_BINDINGS } from '../systems/bindings.js';
 
 /**
  * RIMWARD web — shared context, THE cross-system contract. v2.
@@ -261,6 +262,7 @@ export function createCtx({ scene, camera, renderer }) {
       effectsVolume: 1, // 0..1 combat/world FX bus before dry/wet
       voiceVolume: 1, // 0..1 whalesong bus before dry/wet
       uiVolume: 1, // 0..1 UI/HUD cue bus before dry/wet
+      bindings: Object.assign({}, DEFAULT_BINDINGS), // command id → KeyboardEvent.code; fire may be MouseN
     },
 
     // --- event queue. Frozen event types (payload documented at emit sites):

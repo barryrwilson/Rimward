@@ -463,7 +463,7 @@
 /* ---------- death (danger red) ---------- */
 
 .death-overlay {
-  z-index: 30;
+  z-index: 55; /* above HUD 35 and pause 50; below title 70 / settings 80 */
   background: rgba(8, 2, 2, 0.78);
 }
 
