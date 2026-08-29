@@ -6,12 +6,13 @@
 | **Issue** | [RW-003 / GitHub #4](https://github.com/barryrwilson/Rimward/issues/4) |
 | **Author** | RW-003 design (issue #4) |
 | **Date** | 2026-08-28 |
-| **Status** | **Proposed.** Awaiting owner acceptance. No `src/` change lands under this stamp. |
+| **Status** | **Accepted.** Owner accepted the design on 2026-08-29. No `src/` change lands under this stamp; serials may start after it. |
+| **Accepted** | 2026-08-29 (owner) |
 | **Wave** | Design-only. Later serials land code. |
 | **Owner request** | Turn the Models title-menu surface into a browsable ship reference rather than a flat asset inspection list: faction/class grouping, pirate variant handling, role/scale/lore summaries, and unambiguous loading progress. |
 | **Honor** | `src/core/ctx.js` frozen event vocabulary — **no new `ctx.emit` types**. `src/game/state.js` READ-ONLY. `ctx.asteroids.list` `id === array index` untouched. `src/main.js` init order untouched. No new persisted fields, no new digits/keys outside the overlay, no equipment SKU or kit mutation, no aim-glass gauge. `innerHTML` forbidden in new code; labels `textContent`. Colour is never the only cue. `reducedMotion` respected by every new motion. Fail closed: one broken sculpt must never break the browser. No new ship models, no fleet-art redesign, no balance or catalog change. No in-repo LLM. Do not steal RW-002 Settings, OPT-004 `fireHeld`, or OPT-001 evidence. |
 
-**This stamp does not ship `src/`.** **This is not new ship art.** **This is not a catalog or balance change.** **This is not a HUD change.** Census of live code wins over the issue's prose.
+**This stamp does not ship `src/`.** Design accepted 2026-08-29. Serials may start after this stamp. **This is not new ship art.** **This is not a catalog or balance change.** **This is not a HUD change.** Census of live code wins over the issue's prose.
 
 ---
 
@@ -23,7 +24,7 @@
 | Faction/class browsing, pirate variants, role/scale/lore summaries, loading/error state, keyboard use, reduced motion | §3–§8 |
 | Performance and disposal behaviour have explicit acceptance limits | §9 Budgets and §10 Disposal |
 | First implementation slice and browser verification flow are bounded | §11 Slices, §12 Verification matrix |
-| No implementation begins until the design is accepted | Status line; this task writes docs only |
+| No implementation begins until the design is accepted | Status line; this task wrote docs only. First slice is filed as #23 |
 
 ---
 
