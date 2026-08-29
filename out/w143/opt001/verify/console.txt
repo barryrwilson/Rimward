@@ -1,0 +1,7 @@
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[debug] [vite] connecting...
+[debug] [vite] connected.
+
+--- exceptions ---
+

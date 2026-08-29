@@ -1,7 +1,7 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-08-28, after RW-004 / RW-006 / RW-007 and the local
-verification for issue #20.
+Inventory date: 2026-08-28, after RW-004 / RW-006 / RW-007, the local
+verification for issue #20, and the OPT-001 evidence refresh.
 
 This is the compact backlog index. GitHub Project **Rimward** is the operational
 queue used by Orca AI. The wishlist remains the product-intent and playtest
@@ -27,7 +27,7 @@ already marked done.
 
 | Key | Priority | Follow-up |
 |---|---:|---|
-| [OPT-001](https://github.com/barryrwilson/Rimward/issues/8) | P3 | Capture/update the optional live still set for Hail01, HUD-06, Hail02, HUD-07, NAV-09, TGT-07, and CTL-03. Keep this evidence-only unless a live defect is found. |
+| [OPT-001](https://github.com/barryrwilson/Rimward/issues/8) | P3 | Evidence refreshed; verification complete. Live pass on `72f03012` (2026-08-29, rebased) rates Hail01, HUD-06, Hail02, HUD-07, NAV-09, TGT-07, and CTL-03 all PASS, 7/7, with 0 console errors. TGT-07 gets its first live browser coverage. No defect found, so nothing reopened. Set: `out/w143/opt001/verify/` (rerun `npm run test:opt001-live`; CI job `live-ui-evidence.yml` uploads it as an artifact, and is not a required check). |
 | [OPT-002](https://github.com/barryrwilson/Rimward/issues/9) | P3 | Implemented; verification complete. Fresh playtest: SLOW cue does not stop a cruise ram without J. Human pad closing-speed envelope (20–80 u/s in the 45–135 u band). Afterburner / pause / jump / dock / agent `approachDock` cancel. Live cruise ram now hits at ~20 u/s, not 120. |
 | [OPT-003](https://github.com/barryrwilson/Rimward/issues/10) | P3 | Add the AI-05 home-berth safe bubble after a fresh starter-run pacing check. |
 | [OPT-004](https://github.com/barryrwilson/Rimward/issues/11) | P3 | Harden CTL-04 `fireHeld` behavior while station/overlay input owns the controls. |

@@ -1,0 +1,98 @@
+name: Live UI evidence
+
+# OPT-001 optional live evidence. Drives the dev app in headless Chrome and
+# rates Hail01, HUD-06, Hail02, HUD-07, NAV-09, TGT-07 and CTL-03.
+#
+# This job renders a real WebGL frame through swiftshader, so it is slower
+# and less stable than the CI harnesses. It is deliberately a separate
+# workflow: do NOT make it a required check until it proves itself over
+# several runs. `npm run build` and `npm run test:boot` stay the gates.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'scripts/opt001-live-probe.mjs'
+      - '.github/workflows/live-ui-evidence.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live:
+    name: OPT-001 surfaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # The probe uses the global WebSocket, which Node enables by default
+      # from 22. The other CI jobs stay on 20.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Report the browser
+        run: |
+          google-chrome --version
+          echo "node $(node -v)"
+
+      - name: Run the live probe
+        env:
+          OPT001_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          OPT001_CHROME: /usr/bin/google-chrome
+          OPT001_PROFILE: ${{ runner.temp }}/opt001-chrome-profile
+        run: npm run test:opt001-live
+
+      # Evidence is most useful when the probe fails, so upload either way.
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: opt001-live-evidence-${{ github.run_number }}
+          path: out/w143/opt001/verify/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Summarize
+        if: always()
+        run: |
+          f=out/w143/opt001/verify/probes.json
+          if [ ! -f "$f" ]; then
+            echo "The probe wrote no probes.json." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node -e '
+            const p = require("./out/w143/opt001/verify/probes.json");
+            const out = [];
+            out.push("## OPT-001 live surfaces");
+            out.push("");
+            out.push("Verdict: **" + (p.verdict || "unknown") + "**");
+            out.push("");
+            out.push("Source SHA: `" + (p.commit || "unknown") + "`");
+            out.push("");
+            out.push("| Surface | Result |");
+            out.push("|---|---|");
+            for (const [k, v] of Object.entries(p.surfaces || {})) {
+              out.push("| " + k + " | " + (v.pass ? "PASS" : "**FAIL**") + " |");
+            }
+            out.push("");
+            out.push("Console errors: " + (p.consoleErrors || []).length
+              + ". Uncaught exceptions: " + (p.exceptions || []).length + ".");
+            for (const r of p.reasons || []) out.push("- " + r);
+            out.push("");
+            out.push("Stills are in the run artifact. Reproduce locally with `npm run test:opt001-live`.");
+            console.log(out.join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
