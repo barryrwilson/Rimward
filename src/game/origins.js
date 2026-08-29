@@ -4,6 +4,7 @@ import {
 } from './state.js';
 import { disengage } from './autopilot.js';
 import { disengageAutomine } from './automine.js';
+import { settingsOwnsScreen } from '../systems/overlay-policy.js';
 
 /**
  * Origin selection (§25: origins create situations without imposing stories).
@@ -419,6 +420,17 @@ export function initOrigins(ctx) {
   card.appendChild(footer);
 
   function onKey(e) {
+    try {
+      if (ctx.settingsApi && typeof ctx.settingsApi.isOpen === 'function' && ctx.settingsApi.isOpen() === true) {
+        return;
+      }
+      if (settingsOwnsScreen()) return;
+    } catch {
+      /* fail closed: skip choose rather than steal */
+      try {
+        if (settingsOwnsScreen()) return;
+      } catch { /* continue */ }
+    }
     if (!e.code || e.code.length !== 6 || !e.code.startsWith('Digit')) return;
     const n = e.code.charCodeAt(5) - 49; // '1' → 0
     if (n < 0 || n >= ORIGIN_DIGIT_IDS.length) return;

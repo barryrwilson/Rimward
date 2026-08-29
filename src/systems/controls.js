@@ -10,6 +10,7 @@ import {
   settingsOwnsScreen,
 } from './overlay-policy.js';
 import { decodeKeyCode } from './key-code.js';
+import { COMMANDS, codeOf, conflictFor } from './bindings.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -57,6 +58,151 @@ const TRACKED = new Set([
 
 // Only Space scrolls the page — swallow it, nothing else.
 const PREVENT_DEFAULT = new Set(['Space']);
+
+const CONTROLS_OWNED = Object.freeze([
+  'strafeUp', 'strafeDown', 'strafeLeft', 'strafeRight',
+  'rollLeft', 'rollRight', 'throttleUp', 'throttleDown',
+  'afterburner', 'drift', 'fire',
+  'wpn1', 'wpn2', 'wpn3', 'wpn4', 'wpn5',
+  'targetCycle', 'reticleLock', 'automine', 'enginePart',
+  'hail', 'dock', 'camera', 'matchSpeed',
+]);
+
+const YARD_CHROME_CODE = 'Key' + 'Y';
+
+const snap = {
+  strafeUp: 'KeyW',
+  strafeDown: 'KeyS',
+  strafeLeft: 'KeyA',
+  strafeRight: 'KeyD',
+  rollLeft: 'KeyQ',
+  rollRight: 'KeyE',
+  throttleUp: 'KeyR',
+  throttleDown: 'KeyF',
+  afterburner: 'Space',
+  drift: 'ShiftLeft',
+  fire: 'Mouse0',
+};
+const codeToOwned = new Map();
+let fireMouseButton = 0;
+let fireKeyCode = '';
+
+function seedIdentityTracked() {
+  TRACKED.clear();
+  const seed = [
+    'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
+    'KeyQ', 'KeyE',
+    'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV', 'KeyN', 'KeyK', 'KeyJ',
+    'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
+    'ShiftLeft', 'ShiftRight',
+    'Space',
+  ];
+  for (let i = 0; i < seed.length; i++) TRACKED.add(seed[i]);
+  PREVENT_DEFAULT.clear();
+  PREVENT_DEFAULT.add('Space');
+  fireMouseButton = 0;
+  fireKeyCode = '';
+  snap.strafeUp = 'KeyW';
+  snap.strafeDown = 'KeyS';
+  snap.strafeLeft = 'KeyA';
+  snap.strafeRight = 'KeyD';
+  snap.rollLeft = 'KeyQ';
+  snap.rollRight = 'KeyE';
+  snap.throttleUp = 'KeyR';
+  snap.throttleDown = 'KeyF';
+  snap.afterburner = 'Space';
+  snap.drift = 'ShiftLeft';
+  snap.fire = 'Mouse0';
+  codeToOwned.clear();
+  codeToOwned.set('KeyW', 'strafeUp');
+  codeToOwned.set('KeyS', 'strafeDown');
+  codeToOwned.set('KeyA', 'strafeLeft');
+  codeToOwned.set('KeyD', 'strafeRight');
+  codeToOwned.set('KeyQ', 'rollLeft');
+  codeToOwned.set('KeyE', 'rollRight');
+  codeToOwned.set('KeyR', 'throttleUp');
+  codeToOwned.set('KeyF', 'throttleDown');
+  codeToOwned.set('Space', 'afterburner');
+  codeToOwned.set('ShiftLeft', 'drift');
+  codeToOwned.set('ShiftRight', 'drift');
+  codeToOwned.set('Digit1', 'wpn1');
+  codeToOwned.set('Digit2', 'wpn2');
+  codeToOwned.set('Digit3', 'wpn3');
+  codeToOwned.set('Digit4', 'wpn4');
+  codeToOwned.set('Digit5', 'wpn5');
+  codeToOwned.set('KeyT', 'targetCycle');
+  codeToOwned.set('KeyV', 'reticleLock');
+  codeToOwned.set('KeyN', 'automine');
+  codeToOwned.set('KeyK', 'enginePart');
+  codeToOwned.set('KeyH', 'hail');
+  codeToOwned.set('KeyJ', 'dock');
+  codeToOwned.set('KeyC', 'camera');
+  codeToOwned.set('KeyX', 'matchSpeed');
+}
+
+function isMouseFireCode(code) {
+  return code === 'Mouse0' || code === 'Mouse1' || code === 'Mouse2';
+}
+
+/** Rebuild TRACKED / PREVENT_DEFAULT from the live bind map. Fail closed to identity. */
+export function rebuildTrackedFromBindings(ctx) {
+  try {
+    TRACKED.clear();
+    PREVENT_DEFAULT.clear();
+    codeToOwned.clear();
+    fireMouseButton = -1;
+    fireKeyCode = '';
+    for (let i = 0; i < CONTROLS_OWNED.length; i++) {
+      const id = CONTROLS_OWNED[i];
+      const code = codeOf(ctx, id);
+      if (Object.hasOwn(snap, id)) snap[id] = code;
+      if (!code || conflictFor(ctx && ctx.settings && ctx.settings.bindings, id, code) === 'reserved') {
+        continue;
+      }
+      if (id === 'fire' && isMouseFireCode(code)) {
+        fireMouseButton = code === 'Mouse1' ? 1 : code === 'Mouse2' ? 2 : 0;
+        continue;
+      }
+      TRACKED.add(code);
+      codeToOwned.set(code, id);
+      if (id === 'fire') fireKeyCode = code;
+      if (id === 'drift' && code === 'ShiftLeft') {
+        TRACKED.add('ShiftRight');
+        codeToOwned.set('ShiftRight', 'drift');
+      }
+    }
+    for (let i = 0; i < COMMANDS.length; i++) {
+      if (codeOf(ctx, COMMANDS[i].id) === 'Space') {
+        PREVENT_DEFAULT.add('Space');
+        break;
+      }
+    }
+  } catch {
+    seedIdentityTracked();
+  }
+}
+
+function stationOrHailOwns(ctx) {
+  try {
+    const f = ctx && ctx.flags;
+    if (f && f.docked === true) return true;
+    if (f && f.hailOpen === true) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isMenuDigitCode(code) {
+  if (typeof code !== 'string' || code.length !== 6 || !code.startsWith('Digit')) return false;
+  const d = code.charCodeAt(5);
+  return d >= 48 && d <= 57;
+}
+
+function skipStationHailCode(code) {
+  if (code === 'KeyB' || code === YARD_CHROME_CODE) return true;
+  return isMenuDigitCode(code);
+}
 
 const THROTTLE_RAMP_RATE = 0.5; // setpoint/s while R or F held (§5.1)
 const DOUBLE_TAP_MS = 350; // F double-tap window → full stop (§5.1)
@@ -470,6 +616,7 @@ function tryReticleLock(ctx) {
 export function initControls(ctx) {
   const { input, config } = ctx;
   const pressed = new Set();
+  rebuildTrackedFromBindings(ctx);
 
   // Mouse reticle state (null = not moved yet → treated as screen center).
   let mouseX = null;
@@ -504,67 +651,39 @@ export function initControls(ctx) {
 
   window.addEventListener('keydown', (e) => {
     const code = decodeKeyCode(e);
+    // Space (or any rebound owner) is swallowed iff it is a stored command code.
+    if (PREVENT_DEFAULT.has(code)) e.preventDefault();
     try {
       // Intentional Settings mutex (RW-002 PR1): skip all TRACKED while open.
       if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return;
     } catch { /* helper miss: keep flight keys */ }
     if (e.repeat || !TRACKED.has(code)) return;
+    if (stationOrHailOwns(ctx) && skipStationHailCode(code)) return;
     pressed.add(code);
-    if (PREVENT_DEFAULT.has(code)) e.preventDefault();
 
-    switch (code) {
-      case 'Space':
-        pendingAfterburner = true;
-        break;
-      case 'KeyT':
-        pendingTarget = true;
-        break;
-      case 'KeyH':
-        pendingHail = true;
-        break;
-      case 'KeyJ':
-        if (!shouldSkipDockPulse(ctx)) pendingDock = true;
-        break;
-      case 'KeyC':
-        pendingCamera = true;
-        break;
-      case 'KeyX':
-        pendingMatchSpeed = true;
-        break;
-      case 'KeyV':
-        pendingReticleLock = true;
-        break;
-      case 'KeyN':
-        if (!reticleLockBlocked(ctx)) pendingAutomine = true;
-        break;
-      case 'KeyK':
-        pendingEnginePart = true;
-        break;
-      case 'KeyF': {
-        const now = performance.now();
-        if (now - lastFTapAt <= DOUBLE_TAP_MS) {
-          input.throttle = 0;
-          input.fullStop = true; // doc §5.1: double-tap commands FULL stop (not creep)
-        }
-        lastFTapAt = now;
-        break;
+    const id = codeToOwned.get(code);
+    if (id === 'afterburner') pendingAfterburner = true;
+    else if (id === 'targetCycle') pendingTarget = true;
+    else if (id === 'hail') pendingHail = true;
+    else if (id === 'dock') {
+      if (!shouldSkipDockPulse(ctx)) pendingDock = true;
+    } else if (id === 'camera') pendingCamera = true;
+    else if (id === 'matchSpeed') pendingMatchSpeed = true;
+    else if (id === 'reticleLock') pendingReticleLock = true;
+    else if (id === 'automine') {
+      if (!reticleLockBlocked(ctx)) pendingAutomine = true;
+    } else if (id === 'enginePart') pendingEnginePart = true;
+    else if (id === 'throttleDown') {
+      const now = performance.now();
+      if (now - lastFTapAt <= DOUBLE_TAP_MS) {
+        input.throttle = 0;
+        input.fullStop = true; // doc §5.1: double-tap commands FULL stop (not creep)
       }
-      case 'Digit1':
-        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 1;
-        break;
-      case 'Digit2':
-        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 2;
-        break;
-      case 'Digit3':
-        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 3;
-        break;
-      case 'Digit4':
-        // Group 4 is missiles when a launcher is seated.
-        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 4;
-        break;
-      case 'Digit5':
-        if (!shouldSkipWeaponGroupDigits(ctx)) input.weaponGroup = 5;
-        break;
+      lastFTapAt = now;
+    } else if (id === 'wpn1' || id === 'wpn2' || id === 'wpn3' || id === 'wpn4' || id === 'wpn5') {
+      if (!(isMenuDigitCode(code) && shouldSkipWeaponGroupDigits(ctx))) {
+        input.weaponGroup = id.charCodeAt(3) - 48;
+      }
     }
   });
 
@@ -580,11 +699,21 @@ export function initControls(ctx) {
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.button === 0) fireDown = true;
+    if (fireMouseButton >= 0 && e.button === fireMouseButton) fireDown = true;
+    if (fireMouseButton === 1 && e.button === 1) e.preventDefault();
+    if (fireMouseButton === 2 && e.button === 2) e.preventDefault();
   });
 
   window.addEventListener('mouseup', (e) => {
-    if (e.button === 0) fireDown = false;
+    if (fireMouseButton >= 0 && e.button === fireMouseButton) fireDown = false;
+  });
+
+  window.addEventListener('auxclick', (e) => {
+    if (fireMouseButton === 1 && e.button === 1) e.preventDefault();
+  });
+
+  window.addEventListener('contextmenu', (e) => {
+    if (fireMouseButton === 2) e.preventDefault();
   });
 
   window.addEventListener('blur', zeroAxesFireDrift);
@@ -627,7 +756,7 @@ export function initControls(ctx) {
       input.reticleLockPressed = pendingReticleLock;
       const automineTap = pendingAutomine;
       const enginePartTap = pendingEnginePart;
-      input.throttleHeld = has('KeyR') || has('KeyF');
+      input.throttleHeld = has(snap.throttleUp) || has(snap.throttleDown);
       pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
 
       if (input.cameraPressed) {
@@ -702,18 +831,19 @@ export function initControls(ctx) {
         }
       }
 
-      input.strafeX = (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0);
-      input.strafeY = (has('KeyW') ? 1 : 0) - (has('KeyS') ? 1 : 0);
-      input.roll = (has('KeyE') ? 1 : 0) - (has('KeyQ') ? 1 : 0);
+      input.strafeX = (has(snap.strafeRight) ? 1 : 0) - (has(snap.strafeLeft) ? 1 : 0);
+      input.strafeY = (has(snap.strafeUp) ? 1 : 0) - (has(snap.strafeDown) ? 1 : 0);
+      input.roll = (has(snap.rollRight) ? 1 : 0) - (has(snap.rollLeft) ? 1 : 0);
 
       // --- Held buttons.
-      input.driftHeld = has('ShiftLeft') || has('ShiftRight');
+      input.driftHeld = has(snap.drift) || (snap.drift === 'ShiftLeft' && has('ShiftRight'));
       // Chart overlay: flag is the contract (not a DOM class sniff). Held LMB
       // from before KeyM must not keep firing while the map is open.
-      input.fireHeld = fireDown && ctx.flags.chartOpen !== true;
+      const fireHeldNow = fireMouseButton >= 0 ? fireDown : has(fireKeyCode);
+      input.fireHeld = fireHeldNow && ctx.flags.chartOpen !== true;
 
       // --- Persistent throttle setpoint: hold-to-ramp (§5.1).
-      const throttleDir = (has('KeyR') ? 1 : 0) - (has('KeyF') ? 1 : 0);
+      const throttleDir = (has(snap.throttleUp) ? 1 : 0) - (has(snap.throttleDown) ? 1 : 0);
       if (throttleDir > 0) input.fullStop = false; // thrust command cancels full stop
       if (throttleDir !== 0) {
         input.throttle = Math.min(

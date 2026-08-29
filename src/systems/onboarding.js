@@ -1,4 +1,5 @@
 import { ORIGINS } from '../game/state.js';
+import { codeOf, shortLabel } from './bindings.js';
 
 /**
  * Onboarding hints (§25) — one-time contextual teaching lines.
@@ -157,12 +158,49 @@ export function initOnboarding(ctx) {
     }
   }
 
+  function bindLab(id, fallback) {
+    try {
+      const code = codeOf(ctx, id);
+      const lab = shortLabel(code);
+      if (typeof lab === 'string' && lab && lab !== '?') return lab;
+      if (typeof code === 'string' && code) return code;
+    } catch {
+      /* last-ditch */
+    }
+    return fallback;
+  }
+
+  function formatHintText(hint) {
+    try {
+      const id = hint && hint.id;
+      if (id === 'look') return 'Mouse — look and turn toward the reticle';
+      if (id === 'throttle') {
+        const up = bindLab('throttleUp', 'R');
+        const down = bindLab('throttleDown', 'F');
+        return up + '/' + down + ' — throttle · double-tap ' + down + ' — stop';
+      }
+      if (id === 'target') return bindLab('targetCycle', 'T') + ' — cycle target';
+      if (id === 'hail') return bindLab('hail', 'H') + ' — hail the lock';
+      if (id === 'dock') return bindLab('dock', 'J') + ' — dock when the station is in range';
+      if (id === 'chart') return bindLab('chart', 'M') + ' — galaxy chart';
+      if (id === 'gate') return bindLab('dock', 'J') + ' — jump the gate';
+      if (id === 'combat') {
+        return bindLab('targetCycle', 'T') + ' — target · '
+          + bindLab('hail', 'H') + ' — hail · a surrendered rival pays better than a dead one';
+      }
+      if (id === 'mine') return 'hold ' + bindLab('fire', 'LMB') + ' near an asteroid to mine';
+      return typeof hint.text === 'string' ? hint.text : '';
+    } catch {
+      return typeof hint.text === 'string' ? hint.text : '';
+    }
+  }
+
   function show(hint) {
     try {
       if (!hint || !isAuthoredHintId(hint.id)) return;
       showing = hint;
       shownAt = ctx.elapsed;
-      el.textContent = typeof hint.text === 'string' ? hint.text : '';
+      el.textContent = formatHintText(hint);
       el.style.display = 'block';
       const seen = seenNow();
       if (Array.isArray(seen) && !seen.includes(hint.id)) seen.push(hint.id);

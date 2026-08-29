@@ -18,6 +18,7 @@ import { losCloseRate } from '../game/los-close.js';
 import {
   acceptedMiningOreKeys, authoredOreName, fieldHasMatchingOre, rockMatchesOreKeys,
 } from '../game/mining-ore-keys.js';
+import { codeOf, shortLabel, helpLines } from './bindings.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
@@ -1292,21 +1293,61 @@ export function initHud(ctx) {
   controlsToggle.type = 'button';
   const controlsBody = el('div', 'rw-controls-body', controls);
   const controlsList = el('ul', '', controlsBody);
-  const lines = Array.isArray(ctx.config.controls) ? ctx.config.controls : [];
-  if (lines.length === 0) {
-    el('li', '', controlsList, 'No bindings registered');
-  } else {
-    for (const line of lines) el('li', '', controlsList, String(line));
-  }
   let controlsCollapsed = true;
+  let lastHelpMap = null;
+
+  function fillControlsHelp() {
+    try {
+      while (controlsList.firstChild) controlsList.removeChild(controlsList.firstChild);
+      let lines;
+      try {
+        lines = helpLines(ctx);
+      } catch {
+        lines = ['Mouse — steer toward reticle'];
+      }
+      if (!Array.isArray(lines) || lines.length === 0) {
+        el('li', '', controlsList, 'Mouse — steer toward reticle');
+        return;
+      }
+      for (let i = 0; i < lines.length; i++) el('li', '', controlsList, String(lines[i]));
+    } catch {
+      try {
+        if (!controlsList.firstChild) el('li', '', controlsList, 'Mouse — steer toward reticle');
+      } catch { /* skip */ }
+    }
+  }
+
+  function maybeFillControlsHelp(force) {
+    if (controlsCollapsed && !force) return;
+    let map = null;
+    try { map = ctx.settings && ctx.settings.bindings; } catch { map = null; }
+    if (!force && map === lastHelpMap && controlsList.firstChild) return;
+    lastHelpMap = map;
+    fillControlsHelp();
+  }
+
+  function promptKeyFor(id, fallback) {
+    try {
+      const code = codeOf(ctx, id);
+      const lab = shortLabel(code);
+      if (typeof lab === 'string' && lab && lab !== '?') return lab;
+      if (typeof code === 'string' && code) return code;
+    } catch {
+      /* last-ditch */
+    }
+    return fallback;
+  }
+
   function applyControlsCollapse() {
     controls.classList.toggle('collapsed', controlsCollapsed);
     controlsToggle.textContent = controlsCollapsed ? 'CONTROLS ▸' : 'CONTROLS ▾';
     controlsToggle.setAttribute('aria-expanded', controlsCollapsed ? 'false' : 'true');
   }
+  maybeFillControlsHelp(true);
   applyControlsCollapse();
   controlsToggle.addEventListener('click', () => {
     controlsCollapsed = !controlsCollapsed;
+    if (!controlsCollapsed) maybeFillControlsHelp(true);
     applyControlsCollapse();
   });
 
@@ -2632,9 +2673,10 @@ export function initHud(ctx) {
 
       // context prompt (§13.4): one verb, explicit focus, priority order.
       // Gate sits below dock (zones never overlap in practice).
+      maybeFillControlsHelp(false);
       let pKey = '', pVerb = '';
       if (ctx.station?.inZone && !ctx.flags.docked) {
-        pKey = 'J';
+        pKey = promptKeyFor('dock', 'J');
         const dockSpd = ctx.ship.speed;
         const skipSlow = !!(ctx.flags.berthHold || (ctx.gate && ctx.gate.jumping));
         pVerb = (!skipSlow && Number.isFinite(dockSpd) && dockSpd > DOCK_SLOW_SPEED)
@@ -2644,19 +2686,19 @@ export function initHud(ctx) {
         const destDef = SYSTEMS[ctx.gate.nearTo];
         const destName = destDef ? destDef.name : String(ctx.gate.nearTo);
         if (ctx.gate.nearHub) {
-          // Lamplighter junction: G cycles hub.routes, J jumps the selection.
-          pKey = 'G';
-          pVerb = 'route ' + (ctx.gate.nearRouteIndex + 1) + '/' + ctx.gate.nearRouteCount + ' · J — Jump to ' + destName;
+          pKey = promptKeyFor('hubCycle', 'G');
+          pVerb = 'route ' + (ctx.gate.nearRouteIndex + 1) + '/' + ctx.gate.nearRouteCount
+            + ' · ' + promptKeyFor('dock', 'J') + ' — Jump to ' + destName;
         } else {
-          pKey = 'J'; pVerb = 'Jump to ' + destName;
+          pKey = promptKeyFor('dock', 'J'); pVerb = 'Jump to ' + destName;
         }
       } else if (target && !kind && target.state && !target.state.destroyed) {
         if (target.state.disabled && targetDistNow <= U.TARGET_RANGE) {
-          pKey = 'H';
+          pKey = promptKeyFor('hail', 'H');
           pVerb = 'Hail — dead in space';
         } else {
           const band = resolveBand(target.state.resolve ?? 70);
-          if (band === 'bargaining' || band === 'capitulate') { pKey = 'H'; pVerb = 'Hail'; }
+          if (band === 'bargaining' || band === 'capitulate') { pKey = promptKeyFor('hail', 'H'); pVerb = 'Hail'; }
         }
       }
       if (!pKey && !target && shipObj) {
@@ -2666,7 +2708,7 @@ export function initHud(ctx) {
           if (s.state?.destroyed || !s.object) continue;
           const d = s.object.position;
           const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
-          if (dx * dx + dy * dy + dz * dz <= r2) { pKey = 'T'; pVerb = 'Target'; break; }
+          if (dx * dx + dy * dy + dz * dz <= r2) { pKey = promptKeyFor('targetCycle', 'T'); pVerb = 'Target'; break; }
         }
       }
       // Dock / Jump / Hail / Target win. A rock lock already has a mine target.
@@ -2697,7 +2739,7 @@ export function initHud(ctx) {
             const d = rocks[i] && rocks[i].position;
             if (!d) continue;
             const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
-            if (dx * dx + dy * dy + dz * dz <= r2) { pKey = 'V'; pVerb = 'Lock'; break; }
+            if (dx * dx + dy * dy + dz * dz <= r2) { pKey = promptKeyFor('reticleLock', 'V'); pVerb = 'Lock'; break; }
           }
         }
       }
