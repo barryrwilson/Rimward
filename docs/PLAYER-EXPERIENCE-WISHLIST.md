@@ -92,7 +92,7 @@ durable next-wave capture is mandatory, not optional.
   transition or autopilot leg was interrupted. A save/load screen must be a
   safe place to stop and understand the current state.
   Wave 125 PR1 `docs/Ctl03BerthFreezeDesign.md`. Session `berthHold`.
-  CTL-03 PR2 stills optional.
+  CTL-03 PR2 stills captured, wave 143 OPT-001.
 - [x] DONE (P2, ONBOARDING): Replace the first-minute information dump with a
   short contextual flight lesson. Immediately after the permanent origin pick,
   the expanded controls encyclopedia and several simultaneous narrative lines
@@ -108,7 +108,7 @@ durable next-wave capture is mandatory, not optional.
   to affect an unseen or unselected contact; show concise feedback such as
   `Cinder Halvard — hail out of range (732 u)` or the actual resolved result.
   Wave 129 PR1 `docs/Hail02MissFeedbackDesign.md`. Named HUD-04 toast.
-  KeyH and KeyJ miss. Hail02 PR2 stills optional.
+  KeyH and KeyJ miss. Hail02 PR2 stills captured, wave 143 OPT-001.
 - [x] DONE (P1, HUD): Add dynamic deconfliction and a quieter exploration
   layout for the central HUD. In live targeting, player and target cards,
   duplicated target labels, range/lead cues, bright suns, stations/gates, and
@@ -116,7 +116,7 @@ durable next-wave capture is mandatory, not optional.
   the reticle, ship silhouette, selected target, and projectile path; collapse
   or relocate lower-priority data when those regions collide.
   Wave 129 PR1 `docs/Hud07DeconflictionDesign.md`. `hud.js` + `hud.css`.
-  80 px hub stays empty. HUD-07 PR2 stills optional.
+  80 px hub stays empty. HUD-07 PR2 stills captured, wave 143 OPT-001.
 - [x] DONE (P1, NAV): Make the 101-system chart readable as an exploration and
   decision tool, not only a route picker. Add zoom/pan, search and faction/
   standing filters, clearer labels at the active zoom, and a route itinerary
@@ -124,7 +124,8 @@ durable next-wave capture is mandatory, not optional.
   current full-network view and very long destination list make individual
   systems and route consequences hard to inspect.
   Wave 129 PR1 `docs/Nav09ChartReadabilityDesign.md`. Zoom/pan + filter.
-  Dest select stays. Itinerary as leg rows. NAV-09 PR2 stills optional.
+  Dest select stays. Itinerary as leg rows. NAV-09 PR2 stills captured,
+  wave 143 OPT-001.
 - [x] DONE (P2, ORIGINS): Preview the gameplay consequences of each permanent
   origin before confirmation: starting hull and equipment, money/debt, faction
   standings, immediate danger, and recommended experience level. The current

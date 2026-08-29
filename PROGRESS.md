@@ -5995,10 +5995,11 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   `docs/PLAYER-EXPERIENCE-WISHLIST.md`,
   `PROGRESS.md`,
   `out/w142/`.
-- Wave 143 (2026-08-28): OPT-001 QA
+- Wave 143 (2026-08-29): OPT-001 QA
   evidence refresh. Issue #8. No
   `src/` write. Live Chrome CDP pass
-  on master `e38360f3` (Vite 5186,
+  re-measured on master `72f03012`
+  after rebase (Vite 5186,
   swiftshader, 1440x900), one New
   Game Freehold Greenhand save.
   Hail01 / HUD-06 / Hail02 / HUD-07 /
