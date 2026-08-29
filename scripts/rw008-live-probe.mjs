@@ -1,0 +1,509 @@
+/**
+ * RW-008 live verification. Read-only against `src/`.
+ *
+ * Drives the dev app in headless Chrome over CDP and runs flows V1-V4 of
+ * docs/Mdl01ShipReferenceDesign.md section 12 against the Models browser:
+ *
+ *   V1  Title -> [2] MODELS -> Escape. Opens, closes, focus returns to the
+ *       MODELS entry, and the title stays paused.
+ *   V2  Tab cycles inside the overlay and never reaches the title.
+ *   V3  The dialog is named, and the info bar is a live region that carries
+ *       the selection.
+ *   V4  With Reduced motion on, the turntable and the star shell are both
+ *       still, and no CSS transition runs.
+ *
+ * WHY A PROBE: the overlay owns a WebGL context and a rAF loop, so boot-test
+ * can only pin its source. Focus order, aria wiring and the rAF motion gates
+ * are runtime facts. This is the OPT-001 harness shape (scripts/opt001-live-
+ * probe.mjs), reduced to the title screen: RW-008 never needs flight.
+ *
+ * Run: node scripts/rw008-live-probe.mjs
+ * Output: out/rw008/verify/ (ignored path; stills are not committed).
+ *
+ * Vite 5187 / CDP 9487. The Chrome profile lives outside the repository.
+ */
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
+const outDir = process.env.RW008_OUT || join(repo, 'out', 'rw008', 'verify');
+const WIN = process.platform === 'win32';
+
+/** First Chrome on this machine. RW008_CHROME / CHROME_PATH win. */
+function findChrome() {
+  const named = process.env.RW008_CHROME || process.env.CHROME_PATH;
+  if (named) return named;
+  const candidates = WIN
+    ? [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ]
+    : [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/opt/google/chrome/chrome',
+    ];
+  for (const c of candidates) if (existsSync(c)) return c;
+  return WIN ? 'chrome.exe' : 'google-chrome';
+}
+
+const CHROME = findChrome();
+const PORT = 5187;
+const CDP_PORT = 9487;
+const APP = `http://127.0.0.1:${PORT}/`;
+const PROFILE = process.env.RW008_PROFILE
+  || join(process.env.TEMP || process.env.TMP || '.', 'rw008-chrome-profile');
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const log = [];
+const say = (...a) => {
+  const line = a.map(String).join(' ');
+  log.push(line);
+  console.log(line);
+};
+
+/** Every flow the pass must reach. A missing one fails the run. */
+const FLOWS = ['V1', 'V2', 'V3', 'V4'];
+
+const results = {
+  commit: process.env.RW008_SHA || null,
+  port: PORT,
+  flows: {},
+  consoleErrors: [],
+  exceptions: [],
+};
+
+function record(key, pass, detail) {
+  results.flows[key] = { pass, ...detail };
+  say(pass ? 'PASS' : 'FAIL', key, JSON.stringify(detail).slice(0, 700));
+}
+
+/** Stop a child and everything it started. Vite and Chrome both fork. */
+function killTree(child) {
+  if (!child || child.exitCode != null) return;
+  if (WIN) {
+    try {
+      spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      return;
+    } catch { /* fall through */ }
+  } else {
+    try { process.kill(-child.pid, 'SIGKILL'); return; } catch { /* gone */ }
+  }
+  try { child.kill('SIGKILL'); } catch { /* already gone */ }
+}
+
+class Cdp {
+  constructor(url) {
+    this.ws = new WebSocket(url);
+    this.id = 0;
+    this.pending = new Map();
+    this.console = [];
+    this.exceptions = [];
+  }
+  ready() {
+    this.ws.addEventListener('message', (ev) => {
+      const msg = JSON.parse(String(ev.data));
+      if (msg.method === 'Runtime.consoleAPICalled') {
+        const type = msg.params?.type || 'log';
+        const text = (msg.params?.args || []).map((a) => a.value ?? a.description ?? '').join(' ');
+        this.console.push({ type, text });
+      }
+      if (msg.method === 'Runtime.exceptionThrown') {
+        const d = msg.params?.exceptionDetails;
+        const text = d?.exception?.description || d?.text || 'exception';
+        this.exceptions.push(String(text));
+        say('EXC', String(text).slice(0, 300));
+      }
+      if (msg.id == null) return;
+      const p = this.pending.get(msg.id);
+      if (!p) return;
+      this.pending.delete(msg.id);
+      if (msg.error) p.reject(new Error(JSON.stringify(msg.error)));
+      else p.resolve(msg.result);
+    });
+    if (this.ws.readyState === WebSocket.OPEN) return Promise.resolve();
+    return new Promise((res, rej) => {
+      this.ws.addEventListener('open', () => res(), { once: true });
+      this.ws.addEventListener('error', (e) => rej(e), { once: true });
+    });
+  }
+  send(method, params = {}, timeoutMs = 45000) {
+    const id = ++this.id;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      setTimeout(() => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(new Error('cdp timeout ' + method));
+        }
+      }, timeoutMs);
+      this.ws.send(JSON.stringify({ id, method, params }));
+    });
+  }
+  async eval(expression, timeoutMs = 45000) {
+    const r = await this.send('Runtime.evaluate', {
+      expression, returnByValue: true, awaitPromise: true,
+    }, timeoutMs);
+    if (r?.exceptionDetails) {
+      throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text || 'eval');
+    }
+    return r?.result?.value;
+  }
+  async shot(name) {
+    const r = await this.send('Page.captureScreenshot', { format: 'png' }, 30000);
+    await writeFile(join(outDir, name), Buffer.from(r.data, 'base64'));
+    say('SHOT', name);
+  }
+  close() { try { this.ws.close(); } catch { /* closed */ } }
+}
+
+/**
+ * Send a key the way the overlay listens for it. The browser's handler is on
+ * window in the CAPTURE phase, so a window-dispatched event reaches it exactly
+ * as a real key press does.
+ */
+const KEY = (code, key, extra = '') => `(() => {
+  window.dispatchEvent(new KeyboardEvent('keydown', {
+    code: '${code}', key: '${key}', bubbles: true, cancelable: true${extra}
+  }));
+  return true;
+})()`;
+
+/** Describe whatever currently holds focus, for the V1/V2 assertions. */
+const FOCUS = `(() => {
+  const a = document.activeElement;
+  if (!a) return { id: null, cls: null, tag: null, inOverlay: false };
+  const ov = document.querySelector('.rw-models');
+  return {
+    id: a.id || null,
+    cls: a.className || null,
+    tag: a.tagName,
+    text: (a.textContent || '').trim().slice(0, 40),
+    inOverlay: !!(ov && ov.contains(a)),
+  };
+})()`;
+
+async function main() {
+  await mkdir(PROFILE, { recursive: true });
+  await mkdir(outDir, { recursive: true });
+  let vite = null;
+  let chrome = null;
+  let cdp = null;
+
+  try {
+    // ---- Vite ---------------------------------------------------------
+    vite = spawn(
+      process.execPath,
+      [join(repo, 'node_modules', 'vite', 'bin', 'vite.js'),
+        '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
+      { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN },
+    );
+    vite.stdout.on('data', (b) => say('vite', String(b).trim().slice(0, 160)));
+    vite.stderr.on('data', (b) => say('vite!', String(b).trim().slice(0, 160)));
+    let up = false;
+    for (let i = 0; i < 100; i++) {
+      up = await fetch(APP).then((r) => r.ok).catch(() => false);
+      if (up) break;
+      await sleep(300);
+    }
+    if (!up) throw new Error(`vite ${PORT} not serving`);
+    say('vite up', PORT);
+
+    // ---- Chrome -------------------------------------------------------
+    chrome = spawn(CHROME, [
+      `--remote-debugging-port=${CDP_PORT}`,
+      `--user-data-dir=${PROFILE}`,
+      '--no-first-run', '--no-default-browser-check',
+      '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist', '--enable-webgl',
+      '--disable-extensions', '--window-size=1440,900',
+      '--headless=new',
+      '--hide-crash-restore-bubble', '--disable-session-crashed-bubble',
+      ...(WIN ? [] : ['--no-sandbox', '--disable-dev-shm-usage']),
+      'about:blank',
+    ], { stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN });
+    say('chrome', CHROME, 'pid', chrome.pid);
+
+    let browserWs = null;
+    for (let i = 0; i < 60; i++) {
+      try {
+        const ver = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`);
+        if (ver.ok) { browserWs = (await ver.json()).webSocketDebuggerUrl; if (browserWs) break; }
+      } catch { /* not up yet */ }
+      await sleep(200);
+    }
+    if (!browserWs) throw new Error('CDP not ready');
+
+    cdp = new Cdp(browserWs);
+    await cdp.ready();
+    await cdp.send('Target.createTarget', { url: APP });
+    cdp.close();
+
+    let pageWs = null;
+    for (let i = 0; i < 50; i++) {
+      const list = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json();
+      const page = list.find((t) => t.type === 'page' && String(t.url || '').includes(String(PORT)));
+      if (page?.webSocketDebuggerUrl) { pageWs = page.webSocketDebuggerUrl; break; }
+      await sleep(200);
+    }
+    if (!pageWs) throw new Error('page ws missing');
+    cdp = new Cdp(pageWs);
+    await cdp.ready();
+    await cdp.send('Runtime.enable');
+    await cdp.send('Page.enable');
+
+    const waitUntil = async (expr, pred, ms = 15000, step = 200) => {
+      const t0 = Date.now();
+      let last = null;
+      while (Date.now() - t0 < ms) {
+        last = await cdp.eval(expr);
+        try { if (pred(last)) return last; } catch { /* keep polling */ }
+        await sleep(step);
+      }
+      return last;
+    };
+
+    // ---- Title screen -------------------------------------------------
+    const title = await waitUntil(
+      `(() => {
+        const b = document.getElementById('rw-title-models');
+        return { hasCtx: !!window.__ctx, hasBtn: !!b, label: b ? b.textContent.trim() : null };
+      })()`,
+      (v) => v && v.hasCtx && v.hasBtn,
+      40000,
+    );
+    if (!title?.hasBtn) throw new Error('title MODELS entry never appeared');
+    say('title up', JSON.stringify(title));
+    await cdp.shot('01-title.png');
+
+    // =====================================================================
+    // V1 — open, close, focus restore, title stays paused
+    // =====================================================================
+    {
+      // Focus the opener the way a keyboard user would, then activate it.
+      // close() must send focus back here.
+      await cdp.eval(`(() => {
+        const b = document.getElementById('rw-title-models');
+        b.focus(); b.click(); return true;
+      })()`);
+      const opened = await waitUntil(
+        `(() => {
+          const ov = document.querySelector('.rw-models');
+          return {
+            open: !!(ov && ov.style.display !== 'none'),
+            isOpen: !!window.__ctx?.models?.isOpen?.(),
+            paused: !!window.__ctx?.flags?.paused,
+            focus: (() => { const a = document.activeElement;
+              return a ? (a.className || a.id || a.tagName) : null; })(),
+          };
+        })()`,
+        (v) => v && v.open && v.isOpen,
+        20000,
+      );
+      await cdp.shot('02-models-open.png');
+
+      // Let a model mount so the close path runs against a real selection.
+      await sleep(2500);
+      await cdp.eval(KEY('Escape', 'Escape'));
+      const closed = await waitUntil(
+        `(() => {
+          const ov = document.querySelector('.rw-models');
+          const a = document.activeElement;
+          return {
+            hidden: !!(ov && ov.style.display === 'none'),
+            isOpen: !!window.__ctx?.models?.isOpen?.(),
+            focusId: a ? a.id : null,
+            paused: !!window.__ctx?.flags?.paused,
+          };
+        })()`,
+        (v) => v && v.hidden && !v.isOpen,
+        20000,
+      );
+      await cdp.shot('03-closed-back-to-title.png');
+      record('V1', !!(opened?.open && opened?.isOpen
+        && closed?.hidden && !closed?.isOpen
+        && closed?.focusId === 'rw-title-models'
+        && closed?.paused === true), { opened, closed });
+    }
+
+    // =====================================================================
+    // V2 — Tab cycles inside the overlay and never reaches the title
+    // =====================================================================
+    {
+      await cdp.eval(`(() => { document.getElementById('rw-title-models').click(); return true; })()`);
+      await waitUntil(`!!window.__ctx?.models?.isOpen?.()`, (v) => v === true, 20000);
+      await sleep(1500);
+
+      // Walk Tab well past the control count and confirm focus never leaves.
+      const walk = [];
+      let escaped = false;
+      for (let i = 0; i < 14; i++) {
+        await cdp.eval(KEY('Tab', 'Tab'));
+        const f = await cdp.eval(FOCUS);
+        walk.push(f?.cls || f?.id || f?.tag);
+        if (!f?.inOverlay) { escaped = true; break; }
+      }
+      // And backwards, which is the half a naive trap usually drops.
+      let escapedBack = false;
+      const walkBack = [];
+      for (let i = 0; i < 8; i++) {
+        await cdp.eval(KEY('Tab', 'Tab', ", shiftKey: true"));
+        const f = await cdp.eval(FOCUS);
+        walkBack.push(f?.cls || f?.id || f?.tag);
+        if (!f?.inOverlay) { escapedBack = true; break; }
+      }
+      const distinct = new Set(walk.filter(Boolean)).size;
+      await cdp.shot('04-tab-trap.png');
+      record('V2', !escaped && !escapedBack && distinct >= 2,
+        { escaped, escapedBack, distinct, walk, walkBack });
+    }
+
+    // =====================================================================
+    // V3 — dialog is named; the info bar is a live region carrying the model
+    // =====================================================================
+    {
+      const aria = await waitUntil(
+        `(() => {
+          const ov = document.querySelector('.rw-models');
+          if (!ov) return null;
+          const labelId = ov.getAttribute('aria-labelledby');
+          const label = labelId ? document.getElementById(labelId) : null;
+          const info = ov.querySelector('.rw-models-info');
+          const name = info ? info.querySelector('.rw-models-name') : null;
+          const faction = info ? info.querySelector('.rw-models-faction') : null;
+          return {
+            role: ov.getAttribute('role'),
+            modal: ov.getAttribute('aria-modal'),
+            labelId,
+            labelText: label ? label.textContent.trim() : null,
+            infoLive: info ? info.getAttribute('aria-live') : null,
+            infoRole: info ? info.getAttribute('role') : null,
+            nameText: name ? name.textContent.trim() : null,
+            factionText: faction ? faction.textContent.trim() : null,
+            // A raw storage key would be all lower case with no space.
+            factionIsDisplayName: faction
+              ? /[A-Z]/.test(faction.textContent.trim()) : null,
+            infoHasMarkupChildren: info ? info.querySelectorAll('*').length : null,
+          };
+        })()`,
+        (v) => v && v.nameText,
+        20000,
+      );
+      record('V3', !!(aria?.role === 'dialog' && aria?.modal === 'true'
+        && aria?.labelText === 'MODELS'
+        && aria?.infoLive === 'polite'
+        && aria?.nameText
+        && aria?.factionIsDisplayName !== false), { aria });
+    }
+
+    // =====================================================================
+    // V4 — reduced motion freezes the turntable AND the star shell
+    // =====================================================================
+    {
+      // Settings is the only writer of ctx.settings, but reducedMotion is read
+      // live every frame by the overlay loop, so flipping it here exercises the
+      // same branch the checkbox does.
+      await cdp.eval(`(() => {
+        window.__ctx.settings.reducedMotion = true;
+        document.body.classList.add('rw-reduced-motion');
+        return true;
+      })()`);
+
+      // Sample the two rotations across ~1.2 s of real frames.
+      const sample = `(() => {
+        const g = window.__rw008probe;
+        return g ? { model: g.model(), star: g.star() } : null;
+      })()`;
+      // Reach into the live scene through the renderer's own object graph.
+      await cdp.eval(`(() => {
+        const canvases = document.querySelectorAll('.rw-models-viewport canvas');
+        window.__rw008probe = null;
+        if (!canvases.length) return false;
+        // The overlay's scene is reachable from its Points/Group children via
+        // the shared THREE objects the loop mutates. Tag them once.
+        return true;
+      })()`);
+
+      // The rotation values are private to the module closure, so measure the
+      // OBSERVABLE consequence instead: pixels. Two screenshots 1.2 s apart
+      // must be byte-identical while reduced motion holds.
+      const shotA = await cdp.send('Page.captureScreenshot', { format: 'png' }, 30000);
+      await sleep(1400);
+      const shotB = await cdp.send('Page.captureScreenshot', { format: 'png' }, 30000);
+      const still = shotA.data === shotB.data;
+      await writeFile(join(outDir, '05-reduced-motion-a.png'), Buffer.from(shotA.data, 'base64'));
+      await writeFile(join(outDir, '05-reduced-motion-b.png'), Buffer.from(shotB.data, 'base64'));
+
+      // Control: with the setting off, the same 1.2 s window must DIFFER.
+      // Without this, a frozen renderer would pass the check above for the
+      // wrong reason.
+      await cdp.eval(`(() => {
+        window.__ctx.settings.reducedMotion = false;
+        document.body.classList.remove('rw-reduced-motion');
+        return true;
+      })()`);
+      await sleep(400);
+      const moveA = await cdp.send('Page.captureScreenshot', { format: 'png' }, 30000);
+      await sleep(1400);
+      const moveB = await cdp.send('Page.captureScreenshot', { format: 'png' }, 30000);
+      const moves = moveA.data !== moveB.data;
+      await writeFile(join(outDir, '06-motion-on.png'), Buffer.from(moveB.data, 'base64'));
+
+      // And the CSS guard is present for the three transition users.
+      const css = await cdp.eval(`(() => {
+        document.body.classList.add('rw-reduced-motion');
+        const pick = (sel) => {
+          const el = document.querySelector(sel);
+          return el ? getComputedStyle(el).transitionDuration : null;
+        };
+        const out = {
+          close: pick('.rw-models-close'),
+          tab: pick('.rw-models-tab'),
+          entry: pick('.rw-models-entry'),
+        };
+        document.body.classList.remove('rw-reduced-motion');
+        return out;
+      })()`);
+      const cssOff = ['close', 'tab', 'entry']
+        .every((k) => css?.[k] === null || /^0s(,\\s*0s)*$/.test(String(css[k])));
+
+      record('V4', still && moves && cssOff, { still, moves, css, cssOff });
+    }
+
+    // ---- console ------------------------------------------------------
+    results.consoleErrors = cdp.console
+      .filter((m) => m.type === 'error' || m.type === 'assert')
+      .map((m) => m.text.slice(0, 300));
+    results.exceptions = cdp.exceptions.map((t) => t.slice(0, 300));
+  } finally {
+    if (cdp) cdp.close();
+    killTree(chrome);
+    killTree(vite);
+  }
+
+  const missing = FLOWS.filter((f) => !results.flows[f]);
+  const failed = FLOWS.filter((f) => results.flows[f] && !results.flows[f].pass);
+  const clean = results.consoleErrors.length === 0 && results.exceptions.length === 0;
+
+  await writeFile(join(outDir, 'probes.json'), JSON.stringify(results, null, 2));
+  await writeFile(join(outDir, 'run.log'), log.join('\n'));
+
+  say('');
+  say('missing:', missing.join(',') || 'none');
+  say('failed:', failed.join(',') || 'none');
+  say('console errors:', results.consoleErrors.length, 'exceptions:', results.exceptions.length);
+
+  const ok = missing.length === 0 && failed.length === 0 && clean;
+  say(ok ? 'RW008 LIVE PROBE PASS' : 'RW008 LIVE PROBE FAIL');
+  process.exit(ok ? 0 : 1);
+}
+
+main().catch((err) => {
+  say('FATAL', err?.stack || String(err));
+  process.exit(1);
+});

@@ -425,3 +425,27 @@ body.rw-contrast .rw-models-sidebar::-webkit-scrollbar-thumb:hover,
 body.rw-contrast .rw-models-list::-webkit-scrollbar-thumb:hover {
   background: #8a9bb3;
 }
+
+/* ---------- Warm status text ---------- */
+
+/* Loading and error lines. Was an inline style:"color:#ffb454" written through
+   innerHTML; the class is what the text-safe DOM path uses now. */
+.rw-models-warn {
+  color: #ffb454;
+}
+
+body.rw-contrast .rw-models-warn {
+  color: #ffc978;
+}
+
+/* ---------- Reduced motion ---------- */
+
+/* The turntable and the star shell are frozen in JS (modelsbrowser.js). These
+   are the CSS transitions the setting was still missing: hover and focus
+   easing on the close button, the category tabs and the entry rows. */
+body.rw-reduced-motion .rw-models-close,
+body.rw-reduced-motion .rw-models-tab,
+body.rw-reduced-motion .rw-models-entry,
+body.rw-reduced-motion .rw-models-input {
+  transition: none;
+}
