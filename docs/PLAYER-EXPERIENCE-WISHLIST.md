@@ -139,7 +139,7 @@ durable next-wave capture is mandatory, not optional.
   text sizes are a strong base, but flight comfort still depends on fixed input
   behavior and one master-volume control.
   Ctl06 `docs/Ctl06ExpandedSettingsDesign.md`. RW-002 PR1–PR5
-  (working tree). Live Playwright CLEAN: PR3 bind map, PR4 KEYS UI
+  on master (#29). Live Playwright CLEAN: PR3 bind map, PR4 KEYS UI
   and conflict, PR5 overlay copy.
 - [ ] INBOX (P2, MODEL VIEWER): Turn Models into a browsable ship reference.
   Group the long flat list by faction and class, hide pirate duplicates behind
@@ -147,6 +147,8 @@ durable next-wave capture is mandatory, not optional.
   visually unambiguous. The current viewer is useful for asset inspection but
   not yet inviting as a player-facing title-menu feature.
   RW-003 design `docs/Mdl01ShipReferenceDesign.md` (accepted 2026-08-29).
+  PR1 hygiene/shell and PR2 grouping/livery are on master (#25, #27).
+  Next: RW-010 summary card (#28), then PR4 loading/disposal.
   Group by faction or type; pirate rows become one livery toggle.
 
 ### Playtest capture — 2026-08-25, second pass (agent playtest, `67fb1a0` build)
@@ -244,6 +246,7 @@ checked against the current initiative text before capture.
   no cost.
   Owner choice 1 on 2026-08-28: keep zero-cost recovery and honest copy.
   `docs/DeathLossPolicyDesign.md`. No UU charge. Overlay says so.
+  Landed in #29.
 - [ ] PLANNED (P2, AGENT API): Add an AI-agent play API so agents can play the
   game on a user's behalf. This playtest needed injected synthetic
   key/mouse events, a hand-rolled steering loop against `window.__ctx`, and
