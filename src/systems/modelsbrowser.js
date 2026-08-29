@@ -55,8 +55,11 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { MODEL_CATALOG, MODEL_CATEGORIES } from '../game/model-catalog.js';
+import {
+  MODEL_CATALOG, MODEL_CATEGORIES, MODEL_BY_ID, FACTION_ORDER,
+} from '../game/model-catalog.js';
 import { FACTIONS } from '../game/state.js';
+import { CLASS_ORDER } from '../game/ship-scale.js';
 import { configureShipAssets } from './ship-assets.js';
 import { applyShipLighting, addShipLightRig, applyShipToneMapping } from './ship-lighting.js';
 import '../ui/models.css';
@@ -77,6 +80,20 @@ const TURNTABLE_SPEED = 0.18; // rad per second
 
 // aria-labelledby target for the dialog root.
 const TITLE_ID = 'rw-models-title';
+
+// Group modes. BY FACTION is the wave's reason to exist; BY TYPE preserves the
+// six MODEL_CATEGORIES the browser shipped with, so no row is ever unreachable.
+const MODE_FACTION = 'faction';
+const MODE_TYPE = 'type';
+
+// Bucket for the 53 entries that carry no faction key: every Celestial row,
+// the placeholder station, and every Prop. Required, not optional.
+const NO_FACTION = '__none__';
+const NO_FACTION_LABEL = 'Not a faction';
+
+// Category order inside one faction group. Ships lead so the group opens on
+// the size ladder CLASS_ORDER measures.
+const FACTION_CATEGORY_ORDER = ['Ships', 'Stations', 'Gates', 'Landmarks', 'Celestial', 'Props'];
 
 // Where focus goes when the overlay closes: the title entry that opened it
 // (title.js). Missing on a direct ctx.models.open() call, which is fine.
@@ -107,7 +124,12 @@ export function initModelsBrowser(ctx) {
   let openerEl = null; // element focus returns to on close
 
   let filterText = '';
-  let selectedCategory = 'ALL';
+  let groupMode = MODE_FACTION;      // G1
+  let variantOn = false;             // pirate livery / hub junction
+  const collapsed = new Set();       // group keys the user has closed
+  let hasOpenedOnce = false;         // G4 vs G1-G3
+  const rowButtons = new Map();      // entry.id -> row button
+  const headerButtons = new Map();   // group key -> header button
 
   /**
    * Create the overlay DOM and its contents.
@@ -154,24 +176,25 @@ export function initModelsBrowser(ctx) {
     filterInput.placeholder = 'Filter...';
     filterInput.className = 'rw-models-input';
     filterInput.addEventListener('input', (e) => {
-      filterText = e.target.value.toLowerCase();
+      filterText = e.target.value.trim().toLowerCase();
+      // isExpanded() force-opens every group while a filter is live, so this
+      // repaint is what makes a match visible without the reviewer expanding.
       renderEntryList();
     });
     filterDiv.appendChild(filterInput);
 
-    // Category tabs
+    // Group mode: the two axes the sidebar can sort on. BY TYPE reproduces
+    // the six MODEL_CATEGORIES this browser shipped with, so nothing the old
+    // tabs could reach becomes unreachable.
     const tabsDiv = document.createElement('div');
     tabsDiv.className = 'rw-models-tabs';
-    const allTabs = ['ALL', ...MODEL_CATEGORIES];
-    allTabs.forEach((cat) => {
+    [[MODE_FACTION, 'BY FACTION'], [MODE_TYPE, 'BY TYPE']].forEach(([mode, label]) => {
       const tab = document.createElement('button');
-      tab.className = 'rw-models-tab' + (cat === selectedCategory ? ' rw-selected' : '');
-      tab.textContent = cat;
-      tab.addEventListener('click', () => {
-        selectedCategory = cat;
-        updateTabSelection();
-        renderEntryList();
-      });
+      tab.className = 'rw-models-tab';
+      tab.type = 'button';
+      tab.dataset.mode = mode;
+      tab.textContent = label;
+      tab.addEventListener('click', () => setGroupMode(mode));
       tabsDiv.appendChild(tab);
     });
 
@@ -182,10 +205,32 @@ export function initModelsBrowser(ctx) {
     sidebar.appendChild(tabsDiv);
     sidebar.appendChild(listDiv);
 
+    // Variant control. One checkbox, two names: a ship's pirate LIVERY (the
+    // same sculpt with a different material set) and the Lamplighter gate's
+    // hub junction. Not a general variant system.
+    const variantWrap = document.createElement('label');
+    variantWrap.className = 'rw-models-variant';
+    const variantBox = document.createElement('input');
+    variantBox.type = 'checkbox';
+    variantBox.className = 'rw-models-check';
+    const variantLabel = document.createElement('span');
+    variantLabel.className = 'rw-models-variant-label';
+    variantLabel.textContent = 'Pirate livery';
+    variantBox.addEventListener('change', () => {
+      variantOn = variantBox.checked;
+      // Re-skin in place: same row, same camera. Re-framing would read as a bug.
+      if (currentEntry) selectEntry(currentEntry, { keepCamera: true });
+      updateVariantControl();
+    });
+    variantWrap.appendChild(variantBox);
+    variantWrap.appendChild(variantLabel);
+    sidebar.appendChild(variantWrap);
+
     // Legend
     const legendDiv = document.createElement('div');
     legendDiv.className = 'rw-models-legend';
-    legendDiv.textContent = 'DRAG ORBIT — WHEEL ZOOM — ↑↓ SELECT — R RESET — ESC CLOSE';
+    legendDiv.textContent =
+      'DRAG ORBIT — WHEEL ZOOM — ↑↓ SELECT — ←→ GROUP — R RESET — ESC CLOSE';
     sidebar.appendChild(legendDiv);
 
     // Viewport
@@ -220,6 +265,9 @@ export function initModelsBrowser(ctx) {
     overlayEl._filterInput = filterInput;
     overlayEl._listDiv = listDiv;
     overlayEl._tabsDiv = tabsDiv;
+    overlayEl._variantBox = variantBox;
+    overlayEl._variantLabel = variantLabel;
+    overlayEl._variantWrap = variantWrap;
     overlayEl._viewport = viewport;
     overlayEl._infoBar = infoBar;
   }
@@ -364,65 +412,301 @@ export function initModelsBrowser(ctx) {
     renderer.setSize(width, height);
   }
 
+  // -------------------------------------------------------------------------
+  // Row model
+  //
+  // The catalog holds 245 entries, but 72 of them are the pirate bake of a
+  // ship whose trader row sits right beside it, and one is the Lamplighter
+  // gate's hub junction. Those are VARIANTS of a listed model, not models of
+  // their own: a pirate bake loads the same lod0.glb and differs only by its
+  // material set. So the sidebar lists 173 canonical rows and the variant
+  // checkbox resolves the other id on demand.
+  //
+  // Every catalog id survives. probe-models.mjs still walks all 245.
+  // -------------------------------------------------------------------------
+
+  /** The variant id for a canonical entry, or null when it has none. */
+  function variantIdFor(entry) {
+    if (!entry) return null;
+    if (entry.category === 'Ships' && entry.id.startsWith('ship:') && entry.id !== 'ship:player') {
+      return `${entry.id}:pirate`;
+    }
+    if (entry.id === 'gate:lamplighter') return 'gate:lamplighter:hub';
+    return null;
+  }
+
+  /** What the variant control is called for this row. Null = no variant. */
+  function variantLabelFor(entry) {
+    if (!variantIdFor(entry)) return null;
+    return entry.category === 'Gates' ? 'Hub junction' : 'Pirate livery';
+  }
+
+  /** True when an entry is a variant of some other row, so it is not listed. */
+  function isVariantId(id) {
+    return id.endsWith(':pirate') || id === 'gate:lamplighter:hub';
+  }
+
+  /** The 173 rows the sidebar can show, catalog order preserved. */
+  const CANONICAL = MODEL_CATALOG.filter((e) => !isVariantId(e.id));
+
   /**
-   * Update the category tab selection visuals.
+   * The entry actually mounted for a row: the variant when the box is ticked
+   * and one exists, otherwise the row itself.
    */
-  function updateTabSelection() {
-    const tabs = overlayEl._tabsDiv.querySelectorAll('.rw-models-tab');
-    tabs.forEach((tab) => {
-      if (tab.textContent === selectedCategory) {
-        tab.classList.add('rw-selected');
-      } else {
-        tab.classList.remove('rw-selected');
-      }
-    });
+  function resolveEntry(entry) {
+    if (!variantOn) return entry;
+    const id = variantIdFor(entry);
+    const variant = id ? MODEL_BY_ID.get(id) : null;
+    return variant || entry;
+  }
+
+  /** Class key of a ship row, for filter matching. `ship:<faction>:<class>`. */
+  function classKeyOf(entry) {
+    if (entry.category !== 'Ships') return null;
+    const parts = entry.id.split(':');
+    return parts.length >= 3 ? parts[2] : null;
+  }
+
+  /** Faction display name, own-key guarded; null when the row has no faction. */
+  function factionNameOf(entry) {
+    return entry.faction && Object.hasOwn(FACTIONS, entry.faction)
+      ? FACTIONS[entry.faction].name : null;
   }
 
   /**
-   * Get the filtered list of entries.
+   * Does this row match the current filter?
+   * Label, faction display name and class key all match, so "lamp", "Ferrous"
+   * and "freighter" each find something sensible.
    */
-  function getFilteredEntries() {
-    return MODEL_CATALOG.filter((entry) => {
-      const matchesCategory = selectedCategory === 'ALL' || entry.category === selectedCategory;
-      const matchesFilter = filterText === '' || entry.label.toLowerCase().includes(filterText);
-      return matchesCategory && matchesFilter;
-    });
+  function matchesFilter(entry) {
+    if (filterText === '') return true;
+    if (entry.label.toLowerCase().includes(filterText)) return true;
+    const faction = factionNameOf(entry);
+    if (faction && faction.toLowerCase().includes(filterText)) return true;
+    const classKey = classKeyOf(entry);
+    if (classKey && classKey.toLowerCase().includes(filterText)) return true;
+    return false;
+  }
+
+  /** Sort key inside a faction group: ships walk CLASS_ORDER, then the rest. */
+  function factionRowRank(entry) {
+    const cat = FACTION_CATEGORY_ORDER.indexOf(entry.category);
+    const catRank = cat === -1 ? FACTION_CATEGORY_ORDER.length : cat;
+    if (entry.category !== 'Ships') return catRank * 100;
+    if (entry.id === 'ship:player') return catRank * 100 - 1; // anchor leads
+    const cls = CLASS_ORDER.indexOf(classKeyOf(entry));
+    return catRank * 100 + (cls === -1 ? CLASS_ORDER.length : cls);
+  }
+
+  /**
+   * Build the grouped, filtered row model.
+   * Returns [{ key, label, faction, rows }] in display order. Empty groups are
+   * dropped, so a filter never leaves a bare header behind.
+   */
+  function buildGroups() {
+    const rows = CANONICAL.filter(matchesFilter);
+    const groups = [];
+
+    if (groupMode === MODE_TYPE) {
+      for (const category of MODEL_CATEGORIES) {
+        const list = rows.filter((e) => e.category === category);
+        if (list.length) groups.push({ key: `type:${category}`, label: category, faction: null, rows: list });
+      }
+      return groups;
+    }
+
+    for (const faction of FACTION_ORDER) {
+      const list = rows.filter((e) => e.faction === faction);
+      if (!list.length) continue;
+      list.sort((a, b) => factionRowRank(a) - factionRowRank(b));
+      groups.push({
+        key: `faction:${faction}`,
+        label: FACTIONS[faction]?.name ?? faction,
+        faction,
+        rows: list,
+      });
+    }
+    const orphans = rows.filter((e) => !e.faction || !FACTION_ORDER.includes(e.faction));
+    if (orphans.length) {
+      groups.push({ key: NO_FACTION, label: NO_FACTION_LABEL, faction: null, rows: orphans });
+    }
+    return groups;
+  }
+
+  /** A group is open when the user has not collapsed it, or a filter is live. */
+  function isExpanded(key) {
+    if (filterText !== '') return true; // a search force-opens its matches
+    return !collapsed.has(key);
+  }
+
+  /** Rows the arrow keys can reach: expanded groups only, in display order. */
+  function visibleRows() {
+    const out = [];
+    for (const group of buildGroups()) {
+      if (isExpanded(group.key)) out.push(...group.rows);
+    }
+    return out;
+  }
+
+  /** The group key that holds an entry under the current mode. */
+  function groupKeyOf(entry) {
+    if (!entry) return null;
+    if (groupMode === MODE_TYPE) return `type:${entry.category}`;
+    if (entry.faction && FACTION_ORDER.includes(entry.faction)) return `faction:${entry.faction}`;
+    return NO_FACTION;
   }
 
   /**
    * Render the entry list in the sidebar.
    */
   const entryButtons = new Map(); // Map from entry.id to button element
+
+  /**
+   * Paint the grouped sidebar: one header per group, one row per canonical
+   * entry inside an expanded group.
+   *
+   * Collapsed groups contribute their header only, which is what keeps first
+   * paint at 22 rows instead of 245 buttons (design budget P1).
+   */
   function renderEntryList() {
     const listDiv = overlayEl._listDiv;
     listDiv.replaceChildren();
     entryButtons.clear();
+    rowButtons.clear();
+    headerButtons.clear();
 
-    const entries = getFilteredEntries();
-    entries.forEach((entry) => {
-      const btn = document.createElement('button');
-      btn.className = 'rw-models-entry';
-      if (currentEntry === entry) {
-        btn.classList.add('rw-selected');
+    const groups = buildGroups();
+    if (groups.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'rw-models-empty';
+      empty.textContent = `No models match “${filterText}”`;
+      listDiv.appendChild(empty);
+      return;
+    }
+
+    for (const group of groups) {
+      const open = isExpanded(group.key);
+
+      const header = document.createElement('button');
+      header.className = 'rw-models-group';
+      header.type = 'button';
+      header.setAttribute('aria-expanded', open ? 'true' : 'false');
+      header.dataset.group = group.key;
+
+      // Twisty is TEXT, so the open/closed state never depends on colour.
+      const twisty = document.createElement('span');
+      twisty.className = 'rw-models-twisty';
+      twisty.textContent = open ? '▾' : '▸';
+      header.appendChild(twisty);
+
+      // The faction identity colour rides beside the NAME, never instead of
+      // it. Colour is never the only cue.
+      if (group.faction && Object.hasOwn(FACTIONS, group.faction)) {
+        const swatch = document.createElement('span');
+        swatch.className = 'rw-models-swatch';
+        swatch.style.background = `#${FACTIONS[group.faction].color.toString(16).padStart(6, '0')}`;
+        header.appendChild(swatch);
       }
-      btn.textContent = entry.label;
-      btn.addEventListener('click', () => selectEntry(entry));
-      listDiv.appendChild(btn);
-      entryButtons.set(entry.id, btn);
+
+      const name = document.createElement('span');
+      name.className = 'rw-models-group-name';
+      name.textContent = group.label;
+      header.appendChild(name);
+
+      const count = document.createElement('span');
+      count.className = 'rw-models-group-count';
+      count.textContent = String(group.rows.length);
+      header.appendChild(count);
+
+      header.addEventListener('click', () => toggleGroup(group.key));
+      listDiv.appendChild(header);
+      headerButtons.set(group.key, header);
+
+      if (!open) continue;
+      for (const entry of group.rows) {
+        const btn = document.createElement('button');
+        btn.className = 'rw-models-entry';
+        btn.type = 'button';
+        if (currentEntry === entry) btn.classList.add('rw-selected');
+        btn.textContent = entry.label;
+        btn.dataset.group = group.key;
+        btn.addEventListener('click', () => selectEntry(entry));
+        listDiv.appendChild(btn);
+        entryButtons.set(entry.id, btn);
+        rowButtons.set(entry.id, btn);
+      }
+    }
+  }
+
+  /** Collapse or expand one group, keeping the selection painted. */
+  function toggleGroup(key) {
+    if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+    renderEntryList();
+  }
+
+  /** Set the group mode. G6: the selection survives, and its group opens. */
+  function setGroupMode(mode) {
+    if (groupMode === mode) return;
+    groupMode = mode;
+    collapsed.clear();
+    const groups = buildGroups();
+    const keep = groupKeyOf(currentEntry);
+    for (const group of groups) {
+      if (group.key !== keep) collapsed.add(group.key);
+    }
+    updateModeSelection();
+    renderEntryList();
+    rowButtons.get(currentEntry?.id)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Repaint the two mode buttons. */
+  function updateModeSelection() {
+    const tabs = overlayEl._tabsDiv.querySelectorAll('.rw-models-tab');
+    tabs.forEach((tab) => {
+      const on = tab.dataset.mode === groupMode;
+      tab.classList.toggle('rw-selected', on);
+      tab.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+  }
+
+  /**
+   * Enable or disable the variant checkbox for the current selection and say
+   * what it does. A row with no variant explains itself rather than going
+   * silently dead.
+   */
+  function updateVariantControl() {
+    const box = overlayEl._variantBox;
+    const label = overlayEl._variantLabel;
+    if (!box || !label) return;
+    const name = variantLabelFor(currentEntry);
+    box.disabled = !name;
+    box.checked = variantOn && !!name;
+    label.textContent = name || 'Pirate livery';
+    const why = name
+      ? `Show the ${name.toLowerCase()} of this model`
+      : 'This model has no variant';
+    label.title = why;
+    box.title = why;
+    overlayEl._variantWrap?.classList.toggle('rw-disabled', !name);
   }
 
   /**
    * Select an entry and show its model in the viewport.
    */
-  function selectEntry(entry) {
+  function selectEntry(entry, opts = {}) {
+    const keepCamera = opts.keepCamera === true;
     currentEntry = entry;
+    // The ROW is the canonical entry; the MOUNTED entry may be its variant.
+    const mount = resolveEntry(entry);
     userHasInteracted = false; // reset auto-turntable
 
-    // Reset modelGroup rotation before adding new model
-    if (modelGroup) {
+    // Reset modelGroup rotation before adding new model. A livery swap keeps
+    // the pose, so it does not reset here.
+    if (modelGroup && !keepCamera) {
       modelGroup.rotation.set(0, 0, 0);
     }
+
+    updateVariantControl();
 
     // Update selection visuals (move the selected class, don't rebuild)
     const currentBtn = entryButtons.get(entry.id);
@@ -444,35 +728,35 @@ export function initModelsBrowser(ctx) {
       currentObject = null;
     }
 
-    if (builtModels.has(entry.id)) {
-      mountBuilt(entry, builtModels.get(entry.id));
+    if (builtModels.has(mount.id)) {
+      mountBuilt(mount, builtModels.get(mount.id), keepCamera);
       return;
     }
-    if (entry.load) {
-      showLoading(entry);
-      let pending = loadingModels.get(entry.id);
+    if (mount.load) {
+      showLoading(mount);
+      let pending = loadingModels.get(mount.id);
       if (!pending) {
-        pending = Promise.resolve(entry.load()).then((built) => {
-          builtModels.set(entry.id, built);
+        pending = Promise.resolve(mount.load()).then((built) => {
+          builtModels.set(mount.id, built);
           return built;
-        }).finally(() => loadingModels.delete(entry.id));
-        loadingModels.set(entry.id, pending);
+        }).finally(() => loadingModels.delete(mount.id));
+        loadingModels.set(mount.id, pending);
       }
       pending.then((built) => {
-        if (currentEntry === entry) mountBuilt(entry, built);
+        if (currentEntry === entry) mountBuilt(mount, built, keepCamera);
       }).catch((error) => {
-        if (currentEntry === entry) showBuildError(entry, error);
+        if (currentEntry === entry) showBuildError(mount, error);
       });
       return;
     }
     try {
-      mountBuilt(entry, entry.build());
+      mountBuilt(mount, mount.build(), keepCamera);
     } catch (error) {
-      showBuildError(entry, error);
+      showBuildError(mount, error);
     }
   }
 
-  function mountBuilt(entry, built) {
+  function mountBuilt(entry, built, keepCamera = false) {
     if (!built?.object) {
       showBuildError(entry, new Error('Model loader returned no object'));
       return;
@@ -481,7 +765,9 @@ export function initModelsBrowser(ctx) {
     modelGroup.add(currentObject);
     const stats = computeStats(currentObject);
     const { center, radius, size } = measureModel(currentObject);
-    frameModel(center, radius, size);
+    // A livery swap is the same sculpt in a different material set, so
+    // re-framing it would read as a bug. Only a new model re-frames.
+    if (!keepCamera) frameModel(center, radius, size);
     updateInfoBar(entry, stats, radius);
   }
 
@@ -716,14 +1002,41 @@ export function initModelsBrowser(ctx) {
       window.addEventListener('keydown', keydownListener, { capture: true });
     }
 
-    // Select first entry in Ships category by default
-    selectedCategory = 'Ships';
-    updateTabSelection();
-    const ships = MODEL_CATALOG.filter((e) => e.category === 'Ships');
-    if (ships.length > 0) {
-      selectEntry(ships[0]);
-    } else {
+    // Opening state, design section 3.1.1.
+    //
+    // G4: a re-open inside one session restores the mode, the expansion set,
+    // the filter and the selection. The model is already cached, so this costs
+    // nothing and honours disposal rule D4 (re-open must not refetch). The old
+    // code forced the Ships tab on EVERY open and threw away the reviewer's
+    // place; that is the behaviour being retired here.
+    //
+    // G1-G3: the first open of a session lands on BY FACTION with the first
+    // faction expanded and its lightest ship selected. FACTION_ORDER[0] is
+    // freehold, CLASS_ORDER[0] is light, and a light is the cheapest ship in
+    // the catalog, so the viewport fills at once without pulling a freighter.
+    //
+    // G5 falls out for free: none of this is persisted, so a reload restarts
+    // the session and returns here.
+    if (hasOpenedOnce) {
+      updateModeSelection();
       renderEntryList();
+      updateVariantControl();
+      rowButtons.get(currentEntry?.id)?.scrollIntoView({ block: 'nearest' });
+    } else {
+      hasOpenedOnce = true;
+      groupMode = MODE_FACTION;
+      filterText = '';
+      overlayEl._filterInput.value = '';
+      variantOn = false;
+      collapsed.clear();
+      const first = FACTION_ORDER[0];
+      for (const group of buildGroups()) {
+        if (group.key !== `faction:${first}`) collapsed.add(group.key);
+      }
+      updateModeSelection();
+      const opening = buildGroups().find((g) => g.key === `faction:${first}`);
+      if (opening?.rows.length) selectEntry(opening.rows[0]);
+      else renderEntryList();
     }
 
     // Start animation loop
@@ -840,6 +1153,9 @@ export function initModelsBrowser(ctx) {
         e.stopImmediatePropagation();
         close();
       }
+      // ArrowLeft/ArrowRight deliberately fall through: inside a text field
+      // they move the caret, and stealing them for group collapse would make
+      // the filter box unusable.
       // Letters must reach the INPUT (this listener is window-capture).
       // Game shortcuts that listen on bubble (KeyP pause) must ignore
       // a focused text field — see main.js.
@@ -861,6 +1177,29 @@ export function initModelsBrowser(ctx) {
         navigateList(e.code === 'ArrowDown' ? 1 : -1);
         break;
 
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        collapseOrExpand(e.code === 'ArrowRight');
+        break;
+
+      case 'Enter':
+      case 'Space': {
+        // A focused group header toggles. Anything else falls through to the
+        // modal swallow below, so Space cannot reach the title underneath.
+        const active = document.activeElement;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (active?.classList?.contains('rw-models-group')) {
+          toggleGroup(active.dataset.group);
+          headerButtons.get(active.dataset.group)?.focus();
+        } else if (active?.classList?.contains('rw-models-check')) {
+          active.click();
+        }
+        break;
+      }
+
       case 'KeyR':
         if (!e.ctrlKey && !e.metaKey && !e.altKey) {
           e.preventDefault();
@@ -878,10 +1217,12 @@ export function initModelsBrowser(ctx) {
   }
 
   /**
-   * Navigate the filtered list up or down.
+   * Navigate up or down over the VISIBLE rows.
+   * A collapsed group contributes nothing, so the arrows never land on a row
+   * the reviewer cannot see.
    */
   function navigateList(direction) {
-    const entries = getFilteredEntries();
+    const entries = visibleRows();
     if (entries.length === 0) return;
 
     const currentIndex = entries.indexOf(currentEntry);
@@ -895,6 +1236,21 @@ export function initModelsBrowser(ctx) {
     if (nextIndex >= entries.length) nextIndex = 0;
 
     selectEntry(entries[nextIndex]);
+  }
+
+  /**
+   * Arrow left / right on the list: collapse or expand.
+   * From a row, Left closes the group that holds it; from a header, Left
+   * closes and Right opens. This is the ordinary tree-widget contract.
+   */
+  function collapseOrExpand(expand) {
+    const active = document.activeElement;
+    const key = active?.dataset?.group || groupKeyOf(currentEntry);
+    if (!key) return;
+    if (expand) collapsed.delete(key); else collapsed.add(key);
+    renderEntryList();
+    const header = headerButtons.get(key);
+    if (!expand && header) header.focus();
   }
 
   /**
@@ -932,7 +1288,7 @@ export function initModelsBrowser(ctx) {
 
       // Update model animation if present
       if (currentObject && currentEntry) {
-        const built = builtModels.get(currentEntry.id);
+        const built = builtModels.get(resolveEntry(currentEntry).id);
         if (built?.update) {
           built.update(elapsed, ctx.settings.reducedMotion, camera);
         }

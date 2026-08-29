@@ -42,7 +42,9 @@ export const MODEL_CATEGORIES = ['Ships', 'Stations', 'Gates', 'Landmarks', 'Cel
  */
 
 // ---- Ships ----
-const FACTION_ORDER = [
+// Exported: the Models Browser groups by faction in this order, so the
+// sidebar and the catalog cannot disagree about what "first faction" means.
+export const FACTION_ORDER = [
   'freehold', 'veridian', 'redledger', 'ferrous', 'gilded',
   'congregation', 'assembly', 'lamplighter', 'independent',
   'hollow', 'beautiful', 'unknowables',

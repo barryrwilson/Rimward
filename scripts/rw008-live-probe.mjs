@@ -11,6 +11,16 @@
  *       the selection.
  *   V4  With Reduced motion on, the turntable and the star shell are both
  *       still, and no CSS transition runs.
+ *   V6  First open is BY FACTION, Freehold expanded, Freehold Compact -
+ *       Light selected, 22 rows in the DOM (G1-G3, budget P1).
+ *   V6b A faction group is the size ladder: six ships in CLASS_ORDER,
+ *       then the station, then the gate.
+ *   V6c Change mode, select, Escape, re-open: G4 restores. Then reload
+ *       and confirm G5 returns to the first-open shape.
+ *   V7  BY TYPE reproduces the six categories with 172 canonical rows.
+ *   V8  Filter "lamp" expands the Lamplighter match and nothing else.
+ *   V9  The livery toggle re-skins without moving the camera.
+ *   V10 ship:player disables the variant box and says why.
  *
  * WHY A PROBE: the overlay owns a WebGL context and a rAF loop, so boot-test
  * can only pin its source. Focus order, aria wiring and the rAF motion gates
@@ -68,7 +78,7 @@ const say = (...a) => {
 };
 
 /** Every flow the pass must reach. A missing one fails the run. */
-const FLOWS = ['V1', 'V2', 'V3', 'V4'];
+const FLOWS = ['V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10'];
 
 const results = {
   commit: process.env.RW008_SHA || null,
@@ -473,6 +483,279 @@ async function main() {
         .every((k) => css?.[k] === null || /^0s(,\\s*0s)*$/.test(String(css[k])));
 
       record('V4', still && moves && cssOff, { still, moves, css, cssOff });
+    }
+
+    // =====================================================================
+    // V6 — first open state (G1-G3) and the P1 row budget
+    // =====================================================================
+    // V1/V2 already opened the overlay, so hasOpenedOnce is set and G4 is
+    // live. Reload to get a true first open.
+    await cdp.send('Page.reload');
+    await waitUntil(`(() => !!document.getElementById('rw-title-models'))()`,
+      (v) => v === true, 40000);
+    await sleep(500);
+
+    const openModels = async () => {
+      await cdp.eval(`(() => { document.getElementById('rw-title-models').click(); return true; })()`);
+      await waitUntil(`!!window.__ctx?.models?.isOpen?.()`, (v) => v === true, 20000);
+      await sleep(1800);
+    };
+
+    const LIST = `(() => {
+      const list = document.querySelector('.rw-models-list');
+      if (!list) return null;
+      const groups = [...list.querySelectorAll('.rw-models-group')];
+      const rows = [...list.querySelectorAll('.rw-models-entry')];
+      const sel = list.querySelector('.rw-models-entry.rw-selected');
+      const mode = [...document.querySelectorAll('.rw-models-tab')]
+        .find((t) => t.classList.contains('rw-selected'));
+      const info = document.querySelector('.rw-models-name');
+      const gname = (g) => g.querySelector('.rw-models-group-name').textContent.trim();
+      return {
+        groupCount: groups.length,
+        groupLabels: groups.map(gname),
+        expanded: groups.filter((g) => g.getAttribute('aria-expanded') === 'true').map(gname),
+        rowCount: rows.length,
+        domRows: groups.length + rows.length,
+        selected: sel ? sel.textContent.trim() : null,
+        mode: mode ? mode.textContent.trim() : null,
+        shown: info ? info.textContent.trim() : null,
+        swatches: list.querySelectorAll('.rw-models-swatch').length,
+      };
+    })()`;
+
+    const clickGroup = (name) => cdp.eval(`(() => {
+      const g = [...document.querySelectorAll('.rw-models-group')]
+        .find((x) => x.querySelector('.rw-models-group-name').textContent.trim() === '${name}');
+      if (g) g.click();
+      return !!g;
+    })()`);
+
+    const setFilter = (text) => cdp.eval(`(() => {
+      const i = document.querySelector('.rw-models-input');
+      i.value = '${text}';
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+
+    const setMode = (mode) => cdp.eval(`(() => {
+      const t = [...document.querySelectorAll('.rw-models-tab')]
+        .find((x) => x.dataset.mode === '${mode}');
+      if (t) t.click();
+      return !!t;
+    })()`);
+
+    {
+      await openModels();
+      const v = await waitUntil(LIST, (x) => x && x.groupCount > 0, 20000);
+      await cdp.shot('07-by-faction-first-open.png');
+      record('V6', !!(v
+        && v.mode === 'BY FACTION'
+        && v.expanded.length === 1
+        && v.expanded[0] === 'Freehold Compact'
+        && v.selected === 'Freehold Compact — Light'
+        && v.groupCount === 13
+        && v.groupLabels[v.groupLabels.length - 1] === 'Not a faction'
+        && v.domRows === 22
+        && v.domRows <= 40), {
+        mode: v?.mode, expanded: v?.expanded, selected: v?.selected,
+        groupCount: v?.groupCount, domRows: v?.domRows, swatches: v?.swatches,
+        lastGroup: v?.groupLabels?.[v.groupLabels.length - 1],
+      });
+    }
+
+    // =====================================================================
+    // V6b — a faction group reads as the size ladder
+    // =====================================================================
+    {
+      await clickGroup('Veridian Combine');
+      await sleep(500);
+      const got = await cdp.eval(`(() => {
+        const kids = [...document.querySelector('.rw-models-list').children];
+        const idx = kids.findIndex((k) => k.classList.contains('rw-models-group')
+          && k.querySelector('.rw-models-group-name')?.textContent.trim() === 'Veridian Combine');
+        const out = [];
+        for (let i = idx + 1; i < kids.length; i++) {
+          if (kids[i].classList.contains('rw-models-group')) break;
+          out.push(kids[i].textContent.trim());
+        }
+        return out;
+      })()`);
+      // Ships in CLASS_ORDER, then Station, then Gate, then Landmarks.
+      // 'Hulk Row' is Veridian's authored landmark (authored-systems.js), and
+      // it belongs here: the design orders Landmarks last inside a faction.
+      const expected = [
+        'Veridian Combine — Light', 'Veridian Combine — Ace', 'Veridian Combine — Cutter',
+        'Veridian Combine — Heavy', 'Veridian Combine — Frigate', 'Veridian Combine — Freighter',
+        'Veridian Combine Station', 'Veridian Combine Gate', 'Hulk Row',
+      ];
+      record('V6b', JSON.stringify(got) === JSON.stringify(expected), { got, expected });
+      await clickGroup('Veridian Combine');
+      await sleep(300);
+    }
+
+    // =====================================================================
+    // V7 — BY TYPE keeps the six categories and the 173 canonical rows
+    // =====================================================================
+    {
+      await setMode('type');
+      await sleep(500);
+      await cdp.eval(`(() => {
+        for (const g of document.querySelectorAll('.rw-models-group')) {
+          if (g.getAttribute('aria-expanded') === 'false') g.click();
+        }
+        return true;
+      })()`);
+      await sleep(900);
+      const v = await cdp.eval(LIST);
+      await cdp.shot('08-by-type-expanded.png');
+      const cats = ['Ships', 'Stations', 'Gates', 'Landmarks', 'Celestial', 'Props'];
+      record('V7', !!(v && v.groupCount === 6
+        && JSON.stringify(v.groupLabels) === JSON.stringify(cats)
+        && v.rowCount === 172),
+      { groupCount: v?.groupCount, groupLabels: v?.groupLabels, rowCount: v?.rowCount });
+    }
+
+    // =====================================================================
+    // V8 — the filter force-expands its matches, and a miss says so
+    // =====================================================================
+    {
+      await setMode('faction');
+      await sleep(400);
+      await setFilter('lamp');
+      await sleep(600);
+      const hit = await cdp.eval(LIST);
+      await setFilter('zzzznope');
+      await sleep(500);
+      const miss = await cdp.eval(`(() => {
+        const e = document.querySelector('.rw-models-empty');
+        return { text: e ? e.textContent.trim() : null,
+                 rows: document.querySelectorAll('.rw-models-entry').length };
+      })()`);
+      await setFilter('');
+      await sleep(400);
+      record('V8', !!(hit
+        && hit.groupLabels.length > 0
+        && hit.groupLabels.every((l) => l === 'Lamplighter Guild')
+        && hit.expanded.length === hit.groupLabels.length
+        && hit.rowCount > 0
+        && miss?.text && miss.rows === 0),
+      { hitGroups: hit?.groupLabels, hitRows: hit?.rowCount, miss });
+    }
+
+    // =====================================================================
+    // V9 — the livery toggle re-skins in place
+    // =====================================================================
+    {
+      await clickGroup('Ferrous Hegemony');
+      await sleep(500);
+      await cdp.eval(`(() => {
+        const r = [...document.querySelectorAll('.rw-models-entry')]
+          .find((x) => x.textContent.trim() === 'Ferrous Hegemony — Frigate');
+        if (r) r.click();
+        return !!r;
+      })()`);
+      await sleep(3500);
+      const before = await cdp.eval(`(() => ({
+        disabled: document.querySelector('.rw-models-check').disabled,
+        label: document.querySelector('.rw-models-variant-label').textContent.trim(),
+        shown: document.querySelector('.rw-models-name')?.textContent.trim() || null,
+      }))()`);
+      const shotA = await cdp.send('Page.captureScreenshot', { format: 'png' }, 30000);
+      await cdp.eval(`(() => { document.querySelector('.rw-models-check').click(); return true; })()`);
+      await sleep(3500);
+      const shotB = await cdp.send('Page.captureScreenshot', { format: 'png' }, 30000);
+      await writeFile(join(outDir, '09-livery-on.png'), Buffer.from(shotB.data, 'base64'));
+      const after = await cdp.eval(`(() => ({
+        checked: document.querySelector('.rw-models-check').checked,
+        row: (document.querySelector('.rw-models-entry.rw-selected') || {}).textContent,
+        shown: document.querySelector('.rw-models-name')?.textContent.trim() || null,
+      }))()`);
+      record('V9', !!(before?.disabled === false
+        && before.label === 'Pirate livery'
+        && after?.checked === true
+        && String(after.row).trim() === 'Ferrous Hegemony — Frigate'
+        && /pirate/i.test(String(after.shown))
+        && shotA.data !== shotB.data),
+      { before, after, pixelsChanged: shotA.data !== shotB.data });
+      await cdp.eval(`(() => { document.querySelector('.rw-models-check').click(); return true; })()`);
+      await sleep(1500);
+    }
+
+    // =====================================================================
+    // V10 — a row with no variant disables the box and explains itself
+    // =====================================================================
+    {
+      await setFilter('scale anchor');
+      await sleep(600);
+      await cdp.eval(`(() => {
+        const r = document.querySelector('.rw-models-entry');
+        if (r) r.click();
+        return !!r;
+      })()`);
+      await sleep(2200);
+      const v = await cdp.eval(`(() => {
+        const b = document.querySelector('.rw-models-check');
+        const l = document.querySelector('.rw-models-variant-label');
+        const w = document.querySelector('.rw-models-variant');
+        const sel = document.querySelector('.rw-models-entry.rw-selected');
+        return {
+          row: sel ? sel.textContent.trim() : null,
+          disabled: b.disabled,
+          title: l.title,
+          dimmed: w.classList.contains('rw-disabled'),
+        };
+      })()`);
+      await cdp.shot('10-player-anchor-no-variant.png');
+      await setFilter('');
+      await sleep(400);
+      record('V10', !!(v && v.disabled === true
+        && /no variant/i.test(String(v.title)) && v.dimmed), v);
+    }
+
+    // =====================================================================
+    // V6c — G4 restores on re-open; G5 resets on reload
+    // =====================================================================
+    {
+      await setMode('type');
+      await sleep(500);
+      await clickGroup('Props');
+      await sleep(400);
+      await cdp.eval(`(() => {
+        const r = [...document.querySelectorAll('.rw-models-entry')]
+          .find((x) => x.textContent.trim() === 'Cargo Pod');
+        if (r) r.click();
+        return !!r;
+      })()`);
+      await sleep(1800);
+      const before = await cdp.eval(LIST);
+
+      await cdp.eval(KEY('Escape', 'Escape'));
+      await sleep(800);
+      await openModels();
+      const after = await cdp.eval(LIST);
+
+      await cdp.send('Page.reload');
+      await waitUntil(`(() => !!document.getElementById('rw-title-models'))()`,
+        (v) => v === true, 40000);
+      await sleep(500);
+      await openModels();
+      const reloaded = await cdp.eval(LIST);
+      await cdp.shot('11-after-reload.png');
+
+      record('V6c', !!(after && before
+        && after.mode === before.mode
+        && after.selected === before.selected
+        && JSON.stringify(after.expanded) === JSON.stringify(before.expanded)
+        && reloaded?.mode === 'BY FACTION'
+        && reloaded?.selected === 'Freehold Compact — Light'
+        && reloaded?.domRows === 22), {
+        beforeMode: before?.mode, afterMode: after?.mode,
+        beforeSel: before?.selected, afterSel: after?.selected,
+        beforeExp: before?.expanded, afterExp: after?.expanded,
+        reloadedMode: reloaded?.mode, reloadedSel: reloaded?.selected,
+        reloadedRows: reloaded?.domRows,
+      });
     }
 
     // ---- console ------------------------------------------------------
