@@ -133,11 +133,14 @@ durable next-wave capture is mandatory, not optional.
   choice.
   Wave 142 PR1 `docs/Org01OriginPreviewDesign.md`.
   Derive preview rows from live ORIGINS. Compact sublines first.
-- [ ] INBOX (P2, CONTROLS/SETTINGS): Expand Settings with mouse sensitivity,
+- [x] DONE (P2, CONTROLS/SETTINGS): Expand Settings with mouse sensitivity,
   invert-X/invert-Y, complete key rebinding with conflict detection, and
   separate music/effects/voice/UI volume. The current accessibility toggles and
   text sizes are a strong base, but flight comfort still depends on fixed input
   behavior and one master-volume control.
+  Ctl06 `docs/Ctl06ExpandedSettingsDesign.md`. RW-002 PR1–PR5
+  (working tree). Live Playwright CLEAN: PR3 bind map, PR4 KEYS UI
+  and conflict, PR5 overlay copy.
 - [ ] INBOX (P2, MODEL VIEWER): Turn Models into a browsable ship reference.
   Group the long flat list by faction and class, hide pirate duplicates behind
   a variant toggle, add role/scale/lore summaries, and make loading progress
@@ -236,9 +239,11 @@ checked against the current initiative text before capture.
   broke", confirm the last save time, and offer a reload.
   RW-004: startup vs runtime copy, trustworthy `savedAt` line, Reload,
   inert background, Tab trap. Harness `npm run test:runtime-error-ux`.
-- [ ] INBOX (P3, DEATH): Confirm the death penalty is intended. Ship loss kept
+- [x] DONE (P3, DEATH): Confirm the death penalty is intended. Ship loss kept
   all 350 UU and restored the hull free at the last berth; loss currently has
   no cost.
+  Owner choice 1 on 2026-08-28: keep zero-cost recovery and honest copy.
+  `docs/DeathLossPolicyDesign.md`. No UU charge. Overlay says so.
 - [ ] PLANNED (P2, AGENT API): Add an AI-agent play API so agents can play the
   game on a user's behalf. This playtest needed injected synthetic
   key/mouse events, a hand-rolled steering loop against `window.__ctx`, and

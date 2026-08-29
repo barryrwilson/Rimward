@@ -3,8 +3,9 @@ import { clearRoute, plotRoute, sanitizeSystemId } from '../game/nav.js';
 import { hoverModel } from '../game/chart-hover.js';
 import { standingRead } from '../game/data-trade.js';
 import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from '../game/autopilot.js';
-import { canOpenPlayCard, playSurfaceBlocked, isTypingFocus } from './overlay-policy.js';
+import { canOpenPlayCard, playSurfaceBlocked, isTypingFocus, settingsOwnsScreen } from './overlay-policy.js';
 import { decodeKeyCode } from './key-code.js';
+import { codeOf } from './bindings.js';
 import '../ui/hud.css';
 
 /**
@@ -1315,10 +1316,33 @@ export function initGalaxyChart(ctx) {
     clearHover();
   });
 
+  function liveChartCode() {
+    try {
+      const c = codeOf(ctx, 'chart');
+      if (typeof c === 'string' && c) return c;
+    } catch {
+      /* last-ditch */
+    }
+    return 'KeyM';
+  }
+
+  function settingsMutexOwns() {
+    try {
+      if (settingsOwnsScreen()) return true;
+      if (ctx.settingsApi && typeof ctx.settingsApi.isOpen === 'function' && ctx.settingsApi.isOpen() === true) {
+        return true;
+      }
+    } catch {
+      /* fail open to existing guards */
+    }
+    return false;
+  }
+
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const code = decodeKeyCode(e);
-    if (code === 'KeyM') {
+    if (code === liveChartCode()) {
+      if (settingsMutexOwns()) return;
       // Do not intercept the event. While docked the station overlay owns
       // the screen, and while paused the origin pick or pause banner does —
       // only allow closing in those states.

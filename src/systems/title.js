@@ -4,8 +4,8 @@
  * OWNERSHIP:
  * - Sets ctx.flags.paused at boot when not skipped; clears it on CONTINUE.
  * - Owns the capture-phase keydown listener while open; swallows all input
- *   except KeyO (settings) and Escape (settings panel close), which must pass
- *   through to the settings system.
+ *   except the live settings bind (default KeyO) and Escape, which must pass
+ *   through to the settings system. Yields fully while Settings is open.
  * - Owns the title overlay DOM and its lifecycle (create/remove).
  * - Remount from in-run pause (titleApi.openFromPause) does not reload and
  *   does not set rimward-title-skip. Skip marker remains NEW GAME reload only.
@@ -20,8 +20,8 @@
  *   marker, and reloads the page. A reload is the only way to guarantee a
  *   clean world state across world.js record banks, contacts, mystery, and
  *   epics — a partial in-place reset would be a bug farm.
- * - SETTINGS: dispatches a synthetic KeyO keydown event to every window
- *   listener so the settings panel opens; the title stays open behind it.
+ * - SETTINGS: calls ctx.settingsApi.setOpen(true). Does not dispatch KeyO.
+ *   The title stays open behind Settings.
  * - MODELS: opens the models browser overlay via ctx.models.open(); the title
  *   stays open behind it (same as SETTINGS — the browser is a viewer, not a
  *   game start).
@@ -32,9 +32,9 @@
  * - The title's keydown listener must fire before controls.js and origins.js
  *   listeners so it can swallow all input while the "door is shut" — the game
  *   is not playable until the player dismisses the title.
- * - KeyO and Escape are the only keys allowed through; everything else is
- *   swallowed with preventDefault and stopImmediatePropagation so the canvas
- *   never sees keyboard input while the title is open.
+ * - Escape and the live settings code are the only keys allowed through when
+ *   Settings is closed; everything else is swallowed with preventDefault and
+ *   stopImmediatePropagation so the canvas never sees keyboard input.
  *
  * WHY NEW GAME RELOADS:
  * - A reload is the only way to guarantee a clean world state. Resetting
@@ -45,6 +45,8 @@
 import { hasAutosave, clearAutosave } from '../game/save.js';
 import { disengage } from '../game/autopilot.js';
 import { disengageAutomine } from '../game/automine.js';
+import { settingsOwnsScreen } from './overlay-policy.js';
+import { codeOf } from './bindings.js';
 
 /**
  * Initialize the title screen.
@@ -140,9 +142,12 @@ export function initTitle(ctx) {
         action: 'settings',
         label: 'SETTINGS',
         run: () => {
-          if (globalThis.KeyboardEvent) {
-            const event = new KeyboardEvent('keydown', { code: 'KeyO' });
-            globalThis.window.dispatchEvent(event);
+          try {
+            if (ctx.settingsApi && typeof ctx.settingsApi.setOpen === 'function') {
+              ctx.settingsApi.setOpen(true);
+            }
+          } catch {
+            /* do not synthesize KeyO */
           }
         },
       },
@@ -207,6 +212,14 @@ export function initTitle(ctx) {
       // early-out the title would swallow the browser's own keys before it ever
       // sees them (init order, not z-order, decides who runs first).
       if (ctx.models?.isOpen?.()) return;
+      try {
+        if (ctx.settingsApi && typeof ctx.settingsApi.isOpen === 'function' && ctx.settingsApi.isOpen() === true) {
+          return;
+        }
+      } catch { /* yield check is best-effort */ }
+      try {
+        if (settingsOwnsScreen()) return;
+      } catch { /* yield check is best-effort */ }
 
       if (e.repeat) {
         e.preventDefault?.();
@@ -214,8 +227,15 @@ export function initTitle(ctx) {
         return;
       }
 
-      // KeyO and Escape pass through to settings panel.
-      if (e.code === 'KeyO' || e.code === 'Escape') {
+      // Live settings bind and Escape pass through to the settings panel.
+      let settingsCode = 'KeyO';
+      try {
+        const c = codeOf(ctx, 'settings');
+        if (typeof c === 'string' && c) settingsCode = c;
+      } catch {
+        settingsCode = 'KeyO';
+      }
+      if (e.code === settingsCode || e.code === 'Escape') {
         return;
       }
 

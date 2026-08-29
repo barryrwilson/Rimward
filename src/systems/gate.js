@@ -22,7 +22,9 @@ import {
   isBeautiful,
   makeOrganicGlowTexture,
 } from './organic.js';
-import { berthHeld } from './overlay-policy.js';
+import { berthHeld, settingsOwnsScreen } from './overlay-policy.js';
+import { decodeKeyCode } from './key-code.js';
+import { codeOf } from './bindings.js';
 
 /**
  * Jump gates — one live assembly per system gate plus one hub junction
@@ -606,12 +608,40 @@ export function initGate(ctx) {
 
   // Junction route cycling.
   let zoneHub = null;
+  function liveHubCode() {
+    try {
+      const c = codeOf(ctx, 'hubCycle');
+      if (typeof c === 'string' && c) return c;
+    } catch {
+      /* last-ditch */
+    }
+    return 'KeyG';
+  }
+
+  function settingsMutexOwns() {
+    try {
+      if (settingsOwnsScreen()) return true;
+      if (ctx.settingsApi && typeof ctx.settingsApi.isOpen === 'function' && ctx.settingsApi.isOpen() === true) {
+        return true;
+      }
+    } catch {
+      /* fail open to existing guards */
+    }
+    return false;
+  }
+
   window.addEventListener('keydown', (e) => {
-    if (e.code !== 'KeyG' || e.repeat) return;
-    if (!zoneHub || ctx.flags.docked || ctx.flags.paused || ctx.gate.jumping) return;
-    const routes = zoneHub.routes;
-    zoneHub.routeIndex = (zoneHub.routeIndex + 1) % routes.length;
-    zoneHub.to = routes[zoneHub.routeIndex];
+    try {
+      if (e.repeat) return;
+      if (decodeKeyCode(e) !== liveHubCode()) return;
+      if (settingsMutexOwns()) return;
+      if (!zoneHub || ctx.flags.docked || ctx.flags.paused || ctx.gate.jumping) return;
+      const routes = zoneHub.routes;
+      zoneHub.routeIndex = (zoneHub.routeIndex + 1) % routes.length;
+      zoneHub.to = routes[zoneHub.routeIndex];
+    } catch {
+      /* never throw from hub cycle */
+    }
   });
 
   function update(dt) {

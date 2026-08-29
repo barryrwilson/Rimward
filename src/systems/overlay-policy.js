@@ -48,6 +48,18 @@ export function titleOwnsScreen() {
 /** Settings z-80 panel: body child, inner dialog labelled Settings. */
 export function settingsOwnsScreen() {
   try {
+    let api = null;
+    try {
+      const w = typeof window !== 'undefined' ? window : null;
+      if (w && w.__ctx && w.__ctx.settingsApi) api = w.__ctx.settingsApi;
+    } catch {
+      api = null;
+    }
+    if (api && typeof api.isOpen === 'function' && api.isOpen() === true) return true;
+  } catch {
+    /* fail closed to DOM sniff */
+  }
+  try {
     const kids = bodyKids();
     if (!kids) return false;
     for (let i = 0; i < kids.length; i++) {
