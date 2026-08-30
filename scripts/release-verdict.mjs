@@ -156,12 +156,16 @@ function exactNames(actual, required) {
 
 const evidenceChecks = {
   packageVersion: releaseManifest?.version === packageJson?.version
+    && releaseManifest?.schemaVersion === 1
     && releaseManifest?.tag === `v${packageJson?.version}`
     && archiveName === `rimward-v${packageJson?.version}-dist.zip`,
   packageSourceSha: releaseManifest?.commitSha === expectedSha,
   packageArchive: archiveNameSafe
     && releaseManifest?.distribution === 'static-dist'
     && releaseManifest?.entrypoint === 'dist/index.html'
+    && Number.isInteger(releaseManifest?.files)
+    && releaseManifest.files > 0
+    && releaseManifest?.archive?.checksumFile === `${archiveName}.sha256`
     && archiveBytes > 0
     && archiveBytes === releaseManifest?.archive?.bytes
     && archiveDigest === releaseManifest?.archive?.sha256

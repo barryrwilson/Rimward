@@ -20,22 +20,40 @@ try {
     throw "HEAD $actualSha does not match requested SHA $expectedSha"
   }
 
-  git diff-index --quiet HEAD --
+  $worktreeState = @(git status --porcelain=v1 --untracked-files=all)
   if ($LASTEXITCODE -ne 0) {
-    throw 'tracked worktree changes are not allowed when packaging a release'
+    throw 'could not inspect the release worktree'
+  }
+  if ($worktreeState.Count -gt 0) {
+    throw 'tracked or untracked worktree changes are not allowed when packaging a release'
+  }
+  $ignoredPublicInputs = @(git ls-files --others --ignored --exclude-standard -- public)
+  if ($LASTEXITCODE -ne 0) {
+    throw 'could not inspect ignored public build inputs'
+  }
+  if ($ignoredPublicInputs.Count -gt 0) {
+    throw 'ignored files under public/ are not allowed in a release build'
   }
 
   $package = Get-Content $packagePath -Raw | ConvertFrom-Json
-  $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+  $lock = Get-Content $lockPath -Raw | ConvertFrom-Json -AsHashtable
   $version = [string]$package.version
   if ($version -notmatch '^\d+\.\d+\.\d+$') {
     throw "package version is not semantic: $version"
   }
-  if ([string]$lock.version -ne $version -or [string]$lock.packages.''.version -ne $version) {
+  if ([string]$lock['version'] -ne $version -or [string]$lock['packages']['']['version'] -ne $version) {
     throw 'package.json and package-lock.json root versions do not agree'
   }
   if (-not (Test-Path (Join-Path $distDir 'index.html') -PathType Leaf)) {
     throw 'dist/index.html is missing; run npm run build first'
+  }
+  $distEntries = @(Get-Item $distDir; Get-ChildItem $distDir -Recurse -Force)
+  if ($distEntries.Where({ ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 }).Count -gt 0) {
+    throw 'dist/ contains a reparse point or symbolic link'
+  }
+  $distFiles = @($distEntries.Where({ -not $_.PSIsContainer }))
+  if ($distFiles.Count -eq 0) {
+    throw 'dist/ contains no files'
   }
 
   $tag = "v$version"
@@ -60,6 +78,7 @@ try {
     commitSha = $actualSha
     distribution = 'static-dist'
     entrypoint = 'dist/index.html'
+    files = $distFiles.Count
     archive = [ordered]@{
       name = $archiveName
       sha256 = $digest

@@ -9,6 +9,7 @@ v0.1.0. It does not deploy or change a hosted environment.
 - Git and GitHub CLI authenticated for `barryrwilson/Rimward`.
 - A clean `master` worktree with `origin/master` fetched.
 - No existing tag or GitHub Release for the version being published.
+- Repository immutable releases enabled and verified through the GitHub API.
 
 The release owner is `@barryrwilson`. A second person may execute these steps
 if they have permission to dispatch Actions, push the tag, and create the
@@ -73,9 +74,11 @@ Verify the archive before publication:
 ```powershell
 $manifest = Get-Content "$candidate/release-manifest.json" -Raw | ConvertFrom-Json
 $actual = (Get-FileHash "$candidate/$($manifest.archive.name)" -Algorithm SHA256).Hash.ToLowerInvariant()
+$checksum = (Get-Content "$candidate/$($manifest.archive.checksumFile)" -Raw).Trim()
 if ($manifest.commitSha -ne $releaseSha) { throw "manifest SHA mismatch" }
 if ($manifest.tag -ne "v0.1.0") { throw "manifest tag mismatch" }
 if ($manifest.archive.sha256 -ne $actual) { throw "archive checksum mismatch" }
+if ($checksum -ne "$actual  $($manifest.archive.name)") { throw "checksum file mismatch" }
 ```
 
 ## Publish the immutable release
@@ -83,13 +86,19 @@ if ($manifest.archive.sha256 -ne $actual) { throw "archive checksum mismatch" }
 Only after the exact-SHA workflow and downloaded checks pass:
 
 ```powershell
+$immutable = gh api repos/barryrwilson/Rimward/immutable-releases | ConvertFrom-Json
+if ($immutable.enabled -ne $true) { throw "repository immutable releases are not enabled" }
 git tag -a v0.1.0 $releaseSha -m "Rimward v0.1.0"
 git push origin v0.1.0
+$remoteTagSha = ((git ls-remote origin "refs/tags/v0.1.0^{}") -split "`t")[0]
+if ($remoteTagSha -ne $releaseSha) { throw "remote tag SHA mismatch" }
 gh release create v0.1.0 --verify-tag --title "Rimward v0.1.0" --notes-file CHANGELOG.md `
   "$candidate/rimward-v0.1.0-dist.zip" `
   "$candidate/rimward-v0.1.0-dist.zip.sha256" `
   "$candidate/release-manifest.json" `
   "$candidate/release-verdict.json"
+$release = gh api repos/barryrwilson/Rimward/releases/tags/v0.1.0 | ConvertFrom-Json
+if ($release.immutable -ne $true) { throw "published release is not immutable" }
 gh release view v0.1.0 --json tagName,targetCommitish,url,assets
 ```
 
