@@ -15,6 +15,17 @@ The release owner is `@barryrwilson`. A second person may execute these steps
 if they have permission to dispatch Actions, push the tag, and create the
 release.
 
+An administrator enables immutability once. It applies to future releases:
+
+```powershell
+$apiVersion = "2026-03-10"
+gh api --method PUT -H "X-GitHub-Api-Version: $apiVersion" `
+  repos/barryrwilson/Rimward/immutable-releases
+$immutable = gh api -H "X-GitHub-Api-Version: $apiVersion" `
+  repos/barryrwilson/Rimward/immutable-releases | ConvertFrom-Json
+if ($immutable.enabled -ne $true) { throw "repository immutable releases are not enabled" }
+```
+
 ## Build and validate one SHA
 
 From the repository root:
@@ -86,17 +97,40 @@ if ($checksum -ne "$actual  $($manifest.archive.name)") { throw "checksum file m
 Only after the exact-SHA workflow and downloaded checks pass:
 
 ```powershell
-$immutable = gh api repos/barryrwilson/Rimward/immutable-releases | ConvertFrom-Json
+$immutable = gh api -H "X-GitHub-Api-Version: $apiVersion" `
+  repos/barryrwilson/Rimward/immutable-releases | ConvertFrom-Json
 if ($immutable.enabled -ne $true) { throw "repository immutable releases are not enabled" }
 git tag -a v0.1.0 $releaseSha -m "Rimward v0.1.0"
 git push origin v0.1.0
 $remoteTagSha = ((git ls-remote origin "refs/tags/v0.1.0^{}") -split "`t")[0]
 if ($remoteTagSha -ne $releaseSha) { throw "remote tag SHA mismatch" }
-gh release create v0.1.0 --verify-tag --title "Rimward v0.1.0" --notes-file CHANGELOG.md `
+gh release create v0.1.0 --draft --verify-tag --title "Rimward v0.1.0" `
+  --notes-file CHANGELOG.md `
   "$candidate/rimward-v0.1.0-dist.zip" `
   "$candidate/rimward-v0.1.0-dist.zip.sha256" `
   "$candidate/release-manifest.json" `
   "$candidate/release-verdict.json"
+$draftView = gh release view v0.1.0 --json databaseId,isDraft | ConvertFrom-Json
+if ($draftView.isDraft -ne $true) { throw "release must remain a draft during asset verification" }
+$draft = gh api -H "X-GitHub-Api-Version: $apiVersion" `
+  "repos/barryrwilson/Rimward/releases/$($draftView.databaseId)" | ConvertFrom-Json
+$assetPaths = @(
+  "$candidate/rimward-v0.1.0-dist.zip",
+  "$candidate/rimward-v0.1.0-dist.zip.sha256",
+  "$candidate/release-manifest.json",
+  "$candidate/release-verdict.json"
+)
+$expectedDigests = @{}
+foreach ($assetPath in $assetPaths) {
+  $name = Split-Path $assetPath -Leaf
+  $hash = (Get-FileHash $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $expectedDigests[$name] = "sha256:$hash"
+}
+if ($draft.assets.Count -ne $expectedDigests.Count) { throw "draft asset count mismatch" }
+foreach ($asset in $draft.assets) {
+  if ($expectedDigests[$asset.name] -ne $asset.digest) { throw "draft asset digest mismatch: $($asset.name)" }
+}
+gh release edit v0.1.0 --draft=false
 $release = gh api repos/barryrwilson/Rimward/releases/tags/v0.1.0 | ConvertFrom-Json
 if ($release.immutable -ne $true) { throw "published release is not immutable" }
 gh release view v0.1.0 --json tagName,targetCommitish,url,assets

@@ -16,8 +16,13 @@ deployment is part of this release.
   and separate music, effects, voice, and UI volume.
 - Use three manual Berth Records alongside autosave, recover from runtime
   errors, and retain the zero-cost death-recovery path.
-- Use the loopback-only agent bridge to observe and play the same game,
-  including a live, ordinary-physics outer-pad approach, dock, and undock.
+
+### Developer and verification tooling
+
+- The source repository's loopback-only agent bridge can observe and play the
+  same game, including a live, ordinary-physics outer-pad approach, dock, and
+  undock. The bridge requires a source checkout, Node.js, and a debug-enabled
+  Chrome session; it is not bundled in the static `dist/` download.
 
 ### Known limitations
 

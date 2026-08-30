@@ -78,7 +78,6 @@ try {
     commitSha = $actualSha
     distribution = 'static-dist'
     entrypoint = 'dist/index.html'
-    files = $distFiles.Count
     archive = [ordered]@{
       name = $archiveName
       sha256 = $digest
