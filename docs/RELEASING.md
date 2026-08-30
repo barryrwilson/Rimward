@@ -85,7 +85,7 @@ not a desktop executable: extract it and serve `dist/` over HTTP at the origin
 root. For example, with Python available:
 
 ```powershell
-python -m http.server 8000 --directory dist
+python -m http.server 8000 --bind 127.0.0.1 --directory dist
 ```
 
 Then open `http://localhost:8000/`. Do not open `index.html` through `file://`
