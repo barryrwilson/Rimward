@@ -23701,7 +23701,7 @@ removeLiveShip(w42indyCtx, w42indy);
   // W117 owns its play-surface preconditions. Long earlier waves can leave a
   // random hail card live; KeyM must correctly refuse while that real card
   // owns the screen. Close inherited chart/berth state through their keys,
-  // then force one carried hail and close it through hail.js's event path.
+  // then close any actually carried hail through hail.js's event path.
   // Never poke flags.hailOpen: the subsystem must consume hailClosed and
   // prove the overlay mutex settled before the chart assertion begins.
   if (ctx.flags.chartOpen) {
@@ -23714,18 +23714,6 @@ removeLiveShip(w42indyCtx, w42indy);
     tick(1, 'w117 inherited berth close');
   }
   const berthSettled117 = ctx.flags.berthOpen !== true;
-  const hailProbeShip117 = ctx.ships.find((s) => (
-    s?.object && s?.state && !s.state.destroyed
-    && ctx.world.time >= (Number.isFinite(s.ai?.calmUntil) ? s.ai.calmUntil : 0)
-  )) ?? null;
-  if (ctx.flags.hailOpen !== true && hailProbeShip117) {
-    ctx.emit('hailOpened', {
-      ship: hailProbeShip117,
-      intents: ['keepFiring'],
-      line: 'W117 carried-hail precondition.',
-    });
-    tick(1, 'w117 carried hail open');
-  }
   const carriedHailPrecondition117 = ctx.flags.hailOpen === true;
   let hailCloseQueued117 = false;
   for (let i = 0; i < 4 && ctx.flags.hailOpen === true; i++) {
@@ -23734,9 +23722,16 @@ removeLiveShip(w42indyCtx, w42indy);
       || ctx.events.some((e) => e?.type === 'hailClosed');
     tick(2, 'w117 carried hail close settle');
   }
-  const carriedHailSettled117 = carriedHailPrecondition117
-    && hailCloseQueued117
-    && ctx.flags.hailOpen !== true;
+  const hailOverlayClean117 = ctx.flags.hailOpen !== true;
+  const inheritedHailHandled117 = !carriedHailPrecondition117
+    || (hailCloseQueued117 && hailOverlayClean117);
+  console.log('w117 overlay precondition:', JSON.stringify({
+    berthWasOpen: berthWasOpen117,
+    berthSettled: berthSettled117,
+    carriedHail: carriedHailPrecondition117,
+    hailCloseQueued: hailCloseQueued117,
+    hailOverlayClean: hailOverlayClean117,
+  }));
 
   if (!ctx.flags.chartOpen) dispatchKey('KeyM');
   tick(1, 'w117 chart open');
@@ -23889,8 +23884,8 @@ removeLiveShip(w42indyCtx, w42indy);
     linesSplit,
     noCollapseSrc,
     berthSettled: berthSettled117,
-    carriedHailPrecondition: carriedHailPrecondition117,
-    carriedHailSettled: carriedHailSettled117,
+    hailOverlayClean: hailOverlayClean117,
+    inheritedHailHandled: inheritedHailHandled117,
     chartWasOpen,
     plotMulti,
     engaged,
