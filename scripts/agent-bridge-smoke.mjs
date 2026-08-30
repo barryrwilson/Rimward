@@ -33,6 +33,7 @@ const PIN_KEYS = [
   'approachBraked',
   'approachDocked',
   'approachUndocked',
+  'consoleClean',
   'loopAlive',
   'systemTransition',
   'teardownPortsFree',
@@ -406,6 +407,147 @@ async function probeGamePage() {
   return { pages: pages.map((p) => ({ cdpPort: p.cdpPort, type: p.type, url: p.url, title: p.title })), evals };
 }
 
+function gamePageMatches(pageUrl, gameUrl) {
+  try {
+    const page = new URL(String(pageUrl || ''));
+    const game = new URL(String(gameUrl || ''));
+    return page.protocol === game.protocol
+      && page.hostname === game.hostname
+      && page.port === game.port
+      && page.pathname === game.pathname
+      && page.searchParams.get('agent') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function loopbackWs(url) {
+  try {
+    const u = new URL(String(url || ''));
+    const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return (u.protocol === 'ws:' || u.protocol === 'wss:')
+      && (host === '127.0.0.1' || host === 'localhost' || host === '::1');
+  } catch {
+    return false;
+  }
+}
+
+function consoleArgText(arg) {
+  if (!arg || typeof arg !== 'object') return '';
+  if (Object.hasOwn(arg, 'value')) {
+    try { return String(typeof arg.value === 'string' ? arg.value : JSON.stringify(arg.value)); } catch { /* fall through */ }
+  }
+  return String(arg.description || arg.type || '');
+}
+
+async function startConsoleMonitor(gameUrl, waitMs = 15000) {
+  const deadline = Date.now() + waitMs;
+  let page = null;
+  while (Date.now() < deadline) {
+    const pages = await probeCdpPages();
+    page = pages.find((p) => p && p.type === 'page'
+      && gamePageMatches(p.url, gameUrl)
+      && loopbackWs(p.ws)) || null;
+    if (page) break;
+    await sleep(100);
+  }
+  if (!page) throw new Error('game page missing for console monitor');
+
+  const ws = new WebSocket(page.ws);
+  const pending = new Map();
+  const errors = [];
+  let errorCount = 0;
+  let nextId = 0;
+  const record = (kind, text) => {
+    errorCount += 1;
+    if (errors.length < 20) errors.push({ kind, text: String(text || '').slice(0, 500) });
+  };
+  ws.addEventListener('message', (ev) => {
+    let msg;
+    try { msg = JSON.parse(String(ev.data)); } catch { return; }
+    if (msg.id != null) {
+      const waiter = pending.get(msg.id);
+      if (!waiter) return;
+      pending.delete(msg.id);
+      clearTimeout(waiter.timer);
+      if (msg.error) waiter.reject(new Error('console monitor CDP error'));
+      else waiter.resolve(msg.result);
+      return;
+    }
+    if (msg.method === 'Runtime.exceptionThrown') {
+      const details = msg.params && msg.params.exceptionDetails;
+      const exception = details && details.exception;
+      record('uncaught-exception', (exception && exception.description) || (details && details.text));
+    } else if (msg.method === 'Runtime.consoleAPICalled') {
+      const type = msg.params && msg.params.type;
+      if (type === 'error' || type === 'assert') {
+        const args = Array.isArray(msg.params.args) ? msg.params.args : [];
+        record(`console-${type}`, args.map(consoleArgText).join(' '));
+      }
+    } else if (msg.method === 'Log.entryAdded') {
+      const entry = msg.params && msg.params.entry;
+      if (entry && entry.level === 'error') record('browser-log-error', entry.text);
+    }
+  });
+  await new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch { /* ignore */ }
+      reject(new Error('console monitor websocket timeout'));
+    }, 8000);
+    ws.addEventListener('open', () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+    ws.addEventListener('error', () => {
+      clearTimeout(timer);
+      reject(new Error('console monitor websocket failed'));
+    }, { once: true });
+  });
+  const send = (method, params = {}, timeoutMs = 8000) => {
+    const id = ++nextId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error('console monitor CDP timeout'));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      ws.send(JSON.stringify({ id, method, params }));
+    });
+  };
+  try {
+    await send('Runtime.enable');
+    await send('Log.enable');
+  } catch (err) {
+    try { ws.close(); } catch { /* ignore */ }
+    throw err;
+  }
+  return {
+    errors,
+    errorCount: () => errorCount,
+    async eval(expression) {
+      const result = await send('Runtime.evaluate', {
+        expression,
+        returnByValue: true,
+        awaitPromise: true,
+      });
+      if (result && result.exceptionDetails) throw new Error('console monitor eval failed');
+      return result && result.result ? result.result.value : undefined;
+    },
+    close() {
+      for (const waiter of pending.values()) {
+        clearTimeout(waiter.timer);
+        waiter.reject(new Error('console monitor closed'));
+      }
+      pending.clear();
+      try { ws.close(); } catch { /* ignore */ }
+    },
+  };
+}
+
 async function waitHttpOk(url, ms) {
   const t0 = Date.now();
   let last = '';
@@ -476,6 +618,7 @@ async function main() {
   let token = '';
   let lastSnap = null;
   let failNote = '';
+  let consoleMonitor = null;
 
   const teardown = async () => {
     if (bridgeProc && bridgeProc.child && bridgeProc.child.pid) {
@@ -577,6 +720,8 @@ async function main() {
     }
     if (!token) throw new Error('no AGENT_TOKEN on bridge stderr');
     appendLog(runLog, 'token captured');
+    consoleMonitor = await startConsoleMonitor(gameUrl);
+    appendLog(runLog, 'console monitor attached');
 
     const healthDeadline = Date.now() + HEALTH_WAIT_MS;
     let health = null;
@@ -704,6 +849,14 @@ async function main() {
         }
         if (ap && (ap.phase === 'settle' || ap.phase === 'docking' || ap.phase === 'complete')
           && ship && typeof ship.speed === 'number' && ship.speed <= 5) {
+          if (pins.approachBraked !== true) {
+            pins.approachBrakeAt = {
+              phase: ap.phase,
+              range: ap.range,
+              speed: ship.speed,
+              stationRange: station && station.range,
+            };
+          }
           pins.approachBraked = true;
         }
         if (snap && snap.flags && snap.flags.docked === true) {
@@ -711,6 +864,15 @@ async function main() {
             && ap.engaged === false
             && ap.phase === 'complete'
             && ap.reason === 'docked';
+          if (pins.approachDocked) {
+            pins.approachDockAt = {
+              phase: ap.phase,
+              range: ap.range,
+              speed: ship && ship.speed,
+              stationRange: station && station.range,
+              reason: ap.reason,
+            };
+          }
           break;
         }
         if (ap && ap.mode === 'dock' && ap.engaged === false && ap.phase === 'failed') break;
@@ -724,6 +886,18 @@ async function main() {
         snap = await observe();
         pins.approachUndocked = !!(undock && undock.ok === true
           && snap && snap.flags && snap.flags.docked === false);
+        if (pins.approachUndocked) {
+          const uShip = snap.ship || {};
+          const uAp = snap.autopilot || {};
+          const uSt = snap.station || {};
+          pins.approachUndockAt = {
+            phase: uAp.phase,
+            range: uAp.range,
+            speed: uShip.speed,
+            stationRange: uSt.range,
+            docked: snap.flags.docked,
+          };
+        }
         if (!pins.approachUndocked) {
           failNote = failNote || `undock after approach failed token=${undock && undock.token}`;
         }
@@ -800,6 +974,32 @@ async function main() {
     failNote = failNote || (err && err.message ? err.message : 'smoke failed');
     appendLog(runLog, redact(failNote, token));
   } finally {
+    if (consoleMonitor) {
+      try {
+        const fatal = String(await consoleMonitor.eval(
+          "(document.getElementById('fatal') && document.getElementById('fatal').textContent) || ''",
+        ) || '').trim();
+        pins.consoleClean = fatal.length === 0 && consoleMonitor.errorCount() === 0;
+        pins.consoleEvidence = {
+          fatal,
+          errorCount: consoleMonitor.errorCount(),
+          errors: consoleMonitor.errors.map((entry) => ({
+            kind: entry.kind,
+            text: redact(entry.text, token),
+          })),
+        };
+      } catch (err) {
+        pins.consoleClean = false;
+        pins.consoleEvidence = {
+          error: err && err.message ? err.message : 'console probe failed',
+        };
+      } finally {
+        consoleMonitor.close();
+      }
+    } else {
+      pins.consoleClean = false;
+      pins.consoleEvidence = { error: 'console monitor not attached' };
+    }
     await teardown();
     appendLog(runLog, `teardownPortsFree=${pins.teardownPortsFree}`);
   }
