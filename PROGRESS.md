@@ -6294,3 +6294,20 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   wave-2 "gate hygiene" flake family). Re-run to confirm green; fixing it means
   pinning the demand/tribute setup against soak-era fear and cargo drift, which
   is a harness job, not a gameplay one.
+
+## 2026-08-29 — Release-readiness standing note (supersedes older boot note)
+
+- The older “ONE known intermittent” statement above is historical, not the
+  current release policy. Issue #20 seeded the full boot world and proved 20/20
+  local plus 3/3 hosted passes on one tree. REL-003 later isolated an inherited
+  hail/overlay precondition in WAVE117 without weakening its chart assertions.
+- `master` requires checks named exactly `Build` and `Boot harness`. Release
+  candidates additionally run the focused, bridge, live-browser, and dependency
+  gates against one explicit 40-character SHA and fail closed on missing or
+  contradictory evidence.
+- v0.1.0 is a download-only static `dist/` release. The approved archive,
+  SHA-256 checksum, manifest, and final verdict are generated together under
+  `out/release-candidate/`; generated `dist/` and evidence remain uncommitted.
+- RW-010 is explicitly deferred until after v0.1.0. See `CHANGELOG.md` and
+  `docs/RELEASING.md` for the support boundary, exact commands, and immutable
+  replacement procedure.

@@ -4,6 +4,7 @@
  * results of later gates. This script only summarizes their recorded outcomes.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +17,7 @@ const gateKeys = [
   ['nodeSetup', 'NODE_SETUP_OUTCOME'],
   ['npmCi', 'NPM_CI_OUTCOME'],
   ['build', 'BUILD_OUTCOME'],
+  ['releasePackage', 'PACKAGE_OUTCOME'],
   ['bootHarness', 'BOOT_OUTCOME'],
   ['focusedRegressions', 'FOCUSED_OUTCOME'],
   ['agentBridgeSmoke', 'BRIDGE_OUTCOME'],
@@ -27,6 +29,14 @@ const gateKeys = [
 async function readJson(relativePath) {
   try {
     return JSON.parse(await readFile(path.join(root, relativePath), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function readText(relativePath) {
+  try {
+    return await readFile(path.join(root, relativePath), 'utf8');
   } catch {
     return null;
   }
@@ -61,14 +71,34 @@ function browserEvidence(probe, collectionKey) {
 
 await mkdir(outDir, { recursive: true });
 
-const [focused, rw008, opt001, audit, productionAudit, bridgePins] = await Promise.all([
+const [focused, rw008, opt001, audit, productionAudit, bridgePins, packageJson, releaseManifest] = await Promise.all([
   readJson('out/release-candidate/focused-regressions.json'),
   readJson('out/rw008/verify/probes.json'),
   readJson('out/w143/opt001/verify/probes.json'),
   readJson('out/release-candidate/npm-audit.json'),
   readJson('out/release-candidate/npm-audit-production.json'),
   readBridgePins(),
+  readJson('package.json'),
+  readJson('out/release-candidate/release-manifest.json'),
 ]);
+
+const archiveName = typeof releaseManifest?.archive?.name === 'string'
+  ? releaseManifest.archive.name
+  : null;
+const archiveNameSafe = archiveName != null && path.basename(archiveName) === archiveName;
+let archiveBytes = null;
+let archiveDigest = null;
+let checksumText = null;
+if (archiveNameSafe) {
+  try {
+    const archive = await readFile(path.join(outDir, archiveName));
+    archiveBytes = archive.byteLength;
+    archiveDigest = createHash('sha256').update(archive).digest('hex');
+  } catch {
+    // Missing archive is reported by the fail-closed evidence checks below.
+  }
+  checksumText = await readText(`out/release-candidate/${archiveName}.sha256`);
+}
 
 const gates = Object.fromEntries(gateKeys.map(([key, env]) => [key, {
   outcome: process.env[env] || 'unknown',
@@ -125,6 +155,17 @@ function exactNames(actual, required) {
 }
 
 const evidenceChecks = {
+  packageVersion: releaseManifest?.version === packageJson?.version
+    && releaseManifest?.tag === `v${packageJson?.version}`
+    && archiveName === `rimward-v${packageJson?.version}-dist.zip`,
+  packageSourceSha: releaseManifest?.commitSha === expectedSha,
+  packageArchive: archiveNameSafe
+    && releaseManifest?.distribution === 'static-dist'
+    && releaseManifest?.entrypoint === 'dist/index.html'
+    && archiveBytes > 0
+    && archiveBytes === releaseManifest?.archive?.bytes
+    && archiveDigest === releaseManifest?.archive?.sha256
+    && checksumText?.trim() === `${archiveDigest}  ${archiveName}`,
   focusedRegressions: focused?.verdict === 'PASS'
     && exactNames(focusedChecks.map((check) => check?.name), requiredFocusedChecks)
     && focusedChecks.every((check) => check?.pass === true),
@@ -150,7 +191,7 @@ const pass = shaVerified
   && Object.values(evidenceChecks).every(Boolean);
 
 const result = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   verdict: pass ? 'PASS' : 'FAIL',
   requestedSha: expectedSha || null,
   checkedOutSha: checkedOutSha || null,
@@ -163,6 +204,11 @@ const result = {
     optionalSurfaces: opt001Evidence,
   },
   bridge: bridgeEvidence,
+  releasePackage: {
+    manifest: releaseManifest,
+    observedArchiveBytes: archiveBytes,
+    observedArchiveSha256: archiveDigest,
+  },
   dependencyAudit: {
     allDependencies: auditCounts,
     productionDependencies: productionAuditCounts,
@@ -201,6 +247,8 @@ const summary = [
   `Bridge pins passed: ${requiredBridgePins.filter((key) => bridgePins?.[key] === true).length}/${requiredBridgePins.length}.`,
   '',
   `Bridge ports released: ${bridgePins?.teardownPortsFree === true ? 'yes' : 'no or missing'}.`,
+  '',
+  `Release package: ${archiveName || 'missing'} (${archiveDigest || 'missing checksum'}).`,
   '',
   `Full dependency audit high/critical: ${auditCounts?.high ?? 'missing'}/${auditCounts?.critical ?? 'missing'}.`,
   '',
