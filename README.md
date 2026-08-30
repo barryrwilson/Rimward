@@ -25,6 +25,22 @@ WAVE30 demand/pay and WAVE127/WAVE132 Agent API fixtures. The GitHub boot
 job is a required merge check. Runtime-error overlay pins run with
 `npm run test:runtime-error-ux`.
 
+`master` requires the GitHub checks named exactly `Build` and `Boot harness`.
+For a release candidate, dispatch the `Release candidate` workflow with a full
+40-character commit SHA. The workflow checks out and verifies that exact SHA,
+runs install, build, boot, focused regressions, bridge smoke, both live-browser
+probes, and the dependency audit, then uploads bounded evidence with one final
+JSON/Markdown verdict. A release PR records independent approval when one is
+available; otherwise it includes an explicit security/regression self-review.
+The artifact retains full and deployable-runtime dependency audits;
+high-severity findings in either tree fail the release gate. The integrated
+workflow has a 60-minute Windows budget because the complete local boot harness
+can take about five minutes; the ordinary required `Build` and `Boot harness`
+jobs stay on Ubuntu.
+
+REL-001, REL-002, and REL-004 are integrated. A release is green only when the
+workflow passes against the final full SHA from `master`.
+
 ## Work tracking
 
 - [Remaining work](docs/REMAINING-WORK.md) is the compact inventory of current

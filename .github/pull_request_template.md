@@ -15,6 +15,15 @@ Closes #
 
 Evidence:
 
+## Review policy
+
+For a release PR, record an independent approval when a reviewer is available.
+If one is not available, explicitly document the security and regression
+self-review here; a green check alone is not the review record.
+
+- Independent approval, or reason unavailable:
+- Security/regression self-review:
+
 ## Risk and follow-up
 
 - Architecture/security/regression risks:

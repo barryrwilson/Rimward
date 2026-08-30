@@ -1,0 +1,200 @@
+name: Release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit SHA to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ inputs.sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Final-SHA release verdict
+    # The bridge smoke owns Windows Chrome/process teardown. Keep the complete
+    # verdict on one runner so every gate observes the same checked-out tree.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Validate requested SHA
+        id: requested
+        shell: pwsh
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+        run: |
+          if ($env:RELEASE_SHA -match '^[0-9a-fA-F]{40}$') {
+            "valid=true" >> $env:GITHUB_OUTPUT
+          else
+            "valid=false" >> $env:GITHUB_OUTPUT
+            Write-Error "sha must be a full 40-character hexadecimal commit SHA"
+            exit 1
+          }
+
+      - name: Check out requested SHA
+        id: checkout
+        if: always() && steps.requested.outputs.valid == 'true'
+        continue-on-error: true
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checked-out SHA
+        id: source
+        if: always() && steps.checkout.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:RELEASE_SHA.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            Write-Error "checked out $actual instead of requested $expected"
+            exit 1
+          }
+          "sha=$actual" >> $env:GITHUB_OUTPUT
+
+      - name: Set up Node
+        id: node
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        id: install
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        run: npm ci
+
+      - name: Build
+        id: build
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        run: npm run build
+
+      - name: Boot harness
+        id: boot
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        run: npm run test:boot
+
+      - name: Focused release regressions
+        id: focused
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        run: npm run test:release-focused
+
+      - name: Agent bridge smoke
+        id: bridge
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/release-candidate | Out-Null
+          & npm run agent:bridge:smoke 2>&1 |
+            Tee-Object -FilePath out/release-candidate/agent-bridge-smoke.txt
+          $bridgeExit = $LASTEXITCODE
+          if ($bridgeExit -ne 0) { exit $bridgeExit }
+
+      - name: Models live browser gate
+        id: rw008
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        env:
+          RW008_SHA: ${{ inputs.sha }}
+          RW008_PROFILE: ${{ runner.temp }}/rw008-chrome-profile
+        run: npm run test:rw008-live
+
+      - name: OPT-001 live browser gate
+        id: opt001
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        env:
+          OPT001_SHA: ${{ inputs.sha }}
+          OPT001_PROFILE: ${{ runner.temp }}/opt001-chrome-profile
+        run: npm run test:opt001-live
+
+      - name: Dependency audit
+        id: audit
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/release-candidate | Out-Null
+          & npm audit --audit-level=high --json |
+            Out-File -Encoding utf8 out/release-candidate/npm-audit.json
+          $fullAuditExit = $LASTEXITCODE
+          & npm audit --omit=dev --audit-level=high --json |
+            Out-File -Encoding utf8 out/release-candidate/npm-audit-production.json
+          $productionAuditExit = $LASTEXITCODE
+          if ($fullAuditExit -ne 0 -or $productionAuditExit -ne 0) {
+            Write-Host "dependency audit failed: full=$fullAuditExit production=$productionAuditExit"
+            exit 1
+          }
+
+      - name: Write final verdict
+        id: verdict
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+          CHECKED_OUT_SHA: ${{ steps.source.outputs.sha }}
+          NODE_SETUP_OUTCOME: ${{ steps.node.outcome }}
+          NPM_CI_OUTCOME: ${{ steps.install.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BOOT_OUTCOME: ${{ steps.boot.outcome }}
+          FOCUSED_OUTCOME: ${{ steps.focused.outcome }}
+          BRIDGE_OUTCOME: ${{ steps.bridge.outcome }}
+          RW008_OUTCOME: ${{ steps.rw008.outcome }}
+          OPT001_OUTCOME: ${{ steps.opt001.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+        run: node scripts/release-verdict.mjs
+
+      - name: Publish summary
+        if: always() && steps.verdict.outcome == 'success'
+        shell: pwsh
+        run: Get-Content out/release-candidate/release-verdict.md >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload bounded release evidence
+        if: always() && steps.source.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidate-${{ steps.source.outputs.sha }}
+          path: |
+            out/release-candidate/
+            out/w136/smoke/run.log
+            out/w136/smoke/last-observe.json
+            out/w136/smoke/cdp-probe.json
+            out/rw008/verify/
+            out/w143/opt001/verify/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Enforce final verdict
+        if: always()
+        shell: pwsh
+        env:
+          REQUEST_OUTCOME: ${{ steps.requested.outcome }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          SOURCE_OUTCOME: ${{ steps.source.outcome }}
+          VERDICT_OUTCOME: ${{ steps.verdict.outcome }}
+        run: |
+          if ($env:REQUEST_OUTCOME -ne 'success') { exit 1 }
+          if ($env:CHECKOUT_OUTCOME -ne 'success') { exit 1 }
+          if ($env:SOURCE_OUTCOME -ne 'success') { exit 1 }
+          if ($env:VERDICT_OUTCOME -ne 'success') { exit 1 }
+          $verdict = Get-Content out/release-candidate/release-verdict.json -Raw |
+            ConvertFrom-Json
+          if ($verdict.verdict -ne 'PASS') { exit 1 }
