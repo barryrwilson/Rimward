@@ -1,7 +1,6 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-08-29, after RW-004 / RW-006 / RW-007, issue #20, the
-OPT-001 evidence refresh, RW-002 PR3–PR5 / RW-005 (#29), and RW-009 (#27).
+Inventory date: 2026-08-30, after v0.1.0 publication and REL-006.
 
 This is the compact backlog index. GitHub Project **Rimward** is the operational
 queue used by Orca AI. The wishlist remains the product-intent and playtest
@@ -22,7 +21,7 @@ source; `PROGRESS.md` remains historical and must be read newest-first.
 | [REL-002](https://github.com/barryrwilson/Rimward/issues/32) | Maintenance | Implemented; verification complete | Isolate every Models live-probe run with fresh Vite/CDP ports, a unique external Chrome profile, exact CDP target selection, startup console capture, and condition-specific readiness evidence. Local verification: three consecutive `npm run test:rw008-live` runs completed V1–V10 with zero console errors/exceptions on the same tree; `npm run test:opt001-live`, `npm run build`, and `npm run test:boot` also pass. | [RW-008/RW-009 release-gate follow-up](https://github.com/barryrwilson/Rimward/issues/32) |
 | [REL-004](https://github.com/barryrwilson/Rimward/issues/34) | P2 | Implemented; verification complete | Resolve the release-blocking development-tool advisories without downgrading the GLTF toolchain. Scoped npm overrides select patched `nanoid@3.3.18` for PostCSS and deduplicate GLTF CLI onto `sharp@0.35.4`; full and deployable-runtime audits are both clean. The CLI's declared `sharp~0.34.5` range does not yet include `0.35.4`, so this is a deliberate compatibility exception verified by clean install, build, boot, all 228 ship GLBs, ship optimization, and PNG-to-WebP texture resize/compression plus output validation. | [Ship asset pipeline](ShipAssetPipeline.md) |
 | [REL-003](https://github.com/barryrwilson/Rimward/issues/33) | P1 | Implemented; verification complete | Protect `master` with the exact `Build` and `Boot harness` checks. The release-candidate workflow accepts one full commit SHA, verifies the checked-out tree, runs every release gate without hiding later results, uploads bounded evidence, and emits one fail-closed verdict. Hosted run [33287017191](https://github.com/barryrwilson/Rimward/actions/runs/33287017191) passed on exact master SHA `aabce00c94102cace49b865f933bfba814b86c71`, including bridge 14/14, Models 11/11, OPT-001 7/7, clean consoles and both zero-finding audit trees. | [Release-readiness audit](https://github.com/barryrwilson/Rimward/issues/33) |
-| [REL-005](https://github.com/barryrwilson/Rimward/issues/35) | P1 | Release procedure and packaging implemented; publication follows one final-SHA pass | Publish v0.1.0 as an immutable, download-only static `dist/` archive. The release workflow produces the versioned ZIP, checksum, manifest, and final verdict from the same exact SHA. Release notes record player-visible changes, deferred RW-010 scope, known limitations, verification, and the tested GLTF/sharp compatibility exception. | [Release procedure](RELEASING.md); [release notes](../CHANGELOG.md) |
+| [REL-005](https://github.com/barryrwilson/Rimward/issues/35) | P1 | Implemented; v0.1.0 published | Publish v0.1.0 as an immutable, download-only static `dist/` archive. The release workflow produces the versioned ZIP, checksum, manifest, and final verdict from the same exact SHA. GitHub Release `v0.1.0` is on master `4e70a714`. Release notes record player-visible changes, deferred RW-010 scope, known limitations, verification, and the tested GLTF/sharp compatibility exception. | [Release procedure](RELEASING.md); [release notes](../CHANGELOG.md); [v0.1.0](https://github.com/barryrwilson/Rimward/releases/tag/v0.1.0) |
 
 ## Optional follow-ups
 
@@ -36,6 +35,7 @@ already marked done.
 | [OPT-003](https://github.com/barryrwilson/Rimward/issues/10) | P3 | Add the AI-05 home-berth safe bubble after a fresh starter-run pacing check. |
 | [OPT-004](https://github.com/barryrwilson/Rimward/issues/11) | P3 | Harden CTL-04 `fireHeld` behavior while station/overlay input owns the controls. |
 | [OPT-005](https://github.com/barryrwilson/Rimward/issues/12) | P3 | Extend MSN-04 duplicate prevention to non-mining mission families if current generation can still produce meaningful duplicates. |
+| [REL-006](https://github.com/barryrwilson/Rimward/issues/36) | P3 | Post-v0.1.0; implemented; local verification complete. The production build enforces a 1,800,000-byte minified / 525 KiB gzip JavaScript budget and a runtime-only browser dependency boundary. A reproducible composition report and 8,000 ms cold local title-ready target are documented in [ProductionPerformanceBudget.md](ProductionPerformanceBudget.md); five cache-disabled production starts measured 4,187.0 ms median / 6,601.3 ms slowest with zero console errors. `npm run bundle:report`, `npm run build`, and `npm run test:boot` passed on this tree. Models-only lazy loading is measured and deliberately parked because its small shell saving would replace the load-bearing synchronous initialization contract. |
 
 ## Not remaining work
 

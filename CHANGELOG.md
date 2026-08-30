@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+Post-v0.1.0 work. These notes are not part of the published v0.1.0 GitHub Release.
+
+### Developer and verification tooling
+
+- Production JavaScript is release-gated at 1,800,000 minified bytes and 525
+  KiB gzip, with a reproducible module-composition and browser-boundary report.
+
+### Verification and security
+
+The production browser module census independently enforces the runtime `three`
+boundary. Build and asset tools and the agent bridge cannot enter the browser
+bundle. The local target for cold title readiness is 8,000 ms. Five final-tree
+starts in a blank, cache-disabled Chrome profile measured 4,187.0 ms median /
+6,601.3 ms slowest with zero console errors.
+
 ## v0.1.0 — 2026-08-29
 
 Rimward v0.1.0 is the first versioned, downloadable release of the browser
