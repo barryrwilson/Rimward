@@ -78,6 +78,8 @@ try {
     commitSha = $actualSha
     distribution = 'static-dist'
     entrypoint = 'dist/index.html'
+    basePath = '/'
+    requiresHttp = $true
     archive = [ordered]@{
       name = $archiveName
       sha256 = $digest

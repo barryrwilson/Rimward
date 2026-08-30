@@ -80,6 +80,17 @@ The same artifact contains:
 - `release-manifest.json`
 - `release-verdict.json` and the bounded validation evidence
 
+The ZIP contains one top-level `dist/` directory. It is a web-root artifact,
+not a desktop executable: extract it and serve `dist/` over HTTP at the origin
+root. For example, with Python available:
+
+```powershell
+python -m http.server 8000 --directory dist
+```
+
+Then open `http://localhost:8000/`. Do not open `index.html` through `file://`
+or mount this build only below a URL subpath; its assets use root-absolute URLs.
+
 Verify the archive before publication:
 
 ```powershell

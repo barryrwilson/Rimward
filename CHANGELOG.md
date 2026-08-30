@@ -30,6 +30,9 @@ deployment is part of this release.
   Models loading retry and disposal work is also not included.
 - Distribution is download-only. There is no hosted service or deployment to
   roll back for v0.1.0.
+- The extracted `dist/` directory must be served over HTTP at an origin root.
+  Direct `file://` use and subpath-only hosting are not supported because the
+  generated build uses root-absolute `/assets/` URLs.
 - Berth Records are overwrite-only: slots cannot be renamed, annotated, or
   deleted, and manual berths do not replace autosave or automatic recovery.
 

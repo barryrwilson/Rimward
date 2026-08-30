@@ -163,6 +163,8 @@ const evidenceChecks = {
   packageArchive: archiveNameSafe
     && releaseManifest?.distribution === 'static-dist'
     && releaseManifest?.entrypoint === 'dist/index.html'
+    && releaseManifest?.basePath === '/'
+    && releaseManifest?.requiresHttp === true
     && releaseManifest?.archive?.checksumFile === `${archiveName}.sha256`
     && archiveBytes > 0
     && archiveBytes === releaseManifest?.archive?.bytes
