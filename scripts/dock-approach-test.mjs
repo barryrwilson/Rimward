@@ -23,8 +23,14 @@ function pin(name, ok) {
   }
 }
 
-function makeCtx(x = 300, speed = 0) {
-  const position = new THREE.Vector3(x, 0, 0);
+function makeCtx(x = 300, speed = 0, opts = {}) {
+  const sx = Number.isFinite(opts.stationX) ? opts.stationX : 0;
+  const sy = Number.isFinite(opts.stationY) ? opts.stationY : 0;
+  const sz = Number.isFinite(opts.stationZ) ? opts.stationZ : 0;
+  const px = Number.isFinite(opts.x) ? opts.x : x;
+  const py = Number.isFinite(opts.y) ? opts.y : 0;
+  const pz = Number.isFinite(opts.z) ? opts.z : 0;
+  const position = new THREE.Vector3(px, py, pz);
   const quaternion = new THREE.Quaternion().setFromUnitVectors(
     new THREE.Vector3(0, 0, -1),
     new THREE.Vector3(-1, 0, 0),
@@ -39,13 +45,17 @@ function makeCtx(x = 300, speed = 0) {
     },
     world: { time: 0, currentSystem: 'freehold', nav: { autopilot: false } },
     systems: {
-      freehold: { station: { position: [0, 0, 0] }, gates: [], sunRadius: 0 },
+      freehold: {
+        station: { position: [sx, sy, sz] },
+        gates: [],
+        sunRadius: Number.isFinite(opts.sunRadius) ? opts.sunRadius : 0,
+      },
       veridian: { station: { position: [1000, 0, 0] }, gates: [], sunRadius: 0 },
     },
     station: {
-      inZone: Math.abs(x) <= 45,
+      inZone: position.distanceTo(new THREE.Vector3(sx, sy, sz)) <= 45,
       name: 'Freehold Landing',
-      position: new THREE.Vector3(0, 0, 0),
+      position: new THREE.Vector3(sx, sy, sz),
     },
     ship: {
       object: { position, quaternion },
@@ -82,12 +92,14 @@ function makeCtx(x = 300, speed = 0) {
   return ctx;
 }
 
-function flyFixture(x, facingX) {
-  const ctx = makeCtx(x, 0);
-  ctx.ship.object.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, 0, -1),
-    new THREE.Vector3(facingX, 0, 0),
-  );
+function flyFixture(x, facingX, setup) {
+  const ctx = typeof setup === 'function' ? setup() : makeCtx(x, 0);
+  if (typeof setup !== 'function') {
+    ctx.ship.object.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(facingX, 0, 0),
+    );
+  }
   const sys = initAutopilot(ctx);
   const token = tryApproachDock(ctx);
   const dt = 1 / 60;
@@ -177,6 +189,25 @@ pin('600u far-side fixture routes around station and docks', farSide.token === '
   && farSide.docked === true && farSide.reason === 'docked'
   && farSide.phase === 'complete' && farSide.pulseFrames >= 1
   && farSide.minRange > 34.4);
+
+const liveSpawn = flyFixture(0, 0, () => {
+  const ctx = makeCtx(0, 0, {
+    x: 0, y: 30, z: 800,
+    stationX: 120, stationY: 20, stationZ: 620,
+    sunRadius: 60,
+  });
+  ctx.ship.object.quaternion.identity();
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.config.world.sunPosition = new THREE.Vector3(0, 0, 0);
+  return ctx;
+});
+if (!liveSpawn.docked) {
+  console.log('live-spawn diagnostic', JSON.stringify(liveSpawn));
+}
+pin('live Freehold spawn idle-turns then docks', liveSpawn.token === ''
+  && liveSpawn.docked === true && liveSpawn.reason === 'docked'
+  && liveSpawn.phase === 'complete' && liveSpawn.pulseFrames >= 1
+  && liveSpawn.minRange > 34.4);
 
 let ctx = makeCtx();
 let sys = initAutopilot(ctx);

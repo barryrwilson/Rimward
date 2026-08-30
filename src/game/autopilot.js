@@ -780,7 +780,9 @@ function dockTick(ctx) {
     } else if (detouring) {
       _aim.set(dockDetourX, dockDetourY, dockDetourZ);
     } else {
-      _aim.set(planned.ax, planned.ay, planned.az);
+      // Ignore route-AP widen. From Freehold spawn the widen waypoint sits
+      // toward the pad, so a still-turning hull dives into the cylinder.
+      _aim.copy(points.stage);
     }
     // A far-side detour keeps station lookahead and stays at creep so hull
     // inertia cannot cut the tangent. Once the stage chord is direct, omit
@@ -807,37 +809,34 @@ function dockTick(ctx) {
     const braking = dockShouldBrake(
       stageDistance, speed, acceleration, DOCK_STAGE_BRAKE_BUFFER,
     );
-    const throttle = braking || detouring
-      ? 0
-      : Math.max(0, Math.min(1, throttleForPath(
-        planned.hold, planned.intercept, steer.align, planned.distGate, planned.turnR,
-      )));
+    const aligned = steer.align >= 0.97;
+    // A far-side detour must keep creep, or the hull stops on the keep ring
+    // and the 10 s blocked watch fires before it reaches +X. A clear chord
+    // from live spawn must idle-turn first: spawn faces the station, and
+    // thrusting off-axis dives past the pad at 30 u/s.
+    const needTurn = !aligned && !detouring;
     const stageOvershot = !dockRecovering
       && !detouring
       && Number.isFinite(dockBestRange)
       && stageDistance > dockBestRange + 2
-      && steer.align < 0.97;
+      && !aligned;
     const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
     if (stageOvershot && !dockRecovering) {
       dockRecovering = true;
       dockProgressAt = now;
       dockBestHeading = Infinity;
     }
-    // Dock mode has an authored zero-speed primitive. A planner widen/hold
-    // that asks for zero throttle must stop, not inherit route AP's creep.
-    // If inertia carries the hull past the small arrival band, stop and turn
-    // back before resuming creep; otherwise a 30 u/s minimum-speed turn can
-    // orbit the point forever.
+    // Dock stage never inherits route cruise. Throttle stays 0: idle is a
+    // full stop, and aligned non-idle is the 30 u/s creep floor.
     if (dockRecovering) {
       // Recovery stays on the literal stage point through arrival. Leaving
       // recovery as soon as the nose aligns re-enters planner widen at rest
       // and can oscillate forever between two nearby headings.
-      ap.idle = braking || steer.align < 0.97;
+      ap.idle = braking || !aligned;
       ap.throttle = 0;
     } else {
-      ap.idle = braking || stageOvershot
-        || (throttle < 0.02 && !detouring);
-      ap.throttle = stageOvershot ? 0 : throttle;
+      ap.idle = braking || stageOvershot || needTurn;
+      ap.throttle = 0;
     }
     if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs)) return;
     return;
