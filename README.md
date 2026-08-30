@@ -41,6 +41,22 @@ jobs stay on Ubuntu.
 REL-001, REL-002, and REL-004 are integrated. A release is green only when the
 workflow passes against the final full SHA from `master`.
 
+## Releases
+
+Versioned releases are download-only static builds. Each GitHub Release
+attaches a `rimward-v<version>-dist.zip`, SHA-256 checksum, manifest, and final
+release verdict tied to one validated commit. `dist/` remains generated and is
+never committed.
+
+Extract the archive and serve its `dist/` directory over HTTP at the origin
+root; the generated build uses root-absolute `/assets/` URLs. Opening
+`dist/index.html` through `file://` or mounting it only below a URL subpath is
+not a supported v0.1.0 distribution mode.
+
+See [the release procedure](docs/RELEASING.md) for the exact Node 22 commands,
+validation gates, publication checklist, and immutable replacement policy.
+Release notes and known limitations are maintained in [CHANGELOG.md](CHANGELOG.md).
+
 ## Work tracking
 
 - [Remaining work](docs/REMAINING-WORK.md) is the compact inventory of current

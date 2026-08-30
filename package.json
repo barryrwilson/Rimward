@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "release:package": "pwsh -NoProfile -File scripts/package-release.ps1",
     "preview": "vite preview",
     "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs",
     "test:dock-approach": "node --import ./scripts/with-css-stub.mjs scripts/dock-approach-test.mjs",

@@ -83,6 +83,12 @@ jobs:
         continue-on-error: true
         run: npm run build
 
+      - name: Package versioned dist artifact
+        id: package
+        if: always() && steps.source.outcome == 'success'
+        continue-on-error: true
+        run: npm run release:package -- -Sha ${{ inputs.sha }}
+
       - name: Boot harness
         id: boot
         if: always() && steps.source.outcome == 'success'
@@ -153,6 +159,7 @@ jobs:
           NODE_SETUP_OUTCOME: ${{ steps.node.outcome }}
           NPM_CI_OUTCOME: ${{ steps.install.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
+          PACKAGE_OUTCOME: ${{ steps.package.outcome }}
           BOOT_OUTCOME: ${{ steps.boot.outcome }}
           FOCUSED_OUTCOME: ${{ steps.focused.outcome }}
           BRIDGE_OUTCOME: ${{ steps.bridge.outcome }}
