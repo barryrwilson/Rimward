@@ -30,11 +30,14 @@
  * Run: node scripts/rw008-live-probe.mjs
  * Output: out/rw008/verify/ (ignored path; stills are not committed).
  *
- * Vite 5187 / CDP 9487. The Chrome profile lives outside the repository.
+ * Vite and CDP use isolated loopback ports. Each run gets a fresh Chrome
+ * profile outside the repository and removes it during teardown.
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -63,11 +66,7 @@ function findChrome() {
 }
 
 const CHROME = findChrome();
-const PORT = 5187;
-const CDP_PORT = 9487;
-const APP = `http://127.0.0.1:${PORT}/`;
-const PROFILE = process.env.RW008_PROFILE
-  || join(process.env.TEMP || process.env.TMP || '.', 'rw008-chrome-profile');
+const PROFILE_ROOT = process.env.RW008_PROFILE || tmpdir();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = [];
@@ -82,7 +81,10 @@ const FLOWS = ['V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V1
 
 const results = {
   commit: process.env.RW008_SHA || null,
-  port: PORT,
+  port: null,
+  cdpPort: null,
+  profile: null,
+  readiness: null,
   flows: {},
   consoleErrors: [],
   exceptions: [],
@@ -93,18 +95,47 @@ function record(key, pass, detail) {
   say(pass ? 'PASS' : 'FAIL', key, JSON.stringify(detail).slice(0, 700));
 }
 
-/** Stop a child and everything it started. Vite and Chrome both fork. */
-function killTree(child) {
-  if (!child || child.exitCode != null) return;
+/** Stop a child and everything it started, then wait for the tree to leave. */
+async function killTree(child) {
+  if (!child?.pid) return;
   if (WIN) {
-    try {
-      spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-      return;
-    } catch { /* fall through */ }
+    const stopped = await new Promise((resolve) => {
+      try {
+        const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'],
+          { stdio: 'ignore' });
+        killer.once('error', () => resolve(false));
+        killer.once('exit', (code) => resolve(code === 0 || child.exitCode != null));
+      } catch { resolve(false); }
+    });
+    if (stopped) return;
   } else {
     try { process.kill(-child.pid, 'SIGKILL'); return; } catch { /* gone */ }
   }
   try { child.kill('SIGKILL'); } catch { /* already gone */ }
+}
+
+/** Reserve an unused loopback port for this run. */
+async function availablePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const port = server.address().port;
+  await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  return port;
+}
+
+function failReadiness(condition, state, extra = {}) {
+  results.readiness = {
+    failedCondition: condition,
+    state,
+    consoleErrors: extra.consoleErrors || [],
+    exceptions: extra.exceptions || [],
+    ...extra,
+  };
+  const detail = JSON.stringify(results.readiness).slice(0, 2000);
+  return new Error(`readiness failed: ${condition}; ${detail}`);
 }
 
 class Cdp {
@@ -199,35 +230,69 @@ const FOCUS = `(() => {
 })()`;
 
 async function main() {
-  await mkdir(PROFILE, { recursive: true });
+  await mkdir(PROFILE_ROOT, { recursive: true });
   await mkdir(outDir, { recursive: true });
+  const requestedPort = process.env.RW008_PORT;
+  const port = requestedPort == null ? await availablePort() : Number(requestedPort);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`RW008_PORT must be an integer from 1 through 65535; got ${requestedPort}`);
+  }
+  const profile = await mkdtemp(join(PROFILE_ROOT, 'rw008-chrome-'));
+  const app = `http://127.0.0.1:${port}/`;
+  results.port = port;
+  results.profile = profile;
   let vite = null;
   let chrome = null;
   let cdp = null;
+  let failure = null;
+  const viteStdout = [];
+  const viteStderr = [];
+  const chromeStderr = [];
+  let viteSpawnError = null;
+  let chromeSpawnError = null;
 
   try {
     // ---- Vite ---------------------------------------------------------
     vite = spawn(
       process.execPath,
       [join(repo, 'node_modules', 'vite', 'bin', 'vite.js'),
-        '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
+        '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
       { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN },
     );
-    vite.stdout.on('data', (b) => say('vite', String(b).trim().slice(0, 160)));
-    vite.stderr.on('data', (b) => say('vite!', String(b).trim().slice(0, 160)));
+    vite.once('error', (err) => { viteSpawnError = String(err?.message || err); });
+    vite.stdout.on('data', (b) => {
+      const text = String(b).trim().slice(0, 500);
+      if (text) viteStdout.push(text);
+      say('vite', text.slice(0, 160));
+    });
+    vite.stderr.on('data', (b) => {
+      const text = String(b).trim().slice(0, 500);
+      if (text) viteStderr.push(text);
+      say('vite!', text.slice(0, 160));
+    });
     let up = false;
     for (let i = 0; i < 100; i++) {
-      up = await fetch(APP).then((r) => r.ok).catch(() => false);
+      up = await fetch(app).then((r) => r.ok).catch(() => false);
       if (up) break;
+      if (vite.exitCode != null || viteSpawnError) break;
       await sleep(300);
     }
-    if (!up) throw new Error(`vite ${PORT} not serving`);
-    say('vite up', PORT);
+    if (!up) {
+      throw failReadiness('Vite server', {
+        url: app,
+        viteExitCode: vite.exitCode,
+        viteSpawnError,
+        viteStdout: viteStdout.slice(-8),
+        viteStderr: viteStderr.slice(-8),
+      });
+    }
+    say('vite up', port);
 
     // ---- Chrome -------------------------------------------------------
     chrome = spawn(CHROME, [
-      `--remote-debugging-port=${CDP_PORT}`,
-      `--user-data-dir=${PROFILE}`,
+      '--remote-debugging-port=0',
+      '--remote-debugging-address=127.0.0.1',
+      `--user-data-dir=${profile}`,
       '--no-first-run', '--no-default-browser-check',
       '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
       '--ignore-gpu-blocklist', '--enable-webgl',
@@ -237,41 +302,84 @@ async function main() {
       ...(WIN ? [] : ['--no-sandbox', '--disable-dev-shm-usage']),
       'about:blank',
     ], { stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN });
-    say('chrome', CHROME, 'pid', chrome.pid);
+    chrome.once('error', (err) => { chromeSpawnError = String(err?.message || err); });
+    chrome.stderr.on('data', (b) => {
+      const text = String(b).trim().slice(0, 500);
+      if (text) chromeStderr.push(text);
+    });
+    say('chrome', CHROME, 'pid', chrome.pid, 'profile', profile);
 
     let browserWs = null;
-    for (let i = 0; i < 60; i++) {
+    let cdpPort = null;
+    for (let i = 0; i < 100; i++) {
       try {
-        const ver = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`);
+        const active = await readFile(join(profile, 'DevToolsActivePort'), 'utf8');
+        const parsed = Number(active.split(/\r?\n/, 1)[0]);
+        if (!Number.isInteger(parsed) || parsed <= 0) throw new Error('invalid DevToolsActivePort');
+        cdpPort = parsed;
+        const ver = await fetch(`http://127.0.0.1:${cdpPort}/json/version`);
         if (ver.ok) { browserWs = (await ver.json()).webSocketDebuggerUrl; if (browserWs) break; }
       } catch { /* not up yet */ }
+      if (chrome.exitCode != null || chromeSpawnError) break;
       await sleep(200);
     }
-    if (!browserWs) throw new Error('CDP not ready');
+    results.cdpPort = cdpPort;
+    if (!browserWs) {
+      throw failReadiness('Chrome/CDP', {
+        chromeExitCode: chrome.exitCode,
+        chromeSpawnError,
+        cdpPort,
+        chromeStderr: chromeStderr.slice(-8),
+      });
+    }
 
     cdp = new Cdp(browserWs);
     await cdp.ready();
-    await cdp.send('Target.createTarget', { url: APP });
+    const created = await cdp.send('Target.createTarget', { url: 'about:blank' });
+    const targetId = created?.targetId || null;
     cdp.close();
 
     let pageWs = null;
+    let targets = [];
+    let targetListError = null;
     for (let i = 0; i < 50; i++) {
-      const list = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json();
-      const page = list.find((t) => t.type === 'page' && String(t.url || '').includes(String(PORT)));
-      if (page?.webSocketDebuggerUrl) { pageWs = page.webSocketDebuggerUrl; break; }
+      try {
+        const response = await fetch(`http://127.0.0.1:${cdpPort}/json/list`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        targets = await response.json();
+        const page = targets.find((t) => t.type === 'page' && t.id === targetId);
+        if (page?.webSocketDebuggerUrl) { pageWs = page.webSocketDebuggerUrl; break; }
+      } catch (err) {
+        targetListError = String(err?.message || err);
+      }
+      if (chrome.exitCode != null) break;
       await sleep(200);
     }
-    if (!pageWs) throw new Error('page ws missing');
+    if (!pageWs) {
+      throw failReadiness('page target', {
+        targetId,
+        targetListError,
+        targets: targets.map((t) => ({ id: t.id, type: t.type, url: t.url })),
+      });
+    }
     cdp = new Cdp(pageWs);
     await cdp.ready();
     await cdp.send('Runtime.enable');
     await cdp.send('Page.enable');
+    const navigation = await cdp.send('Page.navigate', { url: app });
+    if (navigation?.errorText) {
+      throw failReadiness('page navigation', { url: app, navigation });
+    }
 
     const waitUntil = async (expr, pred, ms = 15000, step = 200) => {
       const t0 = Date.now();
       let last = null;
       while (Date.now() - t0 < ms) {
-        last = await cdp.eval(expr);
+        try {
+          last = await cdp.eval(expr);
+        } catch (err) {
+          last = { evalError: String(err?.message || err) };
+        }
         try { if (pred(last)) return last; } catch { /* keep polling */ }
         await sleep(step);
       }
@@ -282,12 +390,34 @@ async function main() {
     const title = await waitUntil(
       `(() => {
         const b = document.getElementById('rw-title-models');
-        return { hasCtx: !!window.__ctx, hasBtn: !!b, label: b ? b.textContent.trim() : null };
+        const fatal = document.getElementById('fatal');
+        const fatalOpen = !!(fatal && !fatal.hidden && getComputedStyle(fatal).display !== 'none');
+        return {
+          url: location.href,
+          readyState: document.readyState,
+          hasCtx: !!window.__ctx,
+          hasBtn: !!b,
+          label: b ? b.textContent.trim() : null,
+          fatalOpen,
+          fatalText: fatalOpen ? (fatal.textContent || '').trim().slice(0, 1000) : null,
+        };
       })()`,
-      (v) => v && v.hasCtx && v.hasBtn,
+      (v) => !!(v && (v.fatalOpen || (v.hasCtx && v.hasBtn)))
+        || cdp.exceptions.length > 0
+        || cdp.console.some((m) => m.type === 'error' || m.type === 'assert'),
       40000,
     );
-    if (!title?.hasBtn) throw new Error('title MODELS entry never appeared');
+    const startupConsoleErrors = cdp.console
+      .filter((m) => m.type === 'error' || m.type === 'assert')
+      .map((m) => m.text.slice(0, 300));
+    const startupExceptions = cdp.exceptions.map((t) => t.slice(0, 300));
+    const startupState = { consoleErrors: startupConsoleErrors, exceptions: startupExceptions };
+    if (title?.fatalOpen) throw failReadiness('fatal overlay', title, startupState);
+    if (startupExceptions.length) throw failReadiness('console exception', title, startupState);
+    if (startupConsoleErrors.length) throw failReadiness('console error', title, startupState);
+    if (!title?.hasCtx) throw failReadiness('app context', title, startupState);
+    if (!title?.hasBtn) throw failReadiness('title button', title, startupState);
+    results.readiness = { failedCondition: null, state: title, ...startupState };
     say('title up', JSON.stringify(title));
     await cdp.shot('01-title.png');
 
@@ -759,30 +889,53 @@ async function main() {
     }
 
     // ---- console ------------------------------------------------------
-    results.consoleErrors = cdp.console
-      .filter((m) => m.type === 'error' || m.type === 'assert')
-      .map((m) => m.text.slice(0, 300));
-    results.exceptions = cdp.exceptions.map((t) => t.slice(0, 300));
+  } catch (err) {
+    failure = err;
+    results.error = String(err?.message || err);
+    say('FATAL', err?.stack || String(err));
   } finally {
-    if (cdp) cdp.close();
-    killTree(chrome);
-    killTree(vite);
+    if (cdp) {
+      results.consoleErrors = cdp.console
+        .filter((m) => m.type === 'error' || m.type === 'assert')
+        .map((m) => m.text.slice(0, 300));
+      results.exceptions = cdp.exceptions.map((t) => t.slice(0, 300));
+      cdp.close();
+    }
+    results.chromeStderr = chromeStderr.slice(-20);
+    await killTree(chrome);
+    await killTree(vite);
+    try {
+      // Windows can release Chrome's first_party_sets.db a beat after
+      // taskkill reports success. Give handles time to drain, then let rm
+      // retry the exact mkdtemp directory rather than leaking run profiles.
+      await sleep(750);
+      await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+      results.profileRemoved = true;
+    } catch (err) {
+      results.profileRemoved = false;
+      results.profileCleanupError = String(err?.message || err);
+      results.error ||= `profile cleanup failed: ${results.profileCleanupError}`;
+      failure ||= err;
+      say('profile cleanup failed', results.profileCleanupError);
+    }
   }
 
   const missing = FLOWS.filter((f) => !results.flows[f]);
   const failed = FLOWS.filter((f) => results.flows[f] && !results.flows[f].pass);
   const clean = results.consoleErrors.length === 0 && results.exceptions.length === 0;
 
-  await writeFile(join(outDir, 'probes.json'), JSON.stringify(results, null, 2));
-  await writeFile(join(outDir, 'run.log'), log.join('\n'));
-
   say('');
   say('missing:', missing.join(',') || 'none');
   say('failed:', failed.join(',') || 'none');
   say('console errors:', results.consoleErrors.length, 'exceptions:', results.exceptions.length);
 
-  const ok = missing.length === 0 && failed.length === 0 && clean;
+  const ok = !failure && results.profileRemoved === true
+    && missing.length === 0 && failed.length === 0 && clean;
+  results.summary = { missing, failed, clean, ok };
   say(ok ? 'RW008 LIVE PROBE PASS' : 'RW008 LIVE PROBE FAIL');
+
+  await writeFile(join(outDir, 'probes.json'), JSON.stringify(results, null, 2));
+  await writeFile(join(outDir, 'run.log'), log.join('\n'));
   process.exit(ok ? 0 : 1);
 }
 
