@@ -43,3 +43,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:boot
+      - name: Focused reliability regressions
+        run: |
+          npm run test:pause-recovery
+          npm run test:paused-input
+          npm run test:ship-material-release
+          npm run test:agent-bridge

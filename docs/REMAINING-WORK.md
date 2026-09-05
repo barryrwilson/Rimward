@@ -1,6 +1,6 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-08-30, after v0.1.0 publication and REL-006.
+Inventory date: 2026-09-04, including the five reliability review fixes below.
 
 This is the compact backlog index. GitHub Project **Rimward** is the operational
 queue used by Orca AI. The wishlist remains the product-intent and playtest
@@ -22,6 +22,17 @@ source; `PROGRESS.md` remains historical and must be read newest-first.
 | [REL-004](https://github.com/barryrwilson/Rimward/issues/34) | P2 | Implemented; verification complete | Resolve the release-blocking development-tool advisories without downgrading the GLTF toolchain. Scoped npm overrides select patched `nanoid@3.3.18` for PostCSS and deduplicate GLTF CLI onto `sharp@0.35.4`; full and deployable-runtime audits are both clean. The CLI's declared `sharp~0.34.5` range does not yet include `0.35.4`, so this is a deliberate compatibility exception verified by clean install, build, boot, all 228 ship GLBs, ship optimization, and PNG-to-WebP texture resize/compression plus output validation. | [Ship asset pipeline](ShipAssetPipeline.md) |
 | [REL-003](https://github.com/barryrwilson/Rimward/issues/33) | P1 | Implemented; verification complete | Protect `master` with the exact `Build` and `Boot harness` checks. The release-candidate workflow accepts one full commit SHA, verifies the checked-out tree, runs every release gate without hiding later results, uploads bounded evidence, and emits one fail-closed verdict. Hosted run [33287017191](https://github.com/barryrwilson/Rimward/actions/runs/33287017191) passed on exact master SHA `aabce00c94102cace49b865f933bfba814b86c71`, including bridge 14/14, Models 11/11, OPT-001 7/7, clean consoles and both zero-finding audit trees. | [Release-readiness audit](https://github.com/barryrwilson/Rimward/issues/33) |
 | [REL-005](https://github.com/barryrwilson/Rimward/issues/35) | P1 | Implemented; v0.1.0 published | Publish v0.1.0 as an immutable, download-only static `dist/` archive. The release workflow produces the versioned ZIP, checksum, manifest, and final verdict from the same exact SHA. GitHub Release `v0.1.0` is on master `4e70a714`. Release notes record player-visible changes, deferred RW-010 scope, known limitations, verification, and the tested GLTF/sharp compatibility exception. | [Release procedure](RELEASING.md); [release notes](../CHANGELOG.md); [v0.1.0](https://github.com/barryrwilson/Rimward/releases/tag/v0.1.0) |
+| [#51](https://github.com/barryrwilson/Rimward/issues/51) | P1 | Implemented; local verification complete | Defer paused death recovery until the live update loop can deliver `systemLoaded`. Preserve zero-cost recovery, timer/skip inputs, and exactly-once restoration. | `npm run test:pause-recovery`; live paused Veridian-to-Freehold recovery rebuilds the radius-60 environment once. |
+| [#47](https://github.com/barryrwilson/Rimward/issues/47) | P2 | Implemented; local verification complete | Ignore gameplay keydown while paused; retain keyup cleanup and independent pause/settings/menu listeners. OPT-004 remains separate. | `npm run test:paused-input`; live camera/throttle/weapon and Settings checks. |
+| [#48](https://github.com/barryrwilson/Rimward/issues/48) | P2 | Implemented; local verification complete | Release every instance-owned Beautiful Ones swim material, including late-LOD ownership, without disposing shared resources or siblings. | `npm run test:ship-material-release`; six rendered sibling spawn/release cycles return shader-program count to zero; live NPC removal disposes its private materials. |
+| [#49](https://github.com/barryrwilson/Rimward/issues/49) | P2 | Implemented; local verification complete | Oversized action requests receive HTTP 413 before connection closure, with bounded buffering and no evaluator dispatch. Complete, chunked, and unfinished uploads are covered. | `npm run test:agent-bridge`; live CDP-backed HTTP 413 followed by successful HTTP/WS ping. |
+| [#50](https://github.com/barryrwilson/Rimward/issues/50) | P3 | Implemented; local verification complete | Reject missing/empty programmatic bridge tokens before opening a listener. Keep valid CLI token behavior and existing authentication refusal paths. | `npm run test:agent-bridge`; live unauthenticated request returns 401 and authenticated observation/ping succeed. |
+
+The five review fixes passed local verification:
+`npm run build`, `npm run test:boot`, and the four focused regression commands.
+Live browser verification captured no console errors. PR CI and the focused
+release gate now include these regressions; no hosted verification or release
+publication is claimed.
 
 ## Optional follow-ups
 

@@ -69,6 +69,10 @@ import { disengage as disengageAutopilot } from './autopilot.js';
  *   'anxious'; freshStart keeps her, wounded +0.4, mood 'pained', bond +0.02.
  *   Restore never copies ctx.agent (optIn / ring). recover() appends recovered
  *   onto the session ring after restore so a world wipe cannot drop it.
+ *   Recovery requested while paused (hold timer or skip input) is deferred
+ *   and completed from update() on the first unpaused frame: a mid-pause
+ *   restore's 'systemLoaded' would rotate out of the frozen loop's event
+ *   queue unseen, leaving the environment desynced from the restored system.
  *
  * The snapshot is pure JSON: world.records/recordBanks/incidents/aftermath/
  * markets must stay JSON-plain (they are — world.js/market.js contract).
@@ -1344,6 +1348,9 @@ export function initSave(ctx) {
 
   let dead = false;
   let deathTimer = 0;
+  // Paused frames discard events without running consumers. Hold recovery
+  // until update() can deliver the restored system's rebuild event.
+  let recoveryPending = false;
 
   ctx.deathApi = {
     isOpen() { return dead === true; },
@@ -1351,6 +1358,11 @@ export function initSave(ctx) {
 
   function recover() {
     if (!dead) return;
+    if (ctx.flags.paused) {
+      recoveryPending = true;
+      return;
+    }
+    recoveryPending = false;
     try { disengageFlee(ctx, 'destroyed'); } catch { /* session helm must not block death recovery */ }
     dead = false;
     if (deathTimer) { clearTimeout(deathTimer); deathTimer = 0; }
@@ -1774,6 +1786,8 @@ export function initSave(ctx) {
           pendingRetry = 0;
         }
       }
+      // recover() clears the request once the simulation can consume its events.
+      if (recoveryPending) recover();
       // Complete a deferred jump autosave once the swap has finished.
       if (jumpSavePending && !dead) {
         if (!ctx.gate.jumping) {

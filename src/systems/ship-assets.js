@@ -109,7 +109,7 @@ function injectSwim(uniforms) {
   };
 }
 
-function cloneSwimMaterials(materials, uniforms) {
+function cloneSwimMaterials(materials, uniforms, privateMaterials) {
   const compile = injectSwim(uniforms);
   const wrap = (material) => {
     const cloned = material.clone();
@@ -117,6 +117,9 @@ function cloneSwimMaterials(materials, uniforms) {
     cloned.customProgramCacheKey = () => SWIM_PROGRAM_KEY;
     cloned.userData.swimUniforms = uniforms;
     cloned.needsUpdate = true;
+    // Instance-owned clone: registered (even when this slot is never bound to
+    // a mesh) so releaseShipAsset can dispose every private copy exactly once.
+    privateMaterials?.add(cloned);
     return cloned;
   };
   return {
@@ -129,8 +132,8 @@ function cloneSwimMaterials(materials, uniforms) {
   };
 }
 
-function materialsForInstance(materials, swimUniforms) {
-  return swimUniforms ? cloneSwimMaterials(materials, swimUniforms) : materials;
+function materialsForInstance(materials, swimUniforms, privateMaterials) {
+  return swimUniforms ? cloneSwimMaterials(materials, swimUniforms, privateMaterials) : materials;
 }
 
 function canonicalFaction(faction) {
@@ -358,7 +361,7 @@ function proxyFor(root) {
 
 function addLevel(instance, lod, template, materials) {
   const visual = cloneSkinned(template.scene);
-  bindMaterials(visual, materialsForInstance(materials, instance.userData.swimUniforms));
+  bindMaterials(visual, materialsForInstance(materials, instance.userData.swimUniforms, instance.userData.privateMaterials));
   removeEngineNode(visual);
   // Beautiful Ones: set swim phase on the new LOD meshes
   if (instance.userData.swimPhase !== undefined) {
@@ -392,7 +395,7 @@ function attachLowerLods(faction, classKey, role) {
   for (const lodName of lodNames) {
     Promise.all([loadTemplate(faction, classKey, lodName), loadMaterials(faction, role)]).then(([template, materials]) => {
       for (const instance of active) {
-        if (!instance.parent || instance.userData.loadedLods?.has(lodName)) continue;
+        if (!instance.parent || instance.userData.released || instance.userData.loadedLods?.has(lodName)) continue;
         const level = lodName === 'lod1' ? { distance: 1, hysteresis: 0.1 } : lodName === 'lod2' ? { distance: 2, hysteresis: 0.1 } : { distance: 3, hysteresis: 0.1 };
         addLevel(instance, level, template, materials);
         instance.userData.loadedLods.add(lodName);
@@ -444,7 +447,10 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   const lod = new THREE.LOD();
   const visual = cloneSkinned(template.scene);
   const swimUniforms = resolvedFaction === 'beautiful' ? makeSwimUniforms() : null;
-  const boundMaterials = materialsForInstance(resolvedMaterials, swimUniforms);
+  // Beautiful clones its swim materials per LOD level so each ship owns its
+  // uniforms; the set lets releaseShipAsset free every clone, bound or not.
+  const privateMaterials = swimUniforms ? new Set() : null;
+  const boundMaterials = materialsForInstance(resolvedMaterials, swimUniforms, privateMaterials);
   bindMaterials(visual, boundMaterials);
   const engine = removeEngineNode(visual);
   lod.addLevel(visual, 0, 0.1);
@@ -481,6 +487,7 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
     swimUniforms.uSwimKickZ.value = gait.kickZ;
     swimUniforms.uSwimRadial.value = gait.radial;
     root.userData.swimUniforms = swimUniforms;
+    root.userData.privateMaterials = privateMaterials;
     root.userData.swimPhase = Math.random() * Math.PI * 2;
     // Set morphTargetInfluences on all meshes (visual + glow engine)
     root.traverse((node) => {
@@ -498,9 +505,19 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   return root;
 }
 
-/** Stop a released live ship from retaining a background LOD attachment slot. */
+/** Release a live ship: unregister it and dispose its instance-owned materials. */
 export function releaseShipAsset(root) {
   root.userData.mixer?.stopAllAction();
+  if (!root.userData.released) {
+    root.userData.released = true;
+    // Only per-instance swim clones are private. Shared templates, geometries,
+    // textures, and the cached base material sets stay alive for other ships.
+    const privateMaterials = root.userData.privateMaterials;
+    if (privateMaterials) {
+      for (const material of privateMaterials) material.dispose();
+      privateMaterials.clear();
+    }
+  }
   const key = root.userData.assetInstanceKey;
   if (!key) return;
   const active = instances.get(key);

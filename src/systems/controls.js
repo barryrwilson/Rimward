@@ -658,6 +658,12 @@ export function initControls(ctx) {
       if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return;
     } catch { /* helper miss: keep flight keys */ }
     if (e.repeat || !TRACKED.has(code)) return;
+    // Paused: the system loop is frozen (main.js), so a keydown now must not
+    // buffer a gameplay edge or write throttle/weapon state for resume. Pause,
+    // settings, and menu listeners are separate window listeners — this handler
+    // never stops propagation — and keyup below stays unconditional so a
+    // pre-pause hold released during pause is not stuck on resume.
+    if (ctx.flags && ctx.flags.paused === true) return;
     if (stationOrHailOwns(ctx) && skipStationHailCode(code)) return;
     pressed.add(code);
 

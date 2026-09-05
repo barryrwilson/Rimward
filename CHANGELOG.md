@@ -4,10 +4,31 @@
 
 Post-v0.1.0 work. These notes are not part of the published v0.1.0 GitHub Release.
 
+### Fixes
+
+- Defer death recovery requested during pause until the simulation resumes,
+  preserving cross-system environment rebuilds and exactly-once recovery
+  ([#51](https://github.com/barryrwilson/Rimward/issues/51)).
+- Ignore gameplay keys entered during pause without blocking pause/settings
+  controls or key-release cleanup
+  ([#47](https://github.com/barryrwilson/Rimward/issues/47)).
+- Dispose Beautiful Ones ships' instance-owned swim materials, including
+  lower LODs, while preserving shared resources and other ships
+  ([#48](https://github.com/barryrwilson/Rimward/issues/48)).
+- Return a complete HTTP 413 response for oversized agent actions, including
+  unfinished uploads, before closing the connection
+  ([#49](https://github.com/barryrwilson/Rimward/issues/49)).
+- Refuse programmatic bridge startup with a missing or empty token. Normal
+  CLI-generated and configured nonempty tokens are unchanged
+  ([#50](https://github.com/barryrwilson/Rimward/issues/50)).
+
 ### Developer and verification tooling
 
 - Production JavaScript is release-gated at 1,800,000 minified bytes and 525
   KiB gzip, with a reproducible module-composition and browser-boundary report.
+- Add `test:pause-recovery`, `test:paused-input`, `test:ship-material-release`,
+  and `test:agent-bridge` to PR CI and the focused release regressions.
+  The release verdict requires all four checks in addition to the existing set.
 
 ### Verification and security
 
