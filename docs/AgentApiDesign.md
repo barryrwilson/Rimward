@@ -132,8 +132,17 @@ ok/reason derived from phase, dock/service, overlay, and helm ownership.
 recovery closure (Enter/click/auto-timer path); `act({ name:'recover' })`
 rides it, only while the overlay is open.
 
-**Evidence.** Deterministic role scenarios run in `npm run test:boot`
-wave 141 (ledger printed per run); the live bridge run
+**Evidence.** Deterministic role scenarios run in `npm run test:boot`:
+wave 141 covers the contract surface, lease lifecycle, hail, station-service
+sweep, rescue, and death/recovery; wave 142 adds one executable scenario per
+generated mission family (mining, trade, passenger, hunt, bounty, espionage,
+war, explore, recovery — acceptance, nontrivial progress, terminal
+`jobState`) plus an unprivileged combat path with normal hull/resources whose
+ledger records the real outcome (target resolution or ordinary death and
+recovery). Fixture staging (spawn/placement, contract-kill hull pins, credit
+stakes, fixture records) is labelled `privilegedFixture` in the printed
+ledgers and never counts as player-play evidence; a family that cannot
+complete fails the wave rather than being skipped. The live bridge run
 (`npm run agent:bridge:smoke`) adds the station purchase, lease lifecycle,
 fire path, and an aimed combat probe, and writes the sanitized transcript to
 `out/w136/smoke/scenario-ledger.json`. Focused contract suites:

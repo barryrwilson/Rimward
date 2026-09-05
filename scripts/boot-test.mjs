@@ -27249,6 +27249,741 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w141).every(Boolean)) { console.log('WAVE141 AGENT-PARITY FAIL'); errors++; }
 }
 
+// ---- Wave 142: mission-family parity scenarios (mission 43b34db25ae32972) --
+// One executable scenario per generated job family, plus a genuinely
+// unprivileged combat path (normal hull/resources, real observed outcome).
+// Staging no player can do (position sets, fixture records, credit seeding,
+// contract-kill hull pinning, asset priming) is marked privilegedFixture in
+// the ledger and never counts as the transition of record; every terminal
+// rides legal window.rimward acts and ordinary game systems (tickDeliveryJobs
+// / tickRecoveryCollect / mystery proximity discovery / real combat kills).
+{
+  const rw142 = globalThis.window?.rimward;
+  const ledger142 = [];
+  const step142 = (scenario, name, res, note) => {
+    ledger142.push({
+      scenario, act: name,
+      ok: !!(res && res.ok === true),
+      token: res && typeof res.token === 'string' ? res.token : '',
+      status: res && typeof res.status === 'string' ? res.status : '',
+      reqId: res && typeof res.reqId === 'string' ? res.reqId : '',
+      t: res && Number.isFinite(res.t) ? res.t : null,
+      note: note || '',
+    });
+  };
+  const term142 = (scenario, ok, note) => {
+    ledger142.push({ scenario, act: 'terminal', ok: ok === true, token: '', status: '', reqId: '', t: null, note: note || '' });
+  };
+  const obsEvents142 = (snap, type) => (snap && Array.isArray(snap.events) ? snap.events : []).filter((e) => e && e.type === type);
+  const hold142 = (key) => {
+    let n = 0;
+    for (const c of ctx.cargo || []) {
+      if (c && c.commodity === key && Number.isFinite(c.units)) n += c.units;
+    }
+    return n;
+  };
+  const clamp142 = (v) => Math.max(-1, Math.min(1, v));
+  const w142 = {
+    combatUnprivileged: false,
+    missionExplore: false,
+    missionMining: false,
+    missionTrade: false,
+    missionPassenger: false,
+    missionEspionage: false,
+    missionHunt: false,
+    missionWar: false,
+    missionBounty: false,
+    missionRecovery: false,
+    noThrow: false,
+  };
+  const fixtureRecs = []; // {arr, rec} pushed by fixtures; removed in finally
+  const movedShips = []; // {ship, pos} pre-existing ships re-positioned
+  const killedRecs = []; // {rec, state} real records whose state is restored
+  const spawned142 = new Set(); // live ships instantiated by fixtures
+  let pinned142 = false;
+  const saved142 = {
+    optIn: ctx.agent?.optIn === true,
+    paused: ctx.flags.paused === true,
+    berthHold: ctx.flags.berthHold === true,
+    docked: ctx.flags.docked === true,
+    sys: ctx.world.currentSystem,
+    pos: ctx.ship?.object?.position?.clone?.() || null,
+    quat: ctx.ship?.object?.quaternion?.clone?.() || null,
+    vel: ctx.ship?.velocity?.clone?.() || null,
+    speed: ctx.ship?.speed,
+    credits: ctx.world.credits,
+    hull: ctx.player?.hull, hullMax: ctx.player?.hullMax,
+    screen: ctx.player?.screen, screenMax: ctx.player?.screenMax,
+    shell: ctx.player?.shell, shellMax: ctx.player?.shellMax,
+    wpn: ctx.input.weaponGroup,
+    throttle: ctx.input.throttle,
+    fullStop: ctx.input.fullStop === true,
+    ships: Array.isArray(ctx.ships) ? ctx.ships.slice() : [],
+    pods: Array.isArray(ctx.pods) ? ctx.pods.slice() : [],
+    jobs: Array.isArray(ctx.world.jobs) ? ctx.world.jobs.map((j) => ({ ...j })) : [],
+    cargo: Array.isArray(ctx.cargo) ? ctx.cargo.map((c) => ({ ...c })) : [],
+    rep: ctx.world.reputation && typeof ctx.world.reputation === 'object' ? { ...ctx.world.reputation } : {},
+    aftermath: Array.isArray(ctx.world.aftermath) ? ctx.world.aftermath.slice() : [],
+    incidents: Array.isArray(ctx.world.incidents) ? ctx.world.incidents.slice() : [],
+    visited: Array.isArray(ctx.world.mystery?.visited) ? ctx.world.mystery.visited.slice() : [],
+    fear: ctx.world.fear,
+  };
+  let seq142 = 97000;
+  let threw142 = false;
+  try {
+    // ---- baseline: flying, unpaused, helms off, lease cleared, freehold ----
+    if (ctx.flags.docked) undockStation();
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    ctx.agent.optIn = true;
+    ctx.input.fullStop = false;
+    try { rw142.act({ v: 2, name: 'cancelAutopilot', args: {} }); } catch { /* none */ }
+    try { rw142.act({ v: 2, name: 'cancelAutomine', args: {} }); } catch { /* none */ }
+    if (ctx.flee) ctx.flee.engaged = false;
+    rw142.act({ v: 2, name: 'clearControl', args: {} });
+    if (ctx.world.currentSystem !== 'freehold') {
+      // Harness staging (wave-restore convention): the family scenarios run
+      // off the freehold board. No transition of record.
+      ctx.world.currentSystem = 'freehold';
+      ctx.emit('systemLoaded', { to: 'freehold' });
+    }
+    tick(2, 'w142 baseline');
+
+    const stageAt142 = (x, y, z, label) => {
+      // privilegedFixture staging: position/velocity set, nothing else.
+      ctx.ship.object.position.set(x, y, z);
+      ctx.ship.velocity.set(0, 0, 0);
+      ctx.ship.speed = 0;
+      tick(2, label);
+    };
+    const ensureDocked142 = (label) => {
+      if (!ctx.flags.docked) dockAtCurrentStation(label);
+    };
+    const openJobs142 = (label) => {
+      rw142.act({ v: 2, name: 'openService', args: { id: 'jobs' } });
+      tick(1, label);
+      rw142.observe(); // station.view capture renders the board — syncs run
+    };
+    const offers142 = (kind) => {
+      const snap = rw142.observe();
+      const list = snap && snap.jobs && Array.isArray(snap.jobs.offers) ? snap.jobs.offers : [];
+      return list.filter((j) => j && j.kind === kind && j.state === 'offered'
+        && (typeof j.originSystem !== 'string' || j.originSystem === ctx.world.currentSystem));
+    };
+    const accept142 = (scenario, id) => {
+      const res = rw142.act({ v: 2, name: 'acceptJob', args: { id } });
+      step142(scenario, 'acceptJob', res);
+      tick(1, `w142 ${scenario} accept`);
+      return res;
+    };
+    const liveJob142 = (id) => (ctx.world.jobs || []).find((j) => j && j.id === id) || null;
+    const awaitJobState142 = (id, outcomes, capTicks, label) => {
+      const want = Array.isArray(outcomes) ? outcomes : [outcomes];
+      for (let i = 0; i < capTicks; i += 10) {
+        tick(10, label);
+        const snap = rw142.observe();
+        if (obsEvents142(snap, 'jobState').some((e) => e && e.id === id && want.includes(e.outcome))) return true;
+      }
+      return false;
+    };
+    const findRec142 = (recId) => {
+      if (typeof recId !== 'string' || !recId) return null;
+      const banks = ctx.world.recordBanks;
+      const pools = [];
+      if (banks && typeof banks === 'object' && !Array.isArray(banks)) {
+        if (Array.isArray(banks.freehold)) pools.push(banks.freehold);
+        if (Array.isArray(banks.veridian)) pools.push(banks.veridian);
+      }
+      if (Array.isArray(ctx.world.records)) pools.push(ctx.world.records);
+      for (const arr of pools) {
+        const rec = arr.find((r) => r && r.id === recId);
+        if (rec) return rec;
+      }
+      return null;
+    };
+    const liveForRec142 = (rec, offset, label) => {
+      // privilegedFixture placement: re-position the record's live ship when
+      // one exists (w30parkHostiles precedent), else instantiate from the
+      // record at the staged offset. The fight itself is the real combat loop.
+      const p = ctx.ship.object.position;
+      const cur = ctx.ships.find((s) => s && s.record && s.record.id === rec.id
+        && !(s.state && s.state.destroyed === true));
+      if (cur) {
+        if (!movedShips.some((m) => m.ship === cur)) {
+          movedShips.push({ ship: cur, pos: cur.object.position.clone() });
+        }
+        cur.object.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
+        tick(2, label);
+        return cur;
+      }
+      const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x + offset[0], p.y + offset[1], p.z + offset[2]));
+      if (!live) return null;
+      ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
+      spawned142.add(live);
+      tick(2, label);
+      return live;
+    };
+    const pinHull142 = (on) => {
+      // privilegedFixture: contract-kill invulnerability. Never asserted as
+      // survival/skill evidence — only the kill and jobState terminal count.
+      if (on) {
+        ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+        ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+        ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+        pinned142 = true;
+      } else if (pinned142) {
+        ctx.player.hullMax = saved142.hullMax; ctx.player.hull = saved142.hull;
+        ctx.player.screenMax = saved142.screenMax; ctx.player.screen = saved142.screen;
+        ctx.player.shellMax = saved142.shellMax; ctx.player.shell = saved142.shell;
+        pinned142 = false;
+      }
+    };
+    const fight142 = (scenario, live, recName, terminals) => {
+      // Resolve an open demand card first (the lease refuses while the
+      // overlay owns input), then close and fire through the control lease.
+      w30demandEvs(live, `w142 ${scenario} demand`);
+      rw142.act({ v: 2, name: 'hailResolve', args: { intent: 'refuseFight' } });
+      tick(2, `w142 ${scenario} hostile`);
+      const sel = rw142.act({ v: 2, name: 'selectTarget', args: { id: live.id } });
+      step142(scenario, 'selectTarget', sel);
+      if (!(sel && sel.ok === true)) {
+        // Harness-spawned rows may carry no cycle id; fall back to the
+        // ordinary cycle edge (the foe is the only candidate after parking).
+        rw142.act({ v: 2, name: 'selectTarget', args: {} });
+        tick(1, `w142 ${scenario} cycle`);
+        if (!ctx.targets.current) ctx.targets.current = live; // fixture lock fallback
+      }
+      rw142.act({ v: 2, name: 'setWeaponGroup', args: { n: 1 } });
+      let fire = false;
+      let hit = false;
+      let out = 'timeout';
+      for (let i = 0; i < 60 * 90; i++) {
+        const s = rw142.observe();
+        if (s && s.session && s.session.phase === 'dead') { out = 'died'; break; }
+        const cur = s && s.targets && s.targets.current;
+        const aim = s && s.targets && s.targets.aim;
+        if (!cur || cur.kind !== 'ship' || !aim || !Array.isArray(aim.bearing)) break;
+        for (const e of s.events || []) {
+          if (!e) continue;
+          if (e.type === 'playerFire') fire = true;
+          if (e.type === 'npcHit' && (e.targetName === recName || e.targetId === live.id)) hit = true;
+          if (terminals.includes(e.type) && (e.targetName === recName || e.targetId === live.id)) out = 'resolved';
+        }
+        if (out === 'resolved') break;
+        const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
+        const sx = clamp142(aimPt[0] * 2.5);
+        const sy = clamp142(aimPt[1] * 2.5);
+        const aligned = aimPt[2] < -0.75 && Math.abs(aimPt[0]) < 0.3 && Math.abs(aimPt[1]) < 0.3;
+        rw142.act({
+          v: 2, name: 'setControl',
+          args: { seq: ++seq142, ttl: 0.5, steerX: sx, steerY: sy, fireHeld: aligned, throttle: 0.4 },
+        });
+        tick(12, `w142 ${scenario} fight`);
+      }
+      rw142.act({ v: 2, name: 'clearControl', args: {} });
+      return { out, fire, hit };
+    };
+
+    // ---- 1. combat, unprivileged: normal hull/resources, real outcome ------
+    // No hull pinning, no credit seeding, no attacker deletion. The terminal
+    // is whatever the real combat system produces: target resolution, or
+    // ordinary player death followed by the real recovery path.
+    stageAt142(400, 0, -300, 'w142 merc stage'); // fixture placement; outside the 300u station law zone
+    w30parkHostiles('w142 merc park'); // fixture: clears interfering hostiles
+    const mercHullBefore = ctx.player.hull;
+    const merc = liveForRec142(
+      { id: 'wave142-merc', name: 'Wave142 Merc', classKey: 'cutter', faction: 'redledger', role: 'pirate', resolve: 50, personality: 95, alwaysHuntsPlayer: true },
+      [220, 0, 0], 'w142 merc spawn');
+    let mercFight = { out: 'timeout', fire: false, hit: false };
+    let mercRecovered = false;
+    if (merc) {
+      mercFight = fight142('combat-unprivileged', merc, 'Wave142 Merc', ['npcDestroyed', 'npcDisabled', 'npcSurrendered']);
+      if (mercFight.out === 'died') {
+        for (let i = 0; i < 60 * 8; i++) {
+          const sd = rw142.observe();
+          if (!sd || !sd.session || sd.session.phase !== 'dead') break;
+          const rr = rw142.act({ v: 2, name: 'recover', args: {} });
+          if (rr && rr.ok === true) { step142('combat-unprivileged', 'recover', rr, 'ordinary combat death recovery'); break; }
+          tick(10, 'w142 merc recover wait');
+        }
+        tick(3, 'w142 merc recovered');
+        const sp = rw142.observe();
+        mercRecovered = !!(sp && sp.session && sp.session.phase === 'playing');
+      }
+      if (spawned142.has(merc)) { w30removeShip(merc); spawned142.delete(merc); }
+    }
+    term142('combat-unprivileged',
+      mercFight.out === 'resolved' || (mercFight.out === 'died' && mercRecovered),
+      `result=${mercFight.out} fire=${mercFight.fire} hit=${mercFight.hit} hull ${mercHullBefore}->${ctx.player.hull} (unpinned) recovered=${mercRecovered}`);
+    w142.combatUnprivileged = !!(mercFight.fire && mercFight.hit
+      && (mercFight.out === 'resolved' || (mercFight.out === 'died' && mercRecovered)));
+    // Re-baseline after a possible death/recovery (recovery may dock/relocate).
+    if (ctx.flags.docked) undockStation();
+    if (ctx.world.currentSystem !== 'freehold') {
+      ctx.world.currentSystem = 'freehold';
+      ctx.emit('systemLoaded', { to: 'freehold' });
+      tick(2, 'w142 rebase sys');
+    }
+
+    // ---- 2. exploration: survey contract + real landmark discovery ---------
+    ensureDocked142('w142 dock explore');
+    openJobs142('w142 explore board');
+    const exOffer = offers142('explore')[0] || null;
+    let exploreOk = false;
+    let exNote = 'no explore offer at the freehold board';
+    if (exOffer) {
+      const acc = accept142('exploration', exOffer.id);
+      undockStation();
+      const lm = SYSTEMS.freehold.landmarks[0];
+      const alreadyVisited = !!(ctx.world.mystery && Array.isArray(ctx.world.mystery.visited)
+        && ctx.world.mystery.visited.includes(lm.id));
+      // privilegedFixture staging: park 90u off the landmark (the wave-30 site
+      // precedent). The discovery is the real mystery proximity system.
+      stageAt142(lm.position[0], lm.position[1], lm.position[2] + 90, 'w142 landmark stage');
+      let found = alreadyVisited;
+      for (let i = 0; i < 60 * 5 && !found; i += 10) {
+        tick(10, 'w142 landmark wait');
+        found = obsEvents142(rw142.observe(), 'landmarkFound').some((e) => e && e.id === lm.id);
+      }
+      ensureDocked142('w142 dock explore file');
+      const filed = awaitJobState142(exOffer.id, ['delivered'], 60 * 5, 'w142 explore terminal');
+      exploreOk = !!(acc && acc.ok === true && found && filed);
+      exNote = `offer=${exOffer.id} ${alreadyVisited ? 'landmark already charted; progress recognized' : 'landmarkFound observed'} terminal=${filed}`;
+    }
+    term142('exploration', exploreOk, exNote);
+    w142.missionExplore = exploreOk;
+
+    // ---- 3. mining: board contract, automine channel, dock delivery --------
+    ensureDocked142('w142 dock mining');
+    openJobs142('w142 mining board');
+    const mineOffer = offers142('mining')[0] || null;
+    let mineOk = false;
+    let mineNote = 'no mining offer at the freehold board';
+    if (mineOffer) {
+      const commodity = typeof mineOffer.commodity === 'string' ? mineOffer.commodity : 'rawOre';
+      const need = Number.isFinite(mineOffer.need) ? mineOffer.need : 4;
+      const acc = accept142('mining', mineOffer.id);
+      const inFlight = rw142.observe().jobs.active.some((j) => j && j.id === mineOffer.id);
+      undockStation();
+      // privilegedFixture staging: park inside the freehold field envelope.
+      stageAt142(-450, -30, -250, 'w142 field stage');
+      rw142.act({ v: 2, name: 'setWeaponGroup', args: { n: 3 } });
+      const holdBefore = hold142(commodity);
+      let mined = false;
+      for (let i = 0; i < 60 * 150 && !mined; i++) {
+        const s = rw142.observe();
+        const cur = s && s.targets && s.targets.current;
+        if (!(cur && cur.kind === 'rock')) {
+          // KeyT cycle; weapon group 3 prefers the accepted contract's ore.
+          rw142.act({ v: 2, name: 'selectTarget', args: {} });
+          tick(1, 'w142 rock cycle');
+          continue;
+        }
+        if (!(ctx.automine && ctx.automine.engaged === true)) {
+          rw142.act({ v: 2, name: 'engageAutomine', args: {} });
+        }
+        tick(30, 'w142 automine');
+        mined = hold142(commodity) - holdBefore >= need;
+      }
+      rw142.act({ v: 2, name: 'cancelAutomine', args: {} });
+      const oreDelta = hold142(commodity) - holdBefore;
+      ensureDocked142('w142 dock mining deliver');
+      const delivered = awaitJobState142(mineOffer.id, ['delivered'], 60 * 5, 'w142 mining terminal');
+      mineOk = !!(acc && acc.ok === true && inFlight && mined && delivered);
+      mineNote = `offer=${mineOffer.id} commodity=${commodity} oreDelta=${oreDelta} need=${need} terminal=${delivered}`;
+    }
+    term142('mining', mineOk, mineNote);
+    w142.missionMining = mineOk;
+
+    // ---- 4. trade + espionage + passenger: real cross-system legs ----------
+    // Travel legs use the harness gate flight (jumpToward places the ship on
+    // the gate ring; the real jump.js pipeline performs the system swap). The
+    // agent plotRoute receipts are recorded alongside.
+    ensureDocked142('w142 dock trade');
+    openJobs142('w142 trade board');
+    const tradeOffer = offers142('trade')[0] || null;
+    const spyOffer = offers142('espionage')[0] || null;
+    let tradeOk = false;
+    let spyOk = false;
+    let paxOk = false;
+    let tradeNote = 'no trade offer at the freehold board';
+    let spyNote = 'no espionage offer at the freehold board';
+    let paxNote = 'no passenger offer at the veridian board';
+    let spyAcc = null;
+    if (spyOffer) spyAcc = accept142('espionage', spyOffer.id); // dest resolves to veridian
+    if (tradeOffer) {
+      const commodity = typeof tradeOffer.commodity === 'string' ? tradeOffer.commodity : 'provisions';
+      const need = Number.isFinite(tradeOffer.need) ? tradeOffer.need : 5;
+      const acc = accept142('trade', tradeOffer.id);
+      if (!(ctx.world.credits >= 4000)) ctx.world.credits = 4000; // privilegedFixture: buy-in stake
+      rw142.act({ v: 2, name: 'openService', args: { id: 'market' } });
+      tick(1, 'w142 market open');
+      const buy = rw142.act({ v: 2, name: 'trade', args: { commodity, qty: need, side: 'buy' } });
+      step142('trade', 'trade:buy', buy, `buy ${need} ${commodity} through the desk closure`);
+      tick(1, 'w142 buy settle');
+      const stocked = hold142(commodity) >= need;
+      const plotV = rw142.act({ v: 2, name: 'plotRoute', args: { dest: 'veridian' } });
+      step142('navigation', 'plotRoute', plotV, 'freehold->veridian');
+      undockStation();
+      const arrivedV = travelTo('veridian', 'w142 to veridian');
+      if (arrivedV) {
+        ensureDocked142('w142 dock veridian');
+        const tradeDelivered = stocked && awaitJobState142(tradeOffer.id, ['delivered'], 60 * 5, 'w142 trade terminal');
+        tradeOk = !!(acc && acc.ok === true && tradeDelivered);
+        tradeNote = `offer=${tradeOffer.id} commodity=${commodity} stocked=${stocked} terminal=${tradeDelivered}`;
+      } else {
+        tradeNote = `offer=${tradeOffer.id} commodity=${commodity} stocked=${stocked} travel failed`;
+      }
+    }
+    let spyProgress = false;
+    if (spyOffer && !tradeOffer) {
+      // Espionage still needs the veridian leg when no trade ran it.
+      const plotV2 = rw142.act({ v: 2, name: 'plotRoute', args: { dest: 'veridian' } });
+      step142('navigation', 'plotRoute', plotV2, 'freehold->veridian (spy)');
+      undockStation();
+      if (travelTo('veridian', 'w142 spy to veridian')) ensureDocked142('w142 dock veridian spy');
+    }
+    if (spyOffer && ctx.flags.docked && ctx.world.currentSystem === 'veridian') {
+      tick(40, 'w142 spy dest stamp'); // throttled delivery tick sets progress=1
+      const spyLive = liveJob142(spyOffer.id);
+      spyProgress = !!(spyLive && spyLive.progress === 1);
+    }
+    if (ctx.flags.docked && ctx.world.currentSystem === 'veridian') {
+      openJobs142('w142 veridian board');
+      const paxOffer = offers142('passenger')[0] || null;
+      let paxAcc = null;
+      if (paxOffer) paxAcc = accept142('passenger', paxOffer.id);
+      const plotF = rw142.act({ v: 2, name: 'plotRoute', args: { dest: 'freehold' } });
+      step142('navigation', 'plotRoute', plotF, 'veridian->freehold');
+      undockStation();
+      if (travelTo('freehold', 'w142 to freehold')) {
+        ensureDocked142('w142 dock freehold return');
+        if (paxOffer && paxAcc) {
+          paxOk = paxAcc.ok === true && awaitJobState142(paxOffer.id, ['delivered'], 60 * 5, 'w142 passenger terminal');
+          paxNote = `offer=${paxOffer.id} terminal=${paxOk}`;
+        } else {
+          paxNote = paxOffer ? `offer=${paxOffer.id} accept refused` : 'no passenger offer at the veridian board';
+        }
+        if (spyOffer && spyAcc) {
+          const spyDelivered = awaitJobState142(spyOffer.id, ['delivered'], 60 * 5, 'w142 espionage terminal');
+          spyOk = !!(spyAcc.ok === true && spyProgress && spyDelivered);
+          spyNote = `offer=${spyOffer.id} progressAtDest=${spyProgress} terminal=${spyDelivered}`;
+        }
+      }
+    } else if (spyOffer) {
+      spyNote = `offer=${spyOffer.id} never reached the dest dock`;
+    }
+    term142('trade', tradeOk, tradeNote);
+    term142('espionage', spyOk, spyNote);
+    term142('passenger', paxOk, paxNote);
+    w142.missionTrade = tradeOk;
+    w142.missionEspionage = spyOk;
+    w142.missionPassenger = paxOk;
+
+    // ---- 5. local hunt: board contract on a pirate record, witnessed kill --
+    ensureDocked142('w142 dock hunt');
+    openJobs142('w142 hunt board');
+    let huntOffer = offers142('hunt')[0] || null;
+    let huntFixture = false;
+    if (!huntOffer) {
+      // Bounded recorded fixture (spec: fixture selection is recorded, never
+      // silently skipped): a hunt-eligible quarry record (rec-N id, bounty)
+      // so the board sync generates the card on the next render.
+      const rec = {
+        id: 'rec-9001', name: 'Wave142 Hunt Quarry', classKey: 'cutter',
+        faction: 'redledger', role: 'pirate', system: 'freehold', state: 'enroute',
+        bounty: 520, resolve: 50, personality: 95, alwaysHuntsPlayer: true,
+      };
+      const banks = ctx.world.recordBanks;
+      const bank = (banks && Array.isArray(banks.freehold)) ? banks.freehold
+        : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
+      if (bank) { bank.unshift(rec); fixtureRecs.push({ arr: bank, rec }); huntFixture = true; }
+      openJobs142('w142 hunt board fixture');
+      huntOffer = offers142('hunt').find((j) => typeof j.title === 'string' && j.title.includes(rec.name)) || null;
+    }
+    let huntOk = false;
+    let huntNote = 'no hunt offer (fixture attempted)';
+    if (huntOffer) {
+      const acc = accept142('hunt', huntOffer.id);
+      const liveJob = liveJob142(huntOffer.id);
+      const rec = findRec142(liveJob && liveJob.recordId);
+      undockStation();
+      stageAt142(400, 0, -300, 'w142 hunt stage');
+      w30parkHostiles('w142 hunt park');
+      let live = null;
+      if (rec) {
+        killedRecs.push({ rec, state: rec.state });
+        live = liveForRec142(rec, [220, 0, 0], 'w142 hunt quarry stage');
+      }
+      if (live) {
+        pinHull142(true); // privilegedFixture: contract-kill only, not survival evidence
+        const f = fight142('hunt', live, rec.name, ['npcDestroyed', 'npcSurrendered']);
+        pinHull142(false);
+        if (spawned142.has(live)) { w30removeShip(live); spawned142.delete(live); }
+        const done = awaitJobState142(huntOffer.id, ['done', 'delivered'], 60 * 5, 'w142 hunt terminal');
+        huntOk = !!(acc && acc.ok === true && f.out === 'resolved' && f.fire && f.hit && done);
+        huntNote = `offer=${huntOffer.id} fixture=${huntFixture} result=${f.out} terminal=${done}`;
+      } else {
+        huntNote = `offer=${huntOffer.id} fixture=${huntFixture} quarry unavailable`;
+      }
+    }
+    term142('hunt', huntOk, huntNote);
+    w142.missionHunt = huntOk;
+
+    // ---- 6. faction war: strike on a flagged patrol record ------------------
+    ensureDocked142('w142 dock war');
+    openJobs142('w142 war board');
+    let warOffer = offers142('war')[0] || null;
+    let warFixture = false;
+    if (!warOffer) {
+      // Bounded recorded fixture: a war-eligible patrol record of the rival
+      // faction (veridian) registered in the origin bank.
+      const rec = {
+        id: 'rec-9002', name: 'Wave142 War Quarry', classKey: 'cutter',
+        faction: 'veridian', role: 'patrol', system: 'freehold', state: 'enroute',
+        resolve: 50, personality: 95,
+      };
+      const banks = ctx.world.recordBanks;
+      const bank = (banks && Array.isArray(banks.freehold)) ? banks.freehold
+        : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
+      if (bank) { bank.unshift(rec); fixtureRecs.push({ arr: bank, rec }); warFixture = true; }
+      openJobs142('w142 war board fixture');
+      warOffer = offers142('war').find((j) => typeof j.title === 'string' && j.title.includes(rec.name)) || null;
+    }
+    let warOk = false;
+    let warNote = 'no war offer (fixture attempted)';
+    if (warOffer) {
+      const acc = accept142('war', warOffer.id);
+      const liveJob = liveJob142(warOffer.id);
+      const rec = findRec142(liveJob && liveJob.recordId);
+      undockStation();
+      stageAt142(400, 0, -300, 'w142 war stage');
+      w30parkHostiles('w142 war park');
+      let live = null;
+      if (rec) {
+        // Harness asset priming: boot primes only trader/pirate materials.
+        await primeShipAsset(rec.faction, typeof rec.classKey === 'string' ? rec.classKey : 'cutter', 'patrol');
+        killedRecs.push({ rec, state: rec.state });
+        live = liveForRec142(rec, [220, 0, 0], 'w142 war quarry stage');
+      }
+      if (live) {
+        pinHull142(true); // privilegedFixture: contract-kill only
+        const f = fight142('war', live, rec.name, ['npcDestroyed', 'npcSurrendered']);
+        pinHull142(false);
+        if (spawned142.has(live)) { w30removeShip(live); spawned142.delete(live); }
+        const done = awaitJobState142(warOffer.id, ['done', 'delivered'], 60 * 5, 'w142 war terminal');
+        warOk = !!(acc && acc.ok === true && f.out === 'resolved' && f.fire && f.hit && done);
+        warNote = `offer=${warOffer.id} fixture=${warFixture} result=${f.out} terminal=${done}`;
+      } else {
+        warNote = `offer=${warOffer.id} fixture=${warFixture} quarry unavailable`;
+      }
+    }
+    term142('war', warOk, warNote);
+    w142.missionWar = warOk;
+
+    // ---- 7. faction hunt: posted bounty on a named pirate, witnessed kill ---
+    ensureDocked142('w142 dock bounty');
+    openJobs142('w142 bounty board');
+    const bountyOffers = () => {
+      const snap = rw142.observe();
+      return (snap && snap.jobs && Array.isArray(snap.jobs.offers) ? snap.jobs.offers : [])
+        .filter((j) => j && j.kind === 'bounty' && typeof j.id === 'string'
+          && j.id.startsWith('bounty-pirate-') && j.state === 'offered');
+    };
+    let bountyOffer = bountyOffers()[0] || null;
+    let bountyFixture = false;
+    if (!bountyOffer) {
+      // Bounded recorded fixture: a priced pirate record in the live registry
+      // so syncPirateBounties posts the faction bounty card.
+      const rec = {
+        id: 'rec-9003', name: 'Wave142 Bounty Quarry', classKey: 'cutter',
+        faction: 'redledger', role: 'pirate', system: 'freehold', state: 'enroute',
+        bounty: 640, resolve: 50, personality: 95, alwaysHuntsPlayer: true,
+      };
+      if (Array.isArray(ctx.world.records)) {
+        ctx.world.records.unshift(rec);
+        fixtureRecs.push({ arr: ctx.world.records, rec });
+        bountyFixture = true;
+      }
+      openJobs142('w142 bounty board fixture');
+      bountyOffer = bountyOffers().find((j) => typeof j.title === 'string' && j.title.includes(rec.name)) || null;
+    }
+    let bountyOk = false;
+    let bountyNote = 'no pirate bounty offer (fixture attempted)';
+    if (bountyOffer) {
+      const acc = accept142('bounty', bountyOffer.id);
+      const rec = (ctx.world.records || []).find((r) => r && r.role === 'pirate'
+        && r.name === bountyOffer.target) || null;
+      undockStation();
+      stageAt142(400, 0, -300, 'w142 bounty stage');
+      w30parkHostiles('w142 bounty park');
+      let live = null;
+      if (rec) {
+        killedRecs.push({ rec, state: rec.state });
+        live = liveForRec142(rec, [220, 0, 0], 'w142 bounty quarry stage');
+      }
+      if (live) {
+        pinHull142(true); // privilegedFixture: contract-kill only
+        // The bounty claims only on a DESTROYED incident — surrender does not pay.
+        const f = fight142('bounty', live, rec.name, ['npcDestroyed']);
+        pinHull142(false);
+        if (spawned142.has(live)) { w30removeShip(live); spawned142.delete(live); }
+        const done = awaitJobState142(bountyOffer.id, ['done'], 60 * 5, 'w142 bounty terminal');
+        bountyOk = !!(acc && acc.ok === true && f.out === 'resolved' && f.fire && f.hit && done);
+        bountyNote = `offer=${bountyOffer.id} fixture=${bountyFixture} result=${f.out} terminal=${done}`;
+      } else {
+        bountyNote = `offer=${bountyOffer.id} fixture=${bountyFixture} quarry unavailable`;
+      }
+    }
+    term142('bounty', bountyOk, bountyNote);
+    w142.missionBounty = bountyOk;
+
+    // ---- 8. recovery: wreck salvage card, pod scoop, dock delivery ----------
+    // The wrecks behind the card stage from the real kills above.
+    ensureDocked142('w142 dock recovery');
+    openJobs142('w142 recovery board');
+    const recOffer = offers142('recovery')[0] || null;
+    let recoveryOk = false;
+    let recNote = 'no recovery offer (no live wreck in system)';
+    if (recOffer) {
+      const acc = accept142('recovery', recOffer.id); // cuts the salvage pod loose at the wreck (real system)
+      const liveJob = liveJob142(recOffer.id);
+      const accepted = !!(liveJob && liveJob.state === 'accepted');
+      const wreck = (ctx.world.aftermath || []).find((a) => a && liveJob && a.id === liveJob.wreckId) || null;
+      undockStation();
+      let scooped = false;
+      let metalsDelta = 0;
+      if (accepted && wreck) {
+        const wp = wreck.position;
+        const wx = Array.isArray(wp) ? wp[0] : (wp && wp.x) || 0;
+        const wy = Array.isArray(wp) ? wp[1] : (wp && wp.y) || 0;
+        const wz = Array.isArray(wp) ? wp[2] : (wp && wp.z) || 0;
+        // privilegedFixture staging: park 30u off the salvage pod site.
+        stageAt142(wx + 30, wy, wz, 'w142 salvage stage');
+        const metalsBefore = hold142('refinedMetals');
+        for (let i = 0; i < 60 * 30 && !scooped; i++) {
+          const s = rw142.observe();
+          if (liveJob.collected === true) { scooped = true; break; }
+          const podRow = (s && s.targets && Array.isArray(s.targets.nearby) ? s.targets.nearby : [])
+            .find((r) => r && r.kind === 'pod');
+          if (!podRow || !Array.isArray(podRow.bearing)) { tick(6, 'w142 salvage scan'); continue; }
+          const b = podRow.bearing;
+          rw142.act({
+            v: 2, name: 'setControl',
+            args: { seq: ++seq142, ttl: 0.5, steerX: clamp142(b[0] * 2.5), steerY: clamp142(b[1] * 2.5), throttle: 0.5 },
+          });
+          tick(12, 'w142 salvage approach');
+        }
+        rw142.act({ v: 2, name: 'clearControl', args: {} });
+        scooped = scooped || liveJob.collected === true;
+        metalsDelta = hold142('refinedMetals') - metalsBefore;
+      }
+      ensureDocked142('w142 dock salvage');
+      const done = accepted && awaitJobState142(recOffer.id, ['done'], 60 * 5, 'w142 recovery terminal');
+      recoveryOk = !!(accepted && scooped && done);
+      recNote = `offer=${recOffer.id} accepted=${accepted} scooped=${scooped} metalsDelta=${metalsDelta} terminal=${done}`;
+      void acc;
+    }
+    term142('recovery', recoveryOk, recNote);
+    w142.missionRecovery = recoveryOk;
+  } catch (e) {
+    threw142 = true;
+    console.log('WAVE142 ERR', e && e.message ? e.message : e);
+  } finally {
+    try { rw142.act({ v: 2, name: 'clearControl', args: {} }); } catch { /* ignore */ }
+    pinHull142(false);
+    if (ctx.flee) ctx.flee.engaged = false;
+    try { rw142.act({ v: 2, name: 'cancelAutopilot', args: {} }); } catch { /* ignore */ }
+    try { rw142.act({ v: 2, name: 'cancelAutomine', args: {} }); } catch { /* ignore */ }
+    // A stranded death overlay would poison the restore below; ride the real
+    // recovery path once more before touching state.
+    try {
+      const sp = rw142.observe();
+      if (sp && sp.session && sp.session.phase === 'dead') {
+        rw142.act({ v: 2, name: 'recover', args: {} });
+        tick(3, 'w142 finally recover');
+      }
+    } catch { /* ignore */ }
+    ctx.agent.optIn = saved142.optIn;
+    ctx.flags.paused = saved142.paused;
+    ctx.flags.berthHold = saved142.berthHold;
+    ctx.input.weaponGroup = saved142.wpn;
+    ctx.input.throttle = saved142.throttle;
+    ctx.input.fullStop = saved142.fullStop;
+    if (Number.isFinite(saved142.credits)) ctx.world.credits = saved142.credits;
+    if (ctx.player && Number.isFinite(saved142.hullMax)) {
+      ctx.player.hullMax = saved142.hullMax;
+      ctx.player.hull = saved142.hull;
+      ctx.player.screenMax = saved142.screenMax;
+      ctx.player.screen = saved142.screen;
+      ctx.player.shellMax = saved142.shellMax;
+      ctx.player.shell = saved142.shell;
+    }
+    for (const { arr, rec } of fixtureRecs) {
+      const i = arr.indexOf(rec);
+      if (i >= 0) arr.splice(i, 1);
+    }
+    for (const { rec, state } of killedRecs) rec.state = state;
+    for (const { ship, pos } of movedShips) {
+      if (ship && ship.object && ship.object.position) ship.object.position.copy(pos);
+    }
+    if (Array.isArray(ctx.ships)) {
+      ctx.ships.length = 0;
+      for (const s of saved142.ships) ctx.ships.push(s);
+    }
+    if (Array.isArray(ctx.pods)) {
+      for (const p of saved142.pods) if (!ctx.pods.includes(p)) ctx.pods.push(p);
+    }
+    if (Array.isArray(ctx.world.jobs) && saved142.jobs.length) {
+      const liveIds = new Set(ctx.world.jobs.map((j) => j && j.id));
+      for (const j of saved142.jobs) {
+        if (!j || !j.id) continue;
+        const live = ctx.world.jobs.find((x) => x && x.id === j.id);
+        if (live) Object.assign(live, j);
+        else if (!liveIds.has(j.id)) ctx.world.jobs.push(j);
+      }
+    }
+    if (Array.isArray(ctx.cargo)) {
+      ctx.cargo.length = 0;
+      for (const c of saved142.cargo) ctx.cargo.push(c);
+    }
+    if (saved142.rep && ctx.world.reputation) Object.assign(ctx.world.reputation, saved142.rep);
+    if (Array.isArray(ctx.world.aftermath)) {
+      ctx.world.aftermath.length = 0;
+      for (const a of saved142.aftermath) ctx.world.aftermath.push(a);
+    }
+    if (Array.isArray(ctx.world.incidents)) {
+      ctx.world.incidents.length = 0;
+      for (const ev of saved142.incidents) ctx.world.incidents.push(ev);
+    }
+    if (ctx.world.mystery && Array.isArray(ctx.world.mystery.visited)) {
+      // In-place restore: landmarks.js change-detects on array length.
+      ctx.world.mystery.visited.length = 0;
+      ctx.world.mystery.visited.push(...saved142.visited);
+    }
+    if (Number.isFinite(saved142.fear)) ctx.world.fear = saved142.fear;
+    if (saved142.vel && ctx.ship?.velocity) ctx.ship.velocity.copy(saved142.vel);
+    if (Number.isFinite(saved142.speed)) ctx.ship.speed = saved142.speed;
+    if (saved142.pos && ctx.ship?.object?.position) ctx.ship.object.position.copy(saved142.pos);
+    if (saved142.quat && ctx.ship?.object?.quaternion) ctx.ship.object.quaternion.copy(saved142.quat);
+    if (typeof saved142.sys === 'string' && saved142.sys && ctx.world.currentSystem !== saved142.sys) {
+      ctx.world.currentSystem = saved142.sys;
+      ctx.emit('systemLoaded', { to: saved142.sys });
+      tick(2, 'w142 restore sys');
+    }
+    if (saved142.docked) {
+      if (!ctx.flags.docked) dockAtCurrentStation('w142 restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'w142 restore');
+  }
+  w142.noThrow = threw142 === false;
+  console.log('wave142 ledger:', JSON.stringify(ledger142));
+  console.log('wave142 mission-families:', JSON.stringify(w142));
+  if (!Object.values(w142).every(Boolean)) { console.log('WAVE142 MISSION-FAMILY FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {
