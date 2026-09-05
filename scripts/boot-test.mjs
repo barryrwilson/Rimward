@@ -26820,6 +26820,105 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(wRw009).every(Boolean)) { console.log('RW009 MODELS GROUPING FAIL'); errors++; }
 }
 
+// -- RW-010: Models role/scale/lore summary card (RW-003 PR3) ---------------
+// The lore module is pinned at runtime (frozen shape, 12/60/6, guarded
+// fallbacks); the card is pinned at source (textContent-only, scale text
+// derived from SHIP_SCALE at render time). The overlay's runtime behaviour
+// is covered live by scripts/rw008-live-probe.mjs V11.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const mbSrc = readFileSync(join(here, '..', 'src/systems/modelsbrowser.js'), 'utf8');
+  const mbCss = readFileSync(join(here, '..', 'src/ui/models.css'), 'utf8');
+  const loreSrc = readFileSync(join(here, '..', 'src/game/model-lore.js'), 'utf8');
+  const { FACTION_ORDER } = await import('../src/game/model-catalog.js');
+  const { CLASS_ORDER } = await import('../src/game/ship-scale.js');
+  const { FACTION_LORE, SHIP_ROLE_NAME, CLASS_GRAMMAR } = await import('../src/game/model-lore.js');
+
+  // Independent (bible §5.1) and Hollow Reach (§5.2) bullets carry no role
+  // name, so they deliberately have no entry and the card omits the line.
+  const NO_ROLE_FACTIONS = new Set(['independent', 'hollow']);
+
+  const roleEntries = Object.values(SHIP_ROLE_NAME);
+  const roleCount = roleEntries.reduce((n, byClass) => n + Object.keys(byClass).length, 0);
+
+  const frozenDeep = Object.isFrozen(FACTION_LORE)
+    && Object.isFrozen(SHIP_ROLE_NAME)
+    && Object.isFrozen(CLASS_GRAMMAR)
+    && Object.values(FACTION_LORE).every((e) => Object.isFrozen(e) && typeof e.firstRead === 'string')
+    && roleEntries.every((byClass) => Object.isFrozen(byClass)
+      && Object.values(byClass).every((v) => typeof v === 'string' && v.length > 0))
+    && Object.values(CLASS_GRAMMAR).every((v) => typeof v === 'string' && v.length > 0);
+
+  const counts12_60_6 = Object.keys(FACTION_LORE).length === 12
+    && Object.keys(SHIP_ROLE_NAME).length === 10
+    && roleCount === 60
+    && Object.keys(CLASS_GRAMMAR).length === 6
+    && CLASS_ORDER.every((c) => Object.hasOwn(CLASS_GRAMMAR, c));
+
+  // Every catalog faction has a first read; every Banner faction covers all
+  // six classes; Independent/Hollow Reach are absent exactly as transcribed.
+  const coverage = FACTION_ORDER.length === 12
+    && FACTION_ORDER.every((f) => Object.hasOwn(FACTION_LORE, f)
+      && FACTION_LORE[f].firstRead.length > 0)
+    && FACTION_ORDER.every((f) => NO_ROLE_FACTIONS.has(f)
+      === !Object.hasOwn(SHIP_ROLE_NAME, f))
+    && FACTION_ORDER.every((f) => NO_ROLE_FACTIONS.has(f)
+      || CLASS_ORDER.every((c) => Object.hasOwn(SHIP_ROLE_NAME[f], c)));
+
+  // Guarded read contract: unknown keys return '' and never throw.
+  let guarded = false;
+  try {
+    const roleNameOf = (faction, classKey) => {
+      if (!faction || !classKey || !Object.hasOwn(SHIP_ROLE_NAME, faction)) return '';
+      const byClass = SHIP_ROLE_NAME[faction];
+      return Object.hasOwn(byClass, classKey) ? byClass[classKey] : '';
+    };
+    guarded = roleNameOf('nope', 'light') === ''
+      && roleNameOf('freehold', 'nope') === ''
+      && roleNameOf('freehold', 'light') === 'family runabout'
+      && roleNameOf('independent', 'light') === ''
+      && FACTION_LORE.nope === undefined;
+  } catch { guarded = false; }
+
+  // The card, pinned at source: lore module wired in, scale line computed
+  // from the charter at render time, every lore line conditional so no
+  // empty labelled line can render, PR1's text-safe DOM pin still true.
+  const shipLabelFromFactions = readFileSync(
+    join(here, '..', 'src/game/model-catalog.js'), 'utf8',
+  ).includes('label: `${FACTIONS[faction].name}');
+
+  const wRw010 = {
+    moduleWired: /import \{ FACTION_LORE, SHIP_ROLE_NAME \} from '\.\.\/game\/model-lore\.js'/.test(mbSrc),
+    charterImported: /SHIP_SCALE, UNITS_PER_METRE \} from '\.\.\/game\/ship-scale\.js'/.test(mbSrc),
+    cardSignature: /function updateInfoBar\(entry, stats, radius, size\)/.test(mbSrc),
+    roleGuard: /Object\.hasOwn\(SHIP_ROLE_NAME, faction\)/.test(mbSrc),
+    loreGuard: /Object\.hasOwn\(FACTION_LORE, faction\)/.test(mbSrc),
+    scaleGuard: /Object\.hasOwn\(SHIP_SCALE, classKey\)/.test(mbSrc),
+    scaleFromCharter: /scale\.target\.toFixed\(1\)/.test(mbSrc)
+      && /UNITS_PER_METRE/.test(mbSrc)
+      && /charter band/.test(mbSrc),
+    liveryTag: /function liveryTagFor\(entry\)/.test(mbSrc),
+    noEmptyLines: /if \(roleName\) \{/.test(mbSrc) && /if \(factionName && firstRead\) \{/.test(mbSrc),
+    loreFrozen: frozenDeep,
+    counts12_60_6,
+    coverage,
+    guarded,
+    // No charter number is duplicated into the lore module.
+    loreHasNoCharterNumbers: !/pBand|UNITS_PER_METRE|target:|span:|berth:/.test(loreSrc),
+    shipLabelFromFactions,
+    textSafeCard: !/innerHTML/.test(mbSrc) && /name\.textContent = entry\.label/.test(mbSrc),
+    statsLine: /Meshes \$\{stats\.meshCount\}/.test(mbSrc),
+    cssCard: /\.rw-models-card-head \{/.test(mbCss)
+      && /\.rw-models-livery \{/.test(mbCss)
+      && /\.rw-models-role \{/.test(mbCss)
+      && /\.rw-models-line \{/.test(mbCss)
+      && /\.rw-models-lore \{/.test(mbCss),
+    cssContrast: /body\.rw-contrast \.rw-models-lore \{/.test(mbCss),
+  };
+  console.log('rw010 models card:', JSON.stringify(wRw010), `roles=${roleCount}`);
+  if (!Object.values(wRw010).every(Boolean)) { console.log('RW010 MODELS CARD FAIL'); errors++; }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {

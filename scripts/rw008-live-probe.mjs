@@ -21,6 +21,8 @@
  *   V8  Filter "lamp" expands the Lamplighter match and nothing else.
  *   V9  The livery toggle re-skins without moving the camera.
  *   V10 ship:player disables the variant box and says why.
+ *   V11 A station, a planet and a prop each show a card with only the lines
+ *       they have; no empty labelled line ever renders (RW-010).
  *
  * WHY A PROBE: the overlay owns a WebGL context and a rAF loop, so boot-test
  * can only pin its source. Focus order, aria wiring and the rAF motion gates
@@ -77,7 +79,7 @@ const say = (...a) => {
 };
 
 /** Every flow the pass must reach. A missing one fails the run. */
-const FLOWS = ['V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10'];
+const FLOWS = ['V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10', 'V11'];
 
 const results = {
   commit: process.env.RW008_SHA || null,
@@ -841,6 +843,85 @@ async function main() {
       await sleep(400);
       record('V10', !!(v && v.disabled === true
         && /no variant/i.test(String(v.title)) && v.dimmed), v);
+    }
+
+    // =====================================================================
+    // V11 — station, planet and prop cards show only the lines they have
+    // =====================================================================
+    {
+      const CARD = `(() => {
+        const info = document.querySelector('.rw-models-info');
+        if (!info) return null;
+        const lines = [...info.children].map((el) => ({
+          cls: el.className,
+          text: el.textContent.trim(),
+        }));
+        return {
+          lines,
+          empty: lines.some((l) => !l.text),
+          name: (info.querySelector('.rw-models-name') || {}).textContent || null,
+          hasRole: !!info.querySelector('.rw-models-role'),
+          hasScale: !!info.querySelector('.rw-models-line'),
+          hasLore: !!info.querySelector('.rw-models-lore'),
+          hasStats: !!info.querySelector('.rw-models-stats'),
+        };
+      })()`;
+
+      // Expand-only: never collapse a group this flow did not open.
+      const expandGroup = (name) => cdp.eval(`(() => {
+        const h = [...document.querySelectorAll('.rw-models-group')]
+          .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === '${name}');
+        if (h && h.getAttribute('aria-expanded') === 'false') h.click();
+        return !!h;
+      })()`);
+
+      const clickRow = (label) => cdp.eval(`(() => {
+        const r = [...document.querySelectorAll('.rw-models-entry')]
+          .find((x) => x.textContent.trim() === '${label}');
+        if (r) r.click();
+        return !!r;
+      })()`);
+
+      // Station: factioned, so title + faction first read + stats, and no
+      // ship-only role or scale lines.
+      await expandGroup('Veridian Combine');
+      await sleep(400);
+      await clickRow('Veridian Combine Station');
+      await sleep(1500);
+      const station = await cdp.eval(CARD);
+      await cdp.shot('12-station-card.png');
+
+      // Planet: no faction, so title + stats only.
+      await setMode('type');
+      await sleep(400);
+      await expandGroup('Celestial');
+      await sleep(300);
+      await cdp.eval(`(() => {
+        const h = [...document.querySelectorAll('.rw-models-group')]
+          .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === 'Celestial');
+        if (!h) return false;
+        let row = h.nextElementSibling;
+        while (row && !row.classList.contains('rw-models-entry')) row = row.nextElementSibling;
+        if (row) row.click();
+        return !!row;
+      })()`);
+      await sleep(1500);
+      const planet = await cdp.eval(CARD);
+      await cdp.shot('13-planet-card.png');
+
+      // Prop: no faction either.
+      await expandGroup('Props');
+      await sleep(300);
+      await clickRow('Cargo Pod');
+      await sleep(1500);
+      const prop = await cdp.eval(CARD);
+      await cdp.shot('14-prop-card.png');
+
+      const bareOk = (v) => !!(v && v.name && v.hasStats && !v.hasRole
+        && !v.hasScale && !v.hasLore && !v.empty);
+      record('V11', !!(station && station.name && station.hasStats && station.hasLore
+        && !station.hasRole && !station.hasScale && !station.empty
+        && bareOk(planet) && bareOk(prop)), { station, planet, prop });
     }
 
     // =====================================================================
