@@ -75,6 +75,7 @@ import {
   applyRestitution,
 } from '../game/restitution.js';
 import { POLICE_LEAVE_LINE, POLICE_LEAVE_RADIUS } from '../game/police-leave.js';
+import { noteSessionEvent } from '../game/agent-schema.js';
 import { COVERING_LINE, COVERING_STANDING_MIN } from '../game/police-cover.js';
 import { JUMP_REFUSE_LINE, JUMP_REFUSE_STANDING, JUMP_REFUSE_SKIP } from '../game/jump.js';
 import {
@@ -3651,6 +3652,7 @@ function finishChainStep(ctx, job, parsed) {
 function warPayComplete(ctx, job, rec) {
   job.state = 'failed';
   const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  noteJobOutcome(ctx, job, 'done', pay);
   if (pay > 0) ctx.world.credits += pay;
   const origin = job.originSystem;
   const faction = Object.hasOwn(SYSTEMS, origin) ? SYSTEMS[origin].faction : null;
@@ -3717,6 +3719,7 @@ function playerDestroyedName(ctx, name) {
 function huntPayComplete(ctx, job, rec, huntPaidNames) {
   job.state = 'failed';
   const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  noteJobOutcome(ctx, job, 'done', pay);
   if (pay > 0) ctx.world.credits += pay;
   const origin = job.originSystem;
   const faction = Object.hasOwn(SYSTEMS, origin) ? SYSTEMS[origin].faction : null;
@@ -3885,6 +3888,36 @@ function keepUniqueJobRows(list) {
   }
 }
 
+/**
+ * Agent API v2 outcome ring: record a terminal contract transition
+ * (session-only; the save.js `recovered` precedent). Never blocks the board.
+ * `jobNoted` lets agent-api's watcher skip ids the board already closed.
+ */
+function noteJobOutcome(ctx, job, outcome, pay) {
+  try {
+    if (!job || typeof job.id !== 'string' || !job.id) return;
+    const raw = {
+      type: 'jobState',
+      id: job.id,
+      kind: typeof job.kind === 'string' ? job.kind : '',
+      outcome: typeof outcome === 'string' ? outcome : 'closed',
+    };
+    if (typeof pay === 'number' && Number.isFinite(pay)) raw.pay = Math.round(pay);
+    const row = noteSessionEvent(ctx, raw);
+    if (row) {
+      const agent = ctx.agent;
+      if (agent && typeof agent === 'object') {
+        if (!agent.jobNoted || typeof agent.jobNoted !== 'object' || Array.isArray(agent.jobNoted)) {
+          agent.jobNoted = {};
+        }
+        agent.jobNoted[job.id] = raw.outcome;
+      }
+    }
+  } catch {
+    /* the outcome note never blocks a terminal transition */
+  }
+}
+
 function completeJob(ctx, job, notice) {
   const list = ctx.world.jobs;
   if (job && typeof job.id === 'string' && uniqueFourId(job.id)) {
@@ -3900,6 +3933,7 @@ function completeJob(ctx, job, notice) {
       }
     }
   }
+  noteJobOutcome(ctx, job, 'done');
   rewardJobContacts(ctx, job);
   if (notice) ctx.emit('commLine', { text: notice });
 }
@@ -3959,6 +3993,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         const name = huntCardName(ctx, job);
         ctx.emit('commLine', {
           text: wasAccepted
@@ -4019,6 +4054,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         const name = miningOreName(job);
         ctx.emit('commLine', {
           text: wasAccepted
@@ -4044,6 +4080,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
         : clampJobPay(jobPayFor(ctx, origin, base));
+      noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
       const faction = SYSTEMS[origin].faction;
       if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
@@ -4067,6 +4104,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         const name = tradeCommodityName(job.commodity);
         ctx.emit('commLine', {
           text: wasAccepted
@@ -4094,6 +4132,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
         : clampJobPay(jobPayFor(ctx, origin, base));
+      noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
       const faction = SYSTEMS[origin].faction;
       if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
@@ -4117,6 +4156,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         ctx.emit('commLine', {
           text: wasAccepted
             ? 'Passenger contract lapsed — the escort window closed.'
@@ -4142,6 +4182,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
         : clampJobPay(jobPayFor(ctx, origin, FERRY_REWARD));
+      noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
       const faction = SYSTEMS[origin].faction;
       if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
@@ -4165,6 +4206,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         ctx.emit('commLine', {
           text: wasAccepted
             ? 'Survey contract lapsed — the window closed.'
@@ -4182,6 +4224,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && !site) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         ctx.emit('commLine', {
           text: wasAccepted
             ? 'Survey contract lapsed — the window closed.'
@@ -4207,6 +4250,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
         : clampJobPay(jobPayFor(ctx, origin, explorePayBase()));
+      noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
       const faction = SYSTEMS[origin].faction;
       if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
@@ -4247,6 +4291,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         const wasAccepted = job.state === 'accepted';
         if (wasAccepted) applySpyExpose(ctx, origin, exposeDest);
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         ctx.emit('commLine', {
           text: wasAccepted
             ? 'Spy contract lapsed — the window closed.'
@@ -4260,6 +4305,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         const wasAccepted = job.state === 'accepted';
         if (wasAccepted) applySpyExpose(ctx, origin, exposeDest);
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         ctx.emit('commLine', {
           text: wasAccepted
             ? 'Spy contract lapsed — the window closed.'
@@ -4282,6 +4328,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (ctx.world.currentSystem !== origin) continue;
       job.state = 'failed';
       const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+      noteJobOutcome(ctx, job, 'delivered', pay);
       if (pay > 0) ctx.world.credits += pay;
       if (typeof employer === 'string' && Object.hasOwn(FACTIONS, employer)) {
         writeFactionStanding(ctx, employer, MINING_REP);
@@ -4308,6 +4355,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const wasAccepted = job.state === 'accepted';
         job.state = 'failed';
+        if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
         const name = warCardName(ctx, job);
         ctx.emit('commLine', {
           text: wasAccepted
@@ -4541,19 +4589,25 @@ export function initStation(ctx) {
     justDocked: false,
   };
 
-  function h(tag, cls, parent, text) {
+  // h/btn are the single source for everything the docked player sees and can
+  // click. They are swappable so stationDesk.peekView() can run the exact same
+  // view builders against a JSON capture harness (agent API v2 station parity)
+  // — never a parallel view implementation, never DOM scraping.
+  function hDom(tag, cls, parent, text) {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
     if (text !== undefined) node.textContent = text;
     if (parent) parent.appendChild(node);
     return node;
   }
-  function btn(parent, label, onClick, cls = 'screen-btn') {
+  function btnDom(parent, label, onClick, cls = 'screen-btn') {
     const b = h('button', cls, parent, label);
     b.type = 'button';
     b.addEventListener('click', onClick);
     return b;
   }
+  let h = hDom;
+  let btn = btnDom;
 
   const COMMODITY_KEYS = Object.keys(COMMODITIES);
 
@@ -6107,18 +6161,11 @@ export function initStation(ctx) {
   }
 
   let renderedView = null; // 'level:service' of the last render
-  function render() {
-    // The panel is the scroller (screens.css .screen-panel overflow-y:auto)
-    // and the 1 s docked refresh rebuilds it from scratch — carry scrollTop
-    // across the rebuild or the board snaps to the top mid-scroll. Only
-    // same-view rebuilds restore: navigation (Back / service select) resets
-    // to the top as expected.
-    const view = `${ui.level}:${ui.service}`;
-    const oldPanel = overlay.firstElementChild;
-    const scrollY = oldPanel && renderedView === view ? oldPanel.scrollTop : 0;
-    overlay.textContent = '';
-    const panel = h('div', 'screen-panel station-panel', overlay);
 
+  // Everything the docked player sees, built through the current h/btn
+  // bindings. render() calls this with the DOM pair; stationDesk.peekView()
+  // calls it with a capture pair (agent API v2). One builder, one truth.
+  function buildPanel(panel) {
     const factionName = factionDisplayName(currentDef.faction) || currentDef.faction;
     const head = h('div', 'station-head', panel);
     h('div', 'station-title', head, currentDef.station.name.toUpperCase());
@@ -6164,10 +6211,194 @@ export function initStation(ctx) {
 
     if (ui.notice) {
       const note = h('div', 'station-notice', panel, ui.notice);
-      note.setAttribute('aria-live', 'polite');
+      if (typeof note.setAttribute === 'function') note.setAttribute('aria-live', 'polite');
     }
+  }
+
+  function render() {
+    // The panel is the scroller (screens.css .screen-panel overflow-y:auto)
+    // and the 1 s docked refresh rebuilds it from scratch — carry scrollTop
+    // across the rebuild or the board snaps to the top mid-scroll. Only
+    // same-view rebuilds restore: navigation (Back / service select) resets
+    // to the top as expected.
+    const view = `${ui.level}:${ui.service}`;
+    const oldPanel = overlay.firstElementChild;
+    const scrollY = oldPanel && renderedView === view ? oldPanel.scrollTop : 0;
+    overlay.textContent = '';
+    const panel = h('div', 'screen-panel station-panel', overlay);
+    buildPanel(panel);
     panel.scrollTop = scrollY; // after content: clamped against the new scrollHeight
     renderedView = view;
+  }
+
+  // ---- Agent API v2: structured view capture + player-closure dispatch ----
+  // Capture nodes are plain JSON-ish objects; onClick is the exact closure a
+  // player click would run. Nothing here mutates state except what the real
+  // view builders already mutate during an ordinary render().
+  function makeCapture() {
+    const buttons = [];
+    const hCap = (tag, cls, parent, text) => {
+      const node = {
+        capture: true,
+        tag: typeof tag === 'string' ? tag : '',
+        cls: typeof cls === 'string' ? cls : '',
+        text: text === undefined ? '' : String(text),
+        children: [],
+      };
+      if (parent && Array.isArray(parent.children)) parent.children.push(node);
+      return node;
+    };
+    const btnCap = (parent, label, onClick, cls = 'screen-btn') => {
+      const node = hCap('button', cls, parent, label);
+      node.onClick = onClick;
+      node.actionIndex = buttons.length;
+      buttons.push(node);
+      return node;
+    };
+    const root = hCap('div', 'screen-panel station-panel', null);
+    return { h: hCap, btn: btnCap, root, buttons };
+  }
+
+  /** Run buildPanel against the capture harness. null when not docked. */
+  function captureView() {
+    if (!ctx.flags.docked || !ui.open) return null;
+    const cap = makeCapture();
+    const savedH = h;
+    const savedBtn = btn;
+    h = cap.h;
+    btn = cap.btn;
+    try {
+      buildPanel(cap.root);
+    } catch {
+      /* a view that cannot build captures as empty — never throw */
+    } finally {
+      h = savedH;
+      btn = savedBtn;
+    }
+    return cap;
+  }
+
+  const VIEW_ROW_CAP = 120;
+  const VIEW_TEXT_CAP = 240;
+
+  function viewText(value) {
+    const s = typeof value === 'string' ? value : '';
+    return s.length > VIEW_TEXT_CAP ? s.slice(0, VIEW_TEXT_CAP) : s;
+  }
+
+  /** Flatten a capture tree into bounded JSON rows + the button table. */
+  function viewRows(cap) {
+    const rows = [];
+    const walk = (node, depth) => {
+      if (!node || rows.length >= VIEW_ROW_CAP) return;
+      if (node.text) {
+        rows.push({
+          depth,
+          tag: node.tag,
+          cls: viewText(node.cls),
+          text: viewText(node.text),
+          action: Number.isInteger(node.actionIndex) ? node.actionIndex : null,
+        });
+      }
+      const kids = node.children;
+      for (let i = 0; i < kids.length && rows.length < VIEW_ROW_CAP; i++) {
+        walk(kids[i], depth + 1);
+      }
+    };
+    const kids = cap.root.children;
+    for (let i = 0; i < kids.length && rows.length < VIEW_ROW_CAP; i++) walk(kids[i], 0);
+    return rows;
+  }
+
+  /** Structured view of the current docked panel. Session-only; never throws. */
+  function peekView() {
+    try {
+      const cap = captureView();
+      if (!cap) return null;
+      const actions = [];
+      for (let i = 0; i < cap.buttons.length; i++) {
+        actions.push({ n: i, label: viewText(cap.buttons[i].text) });
+      }
+      return {
+        level: ui.level === 2 ? 2 : 1,
+        service: typeof ui.service === 'string' && ui.service ? ui.service : null,
+        notice: viewText(ui.notice),
+        pending: !!(
+          ui.seedPending || ui.giftPending || ui.restitutionPending
+          || ui.outfitPending || ui.graftPending || ui.trainPending || ui.yardPending
+          || ui.trafficPending || ui.dataPending || ui.launderPending
+        ),
+        rows: viewRows(cap),
+        actions,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Notices that mean the click changed nothing. Everything else is reported
+  // as accepted with the player-visible notice echoed back.
+  const PERFORM_REFUSALS = Object.freeze([
+    { re: /^Not enough UU/, token: 'uu' },
+    { re: /^Hold is full/, token: 'hold' },
+    { re: /^No .+ in the hold/, token: 'hold' },
+    { re: /^No room/, token: 'hold' },
+    { re: /^That posting is not valid/, token: 'not-offered' },
+    { re: /^Dock first/, token: 'no-service' },
+    { re: /no longer on the board/, token: 'not-offered' },
+    { re: /no longer in the hold/, token: 'not-offered' },
+    { re: /^No sale/, token: 'not-offered' },
+    { re: /already (installed|fitted|mounted|maxed)/, token: 'unavailable' },
+    { re: /maxed out/, token: 'unavailable' },
+    { re: /needs the .+ first/, token: 'unavailable' },
+    { re: /no (launcher|turret) hardpoint/, token: 'unavailable' },
+    { re: /^She is sated/, token: 'unavailable' },
+    { re: /^No wounds to tend/, token: 'unavailable' },
+    { re: /whole on every channel/, token: 'unavailable' },
+    { re: /will not take them/, token: 'unavailable' },
+    { re: /hold no marker/, token: 'unavailable' },
+    { re: /^Restitution is not on offer/, token: 'not-offered' },
+    { re: /^That control is not on the panel/, token: 'not-offered' },
+    { re: /^(Cannot|Can't) /, token: 'unavailable' },
+    { re: /papers are already in flight/i, token: 'busy' },
+  ]);
+
+  function performResult(noticeBefore) {
+    const notice = typeof ui.notice === 'string' ? ui.notice : '';
+    for (let i = 0; i < PERFORM_REFUSALS.length; i++) {
+      const rule = PERFORM_REFUSALS[i];
+      if (rule.re.test(notice)) return { ok: false, notice, token: rule.token };
+    }
+    return { ok: true, notice, changed: notice !== noticeBefore };
+  }
+
+  /**
+   * Click the n-th button of the CURRENT view through its own player closure.
+   * Re-captures the view first (live state, like the 1 s refresh), and when
+   * `expect` is given the captured label must match exactly — a stale plan
+   * fails closed instead of clicking the wrong row.
+   */
+  function perform(spec) {
+    const bag = spec && typeof spec === 'object' && !Array.isArray(spec) ? spec : {};
+    const n = Object.hasOwn(bag, 'n') ? bag.n : undefined;
+    if (!Number.isInteger(n) || n < 0) return { ok: false, notice: '', token: 'bad-args' };
+    const cap = captureView();
+    if (!cap) return { ok: false, notice: 'Dock first.', token: 'no-service' };
+    const node = cap.buttons[n];
+    if (!node || typeof node.onClick !== 'function') {
+      return { ok: false, notice: 'That control is not on the panel.', token: 'not-offered' };
+    }
+    if (Object.hasOwn(bag, 'expect') && bag.expect !== undefined) {
+      const want = typeof bag.expect === 'string' ? bag.expect : '';
+      if (!want || node.text !== want) return { ok: false, notice: '', token: 'stale', label: node.text };
+    }
+    const before = typeof ui.notice === 'string' ? ui.notice : '';
+    try {
+      node.onClick();
+    } catch {
+      return { ok: false, notice: '', token: 'refuse' };
+    }
+    return performResult(before);
   }
 
   function pinDockedSystem() {
@@ -6459,6 +6690,8 @@ export function initStation(ctx) {
     undock,
     peekService,
     peekFillUnit,
+    peekView,
+    perform,
   };
 
   return {

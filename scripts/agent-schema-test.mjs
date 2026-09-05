@@ -12,6 +12,7 @@ import {
   actResult,
   fwdFromQuat,
   vec3,
+  localDir,
   isLiveCommand,
   isPr1LiveCommand,
   isForbiddenName,
@@ -183,6 +184,69 @@ const session = { agent: { optIn: false, events: [] }, world: { time: 9 } };
 noteSessionEvent(session, { type: 'recovered', source: 'fresh' });
 pin('noteSessionEvent no optIn write', session.agent.optIn === false);
 pin('noteSessionEvent recovered', session.agent.events.length === 1 && session.agent.events[0].type === 'recovered');
+
+// ---- v2 pins (mission 43b34db25ae32972) ----
+pin('version 2', COMMAND_NAMES.includes('setControl') && COMMAND_NAMES.includes('clearControl')
+  && COMMAND_NAMES.includes('stationAction') && COMMAND_NAMES.includes('recover'));
+pin('v2 commands live', isLiveCommand('setControl') === true && isLiveCommand('clearControl') === true
+  && isLiveCommand('stationAction') === true && isLiveCommand('recover') === true);
+pin('v2 events authored', EVENT_TYPES.includes('jobState') && EVENT_TYPES.includes('npcDestroyed')
+  && EVENT_TYPES.includes('survivorRescued') && EVENT_TYPES.includes('landmarkFound')
+  && EVENT_TYPES.includes('npcHit') && EVENT_TYPES.includes('hailMiss'));
+
+const jobEv = sanitizeEvent({ type: 'jobState', t: 8, id: 'mine-freehold-0', kind: 'mining', outcome: 'delivered', pay: 220, extra: () => {} });
+pin('jobState primitives', !!(jobEv && jobEv.id === 'mine-freehold-0' && jobEv.outcome === 'delivered'
+  && jobEv.pay === 220 && !Object.hasOwn(jobEv, 'extra')));
+
+const npcDead = sanitizeEvent({ type: 'npcDestroyed', t: 9, ship: { id: 'npc-9', state: { name: 'Gallows Wren' }, ai: { intent: true } } });
+pin('npcDestroyed derives identity', !!(npcDead && npcDead.targetId === 'npc-9'
+  && npcDead.targetName === 'Gallows Wren' && !Object.hasOwn(npcDead, 'ship') && !Object.hasOwn(npcDead, 'ai')));
+
+const engOut = sanitizeEvent({ type: 'engineOut', t: 10, player: true });
+pin('engineOut player primitive', !!(engOut && engOut.player === true && !Object.hasOwn(engOut, 'ship')));
+
+const podEv = sanitizeEvent({ type: 'podCollected', t: 11, pod: { id: 7, contents: [] } });
+pin('podCollected derives podId', !!(podEv && podEv.podId === 7 && !Object.hasOwn(podEv, 'pod')));
+
+const hailEnd = sanitizeEvent({ type: 'hailClosed', t: 12, ship: { id: 'x' }, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 120 });
+pin('hailClosed outcome primitives', !!(hailEnd && hailEnd.demandOutcome === 'paid'
+  && hailEnd.speaker === 'Ninth Tooth' && hailEnd.demand === 120 && !Object.hasOwn(hailEnd, 'ship')));
+
+// Hit spam collapses per target and never floods the ring.
+const hitRing = [];
+for (let i = 0; i < 30; i++) pushRing(hitRing, { type: 'npcHit', t: i, targetId: 'a', damage: 8 });
+pushRing(hitRing, { type: 'npcHit', t: 31, targetId: 'b', damage: 4 });
+const hitA = hitRing.find((e) => e && e.type === 'npcHit' && e.targetId === 'a');
+pin('npcHit collapse per target', !!(hitA && hitA.count === 30));
+pin('npcHit newest target kept', hitRing.some((e) => e && e.type === 'npcHit' && e.targetId === 'b'));
+const keepRing = [];
+pushRing(keepRing, { type: 'jobState', t: 1, id: 'j1', kind: 'mining', outcome: 'done' });
+for (let i = 0; i < 24; i++) pushRing(keepRing, { type: 'npcHit', t: i + 2, targetId: 's', damage: 1 });
+pin('jobState survives hit flood', keepRing.some((e) => e && e.type === 'jobState' && e.id === 'j1'));
+
+// actResult v2 receipts: reqId + sim timestamp.
+const receipt = actResult({ ok: true, error: '', name: 'setControl', token: '', status: 'active', reqId: 'q9', t: 12.5 });
+pin('actResult v2 receipt', receipt.v === 2 && receipt.reqId === 'q9' && receipt.t === 12.5 && receipt.status === 'active');
+const receiptBare = actResult({ ok: false, error: 'x', name: 'dock', token: 'range' });
+pin('actResult omits empty reqId', !Object.hasOwn(receiptBare, 'reqId') && !Object.hasOwn(receiptBare, 't'));
+
+// localDir: world dir through the inverse quaternion (identity + 90° yaw).
+pin('localDir identity', vecNear(localDir({ x: 0, y: 0, z: 0, w: 1 }, 0, 0, -5), [0, 0, -1]));
+const yaw90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+const wantLocal = new THREE.Vector3(10, 0, 0).applyQuaternion(yaw90.clone().invert()).normalize();
+pin('localDir matches THREE inverse', vecNear(localDir(yaw90, 10, 0, 0), [wantLocal.x, wantLocal.y, wantLocal.z]));
+pin('localDir bad quat', localDir(null, 1, 0, 0) === null && localDir({ x: NaN, y: 0, z: 0, w: 1 }, 1, 0, 0) === null);
+
+// Capability manifest: every role and station service has an explicit status.
+const { capabilityManifest } = await import('../src/game/agent-schema.js');
+const manifest = capabilityManifest();
+pin('manifest v2', manifest.version === 2 && Array.isArray(manifest.events));
+pin('manifest roles explicit', Object.values(manifest.roles).every((r) => (
+  r && (r.status === 'supported' || r.status === 'unavailable' || r.status === 'blocked-by-scope')
+)));
+pin('manifest services explicit', ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard']
+  .every((s) => manifest.services[s] && manifest.services[s].status === 'supported'));
+pin('manifest commands complete', COMMAND_NAMES.every((n) => manifest.commands[n]));
 
 if (fails) {
   console.log(`AGENT SCHEMA FAIL — ${fails}`);

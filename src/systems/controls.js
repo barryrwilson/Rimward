@@ -210,6 +210,167 @@ const RETICLE_RADIUS_FRACTION = 0.35; // of min(vw, vh)
 
 const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock', 'afterburner']);
 
+// ---------------------------------------------------------------------------
+// Agent manual-control lease (agent API v2, mission 43b34db25ae32972).
+// controls.js stays the sole ctx.input writer. A lease is a bounded, expiring
+// bundle of normalized player inputs — steering/strafe/roll axes, a throttle
+// setpoint target (ramped at the player rate), fire and drift holds — applied
+// by update() at game rate while the outer planner refreshes at low rate.
+// It is not a helm: AP/AM/flee ownership is refused, not stolen, and any
+// physical flight input wins immediately. Every unsafe lifecycle transition
+// (expiry, blur, pause, berth hold, overlays, dock, jump, death, opt-out,
+// explicit clear) zeroes the lease before the next combat tick, so fire can
+// never stick. Session-only module state; nothing persists.
+const LEASE_TTL_MIN = 0.05;
+const LEASE_TTL_MAX = 5;
+const LEASE_TTL_DEFAULT = 1;
+const LEASE_KEYS = new Set([
+  'seq', 'ttl',
+  'steerX', 'steerY', 'strafeX', 'strafeY', 'roll',
+  'throttle', 'fireHeld', 'driftHeld',
+]);
+
+let lease = null; // { seq, expiresAt, steerX, steerY, strafeX, strafeY, roll, throttle, fire, drift }
+let leaseSeq = 0; // last accepted sequence; stale arrivals refused
+let leaseNote = { state: 'idle', seq: 0, reason: '', t: 0 }; // last terminal transition
+
+function simNow(ctx) {
+  return ctx && ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+}
+
+function noteLease(ctx, state, seq, reason) {
+  leaseNote = { state, seq, reason, t: simNow(ctx) };
+}
+
+/** Idempotent. Returns true when a live lease was dropped. */
+function dropLease(ctx, reason) {
+  if (!lease) return false;
+  const seq = lease.seq;
+  lease = null;
+  noteLease(ctx, reason === 'expired' ? 'expired' : 'cleared', seq, reason || 'cleared');
+  return true;
+}
+
+/** Live gates, re-checked every applied tick. '' means the lease may run. */
+function leaseGateToken(ctx) {
+  try {
+    const f = ctx && ctx.flags;
+    if (!f || typeof f !== 'object') return 'no-service';
+    if (f.docked === true) return 'docked';
+    if (f.berthHold === true) return 'held';
+    if (f.paused === true) return 'paused';
+    if (ctx.gate && ctx.gate.jumping === true) return 'jumping';
+    if (f.hailOpen === true || f.chartOpen === true || f.berthOpen === true) return 'overlay';
+    try { if (typeof playSurfaceBlocked === 'function' && playSurfaceBlocked(ctx) === true) return 'overlay'; } catch { /* helper miss */ }
+    try { if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return 'overlay'; } catch { /* helper miss */ }
+    const death = ctx.deathApi;
+    if (death && typeof death.isOpen === 'function' && death.isOpen() === true) return 'dead';
+    if (ctx.autopilot && ctx.autopilot.engaged === true) return 'helm';
+    if (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true) return 'helm';
+    if (ctx.automine && ctx.automine.engaged === true) return 'helm';
+    if (ctx.flee && ctx.flee.engaged === true) return 'helm';
+    return '';
+  } catch {
+    return 'no-service';
+  }
+}
+
+function leaseAxis(spec, key) {
+  if (!Object.hasOwn(spec, key) || spec[key] === undefined) return 0;
+  const v = spec[key];
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < -1 || v > 1) return null;
+  return v;
+}
+
+/**
+ * Accept a bounded manual-control lease. Returns '' on accept or a stable
+ * refusal token. Strict: unknown keys, non-finite/out-of-range axes, stale or
+ * non-integer sequence, out-of-bounds TTL, and every gated lifecycle state
+ * leave the current input untouched.
+ */
+export function agentControlSet(ctx, spec) {
+  try {
+    if (!ctx || !ctx.input || typeof ctx.input !== 'object') return 'no-service';
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return 'bad-args';
+    for (const k of Object.keys(spec)) {
+      if (!LEASE_KEYS.has(k)) return 'bad-args';
+    }
+    const seq = spec.seq;
+    if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 1) return 'bad-seq';
+    if (seq <= leaseSeq) return 'stale';
+    let ttl = LEASE_TTL_DEFAULT;
+    if (spec.ttl !== undefined) {
+      ttl = spec.ttl;
+      if (typeof ttl !== 'number' || !Number.isFinite(ttl) || ttl < LEASE_TTL_MIN || ttl > LEASE_TTL_MAX) {
+        return 'bad-ttl';
+      }
+    }
+    const steerX = leaseAxis(spec, 'steerX');
+    const steerY = leaseAxis(spec, 'steerY');
+    const strafeX = leaseAxis(spec, 'strafeX');
+    const strafeY = leaseAxis(spec, 'strafeY');
+    const roll = leaseAxis(spec, 'roll');
+    if (steerX === null || steerY === null || strafeX === null || strafeY === null || roll === null) {
+      return 'bad-axis';
+    }
+    let throttle = null;
+    if (spec.throttle !== undefined && spec.throttle !== null) {
+      const t = spec.throttle;
+      if (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > 1) return 'bad-throttle';
+      throttle = t;
+    }
+    const gate = leaseGateToken(ctx);
+    if (gate) return gate;
+    leaseSeq = seq;
+    lease = {
+      seq,
+      expiresAt: simNow(ctx) + ttl,
+      steerX, steerY, strafeX, strafeY, roll,
+      throttle,
+      fire: spec.fireHeld === true,
+      drift: spec.driftHeld === true,
+    };
+    noteLease(ctx, 'active', seq, '');
+    return '';
+  } catch {
+    return 'no-service';
+  }
+}
+
+/** Explicit clear. Idempotent; safe to call for any session state. */
+export function agentControlClear(ctx) {
+  try {
+    if (!dropLease(ctx, 'explicit')) noteLease(ctx, 'cleared', leaseSeq, 'explicit');
+    return '';
+  } catch {
+    return 'no-service';
+  }
+}
+
+/** JSON-plain lease status for observe(). Never throws. */
+export function agentControlStatus(ctx) {
+  try {
+    if (lease) {
+      return {
+        state: 'active',
+        seq: lease.seq,
+        expiresIn: Math.max(0, lease.expiresAt - simNow(ctx)),
+        fire: lease.fire === true,
+        reason: '',
+      };
+    }
+    return {
+      state: leaseNote.state,
+      seq: leaseNote.seq,
+      expiresIn: 0,
+      fire: false,
+      reason: leaseNote.reason,
+    };
+  } catch {
+    return { state: 'idle', seq: 0, expiresIn: 0, fire: false, reason: '' };
+  }
+}
+
 // Shared with KeyT/H/J/V/Space. agentPulse sets these; next update publishes one frame.
 let pendingTarget = false;
 let pendingHail = false;
@@ -617,6 +778,10 @@ export function initControls(ctx) {
   const { input, config } = ctx;
   const pressed = new Set();
   rebuildTrackedFromBindings(ctx);
+  // Session reset: a fresh boot starts with no lease and no sequence history.
+  lease = null;
+  leaseSeq = 0;
+  noteLease(ctx, 'idle', 0, '');
 
   // Mouse reticle state (null = not moved yet → treated as screen center).
   let mouseX = null;
@@ -635,6 +800,7 @@ export function initControls(ctx) {
   const zeroAxesFireDrift = () => {
     pressed.clear();
     fireDown = false;
+    dropLease(ctx, 'blur');
     pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
     input.matchSpeedPressed = false;
     input.reticleLockPressed = false;
@@ -856,6 +1022,55 @@ export function initControls(ctx) {
           1,
           Math.max(0, input.throttle + throttleDir * THROTTLE_RAMP_RATE * dt),
         );
+      }
+
+      // --- Agent control lease (v2). Re-gated every tick; any unsafe
+      // transition drops it before the value write, so fire can never stick.
+      if (lease) {
+        const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+        if (now >= lease.expiresAt) {
+          dropLease(ctx, 'expired');
+        } else {
+          const gate = leaseGateToken(ctx);
+          if (gate) dropLease(ctx, gate);
+        }
+        if (lease) {
+          const evs = ctx.lastEvents;
+          if (Array.isArray(evs)) {
+            for (let i = 0; i < evs.length; i++) {
+              const typ = evs[i] && evs[i].type;
+              if (typ === 'playerDestroyed') { dropLease(ctx, 'dead'); break; }
+              if (typ === 'systemLoaded') { dropLease(ctx, 'jump'); break; }
+              if (typ === 'docked') { dropLease(ctx, 'docked'); break; }
+            }
+          }
+        }
+        // Player emergency input wins: any physical flight key or fire button
+        // held this frame drops the lease outright (no silent sharing).
+        if (lease && (fireDown || pressed.size > 0)) dropLease(ctx, 'player-override');
+      }
+      if (lease) {
+        input.steerX = lease.steerX;
+        input.steerY = lease.steerY;
+        input.strafeX = lease.strafeX;
+        input.strafeY = lease.strafeY;
+        input.roll = lease.roll;
+        input.fireHeld = lease.fire && ctx.flags.chartOpen !== true;
+        input.driftHeld = lease.drift;
+        if (lease.throttle !== null) {
+          if (lease.throttle <= 0) {
+            // Player-equivalent full stop (double-tap F).
+            input.throttle = 0;
+            input.fullStop = true;
+          } else {
+            input.fullStop = false;
+            const diff = lease.throttle - input.throttle;
+            const step = THROTTLE_RAMP_RATE * dt;
+            input.throttle = Math.abs(diff) <= step
+              ? lease.throttle
+              : input.throttle + Math.sign(diff) * step;
+          }
+        }
       }
     },
   };

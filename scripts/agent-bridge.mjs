@@ -14,8 +14,10 @@ import { fileURLToPath } from 'node:url';
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const BODY_LIMIT = 65536;
 const WS_MAX = 65536;
+// Page-contract version the bridge emulates when the page is unreachable.
+// Matches src/game/agent-schema.js VERSION (v2 cutover, mission 43b34db25ae32972).
 const NO_CTX_OBSERVE = Object.freeze({
-  v: 1, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [],
+  v: 2, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [],
 });
 const CHROME_WIN = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
@@ -51,7 +53,7 @@ function logLine(...parts) {
 }
 
 function noCtxAct(name) {
-  return { v: 1, ok: false, error: 'no-ctx', name: String(name || ''), token: 'no-ctx' };
+  return { v: 2, ok: false, error: 'no-ctx', name: String(name || ''), token: 'no-ctx' };
 }
 
 function actCommand(raw) {
@@ -195,11 +197,11 @@ function observeExpr() {
     try {
       const h = window.rimward;
       if (!h || typeof h.observe !== 'function') {
-        return { v: 1, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
+        return { v: 2, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
       }
       return h.observe();
     } catch {
-      return { v: 1, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
+      return { v: 2, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
     }
   })()`;
 }
@@ -211,11 +213,11 @@ function actExpr(command) {
       const cmd = ${payload};
       const h = window.rimward;
       if (!h || typeof h.act !== 'function') {
-        return { v: 1, ok: false, error: 'no-ctx', name: String(cmd && cmd.name || ''), token: 'no-ctx' };
+        return { v: 2, ok: false, error: 'no-ctx', name: String(cmd && cmd.name || ''), token: 'no-ctx' };
       }
       return h.act(cmd);
     } catch {
-      return { v: 1, ok: false, error: 'refuse', name: '', token: 'refuse' };
+      return { v: 2, ok: false, error: 'refuse', name: '', token: 'refuse' };
     }
   })()`;
 }
@@ -584,7 +586,7 @@ function makeCdpEvaluator(getCdp, health) {
         if (!value || typeof value !== 'object') return noCtxAct(cmd.name);
         return value;
       } catch {
-        return { v: 1, ok: false, error: 'refuse', name: cmd.name, token: 'refuse' };
+        return { v: 2, ok: false, error: 'refuse', name: cmd.name, token: 'refuse' };
       }
     },
   };
@@ -738,7 +740,7 @@ export function startBridge(opts) {
               const result = await evaluator.act(cmd);
               send(result && typeof result === 'object' ? result : noCtxAct(cmd.name));
             } else {
-              send({ v: 1, ok: false, error: 'unknown', name: '', token: 'unknown' });
+              send({ v: 2, ok: false, error: 'unknown', name: '', token: 'unknown' });
             }
           }
         }).catch(() => { closeSock(); });
@@ -1038,7 +1040,7 @@ export async function runSelfTest() {
 
   const fixture = crypto.randomBytes(32).toString('hex');
   const mockObserve = {
-    v: 1, t: 9, ok: true, error: '', agentOptIn: true, events: [],
+    v: 2, t: 9, ok: true, error: '', agentOptIn: true, events: [],
     world: { credits: 424242, currentSystem: 'fixture-sys' },
   };
   let lastAct = null;
@@ -1076,7 +1078,7 @@ export async function runSelfTest() {
         async act(cmd) {
           actCalls += 1;
           lastAct = cmd;
-          return { v: 1, ok: true, error: '', name: cmd.name, token: '' };
+          return { v: 2, ok: true, error: '', name: cmd.name, token: '' };
         },
       },
       getHealth: async () => ({ cdpAttached: true, gameReady: false, agentOptIn: true }),

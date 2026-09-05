@@ -1354,6 +1354,8 @@ export function initSave(ctx) {
 
   ctx.deathApi = {
     isOpen() { return dead === true; },
+    // Agent API v2: the same recovery the Enter/click/auto-timer path runs.
+    recover() { recover(); },
   };
 
   function recover() {

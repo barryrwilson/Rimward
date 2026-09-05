@@ -20,8 +20,12 @@ import { DEFAULT_BINDINGS } from '../systems/bindings.js';
  *   burn-avoid helm toward a sun-clear station ring. Not pad auto-dock.
  *   Not WORLD_FIELDS. Afterburner does not steal this channel.
  * - agent: written ONLY by agent-api.js (session; not persist; not a helm),
- *   except save.js recover() may append a sanitized `recovered` ring row.
- *   Restore must not set optIn or empty the ring. Observe copies HUD-visible JSON only.
+ *   except save.js recover() may append a sanitized `recovered` ring row and
+ *   station.js may append a sanitized `jobState` ring row at a terminal
+ *   contract transition. Restore must not set optIn or empty the ring.
+ *   Observe copies HUD-visible JSON only. The agent control lease is
+ *   module state inside controls.js (the sole ctx.input writer); agent-api
+ *   calls controls exports and never writes ctx.input itself.
  * - ship (flight transform): written ONLY by ship.js.
  * - player (ship state record): created by ship.js via createShipState;
  *   mutated by combat.js (damage) and state.js helpers only.
@@ -35,6 +39,9 @@ import { DEFAULT_BINDINGS } from '../systems/bindings.js';
  *   (AI state); combat.js may damage their state records.
  * - targets: written by controls.js (selection) + npc.js (availability).
  *   targets.part is controls.js only, live `'engine'|null`, not WORLD_FIELDS.
+ *   targets.aim is hud.js only: the player-visible selected-target aim digest
+ *   (bracket/lead projection + ship-local bearings), refreshed per HUD frame,
+ *   JSON-plain, session-only. agent-observe.js reads it; nobody else writes.
  * - flags.docked: written by station.js only. flags.combat: written by npc.js.
  * - flags.camera / flags.firstPerson: written by controls.js only.
  * - flags.matchSpeed: written by ship.js only (toggle). npc.js does not write it.

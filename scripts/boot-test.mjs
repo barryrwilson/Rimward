@@ -24161,7 +24161,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const noThree = snap && !looksLikeThree(snap) && jsonPlain;
   const missing = buildObservation(null);
   const noCtx = missing
-    && missing.v === 1
+    && missing.v === 2
     && missing.t === 0
     && missing.ok === false
     && missing.error === 'no-ctx'
@@ -24176,16 +24176,16 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.flags.berthHold = false;
   ctx.flags.paused = false;
   ctx.agent.optIn = false;
-  const pingClosed = rw?.act?.({ v: 1, name: 'ping', args: {} });
+  const pingClosed = rw?.act?.({ v: 2, name: 'ping', args: {} });
   const noOptIn = pingClosed?.ok === false && pingClosed?.token === 'opt-in';
-  const tel = rw?.act?.({ v: 1, name: 'teleport', args: {} });
+  const tel = rw?.act?.({ v: 2, name: 'teleport', args: {} });
   const forbidden = tel?.ok === false && tel?.token === 'forbidden';
   ctx.agent.optIn = true;
   let pingThrew = false;
   let pingOk = null;
-  try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { pingThrew = true; }
+  try { pingOk = rw.act({ v: 2, name: 'ping', args: {} }); } catch { pingThrew = true; }
   const pingWhenIn = pingThrew === false && pingOk?.ok === true && pingOk?.token === '';
-  const unk = rw?.act?.({ v: 1, name: 'notACommand', args: {} });
+  const unk = rw?.act?.({ v: 2, name: 'notACommand', args: {} });
   const unknown = unk?.ok === false && unk?.token === 'unknown';
   // RW-007: ctx.agent.events is EVENT_CAP 16; commLines cap at COMM_LINE_CAP 4
   // and pushRing drops the oldest commLine first on overflow. Prior waves leave
@@ -24217,8 +24217,8 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.flags.berthHold = savedHold127;
   ctx.flags.paused = savedPause127;
   const w127 = {
-    handle: !!(rw && rw.version === 1 && typeof rw.observe === 'function' && typeof rw.act === 'function'),
-    snapOk: snap?.ok === true && snap?.v === 1,
+    handle: !!(rw && rw.version === 2 && typeof rw.observe === 'function' && typeof rw.act === 'function'),
+    snapOk: snap?.ok === true && snap?.v === 2,
     jsonPlain: !!jsonPlain,
     noThree: !!noThree,
     noThrow: threw === false && pingThrew === false,
@@ -24519,35 +24519,35 @@ removeLiveShip(w42indyCtx, w42indy);
   const hailApi = !!(hail && typeof hail.resolve === 'function' && typeof hail.peek === 'function');
 
   let plotOk = null;
-  try { plotOk = rw.act({ v: 1, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
+  try { plotOk = rw.act({ v: 2, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
   const plotCharted = plotOk?.ok === true && plotOk?.token === '' && ctx.world.nav?.dest === dest131;
 
   let plotProto = null;
-  try { plotProto = rw.act({ v: 1, name: 'plotRoute', args: { dest: '__proto__' } }); } catch { threw131 = true; }
+  try { plotProto = rw.act({ v: 2, name: 'plotRoute', args: { dest: '__proto__' } }); } catch { threw131 = true; }
   const plotUncharted = plotProto?.ok === false && !!plotProto?.token && plotProto.token !== 'unknown';
 
   let apEng = null;
-  try { apEng = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
+  try { apEng = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
   const apEngage = !!(apEng && apEng.token !== 'unknown'
     && ((apEng.ok === true && apEng.token === '') || (apEng.ok === false && !!apEng.token)));
 
   const apWas = ctx.autopilot?.engaged === true;
   let apCancel = null;
-  try { apCancel = rw.act({ v: 1, name: 'cancelAutopilot', args: {} }); } catch { threw131 = true; }
+  try { apCancel = rw.act({ v: 2, name: 'cancelAutopilot', args: {} }); } catch { threw131 = true; }
   const apCancelOk = apCancel?.ok === true && (apWas ? ctx.autopilot?.engaged !== true : true);
 
   let amEng = null;
-  try { amEng = rw.act({ v: 1, name: 'engageAutomine', args: {} }); } catch { threw131 = true; }
+  try { amEng = rw.act({ v: 2, name: 'engageAutomine', args: {} }); } catch { threw131 = true; }
   const amNoRock = amEng?.ok === false && amEng?.token === 'noRock';
 
   ctx.flags.docked = false;
   let openFlight = null;
-  try { openFlight = rw.act({ v: 1, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
+  try { openFlight = rw.act({ v: 2, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
   const openNotDocked = openFlight?.ok === false && !!openFlight?.token && openFlight.token !== 'unknown';
 
   ctx.flags.docked = true;
   let openMkt = null;
-  try { openMkt = rw.act({ v: 1, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
+  try { openMkt = rw.act({ v: 2, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
   tick(1, 'w131 open market');
   let tradeBad = null;
   try {
@@ -24577,20 +24577,20 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.world.credits = savedCredits131;
 
   let acceptOnMkt = null;
-  try { acceptOnMkt = rw.act({ v: 1, name: 'acceptJob', args: { id: 'ferry-consignment' } }); } catch { threw131 = true; }
+  try { acceptOnMkt = rw.act({ v: 2, name: 'acceptJob', args: { id: 'ferry-consignment' } }); } catch { threw131 = true; }
   const acceptWrongService = acceptOnMkt?.ok === false && !!acceptOnMkt?.token && acceptOnMkt.token !== 'unknown';
 
-  try { rw.act({ v: 1, name: 'openService', args: { id: 'jobs' } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'openService', args: { id: 'jobs' } }); } catch { threw131 = true; }
   tick(1, 'w131 open jobs');
   let acceptMissing = null;
-  try { acceptMissing = rw.act({ v: 1, name: 'acceptJob', args: { id: 'no-such-job-w131' } }); } catch { threw131 = true; }
+  try { acceptMissing = rw.act({ v: 2, name: 'acceptJob', args: { id: 'no-such-job-w131' } }); } catch { threw131 = true; }
   const acceptMissingJob = acceptMissing?.ok === false && !!acceptMissing?.token && acceptMissing.token !== 'unknown';
 
   let repairOnMkt = null;
-  try { repairOnMkt = rw.act({ v: 1, name: 'repairAll', args: {} }); } catch { threw131 = true; }
+  try { repairOnMkt = rw.act({ v: 2, name: 'repairAll', args: {} }); } catch { threw131 = true; }
   const repairWrong = repairOnMkt?.ok === false && !!repairOnMkt?.token && repairOnMkt.token !== 'unknown';
 
-  try { rw.act({ v: 1, name: 'openService', args: { id: 'repair' } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'openService', args: { id: 'repair' } }); } catch { threw131 = true; }
   tick(1, 'w131 open repair');
   const p131 = ctx.player;
   if (p131) {
@@ -24601,7 +24601,7 @@ removeLiveShip(w42indyCtx, w42indy);
   }
   const creditsBeforeRepair = ctx.world.credits;
   let repairWhole = null;
-  try { repairWhole = rw.act({ v: 1, name: 'repairAll', args: {} }); } catch { threw131 = true; }
+  try { repairWhole = rw.act({ v: 2, name: 'repairAll', args: {} }); } catch { threw131 = true; }
   const repairRefuse = repairWhole?.ok === false
     && !!repairWhole?.token
     && repairWhole.token !== 'unknown'
@@ -24609,11 +24609,11 @@ removeLiveShip(w42indyCtx, w42indy);
 
   const savedHunger131 = ctx.bio && typeof ctx.bio.hunger === 'number' ? ctx.bio.hunger : 0;
   if (ctx.bio) ctx.bio.hunger = 0;
-  try { rw.act({ v: 1, name: 'openService', args: { id: 'feed' } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'openService', args: { id: 'feed' } }); } catch { threw131 = true; }
   tick(1, 'w131 open feed');
   const creditsBeforeFeed = ctx.world.credits;
   let feedSated = null;
-  try { feedSated = rw.act({ v: 1, name: 'feed', args: { kind: 'biomass' } }); } catch { threw131 = true; }
+  try { feedSated = rw.act({ v: 2, name: 'feed', args: { kind: 'biomass' } }); } catch { threw131 = true; }
   const feedRefuse = feedSated?.ok === false
     && !!feedSated?.token
     && feedSated.token !== 'unknown'
@@ -24621,28 +24621,28 @@ removeLiveShip(w42indyCtx, w42indy);
   if (ctx.bio) ctx.bio.hunger = savedHunger131;
 
   let feedBad = null;
-  try { feedBad = rw.act({ v: 1, name: 'feed', args: { kind: 'pizza' } }); } catch { threw131 = true; }
+  try { feedBad = rw.act({ v: 2, name: 'feed', args: { kind: 'pizza' } }); } catch { threw131 = true; }
   const feedBadKind = feedBad?.ok === false && !!feedBad?.token && feedBad.token !== 'unknown';
 
   let hailClosed = null;
-  try { hailClosed = rw.act({ v: 1, name: 'hailResolve', args: { intent: 'payTribute' } }); } catch { threw131 = true; }
+  try { hailClosed = rw.act({ v: 2, name: 'hailResolve', args: { intent: 'payTribute' } }); } catch { threw131 = true; }
   const hailClosedRefuse = hailClosed?.ok === false && !!hailClosed?.token && hailClosed.token !== 'unknown';
 
   ctx.flags.docked = true;
   let undockAct = null;
-  try { undockAct = rw.act({ v: 1, name: 'undock', args: {} }); } catch { threw131 = true; }
+  try { undockAct = rw.act({ v: 2, name: 'undock', args: {} }); } catch { threw131 = true; }
   const undockOk = undockAct?.ok === true && ctx.flags.docked === false;
 
   let tel131 = null;
-  try { tel131 = rw.act({ v: 1, name: 'teleport', args: {} }); } catch { threw131 = true; }
+  try { tel131 = rw.act({ v: 2, name: 'teleport', args: {} }); } catch { threw131 = true; }
   const teleportForbidden = tel131?.ok === false && tel131?.token === 'forbidden';
 
-  try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
   let apEng2 = null;
-  try { apEng2 = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
+  try { apEng2 = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
   const apBeforeDisable = ctx.autopilot?.engaged === true;
   let dis131 = null;
-  try { dis131 = rw.act({ v: 1, name: 'disable', args: {} }); } catch { threw131 = true; }
+  try { dis131 = rw.act({ v: 2, name: 'disable', args: {} }); } catch { threw131 = true; }
   const disableNoCancelAp = dis131?.ok === true
     && (!apBeforeDisable || ctx.autopilot?.engaged === true);
 
@@ -24757,7 +24757,7 @@ removeLiveShip(w42indyCtx, w42indy);
   let threw132 = false;
 
   let dockAct = null;
-  try { dockAct = rw.act({ v: 1, name: 'dock', args: {} }); } catch { threw132 = true; }
+  try { dockAct = rw.act({ v: 2, name: 'dock', args: {} }); } catch { threw132 = true; }
   const dockNotSameTick = ctx.input.dockPressed !== true && ctx.flags.docked !== true;
   tick(1, 'w132 dock pulse');
   const dockEdgeOn = ctx.input.dockPressed === true;
@@ -24769,7 +24769,7 @@ removeLiveShip(w42indyCtx, w42indy);
     && ctx.input.dockPressed === false;
 
   let hailPulse = null;
-  try { hailPulse = rw.act({ v: 1, name: 'pulse', args: { edge: 'hail' } }); } catch { threw132 = true; }
+  try { hailPulse = rw.act({ v: 2, name: 'pulse', args: { edge: 'hail' } }); } catch { threw132 = true; }
   const hailNotSameTick = ctx.input.hailPressed !== true;
   tick(1, 'w132 hail pulse');
   const hailEdgeOn = ctx.input.hailPressed === true;
@@ -24783,19 +24783,19 @@ removeLiveShip(w42indyCtx, w42indy);
   let pulseCam = null;
   let pulseBurn = null;
   let pulseProto = null;
-  try { pulseCam = rw.act({ v: 1, name: 'pulse', args: { edge: 'camera' } }); } catch { threw132 = true; }
-  try { pulseBurn = rw.act({ v: 1, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw132 = true; }
-  try { pulseProto = rw.act({ v: 1, name: 'pulse', args: { edge: '__proto__' } }); } catch { threw132 = true; }
+  try { pulseCam = rw.act({ v: 2, name: 'pulse', args: { edge: 'camera' } }); } catch { threw132 = true; }
+  try { pulseBurn = rw.act({ v: 2, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw132 = true; }
+  try { pulseProto = rw.act({ v: 2, name: 'pulse', args: { edge: '__proto__' } }); } catch { threw132 = true; }
   const pulseUnknown = pulseCam?.ok === false && pulseCam?.token === 'unknown'
     && pulseBurn?.ok === false && pulseBurn?.token === 'unknown'
     && pulseProto?.ok === false && pulseProto?.token === 'unknown';
 
   let wgOk = null;
-  try { wgOk = rw.act({ v: 1, name: 'setWeaponGroup', args: { n: 3 } }); } catch { threw132 = true; }
+  try { wgOk = rw.act({ v: 2, name: 'setWeaponGroup', args: { n: 3 } }); } catch { threw132 = true; }
   const wgSet = wgOk?.ok === true && ctx.input.weaponGroup === 3;
   ctx.flags.docked = true;
   let wgHeld = null;
-  try { wgHeld = rw.act({ v: 1, name: 'setWeaponGroup', args: { n: 1 } }); } catch { threw132 = true; }
+  try { wgHeld = rw.act({ v: 2, name: 'setWeaponGroup', args: { n: 1 } }); } catch { threw132 = true; }
   const weaponGroup = !!wgSet
     && wgHeld?.ok === false
     && wgHeld?.token === 'no-service'
@@ -24806,20 +24806,20 @@ removeLiveShip(w42indyCtx, w42indy);
   if (ctx.ship?.object?.position) ctx.ship.object.position.set(1e9, 1e9, 1e9);
   ctx.input.weaponGroup = 1;
   let selNone = null;
-  try { selNone = rw.act({ v: 1, name: 'selectTarget', args: {} }); } catch { threw132 = true; }
+  try { selNone = rw.act({ v: 2, name: 'selectTarget', args: {} }); } catch { threw132 = true; }
   const selectNoCand = selNone?.ok === false && selNone?.token === 'no-service';
   if (savedSelPos && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedSelPos);
   ctx.input.weaponGroup = 3;
 
   let tel132 = null;
-  try { tel132 = rw.act({ v: 1, name: 'teleport', args: {} }); } catch { threw132 = true; }
+  try { tel132 = rw.act({ v: 2, name: 'teleport', args: {} }); } catch { threw132 = true; }
   const teleportForbidden = tel132?.ok === false && tel132?.token === 'forbidden';
 
   if (savedPos132 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos132);
   const dest132 = ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian';
-  try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest132 } }); } catch { threw132 = true; }
+  try { rw.act({ v: 2, name: 'plotRoute', args: { dest: dest132 } }); } catch { threw132 = true; }
   let apEng132 = null;
-  try { apEng132 = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw132 = true; }
+  try { apEng132 = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw132 = true; }
   ctx.input.steerX = 1;
   ctx.input.steerY = 1;
   for (const fn of winListeners.mousemove ?? []) {
@@ -25165,7 +25165,7 @@ removeLiveShip(w42indyCtx, w42indy);
       ? [...walkDom(badge)].find((n) => n.tagName === 'BUTTON' && n.textContent === 'Enable agent play')
       : null;
     if (enableBtn && typeof enableBtn.click === 'function') enableBtn.click();
-    const pingClosed = rw?.act?.({ v: 1, name: 'ping', args: {} });
+    const pingClosed = rw?.act?.({ v: 2, name: 'ping', args: {} });
     untrustedEnable = before === false
       && ctx.agent?.optIn !== true
       && viaHandle?.ok === false
@@ -25183,7 +25183,7 @@ removeLiveShip(w42indyCtx, w42indy);
     if (enableBtn) fireTrusted134(enableBtn);
     const texts = badge ? textsOf134(badge) : [];
     let pingOk = null;
-    try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    try { pingOk = rw.act({ v: 2, name: 'ping', args: {} }); } catch { threw134 = true; }
     trustedEnable = ctx.agent?.optIn === true
       && texts.includes('on')
       && pingOk?.ok === true;
@@ -25194,13 +25194,13 @@ removeLiveShip(w42indyCtx, w42indy);
     const destPin = 'veridian-dest-pin';
     const idPin = 'id-pin-zz';
     let pingOk = null;
-    try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    try { pingOk = rw.act({ v: 2, name: 'ping', args: {} }); } catch { threw134 = true; }
     const badgeAfterPing = findBadge134();
     const textsPing = badgeAfterPing ? textsOf134(badgeAfterPing) : [];
     const lastPing = pingOk?.ok === true && textsPing.includes('Last: ping');
     const errNone = !textsPing.some((t) => typeof t === 'string' && t.startsWith('Error: '));
     let tel = null;
-    try { tel = rw.act({ v: 1, name: 'teleport', args: { dest: destPin, id: idPin } }); } catch { threw134 = true; }
+    try { tel = rw.act({ v: 2, name: 'teleport', args: { dest: destPin, id: idPin } }); } catch { threw134 = true; }
     const badgeAfterTel = findBadge134();
     const textsTel = badgeAfterTel ? textsOf134(badgeAfterTel) : [];
     const joined = textsTel.join('\n');
@@ -25220,9 +25220,9 @@ removeLiveShip(w42indyCtx, w42indy);
   try {
     ctx.agent.optIn = true;
     const dest134 = ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian';
-    try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest134 } }); } catch { threw134 = true; }
+    try { rw.act({ v: 2, name: 'plotRoute', args: { dest: dest134 } }); } catch { threw134 = true; }
     let apEng = null;
-    try { apEng = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw134 = true; }
+    try { apEng = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw134 = true; }
     const apWas = apEng?.ok === true && ctx.autopilot?.engaged === true;
     const badge = findBadge134();
     const stopBtn = badge
@@ -25231,7 +25231,7 @@ removeLiveShip(w42indyCtx, w42indy);
     if (stopBtn && typeof stopBtn.click === 'function') stopBtn.click();
     const texts = badge ? textsOf134(badge) : [];
     let pingAfter = null;
-    try { pingAfter = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    try { pingAfter = rw.act({ v: 2, name: 'ping', args: {} }); } catch { threw134 = true; }
     stopClears = ctx.agent?.optIn !== true
       && texts.includes('off')
       && pingAfter?.ok === false
@@ -25998,7 +25998,7 @@ removeLiveShip(w42indyCtx, w42indy);
     tick(1, 'w138 evade clear');
 
     let actBurn = null;
-    try { actBurn = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { actBurn = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     const notSameTick = ctx.input.afterburnerPressed !== true;
     tick(1, 'w138 evade pulse');
     edgeFrame = notSameTick && ctx.input.afterburnerPressed === true;
@@ -26016,19 +26016,19 @@ removeLiveShip(w42indyCtx, w42indy);
 
     let evadeAct = null;
     let fleeAct = null;
-    try { evadeAct = rw138e.act({ v: 1, name: 'evade' }); } catch { threw138e = true; }
-    try { fleeAct = rw138e.act({ v: 1, name: 'flee' }); } catch { threw138e = true; }
+    try { evadeAct = rw138e.act({ v: 2, name: 'evade' }); } catch { threw138e = true; }
+    try { fleeAct = rw138e.act({ v: 2, name: 'flee' }); } catch { threw138e = true; }
     evadeUnknown = evadeAct?.ok === false && evadeAct?.token === 'unknown';
     fleeUnknown = fleeAct?.ok === false && fleeAct?.token === 'unknown';
 
     let pulseBurn = null;
-    try { pulseBurn = rw138e.act({ v: 1, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw138e = true; }
+    try { pulseBurn = rw138e.act({ v: 2, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw138e = true; }
     pulseAliasUnknown = pulseBurn?.ok === false && pulseBurn?.token === 'unknown';
 
     ctx.flags.docked = true;
     if (ctx.input) ctx.input.afterburnerPressed = false;
     let dockAct = null;
-    try { dockAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { dockAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     tick(1, 'w138 evade docked');
     dockedTok = dockAct?.ok === false && dockAct?.token === 'docked'
       && ctx.input.afterburnerPressed !== true;
@@ -26036,24 +26036,24 @@ removeLiveShip(w42indyCtx, w42indy);
 
     ctx.agent.optIn = false;
     let optAct = null;
-    try { optAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { optAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     optInTok = optAct?.ok === false && optAct?.token === 'opt-in';
     ctx.agent.optIn = true;
 
     ctx.flags.paused = true;
     let pauseAct = null;
-    try { pauseAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { pauseAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     pausedTok = pauseAct?.ok === false && pauseAct?.token === 'paused';
     ctx.flags.paused = false;
 
     ctx.flags.berthHold = true;
     let holdAct = null;
-    try { holdAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { holdAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     heldTok = holdAct?.ok === false && holdAct?.token === 'held';
     ctx.flags.berthHold = false;
 
     let telAct = null;
-    try { telAct = rw138e.act({ v: 1, name: 'teleport' }); } catch { threw138e = true; }
+    try { telAct = rw138e.act({ v: 2, name: 'teleport' }); } catch { threw138e = true; }
     teleportForbidden = telAct?.ok === false && telAct?.token === 'forbidden';
 
     const keepReady = ctx.ship?.burnerReadyAt;
@@ -26101,7 +26101,7 @@ removeLiveShip(w42indyCtx, w42indy);
       tick(1, 'w138 flee face sun');
       const dSun0 = obj138e.position.distanceTo(sun138e);
       const dSt0 = obj138e.position.distanceTo(st138e);
-      try { rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+      try { rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
       fleeEngaged = fleeEngaged || ctx.flee?.engaged === true;
       let maxStep = 0;
       for (let i = 0; i < 180; i++) {
@@ -26150,7 +26150,7 @@ removeLiveShip(w42indyCtx, w42indy);
       ctx.ship.burnerActive = false;
       ctx.ship.burnerReadyAt = 0;
     }
-    try { rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     tick(1, 'w138 flee death engage');
     const fleeWasOn138e = ctx.flee?.engaged === true;
     ctx.emit('playerDestroyed', {});
@@ -26818,6 +26818,435 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('rw009 models grouping:', JSON.stringify(wRw009), `canonical=${canonical.length}`);
   if (!Object.values(wRw009).every(Boolean)) { console.log('RW009 MODELS GROUPING FAIL'); errors++; }
+}
+
+// ---- Wave 141: agent play parity v2 (mission 43b34db25ae32972) --------------
+// Screenshot-free role scenarios through the v2 handle. Staging that no player
+// can do (spawn placement, hull pinning, credit seeding) is marked
+// privilegedFixture in the ledger; every transition of record rides legal
+// window.rimward acts or ordinary game systems. Deterministic: tick-driven,
+// no wall-clock waits, no browser.
+{
+  const rw141 = globalThis.window?.rimward;
+  const { spawnSurvivorPod } = await import('../src/game/pods.js');
+  const ledger141 = [];
+  const step141 = (scenario, name, res, note) => {
+    ledger141.push({
+      scenario, act: name,
+      ok: !!(res && res.ok === true),
+      token: res && typeof res.token === 'string' ? res.token : '',
+      status: res && typeof res.status === 'string' ? res.status : '',
+      reqId: res && typeof res.reqId === 'string' ? res.reqId : '',
+      t: res && Number.isFinite(res.t) ? res.t : null,
+      note: note || '',
+    });
+  };
+  const obsEvents = (snap, type) => (snap && Array.isArray(snap.events) ? snap.events : []).filter((e) => e && e.type === type);
+  const w141 = {};
+  const saved = {
+    optIn: ctx.agent?.optIn === true,
+    paused: ctx.flags.paused === true,
+    berthHold: ctx.flags.berthHold === true,
+    docked: ctx.flags.docked === true,
+    sys: ctx.world.currentSystem,
+    pos: ctx.ship?.object?.position?.clone?.() || null,
+    quat: ctx.ship?.object?.quaternion?.clone?.() || null,
+    vel: ctx.ship?.velocity?.clone?.() || null,
+    speed: ctx.ship?.speed,
+    credits: ctx.world.credits,
+    hull: ctx.player?.hull, hullMax: ctx.player?.hullMax,
+    screen: ctx.player?.screen, screenMax: ctx.player?.screenMax,
+    shell: ctx.player?.shell, shellMax: ctx.player?.shellMax,
+    wpn: ctx.input.weaponGroup,
+    throttle: ctx.input.throttle,
+    fullStop: ctx.input.fullStop === true,
+    ships: Array.isArray(ctx.ships) ? ctx.ships.slice() : [],
+    pods: Array.isArray(ctx.pods) ? ctx.pods.slice() : [],
+    jobs: Array.isArray(ctx.world.jobs) ? ctx.world.jobs.map((j) => ({ ...j })) : [],
+    cargo: Array.isArray(ctx.cargo) ? ctx.cargo.map((c) => ({ ...c })) : [],
+    rep: ctx.world.reputation && typeof ctx.world.reputation === 'object' ? { ...ctx.world.reputation } : {},
+  };
+  let seq141 = 91000;
+  let threw141 = false;
+  try {
+    // ---- baseline: flying, unpaused, helms off, lease cleared ---------------
+    if (ctx.flags.docked) undockStation();
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    ctx.agent.optIn = true;
+    ctx.input.fullStop = false;
+    try { rw141.act({ v: 2, name: 'cancelAutopilot', args: {} }); } catch { /* none */ }
+    try { rw141.act({ v: 2, name: 'cancelAutomine', args: {} }); } catch { /* none */ }
+    if (ctx.flee) ctx.flee.engaged = false;
+    rw141.act({ v: 2, name: 'clearControl', args: {} });
+    tick(2, 'w141 baseline');
+
+    // ---- 1. contract surface -------------------------------------------------
+    const snapC = rw141.observe();
+    w141.contract = !!(
+      rw141 && rw141.version === 2
+      && snapC && snapC.v === 2 && snapC.ok === true
+      && snapC.capabilities && snapC.capabilities.version === 2
+      && Object.keys(snapC.capabilities.roles).length === 10
+      && Object.values(snapC.capabilities.roles).every((r) => r && r.status === 'supported')
+      && Object.values(snapC.capabilities.services).every((s) => s && s.status === 'supported')
+      && snapC.availability && snapC.availability.setControl && snapC.availability.stationAction
+      && snapC.control && typeof snapC.control.state === 'string'
+      && snapC.jobs && Array.isArray(snapC.jobs.offers) && Array.isArray(snapC.jobs.active)
+      && snapC.station && snapC.station.view === null
+    );
+    let plain141 = false;
+    try { JSON.stringify(snapC); plain141 = true; } catch { plain141 = false; }
+    w141.contractJsonPlain = plain141;
+
+    // ---- 2. control lease lifecycle ------------------------------------------
+    const leaseSet = rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 0.6, steerX: 0.5, fireHeld: false } });
+    step141('lease', 'setControl', leaseSet);
+    tick(2, 'w141 lease apply');
+    const leaseApplied = ctx.input.steerX === 0.5 && rw141.observe().control.state === 'active';
+    tick(60, 'w141 lease expiry'); // 1 sim-second > 0.6 ttl
+    const obsExp = rw141.observe();
+    const leaseExpired = obsExp.control.state === 'expired' && obsExp.control.reason === 'expired'
+      && ctx.input.steerX !== 0.5;
+    w141.leaseApplyExpire = !!(leaseSet.ok === true && leaseSet.status === 'active' && leaseApplied && leaseExpired);
+
+    ctx.flags.paused = true;
+    const pauseRefuse = rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 1 } });
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = true;
+    const holdRefuse = rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 1 } });
+    ctx.flags.berthHold = false;
+    const staleRefuse = rw141.act({ v: 2, name: 'setControl', args: { seq: 1, ttl: 1 } });
+    const axisRefuse = rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 1, steerX: 1.5 } });
+    const ttlRefuse = rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 0.001 } });
+    w141.leaseGates = !!(
+      pauseRefuse.ok === false && pauseRefuse.token === 'paused'
+      && holdRefuse.ok === false && holdRefuse.token === 'held'
+      && staleRefuse.ok === false && staleRefuse.token === 'stale'
+      && axisRefuse.ok === false && axisRefuse.token === 'bad-axis'
+      && ttlRefuse.ok === false && ttlRefuse.token === 'bad-ttl'
+    );
+
+    // Player emergency input wins: a held physical key drops the lease.
+    rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 3, steerY: -0.4 } });
+    tick(1, 'w141 override arm');
+    for (const fn of winListeners.keydown ?? []) fn({ code: 'KeyD', repeat: false, preventDefault() {} });
+    tick(1, 'w141 override tick');
+    const overrideObs = rw141.observe();
+    for (const fn of winListeners.keyup ?? []) fn({ code: 'KeyD', preventDefault() {} });
+    tick(1, 'w141 override cleanup');
+    w141.leasePlayerOverride = overrideObs.control.state === 'cleared' && overrideObs.control.reason === 'player-override';
+
+    // Helm conflict: refuse, never steal.
+    rw141.act({ v: 2, name: 'plotRoute', args: { dest: ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian' } });
+    const apOn = rw141.act({ v: 2, name: 'engageAutopilot', args: {} });
+    const helmRefuse = rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 1 } });
+    rw141.act({ v: 2, name: 'cancelAutopilot', args: {} });
+    w141.leaseHelmRefuse = !!(apOn.ok === true && helmRefuse.ok === false && helmRefuse.token === 'helm');
+
+    // ---- 3. hail role: demand card resolves by listed intent -----------------
+    // privilegedFixture: credits seeded so tribute is legal; spawned hostile.
+    w30parkHostiles('w141 park');
+    ctx.world.credits = 4000;
+    const pDemand = w30spawnPirate('w141-demand', 95, [250, 0, 0]);
+    w30demandEvs(pDemand, 'w141 demand open');
+    const snapHail = rw141.observe();
+    const intents = snapHail && snapHail.hail && Array.isArray(snapHail.hail.intents) ? snapHail.hail.intents : [];
+    const payRes = intents.includes('payTribute')
+      ? rw141.act({ v: 2, name: 'hailResolve', args: { intent: 'payTribute' } })
+      : { ok: false, token: 'no-intent' };
+    step141('hail', 'hailResolve', payRes);
+    tick(2, 'w141 demand resolve');
+    const snapHailAfter = rw141.observe();
+    const hailOutcome = obsEvents(snapHailAfter, 'hailClosed').some((e) => e.demandOutcome === 'paid');
+    w141.hailDemand = !!(intents.includes('payTribute') && payRes.ok === true && hailOutcome
+      && snapHailAfter.hail.open === false);
+    const badIntent = rw141.act({ v: 2, name: 'hailResolve', args: { intent: 'not-an-intent' } });
+    w141.hailStaleClosed = badIntent.ok === false && (badIntent.token === 'closed' || badIntent.token === 'no-service');
+    w30removeShip(pDemand);
+
+    // ---- 4. combat + patrol terminal (mission family: patrol) ---------------
+    // privilegedFixture: hull pinned so the agent cannot lose the fixture fight;
+    // all fire/aim/kill transitions ride the real combat system via the lease.
+    ctx.player.hullMax = 1e9; ctx.player.hull = 1e9;
+    ctx.player.screenMax = 1e9; ctx.player.screen = 1e9;
+    ctx.player.shellMax = 1e9; ctx.player.shell = 1e9;
+    let kills = 0;
+    let fireSeen141 = false;
+    let hitSeen141 = false;
+    let destroyedSeen141 = false;
+    const fightOnce = (suffix) => {
+      const foe = w30spawnPirate(suffix, 95, [220, 0, 0]);
+      w30demandEvs(foe, `w141 ${suffix} demand`);
+      rw141.act({ v: 2, name: 'hailResolve', args: { intent: 'refuseFight' } });
+      tick(2, `w141 ${suffix} hostile`);
+      const sel = rw141.act({ v: 2, name: 'selectTarget', args: { id: foe.id } });
+      step141('combat', 'selectTarget', sel);
+      if (!(sel && sel.ok === true)) {
+        // Live rows spawned by the harness may carry no cycle id; fall back to
+        // the ordinary cycle edge (foe is the only candidate after parking).
+        rw141.act({ v: 2, name: 'selectTarget', args: {} });
+        tick(1, `w141 ${suffix} cycle`);
+        ctx.targets.current = ctx.targets.current || foe;
+      }
+      rw141.act({ v: 2, name: 'setWeaponGroup', args: { n: 1 } });
+      let done = false;
+      for (let i = 0; i < 60 * 90 && !done; i++) {
+        const s = rw141.observe();
+        const cur = s && s.targets && s.targets.current;
+        const aim = s && s.targets && s.targets.aim;
+        if (!cur || cur.kind !== 'ship' || !aim || !Array.isArray(aim.bearing)) break;
+        const evs = s.events || [];
+        for (const e of evs) {
+          if (!e) continue;
+          if (e.type === 'playerFire') fireSeen141 = true;
+          if (e.type === 'npcHit') hitSeen141 = true;
+          if (e.type === 'npcDestroyed' || e.type === 'npcDisabled') destroyedSeen141 = true;
+        }
+        if (destroyedSeen141) { done = true; break; }
+        const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
+        const sx = Math.max(-1, Math.min(1, aimPt[0] * 2.5));
+        const sy = Math.max(-1, Math.min(1, aimPt[1] * 2.5));
+        const aligned = aimPt[2] < -0.75 && Math.abs(aimPt[0]) < 0.3 && Math.abs(aimPt[1]) < 0.3;
+        rw141.act({
+          v: 2, name: 'setControl',
+          args: { seq: ++seq141, ttl: 0.5, steerX: sx, steerY: sy, fireHeld: aligned, throttle: 0.4 },
+        });
+        tick(12, `w141 ${suffix} fight`);
+      }
+      rw141.act({ v: 2, name: 'clearControl', args: {} });
+      const dead = !!(foe.state && (foe.state.destroyed || foe.state.disabled));
+      w30removeShip(foe);
+      return dead;
+    };
+    if (fightOnce('w141-merc')) kills += 1;
+    w141.combatMercenary = !!(fireSeen141 && hitSeen141 && destroyedSeen141 && kills >= 1);
+
+    // Patrol contract: accept at the board, then a second real kill completes
+    // via the existing tickPatrolJob path — terminal jobState must land.
+    dockAtCurrentStation('w141 dock patrol');
+    rw141.act({ v: 2, name: 'openService', args: { id: 'jobs' } });
+    tick(1, 'w141 jobs open');
+    const snapJobs = rw141.observe();
+    const patrolOffer = (snapJobs.jobs.offers || []).find((j) => j && j.id === 'patrol-lane' && j.state === 'offered');
+    let patrolDone = false;
+    let patrolNote = '';
+    if (patrolOffer) {
+      const acc = rw141.act({ v: 2, name: 'acceptJob', args: { id: 'patrol-lane' } });
+      step141('missions', 'acceptJob', acc);
+      const inFlight = rw141.observe().jobs.active.some((j) => j && j.id === 'patrol-lane' && j.state === 'accepted');
+      undockStation();
+      tick(2, 'w141 patrol undock');
+      const inFlightUndocked = rw141.observe().jobs.active.some((j) => j && j.id === 'patrol-lane');
+      w141.jobInFlight = !!(acc.ok === true && inFlight && inFlightUndocked);
+      const need = Number.isFinite(patrolOffer.need) ? patrolOffer.need : 2;
+      while (kills < need) {
+        if (!fightOnce(`w141-patrol-${kills}`)) break;
+        kills += 1;
+      }
+      tick(40, 'w141 patrol tick');
+      const snapPatrol = rw141.observe();
+      patrolDone = obsEvents(snapPatrol, 'jobState').some((e) => e.id === 'patrol-lane' && e.outcome === 'done');
+      patrolNote = patrolDone ? 'terminal jobState done' : 'terminal missing';
+    } else {
+      patrolNote = 'fixture-gap: patrol-lane not offered';
+      w141.jobInFlight = false;
+    }
+    ledger141.push({ scenario: 'missions', act: 'terminal', note: patrolNote });
+    w141.missionPatrolTerminal = patrolDone;
+
+    // ---- 5. rescue role: scoop a survivor pod, return at People --------------
+    // privilegedFixture: pod placement; the scoop, dock, and People-desk return
+    // are ordinary player systems.
+    if (ctx.flags.docked) undockStation();
+    const pp = ctx.ship.object.position;
+    const pod141 = spawnSurvivorPod(ctx, new THREE.Vector3(pp.x + 25, pp.y, pp.z), { faction: 'freehold', source: 'other' });
+    tick(2, 'w141 pod spawn');
+    let scooped = false;
+    for (let i = 0; i < 60 * 20 && !scooped; i++) {
+      const s = rw141.observe();
+      const podRow = (s.targets.nearby || []).find((r) => r && r.kind === 'pod');
+      if (obsEvents(s, 'podCollected').length > 0) { scooped = true; break; }
+      if (!podRow || !Array.isArray(podRow.bearing)) break;
+      const b = podRow.bearing;
+      rw141.act({
+        v: 2, name: 'setControl',
+        args: { seq: ++seq141, ttl: 0.5, steerX: Math.max(-1, Math.min(1, b[0] * 2.5)), steerY: Math.max(-1, Math.min(1, b[1] * 2.5)), throttle: 0.5 },
+      });
+      tick(12, 'w141 pod approach');
+    }
+    rw141.act({ v: 2, name: 'clearControl', args: {} });
+    const survivorAboard = ctx.cargo.some((c) => c && c.commodity === 'survivor');
+    dockAtCurrentStation('w141 dock rescue');
+    rw141.act({ v: 2, name: 'openService', args: { id: 'people' } });
+    tick(1, 'w141 people open');
+    const snapPeople = rw141.observe();
+    const peopleView = snapPeople && snapPeople.station && snapPeople.station.view;
+    const rescueAction = peopleView && Array.isArray(peopleView.actions)
+      ? peopleView.actions.find((a) => a && typeof a.label === 'string' && a.label.includes('Return survivors'))
+      : null;
+    let rescueRes = null;
+    if (rescueAction) rescueRes = rw141.act({ v: 2, name: 'stationAction', args: { n: rescueAction.n, expect: rescueAction.label } });
+    step141('rescue', 'stationAction', rescueRes || { ok: false, token: 'not-offered' });
+    tick(2, 'w141 rescue settle');
+    const snapRescue = rw141.observe();
+    const rescueEv = obsEvents(snapRescue, 'survivorRescued').length > 0
+      || (snapRescue.events || []).some((e) => e && e.type === 'commLine' && typeof e.text === 'string' && e.text.includes('Standing +'));
+    w141.rescueRole = !!(pod141 && scooped && survivorAboard && rescueAction && rescueRes && rescueRes.ok === true && rescueEv);
+
+    // ---- 6. station services sweep (bar/outfitting/people/epics/shipyard) ----
+    // Every desk: structured rows + actions visible; real closures exercised
+    // where free or cheap; two-step papers proved by arm→cancel.
+    const svcOk = {};
+    const svcSweep = ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'epics', 'shipyard'];
+    for (const svc of svcSweep) {
+      rw141.act({ v: 2, name: 'openService', args: { id: svc } });
+      tick(1, `w141 svc ${svc}`);
+      const v = rw141.observe().station.view;
+      svcOk[svc] = !!(v && v.service === svc && Array.isArray(v.rows) && v.rows.length > 0);
+    }
+    w141.serviceViews = svcSweep.every((s) => svcOk[s]);
+    // Bar: buy a round through the player closure; credits must drop.
+    rw141.act({ v: 2, name: 'openService', args: { id: 'bar' } });
+    tick(1, 'w141 bar open');
+    const barView = rw141.observe().station.view;
+    const roundBtn = barView.actions.find((a) => a && typeof a.label === 'string' && a.label.includes('Buy a round'));
+    const credBeforeBar = ctx.world.credits;
+    const roundRes = roundBtn ? rw141.act({ v: 2, name: 'stationAction', args: { n: roundBtn.n, expect: roundBtn.label } }) : null;
+    step141('services', 'stationAction:buyRound', roundRes || { ok: false, token: 'not-offered' });
+    w141.barRound = !!(roundBtn && roundRes && roundRes.ok === true && ctx.world.credits < credBeforeBar);
+    // Outfitting: papers are a two-step flow — arm then cancel, no debit.
+    rw141.act({ v: 2, name: 'openService', args: { id: 'outfitting' } });
+    tick(1, 'w141 outfit open');
+    const outView = rw141.observe().station.view;
+    const armBtn = outView.actions.find((a) => a && typeof a.label === 'string' && / — .+\(\d+ UU\)$/.test(a.label) && a.label.startsWith('8'));
+    let papersOk = false;
+    if (armBtn) {
+      rw141.act({ v: 2, name: 'stationAction', args: { n: armBtn.n, expect: armBtn.label } });
+      const armed = rw141.observe().station.view;
+      const cancelBtn = armed && Array.isArray(armed.actions)
+        ? armed.actions.find((a) => a && typeof a.label === 'string' && a.label.includes('Cancel'))
+        : null;
+      const credArmed = ctx.world.credits;
+      if (armed && armed.pending === true && cancelBtn) {
+        rw141.act({ v: 2, name: 'stationAction', args: { n: cancelBtn.n, expect: cancelBtn.label } });
+        const after = rw141.observe().station.view;
+        papersOk = after && after.pending === false && ctx.world.credits === credArmed;
+      }
+    } else {
+      // No launcher seat on this hull: a note row is the player-visible answer.
+      papersOk = outView.rows.some((r) => r && typeof r.text === 'string' && r.text.includes('no launcher hardpoint'));
+    }
+    w141.outfitPapersLifecycle = papersOk;
+    // Shipyard: pane tabs and a free mount of the already-mounted hull.
+    rw141.act({ v: 2, name: 'openService', args: { id: 'shipyard' } });
+    tick(1, 'w141 yard open');
+    const yardView = rw141.observe().station.view;
+    const hangarTab = yardView.actions.find((a) => a && typeof a.label === 'string' && a.label.includes('Hangar'));
+    const yardTab = yardView.actions.find((a) => a && typeof a.label === 'string' && a.label.includes('Yard'));
+    let yardOk = !!(hangarTab && yardTab);
+    if (yardOk) {
+      rw141.act({ v: 2, name: 'stationAction', args: { n: yardTab.n, expect: yardTab.label } });
+      const buyPane = rw141.observe().station.view;
+      const backBtn = buyPane.actions.find((a) => a && typeof a.label === 'string' && a.label.includes('Back'));
+      yardOk = !!(buyPane && buyPane.rows.some((r) => r && typeof r.text === 'string' && r.text === 'YARD'));
+      if (backBtn) rw141.act({ v: 2, name: 'stationAction', args: { n: backBtn.n, expect: backBtn.label } });
+    }
+    w141.shipyardPanes = yardOk;
+    // Stale expect refuses: a re-planned index with the wrong label clicks nothing.
+    const staleBar = roundBtn
+      ? rw141.act({ v: 2, name: 'openService', args: { id: 'bar' } })
+      : null;
+    void staleBar;
+    tick(1, 'w141 bar reopen');
+    const staleProbe = roundBtn
+      ? rw141.act({ v: 2, name: 'stationAction', args: { n: roundBtn.n, expect: 'deliberately wrong' } })
+      : { ok: true };
+    w141.staleExpectRefused = !roundBtn || (staleProbe.ok === false && staleProbe.token === 'stale');
+    undockStation();
+
+    // ---- 7. death / recovery --------------------------------------------------
+    // privilegedFixture: the destroy event itself is staged; the phase
+    // observation and recover() ride the real overlay path (Enter/click/timer).
+    ctx.emit('playerDestroyed', {});
+    tick(2, 'w141 death consume');
+    const snapDead = rw141.observe();
+    const deadPhase = snapDead.session && snapDead.session.phase === 'dead';
+    const deadEv = obsEvents(snapDead, 'playerDestroyed').length > 0;
+    const recRes = rw141.act({ v: 2, name: 'recover', args: {} });
+    step141('session', 'recover', recRes);
+    tick(3, 'w141 recover');
+    const snapRec = rw141.observe();
+    w141.deathRecovery = !!(
+      deadPhase && deadEv && recRes.ok === true
+      && snapRec.session && snapRec.session.phase === 'playing'
+      && obsEvents(snapRec, 'recovered').length > 0
+      && snapRec.control && snapRec.control.state !== 'active'
+    );
+  } catch (e) {
+    threw141 = true;
+    console.log('WAVE141 ERR', e && e.message ? e.message : e);
+  } finally {
+    try { rw141.act({ v: 2, name: 'clearControl', args: {} }); } catch { /* ignore */ }
+    if (ctx.flee) ctx.flee.engaged = false;
+    try { rw141.act({ v: 2, name: 'cancelAutopilot', args: {} }); } catch { /* ignore */ }
+    try { rw141.act({ v: 2, name: 'cancelAutomine', args: {} }); } catch { /* ignore */ }
+    ctx.agent.optIn = saved.optIn;
+    ctx.flags.paused = saved.paused;
+    ctx.flags.berthHold = saved.berthHold;
+    ctx.input.weaponGroup = saved.wpn;
+    ctx.input.throttle = saved.throttle;
+    ctx.input.fullStop = saved.fullStop;
+    if (Number.isFinite(saved.credits)) ctx.world.credits = saved.credits;
+    if (ctx.player && Number.isFinite(saved.hullMax)) {
+      ctx.player.hullMax = saved.hullMax;
+      ctx.player.hull = saved.hull;
+      ctx.player.screenMax = saved.screenMax;
+      ctx.player.screen = saved.screen;
+      ctx.player.shellMax = saved.shellMax;
+      ctx.player.shell = saved.shell;
+    }
+    if (Array.isArray(ctx.ships)) {
+      ctx.ships.length = 0;
+      for (const s of saved.ships) ctx.ships.push(s);
+    }
+    if (Array.isArray(ctx.pods)) {
+      for (const p of saved.pods) if (!ctx.pods.includes(p)) ctx.pods.push(p);
+    }
+    if (Array.isArray(ctx.world.jobs) && saved.jobs.length) {
+      const liveIds = new Set(ctx.world.jobs.map((j) => j && j.id));
+      for (const j of saved.jobs) {
+        if (!j || !j.id) continue;
+        const live = ctx.world.jobs.find((x) => x && x.id === j.id);
+        if (live) Object.assign(live, j);
+        else if (!liveIds.has(j.id)) ctx.world.jobs.push(j);
+      }
+    }
+    if (Array.isArray(ctx.cargo)) {
+      ctx.cargo.length = 0;
+      for (const c of saved.cargo) ctx.cargo.push(c);
+    }
+    if (saved.rep && ctx.world.reputation) Object.assign(ctx.world.reputation, saved.rep);
+    if (saved.vel && ctx.ship?.velocity) ctx.ship.velocity.copy(saved.vel);
+    if (Number.isFinite(saved.speed)) ctx.ship.speed = saved.speed;
+    if (saved.pos && ctx.ship?.object?.position) ctx.ship.object.position.copy(saved.pos);
+    if (saved.quat && ctx.ship?.object?.quaternion) ctx.ship.object.quaternion.copy(saved.quat);
+    if (typeof saved.sys === 'string' && saved.sys && ctx.world.currentSystem !== saved.sys) {
+      ctx.world.currentSystem = saved.sys;
+      ctx.emit('systemLoaded', { to: saved.sys });
+      tick(2, 'w141 restore sys');
+    }
+    if (saved.docked) {
+      if (!ctx.flags.docked) dockAtCurrentStation('w141 restore dock');
+    } else if (ctx.flags.docked) {
+      undockStation();
+    }
+    tick(1, 'w141 restore');
+  }
+  w141.noThrow = threw141 === false;
+  console.log('wave141 ledger:', JSON.stringify(ledger141));
+  console.log('wave141 agent-parity:', JSON.stringify(w141));
+  if (!Object.values(w141).every(Boolean)) { console.log('WAVE141 AGENT-PARITY FAIL'); errors++; }
 }
 
 if (errors === 0) {

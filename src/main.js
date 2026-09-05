@@ -17,7 +17,7 @@ import { configureShipAssets } from './systems/ship-assets.js';
 import { applyShipLighting, applyShipToneMapping } from './systems/ship-lighting.js';
 
 // Input + simulation systems
-import { initControls } from './systems/controls.js';
+import { initControls, agentControlClear } from './systems/controls.js';
 import { decodeKeyCode } from './systems/key-code.js';
 import { overlayIsOpen, settingsOwnsScreen, titleOwnsScreen } from './systems/overlay-policy.js';
 import { codeOf, shortLabel } from './systems/bindings.js';
@@ -263,6 +263,11 @@ function setPaused(next) {
   try {
     if (!ctx.flags) return;
     ctx.flags.paused = next === true;
+    // Pause freezes the system loop; an agent control lease must not survive
+    // into resume with live fire/axes. Synchronous clear on pause entry.
+    if (ctx.flags.paused) {
+      try { agentControlClear(ctx); } catch { /* lease clear is best-effort */ }
+    }
     let titleOn = false;
     try { titleOn = !!document.getElementById('rw-title') || titleOwnsScreen(); } catch { titleOn = false; }
     if (ctx.flags.paused && !titleOn) pauseEl.style.display = 'flex';

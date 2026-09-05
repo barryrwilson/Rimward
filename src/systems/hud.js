@@ -1397,6 +1397,8 @@ export function initHud(ctx) {
   const targetVel = new THREE.Vector3(); // smoothed target velocity
   const lastTargetPos = new THREE.Vector3();
   const relVel = new THREE.Vector3();
+  const aimInv = new THREE.Quaternion(); // ship-local frame for the aim digest
+  const aimVec = new THREE.Vector3(); // world dir scratch for bearings
   const playerFwd = new THREE.Vector3();
   const lockFwd = new THREE.Vector3();
   const toLock = new THREE.Vector3();
@@ -1678,6 +1680,7 @@ export function initHud(ctx) {
         targetDistNow = 0;
         targetSpeedNow = 0;
         targetClosNow = 0;
+        ctx.targets.aim = null;
       } else {
         // estimate target velocity from position deltas (works for live ships;
         // asteroids sit still so their pip hides itself)
@@ -1711,6 +1714,31 @@ export function initHud(ctx) {
         if (behind) { ndcX = -ndcX; ndcY = -ndcY; }
         const onScreen = !behind && ndcX >= -0.95 && ndcX <= 0.95 && ndcY >= -0.92 && ndcY <= 0.92;
 
+        // Agent v2 aim digest: the same player-visible bracket/lead geometry
+        // the HUD draws this frame, plus ship-local unit bearings (x right,
+        // y up, nose is -z). hud.js is the sole writer (ctx.js contract).
+        const aimDigest = {
+          onScreen,
+          behind,
+          nx: ndcX,
+          ny: ndcY,
+          edge: null,
+          lead: null,
+          leadBearing: null,
+          bearing: null,
+          dist,
+          closing: targetClosNow,
+          speed: targetSpeedNow,
+        };
+        if (shipObj && shipObj.quaternion) {
+          aimInv.copy(shipObj.quaternion).invert();
+          aimVec.copy(targetPos).sub(shipObj.position);
+          if (aimVec.lengthSq() > 1e-8) {
+            aimVec.normalize().applyQuaternion(aimInv);
+            aimDigest.bearing = [aimVec.x, aimVec.y, aimVec.z];
+          }
+        }
+
         if (onScreen) {
           if (last.bracketShown !== true) { last.bracketShown = true; bracket.classList.remove('is-hidden'); }
           if (last.arrowShown !== false) { last.arrowShown = false; edgeArrow.classList.add('is-hidden'); }
@@ -1742,6 +1770,15 @@ export function initHud(ctx) {
               last.leadX = (leadProj.x * 0.5 + 0.5) * vw;
               last.leadY = (-leadProj.y * 0.5 + 0.5) * vh;
               lead.style.transform = 'translate3d(' + last.leadX + 'px,' + last.leadY + 'px,0)';
+
+              aimDigest.lead = { nx: leadProj.x, ny: leadProj.y };
+              if (shipObj && shipObj.quaternion) {
+                aimVec.copy(leadWorld).sub(shipObj.position);
+                if (aimVec.lengthSq() > 1e-8) {
+                  aimVec.normalize().applyQuaternion(aimInv);
+                  aimDigest.leadBearing = [aimVec.x, aimVec.y, aimVec.z];
+                }
+              }
             } else if (last.leadShown !== false) {
               last.leadShown = false; lead.classList.add('is-hidden');
             }
@@ -1768,8 +1805,13 @@ export function initHud(ctx) {
             const py = cy + dirY * s;
             const ang = Math.atan2(dirY, dirX) + Math.PI / 2; // glyph points up at 0
             edgeArrow.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) rotate(' + ang + 'rad)';
+            {
+              const edgeLen = Math.hypot(dirX, dirY);
+              if (edgeLen > 1e-4) aimDigest.edge = [dirX / edgeLen, dirY / edgeLen];
+            }
           }
         }
+        ctx.targets.aim = aimDigest;
       }
 
       if (last.family === 'bio') {
