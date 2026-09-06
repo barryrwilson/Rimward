@@ -1202,18 +1202,6 @@ async function main() {
     failNote = failNote || (err && err.message ? err.message : 'smoke failed');
     appendLog(runLog, redact(failNote, token));
   } finally {
-    try {
-      ledger.outcome = {
-        pins: Object.fromEntries(PIN_KEYS.map((k) => [k, pins[k] === true])),
-        failNote: failNote ? redact(failNote, token) : '',
-      };
-      fs.writeFileSync(
-        path.join(SMOKE_DIR, 'scenario-ledger.json'),
-        redact(JSON.stringify(ledger, null, 2), token),
-        'utf8',
-      );
-      pins.ledgerWritten = true;
-    } catch { pins.ledgerWritten = false; }
     if (consoleMonitor) {
       try {
         const fatal = String(await consoleMonitor.eval(
@@ -1242,6 +1230,21 @@ async function main() {
     }
     await teardown();
     appendLog(runLog, `teardownPortsFree=${pins.teardownPortsFree}`);
+    // Serialize the durable ledger LAST: consoleClean/teardownPortsFree (and
+    // every other pin) must hold their final values so the committed evidence
+    // file agrees with the stdout pins below on success and failure alike.
+    try {
+      ledger.outcome = {
+        pins: Object.fromEntries(PIN_KEYS.map((k) => [k, pins[k] === true])),
+        failNote: failNote ? redact(failNote, token) : '',
+      };
+      fs.writeFileSync(
+        path.join(SMOKE_DIR, 'scenario-ledger.json'),
+        redact(JSON.stringify(ledger, null, 2), token),
+        'utf8',
+      );
+      pins.ledgerWritten = true;
+    } catch { pins.ledgerWritten = false; }
   }
 
   if (failNote) pins.failNote = redact(failNote, token);

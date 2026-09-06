@@ -270,6 +270,9 @@ export async function bootGameSystems() {
 
   const binds = {
     inits, // boot-test bootFreshHarness (waves 6/7 origin beats) re-runs this exact list
+    // Scoped throwaway-context builders the wave code drives directly by name
+    // (boot-test waves 38-51 station/gate/asteroid/combat/title build paths).
+    initStation, initGate, initAsteroids, initCombat, initTitle,
     FIRST_PERSON_NOSE, recordPosition,
     contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
     keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,
