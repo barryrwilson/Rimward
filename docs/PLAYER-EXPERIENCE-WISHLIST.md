@@ -2043,6 +2043,12 @@ light + heavy organic NPC slices. Wave 106 remaining four
 classes (ace squid, cutter shark, frigate octopus, freighter
 gardenback). Player CPU `makeLivingHull` stays the quality
 bar. Anatomy-native gait first impl Wave 108.
+Reviewed fleet refresh applied: Glassfin Light, Needlewake Ace, Blue Pilgrim
+Cutter, Velvet Bastion Heavy, Cathedral Frigate and Orchard Freighter now
+use their authored production sculpts at every delivered LOD, with physical
+tissue rendering and Cathedral's transmitting sanctuary bell. Player remains
+unchanged. Replaces the earlier NPC body plans above; see
+`reviews/beautiful-ones/` for the approved studies.
 
 The present Beautiful Ones NPC ships are more organic than conventional ships
 but do not capture the magic of the living player ship. Rebuild their visual and

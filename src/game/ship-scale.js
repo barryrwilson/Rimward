@@ -217,14 +217,14 @@ export const SHIP_PROPORTION = {
  * Faction-level relief on SHIP_PROPORTION. Bible §2: "Faction-specific
  * exceptions may be wide, radial, or manta-like."
  *
- * The Player ship is itself manta-plan (spanX 6.6 vs spanZ 4.2), so the
- * Beautiful Ones — who use it as their direct anatomy reference — cannot be
- * held to a length-leads-beam floor above 1. The Unknowables have no hull and
- * are measured on the stable field envelope, which is a nested loop cage: it is
- * radial by construction and legitimately as tall as it is long.
+ * The Player ship is itself manta-plan (spanX 6.6 vs spanZ 4.2), so Beautiful
+ * hulls retain relief for broad body plans. The approved Glassfin and
+ * Needlewake also need the ordinary beam floor: marine anatomy is not
+ * exclusively manta-shaped. Unknowables are measured on their radial,
+ * stable field envelope, which can legitimately be as tall as it is long.
  */
 export const FACTION_PROPORTION_RELIEF = {
-  beautiful: { minLengthOverBeam: 0.55, maxHeightOverLength: 0.60, minBeamOverLength: 0.35 },
+  beautiful: { minLengthOverBeam: 0.55, maxHeightOverLength: 0.60 },
   unknowables: { minLengthOverBeam: 0.70, maxHeightOverLength: 1.15, minBeamOverLength: 0.45 },
 };
 

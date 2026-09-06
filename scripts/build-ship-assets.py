@@ -123,11 +123,11 @@ def assign_vc(obj, color):
 def paint_parts_vc(parts, skin, is_glow=False):
     """Assign per-corner vertex colors to each object in parts.
 
-    Glow parts receive the emissive color.  Role-tagged parts (skin_role
-    custom property set by the kit builders) use the explicit role colour.
-    Untagged parts fall back to substring matching against accent_parts /
-    secondary_parts from the skin spec.
+    Authored Col pigments take precedence over generic skin-role painting.
+    Otherwise glow parts receive the emissive color and role-tagged parts
+    use the explicit role colour, falling back to the skin's name selectors.
     """
+    parts = [obj for obj in parts if obj.data.color_attributes.get('Col') is None]
     if is_glow:
         col = rgba(skin['emissive'])
         for obj in parts:
