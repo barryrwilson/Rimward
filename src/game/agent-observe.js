@@ -23,6 +23,7 @@ import {
   finiteOrNull,
   vec3,
   fwdFromQuat,
+  localDir,
   copyLastIntent,
   noCtxObservation,
   sanitizeEvent,
@@ -152,7 +153,11 @@ function shipDisplayName(ctx, t) {
     const cover = rec && typeof rec.coverName === 'string' && rec.coverName ? rec.coverName : '';
     if (cover) return cover;
   }
-  return shipName(t) || ((st && typeof st.name === 'string') ? st.name : '');
+  // HUD bracket law (hud.js 2604): record name, then state name, else CONTACT.
+  const named = (rec && typeof rec.name === 'string' && rec.name)
+    || (st && typeof st.name === 'string' && st.name)
+    || '';
+  return named || 'CONTACT';
 }
 
 /**

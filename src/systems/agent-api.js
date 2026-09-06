@@ -713,11 +713,14 @@ function mountAgentBadge(ctx) {
 }
 
 // v2 receipts: every act answers with a caller-provided or handle-issued
-// request id and the simulation timestamp. Session counter only.
+// request id and the simulation timestamp. reqId is envelope metadata on the
+// command ({ v, name, args, reqId }) — never a gameplay arg, so strict arg
+// validation (setControl LEASE_KEYS, desk specs) never sees it. Session
+// counter only.
 let issuedReq = 0;
 
-function requestId(args) {
-  const raw = args && Object.hasOwn(args, 'reqId') ? args.reqId : '';
+function requestId(command) {
+  const raw = command && Object.hasOwn(command, 'reqId') ? command.reqId : '';
   if (typeof raw !== 'string' || !raw || raw.length > 64 || reservedName(raw)) return '';
   return raw;
 }
@@ -734,7 +737,7 @@ function stampResult(ctx, result, reqId) {
 function dispatchAct(ctx, command) {
   const name = commandName(command);
   const args = commandArgs(command);
-  const reqId = requestId(args);
+  const reqId = requestId(command);
   const result = dispatchGated(ctx, name, args);
   return stampResult(ctx, result, reqId);
 }

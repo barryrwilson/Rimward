@@ -111,7 +111,11 @@ perform; refusal notices map to stable tokens (`uu`, `hold`, `not-offered`,
 `unavailable`, `busy`, `stale`). The v1 `v1-observe-only` token is gone.
 
 **Outcomes.** Every act receipt carries `reqId` (caller-provided or
-handle-issued `r<n>`) and the sim timestamp `t`. The bounded session ring now
+handle-issued `r<n>`) and the sim timestamp `t`. `reqId` is request
+metadata on the act envelope (`{ v, name, args, reqId }`) — never a gameplay
+arg, so strict arg validation (the setControl key allowlist, desk specs)
+rejects genuinely unknown fields without ever seeing it; a `reqId` left
+inside `args` is an unknown gameplay key and fails closed (`bad-args`). The bounded session ring now
 admits primitive-only combat/job/rescue/explore outcomes: `npcHit` (collapsed
 per target), `npcDisabled`, `npcDestroyed`, `npcSurrendered`, `engineOut`,
 `mineHit`/`mineBlocked`, `podSpawned`/`podCollected`, `landmarkFound`/
@@ -132,7 +136,13 @@ ok/reason derived from phase, dock/service, overlay, and helm ownership.
 recovery closure (Enter/click/auto-timer path); `act({ name:'recover' })`
 rides it, only while the overlay is open.
 
-**Evidence.** Deterministic role scenarios run in `npm run test:boot`:
+**Evidence.** Deterministic role scenarios run in `npm run test:boot` (the
+full extended boot suite — every wave, slow) and standalone in
+`npm run test:agent-gameplay` (the same wave-141/142 scenario bodies via
+`scripts/lib/agent-parity-waves.mjs` on the shared
+`scripts/lib/boot-harness.mjs` initialization — the fast focused loop for
+gameplay work; nothing is skipped or weakened, and final validation runs
+BOTH suites explicitly):
 wave 141 covers the contract surface, lease lifecycle, hail, station-service
 sweep, rescue, and death/recovery; wave 142 adds one executable scenario per
 generated mission family (mining, trade, passenger, hunt, bounty, espionage,

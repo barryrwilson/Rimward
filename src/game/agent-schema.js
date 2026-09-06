@@ -397,12 +397,17 @@ export function sanitizeEvent(raw) {
     t: num(Object.hasOwn(raw, 't') ? raw.t : 0, 0),
   };
   // Ship/pod identity: derived primitives only; the object refs never copy.
+  // Idempotent by contract: copyEvents re-sanitizes ring rows, which carry
+  // the derived primitives but no ship — the field skip below must apply
+  // only when THIS pass derived identity from a live ship, or the observe()
+  // copy silently drops targetId/targetName the harvest already made plain.
+  let derivedTarget = false;
   if (SHIP_DERIVE.has(type) && raw.ship && typeof raw.ship === 'object') {
     const ship = raw.ship;
     const rec = ship.record && typeof ship.record === 'object' ? ship.record : null;
     const st = ship.state && typeof ship.state === 'object' ? ship.state : null;
     const id = Object.hasOwn(ship, 'id') ? ship.id : (rec && Object.hasOwn(rec, 'id') ? rec.id : null);
-    if (typeof id === 'string' || typeof id === 'number') out.targetId = id;
+    if (typeof id === 'string' || typeof id === 'number') { out.targetId = id; derivedTarget = true; }
     const nm = (st && typeof st.name === 'string' && st.name)
       || (rec && typeof rec.name === 'string' && rec.name)
       || '';
@@ -417,7 +422,7 @@ export function sanitizeEvent(raw) {
   for (let i = 0; i < fields.length; i++) {
     const key = fields[i];
     if (typeof key !== 'string' || reservedName(key)) continue;
-    if ((key === 'targetId' || key === 'targetName') && SHIP_DERIVE.has(type)) continue; // derived above
+    if ((key === 'targetId' || key === 'targetName') && SHIP_DERIVE.has(type) && Object.hasOwn(out, key)) continue; // derived above
     if (key === 'podId' && (type === 'podSpawned' || type === 'podCollected')) continue; // derived above
     if (!Object.hasOwn(raw, key)) continue;
     if (key === 'intents') {

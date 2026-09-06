@@ -40,6 +40,7 @@ const PIN_KEYS = [
   'leaseExpired',
   'firePath',
   'clearControlOk',
+  'combatPath',
   'consoleClean',
   'loopAlive',
   'systemTransition',
@@ -678,7 +679,7 @@ async function main() {
     const reqId = `smoke-${++reqSeq}`;
     const r = await httpCall('POST', actUrl, {
       headers: authHeaders(),
-      body: JSON.stringify({ v: 2, name, args: { ...args, reqId } }),
+      body: JSON.stringify({ v: 2, name, args, reqId }),
     });
     const res = r.json;
     ledger.steps.push({
@@ -974,6 +975,161 @@ async function main() {
       }
     }
 
+    // ---- v2 control lease: apply, sim-time expiry, idempotent clear ----
+    const leaseSet = await act('setControl', { seq: 1, ttl: 1.5, steerX: 0.2, throttle: 0.4 });
+    snap = await observe();
+    pins.leaseActive = !!(leaseSet && leaseSet.ok === true && leaseSet.status === 'active'
+      && snap && snap.control && snap.control.state === 'active' && snap.control.seq === 1
+      && Number.isFinite(snap.control.expiresIn) && snap.control.expiresIn > 0);
+    const leaseDeadline = Date.now() + 9000;
+    while (Date.now() < leaseDeadline) {
+      snap = await observe();
+      if (snap && snap.control && snap.control.state === 'expired') break;
+      await sleep(400);
+    }
+    pins.leaseExpired = !!(snap && snap.control && snap.control.state === 'expired'
+      && snap.control.reason === 'expired');
+
+    // ---- v2 fire path: lease fireHeld must spawn real shots (playerFire) ----
+    await act('setWeaponGroup', { n: 1 });
+    const fireSet = await act('setControl', { seq: 2, ttl: 3, fireHeld: true });
+    let fireSeen = false;
+    const fireDeadline = Date.now() + 9000;
+    while (Date.now() < fireDeadline) {
+      snap = await observe();
+      if (hasEvent(snap && snap.events, 'playerFire')) { fireSeen = true; break; }
+      await sleep(300);
+    }
+    pins.firePath = !!(fireSet && fireSet.ok === true && fireSeen);
+    const clearRes = await act('clearControl', {});
+    const clearDeadline = Date.now() + 4000;
+    while (Date.now() < clearDeadline) {
+      snap = await observe();
+      if (snap && snap.ship && snap.ship.fireHeld === false) break;
+      await sleep(250);
+    }
+    pins.clearControlOk = !!(clearRes && clearRes.ok === true && clearRes.status === 'cleared'
+      && snap && snap.control && snap.control.state === 'cleared'
+      && snap.ship && snap.ship.fireHeld === false);
+
+    // ---- v2 combat path: target/aim/fire/outcome (gating) ----
+    // No fixtures and no privileged results: the target is a real observed
+    // contact from targets.nearby (station traffic lane; hostiles seek the
+    // player), selected through the same cycle service a player's KeyT uses,
+    // steered with the HUD-derived aim/lead bearings on the control lease,
+    // and every counted outcome is a real combat-system ring event.
+    const combatProbe = {
+      attempted: false, targetLocked: false, aimObserved: false,
+      fireEvents: 0, hits: 0, shieldDown: 0, destroyed: 0, surrendered: 0, note: '',
+    };
+    try {
+      let seq = 10;
+      // Demand cards own the input surface (the lease refuses 'overlay');
+      // resolve them through the listed intents exactly as a player would.
+      const clearHails = async () => {
+        for (let i = 0; i < 4; i++) {
+          const hs = await observe();
+          if (!(hs && hs.hail && hs.hail.open === true)) return true;
+          const intents = hs.hail && Array.isArray(hs.hail.intents) ? hs.hail.intents : [];
+          if (intents.includes('refuseFight')) await act('hailResolve', { intent: 'refuseFight' });
+          else if (intents.length) await act('hailResolve', { intent: intents[0] });
+          else return false;
+          await sleep(400);
+        }
+        const after = await observe();
+        return !(after && after.hail && after.hail.open === true);
+      };
+      // Bounded wait for a real contact to enter observation range.
+      let targetRow = null;
+      const contactDeadline = Date.now() + 90000;
+      while (Date.now() < contactDeadline && !targetRow) {
+        const ws = await observe();
+        if (ws && ws.session && ws.session.phase === 'dead') break;
+        const rows = ws && ws.targets && Array.isArray(ws.targets.nearby) ? ws.targets.nearby : [];
+        const contacts = rows.filter((r) => r && r.kind === 'ship');
+        if (contacts.length) {
+          contacts.sort((a, b) => ((b.hostile === true) - (a.hostile === true)) || (a.range - b.range));
+          targetRow = contacts[0];
+          break;
+        }
+        await sleep(1000);
+      }
+      if (targetRow) {
+        await clearHails();
+        const selRes = await act('selectTarget', { id: targetRow.id });
+        if (!(selRes && selRes.ok === true)) await act('selectTarget', {}); // ordinary cycle edge
+        combatProbe.attempted = true;
+        await act('setWeaponGroup', { n: 1 });
+        const aimDeadline = Date.now() + 60000;
+        while (Date.now() < aimDeadline) {
+          const ps = await observe();
+          if (ps && ps.session && ps.session.phase === 'dead') {
+            combatProbe.note = 'player destroyed mid-probe (real combat outcome)';
+            break;
+          }
+          const evs = ps && ps.events;
+          if (Array.isArray(evs)) {
+            for (const e of evs) {
+              if (!e || typeof e !== 'object') continue;
+              if (e.type === 'npcHit') combatProbe.hits += Number.isFinite(e.count) ? e.count : 1;
+              if (e.type === 'shieldDown') combatProbe.shieldDown += 1;
+              if (e.type === 'npcDestroyed' || e.type === 'npcDisabled') combatProbe.destroyed += 1;
+              if (e.type === 'npcSurrendered') combatProbe.surrendered += 1;
+              if (e.type === 'playerFire') combatProbe.fireEvents += 1;
+            }
+          }
+          const tgt = ps && ps.targets && ps.targets.current;
+          if (tgt && tgt.kind === 'ship') combatProbe.targetLocked = true;
+          if (!tgt || tgt.kind !== 'ship') break;
+          const aim = ps.targets && ps.targets.aim;
+          if (aim && Array.isArray(aim.bearing)) combatProbe.aimObserved = true;
+          if (!aim || !Array.isArray(aim.bearing)) { await sleep(300); continue; } // HUD publishes the digest the frame after a new lock
+          if (combatProbe.fireEvents > 0
+            && (combatProbe.hits > 0 || combatProbe.destroyed > 0 || combatProbe.surrendered > 0)) break;
+          const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
+          const sx = Math.max(-1, Math.min(1, aimPt[0] * 2.5));
+          const sy = Math.max(-1, Math.min(1, aimPt[1] * 2.5));
+          const aligned = aimPt[2] < -0.85;
+          const ctl = await act('setControl', { seq: ++seq, ttl: 1.2, steerX: sx, steerY: sy, fireHeld: aligned, throttle: 0.6 });
+          if (ctl && ctl.ok === false && ctl.token === 'overlay') await clearHails();
+          await sleep(700);
+        }
+        await act('clearControl', {});
+        if (!combatProbe.note) {
+          if (combatProbe.fireEvents === 0) combatProbe.note = 'no playerFire within probe window';
+          else if (combatProbe.hits === 0 && combatProbe.destroyed === 0 && combatProbe.surrendered === 0) {
+            combatProbe.note = 'fired without a combat outcome';
+          }
+        }
+      } else {
+        combatProbe.note = 'no contact entered observation range within 90s';
+      }
+    } catch (probeErr) {
+      combatProbe.note = `probe error: ${probeErr && probeErr.message ? probeErr.message : 'err'}`;
+      try { await act('clearControl', {}); } catch { /* ignore */ }
+    }
+    pins.combatProbe = combatProbe;
+    pins.combatPath = !!(
+      combatProbe.attempted
+      && combatProbe.targetLocked
+      && combatProbe.aimObserved
+      && combatProbe.fireEvents > 0
+      && (combatProbe.hits > 0 || combatProbe.destroyed > 0 || combatProbe.surrendered > 0)
+    );
+
+    // If the probe cost the ship, take the real death-overlay recovery path
+    // and undock again so the navigation leg starts flying.
+    {
+      const ds = await observe();
+      if (ds && ds.session && ds.session.phase === 'dead') {
+        await act('recover', {});
+      }
+      const rs = await observe();
+      if (rs && rs.flags && rs.flags.docked === true) {
+        await act('undock', {});
+      }
+    }
+
     snap = await observe();
     const startSystem = snap && snap.world && typeof snap.world.currentSystem === 'string'
       ? snap.world.currentSystem
@@ -1041,86 +1197,6 @@ async function main() {
       }
     }
 
-    // ---- v2 control lease: apply, sim-time expiry, idempotent clear ----
-    const leaseSet = await act('setControl', { seq: 1, ttl: 1.5, steerX: 0.2, throttle: 0.4 });
-    snap = await observe();
-    pins.leaseActive = !!(leaseSet && leaseSet.ok === true && leaseSet.status === 'active'
-      && snap && snap.control && snap.control.state === 'active' && snap.control.seq === 1
-      && Number.isFinite(snap.control.expiresIn) && snap.control.expiresIn > 0);
-    const leaseDeadline = Date.now() + 9000;
-    while (Date.now() < leaseDeadline) {
-      snap = await observe();
-      if (snap && snap.control && snap.control.state === 'expired') break;
-      await sleep(400);
-    }
-    pins.leaseExpired = !!(snap && snap.control && snap.control.state === 'expired'
-      && snap.control.reason === 'expired');
-
-    // ---- v2 fire path: lease fireHeld must spawn real shots (playerFire) ----
-    await act('setWeaponGroup', { n: 1 });
-    const fireSet = await act('setControl', { seq: 2, ttl: 3, fireHeld: true });
-    let fireSeen = false;
-    const fireDeadline = Date.now() + 9000;
-    while (Date.now() < fireDeadline) {
-      snap = await observe();
-      if (hasEvent(snap && snap.events, 'playerFire')) { fireSeen = true; break; }
-      await sleep(300);
-    }
-    pins.firePath = !!(fireSet && fireSet.ok === true && fireSeen);
-    const clearRes = await act('clearControl', {});
-    const clearDeadline = Date.now() + 4000;
-    while (Date.now() < clearDeadline) {
-      snap = await observe();
-      if (snap && snap.ship && snap.ship.fireHeld === false) break;
-      await sleep(250);
-    }
-    pins.clearControlOk = !!(clearRes && clearRes.ok === true && clearRes.status === 'cleared'
-      && snap && snap.control && snap.control.state === 'cleared'
-      && snap.ship && snap.ship.fireHeld === false);
-
-    // ---- v2 combat probe (non-gating datapoint) ----
-    // Cycle a target, steer with the HUD-derived bearing, fire on the lead.
-    // Records real combat-system outcomes when a contact is in range.
-    const combatProbe = { attempted: false, hits: 0, shieldDown: 0, destroyed: 0, fireEvents: 0, note: '' };
-    try {
-      const selRes = await act('selectTarget', {});
-      if (selRes && selRes.ok === true) {
-        combatProbe.attempted = true;
-        let seq = 10;
-        const aimDeadline = Date.now() + 30000;
-        while (Date.now() < aimDeadline) {
-          snap = await observe();
-          const evs = snap && snap.events;
-          if (Array.isArray(evs)) {
-            for (const e of evs) {
-              if (!e || typeof e !== 'object') continue;
-              if (e.type === 'npcHit') combatProbe.hits += Number.isFinite(e.count) ? e.count : 1;
-              if (e.type === 'shieldDown') combatProbe.shieldDown += 1;
-              if (e.type === 'npcDestroyed') combatProbe.destroyed += 1;
-              if (e.type === 'playerFire') combatProbe.fireEvents += 1;
-            }
-          }
-          const tgt = snap && snap.targets && snap.targets.current;
-          if (!tgt || tgt.kind !== 'ship') break;
-          if (combatProbe.destroyed > 0) break;
-          const aim = snap.targets.aim;
-          if (!aim || !Array.isArray(aim.bearing)) break;
-          const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
-          const sx = Math.max(-1, Math.min(1, aimPt[0] * 2.5));
-          const sy = Math.max(-1, Math.min(1, aimPt[1] * 2.5));
-          const aligned = aimPt[2] < -0.85;
-          await act('setControl', { seq: ++seq, ttl: 1.2, steerX: sx, steerY: sy, fireHeld: aligned, throttle: 0.6 });
-          await sleep(700);
-        }
-        await act('clearControl', {});
-      } else {
-        combatProbe.note = `no target: ${selRes && selRes.token}`;
-      }
-    } catch (probeErr) {
-      combatProbe.note = `probe error: ${probeErr && probeErr.message ? probeErr.message : 'err'}`;
-      try { await act('clearControl', {}); } catch { /* ignore */ }
-    }
-    pins.combatProbe = combatProbe;
     ledger.snapshots.terminal = observePin(await observe());
   } catch (err) {
     failNote = failNote || (err && err.message ? err.message : 'smoke failed');

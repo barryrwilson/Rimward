@@ -61,7 +61,13 @@ function actCommand(raw) {
   const v = Number.isFinite(Number(src.v)) ? Number(src.v) : 1;
   const name = typeof src.name === 'string' ? src.name : '';
   const args = src.args && typeof src.args === 'object' && !Array.isArray(src.args) ? src.args : {};
-  return { v, name, args };
+  // reqId is envelope metadata (v2 receipts); it never enters gameplay args.
+  // The game handle validates content (length/reserved) and issues its own id
+  // when the caller's is unusable.
+  const reqId = typeof src.reqId === 'string' ? src.reqId : '';
+  const cmd = { v, name, args };
+  if (reqId) cmd.reqId = reqId;
+  return cmd;
 }
 
 function bearerToken(req) {

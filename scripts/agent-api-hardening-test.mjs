@@ -522,8 +522,14 @@ pin('setControl unknown key refused', unknownKey.ok === false && unknownKey.toke
 const badSeq = rw.act({ v: 2, name: 'setControl', args: { seq: 1.5 } });
 pin('setControl non-integer seq refused', badSeq.ok === false && badSeq.token === 'bad-seq');
 pin('lease survived refused writes', rw.observe().control.state === 'active');
-const reqEcho = rw.act({ v: 2, name: 'ping', args: { reqId: 'client-7' } });
+// reqId is envelope metadata ({ v, name, args, reqId }) — never a gameplay arg.
+const reqEcho = rw.act({ v: 2, name: 'ping', reqId: 'client-7', args: {} });
 pin('reqId echoed', reqEcho.ok === true && reqEcho.reqId === 'client-7');
+const envCtl = rw.act({ v: 2, name: 'setControl', reqId: 'lease-9', args: { seq: 3, ttl: 1 } });
+pin('setControl with envelope reqId accepted', envCtl.ok === true && envCtl.reqId === 'lease-9');
+const argReq = rw.act({ v: 2, name: 'setControl', args: { seq: 4, ttl: 1, reqId: 'wrong-place' } });
+pin('reqId inside gameplay args refused as unknown key', argReq.ok === false && argReq.token === 'bad-args');
+rw.act({ v: 2, name: 'clearControl', args: {} });
 
 ctx.autopilot.engaged = true;
 const helmCtl = rw.act({ v: 2, name: 'setControl', args: { seq: 5, ttl: 1 } });
