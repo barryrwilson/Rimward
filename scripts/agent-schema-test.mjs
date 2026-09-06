@@ -223,6 +223,23 @@ const keepRing = [];
 pushRing(keepRing, { type: 'jobState', t: 1, id: 'j1', kind: 'mining', outcome: 'done' });
 for (let i = 0; i < 24; i++) pushRing(keepRing, { type: 'npcHit', t: i + 2, targetId: 's', damage: 1 });
 pin('jobState survives hit flood', keepRing.some((e) => e && e.type === 'jobState' && e.id === 'j1'));
+// Combat spam folding (wave-142 ring starvation): sustained playerHit/bodyHit
+// (KEEP_RING types) once saturated the 16-row ring so eviction discarded the
+// agent's own playerFire/npcHit on arrival. Folding per family/kind/weapon
+// keeps the ring mixed so fire/hit feedback survives heavy combat.
+const combatRing = [];
+for (let i = 0; i < 20; i++) pushRing(combatRing, { type: 'playerHit', t: i + 1, damage: 2, family: 'cannon' });
+for (let i = 0; i < 10; i++) pushRing(combatRing, { type: 'bodyHit', t: 30 + i, kind: 'ship', speed: 20, damage: 1 });
+for (let i = 0; i < 6; i++) pushRing(combatRing, { type: 'shieldDown', t: 40 + i, layer: i % 2 ? 'screen' : 'shell', actor: 'player' });
+pushRing(combatRing, { type: 'playerFire', t: 50, weapon: 'cannon' });
+pushRing(combatRing, { type: 'npcHit', t: 51, targetId: 'foe', damage: 8 });
+const phRow = combatRing.find((e) => e && e.type === 'playerHit');
+pin('playerHit folds per family', !!(phRow && phRow.count === 20));
+pin('shieldDown rows keep per-layer identity', combatRing.filter((e) => e && e.type === 'shieldDown').length === 6);
+pin('playerFire survives KEEP pressure', combatRing.some((e) => e && e.type === 'playerFire' && e.weapon === 'cannon'));
+pin('npcHit survives KEEP pressure', combatRing.some((e) => e && e.type === 'npcHit' && e.targetId === 'foe'));
+pin('combat ring within cap', combatRing.length <= EVENT_CAP);
+
 
 // actResult v2 receipts: reqId + sim timestamp.
 const receipt = actResult({ ok: true, error: '', name: 'setControl', token: '', status: 'active', reqId: 'q9', t: 12.5 });

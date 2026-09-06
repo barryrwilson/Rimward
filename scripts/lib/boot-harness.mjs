@@ -212,6 +212,7 @@ export async function bootGameSystems() {
   const { initJump } = await import('../../src/game/jump.js');
   const { initNav } = await import('../../src/game/nav.js');
   const { initAutopilot } = await import('../../src/game/autopilot.js');
+  const { initAutomine } = await import('../../src/game/automine.js'); // same slot as main.js: after autopilot, before flee
   const { initAgentFlee } = await import('../../src/game/agent-flee.js');
   const { initTraffic } = await import('../../src/game/traffic.js');
   const {
@@ -251,7 +252,7 @@ export async function bootGameSystems() {
   const inits = [
     ['title', initTitle],
     ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
-    ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['flee', initAgentFlee], ['settings', initSettings], ['bio', initBio],
+    ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['automine', initAutomine], ['flee', initAgentFlee], ['settings', initSettings], ['bio', initBio],
     ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
     ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
     ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['agentapi', initAgentApi], ['hud', initHud],
@@ -268,6 +269,7 @@ export async function bootGameSystems() {
   }
 
   const binds = {
+    inits, // boot-test bootFreshHarness (waves 6/7 origin beats) re-runs this exact list
     FIRST_PERSON_NOSE, recordPosition,
     contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
     keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,

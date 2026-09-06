@@ -117,7 +117,10 @@ arg, so strict arg validation (the setControl key allowlist, desk specs)
 rejects genuinely unknown fields without ever seeing it; a `reqId` left
 inside `args` is an unknown gameplay key and fails closed (`bad-args`). The bounded session ring now
 admits primitive-only combat/job/rescue/explore outcomes: `npcHit` (collapsed
-per target), `npcDisabled`, `npcDestroyed`, `npcSurrendered`, `engineOut`,
+per target), `playerFire`/`playerHit`/`bodyHit` (collapsed per weapon/family/
+kind — folded rows are bounded per key, so ring eviction treats them as
+keep-class and the agent's own fire/hit feedback survives KEEP-type floods),
+`npcDisabled`, `npcDestroyed`, `npcSurrendered`, `engineOut`,
 `mineHit`/`mineBlocked`, `podSpawned`/`podCollected`, `landmarkFound`/
 `clueFound`/`convergence`/`deepening`, `survivorRescued`/`survivorSold`,
 `epicStage`, `hailMiss`, `hailClosed` (`demandOutcome`), `fearChanged`, and
@@ -434,7 +437,7 @@ Builder rules:
 - `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`, and `fullStop` (from `ctx.input.fullStop`). `agentOptIn` is top-level.
 - `ship` includes hull/screen/shell/engine/power/heat/`weaponGroup` (`state.js` **167–181**; `input.weaponGroup`).
 - `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships and rocks** (AM needs the locked asteroid).
-- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact.
+- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId`, `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback.
 - `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
 - `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.
 - `session.phase` is `'dead'` while `ctx.deathApi.isOpen()` (death overlay). Then `'title'` / `'origin'` / `'playing'` as today.

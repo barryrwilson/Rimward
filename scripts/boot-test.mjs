@@ -154,6 +154,7 @@ const {
 const boot = await bootGameSystems();
 const { ctx, systems, scene, camera, renderer } = boot;
 const {
+  inits, // bootFreshHarness (waves 6/7) re-runs the harness list verbatim
   FIRST_PERSON_NOSE, recordPosition,
   contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
   keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,

@@ -164,8 +164,8 @@ const EVENT_FIELDS = Object.freeze({
   automineDisengaged: Object.freeze(['reason']),
   jumpRequested: Object.freeze(['to']),
   systemLoaded: Object.freeze(['to']),
-  playerHit: Object.freeze(['damage', 'family', 'fromAft']),
-  playerFire: Object.freeze(['weapon']),
+  playerHit: Object.freeze(['damage', 'family', 'fromAft', 'count']),
+  playerFire: Object.freeze(['weapon', 'count']),
   shieldDown: Object.freeze(['layer', 'player', 'actor', 'targetId']),
   engineOut: Object.freeze(['player', 'targetId', 'targetName']),
   npcHit: Object.freeze(['targetId', 'targetName', 'damage', 'count']),
@@ -191,7 +191,7 @@ const EVENT_FIELDS = Object.freeze({
   reticleLock: Object.freeze(['hit']),
   playerDestroyed: Object.freeze([]),
   recovered: Object.freeze(['source']),
-  bodyHit: Object.freeze(['kind', 'speed', 'damage']),
+  bodyHit: Object.freeze(['kind', 'speed', 'damage', 'count']),
 });
 
 /** Ship-carrying events: identity is derived as primitives; ship never copied. */
@@ -203,6 +203,14 @@ const SHIP_DERIVE = new Set([
 const COLLAPSE_KEY = Object.freeze({
   npcHit: 'targetId',
   mineHit: 'asteroidId',
+  // Combat spam folds the same way as npcHit/mineHit: without it, sustained
+  // playerHit/bodyHit rows (all KEEP_RING) saturate the 16-row ring and
+  // eviction discards the agent's own playerFire/npcHit feedback on arrival —
+  // the agent goes blind to its own fire exactly in heavy combat. shieldDown
+  // is NOT folded: rows differ by ship/layer and that identity matters.
+  playerHit: 'family',
+  bodyHit: 'kind',
+  playerFire: 'weapon',
 });
 
 const RESERVED = new Set([
@@ -517,7 +525,11 @@ export function pushRing(events, row, cap = EVENT_CAP) {
     if (dropOldestComm(events)) continue;
     let drop = -1;
     for (let i = 0; i < events.length; i++) {
-      if (!events[i] || !KEEP_RING.has(events[i].type)) {
+      // Foldable (COLLAPSE_KEY) rows are bounded to one row per key, so they
+      // are keep-class too: without this, a ring saturated with KEEP rows
+      // discards an incoming playerFire/npcHit on arrival and the agent goes
+      // blind to its own fire exactly in heavy combat (wave-142 ring probe).
+      if (!events[i] || (!KEEP_RING.has(events[i].type) && !Object.hasOwn(COLLAPSE_KEY, events[i].type))) {
         drop = i;
         break;
       }

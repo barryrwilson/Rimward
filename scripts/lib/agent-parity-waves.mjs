@@ -813,10 +813,9 @@ export async function runAgentParityWave142(deps) {
         iters142 += 1;
         const s = rw142.observe();
         if (s && s.session && s.session.phase === 'dead') { out = 'died'; why142 = 'died'; break; }
-        const cur = s && s.targets && s.targets.current;
-        const aim = s && s.targets && s.targets.aim;
-        if (!cur || cur.kind !== 'ship') { why142 = `lock-lost cur=${cur && cur.kind ? cur.kind : 'none'}`; break; } // lock lost: destroyed or despawned
-        if (!aim || !Array.isArray(aim.bearing)) { tick(1, `w142 ${scenario} aim wait`); continue; } // the HUD publishes the digest the frame after a new lock
+        // Scan events BEFORE the lock check: a killing blow clears the target
+        // lock in the same frame the npcDestroyed event lands in the ring, so
+        // a lock-first break would report a real kill as 'lock-lost'.
         for (const e of s.events || []) {
           if (!e) continue;
           seen142.add(e.type);
@@ -826,6 +825,10 @@ export async function runAgentParityWave142(deps) {
           if (terminals.includes(e.type) && isFoe142(e)) out = 'resolved';
         }
         if (out === 'resolved') { why142 = 'resolved'; break; }
+        const cur = s && s.targets && s.targets.current;
+        const aim = s && s.targets && s.targets.aim;
+        if (!cur || cur.kind !== 'ship') { why142 = `lock-lost cur=${cur && cur.kind ? cur.kind : 'none'}`; break; } // lock lost: destroyed or despawned
+        if (!aim || !Array.isArray(aim.bearing)) { tick(1, `w142 ${scenario} aim wait`); continue; } // the HUD publishes the digest the frame after a new lock
         const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
         const sx = clamp142(aimPt[0] * 2.5);
         const sy = clamp142(aimPt[1] * 2.5);
@@ -841,11 +844,11 @@ export async function runAgentParityWave142(deps) {
             rw142.act({ v: 2, name: 'hailResolve', args: { intent: hi142.includes('refuseFight') ? 'refuseFight' : hi142[0] } });
           }
         }
-        tick(3, `w142 ${scenario} fight`);
+        tick(1, `w142 ${scenario} fight`); // per-frame observe: concurrent NPC battles overflow the 16-row ring within 3 frames and evict playerFire/npcHit
       }
       rw142.act({ v: 2, name: 'clearControl', args: {} });
       const foeState = live && live.state ? live.state : {};
-      const diag = `iters=${iters142} why=${why142} ai=${live.ai && live.ai.mode ? live.ai.mode : '?'} destroyed=${!!foeState.destroyed} disabled=${!!foeState.disabled} surrendered=${!!foeState.surrendered} evs=${[...seen142].join(',')} names=${[...names142].join(',')}`;
+      const diag = `iters=${iters142} why=${why142} fire=${fire} hit=${hit} ai=${live.ai && live.ai.mode ? live.ai.mode : '?'} destroyed=${!!foeState.destroyed} disabled=${!!foeState.disabled} surrendered=${!!foeState.surrendered} evs=${[...seen142].join(',')} names=${[...names142].join(',')}`;
       return { out, fire, hit, diag };
     };
 
@@ -1091,25 +1094,34 @@ export async function runAgentParityWave142(deps) {
     // ---- 5. local hunt: board contract on a pirate record, witnessed kill --
     recoverIfDead142('w142 dock hunt pre');
     ensureDocked142('w142 dock hunt');
-    openJobs142('w142 hunt board');
-    let huntOffer = offers142('hunt')[0] || null;
-    let huntFixture = false;
-    if (!huntOffer) {
-      // Bounded recorded fixture (spec: fixture selection is recorded, never
-      // silently skipped): a hunt-eligible quarry record (rec-N id, bounty)
-      // so the board sync generates the card on the next render.
-      const rec = {
-        id: 'rec-9001', name: 'Wave142 Hunt Quarry', classKey: 'cutter',
-        faction: 'redledger', role: 'pirate', system: 'freehold', state: 'enroute',
-        bounty: 520, resolve: 50, personality: 95, alwaysHuntsPlayer: true,
-      };
-      const banks = ctx.world.recordBanks;
-      const bank = (banks && Array.isArray(banks.freehold)) ? banks.freehold
-        : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
-      if (bank) { bank.unshift(rec); fixtureRecs.push({ arr: bank, rec }); huntFixture = true; }
-      openJobs142('w142 hunt board fixture');
-      huntOffer = offers142('hunt').find((j) => typeof j.title === 'string' && j.title.includes(rec.name)) || null;
+    // Bounded recorded fixture installed BEFORE the board read (spec: fixture
+    // selection is recorded, never silently skipped): the labelled
+    // high-personality quarry (personality 95 → permanently 'defiant', never
+    // capitulates) makes the kill-required contract deterministic. The
+    // fixture's own generated offer is preferred; real board offers remain
+    // the fallback. The accept→combat→incident→claim path is unchanged.
+    const huntFixtureRec = {
+      id: 'rec-9001', name: 'Wave142 Hunt Quarry', classKey: 'cutter',
+      faction: 'redledger', role: 'pirate', system: 'freehold', state: 'enroute',
+      bounty: 520, resolve: 50, personality: 95, alwaysHuntsPlayer: true,
+    };
+    const huntBank = (ctx.world.recordBanks && Array.isArray(ctx.world.recordBanks.freehold)) ? ctx.world.recordBanks.freehold
+      : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
+    if (huntBank) { huntBank.unshift(huntFixtureRec); fixtureRecs.push({ arr: huntBank, rec: huntFixtureRec }); }
+    // privilegedFixture board reset: the hunt board fills both slots with real
+    // offers at dock, which would leave no room for the fixture card. Pull
+    // the OFFERED hunt cards so the real syncHuntJobs reposts from the bank
+    // with the labelled fixture first; saved142.jobs restores them in finally.
+    if (Array.isArray(ctx.world.jobs)) {
+      for (let i = ctx.world.jobs.length - 1; i >= 0; i--) {
+        const j = ctx.world.jobs[i];
+        if (j && j.kind === 'hunt' && j.originSystem === 'freehold' && j.state === 'offered') ctx.world.jobs.splice(i, 1);
+      }
     }
+    openJobs142('w142 hunt board');
+    let huntOffer = offers142('hunt').find((j) => typeof j.title === 'string' && j.title.includes(huntFixtureRec.name)) || null;
+    let huntFixture = !!huntOffer;
+    if (!huntOffer) huntOffer = offers142('hunt')[0] || null;
     let huntOk = false;
     let huntNote = 'no hunt offer (fixture attempted)';
     if (huntOffer) {
@@ -1126,7 +1138,7 @@ export async function runAgentParityWave142(deps) {
       }
       if (live) {
         pinHull142(true); // privilegedFixture: contract-kill only, not survival evidence
-        const f = fight142('hunt', live, rec.name, ['npcDestroyed', 'npcSurrendered']);
+        const f = fight142('hunt', live, rec.name, ['npcDestroyed']); // kill-required: surrender is not resolution
         pinHull142(false);
         if (spawned142.has(live)) { w30removeShip(live); spawned142.delete(live); }
         const done = awaitJobState142(huntOffer.id, ['done', 'delivered'], 60 * 5, 'w142 hunt terminal');
@@ -1142,24 +1154,31 @@ export async function runAgentParityWave142(deps) {
     // ---- 6. faction war: strike on a flagged patrol record ------------------
     recoverIfDead142('w142 dock war pre');
     ensureDocked142('w142 dock war');
-    openJobs142('w142 war board');
-    let warOffer = offers142('war')[0] || null;
-    let warFixture = false;
-    if (!warOffer) {
-      // Bounded recorded fixture: a war-eligible patrol record of the rival
-      // faction (veridian) registered in the origin bank.
-      const rec = {
-        id: 'rec-9002', name: 'Wave142 War Quarry', classKey: 'cutter',
-        faction: 'veridian', role: 'patrol', system: 'freehold', state: 'enroute',
-        resolve: 50, personality: 95,
-      };
-      const banks = ctx.world.recordBanks;
-      const bank = (banks && Array.isArray(banks.freehold)) ? banks.freehold
-        : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
-      if (bank) { bank.unshift(rec); fixtureRecs.push({ arr: bank, rec }); warFixture = true; }
-      openJobs142('w142 war board fixture');
-      warOffer = offers142('war').find((j) => typeof j.title === 'string' && j.title.includes(rec.name)) || null;
+    // Bounded recorded fixture installed BEFORE the board read: the labelled
+    // high-personality patrol record (personality 95 → never capitulates)
+    // makes the kill-required contract deterministic. The fixture's own
+    // generated offer is preferred; real board offers remain the fallback.
+    const warFixtureRec = {
+      id: 'rec-9002', name: 'Wave142 War Quarry', classKey: 'cutter',
+      faction: 'veridian', role: 'patrol', system: 'freehold', state: 'enroute',
+      resolve: 50, personality: 95,
+    };
+    const warBank = (ctx.world.recordBanks && Array.isArray(ctx.world.recordBanks.freehold)) ? ctx.world.recordBanks.freehold
+      : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
+    if (warBank) { warBank.unshift(warFixtureRec); fixtureRecs.push({ arr: warBank, rec: warFixtureRec }); }
+    // privilegedFixture board reset: pull existing OFFERED war cards so the
+    // real syncWarJobs reposts from the bank with the labelled fixture first;
+    // saved142.jobs restores them in finally.
+    if (Array.isArray(ctx.world.jobs)) {
+      for (let i = ctx.world.jobs.length - 1; i >= 0; i--) {
+        const j = ctx.world.jobs[i];
+        if (j && j.kind === 'war' && j.originSystem === 'freehold' && j.state === 'offered') ctx.world.jobs.splice(i, 1);
+      }
     }
+    openJobs142('w142 war board');
+    let warOffer = offers142('war').find((j) => typeof j.title === 'string' && j.title.includes(warFixtureRec.name)) || null;
+    let warFixture = !!warOffer;
+    if (!warOffer) warOffer = offers142('war')[0] || null;
     let warOk = false;
     let warNote = 'no war offer (fixture attempted)';
     if (warOffer) {
@@ -1178,7 +1197,7 @@ export async function runAgentParityWave142(deps) {
       }
       if (live) {
         pinHull142(true); // privilegedFixture: contract-kill only
-        const f = fight142('war', live, rec.name, ['npcDestroyed', 'npcSurrendered']);
+        const f = fight142('war', live, rec.name, ['npcDestroyed']); // kill-required: surrender is not resolution
         pinHull142(false);
         if (spawned142.has(live)) { w30removeShip(live); spawned142.delete(live); }
         const done = awaitJobState142(warOffer.id, ['done', 'delivered'], 60 * 5, 'w142 war terminal');
@@ -1194,6 +1213,31 @@ export async function runAgentParityWave142(deps) {
     // ---- 7. faction hunt: posted bounty on a named pirate, witnessed kill ---
     recoverIfDead142('w142 dock bounty pre');
     ensureDocked142('w142 dock bounty');
+    // Bounded recorded fixture installed BEFORE the board read: the labelled
+    // priced pirate record (personality 95 → never capitulates, so it fights
+    // to destruction instead of fleeing) in the live registry so
+    // syncPirateBounties posts the faction bounty card. The fixture's own
+    // generated offer is preferred; real board offers remain the fallback.
+    const bountyFixtureRec = {
+      id: 'rec-9003', name: 'Wave142 Bounty Quarry', classKey: 'cutter',
+      faction: 'redledger', role: 'pirate', system: 'freehold', state: 'enroute',
+      bounty: 640, resolve: 50, personality: 95, alwaysHuntsPlayer: true,
+    };
+    if (Array.isArray(ctx.world.records)) {
+      ctx.world.records.unshift(bountyFixtureRec);
+      fixtureRecs.push({ arr: ctx.world.records, rec: bountyFixtureRec });
+    }
+    // privilegedFixture board reset: the pirate bounty board caps at 2 cards
+    // and real pirates fill it, which would leave no room for the fixture
+    // card. Pull the OFFERED pirate bounty cards so the real
+    // syncPirateBounties reposts from the registry with the labelled fixture
+    // first; saved142.jobs restores them in finally.
+    if (Array.isArray(ctx.world.jobs)) {
+      for (let i = ctx.world.jobs.length - 1; i >= 0; i--) {
+        const j = ctx.world.jobs[i];
+        if (j && j.kind === 'bounty' && typeof j.id === 'string' && j.id.startsWith('bounty-pirate-') && j.state === 'offered') ctx.world.jobs.splice(i, 1);
+      }
+    }
     openJobs142('w142 bounty board');
     const bountyOffers = () => {
       const snap = rw142.observe();
@@ -1201,24 +1245,9 @@ export async function runAgentParityWave142(deps) {
         .filter((j) => j && j.kind === 'bounty' && typeof j.id === 'string'
           && j.id.startsWith('bounty-pirate-') && j.state === 'offered');
     };
-    let bountyOffer = bountyOffers()[0] || null;
-    let bountyFixture = false;
-    if (!bountyOffer) {
-      // Bounded recorded fixture: a priced pirate record in the live registry
-      // so syncPirateBounties posts the faction bounty card.
-      const rec = {
-        id: 'rec-9003', name: 'Wave142 Bounty Quarry', classKey: 'cutter',
-        faction: 'redledger', role: 'pirate', system: 'freehold', state: 'enroute',
-        bounty: 640, resolve: 50, personality: 95, alwaysHuntsPlayer: true,
-      };
-      if (Array.isArray(ctx.world.records)) {
-        ctx.world.records.unshift(rec);
-        fixtureRecs.push({ arr: ctx.world.records, rec });
-        bountyFixture = true;
-      }
-      openJobs142('w142 bounty board fixture');
-      bountyOffer = bountyOffers().find((j) => typeof j.title === 'string' && j.title.includes(rec.name)) || null;
-    }
+    let bountyOffer = bountyOffers().find((j) => typeof j.title === 'string' && j.title.includes(bountyFixtureRec.name)) || null;
+    let bountyFixture = !!bountyOffer;
+    if (!bountyOffer) bountyOffer = bountyOffers()[0] || null;
     let bountyOk = false;
     let bountyNote = 'no pirate bounty offer (fixture attempted)';
     if (bountyOffer) {
