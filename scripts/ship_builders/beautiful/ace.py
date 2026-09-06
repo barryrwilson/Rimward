@@ -1,234 +1,178 @@
-"""Beautiful Ones Ace — HUNTING SQUID.
+"""Beautiful Ones Ace — NEEDLEWAKE (reef squid).
 
-Bible §4.6: a taut, fast adult with a narrow frontal area, bright nerve
-lines, and controlled asymmetry from healed experience. Propulsion is a
-whole-body traveling wave. The class read is a squid dart, not a manta
-and not an octopus.
+Approved concept: reviews/beautiful-ones/small-ships.js buildNeedlewake
+(lines 271-343) and the tube helper (lines 22-29), accent #94b7f0.
 
-Body plan
----------
-One fusiform mantle loft, pointed toward -Z, thickest in the forward
-third, tapering aft into a head collar. Rhomboid mantle fins sit at the
-AFT of the mantle (not mid-body). Eight arms leave a tight ventral
-bundle at the head and trail toward +Z. Two longer feeding tentacles
-tuck along the bundle; clubs reach the driver glow. A ventral siphon
-is the jet. Thumbnail: tubular mantle + rear diamond fins + arm bundle.
+Long sleek mantle tapering to a soft point aft; a continuous fin skirt
+(broad fleshy ribbons on both rear flanks) wraps the rear two-thirds and
+ripples around its margin; the blended forward head carries eight
+S-curved arms in a funnel cluster ahead of the prow plus two longer
+sensory streamers with warm tips. Sparse lateral-line photophores ride
+the mantle flanks. Predator-forward silhouette — no rocket tube, no
+straight rods.
+
+Conventions (matching the review): forward = -Z, up = +Y, concept
+coordinates authored on an ~11-unit span and normalized to class length
+by a single uniform sf.fit_sculpt at the end.
 
 Envelope (driver): l = 7.2, b = l*0.40 = 2.88, h = l*0.20 = 1.44.
-Span band [4.32, 10.08]. Longer than wide (spanZ > spanX). Vertex aim
-4 000-21 000. Authored spanZ ~8.82 (nose to stbd club), so ace sits
-above light 8.5 and below cutter 11.0. Glow at z = +l*0.47; arm and
-tentacle tips dissolve into that wake.
 
-LOD ladder
-----------
-detail=3  full arms, suckers, concentrated vein fans, crown, scar.
-detail=2  fewer suckers and vein branches (anatomy thins repeats).
-detail=1  mantle + fins + arm masses; organ hints.
-detail=0  mantle + fins + arm tubes. Silhouette is never trimmed.
+LOD ladder (tessellation/repeats only — silhouette never trimmed)
+-----------------------------------------------------------------
+detail=3  review densities; 8 photophores.
+detail=2  0.55x tessellation; 8 photophores.
+detail=1  0.30x tessellation; 4 photophores.
+detail=0  0.18x tessellation; photophores dropped; eight arms, two
+          streamers, warm tips, fin ribbons all preserved.
+
 """
 import math
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-import ship_kit as kit
 
 from . import surface as sf
-from . import anatomy as an
-from . import organs as org
+
+TAU = math.pi * 2
+ACCENT = '#94b7f0'
+
+# Tessellation multiplier per detail tier; silhouette density floor.
+_MULT = {3: 1.0, 2: 0.55, 1: 0.30, 0: 0.18}
 
 
-def _mantle_stations(l, b, h):
-    """Fusiform mantle, pointed at -Z, collar kept open at the head.
-
-    Peak girth sits in the forward third. Aft stations are lifted so the
-    mantle does not collapse to a second point — that collar is the head
-    the arms grow from. Nose at -l*0.642 is the -Z stop of the envelope.
-    Half-extents stay well inside class beam; the rhomboid fins carry
-    spanX, kept narrower than the body length.
-    """
-    z_nose = -l * 0.642
-    z_head = l * 0.100
-    max_hw = min(0.64, b * 0.22)
-    max_hh = min(0.52, h * 0.38)
-    raw = an.fusiform_stations(z_nose, z_head, max_hw, max_hh,
-                               y_offset=0.05, peak_t=0.28, n=11)
-    out = []
-    n = len(raw)
-    for i, (z, hw, hh, yo, _ch) in enumerate(raw):
-        t = i / (n - 1.0)
-        if t >= 0.70:
-            u = (t - 0.70) / 0.30
-            hw = max(hw, 0.24 + 0.14 * u)
-            hh = max(hh, 0.20 + 0.12 * u)
-        out.append(sf.fair(z, hw, hh, yo))
-    return out
+def _seg(n, mult, minimum=4):
+    """Scale a review segment count by the LOD multiplier."""
+    return max(minimum, int(round(n * mult)))
 
 
-def _head_stations(stations, z_hub):
-    """Pearl head collar overlapping the open mantle. Buried into indigo."""
-    out = []
-    for z, pull, hh, bury in (
-        (z_hub - 0.28, 0.04, 0.22, 0.16),
-        (z_hub + 0.02, 0.02, 0.24, 0.14),
-        (z_hub + 0.32, 0.06, 0.18, 0.12),
-    ):
-        _hw, _hh, yo, _ch = sf.section(stations, z)
-        hw = sf.flank_x(stations, z, yo) - pull
-        if hw <= 0.10:
-            continue
-        by = sf.bottom_y(stations, z)
-        out.append(sf.fair(z, hw, hh, by + bury + hh * 0.15))
-    return out
+def _clamp01(x):
+    return min(1.0, max(0.0, x))
 
 
-def _inboard(stations, side, z, y, inset=0.10):
-    """One point inside the flank, or None when the section has fallen away."""
-    fx = sf.flank_x(stations, z, y)
-    if fx <= 0.0:
-        return None
-    return (side * max(0.04, fx - inset), y, z)
+# Review axisAt / radAt — mantle spine and girth, verbatim.
+def _axis_at(t):
+    return (0.0, 0.12 * math.sin(math.pi * t), -1.7 + 6.3 * t)
 
 
-def _flank_path(stations, side, pairs, inset=0.04, bury=0.12):
-    """Flank polyline from (z, y) pairs. Ends pull inboard to bury."""
-    pts = []
-    for z, y in pairs:
-        p = _inboard(stations, side, z, y, inset=inset)
-        if p is None:
-            continue
-        pts.append(p)
-    if len(pts) < 2:
-        return []
-    x0, y0, z0 = pts[0]
-    pts[0] = (x0 * 0.45, y0, z0)
-    x1, y1, z1 = pts[-1]
-    pts[-1] = (x1 * 0.45, y1 - bury * 0.3, z1)
-    return pts
-
-
-def _dorsal_path(stations, z0, z1, n=6, proud=0.02):
-    """Centreline path on the mantle crown. Ends drop into the solid."""
-    pts = []
-    for i in range(n):
-        z = z0 + (z1 - z0) * i / (n - 1.0)
-        y = sf.top_y(stations, z, 0.0)
-        pts.append((0.0, y + proud, z))
-    if len(pts) >= 2:
-        x, y, z = pts[0]
-        pts[0] = (x, y - 0.12, z)
-        x, y, z = pts[-1]
-        pts[-1] = (x, y - 0.12, z)
-    return pts
-
-
-def _hub(stations, z_hub):
-    """Arm-root hub inside the ventral head collar."""
-    by = sf.bottom_y(stations, z_hub)
-    _hw, _hh, yo, _ch = sf.section(stations, z_hub)
-    return (0.0, (by + yo) * 0.5 - 0.04, z_hub)
-
-
-def _arm_layout(hub, z_arm, z_tent, z_tent_port):
-    """Eight tight trailing arms plus two feeding tentacles.
-
-    Roots sit in a small ventral oval at the head. Tips trail toward +Z
-    with a modest spread — a travel bundle, not a radial sunburst.
-    """
-    hx, hy, hz = hub
-    arms = []
-    for i in range(8):
-        ang = 2.0 * math.pi * (i + 0.5) / 8.0
-        dx = 0.20 * math.cos(ang)
-        dy = 0.11 * math.sin(ang) - 0.07
-        root = (hx + dx, hy + dy, hz + 0.05)
-        tip_z = z_arm - 0.10 * (i % 3)
-        tip = (hx + dx * 2.05, hy + dy * 1.7 - 0.18, tip_z)
-        arms.append((i, root, tip, dx, dy))
-    tents = (
-        ('stbd', (hx + 0.15, hy - 0.03, hz + 0.10),
-         (hx + 0.46, hy - 0.22, z_tent), 0.20),
-        ('port', (hx - 0.15, hy - 0.03, hz + 0.10),
-         (hx - 0.34, hy - 0.10, z_tent_port), 0.14),
-    )
-    return arms, tents
-
-
-def _scar_path(stations):
-    """Healed welt on the port mantle, diagonal toward the short tentacle."""
-    raw = ((-1.10, 0.10, True), (-0.55, 0.02, False),
-           (0.05, -0.08, False), (0.50, -0.14, True))
-    pts = []
-    for z, y, is_end in raw:
-        fx = sf.flank_x(stations, z, y)
-        if fx <= 0.0:
-            continue
-        x = fx - 0.14 if is_end else fx + 0.01
-        pts.append((-x, y, z))
-    return pts
+def _rad_at(t):
+    return 0.85 * math.sin(math.pi * _clamp01(t * 1.02)) ** 0.75
 
 
 def build_ace(parts, glow, l, b, h, hull_mat, glow_mat, detail):
-    """Build the Beautiful Ones hunting squid (ace class).
+    """Build the Beautiful Ones reef squid (ace class).
 
-    parts    -- ROLE_HULL / ROLE_ARMOUR / ROLE_RECESS / ROLE_TRIM / ROLE_ACCENT.
-    glow     -- emissive objects with skin_role 'glow'.
+    parts    -- hull-slot objects (authored Col preserved by the pipeline).
+    glow     -- emissive-slot objects (photophores, warm streamer tips).
     l, b, h  -- class length, beam, height from the driver (7.2, 2.88, 1.44).
-    detail   -- 3 full / 2 thinned repeats / 1 masses + hints / 0 tubes.
+    detail   -- 3 full / 2 thinned / 1 sparse / 0 silhouette-minimum.
     """
-    stations = _mantle_stations(l, b, h)
-    z_glow = l * 0.47
-    z_hub = l * 0.100
-    z_fin = l * 0.042
-    hub = _hub(stations, z_hub)
+    detail = max(0, min(3, int(detail)))
+    mult = _MULT[detail]
+    pal = sf.sculpt_palette(ACCENT)
+    skin = pal['skin']
+    start_parts = len(parts)
+    start_glow = len(glow)
 
-    # ── PRIMARY MASSES (always) — silhouette is never trimmed ───────────
-    sf.grown_loft(parts, 'ace.hull', kit.ROLE_HULL, stations, hull_mat,
-                  radial=28)
+    # ── MANTLE (review tube, uSeg 48 / vSeg 96, sy 0.92, floor 0.015) ──
+    def mantle_fn(u, v):
+        ax, ay, az = _axis_at(v)
+        r = max(_rad_at(v), 0.015)
+        th = u * TAU
+        return (ax + math.cos(th) * r, ay + math.sin(th) * r * 0.92, az)
 
-    head = _head_stations(stations, z_hub)
-    if len(head) >= 2:
-        sf.grown_loft(parts, 'living-head-ace', kit.ROLE_ARMOUR, head,
-                      hull_mat, radial=20)
+    sf.sculpt_surface(parts, 'ace-mantle', mantle_fn, hull_mat,
+                      _seg(48, mult, 8), _seg(96, mult, 12), skin)
 
-    # Rhomboid pair at the AFT mantle. loc is on the axis, buried.
-    _fhw, _fhh, yo_fin, _fch = sf.section(stations, z_fin)
-    # Aft diamond pair, not a mid-body cross. Span stays under the
-    # mantle length so the thumbnail reads pointed body + arm bundle.
-    an.squid_mantle_fins(parts, 'ace-mantle', hull_mat,
-                         (0.0, yo_fin, z_fin),
-                         span=1.54, chord=1.14, thick=0.15, detail=detail)
+    # ── HEAD (blends into the mantle front; arms root inside it) ───────
+    sf.sculpt_sphere(parts, 'ace-head', (0.0, 0.03, -2.15),
+                     (0.60, 0.54, 1.00), hull_mat, skin,
+                     segments=_seg(16, mult, 5))
 
-    # Stbd club at z_glow+0.585 plus club_r*1.15 (~0.23) is the +Z stop.
-    # Port tentacle stays short (healed). Arms trail shy of the clubs.
-    arms, tents = _arm_layout(hub, z_glow - 0.18, z_glow + 0.585, z_glow - 0.82)
-    for i, root, tip, dx, dy in arms:
-        inn = (-dx, 0.35, 0.0)
-        an.squid_arm(parts, 'living-ace-arm-%d' % i, hull_mat,
-                     root, tip, root_r=0.145, tip_r=0.065,
-                     suckers=False, inward=inn, detail=detail)
+    # ── LATERAL FIN RIBBONS (rear two-thirds, rippling margins) ────────
+    # Broad fleshy sheets swept aft, closing to a rounded point at the
+    # tail. Thin membrane: thickness keeps them alive under front-face
+    # culling. Review grid 40x72; 36x64 loses no silhouette.
+    for side in (-1, 1):
+        def fin_fn(u, v, side=side):
+            t = 0.32 + 0.66 * v
+            ax, ay, az = _axis_at(t)
+            r = max(_rad_at(t), 0.02)
+            # Fin length along the mantle: swells mid-fin, shuts at ends.
+            f_len = (1.55 * max(math.sin(math.pi * v), 0.0) ** 0.8
+                     * (1 + 0.07 * math.sin(v * 13 + side)))
+            wave = (f_len / 1.55) * u
+            x = ax + side * (r * 0.85 + f_len * u)
+            y = (ay + (0.10 * u + 0.22 * u * u) * f_len / 1.55
+                 + 0.16 * math.sin(v * 7 + u * 2.5 + side * 2) * wave)
+            z = az + u * f_len * 0.55  # progressive aft sweep to the margin
+            return (x, y, z)
 
-    for tag, root, tip, club_r in tents:
-        inn = (-1.0 if tag == 'stbd' else 1.0, 0.25, 0.0)
-        an.feeding_tentacle(parts, 'living-ace-tentacle-%s' % tag, hull_mat,
-                            root, tip, root_r=0.11, club_r=club_r,
-                            suckers=False, inward=inn, detail=detail)
+        sf.sculpt_surface(parts, 'ace-fin-%s' % ('port' if side < 0 else 'stbd'),
+                          fin_fn, hull_mat,
+                          _seg(36, mult, 4), _seg(64, mult, 6),
+                          pal['membrane'], thickness=0.02)
 
-    # Jet: buried in the ventral mantle, aiming aft and slightly down.
-    z_siphon = -l * 0.04
-    by = sf.bottom_y(stations, z_siphon)
-    an.siphon(parts, 'ace-siphon', hull_mat,
-              (0.0, by + 0.14, z_siphon),
-              length=0.72, radius=0.15, aim=(0.0, -0.22, 1.0),
-              detail=detail)
+    # ── EIGHT ARMS (individual S-curves flaring into a funnel cluster) ──
+    arm_segments = _seg(64, mult, 8)
+    arm_sides = _seg(10, mult, 4)
+    for k in range(8):
+        th = (k / 8) * TAU + 0.22
+        wob = 0.12 * math.sin(k * 2.7)
+        len_k = 1 + 0.07 * math.sin(k * 2.3)
 
-    if detail < 1:
-        return
+        def P(r, dth, z, th=th, len_k=len_k):
+            return (r * math.cos(th + dth),
+                    r * math.sin(th + dth) * 0.92 + 0.02,
+                    z * len_k)
 
-    # ── ORGAN HINTS (detail 1+) ─────────────────────────────────────────
-    # One injury: shortened port tentacle (layout) plus this port welt.
-    scar = _scar_path(stations)
-    if len(scar) >= 2:
-        an.healed_scar(parts, 'ace-scar-port', hull_mat, scar,
-                       thick=0.08, detail=detail)
+        sf.sculpt_tendril(parts, 'ace-arm-%d' % k, [
+            P(0.30, 0.00, -2.75),
+            P(0.58, 0.12, -3.45),
+            P(0.72, 0.30 + wob, -4.15),
+            P(0.60, 0.52 + wob, -4.70),
+            P(0.34, 0.72 + wob, -5.00 - 0.15 * math.sin(k * 1.9)),
+        ], 0.085, hull_mat, skin, tip=0.013,
+            segments=arm_segments, sides=arm_sides)
+
+    # ── TWO SENSORY STREAMERS (travelling wave, warm tips) ─────────────
+    streamer_segments = _seg(110, mult, 10)
+    streamer_sides = _seg(10, mult, 4)
+    tip_segments = _seg(12, mult, 6)
+    for side in (-1, 1):
+        tag = 'port' if side < 0 else 'stbd'
+        pts = []
+        for j in range(7):
+            t = j / 6.0
+            pts.append((
+                side * (0.28 + 1.15 * t) + 0.12 * math.sin(t * 8 + side * 2),
+                0.28 + 0.55 * t + 0.10 * math.sin(t * 6 + side),
+                -2.6 - 3.7 * t,
+            ))
+        sf.sculpt_tendril(parts, 'ace-streamer-%s' % tag, pts, 0.05,
+                          hull_mat, skin, tip=0.006,
+                          segments=streamer_segments, sides=streamer_sides)
+        sf.sculpt_sphere(glow, 'ace-streamer-tip-%s' % tag, pts[-1],
+                         (0.05, 0.04, 0.07), glow_mat, pal['warm'],
+                         segments=tip_segments)
+
+    # ── SPARSE LATERAL-LINE PHOTOPHORES (mantle flanks) ────────────────
+    # LOD thins the lights: 4 per side at detail >= 2, 2 per side at
+    # detail 1, none at detail 0.
+    if detail >= 2:
+        photo_ts = (0.24, 0.42, 0.60, 0.78)
+    elif detail == 1:
+        photo_ts = (0.32, 0.66)
+    else:
+        photo_ts = ()
+    photo_segments = _seg(10, mult, 5)
+    for side in (-1, 1):
+        for t in photo_ts:
+            ax, ay, az = _axis_at(t)
+            sf.sculpt_sphere(glow, 'ace-photophore-%s-%.2f'
+                             % ('port' if side < 0 else 'stbd', t),
+                             (side * (_rad_at(t) + 0.01), ay, az),
+                             (0.05, 0.04, 0.11), glow_mat, pal['glow'],
+                             segments=photo_segments)
+
+    # ── UNIFORM FIT ─────────────────────────────────────────────────────
+    # One uniform normalization of everything appended above: centres the
+    # full envelope (streamer tips to mantle tail) and makes the
+    # longitudinal span exactly l. No shape distortion.
+    sf.fit_sculpt(parts[start_parts:] + glow[start_glow:], l)
