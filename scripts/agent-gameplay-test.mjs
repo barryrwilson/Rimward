@@ -10,8 +10,12 @@
 // runAgentParityWave141/142 functions run, the same ledgers print, and a
 // non-zero exit means the same failure the full boot would report.
 //
-// Coverage contract: this runner is ADDITIONAL. `npm run test:boot` (the full
-// extended suite) still runs waves 141/142 in place; final QA runs BOTH.
+// Coverage contract: `npm run test:boot` (the full extended suite) runs THIS
+// entrypoint exactly once as a checked fresh child process at its wave-141/142
+// slot — the scenarios declare a fresh greenhand session, so the aggregate
+// must not inherit earlier-wave run state. Same assertions, same ledgers, and
+// the child's exit code gates the boot. Final QA runs the full boot, which
+// includes both waves through this runner.
 //
 // Usage:
 //   node --import ./scripts/with-css-stub.mjs scripts/agent-gameplay-test.mjs [--only=141|142]

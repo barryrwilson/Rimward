@@ -144,8 +144,11 @@ full extended boot suite — every wave, slow) and standalone in
 `npm run test:agent-gameplay` (the same wave-141/142 scenario bodies via
 `scripts/lib/agent-parity-waves.mjs` on the shared
 `scripts/lib/boot-harness.mjs` initialization — the fast focused loop for
-gameplay work; nothing is skipped or weakened, and final validation runs
-BOTH suites explicitly):
+gameplay work; nothing is skipped or weakened). The scenarios declare a fresh
+greenhand session, so the full boot invokes the focused runner exactly once as
+a checked fresh child process at its wave-141/142 slot — same assertions and
+ledgers, complete child stdout/stderr in the boot log, and a spawn error,
+non-zero exit, or timeout fails the aggregate run:
 wave 141 covers the contract surface, lease lifecycle, hail, station-service
 sweep, rescue, and death/recovery; wave 142 adds one executable scenario per
 generated mission family (mining, trade, passenger, hunt, bounty, espionage,

@@ -114,7 +114,8 @@
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createCtx } from '../src/core/ctx.js';
 import { FACTION_STYLE } from '../src/game/faction-style.js';
@@ -135,7 +136,6 @@ import {
   resolveMover,
 } from '../src/game/collision.js';
 import { seedBootRandom, installDomStubs, bootGameSystems, makeTick, makeNavHelpers, makeCombatFixtures, makeCalmPins } from './lib/boot-harness.mjs';
-import { runAgentParityWave141, runAgentParityWave142 } from './lib/agent-parity-waves.mjs';
 
 // The boot harness exercises one fixed world. Production systems intentionally
 // use Math.random, but an unseeded process made the same commit produce
@@ -26468,20 +26468,57 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(wRw009).every(Boolean)) { console.log('RW009 MODELS GROUPING FAIL'); errors++; }
 }
 
-// ---- Wave 141: agent play parity v2 (mission 43b34db25ae32972) --------------
-// The scenario body lives in scripts/lib/agent-parity-waves.mjs (shared with
-// the focused agent-gameplay runner); every assertion and log line is unchanged.
+// ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
+// (mission 43b34db25ae32972 — one checked fresh-process child)
+//
+// These role scenarios are declared on a FRESH greenhand session — the exact
+// baseline scripts/agent-gameplay-test.mjs boots (title NEW GAME click →
+// greenhand origin pick → boot idle). Run in-process at this slot they
+// instead inherited 140 waves of mutable run state: the bccb17bb aggregate
+// failure log shows the wave-141 mercenary/rescue fights and the wave-142
+// unprivileged/hunt/war fights contested by leftover live ships from earlier
+// waves (combat events naming 'Wave30 w141-patrol-1', 'Pale Freida',
+// 'Cartwheel Ann'; combatMercenary=false, rescueRole=false,
+// combatUnprivileged=false, missionHunt=false, missionWar=false), while the
+// focused fresh-boot runner passed every flag on the same commit. That is
+// harness shared-state contamination, not a gameplay regression — so the
+// aggregate runs the SAME scenario bodies (scripts/lib/agent-parity-waves.mjs;
+// every assertion, flag, and ledger line unchanged) exactly once as a checked
+// fresh child process under the same node + css-stub loader environment.
+// Coverage is unchanged and nothing is skipped: the child runs wave 141 AND
+// wave 142, its complete stdout/stderr is forwarded inline below, and a spawn
+// error, non-zero exit, signal, or timeout fails this boot — a successful
+// launch alone never counts as a pass.
 {
-  const r141 = await runAgentParityWave141({ ctx, tick, winListeners, undockStation, dockAtCurrentStation });
-  if (!r141.ok) { console.log('WAVE141 AGENT-PARITY FAIL'); errors++; }
-}
-
-// ---- Wave 142: mission-family parity scenarios (mission 43b34db25ae32972) --
-// The scenario body lives in scripts/lib/agent-parity-waves.mjs (shared with
-// the focused agent-gameplay runner); every assertion and log line is unchanged.
-{
-  const r142 = await runAgentParityWave142({ ctx, tick, winListeners, undockStation, dockAtCurrentStation, travelTo, SYSTEMS });
-  if (!r142.ok) { console.log('WAVE142 MISSION-FAMILY FAIL'); errors++; }
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- waves 141+142: agent parity + mission families (fresh child: node --import with-css-stub.mjs scripts/agent-gameplay-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'agent-gameplay-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit' });
+  const AGENT_GAMEPLAY_TIMEOUT_MS = 30 * 60 * 1000; // watchdog only; a normal run takes minutes
+  const childVerdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${AGENT_GAMEPLAY_TIMEOUT_MS / 60000} min (child killed)`);
+    }, AGENT_GAMEPLAY_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(true, 'exit 0');
+      else finish(false, `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`);
+    });
+  });
+  if (!childVerdict.ok) {
+    console.log(`WAVE141/142 FRESH-PROCESS FAIL — ${childVerdict.why}`);
+    errors++;
+  }
 }
 
 if (errors === 0) {

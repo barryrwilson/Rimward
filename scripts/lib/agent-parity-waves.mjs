@@ -1,9 +1,11 @@
 // Agent play-parity gameplay waves (mission 43b34db25ae32972).
-// The wave-141/142 scenario bodies live here EXACTLY once: scripts/boot-test.mjs
-// calls these at its wave-141/142 slots (full aggregate coverage unchanged) and
-// scripts/agent-gameplay-test.mjs runs the same functions standalone for bounded
-// iteration. Harness services (ctx, tick, nav) are injected; combat fixtures and
-// calm pins come from the shared ./boot-harness.mjs conventions.
+// The wave-141/142 scenario bodies live here EXACTLY once:
+// scripts/agent-gameplay-test.mjs boots a fresh greenhand session and runs
+// them, and scripts/boot-test.mjs invokes that runner as a checked fresh child
+// process at its wave-141/142 slot (full aggregate coverage unchanged — the
+// scenarios declare a fresh-session baseline the aggregate cannot provide
+// in-process). Harness services (ctx, tick, nav) are injected; combat fixtures
+// and calm pins come from the shared ./boot-harness.mjs conventions.
 import * as THREE from 'three';
 import { makeCombatFixtures, makeCalmPins } from './boot-harness.mjs';
 
