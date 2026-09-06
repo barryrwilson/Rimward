@@ -816,7 +816,7 @@ function printHelp() {
     + '  --help\n'
     + 'Env: AGENT_TOKEN (serve). Token is never in a URL query.\n'
     + 'HTTP: Authorization: Bearer. GET /health GET /observe POST /act\n'
-    + 'WS: first {"token"} then {"op":"observe"} or {"op":"act","v":1,"name":"...","args":{}}\n',
+    + 'WS: first {"token"} then {"op":"observe"} or {"op":"act","v":2,"name":"...","args":{}}\n',
   );
 }
 
