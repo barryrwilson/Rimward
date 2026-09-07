@@ -2537,6 +2537,7 @@ dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
 // commodity row (name, status, BUY, SELL, HOLD, TRADE). Offset 2 is BUY
 // (the buy fill); TRADE buttons live at offset 5, not HOLD at offset 4.
 const MARKET_CELL_BUY = 2;
+const MARKET_CELL_SELL = 3; // issue 53: the SELL column, read the way BUY is
 const MARKET_CELL_TRADE = 5;
 function marketRowCell(comName, offset) {
   const ov = stationOverlay();
@@ -2580,8 +2581,17 @@ buyBtn9b?.click();
 const buyCharged9b = creditsBeforeBuy9b - ctx.world.credits;
 tick(1, 'wave9 hermit second buy settle');
 const secondHermitMilestone = ctx.lastEvents.some((e) => e.type === 'milestone' && e.id === 'hermitMarket');
-// Sell one back: epic sellMult × rank goodwill × the hermit premium.
-const expectedPayout9 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
+// Sell one back: epic sellMult × rank goodwill × the hermit premium — and then
+// the issue-53 dock cap. The premium chain is UNCHANGED (expectedSellRaw9 is
+// still the full hermit payout and still beats a premium-less sale); station.js
+// only clamps the ROUNDED payout to the ROUNDED buy quote of the same dock, so
+// buying and immediately selling back here can never print UU. Both figures
+// read the live price inside the same tick-free window as the click.
+const expectedSellRaw9 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
+const expectedBuyAtSell9 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
+const expectedNoPremium9 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9());
+const expectedPayout9 = Math.min(expectedSellRaw9, expectedBuyAtSell9);
+const sellCell9 = marketRowCell('Provisions', MARKET_CELL_SELL);
 const creditsBeforeSell9 = ctx.world.credits;
 const sellBtn9 = marketTradeButton('Provisions', '−1');
 sellBtn9?.click();
@@ -2597,6 +2607,12 @@ const w9hermitTradeChecks = {
   noSecondMilestone: !secondHermitMilestone,
   sellButtonFound: !!sellBtn9,
   sellPaidExact: sellPaid9 === expectedPayout9,
+  // Issue 53: the hermit premium is still computed (it beats a premium-less
+  // sale), and the dock still cannot be farmed — sell never exceeds buy, and
+  // the SELL cell shows exactly what the click pays.
+  hermitPremiumStillInChain: expectedSellRaw9 > expectedNoPremium9,
+  sellNeverBeatsBuy: sellPaid9 <= expectedBuyAtSell9,
+  sellCellAgreesWithFill: sellCell9?.textContent === `${expectedPayout9} UU`,
 };
 console.log('wave9 hermit trades:', JSON.stringify(w9hermitTradeChecks), `buy=${buyCharged9} sell=${sellPaid9}`);
 if (!Object.values(w9hermitTradeChecks).every(Boolean)) { console.log('WAVE9 HERMIT TRADES FAIL'); errors++; }
@@ -3359,8 +3375,16 @@ dispatchKey('Digit1'); // market
 const priceCellFull = marketRowCell('Provisions', MARKET_CELL_BUY);
 const expectedFull11 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
 // Sell one back (bought above): epic sellMult × rank goodwill × the hermit
-// premium — the sell side is unchanged by the keeper waiver.
-const expectedSell11 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
+// premium — the sell CHAIN is unchanged by the keeper waiver, then the
+// issue-53 dock cap clamps the rounded payout to this dock's rounded buy
+// quote. Trust is back at 30 here, so the buy quote carries the full ×1.25
+// scarcity markup again; both figures read the live price in the same
+// tick-free window as the click.
+const expectedSellRaw11 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
+const expectedNoPremium11 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9());
+const expectedBuyAtSell11 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
+const expectedSell11 = Math.min(expectedSellRaw11, expectedBuyAtSell11);
+const sellCell11 = marketRowCell('Provisions', MARKET_CELL_SELL);
 const creditsBeforeSell11 = ctx.world.credits;
 const sellBtn11 = marketTradeButton('Provisions', '−1');
 sellBtn11?.click();
@@ -3373,6 +3397,11 @@ const w11serviceChecks = {
   fullPriceCellReturns: priceCellFull?.textContent === `${expectedFull11} UU`,
   sellButtonFound: !!sellBtn11,
   sellPremiumUnchanged: sellPaid11 === expectedSell11,
+  // Issue 53: premium still in the chain, and the waived-buy dock still
+  // cannot be round-tripped for free UU.
+  hermitPremiumStillInChain: expectedSellRaw11 > expectedNoPremium11,
+  sellNeverBeatsBuy: sellPaid11 <= expectedBuyAtSell11,
+  sellCellAgreesWithFill: sellCell11?.textContent === `${expectedSell11} UU`,
 };
 console.log('wave11 keeper service:', JSON.stringify(w11serviceChecks), `waived=${waivedCharged} full=${expectedFull11} sell=${sellPaid11}`);
 if (!Object.values(w11serviceChecks).every(Boolean)) { console.log('WAVE11 KEEPER SERVICE FAIL'); errors++; }
