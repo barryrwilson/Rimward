@@ -21,6 +21,8 @@
  *   V8  Filter "lamp" expands the Lamplighter match and nothing else.
  *   V9  The livery toggle re-skins without moving the camera.
  *   V10 ship:player disables the variant box and says why.
+ *   V11 A station, a planet and a prop each show a card with only the lines
+ *       they have; no empty labelled line ever renders (RW-010).
  *
  * WHY A PROBE: the overlay owns a WebGL context and a rAF loop, so boot-test
  * can only pin its source. Focus order, aria wiring and the rAF motion gates
@@ -77,7 +79,7 @@ const say = (...a) => {
 };
 
 /** Every flow the pass must reach. A missing one fails the run. */
-const FLOWS = ['V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10'];
+const FLOWS = ['V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10', 'V11'];
 
 const results = {
   commit: process.env.RW008_SHA || null,
@@ -386,6 +388,41 @@ async function main() {
       return last;
     };
 
+    /**
+     * Reload and wait for the NEW document to be usable.
+     *
+     * Page.reload resolves while the old document is still live, so a poll for
+     * `#rw-title-models` sees the OLD title at once, and the next click lands
+     * on a node the replacement has already thrown away. Read the old
+     * document's performance.timeOrigin first and hold the gate until that
+     * value changes, which only happens once the new document exists; then
+     * require the same title readiness the first boot required. An eval that
+     * hits the swap window raises "Execution context was destroyed", which
+     * waitUntil records as evalError and keeps polling past.
+     */
+    const reloadToTitle = async (label) => {
+      const oldOrigin = await cdp.eval('performance.timeOrigin');
+      await cdp.send('Page.reload');
+      const state = await waitUntil(
+        `(() => {
+          const b = document.getElementById('rw-title-models');
+          return {
+            timeOrigin: performance.timeOrigin,
+            readyState: document.readyState,
+            hasCtx: !!window.__ctx,
+            hasBtn: !!b,
+            modelsReady: typeof window.__ctx?.models?.isOpen === 'function',
+          };
+        })()`,
+        (v) => !!(v && v.timeOrigin !== oldOrigin && v.hasCtx && v.hasBtn && v.modelsReady),
+        40000,
+      );
+      const fresh = !!(state && state.timeOrigin !== oldOrigin
+        && state.hasCtx && state.hasBtn && state.modelsReady);
+      if (!fresh) throw failReadiness(`reload title (${label})`, { ...state, oldOrigin });
+      return state;
+    };
+
     // ---- Title screen -------------------------------------------------
     const title = await waitUntil(
       `(() => {
@@ -620,10 +657,7 @@ async function main() {
     // =====================================================================
     // V1/V2 already opened the overlay, so hasOpenedOnce is set and G4 is
     // live. Reload to get a true first open.
-    await cdp.send('Page.reload');
-    await waitUntil(`(() => !!document.getElementById('rw-title-models'))()`,
-      (v) => v === true, 40000);
-    await sleep(500);
+    await reloadToTitle('V6');
 
     const openModels = async () => {
       await cdp.eval(`(() => { document.getElementById('rw-title-models').click(); return true; })()`);
@@ -844,14 +878,113 @@ async function main() {
     }
 
     // =====================================================================
+    // V11 — station, planet and prop cards show only the lines they have
+    // =====================================================================
+    {
+      const CARD = `(() => {
+        const info = document.querySelector('.rw-models-info');
+        if (!info) return null;
+        const lines = [...info.children].map((el) => ({
+          cls: el.className,
+          text: el.textContent.trim(),
+        }));
+        return {
+          lines,
+          empty: lines.some((l) => !l.text),
+          name: (info.querySelector('.rw-models-name') || {}).textContent || null,
+          hasRole: !!info.querySelector('.rw-models-role'),
+          hasScale: !!info.querySelector('.rw-models-line'),
+          hasLore: !!info.querySelector('.rw-models-lore'),
+          hasStats: !!info.querySelector('.rw-models-stats'),
+        };
+      })()`;
+
+      // Expand-only: never collapse a group this flow did not open.
+      const expandGroup = (name) => cdp.eval(`(() => {
+        const h = [...document.querySelectorAll('.rw-models-group')]
+          .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === '${name}');
+        if (h && h.getAttribute('aria-expanded') === 'false') h.click();
+        return !!h;
+      })()`);
+
+      const clickRow = (label) => cdp.eval(`(() => {
+        const r = [...document.querySelectorAll('.rw-models-entry')]
+          .find((x) => x.textContent.trim() === '${label}');
+        if (r) r.click();
+        return !!r;
+      })()`);
+
+      // Station: factioned, so title + faction first read + stats, and no
+      // ship-only role or scale lines.
+      await expandGroup('Veridian Combine');
+      await sleep(400);
+      await clickRow('Veridian Combine Station');
+      await sleep(1500);
+      const station = await cdp.eval(CARD);
+      await cdp.shot('12-station-card.png');
+
+      // Planet: no faction, so title + stats only. model-catalog.js orders
+      // each system's Star before its planets, so the first Celestial row is
+      // a star, not a planet. Take the first row that the catalog labels
+      // "<System> — Planet <n>" and keep the label to prove the captured card
+      // is that planet's.
+      await setMode('type');
+      await sleep(400);
+      await expandGroup('Celestial');
+      await sleep(300);
+      const planetLabel = await cdp.eval(`(() => {
+        const h = [...document.querySelectorAll('.rw-models-group')]
+          .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === 'Celestial');
+        if (!h) return null;
+        for (let row = h.nextElementSibling; row; row = row.nextElementSibling) {
+          if (row.classList.contains('rw-models-group')) break;
+          if (!row.classList.contains('rw-models-entry')) continue;
+          const label = row.textContent.trim();
+          if (!/—\\s*Planet\\s+\\d+$/.test(label)) continue;
+          row.click();
+          return label;
+        }
+        return null;
+      })()`);
+      await sleep(1500);
+      const planet = await cdp.eval(CARD);
+      await cdp.shot('13-planet-card.png');
+      const planetIsSelected = !!(planetLabel
+        && String(planet?.name || '').trim() === planetLabel);
+
+      // Prop: no faction either.
+      await expandGroup('Props');
+      await sleep(300);
+      await clickRow('Cargo Pod');
+      await sleep(1500);
+      const prop = await cdp.eval(CARD);
+      await cdp.shot('14-prop-card.png');
+
+      const bareOk = (v) => !!(v && v.name && v.hasStats && !v.hasRole
+        && !v.hasScale && !v.hasLore && !v.empty);
+      record('V11', !!(station && station.name && station.hasStats && station.hasLore
+        && !station.hasRole && !station.hasScale && !station.empty
+        && bareOk(planet) && planetIsSelected && bareOk(prop)),
+      { station, planet, planetLabel, planetIsSelected, prop });
+    }
+
+    // =====================================================================
     // V6c — G4 restores on re-open; G5 resets on reload
     // =====================================================================
     {
       await setMode('type');
       await sleep(500);
-      await clickGroup('Props');
+      // Expand-only. V11 runs first and can leave Props already open, and a
+      // plain toggle would then CLOSE it and hide the Cargo Pod row.
+      const propsExpanded = await cdp.eval(`(() => {
+        const h = [...document.querySelectorAll('.rw-models-group')]
+          .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === 'Props');
+        if (!h) return false;
+        if (h.getAttribute('aria-expanded') === 'false') h.click();
+        return true;
+      })()`);
       await sleep(400);
-      await cdp.eval(`(() => {
+      const propClicked = await cdp.eval(`(() => {
         const r = [...document.querySelectorAll('.rw-models-entry')]
           .find((x) => x.textContent.trim() === 'Cargo Pod');
         if (r) r.click();
@@ -865,21 +998,23 @@ async function main() {
       await openModels();
       const after = await cdp.eval(LIST);
 
-      await cdp.send('Page.reload');
-      await waitUntil(`(() => !!document.getElementById('rw-title-models'))()`,
-        (v) => v === true, 40000);
-      await sleep(500);
+      await reloadToTitle('V6c');
       await openModels();
       const reloaded = await cdp.eval(LIST);
       await cdp.shot('11-after-reload.png');
 
       record('V6c', !!(after && before
+        && propsExpanded && propClicked
+        // Name the row, or a null-vs-null selection would pass the equality.
+        && before.selected === 'Cargo Pod'
+        && after.selected === 'Cargo Pod'
         && after.mode === before.mode
         && after.selected === before.selected
         && JSON.stringify(after.expanded) === JSON.stringify(before.expanded)
         && reloaded?.mode === 'BY FACTION'
         && reloaded?.selected === 'Freehold Compact — Light'
         && reloaded?.domRows === 22), {
+        propsExpanded, propClicked,
         beforeMode: before?.mode, afterMode: after?.mode,
         beforeSel: before?.selected, afterSel: after?.selected,
         beforeExp: before?.expanded, afterExp: after?.expanded,

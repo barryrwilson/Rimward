@@ -59,7 +59,8 @@ import {
   MODEL_CATALOG, MODEL_CATEGORIES, MODEL_BY_ID, FACTION_ORDER,
 } from '../game/model-catalog.js';
 import { FACTIONS } from '../game/state.js';
-import { CLASS_ORDER } from '../game/ship-scale.js';
+import { CLASS_ORDER, SHIP_SCALE, UNITS_PER_METRE } from '../game/ship-scale.js';
+import { FACTION_LORE, SHIP_ROLE_NAME } from '../game/model-lore.js';
 import { configureShipAssets } from './ship-assets.js';
 import { applyShipLighting, addShipLightRig, applyShipToneMapping } from './ship-lighting.js';
 import '../ui/models.css';
@@ -473,6 +474,33 @@ export function initModelsBrowser(ctx) {
       ? FACTIONS[entry.faction].name : null;
   }
 
+  /** Bible-transcribed role name for a ship, own-key guarded; '' when absent. */
+  function roleNameFor(faction, classKey) {
+    if (!faction || !classKey || !Object.hasOwn(SHIP_ROLE_NAME, faction)) return '';
+    const byClass = SHIP_ROLE_NAME[faction];
+    return Object.hasOwn(byClass, classKey) ? byClass[classKey] : '';
+  }
+
+  /** Bible first-read line for a faction, own-key guarded; '' when absent. */
+  function firstReadFor(faction) {
+    if (!faction || !Object.hasOwn(FACTION_LORE, faction)) return '';
+    const lore = FACTION_LORE[faction];
+    return lore && typeof lore.firstRead === 'string' ? lore.firstRead : '';
+  }
+
+  /**
+   * The active livery named on the card's title row. A trader ship with a
+   * pirate counterpart says so; a mounted variant names itself; rows with
+   * no variant (ship:player, the plain gate) name nothing.
+   */
+  function liveryTagFor(entry) {
+    if (!entry) return null;
+    if (entry.id.endsWith(':pirate')) return 'pirate livery';
+    if (entry.id === 'gate:lamplighter:hub') return 'hub junction';
+    if (entry.category === 'Ships' && variantIdFor(entry)) return 'trader livery';
+    return null;
+  }
+
   /**
    * Does this row match the current filter?
    * Label, faction display name and class key all match, so "lamp", "Ferrous"
@@ -768,7 +796,7 @@ export function initModelsBrowser(ctx) {
     // A livery swap is the same sculpt in a different material set, so
     // re-framing it would read as a bug. Only a new model re-frames.
     if (!keepCamera) frameModel(center, radius, size);
-    updateInfoBar(entry, stats, radius);
+    updateInfoBar(entry, stats, radius, size);
   }
 
   function showLoading(entry) {
@@ -922,38 +950,85 @@ export function initModelsBrowser(ctx) {
   }
 
   /**
-   * Update the info bar with entry stats.
+   * Paint the selection summary card (design §5.2), replacing the old
+   * three-line info bar: title row, role name, role/berth, scale, live
+   * stats, faction first read. Non-ship rows render only the lines they
+   * have — the card never shows an empty labelled line. Every string is
+   * set as TEXT; lore lookups are own-key guarded so a missing key renders
+   * a shorter card and never throws. Scale text is computed from
+   * SHIP_SCALE here, never copied into model-lore.js.
    */
-  function updateInfoBar(entry, stats, radius) {
+  function updateInfoBar(entry, stats, radius, size) {
     const infoBar = overlayEl._infoBar;
-    const radiusStr = Number.isFinite(radius) ? radius.toFixed(1) : '?';
     infoBar.replaceChildren();
 
+    // Title row: the authored display label (built from FACTIONS names in
+    // model-catalog.js, so no raw faction key can reach the card) with the
+    // active livery named at the right when one exists.
+    const head = document.createElement('div');
+    head.className = 'rw-models-card-head';
     const name = document.createElement('div');
     name.className = 'rw-models-name';
     name.textContent = entry.label;
-    infoBar.appendChild(name);
+    head.appendChild(name);
+    const tag = liveryTagFor(entry);
+    if (tag) {
+      const livery = document.createElement('span');
+      livery.className = 'rw-models-livery';
+      livery.textContent = `[${tag}]`;
+      head.appendChild(livery);
+    }
+    infoBar.appendChild(head);
 
-    // The faction DISPLAY name, not the raw key. `beautiful` and `redledger`
-    // are storage keys; a reader wants "Beautiful Ones" and "Red Ledger".
-    // entry.faction is authored in model-catalog.js, but read it own-key
-    // anyway so an unknown key degrades to no line instead of throwing.
-    const factionName = entry.faction && Object.hasOwn(FACTIONS, entry.faction)
-      ? FACTIONS[entry.faction].name : null;
-    if (factionName) {
-      const row = document.createElement('div');
-      const span = document.createElement('span');
-      span.className = 'rw-models-faction';
-      span.textContent = factionName;
-      row.appendChild(span);
-      infoBar.appendChild(row);
+    // Ships only: role name, role/berth, and the scale line. The class
+    // target is stated in P-relative units AND metres so the ship:player
+    // scale anchor (P = 6.6) stays legible from any ship card.
+    const classKey = classKeyOf(entry);
+    if (classKey) {
+      const roleName = roleNameFor(entry.faction, classKey);
+      if (roleName) {
+        const role = document.createElement('div');
+        role.className = 'rw-models-role';
+        role.textContent = roleName;
+        infoBar.appendChild(role);
+      }
+      if (Object.hasOwn(SHIP_SCALE, classKey)) {
+        const scale = SHIP_SCALE[classKey];
+        const roleBerth = document.createElement('div');
+        roleBerth.className = 'rw-models-line';
+        roleBerth.textContent = `${scale.role} · ${scale.berth}`;
+        infoBar.appendChild(roleBerth);
+
+        const metres = Math.round(scale.target / UNITS_PER_METRE);
+        const measured = size && Number.isFinite(size.x)
+          ? Math.max(size.x, size.y, size.z) : NaN;
+        const scaleLine = document.createElement('div');
+        scaleLine.className = 'rw-models-line';
+        scaleLine.textContent =
+          `Class target ${scale.target.toFixed(1)} u (~${metres} m)`
+          + ` · charter band ${scale.span[0].toFixed(1)}–${scale.span[1].toFixed(1)} u`
+          + ` · measured ${Number.isFinite(measured) ? measured.toFixed(1) : '?'} u long`;
+        infoBar.appendChild(scaleLine);
+      }
     }
 
+    // Live stats: every card carries these.
     const statsEl = document.createElement('div');
     statsEl.className = 'rw-models-stats';
     statsEl.textContent =
-      `Meshes: ${stats.meshCount} | Tris: ${stats.triangleCount.toLocaleString()} | Radius: ${radiusStr}`;
+      `Meshes ${stats.meshCount} · Triangles ${stats.triangleCount.toLocaleString()}`
+      + ` · Bounding radius ${Number.isFinite(radius) ? radius.toFixed(1) : '?'}`;
     infoBar.appendChild(statsEl);
+
+    // Faction first read: any factioned row — ship, station, gate, landmark.
+    const factionName = factionNameOf(entry);
+    const firstRead = firstReadFor(entry.faction);
+    if (factionName && firstRead) {
+      const lore = document.createElement('div');
+      lore.className = 'rw-models-lore';
+      lore.textContent = `${factionName} — ${firstRead}`;
+      infoBar.appendChild(lore);
+    }
   }
 
   /**
