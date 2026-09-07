@@ -1,76 +1,54 @@
-"""Beautiful Ones pilot ship builders.
+"""Beautiful Ones production ship builders.
 
-Bible §4.6: living kin, not organic machines. One tissue lineage, four
-body plans. No panels, no windows, no nozzles, no turrets, no kit.box
-faces that read as plating.
+Bible §4.6: living kin, not organic machines. One tissue lineage, varied
+marine body plans. No panels, windows, nozzles, turrets or box-like plating.
 
-Body plans (class mapping for later workers — this package does not
-sculpt the classes):
+Approved production sculpts:
+    light     Glassfin — compressed pelagic ribbonfish, dorsal ribbon,
+              forked tail, small pectorals; no insect-like anatomy.
+    ace       Needlewake — reef squid, mantle fins, eight curved arms
+              and two longer sensory streamers.
+    cutter    Blue Pilgrim — flattened sea slug, three bilateral cerata
+              tiers, forward guardian cradle and soft ventral pouch.
+    heavy     Velvet Bastion — broad cuttlefish mantle, muscular dorsal
+              swells, continuous fin skirt and folded arm crown.
+    frigate   Cathedral — scalloped jellyfish bell, sanctuary core,
+              luminous canals, frilled oral arms and trailing tentacles.
+    freighter Orchard — reef-bearing leviathan, three grown garden
+              basins, mature fan/coral canopy and sheltering flank folds.
 
-    SHARK     fusiform, heterocercal caudal, triangular dorsal,
-              gill slits, pectorals.
-              light    -> young reef shark
-              cutter   -> thresher or hammerhead (must not be a scaled light)
-
-    SQUID     mantle, rear rhomboid fins, 8 arms + 2 feeding tentacles,
-              siphon.
-              ace      -> hunting squid
-
-    OCTOPUS   bulbous mantle, 8 muscular arms, interbrachial web.
-              TRAVEL POSE: mantle toward -Z, arms trail toward +Z.
-              Never a radial sunburst (that kills travel-direction gates).
-              frigate  -> travel-pose octopus (web sanctuaries)
-
-    WHALE     cetacean fusiform, HORIZONTAL fluke, blowhole / grown vents.
-              heavy    -> humpback (long pectorals, dense chest)
-              freighter-> blue-whale gardenback (extreme length, tiny
-                          pectorals, dorsal gardens)
-
-Tissue language is shared: pearl-bone dorsal, violet-indigo flanks,
-cyan-violet veins, sensory crown, healed scars, breath. Class read comes
-from anatomy, never from equipment. The driver glow sphere sits at
-z = +l*0.47; bodies taper so the glow reads as wake. add_idle animates a
-slow breathing scale; keep the pivot at the body's centre of mass.
+The review equations live in reviews/beautiful-ones/{small,large}-ships.js.
+Each production sculpt preserves its anatomy and proportions through one
+uniform fit to the class length. The player hull remains separate.
 
 Layout
 ------
-surface.py    hull-surface queries, absolute living-scale constants,
-              surf_* factories, grown_loft (true-ellipse body sweep).
-              No geometry except grown_loft. No ship_kit.
-anatomy.py    four-plan primitives: tissue, shark, squid, octopus, whale.
-              Geometry through kit.* and grown lofts. Anchors via surf
-              callbacks or explicit points; never a typed y fraction.
-organs.py     sensory crown, breath, belly cradle, sanctuary / nursery
-              hollows, companion craft, garden folds, dorsal mantles.
-              Organs never query the hull; the class file passes anchors.
-<class>.py    one file per class; each owns its station list and body plan.
+surface.py    hull-surface queries, living-scale constants, grown_loft,
+              and sampled sculpt surfaces/curves with authored pigments.
+anatomy.py    shared marine anatomy primitives for component authoring.
+organs.py     sensory crowns, sanctuaries, nurseries and garden organs.
+<class>.py    one file per class; each owns its reviewed sculpt equations.
 
 Skin
 ----
-paint_parts_vc honours the kit role tag first and falls back to the skin's
-name selectors, so every construct keeps the two in agreement
-(ship_skins/beautiful.py):
-    ROLE_HULL    base indigo living tissue                       #6B617B
-    ROLE_ARMOUR  pearl membrane: body masses 'living-body-…',
-                 fins 'fin-…', lips 'living-lip-…'               #B0A8BE
-    ROLE_ACCENT  violet nerve anatomy 'nerve-…' and crown
-                 'sensory-crown-…'                               #7850D4
-    ROLE_TRIM    bright pearl flow lines, welts, lip folds       pearl x1.12
-    ROLE_RECESS  dark crease floors, hollow wells, vent bowls    base x0.62
-Emissive is cyan bioluminescence (#69D8E2) only: vein lattice, crown
-tips, vent and hollow breath — thin, in the creases, never on the calm
-pearl back, capped far below 5 % of hull area. accent_density is 1.0:
-accent coverage is geometry, never random thinning (pipeline §6).
+paint_parts_vc preserves authored Col on all six production sculpts.
+src/systems/ship-assets.js supplies map-free physical tissue and
+vertex-tinted photophore emission. Do not obscure those pigments with
+the old faction atlas or full-body vein map. Cathedral's joined hull
+uses a transmitting membrane profile for its bell and sanctuary;
+the other five classes share the opaque tissue profile.
 
-Proportions are checked by scripts/measure-ships.mjs, not asserted here.
+The driver glow sits at z = +l*0.47. add_idle animates a slow breathing
+scale; the sculpt fit centres the full authored envelope.
+Proportions are checked by scripts/measure-ships.mjs.
 Shared constructs are smoke-probed by scripts/probe-beautiful-parts.py.
 
 LOD rules
 ---------
-detail=3  full build (filaments, branches, suckers, flow lines)
-detail=2  fewer repeats
-detail=1  primary masses plus a hint of each organ
-detail=0  primary masses only
+detail=3  near-review tessellation within the delivery triangle budget.
+detail=2  reduced sampling; preserve all silhouette-defining anatomy.
+detail=1  coarse sampling; preserve the body plan and defining organs.
+detail=0  silhouette-preserving floors and reduced decorative repeats.
 """
 
 PILOT_CLASSES = ('light', 'ace', 'cutter', 'heavy', 'frigate', 'freighter')

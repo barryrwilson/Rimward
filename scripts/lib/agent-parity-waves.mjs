@@ -835,9 +835,23 @@ export async function runAgentParityWave142(deps) {
         const sx = clamp142(aimPt[0] * 2.5);
         const sy = clamp142(aimPt[1] * 2.5);
         const aligned = aimPt[2] < -0.75 && Math.abs(aimPt[0]) < 0.3 && Math.abs(aimPt[1]) < 0.3;
+        // Throttle is a turn-rate control, not just a closing control. The
+        // shared flight law (flight-feel.js turnRateFor) is speed-linked —
+        // omega = min(TURN_MAX, max(speed, 8) / TURN_MIN_RADIUS) — so a
+        // constant 0.4 throttle held the player light near omega ~0.5 rad/s
+        // while a hunting cutter orbits at up to 0.9. The chase settled into
+        // a stable pursuit lag (bearing parked ~0.37 off the nose, just
+        // outside the 0.3 fire gate), fireHeld never latched, and the foe's
+        // screen recharged between the stray hits — a 5400-iteration
+        // stalemate with fire=true hit=true and no terminal. Fly the merge:
+        // full power while the nose is off the foe, so the player turns at
+        // the class cap and the lag closes; ease off only once the shot is
+        // lined up inside gun range, where a slower pass keeps it there.
+        const aimDist142 = Number.isFinite(aim.dist) ? aim.dist : 0;
+        const throttle142 = (aligned && aimDist142 > 0 && aimDist142 < 260) ? 0.25 : 1;
         const ctl142 = rw142.act({
           v: 2, name: 'setControl',
-          args: { seq: ++seq142, ttl: 0.5, steerX: sx, steerY: sy, fireHeld: aligned, throttle: 0.4 },
+          args: { seq: ++seq142, ttl: 0.5, steerX: sx, steerY: sy, fireHeld: aligned, throttle: throttle142 },
         });
         if (ctl142 && ctl142.ok === false && ctl142.token === 'overlay') {
           const hs142 = rw142.observe();

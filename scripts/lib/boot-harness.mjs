@@ -217,6 +217,7 @@ export async function bootGameSystems() {
   const { initTraffic } = await import('../../src/game/traffic.js');
   const {
     NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
+    releaseShipAsset,
   } = await import('../../src/systems/ship-assets.js');
   configureShipAssetFileReader((assetPath) => readFile(new URL(`../../public${assetPath}`, import.meta.url)));
   await Promise.all(NPC_FACTIONS.flatMap((faction) => NPC_CLASSES.flatMap((classKey) => [
@@ -278,7 +279,7 @@ export async function bootGameSystems() {
     keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,
     KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST,
     epicEffects,
-    NPC_FACTIONS, NPC_CLASSES, buildShipAsset, primeShipAsset,
+    NPC_FACTIONS, NPC_CLASSES, buildShipAsset, primeShipAsset, releaseShipAsset,
     spawnLiveShip, removeLiveShip,
     snapshot, restore, clearAutosave,
     hudFamily, hairBoxForRail, agezHairOff,

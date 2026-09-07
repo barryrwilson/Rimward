@@ -1,11 +1,10 @@
 """Beautiful Ones shared hull-surface language: loft queries and living module.
 
-One geometry builder lives here: ``grown_loft``, the faction's body sweep.
-Everything else is the query set every class file seats its anatomy with,
-plus the ABSOLUTE biological scale constants (the faction's human module)
-and the ``surf_*`` / ``span_ray`` callback factories. A class author never
-hand-writes a lambda, and a run self-trims because a factory returns 0.0
-off the section.
+The existing ``grown_loft`` and surface-query vocabulary seats the older
+class anatomy. The approved Glassfin, Needlewake and Orchard sculpts use
+``sculpt_*`` sampled surfaces and tapered curves in the same ship-space
+coordinates, with authored linear vertex pigments. Thin membranes are
+solidified before export so the production material can remain front-sided.
 
 GROWN BODIES USE ``grown_loft``. It sweeps TRUE ELLIPSE rings (default 16
 radial points) through the same station tuples. kit.hull_loft's 8-point
@@ -36,6 +35,8 @@ accepts. plate_course / plate_grid / panel_lines / greeble_field are listed
 for completeness only — a grown body has no use for them.
 """
 import math
+from bisect import bisect_left
+from mathutils import Matrix, Vector
 
 import bmesh
 import bpy
@@ -423,4 +424,182 @@ def assign_beautiful_uv(parts):
                 v = ((co.y - ymin) / yspan) * repeats
                 v = v - math.floor(v)
                 uv.data[li].uv = (u, v)
+
+
+# Approved parametric sculpts: author in review coordinates, then uniformly
+# fit the complete anatomy to the class length. No runtime procedural meshes.
+def sculpt_color(value):
+    """Hex sRGB to the linear RGB used by Blender Col and glTF COLOR_0."""
+    value = value.lstrip('#')
+    channels = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    return tuple(c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels)
+
+
+def sculpt_palette(accent):
+    hue = sculpt_color(accent)
+    lavender, pearl = sculpt_color('#c5b8de'), sculpt_color('#d7e7df')
+    return {
+        'skin': tuple(c * 0.55 for c in hue),
+        'underside': sculpt_color('#b5cac7'),
+        'membrane': tuple(a * 0.6 + b * 0.4 for a, b in zip(hue, lavender)),
+        'ridge': tuple(a * 0.52 + b * 0.48 for a, b in zip(hue, pearl)),
+        'glow': hue,
+        'warm': sculpt_color('#edbb92'),
+        'dark': sculpt_color('#172c3a'),
+    }
+
+
+def _sculpt_pigments(mesh, colors):
+    attr = mesh.color_attributes.new(name='Col', type='FLOAT_COLOR', domain='CORNER')
+    for loop in mesh.loops:
+        attr.data[loop.index].color = (*colors[loop.vertex_index], 1.0)
+    mesh.color_attributes.active_color = attr
+
+
+def _sculpt_mesh(parts, name, vertices, faces, mat, colors):
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([(x, -z, y) for x, y, z in vertices], [], faces)
+    mesh.update()
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    _sculpt_pigments(mesh, colors)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    mesh.materials.append(mat)
+    obj['skin_role'] = 'hull'
+    parts.append(obj)
+    return obj
+
+
+def sculpt_surface(parts, name, fn, mat, u_segments, v_segments, color, *, thickness=0.0):
+    """Sample a ship-space surface; pigments are linear RGB or color(u,v)."""
+    nu, nv = max(2, int(u_segments)), max(2, int(v_segments))
+    vertices, colors = [], []
+    for i in range(nu + 1):
+        for j in range(nv + 1):
+            u, v = i / nu, j / nv
+            vertices.append(fn(u, v))
+            colors.append(color(u, v) if callable(color) else color)
+    stride = nv + 1
+    faces = []
+    for i in range(nu):
+        for j in range(nv):
+            a = i * stride + j
+            faces.append((a, a + stride, a + stride + 1, a + 1))
+    obj = _sculpt_mesh(parts, name, vertices, faces, mat, colors)
+    mesh = obj.data
+    uv = mesh.uv_layers.new(name='UVMap')
+    for loop in mesh.loops:
+        i, j = divmod(loop.vertex_index, stride)
+        uv.data[loop.index].uv = (i / nu, j / nv)
+    # Weld wrapped body seams and collapsed tips before generating thin shells.
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1e-6)
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    if thickness > 0:
+        modifier = obj.modifiers.new('grown-membrane', 'SOLIDIFY')
+        modifier.thickness = thickness
+        modifier.offset = 0
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    return obj
+
+
+def sculpt_sphere(parts, name, center, radii, mat, color, segments=16):
+    """Reuse the ship kit's sphere, with authored pigment rather than a role."""
+    import ship_kit as kit
+    obj = kit.sphere(parts, name, kit.ROLE_HULL, center, radii, mat, segments=segments)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    _sculpt_pigments(obj.data, [color] * len(obj.data.vertices))
+    return obj
+
+
+def sculpt_tendril(parts, name, points, radius, mat, color, *, tip=0.003, segments=64, sides=10):
+    """Centripetal Catmull-Rom tube with arc-length taper and transported frame."""
+    points = [Vector(p) for p in points]
+    segments, sides = max(2, int(segments)), max(3, int(sides))
+
+    def at(t):
+        param = min(t, 1.0) * (len(points) - 1)
+        index = min(int(param), len(points) - 2)
+        weight = param - index
+        p1, p2 = points[index], points[index + 1]
+        p0 = points[index - 1] if index > 0 else p1 * 2 - p2
+        p3 = points[index + 2] if index + 2 < len(points) else p2 * 2 - p1
+        dt1 = max((p2 - p1).length ** 0.5, 1e-4)
+        dt0 = (p1 - p0).length ** 0.5
+        dt2 = (p3 - p2).length ** 0.5
+        if dt0 < 1e-4:
+            dt0 = dt1
+        if dt2 < 1e-4:
+            dt2 = dt1
+        m1 = ((p1 - p0) / dt0 - (p2 - p0) / (dt0 + dt1) + (p2 - p1) / dt1) * dt1
+        m2 = ((p2 - p1) / dt1 - (p3 - p1) / (dt1 + dt2) + (p3 - p2) / dt2) * dt1
+        t2, t3 = weight * weight, weight * weight * weight
+        return p1 * (2 * t3 - 3 * t2 + 1) + m1 * (t3 - 2 * t2 + weight) + p2 * (-2 * t3 + 3 * t2) + m2 * (t3 - t2)
+
+    # Match Three's default arc-length sampling; radii taper by distance, not
+    # control-point spacing, so roots remain muscular through tight bends.
+    samples = [at(i / 200) for i in range(201)]
+    lengths = [0.0]
+    for previous, current in zip(samples, samples[1:]):
+        lengths.append(lengths[-1] + (current - previous).length)
+    centers = []
+    for i in range(segments + 1):
+        distance = lengths[-1] * i / segments
+        k = min(max(bisect_left(lengths, distance), 1), 200)
+        span = lengths[k] - lengths[k - 1]
+        fraction = (distance - lengths[k - 1]) / span if span > 0 else 0
+        centers.append(at((k - 1 + fraction) / 200))
+    tangents = []
+    for i in range(segments + 1):
+        tangent = centers[min(i + 1, segments)] - centers[max(i - 1, 0)]
+        tangents.append(tangent.normalized() if tangent.length > 1e-8 else Vector((0, 0, 1)))
+    tangent = tangents[0]
+    axis = min((Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))), key=lambda a: abs(a.dot(tangent)))
+    normal = tangent.cross(axis).normalized()
+    vertices = []
+    for i, (center, tangent) in enumerate(zip(centers, tangents)):
+        if i:
+            normal = tangents[i - 1].rotation_difference(tangent) @ normal
+        binormal = tangent.cross(normal).normalized()
+        r = tip + (radius - tip) * (1 - i / segments) ** 1.15
+        for j in range(sides):
+            angle = j * math.tau / sides
+            vertices.append(tuple(center + r * (math.cos(angle) * normal + math.sin(angle) * binormal)))
+    faces = []
+    for i in range(segments):
+        for j in range(sides):
+            a, b = i * sides + j, i * sides + (j + 1) % sides
+            faces.append((a, b, b + sides, a + sides))
+    faces.append(tuple(reversed(range(sides))))
+    faces.append(tuple(segments * sides + j for j in range(sides)))
+    obj = _sculpt_mesh(parts, name, vertices, faces, mat, [color] * len(vertices))
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(obj.data)
+    bm.free()
+    return obj
+
+
+def fit_sculpt(parts, length):
+    """Bake a uniform scale and centered pivot; preserve the approved shape."""
+    bpy.context.view_layer.update()
+    vertices = [obj.matrix_world @ v.co for obj in parts for v in obj.data.vertices]
+    lo = Vector(tuple(min(v[i] for v in vertices) for i in range(3)))
+    hi = Vector(tuple(max(v[i] for v in vertices) for i in range(3)))
+    center = (lo + hi) * 0.5
+    # Blender Y is the ship's longitudinal Z.
+    scale = length / (hi.y - lo.y)
+    for obj in parts:
+        matrix = obj.matrix_world.copy()
+        for vertex in obj.data.vertices:
+            vertex.co = ((matrix @ vertex.co) - center) * scale
+        obj.matrix_world = Matrix.Identity(4)
+        obj.data.update()
 

@@ -431,7 +431,12 @@ export function sanitizeEvent(raw) {
     const key = fields[i];
     if (typeof key !== 'string' || reservedName(key)) continue;
     if ((key === 'targetId' || key === 'targetName') && SHIP_DERIVE.has(type) && Object.hasOwn(out, key)) continue; // derived above
-    if (key === 'podId' && (type === 'podSpawned' || type === 'podCollected')) continue; // derived above
+    // Same idempotence rule as targetId/targetName: skip only when THIS pass
+    // derived podId from a live pod object. A re-sanitized ring row carries a
+    // plain podId and no pod, so an unconditional skip would drop it on the
+    // observe() copy and the agent would lose pod identity it already had.
+    if (key === 'podId' && Object.hasOwn(out, key)
+      && (type === 'podSpawned' || type === 'podCollected')) continue; // derived above
     if (!Object.hasOwn(raw, key)) continue;
     if (key === 'intents') {
       out.intents = stringList(raw.intents);

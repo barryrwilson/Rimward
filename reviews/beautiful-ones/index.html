@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07121b" />
+    <title>Beautiful Ones · Concept Review</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23091923'/%3E%3Cpath d='M4 19Q16 0 28 19Q19 17 16 27Q13 17 4 19' fill='%2397ead7'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./gallery.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead__brand">
+        <p class="eyebrow">RIMWARD <span aria-hidden="true">/</span> XENOBIOLOGY STUDIES</p>
+        <h1>Beautiful Ones</h1>
+      </div>
+      <div class="review-status" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>6 APPROVED HULLS · APPLIED</span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="ship-index" aria-labelledby="fleet-heading">
+        <div class="section-heading">
+          <p class="eyebrow">Fleet index</p>
+          <h2 id="fleet-heading">Seven studies</h2>
+        </div>
+        <nav id="ship-list" class="ship-list" aria-label="Beautiful Ones ship studies"></nav>
+        <div class="local-note">
+          <p class="eyebrow">Local review only</p>
+          <p>Feedback stays in this browser. Export to share.</p>
+        </div>
+      </aside>
+
+      <section class="review-stage" aria-labelledby="ship-title">
+        <div class="stage-header">
+          <div>
+            <p id="ship-kicker" class="eyebrow">PLAYER · WAYFINDER</p>
+            <h2 id="ship-title">Loading study…</h2>
+            <p id="ship-creature" class="creature-line">SEA CREATURE SOURCE</p>
+          </div>
+          <div id="load-state" class="load-state" role="status" aria-live="polite">Preparing viewport</div>
+        </div>
+
+        <div id="viewport-wrap" class="viewport-wrap">
+          <div id="viewport" class="viewport" aria-label="Interactive 3D ship review viewport" role="img"></div>
+          <div class="viewport-corner viewport-corner--top" aria-hidden="true">FORM / VOLUME / ANATOMY</div>
+          <div class="viewport-corner viewport-corner--bottom" aria-hidden="true">RIMWARD SPECIMEN PLATE</div>
+          <div id="viewport-error" class="viewport-error" role="alert" hidden></div>
+        </div>
+
+        <div class="viewport-toolbar" aria-label="Viewport tools">
+          <div class="tool-cluster" role="group" aria-label="Model mode">
+            <span class="tool-label">Model</span>
+            <button class="tool-button is-active" type="button" data-mode="concept" aria-pressed="true">Concept</button>
+            <button class="tool-button" type="button" data-mode="current" aria-pressed="false">Current model</button>
+          </div>
+          <div class="tool-cluster" role="group" aria-label="Lighting mode">
+            <span class="tool-label">Judging</span>
+            <button class="tool-button is-active" type="button" data-display="studio" aria-pressed="true">Studio</button>
+            <button class="tool-button" type="button" data-display="silhouette" aria-pressed="false">Silhouette</button>
+          </div>
+          <div class="tool-cluster tool-cluster--views" role="group" aria-label="Camera view">
+            <span class="tool-label">View</span>
+            <button class="tool-button" type="button" data-view="three-quarter" aria-pressed="false">3/4</button>
+            <button class="tool-button" type="button" data-view="top" aria-pressed="false">Top</button>
+            <button class="tool-button" type="button" data-view="side" aria-pressed="false">Side</button>
+            <button class="tool-button" type="button" data-view="reset" aria-pressed="false">Reset</button>
+          </div>
+          <label class="toggle-control">
+            <input id="auto-rotate" type="checkbox" />
+            <span class="toggle-track" aria-hidden="true"></span>
+            <span>Auto rotate</span>
+          </label>
+        </div>
+        <p class="viewport-help">Drag to orbit · wheel to zoom · keyboard: 1 / 2 / 3 for views, R to reset</p>
+        <p class="scope-note">All six NPC hulls are now in game: Light, Ace, Cutter, Heavy, Frigate and Freighter. Player is unchanged. Studies are individually framed — not relative scale.</p>
+      </section>
+
+      <aside class="study-details" aria-labelledby="details-heading">
+        <div class="section-heading section-heading--rule">
+          <p class="eyebrow">Study notes</p>
+          <h2 id="details-heading">Why this form</h2>
+        </div>
+        <p id="ship-description" class="description">Loading proposal rationale…</p>
+        <div class="changes-block">
+          <p class="eyebrow">Anatomical changes</p>
+          <ol id="ship-changes" class="changes-list"></ol>
+        </div>
+
+        <form id="feedback-form" class="feedback-form">
+          <fieldset>
+            <legend>Your review</legend>
+            <div class="review-options">
+              <label class="review-option">
+                <input type="radio" name="review-status" value="not-reviewed" checked />
+                <span>Not reviewed</span>
+              </label>
+              <label class="review-option">
+                <input type="radio" name="review-status" value="approve" />
+                <span>Approve direction</span>
+              </label>
+              <label class="review-option">
+                <input type="radio" name="review-status" value="changes" />
+                <span>Request changes</span>
+              </label>
+            </div>
+          </fieldset>
+          <label class="notes-label" for="review-notes">Notes <span>(optional)</span></label>
+          <textarea id="review-notes" rows="5" maxlength="2000" placeholder="What should the team notice about this creature-shaped silhouette?"></textarea>
+          <p class="form-caption">LOCAL ONLY · This does not modify production assets or grant approval.</p>
+          <button id="export-review" class="export-button" type="button">Download review <span aria-hidden="true">↓</span></button>
+          <p id="save-state" class="save-state" role="status" aria-live="polite"></p>
+        </form>
+      </aside>
+    </main>
+
+    <footer class="footer-note">
+      <span>SEA CREATURE SPACE SHIP MOCKUPS</span>
+      <span>INTERNAL DESIGN REVIEW · 07 PLATES</span>
+    </footer>
+
+    <script type="module" src="./gallery.js"></script>
+  </body>
+</html>

@@ -1,257 +1,240 @@
-"""Beautiful Ones Cutter — HAMMERHEAD GUARDIAN.
+"""Beautiful Ones Cutter — BLUE PILGRIM (blue glaucus sea slug).
 
-Bible §4.6: "A social, maneuverable adult with cradle-like grasping fins,
-gentle docking folds, and a protected belly chamber for rescue or transfer.
-It should look capable of holding without mauling."
+Approved concept: reviews/beautiful-ones/small-ships.js buildBluePilgrim,
+materials from reviews/beautiful-ones/organic.js. Sculpted in review
+coordinates (forward = -Z, up = +Y), then uniformly fit to the class
+length — no ratio distortion.
 
-Body plan: adult HAMMERHEAD SHARK, not a scaled reef shark and not a manta.
-One fusiform grown loft, longer and thicker than the light wayfinder, with
-a CEPHALOFOIL that breaks the outline at the brow. Head stations flare
-wide and stay flat; paired nacre lobes on ±X finish the T-bar. Extra beam
-at the brow is >= 15 % of hull length versus the thorax. Travel axis is
--Z (nose / foil) to +Z (tail into the wake glow at z = +l*0.47).
+Body plan: a slender, sinuous, dorsoventrally flattened trunk (compressed
+tube on a wandering axis, sx 1.15 / sy 0.55) with a soft forward prow and
+paired rhinophores. Three bilateral tiers of cerata root in the flanks:
+the front tier is the guardian cradle — fingers sweep low and forward,
+then hook gently inward to shelter the prow; the mid tier stands lateral;
+the aft tier sweeps back. A lens-shaped belly pouch rides the front
+ventral seam. Sparse accent glow only: one lit finger per cerata cluster
+and a short luminous seam along the pouch and open belly.
 
 Anatomy:
-- triangular dorsal (an.shark_dorsal)
-- heterocercal caudal (an.shark_caudal)
-- thick pectorals that cup inward (an.shark_pectoral) for boarding
-- five gill slits per side (an.gill_slits)
-- open ventral belly chamber (org.belly_chamber) under the thorax
-- soft docking lips, no teeth, no upper jaw
-- moderate sensory crown along the cephalofoil leading edge
-- pearl back, indigo flanks, one port-forward healed scar
+- flattened sinuous trunk, prow swelling near t = 0.09
+- paired rhinophores curling up off the prow
+- three cerata tiers per side (6 / 5 / 5 fingers; cradle / lateral / aft)
+- soft ventral pouch membrane, edges flush on the trunk
+- warm lit fingertip per cluster; sparse ventral glow seam
 
-Envelope (driver): l = 11.0, b = l*0.48 = 5.28, h = l*0.30 = 3.30.
-Span band [6.60, 15.40]. Vertex aim 6 000-47 000. Hammer beam is allowed
-(Beautiful minBeamOverLength 0.35).
+Envelope (driver): l = 11.0. Beam/height emerge from the approved
+concept proportions; the sculpt is uniformly fit to longitudinal span l.
 
 LOD ladder
 ----------
-detail=3  full: five gills, foil-edge nacre, two tip crowns, veins, scar,
-          docking lips, muscle folds, flow lines.
-detail=2  fewer repeats (organs thin themselves).
-detail=1  primary masses plus chamber hint, gills, crown, scar, lips.
-detail=0  loft, hammer, dorsal, caudal, pectorals. Silhouette never trims.
+detail=3  full: 6/5/5 fingers per tier, 3+3 seam lights, dense sampling.
+detail=2  full anatomy, reduced tessellation.
+detail=1  full anatomy, coarse tessellation.
+detail=0  anatomy reduced to 4/3/3 fingers per tier and one light per
+          seam; silhouette and cradle gesture never trim further.
 """
-import sys
-from pathlib import Path
+import math
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-import ship_kit as kit
-
-from . import anatomy as an
-from . import organs as org
 from . import surface as sf
 
+TAU = math.pi * 2.0
 
-# ===========================================================================
-# STATION LISTS
-# ===========================================================================
+# Approved review anchors (small-ships.js buildBluePilgrim / organic.js).
+_ACCENT = '#83cceb'
 
-def _cutter_stations(l, b, h):
-    """Fusiform adult shark with a short wide cephalofoil at the brow.
+# Detail 3..0 segment multiplier and small-sphere resolution.
+_MULT = (0.18, 0.30, 0.55, 1.0)
+_SPHERE_SEG = (8, 8, 10, 12)
 
-    The foil is a T-bar, not a manta diamond: half-beam peaks in a short
-    Z-run at the head, then snaps in at the neck. Thorax half-beam is the
-    fusiform body. Tail tapers to the wake glow at l*+0.47.
+# Cerata tiers per side, review `tiers`: front guardian cradle, mid
+# lateral fan, aft swept-back fan. `n` is the LOD0 finger count.
+_TIERS = (
+    {'t': 0.26, 'len': 2.20, 'n': 6, 'r': 0.130, 'cradle': True, 'sweep': 0.0,
+     'tag': 'cradle'},
+    {'t': 0.50, 'len': 1.85, 'n': 5, 'r': 0.115, 'cradle': False, 'sweep': -0.1,
+     'tag': 'mid'},
+    {'t': 0.74, 'len': 1.50, 'n': 5, 'r': 0.100, 'cradle': False, 'sweep': 0.8,
+     'tag': 'aft'},
+)
 
-    At l=11, b=5.28: foil half-beam b*0.520 = 2.75 (beam 5.49); thorax
-    half-beam b*0.298 = 1.57 (beam 3.15). Extra brow beam = 2.34 = 0.213*l
-    before the nacre lobes. Foil is flat (half-height h*0.10); the body is
-    deep (half-height h*0.286).
-    """
-    return [
-        # -- CEPHALOFOIL: wide, flat, short in Z (the hammer) --
-        sf.fair(l * -0.478, b * 0.388, h * 0.068, h * 0.058),
-        sf.fair(l * -0.452, b * 0.486, h * 0.088, h * 0.064),
-        sf.fair(l * -0.418, b * 0.520, h * 0.100, h * 0.066),  # max foil
-        sf.fair(l * -0.388, b * 0.470, h * 0.108, h * 0.055),
-        sf.fair(l * -0.352, b * 0.318, h * 0.130, h * 0.036),
-        # -- NECK: rapid constriction into the fusiform trunk --
-        sf.fair(l * -0.305, b * 0.228, h * 0.182, h * 0.018),
-        sf.fair(l * -0.248, b * 0.250, h * 0.224, h * 0.008),
-        # -- THORAX: adult girth, longer than the light reef shark --
-        sf.fair(l * -0.175, b * 0.286, h * 0.268, 0.0),
-        sf.fair(l * -0.095, b * 0.298, h * 0.286, 0.0),  # max body
-        sf.fair(l * -0.010, b * 0.286, h * 0.272, 0.0),
-        sf.fair(l *  0.085, b * 0.252, h * 0.236, 0.0),
-        sf.fair(l *  0.170, b * 0.206, h * 0.188, 0.0),
-        # -- TAIL: long even taper into the wake --
-        sf.fair(l *  0.255, b * 0.148, h * 0.136, 0.0),
-        sf.fair(l *  0.340, b * 0.090, h * 0.088, 0.0),
-        sf.fair(l *  0.410, b * 0.046, h * 0.052, 0.0),
-        sf.fair(l *  0.462, b * 0.016, h * 0.028, 0.0),  # tail tip
+# Ventral seam photophores: riding the pouch dip, then the open belly aft.
+_POUCH_TS = (0.24, 0.36, 0.48)
+_POUCH_TS_LOW = (0.36,)
+_AFT_TS = (0.64, 0.78, 0.90)
+_AFT_TS_LOW = (0.78,)
+
+
+def _clamp01(x):
+    return 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
+
+
+def _n3(v):
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) or 1.0
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+def _axis(t):
+    """Sinuous trunk centreline, concept space (review axisAt)."""
+    return (0.22 * math.sin(t * math.pi * 1.1 + 0.3),
+            0.12 * math.sin(t * TAU + 1.0),
+            -4.5 + 8.4 * t)
+
+
+def _radius(t):
+    """Trunk radius profile with the soft prow swelling (review radAt)."""
+    return (0.56 * math.sin(math.pi * _clamp01(t)) ** 0.52
+            * (0.92 + 0.85 * math.exp(-((t - 0.09) / 0.10) ** 2)))
+
+
+def _finger_points(tier, side, f):
+    """One cerata finger's control points and tip (review fan loop)."""
+    a = _axis(tier['t'])
+    rr = _radius(tier['t'])
+    # Root buried in the flank; R is the fan origin above it.
+    root = (a[0] + side * rr * 1.0, a[1] + rr * 0.3, a[2])
+    fan = (root[0] + side * 0.70,
+           root[1] + (0.30 if tier['cradle'] else 0.50),
+           root[2] - 0.05)
+    length = tier['len'] * (1 - 0.22 * abs(f))
+    points = [
+        (root[0] - side * 0.15, root[1] - 0.08, root[2] + f * 0.05),
+        (root[0] + side * 0.36, root[1] + 0.19, root[2] - 0.06),
+        fan,
     ]
+    if tier['cradle']:
+        # Low forward fan that dips, then hooks inward — a cupped shelter.
+        d = _n3((side * (0.95 + 0.25 * abs(f)),
+                 0.10 + 0.35 * f,
+                 -0.55 + 1.0 * f))
+        points.append((fan[0] + d[0] * length * 0.36,
+                       fan[1] + d[1] * length * 0.36 - 0.06,
+                       fan[2] + d[2] * length * 0.36))
+        points.append((fan[0] + d[0] * length * 0.70,
+                       fan[1] + d[1] * length * 0.70 - 0.20,
+                       fan[2] + d[2] * length * 0.70 + 0.02))
+        tip = (fan[0] + d[0] * length - side * 0.34,
+               fan[1] + d[1] * length - 0.05,
+               fan[2] + d[2] * length + 0.06)
+    else:
+        d = _n3((side * (0.85 + 0.30 * abs(f)),
+                 0.55 + 0.30 * f,
+                 tier['sweep'] + 1.0 * f))
+        points.append((fan[0] + d[0] * length * 0.36,
+                       fan[1] + d[1] * length * 0.36 + 0.10,
+                       fan[2] + d[2] * length * 0.36))
+        points.append((fan[0] + d[0] * length * 0.70 + side * 0.05,
+                       fan[1] + d[1] * length * 0.70 + 0.22,
+                       fan[2] + d[2] * length * 0.70 + 0.04))
+        tip = (fan[0] + d[0] * length,
+               fan[1] + d[1] * length + 0.26,
+               fan[2] + d[2] * length + 0.10)
+    points.append(tip)
+    return points, tip
 
 
-def _pearl_stations(stations, l):
-    """Narrow pearl dorsum. Not a manta crest, not a full-beam cap."""
-    profile = (
-        (l * -0.300, 0.22, 0.08),
-        (l * -0.200, 0.34, 0.12),
-        (l * -0.090, 0.42, 0.14),
-        (l *  0.020, 0.40, 0.13),
-        (l *  0.140, 0.32, 0.10),
-        (l *  0.250, 0.22, 0.07),
-        (l *  0.340, 0.14, 0.04),
-    )
-    bury = 0.20
-    out = []
-    for z, hw, proud in profile:
-        ty = sf.top_y(stations, z)
-        hh = (proud + bury) * 0.5
-        yo = ty + (proud - bury) * 0.5
-        out.append(sf.fair(z, hw, hh, yo))
-    return out
+def _pouch(u, v):
+    """Lens-shaped belly membrane flush on the front ventral seam."""
+    t = 0.12 + 0.44 * v
+    a = _axis(t)
+    r = max(_radius(t), 0.03)
+    phi = (u * 2 - 1) * 0.95                    # across the belly width
+    end_taper = math.sin(math.pi * _clamp01(v)) ** 0.6
+    x = a[0] + math.sin(phi) * r * 1.15
+    y_belly = a[1] - math.cos(phi) * r * 0.55
+    dip = 0.30 * end_taper * math.sin(math.pi * u) ** 1.2
+    return (x, y_belly - dip, a[2])
 
 
-# ===========================================================================
-# SURFACE PATHS
-# ===========================================================================
+def _pouch_dip(t):
+    """Centreline dip of the pouch at trunk parameter t (u = 0.5)."""
+    v = (t - 0.12) / 0.44
+    return 0.30 * math.sin(math.pi * _clamp01(v)) ** 0.6
 
-def _pearl_foot(stations, pearl, side, z0, z1, n):
-    """Points along the indigo/pearl boundary at the dorsum foot."""
-    pts = []
-    for i in range(n):
-        z = z0 + (z1 - z0) * i / (n - 1.0)
-        x = sf.section(pearl, z)[0] + 0.04
-        y = sf.top_y(stations, z, x) + 0.02
-        if i == 0 or i == n - 1:
-            y -= 0.12
-        pts.append((side * x, y, z))
-    return pts
-
-
-def _flank_welt(stations, side, samples):
-    """Port or starboard flank path from (z, y) samples. Ends buried."""
-    pts = []
-    for z, y in samples:
-        fx = sf.flank_x(stations, z, y)
-        if fx <= 0.05:
-            continue
-        x = fx + 0.02
-        if not pts or (z, y) == samples[-1]:
-            x -= 0.14
-        pts.append((side * x, y, z))
-    return pts
-
-
-def _gill_y(stations, z0, z1):
-    """Mid-flank height for the gill row, from the local section."""
-    z = 0.5 * (z0 + z1)
-    _, hh, yo, _ = sf.section(stations, z)
-    return yo - hh * 0.10
-
-
-# ===========================================================================
-# BUILD
-# ===========================================================================
 
 def build_cutter(parts, glow, l, b, h, hull_mat, glow_mat, detail):
-    """Build the Beautiful Ones hammerhead guardian (cutter class).
+    """Build the Beautiful Ones Blue Pilgrim sea slug (cutter class).
 
-    parts    -- ROLE_HULL / ROLE_ARMOUR / ROLE_RECESS / ROLE_TRIM / ROLE_ACCENT
-    glow     -- emissive objects (skin_role='glow')
-    l, b, h  -- driver envelope (11.0, 5.28, 3.30)
-    detail   -- 3 full, 2 thinned, 1 primary+chamber, 0 silhouette masses
+    parts    -- list that receives hull-slot objects (trunk, rhinophores,
+                cerata fingers, belly pouch).
+    glow     -- list that receives emissive objects (lit fingertips,
+                ventral seam photophores).
+    l, b, h  -- class envelope from CLASSES (11.0, ...); the sculpt is
+                uniformly fit to longitudinal span l.
+    hull_mat -- RIMWARD_HULL slot; glow_mat -- RIMWARD_EMISSIVE slot.
+    detail   -- 3 (lod0) … 0 (lod3).
     """
-    stations = _cutter_stations(l, b, h)
-    pearl = _pearl_stations(stations, l)
+    d = 0 if detail < 0 else (3 if detail > 3 else int(detail))
+    mult = _MULT[d]
+    sph_seg = _SPHERE_SEG[d]
 
-    z_foil = l * -0.418
-    z_pec = l * -0.018
-    z_dorsal = l * 0.055
-    z_ped = l * 0.348
-    z_chamber = l * -0.088
-    z_gill0 = l * -0.230
-    z_gill1 = l * -0.068
+    def seg(n):
+        return max(4, int(round(n * mult)))
 
-    # -- GROWN BODY (always) ------------------------------------------------
-    sf.grown_loft(parts, 'cutter.hull', kit.ROLE_HULL, stations, hull_mat,
-                  radial=28)
+    pal = sf.sculpt_palette(_ACCENT)
 
-    # -- PEARL DORSUM (always) — narrow adult back, not a manta cap --------
-    sf.grown_loft(parts, 'living-body-cutter.pearl', kit.ROLE_ARMOUR,
-                  pearl, hull_mat, radial=12)
+    parts0 = len(parts)
+    glow0 = len(glow)
 
-    # -- CEPHALOFOIL LOBES (always) — T-bar muscle on ±X, not wings --------
-    hw_f, hh_f, yo_f, _ = sf.section(stations, z_foil)
-    segs = 14 if detail >= 2 else 10
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        kit.sphere(parts, 'living-hammer-cutter.tip.' + tag, kit.ROLE_ARMOUR,
-                   (side * (hw_f - 0.16), yo_f, z_foil),
-                   (hw_f * 0.34, hh_f * 0.92, l * 0.048),
-                   hull_mat, segments=segs)
-        kit.sphere(parts, 'living-hammer-cutter.bar.' + tag, kit.ROLE_ARMOUR,
-                   (side * (hw_f * 0.68), yo_f + hh_f * 0.18, z_foil + l * 0.006),
-                   (hw_f * 0.24, hh_f * 0.72, l * 0.038),
-                   hull_mat, segments=segs)
+    # Trunk: closed flattened tube on the sinuous axis (sx 1.15, sy 0.55).
+    def trunk(u, v):
+        a = _axis(v)
+        r = max(_radius(v), 0.015)      # floor keeps pole normals finite
+        th = u * TAU
+        return (a[0] + math.cos(th) * r * 1.15,
+                a[1] + math.sin(th) * r * 0.55,
+                a[2])
 
-    # -- DORSAL (always) — triangular shark blade --------------------------
-    ty_d = sf.top_y(stations, z_dorsal)
-    an.shark_dorsal(parts, 'fin-dorsal-cutter', hull_mat,
-                    (0.0, ty_d - 0.16, z_dorsal),
-                    (0.0, ty_d + h * 0.50, z_dorsal + l * 0.016),
-                    root_chord=l * 0.118, thick=h * 0.055, detail=detail)
+    sf.sculpt_surface(parts, 'trunk', trunk, hull_mat,
+                      seg(40), seg(84), pal['skin'])
 
-    # -- CAUDAL (always) — heterocercal, upper lobe into the wake ----------
-    _, _, yo_p, _ = sf.section(stations, z_ped)
-    an.shark_caudal(parts, 'fin-caudal-cutter', hull_mat,
-                    (0.0, yo_p, z_ped),
-                    (0.0, yo_p + h * 0.34, l * 0.454),
-                    (0.0, yo_p - h * 0.20, l * 0.410),
-                    root_chord=l * 0.072, thick=h * 0.042, detail=detail)
+    # Rhinophores: paired sensory curls off the prow.
+    for side, tag in ((1.0, 's'), (-1.0, 'p')):
+        sf.sculpt_tendril(parts, 'rhinophore-%s' % tag, [
+            (side * 0.10, 0.26, -3.75),
+            (side * 0.17, 0.44, -4.10),
+            (side * 0.13, 0.52, -4.40),
+        ], 0.040, hull_mat, pal['skin'],
+            tip=0.008, segments=seg(32), sides=seg(10))
 
-    # -- PECTORALS (always) — thick roots, inward cup, not a tooth row -----
-    _, hh_p, yo_pec, _ = sf.section(stations, z_pec)
-    y_pec = yo_pec - hh_p * 0.22
-    fx_p = sf.flank_x(stations, z_pec, y_pec)
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        root = (side * (fx_p - 0.22), y_pec, z_pec)
-        tip = (side * (b * 0.465), y_pec - h * 0.30, z_pec + l * 0.048)
-        an.shark_pectoral(parts, 'fin-pectoral-cutter.' + tag, hull_mat,
-                          root, tip,
-                          root_chord=l * 0.142, tip_chord=l * 0.052,
-                          thick=h * 0.100, detail=detail)
-        kit.sphere(parts, 'living-pectoral-cutter.root.' + tag,
-                   kit.ROLE_ARMOUR,
-                   (side * (fx_p - 0.06), y_pec, z_pec),
-                   (l * 0.038, h * 0.085, l * 0.048),
-                   hull_mat, segments=segs)
-        mid = sf.span_ray(root, tip)(0.82)
-        kit.sphere(parts, 'living-pectoral-cutter.curl.' + tag,
-                   kit.ROLE_ARMOUR,
-                   (mid[0] - side * 0.12, mid[1] - 0.08, mid[2]),
-                   (l * 0.030, h * 0.072, l * 0.034),
-                   hull_mat, segments=segs)
+    # Cerata: three bilateral tiers of thick rooted fingers fanning from
+    # the flanks — cradle forward, mid lateral, aft swept back.
+    for side, stag in ((1.0, 's'), (-1.0, 'p')):
+        for tier in _TIERS:
+            n = tier['n'] if d >= 1 else max(3, tier['n'] - 2)
+            mid = n // 2
+            for j in range(n):
+                f = (j / (n - 1)) - 0.5     # -0.5 .. 0.5 across the fan
+                points, tip = _finger_points(tier, side, f)
+                sf.sculpt_tendril(
+                    parts, 'cerata-%s-%s%d' % (tier['tag'], stag, j),
+                    points, tier['r'] * 1.6, hull_mat, pal['skin'],
+                    tip=0.012, segments=seg(40), sides=seg(12))
+                if j == mid:
+                    # One lit finger per cluster.
+                    sf.sculpt_sphere(glow,
+                                     'cerata-light-%s-%s' % (tier['tag'], stag),
+                                     tip, (0.05, 0.045, 0.06),
+                                     glow_mat, pal['warm'], segments=sph_seg)
 
-    if detail < 1:
-        return
+    # Soft belly pouch: lens-shaped membrane swelling off the front belly;
+    # both ends taper shut and the edges land flush on the trunk.
+    sf.sculpt_surface(parts, 'pouch', _pouch, hull_mat,
+                      seg(40), seg(44), pal['membrane'], thickness=0.02)
 
-    # -- BELLY CHAMBER (detail 1+) — open round hold, no jaw ---------------
-    by = sf.bottom_y(stations, z_chamber)
-    pouch = (b * 0.380, h * 0.340, l * 0.148)
-    hy = pouch[1] * 0.5
-    loc_ch = (0.0, by + 0.14 - hy, z_chamber)
-    org.belly_chamber(parts, glow, 'cutter', hull_mat, glow_mat,
-                      loc_ch, pouch, detail=detail)
+    # Sparse luminous seam riding the pouch, then the open belly aft.
+    pouch_ts = _POUCH_TS if d >= 1 else _POUCH_TS_LOW
+    for i, t in enumerate(pouch_ts):
+        a = _axis(t)
+        centre = (a[0], a[1] - _radius(t) * 0.55 - _pouch_dip(t) - 0.02, a[2])
+        sf.sculpt_sphere(glow, 'seam-pouch-%d' % i, centre,
+                         (0.04, 0.025, 0.075), glow_mat, pal['glow'],
+                         segments=sph_seg)
+    aft_ts = _AFT_TS if d >= 1 else _AFT_TS_LOW
+    for i, t in enumerate(aft_ts):
+        a = _axis(t)
+        centre = (a[0], a[1] - _radius(t) * 0.55 - 0.01, a[2])
+        sf.sculpt_sphere(glow, 'seam-aft-%d' % i, centre,
+                         (0.04, 0.025, 0.075), glow_mat, pal['glow'],
+                         segments=sph_seg)
 
-    # -- GILL SLITS (detail 1+) — five per side ----------------------------
-    y_gill = _gill_y(stations, z_gill0, z_gill1)
-    gill_surf = sf.surf_flank(stations, y_gill)
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        an.gill_slits(parts, 'cutter.gills.' + tag, hull_mat,
-                      z_gill0, z_gill1, gill_surf, y_gill,
-                      side=side, count=5, height=0.42, detail=detail)
-
-    # -- ONE ASYMMETRY: port-forward scar (detail 1+) ----------------------
-    _, hh_s, yo_s, _ = sf.section(stations, l * -0.210)
-    scar = _flank_welt(stations, -1.0, (
-        (l * -0.268, yo_s + hh_s * 0.22),
-        (l * -0.220, yo_s + hh_s * 0.05),
-        (l * -0.172, yo_s - hh_s * 0.12),
-        (l * -0.128, yo_s - hh_s * 0.04),
-    ))
-    if len(scar) >= 2:
-        an.healed_scar(parts, 'cutter.scar.port', hull_mat, scar,
-                       thick=0.09, detail=detail)
+    # One uniform fit: longitudinal span becomes exactly l, no distortion.
+    sf.fit_sculpt(parts[parts0:] + glow[glow0:], l)

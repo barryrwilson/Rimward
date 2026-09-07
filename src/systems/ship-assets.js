@@ -3,7 +3,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { makeOrganicVeinTexture } from './organic.js';
 import {
   SWIM_IDLE_HZ,
   SWIM_CRUISE_HZ,
@@ -54,7 +53,7 @@ let ktx2Loader = null;
 // CPU vertex loop. Per-instance uniform objects: shared module uniforms would
 // lock every Beautiful NPC to one speed. Hz/sweep scales live in living-cadence.js.
 // Gait axis mix lives in living-gait.js (floats, one program).
-const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-gait';
+const SWIM_PROGRAM_KEY = 'rimward-beautiful-swim-gait-tissue';
 
 function makeSwimUniforms() {
   return {
@@ -106,6 +105,15 @@ function injectSwim(uniforms) {
   transformed *= pulse;
 }`
     );
+    // Three's vertex colors tint diffuse light, not emission. Preserve the
+    // authored photophore/tendril-tip colors rather than bleaching them white.
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+#if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
+  totalEmissiveRadiance *= vColor.rgb;
+#endif`
+    );
   };
 }
 
@@ -152,8 +160,10 @@ function templateKey(faction, classKey) {
   return `${canonicalFaction(faction)}:${canonicalClass(classKey)}`;
 }
 
-function materialKey(faction, role) {
-  return `${canonicalFaction(faction)}:${canonicalRole(role)}`;
+function materialKey(faction, role, classKey) {
+  const resolvedFaction = canonicalFaction(faction);
+  const membrane = resolvedFaction === 'beautiful' && canonicalClass(classKey) === 'frigate';
+  return `${resolvedFaction}:${canonicalRole(role)}${membrane ? ':membrane' : ''}`;
 }
 
 function ensureLoader() {
@@ -176,12 +186,14 @@ function texture(path, color) {
   });
 }
 
-function loadMaterials(faction, role) {
-  const key = materialKey(faction, role);
+function loadMaterials(faction, role, classKey) {
+  const key = materialKey(faction, role, classKey);
   if (!materialPromises.has(key)) {
-    const [resolvedFaction, resolvedRole] = key.split(':');
+    const [resolvedFaction, resolvedRole, surface] = key.split(':');
+    const tissue = resolvedFaction === 'beautiful';
+    const membrane = surface === 'membrane';
     const path = `${MATERIAL_ROOT}/${resolvedFaction}/${resolvedRole}`;
-    const maps = assetFileReader
+    const maps = assetFileReader || tissue
       ? Promise.resolve([null, null, null, null])
       : Promise.all([
         texture(`${path}/basecolor.ktx2`, true),
@@ -190,7 +202,22 @@ function loadMaterials(faction, role) {
         texture(`${path}/emissive.ktx2`, true),
       ]);
     materialPromises.set(key, maps.then(([map, normalMap, ormMap, emissiveMap]) => {
-      const hull = new THREE.MeshStandardMaterial({
+      // Match the approved review's soft tissue finish. Do not multiply its
+      // baked pigment by the old striped atlas or add full-body vein emission.
+      const hull = tissue ? new THREE.MeshPhysicalMaterial({
+        name: `RIMWARD_HULL:${key}`,
+        color: 0xffffff,
+        metalness: 0.06,
+        roughness: membrane ? 0.48 : 0.46,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.38,
+        iridescence: 0.38,
+        iridescenceIOR: 1.3,
+        iridescenceThicknessRange: [160, 360],
+        // Cathedral's bell must reveal its sanctuary without alpha sorting.
+        transmission: membrane ? 0.32 : 0,
+        thickness: membrane ? 0.3 : 0,
+      }) : new THREE.MeshStandardMaterial({
         name: `RIMWARD_HULL:${key}`,
         map,
         normalMap,
@@ -204,9 +231,9 @@ function loadMaterials(faction, role) {
         name: `RIMWARD_EMISSIVE:${key}`,
         emissive: 0xffffff,
         emissiveMap,
-        emissiveIntensity: 1.5,
-        roughness: 0.42,
-        metalness: 0.15,
+        emissiveIntensity: tissue ? 1.1 : 1.5,
+        roughness: tissue ? 0.46 : 0.42,
+        metalness: tissue ? 0.06 : 0.15,
       });
       const field = new THREE.MeshBasicMaterial({
         name: `RIMWARD_FIELD:${key}`,
@@ -221,32 +248,6 @@ function loadMaterials(faction, role) {
       emissiveVC.vertexColors = true;
       const fieldVC = field.clone();
       fieldVC.vertexColors = true;
-      // Player living hull uses makeVeinTexture (teal + magenta). Beautiful
-      // NPC GLBs get the same family on the hull emissive map, not 3D beads.
-      if (resolvedFaction === 'beautiful') {
-        let veinTex = null;
-        try {
-          const probe = typeof document !== 'undefined'
-            ? document.createElement('canvas') : null;
-          if (probe && typeof probe.getContext === 'function' && probe.getContext('2d')) {
-            veinTex = makeOrganicVeinTexture({
-              seed: 1337,
-              colors: ['#46ffe0', '#4fe0c8', '#c86bff'],
-              count: 42,
-            });
-            veinTex.wrapT = THREE.RepeatWrapping;
-          }
-        } catch (_) {
-          veinTex = null;
-        }
-        if (veinTex) {
-          for (const mat of [hull, hullVC]) {
-            mat.emissive = new THREE.Color(0xffffff);
-            mat.emissiveMap = veinTex;
-            mat.emissiveIntensity = 0.85;
-          }
-        }
-      }
       // Beautiful swim inject is per instance (cloneSwimMaterials). Shared
       // materials stay static so one NPC's speed cannot drive the fleet.
       const set = { hull, hullVC, emissive, emissiveVC, field, fieldVC };
@@ -393,7 +394,7 @@ function attachLowerLods(faction, classKey, role) {
   if (!active) return;
   const lodNames = canonicalClass(classKey) === 'freighter' ? ['lod1', 'lod2', 'lod3'] : ['lod1', 'lod2'];
   for (const lodName of lodNames) {
-    Promise.all([loadTemplate(faction, classKey, lodName), loadMaterials(faction, role)]).then(([template, materials]) => {
+    Promise.all([loadTemplate(faction, classKey, lodName), loadMaterials(faction, role, classKey)]).then(([template, materials]) => {
       for (const instance of active) {
         if (!instance.parent || instance.userData.released || instance.userData.loadedLods?.has(lodName)) continue;
         const level = lodName === 'lod1' ? { distance: 1, hysteresis: 0.1 } : lodName === 'lod2' ? { distance: 2, hysteresis: 0.1 } : { distance: 3, hysteresis: 0.1 };
@@ -426,12 +427,12 @@ export function configureShipAssetFileReader(nextReader = null) {
 
 /** Resolve the live LOD0 template and role materials without creating a placeholder. */
 export async function primeShipAsset(faction, classKey, role = 'trader') {
-  await Promise.all([loadTemplate(faction, classKey, 'lod0'), loadMaterials(faction, role)]);
+  await Promise.all([loadTemplate(faction, classKey, 'lod0'), loadMaterials(faction, role, classKey)]);
   attachLowerLods(faction, classKey, role);
 }
 
 export function isShipAssetReady(faction, classKey, role = 'trader') {
-  return templates.has(`${templateKey(faction, classKey)}:lod0`) && materialSets.has(materialKey(faction, role));
+  return templates.has(`${templateKey(faction, classKey)}:lod0`) && materialSets.has(materialKey(faction, role, classKey));
 }
 
 /** Build a new NPC visual synchronously after primeShipAsset resolves. */
@@ -440,7 +441,7 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   const resolvedClass = canonicalClass(classKey);
   const resolvedRole = canonicalRole(role);
   const template = templates.get(`${resolvedFaction}:${resolvedClass}:lod0`);
-  const resolvedMaterials = materialSets.get(`${resolvedFaction}:${resolvedRole}`);
+  const resolvedMaterials = materialSets.get(materialKey(resolvedFaction, resolvedRole, resolvedClass));
   if (!template || !resolvedMaterials) throw new Error(`NPC asset not primed: ${resolvedFaction}:${resolvedClass}:${resolvedRole}`);
   const root = new THREE.Group();
   root.name = 'npc-ship-asset';

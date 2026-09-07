@@ -1,217 +1,227 @@
-"""Beautiful Ones Heavy — HUMPBACK WHALE SHIELDBACK.
+"""Beautiful Ones Heavy - VELVET BASTION, cuttlefish shieldback.
 
-Bible §4.6: "A mature defender with a dense central body, layered muscular
-mantles, broad shielding fins, and luminous threat displays. Weapons should
-read as focused biological energy or symbiotic organs, never barrels."
+Approved concept: reviews/beautiful-ones/large-ships.js buildHeavy
+(lines 26-139) and organic.js materials, accent #8fe8d8.
 
-Body plan (wave 106): a HUMPBACK WHALE, not a manta, not a shark, not a
-blue whale. Dense cetacean fusiform. Blunt head toward -Z. Deep chest.
-Thickest in the thorax. Long tapering tail into a HORIZONTAL fluke
-(an.whale_fluke). LONG pectorals (an.whale_pectoral style='humpback') are
-the outline-breaker: whale flippers, mid-flank roots, far reach, slight
-droop, rounded paddle tips, span >= 15 % of hull length. Soft dorsal_ridge
-(not a shark triangle). Blowhole on the crown plus grown-lip vents. Overlap
-dorsal_mantles as whale muscle. Ventral pouch under the thorax. Low
-watchful crown. One port-aft scar. Threat-display veins in pectoral roots
-and mantle folds.
+Broad thick oval mantle with layered muscular dorsal swells grown INTO
+the profile (three overlapping gaussians ride the section itself, so the
+silhouette stays one continuously differentiable surface with no add-on
+lumps); a continuous undulating fin skirt blended along the whole flank,
+fading to zero at nose and tail; a softly folded anterior arm crown of
+eight short arms curling inward and downward like a half-closed flower
+bud; two clubbed feeding tentacles; flush sensory creases on the head
+flanks (no protruding eyeballs); sparse lateral photophores as
+restrained threat-display embers, not a light show. Countershaded
+mantle: satin violet-teal back meeting a lavender pearl underside at the
+flank seam. Weight comes from living volume, not armour add-ons.
 
-Thumbnail read: bulky body, long thin pectorals, horizontal fluke.
+Conventions (matching the review): forward = -Z, up = +Y, concept
+coordinates authored on a ~10-unit span and normalized to class length
+by one uniform sf.fit_sculpt at the end.
 
-Envelope (driver CLASSES): l = 17.0, b = l*0.52, h = l*0.34.
-Span band [10.20, 23.80]. Vertex aim 9000-78000. maxHeightOverLength 0.60.
-Glow at z = +l*0.47 is wake. Stern tapers short of that sphere.
+Envelope (driver): l = 17.0, b = l*0.52 = 8.84, h = l*0.34 = 5.78.
 
-LOD
----
-detail=3  full: veins, pads, crown, vents, scar, flow.
-detail=2  fewer pads / veins (primitives count down).
-detail=1  masses + fluke + pectorals (mantles, pouch, blowhole).
-detail=0  loft + fluke + pectorals + ridge. Silhouette never trimmed.
-
-Paint dual rule (out/w106/foundation/notes.md): role tag AND name selector.
-No kit.box, no windows, no nozzles, no turrets.
+LOD ladder (tessellation/repeats only — silhouette never trimmed)
+-----------------------------------------------------------------
+detail=3  review densities; 5 photophores per flank.
+detail=2  0.55x tessellation; 5 photophores per flank.
+detail=1  0.30x tessellation; 3 photophores per flank.
+detail=0  0.18x tessellation; 1 photophore per flank keeps the emissive
+          join alive. Mantle, dorsal swells, fin skirt, arm crown,
+          feeding tentacles, clubs and creases all preserved.
 """
-import sys
-from pathlib import Path
+import math
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-import ship_kit as kit
-
-from . import anatomy as an
-from . import organs as org
 from . import surface as sf
 
+_PI = math.pi
+_TAU = math.pi * 2
+ACCENT = '#8fe8d8'
 
-# ===========================================================================
-# STATIONS — dense cetacean fusiform
-# ===========================================================================
+# Tessellation multiplier per detail tier; silhouette density floor.
+_MULT = {3: 1.0, 2: 0.55, 1: 0.30, 0: 0.18}
 
-def _heavy_stations(l, b, h):
-    """Blunt-head whale loft. Thickest in the thorax. Tail dies at the wake.
-
-    Near-ellipse sections. Nose droops. Chest is deep and round. Stern
-    station sits short of z = +l*0.47 so the driver glow reads as wake.
-    Half-beam and half-height come from the class envelope so the body
-    stays bulky (humpback), not a blue-whale needle.
-    """
-    hw = b * 0.440
-    hh = h * 0.498
-    return [
-        # -- HEAD: blunt, slightly downturned, never a needle --
-        sf.fair(l * -0.445, hw * 0.10, hh * 0.20, hh * -0.18),
-        sf.fair(l * -0.405, hw * 0.28, hh * 0.38, hh * -0.12),
-        sf.fair(l * -0.355, hw * 0.52, hh * 0.58, hh * -0.04),
-        sf.fair(l * -0.295, hw * 0.74, hh * 0.76, hh *  0.04),
-        sf.fair(l * -0.230, hw * 0.88, hh * 0.90, hh *  0.08),
-        # -- THORAX: deep chest, the thickest station --
-        sf.fair(l * -0.145, hw * 0.98, hh * 0.98, hh *  0.10),
-        sf.fair(l * -0.070, hw * 1.00, hh * 1.00, hh *  0.10),
-        sf.fair(l *  0.020, hw * 0.96, hh * 0.94, hh *  0.08),
-        sf.fair(l *  0.110, hw * 0.88, hh * 0.84, hh *  0.05),
-        sf.fair(l *  0.200, hw * 0.76, hh * 0.72, hh *  0.02),
-        # -- TAIL: long taper into the fluke peduncle --
-        sf.fair(l *  0.280, hw * 0.60, hh * 0.56, hh *  0.00),
-        sf.fair(l *  0.345, hw * 0.44, hh * 0.42, hh * -0.02),
-        sf.fair(l *  0.395, hw * 0.30, hh * 0.28, hh * -0.03),
-        sf.fair(l *  0.430, hw * 0.18, hh * 0.18, hh * -0.03),
-        sf.fair(l *  0.452, hw * 0.10, hh * 0.10, hh * -0.02),
-        sf.fair(l *  0.462, hw * 0.05, hh * 0.055, hh * -0.01),
-    ]
+# Review mantle spine: z = _Z0 + v * _LEN, nose at v = 0.
+_Z0, _LEN = -4.3, 8.6
 
 
-def _flank_run(stations, side, z0, z1, n, y0, y1, inset=0.14):
-    """Points along one flank. Skip stations that have fallen away."""
-    pts = []
-    steps = max(2, int(n))
-    for i in range(steps):
-        t = i / (steps - 1.0)
-        z = z0 + (z1 - z0) * t
-        y = y0 + (y1 - y0) * t
-        fx = sf.flank_x(stations, z, y)
-        if fx <= 0.06:
-            continue
-        x = fx - inset
-        if x <= 0.04:
-            continue
-        pts.append((side * x, y, z))
-    return pts
+# ---------------------------------------------------------------------------
+# Review math helpers — exact ports of large-ships.js clamp01/smooth/gauss.
+# ---------------------------------------------------------------------------
+
+def _clamp01(x):
+    return 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
 
 
-def _pectoral_anchors(stations, l, side):
-    """Mid-flank root inside the hull; far drooped paddle tip.
-
-    Root uses flank_x at the local straight-flank height. Tip is the
-    outline-breaker: long thin reach, slight drop, modest aft sweep.
-    """
-    z_root = l * -0.070
-    st = sf.straight_top(stations, z_root)
-    sb = sf.straight_bottom(stations, z_root)
-    y_root = sb + (st - sb) * 0.40
-    fx = sf.flank_x(stations, z_root, y_root)
-    root = (side * (fx - 0.38), y_root, z_root)
-    tip = (side * (l * 0.372), y_root - l * 0.095, z_root + l * 0.255)
-    return root, tip
+def _smooth(a, b, x):
+    t = _clamp01((x - a) / (b - a))
+    return t * t * (3.0 - 2.0 * t)
 
 
-def _pectoral_vein_tips(root, tip, count):
-    """Threat-display tips along the paddle upper face."""
-    ray = sf.span_ray(root, tip)
-    tips = []
-    n = max(1, int(count))
-    for i in range(n):
-        t = 0.10 + (0.58 * i / max(1.0, n - 1.0))
-        px, py, pz = ray(t)
-        tips.append((px, py + 0.07, pz))
-    return tips
+def _gauss(x, c, w):
+    return math.exp(-((x - c) * (x - c)) / (2.0 * w * w))
 
 
-# ===========================================================================
-# BUILD
-# ===========================================================================
+def _seg(base, mult, lo=4):
+    """LOD-tessellated segment count; ``lo`` keeps the silhouette alive."""
+    return max(lo, int(round(base * mult)))
+
+
+# ---------------------------------------------------------------------------
+# Review profile — exact ports of buildHeavy's shape/prof/dorsalSwell.
+# ---------------------------------------------------------------------------
+
+def _shape(v):
+    return math.sin(_PI * _clamp01(v) ** 1.22) ** 0.72
+
+
+def _prof(v):
+    """Return (z, rx, ry, cy) of the broad thick oval mantle at v."""
+    s = _shape(v)
+    return (_Z0 + v * _LEN,
+            2.75 * s + 0.02,
+            1.72 * s + 0.02,
+            0.12 * math.sin(_PI * v))
+
+
+def _dorsal_swell(v):
+    """Dense shielding mass grown into the mantle: three muscular swells."""
+    return (0.16 * _gauss(v, 0.3, 0.1)
+            + 0.24 * _gauss(v, 0.52, 0.13)
+            + 0.18 * _gauss(v, 0.74, 0.1))
+
+
+def _surf_point(th, v, k=1.0):
+    """Review surfPoint: swell lifts the dorsal sector of each section."""
+    z, rx, ry, cy = _prof(v)
+    f = (1.0 + _dorsal_swell(v) * max(0.0, math.sin(th)) ** 2.2) * k
+    return (math.cos(th) * rx * f, math.sin(th) * ry * f + cy, z)
+
+
+# ---------------------------------------------------------------------------
+# BUILD FUNCTION
+# ---------------------------------------------------------------------------
 
 def build_heavy(parts, glow, l, b, h, hull_mat, glow_mat, detail):
-    """Build the Beautiful Ones heavy as a humpback-whale shieldback.
+    """Build the Beautiful Ones Velvet Bastion cuttlefish shieldback.
 
-    parts    -- ROLE_HULL / ROLE_ARMOUR / ROLE_RECESS / ROLE_TRIM / ROLE_ACCENT.
-    glow     -- emissive objects (skin_role='glow').
-    l, b, h  -- class length, beam, height (17.0, 8.84, 5.78).
-    detail   -- 3 full, 2 fewer repeats, 1 masses, 0 primary silhouette.
+    parts / glow -- object lists the driver joins into hull and emissive.
+    l, b, h      -- class envelope 17.0 x 8.84 x 5.78.
+    detail       -- 3 (lod0) … 0 (lod3).
     """
-    H = kit.ROLE_HULL
+    d = min(max(int(detail), 0), 3)
+    mult = _MULT[d]
 
-    stations = _heavy_stations(l, b, h)
-    radial = 28 if detail >= 3 else (20 if detail == 2 else (16 if detail == 1 else 12))
+    # Review palette: cloned materials override the accent-derived base.
+    pal = sf.sculpt_palette(ACCENT)
+    skin = sf.sculpt_color('#6d64a6')    # satin violet-teal mantle
+    belly = sf.sculpt_color('#c0b2d6')   # lavender pearl underside
+    fin_col = sf.sculpt_color('#7f9fce') # fin-skirt membrane
+    dark = pal['dark']                   # flush sensory creases
+    glow_col = pal['glow']               # photophore embers
 
-    # ── PRIMARY MASS: grown whale body (always) ──────────────────────────
-    sf.grown_loft(parts, 'heavy-body', H, stations, hull_mat, radial=radial)
+    p0, g0 = len(parts), len(glow)
 
-    # ── PRIMARY MASS: long humpback pectorals (always — outline-breaker)
-    # Whale flippers, not manta wings: modest chord, long span, mid-flank
-    # burial, drooped rounded tips. Span is ~0.32 * l.
-    root_chord = l * 0.095
-    tip_chord = l * 0.022
-    pec_thick = l * 0.012
-    pec_roots = {}
-    pec_tips = {}
-    for side, tag in ((1.0, 'stbd'), (-1.0, 'port')):
-        root, tip = _pectoral_anchors(stations, l, side)
-        pec_roots[tag] = root
-        pec_tips[tag] = tip
-        an.whale_pectoral(parts, 'fin-pectoral-' + tag, hull_mat,
-                          root, tip, root_chord, tip_chord=tip_chord,
-                          thick=pec_thick, style='humpback', detail=detail)
+    # -- Mantle: one coherent tube, countershaded at the flank seam ------
+    # Review grid 56x56 per shell.
+    sf.sculpt_surface(parts, 'bastion-mantle-back',
+                      lambda u, v: _surf_point(u * _PI, v), hull_mat,
+                      _seg(56, mult, 10), _seg(56, mult, 10), skin)
+    sf.sculpt_surface(parts, 'bastion-mantle-belly',
+                      lambda u, v: _surf_point(_PI + u * _PI, v), hull_mat,
+                      _seg(56, mult, 10), _seg(56, mult, 10), belly)
 
-    # ── PRIMARY MASS: horizontal fluke (always — whale, not shark) ───────
-    z_ped = l * 0.418
-    yo_ped = sf.section(stations, z_ped)[2]
-    peduncle = (0.0, yo_ped, z_ped)
-    an.whale_fluke(parts, 'heavy-fluke', hull_mat, peduncle,
-                   span=l * 0.34, chord=l * 0.118, thick=l * 0.013,
-                   detail=detail)
+    # -- Continuous undulating fin skirt, blended along the whole flank --
+    # Length fades to zero at nose and tail so the pair reads as one
+    # membrane. Soft broad ripples with a faint second harmonic; amplitude
+    # swells toward the free edge so the skirt flows instead of pleating.
+    # Thin membrane: minimal solidify keeps it alive under front-face
+    # culling. Review grid 22x110 per side.
+    for side, tag in ((-1.0, 'port'), (1.0, 'stbd')):
+        def skirt_point(u, v, side=side):
+            z, rx, _ry, cy = _prof(v)
+            length = 1.05 * max(math.sin(_PI * v), 0.0) ** 1.25 + 0.002
+            x = side * (rx * 0.97 + length * u)
+            edge = _smooth(0.0, 1.0, u)
+            y = cy + edge * (0.22 * math.sin(v * _PI * 9 + side * 0.6 + u * 2.0)
+                             + 0.06 * math.sin(v * _PI * 19 + u * 3.1))
+            return (x, y, z + 0.06 * u * math.sin(v * _PI * 3))
 
-    # ── PRIMARY MASS: soft dorsal ridge (always — not a shark triangle) ──
-    an.dorsal_ridge(parts, 'body-ridge', hull_mat,
-                    l * 0.040, l * 0.230, sf.surf_top(stations, 0.0, 0.02),
-                    x=0.0, height=0.28, detail=detail)
+        sf.sculpt_surface(parts, 'bastion-skirt-' + tag, skirt_point,
+                          hull_mat, _seg(22, mult, 4), _seg(110, mult, 12),
+                          fin_col, thickness=0.02)
 
-    if detail < 1:
-        return
+    # -- Anterior arm crown: eight arms curling in like a closing bud ----
+    arm_segments = _seg(40, mult, 6)
+    arm_sides = _seg(10, mult, 3)
+    for i in range(8):
+        a = (i / 8) * _TAU + 0.22
+        pts = []
+        for k in range(8):
+            t = k / 7.0
+            rad = 0.34 * (1.0 - 0.72 * t) + 0.1 * math.sin(t * 2.6)
+            pts.append((math.cos(a) * rad,
+                        math.sin(a) * rad * 0.85 + 0.05 - 0.38 * t * t,
+                        -3.86 - 1.55 * (t - 0.42 * t ** 2.4)))
+        sf.sculpt_tendril(parts, 'bastion-arm-%d' % i, pts, 0.13,
+                          hull_mat, skin, tip=0.02,
+                          segments=arm_segments, sides=arm_sides)
 
-    # ── MASSES: overlapping whale muscle on the back ─────────────────────
-    mz = l * -0.080
-    my = sf.top_y(stations, mz, 0.0) - 0.20
-    org.dorsal_mantles(parts, 'heavy', hull_mat, (0.0, my, mz),
-                       (b * 0.50, h * 0.26, l * 0.30), count=3, seed=9,
-                       detail=detail)
+    # -- Paired feeding tentacles with soft clubs -------------------------
+    tent_segments = _seg(48, mult, 6)
+    tent_sides = _seg(10, mult, 3)
+    club_segments = _seg(16, mult, 5)
+    for side, tag in ((-1.0, 'port'), (1.0, 'stbd')):
+        pts = []
+        for k in range(10):
+            t = k / 9.0
+            pts.append((side * (0.16 + 0.22 * math.sin(t * 2.4)),
+                        -0.24 - 0.3 * t + 0.1 * math.sin(t * 3.0),
+                        -3.8 - 1.85 * t + 0.3 * t * t))
+        sf.sculpt_tendril(parts, 'bastion-tentacle-' + tag, pts, 0.085,
+                          hull_mat, skin, tip=0.05,
+                          segments=tent_segments, sides=tent_sides)
+        tip = pts[-1]
+        sf.sculpt_sphere(parts, 'bastion-club-' + tag,
+                         (tip[0], tip[1], tip[2] - 0.16),
+                         (0.13, 0.13, 0.32), hull_mat, skin,
+                         segments=club_segments)
 
-    # ── MASS: protected ventral pouch under the thorax ───────────────────
-    pz = l * -0.055
-    by = sf.bottom_y(stations, pz, 0.0)
-    pouch_h = h * 0.24
-    pouch_y = by - pouch_h * 0.5 + 0.22
-    org.belly_chamber(parts, glow, 'heavy', hull_mat, glow_mat,
-                      (0.0, pouch_y, pz),
-                      (b * 0.28, pouch_h, l * 0.22),
-                      detail=detail)
+    # -- Flush sensory creases on the head flanks (no protruding eyes) ---
+    crease_segments = _seg(16, mult, 4)
+    crease_sides = _seg(6, mult, 3)
+    for side, tag in ((-1.0, 'port'), (1.0, 'stbd')):
+        pts = []
+        for s in range(7):
+            t = s / 6.0
+            z = -3.45 + 0.6 * t
+            v = (z - _Z0) / _LEN
+            th = (0.0 if side > 0 else _PI) + side * (0.62 + 0.18 * math.sin(t * _PI))
+            pts.append(_surf_point(th, v, 1.004))
+        sf.sculpt_tendril(parts, 'bastion-crease-' + tag, pts, 0.022,
+                          hull_mat, dark, tip=0.022,
+                          segments=crease_segments, sides=crease_sides)
 
-    # ── Blowhole on the crown of the head ────────────────────────────────
-    bz = l * -0.330
-    by_bh = sf.top_y(stations, bz, 0.0)
-    an.blowhole(parts, glow, 'heavy-blowhole', hull_mat, glow_mat,
-                (0.0, by_bh, bz), radius=0.30, detail=detail, seed=21)
+    # -- Sparse lateral photophores: threat-display embers ---------------
+    # Review plants 5 per flank at v = 0.3 + k*0.115; far LODs keep the
+    # same positions, thinned. One per flank survives to lod3 to hold the
+    # emissive join.
+    if d >= 2:
+        photo_ks = (0, 1, 2, 3, 4)
+    elif d == 1:
+        photo_ks = (0, 2, 4)
+    else:
+        photo_ks = (2,)
+    photo_segments = _seg(12, mult, 5)
+    for side, tag in ((-1.0, 'port'), (1.0, 'stbd')):
+        for k in photo_ks:
+            v = 0.3 + k * 0.115
+            px, py, pz = _surf_point(0.0 if side > 0 else _PI, v, 1.004)
+            sf.sculpt_sphere(glow, 'bastion-photophore-%s-%d' % (tag, k),
+                             (px, py - 0.15, pz), (0.075, 0.075, 0.11),
+                             glow_mat, glow_col, segments=photo_segments)
 
-    if detail < 2:
-        return
-
-    # ── ONE port-aft scar (bible rule 8) ─────────────────────────────────
-    z_fold = l * -0.090
-    st_f = sf.straight_top(stations, z_fold)
-    sb_f = sf.straight_bottom(stations, z_fold)
-    fold_y = sb_f + (st_f - sb_f) * 0.70
-    y_s0 = fold_y - 0.10
-    y_s1 = fold_y - 0.55
-    welt = _flank_run(stations, -1.0, l * 0.090, l * 0.210, 5,
-                      y_s0, y_s1, inset=0.08)
-    if len(welt) >= 2:
-        an.healed_scar(parts, 'heavy-scar-port', hull_mat, welt,
-                       thick=0.09, detail=detail)
+    # -- ONE uniform fit of the complete anatomy to the class length ------
+    # Centres the full envelope (tentacle clubs to mantle tail) and makes
+    # the longitudinal span exactly l. No shape distortion.
+    sf.fit_sculpt(parts[p0:] + glow[g0:], l)

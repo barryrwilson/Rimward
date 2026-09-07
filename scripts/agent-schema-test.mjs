@@ -207,6 +207,21 @@ pin('engineOut player primitive', !!(engOut && engOut.player === true && !Object
 
 const podEv = sanitizeEvent({ type: 'podCollected', t: 11, pod: { id: 7, contents: [] } });
 pin('podCollected derives podId', !!(podEv && podEv.podId === 7 && !Object.hasOwn(podEv, 'pod')));
+// Re-sanitize (observe() copies ring rows) must keep the derived podId: the row
+// has a plain podId and no pod, so a blanket "derived above" skip lost it.
+const podEv2 = sanitizeEvent(podEv);
+pin('podCollected podId survives re-sanitize', !!(podEv2 && podEv2.podId === 7 && !Object.hasOwn(podEv2, 'pod')));
+const podSpawn = sanitizeEvent({ type: 'podSpawned', t: 12, pod: { id: 'pod-3', cargo: {} } });
+const podSpawn2 = sanitizeEvent(podSpawn);
+pin('podSpawned derives podId', !!(podSpawn && podSpawn.podId === 'pod-3' && !Object.hasOwn(podSpawn, 'pod')));
+pin('podSpawned podId survives re-sanitize', !!(podSpawn2 && podSpawn2.podId === 'pod-3' && !Object.hasOwn(podSpawn2, 'cargo')));
+// Raw pod.id still wins over a hand-supplied podId, and non-primitives never copy.
+const podClash = sanitizeEvent({ type: 'podCollected', t: 13, podId: 'spoofed', pod: { id: 4 } });
+pin('raw pod.id beats supplied podId', !!(podClash && podClash.podId === 4));
+const podBad = sanitizeEvent({ type: 'podSpawned', t: 14, podId: { id: 'obj' } });
+pin('object podId rejected', !!(podBad && !Object.hasOwn(podBad, 'podId')));
+const podNoId = sanitizeEvent({ type: 'podCollected', t: 15, podId: 9, pod: { contents: [] } });
+pin('plain podId kept when pod lacks id', !!(podNoId && podNoId.podId === 9 && !Object.hasOwn(podNoId, 'pod')));
 
 const hailEnd = sanitizeEvent({ type: 'hailClosed', t: 12, ship: { id: 'x' }, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 120 });
 pin('hailClosed outcome primitives', !!(hailEnd && hailEnd.demandOutcome === 'paid'
