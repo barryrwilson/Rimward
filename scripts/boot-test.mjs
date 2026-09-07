@@ -26733,6 +26733,437 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(wRw010).every(Boolean)) { console.log('RW010 MODELS CARD FAIL'); errors++; }
 }
 
+// ---- Issue #70: the ferry consignment cannot be accepted twice -------------
+// Two reaches, both public, no station internals:
+//   * the PUBLIC API path — window.rimward.act → agent-api →
+//     ctx.stationDesk.acceptJob → the ONE shared acceptJob handler the board
+//     buttons call (legs A–D, E–G);
+//   * the SHARED HANDLER direct — ctx.stationDesk.acceptJob(jobObject) with a
+//     handle retained across a jump, the way a rendered board card holds one
+//     (leg D2, and the handle pin in leg F).
+//
+// The regression: acceptJob resolved a stale handle to the live row, re-offered
+// a completed consignment BEFORE the capacity gate, and the ferry branch then
+// fronted four free Provisions without ever checking that the job was still on
+// offer. So a second accept of an ALREADY ACCEPTED consignment granted another
+// four units for free and overwrote the live agreement (originSystem /
+// destSystem / payQuoted), and a capacity refusal on a completed consignment
+// left it wiped back to 'offered' with its agreement deleted.
+//
+// Every refusal here is asserted to leave the ENTIRE job row byte-identical
+// (JSON snapshot compare — job rows are JSON-plain by contract), plus credits,
+// hold contents and the job list untouched.
+{
+  const rw = globalThis.window?.rimward;
+  const savedOpt70 = ctx.agent?.optIn === true;
+  const savedPause70 = ctx.flags.paused === true;
+  const savedHold70 = ctx.flags.berthHold === true;
+  let threw70 = false;
+  // TEST SETUP (reversed in the finally): the fill legs below buy Provisions to
+  // press the hold against its cap. Whatever UU that needs is injected here and
+  // subtracted again at the end, so this section never gifts the run credits.
+  let injected70 = 0;
+
+  const jobs70 = () => (Array.isArray(ctx.world.jobs) ? ctx.world.jobs : []);
+  const ferry70 = () => jobs70().find((j) => j && j.id === 'ferry-consignment') ?? null;
+  const snap70 = () => JSON.stringify(ferry70());
+  const used70 = () => ctx.cargo.reduce((n, c) => n + (c && Number.isFinite(c.units) ? c.units : 0), 0);
+  const free70 = () => ctx.cargoCapacity - used70();
+  const cargoSnap70 = () => JSON.stringify(ctx.cargo.map((c) => [c.commodity, c.units]).sort());
+  const stateMap70 = () => {
+    const m = new Map();
+    for (const j of jobs70()) if (j && typeof j.id === 'string') m.set(j.id, j.state);
+    return m;
+  };
+  const svc70 = (id) => {
+    rw.act({ v: 2, name: 'openService', args: { id } });
+    tick(1, `i70 open ${id}`);
+  };
+  const accept70 = () => rw.act({ v: 2, name: 'acceptJob', args: { id: 'ferry-consignment' } });
+  // Deterministic system-transition fixture — NOT a flight test. This section
+  // needs the station module to genuinely rebuild at another system: acceptJob
+  // judges the dock off the station closure's own currentId, and station.update
+  // deliberately refuses a rebuild while docked and pins world.currentSystem
+  // straight back, so the departure has to actually take.
+  //
+  // The undock MUST go through the public rw.act intent, not the Escape-key
+  // helper. This section drives the board through the public openService, which
+  // does not clear ui.justDocked (station.js keyboard handler, ~6516+), so the
+  // helper's two Escapes land as jobs→services and then one swallowed by
+  // justDocked — leaving flags.docked true and the rebuild refused. Real
+  // visible travel over this lane is verified separately in the live browser
+  // pass, not here.
+  const arriveAt70 = (to, label) => {
+    if (ctx.flags.docked) {
+      const left = rw.act({ v: 2, name: 'undock', args: {} });
+      if (left?.ok !== true || ctx.flags.docked !== false) {
+        throw new Error(`fixture undock failed before ${to} (${label}): ok=${left?.ok} token=${left?.token} docked=${ctx.flags.docked}`);
+      }
+      tick(2, 'issue70 public undock');
+    }
+    if (ctx.world.currentSystem !== to) {
+      ctx.world.currentSystem = to;
+      ctx.emit('systemLoaded', { to });
+      tick(2, `${label} rebuild`);
+    }
+    return ctx.world.currentSystem === to;
+  };
+  const skip70 = new Set(['survivor']);
+  // Press the hold down to `leaveFree` units of headroom through the real
+  // market desk (never by pinning ctx.cargoCapacity).
+  const fillTo70 = (leaveFree) => {
+    svc70('market');
+    let guard = 40;
+    while (free70() > leaveFree && guard-- > 0) {
+      const want = free70() - leaveFree;
+      const bought = rw.act({ v: 2, name: 'trade', args: { commodity: 'provisions', qty: want, side: 'buy' } });
+      if (bought?.ok === true) continue;
+      if (bought?.token !== 'uu') break; // anything but "no UU" means retrying won't help
+      const bump = Math.max(200, Math.round((ctx.world.prices?.provisions ?? 40) * want * 2));
+      injected70 += bump;
+      ctx.world.credits += bump;
+    }
+    return free70();
+  };
+  // Free the hold back up the way a player does — by selling at the desk.
+  const freeTo70 = (minFree) => {
+    svc70('market');
+    let guard = 40;
+    while (free70() < minFree && guard-- > 0) {
+      const held = ctx.cargo.find((c) => c && c.units > 0
+        && COMMODITIES[c.commodity]?.legal && !skip70.has(c.commodity));
+      if (!held) break;
+      const qty = Math.min(held.units, minFree - free70());
+      const sold = rw.act({ v: 2, name: 'trade', args: { commodity: held.commodity, qty, side: 'sell' } });
+      if (sold?.ok !== true) skip70.add(held.commodity);
+    }
+    return free70();
+  };
+
+  // A lane with a third dock off it: origin O, the consignment's destination D
+  // (station.js otherSystemId = gates[0].to), and some T that is neither. The
+  // duplicate-accept-elsewhere leg has to happen at T, not at D — docking at D
+  // settles the delivery inside the dock's own settle ticks.
+  let o70 = null;
+  let d70 = null;
+  let t70 = null;
+  for (const id of Object.keys(SYSTEMS)) {
+    const gates = SYSTEMS[id]?.gates;
+    if (!Array.isArray(gates) || !gates.length) continue;
+    const d = gates[0]?.to;
+    if (!d || d === id || !SYSTEMS[d]) continue;
+    const near = (list) => (Array.isArray(list) ? list : [])
+      .map((g) => g && g.to)
+      .find((x) => x && SYSTEMS[x] && x !== id && x !== d);
+    const third = near(gates.slice(1)) ?? near(SYSTEMS[d].gates);
+    if (!third) continue;
+    o70 = id;
+    d70 = d;
+    t70 = third;
+    break;
+  }
+
+  const r70 = {
+    laneFound: !!o70 && !!d70 && !!t70,
+    // A. offered + full hold: refused, and the offer survives whole.
+    fullHoldOfferedRefused: false,
+    fullHoldOfferedJobWhole: false,
+    fullHoldOfferedNoGrant: false,
+    // B. offered + room: exactly four Provisions, exactly one obligation.
+    acceptOk: false,
+    acceptFrontsExactlyFour: false,
+    acceptCostsNothing: false,
+    acceptStampsAgreement: false,
+    acceptIsOneObligation: false,
+    acceptAddsNoJobRow: false,
+    // C. duplicate at the same dock (rw.act): refused, nothing moves.
+    dupHereHasRoom: false,
+    dupHereRefused: false,
+    dupHereNotice: false,
+    dupHereJobWhole: false,
+    dupHereNoGrant: false,
+    dupHereAgreementKept: false,
+    // D. duplicate at a third dock (rw.act): refused, nothing moves.
+    dupAwayAtThirdDock: false,
+    dupAwayHasRoom: false,
+    dupAwayRefused: false,
+    dupAwayNotice: false,
+    dupAwayJobWhole: false,
+    dupAwayNoGrant: false,
+    dupAwayAgreementKept: false,
+    // D2. duplicate through ctx.stationDesk.acceptJob with a retained handle.
+    deskDupRefused: false,
+    deskDupNotice: false,
+    deskDupLiveWhole: false,
+    deskDupHandleWhole: false,
+    deskDupNoGrant: false,
+    // E. the normal delivery still consumes four and pays once.
+    deliveredDone: false,
+    deliveryConsumesFour: false,
+    deliveryPaysQuotedOnce: false,
+    deliveryPaidOnlyFerry: false,
+    // F. completed + full hold: refused, and the COMPLETED agreement survives.
+    doneFullHoldRefused: false,
+    doneFullHoldJobWhole: false,
+    doneFullHoldHandleWhole: false,
+    doneFullHoldStaysDone: false,
+    doneFullHoldNoGrant: false,
+    // G. the completed unique consignment still re-accepts normally.
+    reacceptOk: false,
+    reacceptFrontsExactlyFour: false,
+    reacceptRestamps: false,
+    noThrow: true,
+  };
+
+  try {
+    ctx.flags.paused = false;
+    ctx.flags.berthHold = false;
+    if (ctx.agent) ctx.agent.optIn = true;
+    if (!o70 || !d70 || !t70) throw new Error('no lane with a third dock off it');
+
+    arriveAt70(o70, 'issue70 origin leg');
+    dockAtCurrentStation(`dock ${o70} (issue70 origin)`);
+
+    // TEST SETUP: the galaxy carries ONE ferry contract and earlier waves left
+    // it done — put it back on offer (the wave-26 helper), then take the real
+    // accept/deliver cycle below from there.
+    w26ReofferFerry();
+
+    // -- A. offered, hold pressed to three free units --------------------------
+    fillTo70(3);
+    svc70('jobs');
+    const beforeA = {
+      job: snap70(), credits: ctx.world.credits, cargo: cargoSnap70(),
+      prov: holdCount('provisions'), rows: jobs70().length,
+    };
+    const resA = accept70();
+    r70.fullHoldOfferedRefused = resA?.ok === false
+      && resA?.token === 'hold'
+      && typeof resA?.error === 'string'
+      && resA.error.startsWith('No room for the consignment');
+    r70.fullHoldOfferedJobWhole = snap70() === beforeA.job
+      && ferry70()?.state === 'offered'
+      && !('payQuoted' in (ferry70() ?? { payQuoted: 0 }));
+    r70.fullHoldOfferedNoGrant = ctx.world.credits === beforeA.credits
+      && cargoSnap70() === beforeA.cargo
+      && holdCount('provisions') === beforeA.prov
+      && jobs70().length === beforeA.rows;
+
+    // -- B. offered, room freed: the first honest acceptance -------------------
+    // Free EIGHT units, not four: after the honest accept fronts its four the
+    // hold must still have room for another four, or a duplicate accept would
+    // be turned away by the capacity gate and the free-grant bug would stay
+    // invisible behind it.
+    const wantN70 = ferry70()?.need ?? 4;
+    freeTo70(wantN70 + 4);
+    svc70('jobs');
+    const beforeB = {
+      credits: ctx.world.credits, prov: holdCount('provisions'),
+      used: used70(), rows: jobs70().length,
+    };
+    const resB = accept70();
+    const ferryB = ferry70();
+    r70.acceptOk = resB?.ok === true;
+    r70.acceptFrontsExactlyFour = wantN70 === 4
+      && holdCount('provisions') === beforeB.prov + 4
+      && used70() === beforeB.used + 4;
+    r70.acceptCostsNothing = ctx.world.credits === beforeB.credits;
+    r70.acceptStampsAgreement = ferryB?.state === 'accepted'
+      && ferryB?.originSystem === o70
+      && ferryB?.destSystem === d70
+      && Number.isFinite(ferryB?.payQuoted)
+      && ferryB.payQuoted > 0;
+    r70.acceptIsOneObligation = jobs70().filter((j) => j && j.kind === 'ferry').length === 1
+      && jobs70().filter((j) => j && j.kind === 'ferry' && j.state === 'accepted').length === 1;
+    r70.acceptAddsNoJobRow = jobs70().length === beforeB.rows;
+    const quoted70 = ferryB?.payQuoted;
+
+    // -- C. duplicate accept at the SAME dock (public rw.act path) ------------
+    r70.dupHereHasRoom = free70() >= 4; // the refusal must be the state gate, not the hold gate
+    const beforeC = {
+      job: snap70(), credits: ctx.world.credits, cargo: cargoSnap70(),
+      prov: holdCount('provisions'), used: used70(), rows: jobs70().length,
+    };
+    const resC = accept70();
+    const ferryC = ferry70();
+    r70.dupHereRefused = resC?.ok === false && !!resC?.token && resC.token !== 'unknown';
+    r70.dupHereNotice = typeof resC?.error === 'string'
+      && resC.error.includes('already aboard')
+      && w26StationNotice()?.includes('already aboard') === true;
+    r70.dupHereJobWhole = snap70() === beforeC.job;
+    r70.dupHereNoGrant = ctx.world.credits === beforeC.credits
+      && cargoSnap70() === beforeC.cargo
+      && holdCount('provisions') === beforeC.prov
+      && used70() === beforeC.used
+      && jobs70().length === beforeC.rows;
+    r70.dupHereAgreementKept = ferryC?.state === 'accepted'
+      && ferryC?.originSystem === o70
+      && ferryC?.destSystem === d70
+      && ferryC?.payQuoted === quoted70;
+
+    // -- D. duplicate accept at a DIFFERENT dock (public rw.act path) ---------
+    // The dock this refusal is judged at is the station closure's own currentId,
+    // so the fixture drives the real `systemLoaded` rebuild (see arriveAt70) and
+    // then docks through the ordinary helper — the refusal itself is judged by
+    // live station state, not by anything the fixture wrote.
+    arriveAt70(t70, 'issue70 third-dock leg');
+    dockAtCurrentStation(`dock ${t70} (issue70 duplicate)`);
+    svc70('jobs');
+    r70.dupAwayAtThirdDock = ctx.flags.docked === true
+      && ctx.world.currentSystem === t70
+      && t70 !== o70 && t70 !== d70;
+    r70.dupAwayHasRoom = free70() >= 4; // again: state gate, not capacity gate
+    const beforeD = {
+      job: snap70(), credits: ctx.world.credits, cargo: cargoSnap70(),
+      prov: holdCount('provisions'), used: used70(), rows: jobs70().length,
+    };
+    const resD = accept70();
+    const ferryD = ferry70();
+    r70.dupAwayRefused = resD?.ok === false && !!resD?.token && resD.token !== 'unknown';
+    r70.dupAwayNotice = typeof resD?.error === 'string' && resD.error.includes('already aboard');
+    r70.dupAwayJobWhole = snap70() === beforeD.job;
+    r70.dupAwayNoGrant = ctx.world.credits === beforeD.credits
+      && cargoSnap70() === beforeD.cargo
+      && holdCount('provisions') === beforeD.prov
+      && used70() === beforeD.used
+      && jobs70().length === beforeD.rows;
+    r70.dupAwayAgreementKept = ferryD?.state === 'accepted'
+      && ferryD?.originSystem === o70
+      && ferryD?.destSystem === d70
+      && ferryD?.payQuoted === quoted70;
+
+    // -- D2. duplicate through the SHARED HANDLER with a retained handle ------
+    // Not the rw.act path: this hands ctx.stationDesk.acceptJob the job OBJECT
+    // captured back at the origin dock, which is exactly what a board card
+    // closure holds. acceptJob resolves that handle to the live row itself, so
+    // the refusal has to fire on the resolved row — and neither the live row
+    // nor the retained handle may move.
+    const beforeD2 = {
+      live: snap70(), handle: JSON.stringify(ferryB), credits: ctx.world.credits,
+      cargo: cargoSnap70(), prov: holdCount('provisions'), used: used70(), rows: jobs70().length,
+    };
+    const resD2 = ctx.stationDesk.acceptJob(ferryB);
+    r70.deskDupRefused = resD2?.ok === false;
+    r70.deskDupNotice = typeof resD2?.notice === 'string'
+      && resD2.notice.includes('already aboard')
+      && w26StationNotice()?.includes('already aboard') === true;
+    r70.deskDupLiveWhole = snap70() === beforeD2.live;
+    r70.deskDupHandleWhole = JSON.stringify(ferryB) === beforeD2.handle;
+    r70.deskDupNoGrant = ctx.world.credits === beforeD2.credits
+      && cargoSnap70() === beforeD2.cargo
+      && holdCount('provisions') === beforeD2.prov
+      && used70() === beforeD2.used
+      && jobs70().length === beforeD2.rows;
+
+    // -- E. the ordinary delivery is untouched: four out, one payout ----------
+    // The throttled delivery tick can fire inside the dock's own settle ticks
+    // (the wave-26 f note), so this leg docks one tick at a time and sweeps
+    // commLine out of EVERY tick — otherwise the payout line can be missed and
+    // "paid once" would go unproven.
+    arriveAt70(d70, 'issue70 delivery leg');
+    const payLines70 = [];
+    const sweep70 = (n, label) => {
+      for (let i = 0; i < n; i++) {
+        tick(1, label);
+        for (const e of ctx.lastEvents) if (e.type === 'commLine') payLines70.push(e.text);
+      }
+    };
+    const beforeE = {
+      credits: ctx.world.credits, prov: holdCount('provisions'), states: stateMap70(),
+    };
+    {
+      const stPos70 = SYSTEMS[ctx.world.currentSystem].station.position;
+      ctx.ship.object.position.set(stPos70[0] + 36, stPos70[1], stPos70[2]);
+      ctx.ship.velocity.set(0, 0, 0);
+      ctx.ship.speed = 0;
+      ctx.input.dockPressed = true;
+      sweep70(1, `dock ${d70} (issue70 delivery)`);
+      ctx.input.dockPressed = false;
+      sweep70(92, 'issue70 delivery tick');
+    }
+    const ferryLines70 = payLines70.filter((t) => t.startsWith('Consignment landed intact'));
+    const ferryPaid70 = Number((ferryLines70[0]?.match(/— (\d+) UU/) ?? [])[1]);
+    const afterStates70 = stateMap70();
+    const newlyDone70 = [...afterStates70.keys()]
+      .filter((id) => afterStates70.get(id) === 'done' && beforeE.states.get(id) !== 'done');
+    r70.deliveredDone = ctx.flags.docked === true
+      && ctx.world.currentSystem === d70
+      && ferry70()?.state === 'done';
+    r70.deliveryConsumesFour = holdCount('provisions') === beforeE.prov - 4;
+    // Once, for exactly the quote: a second payout would emit a second line
+    // and double the delta.
+    r70.deliveryPaysQuotedOnce = ferryLines70.length === 1
+      && ferryPaid70 === quoted70
+      && ctx.world.credits - beforeE.credits === quoted70;
+    r70.deliveryPaidOnlyFerry = newlyDone70.length === 1 && newlyDone70[0] === 'ferry-consignment';
+
+    // -- F. completed + full hold: the capacity refusal must NOT reset it ------
+    // Pre-fix this refusal ran AFTER the done→offered reset, so a player who
+    // simply had no room lost the completed contract's stamped agreement.
+    const doneOrigin70 = ferry70()?.originSystem;
+    const doneDest70 = ferry70()?.destSystem;
+    const donePay70 = ferry70()?.payQuoted;
+    fillTo70(3);
+    svc70('jobs');
+    // Both the live row AND the handle retained since the origin dock: the
+    // done→offered reset runs through reofferFerryHandles(), which rewrites
+    // every tracked handle, so a reset that leaked past the capacity gate
+    // would show up on either one.
+    const beforeF = {
+      job: snap70(), handle: JSON.stringify(ferryB), credits: ctx.world.credits,
+      cargo: cargoSnap70(), prov: holdCount('provisions'), rows: jobs70().length,
+    };
+    const resF = accept70();
+    const ferryF = ferry70();
+    r70.doneFullHoldRefused = resF?.ok === false
+      && resF?.token === 'hold'
+      && typeof resF?.error === 'string'
+      && resF.error.startsWith('No room for the consignment');
+    r70.doneFullHoldJobWhole = snap70() === beforeF.job;
+    r70.doneFullHoldHandleWhole = JSON.stringify(ferryB) === beforeF.handle;
+    r70.doneFullHoldStaysDone = ferryF?.state === 'done'
+      && ferryF?.originSystem === doneOrigin70
+      && ferryF?.destSystem === doneDest70
+      && ferryF?.payQuoted === donePay70
+      && doneOrigin70 === o70
+      && doneDest70 === d70
+      && donePay70 === quoted70;
+    r70.doneFullHoldNoGrant = ctx.world.credits === beforeF.credits
+      && cargoSnap70() === beforeF.cargo
+      && holdCount('provisions') === beforeF.prov
+      && jobs70().length === beforeF.rows;
+
+    // -- G. the completed unique consignment re-accepts normally --------------
+    freeTo70(4);
+    svc70('jobs');
+    const beforeG = { prov: holdCount('provisions'), used: used70() };
+    const resG = accept70();
+    const ferryG = ferry70();
+    r70.reacceptOk = resG?.ok === true;
+    r70.reacceptFrontsExactlyFour = holdCount('provisions') === beforeG.prov + 4
+      && used70() === beforeG.used + 4;
+    r70.reacceptRestamps = ferryG?.state === 'accepted'
+      && ferryG?.originSystem === d70
+      && ferryG?.destSystem === (SYSTEMS[d70]?.gates?.[0]?.to ?? null)
+      && Number.isFinite(ferryG?.payQuoted)
+      && ferryG.payQuoted > 0;
+    console.log(`issue70 lane: ${o70} -> ${d70} (third dock ${t70}) quoted=${quoted70} payLines=${payLines70.filter((t) => t.startsWith('Consignment landed intact')).length}`);
+  } catch (e) {
+    threw70 = true;
+    console.log('ISSUE70 ERR', e.message);
+  } finally {
+    r70.noThrow = threw70 === false;
+    if (injected70 > 0) ctx.world.credits = Math.max(0, ctx.world.credits - injected70);
+    if (ctx.agent) ctx.agent.optIn = savedOpt70;
+    ctx.flags.paused = savedPause70;
+    ctx.flags.berthHold = savedHold70;
+    tick(1, 'issue70 restore');
+  }
+
+  console.log('issue70 ferry duplicate accept:', JSON.stringify(r70));
+  if (!Object.values(r70).every(Boolean)) { console.log('ISSUE70 FERRY DUPLICATE ACCEPT FAIL'); errors++; }
+}
+
 // ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
 // (mission 43b34db25ae32972 — one checked fresh-process child)
 //

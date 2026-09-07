@@ -4964,19 +4964,34 @@ export function initStation(ctx) {
       const live = list.find((j) => j && j.id === job.id);
       if (live) job = live;
     }
-    if (job.id === 'ferry-consignment' && job.state === 'done') {
-      job.state = 'offered';
-      job.originSystem = null;
-      job.destSystem = null;
-      delete job.payQuoted;
-      reofferFerryHandles();
-    }
     if (job.kind === 'ferry') {
-      // The consignment is fronted FREE on accept — but only if it fits.
+      // An accepted consignment is already fronted: taking it again would grant
+      // a second free stack and overwrite the live agreement. Refuse first, so
+      // nothing below can mutate the job.
+      const reoffer = job.id === 'ferry-consignment' && job.state === 'done';
+      if (job.state !== 'offered' && !reoffer) {
+        ui.notice = job.state === 'accepted'
+          ? 'That consignment is already aboard — land it at the far station first.'
+          : 'That posting is no longer open.';
+        render();
+        return;
+      }
+      // The consignment is fronted FREE on accept — but only if it fits. This
+      // refusal leaves the whole job untouched, including a completed unique
+      // consignment's previous agreement.
       if (cargoUsed(ctx) + FERRY_UNITS > ctx.cargoCapacity) {
         ui.notice = `No room for the consignment — free ${FERRY_UNITS} units of hold first.`;
         render();
         return;
+      }
+      // Every precondition passed: the repeatable unique consignment is reset
+      // to a fresh offer before its new agreement is stamped below.
+      if (job.id === 'ferry-consignment' && job.state === 'done') {
+        job.state = 'offered';
+        job.originSystem = null;
+        job.destSystem = null;
+        delete job.payQuoted;
+        reofferFerryHandles();
       }
       job.originSystem = ctx.world.currentSystem;
       job.destSystem = otherSystemId(ctx, job.originSystem);
