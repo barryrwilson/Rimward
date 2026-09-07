@@ -15,6 +15,7 @@ const checks = [
   ['shipMaterialRelease', ['scripts/ship-material-release-test.mjs']],
   ['agentBridge', ['scripts/agent-bridge.mjs', '--self-test']],
   ['agentSchema', ['scripts/agent-schema-test.mjs']],
+  ['hailIdentity', ['scripts/hail-identity-test.mjs']],
   ['agentApiHardening', ['scripts/agent-api-hardening-test.mjs']],
   ['wave30Hail', ['--import', ...css, 'scripts/wave30-hail-probe.mjs']],
   ['wave127And132', ['--import', ...css, 'scripts/wave127-132-probe.mjs']],

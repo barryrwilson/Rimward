@@ -514,35 +514,98 @@ function stationService(ctx) {
   }
 }
 
-function hailIntents(ctx, hailOpen) {
-  if (!hailOpen) return [];
-  const api = ctx.hailApi;
-  if (api && typeof api.peek === 'function') {
-    try {
-      const peek = api.peek();
-      if (peek && Array.isArray(peek.intents)) {
-        const out = [];
-        for (let i = 0; i < peek.intents.length; i++) {
-          if (typeof peek.intents[i] === 'string') out.push(peek.intents[i]);
-        }
-        return out;
-      }
-    } catch {
-      /* fail closed to ring fallback */
+const HAIL_KINDS = new Set(['demand', 'surrender', 'salvage', 'conversation']);
+const HAIL_AMOUNTS = Object.freeze(['ransom', 'tribute', 'demand', 'vouchCost']);
+
+function hailOptionRow(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const intent = str(own(raw, 'intent'));
+  if (!intent) return null;
+  return { index: num(own(raw, 'index'), 0), intent, label: str(own(raw, 'label')) };
+}
+
+function hailAmounts(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (let i = 0; i < HAIL_AMOUNTS.length; i++) {
+    const key = HAIL_AMOUNTS[i];
+    const n = finiteOrNull(own(raw, key));
+    if (n !== null) out[key] = n;
+  }
+  return out;
+}
+
+/**
+ * Issue #66 hail block. Identity comes from ONE authoritative snapshot of the
+ * live card (`ctx.hailApi.peek()`) — the speaker in the card header, the hail
+ * family, the token that binds `hailResolve`, and the terms the player can
+ * read. There is no fallback of any kind: a missing `hailApi`, a `peek()` that
+ * throws, or a snapshot that reports the card closed publishes the authored
+ * empty block. The bounded session ring, the selected target and a flags-only
+ * stale card never name a conversation, a speaker, a family or terms — a
+ * historical row cannot describe something the agent can act on now.
+ *
+ * Every field is copied out of that one snapshot as an OWN primitive, so an
+ * inherited property cannot smuggle a value out and no live array, card or
+ * ship object is ever shared with the caller.
+ */
+function hailBlock(ctx, hailOpen) {
+  const block = {
+    open: false,
+    intents: [],
+    conversationId: '',
+    kind: '',
+    speaker: null,
+    terms: null,
+  };
+  const api = ctx && ctx.hailApi;
+  if (!api || typeof api.peek !== 'function') return block;
+  let peek = null;
+  try {
+    const raw = api.peek();
+    if (raw && typeof raw === 'object') peek = raw;
+  } catch {
+    peek = null; // fail closed: no card, no identity, no history
+  }
+  if (!peek || own(peek, 'open') !== true) return block;
+  block.open = true;
+  const rawIntents = own(peek, 'intents');
+  if (Array.isArray(rawIntents)) {
+    for (let i = 0; i < rawIntents.length; i++) {
+      if (typeof rawIntents[i] === 'string') block.intents.push(rawIntents[i]);
     }
   }
-  const ring = ctx.agent && Array.isArray(ctx.agent.events) ? ctx.agent.events : [];
-  for (let i = ring.length - 1; i >= 0; i--) {
-    const e = ring[i];
-    if (e && e.type === 'hailOpened' && Array.isArray(e.intents)) {
-      const out = [];
-      for (let j = 0; j < e.intents.length; j++) {
-        if (typeof e.intents[j] === 'string') out.push(e.intents[j]);
-      }
-      return out;
-    }
+  const id = str(own(peek, 'conversationId'));
+  if (id && !reservedName(id)) block.conversationId = id;
+  const kind = str(own(peek, 'kind'));
+  if (HAIL_KINDS.has(kind)) block.kind = kind;
+  const speaker = own(peek, 'speaker');
+  if (speaker && typeof speaker === 'object') {
+    const sid = own(speaker, 'id');
+    const idOk = typeof sid === 'string'
+      || (typeof sid === 'number' && Number.isFinite(sid));
+    block.speaker = {
+      id: idOk ? sid : null,
+      name: str(own(speaker, 'name')),
+    };
   }
-  return [];
+  const terms = own(peek, 'terms');
+  if (terms && typeof terms === 'object') {
+    const options = [];
+    const rawOptions = own(terms, 'options');
+    if (Array.isArray(rawOptions)) {
+      for (let i = 0; i < rawOptions.length; i++) {
+        const row = hailOptionRow(rawOptions[i]);
+        if (row) options.push(row);
+      }
+    }
+    block.terms = {
+      line: str(own(terms, 'line')),
+      options,
+      amounts: hailAmounts(own(terms, 'amounts')),
+    };
+  }
+  return block;
 }
 
 function copyEvents(agent) {
@@ -807,10 +870,7 @@ export function buildObservation(ctx) {
         nearby: nearbyTargets(ctx, origin, current, group, object ? object.quaternion : null),
         aim: aimDigestOf(ctx),
       },
-      hail: {
-        open: hailOpen,
-        intents: hailIntents(ctx, hailOpen),
-      },
+      hail: hailBlock(ctx, hailOpen),
       autopilot: channel(ctx.autopilot, flags.paused === true),
       automine: channel(ctx.automine, flags.paused === true),
       lastIntent: copyLastIntent(agent && agent.lastIntent),

@@ -185,6 +185,151 @@ measured human baseline.
 
 ---
 
+## Issue #66 — hail conversation identity (implemented)
+
+Before this change `observe().hail` was `{ open, intents }`. An agent could see
+that *a* card was up and which verbs it listed, but not **who** was speaking,
+**what kind** of hail it was, or **what terms** the card printed; when the live
+card could not be peeked the intents fell back to a historical `hailOpened`
+row, so a stale list could describe a card that no longer existed. And
+`hailResolve` bound to nothing: a card replaced between the agent's peek and
+its act resolved against whatever card happened to be open.
+
+**Source of truth.** The open card in `hail.js` — never the selected target,
+never private NPC state, never the event ring. `ctx.hailApi.peek()` builds one
+authoritative snapshot (`cardSnapshot()`) and every public reader copies
+primitives out of it. No card object, ship reference, DOM node, or live array
+leaves that function, so an observation can never mutate the conversation it
+describes.
+
+### `observe().hail`
+
+`open` and `intents` are unchanged. Four additive fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `conversationId` | string | Opaque session token for THIS open card. `''` when no card is open. |
+| `kind` | string | `'demand'` \| `'surrender'` \| `'salvage'` \| `'conversation'`. `''` when no card is open. |
+| `speaker` | `{ id, name }` \| null | `id` is the live ship's primitive id (or `null`); `name` is exactly the name printed in the card header. |
+| `terms` | `{ line, options, amounts }` \| null | What the player can read right now. |
+
+`terms.line` is the displayed line (a demand line carries its own live
+countdown). `terms.options` is one row per listed verb, in card order:
+`{ index (1-based), intent, label }`, where `label` is the button's own text,
+e.g. `[1] Pay tribute — 80 UU`. `terms.amounts` is an authored allowlist of
+finite numbers — `ransom`, `tribute`, `demand`, `vouchCost` — and each one
+ships **only when its own button is on the card**. A ransom or tribute the
+player was never offered stays private.
+
+```json
+{
+  "open": true,
+  "intents": ["payTribute", "refuseFight"],
+  "conversationId": "hail-3",
+  "kind": "demand",
+  "speaker": { "id": "npc-9", "name": "Vane Rook" },
+  "terms": {
+    "line": "Vane Rook heaves to — 80 UU or hull. 14s.",
+    "options": [
+      { "index": 1, "intent": "payTribute", "label": "[1] Pay tribute — 80 UU" },
+      { "index": 2, "intent": "refuseFight", "label": "[2] Refuse — and fight" }
+    ],
+    "amounts": { "demand": 80 }
+  }
+}
+```
+
+**Families are read from the card's own offer,** not from NPC internals: a
+salvage card is a dead hulk, a demand card is a pirate's tribute demand, a
+card that offers `demandCargo` / `demandRansom` / `acceptTribute` is a hull
+that has **struck** (`surrender`), and anything else the card can carry
+(Old Callow's vouch, a Named Gun standing down) is `conversation`.
+
+**No fallback.** With no live card to peek — a missing `hailApi`, a `peek()`
+that throws, or a snapshot that reports the card closed — `observe().hail` is
+the authored empty block (`intents: []`, `conversationId: ''`, `kind: ''`,
+`speaker: null`, `terms: null`). The bounded session ring is never consulted
+for hail data, and neither is the selected target or a flags-only stale card:
+a historical row cannot describe something the agent can act on now, so it is
+better to publish nothing than a list of verbs belonging to a card that is
+gone. `open` is `false` in every one of those cases — a missing `hailApi`, a
+`peek()` that throws, and a snapshot that reports the card closed all read as
+"no card" — and is `true` only when a live peek reports the card open, even if
+that snapshot's stale flag reads `false`.
+
+### `conversationId` scope and reset
+
+- **Session-scoped.** The counter lives in the `initHail` closure. It starts at
+  1 for a fresh page/session, is never persisted, never restored from a save,
+  and is never reused within a session. Tokens are opaque — do not parse them.
+- **Stable** across an ordinary redraw of the same card: a repeat `hailOpened`
+  for the same hull, and every frame of a demand deadline counting down.
+- **New token** whenever the card closes and reopens (including for the same
+  speaker), and whenever the open card changes semantically: a different
+  speaker, a different offered verb set, a different opening line, an in-place
+  conversion to salvage, or a change to **any monetary figure the card prints**
+  (`demand`, `ransom`, `tribute`, `vouchCost`). A re-rolled ransom or tribute
+  on a redraw is a different offer, so it is a different conversation.
+- A quote the card does **not** print — a re-rolled ransom on a card that lists
+  no ransom button — is not part of card identity and never moves the token.
+  What the player is reading is what binds.
+
+### `hailResolve` with an expected identity
+
+`args.expectedConversationId` is **optional**. Omitted is the legacy call and
+behaves exactly as before, including the 1-based `index` form and the ordinary
+button/number-key paths, which are untouched.
+
+When present it must be a non-empty string of at most 64 characters and not a
+prototype-poisoning name. An inherited value, or an `args` object with an
+unusual prototype, is refused the same way: a guarded call is never silently
+downgraded to an unguarded one. Anything malformed refuses with `bad-args` and
+never reaches the card. Omitting the argument entirely is the legacy call —
+`hail.js` is then invoked with a single argument and tells "no token" apart
+from "a bad token" by arity, not by value.
+
+Refusal order, in the wrapper and in the card alike:
+
+1. missing `hailApi` or blocked digits → `no-service`
+2. no open card → `closed`
+3. a present but malformed `expectedConversationId` → `bad-args`
+4. a well-formed token that does not match the live card → `stale`, **even if
+   the verb the caller remembers has disappeared from the new card** — a caller
+   holding a replaced conversation is told the card moved, not that its verb is
+   unavailable
+5. an intent that is not on the live card → `no-service`, which is also what a
+   legacy, unguarded call sees for an unlisted verb
+
+The comparison itself is authoritative in `hail.js`, immediately before any
+effect — not merely against the agent's earlier peek. If the card closed in
+between, `resolve` answers `closed`; if it was replaced by a different
+conversation, `resolve` answers `stale`. Either way **nothing happens**: no
+credits, no cargo, no surrender flag, no AI write, no event, on any ship.
+
+```js
+const o = window.rimward.observe();
+window.rimward.act({
+  v: 2,
+  name: 'hailResolve',
+  args: { intent: 'payTribute', expectedConversationId: o.hail.conversationId },
+});
+```
+
+No new schema version (`VERSION` stays 2), no persisted field, no ring event
+change, no new runtime debug API, and no gameplay, economy, or combat change.
+
+**Evidence.** `npm run test:hail-identity` (the four families, displayed labels
+and amounts, snapshot JSON/prototype safety, two ships with a non-selected
+speaker, bound success, stale replacement with no side effects, same-speaker
+reopen, in-place salvage conversion, countdown stability, malformed expected
+values, legacy success, unchanged version, closed/no-service precedence);
+identity pins in `npm run test:agent-hardening`; and the live browser probe
+`npm run test:hail66-live` (rendered DOM plus `window.rimward` for all four
+families, the two-ship case, the stale guard, the salvage conversion, and the
+ordinary button/digit paths).
+
+---
+
 ## Background & Motivation
 
 ### Why this change is needed
@@ -479,7 +624,7 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `cancelAutomine` | — | `disengageAutomine(ctx, 'cancel')` | — |
 | `selectTarget` | `{ id? }` or cycle | controls export / pulse `target` | `flags.docked` → `docked`; none in range; PR3 |
 | `hail` | — | pulse `pendingHail` via controls | overlay policy; PR3 |
-| `hailResolve` | `{ intent }` or `{ index }` | `ctx.hailApi.resolve` | card closed → `closed`; missing hailApi / overlay block → `no-service`; unknown intent; `hailDigitsAllowed` false |
+| `hailResolve` | `{ intent }` or `{ index }`, optional `expectedConversationId` (issue #66) | `ctx.hailApi.resolve` | card closed → `closed`; missing hailApi / overlay block → `no-service`; unknown intent; `hailDigitsAllowed` false; malformed expected id → `bad-args`; replaced card → `stale` |
 | `dock` | — | pulse `pendingDock` via controls | `station.inZone !== true` → `range` immediately (no pulse, not queued); same as KeyJ skip; **not in pad zone** (no warp); PR3 |
 | `undock` | — | `ctx.stationDesk.undock` | not docked |
 | `openService` | `{ id }` authored `DOCK_KEY_SERVICES` | `ctx.stationDesk.selectService` | not docked; unknown id |

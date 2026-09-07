@@ -446,6 +446,126 @@ ctx.hailApi = {
 const hailClosed = rw.act({ v: 2, name: 'hailResolve', args: { intent: 'pay' } });
 pin('hailResolve closed', hailClosed.ok === false && hailClosed.token === 'closed');
 
+// ---- issue #66: public conversation identity + bound hailResolve ----------
+// A stub card stands in for hail.js here; the live-card behaviour itself is
+// pinned by scripts/hail-identity-test.mjs.
+let cardId = 'hail-7';
+let cardKind = 'demand';
+const resolveCalls = [];
+ctx.flags.hailOpen = true;
+ctx.hailApi = {
+  peek() {
+    return {
+      intents: ['payTribute', 'refuseFight'],
+      open: true,
+      conversationId: cardId,
+      kind: cardKind,
+      speaker: { id: 'npc-9', name: 'Vane Rook' },
+      terms: {
+        line: 'Vane Rook heaves to — 80 UU or hull. 14s.',
+        options: [
+          { index: 1, intent: 'payTribute', label: '[1] Pay tribute — 80 UU' },
+          { index: 2, intent: 'refuseFight', label: '[2] Refuse — and fight' },
+        ],
+        amounts: { demand: 80, ransom: Number.NaN, secretTribute: 500 },
+      },
+    };
+  },
+  resolve(intent, expected) {
+    resolveCalls.push({ intent, expected, argc: arguments.length });
+    return expected && expected !== cardId ? 'stale' : '';
+  },
+};
+const hailObs = rw.observe().hail;
+pin('hail block publishes card identity', !!(
+  hailObs
+  && hailObs.open === true
+  && hailObs.conversationId === 'hail-7'
+  && hailObs.kind === 'demand'
+  && hailObs.speaker
+  && hailObs.speaker.id === 'npc-9'
+  && hailObs.speaker.name === 'Vane Rook'
+  && hailObs.terms
+  && hailObs.terms.line.includes('80 UU')
+  && hailObs.terms.options.length === 2
+  && hailObs.terms.options[0].label === '[1] Pay tribute — 80 UU'
+));
+pin('hail terms amounts are an authored allowlist of finite numbers', !!(
+  hailObs.terms.amounts.demand === 80
+  && !Object.hasOwn(hailObs.terms.amounts, 'ransom')
+  && !Object.hasOwn(hailObs.terms.amounts, 'secretTribute')
+));
+pin('hail block key set frozen', JSON.stringify(Object.keys(hailObs))
+  === JSON.stringify(['open', 'intents', 'conversationId', 'kind', 'speaker', 'terms']));
+cardKind = 'not-a-kind';
+cardId = '__proto__';
+const hailOdd = rw.observe().hail;
+pin('unauthored kind and reserved id are dropped',
+  hailOdd.kind === '' && hailOdd.conversationId === ''
+  && hailOdd.intents.length === 2 && ({}).polluted === undefined);
+cardKind = 'demand';
+cardId = 'hail-7';
+
+resolveCalls.length = 0;
+const boundOk = rw.act({
+  v: 2,
+  name: 'hailResolve',
+  args: { intent: 'payTribute', expectedConversationId: 'hail-7' },
+});
+pin('hailResolve forwards the expected identity', boundOk.ok === true
+  && resolveCalls.length === 1
+  && resolveCalls[0].intent === 'payTribute'
+  && resolveCalls[0].expected === 'hail-7');
+const boundStale = rw.act({
+  v: 2,
+  name: 'hailResolve',
+  args: { intent: 'payTribute', expectedConversationId: 'hail-6' },
+});
+pin('hailResolve stale identity refuses', boundStale.ok === false && boundStale.token === 'stale');
+resolveCalls.length = 0;
+const badExpected = [1, '', '__proto__', 'constructor', {}, null, 'x'.repeat(65)];
+let badExpectedOk = true;
+for (const value of badExpected) {
+  const res = rw.act({
+    v: 2,
+    name: 'hailResolve',
+    args: { intent: 'payTribute', expectedConversationId: value },
+  });
+  if (res.ok !== false || res.token !== 'bad-args') badExpectedOk = false;
+}
+pin('hailResolve malformed expected identity refuses bad-args',
+  badExpectedOk && resolveCalls.length === 0);
+const legacyResolve = rw.act({ v: 2, name: 'hailResolve', args: { intent: 'payTribute' } });
+pin('hailResolve legacy call passes ONE argument', legacyResolve.ok === true
+  && resolveCalls.length === 1 && resolveCalls[0].expected === undefined
+  && resolveCalls[0].argc === 1);
+resolveCalls.length = 0;
+const unlistedIntent = rw.act({
+  v: 2,
+  name: 'hailResolve',
+  args: { intent: 'demandRansom', expectedConversationId: 'hail-6' },
+});
+pin('a bound caller on a replaced card is stale, not no-service',
+  unlistedIntent.ok === false && unlistedIntent.token === 'stale'
+  && resolveCalls.length === 1 && resolveCalls[0].expected === 'hail-6');
+resolveCalls.length = 0;
+const unguardedUnlisted = rw.act({
+  v: 2,
+  name: 'hailResolve',
+  args: { intent: 'demandRansom' },
+});
+pin('an unguarded unlisted intent still refuses no-service',
+  unguardedUnlisted.ok === false && unguardedUnlisted.token === 'no-service'
+  && resolveCalls.length === 0);
+const inheritedArgs = Object.create({ expectedConversationId: 'hail-7' });
+inheritedArgs.intent = 'payTribute';
+const inheritedExpected = rw.act({ v: 2, name: 'hailResolve', args: inheritedArgs });
+pin('an inherited expected identity never downgrades to an unguarded call',
+  inheritedExpected.ok === false && inheritedExpected.token === 'bad-args'
+  && resolveCalls.length === 0);
+ctx.hailApi = undefined;
+ctx.flags.hailOpen = false;
+
 const optBefore = ctx.agent.optIn;
 ctx.agent.events.push({ type: 'playerDestroyed', t: 99 });
 const ringBefore = ctx.agent.events.length;
