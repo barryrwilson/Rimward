@@ -1317,6 +1317,12 @@ DONE (Wave 65). Plated frigate buy DONE (Wave 67; 80000 UU,
 Trusted 25). Wave 94 living yards sell six keys including
 frigate. Wave 115 CONSUME: SHP-01 omit-frigate copy is
 stale. Independent and Hollow yards stay empty.
+Issue #54 (2026-09-07): a purchased plated hull now keeps its
+real model across a cold save reload. The rig wears the grey
+fallback only while the GLB is in flight, then swaps the real
+asset in under the same wrap without visiting the yard preview
+or waiting for matching NPC traffic. Independent and Hollow
+yards staying empty is unchanged.
 
 - Give each faction at least one shipyard where its ships can be purchased.
 - Gate faction hulls by sufficient reputation as well as price.

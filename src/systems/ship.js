@@ -9,7 +9,7 @@ import {
   registerPlayerRemount,
 } from '../game/hangar.js';
 import { buildPlayerPlatedMesh, animateShipMesh } from './npc.js';
-import { releaseShipAsset } from './ship-assets.js';
+import { primeShipAsset, releaseShipAsset } from './ship-assets.js';
 import {
   LIVING_CADENCE,
   SWIM_IDLE_HZ,
@@ -353,6 +353,9 @@ export function makeLivingHull(classKey = 'light') {
 let currentRig = null;
 const _platedBox = new THREE.Box3();
 const _platedSize = new THREE.Vector3();
+// Measuring bench for platedFitScale. Never added to a scene, never given a
+// transform: it exists so an inner mesh can be sized in its own frame.
+const _platedScratch = new THREE.Group();
 
 function publishHullPath(ship, rig) {
   if (!ship) return;
@@ -387,13 +390,24 @@ function makeFallbackPlated() {
   return root;
 }
 
-function scalePlatedToPlayer(wrap, restScale) {
-  wrap.updateMatrixWorld(true);
-  _platedBox.setFromObject(wrap);
+/**
+ * Uniform wrap scale that fits a plated inner mesh to the player size for its
+ * class. Measured in a DETACHED identity frame, never in place: Box3 is an
+ * axis-aligned world box, so measuring the live wrap would fold the flight
+ * root's rotation (a rotated AABB is larger than the hull), the flesh child's
+ * breath and third-person 0.55 view scale, and the dock offset into the fit.
+ * Warm construction and the cold-cache upgrade both call this, so a hull is
+ * the same size whichever path dressed it.
+ */
+function platedFitScale(inner, restScale) {
+  _platedScratch.add(inner);
+  _platedScratch.updateMatrixWorld(true);
+  _platedBox.setFromObject(_platedScratch);
+  _platedScratch.remove(inner);
   _platedBox.getSize(_platedSize);
   const longest = Math.max(_platedSize.x, _platedSize.y, _platedSize.z, 1e-6);
   const s = restScale > 0 ? restScale : 1;
-  wrap.scale.multiplyScalar((P * s) / longest);
+  return (P * s) / longest;
 }
 
 function buildLivingVisual(classKey = 'light') {
@@ -488,9 +502,9 @@ function buildBuiltVisual(classKey, faction) {
   } else {
     inner = makeFallbackPlated();
   }
-  wrap.add(inner);
   const restScale = livingRestScale(classKey);
-  scalePlatedToPlayer(wrap, restScale);
+  wrap.scale.setScalar(platedFitScale(inner, restScale));
+  wrap.add(inner);
   flesh.add(wrap);
   return {
     kind: 'built',
@@ -514,6 +528,14 @@ function buildBuiltVisual(classKey, faction) {
     underLight: null,
     plated: inner,
     platedIsAsset,
+    // The SKU this rig wears. A cold-cache rig starts on the grey fallback and
+    // upgrades to the real GLB later, so the request has to remember what it
+    // asked for and re-check it before it swaps anything in.
+    platedFaction: faction,
+    platedClassKey: classKey,
+    platedLoad: null,
+    platedLoadSeq: 0,
+    disposed: false,
     restScale,
   };
 }
@@ -530,8 +552,84 @@ function disposeUniqueNode(node) {
   }
 }
 
+// ---- Cold-cache plated hull upgrade ---------------------------------------
+// A mounted built hull is remounted synchronously (flight state, dock
+// transform, and camera all depend on that), but its GLB template may not be
+// primed yet — the common case is a cold reload straight into a saved plated
+// hull, before traffic or the yard has ever touched that SKU. buildBuiltVisual
+// then dresses the rig in the grey fallback box. This primes the SKU and swaps
+// the real asset in under the same `player-plated` wrap, so ship.object, its
+// transform, velocity, and hullRig identity never change.
+let platedLoadSeq = 0;
+
+/** True while this request is still the one the live rig is waiting for. */
+function platedUpgradeWanted(ctx, rig, seq) {
+  if (rig.disposed || rig.platedIsAsset) return false;
+  if (rig.platedLoadSeq !== seq) return false;
+  // A different hull was mounted while the GLB was in flight: that remount
+  // built its own rig and disposed (or replaced) this one. These four checks
+  // deliberately overlap — under the current remount order any one of them
+  // catches a stale completion, and none is cheap enough to be worth pruning
+  // down to whichever happens to fire first today.
+  if (ctx.ship?.hullRig !== rig) return false;
+  if (!rig.root?.parent) return false;
+  const p = ctx.player;
+  return (p?.classKey || 'light') === rig.platedClassKey
+    && (p?.faction || 'independent') === rig.platedFaction;
+}
+
+/**
+ * Replace the wrap's inner mesh in place. The fit is computed on the detached
+ * incoming mesh BEFORE it is attached, so the live root rotation, the flesh
+ * breath/view scale, and the camera's visibility toggles cannot reach it: the
+ * wrap ends up with exactly the scale warm construction would have given it.
+ * Everything else about the wrap — its transform, its name, its visible flag —
+ * is left alone, so the flight root and the camera state survive the swap.
+ */
+function swapPlatedInner(rig, nextInner) {
+  const fit = platedFitScale(nextInner, rig.restScale);
+  const wrap = rig.hull;
+  const prev = rig.plated;
+  if (prev) {
+    wrap.remove(prev);
+    if (rig.platedIsAsset) releaseShipAsset(prev);
+    else prev.traverse((node) => { if (node.isMesh) disposeUniqueNode(node); });
+  }
+  wrap.add(nextInner);
+  rig.plated = nextInner;
+  rig.platedIsAsset = true;
+  wrap.scale.setScalar(fit);
+}
+
+/** Prime the mounted SKU, then swap the real GLB in if the rig still wants it. */
+function loadPlatedAsset(ctx, rig) {
+  const faction = rig.platedFaction;
+  const classKey = rig.platedClassKey;
+  const seq = (platedLoadSeq += 1);
+  rig.platedLoadSeq = seq;
+  const job = Promise.resolve()
+    .then(() => primeShipAsset(faction, classKey, 'trader'))
+    .then(() => {
+      if (!platedUpgradeWanted(ctx, rig, seq)) return false;
+      const inner = buildPlayerPlatedMesh(classKey, faction);
+      // buildPlayerPlatedMesh is synchronous, so the guard above still holds.
+      // A null here means the prime resolved without the SKU: keep the box.
+      if (!inner) return false;
+      swapPlatedInner(rig, inner);
+      return true;
+    })
+    .catch((error) => {
+      // Keep the fallback hull. The player keeps flying; only the skin is lost.
+      console.error(`Player plated hull load failed for ${faction}:${classKey}`, error);
+      return false;
+    });
+  rig.platedLoad = job;
+  return job;
+}
+
 function disposeRig(ctx, rig) {
   if (!rig?.root) return;
+  rig.disposed = true;
   if (rig.platedIsAsset && rig.plated) releaseShipAsset(rig.plated);
   ctx.scene?.remove(rig.root);
   if (rig.kind === 'living') {
@@ -590,6 +688,11 @@ export function remountPlayerHull(ctx) {
   if (!currentRig || currentRig.root === oldRoot) currentRig = next;
   if (prev && prev.root === oldRoot) disposeRig(ctx, prev);
   else if (oldRoot !== next.root) ctx.scene.remove(oldRoot);
+
+  // Cold cache: the rig is wearing the grey fallback. Fetch the real GLB and
+  // swap it in without touching the flight root. Started after the old rig is
+  // disposed so the staleness guard sees the settled hullRig.
+  if (next.kind === 'built' && !next.platedIsAsset) loadPlatedAsset(ctx, next);
 }
 
 export function initShip(ctx) {

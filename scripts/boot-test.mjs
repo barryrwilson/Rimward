@@ -6476,6 +6476,7 @@ const { expireSessionDeathCalm: w125ExpireDeathCalm } = await import('../src/sys
 const { dropDeferredHail: w30dropDeferredHail } = await import('../src/systems/overlay-policy.js');
 const w125ExpireAi05 = makeCalmPins({ ctx, expireSessionDeathCalm: w125ExpireDeathCalm });
 let w30demandExpected = 0;
+let w30priceTable = null; // the exact live table the pin below is applied to
 const w30pinDemandScene = (label, mounts) => {
   if (ctx.flags.docked) undockStation();
   w28calm(`${label} calm`);
@@ -6510,6 +6511,7 @@ const w30pinDemandScene = (label, mounts) => {
   for (const s of ctx.ships) if (s?.object) s.object.position.set(9000, 9000, 9000);
   ctx.flags.hailOpen = false;
   ctx.world.prices.provisions = COMMODITIES.provisions.base;
+  w30priceTable = ctx.world.prices;
   w30demandExpected = Math.max(
     HIDDEN_MOUNTS.demandMin,
     Math.round(ECON.tributeRate * cargoValue(ctx.cargo, ctx.world.prices) * 10),
@@ -6533,6 +6535,53 @@ const w30pinDemandScene = (label, mounts) => {
   };
 };
 
+// RW-006 (numeric leg): npc.js rolls the demand off ctx.world.prices at the
+// instant it emits hailOpened — but market.js updates that same table EARLIER
+// in the same frame from its private per-system deviation cache (market.js
+// devBySystem). initPrices never resets that cache, and clearing
+// world.activeEvent / event pressure does not touch it either, so a soak-era
+// deviation survives the scene pin: provisions read 100 while the fixture
+// computed its independent expectation of 200, then the first acquisition tick
+// wrote the cached 80 back and the emitted demand came out 160. Both numbers
+// sit above demandMin, so the floor never hid the mismatch — the hail simply
+// disagreed with the oracle about once in ten runs.
+// Pin the input the roll actually reads, for the acquisition frames ONLY: an
+// accessor on the exact live table that reports the pinned price and swallows
+// the market's writes. A non-writable data property is not usable — market.js
+// writes under strict mode and would throw. The original descriptor goes back
+// in a finally (success, no-hail timeout, or throw) so the card hold, refuse,
+// pay and every later wave run against the normal walking market. No
+// production reset hook, no frozen RNG, and the expected value is still
+// computed from the ten pinned provisions BEFORE the pirate is acquired.
+let w30pinAbsorbed = 0;   // market write attempts swallowed while pinned
+let w30pinLastWrite = null; // the last value the market tried to write (its cache)
+let w30pinRestored = false; // original descriptor back in place after the wrap
+const w30withPinnedProvisions = (fn) => {
+  const table = w30priceTable ?? ctx.world.prices;
+  const had = Object.prototype.hasOwnProperty.call(table, 'provisions');
+  const original = had ? Object.getOwnPropertyDescriptor(table, 'provisions') : null;
+  const pinned = COMMODITIES.provisions.base;
+  w30pinAbsorbed = 0; w30pinLastWrite = null; w30pinRestored = false;
+  Object.defineProperty(table, 'provisions', {
+    configurable: true,
+    enumerable: original ? original.enumerable : true,
+    get: () => pinned,
+    set: (v) => { w30pinAbsorbed++; w30pinLastWrite = v; },
+  });
+  try {
+    return fn();
+  } finally {
+    delete table.provisions;
+    if (original) Object.defineProperty(table, 'provisions', original);
+    const back = Object.getOwnPropertyDescriptor(table, 'provisions');
+    w30pinRestored = had
+      ? (!!back && back.get === undefined && back.value === original.value
+        && back.writable === original.writable && back.enumerable === original.enumerable
+        && back.configurable === original.configurable)
+      : back === undefined;
+  }
+};
+
 // -- a. demand hail WITHOUT mounts: the card offers pay-or-fight, holds -----
 // weapons-cold while open, fires once per record, and refuseFight presses --
 // the attack through the real card button. The run is freehold/undocked off
@@ -6542,7 +6591,17 @@ console.log('wave30 demand setup:', JSON.stringify(w30demandSetupChecks), `deman
 if (!Object.values(w30demandSetupChecks).every(Boolean)) { console.log('WAVE30 DEMAND SETUP FAIL'); errors++; }
 const w30graceExpired = w30demandSetupChecks.graceExpired;
 const p1refuse = w30spawnPirate('refuse', 95, [250, 0, 0]); // 250u: inside TARGET_RANGE, outside the bubble edge
-const p1openEvs = w30demandEvs(p1refuse, 'wave30 p1 demand');
+const p1priceBefore = ctx.world.prices.provisions;
+let p1priceDuring = null;
+const p1openEvs = w30withPinnedProvisions(() => {
+  const evs = w30demandEvs(p1refuse, 'wave30 p1 demand');
+  p1priceDuring = ctx.world.prices.provisions; // what the roll read, last acquisition frame
+  return evs;
+});
+const p1pinAbsorbed = w30pinAbsorbed;
+const p1pinLastWrite = w30pinLastWrite;
+const p1pinRestored = w30pinRestored;
+const p1priceAfter = ctx.world.prices.provisions; // the market's own value again
 const p1hail = p1openEvs.find((e) => e.type === 'hailOpened' && e.ship === p1refuse) ?? null;
 const p1holdEvs = w30collect(60, 'wave30 p1 hold'); // 1 s with the card open
 const p1demandingAfterHold = p1refuse.ai.demanding === true;
@@ -6562,6 +6621,8 @@ const w30demandChecks = {
   demandLine: p1hail?.line === 'Your cargo or your hull.',
   intentsWithoutMounts: JSON.stringify(p1hail?.intents) === JSON.stringify(['payTribute', 'refuseFight']),
   demandRolledOnce: p1hail?.demand === w30demandExpected && w30demandExpected > HIDDEN_MOUNTS.demandMin,
+  demandInputPinned: p1priceDuring === COMMODITIES.provisions.base,
+  marketPinReleased: p1pinRestored === true,
   demandFlagAndRecord: p1refuse.ai.demandSent === true && Number.isFinite(p1refuse.record.demandedAt),
   weaponsColdWhileDemanding: !p1holdEvs.some((e) => e.type === 'npcFire' && e.ship === p1refuse),
   stillDemandingAfterHold: p1demandingAfterHold,
@@ -6573,7 +6634,25 @@ const w30demandChecks = {
   pirateAttacks: p1intentAfterRefuse && p1fireEvs.some((e) => e.type === 'npcFire' && e.ship === p1refuse),
 };
 console.log('wave30 demand hail:', JSON.stringify(w30demandChecks), `demand=${w30demandExpected}`);
-if (!Object.values(w30demandChecks).every(Boolean)) { console.log('WAVE30 DEMAND HAIL FAIL'); errors++; }
+if (!Object.values(w30demandChecks).every(Boolean)) {
+  console.log('WAVE30 DEMAND HAIL FAIL');
+  // Numeric diagnostics: the oracle, the emitted roll, and the price input on
+  // both sides of the acquisition wrap — a demand mismatch is a price-input
+  // story, so print the inputs instead of only the boolean.
+  console.log('wave30 demand numbers:', JSON.stringify({
+    expectedIndependent: w30demandExpected,
+    emittedDemand: p1hail?.demand ?? null,
+    demandMin: HIDDEN_MOUNTS.demandMin,
+    provisionsBeforeAcquire: p1priceBefore,
+    provisionsDuringAcquire: p1priceDuring,
+    provisionsAfterAcquire: p1priceAfter,
+    marketWritesAbsorbed: p1pinAbsorbed,
+    lastMarketWriteAttempt: p1pinLastWrite,
+    pinRestored: p1pinRestored,
+    failedChecks: Object.entries(w30demandChecks).filter(([, v]) => !v).map(([k]) => k),
+  }));
+  errors++;
+}
 w30removeShip(p1refuse);
 tick(5, 'wave30 p1 cleanup');
 
@@ -6659,7 +6738,18 @@ const w30paySetupChecks = w30pinDemandScene('wave30 payTribute setup', true);
 console.log('wave30 payTribute setup:', JSON.stringify(w30paySetupChecks), `demand=${w30demandExpected}`);
 if (!Object.values(w30paySetupChecks).every(Boolean)) { console.log('WAVE30 PAYTRIBUTE SETUP FAIL'); errors++; }
 const p2pay = w30spawnPirate('pay', 95, [250, 0, 0]);
-const p2openEvs = w30demandEvs(p2pay, 'wave30 p2 demand');
+const p2priceBefore = ctx.world.prices.provisions;
+let p2priceDuring = null;
+const p2openEvs = w30withPinnedProvisions(() => {
+  const evs = w30demandEvs(p2pay, 'wave30 p2 demand');
+  p2priceDuring = ctx.world.prices.provisions;
+  return evs;
+});
+const p2pinAbsorbed = w30pinAbsorbed;
+const p2pinLastWrite = w30pinLastWrite;
+const p2pinRestored = w30pinRestored;
+const p2priceAfter = ctx.world.prices.provisions; // released before the pay click
+const p2creditsBefore = ctx.world.credits;
 const p2hail = p2openEvs.find((e) => e.type === 'hailOpened' && e.ship === p2pay) ?? null;
 const p2payBtn = w30hailBtn('[1] Pay tribute');
 const p2payLabel = p2payBtn?.textContent ?? null;
@@ -6675,6 +6765,8 @@ const w30payChecks = {
   hailOpened: !!p2hail,
   intentsWithMounts: JSON.stringify(p2hail?.intents) === JSON.stringify(['payTribute', 'showTeeth', 'refuseFight']),
   payButtonLabeled: p2payLabel === `[1] Pay tribute — ${w30demandExpected} UU`,
+  demandInputPinned: p2priceDuring === COMMODITIES.provisions.base,
+  marketPinReleased: p2pinRestored === true,
   creditsPaidExact: p2creditsAfter === 4000 - w30demandExpected,
   pirateFleesPaid: p2modeAfter === 'flee' && p2outcomeAfter === 'paid',
   calmStamped60: p2calmDelta === 60,
@@ -6684,7 +6776,27 @@ const w30payChecks = {
   paidLine: p2settleEvs.some((e) => e.type === 'commLine' && e.text === 'Smart. Run along.'),
 };
 console.log('wave30 payTribute:', JSON.stringify(w30payChecks), `siteDist=${p2dist?.toFixed?.(2)}`);
-if (!Object.values(w30payChecks).every(Boolean)) { console.log('WAVE30 PAYTRIBUTE FAIL'); errors++; }
+if (!Object.values(w30payChecks).every(Boolean)) {
+  console.log('WAVE30 PAYTRIBUTE FAIL');
+  console.log('wave30 payTribute numbers:', JSON.stringify({
+    expectedIndependent: w30demandExpected,
+    emittedDemand: p2hail?.demand ?? null,
+    demandMin: HIDDEN_MOUNTS.demandMin,
+    payLabel: p2payLabel,
+    payLabelExpected: `[1] Pay tribute — ${w30demandExpected} UU`,
+    creditsBefore: p2creditsBefore,
+    creditsAfter: p2creditsAfter,
+    creditsDebited: p2creditsBefore - p2creditsAfter,
+    provisionsBeforeAcquire: p2priceBefore,
+    provisionsDuringAcquire: p2priceDuring,
+    provisionsAfterAcquire: p2priceAfter,
+    marketWritesAbsorbed: p2pinAbsorbed,
+    lastMarketWriteAttempt: p2pinLastWrite,
+    pinRestored: p2pinRestored,
+    failedChecks: Object.entries(w30payChecks).filter(([, v]) => !v).map(([k]) => k),
+  }));
+  errors++;
+}
 
 // -- d. wake trail visual sanity: with p2pay live and fleeing, the pooled ---
 // Points ring (600-slot buffer, the wave-27 scene-traversal discipline) ------
