@@ -306,6 +306,101 @@ for (let i = 0; i < 40; i++) {
 pin('demand flood bounded by cap', demandFlood.length === EVENT_CAP);
 pin('demand flood keeps newest', demandFlood[demandFlood.length - 1].speaker === 'p39');
 
+// Session lifecycle feedback under mineHit saturation (issue #72): an automine
+// run fills the ring with 16 distinct mineHit rows (foldable, so keep-class),
+// then the ship docks, undocks, or a save is refused. Before lifecycle
+// retention the fresh row was the only non-keep row in the ring, so eviction
+// discarded it on arrival and the agent could never observe its own dock or
+// undock, nor learn why a save was blocked.
+const mineSaturate = (tag) => {
+  const rows = [];
+  for (let i = 0; i < EVENT_CAP; i++) {
+    pushRing(rows, { type: 'mineHit', t: i + 1, asteroidId: `${tag}-${i}` });
+  }
+  return rows;
+};
+const LIFECYCLE_ROWS = [
+  { type: 'saveBlocked', t: 90, reason: 'in-combat' },
+  { type: 'docked', t: 91 },
+  { type: 'undocked', t: 92 },
+];
+for (const raw of LIFECYCLE_ROWS) {
+  const kind = raw.type;
+  const ring = mineSaturate(kind);
+  pin(`${kind} ring saturated by distinct mineHit`, ring.length === EVENT_CAP
+    && ring.every((e) => e && e.type === 'mineHit'));
+  pushRing(ring, sanitizeEvent(raw));
+  const found = ring.filter((e) => e && e.type === kind);
+  pin(`${kind} survives arrival`, ring.length === EVENT_CAP && found.length === 1);
+  pin(`${kind} keeps its timestamp`, found.length === 1 && found[0].t === raw.t);
+  if (kind === 'saveBlocked') {
+    pin('saveBlocked keeps its reason', found.length === 1 && found[0].reason === 'in-combat');
+  }
+  // Mixed keep/foldable traffic keeps pumping: the row must still be
+  // observable on following observe() calls, not only on its arrival frame.
+  for (let i = 0; i < 6; i++) {
+    pushRing(ring, { type: 'mineHit', t: 100 + i, asteroidId: `after-${i}` });
+    pushRing(ring, { type: 'playerHit', t: 100 + i, family: `fam-${i}`, damage: 2 });
+  }
+  pin(`${kind} survives later mixed traffic`, ring.length === EVENT_CAP
+    && ring.some((e) => e && e.type === kind && e.t === raw.t));
+  // Retention is bounded, not permanent: enough newer retained rows age it out
+  // in FIFO order and the ring never grows past the cap.
+  for (let i = 0; i < EVENT_CAP + 4; i++) {
+    pushRing(ring, { type: 'shieldDown', t: 200 + i, layer: i, targetId: `s-${i}` });
+  }
+  pin(`${kind} eventually evicted FIFO`, ring.length === EVENT_CAP
+    && !ring.some((e) => e && e.type === kind));
+  // Repeats stay capped, newest wins, and lifecycle rows never collapse — so
+  // every retained row keeps its own reason/timestamp.
+  const flood = [];
+  for (let i = 0; i < 40; i++) pushRing(flood, sanitizeEvent({ ...raw, t: 300 + i }));
+  pin(`${kind} flood bounded by cap`, flood.length === EVENT_CAP);
+  pin(`${kind} flood keeps newest`, flood[flood.length - 1].t === 339);
+  pin(`${kind} flood keeps distinct uncollapsed rows`, flood.every((e) => e
+    && e.type === kind && !Object.hasOwn(e, 'count'))
+    && new Set(flood.map((e) => e.t)).size === EVENT_CAP);
+  // sanitizeEvent: primitives only, idempotent, JSON-safe.
+  const clean = sanitizeEvent({ ...raw, ship: { id: 'x' }, nested: { a: 1 }, bogus: 3 });
+  pin(`${kind} sanitized primitives only`, !!clean && clean.type === kind && clean.t === raw.t
+    && !Object.hasOwn(clean, 'ship') && !Object.hasOwn(clean, 'nested')
+    && !Object.hasOwn(clean, 'bogus')
+    && Object.keys(clean).every((k) => typeof clean[k] !== 'object'));
+  pin(`${kind} sanitize idempotent`,
+    JSON.stringify(sanitizeEvent(clean)) === JSON.stringify(clean));
+  pin(`${kind} json safe`,
+    JSON.stringify(JSON.parse(JSON.stringify(clean))) === JSON.stringify(clean));
+}
+
+// Narrowness: ordinary non-keep chatter is still evicted first, so lifecycle
+// retention cannot crowd the ring.
+const chatterRing = mineSaturate('chatter');
+pushRing(chatterRing, { type: 'reticleLock', t: 90, hit: true });
+pin('ordinary reticleLock stays evictable', chatterRing.length === EVENT_CAP
+  && !chatterRing.some((e) => e && e.type === 'reticleLock'));
+const hangRing = mineSaturate('hang');
+pushRing(hangRing, { type: 'hailClosed', t: 90 });
+pin('plain hailClosed still evictable under mineHit saturation', hangRing.length === EVENT_CAP
+  && !hangRing.some((e) => e && e.type === 'hailClosed'));
+// Demand receipts, combat feedback and mission outcomes stay equal-priority
+// keep rows beside the new lifecycle rows: none outranks another.
+const mixRing = mineSaturate('mix');
+pushRing(mixRing, {
+  type: 'hailClosed', t: 95, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 200,
+});
+pushRing(mixRing, sanitizeEvent({ type: 'docked', t: 96 }));
+pushRing(mixRing, { type: 'npcHit', t: 97, targetId: 'mix-npc', damage: 4 });
+pushRing(mixRing, {
+  type: 'jobState', t: 98, id: 'j1', kind: 'delivery', outcome: 'delivered', pay: 120,
+});
+pushRing(mixRing, sanitizeEvent({ type: 'undocked', t: 99 }));
+pin('lifecycle coexists with demand/combat/mission rows', mixRing.length === EVENT_CAP
+  && mixRing.some((e) => e && e.type === 'hailClosed' && e.demandOutcome === 'paid')
+  && mixRing.some((e) => e && e.type === 'npcHit' && e.targetId === 'mix-npc')
+  && mixRing.some((e) => e && e.type === 'jobState' && e.outcome === 'delivered')
+  && mixRing.some((e) => e && e.type === 'docked' && e.t === 96)
+  && mixRing.some((e) => e && e.type === 'undocked' && e.t === 99));
+
 
 // actResult v2 receipts: reqId + sim timestamp.
 const receipt = actResult({ ok: true, error: '', name: 'setControl', token: '', status: 'active', reqId: 'q9', t: 12.5 });

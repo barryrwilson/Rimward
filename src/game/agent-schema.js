@@ -145,6 +145,14 @@ const KEEP_RING = new Set([
   'npcDestroyed', 'npcDisabled', 'npcSurrendered', 'jobState',
   'landmarkFound', 'clueFound', 'survivorRescued', 'survivorSold',
   'epicStage', 'mineBlocked', 'convergence', 'deepening',
+  // Session lifecycle receipts (issue #72). An automine run saturates the ring
+  // with 16 distinct mineHit rows (foldable, so keep-class); the fresh
+  // saveBlocked/docked/undocked row was then the only non-keep row present, so
+  // eviction discarded it on arrival and the agent never observed its own
+  // dock, undock, or a refused save. These are deliberately NOT collapsed:
+  // each row keeps its own reason/t. Retention stays bounded — repeats are
+  // capped by EVENT_CAP and enough newer retained traffic ages them out FIFO.
+  'saveBlocked', 'docked', 'undocked',
 ]);
 
 /**

@@ -129,6 +129,22 @@ objects are never copied — identity is derived primitives only. station.js
 notes the precise terminal at each contract transition (the save.js
 `recovered` precedent); agent-api's job watcher is the backstop.
 
+**Ring eviction policy.** The session ring holds `EVENT_CAP` = 16 rows. On
+overflow it drops, in this exact order: (1) the oldest `commLine` row while any
+comm chatter is present; (2) the oldest ordinary non-keep row (routine traffic
+such as a plain `hailClosed` hang-up, `navRoute`, `reticleLock`); (3) — only
+when every remaining row is keep-class or foldable — the oldest retained row,
+so retention is FIFO and never unbounded. Keep class covers the KEEP_RING
+types, every `COLLAPSE_KEY` foldable type (bounded to one row per key), and a
+`hailClosed` carrying a `demandOutcome`. `saveBlocked`, `docked` and `undocked`
+are KEEP_RING lifecycle rows: a ring saturated with 16 distinct `mineHit` rows
+no longer discards them on arrival, so an agent observes its own dock/undock
+and a refused save. Lifecycle rows are deliberately not duplicate-collapsed —
+each keeps its own `reason` and `t` — and repeats are bounded by the cap alone
+(newest survive, oldest age out). Combat and mission outcomes remain equal
+priority: no keep row outranks another, and finite continued retained traffic
+ages any of them out. No new fields, keys, or schema version.
+
 **Discovery.** `observe().capabilities` is the static manifest: ten roles
 (session, pilot, trader, miner, combat, hail, missions, explorer, rescue,
 services) with explicit status, command argument shapes, outcome types, and

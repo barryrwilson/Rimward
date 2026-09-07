@@ -33,9 +33,11 @@ const PIN_KEYS = [
   'approachObserved',
   'approachBraked',
   'approachDocked',
+  'dockedEvent',
   'stationViewRows',
   'stationActionBar',
   'approachUndocked',
+  'undockedEvent',
   'leaseActive',
   'leaseExpired',
   'firePath',
@@ -48,6 +50,16 @@ const PIN_KEYS = [
 ];
 const LOOP_PROBE_MS = 4000;
 const LOOP_T_MIN = 0.25;
+// Session events are harvested on the next observe tick, so a fresh lifecycle
+// row can land one poll after the flag itself flips. Bounded public polling
+// only — no private-state injection.
+const EVENT_POLL_TRIES = 6;
+const EVENT_POLL_MS = 250;
+
+function hasEventType(snap, type) {
+  return !!(snap && Array.isArray(snap.events)
+    && snap.events.some((e) => e && typeof e === 'object' && e.type === type));
+}
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -903,6 +915,13 @@ async function main() {
             && ap.engaged === false
             && ap.phase === 'complete'
             && ap.reason === 'docked';
+          // The docked lifecycle row must be observable in a fresh public
+          // snapshot, not merely inferable from flags.docked.
+          if (pins.dockedEvent !== true) pins.dockedEvent = hasEventType(snap, 'docked');
+          for (let k = 0; k < EVENT_POLL_TRIES && pins.dockedEvent !== true; k++) {
+            await sleep(EVENT_POLL_MS);
+            if (hasEventType(await observe(), 'docked')) pins.dockedEvent = true;
+          }
           if (pins.approachDocked) {
             pins.approachDockAt = {
               phase: ap.phase,
@@ -957,6 +976,12 @@ async function main() {
         snap = await observe();
         pins.approachUndocked = !!(undock && undock.ok === true
           && snap && snap.flags && snap.flags.docked === false);
+        // Same for the undocked lifecycle row.
+        if (pins.undockedEvent !== true) pins.undockedEvent = hasEventType(snap, 'undocked');
+        for (let k = 0; k < EVENT_POLL_TRIES && pins.undockedEvent !== true; k++) {
+          await sleep(EVENT_POLL_MS);
+          if (hasEventType(await observe(), 'undocked')) pins.undockedEvent = true;
+        }
         if (pins.approachUndocked) {
           const uShip = snap.ship || {};
           const uAp = snap.autopilot || {};
