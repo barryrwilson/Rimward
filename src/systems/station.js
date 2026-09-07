@@ -4742,15 +4742,17 @@ export function initStation(ctx) {
   function hermitBuyMult() {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
   }
-  /** Qty-1 fill in UU. Shared by the market pane and tryTrade. */
-  function tradeFillUnit(key, buying) {
-    const price = priceOf(ctx, key);
+  /** Qty-1 BUY fill in UU, before the issue-53 cap (which never moves buys). */
+  function tradeBuyUnit(key) {
     const fx = epicEffects(ctx, currentDef.faction);
-    if (buying) {
-      return Math.round(price * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
-    }
+    return Math.round(priceOf(ctx, key)
+      * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
+  }
+  /** Qty-1 SELL fill in UU with every modifier applied, BEFORE the cap. */
+  function tradeSellUnitRaw(key) {
     const tier = rankFor(standingRead(ctx.world?.reputation, currentDef.faction)).tier;
-    let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
+    const fx = epicEffects(ctx, currentDef.faction);
+    let unit = priceOf(ctx, key) * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
     if (currentService) unit *= currentService.sellMult ?? 1;
     if (currentDef.hermit) unit *= HERMIT.sellMult;
     if (key === 'restrictedComponents') unit *= fx.restrictedSellMult ?? 1;
@@ -4765,6 +4767,18 @@ export function initStation(ctx) {
       }
     }
     return Math.round(unit);
+  }
+  /**
+   * Qty-1 fill in UU. Shared by the market pane, tryTrade and the agent desk.
+   * Invariant (issue #53): with the market unchanged, a dock's rounded SELL
+   * fill never exceeds its own rounded BUY fill for the same commodity, so
+   * selling straight back cannot gain UU. The sell side still applies every
+   * modifier; only the rounded result is clamped. The clamp compares two
+   * quotes at the SAME dock, so a price difference between markets still pays.
+   */
+  function tradeFillUnit(key, buying) {
+    if (buying) return tradeBuyUnit(key);
+    return Math.min(tradeSellUnitRaw(key), tradeBuyUnit(key));
   }
   function lockerAllowed() {
     if (ui.fenceUnlocked) return true;
