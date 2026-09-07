@@ -176,6 +176,8 @@ function fund(units) {
   ctx.world.credits = 5_000_000;
   ctx.cargoCapacity = Math.max(200, units + 40);
 }
+/** TEST SETUP: an exact freighter-sized hold, so a 160-unit order fills it. */
+function holdOf(units) { ctx.cargoCapacity = units; }
 /** TEST SETUP: pin this market's quote, then re-render so the cells are live. */
 function pinPrice(key, price) { ctx.world.prices[key] = price; reopenMarket(); }
 
@@ -307,9 +309,13 @@ if (AUCTION && openMarketAt(AUCTION, 'A auction')) {
   roundTrip('A6 public handle qty 5', 'provisions', 5, api('buy'), api('sell'));
   pinPrice('provisions', 216);
   roundTrip('A7 public handle qty 99', 'provisions', 99, api('buy'), api('sell'));
+  // A freighter-sized hold, filled to the brim: the second chunk must land on
+  // an already-99-full hold with exactly 61 units of room left.
+  holdOf(160);
   pinPrice('provisions', 216);
-  roundTrip('A8 buy 99+61, sell 50+50+50+10 (160 units)', 'provisions', 160,
+  roundTrip('A8 buy 99+61, sell 50+50+50+10 (fills a 160-unit hold)', 'provisions', 160,
     chunks('buy', [99, 61]), chunks('sell', [50, 50, 50, 10]));
+  fund(200); // restore the roomy fixture for the checks below
 
   const before = ctx.world.credits;
   const refused = [0, -1, 100, 1.5, '5', null].map((qty) =>
@@ -463,19 +469,58 @@ if (openMarketAt('redmarch', 'F redmarch')) {
       panelAgrees: cellUU(RC, CELL_SELL) === 340 && cellUU(RC, CELL_BUY) === 340,
     }, { under, at, cut: FIXER_CUT_TRUST });
 
+    // The crossing, traded for real through the public handle: the sale is
+    // priced at trust 29 with the un-marked-up chain, and the sale itself
+    // bumps the fixer over the cut, so the next quote carries the markup.
+    fixer.trust = FIXER_CUT_TRUST - 1; // 29
+    pinPrice('restrictedComponents', 400);
+    const q29 = chainFor('restrictedComponents');
+    const cellBuy29 = cellUU(RC, CELL_BUY);
+    const cellSell29 = cellUU(RC, CELL_SELL);
+    const cash0 = ctx.world.credits;
+    const hold0 = held('restrictedComponents');
+    api('buy')('restrictedComponents', 5);
+    const charged29 = cash0 - ctx.world.credits;
+    const buyNotice29 = noticeText();
+    const holdAfterBuy = held('restrictedComponents');
+    const trustAtSale = fixer.trust;
+    const cash1 = ctx.world.credits;
+    api('sell')('restrictedComponents', 5);
+    const paid29 = ctx.world.credits - cash1;
+    const sellNotice29 = noticeText();
+    const qCrossed = chainFor('restrictedComponents');
+    group('F2 a real sale at fixer trust 29 crosses the cut', {
+      quoteReadBeforeFill: cellBuy29 === q29.buy && cellSell29 === q29.sell,
+      pricedUnderTheCut: trustAtSale === FIXER_CUT_TRUST - 1
+        && q29.sellRaw === Math.round(400 * 1.06 * 1.1),
+      chargedExact: charged29 === q29.buy * 5,
+      paidExact: paid29 === q29.sell * 5,
+      buyNotice: buyNotice29 === `Bought 5 ${RC} for ${q29.buy * 5} UU.`,
+      sellNotice: sellNotice29 === `Sold 5 ${RC} for ${q29.sell * 5} UU.`,
+      cargoRoseThenCleared: holdAfterBuy === hold0 + 5
+        && held('restrictedComponents') === hold0,
+      trustCrossedOnTheSale: fixer.trust >= FIXER_CUT_TRUST,
+      cutNowInTheChain: qCrossed.sellRaw === Math.round(400 * 1.06 * 1.1 * FIXER_MARKUP),
+      stillCapped: q29.sell === q29.buy && qCrossed.sell === qCrossed.buy,
+      noRoundTripGain: ctx.world.credits <= cash0,
+    }, { q29, qCrossed, charged29, paid29, trustAtSale, trustAfter: fixer.trust });
+
     // Stable at trust 30 across the quantity ladder (each sale bumps the
     // fixer, so the trust pin is restated before every leg).
     for (const qty of [1, 5, 99]) {
       fixer.trust = FIXER_CUT_TRUST;
       pinPrice('restrictedComponents', 400);
-      roundTrip(`F2 restricted round trip at fixer trust 30, qty ${qty}`,
+      roundTrip(`F3 restricted round trip at fixer trust 30, qty ${qty}`,
         'restrictedComponents', qty, api('buy'), api('sell'));
     }
+    // A freighter-sized hold, filled to the brim on the restricted row too.
+    holdOf(160);
     fixer.trust = FIXER_CUT_TRUST;
     pinPrice('restrictedComponents', 400);
-    roundTrip('F3 restricted buy 99+61, sell 80+80 (160 units)', 'restrictedComponents', 160,
-      chunks('buy', [99, 61]), chunks('sell', [80, 80]));
-    pinPanel('F4 redmarch panel: every row sell <= buy');
+    roundTrip('F4 restricted buy 99+61, sell 80+80 (fills a 160-unit hold)',
+      'restrictedComponents', 160, chunks('buy', [99, 61]), chunks('sell', [80, 80]));
+    fund(200); // restore the roomy fixture
+    pinPanel('F5 redmarch panel: every row sell <= buy');
   }
 }
 
