@@ -550,7 +550,10 @@ function dispatchLive(ctx, name, args) {
     const result = desk.perform(spec);
     const notice = result && typeof result.notice === 'string' ? result.notice : '';
     if (result && result.ok === true) {
-      return remember(ctx, actResult({ ok: true, error: notice, name, token: '' }));
+      // Issue #64: the success line is feedback, not a refusal. It rides
+      // `notice`; `error` stays empty so ok/error never disagree. Failures
+      // below keep their classifier token and notice-as-error text.
+      return remember(ctx, actResult({ ok: true, error: '', name, token: '', notice }));
     }
     const token = result && typeof result.token === 'string' && result.token
       ? result.token

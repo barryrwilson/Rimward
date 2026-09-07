@@ -36,6 +36,8 @@ const PIN_KEYS = [
   'dockedEvent',
   'stationViewRows',
   'stationActionBar',
+  'stationBarNotice',
+  'staleExpectShape',
   'approachUndocked',
   'undockedEvent',
   'leaseActive',
@@ -970,8 +972,32 @@ async function main() {
           && creditsBefore !== null && creditsAfter !== null && creditsAfter < creditsBefore
         );
         pins.stationBarDelta = creditsBefore !== null && creditsAfter !== null ? creditsAfter - creditsBefore : null;
+        // issue #64: a bought round is a success, so `error` must be empty and
+        // the displayed line must arrive in `notice` — exactly the panel line.
+        const barNotice = snap && snap.station && snap.station.view
+          && typeof snap.station.view.notice === 'string' ? snap.station.view.notice : null;
+        pins.stationBarNotice = !!(
+          roundRes && roundRes.ok === true
+          && roundRes.error === '' && roundRes.token === ''
+          && typeof roundRes.notice === 'string' && roundRes.notice.length > 0
+          && roundRes.notice === barNotice
+          && roundRes.notice === 'The bar loosens up.'
+        );
+        pins.stationBarNoticeText = roundRes && typeof roundRes.notice === 'string' ? roundRes.notice : null;
         const staleRes = roundEntry ? await act('stationAction', { n: roundEntry.n, expect: 'not-the-label' }) : null;
+        snap = await observe();
+        const creditsStale = snap && snap.world && Number.isFinite(snap.world.credits) ? snap.world.credits : null;
         pins.staleExpectRefused = !!(staleRes && staleRes.ok === false && staleRes.token === 'stale');
+        // The same refusal proves the failure side of the contract: token and
+        // error stay, `notice` is empty, receipt metadata survives, no spend.
+        pins.staleExpectShape = !!(
+          staleRes && staleRes.ok === false
+          && staleRes.token === 'stale' && staleRes.error === 'stale'
+          && staleRes.notice === ''
+          && typeof staleRes.reqId === 'string' && staleRes.reqId.length > 0
+          && Number.isFinite(staleRes.t)
+          && creditsStale !== null && creditsAfter !== null && creditsStale === creditsAfter
+        );
         const undock = await act('undock', {});
         snap = await observe();
         pins.approachUndocked = !!(undock && undock.ok === true
