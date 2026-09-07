@@ -164,10 +164,14 @@ export async function runAgentParityWave141(deps) {
     w30parkHostiles('w141 park');
     ctx.world.credits = 4000;
     // Demand inputs pinned (the RW-006/wave-127 discipline): jump grace and
-    // session death-calm expired, no leftover deferred hail, cargo aboard.
+    // session death-calm expired, cargo aboard. A leftover deferred hail is
+    // NOT dropped here: overlay-policy's slot is only one of the three places
+    // a queued demand lives (hail.js keeps its own deferredDemand copy and the
+    // hull keeps ai.demanding), so dropping the slot strands the queued card
+    // instead of clearing it. The isolation loop below lets prior cards
+    // surface through ordinary ticks and drains them through the hail API.
     if (ctx.world.time < (ctx.world.jumpGraceUntil ?? 0)) ctx.world.jumpGraceUntil = 0;
     w125ExpireAi05('w141 demand setup');
-    w30dropDeferredHail(null);
     ctx.cargo.length = 0;
     ctx.cargo.push({ commodity: 'provisions', units: 10 });
     // Fixture placement: outside the 300u station law zone (npc.js demand
@@ -176,11 +180,56 @@ export async function runAgentParityWave141(deps) {
     ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.speed = 0;
     tick(2, 'w141 law-zone stage');
+    // ---- fixture isolation (hosted-boot repair) -----------------------------
+    // The staging ticks above run the ordinary traffic systems, so an ambient
+    // hostile can arrive AFTER the first park and hold a demand of its own:
+    // either an open card or a deferred slot that opens on a later tick. The
+    // pay act below resolves whichever card is open, so on the hosted boot the
+    // paid receipt belonged to an ambient pirate while the fixture stayed
+    // demanding. Park the late arrivals; the park ticks let a queued card
+    // surface on its own, and it is drained through the ordinary hailResolve
+    // path BEFORE the fixture spawns. Bounded, and a failure to settle is
+    // reported (never suppressed) in the predicate below.
+    let isolated141 = false;
+    let isoRounds141 = 0;
+    let isoDrains141 = 0;
+    let isoNoSafeIntent141 = false;
+    for (let round = 0; round < 6 && !isolated141; round++) {
+      isoRounds141 = round + 1;
+      w30parkHostiles('w141 isolate park');
+      const snapIso = rw141.observe();
+      const isoOpen = !!(snapIso && snapIso.hail && snapIso.hail.open === true);
+      const isoIntents = snapIso && snapIso.hail && Array.isArray(snapIso.hail.intents) ? snapIso.hail.intents : [];
+      if (isoOpen) {
+        // Only plain close actions: never tribute, ransom, cargo or bluff, so
+        // isolation cannot spend the seeded credits or move the fixture economy.
+        const isoPick = ['refuseFight', 'keepFiring', 'letGo'].find((i) => isoIntents.includes(i));
+        if (!isoPick) { isoNoSafeIntent141 = true; break; }
+        rw141.act({ v: 2, name: 'hailResolve', args: { intent: isoPick } });
+        isoDrains141++;
+        tick(1, 'w141 isolate drain');
+        continue;
+      }
+      const isoDemanding = (Array.isArray(ctx.ships) ? ctx.ships : [])
+        .filter((s) => s && s.ai && s.ai.demanding === true).length;
+      isolated141 = isoDemanding === 0;
+    }
     const pDemand = w30spawnPirate('w141-demand', 95, [250, 0, 0]);
+    // Authored identity of the fixture, read with the same precedence as the
+    // demand speaker (npc.js demandSpeaker): record pilot, else state name.
+    const speaker141 = (pDemand && pDemand.record && typeof pDemand.record.pilot === 'string' && pDemand.record.pilot)
+      || (pDemand && pDemand.state && typeof pDemand.state.name === 'string' && pDemand.state.name)
+      || '';
+    // A paid close for THIS hull. Raw rows still carry the live ship ref, so
+    // identity is exact; paying any other ship can never satisfy it.
+    const paidForFoe141 = (rows) => (Array.isArray(rows) ? rows : [])
+      .some((e) => e && e.type === 'hailClosed' && e.demandOutcome === 'paid' && e.ship === pDemand);
     // ---- hail diagnostics (read-only; ledger row emitted only on failure) ----
-    // The hosted Ubuntu/Node20 boot reports hailDemand=false while the pay act
-    // itself reports ok and hailStaleClosed=true; which predicate term fails is
-    // not yet known (no-service can also come from an open replacement card).
+    // The hosted Ubuntu/Node20 boot reported hailDemand=false while the pay act
+    // itself reported ok; the cause is now proven: an ambient pirate's card was
+    // the open one, so the paid receipt named that hull (Gallows Wren) while
+    // the fixture stayed demanding. The isolation above removes the competing
+    // card and the identity terms below prove the fixture itself was paid.
     // These helpers copy scalars only: no live ship/context is stringified, no
     // emit/tick is patched, and observe() neither drains the ring nor advances
     // the sim, so every predicate, fixture act, tick(2) call and their order
@@ -267,29 +316,50 @@ export async function runAgentParityWave141(deps) {
       foe: dFoe141(),
       credits: ctx.world.credits,
     };
+    // Raw identity of the paid close, read before the tick rotates the queue.
+    const rawPaidAtAct141 = paidForFoe141(ctx.events);
     step141('hail', 'hailResolve', payRes);
     tick(2, 'w141 demand resolve');
     const snapHailAfter = rw141.observe();
-    const hailOutcome = obsEvents(snapHailAfter, 'hailClosed').some((e) => e.demandOutcome === 'paid');
-    w141.hailDemand = !!(intents.includes('payTribute') && payRes.ok === true && hailOutcome
+    const paidRows141 = obsEvents(snapHailAfter, 'hailClosed').filter((e) => e.demandOutcome === 'paid');
+    const hailOutcome = paidRows141.length > 0;
+    // Identity: the paid receipt must name the authored fixture speaker, and a
+    // raw paid close must carry the fixture hull itself (act frame or tick).
+    const rawPaidForFoe141 = rawPaidAtAct141 || paidForFoe141(ctx.lastEvents) || paidForFoe141(ctx.events);
+    const paidSpeakerMatch141 = speaker141 !== '' && paidRows141.some((e) => e.speaker === speaker141);
+    w141.hailDemand = !!(isolated141 && intents.includes('payTribute') && payRes.ok === true && hailOutcome
+      && rawPaidForFoe141 && paidSpeakerMatch141
       && snapHailAfter.hail.open === false);
     const badIntent = rw141.act({ v: 2, name: 'hailResolve', args: { intent: 'not-an-intent' } });
     w141.hailStaleClosed = badIntent.ok === false && (badIntent.token === 'closed' || badIntent.token === 'no-service');
     if (w141.hailDemand === false) {
-      // Reads the four predicate terms separately so the ledger says WHICH one
-      // failed: no listed payTribute (wrong/absent fixture hail), a refused pay
-      // act, a card left open, or a paid receipt that never reached the ring
-      // (lost terminal event) versus an outcome-less plain close (ordinary
-      // close of a stale/dead hull).
+      // Reads each predicate term separately so the ledger says WHICH one
+      // failed: unsettled fixture isolation (a competing ambient card), no
+      // listed payTribute (wrong/absent fixture hail), a refused pay act, a
+      // card left open, a paid receipt that never reached the ring (lost
+      // terminal event) versus an outcome-less plain close, or — the hosted
+      // PR57 cause — a paid receipt that belongs to another hull.
       const afterRows141 = dRows141(snapHailAfter && Array.isArray(snapHailAfter.events) ? snapHailAfter.events : []);
       const diag141 = {
         node: process.version,
         platform: process.platform,
         predicate: {
+          isolated: isolated141,
           listedPayTribute: intents.includes('payTribute'),
           payOk: payRes ? payRes.ok === true : null,
           hailOutcomePaid: hailOutcome,
+          rawPaidForFoe: rawPaidForFoe141,
+          paidSpeakerMatch: paidSpeakerMatch141,
           closedAfterTick: snapHailAfter && snapHailAfter.hail ? snapHailAfter.hail.open === false : null,
+        },
+        isolation: {
+          rounds: isoRounds141, drains: isoDrains141, settled: isolated141,
+          noSafeIntent: isoNoSafeIntent141,
+        },
+        identity: {
+          fixtureSpeaker: speaker141,
+          paidSpeakers: paidRows141.map((e) => (typeof e.speaker === 'string' ? e.speaker : null)),
+          rawPaidAtAct: rawPaidAtAct141,
         },
         creditsSeeded: 4000,
         creditsDelta: {
