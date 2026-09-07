@@ -83,6 +83,9 @@ const KEY = 'rimward-save-v1';
 const SLOT_KEYS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
 const IDLE_INTERVAL = 60; // s between in-space autosaves
 const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
+// Session-only requests survive a blocked dock checkpoint. Never persist this
+// bookkeeping: a restore must not retry writes from the abandoned timeline.
+const pendingAutosaves = new WeakMap();
 const DEATH_HOLD_MS = 2500; // overlay hold before recovery
 const DEATH_TITLE = 'SHIP LOST';
 const DEATH_LINE_BERTH = 'No UU charge. Credits, cargo, and hull return as they were at your last berth.';
@@ -1071,17 +1074,21 @@ function hostileEncounterBlock(ctx) {
 /** Same gates as trySave(autosave key). Does not invent a second storage key. */
 export function requestAutosave(ctx) {
   if (!ctx?.player || !ctx.ship?.object || ctx.player.destroyed) return false;
-  if (ctx.gate?.jumping) return false;
-  const reason = hostileEncounterBlock(ctx);
-  if (reason) {
-    ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
+  const held = (reason) => {
+    const prior = pendingAutosaves.get(ctx);
+    pendingAutosaves.set(ctx, { elapsed: 0, reason });
+    if (prior?.reason !== reason) ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
     return false;
-  }
+  };
+  if (ctx.gate?.jumping) return held('Mid-jump — autosave will retry.');
+  const reason = hostileEncounterBlock(ctx);
+  if (reason) return held(reason);
   try {
     localStorage.setItem(KEY, JSON.stringify(snapshot(ctx)));
+    pendingAutosaves.delete(ctx);
     return true;
   } catch {
-    return false;
+    return held('Storage unavailable — progress is not saved; autosave will retry.');
   }
 }
 
@@ -1218,6 +1225,7 @@ function healLiveRecords(ctx) {
 }
 
 export function restore(ctx, snap) {
+  pendingAutosaves.delete(ctx);
   if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
   disengageAutopilot(ctx, 'restore');
   // Session channel: never copy optIn or the event ring from a blob.
@@ -1293,6 +1301,7 @@ export function restore(ctx, snap) {
 
 /** Fresh start at the Freehold station when death finds no save (§4.4). */
 function freshStart(ctx) {
+  pendingAutosaves.delete(ctx);
   const fromSystem = ctx.world.currentSystem;
   const name = ctx.world.shipName ?? ctx.player?.name;
   if (ctx.player) {
@@ -1822,7 +1831,15 @@ export function initSave(ctx) {
         }
         return;
       }
-      // Idle autosave in space only; the dock already saved.
+      // Completed transactions and arrival saves can be refused. Retry even
+      // at a berth, through exactly the same encounter and jump gates.
+      const pending = pendingAutosaves.get(ctx);
+      if (pending && !dead && !ctx.player?.destroyed) {
+        pending.elapsed += dt;
+        if (pending.elapsed >= BLOCK_RETRY) trySave();
+        return;
+      }
+      // Idle autosave in space only; dock transactions save at completion.
       if (dead || ctx.flags.docked) return;
       idleAccum += dt;
       if (idleAccum >= nextDue) {

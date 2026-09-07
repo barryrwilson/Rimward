@@ -3979,6 +3979,7 @@ function tickDeliveryJobs(ctx, ui, render) {
   const jobs = ctx.world.jobs;
   if (!Array.isArray(jobs)) return;
   let boardDirty = false;
+  let settled = false;
   const huntPaidNames = new Set();
   // Reverse so splice of mining rows does not skip an unvisited job.
   for (let i = jobs.length - 1; i >= 0; i--) {
@@ -4041,6 +4042,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         continue;
       }
       huntPayComplete(ctx, job, rec, huntPaidNames);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4091,6 +4093,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
       ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.${repLine}` });
       replaceMiningJob(ctx, job);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4143,6 +4146,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
       ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.${repLine}` });
       replaceTradeJob(ctx, job);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4193,6 +4197,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
       ctx.emit('commLine', { text: `Party delivered — ${pay} UU posted at the dock.${repLine}` });
       replacePassengerJob(ctx, job);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4263,6 +4268,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       const dockName = exploreStationName(origin);
       ctx.emit('commLine', { text: `Survey of ${lmName} filed at ${dockName} — ${pay} UU posted.${repLine}` });
       replaceExploreJob(ctx, job);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4342,6 +4348,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         text: `Intel from ${destName} filed at ${homeName} — ${pay} UU posted.${repLine}`,
       });
       replaceEspionageJob(ctx, job);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4404,6 +4411,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         continue;
       }
       warPayComplete(ctx, job, rec);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4423,6 +4431,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (ctx.world.currentSystem !== dockAt) continue;
       if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       finishChainStep(ctx, job, parsed);
+      settled = true;
       boardDirty = true;
       continue;
     }
@@ -4440,6 +4449,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         const acePay = jobPay(ctx, job.reward);
         ctx.world.credits += acePay;
         completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${acePay} UU posted.`);
+        settled = true;
       } else {
         // Pirate bounty: a witnessed, player-caused kill of the named reaver.
         const claimed = (ctx.world.incidents || []).some(
@@ -4450,6 +4460,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         const bountyPay = jobPay(ctx, job.reward);
         ctx.world.credits += bountyPay;
         completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${bountyPay} UU posted.`);
+        settled = true;
       }
     } else if (job.kind === 'haul' && ctx.flags.docked) {
       // Wave 35: delivery binds the NAMED destination, closing the wave-26
@@ -4478,6 +4489,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         ? (persistJobById(jobs, 'haul-provisions') || job)
         : job;
       completeJob(ctx, persistHaul, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
+      settled = true;
     } else if (job.kind === 'ferry' && ctx.flags.docked) {
       if (!job.destSystem || ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
       if (holdUnits(ctx, 'provisions') >= FERRY_UNITS) {
@@ -4492,6 +4504,7 @@ function tickDeliveryJobs(ctx, ui, render) {
           ? (persistJobById(jobs, 'ferry-consignment') || job)
           : job;
         completeJob(ctx, persistFerry, `Consignment landed intact — ${ferryPay} UU from the factor at ${destName}.`);
+        settled = true;
       } else if (ui) {
         // Fronted goods came up short: the contract stays open but unpaid.
         ui.notice = 'Consignment short — the manifest is watched.';
@@ -4503,10 +4516,14 @@ function tickDeliveryJobs(ctx, ui, render) {
         const salvagePay = jobPay(ctx, job.reward);
         ctx.world.credits += salvagePay;
         completeJob(ctx, job, `Salvage accounted — ${salvagePay} UU from the yard.`);
+        settled = true;
       }
     }
   }
   if (boardDirty) maybeRefreshJobsBoard(ctx, ui, render);
+  // Arrival saved before this throttled pass. Persist only after all payout,
+  // cargo, reputation, contact and replacement-row mutations are complete.
+  if (settled && ctx.flags.docked) requestAutosave(ctx);
 }
 
 // ---------------------------------------------------------------- main ----
@@ -4618,6 +4635,7 @@ export function initStation(ctx) {
       ctx.world.credits -= ROUND_COST;
       ui.barRound += 1;
       ui.notice = 'The bar loosens up.';
+      requestAutosave(ctx);
       render();
     },
     feedBiomass() {
@@ -4627,6 +4645,7 @@ export function initStation(ctx) {
       ctx.bio.hunger = 0;
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.05);
       ui.notice = 'She feeds slowly, and the berth lights dim with contentment.';
+      requestAutosave(ctx);
       render();
       return true;
     },
@@ -4636,6 +4655,7 @@ export function initStation(ctx) {
       ctx.bio.hunger = 0;
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.2);
       ui.notice = 'She takes the living rock gently. The song through the hull runs warm for hours.';
+      requestAutosave(ctx);
       render();
       return true;
     },
@@ -4646,6 +4666,7 @@ export function initStation(ctx) {
       ctx.bio.wounds = Math.max(0, ctx.bio.wounds - 0.4);
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.03);
       ui.notice = 'You work the membrane seams by hand. She leans into it.';
+      requestAutosave(ctx);
       render();
       return true;
     },
@@ -4669,6 +4690,7 @@ export function initStation(ctx) {
       }
       p.engineOut = false; p.disabled = false;
       ui.notice = 'Yard crews make her whole.';
+      requestAutosave(ctx);
       render();
       return true;
     },
@@ -4679,6 +4701,7 @@ export function initStation(ctx) {
       ctx.world.credits -= CARGO_UPGRADE_COST;
       writeMountedGear(ctx, { cargoCapacity: ctx.cargoCapacity + CARGO_UPGRADE_STEP });
       ui.notice = `Hold racks extended — capacity ${ctx.cargoCapacity}.`;
+      requestAutosave(ctx);
       render();
     },
     buyScanner() {
@@ -4687,6 +4710,7 @@ export function initStation(ctx) {
       ctx.world.credits -= SCANNER_COST;
       writeMountedGear(ctx, { scanner: 1 });
       ui.notice = 'Wolfeye Mk I bolted in. Their nerve reads as numbers now.';
+      requestAutosave(ctx);
       render();
     },
     buyScanner2() {
@@ -4696,6 +4720,7 @@ export function initStation(ctx) {
       ctx.world.credits -= SCANNER2_COST;
       writeMountedGear(ctx, { scanner: 2 });
       ui.notice = 'Wolfeye Mk II bolted in. Their guns show through their skins.';
+      requestAutosave(ctx);
       render();
     },
     // Wave 30: Q-ship path (§29) — guns that don't show on a manifest.
@@ -4705,6 +4730,7 @@ export function initStation(ctx) {
       ctx.world.credits -= HIDDEN_MOUNTS.cost;
       writeMountedGear(ctx, { concealedMounts: true });
       ui.notice = 'The yard keeps it off the books. Her guns sleep where a manifest can\'t see them.';
+      requestAutosave(ctx);
       render();
     },
     // Wave 51: mining-head ladder (§51) — four tiers in state.js MINING_LASERS,
@@ -4724,6 +4750,7 @@ export function initStation(ctx) {
       ctx.world.credits -= target.cost;
       writeMountedGear(ctx, { miningLaser: targetIndex });
       ui.notice = target.line;
+      requestAutosave(ctx);
       render();
     },
   };
@@ -4831,6 +4858,7 @@ export function initStation(ctx) {
       ctx.world.milestones.push('hermitMarket');
       ctx.emit('milestone', { id: 'hermitMarket', line: HERMIT.line });
     }
+    requestAutosave(ctx);
     return true;
   }
 
@@ -5300,6 +5328,7 @@ export function initStation(ctx) {
     if ('payQuoted' in job) stamped.payQuoted = job.payQuoted;
     patchJob(job.id, stamped);
     ui.notice = `Accepted: ${job.title}`;
+    requestAutosave(ctx);
     render();
     return true;
   }
