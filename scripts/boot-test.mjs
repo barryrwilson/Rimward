@@ -26781,18 +26781,26 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   const accept70 = () => rw.act({ v: 2, name: 'acceptJob', args: { id: 'ferry-consignment' } });
   // Deterministic system-transition fixture — NOT a flight test. This section
-  // needs the station module to genuinely rebuild at another system (acceptJob
-  // judges the dock off the station closure's own currentId, so a bare
-  // world.currentSystem write would be pinned straight back), but it must not
-  // depend on gate traversal: by this point in the aggregate run the player
-  // carries hostile reputation from earlier waves and the gate refuses the hop
-  // with destJumpRefused. So this undocks through the shared helper, moves the
-  // world, and emits the real `systemLoaded` the subsystems consume — the same
-  // currentSystem + emit + tick pattern the wave-138 section uses — leaving the
-  // caller to dock normally. Real visible travel over this lane is verified
-  // separately in the live browser pass, not here.
+  // needs the station module to genuinely rebuild at another system: acceptJob
+  // judges the dock off the station closure's own currentId, and station.update
+  // deliberately refuses a rebuild while docked and pins world.currentSystem
+  // straight back, so the departure has to actually take.
+  //
+  // The undock MUST go through the public rw.act intent, not the Escape-key
+  // helper. This section drives the board through the public openService, which
+  // does not clear ui.justDocked (station.js keyboard handler, ~6516+), so the
+  // helper's two Escapes land as jobs→services and then one swallowed by
+  // justDocked — leaving flags.docked true and the rebuild refused. Real
+  // visible travel over this lane is verified separately in the live browser
+  // pass, not here.
   const arriveAt70 = (to, label) => {
-    if (ctx.flags.docked) undockStation();
+    if (ctx.flags.docked) {
+      const left = rw.act({ v: 2, name: 'undock', args: {} });
+      if (left?.ok !== true || ctx.flags.docked !== false) {
+        throw new Error(`fixture undock failed before ${to} (${label}): ok=${left?.ok} token=${left?.token} docked=${ctx.flags.docked}`);
+      }
+      tick(2, 'issue70 public undock');
+    }
     if (ctx.world.currentSystem !== to) {
       ctx.world.currentSystem = to;
       ctx.emit('systemLoaded', { to });
