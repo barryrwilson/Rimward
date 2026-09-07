@@ -20,6 +20,8 @@
     "test:agent-bridge": "node scripts/agent-bridge.mjs --self-test",
     "test:agent-schema": "node scripts/agent-schema-test.mjs",
     "test:agent-hardening": "node scripts/agent-api-hardening-test.mjs",
+    "test:hail-identity": "node scripts/hail-identity-test.mjs",
+    "test:hail66-live": "node scripts/hail66-live-probe.mjs",
     "test:release-focused": "node scripts/release-focused.mjs",
     "test:opt001-live": "node scripts/opt001-live-probe.mjs",
     "test:rw008-live": "node scripts/rw008-live-probe.mjs",

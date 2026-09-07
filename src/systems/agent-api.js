@@ -280,6 +280,30 @@ function actPlotRoute(ctx, name, args) {
   return ok(ctx, name);
 }
 
+/**
+ * Issue #66 — optional `expectedConversationId`. Absent is the legacy call:
+ * `bound` is false and the card is invoked with a single argument, so it can
+ * never confuse "no token" with "a bad token". Present must be an OWN plain
+ * non-empty token no longer than the envelope reqId bound, and never a
+ * prototype-poisoning name. An `args` object with an unusual prototype, or a
+ * token that is merely inherited, is `bad-args` as well: a guarded call must
+ * never silently downgrade to an unguarded one.
+ */
+function expectedConversationArg(args) {
+  if (!args || typeof args !== 'object') return { ok: true, bound: false, id: '' };
+  const proto = Object.getPrototypeOf(args);
+  if (proto !== Object.prototype && proto !== null) return { ok: false, bound: true, id: '' };
+  if (!Object.hasOwn(args, 'expectedConversationId')) {
+    if ('expectedConversationId' in args) return { ok: false, bound: true, id: '' };
+    return { ok: true, bound: false, id: '' };
+  }
+  const raw = args.expectedConversationId;
+  if (typeof raw !== 'string' || !raw || raw.length > 64 || reservedName(raw)) {
+    return { ok: false, bound: true, id: '' };
+  }
+  return { ok: true, bound: true, id: raw };
+}
+
 function actHailResolve(ctx, name, args) {
   const api = ctx && ctx.hailApi;
   if (!api || typeof api.resolve !== 'function' || typeof api.peek !== 'function') {
@@ -324,8 +348,16 @@ function actHailResolve(ctx, name, args) {
       break;
     }
   }
-  if (!intent || !onCard) return fail(ctx, name, 'no-service');
-  api.resolve(intent);
+  const expected = expectedConversationArg(args);
+  if (!expected.ok) return fail(ctx, name, 'bad-args');
+  // An unguarded caller is answered here. A guarded one is answered by the live
+  // card itself, which reports 'stale' for a conversation that moved even when
+  // the verb the caller remembers is no longer listed.
+  if (!expected.bound && (!intent || !onCard)) return fail(ctx, name, 'no-service');
+  // hail.js re-checks the token against the live card immediately before any
+  // effect, so a card replaced between the peek above and this call refuses.
+  const token = expected.bound ? api.resolve(intent, expected.id) : api.resolve(intent);
+  if (typeof token === 'string' && token) return fail(ctx, name, token);
   return ok(ctx, name);
 }
 

@@ -609,7 +609,7 @@ export const ROLE_STATUS = Object.freeze({
   hail: Object.freeze({
     status: 'supported',
     commands: Object.freeze(['hail', 'hailResolve']),
-    note: 'demand/salvage/conversation cards resolve by listed intent only',
+    note: 'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId',
   }),
   missions: Object.freeze({
     status: 'supported',
@@ -650,7 +650,11 @@ export const COMMAND_SPECS = Object.freeze({
   undock: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot', 'services']) }),
   hail: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['hail', 'combat']) }),
   hailResolve: Object.freeze({
-    args: Object.freeze({ intent: 'listed intent string', index: '1-based intent index (alternative)' }),
+    args: Object.freeze({
+      intent: 'listed intent string',
+      index: '1-based intent index (alternative)',
+      expectedConversationId: 'optional observe().hail.conversationId; a replaced card refuses token stale',
+    }),
     roles: Object.freeze(['hail', 'combat']),
   }),
   selectTarget: Object.freeze({ args: Object.freeze({ id: 'optional nearby target id; omit to cycle' }), roles: Object.freeze(['combat', 'miner', 'rescue']) }),

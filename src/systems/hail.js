@@ -50,6 +50,12 @@ import { decodeKeyCode } from './key-code.js';
  * hull. A bargaining or demand hail that is still open when the target
  * becomes disabled converts in place to salvage verbs (least surprising:
  * the card does not vanish). Buttons carry number-key shortcuts (1..n).
+ *
+ * Issue #66: ctx.hailApi.peek() also publishes the open card's identity —
+ * an opaque session-scoped conversationId, the speaker named in the header,
+ * the hail family, and the terms the player can read — and
+ * ctx.hailApi.resolve(intent, expectedConversationId?) compares that token
+ * against the live card before any effect runs.
  */
 
 // NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
@@ -85,6 +91,114 @@ function isDemandHail(ev) {
   const intents = ev.intents;
   if (intents && intents.includes('payTribute')) return true;
   return typeof ev.demand === 'number' && Number.isFinite(ev.demand);
+}
+
+/**
+ * Issue #66 — public conversation identity.
+ *
+ * The open card is the single source of truth for who is talking, what family
+ * of hail it is, and which terms the player can actually see. Nothing below
+ * reads the selected target, private NPC state, or the agent event ring: a
+ * hull that OFFERS its cargo, a ransom, or tribute has struck, and that is
+ * what 'surrender' names. Families are 'demand' (a pirate's tribute demand),
+ * 'surrender' (a broken hull naming terms), 'salvage' (a dead hulk), and
+ * 'conversation' (everything else the card can carry — Old Callow's vouch, a
+ * Named Gun standing down).
+ */
+const SURRENDER_VERBS = Object.freeze(['demandCargo', 'demandRansom', 'acceptTribute']);
+
+function hailKindOf(h) {
+  if (!h) return '';
+  if (h.salvage === true) return 'salvage';
+  if (h.demandHail === true) return 'demand';
+  const list = Array.isArray(h.intents) ? h.intents : [];
+  for (let i = 0; i < SURRENDER_VERBS.length; i++) {
+    if (list.indexOf(SURRENDER_VERBS[i]) >= 0) return 'surrender';
+  }
+  return 'conversation';
+}
+
+/**
+ * An id the card may publish: an own string, or an own FINITE number. A NaN or
+ * an Infinity is no id at all, so it is dropped rather than printed.
+ */
+function ownIdPrimitive(obj) {
+  if (!Object.hasOwn(obj, 'id')) return null;
+  const id = obj.id;
+  if (typeof id === 'string') return id;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  return null;
+}
+
+/** Primitive ship id for the speaker block. Never the ship object. */
+function speakerIdOf(live) {
+  try {
+    if (live && typeof live === 'object') {
+      const direct = ownIdPrimitive(live);
+      if (direct !== null) return direct;
+      const rec = live.record;
+      if (rec && typeof rec === 'object') {
+        const fromRecord = ownIdPrimitive(rec);
+        if (fromRecord !== null) return fromRecord;
+      }
+    }
+  } catch {
+    /* identity is best-effort; a nameless hull still hails */
+  }
+  return null;
+}
+
+/**
+ * The name printed in the card header, and nothing else. A record that carries
+ * an object or a function where a pilot name belongs falls back to the hull
+ * name, so no live thing rides out on the header; a hostile string such as
+ * '__proto__' is ordinary display data and is kept verbatim.
+ */
+function speakerNameOf(live, st) {
+  const pilot = live && live.record && typeof live.record === 'object'
+    ? live.record.pilot
+    : undefined;
+  if (typeof pilot === 'string' && pilot) return pilot;
+  const name = st && typeof st === 'object' ? st.name : undefined;
+  return typeof name === 'string' ? name : '';
+}
+
+/**
+ * Only the money the card actually prints. A ransom the player was never
+ * offered, or a tribute the card does not list, stays private: each amount
+ * rides its own button label, so it ships only when that button exists.
+ */
+function termAmounts(h) {
+  const out = {};
+  const list = h && Array.isArray(h.intents) ? h.intents : [];
+  if (list.indexOf('demandRansom') >= 0 && Number.isFinite(h.ransom)) out.ransom = h.ransom;
+  if (list.indexOf('acceptTribute') >= 0 && Number.isFinite(h.tribute)) out.tribute = h.tribute;
+  if (list.indexOf('payTribute') >= 0) {
+    out.demand = Number.isFinite(h.demand) ? h.demand : HIDDEN_MOUNTS.demandMin;
+  }
+  if (list.indexOf('callowVouch') >= 0) out.vouchCost = CALLOW.vouchCost;
+  return out;
+}
+
+/**
+ * Identity signature for one open card. Deliberately excludes the demand
+ * countdown: a ticking deadline is the SAME conversation. Everything the
+ * player can READ is identity — the speaker, the family, the offered verb set,
+ * the opening line, and every monetary figure the card actually prints. A
+ * re-rolled ransom or tribute on a redraw is therefore a NEW conversation,
+ * while a quote the card keeps to itself (a ransom with no ransom button on
+ * the card) never moves the token. Structured JSON, so no field can spell
+ * another field's value.
+ */
+function cardSignature(h, baseLine) {
+  return JSON.stringify({
+    kind: hailKindOf(h),
+    intents: Array.isArray(h.intents) ? h.intents.slice() : [],
+    speakerId: String(h.speakerId),
+    speaker: String(h.speaker),
+    amounts: termAmounts(h),
+    line: String(baseLine),
+  });
 }
 
 function demandRemainS(live, now) {
@@ -396,8 +510,16 @@ export function initHail(ctx) {
   root.appendChild(card);
   document.body.appendChild(root);
 
-  let open = null; // { ship, intents, ransom, tribute, salvage, buttons, demandHail?, speaker?, lineEl? }
+  // { ship, intents, ransom, tribute, salvage, buttons, demandHail?, speaker?,
+  //   speakerId?, conversationId, signature, line, lineEl? }
+  let open = null;
   let deferredDemand = null; // { ship, name, n } — hail.js copy of the one overlay defer slot when it is a demand
+  // Issue #66 conversation tokens. Session-scoped: the counter lives in this
+  // initHail closure, so it starts at 1 for a fresh page/session and is never
+  // persisted, never restored from a save, and never reused within a session.
+  // A card that closes and reopens — even for the same speaker — gets a new
+  // token, so an expected id can never bind to a later conversation.
+  let conversationSeq = 0;
 
   function closeCard() {
     open = null;
@@ -702,9 +824,9 @@ export function initHail(ctx) {
     if (intents.length === 0) return;
     const demandHail = isDemandHail(ev);
     const demandN = demandHail ? finiteDemandAmount(ev.demand) : (ev.demand ?? null);
-    const speaker = live.record?.pilot ?? st.name;
+    const speaker = speakerNameOf(live, st);
     const now = ctx.world && typeof ctx.world.time === 'number' ? ctx.world.time : 0;
-    open = {
+    const next = {
       ship: live,
       intents,
       ransom: ransomFor(st), // rolled once so the offer is stable
@@ -714,8 +836,23 @@ export function initHail(ctx) {
       buttons: null,
       demandHail,
       speaker,
+      speakerId: speakerIdOf(live),
+      conversationId: '', // issue #66: minted below
+      signature: '',
+      line: '', // the text the player is reading, filled with the DOM below
       lineEl: null,
     };
+    // A redraw of the still-open card (a repeat hailOpened for the same hull,
+    // a ticking deadline) keeps its token. Any change the player can read — a
+    // converted salvage card, different verbs, a different speaker, a re-rolled
+    // ransom or tribute that the card prints — mints a new one.
+    const signature = cardSignature(next, demandHail ? '' : String(ev.line ?? ''));
+    const prior = open;
+    next.conversationId = prior && prior.ship === live && prior.signature === signature
+      ? prior.conversationId
+      : `hail-${++conversationSeq}`;
+    next.signature = signature;
+    open = next;
 
     // Rebuild card contents (hail-time allocation only).
     const kids = card.children;
@@ -736,6 +873,7 @@ export function initHail(ctx) {
       ? demandLineText(speaker, demandN, demandRemainS(live, now))
       : `“${ev.line ?? 'They are breaking.'}”`;
     open.lineEl = line;
+    open.line = line.textContent;
     // Wave 41: faction portrait (when available) in a flex row.
     const portrait = portraitFor(st.faction, speaker);
     const row = document.createElement('div');
@@ -812,8 +950,17 @@ export function initHail(ctx) {
     }
   });
 
-  function peek() {
-    if (!open) return { intents: [], open: false };
+  /**
+   * The ONE authoritative snapshot of the open card (issue #66). Every public
+   * reader copies primitives out of here: no card object, no live ship, no DOM
+   * node and no live array ever leaves, so an observation cannot mutate the
+   * conversation it describes. When no card is open the snapshot is empty —
+   * identity is never reconstructed from a historical event.
+   */
+  function cardSnapshot() {
+    if (!open) {
+      return { open: false, conversationId: '', kind: '', speaker: null, intents: [], terms: null };
+    }
     const intents = [];
     const list = open.intents;
     if (Array.isArray(list)) {
@@ -821,11 +968,81 @@ export function initHail(ctx) {
         if (typeof list[i] === 'string') intents.push(list[i]);
       }
     }
-    return { intents, open: true };
+    const buttons = Array.isArray(open.buttons) ? open.buttons : null;
+    const options = [];
+    for (let i = 0; i < intents.length; i++) {
+      // The button's own text is the player-visible label; compose the same
+      // string when the card has no DOM yet (headless open).
+      let label = '';
+      try {
+        const btn = buttons ? buttons[i] : null;
+        const text = btn && typeof btn.textContent === 'string' ? btn.textContent : '';
+        label = text || `[${i + 1}] ${intentLabel(open, intents[i])}`;
+      } catch {
+        label = `[${i + 1}] ${intents[i]}`;
+      }
+      options.push({ index: i + 1, intent: intents[i], label });
+    }
+    // Read the live line node so a counting-down demand reports what is on
+    // screen this instant, not the text it opened with.
+    let line = typeof open.line === 'string' ? open.line : '';
+    try {
+      const el = open.lineEl;
+      const text = el && typeof el.textContent === 'string' ? el.textContent : '';
+      if (text) line = text;
+    } catch {
+      /* keep the stored line */
+    }
+    return {
+      open: true,
+      conversationId: open.conversationId,
+      kind: hailKindOf(open),
+      speaker: { id: open.speakerId, name: open.speaker },
+      intents,
+      terms: { line, options, amounts: termAmounts(open) },
+    };
   }
 
-  function resolve(intentOrIndex) {
-    if (!open) return;
+  function peek() {
+    const snap = cardSnapshot();
+    return {
+      open: snap.open,
+      intents: snap.intents,
+      conversationId: snap.conversationId,
+      kind: snap.kind,
+      speaker: snap.speaker,
+      terms: snap.terms,
+    };
+  }
+
+  /**
+   * Resolve one listed intent. The second argument is OPTIONAL, and the two
+   * cases are told apart by arity, not by value: a caller that omits it makes
+   * the legacy call, while a caller that PASSES something malformed (an empty
+   * string, a number, `undefined`, a prototype-poisoning name, anything longer
+   * than 64 characters) is refused with 'bad-args' and touches nothing. A
+   * guarded call is never quietly downgraded to an unguarded one.
+   *
+   * A well-formed token is compared against the LIVE open card here, at the
+   * last authoritative instant before any effect. A card that closed or was
+   * replaced between the caller's peek and this call answers 'stale' and
+   * changes nothing — no credits, no cargo, no surrender, no AI write, no
+   * event. That check runs BEFORE the intent lookup: a caller holding a
+   * replaced card is told the card moved, even when the verb it remembers has
+   * since disappeared from the new card.
+   * Returns '' on success, else a refusal token.
+   */
+  function resolve(intentOrIndex, expectedConversationId) {
+    const bound = arguments.length > 1;
+    if (!open) return 'closed';
+    if (bound) {
+      const want = expectedConversationId;
+      if (typeof want !== 'string' || want === '' || want.length > 64
+        || want === '__proto__' || want === 'constructor' || want === 'prototype') {
+        return 'bad-args';
+      }
+      if (open.conversationId !== want) return 'stale';
+    }
     let intent = '';
     if (typeof intentOrIndex === 'number' && Number.isFinite(intentOrIndex)) {
       const idx = (intentOrIndex | 0) - 1;
@@ -843,8 +1060,12 @@ export function initHail(ctx) {
         }
       }
     }
-    if (!intent) return;
+    if (!intent) return 'no-service';
+    // Last look before anything moves: the card must still be the one the
+    // caller named.
+    if (bound && (!open || open.conversationId !== expectedConversationId)) return 'stale';
     resolveIntent(ctx, intent);
+    return '';
   }
 
   ctx.hailApi = { resolve, peek };
