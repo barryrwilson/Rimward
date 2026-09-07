@@ -388,6 +388,41 @@ async function main() {
       return last;
     };
 
+    /**
+     * Reload and wait for the NEW document to be usable.
+     *
+     * Page.reload resolves while the old document is still live, so a poll for
+     * `#rw-title-models` sees the OLD title at once, and the next click lands
+     * on a node the replacement has already thrown away. Read the old
+     * document's performance.timeOrigin first and hold the gate until that
+     * value changes, which only happens once the new document exists; then
+     * require the same title readiness the first boot required. An eval that
+     * hits the swap window raises "Execution context was destroyed", which
+     * waitUntil records as evalError and keeps polling past.
+     */
+    const reloadToTitle = async (label) => {
+      const oldOrigin = await cdp.eval('performance.timeOrigin');
+      await cdp.send('Page.reload');
+      const state = await waitUntil(
+        `(() => {
+          const b = document.getElementById('rw-title-models');
+          return {
+            timeOrigin: performance.timeOrigin,
+            readyState: document.readyState,
+            hasCtx: !!window.__ctx,
+            hasBtn: !!b,
+            modelsReady: typeof window.__ctx?.models?.isOpen === 'function',
+          };
+        })()`,
+        (v) => !!(v && v.timeOrigin !== oldOrigin && v.hasCtx && v.hasBtn && v.modelsReady),
+        40000,
+      );
+      const fresh = !!(state && state.timeOrigin !== oldOrigin
+        && state.hasCtx && state.hasBtn && state.modelsReady);
+      if (!fresh) throw failReadiness(`reload title (${label})`, { ...state, oldOrigin });
+      return state;
+    };
+
     // ---- Title screen -------------------------------------------------
     const title = await waitUntil(
       `(() => {
@@ -622,10 +657,7 @@ async function main() {
     // =====================================================================
     // V1/V2 already opened the overlay, so hasOpenedOnce is set and G4 is
     // live. Reload to get a true first open.
-    await cdp.send('Page.reload');
-    await waitUntil(`(() => !!document.getElementById('rw-title-models'))()`,
-      (v) => v === true, 40000);
-    await sleep(500);
+    await reloadToTitle('V6');
 
     const openModels = async () => {
       await cdp.eval(`(() => { document.getElementById('rw-title-models').click(); return true; })()`);
@@ -966,10 +998,7 @@ async function main() {
       await openModels();
       const after = await cdp.eval(LIST);
 
-      await cdp.send('Page.reload');
-      await waitUntil(`(() => !!document.getElementById('rw-title-models'))()`,
-        (v) => v === true, 40000);
-      await sleep(500);
+      await reloadToTitle('V6c');
       await openModels();
       const reloaded = await cdp.eval(LIST);
       await cdp.shot('11-after-reload.png');
