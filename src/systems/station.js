@@ -4742,15 +4742,17 @@ export function initStation(ctx) {
   function hermitBuyMult() {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
   }
-  /** Qty-1 fill in UU. Shared by the market pane and tryTrade. */
-  function tradeFillUnit(key, buying) {
-    const price = priceOf(ctx, key);
+  /** Qty-1 BUY fill in UU, before the issue-53 cap (which never moves buys). */
+  function tradeBuyUnit(key) {
     const fx = epicEffects(ctx, currentDef.faction);
-    if (buying) {
-      return Math.round(price * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
-    }
+    return Math.round(priceOf(ctx, key)
+      * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
+  }
+  /** Qty-1 SELL fill in UU with every modifier applied, BEFORE the cap. */
+  function tradeSellUnitRaw(key) {
     const tier = rankFor(standingRead(ctx.world?.reputation, currentDef.faction)).tier;
-    let unit = price * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
+    const fx = epicEffects(ctx, currentDef.faction);
+    let unit = priceOf(ctx, key) * (fx.sellMult ?? 1) * (tier > 0 ? 1 + 0.02 * tier : 1);
     if (currentService) unit *= currentService.sellMult ?? 1;
     if (currentDef.hermit) unit *= HERMIT.sellMult;
     if (key === 'restrictedComponents') unit *= fx.restrictedSellMult ?? 1;
@@ -4765,6 +4767,37 @@ export function initStation(ctx) {
       }
     }
     return Math.round(unit);
+  }
+  /**
+   * Qty-1 fill in UU. Shared by the market pane, tryTrade and the agent desk.
+   *
+   * PRICING INVARIANT (issue #53 / TRADE-001): at one dock, on one frame, the
+   * rounded SELL fill for a commodity never exceeds the rounded BUY fill for
+   * that same commodity. `priceOf(ctx, key)` is the authoritative quote — it
+   * already carries the system's own market level (the market.js random walk
+   * per system). Everything layered on top of it here (epic effects, the
+   * FACTION_SERVICES modifier, hermit scarcity, standing goodwill, the
+   * restricted-components and fixer markups) is a per-dock skin, and buy and
+   * sell wore different skins with nothing tying them together. A dock whose
+   * sell skin outweighed its buy skin printed money: a generated Gilded
+   * auction house buys at ×1.00 and sells at ×1.15, so a 216 UU unit bought
+   * back for 248 UU with no travel, no time and no risk.
+   *
+   * The fix is a cap, not a spread. The sell side keeps every modifier it had;
+   * only the ROUNDED result is clamped to the ROUNDED buy quote. Consequences,
+   * all intentional:
+   *  - break-even (sell === buy) stays legal — the cap bites only where the
+   *    roundtrip was actually profitable, and invents no margin or cooldown;
+   *  - inter-market routes are untouched, because the cap compares two quotes
+   *    at the SAME dock. Hauling into a dock that pays more than a different
+   *    dock charged still profits, which is the intended trade loop;
+   *  - a premium that outruns the local buy quote (a hermit sell premium at a
+   *    keeper-comped dock, a Gilded sale premium) is still a premium against
+   *    every OTHER dock — it just cannot beat the counter it is standing at.
+   */
+  function tradeFillUnit(key, buying) {
+    if (buying) return tradeBuyUnit(key);
+    return Math.min(tradeSellUnitRaw(key), tradeBuyUnit(key));
   }
   function lockerAllowed() {
     if (ui.fenceUnlocked) return true;
