@@ -408,6 +408,28 @@ pin('actResult v2 receipt', receipt.v === 2 && receipt.reqId === 'q9' && receipt
 const receiptBare = actResult({ ok: false, error: 'x', name: 'dock', token: 'range' });
 pin('actResult omits empty reqId', !Object.hasOwn(receiptBare, 'reqId') && !Object.hasOwn(receiptBare, 't'));
 
+// issue #64: `notice` carries player-visible success feedback; `error` stays
+// refusal-only. Always a string, never inherited from a previous receipt.
+pin('actResult notice defaults empty', receipt.notice === '' && receiptBare.notice === '');
+const noticed = actResult({
+  ok: true, error: '', name: 'stationAction', token: '', notice: 'Cargo rack bolted in.', reqId: 'c1', t: 7.25,
+});
+pin('actResult keeps success notice with empty error', noticed.ok === true && noticed.error === ''
+  && noticed.token === '' && noticed.notice === 'Cargo rack bolted in.'
+  && noticed.reqId === 'c1' && noticed.t === 7.25);
+const noticeBad = actResult({ ok: true, name: 'stationAction', notice: { text: 'nope' } });
+const noticeNull = actResult({ ok: true, name: 'stationAction', notice: null });
+pin('actResult filters non-string notice', noticeBad.notice === '' && noticeNull.notice === ''
+  && typeof noticeBad.notice === 'string');
+// No truncation: the exact displayed line survives, however long.
+const longLine = `The archive files the ${'x'.repeat(400)}. 1200 UU.`;
+const noticeLong = actResult({ ok: true, name: 'stationAction', notice: longLine, reqId: 'c2', t: 0 });
+pin('actResult copies long notice exactly', noticeLong.notice === longLine
+  && noticeLong.reqId === 'c2' && noticeLong.t === 0);
+pin('actResult notice json safe',
+  JSON.parse(JSON.stringify(noticeLong)).notice === longLine
+  && JSON.stringify(JSON.parse(JSON.stringify(noticed))) === JSON.stringify(noticed));
+
 // localDir: world dir through the inverse quaternion (identity + 90° yaw).
 pin('localDir identity', vecNear(localDir({ x: 0, y: 0, z: 0, w: 1 }, 0, 0, -5), [0, 0, -1]));
 const yaw90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);

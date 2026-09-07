@@ -400,13 +400,21 @@ export function noCtxObservation() {
   return { v: VERSION, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
 }
 
-export function actResult({ ok, error = '', name = '', token = '', status = '', reqId = '', t = null }) {
+/**
+ * One act receipt. `error` is refusal text only; `notice` is the player-visible
+ * line a successful action displayed (issue #64) — station success notices used
+ * to ride `error`, which read as a failure to every caller. Both are always
+ * present strings, filtered through str(), so a receipt never inherits a value
+ * from the preceding request. Not a version bump: `notice` is additive.
+ */
+export function actResult({ ok, error = '', name = '', token = '', status = '', reqId = '', t = null, notice = '' }) {
   const out = {
     v: VERSION,
     ok: ok === true,
     error: str(error),
     name: str(name),
     token: str(token),
+    notice: str(notice),
   };
   const st = str(status);
   if (st) out.status = st;

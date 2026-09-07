@@ -691,6 +691,106 @@ const saNoDesk = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
 pin('stationAction no perform refused', saNoDesk.ok === false && saNoDesk.token === 'no-service');
 ctx.flags.docked = false;
 
+// ---- issue #64: station success feedback rides `notice`, not `error` -------
+// The fake perform() only simulates what station.js's own performResult()
+// returns for a click; it proves the receipt shape and the dispatcher wiring,
+// not the gameplay effect (live play pins the real purchases).
+let performSpec = null;
+let performReply = { ok: true, notice: '' };
+ctx.stationDesk.perform = (spec) => {
+  performSpec = spec;
+  return performReply;
+};
+ctx.flags.docked = true;
+
+const CARGO_LINE = 'Cargo rack bolted in.';
+performReply = { ok: true, notice: CARGO_LINE, changed: true };
+const saCargo = rw.act({ v: 2, name: 'stationAction', reqId: 'buy-rack', args: { n: 3, expect: 'Cargo rack' } });
+pin('stationAction success clears error and reports notice', saCargo.ok === true
+  && saCargo.error === '' && saCargo.token === ''
+  && saCargo.notice === CARGO_LINE
+  && saCargo.reqId === 'buy-rack' && saCargo.t === ctx.world.time);
+pin('stationAction forwards n/expect unchanged', !!(performSpec
+  && performSpec.n === 3 && performSpec.expect === 'Cargo rack'));
+pin('stationAction success leaves no lastIntent error', !!(() => {
+  const li = rw.observe().lastIntent;
+  return li && li.ok === true && li.error === '' && li.token === ''
+    && li.name === 'stationAction' && !Object.hasOwn(li, 'notice');
+})());
+
+const HEAD_LINE = 'Ridge-cutter mining head bolted in.';
+performReply = { ok: true, notice: HEAD_LINE, changed: true };
+const saHead = rw.act({ v: 2, name: 'stationAction', args: { n: 1 } });
+pin('mining head success notice exact', saHead.ok === true && saHead.error === ''
+  && saHead.notice === HEAD_LINE);
+
+const BAR_LINE = 'The bar loosens up.';
+performReply = { ok: true, notice: BAR_LINE, changed: true };
+const saBar = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+pin('other service success notice exact', saBar.ok === true && saBar.error === ''
+  && saBar.notice === BAR_LINE);
+
+// A click that displays nothing is still a success with empty feedback — and
+// must not inherit the previous request's line.
+performReply = { ok: true, notice: '' };
+const saQuiet = rw.act({ v: 2, name: 'stationAction', args: { n: 2 } });
+pin('empty success feedback is empty, not stale', saQuiet.ok === true
+  && saQuiet.error === '' && saQuiet.notice === '');
+performReply = { ok: true, notice: 42 };
+const saNonString = rw.act({ v: 2, name: 'stationAction', args: { n: 2 } });
+pin('non-string desk notice filtered to empty', saNonString.ok === true
+  && saNonString.notice === '' && typeof saNonString.notice === 'string');
+const LONG_LINE = `The archive files the ${'ledger '.repeat(60)}. 1200 UU.`;
+performReply = { ok: true, notice: LONG_LINE };
+const saLong = rw.act({ v: 2, name: 'stationAction', reqId: 'long-1', args: { n: 2 } });
+pin('long success notice copied exactly', saLong.notice === LONG_LINE
+  && saLong.reqId === 'long-1' && Number.isFinite(saLong.t));
+
+// Failures are unchanged: classifier token, notice-as-error text, empty notice.
+const FAILS = [
+  { reply: { ok: false, notice: 'Not enough UU.', token: 'uu' }, token: 'uu', error: 'Not enough UU.' },
+  { reply: { ok: false, notice: '', token: 'stale' }, token: 'stale', error: 'stale' },
+  { reply: { ok: false, notice: '', token: 'bad-args' }, token: 'bad-args', error: 'bad-args' },
+  { reply: { ok: false, notice: 'That control is not on the panel.', token: 'not-offered' }, token: 'not-offered', error: 'That control is not on the panel.' },
+  { reply: { ok: false, notice: 'Dock first.', token: 'no-service' }, token: 'no-service', error: 'Dock first.' },
+];
+let failShapeOk = true;
+for (const f of FAILS) {
+  performReply = f.reply;
+  const res = rw.act({ v: 2, name: 'stationAction', reqId: `f-${f.token}`, args: { n: 0 } });
+  if (!(res.ok === false && res.token === f.token && res.error === f.error
+    && res.notice === '' && res.reqId === `f-${f.token}` && Number.isFinite(res.t))) failShapeOk = false;
+}
+pin('station failures keep token/error and carry no notice', failShapeOk);
+// Classifier fallback still applies when perform reports no token.
+performReply = { ok: false, notice: 'Not enough UU.' };
+const saClassify = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+pin('failure classifier unchanged without desk token', saClassify.ok === false
+  && saClassify.token === 'uu' && saClassify.error === 'Not enough UU.'
+  && saClassify.notice === '');
+
+// success -> failure -> empty success -> ping: no line ever leaks forward.
+performReply = { ok: true, notice: CARGO_LINE };
+const seq1 = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+performReply = { ok: false, notice: 'Not enough UU.', token: 'uu' };
+const seq2 = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+const seq2Intent = rw.observe().lastIntent;
+performReply = { ok: true, notice: '' };
+const seq3 = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+const seq3Intent = rw.observe().lastIntent;
+const seq4 = rw.act({ v: 2, name: 'ping', args: {} });
+pin('no notice or error leaks across the request sequence',
+  seq1.notice === CARGO_LINE && seq1.error === ''
+  && seq2.notice === '' && seq2.error === 'Not enough UU.' && seq2.token === 'uu'
+  && seq2Intent.ok === false && seq2Intent.error === 'Not enough UU.'
+  && seq3.ok === true && seq3.notice === '' && seq3.error === ''
+  && seq3Intent.ok === true && seq3Intent.error === '' && seq3Intent.token === ''
+  && seq4.ok === true && seq4.notice === '' && seq4.error === '');
+pin('station receipts are json safe',
+  JSON.stringify(JSON.parse(JSON.stringify(saCargo))) === JSON.stringify(saCargo));
+delete ctx.stationDesk.perform;
+ctx.flags.docked = false;
+
 // The old observe-only token is gone: every dock service is playable.
 pin('no v1-observe-only token remains', !JSON.stringify(obsV2).includes('v1-observe-only'));
 

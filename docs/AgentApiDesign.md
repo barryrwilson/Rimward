@@ -110,6 +110,35 @@ instead of clicking the wrong row. `act({ name:'stationAction' })` wraps
 perform; refusal notices map to stable tokens (`uu`, `hold`, `not-offered`,
 `unavailable`, `busy`, `stale`). The v1 `v1-observe-only` token is gone.
 
+**Station receipt fields (issue #64).** Every browser `actResult` receipt has
+both `error` and `notice` as strings. `error` is refusal text only; `notice` is the
+player-visible line a *successful* action displayed. A successful
+`stationAction` therefore answers `ok: true`, `error: ''`, `token: ''` and
+`notice` equal to the desk's success notice — the exact displayed line, copied
+whole (no truncation, no rewriting) through the same `str()` filter as every
+other receipt string, so a non-string desk value becomes `''`:
+
+```
+{ v:2, ok:true, error:'', name:'stationAction', token:'', notice:'The bar loosens up.', reqId:'r7', t:812.5 }
+{ v:2, ok:false, error:'Not enough UU.', name:'stationAction', token:'uu', notice:'', reqId:'r8', t:813.0 }
+```
+
+Failures are unchanged: the classifier token stays, the notice still rides
+`error`, and `notice` is `''`. Every other command (and every failure) defaults
+to `notice: ''`, so a receipt never inherits the preceding request's line; a
+successful click that displayed nothing reports `notice: ''`. `notice` is
+additive — no version bump, no persisted field.
+
+**Immediate-only feedback.** `notice` exists on the act receipt alone.
+`observe().lastIntent` keeps its existing shape (`name`, `ok`, `error`,
+`token`, `t`, optional `status`) and gains no notice field — a caller that
+wants the success line must read it from the receipt it was handed. On success
+`lastIntent.error` is now empty, matching `ok: true`. The docked panel's own
+`observe().station.view.notice` is unchanged and remains the place to
+re-read what the panel is currently showing. Not every refusal is an
+`actResult`: transport-level and no-context bridge errors answer outside this
+shape and carry no `notice`.
+
 **Outcomes.** Every act receipt carries `reqId` (caller-provided or
 handle-issued `r<n>`) and the sim timestamp `t`. `reqId` is request
 metadata on the act envelope (`{ v, name, args, reqId }`) — never a gameplay
