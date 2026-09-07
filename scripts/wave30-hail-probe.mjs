@@ -440,6 +440,166 @@ if (!leftoverPairFails && !gracePairFails && !cargoPairFails) {
   }));
 }
 
+// --- RW-006 numeric leg: dirty market cache vs the rolled demand ----------
+// npc.js rolls the demand off ctx.world.prices when it emits hailOpened, and
+// market.js rewrites that table earlier in the same frame from its private
+// per-system deviation cache (market.js devBySystem). The scene pin above
+// therefore holds only until the first acquisition tick. Seed the cache dirty
+// on purpose (event pressure, then clear the event — the cache is untouched by
+// the clear, which is the whole bug), then prove the acquisition-scoped price
+// pin holds the roll input at the baseline, swallows the market's writes,
+// restores the original descriptor, and lets the market resume immediately.
+const { tickPrices: probeTickPrices, applyEventPressure: probeEventPressure } = await import('../src/game/market.js');
+let probePinAbsorbed = 0;
+let probePinLastWrite = null;
+let probePinRestored = false;
+function withPinnedProvisions(fn) {
+  const table = ctx.world.prices;
+  const had = Object.prototype.hasOwnProperty.call(table, 'provisions');
+  const original = had ? Object.getOwnPropertyDescriptor(table, 'provisions') : null;
+  const pinned = COMMODITIES.provisions.base;
+  probePinAbsorbed = 0; probePinLastWrite = null; probePinRestored = false;
+  Object.defineProperty(table, 'provisions', {
+    configurable: true,
+    enumerable: original ? original.enumerable : true,
+    get: () => pinned,
+    set: (v) => { probePinAbsorbed++; probePinLastWrite = v; },
+  });
+  try {
+    return fn();
+  } finally {
+    delete table.provisions;
+    if (original) Object.defineProperty(table, 'provisions', original);
+    const back = Object.getOwnPropertyDescriptor(table, 'provisions');
+    probePinRestored = had
+      ? (!!back && back.get === undefined && back.value === original.value
+        && back.writable === original.writable && back.enumerable === original.enumerable
+        && back.configurable === original.configurable)
+      : back === undefined;
+  }
+}
+
+probeEventPressure(ctx, 'convoySurge'); // provisions pulled below baseline
+for (let i = 0; i < 60 && ctx.world.prices.provisions >= COMMODITIES.provisions.base - 5; i++) {
+  probeTickPrices(ctx, 5); // 5 s of pull per call, straight into the private cache
+}
+probeEventPressure(ctx, 'clear', ctx.world.currentSystem); // event over; the cache stays dirty
+const probeDirtyCached = ctx.world.prices.provisions;
+
+const dirtySetup = pinDemandScene(false);
+const dirtyExpected = demandExpected; // independent oracle, computed BEFORE acquisition
+const dirtyPriceBefore = ctx.world.prices.provisions;
+const dShipDirty = spawnPirate('dirty-cache-demand');
+let dirtyPriceDuring = null;
+const dirtyEvs = withPinnedProvisions(() => {
+  const evs = demandEvs(dShipDirty, 60, 'probe dirty cache demand');
+  dirtyPriceDuring = ctx.world.prices.provisions;
+  return evs;
+});
+const dirtyAbsorbed = probePinAbsorbed;
+const dirtyLastWrite = probePinLastWrite;
+const dirtyRestoredOk = probePinRestored;
+const dirtyPriceAfter = ctx.world.prices.provisions; // the pre-pin value, writes were swallowed
+const dirtyHail = dirtyEvs.find((e) => e.type === 'hailOpened' && e.ship === dShipDirty) ?? null;
+tick(1, 'probe dirty cache market resume');
+const dirtyPriceAfterTick = ctx.world.prices.provisions; // market walks its own value again
+hailBtn('[2] Refuse — and fight')?.click();
+tick(2, 'probe dirty cache close');
+removeShip(dShipDirty);
+
+// Restoration on a no-hail wait and on a throw — the same finally path.
+withPinnedProvisions(() => tick(5, 'probe pin no-hail wait'));
+const noHailRestored = probePinRestored;
+let pinThrew = false;
+try {
+  withPinnedProvisions(() => { throw new Error('probe pin restore check'); });
+} catch {
+  pinThrew = true;
+}
+const throwRestored = probePinRestored;
+const priceAfterThrow = ctx.world.prices.provisions;
+
+// Pay leg under the same dirty cache: real card label and real debit.
+const dirtyPaySetup = pinDemandScene(true);
+const dirtyPayExpected = demandExpected;
+const pShipDirty = spawnPirate('dirty-cache-pay');
+let dirtyPayPriceDuring = null;
+const dirtyPayEvs = withPinnedProvisions(() => {
+  const evs = demandEvs(pShipDirty, 60, 'probe dirty cache pay');
+  dirtyPayPriceDuring = ctx.world.prices.provisions;
+  return evs;
+});
+const dirtyPayRestoredOk = probePinRestored;
+const dirtyPayHail = dirtyPayEvs.find((e) => e.type === 'hailOpened' && e.ship === pShipDirty) ?? null;
+const dirtyPayBtn = hailBtn('[1] Pay tribute');
+const dirtyPayLabel = dirtyPayBtn?.textContent ?? null;
+const dirtyCreditsBefore = ctx.world.credits;
+dirtyPayBtn?.click();
+const dirtyCreditsAfter = ctx.world.credits;
+removeShip(pShipDirty);
+
+const dirtyChecks = {
+  cacheSeededDirty: probeDirtyCached !== COMMODITIES.provisions.base,
+  setupPinned: Object.values(dirtySetup).every(Boolean),
+  inputBaselineBeforeAcquire: dirtyPriceBefore === COMMODITIES.provisions.base,
+  inputHeldDuringAcquire: dirtyPriceDuring === COMMODITIES.provisions.base,
+  cachedWritesAttempted: dirtyAbsorbed > 0 && dirtyLastWrite !== COMMODITIES.provisions.base,
+  cachedWriteBelowBaseline: typeof dirtyLastWrite === 'number' && dirtyLastWrite < COMMODITIES.provisions.base,
+  hailOpened: !!dirtyHail,
+  demandExactAboveFloor: dirtyHail?.demand === dirtyExpected && dirtyExpected > HIDDEN_MOUNTS.demandMin,
+  descriptorRestored: dirtyRestoredOk === true,
+  valueRestoredUnchanged: dirtyPriceAfter === dirtyPriceBefore,
+  marketResumesAfterRestore: dirtyPriceAfterTick !== COMMODITIES.provisions.base
+    && Math.abs(dirtyPriceAfterTick - probeDirtyCached) <= 5,
+  noHailWaitRestores: noHailRestored === true,
+  throwRestores: pinThrew && throwRestored === true
+    && priceAfterThrow !== COMMODITIES.provisions.base,
+  paySetupPinned: Object.values(dirtyPaySetup).every(Boolean),
+  payInputHeldDuringAcquire: dirtyPayPriceDuring === COMMODITIES.provisions.base,
+  payHailOpened: !!dirtyPayHail,
+  payDemandExact: dirtyPayHail?.demand === dirtyPayExpected,
+  payButtonLabeled: dirtyPayLabel === `[1] Pay tribute — ${dirtyPayExpected} UU`,
+  payDebitExact: dirtyCreditsBefore - dirtyCreditsAfter === dirtyPayExpected,
+  payDescriptorRestored: dirtyPayRestoredOk === true,
+};
+console.log('wave30 probe dirty market cache:', JSON.stringify(dirtyChecks));
+console.log('wave30 probe dirty market numbers:', JSON.stringify({
+  cachedPrice: probeDirtyCached,
+  expectedIndependent: dirtyExpected,
+  emittedDemand: dirtyHail?.demand ?? null,
+  provisionsBefore: dirtyPriceBefore,
+  provisionsDuring: dirtyPriceDuring,
+  provisionsAfterRestore: dirtyPriceAfter,
+  provisionsAfterNextTick: dirtyPriceAfterTick,
+  marketWritesAbsorbed: dirtyAbsorbed,
+  lastMarketWriteAttempt: dirtyLastWrite,
+  payLabel: dirtyPayLabel,
+  creditsBefore: dirtyCreditsBefore,
+  creditsAfter: dirtyCreditsAfter,
+}));
+if (!Object.values(dirtyChecks).every(Boolean)) {
+  console.log('WAVE30 HAIL PROBE FAIL dirty market cache', JSON.stringify(failedKeys(dirtyChecks)));
+  errors++;
+}
+
+// Negative control: the same detector against an oracle that is wrong by 1 UU
+// (an in-memory copy of the assertions only — no product source is touched).
+// If these do NOT fail, the demand/pay checks above prove nothing.
+const wrongOracle = dirtyExpected + 1;
+const negativeControl = {
+  demandExactAboveFloor: dirtyHail?.demand === wrongOracle && wrongOracle > HIDDEN_MOUNTS.demandMin,
+  payButtonLabeled: dirtyPayLabel === `[1] Pay tribute — ${wrongOracle} UU`,
+  payDebitExact: dirtyCreditsBefore - dirtyCreditsAfter === wrongOracle,
+};
+const negativeControlCatches = Object.values(negativeControl).every((v) => v === false);
+console.log('wave30 probe negative control (oracle+1 must fail):', JSON.stringify({
+  wrongOracle, negativeControl, detectorCatches: negativeControlCatches,
+}));
+if (!negativeControlCatches) {
+  console.log('WAVE30 HAIL PROBE FAIL negative control did not catch a wrong oracle');
+  errors++;
+}
+
 // --- Pinned demand+pay, 20 consecutive loops ------------------------------
 let pinnedFail = 0;
 for (let n = 1; n <= 20; n++) {
@@ -450,7 +610,10 @@ for (let n = 1; n <= 20; n++) {
     continue;
   }
   const dShip = spawnPirate(`loop${n}-demand`);
-  const dEvs = demandEvs(dShip, 60, `probe loop ${n} demand`);
+  // Same acquisition-scoped price pin as boot-test: the market cache is dirty
+  // from the seed above, so an unpinned roll would read it, not the fixture.
+  const dEvs = withPinnedProvisions(() => demandEvs(dShip, 60, `probe loop ${n} demand`));
+  const dLoopRestored = probePinRestored;
   const dHail = dEvs.find((e) => e.type === 'hailOpened' && e.ship === dShip) ?? null;
   const dBtn = hailBtn('[2] Refuse — and fight');
   dBtn?.click();
@@ -462,6 +625,7 @@ for (let n = 1; n <= 20; n++) {
     demandRolledOnce: dHail?.demand === demandExpected && demandExpected > HIDDEN_MOUNTS.demandMin,
     refuseButtonFound: !!dBtn,
     refusedOutcome: dShip.ai.demandOutcome === 'refused' && dShip.ai.demanding === false,
+    pinReleased: dLoopRestored === true,
   };
   if (!Object.values(demandChecks).every(Boolean)) {
     pinnedFail++;
@@ -476,7 +640,8 @@ for (let n = 1; n <= 20; n++) {
     continue;
   }
   const pShip = spawnPirate(`loop${n}-pay`);
-  const pEvs = demandEvs(pShip, 60, `probe loop ${n} pay`);
+  const pEvs = withPinnedProvisions(() => demandEvs(pShip, 60, `probe loop ${n} pay`));
+  const pLoopRestored = probePinRestored; // released before the pay click below
   const pHail = pEvs.find((e) => e.type === 'hailOpened' && e.ship === pShip) ?? null;
   const pBtn = hailBtn('[1] Pay tribute');
   const pLabel = pBtn?.textContent ?? null;
@@ -487,6 +652,7 @@ for (let n = 1; n <= 20; n++) {
     payButtonLabeled: pLabel === `[1] Pay tribute — ${demandExpected} UU`,
     creditsPaidExact: ctx.world.credits === 4000 - demandExpected,
     pirateFleesPaid: pShip.ai.mode === 'flee' && pShip.ai.demandOutcome === 'paid',
+    pinReleased: pLoopRestored === true,
   };
   if (!Object.values(payChecks).every(Boolean)) {
     pinnedFail++;
