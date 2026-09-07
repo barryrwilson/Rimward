@@ -1,6 +1,6 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-09-04, including the five reliability review fixes below.
+Inventory date: 2026-09-06, including the five reliability review fixes, the owner-reported Agent Play mouse-control defect, and four trader-playtest tasks below.
 
 This is the compact backlog index. GitHub Project **Rimward** is the operational
 queue used by Orca AI. The wishlist remains the product-intent and playtest
@@ -10,6 +10,11 @@ source; `PROGRESS.md` remains historical and must be read newest-first.
 
 | Key | Priority | Readiness | Outcome | Source |
 |---|---:|---|---|---|
+| [TRADE-001](https://github.com/barryrwilson/Rimward/issues/53) | P1 | Ready; implementation not started; Rimward project Todo | Prevent profitable immediate buy/sell loops at the same station after all price modifiers and rounding. Preserve legitimate inter-system trading. | 2026-09-06 trader playtest: Grand Auction Provisions bought for 216 UU and sold for 248 UU using ordinary keyboard controls. |
+| [TRADE-002](https://github.com/barryrwilson/Rimward/issues/55) | P1 | Needs design/owner decision; depends on TRADE-001; Rimward project Todo | Establish meaningful market liquidity and trader progression after correcting the inverted spread; do not prescribe stock limits or retune ship prices before measuring the corrected economy. | Same playtest: 5,451 units cycled at one dock; a full freighter round trip earned about 34,700 UU against a 24,000 UU ship purchase. |
+| [TRADE-003](https://github.com/barryrwilson/Rimward/issues/54) | P2 | Ready; implementation not started; Rimward project Todo | Render the purchased freighter's real model after cold save reload instead of retaining the grey fallback box. | Live reload preserved cash and 160-unit capacity but displayed a grey box; player hull construction depends on an already-primed asset cache. |
+| [TRADE-004](https://github.com/barryrwilson/Rimward/issues/56) | P2 | Needs design; coordinate with TRADE-001; Rimward project Todo | Add explicit quantity, buy-max and sell-all controls with clear transaction totals, bounded by available money and cargo. | Current +/-1 and +/-5 UI requires 64 five-unit input actions to fill and empty a 160-unit freighter hold. |
+| Agent Play mouse ownership | P2 | Open; owner-reported; backlog only, implementation not started; no external issue created | Fix mouse control interfering with agent control while Agent Play owns the game. Incidental pointer movement and UI clicks must not steer the ship or interrupt agent-directed flight, docking, or mining. Preserve an explicit stop/human-takeover path and normal mouse flight after takeover. Acceptance: live visible-browser verification while moving the cursor, clicking UI, and changing focus during these flows; no stale mouse input applied on handoff. Do not assume the existing opt-in reticle latch covers every control path. | Barry's observation during the 2026-09-06 visible player-scenario playtest in the current workspace (`window.rimward` v1); backlog-only update explicitly authorized. |
 | [RW-001](https://github.com/barryrwilson/Rimward/issues/2) | P1 | Implemented; live verification restored by [#31](https://github.com/barryrwilson/Rimward/issues/31) | Add a playable outer pad-approach intent with a braking profile. Owner choice 2B and the focused design were approved on 2026-08-27. `approachDock` reuses the existing Autopilot/ship helm, observes range/progress, brakes through a fixed `+X` corridor, and finishes only through the ordinary in-zone KeyJ pulse. The 2026-08-29 release-readiness audit found a live Freehold spawn regression (`blocked` / 30 u/s pad orbit). Stage now idle-turns onto the stage chord, ignores route-AP widen, and creeps instead of inheriting route cruise. Five consecutive `npm run agent:bridge:smoke` runs passed on one unchanged commit/tree, each with `approachBraked`, `approachDocked`, `approachUndocked`, `consoleClean`, and `teardownPortsFree`; forbidden teleport remained rejected. No teleport, third helm, or persisted approach state. | [Focused design](AgentApiPadApproachDesign.md); [Agent API parent and live-play capture](PLAYER-EXPERIENCE-WISHLIST.md#playtest-capture--2026-08-27-claude-fable-agent-api-live-play); follow-up [#31](https://github.com/barryrwilson/Rimward/issues/31) |
 | [RW-002](https://github.com/barryrwilson/Rimward/issues/3) | P2 | Implemented; verification complete | Expand Settings with mouse sensitivity, invert X/Y, complete conflict-aware key rebinding, and separate music/effects/voice/UI volume. Brief: [Ctl06ExpandedSettingsDesign.md](Ctl06ExpandedSettingsDesign.md). PR1–PR5 on master (#16, #17, #29). GitHub #3 is closed. | [2026-08-25 playtest capture](PLAYER-EXPERIENCE-WISHLIST.md#playtest-capture--2026-08-25-latest-67fb1a0-build) |
 | [RW-003](https://github.com/barryrwilson/Rimward/issues/4) | P2 | PR1–PR2 on master; PR3 summary card implemented and verified in [#46](https://github.com/barryrwilson/Rimward/pull/46); PR4 not filed | Turn Models into a browsable ship reference grouped by faction/class, with pirate variants, role/scale/lore summaries, and unambiguous loading progress. Brief: [Mdl01ShipReferenceDesign.md](Mdl01ShipReferenceDesign.md). Census: 245 catalog entries, of which 72 are trader/pirate skin duplicates sharing one sculpt. PR1 hygiene/shell: [#23](https://github.com/barryrwilson/Rimward/issues/23) / [#25](https://github.com/barryrwilson/Rimward/pull/25). PR2 grouping/variants: [#26](https://github.com/barryrwilson/Rimward/issues/26) / [#27](https://github.com/barryrwilson/Rimward/pull/27). PR3 summary card: [#28](https://github.com/barryrwilson/Rimward/issues/28) / [#46](https://github.com/barryrwilson/Rimward/pull/46). Next: PR4 loading/disposal. | [2026-08-25 playtest capture](PLAYER-EXPERIENCE-WISHLIST.md#playtest-capture--2026-08-25-latest-67fb1a0-build) |
@@ -33,6 +38,96 @@ The five review fixes passed local verification:
 Live browser verification captured no console errors. PR CI and the focused
 release gate now include these regressions; no hosted verification or release
 publication is claimed.
+
+## Trader playtest tasks — 2026-09-06
+
+These four tasks were requested by Barry after the visible trader run and
+published with owner authorization as GitHub issues #53–#56 in the Rimward
+project for Orca. No implementation is claimed. The existing Agent Play
+mouse-ownership task remains separate.
+
+Evidence directory (local, outside the repository):
+`C:\Users\barry\orca\workspaces\WebSim\playtest-evidence\trader-million-2026-09-06-9kmrkdq5`.
+It contains `trades.jsonl`, `audit-summary.json`, `findings.json`,
+`million-trader-save.json`, `reload-verification.json`, and screenshots.
+The run reconciles as 600 starting UU + 666 ordinary trading profit +
+1,028,796 same-dock loop profit - 24,000 freighter cost = 1,006,062 UU cash.
+The 10m 44s game-time result used automated order entry; it is not a normal
+player pacing estimate. All transactions used ordinary UI or public actions;
+no money, cargo, position, or time was injected.
+
+### TRADE-001 — Prevent profitable same-station round trips
+
+- **Scope:** Correct the authoritative buy/sell quote and fill calculation so
+  an immediate round trip at one unchanged market cannot increase cash after
+  faction, standing, epic, hermit, fixer, commodity and rounding modifiers.
+  Preserve quote/fill agreement and profitable trading between markets.
+- **Acceptance:** The observed Grand Auction 216-to-248 UU Provisions loop no
+  longer profits through either keyboard trading or public agent actions.
+  Cover modifier combinations and quantities 1, 5, 99 and chunked 160-unit
+  holds; cash/cargo remain valid and displayed totals equal actual fills.
+- **Exclusions:** Cash caps, order cooldowns and agent-only restrictions are
+  not substitutes for fixing the spread. No ship-price or liquidity redesign.
+- **Sources/overlap:** `src/game/state.js:643`,
+  `src/systems/station.js:4692-4756`; shares market code with TRADE-002/004.
+- **Verification:** Pricing-contract regression coverage, `npm run build`,
+  `npm run test:boot`, and the live Grand Auction keyboard/agent reproduction
+  with console-error checks.
+
+### TRADE-002 — Design market liquidity and trader progression
+
+- **Scope:** After TRADE-001, measure corrected ordinary trade routes and
+  freighter progression; propose an explicit liquidity/pacing design for owner
+  approval. Evaluate stock/replenishment, demand/price impact and transaction
+  costs as alternatives, not a pre-approved bundle of mechanisms.
+- **Acceptance:** Produce a measured baseline with route profit, elapsed time,
+  risk and time-to-freighter; state the chosen progression targets and
+  tradeoffs. Obtain the owner's design decision before implementation.
+  Implementation acceptance must then pin replenishment/depletion behavior,
+  quote/fill consistency and a repeatable ordinary-route benchmark.
+- **Dependencies/exclusions:** TRADE-001 first. Do not balance ship prices
+  against exploit earnings or silently introduce new persistent market fields.
+- **Sources/overlap:** `src/systems/station.js:4735-4756`,
+  `audit-summary.json`; market code overlaps TRADE-001/004.
+- **Verification:** Design evidence is a fresh live trading benchmark, not
+  the exploit run. Any subsequent implementation requires focused economy
+  contract tests, `npm run build`, `npm run test:boot`, live trading and
+  console-error checks.
+
+### TRADE-003 — Restore real player hull models after cold load
+
+- **Scope:** Prime the mounted plated hull asset on cold load and install the
+  real model once available rather than permanently retaining the fallback.
+  The Gilded freighter asset exists; this is not a request for new ship art.
+- **Acceptance:** Buy/mount the Gilded freighter, save, fully reload with a
+  cold in-memory asset cache, and observe the real freighter model without
+  first visiting the yard preview or waiting for matching NPC traffic.
+  Cash, cargo and mounted hull persist; late asset completion cannot replace
+  a different hull subsequently selected by the player.
+- **Sources/overlap:** `src/systems/ship.js:375-387,478-490`,
+  `src/systems/npc.js:203-207`, player hangar mounting and ship asset loading.
+  Independent of the market-pricing work.
+- **Verification:** Focused cold-load/late-completion coverage,
+  `npm run build`, `npm run test:boot`, and live purchase/save/reload visual
+  verification with console-error checks.
+
+### TRADE-004 — Add freighter-scale bulk trading controls
+
+- **Scope:** Provide explicit quantity, buy-max (limited by cash and free
+  hold space), and sell-all controls with readable unit/transaction totals.
+  Preserve existing small-lot controls and ordinary transaction validation.
+- **Acceptance:** Fill and empty a 160-unit hold without repeated five-unit
+  input; verify partial affordability, a full hold, empty cargo and restricted
+  goods. Previewed totals equal actual cash/cargo changes; human and agent
+  paths obey the same economic rules without bypassing per-order limits.
+- **Dependencies/exclusions:** Coordinate UI decisions and the shared quote
+  contract with TRADE-001. No incidental new key/digit bindings, cargo tuning,
+  equipment changes or unrelated market redesign.
+- **Sources/overlap:** Market UI and trade validation in
+  `src/systems/station.js`; overlaps TRADE-001/002.
+- **Verification:** Focused bulk-transaction boundary coverage,
+  `npm run build`, `npm run test:boot`, and live keyboard/pointer interaction
+  with a freighter-sized hold and console-error checks.
 
 ## Optional follow-ups
 
