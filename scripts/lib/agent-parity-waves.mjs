@@ -177,12 +177,96 @@ export async function runAgentParityWave141(deps) {
     ctx.ship.speed = 0;
     tick(2, 'w141 law-zone stage');
     const pDemand = w30spawnPirate('w141-demand', 95, [250, 0, 0]);
-    w30demandEvs(pDemand, 'w141 demand open');
+    // ---- hail diagnostics (read-only; ledger row emitted only on failure) ----
+    // The hosted Ubuntu/Node20 boot reports hailDemand=false while the pay act
+    // itself reports ok and hailStaleClosed=true; which predicate term fails is
+    // not yet known (no-service can also come from an open replacement card).
+    // These helpers copy scalars only: no live ship/context is stringified, no
+    // emit/tick is patched, and observe() neither drains the ring nor advances
+    // the sim, so every predicate, fixture act, tick(2) call and their order
+    // below are byte-for-byte the originals.
+    const dRows141 = (rows) => (Array.isArray(rows) ? rows : [])
+      .filter((e) => e && e.type === 'hailClosed')
+      .slice(-6)
+      .map((e) => ({
+        t: Number.isFinite(e.t) ? e.t : null,
+        demandHail: typeof e.demandHail === 'boolean' ? e.demandHail : null,
+        demandOutcome: typeof e.demandOutcome === 'string' ? e.demandOutcome : null,
+        speaker: typeof e.speaker === 'string' ? e.speaker : null,
+        demand: Number.isFinite(e.demand) ? e.demand : null,
+        targetId: typeof e.targetId === 'string' || typeof e.targetId === 'number' ? e.targetId : null,
+        targetName: typeof e.targetName === 'string' ? e.targetName : null,
+        // Raw queue rows still hold the ship ref; report identity only.
+        shipId: e.ship && (typeof e.ship.id === 'string' || typeof e.ship.id === 'number') ? e.ship.id : null,
+        isDemandShip: e.ship ? e.ship === pDemand : null,
+      }));
+    const dTypes141 = (rows) => {
+      const counts = {};
+      for (const e of Array.isArray(rows) ? rows : []) {
+        const ty = e && typeof e.type === 'string' ? e.type : '?';
+        counts[ty] = (counts[ty] || 0) + 1;
+      }
+      return counts;
+    };
+    const dHail141 = (snap) => ({
+      open: snap && snap.hail ? snap.hail.open === true : null,
+      intents: snap && snap.hail && Array.isArray(snap.hail.intents) ? snap.hail.intents.slice(0, 8) : null,
+      ringTypes: dTypes141(snap && Array.isArray(snap.events) ? snap.events : []),
+      hailClosed: dRows141(snap && Array.isArray(snap.events) ? snap.events : []),
+    });
+    const dFoe141 = () => {
+      const st = pDemand && pDemand.state ? pDemand.state : null;
+      const ai = pDemand && pDemand.ai ? pDemand.ai : null;
+      return {
+        id: pDemand && (typeof pDemand.id === 'string' || typeof pDemand.id === 'number') ? pDemand.id : null,
+        inShips: Array.isArray(ctx.ships) ? ctx.ships.includes(pDemand) : null,
+        hasObject: pDemand ? !!pDemand.object : null,
+        destroyed: st ? st.destroyed === true : null,
+        disabled: st ? st.disabled === true : null,
+        surrendered: st ? st.surrendered === true : null,
+        hull: st && Number.isFinite(st.hull) ? st.hull : null,
+        demanding: ai ? ai.demanding === true : null,
+        demandSent: ai ? ai.demandSent === true : null,
+        demandOutcome: ai && typeof ai.demandOutcome === 'string' ? ai.demandOutcome : null,
+        demandAmount: ai && Number.isFinite(ai.demandAmount) ? ai.demandAmount : null,
+        phase: ai && typeof ai.phase === 'string' ? ai.phase : null,
+        band: ai && typeof ai.band === 'string' ? ai.band : null,
+        mode: ai && typeof ai.mode === 'string' ? ai.mode : null,
+      };
+    };
+    const dAct141 = (res) => ({
+      ok: res ? res.ok === true : null,
+      token: res && typeof res.token === 'string' ? res.token : null,
+      error: res && typeof res.error === 'string' ? res.error : null,
+      name: res && typeof res.name === 'string' ? res.name : null,
+      status: res && typeof res.status === 'string' ? res.status : null,
+      t: res && Number.isFinite(res.t) ? res.t : null,
+    });
+    // The fixture call, args and order are unchanged; only its return is kept.
+    const openEvs141 = w30demandEvs(pDemand, 'w141 demand open');
+    const diagOpen141 = {
+      hailOpenedForFoe: (Array.isArray(openEvs141) ? openEvs141 : [])
+        .some((e) => e && e.type === 'hailOpened' && e.ship === pDemand),
+      hailOpenedAny: (Array.isArray(openEvs141) ? openEvs141 : []).some((e) => e && e.type === 'hailOpened'),
+      types: dTypes141(openEvs141),
+      flagHailOpen: ctx.flags ? ctx.flags.hailOpen === true : null,
+      foe: dFoe141(),
+    };
     const snapHail = rw141.observe();
     const intents = snapHail && snapHail.hail && Array.isArray(snapHail.hail.intents) ? snapHail.hail.intents : [];
+    const diagBefore141 = { hail: dHail141(snapHail), foe: dFoe141(), credits: ctx.world.credits };
     const payRes = intents.includes('payTribute')
       ? rw141.act({ v: 2, name: 'hailResolve', args: { intent: 'payTribute' } })
       : { ok: false, token: 'no-intent' };
+    // Read the LIVE frame queue before the tick below rotates and clears it.
+    const diagActed141 = {
+      pay: dAct141(payRes),
+      hail: dHail141(rw141.observe()),
+      rawQueueTypes: dTypes141(ctx.events),
+      rawQueueHailClosed: dRows141(ctx.events),
+      foe: dFoe141(),
+      credits: ctx.world.credits,
+    };
     step141('hail', 'hailResolve', payRes);
     tick(2, 'w141 demand resolve');
     const snapHailAfter = rw141.observe();
@@ -191,6 +275,50 @@ export async function runAgentParityWave141(deps) {
       && snapHailAfter.hail.open === false);
     const badIntent = rw141.act({ v: 2, name: 'hailResolve', args: { intent: 'not-an-intent' } });
     w141.hailStaleClosed = badIntent.ok === false && (badIntent.token === 'closed' || badIntent.token === 'no-service');
+    if (w141.hailDemand === false) {
+      // Reads the four predicate terms separately so the ledger says WHICH one
+      // failed: no listed payTribute (wrong/absent fixture hail), a refused pay
+      // act, a card left open, or a paid receipt that never reached the ring
+      // (lost terminal event) versus an outcome-less plain close (ordinary
+      // close of a stale/dead hull).
+      const afterRows141 = dRows141(snapHailAfter && Array.isArray(snapHailAfter.events) ? snapHailAfter.events : []);
+      const diag141 = {
+        node: process.version,
+        platform: process.platform,
+        predicate: {
+          listedPayTribute: intents.includes('payTribute'),
+          payOk: payRes ? payRes.ok === true : null,
+          hailOutcomePaid: hailOutcome,
+          closedAfterTick: snapHailAfter && snapHailAfter.hail ? snapHailAfter.hail.open === false : null,
+        },
+        creditsSeeded: 4000,
+        creditsDelta: {
+          openToActed: diagActed141.credits - diagBefore141.credits,
+          actedToAfterTick: ctx.world.credits - diagActed141.credits,
+        },
+        staleProbe: dAct141(badIntent),
+        atOpen: diagOpen141,
+        beforeAct: diagBefore141,
+        afterAct: diagActed141,
+        afterTick: {
+          hail: dHail141(snapHailAfter),
+          hailClosedOutcomes: afterRows141.map((r) => r.demandOutcome),
+          foe: dFoe141(),
+          credits: ctx.world.credits,
+        },
+        // Shape read: a demand close carries demandHail+demandOutcome; a plain
+        // close carries neither. Both after tick(2) and in the raw frame queue.
+        closeShape: {
+          rawDemandCloses: diagActed141.rawQueueHailClosed.filter((r) => r.demandOutcome).length,
+          rawPlainCloses: diagActed141.rawQueueHailClosed.filter((r) => !r.demandOutcome).length,
+          ringDemandCloses: afterRows141.filter((r) => r.demandOutcome).length,
+          ringPlainCloses: afterRows141.filter((r) => !r.demandOutcome).length,
+        },
+      };
+      let note141 = '';
+      try { note141 = JSON.stringify(diag141); } catch { note141 = 'diag-not-json-safe'; }
+      ledger141.push({ scenario: 'hail', act: 'diag:hailDemand', note: note141 });
+    }
     w30removeShip(pDemand);
 
     // ---- 4. combat + patrol terminal (mission family: patrol) ---------------
