@@ -891,23 +891,34 @@ async function main() {
       const station = await cdp.eval(CARD);
       await cdp.shot('12-station-card.png');
 
-      // Planet: no faction, so title + stats only.
+      // Planet: no faction, so title + stats only. model-catalog.js orders
+      // each system's Star before its planets, so the first Celestial row is
+      // a star, not a planet. Take the first row that the catalog labels
+      // "<System> — Planet <n>" and keep the label to prove the captured card
+      // is that planet's.
       await setMode('type');
       await sleep(400);
       await expandGroup('Celestial');
       await sleep(300);
-      await cdp.eval(`(() => {
+      const planetLabel = await cdp.eval(`(() => {
         const h = [...document.querySelectorAll('.rw-models-group')]
           .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === 'Celestial');
-        if (!h) return false;
-        let row = h.nextElementSibling;
-        while (row && !row.classList.contains('rw-models-entry')) row = row.nextElementSibling;
-        if (row) row.click();
-        return !!row;
+        if (!h) return null;
+        for (let row = h.nextElementSibling; row; row = row.nextElementSibling) {
+          if (row.classList.contains('rw-models-group')) break;
+          if (!row.classList.contains('rw-models-entry')) continue;
+          const label = row.textContent.trim();
+          if (!/—\\s*Planet\\s+\\d+$/.test(label)) continue;
+          row.click();
+          return label;
+        }
+        return null;
       })()`);
       await sleep(1500);
       const planet = await cdp.eval(CARD);
       await cdp.shot('13-planet-card.png');
+      const planetIsSelected = !!(planetLabel
+        && String(planet?.name || '').trim() === planetLabel);
 
       // Prop: no faction either.
       await expandGroup('Props');
@@ -921,7 +932,8 @@ async function main() {
         && !v.hasScale && !v.hasLore && !v.empty);
       record('V11', !!(station && station.name && station.hasStats && station.hasLore
         && !station.hasRole && !station.hasScale && !station.empty
-        && bareOk(planet) && bareOk(prop)), { station, planet, prop });
+        && bareOk(planet) && planetIsSelected && bareOk(prop)),
+      { station, planet, planetLabel, planetIsSelected, prop });
     }
 
     // =====================================================================
