@@ -246,17 +246,37 @@ function labelsMatch(hail, card) {
 const SETUP = `(async () => {
   const c = window.__ctx;
   const { spawnLiveShip } = await import('/src/systems/npc.js');
+  const { isShipAssetReady, primeShipAsset } = await import('/src/systems/ship-assets.js');
   const tries = [
     { faction: 'redledger', classKey: 'cutter', role: 'pirate' },
     { faction: 'independent', classKey: 'cutter', role: 'trader' },
     { faction: 'freehold', classKey: 'cutter', role: 'trader' },
   ];
+  const label = (t) => t.faction + '/' + t.classKey + '/' + t.role;
+  const readyOf = (t) => {
+    try { return isShipAssetReady(t.faction, t.classKey, t.role) === true; }
+    catch (err) { return false; }
+  };
+  // spawnLiveShip returns null until the authored asset is resident, so prime
+  // every combination up front and wait (bounded) for at least one to land.
+  for (const t of tries) {
+    try { await Promise.resolve(primeShipAsset(t.faction, t.classKey, t.role)); }
+    catch (err) { /* one failure must not block the alternatives */ }
+  }
+  const assetDeadline = Date.now() + 15000;
+  while (!tries.some(readyOf) && Date.now() < assetDeadline) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  if (!tries.some(readyOf)) {
+    throw new Error('hail66 SETUP: no authored ship asset ready within 15000ms: ' + tries.map(label).join(', '));
+  }
   const bag = { ships: {} };
   bag.spawn = (tag, pilot, dx) => {
     const pos = c.ship.object.position.clone();
     pos.x += dx;
     let live = null;
     for (const t of tries) {
+      if (!readyOf(t)) continue;
       live = spawnLiveShip(c, {
         id: 'h66-' + tag + '-' + Date.now(),
         name: tag,
@@ -520,14 +540,46 @@ async function main() {
     say('fixture setup', String(setup));
     if (setup !== true) throw new Error('fixture setup failed');
 
+    const closedOk = (s) => !!(s && s.hail && s.hail.open === false
+      && s.card && s.card.display !== 'block');
     const stage = async () => {
       await cdp.eval(call('clear()'));
-      await sleep(350);
+      const s = await waitUntil(PROBE, closedOk, 8000);
+      if (!closedOk(s)) {
+        throw new Error('hail66 stage(): prior card still up after 8000ms: open='
+          + JSON.stringify(s && s.hail && s.hail.open)
+          + ' display=' + JSON.stringify(s && s.card && s.card.display));
+      }
     };
     const openCardFor = async (tag, ev) => {
+      // Resolve the fixture's public identity first, so the wait below cannot be
+      // satisfied by a stale card left by ambient traffic or a prior step.
+      const row = await cdp.eval(`(() => {
+        const rows = window.rimward.observe().targets.nearby || [];
+        const hit = rows.find((r) => r.name === ${JSON.stringify(tag)});
+        return hit ? { id: hit.id } : null;
+      })()`);
+      if (!row || !row.id) {
+        throw new Error(`hail66 openCardFor(${tag}): no nearby target named ${tag}`);
+      }
+      const expectedId = row.id;
       await cdp.eval(`(() => window.__h66.hail('${tag}', ${JSON.stringify(ev)}))()`);
-      return waitUntil(PROBE, (v) => v && v.card.display === 'block'
-        && v.hail && v.hail.open === true && v.hail.conversationId, 8000);
+      const wantIntents = Array.isArray(ev.intents) ? ev.intents : null;
+      const intentsOk = (got) => !wantIntents || (Array.isArray(got)
+        && got.length === wantIntents.length
+        && wantIntents.every((k, i) => got[i] === k));
+      const demandOk = (s) => ev.demand == null
+        || !!(s.hail.terms && s.hail.terms.amounts && s.hail.terms.amounts.demand === ev.demand);
+      const match = (s) => !!(s && s.card && s.card.display === 'block'
+        && s.hail && s.hail.open === true && s.hail.conversationId
+        && s.hail.speaker && s.hail.speaker.id === expectedId
+        && intentsOk(s.hail.intents) && demandOk(s));
+      const v = await waitUntil(PROBE, match, 8000);
+      if (!match(v)) {
+        throw new Error(`hail66 openCardFor(${tag}): card for ${expectedId} not rendered within 8000ms; saw `
+          + JSON.stringify(v && { display: v.card && v.card.display, hail: v.hail }));
+      }
+      return v;
     };
 
     // ================= H1 demand ==========================================

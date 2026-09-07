@@ -252,8 +252,10 @@ the authored empty block (`intents: []`, `conversationId: ''`, `kind: ''`,
 for hail data, and neither is the selected target or a flags-only stale card:
 a historical row cannot describe something the agent can act on now, so it is
 better to publish nothing than a list of verbs belonging to a card that is
-gone. `open` still reports the flag, so an agent can tell "a card is up but I
-cannot read it" from "no card".
+gone. `open` is `false` in every one of those cases — a missing `hailApi`, a
+`peek()` that throws, and a snapshot that reports the card closed all read as
+"no card" — and is `true` only when a live peek reports the card open, even if
+that snapshot's stale flag reads `false`.
 
 ### `conversationId` scope and reset
 
@@ -299,8 +301,9 @@ Refusal order, in the wrapper and in the card alike:
    legacy, unguarded call sees for an unlisted verb
 
 The comparison itself is authoritative in `hail.js`, immediately before any
-effect — not merely against the agent's earlier peek. If the card closed or
-was replaced in between, `resolve` answers `stale` and **nothing happens**: no
+effect — not merely against the agent's earlier peek. If the card closed in
+between, `resolve` answers `closed`; if it was replaced by a different
+conversation, `resolve` answers `stale`. Either way **nothing happens**: no
 credits, no cargo, no surrender flag, no AI write, no event, on any ship.
 
 ```js
