@@ -942,9 +942,17 @@ async function main() {
     {
       await setMode('type');
       await sleep(500);
-      await clickGroup('Props');
+      // Expand-only. V11 runs first and can leave Props already open, and a
+      // plain toggle would then CLOSE it and hide the Cargo Pod row.
+      const propsExpanded = await cdp.eval(`(() => {
+        const h = [...document.querySelectorAll('.rw-models-group')]
+          .find((g) => g.querySelector('.rw-models-group-name')?.textContent.trim() === 'Props');
+        if (!h) return false;
+        if (h.getAttribute('aria-expanded') === 'false') h.click();
+        return true;
+      })()`);
       await sleep(400);
-      await cdp.eval(`(() => {
+      const propClicked = await cdp.eval(`(() => {
         const r = [...document.querySelectorAll('.rw-models-entry')]
           .find((x) => x.textContent.trim() === 'Cargo Pod');
         if (r) r.click();
@@ -967,12 +975,17 @@ async function main() {
       await cdp.shot('11-after-reload.png');
 
       record('V6c', !!(after && before
+        && propsExpanded && propClicked
+        // Name the row, or a null-vs-null selection would pass the equality.
+        && before.selected === 'Cargo Pod'
+        && after.selected === 'Cargo Pod'
         && after.mode === before.mode
         && after.selected === before.selected
         && JSON.stringify(after.expanded) === JSON.stringify(before.expanded)
         && reloaded?.mode === 'BY FACTION'
         && reloaded?.selected === 'Freehold Compact — Light'
         && reloaded?.domRows === 22), {
+        propsExpanded, propClicked,
         beforeMode: before?.mode, afterMode: after?.mode,
         beforeSel: before?.selected, afterSel: after?.selected,
         beforeExp: before?.expanded, afterExp: after?.expanded,
