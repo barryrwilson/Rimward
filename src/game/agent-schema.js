@@ -147,6 +147,22 @@ const KEEP_RING = new Set([
   'epicStage', 'mineBlocked', 'convergence', 'deepening',
 ]);
 
+/**
+ * Keep-class test for one ring row. Most keep decisions are per type, but
+ * hailClosed is split: a plain close (comms hung up) is ordinary chatter,
+ * while a demand close carries the paid/refused/bluffed/expired outcome the
+ * agent acted for. Without keep class, a ring already saturated with keep or
+ * foldable rows discards the fresh terminal receipt on arrival, so an agent
+ * that pays tribute never observes its own hailResolve result (PR57 receipt).
+ * Only the demand rows are retained, so ordinary hail traffic still evicts
+ * first and flood behaviour stays bounded.
+ */
+function isKeepRow(e) {
+  if (!e) return false;
+  if (KEEP_RING.has(e.type) || Object.hasOwn(COLLAPSE_KEY, e.type)) return true;
+  return e.type === 'hailClosed' && typeof e.demandOutcome === 'string' && e.demandOutcome !== '';
+}
+
 const EVENT_TYPE_SET = new Set(EVENT_TYPES);
 
 /** Extra primitive keys copied per authored event type. hailOpened never includes ship. */
@@ -534,7 +550,7 @@ export function pushRing(events, row, cap = EVENT_CAP) {
       // are keep-class too: without this, a ring saturated with KEEP rows
       // discards an incoming playerFire/npcHit on arrival and the agent goes
       // blind to its own fire exactly in heavy combat (wave-142 ring probe).
-      if (!events[i] || (!KEEP_RING.has(events[i].type) && !Object.hasOwn(COLLAPSE_KEY, events[i].type))) {
+      if (!isKeepRow(events[i])) {
         drop = i;
         break;
       }

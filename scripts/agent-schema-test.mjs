@@ -255,6 +255,57 @@ pin('playerFire survives KEEP pressure', combatRing.some((e) => e && e.type === 
 pin('npcHit survives KEEP pressure', combatRing.some((e) => e && e.type === 'npcHit' && e.targetId === 'foe'));
 pin('combat ring within cap', combatRing.length <= EVENT_CAP);
 
+// Demand receipts under ring saturation (PR57 hailDemand): a pirate fight fills
+// the ring with distinct npcHit rows (foldable, so keep-class), then the tribute
+// is paid. Before terminal retention the fresh hailClosed was the only non-keep
+// row present, so eviction discarded it on arrival and the agent could never
+// observe the outcome of its own hailResolve - one more tick did not help.
+const saturate = (rows, tag) => {
+  for (let i = 0; i < EVENT_CAP; i++) {
+    pushRing(rows, { type: 'npcHit', t: i + 1, targetId: `${tag}-${i}`, damage: 3 });
+  }
+  return rows;
+};
+const paidRing = saturate([], 'paid');
+pin('demand ring saturated by npcHit', paidRing.length === EVENT_CAP
+  && paidRing.every((e) => e && e.type === 'npcHit'));
+pushRing(paidRing, {
+  type: 'hailClosed', t: 90, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 200,
+});
+pin('paid demand receipt survives arrival', paidRing.some((e) => e
+  && e.type === 'hailClosed' && e.demandOutcome === 'paid'));
+pin('demand ring within cap', paidRing.length <= EVENT_CAP);
+// The next harvest ticks keep pumping combat rows; the receipt must still be
+// observable on the following observe(), not just on the frame it arrived.
+for (let i = 0; i < 6; i++) {
+  pushRing(paidRing, { type: 'npcHit', t: 100 + i, targetId: `after-${i}`, damage: 2 });
+}
+pin('paid demand receipt survives later ticks', paidRing.some((e) => e
+  && e.type === 'hailClosed' && e.demandOutcome === 'paid'));
+
+// Every terminal outcome is a receipt, not just the paid one.
+for (const outcome of ['refused', 'bluffed', 'failed', 'expired', 'docked', 'jumped', 'voided']) {
+  const ring2 = saturate([], outcome);
+  pushRing(ring2, { type: 'hailClosed', t: 90, demandHail: true, demandOutcome: outcome, speaker: 'Ninth Tooth', demand: 200 });
+  pin(`${outcome} demand receipt survives arrival`, ring2.length <= EVENT_CAP
+    && ring2.some((e) => e && e.type === 'hailClosed' && e.demandOutcome === outcome));
+}
+
+// Narrowness: an ordinary hang-up carries no outcome and stays evictable, so
+// routine hail traffic cannot crowd the ring.
+const plainRing = saturate([], 'plain');
+pushRing(plainRing, { type: 'hailClosed', t: 90 });
+pin('plain hailClosed stays evictable', plainRing.length <= EVENT_CAP
+  && !plainRing.some((e) => e && e.type === 'hailClosed'));
+// A demand flood is still bounded: the ring never grows past the cap and the
+// newest outcomes win.
+const demandFlood = [];
+for (let i = 0; i < 40; i++) {
+  pushRing(demandFlood, { type: 'hailClosed', t: 200 + i, demandHail: true, demandOutcome: 'paid', speaker: `p${i}`, demand: 10 });
+}
+pin('demand flood bounded by cap', demandFlood.length === EVENT_CAP);
+pin('demand flood keeps newest', demandFlood[demandFlood.length - 1].speaker === 'p39');
+
 
 // actResult v2 receipts: reqId + sim timestamp.
 const receipt = actResult({ ok: true, error: '', name: 'setControl', token: '', status: 'active', reqId: 'q9', t: 12.5 });
