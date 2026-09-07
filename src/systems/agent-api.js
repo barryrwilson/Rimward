@@ -1,6 +1,8 @@
 /**
- * Agent play handle. Owns ctx.agent (session; not persist; not a helm).
+ * Agent play handle v2. Owns ctx.agent (session; not persist; not a helm).
  * Does not write ctx.input, ship transform, credits, or flags.berthHold.
+ * v2: full station-service parity (owner-authorized), the controls-owned
+ * manual-control lease, capability discovery, and reqId/t outcome receipts.
  */
 
 import { COMMODITIES } from '../game/state.js';
@@ -15,7 +17,7 @@ import {
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { tryEngageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
-import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop } from './controls.js';
+import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
 import {
   VERSION,
@@ -29,11 +31,11 @@ import {
   isDockService,
   isLiveCommand,
   reservedName,
+  noteSessionEvent,
   str,
 } from '../game/agent-schema.js';
 
 const FEED_KINDS = new Set(['biomass', 'rock', 'tend']);
-const V1_OBSERVE_ONLY = new Set(['bar', 'outfitting', 'people', 'epics', 'shipyard']);
 const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock']);
 const DESK_NEED = Object.freeze({
   acceptJob: 'jobs',
@@ -102,6 +104,59 @@ function harvest(ctx) {
   }
 }
 
+/**
+ * Job terminal watcher (v2): accepted contracts stay observable in flight and
+ * their terminal transition lands on the session ring. station.js notes the
+ * precise outcome at each terminal site (jobNoted marks those ids); this
+ * watcher is the backstop for a state flip or removal without a note.
+ * Session-only; never persists; never throws.
+ */
+function watchJobs(ctx) {
+  const agent = ensureAgent(ctx);
+  if (!agent) return;
+  if (!agent.jobWatch || typeof agent.jobWatch !== 'object' || Array.isArray(agent.jobWatch)) {
+    agent.jobWatch = {};
+  }
+  if (!agent.jobNoted || typeof agent.jobNoted !== 'object' || Array.isArray(agent.jobNoted)) {
+    agent.jobNoted = {};
+  }
+  const watch = agent.jobWatch;
+  const noted = agent.jobNoted;
+  const list = ctx.world && Array.isArray(ctx.world.jobs) ? ctx.world.jobs : [];
+  const live = {};
+  for (let i = 0; i < list.length; i++) {
+    const j = list[i];
+    if (!j || typeof j.id !== 'string' || !j.id || reservedName(j.id)) continue;
+    live[j.id] = {
+      kind: typeof j.kind === 'string' ? j.kind : '',
+      state: typeof j.state === 'string' ? j.state : '',
+    };
+  }
+  for (const id of Object.keys(watch)) {
+    const was = watch[id];
+    if (!was || was.state !== 'accepted') continue;
+    const cur = Object.hasOwn(live, id) ? live[id] : null;
+    let outcome = '';
+    let kind = was.kind;
+    if (cur && cur.state === was.state) continue;
+    if (cur && (cur.state === 'done' || cur.state === 'failed')) {
+      outcome = cur.state;
+      kind = cur.kind || kind;
+    } else if (!cur) {
+      outcome = 'closed';
+    }
+    if (!outcome) continue;
+    if (noted[id] !== undefined) continue;
+    noted[id] = outcome;
+    try {
+      noteSessionEvent(ctx, { type: 'jobState', id, kind, outcome });
+    } catch {
+      /* ring note is best-effort */
+    }
+  }
+  agent.jobWatch = live;
+}
+
 function remember(ctx, result) {
   const agent = ensureAgent(ctx);
   if (!agent) return result;
@@ -155,7 +210,6 @@ function peekDeskService(desk) {
     return null;
   }
 }
-
 function refuseDesk(ctx, name, needService) {
   const desk = deskOf(ctx);
   if (!desk || typeof desk.peekService !== 'function') return fail(ctx, name, 'no-service');
@@ -163,9 +217,6 @@ function refuseDesk(ctx, name, needService) {
   if (!needService) return null;
   const service = peekDeskService(desk);
   if (service === needService) return null;
-  if (typeof service === 'string' && V1_OBSERVE_ONLY.has(service)) {
-    return fail(ctx, name, 'v1-observe-only');
-  }
   return fail(ctx, name, 'no-service');
 }
 
@@ -449,10 +500,52 @@ function dispatchLive(ctx, name, args) {
     const n = Object.hasOwn(args, 'n') ? args.n : undefined;
     return afterControls(ctx, name, agentSetWeaponGroup(ctx, n));
   }
+  if (name === 'setControl') {
+    const token = agentControlSet(ctx, args);
+    if (token) return fail(ctx, name, token);
+    return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'active' }));
+  }
+  if (name === 'clearControl') {
+    agentControlClear(ctx);
+    return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'cleared' }));
+  }
+  if (name === 'stationAction') {
+    const desk = deskOf(ctx);
+    if (!desk || typeof desk.perform !== 'function') return fail(ctx, name, 'no-service');
+    if (!ctx.flags || ctx.flags.docked !== true) return fail(ctx, name, 'no-service');
+    const spec = { n: Object.hasOwn(args, 'n') ? args.n : undefined };
+    if (Object.hasOwn(args, 'expect') && typeof args.expect === 'string') spec.expect = args.expect;
+    const result = desk.perform(spec);
+    const notice = result && typeof result.notice === 'string' ? result.notice : '';
+    if (result && result.ok === true) {
+      return remember(ctx, actResult({ ok: true, error: notice, name, token: '' }));
+    }
+    const token = result && typeof result.token === 'string' && result.token
+      ? result.token
+      : deskNoticeToken(notice);
+    return fail(ctx, name, token, notice || token);
+  }
+  if (name === 'recover') {
+    const death = ctx && ctx.deathApi;
+    if (!death || typeof death.isOpen !== 'function' || typeof death.recover !== 'function') {
+      return fail(ctx, name, 'no-service');
+    }
+    let open = false;
+    try {
+      open = death.isOpen() === true;
+    } catch {
+      return fail(ctx, name, 'no-service');
+    }
+    if (!open) return fail(ctx, name, 'no-service');
+    try {
+      death.recover();
+    } catch {
+      return fail(ctx, name, 'no-service');
+    }
+    return ok(ctx, name);
+  }
   return fail(ctx, name, 'unknown');
 }
-
-/** Public handle follows window.__ctx when present; else the first install ctx. */
 function readLiveCtx(fallback) {
   try {
     const w = hostWindow();
@@ -619,8 +712,37 @@ function mountAgentBadge(ctx) {
   }
 }
 
+// v2 receipts: every act answers with a caller-provided or handle-issued
+// request id and the simulation timestamp. reqId is envelope metadata on the
+// command ({ v, name, args, reqId }) — never a gameplay arg, so strict arg
+// validation (setControl LEASE_KEYS, desk specs) never sees it. Session
+// counter only.
+let issuedReq = 0;
+
+function requestId(command) {
+  const raw = command && Object.hasOwn(command, 'reqId') ? command.reqId : '';
+  if (typeof raw !== 'string' || !raw || raw.length > 64 || reservedName(raw)) return '';
+  return raw;
+}
+
+function stampResult(ctx, result, reqId) {
+  const out = result && typeof result === 'object'
+    ? result
+    : actResult({ ok: false, error: 'refuse', token: 'refuse' });
+  out.t = ctx && ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  out.reqId = reqId || `r${++issuedReq}`;
+  return out;
+}
+
 function dispatchAct(ctx, command) {
   const name = commandName(command);
+  const args = commandArgs(command);
+  const reqId = requestId(command);
+  const result = dispatchGated(ctx, name, args);
+  return stampResult(ctx, result, reqId);
+}
+
+function dispatchGated(ctx, name, args) {
   if (isForbiddenName(name)) {
     try { console.warn('rimward: forbidden act', name); } catch { /* ignore */ }
     return fail(ctx, name, 'forbidden');
@@ -633,6 +755,7 @@ function dispatchAct(ctx, command) {
 
   if (name === 'disable') {
     agent.optIn = false;
+    try { agentControlClear(ctx); } catch { /* lease clear is best-effort */ }
     return ok(ctx, name);
   }
 
@@ -642,7 +765,7 @@ function dispatchAct(ctx, command) {
   if (flags.berthHold === true) return fail(ctx, name, 'held');
 
   if (!isLiveCommand(name)) return fail(ctx, name, 'unknown');
-  return dispatchLive(ctx, name, commandArgs(command));
+  return dispatchLive(ctx, name, args);
 }
 
 export function initAgentApi(ctx) {
@@ -698,6 +821,7 @@ export function initAgentApi(ctx) {
         const live = readLiveCtx(ctx);
         const bag = ensureAgent(live);
         if (bag) bag.optIn = false;
+        try { agentControlClear(live); } catch { /* lease clear is best-effort */ }
         const result = ok(live, 'disable');
         refreshBadge(live);
         return result;
@@ -723,6 +847,7 @@ export function initAgentApi(ctx) {
       try {
         const bag = live || ctx;
         harvest(bag);
+        watchJobs(bag);
         refreshBadge(readLiveCtx(ctx) || bag);
       } catch {
         /* never throw into the flight loop */

@@ -1,20 +1,29 @@
 /**
- * Agent observe snapshot. Authored fields only into a fresh object.
+ * Agent observe snapshot v2. Authored fields only into a fresh object.
  * Never JSON.stringify(ctx). Never returns functions, THREE, desks, or npc.ai.
+ *
+ * v2 (mission 43b34db25ae32972): capability manifest + dynamic availability,
+ * active in-flight jobs, HUD-derived aim/lead geometry, full station view,
+ * and the control-lease status. Every field maps to something a docked or
+ * flying player can presently see; scanner-tier gates mirror the HUD.
  */
 
-import { U, COMMODITIES } from './state.js';
+import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, resolveBand } from './state.js';
 import { losCloseRate } from './los-close.js';
+import { agentControlStatus } from '../systems/controls.js';
 import {
   VERSION,
   NEARBY_CAP,
   DOCK_KEY_SERVICES,
   EVENT_CAP,
+  COMMAND_NAMES,
+  capabilityManifest,
   num,
   str,
   finiteOrNull,
   vec3,
   fwdFromQuat,
+  localDir,
   copyLastIntent,
   noCtxObservation,
   sanitizeEvent,
@@ -94,24 +103,20 @@ function targetRow(kind, id, name, range) {
   };
 }
 
-function shipName(live) {
-  const st = live && live.state;
-  if (st && typeof st.name === 'string' && st.name) return st.name;
-  const rec = live && live.record;
-  if (rec && typeof rec.name === 'string' && rec.name) return rec.name;
-  return '';
-}
-
-function describeTarget(ctx, origin, t) {
+function describeTarget(ctx, origin, t, extended) {
   if (!t || typeof t !== 'object') return null;
   if (isLiveShip(t)) {
     const p = posOf(t.object);
-    return targetRow('ship', own(t, 'id'), shipName(t), rangeTo(origin, p));
+    const row = targetRow('ship', own(t, 'id'), shipDisplayName(ctx, t), rangeTo(origin, p));
+    if (extended) shipCondition(ctx, t, row);
+    return row;
   }
   if (isRockLock(ctx, t)) {
     const list = ctx.asteroids && ctx.asteroids.list;
     const idx = list ? list.indexOf(t) : -1;
-    return targetRow('rock', idx >= 0 ? idx : null, 'rock', rangeTo(origin, posOf(t)));
+    const row = targetRow('rock', idx >= 0 ? idx : null, 'rock', rangeTo(origin, posOf(t)));
+    if (extended) rockCondition(ctx, t, row);
+    return row;
   }
   const kind = lockKind(t);
   if (kind === 'station') {
@@ -137,11 +142,132 @@ function describeTarget(ctx, origin, t) {
   return null;
 }
 
-function nearbyTargets(ctx, origin, current, group) {
+/** HUD-true ship display name: a masked Q-ship's cover holds until the Mk II eye. */
+function shipDisplayName(ctx, t) {
+  const rec = t && t.record;
+  const st = t && t.state;
+  const scanner = ctx && ctx.world && Number.isFinite(ctx.world.scanner) ? ctx.world.scanner : 0;
+  const masked = !!(rec && rec.qship) && !rec.revealed;
+  const pierced = masked && scanner >= 2;
+  if (masked && !pierced) {
+    const cover = rec && typeof rec.coverName === 'string' && rec.coverName ? rec.coverName : '';
+    if (cover) return cover;
+  }
+  // HUD bracket law (hud.js 2604): record name, then state name, else CONTACT.
+  const named = (rec && typeof rec.name === 'string' && rec.name)
+    || (st && typeof st.name === 'string' && st.name)
+    || '';
+  return named || 'CONTACT';
+}
+
+/**
+ * Player-visible condition of a locked ship (HUD bracket + rail, hud.js
+ * 2548-2672): faction, hostility cue, resolve band, disabled state, and the
+ * rail vitals. Numeric resolve and the concealed-mounts mark follow the
+ * Wolfeye scanner tiers exactly like the pane.
+ */
+function shipCondition(ctx, t, row) {
+  const st = t && t.state;
+  const rec = t && t.record;
+  if (!st || typeof st !== 'object') return;
+  const scanner = ctx && ctx.world && Number.isFinite(ctx.world.scanner) ? ctx.world.scanner : 0;
+  const masked = !!(rec && rec.qship) && !rec.revealed;
+  const pierced = masked && scanner >= 2;
+  let key = (typeof st.faction === 'string' && st.faction)
+    || (rec && typeof rec.faction === 'string' ? rec.faction : '')
+    || 'independent';
+  if (masked && !pierced && rec && typeof rec.coverFaction === 'string' && rec.coverFaction) {
+    key = rec.coverFaction;
+  }
+  row.faction = key;
+  row.factionName = Object.hasOwn(FACTIONS, key) ? str(FACTIONS[key].name) : key;
+  // The HUD hostile-enter cue / combat flag is the player-visible source.
+  row.hostile = !!(t.ai && t.ai.intent === true);
+  row.disabled = st.disabled === true;
+  if (typeof st.resolve === 'number' && Number.isFinite(st.resolve)) {
+    row.resolveBand = resolveBand(st.resolve);
+    if (scanner >= 1) row.resolve = Math.round(st.resolve);
+  }
+  if (pierced) row.concealedMounts = true;
+  const frac = (cur, max) => {
+    const c = finiteOrNull(cur);
+    const m = finiteOrNull(max);
+    if (c === null || m === null || m <= 0) return null;
+    return Math.max(0, Math.min(1, c / m));
+  };
+  const screen = frac(st.screen, st.screenMax);
+  const shell = frac(st.shell, st.shellMax);
+  const engine = frac(st.engine, st.engineMax);
+  const hull = frac(st.hull, st.hullMax);
+  if (screen !== null) row.screen = screen;
+  if (shell !== null) row.shell = shell;
+  if (engine !== null) row.engine = engine;
+  if (hull !== null) row.hull = hull;
+}
+
+/** Locked-rock ore readout — the same fields the bracket prints (hud.js 2591-2614). */
+function rockCondition(ctx, t, row) {
+  const oreKey = typeof t.commodity === 'string' ? t.commodity : '';
+  const oreName = (oreKey && Object.hasOwn(COMMODITIES, oreKey) && str(COMMODITIES[oreKey].name)) || 'Ore';
+  const hardness = Number.isFinite(t.hardness)
+    ? t.hardness
+    : (ORE_TYPES[t.oreKey] && Number.isFinite(ORE_TYPES[t.oreKey].hardness) ? ORE_TYPES[t.oreKey].hardness : 1);
+  const laser = miningLaserFor(ctx.world && Number.isFinite(ctx.world.miningLaser) ? ctx.world.miningLaser : 0);
+  row.ore = oreName;
+  row.hardness = hardness;
+  if (Number.isFinite(t.ore)) row.unitsLeft = Math.round(t.ore);
+  if (hardness > laser.tier) {
+    row.blocked = true;
+    let needs = MINING_LASERS[MINING_LASERS.length - 1];
+    for (let li = 0; li < MINING_LASERS.length; li++) {
+      if (MINING_LASERS[li].tier >= hardness) { needs = MINING_LASERS[li]; break; }
+    }
+    row.needsHead = str(needs.name);
+  }
+}
+
+/** Copy of the HUD aim digest for the selected target. null when no lock. */
+function aimDigestOf(ctx) {
+  const aim = ctx && ctx.targets && typeof ctx.targets === 'object' ? ctx.targets.aim : null;
+  if (!aim || typeof aim !== 'object') return null;
+  const out = {
+    onScreen: aim.onScreen === true,
+    behind: aim.behind === true,
+    nx: num(aim.nx, 0),
+    ny: num(aim.ny, 0),
+    dist: num(aim.dist, 0),
+    closing: num(aim.closing, 0),
+    speed: num(aim.speed, 0),
+  };
+  if (Array.isArray(aim.edge)) {
+    const e = vec3([aim.edge[0], aim.edge[1], 0]);
+    if (e) out.edge = [e[0], e[1]];
+  }
+  if (Array.isArray(aim.bearing)) {
+    const b = vec3(aim.bearing);
+    if (b) out.bearing = b;
+  }
+  if (aim.lead && typeof aim.lead === 'object') {
+    const lead = { nx: num(aim.lead.nx, 0), ny: num(aim.lead.ny, 0) };
+    if (Array.isArray(aim.leadBearing)) {
+      const lb = vec3(aim.leadBearing);
+      if (lb) lead.bearing = lb;
+    }
+    out.lead = lead;
+  }
+  return out;
+}
+
+
+function nearbyTargets(ctx, origin, current, group, quat) {
   const rangeMax = U.TARGET_RANGE;
   const range2 = rangeMax * rangeMax;
   const rows = [];
   const seen = new Set();
+  const bearingOf = (p) => {
+    if (!origin || !p || !quat) return null;
+    return localDir(quat, p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]);
+  };
   const ships = Array.isArray(ctx.ships) ? ctx.ships : [];
   for (let i = 0; i < ships.length; i++) {
     const s = ships[i];
@@ -152,6 +278,9 @@ function nearbyTargets(ctx, origin, current, group) {
     if (d2 > range2) continue;
     const row = describeTarget(ctx, origin, s);
     if (!row) continue;
+    row.hostile = !!(s.ai && s.ai.intent === true);
+    const b = bearingOf(p);
+    if (b) row.bearing = b;
     rows.push(row);
     seen.add(s);
   }
@@ -166,10 +295,27 @@ function nearbyTargets(ctx, origin, current, group) {
         if (!origin || !p) continue;
         const d2 = (p[0] - origin[0]) ** 2 + (p[1] - origin[1]) ** 2 + (p[2] - origin[2]) ** 2;
         if (d2 > range2) continue;
-        rows.push(targetRow('rock', i, 'rock', Math.sqrt(d2)));
+        const row = targetRow('rock', i, 'rock', Math.sqrt(d2));
+        const b = bearingOf(p);
+        if (b) row.bearing = b;
+        rows.push(row);
         seen.add(a);
       }
     }
+  }
+  // Pods are world-visible and scoopable by proximity; the V-lock name is the
+  // player-visible identity (SURVIVOR / ore / CARGO).
+  const pods = Array.isArray(ctx.pods) ? ctx.pods : [];
+  for (let i = 0; i < pods.length; i++) {
+    const pod = pods[i];
+    const p = pod && pod.mesh ? vec3(pod.mesh.position) : null;
+    if (!origin || !p) continue;
+    const d2 = (p[0] - origin[0]) ** 2 + (p[1] - origin[1]) ** 2 + (p[2] - origin[2]) ** 2;
+    if (d2 > range2) continue;
+    const row = targetRow('pod', null, podDisplayName(pod), Math.sqrt(d2));
+    const b = bearingOf(p);
+    if (b) row.bearing = b;
+    rows.push(row);
   }
   rows.sort((a, b) => a.range - b.range);
   if (current && !seen.has(current)) {
@@ -178,6 +324,22 @@ function nearbyTargets(ctx, origin, current, group) {
   }
   if (rows.length > NEARBY_CAP) rows.length = NEARBY_CAP;
   return rows;
+}
+
+/** The V-lock bracket name for a pod (hud.js podLockName equivalent). */
+function podDisplayName(pod) {
+  const contents = pod && Array.isArray(pod.contents) ? pod.contents : [];
+  if (!contents.length) return 'CARGO';
+  let oreName = '';
+  for (let i = 0; i < contents.length; i++) {
+    const key = contents[i] && contents[i].commodity;
+    if (key === 'survivor') return 'SURVIVOR';
+    if (!oreName && typeof key === 'string' && Object.hasOwn(COMMODITIES, key)) {
+      const n = COMMODITIES[key].name;
+      if (typeof n === 'string' && n) oreName = n;
+    }
+  }
+  return oreName || 'CARGO';
 }
 
 function cargoRows(cargo) {
@@ -194,38 +356,65 @@ function cargoRows(cargo) {
   return out;
 }
 
-function jobRows(ctx, docked) {
-  if (!docked) return [];
+/** Player-visible contract row (jobs board card fields). */
+function jobRow(ctx, j) {
+  const row = {
+    id: str(own(j, 'id')),
+    kind: str(own(j, 'kind')),
+    state: str(own(j, 'state')),
+    reward: num(own(j, 'reward'), 0),
+  };
+  const title = own(j, 'title');
+  if (typeof title === 'string' && title) row.title = title;
+  const commodity = own(j, 'commodity');
+  if (typeof commodity === 'string' && commodity) row.commodity = commodity;
+  const count = own(j, 'count');
+  if (typeof count === 'number' && Number.isFinite(count)) row.count = count;
+  const units = own(j, 'units');
+  if (typeof units === 'number' && Number.isFinite(units)) row.units = units;
+  const need = own(j, 'need');
+  if (typeof need === 'number' && Number.isFinite(need)) row.need = need;
+  const progress = own(j, 'progress');
+  if (typeof progress === 'number' && Number.isFinite(progress)) row.progress = progress;
+  const destSystem = own(j, 'destSystem');
+  if (typeof destSystem === 'string' && destSystem) row.destSystem = destSystem;
+  const originSystem = own(j, 'originSystem');
+  if (typeof originSystem === 'string' && originSystem) row.originSystem = originSystem;
+  const destination = own(j, 'destination');
+  if (typeof destination === 'string' && destination) row.destination = destination;
+  const target = own(j, 'target');
+  if (typeof target === 'string' && target) row.target = target;
+  if (own(j, 'collected') === true) row.collected = true;
+  const payQuoted = own(j, 'payQuoted');
+  if (typeof payQuoted === 'number' && Number.isFinite(payQuoted)) row.payQuoted = payQuoted;
+  const deadline = own(j, 'deadline');
+  if (typeof deadline === 'number' && Number.isFinite(deadline)) {
+    row.deadline = deadline;
+    const now = ctx && ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : null;
+    if (now !== null) row.secondsLeft = Math.max(0, Math.floor(deadline - now));
+  }
+  return row;
+}
+
+/**
+ * v2 jobs block: board offers only while docked; accepted contracts stay
+ * observable in flight through their terminal jobState ring outcome.
+ */
+function jobsBlock(ctx, docked) {
   const jobs = ctx.world && Array.isArray(ctx.world.jobs) ? ctx.world.jobs : [];
-  const out = [];
+  const offers = [];
+  const active = [];
   for (let i = 0; i < jobs.length; i++) {
     const j = jobs[i];
     if (!j || typeof j !== 'object') continue;
-    const row = {
-      id: str(own(j, 'id')),
-      kind: str(own(j, 'kind')),
-      state: str(own(j, 'state')),
-      reward: num(own(j, 'reward'), 0),
-    };
-    const commodity = own(j, 'commodity');
-    if (typeof commodity === 'string' && commodity) row.commodity = commodity;
-    const count = own(j, 'count');
-    if (typeof count === 'number' && Number.isFinite(count)) row.count = count;
-    const units = own(j, 'units');
-    if (typeof units === 'number' && Number.isFinite(units)) row.units = units;
-    const need = own(j, 'need');
-    if (typeof need === 'number' && Number.isFinite(need)) row.need = need;
-    const progress = own(j, 'progress');
-    if (typeof progress === 'number' && Number.isFinite(progress)) row.progress = progress;
-    const destSystem = own(j, 'destSystem');
-    if (typeof destSystem === 'string' && destSystem) row.destSystem = destSystem;
-    const destination = own(j, 'destination');
-    if (typeof destination === 'string' && destination) row.destination = destination;
-    const deadline = own(j, 'deadline');
-    if (typeof deadline === 'number' && Number.isFinite(deadline)) row.deadline = deadline;
-    out.push(row);
+    const state = str(own(j, 'state'));
+    if (state === 'accepted') {
+      active.push(jobRow(ctx, j));
+      continue;
+    }
+    if (docked) offers.push(jobRow(ctx, j));
   }
-  return out;
+  return { offers, active };
 }
 
 function holdOf(cargo, key) {
@@ -415,7 +604,80 @@ function sessionPhase(ctx) {
 }
 
 /**
- * Frozen §0.2.1 snapshot. Missing ctx → no-ctx envelope and omit the rest.
+ * Dynamic per-command availability (v2 discovery): phase, dock/service,
+ * overlay, and helm ownership reasons. Cheap flag-level gating only — the
+ * authoritative validation still happens inside act().
+ */
+function availabilityBlock(ctx, phase) {
+  const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
+  const paused = flags.paused === true;
+  const held = flags.berthHold === true;
+  const docked = flags.docked === true;
+  const hailOpenF = flags.hailOpen === true;
+  const overlay = flags.chartOpen === true || flags.berthOpen === true || hailOpenF;
+  const helm = !!(
+    (ctx.autopilot && ctx.autopilot.engaged === true)
+    || (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true)
+    || (ctx.automine && ctx.automine.engaged === true)
+    || (ctx.flee && ctx.flee.engaged === true)
+  );
+  const out = {};
+  for (let i = 0; i < COMMAND_NAMES.length; i++) {
+    const name = COMMAND_NAMES[i];
+    let reason = '';
+    if (paused && !(name === 'ping' || name === 'disable' || name === 'startGame' || name === 'chooseOrigin')) {
+      reason = 'paused';
+    } else if (held && name !== 'ping' && name !== 'disable') {
+      reason = 'held';
+    } else if (name === 'dock') {
+      if (!(ctx.station && ctx.station.inZone === true)) reason = 'range';
+    } else if (name === 'undock' || name === 'openService' || name === 'acceptJob'
+      || name === 'trade' || name === 'repairAll' || name === 'feed' || name === 'stationAction') {
+      if (!docked) reason = 'no-service';
+    } else if (name === 'selectTarget' || name === 'setWeaponGroup' || name === 'afterburner' || name === 'approachDock') {
+      if (docked) reason = 'docked';
+    } else if (name === 'setControl') {
+      if (docked) reason = 'docked';
+      else if (phase !== 'playing') reason = 'phase';
+      else if (overlay) reason = 'overlay';
+      else if (helm) reason = 'helm';
+    } else if (name === 'recover') {
+      if (phase !== 'dead') reason = 'no-service';
+    } else if (name === 'startGame') {
+      if (phase !== 'title') reason = 'no-service';
+    } else if (name === 'chooseOrigin') {
+      if (phase !== 'origin') reason = 'no-service';
+    } else if (name === 'hailResolve') {
+      if (!hailOpenF) reason = 'closed';
+    }
+    out[name] = { ok: reason === '', reason };
+  }
+  return out;
+}
+
+/** Structured docked panel view (v2): rows + clickable actions + notice. */
+function stationView(ctx, docked) {
+  if (!docked) return null;
+  const desk = ctx.stationDesk;
+  if (!desk || typeof desk.peekView !== 'function') return null;
+  try {
+    const view = desk.peekView();
+    if (!view || typeof view !== 'object') return null;
+    return {
+      level: view.level === 2 ? 2 : 1,
+      service: typeof view.service === 'string' && view.service ? view.service : null,
+      notice: str(view.notice),
+      pending: view.pending === true,
+      rows: Array.isArray(view.rows) ? view.rows : [],
+      actions: Array.isArray(view.actions) ? view.actions : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * v2 snapshot. Missing ctx → no-ctx envelope and omit the rest.
  */
 export function buildObservation(ctx) {
   try {
@@ -476,13 +738,21 @@ export function buildObservation(ctx) {
     const burnerReadyAt = finiteOrNull(ship.burnerReadyAt);
     if (burnerReadyAt !== null) shipSnap.burnerReadyAt = burnerReadyAt;
 
+    const phase = sessionPhase(ctx);
+
+    const shipSnap2 = shipSnap;
+    shipSnap2.fireHeld = input.fireHeld === true;
+
     return {
       v: VERSION,
       t: num(world.time, 0),
       ok: true,
       error: '',
       agentOptIn: agent ? agent.optIn === true : false,
-      session: { phase: sessionPhase(ctx) },
+      capabilities: capabilityManifest(),
+      availability: availabilityBlock(ctx, phase),
+      session: { phase },
+      control: agentControlStatus(ctx),
       ship: shipSnap,
       flags: {
         docked,
@@ -502,6 +772,9 @@ export function buildObservation(ctx) {
         fear: num(world.fear, 0),
         cargoCapacity: num(ctx.cargoCapacity, 0),
         cargo: cargoRows(ctx.cargo),
+        scanner: num(world.scanner, 0),
+        miningLaser: num(world.miningLaser, 0),
+        concealedMounts: world.concealedMounts === true,
       },
       bio: {
         mood: str(bio.mood) || 'serene',
@@ -525,12 +798,14 @@ export function buildObservation(ctx) {
         closingSpeed: num(stationClosing, 0),
         service,
         services: docked ? DOCK_KEY_SERVICES.slice() : [],
+        view: stationView(ctx, docked),
       },
-      jobs: jobRows(ctx, docked),
+      jobs: jobsBlock(ctx, docked),
       market: marketBlock(ctx, docked, service),
       targets: {
-        current: describeTarget(ctx, origin, current),
-        nearby: nearbyTargets(ctx, origin, current, group),
+        current: describeTarget(ctx, origin, current, true),
+        nearby: nearbyTargets(ctx, origin, current, group, object ? object.quaternion : null),
+        aim: aimDigestOf(ctx),
       },
       hail: {
         open: hailOpen,

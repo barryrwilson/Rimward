@@ -189,6 +189,8 @@ function offerAtDigit(ctx, n) {
 
 function attachHullPreview(h, parent, ctx, offer, faction) {
   const host = h('div', 'shipyard-preview', parent);
+  // stationDesk.peekView() captures plain objects, not DOM: no WebGL turntable.
+  if (host && host.capture === true) return;
   mountYardPreview(host, {
     hullKind: offer.hullKind,
     faction,

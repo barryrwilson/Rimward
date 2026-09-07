@@ -12,6 +12,7 @@ import {
   actResult,
   fwdFromQuat,
   vec3,
+  localDir,
   isLiveCommand,
   isPr1LiveCommand,
   isForbiddenName,
@@ -183,6 +184,152 @@ const session = { agent: { optIn: false, events: [] }, world: { time: 9 } };
 noteSessionEvent(session, { type: 'recovered', source: 'fresh' });
 pin('noteSessionEvent no optIn write', session.agent.optIn === false);
 pin('noteSessionEvent recovered', session.agent.events.length === 1 && session.agent.events[0].type === 'recovered');
+
+// ---- v2 pins (mission 43b34db25ae32972) ----
+pin('version 2', COMMAND_NAMES.includes('setControl') && COMMAND_NAMES.includes('clearControl')
+  && COMMAND_NAMES.includes('stationAction') && COMMAND_NAMES.includes('recover'));
+pin('v2 commands live', isLiveCommand('setControl') === true && isLiveCommand('clearControl') === true
+  && isLiveCommand('stationAction') === true && isLiveCommand('recover') === true);
+pin('v2 events authored', EVENT_TYPES.includes('jobState') && EVENT_TYPES.includes('npcDestroyed')
+  && EVENT_TYPES.includes('survivorRescued') && EVENT_TYPES.includes('landmarkFound')
+  && EVENT_TYPES.includes('npcHit') && EVENT_TYPES.includes('hailMiss'));
+
+const jobEv = sanitizeEvent({ type: 'jobState', t: 8, id: 'mine-freehold-0', kind: 'mining', outcome: 'delivered', pay: 220, extra: () => {} });
+pin('jobState primitives', !!(jobEv && jobEv.id === 'mine-freehold-0' && jobEv.outcome === 'delivered'
+  && jobEv.pay === 220 && !Object.hasOwn(jobEv, 'extra')));
+
+const npcDead = sanitizeEvent({ type: 'npcDestroyed', t: 9, ship: { id: 'npc-9', state: { name: 'Gallows Wren' }, ai: { intent: true } } });
+pin('npcDestroyed derives identity', !!(npcDead && npcDead.targetId === 'npc-9'
+  && npcDead.targetName === 'Gallows Wren' && !Object.hasOwn(npcDead, 'ship') && !Object.hasOwn(npcDead, 'ai')));
+
+const engOut = sanitizeEvent({ type: 'engineOut', t: 10, player: true });
+pin('engineOut player primitive', !!(engOut && engOut.player === true && !Object.hasOwn(engOut, 'ship')));
+
+const podEv = sanitizeEvent({ type: 'podCollected', t: 11, pod: { id: 7, contents: [] } });
+pin('podCollected derives podId', !!(podEv && podEv.podId === 7 && !Object.hasOwn(podEv, 'pod')));
+// Re-sanitize (observe() copies ring rows) must keep the derived podId: the row
+// has a plain podId and no pod, so a blanket "derived above" skip lost it.
+const podEv2 = sanitizeEvent(podEv);
+pin('podCollected podId survives re-sanitize', !!(podEv2 && podEv2.podId === 7 && !Object.hasOwn(podEv2, 'pod')));
+const podSpawn = sanitizeEvent({ type: 'podSpawned', t: 12, pod: { id: 'pod-3', cargo: {} } });
+const podSpawn2 = sanitizeEvent(podSpawn);
+pin('podSpawned derives podId', !!(podSpawn && podSpawn.podId === 'pod-3' && !Object.hasOwn(podSpawn, 'pod')));
+pin('podSpawned podId survives re-sanitize', !!(podSpawn2 && podSpawn2.podId === 'pod-3' && !Object.hasOwn(podSpawn2, 'cargo')));
+// Raw pod.id still wins over a hand-supplied podId, and non-primitives never copy.
+const podClash = sanitizeEvent({ type: 'podCollected', t: 13, podId: 'spoofed', pod: { id: 4 } });
+pin('raw pod.id beats supplied podId', !!(podClash && podClash.podId === 4));
+const podBad = sanitizeEvent({ type: 'podSpawned', t: 14, podId: { id: 'obj' } });
+pin('object podId rejected', !!(podBad && !Object.hasOwn(podBad, 'podId')));
+const podNoId = sanitizeEvent({ type: 'podCollected', t: 15, podId: 9, pod: { contents: [] } });
+pin('plain podId kept when pod lacks id', !!(podNoId && podNoId.podId === 9 && !Object.hasOwn(podNoId, 'pod')));
+
+const hailEnd = sanitizeEvent({ type: 'hailClosed', t: 12, ship: { id: 'x' }, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 120 });
+pin('hailClosed outcome primitives', !!(hailEnd && hailEnd.demandOutcome === 'paid'
+  && hailEnd.speaker === 'Ninth Tooth' && hailEnd.demand === 120 && !Object.hasOwn(hailEnd, 'ship')));
+
+// Hit spam collapses per target and never floods the ring.
+const hitRing = [];
+for (let i = 0; i < 30; i++) pushRing(hitRing, { type: 'npcHit', t: i, targetId: 'a', damage: 8 });
+pushRing(hitRing, { type: 'npcHit', t: 31, targetId: 'b', damage: 4 });
+const hitA = hitRing.find((e) => e && e.type === 'npcHit' && e.targetId === 'a');
+pin('npcHit collapse per target', !!(hitA && hitA.count === 30));
+pin('npcHit newest target kept', hitRing.some((e) => e && e.type === 'npcHit' && e.targetId === 'b'));
+const keepRing = [];
+pushRing(keepRing, { type: 'jobState', t: 1, id: 'j1', kind: 'mining', outcome: 'done' });
+for (let i = 0; i < 24; i++) pushRing(keepRing, { type: 'npcHit', t: i + 2, targetId: 's', damage: 1 });
+pin('jobState survives hit flood', keepRing.some((e) => e && e.type === 'jobState' && e.id === 'j1'));
+// Combat spam folding (wave-142 ring starvation): sustained playerHit/bodyHit
+// (KEEP_RING types) once saturated the 16-row ring so eviction discarded the
+// agent's own playerFire/npcHit on arrival. Folding per family/kind/weapon
+// keeps the ring mixed so fire/hit feedback survives heavy combat.
+const combatRing = [];
+for (let i = 0; i < 20; i++) pushRing(combatRing, { type: 'playerHit', t: i + 1, damage: 2, family: 'cannon' });
+for (let i = 0; i < 10; i++) pushRing(combatRing, { type: 'bodyHit', t: 30 + i, kind: 'ship', speed: 20, damage: 1 });
+for (let i = 0; i < 6; i++) pushRing(combatRing, { type: 'shieldDown', t: 40 + i, layer: i % 2 ? 'screen' : 'shell', actor: 'player' });
+pushRing(combatRing, { type: 'playerFire', t: 50, weapon: 'cannon' });
+pushRing(combatRing, { type: 'npcHit', t: 51, targetId: 'foe', damage: 8 });
+const phRow = combatRing.find((e) => e && e.type === 'playerHit');
+pin('playerHit folds per family', !!(phRow && phRow.count === 20));
+pin('shieldDown rows keep per-layer identity', combatRing.filter((e) => e && e.type === 'shieldDown').length === 6);
+pin('playerFire survives KEEP pressure', combatRing.some((e) => e && e.type === 'playerFire' && e.weapon === 'cannon'));
+pin('npcHit survives KEEP pressure', combatRing.some((e) => e && e.type === 'npcHit' && e.targetId === 'foe'));
+pin('combat ring within cap', combatRing.length <= EVENT_CAP);
+
+// Demand receipts under ring saturation (PR57 hailDemand): a pirate fight fills
+// the ring with distinct npcHit rows (foldable, so keep-class), then the tribute
+// is paid. Before terminal retention the fresh hailClosed was the only non-keep
+// row present, so eviction discarded it on arrival and the agent could never
+// observe the outcome of its own hailResolve - one more tick did not help.
+const saturate = (rows, tag) => {
+  for (let i = 0; i < EVENT_CAP; i++) {
+    pushRing(rows, { type: 'npcHit', t: i + 1, targetId: `${tag}-${i}`, damage: 3 });
+  }
+  return rows;
+};
+const paidRing = saturate([], 'paid');
+pin('demand ring saturated by npcHit', paidRing.length === EVENT_CAP
+  && paidRing.every((e) => e && e.type === 'npcHit'));
+pushRing(paidRing, {
+  type: 'hailClosed', t: 90, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 200,
+});
+pin('paid demand receipt survives arrival', paidRing.some((e) => e
+  && e.type === 'hailClosed' && e.demandOutcome === 'paid'));
+pin('demand ring within cap', paidRing.length <= EVENT_CAP);
+// The next harvest ticks keep pumping combat rows; the receipt must still be
+// observable on the following observe(), not just on the frame it arrived.
+for (let i = 0; i < 6; i++) {
+  pushRing(paidRing, { type: 'npcHit', t: 100 + i, targetId: `after-${i}`, damage: 2 });
+}
+pin('paid demand receipt survives later ticks', paidRing.some((e) => e
+  && e.type === 'hailClosed' && e.demandOutcome === 'paid'));
+
+// Every terminal outcome is a receipt, not just the paid one.
+for (const outcome of ['refused', 'bluffed', 'failed', 'expired', 'docked', 'jumped', 'voided']) {
+  const ring2 = saturate([], outcome);
+  pushRing(ring2, { type: 'hailClosed', t: 90, demandHail: true, demandOutcome: outcome, speaker: 'Ninth Tooth', demand: 200 });
+  pin(`${outcome} demand receipt survives arrival`, ring2.length <= EVENT_CAP
+    && ring2.some((e) => e && e.type === 'hailClosed' && e.demandOutcome === outcome));
+}
+
+// Narrowness: an ordinary hang-up carries no outcome and stays evictable, so
+// routine hail traffic cannot crowd the ring.
+const plainRing = saturate([], 'plain');
+pushRing(plainRing, { type: 'hailClosed', t: 90 });
+pin('plain hailClosed stays evictable', plainRing.length <= EVENT_CAP
+  && !plainRing.some((e) => e && e.type === 'hailClosed'));
+// A demand flood is still bounded: the ring never grows past the cap and the
+// newest outcomes win.
+const demandFlood = [];
+for (let i = 0; i < 40; i++) {
+  pushRing(demandFlood, { type: 'hailClosed', t: 200 + i, demandHail: true, demandOutcome: 'paid', speaker: `p${i}`, demand: 10 });
+}
+pin('demand flood bounded by cap', demandFlood.length === EVENT_CAP);
+pin('demand flood keeps newest', demandFlood[demandFlood.length - 1].speaker === 'p39');
+
+
+// actResult v2 receipts: reqId + sim timestamp.
+const receipt = actResult({ ok: true, error: '', name: 'setControl', token: '', status: 'active', reqId: 'q9', t: 12.5 });
+pin('actResult v2 receipt', receipt.v === 2 && receipt.reqId === 'q9' && receipt.t === 12.5 && receipt.status === 'active');
+const receiptBare = actResult({ ok: false, error: 'x', name: 'dock', token: 'range' });
+pin('actResult omits empty reqId', !Object.hasOwn(receiptBare, 'reqId') && !Object.hasOwn(receiptBare, 't'));
+
+// localDir: world dir through the inverse quaternion (identity + 90° yaw).
+pin('localDir identity', vecNear(localDir({ x: 0, y: 0, z: 0, w: 1 }, 0, 0, -5), [0, 0, -1]));
+const yaw90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+const wantLocal = new THREE.Vector3(10, 0, 0).applyQuaternion(yaw90.clone().invert()).normalize();
+pin('localDir matches THREE inverse', vecNear(localDir(yaw90, 10, 0, 0), [wantLocal.x, wantLocal.y, wantLocal.z]));
+pin('localDir bad quat', localDir(null, 1, 0, 0) === null && localDir({ x: NaN, y: 0, z: 0, w: 1 }, 1, 0, 0) === null);
+
+// Capability manifest: every role and station service has an explicit status.
+const { capabilityManifest } = await import('../src/game/agent-schema.js');
+const manifest = capabilityManifest();
+pin('manifest v2', manifest.version === 2 && Array.isArray(manifest.events));
+pin('manifest roles explicit', Object.values(manifest.roles).every((r) => (
+  r && (r.status === 'supported' || r.status === 'unavailable' || r.status === 'blocked-by-scope')
+)));
+pin('manifest services explicit', ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard']
+  .every((s) => manifest.services[s] && manifest.services[s].status === 'supported'));
+pin('manifest commands complete', COMMAND_NAMES.every((n) => manifest.commands[n]));
 
 if (fails) {
   console.log(`AGENT SCHEMA FAIL — ${fails}`);

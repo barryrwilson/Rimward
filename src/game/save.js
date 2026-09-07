@@ -993,11 +993,28 @@ function replaceMountedHangarCargo(ctx, list) {
 
 export function snapshot(ctx) {
   sanitizeHangar(ctx);
+  // sanitizeNav heals the route for the record but rewrites the live bag
+  // with autopilot:false (a restore never resumes the helm — nav.js wave 85).
+  // A snapshot taken mid-flight (idle/dock/jump autosave) must not silently
+  // cancel a flying autopilot: remember the flag, heal for the blob, then
+  // hand the live bag its flag back. The blob gets its own nav copy, so the
+  // persisted record still says autopilot:false.
+  const navBefore = ctx.world && ctx.world.nav;
+  const apFlying = !!(navBefore && typeof navBefore === 'object' && !Array.isArray(navBefore)
+    && navBefore.autopilot === true);
   sanitizeNav(ctx);
   parkMounted(ctx);
   healPlayerHullKind(ctx);
+  if (apFlying && ctx.world.nav && typeof ctx.world.nav === 'object') {
+    ctx.world.nav.autopilot = true;
+  }
   const world = {};
-  for (const k of WORLD_FIELDS) if (ctx.world[k] !== undefined) world[k] = ctx.world[k];
+  for (const k of WORLD_FIELDS) {
+    if (ctx.world[k] === undefined) continue;
+    world[k] = (k === 'nav' && ctx.world.nav && typeof ctx.world.nav === 'object')
+      ? { ...ctx.world.nav, autopilot: false }
+      : ctx.world[k];
+  }
   return {
     v: 1,
     savedAt: Date.now(),
@@ -1354,6 +1371,8 @@ export function initSave(ctx) {
 
   ctx.deathApi = {
     isOpen() { return dead === true; },
+    // Agent API v2: the same recovery the Enter/click/auto-timer path runs.
+    recover() { recover(); },
   };
 
   function recover() {

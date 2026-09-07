@@ -247,7 +247,7 @@ checked against the current initiative text before capture.
   Owner choice 1 on 2026-08-28: keep zero-cost recovery and honest copy.
   `docs/DeathLossPolicyDesign.md`. No UU charge. Overlay says so.
   Landed in #29.
-- [ ] PLANNED (P2, AGENT API): Add an AI-agent play API so agents can play the
+- [x] DONE (P2, AGENT API): Add an AI-agent play API so agents can play the
   game on a user's behalf. This playtest needed injected synthetic
   key/mouse events, a hand-rolled steering loop against `window.__ctx`, and
   screen-scraping to act at all — and stock agent keyboard events (empty
@@ -265,6 +265,12 @@ checked against the current initiative text before capture.
   2026-08-27 Claude Fable playtest: observe/act bugs below landed in-repo.
   Owner choice 2B and `docs/AgentApiPadApproachDesign.md` were approved on
   2026-08-27. RW-001 implements the bounded `approachDock` intent.
+  **Wave 141 (2026-09-05, mission 43b34db25ae32972): v2 closes the remaining
+  parity gaps** — the versioned handle now carries a controls-owned expiring
+  control lease (the "hand-rolled steering loop" is a first-class legal
+  input), HUD-derived aim/lead geometry, full station-desk parity through the
+  exact player closures, in-flight job tracking with terminal outcomes, and
+  machine-readable scenario ledgers. All roles playable screenshot-free.
 
 Working well and needing no capture: the standing screen, the lock card with
 hardness and required laser, the automine refusal toast, the Ninth Tooth

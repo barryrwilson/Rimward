@@ -114,7 +114,8 @@
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createCtx } from '../src/core/ctx.js';
 import { FACTION_STYLE } from '../src/game/faction-style.js';
@@ -134,264 +135,65 @@ import {
   collectBodies,
   resolveMover,
 } from '../src/game/collision.js';
+import { seedBootRandom, installDomStubs, bootGameSystems, makeTick, makeNavHelpers, makeCombatFixtures, makeCalmPins } from './lib/boot-harness.mjs';
 
 // The boot harness exercises one fixed world. Production systems intentionally
 // use Math.random, but an unseeded process made the same commit produce
 // different traffic, event, hail, and navigation state from run to run. Keep
 // the full boot deterministic; scoped tests below may still save, override,
 // and restore this generator when they need to force a particular roll.
-let bootRandomState = 0x5eed1234;
-Math.random = () => {
-  bootRandomState = (Math.imul(1664525, bootRandomState) + 1013904223) >>> 0;
-  return bootRandomState / 0x100000000;
-};
+seedBootRandom();
 
-// ---- Minimal DOM stubs (enough for hud/station/hail/controls/song) ----
-function makeCtx2d() {
-  const gradient = { addColorStop() {} };
-  return new Proxy(
-    {
-      canvas: null,
-      createRadialGradient: () => gradient,
-      createLinearGradient: () => gradient,
-      createPattern: () => null,
-      measureText: () => ({ width: 10 }),
-      getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(Math.max(4, w * h * 4)) }),
-      createImageData: (w, h) => ({ data: new Uint8ClampedArray(Math.max(4, (w || 1) * (h || 1) * 4)) }),
-    },
-    {
-      get(target, prop) {
-        if (prop in target) return target[prop];
-        // any other property: no-op method if called, benign value otherwise
-        return typeof prop === 'string' ? function () {} : undefined;
-      },
-      set() { return true; },
-    },
-  );
-}
-
-function makeEl(tag = 'div') {
-  const el = {
-    tagName: tag.toUpperCase(),
-    children: [],
-    parent: null,
-    _listeners: {},
-    _attrs: {},
-    style: { setProperty(k, v) { this[k] = v; } },
-    classList: {
-      _s: new Set(),
-      _commit() { el.className = [...this._s].join(' '); }, // routes through the className sync below
-      add(...c) { c.forEach((x) => this._s.add(x)); this._commit(); },
-      remove(...c) { c.forEach((x) => this._s.delete(x)); this._commit(); },
-      toggle(c, f) { (f ?? !this._s.has(c)) ? this._s.add(c) : this._s.delete(c); this._commit(); },
-      contains(c) { return this._s.has(c); },
-    },
-    dataset: {},
-    innerHTML: '',
-    value: '',
-    appendChild(c) { c.parent = el; this.children.push(c); return c; },
-    append(...c) { for (const x of c) if (x && typeof x === 'object') x.parent = el; this.children.push(...c); },
-    prepend(...c) { for (const x of c) if (x && typeof x === 'object') x.parent = el; this.children.unshift(...c); },
-    insertAdjacentHTML() {},
-    insertAdjacentElement() {},
-    closest() { return null; },
-    cloneNode() { return makeEl(this.tagName); },
-    contains() { return false; },
-    removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); return c; },
-    remove() { const p = this.parent; if (p) { const i = p.children.indexOf(this); if (i >= 0) p.children.splice(i, 1); } },
-    addEventListener(type, fn) { (this._listeners[type] ??= []).push(fn); },
-    removeEventListener(type, fn) { const a = this._listeners[type]; if (!a) return; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); },
-    setAttribute(k, v) {
-      const val = String(v);
-      if (k === 'class') { el.className = val; return; } // routes through the className/classList sync below
-      el._attrs[k] = val;
-      // data-system-id → dataset.systemId (real DOM camelCase rule);
-      // galaxychart.js builds its SVG nodes/edges entirely via setAttribute.
-      if (k.startsWith('data-')) el.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = val;
-    },
-    getAttribute(k) { return Object.hasOwn(el._attrs, k) ? el._attrs[k] : null; },
-    removeAttribute(k) { delete el._attrs[k]; },
-    querySelector() { return null; },
-    querySelectorAll() { return []; },
-    getBoundingClientRect() { return { x: 0, y: 0, width: 100, height: 20, top: 0, left: 0, right: 100, bottom: 20 }; },
-    getContext(kind) { return kind === '2d' ? makeCtx2d() : null; },
-    focus() {},
-    // Fire registered click listeners (station.js buttons route game actions here).
-    click() {
-      for (const fn of this._listeners.click ?? []) fn({ type: 'click', target: this });
-      // Real checkboxes toggle + fire 'change' on click (settings.js panel).
-      if (this.type === 'checkbox') {
-        this.checked = !this.checked;
-        for (const fn of this._listeners.change ?? []) fn({ type: 'change', target: this });
-      }
-    },
-  };
-  // className mirrors real DOM: assigning it re-syncs classList and the
-  // 'class' attribute (and vice versa via classList._commit / setAttribute).
-  let className = '';
-  Object.defineProperty(el, 'className', {
-    get() { return className; },
-    set(v) {
-      className = String(v);
-      el._attrs.class = className;
-      el.classList._s = new Set(className.split(/\s+/).filter(Boolean));
-    },
-  });
-  // textContent mirrors real DOM: assigning '' clears children (render() relies on it).
-  let text = '';
-  Object.defineProperty(el, 'textContent', {
-    get() { return text; },
-    set(v) { text = String(v); if (v === '') el.children.length = 0; },
-  });
-  return el;
-}
-const elements = new Map();
-globalThis.document = {
-  createElement: (t) => makeEl(t),
-  createElementNS: (_, t) => makeEl(t),
-  createTextNode: (t) => ({ nodeType: 3, textContent: t, remove() {} }),
-  createDocumentFragment: () => makeEl('fragment'),
-  getElementById: (id) => {
-    if (!elements.has(id)) elements.set(id, makeEl());
-    return elements.get(id);
-  },
-  querySelector: () => null,
-  querySelectorAll: () => [],
-  body: makeEl('body'),
-  addEventListener() {},
-  hidden: false,
-};
-const winListeners = {};
-globalThis.window = {
-  innerWidth: 1280,
-  innerHeight: 720,
-  devicePixelRatio: 1,
-  location: { search: '', href: 'http://127.0.0.1/boot' },
-  addEventListener(type, fn) { (winListeners[type] ??= []).push(fn); },
-  removeEventListener(type, fn) { const a = winListeners[type]; if (!a) return; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); },
-  dispatchEvent() {},
-};
-// Harness-only: fire a synthetic keydown+keyup at every registered window
-// listener (station menu chrome, controls.js edges) exactly like real input.
-function dispatchKey(code) {
-  for (const fn of winListeners.keydown ?? []) fn({ code, repeat: false, preventDefault() {} });
-  for (const fn of winListeners.keyup ?? []) fn({ code, preventDefault() {} });
-}
-// Empty e.code a11y path (WAVE133 / PR4). Existing dispatchKey(code) stays code-only.
-function dispatchKeyFallback(key) {
-  for (const fn of winListeners.keydown ?? []) fn({ code: '', key, repeat: false, preventDefault() {} });
-  for (const fn of winListeners.keyup ?? []) fn({ code: '', key, preventDefault() {} });
-}
-const store = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
-  removeItem: (k) => store.delete(k),
-};
-const sessionStore = new Map();
-globalThis.sessionStorage = {
-  getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
-  setItem: (k, v) => sessionStore.set(k, String(v)),
-  removeItem: (k) => sessionStore.delete(k),
-};
-
-// ---- Boot the full system graph ----
-const { initStarfield } = await import('../src/systems/starfield.js');
-const { initSolarSystem } = await import('../src/systems/solarsystem.js');
-const { initAsteroids } = await import('../src/systems/asteroids.js');
-const { initStation } = await import('../src/systems/station.js');
-const { initLandmarks } = await import('../src/systems/landmarks.js');
-const { initControls } = await import('../src/systems/controls.js');
-const { initSettings } = await import('../src/systems/settings.js');
-const { initBio } = await import('../src/game/bio.js');
-const { initShip, FIRST_PERSON_NOSE } = await import('../src/systems/ship.js');
-const { initWorld, recordPosition } = await import('../src/game/world.js');
+// ---- Minimal DOM stubs (shared harness: scripts/lib/boot-harness.mjs) ----
 const {
-  initContacts, contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
+  elements, winListeners, dispatchKey, dispatchKeyFallback,
+  store, sessionStore, walkDom, makeEl, makeCtx2d,
+} = installDomStubs();
+
+// ---- Boot the full system graph (shared harness: scripts/lib/boot-harness.mjs) ----
+const boot = await bootGameSystems();
+const { ctx, systems, scene, camera, renderer } = boot;
+const {
+  inits, // bootFreshHarness (waves 6/7) re-runs the harness list verbatim
+  initStation, initGate, initAsteroids, initCombat, initTitle, // scoped-context build paths (waves 38-51)
+  FIRST_PERSON_NOSE, recordPosition,
+  contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine,
   keeperLedgerLine, KEEPER_LEDGER_TRUST, keeperVouchArrival, keeperChartMark, chartedMarkNotes,
   KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST,
-} = await import('../src/game/contacts.js');
-const { initMystery } = await import('../src/game/mystery.js');
-const { initEpics, epicEffects } = await import('../src/game/epics.js');
-const { initGate } = await import('../src/systems/gate.js');
-const { initJump } = await import('../src/game/jump.js');
-const { initNav } = await import('../src/game/nav.js');
-const { initAutopilot } = await import('../src/game/autopilot.js');
-const { initAgentFlee } = await import('../src/game/agent-flee.js');
-const { initTraffic } = await import('../src/game/traffic.js');
-const {
-  NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
-  releaseShipAsset,
-} = await import('../src/systems/ship-assets.js');
-configureShipAssetFileReader((assetPath) => readFile(new URL(`../public${assetPath}`, import.meta.url)));
-await Promise.all(NPC_FACTIONS.flatMap((faction) => NPC_CLASSES.flatMap((classKey) => [
-  primeShipAsset(faction, classKey, 'trader'),
-  primeShipAsset(faction, classKey, 'pirate'),
-])));
-const { initNpc, spawnLiveShip, removeLiveShip } = await import('../src/systems/npc.js');
-const { initCombat } = await import('../src/systems/combat.js');
-const { initPods } = await import('../src/game/pods.js');
-const { initHail } = await import('../src/systems/hail.js');
-const { initSong } = await import('../src/systems/song.js');
-const { initSave, snapshot, restore, clearAutosave } = await import('../src/game/save.js');
-const { initOrigins } = await import('../src/game/origins.js');
-const { initOnboarding } = await import('../src/systems/onboarding.js');
-const { initGalaxyChart } = await import('../src/systems/galaxychart.js'); // wave-21 runtime chart (same init slot as main.js)
-const { initWakes } = await import('../src/systems/wakes.js'); // wave 30: flee wake trails + wreck-field discovery (same init slot as main.js)
-const { initTitle } = await import('../src/systems/title.js'); // wave 40: title screen front door
-const { initAgentApi } = await import('../src/systems/agent-api.js');
-const { initHud, hudFamily, hairBoxForRail, agezHairOff } = await import('../src/systems/hud.js');
-const {
+  epicEffects,
+  // Master's Beautiful Ones fleet refresh (#58) primes/releases the shared
+  // ship assets; the harness owns the priming pass, so the wave-108 surface
+  // checks only need the release hook alongside the build/prime binds.
+  NPC_FACTIONS, NPC_CLASSES, buildShipAsset, primeShipAsset, releaseShipAsset,
+  spawnLiveShip, removeLiveShip,
+  snapshot, restore, clearAutosave,
+  hudFamily, hairBoxForRail, agezHairOff,
   isBeautiful, makePetalGeometry, makeTendrilGeometry,
   organicMaterials, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic,
-} = await import('../src/systems/organic.js'); // wave 27: Beautiful Ones organic toolkit
+  SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS,
+  NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION,
+  FACTION_RUMOR, FACTION_COMP, U, HIDDEN_MOUNTS, cargoValue,
+  tickPrices,
+} = boot.binds;
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
-const renderer = { domElement: makeEl('canvas'), setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {} };
-const ctx = createCtx({ scene, camera, renderer });
-const { SYSTEMS, RANK_LADDER, rankFor, ECON, BANDS, CONVERGENCE, DEEPENING, ACES, ORIGIN_ARCS, NAMED_GUNS, HERMIT, CALLOW, COMMODITIES, FACTION_SERVICES, FACTION_RECOGNITION, FACTION_RUMOR, FACTION_COMP, U, HIDDEN_MOUNTS, cargoValue } = await import('../src/game/state.js');
-const { tickPrices } = await import('../src/game/market.js');
-ctx.systems = SYSTEMS; // mirrors main.js boot line
-
-const inits = [
-  ['title', initTitle],
-  ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
-  ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['flee', initAgentFlee], ['settings', initSettings], ['bio', initBio],
-  ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
-  ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
-  ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['agentapi', initAgentApi], ['hud', initHud],
-];
-const systems = [];
-for (const [name, init] of inits) {
-  try {
-    systems.push([name, init(ctx)]);
-    console.log(`INIT OK   ${name}`);
-  } catch (e) {
-    console.log(`INIT FAIL ${name}: ${e.message}`);
-    process.exit(1);
-  }
-}
-
-// ---- Tick with scripted behavior ----
+// ---- Tick with scripted behavior (shared harness convention) ----
 const dt = 1 / 60;
 let frame = 0;
 let errors = 0;
-function tick(n, label) {
-  for (let i = 0; i < n; i++) {
-    frame++;
-    ctx.elapsed += dt;
-    ctx.world.time += dt;
-    try {
-      for (const [name, s] of systems) s?.update?.(dt, ctx);
-    } catch (e) {
-      errors++;
-      if (errors <= 5) console.log(`UPDATE ERR frame ${frame} (${label}): ${e.message}\n${e.stack?.split('\n')[1]?.trim() ?? ''}`);
-    }
-    ctx.lastEvents = ctx.events;
-    ctx.events = [];
-  }
-}
+const tick = makeTick(ctx, systems, {
+  get frame() { return frame; },
+  set frame(v) { frame = v; },
+}, dt, (e, frameNo, label) => {
+  errors++;
+  if (errors <= 5) console.log(`UPDATE ERR frame ${frameNo} (${label}): ${e.message}\n${e.stack?.split('\n')[1]?.trim() ?? ''}`);
+});
+const {
+  graphEdges, routePath, nextHop, gateToward, returnGate,
+  jumpToward, travelTo, tickUntilJumpDone, dockAtCurrentStation, undockStation,
+} = makeNavHelpers({
+  ctx, SYSTEMS, tick, dispatchKey,
+  onRouteError: (msg) => { console.log(msg); errors++; },
+});
 
 // ---- Wave 40: title screen front door (must precede the wave-6 origin pick) --
 // A fresh boot with no skip marker opens the title overlay and pauses. Dismiss
@@ -446,94 +248,7 @@ if (!Object.values(originChecks).every(Boolean)) { console.log('WAVE6 ORIGIN PIC
 tick(120, 'boot idle');
 console.log(`after boot: ships=${ctx.ships.length} records=${ctx.world.records.length} prices=${Object.keys(ctx.world.prices).length} pods=${ctx.pods?.length ?? 0}`);
 
-// ---- Galaxy graph routing (computed at test time, never hardcoded) ----
-// SYSTEMS merges the authored seven with the generated galaxy (state.js), so
-// no inter-system route below is a fixed id chain: every hop is BFS-computed
-// over physical gates (gates[].to) AND hub routes (hub.routes) as edges.
-// Hub travel is asymmetric by design — hub→X rides the junction menu
-// (jumpRequested accepts any known destination; gate proximity is gate.js's
-// concern and the harness fires the event directly), X→hub rides X's
-// physical back-gate.
-function graphEdges(id) {
-  const def = SYSTEMS[id];
-  if (!def) return [];
-  const out = [];
-  for (const g of def.gates ?? []) if (SYSTEMS[g.to]) out.push(g.to);
-  for (const r of def.hub?.routes ?? []) if (SYSTEMS[r]) out.push(r);
-  return out;
-}
-// BFS shortest path from → to across the merged galaxy; null when unreachable.
-function routePath(from, to) {
-  if (from === to) return [from];
-  const prev = new Map([[from, null]]);
-  const queue = [from];
-  for (let qi = 0; qi < queue.length; qi++) {
-    const cur = queue[qi];
-    for (const nx of graphEdges(cur)) {
-      if (prev.has(nx)) continue;
-      prev.set(nx, cur);
-      if (nx === to) {
-        const path = [to];
-        for (let n = cur; n !== null; n = prev.get(n)) path.unshift(n);
-        return path;
-      }
-      queue.push(nx);
-    }
-  }
-  return null;
-}
-// The next hop from `from` toward `to` (null when unreachable or already there).
-function nextHop(from, to) {
-  const path = routePath(from, to);
-  return path && path.length > 1 ? path[1] : null;
-}
-// The physical gate in `from` for the computed next hop toward `to`; null
-// when the hop is a hub-route leg (no gate to park at — jump from anywhere).
-function gateToward(from, to) {
-  const hop = nextHop(from, to);
-  return hop ? (SYSTEMS[from].gates ?? []).find((g) => g.to === hop) ?? null : null;
-}
-// The gate in `to` pointing back at `from` — jump.js's arrival rule, with
-// the same gates[0] fallback.
-function returnGate(to, from) {
-  const gates = SYSTEMS[to]?.gates ?? [];
-  return gates.find((g) => g.to === from) ?? gates[0] ?? null;
-}
-// Park at the computed gate for the next hop toward `to` (a hub-route hop
-// has no gate — fire from anywhere) and emit the jump request. Returns the
-// hop id, or null (counting an error) when the destination is unreachable.
-function jumpToward(to, label) {
-  const from = ctx.world.currentSystem;
-  const hop = nextHop(from, to);
-  if (!hop) {
-    console.log(`ROUTE FAIL — no path ${from} → ${to} (${label})`);
-    errors++;
-    return null;
-  }
-  const gate = (SYSTEMS[from].gates ?? []).find((g) => g.to === hop);
-  if (gate) {
-    ctx.ship.object.position.set(...gate.position);
-    ctx.ship.velocity.set(0, 0, 0);
-    tick(5, `at ${hop} gate (${label})`);
-  }
-  ctx.emit('jumpRequested', { to: hop });
-  return hop;
-}
-// BFS-hop legs until arrival at `to` — for travel chains whose intermediate
-// stops carry no assertions. Returns false on failure (error counted).
-function travelTo(to, label) {
-  let guard = Object.keys(SYSTEMS).length + 1;
-  while (ctx.world.currentSystem !== to) {
-    if (--guard <= 0) { console.log(`ROUTE FAIL — hop loop toward ${to} (${label})`); errors++; return false; }
-    const hop = jumpToward(to, label);
-    if (!hop || !tickUntilJumpDone(hop, `${label} hop to ${hop}`)) {
-      console.log(`TRAVEL FAIL — never arrived at ${hop} (${label})`);
-      errors++;
-      return false;
-    }
-  }
-  return true;
-}
+// Galaxy graph routing + travel/dock helpers: shared nav helpers (top of file).
 
 // ---- Wave 3: gate network data sanity (every system def) ----
 // 101-system contract: the authored seven plus the generated galaxy.
@@ -1127,10 +842,7 @@ if (!jumpOk || ctx.world.currentSystem !== 'freehold') {
 // dockPressed edge for docking, window keydown for service selection, and
 // stub-DOM button clicks for job accepts and the fence favor (station.js
 // routes hotkeys and clicks through the same handlers).
-function* walkDom(node) {
-  yield node;
-  for (const c of node.children ?? []) yield* walkDom(c);
-}
+// walkDom: shared DOM-stub helper (top of file).
 function stationOverlay() {
   for (const n of walkDom(document.body)) {
     if (typeof n.className === 'string' && n.className.includes('station-overlay')) return n;
@@ -1151,33 +863,7 @@ function findAcceptButton(titleFrag) {
   }
   return null;
 }
-function dockAtCurrentStation(label) {
-  // Wave 53: do not park inside the station cylinder. Offset onto the
-  // dock shell (r 32 + player 2.4 = 34.4; zone is 45).
-  const st = SYSTEMS[ctx.world.currentSystem].station.position;
-  ctx.ship.object.position.set(st[0] + 36, st[1], st[2]);
-  ctx.ship.velocity.set(0, 0, 0);
-  ctx.ship.speed = 0;
-  ctx.input.dockPressed = true; // station.update reads the edge before controls clears it
-  tick(1, label);
-  ctx.input.dockPressed = false;
-  tick(2, `${label} settle`);
-}
-function undockStation() {
-  dispatchKey('Escape'); // level 2 backs out to services; level 1 launches
-  if (ctx.flags.docked) dispatchKey('Escape');
-  tick(2, 'undock');
-}
-// Bounded wait for a jump to finish (charge time varies) — never trust a
-// fixed tick count for arrival; fail loudly at the jump instead of docking
-// at the wrong station downstream.
-function tickUntilJumpDone(to, label) {
-  for (let i = 0; i < 60 * 10; i++) {
-    tick(1, label);
-    if (ctx.world.currentSystem === to && !ctx.gate.jumping) return true;
-  }
-  return false;
-}
+// dockAtCurrentStation/undockStation/tickUntilJumpDone: shared nav helpers (top of file).
 const holdCount = (commodity) => ctx.cargo.reduce((n, c) => n + (c.commodity === commodity ? c.units : 0), 0);
 
 // -- 1. contacts data: roster shape + JSON-plain persistence ---------------
@@ -6713,43 +6399,10 @@ const w30collect = (n, label) => {
   for (let i = 0; i < n; i++) { tick(1, label); evs.push(...ctx.lastEvents); }
   return evs;
 };
-const w30isHostile = (s) => s.role === 'pirate' || s.role === 'ace'
-  || s.record?.role === 'pirate' || s.record?.role === 'ace' || s.ai?.hostile === true;
-const w30parkHostiles = (label) => {
-  for (const s of ctx.ships) if (w30isHostile(s) && s.object) s.object.position.set(9000, 9000, 9000);
-  tick(5, label);
-};
-const w30spawnPirate = (suffix, personality, offset) => {
-  const p = ctx.ship.object.position;
-  const rec = {
-    id: `wave30-${suffix}`, name: `Wave30 ${suffix}`, classKey: 'cutter',
-    faction: 'redledger', role: 'pirate', resolve: 50, personality,
-    // Wave 32: pin the interest roll. Every wave-30 leg requires engagement;
-    // alwaysHuntsPlayer reproduces the pre-wave-32 always-lock behavior
-    // exactly (chance 1, no temper stamp), so the dice can't skip a demand.
-    alwaysHuntsPlayer: true,
-  };
-  const live = spawnLiveShip(ctx, rec, new THREE.Vector3(p.x + offset[0], p.y + offset[1], p.z + offset[2]));
-  ctx.ships.push(live); // traffic owns this list in production; the harness drives by hand
-  return live;
-};
-const w30removeShip = (live) => {
-  const i = ctx.ships.indexOf(live);
-  if (i >= 0) ctx.ships.splice(i, 1);
-  removeLiveShip(ctx, live);
-};
-// Tick until this ship's demand hail lands. Budget is 1 s (60 frames): the
-// RW-006 pin below must open on frame 1; a miss is a setup regression, not
-// a reason to wait on soak-era combat/fear/event luck.
-const w30demandEvs = (live, label) => {
-  const evs = [];
-  for (let i = 0; i < 60; i++) {
-    tick(1, label);
-    evs.push(...ctx.lastEvents);
-    if (evs.some((e) => e.type === 'hailOpened' && e.ship === live)) break;
-  }
-  return evs;
-};
+const {
+  isHostile: w30isHostile, parkHostiles: w30parkHostiles, spawnPirate: w30spawnPirate,
+  removeShip: w30removeShip, demandEvs: w30demandEvs,
+} = makeCombatFixtures({ ctx, tick, spawnLiveShip, removeLiveShip });
 // Hail-card buttons are the only '[n] …' labels in the stub DOM.
 const w30hailBtn = (frag) => {
   for (const n of walkDom(document.body)) {
@@ -6792,12 +6445,7 @@ const w30siteDist = (live) => {
 // input; do not wait out grace on the clock.
 const { expireSessionDeathCalm: w125ExpireDeathCalm } = await import('../src/systems/npc.js');
 const { dropDeferredHail: w30dropDeferredHail } = await import('../src/systems/overlay-policy.js');
-const w125ExpireAi05 = (label) => {
-  // TEST SETUP: extra starter elapsed (Greenhand 180s). Session death remaining is 90s of dt (tick is 1/60 s).
-  if (Number.isFinite(ctx.world.time) && ctx.world.time < 180) ctx.world.time = 180;
-  try { w125ExpireDeathCalm(); } catch { /* pin must not throw */ }
-  void label;
-};
+const w125ExpireAi05 = makeCalmPins({ ctx, expireSessionDeathCalm: w125ExpireDeathCalm });
 let w30demandExpected = 0;
 const w30pinDemandScene = (label, mounts) => {
   if (ctx.flags.docked) undockStation();
@@ -24184,7 +23832,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const noThree = snap && !looksLikeThree(snap) && jsonPlain;
   const missing = buildObservation(null);
   const noCtx = missing
-    && missing.v === 1
+    && missing.v === 2
     && missing.t === 0
     && missing.ok === false
     && missing.error === 'no-ctx'
@@ -24199,16 +23847,16 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.flags.berthHold = false;
   ctx.flags.paused = false;
   ctx.agent.optIn = false;
-  const pingClosed = rw?.act?.({ v: 1, name: 'ping', args: {} });
+  const pingClosed = rw?.act?.({ v: 2, name: 'ping', args: {} });
   const noOptIn = pingClosed?.ok === false && pingClosed?.token === 'opt-in';
-  const tel = rw?.act?.({ v: 1, name: 'teleport', args: {} });
+  const tel = rw?.act?.({ v: 2, name: 'teleport', args: {} });
   const forbidden = tel?.ok === false && tel?.token === 'forbidden';
   ctx.agent.optIn = true;
   let pingThrew = false;
   let pingOk = null;
-  try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { pingThrew = true; }
+  try { pingOk = rw.act({ v: 2, name: 'ping', args: {} }); } catch { pingThrew = true; }
   const pingWhenIn = pingThrew === false && pingOk?.ok === true && pingOk?.token === '';
-  const unk = rw?.act?.({ v: 1, name: 'notACommand', args: {} });
+  const unk = rw?.act?.({ v: 2, name: 'notACommand', args: {} });
   const unknown = unk?.ok === false && unk?.token === 'unknown';
   // RW-007: ctx.agent.events is EVENT_CAP 16; commLines cap at COMM_LINE_CAP 4
   // and pushRing drops the oldest commLine first on overflow. Prior waves leave
@@ -24240,8 +23888,8 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.flags.berthHold = savedHold127;
   ctx.flags.paused = savedPause127;
   const w127 = {
-    handle: !!(rw && rw.version === 1 && typeof rw.observe === 'function' && typeof rw.act === 'function'),
-    snapOk: snap?.ok === true && snap?.v === 1,
+    handle: !!(rw && rw.version === 2 && typeof rw.observe === 'function' && typeof rw.act === 'function'),
+    snapOk: snap?.ok === true && snap?.v === 2,
     jsonPlain: !!jsonPlain,
     noThree: !!noThree,
     noThrow: threw === false && pingThrew === false,
@@ -24542,35 +24190,35 @@ removeLiveShip(w42indyCtx, w42indy);
   const hailApi = !!(hail && typeof hail.resolve === 'function' && typeof hail.peek === 'function');
 
   let plotOk = null;
-  try { plotOk = rw.act({ v: 1, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
+  try { plotOk = rw.act({ v: 2, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
   const plotCharted = plotOk?.ok === true && plotOk?.token === '' && ctx.world.nav?.dest === dest131;
 
   let plotProto = null;
-  try { plotProto = rw.act({ v: 1, name: 'plotRoute', args: { dest: '__proto__' } }); } catch { threw131 = true; }
+  try { plotProto = rw.act({ v: 2, name: 'plotRoute', args: { dest: '__proto__' } }); } catch { threw131 = true; }
   const plotUncharted = plotProto?.ok === false && !!plotProto?.token && plotProto.token !== 'unknown';
 
   let apEng = null;
-  try { apEng = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
+  try { apEng = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
   const apEngage = !!(apEng && apEng.token !== 'unknown'
     && ((apEng.ok === true && apEng.token === '') || (apEng.ok === false && !!apEng.token)));
 
   const apWas = ctx.autopilot?.engaged === true;
   let apCancel = null;
-  try { apCancel = rw.act({ v: 1, name: 'cancelAutopilot', args: {} }); } catch { threw131 = true; }
+  try { apCancel = rw.act({ v: 2, name: 'cancelAutopilot', args: {} }); } catch { threw131 = true; }
   const apCancelOk = apCancel?.ok === true && (apWas ? ctx.autopilot?.engaged !== true : true);
 
   let amEng = null;
-  try { amEng = rw.act({ v: 1, name: 'engageAutomine', args: {} }); } catch { threw131 = true; }
+  try { amEng = rw.act({ v: 2, name: 'engageAutomine', args: {} }); } catch { threw131 = true; }
   const amNoRock = amEng?.ok === false && amEng?.token === 'noRock';
 
   ctx.flags.docked = false;
   let openFlight = null;
-  try { openFlight = rw.act({ v: 1, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
+  try { openFlight = rw.act({ v: 2, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
   const openNotDocked = openFlight?.ok === false && !!openFlight?.token && openFlight.token !== 'unknown';
 
   ctx.flags.docked = true;
   let openMkt = null;
-  try { openMkt = rw.act({ v: 1, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
+  try { openMkt = rw.act({ v: 2, name: 'openService', args: { id: 'market' } }); } catch { threw131 = true; }
   tick(1, 'w131 open market');
   let tradeBad = null;
   try {
@@ -24600,20 +24248,20 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.world.credits = savedCredits131;
 
   let acceptOnMkt = null;
-  try { acceptOnMkt = rw.act({ v: 1, name: 'acceptJob', args: { id: 'ferry-consignment' } }); } catch { threw131 = true; }
+  try { acceptOnMkt = rw.act({ v: 2, name: 'acceptJob', args: { id: 'ferry-consignment' } }); } catch { threw131 = true; }
   const acceptWrongService = acceptOnMkt?.ok === false && !!acceptOnMkt?.token && acceptOnMkt.token !== 'unknown';
 
-  try { rw.act({ v: 1, name: 'openService', args: { id: 'jobs' } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'openService', args: { id: 'jobs' } }); } catch { threw131 = true; }
   tick(1, 'w131 open jobs');
   let acceptMissing = null;
-  try { acceptMissing = rw.act({ v: 1, name: 'acceptJob', args: { id: 'no-such-job-w131' } }); } catch { threw131 = true; }
+  try { acceptMissing = rw.act({ v: 2, name: 'acceptJob', args: { id: 'no-such-job-w131' } }); } catch { threw131 = true; }
   const acceptMissingJob = acceptMissing?.ok === false && !!acceptMissing?.token && acceptMissing.token !== 'unknown';
 
   let repairOnMkt = null;
-  try { repairOnMkt = rw.act({ v: 1, name: 'repairAll', args: {} }); } catch { threw131 = true; }
+  try { repairOnMkt = rw.act({ v: 2, name: 'repairAll', args: {} }); } catch { threw131 = true; }
   const repairWrong = repairOnMkt?.ok === false && !!repairOnMkt?.token && repairOnMkt.token !== 'unknown';
 
-  try { rw.act({ v: 1, name: 'openService', args: { id: 'repair' } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'openService', args: { id: 'repair' } }); } catch { threw131 = true; }
   tick(1, 'w131 open repair');
   const p131 = ctx.player;
   if (p131) {
@@ -24624,7 +24272,7 @@ removeLiveShip(w42indyCtx, w42indy);
   }
   const creditsBeforeRepair = ctx.world.credits;
   let repairWhole = null;
-  try { repairWhole = rw.act({ v: 1, name: 'repairAll', args: {} }); } catch { threw131 = true; }
+  try { repairWhole = rw.act({ v: 2, name: 'repairAll', args: {} }); } catch { threw131 = true; }
   const repairRefuse = repairWhole?.ok === false
     && !!repairWhole?.token
     && repairWhole.token !== 'unknown'
@@ -24632,11 +24280,11 @@ removeLiveShip(w42indyCtx, w42indy);
 
   const savedHunger131 = ctx.bio && typeof ctx.bio.hunger === 'number' ? ctx.bio.hunger : 0;
   if (ctx.bio) ctx.bio.hunger = 0;
-  try { rw.act({ v: 1, name: 'openService', args: { id: 'feed' } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'openService', args: { id: 'feed' } }); } catch { threw131 = true; }
   tick(1, 'w131 open feed');
   const creditsBeforeFeed = ctx.world.credits;
   let feedSated = null;
-  try { feedSated = rw.act({ v: 1, name: 'feed', args: { kind: 'biomass' } }); } catch { threw131 = true; }
+  try { feedSated = rw.act({ v: 2, name: 'feed', args: { kind: 'biomass' } }); } catch { threw131 = true; }
   const feedRefuse = feedSated?.ok === false
     && !!feedSated?.token
     && feedSated.token !== 'unknown'
@@ -24644,28 +24292,28 @@ removeLiveShip(w42indyCtx, w42indy);
   if (ctx.bio) ctx.bio.hunger = savedHunger131;
 
   let feedBad = null;
-  try { feedBad = rw.act({ v: 1, name: 'feed', args: { kind: 'pizza' } }); } catch { threw131 = true; }
+  try { feedBad = rw.act({ v: 2, name: 'feed', args: { kind: 'pizza' } }); } catch { threw131 = true; }
   const feedBadKind = feedBad?.ok === false && !!feedBad?.token && feedBad.token !== 'unknown';
 
   let hailClosed = null;
-  try { hailClosed = rw.act({ v: 1, name: 'hailResolve', args: { intent: 'payTribute' } }); } catch { threw131 = true; }
+  try { hailClosed = rw.act({ v: 2, name: 'hailResolve', args: { intent: 'payTribute' } }); } catch { threw131 = true; }
   const hailClosedRefuse = hailClosed?.ok === false && !!hailClosed?.token && hailClosed.token !== 'unknown';
 
   ctx.flags.docked = true;
   let undockAct = null;
-  try { undockAct = rw.act({ v: 1, name: 'undock', args: {} }); } catch { threw131 = true; }
+  try { undockAct = rw.act({ v: 2, name: 'undock', args: {} }); } catch { threw131 = true; }
   const undockOk = undockAct?.ok === true && ctx.flags.docked === false;
 
   let tel131 = null;
-  try { tel131 = rw.act({ v: 1, name: 'teleport', args: {} }); } catch { threw131 = true; }
+  try { tel131 = rw.act({ v: 2, name: 'teleport', args: {} }); } catch { threw131 = true; }
   const teleportForbidden = tel131?.ok === false && tel131?.token === 'forbidden';
 
-  try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
+  try { rw.act({ v: 2, name: 'plotRoute', args: { dest: dest131 } }); } catch { threw131 = true; }
   let apEng2 = null;
-  try { apEng2 = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
+  try { apEng2 = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw131 = true; }
   const apBeforeDisable = ctx.autopilot?.engaged === true;
   let dis131 = null;
-  try { dis131 = rw.act({ v: 1, name: 'disable', args: {} }); } catch { threw131 = true; }
+  try { dis131 = rw.act({ v: 2, name: 'disable', args: {} }); } catch { threw131 = true; }
   const disableNoCancelAp = dis131?.ok === true
     && (!apBeforeDisable || ctx.autopilot?.engaged === true);
 
@@ -24780,7 +24428,7 @@ removeLiveShip(w42indyCtx, w42indy);
   let threw132 = false;
 
   let dockAct = null;
-  try { dockAct = rw.act({ v: 1, name: 'dock', args: {} }); } catch { threw132 = true; }
+  try { dockAct = rw.act({ v: 2, name: 'dock', args: {} }); } catch { threw132 = true; }
   const dockNotSameTick = ctx.input.dockPressed !== true && ctx.flags.docked !== true;
   tick(1, 'w132 dock pulse');
   const dockEdgeOn = ctx.input.dockPressed === true;
@@ -24792,7 +24440,7 @@ removeLiveShip(w42indyCtx, w42indy);
     && ctx.input.dockPressed === false;
 
   let hailPulse = null;
-  try { hailPulse = rw.act({ v: 1, name: 'pulse', args: { edge: 'hail' } }); } catch { threw132 = true; }
+  try { hailPulse = rw.act({ v: 2, name: 'pulse', args: { edge: 'hail' } }); } catch { threw132 = true; }
   const hailNotSameTick = ctx.input.hailPressed !== true;
   tick(1, 'w132 hail pulse');
   const hailEdgeOn = ctx.input.hailPressed === true;
@@ -24806,19 +24454,19 @@ removeLiveShip(w42indyCtx, w42indy);
   let pulseCam = null;
   let pulseBurn = null;
   let pulseProto = null;
-  try { pulseCam = rw.act({ v: 1, name: 'pulse', args: { edge: 'camera' } }); } catch { threw132 = true; }
-  try { pulseBurn = rw.act({ v: 1, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw132 = true; }
-  try { pulseProto = rw.act({ v: 1, name: 'pulse', args: { edge: '__proto__' } }); } catch { threw132 = true; }
+  try { pulseCam = rw.act({ v: 2, name: 'pulse', args: { edge: 'camera' } }); } catch { threw132 = true; }
+  try { pulseBurn = rw.act({ v: 2, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw132 = true; }
+  try { pulseProto = rw.act({ v: 2, name: 'pulse', args: { edge: '__proto__' } }); } catch { threw132 = true; }
   const pulseUnknown = pulseCam?.ok === false && pulseCam?.token === 'unknown'
     && pulseBurn?.ok === false && pulseBurn?.token === 'unknown'
     && pulseProto?.ok === false && pulseProto?.token === 'unknown';
 
   let wgOk = null;
-  try { wgOk = rw.act({ v: 1, name: 'setWeaponGroup', args: { n: 3 } }); } catch { threw132 = true; }
+  try { wgOk = rw.act({ v: 2, name: 'setWeaponGroup', args: { n: 3 } }); } catch { threw132 = true; }
   const wgSet = wgOk?.ok === true && ctx.input.weaponGroup === 3;
   ctx.flags.docked = true;
   let wgHeld = null;
-  try { wgHeld = rw.act({ v: 1, name: 'setWeaponGroup', args: { n: 1 } }); } catch { threw132 = true; }
+  try { wgHeld = rw.act({ v: 2, name: 'setWeaponGroup', args: { n: 1 } }); } catch { threw132 = true; }
   const weaponGroup = !!wgSet
     && wgHeld?.ok === false
     && wgHeld?.token === 'no-service'
@@ -24829,20 +24477,20 @@ removeLiveShip(w42indyCtx, w42indy);
   if (ctx.ship?.object?.position) ctx.ship.object.position.set(1e9, 1e9, 1e9);
   ctx.input.weaponGroup = 1;
   let selNone = null;
-  try { selNone = rw.act({ v: 1, name: 'selectTarget', args: {} }); } catch { threw132 = true; }
+  try { selNone = rw.act({ v: 2, name: 'selectTarget', args: {} }); } catch { threw132 = true; }
   const selectNoCand = selNone?.ok === false && selNone?.token === 'no-service';
   if (savedSelPos && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedSelPos);
   ctx.input.weaponGroup = 3;
 
   let tel132 = null;
-  try { tel132 = rw.act({ v: 1, name: 'teleport', args: {} }); } catch { threw132 = true; }
+  try { tel132 = rw.act({ v: 2, name: 'teleport', args: {} }); } catch { threw132 = true; }
   const teleportForbidden = tel132?.ok === false && tel132?.token === 'forbidden';
 
   if (savedPos132 && ctx.ship?.object?.position) ctx.ship.object.position.copy(savedPos132);
   const dest132 = ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian';
-  try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest132 } }); } catch { threw132 = true; }
+  try { rw.act({ v: 2, name: 'plotRoute', args: { dest: dest132 } }); } catch { threw132 = true; }
   let apEng132 = null;
-  try { apEng132 = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw132 = true; }
+  try { apEng132 = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw132 = true; }
   ctx.input.steerX = 1;
   ctx.input.steerY = 1;
   for (const fn of winListeners.mousemove ?? []) {
@@ -25188,7 +24836,7 @@ removeLiveShip(w42indyCtx, w42indy);
       ? [...walkDom(badge)].find((n) => n.tagName === 'BUTTON' && n.textContent === 'Enable agent play')
       : null;
     if (enableBtn && typeof enableBtn.click === 'function') enableBtn.click();
-    const pingClosed = rw?.act?.({ v: 1, name: 'ping', args: {} });
+    const pingClosed = rw?.act?.({ v: 2, name: 'ping', args: {} });
     untrustedEnable = before === false
       && ctx.agent?.optIn !== true
       && viaHandle?.ok === false
@@ -25206,7 +24854,7 @@ removeLiveShip(w42indyCtx, w42indy);
     if (enableBtn) fireTrusted134(enableBtn);
     const texts = badge ? textsOf134(badge) : [];
     let pingOk = null;
-    try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    try { pingOk = rw.act({ v: 2, name: 'ping', args: {} }); } catch { threw134 = true; }
     trustedEnable = ctx.agent?.optIn === true
       && texts.includes('on')
       && pingOk?.ok === true;
@@ -25217,13 +24865,13 @@ removeLiveShip(w42indyCtx, w42indy);
     const destPin = 'veridian-dest-pin';
     const idPin = 'id-pin-zz';
     let pingOk = null;
-    try { pingOk = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    try { pingOk = rw.act({ v: 2, name: 'ping', args: {} }); } catch { threw134 = true; }
     const badgeAfterPing = findBadge134();
     const textsPing = badgeAfterPing ? textsOf134(badgeAfterPing) : [];
     const lastPing = pingOk?.ok === true && textsPing.includes('Last: ping');
     const errNone = !textsPing.some((t) => typeof t === 'string' && t.startsWith('Error: '));
     let tel = null;
-    try { tel = rw.act({ v: 1, name: 'teleport', args: { dest: destPin, id: idPin } }); } catch { threw134 = true; }
+    try { tel = rw.act({ v: 2, name: 'teleport', args: { dest: destPin, id: idPin } }); } catch { threw134 = true; }
     const badgeAfterTel = findBadge134();
     const textsTel = badgeAfterTel ? textsOf134(badgeAfterTel) : [];
     const joined = textsTel.join('\n');
@@ -25243,9 +24891,9 @@ removeLiveShip(w42indyCtx, w42indy);
   try {
     ctx.agent.optIn = true;
     const dest134 = ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian';
-    try { rw.act({ v: 1, name: 'plotRoute', args: { dest: dest134 } }); } catch { threw134 = true; }
+    try { rw.act({ v: 2, name: 'plotRoute', args: { dest: dest134 } }); } catch { threw134 = true; }
     let apEng = null;
-    try { apEng = rw.act({ v: 1, name: 'engageAutopilot', args: {} }); } catch { threw134 = true; }
+    try { apEng = rw.act({ v: 2, name: 'engageAutopilot', args: {} }); } catch { threw134 = true; }
     const apWas = apEng?.ok === true && ctx.autopilot?.engaged === true;
     const badge = findBadge134();
     const stopBtn = badge
@@ -25254,7 +24902,7 @@ removeLiveShip(w42indyCtx, w42indy);
     if (stopBtn && typeof stopBtn.click === 'function') stopBtn.click();
     const texts = badge ? textsOf134(badge) : [];
     let pingAfter = null;
-    try { pingAfter = rw.act({ v: 1, name: 'ping', args: {} }); } catch { threw134 = true; }
+    try { pingAfter = rw.act({ v: 2, name: 'ping', args: {} }); } catch { threw134 = true; }
     stopClears = ctx.agent?.optIn !== true
       && texts.includes('off')
       && pingAfter?.ok === false
@@ -25520,7 +25168,9 @@ removeLiveShip(w42indyCtx, w42indy);
       && /id: 'haul-provisions'/.test(station136)
       && /id: 'ferry-consignment'/.test(station136),
     digit2Jobs: /DOCK_KEY_SERVICES = Object\.freeze\(\['market', 'jobs'/.test(station136),
-    paintTextContent: /function h\(tag, cls, parent, text\)[\s\S]{0,220}textContent/.test(station136)
+    paintTextContent: /function hDom\(tag, cls, parent, text\)[\s\S]{0,220}textContent/.test(station136)
+      && /let h = hDom;/.test(station136)
+      && /let btn = btnDom;/.test(station136)
       && !/function renderJobs[\s\S]{0,2500}innerHTML/.test(station136),
     noWhileTrue: !/while\s*\(\s*true\s*\)/.test(station136),
   };
@@ -26021,7 +25671,7 @@ removeLiveShip(w42indyCtx, w42indy);
     tick(1, 'w138 evade clear');
 
     let actBurn = null;
-    try { actBurn = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { actBurn = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     const notSameTick = ctx.input.afterburnerPressed !== true;
     tick(1, 'w138 evade pulse');
     edgeFrame = notSameTick && ctx.input.afterburnerPressed === true;
@@ -26039,19 +25689,19 @@ removeLiveShip(w42indyCtx, w42indy);
 
     let evadeAct = null;
     let fleeAct = null;
-    try { evadeAct = rw138e.act({ v: 1, name: 'evade' }); } catch { threw138e = true; }
-    try { fleeAct = rw138e.act({ v: 1, name: 'flee' }); } catch { threw138e = true; }
+    try { evadeAct = rw138e.act({ v: 2, name: 'evade' }); } catch { threw138e = true; }
+    try { fleeAct = rw138e.act({ v: 2, name: 'flee' }); } catch { threw138e = true; }
     evadeUnknown = evadeAct?.ok === false && evadeAct?.token === 'unknown';
     fleeUnknown = fleeAct?.ok === false && fleeAct?.token === 'unknown';
 
     let pulseBurn = null;
-    try { pulseBurn = rw138e.act({ v: 1, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw138e = true; }
+    try { pulseBurn = rw138e.act({ v: 2, name: 'pulse', args: { edge: 'afterburner' } }); } catch { threw138e = true; }
     pulseAliasUnknown = pulseBurn?.ok === false && pulseBurn?.token === 'unknown';
 
     ctx.flags.docked = true;
     if (ctx.input) ctx.input.afterburnerPressed = false;
     let dockAct = null;
-    try { dockAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { dockAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     tick(1, 'w138 evade docked');
     dockedTok = dockAct?.ok === false && dockAct?.token === 'docked'
       && ctx.input.afterburnerPressed !== true;
@@ -26059,24 +25709,24 @@ removeLiveShip(w42indyCtx, w42indy);
 
     ctx.agent.optIn = false;
     let optAct = null;
-    try { optAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { optAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     optInTok = optAct?.ok === false && optAct?.token === 'opt-in';
     ctx.agent.optIn = true;
 
     ctx.flags.paused = true;
     let pauseAct = null;
-    try { pauseAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { pauseAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     pausedTok = pauseAct?.ok === false && pauseAct?.token === 'paused';
     ctx.flags.paused = false;
 
     ctx.flags.berthHold = true;
     let holdAct = null;
-    try { holdAct = rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { holdAct = rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     heldTok = holdAct?.ok === false && holdAct?.token === 'held';
     ctx.flags.berthHold = false;
 
     let telAct = null;
-    try { telAct = rw138e.act({ v: 1, name: 'teleport' }); } catch { threw138e = true; }
+    try { telAct = rw138e.act({ v: 2, name: 'teleport' }); } catch { threw138e = true; }
     teleportForbidden = telAct?.ok === false && telAct?.token === 'forbidden';
 
     const keepReady = ctx.ship?.burnerReadyAt;
@@ -26124,7 +25774,7 @@ removeLiveShip(w42indyCtx, w42indy);
       tick(1, 'w138 flee face sun');
       const dSun0 = obj138e.position.distanceTo(sun138e);
       const dSt0 = obj138e.position.distanceTo(st138e);
-      try { rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+      try { rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
       fleeEngaged = fleeEngaged || ctx.flee?.engaged === true;
       let maxStep = 0;
       for (let i = 0; i < 180; i++) {
@@ -26173,7 +25823,7 @@ removeLiveShip(w42indyCtx, w42indy);
       ctx.ship.burnerActive = false;
       ctx.ship.burnerReadyAt = 0;
     }
-    try { rw138e.act({ v: 1, name: 'afterburner' }); } catch { threw138e = true; }
+    try { rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
     tick(1, 'w138 flee death engage');
     const fleeWasOn138e = ctx.flee?.engaged === true;
     ctx.emit('playerDestroyed', {});
@@ -26940,6 +26590,59 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('rw010 models card:', JSON.stringify(wRw010), `roles=${roleCount}`);
   if (!Object.values(wRw010).every(Boolean)) { console.log('RW010 MODELS CARD FAIL'); errors++; }
+}
+
+// ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
+// (mission 43b34db25ae32972 — one checked fresh-process child)
+//
+// These role scenarios are declared on a FRESH greenhand session — the exact
+// baseline scripts/agent-gameplay-test.mjs boots (title NEW GAME click →
+// greenhand origin pick → boot idle). Run in-process at this slot they
+// instead inherited 140 waves of mutable run state: the bccb17bb aggregate
+// failure log shows the wave-141 mercenary/rescue fights and the wave-142
+// unprivileged/hunt/war fights contested by leftover live ships from earlier
+// waves (combat events naming 'Wave30 w141-patrol-1', 'Pale Freida',
+// 'Cartwheel Ann'; combatMercenary=false, rescueRole=false,
+// combatUnprivileged=false, missionHunt=false, missionWar=false), while the
+// focused fresh-boot runner passed every flag on the same commit. That is
+// harness shared-state contamination, not a gameplay regression — so the
+// aggregate runs the SAME scenario bodies (scripts/lib/agent-parity-waves.mjs;
+// every assertion, flag, and ledger line unchanged) exactly once as a checked
+// fresh child process under the same node + css-stub loader environment.
+// Coverage is unchanged and nothing is skipped: the child runs wave 141 AND
+// wave 142, its complete stdout/stderr is forwarded inline below, and a spawn
+// error, non-zero exit, signal, or timeout fails this boot — a successful
+// launch alone never counts as a pass.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- waves 141+142: agent parity + mission families (fresh child: node --import with-css-stub.mjs scripts/agent-gameplay-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'agent-gameplay-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit' });
+  const AGENT_GAMEPLAY_TIMEOUT_MS = 30 * 60 * 1000; // watchdog only; a normal run takes minutes
+  const childVerdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${AGENT_GAMEPLAY_TIMEOUT_MS / 60000} min (child killed)`);
+    }, AGENT_GAMEPLAY_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(true, 'exit 0');
+      else finish(false, `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`);
+    });
+  });
+  if (!childVerdict.ok) {
+    console.log(`WAVE141/142 FRESH-PROCESS FAIL — ${childVerdict.why}`);
+    errors++;
+  }
 }
 
 if (errors === 0) {

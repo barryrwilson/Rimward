@@ -5,8 +5,8 @@
 | **Title** | RIMWARD AGENT API (AI play surface) |
 | **Author** | Wave 126 leftover integrator |
 | **Date** | 2026-08-26 (rev 3 leftover freeze after Wave 125 census) |
-| **Status** | Wave 135 PR6 implemented. `window.rimward` observe, command intents, pulse sink, hypot latch, `decodeKeyCode`, Agent play badge chrome, and 127.0.0.1 CDP loopback bridge are live. Leftover serial complete. Merge law: shared-contract.md wins. |
-| **Wave** | 135 — PR6 loopback CDP bridge. Serial complete. |
+| **Status** | Wave 135 PR6 implemented; **Wave 141 v2 cutover implemented (mission 43b34db25ae32972)**: VERSION 2, full station-service parity (owner-authorized), controls-owned manual-control lease with fire, capability discovery, in-flight job tracking with terminal outcomes, reqId/t receipts. All in-repo v1 callers migrated in the same commit. Merge law: shared-contract.md wins. |
+| **Wave** | 141 — v2 player-role parity. Builds on the Wave 135 PR6 bridge. |
 | **Owner request** | Inbox P2 AGENT API: add a stable documented AI play API so an agent can play on a user's behalf, plus a live watch surface. Screenshot loops are too slow. Empty `e.code` never reaches TRACKED. Owner: write the design first. Do not implement. |
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
@@ -58,6 +58,114 @@ Recommended architecture (deputize; owner may override): **handle first** — `w
 v1 **does not** complete wishlist “steer to / approach and dock”. Autopilot flies **system** dests. `dock` is KeyJ inside 45 u (existing 90 u snap). Tests place the hull in zone. Pad approach is an owner-locked **v1 non-goal** (tests place the hull in 45 u). It is not a Wave 126 PR.
 
 HUD-01 empty aim glass stays empty. `state.js` stays READ-ONLY. No new persist key. Digit 0/8/9 stay. Do not invent UU.
+
+---
+
+## Wave 141 — v2 player-role parity (implemented)
+
+Owner decision (mission 43b34db25ae32972): **full existing-action parity** —
+every current player service action (outfitting, shipyard, People, Epics, bar,
+launch) is exposed through the exact player methods/costs/eligibility/
+confirmations. No new mechanics, SKUs, persistent fields, keys, or HUD gauges.
+
+**Cutover law.** `VERSION = 2` is the single public contract. There is no v1
+alias or shim: the observation shape changed (`jobs` is now
+`{ offers, active }`, new top-level `capabilities` / `availability` /
+`control` blocks, `station.view`), and every in-repo caller (boot-test waves,
+focused contract tests, bridge smoke) migrated in the same commit. The bridge
+stays an opaque forwarder; its page-emulation fallbacks report v2.
+
+**Control lease (`setControl` / `clearControl`).** controls.js remains the
+sole `ctx.input` writer. A lease is a bounded bundle of normalized existing
+player inputs — `steerX/steerY/strafeX/strafeY/roll` in `[-1,1]`, a `throttle`
+setpoint target (ramped at the player 0.5/s rate), `fireHeld`, `driftHeld` —
+with a strictly increasing `seq` and a sim-time `ttl` in `[0.05, 5]` s. The
+planner refreshes at low rate; controls applies at game rate. The lease is
+*refused* (never stealing) while AP/AM/flee own the helm (`helm`), while
+docked (`docked`), under overlays (`overlay`), dead (`dead`), paused
+(`paused`), jumping (`jumping`), or berth-held (`held`). It *clears* on
+expiry, explicit `clearControl` (idempotent), `disable`, window blur, pause
+entry (synchronous from `setPaused`), dock/jump/death events, helm takeover,
+and any held physical flight key or fire button (`player-override`).
+`observe().control` exposes `state` (`idle|active|cleared|expired`), `seq`,
+`expiresIn`, `fire`, and the terminal `reason`. Cancellation zeroes fire and
+axes before the next combat tick; held values are re-derived from physical
+state every frame, so a stuck input is impossible.
+
+**Aim without screenshots.** hud.js publishes `ctx.targets.aim` each frame —
+the same player-visible geometry it draws: bracket NDC, on-screen/behind,
+off-screen edge direction, lead pip (NDC + ship-local bearing) when shown,
+range/closing/speed. agent-observe adds ship-local unit bearings for the
+current target and nearby ships/rocks/pods. Scanner gates mirror the HUD:
+numeric resolve needs the Mk I eye, the concealed-mounts mark needs Mk II,
+Q-ship cover names hold until revealed.
+
+**Station parity.** station.js builds every docked panel through one
+`h`/`btn` pair. `stationDesk.peekView()` runs the same builders against a
+JSON capture (rows + actions + notice + pending), and
+`stationDesk.perform({ n, expect })` re-captures the live view and invokes the
+n-th button's own click closure — confirmations stay two-step (arm →
+confirm/cancel), and a stale `expect` label refuses with token `stale`
+instead of clicking the wrong row. `act({ name:'stationAction' })` wraps
+perform; refusal notices map to stable tokens (`uu`, `hold`, `not-offered`,
+`unavailable`, `busy`, `stale`). The v1 `v1-observe-only` token is gone.
+
+**Outcomes.** Every act receipt carries `reqId` (caller-provided or
+handle-issued `r<n>`) and the sim timestamp `t`. `reqId` is request
+metadata on the act envelope (`{ v, name, args, reqId }`) — never a gameplay
+arg, so strict arg validation (the setControl key allowlist, desk specs)
+rejects genuinely unknown fields without ever seeing it; a `reqId` left
+inside `args` is an unknown gameplay key and fails closed (`bad-args`). The bounded session ring now
+admits primitive-only combat/job/rescue/explore outcomes: `npcHit` (collapsed
+per target), `playerFire`/`playerHit`/`bodyHit` (collapsed per weapon/family/
+kind — folded rows are bounded per key, so ring eviction treats them as
+keep-class and the agent's own fire/hit feedback survives KEEP-type floods),
+`npcDisabled`, `npcDestroyed`, `npcSurrendered`, `engineOut`,
+`mineHit`/`mineBlocked`, `podSpawned`/`podCollected`, `landmarkFound`/
+`clueFound`/`convergence`/`deepening`, `survivorRescued`/`survivorSold`,
+`epicStage`, `hailMiss`, `hailClosed` (`demandOutcome`), `fearChanged`, and
+`jobState` (`done`/`delivered`/`lapsed`/`closed`, id/kind/pay). Ship/pod
+objects are never copied — identity is derived primitives only. station.js
+notes the precise terminal at each contract transition (the save.js
+`recovered` precedent); agent-api's job watcher is the backstop.
+
+**Discovery.** `observe().capabilities` is the static manifest: ten roles
+(session, pilot, trader, miner, combat, hail, missions, explorer, rescue,
+services) with explicit status, command argument shapes, outcome types, and
+per-service status. `observe().availability` is the dynamic per-command
+ok/reason derived from phase, dock/service, overlay, and helm ownership.
+
+**Recovery.** `ctx.deathApi.recover()` exposes the exact death-overlay
+recovery closure (Enter/click/auto-timer path); `act({ name:'recover' })`
+rides it, only while the overlay is open.
+
+**Evidence.** Deterministic role scenarios run in `npm run test:boot` (the
+full extended boot suite — every wave, slow) and standalone in
+`npm run test:agent-gameplay` (the same wave-141/142 scenario bodies via
+`scripts/lib/agent-parity-waves.mjs` on the shared
+`scripts/lib/boot-harness.mjs` initialization — the fast focused loop for
+gameplay work; nothing is skipped or weakened). The scenarios declare a fresh
+greenhand session, so the full boot invokes the focused runner exactly once as
+a checked fresh child process at its wave-141/142 slot — same assertions and
+ledgers, complete child stdout/stderr in the boot log, and a spawn error,
+non-zero exit, or timeout fails the aggregate run:
+wave 141 covers the contract surface, lease lifecycle, hail, station-service
+sweep, rescue, and death/recovery; wave 142 adds one executable scenario per
+generated mission family (mining, trade, passenger, hunt, bounty, espionage,
+war, explore, recovery — acceptance, nontrivial progress, terminal
+`jobState`) plus an unprivileged combat path with normal hull/resources whose
+ledger records the real outcome (target resolution or ordinary death and
+recovery). Fixture staging (spawn/placement, contract-kill hull pins, credit
+stakes, fixture records) is labelled `privilegedFixture` in the printed
+ledgers and never counts as player-play evidence; a family that cannot
+complete fails the wave rather than being skipped. The live bridge run
+(`npm run agent:bridge:smoke`) adds the station purchase, lease lifecycle,
+fire path, and an aimed combat probe, and writes the sanitized transcript to
+`out/w136/smoke/scenario-ledger.json`. Focused contract suites:
+`npm run test:agent-schema`, `npm run test:agent-hardening`,
+`npm run test:agent-bridge`. Benchmark claims stay factual: completion rates,
+sim time, refusals, and deltas only — no human-superiority claim without a
+measured human baseline.
 
 ---
 
@@ -332,7 +440,7 @@ Builder rules:
 - `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`, and `fullStop` (from `ctx.input.fullStop`). `agentOptIn` is top-level.
 - `ship` includes hull/screen/shell/engine/power/heat/`weaponGroup` (`state.js` **167–181**; `input.weaponGroup`).
 - `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships and rocks** (AM needs the locked asteroid).
-- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact.
+- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId`, `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback.
 - `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
 - `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.
 - `session.phase` is `'dead'` while `ctx.deathApi.isOpen()` (death overlay). Then `'title'` / `'origin'` / `'playing'` as today.

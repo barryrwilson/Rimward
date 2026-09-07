@@ -113,45 +113,45 @@ pin('phase title', obsTitle.session && obsTitle.session.phase === 'title');
 pin('fwd on observe', Array.isArray(obsTitle.ship.fwd) && Math.abs(obsTitle.ship.fwd[2] + 1) < 1e-6);
 pin('stale pause reason while paused kept', obsTitle.automine.reason === 'pause');
 
-const pingPaused = rw.act({ v: 1, name: 'ping', args: {} });
+const pingPaused = rw.act({ v: 2, name: 'ping', args: {} });
 pin('ping while paused', pingPaused.ok === true && pingPaused.token === '');
 
-const dockPaused = rw.act({ v: 1, name: 'dock', args: {} });
+const dockPaused = rw.act({ v: 2, name: 'dock', args: {} });
 pin('dock refused paused', dockPaused.ok === false && dockPaused.token === 'paused');
 
-const start = rw.act({ v: 1, name: 'startGame', args: {} });
+const start = rw.act({ v: 2, name: 'startGame', args: {} });
 pin('startGame while paused', start.ok === true && start.token === '' && startCalls === 1);
 pin('startGame no erase flag', startErased === false);
 pin('startGame closed title', titleOpen === false && ctx.flags.paused === false);
 
-const startAgain = rw.act({ v: 1, name: 'startGame', args: {} });
+const startAgain = rw.act({ v: 2, name: 'startGame', args: {} });
 pin('startGame closed no-op', startAgain.ok === true && startCalls === 1);
 
 ctx.flags.paused = true;
 originOpen = true;
-const protoPick = rw.act({ v: 1, name: 'chooseOrigin', args: { id: '__proto__' } });
+const protoPick = rw.act({ v: 2, name: 'chooseOrigin', args: { id: '__proto__' } });
 pin('chooseOrigin proto refused', protoPick.ok === false && protoPick.token === 'unknown' && chosen === '');
-const ctorPick = rw.act({ v: 1, name: 'chooseOrigin', args: { id: 'constructor' } });
+const ctorPick = rw.act({ v: 2, name: 'chooseOrigin', args: { id: 'constructor' } });
 pin('chooseOrigin constructor refused', ctorPick.ok === false && chosen === '');
-const badPick = rw.act({ v: 1, name: 'chooseOrigin', args: { id: 'not-an-origin' } });
+const badPick = rw.act({ v: 2, name: 'chooseOrigin', args: { id: 'not-an-origin' } });
 pin('chooseOrigin unknown', badPick.ok === false && badPick.token === 'unknown');
 
-const pick = rw.act({ v: 1, name: 'chooseOrigin', args: { id: 'greenhand' } });
+const pick = rw.act({ v: 2, name: 'chooseOrigin', args: { id: 'greenhand' } });
 pin('chooseOrigin while paused', pick.ok === true && chosen === 'greenhand' && originChooseCalls >= 1);
 pin('chooseOrigin closed overlay', originOpen === false);
 
-const pickClosed = rw.act({ v: 1, name: 'chooseOrigin', args: { id: 'drifter' } });
+const pickClosed = rw.act({ v: 2, name: 'chooseOrigin', args: { id: 'drifter' } });
 pin('chooseOrigin closed no-service', pickClosed.ok === false && pickClosed.token === 'no-service' && chosen === 'greenhand');
 
 ctx.flags.paused = true;
 ctx.flags.berthHold = true;
 originOpen = true;
-const held = rw.act({ v: 1, name: 'startGame', args: {} });
+const held = rw.act({ v: 2, name: 'startGame', args: {} });
 pin('startGame held while berth', held.ok === false && held.token === 'held');
 ctx.flags.berthHold = false;
 
 ctx.agent.optIn = false;
-const noOpt = rw.act({ v: 1, name: 'startGame', args: {} });
+const noOpt = rw.act({ v: 2, name: 'startGame', args: {} });
 pin('startGame needs opt-in', noOpt.ok === false && noOpt.token === 'opt-in');
 ctx.agent.optIn = true;
 
@@ -175,14 +175,14 @@ ctx.flags.berthOpen = false;
 ctx.flags.hailOpen = false;
 ctx.models = { isOpen() { return false; } };
 ctx.station = { inZone: false };
-const dockRange = rw.act({ v: 1, name: 'dock', args: {} });
+const dockRange = rw.act({ v: 2, name: 'dock', args: {} });
 pin('dock out of zone range', dockRange.ok === false && dockRange.token === 'range' && dockRange.status !== 'queued');
 ctx.station.inZone = true;
-const hail = rw.act({ v: 1, name: 'hail', args: {} });
+const hail = rw.act({ v: 2, name: 'hail', args: {} });
 pin('hail queued token empty', hail.ok === true && hail.token === '' && hail.status === 'queued');
-const dock = rw.act({ v: 1, name: 'dock', args: {} });
+const dock = rw.act({ v: 2, name: 'dock', args: {} });
 pin('dock queued token empty', dock.ok === true && dock.token === '' && dock.status === 'queued');
-const approachMissing = rw.act({ v: 1, name: 'approachDock', args: {} });
+const approachMissing = rw.act({ v: 2, name: 'approachDock', args: {} });
 pin('approachDock missing station fail closed', approachMissing.ok === false
   && approachMissing.token === 'no-station');
 ctx.station = {
@@ -192,7 +192,7 @@ ctx.station = {
   position: { x: 120, y: 20, z: 620 },
 };
 ctx.systems = { freehold: { station: { position: [120, 20, 620] } } };
-const approach = rw.act({ v: 1, name: 'approachDock', args: {} });
+const approach = rw.act({ v: 2, name: 'approachDock', args: {} });
 pin('approachDock engages dock mode', approach.ok === true
   && ctx.autopilot.engaged === true
   && ctx.autopilot.mode === 'dock'
@@ -203,25 +203,25 @@ pin('approachDock observation plain progress', approachObs.autopilot.mode === 'd
   && approachObs.autopilot.progress === 0
   && Number.isFinite(approachObs.station.range)
   && Number.isFinite(approachObs.station.closingSpeed));
-const approachCancel = rw.act({ v: 1, name: 'cancelAutopilot', args: {} });
+const approachCancel = rw.act({ v: 2, name: 'cancelAutopilot', args: {} });
 pin('approachDock cancel', approachCancel.ok === true
   && ctx.autopilot.engaged === false
   && ctx.autopilot.mode === 'dock'
   && ctx.autopilot.phase === 'failed'
   && ctx.autopilot.reason === 'cancel');
 ctx.flags.docked = true;
-const approachDocked = rw.act({ v: 1, name: 'approachDock', args: {} });
+const approachDocked = rw.act({ v: 2, name: 'approachDock', args: {} });
 pin('approachDock already docked refusal', approachDocked.ok === false
   && approachDocked.token === 'docked');
 ctx.flags.docked = false;
-const pulse = rw.act({ v: 1, name: 'pulse', args: { edge: 'target' } });
+const pulse = rw.act({ v: 2, name: 'pulse', args: { edge: 'target' } });
 pin('pulse queued', pulse.ok === true && pulse.token === '' && pulse.status === 'queued');
-const ping = rw.act({ v: 1, name: 'ping', args: {} });
+const ping = rw.act({ v: 2, name: 'ping', args: {} });
 pin('ping has no status', ping.ok === true && !Object.hasOwn(ping, 'status'));
 
-const tel = rw.act({ v: 1, name: 'teleport', args: {} });
+const tel = rw.act({ v: 2, name: 'teleport', args: {} });
 pin('teleport forbidden', tel.ok === false && tel.token === 'forbidden');
-const credits = rw.act({ v: 1, name: 'setCredits', args: { n: 99999 } });
+const credits = rw.act({ v: 2, name: 'setCredits', args: { n: 99999 } });
 pin('setCredits forbidden', credits.ok === false && credits.token === 'forbidden');
 pin('credits unchanged', ctx.world.credits === 350);
 
@@ -272,11 +272,11 @@ pin('phase playing after recover', rw.observe().session.phase === 'playing');
 
 ctx.input.fullStop = true;
 pin('flags.fullStop', rw.observe().flags && rw.observe().flags.fullStop === true);
-const ap = rw.act({ v: 1, name: 'engageAutopilot', args: {} });
+const ap = rw.act({ v: 2, name: 'engageAutopilot', args: {} });
 pin('engageAutopilot clears fullStop', ctx.input.fullStop === false);
 void ap;
 ctx.input.fullStop = true;
-rw.act({ v: 1, name: 'engageAutomine', args: {} });
+rw.act({ v: 2, name: 'engageAutomine', args: {} });
 pin('engageAutomine clears fullStop', ctx.input.fullStop === false);
 
 ctx.flags.docked = true;
@@ -299,7 +299,9 @@ ctx.stationDesk = {
   peekService() { return deskService; },
 };
 const jobsObs = rw.observe();
-const job0 = jobsObs.jobs && jobsObs.jobs[0];
+// v2: an accepted contract rides jobs.active (observable in flight), not the
+// docked board offers list.
+const job0 = jobsObs.jobs && jobsObs.jobs.active && jobsObs.jobs.active[0];
 pin('jobs extra fields', !!(
   job0
   && job0.commodity === 'provisions'
@@ -307,8 +309,21 @@ pin('jobs extra fields', !!(
   && job0.destSystem === 'veridian'
   && job0.destination === 'Veridian Exchange'
   && job0.deadline === 600
+  && job0.secondsLeft >= 0
   && !Object.hasOwn(job0, 'secret')
 ));
+pin('accepted not in offers', !!(jobsObs.jobs && Array.isArray(jobsObs.jobs.offers)
+  && jobsObs.jobs.offers.length === 0));
+ctx.flags.docked = false;
+const flightJobs = rw.observe();
+pin('accepted job observable in flight', !!(
+  flightJobs.jobs
+  && Array.isArray(flightJobs.jobs.active)
+  && flightJobs.jobs.active.length === 1
+  && flightJobs.jobs.active[0].id === 'haul-1'
+  && flightJobs.jobs.offers.length === 0
+));
+ctx.flags.docked = true;
 
 ctx.world.jobs = [{
   kind: 'mining',
@@ -317,7 +332,7 @@ ctx.world.jobs = [{
   deadline: 400,
 }];
 const mineObs = rw.observe();
-const mine0 = mineObs.jobs && mineObs.jobs[0];
+const mine0 = mineObs.jobs && mineObs.jobs.offers[0];
 pin('mining job need', !!(
   mine0
   && mine0.kind === 'mining'
@@ -334,7 +349,7 @@ ctx.world.jobs = [{
   deadline: 400,
 }];
 const mineProgObs = rw.observe();
-const mineProg = mineProgObs.jobs && mineProgObs.jobs[0];
+const mineProg = mineProgObs.jobs && mineProgObs.jobs.offers[0];
 pin('mining job progress', !!(
   mineProg
   && mineProg.need === 8
@@ -413,22 +428,22 @@ pin('market peekFillUnit throw omit fill', !!(
 delete ctx.stationDesk.peekFillUnit;
 deskService = 'jobs';
 ctx.flags.docked = false;
-pin('jobs empty undocked', Array.isArray(rw.observe().jobs) && rw.observe().jobs.length === 0);
+pin('jobs empty undocked', Array.isArray(rw.observe().jobs.offers) && rw.observe().jobs.offers.length === 0);
 
 ctx.flags.docked = true;
-const selDocked = rw.act({ v: 1, name: 'selectTarget', args: {} });
+const selDocked = rw.act({ v: 2, name: 'selectTarget', args: {} });
 pin('selectTarget docked', selDocked.ok === false && selDocked.token === 'docked');
 ctx.flags.docked = false;
 
 ctx.hailApi = undefined;
-const hailMissing = rw.act({ v: 1, name: 'hailResolve', args: { intent: 'pay' } });
+const hailMissing = rw.act({ v: 2, name: 'hailResolve', args: { intent: 'pay' } });
 pin('hailResolve missing api no-service', hailMissing.ok === false && hailMissing.token === 'no-service');
 ctx.flags.hailOpen = false;
 ctx.hailApi = {
   peek() { return { intents: [], open: false }; },
   resolve() {},
 };
-const hailClosed = rw.act({ v: 1, name: 'hailResolve', args: { intent: 'pay' } });
+const hailClosed = rw.act({ v: 2, name: 'hailResolve', args: { intent: 'pay' } });
 pin('hailResolve closed', hailClosed.ok === false && hailClosed.token === 'closed');
 
 const optBefore = ctx.agent.optIn;
@@ -438,6 +453,126 @@ ctx.world.credits = 1;
 ctx.world.time = 0;
 pin('restore does not clear optIn', ctx.agent.optIn === optBefore);
 pin('restore does not empty ring', ctx.agent.events.length === ringBefore);
+
+// ---- v2 contract pins (mission 43b34db25ae32972) ----
+ctx.flags.paused = false;
+ctx.flags.berthHold = false;
+ctx.flags.docked = false;
+ctx.agent.optIn = true;
+// Deterministic helm baseline: no AP/AM/flee ownership while pinning leases.
+ctx.autopilot.engaged = false;
+ctx.automine.engaged = false;
+if (ctx.flee && typeof ctx.flee === 'object') ctx.flee.engaged = false;
+if (ctx.world.nav && typeof ctx.world.nav === 'object') ctx.world.nav.autopilot = false;
+const obsV2 = rw.observe();
+pin('v2 envelope', obsV2.v === 2 && obsV2.ok === true);
+pin('capabilities manifest present', !!(
+  obsV2.capabilities
+  && obsV2.capabilities.version === 2
+  && obsV2.capabilities.roles
+  && obsV2.capabilities.commands
+  && obsV2.capabilities.services
+  && Object.keys(obsV2.capabilities.roles).length === 10
+  && obsV2.capabilities.roles.combat.status === 'supported'
+  && obsV2.capabilities.roles.services.status === 'supported'
+  && obsV2.capabilities.services.shipyard.status === 'supported'
+  && obsV2.capabilities.services.epics.status === 'supported'
+  && Object.values(obsV2.capabilities.roles).every((r) => r && r.status === 'supported')
+  && Object.values(obsV2.capabilities.services).every((s) => s && s.status === 'supported')
+));
+pin('availability map covers commands', !!(
+  obsV2.availability
+  && obsV2.availability.setControl
+  && obsV2.availability.setControl.ok === true
+  && obsV2.availability.stationAction
+  && obsV2.availability.stationAction.ok === false
+  && obsV2.availability.stationAction.reason === 'no-service'
+  && obsV2.availability.recover.reason === 'no-service'
+));
+pin('control block idle', !!(
+  obsV2.control
+  && typeof obsV2.control.state === 'string'
+  && obsV2.control.fire === false
+));
+pin('jobs v2 split shape', !!(
+  obsV2.jobs
+  && Array.isArray(obsV2.jobs.offers)
+  && Array.isArray(obsV2.jobs.active)
+));
+pin('station view null in flight', obsV2.station && obsV2.station.view === null);
+
+// Control lease: strict validation, apply, expiry, clear, gates.
+const setCtl = rw.act({ v: 2, name: 'setControl', args: { seq: 1, ttl: 1, steerX: 0.5, fireHeld: true } });
+pin('setControl accepted', setCtl.ok === true && setCtl.token === '' && setCtl.status === 'active'
+  && typeof setCtl.reqId === 'string' && setCtl.reqId.length > 0
+  && Number.isFinite(setCtl.t));
+const ctlObs = rw.observe();
+pin('control active observed', ctlObs.control.state === 'active' && ctlObs.control.seq === 1
+  && ctlObs.control.fire === true && ctlObs.control.expiresIn > 0);
+const staleCtl = rw.act({ v: 2, name: 'setControl', args: { seq: 1, ttl: 1 } });
+pin('setControl stale seq refused', staleCtl.ok === false && staleCtl.token === 'stale');
+const badAxis = rw.act({ v: 2, name: 'setControl', args: { seq: 2, steerX: 2 } });
+pin('setControl bad axis refused', badAxis.ok === false && badAxis.token === 'bad-axis');
+const nanAxis = rw.act({ v: 2, name: 'setControl', args: { seq: 2, steerY: Number.NaN } });
+pin('setControl NaN axis refused', nanAxis.ok === false && nanAxis.token === 'bad-axis');
+const badTtl = rw.act({ v: 2, name: 'setControl', args: { seq: 2, ttl: 99 } });
+pin('setControl bad ttl refused', badTtl.ok === false && badTtl.token === 'bad-ttl');
+const unknownKey = rw.act({ v: 2, name: 'setControl', args: { seq: 2, teleport: 1 } });
+pin('setControl unknown key refused', unknownKey.ok === false && unknownKey.token === 'bad-args');
+const badSeq = rw.act({ v: 2, name: 'setControl', args: { seq: 1.5 } });
+pin('setControl non-integer seq refused', badSeq.ok === false && badSeq.token === 'bad-seq');
+pin('lease survived refused writes', rw.observe().control.state === 'active');
+// reqId is envelope metadata ({ v, name, args, reqId }) — never a gameplay arg.
+const reqEcho = rw.act({ v: 2, name: 'ping', reqId: 'client-7', args: {} });
+pin('reqId echoed', reqEcho.ok === true && reqEcho.reqId === 'client-7');
+const envCtl = rw.act({ v: 2, name: 'setControl', reqId: 'lease-9', args: { seq: 3, ttl: 1 } });
+pin('setControl with envelope reqId accepted', envCtl.ok === true && envCtl.reqId === 'lease-9');
+const argReq = rw.act({ v: 2, name: 'setControl', args: { seq: 4, ttl: 1, reqId: 'wrong-place' } });
+pin('reqId inside gameplay args refused as unknown key', argReq.ok === false && argReq.token === 'bad-args');
+rw.act({ v: 2, name: 'clearControl', args: {} });
+
+ctx.autopilot.engaged = true;
+const helmCtl = rw.act({ v: 2, name: 'setControl', args: { seq: 5, ttl: 1 } });
+pin('setControl refused under helm', helmCtl.ok === false && helmCtl.token === 'helm');
+ctx.autopilot.engaged = false;
+ctx.flags.docked = true;
+const dockedCtl = rw.act({ v: 2, name: 'setControl', args: { seq: 6, ttl: 1 } });
+pin('setControl refused docked', dockedCtl.ok === false && dockedCtl.token === 'docked');
+ctx.flags.docked = false;
+
+const clr = rw.act({ v: 2, name: 'clearControl', args: {} });
+pin('clearControl ok', clr.ok === true && clr.status === 'cleared');
+const clr2 = rw.act({ v: 2, name: 'clearControl', args: {} });
+pin('clearControl idempotent', clr2.ok === true);
+pin('control cleared observed', rw.observe().control.state === 'cleared');
+
+// disable drops the lease as well as opt-in.
+const rel = rw.act({ v: 2, name: 'setControl', args: { seq: 9, ttl: 5, fireHeld: true } });
+pin('lease re-armed', rel.ok === true);
+rw.act({ v: 2, name: 'disable', args: {} });
+pin('disable clears lease', rw.observe().control.state !== 'active');
+ctx.agent.optIn = true;
+
+// recover: only while the death overlay is open.
+const recNo = rw.act({ v: 2, name: 'recover', args: {} });
+pin('recover closed refused', recNo.ok === false && recNo.token === 'no-service');
+let deathOpenV2 = true;
+let recoverCalls = 0;
+ctx.deathApi = { isOpen() { return deathOpenV2; }, recover() { recoverCalls += 1; } };
+const recYes = rw.act({ v: 2, name: 'recover', args: {} });
+pin('recover rides death overlay path', recYes.ok === true && recoverCalls === 1);
+deathOpenV2 = false;
+
+// stationAction: gating without a dock.
+const saFlight = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+pin('stationAction undocked refused', saFlight.ok === false && saFlight.token === 'no-service');
+ctx.flags.docked = true;
+const saNoDesk = rw.act({ v: 2, name: 'stationAction', args: { n: 0 } });
+pin('stationAction no perform refused', saNoDesk.ok === false && saNoDesk.token === 'no-service');
+ctx.flags.docked = false;
+
+// The old observe-only token is gone: every dock service is playable.
+pin('no v1-observe-only token remains', !JSON.stringify(obsV2).includes('v1-observe-only'));
 
 if (fails) {
   console.log(`AGENT API HARDENING FAIL — ${fails}`);

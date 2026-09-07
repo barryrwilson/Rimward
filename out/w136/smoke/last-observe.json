@@ -1,54 +1,72 @@
 {
   "ok": true,
-  "t": 16.16890000003568,
+  "t": 143.80850000011688,
   "phase": "playing",
   "paused": false,
   "docked": false,
   "berthHold": false,
   "chartOpen": false,
   "fwd": [
-    0,
-    0.05547001962252291,
-    0.9984603532054126
+    -0.9834727229568714,
+    0.012910939256245771,
+    0.1805954341819045
   ],
-  "speed": 21.22954391027216,
+  "pos": [
+    -2746.3084701076696,
+    58.78540879229894,
+    1181.320248648276
+  ],
+  "speed": 29.83992857216013,
   "throttle": 0,
-  "currentSystem": "veridian",
+  "currentSystem": "freehold",
   "nav": {
     "dest": "veridian",
     "path": [
+      "freehold",
       "veridian"
     ],
     "remaining": [],
-    "status": "arrived",
+    "status": "plotted",
     "autopilot": false
   },
   "autopilot": {
     "engaged": false,
-    "reason": ""
+    "reason": "",
+    "mode": "route"
+  },
+  "station": {
+    "inZone": false,
+    "name": "Freehold Landing",
+    "systemName": "Freehold Drift",
+    "range": 2921.011635596257,
+    "closingSpeed": 29.837856747604338,
+    "service": "bar",
+    "services": [],
+    "view": null
   },
   "gate": {
     "inZone": false,
     "nearTo": null,
-    "jumping": true,
-    "progress": 0.6027200000047678,
-    "destination": "veridian"
+    "jumping": false,
+    "progress": 0,
+    "destination": null
   },
   "events": [
-    "originChosen",
-    "navRoute",
-    "commLine",
-    "autopilotEngaged",
-    "milestone",
-    "commLine",
-    "commLine",
-    "milestone",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
+    "bodyHit",
     "shieldDown",
-    "jumpRequested",
-    "systemLoaded",
-    "commLine",
-    "commLine",
-    "navRoute",
-    "commLine"
+    "shieldDown",
+    "npcSurrendered"
   ]
 }

@@ -319,7 +319,7 @@ function pinDockScene() {
 function runDock(tag) {
   let dockAct = null;
   let threw = false;
-  try { dockAct = rw.act({ v: 1, name: 'dock', args: {} }); } catch { threw = true; }
+  try { dockAct = rw.act({ v: 2, name: 'dock', args: {} }); } catch { threw = true; }
   const dockNotSameTick = ctx.input.dockPressed !== true && ctx.flags.docked !== true;
   tick(1, `${tag} dock pulse`);
   const dockEdgeOn = ctx.input.dockPressed === true;
