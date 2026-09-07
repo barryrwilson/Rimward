@@ -321,6 +321,7 @@ const { initAgentFlee } = await import('../src/game/agent-flee.js');
 const { initTraffic } = await import('../src/game/traffic.js');
 const {
   NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
+  releaseShipAsset,
 } = await import('../src/systems/ship-assets.js');
 configureShipAssetFileReader((assetPath) => readFile(new URL(`../public${assetPath}`, import.meta.url)));
 await Promise.all(NPC_FACTIONS.flatMap((faction) => NPC_CLASSES.flatMap((classKey) => [
@@ -22536,6 +22537,27 @@ removeLiveShip(w42indyCtx, w42indy);
   const aceGait = w108GaitFor('ace');
   const frigateGait = w108GaitFor('frigate');
 
+  // All six reviewed body plans use tissue. Their different gaits must stay
+  // uniform-driven instead of compiling a separate program per ship class.
+  let tissueSurfaces108 = true;
+  const programs108 = Object.fromEntries(NPC_CLASSES.map((classKey) => {
+    const root = buildShipAsset(classKey, 'beautiful', 'trader');
+    try {
+      const hull = root.getObjectByName('RIMWARD_HULL').material;
+      tissueSurfaces108 &&= hull.isMeshPhysicalMaterial === true
+        && hull.map === null && hull.emissiveMap === null
+        && hull.transmission === (classKey === 'frigate' ? 0.32 : 0)
+        && hull.thickness === (classKey === 'frigate' ? 0.3 : 0)
+        && hull.transparent === false && hull.depthWrite === true;
+      return [classKey, ['RIMWARD_HULL', 'RIMWARD_EMISSIVE'].map((name) =>
+        root.getObjectByName(name).material.customProgramCacheKey())];
+    } finally {
+      releaseShipAsset(root);
+    }
+  }));
+  const surfacePrograms108 = [0, 1].every((slot) =>
+    NPC_CLASSES.every((classKey) => programs108[classKey][slot] === programs108.light[slot]));
+
   const w108 = {
     protoSafe: w108GaitFor('__proto__') === lightGait
       && w108GaitFor('constructor') === lightGait
@@ -22591,7 +22613,8 @@ removeLiveShip(w42indyCtx, w42indy);
       && injectSwim108.includes('uSwimKickZ')
       && injectSwim108.includes('uSwimRadial')
       && updateAsset108.includes('uSwimSpineX')
-      && assets108.includes("customProgramCacheKey = () => SWIM_PROGRAM_KEY")
+      && surfacePrograms108
+      && tissueSurfaces108
       && assets108.includes("rimward-beautiful-swim-gait")
       && !injectSwim108.includes('${')
       && !injectSwim108.includes('gaitId')

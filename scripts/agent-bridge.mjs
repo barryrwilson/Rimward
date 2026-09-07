@@ -103,21 +103,28 @@ function sendJson(res, status, obj) {
 
 function readBody(req, limit = BODY_LIMIT) {
   return new Promise((resolve, reject) => {
-    const chunks = [];
+    let chunks = [];
     let n = 0;
+    let settled = false;
     req.on('data', (c) => {
+      if (settled) return;
       n += c.length;
       if (n > limit) {
+        settled = true;
+        chunks = [];
+        // Stop consuming the over-limit body. The 413 handler answers with
+        // Connection: close; Node flushes the response, then closes the
+        // transport without draining arbitrary remaining bytes.
+        req.pause();
         const err = new Error('too large');
         err.code = 'TOO_LARGE';
         reject(err);
-        req.destroy();
         return;
       }
       chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    req.on('end', () => { if (!settled) { settled = true; resolve(Buffer.concat(chunks)); } });
+    req.on('error', (e) => { if (!settled) { settled = true; reject(e); } });
   });
 }
 
@@ -586,6 +593,11 @@ function makeCdpEvaluator(getCdp, health) {
 export function startBridge(opts) {
   const host = assertBindHost(opts.host ?? '127.0.0.1');
   const token = String(opts.token ?? '');
+  if (token.length === 0) {
+    const err = new Error('bridge token required');
+    err.code = 'TOKEN_REQUIRED';
+    throw err;
+  }
   const evaluator = opts.evaluator;
   if (!evaluator || typeof evaluator.observe !== 'function' || typeof evaluator.act !== 'function') {
     throw new Error('evaluator required');
@@ -635,7 +647,9 @@ export function startBridge(opts) {
           const buf = await readBody(req);
           raw = buf.length ? JSON.parse(buf.toString('utf8')) : {};
         } catch (err) {
-          sendJson(res, err && err.code === 'TOO_LARGE' ? 413 : 400, { ok: false, error: 'bad-json' });
+          const tooLarge = err && err.code === 'TOO_LARGE';
+          if (tooLarge) res.setHeader('Connection', 'close');
+          sendJson(res, tooLarge ? 413 : 400, { ok: false, error: tooLarge ? 'too-large' : 'bad-json' });
           return;
         }
         const cmd = actCommand(raw);
@@ -854,6 +868,69 @@ function httpCall(method, urlStr, { headers = {}, body = null } = {}) {
   });
 }
 
+/** POST with a streamed (chunked) body: writes chunks without Content-Length. */
+function httpStreamCall(urlStr, { headers = {}, chunks = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const req = http.request({
+      hostname: u.hostname,
+      port: u.port,
+      path: u.pathname + u.search,
+      method: 'POST',
+      headers: { Connection: 'close', ...headers },
+    }, (res) => {
+      const received = [];
+      res.on('data', (c) => received.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(received).toString('utf8');
+        let json = null;
+        try { json = JSON.parse(text); } catch { json = null; }
+        resolve({ status: res.statusCode, headers: res.headers, text, json });
+      });
+    });
+    req.on('error', reject);
+    for (const c of chunks) req.write(c);
+    req.end();
+  });
+}
+
+/** POST that writes chunks but never ends the request; fails if no full response within timeoutMs. */
+function httpIncompleteCall(urlStr, { headers = {}, chunks = [], timeoutMs = 5000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { req.destroy(); } catch { /* ignore */ }
+      fn(value);
+    };
+    const timer = setTimeout(() => {
+      finish(reject, new Error('incomplete-upload response timeout'));
+    }, timeoutMs);
+    const req = http.request({
+      hostname: u.hostname,
+      port: u.port,
+      path: u.pathname + u.search,
+      method: 'POST',
+      headers: { Connection: 'close', ...headers },
+    }, (res) => {
+      const received = [];
+      res.on('data', (c) => received.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(received).toString('utf8');
+        let json = null;
+        try { json = JSON.parse(text); } catch { json = null; }
+        finish(resolve, { status: res.statusCode, headers: res.headers, text, json });
+      });
+    });
+    req.on('error', (err) => finish(reject, err));
+    for (const c of chunks) req.write(c);
+    // Intentionally no req.end(): the server must answer and close on its own.
+  });
+}
+
 export async function runSelfTest() {
   const pins = {
     bindLoopbackOk: false,
@@ -875,6 +952,15 @@ export async function runSelfTest() {
     healthShape: false,
     healthForeignOrigin403: false,
     chromeKeepAliveFlags: false,
+    tokenMissingRefused: false,
+    tokenEmptyRefused: false,
+    bodyExactLimitOk: false,
+    oversizedComplete413: false,
+    oversizedStreamed413: false,
+    oversizedIncomplete413: false,
+    oversizedNoDispatch: false,
+    malformedJson400: false,
+    postOversizeHealthy: false,
   };
 
   pins.bindLoopbackOk = assertBindHost('127.0.0.1') === '127.0.0.1';
@@ -956,6 +1042,28 @@ export async function runSelfTest() {
     world: { credits: 424242, currentSystem: 'fixture-sys' },
   };
   let lastAct = null;
+  let actCalls = 0;
+
+  const stubEvaluator = {
+    async observe() { return null; },
+    async act() { return null; },
+  };
+  let leaked;
+  try {
+    leaked = await startBridge({ host: '127.0.0.1', port: 0, evaluator: stubEvaluator });
+  } catch (err) {
+    pins.tokenMissingRefused = err && err.code === 'TOKEN_REQUIRED';
+  } finally {
+    if (leaked) await leaked.close();
+  }
+  leaked = null;
+  try {
+    leaked = await startBridge({ host: '127.0.0.1', port: 0, token: '', evaluator: stubEvaluator });
+  } catch (err) {
+    pins.tokenEmptyRefused = err && err.code === 'TOKEN_REQUIRED';
+  } finally {
+    if (leaked) await leaked.close();
+  }
   const cap = captureLogs();
   let bridge;
   try {
@@ -966,6 +1074,7 @@ export async function runSelfTest() {
       evaluator: {
         async observe() { return mockObserve; },
         async act(cmd) {
+          actCalls += 1;
           lastAct = cmd;
           return { v: 1, ok: true, error: '', name: cmd.name, token: '' };
         },
@@ -1023,6 +1132,100 @@ export async function runSelfTest() {
       && lastAct.name === 'ping'
       && lastAct.args && lastAct.args.n === 1
       && !hasCorsStar(actRes.headers);
+
+    const mkBody = (total) => {
+      const baseStr = JSON.stringify({ v: 1, name: 'ping', args: { pad: '' } });
+      return JSON.stringify({ v: 1, name: 'ping', args: { pad: 'x'.repeat(total - baseStr.length) } });
+    };
+    const exactBody = mkBody(BODY_LIMIT);
+    const exactRes = await httpCall('POST', `${base}/act`, {
+      headers: {
+        Authorization: `Bearer ${fixture}`,
+        'Content-Type': 'application/json',
+      },
+      body: exactBody,
+    });
+    pins.bodyExactLimitOk = exactBody.length === BODY_LIMIT
+      && exactRes.status === 200
+      && exactRes.json && exactRes.json.ok === true
+      && exactRes.json.name === 'ping'
+      && !hasCorsStar(exactRes.headers);
+
+    const actsBeforeOversize = actCalls;
+    const bigBody = mkBody(70000);
+    const bigRes = await httpCall('POST', `${base}/act`, {
+      headers: {
+        Authorization: `Bearer ${fixture}`,
+        'Content-Type': 'application/json',
+        'Content-Length': String(Buffer.byteLength(bigBody)),
+      },
+      body: bigBody,
+    });
+    pins.oversizedComplete413 = bigRes.status === 413
+      && bigRes.json && bigRes.json.ok === false
+      && bigRes.json.error === 'too-large'
+      && !hasCorsStar(bigRes.headers);
+
+    const chunk = 'y'.repeat(30000);
+    const streamedRes = await httpStreamCall(`${base}/act`, {
+      headers: {
+        Authorization: `Bearer ${fixture}`,
+        'Content-Type': 'application/json',
+      },
+      chunks: [chunk, chunk, chunk],
+    });
+    pins.oversizedStreamed413 = streamedRes.status === 413
+      && streamedRes.json && streamedRes.json.ok === false
+      && streamedRes.json.error === 'too-large'
+      && !hasCorsStar(streamedRes.headers);
+
+    let incompleteRes = null;
+    try {
+      incompleteRes = await httpIncompleteCall(`${base}/act`, {
+        headers: {
+          Authorization: `Bearer ${fixture}`,
+          'Content-Type': 'application/json',
+        },
+        chunks: [chunk, chunk, chunk],
+      });
+    } catch { incompleteRes = null; }
+    pins.oversizedIncomplete413 = !!incompleteRes
+      && incompleteRes.status === 413
+      && incompleteRes.json && incompleteRes.json.ok === false
+      && incompleteRes.json.error === 'too-large'
+      && !hasCorsStar(incompleteRes.headers);
+
+    pins.oversizedNoDispatch = actCalls === actsBeforeOversize;
+
+    const badRes = await httpCall('POST', `${base}/act`, {
+      headers: {
+        Authorization: `Bearer ${fixture}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{not json',
+    });
+    pins.malformedJson400 = badRes.status === 400
+      && badRes.json && badRes.json.ok === false
+      && badRes.json.error === 'bad-json'
+      && actCalls === actsBeforeOversize
+      && !hasCorsStar(badRes.headers);
+
+    const obsAfter = await httpCall('GET', `${base}/observe`, {
+      headers: { Authorization: `Bearer ${fixture}` },
+    });
+    const actAfter = await httpCall('POST', `${base}/act`, {
+      headers: {
+        Authorization: `Bearer ${fixture}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ v: 1, name: 'ping', args: { n: 2 } }),
+    });
+    pins.postOversizeHealthy = obsAfter.status === 200
+      && obsAfter.json && obsAfter.json.ok === true
+      && actAfter.status === 200
+      && actAfter.json && actAfter.json.ok === true
+      && actAfter.json.name === 'ping'
+      && !hasCorsStar(actAfter.headers);
 
     const opt = await httpCall('OPTIONS', `${base}/observe`);
     pins.noCorsStar = !hasCorsStar(miss.headers)

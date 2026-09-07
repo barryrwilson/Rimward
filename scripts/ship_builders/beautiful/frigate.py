@@ -1,419 +1,259 @@
-"""Beautiful Ones Frigate — TRAVEL-POSE OCTOPUS ELDER.
+"""Beautiful Ones Frigate - CATHEDRAL, deep-sea jellyfish elder guardian.
 
-Bible §4.6: a large calm elder that carries a community. Wave 106 body plan
-is OCTOPUS in travel pose, not a whale and not a manta. Mantle / head sits
-toward -Z. Eight muscular arms trail toward +Z. The interbrachial web is a
-trailing skirt (sanctuary), never a disc in the XY plane.
+Approved concept: reviews/beautiful-ones/large-ships.js buildFrigate
+(lines 147-293) with the shared tissue palette from organic.js, accent
+'#9fd8ff'. A substantial elongated scalloped bell leads along -Z with a
+serene inner sanctuary core, sparse luminous radial canals, frilled oral
+arms, and long flowing tentacles sweeping toward +Z. The mantle dominates
+the silhouette:
 
-Plate family (beautiful-frigate-elder-guardian.png) still names an elder
-guardian with nested young, a deep crown, and scar history. The silhouette
-family is now round mantle + eight trailing arms. No rear rhomboid fins
-(squid), no coordinated fin pairs (manta), no long fusiform flank with
-hangar holes (whale), no nozzle.
+- ONE elongated scalloped bell (10 lobes, soft radial fluting near the
+  rim) in pale ice-blue transmission tissue, apex at -Z, open rim aft.
+- A layered inner sanctuary core glimpsed through the bell: a warm
+  glowing heart, a pearl ridge above it, and four small radiant pods.
+- TEN sparse radial light canals riding the bell's surface relief.
+- FOUR frilled oral arms: a soft core limb plus a rippled membrane frill.
+- NINE long curved trailing tentacles, six short inner veil tentacles,
+  and a delicate fringe hanging between the rim lobes, all toward +Z.
 
-Envelope (driver CLASSES): l = 32.0, b = l * 0.39 = 12.48, h = l * 0.26
-= 8.32. Span band [19.20, 44.80]. AUTHORED largest-dimension target is
-spanZ ≈ 30 (blunt mantle nose to trailing arm tips). Hull vertex aim
-[16 000, 84 000]. Arms use travel_arm_tips(..., spread=0.40, drop=0.22)
-so spanX stays modest and spanZ / spanX stays high.
+All geometry is authored in review concept coordinates (forward -Z, up
++Y) through the sf.sculpt_* helpers and uniformly fit to the class
+length by ONE sf.fit_sculpt call at the end, preserving approved
+proportions. Membranes (bell, oral frills) are solidified minimally so
+front-side runtime materials keep them alive from every angle.
 
-Body plan
----------
-One grown_loft bulbous mantle (near-ellipse rings, round sack, not a
-fusiform shark). A shallow pearl hood loft rides the upper mantle. Eight
-an.octopus_arm tubes trail from a buried hub; tips come from
-an.travel_arm_tips. an.interbrachial_web is the trailing skirt under the
-arms. Four hollows sit IN that skirt (two forward nurseries with nested
-companions, two aft sanctuaries). Deep org.sensory_crown on the forehead.
-Three an.healed_scar welts on the port mantle. Stern is arm tips and web
-dissolving toward the driver glow at z = +l * 0.47. No nozzle.
+Envelope (driver): l = 32.0. Beam/height come from the approved sculpt
+proportions via the uniform fit, not from the old tuning ratios.
 
-LOD ladder
-----------
-detail=3  mantle, hood, 8 arms with suckers, web, 4 hollows, crown,
-          vents, folds, veins, scars, nacre at the arm crown.
-detail=2  fewer suckers (anatomy: 3 per arm), fewer vents / veins / crown.
-detail=1  mantle, 8 arm tubes, web, hollow wells, crown hint, scars as
-          chords. Suckers off (anatomy detail < 2).
-detail=0  mantle + 8 arms + web (primary masses). Silhouette never drops
-          an arm.
+LOD ladder (tessellation only - every lobe, canal, arm and tentacle
+persists at every detail)
+----------------------------------------------------------------------
+detail=3  near-review densities (bell 96x48 solidified, tentacles
+          72x10); ~51k triangles, under the 60k lod0 cap.
+detail=2  0.55x tessellation; ~17k triangles.
+detail=1  0.30x tessellation; ~8k triangles.
+detail=0  0.18x tessellation with silhouette floors (bell keeps 40
+          radial samples so all 10 scalloped lobes read); ~6.5k.
 """
 import math
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-import ship_kit as kit
 
 from . import surface as sf
-from . import anatomy as an
-from . import organs as org
+
+TAU = math.pi * 2.0
+ACCENT = '#9fd8ff'
+
+# Review bell constants: 10 scalloped lobes, apex at -Z, rim aft.
+LOBES = 10
+Z_APEX = -3.0
+Z_RIM = 1.7
+
+# Tessellation multiplier per detail tier; floors keep the anatomy alive.
+_MULT = (0.18, 0.30, 0.55, 1.0)
 
 
-def _lerp(a, b, t):
-    return (a[0] + (b[0] - a[0]) * t,
-            a[1] + (b[1] - a[1]) * t,
-            a[2] + (b[2] - a[2]) * t)
+# ---------------------------------------------------------------------------
+# Review math helpers - exact ports of large-ships.js clamp01/smooth/hash.
+# ---------------------------------------------------------------------------
+
+def _clamp01(x):
+    return 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
 
 
-def _unit(v, fallback=(0.0, -1.0, 0.0)):
-    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-    if n < 1e-8:
-        return fallback
-    return (v[0] / n, v[1] / n, v[2] / n)
+def _smooth(a, b, x):
+    t = _clamp01((x - a) / (b - a))
+    return t * t * (3.0 - 2.0 * t)
 
 
-def _glow_tag(obj):
-    if obj is not None:
-        obj['skin_role'] = 'glow'
-    return obj
+def _hash(n):
+    """Stable review hash: fract(sin(n*127.1 + 311.7) * 43758.5453)."""
+    s = math.sin(n * 127.1 + 311.7) * 43758.5453
+    return s - math.floor(s)
 
 
-# ===========================================================================
-# STATION LIST — bulbous mantle, nose toward -Z, no long tail loft
-# ===========================================================================
-
-def _frigate_stations(l, b, h):
-    """Round mantle sack. Blunt nose, fat through the head, short dissolve
-    into the arm crown. Does not run to the glow (arms carry the stern).
-    """
-    return [
-        sf.fair(l * -0.470, b * 0.040, h * 0.055, h *  0.020),  # blunt nose
-        sf.fair(l * -0.445, b * 0.110, h * 0.160, h *  0.025),
-        sf.fair(l * -0.415, b * 0.190, h * 0.275, h *  0.018),
-        sf.fair(l * -0.375, b * 0.270, h * 0.380, h *  0.006),
-        sf.fair(l * -0.330, b * 0.325, h * 0.450, h * -0.008),
-        sf.fair(l * -0.280, b * 0.350, h * 0.490, h * -0.018),  # round peak
-        sf.fair(l * -0.225, b * 0.348, h * 0.485, h * -0.022),
-        sf.fair(l * -0.170, b * 0.330, h * 0.460, h * -0.020),
-        sf.fair(l * -0.115, b * 0.300, h * 0.415, h * -0.014),
-        sf.fair(l * -0.065, b * 0.255, h * 0.355, h * -0.008),
-        sf.fair(l * -0.020, b * 0.205, h * 0.290, h * -0.002),  # arm hub
-        sf.fair(l *  0.025, b * 0.145, h * 0.205, h *  0.000),
-        sf.fair(l *  0.065, b * 0.085, h * 0.120, h *  0.000),
-        sf.fair(l *  0.095, b * 0.035, h * 0.050, h *  0.000),  # dissolve
-    ]
+def _seg(base, mult, lo=4):
+    """LOD-tessellated segment count; ``lo`` keeps the silhouette alive."""
+    return max(lo, int(round(base * mult)))
 
 
-def _hood_stations(stations, l, h):
-    """Pearl hood on the upper mantle. Shallow grown mass, not a dorsal fin."""
-    hood = []
-    for (z, hw, hh, yo, _ch) in stations:
-        if z < l * -0.430 or z > l * -0.010:
-            continue
-        if hw < 0.20:
-            continue
-        top = yo + hh
-        hood.append(sf.fair(z, max(0.14, hw * 0.58), h * 0.095, top - h * 0.035))
-    return hood
+# ---------------------------------------------------------------------------
+# Review curve equations - verbatim ports.
+# ---------------------------------------------------------------------------
+
+def _bell_prof(v):
+    """Bell profile: axial station and radius at normalized height v."""
+    z = Z_APEX + v * (Z_RIM - Z_APEX)
+    r = max(2.15 * math.sin((math.pi / 2.0) * _clamp01(v) ** 0.78) ** 0.9,
+            0.02)
+    return z, r
 
 
-# ===========================================================================
-# ARMS + WEB
-# ===========================================================================
-
-def _arm_hub(stations, l):
-    """Buried junction at the posterior mantle. Inside the loft solid."""
-    z = l * -0.018
-    _hw, hh, yo, _ch = sf.section(stations, z)
-    return (0.0, yo - hh * 0.08, z)
+def _oral_point(i, t):
+    """Frilled oral-arm spine: gentle outward curl trailing toward +Z."""
+    ph = i * 1.7
+    return (0.22 * math.cos(i * math.pi / 2.0) * (1.0 - t)
+            + 0.34 * math.sin(t * 3.1 + ph) * t,
+            -0.15 - 0.5 * t + 0.22 * math.sin(t * 4.3 + ph * 1.3) * t,
+            0.9 + 3.2 * t)
 
 
-def _arm_inward(hub, root, tip):
-    """Sucker row faces the trailing bundle, not the outer sky."""
-    mid = _lerp(root, tip, 0.45)
-    axis = (hub[0], hub[1] - 0.35, mid[2])
-    return (axis[0] - mid[0], axis[1] - mid[1], axis[2] - mid[2])
-
-
-def _mantle_bury(stations, hub, tip, bury):
-    """Hub->tip point buried ``bury`` inboard of the mantle ellipse.
-
-    The loft is a thin shell. A pad on the hub axis sits in the cavity and
-    never shares a voxel with the wall (voxel 0.06, overlap needs > 0.15).
-    """
-    lo, hi = 0.05, 0.42
-    for _ in range(20):
-        t = 0.5 * (lo + hi)
-        p = _lerp(hub, tip, t)
-        hw, hh, yo, _ch = sf.section(stations, p[2])
-        if hw < 1e-4 or hh < 1e-4:
-            hi = t
-            continue
-        ell = math.sqrt((p[0] / hw) ** 2 + ((p[1] - yo) / hh) ** 2)
-        if ell < 1.0:
-            lo = t
-        else:
-            hi = t
-    p = _lerp(hub, tip, 0.5 * (lo + hi))
-    hw, hh, yo, _ch = sf.section(stations, p[2])
-    gx = p[0] / max(hw * hw, 1e-8)
-    gy = (p[1] - yo) / max(hh * hh, 1e-8)
-    nout = _unit((gx, gy, 0.0), fallback=_unit((p[0], p[1] - yo, 0.0)))
-    return (p[0] - nout[0] * bury, p[1] - nout[1] * bury, p[2])
-
-
-def _bury_suckers(parts, arm_i, mat, root, tip, root_r, tip_r, inward, detail):
-    """Sucker spheres on the inner arm wall. Anatomy's row sits on the
-    axis (offset r*0.55), so at voxel 0.06 it is a hollow interior island.
-    """
-    if detail < 2:
-        return
-    inn = _unit(inward)
-    n = 6 if detail >= 3 else 3
-    for k in range(n):
-        t = 0.12 + 0.7 * k / max(1, n - 1)
-        p = _lerp(root, tip, t)
-        arm_r = root_r + (tip_r - root_r) * t
-        r = max(arm_r * 0.42, 0.14)
-        # Centre 0.12 inboard of the wall so the sphere cuts the tube shell.
-        d = max(arm_r - 0.12, 0.08)
-        loc = (p[0] + inn[0] * d, p[1] + inn[1] * d, p[2] + inn[2] * d)
-        kit.sphere(parts, 'living-arm-frigate.%02d.su%02d' % (arm_i, k),
-                   kit.ROLE_TRIM, loc, (r, r * 0.72, r), mat, segments=8)
-
-
-def _build_arms_and_web(parts, stations, hub, tips, hull_mat, detail):
-    """Eight trailing octopus arms plus the interbrachial skirt.
-
-    All eight arms stay at every detail. Suckers are class-placed on the
-    inner wall (anatomy's axial row floats inside the tube shell).
-    Web is primary mass (anatomy keeps it at detail 0).
-    """
-    n = len(tips)
-    for i, tip in enumerate(tips):
-        root = _lerp(hub, tip, 0.06)
-        root_r = 0.50 + 0.04 * ((i % 3) - 1)
-        inn = _arm_inward(hub, root, tip)
-        an.octopus_arm(parts, 'living-arm-frigate.%02d' % i, hull_mat,
-                       root, tip, root_r=root_r, tip_r=0.10,
-                       suckers=False, inward=inn, detail=detail)
-    an.interbrachial_web(parts, 'living-web-frigate', hull_mat, hub, tips,
-                         thick=0.22, trail=0.32, detail=detail)
-
-
-# ===========================================================================
-# HOLLOWS — in the trailing web, not flank hangar bays
-# ===========================================================================
-
-def _web_mouth(hub, tips, i0, i1, t, y_drop):
-    """Mouth centre on the underside of the web sheet between two arms."""
-    a = _lerp(hub, tips[i0], t)
-    b = _lerp(hub, tips[i1], t)
-    mid = _lerp(a, b, 0.5)
-    return (mid[0], mid[1] - y_drop, mid[2])
-
-
-def _web_plug(parts, name, mat, hub, tips, i0, i1, t):
-    """Ellipsoid that cuts both arm tubes and the web sheet at station t."""
-    a = _lerp(hub, tips[i0], t)
-    b = _lerp(hub, tips[i1], t)
-    mid = _lerp(a, b, 0.5)
-    hx = max(abs(a[0] - b[0]) * 0.55, 0.32)
-    hy = 0.28
-    hz = 0.48
-    kit.sphere(parts, name, kit.ROLE_ARMOUR, mid, (hx, hy, hz), mat,
-               segments=10)
-
-
-def _hollows(parts, glow, hub, tips, hull_mat, glow_mat, detail):
-    """Four grown pockets in the web folds. Forward pair are nurseries.
-
-    Default sf.HOLLOW is 2.5 x 3.2 — wider than the web between two
-    travel-pose arms — so lip beads hang in empty space. Mouths sit in
-    the sheet (y_drop ~ 0) with a pocket sized to the fold, plus a plug
-    that welds well, companion and web.
-    """
-    pocket = (0.62, 0.48, 0.88)
-    # Sheet mouths (no hanging drop). Nested companions still pierce
-    # along -Y from organs.nursery_hollow.
-    loc_s = _web_mouth(hub, tips, 7, 0, 0.14, 0.02)
-    loc_p = _web_mouth(hub, tips, 4, 5, 0.16, 0.02)
-    org.nursery_hollow(parts, glow, 'frigate.hollow.fore.stbd',
-                       hull_mat, glow_mat, loc_s, size=pocket, face='y',
-                       occupants=1, detail=detail, seed=11)
-    org.nursery_hollow(parts, glow, 'frigate.hollow.fore.port',
-                       hull_mat, glow_mat, loc_p, size=pocket, face='y',
-                       occupants=1, detail=detail, seed=23)
-    loc_as = _web_mouth(hub, tips, 0, 1, 0.26, 0.02)
-    loc_ap = _web_mouth(hub, tips, 5, 6, 0.24, 0.02)
-    org.sanctuary_hollow(parts, glow, 'frigate.hollow.aft.stbd',
-                         hull_mat, glow_mat, loc_as, size=pocket, face='y',
-                         detail=detail, seed=37)
-    org.sanctuary_hollow(parts, glow, 'frigate.hollow.aft.port',
-                         hull_mat, glow_mat, loc_ap, size=pocket, face='y',
-                         detail=detail, seed=41)
-    _web_plug(parts, 'living-web-frigate.plug.fore.stbd', hull_mat,
-              hub, tips, 7, 0, 0.14)
-    _web_plug(parts, 'living-web-frigate.plug.fore.port', hull_mat,
-              hub, tips, 4, 5, 0.16)
-    _web_plug(parts, 'living-web-frigate.plug.aft.stbd', hull_mat,
-              hub, tips, 0, 1, 0.26)
-    _web_plug(parts, 'living-web-frigate.plug.aft.port', hull_mat,
-              hub, tips, 5, 6, 0.24)
-    # Companion bodies sit 0.186 below the mouth; pin them back into the sheet.
-    for tag, loc in (('fore.stbd', loc_s), ('fore.port', loc_p)):
-        oy = 1.0 if loc[1] >= 0.0 else -1.0
-        cloc = (loc[0], loc[1] + oy * (sf.COMPANION_LEN * 0.11 - 0.10), loc[2])
-        kit.sphere(parts, 'living-companion-%s.plug' % tag, kit.ROLE_ARMOUR,
-                   _lerp(loc, cloc, 0.45), (0.42, 0.32, 0.70), hull_mat,
-                   segments=10)
-
-
-def _crown_weld(parts, glow, hull_mat, glow_mat, loc, count, detail):
-    """Root pad plus thick shafts. Organ filaments (r≈0.02) and tip
-    droplets (r=0.05) miss voxel 0.06 unless they cut the mantle shell.
-    """
-    kit.sphere(parts, 'sensory-crown-frigate.root', kit.ROLE_HULL, loc,
-               (0.52, 0.38, 0.48), hull_mat, segments=10)
-    if detail < 1:
-        return
-    fx, fy, fz = _unit((0.0, 0.30, -1.0), fallback=(0.0, 0.0, -1.0))
-    if abs(fy) < 0.9:
-        ux, uy, uz = _unit((-fz, 0.0, fx), fallback=(1.0, 0.0, 0.0))
-    else:
-        ux, uy, uz = 1.0, 0.0, 0.0
-    vx = fy * uz - fz * uy
-    vy = fz * ux - fx * uz
-    vz = fx * uy - fy * ux
-    vx, vy, vz = _unit((vx, vy, vz))
-    n = count if detail >= 2 else 4
-    rand = kit.rng(61)
-    lx, ly, lz = loc
-    for i in range(n):
-        ang = 2.0 * math.pi * i / n + rand() * 0.4
-        ca, sa = math.cos(ang), math.sin(ang)
-        length = sf.FILAMENT_LEN * (0.85 + rand() * 0.30)
-        spread = sf.FILAMENT_LEN * 0.55
-        # Skip the two extra rand() calls organs uses for bow, then the tip.
-        rand()
-        rand()
-        tip = (lx + fx * length + (ux * ca + vx * sa) * spread,
-               ly + fy * length + (uy * ca + vy * sa) * spread,
-               lz + fz * length + (uz * ca + vz * sa) * spread)
-        kit.strut(parts, 'sensory-crown-frigate.shaft%02d' % i, kit.ROLE_HULL,
-                  loc, tip, hull_mat, radius=0.10, vertices=6)
-        if detail >= 2:
-            _glow_tag(kit.sphere(glow, 'sensory-crown-frigate.weld%02d' % i,
-                                 'glow', tip, (0.12, 0.12, 0.12), glow_mat,
-                                 segments=8))
-
-
-# ===========================================================================
-# SURFACE PATHS
-# ===========================================================================
-
-def _hood_margin_path(stations, hood, side):
-    """Flow line where the pearl hood meets the indigo mantle."""
-    if len(hood) < 2:
-        return []
-    z0 = hood[0][0]
-    z1 = hood[-1][0]
-    pts = []
-    n = 12
-    for i in range(n):
-        t = i / (n - 1.0)
-        z = z0 + (z1 - z0) * t
-        hw_h = sf.section(hood, z)[0]
-        x = hw_h + 0.05
-        y = sf.top_y(stations, z, x)
-        if y == 0.0:
-            continue
-        if i == 0 or i == n - 1:
-            x *= 0.55
-            y -= 0.10
-        pts.append((side * x, y + 0.02, z))
-    return pts
-
-
-def _scar_path(stations, side, z0, z1, yf0, yf1, n):
-    """Healed welt on the mantle flank. Ends bury inboard."""
-    pts = []
-    for i in range(n):
-        t = i / (n - 1.0)
-        z = z0 + (z1 - z0) * t
-        hw, hh, yo, _ch = sf.section(stations, z)
-        if hw == 0.0:
-            continue
-        y = yo + (yf0 + (yf1 - yf0) * t) * hh
-        fx = sf.flank_x(stations, z, y)
-        if fx == 0.0:
-            continue
-        x = fx + 0.02
-        if i == 0 or i == n - 1:
-            x -= 0.12
-        pts.append((side * x, y, z))
-    return pts
-
-
-def _vent_points(stations, side, l, y, n):
-    """Breath mouths on the mantle flank only (short z-run)."""
-    pts = []
-    z0 = l * -0.340
-    z1 = l * -0.080
-    for i in range(n):
-        z = z0 + (z1 - z0) * i / (n - 1.0)
-        fx = sf.flank_x(stations, z, y)
-        if fx == 0.0:
-            continue
-        pts.append((side * fx, y, z))
-    return pts
-
-
-def _fold_y(stations, yf):
-    _hw, hh, yo, _ch = sf.section(stations, 0.0)
-    # Hub station is near z=0; fall back to a fat mantle sample if slim.
-    if hh < 0.4:
-        _hw, hh, yo, _ch = sf.section(stations, stations[5][0])
-    return yo + yf * hh
-
-
-# ===========================================================================
-# BUILD
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# BUILD FUNCTION
+# ---------------------------------------------------------------------------
 
 def build_frigate(parts, glow, l, b, h, hull_mat, glow_mat, detail):
-    """Build the Beautiful Ones travel-pose octopus elder (frigate class).
+    """Build the Beautiful Ones Cathedral jellyfish elder (frigate class).
 
-    parts    -- ROLE_HULL / ROLE_ARMOUR / ROLE_RECESS / ROLE_TRIM /
-                ROLE_ACCENT objects.
-    glow     -- emissive objects (skin_role='glow').
-    l, b, h  -- class length, beam, height from the driver (32.0, 12.48,
-                8.32).
-    detail   -- 3 full  2 fewer repeats  1 primary + hints  0 masses only.
+    parts / glow -- object lists the driver joins into the hull and
+                    emissive meshes (authored Col preserved).
+    l, b, h      -- class envelope; the uniform fit owns the proportions.
+    detail       -- 3 (lod0) ... 0 (lod3).
     """
-    stations = _frigate_stations(l, b, h)
-    hood = _hood_stations(stations, l, h)
-    hub = _arm_hub(stations, l)
-    arm_len = l * 0.480
-    tips = an.travel_arm_tips(hub, arm_len, count=8, spread=0.40, drop=0.22)
+    d = min(max(int(detail), 0), 3)
+    mult = _MULT[d]
 
-    # -- Primary masses (always) -------------------------------------------
-    sf.grown_loft(parts, 'frigate.hull', kit.ROLE_HULL, stations, hull_mat,
-                  radial=32)
-    if len(hood) >= 2:
-        sf.grown_loft(parts, 'living-body-frigate.hood', kit.ROLE_ARMOUR,
-                      hood, hull_mat, radial=20)
+    # Review palette, all linear RGB via sf helpers.
+    pal = sf.sculpt_palette(ACCENT)
+    bell_col = sf.sculpt_color('#aacbea')   # ice-blue transmission tissue
+    frill_col = sf.sculpt_color('#c3b4e2')  # lavender oral frills
+    tent_col = sf.sculpt_color('#b6a4d8')   # violet trailing tentacles
+    warm = pal['warm']                      # sanctuary heart
+    ridge_col = pal['ridge']                # pearl ridge layer
+    glow_col = pal['glow']                  # pods and light canals
 
-    z_head = l * -0.300
-    ty = sf.top_y(stations, z_head, 0.0)
-    if ty != 0.0:
-        org.dorsal_mantles(parts, 'frigate.dorsal', hull_mat,
-                           (0.0, ty - 0.16, z_head), (2.20, 0.80, 3.10),
-                           count=3, seed=29, detail=detail)
+    p0, g0 = len(parts), len(glow)
 
-    _build_arms_and_web(parts, stations, hub, tips, hull_mat, detail)
-    _hollows(parts, glow, hub, tips, hull_mat, glow_mat, detail)
+    # -- Elongated scalloped bell (review surface 100x52) ------------------
+    # Soft radial fluting near the rim plus a 10-lobe scalloped margin.
+    # Solidified: the open rim exposes the interior, and front-side
+    # materials must see tissue from inside and out.
+    def bell_fn(u, v):
+        th = u * TAU
+        z, r = _bell_prof(v)
+        flute = 1.0 + 0.055 * math.sin(th * LOBES) * _smooth(0.45, 1.0, v)
+        scallop = (0.34 * (0.5 + 0.5 * math.sin(th * LOBES + math.pi / LOBES))
+                   * _smooth(0.72, 1.0, v))
+        return (math.cos(th) * r * flute,
+                math.sin(th) * r * flute,
+                z + scallop)
 
-    if detail < 1:
-        return
+    sf.sculpt_surface(parts, 'cathedral-bell', bell_fn, hull_mat,
+                      _seg(96, mult, 40), _seg(48, mult, 14),
+                      bell_col, thickness=0.05)
 
-    # -- Scar history: one port welt (detail 1+) ---------------------------
-    scars = (
-        ('ridge.mid',  l * -0.250, l * -0.180, 0.22, 0.40),
-    )
-    for tag, z0, z1, yf0, yf1 in scars:
-        path = _scar_path(stations, -1.0, z0, z1, yf0, yf1, 8)
-        if len(path) >= 2:
-            an.healed_scar(parts, 'frigate.scar.' + tag, hull_mat, path,
-                           detail=detail)
+    # -- Layered inner sanctuary core (glimpsed through the bell) ---------
+    sf.sculpt_sphere(glow, 'cathedral-core-warm', (0.0, -0.05, -0.85),
+                     (0.78, 0.82, 1.65), glow_mat, warm,
+                     segments=_seg(20, mult, 6))
+    sf.sculpt_sphere(parts, 'cathedral-core-ridge', (0.0, 0.38, -1.15),
+                     (0.42, 0.34, 0.9), hull_mat, ridge_col,
+                     segments=_seg(16, mult, 5))
+    for i in range(4):
+        a = (i / 4.0) * TAU + math.pi / 4.0
+        sf.sculpt_sphere(glow, 'cathedral-pod-%d' % i,
+                         (math.cos(a) * 0.95, math.sin(a) * 0.95, 0.45),
+                         (0.17, 0.17, 0.48), glow_mat, glow_col,
+                         segments=_seg(12, mult, 5))
+
+    # -- Sparse radial light canals (review tendrils 48 seg, 8 sides) -----
+    # Each canal rides the bell's surface relief at 1.002x radius.
+    for i in range(LOBES):
+        a = (i / float(LOBES)) * TAU + math.pi / LOBES
+        pts = []
+        for k in range(9):
+            v = 0.09 + 0.82 * (k / 8.0)
+            z, r = _bell_prof(v)
+            flute = (1.0 + 0.055 * math.sin(a * LOBES)
+                     * _smooth(0.45, 1.0, v))
+            scallop = (0.34 * (0.5 + 0.5 * math.sin(a * LOBES + math.pi / LOBES))
+                       * _smooth(0.72, 1.0, v))
+            pts.append((math.cos(a) * r * flute * 1.002,
+                        math.sin(a) * r * flute * 1.002,
+                        z + scallop))
+        sf.sculpt_tendril(glow, 'cathedral-canal-%02d' % i, pts, 0.025,
+                          glow_mat, glow_col, tip=0.01,
+                          segments=_seg(40, mult, 10),
+                          sides=_seg(6, mult, 4))
+
+    # -- Frilled oral arms (review tendril + rippled frill membrane) ------
+    for i in range(4):
+        pts = [_oral_point(i, k / 10.0) for k in range(11)]
+        sf.sculpt_tendril(parts, 'cathedral-arm-%d' % i, pts, 0.085,
+                          hull_mat, frill_col, tip=0.02,
+                          segments=_seg(40, mult, 8),
+                          sides=_seg(8, mult, 4))
+        rot = i * math.pi / 2.0 + math.pi / 4.0
+
+        def frill_fn(u, v, i=i, rot=rot):
+            c = _oral_point(i, v)
+            w = ((0.05 + 0.26 * math.sin(math.pi * min(1.0, v * 1.12)))
+                 * (1.0 - 0.35 * v))
+            ripple = 0.09 * math.sin(v * 10.0 + u * 5.0 + i * 2.1)
+            return (c[0] + math.cos(rot) * (u - 0.5) * 2.0 * w,
+                    c[1] + ripple,
+                    c[2] + math.sin(rot) * (u - 0.5) * 2.0 * w)
+
+        sf.sculpt_surface(parts, 'cathedral-frill-%d' % i, frill_fn,
+                          hull_mat, _seg(10, mult, 3), _seg(36, mult, 6),
+                          frill_col, thickness=0.02)
+
+    # -- Nine long flowing tentacles sweeping back past the rim -----------
+    for j in range(9):
+        a = (j / 9.0) * TAU + 0.35
+        h1 = _hash(j * 3 + 1)
+        h2 = _hash(j * 3 + 2)
+        h3 = _hash(j * 3 + 3)
+        length = 4.4 + 0.9 * h1
+        pts = []
+        for k in range(15):
+            t = k / 14.0
+            pts.append((
+                math.cos(a) * (1.55 + 0.35 * math.sin(math.pi * t))
+                + (0.5 + h2 * 0.3) * math.sin(t * TAU + j * 0.6) * t,
+                math.sin(a) * (1.55 - 0.1 * t) - 0.2 * t
+                + (0.65 + h3 * 0.35) * math.sin(t * TAU + j * 0.8)
+                * math.sin(math.pi * t),
+                1.55 + length * t))
+        sf.sculpt_tendril(parts, 'cathedral-tentacle-%02d' % j, pts,
+                          0.065 + 0.02 * h2, hull_mat, tent_col, tip=0.008,
+                          segments=_seg(72, mult, 12),
+                          sides=_seg(10, mult, 4))
+
+    # -- Short inner veil tentacles ---------------------------------------
+    for j in range(6):
+        a = (j / 6.0) * TAU + 0.9
+        pts = []
+        for k in range(9):
+            t = k / 8.0
+            pts.append((
+                math.cos(a) * 0.85 * (1.0 - 0.3 * t)
+                + 0.2 * math.sin(t * 3.0 + j),
+                math.sin(a) * 0.85 * (1.0 - 0.35 * t) - 0.3 * t
+                + 0.08 * math.sin(t * 4.0 + j),
+                1.4 + 2.3 * t))
+        sf.sculpt_tendril(parts, 'cathedral-veil-%d' % j, pts, 0.03,
+                          hull_mat, tent_col, tip=0.006,
+                          segments=_seg(32, mult, 8),
+                          sides=_seg(6, mult, 4))
+
+    # -- Delicate fringe hanging between the rim lobes --------------------
+    for i in range(LOBES):
+        a = (i / float(LOBES)) * TAU
+        pts = []
+        for k in range(6):
+            t = k / 5.0
+            pts.append((
+                math.cos(a) * (2.05 - 0.35 * t)
+                + 0.04 * math.sin(t * 3.0 + i),
+                math.sin(a) * (2.05 - 0.35 * t)
+                + 0.04 * math.cos(t * 2.4 + i),
+                1.62 + 0.75 * t))
+        sf.sculpt_tendril(parts, 'cathedral-fringe-%02d' % i, pts, 0.02,
+                          hull_mat, tent_col, tip=0.005,
+                          segments=_seg(20, mult, 6),
+                          sides=_seg(5, mult, 3))
+
+    # -- UNIFORM FIT -------------------------------------------------------
+    # One uniform normalization of everything appended above: centres the
+    # full envelope (bell apex to longest tentacle tip) and makes the
+    # longitudinal span exactly l. No shape distortion.
+    sf.fit_sculpt(parts[p0:] + glow[g0:], l)
