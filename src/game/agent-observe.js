@@ -9,6 +9,7 @@
  */
 
 import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, resolveBand } from './state.js';
+import { hailOffer } from './hail-offer.js';
 import { losCloseRate } from './los-close.js';
 import { agentControlStatus } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
@@ -190,6 +191,20 @@ function shipCondition(ctx, t, row) {
     if (scanner >= 1) row.resolve = Math.round(st.resolve);
   }
   if (pierced) row.concealedMounts = true;
+  // Issue #67: public parity with the HUD bracket + prompt. `surrendered` is
+  // the completed yield the npcSurrendered receipt already announces;
+  // `hail` is the shared classifier verdict, so a controller reads the same
+  // state, the same refusal reason, and the same next step the player sees.
+  // No cargo, no ai internals, no Q-ship identity leak.
+  row.surrendered = st.surrendered === true;
+  const offer = hailOffer(ctx, t);
+  row.hail = {
+    state: str(offer.state),
+    available: offer.available === true,
+    blocked: str(offer.blocked),
+    reason: str(offer.reason),
+    next: str(offer.next),
+  };
   const frac = (cur, max) => {
     const c = finiteOrNull(cur);
     const m = finiteOrNull(max);

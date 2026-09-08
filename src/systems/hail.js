@@ -17,6 +17,7 @@ import {
   takeDeferredHail,
 } from './overlay-policy.js';
 import { decodeKeyCode } from './key-code.js';
+import { coverHoldsFor, hailOffer } from '../game/hail-offer.js';
 
 /**
  * Combat hail UI (doc §7.6, §12.3): a lower-left card above the aux stack.
@@ -297,6 +298,10 @@ const HAIL_MISS_REASONS = Object.freeze([
   'no-hail',
   'dock-range',
   'jump-zone',
+  // Issue #67: an intact hull that answers nothing is not all one case. The
+  // player-visible split comes from hail-offer.js, never from ai internals.
+  'yielded',
+  'no-answer',
 ]);
 
 /** Primitive miss event. Never throws. Never includes `ship`. */
@@ -332,6 +337,13 @@ function hailMissLockName(ctx) {
     if (list && list.indexOf(live) >= 0 && (live.lockKind === 'rock' || (!live.object && !live.state))) {
       return 'Rock';
     }
+    // Issue #67 fires this feedback far more often than the old generic
+    // miss, so the name obeys the wave-31 cover rule and the Mk II scanner
+    // tier exactly like the HUD bracket: a masked Q-ship keeps its cover.
+    if (coverHoldsFor(ctx, live)) {
+      const cover = live.record && live.record.coverName;
+      if (typeof cover === 'string' && cover) return cover;
+    }
     const n = (live.record && live.record.pilot) || (live.state && live.state.name);
     if (typeof n === 'string' && n) return n;
     if (live.lockKind === 'station') {
@@ -360,27 +372,21 @@ function hailMissLockDist(ctx) {
   }
 }
 
+/**
+ * Why the H press opened nothing. Issue #67: the verdict is the shared
+ * hail-offer.js classifier the bracket and the public API read, so the toast
+ * can never disagree with what the HUD shows or with observe().
+ */
 function classifyLockHailMiss(ctx) {
   const live = ctx && ctx.targets && ctx.targets.current;
   const name = hailMissLockName(ctx);
   const dist = hailMissLockDist(ctx);
   if (!live) return { name: 'No lock', verb: 'hail', reason: 'none', dist };
-  try {
-    if (
-      live.lockKind
-      || !live.state
-      || !live.object
-      || live.state.destroyed
-      || !ctx.ships
-      || !ctx.ships.includes(live)
-    ) {
-      return { name, verb: 'hail', reason: 'no-hail', dist };
-    }
-    if (live.state.disabled) return { name, verb: 'salvage', reason: 'range', dist };
-    return { name, verb: 'hail', reason: 'no-hail', dist };
-  } catch {
-    return { name, verb: 'hail', reason: 'no-hail', dist };
-  }
+  const offer = hailOffer(ctx, live);
+  // 'salvage' means the card DID open, so this path never sees it; fall back
+  // to the historical generic token rather than claim an available hail.
+  const reason = offer.reason || 'no-hail';
+  return { name, verb: offer.verb, reason, dist };
 }
 
 function hailMissSkipSurface(ctx) {
@@ -1145,9 +1151,22 @@ export function initHail(ctx) {
         } else if (!skipMiss) {
           const lock = classifyLockHailMiss(ctx);
           if (overlayToken) {
+            // An open overlay really is the blocker; it outranks the lock.
             emitHailMiss(ctx, { name: lock.name, verb: 'hail', reason: overlayToken });
           } else {
-            emitHailMiss(ctx, { name: lock.name, verb: 'hail', reason: 'calm' });
+            // Issue #67: session calm only explains the miss when a card was
+            // otherwise available. It must not hide an already-yielded hull or
+            // a hull that is simply out of salvage range.
+            const offer = hailOffer(ctx, ctx.targets && ctx.targets.current);
+            // A salvage hull reports no token of its own when only a
+            // transient UI gate is in the way; calm is then the true answer.
+            const calmHides = offer.available === true || offer.reason === '';
+            emitHailMiss(ctx, {
+              name: lock.name,
+              verb: calmHides ? 'hail' : lock.verb,
+              reason: calmHides ? 'calm' : lock.reason,
+              dist: lock.dist,
+            });
           }
         }
       }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import '../ui/hud.css';
 import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor, SHIP_CLASSES } from '../game/state.js';
+import { hailOffer } from '../game/hail-offer.js';
 import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
@@ -861,6 +862,8 @@ function hailMissToast(e, ctx, mem) {
     else if (reason === 'overlay-chart') text = `${name} — hail blocked (chart)`;
     else if (reason === 'overlay-berth') text = `${name} — hail blocked (berth)`;
     else if (reason === 'calm') text = `${name} — hail calm`;
+    else if (reason === 'yielded') text = `${name} — already yielded, no further hail claim`;
+    else if (reason === 'no-answer') text = `${name} — no terms offered`;
     else if (reason === 'no-hail') text = `${name} — no hail`;
     else if (reason === 'dock-range') text = `${name} — dock out of range${rangeBit}`;
     else if (reason === 'jump-zone') text = `${name} — jump not in zone`;
@@ -2612,13 +2615,34 @@ export function initHud(ctx) {
           }
           meta = (FACTIONS[key]?.name ?? key) + ' · ' + dist + 'u';
           if (pierced) meta += ' · CONCEALED MOUNTS';
+          // Issue #67: the bracket states the OUTCOME, not just the morale
+          // band. A completed surrender reads YIELDED so it can never be
+          // mistaken for a hull that is merely willing to break, and the
+          // clause names the one next step (or says the claim is spent).
+          // Same classifier as the H toast and observe(); scanner tiers and
+          // the Q-ship cover above are untouched.
+          const offer = st ? hailOffer(ctx, target) : null;
           if (st && st.disabled) {
             band = 'capitulate';
             resText = 'DEAD IN SPACE';
+          } else if (st && offer && offer.state === 'yielded') {
+            band = 'capitulate';
+            resText = 'YIELDED';
+            if (typeof st.resolve === 'number' && (ctx.world.scanner ?? 0) >= 1) {
+              resText += ' ' + Math.round(st.resolve);
+            }
           } else if (st && typeof st.resolve === 'number') {
             band = resolveBand(st.resolve);
             resText = BAND_LABEL[band];
             if ((ctx.world.scanner ?? 0) >= 1) resText += ' ' + Math.round(st.resolve);
+          }
+          // The clause is the PERSISTENT encounter outcome, so an open chart,
+          // a calm window, or a card open on another ship cannot erase it.
+          if (offer && offer.clause) meta += ' · ' + offer.clause;
+          // Range is the one transient blocker worth stating on the bracket:
+          // it is the only one the player answers by flying.
+          if (offer && offer.state === 'salvage' && offer.blocked === 'range') {
+            meta += ' · CLOSE TO SALVAGE';
           }
         } else if (kind === 'station') {
           name = stripHudText(ctx.station && ctx.station.name);
@@ -2737,12 +2761,14 @@ export function initHud(ctx) {
           pKey = promptKeyFor('dock', 'J'); pVerb = 'Jump to ' + destName;
         }
       } else if (target && !kind && target.state && !target.state.destroyed) {
-        if (target.state.disabled && targetDistNow <= U.TARGET_RANGE) {
+        // Issue #67: prompt only what the key really does. The old branch
+        // offered 'Hail' for any bargaining/capitulate band, but hail.js opens
+        // a player-initiated card for a disabled hull ONLY — so an intact
+        // CAPITULATE trader advertised an action that answered "no hail".
+        // The bracket clause above carries the state for every other case.
+        if (hailOffer(ctx, target).available) {
           pKey = promptKeyFor('hail', 'H');
           pVerb = 'Hail — dead in space';
-        } else {
-          const band = resolveBand(target.state.resolve ?? 70);
-          if (band === 'bargaining' || band === 'capitulate') { pKey = promptKeyFor('hail', 'H'); pVerb = 'Hail'; }
         }
       }
       if (!pKey && !target && shipObj) {
