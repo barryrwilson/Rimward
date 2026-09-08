@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import '../ui/hud.css';
 import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor, SHIP_CLASSES } from '../game/state.js';
 import { hailOffer } from '../game/hail-offer.js';
+import { escapeStatus } from '../game/npc-escape.js';
 import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
@@ -2640,6 +2641,16 @@ export function initHud(ctx) {
             band = resolveBand(st.resolve);
             resText = BAND_LABEL[band];
             if ((ctx.world.scanner ?? 0) >= 1) resText += ' ' + Math.round(st.resolve);
+          }
+          // Issue #68: where a runner is going rides the SAME line, after the
+          // existing status word — the player reading DEAD IN SPACE / YIELDED /
+          // a morale band still reads it first, and now also learns whether the
+          // hull is running for a named gate or the station holding lane. One
+          // line, no new row, no new gauge. observe() publishes this exact
+          // string, and the word is text-safe (authored vocabulary only).
+          const escapeWord = escapeStatus(rec);
+          if (escapeWord) {
+            resText = resText ? resText + ' · ' + escapeWord.label : escapeWord.label;
           }
           // No passive clause is appended to the meta line. Owner call: an
           // inactive notice costs screen space that faction, distance and the

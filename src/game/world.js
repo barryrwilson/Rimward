@@ -1,7 +1,23 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW, JUMP, ESCAPE, DEFENSE } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 import { writeStationHold } from './traffic-feel.js';
+import {
+  readEscape,
+  escapeActive,
+  escapeRouted,
+  writeEscapePosition,
+  stepEscapeToward,
+  driftEscape,
+  tickEscape,
+  escapeArriveRadius,
+  authoredGate,
+  escapeVec,
+  replanEscape,
+  writeEscapeWakeSite,
+  finishEscape,
+  escapePublicIdentity,
+} from './npc-escape.js';
 
 /**
  * World — the persistent layer (doc §8 Living World), multi-system.
@@ -461,6 +477,32 @@ function rebuildTransitRegistry(ctx) {
 }
 
 /**
+ * Issue #68: is a bearer of `name` still flying BECAUSE IT FLED — in this
+ * bank, mid-crossing, or in another system's bank? Dead and captured records
+ * do not count, and neither does any other surrender alternative: a ransomed
+ * or jettisoning ace keeps the pre-existing successor semantics exactly.
+ * Only flight — the outcome this issue made survivable — stands a pending
+ * timer down. Bounded scan over already-generated banks, run only when a
+ * lineage timer comes due.
+ */
+function livingFledBearerExists(ctx, name) {
+  const banks = ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || typeof name !== 'string') return false;
+  for (const sysId in banks) {
+    if (!Object.hasOwn(banks, sysId)) continue;
+    const bank = banks[sysId];
+    if (!Array.isArray(bank)) continue;
+    for (let i = 0; i < bank.length; i++) {
+      const rec = bank[i];
+      if (!rec || rec.name !== name) continue;
+      if (rec.state === 'dead' || rec.state === 'captured') continue;
+      if (rec.survivedByFlight === true) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Named-Gun hunter injection (glossary: Named ace / Named Gun). Once, when
  * fear crosses ACES.hunter.fearThreshold, Sister Vane joins the redmarch
  * record bank with the same jittered gate↔lane ace route Carver Illyx uses.
@@ -514,6 +556,14 @@ const LINEAGE_LINES = [
  */
 function spawnHunterSuccessor(ctx) {
   const rivalry = ctx.world.aceRivalry; // re-resolved per frame; save.js swaps wholesale
+  // Issue #68: a bearer who FLED is alive somewhere — in this bank, mid-
+  // crossing, or in another system's bank. A pending successor timer left
+  // over from an older outcome must never put a second living bearer of the
+  // same name in the galaxy. Stand the timer down instead.
+  if (livingFledBearerExists(ctx, ACES.hunter.name)) {
+    rivalry.hunterDownAt = null;
+    return;
+  }
   rivalry.hunterGeneration++;
   rivalry.hunterDownAt = null;
   const gen = rivalry.hunterGeneration;
@@ -557,6 +607,12 @@ const ILLYX_LINEAGE_LINES = [
  */
 function spawnIllyxSuccessor(ctx) {
   const rivalry = ctx.world.aceRivalry; // re-resolved per frame; save.js swaps wholesale
+  // Issue #68: same guard as the hunter line — kin do not take up a name its
+  // living bearer is still flying, wherever the escape carried them.
+  if (livingFledBearerExists(ctx, ACES.illyx.name)) {
+    rivalry.illyxDownAt = null;
+    return;
+  }
   rivalry.illyxGeneration++;
   rivalry.illyxDownAt = null;
   const gen = rivalry.illyxGeneration;
@@ -623,11 +679,20 @@ function spawnAspirant(ctx) {
   ctx.emit('gunRisen', { name: rec.name, line: NAMED_GUNS.aspirants.lines[idx] });
 }
 
+// Escape scratch — module scope, never allocated per frame.
+const _escapePos = { x: 0, y: 0, z: 0 };
+
 /**
  * Abstract route position estimate (§8.2). Writes into `out` (Vector3) —
  * zero allocation. traffic.js uses this as the spawn point.
  */
 export function recordPosition(rec, out) {
+  // Issue #68: an active escape OWNS this record's position — the abstract
+  // lane route is stale the moment the hull broke for a gate or the station,
+  // and traffic.js must re-instantiate the runner where it actually is.
+  if (escapeActive(rec) && writeEscapePosition(readEscape(rec), _escapePos)) {
+    return out.set(_escapePos.x, _escapePos.y, _escapePos.z);
+  }
   const route = rec.route;
   if (!route || route.length === 0) return out.set(0, 0, 0);
   if (rec.state === 'docked' || route.length === 1) {
@@ -789,6 +854,9 @@ export function traderOutboundDest(rec, sysId) {
 
 export function traderAtOutboundGate(rec) {
   if (!rec || rec.role !== 'trader' || rec.state !== 'enroute') return false;
+  // Issue #68: a runner's frozen lane position is not a gate dwell. An
+  // escaping record is never an ordinary migration candidate.
+  if (escapeActive(rec)) return false;
   normalizeTraderRecord(rec);
   const lastLeg = rec.route.length - 2;
   if (lastLeg < 0) return false;
@@ -796,8 +864,21 @@ export function traderAtOutboundGate(rec) {
   return rec.dir > 0 || rec.gateLinger === true;
 }
 
-export function beginTransit(ctx, rec, dest, bankSysId) {
-  if (!rec || rec.state === 'inTransit' || rec.role !== 'trader') return false;
+/**
+ * Start an inter-system crossing for `rec`.
+ *
+ * Default policy is UNCHANGED: ordinary migration is trader-only, so ambient
+ * pirate/ace migration stays impossible. `opts.escape === true` is the single
+ * narrow opt-in added by issue #68 — it relaxes the ROLE gate and nothing
+ * else. Every other guard (terminal state, already inTransit, a real physical
+ * outbound edge to a known non-self destination, one registry membership)
+ * still applies to both paths.
+ */
+export function beginTransit(ctx, rec, dest, bankSysId, opts) {
+  if (!rec || rec.state === 'inTransit') return false;
+  if (rec.state === 'dead' || rec.state === 'captured') return false;
+  const escapeMode = opts != null && opts.escape === true;
+  if (!escapeMode && rec.role !== 'trader') return false;
   if (!dest || !Object.hasOwn(SYSTEMS, dest)) return false;
   const sysId = bankSysId ?? rec.system ?? ctx.world?.currentSystem;
   if (!sysId || dest === sysId) return false;
@@ -811,8 +892,118 @@ export function beginTransit(ctx, rec, dest, bankSysId) {
   rec.state = 'inTransit';
   rec.transitTo = dest;
   rec.transitEta = eta;
+  rec.escapeTransit = escapeMode === true;
   inTransitRegistry.push({ rec, sysId });
   return true;
+}
+
+/**
+ * Issue #68 terminal departure: a fleeing hull that physically reached its
+ * chosen gate and completed the charge crosses for real, through the SAME
+ * migration lifecycle a trader uses. Returns the eta in seconds on success,
+ * or null when the plan is not entitled to depart (no gate committed, charge
+ * incomplete, engine out, disabled, terminal record, already departed).
+ *
+ * Emits exactly one sanitized `npcEscaped` receipt per successful departure —
+ * `plan.departed` makes a repeated world update or a restore idempotent.
+ */
+export function beginEscapeTransit(ctx, rec, bankSysId) {
+  const plan = readEscape(rec);
+  if (!plan || plan.departed === true) return null;
+  if (plan.kind !== 'gate' || typeof plan.to !== 'string') return null;
+  if (plan.phase !== 'charge' || !(plan.charge >= JUMP.chargeTime)) return null;
+  const sysId = bankSysId ?? rec.system ?? ctx.world?.currentSystem;
+  // PHYSICAL guard. A phase word and a charge number are just persisted data:
+  // a corrupt or hand-edited plan must not teleport a hull off an imaginary
+  // gate. Re-derive the AUTHORED edge of this system and require the record's
+  // tracked position to actually be inside its zone right now.
+  const gate = authoredGate(sysId, plan.to);
+  const at = gate && escapeVec(gate.position);
+  if (!at) return null;
+  if (!writeEscapePosition(plan, _escapePos)) return null;
+  if (Math.hypot(_escapePos.x - at[0], _escapePos.y - at[1], _escapePos.z - at[2]) > JUMP.zone) return null;
+  // Condition guard, FAIL CLOSED. No snapshot at all means the plan never
+  // captured a real ship, so it cannot claim a real crossing — and neither can
+  // one whose numbers do not describe a hull that could fly through a gate.
+  // Flags alone are not enough: a hand-edited `cond: { flags: {} }`, a missing
+  // or non-finite hull, or an engine at zero with every flag politely false
+  // all used to pass. What is required is what the game itself would produce —
+  // a finite positive hull, a finite engine against a real maximum, and an
+  // integrity ratio ABOVE the same DEFENSE.engineOutAt threshold state.js uses
+  // to declare an engine out. Nothing here is a new rule; it is the existing
+  // one, applied to persisted data instead of trusted from it.
+  const cond = plan.cond;
+  const flags = cond && typeof cond === 'object' ? cond.flags : null;
+  if (!cond || !flags || typeof flags !== 'object') return null;
+  if (flags.disabled === true || flags.engineOut === true || flags.destroyed === true) return null;
+  if (!Number.isFinite(cond.hull) || cond.hull <= 0) return null;
+  if (!Number.isFinite(cond.engine) || !Number.isFinite(cond.engineMax) || cond.engineMax <= 0) return null;
+  if (cond.engine / cond.engineMax <= DEFENSE.engineOutAt) return null;
+  if (!beginTransit(ctx, rec, plan.to, sysId, { escape: true })) return null;
+  plan.departed = true;
+  plan.phase = 'done';
+  plan.reason = 'departed';
+  // Durable PRIVATE outcome. Contract bookkeeping (station.js's local hunt)
+  // needs to know this record left the contract system even when nobody was
+  // watching, and it must survive the record's migration into another bank.
+  // It carries no destination and publishes nothing on its own.
+  rec.escapedFrom = typeof sysId === 'string' ? sysId : null;
+  const eta = Math.max(0, Math.round((rec.transitEta ?? ctx.world.time) - ctx.world.time));
+  // The PUBLIC receipt is scoped to what the player could actually observe:
+  // the hull was live in the current system. An off-screen departure in a
+  // bank the player has never flown is real, but it is not news they witnessed
+  // — publishing it would hand a controller free galaxy-wide intelligence.
+  if (escapeWitnessed(ctx, rec, sysId)) {
+    const who = escapePublicIdentity(rec, ctx.world && ctx.world.scanner);
+    ctx.emit('npcEscaped', {
+      targetId: who.id,
+      targetName: who.name,
+      from: typeof sysId === 'string' ? sysId : null,
+      to: plan.to,
+      kind: 'gate',
+      reason: 'gate',
+      eta,
+    });
+  }
+  return eta;
+}
+
+/**
+ * Could the player actually see this? A receipt is published only for a hull
+ * that was live in the system the player is flying — the same visibility the
+ * HUD, the lock and the comm line already obey.
+ */
+function escapeWitnessed(ctx, rec, sysId) {
+  if (!ctx || !ctx.world) return false;
+  if (typeof sysId === 'string' && sysId !== ctx.world.currentSystem) return false;
+  if (rec && rec.live === true) return true;
+  const cur = ctx.targets && ctx.targets.current;
+  return !!cur && cur.record === rec;
+}
+
+/**
+ * The station-shelter receipt, emitted from ONE place for both runners — the
+ * live hull (npc.js) and the off-screen record. Visibility-scoped exactly like
+ * the departure receipt: a hull reaching a holding lane in a bank the player
+ * is not flying is real, but it is not news they witnessed. Returns the public
+ * identity when it published, so the caller can voice a matching line.
+ */
+export function emitSheltered(ctx, rec, sysId) {
+  if (!escapeWitnessed(ctx, rec, sysId)) return null;
+  const who = escapePublicIdentity(rec, ctx.world && ctx.world.scanner);
+  ctx.emit('npcSheltered', {
+    targetId: who.id,
+    targetName: who.name,
+    system: typeof sysId === 'string' ? sysId : null,
+    kind: 'station',
+    reason: 'station',
+  });
+  return who;
+}
+
+/** Display name for escape copy. Unknown ids fall back to the id itself. */
+export function systemDisplayName(id) {
+  return Object.hasOwn(SYSTEMS, id) ? (SYSTEMS[id].name ?? id) : id;
 }
 
 // ---------- Aftermath §8.7 ----------
@@ -824,7 +1015,140 @@ const MAX_INCIDENTS = 40;
 const GALAXY_TICK = 1; // s between abstract route advances
 
 /**
- * Advance one existing bank. Never starts transit (pickMigrant only).
+ * Off-screen escape progress (issue #68). Scalars and one vector per record,
+ * on the existing galaxy tick — no bank instantiation, no physics, no meshes.
+ * The runner uses the SAME speed contract as its live flight (30% class cruise
+ * with the engine out) and stops at its destination; a disabled hull drifts
+ * nowhere and cannot charge.
+ */
+function tickEscapeRecord(rec, sysId, ctx) {
+  const plan = readEscape(rec);
+  if (!plan) return;
+  const cls = SHIP_CLASSES[rec.classKey];
+  const cond = plan.cond;
+  const flags = (cond && cond.flags) || null;
+  // Existing timed repair, off screen: the SAME state.js rule (30 s clean, the
+  // same 2%/s crawl, the same engineOutAt threshold), applied to the snapshot
+  // over elapsed world time. Nothing else regenerates and nothing is healed.
+  if (cond && flags && flags.engineOut === true && flags.disabled !== true
+    && Number.isFinite(cond.engine) && Number.isFinite(cond.engineMax) && cond.engineMax > 0
+    && Number.isFinite(cond.lastCombatAt) && ctx.world.time - cond.lastCombatAt >= 30
+    && cond.engine / cond.engineMax < DEFENSE.engineOutAt + 0.05) {
+    cond.engine = Math.min(cond.engineMax, cond.engine + cond.engineMax * 0.02 * GALAXY_TICK);
+    if (cond.engine / cond.engineMax > DEFENSE.engineOutAt) flags.engineOut = false;
+  }
+  const engineOut = !!flags && flags.engineOut === true;
+  const disabled = !!flags && flags.disabled === true;
+  const cruise = cls && Number.isFinite(cls.cruise) ? cls.cruise : 90;
+  const burn = cls && Number.isFinite(cls.burn) ? cls.burn : cruise * 2;
+  let speed = engineOut ? cruise * 0.3 : burn;
+  let dist = Infinity;
+  if (disabled) {
+    // A dark hull does not navigate — but it does not stop dead either. It
+    // keeps the drift the live loop gave it (updateDisabled's driftVel, folded
+    // into the plan at capture), so a wreck culled mid-coast stays where its
+    // motion actually put it. `dist` deliberately stays Infinity: drifting can
+    // never spool a gate charge or claim a station arrival.
+    driftEscape(plan, GALAXY_TICK, cruise);
+  } else if (escapeRouted(rec)) {
+    const arrive = escapeArriveRadius(plan);
+    // Hold speed inside the arrival radius so a braking hull does not teleport
+    // through its own destination on a 1 s tick. A zero-length step is the
+    // distance query — stepEscapeToward returns the remaining range and moves
+    // nothing when it cannot take a step.
+    const remaining = stepEscapeToward(plan, 0, 0);
+    // Coherent with the live hull: a station hold is PARKED (npc.js updateFlee),
+    // a gate bore still creeps while it spools.
+    if (Number.isFinite(remaining) && remaining <= arrive) {
+      speed = plan.kind === 'station' ? 0 : Math.min(speed, cruise * ESCAPE.holdSpeed);
+    }
+    dist = stepEscapeToward(plan, speed, GALAXY_TICK);
+  } else if (plan.phase === 'evade') {
+    // No committed leg: the runner said it was running from something, and it
+    // really is — coarsely, along the heading it had when it left the bubble,
+    // under the same speed cap, until the retry cadence below finds it a
+    // route. Standing still off screen was the one thing it was not doing.
+    driftEscape(plan, GALAXY_TICK, speed);
+  }
+  const token = tickEscape(plan, {
+    dist,
+    dt: GALAXY_TICK,
+    now: ctx.world.time,
+    canCharge: !engineOut && !disabled,
+  });
+  if (token === 'gate-ready') {
+    beginEscapeTransit(ctx, rec, sysId);
+  } else if (token === 'sheltered') {
+    emitSheltered(ctx, rec, sysId);
+  } else if (token === 'dwell-over') {
+    finishEscape(rec, 'sheltered');
+    // Ordinary work resumes from where the hull actually sits: rebuild the
+    // lane route around the tracked position rather than snapping it home.
+    resumeEscapeRoute(rec, sysId);
+  } else if (token === 'replan') {
+    offscreenReplan(rec, plan, sysId, ctx);
+  }
+}
+
+/**
+ * Off-screen route retry. An evading record has no live pursuer to steer away
+ * from, but the world moves on: a destination that was screened when the hull
+ * broke off may be perfectly clear now. Re-run the SAME choice from the
+ * tracked position with no threat, so a runner never freezes in 'evade'
+ * forever. It fabricates no arrival — if nothing is reachable it simply
+ * refreshes the cadence and drifts on its last intent.
+ */
+function offscreenReplan(rec, plan, sysId, ctx) {
+  plan.checkedAt = ctx.world.time;
+  const id = Object.hasOwn(SYSTEMS, sysId) ? sysId : rec.system;
+  if (!writeEscapePosition(plan, _escapePos)) return;
+  const flags = plan.cond && plan.cond.flags;
+  if (flags && flags.disabled === true) return; // a dark hull chooses nothing
+  const chosenBefore = plan.chosenAt;
+  const kindBefore = plan.kind;
+  replanEscape(rec, {
+    sysId: id,
+    pos: _escapePos,
+    threatPos: null,
+    engineOut: !!flags && flags.engineOut === true,
+    now: ctx.world.time,
+  });
+  // Off screen the trail is the only thing the player can still follow, so a
+  // retry that finally found a route must not leave the old evade site (or an
+  // abandoned gate) behind. Same shared writer the live stamp uses.
+  if (plan.chosenAt !== chosenBefore || plan.kind !== kindBefore) {
+    writeEscapeWakeSite(rec, plan, rec.role);
+  }
+}
+
+/**
+ * Rejoin ordinary traffic after a resolved station shelter. The record keeps
+ * its identity, cargo, condition snapshot and peace; only the lane route is
+ * rebuilt, anchored on where the escape actually left it.
+ */
+export function resumeEscapeRoute(rec, sysId) {
+  const id = Object.hasOwn(SYSTEMS, sysId) ? sysId : rec.system;
+  if (!Object.hasOwn(SYSTEMS, id)) return;
+  const def = SYSTEMS[id];
+  const station = stationPoint(def);
+  const plan = readEscape(rec);
+  const here = plan && writeEscapePosition(plan, _escapePos)
+    ? new THREE.Vector3(_escapePos.x, _escapePos.y, _escapePos.z)
+    : station.clone();
+  const hold = stationHoldVec(station, here);
+  rec.route = plainRoute([hold, here]);
+  rec.legLens = computeLegLens(rec.route);
+  rec.leg = 0;
+  rec.legT = 1;
+  rec.dir = -1;
+  rec.dwellUntil = 0;
+  rec.gateLinger = false;
+}
+
+/**
+ * Advance one existing bank. Never starts transit (pickMigrant only) — the
+ * one exception is a completed issue-#68 gate escape, which departs through
+ * the same beginTransit machinery under its own explicit guards.
  * Blockade/strike hurry pirates only when `sysId` is the event's system.
  */
 export function tickBank(bank, sysId, ctx) {
@@ -836,6 +1160,14 @@ export function tickBank(bank, sysId, ctx) {
   for (let i = 0; i < bank.length; i++) {
     const rec = bank[i];
     if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') continue;
+    // Issue #68: an escaping record's ordinary route is not its intent any
+    // more. Skip normalization, lane progress and dwell entirely; advance the
+    // small scalar/vector plan instead. A LIVE runner is driven by npc.js, so
+    // this path never double-moves it — both layers recognize plan ownership.
+    if (escapeActive(rec)) {
+      if (!rec.live) tickEscapeRecord(rec, sysId, ctx);
+      continue;
+    }
     if (rec.role === 'trader') normalizeTraderRecord(rec);
     if (rec.role === 'miner') {
       normalizeMinerRecord(rec);
@@ -1528,18 +1860,39 @@ export function initWorld(ctx) {
       rec.state = 'enroute';
       rec.transitTo = null;
       rec.transitEta = 0;
+      rec.escapeTransit = false;
+      if (readEscape(rec)) finishEscape(rec, 'cancelled');
       const home = ctx.world.recordBanks?.[rec.system];
       if (home && home.indexOf(rec) < 0) home.push(rec);
       return;
     }
     const destBank = ensureBank(ctx, destId);
     const fromId = rec.system;
+    // Issue #68: an escapee arrives as the SAME logical record — same id,
+    // name, faction, class, cargo, bounty and condition snapshot. Only its
+    // lane geometry is rebuilt (source coordinates mean nothing here), and
+    // the consumed source-system wake trail is dropped deliberately so it can
+    // never be read against this system's space.
+    const escapePlan = readEscape(rec);
+    if (escapePlan) {
+      finishEscape(rec, 'departed');
+      escapePlan.from = destId;
+      escapePlan.pos = [0, 0, 0];
+      escapePlan.vel = [0, 0, 0];
+      escapePlan.speed = 0;
+      escapePlan.charge = 0;
+      if (rec.wakeSite) delete rec.wakeSite;
+    }
+    rec.escapeTransit = false;
     const planned = traderArrivalWaypoints(def, fromId);
     const destWp = (planned.waypoints[1] ?? planned.waypoints[0]).clone();
     // Route rebuilt station-ward: the record sits exactly ON the arrival
     // gate waypoint (leg 0, legT 1, dir −1) heading home, so a player
     // present in the destination system sees it materialize at the gate.
-    rec.route = plainRoute([planned.waypoints[0], jitter(destWp, 60)]);
+    // Issue #68: an escapee arrives on the AUTHORED gate itself, unjittered —
+    // the player who followed it through is looking straight at that bore, and
+    // a 60 u scatter would read as the ship having gone somewhere else.
+    rec.route = plainRoute([planned.waypoints[0], escapePlan ? destWp : jitter(destWp, 60)]);
     rec.legLens = computeLegLens(rec.route);
     rec.leg = 0;
     rec.legT = 1;
@@ -1696,41 +2049,55 @@ export function initWorld(ctx) {
           rivalry.defeats++;
           rivalry.lastOutcome = outcome; // 'flee' | 'jettison' | 'ransom' | ...
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
-          // Aspirant cycle (wave 10): the defeated ace is a new name, not a
-          // line-bearer — mark it downed; the tick rises the next name after
-          // aspirants.respawnDelay. First fall ever fires 'aspirantBroken'
-          // (fireMilestone guards duplicates). Generic ace bookkeeping above
-          // still counts these defeats.
-          if (rec.aspirant) {
-            rivalry.aspirantFlying = false;
-            rivalry.aspirantDownAt = ctx.world.time;
-            fireMilestone(ctx, 'aspirantBroken', 'A new name goes out. The lanes have more where that came from.');
-            // Wave 11: when the THIRD name falls the rim answers once — a
-            // final word and one shift in her song, not an ending (§25).
-            // fireMilestone guards the once-ever; the shift rides its
-            // first-fire return so it, too, sounds exactly once.
-            if (rivalry.aspirantRisen >= NAMED_GUNS.aspirants.names.length && fireMilestone(ctx, 'rimAnswered', 'The lanes are done sending names. The quiet after is yours to fly.')) {
-              ctx.emit('songShift', { reason: 'aftermath' });
+          // Issue #68: a bearer that BROKE OFF and is still flying is a
+          // witnessed defeat — counted above, rematch ladder untouched — but
+          // it is not a death. Flight alone must not schedule a successor,
+          // break a line, or tell an ending story about a hull the player can
+          // still chase through a gate. Every other surrender alternative
+          // (ransom, jettison, capture, cut engines) keeps its old bookkeeping.
+          const survivedByFlight = outcome === 'flee'
+            && rec.state !== 'dead' && rec.state !== 'captured';
+          // Durable and JSON-plain: the pending-timer guard below (and after a
+          // reload) has to know this bearer is alive because it RAN, not
+          // because some other yield left it breathing.
+          if (survivedByFlight) rec.survivedByFlight = true;
+          if (!survivedByFlight) {
+            // Aspirant cycle (wave 10): the defeated ace is a new name, not a
+            // line-bearer — mark it downed; the tick rises the next name after
+            // aspirants.respawnDelay. First fall ever fires 'aspirantBroken'
+            // (fireMilestone guards duplicates). Generic ace bookkeeping above
+            // still counts these defeats.
+            if (rec.aspirant) {
+              rivalry.aspirantFlying = false;
+              rivalry.aspirantDownAt = ctx.world.time;
+              fireMilestone(ctx, 'aspirantBroken', 'A new name goes out. The lanes have more where that came from.');
+              // Wave 11: when the THIRD name falls the rim answers once — a
+              // final word and one shift in her song, not an ending (§25).
+              // fireMilestone guards the once-ever; the shift rides its
+              // first-fire return so it, too, sounds exactly once.
+              if (rivalry.aspirantRisen >= NAMED_GUNS.aspirants.names.length && fireMilestone(ctx, 'rimAnswered', 'The lanes are done sending names. The quiet after is yours to fly.')) {
+                ctx.emit('songShift', { reason: 'aftermath' });
+              }
             }
-          }
-          // Named-Gun lineage (wave 7): the defeated ace is the hunter →
-          // schedule the next generation, or break the line at the last.
-          if (rec.name === ACES.hunter.name && rec.role === 'ace' && rec.faction === ACES.hunter.faction) {
-            rivalry.hunterGeneration ??= 0; // pre-wave-7 saves lack the field
-            if (rivalry.hunterGeneration >= ACES.hunter.lineage.maxGenerations - 1) {
-              fireMilestone(ctx, 'namedGunBroken', 'There will be no fourth Vane. Even the Ledger calls it enough.');
-            } else {
-              rivalry.hunterDownAt = ctx.world.time;
+            // Named-Gun lineage (wave 7): the defeated ace is the hunter →
+            // schedule the next generation, or break the line at the last.
+            if (rec.name === ACES.hunter.name && rec.role === 'ace' && rec.faction === ACES.hunter.faction) {
+              rivalry.hunterGeneration ??= 0; // pre-wave-7 saves lack the field
+              if (rivalry.hunterGeneration >= ACES.hunter.lineage.maxGenerations - 1) {
+                fireMilestone(ctx, 'namedGunBroken', 'There will be no fourth Vane. Even the Ledger calls it enough.');
+              } else {
+                rivalry.hunterDownAt = ctx.world.time;
+              }
             }
-          }
-          // Freehold lineage (wave 8): Illyx's name is carried by kin. One
-          // successor only — defeating him breaks the line for good.
-          if (rec.name === ACES.illyx.name && rec.role === 'ace' && rec.faction === ACES.illyx.faction) {
-            rivalry.illyxGeneration ??= 0; // pre-wave-8 saves lack the field
-            if (rivalry.illyxGeneration >= ACES.illyx.lineage.maxGenerations - 1) {
-              fireMilestone(ctx, 'illyxLineBroken', 'There will be no third Illyx. Freehold Landing leaves his berth lit.');
-            } else {
-              rivalry.illyxDownAt = ctx.world.time;
+            // Freehold lineage (wave 8): Illyx's name is carried by kin. One
+            // successor only — defeating him breaks the line for good.
+            if (rec.name === ACES.illyx.name && rec.role === 'ace' && rec.faction === ACES.illyx.faction) {
+              rivalry.illyxGeneration ??= 0; // pre-wave-8 saves lack the field
+              if (rivalry.illyxGeneration >= ACES.illyx.lineage.maxGenerations - 1) {
+                fireMilestone(ctx, 'illyxLineBroken', 'There will be no third Illyx. Freehold Landing leaves his berth lit.');
+              } else {
+                rivalry.illyxDownAt = ctx.world.time;
+              }
             }
           }
         }

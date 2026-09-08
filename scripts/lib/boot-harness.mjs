@@ -9,6 +9,9 @@
 import * as THREE from 'three';
 import { readFile } from 'node:fs/promises';
 import { createCtx } from '../../src/core/ctx.js';
+// Diagnostic only (undockStation failure report): the same refusal the berth
+// consults, so a held berth names its own blocker instead of guessing.
+import { planLaunch } from '../../src/game/launch-clearance.js';
 
 // The boot harness exercises one fixed world. Production systems intentionally
 // use Math.random, but an unseeded process made the same commit produce
@@ -430,7 +433,40 @@ export function makeNavHelpers({ ctx, SYSTEMS, tick, dispatchKey, onRouteError }
       tick(2, 'undock retry');
     }
     if (!ctx.flags.docked) return;
-    onRouteError(`UNDOCK FAIL — berth still held at ${ctx.world.currentSystem} after retries`);
+    // DIAGNOSTIC ONLY. Nothing below changes the refusal, the retries or this
+    // failure — it reports WHY the berth held: launch-clearance's own refusal
+    // token and the body kind that fouled the lane, plus the live hulls near
+    // the station. Issue #68 runners can now PARK in the station holding lane,
+    // so their id, role, mode and escape phase belong in this report.
+    let plan = null;
+    try {
+      plan = planLaunch(ctx);
+    } catch (e) {
+      plan = { ok: null, token: `threw:${e.message}`, blocker: '', dist: null, corridor: null };
+    }
+    const stp = SYSTEMS[ctx.world.currentSystem]?.station?.position ?? [0, 0, 0];
+    const at3 = (p) => [Math.round(p.x), Math.round(p.y), Math.round(p.z)];
+    const near = [];
+    for (const s of ctx.ships ?? []) {
+      if (!s || !s.object) continue;
+      const d = Math.hypot(s.object.position.x - stp[0], s.object.position.y - stp[1],
+        s.object.position.z - stp[2]);
+      if (d > 400) continue;
+      const esc = s.record && s.record.escape;
+      near.push({
+        id: (s.record && s.record.id) ?? s.id,
+        role: s.role ?? (s.ai && s.ai.role),
+        d: Math.round(d),
+        at: at3(s.object.position),
+        mode: s.ai && s.ai.mode,
+        escape: esc ? `${esc.kind ?? 'none'}/${esc.phase}` : null,
+      });
+    }
+    onRouteError(`UNDOCK FAIL — berth still held at ${ctx.world.currentSystem} after retries`
+      + ` | planLaunch ok=${plan && plan.ok} token=${(plan && plan.token) || ''}`
+      + ` blocker=${(plan && plan.blocker) || ''} dist=${plan && plan.dist} corridor=${plan && plan.corridor}`
+      + ` | player=${JSON.stringify(at3(ctx.ship.object.position))} station=${JSON.stringify(stp)}`
+      + ` | near=${JSON.stringify(near)}`);
   }
   // Bounded wait for a jump to finish (charge time varies) — never trust a
   // fixed tick count for arrival; fail loudly at the jump instead of docking
