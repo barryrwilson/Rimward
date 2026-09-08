@@ -12,6 +12,7 @@
     "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs",
     "test:first-scare": "node --import ./scripts/with-css-stub.mjs scripts/issue-63-first-scare-test.mjs",
     "test:agent-gameplay": "node --import ./scripts/with-css-stub.mjs scripts/agent-gameplay-test.mjs",
+    "test:survey-navigation": "node --import ./scripts/with-css-stub.mjs scripts/issue-69-survey-navigation-test.mjs",
     "test:dock-approach": "node --import ./scripts/with-css-stub.mjs scripts/dock-approach-test.mjs",
     "test:dock-persistence": "node --import ./scripts/with-css-stub.mjs scripts/issue-71-dock-persistence-test.mjs",
     "test:safe-launch": "node --import ./scripts/with-css-stub.mjs scripts/issue-65-safe-launch-test.mjs",

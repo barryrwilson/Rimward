@@ -285,6 +285,18 @@ Working well and needing no capture: the standing screen, the lock card with
 hardness and required laser, the automine refusal toast, the Ninth Tooth
 demand card, and the autopilot NAV panel with its cancel bar.
 
+### Survey navigation follow-up — issue #69, 2026-09-08
+
+- [x] Implemented: accepted survey contracts provide the same named landmark
+  flight marker to human pilots and public API controllers. The accepted job
+  exposes identity/system, availability guidance, local bearing/range and the
+  discovery radius. Real proximity still witnesses the site; ordinary redock
+  pays the accepted quote. Hidden clues/sites and unaccepted objectives remain
+  outside this path. Focused public flight and save/restore tests, build,
+  full boot, API schema and hardening pass. Live browser verification confirms
+  accepted-survey reload, marker/API parity, discovery and the quoted dock
+  payment with no console errors.
+
 ### Playtest capture — 2026-08-27 (Claude Fable Agent API live play)
 
 External agent play on the live `window.rimward` handle (`?agent=1`). Fear 5
