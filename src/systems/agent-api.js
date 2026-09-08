@@ -449,7 +449,21 @@ function dispatchLive(ctx, name, args) {
     const desk = deskOf(ctx);
     if (!desk || typeof desk.undock !== 'function') return fail(ctx, name, 'no-service');
     if (!ctx.flags || ctx.flags.docked !== true) return fail(ctx, name, 'no-service');
-    desk.undock();
+    // Departure clearance (issue #65) can hold the berth. The desk reports the
+    // refusal; a planner that ignored it would think it was flying while still
+    // docked, so the token and the player-visible notice both propagate, and
+    // a still-docked ship is a failure whatever the desk claimed.
+    let result = null;
+    try {
+      result = desk.undock();
+    } catch {
+      return fail(ctx, name, 'refuse');
+    }
+    if (result && result.ok === false) {
+      const token = str(result.token) || 'blocked';
+      return fail(ctx, name, token, str(result.notice) || token);
+    }
+    if (ctx.flags.docked === true) return fail(ctx, name, 'blocked', 'Launch held.');
     return ok(ctx, name);
   }
   if (name === 'acceptJob') {

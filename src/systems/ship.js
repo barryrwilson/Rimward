@@ -19,6 +19,7 @@ import {
 } from '../game/living-cadence.js';
 import { LIVING_GAIT, gaitFor } from '../game/living-gait.js';
 import { berthHeld } from './overlay-policy.js';
+import { registerBerthFlight } from '../game/launch-clearance.js';
 import { applyPadSpeedGovernor } from '../game/pad-speed-governor.js';
 
 export { applyFlightEnvelope };
@@ -80,6 +81,10 @@ const _up = new THREE.Vector3();
 const _targetVelocity = new THREE.Vector3();
 const _delta = new THREE.Vector3();
 const _realignFrom = new THREE.Vector3();
+// Berth release pose (issue #65): current nose, target radial, minimal rotation.
+const _launchFrom = new THREE.Vector3();
+const _launchDir = new THREE.Vector3();
+const _launchQuat = new THREE.Quaternion();
 const _camAnchor = new THREE.Vector3();
 const _camOffset = new THREE.Vector3(0, 4, 12); // chase: on-axis, behind + above
 // Past the hull tip (ellipsoid z radius ~2.1). Eyes at z=-1.45 must not fill glass.
@@ -759,6 +764,58 @@ export function initShip(ctx) {
   let breathScale = 1; // smoothed whole-body breath + growth scale
   let lockRef = null;
   let lockSpeed = 0;
+
+  /**
+   * Berth park (issue #65). Kills every motion carrier the moment the berth
+   * takes the ship, so "docked" does not depend on the next update() landing:
+   * velocity, published speed, the drift/burner state machines, the private
+   * re-align window, and the match-speed flag. Idempotent.
+   */
+  function parkForBerth() {
+    ship.velocity.set(0, 0, 0);
+    ship.speed = 0;
+    ship.driftActive = false;
+    ship.burnerActive = false;
+    realigning = false;
+    realignT = 0;
+    _realignFrom.set(0, 0, 0);
+    ctx.flags.matchSpeed = false;
+    return true;
+  }
+
+  /**
+   * Berth release (issue #65). station.js plans the collision-clear release
+   * point and outward radial; ship.js — the only writer of the flight
+   * transform — places it. The heading is a MINIMAL rotation of the current
+   * nose onto the outward radial, so the player's roll survives while
+   * dot(nose, radial-away) lands on 1. Then park: the hull leaves the berth at
+   * rest, pointing straight out, with no stale drift or realign to deliver.
+   */
+  function applyLaunchPose(pose) {
+    const obj = ship.object || root;
+    if (!obj || !pose) return false;
+    const { x, y, z, dirX, dirY, dirZ } = pose;
+    if (![x, y, z, dirX, dirY, dirZ].every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      return false;
+    }
+    _launchDir.set(dirX, dirY, dirZ);
+    if (!(_launchDir.lengthSq() > 1e-12)) return false;
+    _launchDir.normalize();
+    obj.position.set(x, y, z);
+    _launchFrom.set(0, 0, -1).applyQuaternion(obj.quaternion).normalize();
+    _launchQuat.setFromUnitVectors(_launchFrom, _launchDir);
+    obj.quaternion.premultiply(_launchQuat);
+    obj.quaternion.normalize();
+    obj.updateMatrixWorld(true);
+    bankAngle = 0;
+    cameraSnapped = false; // the chase rig must not lerp across the release
+    parkForBerth();
+    return true;
+  }
+
+  // Keyed by this ctx: a boot fixture with several contexts must never place a
+  // pose on another context's ship.
+  registerBerthFlight(ctx, (_ctx, pose) => (pose ? applyLaunchPose(pose) : parkForBerth()));
 
   return {
     update(dt) {

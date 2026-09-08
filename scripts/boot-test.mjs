@@ -4224,6 +4224,14 @@ const dockCycle14 = (label, sink) => {
   if (ctx.flags.docked) dispatchKey('Escape');
   tick(1, `${label} undock`); sink.push(...ctx.lastEvents);
   tick(1, `${label} undock settle`); sink.push(...ctx.lastEvents);
+  // Issue #65: departure clearance may hold the berth while traffic crosses
+  // the lane. Wait it out on the real Launch path, then fail loudly.
+  for (let i = 0; ctx.flags.docked && i < 20; i++) {
+    tick(30, `${label} undock lane wait`); sink.push(...ctx.lastEvents);
+    dispatchKey('Escape');
+    tick(2, `${label} undock retry`); sink.push(...ctx.lastEvents);
+  }
+  if (ctx.flags.docked) { console.log(`WAVE14 UNDOCK FAIL — berth held (${label})`); errors++; }
   ctx.ship.object.position.set(...SYSTEMS.hush.station.position);
   ctx.ship.velocity.set(0, 0, 0);
   ctx.input.dockPressed = true; // station.update reads the edge before controls clears it
@@ -13264,7 +13272,12 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   undockStation();
 
-  ctx.flags.docked = prevDockedEq;
+  // Restore gear and hull while genuinely undocked. Writing prevDockedEq back
+  // here fabricated flags.docked = true with the station UI closed, so a later
+  // Escape had no panel to launch from and the undock failed. Keep the real
+  // post-launch state; only remountPlayerHull's docked precondition gets a
+  // temporary true, and the real state is put back straight after it.
+  const realDockedEq = ctx.flags.docked;
   ctx.world.scanner = prevScanEq;
   ctx.world.miningLaser = prevMineEq;
   ctx.world.concealedMounts = prevConEq;
@@ -13282,8 +13295,10 @@ removeLiveShip(w42indyCtx, w42indy);
   else {
     ctx.flags.docked = true;
     remountPlayerHull(ctx);
-    ctx.flags.docked = prevDockedEq;
+    ctx.flags.docked = realDockedEq;
   }
+  // Re-enter the berth through the real dock path when the wave started docked.
+  if (prevDockedEq) dockAtCurrentStation('wave64 equipment restore');
 
   const w64e = {
     ...prefix('mig', migrate),

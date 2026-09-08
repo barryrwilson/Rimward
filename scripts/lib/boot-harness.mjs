@@ -414,10 +414,23 @@ export function makeNavHelpers({ ctx, SYSTEMS, tick, dispatchKey, onRouteError }
     ctx.input.dockPressed = false;
     tick(2, `${label} settle`);
   }
+  // Real Launch, with a bounded wait for a lane that traffic has fouled.
+  //
+  // Issue #65: a berth refuses a fouled outward lane. At Verge a drifting
+  // asteroid genuinely fouls it at dock time, so that refusal is CORRECT and
+  // clears within about a second — wait on the real Launch path. A berth still
+  // held after the wait is a hard failure: never force flags.docked.
   function undockStation() {
     dispatchKey('Escape'); // level 2 backs out to services; level 1 launches
     if (ctx.flags.docked) dispatchKey('Escape');
     tick(2, 'undock');
+    for (let i = 0; ctx.flags.docked && i < 20; i++) {
+      tick(30, 'undock lane wait'); // 0.5 s of real traffic movement per pass
+      dispatchKey('Escape'); // press Launch again
+      tick(2, 'undock retry');
+    }
+    if (!ctx.flags.docked) return;
+    onRouteError(`UNDOCK FAIL — berth still held at ${ctx.world.currentSystem} after retries`);
   }
   // Bounded wait for a jump to finish (charge time varies) — never trust a
   // fixed tick count for arrival; fail loudly at the jump instead of docking
