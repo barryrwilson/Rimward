@@ -4,7 +4,10 @@ Decision for [issue #73](https://github.com/barryrwilson/Rimward/issues/73),
 8 September 2026. Code inventory: `2958c140`, before this issue's explanatory
 UI/API changes. Policy and terms are implemented; local build, full boot,
 focused contract and rendered browser verification are complete. Independent
-QA and merge remain pending.
+Claude QA passed `303fdc80a14bccbbd6970c2cd1465abd2a0d2369` on 8 September 2026
+by reviewing the source and recorded evidence. The follow-up changes only
+browser-probe selectors and documentation; its separate verification and
+review belong to the pull request's final artifact record.
 
 ## Decision
 
@@ -254,10 +257,11 @@ UI/API terms, acceptance receipts, restored agreements, correct settlement/
 cargo and no repeat pay after restoring settled state. Single and double
 use ordinary page Reload before and after delivery. The final mixed flow
 uses actual graceful `Browser.close` and a new Chrome process on the same
-profile at both boundaries: accepted-state PID 28372 exited with code 0 and
-restarted as 3664; delivered-state PID 3664 exited with code 0 and restarted
-as 20740. The `restarts` records in `live/probes.json` establish those
-lifecycles. The restored accepted job ids, quotes and deadlines match, the
+profile at both boundaries. Each `restarts` record identifies the old PID,
+its exit code 0, and the new PID. The reviewed initial ledger is preserved as
+`out/issue-73/live-reviewed-pass-before-f1.json`; later selector-only probe
+reruns write their own lifecycle records to `live/probes.json`. The restored
+accepted job ids, quotes and deadlines match, the
 pair pays exactly 700 UU, and the settled restart does not pay again.
 The single and double flows pay 350 and 700 UU respectively; the mixed flow
 retains all 20 purchased Provisions. Their later 2,700 UU sale against the
@@ -276,12 +280,29 @@ Local outputs are `out/issue-73/focused-results.json`, `focused.log`,
 records the local verifier's checks and scoped process/profile/cache cleanup.
 These generated evidence files are
 not required source artifacts; rerun the committed probes to regenerate
-them. The live ledger was captured before the implementation commit and its
-`commit` field is null; no immutable reviewed-commit result is claimed here.
+them. The initial live ledger was captured before the implementation commit
+and its `commit` field is null. That source and evidence were subsequently
+included in the independent review of
+`303fdc80a14bccbbd6970c2cd1465abd2a0d2369`, which returned PASS. The reviewer
+read the recorded evidence and did not execute the tests. The local verdict
+is `C:/Projects/WebSim/out/issue-73-evidence/QA-CLAUDE-VERDICT.md`; this initial
+PASS does not certify later commits or authorize merge/deployment. Final
+follow-up verification/review is recorded against the pull request artifact.
+
+The selector follow-up reran all three rendered browser scenarios successfully
+with zero console errors/exceptions, including both mixed graceful Chrome
+restart boundaries. It checks the real `.station-panel`, fails closed if a
+required UI assertion has no panel, and omits panel inspection only for the
+restored business-state snapshot before the Jobs pane is reopened. The game
+`src` tree is unchanged from `303fdc8`; this rerun verifies the probe correction,
+not a new gameplay implementation. The final follow-up commit still receives
+its own bounded review through the pull request record.
 
 Rendered terms wrap visibly at 1,440 px and 1,024 px desktop widths. At
-390 px the existing fixed-width station pane clips; mobile-layout support
-is not established and that pre-existing layout was not expanded into this
+390 px the station panel's existing 560 px minimum width makes it span
+x=-85 to x=475 and clip (`src/ui/screens.css`: `.screen-panel`). Mobile-layout
+support is not established and that pre-existing layout was not expanded into this
 issue. The original campaign supplies the representative travel/accounting
 comparison above. No new natural-flight benchmark, force-kill durability,
-independent QA pass, merge or deployment is claimed by these local results.
+merge or deployment is claimed by these local test results. The independent
+PASS above is a separate evidence-review verdict for its named artifact.

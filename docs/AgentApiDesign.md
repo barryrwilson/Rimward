@@ -201,6 +201,10 @@ origin, no buy-in or cargo occupancy (a full hold is allowed), and a fresh
 terminal `jobState` receipts report each party's outcome and payment. Terms
 are derived display text, not new saved fields or a version change.
 
+For passengers, `jobs.offers[].reward` is the unmodified base reward. Read the
+current quotable fare from the `job-reward` row in `station.view.rows`; after
+acceptance, `jobs.active[].payQuoted` is the authoritative agreed fare.
+
 Failures are unchanged: the classifier token stays, the notice still rides
 `error`, and `notice` is `''`. Other commands (and every failure) default
 to `notice: ''`, so a receipt never inherits the preceding request's line; a

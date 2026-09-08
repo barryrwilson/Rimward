@@ -1502,7 +1502,9 @@ the two renewable slots belong to each origin, not to ship capacity.
 [Policy and tradeoffs](PassengerCommitmentPolicyDesign.md) and shared UI/API
 terms are implemented. Focused contracts, build/full boot and three rendered
 browser fixture flows pass with save/reload preservation and clean consoles;
-independent QA remains pending. These are not new natural-flight benchmarks.
+independent Claude QA passed the initial artifact `303fdc8` on 2026-09-08.
+Final follow-up review is recorded with the pull request. These are not new
+natural-flight benchmarks.
 
 Support at least:
 

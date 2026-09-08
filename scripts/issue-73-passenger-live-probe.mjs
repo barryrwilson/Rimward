@@ -284,11 +284,14 @@ async function main() {
 
 
     const act = (name,args={}) => cdp.eval(`window.rimward.act(${JSON.stringify({v:2,name,args})})`);
-    const state = () => cdp.eval(`(() => { const c=window.__ctx; return {
+    const state = (requirePanel=true) => cdp.eval(`(() => { const c=window.__ctx;
+      const panel=document.querySelector('.station-panel');
+      if(${requirePanel}&&!panel) throw new Error('Expected station panel for UI parity');
+      return {
       credits:c.world.credits,cargo:JSON.parse(JSON.stringify(c.cargo)),
       accepted:c.world.jobs.filter(j=>j.kind==='passenger'&&j.state==='accepted'),
       observation:window.rimward.observe(),saved:JSON.parse(localStorage.getItem('rimward-save-v1')),
-      text:document.getElementById('rw-station')?.innerText || document.body.innerText }; })()`);
+      text:panel?.innerText??null,uiScope:panel?'.station-panel':null }; })()`);
     const park = () => cdp.eval(`(() => {const c=window.__ctx;const p=c.systems[c.world.currentSystem].station.position;
       for(const s of c.ships) if(s?.object) s.object.position.set(p[0]+9000,p[1]+9000,p[2]+9000);
       c.flags.combat=false;c.ship.object.position.set(p[0]+36,p[1],p[2]);c.ship.velocity.set(0,0,0);c.ship.speed=0;return true;})()`);
@@ -347,7 +350,9 @@ async function main() {
       await scrollPassenger();await sleep(200);await cdp.shot(scenario+'-before-wide.png');
       if(scenario==='single') {
         await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});await scrollPassenger();await sleep(250);await cdp.shot('single-before-390.png');
-        results.narrow=await cdp.eval(`({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,station:document.getElementById('rw-station')?.getBoundingClientRect().toJSON()})`);
+        results.narrow=await cdp.eval(`(() => {const panel=document.querySelector('.station-panel');
+          if(!panel) throw new Error('Expected station panel for narrow geometry');
+          return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,station:panel.getBoundingClientRect().toJSON()};})()`);
         await cdp.send('Emulation.setDeviceMetricsOverride',{width:1024,height:768,deviceScaleFactor:1,mobile:false});await scrollPassenger();await sleep(250);await cdp.shot('single-before-1024.png');
         await cdp.send('Emulation.clearDeviceMetricsOverride');await sleep(200);
       }
@@ -357,7 +362,9 @@ async function main() {
       const duplicate=await act('acceptJob',{id:picked[0]});
       const ferry=scenario==='mixed'?await act('acceptJob',{id:'ferry-consignment'}):null;
       const destination=accepted.accepted[0]?.destSystem,pay=accepted.accepted.reduce((n,j)=>n+j.payQuoted,0);
-      await reloadSaved(scenario==='mixed','accepted');const restored=await state();
+      // Restored agreements are read before reopening a dock; no UI assertion
+      // is made at this intermediate stage where no panel exists.
+      await reloadSaved(scenario==='mixed','accepted');const restored=await state(false);
       await berth(destination);const delivered=await state();await cdp.shot(scenario+'-delivered.png');
       await reloadSaved(scenario==='mixed','delivered');await berth(destination);const restarted=await state();
       let tradeProceeds=0;
