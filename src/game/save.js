@@ -23,11 +23,17 @@ import { disengage as disengageAutopilot } from './autopilot.js';
  *
  * - AUTOSAVE on 'docked'/'undocked' events, on 'systemLoaded' when
  *   JUMP.saveOnJump (gate travel is the dock/undock analog §4.4), and every
- *   60 s idle in space. Consumed via ctx.lastEvents.
+ *   60 s idle in space. Event triggers are consumed via ctx.lastEvents.
+ *   Completed station delivery passes, trades, accepted jobs and services
+ *   with persisted effects request saves after their complete mutations.
  * - SAVE BLOCKED while ctx.gate.jumping (mid-swap state is incoherent — the
  *   'systemLoaded' autosave fires once the jump completes) and during active
  *   encounters: a hostile live ship within U.ENCOUNTER_BUBBLE while the
- *   combat flag is set → emit('saveBlocked', {reason}) and retry in 5 s.
+ *   combat flag is set. Blocked or failed autosaves retain a session-only
+ *   request and retry in 5 s, including while docked, through the same gates.
+ *   Mid-jump, encounter and storage failures emit 'saveBlocked' with their
+ *   reason; identical pending warnings are deduplicated. Restore clears
+ *   pending requests so a discarded timeline cannot write later.
  * - LOAD at init (save.js is constructed second-to-last, after ship/world):
  *   a stored snapshot is restored wholesale — world fields (including
  *   currentSystem, per-system markets, record banks, jumpGraceUntil), cargo,
@@ -52,9 +58,9 @@ import { disengage as disengageAutopilot } from './autopilot.js';
  *   Load button (disabled while the berth is empty or corrupt). Manual
  *   saves share the autosave gating (hostile within the encounter bubble
  *   → 'saveBlocked'), except a mid-jump manual save is refused with a
- *   'Mid-jump — berth record refused.' toast where the autosave stays
- *   silent. The panel closes itself if the ship docks or dies. Boot load
- *   and death recovery still read ONLY the autosave key — manual berths
+ *   'Mid-jump — berth record refused.' toast; an autosave reports that it
+ *   will retry instead. The panel closes itself if the ship docks or dies.
+ *   Boot load and death recovery still read ONLY the autosave key — manual berths
  *   are only ever restored explicitly from the panel.
  * - TITLE SCREEN (wave 40, src/systems/title.js): queries hasAutosave() to
  *   decide whether to show CONTINUE; a confirmed NEW GAME calls clearAutosave()
@@ -1768,8 +1774,8 @@ export function initSave(ctx) {
     if (!ctx.player || !ctx.ship.object || dead) return false;
     if (key === KEY) return requestAutosave(ctx);
     // Mid-jump state is incoherent (ships despawned, system half-swapped);
-    // the 'systemLoaded' autosave fires the moment the jump completes. The
-    // autosave path stays silent; a manual berth save gets a refusal toast.
+    // the 'systemLoaded' autosave waits until the jump completes. Autosaves
+    // retain a retry request; this manual berth save only reports refusal.
     if (ctx.gate?.jumping) {
       ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.', source: 'berth' });
       return false;

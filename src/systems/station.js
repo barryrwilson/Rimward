@@ -4635,7 +4635,6 @@ export function initStation(ctx) {
       ctx.world.credits -= ROUND_COST;
       ui.barRound += 1;
       ui.notice = 'The bar loosens up.';
-      requestAutosave(ctx);
       render();
     },
     feedBiomass() {

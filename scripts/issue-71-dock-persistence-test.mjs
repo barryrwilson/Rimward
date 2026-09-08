@@ -135,6 +135,26 @@ ctx.cargoCapacity = 0;
 refused('full hold buy refused atomically',()=>ctx.stationDesk.trade({commodity:'provisions',qty:1,side:'buy'}));
 ctx.cargoCapacity = priorCapacity;
 
+// A round unlocks more rumors for this visit only. Keep that session benefit
+// and its charge together: this action must not create a standalone save.
+const priorIncidents = ctx.world.incidents;
+ctx.world.incidents = Array.from({length:4},(_,i)=>({kind:'destroyed',name:`Round fixture ${i}`,causer:'npc'}));
+ctx.stationDesk.selectService('bar');
+const barBefore = ctx.stationDesk.peekView();
+const rumorCount = view => view.rows.filter(row=>row.cls==='bar-rumor'&&row.text.includes('Round fixture')).length;
+assert.equal(rumorCount(barBefore),3,'bar initially reveals three incident rumors');
+const buyRound = barBefore.actions.find(action=>action.label.includes('Buy a round'));
+assert.ok(buyRound,'bar exposes its real buy-round action');
+const roundCost = Number(buyRound.label.match(/\((\d+) UU\)/)?.[1]);
+assert.ok(roundCost>0,'round has a posted price');
+const roundCredits = ctx.world.credits, roundBlob = localStorage.getItem(KEY);
+assert.equal(ctx.stationDesk.perform({n:buyRound.n,expect:buyRound.label}).ok,true);
+assert.equal(ctx.world.credits,roundCredits-roundCost,'round charges the posted price');
+assert.equal(rumorCount(ctx.stationDesk.peekView()),4,'round reveals the additional rumor during this visit');
+assert.equal(localStorage.getItem(KEY),roundBlob,'session-only round does not create a standalone checkpoint');
+ctx.world.incidents = priorIncidents;
+console.log('PASS bar round retains debit and visit-only rumor benefit without standalone autosave');
+
 // Repair/feed fixtures alter only their input need; the production handlers
 // must save both payment and the healed/fed state after completing the action.
 ctx.player.hull -= 1;
