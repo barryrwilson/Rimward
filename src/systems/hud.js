@@ -19,6 +19,7 @@ import {
   acceptedMiningOreKeys, authoredOreName, fieldHasMatchingOre, rockMatchesOreKeys,
 } from '../game/mining-ore-keys.js';
 import { codeOf, shortLabel, helpLines } from './bindings.js';
+import { hasSurveyMarker } from '../game/survey-nav.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
@@ -41,7 +42,7 @@ import { codeOf, shortLabel, helpLines } from './bindings.js';
  * HUD-06: current-system station pip + off-screen home chevron + POS HOME.
  * Not a lock, not NAV-02, not a reticle child. Distance text is mandatory.
  *
- * Wave 15: charted landmarks surface as POI markers while flying their
+ * Wave 15 / issue #69: charted landmarks and accepted survey objectives surface as POI markers while flying their
  * system — the keeper's chart mark (wave 14 mystery.charted) becomes a
  * heading. One pooled diamond + label per charted-but-unvisited landmark of
  * the current system, projected and edge-clamped like the target bracket;
@@ -2038,7 +2039,8 @@ export function initHud(ctx) {
       if (!ctx.flags.docked) {
         for (let i = 0; i < curLandmarks.length && cmSlot < CHARTMARK_SLOTS; i++) {
           const lm = curLandmarks[i];
-          if (charted.indexOf(lm.id) === -1 || unvisited.indexOf(lm.id) !== -1) continue;
+          if ((charted.indexOf(lm.id) === -1 && !hasSurveyMarker(ctx, lm))
+            || unvisited.indexOf(lm.id) !== -1) continue;
           const s = chartSlots[cmSlot++];
           s.lmId = lm.id;
           s.lmName = lm.name;

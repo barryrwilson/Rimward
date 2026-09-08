@@ -82,6 +82,8 @@ import {
 } from '../game/restitution.js';
 import { POLICE_LEAVE_LINE, POLICE_LEAVE_RADIUS } from '../game/police-leave.js';
 import { noteSessionEvent } from '../game/agent-schema.js';
+import { exploreLandmarkOk, resolveExploreSite } from '../game/survey-nav.js';
+import { LANDMARK_RADIUS } from '../game/mystery.js';
 import { COVERING_LINE, COVERING_STANDING_MIN } from '../game/police-cover.js';
 import { JUMP_REFUSE_LINE, JUMP_REFUSE_STANDING, JUMP_REFUSE_SKIP } from '../game/jump.js';
 import {
@@ -2943,31 +2945,6 @@ function replacePassengerJob(ctx, job) {
   if (next) jobs.push(next);
 }
 
-function exploreLandmarkOk(lm) {
-  if (!lm || typeof lm !== 'object' || Array.isArray(lm)) return false;
-  if (typeof lm.id !== 'string' || !lm.id) return false;
-  if (typeof lm.name !== 'string' || !lm.name.trim()) return false;
-  return true;
-}
-
-function pickExploreLandmark(lms, slot) {
-  if (!Array.isArray(lms) || lms.length === 0) return null;
-  const lm = lms[slot % lms.length];
-  return exploreLandmarkOk(lm) ? lm : null;
-}
-
-function resolveExploreSite(ctx, origin, slot) {
-  if (!Object.hasOwn(SYSTEMS, origin)) return null;
-  const n = slot === 1 ? 1 : 0;
-  const originLm = pickExploreLandmark(SYSTEMS[origin].landmarks, n);
-  if (originLm) return { siteSystem: origin, landmark: originLm };
-  const dest = otherSystemId(ctx, origin);
-  if (!dest || dest === origin || !Object.hasOwn(SYSTEMS, dest)) return null;
-  const destLm = pickExploreLandmark(SYSTEMS[dest].landmarks, n);
-  if (destLm) return { siteSystem: dest, landmark: destLm };
-  return null;
-}
-
 function exploreSiteName(site) {
   if (!site || !exploreLandmarkOk(site.landmark)) return 'the landmark';
   return site.landmark.name.trim();
@@ -5615,6 +5592,9 @@ export function initStation(ctx) {
           const sysName = exploreSystemName(site ? site.siteSystem : originId);
           const left = miningTimeLeftLabel(ctx, job);
           stateLine = `ACCEPTED — survey ${lmName} in ${sysName}`;
+          stateLine += site && exploreVisitedHas(ctx, site.landmark.id)
+            ? ` · Survey witnessed — return to ${exploreStationName(originId)} to file.`
+            : ` · Follow its flight marker; fly within ${LANDMARK_RADIUS} u, then return to ${exploreStationName(originId)} to file.`;
           if (left) stateLine += ` · ${left}`;
         } else if (job.kind === 'espionage') {
           const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;

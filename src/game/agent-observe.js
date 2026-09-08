@@ -11,6 +11,7 @@
 import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, resolveBand } from './state.js';
 import { losCloseRate } from './los-close.js';
 import { agentControlStatus } from '../systems/controls.js';
+import { surveyObjective } from './survey-nav.js';
 import {
   VERSION,
   NEARBY_CAP,
@@ -365,6 +366,7 @@ function jobRow(ctx, j) {
     reward: num(own(j, 'reward'), 0),
   };
   const title = own(j, 'title');
+  if (row.kind === 'explore' && row.state === 'accepted') row.objective = surveyObjective(ctx, j);
   if (typeof title === 'string' && title) row.title = title;
   const commodity = own(j, 'commodity');
   if (typeof commodity === 'string' && commodity) row.commodity = commodity;

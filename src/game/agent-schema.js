@@ -627,7 +627,7 @@ export const ROLE_STATUS = Object.freeze({
   explorer: Object.freeze({
     status: 'supported',
     commands: Object.freeze(['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse']),
-    note: 'landmark/clue discovery observed via landmarkFound/clueFound ring outcomes',
+    note: 'accepted surveys expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payQuoted. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound and jobState record outcomes',
   }),
   rescue: Object.freeze({
     status: 'supported',

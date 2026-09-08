@@ -16246,6 +16246,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const src78e = (rel) => readFileSync(join(here78e, '..', rel), 'utf8');
   const save78e = src78e('src/game/save.js');
   const st78e = src78e('src/systems/station.js');
+  const survey78e = src78e('src/game/survey-nav.js');
   const nSys78e = Object.keys(SYSTEMS).length;
   const liveCap78e = 4 + 8 * nSys78e + 16;
   const exploreRoom78e = 2 * nSys78e;
@@ -16633,7 +16634,8 @@ removeLiveShip(w42indyCtx, w42indy);
     haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78e),
     uniqueHaulIds: uniqueLive78e,
     replaceHelper: st78e.includes('function replaceExploreJob') && st78e.includes('function syncExploreJobs')
-      && st78e.includes('function resolveExploreSite'),
+      && /import \{[^}]*resolveExploreSite[^}]*\} from '\.\.\/game\/survey-nav\.js'/.test(st78e)
+      && survey78e.includes('export function resolveExploreSite'),
     mouseAccept: st78e.includes('btn(card, `Accept (${i + 1})`, () => acceptJob(job))'),
     huntPassengerHelpers: st78e.includes('function replaceHuntJob') && st78e.includes('function replacePassengerJob'),
   };

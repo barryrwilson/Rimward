@@ -35,7 +35,7 @@
 import { CONVERGENCE, DEEPENING } from './state.js';
 
 const CLUE_RADIUS = 35; // u — clue discovery range
-const LANDMARK_RADIUS = 100; // u — landmark discovery range
+export const LANDMARK_RADIUS = 100; // u — landmark discovery range
 const EMPTY = []; // shared fallback for systems without authored POIs
 
 export function initMystery(ctx) {

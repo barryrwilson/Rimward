@@ -11,6 +11,52 @@
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
+## Issue #69 — Accepted survey navigation
+
+API v2 adds `jobs.active[].objective` for accepted `explore` contracts. The
+Jobs board names the objective and explains the flight marker. While flying
+its system, the accepted survey uses the existing landmark diamond, name and
+distance marker. The same marker supplies public range and ship-local bearing;
+acceptance does not mark the landmark charted or witnessed. No scanner upgrade
+is required. No other landmarks, hidden clues or gated mystery sites are listed.
+
+| Field | Meaning |
+|---|---|
+| `kind` | `landmark` |
+| `id`, `name`, `system` | Stable identity and system of the contract's ordinary landmark; omitted for invalid/expired contracts |
+| `status`, `reason` | Current navigation availability and an actionable explanation |
+| `bearing` | Fresh ship-local unit `[x,y,z]`: right, up, nose `-z`; `null` when guidance is unavailable |
+| `range`, `arrivalRange` | Marker distance in game units and the actual discovery radius (100 u); range is `null` when unavailable |
+| `discovered` | The pilot has already witnessed this landmark |
+
+The status is `docked` until launch, `different-system` when travel is needed,
+`available` for a local flight marker, `discovered` after witnessing, or
+`unavailable` for an invalid/expired contract or missing geometry. Offered
+contracts do not expose objective geometry. Discovered objectives keep their
+known identity and return-to-dock instruction but retire the flight marker.
+The existing keeper chart mark and survey mark deduplicate to one diamond.
+Markers are re-derived from existing accepted jobs after save/restore; there
+are no new saved fields and no changes to discovery, deadlines or payment.
+
+Controller path (also described by `capabilities.roles.explorer.note`):
+
+1. Dock, `openService({id:'jobs'})`, then `acceptJob({id:offer.id})`.
+2. Read the accepted job's `objective`. For `different-system`, use
+   `plotRoute({dest:objective.system})`, undock, then engage the existing route
+   autopilot. For a local objective, undock to reveal its marker.
+3. Once flying in the objective system, refresh `setControl` using the marker
+   bearing/range until
+   `objective.discovered` or the matching `landmarkFound` outcome appears.
+   Normal station updates then publish `job.progress:1`.
+4. Return to `job.originSystem`, use `approachDock`, and observe the matching
+   `jobState` with `outcome:'delivered'` and `pay === job.payQuoted`.
+
+`plotRoute` still takes system IDs. Reticle selection, ordinary manual flight
+and all helm/overlay refusal rules remain unchanged. Focused coverage:
+`npm run test:survey-navigation` flies the fresh earning loop through public
+actions/observations, then separately checks restricted metadata, expiry,
+malformed contracts, serialized save/restore and marker deduplication.
+
 ## Issue #63 — First Scare causal evidence
 
 The existing `milestone` row gains optional primitive `cause`, `targetId` and
