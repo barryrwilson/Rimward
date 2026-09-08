@@ -139,6 +139,30 @@ function removeFixtureShip(live) {
   ctx.ships.splice(i, 1);
   removeLiveShip(ctx, live);
 }
+/**
+ * The one rock fixture this test owns, appended the way the field owns them:
+ * `id === array index` (AGENTS.md). Same rule as the hull fixture — prove the
+ * rock really reaches the production collector before relying on a refusal.
+ */
+function addFixtureRock(pos, radius = 8) {
+  const list = ctx.asteroids.list;
+  const rock = { id: list.length, position: pos, radius };
+  list.push(rock);
+  assert.equal(list[rock.id], rock, 'the rock fixture keeps id === array index');
+  collectBodies(ctx, _fixtureBodies);
+  let seen = false;
+  for (let i = 0; i < _fixtureBodies.count; i++) {
+    const b = _fixtureBodies.items[i];
+    if (b.kind === 'asteroid' && b.id === rock.id) { seen = true; break; }
+  }
+  assert.equal(seen, true, 'the rock is visible to collectBodies as an asteroid body');
+  return rock;
+}
+function removeFixtureRock(rock) {
+  const list = ctx.asteroids.list;
+  assert.equal(list[list.length - 1], rock, 'the rock fixture is still the last entry');
+  list.pop();
+}
 
 // ---------------------------------------------------------------------------
 // 1. Docking parks the ship in the same synchronous call — no next frame.
@@ -440,6 +464,100 @@ ok('Veridian: a second station behaves the same at every approach orientation');
   ctx.input.throttle = 0;
   console.log(`  collision: frames=${frames} hits=${hits} hullLost=${hullLost} shieldAbsorbed=${absorbed}`);
   ok('ordinary station collision damage is preserved outside the berth');
+}
+
+// ---------------------------------------------------------------------------
+// 8b. Regression matrix: every public departure path must report the same
+//     verdict as the lane, with a real collected rock in it. This is the QA
+//     repro that found two receipt bugs — no movement bug:
+//       * openService({ id: 'launch' }) answered ok while flags.docked stayed
+//         true, because selectService swallowed the desk's refusal;
+//       * a stationAction Launch retry replayed the stale "Launch held" notice
+//         after it had actually left the berth, because a successful undock
+//         never cleared ui.notice.
+//     Each retry therefore has to follow a real blocked attempt, including the
+//     cross-path sequence from the repro.
+{
+  const api = globalThis.window.rimward;
+  assert.ok(api && typeof api.act === 'function', 'agent handle present');
+  ctx.agent.optIn = true;
+  const rockInLane = () => {
+    const s = stationPos();
+    return addFixtureRock(new THREE.Vector3(s.x + 90, s.y, s.z));
+  };
+  // Resolve the button from the CURRENT panel every time, and press it by its
+  // exact observed label, so nothing here relies on a remembered index.
+  const launchAction = () => {
+    const view = ctx.stationDesk.peekView();
+    assert.ok(view, 'the docked panel is readable');
+    const found = view.actions.filter((a) => /Launch/.test(a.label));
+    assert.equal(found.length, 1, 'the panel offers exactly one Launch control');
+    return found[0];
+  };
+
+  // --- path 1: the dedicated agent undock (already correct; kept in the matrix
+  //     so all three paths are compared against the same lane).
+  dockFrom('freehold', [1, 0, 0]);
+  let rock = rockInLane();
+  assert.equal(planLaunch(ctx).ok, false, 'the rock fouls the plan');
+  const undockHeld = api.act({ name: 'undock' });
+  assert.equal(undockHeld.ok, false, 'undock: a fouled lane is not a success');
+  assert.equal(undockHeld.token, 'blocked', 'undock: blocked token');
+  assert.match(undockHeld.error, /^Launch held/, 'undock: actionable reason');
+  assert.match(undockHeld.error, /rock/, 'undock: and it names the body actually in the lane');
+  assert.equal(ctx.flags.docked, true, 'undock: the refusal agrees with flags.docked');
+  assert.equal(ctx.agent.lastIntent.ok, false, 'undock: the receipt records the refusal');
+  assert.equal(ctx.agent.lastIntent.token, 'blocked', 'undock: the receipt carries the token');
+  removeFixtureRock(rock);
+  const undockFlew = api.act({ name: 'undock' });
+  assert.equal(undockFlew.ok, true, 'undock: the retry reports success');
+  assert.equal(undockFlew.error, '', 'undock: the retry clears the error');
+  assert.equal(undockFlew.token, '', 'undock: the retry clears the token');
+  assert.equal(ctx.flags.docked, false, 'undock: and the ship really left the berth');
+
+  // --- path 2: openService({ id: 'launch' }).
+  dockFrom('freehold', [1, 0, 0]);
+  rock = rockInLane();
+  const openHeld = api.act({ name: 'openService', args: { id: 'launch' } });
+  assert.equal(openHeld.ok, false, 'openService launch: a fouled lane is not a success');
+  assert.equal(openHeld.token, 'blocked', 'openService launch: blocked token');
+  assert.match(openHeld.error, /^Launch held/, 'openService launch: actionable reason');
+  assert.equal(ctx.flags.docked, true, 'openService launch: the refusal agrees with flags.docked');
+  assert.equal(ctx.agent.lastIntent.ok, false, 'openService launch: the receipt records the refusal');
+  assert.equal(ctx.agent.lastIntent.token, 'blocked', 'openService launch: the receipt carries the token');
+  assert.match(notice(), /^Launch held/, 'openService launch: the panel shows the current hold');
+  removeFixtureRock(rock);
+  const openFlew = api.act({ name: 'openService', args: { id: 'launch' } });
+  assert.equal(openFlew.ok, true, 'openService launch: the retry reports success');
+  assert.equal(openFlew.error, '', 'openService launch: the retry clears the error');
+  assert.equal(openFlew.token, '', 'openService launch: the retry clears the token');
+  assert.equal(ctx.flags.docked, false, 'openService launch: and the ship really left the berth');
+  assert.equal(ctx.agent.lastIntent.ok, true, 'openService launch: the receipt agrees with the launch');
+
+  // --- path 3: stationAction on the panel's own Launch button, retried after
+  //     the exact cross-path blocked sequence from the repro.
+  dockFrom('freehold', [1, 0, 0]);
+  rock = rockInLane();
+  let act = launchAction();
+  const pressHeld = api.act({ name: 'stationAction', args: { n: act.n, expect: act.label } });
+  assert.equal(pressHeld.ok, false, 'stationAction Launch: a fouled lane is not a success');
+  assert.equal(pressHeld.token, 'blocked', 'stationAction Launch: blocked token');
+  assert.match(pressHeld.error, /^Launch held/, 'stationAction Launch: actionable reason');
+  assert.equal(ctx.flags.docked, true, 'stationAction Launch: the refusal agrees with flags.docked');
+  const crossHeld = api.act({ name: 'openService', args: { id: 'launch' } });
+  assert.equal(crossHeld.ok, false, 'cross-path: the second blocked attempt refuses too');
+  assert.equal(ctx.flags.docked, true, 'cross-path: still docked after both refusals');
+  removeFixtureRock(rock);
+  assert.equal(planLaunch(ctx).ok, true, 'the lane is clear again');
+  act = launchAction();
+  const pressFlew = api.act({ name: 'stationAction', args: { n: act.n, expect: act.label } });
+  assert.equal(pressFlew.ok, true, 'stationAction Launch: the retry is not replayed as blocked');
+  assert.equal(pressFlew.error, '', 'stationAction Launch: the retry clears the error');
+  assert.equal(pressFlew.token, '', 'stationAction Launch: the retry clears the token');
+  assert.equal(pressFlew.notice, '', 'stationAction Launch: the held line is cleared, not stale');
+  assert.equal(ctx.flags.docked, false, 'stationAction Launch: and the ship really left the berth');
+  assert.equal(ctx.agent.lastIntent.ok, true, 'stationAction Launch: the receipt agrees with the launch');
+  ok('every public launch path reports the lane it actually found, blocked and then clear');
 }
 
 // ---------------------------------------------------------------------------

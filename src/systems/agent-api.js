@@ -403,6 +403,29 @@ function actChooseOrigin(ctx, name, args) {
   return ok(ctx, name);
 }
 
+/**
+ * One launch verdict for every agent departure path (issue #65). `run` performs
+ * the desk call. Departure clearance can hold the berth; the desk reports the
+ * refusal, and a planner that ignored it would think it was flying while still
+ * docked — so the token and the player-visible notice both propagate, a
+ * still-docked ship is a failure whatever the desk claimed, and a desk that
+ * throws fails closed.
+ */
+function actLaunch(ctx, name, run) {
+  let result = null;
+  try {
+    result = run();
+  } catch {
+    return fail(ctx, name, 'refuse');
+  }
+  if (result && result.ok === false) {
+    const token = str(result.token) || 'blocked';
+    return fail(ctx, name, token, str(result.notice) || token);
+  }
+  if (ctx.flags.docked === true) return fail(ctx, name, 'blocked', 'Launch held.');
+  return ok(ctx, name);
+}
+
 function dispatchLive(ctx, name, args) {
   if (name === 'plotRoute') return actPlotRoute(ctx, name, args);
   if (name === 'clearRoute') {
@@ -442,6 +465,9 @@ function dispatchLive(ctx, name, args) {
     if (!ctx.flags || ctx.flags.docked !== true) return fail(ctx, name, 'no-service');
     const id = Object.hasOwn(args, 'id') ? args.id : '';
     if (!isDockService(id)) return fail(ctx, name, 'no-service');
+    // 'launch' opens no pane: it is the same departure the dedicated undock
+    // runs, so it answers with the same launch verdict (issue #65 QA).
+    if (id === 'launch') return actLaunch(ctx, name, () => desk.selectService(id));
     desk.selectService(id);
     return ok(ctx, name);
   }
@@ -449,22 +475,7 @@ function dispatchLive(ctx, name, args) {
     const desk = deskOf(ctx);
     if (!desk || typeof desk.undock !== 'function') return fail(ctx, name, 'no-service');
     if (!ctx.flags || ctx.flags.docked !== true) return fail(ctx, name, 'no-service');
-    // Departure clearance (issue #65) can hold the berth. The desk reports the
-    // refusal; a planner that ignored it would think it was flying while still
-    // docked, so the token and the player-visible notice both propagate, and
-    // a still-docked ship is a failure whatever the desk claimed.
-    let result = null;
-    try {
-      result = desk.undock();
-    } catch {
-      return fail(ctx, name, 'refuse');
-    }
-    if (result && result.ok === false) {
-      const token = str(result.token) || 'blocked';
-      return fail(ctx, name, token, str(result.notice) || token);
-    }
-    if (ctx.flags.docked === true) return fail(ctx, name, 'blocked', 'Launch held.');
-    return ok(ctx, name);
+    return actLaunch(ctx, name, () => desk.undock());
   }
   if (name === 'acceptJob') {
     const blocked = refuseDesk(ctx, name, DESK_NEED.acceptJob);

@@ -6471,7 +6471,10 @@ export function initStation(ctx) {
   }
 
   function selectService(key) {
-    if (key === 'launch') { undock(); return; }
+    // Launch is a departure, not a pane. Hand the caller the berth's real
+    // verdict: swallowing it let the agent API report a success while the
+    // ship was still docked (issue #65 QA).
+    if (key === 'launch') return undock();
     if (!ctx.flags.docked) return;
     pinDockedSystem();
     ui.level = 2;
@@ -6565,6 +6568,10 @@ export function initStation(ctx) {
 
     ctx.flags.docked = false;
     ui.open = false;
+    // Only a launch that actually happened clears the held line. A hold above
+    // returns before this point and keeps its notice; leaving a stale hold here
+    // made a successful retry read back as a refusal (issue #65 QA).
+    ui.notice = '';
     ui.fenceUnlocked = false; // the fence's call only covers this berth visit
     ctx.station.fenceUnlocked = false;
     ui.keeperComp = false; // the keepers' comp only covers this berth visit
