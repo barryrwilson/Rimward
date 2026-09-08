@@ -8,18 +8,26 @@
  */
 import { SYSTEMS } from './state.js'; // data only: the authored system-id set
 
+/**
+ * The same native Object.freeze, under one local name. This module freezes 160+
+ * authored declarations; the alias is the identical operation (freeze does not
+ * read its receiver), applied at the same moment, to the same depth, on the
+ * same objects, in the same order. Nothing about the frozen result changes.
+ */
+const freeze = Object.freeze;
+
 export const VERSION = 2;
 export const EVENT_CAP = 16;
 export const NEARBY_CAP = 12;
 export const COMM_LINE_CAP = 4;
 
-export const DOCK_KEY_SERVICES = Object.freeze([
+export const DOCK_KEY_SERVICES = freeze([
   'market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard',
 ]);
 
 const DOCK_SERVICE_SET = new Set(DOCK_KEY_SERVICES);
 
-export const COMMAND_NAMES = Object.freeze([
+export const COMMAND_NAMES = freeze([
   'ping',
   'disable',
   'plotRoute',
@@ -51,40 +59,19 @@ export const COMMAND_NAMES = Object.freeze([
 ]);
 
 const COMMAND_SET = new Set(COMMAND_NAMES);
+/** PR1's own pair, still its own membership question (isPr1LiveCommand). */
 const PR1_LIVE = new Set(['ping', 'disable']);
-const PR2_LIVE = new Set([
-  'plotRoute',
-  'clearRoute',
-  'engageAutopilot',
-  'cancelAutopilot',
-  'engageAutomine',
-  'cancelAutomine',
-  'hailResolve',
-  'openService',
-  'acceptJob',
-  'trade',
-  'repairAll',
-  'feed',
-  'undock',
-]);
-const PR3_LIVE = new Set([
-  'dock',
-  'hail',
-  'selectTarget',
-  'pulse',
-  'setWeaponGroup',
-]);
-const SESSION_LIVE = new Set(['startGame', 'chooseOrigin', 'recover']);
-const EVADE_LIVE = new Set(['afterburner']);
-const APPROACH_LIVE = new Set(['approachDock']);
-const CONTROL_LIVE = new Set(['setControl', 'clearControl']);
-const STATION_LIVE = new Set(['stationAction']);
-const LIVE = new Set([
-  ...PR1_LIVE, ...PR2_LIVE, ...PR3_LIVE, ...SESSION_LIVE, ...EVADE_LIVE, ...APPROACH_LIVE,
-  ...CONTROL_LIVE, ...STATION_LIVE,
-]);
+/**
+ * Every authored command is live. The per-wave category sets (PR2/PR3/session/
+ * evade/approach/control/station) existed only to be unioned back together
+ * here, and that union listed the SAME 28 authored strings a second time — so
+ * the union is the authored set. Membership, ordering and every public
+ * isAuthored/isLive/isPr1 answer are unchanged; COMMAND_NAMES remains the one
+ * authored list, in its authored order.
+ */
+const LIVE = COMMAND_SET;
 
-export const FORBIDDEN_NAMES = Object.freeze([
+export const FORBIDDEN_NAMES = freeze([
   'teleport',
   'setCredits',
   'setHull',
@@ -97,7 +84,7 @@ const FORBIDDEN_SET = new Set(FORBIDDEN_NAMES);
 
 const CHEAT_NAME = /^(set|add|give|grant|write|assign|move)(credits|hull|cargo|ammo|position|pos|worldcredits)$/i;
 
-export const EVENT_TYPES = Object.freeze([
+export const EVENT_TYPES = freeze([
   'commLine',
   'docked',
   'undocked',
@@ -184,53 +171,53 @@ function isKeepRow(e) {
 const EVENT_TYPE_SET = new Set(EVENT_TYPES);
 
 /** Extra primitive keys copied per authored event type. hailOpened never includes ship. */
-const EVENT_FIELDS = Object.freeze({
-  commLine: Object.freeze(['text', 'from', 'count']),
-  docked: Object.freeze([]),
-  undocked: Object.freeze([]),
-  hailOpened: Object.freeze(['intents', 'salvage']),
-  hailClosed: Object.freeze(['demandHail', 'demandOutcome', 'speaker', 'demand']),
-  hailMiss: Object.freeze(['name', 'verb', 'reason', 'dist']),
-  navRoute: Object.freeze(['dest', 'hops', 'status']),
-  autopilotEngaged: Object.freeze(['dest']),
-  autopilotDisengaged: Object.freeze(['reason']),
-  automineEngaged: Object.freeze(['asteroidId']),
-  automineDisengaged: Object.freeze(['reason']),
-  jumpRequested: Object.freeze(['to']),
-  systemLoaded: Object.freeze(['to']),
-  playerHit: Object.freeze(['damage', 'family', 'fromAft', 'count']),
-  playerFire: Object.freeze(['weapon', 'count']),
-  shieldDown: Object.freeze(['layer', 'player', 'actor', 'targetId']),
-  engineOut: Object.freeze(['player', 'targetId', 'targetName']),
-  npcHit: Object.freeze(['targetId', 'targetName', 'damage', 'count']),
-  npcDisabled: Object.freeze(['targetId', 'targetName']),
-  npcDestroyed: Object.freeze(['targetId', 'targetName']),
-  npcSurrendered: Object.freeze(['targetId', 'targetName', 'outcome']),
+const EVENT_FIELDS = freeze({
+  commLine: freeze(['text', 'from', 'count']),
+  docked: freeze([]),
+  undocked: freeze([]),
+  hailOpened: freeze(['intents', 'salvage']),
+  hailClosed: freeze(['demandHail', 'demandOutcome', 'speaker', 'demand']),
+  hailMiss: freeze(['name', 'verb', 'reason', 'dist']),
+  navRoute: freeze(['dest', 'hops', 'status']),
+  autopilotEngaged: freeze(['dest']),
+  autopilotDisengaged: freeze(['reason']),
+  automineEngaged: freeze(['asteroidId']),
+  automineDisengaged: freeze(['reason']),
+  jumpRequested: freeze(['to']),
+  systemLoaded: freeze(['to']),
+  playerHit: freeze(['damage', 'family', 'fromAft', 'count']),
+  playerFire: freeze(['weapon', 'count']),
+  shieldDown: freeze(['layer', 'player', 'actor', 'targetId']),
+  engineOut: freeze(['player', 'targetId', 'targetName']),
+  npcHit: freeze(['targetId', 'targetName', 'damage', 'count']),
+  npcDisabled: freeze(['targetId', 'targetName']),
+  npcDestroyed: freeze(['targetId', 'targetName']),
+  npcSurrendered: freeze(['targetId', 'targetName', 'outcome']),
   // Issue #68. `from`/`to` are SYSTEMS ids, `kind` is 'gate'|'station',
   // `reason` matches the word the HUD shows, `eta` is the crossing delay in
   // seconds on the existing migration time scale.
-  npcEscaped: Object.freeze(['targetId', 'targetName', 'from', 'to', 'kind', 'reason', 'eta']),
-  npcSheltered: Object.freeze(['targetId', 'targetName', 'system', 'kind', 'reason']),
-  mineHit: Object.freeze(['asteroidId', 'count']),
-  mineBlocked: Object.freeze(['asteroidId', 'oreKey', 'hardness', 'needs', 'line']),
-  podSpawned: Object.freeze(['podId']),
-  podCollected: Object.freeze(['podId']),
-  landmarkFound: Object.freeze(['id', 'name', 'line']),
-  clueFound: Object.freeze(['id', 'line']),
-  convergence: Object.freeze(['id', 'line']),
-  deepening: Object.freeze(['id', 'line']),
-  survivorRescued: Object.freeze(['faction', 'source', 'count', 'repDelta']),
-  survivorSold: Object.freeze(['faction', 'source', 'count', 'credits', 'repDelta']),
-  epicStage: Object.freeze(['id', 'faction', 'stage', 'line']),
-  fearChanged: Object.freeze(['fear']),
-  jobState: Object.freeze(['id', 'kind', 'outcome', 'pay']),
-  milestone: Object.freeze(['id', 'line', 'cause', 'targetId', 'targetName']),
-  originChosen: Object.freeze(['id', 'line']),
-  saveBlocked: Object.freeze(['reason']),
-  reticleLock: Object.freeze(['hit']),
-  playerDestroyed: Object.freeze([]),
-  recovered: Object.freeze(['source']),
-  bodyHit: Object.freeze(['kind', 'speed', 'damage', 'count']),
+  npcEscaped: freeze(['targetId', 'targetName', 'from', 'to', 'kind', 'reason', 'eta']),
+  npcSheltered: freeze(['targetId', 'targetName', 'system', 'kind', 'reason']),
+  mineHit: freeze(['asteroidId', 'count']),
+  mineBlocked: freeze(['asteroidId', 'oreKey', 'hardness', 'needs', 'line']),
+  podSpawned: freeze(['podId']),
+  podCollected: freeze(['podId']),
+  landmarkFound: freeze(['id', 'name', 'line']),
+  clueFound: freeze(['id', 'line']),
+  convergence: freeze(['id', 'line']),
+  deepening: freeze(['id', 'line']),
+  survivorRescued: freeze(['faction', 'source', 'count', 'repDelta']),
+  survivorSold: freeze(['faction', 'source', 'count', 'credits', 'repDelta']),
+  epicStage: freeze(['id', 'faction', 'stage', 'line']),
+  fearChanged: freeze(['fear']),
+  jobState: freeze(['id', 'kind', 'outcome', 'pay']),
+  milestone: freeze(['id', 'line', 'cause', 'targetId', 'targetName']),
+  originChosen: freeze(['id', 'line']),
+  saveBlocked: freeze(['reason']),
+  reticleLock: freeze(['hit']),
+  playerDestroyed: freeze([]),
+  recovered: freeze(['source']),
+  bodyHit: freeze(['kind', 'speed', 'damage', 'count']),
 });
 
 /**
@@ -248,7 +235,7 @@ const SHIP_DERIVE = new Set([
 ]);
 
 /** Repeat-collapse key per type (same key + type folds into count, newest kept). */
-const COLLAPSE_KEY = Object.freeze({
+const COLLAPSE_KEY = freeze({
   npcHit: 'targetId',
   mineHit: 'asteroidId',
   // Combat spam folds the same way as npcHit/mineHit: without it, sustained
@@ -520,8 +507,8 @@ export function sanitizeEvent(raw) {
 }
 
 const ESCAPE_RECEIPTS = new Set(['npcEscaped', 'npcSheltered']);
-const ESCAPE_KIND_SET = new Set(['gate', 'station']);
-const ESCAPE_REASON_SET = new Set(['gate', 'station']);
+/** The authored escape vocabulary — the same two words for kind and reason. */
+const ESCAPE_WORDS = new Set(['gate', 'station']);
 const ESCAPE_ID_MAX = 64;
 const ESCAPE_NAME_MAX = 40;
 const ESCAPE_ETA_MAX = 100000; // s — far past any authored migration window
@@ -534,29 +521,32 @@ const ESCAPE_ETA_MAX = 100000; // s — far past any authored migration window
  * into a plausible-looking lie. Idempotent by construction — a second pass
  * over an already-bounded row changes nothing.
  */
+/** Bounded own string (id may also be a finite number); anything else drops. */
+function boundReceiptText(out, key, max, allowNumber) {
+  const v = out[key];
+  if (typeof v === 'string') {
+    if (v.length === 0) delete out[key];
+    else if (v.length > max) out[key] = v.slice(0, max);
+  } else if (allowNumber && typeof v === 'number') {
+    if (!Number.isFinite(v)) delete out[key];
+  } else if (Object.hasOwn(out, key)) {
+    delete out[key];
+  }
+}
+
 function boundEscapeReceipt(out) {
-  if (typeof out.targetId === 'string') {
-    if (out.targetId.length === 0) delete out.targetId;
-    else if (out.targetId.length > ESCAPE_ID_MAX) out.targetId = out.targetId.slice(0, ESCAPE_ID_MAX);
-  } else if (typeof out.targetId === 'number') {
-    if (!Number.isFinite(out.targetId)) delete out.targetId;
-  } else if (Object.hasOwn(out, 'targetId')) {
-    delete out.targetId;
-  }
-  if (typeof out.targetName === 'string') {
-    if (out.targetName.length === 0) delete out.targetName;
-    else if (out.targetName.length > ESCAPE_NAME_MAX) out.targetName = out.targetName.slice(0, ESCAPE_NAME_MAX);
-  } else if (Object.hasOwn(out, 'targetName')) {
-    delete out.targetName;
-  }
+  boundReceiptText(out, 'targetId', ESCAPE_ID_MAX, true);
+  boundReceiptText(out, 'targetName', ESCAPE_NAME_MAX, false);
   for (const key of ['from', 'to', 'system']) {
     if (!Object.hasOwn(out, key)) continue;
     const v = out[key];
     if (v === null) continue; // an explicit "unknown" is honest; a fake id is not
     if (typeof v !== 'string' || !Object.hasOwn(SYSTEMS, v)) delete out[key];
   }
-  if (Object.hasOwn(out, 'kind') && out.kind !== null && !ESCAPE_KIND_SET.has(out.kind)) delete out.kind;
-  if (Object.hasOwn(out, 'reason') && out.reason !== null && !ESCAPE_REASON_SET.has(out.reason)) delete out.reason;
+  // 'kind' and 'reason' publish the same two authored words.
+  for (const key of ['kind', 'reason']) {
+    if (Object.hasOwn(out, key) && out[key] !== null && !ESCAPE_WORDS.has(out[key])) delete out[key];
+  }
   if (Object.hasOwn(out, 'eta')) {
     const eta = out.eta;
     if (typeof eta !== 'number' || !Number.isFinite(eta) || eta < 0) delete out.eta;
@@ -659,93 +649,97 @@ export function pushRing(events, row, cap = EVENT_CAP) {
 // authorized — every current player service action rides the same station
 // closures, costs, eligibility and confirmations as the keyboard path.
 
-export const ROLE_STATUS = Object.freeze({
-  session: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['startGame', 'chooseOrigin', 'recover', 'ping', 'disable']),
-    note: 'title/origin/death lifecycle; recovery rides the death overlay path',
-  }),
-  pilot: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze([
+/**
+ * One supported role row: status, its authored command list, its note — in
+ * that order, frozen at declaration exactly as the written-out literals were.
+ * Every row is 'supported'; the repeated field names are what this removes,
+ * not any authored value.
+ */
+const role = (commands, note) => freeze({ status: 'supported', commands: freeze(commands), note });
+
+export const ROLE_STATUS = freeze({
+  session: role(
+    ['startGame', 'chooseOrigin', 'recover', 'ping', 'disable'],
+    'title/origin/death lifecycle; recovery rides the death overlay path',
+  ),
+  pilot: role(
+    [
       'plotRoute', 'clearRoute', 'engageAutopilot', 'cancelAutopilot',
       'approachDock', 'dock', 'undock', 'pulse', 'afterburner',
       'setControl', 'clearControl',
-    ]),
-    note: 'routes/AP/gates plus a bounded expiring manual-control lease',
-  }),
-  trader: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['openService', 'trade', 'repairAll', 'feed', 'stationAction']),
-    note: 'market fill prices, repair, bio feed; desk rows and notices observed',
-  }),
-  miner: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['selectTarget', 'setWeaponGroup', 'engageAutomine', 'cancelAutomine', 'setControl', 'clearControl']),
-    note: 'rock identity/ore/hardness, automine channel, cargo/job progress',
-  }),
-  combat: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'clearControl', 'afterburner', 'hail', 'hailResolve']),
-    note: 'HUD-derived aim/lead + lease fireHeld; hit/shield/destruction ring outcomes',
-  }),
-  hail: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['hail', 'hailResolve']),
-    note: 'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId',
-  }),
-  missions: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['openService', 'acceptJob']),
-    note: 'board offers docked; active jobs observed in flight; jobState ring terminals',
-  }),
-  explorer: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse']),
-    note: 'accepted surveys expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payQuoted. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound and jobState record outcomes',
-  }),
-  rescue: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['selectTarget', 'pulse', 'setControl', 'clearControl', 'openService', 'stationAction']),
-    note: 'pod identity/range observed; scoop, dock and People desk resolve survivors',
-  }),
-  services: Object.freeze({
-    status: 'supported',
-    commands: Object.freeze(['openService', 'stationAction', 'undock']),
-    note: 'bar/outfitting/people/epics/shipyard/launch via exact player closures',
-  }),
+    ],
+    'routes/AP/gates plus a bounded expiring manual-control lease',
+  ),
+  trader: role(
+    ['openService', 'trade', 'repairAll', 'feed', 'stationAction'],
+    'market fill prices, repair, bio feed; desk rows and notices observed',
+  ),
+  miner: role(
+    ['selectTarget', 'setWeaponGroup', 'engageAutomine', 'cancelAutomine', 'setControl', 'clearControl'],
+    'rock identity/ore/hardness, automine channel, cargo/job progress',
+  ),
+  combat: role(
+    ['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'clearControl', 'afterburner', 'hail', 'hailResolve'],
+    'HUD-derived aim/lead + lease fireHeld; hit/shield/destruction ring outcomes',
+  ),
+  hail: role(
+    ['hail', 'hailResolve'],
+    'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId',
+  ),
+  missions: role(
+    ['openService', 'acceptJob'],
+    'board offers docked; active jobs observed in flight; jobState ring terminals',
+  ),
+  explorer: role(
+    ['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse'],
+    'accepted surveys expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payQuoted. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound and jobState record outcomes',
+  ),
+  rescue: role(
+    ['selectTarget', 'pulse', 'setControl', 'clearControl', 'openService', 'stationAction'],
+    'pod identity/range observed; scoop, dock and People desk resolve survivors',
+  ),
+  services: role(
+    ['openService', 'stationAction', 'undock'],
+    'bar/outfitting/people/epics/shipyard/launch via exact player closures',
+  ),
 });
 
-export const COMMAND_SPECS = Object.freeze({
-  ping: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['session']) }),
-  disable: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['session']) }),
-  startGame: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['session']) }),
-  chooseOrigin: Object.freeze({ args: Object.freeze({ id: 'origin id string' }), roles: Object.freeze(['session']) }),
-  recover: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['session']) }),
-  plotRoute: Object.freeze({ args: Object.freeze({ dest: 'system id string' }), roles: Object.freeze(['pilot', 'explorer']) }),
-  clearRoute: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot']) }),
-  engageAutopilot: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot']) }),
-  cancelAutopilot: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot']) }),
-  approachDock: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot']) }),
-  engageAutomine: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['miner']) }),
-  cancelAutomine: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['miner']) }),
-  dock: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot']) }),
-  undock: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot', 'services']) }),
-  hail: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['hail', 'combat']) }),
-  hailResolve: Object.freeze({
-    args: Object.freeze({
-      intent: 'listed intent string',
-      index: '1-based intent index (alternative)',
-      expectedConversationId: 'optional observe().hail.conversationId; a replaced card refuses token stale',
-    }),
-    roles: Object.freeze(['hail', 'combat']),
-  }),
-  selectTarget: Object.freeze({ args: Object.freeze({ id: 'optional nearby target id; omit to cycle' }), roles: Object.freeze(['combat', 'miner', 'rescue']) }),
-  pulse: Object.freeze({ args: Object.freeze({ edge: "'dock'|'hail'|'target'|'reticleLock'" }), roles: Object.freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']) }),
-  afterburner: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot', 'combat']) }),
-  setWeaponGroup: Object.freeze({ args: Object.freeze({ n: 'integer 1..5' }), roles: Object.freeze(['combat', 'miner']) }),
-  setControl: Object.freeze({
-    args: Object.freeze({
+/**
+ * One command spec: its argument sketch and the roles that may issue it, in
+ * that authored order, each frozen at declaration exactly as the written-out
+ * literals were and each a distinct object/array per command. The two specs
+ * that carry an extra authored field (setControl's outcomes, stationAction's
+ * note) stay written out in full below.
+ */
+const cmd = (args, roles) => freeze({ args: freeze(args), roles: freeze(roles) });
+
+export const COMMAND_SPECS = freeze({
+  ping: cmd({}, ['session']),
+  disable: cmd({}, ['session']),
+  startGame: cmd({}, ['session']),
+  chooseOrigin: cmd({ id: 'origin id string' }, ['session']),
+  recover: cmd({}, ['session']),
+  plotRoute: cmd({ dest: 'system id string' }, ['pilot', 'explorer']),
+  clearRoute: cmd({}, ['pilot']),
+  engageAutopilot: cmd({}, ['pilot']),
+  cancelAutopilot: cmd({}, ['pilot']),
+  approachDock: cmd({}, ['pilot']),
+  engageAutomine: cmd({}, ['miner']),
+  cancelAutomine: cmd({}, ['miner']),
+  dock: cmd({}, ['pilot']),
+  undock: cmd({}, ['pilot', 'services']),
+  hail: cmd({}, ['hail', 'combat']),
+  hailResolve: cmd({
+    intent: 'listed intent string',
+    index: '1-based intent index (alternative)',
+    expectedConversationId: 'optional observe().hail.conversationId; a replaced card refuses token stale',
+  }, ['hail', 'combat']),
+  selectTarget: cmd({ id: 'optional nearby target id; omit to cycle' }, ['combat', 'miner', 'rescue']),
+  pulse: cmd({ edge: "'dock'|'hail'|'target'|'reticleLock'" }, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
+  afterburner: cmd({}, ['pilot', 'combat']),
+  setWeaponGroup: cmd({ n: 'integer 1..5' }, ['combat', 'miner']),
+  setControl: freeze({
+    args: freeze({
       seq: 'strictly increasing integer per session',
       ttl: 'sim seconds 0.05..5 (default 1)',
       steerX: '-1..1 optional', steerY: '-1..1 optional',
@@ -754,39 +748,42 @@ export const COMMAND_SPECS = Object.freeze({
       throttle: '0..1 setpoint target optional (ramps at player rate)',
       fireHeld: 'boolean optional', driftHeld: 'boolean optional',
     }),
-    roles: Object.freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
-    outcomes: Object.freeze(['active', 'cleared', 'expired', 'suppressed']),
+    roles: freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
+    outcomes: freeze(['active', 'cleared', 'expired', 'suppressed']),
   }),
-  clearControl: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']) }),
-  openService: Object.freeze({ args: Object.freeze({ id: 'dock service id' }), roles: Object.freeze(['trader', 'missions', 'services', 'rescue']) }),
-  acceptJob: Object.freeze({ args: Object.freeze({ id: 'offered job id' }), roles: Object.freeze(['missions']) }),
-  trade: Object.freeze({
-    args: Object.freeze({ commodity: 'commodity key', qty: 'integer 1..min(99, capacity)', side: "'buy'|'sell'" }),
-    roles: Object.freeze(['trader']),
-  }),
-  repairAll: Object.freeze({ args: Object.freeze({}), roles: Object.freeze(['trader']) }),
-  feed: Object.freeze({ args: Object.freeze({ kind: "'biomass'|'rock'|'tend'" }), roles: Object.freeze(['trader']) }),
-  stationAction: Object.freeze({
-    args: Object.freeze({
+  clearControl: cmd({}, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
+  openService: cmd({ id: 'dock service id' }, ['trader', 'missions', 'services', 'rescue']),
+  acceptJob: cmd({ id: 'offered job id' }, ['missions']),
+  trade: cmd(
+    { commodity: 'commodity key', qty: 'integer 1..min(99, capacity)', side: "'buy'|'sell'" },
+    ['trader'],
+  ),
+  repairAll: cmd({}, ['trader']),
+  feed: cmd({ kind: "'biomass'|'rock'|'tend'" }, ['trader']),
+  stationAction: freeze({
+    args: freeze({
       n: 'integer action index from observe().station.view.actions',
       expect: 'optional exact button label; mismatch refuses token stale',
     }),
-    roles: Object.freeze(['trader', 'missions', 'services', 'rescue']),
+    roles: freeze(['trader', 'missions', 'services', 'rescue']),
     note: 'invokes the exact player button closure of the current docked view; confirmations stay two-step',
   }),
 });
 
-export const SERVICE_SPECS = Object.freeze({
-  market: Object.freeze({ status: 'supported', actions: 'trade + desk buttons (+1/+5/-1/-5, seed/data papers)' }),
-  jobs: Object.freeze({ status: 'supported', actions: 'acceptJob + board accept buttons' }),
-  bar: Object.freeze({ status: 'supported', actions: 'buyRound' }),
-  feed: Object.freeze({ status: 'supported', actions: 'feedBiomass/feedRock/tendWounds' }),
-  repair: Object.freeze({ status: 'supported', actions: 'repairAll' }),
-  outfitting: Object.freeze({ status: 'supported', actions: 'cargo rack, scanners, concealed mounts, mining heads, launcher/turret papers (arm/confirm/cancel)' }),
-  people: Object.freeze({ status: 'supported', actions: 'rescue return, ask around, call in favor, sworn gift/Chain transfer/launder papers' }),
-  launch: Object.freeze({ status: 'supported', actions: 'undock' }),
-  epics: Object.freeze({ status: 'supported', actions: 'restitution papers (arm/confirm/cancel)' }),
-  shipyard: Object.freeze({ status: 'supported', actions: 'hangar mount/graft/train + yard hull papers (arm/confirm/cancel)' }),
+/** One supported dock service row: status then its authored action summary. */
+const svc = (actions) => freeze({ status: 'supported', actions });
+
+export const SERVICE_SPECS = freeze({
+  market: svc('trade + desk buttons (+1/+5/-1/-5, seed/data papers)'),
+  jobs: svc('acceptJob + board accept buttons'),
+  bar: svc('buyRound'),
+  feed: svc('feedBiomass/feedRock/tendWounds'),
+  repair: svc('repairAll'),
+  outfitting: svc('cargo rack, scanners, concealed mounts, mining heads, launcher/turret papers (arm/confirm/cancel)'),
+  people: svc('rescue return, ask around, call in favor, sworn gift/Chain transfer/launder papers'),
+  launch: svc('undock'),
+  epics: svc('restitution papers (arm/confirm/cancel)'),
+  shipyard: svc('hangar mount/graft/train + yard hull papers (arm/confirm/cancel)'),
 });
 
 /** Static manifest attached to every v2 observation. */

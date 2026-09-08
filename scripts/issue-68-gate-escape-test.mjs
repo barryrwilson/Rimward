@@ -187,13 +187,37 @@ function dropFixture(entry) {
  * This is the boot suite's `parkHostiles` discipline, widened.
  */
 const keepRecords = new Set();
+const PARK = { x: 60000, y: 60000, z: 60000 };
+/**
+ * The parking has to be COHERENT. Moving only the live hull leaves its RECORD
+ * sitting on its own lane a few dozen units from the player: traffic.js culls
+ * the teleported hull for range and re-instantiates that same close record on
+ * the very next frame, and since the spawn pass instantiates ONE record per
+ * frame and picks the nearest, an ordinary neighbour can hold the slot for
+ * ever — which is exactly what starved the second-encounter fixture (rec-4 and
+ * rec-1 taking every frame while the runner sat 60 u away, eligible and
+ * unblocked). So park the dormant record with its hull: its abstract route
+ * collapses to the same far point. FIXTURE ISOLATION ONLY — records under test
+ * are never touched, no cap, range, priority or spawn rule is changed, and the
+ * hull under test is still instantiated by the real traffic pass.
+ */
 function parkAmbient() {
   let n = 0;
   for (const s of ctx.ships) {
     if (!s || !s.object) continue;
     if (s.record && keepRecords.has(s.record)) continue;
-    s.object.position.set(60000, 60000, 60000);
+    s.object.position.set(PARK.x, PARK.y, PARK.z);
     n++;
+  }
+  for (const rec of ctx.world.records) {
+    if (!rec || keepRecords.has(rec)) continue;
+    const w = rec.route && rec.route[0];
+    if (w && w.x === PARK.x && w.y === PARK.y && w.z === PARK.z) continue;
+    rec.route = [{ ...PARK }, { ...PARK }];
+    rec.legLens = [1];
+    rec.leg = 0;
+    rec.legT = 0;
+    rec.dir = 1;
   }
   return n;
 }
@@ -2135,14 +2159,63 @@ let escapeEvent = null;
     let live = null;
     let stagedD = null;
     let stagedClose = true;
+    // DIAGNOSTIC ONLY (bounded): the eligibility numbers all read fine, so the
+    // evidence needed is WHO the one-per-frame spawn slot actually goes to and
+    // whether this record is the object traffic is looking at. Sampled on the
+    // first three and last three frames only; nothing here steers the loop.
+    const bank = () => ctx.world.recordBanks?.[SYS] ?? [];
+    const eligible = () => {
+      const rows = [];
+      const o = new THREE.Vector3();
+      for (const r of ctx.world.records) {
+        if (r.live || r.assetPending || r.state !== 'enroute') continue;
+        if (r.system && r.system !== ctx.world.currentSystem) continue;
+        recordPosition(r, o);
+        const d = o.distanceTo(ctx.ship.object.position);
+        rows.push({
+          id: r.id,
+          isRec: r === rec,
+          role: r.role,
+          d: Math.round(d),
+          inRange: d <= U.INSTANTIATE_RANGE,
+          close: closeSpawn(d),
+          primed: isShipAssetReady(r.faction, r.classKey, r.role),
+          blocked: spawnBlocked(o, visualClassFor(r), ctx.ships),
+        });
+      }
+      rows.sort((a, b) => a.d - b.d);
+      return rows.slice(0, 3);
+    };
+    const frameShot = (i, phase) => ({
+      i,
+      phase,
+      recLive: rec.live,
+      recSys: rec.system,
+      curSys: ctx.world.currentSystem,
+      paused: ctx.flags.paused,
+      docked: ctx.flags.docked,
+      assetPending: rec.assetPending ?? null,
+      assetReady: rec.assetReady ?? null,
+      inCurrentBank: bank().includes(rec),
+      bankRowsWithId: bank().filter((r) => r.id === rec.id).length,
+      liveIds: ctx.ships.map((s) => ({
+        id: s.record ? s.record.id : s.id, role: s.role, sameRec: s.record === rec,
+      })),
+      imposter: ctx.ships.some((s) => s.record && s.record.id === rec.id && s.record !== rec),
+    });
+    const trace = [];
     for (let i = 0; i < 240 && !live; i++) {
       recordPosition(rec, where);
       placePlayer(where, { x: 60, y: 0, z: 0 });
       stagedD = where.distanceTo(ctx.ship.object.position);
       if (!closeSpawn(stagedD)) stagedClose = false;
+      const sampled = i < 3 || i >= 237;
+      if (sampled) trace.push({ ...frameShot(i, 'before'), candidates: i === 0 ? eligible() : undefined });
       run(1, 'i68 second episode instantiate');
       live = ctx.ships.find((s) => s.record === rec) ?? null;
+      if (sampled) trace.push({ ...frameShot(i, 'after'), candidates: i === 239 ? eligible() : undefined });
     }
+    if (!live) console.log('DIAG second-encounter trace', JSON.stringify(trace, jsonSafe).slice(0, 3000));
     pin('the reacquisition really was staged inside the close-spawn band',
       stagedClose && Number.isFinite(stagedD) && closeSpawn(stagedD),
       { d: stagedD, close: closeSpawn(stagedD) });
@@ -2166,6 +2239,13 @@ let escapeEvent = null;
           d,
           close: closeSpawn(d),
           blocked: spawnBlocked(o, visualClassFor(rec), ctx.ships),
+          recLive: rec.live,
+          recSys: rec.system,
+          curSys: ctx.world.currentSystem,
+          inCurrentBank: (ctx.world.recordBanks?.[SYS] ?? []).includes(rec),
+          bankRowsWithId: (ctx.world.recordBanks?.[SYS] ?? []).filter((r) => r.id === rec.id).length,
+          imposter: ctx.ships.some((s) => s.record && s.record.id === rec.id && s.record !== rec),
+          candidates: eligible(),
         };
       })());
     if (live) {

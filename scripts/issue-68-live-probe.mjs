@@ -43,10 +43,14 @@
  *                       readable reason, and the record inTransit
  *   G8  arrival       - the same id lands in the destination bank, the player
  *                       crosses for real — staged inside the source gate's
- *                       physical zone, confirmed in-zone by the PUBLIC
- *                       observation, then the PUBLIC dock/jump pulse and
- *                       gate.js's own crossing — and real traffic
- *                       re-instantiates that
+ *                       physical zone and confirmed in-zone by the PUBLIC
+ *                       observation, then the crossing is started by the
+ *                       ORDINARY jump keypress: the public pulse{edge:'dock'}
+ *                       act is REFUSED for range there (its dock guard is the
+ *                       station zone, not the gate zone), which the ledger
+ *                       records verbatim as a refusal, and the real key
+ *                       control is what gate.js spools and carries across —
+ *                       and real traffic re-instantiates that
  *                       same hull: same id, unhealed condition, the paid peace
  *                       still held (no fresh demand, no attack), lockable
  *
@@ -58,10 +62,12 @@
  * spawn pass — which reads recordPosition — cannot keep re-instantiating the
  * hull the harness just moved, and an ambient pirate cannot hijack the
  * fixture's hail card; the runner is never parked, so its cull/reacquisition
- * is real traffic), stages the player (including, for G8, a spatial placement
- * inside the source gate's physical JUMP.zone bore so the crossing itself can
- * be commanded through the PUBLIC pulse/dock control), and seeds INITIAL
- * condition only — where the ship is, how
+ * is real traffic), stages the player (a spatial placement, plus — for G3 —
+ * an attitude-only pose that turns the observer to look at the hull it has
+ * locked; and for G8 a spatial placement inside the source gate's physical
+ * JUMP.zone bore, from which the crossing is commanded by the ordinary jump
+ * keypress after the public pulse/dock act refuses for range), and seeds
+ * INITIAL condition only — where the ship is, how
  * hurt it is, whether its screen is dented, whether its engine is out — plus
  * the bargaining/demand card's hailOpened event (with a purse that can cover
  * the price) and, for the rare-condition legs
@@ -131,7 +137,7 @@ const results = {
   cdpPort: null,
   profile: null,
   boot: null,
-  fixtureNote: 'privilegedFixture: ship spawn, COHERENT ambient parking (each background record’s abstract route AND its live hull translated together to one far parking point, runner excluded, so recordPosition/traffic.js stop re-instantiating the same background hulls beside the measurement), player hull pin, player spatial staging (including the G3 observer placed inside the public 600u target range but off the escape leg, and the G8 placement inside the source gate’s physical JUMP.zone bore before the PUBLIC dock/jump pulse), the public close of any stray ambient hail card, the bargaining/demand card hailOpened event plus a purse that can cover the demand, and seeded INITIAL condition (position, hull/screen/engine damage, engineOut/disabled flags, the lastHitAt/lastCombatAt of the exchange that caused them; the ordinary flee mode ONLY for the G5 engine-out and G6 chase legs). G2 breaks off through the public hailResolve demandRansom path, G7 through public payTribute on a real demand card (hail.js debits the credits and stamps demandOutcome), and G3 through the real trader panic. The harness never writes an escape plan, phase, charge, destination, transit, receipt, peace/surrender flag, lock release or restored value — every asserted outcome is produced by npc.js/world.js/traffic.js/hail.js and read back from the DOM, window.rimward or the persistent record.',
+  fixtureNote: 'privilegedFixture: ship spawn, COHERENT ambient parking (each background record’s abstract route AND its live hull translated together to one far parking point, runner excluded, so recordPosition/traffic.js stop re-instantiating the same background hulls beside the measurement), player hull pin, player spatial staging (including the G3 observer placed inside the public 600u target range but off the escape leg, and the G8 placement inside the source gate’s physical JUMP.zone bore), the G3 attitude-only observer pose that turns the player to look at the hull it has locked, the ordinary jump KEYPRESS that starts the G8 crossing after the public pulse{edge:dock} act is refused for range (that refusal is recorded verbatim and is never counted as a success; gate.js’s own in-zone/spool/systemLoaded transition is the proof), the public close of any stray ambient hail card, the bargaining/demand card hailOpened event plus a purse that can cover the demand, and seeded INITIAL condition (position, hull/screen/engine damage, engineOut/disabled flags, the lastHitAt/lastCombatAt of the exchange that caused them; the ordinary flee mode ONLY for the G5 engine-out and G6 chase legs). G2 breaks off through the public hailResolve demandRansom path, G7 through public payTribute on a real demand card (hail.js debits the credits and stamps demandOutcome), and G3 through the real trader panic. The harness never writes an escape plan, phase, charge, destination, transit, receipt, peace/surrender flag, lock release or restored value — every asserted outcome is produced by npc.js/world.js/traffic.js/hail.js and read back from the DOM, window.rimward or the persistent record.',
   origin: null,
   samples: {},
   pins: {},
@@ -410,6 +416,29 @@ const SETUP = `(async () => {
     c.ship.object.position.set(at[0], at[1], at[2]);
     c.ship.velocity.set(0, 0, 0);
     c.ship.speed = 0;
+    return true;
+  };
+  /**
+   * FIXTURE: harness-only INITIAL POSE. The observer is turned to look at the
+   * hull it is watching, so a target that is genuinely locked is also
+   * genuinely on screen and the ordinary bracket renders it. The ship's
+   * forward is -Z, and Object3D.lookAt points a plain object's +Z at the
+   * target (only the camera/light branch uses -Z), so the rotation is built
+   * explicitly: the quaternion that carries (0, 0, -1) onto the normalized
+   * vector from the player to that hull. Attitude only: no position, no HUD,
+   * no lock and no target state is written here.
+   */
+  bag.faceShip = () => {
+    const rec = bag.rec;
+    if (!rec) return false;
+    const live = (c.ships || []).find((s) => s.record === rec) || null;
+    if (!live || !live.object) return false;
+    const here = c.ship.object.position;
+    const to = live.object.position.clone().sub(here);
+    if (!(to.length() > 1e-6)) return false; // coincident: no direction to take
+    to.normalize();
+    const fwd = new (here.constructor)(0, 0, -1);
+    c.ship.object.quaternion.setFromUnitVectors(fwd, to);
     return true;
   };
   /**
@@ -980,10 +1009,19 @@ async function main() {
       await cdp.eval(call('lock()'));
       const held = await until('G3 shelter',
         (v) => receiptsFor(v, 'npcSheltered', spawn.id, t0).length > 0
-          && v.lock && v.lock.id === spawn.id
-          && v.hud && v.hud.bracketHidden === false, 40000);
-      results.samples.G3 = { plan: chose?.ship, leg: legG3, hold: held?.ship, hud: held?.hud,
-        lock: held?.lock };
+          && v.lock && v.lock.id === spawn.id, 40000);
+      // FIXTURE (initial pose, attributed): the lock was valid at 492 u and the
+      // hull is stationary in the holding lane, but it sat behind the observer,
+      // so nothing was on screen to read. Turn the observer to look at it —
+      // attitude only — and let the ordinary bracket render on the next frame.
+      await cdp.eval(call('faceShip()'));
+      await sleep(500);
+      const shown = await until('G3 bracket',
+        (v) => v.hud && v.hud.bracketHidden === false
+          && v.lock && v.lock.id === spawn.id && v.lock.escape
+          && hudSays(v.hud, v.lock.escape.label), 15000);
+      results.samples.G3 = { plan: chose?.ship, leg: legG3, hold: held?.ship,
+        hud: shown?.hud, lock: shown?.lock, shown: shown?.ship };
       await cdp.shot('g3-station-hold.png');
       const sheltered = receiptsFor(held, 'npcSheltered', spawn.id, t0);
       const receipt = sheltered[0] ?? null;
@@ -994,15 +1032,20 @@ async function main() {
         && held.ship && held.ship.live === true && held.ship.state === 'enroute'
         && held.ship.disabled === false
         && held.lock && held.lock.id === spawn.id
-        // …and the lock renders the refuge the row publishes
         && held.lock.escape && held.lock.escape.kind === 'station'
-        && held.hud && held.hud.bracketHidden === false
-        && hudSays(held.hud, held.lock.escape.label)
+        // …and the bracket the player is actually looking at renders the
+        // refuge the public row publishes, for the same locked hull
+        && shown.lock && shown.lock.id === spawn.id
+        && shown.lock.escape && shown.lock.escape.kind === 'station'
+        && shown.hud && shown.hud.bracketHidden === false
+        && hudSays(shown.hud, shown.lock.escape.label)
+        && shown.ship && shown.ship.live === true
         // and this hull never took a gate
-        && receiptsFor(held, 'npcEscaped', spawn.id, t0).length === 0),
+        && receiptsFor(held, 'npcEscaped', spawn.id, t0).length === 0
+        && receiptsFor(shown, 'npcEscaped', spawn.id, t0).length === 0),
       { plan: chose?.ship?.escape, leg: legG3, receipt, shelterCount: sheltered.length,
         hold: held?.ship, lockId: held?.lock?.id, row: held?.lock?.escape,
-        hud: held?.hud, since: t0 });
+        shownRow: shown?.lock?.escape, hud: shown?.hud, since: t0 });
       g3Id = spawn.id;
       g3Since = t0;
     }

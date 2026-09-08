@@ -137,13 +137,6 @@ export function writeEscapePosition(plan, out) {
   return true;
 }
 
-/** Tracked distance to the committed destination. Infinity with no route. */
-export function escapeRemaining(plan) {
-  if (!plan || !vec3ok(plan.pos) || !vec3ok(plan.dest)) return Infinity;
-  const d = Math.hypot(plan.dest[0] - plan.pos[0], plan.dest[1] - plan.pos[1], plan.dest[2] - plan.pos[2]);
-  return fin(d) ? d : Infinity;
-}
-
 // ---------- destination choice ----------
 
 /**
@@ -350,11 +343,12 @@ export function chooseEscapeDestination(opts) {
   const threat = escapeVec(opts.threatPos);
   const engineOut = opts.engineOut === true;
   const gates = escapeGatesOf(sysId);
-  let best = null;
   let bestScore = Infinity;
   let candidates = 0;
   let blocked = 0;
 
+  // The winner is written straight into the returned record: there is no
+  // second "best" object to allocate per improvement and copy out afterwards.
   const consider = (kind, to, dest, index, returnEdge) => {
     candidates++;
     if (legScreened(from, dest, threat)) {
@@ -366,12 +360,15 @@ export function chooseEscapeDestination(opts) {
     let score = dist * (1 + ESCAPE.threatBearingWeight * towardness(from, dest, threat));
     if (kind === 'gate' && !returnEdge) score *= ESCAPE.noReturnPenalty;
     if (kind === 'station' && engineOut) score *= ESCAPE.engineOutStationBias;
-    if (!fin(score)) return;
-    // Stable order breaks ties: gates in authored order, station last.
-    if (score < bestScore) {
-      bestScore = score;
-      best = { kind, to, dest, index };
-    }
+    // Strict <: stable order breaks ties — gates in authored order, station last.
+    if (!fin(score) || score >= bestScore) return;
+    bestScore = score;
+    out.ok = true;
+    out.kind = kind;
+    out.to = to;
+    out.dest = dest;
+    out.index = index;
+    out.reason = kind;
   };
 
   if (gates) {
@@ -392,16 +389,7 @@ export function chooseEscapeDestination(opts) {
   }
 
   out.blocked = blocked;
-  if (!best) {
-    out.reason = candidates > 0 ? 'blocked' : 'no-route';
-    return out;
-  }
-  out.ok = true;
-  out.kind = best.kind;
-  out.to = best.to;
-  out.dest = best.dest;
-  out.index = best.index;
-  out.reason = best.kind;
+  if (!out.ok) out.reason = candidates > 0 ? 'blocked' : 'no-route';
   return out;
 }
 
@@ -489,6 +477,50 @@ function emptyCond() {
 }
 
 /**
+ * Every persisted field of a plan at its documented default. ONE definition of
+ * the record's shape, used both by the first commit and by the restore rebuild
+ * — so the schema cannot drift between the two, and neither carries a second
+ * copy of the key list.
+ */
+function blankPlan() {
+  return {
+    v: ESCAPE_VERSION,
+    phase: 'route',
+    kind: null,
+    to: null,
+    from: null,
+    dest: null,
+    pos: [0, 0, 0],
+    vel: [0, 0, 0],
+    speed: 0,
+    charge: 0,
+    dwellUntil: 0,
+    reason: 'no-route',
+    threat: null,
+    threatId: null,
+    threatAt: null,
+    chosenAt: 0,
+    checkedAt: 0,
+    updatedAt: 0,
+    announced: false,
+    sheltered: false,
+    departed: false,
+    cond: null,
+    peace: null,
+  };
+}
+
+/** Restore-time scalar bounds: [key, min, max]. Anything else is dropped. */
+const PLAN_RANGES = Object.freeze([
+  ['speed', 0, ESCAPE.maxSpeed],
+  ['charge', 0, JUMP.chargeTime],
+]);
+/** Restore-time free timestamps: finite or the default stands. */
+const PLAN_TIMES = Object.freeze(['dwellUntil', 'chosenAt', 'checkedAt', 'updatedAt']);
+/** Restore-time latches: strictly boolean, never truthy-coerced. */
+const PLAN_LATCHES = Object.freeze(['announced', 'sheltered', 'departed']);
+
+/**
  * Commit `choice` onto the record. Reuses the existing plan object (and its
  * cond/peace snapshots) so a reroute keeps the encounter's condition and never
  * allocates per frame — planning happens at flee entry and on the revalidate
@@ -500,31 +532,11 @@ export function writeEscapePlan(rec, choice, info) {
   const pos = escapeVec(info && info.pos) || [0, 0, 0];
   let plan = readEscape(rec);
   if (!plan) {
-    plan = {
-      v: ESCAPE_VERSION,
-      phase: 'route',
-      kind: null,
-      to: null,
-      from: null,
-      dest: null,
-      pos: [pos[0], pos[1], pos[2]],
-      vel: [0, 0, 0],
-      speed: 0,
-      charge: 0,
-      dwellUntil: 0,
-      reason: 'no-route',
-      threat: null,
-      threatId: null,
-      threatAt: null,
-      chosenAt: now,
-      checkedAt: now,
-      updatedAt: now,
-      announced: false,
-      sheltered: false,
-      departed: false,
-      cond: null,
-      peace: null,
-    };
+    plan = blankPlan();
+    plan.pos = [pos[0], pos[1], pos[2]];
+    plan.chosenAt = now;
+    plan.checkedAt = now;
+    plan.updatedAt = now;
     rec.escape = plan;
   }
   const routed = !!(choice && choice.ok);
@@ -607,16 +619,25 @@ export function writeEscapePlan(rec, choice, info) {
     // Announce a LOSS of route once, not on every revalidation tick: the
     // no-route line repeats only when the situation actually changed.
     if (plan.kind !== null || plan.reason !== reason || plan.phase !== 'evade') plan.announced = false;
-    plan.kind = null;
-    plan.to = null;
-    plan.dest = null;
-    plan.charge = 0;
+    clearRoute(plan);
     plan.sheltered = false;
-    plan.dwellUntil = 0;
     plan.reason = reason;
     plan.phase = 'evade';
   }
   return plan;
+}
+
+/**
+ * Drop the committed leg and everything that only makes sense while flying it.
+ * The condition, peace, position and arrival latch are deliberately untouched:
+ * every caller here is ending a ROUTE, not an encounter.
+ */
+function clearRoute(plan) {
+  plan.kind = null;
+  plan.to = null;
+  plan.dest = null;
+  plan.charge = 0;
+  plan.dwellUntil = 0;
 }
 
 /**
@@ -626,12 +647,8 @@ export function writeEscapePlan(rec, choice, info) {
 export function finishEscape(rec, reason) {
   const plan = readEscape(rec);
   if (!plan) return null;
+  clearRoute(plan);
   plan.phase = 'done';
-  plan.kind = null;
-  plan.to = null;
-  plan.dest = null;
-  plan.charge = 0;
-  plan.dwellUntil = 0;
   plan.reason = REASON_SET.has(reason) ? reason : 'cancelled';
   return plan;
 }
@@ -643,23 +660,60 @@ export function cancelEscape(rec) {
 
 // ---------- condition + peace continuity ----------
 
+/** Copy every whitelisted finite number across. Zero allocation. */
+function copyFinite(src, dst) {
+  for (let i = 0; i < COND_NUMBERS.length; i++) {
+    const key = COND_NUMBERS[i];
+    const v = src[key];
+    if (fin(v)) dst[key] = v;
+  }
+}
+
+/** Copy the whitelisted flags across as strict booleans. Zero allocation. */
+function copyFlags(src, dst) {
+  for (let i = 0; i < COND_FLAGS.length; i++) {
+    const key = COND_FLAGS[i];
+    dst[key] = src[key] === true;
+  }
+}
+
 /**
- * Snapshot the live hull's actual condition onto the plan. In-place writes
- * only — allocation happens once, on the first capture for a record.
+ * Snapshot the live hull onto the plan: its real condition, its peace, who it
+ * is running from and — when `object` is given — where it actually is and how
+ * it is actually moving. In-place writes only; allocation happens once, on the
+ * first capture for a record.
+ *
+ * This is the ONE capture used by the per-frame sync, by the removal boundary
+ * (range cull and the player's own jump) and by the save snapshot, so a blob, a
+ * despawn and a restore all see the ship as it is right now, including damage
+ * or a hail outcome applied earlier in the SAME frame.
  */
-export function captureCondition(plan, state, ai, now) {
+export function captureCondition(plan, state, ai, now, object) {
   if (!plan || !state) return null;
   const cond = plan.cond && typeof plan.cond === 'object' ? plan.cond : (plan.cond = emptyCond());
   if (!cond.flags || typeof cond.flags !== 'object') cond.flags = {};
-  for (let i = 0; i < COND_NUMBERS.length; i++) {
-    const key = COND_NUMBERS[i];
-    const v = state[key];
-    if (fin(v)) cond[key] = v;
+  const p = object && object.position;
+  if (p && vec3ok(plan.pos) && coord(p.x) && coord(p.y) && coord(p.z)) {
+    plan.pos[0] = p.x;
+    plan.pos[1] = p.y;
+    plan.pos[2] = p.z;
   }
-  for (let i = 0; i < COND_FLAGS.length; i++) {
-    const key = COND_FLAGS[i];
-    cond.flags[key] = state[key] === true;
+  // A DARK hull's real motion is its drift, not the velocity the steering loop
+  // last wrote: updateDisabled coasts the wreck along ai.driftVel and never
+  // touches ai.velocity again. Capturing the stale steering vector made the
+  // fold and the save disagree with what the player was watching, and the
+  // off-screen record then had no drift to continue.
+  const drifting = state.disabled === true || (ai && ai.mode === 'drift');
+  const v = object && ai && (drifting && ai.driftVel ? ai.driftVel : ai.velocity);
+  if (v && vec3ok(plan.vel) && fin(v.x) && fin(v.y) && fin(v.z)) {
+    plan.vel[0] = v.x;
+    plan.vel[1] = v.y;
+    plan.vel[2] = v.z;
+    const sp = Math.hypot(v.x, v.y, v.z);
+    plan.speed = fin(sp) ? Math.min(sp, ESCAPE.maxSpeed) : 0;
   }
+  copyFinite(state, cond);
+  copyFlags(state, cond.flags);
   cond.disabledSince = fin(state.disabledSince) ? state.disabledSince : null;
   if (ai) {
     const peace = plan.peace && typeof plan.peace === 'object' ? plan.peace : (plan.peace = {});
@@ -704,40 +758,6 @@ export function captureCondition(plan, state, ai, now) {
   return cond;
 }
 
-/**
- * Fold a LIVE hull's real position, velocity and condition into its plan.
- * Zero allocation, in-place writes only. This is the ONE capture used by the
- * per-frame sync, by the removal boundary (range cull and the player's own
- * jump) and by the save snapshot — so a blob, a despawn and a restore all
- * see the ship as it is right now, including damage or a hail outcome
- * applied earlier in the SAME frame.
- */
-export function captureEscapeLive(plan, object, state, ai, now) {
-  if (!plan || typeof plan !== 'object') return false;
-  const p = object && object.position;
-  if (p && vec3ok(plan.pos) && coord(p.x) && coord(p.y) && coord(p.z)) {
-    plan.pos[0] = p.x;
-    plan.pos[1] = p.y;
-    plan.pos[2] = p.z;
-  }
-  // A DARK hull's real motion is its drift, not the velocity the steering
-  // loop last wrote: updateDisabled coasts the wreck along ai.driftVel and
-  // never touches ai.velocity again. Capturing the stale steering vector made
-  // the fold and the save disagree with what the player was watching, and the
-  // off-screen record then had no drift to continue.
-  const drifting = !!state && (state.disabled === true || (ai && ai.mode === 'drift'));
-  const v = ai && (drifting && ai.driftVel ? ai.driftVel : ai.velocity);
-  if (v && vec3ok(plan.vel) && fin(v.x) && fin(v.y) && fin(v.z)) {
-    plan.vel[0] = v.x;
-    plan.vel[1] = v.y;
-    plan.vel[2] = v.z;
-    const sp = Math.hypot(v.x, v.y, v.z);
-    plan.speed = fin(sp) ? Math.min(sp, ESCAPE.maxSpeed) : 0;
-  }
-  captureCondition(plan, state, ai, now);
-  return true;
-}
-
 function clampPair(state, curKey, maxKey) {
   const max = state[maxKey];
   if (!fin(max) || max < 0) return;
@@ -754,43 +774,45 @@ function clampPair(state, curKey, maxKey) {
  * surrender status back, plus the bounded hail/peace outcome so a paid-off
  * pirate does not wake up hostile. Returns true when a snapshot was applied.
  */
-export function applyCondition(plan, state, ai) {
-  if (!plan || typeof plan !== 'object') return false;
-  const cond = plan.cond && typeof plan.cond === 'object' ? plan.cond : null;
-  let applied = false;
-  if (cond && state) {
-    applied = true;
-    for (let i = 0; i < COND_NUMBERS.length; i++) {
-      const key = COND_NUMBERS[i];
-      const v = cond[key];
-      if (fin(v)) state[key] = v;
+export function applyCondition(plan, state) {
+  const cond = plan && typeof plan === 'object' && plan.cond && typeof plan.cond === 'object'
+    ? plan.cond : null;
+  if (!cond || !state) return false;
+  copyFinite(cond, state);
+  for (let i = 0; i < COND_PAIRS.length; i++) clampPair(state, COND_PAIRS[i][0], COND_PAIRS[i][1]);
+  const flags = cond.flags && typeof cond.flags === 'object' ? cond.flags : null;
+  if (flags) {
+    for (let i = 0; i < COND_FLAGS.length; i++) {
+      const key = COND_FLAGS[i];
+      if (flags[key] !== undefined) state[key] = flags[key] === true;
     }
-    for (let i = 0; i < COND_PAIRS.length; i++) clampPair(state, COND_PAIRS[i][0], COND_PAIRS[i][1]);
-    const flags = cond.flags && typeof cond.flags === 'object' ? cond.flags : null;
-    if (flags) {
-      for (let i = 0; i < COND_FLAGS.length; i++) {
-        const key = COND_FLAGS[i];
-        if (flags[key] !== undefined) state[key] = flags[key] === true;
-      }
-    }
-    state.disabledSince = fin(cond.disabledSince) ? cond.disabledSince : null;
   }
-  if (ai) {
-    applied = true;
-    const peace = plan.peace;
-    if (peace && typeof peace === 'object') {
-      for (let i = 0; i < PEACE_FLAGS.length; i++) {
-        const key = PEACE_FLAGS[i];
-        if (peace[key] !== undefined) ai[key] = peace[key] === true;
-      }
-      ai.demandOutcome = DEMAND_OUTCOMES.has(peace.demandOutcome) ? peace.demandOutcome : null;
-      if (fin(peace.calmUntil)) ai.calmUntil = peace.calmUntil;
+  state.disabledSince = fin(cond.disabledSince) ? cond.disabledSince : null;
+  return true;
+}
+
+/**
+ * …and the peace that came with it: the bounded hail outcome and calm window,
+ * so a paid-off pirate does not wake up hostile. Split from the condition
+ * because the two are needed at different moments — the hull's state before
+ * its AI exists, the peace once it does — and running the whole whitelist
+ * twice per re-instantiation was pure duplication.
+ */
+export function applyPeace(plan, ai) {
+  if (!plan || !ai) return false;
+  const peace = plan.peace;
+  if (peace && typeof peace === 'object') {
+    for (let i = 0; i < PEACE_FLAGS.length; i++) {
+      const key = PEACE_FLAGS[i];
+      if (peace[key] !== undefined) ai[key] = peace[key] === true;
     }
-    // The open card and the target reference are session objects: a restored
-    // plan re-enters the world stood down, never mid-parley.
-    ai.demanding = false;
+    ai.demandOutcome = DEMAND_OUTCOMES.has(peace.demandOutcome) ? peace.demandOutcome : null;
+    if (fin(peace.calmUntil)) ai.calmUntil = peace.calmUntil;
   }
-  return applied;
+  // The open card and the target reference are session objects: a restored
+  // plan re-enters the world stood down, never mid-parley.
+  ai.demanding = false;
+  return true;
 }
 
 /** Keep a persisted resolve ladder bump visible in the retained snapshot. */
@@ -977,20 +999,20 @@ export function escapeStatus(rec) {
   const flags = plan.cond && plan.cond.flags;
   const stalled = !!flags && (flags.disabled === true || flags.engineOut === true);
   const why = flags && flags.disabled === true ? 'DISABLED' : 'ENGINE OUT';
+  const tail = stalled ? ` — ${why}` : '';
   let label = '';
   let phase = plan.phase;
   if (plan.phase === 'evade') label = 'EVADING — NO ROUTE';
   else if (plan.kind === 'gate') {
     const where = dest ? dest.toUpperCase() : 'GATE';
     if (plan.phase === 'charge') {
-      label = stalled ? `AT ${where} GATE — ${why}` : `GATE CHARGE — ${where}`;
       if (stalled) phase = 'stalled';
+      label = stalled ? `AT ${where} GATE${tail}` : `GATE CHARGE — ${where}`;
     } else {
-      label = stalled ? `RUNNING FOR ${where} GATE — ${why}` : `RUNNING FOR ${where} GATE`;
+      label = `RUNNING FOR ${where} GATE${tail}`;
     }
   } else if (plan.kind === 'station') {
-    label = plan.phase === 'hold' ? 'STATION HOLD' : 'RUNNING FOR STATION';
-    if (stalled && plan.phase !== 'hold') label += ` — ${why}`;
+    label = plan.phase === 'hold' ? 'STATION HOLD' : `RUNNING FOR STATION${tail}`;
   }
   if (!label) return null;
   return {
@@ -1088,12 +1110,7 @@ function cleanCond(raw, ref) {
     else if (fin(cond[cur]) && cond[cur] > cond[max]) cond[cur] = cond[max];
   }
   const flags = raw.flags;
-  if (flags && typeof flags === 'object' && !Array.isArray(flags)) {
-    for (let i = 0; i < COND_FLAGS.length; i++) {
-      const key = COND_FLAGS[i];
-      cond.flags[key] = flags[key] === true;
-    }
-  }
+  if (flags && typeof flags === 'object' && !Array.isArray(flags)) copyFlags(flags, cond.flags);
   cond.disabledSince = fin(raw.disabledSince) ? raw.disabledSince : null;
   return cond;
 }
@@ -1145,52 +1162,51 @@ export function sanitizeEscapeRecord(rec) {
   }
   let phase = raw.phase;
   if (!kind && (phase === 'route' || phase === 'charge' || phase === 'hold')) phase = 'evade';
-  const plan = {
-    v: ESCAPE_VERSION,
-    phase,
-    kind,
-    to,
-    from: knownSystem(raw.from) ? raw.from : null,
-    dest,
-    pos,
-    vel: escapeVec(raw.vel) || [0, 0, 0],
-    speed: fin(raw.speed) ? Math.max(0, Math.min(ESCAPE.maxSpeed, raw.speed)) : 0,
-    charge: fin(raw.charge) ? Math.max(0, Math.min(JUMP.chargeTime, raw.charge)) : 0,
-    dwellUntil: fin(raw.dwellUntil) ? raw.dwellUntil : 0,
-    reason: REASON_SET.has(raw.reason) ? raw.reason : (kind || 'no-route'),
-    threat: typeof raw.threat === 'string' ? raw.threat.slice(0, STRING_MAX) : null,
-    // WHICH hull was chasing it (record id + the last position actually seen),
-    // so a restored runner re-finds the same pursuer instead of inheriting the
-    // player. Bounded string, bounded vector, nothing else rides along.
-    threatId: typeof raw.threatId === 'string' ? raw.threatId.slice(0, STRING_MAX) : null,
-    threatAt: escapeVec(raw.threatAt),
-    chosenAt: fin(raw.chosenAt) ? raw.chosenAt : 0,
-    checkedAt: fin(raw.checkedAt) ? raw.checkedAt : 0,
-    updatedAt: fin(raw.updatedAt) ? raw.updatedAt : 0,
-    announced: raw.announced === true,
-    sheltered: raw.sheltered === true,
-    departed: raw.departed === true,
-    cond: cleanCond(raw.cond, classMaxima(rec)),
-    peace: cleanPeace(raw.peace),
-  };
+  // Rebuilt from the SAME shape the live path commits (blankPlan), field by
+  // whitelisted field: an unknown key on the raw blob has nowhere to land, and
+  // a field that fails its own check simply keeps the documented default.
+  const plan = blankPlan();
+  plan.phase = phase;
+  plan.kind = kind;
+  plan.to = to;
+  plan.dest = dest;
+  plan.pos = pos;
+  plan.from = knownSystem(raw.from) ? raw.from : null;
+  plan.vel = escapeVec(raw.vel) || [0, 0, 0];
+  plan.reason = REASON_SET.has(raw.reason) ? raw.reason : (kind || 'no-route');
+  plan.threat = typeof raw.threat === 'string' ? raw.threat.slice(0, STRING_MAX) : null;
+  // WHICH hull was chasing it (record id + the last position actually seen),
+  // so a restored runner re-finds the same pursuer instead of inheriting the
+  // player. Bounded string, bounded vector, nothing else rides along.
+  plan.threatId = typeof raw.threatId === 'string' ? raw.threatId.slice(0, STRING_MAX) : null;
+  plan.threatAt = escapeVec(raw.threatAt);
+  plan.cond = cleanCond(raw.cond, classMaxima(rec));
+  plan.peace = cleanPeace(raw.peace);
+  for (let i = 0; i < PLAN_RANGES.length; i++) {
+    const [key, lo, hi] = PLAN_RANGES[i];
+    if (fin(raw[key])) plan[key] = Math.max(lo, Math.min(hi, raw[key]));
+  }
+  for (let i = 0; i < PLAN_TIMES.length; i++) {
+    const key = PLAN_TIMES[i];
+    if (fin(raw[key])) plan[key] = raw[key];
+  }
+  for (let i = 0; i < PLAN_LATCHES.length; i++) plan[PLAN_LATCHES[i]] = raw[PLAN_LATCHES[i]] === true;
   // A station hold saved before the refuge ring cleared the launch envelope is
   // not a legal place to park any more. Drop only the DESTINATION — identity,
   // damage, peace, dwell, sheltered and the tracked position all stand, so the
   // hull is never teleported, never healed and never re-announces an arrival —
   // and let the ordinary re-choice fly it out to the new refuge.
   if (plan.kind === 'station' && !stationRefugeSafe(rec, plan.from ?? rec.system, plan.dest)) {
-    plan.kind = null;
-    plan.dest = null;
+    const dwell = plan.dwellUntil;
+    clearRoute(plan);
+    plan.dwellUntil = dwell; // the calm wait it was already serving stands
     plan.phase = 'evade';
     plan.reason = 'no-route';
   }
   // A record that already ended cannot resume an escape.
   if (rec.state === 'dead' || rec.state === 'captured') {
+    clearRoute(plan);
     plan.phase = 'done';
-    plan.kind = null;
-    plan.to = null;
-    plan.dest = null;
-    plan.charge = 0;
   }
   rec.escape = plan;
   return true;

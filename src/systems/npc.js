@@ -24,8 +24,8 @@ import {
   finishEscape,
   cancelEscape,
   captureCondition,
-  captureEscapeLive,
   applyCondition,
+  applyPeace,
   syncCondResolve,
   tickEscape,
   escapeArriveRadius,
@@ -381,7 +381,7 @@ export function spawnLiveShip(ctx, record, position) {
   // fold at 30% hull with its engine out must come back exactly that way —
   // no fresh-state healing, and the yielded/paid peace comes back with it.
   const escapePlan = readEscape(record);
-  const escapeRestored = escapePlan ? applyCondition(escapePlan, state, null) : false;
+  const escapeRestored = escapePlan ? applyCondition(escapePlan, state) : false;
   // Issue #68: an escape that has not RESOLVED yet is the same encounter the
   // player is still flying against. Re-instantiating the hull mid-run (a cull
   // and reacquire, a same-system restore) is not a new rematch, so the ladder
@@ -420,26 +420,60 @@ export function spawnLiveShip(ctx, record, position) {
   live.ai = makeAi(ctx, record, position);
   // Peace/hail continuity rides the same snapshot: a hull that already
   // yielded, paid or bluffed its way clear does not wake up mid-parley or
-  // freshly hostile toward the same pursuer.
-  if (escapePlan) applyCondition(escapePlan, state, live.ai);
-  // Movement continuity: a runner folded back in mid-flight comes back MOVING
-  // the way it was, nose along its own velocity. Without this it reappears at
-  // rest, facing wherever the mesh was built, and has to turn around.
-  if (midEncounter && escapeHeading(escapePlan, _v1)) {
-    const v = escapePlan.vel;
-    live.ai.velocity.set(v[0], v[1], v[2]);
-    // A dark hull's motion IS its drift: hand the captured vector back to
-    // updateDisabled as the drift it already had, and mark it initialized —
-    // otherwise the fold restarts the coast at 6 u/s along whatever heading
-    // the rebuilt mesh happens to face.
-    if (state.disabled === true) {
-      live.ai.driftVel.set(v[0], v[1], v[2]);
-      live.ai.disabledInit = true;
-    }
-    _q.setFromUnitVectors(NEG_Z, _v1);
-    if (Number.isFinite(_q.x)) object.quaternion.copy(_q);
-  }
+  // freshly hostile toward the same pursuer. The condition itself went on
+  // above, before the ladder and the AI — this is only the peace.
+  if (escapePlan) applyPeace(escapePlan, live.ai);
+  if (midEncounter) applyEscapeMotion(escapePlan, live);
   return live;
+}
+
+/**
+ * Movement continuity for a hull coming back from a plan — the ONE copy, used
+ * by re-instantiation above and by save.js's same-system restore heal, which
+ * were carrying the same rules twice.
+ *
+ * A runner folded back in mid-flight comes back MOVING the way it was, nose
+ * along its own velocity, instead of at rest facing wherever the mesh was
+ * built. A DARK hull's motion is its drift, so the captured vector is handed
+ * back to updateDisabled as the drift it already had (and marked initialized)
+ * — including a genuinely stopped wreck, which must not be re-seeded with a
+ * fresh 6 u/s coast. The nose is only turned when there is real motion to
+ * point it along.
+ */
+/**
+ * The intent half of coming back from a plan: the hull is still fleeing, and
+ * it is still fleeing the SAME pursuer. Shared with save.js's restore heal,
+ * which had its own copy that always fell back to the player.
+ */
+export function applyEscapeIntent(ctx, plan, live) {
+  const ai = live && live.ai;
+  if (!ai) return false;
+  ai.mode = 'flee';
+  // Same pursuer resolution makeAi uses on re-instantiation: the remembered
+  // NPC hull when it is in the world, otherwise nothing — never the player by
+  // default, who may be nowhere near this fight.
+  ai.fleeFrom = plan.threat === 'player' ? 'player'
+    : (plan.threat === 'ship' ? liveThreatById(ctx, plan.threatId, live) : null);
+  ai.intent = false;
+  ai.phase = null;
+  return true;
+}
+
+export function applyEscapeMotion(plan, live) {
+  const ai = live && live.ai;
+  const vel = plan && Array.isArray(plan.vel) && plan.vel.length === 3
+    && plan.vel.every(Number.isFinite) ? plan.vel : null;
+  if (!ai || !vel) return false;
+  if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(vel[0], vel[1], vel[2]);
+  if (live.state && live.state.disabled === true && ai.driftVel) {
+    ai.driftVel.set(vel[0], vel[1], vel[2]);
+    ai.disabledInit = true;
+  }
+  if (live.object && escapeHeading(plan, _v1)) {
+    _q.setFromUnitVectors(NEG_Z, _v1);
+    if (Number.isFinite(_q.x)) live.object.quaternion.copy(_q);
+  }
+  return true;
 }
 
 /**
@@ -653,7 +687,7 @@ export function enterEscapeFlee(ctx, live, threat) {
 function syncEscapeLive(ctx, live) {
   const plan = readEscape(live.record);
   if (!plan) return;
-  captureEscapeLive(plan, live.object, live.state, live.ai, ctx.world ? ctx.world.time : 0);
+  captureCondition(plan, live.state, live.ai, ctx.world ? ctx.world.time : 0, live.object);
 }
 
 /** Role default the hull returns to once an escape resolves. */
@@ -663,9 +697,10 @@ function roleModeOf(live) {
   // not the fight it already broke off from.
   const st = live.state;
   const ai = live.ai;
+  // escapeYielded covers the retained snapshot, which the per-frame sync keeps
+  // equal to this ai — including a paid/bluffed peace that sets no flag.
   if ((mode === 'hunt' || mode === 'duel')
     && ((st && st.surrendered === true) || (ai && ai.surrenderDone === true)
-      || (ai && (ai.demandOutcome === 'paid' || ai.demandOutcome === 'bluffed'))
       || escapeYielded(readEscape(live.record)))) {
     return 'loiter';
   }

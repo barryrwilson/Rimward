@@ -16,11 +16,13 @@ import { decodeKeyCode } from '../systems/key-code.js';
 import { codeOf } from '../systems/bindings.js';
 import { noteSessionEvent } from './agent-schema.js';
 import { disengageFlee } from './agent-flee.js';
-import * as THREE from 'three';
 import {
-  sanitizeEscapeRecord, readEscape, escapeActive, applyCondition, captureEscapeLive,
-  escapeHeading, escapeRoleMode,
+  sanitizeEscapeRecord, readEscape, escapeActive, applyCondition, applyPeace,
+  captureCondition, escapeRoleMode,
 } from './npc-escape.js';
+// The re-entry hydration both paths share (issue #68). npc.js does not import
+// save.js, so this direction adds no cycle.
+import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
 import { disengage as disengageAutopilot } from './autopilot.js';
 
 /**
@@ -1012,19 +1014,13 @@ function replaceMountedHangarCargo(ctx, list) {
  * would otherwise be serialized one frame stale, and the load would put the
  * damage back the way it was before the shot landed.
  */
-// Restore-time scratch (issue #68). Module scope: a restore is rare, but
-// these must never be allocated inside the per-ship loop.
-const _restoreDir = new THREE.Vector3();
-const _restoreQ = new THREE.Quaternion();
-const _restoreNegZ = new THREE.Vector3(0, 0, -1); // npc.js nose convention
-
 function captureLiveEscapes(ctx) {
   const ships = ctx.ships;
   if (!Array.isArray(ships)) return;
   const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
   for (const ship of ships) {
     const plan = readEscape(ship && ship.record);
-    if (plan) captureEscapeLive(plan, ship.object, ship.state, ship.ai, now);
+    if (plan) captureCondition(plan, ship.state, ship.ai, now, ship.object);
   }
 }
 
@@ -1320,42 +1316,19 @@ function healLiveRecords(ctx) {
       }
       continue;
     }
-    applyCondition(plan, ship.state, ai);
+    applyCondition(plan, ship.state);
+    applyPeace(plan, ai);
     if (!escapeActive(rec)) continue;
-    ai.mode = 'flee';
-    ai.fleeFrom = plan.threat === 'player' ? 'player' : null;
-    ai.intent = false;
-    ai.phase = null;
+    applyEscapeIntent(ctx, plan, ship);
     // Only an ACTIVE plan owns the hull's position; a resolved one keeps its
     // condition snapshot but must never teleport a flying ship.
     if (ship.object && Array.isArray(plan.pos) && plan.pos.length === 3
       && plan.pos.every((n) => Number.isFinite(n))) {
       ship.object.position.set(plan.pos[0], plan.pos[1], plan.pos[2]);
     }
-    // …and it comes back MOVING the way it was, nose along that velocity, so
-    // the reload does not silently stop a ship mid-run. escapeHeading is the
-    // shared derivation npc.js's re-instantiation uses for the same job.
-    // A DISABLED hull moves on ai.driftVel, and updateDisabled seeds a fresh
-    // 6 u/s drift unless disabledInit is already set — so a same-system load
-    // has to hydrate that branch, not just ai.velocity, and it has to do it
-    // for a genuinely stopped wreck (zero) too. spawnLiveShip does the same
-    // for a re-instantiated one; without it the pre-load drift survived the
-    // load and the next sync wrote that stale motion back over the save.
-    const dv = Array.isArray(plan.vel) && plan.vel.length === 3
-      && plan.vel.every((n) => Number.isFinite(n)) ? plan.vel : null;
-    if (dv && ship.state && ship.state.disabled === true) {
-      if (ai.driftVel && typeof ai.driftVel.set === 'function') ai.driftVel.set(dv[0], dv[1], dv[2]);
-      if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(dv[0], dv[1], dv[2]);
-      ai.disabledInit = true;
-    }
-    if (escapeHeading(plan, _restoreDir)) {
-      const vel = plan.vel;
-      if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(vel[0], vel[1], vel[2]);
-      if (ship.object) {
-        _restoreQ.setFromUnitVectors(_restoreNegZ, _restoreDir);
-        if (Number.isFinite(_restoreQ.x)) ship.object.quaternion.copy(_restoreQ);
-      }
-    }
+    // …and it comes back MOVING the way it was — velocity, a dark hull's drift
+    // and the nose — through the SAME hydration npc.js's re-instantiation uses.
+    applyEscapeMotion(plan, ship);
   }
 }
 

@@ -9,7 +9,6 @@ import {
   writeEscapePosition,
   stepEscapeToward,
   driftEscape,
-  escapeRemaining,
   tickEscape,
   escapeArriveRadius,
   authoredGate,
@@ -691,11 +690,8 @@ export function recordPosition(rec, out) {
   // Issue #68: an active escape OWNS this record's position — the abstract
   // lane route is stale the moment the hull broke for a gate or the station,
   // and traffic.js must re-instantiate the runner where it actually is.
-  if (escapeActive(rec)) {
-    const plan = readEscape(rec);
-    if (writeEscapePosition(plan, _escapePos)) {
-      return out.set(_escapePos.x, _escapePos.y, _escapePos.z);
-    }
+  if (escapeActive(rec) && writeEscapePosition(readEscape(rec), _escapePos)) {
+    return out.set(_escapePos.x, _escapePos.y, _escapePos.z);
   }
   const route = rec.route;
   if (!route || route.length === 0) return out.set(0, 0, 0);
@@ -1056,9 +1052,11 @@ function tickEscapeRecord(rec, sysId, ctx) {
     driftEscape(plan, GALAXY_TICK, cruise);
   } else if (escapeRouted(rec)) {
     const arrive = escapeArriveRadius(plan);
-    // Hold speed inside the arrival radius so a braking hull does not
-    // teleport through its own destination on a 1 s tick.
-    const remaining = escapeRemaining(plan);
+    // Hold speed inside the arrival radius so a braking hull does not teleport
+    // through its own destination on a 1 s tick. A zero-length step is the
+    // distance query — stepEscapeToward returns the remaining range and moves
+    // nothing when it cannot take a step.
+    const remaining = stepEscapeToward(plan, 0, 0);
     // Coherent with the live hull: a station hold is PARKED (npc.js updateFlee),
     // a gate bore still creeps while it spools.
     if (Number.isFinite(remaining) && remaining <= arrive) {
