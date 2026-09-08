@@ -1526,7 +1526,7 @@ rather than the ordinary procedural pool.
 
 **Status:** AI-01 / AI-02 / AI-03 / AI-04 first pass DONE (Wave 56).
 Wave 57 closed ship-vs-ship bolts, dest-bank ticks, and miners.
-AI-05 (fleeing ships run somewhere) first pass implemented for issue #68.
+AI-05 (fleeing ships run somewhere) implemented and locally verified for issue #68.
 **Player problem:** Traffic intersects at the new ship scales, ships repeat
 local paths through gates, and almost every ship attacks the player instead of
 having believable work.  
@@ -1583,7 +1583,7 @@ need a scratch or standing ≤ −10. Pirates keep the wave-32 interest roll.
 ### AI-05 — A fleeing ship runs somewhere
 
 **Status:** first pass IMPLEMENTED on the issue #68 branch
-(`codex/issue-68-gate-escape`); local verification pending. Owner-requested
+(`codex/issue-68-gate-escape`); local verification and independent QA complete on `e179dfe5`. Build, full boot, focused escape and affected regressions pass; live browser 8/8 passes with zero console errors/exceptions. Owner-requested
 during the visible pirate playtest, and widened by the owner to include the
 station: "Maybe also give it the choice to head to the nearest gate or the
 station."
@@ -1596,7 +1596,7 @@ station."
   route: the same id comes back at the same damage on the same route.
 - A gate escape ends in a readable departure — a visible charge at the gate,
   a stated destination and delay, and a lock released for a reason the player
-  can read — and the same ship is waiting on the other side.
+  can read — and the same ship can be reacquired in the destination system.
 - A station escape ends in a visible external hold. It is a refuge, not
   immunity: the ship is still there, still targetable, still damageable, and
   still owes whatever it owed.
