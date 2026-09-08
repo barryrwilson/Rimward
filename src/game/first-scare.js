@@ -38,12 +38,19 @@ export function awardFirstScare(ctx, live, previousResolve, receipt, now, maxAge
   if (ctx.world.milestones.includes('firstScare')) return false;
   ctx.world.milestones.push('firstScare');
   const rec = live.record;
+  // Same visible-name rule as the HUD/agent target: the Mk II eye pierces
+  // an unrevealed cover; the authored record name otherwise precedes state.
+  const scanner = Number.isFinite(ctx.world.scanner) ? ctx.world.scanner : 0;
+  const masked = rec?.qship && !rec.revealed && scanner < 2;
+  const cover = masked && typeof rec.coverName === 'string' && rec.coverName;
+  const named = (typeof rec?.name === 'string' && rec.name)
+    || (typeof st.name === 'string' && st.name) || 'CONTACT';
   ctx.emit('milestone', {
     id: 'firstScare',
     line: 'They are breaking. First scare.',
     cause: 'player-damage',
     targetId: live.id,
-    targetName: rec?.qship && !rec.revealed ? (rec.coverName ?? st.name) : st.name,
+    targetName: cover || named,
   });
   return true;
 }

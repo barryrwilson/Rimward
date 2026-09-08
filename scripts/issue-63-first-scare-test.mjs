@@ -13,8 +13,8 @@ function hit(live, player, now = 1, damage = 1, family = 'cannon') {
   applyHit(live.state, { damage, family, now });
   recordScareDamage(live, player, before, now);
 }
-function outcome(live, previous = 50, next = 30, now = 2, receipt = takeScareDamage(live)) {
-  const ctx = { world: { milestones: [] }, events: [], emit(type, data) { this.events.push({ type, ...data }); } };
+function outcome(live, previous = 50, next = 30, now = 2, receipt = takeScareDamage(live), scanner = 0) {
+  const ctx = { world: { milestones: [], scanner }, events: [], emit(type, data) { this.events.push({ type, ...data }); } };
   live.state.resolve = next;
   awardFirstScare(ctx, live, previous, receipt, now, 12);
   return ctx;
@@ -30,6 +30,8 @@ for (const [label, setup, previous, next, now] of [
   ['no crossing', l => hit(l, true), 60, 45, 2],
   ['consumed sample', l => { hit(l, true); takeScareDamage(l); }, 50, 30, 2],
   ['no effect', l => hit(l, true, 1, 0), 50, 30, 2],
+  ['destroyed', l => { hit(l, true); l.state.destroyed = true; }, 50, 30, 2],
+  ['disabled', l => { hit(l, true); l.state.disabled = true; }, 50, 30, 2],
 ]) {
   const live = fixture(); setup(live);
   assert.equal(outcome(live, previous, next, now).events.length, 0, label);
@@ -48,9 +50,22 @@ for (const next of [30, 10]) {
   assert.deepEqual(row, { type: 'milestone', t: 0, id: 'firstScare', line: 'They are breaking. First scare.', cause: 'player-damage', targetId: live.id, targetName: 'Visible Trader' });
   assert.deepEqual(sanitizeEvent(row), row, 'observation re-sanitization preserves evidence');
 }
-const masked = fixture(); masked.record = { qship: true, coverName: 'Cover Trader' };
-hit(masked, true);
-assert.equal(outcome(masked).events[0].targetName, 'Cover Trader');
+for (const [scanner, revealed, qship, expected] of [
+  [0, false, true, 'Cover Trader'],
+  [1, false, true, 'Cover Trader'],
+  [2, false, true, 'Record Trader'],
+  [3, false, true, 'Record Trader'],
+  [Infinity, false, true, 'Cover Trader'],
+  [0, true, true, 'Record Trader'],
+  [0, false, false, 'Record Trader'],
+]) {
+  const live = fixture();
+  live.record = { qship, revealed, coverName: 'Cover Trader', name: 'Record Trader' };
+  hit(live, true);
+  assert.equal(outcome(live, 50, 30, 2, takeScareDamage(live), scanner).events[0].targetName, expected);
+}
+const unnamed = fixture(); unnamed.state.name = ''; hit(unnamed, true);
+assert.equal(outcome(unnamed).events[0].targetName, 'CONTACT');
 console.log('PASS downward bargaining/direct capitulate, once, public evidence and cover identity');
 
 seedBootRandom();
@@ -109,6 +124,24 @@ live.object.position.set(6000, 6000, 5940);
 live.state.resolve = 50; live.state.screen = 1; live.state.shell = 0; live.state.hull = live.state.hullMax * 0.7;
 live.ai.resolveAt = 0; live.ai.calmUntil = 0;
 console.log('PASS real NPC projectile → NPC resolve excludes ambient scare');
+// A real player hit during calm must be consumed by the NPC stand-down
+// sample, not banked until its later resolve crossing after calm ends.
+ctx.input.weaponGroup = 1; ctx.input.fireHeld = true;
+const calmBefore = scareDamageTotal(live.state);
+tick(30, combatSystems);
+ctx.input.fireHeld = false;
+assert.ok(scareDamageTotal(live.state) < calmBefore, 'real player cannon hit before stand-down');
+live.ai.calmUntil = ctx.world.time + 60;
+tick(1, systems.filter(([name]) => name === 'npc'));
+assert.equal(live.state.resolve, 50, 'calm stand-down skips resolve recompute');
+live.ai.calmUntil = 0; live.ai.resolveAt = 0;
+tick(1, systems.filter(([name]) => name === 'npc'));
+assert.ok(live.state.resolve < 40, 'post-calm fixture really crossed into scared band');
+assert.equal(ctx.world.milestones.includes('firstScare'), false, 'stand-down consumed the earlier player hit');
+console.log('PASS real NPC stand-down consumes player damage before later crossing');
+live.object.position.set(6000, 6000, 5940);
+live.state.resolve = 50; live.state.screen = 1; live.state.shell = 0; live.state.hull = live.state.hullMax * 0.7;
+live.ai.resolveAt = 0;
 ctx.input.weaponGroup = 1; ctx.input.fireHeld = true;
 const damageBefore = scareDamageTotal(live.state);
 tick(30, combatSystems);

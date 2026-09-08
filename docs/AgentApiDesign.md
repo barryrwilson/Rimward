@@ -1,5 +1,16 @@
 # RIMWARD Wave 126 — Agent API (AI play surface)
 
+| Field | Value |
+|---|---|
+| **Title** | RIMWARD AGENT API (AI play surface) |
+| **Author** | Wave 126 leftover integrator |
+| **Date** | 2026-08-26 (rev 3 leftover freeze after Wave 125 census) |
+| **Status** | Wave 135 PR6 implemented; **Wave 141 v2 cutover implemented (mission 43b34db25ae32972)**: VERSION 2, full station-service parity (owner-authorized), controls-owned manual-control lease with fire, capability discovery, in-flight job tracking with terminal outcomes, reqId/t receipts. All in-repo v1 callers migrated in the same commit. Merge law: shared-contract.md wins. |
+| **Wave** | 141 — v2 player-role parity. Builds on the Wave 135 PR6 bridge. |
+| **Owner request** | Inbox P2 AGENT API: add a stable documented AI play API so an agent can play on a user's behalf, plus a live watch surface. Screenshot loops are too slow. Empty `e.code` never reaches TRACKED. Owner: write the design first. Do not implement. |
+| **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
+| **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
+
 ## Issue #63 — First Scare causal evidence
 
 The existing `milestone` row gains optional primitive `cause`, `targetId` and
@@ -21,17 +32,6 @@ The existing `world.milestones` list records the once-per-career award and saves
 normally. Damage receipts exist only for a live incarnation and are never saved.
 Resolve tuning and bluff outcomes are unchanged. `npm run test:first-scare`
 covers attribution, real combat/resolve integration and save/restore.
-
-| Field | Value |
-|---|---|
-| **Title** | RIMWARD AGENT API (AI play surface) |
-| **Author** | Wave 126 leftover integrator |
-| **Date** | 2026-08-26 (rev 3 leftover freeze after Wave 125 census) |
-| **Status** | Wave 135 PR6 implemented; **Wave 141 v2 cutover implemented (mission 43b34db25ae32972)**: VERSION 2, full station-service parity (owner-authorized), controls-owned manual-control lease with fire, capability discovery, in-flight job tracking with terminal outcomes, reqId/t receipts. All in-repo v1 callers migrated in the same commit. Merge law: shared-contract.md wins. |
-| **Wave** | 141 — v2 player-role parity. Builds on the Wave 135 PR6 bridge. |
-| **Owner request** | Inbox P2 AGENT API: add a stable documented AI play API so an agent can play on a user's behalf, plus a live watch surface. Screenshot loops are too slow. Empty `e.code` never reaches TRACKED. Owner: write the design first. Do not implement. |
-| **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
-| **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
 **Verifier record:**
 
