@@ -280,7 +280,9 @@ export function createCtx({ scene, camera, renderer }) {
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
     // 'hailMiss' { name, verb, reason, dist }    // hail.js KeyH/KeyJ miss; primitives only; no ship
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}
-    // 'worldEvent' {kind}    'milestone' {id, line}  'marketShift' {}
+    // 'worldEvent' {kind}    'milestone' {id, line, cause?, targetId?, targetName?}
+    // firstScare: cause='player-damage', visible target identity; no resolve/AI.
+    // 'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
     // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
     // 'playerDestroyed' {}   'recovered' { source:'autosave'|'fresh' }  (save.js death)

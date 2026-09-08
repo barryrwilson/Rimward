@@ -31,6 +31,7 @@ import { tickPoliceLeave } from '../game/police-leave.js';
 import { tickPoliceCover, findCoveringWork } from '../game/police-cover.js';
 import { canSeat } from '../game/weapon-fit.js';
 import { canShowHail } from './overlay-policy.js';
+import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
 
 /**
  * NPC system — live GLB ship assets and AI (doc §6.7, §7).
@@ -1457,6 +1458,9 @@ function tickPatrolJob(ctx, live) {
 function updateResolve(ctx, live, now) {
   const st = live.state;
   const ai = live.ai;
+  // Consume even when this sample stands down: old combat cannot earn later.
+  const scareReceipt = takeScareDamage(live);
+  const previousResolve = st.resolve;
   const hostile = (ai.mode === 'hunt' || ai.mode === 'duel') && ai.intent;
   const threatened = now - st.lastCombatAt < THREAT_MEMORY;
   // resolveBoost lifecycle (wave 30, failed-bluff sting): instance-scoped —
@@ -1502,6 +1506,7 @@ function updateResolve(ctx, live, now) {
   // the stand-down gate above, so a paid-off or bluffed-into-flight pirate
   // never carries it — one that fights on keeps it for the encounter.
   st.resolve = Math.min(95, st.resolve + (ai.resolveBoost ?? 0));
+  awardFirstScare(ctx, live, previousResolve, scareReceipt, now, THREAT_MEMORY);
   const band = resolveBand(st.resolve);
   if (band === ai.band) return;
   ai.band = band;

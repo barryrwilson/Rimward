@@ -11,6 +11,28 @@
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
+## Issue #63 — First Scare causal evidence
+
+The existing `milestone` row gains optional primitive `cause`, `targetId` and
+`targetName` fields. First Scare emits `cause: 'player-damage'` with the target's
+visible identity. No NPC resolve, AI state or ship object is exposed. Other
+milestones retain their existing fields; this is additive within API v2.
+
+The earned outcome is a downward resolve crossing from defiant/shaken into
+bargaining or directly into capitulate, after actual player damage since the
+previous resolve sample. Damage that does not reduce defenses, hull or engine
+does not qualify. A sample containing NPC damage is ambiguous and does not
+award First Scare, even if the player struck last. Every sample consumes its
+damage receipt, including stand-down samples; receipts also expire after the
+existing threat-memory window. Starting in a low band, declining further within
+that band, or ambient resolve changes alone do not count. A low-band target can
+qualify after recovery into a higher band and a later player-caused crossing.
+
+The existing `world.milestones` list records the once-per-career award and saves
+normally. Damage receipts exist only for a live incarnation and are never saved.
+Resolve tuning and bluff outcomes are unchanged. `npm run test:first-scare`
+covers attribution, real combat/resolve integration and save/restore.
+
 **Verifier record:**
 
 | Note | Path |

@@ -10,6 +10,7 @@ import { isLauncherId, isTurretId, LAUNCHER_IDS, TURRET_IDS } from '../game/weap
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { prefersEngine } from '../game/subsys-aim.js';
 import { berthHeld } from './overlay-policy.js';
+import { scareDamageTotal, recordScareDamage } from '../game/first-scare.js';
 import {
   HULL_MARK_POOL,
   HULL_MARK_SIZE,
@@ -1545,6 +1546,7 @@ export function initCombat(ctx) {
       _targetFwd.set(0, 0, -1).applyQuaternion(bestShip.object.quaternion);
       _tmp.subVectors(playerObj.position, bestShip.object.position);
       const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
+      const scareBefore = scareDamageTotal(bestShip.state);
       const events = applyHit(bestShip.state, {
         damage: dmg,
         family: 'mining',
@@ -1552,6 +1554,7 @@ export function initCombat(ctx) {
         now,
         preferEngine: prefersEngine(ctx, bestShip),
       });
+      recordScareDamage(bestShip, true, scareBefore, now);
       if (bestShip.ai) bestShip.ai.lastAttacker = 'player';
       ctx.emit('npcHit', { ship: bestShip, damage: dmg });
       for (const ev of events) {
@@ -1725,6 +1728,7 @@ export function initCombat(ctx) {
       const facet = _targetFwd.dot(_tmp) < 0 ? 'aft' : 'fore';
 
       const shielded = s.state.screen > 0 || s.state.shell > 0;
+      const scareBefore = scareDamageTotal(s.state);
       const events = applyHit(s.state, {
         damage: p.damage,
         family: p.wkey,
@@ -1732,6 +1736,7 @@ export function initCombat(ctx) {
         now,
         preferEngine: !!(p.fromPlayer && prefersEngine(ctx, s)),
       });
+      recordScareDamage(s, p.fromPlayer, scareBefore, now);
       if (s.ai) s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
       ctx.emit('npcHit', { ship: s, damage: p.damage });
       for (const ev of events) {

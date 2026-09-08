@@ -209,7 +209,7 @@ const EVENT_FIELDS = Object.freeze({
   epicStage: Object.freeze(['id', 'faction', 'stage', 'line']),
   fearChanged: Object.freeze(['fear']),
   jobState: Object.freeze(['id', 'kind', 'outcome', 'pay']),
-  milestone: Object.freeze(['id', 'line']),
+  milestone: Object.freeze(['id', 'line', 'cause', 'targetId', 'targetName']),
   originChosen: Object.freeze(['id', 'line']),
   saveBlocked: Object.freeze(['reason']),
   reticleLock: Object.freeze(['hit']),

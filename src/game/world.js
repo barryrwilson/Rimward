@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, resolveBand, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 import { writeStationHold } from './traffic-feel.js';
 
@@ -1875,17 +1875,6 @@ export function initWorld(ctx) {
       // column (hail intent 'callowVouch').
       callowReturnBeat(ctx);
       callowVouchOffer(ctx);
-
-      // First Scare: any live ship pushed into the bargaining band §8.8.
-      if (!ctx.world.milestones.includes('firstScare')) {
-        for (const live of ctx.ships) {
-          const st = live.state;
-          if (st && !st.destroyed && resolveBand(st.resolve) === 'bargaining') {
-            fireMilestone(ctx, 'firstScare', 'They are breaking. First scare.');
-            break;
-          }
-        }
-      }
 
       // Aftermath lifecycle: expire old wrecks, build meshes for the CURRENT
       // system's entries lacking one (covers save restores and jump returns —
