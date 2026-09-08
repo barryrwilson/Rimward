@@ -1157,14 +1157,17 @@ export function initHail(ctx) {
             // Issue #67: session calm only explains the miss when a card was
             // otherwise available. It must not hide an already-yielded hull or
             // a hull that is simply out of salvage range.
+            // Issue #67: the shared classifier already knows this branch is
+            // the calm gate, and it answers with the SAME precedence the key
+            // just applied — 'calm' for a salvage hull whose card the calm
+            // window is holding shut, but the hull's own specific reason for
+            // an already-yielded or merely willing hull, which never had a
+            // card for calm to take away. Calm can no longer conceal a yield.
             const offer = hailOffer(ctx, ctx.targets && ctx.targets.current);
-            // A salvage hull reports no token of its own when only a
-            // transient UI gate is in the way; calm is then the true answer.
-            const calmHides = offer.available === true || offer.reason === '';
             emitHailMiss(ctx, {
               name: lock.name,
-              verb: calmHides ? 'hail' : lock.verb,
-              reason: calmHides ? 'calm' : lock.reason,
+              verb: offer.verb,
+              reason: offer.reason || 'calm',
               dist: lock.dist,
             });
           }

@@ -173,10 +173,10 @@ function observedTarget(live) {
 // 1. Vocabulary is closed and the two axes stay separate
 // ---------------------------------------------------------------------------
 pin('states are the authored six',
-  HAIL_OFFER_STATES.join(',') === 'none,not-ship,salvage,yielded,unanswered,no-hail',
+  HAIL_OFFER_STATES.join(',') === 'none,not-ship,salvage,yielded,willing,no-hail',
   HAIL_OFFER_STATES);
-pin('blockers are the authored seven',
-  HAIL_BLOCKERS.join(',') === 'geometry,range,surface,overlay-chart,overlay-berth,busy,calm',
+pin('blockers are the authored seven, in KeyH precedence order',
+  HAIL_BLOCKERS.join(',') === 'busy,surface,overlay-chart,overlay-berth,geometry,range,calm',
   HAIL_BLOCKERS);
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ const marlow = makeShip('Red Marlow', { dist: 220, state: { resolve: 30 } });  /
 
 for (const [label, live] of [['Claim Wren rec-15', wren], ['Red Marlow rec-9', marlow]]) {
   const offer = hailOffer(ctx, live);
-  pin(`${label} state is unanswered, not a completed yield`, offer.state === 'unanswered', offer);
+  pin(`${label} state is willing, not a completed yield`, offer.state === 'willing', offer);
   pin(`${label} advertises no interaction`, offer.available === false, offer);
   pin(`${label} bracket clause names the real gap`, offer.clause === 'NO TERMS', offer);
   pin(`${label} next step is truthful, not a promise of negotiation`,
@@ -202,7 +202,7 @@ for (const [label, live] of [['Claim Wren rec-15', wren], ['Red Marlow rec-9', m
 
   const row = observedTarget(live);
   pin(`${label} public API agrees with the displayed state`,
-    row.hail.state === 'unanswered' && row.hail.available === false
+    row.hail.state === 'willing' && row.hail.available === false
     && row.hail.reason === 'no-answer' && row.hail.next === offer.next, row.hail);
   pin(`${label} public API reports the morale band it shows`,
     row.resolveBand === (live.state.resolve < 20 ? 'capitulate' : 'bargaining'), row);
@@ -248,10 +248,12 @@ pin('willingness and completed yield are never the same state',
   openCardFor(marlow);
   pin('own card sets the shared open flag', ctx.flags.hailOpen === true);
   const own = hailOffer(ctx, marlow);
-  pin('own open card: morale state persists', own.state === 'unanswered', own);
+  pin('own open card: morale state persists', own.state === 'willing', own);
   pin('own open card: NO TERMS clause is suppressed', own.clause === '', own);
   pin('own open card: next points at the card', own.blocked === 'busy'
     && /card/i.test(own.next), own);
+  pin('own open card: refusal token never claims no-answer beside a live card',
+    own.reason === '' && own.available === false, own);
   const ownRow = observedTarget(marlow);
   pin('own open card: public next points at the card too',
     ownRow.hail.blocked === 'busy' && ownRow.hail.next === own.next, ownRow.hail);
@@ -341,8 +343,8 @@ for (const [label, live, wantIntents] of [
     && offer.state === 'salvage' && !Object.hasOwn(offer, 'dist'), offer);
   ctx.ships.splice(ctx.ships.indexOf(ghost), 1);
 }
+// (a raw pause is covered by the parity pins in section 12 below)
 for (const [label, key, want] of [
-  ['paused', 'paused', 'surface'],
   ['chart overlay', 'chartOpen', 'overlay-chart'],
   ['berth overlay', 'berthOpen', 'overlay-berth'],
 ]) {
@@ -379,7 +381,7 @@ for (const [label, key, want] of [
   ctx.world.fear = 15;
   const fresh = makeShip('Marked Origin Contact', { dist: 350, state: { resolve: 6 } });
   const offer = hailOffer(ctx, fresh);
-  pin('fresh fearful spawn is willing, not yielded', offer.state === 'unanswered', offer);
+  pin('fresh fearful spawn is willing, not yielded', offer.state === 'willing', offer);
   pin('fresh fearful spawn grants no interaction and no reward',
     offer.available === false && fresh.state.surrendered === false
     && fresh.ai.surrenderDone === false, offer);
@@ -496,6 +498,162 @@ for (const [label, key, want] of [
     && !/emit\('hailMiss'[\s\S]{0,200}ship:/.test(hailSrc)
     && hailSrc.includes("'no-hail'")
     && hailSrc.includes("'yielded'") && hailSrc.includes("'no-answer'"));
+}
+
+
+// ---------------------------------------------------------------------------
+// 12. ADVERSARIAL: the shared refusal must equal the REAL KeyH result at every
+//     overlap. Quinn's QA found two contradictions here — a far disabled hull
+//     under an open chart published `range` while the key emitted
+//     `overlay-chart`, and a low-morale hull under an open chart published
+//     `no-answer` with an empty blocker while the key emitted `overlay-chart`.
+//     Every row below asserts the offer AND drives the actual press.
+// ---------------------------------------------------------------------------
+{
+  const advWillingNear = makeShip('Adv Willing', { dist: 150, state: { resolve: 8 } });
+  const advYielded = makeShip('Adv Yielded', { dist: 150, state: { resolve: 8, surrendered: true }, ai: { surrenderDone: true } });
+  const advWreckNear = makeShip('Adv Wreck', { dist: 150, state: { disabled: true } });
+  const advWreckFar = makeShip('Adv Far Wreck', { dist: U.TARGET_RANGE + 300, state: { disabled: true } });
+  const advSteady = makeShip('Adv Steady', { dist: 150, state: { resolve: 80 } });
+
+  // [flag, live, persistent state, expected blocked, expected reason]
+  // '' as the expected reason means the real press emits NO toast at all.
+  const rows = [
+    // --- an open CHART outranks range, calm and every morale state ---
+    ['chartOpen', advWreckFar, 'salvage', 'overlay-chart', 'overlay-chart'],
+    ['chartOpen', advWreckNear, 'salvage', 'overlay-chart', 'overlay-chart'],
+    ['chartOpen', advWillingNear, 'willing', 'overlay-chart', 'overlay-chart'],
+    ['chartOpen', advYielded, 'yielded', 'overlay-chart', 'overlay-chart'],
+    ['chartOpen', advSteady, 'no-hail', 'overlay-chart', 'overlay-chart'],
+    // --- an open BERTH behaves the same way ---
+    ['berthOpen', advWreckFar, 'salvage', 'overlay-berth', 'overlay-berth'],
+    ['berthOpen', advWillingNear, 'willing', 'overlay-berth', 'overlay-berth'],
+    ['berthOpen', advYielded, 'yielded', 'overlay-berth', 'overlay-berth'],
+  ];
+  for (const [flag, live, state, blocked, reason] of rows) {
+    const label = `${flag} + ${state}`;
+    ctx.flags[flag] = true;
+    const offer = hailOffer(ctx, live);
+    pin(`${label}: persistent state survives`, offer.state === state, offer);
+    pin(`${label}: shared blocker is ${blocked}`, offer.blocked === blocked, offer);
+    pin(`${label}: shared reason is ${reason || '(silent)'}`, offer.reason === reason, offer);
+    pin(`${label}: nothing is advertised`, offer.available === false, offer);
+    const { miss, opened } = press(live);
+    pin(`${label}: real KeyH opens no card`, opened === null, opened);
+    pin(`${label}: real KeyH agrees with the shared reason`,
+      reason === '' ? miss === null : (!!miss && miss.reason === reason), miss);
+    ctx.flags[flag] = false;
+  }
+
+  // --- the play surface really does silence the key, and the offer agrees ---
+  // hail.js consults playSurfaceBlocked/settingsOwnsScreen, NOT ctx.flags.paused,
+  // so the classifier must not read the raw pause flag either: claiming a
+  // refusal the key does not perform is the same contradiction in reverse.
+  {
+    const surfaces = { isOpen: () => true };
+    ctx.models = surfaces;
+    for (const [live, state] of [[advWreckNear, 'salvage'], [advWillingNear, 'willing'], [advYielded, 'yielded']]) {
+      const offer = hailOffer(ctx, live);
+      pin(`play surface + ${state}: state survives, nothing offered`,
+        offer.state === state && offer.blocked === 'surface'
+        && offer.reason === '' && offer.available === false, offer);
+      const { miss, opened } = press(live);
+      pin(`play surface + ${state}: real KeyH is silent`, miss === null && opened === null, { miss, opened });
+    }
+    delete ctx.models;
+  }
+  {
+    // A paused world offers nothing. The PRODUCTION contract is the one that
+    // counts: main.js skips the whole update loop while paused, controls.js
+    // returns early from keydown, and the public act() refuses with 'paused'.
+    // A fixture that calls hail.update() by hand bypasses all three, so the
+    // public refusal below — not a hand-driven press — is the evidence.
+    ctx.flags.paused = true;
+    for (const [live, state] of [
+      [advWreckNear, 'salvage'], [advWillingNear, 'willing'], [advYielded, 'yielded'],
+    ]) {
+      const offer = hailOffer(ctx, live);
+      pin(`paused + ${state}: persistent state survives, nothing offered`,
+        offer.state === state && offer.blocked === 'surface'
+        && offer.reason === '' && offer.available === false, offer);
+    }
+    ctx.targets.current = advWreckNear;
+    const refused = rw.act({ v: 2, name: 'hail', args: {} });
+    pin('paused: the public hail action is refused, so nothing can open',
+      refused.ok === false && refused.token === 'paused', refused);
+    ctx.flags.paused = false;
+    const resumed = hailOffer(ctx, advWreckNear);
+    pin('unpaused: the same hull is offered again',
+      resumed.available === true && resumed.blocked === '', resumed);
+  }
+
+  // --- calm: salvage-only, and it never speaks for an intact hull -----------
+  const calmRows = [
+    // in range + calm  → calm really is the blocker
+    [advWreckNear, U.TARGET_RANGE - 60, 'salvage', 'calm', 'calm'],
+    // far + calm       → range comes first, exactly as the key reports
+    [advWreckFar, U.TARGET_RANGE + 300, 'salvage', 'range', 'range'],
+  ];
+  for (const [live, , state, blocked, reason] of calmRows) {
+    live.ai.calmUntil = ctx.world.time + 30;
+    const offer = hailOffer(ctx, live);
+    const label = `calm + ${state} @${offer.dist}u`;
+    pin(`${label}: shared blocker is ${blocked}`, offer.blocked === blocked, offer);
+    pin(`${label}: shared reason is ${reason}`, offer.reason === reason, offer);
+    const { miss } = press(live);
+    pin(`${label}: real KeyH agrees`, !!miss && miss.reason === reason, miss);
+    live.ai.calmUntil = 0;
+  }
+  for (const [live, state, reason] of [
+    [advYielded, 'yielded', 'yielded'],
+    [advWillingNear, 'willing', 'no-answer'],
+  ]) {
+    live.ai.calmUntil = ctx.world.time + 30;
+    const offer = hailOffer(ctx, live);
+    pin(`calm + ${state}: calm never borrows an intact hull's answer`,
+      offer.blocked === '' && offer.reason === reason && offer.state === state, offer);
+    const { miss } = press(live);
+    pin(`calm + ${state}: real KeyH keeps the specific reason`,
+      !!miss && miss.reason === reason, miss);
+    live.ai.calmUntil = 0;
+  }
+
+  // --- an open card: swallowed press, no toast, no contradictory claim ------
+  openCardFor(advWillingNear);
+  for (const [live, state] of [
+    [advWillingNear, 'willing'],
+    [advYielded, 'yielded'],
+    [advWreckNear, 'salvage'],
+  ]) {
+    const offer = hailOffer(ctx, live);
+    pin(`open card + ${state}: state survives`, offer.state === state, offer);
+    pin(`open card + ${state}: blocked busy, no refusal token`,
+      offer.blocked === 'busy' && offer.reason === '' && offer.available === false, offer);
+    pin(`open card + ${state}: step names the card`, /card/i.test(offer.next), offer);
+    const { miss } = press(live);
+    pin(`open card + ${state}: real KeyH is swallowed silently`, miss === null, miss);
+  }
+  pin('open card suppresses only the willing clause',
+    hailOffer(ctx, advWillingNear).clause === ''
+    && hailOffer(ctx, advYielded).clause === 'NO HAIL CLAIM'
+    && hailOffer(ctx, advYielded).label === 'YIELDED');
+  closeAnyCard(advWillingNear);
+
+  // --- and with nothing in the way, every row speaks for itself -------------
+  for (const [live, state, reason, avail] of [
+    [advWreckNear, 'salvage', '', true],
+    [advWreckFar, 'salvage', 'range', false],
+    [advWillingNear, 'willing', 'no-answer', false],
+    [advYielded, 'yielded', 'yielded', false],
+    [advSteady, 'no-hail', 'no-hail', false],
+  ]) {
+    const offer = hailOffer(ctx, live);
+    pin(`clear board + ${state}: blocker empty or state-owned`,
+      offer.reason === reason && offer.available === avail, offer);
+  }
+  for (const live of [advWillingNear, advYielded, advWreckNear, advWreckFar, advSteady]) {
+    ctx.ships.splice(ctx.ships.indexOf(live), 1);
+  }
 }
 
 console.log(fails === 0 ? 'ISSUE-67 FEEDBACK PASS' : `ISSUE-67 FEEDBACK FAIL (${fails})`);
