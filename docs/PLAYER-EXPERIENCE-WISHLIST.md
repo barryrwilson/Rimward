@@ -1495,6 +1495,15 @@ traffic, faction reputation, contacts, saves.
 
 ### MSN-02 — Broad mission families
 
+**Passenger policy (#73, 2026-09-08):** Retain no-buy-in, capacity-free parties
+with separately locked fares and 600-second delivery windows. Two same-route
+parties and passengers alongside a full ordinary hold are intentional;
+the two renewable slots belong to each origin, not to ship capacity.
+[Policy and tradeoffs](PassengerCommitmentPolicyDesign.md) and shared UI/API
+terms are implemented. Focused contracts, build/full boot and three rendered
+browser fixture flows pass with save/reload preservation and clean consoles;
+independent QA remains pending. These are not new natural-flight benchmarks.
+
 Support at least:
 
 - mining contracts;
