@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import '../ui/hud.css';
 import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor, SHIP_CLASSES } from '../game/state.js';
+import { hailOffer } from '../game/hail-offer.js';
 import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
@@ -311,11 +312,16 @@ export function weaponHudLabel(ctx) {
   return g + ' · ' + wName;
 }
 
+// The status word on the existing resolve line. Issue #67: the capitulate band
+// reads WILLING TO YIELD, so the morale reading can never be mistaken for the
+// completed surrender the same line prints as YIELDED. The dataset `data-band`
+// vocabulary (defiant/shaken/bargaining/capitulate) is unchanged and stays the
+// styling contract; only this displayed word differs.
 const BAND_LABEL = {
   defiant: 'DEFIANT',
   shaken: 'SHAKEN',
   bargaining: 'BARGAINING',
-  capitulate: 'CAPITULATE',
+  capitulate: 'WILLING TO YIELD',
 };
 
 function el(tag, className, parent, text) {
@@ -861,6 +867,8 @@ function hailMissToast(e, ctx, mem) {
     else if (reason === 'overlay-chart') text = `${name} — hail blocked (chart)`;
     else if (reason === 'overlay-berth') text = `${name} — hail blocked (berth)`;
     else if (reason === 'calm') text = `${name} — hail calm`;
+    else if (reason === 'yielded') text = `${name} — already yielded, no further terms`;
+    else if (reason === 'no-answer') text = `${name} — no terms offered`;
     else if (reason === 'no-hail') text = `${name} — no hail`;
     else if (reason === 'dock-range') text = `${name} — dock out of range${rangeBit}`;
     else if (reason === 'jump-zone') text = `${name} — jump not in zone`;
@@ -2612,14 +2620,32 @@ export function initHud(ctx) {
           }
           meta = (FACTIONS[key]?.name ?? key) + ' · ' + dist + 'u';
           if (pierced) meta += ' · CONCEALED MOUNTS';
+          // Issue #67: the existing resolve line states the OUTCOME, not just
+          // the morale band. A completed surrender reads YIELDED, a hull that
+          // is merely willing reads WILLING TO YIELD, and a dead hull reads
+          // DEAD IN SPACE — one line, no extra row. Same classifier as the H
+          // toast and observe(); scanner tiers and the Q-ship cover above are
+          // untouched.
+          const offer = st ? hailOffer(ctx, target) : null;
           if (st && st.disabled) {
             band = 'capitulate';
             resText = 'DEAD IN SPACE';
+          } else if (st && offer && offer.state === 'yielded') {
+            band = 'capitulate';
+            resText = 'YIELDED';
+            if (typeof st.resolve === 'number' && (ctx.world.scanner ?? 0) >= 1) {
+              resText += ' ' + Math.round(st.resolve);
+            }
           } else if (st && typeof st.resolve === 'number') {
             band = resolveBand(st.resolve);
             resText = BAND_LABEL[band];
             if ((ctx.world.scanner ?? 0) >= 1) resText += ' ' + Math.round(st.resolve);
           }
+          // No passive clause is appended to the meta line. Owner call: an
+          // inactive notice costs screen space that faction, distance and the
+          // concealed-mounts mark have a better claim on. The status word above
+          // already separates WILLING TO YIELD from YIELDED, and the deliberate
+          // H press explains a refusal at the moment the player asks for it.
         } else if (kind === 'station') {
           name = stripHudText(ctx.station && ctx.station.name);
           meta = dist + 'u';
@@ -2737,12 +2763,15 @@ export function initHud(ctx) {
           pKey = promptKeyFor('dock', 'J'); pVerb = 'Jump to ' + destName;
         }
       } else if (target && !kind && target.state && !target.state.destroyed) {
-        if (target.state.disabled && targetDistNow <= U.TARGET_RANGE) {
+        // Issue #67: prompt only what the key really does. The old branch
+        // offered 'Hail' for any bargaining/capitulate band, but hail.js opens
+        // a player-initiated card for a disabled hull ONLY — so an intact
+        // CAPITULATE trader advertised an action that answered "no hail".
+        // The resolve line above carries the state for every other case, and
+        // a deliberate H press explains any refusal on demand.
+        if (hailOffer(ctx, target).available) {
           pKey = promptKeyFor('hail', 'H');
           pVerb = 'Hail — dead in space';
-        } else {
-          const band = resolveBand(target.state.resolve ?? 70);
-          if (band === 'bargaining' || band === 'capitulate') { pKey = promptKeyFor('hail', 'H'); pVerb = 'Hail'; }
         }
       }
       if (!pKey && !target && shipObj) {
