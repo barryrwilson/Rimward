@@ -10,36 +10,55 @@
  *   G1  front door    - a fresh Greenhand start reaches flight with a clean
  *                       console; the escape vocabulary is published by the
  *                       capability manifest
- *   G2  gate route    - a hull that breaks off near the gate commits to a
- *                       NAMED gate, the bracket says so, and the public row
- *                       publishes the same word, kind, destination and phase
- *   G3  station route - a hull that breaks off beside the station commits to
- *                       the holding lane instead, and reaching it emits ONE
+ *   G2  gate route    - the player takes a ransom through the PUBLIC hail
+ *                       (hailResolve/demandRansom): that resolution alone
+ *                       breaks the hull off, it commits to a NAMED gate, the
+ *                       bracket says so, and the public row publishes the same
+ *                       word, kind, destination and phase
+ *   G3  station route - a TRADER panics through its own job tick (a dented
+ *                       screen, no staged mode) beside the station, commits to
+ *                       the holding lane, and reaching it emits ONE
  *                       npcSheltered receipt while the ship stays locked,
  *                       present and damageable (no immunity, no bounty)
- *   G4  choice        - the same hull, moved between the two neighbourhoods,
- *                       really re-chooses; a pursuer parked on the leg forces
- *                       the other route or an explicit evade with NO transit
+ *   G4  choice        - a committed leg is KEPT while it is still real, so the
+ *                       trigger is a real obstruction: the pursuer is parked on
+ *                       the leg the hull is actually flying (segment clearance
+ *                       proven), and the game's own revalidation then commits
+ *                       elsewhere or declares an explicit evade with NO transit
  *   G5  engine out    - a limping hull's sampled world speed stays inside 30%
  *                       of class cruise and it never completes a gate charge;
  *                       a disabled hull cannot depart at all
- *   G6  threshold     - a real chase across 1400 u: the lock drops, the hull
- *                       is culled, and reacquiring it inside 900 u returns the
- *                       SAME id at the same damage on the same escape route
- *   G7  departure     - an actual completed gate jump: physical arrival, a
+ *   G6  threshold     - a real chase across 1400 u: while SELECTED the runner
+ *                       is retained past the fold; the player's own target key
+ *                       then drops the lock, real traffic culls it, and
+ *                       reacquiring it inside 900 u returns the SAME id at the
+ *                       same damage on the same escape route
+ *   G7  departure     - an actual completed gate jump by a pirate the player
+ *                       PAID OFF: an ordinary demand card resolved with
+ *                       payTribute through the public handle, so hail.js takes
+ *                       the credits and stamps demandOutcome 'paid' with NO
+ *                       surrender flag — physical arrival, a
  *                       visible charge, exactly one npcEscaped receipt with
  *                       origin/destination/eta, the lock released with a
  *                       readable reason, and the record inTransit
- *   G8  arrival       - the same id lands in the destination system's bank
- *                       with its condition intact and no duplicate
+ *   G8  arrival       - the same id lands in the destination bank, the player
+ *                       flies there through the PUBLIC route/autopilot and the
+ *                       game's own jump, and real traffic re-instantiates that
+ *                       same hull: same id, unhealed condition, the paid peace
+ *                       still held (no fresh demand, no attack), lockable
  *
  * FIXTURES: a live session cannot be made to produce a damaged runner beside
  * a chosen gate on demand, so a clearly labelled harness (`window.__i68`,
  * recorded as `privilegedFixture` in the ledger) spawns the hull, parks
  * ambient traffic, and seeds INITIAL condition only — where the ship is, how
- * hurt it is, whether its engine is out, and the ordinary `flee` mode a
- * capitulation would set. It NEVER writes an escape plan, a phase, a charge,
- * a destination, a transit, a receipt, a lock release or a restored value.
+ * hurt it is, whether its screen is dented, whether its engine is out — plus
+ * the bargaining/demand card's hailOpened event (with a purse that can cover
+ * the price) and, for the rare-condition legs
+ * (G5 engine-out, G6 chase) only, the ordinary `flee` mode. G2/G3/G7 stage no
+ * mode at all: the break-off is produced by the public hail resolution or by
+ * the trader's own panic. It NEVER writes an escape plan, a phase, a charge,
+ * a destination, a transit, a receipt, a peace/surrender flag, a lock release
+ * or a restored value.
  * Every asserted OUTCOME is produced by the game's own npc.js / world.js /
  * traffic.js code and read back from the rendered DOM, `window.rimward`, or
  * the persistent record.
@@ -101,7 +120,7 @@ const results = {
   cdpPort: null,
   profile: null,
   boot: null,
-  fixtureNote: 'privilegedFixture: ship spawn, ambient parking, player hull pin, and seeded INITIAL condition (position, hull/engine damage, engineOut/disabled flags, ordinary flee mode). The harness never writes an escape plan, phase, charge, destination, transit, receipt, lock release or restored value — every asserted outcome is produced by npc.js/world.js/traffic.js and read back from the DOM, window.rimward or the persistent record.',
+  fixtureNote: 'privilegedFixture: ship spawn, ambient parking, player hull pin, player spatial staging, the bargaining/demand card hailOpened event plus a purse that can cover the demand, and seeded INITIAL condition (position, hull/screen/engine damage, engineOut/disabled flags, the lastHitAt/lastCombatAt of the exchange that caused them; the ordinary flee mode ONLY for the G5 engine-out and G6 chase legs). G2 breaks off through the public hailResolve demandRansom path, G7 through public payTribute on a real demand card (hail.js debits the credits and stamps demandOutcome), and G3 through the real trader panic. The harness never writes an escape plan, phase, charge, destination, transit, receipt, peace/surrender flag, lock release or restored value — every asserted outcome is produced by npc.js/world.js/traffic.js/hail.js and read back from the DOM, window.rimward or the persistent record.',
   origin: null,
   samples: {},
   pins: {},
@@ -262,6 +281,8 @@ const SETUP = `(async () => {
   const { spawnLiveShip } = await import('/src/systems/npc.js');
   const { isShipAssetReady, primeShipAsset } = await import('/src/systems/ship-assets.js');
   const { SYSTEMS } = await import('/src/game/state.js');
+  // The production abstract-route reader: read-only evidence, never a control.
+  const { recordPosition } = await import('/src/game/world.js');
   const tries = [
     { faction: 'redledger', classKey: 'cutter', role: 'pirate' },
     { faction: 'independent', classKey: 'cutter', role: 'pirate' },
@@ -286,6 +307,7 @@ const SETUP = `(async () => {
     gate: def.gates[0].position.slice(),
     gateTo: def.gates[0].to,
     station: def.station.position.slice(),
+    rp: recordPosition,
     ship: null,
     rec: null,
     lastPos: null,
@@ -324,18 +346,28 @@ const SETUP = `(async () => {
     c.world.records.push(rec);
     c.ships.push(live);
     rec.live = true;
-    // FIXTURE: initial condition only — ordinary battle damage and the flee
-    // mode a capitulation or a panic would already have set.
+    // FIXTURE: INITIAL condition only — ordinary battle damage, a dented
+    // screen, an engine out. The flee MODE is no longer staged by default:
+    // G2/G7 enter through the real public hail resolution and G3 through the
+    // real trader panic. The flee option remains for the rare-condition legs
+    // (G5 engine-out, G6 chase), and is attributed as such.
     if (Number.isFinite(o.hull)) live.state.hull = o.hull;
+    if (Number.isFinite(o.screen)) live.state.screen = o.screen;
     if (o.engineOut === true) {
       live.state.engineOut = true;
       live.state.engine = live.state.engineMax * 0.1;
     }
+    // The exchange that did this damage is part of the same INITIAL condition:
+    // without lastCombatAt the hull reads as decades out of combat and the
+    // ordinary repair rule starts healing it before the fixture is measured.
     live.state.lastHitAt = c.world.time;
-    live.ai.mode = 'flee';
-    live.ai.fleeFrom = 'player';
+    live.state.lastCombatAt = c.world.time;
     live.ai.intent = false;
     live.ai.target = null;
+    if (o.flee === true) {
+      live.ai.mode = 'flee';
+      live.ai.fleeFrom = 'player';
+    }
     bag.ship = live;
     bag.rec = rec;
     bag.lastPos = null;
@@ -366,6 +398,47 @@ const SETUP = `(async () => {
     }
     return n;
   };
+  /**
+   * FIXTURE: stage the ENCOUNTER STATE only — the bargaining card is opened
+   * with the game's own hailOpened event (the issue-67 probe's proven
+   * pattern). The card, its terms and every consequence of resolving it —
+   * the credits, the peace, the flee, the plan — are hail.js's and npc.js's.
+   */
+  bag.hailOpen = () => {
+    const s = bag.ship;
+    if (!s) return false;
+    c.emit('hailOpened', {
+      ship: s,
+      intents: ['demandRansom', 'letGo', 'keepFiring'],
+      line: 'They are breaking.',
+    });
+    return true;
+  };
+  /**
+   * FIXTURE: the ordinary wave-30 DEMAND encounter state — the pirate has
+   * heaved to and named a price, and the purse can cover it. hail.js builds
+   * the card; every consequence of paying it (the debit, the calm window, the
+   * paid outcome, the break-off and its refuge) belongs to the game.
+   */
+  bag.hailDemand = (n) => {
+    const s = bag.ship;
+    if (!s) return false;
+    if (!Number.isFinite(c.world.credits) || c.world.credits < n * 3) c.world.credits = n * 3;
+    s.ai.demanding = true;
+    s.ai.demandSent = true;
+    s.ai.demandAmount = n;
+    s.ai.demandPeaceAt = c.world.time;
+    s.ai.demandExpiresAt = c.world.time + 600;
+    c.emit('hailOpened', {
+      ship: s,
+      demandHail: true,
+      demand: n,
+      speaker: s.state.name,
+      intents: ['payTribute', 'showTeeth', 'refuseFight'],
+    });
+    return true;
+  };
+  bag.credits = () => c.world.credits;
   bag.disable = () => {
     if (!bag.ship) return false;
     bag.ship.state.disabled = true; // FIXTURE: the initial disable itself
@@ -416,11 +489,29 @@ const SETUP = `(async () => {
     return {
       id: rec.id,
       name: rec.name,
+      curSys: c.world.currentSystem,
+      surrendered: live ? live.state.surrendered === true
+        : !!(esc && esc.cond && esc.cond.flags && esc.cond.flags.surrendered),
+      demandOutcome: live ? (live.ai.demandOutcome ?? null)
+        : (esc && esc.peace ? (esc.peace.demandOutcome ?? null) : null),
+      intent: live ? live.ai.intent === true : null,
       live: !!live,
       state: rec.state,
       system: rec.system,
       pos: p ? [Math.round(p.x), Math.round(p.y), Math.round(p.z)] : null,
-      recPos: esc && Array.isArray(esc.pos) ? esc.pos.map((n) => Math.round(n)) : null,
+      player: [Math.round(pp.x), Math.round(pp.y), Math.round(pp.z)],
+      dest: esc && Array.isArray(esc.dest) ? esc.dest.map((n) => Math.round(n)) : null,
+      // Where the record ACTUALLY is. An active plan owns that position, a
+      // resolved one does not, and world.js's own recordPosition knows the
+      // difference — so ask it rather than reading the plan unconditionally.
+      recPos: (() => {
+        if (bag.rp) {
+          const out = new (c.ship.object.position.constructor)();
+          bag.rp(rec, out);
+          return [Math.round(out.x), Math.round(out.y), Math.round(out.z)];
+        }
+        return esc && Array.isArray(esc.pos) ? esc.pos.map((n) => Math.round(n)) : null;
+      })(),
       speed: speed === null ? null : Math.round(speed * 10) / 10,
       range: p ? Math.round(Math.hypot(p.x - pp.x, p.y - pp.y, p.z - pp.z)) : null,
       hull: live ? Math.round(live.state.hull) : (esc && esc.cond ? Math.round(esc.cond.hull) : null),
@@ -448,6 +539,27 @@ const SETUP = `(async () => {
 })()`;
 
 const call = (js) => `(() => { const r = (window.__i68.${js}); return typeof r === 'object' ? JSON.stringify(r) : r; })()`;
+/** The live public hail card: open flag, conversation id, speaker and terms. */
+const HAIL = `(() => {
+  const h = window.rimward.observe().hail;
+  return JSON.stringify(h ? {
+    open: h.open === true,
+    id: h.conversationId,
+    intents: h.intents,
+    speaker: h.speaker ? h.speaker.id : null,
+    demand: h.terms && h.terms.amounts ? h.terms.amounts.demand : null,
+  } : null);
+})()`;
+/**
+ * Bounded PUBLIC parley view: how many hail/demand rows the ring is carrying
+ * and the last few. PROBE.events is filtered to the escape receipts, so this
+ * is the only honest way to say "no NEW demand was opened".
+ */
+const HAILRING = `(() => {
+  const rows = (window.rimward.observe().events || []).filter((e) => e
+    && (e.type === 'hailOpened' || e.type === 'hailClosed' || e.type === 'npcSurrendered'));
+  return JSON.stringify({ n: rows.length, last: rows.slice(-4) });
+})()`;
 
 async function main() {
   await mkdir(PROFILE_ROOT, { recursive: true });
@@ -635,6 +747,41 @@ async function main() {
       return JSON.parse(r);
     };
     const V = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    /**
+     * hailOpen/hailDemand only EMIT: hail.js builds the card on its own tick.
+     * Wait for a real, open conversation bound to this hull and offering the
+     * verb we mean to press — never resolve against a stale or half-built one.
+     */
+    const openCard = async (label, intent, id, ms = 15000) => {
+      const end = Date.now() + ms;
+      let last = null;
+      while (Date.now() < end) {
+        last = JSON.parse(await cdp.eval(HAIL));
+        if (last && last.open === true && last.id
+          && (!id || last.speaker === id)
+          && Array.isArray(last.intents) && last.intents.includes(intent)) return last;
+        await sleep(250);
+      }
+      say('CARD MISS', label, JSON.stringify(last));
+      return last && last.open === true && last.id ? last : null;
+    };
+    const resolveCard = async (card, intent) => (card && card.id
+      ? JSON.parse(await cdp.eval(
+        `(() => JSON.stringify(window.rimward.act({ v: 2, name: 'hailResolve', args: { intent: ${JSON.stringify(intent)}, expectedConversationId: ${JSON.stringify(card.id)} } })))()`))
+      : { ok: false, error: 'no-card' });
+    /** Distance from a point to a segment — the same clearance the game uses. */
+    const segClear = (a, b, t) => {
+      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+      let s = len2 > 1e-9
+        ? ((t[0] - a[0]) * ab[0] + (t[1] - a[1]) * ab[1] + (t[2] - a[2]) * ab[2]) / len2 : 0;
+      if (!Number.isFinite(s)) s = 0;
+      const cs = s < 0 ? 0 : s > 1 ? 1 : s;
+      return {
+        t: s,
+        dist: Math.hypot(a[0] + ab[0] * cs - t[0], a[1] + ab[1] * cs - t[1], a[2] + ab[2] * cs - t[2]),
+      };
+    };
 
     // ================= G1: front door + published vocabulary ===============
     {
@@ -645,31 +792,46 @@ async function main() {
       { v: p?.v, optIn: p?.optIn, sys: p?.sys, hasEscaped: p?.capabilities?.includes('npcEscaped') });
     }
 
-    // ================= G2: a gate route, read off the bracket ==============
+    // ================= G2: a gate route, entered through a REAL hail =======
     {
-      const spawn = await spawnAt('Claim Wren', V(geom.gate, [140, 0, 90]));
-      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [700, 0, 500]))})`));
-      const p = await until('G2 gate route', (v) => v.ship && v.ship.escape && v.ship.escape.kind);
+      // No staged flee mode here: the hull breaks off because the player
+      // resolved its bargaining card through the PUBLIC handle and took the
+      // ransom. The mode, the refuge, the copy and the peace are the game's.
+      const spawn = await spawnAt('Claim Wren', V(geom.gate, [140, 0, 90]), { hull: 46 });
+      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [420, 0, 300]))})`));
+      await cdp.eval(call('lock()'));
+      await cdp.eval(call('hailOpen()'));
+      const card = await openCard('G2 bargaining card', 'demandRansom', spawn.id);
+      const resolved = await resolveCard(card, 'demandRansom');
+      results.samples.G2hail = { card, resolved };
+      const p = await until('G2 gate route',
+        (v) => v.ship && v.ship.mode === 'flee' && v.ship.escape && v.ship.escape.kind);
       await cdp.eval(call('lock()'));
       const locked = await until('G2 bracket', (v) => v.hud && v.hud.bracketHidden === false
         && /RUNNING FOR|GATE CHARGE/.test(v.hud.resolve || ''));
       results.samples.G2 = { plan: p?.ship, hud: locked?.hud, row: locked?.lock };
       await cdp.shot('g2-gate-route.png');
-      record('G2', !!(spawn.ok && p.ship && p.ship.escape
+      record('G2', !!(spawn.ok && card && card.open === true && resolved && resolved.ok === true
+        && p.ship && p.ship.mode === 'flee' && p.ship.escape
         && p.ship.escape.kind === 'gate' && p.ship.escape.to === geom.gateTo
         && locked.hud && /GATE/.test(locked.hud.resolve || '')
         && locked.lock && locked.lock.escape
         && locked.lock.escape.kind === 'gate' && locked.lock.escape.to === geom.gateTo
         && locked.lock.escape.label === (locked.hud.resolve || '').split(' · ').pop()),
-      { escape: p?.ship?.escape, resolve: locked?.hud?.resolve, row: locked?.lock?.escape,
-        pos: p?.ship?.pos, speed: p?.ship?.speed });
+      { card, resolved, escape: p?.ship?.escape, resolve: locked?.hud?.resolve,
+        row: locked?.lock?.escape, pos: p?.ship?.pos, speed: p?.ship?.speed,
+        surrendered: p?.ship?.surrendered });
     }
 
     // ================= G3: the station holding lane ========================
     {
-      const spawn = await spawnAt('Bent Kestrel', V(geom.station, [230, 0, 230]));
-      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.station, [700, 0, 700]))})`));
-      const chose = await until('G3 station route', (v) => v.ship && v.ship.escape && v.ship.escape.kind);
+      // A TRADER with a dented screen: the panic, the flee and the refuge all
+      // come from tickTraderJob, not from a staged mode.
+      const spawn = await spawnAt('Bent Kestrel', V(geom.station, [430, 0, 430]),
+        { role: 'trader', hull: 58, screen: 0 });
+      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.station, [900, 0, 900]))})`));
+      const chose = await until('G3 station route',
+        (v) => v.ship && v.ship.mode === 'flee' && v.ship.escape && v.ship.escape.kind);
       await cdp.eval(call('lock()'));
       const held = await until('G3 shelter',
         (v) => v.events.some((e) => e.type === 'npcSheltered' && e.targetId === spawn.id), 30000);
@@ -690,38 +852,52 @@ async function main() {
 
     // ================= G4: the choice really re-decides =====================
     {
-      // Same hull, moved next to the gate: the committed choice is revisited
-      // on the game's own cadence and becomes the gate.
+      // A committed leg is deliberately KEPT while it is still real — moving
+      // the hull is not a reason to re-decide, and the probe must not pretend
+      // it is. So: stage the hull next to the gate (spatial fixture), read the
+      // leg it is ACTUALLY flying, then park the pursuer squarely on that leg.
+      // The game's own revalidation is what changes the choice.
       await cdp.eval(call(`place(${JSON.stringify(V(geom.gate, [220, 0, 160]))})`));
-      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [900, 0, 700]))})`));
-      const toGate = await until('G4 reroute to gate',
-        (v) => v.ship && v.ship.escape && v.ship.escape.kind === 'gate', 30000);
-      // Now park the pursuer squarely on the leg to the gate: with the near
-      // route screened the hull must NOT press through the pursuer.
-      const mid = [(geom.gate[0] + V(geom.gate, [220, 0, 160])[0]) / 2,
-        (geom.gate[1] + V(geom.gate, [220, 0, 160])[1]) / 2,
-        (geom.gate[2] + V(geom.gate, [220, 0, 160])[2]) / 2];
-      await cdp.eval(call(`place(${JSON.stringify(V(geom.gate, [220, 0, 160]))})`));
+      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [1200, 0, 900]))})`));
+      const held = await until('G4 committed leg',
+        (v) => v.ship && v.ship.escape && v.ship.escape.kind && Array.isArray(v.ship.dest), 30000);
+      const leg = { from: held.ship.pos, to: held.ship.dest, kind: held.ship.escape.kind };
+      const mid = [(leg.from[0] + leg.to[0]) / 2, (leg.from[1] + leg.to[1]) / 2,
+        (leg.from[2] + leg.to[2]) / 2];
       await cdp.eval(call(`placePlayer(${JSON.stringify(mid)})`));
-      const screened = await until('G4 screened',
+      const onLeg = await probe();
+      const clear = segClear(onLeg.ship.pos, leg.to, onLeg.ship.player);
+      const screened = await until('G4 rerouted by the obstruction',
         (v) => v.ship && v.ship.escape
-          && (v.ship.escape.kind !== 'gate' || v.ship.escape.reason === 'blocked'
-            || v.ship.escape.phase === 'evade'), 30000);
-      results.samples.G4 = { toGate: toGate?.ship?.escape, screened: screened?.ship?.escape };
+          && (v.ship.escape.kind !== leg.kind || v.ship.escape.phase === 'evade'
+            || v.ship.escape.reason === 'blocked'
+            || !Array.isArray(v.ship.dest)
+            || Math.hypot(v.ship.dest[0] - leg.to[0], v.ship.dest[1] - leg.to[1],
+              v.ship.dest[2] - leg.to[2]) > 1), 40000);
+      results.samples.G4 = { leg, clear, held: held?.ship?.escape, screened: screened?.ship?.escape,
+        newDest: screened?.ship?.dest };
       await cdp.shot('g4-choice.png');
-      record('G4', !!(toGate.ship?.escape?.kind === 'gate'
+      record('G4', !!(held.ship.escape.kind
+        // the pursuer really was ON the committed leg, ahead of the runner
+        && clear.dist < 260 && clear.t > 0.02 && clear.t <= 1
         && screened.ship?.escape
-        && (screened.ship.escape.kind === 'station' || screened.ship.escape.phase === 'evade')
+        // …and the hull committed somewhere else, or said it had nowhere to go
+        && (screened.ship.escape.kind !== leg.kind
+          || screened.ship.escape.phase === 'evade'
+          || (Array.isArray(screened.ship.dest)
+            && Math.hypot(screened.ship.dest[0] - leg.to[0], screened.ship.dest[1] - leg.to[1],
+              screened.ship.dest[2] - leg.to[2]) > 1))
         // an evade is never a transit and never a receipt
         && screened.ship.state !== 'inTransit'
         && !screened.events.some((e) => e.type === 'npcEscaped')),
-      { toGate: toGate?.ship?.escape, screened: screened?.ship?.escape,
-        state: screened?.ship?.state });
+      { leg, clear, held: held?.ship?.escape, screened: screened?.ship?.escape,
+        newDest: screened?.ship?.dest, state: screened?.ship?.state });
     }
 
     // ================= G5: engine out and disabled =========================
     {
-      const spawn = await spawnAt('Limping Hull', V(geom.gate, [900, 0, 700]), { engineOut: true, hull: 40 });
+      const spawn = await spawnAt('Limping Hull', V(geom.gate, [900, 0, 700]),
+        { engineOut: true, hull: 40, flee: true });
       await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [1500, 0, 1200]))})`));
       // Sample the real world speed twice so the reading is a rate, not a jump.
       await probe();
@@ -756,15 +932,26 @@ async function main() {
 
     // ================= G6: chase across the 1400 u threshold ===============
     {
-      const spawn = await spawnAt('Chased Wren', V(geom.gate, [1600, 0, 1200]), { hull: 45 });
+      const spawn = await spawnAt('Chased Wren', V(geom.gate, [1600, 0, 1200]), { hull: 45, flee: true });
       await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [1900, 0, 1400]))})`));
       const near = await until('G6 near', (v) => v.ship && v.ship.live === true && v.ship.range < 600);
       await cdp.eval(call('lock()'));
       const locked = await probe();
       const hull0 = locked?.ship?.hull ?? null;
-      // Fall behind: a real cull at the real threshold, then reacquire.
+      // Fall behind. A SELECTED runner is deliberately retained past the fold
+      // now, so first prove the retention at > 1400 u with the lock still on
+      // it and its identity/condition intact…
       const far = [locked.ship.pos[0] + 2600, locked.ship.pos[1], locked.ship.pos[2]];
       await cdp.eval(call(`placePlayer(${JSON.stringify(far)})`));
+      const retained = await until('G6 retained past 1400',
+        (v) => v.ship && v.ship.range > 1400 && v.ship.live === true
+          && v.lock && v.lock.id === spawn.id, 20000);
+      await cdp.shot('g6-retained-chase.png');
+      // …then drop the lock with the ORDINARY target key, in empty space, and
+      // let real traffic fold it exactly like any other distant hull.
+      await cdp.eval(KEY('KeyT', 't'));
+      const unlocked = await until('G6 lock dropped',
+        (v) => !v.lock || v.lock.id !== spawn.id, 15000);
       const lost = await until('G6 lost', (v) => v.ship && v.ship.live === false, 20000);
       await cdp.shot('g6-target-lost.png');
       // Close back in on the record's own tracked position.
@@ -773,9 +960,15 @@ async function main() {
       const backAgain = await until('G6 reacquired', (v) => v.ship && v.ship.live === true, 25000);
       await cdp.eval(call('lock()'));
       const relocked = await probe();
-      results.samples.G6 = { near: near?.ship, lost: lost?.ship, back: backAgain?.ship, relock: relocked?.lock };
+      results.samples.G6 = { near: near?.ship, retained: retained?.ship, unlocked: unlocked?.lock,
+        lost: lost?.ship, back: backAgain?.ship, relock: relocked?.lock };
       await cdp.shot('g6-reacquired.png');
       record('G6', !!(spawn.ok && hull0 !== null
+        // the chase survives the invisible line while it is SELECTED…
+        && retained.ship && retained.ship.live === true && retained.ship.range > 1400
+        && retained.ship.id === spawn.id && retained.ship.hull === hull0
+        // …the player's own target key released it…
+        && (!unlocked.lock || unlocked.lock.id !== spawn.id)
         && lost.ship && lost.ship.live === false && lost.ship.state === 'enroute'
         && lost.ship.escape && lost.ship.escape.kind
         && backAgain.ship && backAgain.ship.live === true
@@ -784,15 +977,34 @@ async function main() {
         && backAgain.ship.mode === 'flee'
         && relocked.lock && relocked.lock.id === spawn.id
         && !lost.events.some((e) => e.type === 'npcEscaped')),
-      { hull0, lost: lost?.ship, back: backAgain?.ship, relockId: relocked?.lock?.id });
+      { hull0, retained: retained?.ship, unlocked: unlocked?.lock, lost: lost?.ship,
+        back: backAgain?.ship, relockId: relocked?.lock?.id });
     }
 
     // ================= G7: an actual completed gate jump ===================
     let departedId = null;
     {
+      // The hull that crosses is one the PLAYER PAID OFF: an ordinary pirate
+      // demand card, resolved with payTribute through the public handle. That
+      // is the peace with no surrender flag at all — the one that used to wake
+      // up hunting again on the other side — so it is the one carried through
+      // the crossing and checked again in G8. hail.js debits the purse and
+      // stamps the outcome; the probe writes neither.
       const spawn = await spawnAt('Wren Runner', V(geom.gate, [40, 0, 20]), { hull: 50 });
       departedId = spawn.id;
       await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [420, 0, 0]))})`));
+      await cdp.eval(call('lock()'));
+      await cdp.eval(call('hailDemand(400)'));
+      const card7 = await openCard('G7 demand card', 'payTribute', spawn.id);
+      const creditsBefore = Number(await cdp.eval(call('credits()')));
+      const paid7 = await resolveCard(card7, 'payTribute');
+      const creditsAfter = Number(await cdp.eval(call('credits()')));
+      const bought = await until('G7 paid peace',
+        (v) => v.ship && v.ship.mode === 'flee' && v.ship.demandOutcome === 'paid', 20000);
+      results.samples.G7hail = { card: card7, paid: paid7, creditsBefore, creditsAfter,
+        peace: bought?.ship && { outcome: bought.ship.demandOutcome, surrendered: bought.ship.surrendered } };
+      const hailBase = JSON.parse(await cdp.eval(HAILRING));
+      results.samples.G7hail.ringBase = hailBase;
       const charging = await until('G7 charging',
         (v) => v.ship && v.ship.escape && v.ship.escape.phase === 'charge' && v.ship.escape.charge > 0);
       await cdp.eval(call('lock()'));
@@ -804,7 +1016,11 @@ async function main() {
       const receipt = (gone?.events || []).find((e) => e.type === 'npcEscaped' && e.targetId === spawn.id) ?? null;
       results.samples.G7 = { charging: charging?.ship, receipt, after: gone?.ship,
         comms: gone?.comms?.slice(-4), hud: chargeShot?.hud };
-      record('G7', !!(spawn.ok
+      record('G7', !!(spawn.ok && card7 && card7.open === true && paid7 && paid7.ok === true
+        // the game took the money and stamped the peace — the probe wrote neither
+        && creditsAfter < creditsBefore
+        && bought.ship && bought.ship.demandOutcome === 'paid'
+        && bought.ship.surrendered !== true
         && charging.ship.escape.phase === 'charge'
         && chargeShot.lock && chargeShot.lock.id === spawn.id  // observable while charging
         && receipt && receipt.kind === 'gate' && receipt.reason === 'gate'
@@ -815,21 +1031,76 @@ async function main() {
         && (!gone.lock || gone.lock.id !== spawn.id)   // lock released at departure
         && (gone.comms || []).some((t) => /jumped to/.test(t) && /target lost/.test(t))),
       { receipt, after: gone?.ship, lock: gone?.lock, comms: gone?.comms?.slice(-3),
-        chargeHud: chargeShot?.hud?.resolve });
+        chargeHud: chargeShot?.hud?.resolve, creditsBefore, creditsAfter,
+        peace: bought?.ship && { outcome: bought.ship.demandOutcome, surrendered: bought.ship.surrendered } });
+      results.samples.G7ringBase = hailBase;
     }
 
     // ================= G8: the same ship on the other side =================
     {
+      // The record must arrive — and then the player must actually FLY there
+      // and meet it again. A bank row is not a reacquisition.
       const arrived = await until('G8 arrival',
         (v) => v.ship && v.ship.state === 'enroute' && v.ship.destBank === geom.gateTo, 180000);
-      results.samples.G8 = arrived?.ship ?? null;
+      const hullAcross = arrived?.ship?.hull ?? null;
+      // FIXTURE: spatial staging only — the player is put at its own gate.
+      // The crossing itself is the game's: the PUBLIC route/autopilot flies it
+      // and jump.js performs the real jump and loads the destination system.
+      await cdp.eval(call(`placePlayer(${JSON.stringify(V(geom.gate, [90, 0, 60]))})`));
+      const routed = JSON.parse(await cdp.eval(
+        `(() => JSON.stringify(window.rimward.act({ v: 2, name: 'plotRoute', args: { dest: ${JSON.stringify(geom.gateTo)} } })))()`));
+      const flying = JSON.parse(await cdp.eval(
+        `(() => JSON.stringify(window.rimward.act({ v: 2, name: 'engageAutopilot', args: {} })))()`));
+      // Fail fast on a refused public call rather than waiting three minutes
+      // for a jump nobody asked for.
+      if (!(routed && routed.ok === true) || !(flying && flying.ok === true)) {
+        say('G8 public navigation refused', JSON.stringify({ routed, flying }));
+      }
+      const loaded = await until('G8 destination loaded',
+        (v) => v.ship && v.ship.curSys === geom.gateTo, 180000);
+      await cdp.shot('g8-destination-loaded.png');
+      // Meet it: close on the record's own tracked position and let REAL
+      // traffic instantiate the same id in the destination system.
+      const at = loaded?.ship?.recPos;
+      if (at) await cdp.eval(call(`placePlayer(${JSON.stringify([at[0] + 120, at[1], at[2]])})`));
+      const met = await until('G8 live reacquisition',
+        (v) => v.ship && v.ship.live === true && v.ship.curSys === geom.gateTo, 60000);
+      await cdp.eval(call('lock()'));
+      const relock = await probe();
+      // …and the peace it bought is still bought. The baseline is taken HERE,
+      // after the staged card and the crossing, so the original demand is
+      // excluded by sequence rather than by deleting it: any NEW hail or
+      // demand row appearing during the peace window is a real regression.
+      const ringBefore = JSON.parse(await cdp.eval(HAILRING));
+      await sleep(6000);
+      const after = await probe();
+      const ringAfter = JSON.parse(await cdp.eval(HAILRING));
+      results.samples.G8 = {
+        arrived: arrived?.ship, routed, flying, loaded: loaded?.ship, met: met?.ship,
+        lock: relock?.lock, after: after?.ship, ringBefore, ringAfter,
+      };
+      await cdp.shot('g8-reacquired-across.png');
       record('G8', !!(arrived.ship && arrived.ship.id === departedId
         && arrived.ship.destBank === geom.gateTo
         && arrived.ship.system === geom.gateTo
         && arrived.ship.state === 'enroute'
-        && arrived.ship.hull !== null
-        && arrived.ship.escape && arrived.ship.escape.phase === 'done'),
-      arrived?.ship);
+        && arrived.ship.escape && arrived.ship.escape.phase === 'done'
+        // the player really is in the destination system
+        && loaded.ship && loaded.ship.curSys === geom.gateTo
+        // …and the SAME hull is live there, unhealed and still at peace
+        && met.ship && met.ship.id === departedId && met.ship.live === true
+        && met.ship.hull === hullAcross
+        && met.ship.mode !== 'hunt' && met.ship.mode !== 'duel'
+        // the paid peace crossed with it, with no surrender flag anywhere
+        && met.ship.demandOutcome === 'paid' && met.ship.surrendered !== true
+        && after.ship && after.ship.intent !== true
+        && routed && routed.ok === true && flying && flying.ok === true
+        // …and it opened no NEW parley in the window after the reacquisition
+        && ringBefore && ringAfter && ringAfter.n === ringBefore.n
+        && relock.lock && relock.lock.id === departedId),
+      { arrived: arrived?.ship, hullAcross, routed, flying, loaded: loaded?.ship,
+        met: met?.ship, after: after?.ship, lockId: relock?.lock?.id,
+        ring: { before: ringBefore, after: ringAfter } });
       await cdp.eval(call('remove()'));
     }
 

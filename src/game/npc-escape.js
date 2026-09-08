@@ -1,5 +1,12 @@
-import { ESCAPE, JUMP, SYSTEMS, SHIP_CLASSES, DEFENSE } from './state.js';
-import { writeStationHold, visualClassFor } from './traffic-feel.js';
+import { ESCAPE, JUMP, SYSTEMS, SHIP_CLASSES, DEFENSE, U } from './state.js';
+import {
+  writeStationHold, visualClassFor, hullRadiusFor, STATION_HOLD_PAD,
+} from './traffic-feel.js';
+import { PHY } from './physics.js';
+import {
+  LAUNCH_HOLD_SECONDS, LAUNCH_RELEASE_MARGIN, LAUNCH_CORRIDOR_MARGIN,
+  LAUNCH_STEP, LAUNCH_SPEED_HEADROOM, LAUNCH_FALLBACK_CREEP,
+} from './launch-clearance.js';
 
 /**
  * NPC escape plan — issue #68 (gate OR station refuge).
@@ -183,6 +190,94 @@ function towardness(from, dest, threat) {
   return dot > 0 ? dot : 0;
 }
 
+// ---------- escape-only station refuge ring (issue #68) ----------
+//
+// An ordinary traffic hold clears the station cylinder, which is all a MOVING
+// ship needs. An escapee PARKS in its refuge, and a stationary hull anywhere
+// inside the berth's release march plus its five-second hands-off creep run
+// refuses the player's launch for as long as it sits there (diagnostic-boot:
+// Redmarch rec-49 at 83 u, planLaunch blocker=ship). The refuge therefore sits
+// beyond that whole envelope. writeStationHold and ordinary traffic points are
+// untouched; launch clearance itself is untouched and only lends its tuning.
+
+/**
+ * Widest hands-off creep run any SHIPPED class can make in the launch window.
+ * Taken over the catalogue, not the hull in the seat, so a saved refuge stays
+ * legal across a refit.
+ */
+const MAX_LAUNCH_CORRIDOR = (() => {
+  let creep = LAUNCH_FALLBACK_CREEP;
+  for (const key of Object.keys(SHIP_CLASSES)) {
+    const c = SHIP_CLASSES[key].creep;
+    if (fin(c) && c > creep) creep = c;
+  }
+  return creep * LAUNCH_SPEED_HEADROOM * LAUNCH_HOLD_SECONDS;
+})();
+/** Centred bounding SPHERE of the station body — every berth bearing, not the waist. */
+const STATION_BOUND = Math.hypot(PHY.STATION_CYL_RADIUS,
+  Math.max(Math.abs(PHY.STATION_CYL_Y0), Math.abs(PHY.STATION_CYL_Y1)));
+/** Furthest out the release march can legitimately place the departing hull. */
+const RELEASE_BOUND = Math.max(U.DOCK_RANGE,
+  STATION_BOUND + PHY.PLAYER_RADIUS + LAUNCH_RELEASE_MARGIN + LAUNCH_STEP);
+/** End of the swept corridor: no launch probe ever reaches past this. */
+const LANE_BOUND = RELEASE_BOUND + MAX_LAUNCH_CORRIDOR;
+
+/**
+ * Minimum distance from the station centre for a refuge a `classKey` hull may
+ * PARK in. The whole arrival ball is budgeted, not just the destination point:
+ * a hull that stops ESCAPE.stationArrive short of the centre still leaves its
+ * own radius and the swept player probe outside LANE_BOUND, with the hold pad
+ * left over. `hullClass` is the real hull behind a Q-ship cover — masking
+ * never buys a smaller clearance. hullRadiusFor is the visible target radius,
+ * which for every shipped row is the larger of the visible and collision
+ * radii; the hold pad carries the remaining headroom.
+ */
+export function escapeRefugeRadius(classKey, hullClass) {
+  let r = hullRadiusFor(classKey);
+  if (typeof hullClass === 'string' && hullClass !== classKey) {
+    const alt = hullRadiusFor(hullClass);
+    if (alt > r) r = alt;
+  }
+  return LANE_BOUND + PHY.PLAYER_RADIUS + LAUNCH_CORRIDOR_MARGIN + r
+    + ESCAPE.stationArrive + STATION_HOLD_PAD;
+}
+
+/**
+ * The refuge point: writeStationHold's stable, hull-safe bearing (station →
+ * runner in XZ, y clamped into the cylinder band), extended out to the refuge
+ * radius. Same lane, same bearing, far enough out to be parked in.
+ */
+function escapeStationRefuge(station, classKey, from, hullClass) {
+  const hold = writeStationHold({ x: 0, y: 0, z: 0 },
+    { x: station[0], y: station[1], z: station[2] },
+    classKey, { x: from[0], y: from[1], z: from[2] });
+  const dx = hold.x - station[0];
+  const dz = hold.z - station[2];
+  const len = Math.hypot(dx, dz);
+  const want = escapeRefugeRadius(classKey, hullClass);
+  if (len > 1e-6 && len < want) {
+    const k = want / len;
+    hold.x = station[0] + dx * k;
+    hold.z = station[2] + dz * k;
+  }
+  return hold;
+}
+
+/**
+ * Is a COMMITTED station destination still outside the launch envelope? A hold
+ * saved before this ring existed, or one a collision pushed inward, is not a
+ * legal place to park any more and must be re-chosen rather than flown to.
+ */
+export function stationRefugeSafe(rec, sysId, dest) {
+  if (!vec3ok(dest)) return false;
+  if (!knownSystem(sysId)) return false;
+  const station = SYSTEMS[sysId].station;
+  const at = station && escapeVec(station.position);
+  if (!at) return true; // no authored station: nothing to clear
+  const need = escapeRefugeRadius(escapeHullClass(rec), rec && rec.classKey);
+  return Math.hypot(dest[0] - at[0], dest[1] - at[1], dest[2] - at[2]) >= need - 1e-6;
+}
+
 /** Data-side gate list for a system, or null. Hub routes are never included. */
 export function escapeGatesOf(sysId) {
   if (!knownSystem(sysId)) return null;
@@ -221,7 +316,7 @@ export function authoredGate(sysId, to) {
  * endpoint would land somewhere marginally different. Called on the
  * revalidate cadence, never per frame.
  */
-export function escapeLegViable(plan, sysId, fromPos, threatPos) {
+export function escapeLegViable(plan, sysId, fromPos, threatPos, rec) {
   if (!plan || !KIND_SET.has(plan.kind) || !vec3ok(plan.dest)) return false;
   const from = escapeVec(fromPos);
   if (!from) return false;
@@ -230,6 +325,10 @@ export function escapeLegViable(plan, sysId, fromPos, threatPos) {
     const at = g && escapeVec(g.position);
     if (!at) return false;
     if (Math.hypot(at[0] - plan.dest[0], at[1] - plan.dest[1], at[2] - plan.dest[2]) > 1) return false;
+  } else if (rec && !stationRefugeSafe(rec, sysId, plan.dest)) {
+    // A hold inside the launch envelope (a legacy save, or one a collision
+    // pushed inward) is no longer a legal place to park: re-choose.
+    return false;
   }
   return !legScreened(from, plan.dest, escapeVec(threatPos));
 }
@@ -288,9 +387,7 @@ export function chooseEscapeDestination(opts) {
   }
   const station = escapeVec(opts.stationPos);
   if (station) {
-    const hold = writeStationHold({ x: 0, y: 0, z: 0 }, { x: station[0], y: station[1], z: station[2] },
-      opts.classKey, { x: from[0], y: from[1], z: from[2] });
-    const dest = escapeVec(hold);
+    const dest = escapeVec(escapeStationRefuge(station, opts.classKey, from, opts.hullClass));
     if (dest) consider('station', null, dest, gates ? gates.length : 0, false);
   }
 
@@ -306,6 +403,43 @@ export function chooseEscapeDestination(opts) {
   out.index = best.index;
   out.reason = best.kind;
   return out;
+}
+
+/**
+ * Did this hull's retained snapshot record a peace the player actually earned?
+ * Capitulation sets the surrender flags, but a REAL paid ransom/tribute or a
+ * landed bluff (hail.js) sets neither — it stamps demandOutcome and a calm
+ * window, then flees. The calm expires inside a 60-120 s crossing, so without
+ * this the same hull came back through the gate hunting the player who had
+ * just bought it off. Bounded to the two outcomes that are a bought peace.
+ */
+export function escapeYielded(plan) {
+  if (!plan) return false;
+  const flags = plan.cond && plan.cond.flags;
+  if (flags && flags.surrendered === true) return true;
+  const peace = plan.peace;
+  if (!peace) return false;
+  return peace.surrenderDone === true
+    || peace.demandOutcome === 'paid' || peace.demandOutcome === 'bluffed';
+}
+
+/**
+ * Tagged escape trail for a committed refuge. Shared by the live stamp
+ * (npc.js) and the off-screen re-choice (world.js) so a rerouted runner never
+ * leaves a trail naming the destination it abandoned. Pirate/ace only — the
+ * wave-30 wake contract — and JSON-plain.
+ */
+export function writeEscapeWakeSite(rec, plan, role) {
+  if ((role !== 'pirate' && role !== 'ace') || !rec) return false;
+  if (!plan || !KIND_SET.has(plan.kind) || !vec3ok(plan.dest)) return false;
+  rec.wakeSite = {
+    position: [plan.dest[0], plan.dest[1], plan.dest[2]],
+    found: false,
+    kind: plan.kind,
+    to: plan.kind === 'gate' ? plan.to : null,
+    from: rec.system ?? null,
+  };
+  return true;
 }
 
 /**
@@ -336,6 +470,7 @@ export function replanEscape(rec, opts) {
     threatPos: opts.threatPos ?? null,
     stationPos: station ? station.position : null,
     classKey: escapeHullClass(rec),
+    hullClass: rec.classKey,
     engineOut: opts.engineOut === true,
   });
   return writeEscapePlan(rec, choice, { now: opts.now, pos: opts.pos, sysId });
@@ -407,7 +542,11 @@ export function writeEscapePlan(rec, choice, info) {
   // is the SAME refuge: keep the point it is holding at. The choice is still
   // genuinely re-run — if the chooser now prefers a gate (or any other
   // destination) the kind/to comparison below abandons the hold as before.
-  const holding = plan.phase === 'hold' && plan.kind === 'station' && vec3ok(plan.dest);
+  // …but only while the point it is holding is still a LEGAL place to park.
+  // An unsafe hold (legacy save, or one a collision pushed inside the launch
+  // envelope) must be allowed to move to the new refuge.
+  const holding = plan.phase === 'hold' && plan.kind === 'station' && vec3ok(plan.dest)
+    && stationRefugeSafe(rec, plan.from ?? (info && info.sysId), plan.dest);
   const changed = !routed
     || plan.kind !== choice.kind
     || plan.to !== choice.to
@@ -424,12 +563,30 @@ export function writeEscapePlan(rec, choice, info) {
   plan.checkedAt = now;
   plan.updatedAt = now;
   if (routed) {
+    // A genuinely NEW escape episode: the previous run resolved (arrival keeps
+    // the plan, and its departure latch with it) and this record is committing
+    // to a fresh route. Clear the terminal receipt latch HERE and only here —
+    // a restore, a revalidation or a re-commit of the same run never reaches a
+    // 'done' phase, so the old crossing stays idempotent.
+    if (plan.phase === 'done') {
+      if (plan.departed === true) plan.departed = false;
+      plan.sheltered = false;
+      plan.dwellUntil = 0;
+    }
     if (changed) {
       plan.chosenAt = now;
       plan.announced = false;
       plan.charge = 0;
-      plan.sheltered = false;
-      plan.dwellUntil = 0;
+      // The arrival latch belongs to the EPISODE, not to the endpoint. Moving
+      // an already-sheltered hull to a legal hold at the SAME station — a
+      // legacy inner hold clearing the launch envelope, or one a collision
+      // pushed inward — is the same shelter it already announced, so it must
+      // not fire a second arrival receipt. A new episode cleared the latch
+      // above, with everything else.
+      if (!(plan.sheltered === true && choice.kind === 'station')) {
+        plan.sheltered = false;
+        plan.dwellUntil = 0;
+      }
     }
     plan.kind = choice.kind;
     plan.to = choice.kind === 'gate' ? choice.to : null;
@@ -528,11 +685,20 @@ export function captureCondition(plan, state, ai, now) {
         plan.threatAt[1] = p.y;
         plan.threatAt[2] = p.z;
       }
-    } else {
-      plan.threat = src === 'player' ? 'player' : null;
+    } else if (src === 'player') {
+      plan.threat = 'player';
+      plan.threatId = null;
+      plan.threatAt = null;
+    } else if (plan.threat !== 'ship') {
+      plan.threat = null;
       plan.threatId = null;
       plan.threatAt = null;
     }
+    // else: a remembered NPC hunter that simply is not live right now. makeAi
+    // leaves the handle null in exactly that case and threatPos falls back on
+    // the saved id/position — so the ordinary sync, save and removal that
+    // follow must NOT erase the memory they exist to carry. It is replaced
+    // only by a new pursuer or by the player becoming the threat.
   }
   if (fin(now)) plan.updatedAt = now;
   return cond;
@@ -1007,6 +1173,17 @@ export function sanitizeEscapeRecord(rec) {
     cond: cleanCond(raw.cond, classMaxima(rec)),
     peace: cleanPeace(raw.peace),
   };
+  // A station hold saved before the refuge ring cleared the launch envelope is
+  // not a legal place to park any more. Drop only the DESTINATION — identity,
+  // damage, peace, dwell, sheltered and the tracked position all stand, so the
+  // hull is never teleported, never healed and never re-announces an arrival —
+  // and let the ordinary re-choice fly it out to the new refuge.
+  if (plan.kind === 'station' && !stationRefugeSafe(rec, plan.from ?? rec.system, plan.dest)) {
+    plan.kind = null;
+    plan.dest = null;
+    plan.phase = 'evade';
+    plan.reason = 'no-route';
+  }
   // A record that already ended cannot resume an escape.
   if (rec.state === 'dead' || rec.state === 'captured') {
     plan.phase = 'done';

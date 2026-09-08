@@ -15,6 +15,7 @@ import {
   authoredGate,
   escapeVec,
   replanEscape,
+  writeEscapeWakeSite,
   finishEscape,
   escapePublicIdentity,
 } from './npc-escape.js';
@@ -1105,6 +1106,8 @@ function offscreenReplan(rec, plan, sysId, ctx) {
   if (!writeEscapePosition(plan, _escapePos)) return;
   const flags = plan.cond && plan.cond.flags;
   if (flags && flags.disabled === true) return; // a dark hull chooses nothing
+  const chosenBefore = plan.chosenAt;
+  const kindBefore = plan.kind;
   replanEscape(rec, {
     sysId: id,
     pos: _escapePos,
@@ -1112,6 +1115,12 @@ function offscreenReplan(rec, plan, sysId, ctx) {
     engineOut: !!flags && flags.engineOut === true,
     now: ctx.world.time,
   });
+  // Off screen the trail is the only thing the player can still follow, so a
+  // retry that finally found a route must not leave the old evade site (or an
+  // abandoned gate) behind. Same shared writer the live stamp uses.
+  if (plan.chosenAt !== chosenBefore || plan.kind !== kindBefore) {
+    writeEscapeWakeSite(rec, plan, rec.role);
+  }
 }
 
 /**

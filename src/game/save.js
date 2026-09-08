@@ -1335,6 +1335,19 @@ function healLiveRecords(ctx) {
     // …and it comes back MOVING the way it was, nose along that velocity, so
     // the reload does not silently stop a ship mid-run. escapeHeading is the
     // shared derivation npc.js's re-instantiation uses for the same job.
+    // A DISABLED hull moves on ai.driftVel, and updateDisabled seeds a fresh
+    // 6 u/s drift unless disabledInit is already set — so a same-system load
+    // has to hydrate that branch, not just ai.velocity, and it has to do it
+    // for a genuinely stopped wreck (zero) too. spawnLiveShip does the same
+    // for a re-instantiated one; without it the pre-load drift survived the
+    // load and the next sync wrote that stale motion back over the save.
+    const dv = Array.isArray(plan.vel) && plan.vel.length === 3
+      && plan.vel.every((n) => Number.isFinite(n)) ? plan.vel : null;
+    if (dv && ship.state && ship.state.disabled === true) {
+      if (ai.driftVel && typeof ai.driftVel.set === 'function') ai.driftVel.set(dv[0], dv[1], dv[2]);
+      if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(dv[0], dv[1], dv[2]);
+      ai.disabledInit = true;
+    }
     if (escapeHeading(plan, _restoreDir)) {
       const vel = plan.vel;
       if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(vel[0], vel[1], vel[2]);

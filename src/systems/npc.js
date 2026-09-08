@@ -32,7 +32,9 @@ import {
   escapeLegViable,
   escapeHeading,
   escapeRoleMode,
+  escapeYielded,
   replanEscape,
+  writeEscapeWakeSite,
   escapePublicIdentity,
 } from '../game/npc-escape.js';
 import {
@@ -270,12 +272,7 @@ function ring(center, radius, n) {
  */
 function standDownMode(record, mode) {
   if (mode !== 'hunt' && mode !== 'duel') return mode;
-  const plan = readEscape(record);
-  if (!plan) return mode;
-  const flags = plan.cond && plan.cond.flags;
-  const peace = plan.peace;
-  const yielded = (flags && flags.surrendered === true) || (peace && peace.surrenderDone === true);
-  return yielded ? 'loiter' : mode;
+  return escapeYielded(readEscape(record)) ? 'loiter' : mode;
 }
 
 function makeAi(ctx, record, startPos) {
@@ -541,17 +538,7 @@ export function stampWakeSite(live) {
   // fabricated salvage; an untagged site keeps the legacy wreck-field
   // behavior for old saves and for a flee with no route at all.
   const plan = readEscape(rec);
-  if (plan && escapeRouted(rec)) {
-    const d = plan.dest;
-    rec.wakeSite = {
-      position: [d[0], d[1], d[2]],
-      found: false,
-      kind: plan.kind,
-      to: plan.kind === 'gate' ? plan.to : null,
-      from: plan.from ?? rec.system ?? null,
-    };
-    return;
-  }
+  if (plan && escapeRouted(rec) && writeEscapeWakeSite(rec, plan, role)) return;
   // No viable refuge: the runner still went SOMEWHERE — out along its heading.
   // The trail is tagged 'evade' so wakes.js tells that story honestly. It is
   // deliberately NOT the untagged legacy site: a new no-route flight must not
@@ -608,6 +595,12 @@ function planEscapeFor(ctx, live) {
   const sysId = escapeSystemOf(ctx, live);
   if (!sysId) return null;
   const now = ctx.world ? ctx.world.time : 0;
+  const prior = readEscape(rec);
+  // writeEscapePlan advances chosenAt only when the committed destination
+  // REALLY changed, so this is the exact test for "the runner is going
+  // somewhere else now" — no allocation, and an unchanged 6 s revalidation
+  // never re-announces or re-stamps anything.
+  const chosenBefore = prior ? prior.chosenAt : null;
   const plan = replanEscape(rec, {
     sysId,
     pos: live.object.position,
@@ -616,6 +609,15 @@ function planEscapeFor(ctx, live) {
     now,
   });
   if (plan) captureCondition(plan, st, live.ai, now);
+  // The trail follows the decision: a reroute that abandons a gate must not
+  // leave a trail still naming it. One stamp per real choice, here.
+  // A first plan, a moved endpoint, or a route that turned into an evade (and
+  // back) each change where the trail leads; an unchanged revalidation does
+  // not, and must not reset `found` or re-announce.
+  if (plan && (chosenBefore === null || plan.chosenAt !== chosenBefore
+    || (prior && prior.kind !== plan.kind))) {
+    stampWakeSite(live);
+  }
   if (plan && plan.announced !== true) {
     plan.announced = true;
     if (plan.kind === 'gate') {
@@ -642,9 +644,9 @@ export function enterEscapeFlee(ctx, live, threat) {
   ai.phase = null;
   ai.intent = false;
   if (threat !== undefined) ai.fleeFrom = threat ?? null;
-  const plan = planEscapeFor(ctx, live);
-  stampWakeSite(live);
-  return plan;
+  // planEscapeFor stamps the trail for the choice it commits (including the
+  // no-route 'evade' case), so entry needs no second stamp.
+  return planEscapeFor(ctx, live);
 }
 
 /** Keep the record's snapshot equal to the live hull. Zero allocation. */
@@ -662,7 +664,9 @@ function roleModeOf(live) {
   const st = live.state;
   const ai = live.ai;
   if ((mode === 'hunt' || mode === 'duel')
-    && ((st && st.surrendered === true) || (ai && ai.surrenderDone === true))) {
+    && ((st && st.surrendered === true) || (ai && ai.surrenderDone === true)
+      || (ai && (ai.demandOutcome === 'paid' || ai.demandOutcome === 'bluffed'))
+      || escapeYielded(readEscape(live.record)))) {
     return 'loiter';
   }
   return mode;
@@ -2644,10 +2648,7 @@ function updateFlee(ctx, live, dt) {
   // Lazy entry (a save restored mid-flee, or a mode set outside the shared
   // door): commit a refuge AND stamp the matching trail, exactly as
   // enterEscapeFlee would — a flee never runs without a truthful wake.
-  if (!plan || plan.phase === 'done') {
-    plan = planEscapeFor(ctx, live);
-    stampWakeSite(live);
-  }
+  if (!plan || plan.phase === 'done') plan = planEscapeFor(ctx, live);
   if (plan && escapeRouted(rec)) {
     const arrive = escapeArriveRadius(plan);
     _aim.set(plan.dest[0], plan.dest[1], plan.dest[2]);
@@ -2657,7 +2658,7 @@ function updateFlee(ctx, live, dt) {
     // that merely drifted keeps flying the endpoint it announced.
     if (now - plan.checkedAt >= ESCAPE.revalidate) {
       const sysId = escapeSystemOf(ctx, live);
-      if (escapeLegViable(plan, sysId, live.object.position, threatPos(ctx, live))) {
+      if (escapeLegViable(plan, sysId, live.object.position, threatPos(ctx, live), rec)) {
         plan.checkedAt = now;
       } else {
         planEscapeFor(ctx, live);

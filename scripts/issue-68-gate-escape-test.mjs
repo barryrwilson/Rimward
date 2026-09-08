@@ -39,12 +39,14 @@ const { SYSTEMS, spawnLiveShip, removeLiveShip, snapshot, restore, U } = boot.bi
 const { JUMP, ESCAPE, SHIP_CLASSES, DEFENSE, applyHit } = await import('../src/game/state.js');
 const {
   chooseEscapeDestination, readEscape, escapeActive, escapeStatus,
-  escapePublicIdentity, sanitizeEscapeRecord, segmentClearance,
+  escapePublicIdentity, sanitizeEscapeRecord, segmentClearance, escapeRefugeRadius,
 } = await import('../src/game/npc-escape.js');
 const { sanitizeEvent, pushRing, EVENT_TYPES, EVENT_CAP } = await import('../src/game/agent-schema.js');
 const { recordPosition } = await import('../src/game/world.js');
 // Read-only, for the instantiation-eligibility diagnostic below.
-const { closeSpawn, spawnBlocked, visualClassFor, pirateLiveCap } = await import('../src/game/traffic-feel.js');
+const {
+  closeSpawn, spawnBlocked, visualClassFor, pirateLiveCap, stationHoldPoint, hullRadiusFor,
+} = await import('../src/game/traffic-feel.js');
 const { isShipAssetReady } = await import('../src/systems/ship-assets.js');
 const { PHY } = await import('../src/game/physics.js');
 
@@ -302,8 +304,11 @@ ctx.agent.optIn = true;
   // +z, so a runner between them has the two candidates on OPPOSITE bearings.
   // A pursuer on the station leg therefore screens that leg and only that leg
   // — the gate stays provably clear, which is what makes the pin meaningful.
-  const from = { x: STATION.x, y: STATION.y, z: STATION.z - 320 };
-  const tube = { x: STATION.x, y: STATION.y, z: STATION.z - 190 };
+  // Distances account for the escape refuge RING (it sits beyond the launch
+  // envelope, ~270-306 u out by hull), so the runner starts well outside it
+  // and the pursuer sits on the leg between the two.
+  const from = { x: STATION.x, y: STATION.y, z: STATION.z - 800 };
+  const tube = { x: STATION.x, y: STATION.y, z: STATION.z - 550 };
   const screened = chooseEscapeDestination({
     sysId: SYS,
     fromPos: from,
@@ -344,7 +349,7 @@ ctx.agent.optIn = true;
   // station hold and the single gate bear the same way, so one pursuer
   // parked on that bearing sits ahead on BOTH legs.
   const boxedFrom = { x: STATION.x + 400, y: STATION.y, z: STATION.z + 400 };
-  const boxedThreat = { x: STATION.x + 200, y: STATION.y, z: STATION.z + 200 };
+  const boxedThreat = { x: STATION.x + 300, y: STATION.y, z: STATION.z + 300 };
   const blockedAll = chooseEscapeDestination({
     sysId: SYS,
     fromPos: boxedFrom,
@@ -828,7 +833,29 @@ run(3, 'i68 section 2 cleanup');
     !!alone && alone.ai.fleeFrom !== 'player'
     && readEscape(rec2)?.threatId === hunterId,
     alone && { fleeFrom: alone.ai.fleeFrom === 'player' ? 'player' : (alone.ai.fleeFrom ? 'ship' : null) });
-  if (alone) removeLiveShip(ctx, alone);
+  // The memory has to survive the CAPTURE boundary, not just construction: the
+  // ordinary per-frame sync, the removal fold and a save all run captureCondition
+  // with a null live handle, and any one of them erasing the id/position would
+  // hand the next threat lookup the player.
+  if (alone) {
+    ctx.ships.push(alone);
+    keepOnly(rec2);
+    run(20, 'i68 alone runner ticks');
+    const afterTicks = readEscape(rec2);
+    pin('ordinary ticks do not erase the remembered hunter',
+      !!afterTicks && afterTicks.threat === 'ship' && afterTicks.threatId === hunterId
+      && Array.isArray(afterTicks.threatAt),
+      afterTicks && { threat: afterTicks.threat, id: afterTicks.threatId });
+    const k = ctx.ships.indexOf(alone);
+    if (k >= 0) ctx.ships.splice(k, 1);
+    removeLiveShip(ctx, alone);
+    const saved = JSON.parse(JSON.stringify(snapshot(ctx)));
+    const row = (saved.world.recordBanks?.[SYS] ?? []).find((r) => r.id === runnerId) ?? null;
+    pin('the fold and the save carry the hunter identity through as well',
+      !!row && !!row.escape && row.escape.threat === 'ship' && row.escape.threatId === hunterId
+      && Array.isArray(row.escape.threatAt),
+      row && row.escape && { threat: row.escape.threat, id: row.escape.threatId });
+  }
   for (const key of Object.keys(ctx.world.recordBanks ?? {})) {
     const b = ctx.world.recordBanks[key];
     for (let i = b.length - 1; i >= 0; i--) if (b[i].id === runnerId || b[i].id === hunterId) b.splice(i, 1);
@@ -959,7 +986,7 @@ run(3, 'i68 section 2 cleanup');
   keepOnly(f.rec);
   placePlayer(GATE, { x: 500, y: 0, z: 0 });
   run(30, 'i68 disabled setup');
-  const plan = readEscape(f.rec);
+  let plan = readEscape(f.rec);
   const chargeBefore = plan ? plan.charge : null;
   pin('an operational hull at the gate does start charging', (chargeBefore ?? 0) > 0, { chargeBefore });
   f.live.state.disabled = true; // FIXTURE: the disable itself, mid-charge
@@ -979,6 +1006,53 @@ run(3, 'i68 section 2 cleanup');
     drift.length() > 0.5
     && Math.hypot(plan.vel[0] - drift.x, plan.vel[1] - drift.y, plan.vel[2] - drift.z) < 1e-6,
     { vel: plan.vel, drift: [drift.x, drift.y, drift.z] });
+  // A same-system restore must put the SAVED motion back on the branch that
+  // actually moves a dark hull (ai.driftVel + disabledInit), not just on
+  // ai.velocity. FIXTURE: the live hull is given the OPPOSITE drift after the
+  // save, so a restore that misses that branch keeps flying the wrong one.
+  const blobD = JSON.parse(JSON.stringify(snapshot(ctx)));
+  f.live.ai.driftVel.set(-drift.x, -drift.y, -drift.z);
+  restore(ctx, blobD);
+  const recD = (ctx.world.recordBanks?.[SYS] ?? []).find((r) => r.id === f.rec.id) ?? null;
+  const liveD = ctx.ships.find((s) => s.record && s.record.id === f.rec.id) ?? null;
+  if (recD) keepOnly(recD);
+  const posD = liveD ? liveD.object.position.clone() : null;
+  run(1, 'i68 disabled restore tick');
+  pin('a same-system restore puts the SAVED drift back on the disabled hull',
+    !!liveD && liveD.ai.driftVel.clone().normalize().dot(drift.clone().normalize()) > 0.99
+    && liveD.object.position.clone().sub(posD).dot(drift) > 0,
+    liveD && {
+      v: [liveD.ai.driftVel.x, liveD.ai.driftVel.y, liveD.ai.driftVel.z],
+      saved: [drift.x, drift.y, drift.z],
+    });
+  // …including a genuinely STOPPED wreck: zero saved motion must be restored
+  // as zero, not ignored and re-seeded as a fresh 6 u/s drift.
+  const blobZ = JSON.parse(JSON.stringify(snapshot(ctx)));
+  for (const r of [...(blobZ.world.records ?? []), ...(blobZ.world.recordBanks?.[SYS] ?? [])]) {
+    if (r && r.id === f.rec.id && r.escape) r.escape.vel = [0, 0, 0];
+  }
+  restore(ctx, blobZ);
+  const recZ = (ctx.world.recordBanks?.[SYS] ?? []).find((r) => r.id === f.rec.id) ?? null;
+  const liveZ = ctx.ships.find((s) => s.record && s.record.id === f.rec.id) ?? null;
+  if (recZ) keepOnly(recZ);
+  const posZ = liveZ ? liveZ.object.position.clone() : null;
+  run(1, 'i68 disabled zero restore tick');
+  pin('a stopped wreck restores stopped, it is not given a fresh drift',
+    !!liveZ && liveZ.ai.driftVel.length() < 1e-6
+    && liveZ.object.position.distanceTo(posZ) < 0.5,
+    liveZ && { v: liveZ.ai.driftVel.length(), moved: liveZ.object.position.distanceTo(posZ) });
+  // Put the real drift back through the same save path and carry on with the
+  // fold pins on whichever record now owns this hull.
+  if (recZ) {
+    f.rec = recZ;
+    plan = readEscape(recZ) ?? plan; // the restore rebuilt the plan object
+  }
+  if (liveZ) {
+    f.live = liveZ;
+    liveZ.ai.driftVel.copy(drift);
+    run(1, 'i68 disabled drift resume');
+  }
+
   const driftPos = f.live.object.position.clone();
   placePlayer(driftPos, { x: U.DEINSTANTIATE_RANGE + 300, y: 0, z: 0 });
   run(4, 'i68 disabled cull');
@@ -1000,8 +1074,20 @@ run(3, 'i68 section 2 cleanup');
   // the separation gap — this pin is about the fold, not about those rules.
   const driftEnd = new THREE.Vector3(d1[0], d1[1], d1[2]);
   placePlayer(driftEnd, { x: 60, y: 0, z: 0 });
-  run(20, 'i68 disabled reacquire');
-  const backDark = ctx.ships.find((s) => s.record === f.rec) ?? null;
+  // traffic.js instantiates at most ONE record per frame and returns outright
+  // when its best candidate still needs an asset prime — and the harness's own
+  // parkAmbient keeps teleporting ambient hulls out of range, so those records
+  // are despawned and re-offered every frame. That contention is a property of
+  // the fixture environment, not of the fold, so the window is widened (still
+  // the real traffic pass, no forced spawn) and the records that actually took
+  // the slot are recorded for the failure report.
+  const slotTrace = new Set();
+  let backDark = null;
+  for (let i = 0; i < 240 && !backDark; i++) {
+    run(1, 'i68 disabled reacquire');
+    for (const s of ctx.ships) if (s.record) slotTrace.add(s.record.id);
+    backDark = ctx.ships.find((s) => s.record === f.rec) ?? null;
+  }
   pin('the wreck comes back where it drifted to, still dark and still coasting',
     !!backDark && backDark.state.disabled === true
     && backDark.ai.driftVel.length() > 0.5
@@ -1039,6 +1125,7 @@ run(3, 'i68 section 2 cleanup');
           blocked: spawnBlocked(o, visualClassFor(f.rec), ctx.ships),
           recAt: [o.x, o.y, o.z],
           player: [pp.x, pp.y, pp.z],
+          slotTook: [...slotTrace],
         };
       })());
   if (backDark) f.live = backDark;
@@ -1406,8 +1493,9 @@ let escapeEvent = null;
     },
   });
   keepOnly(f.rec);
-  // The pursuer sits squarely on both legs — this is the blocked geometry.
-  placePlayer(STATION, { x: 200, y: 0, z: 200 });
+  // The pursuer sits squarely on both legs — this is the blocked geometry,
+  // measured against the refuge ring the station leg now ends on.
+  placePlayer(STATION, { x: 300, y: 0, z: 300 });
   run(90, 'i68 no-route flee');
   const plan = readEscape(f.rec);
   const site = f.rec.wakeSite;
@@ -1967,10 +2055,13 @@ let escapeEvent = null;
   if (arrived) {
     const plan = readEscape(arrived);
     const hullBefore = plan.cond.hull;
-    // FIXTURE: mark the arrival as a hull that yielded before it ran, so the
-    // peace has something to survive. This is initial state, not an outcome.
-    plan.cond.flags.surrendered = true;
-    plan.peace = { surrenderDone: true, demandOutcome: 'paid', calmUntil: 0 };
+    // FIXTURE: exactly what a REAL paid ransom leaves behind (hail.js
+    // demandRansom / payTribute / a landed showTeeth bluff) — a demand outcome
+    // and a calm window, and NO surrender flags, because the production hail
+    // path sets none. Fabricating surrenderDone here made this pin agree with
+    // itself instead of with the game. The calm is already expired, as it
+    // would be after a 60-120 s crossing.
+    plan.peace = { demandOutcome: 'paid', calmUntil: ctx.world.time - 30 };
     const out = new THREE.Vector3();
     recordPosition(arrived, out);
     // The REAL production constructor traffic.js uses when a record enters
@@ -1982,15 +2073,370 @@ let escapeEvent = null;
         live.id === departedRec.id && live.record === arrived
         && live.state.hull === hullBefore,
         { id: live.id, hull: live.state.hull });
-      pin('the peace it bought survives the crossing — it does not wake up hunting',
+      pin('the peace it BOUGHT survives the crossing — it does not wake up hunting',
         live.ai.mode !== 'hunt' && live.ai.mode !== 'duel'
-        && live.state.surrendered === true && live.ai.demanding === false,
-        { mode: live.ai.mode, surrendered: live.state.surrendered });
+        && live.ai.demandOutcome === 'paid' && live.ai.demanding === false
+        && live.state.surrendered !== true,
+        { mode: live.ai.mode, outcome: live.ai.demandOutcome, surrendered: live.state.surrendered });
       pin('the arrival is not still fleeing: the escape resolved at the gate',
         live.ai.mode !== 'flee' && !escapeActive(arrived), { mode: live.ai.mode });
+      // …and it stays bought with the calm window long expired: no fresh
+      // demand, no shot, through real frames with the player right there.
+      ctx.ships.push(live);
+      keepOnly(arrived);
+      placePlayer(live.object.position, { x: 220, y: 0, z: 0 });
+      const peaceEvs = run(180, 'i68 paid arrival peace');
+      pin('a paid-off arrival opens no new demand and fires no shot',
+        live.ai.mode !== 'hunt' && live.ai.mode !== 'duel' && live.ai.intent !== true
+        && !peaceEvs.some((e) => e.type === 'npcFire' && e.ship === live)
+        && !peaceEvs.some((e) => e.type === 'hailOpened' && e.ship === live),
+        { mode: live.ai.mode, intent: live.ai.intent });
+      const idx = ctx.ships.indexOf(live);
+      if (idx >= 0) ctx.ships.splice(idx, 1);
       removeLiveShip(ctx, live);
     }
   }
+}
+
+// ===========================================================================
+// 14. A second encounter, a truthful reroute trail, and a clear berth
+// ===========================================================================
+{
+  // The same hull must be able to cross TWICE. Arrival keeps the plan (and the
+  // departure latch with it), so only a genuinely new committed run may clear
+  // that latch. FIXTURE: the record comes back to this system later — ordinary
+  // migration moves records between banks in both directions.
+  const rec = (ctx.world.recordBanks?.[GATE_TO] ?? []).find((r) => r.id === departedRec.id) ?? null;
+  if (!rec) {
+    pin('PREREQUISITE second episode: the crossed record is available', false);
+  } else {
+    const destBank = ctx.world.recordBanks[GATE_TO];
+    const di = destBank.indexOf(rec);
+    if (di >= 0) destBank.splice(di, 1);
+    rec.system = SYS;
+    rec.state = 'enroute';
+    rec.live = false;
+    const at = GATE.clone().add(new THREE.Vector3(30, 0, 10));
+    rec.route = [{ x: at.x, y: at.y, z: at.z }, { x: GATE.x, y: GATE.y, z: GATE.z }];
+    rec.legLens = [at.distanceTo(GATE)];
+    rec.leg = 0;
+    rec.legT = 0;
+    rec.dir = 1;
+    ctx.world.records.push(rec);
+    keepOnly(rec);
+    const departedBefore = readEscape(rec)?.departed;
+    // FIXTURE (spatial only): follow the record. It keeps walking its own route
+    // toward the gate, so a one-off staging drifts out of the ordinary
+    // close-spawn band (<= 80 u) — the branch that bypasses the pirate mix cap,
+    // which is not what this pin is about. The player is re-staged 60 u from
+    // where the record ACTUALLY is on every frame traffic looks at it, and the
+    // pre-tick distance is asserted rather than assumed.
+    const where = new THREE.Vector3();
+    let live = null;
+    let stagedD = null;
+    let stagedClose = true;
+    for (let i = 0; i < 240 && !live; i++) {
+      recordPosition(rec, where);
+      placePlayer(where, { x: 60, y: 0, z: 0 });
+      stagedD = where.distanceTo(ctx.ship.object.position);
+      if (!closeSpawn(stagedD)) stagedClose = false;
+      run(1, 'i68 second episode instantiate');
+      live = ctx.ships.find((s) => s.record === rec) ?? null;
+    }
+    pin('the reacquisition really was staged inside the close-spawn band',
+      stagedClose && Number.isFinite(stagedD) && closeSpawn(stagedD),
+      { d: stagedD, close: closeSpawn(stagedD) });
+    pin('the crossed hull comes back into the world for a second encounter',
+      !!live && departedBefore === true,
+      live ? { live: true, departedBefore } : (() => {
+        const o = new THREE.Vector3();
+        recordPosition(rec, o);
+        let pirates = 0;
+        for (const s of ctx.ships) if (s.role === 'pirate') pirates++;
+        const d = o.distanceTo(ctx.ship.object.position);
+        return {
+          departedBefore,
+          state: rec.state,
+          inRecords: ctx.world.records.includes(rec),
+          assetPrimed: isShipAssetReady(rec.faction, rec.classKey, rec.role),
+          assetPending: rec.assetPending ?? null,
+          ships: ctx.ships.length,
+          pirates,
+          pirateCap: pirateLiveCap(ctx.ships.length + 1, false),
+          d,
+          close: closeSpawn(d),
+          blocked: spawnBlocked(o, visualClassFor(rec), ctx.ships),
+        };
+      })());
+    if (live) {
+      // FIXTURE: an ordinary second encounter — a graze and a break-off, the
+      // same initial condition section 4 uses. Nothing writes a plan.
+      live.state.hull = 55;
+      live.state.screen = 0;
+      live.state.lastHitAt = ctx.world.time;
+      live.ai.mode = 'flee';
+      live.ai.fleeFrom = 'player';
+      const evs = run(600, 'i68 second crossing');
+      const again = receipts(evs, 'npcEscaped', rec.id);
+      pin('the SAME hull completes a second real crossing',
+        again.length === 1 && rec.state === 'inTransit',
+        { n: again.length, state: rec.state, phase: readEscape(rec)?.phase, charge: readEscape(rec)?.charge });
+      pin('the second crossing is one receipt, for the same identity',
+        !again[0] || (again[0].targetId === rec.id && again[0].kind === 'gate'), again[0]);
+    }
+    rec.state = 'dead';
+  }
+}
+
+{
+  // A reroute must move the TRAIL, not only the plan: a runner turned off its
+  // gate must not leave a wake still naming that gate.
+  const f = makeFixture({
+    at: GATE.clone().add(new THREE.Vector3(500, 0, 300)),
+    name: 'Turned Runner',
+    classKey: 'cutter',
+    role: 'pirate',
+    faction: 'redledger',
+    state: { hull: 50, screen: 0, lastHitAt: ctx.world.time },
+    ai: { mode: 'flee', fleeFrom: 'player' },
+  });
+  keepOnly(f.rec);
+  placePlayer(f.live.object.position, { x: 0, y: 0, z: 260 });
+  run(30, 'i68 trail entry');
+  const first = readEscape(f.rec);
+  const site0 = f.rec.wakeSite;
+  const kind0 = first && first.kind;
+  const to0 = first && first.to;
+  const dest0 = first && first.dest ? first.dest.slice() : null;
+  pin('the first committed choice stamped its own trail',
+    !!site0 && !!first && site0.kind === (first.kind ?? 'evade'), { site: site0, kind: kind0 });
+  // Hold the REAL pursuer ON the ORIGINAL committed segment every frame — 40%
+  // of the way from the hull to the endpoint it announced, so it stays ahead
+  // of the runner and inside the threat tube however fast the runner closes —
+  // until the FIRST genuine change of destination, and capture that moment.
+  const dest0V = dest0 ? new THREE.Vector3(dest0[0], dest0[1], dest0[2]) : null;
+  let changedAt = -1;
+  let clearAt = null;      // pursuer clearance to the ORIGINAL leg at that moment
+  let destAt = null;
+  let kindAt = null;
+  let toAt = null;
+  let siteAt = null;
+  let hadAlternative = false;
+  for (let i = 0; i < 900 && changedAt < 0 && dest0V; i++) {
+    const hull = f.live.object.position;
+    placePlayer(new THREE.Vector3().lerpVectors(hull, dest0V, 0.4));
+    const c = segmentClearance(hull.x, hull.y, hull.z, dest0V.x, dest0V.y, dest0V.z,
+      ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z);
+    const clearance = { dist: c.dist, t: c.t };
+    run(1, 'i68 trail reroute');
+    const p = readEscape(f.rec);
+    if (!p) break;
+    const moved = p.kind !== kind0 || p.to !== to0 || !p.dest
+      || Math.hypot(p.dest[0] - dest0[0], p.dest[1] - dest0[1], p.dest[2] - dest0[2]) > 1;
+    if (moved) {
+      changedAt = i;
+      clearAt = clearance;
+      destAt = p.dest ? p.dest.slice() : null;
+      kindAt = p.kind;
+      toAt = p.to;
+      siteAt = f.rec.wakeSite ? { ...f.rec.wakeSite, position: [...f.rec.wakeSite.position] } : null;
+      // A clear alternative really existed from where the hull stood.
+      const alt = chooseEscapeDestination({
+        sysId: SYS,
+        fromPos: { x: f.live.object.position.x, y: f.live.object.position.y, z: f.live.object.position.z },
+        threatPos: {
+          x: ctx.ship.object.position.x, y: ctx.ship.object.position.y, z: ctx.ship.object.position.z,
+        },
+        stationPos: DEF.station.position,
+        classKey: 'cutter',
+      });
+      hadAlternative = alt.ok === true;
+    }
+  }
+  pin('the pursuer really turned the runner onto a different destination',
+    changedAt >= 0 && !!clearAt && clearAt.dist < ESCAPE.threatBubble
+    && clearAt.t > ESCAPE.threatAheadMin && hadAlternative,
+    { changedAt, clearAt, was: { kind: kind0, to: to0 }, now: { kind: kindAt, to: toAt } });
+  const wantKind = kindAt ?? 'evade';
+  pin('the trail names where it is going NOW, not the leg it abandoned',
+    !!siteAt && siteAt.kind === wantKind
+    && (wantKind !== 'gate' || siteAt.to === toAt)
+    && siteAt.found === false
+    && (wantKind === 'evade' || (!!destAt
+      && Math.hypot(siteAt.position[0] - destAt[0], siteAt.position[1] - destAt[1],
+        siteAt.position[2] - destAt[2]) < 0.5)),
+    { site: siteAt, dest: destAt });
+  // …and an UNCHANGED revalidation leaves the trail alone: pressure gone, the
+  // committed leg stays viable, so nothing re-stamps it or clears `found`.
+  if (f.rec.wakeSite) f.rec.wakeSite.found = true;
+  const heldSite = f.rec.wakeSite ? [...f.rec.wakeSite.position] : null;
+  placePlayer(f.live.object.position, { x: ESCAPE.pressureRange + 1200, y: 0, z: 0 });
+  run(600, 'i68 trail steady'); // several revalidate cadences, no real change
+  pin('an unchanged revalidation never re-stamps the trail or clears found',
+    !!f.rec.wakeSite && f.rec.wakeSite.found === true && !!heldSite
+    && Math.hypot(f.rec.wakeSite.position[0] - heldSite[0],
+      f.rec.wakeSite.position[1] - heldSite[1],
+      f.rec.wakeSite.position[2] - heldSite[2]) < 1e-6,
+    f.rec.wakeSite);
+  dropFixture(f);
+  run(3, 'i68 14b cleanup');
+}
+
+{
+  // The berth. An escape refuge is PARKED, so it has to sit outside the whole
+  // departure envelope the berth actually checks — the release march plus the
+  // five-second hands-off creep run — on every bearing and for the largest
+  // hull. This is the Redmarch regression: a hold 83 u out held the berth
+  // indefinitely with planLaunch blocker=ship.
+  const { planLaunch } = await import('../src/game/launch-clearance.js');
+  const f = makeFixture({
+    at: STATION.clone().add(new THREE.Vector3(600, 0, 0)),
+    name: 'Berth Blocker',
+    classKey: 'freighter',
+    role: 'trader',
+  });
+  keepOnly(f.rec);
+  const putBerth = (d, r) => {
+    ctx.ship.object.position.set(STATION.x + d[0] * r, STATION.y + d[1] * r, STATION.z + d[2] * r);
+    ctx.ship.velocity.set(0, 0, 0);
+    ctx.ship.speed = 0;
+  };
+  const putHull = (d, r) => {
+    f.live.object.position.set(STATION.x + d[0] * r, STATION.y + d[1] * r, STATION.z + d[2] * r);
+  };
+  // Stage the player AT the berth first, then let ambient park: a player left
+  // out at the previous fixture would put this hull past the cull range and a
+  // vanished ship reads as a clear lane, not as a proof.
+  putBerth([1, 0, 0], 36);
+  run(2, 'i68 berth settle');
+  // Baseline: the ORDINARY inner hold really does hold the berth. The ship
+  // stays in ctx.ships throughout — nothing is removed to make this pass, and
+  // both checks assert it is still there. planLaunch reuses one record, so
+  // every result is copied before the next call.
+  const oldHold = stationHoldPoint(DEF.station.position, 'freighter',
+    { x: STATION.x + 600, y: STATION.y, z: STATION.z });
+  f.live.object.position.set(oldHold.x, oldHold.y, oldHold.z);
+  const liveAtBaseline = ctx.ships.includes(f.live) && f.live.state.destroyed !== true;
+  const raw = planLaunch(ctx);
+  const before = { ok: raw.ok, token: raw.token, blocker: raw.blocker };
+  pin('a hull at the OLD inner hold really does hold the berth (the regression)',
+    liveAtBaseline && before.ok === false && before.token === 'blocked' && before.blocker === 'ship',
+    {
+      ...before,
+      liveAtBaseline,
+      ships: ctx.ships.length,
+      holdR: Math.hypot(oldHold.x - STATION.x, oldHold.z - STATION.z),
+      station: [ctx.station?.position?.x, ctx.station?.position?.y, ctx.station?.position?.z],
+      player: [ctx.ship.object.position.x, ctx.ship.object.position.y, ctx.ship.object.position.z],
+    });
+  // …and at the most INWARD legal arrival position on the refuge ring the same
+  // hull never does, from an inner berth or the dock-range edge, on any bearing.
+  const inward = escapeRefugeRadius('freighter', 'freighter') - ESCAPE.stationArrive;
+  let clear = ctx.ships.includes(f.live) && f.live.state.destroyed !== true;
+  let worst = clear ? '' : 'fixture hull is not live';
+  for (const d of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0.7071, 0, 0.7071], [-0.6, 0, -0.8]]) {
+    putHull(d, inward);
+    for (const r of [36, U.DOCK_RANGE - 1]) {
+      putBerth(d, r);
+      const p = planLaunch(ctx);
+      if (p.ok !== true || !ctx.ships.includes(f.live)) {
+        clear = false;
+        worst = `${p.token}/${p.blocker} dir=${d.join(',')} berth=${r} live=${ctx.ships.includes(f.live)}`;
+      }
+    }
+  }
+  pin('a hull parked on the refuge ring never holds the berth, on any bearing',
+    clear, { worst, inward, refuge: escapeRefugeRadius('freighter', 'freighter') });
+  // Every shipped class keeps the SAME guarantee by construction: the ring is
+  // the lane bound plus that hull's own radius, so the clear distance left
+  // beyond the lane — after the whole arrival tolerance and the hull — is
+  // class-independent and equal to the freighter case proven physically above.
+  // A masked Q-ship is measured on the larger of its cover and real hulls.
+  const clearOf = (cls) => escapeRefugeRadius(cls, cls) - ESCAPE.stationArrive - hullRadiusFor(cls);
+  const ref = clearOf('freighter');
+  let ladder = true;
+  for (const cls of Object.keys(SHIP_CLASSES)) {
+    if (Math.abs(clearOf(cls) - ref) > 1e-6) {
+      ladder = false;
+      worst = `${cls}:${clearOf(cls)}`;
+    }
+  }
+  pin('the ring scales with the hull, so every shipped class keeps that clearance',
+    ladder && escapeRefugeRadius('light', 'freighter') === escapeRefugeRadius('freighter', 'freighter'),
+    { worst, ref });
+  dropFixture(f);
+  run(3, 'i68 14c cleanup');
+}
+
+{
+  // 14d. A LEGACY inner hold — saved before the refuge ring existed — must fly
+  // out to a legal one. It keeps its identity, its damage, the player's lock
+  // and its ONE arrival receipt: relocating for clearance is the same shelter,
+  // not a new one. Nothing is teleported and nothing is powered.
+  const holdStart = STATION.clone().add(new THREE.Vector3(500, 0, 500));
+  const f = makeFixture({
+    at: holdStart,
+    name: 'Legacy Hold',
+    classKey: 'cutter',
+    role: 'trader',
+    faction: 'freehold',
+    state: { hull: 44, screen: 0, lastHitAt: ctx.world.time, lastCombatAt: ctx.world.time },
+  });
+  keepOnly(f.rec);
+  placePlayer(holdStart, { x: 300, y: 0, z: 300 });
+  const arriveEvs = run(900, 'i68 legacy hold arrival');
+  const settled = readEscape(f.rec);
+  pin('the runner reached a legal refuge and sheltered exactly once',
+    !!settled && settled.kind === 'station' && settled.phase === 'hold'
+    && receipts(arriveEvs, 'npcSheltered', f.rec.id).length === 1,
+    settled && { kind: settled.kind, phase: settled.phase });
+  // FIXTURE: an OLD save. The blob's committed hold is rewritten to the
+  // pre-ring inner point — exactly what a save written before this issue
+  // carries — and restored through the real save path.
+  const legacyPoint = stationHoldPoint(DEF.station.position, 'cutter',
+    { x: holdStart.x, y: holdStart.y, z: holdStart.z });
+  const blob = JSON.parse(JSON.stringify(snapshot(ctx)));
+  for (const r of [...(blob.world.records ?? []), ...(blob.world.recordBanks?.[SYS] ?? [])]) {
+    if (r && r.id === f.rec.id && r.escape) {
+      r.escape.dest = [legacyPoint.x, legacyPoint.y, legacyPoint.z];
+      r.escape.pos = [legacyPoint.x, legacyPoint.y, legacyPoint.z];
+    }
+  }
+  restore(ctx, blob);
+  const rec2 = (ctx.world.recordBanks?.[SYS] ?? []).find((r) => r.id === f.rec.id) ?? null;
+  let live2 = ctx.ships.find((s) => s.record && s.record.id === f.rec.id) ?? null;
+  if (rec2) keepOnly(rec2);
+  const hullBefore = live2 ? live2.state.hull : null;
+  if (live2) ctx.targets.current = live2; // the ordinary lock a player holds
+  const legacyR = Math.hypot(legacyPoint.x - STATION.x, legacyPoint.z - STATION.z);
+  pin('the restored legacy hold really is inside the launch envelope',
+    !!rec2 && legacyR < escapeRefugeRadius('cutter', 'cutter') - ESCAPE.stationArrive,
+    { legacyR, ring: escapeRefugeRadius('cutter', 'cutter') });
+  const relocEvs = run(1200, 'i68 legacy hold relocation');
+  live2 = ctx.ships.find((s) => s.record === rec2) ?? live2;
+  const after = rec2 ? readEscape(rec2) : null;
+  const atR = live2
+    ? Math.hypot(live2.object.position.x - STATION.x, live2.object.position.y - STATION.y,
+      live2.object.position.z - STATION.z)
+    : null;
+  pin('an unsafe legacy hold physically relocates out to the ring',
+    !!live2 && !!after && atR >= escapeRefugeRadius('cutter', 'cutter') - ESCAPE.stationArrive - 1,
+    { atR, ring: escapeRefugeRadius('cutter', 'cutter'), phase: after && after.phase });
+  pin('relocating for clearance is the SAME shelter: no second arrival receipt',
+    receipts(relocEvs, 'npcSheltered', rec2 ? rec2.id : '').length === 0
+    && !!after && after.sheltered === true,
+    { n: receipts(relocEvs, 'npcSheltered', rec2 ? rec2.id : '').length, sheltered: after && after.sheltered });
+  pin('the move kept its damage, its identity and the player\'s lock',
+    !!live2 && live2.state.hull === hullBefore && live2.record === rec2
+    && ctx.targets.current === live2 && live2.state.disabled !== true,
+    { hull: live2 && live2.state.hull, was: hullBefore, locked: ctx.targets.current === live2 });
+  ctx.targets.current = null;
+  if (rec2) {
+    f.rec = rec2;
+    f.live = live2;
+  }
+  dropFixture(f);
+  run(3, 'i68 14d cleanup');
 }
 
 for (const rec of fixtureRecords) {
