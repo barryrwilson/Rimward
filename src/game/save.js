@@ -18,7 +18,7 @@ import { noteSessionEvent } from './agent-schema.js';
 import { disengageFlee } from './agent-flee.js';
 import {
   sanitizeEscapeRecord, readEscape, escapeActive, applyCondition, applyPeace,
-  captureCondition, escapeRoleMode,
+  captureCondition, escapeRoleMode, escapeYielded,
 } from './npc-escape.js';
 // The re-entry hydration both paths share (issue #68). npc.js does not import
 // save.js, so this direction adds no cycle.
@@ -1318,7 +1318,24 @@ function healLiveRecords(ctx) {
     }
     applyCondition(plan, ship.state);
     applyPeace(plan, ai);
-    if (!escapeActive(rec)) continue;
+    if (!escapeActive(rec)) {
+      // The saved plan is FINISHED (it departed, or it sheltered and dwelt).
+      // A hull still flying a flee from a LATER encounter must not carry that
+      // intent across the load: the next tick would treat the completed plan
+      // as a lazy entry and overwrite the save with a fresh escape. It stands
+      // down exactly as a resolved escape does — ordinary role work, or the
+      // peace this hull actually bought, which stays peaceful. No position and
+      // no motion is applied for a completed plan.
+      if (ai.mode === 'flee') {
+        const base = escapeRoleMode(ai.role ?? ship.role);
+        ai.mode = (base === 'hunt' || base === 'duel') && escapeYielded(plan) ? 'loiter' : base;
+        ai.fleeFrom = null;
+        ai.target = null;
+        ai.intent = false;
+        ai.phase = null;
+      }
+      continue;
+    }
     applyEscapeIntent(ctx, plan, ship);
     // Only an ACTIVE plan owns the hull's position; a resolved one keeps its
     // condition snapshot but must never teleport a flying ship.

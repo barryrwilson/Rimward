@@ -539,6 +539,19 @@ export function writeEscapePlan(rec, choice, info) {
     plan.updatedAt = now;
     rec.escape = plan;
   }
+  // A genuinely NEW episode. The previous run RESOLVED — arrival and shelter
+  // both keep the plan, and its terminal/shelter latches with it — so those
+  // latches belong to the old run and must not refuse or silence this one.
+  // Cleared BEFORE the route/no-route split: an episode whose first decision
+  // is 'blocked' still ends the old run, and leaving `departed` set there
+  // refused every later real crossing this record could ever make. A hull
+  // still mid-crossing is untouched: it has not finished the run it is on, and
+  // repeats within one run never see phase 'done', so idempotence stands.
+  if (plan.phase === 'done' && rec.state !== 'inTransit') {
+    plan.departed = false;
+    plan.sheltered = false;
+    plan.dwellUntil = 0;
+  }
   const routed = !!(choice && choice.ok);
   // The station hold is derived from the runner's own bearing, so a hull that
   // moved a few units recomputes a point a few units away. That is the SAME
@@ -575,16 +588,6 @@ export function writeEscapePlan(rec, choice, info) {
   plan.checkedAt = now;
   plan.updatedAt = now;
   if (routed) {
-    // A genuinely NEW escape episode: the previous run resolved (arrival keeps
-    // the plan, and its departure latch with it) and this record is committing
-    // to a fresh route. Clear the terminal receipt latch HERE and only here —
-    // a restore, a revalidation or a re-commit of the same run never reaches a
-    // 'done' phase, so the old crossing stays idempotent.
-    if (plan.phase === 'done') {
-      if (plan.departed === true) plan.departed = false;
-      plan.sheltered = false;
-      plan.dwellUntil = 0;
-    }
     if (changed) {
       plan.chosenAt = now;
       plan.announced = false;

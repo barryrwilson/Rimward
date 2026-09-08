@@ -43,6 +43,10 @@ const {
 } = await import('../src/game/npc-escape.js');
 const { sanitizeEvent, pushRing, EVENT_TYPES, EVENT_CAP } = await import('../src/game/agent-schema.js');
 const { recordPosition } = await import('../src/game/world.js');
+// The ONE production flee entry (hail.js capitulation and the trader/miner
+// panic path both call it): used where a decision boundary must be exercised
+// at an exact geometry rather than waited for on the revalidate cadence.
+const { enterEscapeFlee } = await import('../src/systems/npc.js');
 // Read-only, for the instantiation-eligibility diagnostic below.
 const {
   closeSpawn, spawnBlocked, visualClassFor, pirateLiveCap, stationHoldPoint, hullRadiusFor,
@@ -2517,6 +2521,192 @@ let escapeEvent = null;
   }
   dropFixture(f);
   run(3, 'i68 14d cleanup');
+}
+
+// ===========================================================================
+// 15. Terminal-latch, trail-truth and restore edges
+// ===========================================================================
+{
+  // 15a. A new episode whose FIRST decision is 'blocked' still ends the old
+  // run. If the terminal latch survives that, every later real crossing this
+  // record could ever make is refused for ever.
+  const boxed = STATION.clone().add(new THREE.Vector3(400, 0, 400));
+  const f = makeFixture({
+    at: boxed,
+    name: 'Twice Blocked',
+    classKey: 'cutter',
+    role: 'pirate',
+    faction: 'redledger',
+    state: { hull: 46, screen: 0, lastHitAt: ctx.world.time },
+    ai: { mode: 'flee', fleeFrom: 'player' },
+  });
+  keepOnly(f.rec);
+  placePlayer(STATION, { x: 300, y: 0, z: 300 }); // squarely on both legs
+  run(6, 'i68 blocked entry');
+  const plan = readEscape(f.rec);
+  // FIXTURE: the state a SURVIVING prior escape leaves behind — the same
+  // persistent plan, resolved, with its departure already receipted.
+  if (plan) {
+    plan.phase = 'done';
+    plan.departed = true;
+    plan.sheltered = true;
+  }
+  // The decision boundary is tested AT the authored geometry through the real
+  // flee entry, not waited for on the 6 s revalidate cadence: the hull is at
+  // the boxed point and the pursuer is on every leg out of it, so this new
+  // episode's FIRST choice is genuinely blocked.
+  f.live.object.position.copy(boxed);
+  placePlayer(STATION, { x: 300, y: 0, z: 300 });
+  enterEscapeFlee(ctx, f.live, 'player');
+  pin('a new episode that opens BLOCKED still clears the old terminal latch',
+    !!plan && plan.phase === 'evade' && plan.kind === null
+    && plan.departed === false && plan.sheltered === false,
+    plan && {
+      phase: plan.phase, kind: plan.kind, reason: plan.reason,
+      departed: plan.departed, sheltered: plan.sheltered,
+    });
+  // …and the crossing it goes on to make is real: clear the obstruction, put
+  // it at the bore, enter through the same production door, and let the game
+  // fly, spool and depart on its own.
+  f.live.object.position.copy(GATE).add(new THREE.Vector3(25, 0, 10));
+  placePlayer(GATE, { x: 500, y: 0, z: 400 });
+  enterEscapeFlee(ctx, f.live, 'player');
+  const evs = run(600, 'i68 blocked then crossing');
+  const crossed = receipts(evs, 'npcEscaped', f.rec.id);
+  pin('and the episode that began blocked can still complete a REAL crossing',
+    crossed.length === 1 && f.rec.state === 'inTransit'
+    && readEscape(f.rec)?.departed === true,
+    { n: crossed.length, state: f.rec.state, phase: readEscape(f.rec)?.phase });
+  f.rec.state = 'dead';
+  dropFixture(f);
+  run(3, 'i68 15a cleanup');
+}
+
+{
+  // 15b. A gate trail left standing after the runner LOST that route is a lie.
+  const f = makeFixture({
+    at: GATE.clone().add(new THREE.Vector3(400, 0, 260)),
+    name: 'Lost The Lane',
+    classKey: 'cutter',
+    role: 'pirate',
+    faction: 'redledger',
+    state: { hull: 48, screen: 0, lastHitAt: ctx.world.time },
+    ai: { mode: 'flee', fleeFrom: 'player' },
+  });
+  keepOnly(f.rec);
+  // A clear lane first: the real entry commits to the gate and stamps it.
+  placePlayer(f.live.object.position, { x: 0, y: 0, z: 300 });
+  enterEscapeFlee(ctx, f.live, 'player');
+  const plan = readEscape(f.rec);
+  const gateSite = f.rec.wakeSite ? { ...f.rec.wakeSite, position: [...f.rec.wakeSite.position] } : null;
+  pin('the runner committed to a gate and the trail says so',
+    !!plan && plan.kind === 'gate' && !!gateSite && gateSite.kind === 'gate'
+    && gateSite.to === plan.to,
+    { kind: plan && plan.kind, site: gateSite });
+  // Now box it, at the authored blocked geometry, through the same door: from
+  // beyond the station every leg bears the same way, so one pursuer parked on
+  // that bearing screens them all and no route is left.
+  f.live.object.position.copy(STATION).add(new THREE.Vector3(400, 0, 400));
+  placePlayer(STATION, { x: 300, y: 0, z: 300 });
+  enterEscapeFlee(ctx, f.live, 'player');
+  const now = readEscape(f.rec);
+  const site = f.rec.wakeSite;
+  pin('losing the route replaces the obsolete gate trail with the truth',
+    !!now && now.kind === null && now.phase === 'evade'
+    && !!site && site.kind === 'evade' && site.to === null && site.found === false
+    && (!gateSite || Math.hypot(site.position[0] - gateSite.position[0],
+      site.position[1] - gateSite.position[1],
+      site.position[2] - gateSite.position[2]) > 1),
+    { phase: now && now.phase, site, was: gateSite });
+  // The SAME blocked decision again is not a new one: the trail it already
+  // stamped stands, discovery included.
+  if (f.rec.wakeSite) f.rec.wakeSite.found = true; // FIXTURE: a discovered site
+  const held = f.rec.wakeSite;
+  enterEscapeFlee(ctx, f.live, 'player');
+  pin('re-deciding the same no-route does not re-stamp or undiscover the trail',
+    f.rec.wakeSite === held && !!held && held.found === true && held.kind === 'evade',
+    f.rec.wakeSite);
+  dropFixture(f);
+  run(3, 'i68 15b cleanup');
+}
+
+{
+  // 15c. A restored COMPLETED escape owns the hull's intent. Loading an older
+  // save while a later encounter is in progress must not leave the hull flying
+  // that later flee — the next tick would treat the finished plan as a lazy
+  // entry and overwrite the save with a fresh escape.
+  const f = makeFixture({
+    at: STATION.clone().add(new THREE.Vector3(700, 0, 500)),
+    name: 'Bought And Done',
+    classKey: 'cutter',
+    role: 'pirate',
+    faction: 'redledger',
+    state: { hull: 52, screen: 0, lastHitAt: ctx.world.time },
+    ai: { mode: 'flee', fleeFrom: 'player' },
+  });
+  keepOnly(f.rec);
+  placePlayer(f.live.object.position, { x: 300, y: 0, z: 0 });
+  run(30, 'i68 completed escape entry');
+  // FIXTURE: the peace this hull bought earlier (what a real payTribute
+  // leaves: an outcome and a calm window, no surrender flag) and the resolved
+  // state a station dwell or a migrated arrival ends in.
+  f.live.ai.demandOutcome = 'paid';
+  f.live.ai.calmUntil = ctx.world.time + 60;
+  run(2, 'i68 peace capture');
+  const donePlan = readEscape(f.rec);
+  if (donePlan) {
+    donePlan.phase = 'done';
+    donePlan.reason = 'sheltered';
+  }
+  f.live.ai.mode = 'loiter';
+  f.live.ai.fleeFrom = null;
+  const hullSaved = f.live.state.hull;
+  const blob = JSON.parse(JSON.stringify(snapshot(ctx)));
+  pin('the snapshot carries a COMPLETED escape and the peace it bought',
+    (() => {
+      const row = (blob.world.recordBanks?.[SYS] ?? []).find((r) => r.id === f.rec.id);
+      return !!row && !!row.escape && row.escape.phase === 'done'
+        && !!row.escape.peace && row.escape.peace.demandOutcome === 'paid';
+    })());
+  // A LATER encounter, then the older save is loaded on top of it.
+  ctx.world.time += 10;
+  f.live.state.lastHitAt = ctx.world.time;
+  f.live.ai.mode = 'flee';
+  f.live.ai.fleeFrom = 'player';
+  run(20, 'i68 later encounter');
+  pin('the later encounter really is a new, active escape',
+    escapeActive(f.rec) && f.live.ai.mode === 'flee',
+    { phase: readEscape(f.rec)?.phase, mode: f.live.ai.mode });
+  restore(ctx, blob);
+  const rec2 = (ctx.world.recordBanks?.[SYS] ?? []).find((r) => r.id === f.rec.id) ?? null;
+  const live2 = ctx.ships.find((s) => s.record && s.record.id === f.rec.id) ?? null;
+  if (rec2) keepOnly(rec2);
+  pin('the restore stands the stale flee down immediately',
+    !!rec2 && readEscape(rec2)?.phase === 'done'
+    && (!live2 || live2.ai.mode !== 'flee'),
+    { phase: rec2 && readEscape(rec2)?.phase, mode: live2 && live2.ai.mode });
+  run(1, 'i68 restored completed tick');
+  const after = rec2 ? readEscape(rec2) : null;
+  pin('and the next tick does NOT overwrite the completed saved plan',
+    !!after && after.phase === 'done' && !escapeActive(rec2),
+    after && { phase: after.phase, kind: after.kind });
+  pin('the restored hull keeps its condition and its bought peace, not a hunt',
+    !!after && after.cond && after.cond.hull === hullSaved
+    && after.peace && after.peace.demandOutcome === 'paid'
+    && (!live2 || (live2.ai.mode !== 'hunt' && live2.ai.mode !== 'duel'
+      && live2.ai.intent !== true && live2.ai.fleeFrom === null)),
+    {
+      hull: after && after.cond && after.cond.hull,
+      was: hullSaved,
+      mode: live2 && live2.ai.mode,
+      outcome: after && after.peace && after.peace.demandOutcome,
+    });
+  if (rec2) {
+    f.rec = rec2;
+    f.live = live2;
+  }
+  dropFixture(f);
+  run(3, 'i68 15c cleanup');
 }
 
 for (const rec of fixtureRecords) {

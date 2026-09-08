@@ -630,11 +630,14 @@ function planEscapeFor(ctx, live) {
   if (!sysId) return null;
   const now = ctx.world ? ctx.world.time : 0;
   const prior = readEscape(rec);
-  // writeEscapePlan advances chosenAt only when the committed destination
-  // REALLY changed, so this is the exact test for "the runner is going
-  // somewhere else now" — no allocation, and an unchanged 6 s revalidation
-  // never re-announces or re-stamps anything.
+  // SCALARS, captured before the replan: writeEscapePlan reuses and mutates
+  // this very object, so anything read from it afterwards is the new value and
+  // can never disagree with itself. writeEscapePlan advances chosenAt only when
+  // the committed destination REALLY changed, so these two are the exact test
+  // for "the runner is going somewhere else now" — no allocation, and an
+  // unchanged 6 s revalidation still re-announces and re-stamps nothing.
   const chosenBefore = prior ? prior.chosenAt : null;
+  const priorKind = prior ? prior.kind : undefined;
   const plan = replanEscape(rec, {
     sysId,
     pos: live.object.position,
@@ -646,10 +649,11 @@ function planEscapeFor(ctx, live) {
   // The trail follows the decision: a reroute that abandons a gate must not
   // leave a trail still naming it. One stamp per real choice, here.
   // A first plan, a moved endpoint, or a route that turned into an evade (and
-  // back) each change where the trail leads; an unchanged revalidation does
-  // not, and must not reset `found` or re-announce.
+  // back) each change where the trail leads — a gate trail left standing after
+  // the runner lost that route is a lie. An unchanged revalidation changes
+  // neither scalar, so it never resets `found` or re-announces.
   if (plan && (chosenBefore === null || plan.chosenAt !== chosenBefore
-    || (prior && prior.kind !== plan.kind))) {
+    || plan.kind !== priorKind)) {
     stampWakeSite(live);
   }
   if (plan && plan.announced !== true) {
