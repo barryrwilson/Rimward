@@ -2761,6 +2761,37 @@ function makeHuntJob(ctx, sysId, slot, rec) {
   };
 }
 
+/**
+ * Issue #68: did the contracted quarry cross a gate OUT of the contract
+ * system? Local hunt contracts resolve only in their origin bank, so an
+ * escapee must fail the contract with a clear reason instead of silently
+ * vanishing off the board. Checks the origin bank first (a hull mid-crossing
+ * still rides its source bank), then the other existing banks for a record
+ * that already arrived elsewhere. Never generates a bank, and reads only the
+ * durable departure stamp — never a record's current whereabouts.
+ */
+function huntQuarryEscapedSystem(ctx, job, origin) {
+  if (!origin || typeof job?.recordId !== 'string' || !job.recordId) return false;
+  // The verdict rides ONE durable private field: world.js stamps
+  // rec.escapedFrom at the validated departure. It travels with the record,
+  // survives a reload, and says only "this hull crossed out of that system" —
+  // nothing about where it is now, so the board learns no galaxy position the
+  // player never witnessed.
+  const escapedOut = (rec) => rec.state !== 'dead' && rec.state !== 'captured'
+    && rec.escapedFrom === origin;
+  const local = huntRecordInBank(huntBank(ctx, origin), job.recordId);
+  if (local) return escapedOut(local);
+  const banks = ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) return false;
+  for (const sysId in banks) {
+    if (!Object.hasOwn(banks, sysId)) continue;
+    const rec = huntRecordInBank(banks[sysId], job.recordId);
+    if (!rec) continue;
+    return escapedOut(rec);
+  }
+  return false;
+}
+
 function huntQuarryGone(rec, origin) {
   if (!rec) return true;
   if (rec.state === 'dead' || rec.state === 'captured') return true;
@@ -3936,7 +3967,15 @@ function tickRecoveryCollect(ctx) {
   }
 }
 
-/** Every-frame event scan for the patrol contract (cheap: few events). */
+/**
+ * Every-frame event scan for the patrol contract (cheap: few events).
+ *
+ * Issue #68: the escape receipts are deliberately NOT counted here. A pirate
+ * that yields and then runs already scored its npcSurrendered (or npcDisabled)
+ * tally the moment it stood down — crediting npcEscaped as well would pay the
+ * same yielding hull twice for one encounter, and a hull that merely left the
+ * system was never a patrol victory in the first place.
+ */
 function tickPatrolJob(ctx) {
   for (const job of ctx.world.jobs) {
     if (job.kind !== 'patrol' || job.state !== 'accepted') continue;
@@ -4003,6 +4042,24 @@ function tickDeliveryJobs(ctx, ui, render) {
         continue;
       }
       if (job.state !== 'accepted') continue;
+      // Issue #68: the quarry ran for a gate and left the contract system.
+      // That is a real, communicated outcome — a failed local contract with
+      // NO bounty and NO reward — not a silent disappearance. Free pursuit
+      // across the physical gate is still possible; the CONTRACT is what ends
+      // at the system line. Runs before the generic missing-record branch so
+      // the player is told why.
+      if (origin && huntQuarryEscapedSystem(ctx, job, origin)) {
+        job.state = 'failed';
+        noteJobOutcome(ctx, job, 'escaped');
+        const escapedName = huntCardName(ctx, job);
+        const whereName = (Object.hasOwn(SYSTEMS, origin) && SYSTEMS[origin].name) || origin;
+        ctx.emit('commLine', {
+          text: `Hunt contract failed — ${escapedName} crossed the gate out of ${whereName}. No bounty posted.`,
+        });
+        replaceHuntJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
       if (!origin || !rec) {
         job.state = 'failed';
         replaceHuntJob(ctx, job);

@@ -14,7 +14,30 @@ import {
   HIDDEN_MOUNTS,
   ORIGIN_ARCS,
   MINING_LASERS,
+  SYSTEMS,
+  ESCAPE,
 } from '../game/state.js';
+import {
+  readEscape,
+  escapeActive,
+  escapeRouted,
+  finishEscape,
+  cancelEscape,
+  captureCondition,
+  captureEscapeLive,
+  applyCondition,
+  syncCondResolve,
+  tickEscape,
+  escapeArriveRadius,
+  escapeLegViable,
+  escapeHeading,
+  escapeRoleMode,
+  replanEscape,
+  escapePublicIdentity,
+} from '../game/npc-escape.js';
+import {
+  beginEscapeTransit, systemDisplayName, resumeEscapeRoute, emitSheltered,
+} from '../game/world.js';
 import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod, spawnSurvivorPod } from '../game/pods.js';
@@ -45,7 +68,13 @@ import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
  *   anchor?: Vector3 }
  *
  * AI modes: route (trader), loiter (patrol), hunt (pirate), duel (ace),
- * mine (miner), plus surrender modes flee/drift. Hostiles telegraph ≥3 s before the first
+ * mine (miner), plus surrender modes flee/drift. Issue #68: 'flee' is owned by
+ * an escape plan on the RECORD (game/npc-escape.js) — a chosen physical gate
+ * or the station holding lane, its condition snapshot, and its phase. The plan
+ * survives range culling, re-instantiation, save/restore and the crossing
+ * itself: enterEscapeFlee() is the one entry point, removeLiveShip() is the
+ * one capture point, and spawnLiveShip() restores condition and peace instead
+ * of handing back a healed hull. Hostiles telegraph ≥3 s before the first
  * shot (§6.1): direct approach + flashing engine glow + a commLine. Fire is
  * emitted as 'npcFire' { ship, weapon:'cannon'|'missile'|'turret', target } — combat.js
  * aims at target ('player' or a live ship) and spawns the projectile.
@@ -79,6 +108,7 @@ const _aimAvoid = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _toT = new THREE.Vector3();
 const _away = new THREE.Vector3();
+const _threatAt = new THREE.Vector3(); // last-known pursuer position (issue #68)
 const _q = new THREE.Quaternion();
 const _bodies = { count: 0, items: [] };
 let _gax = 0;
@@ -230,15 +260,35 @@ function ring(center, radius, n) {
   return pts;
 }
 
+/**
+ * Issue #68: a hull whose retained escape snapshot says it already yielded
+ * (capitulation, ransom, tribute, a landed bluff) does not resume a hunt on
+ * re-instantiation or on arrival across a gate. It keeps the ambient loiter
+ * behavior instead — the peace the player bought survives the fold.
+ * Un-yielded runners are untouched, and no other surrender alternative
+ * changes: this reads the snapshot only, never rewrites an outcome.
+ */
+function standDownMode(record, mode) {
+  if (mode !== 'hunt' && mode !== 'duel') return mode;
+  const plan = readEscape(record);
+  if (!plan) return mode;
+  const flags = plan.cond && plan.cond.flags;
+  const peace = plan.peace;
+  const yielded = (flags && flags.surrendered === true) || (peace && peace.surrenderDone === true);
+  return yielded ? 'loiter' : mode;
+}
+
 function makeAi(ctx, record, startPos) {
   const role = record.role ?? 'trader';
-  const mode = role === 'pirate' ? 'hunt'
-    : role === 'ace' ? 'duel'
-    : role === 'trader' ? 'route'
-    : role === 'miner' ? 'mine'
-    : 'loiter';
+  const mode = escapeRoleMode(role);
+  // Issue #68: a record still carrying an active escape resumes it. The plan
+  // — not a fresh role default — is the hull's intent through cull,
+  // re-instantiation, save/restore and the crossing itself. A RESOLVED escape
+  // still stands the hull down (see standDownMode) so a pirate that yielded
+  // and ran cannot pop back, or arrive across a gate, freshly hostile.
+  const escaping = escapeActive(record);
   const ai = {
-    mode,
+    mode: escaping ? 'flee' : standDownMode(record, mode),
     role,
     t: 0,
     phase: null, // null | 'telegraph' | 'attack'
@@ -284,6 +334,14 @@ function makeAi(ctx, record, startPos) {
   } else {
     ai.waypoints = ring(record.anchor ?? ctx.config.world.stationPosition, 80 + Math.random() * 70, 4);
   }
+  if (escaping) {
+    const plan = readEscape(record);
+    // The remembered pursuer comes back as the SAME live hull when that hull
+    // is in the world; otherwise the handle stays null and threatPos falls
+    // back on the last place it was seen. Never the player by default.
+    ai.fleeFrom = plan && plan.threat === 'player' ? 'player'
+      : (plan && plan.threat === 'ship' ? liveThreatById(ctx, plan.threatId, null) : null);
+  }
   return ai;
 }
 
@@ -321,8 +379,21 @@ export function spawnLiveShip(ctx, record, position) {
   // record.resolve, which createShipState prefers on every later
   // instantiation, so despawn/re-instantiation reuses it instead of
   // stacking another +15.
+  // Issue #68: BEFORE the rematch ladder, put the escapee's real condition
+  // back. createShipState hands back a nominal hull; a runner that left the
+  // fold at 30% hull with its engine out must come back exactly that way —
+  // no fresh-state healing, and the yielded/paid peace comes back with it.
+  const escapePlan = readEscape(record);
+  const escapeRestored = escapePlan ? applyCondition(escapePlan, state, null) : false;
+  // Issue #68: an escape that has not RESOLVED yet is the same encounter the
+  // player is still flying against. Re-instantiating the hull mid-run (a cull
+  // and reacquire, a same-system restore) is not a new rematch, so the ladder
+  // waits for one — the retained resolve snapshot survives the fold intact.
+  // Once the plan resolves, the next instantiation takes the bump as before.
+  const midEncounter = escapeActive(record);
   if (
     record.name === 'Carver Illyx' &&
+    !midEncounter &&
     (record.rematchCount ?? 0) < 2 &&
     (ctx.world.aceRivalry?.defeats ?? 0) > (record.rematchCount ?? 0) &&
     record.state !== 'dead' &&
@@ -331,6 +402,10 @@ export function spawnLiveShip(ctx, record, position) {
     record.rematchCount = (record.rematchCount ?? 0) + 1;
     record.resolve = Math.min(95, (record.resolve ?? 55) + 15);
     state.resolve = record.resolve;
+    // The ladder is a persisted record value, so it wins over the snapshot's
+    // resolve — but it is written THROUGH the snapshot, never silently past
+    // it: the retained condition stays internally consistent.
+    if (escapeRestored) syncCondResolve(escapePlan, record.resolve);
   }
   // Wave 32: the Ledger's collector never rolls for interest — he has your
   // vector. Name-keyed so saves written before alwaysHuntsPlayer existed
@@ -346,11 +421,40 @@ export function spawnLiveShip(ctx, record, position) {
     ai: null,
   };
   live.ai = makeAi(ctx, record, position);
+  // Peace/hail continuity rides the same snapshot: a hull that already
+  // yielded, paid or bluffed its way clear does not wake up mid-parley or
+  // freshly hostile toward the same pursuer.
+  if (escapePlan) applyCondition(escapePlan, state, live.ai);
+  // Movement continuity: a runner folded back in mid-flight comes back MOVING
+  // the way it was, nose along its own velocity. Without this it reappears at
+  // rest, facing wherever the mesh was built, and has to turn around.
+  if (midEncounter && escapeHeading(escapePlan, _v1)) {
+    const v = escapePlan.vel;
+    live.ai.velocity.set(v[0], v[1], v[2]);
+    // A dark hull's motion IS its drift: hand the captured vector back to
+    // updateDisabled as the drift it already had, and mark it initialized —
+    // otherwise the fold restarts the coast at 6 u/s along whatever heading
+    // the rebuilt mesh happens to face.
+    if (state.disabled === true) {
+      live.ai.driftVel.set(v[0], v[1], v[2]);
+      live.ai.disabledInit = true;
+    }
+    _q.setFromUnitVectors(NEG_Z, _v1);
+    if (Number.isFinite(_q.x)) object.quaternion.copy(_q);
+  }
   return live;
 }
 
+/**
+ * Mesh teardown. Issue #68: this is the ONE contract boundary both removal
+ * paths cross — traffic.js range culling and jump.js's midpoint despawn — so
+ * an escaping runner's position, velocity and condition are captured into its
+ * record here, before the hull stops existing. That is why jump.js needs no
+ * change: the player's own jump cannot strand a half-written plan.
+ */
 export function removeLiveShip(ctx, liveShip) {
   const object = liveShip && liveShip.object;
+  if (object) syncEscapeLive(ctx, liveShip); // no plan: returns immediately
   if (!object) return;
   if (object.userData) releaseShipAsset(object);
   if (ctx && ctx.scene) ctx.scene.remove(object);
@@ -431,12 +535,184 @@ export function stampWakeSite(live) {
   if (!rec) return;
   const role = live.role ?? rec.role;
   if (role !== 'pirate' && role !== 'ace') return;
+  // Issue #68: a runner with a committed escape leaves a trail that points at
+  // where it actually went. The site is TAGGED (kind gate|station, plus the
+  // destination context) so wakes.js can tell a truthful pursuit story with no
+  // fabricated salvage; an untagged site keeps the legacy wreck-field
+  // behavior for old saves and for a flee with no route at all.
+  const plan = readEscape(rec);
+  if (plan && escapeRouted(rec)) {
+    const d = plan.dest;
+    rec.wakeSite = {
+      position: [d[0], d[1], d[2]],
+      found: false,
+      kind: plan.kind,
+      to: plan.kind === 'gate' ? plan.to : null,
+      from: plan.from ?? rec.system ?? null,
+    };
+    return;
+  }
+  // No viable refuge: the runner still went SOMEWHERE — out along its heading.
+  // The trail is tagged 'evade' so wakes.js tells that story honestly. It is
+  // deliberately NOT the untagged legacy site: a new no-route flight must not
+  // fabricate a wreck field and a salvage reward that nothing produced. Old
+  // saves keep their untagged sites and the wave-30 behavior exactly.
   _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
   const p = live.object.position;
   rec.wakeSite = {
     position: [p.x + _fwd.x * WAKE_SITE_DISTANCE, p.y + _fwd.y * WAKE_SITE_DISTANCE, p.z + _fwd.z * WAKE_SITE_DISTANCE],
     found: false,
+    kind: 'evade',
+    to: null,
+    from: rec.system ?? null,
   };
+}
+
+// ---------- escape plan bridge (issue #68) ----------
+
+/**
+ * The live hull for a remembered pursuer id, or null. The plan persists WHO
+ * the runner is fleeing (captureCondition writes the id and the last position
+ * seen); this is how that memory becomes a handle again.
+ */
+function liveThreatById(ctx, id, self) {
+  const ships = typeof id === 'string' && id ? ctx.ships : null;
+  if (!ships) return null;
+  for (let i = 0; i < ships.length; i++) {
+    const s = ships[i];
+    if (s && s !== self && s.object && s.record && s.record.id === id
+      && !(s.state && s.state.destroyed)) {
+      return s;
+    }
+  }
+  return null;
+}
+
+function escapeSystemOf(ctx, live) {
+  const rec = live.record;
+  const sysId = rec && typeof rec.system === 'string' ? rec.system : null;
+  if (sysId && Object.hasOwn(SYSTEMS, sysId)) return sysId;
+  const cur = ctx && ctx.world && ctx.world.currentSystem;
+  return typeof cur === 'string' && Object.hasOwn(SYSTEMS, cur) ? cur : null;
+}
+
+/**
+ * Choose (or re-choose) this runner's refuge and commit it to the record.
+ * Announces the destination ONCE per committed choice — a reroute is a new
+ * choice and says so; a frame is never a message.
+ */
+function planEscapeFor(ctx, live) {
+  const rec = live.record;
+  if (!rec) return null;
+  const st = live.state;
+  const sysId = escapeSystemOf(ctx, live);
+  if (!sysId) return null;
+  const now = ctx.world ? ctx.world.time : 0;
+  const plan = replanEscape(rec, {
+    sysId,
+    pos: live.object.position,
+    threatPos: threatPos(ctx, live),
+    engineOut: !!st && st.engineOut === true,
+    now,
+  });
+  if (plan) captureCondition(plan, st, live.ai, now);
+  if (plan && plan.announced !== true) {
+    plan.announced = true;
+    if (plan.kind === 'gate') {
+      say(ctx, live, `Running for the ${systemDisplayName(plan.to)} gate.`);
+    } else if (plan.kind === 'station') {
+      say(ctx, live, 'Running for the station holding lane.');
+    } else {
+      say(ctx, live, 'No clear lane. Breaking off.');
+    }
+  }
+  return plan;
+}
+
+/**
+ * The single flee entry point (issue #68). Sets the mode, remembers the
+ * threat, commits a refuge, and stamps the truthful wake trail. hail.js
+ * capitulation outcomes and the trader/miner panic path all route through
+ * here so one plan owns the runner's destination, movement and condition.
+ */
+export function enterEscapeFlee(ctx, live, threat) {
+  const ai = live && live.ai;
+  if (!ai) return null;
+  ai.mode = 'flee';
+  ai.phase = null;
+  ai.intent = false;
+  if (threat !== undefined) ai.fleeFrom = threat ?? null;
+  const plan = planEscapeFor(ctx, live);
+  stampWakeSite(live);
+  return plan;
+}
+
+/** Keep the record's snapshot equal to the live hull. Zero allocation. */
+function syncEscapeLive(ctx, live) {
+  const plan = readEscape(live.record);
+  if (!plan) return;
+  captureEscapeLive(plan, live.object, live.state, live.ai, ctx.world ? ctx.world.time : 0);
+}
+
+/** Role default the hull returns to once an escape resolves. */
+function roleModeOf(live) {
+  const mode = escapeRoleMode((live.ai && live.ai.role) ?? live.role);
+  // The peace outlives the escape: a hull that yielded resumes ambient work,
+  // not the fight it already broke off from.
+  const st = live.state;
+  const ai = live.ai;
+  if ((mode === 'hunt' || mode === 'duel')
+    && ((st && st.surrendered === true) || (ai && ai.surrenderDone === true))) {
+    return 'loiter';
+  }
+  return mode;
+}
+
+/** Turn one phase-machine token into world effects. */
+function applyEscapeToken(ctx, live, plan, token) {
+  if (!token) return;
+  const rec = live.record;
+  if (token === 'replan' || token === 'pressed') {
+    // 'pressed': the pursuer followed the runner into the holding lane. The
+    // hold is not a sanctuary — re-run the real choice, which may commit to a
+    // gate, to a different hold, or keep this one if it is still the best leg.
+    planEscapeFor(ctx, live);
+    return;
+  }
+  if (token === 'gate-ready') {
+    syncEscapeLive(ctx, live);
+    const eta = beginEscapeTransit(ctx, rec, rec.system);
+    if (eta === null) return; // guard refused: keep holding, no fake transit
+    const who = escapePublicIdentity(rec, ctx.world && ctx.world.scanner);
+    const dest = systemDisplayName(plan.to);
+    ctx.emit('commLine', {
+      text: `${who.name} jumped to ${dest} — target lost. Crossing runs about ${eta} s.`,
+      from: 'Echo',
+    });
+    // The lock is released HERE — at the real departure, not at selection or
+    // charge — so the player can watch the whole run and understand the loss.
+    if (ctx.targets && ctx.targets.current === live) ctx.targets.current = null;
+    return;
+  }
+  if (token === 'sheltered') {
+    const who = emitSheltered(ctx, rec, rec.system ?? (ctx.world ? ctx.world.currentSystem : null));
+    if (who) ctx.emit('commLine', { text: `${who.name} reached the station holding lane.`, from: 'Echo' });
+    return;
+  }
+  if (token === 'dwell-over') {
+    // tickEscape only issues this token when the caller reported NO pressure,
+    // so the hold ends because the encounter ended.
+    // Pressure gone: ordinary work resumes. The peace/condition snapshot is
+    // retained (finishEscape keeps it) — no repair, no fresh hostility — and
+    // the lane route is rebuilt around where the hull actually sits, so a
+    // later cull cannot teleport it back onto the leg it abandoned.
+    syncEscapeLive(ctx, live);
+    finishEscape(rec, 'sheltered');
+    resumeEscapeRoute(rec, rec.system ?? (ctx.world ? ctx.world.currentSystem : null));
+    live.ai.mode = roleModeOf(live);
+    live.ai.fleeFrom = null;
+    breakOff(live.ai);
+  }
 }
 
 /**
@@ -1385,14 +1661,14 @@ export function tickTraderJob(ctx, live) {
   const hunter = findHunterOf(ctx, live);
   const now = ctx.world && ctx.world.time;
   if (hunter || traderHitPanic(st, now)) {
-    if (ai.mode !== 'flee') {
-      ai.mode = 'flee';
-      ai.phase = null;
-      ai.intent = false;
-    }
-    ai.fleeFrom = hunter || 'player';
+    if (ai.mode !== 'flee') enterEscapeFlee(ctx, live, hunter || 'player');
+    else ai.fleeFrom = hunter || 'player';
     return;
   }
+  // Issue #68: an accepted escape takes precedence over ordinary work until
+  // it RESOLVES. Panic subsiding no longer snaps a hull that already
+  // committed to a gate or the holding lane back onto its old lane route.
+  if (escapeActive(live.record)) return;
   if (ai.mode === 'flee') {
     ai.mode = 'route';
     ai.fleeFrom = null;
@@ -1425,14 +1701,12 @@ export function tickMinerJob(ctx, live) {
   const hunter = findHunterOf(ctx, live);
   const now = ctx.world && ctx.world.time;
   if (hunter || traderHitPanic(st, now)) {
-    if (ai.mode !== 'flee') {
-      ai.mode = 'flee';
-      ai.phase = null;
-      ai.intent = false;
-    }
-    ai.fleeFrom = hunter || 'player';
+    if (ai.mode !== 'flee') enterEscapeFlee(ctx, live, hunter || 'player');
+    else ai.fleeFrom = hunter || 'player';
     return;
   }
+  // Issue #68: same precedence as the trader panic path.
+  if (escapeActive(live.record)) return;
   if (ai.mode === 'flee') {
     ai.mode = 'mine';
     ai.fleeFrom = null;
@@ -1626,9 +1900,12 @@ function capitulate(ctx, live) {
     if (lastAttackerOf(live) === 'player') maybeGrantPirateSeed(ctx, live);
   }
   if (outcome === 'flee') {
-    ai.mode = 'flee';
-    stampWakeSite(live);
     say(ctx, live, 'Breaking off.');
+    // Issue #68: the break-off picks a real refuge (and stamps the truthful
+    // trail) instead of running at open space until the fold eats it.
+    const attacker = lastAttackerOf(live);
+    const from = ai.fleeFrom ?? (attacker && attacker !== 'npc' ? attacker : 'player');
+    enterEscapeFlee(ctx, live, from);
   } else {
     ai.mode = 'drift';
     _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
@@ -2313,17 +2590,163 @@ function updateDuel(ctx, live, dt, now, reducedMotion) {
 function threatPos(ctx, live) {
   const src = live.ai.fleeFrom;
   if (src && src !== 'player' && src.object && !src.state?.destroyed) return src.object.position;
-  if (src === 'player') {
-    const o = ctx.ship && ctx.ship.object;
-    if (o) return o.position;
-  }
   const pObj = ctx.ship && ctx.ship.object;
+  if (src === 'player') return pObj ? pObj.position : null;
+  // Issue #68: a re-instantiated or restored runner holds no live pursuer
+  // handle. Re-find the SAME hull by the remembered record id when it is in
+  // the world (and take the handle back), and otherwise keep running from
+  // where that hull was last actually seen. The player is the fallback only
+  // when nothing is remembered at all — a runner that fled an NPC is never
+  // silently handed the player, who may be nowhere near this fight.
+  const plan = readEscape(live.record);
+  if (plan && plan.threat === 'ship') {
+    const other = liveThreatById(ctx, plan.threatId, live);
+    if (other) {
+      live.ai.fleeFrom = other;
+      return other.object.position;
+    }
+    const at = plan.threatAt;
+    if (Array.isArray(at) && Number.isFinite(at[0]) && Number.isFinite(at[1]) && Number.isFinite(at[2])) {
+      return _threatAt.set(at[0], at[1], at[2]);
+    }
+    return null;
+  }
   return pObj ? pObj.position : null;
 }
 
+/**
+ * Flee steering (issue #68). A runner with a committed refuge flies the leg
+ * it chose — gate bore or station holding point — at its ORDINARY allowed
+ * speed (class burn, or 30% class cruise with the engine out; the engine-out
+ * contract is untouched), brakes inside the arrival radius, and hands the
+ * phase machine the real distance. steerLive keeps physical avoidance and
+ * bounce active the whole way, so a freighter still rounds the ring instead
+ * of driving through the tube.
+ *
+ * With no viable route the old away-from-threat run is the explicit fallback
+ * (phase 'evade'), retried on the ESCAPE.revalidate cadence. Range culling is
+ * never an escape, and nothing here invents a transit or a teleport.
+ */
 function updateFlee(ctx, live, dt) {
   const st = live.state;
   const cls = shipClassOf(live);
+  const rec = live.record;
+  const now = ctx.world ? ctx.world.time : 0;
+  let plan = readEscape(rec);
+  const fleeSpeed = st.engineOut ? classCruise(cls) * 0.3 : classBurn(cls);
+  // A record that already departed, died or was captured never re-plans: the
+  // hull is one frame from despawn and must not acquire a second escape.
+  const terminal = !rec || rec.state === 'inTransit' || rec.state === 'dead' || rec.state === 'captured';
+  if (terminal) {
+    fleeAwayFrom(ctx, live, dt, fleeSpeed);
+    return;
+  }
+  // Lazy entry (a save restored mid-flee, or a mode set outside the shared
+  // door): commit a refuge AND stamp the matching trail, exactly as
+  // enterEscapeFlee would — a flee never runs without a truthful wake.
+  if (!plan || plan.phase === 'done') {
+    plan = planEscapeFor(ctx, live);
+    stampWakeSite(live);
+  }
+  if (plan && escapeRouted(rec)) {
+    const arrive = escapeArriveRadius(plan);
+    _aim.set(plan.dest[0], plan.dest[1], plan.dest[2]);
+    let dist = live.object.position.distanceTo(_aim);
+    // Committed choice: revalidate on a bounded cadence, and then only ABANDON
+    // it when the leg stopped being real or the pursuer moved onto it. A hull
+    // that merely drifted keeps flying the endpoint it announced.
+    if (now - plan.checkedAt >= ESCAPE.revalidate) {
+      const sysId = escapeSystemOf(ctx, live);
+      if (escapeLegViable(plan, sysId, live.object.position, threatPos(ctx, live))) {
+        plan.checkedAt = now;
+      } else {
+        planEscapeFor(ctx, live);
+        plan = readEscape(rec);
+        if (!plan || !escapeRouted(rec)) {
+          fleeAwayFrom(ctx, live, dt, fleeSpeed);
+          return;
+        }
+        _aim.set(plan.dest[0], plan.dest[1], plan.dest[2]);
+        dist = live.object.position.distanceTo(_aim);
+      }
+    }
+    // Braking. A hull that arrives at burn speed cannot turn tightly enough to
+    // stay inside the arrival radius — it sails past and circles forever. Bleed
+    // speed across the last few radii so the turn circle at arrival fits INSIDE
+    // the zone. Nothing here raises any speed: the cap is still the class
+    // contract (30% cruise with the engine out).
+    const turn = turnRateFor(st.classKey, fleeSpeed);
+    const settle = Math.max(
+      classCruise(cls) * ESCAPE.holdSpeed,
+      Number.isFinite(turn) && turn > 0 ? turn * arrive * ESCAPE.turnSettle : 0,
+    );
+    let speed = fleeSpeed;
+    const brake = arrive * ESCAPE.brakeBand;
+    if (dist <= arrive) {
+      // Inside the prevalidated hull-safe hold, a station refuge is a PARK,
+      // not a slow orbit. Powered station-keeping at holdSpeed kept steering
+      // (and avoiding) PAST the point and circling it, which walked the hull
+      // back out of its own arrival radius and knocked the phase out of
+      // 'hold' — the runner never actually stopped anywhere. It stops here.
+      // Steering, avoidance and bounce all still run every frame, so the hull
+      // stays visible, lockable, damageable and outside the cylinder; it is
+      // simply not going anywhere until a NEW route is committed, which puts
+      // the phase back to 'route' and gives it its speed again. The gate bore
+      // keeps the old creep — a charging hull is not parked, it is spooling.
+      speed = plan.kind === 'station' ? 0 : Math.min(fleeSpeed, classCruise(cls) * ESCAPE.holdSpeed);
+    } else if (dist < brake) {
+      const f = (dist - arrive) / (brake - arrive);
+      speed = Math.min(fleeSpeed, settle + (fleeSpeed - settle) * (f > 0 ? f : 0));
+    }
+    steerLive(live, _aim, speed, dt);
+    live.object.userData.glow.scale.setScalar(dist <= arrive ? 1.2 : 1.6);
+    return;
+  }
+  if (plan && plan.phase === 'evade' && now - plan.checkedAt >= ESCAPE.revalidate) {
+    planEscapeFor(ctx, live);
+  }
+  fleeAwayFrom(ctx, live, dt, fleeSpeed);
+}
+
+/**
+ * Is the runner still under pressure? A holding hull only stands down when
+ * the encounter is actually over: no hunter, no threat inside
+ * ESCAPE.pressureRange, and no fresh hit.
+ */
+function escapePressed(ctx, live) {
+  const st = live.state;
+  const now = ctx.world ? ctx.world.time : 0;
+  if (st && Number.isFinite(st.lastHitAt) && now - st.lastHitAt <= ESCAPE.pressureRecent) return true;
+  if (findHunterOf(ctx, live)) return true;
+  const threat = threatPos(ctx, live);
+  return !!threat && live.object.position.distanceTo(threat) <= ESCAPE.pressureRange;
+}
+
+/**
+ * The escape phase machine for a LIVE hull. Runs after the frame's steering
+ * AND its physical bounce, so arrival, the charge and the terminal departure
+ * are decided on where the ship actually ended up — never on a pre-move
+ * estimate that avoidance or a ring bounce then invalidated.
+ */
+function tickEscapePhase(ctx, live, dt) {
+  const rec = live.record;
+  const plan = readEscape(rec);
+  if (!plan || live.ai.mode !== 'flee' || !escapeRouted(rec)) return;
+  if (rec.state === 'inTransit' || rec.state === 'dead' || rec.state === 'captured') return;
+  const st = live.state;
+  _aim.set(plan.dest[0], plan.dest[1], plan.dest[2]);
+  const token = tickEscape(plan, {
+    dist: live.object.position.distanceTo(_aim),
+    dt,
+    now: ctx.world ? ctx.world.time : 0,
+    canCharge: !st.engineOut && !st.disabled,
+    pressure: plan.phase === 'hold' ? escapePressed(ctx, live) : false,
+  });
+  applyEscapeToken(ctx, live, plan, token);
+}
+
+/** Legacy/no-route flight: run from the threat at the existing speed cap. */
+function fleeAwayFrom(ctx, live, dt, fleeSpeed) {
   const threat = threatPos(ctx, live);
   if (threat) {
     _v2.subVectors(live.object.position, threat);
@@ -2347,10 +2770,11 @@ function updateFlee(ctx, live, dt) {
       _aim.copy(live.object.position).addScaledVector(_fwd, 300);
     }
   }
-  const fleeSpeed = st.engineOut ? classCruise(cls) * 0.3 : classBurn(cls);
   steerLive(live, _aim, fleeSpeed, dt);
   live.object.userData.glow.scale.setScalar(1.6);
-  // traffic.js despawns at DEINSTANTIATE_RANGE — we just run.
+  // No committed refuge: this is an explicit evade, not an escape. Range
+  // culling still folds the hull back into its record — the plan (if any)
+  // keeps the identity and condition coherent through it.
 }
 
 function updateDrift(live, dt, reducedMotion) {
@@ -2544,6 +2968,10 @@ function tickDeathBurst(pool, dt, reducedMotion) {
 }
 
 function handleDestroyed(ctx, live, burst, reducedMotion) {
+  // Issue #68: a destroyed hull cannot escape. Drop the plan outright (a
+  // resolved-but-retained snapshot would otherwise resurrect condition onto a
+  // dead record) — the record's own 'dead' state is the terminal truth.
+  if (live && live.record) cancelEscape(live.record);
   // combat.js normally emits npcDestroyed on the killing blow (it runs after
   // us); emit only if nobody else has, so the event fires exactly once.
   let seen = false;
@@ -2649,6 +3077,15 @@ export function initNpc(ctx) {
           ai.resolveBoost = 0; // stand-down: a disabled hull drops the bluff sting (updateResolve never runs here)
           updateDisabled(live, dt, now, reducedMotion);
           if (_phyOn) bounceLive(live, dt);
+          // Issue #68: a disabled runner keeps its plan, its damage and its
+          // place in the world — it simply cannot navigate or charge. The
+          // charge is cleared here, so it can never finish on a timer it
+          // banked before the hull went dark.
+          const dPlan = readEscape(live.record);
+          if (dPlan) {
+            if (dPlan.charge > 0) dPlan.charge = 0;
+            syncEscapeLive(ctx, live);
+          }
           continue;
         }
         ai.t += dt;
@@ -2682,6 +3119,18 @@ export function initNpc(ctx) {
             updateLoiter(live, dt);
         }
         if (_phyOn) bounceLive(live, dt);
+        // Issue #68: the escape phase machine runs HERE — after steering and
+        // after the physical bounce — so arrival, the gate charge and the
+        // terminal departure are decided on the hull's real end-of-frame
+        // position. Cheap: one distance for ships actually fleeing.
+        if (live.ai.mode === 'flee') tickEscapePhase(ctx, live, dt);
+        // Issue #68: keep the record's escape snapshot equal to the live hull
+        // every frame it is fleeing — a mid-flight save, a cull, or the
+        // player's own jump then folds the TRUE position and condition back,
+        // never a stale one. Runs only for ships that carry a plan (≤ MAX_LIVE
+        // of them), writes in place, and allocates nothing. syncEscapeLive is
+        // itself the plan guard — a hull with no plan returns immediately.
+        syncEscapeLive(ctx, live);
         if (ai.intent && playerObj && live.object.position.distanceTo(playerObj.position) < U.ENCOUNTER_BUBBLE) {
           combat = true;
         }

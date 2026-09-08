@@ -6424,8 +6424,12 @@ if (!Object.values(w28Checks).every(Boolean)) { console.log('WAVE28 BERTH RECORD
 // corrupt-restore heal — and (b) the demand hail a hunting pirate opens
 // before pressing the attack (payTribute / showTeeth — only with mounts — /
 // refuseFight), plus the wake contract: every pirate flee stamps
-// record.wakeSite 1400u ahead (npc.js) while wakes.js sheds a pooled
-// world-space trail and discovers a stamped site within 120u.
+// record.wakeSite (npc.js) while wakes.js sheds a pooled world-space trail
+// and discovers a stamped site within 120u. ISSUE #68 UPDATE: the stamp now
+// follows the flee's committed refuge — a tagged gate/station trail on the
+// destination, or the original untagged 1400u open-space site when no refuge
+// was viable. w30sitePlanned pins BOTH branches against the live plan; leg h
+// below still exercises the untagged legacy site and its wreck-field reward.
 // Live pirates are synthetic spawnLiveShip records pushed into ctx.ships by
 // hand (traffic owns that list in production — the wave-27 spawn pattern
 // extended to a real AI drive); each is spliced + mesh-removed after its
@@ -6468,6 +6472,57 @@ const w30siteDist = (live) => {
   if (!ws) return NaN;
   const p = live.object.position;
   return Math.hypot(ws.position[0] - p.x, ws.position[1] - p.y, ws.position[2] - p.z);
+};
+// ISSUE #68 (supersedes the old `wakeSite1400` pin): a flee entry now commits
+// to a real refuge first, so the stamped trail must point at THAT refuge —
+// validated against the AUTHORED gate position or an actual hull-safe station
+// clearance, not merely against what the plan wrote down — and carry its tag,
+// which wakes.js discovers with a truthful no-salvage line. The 1400 u
+// open-space heading is still the contract when (and only when) no refuge was
+// committed, now tagged 'evade' so it cannot mint a wreck field either. Both
+// branches are pinned exactly here, and the focused runner
+// (scripts/issue-68-gate-escape-test.mjs) pins each branch again under
+// controlled geometry.
+const w30sitePlanned = (live) => {
+  const rec = live.record;
+  const ws = rec?.wakeSite;
+  if (!Array.isArray(ws?.position) || ws.found !== false) return false;
+  const plan = rec.escape;
+  const routed = !!plan && (plan.kind === 'gate' || plan.kind === 'station') && Array.isArray(plan.dest);
+  // Which system's geometry the endpoint is checked against. A synthetic
+  // combat-fixture record carries no `system` field, so `SYSTEMS[rec.system]`
+  // was undefined and BOTH strong checks below silently failed. The plan
+  // itself records the system it was actually made in (`plan.from`), and
+  // npc.js's escapeSystemOf falls back to the current system in exactly this
+  // order — resolve it the same way here. The checks stay as strict.
+  const sysId = [plan && plan.from, rec.system, ctx.world.currentSystem]
+    .find((id) => typeof id === 'string' && Object.hasOwn(SYSTEMS, id));
+  const def = sysId ? SYSTEMS[sysId] : null;
+  if (routed) {
+    const onDest = Math.hypot(
+      ws.position[0] - plan.dest[0], ws.position[1] - plan.dest[1], ws.position[2] - plan.dest[2],
+    ) < 0.5;
+    const tagged = ws.kind === plan.kind && (plan.kind !== 'gate' || ws.to === plan.to);
+    // The endpoint must be a REAL place in THIS system, not merely whatever
+    // the plan wrote down: an authored physical gate of the current system,
+    // or a station hold that actually clears the D5 cylinder.
+    let authored = false;
+    if (plan.kind === 'gate') {
+      authored = (def?.gates ?? []).some((g) => g.to === plan.to
+        && Math.hypot(g.position[0] - ws.position[0], g.position[1] - ws.position[1],
+          g.position[2] - ws.position[2]) < 0.5);
+    } else {
+      const sp = def?.station?.position;
+      authored = !!sp && Math.hypot(ws.position[0] - sp[0], ws.position[2] - sp[2]) > PHY.STATION_CYL_RADIUS;
+    }
+    // A tagged escape trail never claims a wreck field.
+    return onDest && tagged && authored;
+  }
+  // No refuge was committed. The flight still went out along its heading and
+  // the trail says so — tagged 'evade', so discovery cannot fabricate a wreck
+  // field for a ship that never wrecked. Only pre-issue-68 saves carry an
+  // untagged site (leg h below still covers that legacy reward).
+  return ws.kind === 'evade' && Math.abs(w30siteDist(live) - 1400) < 0.5;
 };
 
 // RW-006: WAVE30 DEMAND HAIL + PAYTRIBUTE failed together (~1/10) because both
@@ -6768,6 +6823,8 @@ const p2outcomeAfter = p2pay.ai.demandOutcome;
 const p2calmDelta = p2pay.ai.calmUntil - ctx.world.time;
 const p2shape = w30siteShape(p2pay);
 const p2dist = w30siteDist(p2pay);
+const p2sitePlanned = w30sitePlanned(p2pay);
+const p2plan = p2pay.record?.escape ?? null;
 const p2settleEvs = w30collect(3, 'wave30 p2 settle'); // npc.js releases the hold on hailClosed
 const w30payChecks = {
   hailOpened: !!p2hail,
@@ -6779,7 +6836,14 @@ const w30payChecks = {
   pirateFleesPaid: p2modeAfter === 'flee' && p2outcomeAfter === 'paid',
   calmStamped60: p2calmDelta === 60,
   wakeSiteShape: p2shape,
-  wakeSite1400: Math.abs(p2dist - 1400) < 0.5,
+  // issue #68 replacement for the old wakeSite1400 pin (see w30sitePlanned)
+  wakeSiteMatchesRefuge: p2sitePlanned,
+  // ...and the paid pirate really did commit to a refuge, not just run.
+  escapePlanCommitted: !!p2plan && p2plan.phase === 'route'
+    && (p2plan.kind === 'gate' || p2plan.kind === 'station'),
+  escapeKeptCondition: !!p2plan?.cond && Number.isFinite(p2plan.cond.hull)
+    && p2plan.cond.hull === p2pay.state.hull,
+  escapeKeptPeace: p2plan?.peace?.demandOutcome === 'paid',
   holdReleased: p2pay.ai.demanding === false,
   paidLine: p2settleEvs.some((e) => e.type === 'commLine' && e.text === 'Smart. Run along.'),
 };
@@ -6801,6 +6865,8 @@ if (!Object.values(w30payChecks).every(Boolean)) {
     marketWritesAbsorbed: p2pinAbsorbed,
     lastMarketWriteAttempt: p2pinLastWrite,
     pinRestored: p2pinRestored,
+    escapePlan: p2plan && { phase: p2plan.phase, kind: p2plan.kind, to: p2plan.to, dest: p2plan.dest },
+    wakeSite: p2pay.record?.wakeSite ?? null,
     failedChecks: Object.entries(w30payChecks).filter(([, v]) => !v).map(([k]) => k),
   }));
   errors++;
@@ -6861,6 +6927,7 @@ const p3calmDelta = p3bluff.ai.calmUntil - ctx.world.time;
 const p3fearAfter = ctx.world.fear;
 const p3shape = w30siteShape(p3bluff);
 const p3dist = w30siteDist(p3bluff);
+const p3sitePlanned = w30sitePlanned(p3bluff);
 const p3settleEvs = w30collect(3, 'wave30 p3 settle');
 const p3released = p3bluff.ai.demanding === false;
 w30removeShip(p3bluff);
@@ -6890,7 +6957,7 @@ const w30teethChecks = {
   successFlees: p3modeAfter === 'flee' && p3outcomeAfter === 'bluffed',
   successFearBump: p3fearAfter === 6,
   successCalm90: p3calmDelta === HIDDEN_MOUNTS.calmSeconds,
-  successWakeSite: p3shape && Math.abs(p3dist - 1400) < 0.5,
+  successWakeSite: p3shape && p3sitePlanned, // issue #68: trail points at the chosen refuge
   successLine: p3settleEvs.some((e) => e.type === 'commLine' && e.text === 'Guns where none should be. Breaking off.'),
   successHoldReleased: p3released,
   failureButtonFound: !!p4teethBtn,
@@ -6950,6 +7017,10 @@ tick(5, 'wave30 p5 cleanup');
 // are uncontrolled state, cleared first) found within 120u through the real -
 // wakes.js scan: 2-3 refinedMetals pods, the Echo commLine, and the ---------
 // firstWakeSite milestone exactly once (the wave-9 splice-and-refire pattern).
+// Issue #68: this leg deliberately plants an UNTAGGED site — the legacy
+// wreck-field contract is unchanged for old saves and routeless flights. The
+// tagged gate/station branches (no pods, pursuit copy) are pinned in
+// scripts/issue-68-gate-escape-test.mjs against the same real wakes.js scan.
 w28calm('wave30 calm (discovery)');
 for (const r of ctx.world.records) delete r.wakeSite;
 const w30msIdx = ctx.world.milestones.indexOf('firstWakeSite');

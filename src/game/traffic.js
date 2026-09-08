@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { U } from './state.js';
 import { recordPosition } from './world.js';
+import { escapeActive } from './npc-escape.js';
 import { spawnLiveShip, removeLiveShip } from '../systems/npc.js';
 import { isShipAssetReady, primeShipAsset } from '../systems/ship-assets.js';
 import { spawnBlocked, pirateLiveCap, visualClassFor, closeSpawn } from './traffic-feel.js';
@@ -21,6 +22,21 @@ import { spawnBlocked, pirateLiveCap, visualClassFor, closeSpawn } from './traff
  * world.js hurries their abstract routes toward the lane.
  *
  * spawnLiveShip only CONSTRUCTS the live ship; this module owns ctx.ships.
+ *
+ * ESCAPE OWNERSHIP (issue #68): a record carrying an active escape plan is
+ * NOT an ordinary enroute hull folding back onto its lane. Nothing in this
+ * pass needed to change — the two shared contracts already carry it:
+ *   • removeLiveShip (npc.js) captures the runner's real position, velocity
+ *     and condition into the record before the mesh goes, so the despawn
+ *     below cannot lose the encounter;
+ *   • recordPosition (world.js) returns the plan's tracked position, so the
+ *     re-instantiation below puts the SAME hull back on its escape route
+ *     rather than teleporting it onto a stale lane waypoint.
+ * The one behavioral addition: a runner the player still has SELECTED holds
+ * its instantiation past the hysteresis range (see the despawn pass) so an
+ * active chase is not ended by an invisible line. Range culling is still a
+ * rendering optimization, never an escape, and MAX_LIVE and the pirate mix
+ * cap are untouched.
  *
  * Multi-system: ctx.world.records is always the CURRENT system's bank
  * (world.js swaps on 'systemLoaded'). The spawn pass is system-tagged as a
@@ -71,7 +87,16 @@ export function initTraffic(ctx) {
         // marks death exactly once and leaves the splice to us (agreed).
         // inTransit is defensive: migration only picks off-screen records,
         // but a ship mid-jump bookkeeping must never linger.
-        if (d > U.DEINSTANTIATE_RANGE || rec.state === 'captured' || rec.state === 'dead' || rec.state === 'inTransit') {
+        const ended = rec.state === 'captured' || rec.state === 'dead' || rec.state === 'inTransit';
+        // Issue #68: the ONE case the fold must not swallow is the chase the
+        // player is actively flying. A hull the player still has SELECTED and
+        // that is running for a real refuge stays instantiated past the
+        // hysteresis range, so the pursuit reads as a pursuit instead of the
+        // target evaporating at an invisible line. It counts against the same
+        // MAX_LIVE as everything else, and the moment the player drops the
+        // lock (or the escape resolves) it culls like any other ship.
+        const chased = !ended && ctx.targets && ctx.targets.current === live && escapeActive(rec);
+        if ((d > U.DEINSTANTIATE_RANGE && !chased) || ended) {
           removeLiveShip(ctx, live);
           if (ctx.ships[i] === live) ctx.ships.splice(i, 1);
           rec.live = false;

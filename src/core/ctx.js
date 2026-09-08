@@ -275,6 +275,16 @@ export function createCtx({ scene, camera, renderer }) {
     // --- event queue. Frozen event types (payload documented at emit sites):
     // 'playerHit' {damage,family,fromAft}        'npcHit' {ship,damage}
     // 'npcDisabled' {ship}   'npcDestroyed' {ship}   'npcSurrendered' {ship,outcome}
+    // 'npcEscaped' { targetId, targetName, from, to, kind:'gate', reason:'gate', eta }
+    //   world.js beginEscapeTransit ONLY (issue #68): one terminal receipt per
+    //   validated gate departure — physical arrival, then a completed charge,
+    //   then a real beginTransit. Primitives only; a masked Q-ship publishes
+    //   its cover name. `eta` is the existing migration delay in seconds.
+    //   Range culling never emits this.
+    // 'npcSheltered' { targetId, targetName, system, kind:'station', reason:'station' }
+    //   npc.js / world.js (issue #68): once per arrival in the station holding
+    //   lane. The hull stays live, lockable, damageable and hostile-capable —
+    //   this is NOT immunity, docking, a bounty, or a lock release.
     // 'shieldDown' {layer:'screen'|'shell'}      'engineOut' {ship|player}
     // 'podSpawned' {pod}     'podCollected' {pod}
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}

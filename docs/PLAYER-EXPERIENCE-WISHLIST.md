@@ -1525,7 +1525,8 @@ rather than the ordinary procedural pool.
 ## Initiative AI — A living, non-player-centered world
 
 **Status:** AI-01 / AI-02 / AI-03 / AI-04 first pass DONE (Wave 56).
-Wave 57 closed ship-vs-ship bolts, dest-bank ticks, and miners.  
+Wave 57 closed ship-vs-ship bolts, dest-bank ticks, and miners.
+AI-05 (fleeing ships run somewhere) first pass implemented for issue #68.
 **Player problem:** Traffic intersects at the new ship scales, ships repeat
 local paths through gates, and almost every ship attacks the player instead of
 having believable work.  
@@ -1579,9 +1580,36 @@ need a scratch or standing ≤ −10. Pirates keep the wave-32 interest roll.
 - Pirates remain the primary source of unsolicited aggression.
 - Faction law, mission context, and reputation can create justified exceptions.
 
+### AI-05 — A fleeing ship runs somewhere
+
+**Status:** first pass IMPLEMENTED on the issue #68 branch
+(`codex/issue-68-gate-escape`); local verification pending. Owner-requested
+during the visible pirate playtest, and widened by the owner to include the
+station: "Maybe also give it the choice to head to the nearest gate or the
+station."
+
+- A ship that breaks off picks a real destination — the nearest viable
+  physical gate or the station holding lane — weighed against where the
+  pursuer actually is, and says which one it chose.
+- The player can follow it. Crossing the rendering threshold does not cancel
+  the escape, heal the hull, or swap the encounter for an unrelated abstract
+  route: the same id comes back at the same damage on the same route.
+- A gate escape ends in a readable departure — a visible charge at the gate,
+  a stated destination and delay, and a lock released for a reason the player
+  can read — and the same ship is waiting on the other side.
+- A station escape ends in a visible external hold. It is a refuge, not
+  immunity: the ship is still there, still targetable, still damageable, and
+  still owes whatever it owed.
+- Engine-out and disabled ships obey the movement and jump rules they already
+  had. Nothing about running repairs a hull or earns a jump.
+- Contracts hear about it: a local hunt whose quarry crosses the system line
+  fails with a clear reason and no payment.
+
 **Regression risks to call out:** CPU cost from persistent simulation; traffic
 deadlocks; new avoidance breaking authored encounters; off-screen simulation
-creating impossible economic quantities; neutral AI failing to defend itself.
+creating impossible economic quantities; neutral AI failing to defend itself;
+runners clustering on one gate; escape state outliving the encounter that
+justified it.
 
 ---
 

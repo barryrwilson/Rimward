@@ -588,6 +588,35 @@ export const JUMP = {
   graceSeconds: 60, // no hostile intent on arrival or new-game start (covers a gate hop)
   saveOnJump: true, // like dock/undock autosave §4.4
 };
+
+/**
+ * NPC escape (issue #68): a fleeing hull runs for a real physical gate or the
+ * station holding lane instead of open space. Tuning only — the contract,
+ * scoring and phase machine live in game/npc-escape.js. No damage, repair or
+ * migration-timing value is introduced here: gate arrival reuses JUMP.zone and
+ * JUMP.chargeTime, and the crossing itself reuses the existing migration ETA.
+ */
+export const ESCAPE = {
+  version: 1,
+  threatBubble: 260, // u — a pursuer inside this tube of the leg screens the route
+  threatAheadMin: 0.02, // segment parameter: a threat behind the runner never screens
+  threatBearingWeight: 1.6, // score penalty for a destination lying toward the threat
+  noReturnPenalty: 1.25, // an edge without a return gate is a worse pursuit story
+  engineOutStationBias: 0.6, // a limping hull weighs the near refuge higher
+  gateArrive: JUMP.zone, // physical arrival radius at the gate bore (same zone the player uses)
+  stationArrive: 34, // u from the prevalidated hull-safe hold point
+  holdSpeed: 0.12, // fraction of class cruise while braking/holding at the destination
+  brakeBand: 4, // start braking this many arrival radii out, so the hull settles
+  turnSettle: 0.7, // arrival-speed share of turnRate×radius: turn circle fits inside
+  sameDest: 40, // u — a recomputed endpoint this close is the SAME committed one
+  revalidate: 6, // s between route revalidations (commit a choice, do not switch per frame)
+  pressureRange: 900, // u — a threat this close to a holding hull is renewed pressure
+  pressureRecent: 8, // s since the last hit that still counts as pressure
+  dwellMin: 20, // s held outside the station before ordinary work may resume
+  dwellSpan: 16,
+  maxSpeed: 400, // sanity clamp for a restored/persisted speed
+  maxCoord: 1e6, // sanity clamp for restored positions
+};
 export const FACTIONS = {
   freehold: { name: 'Freehold Compact', color: 0xb0703a, doctrine: 0.4 },
   redledger: { name: 'Red Ledger', color: 0xa03434, doctrine: 0.7 },

@@ -2,7 +2,7 @@ import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS, SYSTEMS } from '..
 import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
-import { stampWakeSite, spillShipCargo } from './npc.js';
+import { enterEscapeFlee, spillShipCargo } from './npc.js';
 import {
   berthHeld,
   canOpenPlayCard,
@@ -640,12 +640,11 @@ export function initHail(ctx) {
           ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
         } else {
           st.surrendered = true;
-          ai.mode = 'flee';
-          ai.phase = null;
-          ai.intent = false;
           ai.target = null;
           bumpFear(ctx2, ECON.fear.capitulation);
-          stampWakeSite(live); // wave 30: every pirate/ace flee entry stamps (role-guarded)
+          // Issue #68: the shared plan sets flee, picks a real refuge and
+          // stamps the truthful trail (wave 30 stamp is role-guarded inside).
+          enterEscapeFlee(ctx2, live, 'player');
           ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
           ctx2.emit('npcSurrendered', { ship: live, outcome: 'jettison' });
         }
@@ -654,12 +653,9 @@ export function initHail(ctx) {
       case 'demandRansom': {
         ctx2.world.credits += h.ransom;
         st.surrendered = true;
-        ai.mode = 'flee';
-        ai.phase = null;
-        ai.intent = false;
         ai.target = null;
         bumpFear(ctx2, ECON.fear.ransom);
-        stampWakeSite(live); // wave 30: every pirate/ace flee entry stamps (role-guarded)
+        enterEscapeFlee(ctx2, live, 'player'); // issue #68: shared refuge + trail
         ctx2.emit('commLine', { text: 'Paid. Go.', from: st.name });
         ctx2.emit('npcSurrendered', { ship: live, outcome: 'ransom' });
         break;
@@ -677,11 +673,8 @@ export function initHail(ctx) {
         if (salvage) {
           ctx2.emit('commLine', { text: 'Leaving the hulk.', from: st.name });
         } else {
-          ai.mode = 'flee';
-          ai.phase = null;
-          ai.intent = false;
           ai.target = null;
-          stampWakeSite(live); // wave 30: pirate/ace wake-trailing contract
+          enterEscapeFlee(ctx2, live, 'player'); // issue #68: shared refuge + trail
           ctx2.emit('commLine', { text: 'Running.', from: st.name });
         }
         ai.calmUntil = ctx2.world.time + 30;
@@ -690,12 +683,9 @@ export function initHail(ctx) {
       case 'respect': {
         // Mutual respect: the Named Gun stands down. No fear, no econ — only
         // a long calm so the encounter truly ends.
-        ai.mode = 'flee';
-        ai.phase = null;
-        ai.intent = false;
         ai.target = null;
         ai.calmUntil = ctx2.world.time + 60;
-        stampWakeSite(live); // wave 30: a standing-down Named Gun leaves a trail
+        enterEscapeFlee(ctx2, live, 'player'); // issue #68: shared refuge + trail
         ctx2.emit('commLine', { text: 'Another time, then.', from: st.name });
         break;
       }
@@ -730,13 +720,10 @@ export function initHail(ctx) {
         if (Number.isFinite(credits) && Number.isFinite(demand)) {
           ctx2.world.credits = Math.max(0, credits - demand);
         }
-        ai.mode = 'flee';
-        ai.phase = null;
-        ai.intent = false;
         ai.target = null;
         ai.calmUntil = ctx2.world.time + 60;
         ai.demandOutcome = 'paid';
-        stampWakeSite(live);
+        enterEscapeFlee(ctx2, live, 'player'); // issue #68: shared refuge + trail
         ctx2.emit('commLine', { text: 'Smart. Run along.', from: st.name });
         break;
       }
@@ -745,14 +732,11 @@ export function initHail(ctx) {
         // fear — the whisper does the work before the guns have to.
         const bluffP = HIDDEN_MOUNTS.bluffBase + ctx2.world.fear * HIDDEN_MOUNTS.bluffPerFear;
         if (Math.random() < bluffP) {
-          ai.mode = 'flee';
-          ai.phase = null;
-          ai.intent = false;
           ai.target = null;
           ai.calmUntil = ctx2.world.time + HIDDEN_MOUNTS.calmSeconds;
           ai.demandOutcome = 'bluffed';
           bumpFear(ctx2, 1); // the Q-ship sighting spreads
-          stampWakeSite(live);
+          enterEscapeFlee(ctx2, live, 'player'); // issue #68: shared refuge + trail
           ctx2.emit('commLine', { text: 'Guns where none should be. Breaking off.', from: st.name });
         } else {
           // Called bluff: the pirate steadies (resolve bump) and presses the

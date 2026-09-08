@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { spawnPod } from '../game/pods.js';
+import { SYSTEMS } from '../game/state.js';
 
 /**
  * Flee wakes + wreck-field discovery (wave 30; §29 product-test line:
@@ -24,7 +25,15 @@ import { spawnPod } from '../game/pods.js';
  * SITE DISCOVERY: npc.js (parallel worker) stamps rec.wakeSite =
  * { position: [x, y, z], found: false } — JSON-plain, save.js-safe — on a
  * record when its pirate/ace ENTERS flee mode. This module NEVER stamps
- * it; it only consumes. Throttled to WAKE_SCAN_HZ, ctx.world.records (the
+ * it; it only consumes.
+ *
+ * Issue #68 adds an optional TAG to that stamp: { kind: 'gate'|'station'|'evade',
+ * to, from }. A tagged site sits at the refuge the runner actually chose, so
+ * discovery tells a pursuit story with NO salvage, no wreck copy and no wreck
+ * milestone — there is no wreck out there to find. A flee that found no route
+ * is tagged 'evade' rather than left untagged, so it cannot fabricate a wreck
+ * either. Only UNTAGGED sites — old saves written before this issue — keep the
+ * original wreck-field pods, line and milestone. Throttled to WAKE_SCAN_HZ, ctx.world.records (the
  * current system's bank — a site's coordinates are only meaningful in its
  * own system) is scanned for unfound sites; when the player ship comes
  * within WAKE_SITE_DISCOVERY units, the site is marked found (JSON-plain
@@ -205,7 +214,8 @@ export function initWakes(ctx) {
       const pz = pObj.position.z;
       const records = ctx.world.records;
       for (let i = 0; i < records.length; i++) {
-        const site = records[i].wakeSite;
+        const rec = records[i];
+        const site = rec.wakeSite;
         if (!site || site.found) continue;
         const sp = site.position;
         if (Math.hypot(px - sp[0], py - sp[1], pz - sp[2]) > WAKE_SITE_DISCOVERY) continue;
@@ -213,23 +223,54 @@ export function initWakes(ctx) {
         // Found: JSON-plain mutation only (save.js serializes records).
         site.found = true;
 
-        // 2–3 salvage pods a few units apart (hail.js jettison call shape;
-        // spawnPod copies the position, so the scratch vector is safe).
-        const pods = 2 + (Math.random() < 0.5 ? 1 : 0);
-        for (let p = 0; p < pods; p++) {
-          _podPos.set(
-            sp[0] + (Math.random() - 0.5) * SITE_POD_SPREAD,
-            sp[1] + (Math.random() - 0.5) * SITE_POD_SPREAD,
-            sp[2] + (Math.random() - 0.5) * SITE_POD_SPREAD,
-          );
-          spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
-        }
-
-        ctx.emit('commLine', { text: 'The trail ends in a wreck field.', from: 'Echo' });
-        // First time ever: hail.js/station.js milestones-guard pattern.
-        if (!ctx.world.milestones.includes('firstWakeSite')) {
-          ctx.world.milestones.push('firstWakeSite');
-          ctx.emit('milestone', { id: 'firstWakeSite', line: 'You followed a runner home.' });
+        // Issue #68: a TAGGED site is an escape trail, not a wreck field. The
+        // runner flew somewhere on purpose, so there is nothing out here to
+        // salvage — no pods, no wreck line, and no invented world data. Only
+        // the legacy untagged site (old saves, and a flee with no viable
+        // route) keeps the wave-30 wreck-field reward.
+        const kind = site.kind === 'gate' || site.kind === 'station' || site.kind === 'evade'
+          ? site.kind : null;
+        if (kind === 'gate') {
+          const to = typeof site.to === 'string' && Object.hasOwn(SYSTEMS, site.to)
+            ? SYSTEMS[site.to].name : null;
+          // Tense matters: the trail says they CROSSED only once the crossing
+          // actually began. A player who beats the runner to its own gate is
+          // told it is still coming, not that it already left.
+          const gone = rec.state === 'inTransit' || rec.system !== ctx.world.currentSystem
+            || (rec.escape && rec.escape.departed === true);
+          ctx.emit('commLine', {
+            text: gone
+              ? (to ? `The trail ends at the gate. They crossed to ${to}.` : 'The trail ends at the gate. They crossed.')
+              : (to ? `The trail ends at the gate. They are running for ${to}.` : 'The trail ends at the gate. They are running for it.'),
+            from: 'Echo',
+          });
+        } else if (kind === 'station') {
+          ctx.emit('commLine', { text: 'The trail ends in the station holding lane.', from: 'Echo' });
+        } else if (kind === 'evade') {
+          // A flee with no viable refuge went out into open space. There is
+          // nothing here to salvage and no wreck to claim — say so.
+          ctx.emit('commLine', { text: 'The trail ends in open space. They ran with nowhere to go.', from: 'Echo' });
+        } else {
+          // 2–3 salvage pods a few units apart (hail.js jettison call shape;
+          // spawnPod copies the position, so the scratch vector is safe).
+          const pods = 2 + (Math.random() < 0.5 ? 1 : 0);
+          for (let p = 0; p < pods; p++) {
+            _podPos.set(
+              sp[0] + (Math.random() - 0.5) * SITE_POD_SPREAD,
+              sp[1] + (Math.random() - 0.5) * SITE_POD_SPREAD,
+              sp[2] + (Math.random() - 0.5) * SITE_POD_SPREAD,
+            );
+            spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
+          }
+          ctx.emit('commLine', { text: 'The trail ends in a wreck field.', from: 'Echo' });
+          // First time ever: hail.js/station.js milestones-guard pattern. The
+          // milestone belongs to the wreck-field find — issue #68's tagged
+          // trails end at a gate, a holding lane or empty space, and must not
+          // award the wreck story for something that is not one.
+          if (!ctx.world.milestones.includes('firstWakeSite')) {
+            ctx.world.milestones.push('firstWakeSite');
+            ctx.emit('milestone', { id: 'firstWakeSite', line: 'You followed a runner home.' });
+          }
         }
       }
     },

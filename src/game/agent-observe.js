@@ -13,6 +13,7 @@ import { hailOffer } from './hail-offer.js';
 import { losCloseRate } from './los-close.js';
 import { agentControlStatus } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
+import { escapeStatus } from './npc-escape.js';
 import {
   VERSION,
   NEARBY_CAP,
@@ -197,6 +198,20 @@ function shipCondition(ctx, t, row) {
   // state, the same refusal reason, and the same next step the player sees.
   // No cargo, no ai internals, no Q-ship identity leak.
   row.surrendered = st.surrendered === true;
+  // Issue #68: publish EXACTLY the escape word the bracket prints — where the
+  // runner is going, which phase it is in, and why. Same helper, same string;
+  // no plan internals, no AI object, no snapshot, no private route data.
+  const escape = escapeStatus(rec);
+  if (escape) {
+    row.escape = {
+      kind: str(escape.kind),
+      to: escape.to ? str(escape.to) : null,
+      destName: str(escape.destName),
+      phase: str(escape.phase),
+      reason: str(escape.reason),
+      label: str(escape.label),
+    };
+  }
   const offer = hailOffer(ctx, t);
   row.hail = {
     state: str(offer.state),

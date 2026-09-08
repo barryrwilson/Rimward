@@ -6,6 +6,7 @@
  * Adds the control lease, full station-service parity, capability discovery,
  * and the outcome ring vocabulary. Every in-repo caller migrated same commit.
  */
+import { SYSTEMS } from './state.js'; // data only: the authored system-id set
 
 export const VERSION = 2;
 export const EVENT_CAP = 16;
@@ -118,6 +119,11 @@ export const EVENT_TYPES = Object.freeze([
   'npcDisabled',
   'npcDestroyed',
   'npcSurrendered',
+  // Issue #68 terminal escape receipts. npcEscaped = a validated gate
+  // crossing actually began; npcSheltered = the hull reached the station
+  // holding lane (still present, still lockable, still damageable).
+  'npcEscaped',
+  'npcSheltered',
   'mineHit',
   'mineBlocked',
   'podSpawned',
@@ -143,6 +149,10 @@ export const EVENT_TYPES = Object.freeze([
 const KEEP_RING = new Set([
   'playerDestroyed', 'recovered', 'playerHit', 'bodyHit', 'shieldDown',
   'npcDestroyed', 'npcDisabled', 'npcSurrendered', 'jobState',
+  // Issue #68: an escape receipt arrives at the END of a long chase, when the
+  // ring is at its most saturated with combat rows. Without keep class the
+  // one row explaining where the target went is evicted on arrival.
+  'npcEscaped', 'npcSheltered',
   'landmarkFound', 'clueFound', 'survivorRescued', 'survivorSold',
   'epicStage', 'mineBlocked', 'convergence', 'deepening',
   // Session lifecycle receipts (issue #72). An automine run saturates the ring
@@ -196,6 +206,11 @@ const EVENT_FIELDS = Object.freeze({
   npcDisabled: Object.freeze(['targetId', 'targetName']),
   npcDestroyed: Object.freeze(['targetId', 'targetName']),
   npcSurrendered: Object.freeze(['targetId', 'targetName', 'outcome']),
+  // Issue #68. `from`/`to` are SYSTEMS ids, `kind` is 'gate'|'station',
+  // `reason` matches the word the HUD shows, `eta` is the crossing delay in
+  // seconds on the existing migration time scale.
+  npcEscaped: Object.freeze(['targetId', 'targetName', 'from', 'to', 'kind', 'reason', 'eta']),
+  npcSheltered: Object.freeze(['targetId', 'targetName', 'system', 'kind', 'reason']),
   mineHit: Object.freeze(['asteroidId', 'count']),
   mineBlocked: Object.freeze(['asteroidId', 'oreKey', 'hardness', 'needs', 'line']),
   podSpawned: Object.freeze(['podId']),
@@ -218,9 +233,18 @@ const EVENT_FIELDS = Object.freeze({
   bodyHit: Object.freeze(['kind', 'speed', 'damage', 'count']),
 });
 
-/** Ship-carrying events: identity is derived as primitives; ship never copied. */
+/**
+ * Ship-carrying events: identity is derived as primitives; ship never copied.
+ *
+ * Issue #68 escape receipts are members so a ship handle can never leak
+ * through them, but their emit sites deliberately pass PRIMITIVES ONLY —
+ * derived from the record through npc-escape.js's escapePublicIdentity, which
+ * publishes a masked Q-ship's COVER name. An off-screen departure has no live
+ * ship at all, so the primitive path is also the only one that works there.
+ */
 const SHIP_DERIVE = new Set([
   'engineOut', 'npcHit', 'npcDisabled', 'npcDestroyed', 'npcSurrendered',
+  'npcEscaped', 'npcSheltered',
 ]);
 
 /** Repeat-collapse key per type (same key + type folds into count, newest kept). */
@@ -448,7 +472,12 @@ export function sanitizeEvent(raw) {
     const st = ship.state && typeof ship.state === 'object' ? ship.state : null;
     const id = Object.hasOwn(ship, 'id') ? ship.id : (rec && Object.hasOwn(rec, 'id') ? rec.id : null);
     if (typeof id === 'string' || typeof id === 'number') { out.targetId = id; derivedTarget = true; }
-    const nm = (st && typeof st.name === 'string' && st.name)
+    // Q-ship cover holds on every derived identity: a masked hull publishes
+    // the name the bracket is showing, never the real one underneath.
+    const masked = !!rec && rec.qship === true && rec.revealed !== true;
+    const cover = masked && typeof rec.coverName === 'string' && rec.coverName ? rec.coverName : '';
+    const nm = cover
+      || (st && typeof st.name === 'string' && st.name)
       || (rec && typeof rec.name === 'string' && rec.name)
       || '';
     if (nm) out.targetName = nm;
@@ -486,7 +515,53 @@ export function sanitizeEvent(raw) {
     const pv = primitiveValue(raw[key]);
     if (pv !== undefined) out[key] = pv;
   }
+  if (ESCAPE_RECEIPTS.has(type)) boundEscapeReceipt(out);
   return out;
+}
+
+const ESCAPE_RECEIPTS = new Set(['npcEscaped', 'npcSheltered']);
+const ESCAPE_KIND_SET = new Set(['gate', 'station']);
+const ESCAPE_REASON_SET = new Set(['gate', 'station']);
+const ESCAPE_ID_MAX = 64;
+const ESCAPE_NAME_MAX = 40;
+const ESCAPE_ETA_MAX = 100000; // s — far past any authored migration window
+
+/**
+ * Issue #68: the receipt sanitizer bounds ITSELF, not just its emitters.
+ * A row that reached here from a hostile or buggy caller carries only:
+ * a bounded own id/name, AUTHORED system ids, the two authored enums, and a
+ * finite non-negative eta. Everything else is dropped rather than coerced
+ * into a plausible-looking lie. Idempotent by construction — a second pass
+ * over an already-bounded row changes nothing.
+ */
+function boundEscapeReceipt(out) {
+  if (typeof out.targetId === 'string') {
+    if (out.targetId.length === 0) delete out.targetId;
+    else if (out.targetId.length > ESCAPE_ID_MAX) out.targetId = out.targetId.slice(0, ESCAPE_ID_MAX);
+  } else if (typeof out.targetId === 'number') {
+    if (!Number.isFinite(out.targetId)) delete out.targetId;
+  } else if (Object.hasOwn(out, 'targetId')) {
+    delete out.targetId;
+  }
+  if (typeof out.targetName === 'string') {
+    if (out.targetName.length === 0) delete out.targetName;
+    else if (out.targetName.length > ESCAPE_NAME_MAX) out.targetName = out.targetName.slice(0, ESCAPE_NAME_MAX);
+  } else if (Object.hasOwn(out, 'targetName')) {
+    delete out.targetName;
+  }
+  for (const key of ['from', 'to', 'system']) {
+    if (!Object.hasOwn(out, key)) continue;
+    const v = out[key];
+    if (v === null) continue; // an explicit "unknown" is honest; a fake id is not
+    if (typeof v !== 'string' || !Object.hasOwn(SYSTEMS, v)) delete out[key];
+  }
+  if (Object.hasOwn(out, 'kind') && out.kind !== null && !ESCAPE_KIND_SET.has(out.kind)) delete out.kind;
+  if (Object.hasOwn(out, 'reason') && out.reason !== null && !ESCAPE_REASON_SET.has(out.reason)) delete out.reason;
+  if (Object.hasOwn(out, 'eta')) {
+    const eta = out.eta;
+    if (typeof eta !== 'number' || !Number.isFinite(eta) || eta < 0) delete out.eta;
+    else out.eta = Math.min(ESCAPE_ETA_MAX, Math.round(eta));
+  }
 }
 
 function commCountOf(row) {

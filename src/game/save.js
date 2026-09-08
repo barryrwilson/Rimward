@@ -16,6 +16,11 @@ import { decodeKeyCode } from '../systems/key-code.js';
 import { codeOf } from '../systems/bindings.js';
 import { noteSessionEvent } from './agent-schema.js';
 import { disengageFlee } from './agent-flee.js';
+import * as THREE from 'three';
+import {
+  sanitizeEscapeRecord, readEscape, escapeActive, applyCondition, captureEscapeLive,
+  escapeHeading, escapeRoleMode,
+} from './npc-escape.js';
 import { disengage as disengageAutopilot } from './autopilot.js';
 
 /**
@@ -1000,7 +1005,31 @@ function replaceMountedHangarCargo(ctx, list) {
   mounted.cargo = sanitizeCargoList(list);
 }
 
+/**
+ * Issue #68: fold every live runner's REAL position, velocity and condition
+ * into its record before the blob is built. main.js runs save AFTER combat and
+ * hail, so a hull hit — or one that paid off a demand — in this same frame
+ * would otherwise be serialized one frame stale, and the load would put the
+ * damage back the way it was before the shot landed.
+ */
+// Restore-time scratch (issue #68). Module scope: a restore is rare, but
+// these must never be allocated inside the per-ship loop.
+const _restoreDir = new THREE.Vector3();
+const _restoreQ = new THREE.Quaternion();
+const _restoreNegZ = new THREE.Vector3(0, 0, -1); // npc.js nose convention
+
+function captureLiveEscapes(ctx) {
+  const ships = ctx.ships;
+  if (!Array.isArray(ships)) return;
+  const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  for (const ship of ships) {
+    const plan = readEscape(ship && ship.record);
+    if (plan) captureEscapeLive(plan, ship.object, ship.state, ship.ai, now);
+  }
+}
+
 export function snapshot(ctx) {
+  captureLiveEscapes(ctx);
   sanitizeHangar(ctx);
   // sanitizeNav heals the route for the record but rewrites the live bag
   // with autopilot:false (a restore never resumes the helm — nav.js wave 85).
@@ -1184,6 +1213,33 @@ function sanitizeRestored(ctx) {
   sanitizeFieldOre(ctx);
   sanitizeJobs(ctx);
   sanitizeReputation(ctx);
+  sanitizeEscapes(ctx);
+}
+
+/**
+ * Issue #68: validate every restored NPC escape plan. The field is OPTIONAL —
+ * a legacy save simply has none and the record keeps ordinary behavior — and
+ * a corrupt, foreign-version, or hand-edited plan fails SAFE: npc-escape.js
+ * drops it entirely rather than letting an unbounded blob steer a hull or
+ * restore an impossible hull value. Terminal records lose their plan too, so
+ * a dead or captured hull can never resume an escape.
+ */
+function sanitizeEscapes(ctx) {
+  const banks = ctx.world.recordBanks;
+  const seen = new Set();
+  const sweep = (bank) => {
+    if (!Array.isArray(bank) || seen.has(bank)) return;
+    seen.add(bank);
+    for (const rec of bank) {
+      if (rec && typeof rec === 'object') sanitizeEscapeRecord(rec);
+    }
+  };
+  if (banks && typeof banks === 'object' && !Array.isArray(banks)) {
+    for (const key in banks) {
+      if (Object.hasOwn(banks, key)) sweep(banks[key]);
+    }
+  }
+  sweep(ctx.world.records);
 }
 
 /**
@@ -1228,6 +1284,66 @@ function healLiveRecords(ctx) {
     for (const rec of currentBank) if (rec === ship.record) { inBank = true; break; }
     if (inBank) ship.record.live = true;
   }
+  // Issue #68: a SAME-SYSTEM restore keeps its live ships running, so the
+  // direction of this heal matters. The RESTORED record is the truth: push
+  // its escape condition, peace and intent back onto the surviving live hull.
+  // Without this the live ship's pre-restore hull/engine/plan would be
+  // written straight back over the restored snapshot on the next frame's
+  // sync, and loading a save mid-escape would silently do nothing.
+  for (const ship of ctx.ships ?? []) {
+    const rec = ship.record;
+    const ai = ship.ai;
+    if (!rec || !ai) continue;
+    // The restored record ALREADY ended (or already left). The surviving hull
+    // is stood down here and retired by traffic.js's despawn pass, which runs
+    // before npc.js every frame — so it never gets one more update as a live
+    // ship the save says does not exist.
+    if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') {
+      ai.mode = 'drift';
+      ai.intent = false;
+      ai.fleeFrom = null;
+      ai.target = null;
+      if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(0, 0, 0);
+      continue;
+    }
+    const plan = readEscape(rec);
+    if (!plan) {
+      // The SAVE is the truth in both directions. A restored record with NO
+      // escape was not escaping, so a hull still flying a pre-restore plan is
+      // returned to its ordinary role work instead of running for a gate that
+      // this save never chose.
+      if (ai.mode === 'flee') {
+        ai.mode = escapeRoleMode(ai.role ?? ship.role);
+        ai.fleeFrom = null;
+        ai.intent = false;
+        ai.phase = null;
+      }
+      continue;
+    }
+    applyCondition(plan, ship.state, ai);
+    if (!escapeActive(rec)) continue;
+    ai.mode = 'flee';
+    ai.fleeFrom = plan.threat === 'player' ? 'player' : null;
+    ai.intent = false;
+    ai.phase = null;
+    // Only an ACTIVE plan owns the hull's position; a resolved one keeps its
+    // condition snapshot but must never teleport a flying ship.
+    if (ship.object && Array.isArray(plan.pos) && plan.pos.length === 3
+      && plan.pos.every((n) => Number.isFinite(n))) {
+      ship.object.position.set(plan.pos[0], plan.pos[1], plan.pos[2]);
+    }
+    // …and it comes back MOVING the way it was, nose along that velocity, so
+    // the reload does not silently stop a ship mid-run. escapeHeading is the
+    // shared derivation npc.js's re-instantiation uses for the same job.
+    if (escapeHeading(plan, _restoreDir)) {
+      const vel = plan.vel;
+      if (ai.velocity && typeof ai.velocity.set === 'function') ai.velocity.set(vel[0], vel[1], vel[2]);
+      if (ship.object) {
+        _restoreQ.setFromUnitVectors(_restoreNegZ, _restoreDir);
+        if (Number.isFinite(_restoreQ.x)) ship.object.quaternion.copy(_restoreQ);
+      }
+    }
+  }
 }
 
 export function restore(ctx, snap) {
@@ -1261,6 +1377,9 @@ export function restore(ctx, snap) {
   if (ctx.world.recordBanks && ctx.world.records) {
     ctx.world.recordBanks[ctx.world.currentSystem] = ctx.world.records;
   }
+  // Issue #68: validate restored escape plans BEFORE the live-ship heal reads
+  // them — a corrupt plan must never reach a hull, even for one frame.
+  sanitizeEscapes(ctx);
   healLiveRecords(ctx);
   // Legacy save (no markets envelope): adopt the restored prices as the
   // current system's table — otherwise the rebind below would rebind to the
