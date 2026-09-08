@@ -729,15 +729,32 @@ async function main() {
       if (!Number.isFinite(at)) return null;
       return cdp.eval(call(`place('${tag}', ${at})`));
     };
+    // Public target ACQUISITION is itself range-limited: `selectTarget` only
+    // offers hulls inside U.TARGET_RANGE, and attempt1 died here asking it to
+    // acquire a fresh lock already staged at 900 u. That refusal is correct
+    // game behaviour, not a defect. So an out-of-range row is staged in TWO
+    // labelled steps: acquire the lock at a legal distance first, then move
+    // the ALREADY-SELECTED hull out to the caller's real distance. npc.js only
+    // drops a stale lock when the hull is destroyed or despawned, so the
+    // selection survives the move and the assertions still measure a real
+    // >600 u. Harness-only spatial staging: nothing else is written, and
+    // `ctx.targets.current` is never touched directly.
+    const SELECT_RANGE = 600;   // U.TARGET_RANGE
+    const SELECT_STAGE = 350;   // a legal acquisition distance, well inside it
     const lockAndRead = async (tag, pred, opts = {}) => {
       const { at = null, ms = 8000, hold = null } = opts;
-      await stageAt(tag, at);
+      const farRow = Number.isFinite(at) && at > SELECT_RANGE;
+      // Step 1 — acquire: in range for a far row, otherwise the caller's own.
+      await stageAt(tag, farRow ? SELECT_STAGE : at);
       if (Number.isFinite(hold)) await cdp.eval(call(`hold('${tag}', ${hold})`));
       const locked = await cdp.eval(call(`lock('${tag}')`));
       if (locked !== true && locked !== 'true') {
         throw new Error(`issue67 lockAndRead(${tag}): public selectTarget refused`
-          + ` (staged at ${at === null ? 'current position' : at + 'u'})`);
+          + ` (acquired at ${farRow ? SELECT_STAGE : (at === null ? 'current position' : at)}u`
+          + `${farRow ? `, target ${at}u` : ''})`);
       }
+      // Step 2 — the poll below re-places at the caller's REAL distance, so a
+      // far row is read while the retained lock sits outside hail range.
       // The rendered bracket must be up AND naming this fixture before any
       // caller predicate is even consulted.
       const rendered = (v) => !!(v && v.hud && v.hud.bracketHidden === false
