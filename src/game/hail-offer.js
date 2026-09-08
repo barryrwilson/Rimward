@@ -20,7 +20,8 @@ import {
  * TWO INDEPENDENT AXES — do not merge them:
  *   `state`     persistent encounter outcome for THIS hull. A card open for
  *               some other ship, an open chart or a calm window must never
- *               erase YIELDED / DEAD IN SPACE / willing.
+ *               erase YIELDED / DEAD IN SPACE / willing. `label` is the word
+ *               the existing HUD resolve line prints — no extra row is added.
  *   `blocked`   transient, right-now reason the key would do nothing, plus
  *               `available` and `reason` — which follow hail.js's REAL KeyH
  *               precedence exactly, for every live ship state.
@@ -55,7 +56,7 @@ export const HAIL_OFFER_STATES = Object.freeze([
   'none',     // nothing locked
   'not-ship', // rock/station/gate/pod/landmark, or a dead or despawned hull
   'salvage',  // disabled hull — the salvage card is the valid interaction
-  'yielded',  // surrender COMPLETE; no further hail claim on this hull
+  'yielded',  // surrender COMPLETE; no further terms to negotiate
   // Low morale and no completed surrender. Deliberately NEUTRAL: it says only
   // that the hull is willing to break, which stays true whether or not a card
   // is offering terms right now. It is a morale reading, never a reward.
@@ -75,40 +76,43 @@ export const HAIL_BLOCKERS = Object.freeze([
 ]);
 
 /**
- * Copy per persistent state. `label` replaces the bracket resolve word,
- * `clause` joins the bracket meta line, `next` is the one-line step.
- * Deliberately narrow: a spent hail claim is NOT a spent hull — jettisoned
- * pods stay collectable and a disabled hull stays salvageable.
+ * Copy per persistent state. `label` replaces the word on the existing HUD
+ * resolve line; `next` is the one-line step, shown only when the player
+ * deliberately presses H and in the public `hail.next`.
+ *
+ * NOTHING here is printed passively. Owner call (issue #67 UI follow-up): an
+ * inactive notice on the bracket costs screen space the faction, distance and
+ * concealed-mounts marks have a better claim on, so there is no clause field
+ * and no extra DOM row. Deliberately narrow wording too: spent TERMS are not a
+ * spent hull — jettisoned pods stay collectable and a disabled hull stays
+ * salvageable.
  */
 const STATE_COPY = Object.freeze({
-  none: { verb: 'hail', reason: 'none', label: '', clause: '', next: '' },
-  'not-ship': { verb: 'hail', reason: 'no-hail', label: '', clause: '', next: '' },
+  none: { verb: 'hail', reason: 'none', label: '', next: '' },
+  'not-ship': { verb: 'hail', reason: 'no-hail', label: '', next: '' },
   salvage: {
     verb: 'salvage',
     reason: '',
     label: 'DEAD IN SPACE',
-    clause: '',
     next: 'Hail to open the salvage card.',
   },
   yielded: {
     verb: 'hail',
     reason: 'yielded',
     label: 'YIELDED',
-    clause: 'NO HAIL CLAIM',
-    next: 'They have already yielded. No further hail claim on this hull.',
+    next: 'They have already yielded. No further terms to negotiate.',
   },
-  // The band word the bracket already prints (BARGAINING / CAPITULATE) is the
-  // morale statement and stays true with or without a card. The clause and the
-  // step below describe only the case with NO card open — a live card takes
-  // the 'busy' branch, where the clause is dropped and the step names the card.
+  // The word the resolve line already prints (BARGAINING / WILLING TO YIELD)
+  // is the morale statement and stays true with or without a card. The step
+  // below describes only the case with NO card open — a live card takes the
+  // 'busy' branch, where the step names the card instead.
   willing: {
     verb: 'hail',
     reason: 'no-answer',
     label: '',
-    clause: 'NO TERMS',
     next: 'Their nerve is low, but they have offered no terms to accept.',
   },
-  'no-hail': { verb: 'hail', reason: 'no-hail', label: '', clause: '', next: '' },
+  'no-hail': { verb: 'hail', reason: 'no-hail', label: '', next: '' },
 });
 
 /** The step to take when a transient blocker is in the way. */
@@ -267,7 +271,8 @@ function transientBlocker(ctx, live, state, dist, range) {
 /**
  * Classify what the hail key would do against `live`, and why.
  * Never throws. `state`/`label` are persistent; `available`/`blocked`/`reason`
- * are this frame only and match the real KeyH result.
+ * are this frame only and match the real KeyH result. `next` is never printed
+ * passively — it answers a deliberate H press and the public `hail.next`.
  */
 export function hailOffer(ctx, live, range = U.TARGET_RANGE) {
   const lim = Number.isFinite(range) ? range : U.TARGET_RANGE;
@@ -289,13 +294,9 @@ export function hailOffer(ctx, live, range = U.TARGET_RANGE) {
   const reason = blocked ? (BLOCKED_REASON[blocked] ?? '') : copy.reason;
   // A transient blocker also owns the step: the player answers it first.
   const next = blocked ? (BLOCKED_COPY[blocked] ?? '') : copy.next;
-  // The clause is persistent, EXCEPT that a live card is already showing the
-  // terms — printing NO TERMS beside it would contradict the card.
-  const clause = state === 'willing' && blocked === 'busy' ? '' : copy.clause;
   const out = {
     state,
     label: copy.label,
-    clause,
     next,
     available,
     blocked,

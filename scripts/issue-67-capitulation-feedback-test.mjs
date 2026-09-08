@@ -189,7 +189,8 @@ for (const [label, live] of [['Claim Wren rec-15', wren], ['Red Marlow rec-9', m
   const offer = hailOffer(ctx, live);
   pin(`${label} state is willing, not a completed yield`, offer.state === 'willing', offer);
   pin(`${label} advertises no interaction`, offer.available === false, offer);
-  pin(`${label} bracket clause names the real gap`, offer.clause === 'NO TERMS', offer);
+  pin(`${label} carries no passive clause field at all`,
+    !Object.hasOwn(offer, 'clause'), offer);
   pin(`${label} next step is truthful, not a promise of negotiation`,
     offer.next === 'Their nerve is low, but they have offered no terms to accept.'
     && !/press|hail to/i.test(offer.next), offer);
@@ -204,7 +205,7 @@ for (const [label, live] of [['Claim Wren rec-15', wren], ['Red Marlow rec-9', m
   pin(`${label} public API agrees with the displayed state`,
     row.hail.state === 'willing' && row.hail.available === false
     && row.hail.reason === 'no-answer' && row.hail.next === offer.next, row.hail);
-  pin(`${label} public API reports the morale band it shows`,
+  pin(`${label} public API reports the morale band the line shows`,
     row.resolveBand === (live.state.resolve < 20 ? 'capitulate' : 'bargaining'), row);
   pin(`${label} public API reports no completed surrender`, row.surrendered === false, row);
 }
@@ -220,11 +221,11 @@ const yielded = makeShip('Bent Kestrel', { dist: 120, state: { resolve: 8, surre
 {
   const offer = hailOffer(ctx, yielded);
   pin('yielded state is distinct from willingness', offer.state === 'yielded', offer);
-  pin('yielded bracket word replaces the band', offer.label === 'YIELDED', offer);
-  pin('yielded clause is a HAIL claim only, not the whole hull',
-    offer.clause === 'NO HAIL CLAIM'
-    && /no further hail claim/i.test(offer.next)
-    && !/no claim is left\.?$/i.test(offer.next), offer);
+  pin('yielded status word replaces the band on the existing line',
+    offer.label === 'YIELDED', offer);
+  pin('yielded step names spent TERMS only, not the whole hull',
+    offer.next === 'They have already yielded. No further terms to negotiate.'
+    && !/claim/i.test(offer.next), offer);
   pin('yielded offers no interaction', offer.available === false, offer);
 
   const { miss, opened } = press(yielded);
@@ -249,7 +250,6 @@ pin('willingness and completed yield are never the same state',
   pin('own card sets the shared open flag', ctx.flags.hailOpen === true);
   const own = hailOffer(ctx, marlow);
   pin('own open card: morale state persists', own.state === 'willing', own);
-  pin('own open card: NO TERMS clause is suppressed', own.clause === '', own);
   pin('own open card: next points at the card', own.blocked === 'busy'
     && /card/i.test(own.next), own);
   pin('own open card: refusal token never claims no-answer beside a live card',
@@ -261,8 +261,8 @@ pin('willingness and completed yield are never the same state',
   // 4b. An UNRELATED card must not erase the selected target's own outcome.
   const yieldedDuringCard = hailOffer(ctx, yielded);
   pin('unrelated card leaves YIELDED intact',
-    yieldedDuringCard.state === 'yielded' && yieldedDuringCard.label === 'YIELDED'
-    && yieldedDuringCard.clause === 'NO HAIL CLAIM', yieldedDuringCard);
+    yieldedDuringCard.state === 'yielded' && yieldedDuringCard.label === 'YIELDED',
+    yieldedDuringCard);
   const wreck = makeShip('Slack Drover', { dist: 100, state: { disabled: true } });
   const wreckDuringCard = hailOffer(ctx, wreck);
   pin('unrelated card leaves DEAD IN SPACE intact',
@@ -274,8 +274,9 @@ pin('willingness and completed yield are never the same state',
 
   closeAnyCard(marlow);
   pin('card closed clears the flag', ctx.flags.hailOpen === false);
-  pin('closed card restores the NO TERMS clause',
-    hailOffer(ctx, marlow).clause === 'NO TERMS');
+  pin('closed card restores the willing morale state',
+    hailOffer(ctx, marlow).state === 'willing'
+    && hailOffer(ctx, marlow).reason === 'no-answer');
   pin('closed card restores the salvage action',
     hailOffer(ctx, wreck).available === true);
   ctx.ships.splice(ctx.ships.indexOf(wreck), 1);
@@ -324,6 +325,8 @@ for (const [label, live, wantIntents] of [
   pin('out of range keeps DEAD IN SPACE but refuses the action',
     offer.state === 'salvage' && offer.label === 'DEAD IN SPACE'
     && offer.available === false && offer.blocked === 'range', offer);
+  pin('out of range adds no passive bracket text',
+    !Object.hasOwn(offer, 'clause'), offer);
   pin('out of range names range first', offer.reason === 'range'
     && /close in/i.test(offer.next), offer);
   const { miss, opened } = press(far);
@@ -420,8 +423,8 @@ for (const [label, key, want] of [
   const steady = makeShip('Hard Case', { dist: 90, state: { resolve: 80 } });
   pin('a hull holding its nerve keeps the generic answer',
     hailOffer(ctx, steady).state === 'no-hail' && hailOffer(ctx, steady).reason === 'no-hail');
-  pin('a steady hull advertises no clause and no step',
-    hailOffer(ctx, steady).clause === '' && hailOffer(ctx, steady).next === '');
+  pin('a steady hull advertises no status word and no step',
+    hailOffer(ctx, steady).label === '' && hailOffer(ctx, steady).next === '');
   ctx.ships.splice(ctx.ships.indexOf(steady), 1);
 }
 
@@ -484,14 +487,25 @@ for (const [label, key, want] of [
   const { readFile } = await import('node:fs/promises');
   const hudSrc = await readFile(new URL('../src/systems/hud.js', import.meta.url), 'utf8');
   const hailSrc = await readFile(new URL('../src/systems/hail.js', import.meta.url), 'utf8');
-  pin('hud bracket uses the shared classifier', hudSrc.includes("from '../game/hail-offer.js'")
+  pin('hud resolve line uses the shared classifier', hudSrc.includes("from '../game/hail-offer.js'")
     && hudSrc.includes("offer.state === 'yielded'") && hudSrc.includes("resText = 'YIELDED'"));
-  pin('hud bracket clause comes from the offer', hudSrc.includes("meta += ' · ' + offer.clause"));
+  // OWNER CALL (UI follow-up): no passive text is added to the bracket meta
+  // line. It carries faction, distance and the concealed-mounts mark only.
+  pin('hud adds no passive clause to the meta line',
+    !hudSrc.includes("offer.clause")
+    && !hudSrc.includes('NO HAIL CLAIM')
+    && !hudSrc.includes('NO TERMS')
+    && !hudSrc.includes('CLOSE TO SALVAGE'));
+  pin('the capitulate band reads WILLING TO YIELD on the existing line',
+    hudSrc.includes("capitulate: 'WILLING TO YIELD'")
+    && !hudSrc.includes("capitulate: 'CAPITULATE'")
+    // the dataset band vocabulary is untouched
+    && hudSrc.includes("band = 'capitulate'"));
   pin('hud prompt is offer-driven, not band-driven',
     hudSrc.includes('if (hailOffer(ctx, target).available)')
     && !hudSrc.includes("pVerb = 'Hail'; }"));
   pin('hud toast has distinct copy for both new reasons',
-    hudSrc.includes("already yielded, no further hail claim")
+    hudSrc.includes("already yielded, no further terms")
     && hudSrc.includes("no terms offered"));
   pin('hail.js keeps the legacy primitive miss shape',
     hailSrc.includes("ctx.emit('hailMiss', payload)")
@@ -633,10 +647,9 @@ for (const [label, key, want] of [
     const { miss } = press(live);
     pin(`open card + ${state}: real KeyH is swallowed silently`, miss === null, miss);
   }
-  pin('open card suppresses only the willing clause',
-    hailOffer(ctx, advWillingNear).clause === ''
-    && hailOffer(ctx, advYielded).clause === 'NO HAIL CLAIM'
-    && hailOffer(ctx, advYielded).label === 'YIELDED');
+  pin('an open card never erases the persistent status word',
+    hailOffer(ctx, advYielded).label === 'YIELDED'
+    && hailOffer(ctx, advWreckNear).label === 'DEAD IN SPACE');
   closeAnyCard(advWillingNear);
 
   // --- and with nothing in the way, every row speaks for itself -------------

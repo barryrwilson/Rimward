@@ -8,21 +8,23 @@
  *
  *   L1  front door   - fresh Marked origin (fear 15), and a seeded low resolve
  *                      alone grants no surrender and no reward
- *   L2  low morale   - the bracket keeps the band and adds NO TERMS, no
- *                      useless Hail prompt is offered, and the real KeyH
+ *   L2  low morale   - the existing resolve line reads WILLING TO YIELD (or
+ *                      BARGAINING), the meta line stays faction/distance only,
+ *                      no useless Hail prompt is offered, and the real KeyH
  *                      answers 'no-answer'
  *   L3  earned yield - a real bargaining card, resolved through the PUBLIC
- *                      demandRansom, leaves YIELDED / NO HAIL CLAIM
+ *                      demandRansom, turns that same line to YIELDED
  *   L4  no double dip- repeated public H after the yield moves no credits, no
  *                      cargo, no pods and no fear
- *   L5  open cards   - this hull's own card never prints NO TERMS beside
- *                      itself; an UNRELATED card never erases YIELDED
+ *   L5  open cards   - a card open on this hull or on another one never
+ *                      erases the selected hull's own status word
  *   L6  empty holds  - an intact hull with empty holds reads exactly like a
  *                      laden one; the manifest is never disclosed
  *   L7  salvage      - KeyH opens the rendered salvage card on a dead hulk,
  *                      and empty holds offer no cargo verb and no reward
- *   L8  out of range - DEAD IN SPACE plus CLOSE TO SALVAGE, and the real KeyH
- *                      answers 'range'
+ *   L8  out of range - the line still reads DEAD IN SPACE at a real >600 u,
+ *                      nothing passive is added, and the real KeyH answers
+ *                      'range'
  *   L9  overlap      - an open chart outranks range and morale for BOTH the
  *                      shared feedback and the real key ('overlay-chart'),
  *                      while the persistent state survives untouched
@@ -38,6 +40,13 @@
  * demandRansom path through `rw.act`, and `state.surrendered` is never written
  * anywhere in this file. No new runtime debug API is exposed, and this probe
  * changes no gameplay source.
+ *
+ * PRESENTATION (owner call, issue #67 UI follow-up): no dedicated row and no
+ * passive clause is added anywhere. The existing resolve line carries the
+ * status word - DEFIANT / SHAKEN / BARGAINING / WILLING TO YIELD / YIELDED /
+ * DEAD IN SPACE - the meta line keeps faction, distance and the concealed
+ * mounts mark only, and a refusal is explained on a deliberate H press. Every
+ * assertion below reads that line and asserts the meta line stays clean.
  *
  * Run: node scripts/issue-67-live-probe.mjs   (npm run test:capitulation-live)
  * Output: out/issue67/live/ (ignored path).
@@ -311,31 +320,75 @@ const SETUP = `(async () => {
     throw new Error('issue67 SETUP: no authored ship asset ready within 15000ms: ' + tries.map(label).join(', '));
   }
   const bag = { ships: {} };
-  bag.spawn = (tag, pilot, dx, resolve) => {
+  // privilegedFixture: hunting picks the fixture's LOGICAL role. The
+  // inherited hail66 spawn always asked for a hunting pirate
+  // (alwaysHuntsPlayer, personality 80, ai.intent + mode 'hunt'), which is why
+  // attempt2's "low resolve" hulls all read DEFIANT: spawnLiveShip COMPUTES
+  // live state from the record, and an engaged hunter's resolve is recomputed
+  // every threat tick, so a record-level resolve never survived. A quiet
+  // fixture must therefore be an UNTHREATENED civilian: role 'trader', no
+  // alwaysHuntsPlayer, low personality, and no combat stamp. The authored
+  // asset (redledger visual) is unchanged - only the logical record differs.
+  bag.spawn = (tag, pilot, dx, resolve, hunting) => {
     const pos = c.ship.object.position.clone();
     pos.x += dx;
+    const hunts = hunting === true;
     let live = null;
     for (const t of tries) {
       if (!readyOf(t)) continue;
-      live = spawnLiveShip(c, {
+      const rec = {
         id: 'i67-' + tag + '-' + Date.now(),
         name: tag,
         pilot,
         classKey: t.classKey,
         faction: t.faction,
-        role: t.role,
+        role: hunts ? t.role : 'trader',
         resolve: Number.isFinite(resolve) ? resolve : 45,
-        personality: 80,
-        alwaysHuntsPlayer: true,
-      }, pos);
+        personality: hunts ? 80 : 20,
+      };
+      if (hunts) rec.alwaysHuntsPlayer = true;
+      live = spawnLiveShip(c, rec, pos);
       if (live) break;
     }
     if (!live) return { ok: false, tag };
     live._i67 = true;
     c.ships.push(live);
-    if (live.ai) { live.ai.calmUntil = 0; live.ai.intent = true; live.ai.mode = 'hunt'; }
+    if (live.ai) {
+      live.ai.calmUntil = 0;
+      live.ai.intent = hunts;
+      live.ai.mode = hunts ? 'hunt' : 'route';
+      if (!hunts) { live.ai.target = null; live.ai.phase = null; live.ai.demanding = false; }
+    }
     bag.ships[tag] = live;
-    return { ok: true, tag, pilot };
+    if (!hunts && Number.isFinite(resolve)) bag.hold(tag, resolve);
+    return { ok: true, tag, pilot, role: live.record ? live.record.role : null,
+      resolve: live.state ? live.state.resolve : null };
+  };
+  /**
+   * privilegedFixture: hold a quiet fixture in its seeded INITIAL condition.
+   * Seeds state.resolve explicitly (allowed: it is a spawn property) and
+   * keeps the hull unthreatened so npc.js's resolve tick stays in its early
+   * return and cannot drift the band mid-check. It NEVER writes
+   * state.surrendered, never touches cargo, credits, fear or pods, and it
+   * refuses to touch a hull that has already yielded or been disabled - the
+   * real outcome of the public demandRansom path is preserved exactly.
+   */
+  bag.hold = (tag, resolve) => {
+    const s = bag.ships[tag];
+    if (!s || !s.state) return false;
+    if (s.state.surrendered === true || s.state.disabled === true) return 'outcome-preserved';
+    if (Number.isFinite(resolve)) s.state.resolve = resolve;
+    s.state.lastCombatAt = -1e6; // no recent threat → resolve tick returns early
+    if (s.ai) {
+      s.ai.intent = false;
+      s.ai.target = null;
+      s.ai.phase = null;
+      s.ai.demanding = false;
+      s.ai.resolveBoost = 0;
+      s.ai.calmUntil = 0;
+      if (s.ai.mode === 'hunt' || s.ai.mode === 'duel') s.ai.mode = 'route';
+    }
+    return s.state.resolve;
   };
   bag.park = () => {
     const base = c.ship.object.position;
@@ -371,13 +424,6 @@ const SETUP = `(async () => {
   // writes an outcome the probe then asserts - resolve is an ordinary spawn
   // property, empty holds are an ordinary stock condition, and distance is
   // just where a hull happens to be. state.surrendered is never written.
-  bag.seedResolve = (tag, n) => {
-    const s = bag.ships[tag];
-    if (!s || !s.state) return false;
-    s.state.resolve = n;
-    if (s.ai) { s.ai.band = 'defiant'; s.ai.intent = false; s.ai.mode = 'route'; s.ai.calmUntil = 0; }
-    return s.state.resolve;
-  };
   bag.emptyHolds = (tag) => {
     const s = bag.ships[tag];
     if (!s || !s.state || !Array.isArray(s.state.cargo)) return false;
@@ -663,14 +709,57 @@ async function main() {
     };
 
     // Read the rendered HUD + public observation for one locked fixture.
-    const lockAndRead = async (tag, pred, ms = 8000) => {
+    /**
+     * Select a fixture through the PUBLIC handle and wait for the RENDERED
+     * bracket to catch up with it.
+     *
+     * attempt2 failed twice here. (a) The wait only read the public snapshot,
+     * so L3 recorded a stale `DEFIANT` bracket one frame after the yield had
+     * already landed publicly. Every read now requires the bracket to be
+     * visible AND to name this fixture, on top of the caller's predicate.
+     * (b) A yielded hull legitimately drifts away and left selectTarget with
+     * nothing in range. `opts.at` is explicitly labelled harness-only SPATIAL
+     * staging: it re-places the hull at the caller's OWN distance on every
+     * poll so a bounded UI check is not a race against the drift. It moves the
+     * hull and nothing else - the surrender, credits, cargo, pods, fear and AI
+     * outcome of the real public path are untouched - and the distance is
+     * always the caller's, never a default, so the >600 u rows stay >600 u.
+     */
+    const stageAt = async (tag, at) => {
+      if (!Number.isFinite(at)) return null;
+      return cdp.eval(call(`place('${tag}', ${at})`));
+    };
+    const lockAndRead = async (tag, pred, opts = {}) => {
+      const { at = null, ms = 8000, hold = null } = opts;
+      await stageAt(tag, at);
+      if (Number.isFinite(hold)) await cdp.eval(call(`hold('${tag}', ${hold})`));
       const locked = await cdp.eval(call(`lock('${tag}')`));
       if (locked !== true && locked !== 'true') {
-        throw new Error(`issue67 lockAndRead(${tag}): public selectTarget refused`);
+        throw new Error(`issue67 lockAndRead(${tag}): public selectTarget refused`
+          + ` (staged at ${at === null ? 'current position' : at + 'u'})`);
       }
-      const v = await waitUntil(PROBE, pred || ((s) => !!(s && s.hud && s.hud.bracketHidden === false)), ms);
-      return v;
+      // The rendered bracket must be up AND naming this fixture before any
+      // caller predicate is even consulted.
+      const rendered = (v) => !!(v && v.hud && v.hud.bracketHidden === false
+        && v.hud.name === tag && v.target && v.target.name === tag);
+      const match = (v) => rendered(v) && (!pred || pred(v));
+      const t0 = Date.now();
+      let last = null;
+      while (Date.now() - t0 < ms) {
+        await stageAt(tag, at);
+        if (Number.isFinite(hold)) await cdp.eval(call(`hold('${tag}', ${hold})`));
+        try { last = await cdp.eval(PROBE); } catch (err) { last = { evalError: String(err?.message || err) }; }
+        try { if (match(last)) return last; } catch { /* keep polling */ }
+        await sleep(150);
+      }
+      return last;
     };
+    // A card is CLOSED when its root is not displayed and the public flags say
+    // so. `card.present` only means the DOM node exists — hail.js builds it
+    // once at init and hides it, so demanding node removal (attempt2's L4/L7)
+    // can never pass and proves nothing.
+    const cardClosed = (v) => !!(v && v.card && v.card.display !== 'block'
+      && v.hail && v.hail.open === false && v.hailOpenFlag === false);
     // Press the ordinary hail key and return the NEW public hailMiss row.
     // `t` is the ring's own event timestamp: a fresh row must carry a strictly
     // later `t` than the newest row already present, so a stale identical
@@ -694,23 +783,42 @@ async function main() {
       const v = await waitUntil(PROBE, fresh, 6000);
       return { probe: v, miss: fresh(v) ? newestMiss(v) : null, base };
     };
-    const metaHas = (p, word) => !!(p && p.hud && p.hud.meta && p.hud.meta.includes(word));
+    // The meta line must never gain passive issue-#67 text. Checked at every
+    // rendered read below, in every state and under every blocker.
+    const PASSIVE = ['NO TERMS', 'NO HAIL CLAIM', 'NO FURTHER TERMS', 'CLOSE TO SALVAGE'];
+    const metaClean = (v) => !!(v && v.hud && typeof v.hud.meta === 'string'
+      && PASSIVE.every((w) => !v.hud.meta.includes(w)));
+
+    // Fixture constants. LOW/BARG are the seeded INITIAL resolves that put a
+    // quiet hull in the capitulate / bargaining band; NEAR is the reported
+    // Claim Wren distance, comfortably inside the 600 u hail range. The
+    // out-of-range rows below use their own explicit 900 u and never these.
+    const LOW = 8;
+    const BARG = 30;
+    const NEAR = 176;
 
     // ================= L1 front door: fresh Marked origin =================
     {
       await stage();
       // The front-door receipt taken above, before any fixture mutation.
       const natural = results.origin;
-      const spawned = JSON.parse(await cdp.eval(call("spawn('fresh', 'Marked Contact', 60, 6)")));
+      // Quiet, UNTHREATENED low-morale fixture: a civilian record with no
+      // hunt intent, so npc.js's resolve tick stays in its early return and
+      // the seeded capitulate-band resolve actually holds. attempt2 spawned a
+      // hunting pirate here and read DEFIANT.
+      const spawned = JSON.parse(await cdp.eval(call(`spawn('fresh', 'Marked Contact', 60, ${LOW}, false)`)));
       await cdp.eval(call("park()"));
-      await cdp.eval(call("place('fresh', 350)"));
       // Post-fixture economic baseline (5000, set by the survivability block),
       // deliberately distinct from the pre-fixture origin receipt above.
       const before = await waitUntil(PROBE, (s) => !!(s && s.target !== undefined), 4000);
-      const p = await lockAndRead('fresh');
+      const p = await lockAndRead('fresh', (v) => v.target.hail.state === 'willing'
+        && v.hud.resolve.indexOf('WILLING TO YIELD') === 0, { at: 350, hold: LOW });
       await cdp.shot('01-l1-fresh-marked-origin.png');
       const state = JSON.parse(await cdp.eval(call("effects('fresh')")));
       record('L1', !!(spawned.ok
+        && metaClean(p)
+        && spawned.role === 'trader'
+        && spawned.resolve === LOW
         && natural.origin === 'marked'
         && natural.fear === 15
         && natural.credits === 350
@@ -726,18 +834,20 @@ async function main() {
 
     // ================= L2 low morale: bracket, prompt, real KeyH ==========
     {
-      const p = await lockAndRead('fresh', (s) => !!(s && s.hud && s.hud.bracketHidden === false
-        && s.hud.meta && s.hud.meta.length > 0));
+      // Wait for the RENDERED status word, not just public state.
+      const p = await lockAndRead('fresh', (v) => /^WILLING TO YIELD|^BARGAINING/.test(v.hud.resolve)
+        && v.target.hail.state === 'willing', { at: NEAR, hold: LOW });
       await cdp.shot('02-l2-no-terms-bracket.png');
       const bandWord = p.hud.resolve;
       const before = p;
       const { probe: after, miss } = await pressHail('no-answer');
       await cdp.shot('03-l2-no-answer-toast.png');
       record('L2', !!(p.hud.bracketHidden === false
-        // The morale band the player already read is still printed...
-        && /CAPITULATE|BARGAINING/.test(bandWord)
-        // ...and the bracket now says what is missing.
-        && metaHas(p, 'NO TERMS')
+        // The one existing line names the morale honestly...
+        && /^WILLING TO YIELD|^BARGAINING/.test(bandWord)
+        // ...and the meta line gains NOTHING passive.
+        && metaClean(p)
+        && p.hud.meta.includes('u')
         // No prompt advertising a key that opens nothing.
         && (p.hud.promptHidden === true || p.hud.promptVerb !== 'Hail')
         && p.target.hail.available === false
@@ -745,15 +855,15 @@ async function main() {
         && /offered no terms/i.test(p.target.hail.next)
         // The real key press answers with the same word, and opens no card.
         && miss && miss.reason === 'no-answer' && miss.verb === 'hail'
-        && after.hailOpenFlag === false
-        && after.card.present === false
+        && cardClosed(after)
         && after.credits === before.credits && after.fear === before.fear),
       { hud: p.hud, hail: p.target.hail, miss, before: { credits: before.credits, fear: before.fear }, after: { credits: after.credits, fear: after.fear } });
     }
 
     // ================= L3 earned yield through the PUBLIC path ============
     {
-      const p0 = await lockAndRead('fresh');
+      const p0 = await lockAndRead('fresh', (v) => v.target.hail.state === 'willing'
+        && v.hud.resolve.indexOf('WILLING TO YIELD') === 0, { at: NEAR, hold: LOW });
       // The game's own bargaining card for this hull, with the ordinary verbs.
       const card = await openCardFor('fresh', {
         intents: ['demandRansom', 'letGo', 'keepFiring'],
@@ -764,8 +874,13 @@ async function main() {
       // Resolved by the PUBLIC handle, bound to the live conversation.
       const receipt = JSON.parse(await cdp.eval(
         `(() => JSON.stringify(window.rimward.act({ v: 2, name: 'hailResolve', args: { intent: 'demandRansom', expectedConversationId: ${JSON.stringify(card.hail.conversationId)} } })))()`));
-      const p = await lockAndRead('fresh', (s) => !!(s && s.target && s.target.hail
-        && s.target.hail.state === 'yielded' && s.hud && s.hud.bracketHidden === false));
+      // The RENDERED bracket must actually show the yield. attempt2 accepted
+      // the public state alone and recorded a stale DEFIANT bracket. No `hold`
+      // here: the hull has yielded and bag.hold refuses a settled outcome, so
+      // only the spatial staging keeps it selectable while the UI is read.
+      const p = await lockAndRead('fresh', (v) => v.target.hail.state === 'yielded'
+        && v.hud.resolve.indexOf('YIELDED') === 0
+        && v.hud.band === 'capitulate', { at: NEAR });
       await cdp.shot('05-l3-yielded-bracket.png');
       record('L3', !!(p0.target.hail.state === 'willing'
         && receipt.ok === true
@@ -774,18 +889,23 @@ async function main() {
         && p.target.hail.state === 'yielded'
         && p.target.hail.available === false
         && p.target.hail.reason === 'yielded'
-        && /no further hail claim/i.test(p.target.hail.next)
+        && p.target.hail.next === 'They have already yielded. No further terms to negotiate.'
+        // The SAME line changed word: WILLING TO YIELD before, YIELDED after.
+        && p0.hud.resolve.indexOf('WILLING TO YIELD') === 0
         && p.hud.resolve.indexOf('YIELDED') === 0
-        && metaHas(p, 'NO HAIL CLAIM')
-        && !metaHas(p, 'NO TERMS')
+        // ...and the dataset band vocabulary is unchanged.
+        && p.hud.band === 'capitulate'
+        && metaClean(p)
         && (p.hud.promptHidden === true || p.hud.promptVerb !== 'Hail')
         && p.credits > creditsBefore),
-      { receipt, before: p0.target.hail, after: p.target.hail, hud: p.hud, creditsBefore, creditsAfter: p.credits });
+      { receipt, before: p0.target.hail, after: p.target.hail,
+        hudBefore: p0.hud, hudAfter: p.hud, creditsBefore, creditsAfter: p.credits });
     }
 
     // ================= L4 repeated public H pays nothing twice ============
     {
-      const before = await lockAndRead('fresh');
+      const before = await lockAndRead('fresh', (v) => v.target.hail.state === 'yielded',
+        { at: NEAR });
       // Every press is RETAINED. Each one must produce its own fresh 'yielded'
       // refusal, open no card, and leave credits/fear/pods/hold untouched, and
       // the aggregate below requires all of them - no per-press pin is dropped.
@@ -793,6 +913,7 @@ async function main() {
       let mark = await missMark();
       let last = before;
       for (let i = 0; i < 3; i++) {
+        await cdp.eval(call(`place('fresh', ${NEAR})`)); // harness-only staging
         const r = await pressHail('yielded', mark);
         last = r.probe;
         presses.push({
@@ -800,7 +921,7 @@ async function main() {
           miss: r.miss,
           freshRefusal: !!(r.miss && r.miss.reason === 'yielded' && r.miss.verb === 'hail'),
           isNewRow: !!(r.miss && (!Number.isFinite(r.miss.t) || r.miss.t > r.base.t)),
-          noCard: last.hailOpenFlag === false && last.card.present === false,
+          noCard: cardClosed(last),
           noEffect: last.credits === before.credits && last.fear === before.fear
             && last.pods === before.pods && last.hold === before.hold,
         });
@@ -811,6 +932,7 @@ async function main() {
       const allPresses = presses.length === 3 && presses.every((r) =>
         r.freshRefusal && r.isNewRow && r.noCard && r.noEffect);
       record('L4', !!(allPresses
+        && metaClean(last)
         && last.credits === before.credits
         && last.fear === before.fear
         && last.pods === before.pods
@@ -824,46 +946,50 @@ async function main() {
     // ================= L5 own card and unrelated card ======================
     {
       // 5a. an UNRELATED card must not erase the selected hull's YIELDED state
-      const other = JSON.parse(await cdp.eval(call("spawn('other', 'Deel Sallow', 70, 30)")));
+      const other = JSON.parse(await cdp.eval(call(`spawn('other', 'Deel Sallow', 70, ${BARG}, false)`)));
       await cdp.eval(call("park()"));
       await cdp.eval(call("place('other', 200)"));
       await openCardFor('other', {
         intents: ['demandRansom', 'letGo', 'keepFiring'],
         line: 'They are breaking.',
       });
-      const withUnrelated = await lockAndRead('fresh', (s) => !!(s && s.hailOpenFlag === true
-        && s.hud && s.hud.bracketHidden === false && s.target && s.target.name));
+      // The yielded hull has drifted; stage it back into range so the public
+      // selection can happen at all (attempt2 died here), then require the
+      // RENDERED yield to still be on the bracket beside the unrelated card.
+      const withUnrelated = await lockAndRead('fresh', (v) => v.hailOpenFlag === true
+        && v.target.hail.state === 'yielded'
+        && v.hud.resolve.indexOf('YIELDED') === 0, { at: NEAR });
       await cdp.shot('07-l5-unrelated-card.png');
 
-      // 5b. this hull's OWN card must never print NO TERMS beside itself
+      // 5b. this hull's OWN card must not disturb its own status word
       await stage();
-      const low = JSON.parse(await cdp.eval(call("spawn('own', 'Red Marlow', 80, 30)")));
+      const low = JSON.parse(await cdp.eval(call(`spawn('own', 'Red Marlow', 80, ${BARG}, false)`)));
       await cdp.eval(call("park()"));
-      await cdp.eval(call("place('own', 220)"));
-      const noCard = await lockAndRead('own', (s) => !!(s && s.hud && s.hud.meta
-        && s.hud.meta.includes('NO TERMS')));
+      const noCard = await lockAndRead('own', (v) => v.hud.resolve.indexOf('BARGAINING') === 0
+        && v.target.hail.state === 'willing', { at: 220, hold: BARG });
       await openCardFor('own', {
         intents: ['demandRansom', 'letGo', 'keepFiring'],
         line: 'They are breaking.',
       });
-      const withOwn = await lockAndRead('own', (s) => !!(s && s.hailOpenFlag === true
-        && s.hud && s.hud.meta !== undefined && !s.hud.meta.includes('NO TERMS')));
+      const withOwn = await lockAndRead('own', (v) => v.hailOpenFlag === true
+        && v.target.hail.blocked === 'busy', { at: 220 });
       await cdp.shot('08-l5-own-card.png');
       record('L5', !!(other.ok && low.ok
         // unrelated card open: the selected hull keeps its own outcome
         && withUnrelated.hailOpenFlag === true
         && withUnrelated.target.hail.state === 'yielded'
         && withUnrelated.hud.resolve.indexOf('YIELDED') === 0
-        && withUnrelated.hud.meta.includes('NO HAIL CLAIM')
-        // own card open: the morale state persists, the contradiction does not
-        && noCard.hud.meta.includes('NO TERMS')
+        && metaClean(withUnrelated)
+        // own card open: the morale word persists, the contradiction does not
+        && noCard.hud.resolve.indexOf('BARGAINING') === 0
         && withOwn.target.hail.state === 'willing'
-        && withOwn.hud.meta.includes('NO TERMS') === false
+        && withOwn.hud.resolve.indexOf('BARGAINING') === 0
         && withOwn.target.hail.blocked === 'busy'
         && withOwn.target.hail.reason === ''
-        && /card/i.test(withOwn.target.hail.next)),
+        && /card/i.test(withOwn.target.hail.next)
+        && metaClean(noCard) && metaClean(withOwn)),
       { unrelated: { hail: withUnrelated.target.hail, hud: withUnrelated.hud },
-        ownBefore: noCard.hud.meta, ownDuring: { hail: withOwn.target.hail, hud: withOwn.hud } });
+        ownBefore: noCard.hud, ownDuring: { hail: withOwn.target.hail, hud: withOwn.hud } });
       await cdp.eval(call("remove('other')"));
       await cdp.eval(call("remove('own')"));
       await cdp.eval(call("remove('fresh')"));
@@ -872,20 +998,22 @@ async function main() {
     // ================= L6 intact empty holds read the same =================
     {
       await stage();
-      const laden = JSON.parse(await cdp.eval(call("spawn('laden', 'Grey Tern', 60, 8)")));
-      const empty = JSON.parse(await cdp.eval(call("spawn('hollow', 'Hollow Skiff', 75, 8)")));
+      const laden = JSON.parse(await cdp.eval(call(`spawn('laden', 'Grey Tern', 60, ${LOW}, false)`)));
+      const empty = JSON.parse(await cdp.eval(call(`spawn('hollow', 'Hollow Skiff', 75, ${LOW}, false)`)));
       await cdp.eval(call("park()"));
       await cdp.eval(call("emptyHolds('hollow')"));
-      await cdp.eval(call("place('laden', 170)"));
-      const a = await lockAndRead('laden', (s) => !!(s && s.hud && s.hud.meta && s.hud.meta.includes('NO TERMS')));
-      await cdp.eval(call("place('hollow', 170)"));
-      const b = await lockAndRead('hollow', (s) => !!(s && s.hud && s.hud.meta && s.hud.meta.includes('NO TERMS')));
+      const a = await lockAndRead('laden', (v) => v.hud.resolve.indexOf('WILLING TO YIELD') === 0
+        && v.target.hail.state === 'willing', { at: 170, hold: LOW });
+      const b = await lockAndRead('hollow', (v) => v.hud.resolve.indexOf('WILLING TO YIELD') === 0
+        && v.target.hail.state === 'willing', { at: 170, hold: LOW });
       await cdp.shot('09-l6-empty-holds.png');
       const strip = (row) => JSON.stringify({ ...row.target.hail });
       record('L6', !!(laden.ok && empty.ok
         && a.target.hail.state === 'willing' && b.target.hail.state === 'willing'
         && strip(a) === strip(b)
-        && a.hud.meta.includes('NO TERMS') && b.hud.meta.includes('NO TERMS')
+        // both read the same status word and neither leaks the manifest
+        && a.hud.resolve === b.hud.resolve
+        && metaClean(a) && metaClean(b)
         // the manifest is never published on either row
         && !Object.hasOwn(a.target, 'cargo') && !Object.hasOwn(b.target, 'cargo')
         && JSON.stringify(Object.keys(a.target).sort()) === JSON.stringify(Object.keys(b.target).sort())),
@@ -896,8 +1024,9 @@ async function main() {
     // ================= L7 disabled salvage, empty holds, no reward ========
     {
       await cdp.eval(call("disable('hollow')"));
-      const p = await lockAndRead('hollow', (s) => !!(s && s.target && s.target.hail
-        && s.target.hail.available === true));
+      const p = await lockAndRead('hollow', (v) => v.target.hail.available === true
+        && v.hud.resolve.indexOf('DEAD IN SPACE') === 0
+        && v.hud.promptHidden === false, { at: 170 });
       const before = p;
       await cdp.eval(KEY('KeyH', 'h'));
       const card = await waitUntil(PROBE, (s) => !!(s && s.card && s.card.display === 'block'
@@ -905,6 +1034,7 @@ async function main() {
       await cdp.shot('10-l7-salvage-card.png');
       const after = await waitUntil(PROBE, (s) => !!s, 1000);
       record('L7', !!(p.hud.resolve.indexOf('DEAD IN SPACE') === 0
+        && metaClean(p)
         && p.target.hail.state === 'salvage'
         && p.target.hail.available === true
         && p.hud.promptHidden === false
@@ -924,19 +1054,24 @@ async function main() {
         after: { credits: after.credits, pods: after.pods, hold: after.hold } });
     }
 
-    // ================= L8 out of range: CLOSE TO SALVAGE + range miss =====
+    // ================= L8 out of range: DEAD IN SPACE + real range miss ====
     {
       await stage();
+      // A REAL out-of-range distance. `at` is the caller's own 900 u, so the
+      // staging that keeps the hull steady can never pull it inside 600 u.
       const far = await cdp.eval(call("place('hollow', 900)"));
-      const p = await lockAndRead('hollow', (s) => !!(s && s.hud && s.hud.meta
-        && s.hud.meta.includes('CLOSE TO SALVAGE')));
+      const p = await lockAndRead('hollow', (v) => v.target.hail.blocked === 'range'
+        && v.target.range > 600, { at: 900 });
       await cdp.shot('11-l8-out-of-range.png');
       const { probe: after, miss } = await pressHail('range');
       record('L8', !!(Number(far) > 600
-        // the persistent state survives the transient blocker...
+        // the persistent status word survives the transient blocker...
         && p.hud.resolve.indexOf('DEAD IN SPACE') === 0
         && p.target.hail.state === 'salvage'
-        && metaHas(p, 'CLOSE TO SALVAGE')
+        // ...the existing meta line already carries the real distance, and
+        // NOTHING passive is added to it
+        && metaClean(p)
+        && p.hud.meta.includes('u')
         // ...but nothing is advertised or offered
         && p.target.hail.available === false
         && p.target.hail.blocked === 'range'
@@ -945,7 +1080,7 @@ async function main() {
         // and the real key answers range, with the measured distance
         && miss && miss.reason === 'range' && miss.verb === 'salvage'
         && Number.isFinite(miss.dist) && miss.dist > 600
-        && after.card.present === false),
+        && cardClosed(after)),
       { far, hud: p.hud, hail: p.target.hail, miss });
       await cdp.eval(call("remove('hollow')"));
     }
@@ -957,30 +1092,29 @@ async function main() {
     // chart key, and then again with the chart closed.
     {
       await stage();
-      const far = JSON.parse(await cdp.eval(call("spawn('overlap', 'Long Marlin', 60, 8)")));
-      const low = JSON.parse(await cdp.eval(call("spawn('lowmoral', 'Pale Freida', 75, 8)")));
+      const far = JSON.parse(await cdp.eval(call(`spawn('overlap', 'Long Marlin', 60, ${LOW}, false)`)));
+      const low = JSON.parse(await cdp.eval(call(`spawn('lowmoral', 'Pale Freida', 75, ${LOW}, false)`)));
       await cdp.eval(call("park()"));
       await cdp.eval(call("disable('overlap')"));
-      await cdp.eval(call("place('overlap', 900)"));
-      await cdp.eval(call("place('lowmoral', 200)"));
 
-      const farClear = await lockAndRead('overlap', (s) => !!(s && s.target && s.target.hail
-        && s.target.hail.blocked === 'range'));
+      // 900 u is real and stays real through every staged re-place.
+      const farClear = await lockAndRead('overlap', (v) => v.target.hail.blocked === 'range'
+        && v.target.range > 600, { at: 900 });
       // Ordinary chart key, exactly as a player opens it.
       await cdp.eval(KEY('KeyM', 'm'));
-      const farChart = await waitUntil(PROBE, (s) => !!(s && s.target && s.target.hail
-        && s.target.hail.blocked === 'overlay-chart'), 6000);
+      const farChart = await lockAndRead('overlap', (v) => v.target.hail.blocked === 'overlay-chart',
+        { at: 900 });
       const farMiss = await pressHail('overlay-chart');
       await cdp.shot('12-l9-chart-overlap.png');
-      await cdp.eval(call("lock('lowmoral')"));
-      const lowChart = await waitUntil(PROBE, (s) => !!(s && s.target && s.target.name
-        && s.target.hail && s.target.hail.blocked === 'overlay-chart'), 6000);
+      const lowChart = await lockAndRead('lowmoral', (v) => v.target.hail.blocked === 'overlay-chart',
+        { at: 200, hold: LOW });
       const lowMiss = await pressHail('overlay-chart');
       await cdp.eval(KEY('KeyM', 'm'));
-      const lowClear = await waitUntil(PROBE, (s) => !!(s && s.target && s.target.hail
-        && s.target.hail.blocked === ''), 6000);
+      const lowClear = await lockAndRead('lowmoral', (v) => v.target.hail.blocked === ''
+        && v.hud.resolve.indexOf('WILLING TO YIELD') === 0, { at: 200, hold: LOW });
 
       record('L9', !!(far.ok && low.ok
+        && far.role === 'trader' && low.role === 'trader'
         // with the chart closed each hull speaks for itself
         && farClear.target.hail.state === 'salvage'
         && farClear.target.hail.reason === 'range'
@@ -996,7 +1130,9 @@ async function main() {
         && lowChart.target.hail.state === 'willing'
         // ...and the real key agrees with the published reason, for both.
         && farMiss.miss && farMiss.miss.reason === 'overlay-chart'
-        && lowMiss.miss && lowMiss.miss.reason === 'overlay-chart'),
+        && lowMiss.miss && lowMiss.miss.reason === 'overlay-chart'
+        // and no state, blocked or overlay ever adds passive bracket text
+        && [farClear, farChart, lowChart, lowClear].every(metaClean)),
       { farClear: farClear.target.hail, farChart: farChart.target.hail, farMiss: farMiss.miss,
         lowClear: lowClear.target.hail, lowChart: lowChart.target.hail, lowMiss: lowMiss.miss });
       await cdp.eval(call("remove('overlap')"));
