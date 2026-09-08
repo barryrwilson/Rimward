@@ -11,6 +11,7 @@ import {
 } from './overlay-policy.js';
 import { decodeKeyCode } from './key-code.js';
 import { COMMANDS, codeOf, conflictFor } from './bindings.js';
+import { registerBerthInput } from '../game/launch-clearance.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -814,6 +815,59 @@ export function initControls(ctx) {
     input.driftHeld = false;
     // Throttle setpoint deliberately persists (§5.1 persistent setpoint).
   };
+
+  /**
+   * Berth transition neutral (issue #65). Clearing ctx.input is not enough:
+   * the held-key Set, the reticle pixel position, the fire button, the F
+   * double-tap clock, and the pending edge pulses are all private to this
+   * closure and would be republished on the very next update() — an off-centre
+   * Launch click would re-steer the nose one frame after release, and a key
+   * held through the berth would still deliver thrust. Only controls.js can
+   * drop them, so dock() and undock() ask for it through the berth hook.
+   *
+   * The reticle goes to "not moved yet" (null = screen centre), not to the last
+   * cursor pixel, so the first frame out of the berth steers nowhere. A real
+   * mousemove restores helm control immediately.
+   *
+   * The throttle setpoint is zeroed at BOTH transitions. §5.1's "persistent
+   * setpoint" covers blur, not the berth: a berth that took the ship must not
+   * hold a queued thrust command, and on launch a stale setpoint would fly
+   * straight past the 5 s lane that was actually verified.
+   *
+   * input.fullStop is left alone — it is an explicit "hold station" the player
+   * commanded, and a launch under full stop simply holds at the cleared
+   * release point, which is exactly as collision-safe as creeping out of it.
+   */
+  const neutralizeForBerth = (mode) => {
+    pressed.clear();
+    fireDown = false;
+    mouseX = null;
+    mouseY = null;
+    lastFTapAt = -Infinity;
+    dropLease(ctx, 'berth');
+    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+    input.steerX = 0;
+    input.steerY = 0;
+    input.strafeX = 0;
+    input.strafeY = 0;
+    input.roll = 0;
+    input.throttle = 0;
+    input.throttleHeld = false;
+    input.fireHeld = false;
+    input.driftHeld = false;
+    input.afterburnerPressed = false;
+    input.targetPressed = false;
+    input.hailPressed = false;
+    input.dockPressed = false;
+    input.cameraPressed = false;
+    input.matchSpeedPressed = false;
+    input.reticleLockPressed = false;
+    if (ctx.targets && ctx.targets.reticleScreen) {
+      ctx.targets.reticleScreen.x = 0;
+      ctx.targets.reticleScreen.y = 0;
+    }
+  };
+  registerBerthInput(ctx, (_ctx, mode) => neutralizeForBerth(mode));
 
   window.addEventListener('keydown', (e) => {
     const code = decodeKeyCode(e);

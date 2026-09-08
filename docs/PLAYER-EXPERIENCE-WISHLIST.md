@@ -201,6 +201,15 @@ checked against the current initiative text before capture.
   `.rw-slow-lamp`. KeyJ tap. MATCH stays MATCH. OPT-002 PR2 human pad
   speed envelope after 2026-08-28 playtest (cruise ram without J still
   hit).
+- [x] DONE (P2, NAV/DOCKING): Make Launch leave the berth cleanly. Launch and
+  the agent `undock` kept the inbound approach heading, and the creep resumed
+  on release, so the ship drifted back into the hull it had just left.
+  Docking now parks the ship immediately at zero velocity and speed and clears
+  the stale movement input; both paths then share one outward, collision-clear
+  departure, and a fouled lane holds the berth with an actionable line and a
+  working retry.
+  Issue #65 `src/game/launch-clearance.js`. Implemented; focused tests, build,
+  full boot and live verification complete.
 - [x] DONE (P2, TGT): Sort the T target cycle hostiles-first during combat,
   or add a "target my attacker" key. While an ace fired from 59 u, T selected
   a friendly hauler, then a neutral freighter, and reached the attacker on

@@ -43,6 +43,12 @@ import {
   launcherAmmoMax,
 } from '../game/weapon-fit.js';
 import { trafficLots, applySurvivorSale } from '../game/trafficking.js';
+import {
+  planLaunch,
+  launchBlockedLine,
+  applyBerthFlight,
+  applyBerthInput,
+} from '../game/launch-clearance.js';
 import { requestAutosave, stripControlChars, NAME_MAX } from '../game/save.js';
 import {
   DATA_CRYSTAL,
@@ -6418,6 +6424,7 @@ export function initStation(ctx) {
     { re: /^That control is not on the panel/, token: 'not-offered' },
     { re: /^(Cannot|Can't) /, token: 'unavailable' },
     { re: /papers are already in flight/i, token: 'busy' },
+    { re: /^Launch held/, token: 'blocked' },
   ]);
 
   function performResult(noticeBefore) {
@@ -6464,7 +6471,10 @@ export function initStation(ctx) {
   }
 
   function selectService(key) {
-    if (key === 'launch') { undock(); return; }
+    // Launch is a departure, not a pane. Hand the caller the berth's real
+    // verdict: swallowing it let the agent API report a success while the
+    // ship was still docked (issue #65 QA).
+    if (key === 'launch') return undock();
     if (!ctx.flags.docked) return;
     pinDockedSystem();
     ui.level = 2;
@@ -6484,6 +6494,12 @@ export function initStation(ctx) {
   }
 
   function dock() {
+    // Berth takes the ship NOW (issue #65): the flight owner kills velocity /
+    // speed / drift / realign and the input owner drops every held key and
+    // pending pulse, both synchronously, so the hull is parked without waiting
+    // on the next ship.js update. Same-tick dock → undock is therefore safe.
+    applyBerthFlight(ctx, null);
+    applyBerthInput(ctx, 'dock');
     ctx.flags.docked = true;
     ui.open = true;
     ui.level = 1;
@@ -6513,9 +6529,49 @@ export function initStation(ctx) {
     render();
   }
 
+  /**
+   * Launch (issue #65). One departure path for the panel, the keys, and the
+   * agent API. Every refusal is atomic: the plan is computed and the release
+   * pose is placed BEFORE any berth state moves, so a held launch leaves the
+   * berth, the per-visit grants, the ship's motion, and the pilot's controls
+   * exactly as they were — the only change is an actionable notice.
+   *
+   * Returns { ok, token, notice } for the agent API; the UI paths ignore it
+   * and read ui.notice.
+   */
+  function hold(token, blocker) {
+    const notice = launchBlockedLine(token, blocker);
+    ui.notice = notice;
+    render();
+    ctx.emit('commLine', { text: notice });
+    return { ok: false, token: token === 'no-service' ? 'no-service' : 'blocked', notice };
+  }
+
   function undock() {
+    let plan = null;
+    try {
+      plan = planLaunch(ctx);
+    } catch {
+      return hold('no-service', '');
+    }
+    if (!plan || plan.ok !== true) {
+      return hold(plan && plan.token === 'no-service' ? 'no-service' : 'blocked', plan && plan.blocker);
+    }
+    // Both owners must succeed. planLaunch already refused when either hook
+    // was missing for this ctx; a late failure still holds the berth rather
+    // than releasing a ship nobody placed.
+    // Input first: neutralizing latches on a parked ship changes nothing the
+    // player can observe from inside the berth, so a flight failure after it
+    // still leaves a berth that behaves exactly as it did.
+    if (!applyBerthInput(ctx, 'launch')) return hold('no-service', '');
+    if (!applyBerthFlight(ctx, plan)) return hold('no-service', '');
+
     ctx.flags.docked = false;
     ui.open = false;
+    // Only a launch that actually happened clears the held line. A hold above
+    // returns before this point and keeps its notice; leaving a stale hold here
+    // made a successful retry read back as a refusal (issue #65 QA).
+    ui.notice = '';
     ui.fenceUnlocked = false; // the fence's call only covers this berth visit
     ctx.station.fenceUnlocked = false;
     ui.keeperComp = false; // the keepers' comp only covers this berth visit
@@ -6538,6 +6594,7 @@ export function initStation(ctx) {
     overlay.style.display = 'none';
     overlay.textContent = '';
     ctx.emit('undocked');
+    return { ok: true, token: '', notice: '' };
   }
 
   // UI-level keyboard (menu chrome — never writes ctx.input).
