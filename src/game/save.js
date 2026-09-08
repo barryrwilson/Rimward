@@ -23,11 +23,17 @@ import { disengage as disengageAutopilot } from './autopilot.js';
  *
  * - AUTOSAVE on 'docked'/'undocked' events, on 'systemLoaded' when
  *   JUMP.saveOnJump (gate travel is the dock/undock analog §4.4), and every
- *   60 s idle in space. Consumed via ctx.lastEvents.
+ *   60 s idle in space. Event triggers are consumed via ctx.lastEvents.
+ *   Completed station delivery passes, trades, accepted jobs and services
+ *   with persisted effects request saves after their complete mutations.
  * - SAVE BLOCKED while ctx.gate.jumping (mid-swap state is incoherent — the
  *   'systemLoaded' autosave fires once the jump completes) and during active
  *   encounters: a hostile live ship within U.ENCOUNTER_BUBBLE while the
- *   combat flag is set → emit('saveBlocked', {reason}) and retry in 5 s.
+ *   combat flag is set. Blocked or failed autosaves retain a session-only
+ *   request and retry in 5 s, including while docked, through the same gates.
+ *   Mid-jump, encounter and storage failures emit 'saveBlocked' with their
+ *   reason; identical pending warnings are deduplicated. Restore clears
+ *   pending requests so a discarded timeline cannot write later.
  * - LOAD at init (save.js is constructed second-to-last, after ship/world):
  *   a stored snapshot is restored wholesale — world fields (including
  *   currentSystem, per-system markets, record banks, jumpGraceUntil), cargo,
@@ -52,9 +58,9 @@ import { disengage as disengageAutopilot } from './autopilot.js';
  *   Load button (disabled while the berth is empty or corrupt). Manual
  *   saves share the autosave gating (hostile within the encounter bubble
  *   → 'saveBlocked'), except a mid-jump manual save is refused with a
- *   'Mid-jump — berth record refused.' toast where the autosave stays
- *   silent. The panel closes itself if the ship docks or dies. Boot load
- *   and death recovery still read ONLY the autosave key — manual berths
+ *   'Mid-jump — berth record refused.' toast; an autosave reports that it
+ *   will retry instead. The panel closes itself if the ship docks or dies.
+ *   Boot load and death recovery still read ONLY the autosave key — manual berths
  *   are only ever restored explicitly from the panel.
  * - TITLE SCREEN (wave 40, src/systems/title.js): queries hasAutosave() to
  *   decide whether to show CONTINUE; a confirmed NEW GAME calls clearAutosave()
@@ -83,6 +89,9 @@ const KEY = 'rimward-save-v1';
 const SLOT_KEYS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
 const IDLE_INTERVAL = 60; // s between in-space autosaves
 const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
+// Session-only requests survive a blocked dock checkpoint. Never persist this
+// bookkeeping: a restore must not retry writes from the abandoned timeline.
+const pendingAutosaves = new WeakMap();
 const DEATH_HOLD_MS = 2500; // overlay hold before recovery
 const DEATH_TITLE = 'SHIP LOST';
 const DEATH_LINE_BERTH = 'No UU charge. Credits, cargo, and hull return as they were at your last berth.';
@@ -1071,17 +1080,21 @@ function hostileEncounterBlock(ctx) {
 /** Same gates as trySave(autosave key). Does not invent a second storage key. */
 export function requestAutosave(ctx) {
   if (!ctx?.player || !ctx.ship?.object || ctx.player.destroyed) return false;
-  if (ctx.gate?.jumping) return false;
-  const reason = hostileEncounterBlock(ctx);
-  if (reason) {
-    ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
+  const held = (reason) => {
+    const prior = pendingAutosaves.get(ctx);
+    pendingAutosaves.set(ctx, { elapsed: 0, reason });
+    if (prior?.reason !== reason) ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
     return false;
-  }
+  };
+  if (ctx.gate?.jumping) return held('Mid-jump — autosave will retry.');
+  const reason = hostileEncounterBlock(ctx);
+  if (reason) return held(reason);
   try {
     localStorage.setItem(KEY, JSON.stringify(snapshot(ctx)));
+    pendingAutosaves.delete(ctx);
     return true;
   } catch {
-    return false;
+    return held('Storage unavailable — progress is not saved; autosave will retry.');
   }
 }
 
@@ -1218,6 +1231,7 @@ function healLiveRecords(ctx) {
 }
 
 export function restore(ctx, snap) {
+  pendingAutosaves.delete(ctx);
   if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
   disengageAutopilot(ctx, 'restore');
   // Session channel: never copy optIn or the event ring from a blob.
@@ -1293,6 +1307,7 @@ export function restore(ctx, snap) {
 
 /** Fresh start at the Freehold station when death finds no save (§4.4). */
 function freshStart(ctx) {
+  pendingAutosaves.delete(ctx);
   const fromSystem = ctx.world.currentSystem;
   const name = ctx.world.shipName ?? ctx.player?.name;
   if (ctx.player) {
@@ -1759,8 +1774,8 @@ export function initSave(ctx) {
     if (!ctx.player || !ctx.ship.object || dead) return false;
     if (key === KEY) return requestAutosave(ctx);
     // Mid-jump state is incoherent (ships despawned, system half-swapped);
-    // the 'systemLoaded' autosave fires the moment the jump completes. The
-    // autosave path stays silent; a manual berth save gets a refusal toast.
+    // the 'systemLoaded' autosave waits until the jump completes. Autosaves
+    // retain a retry request; this manual berth save only reports refusal.
     if (ctx.gate?.jumping) {
       ctx.emit('saveBlocked', { reason: 'Mid-jump — berth record refused.', source: 'berth' });
       return false;
@@ -1822,7 +1837,15 @@ export function initSave(ctx) {
         }
         return;
       }
-      // Idle autosave in space only; the dock already saved.
+      // Completed transactions and arrival saves can be refused. Retry even
+      // at a berth, through exactly the same encounter and jump gates.
+      const pending = pendingAutosaves.get(ctx);
+      if (pending && !dead && !ctx.player?.destroyed) {
+        pending.elapsed += dt;
+        if (pending.elapsed >= BLOCK_RETRY) trySave();
+        return;
+      }
+      // Idle autosave in space only; dock transactions save at completion.
       if (dead || ctx.flags.docked) return;
       idleAccum += dt;
       if (idleAccum >= nextDue) {

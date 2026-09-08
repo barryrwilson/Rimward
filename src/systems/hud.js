@@ -681,7 +681,7 @@ function toastForEvent(e, ctx, mem) {
       return { text: '★ ' + (e.line ?? e.id ?? 'A first.'), cls: 'sting' };
     case 'saveBlocked':
       if (e.source === 'autosave') {
-        return { text: '▲ AUTOSAVE HELD — hostiles near', cls: 'warn' };
+        return { text: '▲ AUTOSAVE HELD — ' + (e.reason ?? 'hostiles near'), cls: 'warn' };
       }
       return { text: '▲ SAVE BLOCKED — ' + (e.reason ?? 'hostiles near'), cls: 'warn' };
     case 'podCollected':
