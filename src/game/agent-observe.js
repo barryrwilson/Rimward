@@ -13,6 +13,7 @@ import { hailOffer } from './hail-offer.js';
 import { losCloseRate } from './los-close.js';
 import { agentControlStatus } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
+import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
 import {
   VERSION,
@@ -397,6 +398,7 @@ function jobRow(ctx, j) {
   };
   const title = own(j, 'title');
   if (row.kind === 'explore' && row.state === 'accepted') row.objective = surveyObjective(ctx, j);
+  if (row.kind === 'recovery' && row.state === 'accepted') row.objective = recoveryObjective(ctx, j);
   if (typeof title === 'string' && title) row.title = title;
   const commodity = own(j, 'commodity');
   if (typeof commodity === 'string' && commodity) row.commodity = commodity;
