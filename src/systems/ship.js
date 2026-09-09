@@ -757,6 +757,7 @@ export function initShip(ctx) {
   let recoilY = 0; // remaining flesh kick, local +Y (up)
   let swimPhase = 0; // accumulated (frequency varies with speed + mood)
   let bankAngle = 0; // smoothed auto-bank visual roll
+  let agentBurnerOwned = false;
   let burnerEndsAt = 0; // ctx.world.time when the current burn cuts out
   let driftEndsAt = 0; // ctx.world.time when vector-hold force-releases
   let realigning = false; // drift release: swinging velocity back to facing
@@ -928,6 +929,13 @@ export function initShip(ctx) {
       if (!docked && !held) {
         // --- Afterburner state machine (§5.2): tap Space → ×2 for burnTime,
         // then cooldown before the next burn is allowed.
+        if (agentBurnerOwned && (!input.agentBurnerHeld || !ship.burnerActive)) {
+          if (ship.burnerActive) {
+            ship.burnerActive = false;
+            ship.burnerReadyAt = time + shipCfg.afterburner.cooldown;
+          }
+          agentBurnerOwned = false;
+        }
         if (
           input.afterburnerPressed &&
           !ship.burnerActive &&
@@ -935,6 +943,7 @@ export function initShip(ctx) {
           (ctx.player?.power ?? 0) >= POWER.afterburnerMin
         ) {
           ship.burnerActive = true;
+          agentBurnerOwned = input.agentBurnerHeld === true;
           input.fullStop = false; // burn is a thrust command — cancels full stop
           burnerEndsAt = time + shipCfg.afterburner.burnTime;
         }

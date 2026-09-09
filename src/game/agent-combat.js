@@ -4,6 +4,7 @@
  * writes input, transforms, velocity, weapons or another helm's channel.
  * #62 may replace a command inside this owner; it cannot renew authorization.
  */
+import { createDefense, defenseView, defenseSense, defenseMove, defenseObstruction } from './agent-defense.js';
 import { WEAPONS, HEAT, U } from './state.js';
 import { selectedWeaponKey } from './weapon-fit.js';
 import { canFirePsionic } from './psionic.js';
@@ -37,9 +38,9 @@ export function combatSample(ctx, target) {
   return a;
 }
 
-export function createCombat(ctx, target, intent) {
+export function createCombat(ctx, target, intent, stance = 'evade') {
   return {
-    target, record: target.record, system: ctx.world.currentSystem,
+    defense: createDefense(ctx, stance), target, record: target.record, system: ctx.world.currentSystem,
     targetId: target.id, intent, weaponGroup: ctx.input.weaponGroup,
     weapon: combatWeapon(ctx), phase: attack(intent) ? 'intercept' : intent,
     phaseAt: ctx.world.time, repositionAfter: 0, clearSince: null, side: 1,
@@ -50,7 +51,7 @@ export function createCombat(ctx, target, intent) {
 
 export function combatView(c) {
   return {
-    targetId: c.targetId, intent: c.intent, phase: c.phase,
+    targetId: c.targetId, intent: c.intent, phase: c.phase, defense: defenseView(c.defense),
     weaponGroup: c.weaponGroup, fireBlocked: c.fireBlocked,
     movementBlocked: c.movementBlocked, completedAt: c.completedAt,
   };
@@ -98,7 +99,7 @@ function obstacle(ctx, speed) {
 export function combatTick(ctx, lease) {
   const c = lease.combat, target = c.target, now = ctx.world.time;
   lease.fire = false;
-  lease.drift = false;
+  lease.drift = lease.burner = lease.burnerEdge = false;
   lease.roll = lease.strafeX = lease.strafeY = 0;
   c.fireBlocked = '';
   c.movementBlocked = '';
@@ -114,12 +115,14 @@ export function combatTick(ctx, lease) {
   if (!Number.isFinite(dist)) return 'target-lost';
   if (!(dist <= U.TARGET_RANGE)) {
     if (c.intent === 'retreat') return 'retreated';
-    if (c.intent === 'break-off' && c.clearSince !== null && now - c.clearSince >= 2) return 'disengaged';
+    if ((c.intent === 'break-off' || c.defense.withdrawal) && c.clearSince !== null && now - c.clearSince >= 2) return 'disengaged';
     return 'target-lost';
   }
   if (ctx.targets.current !== target) return ctx.targets.current ? 'target-changed' : 'target-lost';
   const a = combatSample(ctx, target);
   if (!a) return 'target-lost';
+  defenseSense(ctx, c);
+  const attacking = attack(c.intent) && !c.defense.withdrawal;
   const w = c.weapon;
   const reach = w?.range || WEAPONS.cannon.range;
   const b = vector(a.leadBearing) ? a.leadBearing : a.bearing;
@@ -189,7 +192,7 @@ export function combatTick(ctx, lease) {
   const hardPass = dist < hullClearance || (ahead && crosses(hullClearance, responseTime));
   const closePass = ahead && crosses(minimum, 1.2);
   const phase = name => { if (c.phase !== name) { c.phase = name; c.phaseAt = now; } };
-  if (attack(c.intent)) {
+  if (attacking) {
     if (c.phase !== 'reposition' && (hardPass || (now >= c.repositionAfter && closePass))) phase('reposition');
     else if (c.phase === 'reposition') {
       // Equal/faster pursuit may never permit the preferred separation.
@@ -212,17 +215,18 @@ export function combatTick(ctx, lease) {
   // Normalized steering still cannot exceed the physical turn rate at creep.
   // Build ordinary turning speed while closing the lead error; imminent
   // collision, egress and obstruction handling retain their lower setpoints.
-  if (attack(c.intent) && !hardPass && aimError > 0.12) lease.throttle = Math.max(lease.throttle, 0.5);
+  if (attacking && !hardPass && aimError > 0.12) lease.throttle = Math.max(lease.throttle, 0.5);
   // Close inside the firing envelope instead of matching a receding target
   // just beyond it. This remains the existing ordinary throttle cap.
-  if (attack(c.intent) && !hardPass && a.dist > reach * 0.9) lease.throttle = 0.9;
-  if (attack(c.intent) && aimError > 0.5) {
+  if (attacking && !hardPass && a.dist > reach * 0.9) lease.throttle = 0.9;
+  if (attacking && aimError > 0.5) {
     // The ordinary turn law slows at creep speed. Keep enough thrust for a
     // turn back, with lateral clearance while the pursuer crosses the side.
     lease.throttle = Math.max(lease.throttle, 0.18);
     if (a.dist < minimum * 2.5) lease.strafeX = (a.bearing[0] > 0 ? -1 : 1) * 0.8;
   }
-  if (c.phase === 'reposition' || !attack(c.intent)) {
+  if (c.defense.withdrawal) phase(c.intent === 'retreat' ? 'retreat' : 'break-off');
+  if (c.phase === 'reposition' || !attacking) {
     const away = a.bearing;
     const awayYaw = Math.atan2(-away[0], away[2]);
     lease.steerX = clamp((Math.abs(away[0]) < 0.02 && away[2] < 0 ? c.side * Math.PI : awayYaw) * 2);
@@ -234,18 +238,23 @@ export function combatTick(ctx, lease) {
     lease.throttle = 0.18 + 0.72 * clamp((away[2] + 0.3) / 0.6, 0, 1);
     c.fireBlocked = c.phase;
   }
-  const block = obstacle(ctx, speed);
+  let block = obstacle(ctx, speed);
+  const defensive = c.defense.stance !== 'off' && (c.defense.phase === 'evading' || c.defense.withdrawal);
+  if (defensive && (hardPass || (c.phase === 'reposition' && a.bearing[2] < -0.3)) && !block) block = { x: a.bearing[0], y: a.bearing[1], clearance: dist-hullClearance };
+  if (defenseObstruction(ctx, c)) block = { x: 0, y: 0, clearance: 0, stop: true };
+  defenseMove(ctx, lease, a, block);
   if (block) {
     c.movementBlocked = 'obstructed'; c.fireBlocked = 'obstructed';
     lease.steerX = block.x >= 0 ? -1 : 1;
     lease.steerY = block.y >= 0 ? -0.5 : 0.5;
     lease.strafeX = lease.steerX;
     lease.throttle = block.clearance < speed * 0.7 + 8 ? 0 : 0.12;
+    if (block.stop) lease.steerX = lease.steerY = lease.strafeX = lease.strafeY = 0;
   }
-  if (!attack(c.intent)) {
+  if (!attacking) {
     // Remain inside the public envelope long enough to measure separation.
     // Completion means this maneuver finished, never a global safety claim.
-    const clear = !block && a.dist > Math.min(U.TARGET_RANGE * 0.65, Math.max(300, reach * 0.8)) && a.closing > 1;
+    const clear = !block && !c.movementBlocked && a.dist > Math.min(U.TARGET_RANGE * 0.65, Math.max(300, reach * 0.8)) && a.closing > 1;
     c.clearSince = clear ? (c.clearSince ?? now) : null;
     if (c.clearSince !== null && now - c.clearSince >= (c.intent === 'retreat' ? 5 : 2)) {
       return c.intent === 'retreat' ? 'retreated' : 'disengaged';

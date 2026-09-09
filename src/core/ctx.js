@@ -96,6 +96,7 @@ export function createCtx({ scene, camera, renderer }) {
       throttle: 0, // persistent setpoint 0..1 (R/F); double-tap F = 0
       fullStop: false, // double-tap F sets, R (throttle up) or afterburner clears.
       // While true the ship holds station at 0 speed, overriding creep (§5.1).
+      agentBurnerHeld: false, // controls-only transient hold; ship owns burner cancellation
       afterburnerPressed: false, // edge: Space tapped (burn if ready)
       driftHeld: false, // Shift held = vector-hold
       fireHeld: false, // LMB
@@ -332,7 +333,8 @@ export function createCtx({ scene, camera, renderer }) {
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {
-      ctx.events.push({ type, t: ctx.world.time, ...data });
+      ctx.events.push({ type, t: ctx.world.time, ...data,
+        ...(['playerHit', 'npcFire', 'hostileEnter'].includes(type) ? { wallMs: performance.now() } : {}) });
     },
 
     elapsed: 0, // real seconds since boot (visual animation only)

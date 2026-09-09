@@ -10,15 +10,15 @@ export const BUNDLE_BUDGET = Object.freeze({
 // No environment bypass or allowance for future bundle growth.
 const APPROVED_BYTE_EXCEPTION = {
   approved: true,
-  approvalReference: 'Codex task issue #61 owner approval, 2026-09-09',
-  releaseNotes: 'docs/releases/issue-61-measured-exception.md',
-  minifiedBytes: 1_811_486,
-  gzipBytes: 540_768,
+  approvalReference: 'Codex task issue #62 owner approval, 2026-09-09',
+  releaseNotes: 'docs/releases/issue-62-measured-exception.md',
+  minifiedBytes: 1_821_216,
+  gzipBytes: 543_822,
   chunks: [{
-    file: 'assets/index-CiM3Wsov.js',
-    sha256: '66073df56bfe1b856882c550c4f942b2055dfa88dfc27c7f317a3ee7766c471a',
-    minifiedBytes: 1_811_486,
-    gzipBytes: 540_768,
+    file: 'assets/index-BWMahgBB.js',
+    sha256: '5dfbb91fe97de176b5bba052f21e9a5e885d9e4c5ed4b431a927eebfea5f4831',
+    minifiedBytes: 1_821_216,
+    gzipBytes: 543_822,
   }],
 };
 

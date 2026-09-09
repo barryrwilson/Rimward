@@ -142,6 +142,7 @@ export function measurements(samples, targetId) {
 }
 
 export async function runLive(name, mode, fn, options = {}) {
+  assert(options.keepRenderingWhenOccluded === undefined || typeof options.keepRenderingWhenOccluded === 'boolean', 'keepRenderingWhenOccluded must be boolean');
   if (process.env.ISSUE61_TRANSPORT === 'iab') {
     const { runIab } = await import('./issue-61-live-iab.mjs');
     return runIab(name, mode, fn, options);
@@ -168,7 +169,14 @@ export async function runLive(name, mode, fn, options = {}) {
     let ready = false;
     for (let i = 0; i < 100; i++) { if (await fetch(`http://127.0.0.1:${result.port}`).then(r => r.ok).catch(() => false)) { ready = true; break; } assert(vite.exitCode === null, 'Vite exited'); await sleep(200); }
     assert(ready, 'Loopback Vite unavailable');
-    chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--enable-webgl', '--disable-extensions', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--window-size=1440,900', '--window-position=50,50', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', 'about:blank'], { windowsHide: false, stdio: ['ignore', 'ignore', 'pipe'] });
+    // Optional Chromium test switch: keep a real foreground tab rendering when
+    // Windows reports its native window occluded (including desktop lock).
+    // Default launch behavior is unchanged; no hidden/headless page or fake
+    // visibility/game clock is introduced. Actual frames still need proving.
+    // https://chromium.googlesource.com/chromium/src/+/lkgr/content/public/common/content_switches.cc
+    result.chromeLaunchArgs = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--enable-webgl', '--disable-extensions', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--window-size=1440,900', '--window-position=50,50', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', ...(options.keepRenderingWhenOccluded ? ['--disable-backgrounding-occluded-windows'] : []), 'about:blank'];
+    result.keepRenderingWhenOccluded = options.keepRenderingWhenOccluded === true;
+    chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', result.chromeLaunchArgs, { windowsHide: false, stdio: ['ignore', 'ignore', 'pipe'] });
     result.chromePid = chrome.pid; chrome.on('error', e => result.processLogs.push(String(e))); chrome.stderr.on('data', b => result.processLogs.push(String(b).slice(0, 500)));
     let page;
     for (let i = 0; i < 120; i++) {
