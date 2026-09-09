@@ -96,8 +96,20 @@ An initial checker attempt incorrectly counted that public file as a Rollup
 chunk; its failed output remains as `approved-artifact-check.json`. The
 corrected checker verifies the public file separately rather than ignoring it.
 
-Independent review of the policy activation artifact remains pending;
-source QA is not policy QA.
+Final independent Claude artifact QA returned **PASS** on
+`a0d42082d250b763038bd52e53eb6e389c31b16b`. Claude inspected and executed the
+read-only artifact checker, independently confirming source census, reviewed
+Git contents, complete emitted Rollup chunk identity and copied public
+transcoder equivalence. This closes the earlier policy review's evidence
+blocker; the accepted keyboard-override caveat remains unchanged. The full
+verdict is retained as `QA-FINAL.md` under the raw evidence root.
+
+Hosted Build, Boot harness and OPT-001 surface checks passed on the same
+commit in [PR #92](https://github.com/barryrwilson/Rimward/pull/92), runs
+[34410624390](https://github.com/barryrwilson/Rimward/actions/runs/34410624390)
+and [34410624215](https://github.com/barryrwilson/Rimward/actions/runs/34410624215).
+These hosted results are separate from Claude's artifact check; Claude did
+not rerun build, boot or browser tests during final QA.
 
 No production deployment or cold-start remeasurement is claimed. The startup
 requirement remains in force; this byte approval supplies no startup waiver.

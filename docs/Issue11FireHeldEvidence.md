@@ -2,8 +2,10 @@
 
 Implementation and local verification are complete. Independent Claude source,
 security and behavior review passed; the owner-approved exact byte exception
-now permits the ordinary production build. Independent policy review remains
-pending. No deployment or cold-start remeasurement is claimed.
+now permits the ordinary production build. Final independent artifact QA
+passed on `a0d42082d250b763038bd52e53eb6e389c31b16b`, including policy review
+and independently recomputed source/bundle identity. No deployment or
+cold-start remeasurement is claimed.
 
 ## Reproduction and census
 
@@ -95,6 +97,14 @@ for adjacent context but is not changed or claimed as verified by this issue.
   JavaScript chunk set matches the approved filename/hash/byte counts. The
   separately copied public Basis transcoder also matches its reviewed source.
   Evidence: `approved-artifact-check-final.json` and `artifact-check.mjs`.
+- Final Claude artifact QA: PASS on
+  `a0d42082d250b763038bd52e53eb6e389c31b16b`. Claude independently executed
+  the read-only artifact checker; source, complete Rollup chunk set and copied
+  public transcoder matched. Verdict: `QA-FINAL.md` under the evidence root.
+- Hosted Build, Boot harness and OPT-001 surface checks: PASS for that exact
+  commit in [PR #92](https://github.com/barryrwilson/Rimward/pull/92), runs
+  [34410624390](https://github.com/barryrwilson/Rimward/actions/runs/34410624390)
+  and [34410624215](https://github.com/barryrwilson/Rimward/actions/runs/34410624215).
 
 Reproduce live ownership with `npm run test:fire-held-live` and actual
 headed-browser focus loss with `npm run test:fire-held-focus`. Set
@@ -131,8 +141,9 @@ options) measures the candidate without altering the repository build policy:
 The diagnostic reported raw byte policy FAIL before approval. The owner
 approved this exact candidate and Claude source QA satisfied that approval's
 condition. The ordinary build now matches the activated exception, with a
-passing browser audit and unchanged runtime hash. Independent review of the
-policy activation is still required; source QA is not policy QA. The startup
+passing browser audit and unchanged runtime hash. Final independent QA on
+`a0d42082d250b763038bd52e53eb6e389c31b16b` passed the policy artifact and
+independently confirmed source/bundle equivalence. The startup
 requirement remains unchanged and this approval supplies no startup waiver.
 Rollback is the two runtime-file changes plus the exact-artifact descriptor;
 no data migration is involved.
