@@ -1,18 +1,18 @@
 # TRADE-002 — Market liquidity and trader progression
 
-Issue: [#55](https://github.com/barryrwilson/Rimward/issues/55). Status: measured design proposal; owner decision pending. This is a proposed design, not authorization to change the economy.
+Issue: [#55](https://github.com/barryrwilson/Rimward/issues/55). Status: owner approved on 2026-09-09; implementation in progress. The owner replied “Approved” to the stock rules and 10–20-minute experienced-run target presented with this document. This approval includes the scoped `world.marketSupply` persistence contract below. It authorizes implementation and verification; deployment remains a separate gate.
 
-**Proposed choice:** preserve corrected prices and introduce replenishing station sale stock: 160 units per bulk commodity, 20 per other market commodity, and 20 simulation minutes to refill from empty. The measured trader bought a freighter in 13m58.4s, but could initially finance only 16/160 cargo slots. A later full load required recovery after a fatal encounter. The proposal protects early margins and aims to make repeated large purchases encourage different routes or goods; the evidence does not establish that the corrected economy needs a general reduction in profits.
+**Approved choice:** preserve corrected prices and introduce replenishing station sale stock: 160 units per bulk commodity, 20 per other market commodity, and 20 simulation minutes to refill from empty. The measured trader bought a freighter in 13m58.4s, but could initially finance only 16/160 cargo slots. A later full load required recovery after a fatal encounter. The proposal protects early margins and aims to make repeated large purchases encourage different routes or goods; the evidence does not establish that the corrected economy needs a general reduction in profits.
 
 ## Mission and evidence boundary
 
 Measure ordinary trading after the same-station spread fix, then choose the smallest change that makes route choice and freighter progression worthwhile. Source and benchmark base: `197935b1f53d50e04ef6d2d916473457ea559946` (current master on 2026-09-09). Dependency [#53](https://github.com/barryrwilson/Rimward/issues/53) is closed and its corrected quote calculation is present in this tree.
 
-The specification lead owns the proposal; a separate benchmark worker owns live public-API evidence. Next gate: the owner's decision on the concrete stock, clock and progression targets below. Economy implementation, merging, publishing, and issue closure are outside this design-stage handoff.
+The specification lead owns the approved contract; a separate benchmark worker owns live public-API evidence. Next gate: implementation on `codex/issue-55-economy-design`, focused tests, live verification and independent review of the exact implementation commit. The design-stage artifact is `df54c97698f1f6a05f4f4734cb5f5727a1d01589`.
 
 The September 6 million-UU run used the old inverted same-dock spread. Its earnings and time are excluded from the corrected pacing baseline. The September 7 trader report is useful context but is a different origin and an earlier exploratory campaign.
 
-## Current behavior confirmed in code
+## Pre-implementation behavior confirmed in code
 
 - `src/systems/station.js`, `tradeBuyUnit`, `tradeSellUnitRaw`, and `tradeFillUnit`: apply the existing faction, reputation, epic, keeper, and fixer modifiers; round unit quotes; cap the sell quote at the same dock's buy quote. An unchanged same-dock round trip cannot increase cash.
 - `tryTrade`: validates commodity access, funds and cargo; charges or pays quantity multiplied by the unit quote; requests an ordinary autosave. It does not consume station stock, reduce demand, charge a separate fee, or change a market price. Available cash and hold space bound purchases; held cargo bounds sales.
@@ -22,7 +22,7 @@ The September 6 million-UU run used the old inverted same-dock spread. Its earni
 
 ## Design exclusions
 
-No ship-price, cargo-capacity, equipment, key-binding, mission-pay, combat, or travel tuning. No changes to source code or saved market data in this design stage. No stock limits, fees, or demand model are presumed approved. Do not fund a benchmark using missions, salvage, gifts, debug grants, teleportation, or accelerated simulation and then describe it as ordinary market profit.
+No ship-price, cargo-capacity, equipment, key-binding, mission-pay, combat, or travel tuning. The completed design stage changed no gameplay source or saved market data. The subsequent owner approval covers the finite supply rules and persistence contract below; it does not add fees or demand pricing. Do not fund a benchmark using missions, salvage, gifts, debug grants, teleportation, or accelerated simulation and then describe it as ordinary market profit.
 
 ## Measurement and decision
 
@@ -96,13 +96,13 @@ Report origin-to-purchase, first-buy-to-purchase, and travel-segment time separa
 
 These are alternatives, not a bundle. A stock proposal must not acquire demand caps or fees as incidental details. The possibility of buying legal exotic ores belongs in the measured opportunity set; their absence from ordinary NPC cargo generation does not prevent player purchases.
 
-## Proposed decision: replenishing station sale stock
+## Approved decision: replenishing station sale stock
 
-**Recommendation for owner approval:** introduce finite sale stock, keep the corrected flat quote calculation, and preserve ordinary station acceptance of player sales. The purpose is to make repeated large purchases lead to different cargo or routes, while retaining affordable starter trading. This is a supply-liquidity change, not a claim to simulate station demand or eliminate profitable market events.
+**Approved:** introduce finite sale stock, keep the corrected flat quote calculation, and preserve ordinary station acceptance of player sales. The purpose is to make repeated large purchases lead to different cargo or routes, while retaining affordable starter trading. This is a supply-liquidity change, not a claim to simulate station demand or eliminate profitable market events.
 
 The corrected run already demonstrates rapid growth without the old exploit. There is not yet evidence to justify stacking fees or broad price cuts on top of it. Depth pricing would be the appropriate alternative if the owner instead wants a hard reduction in large-load margins; it should replace this recommendation as the chosen approach, not arrive as an unreviewed addition.
 
-### Proposed numerical contract — not yet approved
+### Approved numerical contract
 
 | Parameter | Proposed first implementation | Reason / limit |
 |---|---|---|
@@ -118,13 +118,13 @@ Stocks start full on a genuinely new game or a market with no prior supply recor
 
 A **counterfactual arithmetic replay**, not a live test of new code, applied these capacities and refill rates to the 24 automatically ledgered trades before the actual freighter purchase. None would have been refused for stock. The first two manually submitted Redmarch purchases were one unit each, also within fresh stock; their later destination sales are in the replay. This holds the realized prices, route, and timestamps fixed and cannot establish how another campaign or a player's changed choices would behave. Local reproducible inputs: `C:/Projects/WebSim/out/issue-55-evidence/starter-stock-replay.json`.
 
-**Proposed persistence footprint, requiring explicit implementation scope:** add `world.marketSupply` to the existing save envelope and allowlist, shaped as `{ [systemId]: { [commodityKey]: { units, updatedAt } } }`. `units` is finite in `[0, capacity]`; `updatedAt` is finite saved game time, bounded to the restored world time. Keep `world.markets` as the existing numeric price tables. Ignore unknown systems/commodities and unsafe object keys. Missing legacy rows initialize once at full capacity; malformed present rows normalize deterministically to zero stock at current game time, rather than granting a refill. If the present envelope itself has an invalid type, normalize known market rows to zero at restored time; an absent legacy envelope instead initializes full. Clamp negative elapsed time to zero and catch-up to the interval needed to fill the stock. Cover whole-envelope and row normalization in the implementation tests.
+**Approved persistence footprint:** add `world.marketSupply` to the existing save envelope and allowlist, shaped as `{ [systemId]: { [commodityKey]: { units, updatedAt } } }`. `units` is finite in `[0, capacity]`; `updatedAt` is finite saved game time, bounded to the restored world time. Keep `world.markets` as the existing numeric price tables. Ignore unknown systems/commodities and unsafe object keys. Missing legacy rows initialize once at full capacity; malformed present rows normalize deterministically to zero stock at current game time, rather than granting a refill. If the present envelope itself has an invalid type, normalize known market rows to zero at restored time; an absent legacy envelope instead initializes full. Clamp negative elapsed time to zero and catch-up to the interval needed to fill the stock. Cover whole-envelope and row normalization in the implementation tests.
 
 Read-only market observations calculate effective stock from a snapshot without granting or reserving it. The transaction recomputes the same effective value at execution, validates the entire order, and commits credits, cargo, supply and its timestamp before requesting the existing autosave. Ordinary time-dependent price changes remain possible; unchanged-state quote/fill equality is exact. #56 must include stock in buy-max and partial-affordability previews when it lands, but its quantity-entry UI is a separate outcome.
 
-### Proposed progression targets
+### Approved progression targets
 
-These are proposed product targets for this experienced, public-API-assisted route protocol, **not measured novice session lengths or guarantees for every random campaign**:
+These are approved product targets for this experienced, public-API-assisted route protocol, **not measured novice session lengths or guarantees for every random campaign**:
 
 - Keep a fresh Rim Drifter capable of buying an affordable legal first load immediately upon docking, and earning positive net trade profit on the first completed route. No new stock refusal should occur for the fresh run's first small purchase.
 - Aim for a first earned freighter in **10–20 minutes of simulation time** on the specified core-route benchmark with knowledgeable, prompt piloting. Report the full origin timer, including ordinary failures; also report travel-only and analyst idle time so the comparison is interpretable. Three independent fresh runs should establish the median and range before calling this target validated.
@@ -147,13 +147,13 @@ This proposal deliberately permits an exceptional first large cargo profit and u
 9. Rerun the same ordinary-route benchmark, with a separate outcome ledger for deaths/recoveries, costs, capital left after upgrades, and any timed-out route. Report completed freighter acquisition separately from projected acquisition; measure the slower freighter's actual travel time instead of assuming the eightfold hold increase yields eightfold earnings per minute.
 10. Verification includes focused economic contract tests, the issue-53 spread regression, `npm run build`, `npm run test:boot`, live human and public-API trading, and console checks. Include 1/5/99/chunked-160 orders, affordability/hold limits, prohibited goods, relevant modifiers, same-dock reversals, depletion/recovery, and save/away-system cases. Preserve existing assertions.
 
-Implementation requires a subsequent bounded approved scope with exact tuning and any new saved fields spelled out. No deployment is authorized by this proposal. Any later release should retain a pre-change save fixture and prior build, and verify that the chosen save migration has a documented rollback boundary before deployment.
+The owner approved the bounded implementation scope, tuning and saved fields above on 2026-09-09. No deployment is authorized by this proposal. Any later release should retain a pre-change save fixture and prior build, and verify that the chosen save migration has a documented rollback boundary before deployment.
 
 ## Implementation handoff after the owner decision
 
 Expected bounded write set: tuning in `src/game/state.js`; supply calculation alongside `src/game/market.js`; validation, commits and availability in `src/systems/station.js`; public stock observations in `src/game/agent-observe.js`; save normalization in `src/game/save.js`; focused economy tests and the relevant backlog row. Keep the current numeric price-table shape and initialization order. No new command or event is required for the recommended option. All market/content labels continue through text-safe DOM APIs; the bridge remains loopback-only with its existing action validation.
 
-Reconcile overlap with #56 before it adds buy-max previews. Record the approved stock/rate/clock/schema choice in this brief, implement on its bounded branch, and hand an exact commit with tests and live evidence to independent QA. The present document is an owner-decision artifact; it does not claim implementation QA PASS or issue completion.
+Reconcile overlap with #56 before it adds buy-max previews. Record the approved stock/rate/clock/schema choice in this brief, implement on its bounded branch, and hand an exact commit with tests and live evidence to independent QA. This document records the owner decision and implementation contract; it does not yet claim implementation QA PASS or issue completion.
 
 ## Verification and retained evidence
 
@@ -162,3 +162,60 @@ The unchanged source baseline passed `npm run build`, `npm run test:boot`, and `
 A separate Codex benchmark worker operated the live public API and retained receipts and browser captures; the specification lead reconciled the tables and ran the proposed-stock arithmetic replay. Claude completed an independent **public-source-only preflight**, which informed the quote, persistence and timing boundaries. That preflight did not review the unpublished campaign or approve these proposed numbers, and is not a final implementation QA verdict.
 
 Raw evidence remains local, outside the committed write set, under `C:/Projects/WebSim/out/issue-55-evidence/`: `harness/sessions/trader55/api.jsonl`, `market-ledger.jsonl`, `full-load-ledger.jsonl`, `benchmark-results.json`, `benchmark-summary.md`, `benchmark-summary.json`, `benchmark-method.md`, `starter-stock-replay.json`, bounded pilot logs, console logs and captures. `persistence-resumed.json` and `benchmark-cleanup.json` record restart and teardown; `verification.md` records source checks; `review/public-preflight-completion.json` records the source-only preflight and corrected limitations. The reproducible route protocol and reconciled baseline are contained in this document so they do not depend on an unpushed playtest attachment.
+
+## Implementation candidate and verification gates
+
+The builder committed the approved supply implementation and focused tests as
+`e3761b7632e6d45120a5e60a6e83bf1de0c37059`. The coordinator owns this record;
+the builder does not approve its own work. Runtime source remains pinned while
+live verification runs. No merge or deployment has occurred.
+
+- `npm run test:market-liquidity` and the issue-53 market-spread regression
+  pass, including separate local reruns by the verification worker.
+- `npm run test:boot` passes with its existing assertions intact.
+- The ordinary `npm run build` fails the unchanged byte limits. The new
+  JavaScript bundle is 1,824,513 minified bytes and 545,005 gzip bytes, an
+  increase of 3,297 and 1,183 respectively over the prior approved artifact.
+  The issue-62 exception covers only its old exact artifact and has not been
+  extended. The diagnostic candidate passes the browser dependency boundary.
+- Five serial fresh-profile startup measurements are 6,858.4, 8,276.5,
+  7,506.6, 12,672.3 and 13,815.4 ms. Median is 8,276.5 ms; three samples
+  exceed the unchanged 8,000 ms limit. All five report zero page errors and
+  complete owned-process, port and profile cleanup. An earlier sandboxed
+  attempt failed before navigation and produced no timing samples.
+- The captured slow startup intervals include delays before the document
+  request and after document loading. The historical issue-62 result also
+  failed, but these unpaired measurements do not establish that this feature
+  caused a regression. No startup exception is approved for this candidate.
+- Three fresh earned-only progression runs purchased and mounted the
+  freighter in 554.523, 550.828 and 525.888 accumulated simulation seconds.
+  The 9m10.8s median is below the approved 10–20-minute target, so pacing
+  acceptance is not met. No delay or unapproved tuning change was added.
+- A retained earned freighter completed five further shipments, including
+  an actual 160-unit provisions delivery: 16,000 UU cost, 18,720 UU revenue.
+  Final cash was 27,069 UU from 4,802 UU retained working capital and
+  22,267 UU realized trade profit, with no paid repairs, tribute or deaths.
+  Isolated stock/UI/persistence checks pass 12/12 with zero console errors
+  or exceptions, including fractional stock restored through public Continue.
+- Independent Claude source review is awaiting explicit authorization to
+  transfer the prepared, fixed code-and-test payload. Automatic approval
+  review rejected that transfer; local checks are not a substitute verdict.
+
+Implementation evidence is retained separately under
+`C:/Projects/WebSim/out/issue-55-implementation-evidence/`. The diagnostic
+candidate and full manifests are under this worktree's
+`out/issue-61-live/issue55-candidate-01/`; startup evidence is under
+`out/issue-61-live/issue55-startup-02/`. The candidate JavaScript is
+`assets/index-BccXVvIY.js`, SHA256
+`e9bfd0927fc8a81a90ce185688e11e76a521a08541447410b1166dc13fc75c36`.
+Its whole-candidate manifest SHA256 is
+`ed327b41511e5491d873d797a3e11cb02aca59b6b566be10e26fb79a2f3a28fb`;
+runtime source census SHA256 is
+`5b535d6214fb7d8adec062c278ebeaa703c9e3743dd9a4bff56dbef4cea604ff`.
+These identities permit a concrete later decision; they do not authorize
+changing a release policy or relabeling a failed check as passing.
+
+The [implementation playtest report](playtests/2026-09-09-issue-55-market-liquidity.md)
+contains the reconciled campaign ledgers, save-recovery caveats and release
+gates. The issue remains open until the outstanding acceptance and review
+decisions are resolved.
