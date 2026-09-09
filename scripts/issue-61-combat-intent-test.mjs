@@ -211,6 +211,29 @@ test('egress timeout never opens a firing frame inside hard hull clearance', () 
   assert.equal(f.status().combat.phase,'intercept','return starts as soon as actual hull hazard clears');
 });
 
+test('measured second frontal pass overrides return cooldown before the late collision threshold', () => {
+  const f=fixture();f.ctx.world.time=126.2;
+  f.target.object.position.set(0,0,-20);f.sample();f.start();f.tick();
+  f.target.object.position.set(0,0,201);f.tick(2.1,true,{closing:112});
+  assert.equal(f.status().combat.phase,'intercept','actual egress exit establishes the return cooldown');
+  // Public geometry from assisted-close-final-01 on source 62699b8c...:
+  // old control stayed in pass through 72u, then impacted at t133.2887.
+  const rows=[
+    [131.2906,194.90734,-82.92783,.217083,.217087,-.951708],
+    [131.5201,171.13645,-102.60728,.165730,.165250,-.972227],
+    [131.7535,149.81173,-90.78700,.131148,.128854,-.982953],
+    [131.9761,130.41388,-87.91629,.105895,.103165,-.989011],
+  ];
+  for(const [time,dist,closing,...bearing] of rows) {
+    f.ctx.world.time=time;f.ctx.ship.speed=40.8;
+    f.target.object.position.fromArray(bearing).normalize().multiplyScalar(dist);
+    f.tick(1/60,true,{closing,speed:47.9065});
+  }
+  assert.equal(f.status().combat.phase,'reposition','front corridor must override the still-active six-second cooldown');
+  assert.equal(f.ctx.input.fireHeld,false);
+  assert(f.ctx.targets.aim.dist>120,'avoidance starts well before the measured 50u late response');
+});
+
 test('recorded Gallows aft pursuit does not reverse the return to aim', () => {
   // Public samples from sustained-iab-01/gallows-timeseries.json, frozen
   // source a47b285b62eea741d3b04d4608280180fa9ddbefffdb137537ffa3bb045e2945.
@@ -298,6 +321,42 @@ test('on-nose close egress reduces forward thrust before accelerating away under
   assert(framesAhead>0&&awayAcceleration,'braking while facing target is followed by actual acceleration away');
   assert(minimum>12,'close egress does not fly through the target center');
   assert(firstFire!==null,'close avoidance returns to a firing opportunity');
+});
+
+test('ordinary ship/NPC second crossing clears the target during return cooldown and resumes firing', () => {
+  const random=Math.random;seedBootRandom();
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx),npc=initNpc(ctx);
+  Object.assign(f.target,spawnLiveShip(ctx,{id:f.target.id,name:'Return crossing fixture',classKey:'cutter',faction:'independent',role:'pirate',resolve:95,alwaysHuntsPlayer:true,anchor:{x:0,y:0,z:0}},new THREE.Vector3(0,0,-20)));
+  ctx.world.time=126.2;f.sample();f.start({ttl:45});f.tick();
+  f.target.object.position.set(0,0,201);f.tick(2.1,true,{closing:112});
+  assert.equal(f.status().combat.phase,'intercept');
+  // Controlled checkpoint from the measured second crossing. Establish the
+  // cooldown via real owner transitions above, then let both ordinary motion
+  // systems evolve freely; this is a stress fixture, not a natural replay.
+  ctx.world.time=131.9761;ctx.ship.object.position.set(0,0,0);ctx.ship.object.quaternion.identity();
+  ctx.ship.velocity.set(0,0,-40.8);ctx.ship.speed=40.8;ctx.input.throttle=.12;
+  f.target.object.position.set(.10589519332931759,.1031653513227889,-.9890111820986583).multiplyScalar(130.4138753853993);
+  const toward=ctx.ship.object.position.clone().sub(f.target.object.position).normalize();
+  f.target.object.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),toward);
+  f.target.ai.velocity.copy(toward).multiplyScalar(47.9065136728842);
+  f.target.ai.target='player';f.target.ai.intent=true;f.target.ai.mode='hunt';
+  const relative=new THREE.Vector3();let minimum=Infinity,firstFire=null;
+  for(let n=0;n<20*60;n++) {
+    const closing=losCloseRate(ctx.ship.object.position,f.target.object.position,relative.copy(f.target.ai.velocity).sub(ctx.ship.velocity));
+    f.tick(1/60,true,{closing,speed:f.target.ai.velocity.length()});
+    if(n===0)assert.equal(f.status().combat.phase,'reposition','imminent front crossing outranks cooldown immediately');
+    if(ctx.input.fireHeld)firstFire??=n/60;
+    flight.update(1/60);npc.update(1/60);
+    minimum=Math.min(minimum,ctx.ship.object.position.distanceTo(f.target.object.position));
+    assert.equal(f.status().owner,'combat');
+  }
+  Math.random=random;
+  const shipImpacts=ctx.events.filter(e=>e.type==='bodyHit'&&e.kind==='ship');
+  console.log('Return crossing geometry:',JSON.stringify({minimum,firstFire,shipImpacts:shipImpacts.length}));
+  assert.equal(shipImpacts.length,0,'the reproduced return crossing has no ship impact');
+  assert(minimum>12);assert(firstFire!==null,'collision avoidance returns to a firing opportunity');
 });
 
 test('break-off and retreat complete within observable geometry; never fire', () => {

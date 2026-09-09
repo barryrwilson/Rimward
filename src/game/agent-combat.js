@@ -11,6 +11,7 @@ import { localDir } from './agent-schema.js';
 import { collectBodies } from './collision.js';
 import { PHY } from './physics.js';
 import { effectiveTurnRadius } from './ap-path.js';
+import { hoverTurnRateFor } from './flight-feel.js';
 
 const bodies = { count: 0, items: [] };
 const clamp = (n, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, n));
@@ -157,7 +158,12 @@ export function combatTick(ctx, lease) {
   const lateral = Math.hypot(a.bearing[0], a.bearing[1]) * a.dist;
   const ahead = a.bearing[2] < -0.5;
   const closing = Math.max(0, -a.closing);
-  const hardPass = a.dist < hullClearance || (ahead && lateral < hullClearance && a.dist < hullClearance + closing * 0.3);
+  // The return-to-aim cooldown cannot defer an imminent frontal collision.
+  // Budget an ordinary 45-degree turn (with lateral thrust), rather than a
+  // fixed 0.3 s that cannot move a slow ship's nose before a second crossing.
+  const turnRate = hoverTurnRateFor(ctx.player.classKey, speed) * (ctx.bio?.turnFactor || 1);
+  const responseTime = clamp((Math.PI / 4) / turnRate, 0.3, 2.5);
+  const hardPass = a.dist < hullClearance || (ahead && lateral < hullClearance && a.dist < hullClearance + closing * responseTime);
   const closePass = ahead && lateral < minimum && a.dist < minimum + closing * 1.2;
   const phase = name => { if (c.phase !== name) { c.phase = name; c.phaseAt = now; } };
   if (attack(c.intent)) {

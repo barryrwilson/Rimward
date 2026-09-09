@@ -205,9 +205,13 @@ await runLive(name, mode, async h => {
   let s = await observe(); if (s.hail.open) s = await resolveCombatHail(s);
   assert(!terminal(s), 'Target became terminal before measurement');
   if (mode === 'natural') {
-    const required = [5, 15, 30], covered = new Set(), spent = new Set();
+    // Give the longest observation-only gap the freshest ordinary opponent.
+    // Actual terminals still end a gap; shorter intervals never count as 30s.
+    const required = [30, 15, 5], covered = new Set(), spent = new Set(), spentNames = new Set();
+    const namedOpponents = new Set(result.acceptedJobs.filter(j => j.target).map(j => j.target));
+    const combatSearchSystem = s.world.currentSystem;
     const startWall = Date.now(), endWall = startWall + duration * 1000;
-    result.sustained = { start: s, startedWall: startWall, requestedWallSeconds: duration, grants: [], decisions: [], requiredGaps: required, coveredGaps: [] };
+    result.sustained = { start: s, startedWall: startWall, requestedWallSeconds: duration, grants: [], decisions: [], requiredGaps: required, coveredGaps: [], searchSystem: combatSearchSystem, spentNamedOpponents: [] };
     let windowNumber = 0, searchingRoute = false;
     const matchingJobEvents = () => result.jobEvents.filter(e => result.acceptedJobReceipts.some(j => j.id === e.id && e.t >= j.receipt.t));
     const completedJob = id => matchingJobEvents().some(e => e.id === id && ['done', 'delivered'].includes(e.outcome));
@@ -215,7 +219,14 @@ await runLive(name, mode, async h => {
       s = await observe();
       if (s.session.phase !== 'playing' || s.ship.hull <= 0) { result.sustained.stopReason = 'player-defeated'; break; }
       if (s.flags.paused || s.control.reason === 'player-override') { result.sustained.stopReason = 'human-interruption'; break; }
+      const current = s.targets.current;
+      if (current?.disabled || current?.surrendered) { spent.add(current.id); if (namedOpponents.has(current.name)) spentNames.add(current.name); }
+      for (const e of s.events) {
+        if (['npcDisabled', 'npcSurrendered', 'npcDestroyed'].includes(e.type) && namedOpponents.has(e.targetName)) { spent.add(e.targetId); spentNames.add(e.targetName); }
+      }
+      result.sustained.spentNamedOpponents = [...spentNames];
       if (required.every(n => covered.has(n)) && result.acceptedJobs.some(j => completedJob(j.id))) { result.sustained.stopReason = 'required-combat-and-career-evidence-complete'; break; }
+      if (namedOpponents.size && [...namedOpponents].every(name => spentNames.has(name)) && result.acceptedJobs.some(j => completedJob(j.id))) { result.sustained.stopReason = 'coverage-limited-named-opponents-terminal-career-paid'; break; }
       if (result.acceptedJobs.length && result.acceptedJobs.every(j => completedJob(j.id))) { result.sustained.stopReason = 'accepted-career-goals-complete'; break; }
       if (s.ship.hull < 35 || s.ship.engine < 25) {
         result.sustained.stopReason = 'condition-retreat';
@@ -226,7 +237,6 @@ await runLive(name, mode, async h => {
         }
         break;
       }
-      if (s.targets.current?.disabled || s.targets.current?.surrendered) spent.add(s.targets.current.id);
       if (s.hail.open) {
         result.sustained.decisions.push({ t: s.t, reason: 'read-offered-terms', speaker: s.hail.speaker, conversationId: s.hail.conversationId });
         s = await resolveCombatHail(s); continue;
@@ -240,8 +250,14 @@ await runLive(name, mode, async h => {
           result.sustained.decisions.push({ t: s.t, reason: 'select-next-public-opponent', targetId, name: candidate.name }); searchingRoute = false;
         } else {
           await clear();
+          if (s.gate.jumping || s.world.currentSystem !== combatSearchSystem) { result.sustained.stopReason = 'coverage-limited-search-system-changed'; break; }
           if (!searchingRoute && result.searchDestination) {
-            await act('plotRoute', { dest: result.searchDestination }); const ap = await act('engageAutopilot', {}, false); searchingRoute = ap.ok;
+            if (result.searchDestination === s.world.currentSystem) { result.sustained.stopReason = 'coverage-limited-search-destination-reached'; break; }
+            const route = await act('plotRoute', { dest: result.searchDestination }, false);
+            result.sustained.decisions.push({ t: s.t, reason: 'search-route', receipt: route });
+            if (!route.ok) { result.sustained.stopReason = `coverage-limited-search-route-${route.token || 'refused'}`; break; }
+            const ap = await act('engageAutopilot', {}, false); searchingRoute = ap.ok;
+            if (!ap.ok) { result.sustained.decisions.push({ t: s.t, reason: 'search-autopilot-refused', receipt: ap }); result.sustained.stopReason = `coverage-limited-search-autopilot-${ap.token || 'refused'}`; break; }
           } else if (s.gate.inZone || s.station.range > 1200) { await act('cancelAutopilot'); await neutral(); searchingRoute = false; }
           else if (!s.autopilot.engaged) await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .2, fireHeld: false });
           await sleep(350); continue;
