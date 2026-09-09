@@ -19,6 +19,8 @@ import { repo, identity, sleep, assert } from './issue-61-live-harness.mjs';
 const argv = process.argv.slice(2);
 const option = (key, fallback) => { const i = argv.indexOf('--' + key); return i < 0 ? fallback : argv[i + 1]; };
 const mode = option('mode'), name = option('name'), candidateName = option('candidate');
+const count = Number(option('count', '5'));
+assert(Number.isInteger(count) && count >= 1 && count <= 5, '--count must be 1..5; final compliance requires five');
 assert(['candidate', 'startup'].includes(mode), 'Explicit --mode candidate|startup required');
 assert(/^[a-z0-9-]+$/.test(name || ''), 'Explicit safe --name required');
 const evidenceRoot = join(repo, 'out', 'issue-61-live'), folder = join(evidenceRoot, name);
@@ -99,14 +101,21 @@ class CDP {
   async eval(expression) { const r = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw Error(r.exceptionDetails.text); return r.result.value; }
 }
 
+const startupStatus = `(() => {
+  const controls=['rw-title-models','rw-title-settings','rw-title-new'].map(id=>{const el=document.getElementById(id);return {id,exists:!!el,enabled:!!el&&!el.disabled};});
+  return {ms:performance.now(),navigationStart:performance.timeOrigin,ctxExists:!!window.__ctx,documentState:document.readyState,controls,
+    contractReady:!!window.__ctx&&document.readyState==='complete'&&controls.every(b=>b.enabled),
+    bootFlag:!!window.__rimwardBooted,visibility:document.visibilityState,focused:document.hasFocus(),navigation:performance.getEntriesByType('navigation')[0]?.toJSON()||null};
+})()`;
 const readyProbe = `(() => {
-  const began=performance.timeOrigin;let frames=0;
-  function probe(){const title=document.getElementById('rw-title'),button=document.getElementById('rw-title-new'),canvas=document.querySelector('canvas');
-    const visible=el=>!!el&&el.getClientRects().length>0&&getComputedStyle(el).visibility!=='hidden'&&getComputedStyle(el).display!=='none';
-    if(window.__rimwardBooted&&visible(title)&&visible(button)&&!button.disabled&&canvas&&canvas.width>0&&canvas.height>0){
-      if(++frames>=2){window.__issue61TitleReady={ms:performance.now(),navigationStart:began,visibility:document.visibilityState,focused:document.hasFocus(),title:title.getAttribute('aria-label'),button:button.textContent,canvas:{width:canvas.width,height:canvas.height}};return;}
-    }else frames=0;requestAnimationFrame(probe);
-  }requestAnimationFrame(probe);
+  const stages=[];let lastKey='',timer;
+  function probe(){const s=${startupStatus};const key=JSON.stringify([s.ctxExists,s.documentState,s.controls,s.bootFlag,s.visibility,s.focused]);
+    if(key!==lastKey){lastKey=key;if(stages.length<100)stages.push(s);}
+    if(s.contractReady&&!window.__issue61TitleReady){window.__issue61TitleReady=s;clearInterval(timer);}
+    window.__issue61StartupStages=stages;return s;
+  }
+  window.__issue61StartupSnapshot=probe;timer=setInterval(probe,20);probe();
+  document.addEventListener('readystatechange',probe);addEventListener('load',probe);
 })()`;
 
 async function startups() {
@@ -120,7 +129,7 @@ async function startups() {
   assert(before.sha256 === candidate.artifact.sha256, 'Candidate differs from its recorded artifact');
   result.candidate = { resultPath: candidateResultPath, path: root, artifactHash: before.sha256, sourceHash: candidate.identityStart.sourceHash, byteAuditPass: candidate.audit.byteAuditPass, boundaryPass: candidate.audit.browserBoundary.pass, productionPolicyEquivalent: candidate.audit.productionPolicyEquivalent };
   result.machine = { platform: os.platform(), release: os.release(), arch: os.arch(), cpuModel: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemoryBytes: os.totalmem(), node: process.version };
-  result.method = { count: 5, thresholdMs: 8000, metric: 'navigation start to boot flag plus visible enabled NEW GAME/title and nonzero canvas observed across two animation frames', cache: 'fresh Chrome profile for every run + Network.setCacheDisabled(true) + Network.setBypassServiceWorker(true); static server Cache-Control:no-store', caveat: 'Cold browser cache; OS filesystem cache is not flushed. Navigation metric excludes launching Chrome; launch-to-ready also recorded.', visibility: 'Separate visible external Chrome window, serial one browser/tab per run; not the user IAB surface', graphics: 'Platform GPU, browser sandbox enabled; no headless/software-renderer switches' };
+  result.method = { count, finalComplianceRequires: 5, thresholdMs: 8000, metric: 'Exact ProductionPerformanceBudget.md contract: __ctx exists, document.complete, Models/Settings/New Game controls exist and are enabled; early 20ms interval plus DOM lifecycle and read-only polling. No focus/canvas/rAF gate.', cache: 'fresh Chrome profile for every run + Network.setCacheDisabled(true) + Network.setBypassServiceWorker(true); static server Cache-Control:no-store', caveat: 'Cold browser cache; OS filesystem cache is not flushed. Navigation metric excludes launching Chrome; launch-to-ready also recorded.', visibility: 'Separate visible external Chrome window, serial one browser/tab per run; not the user IAB surface', graphics: 'Platform GPU, browser sandbox enabled; no headless/software-renderer switches' };
   result.runs = [];
   const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.ktx2': 'image/ktx2' };
   const server = createServer(async (req, res) => {
@@ -134,7 +143,7 @@ async function startups() {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   result.staticPort = server.address().port;
   try {
-    for (let n = 1; n <= 5; n++) {
+    for (let n = 1; n <= count; n++) {
       const run = { n, events: [], processLog: [], start: new Date().toISOString() }; result.runs.push(run);
       const profile = await mkdtemp(join(folder, `cold-${n}-profile-`)); run.profile = profile;
       let chrome, c;
@@ -157,7 +166,13 @@ async function startups() {
         run.navigationWall = Date.now();
         await c.send('Page.navigate', { url: `http://127.0.0.1:${result.staticPort}/?issue61startup=${n}` });
         const deadline = Date.now() + 15000;
-        while (Date.now() < deadline) { run.ready = await c.eval('window.__issue61TitleReady || null').catch(() => null); if (run.ready) break; await sleep(50); }
+        while (Date.now() < deadline) {
+          try { run.ready = await c.eval('(window.__issue61StartupSnapshot?.(), window.__issue61TitleReady || null)'); }
+          catch (e) { (run.evaluationErrors ||= []).push(String(e)); }
+          if (run.ready) break; await sleep(50);
+        }
+        run.finalDomStatus = await c.eval(startupStatus);
+        run.stages = await c.eval('window.__issue61StartupStages || []');
         run.launchToReadyWallMs = Date.now() - launchAt;
         run.navigationToReadyMs = run.ready?.ms ?? null;
         run.renderer = await c.eval(`(()=>{const c=document.querySelector('canvas'),g=c?.getContext('webgl2');if(!g)return null;const x=g.getExtension('WEBGL_debug_renderer_info');return {vendor:x?g.getParameter(x.UNMASKED_VENDOR_WEBGL):null,renderer:x?g.getParameter(x.UNMASKED_RENDERER_WEBGL):null};})()`);
@@ -165,7 +180,7 @@ async function startups() {
         await sleep(200); // Capture immediate post-ready errors without changing the timed metric.
         run.errors = run.events.filter(e => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error') || e.method === 'Network.loadingFailed');
         run.cacheEvidence = { servedFromCacheEvents: run.events.filter(e => e.method === 'Network.requestServedFromCache').length, cachedResponses: run.events.filter(e => e.method === 'Network.responseReceived' && (e.params.response.fromDiskCache || e.params.response.fromServiceWorker || e.params.response.fromPrefetchCache)).length };
-        run.pass = !!run.ready && run.ready.ms <= 8000 && run.ready.visibility === 'visible' && run.ready.focused === true && run.errors.length === 0 && run.cacheEvidence.servedFromCacheEvents === 0 && run.cacheEvidence.cachedResponses === 0;
+        run.pass = !!run.ready && run.ready.contractReady && run.ready.ms <= 8000 && run.errors.length === 0 && run.cacheEvidence.servedFromCacheEvents === 0 && run.cacheEvidence.cachedResponses === 0;
       } catch (e) { run.error = e.stack; run.pass = false; }
       finally {
         if (c) { try { await c.send('Browser.close'); } catch {} try { c.ws.close(); } catch {} }
@@ -186,10 +201,11 @@ async function startups() {
     }
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); result.staticServerClosed = true; }
   const times = result.runs.map(r => r.navigationToReadyMs).filter(Number.isFinite).sort((a, b) => a - b);
-  result.summary = { required: 5, measured: times.length, medianMs: times.length === 5 ? times[2] : null, maxMs: times.length ? Math.max(...times) : null, thresholdMs: 8000, pass: result.runs.length === 5 && result.runs.every(r => r.pass && r.processExited && r.cdpPortClosed && r.profileRemoved) };
+  const requestedRunsPass = result.runs.length === count && result.runs.every(r => r.pass && r.processExited && r.cdpPortClosed && r.profileRemoved);
+  result.summary = { required: 5, requested: count, measured: times.length, medianMs: times.length === 5 ? times[2] : null, maxMs: times.length ? Math.max(...times) : null, thresholdMs: 8000, diagnosticOnlyCount: count !== 5, requestedRunsPass, pass: count === 5 && requestedRunsPass };
   result.artifactStable = (await artifactManifest(root)).sha256 === before.sha256;
   if (!result.artifactStable) result.summary.pass = false;
-  if (!result.summary.pass) process.exitCode = 1;
+  if (!requestedRunsPass || !result.artifactStable) process.exitCode = 1;
 }
 
 try { if (mode === 'candidate') await makeCandidate(); else await startups(); }
