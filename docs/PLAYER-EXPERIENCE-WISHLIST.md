@@ -207,7 +207,8 @@ checked against the current initiative text before capture.
   handlers.
   Wave 125 PR1 `docs/Ctl04MenuInputDesign.md`. Digit1–5 skip WPN while
   docked / overlay owns digits. Optional CTL-04 `fireHeld` cleanup implemented
-  in issue #11; release gate pending an exact-artifact byte exception.
+  and locally verified in issue #11; owner-approved exact byte exception
+  passes build/report, with independent policy review pending.
   See `docs/Issue11FireHeldEvidence.md` for reproduction and verification.
 - [x] DONE (P1, HUD/NAV): Add a persistent home-station marker with distance.
   Nothing on the HUD points to the station once it leaves the screen; a drift

@@ -1,8 +1,9 @@
 # Issue #11 — Physical fire ownership
 
-Implementation is ready for independent review. Release remains blocked by
-the unchanged production byte budget; this document does not approve a new
-exception or declare the issue complete.
+Implementation and local verification are complete. Independent Claude source,
+security and behavior review passed; the owner-approved exact byte exception
+now permits the ordinary production build. Independent policy review remains
+pending. No deployment or cold-start remeasurement is claimed.
 
 ## Reproduction and census
 
@@ -49,8 +50,15 @@ physical fire while paused, covering direct title/Models pause writes even
 when simulation updates are frozen. The context-keyed callback remains in
 controls; no persistent field or event vocabulary is added.
 
-No changes to rebinding, station digits, other axes/edges, cadence, weapons,
-combat balance, or the agent lease gates. Death/recovery behavior was read
+No changes to rebinding, station digits, other axes/edges, cadence, weapons or
+combat balance. Per-update agent lease safety gates remain intact, with one
+accepted minor input-path difference: a rebound keyboard fire press under a
+full blocking owner returns before the handler's `player-override` lease
+revocation. Default mouse fire still revokes first. Paused and Settings keys
+already returned early before this change; the new difference concerns other
+blocking owners when their keydown reaches controls. The reviewer permitted
+documenting this low-impact transient difference and the coordinator accepted
+it without changing the approved runtime. Death/recovery behavior was read
 for adjacent context but is not changed or claimed as verified by this issue.
 
 ## Verification
@@ -73,9 +81,20 @@ for adjacent context but is not changed or claimed as verified by this issue.
   the authorized unsandboxed loopback-only retry passed.
 - Both final browser runs have zero console errors/uncaught exceptions,
   matching start/end runtime source hashes, and closed Vite/CDP ports.
-- `npm run build`: blocked by the unchanged exact-artifact byte gate. The
-  previous approved exception belongs to the base artifact and does not
-  authorize this changed JavaScript.
+- Independent Claude source/code, security and behavior/acceptance: PASS on
+  `65f5d522a814c6b8fe282028de5a44105004ccc0`, with the minor caveat above.
+  Claude independently ran the focused fire and paused-input tests and
+  inspected raw live/boot/build evidence; it did not execute boot or build.
+- `npm run build` and `npm run bundle:report -- --json`: PASS after the owner
+  approved this exact byte exception on 2026-09-09, conditional on the source
+  QA PASS that was subsequently received. Both raw byte flags remain false.
+  The initial build FAIL remains recorded; the old exception did not authorize
+  this candidate. See [the approval record](releases/issue-11-measured-exception.md).
+- Read-only local artifact verification: 131 runtime source files match the
+  reviewed Git commit and approved census; the complete emitted Rollup
+  JavaScript chunk set matches the approved filename/hash/byte counts. The
+  separately copied public Basis transcoder also matches its reviewed source.
+  Evidence: `approved-artifact-check-final.json` and `artifact-check.mjs`.
 
 Reproduce live ownership with `npm run test:fire-held-live` and actual
 headed-browser focus loss with `npm run test:fire-held-focus`. Set
@@ -95,7 +114,7 @@ baseline defects were reproduced, not that baseline behavior was correct.
 The early exploratory unit matrix also included an overly broad hail
 expectation; it is not the final acceptance matrix.
 
-## Measured release blocker
+## Measured owner-approved byte exception
 
 Equivalent diagnostic Vite output (unchanged runtime source, normal production
 options) measures the candidate without altering the repository build policy:
@@ -109,6 +128,11 @@ options) measures the candidate without altering the repository build policy:
 | Gzip bytes | 545,098 (limit 537,600; +93 versus base) |
 | Browser dependency audit | PASS; only `three` |
 
-The diagnostic reports raw byte policy FAIL and does not activate an
-exception. Approval and independent review must precede any policy refresh.
-Rollback is the two runtime-file changes; no data migration is involved.
+The diagnostic reported raw byte policy FAIL before approval. The owner
+approved this exact candidate and Claude source QA satisfied that approval's
+condition. The ordinary build now matches the activated exception, with a
+passing browser audit and unchanged runtime hash. Independent review of the
+policy activation is still required; source QA is not policy QA. The startup
+requirement remains unchanged and this approval supplies no startup waiver.
+Rollback is the two runtime-file changes plus the exact-artifact descriptor;
+no data migration is involved.
