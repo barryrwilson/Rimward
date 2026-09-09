@@ -421,7 +421,7 @@ export function agentControlStatus(ctx) {
       ...(combatNote ? { combat: { ...combatNote } } : {}),
     };
   } catch {
-    return { state: 'idle', seq: 0, expiresIn: 0, fire: false, reason: '' };
+    return { owner: 'none', state: 'idle', seq: 0, expiresIn: 0, fire: false, reason: '' };
   }
 }
 
@@ -995,7 +995,12 @@ export function initControls(ctx) {
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (lease?.combat) dropLease(ctx, 'player-override');
+    if (lease?.combat) {
+      dropLease(ctx, 'player-override');
+      if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+        mouseX = e.clientX; mouseY = e.clientY;
+      }
+    }
     if (fireMouseButton >= 0 && e.button === fireMouseButton) fireDown = true;
     if (fireMouseButton === 1 && e.button === 1) e.preventDefault();
     if (fireMouseButton === 2 && e.button === 2) e.preventDefault();

@@ -17,6 +17,26 @@ import { initNpc, spawnLiveShip } from '../src/systems/npc.js';
 import { readFile } from 'node:fs/promises';
 import { configureShipAssetFileReader, primeShipAsset } from '../src/systems/ship-assets.js';
 import { hoverTurnRateFor } from '../src/game/flight-feel.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+
+function sourceFingerprint() {
+  const hash=createHash('sha256');
+  function visit(rel) {
+    for(const entry of readdirSync(new URL('../'+rel,import.meta.url),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))) {
+      const path=rel+entry.name;
+      if(entry.isDirectory())visit(path+'/');
+      else {hash.update(path+'\0');hash.update(readFileSync(new URL('../'+path,import.meta.url)));hash.update('\0');}
+    }
+  }
+  visit('src/');
+  return {src:hash.digest('hex'),test:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex')};
+}
+const sourceStart=sourceFingerprint();console.log('SOURCE START',JSON.stringify(sourceStart));
+process.on('exit',code=>{
+  const end=sourceFingerprint();console.log('SOURCE END',JSON.stringify({...end,exitCode:code}));
+  if(end.src!==sourceStart.src||end.test!==sourceStart.test){console.error('SOURCE CHANGED DURING TEST');process.exitCode=1;}
+});
 
 let checks = 0;
 function test(name, run) { run(); console.log('PASS', name); checks++; }
@@ -250,6 +270,36 @@ test('actual flight regains firing geometry against a pursuing contact after egr
   assert(minimum>12,'do not solve pursuit by flying through the hull center');
 });
 
+test('on-nose close egress reduces forward thrust before accelerating away under ordinary flight', () => {
+  const random=Math.random;seedBootRandom();
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx),npc=initNpc(ctx);
+  Object.assign(f.target,spawnLiveShip(ctx,{id:f.target.id,name:'Close egress fixture',classKey:'cutter',faction:'independent',role:'pirate',resolve:80,alwaysHuntsPlayer:true,anchor:{x:0,y:0,z:0}},new THREE.Vector3(0,0,-100)));
+  f.target.object.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI);
+  f.target.ai.velocity.set(0,0,84);f.target.ai.target='player';f.target.ai.intent=true;f.target.ai.mode='hunt';
+  ctx.ship.velocity.set(0,0,-68.9);ctx.ship.speed=68.9;ctx.input.throttle=(68.9-ctx.config.ship.creep)/(ctx.config.ship.maxSpeed-ctx.config.ship.creep);
+  const initialThrottle=ctx.input.throttle,relative=new THREE.Vector3();
+  const sample=()=>({speed:f.target.ai.velocity.length(),closing:losCloseRate(ctx.ship.object.position,f.target.object.position,relative.copy(f.target.ai.velocity).sub(ctx.ship.velocity))});
+  f.sample(sample());assert.equal(f.start({ttl:45}).ok,true);
+  let minimum=Infinity,firstFire=null,framesAhead=0,awayAcceleration=false;
+  for(let n=0;n<20*60;n++) {
+    const prior=ctx.input.throttle;f.tick(1/60,true,sample());
+    if(n===0){assert.equal(f.status().combat.phase,'reposition');assert(ctx.input.throttle<initialThrottle,'first command decelerates the on-nose approach');}
+    if(f.status().combat.phase==='reposition'&&ctx.targets.aim.bearing[2]<-.3){framesAhead++;assert(ctx.input.throttle<=Math.max(prior,.18)+1e-8);assert.equal(ctx.input.fireHeld,false);}
+    if(f.status().combat.phase==='reposition'&&ctx.targets.aim.bearing[2]>.3&&ctx.input.throttle>prior)awayAcceleration=true;
+    if(ctx.input.fireHeld)firstFire??=n/60;
+    flight.update(1/60);npc.update(1/60);
+    minimum=Math.min(minimum,ctx.ship.object.position.distanceTo(f.target.object.position));
+    assert.equal(f.status().owner,'combat');
+  }
+  Math.random=random;
+  console.log('Close egress geometry:',JSON.stringify({minimum,firstFire,framesAhead,awayAcceleration}));
+  assert(framesAhead>0&&awayAcceleration,'braking while facing target is followed by actual acceleration away');
+  assert(minimum>12,'close egress does not fly through the target center');
+  assert(firstFire!==null,'close avoidance returns to a firing opportunity');
+});
+
 test('break-off and retreat complete within observable geometry; never fire', () => {
   for (const [intent,seconds,reason] of [['break-off',2.1,'disengaged'],['retreat',5.1,'retreated']]) {
     const f=fixture(); f.target.object.position.z=450; f.sample({closing:5});
@@ -361,15 +411,29 @@ test('human input synchronously wins; the new command starts from neutral agent 
     if(name==='mousemove')assert(f.ctx.input.steerX<0);
   }
   const f=fixture();f.emit('keydown',{code:'KeyR'});assert.equal(f.start().token,'player-override');
+  const click=fixture();click.start();click.tick();click.emit('mousedown',{button:0,clientX:100,clientY:100});click.tick();
+  assert(click.ctx.input.steerX<0,'first human shot uses the click cursor, without requiring a mousemove');
+  assert.equal(click.ctx.input.fireHeld,true);
 });
 
 test('public discovery and incoming helms agree, with explicit MATCH refusal', () => {
-  const f=fixture(); assert(f.api.observe().capabilities.commands.setCombatIntent);
+  const f=fixture(); const spec=f.api.observe().capabilities.commands.setCombatIntent;
+  assert(spec.args.intent.includes('disable shares engage policy'));assert(spec.args.intent.includes('may destroy'));
+  assert(spec.outcomes.includes('cleared'));assert(!spec.outcomes.includes('target-disabled'));
+  assert(spec.terminalReasons.includes('target-disabled'));assert(spec.phases.includes('reposition'));
   assert.equal(f.start().owner,'combat');
   for(const name of ['engageAutopilot','engageAutomine','approachDock','afterburner'])assert.equal(f.act(name).token,'helm');
   f.act('clearControl'); f.ctx.flags.matchSpeed=true; assert.equal(f.start().token,'match-speed');
   f.ctx.flags.matchSpeed=false;
   for(const channel of ['autopilot','automine','flee']) { f.ctx[channel].engaged=true;assert.equal(f.start().token,'helm');f.ctx[channel].engaged=false; }
+});
+
+test('degraded control status retains an explicit owner field', () => {
+  const f=fixture();f.start();f.tick();
+  const time=f.ctx.world.time;Object.defineProperty(f.ctx.world,'time',{configurable:true,get(){throw Error('broken clock');}});
+  assert.deepEqual(f.status(),{owner:'none',state:'idle',seq:0,expiresIn:0,fire:false,reason:''});
+  Object.defineProperty(f.ctx.world,'time',{configurable:true,writable:true,value:time});
+  f.act('clearControl');
 });
 
 console.log(`Issue #61: ${checks} regression groups PASS`);

@@ -188,7 +188,10 @@ export function combatTick(ctx, lease) {
     lease.steerX = clamp((Math.abs(away[0]) < 0.02 && away[2] < 0 ? c.side * Math.PI : awayYaw) * 2);
     lease.steerY = clamp(Math.atan2(-away[1], Math.hypot(away[0], away[2])) * 2);
     lease.strafeX = (Math.abs(away[0]) > 0.1 ? -Math.sign(away[0]) : c.side) * 0.8;
-    lease.throttle = 0.9;
+    // Brake the forward approach while the nose is still on the opponent.
+    // Lateral thrust keeps the normal turn law moving; accelerate away only
+    // as the nose clears the target, without a burner or physics override.
+    lease.throttle = 0.18 + 0.72 * clamp((away[2] + 0.3) / 0.6, 0, 1);
     c.fireBlocked = c.phase;
   }
   const block = obstacle(ctx, speed);

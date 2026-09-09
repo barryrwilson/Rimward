@@ -53,6 +53,8 @@ wall deadline expires on the next observation or control tick before a new
 shot; focus does not renew the grant. Idempotent clear remains
 available while paused/held and retains an already reported combat terminal
 reason. There are no automatic burner requests or external renewals.
+An already accepted API target/dock/reticle pulse remains pending through
+focus loss; changing windows does not revoke that deliberate command.
 
 ## Maneuvers and endings
 
@@ -66,7 +68,9 @@ Raw manual leases retain their existing hail interruption behavior.
 - `engage` and `disable`: intercept using angular target/lead errors plus
   measured angular change, enter a firing pass and avoid a forward collision
   corridor. Nearby aft pursuit alone does not reverse a return to aim.
-  Reposition uses ordinary thrust/strafe and lasts at most three seconds
+  Reposition reduces forward thrust while the opponent is still on the nose,
+  retains lateral thrust for the turn, and accelerates as the nose turns away.
+  It uses ordinary thrust/strafe and lasts at most three seconds
   unless immediate hull clearance still requires avoidance;
   the next six seconds suppress only preferred-distance re-entry while actual
   hull clearance and visible obstacles still take priority. A shortest-arc

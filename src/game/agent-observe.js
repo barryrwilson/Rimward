@@ -715,7 +715,6 @@ function availabilityBlock(ctx, phase, control) {
   const held = flags.berthHold === true;
   const docked = flags.docked === true;
   const hailOpenF = flags.hailOpen === true;
-  const overlay = flags.chartOpen === true || flags.berthOpen === true || hailOpenF;
   const helm = !!(
     (ctx.autopilot && ctx.autopilot.engaged === true)
     || (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true)
