@@ -376,7 +376,7 @@ async function live() {
       const end = Date.now() + 120000; let routeStarted = false, laneReached = false;
       while (Date.now() < end) {
         s = await resolveHail(await observe());
-        const match = s.targets.nearby.find(t => t.kind === 'ship' && t.name === bounty?.target) || s.targets.nearby.find(t => t.kind === 'ship' && t.hostile);
+        const match = s.targets.nearby.find(t => t.kind === 'ship' && t.hostile && !t.disabled && !t.surrendered);
         if (match) { targetId = match.id; break; }
         if (s.world.currentSystem !== system || s.gate.jumping) break;
         assert(s.ship.hull > 50 && s.ship.engine > 40, 'Natural search safety threshold');
@@ -401,6 +401,35 @@ async function live() {
       const spent = new Set(), encounterEnd = Date.now() + 180000;
       let trial;
       for (let attempt = 1; attempt <= (mode === 'natural' ? 4 : 1); attempt++) {
+      if (mode === 'natural') {
+        // Ordinary public piloting before authorization, never inside the
+        // measured gap. A hostile contact across/behind the nose can otherwise
+        // leave target range before local combat gets its first firing pass.
+        const alignment = { attempt, targetId, startedWall: Date.now(), steps: [] };
+        (result.naturalAlignment ||= []).push(alignment);
+        const end = Date.now() + 10000;
+        while (Date.now() < end) {
+          const s = await resolveHail(await observe());
+          const target = s.targets.nearby.find(t => t.id === targetId);
+          const aim = s.targets.aim;
+          if (!target?.hostile || target.disabled || target.surrendered || aim?.targetId !== targetId || !Array.isArray(aim.bearing)) {
+            alignment.reason = 'contact-unavailable'; break;
+          }
+          assert(s.session.phase === 'playing' && s.ship.hull > 40 && s.ship.engine > 30 && !s.gate.jumping, 'Natural alignment safety threshold');
+          if (aim.bearing[2] < -.92 && aim.dist <= 400 && aim.closing <= 20) { alignment.reason = 'aligned-in-range'; break; }
+          const b = aim.bearing, across = Math.hypot(b[0], b[1]), angle = Math.atan2(across, -b[2]);
+          const clamp = x => Math.max(-1, Math.min(1, x));
+          const input = { seq: ++seq, ttl: 1, throttle: aim.dist > 350 || b[2] > -.8 ? .5 : .2,
+            steerX: clamp(across > .02 ? 2 * b[0] / across * angle : b[2] > 0 ? 1 : 0),
+            steerY: clamp(across > .02 ? 2 * b[1] / across * angle : 0), fireHeld: false };
+          alignment.steps.push({ t: s.t, range: aim.dist, closing: aim.closing, bearing: b, input });
+          await act('setControl', input); rawSearchUsed = true;
+          await sleep(200);
+        }
+        alignment.reason ||= 'bounded-timeout'; alignment.finishedWall = Date.now();
+        await act('clearControl');
+        await h.checkpoint(`aligned-${attempt}`);
+      }
       await h.c.eval(`(()=>{window.__issue62Samples=[];window.__issue62Sample=()=>{const observation=window.rimward.observe();if(window.__issue62Samples.length<2000)window.__issue62Samples.push({wall:Date.now(),browserMs:performance.now(),visibility:document.visibilityState,observation});};window.__issue62Sample();window.__issue62Timer=setInterval(window.__issue62Sample,50);})()`);
       const grantSeq = ++seq;
       const grant = await act('setCombatIntent', { seq: grantSeq, ttl: 45, targetId, intent: 'engage', defense }, false);
