@@ -369,6 +369,8 @@ export const COMMODITIES = {
 };
 export const REFINED_ORE_MULT = [1.6, 2.2]; // §10.3
 export const PRICE_BAND = 0.4; // prices stay within ±40% of baseline §8.4
+// Issue #55: station sale stock. Player sales remain uncapped at the counter.
+export const MARKET_SUPPLY = Object.freeze({ bulkCapacity: 160, otherCapacity: 20, refillSeconds: 1200 });
 
 // ---------- Ore types (§6.8 terrain, §10.3 miner — wave 51) ----------
 // One entry per minable commodity. asteroids.js builds ONE InstancedMesh per

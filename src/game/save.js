@@ -24,6 +24,7 @@ import {
 // save.js, so this direction adds no cycle.
 import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
 import { disengage as disengageAutopilot } from './autopilot.js';
+import { normalizeMarketSupply } from './market-supply.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -111,7 +112,7 @@ const DEATH_HINT_FRESH = 'Returning to Freehold Drift… (Enter to skip)';
 // 'mystery' ({found:[clueIds], visited:[landmarkIds]}) is created lazily by
 // the mystery module (§25) and persists once present.
 export const WORLD_FIELDS = [
-  'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets',
+  'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets', 'marketSupply',
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
   'jumpGraceUntil', 'contacts', 'mystery',
@@ -1044,6 +1045,10 @@ export function snapshot(ctx) {
   }
   const world = {};
   for (const k of WORLD_FIELDS) {
+    if (k === 'marketSupply') {
+      world[k] = normalizeMarketSupply(ctx.world[k], ctx.world.time, Object.hasOwn(ctx.world, k));
+      continue;
+    }
     if (ctx.world[k] === undefined) continue;
     world[k] = (k === 'nav' && ctx.world.nav && typeof ctx.world.nav === 'object')
       ? { ...ctx.world.nav, autopilot: false }
@@ -1206,6 +1211,8 @@ function sanitizeRestored(ctx) {
   ctx.cargo.length = 0;
   for (const row of cargo) ctx.cargo.push(row);
   if (!Number.isFinite(ctx.world.time) || ctx.world.time < 0) ctx.world.time = 0;
+  ctx.world.marketSupply = normalizeMarketSupply(ctx.world.marketSupply, ctx.world.time,
+    Object.hasOwn(ctx.world, 'marketSupply'));
   sanitizeFieldOre(ctx);
   sanitizeJobs(ctx);
   sanitizeReputation(ctx);
@@ -1359,6 +1366,10 @@ export function restore(ctx, snap) {
   for (const k of WORLD_FIELDS) {
     if (snap.world[k] !== undefined) ctx.world[k] = snap.world[k];
   }
+  // An absent legacy envelope must not inherit depletion from another timeline.
+  // Present undefined is malformed, just like null/arrays; retain that distinction.
+  if (!Object.hasOwn(snap.world, 'marketSupply')) delete ctx.world.marketSupply;
+  else ctx.world.marketSupply = snap.world.marketSupply;
   // Legacy blob with no hangar must not keep a prior session's hulls.
   const omitHangar = snap.world.hangar === undefined;
   if (omitHangar) delete ctx.world.hangar;
