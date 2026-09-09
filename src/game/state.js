@@ -146,6 +146,11 @@ export const WEAPONS = {
 export const HEAT = { max: 100, coolPerSec: 12, overheatUnlockAt: 40 }; // §6.3 heat-limited
 export const POWER = { max: 100, regenPerSec: 8, afterburnerPerSec: 16, afterburnerMin: 15 };
 
+// Session-only agent tuning; never persisted on ship records.
+export const REACTIVE_DEFENSE = Object.freeze({ hull: 0.4, engine: 0.3, defenses: 0.1,
+  heatHigh: 0.9, heatLow: 0.75, cueAge: 0.25, minEpisode: 1, maxEpisode: 3,
+  quiet: 0.75, reengage: 1, driftTime: 0.35, burnTime: 0.5 });
+
 // ---------- Defense model (§6.4/§6.5) ----------
 export const DEFENSE = {
   screenFraction: 0.4, // outer layer share of total shield

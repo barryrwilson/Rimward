@@ -12,6 +12,7 @@ import {
 import { decodeKeyCode } from './key-code.js';
 import { COMMANDS, codeOf, conflictFor } from './bindings.js';
 import { registerBerthInput } from '../game/launch-clearance.js';
+import { defenseApplied } from '../game/agent-defense.js';
 import { combatWeapon, combatSample, createCombat, combatTick, combatView } from '../game/agent-combat.js';
 
 /**
@@ -210,7 +211,7 @@ let physicalHeld = () => false;
 function combatNeutral(ctx) {
   const input = ctx.input;
   input.steerX = input.steerY = input.strafeX = input.strafeY = input.roll = input.throttle = 0;
-  input.fireHeld = input.driftHeld = input.afterburnerPressed = false;
+  input.fireHeld = input.driftHeld = input.afterburnerPressed = input.agentBurnerHeld = false;
   input.fullStop = true;
 }
 
@@ -235,6 +236,9 @@ function dropLease(ctx, reason) {
   const seq = lease.seq;
   if (lease.combat) {
     lease.combat.completedAt = simNow(ctx);
+    lease.combat.defense.phase = 'completed';
+    lease.combat.defense.maneuver = 'stopped';
+    lease.combat.defense.completedAt = simNow(ctx);
     lease.combat.fireBlocked = reason;
     combatNote = combatView(lease.combat);
     combatNeutral(ctx);
@@ -342,19 +346,26 @@ export function agentCombatSet(ctx, spec) {
     expireCombat(ctx);
     if (!ctx?.input || !ctx.ship?.object) return 'no-service';
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)
-        || Object.keys(spec).some(k => !['seq', 'ttl', 'targetId', 'intent'].includes(k))
+        || Object.keys(spec).some(k => !['seq', 'ttl', 'targetId', 'intent', 'defense'].includes(k))
         || !['seq', 'ttl', 'targetId', 'intent'].every(k => Object.hasOwn(spec, k))) return 'bad-args';
     if (!Number.isSafeInteger(spec.seq) || spec.seq < 1) return 'bad-seq';
     if (spec.seq <= leaseSeq) return 'stale';
     if (!Number.isFinite(spec.ttl) || spec.ttl < 1 || spec.ttl > 60) return 'bad-ttl';
     if (!['engage', 'disable', 'break-off', 'retreat'].includes(spec.intent)
         || typeof spec.targetId !== 'string' || !spec.targetId) return 'bad-args';
+    const stance = Object.hasOwn(spec, 'defense') ? spec.defense : 'evade';
+    if (!['evade', 'break-off', 'off'].includes(stance)) return 'bad-args';
+    const prior = lease?.combat;
+    const same = prior && prior.intent === spec.intent && prior.targetId === spec.targetId
+      && prior.weaponGroup === ctx.input.weaponGroup && prior.defense.stance === stance;
     const gate = leaseGateToken(ctx, true);
     if (gate) return gate;
     if (ctx.agent?.optIn !== true) return 'opt-in';
+    if (ctx.player?.destroyed) return 'dead';
     if (physicalHeld()) return 'player-override';
     if (ctx.flags.matchSpeed) return 'match-speed';
-    if (ctx.ship.burnerActive || ctx.ship.driftActive) return 'helm';
+    if ((ctx.ship.burnerActive && !(same && prior.defense.burnerRequested && ctx.input.agentBurnerHeld))
+        || (ctx.ship.driftActive && !(same && prior.defense.driftRequested && ctx.input.driftHeld))) return 'helm';
     if (lease && !lease.combat) return 'helm';
     const target = ctx.targets?.current;
     if (!target?.object || !target.state || target.lockKind || target.id !== spec.targetId
@@ -366,11 +377,10 @@ export function agentCombatSet(ctx, spec) {
       if (!combatWeapon(ctx)) return 'weapon';
     }
     // Renew only the same live maneuver. An expired grant is a fresh start.
-    const prior = lease?.combat;
     const keep = prior && lease.expiresAt > simNow(ctx) && prior.target === target
       && prior.record === target.record && prior.system === ctx.world.currentSystem
-      && prior.intent === spec.intent && prior.weaponGroup === ctx.input.weaponGroup;
-    const combat = keep ? prior : createCombat(ctx, target, spec.intent);
+      && same;
+    const combat = keep ? prior : createCombat(ctx, target, spec.intent, stance);
     leaseSeq = spec.seq;
     combatNote = null;
     lease = { seq: spec.seq, expiresAt: simNow(ctx) + spec.ttl, wallExpiresAt: wallNow() + spec.ttl, combat,
@@ -378,6 +388,7 @@ export function agentCombatSet(ctx, spec) {
       throttle: null, fire: false, drift: false };
     // A replacement cannot leave an old firing command live until next frame.
     ctx.input.fireHeld = false;
+    if (!keep) ctx.input.driftHeld = ctx.input.agentBurnerHeld = ctx.input.afterburnerPressed = false;
     noteLease(ctx, 'active', leaseSeq, '');
     return '';
   } catch { return 'no-service'; }
@@ -418,7 +429,8 @@ export function agentControlStatus(ctx) {
       expiresIn: 0,
       fire: false,
       reason: leaseNote.reason,
-      ...(combatNote ? { combat: { ...combatNote } } : {}),
+      ...(combatNote ? { combat: { ...combatNote, defense: { ...combatNote.defense,
+        latestCue: combatNote.defense.latestCue ? { ...combatNote.defense.latestCue } : null } } } : {}),
     };
   } catch {
     return { owner: 'none', state: 'idle', seq: 0, expiresIn: 0, fire: false, reason: '' };
@@ -1199,6 +1211,10 @@ export function initControls(ctx) {
         input.roll = lease.roll;
         input.fireHeld = lease.fire && ctx.flags.chartOpen !== true;
         input.driftHeld = lease.drift;
+        if (lease.combat) {
+          input.agentBurnerHeld = lease.burner === true;
+          input.afterburnerPressed = lease.burnerEdge === true;
+        }
         if (lease.throttle !== null) {
           if (lease.throttle <= 0) {
             // Player-equivalent full stop (double-tap F).
@@ -1213,6 +1229,7 @@ export function initControls(ctx) {
               : input.throttle + Math.sign(diff) * step;
           }
         }
+        if (lease.combat) defenseApplied(ctx, lease.combat);
       }
     },
   };

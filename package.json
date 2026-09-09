@@ -46,6 +46,8 @@
     "agent:bridge": "node scripts/agent-bridge.mjs",
     "agent:bridge:smoke": "node scripts/agent-bridge-smoke.mjs",
     "test:combat-intent": "node --import ./scripts/with-css-stub.mjs scripts/issue-61-combat-intent-test.mjs",
+    "test:reactive-defense": "node --import ./scripts/with-css-stub.mjs scripts/issue-62-reactive-defense-test.mjs",
+    "test:reactive-defense-live": "node scripts/issue-62-live-probe.mjs",
     "test:combat-live": "node scripts/issue-61-live-probe.mjs"
   },
   "dependencies": {
