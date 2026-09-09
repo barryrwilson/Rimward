@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
 import * as pods from '../game/pods.js';
+import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41: faction character portraits
@@ -263,7 +264,6 @@ for (const oreKey of Object.keys(ORE_TYPES)) {
 }
 
 const _pulse = new THREE.Color();
-const _podPos = new THREE.Vector3(); // scratch for recovery-job pod spawns
 
 // ------------------------------------------------------------- palette ----
 
@@ -2218,11 +2218,7 @@ function syncRecoveryJob(ctx, sysId) {
   for (let i = jobs.length - 1; i >= 0; i--) {
     const j = jobs[i];
     if (j.kind !== 'recovery' || j.state !== 'offered') continue;
-    let live = false;
-    for (const a of aftermath) {
-      if (a.id === j.wreckId && a.kind === 'wreck' && a.expiresAt > ctx.world.time) { live = true; break; }
-    }
-    if (!live) jobs.splice(i, 1);
+    if (!recoveryWreck(ctx, j)) jobs.splice(i, 1);
   }
   // Post for the first in-system wreck with no job yet (one card at a time).
   for (const a of aftermath) {
@@ -2232,7 +2228,7 @@ function syncRecoveryJob(ctx, sysId) {
     jobs.push({
       id, kind: 'recovery', wreckId: a.id,
       title: 'Recovery: wreck salvage',
-      detail: `A wreck drifts in the lanes and the yard wants its metallics back before the hulk goes cold. Accept and a salvage marker pod is cut loose at the site — scoop it, dock back here, collect ${RECOVERY_REWARD} UU.`,
+      detail: 'A confirmed wreck. Accept, launch, follow the Recovery pod flight marker with 2 hold units free, then return to the issuing dock. The marker expires; recovered metals remain yours to sell.',
       reward: RECOVERY_REWARD, state: 'offered', progress: 0, need: 1,
       originSystem: sysId, collected: false, // JSON-plain
     });
@@ -2379,7 +2375,32 @@ function healOfferedMiningTwins(ctx, sysId) {
   }
 }
 
-function syncMiningJobs(ctx, sysId) {
+function jobSlotOf(job) {
+  if (job.slot === 1) return 1;
+  if (job.slot === 0) return 0;
+  return null;
+}
+
+function jobSlotTaken(jobs, origin, slot, kind) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== kind || j.originSystem !== origin || j.slot !== slot) continue;
+    if (j.state === 'offered' || j.state === 'accepted') return true;
+  }
+  return false;
+}
+// Shared slot mechanics keep board maintenance identical across job families.
+function detachJobSlot(ctx, job, kind) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return null;
+  const origin = job.originSystem;
+  const slot = jobSlotOf(job);
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  if (slot == null || !Object.hasOwn(SYSTEMS, origin) || jobSlotTaken(jobs, origin, slot, kind)) return null;
+  return slot;
+}
+function syncJobSlots(ctx, sysId, kind, cap, make, canMake = null) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return;
   const jobs = ctx.world.jobs;
   if (!Array.isArray(jobs)) return;
@@ -2387,47 +2408,37 @@ function syncMiningJobs(ctx, sysId) {
   let count = 0;
   for (let i = 0; i < jobs.length; i++) {
     const j = jobs[i];
-    if (j.kind !== 'mining' || j.originSystem !== sysId) continue;
+    if (j.kind !== kind || j.originSystem !== sysId) continue;
     if (j.state !== 'offered' && j.state !== 'accepted') continue;
     count += 1;
     if (j.slot === 0 || j.slot === 1) used.add(j.slot);
   }
-  while (count < MINING_SLOTS_PER_SYSTEM) {
+  while (count < cap) {
     const slot = used.has(0) ? 1 : 0;
-    const job = makeMiningJob(ctx, sysId, slot);
+    if (canMake && !canMake(ctx, sysId, slot)) break;
+    const job = make(ctx, sysId, slot);
     if (!job) break;
     jobs.push(job);
     used.add(slot);
     count += 1;
   }
-  healOfferedMiningTwins(ctx, sysId);
 }
 
-function miningSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
+function syncMiningJobs(ctx, sysId) {
+  syncJobSlots(ctx, sysId, 'mining', MINING_SLOTS_PER_SYSTEM, makeMiningJob);
+  if (Object.hasOwn(SYSTEMS, sysId) && Array.isArray(ctx.world.jobs)) healOfferedMiningTwins(ctx, sysId);
 }
 
-function miningSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'mining' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
+
 
 /** Splice a mining row and push a fresh offered card for the same origin+slot. */
 function replaceMiningJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'mining');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = miningSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (miningSlotTaken(jobs, origin, slot)) return;
   const next = makeMiningJob(ctx, origin, slot);
   if (next) jobs.push(next);
 }
@@ -2565,54 +2576,20 @@ function makeTradeJob(ctx, sysId, slot) {
 }
 
 function syncTradeJobs(ctx, sysId) {
-  if (!Object.hasOwn(SYSTEMS, sysId)) return;
-  if (!tradeDestId(ctx, sysId)) return;
-  const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
-  const used = new Set();
-  let count = 0;
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'trade' || j.originSystem !== sysId) continue;
-    if (j.state !== 'offered' && j.state !== 'accepted') continue;
-    count += 1;
-    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
-  }
-  while (count < TRADE_SLOTS_PER_SYSTEM) {
-    const slot = used.has(0) ? 1 : 0;
-    const job = makeTradeJob(ctx, sysId, slot);
-    if (!job) break;
-    jobs.push(job);
-    used.add(slot);
-    count += 1;
-  }
+  if (!Object.hasOwn(SYSTEMS, sysId) || !tradeDestId(ctx, sysId)) return;
+  syncJobSlots(ctx, sysId, 'trade', TRADE_SLOTS_PER_SYSTEM, makeTradeJob);
 }
 
-function tradeSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
-}
 
-function tradeSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'trade' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
 
 /** Splice a trade row and push a fresh offered card for the same origin+slot. */
 function replaceTradeJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'trade');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = tradeSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (tradeSlotTaken(jobs, origin, slot)) return;
   if (!tradeDestId(ctx, origin)) return;
   const next = makeTradeJob(ctx, origin, slot);
   if (next) jobs.push(next);
@@ -2837,30 +2814,15 @@ function syncHuntJobs(ctx, sysId) {
   }
 }
 
-function huntSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
-}
 
-function huntSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'hunt' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
 
 function replaceHuntJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'hunt');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = huntSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (huntSlotTaken(jobs, origin, slot)) return;
   const bound = huntBoundRecordIds(jobs, origin, null);
   const rec = pickHuntQuarry(huntBank(ctx, origin), origin, bound);
   if (!rec) return;
@@ -2934,53 +2896,19 @@ function makePassengerJob(ctx, sysId, slot) {
 }
 
 function syncPassengerJobs(ctx, sysId) {
-  if (!Object.hasOwn(SYSTEMS, sysId)) return;
-  if (!passengerDestId(ctx, sysId)) return;
-  const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
-  const used = new Set();
-  let count = 0;
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'passenger' || j.originSystem !== sysId) continue;
-    if (j.state !== 'offered' && j.state !== 'accepted') continue;
-    count += 1;
-    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
-  }
-  while (count < PASSENGER_SLOTS_PER_SYSTEM) {
-    const slot = used.has(0) ? 1 : 0;
-    const job = makePassengerJob(ctx, sysId, slot);
-    if (!job) break;
-    jobs.push(job);
-    used.add(slot);
-    count += 1;
-  }
+  if (!Object.hasOwn(SYSTEMS, sysId) || !passengerDestId(ctx, sysId)) return;
+  syncJobSlots(ctx, sysId, 'passenger', PASSENGER_SLOTS_PER_SYSTEM, makePassengerJob);
 }
 
-function passengerSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
-}
 
-function passengerSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'passenger' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
 
 function replacePassengerJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'passenger');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = passengerSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (passengerSlotTaken(jobs, origin, slot)) return;
   if (!passengerDestId(ctx, origin)) return;
   const next = makePassengerJob(ctx, origin, slot);
   if (next) jobs.push(next);
@@ -3051,53 +2979,18 @@ function makeExploreJob(ctx, sysId, slot) {
 }
 
 function syncExploreJobs(ctx, sysId) {
-  if (!Object.hasOwn(SYSTEMS, sysId)) return;
-  const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
-  const used = new Set();
-  let count = 0;
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'explore' || j.originSystem !== sysId) continue;
-    if (j.state !== 'offered' && j.state !== 'accepted') continue;
-    count += 1;
-    if (j.slot === 0 || j.slot === 1) used.add(j.slot);
-  }
-  while (count < EXPLORE_SLOTS_PER_SYSTEM) {
-    const slot = used.has(0) ? 1 : 0;
-    if (!resolveExploreSite(ctx, sysId, slot)) break;
-    const job = makeExploreJob(ctx, sysId, slot);
-    if (!job) break;
-    jobs.push(job);
-    used.add(slot);
-    count += 1;
-  }
+  syncJobSlots(ctx, sysId, 'explore', EXPLORE_SLOTS_PER_SYSTEM, makeExploreJob, resolveExploreSite);
 }
 
-function exploreSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
-}
 
-function exploreSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'explore' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
 
 function replaceExploreJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'explore');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = exploreSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (exploreSlotTaken(jobs, origin, slot)) return;
   if (!resolveExploreSite(ctx, origin, slot)) return;
   const next = makeExploreJob(ctx, origin, slot);
   if (next) jobs.push(next);
@@ -3271,7 +3164,7 @@ function syncEspionageJobs(ctx, sysId) {
     if (j.state !== 'offered' && j.state !== 'accepted') continue;
     count += 1;
     if (j.slot === 0 || j.slot === 1) used.add(j.slot);
-    const liveSlot = espionageSlotOf(j);
+    const liveSlot = jobSlotOf(j);
     const liveDest = liveSlot == null ? null : resolveEspionageDest(ctx, sysId, liveSlot);
     if (liveDest) bound.add(liveDest);
   }
@@ -3288,30 +3181,15 @@ function syncEspionageJobs(ctx, sysId) {
   }
 }
 
-function espionageSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
-}
 
-function espionageSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'espionage' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
 
 function replaceEspionageJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'espionage');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = espionageSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (espionageSlotTaken(jobs, origin, slot)) return;
   if (!resolveEspionageDest(ctx, origin, slot)) return;
   const next = makeEspionageJob(ctx, origin, slot);
   if (next) jobs.push(next);
@@ -3564,30 +3442,15 @@ function syncWarJobs(ctx, sysId) {
   }
 }
 
-function warSlotOf(job) {
-  if (job.slot === 1) return 1;
-  if (job.slot === 0) return 0;
-  return null;
-}
 
-function warSlotTaken(jobs, origin, slot) {
-  for (let i = 0; i < jobs.length; i++) {
-    const j = jobs[i];
-    if (j.kind !== 'war' || j.originSystem !== origin || j.slot !== slot) continue;
-    if (j.state === 'offered' || j.state === 'accepted') return true;
-  }
-  return false;
-}
+
+
 
 function replaceWarJob(ctx, job) {
+  const slot = detachJobSlot(ctx, job, 'war');
+  if (slot == null) return;
   const jobs = ctx.world.jobs;
-  if (!Array.isArray(jobs)) return;
   const origin = job.originSystem;
-  const slot = warSlotOf(job);
-  const idx = jobs.indexOf(job);
-  if (idx >= 0) jobs.splice(idx, 1);
-  if (slot == null || !Object.hasOwn(SYSTEMS, origin)) return;
-  if (warSlotTaken(jobs, origin, slot)) return;
   const dest = warDestId(origin);
   if (!dest) return;
   const bound = warBoundRecordIds(jobs, origin, null);
@@ -3768,14 +3631,8 @@ function boardJobs(ctx, sysId) {
   for (const j of ctx.world.jobs) {
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
       && j.state === 'offered' && j.system !== sysId) continue;
-    if (j.kind === 'recovery' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'mining' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'trade' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'hunt' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'passenger' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'explore' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'espionage' && j.state === 'offered' && j.originSystem !== sysId) continue;
-    if (j.kind === 'war' && j.state === 'offered' && j.originSystem !== sysId) continue;
+    if ((j.state === 'offered' || (j.kind === 'recovery' && j.state === 'failed')) && j.originSystem !== sysId
+      && ['recovery', 'mining', 'trade', 'hunt', 'passenger', 'explore', 'espionage', 'war'].includes(j.kind)) continue;
     if (j.kind === 'chain' && j.state === 'done') continue;
     // Offered/accepted unique four stay on every dock (WAVE26 re-offer).
     if ((j.id === 'bounty-ace' || j.id === 'patrol-lane'
@@ -3963,21 +3820,6 @@ function completeJob(ctx, job, notice) {
 }
 
 /**
- * Every-frame event scan for active recovery contracts: lastEvents lives one
- * frame, so the podCollected watch CANNOT sit in the throttled delivery tick.
- * Any scooped pod counts while the recovery is active — pods carry no job
- * tags (shared pods.js contract), so the abstraction is temporal.
- */
-function tickRecoveryCollect(ctx) {
-  for (const job of ctx.world.jobs) {
-    if (job.kind !== 'recovery' || job.state !== 'accepted' || job.collected) continue;
-    for (const ev of ctx.lastEvents) {
-      if (ev.type === 'podCollected') { job.collected = true; break; }
-    }
-  }
-}
-
-/**
  * Every-frame event scan for the patrol contract (cheap: few events).
  *
  * Issue #68: the escape receipts are deliberately NOT counted here. A pirate
@@ -4007,6 +3849,14 @@ function tickPatrolJob(ctx) {
 }
 
 /** Throttled checks: bounty claim + delivery + mining expire/replace. */
+function rewardDeliveryStanding(ctx, job, faction) {
+  if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
+    ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
+  }
+  rewardJobContacts(ctx, job);
+  const employerName = factionDisplayName(faction);
+  return employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+}
 function tickDeliveryJobs(ctx, ui, render) {
   const jobs = ctx.world.jobs;
   if (!Array.isArray(jobs)) return;
@@ -4134,13 +3984,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         : clampJobPay(jobPayFor(ctx, origin, base));
       noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
-      const faction = SYSTEMS[origin].faction;
-      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
-        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
-      }
-      rewardJobContacts(ctx, job);
-      const employerName = factionDisplayName(faction);
-      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      const repLine = rewardDeliveryStanding(ctx, job, SYSTEMS[origin].faction);
       ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.${repLine}` });
       replaceMiningJob(ctx, job);
       settled = true;
@@ -4187,13 +4031,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         : clampJobPay(jobPayFor(ctx, origin, base));
       noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
-      const faction = SYSTEMS[origin].faction;
-      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
-        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
-      }
-      rewardJobContacts(ctx, job);
-      const employerName = factionDisplayName(faction);
-      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      const repLine = rewardDeliveryStanding(ctx, job, SYSTEMS[origin].faction);
       ctx.emit('commLine', { text: `${COMMODITIES[commodity].name} delivered — ${pay} UU posted at the dock.${repLine}` });
       replaceTradeJob(ctx, job);
       settled = true;
@@ -4238,13 +4076,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         : clampJobPay(jobPayFor(ctx, origin, FERRY_REWARD));
       noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
-      const faction = SYSTEMS[origin].faction;
-      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
-        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
-      }
-      rewardJobContacts(ctx, job);
-      const employerName = factionDisplayName(faction);
-      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      const repLine = rewardDeliveryStanding(ctx, job, SYSTEMS[origin].faction);
       ctx.emit('commLine', { text: `Party delivered — ${pay} UU posted at the dock.${repLine}` });
       replacePassengerJob(ctx, job);
       settled = true;
@@ -4272,7 +4104,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         continue;
       }
       const origin = job.originSystem;
-      const slot = exploreSlotOf(job);
+      const slot = jobSlotOf(job);
       const site = slot == null || !Object.hasOwn(SYSTEMS, origin)
         ? null
         : resolveExploreSite(ctx, origin, slot);
@@ -4307,13 +4139,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         : clampJobPay(jobPayFor(ctx, origin, explorePayBase()));
       noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
-      const faction = SYSTEMS[origin].faction;
-      if (typeof faction === 'string' && Object.hasOwn(FACTIONS, faction)) {
-        ctx.world.reputation[faction] = (ctx.world.reputation[faction] ?? 0) + MINING_REP;
-      }
-      rewardJobContacts(ctx, job);
-      const employerName = factionDisplayName(faction);
-      const repLine = employerName ? ` ${employerName} standing +${MINING_REP}.` : '';
+      const repLine = rewardDeliveryStanding(ctx, job, SYSTEMS[origin].faction);
       const lmName = exploreSiteName(site);
       const dockName = exploreStationName(origin);
       ctx.emit('commLine', { text: `Survey of ${lmName} filed at ${dockName} — ${pay} UU posted.${repLine}` });
@@ -4330,7 +4156,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       }
       const live = job.state === 'offered' || job.state === 'accepted';
       const origin = job.originSystem;
-      const slot = espionageSlotOf(job);
+      const slot = jobSlotOf(job);
       const dest = slot == null || !Object.hasOwn(SYSTEMS, origin)
         ? null
         : resolveEspionageDest(ctx, origin, slot);
@@ -5078,13 +4904,14 @@ export function initStation(ctx) {
       job.payQuoted = clampJobPay(jobPayFor(ctx, job.destSystem, ferryBase));
       addCargo(ctx, 'provisions', FERRY_UNITS);
     } else if (job.kind === 'recovery') {
-      // Cut the salvage pod loose at the wreck site (world.js keeps aftermath
-      // positions JSON-plain; tolerate {x,y,z} or [x,y,z] here — live only).
-      const entry = (ctx.world.aftermath || []).find((a) => a.id === job.wreckId);
-      if (!entry) { ui.notice = 'The wreck has gone cold — nothing left to recover.'; render(); return; }
-      const p = entry.position;
-      _podPos.set(p.x ?? p[0] ?? 0, p.y ?? p[1] ?? 0, p.z ?? p[2] ?? 0);
-      pods.spawnPod(ctx, [{ commodity: 'refinedMetals', units: 2 }], _podPos);
+      const entry = recoveryWreck(ctx, job);
+      if (!list.includes(job) || job.state !== 'offered' || job.originSystem !== currentId || !entry) {
+        ui.notice = RECOVERY_COLD; render(); return;
+      }
+      if (cargoUsed(ctx) + 2 > ctx.cargoCapacity) {
+        ui.notice = 'Cannot accept recovery: free 2 hold units first.'; render(); return;
+      }
+      job.deadline = Math.min(ctx.world.time + 300, entry.expiresAt);
       job.collected = false;
     } else if (job.kind === 'mining') {
       if (!Object.hasOwn(SYSTEMS, job.originSystem)) job.originSystem = ctx.world.currentSystem;
@@ -5206,7 +5033,7 @@ export function initStation(ctx) {
         render();
         return;
       }
-      const slot = exploreSlotOf(job);
+      const slot = jobSlotOf(job);
       if (slot == null || !resolveExploreSite(ctx, job.originSystem, slot)) {
         ui.notice = 'That posting has no survey site.';
         render();
@@ -5234,7 +5061,7 @@ export function initStation(ctx) {
         render();
         return;
       }
-      const slot = espionageSlotOf(job);
+      const slot = jobSlotOf(job);
       const dest = slot == null ? null : resolveEspionageDest(ctx, job.originSystem, slot);
       if (!dest) {
         ui.notice = 'That posting has no far dock.';
@@ -5359,6 +5186,7 @@ export function initStation(ctx) {
       job.detail = copy.detail;
     }
     job.state = 'accepted';
+    if (job.kind === 'recovery') tickRecovery(ctx);
     if (job.kind === 'haul') {
       // Cross-system contract: stamp where (and at what price) it was taken.
       job.originSystem = ctx.world.currentSystem;
@@ -5386,13 +5214,20 @@ export function initStation(ctx) {
 
   function renderJobs(panel) {
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
+    syncRecoveryJob(ctx, currentId);
+    const salvage = ctx.world.jobs.some(j => j.kind === 'recovery' && j.originSystem === currentId
+      && (j.state === 'offered' || j.state === 'accepted'));
+    h('div', 'screen-note', panel, salvage
+      ? 'SALVAGE — Recovery work below: accept, follow the Recovery pod flight marker, scoop with 2 free hold units, return to the issuing dock.'
+      : 'SALVAGE — No confirmed local recovery is posted. Recent real wrecks qualify; the board updates when one exists.');
+    h('div', 'screen-note', panel, 'Search pods and traffic on a station-to-gate trip; check Jobs at the next dock. This is a search route, not a wreck report. If none appears, take other work.');
+    h('div', 'screen-note', panel, 'Scoop slowly with room for the whole pod. Sell cargo at Market; eligible People desks take survivors. No salvage income or wait time is guaranteed.');
     // Wave 24: the faction's jobs line (same note-line precedent as the market).
     if (currentService?.jobPayMult) h('div', 'screen-note', panel, currentService.line);
     h('div', 'screen-note', panel,
       `Mining, hunt, passenger, explore, spy, and war credit the dock flag (+${MINING_REP}). Patrol credits ${factionDisplayName('freehold') || 'Freehold'} (+${PATROL_REP}).`);
     refreshBountyJob(ctx);
     syncPirateBounties(ctx, currentId);
-    syncRecoveryJob(ctx, currentId);
     syncMiningJobs(ctx, currentId);
     syncTradeJobs(ctx, currentId);
     syncHuntJobs(ctx, currentId);
@@ -5434,7 +5269,7 @@ export function initStation(ctx) {
         detail = PASSENGER_TERMS;
       } else if (job.kind === 'explore') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const slot = exploreSlotOf(job);
+        const slot = jobSlotOf(job);
         const site = slot == null ? null : resolveExploreSite(ctx, originId, slot);
         const lmName = exploreSiteName(site);
         const sysName = exploreSystemName(site ? site.siteSystem : originId);
@@ -5442,7 +5277,7 @@ export function initStation(ctx) {
         detail = `Fly to ${lmName} in ${sysName}. Redock here to file.`;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const slot = espionageSlotOf(job);
+        const slot = jobSlotOf(job);
         const destName = spyCardDestName(ctx, job, originId, slot);
         const homeName = spyStationName(originId, 'the home dock');
         const employerName = spyEmployerName(originId);
@@ -5497,7 +5332,7 @@ export function initStation(ctx) {
           : clampJobPay(jobPayFor(ctx, destId, ferryBase));
         rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${ferryEst} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
-        rewardLine = `Scoop the salvage pod, redock here — pays ${jobPay(ctx, job.reward)} UU`;
+        rewardLine = `Scoop, then return to the issuing dock — pays ${jobPayFor(ctx, job.originSystem, job.reward)} UU`;
       } else if (job.kind === 'mining') {
         const commodity = Object.hasOwn(COMMODITIES, job.commodity) ? job.commodity : null;
         const oreName = commodity ? COMMODITIES[commodity].name : 'ore';
@@ -5540,7 +5375,7 @@ export function initStation(ctx) {
         rewardLine = `File the survey at this dock — pays ${est} UU`;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const slot = espionageSlotOf(job);
+        const slot = jobSlotOf(job);
         const destName = spyCardDestName(ctx, job, originId, slot);
         const homeName = spyStationName(originId, 'the home dock');
         const est = job.state === 'accepted'
@@ -5611,9 +5446,8 @@ export function initStation(ctx) {
           const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
           stateLine = `ACCEPTED — consignment to ${destName} (${holdUnits(ctx, 'provisions')}/${FERRY_UNITS} aboard)`;
         } else if (job.kind === 'recovery') {
-          stateLine = job.collected
-            ? 'ACCEPTED — salvage aboard, redock here'
-            : 'ACCEPTED — pod adrift at the wreck site';
+          stateLine = recoveryObjective(ctx, job).reason;
+          if (!job.collected && Number.isFinite(job.deadline)) stateLine += ` ${Math.max(0, Math.ceil(job.deadline - ctx.world.time))}s left.`;
         } else if (job.kind === 'mining') {
           const commodity = Object.hasOwn(COMMODITIES, job.commodity) ? job.commodity : null;
           const oreName = commodity ? COMMODITIES[commodity].name : 'ore';
@@ -5646,7 +5480,7 @@ export function initStation(ctx) {
           if (left) stateLine += ` · ${left}`;
         } else if (job.kind === 'explore') {
           const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-          const slot = exploreSlotOf(job);
+          const slot = jobSlotOf(job);
           const site = slot == null ? null : resolveExploreSite(ctx, originId, slot);
           const lmName = exploreSiteName(site);
           const sysName = exploreSystemName(site ? site.siteSystem : originId);
@@ -5658,7 +5492,7 @@ export function initStation(ctx) {
           if (left) stateLine += ` · ${left}`;
         } else if (job.kind === 'espionage') {
           const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-          const slot = espionageSlotOf(job);
+          const slot = jobSlotOf(job);
           const destName = spyCardDestName(ctx, job, originId, slot);
           const homeName = spyStationName(originId, 'the home dock');
           const left = miningTimeLeftLabel(ctx, job);
@@ -5690,7 +5524,7 @@ export function initStation(ctx) {
         }
         h('div', 'job-state job-accepted', card, stateLine);
       } else {
-        h('div', 'job-state job-done', card, 'DONE');
+        h('div', 'job-state job-done', card, job.kind === 'recovery' && job.state === 'failed' ? RECOVERY_COLD : 'DONE');
       }
     });
   }
@@ -6932,7 +6766,7 @@ export function initStation(ctx) {
         for (let ji = 0; ji < ctx.world.jobs.length; ji++) trackJob(ctx.world.jobs[ji]);
       }
       tickPatrolJob(ctx);
-      tickRecoveryCollect(ctx);
+      if (tickRecovery(ctx)) requestAutosave(ctx);
       jobTick += dt;
       if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx, ui, render); }
     },

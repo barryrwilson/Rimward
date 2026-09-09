@@ -22,6 +22,7 @@ import {
 } from '../game/mining-ore-keys.js';
 import { codeOf, shortLabel, helpLines } from './bindings.js';
 import { hasSurveyMarker } from '../game/survey-nav.js';
+import { recoveryPod } from '../game/recovery.js';
 
 /**
  * RIMWARD HUD (doc §13) — cold frontier instrumentation (§18.4).
@@ -1073,6 +1074,7 @@ export function initHud(ctx) {
     const n = (SYSTEMS[sysId].landmarks ?? EMPTY_LIST).length;
     if (n > CHARTMARK_SLOTS) CHARTMARK_SLOTS = n;
   }
+  CHARTMARK_SLOTS += 24; // maximum real aftermath entries; accepted recovery marks
   const chartSlots = [];
   for (let i = 0; i < CHARTMARK_SLOTS; i++) {
     const box = el('div', 'rw-chartmark is-hidden', root);
@@ -2044,16 +2046,22 @@ export function initHud(ctx) {
       const charted = mystery?.charted ?? EMPTY_LIST;
       const unvisited = mystery?.visited ?? EMPTY_LIST;
       const curLandmarks = SYSTEMS[ctx.world.currentSystem]?.landmarks ?? EMPTY_LIST;
+      const recoveryJobs = ctx.world.jobs ?? EMPTY_LIST;
       let cmSlot = 0;
       if (!ctx.flags.docked) {
-        for (let i = 0; i < curLandmarks.length && cmSlot < CHARTMARK_SLOTS; i++) {
+        for (let i = 0; i < curLandmarks.length + recoveryJobs.length && cmSlot < CHARTMARK_SLOTS; i++) {
           const lm = curLandmarks[i];
-          if ((charted.indexOf(lm.id) === -1 && !hasSurveyMarker(ctx, lm))
-            || unvisited.indexOf(lm.id) !== -1) continue;
+          const job = recoveryJobs[i - curLandmarks.length];
+          const pod = job && job.kind === 'recovery' && job.state === 'accepted' && !job.collected
+            && job.originSystem === ctx.world.currentSystem && ctx.world.time < job.deadline
+            ? recoveryPod(ctx, job) : null;
+          if (lm ? ((charted.indexOf(lm.id) === -1 && !hasSurveyMarker(ctx, lm))
+            || unvisited.indexOf(lm.id) !== -1) : !pod) continue;
           const s = chartSlots[cmSlot++];
-          s.lmId = lm.id;
-          s.lmName = lm.name;
-          chartProj.set(lm.position[0], lm.position[1], lm.position[2]);
+          s.lmId = lm ? lm.id : job.id;
+          s.lmName = lm ? lm.name : 'Recovery pod';
+          if (lm) chartProj.fromArray(lm.position);
+          else chartProj.copy(pod.mesh.position);
           s.dist = fromPos.distanceTo(chartProj);
           chartProj.project(cam);
           let mdx = chartProj.x, mdy = chartProj.y;

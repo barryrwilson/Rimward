@@ -611,7 +611,7 @@ export function initPods(ctx) {
         pod.mesh.rotation.set(spin * 0.7 + i, spin * 1.1 + i * 2, 0);
         pod.mesh.material.emissiveIntensity = 0.8 + 0.4 * Math.sin(spin * 3 + i); // glitter
 
-        if (ctx.world.time - pod.bornAt > pod.ttl) {
+        if (ctx.world.time - pod.bornAt > pod.ttl || ctx.world.time >= pod.recoveryDeadline) {
           ctx.scene.remove(pod.mesh);
           ctx.pods.splice(i, 1);
           continue;

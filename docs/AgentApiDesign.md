@@ -11,6 +11,51 @@
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
+## Issue #74 — Discoverable salvage and accepted recovery navigation
+
+Open Jobs with `openService({id:'jobs'})`. The first `station.view.rows`
+contain the same SALVAGE guidance printed on the board, including a truthful
+no-local-recovery state. A station-to-gate traffic/pod search and the next
+dock's Jobs board are bounded search suggestions, not confirmed wreck reports.
+No observation creates a wreck, pod, reward or incident.
+
+When an actual local recovery offer exists, `acceptJob({id:offer.id})`
+rechecks the live wreck and requires two free hold units. It creates a marker
+at that wreck and persists the existing job `deadline`: the earlier of wreck
+expiry and 300 world seconds after acceptance. Repeated or stale acceptance
+refuses without another marker or agreement. The original reward rules remain.
+
+Accepted recovery jobs expose `jobs.active[].objective`:
+
+| Field | Meaning |
+|---|---|
+| `kind`, `id`, `name`, `system` | `pod`, accepted job ID, `Recovery pod`, issuing system |
+| `status`, `reason` | `docked`, `available`, `different-system`, `collected`, or `unavailable`, with the next step |
+| `bearing`, `range` | The flight marker's ship-local unit direction (right, up, nose `-z`) and distance, at any range in its system; otherwise `null` |
+| `arrivalRange` | The ordinary scoop radius, 10 u; the entire two-unit pod must fit |
+
+Launch, then refresh `setControl` using this bearing and range. Slow down near
+the marker. Only collection of that exact marker sets `job.collected`; ore,
+survivors and other recovery markers do not count. Return to `originSystem`
+and dock to receive the recovery payment once. The metals remain cargo and
+may be sold through Market. Survivors retain their separate People-desk rules.
+
+An uncollected marker restores only from its same still-live wreck before its
+unchanged deadline. Switching systems removes the local marker and returning
+can reconstruct it with remaining lifetime. Collected jobs keep their return
+instruction after expiry, never respawn a pod, and preserve payment state.
+Legacy accepted recovery jobs without a deadline, or expired/missing wrecks,
+fail with an explicit Jobs/comm line rather than inventing a fresh lifetime.
+Collection and expiry request autosave through the existing save gates/retries.
+Failed recovery rows remain visible at their issuing dock, not unrelated docks.
+At restore's job cap, failed rows can be reclaimed while accepted work remains
+protected. Legacy rows without a finite deadline never display a numeric countdown.
+
+Regression commands: `npm run test:salvage-onboarding`,
+`npm run test:salvage-live`, and `npm run test:salvage-natural-live`.
+Controlled lifecycle fixtures and repeated natural availability observations
+are recorded separately; see [SalvageOnboardingDesign.md](SalvageOnboardingDesign.md).
+
 ## Issue #69 — Accepted survey navigation
 
 API v2 adds `jobs.active[].objective` for accepted `explore` contracts. The
