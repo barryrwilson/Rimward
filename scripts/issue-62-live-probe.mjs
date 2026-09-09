@@ -20,8 +20,74 @@ const scriptHash = async () => createHash('sha256').update(await readFile(new UR
 const condition = s => Object.fromEntries(['hull', 'engine', 'screen', 'shell'].map(k => [k, s.ship[k]]));
 const loss = (a, b) => Object.fromEntries(Object.keys(a).map(k => [k, a[k] - b[k]]));
 
+function responseKind(response) {
+  if (['evading', 'break-off'].includes(response)) return 'defensive-response';
+  if (response === 'obstructed') return 'collision-safety-response';
+  return 'acknowledgement-only';
+}
+
+/** Independent cue evidence comes from the public event ring, never defense.
+ * A strict world-time increase is essential: a cue can predate the last
+ * sample that lacked defense telemetry while waiting for the next controls
+ * frame. Coalesced hits can corroborate their common production frame, not
+ * uniquely identify a shot or a shooter. No frame bracket is inferred from
+ * an event's absence alone.
+ */
+function publicHitEvidence(samples, seq) {
+  const seen = new Set(), hits = [];
+  for (let i = 0; i < samples.length; i++) {
+    const row = samples[i];
+    for (const event of row.observation.events || []) {
+      if (event.type !== 'playerHit' || !(event.damage > 0) || event.family === 'impact') continue;
+      const key = JSON.stringify([event.t, event.family, event.count || 1, event.fromAft]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (row.observation.control.seq !== seq) continue;
+      const prior = samples.slice(0, i).findLast(s => s.observation.control.seq === seq && s.observation.t < event.t);
+      hits.push({ event, firstSeenSampleIndex: i, firstSeenBrowserMs: row.browserMs,
+        productionAfterBrowserMs: prior?.browserMs ?? null,
+        productionByBrowserMs: row.browserMs,
+        bracketBasis: prior ? 'Prior same-grant public observation has simulation t strictly less than this new playerHit row t; production occurs in a later synchronous game frame.' : 'No strictly earlier same-grant simulation sample: production lower bound unavailable.' });
+    }
+  }
+  return hits;
+}
+
+function corroborateHit(samples, independentHits, cue, appliedIndex, kind) {
+  const appliedSample = samples[appliedIndex];
+  const result = { source: null, status: 'not-independently-corroborated',
+    reportedApplicationNoLaterThanObservation: Number.isFinite(cue.appliedWallMs) ? cue.appliedWallMs <= appliedSample.browserMs : null,
+    reportedStampOrdering: Number.isFinite(cue.cueWallMs) && Number.isFinite(cue.appliedWallMs) ? cue.cueWallMs <= cue.appliedWallMs : null };
+  if (cue.trigger !== 'hit') return { ...result, reason: 'No independent production timestamp for this warning/contact in the public API; controller timestamps are self-reported.' };
+  const matches = independentHits.filter(h => h.event.t === cue.t
+    && (cue.direction === 'unknown' || cue.direction === (h.event.fromAft === true ? 'aft' : h.event.fromAft === false ? 'fore' : 'unknown')));
+  const match = matches[0];
+  if (!match) return { ...result, reason: 'No matching public playerHit production-frame/direction row survived observation; coalescing may hide a hit.' };
+  Object.assign(result, { source: 'public-playerHit-event-ring', event: match.event,
+    firstPublicEventSeenBrowserMs: match.firstSeenBrowserMs,
+    productionAfterBrowserMs: match.productionAfterBrowserMs, productionByBrowserMs: match.productionByBrowserMs,
+    applicationTelemetryObservedByBrowserMs: appliedSample.browserMs,
+    publicThrottleAtObservation: appliedSample.observation.ship.throttle,
+    publicSpeedAtObservation: appliedSample.observation.ship.speed,
+    publicFireHeldAtObservation: appliedSample.observation.ship.fireHeld });
+  if (match.productionAfterBrowserMs === null) return { ...result, reason: match.bracketBasis };
+  // The independent lower bound is a sample from a strictly earlier game
+  // frame, NOT merely the last sample without a defense reaction. The upper
+  // bound ends when applied telemetry/public output was observed, so it
+  // includes sampling delay and never substitutes the sampler period.
+  const upper = appliedSample.browserMs - match.productionAfterBrowserMs;
+  const cueInsideBracket = cue.cueWallMs > match.productionAfterBrowserMs && cue.cueWallMs <= match.productionByBrowserMs;
+  const consistent = upper >= 0 && cueInsideBracket && result.reportedStampOrdering && result.reportedApplicationNoLaterThanObservation;
+  return { ...result, status: consistent ? 'public-hit-frame-corroborated' : 'stamp-or-bracket-inconsistent',
+    reportedCueInsidePublicProductionBracket: cueInsideBracket,
+    publicCueToApplicationTelemetryObservedUpperBoundMs: upper >= 0 ? upper : null,
+    corroborates250msDefensiveResponse: kind === 'defensive-response' && consistent && upper <= 250,
+    limitation: 'Independent public hit-frame timing corroborates the cue. Application is still identified by controller telemetry; public throttle/speed/fire corroborate output state, but steering/strafe assignment is not exposed. This is not an independently instrumented input write.' };
+}
+
 function summarize(samples, targetId, seq) {
   const metrics = measurements(samples, targetId), first = samples[0];
+  const independentHits = publicHitEvidence(samples, seq);
   const reactions = [], cues = [], episodes = new Set(), cueKeys = new Set();
   for (let i = 0; i < samples.length; i++) {
     const row = samples[i], d = row.observation.control.combat?.defense;
@@ -31,36 +97,47 @@ function summarize(samples, targetId, seq) {
       const key = `${latest.trigger}:${latest.cueWallMs}`;
       if (!cueKeys.has(key)) {
         cueKeys.add(key);
-        cues.push({ ...latest, controllerWallLatencyMs: latest.appliedWallMs - latest.cueWallMs,
-          firstAppliedObservedWall: row.wall, actualIncoming: ['hit', 'incoming-fire', 'incoming-dart'].includes(latest.trigger),
-          publicThrottleAtApplication: row.observation.ship.throttle, speedAtApplication: row.observation.ship.speed });
+        const classification = responseKind(latest.response), latency = latest.appliedWallMs - latest.cueWallMs;
+        cues.push({ ...latest, classification,
+          reportedResponseLatencyMs: classification !== 'acknowledgement-only' ? latency : null,
+          reportedAcknowledgementLatencyMs: classification === 'acknowledgement-only' ? latency : null,
+          firstApplicationTelemetryObservedBrowserMs: row.browserMs,
+          samplerIntervalMs: i ? row.browserMs - samples[i - 1].browserMs : null,
+          actualIncoming: ['hit', 'incoming-fire', 'incoming-dart'].includes(latest.trigger),
+          publicThrottleAtObservation: row.observation.ship.throttle, speedAtObservation: row.observation.ship.speed,
+          corroboration: corroborateHit(samples, independentHits, latest, i, classification) });
       }
     }
     if (!Number.isFinite(d?.reactedAt) || episodes.has(d.reactedAt)) continue;
     episodes.add(d.reactedAt);
-    const cue = samples.findIndex(s => s.observation.control.combat?.defense?.triggeredAt === d.triggeredAt);
-    const beforeCue = samples[Math.max(0, cue - 1)];
+    const response = row.observation.control.combat.movementBlocked || d.phase;
+    const classification = responseKind(response);
     reactions.push({ trigger: d.trigger, direction: d.direction, attackerId: d.attackerId,
+      response, classification,
       triggeredAtSimulation: d.triggeredAt, reactedAtSimulation: d.reactedAt,
       cueWallMs: d.cueWallMs ?? null, appliedWallMs: d.appliedWallMs ?? null,
-      controllerWallLatencyMs: Number.isFinite(d.cueWallMs) && Number.isFinite(d.appliedWallMs) ? d.appliedWallMs - d.cueWallMs : null,
+      reportedResponseLatencyMs: Number.isFinite(d.cueWallMs) && Number.isFinite(d.appliedWallMs) ? d.appliedWallMs - d.cueWallMs : null,
       reportedSimulationLatencyMs: (d.reactedAt - d.triggeredAt) * 1000,
-      firstCueObservedWall: samples[cue]?.wall, firstReactionObservedWall: row.wall,
-      observerWallLatencyUpperBoundMs: row.wall - beforeCue.wall,
-      reactionHorizonWallMs: row.wall - first.wall,
+      firstEpisodeApplicationTelemetryObservedBrowserMs: row.browserMs,
+      samplerIntervalMs: i ? row.browserMs - samples[i - 1].browserMs : null,
+      reactionHorizonWallMs: row.browserMs - first.browserMs,
       damageNetBeforeReaction: loss(condition(first.observation), condition(row.observation)),
-      publicThrottleAtReaction: row.observation.ship.throttle });
+      publicThrottleAtObservation: row.observation.ship.throttle,
+      corroboration: corroborateHit(samples, independentHits, { ...d, t: d.triggeredAt }, i, classification) });
   }
-  let maxWallSampleGapMs = 0, incomingHitEvents = 0, requestedMovementSeconds = 0;
+  let maxMonotonicSampleGapMs = 0, incomingHitEvents = 0, requestedMovementSeconds = 0;
   for (let i = 0; i < samples.length; i++) {
     incomingHitEvents += samples[i].delta.playerHits;
     if (i) {
-      maxWallSampleGapMs = Math.max(maxWallSampleGapMs, samples[i].wall - samples[i - 1].wall);
+      maxMonotonicSampleGapMs = Math.max(maxMonotonicSampleGapMs, samples[i].browserMs - samples[i - 1].browserMs);
       if (samples[i - 1].observation.ship.throttle > 0) requestedMovementSeconds += samples[i].observation.t - samples[i - 1].observation.t;
     }
   }
-  return { ...metrics, reactions, cues, incomingHitEvents, maxWallSampleGapMs, requestedMovementSeconds,
-    reactionMeasurement: 'Production cueWallMs/appliedWallMs monotonic timestamps plus independent 50ms browser public-observation sampling. Observer latency is an interval upper bound; throttle is public applied input, steering/strafe are not exposed. Frame and observation gaps are retained.',
+  return { ...metrics, reactions, cues, independentHits, incomingHitEvents, maxMonotonicSampleGapMs, requestedMovementSeconds,
+    defensiveResponses: cues.filter(c => c.classification === 'defensive-response'),
+    collisionSafetyResponses: cues.filter(c => c.classification === 'collision-safety-response'),
+    cueAcknowledgements: cues.filter(c => c.classification === 'acknowledgement-only'),
+    reactionMeasurement: 'Controller cue/application timestamps are self-reported. Separately sampled public playerHit rows can corroborate production-frame bounds only when an earlier same-grant sample has strict simulation t < hit.t. Incoming-warning/contact production is not independently exposed. samplerIntervalMs measures cadence only, never cue-to-response latency. All latency/horizon/cadence calculations use performance.now. Screenshots inside the window may perturb frame cadence; actual gaps are retained.',
     incomingEvidence: 'Real playerHit deltas and defense incoming-fire/incoming-dart triggers. nearby-threat alone is not proof of an actual shot.',
     damageMeaning: 'Net stock condition difference, including shield recharge; coalesced event damage is NOT summed.' };
 }
@@ -77,10 +154,10 @@ async function compare() {
   assert(off.identityStart.harnessHash === enabled.identityStart.harnessHash && off.measurementHarnessStable && enabled.measurementHarnessStable, 'Shared transport differs or changed during a run');
   assert(off.probeHashStart === enabled.probeHashStart && off.probeHashStart === off.probeHashEnd && enabled.probeHashStart === enabled.probeHashEnd, 'Pair probe differs or changed during a run');
   const a = off.trials[0], b = enabled.trials[0], horizon = b.metrics.reactions[0]?.reactionHorizonWallMs;
-  const atHorizon = Number.isFinite(horizon) ? a.samples.find(s => s.wall - a.samples[0].wall >= horizon) : null;
+  const atHorizon = Number.isFinite(horizon) ? a.samples.find(s => s.browserMs - a.samples[0].browserMs >= horizon) : null;
   const value = { mode: 'controlled-comparison', paths, pair: enabled.requested.pair, encounter: enabled.requested.encounter,
     delay: enabled.requested.delayWallSeconds, sourceHash: enabled.identityStart.sourceHash,
-    completeDelays: a.completeGap && b.completeGap, reactionHorizonWallMs: horizon ?? null,
+    completeDelays: a.completeGap && b.completeGap, reactionHorizonWallMs: horizon ?? null, reactionHorizonClock: 'performance.now',
     offReactionAbsent: a.metrics.reactions.length === 0,
     offDamageAtEnabledReactionHorizon: atHorizon ? loss(condition(a.samples[0].observation), condition(atHorizon.observation)) : null,
     enabledDamageBeforeReaction: b.metrics.reactions[0]?.damageNetBeforeReaction ?? null,
@@ -152,6 +229,27 @@ async function live() {
   process.env.ISSUE61_OUT = process.env.ISSUE62_OUT || join(repo, 'out', 'issue-62-live');
   await runLive(name, mode, async h => {
     const { result, observe, act, wait, save } = h;
+    result.transportEvents = [];
+    h.c.ws.addEventListener('close', event => result.transportEvents.push({ type: 'close', wall: Date.now(), code: event.code, reason: event.reason, wasClean: event.wasClean }));
+    h.c.ws.addEventListener('error', event => result.transportEvents.push({ type: 'error', wall: Date.now(), message: String(event.message || 'WebSocket error') }));
+    result.foreground = { requestedAt: Date.now(), activation: await h.c.send('Page.bringToFront') };
+    const frameStart = await observe();
+    // A launched browser is not proof of a rendering/simulation loop. These
+    // observer-owned markers count real animation callbacks without touching
+    // game state. Fail before staging anything if foreground activation fails.
+    await h.c.eval('(()=>{window.__issue62ReadyFrames=0;requestAnimationFrame(function frame(){window.__issue62ReadyFrames++;if(window.__issue62ReadyFrames<3)requestAnimationFrame(frame);});})()');
+    const frameDeadline = Date.now() + 10000;
+    let rendering;
+    while (Date.now() < frameDeadline) {
+      rendering = await h.c.eval('({visibility:document.visibilityState,focused:document.hasFocus(),animationFrames:window.__issue62ReadyFrames,t:window.rimward.observe().t})');
+      if (rendering.visibility === 'visible' && rendering.animationFrames >= 3 && rendering.t > frameStart.t) break;
+      await sleep(100);
+    }
+    result.foreground.verified = rendering;
+    result.foreground.simulationStart = frameStart.t;
+    result.foreground.waitedWallMs = Date.now() - result.foreground.requestedAt;
+    await save();
+    assert(rendering?.visibility === 'visible' && rendering.animationFrames >= 3 && rendering.t > frameStart.t, `Foreground/live frames unavailable before fixture: ${JSON.stringify(rendering)}`);
     result.probeHashStart = await scriptHash();
     result.requested = { mode, defense, encounter, delayWallSeconds: delay, pair: option('pair', 'unpaired'), ttlSeconds: 45 };
     result.method = mode === 'natural' ? 'Native RNG, fresh stock Greenhand, public Jobs/patrol/launch/navigation/target/combat actions only; no private game-state inspection or injection.' : 'Controlled initial fixture, ordinary live simulation and public observation/actions during measurement; never natural evidence.';
@@ -205,6 +303,7 @@ async function live() {
     await h.checkpoint('encounter');
     // A browser-local public observer avoids transport latency masking short reactions.
     // It neither touches __ctx nor sends any action; the cap bounds retained data.
+    let scenarioError;
     try {
       const spent = new Set(), encounterEnd = Date.now() + 180000;
       let trial;
@@ -223,13 +322,33 @@ async function live() {
         if (!incomingShot && ['hit', 'incoming-fire', 'incoming-dart'].includes(s.control.combat?.defense?.latestCue?.trigger)) { await h.shot(`incoming-reaction-${attempt}`); incomingShot = true; }
         if (s.control.owner !== 'combat' || s.session.phase !== 'playing' || s.flags.paused) { earlyReason = s.control.reason || s.session.phase; break; }
       }
-      const raw = await h.c.eval('(()=>{clearInterval(window.__issue62Timer);window.__issue62Sample();return window.__issue62Samples;})()');
+      // The full public observation contains capability/discovery data. A 30s
+      // buffer can exceed one CDP WebSocket message even while Chrome is fine.
+      // Freeze the observer first, then copy bounded chunks without extending
+      // the measured interval or touching the game/authorization state.
+      const transfer = await h.c.eval('(()=>{clearInterval(window.__issue62Timer);window.__issue62Sample();return {count:window.__issue62Samples.length,stoppedWall:Date.now()};})()');
+      assert(Number.isInteger(transfer.count) && transfer.count > 0 && transfer.count <= 2000, 'Invalid bounded observer buffer');
+      Object.assign(transfer, { attempt, chunkSize: 10, received: 0, startedWall: Date.now() });
+      (result.observerTransfers ||= []).push(transfer);
+      const raw = [];
+      try {
+        for (let offset = 0; offset < transfer.count; offset += transfer.chunkSize) {
+          const chunk = await h.c.eval(`window.__issue62Samples.slice(${offset},${Math.min(offset + transfer.chunkSize, transfer.count)})`);
+          assert(Array.isArray(chunk) && chunk.length === Math.min(transfer.chunkSize, transfer.count - offset), 'Incomplete observer transfer chunk');
+          raw.push(...chunk); transfer.received = raw.length;
+        }
+        transfer.finishedWall = Date.now();
+      } catch (error) {
+        transfer.error = error.stack || String(error);
+        result.partialObserverSamples = raw;
+        throw error;
+      }
       const counter = eventCounter(); counter(raw[0].observation);
       const samples = raw.map(s => ({ ...s, delta: counter(s.observation) }));
       trial = { label: `${mode}-${encounter}-${defense}-${delay}-${attempt}`, targetId, grant, earlyReason,
         requestedWallSeconds: delay, actionsAtStart, actionsAtEnd: result.actions.length,
         noOuterActions: actionsAtStart === result.actions.length, samples };
-      trial.observedWallSeconds = (Date.now() - started) / 1000;
+      trial.observedWallSeconds = (transfer.stoppedWall - started) / 1000;
       const afterGrant = samples.filter(s => s.wall >= started);
       trial.completeGap = trial.observedWallSeconds >= delay && afterGrant.length > 0 && afterGrant.every(s => s.observation.control.owner === 'combat' && s.observation.control.expiresIn > 0);
       trial.metrics = summarize(samples, targetId, grantSeq); result.trials.push(trial);
@@ -277,9 +396,22 @@ async function live() {
       } else result.lifecycle.push({ case: 'short-grant-unavailable', receipt });
       result.probeHashEnd = await scriptHash(); assert(result.probeHashStart === result.probeHashEnd, 'Probe changed during measurement');
       await save(); console.log('DEFENSE METRICS', JSON.stringify({ metrics: trial.metrics, coverageGaps: result.coverageGaps }));
+    } catch (error) {
+      scenarioError = error;
+      result.probeError = error.stack || String(error);
+      throw error;
     } finally {
-      await h.c.eval('clearInterval(window.__issue62Timer)');
-      await act('clearControl', {}, false);
+      result.probeCleanup = [];
+      for (const [action, fn] of [
+        ['stop-observer', () => h.c.eval('clearInterval(window.__issue62Timer)')],
+        ['clear-control', () => act('clearControl', {}, false)],
+      ]) {
+        try { result.probeCleanup.push({ action, result: await fn() }); }
+        catch (error) { result.probeCleanup.push({ action, error: error.stack || String(error) }); }
+      }
+      // Transport teardown belongs to runLive. Preserve the original failure
+      // if its socket is already closed; cleanup must not replace its cause.
+      if (!scenarioError && result.probeCleanup.some(row => row.error)) throw Error('Probe cleanup failed; see probeCleanup');
     }
   });
 }
