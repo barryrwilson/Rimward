@@ -324,11 +324,15 @@ async function live() {
       const grantSeq = ++seq;
       const grant = await act('setCombatIntent', { seq: grantSeq, ttl: 45, targetId, intent: 'engage', defense }, false);
       assert(mode === 'natural' || grant.ok, `Controlled grant refused: ${grant.token}`);
-      const actionsAtStart = result.actions.length, started = Date.now();
+      // Mark the actual gap after the grant receipt on the browser's monotonic
+      // clock. Retain pre-grant baseline samples, but never classify them as
+      // post-grant merely because Date.now rounded both calls to the same ms.
+      const startMarker = await h.c.eval('(()=>{const marker={browserMs:performance.now(),wall:Date.now(),sampleIndex:window.__issue62Samples.length};window.__issue62Sample();marker.observation=window.__issue62Samples.at(-1).observation;return marker;})()');
+      const actionsAtStart = result.actions.length, started = performance.now();
       console.log('OBSERVATION ONLY', JSON.stringify({ name, delay, defense, targetId }));
       let reactionShot = false, incomingShot = false, earlyReason;
-      while (Date.now() - started < delay * 1000) {
-        await sleep(Math.max(1, Math.min(200, delay * 1000 - (Date.now() - started))));
+      while (performance.now() - started < delay * 1000) {
+        await sleep(Math.max(1, Math.min(200, delay * 1000 - (performance.now() - started))));
         const s = await observe();
         if (!reactionShot && Number.isFinite(s.control.combat?.defense?.reactedAt)) { await h.shot(`reaction-${attempt}`); reactionShot = true; }
         if (!incomingShot && ['hit', 'incoming-fire', 'incoming-dart'].includes(s.control.combat?.defense?.latestCue?.trigger)) { await h.shot(`incoming-reaction-${attempt}`); incomingShot = true; }
@@ -338,7 +342,7 @@ async function live() {
       // buffer can exceed one CDP WebSocket message even while Chrome is fine.
       // Freeze the observer first, then copy bounded chunks without extending
       // the measured interval or touching the game/authorization state.
-      const transfer = await h.c.eval('(()=>{clearInterval(window.__issue62Timer);window.__issue62Sample();return {count:window.__issue62Samples.length,stoppedWall:Date.now()};})()');
+      const transfer = await h.c.eval('(()=>{clearInterval(window.__issue62Timer);window.__issue62Sample();return {count:window.__issue62Samples.length,stoppedWall:Date.now(),stoppedBrowserMs:performance.now()};})()');
       assert(Number.isInteger(transfer.count) && transfer.count > 0 && transfer.count <= 2000, 'Invalid bounded observer buffer');
       Object.assign(transfer, { attempt, chunkSize: 10, received: 0, startedWall: Date.now() });
       (result.observerTransfers ||= []).push(transfer);
@@ -357,11 +361,14 @@ async function live() {
       }
       const counter = eventCounter(); counter(raw[0].observation);
       const samples = raw.map(s => ({ ...s, delta: counter(s.observation) }));
-      trial = { label: `${mode}-${encounter}-${defense}-${delay}-${attempt}`, targetId, grant, earlyReason,
+      trial = { label: `${mode}-${encounter}-${defense}-${delay}-${attempt}`, targetId, grant, earlyReason, startMarker,
         requestedWallSeconds: delay, actionsAtStart, actionsAtEnd: result.actions.length,
         noOuterActions: actionsAtStart === result.actions.length, samples };
-      trial.observedWallSeconds = (transfer.stoppedWall - started) / 1000;
-      const afterGrant = samples.filter(s => s.wall >= started);
+      trial.observedWallSeconds = (transfer.stoppedBrowserMs - startMarker.browserMs) / 1000;
+      // The exact buffer index also handles quantized performance.now ties.
+      // Keep EVERY post-marker sample, including real owner release/expiry.
+      const afterGrant = samples.slice(startMarker.sampleIndex);
+      assert(afterGrant.every(s => s.browserMs >= startMarker.browserMs), 'Post-marker observation clock moved backwards');
       trial.completeGap = trial.observedWallSeconds >= delay && afterGrant.length > 0 && afterGrant.every(s => s.observation.control.owner === 'combat' && s.observation.control.expiresIn > 0);
       trial.metrics = summarize(samples, targetId, grantSeq); result.trials.push(trial);
       await writeFile(join(h.folder, `defense-trace-${attempt}.jsonl`), samples.map(s => JSON.stringify(s)).join('\n') + '\n');
