@@ -43,7 +43,7 @@ export function createCombat(ctx, target, intent) {
     targetId: target.id, intent, weaponGroup: ctx.input.weaponGroup,
     weapon: combatWeapon(ctx), phase: attack(intent) ? 'intercept' : intent,
     phaseAt: ctx.world.time, repositionAfter: 0, clearSince: null, side: 1,
-    sampleAt: null, yaw: 0, pitch: 0, yawRate: 0, pitchRate: 0,
+    sampleAt: null, yaw: 0, pitch: 0, yawRate: 0, pitchRate: 0, motion: null,
     fireBlocked: 'alignment', movementBlocked: '', completedAt: null,
   };
 }
@@ -163,8 +163,31 @@ export function combatTick(ctx, lease) {
   // fixed 0.3 s that cannot move a slow ship's nose before a second crossing.
   const turnRate = hoverTurnRateFor(ctx.player.classKey, speed) * (ctx.bio?.turnFactor || 1);
   const responseTime = clamp((Math.PI / 4) / turnRate, 0.3, 2.5);
-  const hardPass = a.dist < hullClearance || (ahead && lateral < hullClearance && a.dist < hullClearance + closing * responseTime);
-  const closePass = ahead && lateral < minimum && a.dist < minimum + closing * 1.2;
+  // Relative WORLD motion keeps our own yaw out of the collision estimate.
+  // Only the selected visible hull is sampled, at fresh increasing HUD times.
+  const p = target.object.position, own = ctx.ship.object.position;
+  const relative = [p.x - own.x, p.y - own.y, p.z - own.z];
+  if (!c.motion || a.t > c.motion.t) {
+    const dt = a.t - c.motion?.t;
+    const velocity = dt > 0 && dt <= 0.25
+      ? relative.map((n, i) => (n - c.motion.relative[i]) / dt) : null;
+    const speedBound = a.speed + speed;
+    // A discontinuity inconsistent with observed speeds is not usable motion.
+    const plausible = velocity?.every(Number.isFinite)
+      && Math.hypot(...velocity) <= Math.max(speedBound, c.motion?.speedBound || 0) * 1.25 + 1;
+    c.motion = { t: a.t, relative, speedBound, velocity: plausible ? velocity : null };
+  }
+  const velocity = c.motion.t === a.t && now - c.motion.t <= 0.25 ? c.motion.velocity : null;
+  const crosses = (radius, horizon) => {
+    const squaredSpeed = velocity?.reduce((sum, n) => sum + n * n, 0);
+    // Initial, stale or invalid motion retains the conservative old corridor.
+    if (!(squaredSpeed > 1e-8) || !Number.isFinite(squaredSpeed)) return lateral < radius && a.dist < radius + closing * horizon;
+    const dot = relative.reduce((sum, n, i) => sum + n * velocity[i], 0);
+    const t = clamp(-dot / squaredSpeed, 0, horizon);
+    return Math.hypot(...relative.map((n, i) => n + velocity[i] * t)) < radius;
+  };
+  const hardPass = dist < hullClearance || (ahead && crosses(hullClearance, responseTime));
+  const closePass = ahead && crosses(minimum, 1.2);
   const phase = name => { if (c.phase !== name) { c.phase = name; c.phaseAt = now; } };
   if (attack(c.intent)) {
     if (c.phase !== 'reposition' && (hardPass || (now >= c.repositionAfter && closePass))) phase('reposition');
@@ -190,6 +213,9 @@ export function combatTick(ctx, lease) {
   // Build ordinary turning speed while closing the lead error; imminent
   // collision, egress and obstruction handling retain their lower setpoints.
   if (attack(c.intent) && !hardPass && aimError > 0.12) lease.throttle = Math.max(lease.throttle, 0.5);
+  // Close inside the firing envelope instead of matching a receding target
+  // just beyond it. This remains the existing ordinary throttle cap.
+  if (attack(c.intent) && !hardPass && a.dist > reach * 0.9) lease.throttle = 0.9;
   if (attack(c.intent) && aimError > 0.5) {
     // The ordinary turn law slows at creep speed. Keep enough thrust for a
     // turn back, with lateral clearance while the pursuer crosses the side.

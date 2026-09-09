@@ -32,7 +32,8 @@ function sourceFingerprint() {
   visit('src/');
   return {src:hash.digest('hex'),test:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'),
     crossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-crossing-public.json',import.meta.url))).digest('hex'),
-    fastCrossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-fast-crossing-public.json',import.meta.url))).digest('hex')};
+    fastCrossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-fast-crossing-public.json',import.meta.url))).digest('hex'),
+    avoidanceFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-avoidance-public.json',import.meta.url))).digest('hex')};
 }
 const sourceStart=sourceFingerprint();console.log('SOURCE START',JSON.stringify(sourceStart));
 process.on('exit',code=>{
@@ -220,15 +221,19 @@ test('measured second frontal pass overrides return cooldown before the late col
   assert.equal(f.status().combat.phase,'intercept','actual egress exit establishes the return cooldown');
   // Public geometry from assisted-close-final-01 on source 62699b8c...:
   // old control stayed in pass through 72u, then impacted at t133.2887.
+  // Keep the measured final line of approach fixed in WORLD coordinates.
+  // Replaying changing local bearings against a fixed own quaternion would
+  // invent transverse world motion as soon as avoidance estimates velocity.
+  const line=new THREE.Vector3(.105895,.103165,-.989011).normalize();
   const rows=[
-    [131.2906,194.90734,-82.92783,.217083,.217087,-.951708],
-    [131.5201,171.13645,-102.60728,.165730,.165250,-.972227],
-    [131.7535,149.81173,-90.78700,.131148,.128854,-.982953],
-    [131.9761,130.41388,-87.91629,.105895,.103165,-.989011],
+    [131.2906,194.90734,-82.92783],
+    [131.5201,171.13645,-102.60728],
+    [131.7535,149.81173,-90.78700],
+    [131.9761,130.41388,-87.91629],
   ];
-  for(const [time,dist,closing,...bearing] of rows) {
+  for(const [time,dist,closing] of rows) {
     f.ctx.world.time=time;f.ctx.ship.speed=40.8;
-    f.target.object.position.fromArray(bearing).normalize().multiplyScalar(dist);
+    f.target.object.position.copy(line).multiplyScalar(dist);
     f.tick(1/60,true,{closing,speed:47.9065});
   }
   assert.equal(f.status().combat.phase,'reposition','front corridor must override the still-active six-second cooldown');
@@ -258,7 +263,7 @@ test('recorded Gallows aft pursuit does not reverse the return to aim', () => {
 
 configureShipAssetFileReader(assetPath=>readFile(new URL(`../public${assetPath}`,import.meta.url)));
 await primeShipAsset('independent','cutter','pirate');
-function recordedCrossing(file) {
+function recordedCrossing(file, returnCooldown=false) {
   const random=Math.random;seedBootRandom();
   const f=fixture(),ctx=f.ctx;
   ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
@@ -274,6 +279,14 @@ function recordedCrossing(file) {
   // Sampling and unknown initial derivative make this an approximate fixed
   // path, deliberately independent of this test player's subsequent flight.
   const recorded=JSON.parse(readFileSync(new URL('./lib/'+file,import.meta.url))).samples;
+  if(returnCooldown) {
+    // Establish the real egress -> return transition before placing the
+    // measured initial flight state. No collision rule or NPC health changes.
+    ctx.world.time=recorded[0].t-3.2;f.target.object.position.set(0,0,-20);
+    f.sample();assert.equal(f.start({ttl:45}).ok,true);f.tick();
+    f.target.object.position.set(0,0,200);f.tick(2.1,true,{closing:100});
+    assert.equal(f.status().combat.phase,'intercept');
+  }
   const initialSpeed=recorded[0].shipSpeed??40.8;
   ctx.world.time=recorded[0].t;ctx.ship.velocity.set(0,0,-initialSpeed);ctx.ship.speed=initialSpeed;
   ctx.input.throttle=recorded[0].throttle??.12;
@@ -284,6 +297,13 @@ function recordedCrossing(file) {
   const twist=Math.atan2(forward.dot(initialLead.clone().cross(tangent)),initialLead.dot(tangent));
   orientation.premultiply(new THREE.Quaternion().setFromAxisAngle(forward,twist));
   const initialInverse=orientation.clone().invert(),origin=new THREE.Vector3().fromArray(recorded[0].pos);
+  if(returnCooldown) {
+    // This return is still sliding out of a turn: a forward-only velocity
+    // would invent a different collision path. Use the public position step.
+    ctx.ship.velocity.fromArray(recorded[1].pos).sub(origin)
+      .divideScalar(recorded[1].t-recorded[0].t).applyQuaternion(initialInverse);
+    ctx.ship.speed=ctx.ship.velocity.length();
+  }
   const path=recorded.map((row,index)=>{
     const nextForward=new THREE.Vector3().fromArray(row.fwd);
     if(index)orientation.premultiply(new THREE.Quaternion().setFromUnitVectors(forward,nextForward));
@@ -311,17 +331,18 @@ function recordedCrossing(file) {
     return {speed:targetVelocity.length(),closing:losCloseRate(ctx.ship.object.position,f.target.object.position,rel),
       leadBearing:localDir(ctx.ship.object.quaternion,leadOffset.x,leadOffset.y,leadOffset.z)};
   };
-  f.sample(sample());assert.equal(f.start({ttl:45}).ok,true);
-  let firstFire=null,fireFrames=0,minimum=Infinity;
+  f.sample(sample());if(!returnCooldown)assert.equal(f.start({ttl:45}).ok,true);
+  let firstFire=null,fireFrames=0,minimum=Infinity,firstReposition=null;
   for(let n=0;n<10*60;n++) {
     f.tick(1/60,true,sample());
+    if(f.status().combat.phase==='reposition')firstReposition??=n/60;
     if(ctx.input.fireHeld){firstFire??=n/60;fireFrames++;}
     flight.update(1/60);moveTarget((n+1)/60);
     minimum=Math.min(minimum,ctx.ship.object.position.distanceTo(f.target.object.position));
     assert.equal(f.status().owner,'combat');
   }
   Math.random=random;
-  const result={file,initialTargetSpeed,firstFire,fireFrames,minimum};
+  const result={file,initialTargetSpeed,firstFire,fireFrames,minimum,firstReposition};
   console.log('Measured crossing aim:',JSON.stringify(result));
   return result;
 }
@@ -338,6 +359,70 @@ test('recorded accelerating crossing remains a bounded flight nonregression case
   assert(firstFire!==null,'regain firing alignment during the ten-second fast crossing');
   assert(fireFrames>=6,'fast-contact alignment opens a useful firing window');
   assert(minimum>12,'fast pursuit must retain physical hull clearance');
+});
+
+test('recorded controlled return remains a bounded actual-flight nonregression case', () => {
+  const {firstFire,fireFrames,minimum}=recordedCrossing('issue-61-avoidance-public.json',true);
+  // The reconstructed sliding state is approximate. The new player path can
+  // create a real collision, so this does not demand firing before all egress.
+  assert(firstFire!==null,'the recorded crossing eventually opens firing alignment');
+  assert(fireFrames>=6);assert(minimum>12);
+});
+
+function safeWorldCrossing() {
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx);
+  f.target.object.position.set(0,0,-20);f.sample();f.start();f.tick();
+  f.target.object.position.set(0,0,200);f.tick(2.1,true,{closing:100});
+  assert.equal(f.status().combat.phase,'intercept');
+  // Initialize settled public aim history outside the corridor and within
+  // the real return cooldown. Only the following measured segment flies.
+  f.target.object.position.set(15,0,-Math.sqrt(300*300-15*15));
+  f.tick(.5,true,{closing:0});
+  for(let n=0;n<30;n++)f.tick(1/60,true,{closing:0});
+  ctx.ship.velocity.set(-30,0,-68);ctx.ship.speed=ctx.ship.velocity.length();ctx.input.throttle=.5;
+  const velocity=new THREE.Vector3(35,0,2),relative=new THREE.Vector3();
+  f.target.object.position.set(5,0,-Math.sqrt(100*100-25));
+  const sample=()=>{
+    const offset=f.target.object.position.clone().sub(ctx.ship.object.position),rel=relative.copy(velocity).sub(ctx.ship.velocity);
+    const lead=offset.clone().addScaledVector(rel,offset.length()/WEAPONS.cannon.speed);
+    return {speed:velocity.length(),closing:losCloseRate(ctx.ship.object.position,f.target.object.position,rel),
+      leadBearing:localDir(ctx.ship.object.quaternion,lead.x,lead.y,lead.z)};
+  };
+  return {...f,flight,velocity,sampleMotion:sample};
+}
+
+test('actual flight keeps firing through a clear world crossing inside the old frontal corridor', () => {
+  const f=safeWorldCrossing(),ctx=f.ctx;
+  let fireFrames=0,minimumMiss=Infinity;
+  for(let n=0;n<18;n++) {
+    const r=f.target.object.position.clone().sub(ctx.ship.object.position),v=f.velocity.clone().sub(ctx.ship.velocity);
+    const time=Math.max(0,Math.min(2.5,-r.dot(v)/v.lengthSq()));
+    minimumMiss=Math.min(minimumMiss,r.addScaledVector(v,time).length());
+    f.tick(1/60,true,f.sampleMotion());
+    assert.notEqual(f.status().combat.phase,'reposition','clear transverse motion must not be mistaken for a head-on pass');
+    if(ctx.input.fireHeld)fireFrames++;
+    f.flight.update(1/60);f.target.object.position.addScaledVector(f.velocity,1/60);
+  }
+  console.log('Clear world crossing:',JSON.stringify({fireFrames,minimumMiss,range:ctx.targets.aim.dist}));
+  assert(minimumMiss>40,'the entire measured segment has ample predicted hull clearance');
+  assert(fireFrames>=8,'ordinary real flight retains useful firing alignment');
+});
+
+test('stale or discontinuous motion falls back safely and current hull clearance outranks the HUD age', () => {
+  for(const mode of ['stale','discontinuous','near-hull']) {
+    const f=safeWorldCrossing();
+    for(let n=0;n<18;n++){f.tick(1/60,true,f.sampleMotion());f.flight.update(1/60);f.target.object.position.addScaledVector(f.velocity,1/60);}
+    if(mode==='stale')f.tick(.3,true,f.sampleMotion());
+    else {
+      const distance=mode==='near-hull'?10:80;
+      f.target.object.position.copy(f.ctx.ship.object.position).add(new THREE.Vector3(0,0,-distance).applyQuaternion(f.ctx.ship.object.quaternion));
+      f.tick(1/60,mode!=='near-hull',{closing:-100,speed:35});
+    }
+    assert.equal(f.status().combat.phase,'reposition',mode);
+    assert.equal(f.ctx.input.fireHeld,false,mode);
+  }
 });
 
 test('ordinary flight builds physical turning response while correcting a close off-nose contact', () => {
@@ -485,6 +570,27 @@ test('ordinary ship/NPC second crossing clears the target during return cooldown
   console.log('Return crossing geometry:',JSON.stringify({minimum,firstFire,shipImpacts:shipImpacts.length}));
   assert.equal(shipImpacts.length,0,'the reproduced return crossing has no ship impact');
   assert(minimum>12);assert(firstFire!==null,'collision avoidance returns to a firing opportunity');
+});
+
+test('ordinary interception closes into firing range on a slower straight-away target', () => {
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx),targetVelocity=new THREE.Vector3(0,0,-90),relative=new THREE.Vector3();
+  ctx.ship.velocity.set(0,0,-90);ctx.ship.speed=90;ctx.input.throttle=2/3;
+  f.target.object.position.set(0,0,-520);
+  const sample=()=>({speed:90,closing:losCloseRate(ctx.ship.object.position,f.target.object.position,relative.copy(targetVelocity).sub(ctx.ship.velocity))});
+  f.sample(sample());assert.equal(f.start({ttl:60}).ok,true);
+  let firstFire=null,fireFrames=0,minimum=Infinity;
+  for(let n=0;n<50*60;n++) {
+    f.tick(1/60,true,sample());
+    if(ctx.input.fireHeld){assert(ctx.targets.aim.dist<=WEAPONS.cannon.range*.95);firstFire??=n/60;fireFrames++;}
+    flight.update(1/60);f.target.object.position.addScaledVector(targetVelocity,1/60);
+    minimum=Math.min(minimum,ctx.ship.object.position.distanceTo(f.target.object.position));
+    assert.equal(f.status().owner,'combat');
+  }
+  console.log('Straight-away interception:',JSON.stringify({firstFire,fireFrames,minimum,finalRange:ctx.targets.aim.dist,speed:ctx.ship.speed}));
+  assert(firstFire!==null,'a target slower than ordinary available thrust must not equilibrate beyond firing range');
+  assert(fireFrames>30,'interception gives a sustained firing opportunity');
 });
 
 test('break-off and retreat complete within observable geometry; never fire', () => {
