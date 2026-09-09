@@ -163,6 +163,23 @@ function stationOrHailOwns(ctx) {
   }
 }
 
+// Physical fire belongs to flight, not a menu click or a held key carried
+// through one. Agent combat authority has its own gates below (including
+// its explicit permission to continue through incoming hail and focus loss).
+function physicalFireBlocked(ctx) {
+  const f = ctx.flags;
+  return f.paused === true || f.docked === true || f.berthHold === true
+    || f.chartOpen === true || f.berthOpen === true
+    || playSurfaceBlocked(ctx) || settingsOwnsScreen();
+}
+
+const physicalFireReleases = new WeakMap();
+
+/** Pause freezes update(); its owner must also discard the private fire latch. */
+export function clearPhysicalFire(ctx) {
+  physicalFireReleases.get(ctx)?.();
+}
+
 function isMenuDigitCode(code) {
   if (typeof code !== 'string' || code.length !== 6 || !code.startsWith('Digit')) return false;
   const d = code.charCodeAt(5);
@@ -855,6 +872,21 @@ export function initControls(ctx) {
   let mouseX = null;
   let mouseY = null;
   let fireDown = false;
+  const releaseFire = () => {
+    fireDown = false;
+    if (fireKeyCode) pressed.delete(fireKeyCode);
+    input.fireHeld = false;
+  };
+  physicalFireReleases.set(ctx, releaseFire);
+  let hailWasOpen = ctx.flags.hailOpen === true;
+  const syncFireOwnership = () => {
+    const hailOpen = ctx.flags.hailOpen === true;
+    // Hail is a flight-live card: discard the incoming hold, but a fresh
+    // flight press must still let the player shoot to break a demand. The
+    // card itself already stops mousedown propagation in hail.js.
+    if (physicalFireBlocked(ctx) || (hailOpen && !hailWasOpen)) releaseFire();
+    hailWasOpen = hailOpen;
+  };
   physicalHeld = () => pressed.size > 0 || fireDown;
   combatRelease = () => { mouseX = mouseY = null; pendingAfterburner = false; };
 
@@ -945,6 +977,10 @@ export function initControls(ctx) {
     const code = decodeKeyCode(e);
     // Space (or any rebound owner) is swallowed iff it is a stored command code.
     if (PREVENT_DEFAULT.has(code)) e.preventDefault();
+    if (code === fireKeyCode) {
+      syncFireOwnership();
+      if (physicalFireBlocked(ctx)) return;
+    }
     try {
       // Intentional Settings mutex (RW-002 PR1): skip all TRACKED while open.
       if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return;
@@ -1013,7 +1049,10 @@ export function initControls(ctx) {
         mouseX = e.clientX; mouseY = e.clientY;
       }
     }
-    if (fireMouseButton >= 0 && e.button === fireMouseButton) fireDown = true;
+    if (fireMouseButton >= 0 && e.button === fireMouseButton) {
+      syncFireOwnership();
+      if (!physicalFireBlocked(ctx)) fireDown = true;
+    }
     if (fireMouseButton === 1 && e.button === 1) e.preventDefault();
     if (fireMouseButton === 2 && e.button === 2) e.preventDefault();
   });
@@ -1151,8 +1190,9 @@ export function initControls(ctx) {
 
       // --- Held buttons.
       input.driftHeld = has(snap.drift) || (snap.drift === 'ShiftLeft' && has('ShiftRight'));
-      // Chart overlay: flag is the contract (not a DOM class sniff). Held LMB
-      // from before KeyM must not keep firing while the map is open.
+      // Discard ownership-crossing holds, rather than merely masking their
+      // output: closing the surface requires a fresh press to fire again.
+      syncFireOwnership();
       const fireHeldNow = fireMouseButton >= 0 ? fireDown : has(fireKeyCode);
       input.fireHeld = fireHeldNow && ctx.flags.chartOpen !== true;
 

@@ -206,7 +206,9 @@ checked against the current initiative text before capture.
   only the D/J dock conflict. Menu input must not reach flight or weapon
   handlers.
   Wave 125 PR1 `docs/Ctl04MenuInputDesign.md`. Digit1–5 skip WPN while
-  docked / overlay owns digits. CTL-04 PR2 `fireHeld` optional.
+  docked / overlay owns digits. Optional CTL-04 `fireHeld` cleanup implemented
+  in issue #11; release gate pending an exact-artifact byte exception.
+  See `docs/Issue11FireHeldEvidence.md` for reproduction and verification.
 - [x] DONE (P1, HUD/NAV): Add a persistent home-station marker with distance.
   Nothing on the HUD points to the station once it leaves the screen; a drift
   to 8,900 u out left only raw POS coordinates as a navigation aid. Threats

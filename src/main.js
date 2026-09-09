@@ -17,7 +17,7 @@ import { configureShipAssets } from './systems/ship-assets.js';
 import { applyShipLighting, applyShipToneMapping } from './systems/ship-lighting.js';
 
 // Input + simulation systems
-import { initControls, agentControlClear } from './systems/controls.js';
+import { initControls, agentControlClear, clearPhysicalFire } from './systems/controls.js';
 import { decodeKeyCode } from './systems/key-code.js';
 import { overlayIsOpen, settingsOwnsScreen, titleOwnsScreen } from './systems/overlay-policy.js';
 import { codeOf, shortLabel } from './systems/bindings.js';
@@ -155,6 +155,9 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
   ctx.elapsed += dt;
+  // Title/models can also pause directly. Clear physical fire even when the
+  // simulation (and therefore controls.update) is frozen by their ownership.
+  if (ctx.flags.paused) clearPhysicalFire(ctx);
   // KeyP pause is the only full-loop skip. Berth hold (ctx.flags.berthHold)
   // is not pause — readers freeze flight/gate/jump/AP/player DPS; this loop still runs.
   if (!ctx.flags.paused) {
@@ -266,6 +269,7 @@ function setPaused(next) {
     // Pause freezes the system loop; an agent control lease must not survive
     // into resume with live fire/axes. Synchronous clear on pause entry.
     if (ctx.flags.paused) {
+      clearPhysicalFire(ctx);
       try { agentControlClear(ctx, 'paused'); } catch { /* lease clear is best-effort */ }
     }
     let titleOn = false;
