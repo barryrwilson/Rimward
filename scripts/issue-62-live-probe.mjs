@@ -376,7 +376,9 @@ async function live() {
       const end = Date.now() + 120000; let routeStarted = false, laneReached = false;
       while (Date.now() < end) {
         s = await resolveHail(await observe());
-        const match = s.targets.nearby.find(t => t.kind === 'ship' && t.hostile && !t.disabled && !t.surrendered);
+        const eligible = t => t.kind === 'ship' && !t.disabled && !t.surrendered;
+        const match = s.targets.nearby.find(t => eligible(t) && t.hostile)
+          || s.targets.nearby.find(t => eligible(t) && t.name === bounty?.target);
         if (match) { targetId = match.id; break; }
         if (s.world.currentSystem !== system || s.gate.jumping) break;
         assert(s.ship.hull > 50 && s.ship.engine > 40, 'Natural search safety threshold');
@@ -403,7 +405,7 @@ async function live() {
       for (let attempt = 1; attempt <= (mode === 'natural' ? 4 : 1); attempt++) {
       if (mode === 'natural') {
         // Ordinary public piloting before authorization, never inside the
-        // measured gap. A hostile contact across/behind the nose can otherwise
+        // measured gap. A hostile/bounty contact across/behind the nose can
         // leave target range before local combat gets its first firing pass.
         const alignment = { attempt, targetId, startedWall: Date.now(), steps: [] };
         (result.naturalAlignment ||= []).push(alignment);
@@ -412,7 +414,7 @@ async function live() {
           const s = await resolveHail(await observe());
           const target = s.targets.nearby.find(t => t.id === targetId);
           const aim = s.targets.aim;
-          if (!target?.hostile || target.disabled || target.surrendered || aim?.targetId !== targetId || !Array.isArray(aim.bearing)) {
+          if (!target || target.disabled || target.surrendered || aim?.targetId !== targetId || !Array.isArray(aim.bearing)) {
             alignment.reason = 'contact-unavailable'; break;
           }
           assert(s.session.phase === 'playing' && s.ship.hull > 40 && s.ship.engine > 30 && !s.gate.jumping, 'Natural alignment safety threshold');
@@ -428,7 +430,32 @@ async function live() {
         }
         alignment.reason ||= 'bounded-timeout'; alignment.finishedWall = Date.now();
         await act('clearControl');
-        await h.checkpoint(`aligned-${attempt}`);
+        const aligned = await h.checkpoint(`aligned-${attempt}`);
+        if (aligned.targets.current?.id === targetId && !aligned.targets.current.hostile
+            && !aligned.targets.current.disabled && !aligned.targets.current.surrendered) {
+          // Fresh Greenhand pirates need not hunt the player unsolicited.
+          // Initiate the accepted bounty through the ordinary public combat
+          // action, stopping at observed hostility or the short lease's end.
+          // This setup is logged separately and supplies no measured evidence.
+          const initiation = { attempt, targetId, startedWall: Date.now(), before: aligned.targets.current, observations: [] };
+          (result.naturalInitiation ||= []).push(initiation);
+          initiation.grant = await act('setCombatIntent', { seq: ++seq, ttl: 2, targetId, intent: 'engage', defense: 'off' }, false);
+          if (initiation.grant.ok) {
+            rawSearchUsed = false;
+            const end = Date.now() + 2500;
+            while (Date.now() < end) {
+              const s = await observe();
+              initiation.observations.push({ t: s.t, target: s.targets.current, control: s.control });
+              if (s.targets.current?.id === targetId && s.targets.current.hostile) { initiation.reason = 'hostility-observed'; break; }
+              if (s.control.owner !== 'combat') { initiation.reason = s.control.reason || 'lease-ended'; break; }
+              await sleep(100);
+            }
+            await act('clearControl');
+          }
+          initiation.reason ||= initiation.grant.ok ? 'bounded-timeout' : 'grant-refused';
+          initiation.finishedWall = Date.now();
+          await resolveHail(await observe()); await h.checkpoint(`initiated-${attempt}`);
+        }
       }
       await h.c.eval(`(()=>{window.__issue62Samples=[];window.__issue62Sample=()=>{const observation=window.rimward.observe();if(window.__issue62Samples.length<2000)window.__issue62Samples.push({wall:Date.now(),browserMs:performance.now(),visibility:document.visibilityState,observation});};window.__issue62Sample();window.__issue62Timer=setInterval(window.__issue62Sample,50);})()`);
       const grantSeq = ++seq;
