@@ -92,7 +92,7 @@ class CDP {
     this.ws.addEventListener('message', e => {
       const m = JSON.parse(String(e.data));
       if (m.id) { const p = this.pending.get(m.id); if (p) { this.pending.delete(m.id); clearTimeout(p.timer); m.error ? p.reject(Error(JSON.stringify(m.error))) : p.resolve(m.result); } }
-      else if (['Runtime.consoleAPICalled', 'Runtime.exceptionThrown', 'Log.entryAdded', 'Network.loadingFailed', 'Network.responseReceived', 'Network.requestServedFromCache'].includes(m.method)) this.events.push({ method: m.method, params: m.params });
+      else if (['Runtime.consoleAPICalled', 'Runtime.exceptionThrown', 'Log.entryAdded', 'Network.loadingFailed', 'Network.loadingFinished', 'Network.responseReceived', 'Network.requestServedFromCache'].includes(m.method)) this.events.push({ method: m.method, params: m.params });
     });
     this.ws.addEventListener('close', () => { for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(Error('CDP closed')); } this.pending.clear(); });
   }
@@ -117,6 +117,7 @@ const readyProbe = `(() => {
   window.__issue61StartupSnapshot=probe;timer=setInterval(probe,20);probe();
   document.addEventListener('readystatechange',probe);addEventListener('load',probe);
 })()`;
+const benchmarkBackgroundFlags = ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'];
 
 async function startups() {
   assert(/^[a-z0-9-]+$/.test(candidateName || ''), 'Explicit --candidate NAME required');
@@ -130,6 +131,9 @@ async function startups() {
   result.candidate = { resultPath: candidateResultPath, path: root, artifactHash: before.sha256, sourceHash: candidate.identityStart.sourceHash, byteAuditPass: candidate.audit.byteAuditPass, boundaryPass: candidate.audit.browserBoundary.pass, productionPolicyEquivalent: candidate.audit.productionPolicyEquivalent };
   result.machine = { platform: os.platform(), release: os.release(), arch: os.arch(), cpuModel: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemoryBytes: os.totalmem(), node: process.version };
   result.method = { count, finalComplianceRequires: 5, thresholdMs: 8000, metric: 'Exact ProductionPerformanceBudget.md contract: __ctx exists, document.complete, Models/Settings/New Game controls exist and are enabled; early 20ms interval plus DOM lifecycle and read-only polling. No focus/canvas/rAF gate.', cache: 'fresh Chrome profile for every run + Network.setCacheDisabled(true) + Network.setBypassServiceWorker(true); static server Cache-Control:no-store', caveat: 'Cold browser cache; OS filesystem cache is not flushed. Navigation metric excludes launching Chrome; launch-to-ready also recorded.', visibility: 'Separate visible external Chrome window, serial one browser/tab per run; not the user IAB surface', graphics: 'Platform GPU, browser sandbox enabled; no headless/software-renderer switches' };
+  result.method.backgroundFlags = benchmarkBackgroundFlags;
+  result.method.foreground = 'Page.bringToFront before timed navigation; focus is recorded, not an extra pass condition.';
+  result.method.runnerChange = 'Adds the three existing agent-bridge benchmark background/occlusion flags and foreground activation. The previous production-startup-diagnostic-02 9302.4 ms remains a valid overbudget sample under its prior flags; it is not reclassified or pooled with this runner.';
   result.runs = [];
   const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.ktx2': 'image/ktx2' };
   const server = createServer(async (req, res) => {
@@ -149,9 +153,12 @@ async function startups() {
       let chrome, c;
       const launchAt = Date.now();
       try {
-        chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--window-size=1440,900', '--window-position=50,50', 'about:blank'], { windowsHide: false, stdio: ['ignore', 'ignore', 'pipe'] });
+        run.launchArgs = ['--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--window-size=1440,900', '--window-position=50,50', ...benchmarkBackgroundFlags, 'about:blank'];
+        chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', run.launchArgs, { windowsHide: false, stdio: ['ignore', 'ignore', 'pipe'] });
         run.pid = chrome.pid; chrome.stderr.on('data', d => { if (run.processLog.length < 50) run.processLog.push(String(d).slice(0, 1000)); });
-        let launchError; chrome.on('error', e => { launchError = e; });
+        let launchError; chrome.on('error', e => { launchError = e; (run.childErrors ||= []).push({ wall: Date.now(), error: String(e) }); });
+        chrome.once('exit', (code, signal) => { run.childExit = { wall: Date.now(), code, signal }; });
+        chrome.once('close', (code, signal) => { run.childClose = { wall: Date.now(), code, signal }; });
         let page;
         for (let i = 0; i < 150; i++) {
           if (launchError) throw launchError;
@@ -163,6 +170,7 @@ async function startups() {
         await c.send('Runtime.enable'); await c.send('Log.enable'); await c.send('Page.enable'); await c.send('Network.enable');
         await c.send('Network.setCacheDisabled', { cacheDisabled: true }); await c.send('Network.setBypassServiceWorker', { bypass: true });
         await c.send('Page.addScriptToEvaluateOnNewDocument', { source: readyProbe });
+        run.bringToFront = await c.send('Page.bringToFront');
         run.navigationWall = Date.now();
         await c.send('Page.navigate', { url: `http://127.0.0.1:${result.staticPort}/?issue61startup=${n}` });
         const deadline = Date.now() + 15000;
@@ -173,6 +181,7 @@ async function startups() {
         }
         run.finalDomStatus = await c.eval(startupStatus);
         run.stages = await c.eval('window.__issue61StartupStages || []');
+        run.resourceTiming = await c.eval('performance.getEntriesByType("resource").map(e=>e.toJSON())');
         run.launchToReadyWallMs = Date.now() - launchAt;
         run.navigationToReadyMs = run.ready?.ms ?? null;
         run.renderer = await c.eval(`(()=>{const c=document.querySelector('canvas'),g=c?.getContext('webgl2');if(!g)return null;const x=g.getExtension('WEBGL_debug_renderer_info');return {vendor:x?g.getParameter(x.UNMASKED_VENDOR_WEBGL):null,renderer:x?g.getParameter(x.UNMASKED_RENDERER_WEBGL):null};})()`);
@@ -183,18 +192,27 @@ async function startups() {
         run.pass = !!run.ready && run.ready.contractReady && run.ready.ms <= 8000 && run.errors.length === 0 && run.cacheEvidence.servedFromCacheEvents === 0 && run.cacheEvidence.cachedResponses === 0;
       } catch (e) { run.error = e.stack; run.pass = false; }
       finally {
-        if (c) { try { await c.send('Browser.close'); } catch {} try { c.ws.close(); } catch {} }
+        run.cleanup = { started: Date.now(), scope: 'Only this spawn-owned Chrome child and its literal temporary profile; no blanket process termination', gracefulWaitLimitMs: 10000, afterKillWaitLimitMs: 10000 };
+        if (c) {
+          try { run.cleanup.browserClose = await c.send('Browser.close'); } catch (e) { run.cleanup.browserCloseError = String(e); }
+          try { c.ws.close(); } catch (e) { run.cleanup.socketCloseError = String(e); }
+        }
         if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
-          for (let i = 0; i < 50 && chrome.exitCode === null && chrome.signalCode === null; i++) await sleep(100);
-          if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGTERM');
-          for (let i = 0; i < 30 && chrome.exitCode === null && chrome.signalCode === null; i++) await sleep(100);
+          for (let i = 0; i < 100 && chrome.exitCode === null && chrome.signalCode === null; i++) await sleep(100);
+          if (chrome.exitCode === null && chrome.signalCode === null) {
+            run.cleanup.killAttempt = { wall: Date.now(), pid: chrome.pid, signal: 'SIGTERM' };
+            try { run.cleanup.killAttempt.returned = chrome.kill('SIGTERM'); } catch (e) { run.cleanup.killAttempt.error = String(e); }
+          }
+          for (let i = 0; i < 100 && chrome.exitCode === null && chrome.signalCode === null; i++) await sleep(100);
         }
         run.processExited = !chrome || chrome.exitCode !== null || chrome.signalCode !== null;
+        run.cleanup.finalChildState = chrome ? { exitCode: chrome.exitCode, signalCode: chrome.signalCode, killed: chrome.killed } : null;
         run.cdpPortClosed = !run.cdpPort || !(await fetch(`http://127.0.0.1:${run.cdpPort}/json/version`, { signal: AbortSignal.timeout(1000) }).then(() => true).catch(() => false));
         if (run.processExited) {
           assert(within(folder, profile), 'Profile cleanup escaped evidence folder');
           try { await rm(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 300 }); run.profileRemoved = true; } catch (e) { run.cleanupError = String(e); }
         }
+        run.cleanup.finished = Date.now();
         await save(); console.log('COLD START', JSON.stringify({ n, ms: run.navigationToReadyMs, pass: run.pass, processExited: run.processExited, result: join(folder, 'result.json') }));
       }
       assert(run.processExited && run.cdpPortClosed, 'Prior browser did not exit; refuse parallel next startup');
