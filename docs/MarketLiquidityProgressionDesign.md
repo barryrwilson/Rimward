@@ -1,6 +1,6 @@
 # TRADE-002 — Market liquidity and trader progression
 
-Issue: [#55](https://github.com/barryrwilson/Rimward/issues/55). Status: owner approved on 2026-09-09; implementation in progress. The owner replied “Approved” to the stock rules and 10–20-minute experienced-run target presented with this document. This approval includes the scoped `world.marketSupply` persistence contract below. It authorizes implementation and verification; deployment remains a separate gate.
+Issue: [#55](https://github.com/barryrwilson/Rimward/issues/55). Status: implemented and verified locally, with independent source/security and policy/security review PASS. The owner approved the stock rules, original 10–20-minute target and scoped `world.marketSupply` persistence contract on 2026-09-09, then separately accepted the measured faster pacing and exact byte/startup exceptions recorded below. Publication, merge and deployment have not occurred.
 
 **Approved choice:** preserve corrected prices and introduce replenishing station sale stock: 160 units per bulk commodity, 20 per other market commodity, and 20 simulation minutes to refill from empty. The measured trader bought a freighter in 13m58.4s, but could initially finance only 16/160 cargo slots. A later full load required recovery after a fatal encounter. The proposal protects early margins and aims to make repeated large purchases encourage different routes or goods; the evidence does not establish that the corrected economy needs a general reduction in profits.
 
@@ -153,7 +153,7 @@ The owner approved the bounded implementation scope, tuning and saved fields abo
 
 Expected bounded write set: tuning in `src/game/state.js`; supply calculation alongside `src/game/market.js`; validation, commits and availability in `src/systems/station.js`; public stock observations in `src/game/agent-observe.js`; save normalization in `src/game/save.js`; focused economy tests and the relevant backlog row. Keep the current numeric price-table shape and initialization order. No new command or event is required for the recommended option. All market/content labels continue through text-safe DOM APIs; the bridge remains loopback-only with its existing action validation.
 
-Reconcile overlap with #56 before it adds buy-max previews. Record the approved stock/rate/clock/schema choice in this brief, implement on its bounded branch, and hand an exact commit with tests and live evidence to independent QA. This document records the owner decision and implementation contract; it does not yet claim implementation QA PASS or issue completion.
+The original handoff required the bounded implementation branch and exact-commit tests/review recorded below. Future #56 buy-max previews should consume this same authoritative availability contract. The final results distinguish independent static review, actual local/live verification and owner-approved measured exceptions; no GitHub issue closure or deployment is claimed.
 
 ## Verification and retained evidence
 
@@ -222,10 +222,13 @@ runtime source census SHA256 is
 The owner approved these exact byte/startup exceptions and the measured pacing
 on 2026-09-09, separately from source-review permission. The
 [release note](releases/issue-55-measured-exception.md) records the scope;
-activation verification passes and independent policy review is underway. All
+activation verification and independent policy/security review pass. The policy
+review names exact commit `8efc2cbab045e2743b1a73495ed01b1a4f86b1eb`. All
 447 emitted files match the tested candidate. Raw failed measurements
 are retained and global limits remain unchanged.
 
 The [implementation playtest report](playtests/2026-09-09-issue-55-market-liquidity.md)
 contains the reconciled campaign ledgers, save-recovery caveats and release
-gates. The issue remains open while the scoped policy review is completed.
+gates. Implementation and verification are complete locally, with the approved
+measured exceptions and disclosed nonblocking limitations. Publication, merge,
+deployment and GitHub issue closure have not occurred.

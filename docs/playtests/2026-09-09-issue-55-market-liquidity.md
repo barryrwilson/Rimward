@@ -4,8 +4,8 @@ Implementation: `e3761b7632e6d45120a5e60a6e83bf1de0c37059`.
 Contract: [Market liquidity and progression design](../MarketLiquidityProgressionDesign.md).
 Status: implementation, independent source/security review and local/live
 verification recorded. Owner accepted the measured pacing and exact byte/startup
-exceptions. Activation verification passes; independent policy review is
-underway. No merge or deployment.
+exceptions. Activation verification and independent policy review pass.
+No publication, merge or deployment.
 
 The approved finite supply is implemented: 160 units per bulk commodity,
 20 per other ordinary commodity, and a 1,200-second saved-simulation refill.
@@ -157,6 +157,7 @@ saved data were not patched to make the checks pass.
 | Pacing-run console errors | Zero in all three runs |
 | Final isolated live fixture | PASS, 12/12; zero console errors or exceptions |
 | Independent Claude source/security review | PASS on exact source, with nonblocking notes; static review only |
+| Independent Claude policy/security review | PASS on `8efc2cba`; no blocking findings; static review only |
 
 The byte increase over the prior approved artifact is 3,297 minified and
 1,183 gzip bytes. The fixed global limits remain 1,800,000 and 537,600 bytes.
@@ -207,6 +208,13 @@ callers synchronously pass the matching freshly calculated stock capacity.
 These notes were not
 turned into unapproved feature expansion or a release waiver. Full source
 review and local disposition remain in the retained `review/` evidence.
+
+After the owner's separate approval, Claude also reviewed the exact policy
+change and release note at `8efc2cbab045e2743b1a73495ed01b1a4f86b1eb` and
+returned policy code/security PASS with no blocking findings. That review
+was also static; actual build, artifact comparison and live execution remain
+separately attributed. The final documentation update records these verdicts
+without changing the reviewed runtime or policy.
 
 Raw evidence is local and uncommitted under
 `C:/Projects/WebSim/out/issue-55-implementation-evidence/`: per-run public API
