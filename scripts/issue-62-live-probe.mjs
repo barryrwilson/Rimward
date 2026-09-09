@@ -1,6 +1,7 @@
 /** Supplemental live evidence for #62; independent QA remains a separate gate.
  * node scripts/issue-62-live-probe.mjs --mode controlled --encounter aft --defense evade --delay 15 --pair aft15
  * node scripts/issue-62-live-probe.mjs --mode natural --defense evade --delay 30
+ * node scripts/issue-62-live-probe.mjs --mode natural --bounty-target "Gallows Wren" --defense evade --delay 30
  * node scripts/issue-62-live-probe.mjs --mode compare --off PATH/result.json --enabled PATH/result.json
  * node scripts/issue-62-live-probe.mjs --mode reanalyze --input PATH/result.json --output PATH/analysis.json
  * Controlled fixtures alter INITIAL setup only. Measurement uses public APIs,
@@ -16,6 +17,7 @@ const argv = process.argv.slice(2);
 const option = (key, fallback) => { const i = argv.indexOf(`--${key}`); return i < 0 ? fallback : argv[i + 1]; };
 const mode = option('mode', 'natural'), defense = option('defense', 'evade');
 const encounter = option('encounter', 'ahead'), delay = Number(option('delay', '30'));
+const bountyTarget = option('bounty-target', null);
 const name = option('name', `issue62-${mode}-${encounter}-${defense}-${delay}-${Date.now()}`);
 const scriptHash = async () => createHash('sha256').update(await readFile(new URL(import.meta.url))).digest('hex');
 const condition = s => Object.fromEntries(['hull', 'engine', 'screen', 'shell'].map(k => [k, s.ship[k]]));
@@ -342,7 +344,7 @@ async function live() {
     await save();
     assert(rendering?.animationFrames >= 3 && rendering.t > frameStart.t, `Actual rendering/simulation frames unavailable before fixture: ${JSON.stringify(rendering)}`);
     result.probeHashStart = await scriptHash();
-    result.requested = { mode, defense, encounter, delayWallSeconds: delay, pair: option('pair', 'unpaired'), ttlSeconds: 45 };
+    result.requested = { mode, defense, encounter, delayWallSeconds: delay, pair: option('pair', 'unpaired'), ttlSeconds: 45, bountyTarget };
     result.method = mode === 'natural' ? 'Native RNG, fresh stock Greenhand, public Jobs/patrol/launch/navigation/target/combat actions only; no private game-state inspection or injection.' : 'Controlled initial fixture, ordinary live simulation and public observation/actions during measurement; never natural evidence.';
     let seq = 0, targetId, rawSearchUsed = false;
     // Triangle inequality: this public-only lower bound puts BOTH ships
@@ -370,7 +372,10 @@ async function live() {
       result.jobOffers = s.jobs.offers;
       const patrol = s.jobs.offers.find(j => j.kind === 'patrol' && j.state === 'offered');
       assert(patrol, 'No public patrol offer'); await act('acceptJob', { id: patrol.id });
-      const bounty = s.jobs.offers.find(j => j.kind === 'bounty' && j.state === 'offered' && j.id !== 'bounty-ace');
+      const bounty = s.jobs.offers.find(j => j.kind === 'bounty' && j.state === 'offered'
+        && (bountyTarget === null ? j.id !== 'bounty-ace' : j.target === bountyTarget));
+      assert(bountyTarget === null || bounty, `Requested bounty is not an exact currently offered public target: ${bountyTarget}`);
+      result.bountySelection = { requestedTarget: bountyTarget, offer: bounty || null };
       if (bounty) await act('acceptJob', { id: bounty.id });
       result.acceptedJobs = (await observe()).jobs.active;
       const dest = s.jobs.offers.find(j => j.destSystem && j.destSystem !== s.world.currentSystem)?.destSystem;
@@ -380,8 +385,11 @@ async function live() {
       while (Date.now() < end) {
         s = await resolveHail(await observe());
         const eligible = t => (routeStarted || !dest) && t.kind === 'ship' && !t.disabled && !t.surrendered && stationClearance(s, t.range) > 350;
-        const match = s.targets.nearby.find(t => eligible(t) && t.hostile)
-          || s.targets.nearby.find(t => eligible(t) && t.name === bounty?.target);
+        const preferred = s.targets.nearby.find(t => eligible(t) && t.name === bounty?.target);
+        // An explicit opponent choice waits for that public contact instead
+        // of starting another nearby bounty before the chosen one arrives.
+        const match = bountyTarget !== null ? preferred
+          : s.targets.nearby.find(t => eligible(t) && t.hostile) || preferred;
         if (match) {
           targetId = match.id;
           result.naturalSelection = { t: s.t, targetId, routeStarted, stationRange: s.station.range, targetRange: match.range, targetStationRangeLowerBound: stationClearance(s, match.range) };
