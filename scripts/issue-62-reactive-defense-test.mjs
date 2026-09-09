@@ -75,6 +75,8 @@ test('fore/aft and unknown incoming warnings apply ordinary control in one tick 
     const f=fixture();f.start();cue(f,'playerHit',{damage:8,family:'energy',fromAft:aft});f.tick();
     const d=f.status().combat.defense;
     assert.equal(d.trigger,'hit');assert.equal(d.direction,aft?'aft':'fore');assert.equal(d.attackerId,null);
+    // This synchronous fixture checks timestamp pairing/order only. It has no
+    // frame scheduling; the live probe must establish the 250 ms wall budget.
     assert.equal(d.phase,'evading');assert(d.appliedWallMs>=d.cueWallMs);assert(d.appliedWallMs-d.cueWallMs<250);
     assert.equal(f.ctx.input.fireHeld,false);assert(Math.abs(f.ctx.input.strafeX)>0);assert(f.ctx.input.throttle>0);
   }
@@ -198,6 +200,13 @@ test('owned burner uses ordinary gates, bounded hold, renewal and cancellation w
   const human=flightFixture();assert.equal(human.ctx.input.agentBurnerHeld,false);human.emit('keydown',{code:'Space',repeat:false});
   human.tick();human.flight.update(1/60);assert.equal(human.ctx.ship.burnerActive,true);
   human.emit('keyup',{code:'Space'});human.tick();human.flight.update(1/60);assert.equal(human.ctx.ship.burnerActive,true);
+  const humanReadyAt=human.ctx.ship.burnerReadyAt;
+  // Inject a stale ownership hold into an already human-origin burn. Neither
+  // asserting nor releasing it may retroactively adopt or cancel that burn.
+  for(const held of [true,false]) {
+    human.ctx.input.agentBurnerHeld=held;human.flight.update(1/60);
+    assert.equal(human.ctx.ship.burnerActive,true);assert.equal(human.ctx.ship.burnerReadyAt,humanReadyAt);
+  }
   assert.equal(human.start().token,'helm');
   for(const gate of ['power','cooldown']) {
     const g=flightFixture();g.target.object.position.z=550;g.ctx.ship.velocity.set(0,0,-90);g.ctx.ship.speed=90;g.sample();
