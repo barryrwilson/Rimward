@@ -286,18 +286,12 @@ await runLive(name, mode, async h => {
     result.sustained.stopReason ||= 'bounded-career-window-ended';
     result.sustained.endedWall = Date.now(); result.sustained.observedWallSeconds = (Date.now() - startWall) / 1000;
     result.careerAttempt = { start: result.sustained.start, afterFight: await observe(), completions: matchingJobEvents() };
-    await clear(); s = await observe();
-    if (s.hail.open && result.sustained.stopReason !== 'human-interruption') s = await resolveCombatHail(s);
-    if (s.session.phase === 'playing' && !s.flags.paused && !s.flags.docked && !s.hail.open && result.sustained.stopReason !== 'human-interruption') {
-      await act('cancelAutopilot'); await neutral(); const dock = await act('approachDock', {}, false);
-      result.sustained.dockReceipt = dock;
-      if (dock.ok) {
-        const returned = await wait(s => s.flags.docked || s.session.phase !== 'playing', 150, 'career docking outcome');
-        result.sustained.dockOutcome = { t: returned.t, phase: returned.session.phase, safeDocked: returned.flags.docked && returned.session.phase === 'playing', diedDuringDockWait: returned.session.phase === 'dead' };
-        if (result.sustained.dockOutcome.safeDocked) await act('openService', { id: 'jobs' });
-      } else result.sustained.dockOutcome = { t: dock.t, safeDocked: false, diedDuringDockWait: false, refused: dock.token };
-    }
+    // Measurement ends here. Preserve career accounting without a separate
+    // return flight; the transport clears helm and Root pauses the visible tab.
+    await clear();
     const final = await checkpoint('natural-career-final');
+    result.sustained.handoff = { mode: 'root-visible-pause', note: 'Post-measurement return flight omitted. Existing finish helper clears helm; Root must promptly pause the retained visible page. Natural06 docking defeat remains a separate recorded failure.' };
+    result.sustained.dockOutcome = { t: final.t, phase: final.session.phase, attempted: false, reason: 'measurement-ended-retained-for-root-pause', safeDocked: final.flags.docked && final.session.phase === 'playing' };
     result.careerAttempt.final = final; result.careerAttempt.completions = matchingJobEvents();
     result.careerAttempt.completed = result.careerAttempt.completions.some(e => ['done', 'delivered'].includes(e.outcome));
     result.careerAttempt.creditsDelta = final.world.credits - result.creditsBeforeCombat;
