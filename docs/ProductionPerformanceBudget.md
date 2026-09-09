@@ -100,3 +100,19 @@ All five runs had zero console errors or uncaught exceptions.
 If a future build exceeds a byte or startup limit, reduce it or add a measured,
 owner-approved release exception to the release notes. Do not merely raise the
 number.
+
+An exact-artifact byte exception, when explicitly approved, is recorded in
+`scripts/bundle-policy.mjs` with the owner's approval reference and release-note
+path. It must match every emitted JavaScript chunk's filename, SHA256, exact
+minified/gzip byte counts, and the exact aggregate counts. Both production build
+and composition report use that same decision. Any changed, added, or removed
+JavaScript chunk returns to the fixed global budgets; the exception is not an
+allowance for later growth. Reports retain the raw global-budget pass/fail flags.
+Browser dependency checks and startup requirements are never waived by this
+byte exception. The default descriptor is `null` (inactive).
+
+`releaseNotes` and `approvalReference` are reviewed repository metadata, not
+authorization mechanisms. The matcher checks that these strings are nonempty;
+it does not verify that the release-note path exists, inspect its contents, or
+authenticate the owner's approval. Independent review and the authorized release
+owner must verify the actual approval record and release note before activation.

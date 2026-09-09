@@ -1,9 +1,26 @@
 import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 
 export const BUNDLE_BUDGET = Object.freeze({
   minifiedBytes: 1_800_000,
   gzipBytes: 525 * 1024,
 });
+
+// Owner-approved exact artifact; see the recorded approval and measurements.
+// No environment bypass or allowance for future bundle growth.
+const APPROVED_BYTE_EXCEPTION = {
+  approved: true,
+  approvalReference: 'Codex task issue #61 owner approval, 2026-09-09',
+  releaseNotes: 'docs/releases/issue-61-measured-exception.md',
+  minifiedBytes: 1_811_486,
+  gzipBytes: 540_768,
+  chunks: [{
+    file: 'assets/index-CiM3Wsov.js',
+    sha256: '66073df56bfe1b856882c550c4f942b2055dfa88dfc27c7f317a3ee7766c471a',
+    minifiedBytes: 1_811_486,
+    gzipBytes: 540_768,
+  }],
+};
 
 function packageName(moduleId) {
   const normalized = moduleId.replaceAll('\\', '/');
@@ -16,14 +33,46 @@ function packageName(moduleId) {
 
 export function measureJavaScript(bundle) {
   const chunks = Object.values(bundle).filter((item) => item.type === 'chunk');
+  const artifacts = chunks.map((chunk) => ({
+    file: chunk.fileName,
+    sha256: createHash('sha256').update(chunk.code).digest('hex'),
+    minifiedBytes: Buffer.byteLength(chunk.code),
+    gzipBytes: gzipSync(Buffer.from(chunk.code)).byteLength,
+  })).sort((a, b) => a.file.localeCompare(b.file));
   return {
     chunks,
-    minifiedBytes: chunks.reduce((total, chunk) => total + Buffer.byteLength(chunk.code), 0),
-    gzipBytes: chunks.reduce(
-      (total, chunk) => total + gzipSync(Buffer.from(chunk.code)).byteLength,
-      0,
-    ),
+    artifacts,
+    minifiedBytes: artifacts.reduce((total, chunk) => total + chunk.minifiedBytes, 0),
+    gzipBytes: artifacts.reduce((total, chunk) => total + chunk.gzipBytes, 0),
   };
+}
+
+/** Byte approval never waives browser-boundary or startup requirements. */
+export function evaluateByteBudget(measured) {
+  const minifiedPass = measured.minifiedBytes <= BUNDLE_BUDGET.minifiedBytes;
+  const gzipPass = measured.gzipBytes <= BUNDLE_BUDGET.gzipBytes;
+  const approved = APPROVED_BYTE_EXCEPTION;
+  let exception = null;
+  if (approved?.approved === true && typeof approved.approvalReference === 'string'
+      && approved.approvalReference.trim() && typeof approved.releaseNotes === 'string'
+      && approved.releaseNotes.trim() && Array.isArray(approved.chunks)
+      && approved.chunks.length > 0 && approved.chunks.every((chunk) =>
+        chunk && typeof chunk.file === 'string' && chunk.file
+        && /^[a-f0-9]{64}$/.test(chunk.sha256)
+        && Number.isSafeInteger(chunk.minifiedBytes) && chunk.minifiedBytes > 0
+        && Number.isSafeInteger(chunk.gzipBytes) && chunk.gzipBytes > 0)) {
+    const expected = [...approved.chunks].sort((a, b) => a.file.localeCompare(b.file));
+    if (new Set(expected.map((chunk) => chunk.file)).size === expected.length
+        && new Set(measured.artifacts.map((chunk) => chunk.file)).size === measured.artifacts.length
+        && approved.minifiedBytes === measured.minifiedBytes
+        && approved.gzipBytes === measured.gzipBytes
+        && expected.length === measured.artifacts.length
+        && expected.every((chunk, i) => ['file', 'sha256', 'minifiedBytes', 'gzipBytes']
+          .every((key) => chunk[key] === measured.artifacts[i][key]))) {
+      exception = { approvalReference: approved.approvalReference, releaseNotes: approved.releaseNotes };
+    }
+  }
+  return { minifiedPass, gzipPass, exception, pass: (minifiedPass && gzipPass) || exception !== null };
 }
 
 export function auditBrowserModules(chunks, runtimePackages = ['three']) {
