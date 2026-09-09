@@ -106,11 +106,32 @@ callers is deferred. Flattened status-cell text lacks a separator between
 legality and stock, while the inspected live UI was legible. None is claimed
 fixed by this build-policy change.
 
-The coordinator will run the ordinary build and bundle report, verify complete
-emitted-artifact equivalence against the approved diagnostic candidate, and
-record the results. **Independent Claude review of the exact policy change and
-approval record is pending.** No post-activation build PASS, policy-review PASS,
-publication, merge, deployment or issue closure is claimed here.
+The builder activated the exact descriptor in
+`aa7eca4f0b36577bc71baaa901b4589cb71eae9e`. The coordinator then ran the ordinary
+build and report; a separate verification worker compared the complete emitted
+artifact with the approved diagnostic candidate.
+
+| Check | Result | Retained evidence |
+|---|---|---|
+| `npm run build` | PASS; exact #55 exception explicitly reported | `approved-build-01.log` |
+| `npm run bundle:report -- --json` | PASS via `bytePolicy.pass`; both raw byte flags false | `approved-bundle-report-01.log` |
+| Browser dependency boundary | PASS; only `three`, no unexpected packages or forbidden sources | Same bundle report |
+| Complete emitted artifact equivalence | PASS; all 447 files and 126 directories, no missing/extra/mismatched entries | `approved-artifact-verification-01.json` |
+
+The complete 39,389,609-byte artifact retained the canonical manifest and
+runtime census hashes listed above. Physical runtime files and the Git source
+census matched the reviewed implementation before and after verification;
+candidate and emitted files were rehashed and stayed stable. The comparison
+helper `verify-approved.mjs` has SHA256
+`a0daf44527f2b39b138246bd3a8fbe86cbd787578d6293870ed2fd9444a35943`.
+Separate local policy checks accepted only the exact over-budget descriptor
+and rejected altered/missing/duplicate chunk cases, with fixed budgets and
+the unconditional browser boundary preserved.
+
+**Independent Claude review of the exact policy change and approval record is
+pending.** Source/live review and the owner-approved measured exceptions do not
+substitute for that policy review. No publication, merge, deployment or issue
+closure is claimed here.
 
 Raw evidence remains local under
 `C:/Projects/WebSim/out/issue-55-implementation-evidence/`, including the

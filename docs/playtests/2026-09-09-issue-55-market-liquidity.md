@@ -3,7 +3,9 @@
 Implementation: `e3761b7632e6d45120a5e60a6e83bf1de0c37059`.
 Contract: [Market liquidity and progression design](../MarketLiquidityProgressionDesign.md).
 Status: implementation, independent source/security review and local/live
-verification recorded; pacing and release gates remain open. No merge or deployment.
+verification recorded. Owner accepted the measured pacing and exact byte/startup
+exceptions. Activation verification passes; independent policy review is
+underway. No merge or deployment.
 
 The approved finite supply is implemented: 160 units per bulk commodity,
 20 per other ordinary commodity, and a 1,200-second saved-simulation refill.
@@ -33,7 +35,8 @@ ships or a deduction for every outstanding repair.
 
 The median is **550.828 seconds (9m10.8s)**, with a range of **525.888–554.523
 seconds**. All three are faster than the approved 10–20-minute target, so that
-pacing target is **not met**. No delay or tuning change was introduced to make
+original pacing target is **not met**. The owner subsequently accepted this
+measured pacing for the fixed #55 design on 2026-09-09. No delay or tuning change was introduced to make
 it pass. These are knowledgeable automated runs, not novice-session estimates.
 The earlier baseline included different market events and analyst/navigation
 delays; this comparison does not establish that finite stock accelerated play.
@@ -146,7 +149,9 @@ saved data were not patched to make the checks pass.
 | Focused liquidity tests | PASS, including a separate local rerun |
 | Existing issue-53 spread regression | PASS, including a separate local rerun |
 | `npm run test:boot` | PASS; existing assertions retained |
-| Ordinary `npm run build` | FAIL: 1,824,513 minified / 545,005 gzip bytes |
+| Original ordinary `npm run build` | FAIL: 1,824,513 minified / 545,005 gzip bytes |
+| Build and bundle report after approval | PASS through exact #55 byte exception; raw byte flags remain false |
+| Complete emitted artifact equivalence | PASS; all 447 files match the tested candidate |
 | Diagnostic browser dependency boundary | PASS: only `three` |
 | Five cold production starts | FAIL: 6,858.4 / 8,276.5 / 7,506.6 / 12,672.3 / 13,815.4 ms |
 | Pacing-run console errors | Zero in all three runs |
@@ -155,12 +160,17 @@ saved data were not patched to make the checks pass.
 
 The byte increase over the prior approved artifact is 3,297 minified and
 1,183 gzip bytes. The fixed global limits remain 1,800,000 and 537,600 bytes.
-The prior exact-artifact exception does not cover this changed bundle.
+The prior exact-artifact exception does not cover this changed bundle. The owner
+subsequently approved a new exact #55 byte exception, separately from the
+startup and pacing decisions. Its activation and verification are recorded in
+[the #55 release note](../releases/issue-55-measured-exception.md).
 
 Startup median is 8,276.5 ms; three of five samples exceed 8,000 ms. Page error
 arrays are empty and all owned browsers, ports and profiles were cleaned up.
 Captured delays include substantial pre-document and untraced post-load time;
-they do not establish a cause or authorize an exception. An earlier sandboxed
+they do not establish a cause. The owner separately approved this exact
+candidate's measured startup exception on 2026-09-09; the historical raw
+result remains FAIL. An earlier sandboxed
 launch attempt failed before navigation and produced no timing samples.
 
 ## Attribution and retained evidence

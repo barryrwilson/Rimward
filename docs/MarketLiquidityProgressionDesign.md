@@ -173,11 +173,13 @@ live verification runs. No merge or deployment has occurred.
 - `npm run test:market-liquidity` and the issue-53 market-spread regression
   pass, including separate local reruns by the verification worker.
 - `npm run test:boot` passes with its existing assertions intact.
-- The ordinary `npm run build` fails the unchanged byte limits. The new
+- The original ordinary `npm run build` failed the unchanged byte limits. The new
   JavaScript bundle is 1,824,513 minified bytes and 545,005 gzip bytes, an
   increase of 3,297 and 1,183 respectively over the prior approved artifact.
   The issue-62 exception covers only its old exact artifact and has not been
-  extended. The diagnostic candidate passes the browser dependency boundary.
+  extended. The owner subsequently approved a new exact #55 exception;
+  ordinary build and bundle report now pass through that exception with raw
+  byte failures retained. The candidate passes the browser dependency boundary.
 - Five serial fresh-profile startup measurements are 6,858.4, 8,276.5,
   7,506.6, 12,672.3 and 13,815.4 ms. Median is 8,276.5 ms; three samples
   exceed the unchanged 8,000 ms limit. All five report zero page errors and
@@ -186,11 +188,13 @@ live verification runs. No merge or deployment has occurred.
 - The captured slow startup intervals include delays before the document
   request and after document loading. The historical issue-62 result also
   failed, but these unpaired measurements do not establish that this feature
-  caused a regression. No startup exception is approved for this candidate.
+  caused a regression. The owner subsequently approved this exact measured
+  startup exception on 2026-09-09; the raw measurements remain failures.
 - Three fresh earned-only progression runs purchased and mounted the
   freighter in 554.523, 550.828 and 525.888 accumulated simulation seconds.
   The 9m10.8s median is below the approved 10–20-minute target, so pacing
-  acceptance is not met. No delay or unapproved tuning change was added.
+  original target is not met. The owner subsequently accepted this measured
+  pacing for the fixed #55 design. No delay or tuning change was added.
 - A retained earned freighter completed five further shipments, including
   an actual 160-unit provisions delivery: 16,000 UU cost, 18,720 UU revenue.
   Final cash was 27,069 UU from 4,802 UU retained working capital and
@@ -215,10 +219,13 @@ Its whole-candidate manifest SHA256 is
 `ed327b41511e5491d873d797a3e11cb02aca59b6b566be10e26fb79a2f3a28fb`;
 runtime source census SHA256 is
 `5b535d6214fb7d8adec062c278ebeaa703c9e3743dd9a4bff56dbef4cea604ff`.
-These identities permit a concrete later decision; they do not authorize
-changing a release policy or relabeling a failed check as passing.
+The owner approved these exact byte/startup exceptions and the measured pacing
+on 2026-09-09, separately from source-review permission. The
+[release note](releases/issue-55-measured-exception.md) records the scope;
+activation verification passes and independent policy review is underway. All
+447 emitted files match the tested candidate. Raw failed measurements
+are retained and global limits remain unchanged.
 
 The [implementation playtest report](playtests/2026-09-09-issue-55-market-liquidity.md)
 contains the reconciled campaign ledgers, save-recovery caveats and release
-gates. The issue remains open until the outstanding acceptance and review
-decisions are resolved.
+gates. The issue remains open while the scoped policy review is completed.
