@@ -31,12 +31,13 @@ function sourceFingerprint() {
   }
   visit('src/');
   return {src:hash.digest('hex'),test:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'),
-    crossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-crossing-public.json',import.meta.url))).digest('hex')};
+    crossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-crossing-public.json',import.meta.url))).digest('hex'),
+    fastCrossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-fast-crossing-public.json',import.meta.url))).digest('hex')};
 }
 const sourceStart=sourceFingerprint();console.log('SOURCE START',JSON.stringify(sourceStart));
 process.on('exit',code=>{
   const end=sourceFingerprint();console.log('SOURCE END',JSON.stringify({...end,exitCode:code}));
-  if(end.src!==sourceStart.src||end.test!==sourceStart.test||end.crossingFixture!==sourceStart.crossingFixture){console.error('SOURCE CHANGED DURING TEST');process.exitCode=1;}
+  if(JSON.stringify({...end,exitCode:undefined})!==JSON.stringify(sourceStart)){console.error('SOURCE CHANGED DURING TEST');process.exitCode=1;}
 });
 
 let checks = 0;
@@ -257,7 +258,7 @@ test('recorded Gallows aft pursuit does not reverse the return to aim', () => {
 
 configureShipAssetFileReader(assetPath=>readFile(new URL(`../public${assetPath}`,import.meta.url)));
 await primeShipAsset('independent','cutter','pirate');
-test('ordinary flight converges from the measured creep-speed crossing aim deadband', () => {
+function recordedCrossing(file) {
   const random=Math.random;seedBootRandom();
   const f=fixture(),ctx=f.ctx;
   ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
@@ -266,15 +267,16 @@ test('ordinary flight converges from the measured creep-speed crossing aim deadb
   // Fly the real player against the same reconstructed world-space path
   // before/after; the recorded target does not react to the new player path.
   Object.assign(f.target,spawnLiveShip(ctx,{id:f.target.id,name:'Measured crossing fixture',classKey:'cutter',faction:'independent',role:'pirate',resolve:25,alwaysHuntsPlayer:true,anchor:{x:0,y:0,z:0}},new THREE.Vector3()));
-  ctx.world.time=139.9161999999855;
-  ctx.ship.velocity.set(0,0,-40.8);ctx.ship.speed=40.8;ctx.input.throttle=.12;
   const targetVelocity=new THREE.Vector3(),relative=new THREE.Vector3();
   // Public observations expose forward but no roll. Estimate the initial
   // roll from the nose's tangent and lead direction, then parallel-transport
   // the observed forward vectors (the controller commands zero roll).
   // Sampling and unknown initial derivative make this an approximate fixed
   // path, deliberately independent of this test player's subsequent flight.
-  const recorded=JSON.parse(readFileSync(new URL('./lib/issue-61-crossing-public.json',import.meta.url))).samples;
+  const recorded=JSON.parse(readFileSync(new URL('./lib/'+file,import.meta.url))).samples;
+  const initialSpeed=recorded[0].shipSpeed??40.8;
+  ctx.world.time=recorded[0].t;ctx.ship.velocity.set(0,0,-initialSpeed);ctx.ship.speed=initialSpeed;
+  ctx.input.throttle=recorded[0].throttle??.12;
   const nose=new THREE.Vector3(0,0,-1),forward=new THREE.Vector3().fromArray(recorded[0].fwd);
   const orientation=new THREE.Quaternion().setFromUnitVectors(nose,forward);
   const tangent=new THREE.Vector3().fromArray(recorded[1].fwd).sub(forward).projectOnPlane(forward).normalize();
@@ -300,7 +302,7 @@ test('ordinary flight converges from the measured creep-speed crossing aim deadb
   };
   moveTarget(0);
   const initialTargetSpeed=targetVelocity.length();
-  assert(Math.abs(initialTargetSpeed-47.145)<1,'reconstructed initial speed agrees with the public target speed');
+  assert(Math.abs(initialTargetSpeed-(recorded[0].targetSpeed??47.145))<5,'reconstructed initial speed agrees with the public target speed within sampling tolerance');
   assert(path.at(-1).time>=10,'the entire test is covered by recorded observations');
   const sample=()=>{
     const offset=f.target.object.position.clone().sub(ctx.ship.object.position);
@@ -319,10 +321,42 @@ test('ordinary flight converges from the measured creep-speed crossing aim deadb
     assert.equal(f.status().owner,'combat');
   }
   Math.random=random;
-  console.log('Measured crossing aim:',JSON.stringify({initialTargetSpeed,firstFire,fireFrames,minimum}));
+  const result={file,initialTargetSpeed,firstFire,fireFrames,minimum};
+  console.log('Measured crossing aim:',JSON.stringify(result));
+  return result;
+}
+
+test('ordinary flight converges from the measured creep-speed crossing aim deadband', () => {
+  const {firstFire,fireFrames,minimum}=recordedCrossing('issue-61-crossing-public.json');
   assert(firstFire!==null,'converge into the unchanged firing cone within the crossing window');
   assert(fireFrames>=6,'alignment opens a useful firing window');
   assert(minimum>12,'aiming improvement must preserve physical clearance');
+});
+
+test('recorded accelerating crossing remains a bounded flight nonregression case', () => {
+  const {firstFire,fireFrames,minimum}=recordedCrossing('issue-61-fast-crossing-public.json');
+  assert(firstFire!==null,'regain firing alignment during the ten-second fast crossing');
+  assert(fireFrames>=6,'fast-contact alignment opens a useful firing window');
+  assert(minimum>12,'fast pursuit must retain physical hull clearance');
+});
+
+test('ordinary flight builds physical turning response while correcting a close off-nose contact', () => {
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx),initialSpeed=40.8;
+  ctx.ship.velocity.set(0,0,-initialSpeed);ctx.ship.speed=initialSpeed;ctx.input.throttle=.12;
+  f.target.object.position.set(100,0,-Math.sqrt(3)*100);
+  const sample=()=>({speed:0,closing:losCloseRate(ctx.ship.object.position,f.target.object.position,ctx.ship.velocity.clone().negate())});
+  f.sample(sample());assert.equal(f.start().ok,true);
+  const before=ctx.ship.object.quaternion.clone(),initialAuthority=hoverTurnRateFor('light',initialSpeed);
+  for(let n=0;n<30;n++) {
+    f.tick(1/60,true,sample());flight.update(1/60);
+    assert.notEqual(f.status().combat.phase,'reposition','this fixture remains outside the imminent collision corridor');
+  }
+  const authority=hoverTurnRateFor('light',ctx.ship.speed),turned=before.angleTo(ctx.ship.object.quaternion);
+  console.log('Ordinary turning response:',JSON.stringify({initialSpeed,speed:ctx.ship.speed,initialAuthority,authority,turned}));
+  assert(authority>initialAuthority*1.25,'actual flight gains useful turn authority before reaching alignment');
+  assert(turned>.15,'that authority produces a real heading correction');
 });
 
 test('class, speed and bio turn limits remain physical under normalized combat steering', () => {

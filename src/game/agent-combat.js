@@ -186,6 +186,10 @@ export function combatTick(ctx, lease) {
   // Flight speed has a normal creep floor. Never ask for a stop just because
   // the outer planner hasn't refreshed, or because the target crossed aft.
   lease.throttle = clamp((a.dist - reach * 0.35) / reach - Math.max(0, -a.closing) / 350, 0.12, 0.9);
+  // Normalized steering still cannot exceed the physical turn rate at creep.
+  // Build ordinary turning speed while closing the lead error; imminent
+  // collision, egress and obstruction handling retain their lower setpoints.
+  if (attack(c.intent) && !hardPass && aimError > 0.12) lease.throttle = Math.max(lease.throttle, 0.5);
   if (attack(c.intent) && aimError > 0.5) {
     // The ordinary turn law slows at creep speed. Keep enough thrust for a
     // turn back, with lateral clearance while the pursuer crosses the side.
