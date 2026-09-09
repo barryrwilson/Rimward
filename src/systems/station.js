@@ -3631,7 +3631,7 @@ function boardJobs(ctx, sysId) {
   for (const j of ctx.world.jobs) {
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
       && j.state === 'offered' && j.system !== sysId) continue;
-    if (j.state === 'offered' && j.originSystem !== sysId
+    if ((j.state === 'offered' || (j.kind === 'recovery' && j.state === 'failed')) && j.originSystem !== sysId
       && ['recovery', 'mining', 'trade', 'hunt', 'passenger', 'explore', 'espionage', 'war'].includes(j.kind)) continue;
     if (j.kind === 'chain' && j.state === 'done') continue;
     // Offered/accepted unique four stay on every dock (WAVE26 re-offer).
@@ -5218,10 +5218,10 @@ export function initStation(ctx) {
     const salvage = ctx.world.jobs.some(j => j.kind === 'recovery' && j.originSystem === currentId
       && (j.state === 'offered' || j.state === 'accepted'));
     h('div', 'screen-note', panel, salvage
-      ? 'SALVAGE — Recovery work is listed below. Accept a confirmed wreck, follow its Recovery pod flight marker, scoop with 2 hold units free, then return to the issuing dock.'
-      : 'SALVAGE — No confirmed local recovery is posted. Recovery needs a recent real wreck; the board updates when one exists.');
-    h('div', 'screen-note', panel, 'Search option: scan nearby pods and traffic on a normal station-to-gate trip; check Jobs at the next dock. This is a search route, not a wreck report. If none appears, take other work.');
-    h('div', 'screen-note', panel, 'Pods scoop on close, slow approach with room for the whole pod. Sell cargo at Market; return survivors through an eligible People desk. No salvage income or wait time is guaranteed.');
+      ? 'SALVAGE — Recovery work below: accept, follow the Recovery pod flight marker, scoop with 2 free hold units, return to the issuing dock.'
+      : 'SALVAGE — No confirmed local recovery is posted. Recent real wrecks qualify; the board updates when one exists.');
+    h('div', 'screen-note', panel, 'Search pods and traffic on a station-to-gate trip; check Jobs at the next dock. This is a search route, not a wreck report. If none appears, take other work.');
+    h('div', 'screen-note', panel, 'Scoop slowly with room for the whole pod. Sell cargo at Market; eligible People desks take survivors. No salvage income or wait time is guaranteed.');
     // Wave 24: the faction's jobs line (same note-line precedent as the market).
     if (currentService?.jobPayMult) h('div', 'screen-note', panel, currentService.line);
     h('div', 'screen-note', panel,
@@ -5447,7 +5447,7 @@ export function initStation(ctx) {
           stateLine = `ACCEPTED — consignment to ${destName} (${holdUnits(ctx, 'provisions')}/${FERRY_UNITS} aboard)`;
         } else if (job.kind === 'recovery') {
           stateLine = recoveryObjective(ctx, job).reason;
-          if (!job.collected) stateLine += ` ${Math.max(0, Math.ceil(job.deadline - ctx.world.time))}s left.`;
+          if (!job.collected && Number.isFinite(job.deadline)) stateLine += ` ${Math.max(0, Math.ceil(job.deadline - ctx.world.time))}s left.`;
         } else if (job.kind === 'mining') {
           const commodity = Object.hasOwn(COMMODITIES, job.commodity) ? job.commodity : null;
           const oreName = commodity ? COMMODITIES[commodity].name : 'ore';

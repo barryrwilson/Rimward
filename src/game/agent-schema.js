@@ -692,7 +692,7 @@ export const ROLE_STATUS = freeze({
   ),
   explorer: role(
     ['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse'],
-    'accepted surveys expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payQuoted. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound and jobState record outcomes',
+    'accepted surveys and recoveries expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payment. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound, podCollected and jobState record outcomes',
   ),
   rescue: role(
     ['selectTarget', 'pulse', 'setControl', 'clearControl', 'openService', 'stationAction'],

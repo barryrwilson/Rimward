@@ -28,7 +28,7 @@ export async function runLive(name,fn){
   const result={name,profile,started:new Date().toISOString(),fixture:false,actions:[],checkpoints:[],samples:[],consoleErrors:[],exceptions:[]};
   result.rendererConfig=process.env.ISSUE74_RENDERER||'platform';
   result.resumedProfile=!!resumed;
-  result.sourceHashStart=await sourceHash();result.commit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();
+  result.sourceHashStart=await sourceHash();result.headCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();result.workingTreeDirty=!!spawnSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();result.runtimeSourceDirty=!!spawnSync('git',['status','--porcelain','--','src'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();
   const save=()=>writeFile(join(folder,'result.json'),JSON.stringify(result,null,2));
   try{
     vite=spawn(process.execPath,[fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite'))),'--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});

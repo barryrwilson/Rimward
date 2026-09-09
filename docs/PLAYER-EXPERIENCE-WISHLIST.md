@@ -49,19 +49,27 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
-- [ ] PLANNED (P2, SALVAGE; implementation complete, final validation pending):
+- [x] IMPLEMENTED (P2, SALVAGE; review gate in [PR #88](https://github.com/barryrwilson/Rimward/pull/88)):
   Give a new Greenhand a discoverable first salvage path through Jobs.
   Issue [#74](https://github.com/barryrwilson/Rimward/issues/74) adds shared
   UI/API availability guidance, a bounded search suggestion when no confirmed
   local wreck exists, and accepted recovery markers with ordinary flight
   guidance. Collection credits only the assigned pod; capacity, expiry,
   uncollected restore and collected/payment state are guarded. Foreign cards
-  point to the issuing dock and quote its rate. Real aftermath and payouts
-  stay unchanged: no guaranteed wreck frequency, income or first upgrade.
-  Build and 23 focused pins pass; repeated fresh-profile browser checks,
-  supplemental live validation and independent QA are still completing.
-  Injected destruction-event fixtures are lifecycle evidence only, not natural
-  opportunity evidence. Source: [salvager playtest, 2026-09-07](playtests/2026-09-07-salvager-results.md);
+  point to the issuing dock and quote its rate; failed records stay local and
+  are reclaimable at the restore cap without discarding accepted work.
+  Three fresh profiles were observed over bounded attempts; later navigation
+  interruptions are retained. All three observed Freehold guidance and the
+  bounded watch. One completed the natural collection-and-sale loop: 10
+  Provisions sold at Freehold, earning 1,000 UU with an empty hold after sale. This was incidental cargo, not a naturally offered recovery contract.
+  No guaranteed wreck frequency, income or first upgrade is claimed.
+  The original commit passed all three hosted validation gates. Initial
+  Claude review required the failed-record cap correction and complete natural
+  evidence. The correction build and 27 focused recovery pins pass; final
+  verification and independent review are tracked in PR #88. No deployment
+  is claimed. Injected destruction-event
+  fixtures remain separate lifecycle evidence, with interrupted attempts
+  labelled accurately. Source: [playtest summarized in issue #74](https://github.com/barryrwilson/Rimward/issues/74);
   implementation/validation contract: [SalvageOnboardingDesign.md](SalvageOnboardingDesign.md).
 - [x] DONE (P0, NAV): Autopilot can reach the plotted gate's activation zone
   and then cancel with "next gate is missing" instead of jumping; make the

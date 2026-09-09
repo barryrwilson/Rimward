@@ -859,7 +859,7 @@ function sanitizeJobs(ctx) {
   ));
   jobs = dropJobsUntilCap(jobs, (j) => {
     if (uniqueJobId(j.id) || j.state === 'accepted') return false;
-    if (j.kind === 'recovery' && j.state === 'done') return true;
+    if (j.kind === 'recovery') return j.state !== 'offered';
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-') && j.state === 'done') return true;
     return false;
   });

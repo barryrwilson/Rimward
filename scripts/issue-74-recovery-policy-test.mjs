@@ -7,7 +7,8 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {seedBootRandom,installDomStubs,bootGameSystems} from './lib/boot-harness.mjs';
 import {recoveryWreck,recoveryPod,recoveryObjective,tickRecovery} from '../src/game/recovery.js';
-import {restore as restoreSave,requestAutosave} from '../src/game/save.js';
+import {restore as restoreSave,requestAutosave,snapshot as saveSnapshot} from '../src/game/save.js';
+import {capabilityManifest} from '../src/game/agent-schema.js';
 import {FACTION_SERVICES} from '../src/game/state.js';
 import {AUTHORED_SYSTEMS} from '../src/game/authored-systems.js';
 const KEY='rimward-save-v1',restore=process.argv[2]==='restore'?JSON.parse(readFileSync(0,'utf8')):null;
@@ -58,4 +59,17 @@ check('same-context restore rejects old-timeline collection event',()=>{const {j
 check('collection before cutoff credits despite next-frame deadline crossing',()=>{const {j}=wreck('boundary-before');j.state='accepted';j.deadline=ctx.world.time+1;tickRecovery(ctx);const p=recoveryPod(ctx,j);ctx.lastEvents=[{type:'podCollected',pod:p,t:j.deadline-.001}];ctx.world.time=j.deadline+.01;tickRecovery(ctx);assert.equal(j.collected,true);assert.equal(j.state,'accepted');ctx.lastEvents=[];});
 check('collection at cutoff fails without reward credit',()=>{const {j}=wreck('boundary-at');j.state='accepted';j.deadline=ctx.world.time+1;tickRecovery(ctx);const p=recoveryPod(ctx,j);ctx.lastEvents=[{type:'podCollected',pod:p,t:j.deadline}];ctx.world.time=j.deadline+.01;tickRecovery(ctx);assert.equal(j.collected,false);assert.equal(j.state,'failed');ctx.lastEvents=[];});
 check('foreign generated dock preserves issuing-dock payout text',()=>{ctx.world.jobs=ctx.world.jobs.filter(j=>j.kind!=='recovery');ctx.world.epics={};tickRecovery(ctx);const generated=Object.entries(ctx.systems).filter(([id,s])=>!AUTHORED_SYSTEMS[id]&&s.station?.position&&Number.isFinite(FACTION_SERVICES[s.faction]?.jobPayMult));const [issuer,issuerDef]=generated[0],issuerRate=FACTION_SERVICES[issuerDef.faction].jobPayMult;const [foreign,foreignDef]=generated.find(([,s])=>FACTION_SERVICES[s.faction].jobPayMult!==issuerRate);const foreignRate=FACTION_SERVICES[foreignDef.faction].jobPayMult;dock(issuer);const {j}=wreck('generated-quote',{system:issuer});assert.ok(j);assert.equal(ctx.stationDesk.acceptJob(j.id).ok,true);dock(foreign);const row=ctx.stationDesk.peekView().rows.find(r=>/^Scoop, then return to the issuing dock/.test(r.text));assert.ok(row,'issuing dock instruction visible');assert.match(row.text,new RegExp('pays '+Math.round(j.reward*issuerRate)+' UU'));assert.doesNotMatch(row.text,new RegExp('pays '+Math.round(j.reward*foreignRate)+' UU'));console.log('GENERATED QUOTE',JSON.stringify({issuer,foreign,issuerRate,foreignRate,text:row.text}));});
+check('manifest advertises recovery objective discovery',()=>{const role=JSON.stringify(capabilityManifest().roles.explorer);assert.match(role,/surveys and recoveries/);assert.match(role,/jobs\.active\[\]\.objective/);assert.match(role,/podCollected/);});
+ctx.world.jobs=ctx.world.jobs.filter(j=>j.kind!=='recovery');ctx.world.aftermath=[];tickRecovery(ctx);dock();
+check('expired recovery failure stays local to issuing board',()=>{const {j}=wreck('qa-local-failure');j.title='Recovery QA local failure';assert.equal(ctx.stationDesk.acceptJob(j.id).ok,true);ctx.world.time=j.deadline;tickRecovery(ctx);assert.equal(j.state,'failed');assert.ok(ctx.stationDesk.peekView().rows.some(r=>r.text.includes(j.title)));dock('veridian');assert.ok(!ctx.stationDesk.peekView().rows.some(r=>r.text.includes(j.title)));dock();assert.ok(ctx.stationDesk.peekView().rows.some(r=>r.text.includes(j.title)));});
+check('legacy no-deadline card is meaningful before first tick',()=>{const {j}=wreck('qa-legacy-card');j.state='accepted';delete j.deadline;const text=ctx.stationDesk.peekView().rows.map(r=>r.text).join('\n');assert.equal(j.state,'accepted','peek must test before recovery tick');assert.doesNotMatch(text,/NaN/);assert.match(text,/Cannot recover|expired/i);assert.equal(recoveryObjective(ctx,j).status,'unavailable');tickRecovery(ctx);assert.equal(j.state,'failed');});
+check('failed recovery flood prunes at cap while preserving live work',()=>{
+  const cap=27+14*Object.keys(ctx.systems).length,base=ctx.world.jobs.find(j=>j.kind==='recovery'),snap=clone(saveSnapshot(ctx));
+  const row=(id,state,collected=false,originSystem='freehold')=>({...clone(base),id:'recovery-'+id,wreckId:id,state,collected,originSystem,deadline:ctx.world.time+300});
+  const keep=[row('cap-uncollected','accepted'),row('cap-payable','accepted',true),row('cap-local-offer','offered'),row('cap-foreign-offer','offered',false,'veridian')];
+  snap.world.jobs=[...keep,...Array.from({length:cap+8},(_,i)=>row('cap-failed-'+i,'failed'))];
+  restoreSave(ctx,snap);assert.equal(ctx.world.jobs.length,cap);
+  for(const wanted of keep){const found=ctx.world.jobs.find(j=>j.id===wanted.id);assert.ok(found,wanted.id+' survives terminal pruning');assert.equal(found.state,wanted.state);assert.equal(found.collected,wanted.collected);assert.equal(found.deadline,wanted.deadline);}
+  assert.equal(ctx.world.jobs.filter(j=>j.state==='failed').length,cap-keep.length);assert.equal(requestAutosave(ctx),true);const persisted=JSON.parse(localStorage.getItem(KEY)).world.jobs;assert.equal(persisted.length,cap);for(const wanted of keep)assert.ok(persisted.some(j=>j.id===wanted.id));
+});
 console.log('PASS issue #74 '+pins.length+' focused pins');

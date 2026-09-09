@@ -44,6 +44,11 @@ collected and paid jobs survive restore and pay only once at the issuing dock.
 Legacy accepted jobs without a deadline fail explicitly. Collection/expiry
 request autosave using the existing encounter, mid-jump and storage retry
 rules. This is no new promise of storage durability.
+Failed recovery rows remain on the issuing board for feedback, stay off
+foreign boards, and are reclaimable at restore's existing job cap. Accepted
+work, including collected contracts awaiting payment, remains protected.
+Legacy rows without a finite deadline omit the numeric countdown before the
+first update marks them failed.
 
 ## Build constraint and bounded maintenance
 
@@ -73,19 +78,30 @@ economy table changed.
 - Production build, full boot, relevant regressions, browser layout and
   console checks, and independent QA must pass before delivery is approved.
 
-Local evidence is in `out/issue-74-evidence/` in the main checkout. Verification
-results and availability timings are finalized in the issue handoff; this
-design does not itself assert that a natural opportunity was observed.
+Three fresh native-RNG profiles were observed over bounded attempts. All three
+observed Freehold guidance and the bounded watch; later navigation interruptions
+are retained in their records. One completed a natural collection-and-sale loop:
+10 Provisions sold at Freehold, 350 to 1,350 UU, with an empty hold after sale. This is an actual incidental-pod earning receipt, not a
+claim that a naturally offered recovery contract or first upgrade was found.
+Availability and active search are recorded separately from travel and
+non-search overhead. These samples do not establish a guaranteed spawn rate.
 
-At the automated handoff, production build passes at 1,799,979 JavaScript
-bytes / 524.30 KiB gzip with both existing budgets unchanged. Full boot passes,
-including its recovery and other mission-family checks. The 23 focused recovery
-pins, agent schema/hardening, dock persistence, survey navigation and passenger
-commitment policy checks pass. Root logs are `final-build.log`, `final-boot.log`
-and the accompanying `final-*.log` files. The final recovery reward-row display
-uses the issuing dock's rate even at another station: a generated 1.15-rate
-issuer shows 345 UU at a 1.20-rate foreign dock. Final UI evidence is in
-`foreign-card-build.log`, `focused-final-ui.log` and
-`FOREIGN-CARD-UI-SUPPLEMENT.md`; the latter proves the one-line display change
-from the prior tested source by exact hash reversal. Settlement is unchanged.
-Live lifecycle/natural routes and independent QA remain pending at this handoff.
+The original implementation, commit `9fe768c`, passed all three hosted
+validation gates. Local full boot and existing regressions also passed;
+later card-copy/quote changes have explicit source-identity evidence. The
+generated foreign-dock card test verifies that a 1.15-rate issuer still shows
+345 UU at a 1.20-rate foreign dock. Actual settlement remains unchanged.
+
+Initial independent Claude review required completion of natural evidence and
+failed-recovery reclamation at the job cap. The review corrections also hide
+foreign failed rows, document recovery objectives in the runtime manifest,
+and guard the legacy countdown. Their build passes at 1,799,978 JavaScript
+bytes / 524.29 KiB gzip, with unchanged budgets; 27 focused recovery pins and schema/hardening checks
+pass. Shorter salvage copy funds the corrections without another refactor.
+Final verification and independent review are tracked in [PR #88](https://github.com/barryrwilson/Rimward/pull/88).
+
+Final evidence, timings, source identities and review verdicts are tracked in
+`out/issue-74-evidence/` and the pull-request handoff. Natural observations and
+injected destruction-event lifecycle fixtures remain separate. Interrupted
+fixture attempts retain their recorded failures; their composite evidence is
+not labelled as one end-to-end PASS.

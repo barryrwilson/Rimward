@@ -47,6 +47,9 @@ instruction after expiry, never respawn a pod, and preserve payment state.
 Legacy accepted recovery jobs without a deadline, or expired/missing wrecks,
 fail with an explicit Jobs/comm line rather than inventing a fresh lifetime.
 Collection and expiry request autosave through the existing save gates/retries.
+Failed recovery rows remain visible at their issuing dock, not unrelated docks.
+At restore's job cap, failed rows can be reclaimed while accepted work remains
+protected. Legacy rows without a finite deadline never display a numeric countdown.
 
 Regression commands: `npm run test:salvage-onboarding`,
 `npm run test:salvage-live`, and `npm run test:salvage-natural-live`.
