@@ -507,18 +507,30 @@ if (openMarketAt('redmarch', 'F redmarch')) {
 
     // Stable at trust 30 across the quantity ladder (each sale bumps the
     // fixer, so the trust pin is restated before every leg).
-    for (const qty of [1, 5, 99]) {
+    // Issue #55: restricted stock is 20. Keep modifier and round-trip checks
+    // at its executable capacity; bulk cases above retain 99/160 fills.
+    for (const qty of [1, 5, 20]) {
       fixer.trust = FIXER_CUT_TRUST;
       pinPrice('restrictedComponents', 400);
       roundTrip(`F3 restricted round trip at fixer trust 30, qty ${qty}`,
         'restrictedComponents', qty, api('buy'), api('sell'));
     }
-    // A freighter-sized hold, filled to the brim on the restricted row too.
+    // High-quantity restricted requests must now refuse atomically. Preserve
+    // their boundary coverage explicitly instead of granting fixture stock
+    // beyond the approved capacity or silently skipping these cases.
     holdOf(160);
     fixer.trust = FIXER_CUT_TRUST;
     pinPrice('restrictedComponents', 400);
-    roundTrip('F4 restricted buy 99+61, sell 80+80 (fills a 160-unit hold)',
-      'restrictedComponents', 160, chunks('buy', [99, 61]), chunks('sell', [80, 80]));
+    const beforeStockRefusal = JSON.stringify({ cash:ctx.world.credits, cargo:ctx.cargo, supply:ctx.world.marketSupply });
+    const stockRefusals = [99,61].map(qty => globalThis.window.rimward.act({
+      v:2, name:'trade', args:{commodity:'restrictedComponents',qty,side:'buy'},
+    }));
+    group('F4 restricted 99+61 refuses at the 20-unit stock cap', {
+      allRefused: stockRefusals.every(r=>r.ok===false),
+      atomic: JSON.stringify({ cash:ctx.world.credits, cargo:ctx.cargo, supply:ctx.world.marketSupply })===beforeStockRefusal,
+    }, { stockRefusals });
+    roundTrip('F4b restricted capacity buy 5+5+5+5, sell 10+10',
+      'restrictedComponents', 20, chunks('buy',[5,5,5,5]), chunks('sell',[10,10]));
     fund(200); // restore the roomy fixture
     pinPanel('F5 redmarch panel: every row sell <= buy');
   }

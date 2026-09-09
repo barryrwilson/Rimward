@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
 import * as pods from '../game/pods.js';
+import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
 import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
@@ -4689,6 +4690,10 @@ export function initStation(ctx) {
       || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
   }
   function tryTrade(key, qty, buying) {
+    if (!Number.isSafeInteger(qty) || qty < 1) {
+      ui.notice = 'Trade quantity must be a positive whole number.';
+      return false;
+    }
     if (isDataCommodity(key)) {
       ui.notice = 'Data lots file at the archive desk.';
       return false;
@@ -4702,13 +4707,16 @@ export function initStation(ctx) {
       ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
       return false;
     }
+    const stock = marketSupplyAt(ctx.world, currentId, key);
     if (buying) {
       const unit = tradeFillUnit(key, true);
       const cost = unit * qty;
+      if (qty > stock.available) { ui.notice = `Only ${stock.available} ${com.name} available.`; return false; }
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return false; }
       if (cargoUsed(ctx) + qty > ctx.cargoCapacity) { ui.notice = 'Hold is full.'; return false; }
       ctx.world.credits -= cost;
       addCargo(ctx, key, qty);
+      commitMarketSupply(ctx.world, currentId, key, stock, -qty);
       ui.notice = `Bought ${qty} ${com.name} for ${cost} UU.`;
     } else {
       if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return false; }
@@ -4722,6 +4730,7 @@ export function initStation(ctx) {
       }
       removeCargo(ctx, key, qty);
       ctx.world.credits += payout;
+      commitMarketSupply(ctx.world, currentId, key, stock, qty);
       if (fixer) bumpTrust(ctx, fixer, FIXER_TRUST_PER_SALE);
       ui.notice = `Sold ${qty} ${com.name} for ${payout} UU.`;
     }
@@ -4803,7 +4812,7 @@ export function initStation(ctx) {
       renderSeedPapers(panel);
       const table = h('div', 'market-table', panel);
       h('div', 'market-head', table, 'COMMODITY');
-      h('div', 'market-head', table, 'STATUS');
+      h('div', 'market-head', table, 'STATUS / STOCK');
       h('div', 'market-head', table, 'BUY');
       h('div', 'market-head', table, 'SELL');
       h('div', 'market-head', table, 'HOLD');
@@ -4819,7 +4828,10 @@ export function initStation(ctx) {
           const hold = String(holdUnits(ctx, key));
           const nameText = typeof com.name === 'string' && com.name ? com.name : key;
           h('div', 'market-cell' + sel, table, nameText);
-          h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table, com.legal ? 'Legal' : 'RESTRICTED');
+          const status = h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table);
+          h('div', '', status, com.legal ? 'Legal' : 'RESTRICTED');
+          const stock = marketSupplyAt(ctx.world, currentId, key);
+          h('div', 'market-stock', status, `${stock.available}/${stock.capacity}`);
           h('div', 'market-cell market-fill' + sel, table, `${buyUnit} UU`);
           h('div', 'market-cell market-fill' + sel, table, `${sellUnit} UU`);
           h('div', 'market-cell' + sel, table, hold);
@@ -4837,6 +4849,8 @@ export function initStation(ctx) {
         }
       });
       h('div', 'screen-legend', panel, '↑/↓ select · Q/W buy 1/5 · A/S sell 1/5');
+      h('div', 'screen-note', panel,
+        'Stock replenishes in simulation time; empty to full in 20 minutes. Sales accepted even when stock is full.');
       if (currentDef?.tradesRestricted === true) {
         h('div', 'screen-note', panel,
           'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
@@ -6618,6 +6632,21 @@ export function initStation(ctx) {
     }
   }
 
+  function peekTradeAvailability(key) {
+    if (!isMarketCommodity(key)) return undefined;
+    const stock = marketSupplyAt(ctx.world, currentId, key);
+    const allowed = COMMODITIES[key].legal || lockerAllowed();
+    const buyUnit = tradeFillUnit(key, true);
+    const room = Math.max(0, Math.floor(ctx.cargoCapacity - cargoUsed(ctx)));
+    const cash = buyUnit > 0 ? Math.max(0, Math.floor(ctx.world.credits / buyUnit)) : 99;
+    return {
+      available: stock.available, capacity: stock.capacity,
+      buyMax: allowed ? Math.min(99, stock.available, room, cash) : 0,
+      sellMax: allowed ? Math.min(99, holdUnits(ctx, key)) : 0,
+      tradeAllowed: !!allowed,
+    };
+  }
+
   function deskResult(ok) {
     return {
       ok: ok === true,
@@ -6678,6 +6707,7 @@ export function initStation(ctx) {
     undock,
     peekService,
     peekFillUnit,
+    peekTradeAvailability,
     peekView,
     perform,
   };

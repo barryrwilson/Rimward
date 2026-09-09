@@ -519,6 +519,14 @@ function marketBlock(ctx, docked, service) {
       const fillS = peekFill(ctx, commodity, false);
       if (fillB !== null) row.fillBuy = fillB;
       if (fillS !== null) row.fillSell = fillS;
+      const availability = ctx.stationDesk?.peekTradeAvailability?.(commodity);
+      if (availability) {
+        for (const key of ['available', 'capacity', 'buyMax', 'sellMax']) {
+          const value = availability[key];
+          if (Number.isInteger(value) && value >= 0) row[key] = value;
+        }
+        row.tradeAllowed = availability.tradeAllowed === true;
+      }
       rows.push(row);
     }
   } catch {
