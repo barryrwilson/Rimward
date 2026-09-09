@@ -263,6 +263,10 @@ function aimDigestOf(ctx) {
   const aim = ctx && ctx.targets && typeof ctx.targets === 'object' ? ctx.targets.aim : null;
   if (!aim || typeof aim !== 'object') return null;
   const out = {
+    targetId: typeof aim.targetId === 'string' ? aim.targetId : null,
+    system: str(aim.system),
+    t: finiteOrNull(aim.t),
+    weaponGroup: finiteOrNull(aim.weaponGroup),
     onScreen: aim.onScreen === true,
     behind: aim.behind === true,
     nx: num(aim.nx, 0),
@@ -705,24 +709,26 @@ function sessionPhase(ctx) {
  * overlay, and helm ownership reasons. Cheap flag-level gating only — the
  * authoritative validation still happens inside act().
  */
-function availabilityBlock(ctx, phase) {
+function availabilityBlock(ctx, phase, control) {
   const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
   const paused = flags.paused === true;
   const held = flags.berthHold === true;
   const docked = flags.docked === true;
   const hailOpenF = flags.hailOpen === true;
-  const overlay = flags.chartOpen === true || flags.berthOpen === true || hailOpenF;
   const helm = !!(
     (ctx.autopilot && ctx.autopilot.engaged === true)
     || (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true)
     || (ctx.automine && ctx.automine.engaged === true)
     || (ctx.flee && ctx.flee.engaged === true)
   );
+  const combat = control.owner === 'combat';
   const out = {};
   for (let i = 0; i < COMMAND_NAMES.length; i++) {
     const name = COMMAND_NAMES[i];
     let reason = '';
-    if (paused && !(name === 'ping' || name === 'disable' || name === 'startGame' || name === 'chooseOrigin')) {
+    if (name === 'clearControl') {
+      // Idempotent cancellation is available through overlays and pause.
+    } else if (paused && !(name === 'ping' || name === 'disable' || name === 'startGame' || name === 'chooseOrigin')) {
       reason = 'paused';
     } else if (held && name !== 'ping' && name !== 'disable') {
       reason = 'held';
@@ -731,13 +737,18 @@ function availabilityBlock(ctx, phase) {
     } else if (name === 'undock' || name === 'openService' || name === 'acceptJob'
       || name === 'trade' || name === 'repairAll' || name === 'feed' || name === 'stationAction') {
       if (!docked) reason = 'no-service';
+    } else if (combat && ['engageAutopilot', 'engageAutomine', 'afterburner', 'approachDock'].includes(name)) {
+      reason = 'helm';
     } else if (name === 'selectTarget' || name === 'setWeaponGroup' || name === 'afterburner' || name === 'approachDock') {
       if (docked) reason = 'docked';
-    } else if (name === 'setControl') {
+    } else if (name === 'setControl' || name === 'setCombatIntent') {
       if (docked) reason = 'docked';
       else if (phase !== 'playing') reason = 'phase';
-      else if (overlay) reason = 'overlay';
+      else if (flags.chartOpen === true || flags.berthOpen === true || (name === 'setControl' && hailOpenF)) reason = 'overlay';
       else if (helm) reason = 'helm';
+      else if (name === 'setControl' && combat) reason = 'helm';
+      else if (name === 'setCombatIntent' && control.owner === 'manual') reason = 'helm';
+      else if (name === 'setCombatIntent' && flags.matchSpeed) reason = 'match-speed';
     } else if (name === 'recover') {
       if (phase !== 'dead') reason = 'no-service';
     } else if (name === 'startGame') {
@@ -779,6 +790,10 @@ function stationView(ctx, docked) {
 export function buildObservation(ctx) {
   try {
     if (missingCtx(ctx)) return noCtxObservation();
+
+    // A suspended tab can cross the combat wall deadline between frames.
+    // Expire before copying ship holds, then use one coherent control snapshot.
+    const control = agentControlStatus(ctx);
 
     const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
     const world = ctx.world && typeof ctx.world === 'object' ? ctx.world : {};
@@ -847,9 +862,9 @@ export function buildObservation(ctx) {
       error: '',
       agentOptIn: agent ? agent.optIn === true : false,
       capabilities: capabilityManifest(),
-      availability: availabilityBlock(ctx, phase),
+      availability: availabilityBlock(ctx, phase, control),
       session: { phase },
-      control: agentControlStatus(ctx),
+      control,
       ship: shipSnap,
       flags: {
         docked,

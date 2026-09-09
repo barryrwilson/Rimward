@@ -266,7 +266,7 @@ function setPaused(next) {
     // Pause freezes the system loop; an agent control lease must not survive
     // into resume with live fire/axes. Synchronous clear on pause entry.
     if (ctx.flags.paused) {
-      try { agentControlClear(ctx); } catch { /* lease clear is best-effort */ }
+      try { agentControlClear(ctx, 'paused'); } catch { /* lease clear is best-effort */ }
     }
     let titleOn = false;
     try { titleOn = !!document.getElementById('rw-title') || titleOwnsScreen(); } catch { titleOn = false; }

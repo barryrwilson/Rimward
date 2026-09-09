@@ -12,6 +12,7 @@ import {
 import { decodeKeyCode } from './key-code.js';
 import { COMMANDS, codeOf, conflictFor } from './bindings.js';
 import { registerBerthInput } from '../game/launch-clearance.js';
+import { combatWeapon, combatSample, createCombat, combatTick, combatView } from '../game/agent-combat.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -48,6 +49,7 @@ import { registerBerthInput } from '../game/launch-clearance.js';
  */
 
 // Keys this system owns; everything else is left to the browser.
+// Default weapon digits are 1–5. Digit 0 stays with the dock's shipyard service.
 const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
   'KeyQ', 'KeyE',
@@ -90,55 +92,21 @@ let fireKeyCode = '';
 
 function seedIdentityTracked() {
   TRACKED.clear();
-  const seed = [
-    'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF',
-    'KeyQ', 'KeyE',
-    'KeyT', 'KeyH', 'KeyC', 'KeyX', 'KeyV', 'KeyN', 'KeyK', 'KeyJ',
-    'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
-    'ShiftLeft', 'ShiftRight',
-    'Space',
-  ];
-  for (let i = 0; i < seed.length; i++) TRACKED.add(seed[i]);
   PREVENT_DEFAULT.clear();
   PREVENT_DEFAULT.add('Space');
   fireMouseButton = 0;
   fireKeyCode = '';
-  snap.strafeUp = 'KeyW';
-  snap.strafeDown = 'KeyS';
-  snap.strafeLeft = 'KeyA';
-  snap.strafeRight = 'KeyD';
-  snap.rollLeft = 'KeyQ';
-  snap.rollRight = 'KeyE';
-  snap.throttleUp = 'KeyR';
-  snap.throttleDown = 'KeyF';
-  snap.afterburner = 'Space';
-  snap.drift = 'ShiftLeft';
-  snap.fire = 'Mouse0';
   codeToOwned.clear();
-  codeToOwned.set('KeyW', 'strafeUp');
-  codeToOwned.set('KeyS', 'strafeDown');
-  codeToOwned.set('KeyA', 'strafeLeft');
-  codeToOwned.set('KeyD', 'strafeRight');
-  codeToOwned.set('KeyQ', 'rollLeft');
-  codeToOwned.set('KeyE', 'rollRight');
-  codeToOwned.set('KeyR', 'throttleUp');
-  codeToOwned.set('KeyF', 'throttleDown');
-  codeToOwned.set('Space', 'afterburner');
-  codeToOwned.set('ShiftLeft', 'drift');
+  // bindings supplies the identity defaults; retain this owner's subset.
+  for (const { id, defaultCode } of COMMANDS) {
+    if (!CONTROLS_OWNED.includes(id)) continue;
+    if (Object.hasOwn(snap, id)) snap[id] = defaultCode;
+    if (id === 'fire') continue;
+    TRACKED.add(defaultCode);
+    codeToOwned.set(defaultCode, id);
+  }
+  TRACKED.add('ShiftRight');
   codeToOwned.set('ShiftRight', 'drift');
-  codeToOwned.set('Digit1', 'wpn1');
-  codeToOwned.set('Digit2', 'wpn2');
-  codeToOwned.set('Digit3', 'wpn3');
-  codeToOwned.set('Digit4', 'wpn4');
-  codeToOwned.set('Digit5', 'wpn5');
-  codeToOwned.set('KeyT', 'targetCycle');
-  codeToOwned.set('KeyV', 'reticleLock');
-  codeToOwned.set('KeyN', 'automine');
-  codeToOwned.set('KeyK', 'enginePart');
-  codeToOwned.set('KeyH', 'hail');
-  codeToOwned.set('KeyJ', 'dock');
-  codeToOwned.set('KeyC', 'camera');
-  codeToOwned.set('KeyX', 'matchSpeed');
 }
 
 function isMouseFireCode(code) {
@@ -234,9 +202,27 @@ const LEASE_KEYS = new Set([
 let lease = null; // { seq, expiresAt, steerX, steerY, strafeX, strafeY, roll, throttle, fire, drift }
 let leaseSeq = 0; // last accepted sequence; stale arrivals refused
 let leaseNote = { state: 'idle', seq: 0, reason: '', t: 0 }; // last terminal transition
+let combatNote = null;
+let combatRelease = () => {};
+let physicalHeld = () => false;
+
+// Combat release is a normal full stop. Raw lease throttle semantics persist.
+function combatNeutral(ctx) {
+  const input = ctx.input;
+  input.steerX = input.steerY = input.strafeX = input.strafeY = input.roll = input.throttle = 0;
+  input.fireHeld = input.driftHeld = input.afterburnerPressed = false;
+  input.fullStop = true;
+}
 
 function simNow(ctx) {
   return ctx && ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+}
+
+const wallNow = () => performance.now() / 1000;
+function expireCombat(ctx) {
+  if (lease?.combat && (simNow(ctx) >= lease.expiresAt || wallNow() >= lease.wallExpiresAt)) {
+    dropLease(ctx, 'expired');
+  }
 }
 
 function noteLease(ctx, state, seq, reason) {
@@ -247,13 +233,20 @@ function noteLease(ctx, state, seq, reason) {
 function dropLease(ctx, reason) {
   if (!lease) return false;
   const seq = lease.seq;
+  if (lease.combat) {
+    lease.combat.completedAt = simNow(ctx);
+    lease.combat.fireBlocked = reason;
+    combatNote = combatView(lease.combat);
+    combatNeutral(ctx);
+    combatRelease();
+  }
   lease = null;
   noteLease(ctx, reason === 'expired' ? 'expired' : 'cleared', seq, reason || 'cleared');
   return true;
 }
 
 /** Live gates, re-checked every applied tick. '' means the lease may run. */
-function leaseGateToken(ctx) {
+function leaseGateToken(ctx, combat = false) {
   try {
     const f = ctx && ctx.flags;
     if (!f || typeof f !== 'object') return 'no-service';
@@ -261,7 +254,9 @@ function leaseGateToken(ctx) {
     if (f.berthHold === true) return 'held';
     if (f.paused === true) return 'paused';
     if (ctx.gate && ctx.gate.jumping === true) return 'jumping';
-    if (f.hailOpen === true || f.chartOpen === true || f.berthOpen === true) return 'overlay';
+    // Incoming hail cards leave flight live. Only the combat owner may keep
+    // its explicit authorization through them; raw leases retain their gate.
+    if ((!combat && f.hailOpen === true) || f.chartOpen === true || f.berthOpen === true) return 'overlay';
     try { if (typeof playSurfaceBlocked === 'function' && playSurfaceBlocked(ctx) === true) return 'overlay'; } catch { /* helper miss */ }
     try { if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return 'overlay'; } catch { /* helper miss */ }
     const death = ctx.deathApi;
@@ -291,13 +286,14 @@ function leaseAxis(spec, key) {
  */
 export function agentControlSet(ctx, spec) {
   try {
+    expireCombat(ctx);
     if (!ctx || !ctx.input || typeof ctx.input !== 'object') return 'no-service';
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return 'bad-args';
     for (const k of Object.keys(spec)) {
       if (!LEASE_KEYS.has(k)) return 'bad-args';
     }
     const seq = spec.seq;
-    if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 1) return 'bad-seq';
+    if (!Number.isSafeInteger(seq) || seq < 1) return 'bad-seq';
     if (seq <= leaseSeq) return 'stale';
     let ttl = LEASE_TTL_DEFAULT;
     if (spec.ttl !== undefined) {
@@ -322,7 +318,9 @@ export function agentControlSet(ctx, spec) {
     }
     const gate = leaseGateToken(ctx);
     if (gate) return gate;
+    if (lease?.combat) return 'helm';
     leaseSeq = seq;
+    combatNote = null;
     lease = {
       seq,
       expiresAt: simNow(ctx) + ttl,
@@ -338,10 +336,60 @@ export function agentControlSet(ctx, spec) {
   }
 }
 
-/** Explicit clear. Idempotent; safe to call for any session state. */
-export function agentControlClear(ctx) {
+/** One shared owner/sequence, with a longer *explicit* tactical authorization. */
+export function agentCombatSet(ctx, spec) {
   try {
-    if (!dropLease(ctx, 'explicit')) noteLease(ctx, 'cleared', leaseSeq, 'explicit');
+    expireCombat(ctx);
+    if (!ctx?.input || !ctx.ship?.object) return 'no-service';
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)
+        || Object.keys(spec).some(k => !['seq', 'ttl', 'targetId', 'intent'].includes(k))
+        || !['seq', 'ttl', 'targetId', 'intent'].every(k => Object.hasOwn(spec, k))) return 'bad-args';
+    if (!Number.isSafeInteger(spec.seq) || spec.seq < 1) return 'bad-seq';
+    if (spec.seq <= leaseSeq) return 'stale';
+    if (!Number.isFinite(spec.ttl) || spec.ttl < 1 || spec.ttl > 60) return 'bad-ttl';
+    if (!['engage', 'disable', 'break-off', 'retreat'].includes(spec.intent)
+        || typeof spec.targetId !== 'string' || !spec.targetId) return 'bad-args';
+    const gate = leaseGateToken(ctx, true);
+    if (gate) return gate;
+    if (ctx.agent?.optIn !== true) return 'opt-in';
+    if (physicalHeld()) return 'player-override';
+    if (ctx.flags.matchSpeed) return 'match-speed';
+    if (ctx.ship.burnerActive || ctx.ship.driftActive) return 'helm';
+    if (lease && !lease.combat) return 'helm';
+    const target = ctx.targets?.current;
+    if (!target?.object || !target.state || target.lockKind || target.id !== spec.targetId
+        || !ctx.ships.includes(target) || !combatSample(ctx, target)) return 'target-lost';
+    if (target.state.destroyed) return 'target-destroyed';
+    if (spec.intent === 'engage' || spec.intent === 'disable') {
+      if (target.state.surrendered) return 'target-surrendered';
+      if (target.state.disabled) return 'target-disabled';
+      if (!combatWeapon(ctx)) return 'weapon';
+    }
+    // Renew only the same live maneuver. An expired grant is a fresh start.
+    const prior = lease?.combat;
+    const keep = prior && lease.expiresAt > simNow(ctx) && prior.target === target
+      && prior.record === target.record && prior.system === ctx.world.currentSystem
+      && prior.intent === spec.intent && prior.weaponGroup === ctx.input.weaponGroup;
+    const combat = keep ? prior : createCombat(ctx, target, spec.intent);
+    leaseSeq = spec.seq;
+    combatNote = null;
+    lease = { seq: spec.seq, expiresAt: simNow(ctx) + spec.ttl, wallExpiresAt: wallNow() + spec.ttl, combat,
+      steerX: 0, steerY: 0, strafeX: 0, strafeY: 0, roll: 0,
+      throttle: null, fire: false, drift: false };
+    // A replacement cannot leave an old firing command live until next frame.
+    ctx.input.fireHeld = false;
+    noteLease(ctx, 'active', leaseSeq, '');
+    return '';
+  } catch { return 'no-service'; }
+}
+
+export function agentCombatActive(ctx) { expireCombat(ctx); return !!lease?.combat; }
+
+/** Explicit clear. Idempotent; safe to call for any session state. */
+export function agentControlClear(ctx, reason = 'explicit') {
+  try {
+    expireCombat(ctx);
+    if (!dropLease(ctx, reason) && !combatNote) noteLease(ctx, 'cleared', leaseSeq, reason);
     return '';
   } catch {
     return 'no-service';
@@ -351,24 +399,29 @@ export function agentControlClear(ctx) {
 /** JSON-plain lease status for observe(). Never throws. */
 export function agentControlStatus(ctx) {
   try {
+    expireCombat(ctx);
     if (lease) {
       return {
+        owner: lease.combat ? 'combat' : 'manual',
         state: 'active',
         seq: lease.seq,
-        expiresIn: Math.max(0, lease.expiresAt - simNow(ctx)),
+        expiresIn: Math.max(0, Math.min(lease.expiresAt - simNow(ctx), lease.combat ? lease.wallExpiresAt - wallNow() : Infinity)),
         fire: lease.fire === true,
         reason: '',
+        ...(lease.combat ? { combat: combatView(lease.combat) } : {}),
       };
     }
     return {
+      owner: 'none',
       state: leaseNote.state,
       seq: leaseNote.seq,
       expiresIn: 0,
       fire: false,
       reason: leaseNote.reason,
+      ...(combatNote ? { combat: { ...combatNote } } : {}),
     };
   } catch {
-    return { state: 'idle', seq: 0, expiresIn: 0, fire: false, reason: '' };
+    return { owner: 'none', state: 'idle', seq: 0, expiresIn: 0, fire: false, reason: '' };
   }
 }
 
@@ -586,6 +639,7 @@ export function agentPulse(ctx, edge) {
     }
     if (edge === 'hail') {
       if (hailPulseBlocked(ctx)) return 'no-service';
+      if (lease?.combat) dropLease(ctx, 'hail');
       pendingHail = true;
       return '';
     }
@@ -782,12 +836,15 @@ export function initControls(ctx) {
   // Session reset: a fresh boot starts with no lease and no sequence history.
   lease = null;
   leaseSeq = 0;
+  combatNote = null;
   noteLease(ctx, 'idle', 0, '');
 
   // Mouse reticle state (null = not moved yet → treated as screen center).
   let mouseX = null;
   let mouseY = null;
   let fireDown = false;
+  physicalHeld = () => pressed.size > 0 || fireDown;
+  combatRelease = () => { mouseX = mouseY = null; pendingAfterburner = false; };
 
   // One-frame edge pulses, captured in handlers and published in update().
   // pendingTarget/Hail/Dock/ReticleLock/Afterburner live at module scope (agentPulse).
@@ -801,6 +858,9 @@ export function initControls(ctx) {
   const zeroAxesFireDrift = () => {
     pressed.clear();
     fireDown = false;
+    // Explicit bounded combat authority survives focus loss (owner decision,
+    // issue #61). Release physical holds without discarding the active pilot.
+    if (lease?.combat) { mouseX = mouseY = null; expireCombat(ctx); return; }
     dropLease(ctx, 'blur');
     pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
     input.matchSpeedPressed = false;
@@ -877,6 +937,14 @@ export function initControls(ctx) {
       // Intentional Settings mutex (RW-002 PR1): skip all TRACKED while open.
       if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return;
     } catch { /* helper miss: keep flight keys */ }
+    // Hail responses already own digits 1–9. Deliberate negotiation takes
+    // over before their existing menu routing skips the flight handler.
+    if (!e.repeat && lease?.combat && ctx.flags.hailOpen && isMenuDigitCode(code)
+        && hailDigitsAllowed(ctx) !== false) {
+      const n = code.charCodeAt(5) - 48;
+      const card = ctx.hailApi?.peek?.();
+      if (card?.open && n >= 1 && n <= card.intents?.length) dropLease(ctx, 'player-override');
+    }
     if (e.repeat || !TRACKED.has(code)) return;
     // Paused: the system loop is frozen (main.js), so a keydown now must not
     // buffer a gameplay edge or write throttle/weapon state for resume. Pause,
@@ -885,6 +953,7 @@ export function initControls(ctx) {
     // pre-pause hold released during pause is not stuck on resume.
     if (ctx.flags && ctx.flags.paused === true) return;
     if (stationOrHailOwns(ctx) && skipStationHailCode(code)) return;
+    if (lease?.combat) dropLease(ctx, 'player-override');
     pressed.add(code);
 
     const id = codeToOwned.get(code);
@@ -920,11 +989,18 @@ export function initControls(ctx) {
   });
 
   window.addEventListener('mousemove', (e) => {
+    if (lease?.combat) dropLease(ctx, 'player-override');
     mouseX = e.clientX;
     mouseY = e.clientY;
   });
 
   window.addEventListener('mousedown', (e) => {
+    if (lease?.combat) {
+      dropLease(ctx, 'player-override');
+      if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+        mouseX = e.clientX; mouseY = e.clientY;
+      }
+    }
     if (fireMouseButton >= 0 && e.button === fireMouseButton) fireDown = true;
     if (fireMouseButton === 1 && e.button === 1) e.preventDefault();
     if (fireMouseButton === 2 && e.button === 2) e.preventDefault();
@@ -1081,11 +1157,18 @@ export function initControls(ctx) {
       // --- Agent control lease (v2). Re-gated every tick; any unsafe
       // transition drops it before the value write, so fire can never stick.
       if (lease) {
+        expireCombat(ctx);
+      }
+      if (lease) {
+        if (lease.combat && ctx.agent?.optIn !== true) dropLease(ctx, 'opt-in');
+        if (lease?.combat && ctx.player?.destroyed) dropLease(ctx, 'dead');
+      }
+      if (lease) {
         const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
         if (now >= lease.expiresAt) {
           dropLease(ctx, 'expired');
         } else {
-          const gate = leaseGateToken(ctx);
+          const gate = leaseGateToken(ctx, !!lease.combat);
           if (gate) dropLease(ctx, gate);
         }
         if (lease) {
@@ -1102,6 +1185,11 @@ export function initControls(ctx) {
         // Player emergency input wins: any physical flight key or fire button
         // held this frame drops the lease outright (no silent sharing).
         if (lease && (fireDown || pressed.size > 0)) dropLease(ctx, 'player-override');
+      }
+      if (lease?.combat) {
+        let reason;
+        try { reason = combatTick(ctx, lease); } catch { reason = 'no-service'; }
+        if (reason) dropLease(ctx, reason);
       }
       if (lease) {
         input.steerX = lease.steerX;

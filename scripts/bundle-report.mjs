@@ -5,6 +5,7 @@ import { build } from 'vite';
 import {
   auditBrowserModules,
   BUNDLE_BUDGET,
+  evaluateByteBudget,
   formatBytes,
   measureJavaScript,
 } from './bundle-policy.mjs';
@@ -21,6 +22,7 @@ const output = Array.isArray(result)
 const chunks = output.filter((item) => item.type === 'chunk');
 const bundle = Object.fromEntries(output.map((item) => [item.fileName, item]));
 const measured = measureJavaScript(bundle);
+const bytePolicy = evaluateByteBudget(measured);
 const audit = auditBrowserModules(chunks);
 const modules = chunks.flatMap((chunk) => Object.entries(chunk.modules).map(([id, detail]) => ({
   chunk: chunk.fileName,
@@ -31,13 +33,15 @@ modules.sort((a, b) => b.renderedBytes - a.renderedBytes || a.module.localeCompa
 const renderedBytes = modules.reduce((total, module) => total + module.renderedBytes, 0);
 const report = {
   budgets: BUNDLE_BUDGET,
+  bytePolicy,
+  artifacts: measured.artifacts,
   totals: {
     chunks: measured.chunks.length,
     modules: modules.length,
     minifiedBytes: measured.minifiedBytes,
     gzipBytes: measured.gzipBytes,
-    minifiedPass: measured.minifiedBytes <= BUNDLE_BUDGET.minifiedBytes,
-    gzipPass: measured.gzipBytes <= BUNDLE_BUDGET.gzipBytes,
+    minifiedPass: bytePolicy.minifiedPass,
+    gzipPass: bytePolicy.gzipPass,
   },
   browserBoundary: audit,
   chunks: measured.chunks.map((chunk) => ({
@@ -60,6 +64,7 @@ if (process.argv.includes('--json')) {
   console.log(`Chunks: ${report.totals.chunks}; modules: ${report.totals.modules}`);
   console.log(`Browser packages: ${audit.packages.join(', ') || '(none)'}`);
   console.log(`Node-only boundary: ${audit.pass ? 'PASS' : 'FAIL'}`);
+  if (bytePolicy.exception) console.log(`Exact-artifact byte exception: ${bytePolicy.exception.approvalReference}; ${bytePolicy.exception.releaseNotes}`);
   console.log('\nTop modules by Rollup-rendered bytes (before minification):');
   for (const module of report.topModules) {
     console.log(
@@ -68,4 +73,4 @@ if (process.argv.includes('--json')) {
   }
 }
 
-if (!report.totals.minifiedPass || !report.totals.gzipPass || !audit.pass) process.exitCode = 1;
+if (!bytePolicy.pass || !audit.pass) process.exitCode = 1;

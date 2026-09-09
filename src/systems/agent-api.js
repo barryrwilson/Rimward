@@ -17,7 +17,7 @@ import {
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { tryEngageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
-import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear } from './controls.js';
+import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
 import {
   VERSION,
@@ -358,6 +358,9 @@ function actHailResolve(ctx, name, args) {
   // effect, so a card replaced between the peek above and this call refuses.
   const token = expected.bound ? api.resolve(intent, expected.id) : api.resolve(intent);
   if (typeof token === 'string' && token) return fail(ctx, name, token);
+  // The synchronous resolver validates the current card/binding first.
+  // Failed or stale requests must not mutate an existing combat grant.
+  if (agentCombatActive(ctx)) agentControlClear(ctx, 'hail');
   return ok(ctx, name);
 }
 
@@ -427,6 +430,9 @@ function actLaunch(ctx, name, run) {
 }
 
 function dispatchLive(ctx, name, args) {
+  if (agentCombatActive(ctx) && ['engageAutopilot', 'approachDock', 'engageAutomine', 'afterburner'].includes(name)) {
+    return fail(ctx, name, 'helm');
+  }
   if (name === 'plotRoute') return actPlotRoute(ctx, name, args);
   if (name === 'clearRoute') {
     clearRoute(ctx);
@@ -557,14 +563,20 @@ function dispatchLive(ctx, name, args) {
     const n = Object.hasOwn(args, 'n') ? args.n : undefined;
     return afterControls(ctx, name, agentSetWeaponGroup(ctx, n));
   }
-  if (name === 'setControl') {
-    const token = agentControlSet(ctx, args);
+  if (name === 'setControl' || name === 'setCombatIntent') {
+    const token = name === 'setControl' ? agentControlSet(ctx, args) : agentCombatSet(ctx, args);
     if (token) return fail(ctx, name, token);
-    return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'active' }));
+    const result = actResult({ ok: true, error: '', name, token: '', status: 'active' });
+    const control = agentControlStatus(ctx);
+    result.seq = control.seq; result.owner = control.owner;
+    return remember(ctx, result);
   }
   if (name === 'clearControl') {
     agentControlClear(ctx);
-    return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'cleared' }));
+    const result = actResult({ ok: true, error: '', name, token: '', status: 'cleared' });
+    const control = agentControlStatus(ctx);
+    result.seq = control.seq; result.owner = control.owner;
+    return remember(ctx, result);
   }
   if (name === 'stationAction') {
     const desk = deskOf(ctx);
@@ -815,11 +827,13 @@ function dispatchGated(ctx, name, args) {
 
   if (name === 'disable') {
     agent.optIn = false;
-    try { agentControlClear(ctx); } catch { /* lease clear is best-effort */ }
+    try { agentControlClear(ctx, 'opt-in'); } catch { /* lease clear is best-effort */ }
     return ok(ctx, name);
   }
 
   const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
+  // Stop never needs an active play surface, and remains idempotent while held.
+  if (name === 'clearControl') return dispatchLive(ctx, name, args);
   const pauseOk = name === 'startGame' || name === 'chooseOrigin';
   if (flags.paused === true && !pauseOk) return fail(ctx, name, 'paused');
   if (flags.berthHold === true) return fail(ctx, name, 'held');
@@ -881,7 +895,7 @@ export function initAgentApi(ctx) {
         const live = readLiveCtx(ctx);
         const bag = ensureAgent(live);
         if (bag) bag.optIn = false;
-        try { agentControlClear(live); } catch { /* lease clear is best-effort */ }
+        try { agentControlClear(live, 'opt-in'); } catch { /* lease clear is best-effort */ }
         const result = ok(live, 'disable');
         refreshBadge(live);
         return result;

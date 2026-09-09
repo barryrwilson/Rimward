@@ -54,6 +54,7 @@ export const COMMAND_NAMES = freeze([
   'chooseOrigin',
   'recover',
   'setControl',
+  'setCombatIntent',
   'clearControl',
   'stationAction',
 ]);
@@ -679,8 +680,8 @@ export const ROLE_STATUS = freeze({
     'rock identity/ore/hardness, automine channel, cargo/job progress',
   ),
   combat: role(
-    ['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'clearControl', 'afterburner', 'hail', 'hailResolve'],
-    'HUD-derived aim/lead + lease fireHeld; hit/shield/destruction ring outcomes',
+    ['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'setCombatIntent', 'clearControl', 'afterburner', 'hail', 'hailResolve'],
+    'HUD-derived aim/lead + lease fireHeld; bounded target-specific combat intent, explicit renewal/cancel; hit/shield/destruction ring outcomes',
   ),
   hail: role(
     ['hail', 'hailResolve'],
@@ -740,7 +741,7 @@ export const COMMAND_SPECS = freeze({
   setWeaponGroup: cmd({ n: 'integer 1..5' }, ['combat', 'miner']),
   setControl: freeze({
     args: freeze({
-      seq: 'strictly increasing integer per session',
+      seq: 'strictly increasing safe integer per session',
       ttl: 'sim seconds 0.05..5 (default 1)',
       steerX: '-1..1 optional', steerY: '-1..1 optional',
       strafeX: '-1..1 optional', strafeY: '-1..1 optional',
@@ -750,6 +751,27 @@ export const COMMAND_SPECS = freeze({
     }),
     roles: freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
     outcomes: freeze(['active', 'cleared', 'expired', 'suppressed']),
+  }),
+  setCombatIntent: freeze({
+    args: freeze({
+      seq: 'strictly increasing safe integer shared with setControl',
+      ttl: 'required seconds 1..60; expires at the earlier simulation or monotonic wall deadline; no implicit renewal',
+      targetId: 'required current visible ship id',
+      intent: "'engage'|'disable'|'break-off'|'retreat'; disable shares engage policy, does not select engines, and may destroy the target",
+    }),
+    roles: freeze(['combat']),
+    outcomes: freeze(['active', 'cleared', 'expired']),
+    phases: freeze(['intercept', 'pass', 'reposition', 'break-off', 'retreat']),
+    terminalReasons: freeze(['target-disabled', 'target-surrendered', 'target-destroyed',
+      'target-lost', 'target-changed', 'weapon-changed', 'disengaged', 'retreated',
+      'jump', 'jumping', 'match-speed', 'player-override', 'hail', 'expired',
+      'explicit', 'paused', 'held', 'berth', 'docked', 'overlay', 'dead', 'opt-in', 'helm', 'no-service']),
+    refusalReasons: freeze(['bad-args', 'bad-seq', 'bad-ttl', 'stale', 'weapon',
+      'target-lost', 'target-destroyed', 'target-surrendered', 'target-disabled',
+      'match-speed', 'player-override', 'opt-in', 'helm', 'no-service', 'docked',
+      'held', 'paused', 'jumping', 'overlay', 'dead']),
+    fireBlocks: freeze(['', 'alignment', 'range', 'heat', 'weapon', 'reposition', 'break-off', 'retreat', 'obstructed']),
+    note: 'outcomes are control.state; terminalReasons are control.reason. Active combat.fireBlocked uses fireBlocks; after completion it copies control.reason.',
   }),
   clearControl: cmd({}, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
   openService: cmd({ id: 'dock service id' }, ['trader', 'missions', 'services', 'rescue']),

@@ -41,7 +41,10 @@ import { DEFAULT_BINDINGS } from '../systems/bindings.js';
  *   targets.part is controls.js only, live `'engine'|null`, not WORLD_FIELDS.
  *   targets.aim is hud.js only: the player-visible selected-target aim digest
  *   (bracket/lead projection + ship-local bearings), refreshed per HUD frame,
- *   JSON-plain, session-only. agent-observe.js reads it; nobody else writes.
+ *   JSON-plain, session-only; identity/time stamped for controls' combat owner
+ *   and agent-observe.js readers. Nobody else writes it.
+ * - controls.js owns one session-only manual lease OR bounded combat intent.
+ *   agent-combat.js computes normalized commands; no competing helm channel.
  * - flags.docked: written by station.js only. flags.combat: written by npc.js.
  * - flags.camera / flags.firstPerson: written by controls.js only.
  * - flags.matchSpeed: written by ship.js only (toggle). npc.js does not write it.

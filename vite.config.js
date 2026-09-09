@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import {
   auditBrowserModules,
   BUNDLE_BUDGET,
+  evaluateByteBudget,
   formatBytes,
   measureJavaScript,
 } from './scripts/bundle-policy.mjs';
@@ -13,14 +14,15 @@ function productionBundlePolicy() {
     generateBundle(_options, bundle) {
       const measured = measureJavaScript(bundle);
       const audit = auditBrowserModules(measured.chunks);
+      const bytePolicy = evaluateByteBudget(measured);
       const failures = [];
 
-      if (measured.minifiedBytes > BUNDLE_BUDGET.minifiedBytes) {
+      if (!bytePolicy.minifiedPass && !bytePolicy.exception) {
         failures.push(
           `minified JavaScript ${measured.minifiedBytes} B exceeds ${BUNDLE_BUDGET.minifiedBytes} B`,
         );
       }
-      if (measured.gzipBytes > BUNDLE_BUDGET.gzipBytes) {
+      if (!bytePolicy.gzipPass && !bytePolicy.exception) {
         failures.push(
           `gzip JavaScript ${measured.gzipBytes} B exceeds ${BUNDLE_BUDGET.gzipBytes} B`,
         );
@@ -34,6 +36,10 @@ function productionBundlePolicy() {
         );
       }
       if (failures.length) this.error(`Rimward production bundle policy failed:\n- ${failures.join('\n- ')}`);
+
+      if (bytePolicy.exception) {
+        this.warn(`Exact-artifact byte exception: ${bytePolicy.exception.approvalReference}; ${bytePolicy.exception.releaseNotes}`);
+      }
 
       this.info(
         `Rimward bundle policy: ${formatBytes(measured.minifiedBytes)} minified, `
