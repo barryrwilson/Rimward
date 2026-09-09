@@ -2,13 +2,14 @@
  * node scripts/issue-62-live-probe.mjs --mode controlled --encounter aft --defense evade --delay 15 --pair aft15
  * node scripts/issue-62-live-probe.mjs --mode natural --defense evade --delay 30
  * node scripts/issue-62-live-probe.mjs --mode compare --off PATH/result.json --enabled PATH/result.json
+ * node scripts/issue-62-live-probe.mjs --mode reanalyze --input PATH/result.json --output PATH/analysis.json
  * Controlled fixtures alter INITIAL setup only. Measurement uses public APIs,
  * live ordinary NPC fire/physics and no injected hits, damage or movement.
  * Each trial owns a fresh browser/profile; inherited transport always tears down.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { runLive, sleep, assert, eventCounter, measurements, repo } from './issue-61-live-harness.mjs';
 
 const argv = process.argv.slice(2);
@@ -19,10 +20,14 @@ const name = option('name', `issue62-${mode}-${encounter}-${defense}-${delay}-${
 const scriptHash = async () => createHash('sha256').update(await readFile(new URL(import.meta.url))).digest('hex');
 const condition = s => Object.fromEntries(['hull', 'engine', 'screen', 'shell'].map(k => [k, s.ship[k]]));
 const loss = (a, b) => Object.fromEntries(Object.keys(a).map(k => [k, a[k] - b[k]]));
+// Current authored WEAPONS families. Environmental impact is not incoming fire.
+const weaponHitFamilies = new Set(['energy', 'disruptor', 'mining', 'missile', 'psionic']);
+const incomingObserved = metrics => metrics.incomingHitEvents > 0 || metrics.cues.some(c => c.actualIncoming)
+  || metrics.reactions.some(r => ['hit', 'incoming-fire', 'incoming-dart'].includes(r.trigger));
 
 function responseKind(response) {
   if (['evading', 'break-off'].includes(response)) return 'defensive-response';
-  if (response === 'obstructed') return 'collision-safety-response';
+  if (['engine', 'obstructed'].includes(response)) return 'movement-blocked';
   return 'acknowledgement-only';
 }
 
@@ -38,7 +43,7 @@ function publicHitEvidence(samples, seq) {
   for (let i = 0; i < samples.length; i++) {
     const row = samples[i];
     for (const event of row.observation.events || []) {
-      if (event.type !== 'playerHit' || !(event.damage > 0) || event.family === 'impact') continue;
+      if (event.type !== 'playerHit' || !(event.damage > 0) || !weaponHitFamilies.has(event.family)) continue;
       const key = JSON.stringify([event.t, event.family, event.count || 1, event.fromAft]);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -53,9 +58,9 @@ function publicHitEvidence(samples, seq) {
   return hits;
 }
 
-function corroborateHit(samples, independentHits, cue, appliedIndex, kind) {
+function corroborateHit(samples, independentHits, cue, appliedIndex, kind, episodeStart = false) {
   const appliedSample = samples[appliedIndex];
-  const result = { source: null, status: 'not-independently-corroborated',
+  const result = { source: null, status: 'not-independently-corroborated', episodeStart,
     reportedApplicationNoLaterThanObservation: Number.isFinite(cue.appliedWallMs) ? cue.appliedWallMs <= appliedSample.browserMs : null,
     reportedStampOrdering: Number.isFinite(cue.cueWallMs) && Number.isFinite(cue.appliedWallMs) ? cue.cueWallMs <= cue.appliedWallMs : null };
   if (cue.trigger !== 'hit') return { ...result, reason: 'No independent production timestamp for this warning/contact in the public API; controller timestamps are self-reported.' };
@@ -81,7 +86,7 @@ function corroborateHit(samples, independentHits, cue, appliedIndex, kind) {
   return { ...result, status: consistent ? 'public-hit-frame-corroborated' : 'stamp-or-bracket-inconsistent',
     reportedCueInsidePublicProductionBracket: cueInsideBracket,
     publicCueToApplicationTelemetryObservedUpperBoundMs: upper >= 0 ? upper : null,
-    corroborates250msDefensiveResponse: kind === 'defensive-response' && consistent && upper <= 250,
+    corroborates250msDefensiveResponse: episodeStart && kind === 'defensive-response' && consistent && upper <= 250,
     limitation: 'Independent public hit-frame timing corroborates the cue. Application is still identified by controller telemetry; public throttle/speed/fire corroborate output state, but steering/strafe assignment is not exposed. This is not an independently instrumented input write.' };
 }
 
@@ -113,7 +118,7 @@ function summarize(samples, targetId, seq) {
     const response = row.observation.control.combat.movementBlocked || d.phase;
     const classification = responseKind(response);
     reactions.push({ trigger: d.trigger, direction: d.direction, attackerId: d.attackerId,
-      response, classification,
+      response, classification, episodeStart: true,
       triggeredAtSimulation: d.triggeredAt, reactedAtSimulation: d.reactedAt,
       cueWallMs: d.cueWallMs ?? null, appliedWallMs: d.appliedWallMs ?? null,
       reportedResponseLatencyMs: Number.isFinite(d.cueWallMs) && Number.isFinite(d.appliedWallMs) ? d.appliedWallMs - d.cueWallMs : null,
@@ -123,23 +128,53 @@ function summarize(samples, targetId, seq) {
       reactionHorizonWallMs: row.browserMs - first.browserMs,
       damageNetBeforeReaction: loss(condition(first.observation), condition(row.observation)),
       publicThrottleAtObservation: row.observation.ship.throttle,
-      corroboration: corroborateHit(samples, independentHits, { ...d, t: d.triggeredAt }, i, classification) });
+      corroboration: corroborateHit(samples, independentHits, { ...d, t: d.triggeredAt }, i, classification, true) });
   }
-  let maxMonotonicSampleGapMs = 0, incomingHitEvents = 0, requestedMovementSeconds = 0;
+  // latestCue acknowledges every eligible cue, even inside an episode already
+  // in progress. Only an exact match to the episode's first cue is a start.
+  // Continued movement must never satisfy the new-reaction latency criterion.
+  for (const cue of cues) {
+    cue.episodeStart = reactions.some(r => r.cueWallMs === cue.cueWallMs && r.triggeredAtSimulation === cue.t);
+    cue.continuedDefense = cue.classification === 'defensive-response' && !cue.episodeStart;
+    if (cue.continuedDefense) {
+      cue.classification = 'continued-defense';
+      cue.reportedContinuationAcknowledgementLatencyMs = cue.reportedResponseLatencyMs;
+      cue.reportedResponseLatencyMs = null;
+    }
+    cue.corroboration.episodeStart = cue.episodeStart;
+    cue.corroboration.corroborates250msDefensiveResponse = cue.episodeStart
+      && cue.classification === 'defensive-response'
+      && cue.corroboration.status === 'public-hit-frame-corroborated'
+      && cue.corroboration.publicCueToApplicationTelemetryObservedUpperBoundMs <= 250;
+  }
+  let maxMonotonicSampleGapMs = 0, incomingHitEvents = 0, allPlayerHitActivityEvents = 0, requestedMovementSeconds = 0;
+  const weaponCounts = new Map();
   for (let i = 0; i < samples.length; i++) {
-    incomingHitEvents += samples[i].delta.playerHits;
+    const row = samples[i];
+    allPlayerHitActivityEvents += row.delta.playerHits;
+    for (const event of row.observation.events || []) {
+      if (event.type !== 'playerHit' || !(event.damage > 0) || !weaponHitFamilies.has(event.family)) continue;
+      const count = Number(event.count || 1), prior = weaponCounts.get(event.family);
+      const increment = !prior || count < prior.count || (count === prior.count && event.t > prior.t) ? count : Math.max(0, count - prior.count);
+      weaponCounts.set(event.family, { count, t: event.t });
+      // Prime from the initial baseline, including hits before this grant.
+      if (i > 0 && row.observation.control.seq === seq) incomingHitEvents += increment;
+    }
     if (i) {
       maxMonotonicSampleGapMs = Math.max(maxMonotonicSampleGapMs, samples[i].browserMs - samples[i - 1].browserMs);
       if (samples[i - 1].observation.ship.throttle > 0) requestedMovementSeconds += samples[i].observation.t - samples[i - 1].observation.t;
     }
   }
-  return { ...metrics, reactions, cues, independentHits, incomingHitEvents, maxMonotonicSampleGapMs, requestedMovementSeconds,
+  return { ...metrics, reactions, cues, independentHits, incomingHitEvents, allPlayerHitActivityEvents, maxMonotonicSampleGapMs, requestedMovementSeconds,
+    episodeStarts: reactions,
     defensiveResponses: cues.filter(c => c.classification === 'defensive-response'),
-    collisionSafetyResponses: cues.filter(c => c.classification === 'collision-safety-response'),
+    continuedDefenseResponses: cues.filter(c => c.classification === 'continued-defense'),
+    movementBlockedResponses: cues.filter(c => c.classification === 'movement-blocked'),
+    collisionSafetyResponses: cues.filter(c => c.classification === 'movement-blocked' && c.response === 'obstructed'),
     cueAcknowledgements: cues.filter(c => c.classification === 'acknowledgement-only'),
     visibilityStates: [...new Set(samples.map(s => s.visibility))],
-    reactionMeasurement: 'Controller cue/application timestamps are self-reported. Separately sampled public playerHit rows can corroborate production-frame bounds only when an earlier same-grant sample has strict simulation t < hit.t. Incoming-warning/contact production is not independently exposed. samplerIntervalMs measures cadence only, never cue-to-response latency. All latency/horizon/cadence calculations use performance.now. Screenshots inside the window may perturb frame cadence; actual gaps are retained. Visibility is observed browser state, not proof of an unlocked desktop or human visual inspection.',
-    incomingEvidence: 'Real playerHit deltas and defense incoming-fire/incoming-dart triggers. nearby-threat alone is not proof of an actual shot.',
+    reactionMeasurement: 'Controller cue/application timestamps are self-reported. Only exact first-cue matches to unique episode starts can corroborate the 250ms new-response criterion; continued defense, blocked movement and acknowledgements are separate. Separately sampled public playerHit rows can corroborate production-frame bounds only when an earlier same-grant sample has strict simulation t < hit.t. Pre-grant events are excluded; retained terminal seq can appear after release but cannot create a new episode. Incoming-warning/contact production is not independently exposed. samplerIntervalMs measures cadence only, never cue-to-response latency. All latency/horizon/cadence calculations use performance.now. Screenshots inside the window may perturb frame cadence; actual gaps are retained. Visibility is observed browser state, not proof of an unlocked desktop or human visual inspection.',
+    incomingEvidence: 'Positive public playerHit count advances for authored weapon families only, plus defense incoming-fire/incoming-dart triggers. Initial counts are primed; replacement after eviction counts the new row, and unobserved eviction/coalescing can hide activity. Environmental impact and unknown families are excluded. allPlayerHitActivityEvents separately retains the original all-family activity count. nearby-threat alone is not proof of an actual shot.',
     damageMeaning: 'Net stock condition difference, including shield recharge; coalesced event damage is NOT summed.' };
 }
 
@@ -167,6 +202,50 @@ async function compare() {
     limitation: 'Identical seeded initial fixture, variable frame cadence and ordinary autonomous NPC trajectories. Every result retained, including incomplete gaps and worse outcomes; no guaranteed damage reduction inferred.' };
   const output = option('output'); if (output) await writeFile(output, JSON.stringify(value, null, 2));
   console.log(JSON.stringify(value, null, 2));
+}
+
+/** Pure offline analysis of retained observations. Never rewrites evidence or
+ * upgrades an original measurement/coverage verdict. A new sidecar identifies
+ * both the original capture and the exact code used to recompute its metrics.
+ */
+async function reanalyze() {
+  const input = option('input'), output = option('output');
+  assert(input && output, '--input and --output are required');
+  assert(resolve(input) !== resolve(output), 'Analysis output must differ from the original result');
+  const originalBytes = await readFile(input), original = JSON.parse(originalBytes);
+  assert(Array.isArray(original.trials) && original.trials.length > 0, 'No retained trials to reanalyze');
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+  const analysisProbeHash = await scriptHash();
+  const value = { mode: 'offline-reanalysis', createdAt: new Date().toISOString(),
+    original: { path: resolve(input), sha256: hash(originalBytes), name: original.name,
+      requested: original.requested, checksCompleted: original.checksCompleted,
+      sourceHash: original.identityStart?.sourceHash, sourceStable: original.sourceStable,
+      sharedHarnessHash: original.identityStart?.harnessHash,
+      probeHashStart: original.probeHashStart, probeHashEnd: original.probeHashEnd },
+    analysisProbeHash, analysisSharedHarnessHash: hash(await readFile(new URL('./issue-61-live-harness.mjs', import.meta.url))),
+    method: 'Recomputed metrics from the original public observation samples. No browser run, event injection, new gameplay or change to original delay/coverage verdicts. Episode starts, continued defense, blocked movement and acknowledgements are distinguished.',
+    trials: original.trials.map(trial => {
+      assert(Array.isArray(trial.samples) && trial.samples.length > 0, 'Trial has no retained samples');
+      const action = original.actions?.find(a => a.request?.name === 'setCombatIntent' && a.value?.reqId === trial.grant?.reqId);
+      const seq = action?.request.args.seq ?? trial.startMarker?.observation.control.seq;
+      assert(Number.isInteger(seq), 'Cannot identify the original combat grant sequence');
+      const metrics = summarize(trial.samples, trial.targetId, seq);
+      return { label: trial.label, targetId: trial.targetId, seq, correctedActualIncomingObserved: incomingObserved(metrics),
+        originalMeasurement: { requestedWallSeconds: trial.requestedWallSeconds, observedWallSeconds: trial.observedWallSeconds,
+          completeGap: trial.completeGap, noOuterActions: trial.noOuterActions, actualIncomingObserved: trial.actualIncomingObserved,
+          earlyReason: trial.earlyReason, startMarker: trial.startMarker },
+        originalMetricsHash: hash(JSON.stringify(trial.metrics)), metrics };
+    }) };
+  assert(analysisProbeHash === await scriptHash(), 'Analysis probe changed during reanalysis');
+  assert(value.original.sha256 === hash(await readFile(input)), 'Original result changed during reanalysis');
+  // Exclusive creation rejects existing files, including aliases/symlinks to
+  // original evidence. The original result and its capture hashes stay intact.
+  await writeFile(output, JSON.stringify(value, null, 2), { flag: 'wx' });
+  console.log(JSON.stringify({ output: resolve(output), originalSha256: value.original.sha256, analysisProbeHash,
+    trials: value.trials.map(t => ({ label: t.label, episodeStarts: t.metrics.episodeStarts.length,
+      continuedDefense: t.metrics.continuedDefenseResponses.length, movementBlocked: t.metrics.movementBlockedResponses.length,
+      acknowledgements: t.metrics.cueAcknowledgements.length,
+      corroboratedEpisodeBoundsMs: t.metrics.episodeStarts.filter(r => r.corroboration.corroborates250msDefensiveResponse).map(r => r.corroboration.publicCueToApplicationTelemetryObservedUpperBoundMs) })) }));
 }
 
 // This function is serialized for controlled setup only; it is never called in natural mode.
@@ -374,7 +453,7 @@ async function live() {
       await writeFile(join(h.folder, `defense-trace-${attempt}.jsonl`), samples.map(s => JSON.stringify(s)).join('\n') + '\n');
       await save(); await h.shot(`after-delay-${attempt}`);
       assert(trial.noOuterActions && !samples.some(s => s.delta.epochReset), 'Measurement interrupted or mutated by outer control');
-      trial.actualIncomingObserved = trial.metrics.incomingHitEvents > 0 || trial.metrics.cues.some(r => r.actualIncoming) || trial.metrics.reactions.some(r => ['incoming-fire', 'incoming-dart', 'hit'].includes(r.trigger));
+      trial.actualIncomingObserved = incomingObserved(trial.metrics);
       console.log('TRIAL', JSON.stringify({ label: trial.label, completeGap: trial.completeGap, actualIncomingObserved: trial.actualIncomingObserved, metrics: trial.metrics }));
       if (mode !== 'natural' || (trial.completeGap && trial.actualIncomingObserved) || Date.now() >= encounterEnd) break;
       // Real terminal/overlay ends a gap. Retargeting and new authorization are
@@ -435,4 +514,4 @@ async function live() {
   }, { keepRenderingWhenOccluded: true });
 }
 
-if (mode === 'compare') await compare(); else await live();
+if (mode === 'compare') await compare(); else if (mode === 'reanalyze') await reanalyze(); else await live();
