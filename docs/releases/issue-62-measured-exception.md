@@ -13,10 +13,11 @@ increase the global limits, approve future changed artifacts, or waive the
 browser dependency boundary. Approval to run the earlier review cycle was
 separate from this explicit release-exception approval.
 
-The build-side descriptor has been updated to record this approval for the
-next ordinary build. Post-activation build, bundle-report, complete artifact
-verification, and independent policy review are pending. This note does not
-claim a passing build or a published, merged, or deployed result.
+The build-side descriptor was activated in
+`f09a84cf28989bfc78bca3361099b7f626159858`. The subsequent ordinary build,
+bundle report and complete 447-file artifact verification **PASS** with the
+approved exact byte exception. Final independent policy/documentation review
+is pending. No published, merged or deployed result is claimed.
 
 ## Exact artifact and byte decision
 
@@ -98,7 +99,31 @@ includes `out/issue-62-evidence/review-g1/CLAUDE-REVIEW.md`, `build-01.log`,
 decision proposal. The proposal and earlier failures remain historical
 artifacts; this note records the subsequent owner approval.
 
-The coordinator must still run the ordinary build and bundle report, verify
-the emitted files against all 447 approved candidate files and the runtime
-census, and obtain independent review of this exact policy activation. Until
-those results are recorded, post-activation verification remains pending.
+The coordinator ran the ordinary commands after activation:
+
+| Check | Actual result | Retained evidence |
+|---|---|---|
+| `npm run build` | PASS; exact #62 exception explicitly reported | `approved-build-01.log` |
+| `npm run bundle:report -- --json` | PASS through `bytePolicy.pass: true`; raw minified/gzip pass flags remain false | `approved-bundle-report-01.log` |
+| Browser dependency boundary | PASS; package set contains only `three`, no unexpected packages or forbidden sources | Same bundle report |
+| Complete emitted artifact equivalence | PASS; all 447 files, canonical manifest and runtime census match | `approved-artifact-verification-01.json` |
+
+These files are retained in `C:/Projects/WebSim/out/issue-62-evidence/`.
+The emitted single JavaScript file has exactly the approved name, digest and
+1,821,216 / 543,822 byte sizes. Verification compared every emitted file,
+not just JavaScript, with no missing, extra or mismatched files and no extra
+directories. Its canonical manifest hash is
+`40c42c610d295ab2679c3ec8c69d58eb6b20f839b0b3c4b365635c781f5329d0`;
+the runtime source census remains
+`879dc6a3239e4180d44d1ccacc23a86185d7c2ede869f83b6d9d3e8f831816e3`
+before and after verification on `f09a84cf`. The executed verification script
+`verify-approved.mjs` is identified by SHA256
+`0f45ff4f0ce78399f4ce531e3ac487c4ed32c6994845341b9d556e320ea335ee`.
+
+The original cold-start samples remain the historical raw FAIL documented
+above and are covered by the separately approved exact startup exception;
+no fresh startup PASS or changed threshold is claimed. The owner also
+authorized opening the pull request. The remaining gate is independent
+review of the exact policy activation, this evidence update and the F1–F5
+documentation corrections in `95023918`; merge, deployment and issue closure
+are separate and unperformed.

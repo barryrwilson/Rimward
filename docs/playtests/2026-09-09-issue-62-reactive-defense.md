@@ -1,7 +1,8 @@
 # Issue #62 reactive defense — verification in progress
 
 Date: 2026-09-09. Status: **SOURCE, PROBE METHODOLOGY and FUNCTIONAL ACCEPTANCE
-PASS; G1 closed; production byte/startup gates remain blocked**.
+PASS; exact owner exceptions approved; build/bundle/artifact verification PASS;
+final policy review pending**.
 This record does not close #62 or authorize publication.
 Contract: [reactive defense design](../AgentReactiveDefenseDesign.md).
 
@@ -58,7 +59,12 @@ METHODOLOGY PASS and FUNCTIONAL ACCEPTANCE PASS — G1 CLOSED**. Its F1–F5
 findings are nonblocking report-precision corrections incorporated here.
 Review record:
 `C:/Projects/WebSim/out/issue-62-evidence/review-g1/CLAUDE-REVIEW.md`.
-This does not approve or activate a production exception or authorize release.
+That functional review did not approve or activate a production exception.
+The owner subsequently approved the exact #62 byte and startup exceptions
+and opening the pull request. Descriptor activation `f09a84cf` and actual
+post-activation verification are recorded at the end of this report and in
+the [release exception note](../releases/issue-62-measured-exception.md).
+Final independent policy review remains pending; merge/deployment are separate.
 
 Local retained review and command evidence lives in
 `C:/Projects/WebSim/out/issue-62-evidence/`; browser raw evidence lives in this
@@ -76,8 +82,10 @@ committed browser profiles or screenshots. The independent verdict is
 | Agent schema and hardening | PASS | `test-agent-schema-01.log`, `test-agent-hardening-01.log` |
 | Paused input and safe launch | PASS; safe launch 11 checks | `test-paused-input-01.log`, `test-safe-launch-01.log` |
 | Gate escape regression | PASS | `test-gate-escape-01.log` |
-| Production build | **FAIL**: unchanged byte limits exceeded | `build-01.log` |
-| Production cold startup | **FAIL**: two of five exceed 8,000 ms | `production-startup-01.log` |
+| Original production build | Historical **FAIL**: unchanged byte limits exceeded | `build-01.log` |
+| Approved production build and bundle report | **PASS** through the exact owner-approved #62 byte exception; raw byte flags remain false | `approved-build-01.log`, `approved-bundle-report-01.log` |
+| Complete emitted artifact/runtime equivalence | **PASS**, all 447 files and canonical manifest/runtime hashes match | `approved-artifact-verification-01.json` |
+| Production cold startup | Historical raw **FAIL**, two of five exceed 8,000 ms; separately owner-approved exact startup exception | `production-startup-01.log`, release exception note |
 
 Focused tests cover anonymous/fore/aft cues, stale replay, no-threat and
 NPC-vs-NPC exclusions, thresholds, heat hysteresis, lifecycle and human
@@ -194,7 +202,8 @@ turn the shorter enabled attempt into a complete 30-second comparison or
 prove timing for warning-only cues. Frame/sample gaps remain recorded, and
 screenshots inside the gap can disturb cadence. The **250 ms target and
 natural-live requirement are unchanged**; G1 is now closed by the focused
-review below, while the production gates remain open.
+review below. Subsequent owner-approved production exceptions and verification
+are recorded separately; final policy review remains pending.
 
 ## Background rendering and interval integrity
 
@@ -475,8 +484,8 @@ zero and fire false, then observe a one-second grant expire with a stable
 terminal result. These checks are separate from earlier raw-search cleanup.
 Runtime/probe/harness identities remain stable; the browser and Vite process
 exit, their ports close and the temporary profile is deleted. This provides
-the clean G1 evidence accepted by focused independent review; production
-byte/startup gates remain blocked.
+the clean G1 evidence accepted by focused independent review. The subsequent
+production exception decision does not change this gameplay evidence.
 
 All seven follow-up attempts are retained below. Durations are the exact
 `trial.observedWallSeconds`, rounded to four decimals, not metrics sample-span
@@ -544,21 +553,46 @@ Functional acceptance is now PASS and G1 is closed by focused independent
 review on `30c0b280`. All failed, incomplete and no-incoming attempts remain
 recorded with their original flags and coverage limits; none was promoted.
 
-## Production release blockers
+## Approved production exceptions and verification
 
-`npm run build` fails with 1,821,216 minified JavaScript bytes against
+The original `npm run build` failed with 1,821,216 minified JavaScript bytes against
 1,800,000 (+21,216), and 543,822 gzip bytes against 537,600 (+6,222).
 The #61 exception is an exact older artifact allowance and does not match
-this candidate. No budget or exception was changed by this verification.
+this candidate. Those measurements and that failed run remain historical.
+The owner explicitly approved this exact #62 byte exception and its separate
+startup exception on 2026-09-09, plus opening the pull request. Activation
+`f09a84cf28989bfc78bca3361099b7f626159858` changes only the approved build-side
+descriptor and release note, not runtime, matcher logic or global limits.
 
 Diagnostic production cold starts were 7,563.0, 8,437.2, 7,237.2, 8,687.3 and
 7,225.6 ms. Median 7,563.0 ms; maximum 8,687.3 ms. The five-run requirement
-fails because every sample must meet 8,000 ms. These diagnostic measurements
-do not convert the failed production build into a pass. Byte and startup
-gates remain blocked; no release exception is granted in this report.
+failed because every sample must meet 8,000 ms. These original samples stay
+raw FAIL; the owner approved that measured result for this exact candidate.
+No sample is relabeled and no new startup threshold or fresh startup PASS is
+claimed. The startup exception is separate from the byte matcher.
 
-Next gate: the owner decides whether to authorize the concrete measured
-production exception. No exception is approved or activated here; any
-authorized policy activation and its final review remain pending that
-decision. Build/startup FAIL is unchanged. Issue closure, merge and deployment
-remain separate and unperformed.
+After activation the coordinator ran `npm run build` and
+`npm run bundle:report -- --json`; both PASS. Bundle `bytePolicy.pass` is true
+through the exact #62 approval reference while raw `minifiedPass` and
+`gzipPass` remain false. The emitted single JavaScript chunk is
+`assets/index-BWMahgBB.js`, SHA256
+`5dfbb91fe97de176b5bba052f21e9a5e885d9e4c5ed4b431a927eebfea5f4831`,
+with exactly 1,821,216 minified and 543,822 gzip bytes. The unconditional
+browser dependency boundary PASS contains only `three`.
+
+`approved-artifact-verification-01.json` records PASS for every one of the
+447 emitted files against the approved candidate, with no missing, extra or
+mismatched files and no extra directories. Canonical manifest SHA256 is
+`40c42c610d295ab2679c3ec8c69d58eb6b20f839b0b3c4b365635c781f5329d0`.
+Runtime source hash `879dc6a3…16e3` matches before and after on `f09a84cf`.
+The executed `verify-approved.mjs` SHA256 is
+`0f45ff4f0ce78399f4ce531e3ac487c4ed32c6994845341b9d556e320ea335ee`.
+Raw command evidence is `approved-build-01.log` and
+`approved-bundle-report-01.log` in the retained root evidence directory.
+
+Next gate: final independent review of this exact policy activation and
+documentation evidence, including the F1–F5 corrections at `95023918`.
+The exceptions and actual verification now pass within their approved scope;
+this report does not declare the final policy review passed or the release
+fully ready. The owner authorized opening the PR. Issue closure, merge and
+deployment remain separate and unperformed.
