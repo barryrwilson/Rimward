@@ -104,8 +104,12 @@ For a measurable clock contract, stamp eligible events at production with
 new event type). Carry the chosen cue's timestamp into defense observation as
 `cueWallMs`; stamp `appliedWallMs` in controls only when the selected defensive
 inputs are actually assigned to `ctx.input`. A public combat-flag assessment
-without an event uses the controls tick's detection time and identifies that
-source separately. Retained cue time must not be replaced with consumption
+without an event uses the controls tick's detection time. In the reviewed
+implementation, it shares `trigger: 'nearby-threat'` with `hostileEnter` and
+has no separate source field. A null-ID nearby cue therefore cannot establish
+whether the source was the public flag or an anonymous event; exclude such
+rows from claims about independently observed incoming fire. This is an
+observation limitation, not evidence of a shot. Retained event cue time must not be replaced with consumption
 time: that would hide a blocked frame. Repeated cues may update last-cue
 telemetry, but preserve the episode's first cue/applied pair. The probe should
 also capture the actual production event independently and calculate
@@ -228,9 +232,15 @@ normal input path to relinquish owned boost without touching ship mode state
 from the controller. Test that stale holds cannot relaunch a burn or cancel
 full stop. Drift release completes normal realignment before stopping; it is
 not an instant velocity reset. No direct mode, pose or velocity writes, damage changes, ammo
-grants or immunity are authorized. Observation should report maneuver choice
-and unavailable-mode reasons (`cooldown`, `power`, `clearance`, `velocity`,
-`engine`, `heat`, `expiry`) so absence of boost/drift is assessable.
+grants or immunity are authorized. Observation reports maneuver choice and
+the implemented `modeBlocked` vocabulary: empty string, `engine`,
+`obstructed`, `duration`, `speed`, `alignment`, `authorization`, `burner`,
+`cooldown`, `clearance`, `heat`, `power`, or `drift`. `speed` covers insufficient
+speed; `alignment` includes unsafe velocity direction; `authorization` means
+insufficient remaining grant time. Capability discovery currently publishes
+defensive phases and thresholds, but does not enumerate these mode-block
+tokens. This document records the exact vocabulary; discovery of that set is
+a known limitation of the reviewed implementation.
 
 An obstructed or severely damaged ship may move poorly; record the specific
 movement block/condition instead of claiming a successful escape.
@@ -274,7 +284,12 @@ unmodified speed, power and acceleration, as well as the refusal cases.
 `appliedWallMs`, and `response`. The first episode's trigger and timestamps
 remain paired; a later hit must not inherit an earlier nearby-threat timestamp.
 Repeated incoming cues can be acknowledged while the existing maneuver
-continues, with its actual response or movement block reported.
+continues, with its actual response or movement block reported. A finite
+`latestCue.appliedWallMs` acknowledges the next applied controls tick; it does
+not by itself prove a new defensive episode began. In particular,
+`response: 'reengaging'` must not be counted as a fresh reaction. Verification
+must distinguish episode starts, continued defense, blocked movement and cue
+acknowledgments.
 
 Names may be tightened during implementation while preserving these facts.
 Do not overwrite the primary trigger with a lower-priority simultaneous cue.
