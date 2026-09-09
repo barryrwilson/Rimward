@@ -2,8 +2,8 @@
 
 Implementation: `e3761b7632e6d45120a5e60a6e83bf1de0c37059`.
 Contract: [Market liquidity and progression design](../MarketLiquidityProgressionDesign.md).
-Status: implementation and local/live verification recorded; acceptance and
-independent review gates remain open. No merge or deployment.
+Status: implementation, independent source/security review and local/live
+verification recorded; pacing and release gates remain open. No merge or deployment.
 
 The approved finite supply is implemented: 160 units per bulk commodity,
 20 per other ordinary commodity, and a 1,200-second saved-simulation refill.
@@ -151,7 +151,7 @@ saved data were not patched to make the checks pass.
 | Five cold production starts | FAIL: 6,858.4 / 8,276.5 / 7,506.6 / 12,672.3 / 13,815.4 ms |
 | Pacing-run console errors | Zero in all three runs |
 | Final isolated live fixture | PASS, 12/12; zero console errors or exceptions |
-| Independent Claude source review | Awaiting explicit authorization for the fixed review payload |
+| Independent Claude source/security review | PASS on exact source, with nonblocking notes; static review only |
 
 The byte increase over the prior approved artifact is 3,297 minified and
 1,183 gzip bytes. The fixed global limits remain 1,800,000 and 537,600 bytes.
@@ -168,9 +168,35 @@ launch attempt failed before navigation and produced no timing samples.
 The builder authored the source and focused tests. A separate Codex worker
 operated the live campaigns and another reran focused checks and inspected
 source/timing evidence. These local checks are not a substitute for the required
-different-engine review. Automatic approval review rejected transferring the
-prepared unpublished code/test payload to Claude without explicit authorization;
-no Claude source verdict is claimed.
+different-engine review. Automatic approval review initially rejected transferring
+the prepared unpublished code/test payload to Claude without explicit
+authorization. The owner subsequently approved that exact payload. Claude
+completed its tools-disabled review normally and returned **source PASS and
+security PASS** on `e3761b76`, with nonblocking findings and verification notes.
+The reported primary model was `claude-opus-5[1m]`. The reviewer read supplied
+code and tests; it did not execute tests or receive the later live evidence.
+
+Local follow-up verified the source-review visibility gap around fresh starts:
+confirmed New Game clears the autosave and reloads the page
+(`src/systems/title.js:124-128`). No-save death recovery continues the current
+world, time and economy rather than starting a new campaign
+(`src/game/save.js:1442-1475`). Actual multi-system trades, stock restoration
+and readable UI are covered by the separately attributed live evidence above.
+
+Nonblocking hardening/presentation notes remain: an unexpected internal
+availability-getter exception could truncate later public market rows; the
+commit helper trusts the capacity from its current internal callers; flattened
+status-cell text lacks a separator between legality and stock. The reviewer
+found no current capacity mismatch or security defect. Local investigation
+confirmed the getter limitation with a corrupted JSON save containing
+`world.contacts: null`: existing restore accepts that unrelated malformed
+field, and market observation returns zero rows at Verge. A valid restored
+fixture returns all twelve rows. This nonblocking corrupt-save degradation
+remains a known limitation; it is not claimed fixed. Both current commit
+callers synchronously pass the matching freshly calculated stock capacity.
+These notes were not
+turned into unapproved feature expansion or a release waiver. Full source
+review and local disposition remain in the retained `review/` evidence.
 
 Raw evidence is local and uncommitted under
 `C:/Projects/WebSim/out/issue-55-implementation-evidence/`: per-run public API

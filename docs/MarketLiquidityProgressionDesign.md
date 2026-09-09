@@ -197,9 +197,12 @@ live verification runs. No merge or deployment has occurred.
   22,267 UU realized trade profit, with no paid repairs, tribute or deaths.
   Isolated stock/UI/persistence checks pass 12/12 with zero console errors
   or exceptions, including fractional stock restored through public Continue.
-- Independent Claude source review is awaiting explicit authorization to
-  transfer the prepared, fixed code-and-test payload. Automatic approval
-  review rejected that transfer; local checks are not a substitute verdict.
+- The owner explicitly authorized sending the prepared, fixed code-and-test
+  payload to Claude after automatic approval review initially rejected that
+  transfer. Claude returned source and security PASS on the exact source,
+  with nonblocking hardening/presentation notes. The reviewer executed no
+  tests; later live evidence is separately attributed. Local follow-up closed
+  the review's fresh-game reset visibility gap using the actual reload path.
 
 Implementation evidence is retained separately under
 `C:/Projects/WebSim/out/issue-55-implementation-evidence/`. The diagnostic
