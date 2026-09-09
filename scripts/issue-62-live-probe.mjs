@@ -344,7 +344,7 @@ async function live() {
     result.probeHashStart = await scriptHash();
     result.requested = { mode, defense, encounter, delayWallSeconds: delay, pair: option('pair', 'unpaired'), ttlSeconds: 45 };
     result.method = mode === 'natural' ? 'Native RNG, fresh stock Greenhand, public Jobs/patrol/launch/navigation/target/combat actions only; no private game-state inspection or injection.' : 'Controlled initial fixture, ordinary live simulation and public observation/actions during measurement; never natural evidence.';
-    let seq = 0, targetId;
+    let seq = 0, targetId, rawSearchUsed = false;
     const fresh = await h.checkpoint('fresh');
     assert(result.actions.some(a => a.request.name === 'chooseOrigin' && a.request.args.id === 'greenhand') && fresh.world.credits === 350 && fresh.world.scanner === 0, 'Fresh stock Greenhand required');
     async function resolveHail(s) {
@@ -382,7 +382,9 @@ async function live() {
         assert(s.ship.hull > 50 && s.ship.engine > 40, 'Natural search safety threshold');
         if (dest && !routeStarted) { await act('clearControl'); await act('plotRoute', { dest }); await act('engageAutopilot'); routeStarted = true; }
         else if (routeStarted && !laneReached && (s.station.range > 1100 || s.gate.inZone)) { await act('cancelAutopilot'); laneReached = true; }
-        else if (!routeStarted || laneReached || !s.autopilot.engaged) await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .2, fireHeld: false });
+        else if (!routeStarted || laneReached || !s.autopilot.engaged) {
+          await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .2, fireHeld: false }); rawSearchUsed = true;
+        }
         await sleep(350);
       }
       assert(targetId, 'No natural pirate found during bounded public search');
@@ -403,6 +405,7 @@ async function live() {
       const grantSeq = ++seq;
       const grant = await act('setCombatIntent', { seq: grantSeq, ttl: 45, targetId, intent: 'engage', defense }, false);
       assert(mode === 'natural' || grant.ok, `Controlled grant refused: ${grant.token}`);
+      if (grant.ok) rawSearchUsed = false;
       // Mark the actual gap after the grant receipt on the browser's monotonic
       // clock. Retain pre-grant baseline samples, but never classify them as
       // post-grant merely because Date.now rounded both calls to the same ms.
@@ -467,7 +470,7 @@ async function live() {
         s = await resolveHail(s);
         next = s.targets.nearby.find(t => t.kind === 'ship' && t.hostile && !spent.has(t.id) && !t.disabled && !t.surrendered);
         if (next) break;
-        await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .15, fireHeld: false }); await sleep(350);
+        await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .15, fireHeld: false }); rawSearchUsed = true; await sleep(350);
       }
       await act('clearControl');
       if (!next) { result.nextOpponentUnavailable = true; break; }
@@ -478,10 +481,26 @@ async function live() {
       result.delayCovered = result.trials.some(t => t.completeGap && (mode === 'controlled' || t.actualIncomingObserved));
       result.coverageGaps = [!result.delayCovered && 'No complete requested delay with required incoming evidence', !result.actualIncomingObserved && 'No actual incoming shot/hit confirmed by public evidence', defense !== 'off' && !result.trials.some(t => t.metrics.reactions.length) && 'No defensive reaction observed'].filter(Boolean);
       // Cancellation and a new short grant are outside the observation-only window.
+      const beforeClear = await observe();
+      let searchNeutralization = null;
+      if (beforeClear.control.owner !== 'combat' && rawSearchUsed) {
+        // Raw leases intentionally retain throttle when cleared. Finish our
+        // own search with ordinary public zero-throttle input, then release;
+        // this is search cleanup, never evidence that combat cancellation ran.
+        const neutralReceipt = await act('setControl', { seq: ++seq, ttl: 2, throttle: 0, fireHeld: false });
+        const neutral = await wait(s => s.ship.throttle === 0 && !s.ship.fireHeld, 2, 'public search throttle reaches zero');
+        searchNeutralization = { before: beforeClear, receipt: neutralReceipt, observation: neutral,
+          proof: 'Public raw-search zero-throttle input applied before release; no velocity or input injection, no combat-cancel claim.' };
+        rawSearchUsed = false;
+      }
       await act('clearControl');
       const cleared = await observe();
-      assert(cleared.control.owner === 'none' && !cleared.ship.fireHeld && cleared.ship.throttle === 0, 'Clear did not stop requested output');
-      result.lifecycle = [{ case: 'clear', observation: cleared }];
+      assert(cleared.control.owner === 'none', 'Clear retained a control owner');
+      if (beforeClear.control.owner === 'combat' || searchNeutralization) {
+        assert(!cleared.ship.fireHeld && cleared.ship.throttle === 0, 'Owned output did not stop after the appropriate cleanup');
+      }
+      result.lifecycle = [{ case: searchNeutralization ? 'search-neutralization' : beforeClear.control.owner === 'combat' ? 'clear-active-combat' : 'already-released',
+        clearedOwner: beforeClear.control.owner, searchNeutralization, observation: cleared }];
       const receipt = await act('setCombatIntent', { seq: ++seq, ttl: 1, targetId, intent: 'engage', defense }, false);
       if (receipt.ok) {
         const expired = await wait(s => s.control.owner !== 'combat', 3, 'short lease ends');
