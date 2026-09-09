@@ -193,7 +193,7 @@ conditions; ship.js remains the owner of their duration, power and cooldown:
   include that curved transition conservatively in clearance, not only the
   initial straight segment. If a safe transition cannot be established,
   suppress drift and retain ordinary strafe/turn movement.
-- **Afterburner:** at most one edge and 1.5 seconds of agent-owned burn per
+- **Afterburner:** at most one edge and 0.5 seconds of agent-owned burn per
   episode (also bounded by the ordinary ship burn duration), during latched withdrawal
   when the nose and current velocity are aligned with increasing separation
   from the selected visible target. Do not burn while turning across the
@@ -256,12 +256,25 @@ defense: {
   direction: null, // fore | aft | unknown; optional visible bearing separately
   triggeredAt: null, reactedAt: null, // simulation timestamps; probe wall latency separately
   cueWallMs: null, appliedWallMs: null, // monotonic milliseconds, first episode reaction
-  maneuver: null, // thrust-strafe | drift | afterburner
+  maneuver: null, // strafe | drift | burn | withdrawal | clearance | stopped, or ordinary phase
   modeBlocked: '', // reason an otherwise useful drift/burner request is suppressed
   reason: '', // e.g. hull, engine, defenses, stance, heat, obstructed
   completedAt: null
 }
 ```
+
+Implementation refinement: the initial 1.5-second boost proposal could not
+fit the stock light ship's boosted travel and stopping bound inside its
+600-unit sensing envelope. The configured burst is 0.5 seconds. The focused
+physics test must demonstrate an actual activation with the stock ship's
+unmodified speed, power and acceleration, as well as the refusal cases.
+
+`latestCue` separately reports the most recently consumed cue's `trigger`,
+`direction`, nullable `attackerId`, simulation `t`, source `cueWallMs`,
+`appliedWallMs`, and `response`. The first episode's trigger and timestamps
+remain paired; a later hit must not inherit an earlier nearby-threat timestamp.
+Repeated incoming cues can be acknowledged while the existing maneuver
+continues, with its actual response or movement block reported.
 
 Names may be tightened during implementation while preserving these facts.
 Do not overwrite the primary trigger with a lower-priority simultaneous cue.
