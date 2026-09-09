@@ -46,8 +46,8 @@ function simpleControl(s) {
 
 const fixture = `(async()=>{
   const c=window.__ctx;
-  const {spawnLiveShip}=await import('/src/systems/npc.js');
-  const {primeShipAsset,isShipAssetReady}=await import('/src/systems/ship-assets.js');
+  const {spawnLiveShip}=await import(new URL('/src/systems/npc.js',location.origin).href);
+  const {primeShipAsset,isShipAssetReady}=await import(new URL('/src/systems/ship-assets.js',location.origin).href);
   await Promise.resolve(primeShipAsset('redledger','cutter','pirate'));
   const end=Date.now()+20000;
   while(!isShipAssetReady('redledger','cutter','pirate')&&Date.now()<end)await new Promise(r=>setTimeout(r,100));
