@@ -137,7 +137,8 @@ function summarize(samples, targetId, seq) {
     defensiveResponses: cues.filter(c => c.classification === 'defensive-response'),
     collisionSafetyResponses: cues.filter(c => c.classification === 'collision-safety-response'),
     cueAcknowledgements: cues.filter(c => c.classification === 'acknowledgement-only'),
-    reactionMeasurement: 'Controller cue/application timestamps are self-reported. Separately sampled public playerHit rows can corroborate production-frame bounds only when an earlier same-grant sample has strict simulation t < hit.t. Incoming-warning/contact production is not independently exposed. samplerIntervalMs measures cadence only, never cue-to-response latency. All latency/horizon/cadence calculations use performance.now. Screenshots inside the window may perturb frame cadence; actual gaps are retained.',
+    visibilityStates: [...new Set(samples.map(s => s.visibility))],
+    reactionMeasurement: 'Controller cue/application timestamps are self-reported. Separately sampled public playerHit rows can corroborate production-frame bounds only when an earlier same-grant sample has strict simulation t < hit.t. Incoming-warning/contact production is not independently exposed. samplerIntervalMs measures cadence only, never cue-to-response latency. All latency/horizon/cadence calculations use performance.now. Screenshots inside the window may perturb frame cadence; actual gaps are retained. Visibility is observed browser state, not proof of an unlocked desktop or human visual inspection.',
     incomingEvidence: 'Real playerHit deltas and defense incoming-fire/incoming-dart triggers. nearby-threat alone is not proof of an actual shot.',
     damageMeaning: 'Net stock condition difference, including shield recharge; coalesced event damage is NOT summed.' };
 }
@@ -252,14 +253,15 @@ async function live() {
     let rendering;
     while (Date.now() < frameDeadline) {
       rendering = await h.c.eval('({visibility:document.visibilityState,focused:document.hasFocus(),animationFrames:window.__issue62ReadyFrames,t:window.rimward.observe().t})');
-      if (rendering.visibility === 'visible' && rendering.animationFrames >= 3 && rendering.t > frameStart.t) break;
+      if (rendering.animationFrames >= 3 && rendering.t > frameStart.t) break;
       await sleep(100);
     }
     result.foreground.verified = rendering;
     result.foreground.simulationStart = frameStart.t;
     result.foreground.waitedWallMs = Date.now() - result.foreground.requestedAt;
+    result.foreground.frameGate = 'At least three actual animation callbacks and advancing public simulation time. Browser visibility is recorded but does not gate a user-authorized background run; this is not human visual-inspection evidence.';
     await save();
-    assert(rendering?.visibility === 'visible' && rendering.animationFrames >= 3 && rendering.t > frameStart.t, `Foreground/live frames unavailable before fixture: ${JSON.stringify(rendering)}`);
+    assert(rendering?.animationFrames >= 3 && rendering.t > frameStart.t, `Actual rendering/simulation frames unavailable before fixture: ${JSON.stringify(rendering)}`);
     result.probeHashStart = await scriptHash();
     result.requested = { mode, defense, encounter, delayWallSeconds: delay, pair: option('pair', 'unpaired'), ttlSeconds: 45 };
     result.method = mode === 'natural' ? 'Native RNG, fresh stock Greenhand, public Jobs/patrol/launch/navigation/target/combat actions only; no private game-state inspection or injection.' : 'Controlled initial fixture, ordinary live simulation and public observation/actions during measurement; never natural evidence.';
@@ -318,7 +320,7 @@ async function live() {
       const spent = new Set(), encounterEnd = Date.now() + 180000;
       let trial;
       for (let attempt = 1; attempt <= (mode === 'natural' ? 4 : 1); attempt++) {
-      await h.c.eval(`(()=>{window.__issue62Samples=[];window.__issue62Sample=()=>{const observation=window.rimward.observe();if(window.__issue62Samples.length<2000)window.__issue62Samples.push({wall:Date.now(),browserMs:performance.now(),observation});};window.__issue62Sample();window.__issue62Timer=setInterval(window.__issue62Sample,50);})()`);
+      await h.c.eval(`(()=>{window.__issue62Samples=[];window.__issue62Sample=()=>{const observation=window.rimward.observe();if(window.__issue62Samples.length<2000)window.__issue62Samples.push({wall:Date.now(),browserMs:performance.now(),visibility:document.visibilityState,observation});};window.__issue62Sample();window.__issue62Timer=setInterval(window.__issue62Sample,50);})()`);
       const grantSeq = ++seq;
       const grant = await act('setCombatIntent', { seq: grantSeq, ttl: 45, targetId, intent: 'engage', defense }, false);
       assert(mode === 'natural' || grant.ok, `Controlled grant refused: ${grant.token}`);
@@ -423,7 +425,7 @@ async function live() {
       // if its socket is already closed; cleanup must not replace its cause.
       if (!scenarioError && result.probeCleanup.some(row => row.error)) throw Error('Probe cleanup failed; see probeCleanup');
     }
-  });
+  }, { keepRenderingWhenOccluded: true });
 }
 
 if (mode === 'compare') await compare(); else await live();
