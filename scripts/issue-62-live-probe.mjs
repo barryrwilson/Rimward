@@ -232,7 +232,17 @@ async function live() {
     result.transportEvents = [];
     h.c.ws.addEventListener('close', event => result.transportEvents.push({ type: 'close', wall: Date.now(), code: event.code, reason: event.reason, wasClean: event.wasClean }));
     h.c.ws.addEventListener('error', event => result.transportEvents.push({ type: 'error', wall: Date.now(), message: String(event.message || 'WebSocket error') }));
-    result.foreground = { requestedAt: Date.now(), activation: await h.c.send('Page.bringToFront') };
+    result.foreground = { requestedAt: Date.now() };
+    // Activating a tab does not restore a minimized/occluded native window.
+    // Normalize only this transport-owned Chrome window; never fake document
+    // visibility or frame callbacks. The positive loop check below still gates
+    // all fixture work and records an honest failure if restoration is blocked.
+    const ownWindow = await h.c.send('Browser.getWindowForTarget', { targetId: h.c.pageId });
+    result.foreground.windowBefore = ownWindow;
+    await h.c.send('Browser.setWindowBounds', { windowId: ownWindow.windowId, bounds: { windowState: 'normal' } });
+    await h.c.send('Browser.setWindowBounds', { windowId: ownWindow.windowId, bounds: { left: 20, top: 20, width: 1280, height: 800 } });
+    result.foreground.activation = await h.c.send('Page.bringToFront');
+    result.foreground.windowAfter = await h.c.send('Browser.getWindowBounds', { windowId: ownWindow.windowId });
     const frameStart = await observe();
     // A launched browser is not proof of a rendering/simulation loop. These
     // observer-owned markers count real animation callbacks without touching
