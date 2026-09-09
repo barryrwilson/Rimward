@@ -1,7 +1,7 @@
 # Issue #62 reactive defense — verification in progress
 
-Date: 2026-09-09. Status: **SOURCE and METHODOLOGY PASS; functional closure
-pending a clean natural incoming-fire run (G1); production release blocked**.
+Date: 2026-09-09. Status: **SOURCE and METHODOLOGY PASS; clean G1 natural
+incoming-fire evidence recorded, pending focused review; production release blocked**.
 This record does not close #62 or authorize publication.
 Contract: [reactive defense design](../AgentReactiveDefenseDesign.md).
 
@@ -46,6 +46,14 @@ criterion, while leaving G1: no retained natural run is both clean end to end
 and contains confirmed weapon incoming with a defensive response. A complete
 30-second natural window is not required to close that gap. Review record:
 `C:/Projects/WebSim/out/issue-62-evidence/review-completion/CLAUDE-REVIEW.md`.
+
+The latest tested probe commit is
+`b14e542efd2c34eb3e9b0bf87ceae50e371b2bf9`, probe SHA256
+`a23e73e4722bc932faeaf3b339c555fe60007b5528d35b754f921edc22cb8986`.
+It obtains the clean G1 run documented below. Runtime source remains the
+reviewed `97c5ea1` content and source hash `879dc6a3…16e3`; shared live
+harness identity remains `c8035a38…ad0f0`. The new evidence is awaiting focused
+independent review, not an overall release PASS.
 
 Local retained review and command evidence lives in
 `C:/Projects/WebSim/out/issue-62-evidence/`; browser raw evidence lives in this
@@ -390,13 +398,90 @@ regressions; it does not require every 5/15/30-second delay to be repeated
 in a natural encounter. Controlled 5/15/30 windows are complete. Completion
 review accepts the genuine 26-second interval for that natural criterion
 while retaining its normal early terminal and later cleanup failure. G1
-still requires a clean end-to-end natural run with confirmed incoming and a
+at that review required a clean end-to-end natural run with confirmed incoming and a
 defensive response; neither a new benchmark nor a 30-second duration is
 required. Fresh attempt `natural-15-03` failed before any encounter or
 combat grant: initial docking timed out at simulation time 150.652, with
 owner none and no recorded trial. Its `checksCompleted: false` remains an
 unrelated navigation/setup failure, not additional defensive-response evidence.
-No clean, full requested natural delay is claimed from these attempts.
+No clean, full requested natural delay is claimed from those initial attempts.
+
+## Clean natural G1 follow-up
+
+`natural-30-g1-wren-07` is a clean end-to-end natural run on `b14e542e`:
+process exit zero, `checksCompleted: true`, `delayCovered: true`,
+`actualIncomingObserved: true`, empty coverage gaps and zero console
+errors/exceptions. Its observation-only gap is **30.0226 seconds** from
+`trial.observedWallSeconds` on the browser's monotonic clock; the separate
+`metrics.wallSeconds: 30.029` includes the primer sample and is not used as
+the authorized gap duration. Actions remain 20 → 20 with `noOuterActions`
+true, and every post-marker sample retains live combat authorization.
+
+The bounded setup uses public Jobs, patrol, launch and an existing outbound
+route, then at most ten seconds of ordinary, **non-firing** public alignment
+before the grant. It checks `station.range - target.range > 350` at selection
+and immediately before authorization: this public triangle-inequality lower
+bound puts both ships beyond the 300-unit station law zone with a 50-unit
+margin. The successful pre-grant bound is 519.9802 units. No station-law flag
+or hidden NPC state is changed. The final probe removes the intermediate
+two-second firing initiation used in earlier attempts; no initiation command
+is inserted into this run's measured window.
+
+An optional `--bounty-target` selects only an exact currently offered public
+bounty and then waits for the matching public contact. The Wren run selected
+the offered Gallows Wren bounty through that option; omission preserves the
+probe's default selection behavior. These are probe setup refinements only,
+with no runtime changes, hidden-state inspection or fixture injection.
+
+The player survives, travels 2024.1097 sampled units, has zero sampled
+stationary time under the defined threat metric, records zero body hits,
+fires 14 actual shots and receives two confirmed weapon hits. Net screen
+loss is 24.8713; hull, shell and engine net loss are zero. This one run does
+not establish a damage advantage or guaranteed collision avoidance.
+
+New incoming-dart and incoming-fire episodes initially report obstruction.
+Subsequent samples within those same incoming episodes report ordinary
+`strafe` seven times (roughly 0.35 seconds at nominal sampling cadence),
+`clearance` 40 times and `reengaging` 107 times, without another outer action.
+Thus the run records both explicit blocked movement and later local
+defensive movement. Its two anonymous hit cues are aft with a 46.5 ms
+public-hit-frame bound and fore with a 46.8 ms bound. Both are **non-new-episode
+movement-blocked responses**, with new-response corroboration false. They
+do not supply a new natural defensive-maneuver 250 ms demonstration. Warning
+source timing remains self-reported; the controlled genuine new-episode
+timing evidence remains the basis for that quantified criterion.
+
+The coordinator inspected `incoming-reaction-1.png`: Incoming dart, player
+about 69 units/second, selected Wren about 24 units away and gate about 284
+units away. Wren is bargaining in the hail view. The warnings and hits have
+unknown attacker IDs and must not be attributed to Wren merely because Wren
+is selected; another NPC may be firing. No graphical error was noted.
+
+Post-window lifecycle checks clear **active combat** to owner none, throttle
+zero and fire false, then observe a one-second grant expire with a stable
+terminal result. These checks are separate from earlier raw-search cleanup.
+Runtime/probe/harness identities remain stable; the browser and Vite process
+exit, their ports close and the temporary profile is deleted. This provides
+the requested clean G1 evidence for focused independent review; production
+byte/startup gates remain blocked.
+
+All seven follow-up attempts are retained below. Durations are the exact
+`trial.observedWallSeconds`, rounded to four decimals, not metrics sample-span
+times. An overall-clean run without incoming remains a coverage gap.
+
+| Run directory under `out/issue-62-live/` | Monotonic gap | `checksCompleted` | Weapon incoming | Outcome / coverage |
+|---|---:|---|---|---|
+| natural-5-g1-01 | no trial | false | unobserved | Bounded public search found no eligible pirate; setup failed |
+| natural-5-g1-02 | 5.0293 s | true | no | Complete 5 s gap, but no confirmed incoming or defense response |
+| natural-30-g1-03 | 2.6310 s | true | no | Early target-disabled terminal; no full 30 s gap |
+| natural-15-g1-04 | 15.0280 s | true | no | Complete 15 s gap, nearby-threat only; incoming coverage absent |
+| natural-30-g1-05 | 23.3190 s | true | no | Early target surrender; no full 30 s gap |
+| natural-30-g1-carver-06 | 6.3118 s | true | no | Early target surrender; no full 30 s gap |
+| natural-30-g1-wren-07 | 30.0226 s | true | yes | Complete observation-only gap and clean lifecycle/teardown; G1 evidence |
+
+Each directory retains `result.json`; corresponding command logs are in
+`C:/Projects/WebSim/out/issue-62-evidence/` under the run name. Earlier failed,
+shortened and no-incoming attempts have not been replaced or promoted.
 
 ## Known observation limitations
 
@@ -436,10 +521,10 @@ not completed measurements or evidence of a gameplay failure. Subsequent
 user-authorized background rendering restored real frame cadence as recorded
 above; the task is no longer waiting for the desktop to be unlocked.
 
-Still required for functional closure: G1, a clean end-to-end natural run
-with confirmed weapon incoming and a defensive response. Source and
-methodology have passed completion review; the failed pre-encounter natural
-attempt adds no combat evidence. All recorded coverage limits remain.
+Still required for functional closure: focused independent assessment of the
+new clean G1 natural evidence on `b14e542e`. Source and methodology have
+passed completion review; all failed, incomplete and no-incoming attempts
+remain recorded with their original flags and coverage limits.
 
 ## Production release blockers
 
@@ -454,7 +539,7 @@ fails because every sample must meet 8,000 ms. These diagnostic measurements
 do not convert the failed production build into a pass. Byte and startup
 gates remain blocked; no release exception is granted in this report.
 
-Next gate: close G1 with a clean natural incoming-fire run, resolve the measured
+Next gate: review the clean G1 natural evidence, resolve the measured
 production blockers through an authorized decision, then update this report
 against the final immutable artifact. Backlog completion, merge and deployment
 remain separate and unperformed.
