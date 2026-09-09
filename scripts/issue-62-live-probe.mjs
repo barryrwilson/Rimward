@@ -345,6 +345,9 @@ async function live() {
     result.requested = { mode, defense, encounter, delayWallSeconds: delay, pair: option('pair', 'unpaired'), ttlSeconds: 45 };
     result.method = mode === 'natural' ? 'Native RNG, fresh stock Greenhand, public Jobs/patrol/launch/navigation/target/combat actions only; no private game-state inspection or injection.' : 'Controlled initial fixture, ordinary live simulation and public observation/actions during measurement; never natural evidence.';
     let seq = 0, targetId, rawSearchUsed = false;
+    // Triangle inequality: this public-only lower bound puts BOTH ships
+    // beyond the 300-unit station law zone, with a 50-unit setup margin.
+    const stationClearance = (s, range) => Number.isFinite(s.station.range) && Number.isFinite(range) ? s.station.range - range : null;
     const fresh = await h.checkpoint('fresh');
     assert(result.actions.some(a => a.request.name === 'chooseOrigin' && a.request.args.id === 'greenhand') && fresh.world.credits === 350 && fresh.world.scanner === 0, 'Fresh stock Greenhand required');
     async function resolveHail(s) {
@@ -376,16 +379,20 @@ async function live() {
       const end = Date.now() + 120000; let routeStarted = false, laneReached = false;
       while (Date.now() < end) {
         s = await resolveHail(await observe());
-        const eligible = t => t.kind === 'ship' && !t.disabled && !t.surrendered;
+        const eligible = t => (routeStarted || !dest) && t.kind === 'ship' && !t.disabled && !t.surrendered && stationClearance(s, t.range) > 350;
         const match = s.targets.nearby.find(t => eligible(t) && t.hostile)
           || s.targets.nearby.find(t => eligible(t) && t.name === bounty?.target);
-        if (match) { targetId = match.id; break; }
+        if (match) {
+          targetId = match.id;
+          result.naturalSelection = { t: s.t, targetId, routeStarted, stationRange: s.station.range, targetRange: match.range, targetStationRangeLowerBound: stationClearance(s, match.range) };
+          break;
+        }
         if (s.world.currentSystem !== system || s.gate.jumping) break;
         assert(s.ship.hull > 50 && s.ship.engine > 40, 'Natural search safety threshold');
         if (dest && !routeStarted) { await act('clearControl'); await act('plotRoute', { dest }); await act('engageAutopilot'); routeStarted = true; }
         else if (routeStarted && !laneReached && (s.station.range > 1100 || s.gate.inZone)) { await act('cancelAutopilot'); laneReached = true; }
         else if (!routeStarted || laneReached || !s.autopilot.engaged) {
-          await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .2, fireHeld: false }); rawSearchUsed = true;
+          await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: 0, fireHeld: false }); rawSearchUsed = true;
         }
         await sleep(350);
       }
@@ -418,44 +425,32 @@ async function live() {
             alignment.reason = 'contact-unavailable'; break;
           }
           assert(s.session.phase === 'playing' && s.ship.hull > 40 && s.ship.engine > 30 && !s.gate.jumping, 'Natural alignment safety threshold');
+          const clearance = stationClearance(s, aim.dist);
+          alignment.startClearance ??= clearance;
+          if (!(clearance > 350)) { alignment.reason = 'station-clearance-lost'; break; }
+          // Stop outer steering while clearance still exists if the turn has
+          // started carrying us back toward the protected station area.
+          if (s.station.closingSpeed < 0 && clearance < 450) { alignment.reason = 'station-margin-decreasing'; break; }
           if (aim.bearing[2] < -.92 && aim.dist <= 400 && aim.closing <= 20) { alignment.reason = 'aligned-in-range'; break; }
           const b = aim.bearing, across = Math.hypot(b[0], b[1]), angle = Math.atan2(across, -b[2]);
           const clamp = x => Math.max(-1, Math.min(1, x));
           const input = { seq: ++seq, ttl: 1, throttle: aim.dist > 350 || b[2] > -.8 ? .5 : .2,
             steerX: clamp(across > .02 ? 2 * b[0] / across * angle : b[2] > 0 ? 1 : 0),
             steerY: clamp(across > .02 ? 2 * b[1] / across * angle : 0), fireHeld: false };
-          alignment.steps.push({ t: s.t, range: aim.dist, closing: aim.closing, bearing: b, input });
+          alignment.steps.push({ t: s.t, range: aim.dist, closing: aim.closing, bearing: b, stationRange: s.station.range, targetStationRangeLowerBound: clearance, input });
           await act('setControl', input); rawSearchUsed = true;
           await sleep(200);
         }
         alignment.reason ||= 'bounded-timeout'; alignment.finishedWall = Date.now();
         await act('clearControl');
-        const aligned = await h.checkpoint(`aligned-${attempt}`);
-        if (aligned.targets.current?.id === targetId && !aligned.targets.current.hostile
-            && !aligned.targets.current.disabled && !aligned.targets.current.surrendered) {
-          // Fresh Greenhand pirates need not hunt the player unsolicited.
-          // Initiate the accepted bounty through the ordinary public combat
-          // action, stopping at observed hostility or the short lease's end.
-          // This setup is logged separately and supplies no measured evidence.
-          const initiation = { attempt, targetId, startedWall: Date.now(), before: aligned.targets.current, observations: [] };
-          (result.naturalInitiation ||= []).push(initiation);
-          initiation.grant = await act('setCombatIntent', { seq: ++seq, ttl: 2, targetId, intent: 'engage', defense: 'off' }, false);
-          if (initiation.grant.ok) {
-            rawSearchUsed = false;
-            const end = Date.now() + 2500;
-            while (Date.now() < end) {
-              const s = await observe();
-              initiation.observations.push({ t: s.t, target: s.targets.current, control: s.control });
-              if (s.targets.current?.id === targetId && s.targets.current.hostile) { initiation.reason = 'hostility-observed'; break; }
-              if (s.control.owner !== 'combat') { initiation.reason = s.control.reason || 'lease-ended'; break; }
-              await sleep(100);
-            }
-            await act('clearControl');
-          }
-          initiation.reason ||= initiation.grant.ok ? 'bounded-timeout' : 'grant-refused';
-          initiation.finishedWall = Date.now();
-          await resolveHail(await observe()); await h.checkpoint(`initiated-${attempt}`);
-        }
+        await h.checkpoint(`aligned-${attempt}`);
+        // Re-read after screenshot/transport time rather than treating an old
+        // checkpoint as proof that the grant still starts outside the zone.
+        const ready = await observe();
+        const readyRange = ready.targets.current?.id === targetId ? ready.targets.current.range : null;
+        const clearance = stationClearance(ready, readyRange);
+        (result.naturalGrantClearance ||= []).push({ attempt, targetId, t: ready.t, stationRange: ready.station.range, targetRange: readyRange, targetStationRangeLowerBound: clearance });
+        assert(clearance > 350, 'Natural grant setup lost public station-law clearance');
       }
       await h.c.eval(`(()=>{window.__issue62Samples=[];window.__issue62Sample=()=>{const observation=window.rimward.observe();if(window.__issue62Samples.length<2000)window.__issue62Samples.push({wall:Date.now(),browserMs:performance.now(),visibility:document.visibilityState,observation});};window.__issue62Sample();window.__issue62Timer=setInterval(window.__issue62Sample,50);})()`);
       const grantSeq = ++seq;
@@ -524,9 +519,9 @@ async function live() {
         let s = await observe();
         if (s.session.phase !== 'playing' || s.ship.hull <= 40 || s.ship.engine <= 30 || s.gate.jumping) break;
         s = await resolveHail(s);
-        next = s.targets.nearby.find(t => t.kind === 'ship' && t.hostile && !spent.has(t.id) && !t.disabled && !t.surrendered);
+        next = s.targets.nearby.find(t => t.kind === 'ship' && t.hostile && !spent.has(t.id) && !t.disabled && !t.surrendered && stationClearance(s, t.range) > 350);
         if (next) break;
-        await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: .15, fireHeld: false }); rawSearchUsed = true; await sleep(350);
+        await act('setControl', { seq: ++seq, ttl: 1, throttle: .2, steerX: 0, fireHeld: false }); rawSearchUsed = true; await sleep(350);
       }
       await act('clearControl');
       if (!next) { result.nextOpponentUnavailable = true; break; }
