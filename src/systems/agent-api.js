@@ -178,8 +178,8 @@ function fail(ctx, name, token, error) {
   return remember(ctx, actResult({ ok: false, error: error ?? token, name, token }));
 }
 
-function ok(ctx, name) {
-  return remember(ctx, actResult({ ok: true, error: '', name, token: '' }));
+function ok(ctx, name, notice = '') {
+  return remember(ctx, actResult({ ok: true, error: '', name, token: '', notice }));
 }
 
 function commandName(command) {
@@ -237,7 +237,7 @@ function deskNoticeToken(notice) {
 }
 
 function afterDesk(ctx, name, result) {
-  if (result && result.ok === true) return ok(ctx, name);
+  if (result && result.ok === true) return ok(ctx, name, name === 'acceptJob' ? result.notice : '');
   const notice = result && typeof result.notice === 'string' ? result.notice : '';
   const token = deskNoticeToken(notice);
   return fail(ctx, name, token, notice || token);

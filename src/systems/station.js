@@ -236,6 +236,7 @@ const MINING_SLOTS_PER_SYSTEM = 2;
 const TRADE_SLOTS_PER_SYSTEM = 2;
 const HUNT_SLOTS_PER_SYSTEM = 2;
 const PASSENGER_SLOTS_PER_SYSTEM = 2;
+const PASSENGER_TERMS = 'No buy-in; uses no cargo hold. Full hold OK. 2 party slots per origin. Each party earns its own fare, even on one trip. Dock within 10 min of acceptance; fare locks then. Expiry pays nothing.';
 const EXPLORE_SLOTS_PER_SYSTEM = 2;
 const ESPIONAGE_SLOTS_PER_SYSTEM = 2;
 const WAR_SLOTS_PER_SYSTEM = 2;
@@ -2879,6 +2880,15 @@ function passengerStationName(sysId) {
   return SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
 }
 
+function passengerPayLine(ctx, job) {
+  const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : ctx.world.currentSystem;
+  const destName = passengerStationName(otherSystemId(ctx, originId)) ?? 'the far station';
+  const est = job.state === 'accepted'
+    ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, FERRY_REWARD))
+    : jobPayFor(ctx, originId, FERRY_REWARD);
+  return `Escort to ${destName} — pays ${est} UU`;
+}
+
 function nextPassengerId(jobs, sysId) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return null;
   const prefix = `passenger-${sysId}-`;
@@ -5153,6 +5163,7 @@ export function initStation(ctx) {
       if (name) job.target = name;
     } else if (job.kind === 'passenger') {
       if (job.state !== 'offered') {
+        ui.notice = 'That posting is not open.' + (job.state === 'accepted' ? ' Party already aboard.' : '');
         render();
         return;
       }
@@ -5367,6 +5378,7 @@ export function initStation(ctx) {
     if ('payQuoted' in job) stamped.payQuoted = job.payQuoted;
     patchJob(job.id, stamped);
     ui.notice = `Accepted: ${job.title}`;
+    if (job.kind === 'passenger') ui.notice = `${passengerPayLine(ctx, job)}. ${PASSENGER_TERMS}`;
     requestAutosave(ctx);
     render();
     return true;
@@ -5418,11 +5430,8 @@ export function initStation(ctx) {
         title = `Hunt ${name}`;
         detail = `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
       } else if (job.kind === 'passenger') {
-        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const destId = otherSystemId(ctx, originId);
-        const destName = passengerStationName(destId) ?? 'the far station';
         title = 'Escort passengers';
-        detail = `Carry a booked party to ${destName}. Paid on docking there.`;
+        detail = PASSENGER_TERMS;
       } else if (job.kind === 'explore') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = exploreSlotOf(job);
@@ -5522,13 +5531,7 @@ export function initStation(ctx) {
           : jobPayFor(ctx, originId, base);
         rewardLine = `Hunt ${name} in this system — pays ${est} UU`;
       } else if (job.kind === 'passenger') {
-        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const destId = otherSystemId(ctx, originId);
-        const destName = passengerStationName(destId) ?? 'the far station';
-        const est = job.state === 'accepted'
-          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, FERRY_REWARD))
-          : jobPayFor(ctx, originId, FERRY_REWARD);
-        rewardLine = `Escort to ${destName} — pays ${est} UU`;
+        rewardLine = passengerPayLine(ctx, job);
       } else if (job.kind === 'explore') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const est = job.state === 'accepted'

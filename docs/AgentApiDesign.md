@@ -191,8 +191,22 @@ other receipt string, so a non-string desk value becomes `''`:
 { v:2, ok:false, error:'Not enough UU.', name:'stationAction', token:'uu', notice:'', reqId:'r8', t:813.0 }
 ```
 
+Successful `acceptJob` also copies the desk's notice. Passenger acceptance
+reports its destination, locked fare and the terms shown before acceptance in
+`observe().station.view.rows` (`job-detail` and `job-reward`, Jobs service).
+These existing surfaces explain independent per-party fares, two slots per
+origin, no buy-in or cargo occupancy (a full hold is allowed), and a fresh
+10-minute delivery window from acceptance with no fare on expiry. In-flight
+`jobs.active` retains the existing `payQuoted`, `deadline` and `secondsLeft`;
+terminal `jobState` receipts report each party's outcome and payment. Terms
+are derived display text, not new saved fields or a version change.
+
+For passengers, `jobs.offers[].reward` is the unmodified base reward. Read the
+current quotable fare from the `job-reward` row in `station.view.rows`; after
+acceptance, `jobs.active[].payQuoted` is the authoritative agreed fare.
+
 Failures are unchanged: the classifier token stays, the notice still rides
-`error`, and `notice` is `''`. Every other command (and every failure) defaults
+`error`, and `notice` is `''`. Other commands (and every failure) default
 to `notice: ''`, so a receipt never inherits the preceding request's line; a
 successful click that displayed nothing reports `notice: ''`. `notice` is
 additive — no version bump, no persisted field.
