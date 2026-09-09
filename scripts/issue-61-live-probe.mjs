@@ -291,7 +291,11 @@ await runLive(name, mode, async h => {
     if (s.session.phase === 'playing' && !s.flags.paused && !s.flags.docked && !s.hail.open && result.sustained.stopReason !== 'human-interruption') {
       await act('cancelAutopilot'); await neutral(); const dock = await act('approachDock', {}, false);
       result.sustained.dockReceipt = dock;
-      if (dock.ok) { await wait(s => s.flags.docked || s.session.phase !== 'playing', 150, 'safe career dock'); if ((await observe()).flags.docked) await act('openService', { id: 'jobs' }); }
+      if (dock.ok) {
+        const returned = await wait(s => s.flags.docked || s.session.phase !== 'playing', 150, 'career docking outcome');
+        result.sustained.dockOutcome = { t: returned.t, phase: returned.session.phase, safeDocked: returned.flags.docked && returned.session.phase === 'playing', diedDuringDockWait: returned.session.phase === 'dead' };
+        if (result.sustained.dockOutcome.safeDocked) await act('openService', { id: 'jobs' });
+      } else result.sustained.dockOutcome = { t: dock.t, safeDocked: false, diedDuringDockWait: false, refused: dock.token };
     }
     const final = await checkpoint('natural-career-final');
     result.careerAttempt.final = final; result.careerAttempt.completions = matchingJobEvents();

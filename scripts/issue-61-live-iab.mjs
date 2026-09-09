@@ -122,7 +122,9 @@ while(!stopped){
     try {
       result.finalStop = await request('finish'); result.consoleErrors = result.finalStop.errors; result.exceptions = result.finalStop.exceptions;
       const final = result.finalStop.observation;
-      result.requiresRootPauseOrDock = final.session.phase === 'playing' && !final.flags.paused && !final.flags.docked;
+      result.finalDisposition = final.session.phase === 'dead' ? 'dead' : final.flags.docked ? 'docked' : final.flags.paused ? 'paused' : `unsecured-${final.session.phase}`;
+      result.requiresRootPauseOrDock = !final.flags.paused && !final.flags.docked;
+      result.runOutcome = final.session.phase === 'dead' ? 'player-died' : result.careerAttempt?.completed === false ? 'career-incomplete' : 'checks-finished-independent-review-required';
       result.retentionNote = 'Cleared authority and throttle zero do not imply zero physical speed; ordinary creep remains. Root pauses the actual IAB tab through its normal UI if it is not docked.';
       if (result.consoleErrors.length || result.exceptions.length) { result.checksCompleted = false; process.exitCode = 1; }
     } catch (e) { result.finalStopError = String(e); result.checksCompleted = false; process.exitCode = 1; }
@@ -130,7 +132,7 @@ while(!stopped){
     if (!result.sourceStable || !result.harnessStable) { result.checksCompleted = false; process.exitCode = 1; }
     if (!result.checksCompleted) result.acceptance = { ...(result.acceptance || {}), scope: 'Supplemental checks only; not independent QA', pass: false, harnessFailure: true };
     result.finished = new Date().toISOString(); result.pageKeptOpen = true; await save();
-    console.log('IAB FINISHED PAGE KEPT OPEN', JSON.stringify({ result: join(folder, 'result.json'), checksCompleted: result.checksCompleted, acceptance: result.acceptance, coverageGaps: result.coverageGaps, requiresRootPauseOrDock: result.requiresRootPauseOrDock, speed: result.finalStop?.observation?.ship.speed, observation: result.finalStop?.observation?.control }));
+    console.log('IAB FINISHED PAGE KEPT OPEN', JSON.stringify({ result: join(folder, 'result.json'), checksCompleted: result.checksCompleted, coverageOnlyPass: result.acceptance?.pass, careerCompleted: result.careerAttempt?.completed ?? null, runOutcome: result.runOutcome, finalDisposition: result.finalDisposition, docking: result.sustained?.dockOutcome ?? null, coverageGaps: result.coverageGaps, requiresRootPauseOrDock: result.requiresRootPauseOrDock, speed: result.finalStop?.observation?.ship.speed, observation: result.finalStop?.observation?.control }));
     // Queue owns no browser or Vite. End only this test transport; leave the
     // actual user's tab and root-owned preview server exactly where they are.
     if (waitingPoll) { respond(waitingPoll, 200, { kind: 'idle' }); waitingPoll = null; }
