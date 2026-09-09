@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import * as THREE from 'three';
 import { createCtx } from '../src/core/ctx.js';
-import { createShipState, U } from '../src/game/state.js';
+import { createShipState, U, WEAPONS } from '../src/game/state.js';
 import { localDir } from '../src/game/agent-schema.js';
 import { losCloseRate } from '../src/game/los-close.js';
 import { installDomStubs, seedBootRandom } from './lib/boot-harness.mjs';
@@ -30,12 +30,13 @@ function sourceFingerprint() {
     }
   }
   visit('src/');
-  return {src:hash.digest('hex'),test:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex')};
+  return {src:hash.digest('hex'),test:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'),
+    crossingFixture:createHash('sha256').update(readFileSync(new URL('./lib/issue-61-crossing-public.json',import.meta.url))).digest('hex')};
 }
 const sourceStart=sourceFingerprint();console.log('SOURCE START',JSON.stringify(sourceStart));
 process.on('exit',code=>{
   const end=sourceFingerprint();console.log('SOURCE END',JSON.stringify({...end,exitCode:code}));
-  if(end.src!==sourceStart.src||end.test!==sourceStart.test){console.error('SOURCE CHANGED DURING TEST');process.exitCode=1;}
+  if(end.src!==sourceStart.src||end.test!==sourceStart.test||end.crossingFixture!==sourceStart.crossingFixture){console.error('SOURCE CHANGED DURING TEST');process.exitCode=1;}
 });
 
 let checks = 0;
@@ -256,6 +257,99 @@ test('recorded Gallows aft pursuit does not reverse the return to aim', () => {
 
 configureShipAssetFileReader(assetPath=>readFile(new URL(`../public${assetPath}`,import.meta.url)));
 await primeShipAsset('independent','cutter','pirate');
+test('ordinary flight converges from the measured creep-speed crossing aim deadband', () => {
+  const random=Math.random;seedBootRandom();
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx);
+  // Public natural05 t139.9162 begins inside the 48.97-second no-shot gap.
+  // Fly the real player against the same reconstructed world-space path
+  // before/after; the recorded target does not react to the new player path.
+  Object.assign(f.target,spawnLiveShip(ctx,{id:f.target.id,name:'Measured crossing fixture',classKey:'cutter',faction:'independent',role:'pirate',resolve:25,alwaysHuntsPlayer:true,anchor:{x:0,y:0,z:0}},new THREE.Vector3()));
+  ctx.world.time=139.9161999999855;
+  ctx.ship.velocity.set(0,0,-40.8);ctx.ship.speed=40.8;ctx.input.throttle=.12;
+  const targetVelocity=new THREE.Vector3(),relative=new THREE.Vector3();
+  // Public observations expose forward but no roll. Estimate the initial
+  // roll from the nose's tangent and lead direction, then parallel-transport
+  // the observed forward vectors (the controller commands zero roll).
+  // Sampling and unknown initial derivative make this an approximate fixed
+  // path, deliberately independent of this test player's subsequent flight.
+  const recorded=JSON.parse(readFileSync(new URL('./lib/issue-61-crossing-public.json',import.meta.url))).samples;
+  const nose=new THREE.Vector3(0,0,-1),forward=new THREE.Vector3().fromArray(recorded[0].fwd);
+  const orientation=new THREE.Quaternion().setFromUnitVectors(nose,forward);
+  const tangent=new THREE.Vector3().fromArray(recorded[1].fwd).sub(forward).projectOnPlane(forward).normalize();
+  const initialLead=new THREE.Vector3().fromArray(recorded[0].lead);initialLead.z=0;initialLead.normalize().applyQuaternion(orientation);
+  const twist=Math.atan2(forward.dot(initialLead.clone().cross(tangent)),initialLead.dot(tangent));
+  orientation.premultiply(new THREE.Quaternion().setFromAxisAngle(forward,twist));
+  const initialInverse=orientation.clone().invert(),origin=new THREE.Vector3().fromArray(recorded[0].pos);
+  const path=recorded.map((row,index)=>{
+    const nextForward=new THREE.Vector3().fromArray(row.fwd);
+    if(index)orientation.premultiply(new THREE.Quaternion().setFromUnitVectors(forward,nextForward));
+    forward.copy(nextForward);
+    const point=new THREE.Vector3().fromArray(row.bearing).multiplyScalar(row.range).applyQuaternion(orientation)
+      .add(new THREE.Vector3().fromArray(row.pos)).sub(origin).applyQuaternion(initialInverse);
+    return {time:row.t-recorded[0].t,point};
+  });
+  let segment=0;
+  const moveTarget=seconds=>{
+    while(segment<path.length-2&&path[segment+1].time<seconds)segment++;
+    const a=path[segment],b=path[segment+1],dt=b.time-a.time;
+    f.target.object.position.lerpVectors(a.point,b.point,(seconds-a.time)/dt);
+    targetVelocity.copy(b.point).sub(a.point).divideScalar(dt);
+    f.target.object.quaternion.setFromUnitVectors(nose,targetVelocity.clone().normalize());
+  };
+  moveTarget(0);
+  const initialTargetSpeed=targetVelocity.length();
+  assert(Math.abs(initialTargetSpeed-47.145)<1,'reconstructed initial speed agrees with the public target speed');
+  assert(path.at(-1).time>=10,'the entire test is covered by recorded observations');
+  const sample=()=>{
+    const offset=f.target.object.position.clone().sub(ctx.ship.object.position);
+    const rel=relative.copy(targetVelocity).sub(ctx.ship.velocity);
+    const leadOffset=offset.clone().addScaledVector(rel,offset.length()/WEAPONS.cannon.speed);
+    return {speed:targetVelocity.length(),closing:losCloseRate(ctx.ship.object.position,f.target.object.position,rel),
+      leadBearing:localDir(ctx.ship.object.quaternion,leadOffset.x,leadOffset.y,leadOffset.z)};
+  };
+  f.sample(sample());assert.equal(f.start({ttl:45}).ok,true);
+  let firstFire=null,fireFrames=0,minimum=Infinity;
+  for(let n=0;n<10*60;n++) {
+    f.tick(1/60,true,sample());
+    if(ctx.input.fireHeld){firstFire??=n/60;fireFrames++;}
+    flight.update(1/60);moveTarget((n+1)/60);
+    minimum=Math.min(minimum,ctx.ship.object.position.distanceTo(f.target.object.position));
+    assert.equal(f.status().owner,'combat');
+  }
+  Math.random=random;
+  console.log('Measured crossing aim:',JSON.stringify({initialTargetSpeed,firstFire,fireFrames,minimum}));
+  assert(firstFire!==null,'converge into the unchanged firing cone within the crossing window');
+  assert(fireFrames>=6,'alignment opens a useful firing window');
+  assert(minimum>12,'aiming improvement must preserve physical clearance');
+});
+
+test('class, speed and bio turn limits remain physical under normalized combat steering', () => {
+  for(const [classKey,speed,turnFactor] of [['light',0,.85],['light',120,1.12],['frigate',0,.85],['frigate',75,1]]) {
+    const f=fixture(),ctx=f.ctx;
+    ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+    const flight=initShip(ctx);
+    // Isolate the class/bio steering law in the actual flight integrator;
+    // this does not claim a complete fitted or rendered frigate encounter.
+    ctx.player.classKey=classKey;ctx.bio.turnFactor=turnFactor;
+    ctx.ship.speed=speed;ctx.ship.velocity.set(0,0,-speed);
+    f.target.object.position.set(160,80,-360);f.sample();assert.equal(f.start().ok,true);
+    for(let n=0;n<30;n++) {
+      const dt=1/60,before=ctx.ship.object.quaternion.clone();
+      const direction=f.target.object.position.clone().sub(ctx.ship.object.position).normalize();
+      const nose=new THREE.Vector3(0,0,-1).applyQuaternion(before);
+      const limit=hoverTurnRateFor(classKey,ctx.ship.speed)*turnFactor*1.22*Math.SQRT2*dt;
+      f.tick(dt);assert(Number.isFinite(ctx.input.steerX)&&Math.abs(ctx.input.steerX)<=1);
+      assert(Number.isFinite(ctx.input.steerY)&&Math.abs(ctx.input.steerY)<=1);
+      flight.update(dt);
+      assert(before.angleTo(ctx.ship.object.quaternion)<=limit+1e-7,'normal per-axis turn and existing lock assist remain the physical bound');
+      const turned=new THREE.Vector3(0,0,-1).applyQuaternion(ctx.ship.object.quaternion);
+      assert(turned.dot(direction)>nose.dot(direction),'normal flight turns toward the observed contact');
+    }
+  }
+});
+
 test('actual flight regains firing geometry against a pursuing contact after egress', () => {
   const random=Math.random;seedBootRandom();
   const f=fixture(),ctx=f.ctx;

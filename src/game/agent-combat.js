@@ -177,8 +177,12 @@ export function combatTick(ctx, lease) {
     } else if (a.dist < reach * 0.9 && aimError < 0.5) phase('pass');
     else phase('intercept');
   }
-  lease.steerX = clamp(yaw * 2.7 + c.yawRate * 0.45);
-  lease.steerY = clamp(pitch * 2.7 + c.pitchRate * 0.45);
+  // Convert desired angular correction into ordinary normalized steering.
+  // Otherwise creep speed multiplies this response down again in ship.js,
+  // leaving a crossing lead just outside the firing cone. The clamp retains
+  // the hull's physical turn limit; no extra closing speed is required.
+  lease.steerX = clamp((yaw * 2.7 + c.yawRate * 0.45) / turnRate);
+  lease.steerY = clamp((pitch * 2.7 + c.pitchRate * 0.45) / turnRate);
   // Flight speed has a normal creep floor. Never ask for a stop just because
   // the outer planner hasn't refreshed, or because the target crossed aft.
   lease.throttle = clamp((a.dist - reach * 0.35) / reach - Math.max(0, -a.closing) / 350, 0.12, 0.9);
