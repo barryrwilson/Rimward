@@ -54,6 +54,7 @@ export const COMMAND_NAMES = freeze([
   'chooseOrigin',
   'recover',
   'setControl',
+  'setCombatIntent',
   'clearControl',
   'stationAction',
 ]);
@@ -679,8 +680,8 @@ export const ROLE_STATUS = freeze({
     'rock identity/ore/hardness, automine channel, cargo/job progress',
   ),
   combat: role(
-    ['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'clearControl', 'afterburner', 'hail', 'hailResolve'],
-    'HUD-derived aim/lead + lease fireHeld; hit/shield/destruction ring outcomes',
+    ['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'setCombatIntent', 'clearControl', 'afterburner', 'hail', 'hailResolve'],
+    'HUD-derived aim/lead + lease fireHeld; bounded target-specific combat intent, explicit renewal/cancel; hit/shield/destruction ring outcomes',
   ),
   hail: role(
     ['hail', 'hailResolve'],
@@ -740,7 +741,7 @@ export const COMMAND_SPECS = freeze({
   setWeaponGroup: cmd({ n: 'integer 1..5' }, ['combat', 'miner']),
   setControl: freeze({
     args: freeze({
-      seq: 'strictly increasing integer per session',
+      seq: 'strictly increasing safe integer per session',
       ttl: 'sim seconds 0.05..5 (default 1)',
       steerX: '-1..1 optional', steerY: '-1..1 optional',
       strafeX: '-1..1 optional', strafeY: '-1..1 optional',
@@ -751,6 +752,12 @@ export const COMMAND_SPECS = freeze({
     roles: freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
     outcomes: freeze(['active', 'cleared', 'expired', 'suppressed']),
   }),
+  setCombatIntent: cmd({
+    seq: 'strictly increasing safe integer shared with setControl',
+    ttl: 'required seconds 1..60; expires at the earlier simulation or monotonic wall deadline; no implicit renewal',
+    targetId: 'required current visible ship id',
+    intent: "'engage'|'disable'|'break-off'|'retreat'",
+  }, ['combat']),
   clearControl: cmd({}, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
   openService: cmd({ id: 'dock service id' }, ['trader', 'missions', 'services', 'rescue']),
   acceptJob: cmd({ id: 'offered job id' }, ['missions']),

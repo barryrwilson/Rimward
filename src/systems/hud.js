@@ -3,7 +3,7 @@ import '../ui/hud.css';
 import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor, SHIP_CLASSES } from '../game/state.js';
 import { hailOffer } from '../game/hail-offer.js';
 import { escapeStatus } from '../game/npc-escape.js';
-import { isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
+import { selectedWeaponKey, isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
 import {
@@ -278,19 +278,8 @@ function contactsArcPath() {
   return d;
 }
 
-const WEAPON_KEYS = ['cannon', 'disruptor', 'mining']; // groups 1–3; group 4 is hudWeaponKey; group 5 is psionic
-
-/** Empty group 4 / unknown groups must not fall through to cannon. */
-export function hudWeaponKey(ctx) {
-  const g = ctx.input.weaponGroup | 0;
-  if (g === 4) {
-    const id = ctx.world.launcher;
-    if (!isLauncherId(id)) return null;
-    return LAUNCHER_IDS[id].wkey;
-  }
-  if (g === 5) return psionicCatalogOk() ? 'psionic' : null;
-  return WEAPON_KEYS[g - 1] ?? null;
-}
+/** Empty groups never fall through to cannon; same selection as combat. */
+export const hudWeaponKey = selectedWeaponKey;
 
 /** WPN rail copy. Names and ammo stay textContent; HUD never writes world keys. */
 export function weaponHudLabel(ctx) {
@@ -1730,6 +1719,10 @@ export function initHud(ctx) {
         // the HUD draws this frame, plus ship-local unit bearings (x right,
         // y up, nose is -z). hud.js is the sole writer (ctx.js contract).
         const aimDigest = {
+          targetId: shipTgt ? target.id : null,
+          system: ctx.world.currentSystem,
+          t: ctx.world.time,
+          weaponGroup: ctx.input.weaponGroup,
           onScreen,
           behind,
           nx: ndcX,

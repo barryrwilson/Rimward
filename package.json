@@ -44,7 +44,9 @@
     "ships:render": "node scripts/ship-render.mjs",
     "gates:render": "node --import ./scripts/with-css-stub.mjs scripts/gate-render.mjs",
     "agent:bridge": "node scripts/agent-bridge.mjs",
-    "agent:bridge:smoke": "node scripts/agent-bridge-smoke.mjs"
+    "agent:bridge:smoke": "node scripts/agent-bridge-smoke.mjs",
+    "test:combat-intent": "node --import ./scripts/with-css-stub.mjs scripts/issue-61-combat-intent-test.mjs",
+    "test:combat-live": "node scripts/issue-61-live-probe.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

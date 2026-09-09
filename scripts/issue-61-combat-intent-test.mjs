@@ -1,0 +1,375 @@
+/** Issue #61 deterministic ownership and tactical regressions.
+ * Synthetic contacts/HUD frames are fixtures, not natural play evidence.
+ * The real controls update and public v2 dispatcher apply every request.
+ */
+import assert from 'node:assert/strict';
+import { mock } from 'node:test';
+import * as THREE from 'three';
+import { createCtx } from '../src/core/ctx.js';
+import { createShipState, U } from '../src/game/state.js';
+import { localDir } from '../src/game/agent-schema.js';
+import { losCloseRate } from '../src/game/los-close.js';
+import { installDomStubs, seedBootRandom } from './lib/boot-harness.mjs';
+import { initControls, agentControlStatus } from '../src/systems/controls.js';
+import { initAgentApi } from '../src/systems/agent-api.js';
+import { initShip } from '../src/systems/ship.js';
+import { initNpc, spawnLiveShip } from '../src/systems/npc.js';
+import { readFile } from 'node:fs/promises';
+import { configureShipAssetFileReader, primeShipAsset } from '../src/systems/ship-assets.js';
+import { hoverTurnRateFor } from '../src/game/flight-feel.js';
+
+let checks = 0;
+function test(name, run) { run(); console.log('PASS', name); checks++; }
+function fixture() {
+  const dom = installDomStubs(), docEvents = {};
+  document.addEventListener = (name, fn) => (docEvents[name] ??= []).push(fn);
+  window.location.search = '?agent=1';
+  const ctx = createCtx({ scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(), renderer: {} });
+  ctx.config.world = {};
+  ctx.world.currentSystem = 'fixture'; ctx.world.time = 1;
+  ctx.systems = {}; ctx.station = {}; ctx.asteroids = { list: [] }; ctx.flags.paused = false;
+  ctx.ship.object = new THREE.Object3D(); ctx.ship.velocity = new THREE.Vector3();
+  ctx.ship.speed = 80;
+  ctx.player = createShipState('light');
+  ctx.agent.optIn = true;
+  const target = { id: 'combat-fixture', record: {}, object: new THREE.Object3D(), state: createShipState('light') };
+  target.object.position.set(0, 0, -300); ctx.ships = [target]; ctx.targets.current = target;
+  const controls = initControls(ctx); initAgentApi(ctx);
+  const api = window.rimward;
+  let seq = 0;
+  function sample(extra = {}) {
+    const p = target.object.position, o = ctx.ship.object.position;
+    ctx.targets.aim = { targetId: target.id, system: ctx.world.currentSystem, t: ctx.world.time, weaponGroup: ctx.input.weaponGroup,
+      dist: p.distanceTo(o), speed: 80, closing: 0,
+      bearing: localDir(ctx.ship.object.quaternion, p.x-o.x, p.y-o.y, p.z-o.z), ...extra };
+  }
+  sample();
+  const act = (name, args = {}) => api.act({ v: 2, name, args });
+  const start = (args = {}) => act('setCombatIntent', { seq: ++seq, ttl: 45, targetId: target.id, intent: 'engage', ...args });
+  const status = () => agentControlStatus(ctx);
+  const tick = (seconds = 1/60, fresh = true, extra = {}) => {
+    ctx.world.time += seconds;
+    if (fresh) sample(extra);
+    controls.update(seconds);
+  };
+  const emit = (name, args = {}) => {
+    for (const fn of dom.winListeners[name] || []) fn({ preventDefault() {}, ...args });
+  };
+  return { ctx, target, act, start, status, tick, sample, emit, docEvents, api };
+}
+
+test('strict malformed requests cannot replace ownership or poison sequence', () => {
+  const f = fixture(); assert.equal(f.start().ok, true); f.tick();
+  const before = f.status(), input = { ...f.ctx.input };
+  const good = { seq: 2, ttl: 45, targetId: f.target.id, intent: 'engage' };
+  for (const args of [null, [], {}, { ...good, ttl: '45' }, { ...good, ttl: Infinity },
+    { ...good, ttl: 0.9 }, { ...good, ttl: 61 }, { ...good, seq: 1 },
+    { ...good, seq: 1.5 }, { ...good, seq: 1e30 }, { ...good, unknown: true },
+    { ...good, intent: 'shootEveryone' }, { ...good, targetId: 2 }, { ...good, targetId: 'missing' }]) {
+    assert.equal(f.act('setCombatIntent', args).ok, false, JSON.stringify(args));
+    assert.deepEqual({ ...f.status(), expiresIn: before.expiresIn }, before); assert.deepEqual(f.ctx.input, input);
+  }
+  assert.equal(f.act('setControl', { seq: 1e30, ttl: 1 }).token, 'bad-seq');
+  assert.deepEqual({ ...f.status(), expiresIn: before.expiresIn }, before);
+  assert.equal(f.start().ok, true); assert.equal(f.status().seq, 2);
+});
+
+test('raw and tactical leases share sequence, exclusive helm, and raw max TTL stays five', () => {
+  const f = fixture();
+  assert.equal(f.act('setControl', { seq: 1, ttl: 5 }).ok, true);
+  assert.equal(f.start({seq:2}).token, 'helm');
+  f.act('clearControl');
+  assert.equal(f.start({seq:2}).ok, true);
+  assert.equal(f.act('setControl', { seq: 3, ttl: 5 }).token, 'helm');
+  f.act('clearControl');
+  assert.equal(f.act('setControl', { seq: 3, ttl: 5.01 }).token, 'bad-ttl');
+  assert.equal(f.act('setControl', { seq: 3, ttl: 5 }).ok, true);
+  f.tick(5); assert.equal(f.status().state, 'expired');
+});
+
+test('explicit 45-second grant remains tactical during 5/15/30-second decision gaps', () => {
+  for (const delay of [5, 15, 30]) {
+    const f = fixture(); assert.equal(f.start().ok, true);
+    for (let n = 0; n < delay*60; n++) {
+      // Moving, on-screen contact without private velocity. No action/renewal.
+      f.target.object.position.x = Math.sin(n/60) * 15;
+      f.tick();
+      assert.equal(f.status().owner, 'combat');
+      assert.equal(f.ctx.input.fullStop, false); assert(f.ctx.input.throttle > 0);
+    }
+    assert(Math.abs(f.status().expiresIn - (45-delay)) < 1e-8);
+    assert.equal(f.status().seq, 1);
+  }
+});
+
+test('renewal preserves maneuver and expiry neutralizes immediately; old receipt never revives it', () => {
+  const f = fixture(); f.target.object.position.z = -55; f.sample();
+  assert.equal(f.start({ttl:2}).ok, true); f.tick();
+  assert.equal(f.status().combat.phase, 'reposition');
+  f.tick(0.5); const phase = f.status().combat.phase;
+  assert.equal(f.start({ttl:1}).ok, true); assert.equal(f.status().combat.phase, phase);
+  f.tick(1); assert.equal(f.status().reason, 'expired');
+  assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.ctx.input.throttle, 0);
+  assert.equal(f.ctx.input.fullStop, true); assert.equal(f.status().owner, 'none');
+  assert.equal(f.start({seq:2}).token, 'stale');
+  f.act('clearControl'); assert.equal(f.status().reason, 'expired');
+  assert.equal(f.status().combat.targetId, f.target.id);
+});
+
+test('weapon reach, alignment, heat and current fire output are enforced', () => {
+  const f = fixture(); f.start(); f.tick(); assert.equal(f.ctx.input.fireHeld, true);
+  f.tick(1/60, true, { bearing: [0.5,0,-Math.sqrt(0.75)] });
+  assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.status().combat.fireBlocked, 'alignment');
+  f.target.object.position.z = -550; f.tick();
+  assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.status().combat.fireBlocked, 'range');
+  f.target.object.position.z = -300; f.ctx.player.heat = 95; f.tick();
+  assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.status().combat.fireBlocked, 'heat');
+  f.ctx.player.heat = 10; f.ctx.player.overheated = true; f.tick(); assert.equal(f.ctx.input.fireHeld, false);
+  f.ctx.player.overheated = false; f.tick(); assert.equal(f.ctx.input.fireHeld, true);
+  f.ctx.input.weaponGroup = 2; f.tick(); assert.equal(f.status().reason, 'weapon-changed');
+  for (const group of [3,4]) { const g=fixture(); g.ctx.input.weaponGroup=group; g.sample(); assert.equal(g.start().token,'weapon'); }
+});
+
+test('actual disabled/surrendered/destroyed terminals differ from bargaining and willingness', () => {
+  for (const intent of ['engage','disable']) {
+    for (const [field,reason] of [['disabled','target-disabled'],['surrendered','target-surrendered'],['destroyed','target-destroyed']]) {
+      const f=fixture(); f.start({intent});
+      f.target.state.resolve=35; f.tick(); assert.equal(f.status().owner,'combat');
+      f.target.state.resolve=0; f.tick(); assert.equal(f.status().owner,'combat');
+      f.target.state[field]=true; f.tick(); assert.equal(f.status().reason,reason);
+      assert.equal(f.ctx.input.fireHeld,false); assert.equal(f.ctx.input.throttle,0);
+    }
+  }
+});
+
+test('no silent retarget, stale sensing or continued fire after target loss', () => {
+  for (const [change,reason] of [
+    [f=>{f.ctx.ships=[];f.ctx.targets.current=null;},'target-lost'],
+    [f=>{f.ctx.targets.current={...f.target};},'target-changed'],
+    [f=>{f.ctx.targets.current=null;},'target-lost'],
+    [f=>{f.target.record={};},'target-lost'],
+    [f=>{f.ctx.targets.aim.targetId='old';},'target-lost'],
+    [f=>{f.ctx.targets.aim.t-=1;},'target-lost'],
+    [f=>{f.ctx.targets.aim.bearing=[NaN,0,-1];},'target-lost'],
+    [f=>{f.target.object.position.z=-U.TARGET_RANGE-1;},'target-lost'],
+  ]) { const f=fixture(); f.start(); f.tick(); change(f); f.tick(1/60,false); assert.equal(f.status().reason,reason); assert.equal(f.ctx.input.fireHeld,false); }
+});
+
+test('new weapon authorization waits for that weapon HUD digest without reviving an old lead', () => {
+  const f=fixture();f.start();f.tick();f.act('clearControl');
+  f.ctx.input.weaponGroup=2;
+  assert.equal(f.start().token,'target-lost','previous weapon lead is not authorization');
+  assert.equal(f.ctx.input.fireHeld,false);f.sample();
+  assert.equal(f.start().ok,true);f.tick();assert.equal(f.status().combat.weaponGroup,2);
+});
+
+test('close pass repositions with thrust/strafe and never fires through target center', () => {
+  const f=fixture(); f.start(); f.target.object.position.z=-180;
+  // Use the real HUD derivative helper: a +Z relative velocity approaches a
+  // target on -Z. This must trigger BEFORE the static minimum distance.
+  const closing=losCloseRate(f.ctx.ship.object.position,f.target.object.position,{x:0,y:0,z:100});
+  assert(closing<0); f.tick(1/60,true,{closing});
+  assert.equal(f.status().combat.phase,'reposition'); assert.equal(f.ctx.input.fireHeld,false);
+  assert.notEqual(f.ctx.input.strafeX,0); assert(f.ctx.input.throttle>0);
+  f.target.object.position.set(0,0,250); f.tick(2.1,true,{closing:30});
+  assert.equal(f.status().combat.phase,'intercept'); assert.notEqual(f.ctx.input.steerX,0);
+});
+
+test('close-pass clearance uses the visible hull and strafes away from an off-center opponent', () => {
+  const f=fixture();f.ctx.ship.speed=0;f.target.object.position.set(30,0,-110);
+  f.target.object.userData.proxy={rx:80,ry:20,halfLen:90};f.sample();f.start();f.tick();
+  assert.equal(f.status().combat.phase,'reposition');assert(f.ctx.input.strafeX<0);
+  assert.equal(f.ctx.input.fireHeld,false);
+});
+
+test('egress timeout never opens a firing frame inside hard hull clearance', () => {
+  const f=fixture();f.target.object.position.set(0,0,-20);f.sample();f.start();f.tick();
+  assert.equal(f.status().combat.phase,'reposition');
+  f.tick(3.1);
+  assert.equal(f.status().combat.phase,'reposition');assert.equal(f.ctx.input.fireHeld,false);
+  f.target.object.position.set(0,0,100);f.tick();
+  assert.equal(f.status().combat.phase,'intercept','return starts as soon as actual hull hazard clears');
+});
+
+test('recorded Gallows aft pursuit does not reverse the return to aim', () => {
+  // Public samples from sustained-iab-01/gallows-timeseries.json, frozen
+  // source a47b285b62eea741d3b04d4608280180fa9ddbefffdb137537ffa3bb045e2945.
+  // Replay the geometry that repeatedly reversed the old return maneuver.
+  const rows = [
+    [49.2014, 99.8350, -11.8085, 44.7302, -.995633, .020692, .091030],
+    [56.2746, 99.8312, -17.8572, 41.8573, -.703102, .359089, .613761],
+    [59.6163, 106.8666, -27.9686, 44.7183, -.585517, -.022906, .810336],
+    [67.0984, 114.3926, -46.4682, 40.1334, -.573501, .011968, .819118],
+  ];
+  for (const [time,dist,closing,speed,...bearing] of rows) {
+    const f=fixture(); f.ctx.world.time=time; f.ctx.ship.speed=speed;
+    f.target.object.position.fromArray(bearing).normalize().multiplyScalar(dist);
+    f.sample({closing}); f.start(); f.tick(1/60,true,{closing});
+    assert.equal(f.status().combat.phase,'intercept');
+    assert(f.ctx.input.steerX<0,'continue leftward turn toward the observed pursuer');
+    assert.equal(f.ctx.input.fireHeld,false,'aft target still cannot authorize fire');
+  }
+});
+
+configureShipAssetFileReader(assetPath=>readFile(new URL(`../public${assetPath}`,import.meta.url)));
+await primeShipAsset('independent','cutter','pirate');
+test('actual flight regains firing geometry against a pursuing contact after egress', () => {
+  const random=Math.random;seedBootRandom();
+  const f=fixture(),ctx=f.ctx;
+  ctx.config.world.shipSpawn=new THREE.Vector3();
+  ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  const flight=initShip(ctx),npc=initNpc(ctx);
+  // Measured t44.08: range94.9, almost directly aft, own68.9u/s versus
+  // target84u/s. Both sides use actual ship/NPC updates in this fixture;
+  // player input still goes through the controls owner and public API.
+  const position=new THREE.Vector3(-.148,-.068,.987).normalize().multiplyScalar(94.9);
+  Object.assign(f.target,spawnLiveShip(ctx,{id:f.target.id,name:'Gallows pursuit fixture',classKey:'cutter',faction:'independent',role:'pirate',resolve:80,alwaysHuntsPlayer:true,anchor:{x:0,y:0,z:0}},position));
+  ctx.ship.velocity.set(0,0,-68.9);ctx.ship.speed=68.9;
+  const velocity=f.target.ai.velocity,relative=new THREE.Vector3();velocity.set(0,0,-84);
+  f.target.ai.target='player';f.target.ai.intent=true;f.target.ai.mode='hunt';
+  const sample=()=>({speed:velocity.length(),closing:losCloseRate(ctx.ship.object.position,f.target.object.position,relative.copy(velocity).sub(ctx.ship.velocity))});
+  f.sample(sample());assert.equal(f.start({ttl:45}).ok,true);
+  let fireFrames=0,firstFire=null,minimum=Infinity,previous=false,windows=0;
+  for(let n=0;n<30*60;n++) {
+    const dt=1/60;
+    f.tick(dt,true,sample());flight.update(dt);npc.update(dt);
+    minimum=Math.min(minimum,ctx.ship.object.position.distanceTo(f.target.object.position));
+    const fire=ctx.input.fireHeld;
+    if(fire){fireFrames++;firstFire??=n*dt;if(!previous)windows++;}
+    previous=fire;
+    assert.equal(f.status().owner,'combat','grant stays active throughout pursuing flight');
+  }
+  Math.random=random;
+  // A regression budget of two half-turns at the measured initial speed
+  // plus one maximum egress. This is a stress-test bound, not a game promise.
+  const budget=3+2*Math.PI/hoverTurnRateFor('light',68.9);
+  console.log('Gallows pursuit geometry:',JSON.stringify({firstFire,budget,fireFrames,windows,minimum}));
+  assert(firstFire!==null&&firstFire<budget,'regain firing geometry within the ordinary maneuver budget');
+  assert(fireFrames>30,'sustain more than a transient single-frame alignment');
+  assert(windows>=2,'reacquire after more than one close pass');
+  assert(minimum>12,'do not solve pursuit by flying through the hull center');
+});
+
+test('break-off and retreat complete within observable geometry; never fire', () => {
+  for (const [intent,seconds,reason] of [['break-off',2.1,'disengaged'],['retreat',5.1,'retreated']]) {
+    const f=fixture(); f.target.object.position.z=450; f.sample({closing:5});
+    assert.equal(f.start({intent}).ok,true); f.tick(1/60,true,{closing:5});
+    assert.equal(f.ctx.input.fireHeld,false);
+    f.tick(seconds,true,{closing:5}); assert.equal(f.status().reason,reason);
+    assert.equal(f.ctx.input.throttle,0);
+  }
+  const f=fixture(); f.start({intent:'retreat'}); f.target.object.position.z=601;
+  f.ctx.targets.current=null;f.tick(); assert.equal(f.status().reason,'retreated');
+  const invalid=fixture();invalid.start({intent:'retreat'});invalid.target.object.position.z=NaN;
+  invalid.tick();assert.equal(invalid.status().reason,'target-lost');
+});
+
+test('visible obstruction stops fire and slows; hidden ship details are never sampled', () => {
+  const f=fixture();
+  f.ctx.ships.push({ get object(){throw Error('hidden contact was read');}, get state(){throw Error('hidden state was read');} });
+  f.ctx.asteroids.list=[{id:0,position:new THREE.Vector3(0,0,-35),radius:15}];
+  assert.equal(f.start().ok,true); f.tick();
+  assert.equal(f.status().owner,'combat'); assert.equal(f.status().combat.movementBlocked,'obstructed');
+  assert.equal(f.ctx.input.fireHeld,false); assert.equal(f.ctx.input.throttle,0);
+});
+
+test('each lifecycle releases before the next fire tick and remains stopped after redundant clear', () => {
+  for (const [change,reason] of [
+    [f=>{f.ctx.flags.paused=true;},'paused'],[f=>{f.ctx.flags.berthHold=true;},'held'],
+    [f=>{f.ctx.flags.docked=true;},'docked'],[f=>{f.ctx.gate.jumping=true;},'jumping'],
+    [f=>{f.ctx.flags.chartOpen=true;},'overlay'],
+    [f=>{f.ctx.flags.berthOpen=true;},'overlay'],[f=>{f.ctx.player.destroyed=true;},'dead'],
+    [f=>{f.ctx.agent.optIn=false;},'opt-in'],[f=>{f.ctx.lastEvents=[{type:'systemLoaded'}];},'jump'],
+  ]) { const f=fixture(); f.start();f.tick();change(f);f.tick();assert.equal(f.status().reason,reason);assert.equal(f.ctx.input.fireHeld,false);assert.equal(f.ctx.input.throttle,0);if(f.ctx.agent.optIn)assert.equal(f.act('clearControl').ok,true);assert.equal(f.status().reason,reason); }
+});
+
+test('unsolicited hail preserves combat authority and permits explicit grants/renewals, but raw leases remain gated', () => {
+  const f=fixture();f.start({ttl:45});f.tick();const seq=f.status().seq,phase=f.status().combat.phase;
+  const card={open:true,conversationId:'incoming-card',kind:'bargaining',intents:['keepFiring']};
+  let replies=0;f.ctx.hailApi={peek:()=>card,resolve:()=>{replies++;return '';}};
+  f.ctx.flags.hailOpen=true;f.target.state.resolve=15;
+  for(let n=0;n<15*60;n++)f.tick();
+  assert.equal(f.status().owner,'combat');assert.equal(f.status().seq,seq);
+  assert.equal(f.status().combat.phase,phase);assert.equal(f.ctx.input.fireHeld,true);
+  assert(Math.abs(f.status().expiresIn-(30-1/60))<1e-7);
+  assert.equal(card.open,true);assert.equal(replies,0,'no automatic negotiation or card close');
+  const availability=f.api.observe().availability;
+  assert.equal(availability.setCombatIntent.ok,true);assert.equal(availability.setControl.reason,'overlay');
+  assert.equal(f.start().ok,true);assert.equal(f.status().combat.phase,phase);
+  f.act('clearControl');assert.equal(f.start().ok,true,'new explicit grant is also permitted through a card');
+  f.target.state.surrendered=true;f.tick();assert.equal(f.status().reason,'target-surrendered');
+  const raw=fixture();raw.act('setControl',{seq:1,ttl:5,fireHeld:true});raw.tick();
+  raw.ctx.flags.hailOpen=true;raw.tick();assert.equal(raw.status().reason,'overlay');
+  assert.equal(raw.act('setControl',{seq:2,ttl:5}).token,'overlay');
+});
+
+test('only valid deliberate hail actions hand combat back; stale responses preserve the grant', () => {
+  for(const [name,args] of [['hail',{}],['pulse',{edge:'hail'}]]) {
+    const f=fixture();f.start();f.tick();assert.equal(f.act(name,args).ok,true);
+    assert.equal(f.status().reason,'hail');assert.equal(f.ctx.input.fireHeld,false);assert.equal(f.ctx.input.throttle,0);
+  }
+  const f=fixture();f.start();f.tick();f.ctx.flags.hailOpen=true;
+  let effects=0;
+  f.ctx.hailApi={peek:()=>({open:true,conversationId:'live-card',intents:['keepFiring']}),resolve:(intent,id)=>{
+    if(id&&id!=='live-card')return 'stale';
+    if(intent!=='keepFiring')return 'no-service';
+    effects++;return '';
+  }};
+  const before=f.status(),input={...f.ctx.input};
+  for(const [args,token] of [[{intent:'keepFiring',expectedConversationId:'old-card'},'stale'],
+    [{intent:'missing',expectedConversationId:'live-card'},'no-service'],
+    [{intent:'keepFiring',expectedConversationId:3},'bad-args']]) {
+    assert.equal(f.act('hailResolve',args).token,token);
+    assert.deepEqual({...f.status(),expiresIn:before.expiresIn},before);assert.deepEqual(f.ctx.input,input);
+  }
+  assert.equal(effects,0);assert.equal(f.act('pulse',{edge:'unknown'}).ok,false);assert.equal(f.status().owner,'combat');
+  assert.equal(f.act('hailResolve',{intent:'keepFiring',expectedConversationId:'live-card'}).ok,true);
+  assert.equal(effects,1);assert.equal(f.status().reason,'hail');assert.equal(f.ctx.input.fireHeld,false);
+  for(const digit of [1,7]) {
+    const g=fixture();g.start();g.tick();g.ctx.flags.hailOpen=true;
+    g.ctx.hailApi={peek:()=>({open:true,intents:Array(7).fill('existing-choice')})};
+    g.emit('keydown',{code:'Digit'+digit,repeat:false});
+    assert.equal(g.status().reason,'player-override');assert.equal(g.ctx.input.fireHeld,false);
+  }
+});
+
+test('combat survives focus loss, but bounded wall authorization cannot survive suspension indefinitely', () => {
+  let now=performance.now(); const clock=mock.method(performance,'now',()=>now);
+  try {
+    const f=fixture();f.start({ttl:5});f.tick();
+    f.emit('blur'); document.hidden=true;
+    assert.equal(f.status().owner,'combat');f.tick();assert.equal(f.ctx.input.fireHeld,true);
+    const sim=f.ctx.world.time;
+    now+=5001; // no simulation frames, no action and no implicit renewal
+    const resumed=f.api.observe(); // First read must not mix old holds/new owner.
+    assert.equal(resumed.control.reason,'expired');assert.equal(f.ctx.world.time,sim);
+    assert.equal(resumed.ship.fireHeld,false);assert.equal(resumed.ship.throttle,0);
+    assert.equal(f.ctx.input.fireHeld,false);assert.equal(f.ctx.input.throttle,0);
+    document.hidden=false;f.tick();assert.equal(f.ctx.input.fireHeld,false);
+    const raw=fixture();raw.act('setControl',{seq:1,ttl:5,fireHeld:true});raw.tick();raw.emit('blur');
+    assert.equal(raw.status().reason,'blur','raw manual lease behavior is unchanged');
+  } finally {clock.mock.restore();}
+});
+
+test('human input synchronously wins; the new command starts from neutral agent throttle', () => {
+  for(const [name,args] of [['mousemove',{clientX:100,clientY:100}],['mousedown',{button:0}],['keydown',{code:'KeyR',repeat:false}]]) {
+    const f=fixture();f.start();f.tick(1);assert(f.ctx.input.throttle>0);f.emit(name,args);
+    assert.equal(f.status().reason,'player-override');assert.equal(f.ctx.input.throttle,0);assert.equal(f.ctx.input.fireHeld,false);
+    f.tick();
+    if(name==='keydown')assert.equal(f.ctx.input.throttle,0.5/60);
+    if(name==='mousedown')assert.equal(f.ctx.input.fireHeld,true,'human fire is intentional');
+    if(name==='mousemove')assert(f.ctx.input.steerX<0);
+  }
+  const f=fixture();f.emit('keydown',{code:'KeyR'});assert.equal(f.start().token,'player-override');
+});
+
+test('public discovery and incoming helms agree, with explicit MATCH refusal', () => {
+  const f=fixture(); assert(f.api.observe().capabilities.commands.setCombatIntent);
+  assert.equal(f.start().owner,'combat');
+  for(const name of ['engageAutopilot','engageAutomine','approachDock','afterburner'])assert.equal(f.act(name).token,'helm');
+  f.act('clearControl'); f.ctx.flags.matchSpeed=true; assert.equal(f.start().token,'match-speed');
+  f.ctx.flags.matchSpeed=false;
+  for(const channel of ['autopilot','automine','flee']) { f.ctx[channel].engaged=true;assert.equal(f.start().token,'helm');f.ctx[channel].engaged=false; }
+});
+
+console.log(`Issue #61: ${checks} regression groups PASS`);

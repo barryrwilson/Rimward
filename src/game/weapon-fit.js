@@ -1,4 +1,13 @@
 import { MOUNT_TABLE } from './state.js';
+import { psionicCatalogOk } from './psionic.js';
+
+/** Shared ordinary weapon selection: empty groups never fall back to cannon. */
+export function selectedWeaponKey(ctx) {
+  const g = ctx.input.weaponGroup | 0;
+  if (g === 4) return isLauncherId(ctx.world.launcher) ? LAUNCHER_IDS[ctx.world.launcher].wkey : null;
+  if (g === 5) return psionicCatalogOk() ? 'psionic' : null;
+  return ['cannon', 'disruptor', 'mining'][g - 1] ?? null;
+}
 
 /**
  * Authored launcher / turret SKUs. Combat stats live on WEAPONS; this module
