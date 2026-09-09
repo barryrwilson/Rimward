@@ -1,7 +1,7 @@
 # Issue #62 reactive defense — verification in progress
 
-Date: 2026-09-09. Status: **source and local functional verification complete
-within the recorded coverage; final evidence review pending; release blocked**.
+Date: 2026-09-09. Status: **SOURCE and METHODOLOGY PASS; functional closure
+pending a clean natural incoming-fire run (G1); production release blocked**.
 This record does not close #62 or authorize publication.
 Contract: [reactive defense design](../AgentReactiveDefenseDesign.md).
 
@@ -35,9 +35,17 @@ closed by that review. Probe `2cacf343074cd8406696942a406559808a14d061`
 implements D1/D2 classification corrections and weapon-family gating;
 offline reanalysis preserves original results. Cleanup-only probe follow-up
 `f2bb0d6ace26f5c6f942053d5883ee1145f1e70a` treats raw search neutralization
-separately from combat cancellation. Final evidence review remains pending.
+separately from combat cancellation.
 Review record:
 `C:/Projects/WebSim/out/issue-62-evidence/review-final/CLAUDE-REVIEW.md`.
+
+Completion review of `030c24665d9962fd146f6ccbb649ffd945aee525` returned
+**SOURCE PASS and METHODOLOGY PASS**, closing D1/D2/D3. It accepts the
+26.3719-second natural interval as satisfying the issue's natural-evidence
+criterion, while leaving G1: no retained natural run is both clean end to end
+and contains confirmed weapon incoming with a defensive response. A complete
+30-second natural window is not required to close that gap. Review record:
+`C:/Projects/WebSim/out/issue-62-evidence/review-completion/CLAUDE-REVIEW.md`.
 
 Local retained review and command evidence lives in
 `C:/Projects/WebSim/out/issue-62-evidence/`; browser raw evidence lives in this
@@ -172,8 +180,8 @@ observed hit, within the stated telemetry/application limitation. It does not
 turn the shorter enabled attempt into a complete 30-second comparison or
 prove timing for warning-only cues. Frame/sample gaps remain recorded, and
 screenshots inside the gap can disturb cadence. The **250 ms target and
-natural-live requirement are unchanged**; remaining coverage and final
-evidence review remain pending.
+natural-live requirement are unchanged**; G1 and the production gates remain
+open after source/methodology review.
 
 ## Background rendering and interval integrity
 
@@ -297,7 +305,12 @@ from public samples, with no new browser run, gameplay, injection or change
 to original delay/coverage verdicts. Thus the earlier invalid observer-bound
 fields stay invalid; they have not been silently overwritten.
 
-| Enabled run | Genuine new hit-episode public-frame upper bounds |
+Hash scopes differ: sidecar `original.sharedHarnessHash` is the live harness's
+composite hash over three tool files, while `analysisSharedHarnessHash` is the
+plain SHA256 of `scripts/issue-61-live-harness.mjs` alone. Their different
+values do not imply harness drift; compare hashes only within matching scopes.
+
+| Enabled run | Corroborated genuine new defensive-response hit-episode public-frame upper bounds |
 |---|---|
 | ahead-5-evade-02 | 99.7 ms |
 | aft-15-evade-01 | 49.7 ms |
@@ -310,8 +323,11 @@ public-frame/telemetry limitation. Continued defense, blocked movement and
 acknowledgments are not counted as new reactions. Warning-only source timing
 remains self-reported. Pre-grant events are excluded; retained terminal
 sequence values can appear after release but cannot create a new episode.
-Final independent review must assess the corrected classifications and these
-specific evidence claims.
+The table intentionally covers defensive-response episodes. A separate
+genuine new hit episode in `multiple-30-evade-02` was movement-blocked by
+obstruction, with a 104.2 ms corroborated upper bound; it is not a
+defensive-response 250 ms demonstration. Completion review accepted the
+corrected methodology and these scoped classifications.
 
 ## Natural API-only gameplay
 
@@ -331,6 +347,20 @@ two hits. Browser console errors/exceptions are zero. The coordinator viewed
 the natural incoming screenshot: Incoming dart, selected Red Marlow at 191
 units, player speed about 24 units/second, with no graphical error noted.
 That image does not identify the dart's attacker.
+
+`natural-30-01/analysis-episode-start.json` uses the later analysis probe hash
+`ca5701ec5bad6e4e04a0543d85cdf7a7cce16eec731e15806ea4a7ca160cd60a`
+from the cleanup-corrected probe, separately from the controlled sidecars.
+It preserves original result SHA256
+`a2cc2f60d3b728eca936e48aa5351dad8efe1163451a9d88dfd20a4934793604`.
+That sidecar corroborates a 56 ms public-hit-frame bound for a real missile
+hit (22 damage, fore direction, attacker ID null), whose recorded response
+was `obstructed`, throttle zero and fire false. This supports unidentified-hit
+handling and an explicit movement-block reason. The cue did not begin a new
+defensive-response episode and its corroboration flag is false: **this is
+not a natural defensive-response 250 ms demonstration** (G2). The natural
+interval has no corroborated new defensive-response hit bracket; controlled
+live evidence supplies that timing evidence, as permitted by the issue.
 
 The observation interval is genuine natural evidence of local responses
 while the outer agent is delayed until normal target completion. It is
@@ -357,10 +387,12 @@ loss. Neither is relabeled as a complete defensive-response run.
 
 The assigned issue requires natural live evidence in addition to controlled
 regressions; it does not require every 5/15/30-second delay to be repeated
-in a natural encounter. Controlled 5/15/30 windows are complete. Final
-independent review should assess the genuine 26-second natural interval
-against that requirement while retaining its normal early terminal and later
-cleanup failure. Fresh attempt `natural-15-03` failed before any encounter or
+in a natural encounter. Controlled 5/15/30 windows are complete. Completion
+review accepts the genuine 26-second interval for that natural criterion
+while retaining its normal early terminal and later cleanup failure. G1
+still requires a clean end-to-end natural run with confirmed incoming and a
+defensive response; neither a new benchmark nor a 30-second duration is
+required. Fresh attempt `natural-15-03` failed before any encounter or
 combat grant: initial docking timed out at simulation time 150.652, with
 owner none and no recorded trial. Its `checksCompleted: false` remains an
 unrelated navigation/setup failure, not additional defensive-response evidence.
@@ -404,10 +436,10 @@ not completed measurements or evidence of a gameplay failure. Subsequent
 user-authorized background rendering restored real frame cadence as recorded
 above; the task is no longer waiting for the desktop to be unlocked.
 
-Still required: final independent assessment of corrected evidence
-classifications, qualified wall-latency claims and the natural observation
-interval. Synthetic tests do not replace the recorded live coverage and its
-limits. The failed pre-encounter natural attempt adds no combat evidence.
+Still required for functional closure: G1, a clean end-to-end natural run
+with confirmed weapon incoming and a defensive response. Source and
+methodology have passed completion review; the failed pre-encounter natural
+attempt adds no combat evidence. All recorded coverage limits remain.
 
 ## Production release blockers
 
@@ -422,7 +454,7 @@ fails because every sample must meet 8,000 ms. These diagnostic measurements
 do not convert the failed production build into a pass. Byte and startup
 gates remain blocked; no release exception is granted in this report.
 
-Next gate: independently assess the corrected live evidence, resolve the measured
+Next gate: close G1 with a clean natural incoming-fire run, resolve the measured
 production blockers through an authorized decision, then update this report
 against the final immutable artifact. Backlog completion, merge and deployment
 remain separate and unperformed.
