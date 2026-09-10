@@ -13,6 +13,20 @@ function flagsOf(ctx) {
   return ctx && ctx.flags;
 }
 
+/**
+ * Issue #100 — the berth owns the screen. A docked pilot is standing at a
+ * station desk, not sitting on a channel: no hail card opens over the panel,
+ * none stays open, no digit resolves one, and nothing the berth swallowed is
+ * held back to reappear at launch. Session flag only; never throws.
+ */
+export function dockedAtBerth(ctx) {
+  try {
+    return !!(ctx && ctx.flags && ctx.flags.docked === true);
+  } catch {
+    return false;
+  }
+}
+
 export function overlayIsOpen(ctx, id) {
   try {
     const f = flagsOf(ctx);
@@ -119,6 +133,9 @@ export function hailCalmOk(ctx, ship) {
  */
 export function canShowHail(ctx, ship) {
   try {
+    // Issue #100: refuse outright, never 'defer'. A hull that called while the
+    // player was at a desk does not get to hold the one slot and speak later.
+    if (dockedAtBerth(ctx)) return false;
     if (!hailCalmOk(ctx, ship)) return false;
     if (overlayIsOpen(ctx, 'chart') || overlayIsOpen(ctx, 'berth')) return 'defer';
     return true;
@@ -171,6 +188,9 @@ export function takeDeferredHail(ctx) {
   try {
     const slot = deferredHail;
     if (!slot) return null;
+    // Issue #100: a docked pilot is never handed the slot. hail.js empties it
+    // on the docking frame, so this is the second lock on the same door.
+    if (dockedAtBerth(ctx)) return null;
     if (overlayIsOpen(ctx, 'chart') || overlayIsOpen(ctx, 'berth')) return null;
     deferredHail = null;
     const ship = slot.ship;
@@ -187,6 +207,7 @@ export function takeDeferredHail(ctx) {
 export function hailDigitsAllowed(ctx) {
   try {
     if (ctx && ctx.flags && ctx.flags.paused) return false;
+    if (dockedAtBerth(ctx)) return false; // issue #100: the desk owns the digits
     if (playSurfaceBlocked(ctx)) return false;
     if (settingsOwnsScreen()) return false;
     if (overlayIsOpen(ctx, 'chart') || overlayIsOpen(ctx, 'berth')) return false;

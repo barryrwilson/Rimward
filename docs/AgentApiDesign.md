@@ -486,6 +486,42 @@ ordinary button/digit paths).
 
 ---
 
+## Issue #100 — docked hails
+
+Implemented in the runtime and covered by focused tests. The live browser
+probe passes 7/7 pins on 2026-09-10 with a clean console, under a harness-only
+dev-server override and a labelled fixture for the rare hail. The production
+build still fails the unchanged byte policy, and independent QA review is
+**pending**. See the [issue #100 evidence](Issue100DockedHailsEvidence.md) for
+the exact state before relying on this section.
+
+While `flags.docked` is true the berth owns the channel, so `hailResolve` is
+refused for the berth **before** the overlay gate is consulted:
+
+| Caller sees | When |
+|---|---|
+| `token: 'docked'` from `act({ name: 'hailResolve', … })` | `flags.docked === true`, whatever the card state is |
+| `availability.hailResolve = { ok: false, reason: 'docked' }` | same condition; discovery agrees with `act()` |
+
+`docked` is the same stable token `selectTarget` already returns while docked.
+It is checked ahead of `hailDigitsAllowed`, so a docked planner reads the real
+reason rather than the generic `no-service` the overlay gate would give, and
+ahead of the card state, so the answer does not vary with whether the frame's
+dock close has already emptied the card. `observe().hail` reports the closed
+card as usual, and nothing is resolved: no credits, cargo, surrender flag, AI
+write or event, on any ship.
+
+Undocked behaviour is unchanged, including the issue #66 `expectedConversationId`
+guard and the `closed` / `stale` / `bad-args` / `no-service` precedence above.
+No new schema version, persisted field, ring event or command name.
+
+**Evidence.** `npm run test:docked-hails` (37 checks), plus unchanged
+`npm run test:boot`, `npm run test:hail-identity` and
+`npm run test:agent-hardening`. `npm run test:docked-hails-live` has **not**
+produced a passing live run yet.
+
+---
+
 ## Background & Motivation
 
 ### Why this change is needed
@@ -780,7 +816,7 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `cancelAutomine` | — | `disengageAutomine(ctx, 'cancel')` | — |
 | `selectTarget` | `{ id? }` or cycle | controls export / pulse `target` | `flags.docked` → `docked`; none in range; PR3 |
 | `hail` | — | pulse `pendingHail` via controls | overlay policy; PR3 |
-| `hailResolve` | `{ intent }` or `{ index }`, optional `expectedConversationId` (issue #66) | `ctx.hailApi.resolve` | card closed → `closed`; missing hailApi / overlay block → `no-service`; unknown intent; `hailDigitsAllowed` false; malformed expected id → `bad-args`; replaced card → `stale` |
+| `hailResolve` | `{ intent }` or `{ index }`, optional `expectedConversationId` (issue #66) | `ctx.hailApi.resolve` | card closed → `closed`; missing hailApi / overlay block → `no-service`; unknown intent; `hailDigitsAllowed` false; malformed expected id → `bad-args`; replaced card → `stale`; `flags.docked` → `docked` first (issue #100) |
 | `dock` | — | pulse `pendingDock` via controls | `station.inZone !== true` → `range` immediately (no pulse, not queued); same as KeyJ skip; **not in pad zone** (no warp); PR3 |
 | `undock` | — | `ctx.stationDesk.undock` | not docked |
 | `openService` | `{ id }` authored `DOCK_KEY_SERVICES` | `ctx.stationDesk.selectService` | not docked; unknown id |

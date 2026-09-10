@@ -29,6 +29,20 @@ files match the baseline runtime exactly. Earlier failed runs remain recorded,
 and their residual reliability observations remain below. No release was
 published or new performance exception granted.
 
+[Issue #100](https://github.com/barryrwilson/Rimward/issues/100) — keep hails
+off the station desk while docked — is **in progress and not complete**. The
+runtime change is implemented and 37 focused checks pass with unchanged
+`test:boot`, `test:hail-identity` and `test:agent-hardening`. Live browser
+acceptance now **passes 7/7 pins on 2026-09-10** with a clean console, under
+two recorded limitations: a harness-only dev-server override (`watch: null`
+plus `noDiscovery`) needed to boot Vite on this workspace, and a labelled
+fixture that stages only the rare hail. It stays **held** on the build:
+`npm run build` / `npm run bundle:report` fail the unchanged byte policy with
+no authorized exception. Independent QA review is still pending. Nothing is
+merged, released or approved. See
+[Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md) and the
+[public API contract](AgentApiDesign.md#issue-100--docked-hails).
+
 ## Completed and merged outcomes
 
 All issue numbers in this table are closed. Linked PRs are merged into the
@@ -82,7 +96,7 @@ outcome before implementation; preserve the original product intent.
 |---|---|
 | Intermittent live dock approach collision | [Baseline run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689) records fresh Greenhand `approachDock` cancelling on `bodyHit` / `impact` near the +X stage. Docking passed in the intermediate and final runs; the original collider and cause remain unresolved. Preserve full public collision payload and pre-failure state on an unchanged fresh-start approach before selecting a bounded runtime fix. See the [diagnostic summary](RepoConsolidation20260910.md#residual-reliability-follow-ups). This is an unfiled follow-up, not a failed final gate or a proven repaired defect. |
 | Smoke/capture reliability | [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
-| Performance headroom | Latest #56 measured artifact is 1,835,632 minified / 549,169 gzip bytes against unchanged 1,800,000 / 537,600 limits. Startup median was 7,340.4 ms; one of five runs reached 8,280 ms against 8,000 ms. Exact byte and separate startup acceptances preserve raw failures and grant no future-growth allowance. Use the [measured decision](releases/issue-56-measured-decision.md) and [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
+| Performance headroom | Latest #56 measured artifact is 1,835,632 minified / 549,169 gzip bytes against unchanged 1,800,000 / 537,600 limits. Startup median was 7,340.4 ms; one of five runs reached 8,280 ms against 8,000 ms. Exact byte and separate startup acceptances preserve raw failures and grant no future-growth allowance. Use the [measured decision](releases/issue-56-measured-decision.md) and [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. The in-progress #100 candidate measures 1,835,953 minified / 549,263 gzip; the existing exact exception names only the previous SHA, so that build stays FAIL and unapproved. |
 | Agent Play mouse ownership | Unfiled owner report from 2026-09-06: incidental pointer/UI movement should not interfere with agent flight, docking or mining, while explicit takeover remains available. Current `controls.js` deliberately makes mouse movement/clicks cancel a combat lease; that later human-takeover contract must be reconciled with the requested watch behavior. Do not claim #57 or #61 closed the whole observation. Recheck live pointer, click, focus and handoff behavior before selecting a change. |
 | Raw afterburner/flee completion (local PIR-02) | Historical run observed residual motion and station contacts after the flee timer ended. Current `agent-flee.js` still ends by clearing its channel; #62's stable combat withdrawal is a different path. Repeat the raw flee expiry flow near/far from port before claiming a current defect or a completed fix. |
 | Supported resumable API playtest runner (local PIR-07) | Local tooling proposal: expected build/API version, isolated profile, durable sequence recovery, acknowledged safe handoffs and sanitized evidence. Existing scenario probes do not by themselves establish the full resumable-runner contract. Scope only if selected; no browser credentials or in-game LLM runner. |
