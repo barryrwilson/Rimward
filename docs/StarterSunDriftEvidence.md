@@ -1,8 +1,10 @@
 # Fresh-start sun drift: investigation and verification
 
 Status: cause reproduced; narrow heading fix implemented and locally verified.
-Independent QA and measured build/startup decisions remain pending. No merge or
-deployment is claimed.
+Independent source/evidence QA passed `6e17f69f9db65d902dbe1272fc69a43d45103385`.
+Owner-approved exact bytes and separate measured startup exceptions are recorded
+and the byte descriptor is activated. Ordinary build/report, complete artifact
+comparison, and final policy QA remain pending. No merge or deployment is claimed.
 
 ## Reproduced behavior
 
@@ -133,22 +135,34 @@ candidate run (`boot-candidate.log`, `boot-ship-before.json`,
 
 ## Remaining release gates
 
-Baseline build passed. The candidate ordinary build currently
-fails only the byte gate: 1,825,899 minified / 545,419 gzip JavaScript bytes,
+Baseline build passed. Before exception activation, the candidate ordinary build
+failed only the byte gate: 1,825,899 minified / 545,419 gzip JavaScript bytes,
 30 / 10 bytes above the exact previous issue #12 artifact. The separate
-three-only browser dependency-boundary diagnostic passed. No budget policy was
-edited, and that diagnostic does not convert the ordinary build into a PASS.
+three-only browser dependency-boundary diagnostic passed. That diagnostic does
+not convert the ordinary build into a PASS. The exact approved byte descriptor
+is now activated, with global limits, matcher, and dependency audit unchanged;
+ordinary build/report and full emitted-artifact comparison remain pending.
 Five serial production startup samples had median 7,880.8 ms and maximum
 8,076.1 ms; two exceeded the unchanged 8,000 ms target, so raw startup failed.
 All 447 candidate files were independently rehashed against the saved manifest.
-Exact artifact identities, raw measurements, limitations, and the pending
-decisions are in the [measured release proposal](releases/starter-sun-drift-measured-decision.md).
+Exact artifact identities, raw measurements, limitations, and the owner-approved
+exact byte and separate startup decisions are in the
+[measured release decision](releases/starter-sun-drift-measured-decision.md).
+The two-overrun raw startup FAIL is retained; its separate acceptance does not
+follow from the byte exception.
 
-Independent review through a different engine is blocked pending the owner's
-scoped approval to disclose source to Claude. The initial authenticated Claude
-build stalled without producing changes; its scoped retry was rejected by
-automatic approval review over external source disclosure. Implementation and
-builder tests therefore used the designated local Codex fallback. A second
-Codex agent is not being substituted for the required different-engine QA.
-Build/startup resolution, exact reviewed identity, and independent QA verdict
-must be recorded before claiming release readiness.
+The initial authenticated Claude build stalled without producing changes; its
+scoped retry was rejected by automatic approval review over external source
+disclosure. Implementation and builder tests therefore used the designated
+local Codex fallback. The owner subsequently explicitly authorized scoped
+Claude review and conditional exact byte/separate startup exceptions on
+2026-09-10. Independent Claude review returned source/evidence **PASS**, with
+no blocking findings, on `6e17f69f9db65d902dbe1272fc69a43d45103385`, fulfilling
+those conditions. The verdict is retained as `QA-SOURCE.md` in the local evidence
+directory. Raw transcripts are `claude-source-review.jsonl` (initial review,
+reached the turn limit) and `claude-source-review-continuation.jsonl` (final PASS).
+Review reproduced the runtime source digest and focused tests, checked pose
+contracts, and confirmed executable probe code was unchanged by EOF cleanup.
+Its separate death-respawn observation is parked outside this fresh-start scope.
+Final independent policy/documentation QA remains pending after the ordinary
+build/report and complete artifact comparison; release readiness is not claimed.

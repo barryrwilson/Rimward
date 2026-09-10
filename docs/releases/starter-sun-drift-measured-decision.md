@@ -1,14 +1,21 @@
-# Starter sun-drift measured release decision — proposed
+# Starter sun-drift measured release decision — approved
 
 The fresh-start heading fix is locally implemented on `codex/starter-sun-drift`.
-This is a concrete proposal, **not an approved exception**. Ordinary build
-currently fails its byte gate; completed local live verification and pending
-independent QA are tracked in [the evidence report](../StarterSunDriftEvidence.md).
+The owner approved the exact byte exception and, separately, the measured
+startup exception on 2026-09-10, conditional on scoped independent Claude QA
+passing. That condition is fulfilled by the source/evidence **PASS** on
+`6e17f69f9db65d902dbe1272fc69a43d45103385`. The exact byte descriptor is now
+activated. Ordinary build/report, full emitted-artifact comparison, and final
+independent policy/documentation review remain pending; this record does not
+claim release readiness. [The evidence report](../StarterSunDriftEvidence.md)
+retains the functional verification and provenance.
 
 The [production performance policy](../ProductionPerformanceBudget.md) requires
 owner approval for a changed artifact outside its fixed byte/startup limits.
-The existing issue #12 exception matches a different bundle and cannot authorize
-this one. No exception descriptor or global limit has been changed.
+The prior issue #12 exception matches a different bundle and cannot authorize
+this one. Only `APPROVED_BYTE_EXCEPTION` in `scripts/bundle-policy.mjs` is
+replaced with this approved artifact. Global byte/startup limits, the exact
+matcher, and the browser dependency audit remain unchanged.
 
 | Measure | Candidate | Limit / prior artifact |
 |---|---:|---|
@@ -34,7 +41,7 @@ All five owned Chrome processes and ports closed; the local static server
 closed; runtime source, measurement script, and the complete emitted artifact
 remained unchanged throughout measurement.
 
-## Exact proposed artifact
+## Exact approved artifact
 
 - Runtime source SHA256:
   `b7f2d46f2f7550028ff83b9a0197e29bbd702770714e9c9b8b245120a27e04a2`
@@ -52,19 +59,39 @@ on issue #61. Logs are retained in the separate
 `C:/Projects/WebSim/out/starter-sun-drift-evidence/` directory. Generated output
 and profiles are excluded from the implementation commit.
 
-## Requested decision, pending
+## Owner decisions and independent source review
 
-1. Permit a scoped independent Claude review of the implementation, focused
-   tests, relevant source contracts, and these verification records. Automatic
-   approval review rejected the earlier external Claude request because the
-   task had not explicitly authorized disclosure of repository source.
-2. If that review passes, approve only the exact byte artifact identified above.
-3. Separately accept this artifact's five measured startup results, including
-   the two overruns. The global 8,000 ms target remains unchanged.
+1. **Approved:** scoped independent Claude review of the implementation,
+   focused tests, relevant source contracts, and verification records. This
+   explicit owner authorization resolves the earlier automatic approval
+   rejection for external source disclosure.
+2. **Approved conditional on that PASS, now fulfilled:** only the exact byte
+   artifact identified above. Approval reference:
+   `Codex starter sun-drift conditional owner approval, 2026-09-10`.
+3. **Separately approved conditional on that PASS, now fulfilled:** accept this
+   artifact's five measured startup results, including the two overruns. Raw
+   startup remains **FAIL**; this exception does not relabel those observations
+   or change the global 8,000 ms target, and is not inferred from byte approval.
 
-After approval and independent QA, the exact descriptor may be activated and
-ordinary build/report rerun. Actual emitted identity must match this proposal.
-Any changed artifact requires reassessment. None of these decisions authorizes
-publication, merge, or deployment. Rollback remains the prior application
+Independent Claude source/evidence review returned **PASS**, with no blocking
+findings, on exact commit `6e17f69f9db65d902dbe1272fc69a43d45103385` against base
+`acc8662431507d257ed094975224fd7ed4cf80fa`. The retained verdict is
+`C:/Projects/WebSim/out/starter-sun-drift-evidence/QA-SOURCE.md`. Raw transcripts
+in the same directory are `claude-source-review.jsonl` (initial review, reached
+the turn limit) and `claude-source-review-continuation.jsonl` (final PASS). Review
+verified the narrow runtime change, source digest, focused tests and saved-pose
+contracts, probe whitespace provenance, and byte-delta arithmetic. The verdict
+left release policy on HOLD until these separately approved decisions were
+recorded and activated. Its death-respawn observation is parked outside the
+fresh-start scope; no respawn implementation or external issue is added.
+
+The next gate is ordinary build/report and comparison of all 447 emitted files
+against the approved manifest, followed by independent review of this narrow
+policy/documentation change. These checks remain pending; their exact-commit
+results will be retained in the external evidence directory, with the final
+independent verdict in `QA-POLICY.md`. Actual emitted
+identity must match the approved artifact; any changed artifact requires
+reassessment. None of these decisions authorizes publication, merge, or
+deployment. Rollback remains the prior application
 artifact on master `acc8662431507d257ed094975224fd7ed4cf80fa`; no save migration
 or persistent-data change is introduced.

@@ -194,8 +194,11 @@ checked against the current initiative text before capture.
   retaining current protection without another bubble. No gameplay change;
   local evidence complete, independent review tracked with the task handoff.
   The separate unsteered sun-loss observation now has a local outward-heading
-  fix. Independent review and build/startup policy decisions remain pending;
-  see [StarterSunDriftEvidence.md](StarterSunDriftEvidence.md).
+  fix. Independent Claude source/evidence QA passed `6e17f69f`; exact byte and
+  separate measured startup exceptions are owner-approved, with the byte
+  descriptor activated. Ordinary build/report, complete artifact comparison,
+  and final policy review remain pending; no release readiness is claimed.
+  See [StarterSunDriftEvidence.md](StarterSunDriftEvidence.md).
   See [Issue10StarterPacingEvidence.md](Issue10StarterPacingEvidence.md).
 - [x] DONE (P1, HAIL/ENCOUNTERS): Give pirate demands a full lifecycle. The
   "HEAVE TO. CARGO OR HULL." toast names no ship, range, deadline, or way to
