@@ -31,7 +31,7 @@ await runLive('boards',async h=>{
     const duplicateCopyGroups=[...new Set(visibleCopies)].map(key=>({copy:key,count:visibleCopies.filter(x=>x===key).length})).filter(x=>x.count>1);
     const entry={label,origin,counts,rows,cards,duplicateCopyGroups};result.boards.push(entry);
     for(const [family,title] of [['trade','Haul '],['survey','Survey ']]){
-      const found=await c.eval(`(()=>{const e=[...document.querySelectorAll('.job-card')].find(e=>e.querySelector('.job-title')?.textContent.includes(${JSON.stringify(title)}));e?.scrollIntoView({block:'center'});return !!e;})()`);
+      const found=await c.eval(`(()=>{const e=[...document.querySelectorAll('.job-card')].find(e=>e.querySelector('.job-title')?.textContent.includes(${JSON.stringify(title)})&&(${JSON.stringify(family)}!=='trade'||e.querySelector('.job-detail')?.textContent.startsWith('Buy or hold ')));e?.scrollIntoView({block:'center'});return !!e;})()`);
       if(found)await shot(label+'-'+family);
     }
     await save();return entry;
