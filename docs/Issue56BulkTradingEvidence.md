@@ -5,10 +5,13 @@ Freighter-scale bulk trading is implemented and verified locally on
 `d0b032e9dc0d664b1e9c733ed4a3ea1db3bd2dad`, based on master
 `fb93a7c87f28fe37b4e73238b460cbf9ffa1cc07`. Focused tests, full boot and all
 57 final live checks pass. Independent source, CSS/probe and evidence review pass. The
-normal production build fails its unchanged byte policy, and one of five final
-startup measurements exceeds 8,000 ms. Separate owner decisions on the exact
-byte artifact and measured startup overrun remain required. No exception is
-activated and no publication, merge or deployment is claimed.
+pre-approval normal build failed the fixed byte limits, and one of five final
+startup measurements exceeds 8,000 ms. The owner approved both separate measured
+decisions on 2026-09-10 — the exact byte artifact and, distinctly, the measured
+startup overrun — and only the exact byte descriptor is activated in
+`scripts/bundle-policy.mjs`. Ordinary build/report, exact 447-file equivalence
+and independent final policy review remain pending; no publication, merge or
+deployment is claimed.
 
 The owner approved the [bulk design](Trade004BulkTradingDesign.md) originally
 committed as `d8339c821f723c5d48c5b5149a676bfc0b8c6134`. Quantity entry, Buy Max
@@ -38,8 +41,12 @@ Live testing found and fixed two concrete problems:
 
 The final runtime source SHA256 is
 `48ed6b5539e33140512c37eff32537a5e94e30015107c686065bb17ddfec8333`;
-full production-source census SHA256 is
-`88dd101c7d0e31d9f6ffa9310396a438596d94db199a84600f324cbe06d1e08b`.
+the full production-source census SHA256 measured **before** the byte-descriptor
+activation is `88dd101c7d0e31d9f6ffa9310396a438596d94db199a84600f324cbe06d1e08b`.
+That census describes the measured candidate at `d34f2cc2`, unchanged at `d0b032e9`; activating the
+descriptor edits `scripts/bundle-policy.mjs`, so the current full census is
+expected to differ and no current census equality is claimed. The runtime source
+hash above is unchanged by the activation.
 Candidate-02 contains 447 files / 39,402,057 bytes, manifest SHA256
 `43318a9d5d9a846faef259318e049fc421cde07eb2f4fc064f99a77c8cf9e082`.
 Its sole generated JavaScript chunk is `assets/index-BX1kNgWb.js`, SHA256
@@ -138,9 +145,10 @@ not relabelled as passing final runs.
 ## Final production measurements and holds
 
 The final JavaScript measures **1,835,632 minified / 549,169 gzip bytes**. Global
-limits remain **1,800,000 / 537,600**. The current sun-drift approved descriptor is
-**1,825,899 / 545,419**, so growth is **9,733 / 3,750 bytes**. It does not match
-this artifact. The normal build remains a byte-policy FAIL.
+limits remain **1,800,000 / 537,600**. The previously approved sun-drift descriptor
+was **1,825,899 / 545,419**, so growth is **9,733 / 3,750 bytes**. It did not match
+this artifact and is no longer the active exception. The raw build remains a
+byte-policy FAIL; only the owner-approved exact exception now covers it.
 
 Candidate-02 loads the actual production configuration and replaces only its
 named audit hook to record the unchanged byte failure while emitting an isolated
@@ -151,7 +159,10 @@ source. Diagnostic emission is not a passing ordinary build.
 Final startup-02 measured five serial fresh-profile Chrome navigation-to-title
 starts: **7,340.4; 7,596.8; 8,280.0; 6,240.6; and 6,971.5 ms**. Median is
 **7,340.4 ms**, maximum **8,280.0 ms**. One exceeds the unchanged **8,000 ms** limit
-by **280 ms**; the raw startup gate is **FAIL** and needs a separate owner decision.
+by **280 ms**; the raw startup gate is **FAIL**. The owner approved these five
+observations on 2026-09-10 as a decision separate from the byte exception. That
+acceptance is documentation only: startup enforcement, the 8,000 ms limit and the
+recorded FAIL are unchanged, and the observation is not relabelled.
 The earlier startup-01 PASS belongs to the superseded runtime and cannot approve
 this artifact. No rerun was used to replace the failed observation.
 
@@ -167,8 +178,9 @@ Raw `build-final-before-approval.log`, `release/candidate-02/result.json`,
 `release/candidate-02/artifact-manifest.json`, and
 `release/startup-02/result.json` are retained under
 `C:/Projects/WebSim/out/issue-56-completion-evidence/`. The
-[measured release decision](releases/issue-56-measured-decision.md) proposes the
-exact byte exception and separate measured startup exception; neither is active.
+[measured release decision](releases/issue-56-measured-decision.md) records the
+owner-approved exact byte exception, now activated, and the separately approved
+measured startup exception, which changes no enforcement.
 
 ## Independent review and remaining work
 
@@ -178,8 +190,10 @@ Claude-authored activation delta `0d59a5e` and independently reran its 11-group
 bulk test (`QA-ACTIVATION-DELTA.md`). Final independent Codex CSS/probe/live and
 production-evidence review passed on `d0b032e9` (`QA-LIVE-EVIDENCE.md`). Quinn
 independently inspected all 57 pins, critical screenshots, hashes, cleanup and
-final measurement method. Feature acceptance passes; release compliance remains
-FAIL pending reduction or the applicable owner-approved exceptions.
+final measurement method. Feature acceptance passes. Release compliance now rests
+on the owner-approved exact byte exception and the separately approved measured
+startup result; the raw byte and startup results remain FAIL, and the ordinary
+build/report, artifact equivalence and final policy gates below are still open.
 
 The owner explicitly authorized scoped issue-56 source/test/report review in
 Claude after an automatic approval rejection of external source/report disclosure.
@@ -189,10 +203,12 @@ Earlier source authorship is recorded as Codex; no missing original implementati
 fallback receipt is inferred. The activation and CSS/probe changes used designated
 Claude harnesses, with raw receipts retained in the evidence directory.
 
-After owner approval of both measured exceptions, only the exact byte descriptor
-may be activated. Ordinary build/report and all emitted-file equivalence checks
-must pass, followed by independent policy review. Global limits and the matcher
-remain fixed. Merge/deployment require a separate gate.
+Both measured exceptions are owner-approved, and only the exact byte descriptor
+is activated. Ordinary build/report, all 447-file equivalence checks and the
+independent final policy review are **PENDING** and are not claimed here. Global
+limits, the matcher and the browser dependency audit remain fixed, with no
+future-growth allowance or environment bypass. Merge/deployment require a
+separate gate.
 
 Parked minor observations are silent stale-quote display until click, the inherited
 capacity-derived single-order sell ceiling for malformed tiny-hold imports, and
