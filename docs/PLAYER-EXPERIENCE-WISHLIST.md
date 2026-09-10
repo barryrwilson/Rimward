@@ -245,7 +245,11 @@ checked against the current initiative text before capture.
   showed two identical "Mine Raw ore, 784 UU" postings as jobs 8 and 9.
   MSN-01 covers replacement of completed jobs, not duplicate generation.
   Wave 136 PR1 `docs/Msn04JobDedupDesign.md`. Mining-only identity.
-  Digit 2 stays Jobs. Other families PR2 optional.
+  Digit 2 stays Jobs. Issue #12's follow-up census found trade and survey
+  twins and implements a family-specific correction; distinct objectives,
+  accepted agreements, and #73's independent passenger parties remain.
+  See [Issue12MissionDuplicateCensus.md](Issue12MissionDuplicateCensus.md).
+  Final verification and the candidate's measured byte/startup decisions are pending.
 - [x] DONE (P2, MSN/AST): Give mining contracts ore-type guidance. The
   contract asks for Raw ore, but a rock reveals its type only after a lock,
   one rock at a time (nearest rock was brine ice; next lock slag iron at
