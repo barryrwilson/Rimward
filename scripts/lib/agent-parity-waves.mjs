@@ -1519,13 +1519,23 @@ export async function runAgentParityWave142(deps) {
         for (let i = 0; i < 60 * 30 && !scooped; i++) {
           const s = rw142.observe();
           if (liveJob.collected === true) { scooped = true; break; }
-          const podRow = (s && s.targets && Array.isArray(s.targets.nearby) ? s.targets.nearby : [])
-            .find((r) => r && r.kind === 'pod');
-          if (!podRow || !Array.isArray(podRow.bearing)) { tick(6, 'w142 salvage scan'); continue; }
-          const b = podRow.bearing;
+          // Follow this agreement's public marker, not a nearer ambient pod.
+          // Staging preserves the inherited heading, so the marker can be
+          // directly aft. Turn toward it before applying approach throttle,
+          // using the same bearing policy as the recovery live probe.
+          const objective = s?.jobs?.active?.find((j) => j.id === recOffer.id)?.objective;
+          if (objective?.status !== 'available' || !Array.isArray(objective.bearing)) {
+            tick(6, 'w142 salvage scan'); continue;
+          }
+          const [x, y, z] = objective.bearing;
+          const desiredSpeed = Math.max(2, Math.min(50, (objective.range - 4) * 0.18));
+          const throttle = z < -0.92 && s.ship.speed < desiredSpeed + 2
+            ? Math.max(0.005, Math.min(0.2, (objective.range - 4) / 1800)) : 0;
           const ctl142p = rw142.act({
             v: 2, name: 'setControl',
-            args: { seq: ++seq142, ttl: 0.5, steerX: clamp142(b[0] * 2.5), steerY: clamp142(b[1] * 2.5), throttle: Math.max(0.05, Math.min(0.5, (Number.isFinite(podRow.range) ? podRow.range : 999) / 120)) },
+            args: { seq: ++seq142, ttl: 0.5,
+              steerX: clamp142(Math.atan2(x, -z) * 1.5),
+              steerY: clamp142(Math.atan2(y, Math.hypot(x, z)) * 1.5), throttle },
           });
           if (ctl142p && ctl142p.ok === false && ctl142p.token === 'overlay') {
             const hp142 = rw142.observe();

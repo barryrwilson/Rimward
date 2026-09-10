@@ -17,7 +17,8 @@ function fixture() {
   document.addEventListener = (name, fn) => (docEvents[name] ??= []).push(fn);
   window.location.search = '?agent=1';
   const ctx = createCtx({ scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(), renderer: {} });
-  ctx.config.world = {};
+  // Flight fixtures spawn at the origin facing -Z, away from this valid sun.
+  ctx.config.world = { sunPosition: new THREE.Vector3(0, 0, 5000) };
   ctx.world.currentSystem = 'fixture'; ctx.world.time = 1;
   ctx.systems = {}; ctx.station = {}; ctx.asteroids = { list: [] }; ctx.flags.paused = false;
   ctx.ship.object = new THREE.Object3D(); ctx.ship.velocity = new THREE.Vector3();

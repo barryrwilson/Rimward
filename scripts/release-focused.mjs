@@ -16,6 +16,8 @@ const checks = [
   ['agentBridge', ['scripts/agent-bridge.mjs', '--self-test']],
   ['agentSchema', ['scripts/agent-schema-test.mjs']],
   ['hailIdentity', ['scripts/hail-identity-test.mjs']],
+  ['combatIntent', ['--import', ...css, 'scripts/issue-61-combat-intent-test.mjs']],
+  ['reactiveDefense', ['--import', ...css, 'scripts/issue-62-reactive-defense-test.mjs']],
   ['agentApiHardening', ['scripts/agent-api-hardening-test.mjs']],
   ['wave30Hail', ['--import', ...css, 'scripts/wave30-hail-probe.mjs']],
   ['wave127And132', ['--import', ...css, 'scripts/wave127-132-probe.mjs']],
