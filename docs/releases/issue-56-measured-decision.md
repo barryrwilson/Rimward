@@ -1,4 +1,4 @@
-# Issue 56 measured release decision — owner approved; verification pending
+# Issue 56 measured release decision — owner approved; final review pending
 
 Bulk trading is implemented and live-verified locally. The pre-approval normal
 build failed the fixed byte limits, and one of five final startup runs exceeds
@@ -76,8 +76,8 @@ the final five startup runs are in adjacent `startup-02/result.json`.
 
 ## Owner decisions and remaining gates
 
-Approval source: current Codex issue-56 task, 2026-09-10, after the owner
-reviewed the five issue-56 documents at `a0cac3b74e7ac1c58207136d690a075c28ec7f27`.
+Approval source: current Codex issue-56 task, 2026-09-10, following independent
+review of the five issue-56 documents at `a0cac3b74e7ac1c58207136d690a075c28ec7f27`.
 The recorded reference is `Codex issue-56 owner approval of exact byte and
 measured startup exceptions, 2026-09-10`.
 
@@ -86,7 +86,7 @@ measured startup exceptions, 2026-09-10`.
    minified bytes and 3,750 additional gzip bytes** over the previously approved
    sun-drift artifact. `APPROVED_BYTE_EXCEPTION` in `scripts/bundle-policy.mjs`
    now names `assets/index-BX1kNgWb.js`, its SHA256 and its exact aggregate and
-   per-chunk 1,835,632 / 549,169 bytes. The whole-artifact matcher, the global
+   per-chunk 1,835,632 / 549,169 bytes. The exact JavaScript-chunk matcher, the global
    1,800,000 / 537,600 limits, the browser dependency audit and every other
    export are unchanged; there is no future-growth allowance or environment
    bypass. Any changed artifact returns to the fixed limits and needs
@@ -103,12 +103,18 @@ activation-delta and final CSS/probe/evidence reviews pass. Feature verification
 remains PASS. No performance exception approval is inferred from feature
 approval, review authorization or these results.
 
-Remaining gates, all **PENDING** and not claimed here:
-
-- `npm run build` and `npm run bundle:report -- --json` on the activated tree.
-- Exact equivalence of all 447 emitted files with the measured candidate by
-  path, size and SHA256.
-- Independent final policy review of the descriptor, authority and equivalence.
+The activated source tree, committed as `e044b2d67f158a593c4a20bfabfb203dc37370c4`,
+passes ordinary `npm run build` and `npm run bundle:report -- --json` (exit 0).
+Raw byte flags remain false; `bytePolicy.pass` is true through the exact approved
+exception. Browser boundary passes with `three` only. All 447 emitted files match
+the measured candidate by path, size and SHA256, with zero differences and the
+manifest above. Evidence is `build-approved.log`, `bundle-report-approved.log`,
+and `release/normal-build-equivalence-01.json` in the completion evidence directory.
+Before/after production-source identities both equal
+`bbec61189ab1bb2d31f688eb270aaeb8dac0ba042706987c01cde7f5228f1f21`; runtime source
+is unchanged. The identity files bind gates run during documentation finalization
+to the committed descriptor. Independent final policy review of the descriptor,
+authority and equivalence remains **PENDING**, with no verdict claimed here.
 
 No overall release PASS, publication, PR, merge or deployment is claimed or
 authorized by this document.

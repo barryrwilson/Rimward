@@ -49,7 +49,7 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
-- [x] IMPLEMENTED locally (P2, TRADE-004; measured exceptions approved, release verification pending): Fill and empty a freighter hold without repeated
+- [x] IMPLEMENTED locally (P2, TRADE-004; measured exceptions approved, final policy review pending): Fill and empty a freighter hold without repeated
   five-unit input. [Issue #56](https://github.com/barryrwilson/Rimward/issues/56)
   has an [approved bulk trading design](Trade004BulkTradingDesign.md): explicit
   quantity, Buy Max, selected-commodity Sell All, visible totals and ordinary
@@ -59,8 +59,8 @@ durable next-wave capture is mandatory, not optional.
   owner approved the [exact byte and separately the measured startup exceptions](releases/issue-56-measured-decision.md)
   on 2026-09-10; only the exact byte descriptor is activated, the raw byte and
   startup results stay FAIL, and global limits are unchanged. Ordinary
-  build/report, exact 447-file equivalence and independent final policy review
-  remain pending. No publication, merge or deployment is claimed.
+  build/report and exact 447-file equivalence pass; independent final policy
+  review remains pending. No publication, merge or deployment is claimed.
 
 - [x] IMPLEMENTED (P2, SALVAGE; review gate in [PR #88](https://github.com/barryrwilson/Rimward/pull/88)):
   Give a new Greenhand a discoverable first salvage path through Jobs.

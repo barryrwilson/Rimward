@@ -9,8 +9,8 @@ pre-approval normal build failed the fixed byte limits, and one of five final
 startup measurements exceeds 8,000 ms. The owner approved both separate measured
 decisions on 2026-09-10 — the exact byte artifact and, distinctly, the measured
 startup overrun — and only the exact byte descriptor is activated in
-`scripts/bundle-policy.mjs`. Ordinary build/report, exact 447-file equivalence
-and independent final policy review remain pending; no publication, merge or
+`scripts/bundle-policy.mjs`. Ordinary build/report and exact 447-file equivalence
+pass; independent final policy review remains pending. No publication, merge or
 deployment is claimed.
 
 The owner approved the [bulk design](Trade004BulkTradingDesign.md) originally
@@ -192,8 +192,8 @@ production-evidence review passed on `d0b032e9` (`QA-LIVE-EVIDENCE.md`). Quinn
 independently inspected all 57 pins, critical screenshots, hashes, cleanup and
 final measurement method. Feature acceptance passes. Release compliance now rests
 on the owner-approved exact byte exception and the separately approved measured
-startup result; the raw byte and startup results remain FAIL, and the ordinary
-build/report, artifact equivalence and final policy gates below are still open.
+startup result; the raw byte and startup results remain FAIL. Ordinary build/report
+and artifact equivalence pass; final policy review remains pending.
 
 The owner explicitly authorized scoped issue-56 source/test/report review in
 Claude after an automatic approval rejection of external source/report disclosure.
@@ -204,11 +204,19 @@ fallback receipt is inferred. The activation and CSS/probe changes used designat
 Claude harnesses, with raw receipts retained in the evidence directory.
 
 Both measured exceptions are owner-approved, and only the exact byte descriptor
-is activated. Ordinary build/report, all 447-file equivalence checks and the
-independent final policy review are **PENDING** and are not claimed here. Global
-limits, the matcher and the browser dependency audit remain fixed, with no
-future-growth allowance or environment bypass. Merge/deployment require a
-separate gate.
+is activated in `e044b2d67f158a593c4a20bfabfb203dc37370c4`. Ordinary build and
+bundle report exited zero, with raw byte flags false and `bytePolicy.pass` true
+through the exact approved descriptor. Browser boundary passes with `three` only.
+All 447 emitted files match candidate-02 by path/size/SHA256, with zero differences
+and the manifest identified above. Raw evidence is `build-approved.log`,
+`bundle-report-approved.log`, and `release/normal-build-equivalence-01.json` in
+the completion evidence directory. Before/after production-source identities
+are both `bbec61189ab1bb2d31f688eb270aaeb8dac0ba042706987c01cde7f5228f1f21`
+(`build-approved-identity-before.json` / `build-approved-identity-after.json`),
+binding the activated source tree to that commit; runtime source is unchanged.
+Independent final policy review remains **PENDING**. Global limits, the exact
+JavaScript-chunk matcher and browser audit remain fixed. No startup rerun was
+performed. Merge/deployment require a separate gate.
 
 Parked minor observations are silent stale-quote display until click, the inherited
 capacity-derived single-order sell ceiling for malformed tiny-hold imports, and
