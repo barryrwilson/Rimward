@@ -189,6 +189,13 @@ checked against the current initiative text before capture.
   who is hostile; nothing covers hostility pacing or starter difficulty.
   Wave 125 PR1 `docs/Ai05StarterGraceDesign.md`. Hop 60 s + extra 180 s
   Greenhand/Beautiful + death calm 90 s. AI-05 PR2 home-berth bubble optional.
+  Issue #10 fresh reassessment on master `383b0878`: 32 seeded runs, both
+  rendered starter origins and controlled pursuit/return/re-entry support
+  retaining current protection without another bubble. No gameplay change;
+  local evidence complete, independent review tracked with the task handoff.
+  Unsteered sun losses
+  remain a separate onboarding observation, not a hostile-pressure failure.
+  See [Issue10StarterPacingEvidence.md](Issue10StarterPacingEvidence.md).
 - [x] DONE (P1, HAIL/ENCOUNTERS): Give pirate demands a full lifecycle. The
   "HEAVE TO. CARGO OR HULL." toast names no ship, range, deadline, or way to
   comply; it persisted while docked, reappeared after a gate jump, and expired
