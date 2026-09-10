@@ -1,6 +1,6 @@
 # TRADE-004 — Freighter-scale bulk trading
 
-Issue: [#56](https://github.com/barryrwilson/Rimward/issues/56). **Status: design approved; implementation in progress.** The owner replied **Approved** to design commit `d8339c821f723c5d48c5b5149a676bfc0b8c6134` in the issue #56 Codex task. This document specifies the accepted behavior; it does not claim that bulk controls have shipped or that their live acceptance tests pass. Discovery base: `8b55b87ef7167612266704e8a7668d0ea42f1d32` (master, 2026-09-09). Specification owner: Sloane. Implementation owners: Rex/Fiona.
+Issue: [#56](https://github.com/barryrwilson/Rimward/issues/56). **Status: implemented and live-verified locally; release approval pending.** The owner replied **Approved** to design commit `d8339c821f723c5d48c5b5149a676bfc0b8c6134` in the issue #56 Codex task. [Implementation evidence](Issue56BulkTradingEvidence.md) records 57 live checks and independent feature review PASS on source/probe `d0b032e9dc0d664b1e9c733ed4a3ea1db3bd2dad`. The [exact byte and separate startup decisions](releases/issue-56-measured-decision.md) remain unapproved; no release is claimed. This document retains the accepted behavior and discovery baseline: `8b55b87ef7167612266704e8a7668d0ea42f1d32` (master, 2026-09-09). Specification owner: Sloane. Implementation owners: Rex/Fiona.
 
 ## Outcome and scope
 
