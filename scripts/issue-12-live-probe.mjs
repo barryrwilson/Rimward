@@ -15,7 +15,7 @@ const families=['trade','hunt','passenger','explore','espionage','war'];
 await runLive('boards',async h=>{
   const {c,result,act,observe,wait,checkpoint,shot,save}=h;
   result.fixture=true;
-  result.method='Unmodified native RNG and native Jobs board generation in a fresh Chrome profile. Initial dock uses public actions. Later visits use explicit jumpRequested and safe-berth position fixtures, followed by public dock/openService. Expiry fixtures change only one selected contract deadline and let production ticks replace it. Accept actions invoke production station closures. Passenger payment occurs on production docking; no fabricated jobs, kill records, payout, or completion flags.';
+  result.method='Unmodified native RNG and native Jobs board generation in a fresh Chrome profile. Initial dock uses public actions. Later visits use explicit jumpRequested and safe-berth position fixtures, followed by public dock/openService. Expiry fixtures change only one selected contract deadline and let production ticks replace it. A separate legacy survey fixture moves one native offer to slot 1 and inserts an offered copy. Accept actions invoke production station closures through CDP Runtime.evaluate of the public API; no native mouse or keyboard input is claimed. Passenger payment occurs on production docking; no fabricated kill records, payout, or completion flags.';
   result.boards=[];result.lifecycle=[];result.fixtures=[];
   async function raw(){return c.eval(`JSON.parse(JSON.stringify(window.__ctx.world.jobs))`);}
   const live=(rows,kind,origin)=>rows.filter(j=>j.kind===kind&&j.originSystem===origin&&['offered','accepted'].includes(j.state));
