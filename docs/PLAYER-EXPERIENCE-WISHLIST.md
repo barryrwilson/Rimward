@@ -249,7 +249,9 @@ checked against the current initiative text before capture.
   twins and implements a family-specific correction; distinct objectives,
   accepted agreements, and #73's independent passenger parties remain.
   See [Issue12MissionDuplicateCensus.md](Issue12MissionDuplicateCensus.md).
-  Final verification and the candidate's measured byte/startup decisions are pending.
+  Independent source/security/behavior review, full boot, census, and live
+  checks pass. Build/report use the owner's exact byte exception; the measured
+  startup overrun has a separate approved exception. Global limits remain.
 - [x] DONE (P2, MSN/AST): Give mining contracts ore-type guidance. The
   contract asks for Raw ore, but a rock reveals its type only after a lock,
   one rock at a time (nearest rock was brine ice; next lock slag iron at
