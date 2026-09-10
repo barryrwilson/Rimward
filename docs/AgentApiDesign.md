@@ -517,8 +517,13 @@ No new schema version, persisted field, ring event or command name.
 
 **Evidence.** `npm run test:docked-hails` (37 checks), plus unchanged
 `npm run test:boot`, `npm run test:hail-identity` and
-`npm run test:agent-hardening`. `npm run test:docked-hails-live` has **not**
-produced a passing live run yet.
+`npm run test:agent-hardening`. `npm run test:docked-hails-live` passes 7/7
+pins on 2026-09-10 with 0 console errors and 0 uncaught exceptions. The live
+refusal checks run after the dock completes, so the card is already closed there; the
+focused suite is what proves the synchronous still-visible case, where
+`hailResolve` is refused in the same frame as the dock, before the update
+empties the card. See the
+[issue #100 evidence](Issue100DockedHailsEvidence.md) for the run conditions.
 
 ---
 
