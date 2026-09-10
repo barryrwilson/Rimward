@@ -160,10 +160,3 @@ else{
   if(origins.some(o=>!['greenhand','beautiful'].includes(o)))throw Error('Unsupported origin');
   await Promise.all(origins.map(origin=>runLive('natural-'+origin,origin,origin==='greenhand'?101:202,pacing)));
 }
-
-
-
-
-
-
-
