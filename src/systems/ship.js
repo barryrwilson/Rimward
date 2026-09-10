@@ -712,6 +712,8 @@ export function initShip(ctx) {
   publishHullPath(ship, born);
 
   root.position.copy(config.world.shipSpawn);
+  // Object3D lookAt points +Z inward, so the ship's -Z nose creeps away from the sun.
+  root.lookAt(config.world.sunPosition);
   scene.add(root);
 
   // --- Afterburner trail (wave-6): pooled Points ring buffer, built once.

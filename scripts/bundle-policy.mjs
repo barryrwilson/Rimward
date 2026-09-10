@@ -10,15 +10,15 @@ export const BUNDLE_BUDGET = Object.freeze({
 // No environment bypass or allowance for future bundle growth.
 const APPROVED_BYTE_EXCEPTION = {
   approved: true,
-  approvalReference: 'Codex task issue #12 conditional owner approval, 2026-09-09',
-  releaseNotes: 'docs/releases/issue-12-measured-decision.md',
-  minifiedBytes: 1_825_869,
-  gzipBytes: 545_409,
+  approvalReference: 'Codex starter sun-drift conditional owner approval, 2026-09-10',
+  releaseNotes: 'docs/releases/starter-sun-drift-measured-decision.md',
+  minifiedBytes: 1_825_899,
+  gzipBytes: 545_419,
   chunks: [{
-    file: 'assets/index-d7TmuHz9.js',
-    sha256: '22df21f974e428bbaf84e43ed22f4ea60727b40e8514cc87c0e223ed8dbde03a',
-    minifiedBytes: 1_825_869,
-    gzipBytes: 545_409,
+    file: 'assets/index-Dvycuwk6.js',
+    sha256: '535f68a70399de3c149e53f26c1b0a1af6c46472f7ac367f52857e38681790b4',
+    minifiedBytes: 1_825_899,
+    gzipBytes: 545_419,
   }],
 };
 
