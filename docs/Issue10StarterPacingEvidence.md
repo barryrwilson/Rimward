@@ -69,8 +69,8 @@ released through public `letGo`; temporary launch holds were respected.
 
 | Origin | World / wall seconds | Result |
 |---|---:|---|
-| Greenhand, seed 101 | 240.268 / 242.374 | No hostile target, active intent, demand or damage. Full defenses. Two ambient surrender hails after the first minute; returned to dock at 225.051s. |
-| Beautiful, seed 202 | 240.404 / 241.031 | No hostile target, active intent, demand or damage. Full defenses. Two first-minute ambient surrender hails; returned to dock at 226.824s. |
+| Greenhand, seed 101 | 240.268 / 242.374 | No hostile target, active intent, demand or damage. Full defenses. Two ambient surrender hails after the first minute; dock completion observed at 225.051s. |
+| Beautiful, seed 202 | 240.404 / 241.031 | No hostile target, active intent, demand or damage. Full defenses. Two first-minute ambient surrender hails; dock completion observed at 226.794s. |
 
 Both completed with zero browser console errors/exceptions, unchanged runtime
 source hash, and closed Vite/CDP ports. First-minute and dock-return screenshots
@@ -102,9 +102,9 @@ remained 100, confirming the test did not give the player immunity.
 
 Ordinary turning and departure reached 460u at 225.835s. The pirate reacquired
 the player at 252.651s, 482u from the station (hunter 361u), with the normal
-telegraph phase. All six hunter shots were recorded while the player was
-310-600u from the
-station. These are player distances, not hunter distances. Console and
+telegraph phase. Player station distances at the six shots ranged from
+approximately 309.515 to 600u. These are player distances, not hunter
+distances. Console and
 exceptions were clean, runtime source unchanged, and teardown closed both
 ports. Root inspected screenshots of incoming fire and the starter dock flows.
 
