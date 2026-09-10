@@ -122,6 +122,9 @@ The baseline successful probe hash was
 `366fd336de6f3903529e3c44159e54103d3c97003220e63cb74981dd278c9793`;
 all candidate live runs used probe hash
 `7e62d1d2786f2af38aa2cdf69b8c6f0ae7d79c75f1e6d37aa96408772a16019a`.
+Git normalized line endings in the stored probe, and a surplus EOF blank line
+was removed after capture. Executable code is unchanged; the hashes above
+identify the captured probe bytes, not the final whitespace-cleaned file.
 The runtime source hash is
 `b7f2d46f2f7550028ff83b9a0197e29bbd702770714e9c9b8b245120a27e04a2`.
 Baseline and candidate full boot passed, with unchanged ship source during the

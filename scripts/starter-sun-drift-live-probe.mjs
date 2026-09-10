@@ -188,5 +188,3 @@ async function flight({c,result,checkpoint,save,act,observe}){
   if(result.measurements.events.some(e=>['sunHeat','sunKill','playerDestroyed'].includes(e.type)))throw Error('Solar/death event during manual flight');
   result.outcome='manual-flight-dock-and-saved-pose-restored';await save();
 }
-
-
