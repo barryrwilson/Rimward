@@ -155,6 +155,12 @@ function closeAnyCard(live) {
 }
 
 function openCardFor(live, ev = {}) {
+  // Issue #99: a bargaining card is admitted only for a break the PLAYER
+  // caused. Every hull here spawns at hull 9/10 — already scratched — so
+  // naming the attacker is all that is needed to keep these fixtures the
+  // legitimate player-caused parleys they were always meant to be. Section 7's
+  // untouched fearful spawn deliberately does NOT go through this helper.
+  if (live && live.ai) live.ai.lastAttacker = 'player';
   ctx.emit('hailOpened', {
     ship: live,
     intents: ['demandRansom', 'letGo', 'keepFiring'],

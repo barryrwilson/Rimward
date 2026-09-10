@@ -2029,19 +2029,36 @@ export function initWorld(ctx) {
         const outcome = ev.outcome ?? 'ransom';
         if (rec && (outcome === 'captured' || outcome === 'capture')) rec.state = 'captured';
         const pos = ship.object ? ship.object.position : rec ? recordPosition(rec, _v1) : null;
+        // Issue #99: the receipt names its own causer, decided where the break
+        // happened. This branch used to hard-code 'player', which wrote a
+        // player attribution into the ledger for a hull two pirates broke
+        // between themselves. Read it, and fail closed to 'world' for anything
+        // that is not the explicit player word — an older or hand-made event
+        // with no attribution is exactly the case that must not pay.
+        const causer = ev.causer === 'player' ? 'player' : 'world';
         if (pos) {
+          // The incident itself is neutral bookkeeping and is still recorded
+          // for both: the lane remembers that a hull yielded here regardless
+          // of who broke it. Only the credit below is withheld.
           addIncident(ctx, 'surrendered', {
             name: rec?.name ?? ship.state?.name ?? 'unknown hull',
             faction: rec?.faction ?? ship.state?.faction ?? 'independent',
             role: rec?.role ?? ship.role ?? 'trader',
             position: pos,
-            causer: 'player',
+            causer,
             outcome,
           });
         }
-        fireMilestone(ctx, 'firstCapitulation', 'They yield. First capitulation.');
-        if (outcome === 'tribute') fireMilestone(ctx, 'firstTribute', 'Tribute paid. The lane remembers.');
-        if (rec?.role === 'ace') {
+        // Milestones are the player's story. A capitulation the player did not
+        // cause cannot fire "first capitulation" or spend the tribute line.
+        if (causer === 'player') {
+          fireMilestone(ctx, 'firstCapitulation', 'They yield. First capitulation.');
+          if (outcome === 'tribute') fireMilestone(ctx, 'firstTribute', 'Tribute paid. The lane remembers.');
+        }
+        // The rematch ladder, the lineages and the aspirant cycle all answer
+        // the question "has the player put this name down?". An ace broken by
+        // someone else answers it 'no', so the whole block is player-only.
+        if (causer === 'player' && rec?.role === 'ace') {
           const rivalry = (ctx.world.aceRivalry ??= { defeats: 0, lastOutcome: null, hunterSpawned: false, hunterGeneration: 0, hunterDownAt: null, illyxGeneration: 0, illyxDownAt: null, aspirantRisen: 0, aspirantDownAt: null, aspirantFlying: false });
           rivalry.aspirantRisen ??= 0; // pre-wave-10 saves lack the field
           rivalry.aspirantDownAt ??= null;

@@ -3864,12 +3864,19 @@ function completeJob(ctx, job, notice) {
  * tally the moment it stood down — crediting npcEscaped as well would pay the
  * same yielding hull twice for one encounter, and a hull that merely left the
  * system was never a patrol victory in the first place.
+ *
+ * Issue #99: a patrol contract pays the player for the player's own work. The
+ * surrender receipt now names its causer, so a pirate broken by another NPC —
+ * or by nothing anyone can attribute — no longer ticks the contract. The
+ * verdict is read from the event, and anything that is not the explicit player
+ * word fails closed. Destruction and disablement are unchanged.
  */
 function tickPatrolJob(ctx) {
   for (const job of ctx.world.jobs) {
     if (job.kind !== 'patrol' || job.state !== 'accepted') continue;
     for (const ev of ctx.lastEvents) {
       if (ev.type !== 'npcDestroyed' && ev.type !== 'npcSurrendered' && ev.type !== 'npcDisabled') continue;
+      if (ev.type === 'npcSurrendered' && ev.causer !== 'player') continue;
       const role = ev.ship?.role ?? ev.ship?.record?.role;
       if (role !== 'pirate') continue;
       job.progress += 1;

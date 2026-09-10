@@ -2,7 +2,7 @@ import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS, SYSTEMS } from '..
 import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
-import { enterEscapeFlee, spillShipCargo } from './npc.js';
+import { enterEscapeFlee, spillShipCargo, surrenderCauserOf } from './npc.js';
 import {
   berthHeld,
   canOpenPlayCard,
@@ -65,6 +65,16 @@ import { coverHoldsFor, hailOffer } from '../game/hail-offer.js';
  * every resolution path — a button click, a number key, ctx.hailApi.resolve,
  * the public hailResolve — refuses with the stable 'docked' token and moves no
  * credits, cargo, fear or NPC state. Undocked behaviour is unchanged.
+ *
+ * Issue #99: the SURRENDER family is the only one whose verbs rest on a claim
+ * about the world — "the player broke this hull". That claim is tested against
+ * the live damage trail (npc.js surrenderCauserOf) at admission, at every
+ * resolution, and once per update while the card is up. The family is decided
+ * by the ORIGINAL event, so a hull that becomes disabled under an open
+ * surrender card does not turn it into a salvage payout — only a real salvage
+ * event (ev.salvage) does that. A refused resolution closes the card, changes
+ * nothing, and answers the public resolve() with 'stale'. Demand, salvage and
+ * conversation cards never rested on that claim and are untouched.
  */
 
 // NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
@@ -115,6 +125,24 @@ function isDemandHail(ev) {
  * Named Gun standing down).
  */
 const SURRENDER_VERBS = Object.freeze(['demandCargo', 'demandRansom', 'acceptTribute']);
+
+/**
+ * Issue #99 — may this hull's break still be sold to the player? Two facts,
+ * both read live from the hull rather than from anything the card remembers:
+ * the player broke it (npc.js reads the instance damage trail), and the break
+ * has not already been spent (state.surrendered is the completed yield
+ * npcSurrendered announces). A missing hull or state fails closed.
+ */
+function surrenderPayoutOk(live, st) {
+  if (!live || !st) return false;
+  if (st.surrendered === true || st.disabled === true || st.destroyed === true) return false;
+  return surrenderCauserOf(live) === 'player';
+}
+
+/** True when this verb pays the player for a break (rather than for a wreck). */
+function isSurrenderVerb(intent) {
+  return SURRENDER_VERBS.indexOf(intent) >= 0;
+}
 
 function hailKindOf(h) {
   if (!h) return '';
@@ -655,22 +683,40 @@ export function initHail(ctx) {
     return false;
   }
 
+  /**
+   * Resolve one intent from the open card. Returns '' when the intent ran (or
+   * when the card simply had nothing left to act on), or a refusal token the
+   * public resolve() hands straight to its caller.
+   */
   function resolveIntent(ctx2, intent) {
     const h = open;
-    if (!h) return;
+    if (!h) return '';
     // Issue #100: ONE boundary for every resolution path that reaches an
     // effect — a card button, a number key, and ctx.hailApi.resolve. A card
     // still on screen in the frame the berth takes the ship resolves nothing.
-    if (dockedAtBerth(ctx2)) return;
+    if (dockedAtBerth(ctx2)) return '';
     const live = h.ship;
     const st = live && live.state;
     const ai = live && live.ai;
     if (!st || !ai || st.destroyed || !live.object) {
       if (live) ctx2.emit('hailClosed', { ship: live });
       closeCard();
-      return;
+      return '';
     }
     const salvage = !!h.salvage || !!st.disabled;
+    // Issue #99: the last authoritative look before anything moves, and it
+    // covers the WHOLE original surrender card — letGo and respect restart a
+    // flee and rewrite ai state, which is no more the player's to command than
+    // the ransom is once an NPC has taken the fight over or the hull has
+    // yielded. The family comes from the card that opened (hailKindOf reads the
+    // original h.salvage), so a hull disabled since then cannot exempt an old
+    // ransom card by looking like a wreck. Refusal names no NPC: it closes the
+    // channel, moves no credits, cargo, fear or AI state, and reports 'stale'.
+    if (hailKindOf(h) === 'surrender' && !surrenderPayoutOk(live, st)) {
+      ctx2.emit('hailClosed', { ship: live });
+      closeCard();
+      return 'stale';
+    }
     switch (intent) {
       case 'demandCargo': {
         spillShipCargo(ctx2, live);
@@ -687,7 +733,10 @@ export function initHail(ctx) {
           // stamps the truthful trail (wave 30 stamp is role-guarded inside).
           enterEscapeFlee(ctx2, live, 'player');
           ctx2.emit('commLine', { text: 'Cargo loose.', from: st.name });
-          ctx2.emit('npcSurrendered', { ship: live, outcome: 'jettison' });
+          // Issue #99: this branch is reached only past the payout guard
+          // above, so the player really did break them — say so explicitly
+          // rather than leaving world.js and station.js to assume it.
+          ctx2.emit('npcSurrendered', { ship: live, outcome: 'jettison', causer: 'player' });
         }
         break;
       }
@@ -698,7 +747,7 @@ export function initHail(ctx) {
         bumpFear(ctx2, ECON.fear.ransom);
         enterEscapeFlee(ctx2, live, 'player'); // issue #68: shared refuge + trail
         ctx2.emit('commLine', { text: 'Paid. Go.', from: st.name });
-        ctx2.emit('npcSurrendered', { ship: live, outcome: 'ransom' });
+        ctx2.emit('npcSurrendered', { ship: live, outcome: 'ransom', causer: 'player' });
         break;
       }
       case 'acceptTribute': {
@@ -811,6 +860,7 @@ export function initHail(ctx) {
       ctx2.emit('hailClosed', { ship: live });
     }
     closeCard();
+    return '';
   }
 
   function intentLabel(h, intent) {
@@ -860,6 +910,17 @@ export function initHail(ctx) {
     const intents = INTENT_ORDER.filter((i) => ev.intents && ev.intents.includes(i));
     if (intents.length === 0) return;
     const demandHail = isDemandHail(ev);
+    // Issue #99: ONE admission boundary for the surrender family, sitting where
+    // every opener funnels — hailOpened, a same-speaker redraw, the deferred
+    // slot, and the KeyH press. Only an EXPLICIT salvage event is a salvage
+    // card: a stale surrender event (a deferred demandRansom, say) whose hull
+    // has since been disabled must not be admitted as a wreck to strip. It is
+    // drawn only when the player broke that hull and it has not yet yielded.
+    const salvageCard = ev.salvage === true;
+    if (!salvageCard && !demandHail && intents.some(isSurrenderVerb)
+      && !surrenderPayoutOk(live, st)) {
+      return;
+    }
     const demandN = demandHail ? finiteDemandAmount(ev.demand) : (ev.demand ?? null);
     const speaker = speakerNameOf(live, st);
     const now = ctx.world && typeof ctx.world.time === 'number' ? ctx.world.time : 0;
@@ -869,7 +930,9 @@ export function initHail(ctx) {
       ransom: ransomFor(st), // rolled once so the offer is stable
       tribute: Math.round(ECON.tributeRate * cargoValueSafe(st.cargo, ctx.world.prices)),
       demand: demandN, // wave 30: pirate demand-hail amount, rolled at emit time
-      salvage: ev.salvage === true || !!st.disabled,
+      // Issue #99: the event decides the family, never the hull's current
+      // state — the steady update below converts a card whose hull has died.
+      salvage: ev.salvage === true,
       buttons: null,
       demandHail,
       speaker,
@@ -1107,8 +1170,10 @@ export function initHail(ctx) {
     // Last look before anything moves: the card must still be the one the
     // caller named.
     if (bound && (!open || open.conversationId !== expectedConversationId)) return 'stale';
-    resolveIntent(ctx, intent);
-    return '';
+    // Issue #99: the shared boundary owns the attribution test, so a guarded
+    // and an unguarded caller get the same answer for the same card — a payout
+    // whose claim no longer holds refuses with 'stale' and moves nothing.
+    return resolveIntent(ctx, intent);
   }
 
   ctx.hailApi = { resolve, peek };
@@ -1258,6 +1323,12 @@ export function initHail(ctx) {
             closeCard();
           }
         } else if (st.disabled && !open.salvage) {
+          // A hull that dies under an open bargaining or demand card converts
+          // in place to an EXPLICIT salvage event (ev.salvage true), which is
+          // the only thing openCard admits as a wreck. This runs before the
+          // stale-surrender close below: surrenderPayoutOk refuses a disabled
+          // hull by design, so testing it first would close the card on the
+          // very frame the conversion is due.
           const ev = {
             ship: open.ship,
             intents: salvageIntentsFor(ctx, open.ship),
@@ -1266,6 +1337,12 @@ export function initHail(ctx) {
           };
           ctx.emit('hailOpened', ev);
           openCard(ev);
+        } else if (hailKindOf(open) === 'surrender' && !surrenderPayoutOk(open.ship, st)) {
+          // Issue #99: the claim the card was drawn on has lapsed — an NPC took
+          // the fight over, or the hull yielded to someone else. Close the
+          // channel. Disabled hulls never reach here: they converted above.
+          ctx.emit('hailClosed', { ship: open.ship });
+          closeCard();
         }
       }
       if (!open) {

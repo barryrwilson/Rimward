@@ -1555,7 +1555,12 @@ export function initCombat(ctx) {
         preferEngine: prefersEngine(ctx, bestShip),
       });
       recordScareDamage(bestShip, true, scareBefore, now);
-      if (bestShip.ai) bestShip.ai.lastAttacker = 'player';
+      // Issue #99: ownership of a hull follows real damage. A hit that reduced
+      // nothing (an Unknowable field shrugging the beam off) leaves the trail
+      // to whoever last actually wounded them.
+      if (bestShip.ai && scareDamageTotal(bestShip.state) < scareBefore) {
+        bestShip.ai.lastAttacker = 'player';
+      }
       ctx.emit('npcHit', { ship: bestShip, damage: dmg });
       for (const ev of events) {
         if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { ship: bestShip });
@@ -1737,7 +1742,11 @@ export function initCombat(ctx) {
         preferEngine: !!(p.fromPlayer && prefersEngine(ctx, s)),
       });
       recordScareDamage(s, p.fromPlayer, scareBefore, now);
-      if (s.ai) s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
+      // Issue #99: same rule for projectiles — a shot that spent no screen,
+      // shell, hull or engine does not take the trail from the last real hit.
+      if (s.ai && scareDamageTotal(s.state) < scareBefore) {
+        s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
+      }
       ctx.emit('npcHit', { ship: s, damage: p.damage });
       for (const ev of events) {
         if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { ship: s });
