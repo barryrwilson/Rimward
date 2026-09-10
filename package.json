@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs",
     "test:market-liquidity": "node --import ./scripts/with-css-stub.mjs scripts/issue-55-market-liquidity-test.mjs",
+    "test:bulk-trade": "node --import ./scripts/with-css-stub.mjs scripts/issue-56-bulk-trade-test.mjs",
     "test:capitulation-feedback": "node scripts/issue-67-capitulation-feedback-test.mjs",
     "test:gate-escape": "node --import ./scripts/with-css-stub.mjs scripts/issue-68-gate-escape-test.mjs",
     "test:first-scare": "node --import ./scripts/with-css-stub.mjs scripts/issue-63-first-scare-test.mjs",

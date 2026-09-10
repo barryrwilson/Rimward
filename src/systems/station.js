@@ -3,6 +3,7 @@ import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
+import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
 import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
@@ -4493,6 +4494,7 @@ export function initStation(ctx) {
     level: 1, // 1 = services, 2 = service detail (never deeper, §12.1)
     service: null,
     marketSel: 0,
+    bulk: null,
     barRound: 0,
     notice: '',
     fenceUnlocked: false, // session-scoped: a called-in favor opens the locker
@@ -4537,6 +4539,12 @@ export function initStation(ctx) {
   }
   let h = hDom;
   let btn = btnDom;
+  let renderedPanel = null;
+  // This node survives panel replacement, so refreshes do not repeat receipts.
+  const bulkStatus = hDom('div', 'market-bulk-status', overlay);
+  bulkStatus.id = 'market-bulk-status';
+  bulkStatus.setAttribute('role', 'status');
+  bulkStatus.setAttribute('aria-live', 'polite');
 
   const COMMODITY_KEYS = Object.keys(COMMODITIES);
 
@@ -4725,8 +4733,12 @@ export function initStation(ctx) {
       || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
   }
   function tryTrade(key, qty, buying) {
-    if (!Number.isSafeInteger(qty) || qty < 1) {
-      ui.notice = 'Trade quantity must be a positive whole number.';
+    if (!ctx.flags.docked || !ui.open || ctx.world.currentSystem !== currentId) {
+      ui.notice = 'Dock first at the market.';
+      return false;
+    }
+    if (tradeQty(ctx, qty) === null) {
+      ui.notice = `Trade quantity must be a whole number from 1 to ${tradeOrderLimit(ctx)}.`;
       return false;
     }
     if (isDataCommodity(key)) {
@@ -4743,8 +4755,16 @@ export function initStation(ctx) {
       return false;
     }
     const stock = marketSupplyAt(ctx.world, currentId, key);
+    const unit = tradeFillUnit(key, buying);
+    const total = unit * qty;
+    const after = ctx.world.credits + (buying ? -total : total);
+    if (!Number.isSafeInteger(unit) || unit < 0 || !Number.isSafeInteger(total)
+      || !Number.isFinite(after) || Math.abs(after) > Number.MAX_SAFE_INTEGER
+      || !Number.isFinite(cargoUsed(ctx)) || !Number.isFinite(ctx.cargoCapacity)) {
+      ui.notice = 'Cannot trade: invalid quote or resources.';
+      return false;
+    }
     if (buying) {
-      const unit = tradeFillUnit(key, true);
       const cost = unit * qty;
       if (qty > stock.available) { ui.notice = `Only ${stock.available} ${com.name} available.`; return false; }
       if (ctx.world.credits < cost) { ui.notice = 'Not enough UU.'; return false; }
@@ -4755,7 +4775,6 @@ export function initStation(ctx) {
       ui.notice = `Bought ${qty} ${com.name} for ${cost} UU.`;
     } else {
       if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return false; }
-      const unit = tradeFillUnit(key, false);
       const payout = unit * qty;
       let fixer = null;
       if (key === 'restrictedComponents' && stationAlwaysTradesRestricted(ctx)) {
@@ -4779,6 +4798,258 @@ export function initStation(ctx) {
     }
     requestAutosave(ctx);
     return true;
+  }
+
+  /** A read-only quote, including every resource that a displayed intent used. */
+  const BULK_ORDER_CAP = 1024; // Bound synchronous autosaves even for oversized imported cargo.
+  function previewBulkTrade(key, qty, buying) {
+    const allowed = isMarketCommodity(key) && (COMMODITIES[key].legal || lockerAllowed());
+    const stock = marketSupplyAt(ctx.world, currentId, key);
+    const held = holdUnits(ctx, key);
+    const used = cargoUsed(ctx);
+    const capacity = ctx.cargoCapacity;
+    const credits = ctx.world.credits;
+    const unit = isMarketCommodity(key) ? tradeFillUnit(key, buying) : NaN;
+    const buyUnit = isMarketCommodity(key) ? tradeFillUnit(key, true) : NaN;
+    const room = Math.max(0, Math.floor(capacity - used));
+    const cash = buyUnit === 0 ? room : Math.max(0, Math.floor(credits / buyUnit));
+    const validUnit = Number.isSafeInteger(unit) && unit >= 0;
+    const resources = Number.isFinite(credits) && credits >= 0 && credits <= Number.MAX_SAFE_INTEGER
+      && Number.isSafeInteger(held) && held >= 0 && Number.isSafeInteger(used) && used >= 0
+      && Number.isSafeInteger(capacity) && capacity >= 0;
+    const buyMaxTotal = allowed && resources && Number.isSafeInteger(buyUnit) && buyUnit >= 0
+      ? Math.min(stock.available, room, cash) : 0;
+    const sellMaxTotal = allowed && resources && validUnit ? held : 0;
+    const total = qty * unit;
+    const creditsAfter = credits + (buying ? -total : total);
+    const cargoUsedAfter = used + (buying ? qty : -qty);
+    let reason = '';
+    if (!ctx.flags.docked || !ui.open || ui.service !== 'market' || ctx.world.currentSystem !== currentId) reason = 'Dock first at this market.';
+    else if (!allowed) reason = 'Restricted locker closed; trade refused.';
+    else if (!Number.isSafeInteger(qty) || qty < 1) reason = 'Enter a positive whole quantity using digits only.';
+    else if (Math.ceil(qty / tradeOrderLimit(ctx)) > BULK_ORDER_CAP) reason = `Quantity exceeds the ${BULK_ORDER_CAP}-order safety limit; enter a smaller quantity.`;
+    else if (!resources || !validUnit || !Number.isSafeInteger(total)
+      || !Number.isFinite(creditsAfter) || Math.abs(creditsAfter) > Number.MAX_SAFE_INTEGER) reason = 'Invalid quote or resources.';
+    else if (buying && qty > stock.available) reason = `Only ${stock.available} units available.`;
+    else if (buying && qty > room) reason = `Only ${room} hold units free.`;
+    else if (buying && total > credits) reason = `Not enough UU; affordable quantity ${cash}.`;
+    else if (!buying && qty > held) reason = `Only ${held} units in the hold.`;
+    return Object.freeze({
+      ok: !reason, reason, key, qty, buying, unit, total: reason ? null : total,
+      buyMaxTotal, sellMaxTotal, orderLimit: tradeOrderLimit(ctx),
+      orderCount: Math.ceil(qty / tradeOrderLimit(ctx)), creditsAfter, cargoUsedAfter,
+      station: currentId, service: currentService, allowed, available: stock.available,
+      held, used, capacity, credits,
+    });
+  }
+
+  function editBulk(text = '1', key = COMMODITY_KEYS[ui.marketSel]) {
+    const qty = /^\d+$/.test(text) ? Number(text) : NaN;
+    ui.bulk = {
+      key, text, ready: true, busy: false, receipt: '', remainder: 0, fills: [],
+      buy: previewBulkTrade(key, qty, true), sell: previewBulkTrade(key, qty, false),
+    };
+  }
+
+  function bulkNotice(line) {
+    ui.notice = line;
+    if (ui.bulk) ui.bulk.receipt = line;
+    if (bulkStatus.textContent !== line) bulkStatus.textContent = line;
+  }
+
+  function bulkContext(intent) {
+    return ctx.flags.docked && ui.open && ui.service === 'market'
+      && ctx.world.currentSystem === intent.station && currentId === intent.station
+      && currentService === intent.service && COMMODITY_KEYS[ui.marketSel] === intent.key;
+  }
+
+  function executeBulk(intent) {
+    const order = ui.bulk;
+    if (!order || !order.ready || order.busy || order[intent?.buying ? 'buy' : 'sell'] !== intent) {
+      bulkNotice('Cannot trade: edit a quantity or choose a preset for a fresh confirmation.');
+      render();
+      return;
+    }
+    if (!intent.ok || !bulkContext(intent)) {
+      order.ready = false;
+      bulkNotice(`Cannot trade: ${intent.reason || 'market selection changed. Review a fresh quantity.'}`);
+      render();
+      return;
+    }
+    const live = previewBulkTrade(intent.key, intent.qty, intent.buying);
+    const unchanged = ['unit', 'total', 'allowed', 'available', 'held', 'used', 'capacity', 'credits', 'orderLimit']
+      .every(key => live[key] === intent[key]);
+    if (!live.ok || !unchanged) {
+      editBulk(order.text, order.key);
+      bulkNotice('Cannot trade: market state changed. Review the refreshed preview and confirm again.');
+      render();
+      return;
+    }
+    // Consume BOTH side confirmations before entering ordinary trade effects.
+    order.ready = false;
+    order.busy = true;
+    let completed = 0;
+    let paid = 0;
+    let count = 0;
+    let reason = '';
+    try {
+      while (completed < intent.qty) {
+        if (!bulkContext(intent) || ui.bulk !== order) { reason = 'market context changed'; break; }
+        const qty = Math.min(intent.qty - completed, intent.orderLimit);
+        const next = previewBulkTrade(intent.key, qty, intent.buying);
+        if (next.unit !== intent.unit) { reason = 'quote changed'; break; }
+        if (!next.ok || next.orderLimit !== intent.orderLimit) { reason = next.reason || 'order limit changed'; break; }
+        if (!tryTrade(intent.key, qty, intent.buying)) { reason = ui.notice || 'order refused'; break; }
+        order.fills.push(Object.freeze({ qty, unit: next.unit, total: next.total }));
+        completed += qty;
+        paid += next.total;
+        count += 1;
+      }
+    } finally {
+      order.busy = false;
+    }
+    order.remainder = intent.qty - completed;
+    order.side = intent.buying;
+    const verb = intent.buying ? 'Bought' : 'Sold';
+    const name = COMMODITIES[intent.key].name;
+    const receipt = completed === intent.qty
+      ? `${verb} ${completed} ${name} for ${paid} UU (${count} orders).`
+      : completed > 0
+        ? `${verb} ${completed} of ${intent.qty} ${name} for ${paid} UU. ${order.remainder} remain: ${reason}. Review the remainder.`
+        : `Cannot trade: ${reason}. No units moved.`;
+    bulkNotice(receipt);
+    render();
+  }
+
+  function focusBulk(id) {
+    if (h === hDom) document.getElementById(id)?.focus({ preventScroll: true });
+  }
+
+  // ---- native activation hold (issue #56 B10) ----------------------------
+  // A browser only turns a press into a click when the pressed element still
+  // exists at release. The docked 1 s refresh removes and rebuilds the whole
+  // panel, so a press held across a tick was swallowed: focus landed on the
+  // freshly built button, but no click, preset or trade ever ran. While a real
+  // bulk control is physically held, defer ONLY the periodic refresh. Every
+  // explicit render (action, preview refresh, cancel, navigation) and
+  // captureView still run untouched, and an explicit render releases the hold
+  // because it replaces the pressed node anyway.
+  const bulkPress = new Set(); // live press tokens: pointer ids and key codes
+
+  /** True only for the real native bulk controls (button/select/input). */
+  function isBulkControl(node) {
+    const id = node && typeof node.id === 'string' ? node.id : '';
+    return id.startsWith('market-bulk-') && /^(BUTTON|SELECT|INPUT)$/.test(node.tagName || '');
+  }
+  function bulkHoldActive() { return bulkPress.size > 0; }
+  function holdBulkPress(token, target) {
+    if (!ui.open || !ctx.flags.docked || !isBulkControl(target)) return;
+    bulkPress.add(token); // a repeat keydown re-adds the same token
+  }
+  function releaseBulkPress(token) { bulkPress.delete(token); }
+  function releaseBulkHold() { bulkPress.clear(); }
+  const pointerToken = e => `p:${e && e.pointerId !== undefined ? e.pointerId : 0}`;
+
+  // Capture phase: see the press even if something downstream stops it.
+  window.addEventListener('pointerdown', e => holdBulkPress(pointerToken(e), e?.target), true);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    window.addEventListener(type, e => releaseBulkPress(pointerToken(e)), true);
+  }
+  // Native Space activation spans keydown→keyup (Enter fires at keydown); the
+  // keyup listener runs in capture phase, before the browser's own activation
+  // default, and only clears the flag — it never renders.
+  window.addEventListener('keydown', e => {
+    const code = decodeKeyCode(e);
+    if (code === 'Space' || code === 'Enter') holdBulkPress(`k:${code}`, e?.target ?? document.activeElement);
+  }, true);
+  window.addEventListener('keyup', e => releaseBulkPress(`k:${decodeKeyCode(e)}`), true);
+  // A release outside the control, a dismissed native select popup or a window
+  // blur must not wedge the refresh: click and blur are unconditional releases.
+  window.addEventListener('click', releaseBulkHold, true);
+  window.addEventListener('blur', releaseBulkHold);
+
+  function renderBulk(panel) {
+    const order = ui.bulk;
+    if (!order) return;
+    const box = h('section', 'market-bulk', panel);
+    const heading = h('h3', '', box, 'Bulk trade');
+    heading.id = 'market-bulk-heading';
+    heading.tabIndex = -1;
+    const controls = h('div', 'market-bulk-controls', box);
+    const commodityLabel = h('label', '', controls, 'Commodity');
+    const select = h('select', '', commodityLabel);
+    select.id = 'market-bulk-commodity';
+    for (const key of COMMODITY_KEYS) {
+      const option = h('option', '', select, COMMODITIES[key].name);
+      option.value = key;
+    }
+    select.value = order.key;
+    const quantityLabel = h('label', '', controls, 'Quantity (whole units)');
+    const input = h('input', '', quantityLabel);
+    input.id = 'market-bulk-quantity';
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.value = order.text;
+    if (!input.capture) {
+      input.setAttribute('aria-describedby', 'market-bulk-preview');
+      select.addEventListener('change', () => {
+        const index = COMMODITY_KEYS.indexOf(select.value);
+        if (index < 0) return;
+        ui.marketSel = index;
+        editBulk();
+        render();
+      });
+      input.addEventListener('input', () => { editBulk(input.value); render(); });
+    }
+    const presets = h('div', 'market-bulk-actions', box);
+    for (const buying of [true, false]) {
+      const preset = btn(presets, buying ? 'Buy Max' : 'Sell All', () => {
+        const live = previewBulkTrade(order.key, 1, buying);
+        const qty = buying ? live.buyMaxTotal : live.sellMaxTotal;
+        editBulk(String(qty), order.key);
+        if (!qty) bulkNotice(`Cannot trade: ${live.reason || 'no units available.'}`);
+        render();
+        focusBulk(buying ? 'market-bulk-buy' : 'market-bulk-sell');
+      });
+      preset.id = buying ? 'market-bulk-buy-max' : 'market-bulk-sell-all';
+    }
+    const preview = h('div', 'market-bulk-preview', box);
+    preview.id = 'market-bulk-preview';
+    const live = previewBulkTrade(order.key, 1, true);
+    h('div', '', preview, `${COMMODITIES[order.key].name} · ${live.allowed ? 'Trade open' : 'Trade refused'} · Stock ${live.available} · Held ${live.held} · Hold ${live.used}/${live.capacity}`);
+    const confirms = h('div', 'market-bulk-actions', box);
+    for (const buying of [true, false]) {
+      const intent = order[buying ? 'buy' : 'sell'];
+      const verb = buying ? 'Buy' : 'Sell';
+      h('div', '', preview, intent.ok
+        ? `${verb}: ${intent.unit} UU/unit · ${intent.total} UU at displayed quote · Cash after ${intent.creditsAfter} UU · Hold after ${intent.cargoUsedAfter}/${intent.capacity}`
+        : `${verb}: ${Number.isSafeInteger(intent.unit) && intent.unit >= 0 ? `${intent.unit} UU/unit · ` : ''}${intent.reason}`);
+      const label = intent.ok
+        ? `${verb} ${intent.qty} ${COMMODITIES[order.key].name} · ${intent.total} UU`
+        : `${verb} ${COMMODITIES[order.key].name} — unavailable`;
+      const confirm = btn(confirms, label, event => {
+        if (event?.detail > 1) return; // A double-click cannot confirm a refreshed stale quote.
+        executeBulk(intent);
+      });
+      confirm.id = buying ? 'market-bulk-buy' : 'market-bulk-sell';
+      confirm.disabled = !order.ready || !intent.ok || order.busy;
+    }
+    if (order.buy.orderCount > 1 && Number.isSafeInteger(order.buy.qty)) {
+      h('div', 'screen-note', preview, `Processed in ${order.buy.orderCount} orders. If the quote changes, the remainder stops for review.`);
+    }
+    if (order.receipt) h('div', 'market-bulk-receipt', box, order.receipt);
+    if (!order.ready && order.remainder > 0) {
+      const review = btn(box, `Review remainder: ${order.remainder} ${COMMODITIES[order.key].name}`, () => {
+        if (ui.bulk !== order || !bulkContext(order.buy)) return;
+        const receipt = order.receipt;
+        editBulk(String(order.remainder), order.key);
+        ui.bulk.receipt = receipt;
+        render();
+        focusBulk(order.side ? 'market-bulk-buy' : 'market-bulk-sell');
+      });
+      review.id = 'market-bulk-review';
+    }
+    if (!order.ready && !order.remainder) h('div', 'screen-note', box, 'Edit quantity or choose a preset to prepare another trade.');
   }
 
   function cancelSeedPending() {
@@ -4899,6 +5170,7 @@ export function initStation(ctx) {
         h('div', 'screen-note', panel, currentService.line);
       }
       renderArchiveDesk(h, btn, panel, ctx, ui, currentDef.faction, render);
+      renderBulk(panel);
     } catch { /* fail-closed: keep the overlay */ }
   }
 
@@ -6197,7 +6469,7 @@ export function initStation(ctx) {
 
     if (ui.notice) {
       const note = h('div', 'station-notice', panel, ui.notice);
-      if (typeof note.setAttribute === 'function') note.setAttribute('aria-live', 'polite');
+      if (typeof note.setAttribute === 'function' && ui.notice !== ui.bulk?.receipt) note.setAttribute('aria-live', 'polite');
     }
   }
 
@@ -6208,11 +6480,25 @@ export function initStation(ctx) {
     // same-view rebuilds restore: navigation (Back / service select) resets
     // to the top as expected.
     const view = `${ui.level}:${ui.service}`;
-    const oldPanel = overlay.firstElementChild;
+    // This rebuild replaces any pressed node, so a held activation is already
+    // over: drop the hold instead of letting it wedge the periodic refresh.
+    releaseBulkHold();
+    if (ui.service !== 'market' || !ctx.flags.docked) ui.bulk = null;
+    const focused = document.activeElement;
+    const focusId = focused?.id?.startsWith('market-bulk-') ? focused.id : null;
+    const range = focused?.id === 'market-bulk-quantity'
+      ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
+    const oldPanel = renderedPanel;
     const scrollY = oldPanel && renderedView === view ? oldPanel.scrollTop : 0;
-    overlay.textContent = '';
+    oldPanel?.remove();
     const panel = h('div', 'screen-panel station-panel', overlay);
+    renderedPanel = panel;
     buildPanel(panel);
+    if (focusId && renderedView === view) {
+      const target = document.getElementById(focusId);
+      target?.focus({ preventScroll: true });
+      if (range && typeof target?.setSelectionRange === 'function') target.setSelectionRange(...range);
+    }
     panel.scrollTop = scrollY; // after content: clamped against the new scrollHeight
     renderedView = view;
   }
@@ -6325,6 +6611,7 @@ export function initStation(ctx) {
   // Notices that mean the click changed nothing. Everything else is reported
   // as accepted with the player-visible notice echoed back.
   const PERFORM_REFUSALS = Object.freeze([
+    { re: /^Trade quantity must/, token: 'bad-args' },
     { re: /^Not enough UU/, token: 'uu' },
     { re: /^Hold is full/, token: 'hold' },
     { re: /^No .+ in the hold/, token: 'hold' },
@@ -6412,6 +6699,8 @@ export function initStation(ctx) {
     ui.restitutionPending = false;
     ui.giftPending = false;
     ui.seedPending = false;
+    if (key === 'market' && !ui.bulk) editBulk();
+    if (key !== 'market') ui.bulk = null;
     if (key === 'shipyard') setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     render();
   }
@@ -6425,6 +6714,8 @@ export function initStation(ctx) {
     applyBerthInput(ctx, 'dock');
     ctx.flags.docked = true;
     ui.open = true;
+    ui.bulk = null;
+    if (!bulkStatus.parentNode) overlay.appendChild(bulkStatus);
     ui.level = 1;
     ui.service = null;
     ui.notice = '';
@@ -6491,6 +6782,8 @@ export function initStation(ctx) {
 
     ctx.flags.docked = false;
     ui.open = false;
+    ui.bulk = null;
+    bulkStatus.textContent = '';
     // Only a launch that actually happened clears the held line. A hold above
     // returns before this point and keeps its notice; leaving a stale hold here
     // made a successful retry read back as a refusal (issue #65 QA).
@@ -6524,6 +6817,21 @@ export function initStation(ctx) {
   window.addEventListener('keydown', (e) => {
     if (!ui.open) return;
     const code = decodeKeyCode(e);
+    const native = node => node && (/^(INPUT|SELECT|TEXTAREA)$/.test(node.tagName) || node.isContentEditable
+      || (node.tagName === 'BUTTON' && node.id?.startsWith('market-bulk-')));
+    const focused = document.activeElement;
+    if (native(e.target) || native(focused)) {
+      if (e.repeat && (code === 'Enter' || code === 'Space')
+        && (focused?.id?.startsWith('market-bulk-') || e.target?.id?.startsWith('market-bulk-'))) e.preventDefault();
+      if (code === 'Escape' && (focused?.id?.startsWith('market-bulk-') || e.target?.id?.startsWith('market-bulk-'))) {
+        e.preventDefault();
+        if (ui.bulk) ui.bulk.ready = false;
+        bulkNotice('Bulk preview cancelled.');
+        render();
+        focusBulk('market-bulk-heading');
+      }
+      return;
+    }
     if (ui.level === 1) {
       if (code === 'Escape') {
         if (ui.justDocked) { ui.justDocked = false; return; }
@@ -6569,8 +6877,8 @@ export function initStation(ctx) {
         render();
         return;
       }
-      if (code === 'ArrowUp') { ui.marketSel = (ui.marketSel + COMMODITY_KEYS.length - 1) % COMMODITY_KEYS.length; render(); return; }
-      if (code === 'ArrowDown') { ui.marketSel = (ui.marketSel + 1) % COMMODITY_KEYS.length; render(); return; }
+      if (code === 'ArrowUp') { ui.marketSel = (ui.marketSel + COMMODITY_KEYS.length - 1) % COMMODITY_KEYS.length; editBulk(); render(); return; }
+      if (code === 'ArrowDown') { ui.marketSel = (ui.marketSel + 1) % COMMODITY_KEYS.length; editBulk(); render(); return; }
       if (code === 'KeyQ' || code === 'KeyW' || code === 'KeyA' || code === 'KeyS') {
         const qty = code === 'KeyQ' || code === 'KeyA' ? 1 : 5;
         tryTrade(COMMODITY_KEYS[ui.marketSel], qty, code === 'KeyQ' || code === 'KeyW');
@@ -6694,6 +7002,10 @@ export function initStation(ctx) {
     const commodity = Object.hasOwn(bag, 'commodity') ? bag.commodity : '';
     const qty = Object.hasOwn(bag, 'qty') ? bag.qty : 0;
     const side = Object.hasOwn(bag, 'side') ? bag.side : '';
+    if (side !== 'buy' && side !== 'sell') {
+      ui.notice = 'Cannot trade: choose buy or sell.';
+      return deskResult(false);
+    }
     const ok = tryTrade(commodity, qty, side === 'buy') === true;
     render();
     return deskResult(ok);
@@ -6753,6 +7065,7 @@ export function initStation(ctx) {
       // another system) lands. Consumed via lastEvents like every module.
       let loadedTo = null;
       for (const ev of ctx.lastEvents) {
+        if (ev.type === 'systemLoaded' || ev.type === 'recovered' || ev.type === 'playerDestroyed') ui.bulk = null;
         if (ev.type === 'systemLoaded' && ev.to && ev.to !== currentId) loadedTo = ev.to;
       }
       if (!loadedTo && ctx.world.currentSystem !== currentId) loadedTo = ctx.world.currentSystem;
@@ -6793,8 +7106,11 @@ export function initStation(ctx) {
       }
       if (ctx.flags.docked) {
         // Periodic refresh so prices/jobs/credits stay live behind the panel.
+        // A held bulk control keeps the rebuild waiting (see bulkHoldActive):
+        // refreshTick keeps accumulating, so the deferred refresh lands on the
+        // first frame after the release or cancel. Nothing else is deferred.
         refreshTick += dt;
-        if (refreshTick >= 1) { refreshTick = 0; render(); }
+        if (refreshTick >= 1 && !bulkHoldActive()) { refreshTick = 0; render(); }
       }
 
       const reducedMotion = ctx.settings?.reducedMotion === true;
