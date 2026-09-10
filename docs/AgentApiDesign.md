@@ -534,6 +534,24 @@ empties the card. See the
 
 ---
 
+## Issue #99 — surrender attribution
+
+Surrender terms are offered only for an **effective player-attributed** break.
+A hull broken by an NPC or by an unknown cause may still yield, but that yield
+offers the player no terms and no reward: the incident records causer `world`,
+`observe().targets.current.hail.state` stays `yielded`, credits, fear and the
+`firstCapitulation` milestone do not move, and a later hail opens no card.
+An already-open ORIGINAL surrender card whose eligibility has since changed is
+rejected: `hailResolve` answers with the existing `stale` token and produces no
+effects — no credits, cargo, surrender flag, AI write or event, on any ship.
+That rejection is scoped to the original card. A disabled hull can still offer
+real **salvage** once the live hail maintenance converts the conversation in
+place, which issues a new `conversationId` and prints no ransom amount.
+No API version bump, no new field, command or persisted key.
+Evidence: [Issue99SurrenderAttributionEvidence.md](Issue99SurrenderAttributionEvidence.md).
+
+---
+
 ## Background & Motivation
 
 ### Why this change is needed

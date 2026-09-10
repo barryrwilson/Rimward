@@ -124,7 +124,7 @@ const results = {
   cdpPort: null,
   profile: null,
   boot: null,
-  fixtureNote: 'privilegedFixture: ship spawn, ambient parking, hull pin and hailOpened emission stage the rare card; docking and launching use the real station panel and never write ctx.flags.docked; every assertion reads the rendered DOM or window.rimward',
+  fixtureNote: 'privilegedFixture: ship spawn, ambient parking, hull pin and hailOpened emission stage the rare card; each spawned fixture is also given an initial combat history in which the player is the last effective attacker (ai.lastAttacker = player, one point of player-caused hull damage), disclosed as an initial state rather than a naturally encountered fight; docking and launching use the real station panel and never write ctx.flags.docked; every assertion reads the rendered DOM or window.rimward',
   devServerNote: "harness-only dev server: vite createServer with server { watch: null } and optimizeDeps { noDiscovery: true, include: [] }. Two symptoms, both overrides needed: (1) the cold-cache dependency scan holds /src/main.js and /src/core/ctx.js (both import bare three) open until it times out; (2) an independent CPU profile (out/issue-100/quinn-vite-profile.json) shows Vite/chokidar watcher startup taking ~1.2 GB and ~80 CPU seconds and starving the server afterwards. The dependency scan is not the sole cause; noDiscovery alone does not cure the watcher stall. Disabling the watcher only removes HMR, which this one-shot run never uses. App source, vite.config.js and the production bundle budget are unchanged, and three is simply served unbundled as the pure ESM it is",
   pins: {},
   consoleErrors: [],
@@ -335,6 +335,13 @@ const SETUP = `(async () => {
     live._i100 = true;
     c.ships.push(live);
     if (live.ai) { live.ai.calmUntil = 0; live.ai.intent = true; live.ai.mode = 'hunt'; }
+    // privilegedFixture (issue #99): the rare surrender fixture is staged with
+    // an INITIAL combat history in which the PLAYER is the last effective
+    // attacker — one point of legitimate player-caused hull damage. Without it
+    // the surrender card the D-pins need would not belong to the player at all.
+    // This is a disclosed initial state, not a naturally encountered fight.
+    if (live.ai) live.ai.lastAttacker = 'player';
+    if (live.state) live.state.hull = Math.max(1, live.state.hull - 1);
     bag.ships[tag] = live;
     return { ok: true, tag, pilot };
   };
