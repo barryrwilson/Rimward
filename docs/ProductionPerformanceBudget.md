@@ -11,10 +11,17 @@ The production build must satisfy all of these limits:
 
 | Measure | Release limit | Enforcement |
 |---|---:|---|
-| Total minified JavaScript | 1,800,000 bytes (1,757.81 KiB) | `npm run build` |
-| Total gzip JavaScript | 537,600 bytes (525 KiB) | `npm run build` |
+| Total minified JavaScript | 3,671,906 bytes (3,585.85 KiB) | `npm run build` |
+| Total gzip JavaScript | 1,098,526 bytes (1,072.78 KiB) | `npm run build` |
 | Cold local title-ready startup | 8,000 ms | representative Chrome production probe |
 | Browser dependency boundary | Runtime packages only; currently `three` | `npm run build` and `npm run bundle:report` |
+
+The release owner approved these byte caps on 2026-09-10 by direct request, to
+double the 1,835,953 minified / 549,263 gzip counts measured for the issue-100
+artifact. They supersede the earlier 1,800,000 / 537,600 limits, which are now
+historical. The approval covers the enforceable caps only. It does not change
+the exact-artifact fingerprint below, whose byte counts, filename, and SHA256
+stay as measured, and it waives no startup or browser-boundary requirement.
 
 Gzip is summed per emitted JavaScript chunk because an HTTP server compresses
 chunks independently. The minified and gzip limits are totals, so code splitting
@@ -98,8 +105,8 @@ title in 6,601.3, 4,804.6, 4,105.6, 4,187.0, and 4,181.7 ms. The median was
 All five runs had zero console errors or uncaught exceptions.
 
 If a future build exceeds a byte or startup limit, reduce it or add a measured,
-owner-approved release exception to the release notes. Do not merely raise the
-number.
+owner-approved release exception to the release notes. Do not raise a number
+without an explicit, recorded owner approval such as the 2026-09-10 one above.
 
 An exact-artifact byte exception, when explicitly approved, is recorded in
 `scripts/bundle-policy.mjs` with the owner's approval reference and release-note
@@ -109,7 +116,8 @@ and composition report use that same decision. Any changed, added, or removed
 JavaScript chunk returns to the fixed global budgets; the exception is not an
 allowance for later growth. Reports retain the raw global-budget pass/fail flags.
 Browser dependency checks and startup requirements are never waived by this
-byte exception. The default descriptor is `null` (inactive).
+byte exception. The descriptor is currently active for the issue-100 artifact;
+when no artifact is approved it is `null` (inactive).
 
 `releaseNotes` and `approvalReference` are reviewed repository metadata, not
 authorization mechanisms. The matcher checks that these strings are nonempty;

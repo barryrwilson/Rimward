@@ -1,13 +1,17 @@
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 
+// Owner-approved release limits, doubled on 2026-09-10 by direct owner request;
+// see the approval note in docs/ProductionPerformanceBudget.md. They waive no
+// startup or browser-boundary requirement.
 export const BUNDLE_BUDGET = Object.freeze({
-  minifiedBytes: 1_800_000,
-  gzipBytes: 525 * 1024,
+  minifiedBytes: 3_671_906,
+  gzipBytes: 1_098_526,
 });
 
 // Owner-approved exact artifact; see the recorded approval and measurements.
-// No environment bypass or allowance for future bundle growth.
+// These are historical measured counts for one exact bundle. No environment
+// bypass, and this descriptor itself allows no future bundle growth.
 const APPROVED_BYTE_EXCEPTION = {
   approved: true,
   approvalReference: 'Codex issue-100 owner approval of exact byte exception, 2026-09-10',
