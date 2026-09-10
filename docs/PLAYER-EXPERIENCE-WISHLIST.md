@@ -49,6 +49,13 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [ ] PLANNED (P2, TRADE-004): Fill and empty a freighter hold without repeated
+  five-unit input. [Issue #56](https://github.com/barryrwilson/Rimward/issues/56)
+  has a [proposed bulk trading design](Trade004BulkTradingDesign.md), completed
+  for review on 2026-09-09: explicit quantity, Buy Max, selected-commodity Sell
+  All, visible totals and ordinary orders of at most 99 units. Implementation
+  and live player-outcome verification remain pending.
+
 - [x] IMPLEMENTED (P2, SALVAGE; review gate in [PR #88](https://github.com/barryrwilson/Rimward/pull/88)):
   Give a new Greenhand a discoverable first salvage path through Jobs.
   Issue [#74](https://github.com/barryrwilson/Rimward/issues/74) adds shared
