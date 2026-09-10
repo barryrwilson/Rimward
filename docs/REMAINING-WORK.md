@@ -48,6 +48,30 @@ boundary checks. That is the issue and byte-gate verdict only, not an overall
 release or startup approval; the earlier failed remote TGT-07 run 34513272635
 stays failed historical evidence.
 
+[Issue #98](https://github.com/barryrwilson/Rimward/issues/98) — a hull that
+surrenders can be told to dump its holds — is **implemented and locally
+verified, awaiting independent QA and PR review**. A player-owned surrender card
+offers `demandCargo` whenever the hull still holds a unit, on the same nonempty
+gate the salvage card uses, and publishes it through `observe().hail`. An empty
+hold omits the verb. Resolution reuses the existing branch: an ordinary manifest
+(`rawOre`, `refinedMetals`) spills as pods unit for unit, the manifest clears,
+fear rises **+2**, **no credits** move, the hull yields to the player and runs.
+Issue #99 attribution, issue #100 dock refusal, disabled-hull salvage (no fear,
+no receipt) and the wave-30 pirate demand are unchanged, as is
+`spillShipCargo`'s separate special-data handling, which is out of scope. No new
+schema, API version, key or persistent field. 57 focused checks pass, with
+`npm run build`, root `npm run test:boot`, `test:surrender-attribution`,
+`test:docked-hails`, `test:hail-identity`, `test:agent-schema` and
+`test:agent-gameplay` all passing locally. Live browser acceptance
+(`npm run test:surrender-cargo-live`) passes **6/6 pins** with a clean console,
+under the recorded harness-only dev-server override and labelled fixtures; an
+earlier live run failed only because the loaded fixture's resolve fell to 19 and
+capitulated past the card (fixture corrected, no runtime change), and a
+superseded dock pin failed on an unrelated dock approach and was replaced by a
+real rendered-button payout pin. No independent QA, merge, release or deployment
+is claimed. See
+[Issue98SurrenderCargoEvidence.md](Issue98SurrenderCargoEvidence.md).
+
 [Issue #99](https://github.com/barryrwilson/Rimward/issues/99) — surrender
 attribution: only the player who actually broke a hull is owed for the yield —
 is **implemented and locally verified, awaiting PR review and merge**. A break the player did not cause opens no bargaining card,

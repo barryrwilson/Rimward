@@ -57,6 +57,28 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING INDEPENDENT QA AND PR REVIEW
+  (P1, HAIL/COMBAT): A hull that has just surrendered should be able to hand
+  over its holds, not only a ransom.
+  [Issue #98](https://github.com/barryrwilson/Rimward/issues/98) offers
+  `demandCargo` on a player-owned surrender card whenever the hull still holds a
+  unit — the same nonempty gate the salvage card uses — and publishes it through
+  `observe().hail`. An empty hold omits the verb. Resolution reuses the existing
+  branch: an ordinary manifest (`rawOre`, `refinedMetals`) spills as scoopable
+  pods unit for unit, the manifest clears, fear rises **+2**, **no credits**
+  move (a ransom is a different verb), the hull yields to the player and runs.
+  Issue #99 attribution, issue #100 dock refusal, disabled-hull salvage (no
+  fear, no receipt) and the wave-30 pirate demand are unchanged;
+  `spillShipCargo`'s separate special-data handling is out of scope and is not
+  redesigned. No new schema, API version, key or persistent field. **Not
+  merged.** 57 focused checks pass, with `npm run build`, root
+  `npm run test:boot` and the #99/#100/#66/agent regressions; the live browser
+  probe passes **6/6 pins** with a clean console. An earlier live run failed
+  only because the loaded fixture's resolve fell to 19 and capitulated past the
+  card — corrected in the fixture, with no runtime change — and a superseded
+  dock pin failed on an unrelated dock approach and was replaced by a real
+  rendered-button payout pin. Independent QA and review are outstanding. See
+  [Issue98SurrenderCargoEvidence.md](Issue98SurrenderCargoEvidence.md).
 - [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P1,
   HAIL/COMBAT): Being nearby when someone else breaks a
   pirate should not make it your prize.

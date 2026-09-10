@@ -1863,6 +1863,9 @@ function updateResolve(ctx, live, now) {
 function intentsFor(ctx, live) {
   const st = live.state;
   const intents = [];
+  // Issue #98: same nonempty-hold gate the salvage card uses, so an empty hold
+  // offers no verb. hail.js owns the existing demandCargo resolution.
+  if (shipHasCargo(st)) intents.push('demandCargo');
   intents.push('demandRansom');
   if (cargoValueSafe(st.cargo, ctx.world.prices) > 0) intents.push('acceptTribute');
   // Named-ace respect: a feared pilot can ask a Named Gun to stand down.
@@ -1917,6 +1920,25 @@ export function spawnShipSurvivor(ctx, live, drift = null) {
   const pod = spawnSurvivorPod(ctx, _v1, spec, drift);
   if (ai) ai.survivorsSpawned = true;
   return pod;
+}
+
+/**
+ * True when the live manifest still holds at least one unit.
+ *
+ * Issue #98: the shared nonempty-hold gate for the salvage card (hail.js, which
+ * re-exports it) and the bargaining card's demandCargo verb (intentsFor above).
+ * It lives here beside spillShipCargo so npc.js needs no import from hail.js —
+ * hail.js already imports npc.js, and the reverse direction would be circular.
+ * Units, not market value: a commodity the local market will not price is still
+ * cargo the player can scoop.
+ */
+export function shipHasCargo(st) {
+  const cargo = st && st.cargo;
+  if (!cargo || cargo.length === 0) return false;
+  for (let i = 0; i < cargo.length; i++) {
+    if ((cargo[i].units | 0) > 0) return true;
+  }
+  return false;
 }
 
 /**
