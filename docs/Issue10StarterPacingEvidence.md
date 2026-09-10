@@ -50,7 +50,7 @@ Fourteen isolated grace contracts cover the 179.99/180/180.01 boundaries,
 origin-system exit/re-entry before and after expiry, and related eligibility.
 Those are pure policy-input fixtures, not actual travel measurements. A second
 fresh-process seed-1 dock-return run produced byte-identical JSON
-(SHA-256 `41c5ffddd9d6f08f9b3b179603fcbdd23736a6b17116fe9a418ef3c74449826`).
+(SHA-256 `41c5ffddd9d6f08f9b3b179603fcbbdd23736a6b17116fe9a418ef3c74449826`).
 
 Run from the repository root:
 
@@ -69,8 +69,8 @@ released through public `letGo`; temporary launch holds were respected.
 
 | Origin | World / wall seconds | Result |
 |---|---:|---|
-| Greenhand, seed 101 | 240.454 / 240.327 | No hostile target, active intent, demand or weapon hit. One collision impact at 90.33s, 197.58u from station, cost 11.123 screen; shell/hull stayed 60/100. Returned to dock at 224.71s. |
-| Beautiful, seed 202 | 240.294 / 242.389 | No hostile target, active intent, demand or damage. Full defenses. Three ambient surrender hails, including one during the first minute; returned to dock at 224.25s. |
+| Greenhand, seed 101 | 240.268 / 242.374 | No hostile target, active intent, demand or damage. Full defenses. Two ambient surrender hails after the first minute; returned to dock at 225.051s. |
+| Beautiful, seed 202 | 240.404 / 241.031 | No hostile target, active intent, demand or damage. Full defenses. Two first-minute ambient surrender hails; returned to dock at 226.824s. |
 
 Both completed with zero browser console errors/exceptions, unchanged runtime
 source hash, and closed Vite/CDP ports. First-minute and dock-return screenshots
@@ -94,15 +94,17 @@ eligible live pirate was present. Player defenses were not altered. This is a
 boundary test, not a natural encounter-frequency sample.
 
 After public refusal of its demand, the hunter fired a missile and cannon at
-203.278s and 203.656s. Ordinary player controls then flew inward: by 209.202s,
-at 229u from the station, target and active intent were cleared. A further
+203.293s and 203.670s. Ordinary player controls then flew inward: by 209.215s,
+at 232u from the station, target and active intent were cleared. A further
 five-second hold remained clear; no hunter shot was recorded while the player
-was inside 300u. Actual damage left screen at 0 and shell at 46, while hull
+was inside 300u. Actual damage left screen at 0 and shell at 54, while hull
 remained 100, confirming the test did not give the player immunity.
 
-Ordinary turning and departure reached 457u at 225.805s. The pirate reacquired
-the player at 249.102s, 479u from the station, with the normal telegraph phase.
-All seven hunter shots occurred outside the law zone (313-600u). Console and
+Ordinary turning and departure reached 460u at 225.835s. The pirate reacquired
+the player at 252.651s, 482u from the station (hunter 361u), with the normal
+telegraph phase. All six hunter shots were recorded while the player was
+310-600u from the
+station. These are player distances, not hunter distances. Console and
 exceptions were clean, runtime source unchanged, and teardown closed both
 ports. Root inspected screenshots of incoming fire and the starter dock flows.
 
@@ -115,9 +117,50 @@ Remove-Item Env:ISSUE10_PURSUIT
 
 The native hail-open event can use `t` for its countdown. Do not interpret
 that field as world time in historical raw hail rows; use action receipts and
-samples. The final probe adds an explicit observed-world-time field for
-future captures. This telemetry-only addition did not change game behavior
-and is not represented as a rerun of these historical captures.
+samples. Historical captures are retained unchanged. An earlier Greenhand
+sample included an 11.123-screen collision impact, not weapon damage; the
+final natural runs above had no damage. The final
+probe records `observedWorldTime` and uses it for first-minute/post-grace
+classification; it also records its own SHA-256. A focused adversarial check
+places a demand at world time 250 with raw `t:20` and verifies that it appears
+only in the post-grace window. Missing observation time is rejected.
+
+The final natural-flow probe rejects refused or timed-out docks, missing or
+reordered checkpoints, non-launches, failure to cross beyond 300u, and short
+observation windows. Both dock/launch sequences and all nine checkpoints are
+mandatory for a successful run. The focused checks execute the same exported
+guards used by the live runner:
+
+```powershell
+node scripts/issue-10-live-probe-test.mjs
+```
+
+## Final capture identity and bounded observation
+
+Natural captures under `live/reviewed-final/natural-greenhand` and
+`natural-beautiful` completed all nine mandatory checkpoints on script commit
+`c24b429460d9bb7d74909ad0ba5fb6d51f0e560d`, probe SHA-256
+`e5b6b1924d40a13c286cfa4868af26e028950fffe692fcfb368f95eb88a05b67`.
+
+A supplemental controlled attempt timed out after 30 seconds waiting for
+reacquisition. At cutoff the hunter was 267u from the station, where law
+suppression is expected; it was briefly outside 300u earlier, and non-player
+target identities were not captured. The entire timeout therefore cannot be
+attributed to the law rule. This attempt remains preserved as inconclusive,
+not counted as a passing flow or proof of a game defect.
+
+Commit `2bd3ab511d8dfc0936a85bb7733e08a5ebc09be2` changes only two lines in the
+controlled scenario: exposes hunter distance in snapshots and extends its
+observation bound to 60 seconds. It still requires actual reacquisition. The
+successful controlled recapture is under
+`live/reviewed-final-pursuit-60/controlled-pursuit`, probe SHA-256
+`540e21dc2bd573955113a00f164e73f74347dab3201cd8d4687dadbbb5f29336`.
+It reacquired 26.816 seconds after departure in that sample; the larger bound
+is not claimed as its cause. Both stored hashes match their committed script
+blobs. Natural flow and guards are unchanged by the two-line delta, so the
+natural captures are retained on their actual hash rather than described as
+reruns on the later script. All successful final captures include observed
+world timestamps, clean consoles, unchanged runtime source, and closed ports.
 
 ## Verification, limits and decision
 
@@ -141,9 +184,10 @@ its own issue; this task does not alter flight physics or grant immunity.
 
 Raw local evidence: `out/issue-10-evidence/starter-pacing-summary.json`,
 `diagnostic-rollup.json`, `reproducibility.json`, build/boot logs, and
-`live/verified/natural-greenhand/result.json` plus
-`live/final/natural-beautiful/result.json`, and
-`live/pursuit-sustained/controlled-pursuit/result.json`. Generated output and disposable
+`live/reviewed-final/natural-greenhand/result.json` plus
+`live/reviewed-final/natural-beautiful/result.json`, and
+`live/reviewed-final-pursuit-60/controlled-pursuit/result.json`.
+Generated output and disposable
 profiles are excluded from the committed artifact. The independent review
 verdict is retained with the task handoff; no merge, deployment, or GitHub
 issue closure is claimed.
