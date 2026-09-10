@@ -764,7 +764,11 @@ function availabilityBlock(ctx, phase, control) {
     } else if (name === 'chooseOrigin') {
       if (phase !== 'origin') reason = 'no-service';
     } else if (name === 'hailResolve') {
-      if (!hailOpenF) reason = 'closed';
+      // Issue #100: discovery agrees with act(). The berth outranks the card,
+      // so a docked planner is told 'docked' and never sees an open hail it
+      // could not resolve anyway.
+      if (docked) reason = 'docked';
+      else if (!hailOpenF) reason = 'closed';
     }
     out[name] = { ok: reason === '', reason };
   }

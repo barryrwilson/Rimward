@@ -8,6 +8,7 @@ import {
   canOpenPlayCard,
   canShowHail,
   deferIncomingHail,
+  dockedAtBerth,
   dropDeferredHail,
   hailCalmOk,
   hailDigitsAllowed,
@@ -57,6 +58,13 @@ import { coverHoldsFor, hailOffer } from '../game/hail-offer.js';
  * the hail family, and the terms the player can read — and
  * ctx.hailApi.resolve(intent, expectedConversationId?) compares that token
  * against the live card before any effect runs.
+ *
+ * Issue #100: the berth is a hard boundary. While ctx.flags.docked is true no
+ * card is drawn (openCard refuses), any card still up is closed on the docking
+ * frame, the one defer slot is emptied so nothing reappears at launch, and
+ * every resolution path — a button click, a number key, ctx.hailApi.resolve,
+ * the public hailResolve — refuses with the stable 'docked' token and moves no
+ * credits, cargo, fear or NPC state. Undocked behaviour is unchanged.
  */
 
 // NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
@@ -606,6 +614,35 @@ export function initHail(ctx) {
     closeDeferredDemand('jumped');
   }
 
+  /**
+   * Issue #100 — the berth closes the channel. A demand keeps its existing
+   * close semantics exactly: the 'docked' outcome, ai.demanding cleared once,
+   * and the demand-shaped hailClosed the HUD already narrates. Every other
+   * family (surrender, salvage, conversation) closes with the ordinary
+   * hailClosed the rest of the game listens for — and with NO resolution, so
+   * nothing is paid, taken, feared or written on the way out. The one defer
+   * slot is emptied too, so a call the berth swallowed cannot surface later.
+   */
+  function closeForDock() {
+    if (open && !open.demandHail) {
+      const live = open.ship;
+      try {
+        ctx.emit('hailClosed', { ship: live });
+      } catch {
+        /* never throw out of dock close */
+      }
+      closeCard();
+    } else {
+      resolveOpenDemand('docked');
+    }
+    closeDeferredDemand('docked');
+    try {
+      dropDeferredHail();
+    } catch {
+      /* skip mutex */
+    }
+  }
+
   function frameHas(type) {
     try {
       const evs = ctx.events;
@@ -621,6 +658,10 @@ export function initHail(ctx) {
   function resolveIntent(ctx2, intent) {
     const h = open;
     if (!h) return;
+    // Issue #100: ONE boundary for every resolution path that reaches an
+    // effect — a card button, a number key, and ctx.hailApi.resolve. A card
+    // still on screen in the frame the berth takes the ship resolves nothing.
+    if (dockedAtBerth(ctx2)) return;
     const live = h.ship;
     const st = live && live.state;
     const ai = live && live.ai;
@@ -803,6 +844,12 @@ export function initHail(ctx) {
   function openCard(ev) {
     const live = ev.ship;
     if (!live || !live.state) return;
+    // Issue #100: ONE card boundary. Every opener funnels through here — an
+    // incoming hailOpened, a same-speaker redraw of a card already up, the
+    // in-place salvage conversion, the deferred slot, and the KeyH salvage
+    // press — so the berth needs exactly this one refusal to keep the desk
+    // clear. Nothing stacks on the station panel.
+    if (dockedAtBerth(ctx)) return;
     const same = !!(open && open.ship === live);
     try {
       if (!same && hailCalmOk(ctx, live) === false) return;
@@ -1024,6 +1071,12 @@ export function initHail(ctx) {
    */
   function resolve(intentOrIndex, expectedConversationId) {
     const bound = arguments.length > 1;
+    // Issue #100: the berth answers first, and always with the same word. The
+    // token does not depend on whether this frame's dock close has run yet, so
+    // a planner reads one stable 'docked' — the token selectTarget already
+    // uses — rather than racing 'closed' against it. Nothing is inspected,
+    // nothing is resolved.
+    if (dockedAtBerth(ctx)) return 'docked';
     if (!open) return 'closed';
     if (bound) {
       const want = expectedConversationId;
@@ -1093,7 +1146,10 @@ export function initHail(ctx) {
             openCard(ev);
             continue;
           }
-          if (demandHail) failCloseDemand(ev, 'voided');
+          // Issue #100: a demand that arrives while the ship is in the berth
+          // keeps the 'docked' outcome the HUD already narrates ("demand
+          // broken. You docked.") rather than the generic 'voided'.
+          if (demandHail) failCloseDemand(ev, dockedAtBerth(ctx) ? 'docked' : 'voided');
         } else if (ev.type === 'hailClosed') {
           if (open && (!ev.ship || ev.ship === open.ship)) closeCard();
           try { dropDeferredHail(ev.ship); } catch { /* skip mutex */ }
@@ -1102,7 +1158,9 @@ export function initHail(ctx) {
       }
       // Player-initiated salvage hail (H). World.js may already have opened
       // a Callow card this frame; do not steal an open card.
-      if (ctx.input.hailPressed && !open) {
+      // Issue #100: docked swallows the press outright — no card, and no miss
+      // toast either, because the berth is not a failed hail.
+      if (ctx.input.hailPressed && !open && !dockedAtBerth(ctx)) {
         let allow = true;
         let skipMiss = hailMissSkipSurface(ctx);
         let overlayToken = '';
@@ -1173,10 +1231,7 @@ export function initHail(ctx) {
         /* timer text must not throw */
       }
       try {
-        if (ctx.flags && ctx.flags.docked === true) {
-          resolveOpenDemand('docked');
-          closeDeferredDemand('docked');
-        }
+        if (dockedAtBerth(ctx)) closeForDock();
       } catch {
         /* dock close must not throw */
       }

@@ -300,6 +300,12 @@ function actHailResolve(ctx, name, args) {
   if (!api || typeof api.resolve !== 'function' || typeof api.peek !== 'function') {
     return fail(ctx, name, 'no-service');
   }
+  // Issue #100: the berth refuses first, and with the same stable token
+  // selectTarget and afterburner use. It runs BEFORE hailDigitsAllowed so a
+  // docked planner reads 'docked' — the real reason — instead of the generic
+  // 'no-service' the overlay gate would give, and it never varies with whether
+  // this frame's dock close has already emptied the card.
+  if (ctx.flags && ctx.flags.docked === true) return fail(ctx, name, 'docked');
   let digitsOk = false;
   try {
     digitsOk = hailDigitsAllowed(ctx) !== false;
