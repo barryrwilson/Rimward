@@ -2,8 +2,10 @@
 
 Inventory date: 2026-09-10. Reconciled against master
 `0dd7908e3929725d646958d43f63de57b68dc7c8` and the GitHub issue/PR API.
-At this snapshot there are **zero open issues and zero open pull requests**.
-That describes the filed queue; the unfiled candidates below remain visible.
+Before consolidation, this snapshot had **zero open issues and zero open pull
+requests**. [Consolidation PR #97](https://github.com/barryrwilson/Rimward/pull/97)
+now tracks the documentation and verification repairs; the unfiled candidates
+below remain visible.
 
 This is the compact current index. The assigned GitHub issue governs a selected
 task; the wishlist preserves product intent and playtest observations.
@@ -17,9 +19,15 @@ is not fresh QA, release readiness, or deployment evidence.
 ## Active outcomes
 
 The owner authorized consolidation and complete release validation on current
-master before more features. The coordinating consolidation record owns that
-verification and repository housekeeping. This index does not predeclare its
-result or publish a new release.
+master before more features. The [consolidation record](RepoConsolidation20260910.md)
+records completed preservation/cleanup and verification repairs. Final
+[release run 34500771317](https://github.com/barryrwilson/Rimward/actions/runs/34500771317)
+on `f0b4c62c3a7bef7296e1603c46dd90acea893532` returned **PASS** for all 10
+gates and 15 evidence assertions. Independent source/contract review passed;
+PR #97 owns the final documentation review and merge handoff. All 447 emitted
+files match the baseline runtime exactly. Earlier failed runs remain recorded,
+and their residual reliability observations remain below. No release was
+published or new performance exception granted.
 
 ## Completed and merged outcomes
 
@@ -72,7 +80,9 @@ outcome before implementation; preserve the original product intent.
 
 | Candidate | State and next action |
 |---|---|
-| Performance headroom and current release validation | Latest #56 measured artifact is 1,835,632 minified / 549,169 gzip bytes against unchanged 1,800,000 / 537,600 limits. Startup median was 7,340.4 ms; one of five runs reached 8,280 ms against 8,000 ms. Exact byte and separate startup acceptances preserve raw failures and grant no future-growth allowance. Use the [measured decision](releases/issue-56-measured-decision.md) and [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
+| Intermittent live dock approach collision | [Baseline run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689) records fresh Greenhand `approachDock` cancelling on `bodyHit` / `impact` near the +X stage. Docking passed in the intermediate and final runs; the original collider and cause remain unresolved. Preserve full public collision payload and pre-failure state on an unchanged fresh-start approach before selecting a bounded runtime fix. See the [diagnostic summary](RepoConsolidation20260910.md#residual-reliability-follow-ups). This is an unfiled follow-up, not a failed final gate or a proven repaired defect. |
+| Smoke/capture reliability | [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
+| Performance headroom | Latest #56 measured artifact is 1,835,632 minified / 549,169 gzip bytes against unchanged 1,800,000 / 537,600 limits. Startup median was 7,340.4 ms; one of five runs reached 8,280 ms against 8,000 ms. Exact byte and separate startup acceptances preserve raw failures and grant no future-growth allowance. Use the [measured decision](releases/issue-56-measured-decision.md) and [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
 | Agent Play mouse ownership | Unfiled owner report from 2026-09-06: incidental pointer/UI movement should not interfere with agent flight, docking or mining, while explicit takeover remains available. Current `controls.js` deliberately makes mouse movement/clicks cancel a combat lease; that later human-takeover contract must be reconciled with the requested watch behavior. Do not claim #57 or #61 closed the whole observation. Recheck live pointer, click, focus and handoff behavior before selecting a change. |
 | Raw afterburner/flee completion (local PIR-02) | Historical run observed residual motion and station contacts after the flee timer ended. Current `agent-flee.js` still ends by clearing its channel; #62's stable combat withdrawal is a different path. Repeat the raw flee expiry flow near/far from port before claiming a current defect or a completed fix. |
 | Supported resumable API playtest runner (local PIR-07) | Local tooling proposal: expected build/API version, isolated profile, durable sequence recovery, acknowledged safe handoffs and sanitized evidence. Existing scenario probes do not by themselves establish the full resumable-runner contract. Scope only if selected; no browser credentials or in-game LLM runner. |
