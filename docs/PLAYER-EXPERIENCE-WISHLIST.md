@@ -196,8 +196,10 @@ checked against the current initiative text before capture.
   The separate unsteered sun-loss observation now has a local outward-heading
   fix. Independent Claude source/evidence QA passed `6e17f69f`; exact byte and
   separate measured startup exceptions are owner-approved, with the byte
-  descriptor activated. Ordinary build/report, complete artifact comparison,
-  and final policy review remain pending; no release readiness is claimed.
+  descriptor activated. Ordinary build/report and complete 447-file artifact
+  comparison passed `ffd4d891`; final independent policy/documentation verdict
+  is tracked in the coordinating task evidence `QA-POLICY.md`, not asserted here.
+  No release readiness is claimed.
   See [StarterSunDriftEvidence.md](StarterSunDriftEvidence.md).
   See [Issue10StarterPacingEvidence.md](Issue10StarterPacingEvidence.md).
 - [x] DONE (P1, HAIL/ENCOUNTERS): Give pirate demands a full lifecycle. The

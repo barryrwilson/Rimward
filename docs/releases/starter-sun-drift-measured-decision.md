@@ -5,9 +5,11 @@ The owner approved the exact byte exception and, separately, the measured
 startup exception on 2026-09-10, conditional on scoped independent Claude QA
 passing. That condition is fulfilled by the source/evidence **PASS** on
 `6e17f69f9db65d902dbe1272fc69a43d45103385`. The exact byte descriptor is now
-activated. Ordinary build/report, full emitted-artifact comparison, and final
-independent policy/documentation review remain pending; this record does not
-claim release readiness. [The evidence report](../StarterSunDriftEvidence.md)
+activated. Ordinary build/report and full emitted-artifact comparison **PASS**
+on `ffd4d8918fe36d59ab53345666389982cbc5248f`. Final independent
+policy/documentation review is tracked in the coordinating task's external
+`QA-POLICY.md`; this record does not assert that verdict or release readiness.
+[The evidence report](../StarterSunDriftEvidence.md)
 retains the functional verification and provenance.
 
 The [production performance policy](../ProductionPerformanceBudget.md) requires
@@ -85,12 +87,19 @@ left release policy on HOLD until these separately approved decisions were
 recorded and activated. Its death-respawn observation is parked outside the
 fresh-start scope; no respawn implementation or external issue is added.
 
-The next gate is ordinary build/report and comparison of all 447 emitted files
-against the approved manifest, followed by independent review of this narrow
-policy/documentation change. These checks remain pending; their exact-commit
-results will be retained in the external evidence directory, with the final
-independent verdict in `QA-POLICY.md`. Actual emitted
-identity must match the approved artifact; any changed artifact requires
+Ordinary `npm run build` and `npm run bundle:report -- --json` both exited zero
+on `ffd4d8918fe36d59ab53345666389982cbc5248f`. Raw `minifiedPass` and `gzipPass`
+remain false; the overall byte gate passes through the exact approved exception.
+The browser boundary passes with only `three` and no unexpected packages or
+forbidden sources. All 447 emitted files match the measured candidate by path,
+size and SHA256, with zero mismatches and the manifest identity recorded above.
+The runtime source digest also remains exactly unchanged.
+
+Evidence is retained in the external evidence directory as `build-approved.log`,
+`bundle-approved.log`, `build-artifact-verification.json`, and
+`build-source-identity.json`. The final independent policy/documentation verdict
+for the documentation closeout is tracked there in `QA-POLICY.md` by the
+coordinating task; this build evidence does not assert that verdict. Any changed artifact requires
 reassessment. None of these decisions authorizes publication, merge, or
 deployment. Rollback remains the prior application
 artifact on master `acc8662431507d257ed094975224fd7ed4cf80fa`; no save migration

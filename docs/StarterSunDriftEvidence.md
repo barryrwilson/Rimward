@@ -3,8 +3,10 @@
 Status: cause reproduced; narrow heading fix implemented and locally verified.
 Independent source/evidence QA passed `6e17f69f9db65d902dbe1272fc69a43d45103385`.
 Owner-approved exact bytes and separate measured startup exceptions are recorded
-and the byte descriptor is activated. Ordinary build/report, complete artifact
-comparison, and final policy QA remain pending. No merge or deployment is claimed.
+and the byte descriptor is activated. Ordinary build/report and complete artifact
+comparison passed `ffd4d8918fe36d59ab53345666389982cbc5248f`. Final independent
+policy QA is tracked in the coordinating task's external `QA-POLICY.md`; no
+final verdict, merge, or deployment is claimed here.
 
 ## Reproduced behavior
 
@@ -133,15 +135,23 @@ Baseline and candidate full boot passed, with unchanged ship source during the
 candidate run (`boot-candidate.log`, `boot-ship-before.json`,
 `boot-ship-after.json`). No tests or release thresholds were weakened.
 
-## Remaining release gates
+## Release verification and independent closeout
 
 Baseline build passed. Before exception activation, the candidate ordinary build
 failed only the byte gate: 1,825,899 minified / 545,419 gzip JavaScript bytes,
 30 / 10 bytes above the exact previous issue #12 artifact. The separate
 three-only browser dependency-boundary diagnostic passed. That diagnostic does
 not convert the ordinary build into a PASS. The exact approved byte descriptor
-is now activated, with global limits, matcher, and dependency audit unchanged;
-ordinary build/report and full emitted-artifact comparison remain pending.
+is now activated, with global limits, matcher, and dependency audit unchanged.
+Ordinary `npm run build` and `npm run bundle:report -- --json` both exited zero
+on `ffd4d8918fe36d59ab53345666389982cbc5248f`: raw byte flags remain false while
+the exact exception passes. The browser boundary passes with only `three` and
+no unexpected packages or forbidden sources. All 447 emitted files match the
+measured candidate by path, size and SHA256, with zero mismatches; the manifest
+SHA256 is `1210e226e2f444d5a9626b6493b21d1e29d93b5d912721525a984e6a855c249a`.
+The runtime source digest remains the one recorded above. Evidence is retained
+as `build-approved.log`, `bundle-approved.log`, `build-artifact-verification.json`,
+and `build-source-identity.json` in the local evidence directory.
 Five serial production startup samples had median 7,880.8 ms and maximum
 8,076.1 ms; two exceeded the unchanged 8,000 ms target, so raw startup failed.
 All 447 candidate files were independently rehashed against the saved manifest.
@@ -164,5 +174,7 @@ reached the turn limit) and `claude-source-review-continuation.jsonl` (final PAS
 Review reproduced the runtime source digest and focused tests, checked pose
 contracts, and confirmed executable probe code was unchanged by EOF cleanup.
 Its separate death-respawn observation is parked outside this fresh-start scope.
-Final independent policy/documentation QA remains pending after the ordinary
-build/report and complete artifact comparison; release readiness is not claimed.
+The final independent policy/documentation verdict is tracked by the coordinating
+task in `QA-POLICY.md` in the local evidence directory. This record reports the
+completed source and build gates without asserting that final verdict or release
+readiness.
