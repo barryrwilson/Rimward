@@ -127,7 +127,7 @@ const requiredFocusedChecks = [
   'wave127And132',
 ];
 const requiredModelsFlows = [
-  'V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10',
+  'V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10', 'V11',
 ];
 const requiredOptionalSurfaces = [
   'Hail01', 'HUD-06', 'Hail02', 'HUD-07', 'NAV-09', 'TGT-07', 'CTL-03',
@@ -185,7 +185,7 @@ const evidenceChecks = {
   modelsSourceSha: rw008Evidence.sourceSha === expectedSha,
   modelsFlows: rw008Evidence.reportedVerdict === 'PASS'
     && exactNames(rw008Evidence.checkNames, requiredModelsFlows)
-    && rw008Evidence.checksPassed === 11,
+    && rw008Evidence.checksPassed === 12,
   modelsConsoleClean: rw008Evidence.consoleErrors === 0 && rw008Evidence.exceptions === 0,
   modelsProfileRemoved: rw008Evidence.profileRemoved === true,
   optionalSourceSha: opt001Evidence.sourceSha === expectedSha,

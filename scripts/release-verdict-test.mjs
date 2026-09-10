@@ -45,9 +45,10 @@ try {
     commit: sha, verdict: 'PASS', consoleErrors: [], exceptions: [], profileRemoved: true,
     [key]: Object.fromEntries(names.map((name) => [name, { pass: true }])),
   });
-  write('out/rw008/verify/probes.json', browser('flows', [
-    'V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10',
-  ]));
+  const models = browser('flows', [
+    'V1', 'V2', 'V3', 'V4', 'V6', 'V6b', 'V6c', 'V7', 'V8', 'V9', 'V10', 'V11',
+  ]);
+  write('out/rw008/verify/probes.json', models);
   write('out/w143/opt001/verify/probes.json', browser('surfaces', [
     'Hail01', 'HUD-06', 'Hail02', 'HUD-07', 'NAV-09', 'TGT-07', 'CTL-03',
   ]));
@@ -61,7 +62,7 @@ try {
     write(`out/release-candidate/${name}`, { metadata: { vulnerabilities: { high: 0, critical: 0 } } });
   }
   const complete = required.map((name) => ({ name, pass: true }));
-  function verify(label, checks, expected, verdict = 'PASS', overrides = {}) {
+  function verify(label, checks, expected, verdict = 'PASS', overrides = {}, expectedModels = true) {
     write('out/release-candidate/focused-regressions.json', { verdict, checks });
     const run = spawnSync(process.execPath, [path.join(fixture, 'scripts/release-verdict.mjs')], {
       cwd: fixture, windowsHide: true, encoding: 'utf8',
@@ -71,7 +72,8 @@ try {
     assert.equal(run.status, 0, `${label}: CLI crashed: ${run.stderr}`);
     const result = JSON.parse(readFileSync(path.join(fixture, 'out/release-candidate/release-verdict.json'), 'utf8'));
     assert.equal(result.evidenceChecks.focusedRegressions, expected, `${label}: focused evidence`);
-    assert.equal(result.verdict, expected && !Object.keys(overrides).length ? 'PASS' : 'FAIL', `${label}: final verdict`);
+    assert.equal(result.evidenceChecks.modelsFlows, expectedModels, `${label}: Models evidence`);
+    assert.equal(result.verdict, expected && expectedModels && !Object.keys(overrides).length ? 'PASS' : 'FAIL', `${label}: final verdict`);
     pins++;
   }
   verify('complete fourteen-check release evidence', complete, true);
@@ -88,6 +90,12 @@ try {
   verify('missing checks', null, false);
   verify('successful evidence cannot override failed workflow', complete, true, 'PASS', { FOCUSED_OUTCOME: 'failure' });
   verify('successful evidence cannot override wrong checkout', complete, true, 'PASS', { CHECKED_OUT_SHA: 'b'.repeat(40) });
+  delete models.flows.V11;
+  write('out/rw008/verify/probes.json', models);
+  verify('missing required Models V11', complete, true, 'PASS', {}, false);
+  models.flows.V11 = { pass: false };
+  write('out/rw008/verify/probes.json', models);
+  verify('failed required Models V11', complete, true, 'PASS', {}, false);
   console.log(`RELEASE VERDICT CONTRACT PASS (${pins} scenarios)`);
 } finally {
   // mkdtemp owns this exact directory; never touches live release evidence.
