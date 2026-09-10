@@ -61,17 +61,19 @@ durable next-wave capture is mandatory, not optional.
   station desk. [Issue #100](https://github.com/barryrwilson/Rimward/issues/100)
   keeps the berth in charge: no incoming surrender or bargaining card opens
   while docked, an open card and the deferred slot close on the docking frame
-  so nothing returns at launch, and the button, the number key and the public
-  `hailResolve` all refuse with the stable `docked` token while granting
-  nothing. Demand close semantics and undocked behaviour, including issue #66
-  conversation identity, are unchanged. **Not done.** The runtime change and
+  so nothing returns at launch, the human button and number-key handlers are
+  ignored while docked, and the public `hailResolve` returns the stable
+  `docked` token; none of them grants hail effects. Demand close semantics and undocked behaviour, including issue #66
+  conversation identity, are unchanged. **Not merged.** The runtime change and
   37 focused checks pass locally with `test:boot`, `test:hail-identity` and
-  `test:agent-hardening`, and the live browser probe passes 7/7 pins on
-  2026-09-10 with a clean console. The production build still fails the
-  unchanged byte policy with no authorized exception, and independent QA
-  review is pending. NPC hail attribution (#99) and the persisted throttle and
-  control-expiry work (#103) are out of scope. See
-  [Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md).
+  `test:agent-hardening`, the live browser probe passes 7/7 pins on 2026-09-10
+  with a clean console, and independent behaviour and source QA passes at
+  `1f9035c2`. The production build now passes through an exact owner-approved
+  byte exception for this artifact only, with the raw byte limits still
+  exceeded; QA of that activation is pending. NPC hail attribution (#99) and the
+  persisted throttle and control-expiry work (#103) are out of scope. See
+  [Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md) and the
+  [measured decision](releases/issue-100-measured-decision.md).
 - [x] DONE (P2, TRADE-004; merged [PR #96](https://github.com/barryrwilson/Rimward/pull/96)): Fill and empty a freighter hold without repeated
   five-unit input. [Issue #56](https://github.com/barryrwilson/Rimward/issues/56)
   has an [approved bulk trading design](Trade004BulkTradingDesign.md): explicit

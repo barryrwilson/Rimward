@@ -2,12 +2,15 @@
 
 [Issue #100](https://github.com/barryrwilson/Rimward/issues/100).
 
-**Status: not done — build hold.** The runtime change is implemented. The
-focused, boot, hail-identity and agent-hardening suites pass locally, and the
-live browser probe now passes **7/7 pins on 2026-09-10** with a clean console.
-`npm run build` and `npm run bundle:report` still **FAIL** under the unchanged
-byte policy, and no new exception is authorized. Independent QA review is
-**pending**. Nothing here claims a merged, released or deployed state.
+**Status: build gate resolved by an exact owner-approved byte exception; QA of
+that activation pending.** The runtime change is implemented. The focused, boot,
+hail-identity and agent-hardening suites pass locally, and the live browser probe
+passes **7/7 pins on 2026-09-10** with a clean console. Independent behaviour and
+source QA at `1f9035c2` returned **PASS** (`out/issue-100/qa-review.md`). The raw
+byte limits are still exceeded, but `npm run build` and
+`npm run bundle:report -- --json` now pass through the exact approved exception
+for this artifact only. Independent QA of the descriptor and documentation delta
+is **pending**. Nothing here claims a merged, released or deployed state.
 
 ## Outcome
 
@@ -68,11 +71,12 @@ API stays at `VERSION` 2. See the
 Raw output is local and untracked: `out/issue-100/focused-test-restored.log`
 and the harness log `out/issue-100/claude-finish.log`.
 
-## Build and bundle — FAIL, on hold
+## Build and bundle — PASS under the exact approved exception
 
-`npm run build` and `npm run bundle:report` fail the unchanged production byte
-policy. Logs: `out/issue-100/build.log`, `out/issue-100/bundle-report.log`,
-`out/issue-100/bundle-measurement-restored.json`.
+The ordinary `npm run build` and `npm run bundle:report -- --json` now exit 0.
+The raw numeric limits are still exceeded: `minifiedPass` is `false` and
+`gzipPass` is `false`. `bytePolicy.pass` is true only through the owner-approved
+exact byte exception for this artifact.
 
 | Field | Measured |
 |---|---|
@@ -81,14 +85,27 @@ policy. Logs: `out/issue-100/build.log`, `out/issue-100/bundle-report.log`,
 | Minified bytes | 1,835,953 (limit 1,800,000; +321 versus the previous exact exception) |
 | Gzip bytes | 549,263 (limit 537,600; +94 versus the previous exact exception) |
 
-The existing exact byte exception names only the previous SHA, so it does not
-cover this artifact. **No new exception or budget change is authorized or
-activated.** See the
+On 2026-09-10 the owner approved an exact byte exception for this artifact only.
+`APPROVED_BYTE_EXCEPTION` in `scripts/bundle-policy.mjs` now names this chunk,
+its SHA256 and its exact aggregate and per-chunk bytes. The global
+1,800,000 / 537,600 limits, the exact matcher, the browser dependency audit and
+every other export are unchanged, and there is no future-growth allowance or
+environment bypass. The approval covers only the exact new bundle; it grants no
+startup exception, measurement, merge or deployment. See the
 [performance contract](ProductionPerformanceBudget.md) and the
-[measured decision record](releases/issue-56-measured-decision.md). The
-browser dependency boundary check passes: the bundle's only dependency is
-Three.js, and no forbidden module is present. That check is not a passing
-build.
+[issue-100 measured decision](releases/issue-100-measured-decision.md); the
+[issue-56 record](releases/issue-56-measured-decision.md) stands as history.
+
+The emitted `dist/assets/index-CY-oCepC.js` was measured directly after
+activation and matches the approval exactly by SHA256, raw bytes and gzip bytes.
+Logs: `out/issue-100/approved-build.log`,
+`out/issue-100/approved-bundle-report.log`,
+`out/issue-100/approved-bundle-report.json`. The earlier failing run is
+preserved raw at `out/issue-100/build.log`, `out/issue-100/bundle-report.log`
+and `out/issue-100/bundle-measurement-restored.json`.
+
+The browser dependency boundary check passes: the bundle's only dependency is
+Three.js, and no forbidden module is present.
 
 ## Verification — live browser, PASS
 
@@ -144,9 +161,21 @@ Two limitations belong on the record:
   never sets `ctx.flags.docked`, and every assertion reads the rendered DOM or
   the public `window.rimward` handle.
 
+## Independent QA — behaviour and source, PASS
+
+`out/issue-100/qa-review.md` records an independent review at
+`1f9035c255afa9ddd0d4dd4dd17d1a4c92bb51a2`: **behaviour verdict PASS**, with
+focused (37 checks), hail-identity, agent-hardening, capitulation-feedback and
+boot suites rerun independently, plus 12 added boundary assertions. That review
+also recorded the then-current build FAIL as the blocking release finding, and
+it is not approval of the byte exception now activated.
+
 ## Remaining before done
 
-Live acceptance now passes, so criterion 4 of the `AGENTS.md` definition of
-done is met. Criterion 2 still fails: the build and bundle budget are on hold
-above. Independent QA review is pending. No pull request, approval or commit
-identity is claimed.
+Live acceptance passes, so criterion 4 of the `AGENTS.md` definition of done is
+met. Criterion 2 now passes through the exact approved byte exception, with the
+raw limits still exceeded as recorded above. Runtime source, tests and the probe
+are unchanged from the QA-approved state at `1f9035c2`, so no gameplay, boot or
+live rerun was needed for the activation. The activation itself — the descriptor
+delta and these documentation changes — still needs independent QA. No pull
+request, merge, deployment or commit identity is claimed.
