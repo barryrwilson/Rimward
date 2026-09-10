@@ -122,7 +122,12 @@ function makeShip(name, pilot, extra = {}) {
       hullMax: 10,
       ...(extra.state || {}),
     },
-    ai: { calmUntil: 0, intent: true, mode: 'hunt', ...(extra.ai || {}) },
+    // Issue #99: these hulls are mid-fight WITH THE PLAYER — hull 8/10 is the
+    // player's own mark on them. The surrender family only draws and only pays
+    // for a break the player caused, so spelling the attacker out here is what
+    // makes the bargaining fixtures below mean what they always meant. Cases
+    // that need a different attacker pass their own `extra.ai`.
+    ai: { calmUntil: 0, intent: true, mode: 'hunt', lastAttacker: 'player', ...(extra.ai || {}) },
     object,
   };
 }

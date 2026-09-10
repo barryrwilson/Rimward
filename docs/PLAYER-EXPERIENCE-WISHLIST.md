@@ -57,6 +57,23 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P1,
+  HAIL/COMBAT): Being nearby when someone else breaks a
+  pirate should not make it your prize.
+  [Issue #99](https://github.com/barryrwilson/Rimward/issues/99) attributes a
+  surrender to whoever landed the last *effective* damage: a break the player
+  did not cause opens no bargaining card, still yields the hull through the
+  ordinary NPC loop, and pays no credits, fear, `firstCapitulation` or patrol
+  progress — the receipt and the lane incident say `world`. A player-caused
+  break, salvage, demand hails, the public API version and the persistent save
+  schema are unchanged (the internal surrender receipt gains a bounded causer),
+  and a card whose claim lapses refuses payout with `stale`. **Not merged.**
+  Independent core QA, the root production build and the full boot all pass at
+  the runtime commit; the live browser probe passes **5/5 pins** and the
+  existing #100 probe still passes **7/7**, both with a clean console. The final
+  docs/test delta still gets independent review. Branch is stacked on
+  PR #107. See
+  [Issue99SurrenderAttributionEvidence.md](Issue99SurrenderAttributionEvidence.md).
 - [ ] IMPLEMENTED / AWAITING MERGE (P1, HAIL/DOCK): A hail must not reach a pilot standing at a
   station desk. [Issue #100](https://github.com/barryrwilson/Rimward/issues/100)
   keeps the berth in charge: no incoming surrender or bargaining card opens

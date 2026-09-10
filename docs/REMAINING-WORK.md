@@ -47,6 +47,27 @@ report, the exact chunk identity, nine negative matcher cases and the browser
 boundary checks. That is the issue and byte-gate verdict only, not an overall
 release or startup approval; the earlier failed remote TGT-07 run 34513272635
 stays failed historical evidence.
+
+[Issue #99](https://github.com/barryrwilson/Rimward/issues/99) — surrender
+attribution: only the player who actually broke a hull is owed for the yield —
+is **implemented and locally verified, awaiting PR review and merge**. A break the player did not cause opens no bargaining card,
+still yields the hull through the ordinary NPC loop, and pays no credits, fear,
+milestone or patrol progress; its `npcSurrendered` receipt and lane incident name
+`world`. A player-caused break is unchanged. Ownership follows the last
+*effective* attacker, so a hit that reduces nothing takes no claim, and an
+original surrender card whose claim has since lapsed refuses payout and `letGo`
+with `stale`. Salvage and demand behaviour, the public API version and the persistent save
+schema are unchanged; the internal surrender receipt gains a bounded causer.
+Independent core QA returned **PASS** at
+`78a3a2b3090e1a75469f138d4098847a3b644362`, covering 61 focused and 20
+adversarial assertions, and the root final production build and full boot both
+pass at that exact commit. Live browser acceptance
+(`npm run test:surrender-attribution-live`) passes **5/5 pins** with a clean
+console, and the existing #100 live probe still passes **7/7** with a clean
+console, under the recorded harness-only dev-server override and labelled
+fixtures. The final docs/test delta still gets independent review. Branch is
+stacked on PR #107. See
+[Issue99SurrenderAttributionEvidence.md](Issue99SurrenderAttributionEvidence.md).
 [PR #106](https://github.com/barryrwilson/Rimward/pull/106) owns the final review
 handoff and the current CI record. Nothing is merged, released or deployed. See
 [Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md), the

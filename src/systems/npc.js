@@ -88,6 +88,10 @@ import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
  * ship recently in combat. Bands drive behavior: defiant presses, shaken
  * weaves with visible power waver, bargaining opens one combat hail,
  * capitulate picks a §7.5 outcome (cut engines / jettison / flee / crew pods).
+ * Issue #99: both are attributed at event time by surrenderCauserOf. The
+ * bargaining card is offered only for a break the PLAYER caused; any other
+ * break still yields the hull, but pays no fear, no seed, and stamps its
+ * npcSurrendered receipt causer:'world'. A yielded hull never bargains again.
  *
  * update() performs zero allocations: all scratch vectors/quaternions are
  * module-scope; allocations happen only on spawn, hail, or capitulation
@@ -1547,6 +1551,18 @@ export function lastAttackerOf(live) {
   return null;
 }
 
+/**
+ * Issue #99 — who caused this hull to break, decided at the instant it breaks.
+ * The last EFFECTIVE damaging attacker owns the receipt: combat.js stamps
+ * lastAttacker only for a hit that really reduced screen/shell/hull/engine, so
+ * the stamp alone is the claim — a shell- or engine-only wound counts. Anything
+ * else — an NPC gun, an unknown or dead attacker ref — fails closed to 'world'.
+ * Reads instance bookkeeping only (lastAttackerOf may clear a dead ref).
+ */
+export function surrenderCauserOf(live) {
+  return lastAttackerOf(live) === 'player' ? 'player' : 'world';
+}
+
 /** Latch + read: hull or screen went below max this instantiation. */
 export function isScratched(live) {
   const ai = live.ai;
@@ -1777,6 +1793,10 @@ function updateResolve(ctx, live, now) {
   const ai = live.ai;
   // Consume even when this sample stands down: old combat cannot earn later.
   const scareReceipt = takeScareDamage(live);
+  // Issue #99: a hull that has already yielded is done bargaining. Stop after
+  // the receipt is spent so a later band change cannot reopen a card on it or
+  // re-enter capitulate. The yield's own physical outcome is untouched.
+  if (st.surrendered === true || ai.surrenderDone === true) return;
   const previousResolve = st.resolve;
   const hostile = (ai.mode === 'hunt' || ai.mode === 'duel') && ai.intent;
   const threatened = now - st.lastCombatAt < THREAT_MEMORY;
@@ -1827,7 +1847,11 @@ function updateResolve(ctx, live, now) {
   const band = resolveBand(st.resolve);
   if (band === ai.band) return;
   ai.band = band;
-  if (band === 'bargaining' && !ai.hailed && !ai.demanding && playerNear(ctx, live, U.TARGET_RANGE)) {
+  // Issue #99: proximity is not authorship. A break the player did not cause
+  // opens no bargaining card — the hull simply keeps flying, and the capitulate
+  // branch below still yields it later without paying anyone.
+  if (band === 'bargaining' && !ai.hailed && !ai.demanding
+    && surrenderCauserOf(live) === 'player' && playerNear(ctx, live, U.TARGET_RANGE)) {
     ai.hailed = true;
     say(ctx, live, 'Terms. Name them.');
     ctx.emit('hailOpened', { ship: live, intents: intentsFor(ctx, live), line: 'They are breaking.' });
@@ -1930,6 +1954,11 @@ function capitulate(ctx, live) {
   ai.intent = false;
   ai.target = null;
 
+  // Issue #99: read the attribution ONCE, before the outcome below spills
+  // cargo or starts a flee that would move the trail. The yield is
+  // unconditional; the causer only decides whether anyone is owed for it.
+  const causer = surrenderCauserOf(live);
+
   // §7.5: critical hull → crew pods; intact cargo → jettison; pirates/aces run.
   let outcome;
   if (st.hull / st.hullMax < 0.4) outcome = 'crewPods';
@@ -1940,7 +1969,9 @@ function capitulate(ctx, live) {
   const glow = live.object.userData.glow;
   if (outcome === 'jettison' || outcome === 'crewPods') {
     jettison(ctx, live, outcome === 'crewPods');
-    if (lastAttackerOf(live) === 'player') maybeGrantPirateSeed(ctx, live);
+    // The seed is a reward for breaking a beautiful hull yourself, so it rides
+    // the same event-time attribution as the fear and the receipt below.
+    if (causer === 'player') maybeGrantPirateSeed(ctx, live);
   }
   if (outcome === 'flee') {
     say(ctx, live, 'Breaking off.');
@@ -1956,8 +1987,11 @@ function capitulate(ctx, live) {
     glow.visible = false; // engines cut
     say(ctx, live, outcome === 'crewPods' ? 'Abandoning ship.' : outcome === 'jettison' ? 'Cargo loose.' : 'We yield.');
   }
-  bumpFear(ctx, ECON.fear.capitulation); // witnessed capitulation +2
-  ctx.emit('npcSurrendered', { ship: live, outcome });
+  // Issue #99: fear is the player's reputation, so it is paid only for a break
+  // the player caused. The receipt carries the same verdict so world.js and
+  // station.js never re-derive it from a trail that has since moved on.
+  if (causer === 'player') bumpFear(ctx, ECON.fear.capitulation); // witnessed capitulation +2
+  ctx.emit('npcSurrendered', { ship: live, outcome, causer });
 }
 
 // ---------- movement modes ----------

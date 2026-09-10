@@ -1646,7 +1646,10 @@ let escapeEvent = null;
   bank.push(bearer);
   const before = ctx.world.milestones.slice();
   // The REAL surrender path: an ace that broke off and is still flying.
-  ctx.emit('npcSurrendered', { ship: { id: 'i68-illyx-live', record: bearer, state: { name: bearer.name } }, outcome: 'flee' });
+  // Issue #99: the receipt names its causer, and the rematch ladder only
+  // counts a name the PLAYER put down — so this witnessed defeat says so
+  // explicitly, exactly as npc.js and hail.js now stamp it in production.
+  ctx.emit('npcSurrendered', { ship: { id: 'i68-illyx-live', record: bearer, state: { name: bearer.name } }, outcome: 'flee', causer: 'player' });
   const evs = eventsOver(4, 'i68 ace flee');
   pin('a fleeing ace still counts as a witnessed defeat',
     ctx.world.aceRivalry.defeats === defeatsBefore + 1
@@ -1675,7 +1678,7 @@ let escapeEvent = null;
   // not survive by flight — the successor it always scheduled still comes.
   delete bearer.survivedByFlight; // FIXTURE: this outcome is not a flight
   ctx.world.aceRivalry.illyxDownAt = null;
-  ctx.emit('npcSurrendered', { ship: { id: 'i68-illyx-live', record: bearer, state: { name: bearer.name } }, outcome: 'ransom' });
+  ctx.emit('npcSurrendered', { ship: { id: 'i68-illyx-live', record: bearer, state: { name: bearer.name } }, outcome: 'ransom', causer: 'player' });
   eventsOver(4, 'i68 ace ransom');
   pin('a NON-flee surrender still schedules the successor it always did',
     ctx.world.aceRivalry.illyxDownAt != null

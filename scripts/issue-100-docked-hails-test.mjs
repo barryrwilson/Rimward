@@ -131,7 +131,11 @@ function makeShip(name, pilot) {
       hull: 8,
       hullMax: 10,
     },
-    ai: { calmUntil: 0, intent: true, mode: 'hunt', target: 'player' },
+    // Issue #99: hull 8/10 is the player's own mark, and the surrender family
+    // only draws and only pays for a break the player caused. Naming the
+    // attacker keeps every berth pin below testing the BERTH boundary rather
+    // than accidentally testing the new attribution guard.
+    ai: { calmUntil: 0, intent: true, mode: 'hunt', target: 'player', lastAttacker: 'player' },
     object,
   };
   ctx.ships.push(ship);

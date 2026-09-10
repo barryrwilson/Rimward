@@ -278,7 +278,17 @@ export function createCtx({ scene, camera, renderer }) {
 
     // --- event queue. Frozen event types (payload documented at emit sites):
     // 'playerHit' {damage,family,fromAft}        'npcHit' {ship,damage}
-    // 'npcDisabled' {ship}   'npcDestroyed' {ship}   'npcSurrendered' {ship,outcome}
+    // 'npcDisabled' {ship}   'npcDestroyed' {ship}
+    // 'npcSurrendered' { ship, outcome, causer:'player'|'world' }
+    //   Issue #99: `causer` is decided by the EMITTER at the instant the hull
+    //   yields — npc.js capitulate reads the live damage trail through
+    //   surrenderCauserOf, and hail.js states 'player' outright for a
+    //   resolution the player just made past the payout guard. Only those two
+    //   words are ever published, so no NPC identity leaks. Consumers must
+    //   fail closed: treat anything that is not exactly 'player' as 'world'
+    //   and withhold fear, milestones, standing and contract credit. The yield
+    //   itself (state.surrendered, the drift/flee outcome, the incident row)
+    //   is unconditional — attribution gates the REWARD, never the outcome.
     // 'npcEscaped' { targetId, targetName, from, to, kind:'gate', reason:'gate', eta }
     //   world.js beginEscapeTransit ONLY (issue #68): one terminal receipt per
     //   validated gate departure — physical arrival, then a completed charge,
