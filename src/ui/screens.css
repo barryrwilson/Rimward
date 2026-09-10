@@ -301,6 +301,18 @@
 .market-bulk-preview { margin: 10px 0; color: #c3d3e4; }
 .market-bulk-receipt { margin-top: 10px; color: var(--rw-warm); }
 
+/*
+ * Short viewports (small windows, or 200% browser zoom on 1280x720) leave the
+ * panel about 295px tall, so the last composer lines stop mid-panel at maximum
+ * scroll and sit under the fixed agent badge. Extra scrollable space below the
+ * composer lets native scrolling carry every confirmation, total and receipt
+ * line up to the panel top, clear of the badge. The badge, the market grid and
+ * all taller layouts are untouched.
+ */
+@media (max-height: 480px) {
+  .market-bulk { padding-bottom: 200px; }
+}
+
 /* Stable live region survives periodic panel replacement. */
 .market-bulk-status {
   position: absolute;
