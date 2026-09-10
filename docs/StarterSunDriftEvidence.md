@@ -109,7 +109,7 @@ performance benchmark or an estimate of incident probability.
 Raw candidate results and initial/terminal screenshots are under
 `fixed-live/` and `fixed-forward-live/` in the local evidence directory. The
 supplemental `fixed-flight-live/flight-greenhand/result.json` records actual
-CDP mouse steering, R/F keys, and J docking at Freehold near world time 14.23.
+CDP mouse steering, R/F keys, and J docking confirmed by world time 14.283.
 Its native dock autosave survives a page reload with exactly equal position and
 quaternion before Continue. It then resumes play without another origin choice.
 The station panel and saved reload screenshots were inspected. All five live
