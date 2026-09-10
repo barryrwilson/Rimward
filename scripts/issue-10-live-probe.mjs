@@ -8,6 +8,35 @@ import {fileURLToPath} from 'node:url';
 export const repo=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const out=resolve(process.env.ISSUE10_OUT||join(repo,'out','issue-10-live'));
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+// Hail payloads may overwrite event.t with a countdown. Only the capture's
+// independent world clock may classify an event into a pacing window.
+export function pacingEventWindows(events) {
+  if(events.some(e=>!Number.isFinite(e.observedWorldTime)))throw Error('Pacing event lacks observed world time');
+  return {
+    firstMinuteEvents:events.filter(e=>e.observedWorldTime>=0&&e.observedWorldTime<=60),
+    afterGraceEvents:events.filter(e=>e.observedWorldTime>=180),
+  };
+}
+export function requireAccepted(receipt,label) {
+  if(receipt?.ok!==true)throw Error(label+' refused '+JSON.stringify(receipt));
+}
+const NATURAL_CHECKPOINTS=['01-stock-start','02-first-minute','03-docked','04-launched','05-left-law-zone','06-after-starter-grace','07-return-outcome','08-return-launch','09-extended-window'];
+export function requirePacingComplete(result) {
+  requireAccepted(result.initialDock?.receipt,'Initial dock');
+  requireAccepted(result.returnAttempt?.receipt,'Return dock');
+  if(result.initialDock.completed!==true||result.returnAttempt.completed!==true)throw Error('Natural pacing did not complete both docks');
+  const checkpoints=result.checkpoints??[];
+  if(checkpoints.length!==NATURAL_CHECKPOINTS.length||checkpoints.some((c,i)=>c.name!==NATURAL_CHECKPOINTS[i]))throw Error('Natural pacing skipped or reordered a required checkpoint');
+  for(const c of checkpoints){
+    if(c.observation?.session?.phase!=='playing')throw Error('Natural pacing left play at '+c.name);
+    if(['03-docked','07-return-outcome'].includes(c.name)&&c.observation.flags?.docked!==true)throw Error('Not docked at '+c.name);
+    if(['04-launched','05-left-law-zone','08-return-launch'].includes(c.name)&&c.observation.flags?.docked!==false)throw Error('Not launched at '+c.name);
+  }
+  const outside=checkpoints[4].observation.station?.range;
+  if(!Number.isFinite(outside)||outside<=300)throw Error('Natural pacing never crossed outside the 300u law zone');
+  for(const [i,time] of [[1,60],[5,190],[8,240]])if(!(checkpoints[i].observation.t>=time))throw Error('Pacing time window not reached at '+checkpoints[i].name);
+}
 async function sourceHash(){const files=spawnSync('git',['ls-files','--cached','--others','--exclude-standard','src'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim().split(/\r?\n/).filter(Boolean).sort();const hash=createHash('sha256');for(const f of [...new Set(files)]){hash.update(f);hash.update(await readFile(join(repo,f)));}return hash.digest('hex');}
 async function port(){const s=createServer();await new Promise((r,j)=>{s.once('error',j);s.listen(0,'127.0.0.1',r);});const p=s.address().port;await new Promise(r=>s.close(r));return p;}
 async function stop(p){if(!p?.pid)return {started:false};if(p.exitCode!==null)return {pid:p.pid,exitCode:p.exitCode,exited:true};let error=null;try{p.kill('SIGTERM');}catch(e){error=String(e);}for(let i=0;i<50&&p.exitCode===null&&p.signalCode===null;i++)await sleep(100);return {pid:p.pid,exitCode:p.exitCode,signal:p.signalCode,exited:p.exitCode!==null||p.signalCode!==null,error};}
@@ -108,26 +137,31 @@ async function pacing(h) {
   await checkpoint('02-first-minute');
   const dock=await act('approachDock',{},false);
   result.initialDock={receipt:dock,requestedAt:(await observe()).t};
-  if(dock.ok){
-    const cap=Date.now()+180000;let s;
-    while(!(s=await observe()).flags.docked&&Date.now()<cap){await sleep(300);}
-    result.initialDock.completed=s.flags.docked;
-    if(s.flags.docked){await checkpoint('03-docked');await launch();await checkpoint('04-launched');
-      const leaveAt=(await observe()).t;await until(leaveAt+12,{throttle:.35});await until(leaveAt+18,{throttle:0});await act('clearControl');await checkpoint('05-left-law-zone');}
-  }
+  requireAccepted(dock,'Initial dock');
+  let cap=Date.now()+180000,s;
+  while(!(s=await observe()).flags.docked&&Date.now()<cap){await sleep(300);}
+  result.initialDock.completed=s.flags.docked;
+  if(!s.flags.docked)throw Error('Initial dock timed out');
+  await checkpoint('03-docked');await launch();
+  if((await checkpoint('04-launched')).flags.docked)throw Error('Initial launch did not leave the dock');
+  const leaveAt=(await observe()).t;await until(leaveAt+12,{throttle:.35});await until(leaveAt+18,{throttle:0});await act('clearControl');
+  const outside=await checkpoint('05-left-law-zone');
+  if(outside.flags.docked||!(outside.station.range>300))throw Error('Departure did not cross outside the 300u law zone');
   await until(190);await checkpoint('06-after-starter-grace');
   result.returnAttempt={requestedAt:(await observe()).t,receipt:await act('approachDock',{},false)};
-  if(result.returnAttempt.receipt.ok){
-    const began=(await observe()).t,cap=Date.now()+180000;let s;
-    while(!(s=await observe()).flags.docked&&s.t-began<120&&Date.now()<cap){await sleep(300);}
-    result.returnAttempt.completed=s.flags.docked;result.returnAttempt.finishedAt=s.t;await checkpoint('07-return-outcome');
-    if(s.flags.docked){await launch();await checkpoint('08-return-launch');}
-  }
+  requireAccepted(result.returnAttempt.receipt,'Return dock');
+  const began=(await observe()).t;cap=Date.now()+180000;
+  while(!(s=await observe()).flags.docked&&s.t-began<120&&Date.now()<cap){await sleep(300);}
+  result.returnAttempt.completed=s.flags.docked;result.returnAttempt.finishedAt=s.t;
+  if(!s.flags.docked)throw Error('Return dock timed out');
+  await checkpoint('07-return-outcome');await launch();
+  if((await checkpoint('08-return-launch')).flags.docked)throw Error('Return launch did not leave the dock');
   await until(240);await checkpoint('09-extended-window');
+  requirePacingComplete(result);
   result.measurements=await c.eval('(()=>{window.__issue10.running=false;return window.__issue10;})()');
   result.wallElapsedSeconds=(Date.now()-result.wallStart)/1000;
   result.worldElapsedSeconds=(await observe()).t-start.t;
-  result.summary={frames:result.measurements.frames,firstTarget:result.measurements.firstTarget,firstIntent:result.measurements.firstIntent,minHull:result.measurements.minHull,minScreen:result.measurements.minScreen,minShell:result.measurements.minShell,events:result.measurements.events.reduce((n,e)=>(n[e.type]=(n[e.type]||0)+1,n),{}),firstMinuteEvents:result.measurements.events.filter(e=>e.t<=60),afterGraceEvents:result.measurements.events.filter(e=>e.t>=180)};
+  result.summary={frames:result.measurements.frames,firstTarget:result.measurements.firstTarget,firstIntent:result.measurements.firstIntent,minHull:result.measurements.minHull,minScreen:result.measurements.minScreen,minShell:result.measurements.minShell,events:result.measurements.events.reduce((n,e)=>(n[e.type]=(n[e.type]||0)+1,n),{}),...pacingEventWindows(result.measurements.events)};
   await save();
 }
 async function pursuit(h){
@@ -154,9 +188,11 @@ async function pursuit(h){
   result.insideLawShots=result.measurements.events.filter(e=>e.type==='npcFire'&&e.shipId===result.fixture.hunterId&&e.t>result.lawEntry.t&&e.t<result.departure.t&&e.stationDistance<300);
   if(result.insideLawShots.length)throw Error('Hunter fired while player inside law');await save();
 }
-if(process.env.ISSUE10_PURSUIT==='1')await runLive('controlled-pursuit','greenhand',303,pursuit);
-else{
-  const origins=process.env.ISSUE10_ORIGIN?[process.env.ISSUE10_ORIGIN]:['greenhand','beautiful'];
-  if(origins.some(o=>!['greenhand','beautiful'].includes(o)))throw Error('Unsupported origin');
-  await Promise.all(origins.map(origin=>runLive('natural-'+origin,origin,origin==='greenhand'?101:202,pacing)));
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  if(process.env.ISSUE10_PURSUIT==='1')await runLive('controlled-pursuit','greenhand',303,pursuit);
+  else{
+    const origins=process.env.ISSUE10_ORIGIN?[process.env.ISSUE10_ORIGIN]:['greenhand','beautiful'];
+    if(origins.some(o=>!['greenhand','beautiful'].includes(o)))throw Error('Unsupported origin');
+    await Promise.all(origins.map(origin=>runLive('natural-'+origin,origin,origin==='greenhand'?101:202,pacing)));
+  }
 }
