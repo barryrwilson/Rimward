@@ -4,6 +4,14 @@
 > This is an idea and product-intent source for future Orchestrator waves, not
 > an implementation plan and not a promise that every item ships unchanged.
 
+Current status reconciled on 2026-09-10 against master
+`0dd7908e3929725d646958d43f63de57b68dc7c8`: all filed issues are closed and
+all PRs are closed, with historical preservation PR #60 closed without merge.
+Use [REMAINING-WORK.md](REMAINING-WORK.md) for current merge records and
+unfiled candidates. Dated playtest observations below retain their original
+product intent and evidence limits; they are not new defects inferred from
+old prose. Merge status does not establish fresh release QA or deployment.
+
 ## How to use this document
 
 ### Adding a quick idea
@@ -49,7 +57,7 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
-- [x] IMPLEMENTED locally (P2, TRADE-004; measured exceptions approved, final policy review pending): Fill and empty a freighter hold without repeated
+- [x] DONE (P2, TRADE-004; merged [PR #96](https://github.com/barryrwilson/Rimward/pull/96)): Fill and empty a freighter hold without repeated
   five-unit input. [Issue #56](https://github.com/barryrwilson/Rimward/issues/56)
   has an [approved bulk trading design](Trade004BulkTradingDesign.md): explicit
   quantity, Buy Max, selected-commodity Sell All, visible totals and ordinary
@@ -59,10 +67,11 @@ durable next-wave capture is mandatory, not optional.
   owner approved the [exact byte and separately the measured startup exceptions](releases/issue-56-measured-decision.md)
   on 2026-09-10; only the exact byte descriptor is activated, the raw byte and
   startup results stay FAIL, and global limits are unchanged. Ordinary
-  build/report and exact 447-file equivalence pass; independent final policy
-  review remains pending. No publication, merge or deployment is claimed.
+  build/report and exact 447-file equivalence pass. PR #96 records final
+  independent QA on `7cb7e7951afe670b2b14fc6701f6e6f667706fb2` and supersedes
+  the historical pending-review label. No new release or deployment is claimed.
 
-- [x] IMPLEMENTED (P2, SALVAGE; review gate in [PR #88](https://github.com/barryrwilson/Rimward/pull/88)):
+- [x] DONE (P2, SALVAGE; merged [PR #88](https://github.com/barryrwilson/Rimward/pull/88)):
   Give a new Greenhand a discoverable first salvage path through Jobs.
   Issue [#74](https://github.com/barryrwilson/Rimward/issues/74) adds shared
   UI/API availability guidance, a bounded search suggestion when no confirmed
@@ -79,7 +88,7 @@ durable next-wave capture is mandatory, not optional.
   The original commit passed all three hosted validation gates. Initial
   Claude review required the failed-record cap correction and complete natural
   evidence. The correction build and 27 focused recovery pins pass; final
-  verification and independent review are tracked in PR #88. No deployment
+  verification and independent review are recorded in merged PR #88. No deployment
   is claimed. Injected destruction-event
   fixtures remain separate lifecycle evidence, with interrupted attempts
   labelled accurately. Source: [playtest summarized in issue #74](https://github.com/barryrwilson/Rimward/issues/74);
@@ -176,14 +185,18 @@ durable next-wave capture is mandatory, not optional.
   Ctl06 `docs/Ctl06ExpandedSettingsDesign.md`. RW-002 PR1–PR5
   on master (#29). Live Playwright CLEAN: PR3 bind map, PR4 KEYS UI
   and conflict, PR5 overlay copy.
-- [ ] INBOX (P2, MODEL VIEWER): Turn Models into a browsable ship reference.
+- [ ] PARKED remainder (P2, MODEL VIEWER): Turn Models into a browsable ship reference.
   Group the long flat list by faction and class, hide pirate duplicates behind
   a variant toggle, add role/scale/lore summaries, and make loading progress
-  visually unambiguous. The current viewer is useful for asset inspection but
-  not yet inviting as a player-facing title-menu feature.
+  visually unambiguous. This records the original player-facing goal; the
+  grouping, variants and summary card now ship.
   RW-003 design `docs/Mdl01ShipReferenceDesign.md` (accepted 2026-08-29).
-  PR1 hygiene/shell and PR2 grouping/livery are on master (#25, #27).
-  Next: RW-010 summary card (#28), then PR4 loading/disposal.
+  PR1 hygiene/shell, PR2 grouping/livery and PR3 role/scale/lore card are on
+  master ([#25](https://github.com/barryrwilson/Rimward/pull/25),
+  [#27](https://github.com/barryrwilson/Rimward/pull/27),
+  [#46](https://github.com/barryrwilson/Rimward/pull/46)); issue #28 is closed.
+  Optional PR4 loading/retry/disposal remains unfiled. Narrow-phone layout and
+  side-by-side scale comparison remain separately parked in PR #46.
   Group by faction or type; pirate rows become one livery toggle.
 
 ### Playtest capture — 2026-08-25, second pass (agent playtest, `67fb1a0` build)
@@ -205,14 +218,14 @@ checked against the current initiative text before capture.
   Issue #10 fresh reassessment on master `383b0878`: 32 seeded runs, both
   rendered starter origins and controlled pursuit/return/re-entry support
   retaining current protection without another bubble. No gameplay change;
-  local evidence complete, independent review tracked with the task handoff.
-  The separate unsteered sun-loss observation now has a local outward-heading
-  fix. Independent Claude source/evidence QA passed `6e17f69f`; exact byte and
-  separate measured startup exceptions are owner-approved, with the byte
-  descriptor activated. Ordinary build/report and complete 447-file artifact
-  comparison passed `ffd4d891`; final independent policy/documentation verdict
-  is tracked in the coordinating task evidence `QA-POLICY.md`, not asserted here.
-  No release readiness is claimed.
+  reassessment merged in [PR #94](https://github.com/barryrwilson/Rimward/pull/94).
+  The separate fresh-start sun-loss fix merged in
+  [PR #95](https://github.com/barryrwilson/Rimward/pull/95). It faces fresh
+  ships outward while preserving valid saved headings and Drifter's pose.
+  PR #95 records final policy QA on `6f32b2e8b51d5037f5ea857c24847786361679c1`;
+  exact byte and separate measured startup acceptances retain their raw failures.
+  Death-respawn heading remains a separate parked observation. No new release
+  readiness is claimed.
   See [StarterSunDriftEvidence.md](StarterSunDriftEvidence.md).
   See [Issue10StarterPacingEvidence.md](Issue10StarterPacingEvidence.md).
 - [x] DONE (P1, HAIL/ENCOUNTERS): Give pirate demands a full lifecycle. The
@@ -232,8 +245,9 @@ checked against the current initiative text before capture.
   only the D/J dock conflict. Menu input must not reach flight or weapon
   handlers.
   Wave 125 PR1 `docs/Ctl04MenuInputDesign.md`. Digit1–5 skip WPN while
-  docked / overlay owns digits. Optional CTL-04 `fireHeld` cleanup implemented
-  and locally verified in issue #11; owner-approved exact byte exception
+  docked / overlay owns digits. CTL-04 `fireHeld` cleanup merged in
+  [PR #92](https://github.com/barryrwilson/Rimward/pull/92), closing #11;
+  owner-approved exact byte exception
   passes build/report, with final independent artifact QA PASS on `a0d42082`.
   See `docs/Issue11FireHeldEvidence.md` for reproduction and verification.
 - [x] DONE (P1, HUD/NAV): Add a persistent home-station marker with distance.
@@ -272,7 +286,8 @@ checked against the current initiative text before capture.
   MSN-01 covers replacement of completed jobs, not duplicate generation.
   Wave 136 PR1 `docs/Msn04JobDedupDesign.md`. Mining-only identity.
   Digit 2 stays Jobs. Issue #12's follow-up census found trade and survey
-  twins and implements a family-specific correction; distinct objectives,
+  twins; its family-specific correction merged in
+  [PR #93](https://github.com/barryrwilson/Rimward/pull/93). Distinct objectives,
   accepted agreements, and #73's independent passenger parties remain.
   See [Issue12MissionDuplicateCensus.md](Issue12MissionDuplicateCensus.md).
   Independent source/security/behavior review, full boot, census, and live

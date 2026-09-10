@@ -49,3 +49,4 @@ jobs:
           npm run test:paused-input
           npm run test:ship-material-release
           npm run test:agent-bridge
+          node scripts/release-verdict-test.mjs
