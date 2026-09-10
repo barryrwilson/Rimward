@@ -2,8 +2,10 @@
 
 The mission duplicate fix is implemented at
 `061dd79fea91d9fc34688909868c2e5591f6edd6`. Its focused census, complete boot
-test, and live station-board checks pass. Independent review is recorded in
-the coordinating task's evidence. This document requests a decision; it does
+test, and live station-board checks pass. Independent Claude review is pending:
+automatic approval review blocked the external source/evidence transfer until
+the owner explicitly authorizes it. No independent PASS is claimed.
+This document requests a decision; it does
 not grant approval or activate an exception.
 
 The [production performance policy](../ProductionPerformanceBudget.md)
@@ -55,8 +57,10 @@ worktree; behavior evidence is described in
 
 ## Decision requested
 
-Approve this exact JavaScript artifact's measured bytes and, separately, this
-candidate's measured cold-start overrun. Neither approval would raise the
+Authorize scoped source/test/document and verification-evidence transfer to
+Claude for independent review. If that review passes, approve this exact
+JavaScript artifact's measured bytes and, separately, this candidate's measured
+cold-start overrun. Neither release exception would raise the
 global limits or permit future changed artifacts. Byte approval alone would
 not waive startup. No publication, merge, deployment, or issue closure is
 claimed or authorized by this pending decision.
