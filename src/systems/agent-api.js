@@ -6,6 +6,7 @@
  */
 
 import { COMMODITIES } from '../game/state.js';
+import { tradeQty } from '../game/trade-order.js';
 import { plotRoute, clearRoute, sanitizeSystemId } from '../game/nav.js';
 import {
   tryEngage,
@@ -249,16 +250,6 @@ function afterControls(ctx, name, token, queued) {
     return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'queued' }));
   }
   return ok(ctx, name);
-}
-
-function tradeQty(ctx, qty) {
-  if (typeof qty !== 'number' || !Number.isInteger(qty)) return null;
-  const cap = ctx && typeof ctx.cargoCapacity === 'number' && Number.isFinite(ctx.cargoCapacity)
-    ? Math.floor(ctx.cargoCapacity)
-    : 99;
-  const max = Math.min(99, cap > 0 ? cap : 99);
-  if (qty < 1 || qty > max) return null;
-  return qty;
 }
 
 function actPlotRoute(ctx, name, args) {

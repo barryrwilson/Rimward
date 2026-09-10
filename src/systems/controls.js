@@ -974,6 +974,17 @@ export function initControls(ctx) {
   registerBerthInput(ctx, (_ctx, mode) => neutralizeForBerth(mode));
 
   window.addEventListener('keydown', (e) => {
+    // Docked native controls own their keys before flight default prevention.
+    // In particular, Space must activate a focused button and arrows must
+    // remain available to a select/input. Keyup below still clears old holds.
+    if (ctx.flags?.docked === true) {
+      const ownsKey = (node) => !!node && (
+        /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(node.tagName || '')
+        || node.isContentEditable === true
+        || !!node.closest?.('input, textarea, select, button, [contenteditable="true"]')
+      );
+      if (ownsKey(e.target) || ownsKey(document.activeElement)) return;
+    }
     const code = decodeKeyCode(e);
     // Space (or any rebound owner) is swallowed iff it is a stored command code.
     if (PREVENT_DEFAULT.has(code)) e.preventDefault();
