@@ -2,7 +2,7 @@ import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS, SYSTEMS } from '..
 import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
-import { enterEscapeFlee, spillShipCargo, surrenderCauserOf } from './npc.js';
+import { enterEscapeFlee, shipHasCargo, spillShipCargo, surrenderCauserOf } from './npc.js';
 import {
   berthHeld,
   canOpenPlayCard,
@@ -75,6 +75,12 @@ import { coverHoldsFor, hailOffer } from '../game/hail-offer.js';
  * event (ev.salvage) does that. A refused resolution closes the card, changes
  * nothing, and answers the public resolve() with 'stale'. Demand, salvage and
  * conversation cards never rested on that claim and are untouched.
+ *
+ * Issue #98: the bargaining card offers 'demandCargo' too, whenever the hull
+ * still holds a unit (npc.js intentsFor, same shipHasCargo gate the salvage
+ * card uses). No new resolution: it lands on the existing non-salvage
+ * demandCargo branch below — spill, fear +2, mark the yield, start the escape
+ * flee, emit the player-attributed receipt. An empty hold omits the verb.
  */
 
 // NOTE: 'callowVouch' must precede 'keepFiring' — card buttons follow this
@@ -275,15 +281,10 @@ function demandLineText(name, n, t) {
   return `${name} heaves to — ${n} UU or hull. ${t}s.`;
 }
 
-/** True when the live manifest still holds at least one unit. */
-export function shipHasCargo(st) {
-  const cargo = st && st.cargo;
-  if (!cargo || cargo.length === 0) return false;
-  for (let i = 0; i < cargo.length; i++) {
-    if ((cargo[i].units | 0) > 0) return true;
-  }
-  return false;
-}
+// Issue #98: the nonempty-hold gate now lives beside spillShipCargo in npc.js,
+// which this module already imports (the reverse direction would be circular).
+// Re-exported unchanged so this module's `shipHasCargo` export still works.
+export { shipHasCargo };
 
 /** Salvage-hail verbs for a disabled hull. demandCargo only if holds are not empty. */
 export function salvageIntentsFor(ctx, live) {
