@@ -2504,8 +2504,19 @@ function isTradeCommodity(key) {
   return true;
 }
 
-function pickTradeCommodity() {
-  return TRADE_SEED[(Math.random() * TRADE_SEED.length) | 0];
+function tradeTwin(ctx, origin, commodity, skip) {
+  const pay = jobPayFor(ctx, origin, tradePayBase(ctx, commodity, HAUL_UNITS));
+  return ctx.world.jobs.some(j => j !== skip && j.kind === 'trade'
+    && j.originSystem === origin && j.commodity === commodity && j.need === HAUL_UNITS
+    && (j.state === 'offered' || (j.state === 'accepted'
+      && j.destSystem === tradeDestId(ctx, origin) && j.payQuoted === pay)));
+}
+
+function pickTradeCommodity(ctx, origin) {
+  // Keep the authored weights among eligible cargo; a repeat RNG roll must
+  // not re-create the sibling's identical delivery agreement.
+  const available = TRADE_SEED.filter(key => !tradeTwin(ctx, origin, key));
+  return available.length ? available[(Math.random() * available.length) | 0] : null;
 }
 
 function nextTradeId(jobs, sysId) {
@@ -2553,9 +2564,10 @@ function makeTradeJob(ctx, sysId, slot) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return null;
   const dest = tradeDestId(ctx, sysId);
   if (!dest) return null;
+  const commodity = pickTradeCommodity(ctx, sysId);
+  if (!commodity) return null;
   const id = nextTradeId(ctx.world.jobs, sysId);
   if (!id) return null;
-  const commodity = pickTradeCommodity();
   const name = COMMODITIES[commodity].name;
   const destName = tradeStationName(dest) ?? 'the far station';
   const need = HAUL_UNITS;
@@ -2578,6 +2590,11 @@ function makeTradeJob(ctx, sysId, slot) {
 
 function syncTradeJobs(ctx, sysId) {
   if (!Object.hasOwn(SYSTEMS, sysId) || !tradeDestId(ctx, sysId)) return;
+  // Old offered twins can be replaced; accepted quotes are agreements.
+  for (const j of ctx.world.jobs.slice()) {
+    if (j.kind === 'trade' && j.originSystem === sysId && j.state === 'offered'
+      && tradeTwin(ctx, sysId, j.commodity, j)) replaceTradeJob(ctx, j);
+  }
   syncJobSlots(ctx, sysId, 'trade', TRADE_SLOTS_PER_SYSTEM, makeTradeJob);
 }
 
@@ -2956,10 +2973,23 @@ function nextExploreId(jobs, sysId) {
   return id;
 }
 
+function exploreTwin(ctx, origin, slot, skip) {
+  const site = resolveExploreSite(ctx, origin, slot);
+  if (!site) return false;
+  const pay = jobPayFor(ctx, origin, explorePayBase());
+  return ctx.world.jobs.some(j => {
+    if (j === skip || j.kind !== 'explore' || j.originSystem !== origin || j.need !== 1
+      || (j.state !== 'offered' && !(j.state === 'accepted' && j.payQuoted === pay))) return false;
+    const other = resolveExploreSite(ctx, origin, j.slot);
+    return other && other.siteSystem === site.siteSystem && other.landmark.id === site.landmark.id;
+  });
+}
+
 function makeExploreJob(ctx, sysId, slot) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return null;
   const site = resolveExploreSite(ctx, sysId, slot);
   if (!site) return null;
+  if (exploreTwin(ctx, sysId, slot)) return null;
   const id = nextExploreId(ctx.world.jobs, sysId);
   if (!id) return null;
   const lmName = exploreSiteName(site);
@@ -2980,6 +3010,11 @@ function makeExploreJob(ctx, sysId, slot) {
 }
 
 function syncExploreJobs(ctx, sysId) {
+  // Keep legacy accepted slot 1 resolvable; only withdraw offered twins.
+  for (const j of ctx.world.jobs.slice()) {
+    if (j.kind === 'explore' && j.originSystem === sysId && j.state === 'offered'
+      && exploreTwin(ctx, sysId, j.slot, j)) replaceExploreJob(ctx, j);
+  }
   syncJobSlots(ctx, sysId, 'explore', EXPLORE_SLOTS_PER_SYSTEM, makeExploreJob, resolveExploreSite);
 }
 

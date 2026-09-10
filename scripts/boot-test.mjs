@@ -16680,7 +16680,10 @@ removeLiveShip(w42indyCtx, w42indy);
       && floodCtx78e.world.jobs.some((j) => j.id === 'trade-freehold-0'),
     fieldsJobs: w78eFields.includes('jobs') && w78eFields.filter((k) => k === 'jobs').length === 1
       && !w78eFields.includes('missions') && !w78eFields.includes('explored'),
-    fillTwo: explores78e.length === 2,
+    // Issue #12: Freehold has one physical survey site. Two independent
+    // sites still fill two slots in issue-12-mission-census.mjs (Hollowreach).
+    fillUniqueSite: explores78e.length === 1
+      && siteLm78e('freehold', explores78e[0].slot)?.id === 'fh_shepherd',
     huntStillTwo: huntsLive78e.length === 2,
     passengerStillTwo: passesLive78e.length === 2,
     needOne: need1LiveE,
@@ -17445,7 +17448,8 @@ removeLiveShip(w42indyCtx, w42indy);
     fieldsJobs: w80sFields.includes('jobs') && w80sFields.filter((k) => k === 'jobs').length === 1
       && !w80sFields.includes('missions') && !w80sFields.includes('spies'),
     fillHome: spies80s.length >= 1 && spies80s.length <= 2,
-    exploreStillTwo: exploresLive80s.length === 2,
+    exploreStillUnique: exploresLive80s.length === 1
+      && exploresLive80s[0].originSystem === 'freehold' && exploresLive80s[0].need === 1,
     needOne: need1LiveS,
     noAsteroidId: noAst80s,
     titlesHideKeys,
