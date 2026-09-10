@@ -57,7 +57,7 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
-- [ ] PLANNED (P1, HAIL/DOCK): A hail must not reach a pilot standing at a
+- [ ] IMPLEMENTED / AWAITING MERGE (P1, HAIL/DOCK): A hail must not reach a pilot standing at a
   station desk. [Issue #100](https://github.com/barryrwilson/Rimward/issues/100)
   keeps the berth in charge: no incoming surrender or bargaining card opens
   while docked, an open card and the deferred slot close on the docking frame
@@ -68,9 +68,12 @@ durable next-wave capture is mandatory, not optional.
   37 focused checks pass locally with `test:boot`, `test:hail-identity` and
   `test:agent-hardening`, the live browser probe passes 7/7 pins on 2026-09-10
   with a clean console, and independent behaviour and source QA passes at
-  `1f9035c2`. The production build now passes through an exact owner-approved
+  `1f9035c2`. The production build passes through an exact owner-approved
   byte exception for this artifact only, with the raw byte limits still
-  exceeded; QA of that activation is pending. NPC hail attribution (#99) and the
+  exceeded, and independent QA of that activation returned **PASS** at
+  `17edf7eb`. Implementation and verification are complete; review and the
+  current CI record sit on
+  [PR #106](https://github.com/barryrwilson/Rimward/pull/106). NPC hail attribution (#99) and the
   persisted throttle and control-expiry work (#103) are out of scope. See
   [Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md) and the
   [measured decision](releases/issue-100-measured-decision.md).

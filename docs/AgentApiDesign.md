@@ -491,9 +491,13 @@ ordinary button/digit paths).
 Implemented in the runtime and covered by focused tests. The live browser
 probe passes 7/7 pins on 2026-09-10 with a clean console, under a harness-only
 dev-server override and a labelled fixture for the rare hail. Independent
-behaviour and source QA passes at `1f9035c2`. The production build now passes
+behaviour and source QA passes at `1f9035c2`. The production build passes
 through an exact owner-approved byte exception for this artifact only, while the
-raw byte limits are still exceeded; QA of that activation is **pending**. See
+raw byte limits are still exceeded; independent QA of that activation returned
+**PASS** at `17edf7eb`. Implementation and verification are complete and the work
+is **awaiting merge** under
+[PR #106](https://github.com/barryrwilson/Rimward/pull/106); nothing is merged,
+released or deployed. See
 the [issue #100 evidence](Issue100DockedHailsEvidence.md) and the
 [measured decision](releases/issue-100-measured-decision.md) for the exact state
 before relying on this section.

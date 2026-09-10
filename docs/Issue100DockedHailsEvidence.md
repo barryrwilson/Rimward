@@ -2,15 +2,18 @@
 
 [Issue #100](https://github.com/barryrwilson/Rimward/issues/100).
 
-**Status: build gate resolved by an exact owner-approved byte exception; QA of
-that activation pending.** The runtime change is implemented. The focused, boot,
-hail-identity and agent-hardening suites pass locally, and the live browser probe
-passes **7/7 pins on 2026-09-10** with a clean console. Independent behaviour and
-source QA at `1f9035c2` returned **PASS** (`out/issue-100/qa-review.md`). The raw
-byte limits are still exceeded, but `npm run build` and
-`npm run bundle:report -- --json` now pass through the exact approved exception
-for this artifact only. Independent QA of the descriptor and documentation delta
-is **pending**. Nothing here claims a merged, released or deployed state.
+**Status: implementation and verification COMPLETE, AWAITING MERGE.** The runtime
+change is implemented. The focused, boot, hail-identity and agent-hardening
+suites pass locally, and the live browser probe passes **7/7 pins on 2026-09-10**
+with a clean console. Independent behaviour and source QA at `1f9035c2` returned
+**PASS** (`out/issue-100/qa-review.md`). The raw byte limits are still exceeded,
+but `npm run build` and `npm run bundle:report -- --json` pass through the exact
+approved exception for this artifact only. Independent QA of that activation
+returned **PASS** at `17edf7ebabccb023b6df255eda47e5bf39176d93`
+(`out/issue-100/qa-activation-review.md`).
+[PR #106](https://github.com/barryrwilson/Rimward/pull/106) carries the final
+review and the current CI record. Nothing here claims a merged, released or
+deployed state, and no overall release or startup approval is claimed.
 
 ## Outcome
 
@@ -170,12 +173,40 @@ boot suites rerun independently, plus 12 added boundary assertions. That review
 also recorded the then-current build FAIL as the blocking release finding, and
 it is not approval of the byte exception now activated.
 
+## Independent QA — byte-exception activation, PASS
+
+`out/issue-100/qa-activation-review.md` records a second independent review
+(Quinn / Codex) at `17edf7ebabccb023b6df255eda47e5bf39176d93`: **PASS for the
+issue behaviour and the authorized exact-byte build gate**. Ordinary
+`npm run build` and `npm run bundle:report -- --json` both exit 0
+(`qa-activation-build.log`, `qa-activation-report.log`). The emitted
+`dist/assets/index-CY-oCepC.js` measures 1,835,953 raw / 549,263 gzip bytes with
+SHA256 `31e00966…3ea36eb1`, exactly the approved artifact. The fixed
+1,800,000 / 537,600 limits stand, `minifiedPass` and `gzipPass` remain `false`,
+and `bytePolicy.pass` is true solely through the exact exception. Nine negative
+matching cases — changed hash, changed filename, aggregate raw and gzip totals,
+individual raw and gzip bytes, extra chunk, missing chunk and duplicate chunk —
+each reject the exception and stay failed, and the browser boundary checks pass.
+Runtime source, tests, probes, package files and `vite.config.js` are unchanged
+from `1f9035c2`, and the policy file is byte-identical outside the descriptor,
+so the existing focused (37 checks), boot, hail-identity, agent-hardening and
+7/7 live PASS evidence carries forward with no gameplay retest.
+
+The review is not an overall release, startup, merge or deployment approval. The
+earlier remote TGT-07 failure on run 34513272635 remains failed historical
+evidence, diagnosed in `out/issue-100/qa-ci-diagnosis.md` as a preexisting
+fixture timing race; it is distinct from the latest checks on
+[PR #106](https://github.com/barryrwilson/Rimward/pull/106) and no claim is made
+that all remote CI passed.
+
 ## Remaining before done
 
 Live acceptance passes, so criterion 4 of the `AGENTS.md` definition of done is
-met. Criterion 2 now passes through the exact approved byte exception, with the
-raw limits still exceeded as recorded above. Runtime source, tests and the probe
-are unchanged from the QA-approved state at `1f9035c2`, so no gameplay, boot or
-live rerun was needed for the activation. The activation itself — the descriptor
-delta and these documentation changes — still needs independent QA. No pull
-request, merge, deployment or commit identity is claimed.
+met. Criterion 2 passes through the exact approved byte exception, with the raw
+limits still exceeded as recorded above. Runtime source, tests and the probe are
+unchanged from the QA-approved state at `1f9035c2`, so no gameplay, boot or live
+rerun was needed for the activation, and the activation itself is independently
+QA-passed at `17edf7eb`. Implementation and verification are complete; the work
+is **awaiting merge**. [PR #106](https://github.com/barryrwilson/Rimward/pull/106)
+owns the final review handoff and the current CI record. No merge, release or
+deployment is claimed.

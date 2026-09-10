@@ -30,7 +30,8 @@ and their residual reliability observations remain below. No release was
 published or new performance exception granted.
 
 [Issue #100](https://github.com/barryrwilson/Rimward/issues/100) — keep hails
-off the station desk while docked — is **in progress and not complete**. The
+off the station desk while docked — is **implemented and verified, awaiting
+merge**. The
 runtime change is implemented and 37 focused checks pass with unchanged
 `test:boot`, `test:hail-identity` and `test:agent-hardening`. Live browser
 acceptance now **passes 7/7 pins on 2026-09-10** with a clean console, under
@@ -40,8 +41,14 @@ fixture that stages only the rare hail. Independent behaviour and source QA
 returned **PASS** at `1f9035c2`. The build hold is resolved by an exact
 owner-approved byte exception for this artifact only, activated on 2026-09-10:
 `npm run build` and `npm run bundle:report -- --json` now exit 0 while the raw
-byte gates still fail. Independent QA of that descriptor and documentation delta
-is still pending. Nothing is merged, released or deployed. See
+byte gates still fail. Independent QA of that activation returned **PASS** at
+`17edf7ebabccb023b6df255eda47e5bf39176d93`, covering the ordinary build and
+report, the exact chunk identity, nine negative matcher cases and the browser
+boundary checks. That is the issue and byte-gate verdict only, not an overall
+release or startup approval; the earlier failed remote TGT-07 run 34513272635
+stays failed historical evidence.
+[PR #106](https://github.com/barryrwilson/Rimward/pull/106) owns the final review
+handoff and the current CI record. Nothing is merged, released or deployed. See
 [Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md), the
 [measured decision](releases/issue-100-measured-decision.md) and the
 [public API contract](AgentApiDesign.md#issue-100--docked-hails).

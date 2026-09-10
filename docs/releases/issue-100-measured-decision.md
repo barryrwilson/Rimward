@@ -1,4 +1,4 @@
-# Issue 100 measured release decision — owner approved byte exception; QA of this activation pending
+# Issue 100 measured release decision — owner approved byte exception; activation QA PASS
 
 Docked hails are implemented, independently QA-reviewed and live-verified at
 `1f9035c255afa9ddd0d4dd4dd17d1a4c92bb51a2`. The ordinary pre-approval build
@@ -79,10 +79,21 @@ reference is `Codex issue-100 owner approval of exact byte exception,
    future-growth allowance, no budget or matcher change, no merge and no
    deployment.
 
-Independent QA of this activation — the descriptor delta and these documentation
-changes — is **PENDING**. The prior QA verdict covers the source at
-`1f9035c2` and cannot be read as approval of this new descriptor. No overall
-release PASS is claimed.
+Independent QA of this activation — the descriptor delta against the prior
+QA artifact — returned **PASS** at
+`17edf7ebabccb023b6df255eda47e5bf39176d93`
+(`out/issue-100/qa-activation-review.md`, Quinn / Codex, 2026-09-10). That
+review reran the ordinary build and bundle report (both exit 0), measured the
+emitted chunk directly to the approved SHA256 and exact bytes, confirmed the raw
+`minifiedPass` / `gzipPass` remain `false` with `bytePolicy.pass` true only
+through the exact exception, and passed nine negative matching cases plus the
+browser boundary checks. It confirmed runtime source, tests, probes, package
+files and `vite.config.js` unchanged from the QA-approved state, and the policy
+file byte-identical outside the descriptor. Implementation and verification are
+**COMPLETE, AWAITING MERGE**. This is the issue and byte-gate verdict only: no
+overall release, startup or deployment approval is claimed.
+[PR #106](https://github.com/barryrwilson/Rimward/pull/106) carries the final
+review and the current CI record.
 
 Rollback is the prior descriptor and the prior approved application artifact
 recorded in [the issue-56 decision](issue-56-measured-decision.md). No save
