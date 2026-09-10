@@ -542,8 +542,8 @@ offers the player no terms and no reward: the incident records causer `world`,
 `observe().targets.current.hail.state` stays `yielded`, credits, fear and the
 `firstCapitulation` milestone do not move, and a later hail opens no card.
 An already-open ORIGINAL surrender card whose eligibility has since changed is
-rejected: `hailResolve` answers with the existing `stale` token and produces no
-effects — no credits, cargo, surrender flag, AI write or event, on any ship.
+rejected: `hailResolve` answers with the existing `stale` token, grants no reward,
+and changes no NPC state. It closes the stale card and emits `hailClosed`.
 That rejection is scoped to the original card. A disabled hull can still offer
 real **salvage** once the live hail maintenance converts the conversation in
 place, which issues a new `conversationId` and prints no ransom amount.
