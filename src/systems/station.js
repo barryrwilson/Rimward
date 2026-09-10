@@ -4925,6 +4925,49 @@ export function initStation(ctx) {
     if (h === hDom) document.getElementById(id)?.focus({ preventScroll: true });
   }
 
+  // ---- native activation hold (issue #56 B10) ----------------------------
+  // A browser only turns a press into a click when the pressed element still
+  // exists at release. The docked 1 s refresh removes and rebuilds the whole
+  // panel, so a press held across a tick was swallowed: focus landed on the
+  // freshly built button, but no click, preset or trade ever ran. While a real
+  // bulk control is physically held, defer ONLY the periodic refresh. Every
+  // explicit render (action, preview refresh, cancel, navigation) and
+  // captureView still run untouched, and an explicit render releases the hold
+  // because it replaces the pressed node anyway.
+  const bulkPress = new Set(); // live press tokens: pointer ids and key codes
+
+  /** True only for the real native bulk controls (button/select/input). */
+  function isBulkControl(node) {
+    const id = node && typeof node.id === 'string' ? node.id : '';
+    return id.startsWith('market-bulk-') && /^(BUTTON|SELECT|INPUT)$/.test(node.tagName || '');
+  }
+  function bulkHoldActive() { return bulkPress.size > 0; }
+  function holdBulkPress(token, target) {
+    if (!ui.open || !ctx.flags.docked || !isBulkControl(target)) return;
+    bulkPress.add(token); // a repeat keydown re-adds the same token
+  }
+  function releaseBulkPress(token) { bulkPress.delete(token); }
+  function releaseBulkHold() { bulkPress.clear(); }
+  const pointerToken = e => `p:${e && e.pointerId !== undefined ? e.pointerId : 0}`;
+
+  // Capture phase: see the press even if something downstream stops it.
+  window.addEventListener('pointerdown', e => holdBulkPress(pointerToken(e), e?.target), true);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    window.addEventListener(type, e => releaseBulkPress(pointerToken(e)), true);
+  }
+  // Native Space activation spans keydown→keyup (Enter fires at keydown); the
+  // keyup listener runs in capture phase, before the browser's own activation
+  // default, and only clears the flag — it never renders.
+  window.addEventListener('keydown', e => {
+    const code = decodeKeyCode(e);
+    if (code === 'Space' || code === 'Enter') holdBulkPress(`k:${code}`, e?.target ?? document.activeElement);
+  }, true);
+  window.addEventListener('keyup', e => releaseBulkPress(`k:${decodeKeyCode(e)}`), true);
+  // A release outside the control, a dismissed native select popup or a window
+  // blur must not wedge the refresh: click and blur are unconditional releases.
+  window.addEventListener('click', releaseBulkHold, true);
+  window.addEventListener('blur', releaseBulkHold);
+
   function renderBulk(panel) {
     const order = ui.bulk;
     if (!order) return;
@@ -6437,6 +6480,9 @@ export function initStation(ctx) {
     // same-view rebuilds restore: navigation (Back / service select) resets
     // to the top as expected.
     const view = `${ui.level}:${ui.service}`;
+    // This rebuild replaces any pressed node, so a held activation is already
+    // over: drop the hold instead of letting it wedge the periodic refresh.
+    releaseBulkHold();
     if (ui.service !== 'market' || !ctx.flags.docked) ui.bulk = null;
     const focused = document.activeElement;
     const focusId = focused?.id?.startsWith('market-bulk-') ? focused.id : null;
@@ -7060,8 +7106,11 @@ export function initStation(ctx) {
       }
       if (ctx.flags.docked) {
         // Periodic refresh so prices/jobs/credits stay live behind the panel.
+        // A held bulk control keeps the rebuild waiting (see bulkHoldActive):
+        // refreshTick keeps accumulating, so the deferred refresh lands on the
+        // first frame after the release or cancel. Nothing else is deferred.
         refreshTick += dt;
-        if (refreshTick >= 1) { refreshTick = 0; render(); }
+        if (refreshTick >= 1 && !bulkHoldActive()) { refreshTick = 0; render(); }
       }
 
       const reducedMotion = ctx.settings?.reducedMotion === true;

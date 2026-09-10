@@ -172,6 +172,94 @@ check('B7 old DOM confirmation cannot replay after completion or selection chang
   for(const fn of dom.winListeners.keydown) fn({code:'Enter',repeat:true,target,preventDefault(){prevented=true;}});
   assert.equal(prevented,true,'held Enter cannot advance preset focus into confirmation');
 });
+check('B10 a held native bulk press defers only the periodic panel refresh', () => {
+  // Synthetic events on the REAL window listeners. This pins the deferral, the
+  // surviving pressed node and its live closure. It does NOT prove the
+  // browser's own down→up click synthesis — only the live Chrome probe can.
+  const fire = (type, event) => { for (const fn of dom.winListeners[type] ?? []) fn(event); };
+  const press = (node, pointerId = 1) => fire('pointerdown', { pointerId, target: node });
+  fixture();
+  const pressed = find('market-bulk-buy-max');
+  const before = state();
+  press(pressed);
+  station.update(1.1);
+  assert.equal(find('market-bulk-buy-max'), pressed, 'refresh must not replace a held control');
+  assert.deepEqual(state(), before, 'holding a control never trades by itself');
+  fire('pointerup', { pointerId: 1, target: pressed });
+  station.update(1 / 60);
+  assert.notEqual(find('market-bulk-buy-max'), pressed, 'refresh resumes on the first frame after release');
+  // The node that survived the refresh still carries the live preset closure.
+  fixture();
+  const survivor = find('market-bulk-buy-max');
+  press(survivor);
+  station.update(1.1);
+  assert.equal(find('market-bulk-buy-max'), survivor);
+  survivor.click();
+  assert.equal(find('market-bulk-quantity').value, '160');
+  station.update(1 / 60); // that explicit render already released the hold
+  assert.notEqual(find('market-bulk-buy-max'), survivor, 'an explicit render is never deferred');
+  // Release outside the control, a cancelled pointer and a window blur must all
+  // resume the refresh instead of wedging it.
+  for (const [label, release] of [
+    ['pointerup elsewhere', () => fire('pointerup', { pointerId: 2, target: find('market-bulk-preview') })],
+    ['pointercancel', () => fire('pointercancel', { pointerId: 2 })],
+    ['lostpointercapture', () => fire('lostpointercapture', { pointerId: 2, target: find('market-bulk-sell-all') })],
+    ['window blur', () => fire('blur', {})],
+  ]) {
+    fixture();
+    const node = find('market-bulk-sell-all');
+    press(node, 2);
+    station.update(1.1);
+    assert.equal(find('market-bulk-sell-all'), node, label);
+    release();
+    station.update(1 / 60);
+    assert.notEqual(find('market-bulk-sell-all'), node, label);
+  }
+  // A native select popup can swallow the pointerup: dismissing it with Escape
+  // must still cancel explicitly and hand the periodic refresh back.
+  fixture();
+  edit('12');
+  const popup = find('market-bulk-commodity');
+  press(popup, 4);
+  station.update(1.1);
+  assert.equal(find('market-bulk-commodity'), popup, 'an open select popup holds the refresh');
+  let escaped = false;
+  fire('keydown', { code: 'Escape', repeat: false, target: popup, preventDefault() { escaped = true; } });
+  assert.equal(escaped, true, 'Escape on a bulk control is owned by the composer');
+  assert.notEqual(find('market-bulk-commodity'), popup, 'the explicit cancel render is never deferred');
+  assert.match(ctx.stationDesk.peekView().notice, /Bulk preview cancelled/);
+  assert.equal(find('market-bulk-buy').disabled, true, 'a cancelled preview needs a fresh confirmation');
+  const dismissed = find('market-bulk-commodity');
+  station.update(1 / 60); // no pointerup ever arrived from the popup
+  assert.notEqual(find('market-bulk-commodity'), dismissed, 'refresh resumes without a pointerup');
+  // Native Space activation spans keydown→keyup; a repeat cannot double-hold.
+  fixture();
+  const spaceNode = find('market-bulk-buy-max');
+  const keyEvent = (repeat = false) => ({ code: 'Space', repeat, target: spaceNode, preventDefault() {} });
+  fire('keydown', keyEvent());
+  fire('keydown', keyEvent(true));
+  station.update(1.1);
+  assert.equal(find('market-bulk-buy-max'), spaceNode, 'Space keydown holds the pressed button');
+  fire('keyup', keyEvent());
+  station.update(1 / 60);
+  assert.notEqual(find('market-bulk-buy-max'), spaceNode, 'refresh resumes after Space keyup');
+  // Scope: a press on ordinary panel content defers nothing.
+  fixture();
+  const quantity = find('market-bulk-quantity');
+  press(find('market-bulk-preview'), 3);
+  station.update(1.1);
+  assert.notEqual(find('market-bulk-quantity'), quantity, 'only native bulk controls hold the refresh');
+  fire('pointerup', { pointerId: 3 });
+  // Typing and the one-second refresh still work after every release.
+  edit('7');
+  assert.equal(find('market-bulk-quantity').value, '7');
+  const typed = find('market-bulk-quantity');
+  station.update(1.1);
+  assert.notEqual(find('market-bulk-quantity'), typed);
+  assert.equal(find('market-bulk-quantity').value, '7');
+  click('market-bulk-buy');
+  assert.equal(held('provisions'), 7);
+});
 check('B7 second-chunk refusal and context loss preserve first fill and partial receipt', () => {
   for (const stop of [()=>{ctx.world.marketSupply.rl_toll.provisions.units=0;},()=>{ctx.stationDesk.selectService('jobs');}]) {
     fixture(); click('market-bulk-buy-max'); fills=[];
