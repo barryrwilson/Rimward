@@ -539,6 +539,10 @@ Play-technique lessons for the next agent run (not product bugs):
   ([issue #114](https://github.com/barryrwilson/Rimward/issues/114)); while a
   live combat lease is still held by the latch, `control.combat.movementBlocked`
   reads `full-stop`.
+- The raw `afterburner` pulse answers `helm` under any combat lease. To break
+  contact with a faster hull, pass `burner: true` on a `retreat` / `break-off`
+  intent ([issue #120](https://github.com/barryrwilson/Rimward/issues/120));
+  `control.combat.burner.blocked` names why no burn is held.
 - The raw `setControl` throttle is a **persistent ship setpoint**, not a lease
   value. Letting the lease expire, or calling `clearControl`, stops steering
   and fire but leaves the ship under thrust. To stop, request
