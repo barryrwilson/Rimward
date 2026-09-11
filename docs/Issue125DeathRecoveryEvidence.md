@@ -2,9 +2,9 @@
 
 [Issue #125](https://github.com/barryrwilson/Rimward/issues/125).
 
-**Status: implementation and local verification COMPLETE, AWAITING PR REVIEW
-AND MERGE.** The runtime change is implemented on `claude/last-issue-2c8c40`
-from master `6bb15385`. Build, unchanged boot, the new focused suite, the
+**Status: MERGED** in [PR #137](https://github.com/barryrwilson/Rimward/pull/137)
+on 2026-09-11 (master `33bc95f4`). The runtime change was implemented on
+`claude/last-issue-2c8c40` from master `6bb15385`. Build, unchanged boot, the new focused suite, the
 neighbouring focused suites, the release-focused runner and the live browser
 check on 2026-09-11 pass with no console errors. No independent QA, merge,
 release or deployment is claimed.

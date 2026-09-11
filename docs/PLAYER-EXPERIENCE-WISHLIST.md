@@ -57,8 +57,7 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
-- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P2,
-  PIRACY/CONTACTS): The fence's marker should grow from pirate outcomes, not
+- [x] DONE (P2, PIRACY/CONTACTS; merged [PR #136](https://github.com/barryrwilson/Rimward/pull/136)): The fence's marker should grow from pirate outcomes, not
   only from bounty claims.
   [Issue #124](https://github.com/barryrwilson/Rimward/issues/124): a hull the
   player breaks that pays — a ransom taken, or a hold spilled (`jettison`,
@@ -66,14 +65,13 @@ durable next-wave capture is mandatory, not optional.
   in, as one bounty claim does, with a comm-line receipt that names the
   contact. Attribution fails closed as in issue #99; the bounty path and
   Callow's vouch are unchanged; no fenced-sale or fear-threshold rule (no
-  fenced sale exists in code; fear already opens the locker). **Not merged.**
+  fenced sale exists in code; fear already opens the locker). Merged 2026-09-11.
   Build, unchanged boot, the new focused suite, the #99/#122/#67 suites, the
   release-focused runner and the live browser check (ransom → `favors 1` →
   the People desk's favor call opened the restricted locker) pass with a
   clean console. See
   [Issue124FenceMarkerEvidence.md](Issue124FenceMarkerEvidence.md).
-- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P1,
-  HAIL/PIRACY): A feared pirate should be able to demand terms from a willing
+- [x] DONE (P1, HAIL/PIRACY; merged [PR #134](https://github.com/barryrwilson/Rimward/pull/134)): A feared pirate should be able to demand terms from a willing
   hull, not only from one it breaks in front of the card.
   [Issue #122](https://github.com/barryrwilson/Rimward/issues/122) lets a
   deliberate H press or `act({ name: 'hail' })` on a locked intact hull at the
@@ -85,13 +83,12 @@ durable next-wave capture is mandatory, not optional.
   attribution outside a player-demanded card is unchanged. The shared
   classifier now offers `willing` as an action, range and calm gate it like
   a wreck, and the bracket prompt reads `H — Hail — demand terms`. Design
-  pass in [Hail03PlayerTermsDesign.md](Hail03PlayerTermsDesign.md). **Not
-  merged.** Build, unchanged boot, the new focused suite, the updated #67
+  pass in [Hail03PlayerTermsDesign.md](Hail03PlayerTermsDesign.md). Merged
+  2026-09-11. Build, unchanged boot, the new focused suite, the updated #67
   suite, the hail/agent regressions, the release-focused runner (18/18) and
   the live browser check pass with a clean console. See
   [Issue122PlayerTermsEvidence.md](Issue122PlayerTermsEvidence.md).
-- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING INDEPENDENT QA AND PR REVIEW
-  (P1, HAIL/COMBAT): A hull that has just surrendered should be able to hand
+- [x] DONE (P1, HAIL/COMBAT; merged [PR #109](https://github.com/barryrwilson/Rimward/pull/109)): A hull that has just surrendered should be able to hand
   over its holds, not only a ransom.
   [Issue #98](https://github.com/barryrwilson/Rimward/issues/98) offers
   `demandCargo` on a player-owned surrender card whenever the hull still holds a
@@ -103,8 +100,8 @@ durable next-wave capture is mandatory, not optional.
   Issue #99 attribution, issue #100 dock refusal, disabled-hull salvage (no
   fear, no receipt) and the wave-30 pirate demand are unchanged;
   `spillShipCargo`'s separate special-data handling is out of scope and is not
-  redesigned. No new schema, API version, key or persistent field. **Not
-  merged.** 57 focused checks pass, with `npm run build`, root
+  redesigned. No new schema, API version, key or persistent field. Merged
+  2026-09-10. 57 focused checks pass, with `npm run build`, root
   `npm run test:boot` and the #99/#100/#66/agent regressions; the live browser
   probe passes **6/6 pins** with a clean console. An earlier live run failed
   only because the loaded fixture's resolve fell to 19 and capitulated past the
@@ -112,8 +109,7 @@ durable next-wave capture is mandatory, not optional.
   dock pin failed on an unrelated dock approach and was replaced by a real
   rendered-button payout pin. Independent QA and review are outstanding. See
   [Issue98SurrenderCargoEvidence.md](Issue98SurrenderCargoEvidence.md).
-- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P1,
-  HAIL/COMBAT): Being nearby when someone else breaks a
+- [x] DONE (P1, HAIL/COMBAT; merged [PR #108](https://github.com/barryrwilson/Rimward/pull/108)): Being nearby when someone else breaks a
   pirate should not make it your prize.
   [Issue #99](https://github.com/barryrwilson/Rimward/issues/99) attributes a
   surrender to whoever landed the last *effective* damage: a break the player
@@ -122,21 +118,21 @@ durable next-wave capture is mandatory, not optional.
   progress — the receipt and the lane incident say `world`. A player-caused
   break, salvage, demand hails, the public API version and the persistent save
   schema are unchanged (the internal surrender receipt gains a bounded causer),
-  and a card whose claim lapses refuses payout with `stale`. **Not merged.**
+  and a card whose claim lapses refuses payout with `stale`. Merged 2026-09-10.
   Independent core QA, the root production build and the full boot all pass at
   the runtime commit; the live browser probe passes **5/5 pins** and the
   existing #100 probe still passes **7/7**, both with a clean console. The final
   docs/test delta still gets independent review. Branch is stacked on
   PR #107. See
   [Issue99SurrenderAttributionEvidence.md](Issue99SurrenderAttributionEvidence.md).
-- [ ] IMPLEMENTED / AWAITING MERGE (P1, HAIL/DOCK): A hail must not reach a pilot standing at a
+- [x] DONE (P1, HAIL/DOCK; merged [PR #106](https://github.com/barryrwilson/Rimward/pull/106)): A hail must not reach a pilot standing at a
   station desk. [Issue #100](https://github.com/barryrwilson/Rimward/issues/100)
   keeps the berth in charge: no incoming surrender or bargaining card opens
   while docked, an open card and the deferred slot close on the docking frame
   so nothing returns at launch, the human button and number-key handlers are
   ignored while docked, and the public `hailResolve` returns the stable
   `docked` token; none of them grants hail effects. Demand close semantics and undocked behaviour, including issue #66
-  conversation identity, are unchanged. **Not merged.** The runtime change and
+  conversation identity, are unchanged. Merged 2026-09-10. The runtime change and
   37 focused checks pass locally with `test:boot`, `test:hail-identity` and
   `test:agent-hardening`, the live browser probe passes 7/7 pins on 2026-09-10
   with a clean console, and independent behaviour and source QA passes at
