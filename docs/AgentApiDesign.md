@@ -11,6 +11,75 @@
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
+## Issue #103 — Raw control throttle persistence and observability
+
+`observe().ship.throttle` is `ctx.input.throttle`: the persistent **manual**
+throttle setpoint, the one a human moves with R/F (§5.1). It is ship state, not
+lease state. `setControl` writes it while a lease is live; ending the lease does
+not write it back, so a planner that sets a throttle and then lets the lease
+expire, or calls `clearControl`, is still under thrust with no steering. The
+field, the lease rule and the API version all predate this issue: nothing in the
+runtime changed for #103, only this document and the runtime help schema.
+
+Read the field for what it is:
+
+- **Not the value you requested.** A request is a target; toward a positive
+  target the setpoint moves at 0.5 per second while the lease is live, so the
+  time to arrive depends on where the setpoint started — 0 → 1 takes two
+  seconds, 0.4 → 0.5 takes a fifth of one.
+- **Not always the throttle the flight model uses.** `ship.js` takes its
+  throttle from the autopilot, automine or flee helm while one is engaged;
+  `input.throttle` is the manual contribution. Those helms refuse a raw lease
+  with `helm`.
+- **Not speed.** `observe().ship.speed` is measured velocity: it lags the
+  setpoint, keeps momentum after it drops, and is affected by drift, afterburner
+  and mass. Read both.
+- **Unchanged by the lease ending.** After expiry and after `clearControl` it
+  keeps the last value an update applied, while `observe().control.state` reads
+  `expired` or `cleared`.
+- **Untouched by an omitted `throttle`** (or `null`) — the way to steer without
+  changing thrust.
+
+**Zero is the stop, and it needs one applied update.** `throttle: 0` does not
+ramp: the next eligible controls update writes the setpoint to 0 and raises
+`flags.fullStop`, the player's double-tap-F full stop. There is no separate stop
+action, and `clearControl` is not one — clearing before an update applies the
+zero discards the request and the ship flies on. `flags.fullStop` says the
+manual setpoint is zero and will not creep, not that the ship is already
+stationary; for that, watch `ship.speed` fall. A later thrust command clears the
+latch, and so do `engageAutopilot`, `approachDock` and `engageAutomine`.
+
+```js
+const rw = window.rimward;
+// seq must increase monotonically across every accepted setControl.
+rw.act({ v: 2, name: 'setControl', args: { seq: n, ttl: 1, throttle: 0 } });
+// …let real frames run, then confirm BOTH readings before releasing…
+const o = rw.observe();
+if (o.ship.throttle === 0 && o.flags.fullStop === true) {
+  rw.act({ v: 2, name: 'clearControl', args: {} });
+}
+```
+
+A **combat** lease is the exception: `setCombatIntent` drives the setpoint, and
+every release of it — `clearControl`, expiry or a gated transition — ends in a
+real full stop (axes, fire and drift zeroed, setpoint 0, `flags.fullStop` true).
+Only raw `setControl` leases leave thrust behind.
+
+A refusal leaves a **valid active raw lease** exactly as it was: a `throttle`
+outside finite `[0, 1]` refuses `bad-throttle`, an unknown key refuses
+`bad-args`, the sequence is not consumed, and the setpoint and `flags.fullStop`
+are untouched. A refusal is not a renewal, so it cannot restore a lease that
+already ended — and if that lease was a combat lease, the release already
+stopped the ship.
+
+The manifest carries the same rules in
+`capabilities.commands.setControl.args.throttle`, its `note`, and
+`capabilities.commands.clearControl.note`. Verification:
+`npm run test:throttle-observability` (real installed controls update and the
+public observation) and `npm run test:throttle-observability-live` (browser,
+real frames); run status is in
+[Issue103ThrottleEvidence.md](Issue103ThrottleEvidence.md).
+
 ## Issue #102 — Solar hazards in public observation
 
 This is an additive v2 contract. `observe().hazards.sun` is a fresh, detached
@@ -274,7 +343,10 @@ and any held physical flight key or fire button (`player-override`).
 `observe().control` exposes `state` (`idle|active|cleared|expired`), `seq`,
 `expiresIn`, `fire`, and the terminal `reason`. Cancellation zeroes fire and
 axes before the next combat tick; held values are re-derived from physical
-state every frame, so a stuck input is impossible.
+state every frame, so a stuck input is impossible. The throttle setpoint is
+the one exception, and it is ship state rather than lease state: it survives
+expiry and `clearControl` exactly as it survives a human releasing R/F. See
+[issue #103](#issue-103--raw-control-throttle-persistence-and-observability).
 
 **Aim without screenshots.** hud.js publishes `ctx.targets.aim` each frame —
 the same player-visible geometry it draws: bracket NDC, on-screen/behind,
@@ -927,6 +999,8 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `feed` | `{ kind:'biomass'\|'rock'\|'tend' }` | `ctx.stationDesk.feed` | not docked; **`service !== 'feed'`**; bad kind |
 | `setWeaponGroup` | `{ n:1..5 }` | `agentSetWeaponGroup` | skip surfaces; PR3 |
 | `pulse` | `{ edge }` | `agentPulse` | edge not in `dock`\|`hail`\|`target`\|`reticleLock` |
+| `setControl` | `{ seq, ttl?, steerX?, steerY?, strafeX?, strafeY?, roll?, throttle?, fireHeld?, driftHeld? }` | `agentControlSet` | `bad-args` / `bad-seq` / `bad-ttl` / `bad-axis` / `bad-throttle` / `stale`; `helm`, `docked`, `overlay`, `paused`, `jumping`, `held`, `dead`. `throttle` moves the **persistent** setpoint and an omitted `throttle` leaves it alone (issue #103) |
+| `clearControl` | — | `agentControlClear` | never; idempotent, and allowed while paused or berth-held. **For raw leases it does not brake; combat lease release applies full stop.** Handshake: `setControl { throttle: 0 }`, then confirm `ship.throttle === 0` **and** `flags.fullStop === true` before clearing; read `ship.speed` for actual rest (issue #103) |
 | `disable` | — | clear `optIn` | never (does not cancel AP) |
 
 `token` is the enum; `error` may copy live English (`AP_LINES`, `ui.notice`). Desk wrappers **do not** return `AP_LINES` keys; they set `token` from an authored desk map or `notice` as `error`.
