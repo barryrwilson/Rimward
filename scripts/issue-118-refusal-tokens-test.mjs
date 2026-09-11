@@ -134,7 +134,10 @@ test('argument refusals carry the failing field in detail', () => {
     [{ defense: 'none' }, 'bad-args', /defense must be 'evade'\|'break-off'\|'off'/],
     [{ intent: 'keepFiring' }, 'bad-args', /intent must be/],
     [{ targetId: '' }, 'bad-args', /targetId must be a non-empty string/],
-    [{ burner: true }, 'bad-args', /unknown argument burner/],
+    // Issue #120 made burner a real argument on retreat / break-off; an
+    // attack intent still refuses it as bad-args with the #120 wording (#138).
+    [{ burner: true }, 'bad-args', /burner is accepted only with intent 'break-off'\|'retreat'/],
+    [{ warp: true }, 'bad-args', /unknown argument warp/],
     [{ ttl: 61 }, 'bad-ttl', /ttl must be a number in 1\.\.60/],
     [{ seq: 0 }, 'bad-seq', /seq must be a safe integer/],
   ];
@@ -143,6 +146,9 @@ test('argument refusals carry the failing field in detail', () => {
     assert.match(refused(r, token), re, JSON.stringify(r));
     assert.equal(f.status().owner, 'none');
   }
+  // The #120 contract: burner rides a retreat without a refusal.
+  assert.equal(f.intent({ intent: 'retreat', burner: true }).ok, true, 'burner on retreat is accepted');
+  f.act('clearControl'); f.tick();
   const missing = f.act('setCombatIntent', { seq: f.nextSeq(), ttl: 40, intent: 'engage' });
   assert.match(refused(missing, 'bad-args'), /missing required argument targetId/);
   const stale = f.intent({ seq: 1 });

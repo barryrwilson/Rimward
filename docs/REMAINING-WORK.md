@@ -28,9 +28,13 @@ None. Every issue from #98 to #125 is merged (see the table below). The two
 open issues are backlog candidates promoted by the 2026-09-11 pass:
 
 - [#138](https://github.com/barryrwilson/Rimward/issues/138) — the
-  `test:refusal-tokens` suite fails on master because its #118 burner pin
-  predates the #120 wording; repair the pin and add the suite to the
-  release-focused runner. No runtime change.
+  `test:refusal-tokens` suite failed on master because its #118 burner pin
+  predated the #120 wording — is **implemented and locally verified on
+  `claude/issue-138`**: the pin now expects the #120 `bad-args` detail on an
+  attack intent, a `warp` argument keeps the unknown-argument pin, `burner:
+  true` on `retreat` is pinned accepted, and the suite is entry
+  `refusalTokens` in the release-focused runner. Test and docs only; no
+  runtime change.
 - [#139](https://github.com/barryrwilson/Rimward/issues/139) — the
   intermittent fresh-Greenhand `approachDock` cancellation on a `bodyHit`
   near the +X stage; reproduce with full payloads first, then a bounded fix.
