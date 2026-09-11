@@ -18,6 +18,19 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #119](https://github.com/barryrwilson/Rimward/issues/119) — NPC miner
+`mineHit` receipts leak into the public event ring with no actor — is
+**implemented and locally verified on `claude/next-issue-547450`**, based on
+master `66b56f88`. Both internal emitters now tag the payload (`actor: 'npc'`
+from the npc.js miner, `actor: 'player'` from the combat.js beam) and
+`sanitizeEvent` admits only the player's beam to the ring, failing closed on
+any other or missing actor. The public row is `{ asteroidId, actor: 'player',
+count? }`; asteroid extraction, NPC cargo fill, fold/keep rules, the API
+version and the ring cap are unchanged. Build, unchanged boot, the new focused
+suite (`npm run test:miner-receipts`), the schema pins and the agent
+regressions pass. See
+[the acceptance and evidence record](Issue119MinerReceiptsEvidence.md).
+
 [Issue #114](https://github.com/barryrwilson/Rimward/issues/114) — an agent that
 follows the documented stop handshake and then starts a fight must not sit
 still under fire while the view reports an intercept — is **implemented and

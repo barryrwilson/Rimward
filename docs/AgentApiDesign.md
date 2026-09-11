@@ -677,6 +677,39 @@ plus unchanged `npm run test:boot`, `npm run test:agent-hardening`,
 
 ---
 
+## Issue #119 — NPC miner cuts stay off the public ring
+
+Implemented in the runtime and covered by focused tests; see the
+[issue #119 evidence](Issue119MinerReceiptsEvidence.md) for the run
+conditions and the live browser check before relying on this section.
+
+NPC miners (`npc.js`) emit `mineHit` on the same internal channel as the
+player's beam (`combat.js`), because `asteroids.js` extracts ore from either.
+The public ring harvested both, so a session in which the player never mined
+carried dozens of `mineHit` rows folded into the same `asteroidId` buckets a
+runner reads as "I am cutting rock", and every one of those rows was keep-class
+pressure that helped evict real chatter.
+
+| Surface | Now |
+|---|---|
+| Internal `mineHit` payload | Both emitters tag the payload: `actor: 'npc'` (npc.js miner) or `actor: 'player'` (combat.js beam). `point`, `laserTier` and `extractPerSec` are unchanged, so asteroid extraction, rock heat and NPC cargo fill behave exactly as before. |
+| Public `mineHit` ring row | **Player beam only.** `sanitizeEvent` drops any `mineHit` whose `actor` is not `'player'` — npc, missing or unknown all fail closed, so an untagged future emitter cannot leak. The published row is `{ asteroidId, actor: 'player', count? }`; `actor` is kept on the row so the observe() re-sanitize copy is idempotent. |
+| Fold and eviction | Unchanged for player rows: one row per `asteroidId`, keep-class on overflow. NPC cuts never enter the ring, so they neither fold into a player row on the same rock nor evict anything. |
+
+No new command, key, gauge, persisted field, event type or schema version; the
+public API stays at `VERSION` 2 and the ring cap stays 16. `mineBlocked` has
+only ever had the player emitter and is unchanged.
+
+**Evidence.** `npm run test:miner-receipts` (13 checks over the real agent-api
+harvest and observe() builder: emitter source pins, npc rows dropped, player
+rows folded and bounded, 52 npc cuts evicting nothing from a saturated ring,
+the internal channel still carrying both actors) and the issue #119 pins in
+`npm run test:agent-schema`, plus unchanged `npm run test:boot`,
+`npm run test:pod-receipts`, `npm run test:agent-hardening` and
+`npm run test:agent-gameplay`.
+
+---
+
 ## Issue #100 — docked hails
 
 Implemented in the runtime and covered by focused tests. The live browser
@@ -1014,7 +1047,7 @@ Builder rules:
 - `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`, and `fullStop` (from `ctx.input.fullStop`). `agentOptIn` is top-level.
 - `ship` includes hull/screen/shell/engine/power/heat/`weaponGroup` (`state.js` **167–181**; `input.weaponGroup`).
 - `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships, rocks and pods** (AM needs the locked asteroid). Pod rows carry the pod `id` and `units` (issue #115).
-- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId`, `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback.
+- `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId` — player beam only, `actor: 'player'`; NPC miner cuts never reach the ring (issue #119), `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback.
 - `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
 - `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.
 - `session.phase` is `'dead'` while `ctx.deathApi.isOpen()` (death overlay). Then `'title'` / `'origin'` / `'playing'` as today.

@@ -319,6 +319,9 @@ export function createCtx({ scene, camera, renderer }) {
     // 'deepening' {id,line} (mystery.js, wave 7)   'lineagePassed' {name,generation,line}
     // 'gunRisen' {name,line} (world.js, wave 10 — aspirant cycle)
     // 'creditorCall' {stage,line}  'originPayoff' {id,line}  'originBeat' {id,line}  (world.js origin arcs)
+    // 'mineHit' {asteroidId, actor:'player'|'npc', point, laserTier, extractPerSec}
+    //   (combat.js player beam / npc.js miner; asteroids.js extracts from either;
+    //   issue #119: only actor 'player' reaches the agent ring)
     // 'mineBlocked' {asteroidId, oreKey, hardness, needs, line} (combat.js, wave 51 —
     //   the beam scattered off rock harder than the installed head's tier)
     // 'bodyHit' { kind, speed, damage }   // ship.js bounce; combat.js may fill damage

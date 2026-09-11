@@ -210,7 +210,9 @@ const EVENT_FIELDS = freeze({
   // seconds on the existing migration time scale.
   npcEscaped: freeze(['targetId', 'targetName', 'from', 'to', 'kind', 'reason', 'eta']),
   npcSheltered: freeze(['targetId', 'targetName', 'system', 'kind', 'reason']),
-  mineHit: freeze(['asteroidId', 'count']),
+  // Issue #119: NPC miners emit on the same internal channel; only the
+  // player's beam reaches the ring (sanitizeEvent drops any other actor).
+  mineHit: freeze(['asteroidId', 'actor', 'count']),
   mineBlocked: freeze(['asteroidId', 'oreKey', 'hardness', 'needs', 'line']),
   podSpawned: freeze(['podId']),
   podCollected: freeze(['podId', 'units', 'commodity']),
@@ -462,6 +464,11 @@ export function sanitizeEvent(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const type = Object.hasOwn(raw, 'type') ? raw.type : '';
   if (!isAuthoredEventType(type)) return null;
+  // Issue #119: NPC miners share the internal mineHit channel with the
+  // player's beam. Only the player's own cut is a public receipt; every other
+  // actor (npc, missing, unknown) fails closed. Ring rows carry
+  // actor:'player', so the observe() re-sanitize pass is idempotent.
+  if (type === 'mineHit' && raw.actor !== 'player') return null;
   const out = {
     type,
     t: num(Object.hasOwn(raw, 't') ? raw.t : 0, 0),

@@ -35,6 +35,7 @@
     "test:agent-schema": "node scripts/agent-schema-test.mjs",
     "test:combat-full-stop": "node --import ./scripts/with-css-stub.mjs scripts/issue-114-combat-full-stop-test.mjs",
     "test:pod-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-115-pod-receipts-test.mjs",
+    "test:miner-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-119-miner-receipts-test.mjs",
     "test:agent-hardening": "node scripts/agent-api-hardening-test.mjs",
     "test:hail-identity": "node scripts/hail-identity-test.mjs",
     "test:docked-hails": "node scripts/issue-100-docked-hails-test.mjs",
