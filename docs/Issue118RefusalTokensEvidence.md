@@ -23,7 +23,7 @@ console errors. No independent QA, merge, release or deployment is claimed.
   (`bad-args`, `bad-seq`, `bad-ttl`, `stale`, `bad-axis`, `bad-throttle`) and
   the four target refusals carries an additive `detail` string on the receipt,
   for example `defense must be 'evade'|'break-off'|'off'`,
-  `unknown argument burner`, or
+  `unknown argument warp` (`unknown argument burner` before issue #120 made `burner` a real argument), or
   `HUD aim digest is for rec-5, not rec-9; one rendered HUD frame is needed after selectTarget`.
   `token` stays the stable enum. `detail` is absent when empty, so accepted
   receipts and lifecycle-gate refusals keep the previous shape.
@@ -100,7 +100,7 @@ synthetic. All calls went through `window.rimward.act`:
 | Step | Receipt |
 |---|---|
 | `setCombatIntent { defense: 'none' }` | `bad-args`, detail `defense must be 'evade'\|'break-off'\|'off'` |
-| `setCombatIntent { burner: true }` | `bad-args`, detail `unknown argument burner` |
+| `setCombatIntent { burner: true }` | `bad-args`, detail `unknown argument burner` at the time; since issue #120 the detail reads `burner is accepted only with intent 'break-off'\|'retreat'` on an attack intent and `burner: true` is accepted on `retreat` / `break-off` — the suite's pin follows #120 as of issue #138 |
 | `setCombatIntent { ttl: 99 }` | `bad-ttl`, detail `ttl must be a number in 1..60 seconds` |
 | `setControl { steerX: 3 }` | `bad-axis`, detail `steerX must be a number in -1..1` |
 | `setCombatIntent` with no lock | `stale-lock`, detail `no current lock; selectTarget rec-1 first`; `lastIntent.detail` matches |
