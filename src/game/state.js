@@ -346,6 +346,13 @@ export const RESCUE = {
 // failResolveBump sting; calmSeconds is the stand-down after a refused
 // demand; demandMin is the floor of a pirate's demand (UU).
 export const HIDDEN_MOUNTS = { cost: 900, bluffBase: 0.35, bluffPerFear: 0.01, failResolveBump: 20, calmSeconds: 90, demandMin: 50 };
+// Issue #123: NPC pirates share the lane with a player pirate. concurrentCap
+// is the most pirates/aces that may work trader prizes at once in one
+// bubble; the rest loiter until a hunter finishes. A trader the player is
+// already engaging (a lock inside contestRange, a scratch, or an open terms
+// card) is the player's prize: no NPC pirate acquires it, and one already
+// on it backs off. Sit-on hunts against the player are never capped.
+export const PIRACY = { concurrentCap: 2, contestRange: 800 };
 // `bulk: true` marks the staples an NPC freighter actually hauls. Wave 51 added
 // seven exotic ores; without this flag world.js's LEGAL_KEYS manifest roll
 // would put void platinum in a Freehold grain hauler's hold. The four bulk
