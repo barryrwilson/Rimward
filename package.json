@@ -47,6 +47,8 @@
     "test:solar-hazards-live": "node scripts/issue-102-live-probe.mjs",
     "test:throttle-observability": "node --import ./scripts/with-css-stub.mjs scripts/issue-103-throttle-observability-test.mjs",
     "test:throttle-observability-live": "node scripts/issue-103-live-probe.mjs",
+    "test:lane-hold": "node --import ./scripts/with-css-stub.mjs scripts/issue-105-lane-hold-test.mjs",
+    "test:lane-hold-live": "node scripts/issue-105-live-probe.mjs",
     "test:capitulation-live": "node scripts/issue-67-live-probe.mjs",
     "test:gate-escape-live": "node scripts/issue-68-live-probe.mjs",
     "test:hail66-live": "node scripts/hail66-live-probe.mjs",
