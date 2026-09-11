@@ -69,7 +69,17 @@ and explicit clear release combat. **Focus loss and switching windows do not
 cancel combat**, per the owner's correction during implementation. The raw
 manual lease still cancels on blur. If a hidden tab suspends simulation, the
 wall deadline expires on the next observation or control tick before a new
-shot; focus does not renew the grant. Idempotent clear remains
+shot; focus does not renew the grant. Issue #121 names that case: `main.js`
+stamps the wall clock of every render-loop frame, `observe()` publishes
+`frameAgeMs` (wall ms since the last frame) and `flags.suspended` (true once
+no frame has run for `SUSPEND_AFTER_MS`, 1000 ms, while `t` freezes and
+`flags.paused` stays false), and a wall deadline crossed while no frame ran
+ends the combat lease with terminal reason `suspended` instead of `expired`
+(state `expired`, owner `none`, `combat.fireBlocked: 'suspended'`, the normal
+full-stop release). The first frame that closes such a gap reports the same
+reason; a deadline crossed with frames running, or a simulation-time expiry,
+still reads `expired`. The raw manual lease has no wall clock and is
+untouched. Idempotent clear remains
 available while paused/held and retains an already reported combat terminal
 reason. There are no external renewals, and no burner request the caller did
 not permit: issue #120 adds an optional `burner: true` on `retreat` and

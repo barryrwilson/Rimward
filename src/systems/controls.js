@@ -241,9 +241,50 @@ function simNow(ctx) {
 }
 
 const wallNow = () => performance.now() / 1000;
+
+/**
+ * Issue #121: a hidden pane stops the render loop. The simulation clock and
+ * `flags.paused` then read exactly as they did on the last frame, so a
+ * runner cannot tell a stall from a crash. A frame gap longer than this many
+ * wall milliseconds is reported as a suspended simulation.
+ */
+export const SUSPEND_AFTER_MS = 1000;
+
+/**
+ * Wall milliseconds since the latest render-loop frame (main.js stamps
+ * ctx.frameWallMs). 0 until the first frame or without a host loop.
+ */
+function frameAgeMs(ctx) {
+  const at = ctx && Number.isFinite(ctx.frameWallMs) ? ctx.frameWallMs : 0;
+  return at > 0 ? Math.max(0, performance.now() - at) : 0;
+}
+
+/** True while no frame has run for SUSPEND_AFTER_MS, or on the frame that ended such a gap. */
+function frameStalled(ctx) {
+  if (frameAgeMs(ctx) > SUSPEND_AFTER_MS) return true;
+  const gap = ctx && Number.isFinite(ctx.frameGapMs) ? ctx.frameGapMs : 0;
+  return gap > SUSPEND_AFTER_MS;
+}
+
+/** JSON-plain frame clock for observe(). Never throws. */
+export function agentFrameClock(ctx) {
+  try {
+    const age = frameAgeMs(ctx);
+    return { frameAgeMs: Math.round(age), suspended: age > SUSPEND_AFTER_MS };
+  } catch {
+    return { frameAgeMs: 0, suspended: false };
+  }
+}
+
 function expireCombat(ctx) {
-  if (lease?.combat && (simNow(ctx) >= lease.expiresAt || wallNow() >= lease.wallExpiresAt)) {
+  if (!lease?.combat) return;
+  if (simNow(ctx) >= lease.expiresAt) {
     dropLease(ctx, 'expired');
+  } else if (wallNow() >= lease.wallExpiresAt) {
+    // The wall bound still ends the grant (focus does not renew it), but a
+    // deadline crossed while no frame ran is named so the runner can tell
+    // a suspended pane from a lease that simply ran out (issue #121).
+    dropLease(ctx, frameStalled(ctx) ? 'suspended' : 'expired');
   }
 }
 
@@ -268,7 +309,7 @@ function dropLease(ctx, reason) {
     combatRelease();
   }
   lease = null;
-  noteLease(ctx, reason === 'expired' ? 'expired' : 'cleared', seq, reason || 'cleared');
+  noteLease(ctx, reason === 'expired' || reason === 'suspended' ? 'expired' : 'cleared', seq, reason || 'cleared');
   return true;
 }
 

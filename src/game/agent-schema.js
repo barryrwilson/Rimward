@@ -826,7 +826,7 @@ export const COMMAND_SPECS = freeze({
   setCombatIntent: freeze({
     args: freeze({
       seq: 'strictly increasing safe integer shared with setControl',
-      ttl: 'required seconds 1..60; expires at the earlier simulation or monotonic wall deadline; no implicit renewal',
+      ttl: 'required seconds 1..60; expires at the earlier simulation or monotonic wall deadline; no implicit renewal; a wall deadline crossed while no frame ran (hidden pane, observe().flags.suspended) ends with reason suspended instead of expired',
       targetId: 'required current visible ship id',
       defense: "optional 'evade' (default)|'break-off'|'off'; local reaction inside the same TTL",
       intent: "'engage'|'disable'|'break-off'|'retreat'; disable shares engage policy, does not select engines, and may destroy the target",
@@ -837,7 +837,7 @@ export const COMMAND_SPECS = freeze({
     phases: freeze(['intercept', 'pass', 'reposition', 'break-off', 'retreat']),
     terminalReasons: freeze(['target-disabled', 'target-surrendered', 'target-destroyed',
       'target-lost', 'target-changed', 'weapon-changed', 'disengaged', 'retreated',
-      'jump', 'jumping', 'match-speed', 'player-override', 'hail', 'expired',
+      'jump', 'jumping', 'match-speed', 'player-override', 'hail', 'expired', 'suspended',
       'explicit', 'paused', 'held', 'berth', 'docked', 'overlay', 'dead', 'opt-in', 'helm', 'no-service']),
     refusalReasons: freeze(['bad-args', 'bad-seq', 'bad-ttl', 'stale', 'weapon',
       'lock-kind', 'stale-lock', 'no-sample',

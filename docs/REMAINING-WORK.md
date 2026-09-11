@@ -18,6 +18,23 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #121](https://github.com/barryrwilson/Rimward/issues/121) — `observe()`
+gives no sign the simulation is suspended while lease TTLs keep expiring — is
+**implemented and locally verified on `claude/next-issue-1e76da`**, based on
+master `11ee8081`. `main.js` stamps the wall clock of every render-loop frame
+(`ctx.frameWallMs`, `ctx.frameGapMs`); `observe()` publishes `frameAgeMs` and
+`flags.suspended` (true once no frame has run for 1000 ms, while `t` freezes
+and `flags.paused` stays false); a combat-lease wall deadline crossed while no
+frame ran ends with terminal reason `suspended` instead of `expired` (state
+`expired`, the normal full-stop release, focus does not renew the grant). A
+deadline crossed with frames running, or a simulation-time expiry, still reads
+`expired`; the raw manual lease has no wall clock and is untouched. Build,
+unchanged boot, the new focused suite (`npm run test:suspended-clock`, 10
+groups), the release-focused runner (17/17) and the live browser check (a
+1.3 s main-thread stall after an accepted 1 s intent read `suspended`) pass
+with no console errors. See
+[the acceptance and evidence record](Issue121SuspendedClockEvidence.md).
+
 [Issue #120](https://github.com/barryrwilson/Rimward/issues/120) — a `retreat`
 intent cannot use the afterburner, so an ace paces the retreat until the hull
 dies — is **implemented and locally verified on `claude/next-issue-2ba4be`**,
