@@ -11,6 +11,77 @@
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
+## Issue #102 — Solar hazards in public observation
+
+This is an additive v2 contract. `observe().hazards.sun` is a fresh, detached
+snapshot of the **live** sun configuration used by combat, at any distance.
+It is `null` if there is no initialized valid sun (including a zero radius),
+and the no-context error observation also includes `{ hazards: { sun: null } }`.
+Changing systems or moving the live sun does not retain previous geometry.
+
+| Field | Meaning |
+|---|---|
+| `position` | World-space `[x, y, z]`, in the same coordinates as `ship.pos` |
+| `radius` | Live rendered sun radius, in world units |
+| `heatRadius`, `lethalRadius` | Shared physics boundaries: radius × 2.4 and radius × 1.12 |
+| `distance` | Ship-center distance from sun center; `null` without a valid ship position |
+| `zone` | `clear`, `heat`, or `lethal`; `null` without a valid ship position |
+| `intensity` | Heat-shell depth from 0 at the outer boundary to 1 at the lethal boundary; 0 outside, 1 inside the core, `null` without position |
+| `heatDps` | Current heat-shell damage rate (6 + 18 × intensity); 0 in clear space, `null` in the lethal core or without position |
+
+Boundary equality is inclusive: distance ≤ `lethalRadius` is lethal;
+otherwise distance ≤ `heatRadius` is heat. The core uses an immediate lethal
+damage packet rather than a DPS rate. These fields describe geometry, even
+when docked, berth-held, jumping or paused; those states suppress solar damage.
+They are distinct from `ship.heat` / `ship.overheated`, which describe weapons.
+
+Actual solar damage reaches the existing 16-row public event ring:
+
+- `sunHeat { t, reason: 'sun', intensity, dps, count? }`: shield/shell/hull
+  damage from combat. `t` is world time; `intensity` holds the heat fraction.
+  The HUD's existing 2.5-second warning cadence remains, with an immediate
+  first warning and a reset on system load. Repeats fold into one newest
+  solar row with an accumulated `count` of warnings, not damage ticks.
+- `sunKill { t, reason: 'sun' }`: entry into the lethal core, alongside the
+  normal `playerDestroyed` receipt. It is retained as a significant outcome.
+
+Solar receipts expose only authored primitive fields and survive ordinary
+chatter eviction. The bounded ring is historical: leaving the zone clears
+the live `hazards.sun.zone` / `heatDps`, but does not erase prior warnings.
+Enough newer retained events can eventually evict them.
+
+For system-to-system travel, use the existing route helm:
+
+```js
+const rw = window.rimward;
+rw.act({ v: 2, name: 'plotRoute', args: { dest: 'veridian' } });
+// Launch first if docked, and check every receipt/availability before continuing.
+rw.act({ v: 2, name: 'engageAutopilot', args: {} });
+```
+
+`plotRoute` selects the system hops; `engageAutopilot` performs local gate
+approach using the existing path planner and a sun heat keep-out sphere.
+This gives normal authored routes sun avoidance, but is not a guarantee
+against every collision, combat threat or interrupted approach. Monitor
+`autopilot`, `nav`, receipts and the live hazard. The path planner's sun radius
+comes from the current authored system; privileged changes to live radius
+are reflected in observation/combat and are not a supported route guarantee.
+
+Freehold's station `[120,20,620]` to Veridian gate `[0,60,-900]` passes about
+79.66 units from the sun center on a straight segment: inside its 144-unit
+heat boundary, outside its 67.2-unit lethal core. Sustained heat can still
+destroy the ship. Raw `setControl` steering does not plan around the sun;
+its caller must choose a clear trajectory with margin for momentum, turn
+radius and observation latency. No station, gate, sun or damage tuning was
+changed for this issue.
+
+Verification: `npm run test:solar-hazards` exercises real combat-to-public
+receipts, boundaries, live configuration changes, suppression, timestamp
+integrity, sanitation and ring retention. `npm run test:solar-hazards-live`
+uses normal startup/public routing and a labeled position fixture for real
+frame damage, HUD warning and exit observation. The existing unchanged boot
+suite also checks a sun-crossing route's detour geometry.
+
 ## Issue #74 — Discoverable salvage and accepted recovery navigation
 
 Open Jobs with `openService({id:'jobs'})`. The first `station.view.rows`

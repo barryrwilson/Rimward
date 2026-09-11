@@ -1943,6 +1943,14 @@ is a safety net, not the normal way traffic navigates.
 - Flying into the lethal inner region destroys the ship.
 - Danger is telegraphed clearly enough to permit escape before the lethal core.
 
+Agent visibility follow-up [#102](https://github.com/barryrwilson/Rimward/issues/102)
+is implemented locally: live sun boundaries and exposure are available through
+`observe().hazards.sun`, and existing solar damage warnings reach the public
+event history. Build, boot, focused, regression and live checks pass; independent
+Claude Code QA returned PASS on `de3346a`. PR review and merge remain pending.
+See [the evidence record](Issue102SolarHazardsEvidence.md).
+Authored layout and damage tuning are unchanged.
+
 **Acceptance direction**
 
 - The player cannot pass through major objects.

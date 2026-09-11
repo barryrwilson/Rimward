@@ -15,6 +15,8 @@ import { agentControlStatus } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
+import { PHY } from './physics.js';
+import { sunZone } from './collision.js';
 import {
   VERSION,
   NEARBY_CAP,
@@ -36,6 +38,31 @@ import {
 } from './agent-schema.js';
 
 const CAMERA = new Set(['chase', 'third', 'first']);
+
+/** Live solar geometry, never the authored table or a cached previous system. */
+function solarHazard(ctx, origin) {
+  const world = ctx.config?.world;
+  const radius = finiteOrNull(world?.sunRadius);
+  const position = vec3(world?.sunPosition);
+  if (radius === null || radius <= 0 || !position) return null;
+  const heatRadius = radius * PHY.SUN_HEAT_MULT;
+  const lethalRadius = radius * PHY.SUN_LETHAL_MULT;
+  if (!Number.isFinite(heatRadius) || !Number.isFinite(lethalRadius)) return null;
+  const row = { position, radius, heatRadius, lethalRadius,
+    distance: null, zone: null, intensity: null, heatDps: null };
+  if (origin) {
+    const sample = {};
+    sunZone(...origin, ...position, radius, sample);
+    if (Number.isFinite(sample.dist)) {
+      row.distance = sample.dist;
+      row.zone = ['clear', 'heat', 'lethal'][sample.zone];
+      row.intensity = sample.t;
+      row.heatDps = sample.zone === 1 ? PHY.SUN_HEAT_DPS + sample.t * PHY.SUN_HEAT_RAMP
+        : sample.zone === 0 ? 0 : null;
+    }
+  }
+  return row;
+}
 
 function missingCtx(ctx) {
   return ctx == null || typeof ctx !== 'object';
@@ -878,6 +905,7 @@ export function buildObservation(ctx) {
       session: { phase },
       control,
       ship: shipSnap,
+      hazards: { sun: solarHazard(ctx, origin) },
       flags: {
         docked,
         combat: flags.combat === true,
