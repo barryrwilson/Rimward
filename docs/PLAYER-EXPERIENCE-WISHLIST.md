@@ -535,7 +535,10 @@ Play-technique lessons for the next agent run (not product bugs):
 - Do not assume `dock` closes from cruise range until 2B exists. Place the
   hull in 45 u, or fly a human/inner-loop approach.
 - Double-tap F latches `fullStop` and cancels AP/AM until throttle-up or
-  `engageAutopilot` / `engageAutomine`.
+  `engageAutopilot` / `engageAutomine` / an accepted `setCombatIntent`
+  ([issue #114](https://github.com/barryrwilson/Rimward/issues/114)); while a
+  live combat lease is still held by the latch, `control.combat.movementBlocked`
+  reads `full-stop`.
 - The raw `setControl` throttle is a **persistent ship setpoint**, not a lease
   value. Letting the lease expire, or calling `clearControl`, stops steering
   and fire but leaves the ship under thrust. To stop, request

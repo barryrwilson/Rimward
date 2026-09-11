@@ -405,6 +405,12 @@ export function agentCombatSet(ctx, spec) {
       throttle: null, fire: false, drift: false };
     // A replacement cannot leave an old firing command live until next frame.
     ctx.input.fireHeld = false;
+    // Issue #114: a combat intent is a thrust command. Clear the double-tap F
+    // latch on acceptance, exactly like engageAutopilot / engageAutomine, so
+    // a hull stopped by the #103 handshake does not hold station under a
+    // lease whose view reports an intercept. The first applied tick would
+    // clear it anyway; clearing here keeps flags.fullStop honest before it.
+    ctx.input.fullStop = false;
     if (!keep) ctx.input.driftHeld = ctx.input.agentBurnerHeld = ctx.input.afterburnerPressed = false;
     noteLease(ctx, 'active', leaseSeq, '');
     return '';
@@ -424,6 +430,16 @@ export function agentControlClear(ctx, reason = 'explicit') {
   }
 }
 
+/**
+ * Issue #114: while a live combat lease is held at rest by the full-stop
+ * latch, say so. Physical movement blocks (obstruction, engine) keep priority.
+ */
+function combatStatusView(ctx, c) {
+  const view = combatView(c);
+  if (!view.movementBlocked && ctx?.input?.fullStop === true) view.movementBlocked = 'full-stop';
+  return view;
+}
+
 /** JSON-plain lease status for observe(). Never throws. */
 export function agentControlStatus(ctx) {
   try {
@@ -436,7 +452,7 @@ export function agentControlStatus(ctx) {
         expiresIn: Math.max(0, Math.min(lease.expiresAt - simNow(ctx), lease.combat ? lease.wallExpiresAt - wallNow() : Infinity)),
         fire: lease.fire === true,
         reason: '',
-        ...(lease.combat ? { combat: combatView(lease.combat) } : {}),
+        ...(lease.combat ? { combat: combatStatusView(ctx, lease.combat) } : {}),
       };
     }
     return {
