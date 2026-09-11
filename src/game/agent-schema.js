@@ -762,11 +762,12 @@ export const COMMAND_SPECS = freeze({
       steerX: '-1..1 optional', steerY: '-1..1 optional',
       strafeX: '-1..1 optional', strafeY: '-1..1 optional',
       roll: '-1..1 optional',
-      throttle: '0..1 setpoint target optional (ramps at player rate)',
+      throttle: '0..1 target for the persistent ship setpoint published as observe().ship.throttle; omitted or null leaves that setpoint alone; ramps at the player 0.5/s rate while the lease is live; 0 commands the player full stop (observe().flags.fullStop) on the next applied update',
       fireHeld: 'boolean optional', driftHeld: 'boolean optional',
     }),
     roles: freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
     outcomes: freeze(['active', 'cleared', 'expired', 'suppressed']),
+    note: 'the throttle setpoint is ship state, not lease state: lease expiry and clearControl end steering and fire but leave observe().ship.throttle where the last applied update left it, so the ship keeps flying. To stop, request throttle 0 on a live lease, then confirm observe().ship.throttle === 0 AND observe().flags.fullStop === true before clearing; zero throttle alone can still be a lease that never applied.',
   }),
   setCombatIntent: freeze({
     args: freeze({
@@ -792,7 +793,11 @@ export const COMMAND_SPECS = freeze({
       tuning: 'hull <=40%, engine <=30% or engineOut, defenses <=10% latch withdrawal on threat; heat >=90% suppresses fire until <75%; evade 1..3s, 0.75s quiet, 1s reengagement; drift <=0.35s, owned burn <=0.5s with visible clearance and normal power/cooldown' }),
     note: 'outcomes are control.state; terminalReasons are control.reason. Active combat.fireBlocked uses fireBlocks; after completion it copies control.reason.',
   }),
-  clearControl: cmd({}, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
+  clearControl: freeze({
+    args: freeze({}),
+    roles: freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
+    note: 'idempotent release of the manual or tactical lease. For raw leases it does not brake; combat lease release applies full stop. A raw release leaves observe().ship.throttle and observe().flags.fullStop as the last applied update left them. Supported stop handshake: setControl throttle 0, then confirm observe().ship.throttle === 0 AND observe().flags.fullStop === true before clearControl. For a ship actually at rest read observe().ship.speed; the full stop commands no thrust, it does not promise instant zero velocity.',
+  }),
   openService: cmd({ id: 'dock service id' }, ['trader', 'missions', 'services', 'rescue']),
   acceptJob: cmd({ id: 'offered job id' }, ['missions']),
   trade: cmd(

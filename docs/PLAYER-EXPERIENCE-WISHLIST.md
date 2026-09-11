@@ -527,6 +527,19 @@ Play-technique lessons for the next agent run (not product bugs):
   hull in 45 u, or fly a human/inner-loop approach.
 - Double-tap F latches `fullStop` and cancels AP/AM until throttle-up or
   `engageAutopilot` / `engageAutomine`.
+- The raw `setControl` throttle is a **persistent ship setpoint**, not a lease
+  value. Letting the lease expire, or calling `clearControl`, stops steering
+  and fire but leaves the ship under thrust. To stop, request
+  `setControl { throttle: 0 }`, confirm `observe().ship.throttle === 0` **and**
+  `observe().flags.fullStop === true` across real frames, and only then clear —
+  zero throttle alone can be a lease that never applied. `fullStop` means no
+  thrust is commanded, not that the ship has stopped; watch `ship.speed` for
+  that. A combat lease is the exception: its release is already a full stop.
+  Tracked as
+  [issue #103](https://github.com/barryrwilson/Rimward/issues/103): implemented,
+  verified and independently QA-approved at `f7593a08`; publication awaits
+  owner authorization. See
+  [Issue103ThrottleEvidence.md](Issue103ThrottleEvidence.md).
 - Read `session.phase` and the ring for `playerDestroyed` / `recovered`
   after combat. Clock running backwards is a recover clue, not a sim bug.
 - Job `kind` is not the cargo key. Read `commodity`, `need`/`units`, and
