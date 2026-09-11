@@ -117,6 +117,26 @@ pin('shieldDown npc primitives', !!(
   && !Object.hasOwn(sdNpc, 'ship')
 ));
 
+// Issue #119: NPC miners share the internal mineHit channel with the player's
+// beam. Only the player's own cut reaches the public ring; any other actor
+// (npc, missing, unknown) fails closed, and the ring row keeps actor:'player'
+// so the observe() re-sanitize pass is idempotent.
+const mhPlayer = sanitizeEvent({ type: 'mineHit', t: 3, asteroidId: 40, actor: 'player', point: { x: 1 }, laserTier: 1, extractPerSec: 2 });
+pin('mineHit player row keeps asteroidId/actor only', !!(mhPlayer && mhPlayer.asteroidId === 40 && mhPlayer.actor === 'player'
+  && !Object.hasOwn(mhPlayer, 'point') && !Object.hasOwn(mhPlayer, 'laserTier') && !Object.hasOwn(mhPlayer, 'extractPerSec')));
+pin('mineHit player row re-sanitizes idempotently', JSON.stringify(sanitizeEvent(mhPlayer)) === JSON.stringify(mhPlayer));
+pin('mineHit npc actor dropped', sanitizeEvent({ type: 'mineHit', t: 3, asteroidId: 40, actor: 'npc' }) === null);
+pin('mineHit missing actor dropped', sanitizeEvent({ type: 'mineHit', t: 3, asteroidId: 40 }) === null);
+pin('mineHit unknown actor dropped', sanitizeEvent({ type: 'mineHit', t: 3, asteroidId: 40, actor: 'world' }) === null);
+{
+  const ctx119 = { agent: { optIn: true, events: [] }, world: { time: 9 } };
+  noteSessionEvent(ctx119, { type: 'mineHit', asteroidId: 7, actor: 'npc' });
+  noteSessionEvent(ctx119, { type: 'mineHit', asteroidId: 7, actor: 'player' });
+  noteSessionEvent(ctx119, { type: 'mineHit', asteroidId: 7, actor: 'player' });
+  pin('noteSessionEvent drops npc mineHit and folds player rows', ctx119.agent.events.length === 1
+    && ctx119.agent.events[0].asteroidId === 7 && ctx119.agent.events[0].actor === 'player' && ctx119.agent.events[0].count === 2);
+}
+
 pin('playerDestroyed authored', EVENT_TYPES.includes('playerDestroyed'));
 pin('recovered authored', EVENT_TYPES.includes('recovered'));
 pin('bodyHit authored', EVENT_TYPES.includes('bodyHit'));

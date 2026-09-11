@@ -1737,8 +1737,12 @@ function updateMine(ctx, live, dt, now, reducedMotion) {
 
   if (now >= (ai.fireAt || 0)) {
     ai.fireAt = now + MINER_HIT_INTERVAL;
+    // Issue #119: the internal channel is shared with the player's beam
+    // (asteroids.js extracts from either), but only the player's cut is a
+    // public receipt. The actor tag lets the agent ring drop this row.
     ctx.emit('mineHit', {
       asteroidId: rock.id,
+      actor: 'npc',
       point: pt,
       laserTier: 0,
       extractPerSec: MINER_EXTRACT_PER_SEC,

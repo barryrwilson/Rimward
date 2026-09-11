@@ -1608,7 +1608,7 @@ export function initCombat(ctx) {
         const pt = _minePoints[_minePointIdx];
         _minePointIdx = (_minePointIdx + 1) % _minePoints.length;
         pt.copy(_beamEnd);
-        ctx.emit('mineHit', { asteroidId: bestEntry.id, point: pt, laserTier: laser.tier, extractPerSec: laser.extractPerSec });
+        ctx.emit('mineHit', { asteroidId: bestEntry.id, actor: 'player', point: pt, laserTier: laser.tier, extractPerSec: laser.extractPerSec });
         if (!reduced) {
           mineSparkClock += dt;
           if (mineSparkClock >= MINE_SPARK_INTERVAL) {
