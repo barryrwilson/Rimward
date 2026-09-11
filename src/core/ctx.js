@@ -313,7 +313,9 @@ export function createCtx({ scene, camera, renderer }) {
     // 'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
     // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
-    // 'playerDestroyed' {attackerId?,attackerName?}   'recovered' { source:'autosave'|'fresh' }  (save.js death)
+    // 'playerDestroyed' {attackerId?,attackerName?}   'recovered' { source:'autosave'|'berth'|'fresh',
+    //   rewindSeconds, lostCargo:['<units> <commodityKey>'], lostUnits }  (save.js death; issue #125:
+    //   'berth' is the docked/launch checkpoint a death inside an encounter returns to)
     // 'clueFound' {id,line}  'landmarkFound' {id,name,line}   (mystery.js, wave 5)
     // 'epicStage' {id,faction,stage,line}      'originChosen' {id,line}  (wave 6)
     // 'convergence' {id,line} (mystery.js)     'songShift' {reason} (mystery→song)

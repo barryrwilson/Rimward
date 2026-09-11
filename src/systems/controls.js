@@ -1271,6 +1271,13 @@ export function initControls(ctx) {
           dropStaleRockLock(ctx);
         }
         if (typ === 'podCollected') dropStaleKindLock(ctx);
+        // Issue #125: a recovered hull comes back at rest. The setpoint the
+        // player held at the moment of loss must not fly her straight out of
+        // the berth (or the autosave point) before she has seen where she is.
+        if (typ === 'recovered') {
+          input.throttle = 0;
+          input.throttleHeld = false;
+        }
       }
       dropStaleRockLock(ctx);
       dropStaleKindLock(ctx);

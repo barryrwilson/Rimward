@@ -388,11 +388,19 @@ function createRecords(ctx, sysId) {
     records.push(rec);
   }
   for (let i = 0; i < cast.patrols; i++) {
+    // Issue #125: a patrol flies its home system's flag. The neighbour's
+    // faction on every patrol past index 0 put a Veridian Combine heavy in
+    // Freehold Drift that hunted a Marked player (Veridian −15) on standing
+    // alone, while the war board described the same hull as patrolling the
+    // far dock. War quarry comes from the target faction's own bank
+    // (pickWarQuarry already prefers it); a foreign patrol in an old bank
+    // keeps its flag but npc.js mayHuntPlayer no longer lets it enforce
+    // standing law away from home.
     records.push(
       makeRecord(ctx, {
         name: poolName(PATROL_NAMES, sysId, i, 'Patrol'),
         classKey: 'heavy',
-        faction: i === 0 ? def.faction : otherFaction,
+        faction: def.faction,
         role: 'patrol',
         route: [writeStationHold(new THREE.Vector3(), station, 'heavy', gate), jitter(gate.clone(), 50), jitter(planet.clone(), 60)],
         cargo: [],

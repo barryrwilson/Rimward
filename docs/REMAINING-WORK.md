@@ -18,6 +18,34 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #125](https://github.com/barryrwilson/Rimward/issues/125) — Marked
+origin: hunters kill the starter hull three times in 13 sim-minutes; each
+recovery rewinds and relocates kilometres away — is **implemented and
+locally verified on `claude/last-issue-2c8c40`**, based on master
+`6bb15385`. `save.js` mirrors the docked / launch checkpoints into
+`rimward-save-v1-berth` and stamps the autosave lineage (`berth: true`,
+`berthSavedAt`); a death within `BERTH_RECOVERY_WINDOW` (120 s) of a
+mid-flight autosave returns to that berth when the stamps agree, and every
+other case (a longer fight, a foreign or future mirror, a legacy blob)
+restores the autosave as before, with the overlay copy naming whichever
+record she returns to. A second comm receipt states the cost (`Rewound 41 s
+to your last berth. Lost from the hold: 14 Raw ore, 5 Refined metals.`), and
+`recovered` gains `source: 'berth'`, `rewindSeconds`, `lostCargo` and
+`lostUnits` (bounded in the ring sanitizer). `controls.js` zeroes the
+throttle setpoint on `recovered`. `world.js` gives every generated patrol its
+home system's flag and `npc.js` `mayHuntPlayer` makes patrol standing law
+local (a Veridian heavy in Freehold no longer hunts a Marked player on
+standing; it still does inside Veridian space, and a scratch still provokes
+it anywhere). Build, unchanged boot, the new focused suite (`npm run
+test:death-recovery`, 44 pins), the neighbouring suites, the release-focused
+runner and a live browser check (a real dock, a mid-flight autosave 2 km
+out, a death 41 s later: the overlay named the berth, Enter put the hull on
+the pad with the receipt as HUD toasts and on the agent ring, throttle 0)
+pass with no console errors. Parked: station security reacting to a hostile
+hunter near the dock, ace demand behaviour, and a job that sends a patrol
+across a gate. See
+[the acceptance and evidence record](Issue125DeathRecoveryEvidence.md).
+
 [Issue #123](https://github.com/barryrwilson/Rimward/issues/123) — four NPC
 pirates camp the Freehold lane and break every trader first; the player
 pirate can only scavenge — is **implemented and locally verified on

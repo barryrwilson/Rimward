@@ -77,8 +77,17 @@ import { normalizeMarketSupply } from './market-supply.js';
  * - DEATH (§4.4 / RW-005 option 1): consumes 'playerDestroyed' → overlay →
  *   reload the last save (or a fresh start at Freehold when no save exists).
  *   No corpse run, no insurance, no UU charge. Copy must say that. Emits the
- *   commLine 'She limped home.' on recovery, then authored `recovered`
- *   { source: 'autosave'|'fresh' }. The bio companion survives
+ *   commLine 'She limped home.' on recovery, a second commLine receipt
+ *   (rewind seconds and the hold's loss), then authored `recovered`
+ *   { source: 'autosave'|'berth'|'fresh', rewindSeconds, lostCargo, lostUnits }.
+ *   Issue #125 BERTH RECOVERY: the docked / undocked checkpoints (and any
+ *   save taken while docked) mirror their blob into BERTH_KEY and stamp the
+ *   autosave lineage (`berth: true` on the checkpoint, `berthSavedAt` on
+ *   every later autosave). A death within BERTH_RECOVERY_WINDOW of a
+ *   mid-flight autosave — the fight had already begun when that save was
+ *   taken — returns to the berth mirror when its savedAt matches the stamp;
+ *   otherwise, and for any legacy blob, the autosave restores as before.
+ *   The bio companion survives
  *   either path (§ Bio companion): reload-from-save leaves her mood
  *   'anxious'; freshStart keeps her, wounded +0.4, mood 'pained', bond +0.02.
  *   Restore never copies ctx.agent (optIn / ring). recover() appends recovered
@@ -94,17 +103,32 @@ import { normalizeMarketSupply } from './market-supply.js';
  */
 
 const KEY = 'rimward-save-v1';
+// Issue #125: the last BERTH snapshot — the docked / launch checkpoint — kept
+// beside the rolling autosave so a death inside an encounter can return to
+// the berth instead of the open-space autosave the fight already reached.
+// Same {v:1} envelope; written only by the berth checkpoints below, never by
+// an idle or jump autosave. Boot load never reads it.
+export const BERTH_KEY = 'rimward-save-v1-berth';
 const SLOT_KEYS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
 const IDLE_INTERVAL = 60; // s between in-space autosaves
 const BLOCK_RETRY = 5; // s before retrying a combat-blocked autosave
+// Issue #125: a mid-flight autosave taken this close before the death was
+// taken inside the encounter that killed the hull (saves are refused only
+// once a hostile is already in the bubble). Recover at the berth instead.
+export const BERTH_RECOVERY_WINDOW = 120; // s
 // Session-only requests survive a blocked dock checkpoint. Never persist this
 // bookkeeping: a restore must not retry writes from the abandoned timeline.
 const pendingAutosaves = new WeakMap();
+// Session-only: savedAt of the berth snapshot this timeline descends from.
+// Seeded from the restored blob's berthSavedAt; a berth write refreshes it.
+const berthStamps = new WeakMap();
 const DEATH_HOLD_MS = 2500; // overlay hold before recovery
 const DEATH_TITLE = 'SHIP LOST';
 const DEATH_LINE_BERTH = 'No UU charge. Credits, cargo, and hull return as they were at your last berth.';
+const DEATH_LINE_AUTOSAVE = 'No UU charge. Credits, cargo, and hull return as they were at your last autosave.';
 const DEATH_LINE_FRESH = 'No berth record. Credits stay. A starter hull waits at Freehold Drift.';
 const DEATH_HINT_BERTH = 'Returning to your last berth… (Enter to skip)';
+const DEATH_HINT_AUTOSAVE = 'Returning to your last autosave… (Enter to skip)';
 const DEATH_HINT_FRESH = 'Returning to Freehold Drift… (Enter to skip)';
 
 // Whitelist: only these world fields persist. Anything world.js adds for the
@@ -1107,12 +1131,19 @@ function hostileEncounterBlock(ctx) {
   return null;
 }
 
-/** Same gates as trySave(autosave key). Does not invent a second storage key. */
-export function requestAutosave(ctx) {
+/**
+ * Same gates as trySave(autosave key). The autosave key stays the one rolling
+ * record; a BERTH checkpoint (issue #125: the docked / launch events, or any
+ * save taken while docked) is mirrored into BERTH_KEY and stamps the lineage
+ * so death recovery can prove the berth belongs to this timeline.
+ */
+export function requestAutosave(ctx, opts) {
   if (!ctx?.player || !ctx.ship?.object || ctx.player.destroyed) return false;
+  const prior = pendingAutosaves.get(ctx);
+  // A refused berth checkpoint keeps its berth-ness through the retry.
+  const berth = opts?.berth === true || ctx.flags?.docked === true || prior?.berth === true;
   const held = (reason) => {
-    const prior = pendingAutosaves.get(ctx);
-    pendingAutosaves.set(ctx, { elapsed: 0, reason });
+    pendingAutosaves.set(ctx, { elapsed: 0, reason, berth });
     if (prior?.reason !== reason) ctx.emit?.('saveBlocked', { reason, source: 'autosave' });
     return false;
   };
@@ -1120,7 +1151,22 @@ export function requestAutosave(ctx) {
   const reason = hostileEncounterBlock(ctx);
   if (reason) return held(reason);
   try {
-    localStorage.setItem(KEY, JSON.stringify(snapshot(ctx)));
+    const blob = snapshot(ctx);
+    if (berth) {
+      blob.berth = true;
+      blob.berthSavedAt = blob.savedAt;
+    } else {
+      const stamp = berthStamps.get(ctx);
+      if (Number.isFinite(stamp)) blob.berthSavedAt = stamp;
+    }
+    const json = JSON.stringify(blob);
+    localStorage.setItem(KEY, json);
+    if (berth) {
+      // The autosave is already on disk; a failed mirror leaves the stamps
+      // disagreeing, which recovery reads as "no berth" (fail closed).
+      localStorage.setItem(BERTH_KEY, json);
+      berthStamps.set(ctx, blob.savedAt);
+    }
     pendingAutosaves.delete(ctx);
     return true;
   } catch {
@@ -1129,8 +1175,8 @@ export function requestAutosave(ctx) {
 }
 
 /**
- * Clears only the autosave key; manual berth slots survive so a New Game never
- * destroys an explicitly-saved berth.
+ * Clears the autosave key and its berth mirror; manual berth slots survive so
+ * a New Game never destroys an explicitly-saved berth.
  */
 export function clearAutosave() {
   try {
@@ -1138,6 +1184,71 @@ export function clearAutosave() {
   } catch {
     /* storage denied — silently fail */
   }
+  try {
+    localStorage.removeItem(BERTH_KEY);
+  } catch {
+    /* storage denied — silently fail */
+  }
+}
+
+/**
+ * Issue #125: which record a death returns to. Pure — reads storage and the
+ * death time only, so the overlay copy and recover() agree.
+ *   fresh    — no autosave.
+ *   berth    — the autosave is a mid-flight snapshot taken within
+ *              BERTH_RECOVERY_WINDOW of the death (the fight had already
+ *              begun) AND the berth mirror provably belongs to this timeline
+ *              (its savedAt matches the autosave's berthSavedAt stamp and it
+ *              is not from the future). Also when the autosave itself is the
+ *              berth checkpoint.
+ *   autosave — every other case, including a legacy blob with no stamps.
+ */
+export function readRecoveryPlan(ctx, deathAt) {
+  const snap = loadSnapshot();
+  if (!snap) return { source: 'fresh', snap: null };
+  if (snap.berth === true) return { source: 'berth', snap };
+  const t = snap.world.time;
+  if (Number.isFinite(deathAt) && Number.isFinite(t) && deathAt - t <= BERTH_RECOVERY_WINDOW
+    && Number.isFinite(snap.berthSavedAt)) {
+    const berth = loadSnapshot(BERTH_KEY);
+    if (berth && berth.berth === true && berth.savedAt === snap.berthSavedAt
+      && Number.isFinite(berth.world.time) && berth.world.time <= t) {
+      return { source: 'berth', snap: berth };
+    }
+  }
+  return { source: 'autosave', snap };
+}
+
+/**
+ * Issue #125: the hold's loss receipt. Units the death-time hold carried that
+ * the restored hold does not, per commodity, as ring-safe strings
+ * ('14 rawOre') plus the unit total. A fresh start loses everything.
+ */
+export function lostCargoRows(before, after) {
+  const had = new Map();
+  for (const row of sanitizeCargoList(before)) had.set(row.commodity, (had.get(row.commodity) ?? 0) + row.units);
+  for (const row of sanitizeCargoList(after)) {
+    if (had.has(row.commodity)) had.set(row.commodity, had.get(row.commodity) - row.units);
+  }
+  const lostCargo = [];
+  let lostUnits = 0;
+  for (const [commodity, units] of had) {
+    if (!(units > 0)) continue;
+    lostCargo.push(`${units} ${commodity}`);
+    lostUnits += units;
+  }
+  return { lostCargo, lostUnits };
+}
+
+function lostCargoLine(before, after) {
+  const { lostCargo } = lostCargoRows(before, after);
+  if (lostCargo.length === 0) return 'Nothing lost from the hold.';
+  const names = lostCargo.map((row) => {
+    const i = row.indexOf(' ');
+    const key = row.slice(i + 1);
+    return `${row.slice(0, i)} ${COMMODITIES[key]?.name ?? key}`;
+  });
+  return `Lost from the hold: ${names.join(', ')}.`;
 }
 
 /**
@@ -1359,6 +1470,12 @@ function healLiveRecords(ctx) {
 export function restore(ctx, snap) {
   pendingAutosaves.delete(ctx);
   if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
+  // Issue #125: the restored timeline descends from the berth its blob names
+  // (its own savedAt when it IS the berth). A legacy blob names none, so no
+  // berth recovery can claim an unrelated mirror until the next checkpoint.
+  const stamp = snap.berth === true ? snap.savedAt : snap.berthSavedAt;
+  if (Number.isFinite(stamp)) berthStamps.set(ctx, stamp);
+  else berthStamps.delete(ctx);
   disengageAutopilot(ctx, 'restore');
   // Session channel: never copy optIn or the event ring from a blob.
   const fromSystem = ctx.world.currentSystem;
@@ -1499,13 +1616,20 @@ export function initSave(ctx) {
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
+  // Issue #125: the moment of loss. The plan and the hold receipt both read
+  // these, so the overlay copy and the recovery agree on where she goes.
+  let deathAt = 0;
+  let deathCargo = [];
+
   function paintDeathCopy() {
-    let hasBerth = false;
-    try { hasBerth = !!loadSnapshot(); } catch { hasBerth = false; }
+    let source = 'fresh';
+    try { source = readRecoveryPlan(ctx, deathAt).source; } catch { source = 'fresh'; }
     try {
       title.textContent = DEATH_TITLE;
-      line.textContent = hasBerth ? DEATH_LINE_BERTH : DEATH_LINE_FRESH;
-      hint.textContent = hasBerth ? DEATH_HINT_BERTH : DEATH_HINT_FRESH;
+      line.textContent = source === 'berth' ? DEATH_LINE_BERTH
+        : source === 'autosave' ? DEATH_LINE_AUTOSAVE : DEATH_LINE_FRESH;
+      hint.textContent = source === 'berth' ? DEATH_HINT_BERTH
+        : source === 'autosave' ? DEATH_HINT_AUTOSAVE : DEATH_HINT_FRESH;
     } catch {
       /* never throw from death overlay paint */
     }
@@ -1534,8 +1658,7 @@ export function initSave(ctx) {
     dead = false;
     if (deathTimer) { clearTimeout(deathTimer); deathTimer = 0; }
     overlay.style.display = 'none';
-    const snap = loadSnapshot();
-    const source = snap ? 'autosave' : 'fresh';
+    const { source, snap } = readRecoveryPlan(ctx, deathAt);
     // RW-005 option 1: never charge UU. Restore or freshStart only.
     if (snap) {
       restore(ctx, snap);
@@ -1547,19 +1670,29 @@ export function initSave(ctx) {
     }
     idleAccum = 0;
     nextDue = IDLE_INTERVAL;
+    // Issue #125: the receipt says what the rewind cost. Seconds are the
+    // sim clock the agent already reads; the hold diff is per commodity.
+    const rewindSeconds = Math.max(0, Math.round(deathAt - ctx.world.time));
+    const { lostCargo, lostUnits } = lostCargoRows(deathCargo, ctx.cargo);
     ctx.emit('commLine', { text: 'She limped home.' });
-    ctx.emit('recovered', { source });
+    ctx.emit('commLine', {
+      text: `${source === 'fresh' ? 'No berth record.' : `Rewound ${rewindSeconds} s to your last ${source}.`} ${lostCargoLine(deathCargo, ctx.cargo)}`,
+    });
+    ctx.emit('recovered', { source, rewindSeconds, lostCargo, lostUnits });
     try {
-      noteSessionEvent(ctx, { type: 'recovered', t: ctx.world.time, source });
+      noteSessionEvent(ctx, { type: 'recovered', t: ctx.world.time, source, rewindSeconds, lostCargo, lostUnits });
     } catch {
       /* session ring must not block death recovery */
     }
+    deathCargo = [];
   }
 
   function onPlayerDestroyed() {
     try { disengageFlee(ctx, 'destroyed'); } catch { /* session helm must not block death overlay */ }
     if (dead) return;
     dead = true;
+    deathAt = Number.isFinite(ctx.world?.time) ? ctx.world.time : 0;
+    deathCargo = sanitizeCargoList(ctx.cargo);
     paintDeathCopy();
     overlay.style.display = 'flex';
     deathTimer = setTimeout(recover, DEATH_HOLD_MS);
@@ -1903,9 +2036,9 @@ export function initSave(ctx) {
   }
 
   /** Attempt a save. Returns true when written. */
-  function trySave(key = KEY) {
+  function trySave(key = KEY, opts) {
     if (!ctx.player || !ctx.ship.object || dead) return false;
-    if (key === KEY) return requestAutosave(ctx);
+    if (key === KEY) return requestAutosave(ctx, opts);
     // Mid-jump state is incoherent (ships despawned, system half-swapped);
     // the 'systemLoaded' autosave waits until the jump completes. Autosaves
     // retain a retry request; this manual berth save only reports refusal.
@@ -1945,7 +2078,9 @@ export function initSave(ctx) {
         if (ev.type === 'playerDestroyed') { onPlayerDestroyed(); continue; }
         if (dead) continue;
         if (ev.type === 'docked' || ev.type === 'undocked') {
-          if (trySave()) jumpSavePending = false;
+          // Issue #125: the berth checkpoints. The launch save is taken with
+          // flags.docked already false, so the berth-ness is explicit here.
+          if (trySave(KEY, { berth: true })) jumpSavePending = false;
           idleAccum = 0;
           nextDue = IDLE_INTERVAL;
         } else if (ev.type === 'systemLoaded' && JUMP.saveOnJump) {

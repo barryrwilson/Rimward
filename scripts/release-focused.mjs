@@ -23,6 +23,7 @@ const checks = [
   ['suspendedClock', ['--import', ...css, 'scripts/issue-121-suspended-clock-test.mjs']],
   ['playerTerms', ['--import', ...css, 'scripts/issue-122-player-terms-test.mjs']],
   ['fenceMarker', ['--import', ...css, 'scripts/issue-124-fence-marker-test.mjs']],
+  ['deathRecovery', ['--import', ...css, 'scripts/issue-125-death-recovery-test.mjs']],
   ['agentApiHardening', ['scripts/agent-api-hardening-test.mjs']],
   ['wave30Hail', ['--import', ...css, 'scripts/wave30-hail-probe.mjs']],
   ['wave127And132', ['--import', ...css, 'scripts/wave127-132-probe.mjs']],
