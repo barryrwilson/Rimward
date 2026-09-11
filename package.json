@@ -41,6 +41,8 @@
     "test:surrender-attribution-live": "node scripts/issue-99-live-probe.mjs",
     "test:surrender-cargo": "node --import ./scripts/with-css-stub.mjs scripts/issue-98-surrender-cargo-test.mjs",
     "test:surrender-cargo-live": "node scripts/issue-98-live-probe.mjs",
+    "test:traffic-retirement": "node --import ./scripts/with-css-stub.mjs scripts/issue-101-traffic-retirement-test.mjs",
+    "test:traffic-retirement-live": "node scripts/issue-101-live-probe.mjs",
     "test:capitulation-live": "node scripts/issue-67-live-probe.mjs",
     "test:gate-escape-live": "node scripts/issue-68-live-probe.mjs",
     "test:hail66-live": "node scripts/hail66-live-probe.mjs",

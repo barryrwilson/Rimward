@@ -2814,6 +2814,11 @@ function escapePressed(ctx, live) {
   const now = ctx.world ? ctx.world.time : 0;
   if (st && Number.isFinite(st.lastHitAt) && now - st.lastHitAt <= ESCAPE.pressureRecent) return true;
   if (findHunterOf(ctx, live)) return true;
+  // Issue #101: after surrender, an idle player near the pad is not an
+  // ongoing pursuit. Fresh damage and NPC hunters above still press the hold;
+  // a selected runner retains the existing close-pursuit behavior below.
+  if (st?.surrendered === true && live.ai.fleeFrom === 'player'
+    && ctx.targets?.current !== live) return false;
   const threat = threatPos(ctx, live);
   return !!threat && live.object.position.distanceTo(threat) <= ESCAPE.pressureRange;
 }

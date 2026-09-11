@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { U } from './state.js';
+import { U, ESCAPE } from './state.js';
 import { recordPosition } from './world.js';
-import { escapeActive } from './npc-escape.js';
-import { spawnLiveShip, removeLiveShip } from '../systems/npc.js';
+import { escapeActive, readEscape } from './npc-escape.js';
+import { spawnLiveShip, removeLiveShip, findHunterOf } from '../systems/npc.js';
 import { isShipAssetReady, primeShipAsset } from '../systems/ship-assets.js';
 import { spawnBlocked, pirateLiveCap, visualClassFor, closeSpawn } from './traffic-feel.js';
 
@@ -54,6 +54,26 @@ const BLOCKADE_PIRATE_PRIORITY = 0.5; // score multiplier: pirates spawn sooner
 
 const _pos = new THREE.Vector3();
 const _skipped = [];
+const _remaining = [];
+
+/**
+ * Completed station yields get spare capacity after unfinished encounters.
+ * They can fold to their existing record when a new encounter needs a slot;
+ * they are never permanently excluded from the finite population. Named Guns
+ * and offered/accepted job quarry remain ordinary-priority candidates.
+ */
+function shelteredYield(ctx, rec, state = readEscape(rec)?.cond?.flags) {
+  const plan = readEscape(rec);
+  if (!plan || plan.phase !== 'done' || plan.reason !== 'sheltered'
+    || !state || state.surrendered !== true || state.disabled || state.destroyed) return false;
+  if (rec.role === 'ace' || rec.classKey === 'ace') return false;
+  for (const job of ctx.world.jobs ?? []) {
+    if (job.state !== 'offered' && job.state !== 'accepted') continue;
+    if (job.recordId === rec.id) return false;
+    if (job.kind === 'bounty' && job.target === rec.name && job.system === rec.system) return false;
+  }
+  return true;
+}
 
 export function initTraffic(ctx) {
   ctx.ships = ctx.ships ?? [];
@@ -104,13 +124,33 @@ export function initTraffic(ctx) {
       }
 
       // Spawn pass: at most one instantiation per frame, best candidate wins.
-      if (ctx.ships.length >= MAX_LIVE) return;
+      let retire = null;
+      if (ctx.ships.length >= MAX_LIVE) {
+        if (ctx.ships.length > MAX_LIVE) return;
+        for (let i = ctx.ships.length - 1; i >= 0; i--) {
+          const live = ctx.ships[i];
+          const recentHit = Number.isFinite(live.state?.lastHitAt)
+            && ctx.world.time - live.state.lastHitAt <= ESCAPE.pressureRecent;
+          if (ctx.targets?.current !== live && shelteredYield(ctx, live.record, live.state)
+            && !recentHit && !live.ai?.target && !live.ai?.intent && !findHunterOf(ctx, live)) {
+            retire = live;
+            break;
+          }
+        }
+        if (!retire) return;
+      }
+      // Clearance and mix are measured against the proposed post-fold bubble.
+      // Do not actually remove anything until a ready replacement is found.
+      _remaining.length = 0;
+      for (let i = 0; i < ctx.ships.length; i++) {
+        if (ctx.ships[i] !== retire) _remaining.push(ctx.ships[i]);
+      }
       const curSys = ctx.world.currentSystem;
       let pirateLive = 0;
-      for (let i = 0; i < ctx.ships.length; i++) {
-        if (ctx.ships[i].role === 'pirate') pirateLive++;
+      for (let i = 0; i < _remaining.length; i++) {
+        if (_remaining[i].role === 'pirate') pirateLive++;
       }
-      const pirateCap = pirateLiveCap(ctx.ships.length + 1, blockade);
+      const pirateCap = pirateLiveCap(_remaining.length + 1, blockade);
 
       const records = ctx.world.records;
       const recCount = records.length;
@@ -119,9 +159,13 @@ export function initTraffic(ctx) {
       for (let attempt = 0; attempt < recCount; attempt++) {
         best = null;
         let bestScore = Infinity;
+        let bestFinished = true;
         for (let i = 0; i < recCount; i++) {
           const rec = records[i];
           if (rec.live || rec.assetPending || rec.state !== 'enroute') continue;
+          const finished = shelteredYield(ctx, rec);
+          // Never exchange one finished encounter for another at the cap.
+          if (retire && finished) continue;
           // Stale-bank guard: on the jump frame records still point at the old
           // system's bank while currentSystem has already flipped. Untagged
           // legacy records (wave-1 saves) pass through.
@@ -133,8 +177,9 @@ export function initTraffic(ctx) {
           if (blockade && rec.role === 'pirate') range *= BLOCKADE_PIRATE_RANGE_MULT;
           if (d > range) continue;
           const score = blockade && rec.role === 'pirate' ? d * BLOCKADE_PIRATE_PRIORITY : d;
-          if (score < bestScore) {
+          if (!best || (bestFinished && !finished) || (bestFinished === finished && score < bestScore)) {
             bestScore = score;
+            bestFinished = finished;
             best = rec;
           }
         }
@@ -147,7 +192,7 @@ export function initTraffic(ctx) {
           best = null;
           continue;
         }
-        if (!close && spawnBlocked(_pos, visualClassFor(best), ctx.ships)) {
+        if (!close && spawnBlocked(_pos, visualClassFor(best), _remaining)) {
           _skipped.push(best);
           best = null;
           continue;
@@ -180,6 +225,11 @@ export function initTraffic(ctx) {
         recordPosition(best, _pos);
         const live = spawnLiveShip(ctx, best, _pos);
         if (live) {
+          if (retire) {
+            removeLiveShip(ctx, retire);
+            ctx.ships.splice(ctx.ships.indexOf(retire), 1);
+            retire.record.live = false;
+          }
           if (!ctx.ships.includes(live)) ctx.ships.push(live);
           best.live = true;
         }
