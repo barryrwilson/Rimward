@@ -30,11 +30,13 @@ import {
  *   1. a card is already open  → the press is swallowed, no toast   ('busy')
  *   2. paused, play surface or settings owns the screen → no toast ('surface')
  *   3. the play-card mutex refuses: chart or berth  → that overlay token
- *   4. salvage only: unreadable geometry, then range (canHailDisabled)
- *   5. salvage only: the session calm window                        ('calm')
- * Steps 4-5 are salvage-only because they gate the card hail.js can actually
- * open. An intact yielded or willing hull had no card to lose, so calm never
- * speaks for it — its own specific reason does.
+ *   4. salvage / willing: unreadable geometry, then range (canHailDisabled,
+ *      canDemandTerms)
+ *   5. salvage / willing: the session calm window                   ('calm')
+ * Steps 4-5 apply only to the states whose card hail.js can actually open:
+ * a wreck's salvage card and, since issue #122, a willing hull's terms card.
+ * An intact yielded hull had no card to lose, so calm never speaks for it —
+ * its own specific reason does.
  *
  * Only player-visible facts are read: the lock is live, `state.disabled`,
  * `state.surrendered` (already announced by npcSurrendered, cut engines and
@@ -59,7 +61,8 @@ export const HAIL_OFFER_STATES = Object.freeze([
   'yielded',  // surrender COMPLETE; no further terms to negotiate
   // Low morale and no completed surrender. Deliberately NEUTRAL: it says only
   // that the hull is willing to break, which stays true whether or not a card
-  // is offering terms right now. It is a morale reading, never a reward.
+  // is offering terms right now. It is a morale reading, never a reward —
+  // but since issue #122 a deliberate hail on it DOES open the terms card.
   'willing',
   'no-hail',  // holding their nerve; nothing to talk about
 ]);
@@ -106,11 +109,16 @@ const STATE_COPY = Object.freeze({
   // is the morale statement and stays true with or without a card. The step
   // below describes only the case with NO card open — a live card takes the
   // 'busy' branch, where the step names the card instead.
+  // Issue #122: a willing hull is now an ACTION — a deliberate hail opens the
+  // surrender card with the player as causer (npc.js tryOpenTermsHail), so
+  // the unblocked reason is empty like salvage. 'no-answer' survives in
+  // hail.js's vocabulary for the one press the key still cannot answer (a
+  // pirate mid-demand); it is no longer the classifier's word for willing.
   willing: {
     verb: 'hail',
-    reason: 'no-answer',
+    reason: '',
     label: '',
-    next: 'Their nerve is low, but they have offered no terms to accept.',
+    next: 'Hail to demand terms.',
   },
   'no-hail': { verb: 'hail', reason: 'no-hail', label: '', next: '' },
 });
@@ -254,10 +262,11 @@ function transientBlocker(ctx, live, state, dist, range) {
   } catch {
     return 'surface';
   }
-  // 4/5. Salvage only: these gate the card hail.js can actually open. An
-  //      intact yielded or willing hull had no card to lose, so it keeps its
-  //      own specific reason instead of borrowing range or calm.
-  if (state !== 'salvage') return '';
+  // 4/5. Only the states whose card hail.js can actually open: a wreck's
+  //      salvage card, and (issue #122) a willing hull's terms card. An
+  //      intact yielded hull had no card to lose, so it keeps its own
+  //      specific reason instead of borrowing range or calm.
+  if (state !== 'salvage' && state !== 'willing') return '';
   if (!Number.isFinite(dist)) return 'geometry';
   if (dist > range) return 'range';
   try {
@@ -288,7 +297,8 @@ export function hailOffer(ctx, live, range = U.TARGET_RANGE) {
     blocked = '';
   }
   const copy = STATE_COPY[state] ?? STATE_COPY['no-hail'];
-  const available = state === 'salvage' && blocked === '';
+  // Issue #122: a willing hull is an action too — the key opens the terms card.
+  const available = (state === 'salvage' || state === 'willing') && blocked === '';
   // A transient blocker owns the refusal token; only an unblocked lock speaks
   // for itself. '' means the real press produces no toast at all.
   const reason = blocked ? (BLOCKED_REASON[blocked] ?? '') : copy.reason;

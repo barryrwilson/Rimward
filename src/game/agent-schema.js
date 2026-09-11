@@ -187,7 +187,7 @@ const EVENT_FIELDS = freeze({
   commLine: freeze(['text', 'from', 'count']),
   docked: freeze([]),
   undocked: freeze([]),
-  hailOpened: freeze(['intents', 'salvage']),
+  hailOpened: freeze(['intents', 'salvage', 'terms']),
   hailClosed: freeze(['demandHail', 'demandOutcome', 'speaker', 'demand']),
   hailMiss: freeze(['name', 'verb', 'reason', 'dist']),
   navRoute: freeze(['dest', 'hops', 'status']),
@@ -751,7 +751,7 @@ export const ROLE_STATUS = freeze({
   ),
   hail: role(
     ['hail', 'hailResolve'],
-    'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId',
+    'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId. hail on a locked hull whose targets.current.hail.state is willing (resolveBand bargaining/capitulate, not yielded) inside range opens the surrender card with the player as causer (hailOpened terms:true); the claim lasts only while that card is open',
   ),
   missions: role(
     ['openService', 'acceptJob'],

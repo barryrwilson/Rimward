@@ -18,6 +18,29 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #122](https://github.com/barryrwilson/Rimward/issues/122) — a feared
+pirate cannot demand terms from a willing hull; the bargaining card only
+opens on a player-caused band transition — is **implemented and locally
+verified on `claude/next-issue-a80ed6`**, based on master `4c8a8527`, after
+the focused design pass in [Hail03PlayerTermsDesign.md](Hail03PlayerTermsDesign.md).
+A deliberate H press or `act({ name: 'hail' })` on a locked live hull at the
+`bargaining` or `capitulate` band that has not yielded, inside
+`U.TARGET_RANGE`, opens the same surrender card the band transition draws
+(`hailOpened` gains `terms: true`), with the player as causer while that card
+is open: a ransom, cargo demand or tribute pays exactly as before. The claim
+dies with the card; an NPC hit landed during the parley lapses it (`stale`),
+and outside an open terms card issue #99 attribution is unchanged. The shared
+classifier offers `willing` as an action (`Hail to demand terms.`), range and
+calm gate it like a wreck, and the bracket prompt reads `H — Hail — demand
+terms`. Build, unchanged boot, the new focused suite (`npm run
+test:player-terms`, 8 groups), the updated #67 suite, the #99/#98/#100/#66
+and agent suites, the release-focused runner (18/18) and the live browser
+check (a real KeyH opened the card on an unshot willing freighter; Digit2
+paid 338 UU and fear +3) pass with no console errors. `test:refusal-tokens`
+fails independently of this branch (the #118 test predates the #120 burner
+wording) and is parked. See
+[the acceptance and evidence record](Issue122PlayerTermsEvidence.md).
+
 [Issue #121](https://github.com/barryrwilson/Rimward/issues/121) — `observe()`
 gives no sign the simulation is suspended while lease TTLs keep expiring — is
 **implemented and locally verified on `claude/next-issue-1e76da`**, based on
