@@ -18,6 +18,17 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #101](https://github.com/barryrwilson/Rimward/issues/101) — release
+traffic slots after surrendered hulls finish station refuge — is implemented,
+locally verified and independently QA-approved at `800917d43a18ff6fa6d1b87b91f2e25d5079b315`,
+awaiting PR review and merge. At a full bubble, one safe completed encounter
+folds only when a ready unfinished replacement can use its slot. Finished
+ships can return in spare capacity; population, cargo and condition survive.
+Selection, active pursuit, recent attacks, disabled salvage, named aces and
+current job quarry remain protected. Build, unchanged boot, focused and related
+regressions pass; live Chrome passes 3/3 pins with a clean console. See
+[the acceptance and evidence record](Issue101TrafficRetirementEvidence.md).
+
 The owner authorized consolidation and complete release validation on current
 master before more features. The [consolidation record](RepoConsolidation20260910.md)
 records completed preservation/cleanup and verification repairs. Final

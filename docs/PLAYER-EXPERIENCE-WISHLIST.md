@@ -1724,6 +1724,14 @@ need a scratch or standing ≤ −10. Pirates keep the wave-32 interest roll.
 
 ### AI-05 — A fleeing ship runs somewhere
 
+Issue #101 follow-up is implemented and independently QA-approved at
+`800917d43a18ff6fa6d1b87b91f2e25d5079b315`, awaiting PR review and merge.
+Completed surrendered station encounters yield contested live slots to ready
+unfinished traffic and can return in spare capacity, keeping their records,
+cargo and condition. Selection, active pursuit, salvage, named aces and current
+job quarry remain available. Live verification passes 3/3 with a clean console. See
+[the acceptance and evidence record](Issue101TrafficRetirementEvidence.md).
+
 **Status:** first pass IMPLEMENTED on the issue #68 branch
 (`codex/issue-68-gate-escape`); local verification and independent QA complete on `e179dfe5`. Build, full boot, focused escape and affected regressions pass; live browser 8/8 passes with zero console errors/exceptions. Owner-requested
 during the visible pirate playtest, and widened by the owner to include the
