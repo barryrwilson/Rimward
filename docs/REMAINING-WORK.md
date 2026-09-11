@@ -18,6 +18,28 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #123](https://github.com/barryrwilson/Rimward/issues/123) — four NPC
+pirates camp the Freehold lane and break every trader first; the player
+pirate can only scavenge — is **implemented and locally verified on
+`claude/next-issue-9c2b29`**, based on master `126250d5`. `PIRACY` in
+`src/game/state.js` (`concurrentCap: 2`, `contestRange: 800`) is the new
+tuning. In `src/systems/npc.js` the hunt loop now (1) lets at most
+`concurrentCap` pirates/aces work trader prizes at once in a bubble — the
+rest loiter until a hunter finishes — (2) never doubles a second pirate onto
+a trader another hunter already works while an unworked one is in reach, and
+(3) treats a trader the player is engaging as the player's prize: a lock
+inside `contestRange`, a player scratch, or an open issue #122 terms claim
+(`playerContests`) means no NPC pirate acquires that hull, and one already on
+it backs off once with the comm line `Your prize. We take the next one.` A
+pirate that rolled interest in the player is never capped; the spawn-side
+pirate share (`pirateLiveCap`) is unchanged. Build, unchanged boot, the new
+focused suite (`npm run test:shared-lane`, 21 checks), the #105, #101, #122,
+#61, #99 and agent suites, and a live browser check (a spawned pirate on a
+freighter backed off and said the line the frame the player locked that
+freighter at 150 u; the cap left a third pirate idle beside two working ones)
+pass with no console errors. Parked: the optional fear-rating suppression of
+rival pirate interest from the issue's third suggestion.
+
 [Issue #122](https://github.com/barryrwilson/Rimward/issues/122) — a feared
 pirate cannot demand terms from a willing hull; the bargaining card only
 opens on a player-caused band transition — is **implemented and locally

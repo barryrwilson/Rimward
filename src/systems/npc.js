@@ -16,6 +16,7 @@ import {
   MINING_LASERS,
   SYSTEMS,
   ESCAPE,
+  PIRACY,
 } from '../game/state.js';
 import {
   readEscape,
@@ -1986,6 +1987,54 @@ export function findHunterOf(ctx, live) {
   return null;
 }
 
+/**
+ * Issue #123 — is this civilian hull the player's prize right now? Mirrors
+ * police-cover's "player fighting" read (a scratch or the current lock) plus
+ * the issue #122 terms claim, with the lock only counting while the player
+ * is inside PIRACY.contestRange of the hull and not docked. Fails closed on
+ * a missing player, hull or lock.
+ */
+export function playerContests(ctx, live) {
+  if (!ctx || !live || !live.ai || !live.state) return false;
+  if (!isCivilianRole(live.ai.role ?? live.role ?? live.record?.role)) return false;
+  if (lastAttackerOf(live) === 'player') return true;
+  const at = live.ai.termsAt;
+  if (typeof at === 'number' && Number.isFinite(at) && at >= 0) return true;
+  if (ctx.flags && ctx.flags.docked) return false;
+  const cur = ctx.targets && ctx.targets.current;
+  if (!cur || cur !== live) return false;
+  const pObj = ctx.ship && ctx.ship.object;
+  if (!pObj || !live.object) return false;
+  const d = pObj.position.distanceTo(live.object.position);
+  return Number.isFinite(d) && d < PIRACY.contestRange;
+}
+
+/** Issue #123 — live pirates/aces (other than `live`) currently working a trader. */
+export function countTraderHunters(ctx, live) {
+  const ships = ctx && ctx.ships;
+  if (!ships) return 0;
+  const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
+  let n = 0;
+  for (let i = 0; i < ships.length; i++) {
+    const other = ships[i];
+    if (!other || other === live || !other.ai) continue;
+    const st = other.state;
+    if (!st || st.destroyed || st.disabled || st.surrendered) continue;
+    if (!hunterHasWork(other, station)) continue;
+    if (other.ai.target === 'player') continue;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * Issue #123 — may this pirate/ace take a NEW trader prize? False once
+ * PIRACY.concurrentCap other hunters already work traders in the bubble.
+ */
+export function huntSlotOpen(ctx, live) {
+  return countTraderHunters(ctx, live) < PIRACY.concurrentCap;
+}
+
 /** Nearest in-bubble pirate/ace working a trader or the player. */
 export function findPirateWork(ctx, live) {
   const ships = ctx.ships;
@@ -2666,7 +2715,15 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
   } else if (ai.target) {
     const t = ai.target;
     if (t.state.destroyed || t.state.disabled || t.state.surrendered || !ctx.ships.includes(t)) breakOff(ai);
-    else targetPos = t.object.position;
+    else if (playerContests(ctx, t)) {
+      // Issue #123: the player is on this hull — it is their prize. Back off
+      // once, say so once per hull, and let the acquire loop find another.
+      if (ai.yieldedPrize !== t) {
+        ai.yieldedPrize = t;
+        say(ctx, live, 'Your prize. We take the next one.');
+      }
+      breakOff(ai);
+    } else targetPos = t.object.position;
   }
 
   if (targetPos) {
@@ -2726,13 +2783,19 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
         // the hail and bracket already show true colors: a 'freighter' closes,
         // flips, then 'Your cargo or your hull.'
         revealQship(ctx, live);
-      } else {
+      } else if (huntSlotOpen(ctx, live)) {
+        // Issue #123: at most PIRACY.concurrentCap hunters work traders at
+        // once; a hull the player contests or another hunter already works
+        // is skipped, so prizes spread and the player pirate finds a fresh one.
         let best = null;
         let bestD = U.ENCOUNTER_BUBBLE;
         for (const other of ctx.ships) {
           if (!other || other === live || !isCivilianRole(other.role)) continue;
           if (!other.state || other.state.destroyed || other.state.disabled || other.state.surrendered) continue;
           if (!other.object || other.object.position.distanceTo(station) < LAW_ZONE_RADIUS) continue;
+          if (playerContests(ctx, other)) continue;
+          const hunter = findHunterOf(ctx, other);
+          if (hunter && hunter !== live) continue;
           const d = live.object.position.distanceTo(other.object.position);
           if (d < bestD) {
             best = other;
