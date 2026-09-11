@@ -24,8 +24,10 @@ hazards and damage visible to agents — is implemented and locally verified on
 is a live sun danger-zone snapshot, public solar event receipts, and accurate
 sun-avoiding navigation guidance. Authored layout and damage balance are outside
 scope. Build, unchanged boot, 13 focused groups, five regression suites and 4/4
-live browser pins pass. Independent QA awaits authorization for the separate
-review engine. See [the acceptance and evidence record](Issue102SolarHazardsEvidence.md).
+live browser pins pass. Independent Claude Code QA returned PASS on
+`de3346a9322daa2d3027a0763a150abb2c61c4bf`, including its own live rerun and 50
+additional checks. Awaiting PR review and merge. See
+[the acceptance and evidence record](Issue102SolarHazardsEvidence.md).
 
 [Issue #101](https://github.com/barryrwilson/Rimward/issues/101) — release
 traffic slots after surrendered hulls finish station refuge — is implemented,

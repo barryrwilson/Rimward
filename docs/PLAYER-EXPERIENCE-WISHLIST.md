@@ -1947,7 +1947,8 @@ Agent visibility follow-up [#102](https://github.com/barryrwilson/Rimward/issues
 is implemented locally: live sun boundaries and exposure are available through
 `observe().hazards.sun`, and existing solar damage warnings reach the public
 event history. Build, boot, focused, regression and live checks pass; independent
-QA remains pending. See [the evidence record](Issue102SolarHazardsEvidence.md).
+Claude Code QA returned PASS on `de3346a`. PR review and merge remain pending.
+See [the evidence record](Issue102SolarHazardsEvidence.md).
 Authored layout and damage tuning are unchanged.
 
 **Acceptance direction**

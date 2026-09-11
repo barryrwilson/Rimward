@@ -12,9 +12,10 @@ Implementation artifact: `57a81c65a0511bb2b022bf506a00d06f2a6450f2`
 (`Expose live solar hazards and damage events to agents`). The subsequent
 evidence/backlog commit changes documentation only.
 
-Stage: awaiting independent review. Rex owns source and test implementation through the
+Stage: independently QA-approved, awaiting PR review and merge. Rex owns source and test implementation through the
 Codex fallback harness; Clawd coordinates scope and evidence and executed the
-live probe. Independent cross-engine QA remains pending.
+live probe. Quinn's independent Claude Code review returned PASS on
+`de3346a9322daa2d3027a0763a150abb2c61c4bf`.
 
 The selected outcome is that an agent can identify the live star's danger
 boundaries before entering them and recognize actual solar damage through
@@ -120,12 +121,52 @@ authorization. It did not run. The Codex fallback is permitted by Rex's role
 instructions. The separate-engine QA gate is still required by the team
 operating rules; no same-engine check will be labelled independent QA.
 
+The owner subsequently explicitly authorized Claude Code reading the relevant
+source and running independent tests. Quinn used `claude-opus-5[1m]` and
+returned **PASS** on `de3346a9322daa2d3027a0763a150abb2c61c4bf`, with a clean
+working tree and no implementation drift. Raw stdout is preserved in
+`out/issue-102-evidence/qa-stream.jsonl`; the complete extracted verdict is
+`qa-verdict.md`. The reviewer made no source changes.
+
+Independent runs passed the 13-group solar suite, build, unchanged boot,
+agent-schema, agent-hardening, combat-intent (33 groups), reactive-defense
+(19 groups) and the live solar probe (4/4, zero console errors/exceptions).
+The independent live rerun refreshed `live/`; the numerical trace above is
+the coordinator's earlier run preserved in `live-command-revised.log`.
+The boot command also includes the agent-gameplay checks. In addition, the
+reviewer ran 30 schema and 20 runtime checks covering hostile field values,
+ring saturation, boundary agreement, stale geometry, snapshot mutation,
+docked suppression, actual heat damage and timestamps. Its runtime probe
+initially used the wrong fixture state path, then corrected that probe;
+the initial failure and successful rerun remain in captured stdout.
+
+Non-blocking observations, kept outside this issue's implementation scope:
+
+- `_sunKillEmitted` resets on system load, so a synthetic same-system revival
+  followed by another core death omitted a second `sunKill` while still emitting
+  `playerDestroyed`. This is pre-existing behaviour; the real recovery flow
+  was not replayed. Reproduce that flow before selecting a separate repair.
+- Core-death rows do not coalesce, but remain bounded like other significant
+  receipts. Geometry/DPS remains visible while damage is suppressed, as the
+  guide documents; callers must read session flags too.
+- Navigation uses authored sun radius while observation/damage uses live
+  radius. Normal systems agree; privileged radius changes are outside the
+  documented route guarantee.
+- The live fixture derives its heat placement from observed radius; the
+  independent numerical boundary checks cover this shared test input.
+
+Review limits: one Windows run per suite; no completed gate crossing,
+full-release or startup-performance claim. The reviewer did not inspect the
+live screenshots or historical ignored Wave 126 contract. The coordinator
+inspected the heat screenshot; current issue scope and current code/tests
+govern the accepted change.
+
 Coordinator source inspection found no expansion of public commands, persistent
 state, DOM rendering, bridge exposure or credentials. Solar observation admits
 only known geometry and primitive event fields. This inspection is not the
 independent QA gate. No full-release or startup-performance certification is
 claimed.
 
-Next owner: Quinn, to review the exact implementation through an authorized
-independent engine. No push, merge or deployment has been performed for this
-issue.
+Next gate: PR review and merge handoff. The independent verdict approves the
+named implementation and evidence artifact; subsequent status documentation
+does not alter source or tests. Merge and deployment are not claimed here.
