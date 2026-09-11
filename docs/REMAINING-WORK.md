@@ -20,7 +20,7 @@ is not fresh QA, release readiness, or deployment evidence.
 
 [Issue #103](https://github.com/barryrwilson/Rimward/issues/103) — a raw
 `setControl` throttle persists after the lease expires or is cleared, so an
-agent can fly unattended — is **implemented and locally verified on
+agent can fly unattended — is **implemented and independently QA-approved on
 `codex/issue-103-throttle-observability`**, based on master `7645aa22`. The
 issue explicitly allows keeping the setpoint and documenting the already
 published `observe().ship.throttle` instead of changing the semantics, and that
@@ -33,8 +33,11 @@ persistent setpoint, that clearing does not brake, or that the supported stop is
 behaviour, the combat-release full stop and the API version are unchanged.
 Focused checks (12 groups), build, unchanged boot and agent/combat regressions
 pass. The live browser probe passes 5/5 pins with no console errors or uncaught
-exceptions. Independent QA on the exact commit is next; no merge or release is
-claimed. Initial verification failures and their corrections remain in the
+exceptions. Independent Codex QA returned PASS on
+`f7593a085ca8ff710f9d21d4c2e127001785a227`, including four additional boundary
+groups and source/security review. Publication awaits owner authorization after
+automatic approval review rejected the push; no PR, merge or release is claimed.
+Initial verification failures and their corrections remain in the
 evidence record. See
 [the acceptance and evidence record](Issue103ThrottleEvidence.md).
 

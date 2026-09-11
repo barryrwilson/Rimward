@@ -536,7 +536,9 @@ Play-technique lessons for the next agent run (not product bugs):
   thrust is commanded, not that the ship has stopped; watch `ship.speed` for
   that. A combat lease is the exception: its release is already a full stop.
   Tracked as
-  [issue #103](https://github.com/barryrwilson/Rimward/issues/103); see
+  [issue #103](https://github.com/barryrwilson/Rimward/issues/103): implemented,
+  verified and independently QA-approved at `f7593a08`; publication awaits
+  owner authorization. See
   [Issue103ThrottleEvidence.md](Issue103ThrottleEvidence.md).
 - Read `session.phase` and the ring for `playerDestroyed` / `recovered`
   after combat. Clock running backwards is a recover clue, not a sim bug.

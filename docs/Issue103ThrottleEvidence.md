@@ -6,10 +6,12 @@ Source: [issue #103](https://github.com/barryrwilson/Rimward/issues/103).
 Baseline: master `7645aa225e9b8b34853111c6118b066fbabd91f0`; branch
 `codex/issue-103-throttle-observability`.
 
-Stage: implemented and locally verified, awaiting independent QA on the exact
-commit. Rex directed the Claude Code implementation harness and executed the
+Stage: implemented, locally verified and independently QA-approved at
+`f7593a085ca8ff710f9d21d4c2e127001785a227`; awaiting publication authorization.
+Rex directed the Claude Code implementation harness and executed the
 focused/build/boot/regression checks; Clawd coordinated scope and executed the
-live browser probe. No independent QA, merge, release or deployment is claimed.
+live browser probe. Quinn reviewed through the independent Codex harness.
+No push, PR, merge, release or deployment is claimed.
 
 The accepted option is the issue's explicitly permitted compatibility-preserving
 choice: keep the setpoint and document the existing `observe().ship.throttle`.
@@ -107,10 +109,28 @@ cross-platform timing, full-release or startup-performance certification.
 
 ## Review and rollback
 
-Next owner: Quinn, for independent review of the immutable implementation commit.
-Review must verify the accepted compatibility-preserving option, stop handshake,
-raw/combat distinction, test integrity and scoped write set. Local builder checks
-are evidence, not self-approval. PR/merge/deployment remain separate gates.
+Quinn returned **PASS** on `f7593a085ca8ff710f9d21d4c2e127001785a227`
+on 2026-09-11 UTC through Codex, independently of the Claude Code builder.
+The focused 12 groups, schema, hardening, combat-intent 33 groups and
+reactive-defense 19 groups all passed independent reruns. Four additional
+boundary groups covered zero expiring before application, positive resume and
+downward ramp, held-input release, and omitted/malformed throttle handling.
+The QA fixture's initial negative-zero equality assertion was corrected;
+its initial failure remains in the raw evidence. No committed tests were altered.
+
+QA independently inspected the recorded build/boot output and coordinator-run
+live evidence, including the final screenshot. It did not repeat those runs.
+No blocking correctness, security or regression finding was identified. The
+live stop pin checks deceleration; raw observations and the screenshot separately
+prove actual rest for this run. The original eight-file artifact and clean
+working tree were verified before and after review. Detailed verdict and raw
+checks remain in ignored `out/issue-103-evidence/qa-verdict.md` and `qa-*.log`.
+
+Next step: owner authorization to push this branch and create a draft PR.
+Automatic approval review rejected the attempted push because the request did
+not explicitly authorize external publication. No remote write occurred.
+This documentation-only follow-up records QA and the hold; merge and deployment
+remain separate gates.
 
 Revert the implementation commit to restore prior help/docs/test scripts. No
 migration or saved-state rollback is required because runtime behavior and
