@@ -18,6 +18,25 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #118](https://github.com/barryrwilson/Rimward/issues/118) —
+`setCombatIntent` refuses `target-lost` on a fresh lock and refusal tokens
+carry no detail — is **implemented and locally verified on
+`claude/next-issue-77b2bb`**, based on master `031e0dda`. The folded target
+check now returns one token per precondition: `lock-kind` (rock, pod, station,
+gate or landmark lock), `stale-lock` (no lock or another id), `no-sample` (the
+hull is locked but the HUD aim digest is missing, for another lock or weapon
+group, older than 0.25 s or beyond 600 u) and `target-lost` only for a hull
+that left the live roster. Argument refusals from `setControl` and
+`setCombatIntent` (`bad-args`, `bad-seq`, `bad-ttl`, `stale`, `bad-axis`,
+`bad-throttle`) and the four target refusals carry an additive `detail` string
+naming the failing field or the unmet precondition; `lastIntent` mirrors it.
+The manifest documents the one-rendered-frame rule on `selectTarget` and
+`setCombatIntent`. Combat behaviour, terminal reasons, the lease model and the
+API version are unchanged. Build, unchanged boot, the new focused suite
+(`npm run test:refusal-tokens`), the schema pins and the agent/combat
+regressions pass. See
+[the acceptance and evidence record](Issue118RefusalTokensEvidence.md).
+
 [Issue #119](https://github.com/barryrwilson/Rimward/issues/119) — NPC miner
 `mineHit` receipts leak into the public event ring with no actor — is
 **implemented and locally verified on `claude/next-issue-547450`**, based on

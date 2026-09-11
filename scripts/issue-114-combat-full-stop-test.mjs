@@ -85,7 +85,7 @@ test('the hull thrusts under the combat lease after the handshake', () => {
 test('a refused setCombatIntent leaves the latch untouched', () => {
   const f = fixture(); f.stop();
   assert.equal(f.intent({ ttl: 61 }).token, 'bad-ttl');
-  assert.equal(f.intent({ targetId: 'missing' }).token, 'target-lost');
+  assert.equal(f.intent({ targetId: 'missing' }).token, 'stale-lock');
   assert.equal(f.ctx.input.fullStop, true);
   assert.equal(f.api.observe().flags.fullStop, true);
   assert.equal(f.api.observe().control.owner, 'none');
