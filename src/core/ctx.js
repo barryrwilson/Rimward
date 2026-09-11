@@ -319,7 +319,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'mineBlocked' {asteroidId, oreKey, hardness, needs, line} (combat.js, wave 51 —
     //   the beam scattered off rock harder than the installed head's tier)
     // 'bodyHit' { kind, speed, damage }   // ship.js bounce; combat.js may fill damage
-    // 'sunHeat' { t, dps }                // combat.js, throttled
+    // 'sunHeat' { reason: 'sun', intensity, dps } // combat.js, throttled; t is event time
     // 'sunKill' { reason: 'sun' }         // combat.js lethal core
     // 'playerFire' { weapon }             // combat.js: real spawn only (cannon/disruptor/'missile'/turret/'psionic')
     // 'npcFire' { ship, weapon:'cannon'|'missile'|'turret', target }  // missiles always set target ('player' this slice); turret always sets target ('player' or a live NPC); missing turret target drops

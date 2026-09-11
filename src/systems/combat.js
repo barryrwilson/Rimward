@@ -1851,6 +1851,7 @@ export function initCombat(ctx) {
           _lastBlockedId = -1;
           _lastBlockedAt = -1e9;
           _sunKillEmitted = false;
+          _lastSunHeatAt = -1e9;
           parkAllHullMarks();
           parkAllRipples();
           break;
@@ -1920,7 +1921,7 @@ export function initCombat(ctx) {
             emitPlayerApplyHits(events);
             if (now - _lastSunHeatAt >= SUN_HEAT_TOAST_GAP) {
               _lastSunHeatAt = now;
-              ctx.emit('sunHeat', { t: _sunOut.t, dps });
+              ctx.emit('sunHeat', { reason: 'sun', intensity: _sunOut.t, dps });
             }
           } else if (_sunOut.zone === 2) {
             const packet = player.hullMax + player.screenMax + player.shellMax + 1;

@@ -132,6 +132,8 @@ export const EVENT_TYPES = freeze([
   'playerDestroyed',
   'recovered',
   'bodyHit',
+  'sunHeat',
+  'sunKill',
 ]);
 
 const KEEP_RING = new Set([
@@ -151,6 +153,7 @@ const KEEP_RING = new Set([
   // each row keeps its own reason/t. Retention stays bounded — repeats are
   // capped by EVENT_CAP and enough newer retained traffic ages them out FIFO.
   'saveBlocked', 'docked', 'undocked',
+  'sunKill',
 ]);
 
 /**
@@ -219,6 +222,8 @@ const EVENT_FIELDS = freeze({
   playerDestroyed: freeze([]),
   recovered: freeze(['source']),
   bodyHit: freeze(['kind', 'speed', 'damage', 'count']),
+  sunHeat: freeze(['reason', 'intensity', 'dps', 'count']),
+  sunKill: freeze(['reason']),
 });
 
 /**
@@ -247,6 +252,7 @@ const COLLAPSE_KEY = freeze({
   playerHit: 'family',
   bodyHit: 'kind',
   playerFire: 'weapon',
+  sunHeat: 'reason',
 });
 
 const RESERVED = new Set([
@@ -409,7 +415,7 @@ export function copyLastIntent(raw) {
 }
 
 export function noCtxObservation() {
-  return { v: VERSION, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, events: [] };
+  return { v: VERSION, t: 0, ok: false, error: 'no-ctx', agentOptIn: false, hazards: { sun: null }, events: [] };
 }
 
 /**
@@ -504,6 +510,16 @@ export function sanitizeEvent(raw) {
     if (pv !== undefined) out[key] = pv;
   }
   if (ESCAPE_RECEIPTS.has(type)) boundEscapeReceipt(out);
+  if (type === 'sunHeat' || type === 'sunKill') {
+    // Fixed cause and finite numeric solar fields only; idempotent on observe copies.
+    out.reason = 'sun';
+    if (type === 'sunHeat') {
+      for (const key of ['intensity', 'dps']) {
+        if (typeof out[key] !== 'number' || out[key] < 0) delete out[key];
+      }
+      if (typeof out.intensity === 'number') out.intensity = Math.min(1, out.intensity);
+    }
+  }
   return out;
 }
 
