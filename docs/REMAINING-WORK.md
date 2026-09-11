@@ -18,6 +18,15 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #102](https://github.com/barryrwilson/Rimward/issues/102) — make solar
+hazards and damage visible to agents — is implemented and locally verified on
+`codex/issue-102-solar-hazards`, based on master `d1b7d8f`. The bounded outcome
+is a live sun danger-zone snapshot, public solar event receipts, and accurate
+sun-avoiding navigation guidance. Authored layout and damage balance are outside
+scope. Build, unchanged boot, 13 focused groups, five regression suites and 4/4
+live browser pins pass. Independent QA awaits authorization for the separate
+review engine. See [the acceptance and evidence record](Issue102SolarHazardsEvidence.md).
+
 [Issue #101](https://github.com/barryrwilson/Rimward/issues/101) — release
 traffic slots after surrendered hulls finish station refuge — is implemented,
 locally verified and independently QA-approved at `800917d43a18ff6fa6d1b87b91f2e25d5079b315`,
