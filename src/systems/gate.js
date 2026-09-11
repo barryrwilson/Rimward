@@ -507,6 +507,34 @@ export function lookupLiveNavHopKind(to, expectSystem) {
   return _liveHopKind.kind;
 }
 
+/**
+ * Issue #116: the nearest live gate assembly to a world point, as primitives
+ * — `{ to, kind, x, y, z }` — or null when no assembly is built for
+ * `expectSystem`. `to` is the ring's destination, or a hub's currently
+ * selected route; `kind` is `'ring'` or `'hub'`. Same live-only rule as
+ * lookupLiveNavGate: never an authored ghost, never a mesh.
+ */
+export function lookupNearestLiveGate(x, y, z, expectSystem) {
+  if (!_liveReady || !_liveAssemblies) return null;
+  if (expectSystem !== undefined && expectSystem !== _builtSystem) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  let best = null;
+  let bestD2 = Infinity;
+  for (let i = 0; i < _liveAssemblies.length; i++) {
+    const a = _liveAssemblies[i];
+    if (!a) continue;
+    const pos = liveAssemblyOrigin(a);
+    if (!pos) continue;
+    const d2 = (pos.x - x) ** 2 + (pos.y - y) ** 2 + (pos.z - z) ** 2;
+    if (!(d2 < bestD2)) continue;
+    const to = typeof a.to === 'string' && !reservedNavId(a.to) ? a.to : '';
+    if (!to) continue;
+    bestD2 = d2;
+    best = { to, kind: a.isHub ? 'hub' : 'ring', x: pos.x, y: pos.y, z: pos.z };
+  }
+  return best;
+}
+
 // =============================================================================
 // LIVE GATE SYSTEM (initGate)
 // =============================================================================

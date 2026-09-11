@@ -681,6 +681,39 @@ plus unchanged `npm run test:boot`, `npm run test:agent-hardening`,
 
 ---
 
+## Issue #116 — nearby rows a pirate can rank; station and gate bearings
+
+Implemented in the runtime and covered by focused tests; see the
+[issue #116 evidence](Issue116NearbyRowsEvidence.md) for the run conditions
+and the live browser check before relying on this section.
+
+`targets.nearby` ship rows were `{ id, kind, name, range, bearing, hostile }`.
+To rank seven hulls a pirate had to `selectTarget` each one, wait a rendered
+frame, and read `targets.current` — churning the real lock and spending about
+two seconds per scan while the prizes left at 50 u/s. `station` had a range
+but no bearing and `gate` had neither, so flying home from the public surface
+was impossible without a privileged read of `__ctx.station.position`.
+
+| Surface | Now |
+|---|---|
+| `targets.nearby` ship rows | Add `faction`, `factionName`, `resolveBand`, `surrendered`, `disabled` and `hailState` — the words the locked bracket prints, under the same scanner tiers (a masked Q-ship publishes its cover name and cover faction until the Mk II eye pierces it). `hailState` is the persistent classifier verdict (`salvage` / `yielded` / `willing` / `no-hail`). |
+| `targets.current` (locked row) | Unchanged shape. Numeric `resolve` (Mk I), `concealedMounts` (Mk II), the `hail` object with its transient blocker / reason / next step, `escape` and the vitals stay here only. |
+| `targets.nearby` pod rows | `id` and `units` as before (issue #115). |
+| `station.bearing` | Ship-local unit vector (x right, y up, nose `-z`) toward the station, the `jobs.active[].objective.bearing` convention; `null` without ship geometry. |
+| `gate.to` / `kind` / `source` / `range` / `bearing` | The **active gate**: the plotted nav next hop (`source: 'nav'`, the live zone origin the in-world NAV ring marks) when a route is plotted, else the nearest live gate assembly (`source: 'nearest'`). `kind` is `ring` or `hub`; for a hub, `to` is its currently selected route. Live assemblies only — never an authored ghost — so all five read `null` when nothing is built. The legacy `inZone` / `nearTo` / `jumping` / `progress` / `destination` fields are unchanged. |
+
+No new command, key, gauge, persisted field or schema version; the public API
+stays at `VERSION` 2 and the ring cap stays 16. Locking, hailing, combat,
+resolve and the HUD are unchanged. The issue's alternative `inspect { id }`
+command was not added.
+
+**Evidence.** `npm run test:nearby-rows` (39 checks over the real npc, gate,
+nav, pods and agent-api systems), plus unchanged `npm run test:boot`,
+`npm run test:agent-schema`, `npm run test:agent-hardening`,
+`npm run test:pod-receipts` and `npm run test:refusal-tokens`.
+
+---
+
 ## Issue #119 — NPC miner cuts stay off the public ring
 
 Implemented in the runtime and covered by focused tests; see the
@@ -1050,12 +1083,12 @@ Builder rules:
 - `jumping` lives on `gate.jumping` (`ctx.gate.jumping`, `ctx.js` **183**). **Not** `flags.jumping`.
 - `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`, and `fullStop` (from `ctx.input.fullStop`). `agentOptIn` is top-level.
 - `ship` includes hull/screen/shell/engine/power/heat/`weaponGroup` (`state.js` **167–181**; `input.weaponGroup`).
-- `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships, rocks and pods** (AM needs the locked asteroid). Pod rows carry the pod `id` and `units` (issue #115).
+- `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships, rocks and pods** (AM needs the locked asteroid). Pod rows carry the pod `id` and `units` (issue #115). Ship rows carry `faction`, `factionName`, `resolveBand`, `surrendered`, `disabled` and `hailState` under the bracket's scanner tiers; numeric resolve, `concealedMounts`, the `hail` object and vitals stay on `targets.current` (issue #116).
 - `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed` `{ attackerId?, attackerName? }` (the last NPC hull that hit that life, cleared on the receipt and on `systemLoaded`; issue #117), `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId` — player beam only, `actor: 'player'`; NPC miner cuts never reach the ring (issue #119), `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback.
 - `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
 - `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.
 - `session.phase` is `'dead'` while `ctx.deathApi.isOpen()` (death overlay). Then `'title'` / `'origin'` / `'playing'` as today.
-- `station` is a **pose copy** (`inZone`, `name`, `systemName`, `service`, `services`). Never copy `ctx.station` wholesale and never serialize `stationDesk`.
+- `station` is a **pose copy** (`inZone`, `name`, `systemName`, `range`, `bearing`, `closingSpeed`, `service`, `services`). Never copy `ctx.station` wholesale and never serialize `stationDesk`. `gate` adds `to` / `kind` / `source` / `range` / `bearing` for the active gate (plotted next hop, else nearest live assembly; issue #116).
 - `bio` is HUD-true (`mood`, `hunger`, `wounds`, `bond`).
 - **Omit:** `npc.ai` internals, interest rolls, scene, renderer, `__ctx`, save slots, settings storage, API keys, functions.
 
