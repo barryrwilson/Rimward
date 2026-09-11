@@ -9,7 +9,8 @@
  */
 
 import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, resolveBand } from './state.js';
-import { hailOffer } from './hail-offer.js';
+import { hailOffer, hailEncounterState } from './hail-offer.js';
+import { lookupLiveNavGate, lookupLiveNavHopKind, lookupNearestLiveGate } from '../systems/gate.js';
 import { losCloseRate } from './los-close.js';
 import { agentControlStatus } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
@@ -141,6 +142,7 @@ function describeTarget(ctx, origin, t, extended) {
     const p = posOf(t.object);
     const row = targetRow('ship', own(t, 'id'), shipDisplayName(ctx, t), rangeTo(origin, p));
     if (extended) shipCondition(ctx, t, row);
+    else shipPublicCondition(ctx, t, row);
     return row;
   }
   if (isRockLock(ctx, t)) {
@@ -195,12 +197,17 @@ function shipDisplayName(ctx, t) {
 }
 
 /**
- * Player-visible condition of a locked ship (HUD bracket + rail, hud.js
- * 2548-2672): faction, hostility cue, resolve band, disabled state, and the
- * rail vitals. Numeric resolve and the concealed-mounts mark follow the
- * Wolfeye scanner tiers exactly like the pane.
+ * Issue #116: the prize-ranking subset of the bracket, published on EVERY
+ * nearby ship row so a pirate can pick a hull without cycling the real lock.
+ * Same tier rules as the locked bracket: a masked Q-ship publishes its cover
+ * faction until the Mk II eye pierces it; the resolve band is the word the
+ * bracket prints with no scanner; numeric resolve and the concealed-mounts
+ * mark stay on the extended (locked) row. `hailState` is the persistent
+ * encounter verdict of the shared classifier (`salvage` / `yielded` /
+ * `willing` / `no-hail`) — no transient blocker, no range check, so it costs
+ * no overlay probe per row. No cargo, no ai internals, no record identity.
  */
-function shipCondition(ctx, t, row) {
+function shipPublicCondition(ctx, t, row) {
   const st = t && t.state;
   const rec = t && t.record;
   if (!st || typeof st !== 'object') return;
@@ -220,7 +227,27 @@ function shipCondition(ctx, t, row) {
   row.disabled = st.disabled === true;
   if (typeof st.resolve === 'number' && Number.isFinite(st.resolve)) {
     row.resolveBand = resolveBand(st.resolve);
-    if (scanner >= 1) row.resolve = Math.round(st.resolve);
+  }
+  row.surrendered = st.surrendered === true;
+  row.hailState = str(hailEncounterState(ctx, t));
+}
+
+/**
+ * Player-visible condition of a locked ship (HUD bracket + rail, hud.js
+ * 2548-2672): faction, hostility cue, resolve band, disabled state, and the
+ * rail vitals. Numeric resolve and the concealed-mounts mark follow the
+ * Wolfeye scanner tiers exactly like the pane.
+ */
+function shipCondition(ctx, t, row) {
+  const st = t && t.state;
+  const rec = t && t.record;
+  if (!st || typeof st !== 'object') return;
+  const scanner = ctx && ctx.world && Number.isFinite(ctx.world.scanner) ? ctx.world.scanner : 0;
+  const masked = !!(rec && rec.qship) && !rec.revealed;
+  const pierced = masked && scanner >= 2;
+  shipPublicCondition(ctx, t, row);
+  if (typeof st.resolve === 'number' && Number.isFinite(st.resolve) && scanner >= 1) {
+    row.resolve = Math.round(st.resolve);
   }
   if (pierced) row.concealedMounts = true;
   // Issue #67: public parity with the HUD bracket + prompt. `surrendered` is
@@ -228,7 +255,6 @@ function shipCondition(ctx, t, row) {
   // `hail` is the shared classifier verdict, so a controller reads the same
   // state, the same refusal reason, and the same next step the player sees.
   // No cargo, no ai internals, no Q-ship identity leak.
-  row.surrendered = st.surrendered === true;
   // Issue #68: publish EXACTLY the escape word the bracket prints — where the
   // runner is going, which phase it is in, and why. Same helper, same string;
   // no plan internals, no AI object, no snapshot, no private route data.
@@ -568,6 +594,60 @@ function marketBlock(ctx, docked, service) {
   return { rows };
 }
 
+/**
+ * Issue #116: the gate a pilot would fly to right now. The plotted nav next
+ * hop wins (the same live zone origin the in-world NAV ring marks); with no
+ * plotted hop, the nearest live gate assembly of the current system. Live
+ * assemblies only — never an authored ghost — so a dropped systemLoaded
+ * publishes null rather than a stale position. Primitives only.
+ */
+function activeGateSnap(ctx, origin, quat) {
+  if (!origin) return null;
+  const world = ctx && ctx.world && typeof ctx.world === 'object' ? ctx.world : null;
+  const cur = world && typeof world.currentSystem === 'string' ? world.currentSystem : '';
+  if (!cur) return null;
+  let to = null;
+  let kind = null;
+  let source = null;
+  let pos = null;
+  const nav = world && own(world, 'nav');
+  const path = nav && typeof nav === 'object' && Array.isArray(nav.path) ? nav.path : null;
+  const status = nav && typeof nav === 'object' ? own(nav, 'status') : '';
+  const nextTo = status === 'plotted' && path && path.length >= 2 && typeof path[1] === 'string' ? path[1] : '';
+  if (nextTo) {
+    let hop = null;
+    try { hop = lookupLiveNavGate(nextTo, cur); } catch { hop = null; }
+    if (hop) {
+      to = nextTo;
+      let hk = '';
+      try { hk = lookupLiveNavHopKind(nextTo, cur); } catch { hk = ''; }
+      kind = hk === 'hub' ? 'hub' : 'ring';
+      source = 'nav';
+      pos = hop;
+    }
+  }
+  if (!pos) {
+    let near = null;
+    try { near = lookupNearestLiveGate(origin[0], origin[1], origin[2], cur); } catch { near = null; }
+    if (!near) return null;
+    to = near.to;
+    kind = near.kind;
+    source = 'nearest';
+    pos = near;
+  }
+  const dx = num(pos.x, 0) - origin[0];
+  const dy = num(pos.y, 0) - origin[1];
+  const dz = num(pos.z, 0) - origin[2];
+  const range = Math.hypot(dx, dy, dz);
+  return {
+    to: str(to),
+    kind: str(kind),
+    source,
+    range: Number.isFinite(range) ? range : 0,
+    bearing: quat ? localDir(quat, dx, dy, dz) : null,
+  };
+}
+
 function navSnap(world) {
   const n = world && own(world, 'nav');
   if (!n || typeof n !== 'object') return null;
@@ -861,6 +941,14 @@ export function buildObservation(ctx) {
       : null;
     const stationVec = stationPos ? vec3(stationPos) : null;
     const stationRange = rangeTo(origin, stationVec);
+    // Issue #116: ship-local unit bearings (x right, y up, nose -z), the
+    // jobs.active[].objective convention, so a runner can fly home or to the
+    // active gate with setControl from the public surface alone.
+    const quat = object ? object.quaternion : null;
+    const stationBearing = origin && stationVec && quat
+      ? localDir(quat, stationVec[0] - origin[0], stationVec[1] - origin[1], stationVec[2] - origin[2])
+      : null;
+    const activeGate = activeGateSnap(ctx, origin, quat);
     const velocity = ship.velocity && typeof ship.velocity === 'object' ? ship.velocity : null;
     const stationClosing = object && stationPos && velocity
       ? losCloseRate(object.position, stationPos, {
@@ -947,12 +1035,18 @@ export function buildObservation(ctx) {
         jumping: gate.jumping === true,
         progress: num(gate.progress, 0),
         destination: typeof gate.destination === 'string' ? gate.destination : null,
+        to: activeGate ? activeGate.to : null,
+        kind: activeGate ? activeGate.kind : null,
+        source: activeGate ? activeGate.source : null,
+        range: activeGate ? activeGate.range : null,
+        bearing: activeGate ? activeGate.bearing : null,
       },
       station: {
         inZone: station.inZone === true,
         name: str(station.name),
         systemName: str(station.systemName),
         range: num(stationRange, 0),
+        bearing: stationBearing,
         closingSpeed: num(stationClosing, 0),
         service,
         services: docked ? DOCK_KEY_SERVICES.slice() : [],

@@ -37,6 +37,24 @@ lease, now with a `detail`. Build, unchanged boot, the new focused suite
 and the live browser check pass with no console errors. See
 [the acceptance and evidence record](Issue120RetreatBurnerEvidence.md).
 
+[Issue #116](https://github.com/barryrwilson/Rimward/issues/116) —
+nearby rows give a pirate nothing to pick a prize with; station and gate
+have no bearing — is **implemented and locally verified on
+`claude/next-issue-16b598`**, based on master `696f0ecb`. Every
+`targets.nearby` ship row now carries `faction`, `factionName`,
+`resolveBand`, `surrendered`, `disabled` and `hailState` under the same
+scanner tiers as the locked bracket (a masked Q-ship keeps its cover until the
+Mk II eye; numeric resolve, `concealedMounts`, the `hail` object and vitals
+stay on `targets.current`). `station.bearing` and `gate.to/kind/source/range/
+bearing` publish ship-local unit bearings (x right, y up, nose `-z`) to the
+station and to the active gate (plotted next hop, else nearest live gate).
+Pod rows keep the issue #115 `id`/`units` contract. Locking, hailing, combat,
+persistence and the API version are unchanged. Build, unchanged boot, the new
+focused suite (`npm run test:nearby-rows`), the schema pins and the agent
+regressions pass; the live browser check passes with no console error from
+the change. See
+[the acceptance and evidence record](Issue116NearbyRowsEvidence.md).
+
 [Issue #117](https://github.com/barryrwilson/Rimward/issues/117) —
 `playerHit` and `playerDestroyed` name no attacker — is **implemented and
 locally verified on `claude/next-issue-57e919`**, based on master `270af60d`.
