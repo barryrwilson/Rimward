@@ -4,7 +4,7 @@
 
 Source: [issue #105](https://github.com/barryrwilson/Rimward/issues/105).
 Base: master `a157056d`; branch `codex/issue-105-launch-hold`.
-Stage: independently reviewable implementation. Coordinator: Codex;
+Stage: independently QA-approved implementation. Coordinator: Codex;
 builder: Rex through Claude Code;
 independent quality gate: Quinn through Codex, after an immutable handoff.
 
@@ -113,12 +113,37 @@ false and the stale refusal clears. Screenshots `01-docked.png` through
 `04-launched.png` are retained; the coordinator visually inspected the held
 notice and launched view. The event timing correction changes only the probe.
 
-The implementation and tests are ready for an immutable handoff to independent
-Codex QA. The builder self-applied source/security checks; this is not the
-independent verdict. No saved fields, event vocabulary, API version, combat
+The implementation and tests were handed to independent Codex QA after these
+checks. The builder also self-applied source/security checks, separately from
+the independent verdict below. No saved fields, event vocabulary, API version, combat
 balance, bridge binding, credentials, or equipment changed. Repeated orders
 are bounded, but security does not guarantee a fixed launch deadline when
 other ships or structures still obstruct the lane.
+
+## Independent QA
+
+Quinn through Codex returned **PASS** on
+`b0e68ddcd4d25714f090fbedee97dc01b6d1f9b1`. The independent lane-hold
+10-group and safe-launch 11-group reruns pass, together with six additional
+adversarial groups: stationAction/numeric blocker identity and off-lane
+bystanders; isolated ace physical movement and a new structural obstruction;
+malformed directions and role/condition transitions; clock-rewind pruning;
+same-id hulls across independent contexts; and missing input-owner refusal.
+
+An additional production-spawned paid-pirate case preserves the completed
+escape/peace state across 120 NPC frames while its lane clears. An active
+pirate that previously accepted payment may receive a traffic-clearance order;
+this does not restart combat or change its payment/escape record. Current
+fleeing, surrendered, disabled, destroyed, civilian and concealed hulls remain
+excluded from orders.
+
+QA inspected the recorded final build/boot/live results, console logs and
+screenshots; it did not rerun those long checks. No blocking correctness or
+security finding remains. Exact HEAD and a clean working tree were verified
+before and after review. The detailed verdict, commands and additional tests
+are retained in ignored `out/issue-105-evidence/qa-verdict.md` and `qa-*` logs.
+This documentation-only follow-up records the result without changing the
+reviewed runtime or tests.
 
 ## Handoffs and status
 
@@ -156,8 +181,8 @@ repository context to the external implementation harness and allowing its local
 edits required more explicit user authorization. The user then explicitly
 authorized Claude Code to transmit relevant source context to Anthropic and
 make scoped local code/test edits, followed by independent Codex review.
-Implementation resumed under that authorization. No QA PASS, publication,
-merge, or deployment is claimed. Next owner: Quinn to review the immutable
-implementation commit against the acceptance contract and recorded evidence.
+Implementation resumed under that authorization and independently passed QA.
+Publication, merge and deployment are separate from the local verification
+record; no merge or deployment is claimed.
 
 Rollback: revert the implementation commit. No save migration is in scope.

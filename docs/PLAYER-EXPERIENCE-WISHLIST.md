@@ -342,7 +342,7 @@ checked against the current initiative text before capture.
   clearance planner — security never authorizes a launch through an
   obstruction. `docs/Issue105LaunchHoldEvidence.md`. Implemented; focused
   checks, build, full boot and all five live browser checks pass with a clean
-  console; independent QA pending.
+  console. Independent Codex QA passed `b0e68ddc`; awaiting PR review and merge.
 - [x] DONE (P2, TGT): Sort the T target cycle hostiles-first during combat,
   or add a "target my attacker" key. While an ace fired from 59 u, T selected
   a friendly hauler, then a neutral freighter, and reached the attacker on
