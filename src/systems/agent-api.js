@@ -430,7 +430,12 @@ function actLaunch(ctx, name, run) {
 
 function dispatchLive(ctx, name, args) {
   if (agentCombatActive(ctx) && ['engageAutopilot', 'approachDock', 'engageAutomine', 'afterburner'].includes(name)) {
-    return fail(ctx, name, 'helm');
+    // Issue #120: the pulse cannot share the combat helm, but a withdrawal
+    // intent can carry its own burner permission. Say so on the receipt.
+    const detail = name === 'afterburner'
+      ? "a combat intent owns the helm; renew setCombatIntent with intent 'retreat'|'break-off' and burner: true, or clearControl first"
+      : '';
+    return fail(ctx, name, 'helm', undefined, detail);
   }
   if (name === 'plotRoute') return actPlotRoute(ctx, name, args);
   if (name === 'clearRoute') {

@@ -71,7 +71,9 @@ manual lease still cancels on blur. If a hidden tab suspends simulation, the
 wall deadline expires on the next observation or control tick before a new
 shot; focus does not renew the grant. Idempotent clear remains
 available while paused/held and retains an already reported combat terminal
-reason. There are no automatic burner requests or external renewals.
+reason. There are no external renewals, and no burner request the caller did
+not permit: issue #120 adds an optional `burner: true` on `retreat` and
+`break-off` (see below); attack intents refuse it with `bad-args`.
 An already accepted API target/dock/reticle pulse remains pending through
 focus loss; changing windows does not revoke that deliberate command.
 
@@ -101,6 +103,50 @@ Raw manual leases retain their existing hail interruption behavior.
   of increasing separation beyond the weapon-relative threshold.
 - `retreat`: never fire, turn away and finish `retreated` after five seconds of
   the same separation criterion or the tracked target leaves sensor range.
+
+### Withdrawal burner (issue #120)
+
+Before #120 a `retreat` against a hull with equal or better cruise speed was
+only a slower way to die: the raw `afterburner` pulse answers `helm` under a
+combat lease, and the PIR-09 owned burn is a 0.5 s tap that fires only on a
+critical latch. A human pilot holds Space once the nose is off the pursuer;
+the API pilot could not.
+
+`setCombatIntent { intent: 'retreat'|'break-off', burner: true }` permits the
+controller to do the same with the ordinary afterburner. Each applied frame it
+holds the burner (`input.agentBurnerHeld`, with the one-frame
+`afterburnerPressed` edge when a burn starts) only while every condition
+holds, and `combat.burner { allowed, held, blocked }` reports the first unmet
+one:
+
+| `blocked` | Condition |
+|---|---|
+| `not-allowed` | the intent carries no permission (default, and every attack intent) |
+| `engine` | engine out |
+| `obstructed` | a visible body inside the steering lookahead, a live movement block, or a body inside the **boosted** lookahead (`max(speed, 2 × maxSpeed)` over two seconds) before a burn starts |
+| `drift` | a vector-hold drift is live or requested |
+| `cooldown` | the burner is not ready (or a burn nobody in the session requested is running) |
+| `power` | reactor below the burner minimum |
+| `alignment` | the target is not astern (HUD bearing local z ≤ 0.7) |
+| `separating` | HUD closing > 20 u/s: the pursuer is already falling behind |
+| `authorization` | one second or less of lease remains |
+
+An owned burn that already started keeps its hold until `ship.js` ends it on
+the ordinary burn time, power floor or cooldown, or until `engine`, `drift` or
+`obstructed` appears; separating later does not cut it short. The burner is
+still the player's: the same ×2 multiplier, power drain, burn time and cooldown,
+started through the same edge gate. Nothing writes `ship.burnerActive`.
+`held` is the controller output for the frame, not proof the burn engaged;
+read `observe().ship.burnerActive` / `burnerReadyAt` for the ship state.
+
+The permission is not maneuver identity: a same-target renewal may grant or
+revoke it without losing the separation timer, and a renewal during an owned
+burn is not refused as a foreign burner. A burn the session did not request
+still refuses acquisition with `helm`. Every lease release (terminal
+`retreated`/`disengaged`, expiry, `clearControl`, human takeover) neutralizes
+the hold with the other agent inputs, so the ordinary cutoff and cooldown
+apply. The raw `afterburner` pulse still answers `helm` under any combat
+lease; its receipt `detail` now names the permission.
 
 The withdrawal threshold is `min(0.65 * TARGET_RANGE,
 max(300, 0.8 * weaponRange))`, keeping the measurement inside the 600-unit
@@ -140,7 +186,8 @@ adds `owner` (`none`, `manual`, `combat`), and includes a combat block while
 active or after its last terminal result:
 
 ```js
-{ targetId, intent, phase, weaponGroup, fireBlocked, movementBlocked, completedAt }
+{ targetId, intent, phase, weaponGroup, fireBlocked, movementBlocked, completedAt,
+  defense: { … }, burner: { allowed, held, blocked } }
 ```
 
 Fire reflects the controller output selected for the current frame, not shot

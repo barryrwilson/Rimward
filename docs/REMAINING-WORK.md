@@ -18,6 +18,25 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #120](https://github.com/barryrwilson/Rimward/issues/120) — a `retreat`
+intent cannot use the afterburner, so an ace paces the retreat until the hull
+dies — is **implemented and locally verified on `claude/next-issue-2ba4be`**,
+based on master `696f0ecb`. `setCombatIntent` accepts an optional
+`burner: true` on `retreat` and `break-off` (attack intents refuse it with
+`bad-args`; the default is unchanged). With the permission the controller
+holds the ordinary afterburner once the target is astern, the pursuer is not
+already falling behind, the burner is ready with power, no drift or visible
+obstruction is live (including a boosted-speed lookahead before a burn starts)
+and more than one second of authorization remains; an owned burn rides to the
+ship's normal cutoff. `combat.burner { allowed, held, blocked }` reports the
+state and the first unmet condition. A renewal may grant or revoke the
+permission on the same maneuver; a burn the session did not request still
+refuses `helm`; the raw `afterburner` pulse still answers `helm` under a combat
+lease, now with a `detail`. Build, unchanged boot, the new focused suite
+(`npm run test:retreat-burner`, 10 groups), the release-focused runner (16/16)
+and the live browser check pass with no console errors. See
+[the acceptance and evidence record](Issue120RetreatBurnerEvidence.md).
+
 [Issue #116](https://github.com/barryrwilson/Rimward/issues/116) —
 nearby rows give a pirate nothing to pick a prize with; station and gate
 have no bearing — is **implemented and locally verified on

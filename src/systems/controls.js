@@ -261,6 +261,8 @@ function dropLease(ctx, reason) {
     lease.combat.defense.maneuver = 'stopped';
     lease.combat.defense.completedAt = simNow(ctx);
     lease.combat.fireBlocked = reason;
+    // Issue #120: the release neutralizes the burner hold with everything else.
+    if (lease.combat.burn) lease.combat.burn.held = false;
     combatNote = combatView(lease.combat);
     combatNeutral(ctx);
     combatRelease();
@@ -408,7 +410,7 @@ export function agentCombatSet(ctx, spec) {
     refusalDetail = '';
     if (!ctx?.input || !ctx.ship?.object) return 'no-service';
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return refuse('bad-args', 'args must be a plain object');
-    const unknown = Object.keys(spec).find(k => !['seq', 'ttl', 'targetId', 'intent', 'defense'].includes(k));
+    const unknown = Object.keys(spec).find(k => !['seq', 'ttl', 'targetId', 'intent', 'defense', 'burner'].includes(k));
     if (unknown !== undefined) return refuse('bad-args', 'unknown argument ' + unknown);
     const missing = ['seq', 'ttl', 'targetId', 'intent'].find(k => !Object.hasOwn(spec, k));
     if (missing !== undefined) return refuse('bad-args', 'missing required argument ' + missing);
@@ -421,6 +423,13 @@ export function agentCombatSet(ctx, spec) {
     if (typeof spec.targetId !== 'string' || !spec.targetId) return refuse('bad-args', 'targetId must be a non-empty string');
     const stance = Object.hasOwn(spec, 'defense') ? spec.defense : 'evade';
     if (!['evade', 'break-off', 'off'].includes(stance)) return refuse('bad-args', "defense must be 'evade'|'break-off'|'off'");
+    // Issue #120: an explicit, optional withdrawal burner permission. Attack
+    // intents never burn; the default stays off so old callers are unchanged.
+    const burner = Object.hasOwn(spec, 'burner') ? spec.burner : false;
+    if (typeof burner !== 'boolean') return refuse('bad-args', 'burner must be a boolean');
+    if (burner && (spec.intent === 'engage' || spec.intent === 'disable')) {
+      return refuse('bad-args', "burner is accepted only with intent 'break-off'|'retreat'");
+    }
     const prior = lease?.combat;
     const same = prior && prior.intent === spec.intent && prior.targetId === spec.targetId
       && prior.weaponGroup === ctx.input.weaponGroup && prior.defense.stance === stance;
@@ -430,7 +439,7 @@ export function agentCombatSet(ctx, spec) {
     if (ctx.player?.destroyed) return 'dead';
     if (physicalHeld()) return 'player-override';
     if (ctx.flags.matchSpeed) return 'match-speed';
-    if ((ctx.ship.burnerActive && !(same && prior.defense.burnerRequested && ctx.input.agentBurnerHeld))
+    if ((ctx.ship.burnerActive && !(same && (prior.defense.burnerRequested || prior.burn?.requested) && ctx.input.agentBurnerHeld))
         || (ctx.ship.driftActive && !(same && prior.defense.driftRequested && ctx.input.driftHeld))) return 'helm';
     if (lease && !lease.combat) return 'helm';
     // Issue #118: one token per precondition, so a runner can tell "select
@@ -457,7 +466,11 @@ export function agentCombatSet(ctx, spec) {
     const keep = prior && lease.expiresAt > simNow(ctx) && prior.target === target
       && prior.record === target.record && prior.system === ctx.world.currentSystem
       && same;
-    const combat = keep ? prior : createCombat(ctx, target, spec.intent, stance);
+    const combat = keep ? prior : createCombat(ctx, target, spec.intent, stance, burner);
+    // The permission is not maneuver identity: a renewal may grant or revoke
+    // it without losing separation memory. Revoking releases an owned burn
+    // on the next applied tick through the ordinary cutoff and cooldown.
+    if (keep) combat.burnerAllowed = burner;
     leaseSeq = spec.seq;
     combatNote = null;
     lease = { seq: spec.seq, expiresAt: simNow(ctx) + spec.ttl, wallExpiresAt: wallNow() + spec.ttl, combat,

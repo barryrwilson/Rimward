@@ -5,7 +5,7 @@
  * #62 may replace a command inside this owner; it cannot renew authorization.
  */
 import { createDefense, defenseView, defenseSense, defenseMove, defenseObstruction } from './agent-defense.js';
-import { WEAPONS, HEAT, U } from './state.js';
+import { WEAPONS, HEAT, POWER, U } from './state.js';
 import { selectedWeaponKey } from './weapon-fit.js';
 import { canFirePsionic } from './psionic.js';
 import { localDir } from './agent-schema.js';
@@ -38,7 +38,7 @@ export function combatSample(ctx, target) {
   return a;
 }
 
-export function createCombat(ctx, target, intent, stance = 'evade') {
+export function createCombat(ctx, target, intent, stance = 'evade', burner = false) {
   return {
     defense: createDefense(ctx, stance), target, record: target.record, system: ctx.world.currentSystem,
     targetId: target.id, intent, weaponGroup: ctx.input.weaponGroup,
@@ -46,6 +46,11 @@ export function createCombat(ctx, target, intent, stance = 'evade') {
     phaseAt: ctx.world.time, repositionAfter: 0, clearSince: null, side: 1,
     sampleAt: null, yaw: 0, pitch: 0, yawRate: 0, pitchRate: 0, motion: null,
     fireBlocked: 'alignment', movementBlocked: '', completedAt: null,
+    // Issue #120: an explicit withdrawal burner permission. `requested` is
+    // sticky for the session so a renewal can tell an owned burn from a
+    // human one; `held`/`blocked` describe the current frame.
+    burnerAllowed: burner === true,
+    burn: { requested: false, held: false, blocked: burner === true ? '' : 'not-allowed', at: null },
   };
 }
 
@@ -54,7 +59,46 @@ export function combatView(c) {
     targetId: c.targetId, intent: c.intent, phase: c.phase, defense: defenseView(c.defense),
     weaponGroup: c.weaponGroup, fireBlocked: c.fireBlocked,
     movementBlocked: c.movementBlocked, completedAt: c.completedAt,
+    burner: { allowed: c.burnerAllowed === true, held: c.burn?.held === true, blocked: c.burn?.blocked || '' },
   };
+}
+
+/** Public reasons an allowed withdrawal burn is not held this frame. */
+export const WITHDRAWAL_BURN_BLOCKS = Object.freeze(['', 'not-allowed', 'engine', 'obstructed',
+  'drift', 'power', 'cooldown', 'alignment', 'separating', 'authorization']);
+
+/**
+ * Issue #120: hold the ordinary afterburner during an explicitly permitted
+ * `retreat` / `break-off`, the way a human pilot holds Space once the nose is
+ * off the pursuer. Uses only the HUD sample, the public burner/power gauges
+ * and the same visible-body lookahead as steering. Never starts a burn into
+ * an obstruction, at rest, while drifting, on cooldown, low power, before the
+ * turn away is complete, when the pursuer is already falling behind, or in
+ * the last second of authorization. An owned burn already running keeps its
+ * hold until ship.js ends it or a physical block appears; ship.js applies the
+ * normal burn time, power drain and cooldown either way.
+ */
+function withdrawalBurn(ctx, lease, c, a, block) {
+  const b = c.burn, now = ctx.world.time, ship = ctx.ship, cfg = ctx.config?.ship;
+  b.held = false;
+  if (!c.burnerAllowed) { b.blocked = 'not-allowed'; return; }
+  const owned = ship.burnerActive && (b.requested || c.defense.burnerRequested);
+  const remaining = Math.min(lease.expiresAt - now,
+    Number.isFinite(lease.wallExpiresAt) ? lease.wallExpiresAt - performance.now() / 1000 : Infinity);
+  const boost = Math.max(ctx.ship.speed, (cfg?.maxSpeed || 0) * (cfg?.afterburner?.multiplier || 2) * (ctx.bio?.speedFactor || 1));
+  b.blocked = ctx.player.engineOut ? 'engine'
+    : block || c.movementBlocked ? 'obstructed'
+    : ship.driftActive || lease.drift ? 'drift'
+    : owned ? ''
+    : ship.burnerActive || !(now >= ship.burnerReadyAt) ? 'cooldown'
+    : !(ctx.player.power >= POWER.afterburnerMin) ? 'power'
+    : !(a.bearing[2] > 0.7) ? 'alignment'
+    : a.closing > 20 ? 'separating'
+    : !(remaining > 1) ? 'authorization'
+    : obstacle(ctx, boost) ? 'obstructed' : '';
+  if (b.blocked) return;
+  if (!ship.burnerActive) { lease.burnerEdge = true; b.at = now; }
+  lease.burner = true; b.requested = true; b.held = true;
 }
 
 /** A bounded look ahead in current ship-local coordinates. No AI reads. */
@@ -251,6 +295,8 @@ export function combatTick(ctx, lease) {
     lease.throttle = block.clearance < speed * 0.7 + 8 ? 0 : 0.12;
     if (block.stop) lease.steerX = lease.steerY = lease.strafeX = lease.strafeY = 0;
   }
+  // Attack intents carry no permission, so the view reads 'not-allowed'.
+  withdrawalBurn(ctx, lease, c, a, block);
   if (!attacking) {
     // Remain inside the public envelope long enough to measure separation.
     // Completion means this maneuver finished, never a global safety claim.
