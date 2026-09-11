@@ -11,6 +11,7 @@ import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { prefersEngine } from '../game/subsys-aim.js';
 import { berthHeld } from './overlay-policy.js';
 import { scareDamageTotal, recordScareDamage } from '../game/first-scare.js';
+import { escapePublicIdentity } from '../game/npc-escape.js';
 import {
   HULL_MARK_POOL,
   HULL_MARK_SIZE,
@@ -167,6 +168,10 @@ const SUN_HEAT_TOAST_GAP = 2.5;
 let _lastImpactAt = -1e9;
 let _lastSunHeatAt = -1e9;
 let _sunKillEmitted = false;
+// Issue #117: the last NPC hull whose projectile hit the player this life.
+// playerHit publishes the shooter; playerDestroyed publishes this ref, then
+// clears it so a recovered life starts with no attacker on record.
+let _lastPlayerAttacker = null;
 // Hull-mark stamp scratch. Combat writes sprite.position from these.
 const _markPose = { px: 0, py: 0, pz: 0, qx: 0, qy: 0, qz: 0, qw: 1, sx: 1, sy: 1, sz: 1 };
 const _markLocal = { x: 0, y: 0, z: 0 };
@@ -1782,13 +1787,32 @@ export function initCombat(ctx) {
     ctx.emit('shieldDown', payload);
   }
 
+  /**
+   * Issue #117: public attacker identity as PRIMITIVES, derived from the
+   * record under the HUD bracket law (a masked Q-ship publishes its cover
+   * name until the Mk II eye pierces it). The ship ref never leaves combat.
+   */
+  function attackerIdentity(ship) {
+    const rec = ship && ship.record && typeof ship.record === 'object' ? ship.record : null;
+    if (!rec) return null;
+    const pub = escapePublicIdentity(rec, ctx.world.scanner);
+    if (pub.id === null || pub.id === undefined) return null;
+    return { attackerId: pub.id, attackerName: pub.name };
+  }
+
   /** Translate applyHit descriptors into the frozen player event vocabulary. */
   function emitPlayerApplyHits(events) {
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { player: true });
       else if (ev.type === 'engineOut') ctx.emit('engineOut', { player: true });
-      else if (ev.type === 'destroyed') ctx.emit('playerDestroyed', {}); // save.js owns the reload flow
+      else if (ev.type === 'destroyed') {
+        // save.js owns the reload flow. Issue #117: name the last hull that
+        // hit this life, then forget it so the recovered life starts clean.
+        const who = attackerIdentity(_lastPlayerAttacker);
+        _lastPlayerAttacker = null;
+        ctx.emit('playerDestroyed', who ? { ...who } : {});
+      }
     }
   }
 
@@ -1828,7 +1852,11 @@ export function initCombat(ctx) {
 
     const events = applyHit(player, { damage: p.damage, family: p.wkey, facet: fromAft ? 'aft' : 'fore', now });
     // HUD owns all pixels (incl. subtle screen-edge flash on shield hits) — emit only.
-    ctx.emit('playerHit', { damage: p.damage, family: p.family, fromAft, shielded });
+    // Issue #117: the shooter is known here; publish it as primitives.
+    const attacker = !p.fromPlayer && p.shooter ? p.shooter : null;
+    if (attacker) _lastPlayerAttacker = attacker;
+    const who = attackerIdentity(attacker);
+    ctx.emit('playerHit', { damage: p.damage, family: p.family, fromAft, shielded, ...(who || {}) });
     emitPlayerApplyHits(events);
     spawnHitFx(p.mesh.position, p.family, shielded, playerObj);
     if (player.destroyed) {
@@ -1852,6 +1880,7 @@ export function initCombat(ctx) {
           _lastBlockedAt = -1e9;
           _sunKillEmitted = false;
           _lastSunHeatAt = -1e9;
+          _lastPlayerAttacker = null;
           parkAllHullMarks();
           parkAllRipples();
           break;

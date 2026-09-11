@@ -277,7 +277,8 @@ export function createCtx({ scene, camera, renderer }) {
     },
 
     // --- event queue. Frozen event types (payload documented at emit sites):
-    // 'playerHit' {damage,family,fromAft}        'npcHit' {ship,damage}
+    // 'playerHit' {damage,family,fromAft,attackerId?,attackerName?}   'npcHit' {ship,damage}
+    //   Issue #117: attacker primitives from the NPC shooter (cover name held)
     // 'npcDisabled' {ship}   'npcDestroyed' {ship}
     // 'npcSurrendered' { ship, outcome, causer:'player'|'world' }
     //   Issue #99: `causer` is decided by the EMITTER at the instant the hull
@@ -312,7 +313,7 @@ export function createCtx({ scene, camera, renderer }) {
     // 'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}
     // 'atrocity' {}          'jumpRequested' {to}     'systemLoaded' {to}
-    // 'playerDestroyed' {}   'recovered' { source:'autosave'|'fresh' }  (save.js death)
+    // 'playerDestroyed' {attackerId?,attackerName?}   'recovered' { source:'autosave'|'fresh' }  (save.js death)
     // 'clueFound' {id,line}  'landmarkFound' {id,name,line}   (mystery.js, wave 5)
     // 'epicStage' {id,faction,stage,line}      'originChosen' {id,line}  (wave 6)
     // 'convergence' {id,line} (mystery.js)     'songShift' {reason} (mystery→song)
