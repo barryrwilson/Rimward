@@ -131,6 +131,8 @@ import {
  * the board syncs pirate bounties on render — up to PIRATE_BOUNTY_CAP live,
  * priced pirates of the CURRENT system, posted only at their home station.
  * Every bounty claim needs a player-caused incident (Witness Rule §8.7).
+ * Issue #124: the fence's marker (restricted-locker favor) is banked by a
+ * bounty claim OR by a player-caused surrender that paid (tickFenceMarker).
  *
  * Haul job (§10.1): cross-system. Accept at either station, buy 5 Provisions,
  * deliver at the OTHER system's station for 140% of the stamped origin buy
@@ -3747,7 +3749,8 @@ function epicEffectLine(key, value) {
 
 function rewardJobContacts(ctx, job) {
   // Dockmaster trust grows with every finished contract; a bounty claim also
-  // earns the local fence's favor where one works the dock (§12.x).
+  // earns the local fence's favor where one works the dock (§12.x). Issue
+  // #124: the pirate path to the same marker is tickFenceMarker below.
   for (const c of contactsForSystem(ctx, ctx.world.currentSystem)) {
     if (c.role === 'dockmaster') bumpTrust(ctx, c, DOCKMASTER_TRUST_PER_JOB);
     // Wave 26: a generated-system dockmaster banks +1 favor per finished
@@ -3890,6 +3893,41 @@ function tickPatrolJob(ctx) {
         break; // one payout per contract, even for a multi-kill frame
       }
     }
+  }
+}
+
+/**
+ * Issue #124 — the fence's marker grows from pirate outcomes too.
+ *
+ * Before this the fence (Quiet Hollis at Freehold) banked a favor only for a
+ * bounty claim and Callow's vouch, so a working pirate could never open the
+ * restricted locker through the contact the lore hangs on. Now every hull
+ * the PLAYER breaks that pays — a ransom taken, or a hold spilled (jettison /
+ * crewPods, from the surrender card or npc.js capitulate alike) — banks one
+ * favor with the fence of the system it happened in, exactly as one bounty
+ * claim does. Same scan as tickPatrolJob: the receipt is read from
+ * ctx.lastEvents and the causer word fails closed (issue #99), so a hull two
+ * NPCs broke between themselves, an unattributed receipt, a mere break-off
+ * ('flee'), a cut-engines yield with nothing paid, and a stripped wreck (no
+ * receipt at all) bank nothing. The bounty path is unchanged. A commLine
+ * receipt names the contact so the marker is not invisible in space.
+ */
+const FENCE_MARKER_OUTCOMES = new Set(['ransom', 'jettison', 'crewPods']);
+function tickFenceMarker(ctx) {
+  let fence = null;
+  for (const ev of ctx.lastEvents) {
+    if (ev.type !== 'npcSurrendered' || ev.causer !== 'player') continue;
+    if (!FENCE_MARKER_OUTCOMES.has(ev.outcome)) continue;
+    if (fence === null) {
+      fence = false;
+      for (const c of contactsForSystem(ctx, ctx.world.currentSystem)) {
+        if (c.role === 'fence') { fence = c; break; }
+      }
+    }
+    if (!fence) return; // no fence works this system's dock: nothing to bank
+    addFavor(ctx, fence);
+    const took = ev.outcome === 'ransom' ? 'took a ransom' : 'emptied a hold';
+    ctx.emit('commLine', { text: `Word travels. ${fence.name} hears you ${took} — one marker banked.` });
   }
 }
 
@@ -7194,6 +7232,7 @@ export function initStation(ctx) {
         for (let ji = 0; ji < ctx.world.jobs.length; ji++) trackJob(ctx.world.jobs[ji]);
       }
       tickPatrolJob(ctx);
+      tickFenceMarker(ctx);
       if (tickRecovery(ctx)) requestAutosave(ctx);
       jobTick += dt;
       if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx, ui, render); }
