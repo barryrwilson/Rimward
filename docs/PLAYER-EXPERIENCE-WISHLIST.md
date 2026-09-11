@@ -57,6 +57,21 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P2,
+  PIRACY/CONTACTS): The fence's marker should grow from pirate outcomes, not
+  only from bounty claims.
+  [Issue #124](https://github.com/barryrwilson/Rimward/issues/124): a hull the
+  player breaks that pays — a ransom taken, or a hold spilled (`jettison`,
+  `crewPods`) — now banks one favor with the fence of the system it happened
+  in, as one bounty claim does, with a comm-line receipt that names the
+  contact. Attribution fails closed as in issue #99; the bounty path and
+  Callow's vouch are unchanged; no fenced-sale or fear-threshold rule (no
+  fenced sale exists in code; fear already opens the locker). **Not merged.**
+  Build, unchanged boot, the new focused suite, the #99/#122/#67 suites, the
+  release-focused runner and the live browser check (ransom → `favors 1` →
+  the People desk's favor call opened the restricted locker) pass with a
+  clean console. See
+  [Issue124FenceMarkerEvidence.md](Issue124FenceMarkerEvidence.md).
 - [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P1,
   HAIL/PIRACY): A feared pirate should be able to demand terms from a willing
   hull, not only from one it breaks in front of the card.

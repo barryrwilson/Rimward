@@ -40,6 +40,25 @@ freighter at 150 u; the cap left a third pirate idle beside two working ones)
 pass with no console errors. Parked: the optional fear-rating suppression of
 rival pirate interest from the issue's third suggestion.
 
+[Issue #124](https://github.com/barryrwilson/Rimward/issues/124) — the
+fence's marker is earned only by bounty claims, never by piracy — is
+**implemented and locally verified on `claude/next-issue-d3b0b4`**, based on
+master `c4167634`. `station.js` gains `tickFenceMarker`, a `ctx.lastEvents`
+scan beside `tickPatrolJob`: a `npcSurrendered` receipt with `causer:
+'player'` and outcome `ransom`, `jettison` or `crewPods` banks one favor
+with the fence of the system it happened in, exactly as one bounty claim does,
+and a comm line names the contact (`Word travels. Quiet Hollis hears you took
+a ransom — one marker banked.`). Attribution fails closed as in issue #99 (a
+world-caused break, an unattributed receipt, a break-off, a cut-engines yield
+and a stripped wreck bank nothing); the bounty path and Callow's vouch are
+unchanged; no fenced-sale or fear-threshold rule was added (no fenced sale
+exists in code, and fear already opens the locker directly). Build, unchanged
+boot, the new focused suite (`npm run test:fence-marker`, 15 pins), the #99 /
+#122 / #67 suites, the release-focused runner and the live browser check (a
+player-demanded ransom banked `favors 1`; the People desk's `Call in a favor`
+opened the restricted locker) pass with no console errors. See
+[the acceptance and evidence record](Issue124FenceMarkerEvidence.md).
+
 [Issue #122](https://github.com/barryrwilson/Rimward/issues/122) — a feared
 pirate cannot demand terms from a willing hull; the bargaining card only
 opens on a player-caused band transition — is **implemented and locally
