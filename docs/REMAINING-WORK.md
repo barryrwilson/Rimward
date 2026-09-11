@@ -1,367 +1,45 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-09-10. Reconciled against master
-`0dd7908e3929725d646958d43f63de57b68dc7c8` and the GitHub issue/PR API.
-Before consolidation, this snapshot had **zero open issues and zero open pull
-requests**. [Consolidation PR #97](https://github.com/barryrwilson/Rimward/pull/97)
-now tracks the documentation and verification repairs; the unfiled candidates
-below remain visible.
+Inventory date: 2026-09-11. Reconciled against master
+`33bc95f4907184d1415d3f1f0d43c75521946d15` and the GitHub issue/PR API.
+This snapshot has **zero open pull requests** and two open issues, both filed
+by this pass from candidates below ([#138](https://github.com/barryrwilson/Rimward/issues/138),
+[#139](https://github.com/barryrwilson/Rimward/issues/139)).
+[Consolidation PR #97](https://github.com/barryrwilson/Rimward/pull/97) is the
+earlier documentation and verification repair; every issue it left in review
+has since merged and moved to the completed table.
 
 This is the compact current index. The assigned GitHub issue governs a selected
 task; the wishlist preserves product intent and playtest observations.
 `PROGRESS.md` and dated verification documents are historical evidence.
-The [pre-consolidation index at this exact commit](https://github.com/barryrwilson/Rimward/blob/0dd7908e3929725d646958d43f63de57b68dc7c8/docs/REMAINING-WORK.md)
+The [pre-consolidation index at `0dd7908e`](https://github.com/barryrwilson/Rimward/blob/0dd7908e3929725d646958d43f63de57b68dc7c8/docs/REMAINING-WORK.md)
 retains the detailed implementation claims, trader acceptance contracts, artifact
-identities, raw failures and intermediate review states. Final PR records below
-supersede its stale pending-review and not-yet-merged labels. Merge status alone
-is not fresh QA, release readiness, or deployment evidence.
+identities, raw failures and intermediate review states; the
+[index at `6bb15385`](https://github.com/barryrwilson/Rimward/blob/6bb15385/docs/REMAINING-WORK.md)
+retains the long per-issue verification prose for #98–#125 that the table
+below compresses. Final PR records supersede their stale pending-review and
+not-yet-merged labels. Merge status alone is not fresh QA, release readiness,
+or deployment evidence.
+
 
 ## Active outcomes
 
-[Issue #125](https://github.com/barryrwilson/Rimward/issues/125) — Marked
-origin: hunters kill the starter hull three times in 13 sim-minutes; each
-recovery rewinds and relocates kilometres away — is **implemented and
-locally verified on `claude/last-issue-2c8c40`**, based on master
-`6bb15385`. `save.js` mirrors the docked / launch checkpoints into
-`rimward-save-v1-berth` and stamps the autosave lineage (`berth: true`,
-`berthSavedAt`); a death within `BERTH_RECOVERY_WINDOW` (120 s) of a
-mid-flight autosave returns to that berth when the stamps agree, and every
-other case (a longer fight, a foreign or future mirror, a legacy blob)
-restores the autosave as before, with the overlay copy naming whichever
-record she returns to. A second comm receipt states the cost (`Rewound 41 s
-to your last berth. Lost from the hold: 14 Raw ore, 5 Refined metals.`), and
-`recovered` gains `source: 'berth'`, `rewindSeconds`, `lostCargo` and
-`lostUnits` (bounded in the ring sanitizer). `controls.js` zeroes the
-throttle setpoint on `recovered`. `world.js` gives every generated patrol its
-home system's flag and `npc.js` `mayHuntPlayer` makes patrol standing law
-local (a Veridian heavy in Freehold no longer hunts a Marked player on
-standing; it still does inside Veridian space, and a scratch still provokes
-it anywhere). Build, unchanged boot, the new focused suite (`npm run
-test:death-recovery`, 44 pins), the neighbouring suites, the release-focused
-runner and a live browser check (a real dock, a mid-flight autosave 2 km
-out, a death 41 s later: the overlay named the berth, Enter put the hull on
-the pad with the receipt as HUD toasts and on the agent ring, throttle 0)
-pass with no console errors. Parked: station security reacting to a hostile
-hunter near the dock, ace demand behaviour, and a job that sends a patrol
-across a gate. See
-[the acceptance and evidence record](Issue125DeathRecoveryEvidence.md).
+None. Every issue from #98 to #125 is merged (see the table below). The two
+open issues are backlog candidates promoted by the 2026-09-11 pass:
 
-[Issue #123](https://github.com/barryrwilson/Rimward/issues/123) — four NPC
-pirates camp the Freehold lane and break every trader first; the player
-pirate can only scavenge — is **implemented and locally verified on
-`claude/next-issue-9c2b29`**, based on master `126250d5`. `PIRACY` in
-`src/game/state.js` (`concurrentCap: 2`, `contestRange: 800`) is the new
-tuning. In `src/systems/npc.js` the hunt loop now (1) lets at most
-`concurrentCap` pirates/aces work trader prizes at once in a bubble — the
-rest loiter until a hunter finishes — (2) never doubles a second pirate onto
-a trader another hunter already works while an unworked one is in reach, and
-(3) treats a trader the player is engaging as the player's prize: a lock
-inside `contestRange`, a player scratch, or an open issue #122 terms claim
-(`playerContests`) means no NPC pirate acquires that hull, and one already on
-it backs off once with the comm line `Your prize. We take the next one.` A
-pirate that rolled interest in the player is never capped; the spawn-side
-pirate share (`pirateLiveCap`) is unchanged. Build, unchanged boot, the new
-focused suite (`npm run test:shared-lane`, 21 checks), the #105, #101, #122,
-#61, #99 and agent suites, and a live browser check (a spawned pirate on a
-freighter backed off and said the line the frame the player locked that
-freighter at 150 u; the cap left a third pirate idle beside two working ones)
-pass with no console errors. Parked: the optional fear-rating suppression of
-rival pirate interest from the issue's third suggestion.
+- [#138](https://github.com/barryrwilson/Rimward/issues/138) — the
+  `test:refusal-tokens` suite fails on master because its #118 burner pin
+  predates the #120 wording; repair the pin and add the suite to the
+  release-focused runner. No runtime change.
+- [#139](https://github.com/barryrwilson/Rimward/issues/139) — the
+  intermittent fresh-Greenhand `approachDock` cancellation on a `bodyHit`
+  near the +X stage; reproduce with full payloads first, then a bounded fix.
 
-[Issue #124](https://github.com/barryrwilson/Rimward/issues/124) — the
-fence's marker is earned only by bounty claims, never by piracy — is
-**implemented and locally verified on `claude/next-issue-d3b0b4`**, based on
-master `c4167634`. `station.js` gains `tickFenceMarker`, a `ctx.lastEvents`
-scan beside `tickPatrolJob`: a `npcSurrendered` receipt with `causer:
-'player'` and outcome `ransom`, `jettison` or `crewPods` banks one favor
-with the fence of the system it happened in, exactly as one bounty claim does,
-and a comm line names the contact (`Word travels. Quiet Hollis hears you took
-a ransom — one marker banked.`). Attribution fails closed as in issue #99 (a
-world-caused break, an unattributed receipt, a break-off, a cut-engines yield
-and a stripped wreck bank nothing); the bounty path and Callow's vouch are
-unchanged; no fenced-sale or fear-threshold rule was added (no fenced sale
-exists in code, and fear already opens the locker directly). Build, unchanged
-boot, the new focused suite (`npm run test:fence-marker`, 15 pins), the #99 /
-#122 / #67 suites, the release-focused runner and the live browser check (a
-player-demanded ransom banked `favors 1`; the People desk's `Call in a favor`
-opened the restricted locker) pass with no console errors. See
-[the acceptance and evidence record](Issue124FenceMarkerEvidence.md).
-
-[Issue #122](https://github.com/barryrwilson/Rimward/issues/122) — a feared
-pirate cannot demand terms from a willing hull; the bargaining card only
-opens on a player-caused band transition — is **implemented and locally
-verified on `claude/next-issue-a80ed6`**, based on master `4c8a8527`, after
-the focused design pass in [Hail03PlayerTermsDesign.md](Hail03PlayerTermsDesign.md).
-A deliberate H press or `act({ name: 'hail' })` on a locked live hull at the
-`bargaining` or `capitulate` band that has not yielded, inside
-`U.TARGET_RANGE`, opens the same surrender card the band transition draws
-(`hailOpened` gains `terms: true`), with the player as causer while that card
-is open: a ransom, cargo demand or tribute pays exactly as before. The claim
-dies with the card; an NPC hit landed during the parley lapses it (`stale`),
-and outside an open terms card issue #99 attribution is unchanged. The shared
-classifier offers `willing` as an action (`Hail to demand terms.`), range and
-calm gate it like a wreck, and the bracket prompt reads `H — Hail — demand
-terms`. Build, unchanged boot, the new focused suite (`npm run
-test:player-terms`, 8 groups), the updated #67 suite, the #99/#98/#100/#66
-and agent suites, the release-focused runner (18/18) and the live browser
-check (a real KeyH opened the card on an unshot willing freighter; Digit2
-paid 338 UU and fear +3) pass with no console errors. `test:refusal-tokens`
-fails independently of this branch (the #118 test predates the #120 burner
-wording) and is parked. See
-[the acceptance and evidence record](Issue122PlayerTermsEvidence.md).
-
-[Issue #121](https://github.com/barryrwilson/Rimward/issues/121) — `observe()`
-gives no sign the simulation is suspended while lease TTLs keep expiring — is
-**implemented and locally verified on `claude/next-issue-1e76da`**, based on
-master `11ee8081`. `main.js` stamps the wall clock of every render-loop frame
-(`ctx.frameWallMs`, `ctx.frameGapMs`); `observe()` publishes `frameAgeMs` and
-`flags.suspended` (true once no frame has run for 1000 ms, while `t` freezes
-and `flags.paused` stays false); a combat-lease wall deadline crossed while no
-frame ran ends with terminal reason `suspended` instead of `expired` (state
-`expired`, the normal full-stop release, focus does not renew the grant). A
-deadline crossed with frames running, or a simulation-time expiry, still reads
-`expired`; the raw manual lease has no wall clock and is untouched. Build,
-unchanged boot, the new focused suite (`npm run test:suspended-clock`, 10
-groups), the release-focused runner (17/17) and the live browser check (a
-1.3 s main-thread stall after an accepted 1 s intent read `suspended`) pass
-with no console errors. See
-[the acceptance and evidence record](Issue121SuspendedClockEvidence.md).
-
-[Issue #120](https://github.com/barryrwilson/Rimward/issues/120) — a `retreat`
-intent cannot use the afterburner, so an ace paces the retreat until the hull
-dies — is **implemented and locally verified on `claude/next-issue-2ba4be`**,
-based on master `696f0ecb`. `setCombatIntent` accepts an optional
-`burner: true` on `retreat` and `break-off` (attack intents refuse it with
-`bad-args`; the default is unchanged). With the permission the controller
-holds the ordinary afterburner once the target is astern, the pursuer is not
-already falling behind, the burner is ready with power, no drift or visible
-obstruction is live (including a boosted-speed lookahead before a burn starts)
-and more than one second of authorization remains; an owned burn rides to the
-ship's normal cutoff. `combat.burner { allowed, held, blocked }` reports the
-state and the first unmet condition. A renewal may grant or revoke the
-permission on the same maneuver; a burn the session did not request still
-refuses `helm`; the raw `afterburner` pulse still answers `helm` under a combat
-lease, now with a `detail`. Build, unchanged boot, the new focused suite
-(`npm run test:retreat-burner`, 10 groups), the release-focused runner (16/16)
-and the live browser check pass with no console errors. See
-[the acceptance and evidence record](Issue120RetreatBurnerEvidence.md).
-
-[Issue #116](https://github.com/barryrwilson/Rimward/issues/116) —
-nearby rows give a pirate nothing to pick a prize with; station and gate
-have no bearing — is **implemented and locally verified on
-`claude/next-issue-16b598`**, based on master `696f0ecb`. Every
-`targets.nearby` ship row now carries `faction`, `factionName`,
-`resolveBand`, `surrendered`, `disabled` and `hailState` under the same
-scanner tiers as the locked bracket (a masked Q-ship keeps its cover until the
-Mk II eye; numeric resolve, `concealedMounts`, the `hail` object and vitals
-stay on `targets.current`). `station.bearing` and `gate.to/kind/source/range/
-bearing` publish ship-local unit bearings (x right, y up, nose `-z`) to the
-station and to the active gate (plotted next hop, else nearest live gate).
-Pod rows keep the issue #115 `id`/`units` contract. Locking, hailing, combat,
-persistence and the API version are unchanged. Build, unchanged boot, the new
-focused suite (`npm run test:nearby-rows`), the schema pins and the agent
-regressions pass; the live browser check passes with no console error from
-the change. See
-[the acceptance and evidence record](Issue116NearbyRowsEvidence.md).
-
-[Issue #117](https://github.com/barryrwilson/Rimward/issues/117) —
-`playerHit` and `playerDestroyed` name no attacker — is **implemented and
-locally verified on `claude/next-issue-57e919`**, based on master `270af60d`.
-A `playerHit` from an NPC projectile now carries `attackerId`/`attackerName`
-as primitives derived at the emit site through the existing
-`escapePublicIdentity` bracket law (a masked Q-ship publishes its cover name
-until the Mk II eye pierces it; impact and solar rows carry none).
-`playerDestroyed` carries the last NPC hull that hit that life, even when the
-killing blow is an impact, and the record clears on the receipt and on
-`systemLoaded`. `sanitizeEvent` fails closed on malformed attacker fields.
-Fold rules, keep class, the ring cap, combat behaviour and the API version are
-unchanged. Build, unchanged boot, the new focused suite
-(`npm run test:attacker-identity`), the schema, hardening and agent
-regressions pass, and the live browser check passes with no console errors.
-See [the acceptance and evidence record](Issue117AttackerIdentityEvidence.md).
-
-[Issue #118](https://github.com/barryrwilson/Rimward/issues/118) —
-`setCombatIntent` refuses `target-lost` on a fresh lock and refusal tokens
-carry no detail — is **implemented and locally verified on
-`claude/next-issue-77b2bb`**, based on master `031e0dda`. The folded target
-check now returns one token per precondition: `lock-kind` (rock, pod, station,
-gate or landmark lock), `stale-lock` (no lock or another id), `no-sample` (the
-hull is locked but the HUD aim digest is missing, for another lock or weapon
-group, older than 0.25 s or beyond 600 u) and `target-lost` only for a hull
-that left the live roster. Argument refusals from `setControl` and
-`setCombatIntent` (`bad-args`, `bad-seq`, `bad-ttl`, `stale`, `bad-axis`,
-`bad-throttle`) and the four target refusals carry an additive `detail` string
-naming the failing field or the unmet precondition; `lastIntent` mirrors it.
-The manifest documents the one-rendered-frame rule on `selectTarget` and
-`setCombatIntent`. Combat behaviour, terminal reasons, the lease model and the
-API version are unchanged. Build, unchanged boot, the new focused suite
-(`npm run test:refusal-tokens`), the schema pins and the agent/combat
-regressions pass. See
-[the acceptance and evidence record](Issue118RefusalTokensEvidence.md).
-
-[Issue #119](https://github.com/barryrwilson/Rimward/issues/119) — NPC miner
-`mineHit` receipts leak into the public event ring with no actor — is
-**implemented and locally verified on `claude/next-issue-547450`**, based on
-master `66b56f88`. Both internal emitters now tag the payload (`actor: 'npc'`
-from the npc.js miner, `actor: 'player'` from the combat.js beam) and
-`sanitizeEvent` admits only the player's beam to the ring, failing closed on
-any other or missing actor. The public row is `{ asteroidId, actor: 'player',
-count? }`; asteroid extraction, NPC cargo fill, fold/keep rules, the API
-version and the ring cap are unchanged. Build, unchanged boot, the new focused
-suite (`npm run test:miner-receipts`), the schema pins and the agent
-regressions pass. See
-[the acceptance and evidence record](Issue119MinerReceiptsEvidence.md).
-
-[Issue #114](https://github.com/barryrwilson/Rimward/issues/114) — an agent that
-follows the documented stop handshake and then starts a fight must not sit
-still under fire while the view reports an intercept — is **implemented and
-locally verified on `claude/next-issue-dcb4e3`**, based on master `66b56f88`.
-An accepted `setCombatIntent` clears `input.fullStop` on acceptance, like
-`engageAutopilot`; a live combat lease still held by the latch publishes
-`control.combat.movementBlocked: 'full-stop'`. The fixture repro shows the
-apply path already cleared the latch on the first applied frame, so the
-playtest reading is most likely a frozen sim plus wall-clock expiry (#121,
-unchanged here). Focused suite (7 groups), release-focused 15/15, build,
-unchanged boot and the live browser check pass. Awaiting PR review and merge.
-See [the acceptance and evidence record](Issue114CombatFullStopEvidence.md).
-
-[Issue #115](https://github.com/barryrwilson/Rimward/issues/115) — a pirate
-never observes its own scoops, and an oversized pod is refused silently — is
-**implemented and locally verified on `claude/issue-work-4f8ccb`**, based on
-master `196b954c`. `podCollected` is now a keep-class ring row carrying
-`podId`, `units` and the primary `commodity`; the new keep-class
-`podBlocked { podId, units, free }` receipt records a capacity refusal once per
-pod per free-space value; every pod carries a session id and
-`targets.nearby` pod rows publish `id` and `units`. Scooping rules, the
-HUD line, persistence and the API version are unchanged. Build, unchanged boot,
-the focused suite, the schema pins and the agent/salvage regressions pass; the
-live browser check passes with no console errors. Awaiting PR review and merge.
-See [the acceptance and evidence record](Issue115PodReceiptsEvidence.md).
-
-[Issue #103](https://github.com/barryrwilson/Rimward/issues/103) — a raw
-`setControl` throttle persists after the lease expires or is cleared, so an
-agent can fly unattended — is **implemented and independently QA-approved on
-`codex/issue-103-throttle-observability`**, based on master `7645aa22`. The
-issue explicitly allows keeping the setpoint and documenting the already
-published `observe().ship.throttle` instead of changing the semantics, and that
-compatibility-preserving option is the accepted one. The baseline already
-publishes `ship.throttle` and `flags.fullStop`, so the issue's "not observable"
-premise is stale; the real gap is that nothing told a caller the field is the
-persistent setpoint, that clearing does not brake, or that the supported stop is
-`setControl { throttle: 0 }` confirmed across a live update — with both
-`ship.throttle === 0` and `flags.fullStop === true` — before clearing. Lease
-behaviour, the combat-release full stop and the API version are unchanged.
-Focused checks (12 groups), build, unchanged boot and agent/combat regressions
-pass. The live browser probe passes 5/5 pins with no console errors or uncaught
-exceptions. Independent Codex QA returned PASS on
-`f7593a085ca8ff710f9d21d4c2e127001785a227`, including four additional boundary
-groups and source/security review. Publication awaits owner authorization after
-automatic approval review rejected the push; no PR, merge or release is claimed.
-Initial verification failures and their corrections remain in the
-evidence record. See
-[the acceptance and evidence record](Issue103ThrottleEvidence.md).
-
-[Issue #102](https://github.com/barryrwilson/Rimward/issues/102) — make solar
-hazards and damage visible to agents — is implemented and locally verified on
-`codex/issue-102-solar-hazards`, based on master `d1b7d8f`. The bounded outcome
-is a live sun danger-zone snapshot, public solar event receipts, and accurate
-sun-avoiding navigation guidance. Authored layout and damage balance are outside
-scope. Build, unchanged boot, 13 focused groups, five regression suites and 4/4
-live browser pins pass. Independent Claude Code QA returned PASS on
-`de3346a9322daa2d3027a0763a150abb2c61c4bf`, including its own live rerun and 50
-additional checks. Awaiting PR review and merge. See
-[the acceptance and evidence record](Issue102SolarHazardsEvidence.md).
-
-[Issue #101](https://github.com/barryrwilson/Rimward/issues/101) — release
-traffic slots after surrendered hulls finish station refuge — is implemented,
-locally verified and independently QA-approved at `800917d43a18ff6fa6d1b87b91f2e25d5079b315`,
-awaiting PR review and merge. At a full bubble, one safe completed encounter
-folds only when a ready unfinished replacement can use its slot. Finished
-ships can return in spare capacity; population, cargo and condition survive.
-Selection, active pursuit, recent attacks, disabled salvage, named aces and
-current job quarry remain protected. Build, unchanged boot, focused and related
-regressions pass; live Chrome passes 3/3 pins with a clean console. See
-[the acceptance and evidence record](Issue101TrafficRetirementEvidence.md).
-
-The owner authorized consolidation and complete release validation on current
-master before more features. The [consolidation record](RepoConsolidation20260910.md)
-records completed preservation/cleanup and verification repairs. Final
-[release run 34500771317](https://github.com/barryrwilson/Rimward/actions/runs/34500771317)
-on `f0b4c62c3a7bef7296e1603c46dd90acea893532` returned **PASS** for all 10
-gates and 15 evidence assertions. Independent source/contract review passed;
-PR #97 owns the final documentation review and merge handoff. All 447 emitted
-files match the baseline runtime exactly. Earlier failed runs remain recorded,
-and their residual reliability observations remain below. No release was
-published or new performance exception granted.
-
-[Issue #100](https://github.com/barryrwilson/Rimward/issues/100) — keep hails
-off the station desk while docked — is **implemented and verified, awaiting
-merge**. The
-runtime change is implemented and 37 focused checks pass with unchanged
-`test:boot`, `test:hail-identity` and `test:agent-hardening`. Live browser
-acceptance now **passes 7/7 pins on 2026-09-10** with a clean console, under
-two recorded limitations: a harness-only dev-server override (`watch: null`
-plus `noDiscovery`) needed to boot Vite on this workspace, and a labelled
-fixture that stages only the rare hail. Independent behaviour and source QA
-returned **PASS** at `1f9035c2`. The build hold is resolved by an exact
-owner-approved byte exception for this artifact only, activated on 2026-09-10:
-`npm run build` and `npm run bundle:report -- --json` now exit 0 while the raw
-byte gates still fail. Independent QA of that activation returned **PASS** at
-`17edf7ebabccb023b6df255eda47e5bf39176d93`, covering the ordinary build and
-report, the exact chunk identity, nine negative matcher cases and the browser
-boundary checks. That is the issue and byte-gate verdict only, not an overall
-release or startup approval; the earlier failed remote TGT-07 run 34513272635
-stays failed historical evidence.
-
-[Issue #98](https://github.com/barryrwilson/Rimward/issues/98) — a hull that
-surrenders can be told to dump its holds — is **implemented and locally
-verified, awaiting independent QA and PR review**. A player-owned surrender card
-offers `demandCargo` whenever the hull still holds a unit, on the same nonempty
-gate the salvage card uses, and publishes it through `observe().hail`. An empty
-hold omits the verb. Resolution reuses the existing branch: an ordinary manifest
-(`rawOre`, `refinedMetals`) spills as pods unit for unit, the manifest clears,
-fear rises **+2**, **no credits** move, the hull yields to the player and runs.
-Issue #99 attribution, issue #100 dock refusal, disabled-hull salvage (no fear,
-no receipt) and the wave-30 pirate demand are unchanged, as is
-`spillShipCargo`'s separate special-data handling, which is out of scope. No new
-schema, API version, key or persistent field. 57 focused checks pass, with
-`npm run build`, root `npm run test:boot`, `test:surrender-attribution`,
-`test:docked-hails`, `test:hail-identity`, `test:agent-schema` and
-`test:agent-gameplay` all passing locally. Live browser acceptance
-(`npm run test:surrender-cargo-live`) passes **6/6 pins** with a clean console,
-under the recorded harness-only dev-server override and labelled fixtures; an
-earlier live run failed only because the loaded fixture's resolve fell to 19 and
-capitulated past the card (fixture corrected, no runtime change), and a
-superseded dock pin failed on an unrelated dock approach and was replaced by a
-real rendered-button payout pin. No independent QA, merge, release or deployment
-is claimed. See
-[Issue98SurrenderCargoEvidence.md](Issue98SurrenderCargoEvidence.md).
-
-[Issue #99](https://github.com/barryrwilson/Rimward/issues/99) — surrender
-attribution: only the player who actually broke a hull is owed for the yield —
-is **implemented and locally verified, awaiting PR review and merge**. A break the player did not cause opens no bargaining card,
-still yields the hull through the ordinary NPC loop, and pays no credits, fear,
-milestone or patrol progress; its `npcSurrendered` receipt and lane incident name
-`world`. A player-caused break is unchanged. Ownership follows the last
-*effective* attacker, so a hit that reduces nothing takes no claim, and an
-original surrender card whose claim has since lapsed refuses payout and `letGo`
-with `stale`. Salvage and demand behaviour, the public API version and the persistent save
-schema are unchanged; the internal surrender receipt gains a bounded causer.
-Independent core QA returned **PASS** at
-`78a3a2b3090e1a75469f138d4098847a3b644362`, covering 61 focused and 20
-adversarial assertions, and the root final production build and full boot both
-pass at that exact commit. Live browser acceptance
-(`npm run test:surrender-attribution-live`) passes **5/5 pins** with a clean
-console, and the existing #100 live probe still passes **7/7** with a clean
-console, under the recorded harness-only dev-server override and labelled
-fixtures. The final docs/test delta still gets independent review. Branch is
-stacked on PR #107. See
-[Issue99SurrenderAttributionEvidence.md](Issue99SurrenderAttributionEvidence.md).
-[PR #106](https://github.com/barryrwilson/Rimward/pull/106) owns the final review
-handoff and the current CI record. Nothing is merged, released or deployed. See
-[Issue100DockedHailsEvidence.md](Issue100DockedHailsEvidence.md), the
-[measured decision](releases/issue-100-measured-decision.md) and the
-[public API contract](AgentApiDesign.md#issue-100--docked-hails).
+Parked follow-ups recorded by the merged issues, none promoted to a task:
+station security reacting to a hostile hunter near the dock, ace demand
+behaviour and starter cruise speed versus an ace (#125); the optional
+fear-rating suppression of rival pirate interest (#123); a job that sends a
+patrol across a gate (#125).
 
 ## Completed and merged outcomes
 
@@ -371,6 +49,25 @@ artifacts, with their stated limitations.
 
 | Outcome | Issue / merged PR | Durable design or evidence |
 |---|---|---|
+| Death inside an encounter returns to the last berth with a rewind and hold receipt; patrol standing law is local | [#125](https://github.com/barryrwilson/Rimward/issues/125) / [#137](https://github.com/barryrwilson/Rimward/pull/137) | [Evidence](Issue125DeathRecoveryEvidence.md); `npm run test:death-recovery`. |
+| The fence's marker banks on a paying pirate outcome, not only a bounty claim | [#124](https://github.com/barryrwilson/Rimward/issues/124) / [#136](https://github.com/barryrwilson/Rimward/pull/136) | [Evidence](Issue124FenceMarkerEvidence.md); `npm run test:fence-marker`. |
+| At most two NPC pirates work traders at once; a prize the player engages is yielded | [#123](https://github.com/barryrwilson/Rimward/issues/123) / [#135](https://github.com/barryrwilson/Rimward/pull/135) | `PIRACY` tuning in `state.js`; `npm run test:shared-lane` (21 checks). Fear-rating suppression of rival interest parked. |
+| A deliberate hail demands terms from a willing hull | [#122](https://github.com/barryrwilson/Rimward/issues/122) / [#134](https://github.com/barryrwilson/Rimward/pull/134) | [Design](Hail03PlayerTermsDesign.md); [evidence](Issue122PlayerTermsEvidence.md). |
+| `frameAgeMs` / `flags.suspended`; a wall expiry during a stall reads `suspended` | [#121](https://github.com/barryrwilson/Rimward/issues/121) / [#133](https://github.com/barryrwilson/Rimward/pull/133) | [Evidence](Issue121SuspendedClockEvidence.md). |
+| A `retreat` or `break-off` intent may hold the afterburner (`burner: true`) | [#120](https://github.com/barryrwilson/Rimward/issues/120) / [#132](https://github.com/barryrwilson/Rimward/pull/132) | [Evidence](Issue120RetreatBurnerEvidence.md). Left the #118 burner pin stale → [#138](https://github.com/barryrwilson/Rimward/issues/138). |
+| NPC miner `mineHit` receipts stay off the agent ring | [#119](https://github.com/barryrwilson/Rimward/issues/119) / [#128](https://github.com/barryrwilson/Rimward/pull/128) | [Evidence](Issue119MinerReceiptsEvidence.md). |
+| `setCombatIntent` target refusals split (`no-sample`, `stale-lock`, `lock-kind`) with receipt `detail` | [#118](https://github.com/barryrwilson/Rimward/issues/118) / [#129](https://github.com/barryrwilson/Rimward/pull/129) | [Evidence](Issue118RefusalTokensEvidence.md). Suite currently red on master → [#138](https://github.com/barryrwilson/Rimward/issues/138). |
+| `playerHit` / `playerDestroyed` name the attacker under the bracket identity law | [#117](https://github.com/barryrwilson/Rimward/issues/117) / [#130](https://github.com/barryrwilson/Rimward/pull/130) | [Evidence](Issue117AttackerIdentityEvidence.md). |
+| Prize-ranking fields on nearby rows; station and gate bearings | [#116](https://github.com/barryrwilson/Rimward/issues/116) / [#131](https://github.com/barryrwilson/Rimward/pull/131) | [Evidence](Issue116NearbyRowsEvidence.md). |
+| Scoop receipts are keep-class; refused pods report `podBlocked` | [#115](https://github.com/barryrwilson/Rimward/issues/115) / [#126](https://github.com/barryrwilson/Rimward/pull/126) | [Evidence](Issue115PodReceiptsEvidence.md). |
+| A combat intent clears the full-stop latch and names it when it holds | [#114](https://github.com/barryrwilson/Rimward/issues/114) / [#127](https://github.com/barryrwilson/Rimward/pull/127) | [Evidence](Issue114CombatFullStopEvidence.md). |
+| Persistent raw-control throttle and the verified stop sequence are documented and observable | [#103](https://github.com/barryrwilson/Rimward/issues/103) / [#112](https://github.com/barryrwilson/Rimward/pull/112) | [Evidence](Issue103ThrottleEvidence.md). |
+| Solar hazards and damage are visible to agents | [#102](https://github.com/barryrwilson/Rimward/issues/102) / [#111](https://github.com/barryrwilson/Rimward/pull/111) | [Evidence](Issue102SolarHazardsEvidence.md). |
+| Completed station encounters no longer starve traffic | [#101](https://github.com/barryrwilson/Rimward/issues/101) / [#110](https://github.com/barryrwilson/Rimward/pull/110) | [Evidence](Issue101TrafficRetirementEvidence.md). |
+| Hail cards stay off docked station menus | [#100](https://github.com/barryrwilson/Rimward/issues/100) / [#106](https://github.com/barryrwilson/Rimward/pull/106) | [Evidence](Issue100DockedHailsEvidence.md); [API contract](AgentApiDesign.md#issue-100--docked-hails). Bundle bytes ride the #100/#107 approved exception. |
+| A surrendered hull can hand over its holds (`demandCargo`) | [#98](https://github.com/barryrwilson/Rimward/issues/98) / [#109](https://github.com/barryrwilson/Rimward/pull/109) | [Evidence](Issue98SurrenderCargoEvidence.md). |
+| Surrender is attributed to the last effective damage; a world-caused break pays nothing | [#99](https://github.com/barryrwilson/Rimward/issues/99) / [#108](https://github.com/barryrwilson/Rimward/pull/108) | [Evidence](Issue99SurrenderAttributionEvidence.md). |
+| Bundle byte caps doubled by owner request | [#107](https://github.com/barryrwilson/Rimward/pull/107) | [#100 measured decision](releases/issue-100-measured-decision.md); [performance contract](ProductionPerformanceBudget.md). |
 | Freighter quantity, Buy Max and selected-commodity Sell All through ordinary bounded orders | [#56](https://github.com/barryrwilson/Rimward/issues/56) / [#96](https://github.com/barryrwilson/Rimward/pull/96) | [Bulk evidence](Issue56BulkTradingEvidence.md); [measured decisions](releases/issue-56-measured-decision.md). PR #96 records final independent QA on `7cb7e7951afe670b2b14fc6701f6e6f667706fb2`. |
 | Fresh-start heading away from the sun, preserving saved headings and Drifter pose | [#95](https://github.com/barryrwilson/Rimward/pull/95) | [Starter evidence](StarterSunDriftEvidence.md). Final policy QA on `6f32b2e8b51d5037f5ea857c24847786361679c1` is recorded in the PR. |
 | Reassess starter pacing and retain the existing protection | [#10](https://github.com/barryrwilson/Rimward/issues/10) / [#94](https://github.com/barryrwilson/Rimward/pull/94) | [Pacing evidence](Issue10StarterPacingEvidence.md). No additional safe bubble was justified by the samples. |
@@ -385,7 +82,7 @@ artifacts, with their stated limitations.
 | Capitulation status and actionable hail feedback agree | [#67](https://github.com/barryrwilson/Rimward/issues/67) / [#85](https://github.com/barryrwilson/Rimward/pull/85) | Willingness and completed surrender remain distinct. |
 | Accepted survey objective navigation through visible marker and public API | [#69](https://github.com/barryrwilson/Rimward/issues/69) / [#84](https://github.com/barryrwilson/Rimward/pull/84) | [API contract](AgentApiDesign.md#issue-69--accepted-survey-navigation) |
 | Award First Scare only for player-earned intimidation | [#63](https://github.com/barryrwilson/Rimward/issues/63) / [#83](https://github.com/barryrwilson/Rimward/pull/83) | PR records attribution, persistence and live verification. |
-| Shared outward, collision-clear station launch | [#65](https://github.com/barryrwilson/Rimward/issues/65) / [#82](https://github.com/barryrwilson/Rimward/pull/82) | Blocked clearance holds the berth with a retry. Extended by [#105](https://github.com/barryrwilson/Rimward/issues/105) ([evidence](Issue105LaunchHoldEvidence.md)): the hold notice and agent receipt name the blocking hull and range; a pirate/ace camping the lane draws a throttled security hail and physical clearance response. Every retry still requires full clearance. #105 passes focused checks, build, unchanged boot and all five live browser checks with a clean console. Independent Codex QA passed `b0e68ddc`; awaiting PR review and merge. |
+| Shared outward, collision-clear station launch | [#65](https://github.com/barryrwilson/Rimward/issues/65) / [#82](https://github.com/barryrwilson/Rimward/pull/82) | Blocked clearance holds the berth with a retry. Extended by [#105](https://github.com/barryrwilson/Rimward/issues/105) ([evidence](Issue105LaunchHoldEvidence.md)): the hold notice and agent receipt name the blocking hull and range; a pirate/ace camping the lane draws a throttled security hail and physical clearance response. Every retry still requires full clearance. #105 passes focused checks, build, unchanged boot and all five live browser checks with a clean console. Independent Codex QA passed `b0e68ddc`; merged in [PR #113](https://github.com/barryrwilson/Rimward/pull/113). |
 | Persist completed dock transactions | [#71](https://github.com/barryrwilson/Rimward/issues/71) / [#81](https://github.com/barryrwilson/Rimward/pull/81) | Normal reload/graceful restart evidence does not establish forced-process crash durability. |
 | Refuse duplicate ferry acceptance without cargo or agreement mutation | [#70](https://github.com/barryrwilson/Rimward/issues/70) / [#80](https://github.com/barryrwilson/Rimward/pull/80) | Legitimate completed-consignment reacceptance remains. |
 | Restore the real player hull after cold asset load | [#54](https://github.com/barryrwilson/Rimward/issues/54) / [#79](https://github.com/barryrwilson/Rimward/pull/79) | Cold-load and stale-completion evidence in the PR. |
@@ -414,7 +111,7 @@ outcome before implementation; preserve the original product intent.
 
 | Candidate | State and next action |
 |---|---|
-| Intermittent live dock approach collision | [Baseline run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689) records fresh Greenhand `approachDock` cancelling on `bodyHit` / `impact` near the +X stage. Docking passed in the intermediate and final runs; the original collider and cause remain unresolved. Preserve full public collision payload and pre-failure state on an unchanged fresh-start approach before selecting a bounded runtime fix. See the [diagnostic summary](RepoConsolidation20260910.md#residual-reliability-follow-ups). This is an unfiled follow-up, not a failed final gate or a proven repaired defect. |
+| Intermittent live dock approach collision — **filed as [#139](https://github.com/barryrwilson/Rimward/issues/139)** | [Baseline run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689) records fresh Greenhand `approachDock` cancelling on `bodyHit` / `impact` near the +X stage. Docking passed in the intermediate and final runs; the original collider and cause remain unresolved. Preserve full public collision payload and pre-failure state on an unchanged fresh-start approach before selecting a bounded runtime fix. See the [diagnostic summary](RepoConsolidation20260910.md#residual-reliability-follow-ups). This is an unfiled follow-up, not a failed final gate or a proven repaired defect. |
 | Smoke/capture reliability | [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
 | Performance headroom | The enforceable byte caps are now 3,671,906 minified / 1,098,526 gzip bytes: the owner approved doubling the #100 artifact counts by direct request on 2026-09-10, superseding the earlier 1,800,000 / 537,600 limits. Historic measurements are unchanged: #56 measured 1,835,632 minified / 549,169 gzip with a 7,340.4 ms startup median and one of five runs at 8,280 ms against 8,000 ms. The exact descriptor still pins the #100 artifact `assets/index-CY-oCepC.js` at 1,835,953 minified / 549,263 gzip for that exact bundle only. The 8,000 ms startup limit and the browser dependency boundary are unchanged and unwaived. Use the [#56](releases/issue-56-measured-decision.md) and [#100](releases/issue-100-measured-decision.md) measured decisions and the [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
 | Agent Play mouse ownership | Unfiled owner report from 2026-09-06: incidental pointer/UI movement should not interfere with agent flight, docking or mining, while explicit takeover remains available. Current `controls.js` deliberately makes mouse movement/clicks cancel a combat lease; that later human-takeover contract must be reconciled with the requested watch behavior. Do not claim #57 or #61 closed the whole observation. Recheck live pointer, click, focus and handoff behavior before selecting a change. |
