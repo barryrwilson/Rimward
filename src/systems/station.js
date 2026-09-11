@@ -52,6 +52,7 @@ import {
   applyBerthFlight,
   applyBerthInput,
 } from '../game/launch-clearance.js';
+import { requestLaneClearance } from './npc.js';
 import { requestAutosave, stripControlChars, NAME_MAX } from '../game/save.js';
 import {
   DATA_CRYSTAL,
@@ -6760,12 +6761,50 @@ export function initStation(ctx) {
    * Returns { ok, token, notice } for the agent API; the UI paths ignore it
    * and read ui.notice.
    */
-  function hold(token, blocker) {
-    const notice = launchBlockedLine(token, blocker);
+  function hold(token, blocker, detail) {
+    const notice = launchBlockedLine(token, blocker, detail);
     ui.notice = notice;
     render();
     ctx.emit('commLine', { text: notice });
     return { ok: false, token: token === 'no-service' ? 'no-service' : 'blocked', notice };
+  }
+
+  /**
+   * Issue #105: a hull camped in the departure lane held the berth forever and
+   * the notice would not even say whose hull it was. The refused plan carries
+   * the live blocker's identity and its current range, and — for an active
+   * pirate or ace — security asks the NPC owner to move it out of the lane with
+   * ordinary flight. Nothing here launches, moves the player, or fires: the
+   * retry still has to pass the whole clearance planner on its own merits.
+   *
+   * Returns the detail the hold line states. `security` is only true when the
+   * owner really accepted, so the line never promises a physics outcome.
+   */
+  function laneHoldDetail(plan) {
+    const detail = {
+      name: typeof plan.blockerName === 'string' ? plan.blockerName : '',
+      range: Number.isFinite(plan.blockerRange) ? plan.blockerRange : -1,
+      security: false,
+    };
+    if (plan.blocker !== 'ship' || !detail.name || detail.range < 0) return detail;
+    let answer = null;
+    try {
+      answer = requestLaneClearance(ctx, plan.blockerId, plan);
+    } catch {
+      answer = null;
+    }
+    if (!answer || answer.ok !== true) return detail;
+    detail.security = true;
+    if (answer.hail === true) {
+      const dock = stripControlChars(
+        (ctx.station && typeof ctx.station.name === 'string' && ctx.station.name) || 'Station',
+      ).slice(0, NAME_MAX);
+      ctx.emit('commLine', {
+        text: `${detail.name}, you are fouling a berth departure lane. Clear it now.`,
+        from: `${dock} security`,
+      });
+    }
+    return detail;
   }
 
   function undock() {
@@ -6776,6 +6815,7 @@ export function initStation(ctx) {
       return hold('no-service', '');
     }
     if (!plan || plan.ok !== true) {
+      if (plan && plan.token !== 'no-service') return hold('blocked', plan.blocker, laneHoldDetail(plan));
       return hold(plan && plan.token === 'no-service' ? 'no-service' : 'blocked', plan && plan.blocker);
     }
     // Both owners must succeed. planLaunch already refused when either hook

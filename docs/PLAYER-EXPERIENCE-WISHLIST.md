@@ -334,6 +334,15 @@ checked against the current initiative text before capture.
   working retry.
   Issue #65 `src/game/launch-clearance.js`. Implemented; focused tests, build,
   full boot and live verification complete.
+  Issue #105 extends the hold, without changing the #65 clearance contract: a
+  held launch now names the blocking hull and its current range in both the
+  panel notice and the agent `undock`/`launch` receipt, and a pirate or ace
+  camping the departure lane draws a throttled station-security hail that
+  physically steers it out of the lane. A retry still has to pass the complete
+  clearance planner — security never authorizes a launch through an
+  obstruction. `docs/Issue105LaunchHoldEvidence.md`. Implemented; focused
+  checks, build, full boot and all five live browser checks pass with a clean
+  console; independent QA pending.
 - [x] DONE (P2, TGT): Sort the T target cycle hostiles-first during combat,
   or add a "target my attacker" key. While an ace fired from 59 u, T selected
   a friendly hauler, then a neutral freighter, and reached the attacker on

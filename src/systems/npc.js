@@ -50,6 +50,7 @@ import { turnRateFor } from '../game/flight-feel.js';
 import { scaleFor } from '../game/ship-scale.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
+import { LAUNCH_CORRIDOR_MARGIN, usableId } from '../game/launch-clearance.js';
 import { writeStationHold } from '../game/traffic-feel.js';
 import { isUnknowable } from '../game/faction-style.js';
 import { tickPoliceLeave } from '../game/police-leave.js';
@@ -115,6 +116,7 @@ const _fwd = new THREE.Vector3();
 const _toT = new THREE.Vector3();
 const _away = new THREE.Vector3();
 const _threatAt = new THREE.Vector3(); // last-known pursuer position (issue #68)
+const _laneAim = new THREE.Vector3(); // departure-lane clearance point (issue #105)
 const _q = new THREE.Quaternion();
 const _bodies = { count: 0, items: [] };
 let _gax = 0;
@@ -1242,6 +1244,233 @@ function steerLive(live, targetPos, speed, dt) {
   const vel = live.ai && live.ai.velocity;
   if (vel && typeof vel.copy === 'function') vel.copy(_fwd).multiplyScalar(speed);
   return dist;
+}
+
+// ---------------------------------------------------------------------------
+// Departure-lane evacuation (issue #105). station.js owns the berth but owns no
+// hull; when its clearance planner refuses a launch because a live pirate/ace
+// is parked in the lane, it asks THIS owner to move that hull with the ordinary
+// steering and collision machinery. Nothing here teleports anything, fires
+// anything, or touches standing, cargo, or a record.
+//
+// State is transient and per (context, live hull): a WeakMap keyed by the hull
+// itself, so a despawned hull's request dies with it and no id is ever reused
+// across hulls. The per-context Set only exists so lifecycle resets can sweep;
+// it is pruned on every request and every frame.
+const LANE_REQ = new WeakMap();   // live hull -> { ctx, system, openedAt, activeUntil, cooldownUntil, tx, ty, tz }
+const LANE_CTX = new WeakMap();   // ctx -> Set<live hull>
+/** How long one security order steers a hull (s). */
+const LANE_CLEAR_SECONDS = 20;
+/** Quiet time after an order ends before security will hail that hull again (s). */
+const LANE_CLEAR_COOLDOWN = 15;
+/** Extra lateral room beyond the checked corridor, so the retry really clears. */
+const LANE_CLEAR_MARGIN = 14;
+/** Station-keeping radius at the clearance point: inside it, no thrust. */
+const LANE_CLEAR_ARRIVE = 10;
+
+function laneSetFor(ctx) {
+  let set = LANE_CTX.get(ctx);
+  if (!set) {
+    set = new Set();
+    LANE_CTX.set(ctx, set);
+  }
+  return set;
+}
+
+/**
+ * May this hull be ASKED to clear the lane? Active pirate/ace only. A wreck, a
+ * dark hull, a hull that already yielded, one already running for a gate, a
+ * civilian, a patrol, or a hull that has left ctx.ships is refused — and so is
+ * an unrevealed Q-ship, because ordering "the freighter" out of the lane would
+ * announce a role the player has not seen through yet.
+ */
+export function laneClearEligible(ctx, live) {
+  if (!live || !live.object || !live.object.position) return false;
+  const st = live.state;
+  const ai = live.ai;
+  if (!st || !ai) return false;
+  if (st.destroyed || st.disabled || st.surrendered) return false;
+  if (!ai.velocity || typeof ai.velocity.length !== 'function') return false;
+  if (ai.mode === 'flee') return false;
+  const role = ai.role ?? live.role ?? (live.record && live.record.role);
+  if (role !== 'pirate' && role !== 'ace') return false;
+  const rec = live.record;
+  if (rec && rec.qship === true && rec.revealed !== true) return false;
+  const ships = ctx && ctx.ships;
+  if (!ships || ships.indexOf(live) < 0) return false;
+  return true;
+}
+
+/**
+ * A stable point off the departure lane: straight out of the corridor, plus a
+ * little further from the station. Lateral distance from the lane axis only
+ * grows along the path, so the hull never crosses the axis — it cannot fly
+ * through the berth, the station, or the parked player to get there.
+ */
+function laneClearTarget(ctx, live, lane, out) {
+  const s = ctx && ctx.station && ctx.station.position;
+  if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y) || !Number.isFinite(s.z)) return null;
+  let dx = lane && lane.dirX;
+  let dy = lane && lane.dirY;
+  let dz = lane && lane.dirZ;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || !Number.isFinite(dz)) return null;
+  const dlen = Math.hypot(dx, dy, dz);
+  if (!(dlen > 1e-3)) return null;
+  dx /= dlen; dy /= dlen; dz /= dlen;
+
+  const p = live.object.position;
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return null;
+  const vx = p.x - s.x;
+  const vy = p.y - s.y;
+  const vz = p.z - s.z;
+  const axial = vx * dx + vy * dy + vz * dz;
+  let ex = vx - axial * dx;
+  let ey = vy - axial * dy;
+  let ez = vz - axial * dz;
+  let perp = Math.hypot(ex, ey, ez);
+  if (!(perp > 1e-3)) {
+    // Dead on the axis: any perpendicular will do, chosen deterministically.
+    ex = Math.abs(dx) < 0.9 ? 1 - dx * dx : -dx * dy;
+    ey = Math.abs(dx) < 0.9 ? -dy * dx : 1 - dy * dy;
+    ez = Math.abs(dx) < 0.9 ? -dz * dx : -dz * dy;
+    perp = Math.hypot(ex, ey, ez);
+    if (!(perp > 1e-3)) return null;
+  }
+  ex /= perp; ey /= perp; ez /= perp;
+  const need = PHY.PLAYER_RADIUS + LAUNCH_CORRIDOR_MARGIN + npcRadius(live) + LANE_CLEAR_MARGIN;
+  const lateral = Math.max(need - perp, need * 0.5);
+  const outward = lateral * 0.5;
+  out.set(
+    p.x + ex * lateral + dx * outward,
+    p.y + ey * lateral + dy * outward,
+    p.z + ez * lateral + dz * outward,
+  );
+  if (!Number.isFinite(out.x) || !Number.isFinite(out.y) || !Number.isFinite(out.z)) return null;
+  return out;
+}
+
+function laneNow(ctx) {
+  const t = ctx && ctx.world && ctx.world.time;
+  return Number.isFinite(t) ? t : 0;
+}
+
+function laneSystemOf(ctx) {
+  const id = ctx && ctx.world && ctx.world.currentSystem;
+  return typeof id === 'string' ? id : '';
+}
+
+/**
+ * Is this request still about the same berth visit, in the same system, on the
+ * same clock? A system load rebuilds the field under the hull, and a restored
+ * save can move world.time backwards — either way the window an order was
+ * measured against no longer exists, so the order ends rather than standing on
+ * a stale deadline.
+ */
+function laneReqLive(ctx, live, req, now) {
+  if (!req || req.ctx !== ctx) return false;
+  if (req.system !== laneSystemOf(ctx)) return false;
+  if (now < req.openedAt) return false; // clock rewound under it
+  if (now >= req.cooldownUntil) return false;
+  return true;
+}
+
+/** Drop requests that expired, lost eligibility, or belong to another life. */
+function pruneLaneClearance(ctx, now) {
+  const set = LANE_CTX.get(ctx);
+  if (!set || set.size === 0) return;
+  // The berth is the only thing that asks; once the player is out of it, every
+  // order is finished — the same reset a system load or a despawn produces.
+  const docked = !!(ctx && ctx.flags && ctx.flags.docked === true);
+  for (const live of set) {
+    const req = LANE_REQ.get(live);
+    const stale = !laneReqLive(ctx, live, req, now) || !docked || !laneClearEligible(ctx, live);
+    if (!stale) continue;
+    if (req && req.ctx === ctx) LANE_REQ.delete(live);
+    set.delete(live);
+  }
+}
+
+/**
+ * Station security asks the blocking hull to clear the departure lane.
+ * `lane` is the refused launch plan (its dirX/dirY/dirZ is the real departure
+ * radial). Returns { ok, hail }: `ok` means an order is standing right now,
+ * `hail` means THIS call opened it, so only one comm line is spoken per order.
+ * Repeated launch attempts inside one order, and attempts inside the quiet
+ * window after it, never re-hail. Never throws; a refusal simply leaves the
+ * player with the plain hold line.
+ */
+export function requestLaneClearance(ctx, blockerId, lane) {
+  const out = { ok: false, hail: false };
+  try {
+    if (!ctx || !usableId(blockerId)) return out;
+    if (!(ctx.flags && ctx.flags.docked === true)) return out;
+    const ships = ctx.ships;
+    if (!ships) return out;
+    let live = null;
+    for (let i = 0; i < ships.length; i++) {
+      if (ships[i] && ships[i].id === blockerId) { live = ships[i]; break; }
+    }
+    if (!live || !laneClearEligible(ctx, live)) return out;
+    const now = laneNow(ctx);
+    pruneLaneClearance(ctx, now);
+    const prev = LANE_REQ.get(live);
+    if (laneReqLive(ctx, live, prev, now)) {
+      if (now < prev.activeUntil) {
+        out.ok = true; // already under way — no second hail, no reset
+        return out;
+      }
+      return out; // quiet window: too soon to order the same hull again
+    }
+    if (!laneClearTarget(ctx, live, lane, _laneAim)) return out;
+    LANE_REQ.set(live, {
+      ctx,
+      system: laneSystemOf(ctx),
+      openedAt: now,
+      activeUntil: now + LANE_CLEAR_SECONDS,
+      cooldownUntil: now + LANE_CLEAR_SECONDS + LANE_CLEAR_COOLDOWN,
+      tx: _laneAim.x, ty: _laneAim.y, tz: _laneAim.z,
+    });
+    laneSetFor(ctx).add(live);
+    out.ok = true;
+    out.hail = true;
+    return out;
+  } catch {
+    return out;
+  }
+}
+
+/** True while an order is standing for this hull in this context. */
+export function laneClearanceActive(ctx, live) {
+  const now = laneNow(ctx);
+  const req = LANE_REQ.get(live);
+  return laneReqLive(ctx, live, req, now) && now < req.activeUntil;
+}
+
+/**
+ * One frame of a standing order, in place of this hull's ordinary mode. Returns
+ * true when it owned the motion. The hull flies with the same steerLive / bounce
+ * path every NPC uses, so obstacles are still obstacles; inside the arrival
+ * radius it holds station instead of drifting back across the lane.
+ */
+function laneClearStep(ctx, live, dt, now) {
+  const req = LANE_REQ.get(live);
+  if (!laneReqLive(ctx, live, req, now)) return false;
+  if (now >= req.activeUntil) return false; // quiet window only; prune removes it
+  if (!laneClearEligible(ctx, live)) {
+    LANE_REQ.delete(live);
+    const set = LANE_CTX.get(ctx);
+    if (set) set.delete(live);
+    return false;
+  }
+  _laneAim.set(req.tx, req.ty, req.tz);
+  const dist = live.object.position.distanceTo(_laneAim);
+  const speed = dist > LANE_CLEAR_ARRIVE ? speedCap(live) * 0.8 : 0;
+  // Complying is not fighting: drop the attack phase and the hostile-intent
+  // flag for the frames the hull is under orders. No weapon runs here.
+  live.ai.phase = null;
+  live.ai.intent = false;
+  steerLive(live, _laneAim, speed, dt);
+  return true;
 }
 
 function abeamSign(ai) {
@@ -3130,6 +3359,10 @@ export function initNpc(ctx) {
       } else {
         _bodies.count = 0;
       }
+      // Issue #105: standing lane-clearance orders expire, end with the berth
+      // visit, and die with the hull. Sweeping here keeps the transient state
+      // bounded without any subsystem having to remember to reset it.
+      pruneLaneClearance(ctx, now);
       let combat = false;
       hideMinerBeams();
       for (let i = ctx.ships.length - 1; i >= 0; i--) {
@@ -3197,7 +3430,11 @@ export function initNpc(ctx) {
         if (ai.role === 'trader') tickTraderJob(ctx, live);
         else if (ai.role === 'miner') tickMinerJob(ctx, live);
         else if (ai.role === 'patrol') tickPatrolJob(ctx, live);
-        switch (ai.mode) {
+        // Issue #105: a standing station-security order owns this hull's motion
+        // for its window, in place of the ordinary mode. Everything after it —
+        // the bounce, the escape sync, the combat flag — still runs.
+        const underOrders = laneClearStep(ctx, live, dt, now);
+        if (!underOrders) switch (ai.mode) {
           case 'hunt':
             updateHunt(ctx, live, dt, now, reducedMotion);
             break;
