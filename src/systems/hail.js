@@ -2,7 +2,9 @@ import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS, SYSTEMS } from '..
 import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
-import { enterEscapeFlee, shipHasCargo, spillShipCargo, surrenderCauserOf } from './npc.js';
+import {
+  dropTermsClaim, enterEscapeFlee, shipHasCargo, spillShipCargo, surrenderCauserOf, tryOpenTermsHail,
+} from './npc.js';
 import {
   berthHeld,
   canOpenPlayCard,
@@ -565,6 +567,10 @@ export function initHail(ctx) {
   let conversationSeq = 0;
 
   function closeCard() {
+    // Issue #122: the player's terms claim rides the open card only. Every
+    // close path funnels here (resolution, keepFiring, the berth, a lapse,
+    // a dead hull), so the claim can never outlive the card it was sold on.
+    if (open && open.ship) dropTermsClaim(open.ship);
     open = null;
     root.style.display = 'none';
     try {
@@ -1253,9 +1259,20 @@ export function initHail(ctx) {
         } catch { /* skip calm gate */ }
         if (hailMissFrameHas(ctx, 'hailOpened')) skipMiss = true;
         if (allow) {
-          const ev = tryOpenDisabledHail(ctx);
-          if (ev) openCard(ev);
-          else if (!skipMiss) emitHailMiss(ctx, classifyLockHailMiss(ctx));
+          let ev = tryOpenDisabledHail(ctx);
+          // Issue #122: an intact willing hull answers a deliberate hail with
+          // the same surrender card the band transition draws. A card some
+          // other opener emitted this frame (Old Callow's vouch) keeps
+          // precedence; the salvage card above still outranks it for a wreck.
+          if (!ev && !hailMissFrameHas(ctx, 'hailOpened')) ev = tryOpenTermsHail(ctx);
+          if (ev) {
+            openCard(ev);
+            // The claim rides the OPEN card only: an admission refusal (the
+            // issue #99 boundary, an empty verb list) leaves nothing to sell.
+            if (ev.terms === true && !(open && open.ship === ev.ship)) dropTermsClaim(ev.ship);
+          } else if (!skipMiss) {
+            emitHailMiss(ctx, classifyLockHailMiss(ctx));
+          }
         } else if (!skipMiss) {
           const lock = classifyLockHailMiss(ctx);
           if (overlayToken) {

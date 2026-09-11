@@ -314,6 +314,7 @@ function makeAi(ctx, record, startPos) {
     playerInterested: false,
     scratched: false, // hull or screen dipped this instance (trader/patrol memory)
     lastAttacker: null, // 'player' | live ship | 'npc' — instance only, not saved
+    termsAt: -1, // issue #122: sim time the player's own terms card opened; -1 none. Instance only, not saved
     survivorsSpawned: false, // one crew pod per hull; crewPods and destroy share this
     fleeFrom: null, // 'player' | live ship — trader job flee source
     band: 'defiant',
@@ -1793,7 +1794,79 @@ export function lastAttackerOf(live) {
  * Reads instance bookkeeping only (lastAttackerOf may clear a dead ref).
  */
 export function surrenderCauserOf(live) {
-  return lastAttackerOf(live) === 'player' ? 'player' : 'world';
+  const attacker = lastAttackerOf(live);
+  if (attacker === 'player') return 'player';
+  if (playerTermsClaim(live, attacker)) return 'player';
+  return 'world';
+}
+
+/**
+ * Issue #122 — the demand is authorship. While the player's OWN terms card
+ * is open on this hull (ai.termsAt stamped by tryOpenTermsHail, cleared to -1
+ * on that hull's hailClosed) the break is the player's to sell, whoever
+ * wounded the hull BEFORE the demand. An NPC that lands a hit AFTER the
+ * demand opened takes the fight over, exactly as issue #99 defines a lapsed
+ * claim: the card refuses 'stale' and the ordinary loop yields to the world.
+ * Instance bookkeeping only; nothing here is persisted.
+ */
+function playerTermsClaim(live, attacker) {
+  const ai = live && live.ai;
+  const st = live && live.state;
+  if (!ai || !st) return false;
+  const at = ai.termsAt;
+  if (typeof at !== 'number' || !Number.isFinite(at) || at < 0) return false;
+  if (attacker === null || attacker === 'player') return true;
+  const hitAt = st.lastHitAt;
+  return !(typeof hitAt === 'number' && Number.isFinite(hitAt) && hitAt > at);
+}
+
+/** Issue #122: drop the player's terms claim on this hull (card closed). */
+export function dropTermsClaim(live) {
+  if (live && live.ai) live.ai.termsAt = -1;
+}
+
+/**
+ * Issue #122 — may the player demand terms from this hull right now? A live,
+ * intact, unyielded lock at the bargaining or capitulate band inside the same
+ * range the NPC-initiated card uses, and not mid-demand itself. Reads the
+ * same facts the shared classifier calls 'willing' plus the two ai guards
+ * that mean a card is already spoken for.
+ */
+export function canDemandTerms(ctx, live, range = U.TARGET_RANGE) {
+  if (!live || live.lockKind) return false;
+  const st = live.state;
+  const ai = live.ai;
+  if (!st || !ai || !live.object) return false;
+  if (st.destroyed || st.disabled || st.surrendered === true || ai.surrenderDone === true) return false;
+  if (ai.demanding === true) return false;
+  if (!ctx || !ctx.ships || !ctx.ships.includes(live)) return false;
+  if (!ctx.ship || !ctx.ship.object) return false;
+  const band = Number.isFinite(st.resolve) ? resolveBand(st.resolve) : '';
+  if (band !== 'bargaining' && band !== 'capitulate') return false;
+  return playerNear(ctx, live, range);
+}
+
+/**
+ * Issue #122 — player-initiated terms on the current lock. Emits the SAME
+ * surrender-card hailOpened the band transition emits (hail.js rolls the
+ * ransom/tribute and admits it through the issue #99 boundary), stamps the
+ * claim, and — for a bargaining hull — the same ai.hailed / ai.band the
+ * transition opener stamps, so the hull heaves to and no second card can be
+ * drawn on the transition. A capitulate-band hull keeps its unsampled band
+ * so the ordinary loop can still yield it. Returns the event, or null.
+ */
+export function tryOpenTermsHail(ctx) {
+  const live = ctx && ctx.targets && ctx.targets.current;
+  if (!canDemandTerms(ctx, live)) return null;
+  const ai = live.ai;
+  const now = ctx.world && typeof ctx.world.time === 'number' ? ctx.world.time : 0;
+  ai.termsAt = now;
+  ai.hailed = true;
+  if (resolveBand(live.state.resolve) === 'bargaining') ai.band = 'bargaining';
+  say(ctx, live, 'Heard. Name your terms.');
+  const ev = { ship: live, intents: intentsFor(ctx, live), line: 'Name your terms.', terms: true };
+  ctx.emit('hailOpened', ev);
+  return ev;
 }
 
 /** Latch + read: hull or screen went below max this instantiation. */
@@ -3504,6 +3577,10 @@ export function initNpc(ctx) {
           for (const s of ctx.ships) {
             if (!s || !s.ai) continue;
             if (s.ai.demanding && s.ai.demandOutcome && (!e.ship || s === e.ship)) s.ai.demanding = false;
+            // Issue #122: the player's terms claim lives only while that
+            // hull's card is up. Any close of it (resolved, keepFiring, the
+            // berth, a lapse) drops the claim on the next frame.
+            if (!e.ship || s === e.ship) dropTermsClaim(s);
           }
         }
       }

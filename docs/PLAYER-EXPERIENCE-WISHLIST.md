@@ -57,6 +57,24 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING PR REVIEW AND MERGE (P1,
+  HAIL/PIRACY): A feared pirate should be able to demand terms from a willing
+  hull, not only from one it breaks in front of the card.
+  [Issue #122](https://github.com/barryrwilson/Rimward/issues/122) lets a
+  deliberate H press or `act({ name: 'hail' })` on a locked intact hull at the
+  `bargaining` or `capitulate` band (not yet yielded, inside hail range) open
+  the same surrender card the band transition draws, with the player as
+  causer while that card is open; a ransom, cargo demand or tribute pays as
+  before, and the fear economy is untouched. The claim dies with the card and
+  lapses if an NPC lands a hit during the parley (`stale`), so issue #99
+  attribution outside a player-demanded card is unchanged. The shared
+  classifier now offers `willing` as an action, range and calm gate it like
+  a wreck, and the bracket prompt reads `H — Hail — demand terms`. Design
+  pass in [Hail03PlayerTermsDesign.md](Hail03PlayerTermsDesign.md). **Not
+  merged.** Build, unchanged boot, the new focused suite, the updated #67
+  suite, the hail/agent regressions, the release-focused runner (18/18) and
+  the live browser check pass with a clean console. See
+  [Issue122PlayerTermsEvidence.md](Issue122PlayerTermsEvidence.md).
 - [ ] IMPLEMENTED AND LOCALLY VERIFIED / AWAITING INDEPENDENT QA AND PR REVIEW
   (P1, HAIL/COMBAT): A hull that has just surrendered should be able to hand
   over its holds, not only a ransom.

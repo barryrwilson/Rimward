@@ -191,29 +191,38 @@ pin('blockers are the authored seven, in KeyH precedence order',
 const wren = makeShip('Claim Wren', { dist: 176, state: { resolve: 8 } });     // capitulate band
 const marlow = makeShip('Red Marlow', { dist: 220, state: { resolve: 30 } });  // bargaining band
 
+// Issue #122: a willing hull is now an ACTION. The deliberate H press opens
+// the surrender card with the player as causer instead of answering
+// 'no-answer'; the state word, the two axes and the public parity all stay.
 for (const [label, live] of [['Claim Wren rec-15', wren], ['Red Marlow rec-9', marlow]]) {
   const offer = hailOffer(ctx, live);
   pin(`${label} state is willing, not a completed yield`, offer.state === 'willing', offer);
-  pin(`${label} advertises no interaction`, offer.available === false, offer);
+  pin(`${label} advertises the terms hail (issue #122)`, offer.available === true
+    && offer.blocked === '' && offer.reason === '', offer);
   pin(`${label} carries no passive clause field at all`,
     !Object.hasOwn(offer, 'clause'), offer);
-  pin(`${label} next step is truthful, not a promise of negotiation`,
-    offer.next === 'Their nerve is low, but they have offered no terms to accept.'
-    && !/press|hail to/i.test(offer.next), offer);
-
-  const { miss, opened } = press(live);
-  pin(`${label} H opens no card`, opened === null, opened);
-  pin(`${label} H answers no-answer, not the old generic no-hail`,
-    !!miss && miss.reason === 'no-answer' && miss.verb === 'hail', miss);
-  pin(`${label} miss event carries no ship handle`, !!miss && !Object.hasOwn(miss, 'ship'), miss);
+  pin(`${label} next step names the action`, offer.next === 'Hail to demand terms.', offer);
 
   const row = observedTarget(live);
   pin(`${label} public API agrees with the displayed state`,
-    row.hail.state === 'willing' && row.hail.available === false
-    && row.hail.reason === 'no-answer' && row.hail.next === offer.next, row.hail);
+    row.hail.state === 'willing' && row.hail.available === true
+    && row.hail.reason === '' && row.hail.next === offer.next, row.hail);
   pin(`${label} public API reports the morale band the line shows`,
     row.resolveBand === (live.state.resolve < 20 ? 'capitulate' : 'bargaining'), row);
   pin(`${label} public API reports no completed surrender`, row.surrendered === false, row);
+
+  const before = { fear: ctx.world.fear, credits: ctx.world.credits, cargo: live.state.cargo.length };
+  const { miss, opened } = press(live);
+  pin(`${label} H opens the surrender card (issue #122)`,
+    !!opened && opened.terms === true && opened.intents.includes('demandRansom')
+    && ctx.flags.hailOpen === true && ctx.hailApi.peek().kind === 'surrender', opened);
+  pin(`${label} no miss toast beside the card`, miss === null, miss);
+  pin(`${label} opening the card moves no fear, credits or cargo`,
+    ctx.world.fear === before.fear && ctx.world.credits === before.credits
+    && live.state.cargo.length === before.cargo && live.state.surrendered === false);
+  pin(`${label} the claim is scoped to the open card`, live.ai.termsAt >= 0);
+  closeAnyCard(live);
+  pin(`${label} closing the card drops the claim`, live.ai.termsAt === -1);
 }
 
 // The reason token that hail.js will accept must be exactly what we emit.
@@ -280,9 +289,9 @@ pin('willingness and completed yield are never the same state',
 
   closeAnyCard(marlow);
   pin('card closed clears the flag', ctx.flags.hailOpen === false);
-  pin('closed card restores the willing morale state',
+  pin('closed card restores the willing morale state and the terms action',
     hailOffer(ctx, marlow).state === 'willing'
-    && hailOffer(ctx, marlow).reason === 'no-answer');
+    && hailOffer(ctx, marlow).reason === '' && hailOffer(ctx, marlow).available === true);
   pin('closed card restores the salvage action',
     hailOffer(ctx, wreck).available === true);
   ctx.ships.splice(ctx.ships.indexOf(wreck), 1);
@@ -391,17 +400,21 @@ for (const [label, key, want] of [
   const fresh = makeShip('Marked Origin Contact', { dist: 350, state: { resolve: 6 } });
   const offer = hailOffer(ctx, fresh);
   pin('fresh fearful spawn is willing, not yielded', offer.state === 'willing', offer);
-  pin('fresh fearful spawn grants no interaction and no reward',
-    offer.available === false && fresh.state.surrendered === false
+  // Issue #122: the willing spawn is an action, but still no reward — only a
+  // resolved verb pays, and opening the card writes no outcome.
+  pin('fresh fearful spawn offers the terms hail and no reward',
+    offer.available === true && fresh.state.surrendered === false
     && fresh.ai.surrenderDone === false, offer);
   const before = { fear: ctx.world.fear, credits: ctx.world.credits, pods: ctx.pods.length, cargo: fresh.state.cargo.length };
   const { miss, opened } = press(fresh);
-  pin('fresh fearful spawn H opens nothing', opened === null, opened);
-  pin('fresh fearful spawn H states no terms', !!miss && miss.reason === 'no-answer', miss);
-  pin('feedback moved no fear, credits, pods or cargo',
+  pin('fresh fearful spawn H opens the terms card', !!opened && opened.terms === true, opened);
+  pin('fresh fearful spawn H raises no miss', miss === null, miss);
+  pin('opening the card moved no fear, credits, pods or cargo',
     ctx.world.fear === before.fear && ctx.world.credits === before.credits
-    && ctx.pods.length === before.pods && fresh.state.cargo.length === before.cargo,
+    && ctx.pods.length === before.pods && fresh.state.cargo.length === before.cargo
+    && fresh.state.surrendered === false,
     { before, after: { fear: ctx.world.fear, credits: ctx.world.credits, pods: ctx.pods.length } });
+  closeAnyCard(fresh);
   ctx.ships.splice(ctx.ships.indexOf(fresh), 1);
   ctx.world.fear = 0;
 }
@@ -508,7 +521,9 @@ for (const [label, key, want] of [
     // the dataset band vocabulary is untouched
     && hudSrc.includes("band = 'capitulate'"));
   pin('hud prompt is offer-driven, not band-driven',
-    hudSrc.includes('if (hailOffer(ctx, target).available)')
+    hudSrc.includes('const offer = hailOffer(ctx, target);')
+    && hudSrc.includes('if (offer.available)')
+    && hudSrc.includes("'Hail — demand terms'")
     && !hudSrc.includes("pVerb = 'Hail'; }"));
   pin('hud toast has distinct copy for both new reasons',
     hudSrc.includes("already yielded, no further terms")
@@ -607,10 +622,12 @@ for (const [label, key, want] of [
       resumed.available === true && resumed.blocked === '', resumed);
   }
 
-  // --- calm: salvage-only, and it never speaks for an intact hull -----------
+  // --- calm: gates the states whose card the key opens (salvage and, since
+  //     issue #122, willing); it never speaks for a yielded hull ------------
   const calmRows = [
     // in range + calm  → calm really is the blocker
     [advWreckNear, U.TARGET_RANGE - 60, 'salvage', 'calm', 'calm'],
+    [advWillingNear, U.TARGET_RANGE - 60, 'willing', 'calm', 'calm'],
     // far + calm       → range comes first, exactly as the key reports
     [advWreckFar, U.TARGET_RANGE + 300, 'salvage', 'range', 'range'],
   ];
@@ -626,11 +643,10 @@ for (const [label, key, want] of [
   }
   for (const [live, state, reason] of [
     [advYielded, 'yielded', 'yielded'],
-    [advWillingNear, 'willing', 'no-answer'],
   ]) {
     live.ai.calmUntil = ctx.world.time + 30;
     const offer = hailOffer(ctx, live);
-    pin(`calm + ${state}: calm never borrows an intact hull's answer`,
+    pin(`calm + ${state}: calm never borrows a yielded hull's answer`,
       offer.blocked === '' && offer.reason === reason && offer.state === state, offer);
     const { miss } = press(live);
     pin(`calm + ${state}: real KeyH keeps the specific reason`,
@@ -662,7 +678,7 @@ for (const [label, key, want] of [
   for (const [live, state, reason, avail] of [
     [advWreckNear, 'salvage', '', true],
     [advWreckFar, 'salvage', 'range', false],
-    [advWillingNear, 'willing', 'no-answer', false],
+    [advWillingNear, 'willing', '', true],
     [advYielded, 'yielded', 'yielded', false],
     [advSteady, 'no-hail', 'no-hail', false],
   ]) {

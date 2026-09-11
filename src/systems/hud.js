@@ -2781,9 +2781,12 @@ export function initHud(ctx) {
         // CAPITULATE trader advertised an action that answered "no hail".
         // The resolve line above carries the state for every other case, and
         // a deliberate H press explains any refusal on demand.
-        if (hailOffer(ctx, target).available) {
+        // Issue #122: a willing intact hull is an action again — the key
+        // opens the terms card — so the prompt names which card it opens.
+        const offer = hailOffer(ctx, target);
+        if (offer.available) {
           pKey = promptKeyFor('hail', 'H');
-          pVerb = 'Hail — dead in space';
+          pVerb = offer.state === 'willing' ? 'Hail — demand terms' : 'Hail — dead in space';
         }
       }
       if (!pKey && !target && shipObj) {
