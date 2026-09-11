@@ -629,6 +629,50 @@ ordinary button/digit paths).
 
 ---
 
+## Issue #115 — scoop receipts
+
+Implemented in the runtime and covered by focused tests; see the
+[issue #115 evidence](Issue115PodReceiptsEvidence.md) for the run conditions
+and the live browser check before relying on this section.
+
+For a pirate the scoop is the payout, and it lands in the middle of a fight,
+when the ring is saturated with keep-class `npcHit` / `bodyHit` /
+`shieldDown` / `mineHit` rows. `podCollected` was ordinary chatter, so the
+one row that recorded the payout was evicted on arrival and the runner could
+only watch `world.cargo`. A pod that did not fit the hold was refused
+silently, every frame, with nothing in the ring or the nearby row to say why.
+
+| Surface | Now |
+|---|---|
+| `podCollected` ring row | **Keep-class.** `{ podId, units, commodity? }`: the merged unit total and the pod's primary commodity key (`survivor` for a survivor pod; absent for an empty pod). |
+| `podBlocked` ring row (new authored type) | **Keep-class.** `{ podId, units, free }`: the scoop was refused because `used + units > cargoCapacity`; `free` is the spare capacity at that moment. |
+| `targets.nearby` pod rows | `id` is the pod's session id (the same string the receipts carry) and `units` is the pod's total, so a runner can compare against its own free space before flying there. |
+| Pod identity | Every pod carries a session-unique `pod-<n>` id. Pods never persist, so no save field changes. |
+
+**Bounded refusal.** The pod sits inside scoop range every frame, so a
+per-frame emit would flood the ring. pods.js emits `podBlocked` once per pod
+per free-space value: the first refusal earns one receipt, and only a change in
+`free` (a sale, a jettison, another scoop) earns one more for a pod that still
+does not fit. Two oversized pods each earn their own receipt. Repeat rows are
+not collapsed — each keeps its own `podId`, `free` and `t` — and retention
+is bounded by the cap alone, exactly as the issue #72 lifecycle rows are.
+`podSpawned` stays ordinary chatter and is still evicted first.
+
+The raw `ctx.emit` payload still carries the live `pod` for in-engine
+consumers (recovery.js matches on it); sanitizeEvent derives `podId` and
+never copies the object. `units`/`free` must be finite and non-negative and
+`commodity` must be a known key or `survivor`, otherwise the field is dropped.
+Scooping itself is unchanged: same range, same capacity rule, nothing while
+docked. No new command, key, gauge, persisted field or schema version; the
+public API stays at `VERSION` 2 and the ring cap stays 16.
+
+**Evidence.** `npm run test:pod-receipts` (33 checks over the real pods and
+agent-api systems) and the issue #115 pins in `npm run test:agent-schema`,
+plus unchanged `npm run test:boot`, `npm run test:agent-hardening`,
+`npm run test:salvage-onboarding` and `npm run test:agent-gameplay`.
+
+---
+
 ## Issue #100 — docked hails
 
 Implemented in the runtime and covered by focused tests. The live browser
@@ -965,7 +1009,7 @@ Builder rules:
 - `jumping` lives on `gate.jumping` (`ctx.gate.jumping`, `ctx.js` **183**). **Not** `flags.jumping`.
 - `flags` includes `chartOpen`, `berthHold`, `matchSpeed`, `camera`, and `fullStop` (from `ctx.input.fullStop`). `agentOptIn` is top-level.
 - `ship` includes hull/screen/shell/engine/power/heat/`weaponGroup` (`state.js` **167–181**; `input.weaponGroup`).
-- `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships and rocks** (AM needs the locked asteroid).
+- `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships, rocks and pods** (AM needs the locked asteroid). Pod rows carry the pod `id` and `units` (issue #115).
 - `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed`, `recovered` `{ source:'autosave'|'fresh' }`, `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId`, `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback.
 - `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
 - `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.

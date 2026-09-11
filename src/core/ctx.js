@@ -300,7 +300,10 @@ export function createCtx({ scene, camera, renderer }) {
     //   lane. The hull stays live, lockable, damageable and hostile-capable —
     //   this is NOT immunity, docking, a bounty, or a lock release.
     // 'shieldDown' {layer:'screen'|'shell'}      'engineOut' {ship|player}
-    // 'podSpawned' {pod}     'podCollected' {pod}
+    // 'podSpawned' {pod}     'podCollected' {pod, units, commodity?}
+    // 'podBlocked' {pod, units, free}   // pods.js (issue #115): scoop refused,
+    //   the hold cannot take `units`; `free` is the spare capacity now. One
+    //   emit per pod per free-space value, never per frame.
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
     // 'hailMiss' { name, verb, reason, dist }    // hail.js KeyH/KeyJ miss; primitives only; no ship
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}

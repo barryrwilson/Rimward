@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { U } from './state.js';
+import { COMMODITIES, U } from './state.js';
 import { copyDataCargoEntry, dataRowsMatch, isDataCargo } from './data-trade.js';
 
 /**
@@ -524,12 +524,45 @@ export function mergePodContents(cargo, contents) {
   }
 }
 
+/**
+ * Session-unique pod identity (issue #115). Pods never persist, so the counter
+ * restarts with the page; the public ring and targets.nearby publish the same
+ * string, so a podCollected/podBlocked receipt can be matched to the row the
+ * agent was steering at.
+ */
+let podSeq = 0;
+
+/** Total units a pod would add to the hold. */
+export function podUnits(pod) {
+  const contents = pod && Array.isArray(pod.contents) ? pod.contents : [];
+  let n = 0;
+  for (let i = 0; i < contents.length; i++) {
+    const u = contents[i] && contents[i].units;
+    if (typeof u === 'number' && Number.isFinite(u) && u > 0) n += u;
+  }
+  return n;
+}
+
+/** Primary commodity key of a pod: 'survivor' wins, else the first known key. */
+export function podCommodityKey(pod) {
+  const contents = pod && Array.isArray(pod.contents) ? pod.contents : [];
+  let first = '';
+  for (let i = 0; i < contents.length; i++) {
+    const key = contents[i] && contents[i].commodity;
+    if (key === SURVIVOR_COMMODITY) return SURVIVOR_COMMODITY;
+    if (!first && typeof key === 'string' && Object.hasOwn(COMMODITIES, key)) first = key;
+  }
+  return first;
+}
+
 function makePod(ctx, contents, position, drift, tint, meshName) {
   const mesh = new THREE.Mesh(ensurePodGeo(), podMaterialFor(tint));
   if (meshName) mesh.name = meshName;
   mesh.position.copy(position);
   ctx.scene.add(mesh);
+  podSeq += 1;
   const pod = {
+    id: `pod-${podSeq}`,
     mesh,
     contents, // [{ commodity, units }] or survivor rows
     velocity: drift ? drift.clone() : new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3),
@@ -643,12 +676,25 @@ export function initPods(ctx) {
           }
           if (dist < U.SCOOP_RANGE) {
             const used = ctx.cargo.reduce((n, c) => n + c.units, 0);
-            const incoming = pod.contents.reduce((n, c) => n + c.units, 0);
+            const incoming = podUnits(pod);
             if (used + incoming <= ctx.cargoCapacity) {
               mergePodContents(ctx.cargo, pod.contents);
-              ctx.emit('podCollected', { pod });
+              const commodity = podCommodityKey(pod);
+              ctx.emit('podCollected', commodity
+                ? { pod, units: incoming, commodity }
+                : { pod, units: incoming });
               ctx.scene.remove(pod.mesh);
               ctx.pods.splice(i, 1);
+            } else {
+              // Issue #115: the refusal used to be silent. One receipt per pod
+              // per free-space value — the pod sits in scoop range every frame,
+              // so a per-frame emit would flood the ring; a later sale or
+              // jettison changes `free` and earns one fresh receipt.
+              const free = Math.max(0, ctx.cargoCapacity - used);
+              if (pod.blockedFree !== free) {
+                pod.blockedFree = free;
+                ctx.emit('podBlocked', { pod, units: incoming, free });
+              }
             }
           }
         } else {

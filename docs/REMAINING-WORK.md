@@ -18,6 +18,19 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #115](https://github.com/barryrwilson/Rimward/issues/115) — a pirate
+never observes its own scoops, and an oversized pod is refused silently — is
+**implemented and locally verified on `claude/issue-work-4f8ccb`**, based on
+master `196b954c`. `podCollected` is now a keep-class ring row carrying
+`podId`, `units` and the primary `commodity`; the new keep-class
+`podBlocked { podId, units, free }` receipt records a capacity refusal once per
+pod per free-space value; every pod carries a session id and
+`targets.nearby` pod rows publish `id` and `units`. Scooping rules, the
+HUD line, persistence and the API version are unchanged. Build, unchanged boot,
+the focused suite, the schema pins and the agent/salvage regressions pass; the
+live browser check passes with no console errors. Awaiting PR review and merge.
+See [the acceptance and evidence record](Issue115PodReceiptsEvidence.md).
+
 [Issue #103](https://github.com/barryrwilson/Rimward/issues/103) — a raw
 `setControl` throttle persists after the lease expires or is cleared, so an
 agent can fly unattended — is **implemented and independently QA-approved on
