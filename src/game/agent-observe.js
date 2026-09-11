@@ -15,6 +15,7 @@ import { agentControlStatus } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
+import { podUnits } from './pods.js';
 import { PHY } from './physics.js';
 import { sunZone } from './collision.js';
 import {
@@ -163,7 +164,9 @@ function describeTarget(ctx, origin, t, extended) {
   if (kind === 'pod') {
     const pod = t.pod;
     const id = pod && Object.hasOwn(pod, 'id') ? pod.id : null;
-    return targetRow('pod', id, 'pod', rangeTo(origin, posOf(t)));
+    const row = targetRow('pod', id, 'pod', rangeTo(origin, posOf(t)));
+    row.units = podUnits(pod);
+    return row;
   }
   if (kind === 'landmark') {
     const id = typeof t.id === 'string' ? t.id : null;
@@ -375,7 +378,10 @@ function nearbyTargets(ctx, origin, current, group, quat) {
     if (!origin || !p) continue;
     const d2 = (p[0] - origin[0]) ** 2 + (p[1] - origin[1]) ** 2 + (p[2] - origin[2]) ** 2;
     if (d2 > range2) continue;
-    const row = targetRow('pod', null, podDisplayName(pod), Math.sqrt(d2));
+    // Issue #115: id matches the podCollected/podBlocked receipt; units lets
+    // a runner compare against cargo free space before flying to the pod.
+    const row = targetRow('pod', Object.hasOwn(pod, 'id') ? pod.id : null, podDisplayName(pod), Math.sqrt(d2));
+    row.units = podUnits(pod);
     const b = bearingOf(p);
     if (b) row.bearing = b;
     rows.push(row);

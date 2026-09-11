@@ -6,7 +6,7 @@
  * Adds the control lease, full station-service parity, capability discovery,
  * and the outcome ring vocabulary. Every in-repo caller migrated same commit.
  */
-import { SYSTEMS } from './state.js'; // data only: the authored system-id set
+import { COMMODITIES, SYSTEMS } from './state.js'; // data only: authored commodity keys and the system-id set
 
 /**
  * The same native Object.freeze, under one local name. This module freezes 160+
@@ -116,6 +116,7 @@ export const EVENT_TYPES = freeze([
   'mineBlocked',
   'podSpawned',
   'podCollected',
+  'podBlocked',
   'landmarkFound',
   'clueFound',
   'convergence',
@@ -154,6 +155,13 @@ const KEEP_RING = new Set([
   // capped by EVENT_CAP and enough newer retained traffic ages them out FIFO.
   'saveBlocked', 'docked', 'undocked',
   'sunKill',
+  // Scoop receipts (issue #115). For a pirate the scoop IS the payout, and
+  // it lands in the middle of a fight: the ring is saturated with npcHit /
+  // bodyHit / shieldDown / mineHit rows, so the ordinary-chatter podCollected
+  // was evicted on arrival and the agent never observed its own scoops.
+  // podBlocked is the previously silent capacity refusal; pods.js emits it
+  // once per pod per free-space value, so retention stays bounded.
+  'podCollected', 'podBlocked',
 ]);
 
 /**
@@ -205,7 +213,8 @@ const EVENT_FIELDS = freeze({
   mineHit: freeze(['asteroidId', 'count']),
   mineBlocked: freeze(['asteroidId', 'oreKey', 'hardness', 'needs', 'line']),
   podSpawned: freeze(['podId']),
-  podCollected: freeze(['podId']),
+  podCollected: freeze(['podId', 'units', 'commodity']),
+  podBlocked: freeze(['podId', 'units', 'free']),
   landmarkFound: freeze(['id', 'name', 'line']),
   clueFound: freeze(['id', 'line']),
   convergence: freeze(['id', 'line']),
@@ -239,6 +248,9 @@ const SHIP_DERIVE = new Set([
   'engineOut', 'npcHit', 'npcDisabled', 'npcDestroyed', 'npcSurrendered',
   'npcEscaped', 'npcSheltered',
 ]);
+
+/** Pod-carrying events: podId is derived from the live pod; the pod never copies. */
+const POD_DERIVE = new Set(['podSpawned', 'podCollected', 'podBlocked']);
 
 /** Repeat-collapse key per type (same key + type folds into count, newest kept). */
 const COLLAPSE_KEY = freeze({
@@ -476,7 +488,7 @@ export function sanitizeEvent(raw) {
       || '';
     if (nm) out.targetName = nm;
   }
-  if ((type === 'podSpawned' || type === 'podCollected')
+  if (POD_DERIVE.has(type)
     && raw.pod && typeof raw.pod === 'object' && Object.hasOwn(raw.pod, 'id')) {
     const pid = raw.pod.id;
     if (typeof pid === 'string' || typeof pid === 'number') out.podId = pid;
@@ -490,8 +502,7 @@ export function sanitizeEvent(raw) {
     // derived podId from a live pod object. A re-sanitized ring row carries a
     // plain podId and no pod, so an unconditional skip would drop it on the
     // observe() copy and the agent would lose pod identity it already had.
-    if (key === 'podId' && Object.hasOwn(out, key)
-      && (type === 'podSpawned' || type === 'podCollected')) continue; // derived above
+    if (key === 'podId' && Object.hasOwn(out, key) && POD_DERIVE.has(type)) continue; // derived above
     if (!Object.hasOwn(raw, key)) continue;
     if (key === 'intents') {
       out.intents = stringList(raw.intents);
@@ -510,6 +521,14 @@ export function sanitizeEvent(raw) {
     if (pv !== undefined) out[key] = pv;
   }
   if (ESCAPE_RECEIPTS.has(type)) boundEscapeReceipt(out);
+  if (type === 'podCollected' || type === 'podBlocked') {
+    // Finite non-negative unit counts only; a commodity must be a known key.
+    for (const key of ['units', 'free']) {
+      if (Object.hasOwn(out, key) && !(typeof out[key] === 'number' && Number.isFinite(out[key]) && out[key] >= 0)) delete out[key];
+    }
+    if (Object.hasOwn(out, 'commodity') && !(typeof out.commodity === 'string'
+      && (out.commodity === 'survivor' || Object.hasOwn(COMMODITIES, out.commodity)))) delete out.commodity;
+  }
   if (type === 'sunHeat' || type === 'sunKill') {
     // Fixed cause and finite numeric solar fields only; idempotent on observe copies.
     out.reason = 'sun';
@@ -709,7 +728,7 @@ export const ROLE_STATUS = freeze({
   ),
   explorer: role(
     ['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse'],
-    'accepted surveys and recoveries expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payment. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound, podCollected and jobState record outcomes',
+    'accepted surveys and recoveries expose jobs.active[].objective: named system, status/reason, and the flight marker range + ship-local bearing (x right, y up, nose -z); use setControl to fly within arrivalRange, then return to originSystem and dock for payment. No scanner required. Unaccepted sites/clues are not enumerated; landmarkFound/clueFound, podCollected and jobState record outcomes. podCollected { podId, units, commodity } and podBlocked { podId, units, free } are keep-class scoop receipts; targets.nearby pod rows carry id and units so a runner can see whether a pod fits the hold before flying to it',
   ),
   rescue: role(
     ['selectTarget', 'pulse', 'setControl', 'clearControl', 'openService', 'stationAction'],

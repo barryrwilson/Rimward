@@ -448,6 +448,54 @@ pin('manifest services explicit', ['market', 'jobs', 'bar', 'feed', 'repair', 'o
   .every((s) => manifest.services[s] && manifest.services[s].status === 'supported'));
 pin('manifest commands complete', COMMAND_NAMES.every((n) => manifest.commands[n]));
 
+// Scoop receipts (issue #115): podCollected is keep-class and carries the
+// merged units/commodity; podBlocked is the previously silent capacity refusal.
+pin('podBlocked is an authored event', EVENT_TYPES.includes('podBlocked') && manifest.events.includes('podBlocked'));
+const scoopEv = sanitizeEvent({ type: 'podCollected', t: 20, pod: { id: 'pod-4', contents: [{ commodity: 'rawOre', units: 6 }] }, units: 6, commodity: 'rawOre' });
+pin('podCollected carries units/commodity', !!(scoopEv && scoopEv.podId === 'pod-4' && scoopEv.units === 6
+  && scoopEv.commodity === 'rawOre' && !Object.hasOwn(scoopEv, 'pod')));
+pin('podCollected sanitize idempotent', JSON.stringify(sanitizeEvent(scoopEv)) === JSON.stringify(scoopEv));
+const survivorEv = sanitizeEvent({ type: 'podCollected', t: 21, pod: { id: 'pod-5' }, units: 1, commodity: 'survivor' });
+pin('podCollected survivor commodity kept', !!(survivorEv && survivorEv.commodity === 'survivor'));
+const badScoop = sanitizeEvent({ type: 'podCollected', t: 22, pod: { id: 'pod-6' }, units: -3, commodity: 'notACommodity' });
+pin('podCollected rejects bad units/commodity', !!(badScoop && badScoop.podId === 'pod-6'
+  && !Object.hasOwn(badScoop, 'units') && !Object.hasOwn(badScoop, 'commodity')));
+const blockedEv = sanitizeEvent({ type: 'podBlocked', t: 23, pod: { id: 'pod-7', mesh: {} }, units: 12, free: 6 });
+pin('podBlocked derives podId and keeps units/free', !!(blockedEv && blockedEv.podId === 'pod-7'
+  && blockedEv.units === 12 && blockedEv.free === 6 && !Object.hasOwn(blockedEv, 'pod')
+  && Object.keys(blockedEv).every((k) => typeof blockedEv[k] !== 'object')));
+pin('podBlocked sanitize idempotent', JSON.stringify(sanitizeEvent(blockedEv)) === JSON.stringify(blockedEv));
+pin('podBlocked rejects NaN free', !Object.hasOwn(sanitizeEvent({ type: 'podBlocked', t: 24, podId: 'p', units: 1, free: NaN }), 'free'));
+// The pirate case: a scoop lands mid-fight, when the ring is saturated with
+// keep/foldable combat rows. Before #115 the fresh row was the only non-keep
+// row present and was evicted on arrival.
+for (const raw of [scoopEv, blockedEv]) {
+  const ring = mineSaturate(raw.type);
+  for (let i = 0; i < 4; i++) pushRing(ring, { type: 'npcHit', t: 50 + i, targetId: `foe-${i}`, damage: 3 });
+  pushRing(ring, { type: 'shieldDown', t: 55, layer: 'screen', targetId: 'foe-0' });
+  pushRing(ring, sanitizeEvent(raw));
+  pin(`${raw.type} survives combat saturation`, ring.length === EVENT_CAP
+    && ring.some((e) => e && e.type === raw.type && e.podId === raw.podId));
+  for (let i = 0; i < 6; i++) {
+    pushRing(ring, { type: 'mineHit', t: 100 + i, asteroidId: `after-${i}` });
+    pushRing(ring, { type: 'playerHit', t: 100 + i, family: `fam-${i}`, damage: 2 });
+  }
+  pin(`${raw.type} survives later mixed traffic`, ring.some((e) => e && e.type === raw.type && e.podId === raw.podId));
+  for (let i = 0; i < EVENT_CAP + 4; i++) pushRing(ring, { type: 'shieldDown', t: 200 + i, layer: i, targetId: `s-${i}` });
+  pin(`${raw.type} eventually evicted FIFO`, ring.length === EVENT_CAP && !ring.some((e) => e && e.type === raw.type));
+  // Distinct pods never fold into one row; repeats stay bounded by the cap.
+  const flood = [];
+  for (let i = 0; i < 40; i++) pushRing(flood, sanitizeEvent({ ...raw, t: 300 + i, podId: `${raw.podId}-${i}` }));
+  pin(`${raw.type} flood bounded and uncollapsed`, flood.length === EVENT_CAP
+    && flood.every((e) => e && e.type === raw.type && !Object.hasOwn(e, 'count'))
+    && flood[flood.length - 1].t === 339);
+}
+// Ordinary chatter (podSpawned) is still evicted first, so scoop retention
+// cannot crowd the ring.
+const spawnRing = mineSaturate('spawn');
+pushRing(spawnRing, sanitizeEvent({ type: 'podSpawned', t: 90, pod: { id: 'pod-9' } }));
+pin('podSpawned stays evictable', spawnRing.length === EVENT_CAP && !spawnRing.some((e) => e && e.type === 'podSpawned'));
+
 if (fails) {
   console.log(`AGENT SCHEMA FAIL — ${fails}`);
   process.exit(1);
