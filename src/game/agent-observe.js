@@ -12,7 +12,7 @@ import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, res
 import { hailOffer, hailEncounterState } from './hail-offer.js';
 import { lookupLiveNavGate, lookupLiveNavHopKind, lookupNearestLiveGate } from '../systems/gate.js';
 import { losCloseRate } from './los-close.js';
-import { agentControlStatus } from '../systems/controls.js';
+import { agentControlStatus, agentFrameClock } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
@@ -919,6 +919,9 @@ export function buildObservation(ctx) {
     // A suspended tab can cross the combat wall deadline between frames.
     // Expire before copying ship holds, then use one coherent control snapshot.
     const control = agentControlStatus(ctx);
+    // Issue #121: wall age of the latest rendered frame, so a frozen t with
+    // paused false reads as a suspended loop rather than a crash.
+    const frame = agentFrameClock(ctx);
 
     const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
     const world = ctx.world && typeof ctx.world === 'object' ? ctx.world : {};
@@ -991,6 +994,7 @@ export function buildObservation(ctx) {
     return {
       v: VERSION,
       t: num(world.time, 0),
+      frameAgeMs: num(frame.frameAgeMs, 0),
       ok: true,
       error: '',
       agentOptIn: agent ? agent.optIn === true : false,
@@ -1004,6 +1008,7 @@ export function buildObservation(ctx) {
         docked,
         combat: flags.combat === true,
         paused: flags.paused === true,
+        suspended: frame.suspended === true,
         chartOpen: flags.chartOpen === true,
         hailOpen,
         berthOpen: flags.berthOpen === true,

@@ -155,6 +155,11 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
   ctx.elapsed += dt;
+  // Issue #121: stamp the frame so observe() can tell a suspended loop (a
+  // hidden pane renders nothing) from a paused or crashed simulation.
+  const frameWallMs = performance.now();
+  ctx.frameGapMs = ctx.frameWallMs > 0 ? frameWallMs - ctx.frameWallMs : 0;
+  ctx.frameWallMs = frameWallMs;
   // Title/models can also pause directly. Clear physical fire even when the
   // simulation (and therefore controls.update) is frozen by their ownership.
   if (ctx.flags.paused) clearPhysicalFire(ctx);

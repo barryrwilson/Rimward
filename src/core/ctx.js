@@ -355,6 +355,12 @@ export function createCtx({ scene, camera, renderer }) {
     },
 
     elapsed: 0, // real seconds since boot (visual animation only)
+    // Issue #121: wall clock (performance.now() ms) of the latest render-loop
+    // frame and the wall gap it closed. main.js is the only writer; the agent
+    // API reads them to publish observe().frameAgeMs / flags.suspended and to
+    // name a wall-deadline expiry crossed while no frame ran `suspended`.
+    frameWallMs: 0,
+    frameGapMs: 0,
   };
   return ctx;
 }

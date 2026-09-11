@@ -543,6 +543,13 @@ Play-technique lessons for the next agent run (not product bugs):
   contact with a faster hull, pass `burner: true` on a `retreat` / `break-off`
   intent ([issue #120](https://github.com/barryrwilson/Rimward/issues/120));
   `control.combat.burner.blocked` names why no burn is held.
+- In the desktop app a hidden Browser pane stops the render loop: `t` freezes
+  and `flags.paused` stays false. Since
+  [issue #121](https://github.com/barryrwilson/Rimward/issues/121) read
+  `observe().frameAgeMs` / `flags.suspended` to tell a stall from a crash; a
+  combat lease whose wall deadline passed during the stall ends with reason
+  `suspended`. Batch a `computer.screenshot` before each long poll so frames
+  keep running.
 - The raw `setControl` throttle is a **persistent ship setpoint**, not a lease
   value. Letting the lease expire, or calling `clearControl`, stops steering
   and fire but leaves the ship under thrust. To stop, request
