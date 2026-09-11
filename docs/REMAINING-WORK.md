@@ -18,6 +18,19 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #114](https://github.com/barryrwilson/Rimward/issues/114) — an agent that
+follows the documented stop handshake and then starts a fight must not sit
+still under fire while the view reports an intercept — is **implemented and
+locally verified on `claude/next-issue-dcb4e3`**, based on master `66b56f88`.
+An accepted `setCombatIntent` clears `input.fullStop` on acceptance, like
+`engageAutopilot`; a live combat lease still held by the latch publishes
+`control.combat.movementBlocked: 'full-stop'`. The fixture repro shows the
+apply path already cleared the latch on the first applied frame, so the
+playtest reading is most likely a frozen sim plus wall-clock expiry (#121,
+unchanged here). Focused suite (7 groups), release-focused 15/15, build,
+unchanged boot and the live browser check pass. Awaiting PR review and merge.
+See [the acceptance and evidence record](Issue114CombatFullStopEvidence.md).
+
 [Issue #115](https://github.com/barryrwilson/Rimward/issues/115) — a pirate
 never observes its own scoops, and an oversized pod is refused silently — is
 **implemented and locally verified on `claude/issue-work-4f8ccb`**, based on

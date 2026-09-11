@@ -808,9 +808,10 @@ export const COMMAND_SPECS = freeze({
       'match-speed', 'player-override', 'opt-in', 'helm', 'no-service', 'docked',
       'held', 'paused', 'jumping', 'overlay', 'dead']),
     fireBlocks: freeze(['', 'alignment', 'range', 'heat', 'weapon', 'reposition', 'break-off', 'retreat', 'obstructed', 'defense']),
+    movementBlocks: freeze(['', 'obstructed', 'engine', 'full-stop']),
     defense: freeze({ phases: freeze(['idle', 'evading', 'reengaging', 'break-off', 'completed']),
       tuning: 'hull <=40%, engine <=30% or engineOut, defenses <=10% latch withdrawal on threat; heat >=90% suppresses fire until <75%; evade 1..3s, 0.75s quiet, 1s reengagement; drift <=0.35s, owned burn <=0.5s with visible clearance and normal power/cooldown' }),
-    note: 'outcomes are control.state; terminalReasons are control.reason. Active combat.fireBlocked uses fireBlocks; after completion it copies control.reason.',
+    note: 'outcomes are control.state; terminalReasons are control.reason. Active combat.fireBlocked uses fireBlocks; after completion it copies control.reason. Active combat.movementBlocked uses movementBlocks. A combat intent is a thrust command: acceptance clears observe().flags.fullStop like engageAutopilot and engageAutomine, so a hull stopped by the setControl throttle-0 handshake moves on the first applied update; while a live combat lease is still held at rest by that latch, movementBlocked reads full-stop. Every release of the lease ends in a full stop.',
   }),
   clearControl: freeze({
     args: freeze({}),
