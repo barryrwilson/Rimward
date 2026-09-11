@@ -18,6 +18,7 @@ const checks = [
   ['hailIdentity', ['scripts/hail-identity-test.mjs']],
   ['combatIntent', ['--import', ...css, 'scripts/issue-61-combat-intent-test.mjs']],
   ['reactiveDefense', ['--import', ...css, 'scripts/issue-62-reactive-defense-test.mjs']],
+  ['combatFullStop', ['--import', ...css, 'scripts/issue-114-combat-full-stop-test.mjs']],
   ['agentApiHardening', ['scripts/agent-api-hardening-test.mjs']],
   ['wave30Hail', ['--import', ...css, 'scripts/wave30-hail-probe.mjs']],
   ['wave127And132', ['--import', ...css, 'scripts/wave127-132-probe.mjs']],

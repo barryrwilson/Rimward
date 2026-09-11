@@ -47,7 +47,11 @@ action, and `clearControl` is not one — clearing before an update applies the
 zero discards the request and the ship flies on. `flags.fullStop` says the
 manual setpoint is zero and will not creep, not that the ship is already
 stationary; for that, watch `ship.speed` fall. A later thrust command clears the
-latch, and so do `engageAutopilot`, `approachDock` and `engageAutomine`.
+latch, and so do `engageAutopilot`, `approachDock`, `engageAutomine` and an
+accepted `setCombatIntent` (issue #114: a combat intent is a thrust command).
+While a live combat lease is still held at rest by the latch,
+`control.combat.movementBlocked` reads `full-stop`, so the view never claims
+an intercept the hull is not flying.
 
 ```js
 const rw = window.rimward;
