@@ -30,8 +30,27 @@ its current clock plus the requested duration. Same-target/intent/weapon renewal
 preserves maneuver memory. Cancelled/expired sequences cannot be reused.
 
 The target must be the current live ship lock with a fresh matching HUD sample.
-A newly selected target may require one HUD frame before authorization is
-accepted. There is no automatic target cycling, acquisition or reacquisition.
+A newly selected target requires one **rendered** HUD frame before authorization
+is accepted: `hud.js` writes the aim digest once per rendered frame for the
+current lock and weapon group, and the digest is fresh for 0.25 s of simulation
+time and within 600 u. A hidden or suspended tab renders no frames, so the
+digest never freshens until the tab is visible again (see issue #121). Issue
+#118 split the old folded `target-lost` refusal into one token per
+precondition, each with a human-readable `detail` string on the receipt:
+
+| Token | Meaning | Runner action |
+|---|---|---|
+| `lock-kind` | the current lock is a rock, pod, station, gate or landmark | `selectTarget` the hull |
+| `stale-lock` | no current lock, or its id is not `targetId` | `selectTarget` the hull |
+| `target-lost` | the locked hull left the live roster | pick another prize |
+| `no-sample` | the hull is locked but the HUD digest is missing, for another lock or weapon group, older than 0.25 s, or beyond 600 u; `detail` names which | wait one rendered frame (`observe().t` advances), then retry |
+
+Argument refusals (`bad-args`, `bad-seq`, `bad-ttl`, `stale`) also carry
+`detail` naming the failing field, for example
+`defense must be 'evade'|'break-off'|'off'`. `token` stays the stable enum;
+`detail` is free text and is absent from accepted receipts and from refusals
+that come from the lifecycle gates. There is no automatic target cycling,
+acquisition or reacquisition.
 Attack intents bind the selected non-mining weapon, without switching equipment
 or subsystem aim. Empty/ineligible weapon groups refuse. Active MATCH, burner
 or drift refuses; the agent cannot quietly mutate a human flight setting.

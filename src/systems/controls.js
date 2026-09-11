@@ -221,6 +221,10 @@ let lease = null; // { seq, expiresAt, steerX, steerY, strafeX, strafeY, roll, t
 let leaseSeq = 0; // last accepted sequence; stale arrivals refused
 let leaseNote = { state: 'idle', seq: 0, reason: '', t: 0 }; // last terminal transition
 let combatNote = null;
+// Issue #118: human-readable context for the last argument or target refusal
+// returned by agentControlSet / agentCombatSet. The token stays the stable
+// enum; this string only says which field or which precondition failed.
+let refusalDetail = '';
 let combatRelease = () => {};
 let physicalHeld = () => false;
 
@@ -292,6 +296,44 @@ function leaseGateToken(ctx, combat = false) {
   }
 }
 
+/** Refuse with a stable token and record the human-readable reason. */
+function refuse(token, detail = '') {
+  refusalDetail = typeof detail === 'string' ? detail : '';
+  return token;
+}
+
+/** Detail recorded by the most recent agentControlSet / agentCombatSet refusal. */
+export function agentRefusalDetail() { return refusalDetail; }
+
+/**
+ * Issue #118: why combatSample() has no fresh HUD digest for a live ship lock.
+ * Mirrors the combatSample predicate order so the first failing clause names
+ * the cause. hud.js writes the digest once per rendered frame, so a new lock
+ * or weapon group needs one rendered frame; a suspended tab renders none.
+ */
+function sampleGap(ctx, target) {
+  const a = ctx.targets?.aim;
+  const frame = '; one rendered HUD frame is needed after selectTarget';
+  if (!a) return 'no HUD aim digest yet' + frame;
+  if (a.targetId !== target.id) {
+    return 'HUD aim digest is for ' + (a.targetId == null ? 'no ship' : String(a.targetId)) + ', not ' + String(target.id) + frame;
+  }
+  if (a.system !== ctx.world.currentSystem) return 'HUD aim digest is from another system' + frame;
+  if (a.weaponGroup !== ctx.input.weaponGroup) {
+    return 'HUD aim digest is for weapon group ' + String(a.weaponGroup) + ', not ' + String(ctx.input.weaponGroup)
+      + '; one rendered HUD frame is needed after setWeaponGroup';
+  }
+  const age = ctx.world.time - a.t;
+  if (!(age >= 0 && age <= 0.25)) {
+    return 'HUD aim digest age ' + (Number.isFinite(age) ? age.toFixed(2) + ' s' : 'unknown')
+      + ' exceeds 0.25 s; no frame rendered since, the simulation may be suspended';
+  }
+  if (!(a.dist > 0 && a.dist <= U.TARGET_RANGE)) {
+    return 'target range ' + (Number.isFinite(a.dist) ? String(Math.round(a.dist)) : '?') + ' u exceeds targeting range ' + U.TARGET_RANGE + ' u';
+  }
+  return 'HUD aim digest is incomplete';
+}
+
 function leaseAxis(spec, key) {
   if (!Object.hasOwn(spec, key) || spec[key] === undefined) return 0;
   const v = spec[key];
@@ -308,19 +350,20 @@ function leaseAxis(spec, key) {
 export function agentControlSet(ctx, spec) {
   try {
     expireCombat(ctx);
+    refusalDetail = '';
     if (!ctx || !ctx.input || typeof ctx.input !== 'object') return 'no-service';
-    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return 'bad-args';
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return refuse('bad-args', 'args must be a plain object');
     for (const k of Object.keys(spec)) {
-      if (!LEASE_KEYS.has(k)) return 'bad-args';
+      if (!LEASE_KEYS.has(k)) return refuse('bad-args', 'unknown argument ' + k);
     }
     const seq = spec.seq;
-    if (!Number.isSafeInteger(seq) || seq < 1) return 'bad-seq';
-    if (seq <= leaseSeq) return 'stale';
+    if (!Number.isSafeInteger(seq) || seq < 1) return refuse('bad-seq', 'seq must be a safe integer >= 1');
+    if (seq <= leaseSeq) return refuse('stale', 'seq must exceed ' + leaseSeq);
     let ttl = LEASE_TTL_DEFAULT;
     if (spec.ttl !== undefined) {
       ttl = spec.ttl;
       if (typeof ttl !== 'number' || !Number.isFinite(ttl) || ttl < LEASE_TTL_MIN || ttl > LEASE_TTL_MAX) {
-        return 'bad-ttl';
+        return refuse('bad-ttl', 'ttl must be a number in ' + LEASE_TTL_MIN + '..' + LEASE_TTL_MAX + ' seconds');
       }
     }
     const steerX = leaseAxis(spec, 'steerX');
@@ -329,12 +372,13 @@ export function agentControlSet(ctx, spec) {
     const strafeY = leaseAxis(spec, 'strafeY');
     const roll = leaseAxis(spec, 'roll');
     if (steerX === null || steerY === null || strafeX === null || strafeY === null || roll === null) {
-      return 'bad-axis';
+      const bad = ['steerX', 'steerY', 'strafeX', 'strafeY', 'roll'].find(k => leaseAxis(spec, k) === null);
+      return refuse('bad-axis', bad + ' must be a number in -1..1');
     }
     let throttle = null;
     if (spec.throttle !== undefined && spec.throttle !== null) {
       const t = spec.throttle;
-      if (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > 1) return 'bad-throttle';
+      if (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > 1) return refuse('bad-throttle', 'throttle must be a number in 0..1');
       throttle = t;
     }
     const gate = leaseGateToken(ctx);
@@ -361,17 +405,22 @@ export function agentControlSet(ctx, spec) {
 export function agentCombatSet(ctx, spec) {
   try {
     expireCombat(ctx);
+    refusalDetail = '';
     if (!ctx?.input || !ctx.ship?.object) return 'no-service';
-    if (!spec || typeof spec !== 'object' || Array.isArray(spec)
-        || Object.keys(spec).some(k => !['seq', 'ttl', 'targetId', 'intent', 'defense'].includes(k))
-        || !['seq', 'ttl', 'targetId', 'intent'].every(k => Object.hasOwn(spec, k))) return 'bad-args';
-    if (!Number.isSafeInteger(spec.seq) || spec.seq < 1) return 'bad-seq';
-    if (spec.seq <= leaseSeq) return 'stale';
-    if (!Number.isFinite(spec.ttl) || spec.ttl < 1 || spec.ttl > 60) return 'bad-ttl';
-    if (!['engage', 'disable', 'break-off', 'retreat'].includes(spec.intent)
-        || typeof spec.targetId !== 'string' || !spec.targetId) return 'bad-args';
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return refuse('bad-args', 'args must be a plain object');
+    const unknown = Object.keys(spec).find(k => !['seq', 'ttl', 'targetId', 'intent', 'defense'].includes(k));
+    if (unknown !== undefined) return refuse('bad-args', 'unknown argument ' + unknown);
+    const missing = ['seq', 'ttl', 'targetId', 'intent'].find(k => !Object.hasOwn(spec, k));
+    if (missing !== undefined) return refuse('bad-args', 'missing required argument ' + missing);
+    if (!Number.isSafeInteger(spec.seq) || spec.seq < 1) return refuse('bad-seq', 'seq must be a safe integer >= 1');
+    if (spec.seq <= leaseSeq) return refuse('stale', 'seq must exceed ' + leaseSeq);
+    if (!Number.isFinite(spec.ttl) || spec.ttl < 1 || spec.ttl > 60) return refuse('bad-ttl', 'ttl must be a number in 1..60 seconds');
+    if (!['engage', 'disable', 'break-off', 'retreat'].includes(spec.intent)) {
+      return refuse('bad-args', "intent must be 'engage'|'disable'|'break-off'|'retreat'");
+    }
+    if (typeof spec.targetId !== 'string' || !spec.targetId) return refuse('bad-args', 'targetId must be a non-empty string');
     const stance = Object.hasOwn(spec, 'defense') ? spec.defense : 'evade';
-    if (!['evade', 'break-off', 'off'].includes(stance)) return 'bad-args';
+    if (!['evade', 'break-off', 'off'].includes(stance)) return refuse('bad-args', "defense must be 'evade'|'break-off'|'off'");
     const prior = lease?.combat;
     const same = prior && prior.intent === spec.intent && prior.targetId === spec.targetId
       && prior.weaponGroup === ctx.input.weaponGroup && prior.defense.stance === stance;
@@ -384,9 +433,20 @@ export function agentCombatSet(ctx, spec) {
     if ((ctx.ship.burnerActive && !(same && prior.defense.burnerRequested && ctx.input.agentBurnerHeld))
         || (ctx.ship.driftActive && !(same && prior.defense.driftRequested && ctx.input.driftHeld))) return 'helm';
     if (lease && !lease.combat) return 'helm';
+    // Issue #118: one token per precondition, so a runner can tell "select
+    // the hull first" from "wait one HUD frame" from "the hull is gone".
     const target = ctx.targets?.current;
-    if (!target?.object || !target.state || target.lockKind || target.id !== spec.targetId
-        || !ctx.ships.includes(target) || !combatSample(ctx, target)) return 'target-lost';
+    if (target && (target.lockKind || (!target.object && !target.state))) {
+      return refuse('lock-kind', 'current lock is a ' + String(target.lockKind || 'rock') + ', not a ship; selectTarget the hull first');
+    }
+    if (!target) return refuse('stale-lock', 'no current lock; selectTarget ' + spec.targetId + ' first');
+    if (target.id !== spec.targetId) {
+      return refuse('stale-lock', 'current lock is ' + String(target.id) + ', not ' + spec.targetId + '; selectTarget it first');
+    }
+    if (!target.object || !target.state || !ctx.ships.includes(target)) {
+      return refuse('target-lost', 'hull ' + spec.targetId + ' is no longer in the live roster');
+    }
+    if (!combatSample(ctx, target)) return refuse('no-sample', sampleGap(ctx, target));
     if (target.state.destroyed) return 'target-destroyed';
     if (spec.intent === 'engage' || spec.intent === 'disable') {
       if (target.state.surrendered) return 'target-surrendered';

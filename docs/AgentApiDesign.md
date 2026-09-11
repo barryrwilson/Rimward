@@ -405,7 +405,7 @@ additive — no version bump, no persisted field.
 
 **Immediate-only feedback.** `notice` exists on the act receipt alone.
 `observe().lastIntent` keeps its existing shape (`name`, `ok`, `error`,
-`token`, `t`, optional `status`) and gains no notice field — a caller that
+`token`, `t`, optional `status`, optional `detail` since issue #118) and gains no notice field — a caller that
 wants the success line must read it from the receipt it was handed. On success
 `lastIntent.error` is now empty, matching `ok: true`. The docked panel's own
 `observe().station.view.notice` is unchanged and remains the place to
@@ -1084,7 +1084,7 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `clearControl` | — | `agentControlClear` | never; idempotent, and allowed while paused or berth-held. **For raw leases it does not brake; combat lease release applies full stop.** Handshake: `setControl { throttle: 0 }`, then confirm `ship.throttle === 0` **and** `flags.fullStop === true` before clearing; read `ship.speed` for actual rest (issue #103) |
 | `disable` | — | clear `optIn` | never (does not cancel AP) |
 
-`token` is the enum; `error` may copy live English (`AP_LINES`, `ui.notice`). Desk wrappers **do not** return `AP_LINES` keys; they set `token` from an authored desk map or `notice` as `error`.
+`token` is the enum; `error` may copy live English (`AP_LINES`, `ui.notice`). Desk wrappers **do not** return `AP_LINES` keys; they set `token` from an authored desk map or `notice` as `error`. Issue #118 adds an optional `detail` string to `setControl` / `setCombatIntent` refusals: the failing argument (`unknown argument burner`, `defense must be 'evade'|'break-off'|'off'`) or the unmet target precondition. `setCombatIntent` target refusals are split into `lock-kind` (rock/pod/station/gate lock), `stale-lock` (no lock or another id), `no-sample` (locked hull, HUD digest not fresh — one rendered frame after `selectTarget`/`setWeaponGroup`) and `target-lost` (hull left the roster). `detail` is absent when empty, so older callers see the same receipt shape; `lastIntent` mirrors it under the same rule. Not a version bump.
 
 **Attach point (PR2):** `initStation` assigns `ctx.stationDesk = { selectService, acceptJob, trade, repairAll, feed, undock, peekService }` synchronously, same as `ctx.models` (`modelsbrowser.js` **832–836**). `initHail` assigns `ctx.hailApi = { resolve, peek }`. Do **not** put functions on `ctx.station`. PR2 writes **helpers only** — no overlay CSS/HTML rewrite.
 

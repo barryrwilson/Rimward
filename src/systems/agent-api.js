@@ -18,7 +18,7 @@ import {
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { tryEngageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
-import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus } from './controls.js';
+import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus, agentRefusalDetail } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
 import {
   VERSION,
@@ -171,12 +171,14 @@ function remember(ctx, result) {
   };
   const status = str(result.status);
   if (status) last.status = status;
+  const detail = str(result.detail);
+  if (detail) last.detail = detail;
   agent.lastIntent = last;
   return result;
 }
 
-function fail(ctx, name, token, error) {
-  return remember(ctx, actResult({ ok: false, error: error ?? token, name, token }));
+function fail(ctx, name, token, error, detail = '') {
+  return remember(ctx, actResult({ ok: false, error: error ?? token, name, token, detail }));
 }
 
 function ok(ctx, name, notice = '') {
@@ -562,7 +564,9 @@ function dispatchLive(ctx, name, args) {
   }
   if (name === 'setControl' || name === 'setCombatIntent') {
     const token = name === 'setControl' ? agentControlSet(ctx, args) : agentCombatSet(ctx, args);
-    if (token) return fail(ctx, name, token);
+    // Issue #118: the token stays the enum; detail names the failing field or
+    // the precondition (no sample yet, wrong lock kind, stale lock).
+    if (token) return fail(ctx, name, token, undefined, agentRefusalDetail());
     const result = actResult({ ok: true, error: '', name, token: '', status: 'active' });
     const control = agentControlStatus(ctx);
     result.seq = control.seq; result.owner = control.owner;

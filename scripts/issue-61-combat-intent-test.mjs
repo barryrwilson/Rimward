@@ -182,7 +182,7 @@ test('no silent retarget, stale sensing or continued fire after target loss', ()
 test('new weapon authorization waits for that weapon HUD digest without reviving an old lead', () => {
   const f=fixture();f.start();f.tick();f.act('clearControl');
   f.ctx.input.weaponGroup=2;
-  assert.equal(f.start().token,'target-lost','previous weapon lead is not authorization');
+  assert.equal(f.start().token,'no-sample','previous weapon lead is not authorization (#118: split from target-lost)');
   assert.equal(f.ctx.input.fireHeld,false);f.sample();
   assert.equal(f.start().ok,true);f.tick();assert.equal(f.status().combat.weaponGroup,2);
 });

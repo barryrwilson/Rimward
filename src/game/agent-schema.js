@@ -425,6 +425,9 @@ export function copyLastIntent(raw) {
   };
   const status = src ? str(Object.hasOwn(src, 'status') ? src.status : '') : '';
   if (status) out.status = status;
+  // Issue #118: optional refusal context, mirrored from the act receipt.
+  const detail = src ? str(Object.hasOwn(src, 'detail') ? src.detail : '') : '';
+  if (detail) out.detail = detail;
   return out;
 }
 
@@ -438,8 +441,11 @@ export function noCtxObservation() {
  * to ride `error`, which read as a failure to every caller. Both are always
  * present strings, filtered through str(), so a receipt never inherits a value
  * from the preceding request. Not a version bump: `notice` is additive.
+ * `detail` (issue #118) is an optional human-readable refusal context — the
+ * failing argument name or the unmet precondition — present only when the
+ * refusing helper supplied one. `token` stays the stable enum.
  */
-export function actResult({ ok, error = '', name = '', token = '', status = '', reqId = '', t = null, notice = '' }) {
+export function actResult({ ok, error = '', name = '', token = '', status = '', reqId = '', t = null, notice = '', detail = '' }) {
   const out = {
     v: VERSION,
     ok: ok === true,
@@ -450,6 +456,8 @@ export function actResult({ ok, error = '', name = '', token = '', status = '', 
   };
   const st = str(status);
   if (st) out.status = st;
+  const why = str(detail);
+  if (why) out.detail = why;
   const id = str(reqId);
   if (id) out.reqId = id;
   if (typeof t === 'number' && Number.isFinite(t)) out.t = t;
@@ -777,7 +785,11 @@ export const COMMAND_SPECS = freeze({
     index: '1-based intent index (alternative)',
     expectedConversationId: 'optional observe().hail.conversationId; a replaced card refuses token stale',
   }, ['hail', 'combat']),
-  selectTarget: cmd({ id: 'optional nearby target id; omit to cycle' }, ['combat', 'miner', 'rescue']),
+  selectTarget: freeze({
+    args: freeze({ id: 'optional nearby target id; omit to cycle' }),
+    roles: freeze(['combat', 'miner', 'rescue']),
+    note: 'the lock moves on acceptance, but the HUD aim digest that setCombatIntent needs is written once per rendered frame: after selectTarget (or setWeaponGroup) wait one rendered HUD frame — read observe().t advancing — before setCombatIntent, or expect token no-sample. A hidden or suspended tab renders no frames, so the sample never freshens until it is visible again.',
+  }),
   pulse: cmd({ edge: "'dock'|'hail'|'target'|'reticleLock'" }, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
   afterburner: cmd({}, ['pilot', 'combat']),
   setWeaponGroup: cmd({ n: 'integer 1..5' }, ['combat', 'miner']),
@@ -811,9 +823,17 @@ export const COMMAND_SPECS = freeze({
       'jump', 'jumping', 'match-speed', 'player-override', 'hail', 'expired',
       'explicit', 'paused', 'held', 'berth', 'docked', 'overlay', 'dead', 'opt-in', 'helm', 'no-service']),
     refusalReasons: freeze(['bad-args', 'bad-seq', 'bad-ttl', 'stale', 'weapon',
+      'lock-kind', 'stale-lock', 'no-sample',
       'target-lost', 'target-destroyed', 'target-surrendered', 'target-disabled',
       'match-speed', 'player-override', 'opt-in', 'helm', 'no-service', 'docked',
       'held', 'paused', 'jumping', 'overlay', 'dead']),
+    targetRefusals: freeze({
+      'lock-kind': 'the current lock is a rock, pod, station, gate or landmark, not a ship; selectTarget the hull',
+      'stale-lock': 'there is no current lock, or its id is not targetId; selectTarget the hull',
+      'target-lost': 'the locked hull left the live roster',
+      'no-sample': 'the hull is locked but the HUD aim digest is not fresh: written once per rendered frame for the current lock and weapon group, valid for 0.25 s of simulation time and within 600 u; wait one rendered frame after selectTarget or setWeaponGroup (observe().t must advance); a suspended tab never freshens it',
+    }),
+    detail: 'refusal receipts for bad-args, bad-seq, bad-ttl, stale, bad-axis, bad-throttle and the four target refusals carry a human-readable detail string naming the failing argument or the unmet precondition; token is the enum, detail is free text',
     fireBlocks: freeze(['', 'alignment', 'range', 'heat', 'weapon', 'reposition', 'break-off', 'retreat', 'obstructed', 'defense']),
     movementBlocks: freeze(['', 'obstructed', 'engine', 'full-stop']),
     defense: freeze({ phases: freeze(['idle', 'evading', 'reengaging', 'break-off', 'completed']),
