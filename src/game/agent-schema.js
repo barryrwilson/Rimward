@@ -233,7 +233,7 @@ const EVENT_FIELDS = freeze({
   saveBlocked: freeze(['reason']),
   reticleLock: freeze(['hit']),
   playerDestroyed: freeze(['attackerId', 'attackerName']),
-  recovered: freeze(['source']),
+  recovered: freeze(['source', 'rewindSeconds', 'lostCargo', 'lostUnits']),
   bodyHit: freeze(['kind', 'speed', 'damage', 'count']),
   sunHeat: freeze(['reason', 'intensity', 'dps', 'count']),
   sunKill: freeze(['reason']),
@@ -531,7 +531,18 @@ export function sanitizeEvent(raw) {
       continue;
     }
     if (type === 'recovered' && key === 'source') {
-      if (raw.source === 'autosave' || raw.source === 'fresh') out.source = raw.source;
+      if (raw.source === 'autosave' || raw.source === 'berth' || raw.source === 'fresh') out.source = raw.source;
+      continue;
+    }
+    if (type === 'recovered' && key === 'lostCargo') {
+      // Issue #125: '<units> <commodityKey>' rows only; anything else drops.
+      const rows = stringList(raw.lostCargo).filter((s) => /^[1-9][0-9]{0,5} [A-Za-z][A-Za-z0-9_]{0,63}$/.test(s));
+      if (rows.length) out.lostCargo = rows.slice(0, 16);
+      continue;
+    }
+    if (type === 'recovered' && (key === 'rewindSeconds' || key === 'lostUnits')) {
+      const n = primitiveValue(raw[key]);
+      if (typeof n === 'number' && Number.isFinite(n) && n >= 0) out[key] = Math.floor(n);
       continue;
     }
     const pv = primitiveValue(raw[key]);

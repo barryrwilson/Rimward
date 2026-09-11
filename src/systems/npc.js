@@ -1888,7 +1888,12 @@ export function isScratched(live) {
 
 /**
  * Whether this hull may lock the player as a hunt target.
- * Traders and miners never. Patrols only if the player scratched them or standing ≤ -10.
+ * Traders and miners never. Patrols only if the player scratched them or
+ * standing ≤ -10 with the patrol's own faction — and (issue #125) standing
+ * law is LOCAL: it bites only in a system that faction holds. A foreign
+ * patrol in an old bank (a Veridian heavy in Freehold Drift) can still be
+ * provoked by a scratch, but a Marked player's Veridian board does not
+ * follow them into Freehold.
  * An NPC scratch does not authorize a player hunt. Pirates/aces remain
  * eligible; interest/retaliation still decide.
  */
@@ -1896,11 +1901,24 @@ function isCivilianRole(role) {
   return role === 'trader' || role === 'miner';
 }
 
+/**
+ * Issue #125: true when the current system is KNOWN to run another faction's
+ * law than `fac`. An unknown system (no def, no faction) is not foreign — the
+ * pre-#125 standing rule stands there, so a bare fixture ctx keeps its law.
+ */
+function foreignLaw(ctx, fac) {
+  const sys = ctx?.world?.currentSystem;
+  const def = ctx?.systems && sys != null ? ctx.systems[sys] : null;
+  const local = def && typeof def.faction === 'string' ? def.faction : null;
+  return local !== null && fac != null && fac !== local;
+}
+
 export function mayHuntPlayer(ctx, live) {
   const role = live?.ai?.role ?? live?.role ?? live?.record?.role;
   if (isCivilianRole(role)) return false;
   if (role === 'patrol') {
-    if (standingOf(ctx, live) <= HOSTILE_STANDING) return true;
+    const fac = live?.record?.faction ?? live?.state?.faction;
+    if (standingOf(ctx, live) <= HOSTILE_STANDING && !foreignLaw(ctx, fac)) return true;
     return isScratched(live) && lastAttackerOf(live) === 'player';
   }
   return role === 'pirate' || role === 'ace';

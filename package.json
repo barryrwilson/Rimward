@@ -39,6 +39,7 @@
     "test:player-terms": "node --import ./scripts/with-css-stub.mjs scripts/issue-122-player-terms-test.mjs",
     "test:shared-lane": "node --import ./scripts/with-css-stub.mjs scripts/issue-123-shared-lane-test.mjs",
     "test:fence-marker": "node --import ./scripts/with-css-stub.mjs scripts/issue-124-fence-marker-test.mjs",
+    "test:death-recovery": "node --import ./scripts/with-css-stub.mjs scripts/issue-125-death-recovery-test.mjs",
     "test:pod-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-115-pod-receipts-test.mjs",
     "test:miner-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-119-miner-receipts-test.mjs",
     "test:refusal-tokens": "node --import ./scripts/with-css-stub.mjs scripts/issue-118-refusal-tokens-test.mjs",
