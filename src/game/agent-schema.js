@@ -197,7 +197,9 @@ const EVENT_FIELDS = freeze({
   automineDisengaged: freeze(['reason']),
   jumpRequested: freeze(['to']),
   systemLoaded: freeze(['to']),
-  playerHit: freeze(['damage', 'family', 'fromAft', 'count']),
+  // Issue #117: attackerId/attackerName are primitives derived at the emit
+  // site under the bracket masking law; absent for impact/solar damage.
+  playerHit: freeze(['damage', 'family', 'fromAft', 'count', 'attackerId', 'attackerName']),
   playerFire: freeze(['weapon', 'count']),
   shieldDown: freeze(['layer', 'player', 'actor', 'targetId']),
   engineOut: freeze(['player', 'targetId', 'targetName']),
@@ -230,7 +232,7 @@ const EVENT_FIELDS = freeze({
   originChosen: freeze(['id', 'line']),
   saveBlocked: freeze(['reason']),
   reticleLock: freeze(['hit']),
-  playerDestroyed: freeze([]),
+  playerDestroyed: freeze(['attackerId', 'attackerName']),
   recovered: freeze(['source']),
   bodyHit: freeze(['kind', 'speed', 'damage', 'count']),
   sunHeat: freeze(['reason', 'intensity', 'dps', 'count']),
@@ -536,6 +538,7 @@ export function sanitizeEvent(raw) {
     if (pv !== undefined) out[key] = pv;
   }
   if (ESCAPE_RECEIPTS.has(type)) boundEscapeReceipt(out);
+  if (type === 'playerHit' || type === 'playerDestroyed') boundAttacker(out);
   if (type === 'podCollected' || type === 'podBlocked') {
     // Finite non-negative unit counts only; a commodity must be a known key.
     for (const key of ['units', 'free']) {
@@ -558,6 +561,19 @@ export function sanitizeEvent(raw) {
 }
 
 const ESCAPE_RECEIPTS = new Set(['npcEscaped', 'npcSheltered']);
+
+/**
+ * Issue #117: attacker identity fails closed. An id must be a string (≤ 64)
+ * or a number; a name must be a non-empty string (≤ 40) and never travels
+ * without its id. Idempotent on observe() copies.
+ */
+function boundAttacker(out) {
+  const id = out.attackerId;
+  const idOk = (typeof id === 'string' && id.length > 0 && id.length <= 64) || (typeof id === 'number' && Number.isFinite(id));
+  if (!idOk) { delete out.attackerId; delete out.attackerName; return; }
+  const nm = out.attackerName;
+  if (typeof nm !== 'string' || !nm || nm.length > 40) delete out.attackerName;
+}
 /** The authored escape vocabulary — the same two words for kind and reason. */
 const ESCAPE_WORDS = new Set(['gate', 'station']);
 const ESCAPE_ID_MAX = 64;
@@ -838,7 +854,7 @@ export const COMMAND_SPECS = freeze({
     movementBlocks: freeze(['', 'obstructed', 'engine', 'full-stop']),
     defense: freeze({ phases: freeze(['idle', 'evading', 'reengaging', 'break-off', 'completed']),
       tuning: 'hull <=40%, engine <=30% or engineOut, defenses <=10% latch withdrawal on threat; heat >=90% suppresses fire until <75%; evade 1..3s, 0.75s quiet, 1s reengagement; drift <=0.35s, owned burn <=0.5s with visible clearance and normal power/cooldown' }),
-    note: 'outcomes are control.state; terminalReasons are control.reason. Active combat.fireBlocked uses fireBlocks; after completion it copies control.reason. Active combat.movementBlocked uses movementBlocks. A combat intent is a thrust command: acceptance clears observe().flags.fullStop like engageAutopilot and engageAutomine, so a hull stopped by the setControl throttle-0 handshake moves on the first applied update; while a live combat lease is still held at rest by that latch, movementBlocked reads full-stop. Every release of the lease ends in a full stop.',
+    note: 'outcomes are control.state; terminalReasons are control.reason. Active combat.fireBlocked uses fireBlocks; after completion it copies control.reason. Active combat.movementBlocked uses movementBlocks. A combat intent is a thrust command: acceptance clears observe().flags.fullStop like engageAutopilot and engageAutomine, so a hull stopped by the setControl throttle-0 handshake moves on the first applied update; while a live combat lease is still held at rest by that latch, movementBlocked reads full-stop. Every release of the lease ends in a full stop. Issue #117: playerHit rows carry attackerId/attackerName for a projectile from an NPC hull (a masked Q-ship publishes its cover name until the Mk II eye; impact and solar damage carry none); playerHit still folds per family, so the newest row names the latest shooter. playerDestroyed carries the last attacker of that life the same way.',
   }),
   clearControl: freeze({
     args: freeze({}),

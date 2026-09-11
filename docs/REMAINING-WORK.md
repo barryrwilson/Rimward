@@ -18,6 +18,22 @@ is not fresh QA, release readiness, or deployment evidence.
 
 ## Active outcomes
 
+[Issue #117](https://github.com/barryrwilson/Rimward/issues/117) —
+`playerHit` and `playerDestroyed` name no attacker — is **implemented and
+locally verified on `claude/next-issue-57e919`**, based on master `270af60d`.
+A `playerHit` from an NPC projectile now carries `attackerId`/`attackerName`
+as primitives derived at the emit site through the existing
+`escapePublicIdentity` bracket law (a masked Q-ship publishes its cover name
+until the Mk II eye pierces it; impact and solar rows carry none).
+`playerDestroyed` carries the last NPC hull that hit that life, even when the
+killing blow is an impact, and the record clears on the receipt and on
+`systemLoaded`. `sanitizeEvent` fails closed on malformed attacker fields.
+Fold rules, keep class, the ring cap, combat behaviour and the API version are
+unchanged. Build, unchanged boot, the new focused suite
+(`npm run test:attacker-identity`), the schema, hardening and agent
+regressions pass, and the live browser check passes with no console errors.
+See [the acceptance and evidence record](Issue117AttackerIdentityEvidence.md).
+
 [Issue #118](https://github.com/barryrwilson/Rimward/issues/118) —
 `setCombatIntent` refuses `target-lost` on a fresh lock and refusal tokens
 carry no detail — is **implemented and locally verified on
