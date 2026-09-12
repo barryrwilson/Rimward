@@ -1266,7 +1266,10 @@ export function initShip(ctx) {
         fleshMat.emissiveIntensity += 0.6 * Math.min(thrust, 1);
         underLight.intensity = 5 + thrust * 22 + heart * 5;
       } else if (rig.kind === 'built' && rig.plated) {
-        animateShipMesh(rig.plated, t, ctx.settings?.reducedMotion === true, camera);
+        // Built hull: LOD + the velocity-driven drive plume (thruster-fx.js).
+        // ship.speed is the current velocity magnitude, so the afterburner and
+        // a vector-hold drift both read truthfully off the plume.
+        animateShipMesh(rig.plated, t, ctx.settings?.reducedMotion === true, camera, ship.speed);
       }
 
       // Idle hover: gentle bob + sway while (nearly) stationary, fading out

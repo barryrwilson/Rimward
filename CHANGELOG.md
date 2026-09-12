@@ -4,6 +4,15 @@
 
 Post-v0.1.0 work. These notes are not part of the published v0.1.0 GitHub Release.
 
+### Presentation
+
+- Built hulls now trail a velocity-driven drive plume behind their engine
+  flare: hidden at rest, growing toward class cruise speed, hotter under an
+  afterburner or a burn, in the faction's glow colour. Beautiful Ones (organic)
+  hulls and the player's living hull keep their bioluminescent surge, and the
+  hull-less Unknowables fields gain no nozzle either.
+  `src/systems/thruster-fx.js`; pinned in `test:boot`.
+
 ### Fixes
 
 - Defer death recovery requested during pause until the simulation resumes,

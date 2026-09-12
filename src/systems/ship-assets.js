@@ -10,6 +10,7 @@ import {
   classCruise,
 } from '../game/living-cadence.js';
 import { gaitFor } from '../game/living-gait.js';
+import { attachThruster, updateThruster, releaseThruster } from './thruster-fx.js';
 
 export { SWIM_IDLE_HZ, SWIM_CRUISE_HZ };
 
@@ -458,13 +459,15 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   root.add(lod);
   const glow = new THREE.Group();
   glow.name = 'engine-effect';
+  let bead = engine;
   if (engine) {
     // The drive flare is additive light, not an opaque bead. RIMWARD_FIELD is the
     // additive slot; the opaque emissive material rendered it as a solid pearl.
     engine.material = engine.geometry?.attributes.color ? boundMaterials.fieldVC : boundMaterials.field;
     glow.add(engine);
   } else {
-    glow.add(new THREE.Mesh(glowGeometry, boundMaterials.field));
+    bead = new THREE.Mesh(glowGeometry, boundMaterials.field);
+    glow.add(bead);
   }
   root.add(glow);
   root.userData.proxy = proxyFor(visual);
@@ -474,6 +477,10 @@ export function buildShipAsset(classKey, faction, role = 'trader') {
   root.userData.radius = new THREE.Box3().setFromObject(visual).getBoundingSphere(new THREE.Sphere()).radius;
   root.userData.loadedLods = new Set(['lod0']);
   root.userData.classKey = resolvedClass;
+  // Velocity-driven drive plume behind the flare (thruster-fx.js). Built hulls
+  // only: the Beautiful Ones swim (no nozzle) and the Unknowables are light
+  // fields (no hull), so attach is a no-op for both.
+  attachThruster(root, resolvedFaction, resolvedClass, glow, bead);
   const idle = template.animations.find((clip) => clip.name === 'idle');
   if (idle) {
     const mixer = new THREE.AnimationMixer(visual);
@@ -518,6 +525,7 @@ export function releaseShipAsset(root) {
       for (const material of privateMaterials) material.dispose();
       privateMaterials.clear();
     }
+    releaseThruster(root); // plume materials are per instance too
   }
   const key = root.userData.assetInstanceKey;
   if (!key) return;
@@ -533,6 +541,7 @@ export function updateShipAsset(object, elapsed, reducedMotion = false, camera, 
     updateDistanceBands(object, camera);
     object.userData.lod?.update(camera);
   }
+  updateThruster(object, speed, elapsed, reducedMotion); // built hulls only (no-op otherwise)
   const uniforms = object.userData.swimUniforms;
   if (!uniforms) return;
   const spd = Number.isFinite(speed) ? Math.max(speed, 0) : 0;

@@ -5733,13 +5733,30 @@ const needFree26 = (ferryJob26?.need ?? 4) + (haulJob26?.need ?? 5);
 dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
 let sellGuard26 = 60;
 while (ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) < needFree26 && sellGuard26-- > 0) {
-  const held = ctx.cargo.find((c) => c.units > 0 && COMMODITIES[c.commodity]?.legal);
-  if (!held) break;
-  const sellBtn26 = marketTradeButton(COMMODITIES[held.commodity].name, '−1');
+  // Skip rows this market does not list (raw ore at a non-refinery) instead
+  // of stopping at the first one — a listed row further down still sells.
+  let sellBtn26 = null;
+  for (const held of ctx.cargo) {
+    if (!(held.units > 0 && COMMODITIES[held.commodity]?.legal)) continue;
+    sellBtn26 = marketTradeButton(COMMODITIES[held.commodity].name, '−1');
+    if (sellBtn26) break;
+  }
   if (!sellBtn26) break;
   sellBtn26.click(); // real path: tryTrade(commodity, 1, false) — re-found per click (each trade re-renders)
 }
 dispatchKey('Escape'); // market → services
+// privilegedFixture (the wave-127 cargo-pin convention): what the market will
+// not take stays aboard — illegal lots, a rescued survivor, raw ore at a
+// station with no ore desk. Those rows depend on which seeded encounters ran
+// above, so any unrelated change that shifts the seeded RNG stream can leave
+// the hold too full for the 4 + 5 and fail the quote==pay pins below for a
+// reason they do not test. Log what was left, then drop it so the ferry and
+// haul contracts get the room the scenario assumes.
+const stuck26 = ctx.cargo.filter((c) => c.units > 0).map((c) => `${c.commodity}:${c.units}`);
+if (ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) < needFree26) {
+  console.log('wave26 hold fixture: unsellable rows dropped', JSON.stringify(stuck26));
+  ctx.cargo.length = 0;
+}
 const freeCap26 = ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0);
 const provAtLaneStart26 = holdCount('provisions');
 // One tick-free window: the board render, both quote parses, and both real
@@ -27254,6 +27271,93 @@ removeLiveShip(w42indyCtx, w42indy);
 
   console.log('issue70 ferry duplicate accept:', JSON.stringify(r70));
   if (!Object.values(r70).every(Boolean)) { console.log('ISSUE70 FERRY DUPLICATE ACCEPT FAIL'); errors++; }
+}
+
+// ---- Thruster FX: velocity-driven drive plume on built hulls ---------------
+// thruster-fx.js hangs an additive core+halo cone pair behind the
+// RIMWARD_ENGINE_GLOW bead of every BUILT hull (attach in buildShipAsset,
+// drive in updateShipAsset from the caller's speed). Organic Beautiful hulls
+// and hull-less Unknowables fields carry no plume. The plume never touches glow.scale / glow.visible (the
+// wave-39 npc.js glow pins above still hold), grows with speed toward
+// classCruise, hides at rest, and its per-instance materials are disposed by
+// releaseShipAsset.
+{
+  const { updateShipAsset: thrUpdate } = await import('../src/systems/ship-assets.js');
+  const { thrusterFaction: thrFaction, THRUSTER_EXCLUDED_FACTIONS: thrExcluded } = await import('../src/systems/thruster-fx.js');
+  const { classCruise: thrCruise } = await import('../src/game/living-cadence.js');
+  const thrSrcShip = readFileSync(new URL('../src/systems/ship.js', import.meta.url), 'utf8');
+  const settle = (root, speed, from, steps = 60, rm = false) => {
+    for (let i = 1; i <= steps; i++) thrUpdate(root, from + i / 60, rm, null, speed);
+    return from + steps / 60;
+  };
+  const built = buildShipAsset('cutter', 'redledger', 'pirate');
+  const heavy = buildShipAsset('freighter', 'freehold', 'trader');
+  const organic = buildShipAsset('light', 'beautiful', 'trader');
+  const th = built.userData.thruster;
+  const glow = built.userData.glow;
+  const checks = {};
+  try {
+    checks.builtHasPlume = !!th && th.core?.isMesh === true && th.halo?.isMesh === true
+      && th.restScale?.isVector3 === true && th.restScale.x > 0 && th.restScale.x < 1
+      && th.core.parent === glow && th.halo.parent === glow && th.bead?.parent === glow
+      && th.core.material !== th.halo.material;
+    checks.heavyHasPlume = !!heavy.userData.thruster;
+    checks.organicHasNone = !organic.userData.thruster
+      && thrExcluded.includes('beautiful') && !thrFaction('beautiful') && thrFaction('ferrous')
+      && organic.userData.glow.children.every((c) => !/THRUSTER/.test(c.name));
+    checks.unknowablesHaveNone = thrExcluded.includes('unknowables') && !thrFaction('unknowables');
+    checks.additiveNoDepthWrite = [th.core, th.halo].every((m) =>
+      m.material.blending === THREE.AdditiveBlending && m.material.depthWrite === false && m.material.transparent === true);
+    // Rest: hidden plume, bead at rest scale, glow group untouched.
+    let t = settle(built, 0, 0);
+    checks.restHidden = th.core.visible === false && th.halo.visible === false
+      && th.bead.scale.x === th.restScale.x && glow.scale.x === 1 && glow.visible === true;
+    // Cruise: visible, stretched, bead swollen; glow group still untouched.
+    const cruise = thrCruise('cutter');
+    t = settle(built, cruise, t);
+    const cruiseLen = th.halo.scale.z;
+    checks.cruiseLit = th.core.visible === true && th.halo.visible === true
+      && cruiseLen > 0.5 * built.userData.radius && th.halo.scale.z > th.core.scale.z
+      && th.bead.scale.x > 1.5 * th.restScale.x && th.halo.material.uniforms.uOpacity.value > 0
+      && glow.scale.x === 1 && glow.visible === true;
+    // Half cruise sits between rest and cruise; burn (2× cruise) is longer than cruise but capped.
+    t = settle(built, cruise * 0.5, t);
+    const halfLen = th.halo.scale.z;
+    t = settle(built, cruise * 2, t);
+    const burnLen = th.halo.scale.z;
+    checks.monotone = halfLen > 0 && halfLen < cruiseLen && burnLen > cruiseLen
+      && burnLen < cruiseLen * 2;
+    // Ease: one frame after a throttle jump the plume is not yet at target.
+    t = settle(built, 0, t);
+    thrUpdate(built, t + 1 / 60, false, null, cruise);
+    checks.eased = th.halo.scale.z > 0 && th.halo.scale.z < cruiseLen * 0.5;
+    t += 1 / 60;
+    // reducedMotion: still speed-scaled, but frozen (no flicker) frame to frame.
+    t = settle(built, cruise, t, 120, true);
+    const rm1 = th.halo.scale.z;
+    thrUpdate(built, t + 1 / 60, true, null, cruise);
+    thrUpdate(built, t + 2 / 60, true, null, cruise);
+    checks.reducedMotionStill = rm1 > 0 && th.halo.scale.z === rm1 && th.core.visible === true;
+    // Back to rest: hides again; NaN / negative speed reads as rest.
+    t = settle(built, 0, t + 2 / 60);
+    checks.restAgain = th.core.visible === false;
+    t = settle(built, NaN, t);
+    thrUpdate(built, t + 1 / 60, false, null, -50);
+    checks.badSpeedIsRest = th.core.visible === false && th.bead.scale.x === th.restScale.x;
+    // Organic update path is unchanged by the thruster (swim still driven).
+    thrUpdate(organic, 1, false, null, thrCruise('light'));
+    checks.organicSwims = organic.userData.swimUniforms.uSwimHz.value > 0.5;
+    // Player built rig passes ship.speed into animateShipMesh.
+    checks.playerWired = /animateShipMesh\(rig\.plated, t, ctx\.settings\?\.reducedMotion === true, camera, ship\.speed\)/.test(thrSrcShip);
+  } finally {
+    const coreMat = th?.core.material;
+    releaseShipAsset(built);
+    releaseShipAsset(heavy);
+    releaseShipAsset(organic);
+    checks.released = built.userData.thruster === null && !!coreMat;
+  }
+  console.log('thruster fx:', JSON.stringify(checks));
+  if (!Object.values(checks).every(Boolean)) { console.log('THRUSTER FX FAIL'); errors++; }
 }
 
 // ---- Waves 141+142: agent play parity v2 + mission-family parity -----------

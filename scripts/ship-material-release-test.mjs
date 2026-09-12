@@ -178,11 +178,21 @@ try {
   const shipF = buildShipAsset('light', 'independent', 'trader');
   holder.add(shipF);
   await waitFor(() => shipF.userData.loadedLods.size === 3, 'ordinary faction lower LODs');
-  const sharedF = attachedMaterials(shipF);
+  // The thruster plume (thruster-fx.js) is the one instance-owned material
+  // pair on a built hull: its opacity animates per ship, so it is never
+  // shared and releaseShipAsset must dispose it — everything else attached
+  // to the hull is a shared base material.
+  const isPlume = (material) => material.name === 'RIMWARD_THRUSTER_PLUME';
+  const allF = attachedMaterials(shipF);
+  const plumeF = allF.filter(isPlume);
+  const sharedF = allF.filter((material) => !isPlume(material));
   pin('ordinary faction ship owns no private clone set', !shipF.userData.privateMaterials);
+  pin('ordinary faction ship carries its plume material pair', plumeF.length === 2 && sharedF.length > 0);
   releaseShipAsset(shipF);
   pin('ordinary faction release disposes no shared materials',
     sharedF.every((material) => disposesOf(materialDisposes, material) === 0));
+  pin('ordinary faction release disposes its plume materials exactly once',
+    plumeF.every((material) => disposesOf(materialDisposes, material) === 1));
   const shipG = buildShipAsset('light', 'independent', 'trader');
   holder.add(shipG);
   pin('ordinary faction shared materials still usable', !!shipG.userData.shipVisual);

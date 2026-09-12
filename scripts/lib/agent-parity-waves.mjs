@@ -553,8 +553,16 @@ export async function runAgentParityWave141(deps) {
     // (pods.js), and the fights above leave the demand-staging provisions plus
     // any magneted ore aboard.
     ctx.cargo.length = 0;
+    // privilegedFixture: the pod sits 25 u off the NOSE, not 25 u along world
+    // +X. The hull leaves the patrol fight above at ~60 u/s on whatever
+    // heading that seeded fight ended on; a world-axis drop can land the pod
+    // abeam, inside the hull's turn radius, and the bearing chase below then
+    // orbits it for the whole window without ever closing (seen when an
+    // unrelated change shifted the seeded RNG stream). The scoop, the bearing
+    // steer, the dock and the People-desk return are unchanged.
     const pp = ctx.ship.object.position;
-    const pod141 = spawnSurvivorPod(ctx, new THREE.Vector3(pp.x + 25, pp.y, pp.z), { faction: 'freehold', source: 'other' });
+    const nose141 = new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.ship.object.quaternion);
+    const pod141 = spawnSurvivorPod(ctx, new THREE.Vector3(pp.x, pp.y, pp.z).addScaledVector(nose141, 25), { faction: 'freehold', source: 'other' });
     tick(2, 'w141 pod spawn');
     let scooped = false;
     for (let i = 0; i < 60 * 20 && !scooped; i++) {
