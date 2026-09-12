@@ -254,6 +254,30 @@ export function animateShipMesh(object, elapsed, reducedMotion = false, camera, 
 }
 
 // ---------- AI construction ----------
+/**
+ * Issue #139: a station-anchored loiter path keeps clear of the docking
+ * lane. The full ring around the station started its first waypoint on the
+ * +X axis, and its 80–150 u band straddles the dock stage point (+135 u) and
+ * the whole corridor (+40..+135 u) the player's approach and outward launch
+ * fly. A loiterer turning at that waypoint hit the hull parked at the stage
+ * entry and cancelled the approach with `impact` (the intermittent CI
+ * collision). The path is now a sweep along the far side of the station:
+ * four points on the −X half (90°..270°), listed out and back so the ordinary
+ * wrap-around follower ping-pongs instead of closing the loop through the
+ * lane. Every point and every chord stays at x ≤ center.x.
+ */
+const STATION_ARC_ANGLES = [90, 150, 210, 270, 210, 150];
+export function stationLoiterWaypoints(center, radius) {
+  return STATION_ARC_ANGLES.map((deg) => {
+    const a = (deg * Math.PI) / 180;
+    return new THREE.Vector3(
+      center.x + Math.cos(a) * radius,
+      center.y + (Math.random() - 0.5) * 24,
+      center.z + Math.sin(a) * radius,
+    );
+  });
+}
+
 function ring(center, radius, n) {
   const pts = [];
   for (let i = 0; i < n; i++) {
@@ -337,7 +361,7 @@ function makeAi(ctx, record, startPos) {
   } else if (mode === 'route' || mode === 'mine') {
     ai.waypoints = ring(startPos, 90, 3);
   } else {
-    ai.waypoints = ring(record.anchor ?? ctx.config.world.stationPosition, 80 + Math.random() * 70, 4);
+    ai.waypoints = stationLoiterWaypoints(record.anchor ?? ctx.config.world.stationPosition, 80 + Math.random() * 70);
   }
   if (escaping) {
     const plan = readEscape(record);
