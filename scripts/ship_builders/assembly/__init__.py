@@ -16,8 +16,8 @@ empty truss gap, Ledger salvage booms, the Gilded lapped leaf, Beautiful
 grown flesh, Unknowables lace and Congregation's tight reliquary stack
 (Assembly cans sit apart on a visible spine, and the dish is the tell).
 
-Concept sheet: the owner-approved 2026-09 concept (hero frigate, aft
-view, module callout, fleet line-up). The old 08-assembly-ship.png plate
+Concept sheet: docs/FactionExamples/08-assembly-ship-concept-2026-09.png
+(owner-approved: hero frigate, aft view, module callout, fleet line-up). The old 08-assembly-ship.png plate
 is superseded for ships; its palette (off-white, charcoal, faded orange,
 teal) is unchanged.
 
