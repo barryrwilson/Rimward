@@ -2,12 +2,13 @@
 
 [Issue #139](https://github.com/barryrwilson/Rimward/issues/139).
 
-**Status: implementation and local verification COMPLETE, AWAITING PR REVIEW
-AND MERGE.** The runtime change is implemented on `claude/issue-139` from
-master `0251f4a6`. Build, unchanged boot, the new focused suite, the
-release-focused runner and the repository's own headless-Chrome bridge smoke
-(the CI flow that recorded the failure) pass locally on 2026-09-11. No
-independent QA, merge, release or deployment is claimed.
+**Status: MERGED** in [PR #142](https://github.com/barryrwilson/Rimward/pull/142)
+on 2026-09-12 (master `5e0ff560`). The runtime change was implemented on
+`claude/issue-139` from master `0251f4a6`. Build, unchanged boot, the new
+focused suite, the release-focused runner and ten consecutive runs of the
+repository's own headless-Chrome bridge smoke (the CI flow that recorded the
+failure) passed locally before merge. No independent QA, release or
+deployment is claimed.
 
 ## Reproduction record
 

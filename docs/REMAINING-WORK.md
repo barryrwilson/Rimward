@@ -1,10 +1,10 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-09-11. Reconciled against master
-`33bc95f4907184d1415d3f1f0d43c75521946d15` and the GitHub issue/PR API.
-This snapshot has **zero open pull requests** and two open issues, both filed
-by this pass from candidates below ([#138](https://github.com/barryrwilson/Rimward/issues/138),
-[#139](https://github.com/barryrwilson/Rimward/issues/139)).
+Inventory date: 2026-09-12. Reconciled against master
+`5e0ff560ae9de92821243c0e0aacc5ef008b4b52` and the GitHub issue/PR API.
+This snapshot has **zero open issues and zero open pull requests**. The two
+issues the 2026-09-11 pass filed from candidates below ([#138](https://github.com/barryrwilson/Rimward/issues/138),
+[#139](https://github.com/barryrwilson/Rimward/issues/139)) are merged.
 [Consolidation PR #97](https://github.com/barryrwilson/Rimward/pull/97) is the
 earlier documentation and verification repair; every issue it left in review
 has since merged and moved to the completed table.
@@ -24,30 +24,7 @@ or deployment evidence.
 
 ## Active outcomes
 
-None. Every issue from #98 to #125 is merged (see the table below). The two
-open issues are backlog candidates promoted by the 2026-09-11 pass:
-
-- [#138](https://github.com/barryrwilson/Rimward/issues/138) — the
-  `test:refusal-tokens` suite failed on master because its #118 burner pin
-  predated the #120 wording — is **implemented and locally verified on
-  `claude/issue-138`**: the pin now expects the #120 `bad-args` detail on an
-  attack intent, a `warp` argument keeps the unknown-argument pin, `burner:
-  true` on `retreat` is pinned accepted, and the suite is entry
-  `refusalTokens` in the release-focused runner. Test and docs only; no
-  runtime change.
-- [#139](https://github.com/barryrwilson/Rimward/issues/139) — the
-  intermittent fresh-Greenhand `approachDock` cancellation on a `bodyHit`
-  near the +X stage — is **implemented and locally verified on
-  `claude/issue-139`**. The collider is a station-anchored loitering NPC
-  hull: `npc.js` built every station loiter path as a full ring (80–150 u)
-  whose first waypoint sat on the +X docking axis, so a loiterer turning
-  there hit the hull parked at the corridor entry (128 u out, the CI pose).
-  `stationLoiterWaypoints` now sweeps the far side of the station (x ≤
-  anchor.x, out and back), so no point or chord enters the corridor. Build,
-  unchanged boot, the new focused suite (`npm run test:dock-corridor`, 17
-  pins including the reproduction with the old ring), the release-focused
-  runner (22/22) and the headless-Chrome bridge smoke pass. See
-  [the reproduction and evidence record](Issue139DockCorridorEvidence.md).
+None. Every issue from #98 to #139 is merged (see the table below).
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 station security reacting to a hostile hunter near the dock, ace demand
@@ -63,6 +40,8 @@ artifacts, with their stated limitations.
 
 | Outcome | Issue / merged PR | Durable design or evidence |
 |---|---|---|
+| Station loiterers keep clear of the +X docking lane (the intermittent fresh-Greenhand `approachDock` collision) | [#139](https://github.com/barryrwilson/Rimward/issues/139) / [#142](https://github.com/barryrwilson/Rimward/pull/142) | [Reproduction and evidence](Issue139DockCorridorEvidence.md); `npm run test:dock-corridor`; ten consecutive local bridge smoke runs docked. |
+| `test:refusal-tokens` pins the #120 burner contract and runs in the release-focused runner | [#138](https://github.com/barryrwilson/Rimward/issues/138) / [#141](https://github.com/barryrwilson/Rimward/pull/141) | Test and docs only; [#118 evidence](Issue118RefusalTokensEvidence.md) notes the pin follows #120. |
 | Death inside an encounter returns to the last berth with a rewind and hold receipt; patrol standing law is local | [#125](https://github.com/barryrwilson/Rimward/issues/125) / [#137](https://github.com/barryrwilson/Rimward/pull/137) | [Evidence](Issue125DeathRecoveryEvidence.md); `npm run test:death-recovery`. |
 | The fence's marker banks on a paying pirate outcome, not only a bounty claim | [#124](https://github.com/barryrwilson/Rimward/issues/124) / [#136](https://github.com/barryrwilson/Rimward/pull/136) | [Evidence](Issue124FenceMarkerEvidence.md); `npm run test:fence-marker`. |
 | At most two NPC pirates work traders at once; a prize the player engages is yielded | [#123](https://github.com/barryrwilson/Rimward/issues/123) / [#135](https://github.com/barryrwilson/Rimward/pull/135) | `PIRACY` tuning in `state.js`; `npm run test:shared-lane` (21 checks). Fear-rating suppression of rival interest parked. |
@@ -70,7 +49,7 @@ artifacts, with their stated limitations.
 | `frameAgeMs` / `flags.suspended`; a wall expiry during a stall reads `suspended` | [#121](https://github.com/barryrwilson/Rimward/issues/121) / [#133](https://github.com/barryrwilson/Rimward/pull/133) | [Evidence](Issue121SuspendedClockEvidence.md). |
 | A `retreat` or `break-off` intent may hold the afterburner (`burner: true`) | [#120](https://github.com/barryrwilson/Rimward/issues/120) / [#132](https://github.com/barryrwilson/Rimward/pull/132) | [Evidence](Issue120RetreatBurnerEvidence.md). Left the #118 burner pin stale → [#138](https://github.com/barryrwilson/Rimward/issues/138). |
 | NPC miner `mineHit` receipts stay off the agent ring | [#119](https://github.com/barryrwilson/Rimward/issues/119) / [#128](https://github.com/barryrwilson/Rimward/pull/128) | [Evidence](Issue119MinerReceiptsEvidence.md). |
-| `setCombatIntent` target refusals split (`no-sample`, `stale-lock`, `lock-kind`) with receipt `detail` | [#118](https://github.com/barryrwilson/Rimward/issues/118) / [#129](https://github.com/barryrwilson/Rimward/pull/129) | [Evidence](Issue118RefusalTokensEvidence.md). Suite currently red on master → [#138](https://github.com/barryrwilson/Rimward/issues/138). |
+| `setCombatIntent` target refusals split (`no-sample`, `stale-lock`, `lock-kind`) with receipt `detail` | [#118](https://github.com/barryrwilson/Rimward/issues/118) / [#129](https://github.com/barryrwilson/Rimward/pull/129) | [Evidence](Issue118RefusalTokensEvidence.md). Suite was red on master until [#138](https://github.com/barryrwilson/Rimward/issues/138). |
 | `playerHit` / `playerDestroyed` name the attacker under the bracket identity law | [#117](https://github.com/barryrwilson/Rimward/issues/117) / [#130](https://github.com/barryrwilson/Rimward/pull/130) | [Evidence](Issue117AttackerIdentityEvidence.md). |
 | Prize-ranking fields on nearby rows; station and gate bearings | [#116](https://github.com/barryrwilson/Rimward/issues/116) / [#131](https://github.com/barryrwilson/Rimward/pull/131) | [Evidence](Issue116NearbyRowsEvidence.md). |
 | Scoop receipts are keep-class; refused pods report `podBlocked` | [#115](https://github.com/barryrwilson/Rimward/issues/115) / [#126](https://github.com/barryrwilson/Rimward/pull/126) | [Evidence](Issue115PodReceiptsEvidence.md). |
@@ -125,8 +104,8 @@ outcome before implementation; preserve the original product intent.
 
 | Candidate | State and next action |
 |---|---|
-| Intermittent live dock approach collision — **filed as [#139](https://github.com/barryrwilson/Rimward/issues/139)** | [Baseline run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689) records fresh Greenhand `approachDock` cancelling on `bodyHit` / `impact` near the +X stage. Docking passed in the intermediate and final runs; the original collider and cause remain unresolved. Preserve full public collision payload and pre-failure state on an unchanged fresh-start approach before selecting a bounded runtime fix. See the [diagnostic summary](RepoConsolidation20260910.md#residual-reliability-follow-ups). This is an unfiled follow-up, not a failed final gate or a proven repaired defect. |
-| Smoke/capture reliability | [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
+| Intermittent live dock approach collision | **Resolved by [#139](https://github.com/barryrwilson/Rimward/issues/139) / [PR #142](https://github.com/barryrwilson/Rimward/pull/142)**: the collider was a station-anchored loitering NPC hull on a ring whose first waypoint sat on the +X docking axis; loiterers now sweep the far side of the station. Kept here only as the record of the baseline observation ([run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689)); no follow-up remains. |
+| Smoke/capture reliability | One of ten local #139 bridge smoke runs (2026-09-12) timed out only on the later `systemTransition` jump pin (90 s) with docking and console clean, so the flake is real and unrelated to docking. [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
 | Performance headroom | The enforceable byte caps are now 3,671,906 minified / 1,098,526 gzip bytes: the owner approved doubling the #100 artifact counts by direct request on 2026-09-10, superseding the earlier 1,800,000 / 537,600 limits. Historic measurements are unchanged: #56 measured 1,835,632 minified / 549,169 gzip with a 7,340.4 ms startup median and one of five runs at 8,280 ms against 8,000 ms. The exact descriptor still pins the #100 artifact `assets/index-CY-oCepC.js` at 1,835,953 minified / 549,263 gzip for that exact bundle only. The 8,000 ms startup limit and the browser dependency boundary are unchanged and unwaived. Use the [#56](releases/issue-56-measured-decision.md) and [#100](releases/issue-100-measured-decision.md) measured decisions and the [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
 | Agent Play mouse ownership | Unfiled owner report from 2026-09-06: incidental pointer/UI movement should not interfere with agent flight, docking or mining, while explicit takeover remains available. Current `controls.js` deliberately makes mouse movement/clicks cancel a combat lease; that later human-takeover contract must be reconciled with the requested watch behavior. Do not claim #57 or #61 closed the whole observation. Recheck live pointer, click, focus and handoff behavior before selecting a change. |
 | Raw afterburner/flee completion (local PIR-02) | Historical run observed residual motion and station contacts after the flee timer ended. Current `agent-flee.js` still ends by clearing its channel; #62's stable combat withdrawal is a different path. Repeat the raw flee expiry flow near/far from port before claiming a current defect or a completed fix. |
