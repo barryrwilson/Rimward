@@ -37,7 +37,17 @@ open issues are backlog candidates promoted by the 2026-09-11 pass:
   runtime change.
 - [#139](https://github.com/barryrwilson/Rimward/issues/139) — the
   intermittent fresh-Greenhand `approachDock` cancellation on a `bodyHit`
-  near the +X stage; reproduce with full payloads first, then a bounded fix.
+  near the +X stage — is **implemented and locally verified on
+  `claude/issue-139`**. The collider is a station-anchored loitering NPC
+  hull: `npc.js` built every station loiter path as a full ring (80–150 u)
+  whose first waypoint sat on the +X docking axis, so a loiterer turning
+  there hit the hull parked at the corridor entry (128 u out, the CI pose).
+  `stationLoiterWaypoints` now sweeps the far side of the station (x ≤
+  anchor.x, out and back), so no point or chord enters the corridor. Build,
+  unchanged boot, the new focused suite (`npm run test:dock-corridor`, 17
+  pins including the reproduction with the old ring), the release-focused
+  runner (22/22) and the headless-Chrome bridge smoke pass. See
+  [the reproduction and evidence record](Issue139DockCorridorEvidence.md).
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 station security reacting to a hostile hunter near the dock, ace demand
