@@ -81,6 +81,44 @@ ANTENNA_H        = 1.45   # default mast height
 SHELL_THICK      = 0.16   # clamped shell thickness when the caller omits size
 
 
+# -- Survey-probe lineage constants (2026-09 redesign): ABSOLUTE ------------
+# The Assembly is one ancient survey probe copied for ten thousand
+# generations. The module is the BUS CAN (a short, wide, 10-sided instrument
+# prism), the outline-breaker is the annular REPORT DISH at the stern, and
+# the antenna forest is the forward SURVEY BOOM set. Cans recur at a few
+# discrete generation sizes (a component visibly recurs at two or three
+# scales, bible 4.8); everything below is one size for every class.
+
+CAN_SIDES        = 10     # canonical facet count; copy-drift yields 9 or 11
+FACET_PLATE_T    = 0.10   # off-white shell plate thickness on one facet
+FACET_PLATE_GAP  = 0.12   # fraction of facet width left as charcoal seam
+BAND_DEPTH       = 0.24   # registry (lineage stencil) band width along Z
+BAND_PROUD       = 0.03   # how far the band ring stands proud of the facets
+BAND_TICK        = (0.05, 0.05, 0.14)  # one stencil tick on the band
+
+BOOM_R           = 0.045  # survey boom shaft radius (diameter 0.09 > voxel)
+BOOM_COLLAR_R    = 0.09   # segment collar radius
+BOOM_TIP_R       = 0.07   # teal tip marker radius
+BOOM_TIP_BOX     = (0.18, 0.18, 0.22)  # magnetometer / RTG head at the tip
+
+DISH_THICK       = 0.09   # report-dish shell thickness (> 0.06 voxel)
+DISH_RIM_MINOR   = 0.06   # rim bead half-thickness
+DISH_RIB_R       = 0.06   # back-side gore rib radius
+DISH_DEPTH_RATIO = 1.0 / 3.0  # depth = R * ratio  (f/D ~ 0.375, a shallow bowl)
+
+NOZZLE_SKIRT     = 1.28   # bell skirt radius multiplier at the exit plane
+
+DAUGHTER_CAN_R   = 0.42   # nested daughter craft: can radius (absolute)
+DAUGHTER_DISH_R  = 0.78   # nested daughter craft: report dish radius
+DAUGHTER_LEN     = 2.90   # nested daughter craft: nose tip to dish rim
+
+CAGE_STRUT_R     = 0.06   # ancient-core cage bar radius
+CAGE_CLEAR       = 0.20   # cage stand-off from the core can
+
+ARM_R            = 0.07   # cutter manipulator arm radius
+ARM_CLAW         = (0.20, 0.14, 0.30)  # claw head box
+
+
 # ---------------------------------------------------------------------------
 # Hull surface queries
 #

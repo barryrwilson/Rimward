@@ -1,20 +1,34 @@
-"""Assembly surface language: repeated modules, joints, radial fans.
+"""Assembly surface language: the copied BUS CAN, joints, bands, the core.
 
-Bible §4.8 / synthesis §G6: one part, many copies, radial and linear arrays,
-visible joints. This module builds geometry through ship_kit only. It never
-queries a hull — the caller passes loc, size, radius and optional ``surf``
-callables computed from surface.py.
+Redesign (2026-09, owner-approved concept): the Assembly descends from ONE
+ancient human survey probe. A survey probe is an instrument bus, a
+high-gain dish that points home, long booms, and a power source. Ten
+thousand generations of copying grew those four parts into a fleet. The
+module is the BUS CAN: a short, wide, ten-sided instrument prism copied
+along a charcoal spine. Copy-drift changes the facet count (9 / 10 / 11)
+and the proud step of each shell plate; it never changes the joint ring.
+
+Every can carries one teal optic, one faded-orange re-fabricated facet
+(a panel the lineage could not colour-match), and a registry band (the
+lineage stencil, painted on every can at one letter height).
+
+Construction logic (synthesis/21 G6): REPEATED MODULE. One part, many
+copies, linear arrays, visible joints. This module builds geometry through
+ship_kit only. It never queries a hull; class files pass loc, radius and
+length. All module thicknesses come from surface.py and are ABSOLUTE.
 
 Size conventions (verified against scripts/ship_kit.py source):
-    kit.box / plate_course / plate_grid / panel_lines / greeble_field
-    / chamfer_block / taper_block / wedge / hull_loft   -> FULL extents
-    kit.cyl / torus / strut                             -> real radius / depth
-There is NO half-extent entry point in the kit. Absolute sf.* constants go
-into kit.box at their stated values. Human and Assembly module sizes are
-NEVER multiplied by ship l, b or h.
+    kit.box / chamfer_block / taper_block / hull_loft  -> FULL extents
+    kit.cyl / torus / strut                            -> real radius / depth
+There is NO half-extent entry point in the kit.
 
-Copy-drift is systematic and small (a few percent), seeded through kit.rng.
-It is how generations of the same module mismatch — not random junk.
+Facet geometry: kit.cyl with ``vertices=n`` and rotation CYL_ALONG_Z puts
+vertex 0 on ship +X and facet centre i at ship-plane angle
+``2*pi*(i+0.5)/n`` measured from +X toward +Y. For n = 10 the top facet is
+i = 2 (+Y) and the bottom facet is i = 7. A rotation of ``phi`` about ship
+Z is Blender ``rotation_euler = (0, -phi, 0)``; a kit box rotated by
+``phi = angle - pi/2`` has its local +Y (thickness axis) pointing along
+``(cos angle, sin angle, 0)``.
 
 Detail ladder: 3 = full, 2 = half repeats, 1 = primary form, 0 = mass only.
 """
@@ -24,44 +38,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import ship_kit as kit
-import mathutils
 
 from . import surface as sf
 
 
-# Petal long axis after kit.taper_block is ship +Z (Blender +Y).
-_BL_LONG = mathutils.Vector((0.0, 1.0, 0.0))
-
-_PLANES = {
-    'xy': ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),  # normal +Z, stern / bow fan
-    'xz': ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),  # normal +Y, dorsal / ventral fan
-    'yz': ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),  # normal +X, side fan
-}
-
-_FACE_DIR = {
-    'nose': (0.0, 0.0, -1.0),
-    'stern': (0.0, 0.0, 1.0),
-    'port': (-1.0, 0.0, 0.0),
-    'starboard': (1.0, 0.0, 0.0),
-    'up': (0.0, 1.0, 0.0),
-    'down': (0.0, -1.0, 0.0),
-}
-
-
 def _add(a, b, s=1.0):
     return (a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s)
-
-
-def _ship_to_bl(d):
-    return mathutils.Vector((d[0], -d[2], d[1]))
-
-
-def _aim_long_axis(obj, ship_dir):
-    """Rotate a kit part so its ship +Z long axis matches ``ship_dir``."""
-    target = _ship_to_bl(ship_dir)
-    if target.length < 1e-6:
-        return
-    obj.rotation_euler = _BL_LONG.rotation_difference(target.normalized()).to_euler()
 
 
 def copy_drift(seed):
@@ -83,15 +65,114 @@ def copy_drift(seed):
     return sample
 
 
+def drift_sides(seed):
+    """Facet count for one can: 10 canon, 9 or 11 by copy-drift (seeded)."""
+    v = kit.rng(int(seed) & 0xFFFFFFFF)()
+    if v < 0.18:
+        return 9
+    if v > 0.82:
+        return 11
+    return sf.CAN_SIDES
+
+
+def apothem(radius, sides):
+    """Distance from the can axis to a facet centre."""
+    return radius * math.cos(math.pi / sides)
+
+
+def facet_width(radius, sides):
+    """Flat width of one facet."""
+    return 2.0 * radius * math.sin(math.pi / sides)
+
+
+def facet_angle(sides, facet):
+    """Ship-plane angle (from +X toward +Y) of facet centre ``facet``."""
+    return 2.0 * math.pi * (facet + 0.5) / sides
+
+
+def facet_dir(sides, facet):
+    a = facet_angle(sides, facet)
+    return (math.cos(a), math.sin(a), 0.0)
+
+
+def top_facet(sides):
+    """Index of the facet whose centre is nearest +Y."""
+    best = 0
+    best_d = 9.0
+    for i in range(sides):
+        d = abs(facet_angle(sides, i) - math.pi * 0.5)
+        if d < best_d:
+            best_d = d
+            best = i
+    return best
+
+
+def bottom_facet(sides):
+    best = 0
+    best_d = 9.0
+    for i in range(sides):
+        d = abs(facet_angle(sides, i) - math.pi * 1.5)
+        if d < best_d:
+            best_d = d
+            best = i
+    return best
+
+
+def side_facet(sides, starboard=True):
+    """Index of the facet nearest +X (starboard) or -X (port)."""
+    target = 0.0 if starboard else math.pi
+    best = 0
+    best_d = 9.0
+    for i in range(sides):
+        a = facet_angle(sides, i)
+        d = abs(math.atan2(math.sin(a - target), math.cos(a - target)))
+        if d < best_d:
+            best_d = d
+            best = i
+    return best
+
+
+def facet_point(loc, radius, sides, facet, z_off=0.0, proud=0.0):
+    """Ship-space point on facet ``facet`` of a can centred at ``loc``."""
+    d = facet_dir(sides, facet)
+    dist = apothem(radius, sides) + proud
+    return (loc[0] + d[0] * dist, loc[1] + d[1] * dist, loc[2] + z_off)
+
+
+def rotate_about_z(obj, angle):
+    """Rotate a kit part about ship Z by ``angle`` (radians)."""
+    if obj is not None:
+        obj.rotation_euler = (0.0, -angle, 0.0)
+
+
+def facet_plate(parts, name, role, mat, loc, radius, sides, facet, z_off,
+                size, proud=0.02, bevel=0.0):
+    """One box seated flat on facet ``facet`` of a can at ``loc``.
+
+    ``size`` is (tangential width, radial thickness, length along Z), FULL
+    extents. The plate centre sits ``apothem - thickness/2 + proud`` from
+    the axis, so it buries ``thickness - proud`` into the drum and stands
+    ``proud`` above the facet. Returns the box or None.
+    """
+    w, t, ln = size
+    a = facet_angle(sides, facet)
+    d = (math.cos(a), math.sin(a), 0.0)
+    dist = apothem(radius, sides) - t * 0.5 + proud
+    c = (loc[0] + d[0] * dist, loc[1] + d[1] * dist, loc[2] + z_off)
+    obj = kit.box(parts, name, role, c, (w, t, ln), mat, bevel=bevel)
+    rotate_about_z(obj, a - math.pi * 0.5)
+    return obj
+
+
 def joint_ring(parts, name, mat, loc, radius, detail=3):
-    """Visible mechanical joint between two spine copies.
+    """Visible mechanical joint between two copies (the boundary the copy
+    never crosses).
 
-    FACING: wraps the spine about ship Z. ``loc`` is the ring centre on the
-    bay end face. ``radius`` is the host bay radius; the ring stands slightly
-    proud so the joint reads as a clamp, not a painted line.
+    FACING: wraps the spine about ship Z. ``loc`` is the ring centre.
+    ``radius`` is the host can radius; the ring stands proud so the joint
+    reads as a clamp, not a painted line.
 
-    Detail: 0 = nothing (the bay mass carries the silhouette); 1 = recess
-    collar; 2+ = collar plus a thin torus bead.
+    Detail: 0 = nothing; 1 = recess collar; 2+ = collar plus a bead.
     """
     if detail < 1:
         return []
@@ -108,85 +189,195 @@ def joint_ring(parts, name, mat, loc, radius, detail=3):
                          rotation=sf.CYL_ALONG_Z)
         if bead:
             objs.append(bead)
-    return objs
-
-
-def spine_segment(parts, name, mat, loc, radius, length, detail=3, seed=1):
-    """One charcoal octagonal spine bay with a visible stern joint ring.
-
-    FACING: long axis along ship Z. ``loc`` is the bay centre. ``radius`` and
-    ``length`` are full-size figures (kit.chamfer_block takes FULL extents).
-    The stern joint is built inboard of the +Z end face so it overlaps the
-    bay by ≥ 0.10.
-
-    Detail: 0/1 = bay mass; 2+ = bay plus joint_ring. Copy-drift jitters the
-    bay scale a few percent so adjacent bays read as successive generations.
-    """
-    objs = []
-    drift = copy_drift(seed)()
-    sc, _rot, off = drift
-    r = max(radius * sc[0], 0.16)
-    ln = max(length * sc[2], 0.40)
-    cx, cy, cz = _add(loc, off)
-    bay = kit.chamfer_block(parts, name + '.bay', kit.ROLE_HULL,
-                            (cx, cy, cz), (r * 2.0, r * 2.0, ln), mat,
-                            chamfer=r * 0.35)
-    if bay:
-        objs.append(bay)
-    if detail >= 2:
-        # Stern face, pulled 0.05 inboard so the ring bites the bay.
-        jz = cz + ln * 0.5 - 0.05
-        objs.extend(joint_ring(parts, name + '.joint', mat,
-                               (cx, cy, jz), r, detail=detail))
-    return objs
-
-
-def shell_module(parts, name, mat, loc, size, detail=3, seed=1):
-    """One weathered off-white shell clamped onto a spine.
-
-    FACING: the box axes follow ship axes. ``loc`` is the module centre;
-    the caller seats it so the inboard face overlaps the spine by ≥ 0.10.
-    ``size`` is FULL extents.
-
-    Detail: 0/1 = shell mass; 2 = shell plus a recess lip; 3 = lip plus one
-    calm panel line (55–80 % of the face stays empty).
-    """
-    objs = []
-    sx, sy, sz = size
-    sc, _rot, off = copy_drift(seed)()
-    sx = max(sx * sc[0], 0.20)
-    sy = max(sy * sc[1], 0.16)
-    sz = max(sz * sc[2], 0.28)
-    cx, cy, cz = _add(loc, off)
-    body = kit.chamfer_block(parts, name + '.shell-module', kit.ROLE_ARMOUR,
-                             (cx, cy, cz), (sx, sy, sz), mat,
-                             chamfer=min(sx, sy) * 0.18)
-    if body:
-        objs.append(body)
-    if detail >= 2:
-        # Recess lip on the outboard +Y face, proud 0.03, buried 0.04.
-        lip = kit.box(parts, name + '.lip', kit.ROLE_RECESS,
-                      (cx, cy + sy * 0.5 - 0.01, cz),
-                      (sx * 0.72, 0.08, sz * 0.72), mat)
-        if lip:
-            objs.append(lip)
     if detail >= 3:
-        before = len(parts)
-        kit.panel_lines(parts, name + '.seam', (cx, cy + sy * 0.5, cz),
-                        (sx * 0.70, 0.08, sz * 0.70), mat,
-                        count=1, axis='z', depth=0.08)
-        objs.extend(parts[before:])
+        # Clamp bolts: the joint is hardware, not a painted line.
+        for k in range(6):
+            a = 2.0 * math.pi * k / 6.0 + math.pi / 6.0
+            c = (loc[0] + math.cos(a) * (r + 0.04), loc[1] + math.sin(a) * (r + 0.04), loc[2])
+            bolt = kit.box(parts, '%s.bolt.%d' % (name, k), kit.ROLE_HULL, c,
+                           (0.09, 0.08, 0.11), mat)
+            rotate_about_z(bolt, a - math.pi * 0.5)
+            if bolt:
+                objs.append(bolt)
     return objs
+
+
+def edge_seams(parts, name, mat, loc, radius, sides, length, detail=3):
+    """Charcoal seam strips along every facet edge of an off-white drum.
+
+    The drum is one off-white prism at every LOD; these strips are what
+    make it read as ten clamped shells on a charcoal frame.
+    Detail: 0 = nothing; 1 = every other edge; 2+ = every edge.
+    """
+    if detail < 1:
+        return []
+    objs = []
+    step = 1 if detail >= 2 else 2
+    ln = max(0.30, length * 0.96)
+    for k in range(0, sides, step):
+        a = 2.0 * math.pi * k / sides
+        d = (math.cos(a), math.sin(a), 0.0)
+        c = (loc[0] + d[0] * (radius - 0.015), loc[1] + d[1] * (radius - 0.015), loc[2])
+        strip = kit.box(parts, '%s.seam.%02d' % (name, k), kit.ROLE_RECESS,
+                        c, (0.07, 0.07, ln), mat)
+        rotate_about_z(strip, a - math.pi * 0.5)
+        if strip:
+            objs.append(strip)
+    return objs
+
+
+def shell_plates(parts, name, mat, loc, radius, sides, length, rows=2,
+                 detail=3, seed=1, skip=(), plate_t=None):
+    """Off-white shell plates on every facet, stepped proud by copy-drift.
+
+    ``rows`` plates per facet along Z. Each plate is narrower than its facet
+    by FACET_PLATE_GAP so the charcoal seam shows. Detail: 0/1 = nothing;
+    2 = one row; 3 = ``rows``. Facets listed in ``skip`` get no plates
+    (an optic or the orange facet sits there).
+    """
+    if detail < 2:
+        return []
+    n_rows = rows if detail >= 3 else 1
+    fw = facet_width(radius, sides) * (1.0 - sf.FACET_PLATE_GAP)
+    margin = 0.12
+    usable = max(0.20, length - 2.0 * margin)
+    pl = usable / n_rows * 0.90
+    rand = kit.rng(int(seed) & 0xFFFFFFFF)
+    if plate_t is None:
+        plate_t = sf.FACET_PLATE_T
+    objs = []
+    for f in range(sides):
+        if f in skip:
+            continue
+        for r in range(n_rows):
+            z_off = -usable * 0.5 + usable * (r + 0.5) / n_rows
+            proud = 0.015 + rand() * 0.035 + max(0.0, plate_t - sf.FACET_PLATE_T) * 0.5
+            p = facet_plate(parts, '%s.plate.%02d_%d' % (name, f, r),
+                            kit.ROLE_ARMOUR, mat, loc, radius, sides, f, z_off,
+                            (fw, plate_t, pl), proud=proud,
+                            bevel=0.012)
+            if p:
+                objs.append(p)
+    return objs
+
+
+def orange_facet(parts, name, mat, loc, radius, sides, facet, z_off, length,
+                 detail=3, seed=1):
+    """The faded-orange re-fabricated facet: one block accent per can.
+
+    Detail: 0 = nothing (accent is not a primary mass); 1+ = the block.
+    """
+    if detail < 1:
+        return []
+    sc, _rot, off = copy_drift(seed)()
+    fw = facet_width(radius, sides) * 0.78 * sc[0]
+    pl = max(0.20, length * 0.42 * sc[2])
+    p = facet_plate(parts, name + '.orange-facet', kit.ROLE_ACCENT, mat,
+                    (loc[0], loc[1], loc[2] + off[2]), radius, sides, facet,
+                    z_off, (fw, 0.10, pl), proud=0.05)
+    return [p] if p else []
+
+
+def registry_band(parts, name, mat, loc, radius, sides, z_off, detail=3,
+                  seed=1):
+    """The lineage stencil: a dark band ring near one end of the can, with
+    a few pale stencil ticks at constant letter height.
+
+    Detail: 0/1 = nothing; 2 = the band; 3 = band plus ticks.
+    """
+    if detail < 2:
+        return []
+    objs = []
+    c = (loc[0], loc[1], loc[2] + z_off)
+    band = kit.cyl(parts, name + '.band', kit.ROLE_RECESS, c,
+                   radius + sf.BAND_PROUD, sf.BAND_DEPTH, mat,
+                   rotation=sf.CYL_ALONG_Z, vertices=max(12, sides * 2))
+    if band:
+        objs.append(band)
+    if detail >= 3:
+        rand = kit.rng(int(seed) & 0xFFFFFFFF)
+        proud = (radius - apothem(radius, sides)) + sf.BAND_PROUD + 0.03
+        for f in range(sides):
+            if rand() < 0.45:
+                continue
+            tw, tt, tl = sf.BAND_TICK
+            t = facet_plate(parts, '%s.tick.%02d' % (name, f), kit.ROLE_TRIM,
+                            mat, loc, radius, sides, f, z_off,
+                            (tw, tt, tl), proud=proud)
+            if t:
+                objs.append(t)
+    return objs
+
+
+def bus_can(parts, name, mat, loc, radius, length, detail=3, seed=1,
+            sides=None, rows=2, orange=True, band=True, skip=(), plate_t=None):
+    """One copied survey bus: off-white drum, end joints, seams, plates,
+    orange facet, registry band.
+
+    ``loc`` is the can centre; ``radius`` is the circumradius; ``length``
+    along Z. ``sides`` defaults to copy-drift (9/10/11). ``skip`` lists
+    facets to leave bare for an optic. Returns (objs, sides) so the caller
+    can seat optics on the drifted facet count.
+
+    Detail: 0 = drum; 1 = + end joints, seams, orange; 2 = + plates (one
+    row), band; 3 = full rows, band ticks.
+    """
+    if sides is None:
+        sides = drift_sides(seed)
+    objs = []
+    drum = kit.cyl(parts, name + '.drum', kit.ROLE_ARMOUR, loc, radius,
+                   length, mat, rotation=sf.CYL_ALONG_Z, vertices=sides)
+    if drum:
+        objs.append(drum)
+    if detail < 1:
+        return objs, sides
+    half = length * 0.5
+    objs.extend(joint_ring(parts, name + '.jn', mat,
+                           (loc[0], loc[1], loc[2] - half + 0.05), radius,
+                           detail=detail))
+    objs.extend(joint_ring(parts, name + '.js', mat,
+                           (loc[0], loc[1], loc[2] + half - 0.05), radius,
+                           detail=detail))
+    objs.extend(edge_seams(parts, name, mat, loc, radius, sides, length,
+                           detail=detail))
+    o_facet = None
+    if orange:
+        rand = kit.rng((int(seed) * 7 + 3) & 0xFFFFFFFF)
+        cands = [f for f in range(sides) if f not in skip]
+        if cands:
+            o_facet = cands[int(rand() * len(cands)) % len(cands)]
+            objs.extend(orange_facet(parts, name, mat, loc, radius, sides,
+                                     o_facet, -length * 0.12, length,
+                                     detail=detail, seed=seed + 11))
+    plate_skip = tuple(skip) + ((o_facet,) if o_facet is not None else ())
+    objs.extend(shell_plates(parts, name, mat, loc, radius, sides, length,
+                             rows=rows, detail=detail, seed=seed + 23,
+                             skip=plate_skip, plate_t=plate_t))
+    if band:
+        objs.extend(registry_band(parts, name, mat, loc, radius, sides,
+                                  length * 0.5 - 0.30, detail=detail,
+                                  seed=seed + 31))
+    return objs, sides
+
+
+def spine_bar(parts, name, mat, z0, z1, radius, x=0.0, y=0.0, detail=3):
+    """The charcoal structural spine the cans are copied along.
+
+    Octagonal chamfer_block from z0 to z1 (FULL extents). Always built —
+    it is the primary connection between every can, drive and dish.
+    """
+    ln = max(0.30, z1 - z0)
+    bar = kit.chamfer_block(parts, name + '.spine', kit.ROLE_HULL,
+                            (x, y, (z0 + z1) * 0.5),
+                            (radius * 2.0, radius * 2.0, ln), mat,
+                            chamfer=radius * 0.35)
+    return [bar] if bar else []
 
 
 def orange_patch(parts, name, mat, loc, size=None, detail=3, seed=1):
-    """One faded-orange replacement panel — the block accent.
+    """One faded-orange replacement block on a flat face (not a can).
 
-    FACING: box axes follow ship axes. ``loc`` is the panel centre. Default
-    ``size`` is sf.ORANGE_PATCH (FULL extents). Coverage is controlled by
-    how many patches the class file places, never by accent_density.
-
-    Detail: 0 = nothing (accent is not a primary mass); 1+ = the block.
+    Detail: 0 = nothing; 1+ = the block.
     """
     if detail < 1:
         return []
@@ -197,137 +388,59 @@ def orange_patch(parts, name, mat, loc, size=None, detail=3, seed=1):
     sx = max(sx * sc[0], 0.20)
     sy = max(sy * sc[1], 0.08)
     sz = max(sz * sc[2], 0.20)
-    cx, cy, cz = _add(loc, off)
     panel = kit.box(parts, name + '.orange-patch', kit.ROLE_ACCENT,
-                    (cx, cy, cz), (sx, sy, sz), mat)
-    if panel:
-        return [panel]
-    return []
+                    _add(loc, off), (sx, sy, sz), mat)
+    return [panel] if panel else []
 
 
-def fan_petal(parts, name, mat, loc, facing='up', size=None, detail=3, seed=1):
-    """One fan / survey petal module. Tip points along ``facing``.
+def ancient_core(parts, glow, name, hull_mat, glow_mat, loc, radius, length,
+                 detail=3, seed=1):
+    """THE ANCIENT CORE: the original probe body, dark, caged, off-centre.
 
-    FACING: nose / stern / port / starboard / up / down. ``loc`` is the
-    petal centre. The wide root is toward the opposite of ``facing`` so a
-    caller can bury 0.10 of length into a hub. ``size`` defaults to the
-    absolute FAN_PETAL_* module (FULL extents: width, thickness, length).
+    A charcoal nine-sided drum with its own joints and one side optic,
+    inside a cage of two rings and four longitudinal bars. The caller seats
+    ``loc`` below the spine so the cage rings pass through the spine bar
+    (that intersection is the connection). Cage rings are always built.
 
-    Detail: 0 = nothing; 1+ = the petal mass. Copy-drift jitters scale.
+    Detail: 0 = drum + rings; 1 = + joints + optic; 2+ = + cage bars.
     """
-    if detail < 1:
-        return []
-    if size is None:
-        size = (sf.FAN_PETAL_W, sf.FAN_PETAL_T, sf.FAN_PETAL_LEN)
-    d = _FACE_DIR.get(facing, facing)
-    if not isinstance(d, tuple):
-        d = (0.0, 1.0, 0.0)
-    sc, _rot, off = copy_drift(seed)()
-    sx = max(size[0] * sc[0], 0.16)
-    sy = max(size[1] * sc[1], 0.08)
-    sz = max(size[2] * sc[2], 0.28)
-    cx, cy, cz = _add(loc, off)
-    petal = kit.taper_block(parts, name + '.fan-petal', kit.ROLE_ARMOUR,
-                            (cx, cy, cz), (sx, sy, sz), mat,
-                            front=(0.38, 0.80), back=(1.0, 1.0))
-    if not petal:
-        return []
-    # taper_block tip is ship -Z; aim that axis along facing.
-    _aim_long_axis(petal, (-d[0], -d[1], -d[2]))
-    return [petal]
-
-
-def radial_fan(parts, name, mat, loc, count=10, radius=1.40, petal_size=None,
-               plane='xy', seed=1, detail=3):
-    """Radial array of identical petal modules — the §G2 outline-breaker.
-
-    FACING: ``plane`` is the petal plane ('xy' normal +Z, 'xz' normal +Y,
-    'yz' normal +X). ``loc`` is the hub centre. ``radius`` is hub-centre to
-    petal-root. The hub disc grows to that ring (``hub_r = radius - 0.02``).
-    Each petal also gets a root peg (cyl/strut, r ≥ 0.08) that buries
-    ≥ 0.20 into the hub and ≥ 0.20 into the petal so large-R fans stay
-    26-connected at voxel 0.06. Outer fan reach is
-    ``radius + petal_len - bury``. ``petal_size`` is the absolute module
-    (width, thick, length); default FAN_PETAL_*. The fan as a WHOLE grows
-    by raising ``count`` and ``radius``; the petal module stays one size.
-
-    Generation ``seed`` drives copy-drift on every petal (scale and a few
-    degrees of angle). Hub is charcoal; petals are off-white armour.
-
-    Detail: 0 = hub mass; 1 = hub plus 3 petals; 2 = half of ``count``;
-    3 = full ``count``.
-    """
-    if petal_size is None:
-        petal_size = (sf.FAN_PETAL_W, sf.FAN_PETAL_T, sf.FAN_PETAL_LEN)
-    pw, pt, pl = petal_size
-    if plane not in _PLANES:
-        plane = 'xy'
-    u, v = _PLANES[plane]
-    if detail >= 3:
-        n = max(3, int(count))
-    elif detail == 2:
-        n = max(3, int(count) // 2)
-    elif detail == 1:
-        n = 3
-    else:
-        n = 0
-
     objs = []
-    # Hub reaches the petal-root ring. Pegs (below) pin each petal into it.
-    bury = 0.28
-    hub_r = max(0.28, radius - 0.02)
-    peg_r = 0.14
-    peg_in = 0.40
-    peg_out = 0.40
-    hub_d = max(0.28, pt * 2.2)
-    if plane == 'xy':
-        hub_rot = sf.CYL_ALONG_Z
-    elif plane == 'xz':
-        hub_rot = sf.CYL_ALONG_Y
-    else:
-        hub_rot = sf.CYL_ALONG_X
-    hub = kit.cyl(parts, name + '.hub', kit.ROLE_HULL, loc,
-                  hub_r, hub_d, mat, rotation=hub_rot, vertices=12)
-    if hub:
-        objs.append(hub)
-    if detail >= 2:
-        ring = kit.torus(parts, name + '.hubjoint', kit.ROLE_RECESS, loc,
-                         hub_r * 0.92, sf.JOINT_MINOR, mat,
-                         rotation=hub_rot)
+    sides = 9
+    drum = kit.cyl(parts, name + '.core-drum', kit.ROLE_HULL, loc, radius,
+                   length, hull_mat, rotation=sf.CYL_ALONG_Z, vertices=sides)
+    if drum:
+        objs.append(drum)
+    cage_r = radius + sf.CAGE_CLEAR
+    half = length * 0.5
+    for tag, zo in (('a', -half + 0.10), ('b', half - 0.10)):
+        ring = kit.torus(parts, '%s.cage-ring.%s' % (name, tag), kit.ROLE_TRIM,
+                         (loc[0], loc[1], loc[2] + zo), cage_r, 0.05,
+                         hull_mat, rotation=sf.CYL_ALONG_Z)
         if ring:
             objs.append(ring)
-    if n < 1:
+    if detail < 1:
         return objs
-
-    drift = copy_drift(seed)
-    for i in range(n):
-        ang = 2.0 * math.pi * i / n
-        sc, _rot, off = drift()
-        ang = ang + _rot[2]
-        cu = math.cos(ang)
-        sv = math.sin(ang)
-        radial = (u[0] * cu + v[0] * sv,
-                  u[1] * cu + v[1] * sv,
-                  u[2] * cu + v[2] * sv)
-        # Petal centre: root buried in the hub.
-        dist = radius + pl * 0.5 * sc[2] - bury
-        pc = _add(_add(loc, off), radial, dist)
-        psz = (max(pw * sc[0], 0.16), max(pt * sc[1], 0.08), max(pl * sc[2], 0.28))
-        petal = kit.taper_block(parts, '%s.fan-petal.%02d' % (name, i),
-                                kit.ROLE_ARMOUR, pc, psz, mat,
-                                front=(0.38, 0.80), back=(1.0, 1.0))
-        if not petal:
-            continue
-        # Tip along +radial (taper tip is ship -Z, so aim long axis at -radial).
-        _aim_long_axis(petal, (-radial[0], -radial[1], -radial[2]))
-        objs.append(petal)
-        # Root peg: fat spoke through the root ring. AABB overlap is not
-        # enough at large R — the 0.12-thick taper misses the 0.06 voxel.
-        pl_half = psz[2] * 0.5
-        peg_a = _add(loc, radial, hub_r - peg_in)
-        peg_b = _add(pc, radial, -(pl_half - peg_out))
-        peg = kit.strut(parts, '%s.fan-peg.%02d' % (name, i), kit.ROLE_RECESS,
-                        peg_a, peg_b, mat, peg_r, vertices=8)
-        if peg:
-            objs.append(peg)
+    objs.extend(joint_ring(parts, name + '.jn', hull_mat,
+                           (loc[0], loc[1], loc[2] - half + 0.06), radius,
+                           detail=detail))
+    objs.extend(joint_ring(parts, name + '.js', hull_mat,
+                           (loc[0], loc[1], loc[2] + half - 0.06), radius,
+                           detail=detail))
+    from . import hardware as hw
+    f = side_facet(sides, starboard=True)
+    objs.extend(hw.teal_optic(parts, glow, name + '.eye', hull_mat, glow_mat,
+                              facet_point(loc, radius, sides, f, 0.0, 0.0),
+                              radius=min(sf.OPTIC_COLLAR_R, radius * 0.45),
+                              facing='starboard', detail=detail))
+    if detail < 2:
+        return objs
+    for k in range(4):
+        a = math.pi * 0.25 + k * math.pi * 0.5
+        x = loc[0] + math.cos(a) * cage_r
+        y = loc[1] + math.sin(a) * cage_r
+        bar = kit.strut(parts, '%s.cage-bar.%d' % (name, k), kit.ROLE_TRIM,
+                        (x, y, loc[2] - half + 0.10), (x, y, loc[2] + half - 0.10),
+                        hull_mat, sf.CAGE_STRUT_R, vertices=6)
+        if bar:
+            objs.append(bar)
     return objs
