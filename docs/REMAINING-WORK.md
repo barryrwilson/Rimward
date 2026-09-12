@@ -24,7 +24,15 @@ or deployment evidence.
 
 ## Active outcomes
 
-None. Every issue from #98 to #139 is merged (see the table below).
+Every issue from #98 to #139 is merged (see the table below). The piracy
+aftermath set filed on 2026-09-12 is open:
+
+| Outcome | Issue / PR | Status |
+|---|---|---|
+| A trader that yields its cargo runs for a refuge instead of parking dead-stick | [#146](https://github.com/barryrwilson/Rimward/issues/146) / PR pending | Implemented: `capitulate` in `npc.js` routes every crew-aboard yield (`jettison`, `cutEngines`, `flee`) through the #68 escape plan; only `crewPods` still drifts. Pinned in `npm run test:boot` (section "Issue #146"); live check 2026-09-12. NPC pirates do not physically scoop spilled pods today (player scoop only); unchanged. |
+| A pirate may claim the crew and the hull of a yielded trader | [#147](https://github.com/barryrwilson/Rimward/issues/147) | Open; depends on #146. |
+| An unclaimed derelict is claimable and folds away after 30 minutes | [#148](https://github.com/barryrwilson/Rimward/issues/148) | Open; the `crewPods` drift hull is the derelict. |
+| A mined-out asteroid breaks up and a new ore kind seeds its slot | [#149](https://github.com/barryrwilson/Rimward/issues/149) | Open; independent. |
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 station security reacting to a hostile hunter near the dock, ace demand
