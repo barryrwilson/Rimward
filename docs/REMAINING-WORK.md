@@ -29,10 +29,11 @@ aftermath set filed on 2026-09-12 is open:
 
 | Outcome | Issue / PR | Status |
 |---|---|---|
-| A trader that yields its cargo runs for a refuge instead of parking dead-stick | [#146](https://github.com/barryrwilson/Rimward/issues/146) / [PR #150](https://github.com/barryrwilson/Rimward/pull/150) | Implemented: `capitulate` in `npc.js` routes every crew-aboard yield (`jettison`, `cutEngines`, `flee`) through the #68 escape plan; only `crewPods` still drifts. Pinned in `npm run test:boot` (section "Issue #146"); live check 2026-09-12. NPC pirates do not physically scoop spilled pods today (player scoop only); unchanged. |
+| A trader that yields its cargo runs for a refuge instead of parking dead-stick | [#146](https://github.com/barryrwilson/Rimward/issues/146) / [PR #150](https://github.com/barryrwilson/Rimward/pull/150) | Implemented: `capitulate` in `npc.js` routes every crew-aboard yield (`jettison`, `cutEngines`, `flee`) through the #68 escape plan; only `crewPods` still drifts. Pinned in `npm run test:boot` (section "Issue #146"); live check 2026-09-12. NPC pirates do not scoop spilled pods today (player scoop only): [#151](https://github.com/barryrwilson/Rimward/issues/151). |
 | A pirate may claim the crew and the hull of a yielded trader | [#147](https://github.com/barryrwilson/Rimward/issues/147) | Open; depends on #146. |
 | An unclaimed derelict is claimable and folds away after 30 minutes | [#148](https://github.com/barryrwilson/Rimward/issues/148) | Open; the `crewPods` drift hull is the derelict. |
 | A mined-out asteroid breaks up and a new ore kind seeds its slot | [#149](https://github.com/barryrwilson/Rimward/issues/149) | Open; independent. |
+| An NPC pirate scoops the pods it took and sells the haul at a fence | [#151](https://github.com/barryrwilson/Rimward/issues/151) | Open; filed 2026-09-12 from the #146 review; follows #146. |
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 station security reacting to a hostile hunter near the dock, ace demand
