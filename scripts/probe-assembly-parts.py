@@ -125,20 +125,26 @@ def cases():
     out.append(('lineage.copy_drift', lambda p, g, hm, gm, d: _probe_drift()))
     out.append(('lineage.joint_ring', lambda p, g, hm, gm, d: ln.joint_ring(
         p, 'jr', hm, (0.0, 0.0, 0.9), 0.55, detail=d)))
-    out.append(('lineage.spine_segment', lambda p, g, hm, gm, d: ln.spine_segment(
-        p, 'sp', hm, (0.0, 0.0, 0.0), 0.55, 1.80, detail=d, seed=4)))
-    out.append(('lineage.shell_module', lambda p, g, hm, gm, d: ln.shell_module(
-        p, 'sh', hm, (0.0, 0.55, 0.0), (0.70, 0.42, 1.40), detail=d, seed=7)))
+    out.append(('lineage.bus_can', lambda p, g, hm, gm, d: ln.bus_can(
+        p, 'bc', hm, (0.0, 0.0, 0.0), 0.80, 1.40, detail=d, seed=4)[0]))
+    out.append(('lineage.bus_can 9-side skip', lambda p, g, hm, gm, d: ln.bus_can(
+        p, 'bc9', hm, (0.0, 0.0, 2.0), 0.60, 1.10, detail=d, seed=5, sides=9,
+        skip=(ln.top_facet(9),), plate_t=0.20)[0]))
+    out.append(('lineage.facet_plate', lambda p, g, hm, gm, d: [ln.facet_plate(
+        p, 'fp', kit.ROLE_ARMOUR, hm, (0.0, 0.0, 0.0), 0.80, 10, 3, 0.2,
+        (0.40, 0.10, 0.60), proud=0.03)]))
+    out.append(('lineage.registry_band', lambda p, g, hm, gm, d: ln.registry_band(
+        p, 'rb', hm, (0.0, 0.0, 0.0), 0.80, 10, 0.40, detail=d, seed=6)))
+    out.append(('lineage.orange_facet', lambda p, g, hm, gm, d: ln.orange_facet(
+        p, 'of', hm, (0.0, 0.0, 0.0), 0.80, 10, 4, -0.10, 1.40, detail=d, seed=7)))
+    out.append(('lineage.edge_seams', lambda p, g, hm, gm, d: ln.edge_seams(
+        p, 'es', hm, (0.0, 0.0, 0.0), 0.80, 10, 1.40, detail=d)))
+    out.append(('lineage.spine_bar', lambda p, g, hm, gm, d: ln.spine_bar(
+        p, 'sb', hm, -3.0, 3.0, 0.30)))
     out.append(('lineage.orange_patch', lambda p, g, hm, gm, d: ln.orange_patch(
         p, 'op', hm, (0.20, 0.62, -0.10), detail=d, seed=9)))
-    out.append(('lineage.fan_petal', lambda p, g, hm, gm, d: ln.fan_petal(
-        p, 'fp', hm, (0.0, 1.20, 0.0), facing='up', detail=d, seed=3)))
-    out.append(('lineage.radial_fan xy', lambda p, g, hm, gm, d: ln.radial_fan(
-        p, 'rfxy', hm, (0.0, 0.0, 2.4), count=10, radius=1.50,
-        plane='xy', seed=11, detail=d)))
-    out.append(('lineage.radial_fan xz', lambda p, g, hm, gm, d: ln.radial_fan(
-        p, 'rfxz', hm, (0.0, 0.90, -1.6), count=12, radius=1.70,
-        plane='xz', seed=13, detail=d)))
+    out.append(('lineage.ancient_core', lambda p, g, hm, gm, d: ln.ancient_core(
+        p, g, 'ac', hm, gm, (0.0, -1.3, 0.0), 0.72, 2.2, detail=d, seed=8)))
 
     # ---- hardware.py ------------------------------------------------------
     out.append(('hardware.teal_optic nose', lambda p, g, hm, gm, d: hw.teal_optic(
@@ -149,8 +155,6 @@ def cases():
         p, 'ip', hm, (1.0, 0.0, 0.0), facing='starboard', detail=d)))
     out.append(('hardware.fabrication_socket', lambda p, g, hm, gm, d: hw.fabrication_socket(
         p, g, 'fs', hm, gm, (0.0, 0.0, -2.0), facing='nose', detail=d)))
-    out.append(('hardware.daughter_probe', lambda p, g, hm, gm, d: hw.daughter_probe(
-        p, g, 'dp', hm, gm, (3.5, 0.0, 0.0), detail=d, seed=21, petals=4)))
     out.append(('hardware.antenna_mast', lambda p, g, hm, gm, d: hw.antenna_mast(
         p, 'am', hm, (0.0, 0.55, 0.4), detail=d)))
     out.append(('hardware.antenna_forest', lambda p, g, hm, gm, d: hw.antenna_forest(
@@ -166,6 +170,26 @@ def cases():
         p, g, 'dc', hm, gm, (0.0, -0.55, 0.2), facing='down', detail=d)))
     out.append(('hardware.docking_collar nose', lambda p, g, hm, gm, d: hw.docking_collar(
         p, g, 'dcn', hm, gm, (0.0, 0.0, -2.4), facing='nose', detail=d)))
+    out.append(('hardware.report_dish', lambda p, g, hm, gm, d: hw.report_dish(
+        p, 'rd', hm, (0.0, 0.0, 3.0), 2.0, 0.30, gores=12, detail=d, seed=3)))
+    for n in (1, 2, 4, 6):
+        def stern(p, g, hm, gm, d, n=n):
+            return hw.stern_cluster(p, g, 'sc%d' % n, hm, gm, 1.0, 2.0,
+                                    0.55, 0.46, n, 2.6, 4.6, detail=d, seed=n)
+        out.append(('hardware.stern_cluster n=%d' % n, stern))
+    out.append(('hardware.survey_boom', lambda p, g, hm, gm, d: hw.survey_boom(
+        p, g, 'sbm', hm, gm, (0.0, 0.2, -1.0), 2.4, detail=d, seed=5)))
+    out.append(('hardware.boom_set', lambda p, g, hm, gm, d: hw.boom_set(
+        p, g, 'bs', hm, gm, (0.0, 0.0, -1.0), 0.8, -1.8, (2.0, 1.4, 1.0),
+        detail=d, seed=6)))
+    out.append(('hardware.radiator_set 4', lambda p, g, hm, gm, d: hw.radiator_set(
+        p, 'rs', hm, (0.0, 0.0, 1.0), 0.76, 1.2, 1.6, count=4, detail=d)))
+    out.append(('hardware.manipulator_arm', lambda p, g, hm, gm, d: hw.manipulator_arm(
+        p, 'ma', hm, (0.6, 0.3, 0.0), (1.5, 1.1, -0.6), (1.7, 0.8, -2.0), detail=d)))
+    out.append(('hardware.cradle', lambda p, g, hm, gm, d: hw.cradle(
+        p, 'cr', hm, (0.0, -0.6, 0.0), (0.0, -1.6, 0.0), detail=d)))
+    out.append(('hardware.daughter_craft', lambda p, g, hm, gm, d: hw.daughter_craft(
+        p, g, 'dcft', hm, gm, (3.5, 0.0, 0.0), detail=d, seed=21)[0]))
 
     # ---- surface factories (no geometry; raise if self-trim is broken) ----
     out.append(('surface.surf self-trim', lambda p, g, hm, gm, d: _probe_surf()))

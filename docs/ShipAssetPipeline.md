@@ -372,7 +372,7 @@ Ones, is DONE — wave 8 completed 2026-08-14.** **`unknowables` wave 9 is
 COMPLETE — recorded 2026-08-15; see "Wave 9 status" at the end of this
 section.** The form is ephemeral lace (filaments, cells, loops), not haze.
 Beam-only damage for this faction is runtime and already landed.
-**`assembly` wave 10 is COMPLETE — recorded 2026-08-15.**
+**`assembly` wave 10 is COMPLETE — recorded 2026-08-15; SUPERSEDED by the wave 16 redesign, recorded 2026-09-11 (see the end of this section).**
 **`congregation` wave 11 is COMPLETE — recorded 2026-08-16; see "Wave 11
 status" at the end of this section.** **`lamplighter` wave 12 is
 COMPLETE — recorded 2026-08-16; see "Wave 12 status" at the end of this
@@ -880,3 +880,52 @@ Do not add a mid 18×44 grid.
 the block centre. The probe rasterises surfaces, so an interior course
 inside a hollow chamfer shell is a float. Bury the block so the course
 straddles the deck, or call the plate at `detail=1` and keep the mass.
+
+### Wave 16 — Assembly REDESIGN — COMPLETE, recorded 2026-09-11
+
+Owner-approved concept sheet (this session): the Assembly is ONE ancient
+human survey probe copied for ten thousand generations. The family is
+SURVEY HEAD + CAN SPINE + REPORT DISH on every class. Wave 10's radial
+petal fans are retired; `docs/FactionShipDesignBible.md` §4.8 and
+`21-rimward-gap-analysis.md` §G2/§G6 now carry the new charter.
+
+Foundation (smoke-probed by `scripts/probe-assembly-parts.py`, ALL
+CONSTRUCTS CLEAN): `lineage.bus_can` (off-white 9/10/11-sided drum, end
+joint rings with clamp bolts, charcoal edge seams, stepped shell plates,
+one orange facet, registry band), `lineage.spine_bar`,
+`lineage.ancient_core`; `hardware.report_dish` (closed gored paraboloid
+shell, one orange gore, rim bead, back ribs), `hardware.stern_cluster`
+(housing + neck tube + dish + 1/2/4/6 nozzle bells with exit glow),
+`hardware.boom_set`, `radiator_set`, `manipulator_arm`, `cradle`,
+`daughter_craft` (absolute light-scale nested craft).
+
+**Measured (2026-09-11, `measure-ships` + three.js Meshopt tri counts):**
+
+| class | size | lod0 verts | tris lod0/lod1/lod2(/lod3) |
+|---|---|---|---|
+| light | 7.3 | 11492 | 6092/3792/1248 |
+| ace | 7.5 | 13112 | 7004/4864/1484 |
+| cutter | 10.8 | 21872 | 11676/7428/2560 |
+| heavy | 16.6 | 21252 | 11372/8192/2340 |
+| frigate | 31.5 | 33846 | 18088/11304/3612 |
+| freighter | 82.6 | 58966 | 31720/20184/6024/3052 |
+
+Ladder `light 7.3 < ace 7.5 < cutter 10.8 < heavy 16.6 < frigate 31.5 <
+freighter 82.6`; every class inside its `SHIP_SCALE[class].hull` band.
+Gates: measure ALL PASS (ht/len 0.42-0.56, the dish sets height and
+beam on every class); islands ONE CONNECTED BODY ×6; validate-ship-assets
+PASS (72/228). Sheets: `out/silhouettes/assembly-shape.png`, `-scale.png`,
+`-render.png`.
+
+**Lessons:**
+- A dish that fires the drive through its hole connects to the ship
+  through a solid NECK TUBE that the dish's inner ring is buried in; the
+  nozzle bells run inside the neck and past its end. Without the neck the
+  dish floats behind the housing.
+- kit boxes can be rotated after creation (`rotation_euler = (0, -phi,
+  0)` is a rotation of phi about ship Z); that is how a plate seats flat on
+  facet i of a 10-gon at angle `2*pi*(i+0.5)/10`. `centre_parts` and
+  export keep the rotation.
+- The can drum is ARMOUR (off-white) at every LOD so the colour does not
+  pop between LODs; the charcoal read comes from RECESS seam strips and
+  joint collars layered on it.

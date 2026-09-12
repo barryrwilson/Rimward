@@ -186,18 +186,18 @@ A bulk-moving machine or organism. Cargo volume dominates propulsion and crew vo
 
 ## 4.8 The Assembly — inheritance copied until it became civilization
 
-**First read:** ancient survey machinery, recursive self-similarity, copy errors that accumulated into lineage.
+**First read:** one ancient human survey probe, copied for ten thousand generations: a survey head, a spine of instrument cans, and a great dish at the stern that still faces home.
 
-**Fleet DNA:** repeated probe modules on charcoal structural spines; weathered off-white shells; faded orange replacement panels; teal optics; antenna forests; daughter probes; fabrication apertures. A component should visibly recur at two or three scales. Variation is systematic copy drift, not human patchwork.
+**Fleet DNA (redesigned 2026-09, owner-approved):** the module is the BUS CAN — a short, wide, ten-sided instrument prism in weathered off-white, copied along a charcoal spine with visible joint rings between copies. Every can carries one teal optic, one faded-orange re-fabricated facet (a panel the lineage could not colour-match) and a registry band (the lineage stencil at one letter height). Forward SURVEY BOOMS of unequal length are the antenna forest. The outline-breaker on every class is the annular REPORT DISH at the stern (about half the hull length across, one gore re-fabricated in orange); the countable drive fires through its centre. Larger classes carry THE ANCIENT CORE (the original probe body: dark, nine-sided, caged, off-centre) and nested DAUGHTER CRAFT that are the same design at light-class scale. Variation is systematic copy drift (facet count 9/10/11, plate step), not human patchwork.
 
-**Avoid:** pristine killer robots, humanoid robot faces, random asymmetry, chrome, or mystical floating pieces without mechanical purpose.
+**Avoid:** pristine killer robots, humanoid robot faces, random asymmetry, chrome, radial petal fans (retired with the redesign), or mystical floating pieces without mechanical purpose.
 
-- **Light — daughter probe:** A central teal optic, three or four repeated instrument petals, small fabrication socket, and a tiny detachable copy nested beneath it.
-- **Ace — divergent surveyor:** A high-speed lineage with duplicated drive modules and slightly mismatched recursive fins—the same design copied, corrected, and copied again.
-- **Cutter — contact probe:** A robust survey chassis with several manipulator/inspection arms, sample exchange ports, and daughter probes arranged around an old central body.
-- **Heavy — replication defender:** A dense machinery core surrounded by replaceable armor modules, fabrication bays, and duplicated sensor/weapon clusters. Function should remain legible despite complexity.
-- **Frigate — archive surveyor:** A long archive spine bearing repeated data vaults, an antenna crown, probe launch petals, and a protected ancient core embedded off-center by generations of growth.
-- **Freighter — foundry lineage:** A colossal mobile replication yard: resource hoppers, repeating foundry cells, daughter-ship racks, and successive generations of modules extending down one spine. The smallest visible daughter probe should be light-class scale.
+- **Light — daughter probe:** Survey head can with the largest teal optic, two booms, one spine can with cruciform instrument petals and a ventral fabrication socket, one nozzle through a report dish half the hull length across. This IS the daughter that larger classes nest.
+- **Ace — divergent surveyor:** Three booms, head plus two cans, duplicated drive pods on the stern can, and two mismatched recursive fins (the ventral one a drifted smaller copy). Narrower dish, two nozzles.
+- **Cutter — contact probe:** Head plus three cans; two forward-reaching manipulator arms, sample-exchange sockets on the flanks, one daughter craft cradled beneath the middle can.
+- **Heavy — replication defender:** Head plus four tightly pitched cans with thick replaceable armour plates, duplicated weapon barbettes top and bottom, fabrication bays on the flanks, a radiator cross beside the reactor, four nozzles.
+- **Frigate — archive surveyor:** Head plus six archive-vault cans on a long visible spine; the fourth slot is empty spine with the ANCIENT CORE caged beneath it; antenna crown, probe-launch petals, two cradled daughters, a radiator pair, four nozzles.
+- **Freighter — foundry lineage:** Head plus ten generations of cans; resource hoppers riding two of them, repeating foundry cells with teal irises on three, four daughter craft racked beneath the bow cans (the smallest visible daughter is light-class scale), the ANCIENT CORE below the seventh slot, a radiator cross, six nozzles through the largest report dish.
 
 ## 4.9 Congregation of the Further Shore — pilgrimage aimed outward
 

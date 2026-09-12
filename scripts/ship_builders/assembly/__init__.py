@@ -1,40 +1,42 @@
-"""Assembly pilot ship builders.
+"""Assembly pilot ship builders (2026-09 redesign, owner-approved).
 
-Bible §4.8: "inheritance copied until it became civilization … repeated
-probe modules on charcoal structural spines". Construction logic from the
-reference corpus (SpaceShipIdeas/synthesis/20 §5, 21 §G2/§G6): REPEATED
-MODULE. One part, many copies, radial and linear arrays, visible joints.
-Variation is systematic copy-drift, not human patchwork.
+Bible §4.8: the Assembly descends from ONE ancient human survey probe,
+copied for ten thousand generations. A survey probe is an instrument
+bus, a high-gain dish that points home, long booms and a power source;
+the fleet grew from those four parts. Construction logic (synthesis/20
+§5, 21 §G6): REPEATED MODULE — one part, many copies, linear arrays,
+visible joints. Variation is systematic copy-drift (facet count 9/10/11,
+plate step), never human patchwork.
 
-The Assembly is a SPINE WITH RADIAL FANS. It refuses Veridian's stepped
-slab, Ferrous's segmented cigar, Freehold's empty truss gap, Ledger salvage
-booms, the Gilded lapped leaf, Beautiful grown flesh, and Unknowables lace.
-The silhouette family is SPINE-AND-PODS / cruciform fans, held across all
-six classes. The outline-breaker (§G2, ≥ 15 % of hull length) is the
-RADIAL MODULE FAN — keep and enlarge versus the plate's timid fans.
+Silhouette family, held across all six classes: SURVEY HEAD + CAN SPINE +
+REPORT DISH. The §G2 outline-breaker is the annular REPORT DISH at the
+stern (about 0.5 l across); the countable drive fires through its hole.
+It refuses Veridian's stepped slab, Ferrous's segmented cigar, Freehold's
+empty truss gap, Ledger salvage booms, the Gilded lapped leaf, Beautiful
+grown flesh, Unknowables lace and Congregation's tight reliquary stack
+(Assembly cans sit apart on a visible spine, and the dish is the tell).
 
-The 08-assembly-ship.png plate is CONCEPT ART, not a model to reproduce:
-a long charcoal structural spine of repeating cylindrical bays with visible
-joints; weathered off-white shell modules clamped onto the spine (not a
-smooth closed hull); faded orange replacement panels as BLOCK accents
-(one shape family, 3–8 % of area); teal circular optics; a dorsal petal-fan
-near the bow and a stern radial fan; an antenna forest on the mid spine;
-many small daughter probes; a fabrication iris in a dark nose collar.
+Concept sheet: docs/FactionExamples/08-assembly-ship-concept-2026-09.png
+(owner-approved: hero frigate, aft view, module callout, fleet line-up). The old 08-assembly-ship.png plate
+is superseded for ships; its palette (off-white, charcoal, faded orange,
+teal) is unchanged.
 
 Layout
 ------
 surface.py    shared hull-surface queries, the absolute human + Assembly
               module, and the ``surf_*`` callback factories. No geometry,
               no ship_kit. Importable by plain CPython.
-lineage.py    the Assembly surface language — spine bays, clamped shells,
-              visible joint rings, orange replacement patches, radial fans,
-              copy-drift. Builds through ship_kit only. No hull queries.
-hardware.py   the Assembly equipment — teal optics, instrument petals,
-              daughter probes, fabrication sockets, antenna forests, the
-              countable drive face, flat radiators, docking collars.
+lineage.py    the Assembly surface language — the BUS CAN (drum, end
+              joints, edge seams, stepped shell plates, orange facet,
+              registry band), spine bar, THE ANCIENT CORE, copy-drift.
               Builds through ship_kit only. No hull queries.
-<class>.py    one file per class once authored; each owns its station list
-              and its body plan. Not present in this foundation wave.
+hardware.py   the Assembly equipment — teal optics, instrument petals,
+              fabrication sockets, antenna forests, the REPORT DISH,
+              stern_cluster (housing + neck + dish + countable nozzles),
+              survey booms, radiator sets, manipulator arms, cradles and
+              the nested daughter_craft. Builds through ship_kit only.
+<class>.py    one file per class; each owns its body plan (can pitch,
+              dish radius, what rides which can).
 
 Skin
 ----

@@ -10,7 +10,7 @@ Accessed: 2026-08-12
 ## 1. What the current concept art already does well
 
 - Every faction render carries one clear silhouette family. Veridian is a stepped slab, Ferrous is
-  a segmented cigar, Assembly is a spine with radial fans, Beautiful Ones is a manta.
+  a segmented cigar, Assembly is a spine with radial fans (redesigned 2026-09 to survey head + can spine + report dish), Beautiful Ones is a manta.
 - Colour habits are disciplined. Veridian uses green light on dark metal, Ferrous uses red-brown
   stripe on grey, Assembly uses teal light with orange patch panels, Lamplighter uses yellow and blue.
 - Scale escorts appear in most frames. Small craft beside the main hull give an immediate size read.
@@ -30,7 +30,7 @@ distance break the outline with a few large elements: Galactica flight pods, Don
 Serenity nacelles, Sulaco hung pods, Rifter twin booms.
 **Fix:** give each faction one outline-breaking element of at least 15 % of hull length:
 Ferrous — armour rib flare; Veridian — cargo cradle wings; Red Ledger — salvage boom;
-Lamplighter — gate-arm fork; Assembly — radial module fans (already present, keep and enlarge).
+Lamplighter — gate-arm fork; Assembly — the annular stern REPORT DISH (2026-09 redesign; replaced the radial module fans).
 
 ### G3. Thermal and propulsion systems are not visible.
 No current render shows radiators, a shielded reactor face, or a real nozzle count. The NASA OTV
@@ -64,7 +64,7 @@ boxes". The corpus shows four distinct logics: exposed frame, closed shell, repe
 | Gilded Chain | Closed shell, ornament | One continuous curve; edge-only precious trim; long thin light lines |
 | Beautiful Ones | Grown body | No panel lines; flow-line detail; lights on the flow lines |
 | Unknowables | Field body | Stable envelope with implied structure; light without a lamp |
-| Assembly | Repeated module | One part, many copies, radial and linear arrays; visible joints |
+| Assembly | Repeated module | One survey bus can, many copies in a linear array on a visible spine; visible joints; stern report dish |
 | Congregation | Repeated module, ritual | Stacked reliquary cans; procession of identical shrines along a spine |
 | Lamplighter Guild | Exposed frame, utility | Gantries, cable runs, work lights, and clamp arms |
 
