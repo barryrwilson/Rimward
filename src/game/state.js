@@ -589,6 +589,48 @@ export function oreKeysForBand(band) {
   return Object.keys(ORE_BAND_WEIGHTS[band] ?? ORE_BAND_WEIGHTS[0]);
 }
 
+// Issue #149: a rock mined to zero ore breaks up and leaves the field; a new
+// rock of ANOTHER ore kind seeds the same slot delaySeconds + [0, spreadSeconds)
+// of world time later. Animation lengths are the break-up collapse, the shard
+// burst, and the grow-in (reducedMotion snaps all three).
+export const ASTEROID_RESPAWN = Object.freeze({
+  delaySeconds: 180,
+  spreadSeconds: 120,
+  collapseSeconds: 0.5,
+  shardSeconds: 0.9,
+  growSeconds: 0.6,
+});
+
+/**
+ * Ore kind for a respawned rock (issue #149). Draws from the band's weights
+ * restricted to `allowedKeys` (the ore kinds the built field can render) and
+ * skips `excludeKey` (the mined-out kind) whenever another kind is allowed.
+ * `roll` is 0..1. Falls back to excludeKey, then 'rawOre', so it never throws.
+ */
+export function pickRespawnOreType(band, roll, allowedKeys, excludeKey) {
+  const weights = ORE_BAND_WEIGHTS[band] ?? ORE_BAND_WEIGHTS[0];
+  const keys = [];
+  let total = 0;
+  for (const key in weights) {
+    if (!Object.hasOwn(weights, key) || !(weights[key] > 0)) continue;
+    if (allowedKeys && !allowedKeys.has(key)) continue;
+    if (key === excludeKey) continue;
+    keys.push(key);
+    total += weights[key];
+  }
+  if (keys.length === 0 || !(total > 0)) {
+    if (typeof excludeKey === 'string' && Object.hasOwn(ORE_TYPES, excludeKey)) return excludeKey;
+    return 'rawOre';
+  }
+  const r = Number.isFinite(roll) ? Math.min(0.999999, Math.max(0, roll)) : 0;
+  let acc = r * total;
+  for (let i = 0; i < keys.length; i++) {
+    acc -= weights[keys[i]];
+    if (acc <= 0) return keys[i];
+  }
+  return keys[keys.length - 1];
+}
+
 // ---------- Star systems (§15.1/§15.3) ----------
 // Wave 19: merged galaxy — authored lane first (contacts.js ledger iteration
 // rides SYSTEMS key order), then the 94 generated systems. Generator

@@ -2824,7 +2824,7 @@ export function initHud(ctx) {
         const rocks = ctx.asteroids && ctx.asteroids.list;
         if (rocks) {
           for (let i = 0; i < rocks.length; i++) {
-            const d = rocks[i] && rocks[i].position;
+            const d = rocks[i] && rocks[i].radius > 0 ? rocks[i].position : null; // #149
             if (!d) continue;
             const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
             if (dx * dx + dy * dy + dz * dz <= r2) { pKey = promptKeyFor('reticleLock', 'V'); pVerb = 'Lock'; break; }

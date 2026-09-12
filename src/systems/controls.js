@@ -673,7 +673,7 @@ function collectCycleCands(ctx) {
       oreKeys = null;
     }
     for (const a of list) {
-      if (!a || !a.position) continue;
+      if (!a || !a.position || !(a.radius > 0)) continue; // #149: removed slots never cycle
       if (matchOn) {
         let ok = false;
         try { ok = rockMatchesOreKeys(a, oreKeys); } catch { ok = false; }
@@ -880,6 +880,8 @@ function dropStaleRockLock(ctx) {
   if (!isRockLock(t)) return;
   const list = ctx.asteroids && ctx.asteroids.list;
   if (!list || list.indexOf(t) < 0) ctx.targets.current = null;
+  // Issue #149: a mined-out slot leaves the field; the lock goes with it.
+  else if (!(t.radius > 0)) ctx.targets.current = null;
 }
 
 function currentSystemDef(ctx) {
