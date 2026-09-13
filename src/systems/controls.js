@@ -47,6 +47,17 @@ import { combatWeapon, combatSample, createCombat, combatTick, combatView } from
  * published (and cleared) at the top of update() so later systems in the
  * same frame still see them. Window blur zeroes axes/fire/drift so the ship
  * never runs away while unfocused; the throttle setpoint persists (§5.1).
+ *
+ * AGENT OWNERSHIP (issue #163): while an agent lease (raw or combat) is live,
+ * or a helm path the agent bridge engaged (autopilot, dock approach, automine,
+ * flee) is still engaged, the human takes the ship back with Escape ONLY.
+ * Pointer motion, any mousedown, tracked flight keys and the fire button
+ * neither drop the lease nor write steer, throttle or fire; the cursor is
+ * still tracked so the reticle is right at handoff. Physical edges during
+ * ownership are discarded, not buffered: a key held through Escape does
+ * nothing until released and pressed again. Camera (C) stays live — it is a
+ * view control, not a ship control. Escape under an overlay keeps its overlay
+ * meaning and does not take the ship.
  */
 
 // Keys this system owns; everything else is left to the browser.
@@ -203,8 +214,8 @@ const PULSE_EDGES = new Set(['dock', 'hail', 'target', 'reticleLock', 'afterburn
 // bundle of normalized player inputs — steering/strafe/roll axes, a throttle
 // setpoint target (ramped at the player rate), fire and drift holds — applied
 // by update() at game rate while the outer planner refreshes at low rate.
-// It is not a helm: AP/AM/flee ownership is refused, not stolen, and any
-// physical flight input wins immediately. Every unsafe lifecycle transition
+// It is not a helm: AP/AM/flee ownership is refused, not stolen. Only Escape
+// hands the ship back to the human (issue #163). Every unsafe lifecycle transition
 // (expiry, blur, pause, berth hold, overlays, dock, jump, death, opt-out,
 // explicit clear) zeroes the lease before the next combat tick, so fire can
 // never stick. Session-only module state; nothing persists.
@@ -219,8 +230,18 @@ const LEASE_KEYS = new Set([
 
 let lease = null; // { seq, expiresAt, steerX, steerY, strafeX, strafeY, roll, throttle, fire, drift }
 let leaseSeq = 0; // last accepted sequence; stale arrivals refused
-let leaseNote = { state: 'idle', seq: 0, reason: '', t: 0 }; // last terminal transition
+let leaseNote = { state: 'idle', seq: 0, reason: '', t: 0, input: '' }; // last terminal transition
 let combatNote = null;
+// Issue #163: agent helm ownership, keyed by ctx. The bridge marks a helm path
+// it engaged; the mark is inert once no helm is engaged or Agent Play is off,
+// and the owning update() tidies it away. A pure read from another reader
+// (hud.js, a harness with a second ctx) never clears it.
+// helmRelease is registered by agent-api.js so controls.js does not import
+// the helm modules (autopilot.js and agent-flee.js already import this one).
+const helmMarks = new WeakMap();
+let helmRelease = () => {};
+let escapeHandoff = false; // true only inside the Escape takeover drop
+let discardPhysical = () => {};
 // Issue #118: human-readable context for the last argument or target refusal
 // returned by agentControlSet / agentCombatSet. The token stays the stable
 // enum; this string only says which field or which precondition failed.
@@ -288,8 +309,59 @@ function expireCombat(ctx) {
   }
 }
 
-function noteLease(ctx, state, seq, reason) {
-  leaseNote = { state, seq, reason, t: simNow(ctx) };
+function noteLease(ctx, state, seq, reason, input = '') {
+  leaseNote = { state, seq, reason, t: simNow(ctx), input };
+}
+
+function helmEngaged(ctx) {
+  try {
+    if (ctx.autopilot && ctx.autopilot.engaged === true) return true;
+    if (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true) return true;
+    if (ctx.automine && ctx.automine.engaged === true) return true;
+    if (ctx.flee && ctx.flee.engaged === true) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** True while a helm path the agent bridge engaged is still flying the ship. Pure read. */
+function agentOwnsHelm(ctx) {
+  if (!ctx || helmMarks.get(ctx) !== true) return false;
+  return !!ctx.agent && ctx.agent.optIn === true && helmEngaged(ctx);
+}
+
+/**
+ * Issue #163: true while the agent owns the ship — a live raw or combat lease,
+ * or an agent-engaged helm path. hud.js reads it for the takeover notice.
+ */
+export function agentOwnsShip(ctx) {
+  try {
+    if (lease) return true;
+    return agentOwnsHelm(ctx);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * agent-api.js calls this after engageAutopilot / approachDock /
+ * engageAutomine / afterburner (flee) succeed. Physical holds present at the
+ * moment of handover are discarded so nothing steers on the first tick.
+ */
+export function markAgentHelm(ctx) {
+  try {
+    if (!ctx || !ctx.agent || ctx.agent.optIn !== true || !helmEngaged(ctx)) return;
+    helmMarks.set(ctx, true);
+    discardPhysical();
+  } catch {
+    /* never throw */
+  }
+}
+
+/** Registered once by agent-api.js: (ctx, reason) disengages every helm path. */
+export function registerAgentHelmRelease(fn) {
+  helmRelease = typeof fn === 'function' ? fn : () => {};
 }
 
 /** Idempotent. Returns true when a live lease was dropped. */
@@ -309,7 +381,8 @@ function dropLease(ctx, reason) {
     combatRelease();
   }
   lease = null;
-  noteLease(ctx, reason === 'expired' || reason === 'suspended' ? 'expired' : 'cleared', seq, reason || 'cleared');
+  noteLease(ctx, reason === 'expired' || reason === 'suspended' ? 'expired' : 'cleared', seq, reason || 'cleared',
+    escapeHandoff ? 'escape' : '');
   return true;
 }
 
@@ -438,6 +511,8 @@ export function agentControlSet(ctx, spec) {
       drift: spec.driftHeld === true,
     };
     noteLease(ctx, 'active', seq, '');
+    // Issue #163: holds present at handover are discarded, never buffered.
+    discardPhysical();
     return '';
   } catch {
     return 'no-service';
@@ -527,6 +602,7 @@ export function agentCombatSet(ctx, spec) {
     ctx.input.fullStop = false;
     if (!keep) ctx.input.driftHeld = ctx.input.agentBurnerHeld = ctx.input.afterburnerPressed = false;
     noteLease(ctx, 'active', leaseSeq, '');
+    discardPhysical();
     return '';
   } catch { return 'no-service'; }
 }
@@ -576,6 +652,8 @@ export function agentControlStatus(ctx) {
       expiresIn: 0,
       fire: false,
       reason: leaseNote.reason,
+      // Issue #163: which human input class ended the lease ('escape').
+      ...(leaseNote.input ? { input: leaseNote.input } : {}),
       ...(combatNote ? { combat: { ...combatNote, defense: { ...combatNote.defense,
         latestCue: combatNote.defense.latestCue ? { ...combatNote.defense.latestCue } : null } } } : {}),
     };
@@ -998,6 +1076,8 @@ export function initControls(ctx) {
   lease = null;
   leaseSeq = 0;
   combatNote = null;
+  helmMarks.delete(ctx);
+  escapeHandoff = false;
   noteLease(ctx, 'idle', 0, '');
 
   // Mouse reticle state (null = not moved yet → treated as screen center).
@@ -1020,7 +1100,51 @@ export function initControls(ctx) {
     hailWasOpen = hailOpen;
   };
   physicalHeld = () => pressed.size > 0 || fireDown;
-  combatRelease = () => { mouseX = mouseY = null; pendingAfterburner = false; };
+  // An Escape handoff keeps the live cursor so the first steer sample is the
+  // reticle the player sees; every other combat release re-centres it.
+  combatRelease = () => { if (!escapeHandoff) mouseX = mouseY = null; pendingAfterburner = false; };
+  discardPhysical = () => { pressed.clear(); fireDown = false; };
+
+  /**
+   * Issue #163: true when an overlay owns Escape (or the ship is not in open
+   * flight), so Escape keeps its overlay meaning and does not take the ship.
+   */
+  const overlayOwnsEscape = () => {
+    try {
+      const f = ctx.flags || {};
+      if (f.paused === true || f.docked === true || f.berthHold === true) return true;
+      if (f.hailOpen === true || f.chartOpen === true || f.berthOpen === true) return true;
+      if (ctx.gate && ctx.gate.jumping === true) return true;
+      if (playSurfaceBlocked(ctx) === true) return true;
+      if (settingsOwnsScreen() === true) return true;
+      if (ctx.models?.isOpen?.()) return true;
+      if (titleOverlayAttached()) return true;
+      const death = ctx.deathApi;
+      if (death && typeof death.isOpen === 'function' && death.isOpen() === true) return true;
+      return false;
+    } catch {
+      return true;
+    }
+  };
+
+  /** Escape in open flight: the only human takeover. Returns true when it took the ship. */
+  const humanTakeover = () => {
+    let took = false;
+    if (lease) {
+      escapeHandoff = true;
+      try { dropLease(ctx, 'player-override'); } finally { escapeHandoff = false; }
+      took = true;
+    }
+    if (agentOwnsHelm(ctx)) {
+      try { helmRelease(ctx, 'input'); } catch { /* helm modules never throw; keep the handoff */ }
+      took = true;
+    }
+    helmMarks.delete(ctx);
+    // Keys or a button held through Escape do nothing until released and
+    // pressed again (the pause resume rule).
+    discardPhysical();
+    return took;
+  };
 
   // One-frame edge pulses, captured in handlers and published in update().
   // pendingTarget/Hail/Dock/ReticleLock/Afterburner live at module scope (agentPulse).
@@ -1128,6 +1252,12 @@ export function initControls(ctx) {
       // Intentional Settings mutex (RW-002 PR1): skip all TRACKED while open.
       if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return;
     } catch { /* helper miss: keep flight keys */ }
+    // Issue #163: Escape is the only human takeover while the agent owns the
+    // ship. Under an overlay it keeps its overlay meaning (never rebindable).
+    if (code === 'Escape') {
+      if (!e.repeat && !overlayOwnsEscape()) humanTakeover();
+      return;
+    }
     // Hail responses already own digits 1–9. Deliberate negotiation takes
     // over before their existing menu routing skips the flight handler.
     if (!e.repeat && lease?.combat && ctx.flags.hailOpen && isMenuDigitCode(code)
@@ -1144,10 +1274,12 @@ export function initControls(ctx) {
     // pre-pause hold released during pause is not stuck on resume.
     if (ctx.flags && ctx.flags.paused === true) return;
     if (stationOrHailOwns(ctx) && skipStationHailCode(code)) return;
-    if (lease?.combat) dropLease(ctx, 'player-override');
+    const id = codeToOwned.get(code);
+    // Issue #163: while the agent owns the ship a flight key is discarded,
+    // not buffered and not a takeover. Camera stays a view control.
+    if (id !== 'camera' && agentOwnsShip(ctx)) return;
     pressed.add(code);
 
-    const id = codeToOwned.get(code);
     if (id === 'afterburner') pendingAfterburner = true;
     else if (id === 'targetCycle') pendingTarget = true;
     else if (id === 'hail') pendingHail = true;
@@ -1179,22 +1311,23 @@ export function initControls(ctx) {
     pressed.delete(code);
   });
 
+  // Issue #163: pointer motion and clicks never take the ship from the agent.
+  // The cursor is still recorded so the reticle is correct at handoff.
   window.addEventListener('mousemove', (e) => {
-    if (lease?.combat) dropLease(ctx, 'player-override');
     mouseX = e.clientX;
     mouseY = e.clientY;
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (lease?.combat) {
-      dropLease(ctx, 'player-override');
-      if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
-        mouseX = e.clientX; mouseY = e.clientY;
-      }
+    // While the agent owns the ship a click still records the cursor, so a
+    // later Escape steers from the point the player is actually at.
+    if (agentOwnsShip(ctx) && Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+      mouseX = e.clientX; mouseY = e.clientY;
     }
     if (fireMouseButton >= 0 && e.button === fireMouseButton) {
       syncFireOwnership();
-      if (!physicalFireBlocked(ctx)) fireDown = true;
+      // A fire edge while the agent owns the ship is discarded, not buffered.
+      if (!physicalFireBlocked(ctx) && !agentOwnsShip(ctx)) fireDown = true;
     }
     if (fireMouseButton === 1 && e.button === 1) e.preventDefault();
     if (fireMouseButton === 2 && e.button === 2) e.preventDefault();
@@ -1311,8 +1444,13 @@ export function initControls(ctx) {
       sy = Math.max(-1, Math.min(1, sy * gain));
       if (ctx.settings && ctx.settings.invertX === true) sx = -sx;
       if (ctx.settings && ctx.settings.invertY === true) sy = -sy;
-      input.steerX = sx;
-      input.steerY = sy;
+      // Issue #163: an agent-engaged helm flies the hull; the reticle still
+      // follows the cursor, but the human steer sample is not published.
+      const agentHelm = agentOwnsHelm(ctx);
+      if (agentHelm) discardPhysical();
+      else if (helmMarks.get(ctx) === true) helmMarks.delete(ctx); // helm ended or Agent Play off
+      input.steerX = agentHelm ? 0 : sx;
+      input.steerY = agentHelm ? 0 : sy;
       // Pixel offset from screen center (0,0 = centered) — HUD re-centers it.
       // Helm invert/gain must not move the pip; KeyV still locks under the cursor.
       ctx.targets.reticleScreen.x = ox;
@@ -1384,9 +1522,9 @@ export function initControls(ctx) {
             }
           }
         }
-        // Player emergency input wins: any physical flight key or fire button
-        // held this frame drops the lease outright (no silent sharing).
-        if (lease && (fireDown || pressed.size > 0)) dropLease(ctx, 'player-override');
+        // Issue #163: physical flight input no longer drops the lease; the
+        // listeners discard it while the agent owns the ship. Escape is the
+        // only takeover (see humanTakeover above).
       }
       if (lease?.combat) {
         let reason;

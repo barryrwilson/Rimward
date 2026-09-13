@@ -24974,8 +24974,15 @@ removeLiveShip(w42indyCtx, w42indy);
   for (const fn of winListeners.keydown ?? []) {
     fn({ code: 'KeyD', repeat: false, preventDefault() {} });
   }
-  tick(1, 'w132 strafe steal');
-  const hypotLatch = !!hypotHeld
+  tick(1, 'w132 strafe discarded');
+  // Issue #163: a flight key no longer steals an agent-engaged helm; only
+  // Escape hands the ship back, and the helm ends with the manual-helm reason.
+  const strafeDiscarded = !!hypotHeld && ctx.autopilot?.engaged === true && ctx.input.strafeX === 0;
+  for (const fn of winListeners.keydown ?? []) {
+    fn({ code: 'Escape', repeat: false, preventDefault() {} });
+  }
+  tick(1, 'w132 escape takeover');
+  const hypotLatch = !!strafeDiscarded
     && ctx.autopilot?.engaged === false
     && ctx.autopilot?.reason === 'input';
   for (const fn of winListeners.keyup ?? []) {

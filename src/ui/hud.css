@@ -755,6 +755,23 @@ body.rw-colorblind .rw-facing-end.is-dim {
 #hud .rw-autopilot.is-hidden,
 #hud .rw-automine.is-hidden { display: none; }
 
+/* Issue #163: agent ownership notice — Escape is the only human takeover. */
+#hud .rw-agent-helm {
+  position: relative;
+  padding: 4px 10px;
+  background: rgba(2, 6, 13, 0.82);
+  border: 1px solid rgba(255, 180, 84, 0.55);
+  border-radius: 2px;
+  pointer-events: none;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+#hud .rw-agent-helm.is-hidden { display: none; }
+
 #hud .rw-autopilot-dest,
 #hud .rw-autopilot-next,
 #hud .rw-autopilot-rem,

@@ -149,9 +149,13 @@ test('grant cancellation, dock/hold/lifecycle gates cannot be revived by new cue
   }
   for(const flag of ['docked','berthHold']) {const f=fixture();f.ctx.flags[flag]=true;cue(f);assert.equal(f.start().ok,false);f.tick();assert.equal(f.ctx.input.throttle,0);}
 });
-test('physical takeover is synchronous, held controls refuse renewal, and focus preserves wall-bounded defense',()=>{
+test('Escape takeover is synchronous, incidental keys are not, held controls refuse renewal, and focus preserves wall-bounded defense',()=>{
   const f=fixture();f.start();cue(f);f.tick();f.emit('keydown',{code:'KeyR',repeat:false});
-  assert.equal(f.status().reason,'player-override');assert.equal(f.ctx.input.agentBurnerHeld,false);assert.equal(f.start().token,'player-override');
+  assert.equal(f.status().owner,'combat','issue #163: a flight key is not a takeover');assert.equal(f.status().combat.defense.phase,'evading');
+  f.emit('keydown',{code:'Escape',repeat:false});
+  assert.equal(f.status().reason,'player-override');assert.equal(f.status().input,'escape');assert.equal(f.status().combat.defense.phase,'completed');
+  assert.equal(f.ctx.input.agentBurnerHeld,false);
+  const held=fixture();held.emit('keydown',{code:'KeyR',repeat:false});cue(held);assert.equal(held.start().token,'player-override');
   let now=performance.now();const clock=mock.method(performance,'now',()=>now);
   try {const g=fixture();g.start({ttl:2});cue(g);g.tick();g.emit('blur');assert.equal(g.status().owner,'combat');
     now+=2001;assert.equal(g.api.observe().control.reason,'expired');cue(g);g.tick();assert.equal(g.ctx.input.fullStop,true);
