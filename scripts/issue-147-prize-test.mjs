@@ -25,15 +25,22 @@
  *   7  persistence: the prize and the captives ride snapshot/restore; a
  *      corrupt prize fails safe; a culled pirate comes back owing its fence
  *      run; a broken pirate spills its captives as survivor pods
+ *   8  claim: any passing ship may claim a crewless hull — the player hails
+ *      a locked derelict (H), claims it, the hull leaves the lane on the
+ *      claimed ledger, the hull's faction docks standing, pirates take more
+ *      interest; the yard returns it at its own faction (standing back, no
+ *      pay) or buys it elsewhere at hotHullFence; a contract hull and a full
+ *      ledger are not claimable; the ledger rides snapshot/restore
  *
  * Run: npm run test:prize
  */
 import * as THREE from 'three';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
-import { ECON, PRIZE, PIRACY, cargoHoldFor } from '../src/game/state.js';
+import { ECON, PRIZE, PRIZE_CLAIM, PIRACY, U, cargoHoldFor } from '../src/game/state.js';
+import { sanitizeClaimedHulls, claimableDerelict } from '../src/game/derelict.js';
 import { prizeOdds, hullPrizeValue, sellCaptives, sanitizePrizeRecord, rollTaste, tasteOf, rollPrizeChoice, PRIZE_TASTES } from '../src/game/prize.js';
 import { TRAFFIC_LIST_UU } from '../src/game/trafficking.js';
-import { spillShipCargo } from '../src/systems/npc.js';
+import { spillShipCargo, playerInterestChance } from '../src/systems/npc.js';
 
 let fails = 0;
 function pin(name, ok, detail) {
@@ -489,6 +496,161 @@ pin('0d rollTaste walks PRIZE.tasteWeights in order (cargo, crew, hull) and fail
     && survivorPod.contents[0].faction === 'freehold' && survivorPod.contents[0].source === 'other' && survivorPod.contents[0].name === 'Held Crew' && spiller.state.cargo.length === 0, ctx.pods.map((p) => p.contents));
   despawn(spiller);
   clearPods();
+}
+
+// ---- 8  claim: a passing ship takes a crewless hull ------------------------------
+{
+  /** A crewTaken derelict made the real way (a slaver boards, takes the crew). Returns the live trader. */
+  function makeCrewTakenDerelict(faction = 'freehold') {
+    // Section 7's fold swept every hull out of the world, and a berth visit culls
+    // anything left at FAR: each derelict gets its own boarder, retired after.
+    const pirate8 = spawn('pirate', 'cutter');
+    const trader = spawn('trader', 'freighter', { cargo: [] });
+    trader.record.faction = faction; trader.state.faction = faction;
+    pirate8.record.taste = 'crew';
+    const m = breakTrader(pirate8, trader, 0.7);
+    pirate8.record.taste = 'hull';
+    waitHold(pirate8);
+    let taken = false;
+    for (let i = 0; i < 60 * 40 && !taken; i++) { tickHeld(1); taken = receiptsSince(m, 'npcPrizeTaken').length > 0; }
+    despawn(pirate8);
+    return trader;
+  }
+  const claimAll = () => ctx.world.claimedHulls ?? [];
+  const hailsSince = (m) => receiptsSince(m, 'hailOpened');
+  /** Park the player inside hail range of the hull, lock it, press H. */
+  function hailDerelict(trader) {
+    const at = trader.object.position.clone(); at.x += U.TARGET_RANGE * 0.5;
+    ctx.ship.object.position.copy(at); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
+    ctx.targets.current = trader;
+    tickHeld(2, at);
+    const m = mark();
+    dom.dispatchKey('KeyH');
+    tickHeld(2, at);
+    return { m, at };
+  }
+  const closeHail = () => { dom.dispatchKey('Escape'); tickHeld(2); ctx.targets.current = null; };
+
+  // 8a-i: the claim.
+  const t1 = makeCrewTakenDerelict('freehold');
+  pin('8a fixture: a crewTaken derelict in the lane', t1.record.state === 'derelict' && t1.record.derelict?.reason === 'crewTaken' && ctx.ships.includes(t1), { state: t1.record.state });
+  const rep0 = ctx.world.reputation?.freehold ?? 0;
+  const credits0 = ctx.world.credits;
+  const fear0 = ctx.world.fear;
+  const probe = { temper: 0.5, taste: 'cargo' };
+  const interest0 = playerInterestChance(ctx, probe);
+  const { m, at } = hailDerelict(t1);
+  const hails = hailsSince(m).filter((e) => e.ship === t1);
+  pin('8b H on a locked derelict opens a salvage-family card offering claimHull and letGo', hails.length === 1 && hails[0].salvage === true && hails[0].derelict === true
+    && JSON.stringify(hails[0].intents) === JSON.stringify(['claimHull', 'letGo']) && /claims her/.test(hails[0].line), hails.map((e) => [e.intents, e.salvage, e.line]));
+  const peek = ctx.hailApi.peek();
+  pin('8c the public card reads salvage with the claim verb', !!peek && peek.kind === 'salvage' && Array.isArray(peek.intents) && peek.intents.includes('claimHull'), peek);
+  const res = ctx.hailApi.resolve('claimHull');
+  tickHeld(3, at);
+  const claimed = receiptsSince(m, 'derelictClaimed');
+  pin('8d claimHull resolves: the derelict is recovered by the player and the record ends captured', res !== 'stale' && t1.record.state === 'captured' && t1.record.derelict?.outcome === 'recovered' && t1.record.derelict?.claimant === 'player', { res, state: t1.record.state, d: t1.record.derelict });
+  pin('8e one derelictClaimed receipt names the hull; the hull leaves the lane', claimed.length === 1 && claimed[0].targetId === t1.record.id && claimed[0].targetName === t1.record.name && claimed[0].classKey === 'freighter'
+    && claimed[0].faction === 'freehold' && !ctx.ships.includes(t1), claimed);
+  const led = claimAll();
+  pin('8f the claimed ledger carries one JSON-plain entry (v, id, name, class, faction, reason, claimedAt, system, repHit)', led.length === 1 && led[0].v === 1 && led[0].id === t1.record.id && led[0].classKey === 'freighter' && led[0].faction === 'freehold'
+    && led[0].reason === 'crewTaken' && led[0].system === SYS && Number.isFinite(led[0].claimedAt) && led[0].repHit === PRIZE_CLAIM.repHit
+    && JSON.stringify(led[0]) === JSON.stringify(JSON.parse(JSON.stringify(led[0]))), led);
+  pin('8g the risk passes with the claim: the hull\'s faction docks standing, and pirates take more interest while it is unsettled', (ctx.world.reputation?.freehold ?? 0) === rep0 - PRIZE_CLAIM.repHit
+    && playerInterestChance(ctx, probe) > interest0 && Math.abs(playerInterestChance(ctx, probe) - interest0 - PRIZE_CLAIM.interestPerHull) < 1e-9, { rep: ctx.world.reputation?.freehold, rep0, i0: interest0, i1: playerInterestChance(ctx, probe) });
+  pin('8h no pay and no fear at the claim itself; the stale recovery card is pulled', ctx.world.credits === credits0 && ctx.world.fear === fear0
+    && ctx.world.aftermath.every((a) => a.derelictId !== t1.record.id || a.expiresAt <= ctx.world.time), { credits: ctx.world.credits, credits0 });
+  pin('8i Echo says whose troubles they are now', linesSince(m).some((l) => l.startsWith('Echo:') && /salvage claim logged/.test(l) && /Freehold Compact will not thank you/.test(l)), linesSince(m));
+  closeHail();
+  mine.delete(t1); despawn(t1);
+  ctx.ship.object.position.copy(FAR);
+  tickHeld(3);
+
+  // 8j-l: at the hull's OWN faction yard she goes home — no pay, the standing comes back.
+  {
+    const stp = ctx.systems[SYS].station.position;
+    const near = new THREE.Vector3(stp[0] + 36, stp[1], stp[2]);
+    ctx.ship.object.position.copy(near); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
+    tick(2);
+    const m2 = mark();
+    ctx.input.dockPressed = true;
+    tick(3);
+    ctx.input.dockPressed = false;
+    const settled = receiptsSince(m2, 'hullSettled');
+    pin('8j docked at the Freehold yard: the Freehold hull is returned — no pay, the standing comes back, the ledger empties', ctx.flags.docked === true && settled.length === 1 && settled[0].outcome === 'returned' && settled[0].credits === 0
+      && settled[0].repBack === PRIZE_CLAIM.repHit && (ctx.world.reputation?.freehold ?? 0) === rep0 && ctx.world.credits === credits0 && claimAll().length === 0, { docked: ctx.flags.docked, settled, rep: ctx.world.reputation?.freehold });
+    pin('8k a station line says so', linesSince(m2).some((l) => /takes .* back/.test(l)), linesSince(m2));
+    ctx.stationDesk.undock();
+    for (let i = 0; ctx.flags.docked && i < 40; i++) { tick(30); dom.dispatchKey('Escape'); tick(2); }
+    pin('8l launched again', ctx.flags.docked === false);
+    ctx.ship.object.position.copy(FAR); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
+    tickHeld(3);
+  }
+
+  // 8m-n: a hull of ANOTHER faction sells at hotHullFence of its value at this yard.
+  {
+    const t2 = makeCrewTakenDerelict('veridian');
+    const rep1 = ctx.world.reputation?.veridian ?? 0;
+    hailDerelict(t2);
+    const res2 = ctx.hailApi.resolve('claimHull');
+    tickHeld(3);
+    closeHail();
+    pin('8m a Veridian hull claimed: Veridian docks the standing', res2 !== 'stale' && claimAll().length === 1 && claimAll()[0].faction === 'veridian' && (ctx.world.reputation?.veridian ?? 0) === rep1 - PRIZE_CLAIM.repHit, { res2, led: claimAll() });
+    mine.delete(t2); despawn(t2);
+    const stp = ctx.systems[SYS].station.position;
+    const near = new THREE.Vector3(stp[0] + 36, stp[1], stp[2]);
+    ctx.ship.object.position.copy(near); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
+    tick(2);
+    const c0 = ctx.world.credits;
+    const m3 = mark();
+    ctx.input.dockPressed = true; tick(3); ctx.input.dockPressed = false;
+    const settled = receiptsSince(m3, 'hullSettled');
+    const [lo, hi] = ECON.hotHullFence;
+    const V = hullPrizeValue('freighter');
+    const gained = ctx.world.credits - c0;
+    pin('8n the Freehold yard buys the Veridian hull at hotHullFence of its value; Veridian standing stays docked', ctx.flags.docked === true && settled.length === 1 && settled[0].outcome === 'sold' && settled[0].credits === gained
+      && gained >= Math.round(V * lo) && gained <= Math.round(V * hi) && (ctx.world.reputation?.veridian ?? 0) === rep1 - PRIZE_CLAIM.repHit && claimAll().length === 0, { settled, gained, V });
+    ctx.stationDesk.undock();
+    for (let i = 0; ctx.flags.docked && i < 40; i++) { tick(30); dom.dispatchKey('Escape'); tick(2); }
+    ctx.ship.object.position.copy(FAR); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
+    tickHeld(3);
+  }
+
+  // 8o-v: not claimable — the player's own recovery contract on it, or a full ledger; persistence.
+  {
+    const t3 = makeCrewTakenDerelict('freehold');
+    ctx.world.jobs = ctx.world.jobs ?? [];
+    const job = { id: 'i147-rec', kind: 'recovery', state: 'accepted', wreckId: t3.record.derelict.wreckId, originSystem: SYS, system: SYS, deadline: ctx.world.time + 600, reward: 100 };
+    ctx.world.jobs.push(job);
+    const { m: m4 } = hailDerelict(t3);
+    const h4 = hailsSince(m4).filter((e) => e.ship === t3);
+    pin('8o a hull the player holds a recovery contract on offers no claim (the marker is the claim)', !claimableDerelict(ctx, t3) && h4.length === 1 && !h4[0].intents.includes('claimHull') && /Not yours to claim/.test(h4[0].line), h4.map((e) => [e.intents, e.line]));
+    const r4 = ctx.hailApi.resolve('claimHull');
+    tickHeld(2);
+    pin('8p …and resolving it anyway moves nothing', t3.record.state === 'derelict' && claimAll().length === 0, { r4, state: t3.record.state });
+    closeHail();
+    ctx.world.jobs.splice(ctx.world.jobs.indexOf(job), 1);
+    ctx.world.claimedHulls = [];
+    for (let i = 0; i < PRIZE_CLAIM.max; i++) ctx.world.claimedHulls.push({ v: 1, id: `full-${i}`, name: 'x', classKey: 'light', faction: null, reason: 'crewPods', claimedAt: 0, system: SYS, repHit: 0 });
+    pin('8q a full ledger offers no claim', !claimableDerelict(ctx, t3), { n: claimAll().length });
+    const snap = JSON.parse(JSON.stringify(binds.snapshot(ctx)));
+    pin('8r the snapshot carries the ledger', Array.isArray(snap.world.claimedHulls) && snap.world.claimedHulls.length === PRIZE_CLAIM.max, snap.world.claimedHulls?.length);
+    binds.restore(ctx, snap);
+    pin('8s restore keeps it', claimAll().length === PRIZE_CLAIM.max && claimAll()[0].id === 'full-0');
+    const bad = JSON.parse(JSON.stringify(snap));
+    bad.world.claimedHulls = 'lots';
+    binds.restore(ctx, bad);
+    pin('8t a corrupt ledger is dropped', claimAll().length === 0, ctx.world.claimedHulls);
+    const mixed = JSON.parse(JSON.stringify(snap));
+    mixed.world.claimedHulls = [{ v: 1, id: 'ok', classKey: 'battleship', faction: 'nobody', repHit: -4, claimedAt: 'x' }, null, 'junk', { v: 2, id: 'foreign' }, ...Array(12).fill({ v: 1, id: 'over' })];
+    binds.restore(ctx, mixed);
+    const led2 = claimAll();
+    pin('8u corrupt entries are skipped, odd fields healed, the cap holds', led2.length === PRIZE_CLAIM.max && led2[0].id === 'ok' && led2[0].classKey === 'light' && led2[0].faction === null && led2[0].repHit === 0 && led2[0].claimedAt === 0 && led2.every((e) => e.v === 1 && e.id !== 'foreign'), led2);
+    const w = { claimedHulls: [{ v: 1, id: 'a', classKey: 'cutter', faction: 'redledger', reason: 'crewTaken', claimedAt: 5, system: 'freehold', repHit: 3 }] };
+    sanitizeClaimedHulls(w);
+    pin('8v sanitizeClaimedHulls keeps a good entry whole', JSON.stringify(w.claimedHulls[0]) === JSON.stringify({ v: 1, id: 'a', name: null, classKey: 'cutter', faction: 'redledger', reason: 'crewTaken', claimedAt: 5, system: 'freehold', repHit: 3 }), w.claimedHulls);
+    ctx.world.claimedHulls = [];
+    mine.delete(t3); despawn(t3);
+  }
 }
 
 console.log(fails === 0 ? 'ISSUE147 PRIZE PASS' : `ISSUE147 PRIZE FAIL — ${fails} pins`);

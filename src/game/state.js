@@ -406,6 +406,22 @@ export const PRIZE = Object.freeze({
   hullValueMult: 6, // hullPrizeValue = (hull + shield + engine) × mult + cargo × cargoMult
   hullCargoMult: 10,
 });
+// Issue #147 follow-up: a crewless hull is claimable by ANY passing ship, the
+// player included. A hail (H) on a locked derelict offers `claimHull`: the
+// hull leaves the lane under the player's claim and rides world.claimedHulls
+// (JSON-plain, at most `max`) to the next berth, where the yard settles it —
+// a station of the hull's OWN faction takes her back (no pay, the standing
+// the claim cost comes back), any other yard pays ECON.hotHullFence of
+// hullPrizeValue. The risk and the impact pass with the claim: the hull's
+// faction logs her as taken (repHit), and word of a towed prize draws the
+// lane's pirates (interestPerHull on the wave-32 interest roll) until it is
+// settled. A hull the player already holds a recovery contract on is that
+// contract's, not a hail claim.
+export const PRIZE_CLAIM = Object.freeze({
+  max: 8, // claimed hulls the ledger carries; a ninth claim is refused
+  repHit: 3, // standing the hull's faction docks at the claim (returned at their own yard)
+  interestPerHull: 0.04, // added to a pirate's interest chance per unsettled hull
+});
 // Issue #148: a yielded hull whose crew is GONE (crewPods) is a derelict. The
 // record flips to state 'derelict' and carries rec.derelict (JSON-plain:
 // since/due/claimAt, the dead-stick position and coast, the hull left, and

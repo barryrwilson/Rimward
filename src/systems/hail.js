@@ -1,4 +1,5 @@
 import { ECON, FACTIONS, U, ransomFor, CALLOW, HIDDEN_MOUNTS, SYSTEMS } from '../game/state.js';
+import { claimableDerelict, claimDerelict } from '../game/derelict.js';
 import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
@@ -92,7 +93,7 @@ import { coverHoldsFor, hailOffer } from '../game/hail-offer.js';
 // are appended AFTER every existing entry so combat-hail button numbering is
 // unchanged; demand hails offer only these three ([1] pay, [2] teeth,
 // [3] refuse).
-const INTENT_ORDER = ['demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect', 'payTribute', 'showTeeth', 'refuseFight'];
+const INTENT_ORDER = ['claimHull', 'demandCargo', 'demandRansom', 'acceptTribute', 'letGo', 'callowVouch', 'keepFiring', 'respect', 'payTribute', 'showTeeth', 'refuseFight'];
 
 const DEMAND_SECONDS = 20;
 
@@ -300,6 +301,47 @@ export function salvageLine(live) {
   return shipHasCargo(live && live.state)
     ? 'Hull is dead in space. Holds still sealed.'
     : 'Hull is dead in space. Holds are empty.';
+}
+
+/**
+ * Issue #147 follow-up: a locked derelict (crew gone) answers H with a claim
+ * card — salvage family, verbs claimHull + letGo. Same range as the wreck
+ * hail. A hull the player holds a recovery contract on offers no claim (that
+ * contract's marker is the claim), and a full ledger offers none.
+ */
+export function canHailDerelict(ctx, live, range = U.TARGET_RANGE) {
+  if (!live || live.lockKind) return false;
+  if (!live.state || !live.object || live.state.destroyed) return false;
+  if (!live.record || live.record.state !== 'derelict') return false;
+  if (!ctx.ships || !ctx.ships.includes(live)) return false;
+  const player = ctx.ship && ctx.ship.object;
+  if (!player) return false;
+  return live.object.position.distanceTo(player.position) <= range;
+}
+
+export function derelictIntentsFor(ctx, live) {
+  const intents = [];
+  if (claimableDerelict(ctx, live)) intents.push('claimHull');
+  intents.push('letGo');
+  return intents;
+}
+
+/** Emit hailOpened for the current derelict target. Does not open the DOM card. */
+export function tryOpenDerelictHail(ctx) {
+  const live = ctx.targets && ctx.targets.current;
+  if (!canHailDerelict(ctx, live)) return null;
+  const intents = derelictIntentsFor(ctx, live);
+  const ev = {
+    ship: live,
+    intents,
+    line: intents.includes('claimHull')
+      ? 'Derelict. Crew gone, engines cold. Salvage rights to whoever claims her — and her troubles with her.'
+      : 'Derelict. Crew gone, engines cold. Not yours to claim.',
+    salvage: true,
+    derelict: true,
+  };
+  ctx.emit('hailOpened', ev);
+  return ev;
 }
 
 /** Player-initiated salvage hail: targeted, disabled, in range, still live. */
@@ -766,6 +808,18 @@ export function initHail(ctx) {
         ctx2.emit('commLine', { text: 'Tribute paid.', from: st.name });
         break;
       }
+      case 'claimHull': {
+        // Issue #147 follow-up: the derelict is the player's. Refused (a
+        // contract on it, a full ledger, not a derelict any more) → nothing
+        // moves and the card closes like any stale card.
+        const entry = claimDerelict(ctx2, live);
+        if (!entry) {
+          ctx2.emit('hailClosed', { ship: live });
+          closeCard();
+          return 'stale';
+        }
+        break;
+      }
       case 'letGo': {
         if (salvage) {
           ctx2.emit('commLine', { text: 'Leaving the hulk.', from: st.name });
@@ -879,6 +933,8 @@ export function initHail(ctx) {
         return `Demand ransom — ${h.ransom} UU`;
       case 'acceptTribute':
         return `Accept tribute — ${h.tribute} UU`;
+      case 'claimHull':
+        return 'Claim the hull — salvage rights, and her troubles';
       case 'letGo':
         return salvage ? 'Leave the hulk' : 'Let them go';
       case 'respect':
@@ -1260,6 +1316,8 @@ export function initHail(ctx) {
         if (hailMissFrameHas(ctx, 'hailOpened')) skipMiss = true;
         if (allow) {
           let ev = tryOpenDisabledHail(ctx);
+          // Issue #147 follow-up: a locked derelict answers with the claim card.
+          if (!ev) ev = tryOpenDerelictHail(ctx);
           // Issue #122: an intact willing hull answers a deliberate hail with
           // the same surrender card the band transition draws. A card some
           // other opener emitted this frame (Old Callow's vouch) keeps

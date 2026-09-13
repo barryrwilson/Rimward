@@ -17,7 +17,7 @@ import {
   SYSTEMS,
   ESCAPE,
   PIRACY,
-  PIRATE_HAUL, PRIZE,
+  PIRATE_HAUL, PRIZE, PRIZE_CLAIM,
 } from '../game/state.js';
 import {
   readEscape,
@@ -2929,8 +2929,12 @@ export function playerInterestChance(ctx, record) {
   // per-record greed — rolled once ever, persisted; non-finite heals
   if (record && !Number.isFinite(record.temper)) record.temper = Math.random();
   const cargo = clamp01(cargoValueSafe(ctx.cargo, ctx.world.prices) / INTEREST.cargoNormUU);
+  // Issue #147 follow-up: word of a towed prize travels — every hull on the
+  // player's claimed ledger draws the lane's eyes until the yard settles it.
+  const claimed = Array.isArray(ctx.world.claimedHulls) ? ctx.world.claimedHulls.length : 0;
   const p = INTEREST.base + (record?.temper ?? 0.5) * INTEREST.temperSpan
-    + cargo * INTEREST.cargoSpan - ctx.world.fear * INTEREST.fearRepel;
+    + cargo * INTEREST.cargoSpan - ctx.world.fear * INTEREST.fearRepel
+    + claimed * PRIZE_CLAIM.interestPerHull;
   return Math.min(INTEREST.max, Math.max(INTEREST.min, p));
 }
 

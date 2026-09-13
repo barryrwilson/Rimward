@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
+import { settleClaimedHulls } from '../game/derelict.js';
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
@@ -6790,6 +6791,12 @@ export function initStation(ctx) {
     jobTick = 0;
     setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     overlay.style.display = 'flex';
+    // Issue #147 follow-up: the yard settles every claimed hull at the berth.
+    try {
+      const sysId = ctx.world.currentSystem;
+      const settled = settleClaimedHulls(ctx, sysId, ctx.systems?.[sysId]?.faction ?? null);
+      if (settled.length > 0) ui.notice = settled.map((x) => x.line).join(' ');
+    } catch { /* the berth never fails on the ledger */ }
     ctx.emit('docked');
     render();
   }

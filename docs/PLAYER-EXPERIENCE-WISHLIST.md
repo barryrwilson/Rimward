@@ -68,6 +68,11 @@ durable next-wave capture is mandatory, not optional.
   survivor row, leaves the hull a derelict or takes it as a prize that sells
   at the fence with the captives. The player earns nothing for a break they
   did not cause. Implemented 2026-09-13; `npm run test:prize`.
+  Owner follow-up (same day): a crewless hull is claimable by any passing
+  ship — the player hails a locked derelict (H) and claims it; the hull's
+  faction docks standing, pirates take more interest while the prize is
+  unsettled, and the yard returns it at its own faction or buys it elsewhere
+  at the hot-hull rate.
 - [x] DONE (P2, PIRACY/NPC): A working NPC pirate should have a visible loop:
   hunt, break, scoop, fence, hunt again.
   [Issue #151](https://github.com/barryrwilson/Rimward/issues/151): after its

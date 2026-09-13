@@ -547,7 +547,9 @@ player was never offered stays private.
 ```
 
 **Families are read from the card's own offer,** not from NPC internals: a
-salvage card is a dead hulk, a demand card is a pirate's tribute demand, a
+salvage card is a dead hulk (or, since issue #147's follow-up, a crewless
+derelict offering `claimHull` — the player's salvage claim; the hull leaves
+the lane and settles at the next berth), a demand card is a pirate's tribute demand, a
 card that offers `demandCargo` / `demandRansom` / `acceptTribute` is a hull
 that has **struck** (`surrender`), and anything else the card can carry
 (Old Callow's vouch, a Named Gun standing down) is `conversation`.

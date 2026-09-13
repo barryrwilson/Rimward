@@ -1,5 +1,6 @@
-import { DERELICT, ESCAPE, FACTIONS } from './state.js';
+import { DERELICT, ESCAPE, FACTIONS, PRIZE_CLAIM, SHIP_CLASSES } from './state.js';
 import { cancelEscape } from './npc-escape.js';
+import { hullPrizeValue, rollHullRate } from './prize.js';
 
 /**
  * Derelicts (issue #148).
@@ -370,6 +371,153 @@ export function tickDerelicts(ctx) {
     }
   }
   sweep(ctx.world.records, ctx.world.currentSystem);
+}
+
+// ---------- issue #147 follow-up: a passing ship claims a crewless hull ----------
+export const CLAIMED_HULL_VERSION = 1;
+
+/** The player's claimed-hull ledger (world.claimedHulls), created lazily. */
+export function claimedHullsOf(world, create = false) {
+  if (!world || typeof world !== 'object') return [];
+  if (!Array.isArray(world.claimedHulls)) {
+    if (!create) return [];
+    world.claimedHulls = [];
+  }
+  return world.claimedHulls;
+}
+
+/**
+ * May the player claim this live hull by hail? A derelict record (crew gone,
+ * not yet resolved), no recovery contract of the player's on it (that
+ * contract's marker IS the claim), and room on the ledger.
+ */
+export function claimableDerelict(ctx, live) {
+  const rec = live && live.record;
+  const d = derelictOf(rec);
+  if (!ctx || !d || d.outcome) return false;
+  if (!live.state || live.state.destroyed) return false;
+  if (recoveryJobFor(ctx, d.wreckId)) return false;
+  return claimedHullsOf(ctx.world).length < PRIZE_CLAIM.max;
+}
+
+function repBag(ctx) {
+  const w = ctx.world;
+  if (!w.reputation || typeof w.reputation !== 'object' || Array.isArray(w.reputation)) w.reputation = {};
+  return w.reputation;
+}
+
+function addRep(ctx, faction, delta) {
+  if (typeof faction !== 'string' || !Object.hasOwn(FACTIONS, faction) || !fin(delta) || delta === 0) return 0;
+  const bag = repBag(ctx);
+  const cur = fin(bag[faction]) ? bag[faction] : 0;
+  bag[faction] = cur + delta;
+  return delta;
+}
+
+function factionName(key) {
+  return typeof key === 'string' && Object.hasOwn(FACTIONS, key) ? FACTIONS[key].name : 'Unknown';
+}
+
+/**
+ * The player claims a live derelict (hail verb `claimHull`). The derelict
+ * resolves 'recovered' with claimant 'player' (the record ends 'captured':
+ * traffic retires the hull, the recovery card is pulled), a ledger entry is
+ * written, and the hull's faction docks the standing. Returns the entry, or
+ * null when the claim is refused (nothing moves).
+ */
+export function claimDerelict(ctx, live) {
+  if (!claimableDerelict(ctx, live)) return null;
+  const rec = live.record;
+  const d = rec.derelict;
+  const now = ctx.world.time;
+  const sysId = rec.system ?? ctx.world.currentSystem;
+  const faction = typeof rec.faction === 'string' && Object.hasOwn(FACTIONS, rec.faction) ? rec.faction : null;
+  const entry = {
+    v: CLAIMED_HULL_VERSION,
+    id: typeof rec.id === 'string' ? rec.id.slice(0, STRING_MAX) : null,
+    name: typeof rec.name === 'string' ? rec.name.slice(0, STRING_MAX) : null,
+    classKey: Object.hasOwn(SHIP_CLASSES, rec.classKey) ? rec.classKey : 'light',
+    faction,
+    reason: REASON_SET.has(d.reason) ? d.reason : 'crewPods',
+    claimedAt: now,
+    system: typeof sysId === 'string' ? sysId.slice(0, STRING_MAX) : null,
+    repHit: 0,
+  };
+  if (!resolveDerelict(ctx, rec, 'recovered', 'player')) return null;
+  entry.repHit = faction ? -addRep(ctx, faction, -PRIZE_CLAIM.repHit) : 0;
+  claimedHullsOf(ctx.world, true).push(entry);
+  const name = entry.name ?? 'the hull';
+  ctx.emit('derelictClaimed', {
+    targetId: entry.id, targetName: name, classKey: entry.classKey, faction, repHit: entry.repHit, system: entry.system,
+  });
+  ctx.emit('commLine', {
+    text: `${name} is yours — salvage claim logged. Her troubles come with her.${faction ? ` The ${factionName(faction)} will not thank you.` : ''}`,
+    from: 'Echo',
+  });
+  return entry;
+}
+
+/**
+ * Settle every claimed hull at a berth (station.js, on dock). At a yard of
+ * the hull's own faction she goes home: no pay, and the standing the claim
+ * cost comes back. Anywhere else the yard pays ECON.hotHullFence of
+ * hullPrizeValue, rolled per hull. Returns the settlements (empty when the
+ * ledger is empty); the ledger is cleared.
+ */
+export function settleClaimedHulls(ctx, systemId, stationFaction) {
+  const list = claimedHullsOf(ctx.world);
+  const out = [];
+  if (list.length === 0) return out;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    const home = typeof stationFaction === 'string' && stationFaction === e.faction;
+    let credits = 0;
+    let repBack = 0;
+    if (home) {
+      repBack = e.repHit > 0 ? addRep(ctx, e.faction, e.repHit) : 0;
+    } else {
+      credits = Math.max(0, Math.round(hullPrizeValue(e.classKey) * rollHullRate()));
+      if (fin(ctx.world.credits)) ctx.world.credits += credits;
+    }
+    const name = e.name ?? 'the hull';
+    const line = home
+      ? `${factionName(e.faction)} yard takes ${name} back. No pay — but they note you brought her home.`
+      : `Yard takes ${name} off your hands. ${credits} UU, no questions.`;
+    const s = { targetId: e.id, targetName: name, classKey: e.classKey, faction: e.faction, outcome: home ? 'returned' : 'sold', credits, repBack, system: systemId, line };
+    out.push(s);
+    ctx.emit('hullSettled', s);
+    ctx.emit('commLine', { text: line, from: 'station' });
+  }
+  list.length = 0;
+  return out;
+}
+
+/** Save-time heal (save.js): a corrupt ledger is dropped, corrupt entries are skipped, the cap holds. */
+export function sanitizeClaimedHulls(world) {
+  if (!world || typeof world !== 'object' || !Object.hasOwn(world, 'claimedHulls')) return false;
+  const raw = world.claimedHulls;
+  if (!Array.isArray(raw)) {
+    delete world.claimedHulls;
+    return false;
+  }
+  const clean = [];
+  for (let i = 0; i < raw.length && clean.length < PRIZE_CLAIM.max; i++) {
+    const e = raw[i];
+    if (!e || typeof e !== 'object' || Array.isArray(e) || e.v !== CLAIMED_HULL_VERSION) continue;
+    clean.push({
+      v: CLAIMED_HULL_VERSION,
+      id: typeof e.id === 'string' ? e.id.slice(0, STRING_MAX) : null,
+      name: typeof e.name === 'string' ? e.name.slice(0, STRING_MAX) : null,
+      classKey: Object.hasOwn(SHIP_CLASSES, e.classKey) ? e.classKey : 'light',
+      faction: typeof e.faction === 'string' && Object.hasOwn(FACTIONS, e.faction) ? e.faction : null,
+      reason: REASON_SET.has(e.reason) ? e.reason : 'crewPods',
+      claimedAt: fin(e.claimedAt) ? e.claimedAt : 0,
+      system: typeof e.system === 'string' ? e.system.slice(0, STRING_MAX) : null,
+      repHit: fin(e.repHit) && e.repHit >= 0 ? Math.min(100, e.repHit) : 0,
+    });
+  }
+  world.claimedHulls = clean;
+  return true;
 }
 
 /**
