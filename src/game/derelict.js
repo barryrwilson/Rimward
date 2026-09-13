@@ -4,6 +4,7 @@ import { hullPrizeValue, rollHullRate } from './prize.js';
 import { addPurchasedHull, canAcceptPurchase } from './hangar.js';
 import { hullKindFor, yardStockFor } from './shipyard.js';
 import { requestAutosave } from './save.js';
+import { canSeat } from './weapon-fit.js';
 
 /**
  * Derelicts (issue #148).
@@ -508,12 +509,18 @@ function nextPrizeHullId(hangar) {
 }
 
 /**
- * A hangar row for a kept claimed hull: her class and faction, her name, an
- * EMPTY loadout (no launcher, turret, scanner, laser or racks — the crew took
- * nothing with them but the yard fits nothing either; refits are a later
- * visit) and class-fresh vitals. `hot: true` rides the row for good: the
- * hull's faction standing stays docked and a later sale (issue #158) pays
- * the hot-hull rate wherever it is sold.
+ * A hangar row for a kept claimed hull: her class and faction, her name, the
+ * kit her class implies and class-fresh vitals. An NPC record carries no
+ * per-ship loadout — its weapons are class defaults (every hull a cannon; a
+ * class that seats a turret fires one; a class that seats a launcher fires
+ * missiles) — and nobody strips a derelict's mounts, so the row gets what
+ * the ship fought with: the auto turret where the class seats a turret, the
+ * dart rack with an EMPTY magazine where it seats a launcher (she fired
+ * them), tier-0 scanner and laser (no NPC hull carries either), no racks, an
+ * empty hold (the manifest emptied when she became a derelict). Owner
+ * decision on PR #161. `hot: true` rides the row for good: the hull's
+ * faction standing stays docked and a later sale (issue #158) pays the
+ * hot-hull rate wherever it is sold.
  */
 function prizeHangarRow(ctx, entry) {
   const id = nextPrizeHullId(ctx.world?.hangar);
@@ -530,9 +537,9 @@ function prizeHangarRow(ctx, entry) {
     scanner: 0,
     miningLaser: 0,
     concealedMounts: false,
-    launcher: '',
+    launcher: canSeat(classKey, 'missile') ? 'dart' : '',
     missileAmmo: 0,
-    turret: '',
+    turret: canSeat(classKey, 'turret') ? 'auto' : '',
     cargoCapacity: cargoHoldFor(classKey),
     cargo: [],
     hull: fresh.hull,
@@ -551,8 +558,9 @@ function prizeHangarRow(ctx, entry) {
 /**
  * Settle ONE claimed hull at a berth by the player's choice (issue #159;
  * shipyard-desk.js Claimed hulls pane). Nothing settles on dock any more.
- *   • 'keep'   — the hull joins the hangar as an owned `hot` row (empty
- *                loadout). Refused with 'stock' at a berth with no yard and
+ *   • 'keep'   — the hull joins the hangar as an owned `hot` row with the
+ *                kit her class implies (prizeHangarRow). Refused with
+ *                'stock' at a berth with no yard and
  *                'full' when the hangar has no room. The standing stays
  *                docked: the risk comes with the hull.
  *   • 'sell'   — the yard pays ECON.hotHullFence of hullPrizeValue at

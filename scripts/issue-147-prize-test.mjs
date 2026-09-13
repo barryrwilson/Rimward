@@ -29,7 +29,7 @@
  *      a locked derelict (H), claims it, the hull leaves the lane on the
  *      claimed ledger, the hull's faction docks standing, pirates take more
  *      interest; nothing settles on dock (issue #159): the desk's Claimed
- *      hulls pane offers Keep (an owned hot hangar row, empty loadout),
+ *      hulls pane offers Keep (an owned hot hangar row with the class kit),
  *      Sell (hotHullFence, the quote shown) and Return (own faction only:
  *      standing back, no pay); a full hangar and a berth with no yard
  *      refuse Keep; a contract hull and a full ledger are not claimable;
@@ -677,14 +677,14 @@ pin('0d rollTaste walks PRIZE.tasteWeights in order (cargo, crew, hull) and fail
     const hulls0 = ctx.world.hangar.hulls.length;
     const c1 = ctx.world.credits;
     button((t) => t === 'Keep')?.click(); tick(1);
-    pin('8w2 Keep opens a confirm box that says what the hull comes with', has('Confirm keep') && has('She joins the hangar hot'), texts());
+    pin('8w2 Keep opens a confirm box that says what the hull comes with', has('Confirm keep') && has('She joins the hangar hot: the mounts her class carries'), texts());
     const m4 = mark();
     button((t) => t === 'Confirm keep')?.click(); tick(2);
     const kept = receiptsSince(m4, 'hullSettled');
     const row = ctx.world.hangar.hulls.find((h) => h.id === kept[0]?.hullId);
     pin('8x Confirm keep: hullSettled says kept and names the hangar row; the ledger empties; no pay; Veridian stays docked', kept.length === 1 && kept[0].outcome === 'kept' && kept[0].credits === 0 && kept[0].repBack === 0 && typeof kept[0].hullId === 'string'
       && claimAll().length === 0 && ctx.world.credits === c1 && (ctx.world.reputation?.veridian ?? 0) === rep2 - PRIZE_CLAIM.repHit, { kept, led: claimAll(), rep: ctx.world.reputation?.veridian, rep2 });
-    pin('8x2 the hangar gained one hot row of her class, faction and name with an empty loadout, unmounted', ctx.world.hangar.hulls.length === hulls0 + 1 && !!row && row.hot === true && row.classKey === 'freighter' && row.faction === 'veridian'
+    pin('8x2 the hangar gained one hot row of her class, faction and name, unmounted; a freighter seats no turret or launcher, no scanner or laser, empty hold', ctx.world.hangar.hulls.length === hulls0 + 1 && !!row && row.hot === true && row.classKey === 'freighter' && row.faction === 'veridian'
       && row.name === entry.name && row.launcher === '' && row.turret === '' && row.scanner === 0 && row.miningLaser === 0 && row.cargo.length === 0 && row.hullKind === 'built'
       && ctx.world.hangar.mountedId !== row.id, { row, hangar: ctx.world.hangar });
     pin('8x3 the desk shows her in the hangar as hot with a Sell row at the hot-hull rate; the Claimed pane is gone', !has('CLAIMED HULLS') && has('· hot') && !!sellBtn() && sellQuote() >= Math.round(hullPrizeValue('freighter') * ECON.hotHullFence[0]) && sellQuote() <= Math.round(hullPrizeValue('freighter') * ECON.hotHullFence[1]), texts().filter((t) => /hot|Sell/.test(t)));
@@ -693,6 +693,21 @@ pin('0d rollTaste walks PRIZE.tasteWeights in order (cargo, crew, hull) and fail
     binds.restore(ctx, snap);
     const back = ctx.world.hangar.hulls.find((h) => h.id === row.id);
     pin('8y the kept row rides snapshot/restore with hot: true', !!snapRow && snapRow.hot === true && !!back && back.hot === true && back.classKey === 'freighter' && back.faction === 'veridian', { snapRow, back });
+
+    // A class that seats mounts keeps the kit it fought with: auto turret, dart rack with an empty magazine.
+    {
+      const frig = { v: 1, id: 'i159-frig', name: 'Iron Vesper', classKey: 'frigate', faction: 'redledger', reason: 'crewTaken', claimedAt: 0, system: SYS, repHit: PRIZE_CLAIM.repHit };
+      ctx.world.claimedHulls = [JSON.parse(JSON.stringify(frig))];
+      const rK = settleClaimedHull(ctx, 'i159-frig', 'keep');
+      const fr = ctx.world.hangar.hulls.find((h) => h.id === rK.hullId);
+      pin('8y2 a kept frigate carries the auto turret and the dart rack with an empty magazine, tier-0 scanner and laser, empty hold, hot', rK.ok === true && !!fr && fr.turret === 'auto' && fr.launcher === 'dart' && fr.missileAmmo === 0
+        && fr.scanner === 0 && fr.miningLaser === 0 && fr.cargo.length === 0 && fr.hot === true && fr.classKey === 'frigate' && fr.faction === 'redledger', { rK, fr });
+      const snapF = JSON.parse(JSON.stringify(binds.snapshot(ctx)));
+      binds.restore(ctx, snapF);
+      const fr2 = ctx.world.hangar.hulls.find((h) => h.id === rK.hullId);
+      pin('8y3 the kit rides snapshot/restore', !!fr2 && fr2.turret === 'auto' && fr2.launcher === 'dart' && fr2.missileAmmo === 0 && fr2.hot === true, fr2);
+      ctx.world.hangar.hulls = ctx.world.hangar.hulls.filter((h) => h.id !== rK.hullId);
+    }
 
     // Refusals: a full hangar, a berth with no yard, a bad verb, a missing entry, not docked.
     const fake = { v: 1, id: 'i159-full', name: 'Stray Hull', classKey: 'cutter', faction: 'veridian', reason: 'crewPods', claimedAt: 0, system: SYS, repHit: PRIZE_CLAIM.repHit };

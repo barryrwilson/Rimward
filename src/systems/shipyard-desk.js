@@ -161,7 +161,7 @@ export const CLAIM_REFUSE_LINES = Object.freeze({
   busy: 'Papers are already in flight.',
 });
 
-export const CLAIM_KEEP_NOTE = 'She joins the hangar hot: empty loadout, her faction still sore, and any yard pays the laundering rate for her later.';
+export const CLAIM_KEEP_NOTE = 'She joins the hangar hot: the mounts her class carries with empty magazines, her faction still sore, and any yard pays the laundering rate for her later.';
 export const CLAIM_SELL_NOTE = SELL_HOT_NOTE;
 export const CLAIM_RETURN_NOTE = 'No pay. Her faction gets its hull back and forgets the claim.';
 export const CLAIM_VERB_LABEL = Object.freeze({ keep: 'Keep', sell: 'Sell', return: 'Return' });
