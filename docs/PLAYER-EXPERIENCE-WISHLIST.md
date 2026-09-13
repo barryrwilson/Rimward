@@ -57,6 +57,16 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [x] DONE (P2, PIRACY/NPC): A working NPC pirate should have a visible loop:
+  hunt, break, scoop, fence, hunt again.
+  [Issue #151](https://github.com/barryrwilson/Rimward/issues/151): after its
+  prize yields, the pirate scoops the pods it spilled into its own hold, and a
+  half-full hold sends it to the local station to fence the haul at
+  `ECON.fenceRate`; the sale credits the pirate record and moves the station
+  market. Spilled cargo inside the player's own magnet reach stays the
+  player's, a player-caused spill is never a pirate's to collect, and a pirate
+  under fire drops the scoop. NPC scoops are `npcPodCollected` receipts, never
+  a player `podCollected`. Implemented 2026-09-13; `npm run test:pirate-haul`.
 - [x] DONE (P2, PIRACY/CONTACTS; merged [PR #136](https://github.com/barryrwilson/Rimward/pull/136)): The fence's marker should grow from pirate outcomes, not
   only from bounty claims.
   [Issue #124](https://github.com/barryrwilson/Rimward/issues/124): a hull the

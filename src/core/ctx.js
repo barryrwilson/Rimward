@@ -307,6 +307,11 @@ export function createCtx({ scene, camera, renderer }) {
     // 'podBlocked' {pod, units, free}   // pods.js (issue #115): scoop refused,
     //   the hold cannot take `units`; `free` is the spare capacity now. One
     //   emit per pod per free-space value, never per frame.
+    // 'npcPodCollected' {ship, pod, units, commodity?}   // npc.js (issue #151): an
+    //   NPC pirate scooped a pod it spilled. NEVER a podCollected — the player's
+    //   scoop receipts, HUD chime and agent ring stay player-only.
+    // 'npcFenced' {ship, units, credits, system}   // npc.js (issue #151): a pirate
+    //   sold its haul at the local station; the market took the units.
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
     // 'hailMiss' { name, verb, reason, dist }    // hail.js KeyH/KeyJ miss; primitives only; no ship
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}

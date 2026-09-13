@@ -21,6 +21,7 @@ import {
   captureCondition, escapeRoleMode, escapeYielded,
 } from './npc-escape.js';
 import { sanitizeDerelictRecord, applyDerelictLive } from './derelict.js';
+import { sanitizeHaulRecord } from './pirate-haul.js';
 // The re-entry hydration both paths share (issue #68). npc.js does not import
 // save.js, so this direction adds no cycle.
 import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
@@ -1404,6 +1405,7 @@ function sanitizeEscapes(ctx) {
       if (rec && typeof rec === 'object') {
         sanitizeEscapeRecord(rec);
         sanitizeDerelictRecord(rec); // issue #148: same fail-safe discipline
+        sanitizeHaulRecord(rec); // issue #151: a pirate purse must be a finite non-negative integer
       }
     }
   };
