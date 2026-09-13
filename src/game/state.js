@@ -353,6 +353,23 @@ export const HIDDEN_MOUNTS = { cost: 900, bluffBase: 0.35, bluffPerFear: 0.01, f
 // card) is the player's prize: no NPC pirate acquires it, and one already
 // on it backs off. Sit-on hunts against the player are never capped.
 export const PIRACY = { concurrentCap: 2, contestRange: 800 };
+// Issue #148: a yielded hull whose crew is GONE (crewPods) is a derelict. The
+// record flips to state 'derelict' and carries rec.derelict (JSON-plain:
+// since/due/claimAt, the dead-stick position and coast, the hull left, and
+// the aftermath wreck id the recovery board posts against). Anyone may claim
+// it: the player through the issue #74 recovery flow, or a local salvager
+// after npcClaimAfter (+ a random spread). An unclaimed derelict folds away
+// at due = since + foldAfter and the record resolves ('expired' → dead).
+export const DERELICT = Object.freeze({
+  version: 1,
+  foldAfter: 1800, // s of world time an unclaimed derelict stays in the lane
+  npcClaimAfter: 420, // s before a salvager may take it under tow
+  npcClaimSpan: 480, // s of random spread on the salvager's arrival
+  claimDefer: 60, // s the salvager holds off while the player keeps the hull locked
+  driftDecay: 0.08, // per-second fraction of the dead-stick coast bled off
+  driftStop: 0.4, // u/s under which the coast counts as stopped
+  tickEvery: 1, // s between record-bank sweeps
+});
 // `bulk: true` marks the staples an NPC freighter actually hauls. Wave 51 added
 // seven exotic ores; without this flag world.js's LEGAL_KEYS manifest roll
 // would put void platinum in a Freehold grain hauler's hold. The four bulk

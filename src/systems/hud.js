@@ -2632,6 +2632,10 @@ export function initHud(ctx) {
           if (st && st.disabled) {
             band = 'capitulate';
             resText = 'DEAD IN SPACE';
+          } else if (st && rec && rec.state === 'derelict') {
+            // Issue #148: crew gone, nobody flying it — claimable.
+            band = 'capitulate';
+            resText = 'DERELICT';
           } else if (st && offer && offer.state === 'yielded') {
             band = 'capitulate';
             resText = 'YIELDED';

@@ -2230,10 +2230,15 @@ function syncRecoveryJob(ctx, sysId) {
     if (a.kind !== 'wreck' || a.system !== sysId || !(a.expiresAt > ctx.world.time)) continue;
     const id = `recovery-${a.id}`;
     if (jobs.some((j) => j.id === id)) continue;
+    // Issue #148: a derelict (crew gone) posts through the same card; only
+    // the words differ. Same on-ramp, same marker, same receipts.
+    const derelict = typeof a.derelictId === 'string';
     jobs.push({
       id, kind: 'recovery', wreckId: a.id,
-      title: 'Recovery: wreck salvage',
-      detail: 'A confirmed wreck. Accept, launch, follow the Recovery pod flight marker with 2 hold units free, then return to the issuing dock. The marker expires; recovered metals remain yours to sell.',
+      title: derelict ? 'Recovery: derelict hull' : 'Recovery: wreck salvage',
+      detail: derelict
+        ? 'A yielded hull, crew gone, drifting unclaimed. Accept, launch, follow the Recovery pod flight marker with 2 hold units free, then return to the issuing dock. A salvage tug may claim it first; the marker expires; recovered metals remain yours to sell.'
+        : 'A confirmed wreck. Accept, launch, follow the Recovery pod flight marker with 2 hold units free, then return to the issuing dock. The marker expires; recovered metals remain yours to sell.',
       reward: RECOVERY_REWARD, state: 'offered', progress: 0, need: 1,
       originSystem: sysId, collected: false, // JSON-plain
     });

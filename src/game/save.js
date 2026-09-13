@@ -20,6 +20,7 @@ import {
   sanitizeEscapeRecord, readEscape, escapeActive, applyCondition, applyPeace,
   captureCondition, escapeRoleMode, escapeYielded,
 } from './npc-escape.js';
+import { sanitizeDerelictRecord, applyDerelictLive } from './derelict.js';
 // The re-entry hydration both paths share (issue #68). npc.js does not import
 // save.js, so this direction adds no cycle.
 import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
@@ -1400,7 +1401,10 @@ function sanitizeEscapes(ctx) {
     if (!Array.isArray(bank) || seen.has(bank)) return;
     seen.add(bank);
     for (const rec of bank) {
-      if (rec && typeof rec === 'object') sanitizeEscapeRecord(rec);
+      if (rec && typeof rec === 'object') {
+        sanitizeEscapeRecord(rec);
+        sanitizeDerelictRecord(rec); // issue #148: same fail-safe discipline
+      }
     }
   };
   if (banks && typeof banks === 'object' && !Array.isArray(banks)) {
@@ -1467,6 +1471,12 @@ function healLiveRecords(ctx) {
     // is stood down here and retired by traffic.js's despawn pass, which runs
     // before npc.js every frame — so it never gets one more update as a live
     // ship the save says does not exist.
+    // Issue #148: the restored record is a derelict — the surviving hull
+    // becomes the dead-stick it describes (traffic re-instantiates the same).
+    if (rec.state === 'derelict') {
+      applyDerelictLive(rec, ship);
+      continue;
+    }
     if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') {
       ai.mode = 'drift';
       ai.intent = false;

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW, JUMP, ESCAPE, DEFENSE } from './state.js';
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 import { writeStationHold } from './traffic-feel.js';
+import { tickDerelicts, writeDerelictPosition } from './derelict.js';
 import {
   readEscape,
   escapeActive,
@@ -695,6 +696,9 @@ const _escapePos = { x: 0, y: 0, z: 0 };
  * zero allocation. traffic.js uses this as the spawn point.
  */
 export function recordPosition(rec, out) {
+  // Issue #148: a derelict sits where its crew left it; the lane is not its
+  // position any more and it never advances.
+  if (rec.state === 'derelict' && writeDerelictPosition(rec, out)) return out;
   // Issue #68: an active escape OWNS this record's position — the abstract
   // lane route is stale the moment the hull broke for a gate or the station,
   // and traffic.js must re-instantiate the runner where it actually is.
@@ -1168,6 +1172,7 @@ export function tickBank(bank, sysId, ctx) {
   for (let i = 0; i < bank.length; i++) {
     const rec = bank[i];
     if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') continue;
+    if (rec.state === 'derelict') continue; // issue #148: derelict.js owns it
     // Issue #68: an escaping record's ordinary route is not its intent any
     // more. Skip normalization, lane progress and dwell entirely; advance the
     // small scalar/vector plan instead. A LIVE runner is driven by npc.js, so
@@ -2207,6 +2212,9 @@ export function initWorld(ctx) {
       // Witness Rule: incidents → aftermath, only from real events.
       consumeIncidents(ctx);
 
+      // Issue #148: derelict claims and the 30-minute fold, every bank.
+      tickDerelicts(ctx);
+
       // Named-Gun hunter: fear crossing the threshold buys Sister Vane, once
       // ever (cheap per-frame guard; spawn itself allocates once).
       if (!ctx.world.aceRivalry?.hunterSpawned && ctx.world.fear >= ACES.hunter.fearThreshold) {
@@ -2280,7 +2288,8 @@ export function initWorld(ctx) {
           ctx.world.aftermath.splice(i, 1);
           continue;
         }
-        if ((entry.system ?? curSys) === curSys && !wreckMeshes.has(entry.id)) {
+        // Issue #148: a derelict's entry has the hull itself for a visual.
+        if ((entry.system ?? curSys) === curSys && !entry.derelictId && !wreckMeshes.has(entry.id)) {
           wreckMeshes.set(entry.id, makeWreckMesh(ctx, entry));
         }
       }
