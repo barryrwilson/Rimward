@@ -31,7 +31,7 @@ from #98 to #159 is merged (see the table below). The next task is selected
 from the candidates in the sections that follow, or from a new owner report.
 Selected on 2026-09-13: [#163](https://github.com/barryrwilson/Rimward/issues/163),
 Agent Play mouse ownership (incidental pointer motion must not cancel or steer
-agent-directed flight; explicit takeover stays available).
+agent-directed flight; Escape is the only human takeover, owner decision 2026-09-13).
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 
