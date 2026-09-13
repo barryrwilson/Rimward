@@ -1377,16 +1377,27 @@ export async function runAgentParityWave142(deps) {
     recoverIfDead142('w142 dock war pre');
     ensureDocked142('w142 dock war');
     // Bounded recorded fixture installed BEFORE the board read: the labelled
-    // high-personality patrol record (personality 95 → never capitulates)
-    // makes the kill-required contract deterministic. The fixture's own
-    // generated offer is preferred; real board offers remain the fallback.
+    // high-personality patrol record (personality 95 → resolve floor 70,
+    // 'defiant', never capitulates) makes the kill-required contract
+    // deterministic. The fixture's own generated offer is preferred; real
+    // board offers remain the fallback.
+    // Issue #153: station.js pickWarQuarry scans the war DEST bank (veridian
+    // for a freehold posting) before the origin bank, so a fixture parked in
+    // the freehold bank only posted when veridian held fewer than two
+    // eligible patrols — a bank-state race that left the scenario on a real
+    // record (fixture=false) which yielded and ran through the #146 escape
+    // plan. Park the fixture at the head of the dest bank when that bank
+    // exists (the record's own system stays freehold, which the eligibility
+    // rule accepts), else the origin bank, so the picker reads it first.
     const warFixtureRec = {
       id: 'rec-9002', name: 'Wave142 War Quarry', classKey: 'cutter',
       faction: 'veridian', role: 'patrol', system: 'freehold', state: 'enroute',
       resolve: 50, personality: 95,
     };
-    const warBank = (ctx.world.recordBanks && Array.isArray(ctx.world.recordBanks.freehold)) ? ctx.world.recordBanks.freehold
-      : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
+    const warBanks = ctx.world.recordBanks;
+    const warBank = (warBanks && Array.isArray(warBanks.veridian)) ? warBanks.veridian
+      : (warBanks && Array.isArray(warBanks.freehold)) ? warBanks.freehold
+        : (Array.isArray(ctx.world.records) ? ctx.world.records : null);
     if (warBank) { warBank.unshift(warFixtureRec); fixtureRecs.push({ arr: warBank, rec: warFixtureRec }); }
     // privilegedFixture board reset: pull existing OFFERED war cards so the
     // real syncWarJobs reposts from the bank with the labelled fixture first;
@@ -1418,6 +1429,17 @@ export async function runAgentParityWave142(deps) {
         live = liveForRec142(rec, [220, 0, 0], 'w142 war quarry stage');
       }
       if (live) {
+        // Issue #153: the kill-required contract must not race the #146
+        // post-yield run. Pin the LIVE quarry's personality whichever record
+        // the board bound (fixture or real fallback): computeResolve floors
+        // at 70 ('defiant') with personality 95, so updateResolve never
+        // reaches capitulate and the hull fights until npcDestroyed. The
+        // live state is instance-scoped — a real fallback record is not
+        // rewritten, and killedRecs restores its state below.
+        if (live.state) {
+          live.state.personality = 95;
+          if (!Number.isFinite(live.state.resolve) || live.state.resolve < 70) live.state.resolve = 70;
+        }
         pinHull142(true); // privilegedFixture: contract-kill only
         const f = fight142('war', live, rec.name, ['npcDestroyed']); // kill-required: surrender is not resolution
         pinHull142(false);
