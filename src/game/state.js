@@ -422,6 +422,20 @@ export const PRIZE_CLAIM = Object.freeze({
   repHit: 3, // standing the hull's faction docks at the claim (returned at their own yard)
   interestPerHull: 0.04, // added to a pirate's interest chance per unsettled hull
 });
+// Issue #158: the yard buys an owned hull BACK from the hangar. Any unmounted
+// hangar row sells at a berth with a hull catalog (yardStockFor); the mounted
+// hull never does. The yard pays a fraction of YARD_LIST_UU for the class:
+// homeRate when the hull flies the yard's own banner, foreignRate for any
+// other faction's hull (a hangar row does not record which yard sold it, so
+// the banner is the proxy). A living hull is traded only where living hulls
+// are sold (Beautiful Ones / Unknowables yards); a grafted plated hull only at
+// the Gilded Chain that grafts. A `hot` hull (a claimed prize kept in the
+// hangar, issue #159) sells anywhere at ECON.hotHullFence of hullPrizeValue
+// instead, whatever its banner. Equipment aboard goes with the hull.
+export const HULL_RESALE = Object.freeze({
+  homeRate: 0.5, // of YARD_LIST_UU when the hull's faction is the yard's banner
+  foreignRate: 0.35, // of YARD_LIST_UU for a hull of another faction
+});
 // Issue #148: a yielded hull whose crew is GONE (crewPods) is a derelict. The
 // record flips to state 'derelict' and carries rec.derelict (JSON-plain:
 // since/due/claimAt, the dead-stick position and coast, the hull left, and

@@ -10,6 +10,10 @@ import {
   trainListPrice,
   yardPrice,
   yardStockFor,
+  clampHotRate,
+  hullResaleQuote,
+  hullResaleRefusal,
+  sellHangarHull,
 } from '../game/shipyard.js';
 import { FACTIONS, SHIP_CLASSES } from '../game/state.js';
 import { requestAutosave } from '../game/save.js';
@@ -118,6 +122,28 @@ export function trainRefuseLine(reason) {
   return TRAIN_REFUSE_LINES[reason] ?? 'Cannot train that hull.';
 }
 
+/** Issue #158: the yard buys an unmounted hangar hull. */
+export const SELL_REFUSE_LINES = Object.freeze({
+  dock: 'Dock first to sell a hull.',
+  combat: 'Cannot sell in combat.',
+  jump: 'Cannot sell during a jump.',
+  destroyed: SWITCH_REFUSE_LINES.destroyed,
+  paused: 'Cannot sell while paused.',
+  missing: SWITCH_REFUSE_LINES.missing,
+  mounted: 'The yard does not buy the hull you stand in. Mount another first.',
+  stock: 'This dock has no yard. No sale.',
+  living: 'Living hulls are traded at Beautiful Ones and Unknowables yards only.',
+  grafted: 'A grafted hull is traded at a Gilded Chain yard only.',
+  busy: 'Papers are already in flight.',
+});
+
+export const SELL_NOTE = 'Gear and hold aboard go with the hull.';
+export const SELL_HOT_NOTE = 'Hot hull. The yard pays the laundering rate, no questions.';
+
+export function sellRefuseLine(reason) {
+  return SELL_REFUSE_LINES[reason] ?? 'No sale.';
+}
+
 export function shipyardPaneOf(ui) {
   return ui?.shipyardPane === SHIPYARD_PANE_BUY ? SHIPYARD_PANE_BUY : SHIPYARD_PANE_HANGAR;
 }
@@ -129,7 +155,31 @@ export function setShipyardPane(ui, pane) {
   if (ui.shipyardPane !== SHIPYARD_PANE_HANGAR) {
     ui.graftPending = null;
     ui.trainPending = null;
+    ui.sellPending = null;
   }
+}
+
+/** Dock entry (station.js): forget the last visit's sale papers and hot quotes. */
+export function resetShipyardSale(ui) {
+  if (!ui) return;
+  ui.sellPending = null;
+  ui.sellRates = null;
+}
+
+export function cancelSellPending(ui) {
+  if (!ui?.sellPending) return false;
+  ui.sellPending = null;
+  ui.notice = '';
+  return true;
+}
+
+/** One hot-hull rate per row per visit, so the quote shown is the quote paid. */
+function hotRateFor(ui, id) {
+  if (!ui) return clampHotRate();
+  if (!ui.sellRates || typeof ui.sellRates !== 'object') ui.sellRates = Object.create(null);
+  if (typeof id !== 'string') return clampHotRate();
+  if (!Object.prototype.hasOwnProperty.call(ui.sellRates, id)) ui.sellRates[id] = clampHotRate();
+  return ui.sellRates[id];
 }
 
 export function cancelYardPending(ui) {
@@ -305,6 +355,45 @@ function confirmTrain(ctx, ui) {
   }
 }
 
+function setSellPending(ui, ctx, row, quote) {
+  if (!row || !quote) return;
+  ui.sellPending = {
+    id: row.id,
+    price: quote.price,
+    kind: quote.kind,
+    hotRate: quote.kind === 'hot' ? quote.rate : null,
+    mountedId: ctx?.world?.hangar?.mountedId ?? '',
+  };
+  ui.graftPending = null;
+  ui.trainPending = null;
+  ui.notice = '';
+}
+
+function confirmSell(ctx, ui) {
+  if (ui.sellBusy) return { ok: false, reason: 'busy' };
+  const pending = ui.sellPending;
+  if (!pending) return { ok: false, reason: 'missing' };
+  ui.sellBusy = true;
+  try {
+    ui.sellPending = null;
+    if (pending.mountedId && pending.mountedId !== ctx.world?.hangar?.mountedId) {
+      ui.notice = sellRefuseLine('missing');
+      return { ok: false, reason: 'missing' };
+    }
+    const opts = pending.kind === 'hot' ? { hotRate: pending.hotRate } : undefined;
+    const result = sellHangarHull(ctx, pending.id, opts);
+    if (result.ok) {
+      ui.notice = result.receipt?.line ?? `Sold. ${result.price} UU.`;
+      if (ui.sellRates && typeof ui.sellRates === 'object') delete ui.sellRates[pending.id];
+    } else {
+      ui.notice = sellRefuseLine(result.reason);
+    }
+    return result;
+  } finally {
+    ui.sellBusy = false;
+  }
+}
+
 function confirmGraft(ctx, ui) {
   if (ui.graftBusy) return { ok: false, reason: 'busy' };
   const pending = ui.graftPending;
@@ -405,6 +494,29 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
     });
     return;
   }
+  if (ui.sellPending) {
+    const pending = ui.sellPending;
+    const row = hulls.find((r) => r.id === pending.id);
+    const name = row ? (row.name || SHIP_CLASSES[row.classKey]?.role || 'hull') : 'hull';
+    const box = h('div', 'shipyard-buy-row shipyard-confirm', panel);
+    h('div', 'shipyard-buy-name', box, `Sell ${name}`);
+    if (row) {
+      h('div', 'shipyard-buy-meta', box,
+        `${classLabel(row.classKey)} · ${factionLabel(row.faction)} · ${pending.price} UU · Confirm sale`);
+    } else {
+      h('div', 'shipyard-buy-meta', box, `${pending.price} UU · Confirm sale`);
+    }
+    h('div', 'screen-note', box, pending.kind === 'hot' ? SELL_HOT_NOTE : SELL_NOTE);
+    btn(box, 'Confirm sale', () => {
+      confirmSell(ctx, ui);
+      redraw();
+    }, 'screen-btn screen-btn-warm');
+    btn(box, 'Esc — Cancel', () => {
+      cancelSellPending(ui);
+      redraw();
+    });
+    return;
+  }
   if (ui.trainPending) {
     const pending = ui.trainPending;
     const fromClass = classLabel(pending.fromClass);
@@ -431,15 +543,34 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
     const name = row.name || SHIP_CLASSES[row.classKey]?.role || 'hull';
     const mounted = row.id === mountedId ? ' · mounted' : '';
     h('div', 'shipyard-hull-name', card, name);
+    const hot = row.hot === true ? ' · hot' : '';
     h('div', 'shipyard-hull-meta', card,
-      `${classLabel(row.classKey)} · ${factionLabel(row.faction)}${mounted}`);
-    if (i > 7) return;
-    btn(card, `${hullDigitLabel(i)} — Mount`, () => {
-      const result = switchTo(ctx, row.id);
-      ui.notice = result.ok ? `Mounted ${name}.` : switchRefuseLine(result.reason);
+      `${classLabel(row.classKey)} · ${factionLabel(row.faction)}${hot}${mounted}`);
+    if (i <= 7) {
+      btn(card, `${hullDigitLabel(i)} — Mount`, () => {
+        const result = switchTo(ctx, row.id);
+        ui.notice = result.ok ? `Mounted ${name}.` : switchRefuseLine(result.reason);
+        redraw();
+      });
+    }
+    // Issue #158: the yard buys any unmounted row it will trade.
+    if (row.id === mountedId) return;
+    const refusal = hullResaleRefusal(ctx, row);
+    if (refusal === 'living' || refusal === 'grafted') {
+      h('div', 'screen-note shipyard-sell-note', card, sellRefuseLine(refusal));
+      return;
+    }
+    if (refusal) return;
+    const quote = hullResaleQuote(ctx, row, row.hot === true ? hotRateFor(ui, row.id) : undefined);
+    if (!quote) return;
+    btn(card, `Sell — ${quote.price} UU`, () => {
+      setSellPending(ui, ctx, row, quote);
       redraw();
     });
   });
+  if (hulls.length > 1 && yardStockFor(dockFactionOf(ctx)).length === 0) {
+    h('div', 'screen-note shipyard-sell-note', panel, SELL_REFUSE_LINES.stock);
+  }
   if (graftOfferVisible(ctx)) {
     const card = h('div', 'shipyard-buy-row', panel);
     h('div', 'shipyard-buy-name', card, 'Graft tissue');
@@ -489,7 +620,7 @@ export function renderShipyardDesk(h, btn, panel, ctx, ui, redraw) {
   }, pane === SHIPYARD_PANE_BUY ? 'screen-btn screen-btn-warm' : 'screen-btn');
   if (pane === SHIPYARD_PANE_BUY) renderBuyPane(h, btn, panel, ctx, ui, redraw);
   else renderHangarPane(h, btn, panel, ctx, ui, redraw);
-  let legend = '1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Esc back';
+  let legend = '1 Hangar · 2 Yard · 3+ hull on Hangar · 3+ papers on Yard · 0 last row · Sell on Hangar · Esc back';
   if (dockFactionOf(ctx) === 'beautiful' && pane === SHIPYARD_PANE_HANGAR) {
     legend += ` · Train on Hangar · ${TRAIN_HULL_LINE} · Esc cancels papers`;
   }
@@ -519,7 +650,7 @@ export function handleShipyardDigit(n, ctx, ui) {
     setYardPending(ui, offer.classKey);
     return true;
   }
-  if (ui.graftPending || ui.trainPending) return true;
+  if (ui.graftPending || ui.trainPending || ui.sellPending) return true;
   const idx = hullIndexForDigit(n);
   if (idx < 0) return false;
   sanitizeHangar(ctx);
