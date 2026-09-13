@@ -72,7 +72,9 @@ import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
  *   anchor?: Vector3 }
  *
  * AI modes: route (trader), loiter (patrol), hunt (pirate), duel (ace),
- * mine (miner), plus surrender modes flee/drift. Issue #68: 'flee' is owned by
+ * mine (miner), plus surrender modes flee/drift. Issue #146: a yield that keeps
+ * its crew (jettison, cutEngines, flee) runs for a refuge; only a crewPods yield
+ * (crew gone) goes dead-stick in 'drift'. Issue #68: 'flee' is owned by
  * an escape plan on the RECORD (game/npc-escape.js) — a chosen physical gate
  * or the station holding lane, its condition snapshot, and its phase. The plan
  * survives range culling, re-instantiation, save/restore and the crossing
@@ -2392,19 +2394,31 @@ function capitulate(ctx, live) {
     // the same event-time attribution as the fear and the receipt below.
     if (causer === 'player') maybeGrantPirateSeed(ctx, live);
   }
-  if (outcome === 'flee') {
-    say(ctx, live, 'Breaking off.');
-    // Issue #68: the break-off picks a real refuge (and stamps the truthful
-    // trail) instead of running at open space until the fold eats it.
-    const attacker = lastAttackerOf(live);
-    const from = ai.fleeFrom ?? (attacker && attacker !== 'npc' ? attacker : 'player');
-    enterEscapeFlee(ctx, live, from);
-  } else {
+  if (outcome === 'crewPods') {
+    // The crew is gone: nobody is left to fly the hull. It goes dead-stick
+    // (the derelict the companion issue #148 claims and folds away).
     ai.mode = 'drift';
     _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
     ai.driftVel.copy(_fwd).multiplyScalar(8); // dead-stick drift
     glow.visible = false; // engines cut
-    say(ctx, live, outcome === 'crewPods' ? 'Abandoning ship.' : outcome === 'jettison' ? 'Cargo loose.' : 'We yield.');
+    say(ctx, live, 'Abandoning ship.');
+  } else {
+    // Issue #146: every yield that KEEPS its crew runs. A trader that dumped
+    // its hold (jettison) or had nothing to dump (cutEngines) used to park in
+    // 'drift' with a live crew, engines dark, until traffic needed the slot;
+    // players saw dark hulls parked for a long time. It now takes the same
+    // door the break-off ('flee') does — issue #68: pick a real refuge, stamp
+    // the truthful trail, fly there, shelter. The receipt below still carries
+    // the physical outcome word, and a yielded hull never bargains again.
+    say(ctx, live, outcome === 'flee' ? 'Breaking off.' : outcome === 'jettison' ? 'Cargo loose.' : 'We yield.');
+    // Run from whoever broke the hull. An NPC-broken trader carries its
+    // pirate's live handle as lastAttacker; when the stamp is only the bare
+    // 'npc' word, the hunter still working this hull is the threat. The
+    // player is the fallback only when nothing else is known.
+    const attacker = lastAttackerOf(live);
+    const hunter = attacker && attacker !== 'npc' ? null : findHunterOf(ctx, live);
+    const from = ai.fleeFrom ?? (attacker && attacker !== 'npc' ? attacker : (hunter ?? 'player'));
+    enterEscapeFlee(ctx, live, from);
   }
   // Issue #99: fear is the player's reputation, so it is paid only for a break
   // the player caused. The receipt carries the same verdict so world.js and

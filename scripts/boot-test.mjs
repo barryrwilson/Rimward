@@ -27578,6 +27578,173 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(checks).every(Boolean)) { console.log('THRUSTER FX FAIL'); errors++; }
 }
 
+// ---- Issue #146: a trader that yields its cargo runs for a refuge ----------
+// npc.js capitulate used to park every non-flee yield (jettison / cutEngines /
+// crewPods) in ai.mode 'drift' with the engines cut, so a trader that gave up
+// its hold sat dead-stick with a live crew until traffic needed the slot. Now
+// a yield that KEEPS its crew takes the issue #68 escape door: a refuge is
+// committed, the trail stamped, the hull moves. Only crewPods (crew gone)
+// still drifts — that hull is the companion issue #148 derelict.
+// FIXTURE: hand-spawned trader + hunting pirate beside the player, far from
+// the lane so traffic spawns nothing into the bubble. The break is forced
+// through the REAL resolve ladder (personality -100 → resolve 0 → capitulate
+// band on the next 1 Hz sample), attributed to the pirate (lastAttacker = the
+// live pirate), so the receipt reads causer:'world' and pays the player nothing.
+{
+  const { readEscape: esc146, escapeRouted: routed146 } = await import('../src/game/npc-escape.js');
+  const savedPos146 = ctx.ship.object.position.clone();
+  const savedDock146 = ctx.flags.docked;
+  const savedTarget146 = ctx.targets.current;
+  const savedFear146 = ctx.world.fear;
+  const savedCredits146 = ctx.world.credits;
+  const parked146 = [];
+  for (let i = ctx.ships.length - 1; i >= 0; i--) {
+    const s = ctx.ships[i];
+    if (s.object) { parked146.push([s, s.object.position.clone()]); s.object.position.set(9000, 9000, 9000); }
+  }
+  ctx.flags.docked = false;
+  ctx.targets.current = null;
+  ctx.ship.object.position.set(20000, 20000, 20000);
+  const P146 = ctx.ship.object.position;
+  let seq146 = 0;
+  const spawn146 = (role, classKey, faction, extra = {}) => {
+    seq146++;
+    const rec = {
+      id: `i146-${seq146}`, name: `I146 ${role} ${seq146}`, classKey, faction, role,
+      resolve: 80, personality: 0, cargo: extra.cargo ?? [],
+    };
+    const live = spawnLiveShip(ctx, rec, new THREE.Vector3(P146.x + 60 + seq146 * 40, P146.y, P146.z + 60));
+    if (!live) return null;
+    ctx.ships.push(live);
+    live.object.quaternion.identity();
+    if (role === 'pirate') {
+      live.ai.demandSent = true; // TEST SETUP: no demand hail interrupts the loop
+      live.ai.playerRolled = true; // the interest roll is fixed off —
+      live.ai.playerInterested = false; // this pirate works the trader
+      live.ai.resolveAt = ctx.world.time + 1e6;
+    }
+    return live;
+  };
+  const drop146 = (live) => {
+    if (!live) return;
+    const i = ctx.ships.indexOf(live);
+    if (i >= 0) ctx.ships.splice(i, 1);
+    removeLiveShip(ctx, live);
+  };
+  // Force the REAL ladder to break this hull on its next resolve sample.
+  const breakNext146 = (live, pirate) => {
+    live.state.personality = -100; // computeResolve clamps to 0 → 'capitulate'
+    live.state.lastCombatAt = ctx.world.time; // 'threatened': the sample runs
+    live.ai.calmUntil = 0;
+    live.ai.band = 'defiant';
+    live.ai.resolveAt = 0;
+    live.ai.lastAttacker = pirate; // the pirate broke it, not the player
+  };
+  const receipts146 = (live, n, label) => {
+    const evs = [];
+    for (let i = 0; i < n; i++) {
+      tick(1, label);
+      for (const e of ctx.lastEvents) if (e.type === 'npcSurrendered' && e.ship === live) evs.push(e);
+      if (evs.length) break;
+    }
+    return evs;
+  };
+  const distToDest146 = (live) => {
+    const plan = esc146(live.record);
+    if (!plan || !routed146(live.record)) return NaN;
+    return live.object.position.distanceTo(new THREE.Vector3(plan.dest[0], plan.dest[1], plan.dest[2]));
+  };
+  const r146 = {};
+  try {
+    const fear0 = ctx.world.fear;
+    // A. cargo aboard → 'jettison': the hold spills and the hull RUNS.
+    const pirate = spawn146('pirate', 'cutter', 'redledger');
+    const trader = spawn146('trader', 'freighter', 'veridian', { cargo: [{ commodity: 'provisions', units: 6 }] });
+    if (pirate && trader) {
+      pirate.ai.mode = 'hunt';
+      pirate.ai.target = trader;
+      pirate.ai.phase = 'attack';
+      pirate.ai.phaseStart = ctx.world.time - 3.05;
+      tick(2, 'i146 settle');
+      r146.precondition = trader.state.cargo.length > 0 && trader.state.surrendered !== true
+        && trader.ai.mode !== 'drift' && pirate.ai.target === trader;
+      const pods0 = ctx.pods.length;
+      breakNext146(trader, pirate);
+      const rcpt = receipts146(trader, 5, 'i146 jettison yield');
+      const plan = esc146(trader.record);
+      r146.jettisonReceipt = rcpt.length === 1 && rcpt[0].outcome === 'jettison' && rcpt[0].causer === 'world';
+      r146.holdSpilled = trader.state.cargo.length === 0 && ctx.pods.length > pods0;
+      r146.yieldedRuns = trader.state.surrendered === true && trader.ai.surrenderDone === true
+        && trader.ai.mode === 'flee' && !!plan && routed146(trader.record)
+        && (plan.kind === 'gate' || plan.kind === 'station');
+      r146.enginesLit = trader.object.userData.glow.visible === true;
+      r146.runsFromPirate = trader.ai.fleeFrom === pirate && plan?.threat === 'ship' && plan?.threatId === pirate.record.id;
+      r146.pirateDropsPrize = pirate.ai.target !== trader;
+      r146.noPlayerPay = ctx.world.fear === fear0;
+      // Within a few seconds the hull is closing on its refuge, never drifting.
+      const d0 = distToDest146(trader);
+      let neverDrift = true;
+      let pirateNeverRetakes = true;
+      for (let i = 0; i < 300; i++) {
+        tick(1, 'i146 run');
+        if (trader.ai.mode === 'drift') neverDrift = false;
+        if (pirate.ai.target === trader) pirateNeverRetakes = false;
+      }
+      const d1 = distToDest146(trader);
+      r146.movingToRefuge = Number.isFinite(d0) && Number.isFinite(d1) && d1 < d0 - 30;
+      r146.neverDrift = neverDrift && trader.ai.mode === 'flee';
+      r146.pirateNeverRetakes = pirateNeverRetakes;
+      r146.stillYielded = trader.state.surrendered === true && trader.ai.hailed !== true;
+      // B. nothing aboard → 'cutEngines': the crew is aboard, so it still runs.
+      const empty = spawn146('trader', 'cutter', 'freehold', { cargo: [] });
+      if (empty) {
+        pirate.ai.target = empty;
+        pirate.ai.phase = 'attack';
+        tick(1, 'i146 settle empty');
+        breakNext146(empty, pirate);
+        const rcptE = receipts146(empty, 5, 'i146 cutEngines yield');
+        r146.cutEnginesReceipt = rcptE.length === 1 && rcptE[0].outcome === 'cutEngines' && rcptE[0].causer === 'world';
+        r146.cutEnginesRuns = empty.ai.mode === 'flee' && routed146(empty.record)
+          && empty.object.userData.glow.visible === true && empty.ai.fleeFrom === pirate;
+      } else r146.cutEnginesReceipt = r146.cutEnginesRuns = false;
+      // C. critical hull → 'crewPods': the crew is GONE, so this one still drifts.
+      const dark = spawn146('trader', 'cutter', 'freehold', { cargo: [{ commodity: 'provisions', units: 2 }] });
+      if (dark) {
+        dark.state.hull = Math.floor(dark.state.hullMax * 0.3);
+        pirate.ai.target = dark;
+        pirate.ai.phase = 'attack';
+        tick(1, 'i146 settle dark');
+        breakNext146(dark, pirate);
+        const rcptD = receipts146(dark, 5, 'i146 crewPods yield');
+        r146.crewPodsReceipt = rcptD.length === 1 && rcptD[0].outcome === 'crewPods';
+        // (The panic path may already have committed a plan before the break;
+        // a lingering plan on a dark hull is the #148 derelict's business.)
+        r146.crewPodsDrifts = dark.ai.mode === 'drift' && dark.object.userData.glow.visible === false;
+      } else r146.crewPodsReceipt = r146.crewPodsDrifts = false;
+      drop146(empty);
+      drop146(dark);
+    } else {
+      r146.precondition = false;
+    }
+    drop146(trader);
+    drop146(pirate);
+  } catch (e) {
+    r146.noThrow = false;
+    console.log('ISSUE146 ERR', e.message, e.stack?.split('\n')[1]?.trim() ?? '');
+  } finally {
+    r146.noThrow = r146.noThrow !== false;
+    for (const [s, p] of parked146) if (s.object) s.object.position.copy(p);
+    ctx.ship.object.position.copy(savedPos146);
+    ctx.flags.docked = savedDock146;
+    ctx.targets.current = savedTarget146;
+    ctx.world.fear = savedFear146;
+    ctx.world.credits = savedCredits146;
+    tick(1, 'i146 restore');
+  }
+  console.log('issue146 yielded trader runs:', JSON.stringify(r146));
+  if (!Object.values(r146).every(Boolean)) { console.log('ISSUE146 YIELDED TRADER RUNS FAIL'); errors++; }
+}
+
 // ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
 // (mission 43b34db25ae32972 — one checked fresh-process child)
 //
