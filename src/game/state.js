@@ -353,6 +353,23 @@ export const HIDDEN_MOUNTS = { cost: 900, bluffBase: 0.35, bluffPerFear: 0.01, f
 // card) is the player's prize: no NPC pirate acquires it, and one already
 // on it backs off. Sit-on hunts against the player are never capped.
 export const PIRACY = { concurrentCap: 2, contestRange: 800 };
+// Issue #151: an NPC pirate collects what it took. After its prize yields
+// (or dies) with cargo aboard, the pirate scoops the pods that spill from
+// THAT hull (pod.spilledBy = the pirate's record id) into its own hold, then
+// — once the hold is fenceAt-full — flies to the local station and fences the
+// haul at ECON.fenceRate against that station's prices. Credits land on the
+// pirate record (rec.credits, JSON-plain) and the sale feeds the station's
+// market supply exactly as a player sale does. Pods inside the player's own
+// magnet reach are the player's; a pirate under fire drops the scoop.
+export const PIRATE_HAUL = Object.freeze({
+  scoopRange: 12, // u: an NPC pirate collects a pod inside this range
+  magnetRange: 40, // u: a pod this close is drawn to the pirate (player: SCOOP_RANGE × 3)
+  magnetSpeed: 15, // u/s the pod closes at (matches the player's magnet)
+  scoopSeconds: 90, // s a scoop phase may last before the pirate gives up
+  fenceAt: 0.5, // fraction of cargoHoldFor(classKey) that sends the pirate to fence
+  fenceHold: 12, // s the pirate holds at the station pad while the sale closes
+  fenceArrive: 28, // u from the hold point that counts as arrived (miner hold)
+});
 // Issue #148: a yielded hull whose crew is GONE (crewPods) is a derelict. The
 // record flips to state 'derelict' and carries rec.derelict (JSON-plain:
 // since/due/claimAt, the dead-stick position and coast, the hull left, and
