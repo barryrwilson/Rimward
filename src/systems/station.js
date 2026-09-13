@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
-import { settleClaimedHulls } from '../game/derelict.js';
+import { claimedHullsOf } from '../game/derelict.js';
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
@@ -24,7 +24,7 @@ import { lamplighterStation } from './stations/lamplighter.js';
 import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
-import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, cancelSellPending, resetShipyardSale, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
+import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, cancelSellPending, cancelClaimPending, claimedDockNotice, resetShipyardSale, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
 import { decodeKeyCode } from './key-code.js';
 import { writeMountedGear, applyAbominationStanding } from '../game/hangar.js';
 import {
@@ -6650,7 +6650,7 @@ export function initStation(ctx) {
         pending: !!(
           ui.seedPending || ui.giftPending || ui.restitutionPending
           || ui.outfitPending || ui.graftPending || ui.trainPending || ui.yardPending
-          || ui.sellPending || ui.trafficPending || ui.dataPending || ui.launderPending
+          || ui.sellPending || ui.claimPending || ui.trafficPending || ui.dataPending || ui.launderPending
         ),
         rows: viewRows(cap),
         actions,
@@ -6792,11 +6792,18 @@ export function initStation(ctx) {
     setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
     resetShipyardSale(ui);
     overlay.style.display = 'flex';
-    // Issue #147 follow-up: the yard settles every claimed hull at the berth.
+    // Issue #159: a claimed hull settles only by the player's choice. The
+    // berth opens the shipyard desk on the Claimed hulls pane so the ledger
+    // is in front of the pilot; nothing on it moves until a verb is confirmed.
     try {
-      const sysId = ctx.world.currentSystem;
-      const settled = settleClaimedHulls(ctx, sysId, ctx.systems?.[sysId]?.faction ?? null);
-      if (settled.length > 0) ui.notice = settled.map((x) => x.line).join(' ');
+      const claimed = claimedHullsOf(ctx.world).length;
+      if (claimed > 0) {
+        pinDockedSystem();
+        ui.level = 2;
+        ui.service = 'shipyard';
+        setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
+        ui.notice = claimedDockNotice(claimed);
+      }
     } catch { /* the berth never fails on the ledger */ }
     ctx.emit('docked');
     render();
@@ -6952,7 +6959,7 @@ export function initStation(ctx) {
     }
     // level 2
     if (code === 'Escape') {
-      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui) || cancelTrainPending(ui) || cancelSellPending(ui))) { render(); return; }
+      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui) || cancelTrainPending(ui) || cancelSellPending(ui) || cancelClaimPending(ui))) { render(); return; }
       if (ui.service === 'people' && (cancelGiftPending() || cancelTrafficPending(ui) || cancelLaunderPending(ui))) { render(); return; }
       if (ui.service === 'market' && (cancelSeedPending() || cancelDataPending(ui))) { render(); return; }
       if (ui.service === 'outfitting' && cancelOutfitPending(ui)) { render(); return; }
