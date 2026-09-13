@@ -27790,6 +27790,48 @@ removeLiveShip(w42indyCtx, w42indy);
   }
 }
 
+// ---- Issue #151: an NPC pirate scoops the pods it took and fences the haul --
+// After its prize yields, a pirate collects the pods that spilled from THAT
+// hull (pod.spilledBy) into its own record manifest, then runs a heavy hold
+// to the local station and fences it at ECON.fenceRate; the purse lands on
+// rec.credits and the market takes the units. Pods in the player's reach are
+// the player's; a pirate under fire drops the scoop. The pins live in
+// scripts/issue-151-pirate-haul-test.mjs (npm run test:pirate-haul) and run
+// here as one checked fresh child process, for the same reason as #148 above:
+// the fence run docks at the real station and the persistence leg round-trips
+// a full save/restore, which this file's inherited run state contaminates.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- issue #151: pirate scoop and fence run (fresh child: node --import with-css-stub.mjs scripts/issue-151-pirate-haul-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'issue-151-pirate-haul-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit' });
+  const HAUL_TIMEOUT_MS = 10 * 60 * 1000; // watchdog only; a normal run takes well under a minute
+  const verdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${HAUL_TIMEOUT_MS / 60000} min (child killed)`);
+    }, HAUL_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(true, 'exit 0');
+      else finish(false, `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`);
+    });
+  });
+  if (!verdict.ok) {
+    console.log(`ISSUE151 PIRATE HAUL FRESH-PROCESS FAIL — ${verdict.why}`);
+    errors++;
+  }
+}
+
 // ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
 // (mission 43b34db25ae32972 — one checked fresh-process child)
 //

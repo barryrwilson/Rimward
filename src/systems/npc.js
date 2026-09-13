@@ -17,6 +17,7 @@ import {
   SYSTEMS,
   ESCAPE,
   PIRACY,
+  PIRATE_HAUL,
 } from '../game/state.js';
 import {
   readEscape,
@@ -43,7 +44,8 @@ import {
 } from '../game/world.js';
 import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
-import { spawnPod, spawnSurvivorPod } from '../game/pods.js';
+import { spawnPod, spawnSurvivorPod, mergePodContents, podUnits, podCommodityKey } from '../game/pods.js';
+import { holdFree, holdHeavy, fenceHaul } from '../game/pirate-haul.js';
 import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
 import { applyPlayerKillStanding } from '../game/kill-standing.js';
 import { maybeGrantPirateSeed } from '../game/bio-seed.js';
@@ -345,6 +347,8 @@ function makeAi(ctx, record, startPos) {
     termsAt: -1, // issue #122: sim time the player's own terms card opened; -1 none. Instance only, not saved
     survivorsSpawned: false, // one crew pod per hull; crewPods and destroy share this
     fleeFrom: null, // 'player' | live ship — trader job flee source
+    scoop: null, // issue #151: { since, until } while a pirate collects the pods it spilled; session only
+    fence: null, // issue #151: { since, holdAt } while a pirate runs its haul to the local station; session only
     band: 'defiant',
     resolveAt: 0,
     fireAt: 0,
@@ -365,6 +369,11 @@ function makeAi(ctx, record, startPos) {
     ai.waypoints = ring(startPos, 90, 3);
   } else {
     ai.waypoints = stationLoiterWaypoints(record.anchor ?? ctx.config.world.stationPosition, 80 + Math.random() * 70);
+  }
+  // Issue #151: a pirate folded back in with a heavy hold still owes a fence
+  // run. Derived from the record's own manifest, so it needs no saved phase.
+  if (!escaping && role === 'pirate' && holdHeavy(record.classKey, record.cargo)) {
+    ai.fence = { since: 0, holdAt: 0 };
   }
   if (escaping) {
     const plan = readEscape(record);
@@ -2355,6 +2364,7 @@ export function spillShipCargo(ctx, live) {
   const cargo = st && st.cargo;
   const pos = live && live.object && live.object.position;
   if (!cargo || !pos) return 0;
+  const spiller = spillerOf(live); // issue #151: read once, before the trail moves
   let n = 0;
   for (const entry of cargo) {
     const units = entry && (entry.units | 0);
@@ -2362,12 +2372,30 @@ export function spillShipCargo(ctx, live) {
     // Flattening would drop source/originFaction; data pods are a separate roll.
     if (isDataCommodity(entry.commodity)) continue;
     _v1.set(pos.x + (Math.random() - 0.5) * 8, pos.y + (Math.random() - 0.5) * 8, pos.z + (Math.random() - 0.5) * 8);
-    spawnPod(ctx, [{ commodity: entry.commodity, units }], _v1);
+    const pod = spawnPod(ctx, [{ commodity: entry.commodity, units }], _v1);
+    if (pod && spiller) pod.spilledBy = spiller;
     n++;
   }
   cargo.length = 0;
   maybeSpawnDataFromWreck(ctx, live);
   return n;
+}
+
+/**
+ * Issue #151 — the NPC hunter that caused this spill, as its record id, or
+ * null. Only a break the WORLD caused is a pirate's to collect: a player
+ * causer (a hit, or the issue #122 terms claim) leaves the pods untagged, so
+ * a pirate that merely grazed the hull earlier never scoops the player's
+ * prize. A bare 'npc' stamp (a dead shooter) names nobody.
+ */
+function spillerOf(live) {
+  if (!live || !live.ai) return null;
+  if (surrenderCauserOf(live) === 'player') return null;
+  const attacker = lastAttackerOf(live);
+  if (!attacker || attacker === 'player' || attacker === 'npc') return null;
+  if (hunterRole(attacker) !== 'pirate') return null;
+  const id = attacker.record && attacker.record.id;
+  return typeof id === 'string' && id.length > 0 ? id : null;
 }
 
 function capitulate(ctx, live) {
@@ -2705,6 +2733,154 @@ function playerInterestedIn(ctx, live) {
   return ai.playerInterested;
 }
 
+// ---------- issue #151: a pirate collects what it took ----------
+/** Pods this hull spilled that are still in the world. */
+function spilledPodCount(ctx, live) {
+  const id = live.record && live.record.id;
+  const pods = ctx.pods;
+  if (!id || !pods) return 0;
+  let n = 0;
+  for (let i = 0; i < pods.length; i++) if (pods[i].spilledBy === id) n++;
+  return n;
+}
+
+/** The player is magneting this pod (pods.js draws pods inside SCOOP_RANGE × 3). */
+function playerMagnets(ctx, pod) {
+  const pObj = ctx.ship && ctx.ship.object;
+  if (!pObj || (ctx.flags && ctx.flags.docked)) return false;
+  return pObj.position.distanceTo(pod.mesh.position) < U.SCOOP_RANGE * 3;
+}
+
+/**
+ * Open a bounded scoop phase if this pirate has pods of its own in the
+ * world and room to hold them. Pirates only; a hunt that ends for any other
+ * reason (a kill with nothing aboard, a contested prize) starts nothing.
+ */
+function beginScoop(ctx, live, now) {
+  const ai = live.ai;
+  if (!ai || ai.role !== 'pirate' || ai.scoop) return;
+  if (live.state.surrendered || live.state.disabled) return;
+  if (spilledPodCount(ctx, live) === 0) return;
+  if (holdFree(live.state.classKey, live.state.cargo) <= 0) {
+    if (!ai.fence) ai.fence = { since: now, holdAt: 0 };
+    return;
+  }
+  ai.scoop = { since: now, until: now + PIRATE_HAUL.scoopSeconds };
+  say(ctx, live, 'Cargo loose. Scooping the spill.');
+}
+
+/** Nearest pod this pirate may take: its own spill, not the player's, and it fits. */
+function pickScoopPod(ctx, live, free) {
+  const id = live.record && live.record.id;
+  const pods = ctx.pods;
+  if (!id || !pods) return null;
+  const pos = live.object.position;
+  let best = null;
+  let bestD = Infinity;
+  for (let i = 0; i < pods.length; i++) {
+    const pod = pods[i];
+    if (pod.spilledBy !== id) continue;
+    if (podUnits(pod) > free) continue;
+    if (playerMagnets(ctx, pod)) continue; // issue #151: inside the player's reach it is theirs
+    const d = pos.distanceTo(pod.mesh.position);
+    if (d < bestD) {
+      best = pod;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+function endScoop(ctx, live, now) {
+  const ai = live.ai;
+  ai.scoop = null;
+  if (holdHeavy(live.state.classKey, live.state.cargo) && !ai.fence) ai.fence = { since: now, holdAt: 0 };
+}
+
+/**
+ * Scoop: fly to the nearest pod of its own spill, draw it in inside
+ * magnetRange, take it inside scoopRange. Ends when the pods are gone, the
+ * hold is full, the phase times out, or a hit lands (any shooter). Fence:
+ * run to the local station's hold point, hold there fenceHold seconds, sell.
+ * Returns true while the haul owns the hull's motion this frame.
+ */
+function updateHaul(ctx, live, dt, now) {
+  const ai = live.ai;
+  const st = live.state;
+  if (ai.scoop) {
+    const scoop = ai.scoop;
+    if (st.lastHitAt > scoop.since || now >= scoop.until) {
+      // Under fire the spill is not worth the hull; the clock bounds the rest.
+      endScoop(ctx, live, now);
+      return updateHaul(ctx, live, dt, now);
+    }
+    const free = holdFree(st.classKey, st.cargo);
+    const pod = free > 0 ? pickScoopPod(ctx, live, free) : null;
+    if (!pod) {
+      endScoop(ctx, live, now);
+      return updateHaul(ctx, live, dt, now);
+    }
+    const pos = live.object.position;
+    _v1.subVectors(pos, pod.mesh.position);
+    let dist = _v1.length();
+    if (dist < PIRATE_HAUL.magnetRange && dist > 1e-4) {
+      pod.mesh.position.addScaledVector(_v1.normalize(), Math.min(PIRATE_HAUL.magnetSpeed * dt, dist));
+      dist = pos.distanceTo(pod.mesh.position);
+    }
+    // Close at cruise from afar, then bleed speed off with the range so the
+    // turn radius shrinks with it: a cutter that keeps 0.8 × cruise orbits a
+    // pod at ~80 u and never comes inside the magnet. Creep once inside.
+    const cap = speedCap(live);
+    const creep = SHIP_CLASSES[st.classKey]?.creep ?? cap * 0.25;
+    const speed = dist > PIRATE_HAUL.magnetRange ? Math.max(creep, Math.min(cap * 0.8, dist * 0.5)) : creep;
+    if (dist < PIRATE_HAUL.scoopRange) {
+      const units = podUnits(pod);
+      mergePodContents(st.cargo, pod.contents);
+      const commodity = podCommodityKey(pod);
+      ctx.emit('npcPodCollected', commodity ? { ship: live, pod, units, commodity } : { ship: live, pod, units });
+      ctx.scene.remove(pod.mesh);
+      const i = ctx.pods.indexOf(pod);
+      if (i >= 0) ctx.pods.splice(i, 1);
+    }
+    steerLive(live, pod.mesh.position, speed, dt);
+    return true;
+  }
+  if (ai.fence) {
+    const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
+    if (!station || !holdHeavy(st.classKey, st.cargo)) {
+      ai.fence = null; // nothing to fence here (or the hold emptied some other way)
+      return false;
+    }
+    holdApproachPos(live, station, _v3);
+    minerHoldFromStation(station, _v3, npcRadius(live), _aim);
+    const pos = live.object.position;
+    const holdDist = Math.hypot(pos.x - _aim.x, pos.y - _aim.y, pos.z - _aim.z);
+    // Approach until the pad is close; a hold already begun is not reset by
+    // a nudge (the station bounce, a passing hull) — only a real push-off
+    // past twice the arrival radius sends it back in, and the clock waits.
+    const settleDist = ai.fence.holdAt ? PIRATE_HAUL.fenceArrive * 2 : PIRATE_HAUL.fenceArrive;
+    if (holdDist >= settleDist) {
+      const cap = speedCap(live);
+      steerLive(live, _aim, Math.max(cap * 0.2, Math.min(cap * 0.85, holdDist * 0.5)), dt);
+      return true;
+    }
+    // At the pad: engines idle (the miner's dock does the same), count the
+    // hold, then the sale closes.
+    if (ai.velocity) ai.velocity.set(0, 0, 0);
+    if (!ai.fence.holdAt) ai.fence.holdAt = now;
+    if (now - ai.fence.holdAt < PIRATE_HAUL.fenceHold) return true;
+    const systemId = ctx.world.currentSystem;
+    const sale = fenceHaul(ctx.world, live.record, systemId);
+    ai.fence = null;
+    if (sale.units > 0) {
+      say(ctx, live, `Haul fenced. ${sale.units} units, ${sale.credits} UU.`);
+      ctx.emit('npcFenced', { ship: live, units: sale.units, credits: sale.credits, system: systemId });
+    }
+    return true;
+  }
+  return false;
+}
+
 function updateHunt(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
   const station = ctx.config.world.stationPosition;
@@ -2778,8 +2954,10 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
     else breakOff(ai);
   } else if (ai.target) {
     const t = ai.target;
-    if (t.state.destroyed || t.state.disabled || t.state.surrendered || !ctx.ships.includes(t)) breakOff(ai);
-    else if (playerContests(ctx, t)) {
+    if (t.state.destroyed || t.state.disabled || t.state.surrendered || !ctx.ships.includes(t)) {
+      breakOff(ai);
+      beginScoop(ctx, live, now); // issue #151: the prize broke — collect what it spilled
+    } else if (playerContests(ctx, t)) {
       // Issue #123: the player is on this hull — it is their prize. Back off
       // once, say so once per hull, and let the acquire loop find another.
       if (ai.yieldedPrize !== t) {
@@ -2796,6 +2974,16 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
       live.object.position.distanceTo(station) < LAW_ZONE_RADIUS;
     if (inLaw) breakOff(ai); // station law zone: hostile intent never develops
     else if (live.object.position.distanceTo(targetPos) >= U.ENCOUNTER_BUBBLE) breakOff(ai);
+  }
+
+  // Issue #151: a pirate with a haul to collect or to fence does that before
+  // it looks for the next prize. A scratch from the player above already
+  // turned it onto the player (the target is set, so this is skipped and the
+  // haul phase is dropped); any other hit drops the scoop inside updateHaul.
+  if (ai.target) {
+    ai.scoop = null;
+  } else if (ai.scoop || ai.fence) {
+    if (updateHaul(ctx, live, dt, now)) return;
   }
 
   // Acquire (wave 32): the interest roll decides whether this pirate bothers
