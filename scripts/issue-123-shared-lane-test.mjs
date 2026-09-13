@@ -75,6 +75,7 @@ function spawn(name, role, classKey, offset) {
   }, LANE.clone().add(offset));
   if (role === 'pirate') {
     live.ai.demandSent = true; // TEST SETUP: no wave-30 demand hail interrupts the loop
+    live.record.temper = 0; live.record.taste = 'cargo'; // TEST SETUP: issue #147 — a temper-0 cargo raider takes cargo only (never boards)
     live.ai.playerRolled = true; // TEST SETUP: the interest roll is fixed off —
     live.ai.playerInterested = false; // these pirates work the lane's traders
   }

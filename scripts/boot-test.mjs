@@ -14438,7 +14438,7 @@ removeLiveShip(w42indyCtx, w42indy);
   initAsteroids(ctxC);
   const listC = ctxC.asteroids.list;
   const returnVisitGrown = listC[slotA].oreKey === grownKey && listC[slotA].ore === grownOre
-    && listC[slotA].radius >= 2 && ctxC.world.fieldRespawn.freehold[String(slotA)].grown === true
+    && listC[slotA].radius > 0 && ctxC.world.fieldRespawn.freehold[String(slotA)].grown === true
     && !(ctxC.world.fieldOre && ctxC.world.fieldOre.freehold && Object.hasOwn(ctxC.world.fieldOre.freehold, String(slotA)));
 
   // D: reducedMotion snaps the removal and the grow-in.
@@ -14452,7 +14452,11 @@ removeLiveShip(w42indyCtx, w42indy);
   const recD = ctxD.world.fieldRespawn.freehold['2'];
   ctxD.world.time = recD.due + 1;
   astD.update(0.016);
-  const reducedSnapIn = listD[2].radius >= 2 && listD[2].oreKey === recD.ore && listD[2].ore > 0;
+  // A grown rock's radius is (2 + roll^1.6 × 12) × ORE_TYPES[ore].rock.scaleMult, and
+  // scaleMult runs down to 0.7, so a small roll on a small-profile ore sits under 2 u.
+  // The record's seed rides the seeded Math.random stream, which any earlier section
+  // (issue #147: a lane pirate's prize roll) may shift — pin "grown", not a size.
+  const reducedSnapIn = listD[2].radius > 0 && listD[2].oreKey === recD.ore && listD[2].ore > 0;
 
   // F: a restore to a timeline with no record puts the field's built rock back; re-applying the
   //    grown record grows the same rock again.
@@ -27619,6 +27623,7 @@ removeLiveShip(w42indyCtx, w42indy);
     live.object.quaternion.identity();
     if (role === 'pirate') {
       live.ai.demandSent = true; // TEST SETUP: no demand hail interrupts the loop
+      rec.temper = 0; rec.taste = 'cargo'; // TEST SETUP: issue #147 — a temper-0 cargo raider takes cargo only (never boards)
       live.ai.playerRolled = true; // the interest roll is fixed off —
       live.ai.playerInterested = false; // this pirate works the trader
       live.ai.resolveAt = ctx.world.time + 1e6;
@@ -27828,6 +27833,48 @@ removeLiveShip(w42indyCtx, w42indy);
   });
   if (!verdict.ok) {
     console.log(`ISSUE151 PIRATE HAUL FRESH-PROCESS FAIL — ${verdict.why}`);
+    errors++;
+  }
+}
+
+// ---- Issue #147: a pirate may claim the crew and the hull of a yielded trader
+// After a world-caused yield with the crew aboard, the NPC pirate rolls ONE
+// choice from its persisted temper: cargo only (#146 run + #151 scoop), crew
+// and cargo (the trader heaves to, the pirate boards, one captives row, the
+// hull is a 'crewTaken' derelict), or crew, cargo and hull (the record ends
+// 'captured', rec.prize rides the pirate to the fence). All three choices are
+// reached the real way and pinned in scripts/issue-147-prize-test.mjs (npm run
+// test:prize), run here as one checked fresh child process for the same reason
+// as #148/#151 above: the fence leg docks at the real station and the
+// persistence leg round-trips a full save/restore.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- issue #147: prize choices, boarding, captives and the hull sale (fresh child: node --import with-css-stub.mjs scripts/issue-147-prize-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'issue-147-prize-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit' });
+  const PRIZE_TIMEOUT_MS = 10 * 60 * 1000; // watchdog only; a normal run takes well under a minute
+  const verdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${PRIZE_TIMEOUT_MS / 60000} min (child killed)`);
+    }, PRIZE_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(true, 'exit 0');
+      else finish(false, `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`);
+    });
+  });
+  if (!verdict.ok) {
+    console.log(`ISSUE147 PRIZE FRESH-PROCESS FAIL — ${verdict.why}`);
     errors++;
   }
 }

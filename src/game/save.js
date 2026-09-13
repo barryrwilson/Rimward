@@ -20,8 +20,9 @@ import {
   sanitizeEscapeRecord, readEscape, escapeActive, applyCondition, applyPeace,
   captureCondition, escapeRoleMode, escapeYielded,
 } from './npc-escape.js';
-import { sanitizeDerelictRecord, applyDerelictLive } from './derelict.js';
+import { sanitizeDerelictRecord, applyDerelictLive, sanitizeClaimedHulls } from './derelict.js';
 import { sanitizeHaulRecord } from './pirate-haul.js';
+import { sanitizePrizeRecord } from './prize.js';
 // The re-entry hydration both paths share (issue #68). npc.js does not import
 // save.js, so this direction adds no cycle.
 import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
@@ -142,6 +143,7 @@ export const WORLD_FIELDS = [
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
   'jumpGraceUntil', 'contacts', 'mystery',
+  'claimedHulls', // issue #147 follow-up: the player's claimed-hull ledger (derelict.js)
   // wave 6: epics {faction:stageCount} (epics.js), origin id (origins.js),
   // onboarding {seen:[hintIds]} (onboarding.js), aceRivalry (world.js ace arc)
   'epics', 'origin', 'onboarding', 'aceRivalry',
@@ -1383,6 +1385,7 @@ function sanitizeRestored(ctx) {
   sanitizeFieldOre(ctx);
   sanitizeFieldRespawn(ctx);
   sanitizeJobs(ctx);
+  sanitizeClaimedHulls(ctx.world); // issue #147 follow-up: corrupt ledger dropped, entries healed
   sanitizeReputation(ctx);
   sanitizeEscapes(ctx);
 }
@@ -1406,6 +1409,7 @@ function sanitizeEscapes(ctx) {
         sanitizeEscapeRecord(rec);
         sanitizeDerelictRecord(rec); // issue #148: same fail-safe discipline
         sanitizeHaulRecord(rec); // issue #151: a pirate purse must be a finite non-negative integer
+        sanitizePrizeRecord(rec); // issue #147: a hull prize must be a well-formed blob
       }
     }
   };

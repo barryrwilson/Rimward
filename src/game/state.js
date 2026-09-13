@@ -370,6 +370,58 @@ export const PIRATE_HAUL = Object.freeze({
   fenceHold: 12, // s the pirate holds at the station pad while the sale closes
   fenceArrive: 28, // u from the hold point that counts as arrived (miner hold)
 });
+// Issue #147: a pirate may take more than the cargo. When a trader yields
+// with its crew aboard (jettison / cutEngines) to an NPC pirate, that pirate
+// rolls ONE choice from its persisted temper (greed): cargo only (the #146
+// run and the #151 scoop), crew and cargo, or crew, cargo and hull. A crew or
+// hull choice makes the trader heave to; the pirate closes to boardRange,
+// holds boardSeconds, and then takes the crew as ONE captives row on its own
+// manifest (`{ commodity: 'survivor', units: 1, faction, source: 'other',
+// name }` — the wave-60 survivor row, JSON-plain). Crew only: the hull is a
+// derelict (#148, reason 'crewTaken'). Hull too: the trader record ends
+// 'captured' (it leaves the finite population) and `rec.prize` on the pirate
+// carries the hull to the fence, where it sells at ECON.hotHullFence of
+// hullPrizeValue and captives sell at TRAFFIC_LIST_UU.other (a Gilded Chain
+// station) or captiveRansom (anywhere else). A boarding disturbed before the
+// crew is taken breaks off and the trader runs (#146); a heaved-to trader
+// whose boarder is gone runs after heaveSeconds. Player-caused breaks never
+// enter this path (issue #99: the player's prize is the player's).
+// Pirates differ in how they like to be paid: each record rolls ONE persisted
+// taste (`rec.taste`, weights below) — a cargo raider, a slaver who wants the
+// crew, or a prize-crew captain who wants the hull — and that taste sets the
+// base odds, with temper (greed) scaling on top. A cargo raider at temper 0
+// only ever wants the cargo; a slaver boards more often than not.
+export const PRIZE = Object.freeze({
+  tasteWeights: Object.freeze({ cargo: 0.5, crew: 0.3, hull: 0.2 }),
+  // per taste: p(crew and cargo) = crew[0] + temper × crew[1]; hull likewise
+  odds: Object.freeze({
+    cargo: Object.freeze({ crew: [0, 0.12], hull: [0, 0.06] }),
+    crew: Object.freeze({ crew: [0.35, 0.35], hull: [0, 0.08] }),
+    hull: Object.freeze({ crew: [0.10, 0.10], hull: [0.30, 0.35] }),
+  }),
+  boardRange: 22, // u: the pirate holds inside this range of the heaved-to hull
+  boardSeconds: 18, // s the boarding party needs
+  heaveSeconds: 120, // s a heaved-to trader waits for its boarder before it runs
+  captiveRansom: 90, // UU per head the pirate gets for a captive at a non-Chain station
+  hullValueMult: 6, // hullPrizeValue = (hull + shield + engine) × mult + cargo × cargoMult
+  hullCargoMult: 10,
+});
+// Issue #147 follow-up: a crewless hull is claimable by ANY passing ship, the
+// player included. A hail (H) on a locked derelict offers `claimHull`: the
+// hull leaves the lane under the player's claim and rides world.claimedHulls
+// (JSON-plain, at most `max`) to the next berth, where the yard settles it —
+// a station of the hull's OWN faction takes her back (no pay, the standing
+// the claim cost comes back), any other yard pays ECON.hotHullFence of
+// hullPrizeValue. The risk and the impact pass with the claim: the hull's
+// faction logs her as taken (repHit), and word of a towed prize draws the
+// lane's pirates (interestPerHull on the wave-32 interest roll) until it is
+// settled. A hull the player already holds a recovery contract on is that
+// contract's, not a hail claim.
+export const PRIZE_CLAIM = Object.freeze({
+  max: 8, // claimed hulls the ledger carries; a ninth claim is refused
+  repHit: 3, // standing the hull's faction docks at the claim (returned at their own yard)
+  interestPerHull: 0.04, // added to a pirate's interest chance per unsettled hull
+});
 // Issue #148: a yielded hull whose crew is GONE (crewPods) is a derelict. The
 // record flips to state 'derelict' and carries rec.derelict (JSON-plain:
 // since/due/claimAt, the dead-stick position and coast, the hull left, and

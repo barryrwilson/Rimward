@@ -310,8 +310,19 @@ export function createCtx({ scene, camera, renderer }) {
     // 'npcPodCollected' {ship, pod, units, commodity?}   // npc.js (issue #151): an
     //   NPC pirate scooped a pod it spilled. NEVER a podCollected — the player's
     //   scoop receipts, HUD chime and agent ring stay player-only.
-    // 'npcFenced' {ship, units, credits, system}   // npc.js (issue #151): a pirate
-    //   sold its haul at the local station; the market took the units.
+    // 'npcFenced' {ship, units, credits, system, captives, hull?}   // npc.js (issue
+    //   #151): a pirate sold its haul at the local station; the market took the
+    //   units. Issue #147 adds `captives` (heads sold) and `hull` ({id, name,
+    //   classKey} of a prize hull sold, else null); `credits` is the total.
+    // 'derelictClaimed' {targetId, targetName, classKey, faction, repHit, system}
+    //   derelict.js (issue #147 follow-up): the player claimed a derelict by hail
+    //   (verb claimHull). The hull leaves the lane and rides world.claimedHulls.
+    // 'hullSettled' {targetId, targetName, classKey, faction, outcome:'sold'|'returned', credits, repBack, system, line}
+    //   derelict.js via station.js on dock: the yard settled a claimed hull.
+    // 'npcPrizeTaken' {ship, prize, targetId, targetName, choice:'crew'|'hull'|'cargo', captives, causer:'world'}
+    //   npc.js (issue #147): a boarding pirate took the crew (and the hull) of
+    //   a yielded trader. Never a player receipt; pays no fear, bounty or
+    //   standing (issue #99: the player did not cause it). Off the agent ring.
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
     // 'hailMiss' { name, verb, reason, dist }    // hail.js KeyH/KeyJ miss; primitives only; no ship
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}

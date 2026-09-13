@@ -97,6 +97,7 @@ function spawn(role, classKey, extra = {}) {
   live.object.quaternion.identity();
   if (role === 'pirate') {
     live.ai.demandSent = true; // TEST SETUP: no demand hail interrupts the loop
+    rec.temper = 0; rec.taste = 'cargo'; // TEST SETUP: issue #147 — a temper-0 cargo raider takes cargo only (never boards)
     live.ai.playerRolled = true; // the interest roll is fixed off —
     live.ai.playerInterested = false; // this pirate works the trader
     live.ai.resolveAt = ctx.world.time + 1e6;
