@@ -317,8 +317,11 @@ export function createCtx({ scene, camera, renderer }) {
     // 'derelictClaimed' {targetId, targetName, classKey, faction, repHit, system}
     //   derelict.js (issue #147 follow-up): the player claimed a derelict by hail
     //   (verb claimHull). The hull leaves the lane and rides world.claimedHulls.
-    // 'hullSettled' {targetId, targetName, classKey, faction, outcome:'sold'|'returned', credits, repBack, system, line}
-    //   derelict.js via station.js on dock: the yard settled a claimed hull.
+    // 'hullSettled' {targetId, targetName, classKey, faction, outcome:'kept'|'sold'|'returned', credits, repBack, hullId, system, line}
+    //   derelict.js settleClaimedHull via the shipyard desk (issue #159): the
+    //   player settled ONE claimed hull by choice — kept (hullId names the new
+    //   hot hangar row), sold (the hot-hull rate) or returned (own faction:
+    //   repBack). Nothing settles on dock. Off the agent ring.
     // 'hullSold' {hullId, name, classKey, faction, hullKind, grafted, hot, kind:'home'|'foreign'|'hot', credits, system, line}
     //   shipyard.js (issue #158): the player sold an unmounted hangar hull to
     //   this yard. Off the agent ring. Never the mounted hull.

@@ -28,16 +28,21 @@
  *   8  claim: any passing ship may claim a crewless hull — the player hails
  *      a locked derelict (H), claims it, the hull leaves the lane on the
  *      claimed ledger, the hull's faction docks standing, pirates take more
- *      interest; the yard returns it at its own faction (standing back, no
- *      pay) or buys it elsewhere at hotHullFence; a contract hull and a full
- *      ledger are not claimable; the ledger rides snapshot/restore
+ *      interest; nothing settles on dock (issue #159): the desk's Claimed
+ *      hulls pane offers Keep (an owned hot hangar row with the class kit),
+ *      Sell (hotHullFence, the quote shown) and Return (own faction only:
+ *      standing back, no pay); a full hangar and a berth with no yard
+ *      refuse Keep; a contract hull and a full ledger are not claimable;
+ *      the ledger and a kept row ride snapshot/restore
  *
  * Run: npm run test:prize
  */
 import * as THREE from 'three';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
 import { ECON, PRIZE, PRIZE_CLAIM, PIRACY, U, cargoHoldFor } from '../src/game/state.js';
-import { sanitizeClaimedHulls, claimableDerelict } from '../src/game/derelict.js';
+import { sanitizeClaimedHulls, claimableDerelict, settleClaimedHull, claimedHullOptions } from '../src/game/derelict.js';
+import { CLAIM_REFUSE_LINES } from '../src/systems/shipyard-desk.js';
+import { EVENT_TYPES } from '../src/game/agent-schema.js';
 import { prizeOdds, hullPrizeValue, sellCaptives, sanitizePrizeRecord, rollTaste, tasteOf, rollPrizeChoice, PRIZE_TASTES } from '../src/game/prize.js';
 import { TRAFFIC_LIST_UU } from '../src/game/trafficking.js';
 import { spillShipCargo, playerInterestChance } from '../src/systems/npc.js';
@@ -565,28 +570,69 @@ pin('0d rollTaste walks PRIZE.tasteWeights in order (cargo, crew, hull) and fail
   ctx.ship.object.position.copy(FAR);
   tickHeld(3);
 
-  // 8j-l: at the hull's OWN faction yard she goes home — no pay, the standing comes back.
-  {
+  // Issue #159: nothing settles on dock. The berth opens the shipyard desk on
+  // the Claimed hulls pane and the player picks Keep / Sell / Return per hull.
+  function overlay() {
+    for (const n of dom.walkDom(document.body)) {
+      if (typeof n.className === 'string' && n.className.includes('station-overlay')) return n;
+    }
+    return null;
+  }
+  function texts() {
+    const ov = overlay();
+    if (!ov) return [];
+    return [...dom.walkDom(ov)].map((n) => n.textContent).filter((t) => typeof t === 'string');
+  }
+  const has = (frag) => texts().some((t) => t.includes(frag));
+  function button(pred) {
+    const ov = overlay();
+    if (!ov) return null;
+    for (const n of dom.walkDom(ov)) {
+      if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && pred(n.textContent)) return n;
+    }
+    return null;
+  }
+  const sellBtn = () => button((t) => /^Sell — \d+ UU$/.test(t));
+  const sellQuote = () => { const b = sellBtn(); return b ? Number(/(\d+) UU/.exec(b.textContent)[1]) : NaN; };
+  function dockAtYard() {
     const stp = ctx.systems[SYS].station.position;
     const near = new THREE.Vector3(stp[0] + 36, stp[1], stp[2]);
     ctx.ship.object.position.copy(near); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
     tick(2);
-    const m2 = mark();
-    ctx.input.dockPressed = true;
-    tick(3);
-    ctx.input.dockPressed = false;
-    const settled = receiptsSince(m2, 'hullSettled');
-    pin('8j docked at the Freehold yard: the Freehold hull is returned — no pay, the standing comes back, the ledger empties', ctx.flags.docked === true && settled.length === 1 && settled[0].outcome === 'returned' && settled[0].credits === 0
-      && settled[0].repBack === PRIZE_CLAIM.repHit && (ctx.world.reputation?.freehold ?? 0) === rep0 && ctx.world.credits === credits0 && claimAll().length === 0, { docked: ctx.flags.docked, settled, rep: ctx.world.reputation?.freehold });
-    pin('8k a station line says so', linesSince(m2).some((l) => /takes .* back/.test(l)), linesSince(m2));
+    const m = mark();
+    ctx.input.dockPressed = true; tick(3); ctx.input.dockPressed = false;
+    return m;
+  }
+  function launchAgain() {
     ctx.stationDesk.undock();
     for (let i = 0; ctx.flags.docked && i < 40; i++) { tick(30); dom.dispatchKey('Escape'); tick(2); }
-    pin('8l launched again', ctx.flags.docked === false);
     ctx.ship.object.position.copy(FAR); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
     tickHeld(3);
   }
 
-  // 8m-n: a hull of ANOTHER faction sells at hotHullFence of its value at this yard.
+  // 8j-l: docking settles nothing; at the hull's OWN faction yard Return sends her home — no pay, the standing comes back.
+  {
+    const m2 = dockAtYard();
+    const view = ctx.stationDesk.peekView();
+    pin('8j docked at the Freehold yard: the ledger still holds the hull, nothing settled, purse and standing unchanged', ctx.flags.docked === true && receiptsSince(m2, 'hullSettled').length === 0 && claimAll().length === 1
+      && (ctx.world.reputation?.freehold ?? 0) === rep0 - PRIZE_CLAIM.repHit && ctx.world.credits === credits0, { settled: receiptsSince(m2, 'hullSettled'), led: claimAll() });
+    pin('8j2 the berth opened the shipyard desk on the Claimed hulls pane with the notice and all three verbs', view?.level === 2 && view?.service === 'shipyard' && /claimed hull waits on your papers/.test(view?.notice ?? '')
+      && has('CLAIMED HULLS') && has('crew taken · hot') && !!button((t) => t === 'Keep') && !!sellBtn() && !!button((t) => t === 'Return'), { view, texts: texts().filter((t) => /Keep|Sell|Return|CLAIMED/.test(t)) });
+    button((t) => t === 'Return')?.click(); tick(1);
+    pin('8j3 Return opens a confirm box; Esc cancels it with nothing moved', has('Confirm return') && has('No pay. Her faction gets its hull back') && ctx.stationDesk.peekView()?.pending === true
+      && (() => { dom.dispatchKey('Escape'); tick(1); return !has('Confirm return') && claimAll().length === 1 && ctx.stationDesk.peekView()?.pending === false; })(), texts());
+    button((t) => t === 'Return')?.click(); tick(1);
+    const m2b = mark();
+    button((t) => t === 'Confirm return')?.click(); tick(2);
+    const settled = receiptsSince(m2b, 'hullSettled');
+    pin('8k Confirm return: the Freehold hull is returned — no pay, the standing comes back, the ledger empties, hullSettled says returned', settled.length === 1 && settled[0].outcome === 'returned' && settled[0].credits === 0 && settled[0].hullId === null
+      && settled[0].repBack === PRIZE_CLAIM.repHit && (ctx.world.reputation?.freehold ?? 0) === rep0 && ctx.world.credits === credits0 && claimAll().length === 0, { settled, rep: ctx.world.reputation?.freehold });
+    pin('8k2 a station line says so and the pane is gone', linesSince(m2b).some((l) => /takes .* back/.test(l)) && !has('CLAIMED HULLS') && has('HANGAR'), linesSince(m2b));
+    launchAgain();
+    pin('8l launched again', ctx.flags.docked === false);
+  }
+
+  // 8m-n: a hull of ANOTHER faction cannot be returned here; Sell pays hotHullFence of its value, the quote shown.
   {
     const t2 = makeCrewTakenDerelict('veridian');
     const rep1 = ctx.world.reputation?.veridian ?? 0;
@@ -596,23 +642,102 @@ pin('0d rollTaste walks PRIZE.tasteWeights in order (cargo, crew, hull) and fail
     closeHail();
     pin('8m a Veridian hull claimed: Veridian docks the standing', res2 !== 'stale' && claimAll().length === 1 && claimAll()[0].faction === 'veridian' && (ctx.world.reputation?.veridian ?? 0) === rep1 - PRIZE_CLAIM.repHit, { res2, led: claimAll() });
     mine.delete(t2); despawn(t2);
-    const stp = ctx.systems[SYS].station.position;
-    const near = new THREE.Vector3(stp[0] + 36, stp[1], stp[2]);
-    ctx.ship.object.position.copy(near); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
-    tick(2);
-    const c0 = ctx.world.credits;
-    const m3 = mark();
-    ctx.input.dockPressed = true; tick(3); ctx.input.dockPressed = false;
-    const settled = receiptsSince(m3, 'hullSettled');
+    dockAtYard();
     const [lo, hi] = ECON.hotHullFence;
     const V = hullPrizeValue('freighter');
+    const quote = sellQuote();
+    pin('8m2 at the Freehold yard: no Return for a Veridian hull (the note names why), Keep and Sell offered inside the hot band', has('Only her own faction takes her back.') && !button((t) => t === 'Return')
+      && !!button((t) => t === 'Keep') && quote >= Math.round(V * lo) && quote <= Math.round(V * hi), { quote, V, texts: texts().filter((t) => /Keep|Sell|Return|faction/.test(t)) });
+    const rWrong = settleClaimedHull(ctx, claimAll()[0].id, 'return');
+    pin('8m3 settleClaimedHull refuses Return here: faction, nothing moves', rWrong.ok === false && rWrong.reason === 'faction' && claimAll().length === 1, rWrong);
+    const c0 = ctx.world.credits;
+    sellBtn()?.click(); tick(1);
+    pin('8m4 Sell opens a confirm box that names the laundering rate and the same quote', has('Confirm sale') && has(`${quote} UU`) && has('Hot hull. The yard pays the laundering rate, no questions.'), texts());
+    const m3 = mark();
+    button((t) => t === 'Confirm sale')?.click(); tick(2);
+    const settled = receiptsSince(m3, 'hullSettled');
     const gained = ctx.world.credits - c0;
-    pin('8n the Freehold yard buys the Veridian hull at hotHullFence of its value; Veridian standing stays docked', ctx.flags.docked === true && settled.length === 1 && settled[0].outcome === 'sold' && settled[0].credits === gained
-      && gained >= Math.round(V * lo) && gained <= Math.round(V * hi) && (ctx.world.reputation?.veridian ?? 0) === rep1 - PRIZE_CLAIM.repHit && claimAll().length === 0, { settled, gained, V });
-    ctx.stationDesk.undock();
-    for (let i = 0; ctx.flags.docked && i < 40; i++) { tick(30); dom.dispatchKey('Escape'); tick(2); }
-    ctx.ship.object.position.copy(FAR); ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
+    pin('8n the Freehold yard buys the Veridian hull at the quote shown; Veridian standing stays docked; the ledger empties', settled.length === 1 && settled[0].outcome === 'sold' && settled[0].credits === gained && gained === quote
+      && (ctx.world.reputation?.veridian ?? 0) === rep1 - PRIZE_CLAIM.repHit && claimAll().length === 0, { settled, gained, quote, V });
+    launchAgain();
+  }
+
+  // 8w-z: Keep — the hull joins the hangar as an owned hot row; a full hangar and a berth with no yard refuse.
+  {
+    const t4 = makeCrewTakenDerelict('veridian');
+    const rep2 = ctx.world.reputation?.veridian ?? 0;
+    hailDerelict(t4);
+    ctx.hailApi.resolve('claimHull');
     tickHeld(3);
+    closeHail();
+    mine.delete(t4); despawn(t4);
+    const entry = claimAll()[0];
+    pin('8w fixture: a Veridian freighter on the ledger', !!entry && entry.faction === 'veridian' && entry.classKey === 'freighter', entry);
+    dockAtYard();
+    const hulls0 = ctx.world.hangar.hulls.length;
+    const c1 = ctx.world.credits;
+    button((t) => t === 'Keep')?.click(); tick(1);
+    pin('8w2 Keep opens a confirm box that says what the hull comes with', has('Confirm keep') && has('She joins the hangar hot: the mounts her class carries'), texts());
+    const m4 = mark();
+    button((t) => t === 'Confirm keep')?.click(); tick(2);
+    const kept = receiptsSince(m4, 'hullSettled');
+    const row = ctx.world.hangar.hulls.find((h) => h.id === kept[0]?.hullId);
+    pin('8x Confirm keep: hullSettled says kept and names the hangar row; the ledger empties; no pay; Veridian stays docked', kept.length === 1 && kept[0].outcome === 'kept' && kept[0].credits === 0 && kept[0].repBack === 0 && typeof kept[0].hullId === 'string'
+      && claimAll().length === 0 && ctx.world.credits === c1 && (ctx.world.reputation?.veridian ?? 0) === rep2 - PRIZE_CLAIM.repHit, { kept, led: claimAll(), rep: ctx.world.reputation?.veridian, rep2 });
+    pin('8x2 the hangar gained one hot row of her class, faction and name, unmounted; a freighter seats no turret or launcher, no scanner or laser, empty hold', ctx.world.hangar.hulls.length === hulls0 + 1 && !!row && row.hot === true && row.classKey === 'freighter' && row.faction === 'veridian'
+      && row.name === entry.name && row.launcher === '' && row.turret === '' && row.scanner === 0 && row.miningLaser === 0 && row.cargo.length === 0 && row.hullKind === 'built'
+      && ctx.world.hangar.mountedId !== row.id, { row, hangar: ctx.world.hangar });
+    pin('8x3 the desk shows her in the hangar as hot with a Sell row at the hot-hull rate; the Claimed pane is gone', !has('CLAIMED HULLS') && has('· hot') && !!sellBtn() && sellQuote() >= Math.round(hullPrizeValue('freighter') * ECON.hotHullFence[0]) && sellQuote() <= Math.round(hullPrizeValue('freighter') * ECON.hotHullFence[1]), texts().filter((t) => /hot|Sell/.test(t)));
+    const snap = JSON.parse(JSON.stringify(binds.snapshot(ctx)));
+    const snapRow = snap.world.hangar.hulls.find((h) => h.id === row.id);
+    binds.restore(ctx, snap);
+    const back = ctx.world.hangar.hulls.find((h) => h.id === row.id);
+    pin('8y the kept row rides snapshot/restore with hot: true', !!snapRow && snapRow.hot === true && !!back && back.hot === true && back.classKey === 'freighter' && back.faction === 'veridian', { snapRow, back });
+
+    // A class that seats mounts keeps the kit it fought with: auto turret, dart rack with an empty magazine.
+    {
+      const frig = { v: 1, id: 'i159-frig', name: 'Iron Vesper', classKey: 'frigate', faction: 'redledger', reason: 'crewTaken', claimedAt: 0, system: SYS, repHit: PRIZE_CLAIM.repHit };
+      ctx.world.claimedHulls = [JSON.parse(JSON.stringify(frig))];
+      const rK = settleClaimedHull(ctx, 'i159-frig', 'keep');
+      const fr = ctx.world.hangar.hulls.find((h) => h.id === rK.hullId);
+      pin('8y2 a kept frigate carries the auto turret and the dart rack with an empty magazine, tier-0 scanner and laser, empty hold, hot', rK.ok === true && !!fr && fr.turret === 'auto' && fr.launcher === 'dart' && fr.missileAmmo === 0
+        && fr.scanner === 0 && fr.miningLaser === 0 && fr.cargo.length === 0 && fr.hot === true && fr.classKey === 'frigate' && fr.faction === 'redledger', { rK, fr });
+      const snapF = JSON.parse(JSON.stringify(binds.snapshot(ctx)));
+      binds.restore(ctx, snapF);
+      const fr2 = ctx.world.hangar.hulls.find((h) => h.id === rK.hullId);
+      pin('8y3 the kit rides snapshot/restore', !!fr2 && fr2.turret === 'auto' && fr2.launcher === 'dart' && fr2.missileAmmo === 0 && fr2.hot === true, fr2);
+      ctx.world.hangar.hulls = ctx.world.hangar.hulls.filter((h) => h.id !== rK.hullId);
+    }
+
+    // Refusals: a full hangar, a berth with no yard, a bad verb, a missing entry, not docked.
+    const fake = { v: 1, id: 'i159-full', name: 'Stray Hull', classKey: 'cutter', faction: 'veridian', reason: 'crewPods', claimedAt: 0, system: SYS, repHit: PRIZE_CLAIM.repHit };
+    ctx.world.claimedHulls = [JSON.parse(JSON.stringify(fake))];
+    const hangarSnap = JSON.parse(JSON.stringify(ctx.world.hangar));
+    while (ctx.world.hangar.hulls.length < 8) {
+      ctx.world.hangar.hulls.push({ id: `hull_pad_${ctx.world.hangar.hulls.length}`, classKey: 'light', faction: 'freehold', hullKind: 'built', name: 'pad' });
+    }
+    ctx.stationDesk.selectService('shipyard'); tick(1);
+    const before = JSON.stringify(ctx.world.hangar);
+    const rFull = settleClaimedHull(ctx, 'i159-full', 'keep');
+    pin('8z a full hangar refuses Keep: full — the pane says so and offers no Keep button; nothing moves', rFull.ok === false && rFull.reason === 'full' && JSON.stringify(ctx.world.hangar) === before && claimAll().length === 1
+      && has('The hangar is full.') && !button((t) => t === 'Keep') && !!sellBtn(), { rFull, texts: texts().filter((t) => /full|Keep/.test(t)) });
+    const rStock = settleClaimedHull(ctx, 'i159-full', 'keep', { stationFaction: 'independent' });
+    pin('8z2 a berth with no yard refuses Keep: stock', rStock.ok === false && rStock.reason === 'stock' && claimAll().length === 1, rStock);
+    pin('8z3 claimedHullOptions: no yard → keep stock, sell open, return only under her own banner', JSON.stringify(claimedHullOptions(ctx, fake, 'independent')) === JSON.stringify({ keep: 'stock', sell: null, return: 'faction' })
+      && claimedHullOptions(ctx, fake, 'veridian').return === null && claimedHullOptions(ctx, fake, 'veridian').keep === 'full', claimedHullOptions(ctx, fake, 'independent'));
+    const rVerb = settleClaimedHull(ctx, 'i159-full', 'scrap');
+    const rMiss = settleClaimedHull(ctx, 'nope', 'sell');
+    pin('8z4 a bad verb and a missing entry are refused and named', rVerb.ok === false && rVerb.reason === 'verb' && rMiss.ok === false && rMiss.reason === 'missing' && claimAll().length === 1, { rVerb, rMiss });
+    pin('8z5 a refusal line exists for every reason the desk can meet; hullSettled stays off the agent ring', ['dock', 'missing', 'verb', 'stock', 'full', 'faction', 'invalid', 'busy'].every((k) => typeof CLAIM_REFUSE_LINES[k] === 'string') && !EVENT_TYPES.includes('hullSettled'));
+    // Sell the fake at a fixed rate: the price is exactly the clamped quote, and a restore keeps the ledger empty.
+    const cS = ctx.world.credits;
+    const rSell = settleClaimedHull(ctx, 'i159-full', 'sell', { hotRate: 99 });
+    pin('8z6 Sell at a fixed rate pays exactly the clamped quote and empties the ledger', rSell.ok === true && rSell.outcome === 'sold' && rSell.credits === Math.round(hullPrizeValue('cutter') * ECON.hotHullFence[1]) && ctx.world.credits === cS + rSell.credits && claimAll().length === 0, rSell);
+    const rDock = (() => { ctx.world.claimedHulls = [JSON.parse(JSON.stringify(fake))]; const d = ctx.flags.docked; ctx.flags.docked = false; const r = settleClaimedHull(ctx, 'i159-full', 'sell'); ctx.flags.docked = d; return r; })();
+    pin('8z7 not docked: dock', rDock.ok === false && rDock.reason === 'dock' && claimAll().length === 1, rDock);
+    ctx.world.claimedHulls = [];
+    ctx.world.hangar = hangarSnap;
+    launchAgain();
   }
 
   // 8o-v: not claimable — the player's own recovery contract on it, or a full ledger; persistence.

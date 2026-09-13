@@ -1,6 +1,10 @@
-import { DERELICT, ESCAPE, FACTIONS, PRIZE_CLAIM, SHIP_CLASSES } from './state.js';
+import { DERELICT, ECON, ESCAPE, FACTIONS, PRIZE_CLAIM, SHIP_CLASSES, cargoHoldFor, createShipState } from './state.js';
 import { cancelEscape } from './npc-escape.js';
 import { hullPrizeValue, rollHullRate } from './prize.js';
+import { addPurchasedHull, canAcceptPurchase } from './hangar.js';
+import { hullKindFor, yardStockFor } from './shipyard.js';
+import { requestAutosave } from './save.js';
+import { canSeat } from './weapon-fit.js';
 
 /**
  * Derelicts (issue #148).
@@ -457,39 +461,156 @@ export function claimDerelict(ctx, live) {
   return entry;
 }
 
+/** The three ways a claimed hull leaves the ledger at a berth (issue #159). */
+export const CLAIM_VERBS = Object.freeze(['keep', 'sell', 'return']);
+
+/** The hot-hull rate for one sale, clamped into ECON.hotHullFence (rolled when none is given). */
+export function claimSaleRate(rate) {
+  const [lo, hi] = ECON.hotHullFence;
+  if (!fin(rate)) return rollHullRate();
+  return Math.min(hi, Math.max(lo, rate));
+}
+
+/** The UU a yard pays for a claimed hull at `rate` (the same figure the sale pays). */
+export function claimSalePrice(entry, rate) {
+  if (!entry || typeof entry !== 'object') return 0;
+  return Math.max(0, Math.round(hullPrizeValue(entry.classKey) * claimSaleRate(rate)));
+}
+
 /**
- * Settle every claimed hull at a berth (station.js, on dock). At a yard of
- * the hull's own faction she goes home: no pay, and the standing the claim
- * cost comes back. Anywhere else the yard pays ECON.hotHullFence of
- * hullPrizeValue, rolled per hull. Returns the settlements (empty when the
- * ledger is empty); the ledger is cleared.
+ * What the berth offers for one ledger entry (issue #159). Sell works at any
+ * berth. Return only at a station of the hull's own faction. Keep needs a
+ * yard (a hull catalog — the same test the #158 sale uses) and room in the
+ * hangar; the refusal names which. Pure: nothing moves.
  */
-export function settleClaimedHulls(ctx, systemId, stationFaction) {
+export function claimedHullOptions(ctx, entry, stationFaction) {
+  const home = !!entry && typeof stationFaction === 'string' && stationFaction === entry.faction;
+  let keep = null;
+  if (yardStockFor(stationFaction).length === 0) keep = 'stock';
+  else if (!canAcceptPurchase(ctx)) keep = 'full';
+  return { keep, sell: null, return: home ? null : 'faction' };
+}
+
+function findClaimed(ctx, id) {
   const list = claimedHullsOf(ctx.world);
-  const out = [];
-  if (list.length === 0) return out;
-  for (let i = 0; i < list.length; i++) {
-    const e = list[i];
-    const home = typeof stationFaction === 'string' && stationFaction === e.faction;
-    let credits = 0;
-    let repBack = 0;
-    if (home) {
-      repBack = e.repHit > 0 ? addRep(ctx, e.faction, e.repHit) : 0;
-    } else {
-      credits = Math.max(0, Math.round(hullPrizeValue(e.classKey) * rollHullRate()));
-      if (fin(ctx.world.credits)) ctx.world.credits += credits;
-    }
-    const name = e.name ?? 'the hull';
-    const line = home
-      ? `${factionName(e.faction)} yard takes ${name} back. No pay — but they note you brought her home.`
-      : `Yard takes ${name} off your hands. ${credits} UU, no questions.`;
-    const s = { targetId: e.id, targetName: name, classKey: e.classKey, faction: e.faction, outcome: home ? 'returned' : 'sold', credits, repBack, system: systemId, line };
-    out.push(s);
-    ctx.emit('hullSettled', s);
-    ctx.emit('commLine', { text: line, from: 'station' });
+  if (typeof id !== 'string') return -1;
+  return list.findIndex((e) => e && e.id === id);
+}
+
+/** A hangar id for a kept prize that no row uses yet. */
+function nextPrizeHullId(hangar) {
+  const used = new Set();
+  for (const row of hangar?.hulls ?? []) if (typeof row?.id === 'string') used.add(row.id);
+  for (let i = 1; i < 1000; i++) {
+    const id = `hull_prize_${i}`;
+    if (!used.has(id)) return id;
   }
-  list.length = 0;
-  return out;
+  return null;
+}
+
+/**
+ * A hangar row for a kept claimed hull: her class and faction, her name, the
+ * kit her class implies and class-fresh vitals. An NPC record carries no
+ * per-ship loadout — its weapons are class defaults (every hull a cannon; a
+ * class that seats a turret fires one; a class that seats a launcher fires
+ * missiles) — and nobody strips a derelict's mounts, so the row gets what
+ * the ship fought with: the auto turret where the class seats a turret, the
+ * dart rack with an EMPTY magazine where it seats a launcher (she fired
+ * them), tier-0 scanner and laser (no NPC hull carries either), no racks, an
+ * empty hold (the manifest emptied when she became a derelict). Owner
+ * decision on PR #161. `hot: true` rides the row for good: the hull's
+ * faction standing stays docked and a later sale (issue #158) pays the
+ * hot-hull rate wherever it is sold.
+ */
+function prizeHangarRow(ctx, entry) {
+  const id = nextPrizeHullId(ctx.world?.hangar);
+  if (!id) return null;
+  const classKey = Object.hasOwn(SHIP_CLASSES, entry.classKey) ? entry.classKey : 'light';
+  const faction = entry.faction ?? 'independent';
+  const fresh = createShipState(classKey, { name: entry.name ?? classKey, faction });
+  return {
+    id,
+    hullKind: hullKindFor(faction),
+    faction,
+    classKey,
+    name: entry.name ?? classKey,
+    scanner: 0,
+    miningLaser: 0,
+    concealedMounts: false,
+    launcher: canSeat(classKey, 'missile') ? 'dart' : '',
+    missileAmmo: 0,
+    turret: canSeat(classKey, 'turret') ? 'auto' : '',
+    cargoCapacity: cargoHoldFor(classKey),
+    cargo: [],
+    hull: fresh.hull,
+    hullMax: fresh.hullMax,
+    screen: fresh.screen,
+    screenMax: fresh.screenMax,
+    shell: fresh.shell,
+    shellMax: fresh.shellMax,
+    engine: fresh.engine,
+    engineMax: fresh.engineMax,
+    heat: 0,
+    hot: true,
+  };
+}
+
+/**
+ * Settle ONE claimed hull at a berth by the player's choice (issue #159;
+ * shipyard-desk.js Claimed hulls pane). Nothing settles on dock any more.
+ *   • 'keep'   — the hull joins the hangar as an owned `hot` row with the
+ *                kit her class implies (prizeHangarRow). Refused with
+ *                'stock' at a berth with no yard and
+ *                'full' when the hangar has no room. The standing stays
+ *                docked: the risk comes with the hull.
+ *   • 'sell'   — the yard pays ECON.hotHullFence of hullPrizeValue at
+ *                opts.hotRate (clamped; rolled when absent) — the same figure
+ *                claimSalePrice quotes.
+ *   • 'return' — only at a station of the hull's own faction: no pay, and the
+ *                standing the claim cost comes back. Refused 'faction'
+ *                elsewhere.
+ * Every refusal moves nothing and names the reason; a settled entry leaves
+ * the ledger and emits `hullSettled` (outcome kept | sold | returned).
+ */
+export function settleClaimedHull(ctx, id, verb, opts = {}) {
+  if (!ctx?.world) return { ok: false, reason: 'missing' };
+  if (!CLAIM_VERBS.includes(verb)) return { ok: false, reason: 'verb' };
+  if (!ctx.flags?.docked) return { ok: false, reason: 'dock' };
+  const list = claimedHullsOf(ctx.world);
+  const idx = findClaimed(ctx, id);
+  if (idx < 0) return { ok: false, reason: 'missing' };
+  const e = list[idx];
+  const systemId = typeof opts.systemId === 'string' ? opts.systemId : ctx.world.currentSystem;
+  const stationFaction = Object.hasOwn(opts, 'stationFaction') ? opts.stationFaction : (ctx.systems?.[systemId]?.faction ?? null);
+  const options = claimedHullOptions(ctx, e, stationFaction);
+  if (options[verb]) return { ok: false, reason: options[verb] };
+  const name = e.name ?? 'the hull';
+  let credits = 0;
+  let repBack = 0;
+  let hullId = null;
+  let line;
+  if (verb === 'keep') {
+    const row = prizeHangarRow(ctx, e);
+    const added = row ? addPurchasedHull(ctx, row) : { ok: false, reason: 'full' };
+    if (!added.ok) return { ok: false, reason: added.reason === 'full' ? 'full' : 'invalid' };
+    hullId = added.row.id;
+    line = `${name} is on your papers now. Hangar has her — hot, and the ${factionName(e.faction)} still want a word.`;
+  } else if (verb === 'return') {
+    repBack = e.repHit > 0 ? addRep(ctx, e.faction, e.repHit) : 0;
+    line = `${factionName(e.faction)} yard takes ${name} back. No pay — but they note you brought her home.`;
+  } else {
+    credits = claimSalePrice(e, opts.hotRate);
+    const purse = fin(ctx.world.credits) ? ctx.world.credits : 0;
+    ctx.world.credits = purse + credits;
+    line = `Yard takes ${name} off your hands. ${credits} UU, no questions.`;
+  }
+  list.splice(idx, 1);
+  const outcome = verb === 'keep' ? 'kept' : verb === 'sell' ? 'sold' : 'returned';
+  const s = { targetId: e.id, targetName: name, classKey: e.classKey, faction: e.faction, outcome, credits, repBack, hullId, system: systemId, line };
+  ctx.emit('hullSettled', s);
+  ctx.emit('commLine', { text: line, from: 'station' });
+  requestAutosave(ctx);
+  return { ok: true, outcome, credits, repBack, hullId, receipt: s };
 }
 
 /** Save-time heal (save.js): a corrupt ledger is dropped, corrupt entries are skipped, the cap holds. */

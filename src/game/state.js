@@ -409,10 +409,12 @@ export const PRIZE = Object.freeze({
 // Issue #147 follow-up: a crewless hull is claimable by ANY passing ship, the
 // player included. A hail (H) on a locked derelict offers `claimHull`: the
 // hull leaves the lane under the player's claim and rides world.claimedHulls
-// (JSON-plain, at most `max`) to the next berth, where the yard settles it —
-// a station of the hull's OWN faction takes her back (no pay, the standing
-// the claim cost comes back), any other yard pays ECON.hotHullFence of
-// hullPrizeValue. The risk and the impact pass with the claim: the hull's
+// (JSON-plain, at most `max`) to the next berth. Issue #159: nothing settles
+// on dock — the shipyard desk's Claimed hulls pane offers the choice per
+// hull: Keep (an owned `hot` hangar row with an empty loadout; needs a yard
+// and hangar room), Sell (ECON.hotHullFence of hullPrizeValue, anywhere) or
+// Return (a station of the hull's OWN faction only: no pay, the standing the
+// claim cost comes back). The risk and the impact pass with the claim: the hull's
 // faction logs her as taken (repHit), and word of a towed prize draws the
 // lane's pirates (interestPerHull on the wave-32 interest roll) until it is
 // settled. A hull the player already holds a recovery contract on is that

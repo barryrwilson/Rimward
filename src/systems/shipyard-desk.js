@@ -17,6 +17,7 @@ import {
 } from '../game/shipyard.js';
 import { FACTIONS, SHIP_CLASSES } from '../game/state.js';
 import { requestAutosave } from '../game/save.js';
+import { claimedHullsOf, claimedHullOptions, claimSalePrice, claimSaleRate, settleClaimedHull } from '../game/derelict.js';
 import { mountYardPreview } from './yard-preview.js';
 
 /** Desk panes. Digit 1 Hangar, Digit 2 Yard. Not dock services. */
@@ -144,6 +145,41 @@ export function sellRefuseLine(reason) {
   return SELL_REFUSE_LINES[reason] ?? 'No sale.';
 }
 
+/**
+ * Issue #159: a claimed derelict on the ledger (derelict.js) settles only by
+ * the player's choice at the desk — Keep (an owned hot hull in the hangar),
+ * Sell (the hot-hull rate) or Return (the hull's own faction yard only).
+ */
+export const CLAIM_REFUSE_LINES = Object.freeze({
+  dock: 'Dock first to settle a claimed hull.',
+  missing: 'That hull is not on your ledger.',
+  verb: 'The yard does not do that with a claimed hull.',
+  stock: 'No yard here to take her in. Sell or carry her on.',
+  full: 'The hangar is full. Sell a hull first, or sell her.',
+  faction: 'Only her own faction takes her back.',
+  invalid: 'The yard cannot take that hull in.',
+  busy: 'Papers are already in flight.',
+});
+
+export const CLAIM_KEEP_NOTE = 'She joins the hangar hot: the mounts her class carries with empty magazines, her faction still sore, and any yard pays the laundering rate for her later.';
+export const CLAIM_SELL_NOTE = SELL_HOT_NOTE;
+export const CLAIM_RETURN_NOTE = 'No pay. Her faction gets its hull back and forgets the claim.';
+export const CLAIM_VERB_LABEL = Object.freeze({ keep: 'Keep', sell: 'Sell', return: 'Return' });
+export const CLAIM_CONFIRM_LABEL = Object.freeze({ keep: 'Confirm keep', sell: 'Confirm sale', return: 'Confirm return' });
+
+export function claimRefuseLine(reason) {
+  return CLAIM_REFUSE_LINES[reason] ?? 'No sale.';
+}
+
+/** The dock notice when the ledger holds hulls (station.js). */
+export function claimedDockNotice(n) {
+  const count = Number.isInteger(n) && n > 0 ? n : 0;
+  if (count === 0) return '';
+  return count === 1
+    ? 'A claimed hull waits on your papers. Keep her, sell her, or return her.'
+    : `${count} claimed hulls wait on your papers. Keep, sell, or return each.`;
+}
+
 export function shipyardPaneOf(ui) {
   return ui?.shipyardPane === SHIPYARD_PANE_BUY ? SHIPYARD_PANE_BUY : SHIPYARD_PANE_HANGAR;
 }
@@ -156,6 +192,7 @@ export function setShipyardPane(ui, pane) {
     ui.graftPending = null;
     ui.trainPending = null;
     ui.sellPending = null;
+    ui.claimPending = null;
   }
 }
 
@@ -164,6 +201,14 @@ export function resetShipyardSale(ui) {
   if (!ui) return;
   ui.sellPending = null;
   ui.sellRates = null;
+  ui.claimPending = null;
+}
+
+export function cancelClaimPending(ui) {
+  if (!ui?.claimPending) return false;
+  ui.claimPending = null;
+  ui.notice = '';
+  return true;
 }
 
 export function cancelSellPending(ui) {
@@ -394,6 +439,104 @@ function confirmSell(ctx, ui) {
   }
 }
 
+/** Issue #159: one claimed-hull rate per ledger entry per visit (the quote shown is the quote paid). */
+function claimRateFor(ui, id) {
+  return hotRateFor(ui, typeof id === 'string' ? `claim:${id}` : id);
+}
+
+function setClaimPending(ui, ctx, entry, verb) {
+  if (!entry || !Object.prototype.hasOwnProperty.call(CLAIM_VERB_LABEL, verb)) return;
+  const rate = verb === 'sell' ? claimSaleRate(claimRateFor(ui, entry.id)) : null;
+  ui.claimPending = {
+    id: entry.id,
+    verb,
+    price: verb === 'sell' ? claimSalePrice(entry, rate) : 0,
+    hotRate: rate,
+  };
+  ui.graftPending = null;
+  ui.trainPending = null;
+  ui.sellPending = null;
+  ui.notice = '';
+}
+
+function confirmClaim(ctx, ui) {
+  if (ui.claimBusy) return { ok: false, reason: 'busy' };
+  const pending = ui.claimPending;
+  if (!pending) return { ok: false, reason: 'missing' };
+  ui.claimBusy = true;
+  try {
+    ui.claimPending = null;
+    const opts = pending.verb === 'sell' ? { hotRate: pending.hotRate } : {};
+    const result = settleClaimedHull(ctx, pending.id, pending.verb, opts);
+    if (result.ok) {
+      ui.notice = result.receipt?.line ?? 'Papers filed.';
+      if (ui.sellRates && typeof ui.sellRates === 'object') delete ui.sellRates[`claim:${pending.id}`];
+    } else {
+      ui.notice = claimRefuseLine(result.reason);
+    }
+    return result;
+  } finally {
+    ui.claimBusy = false;
+  }
+}
+
+function claimedEntryName(entry) {
+  return entry.name || SHIP_CLASSES[entry.classKey]?.role || 'hull';
+}
+
+/**
+ * The Claimed hulls pane (issue #159), at the head of the Hangar pane while
+ * the ledger holds anything. One card per entry; the verbs the berth refuses
+ * are shown as a note that names why. Text-safe DOM only. Returns true while
+ * a confirm box owns the pane.
+ */
+function renderClaimedPane(h, btn, panel, ctx, ui, redraw) {
+  const ledger = claimedHullsOf(ctx.world);
+  if (ledger.length === 0) return false;
+  const faction = dockFactionOf(ctx);
+  const box = h('div', 'shipyard-claimed', panel);
+  h('div', 'screen-sub', box, 'CLAIMED HULLS');
+  h('div', 'screen-note', box, 'Salvage claims ride your papers until you settle them here.');
+  if (ui.claimPending) {
+    const pending = ui.claimPending;
+    const entry = ledger.find((e) => e && e.id === pending.id);
+    const name = entry ? claimedEntryName(entry) : 'hull';
+    const verb = CLAIM_VERB_LABEL[pending.verb] ?? 'Settle';
+    const card = h('div', 'shipyard-buy-row shipyard-confirm', box);
+    h('div', 'shipyard-buy-name', card, `${verb} ${name}`);
+    const meta = entry ? `${classLabel(entry.classKey)} · ${factionLabel(entry.faction)} · ` : '';
+    const confirm = CLAIM_CONFIRM_LABEL[pending.verb] ?? 'Confirm';
+    h('div', 'shipyard-buy-meta', card, pending.verb === 'sell'
+      ? `${meta}${pending.price} UU · ${confirm}`
+      : `${meta}${confirm}`);
+    h('div', 'screen-note', card, pending.verb === 'keep' ? CLAIM_KEEP_NOTE : pending.verb === 'sell' ? CLAIM_SELL_NOTE : CLAIM_RETURN_NOTE);
+    btn(card, confirm, () => {
+      confirmClaim(ctx, ui);
+      redraw();
+    }, 'screen-btn screen-btn-warm');
+    btn(card, 'Esc — Cancel', () => {
+      cancelClaimPending(ui);
+      redraw();
+    });
+    return true;
+  }
+  for (const entry of ledger) {
+    if (!entry || typeof entry !== 'object') continue;
+    const card = h('div', 'shipyard-hull shipyard-claimed-hull', box);
+    h('div', 'shipyard-hull-name', card, claimedEntryName(entry));
+    const reason = entry.reason === 'crewTaken' ? 'crew taken' : 'crew podded';
+    h('div', 'shipyard-hull-meta', card, `${classLabel(entry.classKey)} · ${factionLabel(entry.faction)} · ${reason} · hot`);
+    const options = claimedHullOptions(ctx, entry, faction);
+    if (options.keep) h('div', 'screen-note shipyard-sell-note', card, claimRefuseLine(options.keep));
+    else btn(card, 'Keep', () => { setClaimPending(ui, ctx, entry, 'keep'); redraw(); });
+    const price = claimSalePrice(entry, claimRateFor(ui, entry.id));
+    btn(card, `Sell — ${price} UU`, () => { setClaimPending(ui, ctx, entry, 'sell'); redraw(); });
+    if (options.return) h('div', 'screen-note shipyard-sell-note', card, claimRefuseLine(options.return));
+    else btn(card, 'Return', () => { setClaimPending(ui, ctx, entry, 'return'); redraw(); });
+  }
+  return false;
+}
+
 function confirmGraft(ctx, ui) {
   if (ui.graftBusy) return { ok: false, reason: 'busy' };
   const pending = ui.graftPending;
@@ -476,6 +619,7 @@ function renderHangarPane(h, btn, panel, ctx, ui, redraw) {
   const hangar = ctx.world.hangar;
   const mountedId = hangar?.mountedId ?? '';
   const hulls = Array.isArray(hangar?.hulls) ? hangar.hulls : [];
+  if (renderClaimedPane(h, btn, panel, ctx, ui, redraw)) return;
   h('div', 'screen-sub', panel, 'HANGAR');
   h('div', 'screen-note shipyard-mounted', panel, `Mounted id ${mountedId}`);
   if (ui.graftPending) {
@@ -650,7 +794,7 @@ export function handleShipyardDigit(n, ctx, ui) {
     setYardPending(ui, offer.classKey);
     return true;
   }
-  if (ui.graftPending || ui.trainPending || ui.sellPending) return true;
+  if (ui.graftPending || ui.trainPending || ui.sellPending || ui.claimPending) return true;
   const idx = hullIndexForDigit(n);
   if (idx < 0) return false;
   sanitizeHangar(ctx);
