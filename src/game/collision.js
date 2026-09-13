@@ -416,6 +416,7 @@ export function collectBodies(ctx, dest) {
       const p = readPos(a.position, a);
       if (!p) continue;
       const r = Number.isFinite(a.radius) ? a.radius : 0;
+      if (!(r > 0)) continue; // issue #149: a removed slot has no body
       const id = a.id;
       fillSlot(acquireSlot(dest, n), 'asteroid', p.x, p.y, p.z, r, 0, 0, id);
       n += 1;

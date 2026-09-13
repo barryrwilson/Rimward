@@ -158,6 +158,8 @@ export const WORLD_FIELDS = [
   'launcher', 'missileAmmo', 'turret',
   // AST: sparse remaining units { [systemId]: { [indexString]: remainingInt } }
   'fieldOre',
+  // Issue #149: mined-out slots { [systemId]: { [indexString]: { at, due, ore, seed, grown } } }
+  'fieldRespawn',
   // wave 85: plotted route { dest, path, remaining, status, autopilot }
   'nav',
 ];
@@ -291,6 +293,58 @@ function sanitizeFieldOre(ctx) {
     if (!keep.has(keys[i])) takeSys(keys[i]);
   }
   ctx.world.fieldOre = out;
+}
+
+// Issue #149: same system/index envelope as fieldOre; a record must name a
+// real ore kind and carry finite non-negative times. Bad records drop.
+const FIELD_RESPAWN_MAX_TIME = 1e9;
+function sanitizeFieldRespawn(ctx) {
+  const raw = ctx.world.fieldRespawn;
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    delete ctx.world.fieldRespawn;
+    return;
+  }
+  const out = {};
+  const keys = Object.keys(raw);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (Object.keys(out).length >= FIELD_ORE_SYS_CAP) break;
+    if (RESERVED_IDS.has(k) || k === '__proto__') continue;
+    if (!Object.hasOwn(SYSTEMS, k)) continue;
+    const child = Object.hasOwn(raw, k) ? raw[k] : undefined;
+    if (child == null || typeof child !== 'object' || Array.isArray(child)) continue;
+    const def = SYSTEMS[k];
+    let maxIdx = FIELD_ORE_MAX_COUNT;
+    if (def && def.field && Number.isFinite(def.field.count)) {
+      maxIdx = Math.min(Math.max(0, def.field.count | 0), FIELD_ORE_MAX_COUNT);
+    }
+    const childOut = {};
+    const ck = Object.keys(child);
+    for (let j = 0; j < ck.length; j++) {
+      const ik = ck[j];
+      if (RESERVED_IDS.has(ik) || ik === '__proto__') continue;
+      if (!FIELD_ORE_INDEX.test(ik)) continue;
+      const idx = +ik;
+      if (idx < 0 || idx >= maxIdx) continue;
+      const rec = Object.hasOwn(child, ik) ? child[ik] : undefined;
+      if (rec == null || typeof rec !== 'object' || Array.isArray(rec)) continue;
+      const at = rec.at;
+      const due = rec.due;
+      const ore = rec.ore;
+      const seed = rec.seed;
+      if (typeof at !== 'number' || !Number.isFinite(at) || at < 0 || at > FIELD_RESPAWN_MAX_TIME) continue;
+      if (typeof due !== 'number' || !Number.isFinite(due) || due < 0 || due > FIELD_RESPAWN_MAX_TIME) continue;
+      if (typeof ore !== 'string' || RESERVED_IDS.has(ore) || !Object.hasOwn(ORE_TYPES, ore)) continue;
+      if (typeof seed !== 'number' || !Number.isInteger(seed) || seed < 0 || seed > 0x7fffffff) continue;
+      childOut[ik] = { at, due, ore, seed, grown: rec.grown === true };
+    }
+    if (Object.keys(childOut).length > 0) out[k] = childOut;
+  }
+  if (Object.keys(out).length === 0) {
+    delete ctx.world.fieldRespawn;
+    return;
+  }
+  ctx.world.fieldRespawn = out;
 }
 
 function reservedId(value) {
@@ -1325,6 +1379,7 @@ function sanitizeRestored(ctx) {
   ctx.world.marketSupply = normalizeMarketSupply(ctx.world.marketSupply, ctx.world.time,
     Object.hasOwn(ctx.world, 'marketSupply'));
   sanitizeFieldOre(ctx);
+  sanitizeFieldRespawn(ctx);
   sanitizeJobs(ctx);
   sanitizeReputation(ctx);
   sanitizeEscapes(ctx);
@@ -1492,6 +1547,7 @@ export function restore(ctx, snap) {
   if (omitHangar) delete ctx.world.hangar;
   // Omitted fieldOre is missing (contract §6.3) — do not keep a live bag.
   if (snap.world.fieldOre === undefined) delete ctx.world.fieldOre;
+  if (snap.world.fieldRespawn === undefined) delete ctx.world.fieldRespawn;
   // Omitted jobs is missing (MSN contract §1.2) — do not keep a live board.
   if (snap.world.jobs === undefined) delete ctx.world.jobs;
   // Omitted nav is idle — do not keep a live plot from a prior session.

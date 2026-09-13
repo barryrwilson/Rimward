@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPONS, SYSTEMS, ORE_TYPES, COMMODITIES, pickOreType, oreKeysForBand, miningLaserFor } from '../game/state.js';
+import { WEAPONS, SYSTEMS, ORE_TYPES, COMMODITIES, ASTEROID_RESPAWN, pickOreType, pickRespawnOreType, oreKeysForBand, miningLaserFor } from '../game/state.js';
 import { spawnPod } from '../game/pods.js';
 import { PHY } from '../game/physics.js';
 import { cylinderOverlap, torusOverlap } from '../game/collision.js';
@@ -42,8 +42,25 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * active-index array (cap 24 — mining hits one rock at a time). Under
  * ctx.settings.reducedMotion the animated lerp is skipped but a static
  * bright tint is still applied while hot: the feedback survives, the motion
- * does not. Depletion darkens as before and, unless reducedMotion is set,
- * collapses over ~0.4 s with a quadratic ease-out instead of snapping.
+ * does not.
+ *
+ * Issue #149 — break-up and respawn. A rock mined to zero darkens, collapses
+ * to nothing over ASTEROID_RESPAWN.collapseSeconds while a burst of shards
+ * in its sparkColor flies off (one shared 'asteroid-shards' InstancedMesh),
+ * and is then REMOVED: the slot stays in ctx.asteroids.list (id === index)
+ * with radius 0 and ore 0, so the beam, the reticle, target cycling,
+ * contacts and collision all skip it. A record { at, due, ore, seed, grown }
+ * is written to ctx.world.fieldRespawn[sys][index] (save.js sanitizes,
+ * WORLD_FIELDS carries it). When world.time reaches `due` a new rock of ore
+ * kind `ore` grows into the SAME slot on the same orbit — shape, tilt, colour,
+ * radius and seeded units derive from `seed`, so a save/restore or a return
+ * visit rebuilds exactly the rock that grew. Every per-ore mesh is allocated
+ * at the field's full count with mesh.count trimmed to its live rocks, so a
+ * respawn can move a slot between ore meshes without reallocating.
+ * reducedMotion snaps the collapse and the grow-in and spawns no shards.
+ * fieldOre stays authoritative for the CURRENT generation's remaining units:
+ * an entry of 0 removes the slot, a missing entry restores the full rock and
+ * drops an ungrown respawn record (same-timeline restore semantics).
  *
  * Ownership: writes ctx.asteroids = { list } (combat.js raycasts its mining
  * beam against list entries { id, position, radius, ore, commodity, oreKey,
@@ -84,6 +101,10 @@ const PLANET_SLOTS = [
   { radius: 30, orbitRadius: 1400 },
 ];
 const _keepOut = { hit: false, nx: 0, ny: 1, nz: 0, overlap: 0 };
+// Issue #149 shard burst: one shared InstancedMesh per ctx, capped.
+const SHARD_CAP = 96;
+const SHARDS_PER_BURST = 12;
+const _shardQuat = new THREE.Quaternion();
 
 function kindFromDef(def) {
   const k = def && def.field && def.field.kind;
@@ -1552,11 +1573,36 @@ export function initAsteroids(ctx) {
   let builtSys = ctx.world.currentSystem;
   let builtSeed = SYSTEMS[builtSys] && SYSTEMS[builtSys].worldSeed;
   let lastOreRef = ctx.world.fieldOre;
+  let lastRespawnRef = ctx.world.fieldRespawn;
   let sawSaveRestored = ctx.flags.saveRestored;
+  let fieldBand = 0; // §15 band of the built field (respawn ore draw)
+  let fieldOreMult = 1; // built field's oreMult (respawn units)
   // Reused bookkeeping arrays — reset on build, never reallocated per frame.
   const dirtyBundles = [];
   const activeHeat = []; // rock indices with heat > 0, capped at HEAT_CAP
   const collapseList = []; // rock indices mid-collapse animation
+  const growList = []; // rock indices mid grow-in (issue #149)
+  const pendingList = []; // removed rock indices waiting on their respawn record
+  // Shard burst pool (issue #149): fixed slots, swap-removed when spent.
+  const shards = [];
+  for (let k = 0; k < SHARD_CAP; k++) {
+    shards.push({
+      pos: new THREE.Vector3(), vel: new THREE.Vector3(), axis: new THREE.Vector3(0, 1, 0),
+      spin: 0, angle: 0, size: 1, t: 0, life: 1, color: new THREE.Color(),
+    });
+  }
+  let shardCount = 0;
+  const shardMesh = new THREE.InstancedMesh(
+    new THREE.TetrahedronGeometry(1, 0),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    SHARD_CAP,
+  );
+  shardMesh.name = 'asteroid-shards';
+  shardMesh.frustumCulled = false;
+  shardMesh.count = 0;
+  // Colour buffer exists from the start so setColorAt never reallocates mid-frame.
+  shardMesh.setColorAt(0, _color.set(0xffffff));
+  ctx.scene.add(shardMesh);
   // Teardown list: every live per-ore InstancedMesh for THIS ctx. rebuild()
   // disposes and empties it, so no mesh leaks across a system jump. This is
   // per-ctx closure state, NOT module state: the boot harness builds several
@@ -1590,6 +1636,275 @@ export function initAsteroids(ctx) {
     child[key] = remaining;
   }
 
+  function worldNow() {
+    const t = ctx.world.time;
+    return Number.isFinite(t) && t > 0 ? t : 0;
+  }
+
+  // ---- Issue #149: respawn records { at, due, ore, seed, grown } ----
+  function respawnChild(sys, create) {
+    if (typeof sys !== 'string' || !Object.hasOwn(SYSTEMS, sys)) return null;
+    let bag = ctx.world.fieldRespawn;
+    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+      if (!create) return null;
+      bag = {};
+      ctx.world.fieldRespawn = bag;
+      lastRespawnRef = bag;
+    }
+    let child = Object.hasOwn(bag, sys) ? bag[sys] : null;
+    if (!child || typeof child !== 'object' || Array.isArray(child)) {
+      if (!create) return null;
+      child = {};
+      bag[sys] = child;
+    }
+    return child;
+  }
+
+  function readRespawn(sys, index) {
+    const child = respawnChild(sys, false);
+    if (!child) return null;
+    const key = String(index);
+    if (!Object.hasOwn(child, key)) return null;
+    const rec = child[key];
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return null;
+    if (!Number.isFinite(rec.due) || typeof rec.ore !== 'string') return null;
+    if (!Object.hasOwn(ORE_TYPES, rec.ore)) return null;
+    return rec;
+  }
+
+  function writeRespawn(sys, index, rec) {
+    const child = respawnChild(sys, !!rec);
+    if (!child) return;
+    const key = String(index);
+    if (rec) {
+      child[key] = rec;
+      return;
+    }
+    if (Object.hasOwn(child, key)) delete child[key];
+    if (Object.keys(child).length === 0) {
+      const bag = ctx.world.fieldRespawn;
+      if (bag && typeof bag === 'object') delete bag[sys];
+    }
+  }
+
+  function rockGenKey(rec) {
+    return rec.ore + ':' + String(rec.seed | 0);
+  }
+
+  function listPending(i) {
+    if (pendingList.indexOf(i) < 0) pendingList.push(i);
+  }
+
+  function unlistPending(i) {
+    const ix = pendingList.indexOf(i);
+    if (ix >= 0) {
+      pendingList[ix] = pendingList[pendingList.length - 1];
+      pendingList.pop();
+    }
+  }
+
+  /** Draw the next ore kind: a kind this field renders, never the mined-out one when avoidable. */
+  function pickNextOre(currentKey) {
+    const allowed = new Set();
+    for (let b = 0; b < bundles.length; b++) allowed.add(bundles[b].oreKey);
+    return pickRespawnOreType(fieldBand, Math.random(), allowed, currentKey);
+  }
+
+  function scheduleRespawn(i, rock) {
+    if (typeof builtSys !== 'string' || !Object.hasOwn(SYSTEMS, builtSys)) return null;
+    const now = worldNow();
+    const delay = ASTEROID_RESPAWN.delaySeconds + Math.random() * ASTEROID_RESPAWN.spreadSeconds;
+    const rec = {
+      at: Math.round(now * 100) / 100,
+      due: Math.round((now + delay) * 100) / 100,
+      ore: pickNextOre(rock.oreKey),
+      seed: (Math.random() * 0x7fffffff) | 0,
+      grown: false,
+    };
+    writeRespawn(builtSys, i, rec);
+    listPending(i);
+    return rec;
+  }
+
+  function unlistCollapse(i, rock) {
+    rock.collapseT = -1;
+    if (!rock.collapseListed) return;
+    rock.collapseListed = false;
+    const ix = collapseList.indexOf(i);
+    if (ix >= 0) {
+      collapseList[ix] = collapseList[collapseList.length - 1];
+      collapseList.pop();
+    }
+  }
+
+  function unlistGrow(i, rock) {
+    rock.growT = -1;
+    if (!rock.growListed) return;
+    rock.growListed = false;
+    const ix = growList.indexOf(i);
+    if (ix >= 0) {
+      growList[ix] = growList[growList.length - 1];
+      growList.pop();
+    }
+  }
+
+  function writeRockInstance(rock) {
+    _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
+    _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
+    _mat4.compose(rock.position, _quat, _scale);
+    rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+    rock.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Bring a depleted (removed or collapsing) rock back to its full seeded state. */
+  function restoreRock(i, rock) {
+    rock.depleted = false;
+    unlistCollapse(i, rock);
+    unlistGrow(i, rock);
+    unlistPending(i);
+    rock.radius = rock.baseScale;
+    if (list[i]) list[i].radius = rock.radius;
+    _color.copy(rock.baseColor);
+    rock.mesh.setColorAt(rock.instanceIndex, _color);
+    rock.mesh.instanceColor.needsUpdate = true;
+    writeRockInstance(rock);
+  }
+
+  /**
+   * Put a generation into slot i (issue #149): ore kind, look, tumble and
+   * seeded units. The orbit is untouched. Moves the slot between ore meshes
+   * when the kind changes: the old instance hides, a slot in the new bundle
+   * is reused or extended (capacity is the field count, and a bundle never
+   * holds more live+freed slots than rocks that visited it). `snap` skips the
+   * grow-in (rebuild / restore / reducedMotion).
+   */
+  function applyGeneration(i, rock, gen, genKey, snap) {
+    const bundle = gen.bundle;
+    const oreKey = gen.oreKey;
+    const ore = ORE_TYPES[oreKey];
+    if (bundle !== rock.bundle) {
+      const old = rock.bundle;
+      _scale.set(0, 0, 0);
+      _mat4.compose(rock.position, _quat.identity(), _scale);
+      old.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+      old.mesh.instanceMatrix.needsUpdate = true;
+      old.free.push(rock.instanceIndex);
+      let slot;
+      if (bundle.free.length > 0) slot = bundle.free.pop();
+      else slot = bundle.nextSlot++;
+      if (slot + 1 > bundle.mesh.count) bundle.mesh.count = slot + 1;
+      rock.bundle = bundle;
+      rock.mesh = bundle.mesh;
+      rock.instanceIndex = slot;
+      rock.hotColor = bundle.hot;
+    }
+    rock.baseColor.copy(gen.baseColor);
+    rock.scaleVec.copy(gen.scaleVec);
+    rock.tilt.copy(gen.tilt);
+    rock.axis.copy(gen.axis);
+    rock.spin = gen.spin;
+    rock.angle = gen.angle;
+    rock.oreKey = oreKey;
+    rock.commodity = oreKey;
+    rock.baseScale = gen.radius;
+    rock.ore = gen.units;
+    rock.seedOre = gen.units;
+    rock.extract = 0;
+    rock.heat = 0;
+    rock.hitThisFrame = false;
+    rock.heatedThisFrame = false;
+    rock.hitPoint = null;
+    rock.depleted = false;
+    rock.genKey = genKey;
+    unlistCollapse(i, rock);
+    unlistPending(i);
+    const entry = list[i];
+    if (entry) {
+      entry.ore = gen.units;
+      entry.commodity = oreKey;
+      entry.oreKey = oreKey;
+      entry.hardness = ore.hardness;
+    }
+    _color.copy(rock.baseColor);
+    rock.mesh.setColorAt(rock.instanceIndex, _color);
+    rock.mesh.instanceColor.needsUpdate = true;
+    if (snap || ctx.settings.reducedMotion) {
+      unlistGrow(i, rock);
+      rock.radius = gen.radius;
+    } else {
+      rock.radius = 0;
+      rock.growT = 0;
+      if (!rock.growListed) {
+        rock.growListed = true;
+        growList.push(i);
+      }
+    }
+    if (entry) entry.radius = rock.radius;
+    writeRockInstance(rock);
+  }
+
+  // Scratch generation for growRock — filled per call, never retained.
+  const _gen = {
+    oreKey: 'rawOre', bundle: null, radius: 1, baseColor: new THREE.Color(),
+    scaleVec: new THREE.Vector3(1, 1, 1), tilt: new THREE.Quaternion(),
+    axis: new THREE.Vector3(0, 1, 0), spin: 0, angle: 0, units: 1,
+  };
+
+  /**
+   * Seed a NEW rock into slot i from its respawn record (issue #149). Ore
+   * kind, shape, tilt, colour, radius and units all derive from the record's
+   * seed so every timeline grows the same rock.
+   */
+  function growRock(i, rock, rec, snap) {
+    let oreKey = rec.ore;
+    let bundle = null;
+    for (let b = 0; b < bundles.length; b++) {
+      if (bundles[b].oreKey === oreKey) { bundle = bundles[b]; break; }
+    }
+    if (!bundle) {
+      // A kind this field cannot render: keep the slot's current mesh.
+      oreKey = rock.oreKey;
+      bundle = rock.bundle;
+    }
+    const ore = ORE_TYPES[oreKey];
+    const profile = ore.rock;
+    const rng = makeRng(((rec.seed | 0) ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0);
+    _gen.oreKey = oreKey;
+    _gen.bundle = bundle;
+    _gen.radius = (2 + Math.pow(rng(), 1.6) * 12) * profile.scaleMult;
+    _gen.baseColor.setHSL(
+      profile.hue[0] + rng() * profile.hue[1],
+      profile.sat[0] + rng() * profile.sat[1],
+      profile.light[0] + rng() * profile.light[1],
+    );
+    _gen.scaleVec.set(1, 1, 1);
+    _gen.tilt.identity();
+    const jitter = profile.axisJitter ?? 0;
+    if (jitter > 0) {
+      const rx = 1 - rng() * jitter;
+      const ry = 1 - rng() * jitter;
+      const rz = 1 - rng() * jitter;
+      const maxR = Math.max(rx, ry, rz);
+      _gen.scaleVec.set(rx / maxR, ry / maxR, rz / maxR);
+      _gen.tilt.setFromEuler(new THREE.Euler(
+        rng() * Math.PI * 2,
+        rng() * Math.PI * 2,
+        rng() * Math.PI * 2,
+      ));
+    }
+    _gen.axis.set(rng() - 0.5, rng() - 0.5, rng() - 0.5).normalize();
+    _gen.spin = (0.1 + rng() * 0.35) * (rng() < 0.5 ? -1 : 1);
+    _gen.angle = rng() * Math.PI * 2;
+    _gen.units = Math.max(1, Math.ceil((4 + Math.floor(rng() * 9)) * fieldOreMult * ore.unitsMult));
+    applyGeneration(i, rock, _gen, rockGenKey(rec), snap);
+  }
+
+  /** Put the field's BUILT rock back into slot i (a timeline with no grown record). */
+  function revertRock(i, rock) {
+    if (rock.genKey === '') return;
+    applyGeneration(i, rock, rock.built, '', true);
+  }
+
   function overlayFieldOre(sys) {
     const bag = ctx.world.fieldOre;
     let child = null;
@@ -1598,45 +1913,47 @@ export function initAsteroids(ctx) {
       const c = bag[sys];
       if (c && typeof c === 'object' && !Array.isArray(c)) child = c;
     }
+    const now = worldNow();
     for (let i = 0; i < rocks.length; i++) {
       const rock = rocks[i];
+      const key = String(i);
+      // Issue #149: the respawn record decides which generation sits in the
+      // slot; fieldOre then says how much of THAT generation remains.
+      let rec = readRespawn(sys, i);
+      if (rec && rec.grown === true) {
+        if (rock.genKey !== rockGenKey(rec)) growRock(i, rock, rec, true);
+      } else {
+        revertRock(i, rock); // no grown record: the built rock owns the slot
+        if (rec && now >= rec.due) {
+          growRock(i, rock, rec, true);
+          rec.grown = true;
+          if (child && Object.hasOwn(child, key)) delete child[key];
+        }
+      }
       const seeded = rock.seedOre;
       let remaining = seeded;
-      if (child) {
-        const key = String(i);
-        if (Object.hasOwn(child, key)) {
-          const v = child[key];
-          if (Number.isFinite(v)) remaining = Math.min(seeded, Math.max(0, Math.trunc(v)));
-        }
+      if (child && Object.hasOwn(child, key)) {
+        const v = child[key];
+        if (Number.isFinite(v)) remaining = Math.min(seeded, Math.max(0, Math.trunc(v)));
       }
       rock.ore = remaining;
       if (list[i]) list[i].ore = remaining;
       if (remaining <= 0) {
-        if (!rock.depleted) deplete(i, rock);
-      } else if (rock.depleted) {
-        rock.depleted = false;
-        rock.collapseT = -1;
-        if (rock.collapseListed) {
-          rock.collapseListed = false;
-          const ix = collapseList.indexOf(i);
-          if (ix >= 0) {
-            collapseList[ix] = collapseList[collapseList.length - 1];
-            collapseList.pop();
-          }
-        }
-        rock.radius = rock.baseScale;
-        if (list[i]) list[i].radius = rock.radius;
-        _color.copy(rock.baseColor);
-        rock.mesh.setColorAt(rock.instanceIndex, _color);
-        rock.mesh.instanceColor.needsUpdate = true;
-        _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
-        _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
-        _mat4.compose(rock.position, _quat, _scale);
-        rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
-        rock.mesh.instanceMatrix.needsUpdate = true;
+        if (!rock.depleted) deplete(i, rock, true);
+        else if (rock.radius > 0 && !rock.collapseListed) removeRock(i, rock);
+        rec = readRespawn(sys, i);
+        if (!rec || rec.grown === true) scheduleRespawn(i, rock);
+        else listPending(i);
+      } else {
+        if (rock.depleted) restoreRock(i, rock);
+        // Full rock, ungrown record: this timeline never mined it out.
+        if (rec && rec.grown !== true) writeRespawn(sys, i, null);
+        unlistPending(i);
       }
     }
+    if (child && Object.keys(child).length === 0 && bag && Object.hasOwn(bag, sys)) delete bag[sys];
     lastOreRef = ctx.world.fieldOre;
+    lastRespawnRef = ctx.world.fieldRespawn;
   }
 
   function build(def) {
@@ -1709,11 +2026,14 @@ export function initAsteroids(ctx) {
       const slots = perOre.get(oreKey);
       if (!slots) continue;
       const ore = ORE_TYPES[oreKey];
+      // Issue #149: capacity is the whole field so a respawned rock can
+      // move into this mesh later; count is trimmed to the live rocks.
       const mesh = new THREE.InstancedMesh(
         makeRockGeometry(rng, ore.rock),
         makeRockMaterial(ore.rock),
-        slots,
+        count,
       );
+      mesh.count = slots;
       mesh.name = 'asteroid-field-' + oreKey; // boot harness contract
       mesh.userData.oreKey = oreKey;
       mesh.frustumCulled = false; // instances span the whole field
@@ -1725,6 +2045,7 @@ export function initAsteroids(ctx) {
         // Heat-glow target: the ore's spark colour, scaled bright.
         hot: new THREE.Color(ore.sparkColor).multiplyScalar(1.6),
         matrixDirty: false,
+        free: [], // instance slots vacated by respawns (issue #149)
       };
       bundles.push(bundle);
       bundleByOre.set(oreKey, bundle);
@@ -1824,8 +2145,25 @@ export function initAsteroids(ctx) {
         heatListed: false, // in activeHeat[]
         collapseT: -1, // <0 = not collapsing
         collapseListed: false, // in collapseList[]
+        growT: -1, // <0 = not growing in (issue #149)
+        growListed: false, // in growList[]
+        genKey: '', // '' = the built generation; else ore:seed of the respawn record
       };
       rock.seedOre = rock.ore;
+      // Issue #149: the built generation, kept so a restore to a timeline
+      // with no respawn record can put the field's own rock back.
+      rock.built = {
+        oreKey,
+        bundle,
+        radius,
+        baseColor: baseColor.clone(),
+        scaleVec: scaleVec.clone(),
+        tilt: tilt.clone(),
+        axis: rock.axis.clone(),
+        spin: rock.spin,
+        angle: rock.angle,
+        units: rock.ore,
+      };
       // Keep-out mutates r/phase0 only — no extra rng after the look stream.
       const pad = radius + 20;
       const sunMin = sunR * PHY.SUN_HEAT_MULT + pad;
@@ -1924,6 +2262,13 @@ export function initAsteroids(ctx) {
     ctx.asteroids = { list };
     builtSys = def.id ?? ctx.world.currentSystem;
     builtSeed = def.worldSeed;
+    fieldBand = band;
+    fieldOreMult = oreMult;
+    collapseList.length = 0;
+    growList.length = 0;
+    pendingList.length = 0;
+    shardCount = 0;
+    shardMesh.count = 0;
     overlayFieldOre(builtSys);
 
     // Tumble budget: recompose ~1/4 of instances per frame (full sweep ≈
@@ -1932,7 +2277,6 @@ export function initAsteroids(ctx) {
     cursor = 0;
     dirtyBundles.length = 0;
     activeHeat.length = 0;
-    collapseList.length = 0;
   }
 
   function rebuild(to) {
@@ -1959,31 +2303,64 @@ export function initAsteroids(ctx) {
     }
   }
 
-  function deplete(i, rock) {
+  /** Issue #149: the slot leaves the field — radius 0 hides the instance and every consumer skips it. */
+  function removeRock(i, rock) {
+    unlistCollapse(i, rock);
+    unlistGrow(i, rock);
+    rock.radius = 0;
+    list[i].radius = 0;
+    writeRockInstance(rock);
+  }
+
+  function spawnShards(rock) {
+    const ore = ORE_TYPES[rock.oreKey];
+    writeOrbitVel(_rockVel, rock.orbitR, rock.inc, rock.node, rock.phase0, rock.omega, worldNow());
+    for (let k = 0; k < SHARDS_PER_BURST; k++) {
+      if (shardCount >= SHARD_CAP) break;
+      const sh = shards[shardCount++];
+      sh.pos.copy(rock.position);
+      sh.pos.x += (Math.random() - 0.5) * rock.baseScale;
+      sh.pos.y += (Math.random() - 0.5) * rock.baseScale;
+      sh.pos.z += (Math.random() - 0.5) * rock.baseScale;
+      sh.vel.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      sh.vel.multiplyScalar(rock.baseScale * (1.2 + Math.random() * 1.8)).add(_rockVel);
+      sh.axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      sh.spin = (Math.random() - 0.5) * 8;
+      sh.angle = Math.random() * Math.PI * 2;
+      sh.size = rock.baseScale * (0.10 + Math.random() * 0.18);
+      sh.t = 0;
+      sh.life = ASTEROID_RESPAWN.shardSeconds * (0.7 + Math.random() * 0.5);
+      sh.color.set(ore ? ore.sparkColor : 0xffb066);
+    }
+  }
+
+  /**
+   * Mined to zero (issue #149): darken, break up, leave the field. `snap`
+   * (overlay / restore) skips the animation and the shard burst; the live
+   * mining path also schedules the slot's respawn record.
+   */
+  function deplete(i, rock, snap) {
     rock.depleted = true;
     rock.heat = 0; // the heat sweep unlists it and restores the darkened tint
     list[i].ore = 0;
+    unlistGrow(i, rock);
     // Darken immediately: world-tells-first depletion cue (§13.1).
     _color.copy(rock.baseColor).multiplyScalar(0.35);
     rock.mesh.setColorAt(rock.instanceIndex, _color);
     rock.mesh.instanceColor.needsUpdate = true;
-    if (ctx.settings.reducedMotion) {
-      // Accessibility: no collapse animation — snap to the depleted husk.
-      rock.radius = rock.baseScale * 0.3;
-      list[i].radius = rock.radius;
-      _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
-      _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
-      _mat4.compose(rock.position, _quat, _scale);
-      rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
-      rock.mesh.instanceMatrix.needsUpdate = true; // direct: the per-frame flush already ran
+    if (snap || ctx.settings.reducedMotion) {
+      // Accessibility / restore: no break-up animation — the rock is gone.
+      removeRock(i, rock);
     } else {
-      // Ease-out collapse over ~0.4 s, driven by the update loop below.
+      // Ease-out collapse to nothing plus a shard burst, driven by update().
+      spawnShards(rock);
       rock.collapseT = 0;
       if (!rock.collapseListed) {
         rock.collapseListed = true;
         collapseList.push(i);
       }
     }
+    if (!snap) scheduleRespawn(i, rock);
   }
 
   build(SYSTEMS[ctx.world.currentSystem]);
@@ -2000,11 +2377,14 @@ export function initAsteroids(ctx) {
       }
       const restoring = ctx.flags.saveRestored && !sawSaveRestored;
       sawSaveRestored = ctx.flags.saveRestored;
-      if (ctx.world.fieldOre !== lastOreRef || restoring) {
+      if (ctx.world.fieldOre !== lastOreRef || ctx.world.fieldRespawn !== lastRespawnRef || restoring) {
         const sys = ctx.world.currentSystem;
         const seed = SYSTEMS[sys] && SYSTEMS[sys].worldSeed;
         if (sys === builtSys && seed === builtSeed) overlayFieldOre(sys);
-        else lastOreRef = ctx.world.fieldOre;
+        else {
+          lastOreRef = ctx.world.fieldOre;
+          lastRespawnRef = ctx.world.fieldRespawn;
+        }
       }
 
       const reduced = ctx.settings.reducedMotion;
@@ -2048,34 +2428,109 @@ export function initAsteroids(ctx) {
         if (reduced) continue;
         rock.angle += rock.spin * dt * (n / chunk); // amortized over skipped frames
         _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
-        _scale.copy(rock.scaleVec).multiplyScalar(rock.baseScale);
+        _scale.copy(rock.scaleVec).multiplyScalar(rock.radius); // grow-in keeps its scale
         _mat4.compose(rock.position, _quat, _scale);
         rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
         markDirty(rock);
       }
       cursor = end >= n ? 0 : end;
 
-      // --- Depletion collapse: ease-out shrink ~0.4 s (skipped under
-      //     reducedMotion — deplete() snaps instead) ---
+      // --- Depletion break-up (issue #149): ease-out shrink to nothing over
+      //     collapseSeconds (skipped under reducedMotion — deplete() snaps) ---
       for (let k = collapseList.length - 1; k >= 0; k--) {
         const i = collapseList[k];
         const rock = rocks[i];
-        rock.collapseT += dt / 0.4;
+        rock.collapseT += dt / ASTEROID_RESPAWN.collapseSeconds;
         let t = rock.collapseT;
         if (t >= 1) {
           t = 1;
           rock.collapseListed = false;
+          rock.collapseT = -1;
           collapseList[k] = collapseList[collapseList.length - 1]; // swap-remove
           collapseList.pop();
         }
         const ease = 1 - (1 - t) * (1 - t); // quadratic ease-out
-        rock.radius = rock.baseScale * (1 - 0.7 * ease); // → baseScale × 0.3
+        rock.radius = t >= 1 ? 0 : rock.baseScale * (1 - ease);
         list[i].radius = rock.radius;
         _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
         _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
         _mat4.compose(rock.position, _quat, _scale);
         rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
         markDirty(rock);
+      }
+
+      // --- Respawn (issue #149): a removed slot whose record is due grows a
+      //     new rock of the record's ore kind. ---
+      if (pendingList.length > 0) {
+        const now = worldNow();
+        for (let k = pendingList.length - 1; k >= 0; k--) {
+          const i = pendingList[k];
+          const rock = rocks[i];
+          const rec = readRespawn(builtSys, i);
+          if (!rec || rec.grown === true) {
+            pendingList[k] = pendingList[pendingList.length - 1];
+            pendingList.pop();
+            continue;
+          }
+          if (now < rec.due || rock.collapseListed) continue;
+          growRock(i, rock, rec, false); // unlists pending
+          rec.grown = true;
+          writeFieldOre(builtSys, i, rock.ore, rock.seedOre); // clears the 0 entry
+        }
+      }
+
+      // --- Grow-in: scale 0 → 1 over growSeconds (snapped under reducedMotion) ---
+      for (let k = growList.length - 1; k >= 0; k--) {
+        const i = growList[k];
+        const rock = rocks[i];
+        rock.growT += dt / ASTEROID_RESPAWN.growSeconds;
+        let t = rock.growT;
+        if (t >= 1 || reduced) {
+          t = 1;
+          rock.growListed = false;
+          rock.growT = -1;
+          growList[k] = growList[growList.length - 1]; // swap-remove
+          growList.pop();
+        }
+        const ease = 1 - (1 - t) * (1 - t); // quadratic ease-out
+        rock.radius = rock.baseScale * ease;
+        list[i].radius = rock.radius;
+        _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
+        _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
+        _mat4.compose(rock.position, _quat, _scale);
+        rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        markDirty(rock);
+      }
+
+      // --- Shard bursts: fly out, tumble, shrink to nothing ---
+      if (shardCount > 0) {
+        for (let k = shardCount - 1; k >= 0; k--) {
+          const sh = shards[k];
+          sh.t += dt;
+          if (sh.t >= sh.life) {
+            const last = shards[shardCount - 1];
+            shards[shardCount - 1] = sh;
+            shards[k] = last;
+            shardCount -= 1;
+            continue;
+          }
+          sh.pos.addScaledVector(sh.vel, dt);
+          sh.angle += sh.spin * dt;
+        }
+        for (let k = 0; k < shardCount; k++) {
+          const sh = shards[k];
+          const fade = 1 - sh.t / sh.life;
+          _shardQuat.setFromAxisAngle(sh.axis, sh.angle);
+          _scale.setScalar(sh.size * fade);
+          _mat4.compose(sh.pos, _shardQuat, _scale);
+          shardMesh.setMatrixAt(k, _mat4);
+          shardMesh.setColorAt(k, sh.color);
+        }
+        shardMesh.count = shardCount;
+        shardMesh.instanceMatrix.needsUpdate = true;
+        if (shardMesh.instanceColor) shardMesh.instanceColor.needsUpdate = true;
+      } else if (shardMesh.count !== 0) {
+        shardMesh.count = 0;
       }
 
       // Flush per-mesh matrix dirtiness accumulated this frame.

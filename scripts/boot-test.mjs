@@ -14321,6 +14321,224 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w69).every(Boolean)) { console.log('WAVE69 AST FAIL'); errors++; }
 }
 
+// ---- Issue #149: mined-out rock breaks up, leaves the field, respawns as another ore ----
+{
+  const { WORLD_FIELDS: w149Fields } = await import('../src/game/save.js');
+  const { ASTEROID_RESPAWN, ORE_TYPES: ORE149, pickRespawnOreType } = await import('../src/game/state.js');
+  const here149 = dirname(fileURLToPath(import.meta.url));
+  const src149 = (rel) => readFileSync(join(here149, '..', rel), 'utf8');
+  const w149scoped = (reduced) => {
+    const sceneS = new THREE.Scene();
+    const cameraS = new THREE.PerspectiveCamera(70, 1280 / 720, 0.1, 20000);
+    const rendererS = {
+      domElement: { style: {} }, setSize() {}, setPixelRatio() {}, setAnimationLoop() {}, render() {},
+    };
+    const ctxS = createCtx({ scene: sceneS, camera: cameraS, renderer: rendererS });
+    ctxS.systems = SYSTEMS;
+    ctxS.world.currentSystem = 'freehold';
+    ctxS.world.time = 0;
+    ctxS.pods = [];
+    ctxS.settings.reducedMotion = !!reduced;
+    const sunRLive = ctx.config.world.sunRadius;
+    ctxS.config.world.sunRadius = Number.isFinite(sunRLive) && sunRLive > 0 ? sunRLive : SYSTEMS.freehold.sunRadius;
+    return ctxS;
+  };
+  const w149frames = (ast, ctxS, n, dt) => { for (let k = 0; k < n; k++) ast.update(dt); };
+
+  // A: live mining to zero → collapse to radius 0, shard burst, record written.
+  const ctxA = w149scoped(false);
+  const astA = initAsteroids(ctxA);
+  const listA = ctxA.asteroids.list;
+  const slotA = 1;
+  const keyA0 = listA[slotA].oreKey;
+  const oreA0 = listA[slotA].ore;
+  ctxA.world.time = 10;
+  let minedFrames = 0;
+  while (listA[slotA].ore > 0 && minedFrames < 400) {
+    ctxA.lastEvents.length = 0;
+    ctxA.lastEvents.push({ type: 'mineHit', asteroidId: slotA, extractPerSec: 50, point: null });
+    astA.update(0.1);
+    ctxA.world.time += 0.1;
+    minedFrames += 1;
+  }
+  ctxA.lastEvents.length = 0;
+  astA.update(0.016); // the burst spawned inside the mining pass; its mesh count lands next frame
+  const shardMesh = ctxA.scene.children.find((o) => o.name === 'asteroid-shards');
+  const shardsBurst = !!(shardMesh && shardMesh.count > 0);
+  const radiusMidCollapse = listA[slotA].radius;
+  w149frames(astA, ctxA, 20, 0.1);
+  ctxA.world.time += 2;
+  const recA = ctxA.world.fieldRespawn && ctxA.world.fieldRespawn.freehold && ctxA.world.fieldRespawn.freehold[String(slotA)];
+  const removed = listA[slotA].radius === 0 && listA[slotA].ore === 0
+    && ctxA.world.fieldOre && ctxA.world.fieldOre.freehold && ctxA.world.fieldOre.freehold[String(slotA)] === 0;
+  const recordOk = !!(recA && recA.grown === false && typeof recA.ore === 'string' && recA.ore !== keyA0
+    && Number.isFinite(recA.due) && recA.due - recA.at >= ASTEROID_RESPAWN.delaySeconds
+    && recA.due - recA.at <= ASTEROID_RESPAWN.delaySeconds + ASTEROID_RESPAWN.spreadSeconds
+    && Number.isInteger(recA.seed));
+  // Beam ignores the removed slot: a mineHit on it extracts nothing.
+  ctxA.lastEvents.push({ type: 'mineHit', asteroidId: slotA, extractPerSec: 50, point: null });
+  astA.update(0.1);
+  ctxA.lastEvents.length = 0;
+  const stillRemoved = listA[slotA].radius === 0 && listA[slotA].ore === 0;
+  const snapOre149 = JSON.parse(JSON.stringify(ctxA.world.fieldOre));
+  const snapResp149 = JSON.parse(JSON.stringify(ctxA.world.fieldRespawn));
+  const snapTime149 = ctxA.world.time;
+
+  // Respawn: at `due` a new rock of the record's ore grows in the same slot.
+  const posRef = listA[slotA].position; // same slot keeps its orbit Vector3
+  ctxA.world.time = recA.due + 0.01;
+  astA.update(0.016);
+  const growStarted = listA[slotA].oreKey === recA.ore && listA[slotA].ore > 0 && listA[slotA].radius > 0
+    && listA[slotA].radius < 1 && recA.grown === true;
+  w149frames(astA, ctxA, 60, 0.016);
+  const grownRadius = listA[slotA].radius;
+  const grown = listA[slotA].oreKey === recA.ore && listA[slotA].commodity === recA.ore
+    && listA[slotA].hardness === ORE149[recA.ore].hardness && grownRadius >= 2 && listA[slotA].ore > 0
+    && listA[slotA].position === posRef;
+  const oreEntryCleared = !(ctxA.world.fieldOre && ctxA.world.fieldOre.freehold
+    && Object.hasOwn(ctxA.world.fieldOre.freehold, String(slotA)));
+  const grownKey = listA[slotA].oreKey;
+  const grownOre = listA[slotA].ore;
+  // The new rock mines like any other and, mined out again, writes a fresh record.
+  ctxA.world.time += 1;
+  let minedFrames2 = 0;
+  while (listA[slotA].ore > 0 && minedFrames2 < 400) {
+    ctxA.lastEvents.length = 0;
+    ctxA.lastEvents.push({ type: 'mineHit', asteroidId: slotA, extractPerSec: 50, point: null });
+    astA.update(0.1);
+    ctxA.world.time += 0.1;
+    minedFrames2 += 1;
+  }
+  ctxA.lastEvents.length = 0;
+  w149frames(astA, ctxA, 20, 0.1);
+  const recA2 = ctxA.world.fieldRespawn.freehold[String(slotA)];
+  const secondGeneration = listA[slotA].radius === 0 && recA2 && recA2 !== recA && recA2.grown === false
+    && recA2.ore !== grownKey;
+  const meshesA = ctxA.scene.children.filter((o) => o.name && o.name.startsWith('asteroid-field-'));
+  const meshCapacity = meshesA.every((m) => m.instanceMatrix.count === SYSTEMS.freehold.field.count && m.count <= m.instanceMatrix.count);
+
+  // B: restore at the removed snapshot → still removed; grows the SAME rock at due.
+  const ctxB = w149scoped(false);
+  ctxB.world.time = snapTime149;
+  ctxB.world.fieldOre = JSON.parse(JSON.stringify(snapOre149));
+  ctxB.world.fieldRespawn = JSON.parse(JSON.stringify(snapResp149));
+  const astB = initAsteroids(ctxB);
+  const listB = ctxB.asteroids.list;
+  const restoredRemoved = listB[slotA].radius === 0 && listB[slotA].ore === 0;
+  ctxB.world.time = recA.due + 5;
+  w149frames(astB, ctxB, 61, 0.016);
+  const restoredGrowsSame = listB[slotA].oreKey === grownKey && listB[slotA].ore === grownOre
+    && Math.abs(listB[slotA].radius - grownRadius) < 1e-9;
+
+  // C: a return visit after `due` builds straight into the grown rock (timer kept running).
+  const ctxC = w149scoped(false);
+  ctxC.world.time = recA.due + 100;
+  ctxC.world.fieldOre = JSON.parse(JSON.stringify(snapOre149));
+  ctxC.world.fieldRespawn = JSON.parse(JSON.stringify(snapResp149));
+  initAsteroids(ctxC);
+  const listC = ctxC.asteroids.list;
+  const returnVisitGrown = listC[slotA].oreKey === grownKey && listC[slotA].ore === grownOre
+    && listC[slotA].radius >= 2 && ctxC.world.fieldRespawn.freehold[String(slotA)].grown === true
+    && !(ctxC.world.fieldOre && ctxC.world.fieldOre.freehold && Object.hasOwn(ctxC.world.fieldOre.freehold, String(slotA)));
+
+  // D: reducedMotion snaps the removal and the grow-in.
+  const ctxD = w149scoped(true);
+  const astD = initAsteroids(ctxD);
+  const listD = ctxD.asteroids.list;
+  ctxD.world.time = 10;
+  ctxD.world.fieldOre = { freehold: { '2': 0 } };
+  astD.update(0.016);
+  const reducedSnapOut = listD[2].radius === 0 && listD[2].ore === 0;
+  const recD = ctxD.world.fieldRespawn.freehold['2'];
+  ctxD.world.time = recD.due + 1;
+  astD.update(0.016);
+  const reducedSnapIn = listD[2].radius >= 2 && listD[2].oreKey === recD.ore && listD[2].ore > 0;
+
+  // F: a restore to a timeline with no record puts the field's built rock back; re-applying the
+  //    grown record grows the same rock again.
+  const ctxF = w149scoped(false);
+  const astF = initAsteroids(ctxF);
+  const listF = ctxF.asteroids.list;
+  const builtF = { key: listF[slotA].oreKey, radius: listF[slotA].radius, ore: listF[slotA].ore };
+  ctxF.world.time = recA.due + 100;
+  ctxF.world.fieldOre = JSON.parse(JSON.stringify(snapOre149));
+  ctxF.world.fieldRespawn = JSON.parse(JSON.stringify(snapResp149));
+  ctxF.flags.saveRestored = true;
+  astF.update(0.016);
+  const grownF = listF[slotA].oreKey === grownKey && listF[slotA].ore === grownOre;
+  delete ctxF.world.fieldOre;
+  delete ctxF.world.fieldRespawn;
+  astF.update(0.016);
+  const revertedF = listF[slotA].oreKey === builtF.key && listF[slotA].radius === builtF.radius
+    && listF[slotA].ore === builtF.ore && listF[slotA].radius > 0;
+  ctxF.world.fieldRespawn = JSON.parse(JSON.stringify(snapResp149));
+  astF.update(0.016);
+  const regrownF = listF[slotA].oreKey === grownKey && listF[slotA].ore === grownOre
+    && Math.abs(listF[slotA].radius - grownRadius) < 1e-9;
+  const revertRoundTrip = grownF && revertedF && regrownF;
+
+  // E: the sanitizer keeps a good record and drops malformed ones through the real restore path.
+  const snapE = snapshot(ctx);
+  const badBag = {
+    freehold: {
+      '3': { at: 1, due: 200, ore: 'rawOre', seed: 7, grown: true },
+      '4': { at: 1, due: 200, ore: 'notAnOre', seed: 7, grown: false },
+      '5': { at: -1, due: 200, ore: 'rawOre', seed: 7, grown: false },
+      '6': { at: 1, due: 200, ore: 'rawOre', seed: 1.5, grown: false },
+      '999': { at: 1, due: 200, ore: 'rawOre', seed: 7, grown: false },
+    },
+    nowhere: { '0': { at: 1, due: 200, ore: 'rawOre', seed: 7, grown: false } },
+  };
+  restore(ctx, { ...snapE, world: { ...snapE.world, fieldRespawn: badBag } });
+  const bagAfter = ctx.world.fieldRespawn;
+  const sanitized = !!(bagAfter && bagAfter.freehold && Object.keys(bagAfter).length === 1
+    && Object.keys(bagAfter.freehold).length === 1 && bagAfter.freehold['3']
+    && bagAfter.freehold['3'].grown === true && bagAfter.freehold['3'].ore === 'rawOre');
+  const roundTrip = JSON.stringify(snapshot(ctx).world.fieldRespawn) === JSON.stringify(bagAfter);
+  restore(ctx, snapE);
+  const omittedDrops = ctx.world.fieldRespawn === undefined;
+
+  const collision149 = src149('src/game/collision.js');
+  const combat149 = src149('src/systems/combat.js');
+  const controls149 = src149('src/systems/controls.js');
+  const observe149 = src149('src/game/agent-observe.js');
+  const w149 = {
+    minedOut: minedFrames < 400 && oreA0 > 0,
+    shardsBurst,
+    collapseToZero: radiusMidCollapse >= 0 && removed,
+    recordOk,
+    beamSkipsRemoved: stillRemoved,
+    growStarted,
+    grownDifferentOre: grown && grownKey !== keyA0,
+    oreEntryCleared,
+    secondGeneration: !!secondGeneration,
+    meshCapacity,
+    restoredRemoved,
+    restoredGrowsSame,
+    returnVisitGrown,
+    reducedSnapOut,
+    reducedSnapIn,
+    idEqIndex: listA.every((e, i) => e.id === i) && listB.every((e, i) => e.id === i),
+    worldField: w149Fields.includes('fieldRespawn'),
+    sanitized,
+    roundTrip,
+    omittedDrops,
+    revertRoundTrip,
+    pickerAvoidsCurrent: (() => {
+      const allowed = new Set(['rawOre', 'slagIron']);
+      for (let r = 0; r < 1; r += 0.05) if (pickRespawnOreType(0, r, allowed, 'rawOre') !== 'slagIron') return false;
+      return pickRespawnOreType(0, 0.5, new Set(['rawOre']), 'rawOre') === 'rawOre';
+    })(),
+    consumersSkipRemoved: collision149.includes("if (!(r > 0)) continue; // issue #149")
+      && combat149.includes('if (!(a.radius > 0)) continue; // issue #149')
+      && controls149.includes('else if (!(t.radius > 0)) ctx.targets.current = null;')
+      && observe149.includes('!(a.radius > 0)) continue; // #149'),
+  };
+  console.log('issue149 respawn:', JSON.stringify(w149),
+    `slot=${slotA} ${keyA0}->${grownKey} due-at=${recA ? (recA.due - recA.at).toFixed(1) : 'n/a'}`);
+  if (!Object.values(w149).every(Boolean)) { console.log('ISSUE149 RESPAWN FAIL'); errors++; }
+}
+
 // ---- WAVE70: MATCH (X) on a locked rock; ship MATCH still arms ----
 {
   const prevTgt70 = ctx.targets.current;
