@@ -24,7 +24,7 @@ import { lamplighterStation } from './stations/lamplighter.js';
 import { independentStation } from './stations/independent.js'; // wave 46: the placeholder loses its live sites
 import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
-import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
+import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, cancelSellPending, resetShipyardSale, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
 import { decodeKeyCode } from './key-code.js';
 import { writeMountedGear, applyAbominationStanding } from '../game/hangar.js';
 import {
@@ -6650,7 +6650,7 @@ export function initStation(ctx) {
         pending: !!(
           ui.seedPending || ui.giftPending || ui.restitutionPending
           || ui.outfitPending || ui.graftPending || ui.trainPending || ui.yardPending
-          || ui.trafficPending || ui.dataPending || ui.launderPending
+          || ui.sellPending || ui.trafficPending || ui.dataPending || ui.launderPending
         ),
         rows: viewRows(cap),
         actions,
@@ -6790,6 +6790,7 @@ export function initStation(ctx) {
     // leftover throttle must not deliver during dock settle
     jobTick = 0;
     setShipyardPane(ui, SHIPYARD_PANE_HANGAR);
+    resetShipyardSale(ui);
     overlay.style.display = 'flex';
     // Issue #147 follow-up: the yard settles every claimed hull at the berth.
     try {
@@ -6951,7 +6952,7 @@ export function initStation(ctx) {
     }
     // level 2
     if (code === 'Escape') {
-      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui) || cancelTrainPending(ui))) { render(); return; }
+      if (ui.service === 'shipyard' && (cancelGraftPending(ui) || cancelYardPending(ui) || cancelTrainPending(ui) || cancelSellPending(ui))) { render(); return; }
       if (ui.service === 'people' && (cancelGiftPending() || cancelTrafficPending(ui) || cancelLaunderPending(ui))) { render(); return; }
       if (ui.service === 'market' && (cancelSeedPending() || cancelDataPending(ui))) { render(); return; }
       if (ui.service === 'outfitting' && cancelOutfitPending(ui)) { render(); return; }

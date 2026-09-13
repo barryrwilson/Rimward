@@ -319,6 +319,9 @@ export function createCtx({ scene, camera, renderer }) {
     //   (verb claimHull). The hull leaves the lane and rides world.claimedHulls.
     // 'hullSettled' {targetId, targetName, classKey, faction, outcome:'sold'|'returned', credits, repBack, system, line}
     //   derelict.js via station.js on dock: the yard settled a claimed hull.
+    // 'hullSold' {hullId, name, classKey, faction, hullKind, grafted, hot, kind:'home'|'foreign'|'hot', credits, system, line}
+    //   shipyard.js (issue #158): the player sold an unmounted hangar hull to
+    //   this yard. Off the agent ring. Never the mounted hull.
     // 'npcPrizeTaken' {ship, prize, targetId, targetName, choice:'crew'|'hull'|'cargo', captives, causer:'world'}
     //   npc.js (issue #147): a boarding pirate took the crew (and the hull) of
     //   a yielded trader. Never a player receipt; pays no fear, bounty or

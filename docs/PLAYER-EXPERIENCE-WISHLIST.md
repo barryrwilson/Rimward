@@ -1574,7 +1574,11 @@ yards staying empty is unchanged.
 ### SHP-02 — Magical multi-ship storage
 
 **Status:** first slice DONE (Wave 64). Magical hangar cap 8.
-Buy adds a row. Hangar pane mounts from any dock.
+Buy adds a row. Hangar pane mounts from any dock. Sell DONE
+(issue #158, 2026-09-13): the yard buys any unmounted row
+(`HULL_RESALE` home/foreign of list; hot prize at
+`ECON.hotHullFence`); living hulls trade at living yards,
+grafted at the Chain; the mounted hull is never sold.
 
 - The player can own and store multiple ships rather than trading away the
   current hull.

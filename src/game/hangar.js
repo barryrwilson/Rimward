@@ -249,6 +249,9 @@ export function sanitizeHangarRecord(raw) {
   const kind = own(raw, 'hullKind');
   if (kind === 'living' || kind === 'built') row.hullKind = kind;
   applyGraftedAllowlist(row, raw);
+  // Issue #158/#159: a claimed prize kept in the hangar is `hot: true` only.
+  // The flag never clears by itself; a sale pays the hot-hull rate.
+  if (own(raw, 'hot') === true) row.hot = true;
   return row;
 }
 
@@ -406,6 +409,8 @@ export function parkMounted(ctx) {
   const packed = packLiveHull(ctx, hangar.mountedId);
   if (!packed) return;
   const idx = hangar.hulls.findIndex((h) => h.id === hangar.mountedId);
+  // The live player carries no `hot` field: the flag rides the row (#158).
+  if (idx >= 0 && hangar.hulls[idx]?.hot === true) packed.hot = true;
   if (idx < 0) hangar.hulls.unshift(packed);
   else hangar.hulls[idx] = packed;
 }
@@ -850,6 +855,7 @@ function trainMountedUnlocked(ctx, destClass) {
       engine: parked.engine,
       engineMax: parked.engineMax,
       heat: parked.heat,
+      hot: parked.hot,
     };
     const rec = sanitizeHangarRecord(raw);
     if (!rec || rec.id !== parked.id || rec.classKey !== dest || rec.hullKind !== 'living') {
@@ -969,6 +975,25 @@ export function grantLivingSeedRow(ctx, spec) {
   if (ctx.world.hangar.mountedId !== mountedId) ctx.world.hangar.mountedId = mountedId;
   requestAutosave(ctx);
   return { ok: true, row: added.row };
+}
+
+/**
+ * Issue #158: take one UNMOUNTED row out of the hangar (the yard bought it).
+ * The mounted row is never removed here; the mirrors stay untouched because
+ * the live hull is not the one that left. Returns { ok, row } or a reason.
+ */
+export function removeHangarRow(ctx, id) {
+  if (!ctx?.world) return { ok: false, reason: 'missing' };
+  sanitizeHangar(ctx);
+  const hangar = ctx.world.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return { ok: false, reason: 'missing' };
+  if (typeof id !== 'string' || !isSafeHullId(id)) return { ok: false, reason: 'missing' };
+  const idx = hangar.hulls.findIndex((h) => h.id === id);
+  if (idx < 0) return { ok: false, reason: 'missing' };
+  if (hangar.mountedId === id) return { ok: false, reason: 'mounted' };
+  const [row] = hangar.hulls.splice(idx, 1);
+  sanitizeHangar(ctx);
+  return { ok: true, row };
 }
 
 /** Death no-save: one living starter. Do not keep parked rows. */

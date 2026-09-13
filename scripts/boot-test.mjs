@@ -27879,6 +27879,46 @@ removeLiveShip(w42indyCtx, w42indy);
   }
 }
 
+// ---- Issue #158: sell an owned hull from the hangar ---------------------------
+// The shipyard desk buys back any UNMOUNTED hangar row at a berth with a hull
+// catalog (HULL_RESALE in state.js: homeRate / foreignRate of the class list;
+// a hot claimed prize at ECON.hotHullFence of hullPrizeValue). Quotes,
+// refusals, mirrors, the hot flag, the live desk flow and the save round trip
+// are pinned in scripts/issue-158-hull-sale-test.mjs (npm run test:hull-sale),
+// run here as one checked fresh child process: the desk leg docks at the real
+// station and the persistence leg round-trips a full snapshot/restore.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- issue #158: sell an owned hull from the hangar (fresh child: node --import with-css-stub.mjs scripts/issue-158-hull-sale-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'issue-158-hull-sale-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit' });
+  const SALE_TIMEOUT_MS = 10 * 60 * 1000; // watchdog only; a normal run takes seconds
+  const verdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${SALE_TIMEOUT_MS / 60000} min (child killed)`);
+    }, SALE_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(true, 'exit 0');
+      else finish(false, `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`);
+    });
+  });
+  if (!verdict.ok) {
+    console.log(`ISSUE158 HULL SALE FRESH-PROCESS FAIL — ${verdict.why}`);
+    errors++;
+  }
+}
+
 // ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
 // (mission 43b34db25ae32972 — one checked fresh-process child)
 //

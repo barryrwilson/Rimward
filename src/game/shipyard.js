@@ -1,4 +1,4 @@
-import { createShipState, SHIP_CLASSES, rankFor, cargoHoldFor } from './state.js';
+import { createShipState, SHIP_CLASSES, rankFor, cargoHoldFor, ECON, HULL_RESALE } from './state.js';
 import { requestAutosave } from './save.js';
 import {
   HANGAR_CAP,
@@ -6,7 +6,9 @@ import {
   sanitizeHangarRecord,
   canAcceptPurchase,
   addPurchasedHull,
+  removeHangarRow,
 } from './hangar.js';
+import { hullPrizeValue, rollHullRate } from './prize.js';
 
 /**
  * Authored yard catalog. Prices and min-rep live here, not on the save blob.
@@ -254,6 +256,127 @@ export function purchaseYardHull(ctx, classKey) {
     return purchaseYardHullUnlocked(ctx, classKey);
   } finally {
     buyInFlight = false;
+  }
+}
+
+// ---------- Issue #158: sell an owned hull from the hangar ----------
+
+/** Living hulls are traded where living hulls are sold. */
+const LIVING_YARDS = Object.freeze(['beautiful', 'unknowables']);
+/** A grafted plated hull is traded only by the yard that grafts. */
+const GRAFT_YARDS = Object.freeze(['gilded']);
+
+/** Clamp a hot-hull rate into ECON.hotHullFence; a bad rate rolls fresh. */
+export function clampHotRate(rate) {
+  const [lo, hi] = ECON.hotHullFence;
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) return rollHullRate();
+  return Math.min(hi, Math.max(lo, rate));
+}
+
+/**
+ * Why THIS yard will not quote THIS row, or null when it will. Reads the dock
+ * banner only; the mounted check lives in sellHangarHull (the pane never
+ * offers the mounted row).
+ */
+export function hullResaleRefusal(ctx, row) {
+  if (!row || typeof row !== 'object') return 'missing';
+  const faction = dockFactionOf(ctx);
+  if (yardStockFor(faction).length === 0) return 'stock';
+  if (!hasOwn(YARD_LIST_UU, row.classKey)) return 'stock';
+  if (row.hot === true) return null;
+  if (row.grafted === true && !GRAFT_YARDS.includes(faction)) return 'grafted';
+  if (row.hullKind === 'living' && !LIVING_YARDS.includes(faction)) return 'living';
+  return null;
+}
+
+/**
+ * The yard's offer for one hangar row: { price, kind, rate } or null when
+ * refused. kind 'home' = HULL_RESALE.homeRate of the class list (the row
+ * flies this yard's banner), 'foreign' = foreignRate, 'hot' =
+ * ECON.hotHullFence x the prize book (hullPrizeValue); the hot rate is
+ * supplied by the caller so a shown quote is the paid quote.
+ */
+export function hullResaleQuote(ctx, row, hotRate) {
+  if (hullResaleRefusal(ctx, row) !== null) return null;
+  if (row.hot === true) {
+    const rate = clampHotRate(hotRate);
+    return { price: Math.max(0, Math.round(hullPrizeValue(row.classKey) * rate)), kind: 'hot', rate };
+  }
+  const list = YARD_LIST_UU[row.classKey];
+  if (!Number.isFinite(list) || list < 0) return null;
+  const home = dockFactionOf(ctx) === row.faction;
+  const rate = home ? HULL_RESALE.homeRate : HULL_RESALE.foreignRate;
+  return { price: Math.max(0, Math.round(list * rate)), kind: home ? 'home' : 'foreign', rate };
+}
+
+let sellInFlight = false;
+
+function sellHangarHullUnlocked(ctx, id, opts) {
+  if (!ctx?.world || !ctx.flags?.docked) return { ok: false, reason: 'dock' };
+  if (ctx.flags?.combat) return { ok: false, reason: 'combat' };
+  if (ctx.gate?.jumping) return { ok: false, reason: 'jump' };
+  if (ctx.player?.destroyed) return { ok: false, reason: 'destroyed' };
+  if (ctx.flags?.paused) return { ok: false, reason: 'paused' };
+  sanitizeHangar(ctx);
+  const hangar = ctx.world.hangar;
+  if (!hangar || !Array.isArray(hangar.hulls)) return { ok: false, reason: 'missing' };
+  if (typeof id !== 'string') return { ok: false, reason: 'missing' };
+  const row = hangar.hulls.find((h) => h.id === id);
+  if (!row) return { ok: false, reason: 'missing' };
+  if (hangar.mountedId === id) return { ok: false, reason: 'mounted' };
+  const refusal = hullResaleRefusal(ctx, row);
+  if (refusal) return { ok: false, reason: refusal };
+  const quote = hullResaleQuote(ctx, row, opts?.hotRate);
+  if (!quote || !Number.isInteger(quote.price) || quote.price < 0) {
+    return { ok: false, reason: 'stock' };
+  }
+  const credits = ctx.world.credits;
+  const purse = typeof credits === 'number' && Number.isFinite(credits) ? credits : 0;
+
+  const removed = removeHangarRow(ctx, id);
+  if (!removed.ok) return { ok: false, reason: removed.reason === 'mounted' ? 'mounted' : 'missing' };
+  ctx.world.credits = purse + quote.price;
+
+  const sold = removed.row;
+  const name = sold.name || sold.classKey;
+  const systemId = ctx.world.currentSystem;
+  const line = quote.kind === 'hot'
+    ? `Yard takes ${name} off your hands. ${quote.price} UU, no questions.`
+    : `Yard buys ${name}. ${quote.price} UU.`;
+  const receipt = {
+    hullId: sold.id,
+    name,
+    classKey: sold.classKey,
+    faction: sold.faction,
+    hullKind: sold.hullKind === 'living' ? 'living' : 'built',
+    grafted: sold.grafted === true,
+    hot: sold.hot === true,
+    kind: quote.kind,
+    credits: quote.price,
+    system: typeof systemId === 'string' ? systemId : null,
+    line,
+  };
+  if (typeof ctx.emit === 'function') {
+    ctx.emit('hullSold', receipt);
+    ctx.emit('commLine', { text: line, from: 'station' });
+  }
+  requestAutosave(ctx);
+  return { ok: true, price: quote.price, kind: quote.kind, row: sold, receipt };
+}
+
+/**
+ * Sell one UNMOUNTED hangar row to this yard. One credit. Equipment and hold
+ * aboard the row go with it. opts.hotRate fixes the hot-hull roll so the
+ * pane's quote is the paid amount. Never remounts; the mirrors belong to the
+ * mounted hull, which is never sold.
+ */
+export function sellHangarHull(ctx, id, opts) {
+  if (sellInFlight) return { ok: false, reason: 'busy' };
+  sellInFlight = true;
+  try {
+    return sellHangarHullUnlocked(ctx, id, opts);
+  } finally {
+    sellInFlight = false;
   }
 }
 
