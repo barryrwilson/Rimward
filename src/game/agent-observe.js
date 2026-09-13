@@ -382,7 +382,7 @@ function nearbyTargets(ctx, origin, current, group, quat) {
     if (list && typeof list.length === 'number') {
       for (let i = 0; i < list.length; i++) {
         const a = list[i];
-        if (!a || !a.position) continue;
+        if (!a || !a.position || !(a.radius > 0)) continue; // #149: removed slot, no row
         const p = vec3(a.position);
         if (!origin || !p) continue;
         const d2 = (p[0] - origin[0]) ** 2 + (p[1] - origin[1]) ** 2 + (p[2] - origin[2]) ** 2;

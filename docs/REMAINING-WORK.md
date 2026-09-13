@@ -24,7 +24,12 @@ or deployment evidence.
 
 ## Active outcomes
 
-None. Every issue from #98 to #139 is merged (see the table below).
+Every issue from #98 to #139 is merged (see the table below). The 2026-09-12
+set filed after the pirate playtest is in progress:
+
+| Outcome | Issue / PR | Status |
+|---|---|---|
+| A mined-out asteroid breaks up, leaves the field, and a new rock of another ore seeds its slot a few minutes later | [#149](https://github.com/barryrwilson/Rimward/issues/149) | Implemented: `asteroids.js` collapses a zero-ore rock to radius 0 with a shard burst, keeps the slot in `ctx.asteroids.list` (`id === index`), writes `world.fieldRespawn[sys][index] = { at, due, ore, seed, grown }` (`ASTEROID_RESPAWN` tuning in `state.js`, 3–5 min of world time), and grows a rock of the recorded ore into the same orbit at `due`; the record rides `WORLD_FIELDS` and `save.js` sanitizes it. Beam, reticle, target cycle, agent rows and collision skip radius-0 slots. Pinned in `npm run test:boot` (section "Issue #149"); live check 2026-09-12 (break-up, grow-in, `reducedMotion` snaps). Parked: rare-ore respawn weighting and respawn size are unchanged from the field's band draw. |
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 station security reacting to a hostile hunter near the dock, ace demand

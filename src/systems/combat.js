@@ -1468,6 +1468,7 @@ export function initCombat(ctx) {
     if (list) {
       for (let i = 0; i < list.length; i++) {
         const a = list[i];
+        if (!(a.radius > 0)) continue; // issue #149: removed slot, no beam hit
         _oc.subVectors(_nose, a.position);
         const b = _oc.dot(_dir);
         const c = _oc.lengthSq() - a.radius * a.radius;

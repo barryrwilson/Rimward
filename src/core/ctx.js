@@ -35,6 +35,8 @@ import { DEFAULT_BINDINGS } from '../systems/bindings.js';
  *   SHP hangar persist: world.hangar ({ mountedId, hulls }) rides WORLD_FIELDS.
  *   Do not persist config.ship. No new persist event for hull swaps.
  *   world.fieldOre is sparse remaining units; asteroids.js writes on extract; save.js sanitizes.
+ *   world.fieldRespawn is the sparse mined-out slot ledger { at, due, ore, seed, grown }
+ *   (issue #149); asteroids.js is the only writer; save.js sanitizes.
  * - ships (live NPC list): written by traffic.js (spawn/despawn) and npc.js
  *   (AI state); combat.js may damage their state records.
  * - targets: written by controls.js (selection) + npc.js (availability).
