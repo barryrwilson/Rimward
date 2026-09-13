@@ -57,6 +57,17 @@ durable next-wave capture is mandatory, not optional.
 
 ## Idea inbox
 
+- [x] DONE (P2, PIRACY/NPC): A pirate may take more than the cargo — the crew
+  as captives, and the hull as a prize it sells.
+  [Issue #147](https://github.com/barryrwilson/Rimward/issues/147): after a
+  world-caused yield with the crew aboard, the NPC pirate rolls one choice from
+  its persisted taste (a cargo raider, a slaver, or a prize-crew captain — rolled
+  once per pirate) and greed: cargo only, crew and cargo, or crew, cargo and hull. The
+  trader heaves to, the pirate boards (a hull the player can engage; any
+  disturbance breaks it off and the trader runs), takes the crew as one
+  survivor row, leaves the hull a derelict or takes it as a prize that sells
+  at the fence with the captives. The player earns nothing for a break they
+  did not cause. Implemented 2026-09-13; `npm run test:prize`.
 - [x] DONE (P2, PIRACY/NPC): A working NPC pirate should have a visible loop:
   hunt, break, scoop, fence, hunt again.
   [Issue #151](https://github.com/barryrwilson/Rimward/issues/151): after its

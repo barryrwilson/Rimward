@@ -17,7 +17,7 @@ import {
   SYSTEMS,
   ESCAPE,
   PIRACY,
-  PIRATE_HAUL,
+  PIRATE_HAUL, PRIZE,
 } from '../game/state.js';
 import {
   readEscape,
@@ -45,7 +45,8 @@ import {
 import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
 import { spawnPod, spawnSurvivorPod, mergePodContents, podUnits, podCommodityKey } from '../game/pods.js';
-import { holdFree, holdHeavy, fenceHaul } from '../game/pirate-haul.js';
+import { holdFree, holdHeavy } from '../game/pirate-haul.js';
+import { rollPrizeChoice, prizeEligible, captivesRowFor, takePrizeHull, owesPrizeFence, fencePrize, tasteOf } from '../game/prize.js';
 import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
 import { applyPlayerKillStanding } from '../game/kill-standing.js';
 import { maybeGrantPirateSeed } from '../game/bio-seed.js';
@@ -372,7 +373,8 @@ function makeAi(ctx, record, startPos) {
   }
   // Issue #151: a pirate folded back in with a heavy hold still owes a fence
   // run. Derived from the record's own manifest, so it needs no saved phase.
-  if (!escaping && role === 'pirate' && holdHeavy(record.classKey, record.cargo)) {
+  // Issue #147: so does one carrying a hull prize or captives.
+  if (!escaping && role === 'pirate' && (holdHeavy(record.classKey, record.cargo) || owesPrizeFence(record))) {
     ai.fence = { since: 0, holdAt: 0 };
   }
   if (escaping) {
@@ -2372,6 +2374,16 @@ export function spillShipCargo(ctx, live) {
     // Flattening would drop source/originFaction; data pods are a separate roll.
     if (isDataCommodity(entry.commodity)) continue;
     _v1.set(pos.x + (Math.random() - 0.5) * 8, pos.y + (Math.random() - 0.5) * 8, pos.z + (Math.random() - 0.5) * 8);
+    // Issue #147: captives aboard a broken pirate go free as survivor pods —
+    // the row keeps its faction/source/name so a rescue or a transfer reads
+    // them for who they are. A survivor row never becomes a nameless pod.
+    if (entry.commodity === 'survivor') {
+      const spec = { faction: entry.faction, source: entry.source };
+      if (typeof entry.name === 'string' && entry.name.length > 0) spec.name = entry.name;
+      const sp = spawnSurvivorPod(ctx, _v1, spec);
+      if (sp) n++;
+      continue;
+    }
     const pod = spawnPod(ctx, [{ commodity: entry.commodity, units }], _v1);
     if (pod && spiller) pod.spilledBy = spiller;
     n++;
@@ -2421,6 +2433,7 @@ function capitulate(ctx, live) {
   else outcome = 'cutEngines';
 
   const glow = live.object.userData.glow;
+  let prize = null;
   if (outcome === 'jettison' || outcome === 'crewPods') {
     jettison(ctx, live, outcome === 'crewPods');
     // The seed is a reward for breaking a beautiful hull yourself, so it rides
@@ -2438,6 +2451,12 @@ function capitulate(ctx, live) {
     // Issue #148: the record becomes the derelict — claimable by the player
     // (recovery board) or a salvager, and folded away unclaimed at 30 min.
     markDerelict(ctx, live, 'crewPods');
+  } else if ((prize = prizeChoiceFor(ctx, live, outcome, causer)) && prize.choice !== 'cargo') {
+    // Issue #147: the NPC pirate that broke this hull wants more than the
+    // cargo. The trader heaves to instead of running; the pirate closes and
+    // boards (updateBoarding). Cargo already spilled above, tagged for the
+    // #151 scoop the pirate opens once the boarding is done.
+    heaveTo(ctx, live, prize.hunter, prize.choice);
   } else {
     // Issue #146: every yield that KEEPS its crew runs. A trader that dumped
     // its hold (jettison) or had nothing to dump (cutEngines) used to park in
@@ -2460,7 +2479,199 @@ function capitulate(ctx, live) {
   // the player caused. The receipt carries the same verdict so world.js and
   // station.js never re-derive it from a trail that has since moved on.
   if (causer === 'player') bumpFear(ctx, ECON.fear.capitulation); // witnessed capitulation +2
-  ctx.emit('npcSurrendered', { ship: live, outcome, causer });
+  const receipt = { ship: live, outcome, causer };
+  if (prize && prize.choice !== 'cargo') receipt.boarding = prize.choice; // issue #147: additive
+  ctx.emit('npcSurrendered', receipt);
+}
+
+// ---------- issue #147: a pirate may claim the crew and the hull ----------
+/**
+ * The live NPC pirate that broke this hull, or null. Only a WORLD-caused
+ * break with its crew aboard (jettison / cutEngines) is a pirate's to board:
+ * a player causer keeps the #99 rule (the player's prize is the player's),
+ * a crewPods break has no crew left to take, and an ace takes no prizes.
+ */
+function prizeHunterOf(ctx, live, outcome, causer) {
+  if (causer !== 'world') return null;
+  if (outcome !== 'jettison' && outcome !== 'cutEngines') return null;
+  if (!isCivilianRole(live.ai.role)) return null;
+  const attacker = lastAttackerOf(live);
+  const hunter = attacker && attacker !== 'player' && attacker !== 'npc' ? attacker : findHunterOf(ctx, live);
+  if (!hunter || hunter === live || !hunter.ai || !hunter.record || !hunter.object) return null;
+  if (hunterRole(hunter) !== 'pirate') return null;
+  const st = hunter.state;
+  if (!st || st.destroyed || st.disabled || st.surrendered) return null;
+  if (hunter.ai.board || hunter.ai.mode === 'flee' || hunter.ai.mode === 'drift') return null;
+  if (!ctx.ships.includes(hunter)) return null;
+  return hunter;
+}
+
+/** Roll the hunter's choice for this yield: { hunter, choice } or null. */
+function prizeChoiceFor(ctx, live, outcome, causer) {
+  const hunter = prizeHunterOf(ctx, live, outcome, causer);
+  if (!hunter) return null;
+  if (!prizeEligible(ctx, live.record)) return { hunter, choice: 'cargo' };
+  const choice = rollPrizeChoice(hunter.record, {
+    captiveRoom: holdFree(hunter.state.classKey, hunter.state.cargo) > 0,
+  });
+  return { hunter, choice };
+}
+
+/**
+ * The trader heaves to for its boarder: engines dark, a creeping coast,
+ * held (instance-only ai.heldBy) for the pirate whose ai.board names it.
+ * Nothing persists: a cull or a save mid-boarding drops the boarding and the
+ * trader comes back the enroute hull its record says it is.
+ */
+function heaveTo(ctx, live, hunter, choice) {
+  const ai = live.ai;
+  const now = ctx.world.time;
+  ai.mode = 'drift';
+  // Hove to: engines dark with a little way still on, so the hull clears its
+  // own spill while the boarder closes (a pod inside the hull's avoidance
+  // sphere is one no steering NPC can reach).
+  _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+  ai.driftVel.copy(_fwd).multiplyScalar(3);
+  if (ai.velocity) ai.velocity.set(0, 0, 0);
+  const glow = live.object.userData.glow;
+  if (glow) glow.visible = false;
+  ai.heldBy = hunter;
+  ai.heldSince = now;
+  say(ctx, live, 'Heaving to. Do not fire.');
+  breakOff(hunter.ai);
+  hunter.ai.scoop = null;
+  hunter.ai.board = { prize: live, choice, since: now, holdAt: 0 };
+  // The boarder's line reads its trade: a slaver names the crew, a prize-crew
+  // captain names the hull, a cargo raider that boards anyway sounds it out.
+  const taste = tasteOf(hunter.record);
+  say(ctx, hunter, choice === 'hull'
+    ? (taste === 'hull' ? 'Stand by to be boarded. Prize crew coming across — she is ours.' : 'Stand by to be boarded. We are taking her.')
+    : (taste === 'crew' ? 'Stand by to be boarded. Your crew comes with us.' : 'Stand by to be boarded.'));
+}
+
+/** Release a heaved-to trader: it runs for a refuge (issue #146) from its boarder. */
+function releaseHeld(ctx, live, threat) {
+  const ai = live.ai;
+  if (!ai || !ai.heldBy) return;
+  const from = threat ?? (ctx.ships.includes(ai.heldBy) && !ai.heldBy.state.destroyed ? ai.heldBy : null);
+  ai.heldBy = null;
+  ai.heldSince = 0;
+  enterEscapeFlee(ctx, live, from ?? 'player');
+}
+
+/**
+ * Per-frame for a heaved-to trader (npc.js drift case): its boarder is gone,
+ * dead, dark, or no longer boarding it, or the wait ran out — nobody is
+ * coming, so it runs.
+ */
+function tickHeld(ctx, live, now) {
+  const ai = live.ai;
+  const h = ai.heldBy;
+  if (!h) return;
+  const gone = !ctx.ships.includes(h) || !h.state || h.state.destroyed || h.state.disabled || h.state.surrendered
+    || !h.ai || !h.ai.board || h.ai.board.prize !== live;
+  if (gone || now - ai.heldSince > PRIZE.heaveSeconds) releaseHeld(ctx, live, null);
+}
+
+/** Is the boarding still undisturbed? Any hit on either hull, or the player contesting the prize, ends it. */
+function boardingIntact(ctx, live, board) {
+  const prize = board.prize;
+  if (!prize || !ctx.ships.includes(prize) || !prize.state || prize.state.destroyed) return false;
+  if (!prize.ai || prize.ai.heldBy !== live) return false;
+  if (live.state.lastHitAt > board.since) return false;
+  // The boarder's own bolts still in flight at the yield are not a disturbance.
+  if (prize.state.lastHitAt > board.since && lastAttackerOf(prize) !== live) return false;
+  if (playerContests(ctx, prize)) return false; // issue #123: the player is on this hull — it is theirs
+  return true;
+}
+
+/** Break the boarding off. The trader keeps its crew and runs (issue #146). */
+function endBoarding(ctx, live, why) {
+  const ai = live.ai;
+  const board = ai.board;
+  ai.board = null;
+  if (!board) return;
+  const prize = board.prize;
+  if (prize && prize.ai && prize.ai.heldBy === live) {
+    say(ctx, live, 'Boarding off.');
+    releaseHeld(ctx, prize, why === 'player' ? 'player' : live);
+  }
+}
+
+/**
+ * The boarding itself: close to PRIZE.boardRange of the heaved-to hull, hold
+ * there boardSeconds, then take what was chosen. Crew: ONE captives row on
+ * this pirate's manifest; the hull is a derelict (#148, 'crewTaken'). Hull:
+ * the captives too, and the trader record ends 'captured' — the hull leaves
+ * the lane by traffic's despawn pass and rides rec.prize to the fence.
+ * Returns true while the boarding owns the hull's motion this frame.
+ */
+function updateBoarding(ctx, live, dt, now) {
+  const ai = live.ai;
+  const board = ai.board;
+  if (!board) return false;
+  if (ai.target || !boardingIntact(ctx, live, board)) {
+    endBoarding(ctx, live, ai.target === 'player' || lastAttackerOf(live) === 'player' ? 'player' : 'disturbed');
+    return false;
+  }
+  const prize = board.prize;
+  const pos = live.object.position;
+  const dist = pos.distanceTo(prize.object.position);
+  // Contact-relative: the bounce keeps two hulls a radius apart each, so the
+  // boarding range is a margin above touching, not an absolute figure.
+  const need = npcRadius(live) + npcRadius(prize) + PRIZE.boardRange;
+  const cap = speedCap(live);
+  const creep = SHIP_CLASSES[live.state.classKey]?.creep ?? cap * 0.25;
+  if (dist >= need) {
+    steerLive(live, prize.object.position, Math.max(creep, Math.min(cap * 0.8, dist * 0.5)), dt);
+    return true;
+  }
+  // Alongside: keep station (a nudge from the bounce or a passing hull is
+  // crept back in), otherwise dead still while the party crosses.
+  if (dist > need - 8) steerLive(live, prize.object.position, creep * 0.5, dt);
+  else if (ai.velocity) ai.velocity.set(0, 0, 0);
+  if (!board.holdAt) board.holdAt = now;
+  if (now - board.holdAt < PRIZE.boardSeconds) return true;
+  completeBoarding(ctx, live, prize, board.choice, now);
+  return true;
+}
+
+function completeBoarding(ctx, live, prize, choice, now) {
+  const ai = live.ai;
+  ai.board = null;
+  const rec = prize.record;
+  const pAi = prize.ai;
+  pAi.heldBy = null;
+  pAi.heldSince = 0;
+  // The crew: one survivor row, merged like a scooped pod so a second
+  // boarding of the same faction stacks. No room → the crew stays put.
+  let captives = 0;
+  const row = captivesRowFor(rec);
+  if (row && holdFree(live.state.classKey, live.state.cargo) >= row.units) {
+    mergePodContents(live.state.cargo, [row]);
+    captives = row.units;
+  }
+  pAi.survivorsSpawned = true; // the crew is gone: a later kill dumps no pods
+  const name = rec.name ?? prize.state.name ?? 'the hull';
+  let taken = choice;
+  if (choice === 'hull' && takePrizeHull(live.record, rec, now, ctx.world.currentSystem)) {
+    cancelEscape(rec);
+    if (Array.isArray(rec.cargo)) rec.cargo.length = 0;
+    say(ctx, live, `Prize crew aboard ${name}. Taking her in.`);
+  } else {
+    taken = captives > 0 ? 'crew' : 'cargo';
+    if (captives > 0) say(ctx, live, `Crew off ${name}. She is nobody's now.`);
+    // Crew gone, hull left: the derelict (issue #148) — claimable, foldable.
+    if (!markDerelict(ctx, prize, 'crewTaken')) releaseHeld(ctx, prize, live);
+  }
+  ctx.emit('npcPrizeTaken', {
+    ship: live, prize, targetId: rec.id ?? null, targetName: name, choice: taken, captives, causer: 'world',
+  });
+  // Then the #151 loop: the spill it tagged is still out there.
+  beginScoop(ctx, live, now);
+  if (!ai.scoop && !ai.fence && (holdHeavy(live.state.classKey, live.state.cargo) || owesPrizeFence(live.record))) {
+    ai.fence = { since: now, holdAt: 0 };
+  }
 }
 
 // ---------- movement modes ----------
@@ -2794,7 +3005,9 @@ function pickScoopPod(ctx, live, free) {
 function endScoop(ctx, live, now) {
   const ai = live.ai;
   ai.scoop = null;
-  if (holdHeavy(live.state.classKey, live.state.cargo) && !ai.fence) ai.fence = { since: now, holdAt: 0 };
+  if ((holdHeavy(live.state.classKey, live.state.cargo) || owesPrizeFence(live.record)) && !ai.fence) {
+    ai.fence = { since: now, holdAt: 0 };
+  }
 }
 
 /**
@@ -2847,7 +3060,7 @@ function updateHaul(ctx, live, dt, now) {
   }
   if (ai.fence) {
     const station = ctx.config && ctx.config.world && ctx.config.world.stationPosition;
-    if (!station || !holdHeavy(st.classKey, st.cargo)) {
+    if (!station || !(holdHeavy(st.classKey, st.cargo) || owesPrizeFence(live.record))) {
       ai.fence = null; // nothing to fence here (or the hold emptied some other way)
       return false;
     }
@@ -2870,11 +3083,20 @@ function updateHaul(ctx, live, dt, now) {
     if (!ai.fence.holdAt) ai.fence.holdAt = now;
     if (now - ai.fence.holdAt < PIRATE_HAUL.fenceHold) return true;
     const systemId = ctx.world.currentSystem;
-    const sale = fenceHaul(ctx.world, live.record, systemId);
+    // Issue #147: the same sale also moves captives and a hull prize.
+    const stationFaction = ctx.systems && ctx.systems[systemId] ? ctx.systems[systemId].faction : null;
+    const sale = fencePrize(ctx.world, live.record, systemId, stationFaction);
     ai.fence = null;
-    if (sale.units > 0) {
-      say(ctx, live, `Haul fenced. ${sale.units} units, ${sale.credits} UU.`);
-      ctx.emit('npcFenced', { ship: live, units: sale.units, credits: sale.credits, system: systemId });
+    if (sale.units > 0 || sale.captives > 0 || sale.hull) {
+      const parts = [];
+      if (sale.units > 0) parts.push(`${sale.units} units`);
+      if (sale.captives > 0) parts.push(`${sale.captives} ${sale.captives === 1 ? 'captive' : 'captives'}`);
+      if (sale.hull) parts.push(`the hull ${sale.hull.name ?? ''}`.trim());
+      say(ctx, live, `${sale.hull ? 'Prize' : 'Haul'} fenced. ${parts.join(', ')}, ${sale.credits} UU.`);
+      ctx.emit('npcFenced', {
+        ship: live, units: sale.units, credits: sale.credits, system: systemId,
+        captives: sale.captives, hull: sale.hull ? { id: sale.hull.id, name: sale.hull.name, classKey: sale.hull.classKey } : null,
+      });
     }
     return true;
   }
@@ -2980,6 +3202,11 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
   // it looks for the next prize. A scratch from the player above already
   // turned it onto the player (the target is set, so this is skipped and the
   // haul phase is dropped); any other hit drops the scoop inside updateHaul.
+  // Issue #147: a boarding in progress owns the hull first; a target set
+  // above (a player scratch) or any disturbance breaks it off inside.
+  if (ai.board) {
+    if (updateBoarding(ctx, live, dt, now)) return;
+  }
   if (ai.target) {
     ai.scoop = null;
   } else if (ai.scoop || ai.fence) {
@@ -3840,6 +4067,8 @@ export function initNpc(ctx) {
             updateDrift(live, dt, reducedMotion);
             // Issue #148: a derelict bleeds its coast off and keeps its record true.
             if (live.record && live.record.state === 'derelict') tickDerelictLive(live, dt);
+            // Issue #147: a heaved-to trader whose boarder is gone runs.
+            if (ai.heldBy) tickHeld(ctx, live, now);
             break;
           case 'route':
             updateRoute(ctx, live, dt, now, reducedMotion);
