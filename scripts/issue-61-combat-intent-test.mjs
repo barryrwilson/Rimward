@@ -10,8 +10,10 @@ import { createShipState, U, WEAPONS } from '../src/game/state.js';
 import { localDir } from '../src/game/agent-schema.js';
 import { losCloseRate } from '../src/game/los-close.js';
 import { installDomStubs, seedBootRandom } from './lib/boot-harness.mjs';
-import { initControls, agentControlStatus } from '../src/systems/controls.js';
+import { initControls, agentControlStatus, agentOwnsShip, markAgentHelm } from '../src/systems/controls.js';
 import { initAgentApi } from '../src/systems/agent-api.js';
+import { initAgentFlee } from '../src/game/agent-flee.js';
+import { initAutomine, tryEngageAutomine } from '../src/game/automine.js';
 import { initShip } from '../src/systems/ship.js';
 import { initNpc, spawnLiveShip } from '../src/systems/npc.js';
 import { readFile } from 'node:fs/promises';
@@ -695,19 +697,132 @@ test('combat survives focus loss, but bounded wall authorization cannot survive 
   } finally {clock.mock.restore();}
 });
 
-test('human input synchronously wins; the new command starts from neutral agent throttle', () => {
-  for(const [name,args] of [['mousemove',{clientX:100,clientY:100}],['mousedown',{button:0}],['keydown',{code:'KeyR',repeat:false}]]) {
-    const f=fixture();f.start();f.tick(1);assert(f.ctx.input.throttle>0);f.emit(name,args);
-    assert.equal(f.status().reason,'player-override');assert.equal(f.ctx.input.throttle,0);assert.equal(f.ctx.input.fireHeld,false);
+// Issue #163: only Escape hands the ship back. Every incidental input class,
+// against both lease kinds and an agent-engaged helm, must leave ownership,
+// the view, the note and ctx.input exactly as the agent left them.
+const INCIDENTAL=[['motion','mousemove',{clientX:100,clientY:100}],
+  ['ui-click','mousedown',{button:0,clientX:20,clientY:20,target:{closest:()=>({})}}],
+  ['surface-click','mousedown',{button:0,clientX:100,clientY:100}],
+  ['flight-key','keydown',{code:'KeyR',repeat:false}],
+  ['strafe-key','keydown',{code:'KeyD',repeat:false}],
+  ['fire','mousedown',{button:0}]];
+const snapshotInput=(ctx)=>JSON.stringify(ctx.input);
+
+test('issue #163: incidental input never takes a combat lease; Escape does, with input class escape', () => {
+  for(const [label,name,args] of INCIDENTAL) {
+    const f=fixture();f.start();f.tick(1);assert(f.ctx.input.throttle>0);
+    const before={...f.status()},view=JSON.stringify(f.status().combat),input=snapshotInput(f.ctx);
+    f.emit(name,args);
+    assert.equal(f.status().owner,'combat',label+' keeps the lease alive');
+    assert.equal(f.status().state,'active',label);assert.equal(f.status().reason,'',label);
+    assert.deepEqual({...f.status(),expiresIn:before.expiresIn},before,label+' leaves the lease note unchanged');
+    assert.equal(JSON.stringify(f.status().combat),view,label+' leaves combatView unchanged');
+    assert.equal(snapshotInput(f.ctx),input,label+' leaves ctx.input untouched synchronously');
     f.tick();
-    if(name==='keydown')assert.equal(f.ctx.input.throttle,0.5/60);
-    if(name==='mousedown')assert.equal(f.ctx.input.fireHeld,true,'human fire is intentional');
-    if(name==='mousemove')assert(f.ctx.input.steerX<0);
+    assert.equal(f.status().owner,'combat',label+' still owned after the next tick');
+    assert(f.ctx.input.throttle>0,label+' does not neutralize throttle');
+    assert.equal(f.ctx.input.fireHeld,true,label+' does not steal fire');
+    assert.equal(f.ctx.input.strafeX,0,label+' writes no strafe');
+    assert.equal(agentOwnsShip(f.ctx),true);
+    // A key or button held through the lease is discarded, not buffered.
+    f.emit('keyup',{code:'KeyR'});f.emit('keyup',{code:'KeyD'});f.emit('mouseup',{button:0});
   }
-  const f=fixture();f.emit('keydown',{code:'KeyR'});assert.equal(f.start().token,'player-override');
-  const click=fixture();click.start();click.tick();click.emit('mousedown',{button:0,clientX:100,clientY:100});click.tick();
-  assert(click.ctx.input.steerX<0,'first human shot uses the click cursor, without requiring a mousemove');
-  assert.equal(click.ctx.input.fireHeld,true);
+  const f=fixture();f.start();f.tick(1);f.emit('mousemove',{clientX:100,clientY:100});f.tick();
+  f.emit('keydown',{code:'KeyR',repeat:false});f.emit('mousedown',{button:0});
+  f.emit('keydown',{code:'Escape',repeat:false});
+  const s=f.status();
+  assert.equal(s.owner,'none');assert.equal(s.state,'cleared');assert.equal(s.reason,'player-override');
+  assert.equal(s.input,'escape','the receipt names the input class');
+  assert.equal(s.combat.defense.phase,'completed','human takeover clears the defense phase');
+  assert.equal(f.ctx.input.fireHeld,false);assert.equal(f.ctx.input.throttle,0);assert.equal(f.ctx.input.fullStop,true);
+  assert.equal(agentOwnsShip(f.ctx),false);
+  assert.equal(f.api.observe().control.input,'escape');
+  f.tick();
+  assert(f.ctx.input.steerX<0,'the first steer sample after Escape is the live cursor');
+  assert.equal(f.ctx.input.fireHeld,false,'a button held through Escape does nothing');
+  assert.equal(f.ctx.input.throttle,0,'a key held through Escape does nothing');
+  f.emit('keyup',{code:'KeyR'});f.emit('keydown',{code:'KeyR',repeat:false});f.emit('mouseup',{button:0});f.emit('mousedown',{button:0});f.tick();
+  assert.equal(f.ctx.input.throttle,0.5/60,'a fresh press after Escape ramps at once');
+  assert.equal(f.ctx.input.fireHeld,true,'a fresh fire press after Escape fires');
+  assert.equal(f.status().reason,'player-override');
+  const held=fixture();held.emit('keydown',{code:'KeyR'});assert.equal(held.start().token,'player-override','held controls still refuse acquisition');
+  const repeat=fixture();repeat.start();repeat.tick();repeat.emit('keydown',{code:'Escape',repeat:true});
+  assert.equal(repeat.status().owner,'combat','an auto-repeated Escape is not a takeover');
+});
+
+test('issue #163: incidental input never takes a raw lease; Escape does', () => {
+  for(const [label,name,args] of INCIDENTAL) {
+    const f=fixture();assert.equal(f.act('setControl',{seq:1,ttl:5,throttle:0.6,strafeX:0.5,fireHeld:true}).ok,true);f.tick(1);
+    const before={...f.status()},input=snapshotInput(f.ctx);
+    f.emit(name,args);
+    assert.deepEqual({...f.status(),expiresIn:before.expiresIn},before,label);
+    assert.equal(snapshotInput(f.ctx),input,label);
+    f.tick();
+    assert.equal(f.status().owner,'manual',label);assert.equal(f.ctx.input.strafeX,0.5,label);
+    assert.equal(f.ctx.input.fireHeld,true,label);assert(f.ctx.input.throttle>0.5,label);
+    f.emit('keyup',{code:'KeyR'});f.emit('keyup',{code:'KeyD'});f.emit('mouseup',{button:0});
+  }
+  const f=fixture();f.emit('keydown',{code:'KeyD',repeat:false});
+  assert.equal(f.act('setControl',{seq:1,ttl:5,strafeX:-1}).ok,true);f.tick();
+  assert.equal(f.ctx.input.strafeX,-1,'a key already held at handover is discarded, not shared');
+  f.emit('keydown',{code:'Escape',repeat:false});
+  assert.equal(f.status().state,'cleared');assert.equal(f.status().reason,'player-override');assert.equal(f.status().input,'escape');
+  f.tick();assert.equal(f.ctx.input.strafeX,0,'a key held through Escape does nothing until released');
+  f.emit('keyup',{code:'KeyD'});f.emit('keydown',{code:'KeyD',repeat:false});f.tick();assert.equal(f.ctx.input.strafeX,1);
+  assert.equal(f.act('setControl',{seq:2,ttl:1}).ok,true);f.tick();
+  assert.equal(f.status().owner,'manual','a fresh lease after the handoff is accepted; the held D is discarded');
+  assert.equal(f.ctx.input.strafeX,0);
+  const overlay=fixture();overlay.act('setControl',{seq:1,ttl:5});overlay.ctx.flags.hailOpen=true;
+  overlay.emit('keydown',{code:'Escape',repeat:false});
+  assert.equal(overlay.status().owner,'manual','Escape under an overlay keeps its overlay meaning');
+});
+
+test('issue #163: an agent-engaged helm ignores incidental input and hands back on Escape only', () => {
+  const rockFixture=()=>{
+    const f=fixture();const rock={id:0,position:new THREE.Vector3(0,0,-120),radius:6,ore:5,hardness:1};
+    f.ctx.asteroids.list=[rock];f.ctx.targets.current=rock;f.ctx.cargo=[];f.ctx.cargoCapacity=20;
+    f.ctx.input.weaponGroup=3;const am=initAutomine(f.ctx);return {...f,am};
+  };
+  for(const [label,name,args] of INCIDENTAL) {
+    const f=rockFixture();assert.equal(f.act('engageAutomine').ok,true);
+    assert.equal(agentOwnsShip(f.ctx),true,'the bridge marks the automine helm');
+    f.tick();f.am.update(1/60);f.emit(name,args);f.tick();f.am.update(1/60);
+    assert.equal(f.ctx.automine.engaged,true,label+' does not break automine');
+    assert.equal(f.ctx.input.steerX,0,label+' publishes no steer');assert.equal(f.ctx.input.strafeX,0,label);
+    assert.equal(f.ctx.input.throttleHeld,false,label);assert.equal(f.ctx.input.fireHeld,false,label+' does not fire');
+    f.emit('keyup',{code:'KeyR'});f.emit('keyup',{code:'KeyD'});f.emit('mouseup',{button:0});
+  }
+  const f=rockFixture();assert.equal(f.act('engageAutomine').ok,true);f.tick();f.am.update(1/60);
+  f.emit('mousemove',{clientX:100,clientY:100});f.emit('keydown',{code:'KeyR',repeat:false});
+  f.emit('keydown',{code:'Escape',repeat:false});
+  assert.equal(f.ctx.automine.engaged,false,'Escape disengages the agent helm');
+  assert.equal(f.ctx.automine.reason,'input');assert.equal(agentOwnsShip(f.ctx),false);
+  f.tick();assert(f.ctx.input.steerX<0,'mouse flight resumes at once from the live cursor');
+  assert.equal(f.ctx.input.throttle,0,'the R held through Escape does nothing');
+  f.emit('keyup',{code:'KeyR'});f.emit('keydown',{code:'KeyR',repeat:false});f.tick();assert.equal(f.ctx.input.throttle,0.5/60);
+  // Camera stays a view control while the agent owns the ship.
+  const cam=rockFixture();cam.act('engageAutomine');cam.tick();cam.emit('keydown',{code:'KeyC',repeat:false});cam.tick();
+  assert.equal(cam.ctx.flags.camera,'third');assert.equal(cam.ctx.automine.engaged,true);
+  // A human-engaged helm (the N tap path) is not agent-owned: the old input break still applies.
+  const human=rockFixture();assert.equal(tryEngageAutomine(human.ctx),'');human.tick();human.am.update(1/60);
+  assert.equal(human.ctx.automine.engaged,true);assert.equal(agentOwnsShip(human.ctx),false);
+  human.emit('keydown',{code:'KeyD',repeat:false});human.tick();human.am.update(1/60);
+  assert.equal(human.ctx.automine.engaged,false);assert.equal(human.ctx.automine.reason,'input');
+  // Flee through the bridge afterburner pulse is an agent helm as well.
+  const flee=fixture();const fl=initAgentFlee(flee.ctx);assert.equal(flee.act('afterburner').ok,true);
+  assert.equal(flee.ctx.flee.engaged,true);assert.equal(agentOwnsShip(flee.ctx),true);
+  flee.tick();fl.update(1/60);flee.emit('keydown',{code:'KeyD',repeat:false});flee.emit('mousedown',{button:0});flee.tick();fl.update(1/60);
+  assert.equal(flee.ctx.flee.engaged,true,'incidental input does not break flee');assert.equal(flee.ctx.input.fireHeld,false);
+  flee.emit('keydown',{code:'Escape',repeat:false});
+  assert.equal(flee.ctx.flee.engaged,false);assert.equal(flee.ctx.flee.reason,'input');
+  // Any helm channel the bridge marked, including autopilot, releases the mark when it ends by itself.
+  const ap=fixture();ap.ctx.autopilot={engaged:true,mode:'route'};ap.ctx.world.nav={autopilot:true,dest:'x',path:['x']};markAgentHelm(ap.ctx);assert.equal(agentOwnsShip(ap.ctx),true);
+  ap.emit('keydown',{code:'Escape',repeat:false});
+  assert.equal(ap.ctx.autopilot.engaged,false,'Escape releases an agent-marked autopilot channel');assert.equal(ap.ctx.autopilot.reason,'input');
+  assert.equal(ap.ctx.world.nav.autopilot,false);assert.equal(agentOwnsShip(ap.ctx),false);
+  ap.ctx.autopilot.engaged=true;markAgentHelm(ap.ctx);assert.equal(agentOwnsShip(ap.ctx),true);
+  ap.ctx.autopilot.engaged=false;assert.equal(agentOwnsShip(ap.ctx),false);
+  ap.ctx.autopilot.engaged=true;markAgentHelm(ap.ctx);ap.ctx.agent.optIn=false;assert.equal(agentOwnsShip(ap.ctx),false,'Agent Play off releases ownership');
 });
 
 test('public discovery and incoming helms agree, with explicit MATCH refusal', () => {

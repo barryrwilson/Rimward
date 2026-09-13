@@ -342,12 +342,37 @@ planner refreshes at low rate; controls applies at game rate. The lease is
 docked (`docked`), under overlays (`overlay`), dead (`dead`), paused
 (`paused`), jumping (`jumping`), or berth-held (`held`). It *clears* on
 expiry, explicit `clearControl` (idempotent), `disable`, window blur, pause
-entry (synchronous from `setPaused`), dock/jump/death events, helm takeover,
-and any held physical flight key or fire button (`player-override`).
+entry (synchronous from `setPaused`), dock/jump/death events, and the human
+takeover (`player-override`).
 `observe().control` exposes `state` (`idle|active|cleared|expired`), `seq`,
-`expiresIn`, `fire`, and the terminal `reason`. Cancellation zeroes fire and
+`expiresIn`, `fire`, the terminal `reason`, and, after a takeover, `input`
+(`'escape'`). Cancellation zeroes fire and
 axes before the next combat tick; held values are re-derived from physical
-state every frame, so a stuck input is impossible. The throttle setpoint is
+state every frame, so a stuck input is impossible.
+
+**Human takeover is Escape only (issue #163, owner decision 2026-09-13).**
+While a raw or combat lease is live, or while a helm path the bridge engaged
+(`engageAutopilot`, `approachDock`, `engageAutomine`, the flee channel behind
+`afterburner`) is still engaged with Agent Play on, incidental human input
+never takes the ship: pointer motion, a `mousedown` on any surface (HUD or
+play surface), a tracked flight key and the fire button neither drop the lease
+nor write steer, throttle or fire. Those physical edges are discarded, not
+buffered, so nothing fires or thrusts on handoff; the cursor is still tracked
+so the reticle is right when the human takes over. Camera (C) stays a view
+control. Escape in open flight drops the lease with `reason: 'player-override'`
+and `input: 'escape'`, or disengages the agent-engaged helm with its ordinary
+manual-helm reason (`input`); the HUD line `AGENT HAS THE HELM · Esc to take
+over` shows while the agent owns the ship and clears on handoff. After Escape
+the first mouse steer sample is the live cursor, and a key or button held
+through the handoff does nothing until released and pressed again (the pause
+resume rule). Escape under an overlay (settings, chart, berth records, models,
+title, pause, a hail card, the station) keeps its overlay meaning and does not
+take the ship; a helm the human engaged with N, J or the chart is not agent
+owned and still breaks on manual input as before. Holds already present when a
+lease or agent helm is accepted are discarded the same way; a combat intent
+still refuses acquisition while a physical control is held. Lease TTL, gate
+and refusal tokens, the reticle-lock key, the bridge's own `clearControl` /
+`fullStop` paths and the badge's Stop button are unchanged. The throttle setpoint is
 the one exception, and it is ship state rather than lease state: it survives
 expiry and `clearControl` exactly as it survives a human releasing R/F. See
 [issue #103](#issue-103--raw-control-throttle-persistence-and-observability).

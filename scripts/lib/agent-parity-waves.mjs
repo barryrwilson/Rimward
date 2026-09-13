@@ -142,15 +142,20 @@ export async function runAgentParityWave141(deps) {
       && ttlRefuse.ok === false && ttlRefuse.token === 'bad-ttl'
     );
 
-    // Player emergency input wins: a held physical key drops the lease.
+    // Issue #163: a held physical key is discarded while the agent owns the
+    // ship; only Escape hands it back (reason player-override, input escape).
     rw141.act({ v: 2, name: 'setControl', args: { seq: ++seq141, ttl: 3, steerY: -0.4 } });
     tick(1, 'w141 override arm');
     for (const fn of winListeners.keydown ?? []) fn({ code: 'KeyD', repeat: false, preventDefault() {} });
     tick(1, 'w141 override tick');
+    const keyObs = rw141.observe();
+    for (const fn of winListeners.keydown ?? []) fn({ code: 'Escape', repeat: false, preventDefault() {} });
     const overrideObs = rw141.observe();
     for (const fn of winListeners.keyup ?? []) fn({ code: 'KeyD', preventDefault() {} });
     tick(1, 'w141 override cleanup');
-    w141.leasePlayerOverride = overrideObs.control.state === 'cleared' && overrideObs.control.reason === 'player-override';
+    w141.leasePlayerOverride = keyObs.control.state === 'active' && ctx.input.strafeX === 0
+      && overrideObs.control.state === 'cleared' && overrideObs.control.reason === 'player-override'
+      && overrideObs.control.input === 'escape';
 
     // Helm conflict: refuse, never steal.
     rw141.act({ v: 2, name: 'plotRoute', args: { dest: ctx.world.currentSystem === 'veridian' ? 'freehold' : 'veridian' } });

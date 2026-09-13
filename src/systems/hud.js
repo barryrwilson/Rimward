@@ -21,6 +21,7 @@ import {
   acceptedMiningOreKeys, authoredOreName, fieldHasMatchingOre, rockMatchesOreKeys,
 } from '../game/mining-ore-keys.js';
 import { codeOf, shortLabel, helpLines } from './bindings.js';
+import { agentOwnsShip } from './controls.js';
 import { hasSurveyMarker } from '../game/survey-nav.js';
 import { recoveryPod } from '../game/recovery.js';
 
@@ -1390,6 +1391,11 @@ export function initHud(ctx) {
   amChipCancel.addEventListener('keydown', guardAutomineSpace);
   amChipCancel.addEventListener('click', () => disengageAutomine(ctx, 'cancel'));
 
+  // Issue #163: while the agent owns the ship (lease or agent-engaged helm)
+  // only Escape takes it back. One line, textContent, no gauge.
+  const agentHelmChip = el('div', 'rw-agent-helm is-hidden', chipStack, 'AGENT HAS THE HELM · Esc to take over');
+  agentHelmChip.setAttribute('role', 'status');
+
   // ---------- scratch (no per-frame allocation) ----------
   const proj = new THREE.Vector3(); // projected target NDC
   const leadProj = new THREE.Vector3(); // projected lead point
@@ -1453,6 +1459,7 @@ export function initHud(ctx) {
     navNextRow: null, navJumpsRow: null, navDistRow: null,
     apShown: null, apDest: '', apNext: '', apRem: '',
     amShown: null, amState: '', amRockShown: null, amRockLabel: '', amRockDim: null,
+    agentHelmShown: null,
     yieldName: false, yieldRange: false, yieldLead: false, yieldHome: false,
   };
   const mem = {
@@ -2161,6 +2168,14 @@ export function initHud(ctx) {
           last.amState = amState;
           amChipState.textContent = amState;
         }
+      }
+
+      // Issue #163: the takeover notice clears on handoff (Escape) or release.
+      let agentHelmOn = false;
+      try { agentHelmOn = agentOwnsShip(ctx) === true; } catch { agentHelmOn = false; }
+      if (agentHelmOn !== last.agentHelmShown) {
+        last.agentHelmShown = agentHelmOn;
+        agentHelmChip.classList.toggle('is-hidden', !agentHelmOn);
       }
 
       {

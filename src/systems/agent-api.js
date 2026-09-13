@@ -16,9 +16,9 @@ import {
   dockApproachLine,
 } from '../game/autopilot.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
-import { tryEngageFlee } from '../game/agent-flee.js';
+import { tryEngageFlee, disengageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
-import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus, agentRefusalDetail } from './controls.js';
+import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus, agentRefusalDetail, markAgentHelm, registerAgentHelmRelease } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
 import {
   VERSION,
@@ -446,6 +446,7 @@ function dispatchLive(ctx, name, args) {
     agentClearFullStop(ctx);
     const token = tryEngage(ctx);
     if (token) return fail(ctx, name, token, apLine(token) || token);
+    markAgentHelm(ctx); // issue #163: Escape is now the only human takeover
     return ok(ctx, name);
   }
   if (name === 'cancelAutopilot') {
@@ -456,12 +457,14 @@ function dispatchLive(ctx, name, args) {
     const token = tryApproachDock(ctx);
     if (token) return fail(ctx, name, token, dockApproachLine(token) || token);
     agentClearFullStop(ctx);
+    markAgentHelm(ctx);
     return ok(ctx, name);
   }
   if (name === 'engageAutomine') {
     agentClearFullStop(ctx);
     const token = tryEngageAutomine(ctx);
     if (token) return fail(ctx, name, token, amLine(token) || token);
+    markAgentHelm(ctx);
     return ok(ctx, name);
   }
   if (name === 'cancelAutomine') {
@@ -540,6 +543,7 @@ function dispatchLive(ctx, name, args) {
     if (!ctx.input || typeof ctx.input !== 'object') return fail(ctx, name, 'no-service');
     agentClearFullStop(ctx);
     tryEngageFlee(ctx);
+    markAgentHelm(ctx); // no-op unless the flee channel engaged
     return afterControls(ctx, name, agentPulse(ctx, 'afterburner'), true);
   }
   if (name === 'selectTarget') {
@@ -854,6 +858,14 @@ export function initAgentApi(ctx) {
   }
   const agent = ensureAgent(ctx);
   if (agent && queryOptIn()) agent.optIn = true;
+  // Issue #163: Escape in open flight hands an agent-engaged helm back to the
+  // human. controls.js owns the key; the helm modules are released from here
+  // so controls.js never imports them (they already import controls.js).
+  registerAgentHelmRelease((live, reason) => {
+    try { disengage(live, reason); } catch { /* AP off is enough */ }
+    try { disengageAutomine(live, reason); } catch { /* never throw */ }
+    try { disengageFlee(live, reason); } catch { /* never throw */ }
+  });
 
   const w = hostWindow();
   if (w && !isPublicHandle(w.rimward)) {

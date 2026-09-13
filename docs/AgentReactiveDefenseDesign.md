@@ -16,8 +16,8 @@ cannot safely proceed; it does not promise survival or a win.
 target-specific combat. `agent-combat.js` returns normalized controls through
 that owner. Its attack, close-pass, obstacle and withdrawal policies already
 use normal ship physics. Authorization ends at the earlier simulation or
-monotonic wall deadline. Human takeover and lifecycle cancellation already
-neutralize combat. Preserve these contracts.
+monotonic wall deadline. Human takeover (Escape only since issue #163) and
+lifecycle cancellation already neutralize combat. Preserve these contracts.
 
 The current `playerHit` event exposes damage, family, fore/aft and shielded
 state but **no attacker ID**. `npcFireToast` classifies the actual player-facing
@@ -215,8 +215,8 @@ Acquisition still refuses pre-existing human burner/drift modes. Track a
 session-only accepted/requested activation marker inside the same combat
 grant so renewal of the same target/intent/weapon/stance does not refuse its
 own active mode. A different grant or mode replacement does not inherit that
-exception. Physical input still cancels first and keeps the human's new input;
-no private mode owner may fight it. Clear pending burner edges and drift hold
+exception. Human takeover (Escape only, issue #163) still cancels first and
+keeps the human's new input; no private mode owner may fight it. Clear pending burner edges and drift hold
 on every terminal path, and preserve ordinary full-stop on autonomous release.
 
 Current burner has no normal mid-burn cancellation input, so this slice adds
@@ -246,8 +246,11 @@ An obstructed or severely damaged ship may move poorly; record the specific
 movement block/condition instead of claiming a successful escape.
 
 Docked/berth-held/paused/dead/blocked-overlay states cannot acquire or continue
-this mode. Docked or held threat cues must never launch the ship. Physical
-input cancels synchronously; held physical controls refuse reacquisition.
+this mode. Docked or held threat cues must never launch the ship. Human
+takeover is the Escape key only (issue #163): it cancels synchronously and
+completes the defense phase, while pointer motion, clicks, flight keys and the
+fire button are discarded during the grant; held physical controls still
+refuse reacquisition.
 Focus loss alone continues combat as in #61, subject to wall expiry. Incoming
 hail cards retain authorization; deliberate hail handback remains unchanged.
 With no fresh threat, do not add a weave to the existing combat policy.
