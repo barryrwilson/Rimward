@@ -56,6 +56,7 @@ import { writeStationHold } from '../game/traffic-feel.js';
 import { isUnknowable } from '../game/faction-style.js';
 import { tickPoliceLeave } from '../game/police-leave.js';
 import { tickPoliceCover, findCoveringWork } from '../game/police-cover.js';
+import { markDerelict, applyDerelictLive, tickDerelictLive, syncDerelictLive } from '../game/derelict.js';
 import { canSeat } from '../game/weapon-fit.js';
 import { canShowHail } from './overlay-policy.js';
 import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
@@ -458,6 +459,9 @@ export function spawnLiveShip(ctx, record, position) {
   // above, before the ladder and the AI — this is only the peace.
   if (escapePlan) applyPeace(escapePlan, live.ai);
   if (midEncounter) applyEscapeMotion(escapePlan, live);
+  // Issue #148: a derelict record comes back as the dead-stick hull it is —
+  // yielded, hold empty, crew gone, engines dark — never a healed trader.
+  if (record.state === 'derelict') applyDerelictLive(record, live);
   return live;
 }
 
@@ -520,6 +524,7 @@ export function applyEscapeMotion(plan, live) {
 export function removeLiveShip(ctx, liveShip) {
   const object = liveShip && liveShip.object;
   if (object) syncEscapeLive(ctx, liveShip); // no plan: returns immediately
+  if (object) syncDerelictLive(liveShip); // issue #148: not a derelict: returns immediately
   if (!object) return;
   if (object.userData) releaseShipAsset(object);
   if (ctx && ctx.scene) ctx.scene.remove(object);
@@ -2402,6 +2407,9 @@ function capitulate(ctx, live) {
     ai.driftVel.copy(_fwd).multiplyScalar(8); // dead-stick drift
     glow.visible = false; // engines cut
     say(ctx, live, 'Abandoning ship.');
+    // Issue #148: the record becomes the derelict — claimable by the player
+    // (recovery board) or a salvager, and folded away unclaimed at 30 min.
+    markDerelict(ctx, live, 'crewPods');
   } else {
     // Issue #146: every yield that KEEPS its crew runs. A trader that dumped
     // its hold (jettison) or had nothing to dump (cutEngines) used to park in
@@ -3642,6 +3650,8 @@ export function initNpc(ctx) {
             break;
           case 'drift':
             updateDrift(live, dt, reducedMotion);
+            // Issue #148: a derelict bleeds its coast off and keeps its record true.
+            if (live.record && live.record.state === 'derelict') tickDerelictLive(live, dt);
             break;
           case 'route':
             updateRoute(ctx, live, dt, now, reducedMotion);

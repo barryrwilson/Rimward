@@ -27745,6 +27745,51 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(r146).every(Boolean)) { console.log('ISSUE146 YIELDED TRADER RUNS FAIL'); errors++; }
 }
 
+// ---- Issue #148: an unclaimed yielded hull is a derelict ----------------------
+// A crewPods yield (crew gone) flips the record to state 'derelict' with a
+// JSON-plain rec.derelict timer (derelict.js). Anyone may claim it: the player
+// through the issue #74 recovery board (same card, marker pod and receipts),
+// or a local salvager after DERELICT.npcClaimAfter; an unclaimed derelict
+// folds away at 30 min of world time and the record resolves. The pins live
+// in scripts/issue-148-derelict-test.mjs (npm run test:derelict) and run here
+// as one checked fresh child process — the same discipline as the waves
+// 141+142 block below: the scenarios need a clean greenhand boot (docking at
+// the issuing station, a full save/restore round trip), and inheriting this
+// file's run state contaminated them. Coverage is unchanged and nothing is
+// skipped: the child's stdout/stderr is forwarded inline, and a spawn error,
+// non-zero exit, signal or timeout fails this boot.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- issue #148: derelict claims and the 30-minute fold (fresh child: node --import with-css-stub.mjs scripts/issue-148-derelict-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'issue-148-derelict-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit' });
+  const DERELICT_TIMEOUT_MS = 10 * 60 * 1000; // watchdog only; a normal run takes well under a minute
+  const verdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${DERELICT_TIMEOUT_MS / 60000} min (child killed)`);
+    }, DERELICT_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(true, 'exit 0');
+      else finish(false, `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`);
+    });
+  });
+  if (!verdict.ok) {
+    console.log(`ISSUE148 DERELICT FRESH-PROCESS FAIL — ${verdict.why}`);
+    errors++;
+  }
+}
+
 // ---- Waves 141+142: agent play parity v2 + mission-family parity -----------
 // (mission 43b34db25ae32972 — one checked fresh-process child)
 //

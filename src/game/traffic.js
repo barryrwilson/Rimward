@@ -162,7 +162,8 @@ export function initTraffic(ctx) {
         let bestFinished = true;
         for (let i = 0; i < recCount; i++) {
           const rec = records[i];
-          if (rec.live || rec.assetPending || rec.state !== 'enroute') continue;
+          // Issue #148: a derelict record instantiates too — as the dead hull.
+          if (rec.live || rec.assetPending || (rec.state !== 'enroute' && rec.state !== 'derelict')) continue;
           const finished = shelteredYield(ctx, rec);
           // Never exchange one finished encounter for another at the cap.
           if (retire && finished) continue;
@@ -215,7 +216,7 @@ export function initTraffic(ctx) {
             best.assetPending = true;
             const required = cover ? [primeShipAsset(cover.faction, cover.classKey, cover.role), primeShipAsset(real.faction, real.classKey, real.role)] : [primeShipAsset(real.faction, real.classKey, real.role)];
             Promise.all(required).then(() => {
-              if (ctx.world.currentSystem === curSys && ctx.world.records.includes(best) && best.state === 'enroute' && !best.live) best.assetReady = true;
+              if (ctx.world.currentSystem === curSys && ctx.world.records.includes(best) && (best.state === 'enroute' || best.state === 'derelict') && !best.live) best.assetReady = true;
             }).catch((error) => console.error(`NPC asset prime failed for ${best.id ?? best.name ?? 'record'}`, error)).finally(() => {
               best.assetPending = false;
             });
