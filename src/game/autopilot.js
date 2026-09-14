@@ -12,7 +12,7 @@ import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
-import { collectDockCruiseBodies, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
+import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
 import { agentPulse } from '../systems/controls.js';
 import {
   DOCK_STAGE_ARRIVE,
@@ -103,6 +103,7 @@ const _apBodies = { count: 0, items: [] };
 const _dockBodies = { count: 0, items: [] };
 const _cruiseBodies = { count: 0, items: [] };
 const _stageTrafficBodies = { count: 0, items: [] };
+const _cruiseExitAim = { x: 0, y: 0, z: 0 };
 const _playerLive = {
   role: 'player',
   id: -1,
@@ -898,6 +899,12 @@ function dockTick(ctx) {
         }
       }
     }
+    let cruiseExitBlocked = false;
+    if (!stageTransit) {
+      const exit = dockCruiseExitAim(p, _aim, planningBodies, _cruiseExitAim);
+      if (exit === 'clear') _aim.set(_cruiseExitAim.x, _cruiseExitAim.y, _cruiseExitAim.z);
+      else if (exit === 'blocked') cruiseExitBlocked = true;
+    }
     let trafficDetour = false;
     let trafficBlocked = false;
     let trafficYield = false;
@@ -953,7 +960,7 @@ function dockTick(ctx) {
       disengage(ctx, 'stale');
       return;
     }
-    const braking = trafficBlocked || (stageTransit
+    const braking = trafficBlocked || cruiseExitBlocked || (stageTransit
       && dockCruiseShouldBrake(p, ctx.ship.velocity, acceleration, planningBodies)) || dockShouldBrake(
       stageDistance, speed, acceleration, DOCK_STAGE_BRAKE_BUFFER,
     );

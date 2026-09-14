@@ -81,6 +81,8 @@ Credit is cumulative and capped at10s for an entire episode without at least1u o
 
 ## Review and limits
 
+The subsequent parked-freighter cruise slowdown and bounded outward-course correction are documented in [Issue168CruisePadExitEvidence.md](Issue168CruisePadExitEvidence.md). Its constructed actual-owner test proves safe padding exit and resumed progress; final natural berth evidence remains a separate release gate.
+
 A subsequent independent natural flight exposed a separate active station-detour watchdog cancellation on `baf7e315`. The bounded geometric progress repair and explicitly labeled hybrid regression are documented in [Issue168DetourProgressEvidence.md](Issue168DetourProgressEvidence.md). The earlier ten-check and three-journey results above remain historical evidence; final combined acceptance requires the new focused checks and fresh independent natural flight.
 
 Builder security/regression review found no new credentials, external endpoint, action authority, unsafe DOM writes, persistence, or event surface. Only private planning geometry and ship-owner takeover state are added. Finite-input refusals, held-helm boundaries, loopback binding and owned-process cleanup remain. Constant-velocity prediction is bounded avoidance, not a guarantee against every arbitrarily accelerating NPC encounter. Independent combined review, build, boot suite and the near-pad live browser check are coordinated by the parent task.

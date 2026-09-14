@@ -2,7 +2,7 @@
  * their own policies. Collected ship/asteroid spheres are normally skipped
  * by planApPath, so promote them only in this private planning bag. */
 import { PHY } from './physics.js';
-import { AP_KEEP_PAD, keepRadius, sphereChordHit } from './ap-path.js';
+import { AP_KEEP_PAD, TANGENT_CLEAR, keepRadius, sphereChordHit } from './ap-path.js';
 
 const finite3 = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
 const velocities = new Map();
@@ -54,7 +54,7 @@ export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out,
     // the old fixed 40 u lookahead has become too short to brake.
     const entry = predicted[predictedCount] || (predicted[predictedCount] = {});
     predictedCount++;
-    entry.kind = 'cruise-obstacle'; entry.id = body.id;
+    entry.kind = 'cruise-obstacle'; entry.id = body.id; entry.bodyKind = body.kind;
     entry.motionVx = motionVx; entry.motionVy = motionVy; entry.motionVz = motionVz;
     entry.x = body.x + vx * horizon * 0.5;
     entry.y = body.y + vy * horizon * 0.5;
@@ -67,6 +67,51 @@ export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out,
   }
   out.count = n;
   return out;
+}
+
+// The shared tangent planner's inside-sphere waypoint can point inward.
+// Inside a parked ship's padded tangent boundary, keep its lateral direction but
+// originate an outward course at the player instead of at the obstacle.
+// No braking radius or motion policy changes; other keep spheres can veto it.
+export function dockCruiseExitAim(position, target, bodies, out) {
+  if (!finite3(position) || !finite3(target) || !bodies?.items || !out) return 'blocked';
+  for (let i = 0; i < bodies.count; i++) {
+    const body = bodies.items[i];
+    if (body.kind !== 'cruise-obstacle' || body.bodyKind !== 'ship'
+      || body.vx !== 0 || body.vy !== 0 || body.vz !== 0
+      || body.motionVx !== 0 || body.motionVy !== 0 || body.motionVz !== 0) continue;
+    const keep = keepRadius(body, PHY.PLAYER_RADIUS);
+    let rx = position.x - body.x, ry = position.y - body.y, rz = position.z - body.z;
+    const distance = Math.hypot(rx, ry, rz);
+    // Match the shared inside-tangent interval, including its 1u clearance
+    // annulus, so returning to that planner cannot turn inward at keep.
+    if (!(distance > body.bodyRadius + PHY.PLAYER_RADIUS && distance <= keep + TANGENT_CLEAR)) continue;
+    rx /= distance; ry /= distance; rz /= distance;
+    let tx = target.x - position.x, ty = target.y - position.y, tz = target.z - position.z;
+    const radial = tx * rx + ty * ry + tz * rz;
+    if (!(radial < 0)) continue;
+    tx -= radial * rx; ty -= radial * ry; tz -= radial * rz;
+    const lateral = Math.hypot(tx, ty, tz);
+    // Equal radial/lateral travel gives a 45-degree outward course. Its
+    // radial component clears the keep plus one player radius, and the
+    // lateral extent never exceeds this obstacle's own keep radius.
+    const extent = Math.max(keep - distance + PHY.PLAYER_RADIUS, Math.min(keep, lateral));
+    const scale = lateral > 0 ? extent / lateral : 0;
+    const x = position.x + rx * extent + tx * scale;
+    const y = position.y + ry * extent + ty * scale;
+    const z = position.z + rz * extent + tz * scale;
+    if (![x, y, z].every(Number.isFinite)) return 'blocked';
+    for (let j = 0; j < bodies.count; j++) {
+      const other = bodies.items[j];
+      if (other === body) continue;
+      const radius = keepRadius(other, PHY.PLAYER_RADIUS);
+      if (radius > 0 && sphereChordHit(position.x, position.y, position.z,
+        x, y, z, other.x, other.y, other.z, radius).hit) return 'blocked';
+    }
+    out.x = x; out.y = y; out.z = z;
+    return 'clear';
+  }
+  return 'none';
 }
 
 export function dockCruiseShouldBrake(position, velocity, acceleration, bodies) {
