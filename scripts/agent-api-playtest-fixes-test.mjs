@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const checks = [
+  ['allAuthoredGateSolarApproaches', 'issue-172-dock-sun-test.mjs'],
   ['cruiseApproach', 'issue-168-cruise-test.mjs'],
   ['cruiseObstacles', 'issue-168-cruise-obstacles-test.mjs'],
   ['stageRealAsteroids', 'issue-168-stage-obstacles-test.mjs', { STAGE_CASE: 'earliest', STAGE_DIAG: '', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-stage','gate') }],

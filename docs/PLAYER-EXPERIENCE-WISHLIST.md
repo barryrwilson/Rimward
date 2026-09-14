@@ -373,7 +373,10 @@ checked against the current initiative text before capture.
   selected point of interest) with bearing and distance.
   Wave 127 PR1 `docs/Hud06HomeMarkerDesign.md`. POS HOME + pip +
   chevron 108. Selected POI omit.
-- [x] DONE (P2, NAV/DOCKING): Add docking approach assistance. The J prompt
+- [x] DONE (P2, NAV/DOCKING): Add docking approach assistance. Issue #172
+  follow-up scans every planner keep-out body; five authored-gate solar
+  approach regressions are implemented, with independent QA pending.
+  The J prompt
   appears, but there is no approach-speed cue or brake assist, so a cruise-
   speed approach ends in a bounce off the station hull. A "SLOW — approach
   under 20 u/s" cue or an approach governor on J would close the loop. NAV-03
