@@ -2,7 +2,7 @@
  * their own policies. Collected ship/asteroid spheres are normally skipped
  * by planApPath, so promote them only in this private planning bag. */
 import { PHY } from './physics.js';
-import { AP_KEEP_PAD, sphereChordHit } from './ap-path.js';
+import { AP_KEEP_PAD, keepRadius, sphereChordHit } from './ap-path.js';
 
 const finite3 = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
 const velocities = new Map();
@@ -28,6 +28,7 @@ export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out,
     }
     const velocity = body.kind === 'ship' ? velocities.get(body.id) : null;
     let vx = velocity?.x || 0, vy = velocity?.y || 0, vz = velocity?.z || 0;
+    let motionVx = vx, motionVy = vy, motionVz = vz;
     const rock = body.kind === 'asteroid' && asteroids?.[body.id];
     if (rock && typeof rock === 'object' && Number.isFinite(time)) {
       // Public asteroid rows expose live positions, not private orbit data.
@@ -46,6 +47,7 @@ export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out,
         sample.x = body.x; sample.y = body.y; sample.z = body.z; sample.t = time;
       }
       if (predictAsteroids) { vx = sample.vx; vy = sample.vy; vz = sample.vz; }
+      motionVx = sample.vx; motionVy = sample.vy; motionVz = sample.vz;
     }
     // This sphere encloses both the current body and its predicted path
     // until the player could stop; a crossing ship cannot appear only after
@@ -53,6 +55,7 @@ export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out,
     const entry = predicted[predictedCount] || (predicted[predictedCount] = {});
     predictedCount++;
     entry.kind = 'cruise-obstacle'; entry.id = body.id;
+    entry.motionVx = motionVx; entry.motionVy = motionVy; entry.motionVz = motionVz;
     entry.x = body.x + vx * horizon * 0.5;
     entry.y = body.y + vy * horizon * 0.5;
     entry.z = body.z + vz * horizon * 0.5;
@@ -95,4 +98,96 @@ export function dockCruiseShouldBrake(position, velocity, acceleration, bodies) 
     }
   }
   return false;
+}
+
+// A moving body can enter a stationary hold while the hull turns. Evaluate
+// normal idle versus normal creep with the same acceleration/drag equations
+// as ship.js. Steering is held only during an accepted creep step, so the
+// proposed forward sweep is the motion the ship owner actually receives.
+const HOLD_STEPS = 45;
+const HOLD_DT = 1 / 30;
+const HOLD_TIME = HOLD_STEPS * HOLD_DT;
+const holdPath = new Float64Array((HOLD_STEPS + 1) * 3);
+const advancePath = new Float64Array((HOLD_STEPS + 1) * 3);
+
+function writeHoldPath(out, position, velocity, forward, speed, acceleration, damping) {
+  let x = position.x, y = position.y, z = position.z;
+  let vx = velocity.x, vy = velocity.y, vz = velocity.z;
+  const drag = Math.exp(-damping * HOLD_DT);
+  out[0] = x; out[1] = y; out[2] = z;
+  for (let step = 1; step <= HOLD_STEPS; step++) {
+    let dx = forward.x * speed - vx;
+    let dy = forward.y * speed - vy;
+    let dz = forward.z * speed - vz;
+    const length = Math.hypot(dx, dy, dz), maxStep = acceleration * HOLD_DT;
+    if (length > maxStep) { const k = maxStep / length; dx *= k; dy *= k; dz *= k; }
+    vx = (vx + dx) * drag; vy = (vy + dy) * drag; vz = (vz + dz) * drag;
+    x += vx * HOLD_DT; y += vy * HOLD_DT; z += vz * HOLD_DT;
+    const index = step * 3;
+    out[index] = x; out[index + 1] = y; out[index + 2] = z;
+  }
+}
+
+function holdPathHits(path, x, y, z, vx, vy, vz, radius) {
+  for (let step = 1; step <= HOLD_STEPS; step++) {
+    const index = step * 3, before = index - 3;
+    const t0 = (step - 1) * HOLD_DT, t1 = step * HOLD_DT;
+    if (sphereChordHit(path[before] - vx * t0, path[before + 1] - vy * t0, path[before + 2] - vz * t0,
+      path[index] - vx * t1, path[index + 1] - vy * t1, path[index + 2] - vz * t1,
+      x, y, z, radius).hit) return true;
+  }
+  return false;
+}
+
+export function dockHoldCanAdvance(position, velocity, forward, acceleration, creep, damping, bodies) {
+  if (!finite3(position) || !finite3(velocity) || !finite3(forward) || !bodies?.items
+    || ![acceleration, creep, damping].every(Number.isFinite)
+    || acceleration <= 0 || creep <= 0 || damping < 0) return false;
+  const speed = Math.hypot(velocity.x, velocity.y, velocity.z);
+  // This is an escape from an idle/slow hold, never permission to keep
+  // cruise-speed thrust while the ordinary braking check is active.
+  if (speed > creep + 1) return false;
+  writeHoldPath(holdPath, position, velocity, forward, 0, acceleration, damping);
+  let threatened = false;
+  for (let i = 0; i < bodies.count; i++) {
+    const body = bodies.items[i];
+    if (body.kind !== 'cruise-obstacle') continue;
+    const vx = body.motionVx, vy = body.motionVy, vz = body.motionVz;
+    const dx = body.baseX - position.x, dy = body.baseY - position.y, dz = body.baseZ - position.z;
+    if (dx * vx + dy * vy + dz * vz >= 0) continue;
+    // Require an actual contact threat with a small hull-sized margin;
+    // entering the route planner's generous 12u pad alone is not a reason
+    // to abandon a stationary hold and delay its ordinary turn.
+    const radius = body.bodyRadius + PHY.PLAYER_RADIUS * 2;
+    if (Math.hypot(dx, dy, dz) > radius + (Math.hypot(vx, vy, vz) + speed) * HOLD_TIME) continue;
+    if (holdPathHits(holdPath, body.baseX, body.baseY, body.baseZ, vx, vy, vz, radius)) {
+      threatened = true; break;
+    }
+  }
+  if (!threatened) return false;
+  writeHoldPath(advancePath, position, velocity, forward, creep, acceleration, damping);
+  for (let i = 0; i < bodies.count; i++) {
+    const body = bodies.items[i];
+    if (body.kind === 'player') continue;
+    const moving = body.kind === 'cruise-obstacle';
+    const x = moving ? body.baseX : body.x, y = moving ? body.baseY : body.y, z = moving ? body.baseZ : body.z;
+    const vx = moving ? body.motionVx : 0, vy = moving ? body.motionVy : 0, vz = moving ? body.motionVz : 0;
+    const distance = Math.hypot(x - position.x, y - position.y, z - position.z);
+    let radius;
+    if (moving) {
+      const physical = body.bodyRadius + PHY.PLAYER_RADIUS;
+      // If another body already lies within the planning pad, still demand
+      // positive swept hull clearance; do not trap a safe escape solely
+      // because its starting pose is inside that conservative extra pad.
+      radius = physical + Math.min(AP_KEEP_PAD, Math.max(0, distance - physical) * 0.5);
+    } else {
+      // Includes the station and sun's full keep-out envelopes. Gates have
+      // no route-planner keep radius, but remain physical obstacles here.
+      radius = keepRadius(body, PHY.PLAYER_RADIUS) || body.r + PHY.PLAYER_RADIUS + AP_KEEP_PAD;
+    }
+    if (!Number.isFinite(radius) || radius <= 0) return false;
+    if (distance > radius + (Math.hypot(vx, vy, vz) + Math.max(speed, creep)) * HOLD_TIME) continue;
+    if (holdPathHits(advancePath, x, y, z, vx, vy, vz, radius)) return false;
+  }
+  return true;
 }

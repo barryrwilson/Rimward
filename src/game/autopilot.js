@@ -12,7 +12,7 @@ import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
-import { collectDockCruiseBodies, dockCruiseShouldBrake } from './dock-cruise.js';
+import { collectDockCruiseBodies, dockCruiseShouldBrake, dockHoldCanAdvance } from './dock-cruise.js';
 import { agentPulse } from '../systems/controls.js';
 import {
   DOCK_STAGE_ARRIVE,
@@ -904,7 +904,10 @@ function dockTick(ctx) {
     if (cruise) {
       ap.idle = braking || steer.align < 0.97
         || dockCruiseShouldBrake(p, ctx.ship.velocity, acceleration, planningBodies);
-      ap.throttle = ap.idle ? 0 : throttleForPath(
+      const escapeHold = ap.idle && !ctx.input.fullStop && dockHoldCanAdvance(p, ctx.ship.velocity, _fwd,
+        acceleration, ctx.config.ship.creep * (ctx.bio?.speedFactor ?? 1), ctx.config.ship.damping, planningBodies);
+      if (escapeHold) { ap.idle = false; ap.yaw = 0; ap.pitch = 0; }
+      ap.throttle = ap.idle || escapeHold ? 0 : throttleForPath(
         planned.hold, planned.intercept, steer.align, stageDistance, planned.turnR,
       );
       const cruiseRemaining = stationBlocked
@@ -942,6 +945,10 @@ function dockTick(ctx) {
     } else {
       ap.idle = braking || stageOvershot || needTurn;
       ap.throttle = 0;
+    }
+    if (ap.idle && !ctx.input.fullStop && dockHoldCanAdvance(p, ctx.ship.velocity, _fwd,
+      acceleration, ctx.config.ship.creep * (ctx.bio?.speedFactor ?? 1), ctx.config.ship.damping, planningBodies)) {
+      ap.idle = false; ap.yaw = 0; ap.pitch = 0;
     }
     if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs)) return;
     return;
