@@ -1,0 +1,190 @@
+// Real rendered public-API journey; owns its loopback Vite and Chrome profile.
+import {spawn,spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {mkdir,readFile,writeFile,mkdtemp} from 'node:fs/promises';
+import {createServer} from 'node:net';
+import {dirname,join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+export const repo=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+export const out=resolve(process.env.CRUISE_OUT||join(repo,'out','issue-168-cruise-live',String(Date.now())));
+export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function git(args){const r=spawnSync('git',args,{cwd:repo,encoding:'utf8',windowsHide:true});if(r.error||r.status!==0)throw Error('Git capture failed: '+args.join(' '));return r.stdout.trim();}
+async function sourceHash(){const files=git(['ls-files','--cached','--others','--exclude-standard','src']).split(/\r?\n/).filter(Boolean).sort();if(!files.length)throw Error('Empty runtime file list');const hash=createHash('sha256');for(const f of [...new Set(files)]){hash.update(f);hash.update(await readFile(join(repo,f)));}return hash.digest('hex');}
+async function port(){const s=createServer();await new Promise((r,j)=>{s.once('error',j);s.listen(0,'127.0.0.1',r);});const p=s.address().port;await new Promise(r=>s.close(r));return p;}
+async function stop(p){if(!p?.pid)return {started:false};if(p.exitCode!==null)return {pid:p.pid,exitCode:p.exitCode,exited:true};let error=null;try{p.kill('SIGTERM');}catch(e){error=String(e);}for(let i=0;i<50&&p.exitCode===null&&p.signalCode===null;i++)await sleep(100);return {pid:p.pid,exitCode:p.exitCode,signal:p.signalCode,exited:p.exitCode!==null||p.signalCode!==null,error};}
+class CDP{
+  constructor(url){this.ws=new WebSocket(url);this.id=0;this.pending=new Map();this.console=[];this.exceptions=[];this.ws.addEventListener('close',()=>{for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('CDP socket closed'));}this.pending.clear();});this.ws.addEventListener('message',e=>{const m=JSON.parse(String(e.data));if(m.id){const p=this.pending.get(m.id);if(p){this.pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result);}}if(m.method==='Runtime.consoleAPICalled')this.console.push({type:m.params.type,text:m.params.args.map(a=>a.value??a.description??'').join(' ')});if(m.method==='Runtime.exceptionThrown')this.exceptions.push(m.params.exceptionDetails);});}
+  ready(){return new Promise((r,j)=>{this.ws.addEventListener('open',r,{once:true});this.ws.addEventListener('error',j,{once:true});});}
+  send(method,params={}){if(this.ws.readyState!==WebSocket.OPEN)return Promise.reject(Error('CDP socket not open'));const id=++this.id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout '+method));},Number(process.env.CRUISE_CDP_TIMEOUT||30000));this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
+  async eval(expression){const r=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;}
+}
+
+async function waitForBootstrap(c,result,save){
+  const started=Date.now(),timeoutMs=120000;
+  result.bootstrap={started,timeoutMs,ready:false,samples:[]};
+  while(Date.now()-started<timeoutMs){
+    const state=await c.eval(`({url:location.href,readyState:document.readyState,title:document.title,
+      ready:typeof window.rimward?.observe==='function'&&typeof window.rimward?.act==='function',
+      hasContext:!!window.__ctx,resources:performance.getEntriesByType('resource').length})`);
+    const elapsedMs=Date.now()-started;
+    result.bootstrap.elapsedMs=elapsedMs;result.bootstrap.lastState=state;
+    if(!result.bootstrap.samples.length||elapsedMs-result.bootstrap.samples.at(-1).elapsedMs>=5000){
+      result.bootstrap.samples.push({elapsedMs,...state});await save();
+    }
+    if(state.ready){result.bootstrap.ready=true;await save();return;}
+    await sleep(300);
+  }
+  throw Error('Bootstrap readiness timeout '+JSON.stringify(result.bootstrap));
+}
+
+async function runLive(name,origin,seed,fn){
+  await mkdir(out,{recursive:true});const folder=join(out,name);await mkdir(folder);
+  const profile=await mkdtemp(join(folder,'profile-')),cache=join(folder,'vite-cache');
+  const config=join(folder,'vite.config.mjs');await mkdir(dirname(config),{recursive:true});
+  await writeFile(config,`export default {root:${JSON.stringify(repo)},cacheDir:${JSON.stringify(cache)}};`);
+  const p=process.env.CRUISE_PORT?Number(process.env.CRUISE_PORT):await port();if(!Number.isInteger(p)||p<1024||p>65535)throw Error('Invalid loopback port');let vite,chrome,c;
+  const result={probeSha256:createHash('sha256').update(await readFile(fileURLToPath(import.meta.url))).digest('hex'),name,origin,seed,profile,started:new Date().toISOString(),fixture:false,actions:[],checkpoints:[],samples:[],consoleErrors:[],exceptions:[]};
+  result.rendererConfig=process.env.CRUISE_RENDERER||'platform';
+  result.sourceHashStart=await sourceHash();result.headCommit=git(['rev-parse','HEAD']);result.workingTreeDirty=!!git(['status','--porcelain']);result.runtimeSourceDirty=!!git(['status','--porcelain','--','src']);
+  const save=()=>writeFile(join(folder,'result.json'),JSON.stringify(result,null,2));
+  try{
+    vite=spawn(process.execPath,[fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite'))),'--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});
+    result.vitePid=vite.pid;result.port=p;
+    result.viteStdout=[];result.viteStderr=[];
+    vite.stdout.on('data',b=>result.viteStdout.push(String(b)));
+    vite.stderr.on('data',b=>{result.viteStderr.push(String(b));console.log('VITE',String(b).trim());});
+    for(let i=0;i<100;i++){if(await fetch(`http://127.0.0.1:${p}`).then(r=>r.ok).catch(()=>false))break;if(vite.exitCode!==null)throw Error('Vite exited');await sleep(250);}
+    chrome=spawn(process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe',['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check',...(result.rendererConfig==='swiftshader'?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:[]),'--ignore-gpu-blocklist','--enable-webgl','--disable-extensions','--disable-background-networking','--disable-component-update','--disable-sync','--window-size=1440,900','--headless=new','--disable-background-timer-throttling','--disable-renderer-backgrounding','about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
+    result.chromePid=chrome.pid;await save();
+    const errors=[];chrome.stderr.on('data',b=>{errors.push(String(b).slice(0,500));result.chromeStderr=errors;});
+    let pages;for(let i=0;i<120;i++){try{const cp=Number((await readFile(join(profile,'DevToolsActivePort'),'utf8')).split(/\r?\n/)[0]);pages=await fetch(`http://127.0.0.1:${cp}/json/list`).then(r=>r.json());if(pages.some(p=>p.type==='page')){result.cdpPort=cp;break;}}catch{}if(chrome.exitCode!==null)throw Error('Chrome exited '+errors.slice(-3));await sleep(250);}
+    c=new CDP(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await c.ready();
+    result.networkRequests=[];const requests=new Map();
+    c.ws.addEventListener('message',e=>{
+      const m=JSON.parse(String(e.data)),p=m.params;
+      if(m.method==='Network.requestWillBeSent'){
+        const row={id:p.requestId,url:p.request.url,type:p.type,startedAt:Date.now()};
+        requests.set(p.requestId,row);result.networkRequests.push(row);
+      }else if(m.method==='Network.responseReceived'){
+        Object.assign(requests.get(p.requestId)||{},{responseAt:Date.now(),status:p.response.status,mime:p.response.mimeType});
+      }else if(m.method==='Network.loadingFinished'){
+        Object.assign(requests.get(p.requestId)||{},{finishedAt:Date.now(),bytes:p.encodedDataLength});
+      }else if(m.method==='Network.loadingFailed'){
+        Object.assign(requests.get(p.requestId)||{},{failedAt:Date.now(),error:p.errorText,blockedReason:p.blockedReason});
+      }
+    });
+    await c.send('Network.enable');await c.send('Runtime.enable');await c.send('Page.enable');await c.send('Page.addScriptToEvaluateOnNewDocument',{source:'let cruiseSeed='+seed+';Math.random=()=>{cruiseSeed=(Math.imul(cruiseSeed,1664525)+1013904223)>>>0;return cruiseSeed/4294967296;};'});
+    result.navigation=await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1`});
+    if(result.navigation.errorText)throw Error('Navigation failed: '+result.navigation.errorText);
+    const observe=()=>c.eval('window.rimward.observe()');
+    const act=async(name,args={},must=true)=>{const r=await c.eval(`(()=>{const receipt=window.rimward.act(${JSON.stringify({v:2,name,args})});if(receipt.ok&&${JSON.stringify(name)}==='chooseOrigin'){(${installDiagnostic.toString()})();}return receipt;})()`);result.actions.push({at:Date.now(),name,args,result:r});if(must&&!r.ok)throw Error(name+' refused '+JSON.stringify(r));return r;};
+    const shot=async name=>{const s=await c.send('Page.captureScreenshot',{format:'png'});await writeFile(join(folder,name+'.png'),Buffer.from(s.data,'base64'));};
+    const checkpoint=async name=>{const observation=await observe();const panel=await c.eval(`(()=>{const p=document.querySelector('.station-panel');return p?{text:p.innerText,rect:p.getBoundingClientRect().toJSON(),scrollWidth:document.documentElement.scrollWidth,width:innerWidth}:null})()`);result.checkpoints.push({name,at:Date.now(),observation,panel});console.log('CHECKPOINT',name,observation.t,observation.world.currentSystem,observation.world.credits);await save();await shot(name);return observation;};
+    // Limits are simulation seconds, with a separate 4x wall cap for software
+    // rendering. Neither bound becomes an active-search-time measurement.
+    const wait=async(pred,seconds,label,sample)=>{const began=Date.now(),end=began+Math.max(60000,seconds*4000);let s,startT;while(Date.now()<end){s=await observe();startT??=s.t;if(sample)await sample(s);if(pred(s))return s;if(s.t-startT>=seconds)break;await sleep(300);}throw Error('timeout '+label+' '+JSON.stringify({t:s?.t,worldElapsed:s?.t-startT,wallElapsed:(Date.now()-began)/1000,flags:s?.flags,ap:s?.autopilot}));};
+    // Cold Vite transforms have taken >51 s here. This is a wall-clock boot
+    // gate, before any action or flight timer; never call observe on timeout.
+    await waitForBootstrap(c,result,save);
+    let s=await observe();if(s.session.phase==='title')await act('startGame');s=await observe();if(s.session.phase==='origin')await act('chooseOrigin',{id:origin});await wait(s=>s.session.phase==='playing',25,'playing');
+    result.graphics=await c.eval(`(()=>{const canvas=document.querySelector('canvas'),g=canvas?.getContext('webgl2');if(!g)return null;const e=g.getExtension('WEBGL_debug_renderer_info');return {renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER),vendor:e?g.getParameter(e.UNMASKED_VENDOR_WEBGL):g.getParameter(g.VENDOR)};})()`);console.log('BOOT',name,JSON.stringify(result.graphics));
+    await fn({c,result,save,observe,act,shot,checkpoint,wait,folder});
+    result.consoleErrors=c.console.filter(e=>['error','assert'].includes(e.type));result.exceptions=c.exceptions;
+    if(result.consoleErrors.length||result.exceptions.length)throw Error('Browser console errors or exceptions');
+    result.verdict='PASS';
+  }catch(e){result.error=e.stack;result.verdict='FAIL';console.error(e.stack);process.exitCode=1;}
+  finally{if(c){try{result.partialMeasurements=await c.eval('window.__cruise || null');}catch{}result.consoleErrors=c.console.filter(e=>['error','assert'].includes(e.type));result.exceptions=c.exceptions;try{await c.send('Browser.close');result.browserCloseRequested=true;}catch(e){result.browserCloseError=String(e);}c.ws.close();for(let i=0;i<80&&chrome?.exitCode===null;i++)await sleep(100);}result.cleanup={chrome:await stop(chrome),vite:await stop(vite)};
+    const responds=async port=>port?fetch(`http://127.0.0.1:${port}/`,{signal:AbortSignal.timeout(1500)}).then(()=>true).catch(()=>false):false;
+    result.closedPorts={vite:!(await responds(result.port)),cdp:!(await responds(result.cdpPort))};
+    if(Object.values(result.cleanup).some(p=>p.started!==false&&!p.exited)||Object.values(result.closedPorts).some(closed=>!closed)){result.verdict='FAIL';result.cleanupFailed=true;process.exitCode=1;}result.finished=new Date().toISOString();result.sourceHashEnd=await sourceHash();result.sourceStable=result.sourceHashStart===result.sourceHashEnd;if(!result.sourceStable){result.verdict='FAIL';result.sourceChanged=true;process.exitCode=1;}await save();console.log(name,result.verdict);}
+  return result;
+}
+
+function installDiagnostic() {
+  const ctx = window.__ctx;
+  const seen = new WeakSet();
+  window.__cruise = { events: [], phases: [], peakSpeed: 0, samples: [], minHullClearance: null, collisions: [] };
+  const previousBodies = new Map();
+  const recentFrames = [];
+  let sampledSystem = ctx.world.currentSystem;
+  let collect;
+  const bodies = { items: [], count: 0 };
+  import('/src/game/collision.js').then(m => { collect = m.collectBodies; });
+  const sample = () => {
+    if (sampledSystem !== ctx.world.currentSystem) {
+      sampledSystem = ctx.world.currentSystem;
+      previousBodies.clear(); recentFrames.length = 0;
+    }
+    const frameEvents = [];
+    for (const e of [...ctx.events, ...ctx.lastEvents]) {
+      if (seen.has(e)) continue;
+      seen.add(e);
+      if (['sunHeat', 'bodyHit', 'docked'].includes(e.type)) {
+        const copy = { ...e };
+        window.__cruise.events.push(copy);
+        frameEvents.push(copy);
+      }
+    }
+    const phase = window.rimward.observe().autopilot.phase;
+    let nearest = null;
+    const nearby = [];
+    if (collect) {
+      collect(ctx, bodies);
+      for (let i = 0; i < bodies.count; i++) {
+        const b = bodies.items[i];
+        if (b.kind !== 'ship' && b.kind !== 'asteroid') continue;
+        const p = ctx.ship.object.position;
+        const clearance = Math.hypot(p.x-b.x,p.y-b.y,p.z-b.z)-b.r-2.4;
+        const key = b.kind + ':' + b.id;
+        const previous = previousBodies.get(key);
+        const dt = previous ? ctx.world.time - previous.t : 0;
+        const entry = { id:b.id,kind:b.kind,clearance,p:[b.x,b.y,b.z],r:b.r,
+          v: dt > 0 && dt <= 0.25 ? [(b.x-previous.p[0])/dt,(b.y-previous.p[1])/dt,(b.z-previous.p[2])/dt] : null };
+        previousBodies.set(key, { t:ctx.world.time,p:entry.p });
+        nearby.push(entry);
+        if (!nearest || clearance < nearest.clearance) nearest = entry;
+      }
+      if (nearest && (window.__cruise.minHullClearance === null || nearest.clearance < window.__cruise.minHullClearance)) window.__cruise.minHullClearance = nearest.clearance;
+    }
+    nearby.sort((a,b) => a.clearance - b.clearance);
+    const frame = { t:ctx.world.time,phase,p:ctx.ship.object.position.toArray(),
+      v:ctx.ship.velocity.toArray(),q:ctx.ship.object.quaternion.toArray(),speed:ctx.ship.speed,
+      idle:ctx.autopilot.idle,throttle:ctx.autopilot.throttle,yaw:ctx.autopilot.yaw,pitch:ctx.autopilot.pitch,
+      fullStop:ctx.input.fullStop,nearest,nearby:nearby.slice(0,8) };
+    if (recentFrames.at(-1)?.t !== frame.t) {
+      recentFrames.push(frame);
+      if (recentFrames.length > 120) recentFrames.shift();
+    }
+    for (const event of frameEvents) if (event.type === 'bodyHit') {
+      window.__cruise.collisions.push({event,frame,
+        colliderCandidates:nearby.filter(b => b.kind === event.kind).slice(0,3),
+        recentFrames:recentFrames.slice()});
+    }
+    if (!window.__cruise.samples.length || ctx.world.time - window.__cruise.samples.at(-1).t >= 0.5) {
+      window.__cruise.samples.push(frame);
+    }
+    if (window.__cruise.phases.at(-1) !== phase) window.__cruise.phases.push(phase);
+    window.__cruise.peakSpeed = Math.max(window.__cruise.peakSpeed, ctx.ship.speed);
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+}
+
+await runLive('veridian-public', 'greenhand', 7, async ({ c, result, act, wait, checkpoint }) => {
+  await act('plotRoute', { dest: 'veridian' });
+  await act('engageAutopilot');
+  await wait(s => s.world.currentSystem === 'veridian' && !s.gate.jumping, 90, 'Veridian arrival');
+  await checkpoint('arrival');
+  await c.eval('window.__cruise.events=[];window.__cruise.phases=[];window.__cruise.peakSpeed=0;window.__cruise.samples=[];window.__cruise.minHullClearance=null;window.__cruise.collisions=[];');
+  const receipt = await act('approachDock');
+  const end = await wait(s => s.flags.docked || !s.autopilot.engaged, 65, 'dock approach');
+  result.cruise = await c.eval('window.__cruise');
+  result.cruise.elapsed = (result.cruise.events.find(e => e.type === 'docked')?.t ?? end.t) - receipt.t;
+  result.cruise.docked = end.flags.docked;
+  await checkpoint('berth');
+  if (!end.flags.docked || result.cruise.elapsed >= 40
+    || result.cruise.events.some(e => e.type === 'sunHeat' || e.type === 'bodyHit')) {
+    throw Error('Cruise acceptance failed: ' + JSON.stringify(result.cruise));
+  }
+});

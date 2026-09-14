@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PHY } from '../src/game/physics.js';
 import {
   DOCK_STAGE_RANGE,
   DOCK_SETTLE_RANGE,
@@ -110,8 +111,11 @@ function flyFixture(x, facingX, setup) {
   let minPos = null;
   let minPhase = '';
   let pulseFrames = 0;
+  let minSunRange = Infinity;
+  let peakSpeed = 0;
   for (let i = 0; i < 30000 && !ctx.flags.docked; i++) {
     const range = ctx.ship.object.position.distanceTo(ctx.station.position);
+    minSunRange = Math.min(minSunRange, ctx.ship.object.position.distanceTo(ctx.config.world.sunPosition));
     if (range < minRange) {
       minRange = range;
       minPos = ctx.ship.object.position.toArray();
@@ -148,6 +152,7 @@ function flyFixture(x, facingX, setup) {
       }
       ctx.ship.object.position.addScaledVector(ctx.ship.velocity, dt);
       ctx.ship.speed = ctx.ship.velocity.length();
+      peakSpeed = Math.max(peakSpeed, ctx.ship.speed);
     }
     ctx.world.time += dt;
     ctx.lastEvents = ctx.events;
@@ -163,6 +168,8 @@ function flyFixture(x, facingX, setup) {
     minPos,
     minPhase,
     pulseFrames,
+    minSunRange,
+    peakSpeed,
   };
 }
 
@@ -189,6 +196,10 @@ pin('600u far-side fixture routes around station and docks', farSide.token === '
   && farSide.docked === true && farSide.reason === 'docked'
   && farSide.phase === 'complete' && farSide.pulseFrames >= 1
   && farSide.minRange > 34.4);
+const distantFarSide = flyFixture(-3000, 1);
+if (!distantFarSide.docked) console.log('distant far-side diagnostic', JSON.stringify(distantFarSide));
+pin('distant far-side approach cruises before slowing around station', distantFarSide.docked
+  && distantFarSide.peakSpeed > 100 && distantFarSide.minRange > 34.4);
 
 const liveSpawn = flyFixture(0, 0, () => {
   const ctx = makeCtx(0, 0, {
@@ -201,6 +212,14 @@ const liveSpawn = flyFixture(0, 0, () => {
   ctx.config.world.sunPosition = new THREE.Vector3(0, 0, 0);
   return ctx;
 });
+const sunChord = flyFixture(0, 0, () => {
+  const ctx = makeCtx(0, 0, { x: 0, y: 0, z: 1000,
+    stationX: -135, stationY: 0, stationZ: -1000, sunRadius: 100 });
+  ctx.ship.object.quaternion.identity();
+  return ctx;
+});
+if (!sunChord.docked || sunChord.minSunRange <= 100 * PHY.SUN_HEAT_MULT) console.log('sun-chord diagnostic', JSON.stringify(sunChord));
+pin('sun-blocked stage chord detours and docks outside heat radius', sunChord.docked && sunChord.minSunRange > 100 * PHY.SUN_HEAT_MULT);
 if (!liveSpawn.docked) {
   console.log('live-spawn diagnostic', JSON.stringify(liveSpawn));
 }
@@ -218,6 +237,23 @@ ctx.world.time = 11;
 sys.update(1 / 60, ctx);
 pin('stalled approach fails blocked', ctx.autopilot.engaged === false
   && ctx.autopilot.reason === 'blocked' && ctx.autopilot.phase === 'failed');
+
+for (const source of ['agent', 'human']) {
+  const burning = makeCtx();
+  burning.ship.burnerActive = true;
+  const helm = initAutopilot(burning);
+  pin(`active burner permits dock handoff (${source})`, tryApproachDock(burning) === '');
+  burning.input.afterburnerPressed = true;
+  burning.input.agentAfterburnerPressed = source === 'agent';
+  helm.update(1 / 60, burning);
+  pin(`${source} burner edge respects dock helm ownership`, burning.autopilot.engaged === (source === 'agent'));
+  if (source === 'agent') {
+    burning.input.afterburnerPressed = false;
+    burning.input.agentAfterburnerPressed = false;
+    helm.update(1 / 60, burning);
+    pin('running raw burn does not cancel next dock frame', burning.autopilot.engaged);
+  }
+}
 
 ctx = makeCtx();
 sys = initAutopilot(ctx);

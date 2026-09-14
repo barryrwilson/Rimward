@@ -45,7 +45,7 @@ await runLive('fixture-lifecycle',async h=>{
   while(Date.now()<end){s=await observe();job=s.jobs.active.find(j=>j.id===offer.id);const o=job?.objective;
     if(!o?.bearing||o.status!=='available')throw Error('Recovery objective lost '+JSON.stringify(o));
     if(o.range<8){await act('setControl',{seq:++seq,ttl:5,throttle:0,steerX:0,steerY:0});reached=true;break;}
-    const [x,y,z]=o.bearing,steerX=Math.max(-1,Math.min(1,Math.atan2(x,-z)*1.5)),steerY=Math.max(-1,Math.min(1,Math.atan2(y,Math.hypot(x,z))*1.5));
+    const [x,y,z]=o.bearing,steerX=Math.max(-1,Math.min(1,Math.atan2(x,-z)*1.5)),steerY=Math.max(-1,Math.min(1,-Math.atan2(y,Math.hypot(x,z))*1.5));
     const desiredSpeed=Math.max(2,Math.min(110,(o.range-4)*.18));
     const throttle=z<-.92&&s.ship.speed<desiredSpeed+2?Math.max(.005,Math.min(.5,(o.range-4)/1800)):0;
     result.flight.push({t:s.t,range:o.range,bearing:o.bearing,speed:s.ship.speed,steerX,steerY,throttle});
@@ -58,7 +58,7 @@ await runLive('fixture-lifecycle',async h=>{
   await c.eval(`window.__ctx.cargo.length=0;true`);
   const collectionEnd=Date.now()+120000;let collected=false;
   while(Date.now()<collectionEnd){s=await observe();job=s.jobs.active.find(j=>j.id===offer.id);if(job?.collected){collected=true;break;}const o=job?.objective;if(!o?.bearing)throw Error('No public marker during collection reacquisition');const [x,y,z]=o.bearing;
-    const steerX=Math.max(-1,Math.min(1,Math.atan2(x,-z)*1.5)),steerY=Math.max(-1,Math.min(1,Math.atan2(y,Math.hypot(x,z))*1.5));
+    const steerX=Math.max(-1,Math.min(1,Math.atan2(x,-z)*1.5)),steerY=Math.max(-1,Math.min(1,-Math.atan2(y,Math.hypot(x,z))*1.5));
     const desiredSpeed=Math.max(2,Math.min(50,(o.range-4)*.18)),throttle=z<-.92&&s.ship.speed<desiredSpeed+2?Math.max(.005,Math.min(.2,(o.range-4)/1800)):0;
     await act('setControl',{seq:++seq,ttl:2,steerX,steerY,throttle});await sleep(200);
   }

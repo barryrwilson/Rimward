@@ -466,7 +466,7 @@ export async function runAgentParityWave141(deps) {
         if (foeDown) { breakWhy = 'foe-down'; done = true; break; }
         const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
         const sx = Math.max(-1, Math.min(1, aimPt[0] * 2.5));
-        const sy = Math.max(-1, Math.min(1, aimPt[1] * 2.5));
+        const sy = Math.max(-1, Math.min(1, -aimPt[1] * 2.5));
         const aligned = aimPt[2] < -0.75 && Math.abs(aimPt[0]) < 0.3 && Math.abs(aimPt[1]) < 0.3;
         const ctl141f = rw141.act({
           v: 2, name: 'setControl',
@@ -583,7 +583,7 @@ export async function runAgentParityWave141(deps) {
       const b = podRow.bearing;
       const ctl141p = rw141.act({
         v: 2, name: 'setControl',
-        args: { seq: ++seq141, ttl: 0.5, steerX: Math.max(-1, Math.min(1, b[0] * 2.5)), steerY: Math.max(-1, Math.min(1, b[1] * 2.5)), throttle: Math.max(0.05, Math.min(0.5, (Number.isFinite(podRow.range) ? podRow.range : 999) / 120)) },
+        args: { seq: ++seq141, ttl: 0.5, steerX: Math.max(-1, Math.min(1, b[0] * 2.5)), steerY: Math.max(-1, Math.min(1, -b[1] * 2.5)), throttle: Math.max(0.05, Math.min(0.5, (Number.isFinite(podRow.range) ? podRow.range : 999) / 120)) },
       });
       if (ctl141p && ctl141p.ok === false && ctl141p.token === 'overlay') {
         const hp141 = rw141.observe();
@@ -1044,7 +1044,7 @@ export async function runAgentParityWave142(deps) {
         if (!aim || !Array.isArray(aim.bearing)) { tick(1, `w142 ${scenario} aim wait`); continue; } // the HUD publishes the digest the frame after a new lock
         const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
         const sx = clamp142(aimPt[0] * 2.5);
-        const sy = clamp142(aimPt[1] * 2.5);
+        const sy = clamp142(-aimPt[1] * 2.5);
         const aligned = aimPt[2] < -0.75 && Math.abs(aimPt[0]) < 0.3 && Math.abs(aimPt[1]) < 0.3;
         // Throttle is a turn-rate control, not just a closing control. The
         // shared flight law (flight-feel.js turnRateFor) is speed-linked —
@@ -1570,7 +1570,7 @@ export async function runAgentParityWave142(deps) {
             v: 2, name: 'setControl',
             args: { seq: ++seq142, ttl: 0.5,
               steerX: clamp142(Math.atan2(x, -z) * 1.5),
-              steerY: clamp142(Math.atan2(y, Math.hypot(x, z)) * 1.5), throttle },
+              steerY: clamp142(-Math.atan2(y, Math.hypot(x, z)) * 1.5), throttle },
           });
           if (ctl142p && ctl142p.ok === false && ctl142p.token === 'overlay') {
             const hp142 = rw142.observe();

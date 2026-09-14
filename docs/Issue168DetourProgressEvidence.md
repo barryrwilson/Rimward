@@ -1,0 +1,25 @@
+# Issue 168: progress around a committed station detour
+
+The independent natural public-API flight on clean `baf7e3153e6ffdab66ecbc229b888b24d3f63b70` safely traversed cruise and stage but cancelled `blocked` before berth. The preserved raw result is `out/quinn-rollup/live/veridian-public/result.json` in the integration workspace. It contains no body contact, heat, console error or exception. A subsequent successful natural flight does not erase this liveness failure.
+
+## Cause and bounded repair
+
+The stage watchdog recognized improved distance to the literal stage point or improved yaw, but a committed station tangent can temporarily increase that distance. In the failing trace, the direct segment from player to stage remained inside the station keep sphere while its closest clearance increased from 46.67u at world52.129 to 58.09u at56.6604. Cancellation occurred at57.1287 with clearance59.76u, just short of the60.3674u keep radius. The ship was making physical progress around the station; it was not stationary during most of this interval.
+
+The repair changes private stage-watchdog bookkeeping only. With a valid committed station tangent, it records a fixed station center, keep radius and literal stage point for the engagement. Only a new high-water mark of at least1u in direct-chord clearance can earn time. The committed tangent must still have a safe chord, or point outward when starting inside the keep sphere. The gain earns `10 seconds × clearance gain / keep radius`; since clearance is capped at the fixed keep radius and its high-water mark never decreases, the total possible geometric allowance is at most10s for the entire engagement. The observed reconstructed case needs approximately1.73s of this allowance.
+
+The high-water mark survives tangent replacement, clear/re-enter cycles and phase changes, and resets only with a new dock engagement or teardown. A changed station/goal geometry cannot earn credit against the stored geometry. Backtracking, repeated arc traversal, heading changes and body identities cannot refill the geometric allowance. Ordinary range/yaw progress discards that frame's geometric credit; geometric credit never resets the separately bounded moving-traffic waiting budget. Sun detours receive no new allowance. Planning, helm commands, collision guards, traffic prediction, hold escape, ship tuning and corridor/settle behavior are unchanged.
+
+## Regression provenance
+
+Run `node --import ./scripts/with-css-stub.mjs scripts/issue-168-detour-progress-test.mjs`. `STAGE_RUNTIME` optionally selects a source checkout, and `STAGE_OUT` selects the ignored result directory. The durable fixture `scripts/fixtures/issue-168-detour-trace.json` contains only recorded world time and player position, velocity and quaternion from the failed natural flight, plus its source identity.
+
+This is deliberately a hybrid test, not a full saved-world replay. From world42.532 through56.6604, the actual AP owner receives the recorded/interpolated player trajectory and builds its own private tangent/watch history. The asteroid owner supplies actual orbital positions; NPCs remain intact in the bootstrap world, whose full state was not saved by the original trace. This first portion tests watchdog bookkeeping and makes no ship-motion safety claim. After56.6604, the test stops writing player poses and runs every actual game owner, including helm, ship, NPCs, asteroids, collision and docking.
+
+The same test inputs on the unchanged parent runtime (`41fa6a3b9a879b3abd63e66b253b2f96959ac20f5a7e61f7386f6c875d4f3e8b`) cancel `blocked` at56.8271, only0.1667s into the real-owner continuation. With the repair, the continuation reaches berth at81.1771,24.5167s after handoff, with only the `docked` event and no contact, heat or death. A separate frozen-tail diagnostic remains bounded: the parent cancels at56.8271 and the candidate at58.5604. These results discriminate watchdog behavior without injecting a private tangent, heading command or timer.
+
+Earlier cold-command diagnostics are preserved: a fresh command at the first stage sample safely berthed on the parent in38.4167s, and another at44.5619 berthed in23.7s. A fresh command at the first cruise sample diverged into a later NPC impact. Those outcomes demonstrate why restarting from a player pose is not a faithful reconstruction of this private-history defect. They are not substituted for the discriminating hybrid or claimed as repaired natural journeys.
+
+## Final verification boundary
+
+The historical traffic-wait and three-journey safety evidence remains in [Issue168StageLivenessEvidence.md](Issue168StageLivenessEvidence.md) and [Issue168CruiseEvidence.md](Issue168CruiseEvidence.md). Independent negative controls cover nonrenewable geometric allowance alongside the existing static, projected-unclearing and traffic-budget tests. The final combined commit must receive the focused group, build, full boot/release checks and an independent natural browser journey. Its immutable source identity and final results belong in the release logs/review; this source document does not pre-claim that gate.

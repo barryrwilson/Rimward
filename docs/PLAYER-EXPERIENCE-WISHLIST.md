@@ -494,6 +494,36 @@ demand card, and the autopilot NAV panel with its cancel bar.
   accepted-survey reload, marker/API parity, discovery and the quoted dock
   payment with no console errors.
 
+### Agent API playtest corrections — 2026-09-14
+
+Implemented on the local Agent API candidate, with builder evidence; final
+integrated QA and publication are pending in the
+[mission record](AgentApiFixes20260914.md).
+
+- [#168](https://github.com/barryrwilson/Rimward/issues/168): `approachDock`
+  cruises to a distant local station with body/sun avoidance, brakes into the
+  existing corridor, and reports its phases. The public Veridian arrival run
+  reached berth in 38.3846 simulation seconds without heat or impact events.
+- [#169](https://github.com/barryrwilson/Rimward/issues/169): raw pitch is
+  explicitly mouse-style positive-down; real hull tests cover pitch, yaw and
+  roll in both directions. The original no-turn symptom did not reproduce
+  in standalone Chrome; the sign correction and regression coverage are
+  supported outcomes, not proof of a repaired browser-pane-specific drop.
+- [#170](https://github.com/barryrwilson/Rimward/issues/170): service refusals
+  carry a token and reason, launch works from service panes when clearance is
+  available, and observed offers match the current desk's board.
+- [#171](https://github.com/barryrwilson/Rimward/issues/171): raw afterburner
+  is a pulse without flee ownership, so an immediate dock handoff survives.
+  Directed combat retreat keeps its existing burner authorization.
+- [#178](https://github.com/barryrwilson/Rimward/issues/178): the desk's visible
+  haul reward, offer observation and accepted agreement share one quote;
+  later price drift cannot change accepted pay.
+
+These updates add no keys, ship tuning, or persistent schema fields. Existing
+raw bearing controllers negate their outgoing pitch under the documented
+sign contract. [API contract](AgentApiDesign.md)
+and [focused evidence](AgentApiFixes20260914.md) retain test boundaries.
+
 ### Playtest capture — 2026-08-27 (Claude Fable Agent API live play)
 
 External agent play on the live `window.rimward` handle (`?agent=1`). Fear 5
@@ -551,9 +581,10 @@ items stay INBOX for a later wave. Scratch nits: `out/orch-fable/`.
   outer loop a usable evade/flee path (and/or pace Fear for agent playtests)
   without a cheat warp.
   Wave 138 PR1 `docs/AgentApiEvadeDesign.md`. Named
-  `act({ name: 'afterburner' })` Space pulse plus a session flee helm:
-  sample headings, avoid the sun and large solids, run to the station
-  ring, in-zone dock pulse. No teleport. `evade` stays unknown.
+  originally coupled `act({ name: 'afterburner' })` to a session flee helm.
+  Issue #171 supersedes that raw-command coupling with a Space-equivalent
+  pulse; directed retreat remains under `setCombatIntent`. No teleport;
+  `evade` stays unknown.
 - [x] DONE (P2, AGENT API): Observe market rows expose **posted** table
   prices (`priceOf` / `world.prices`). Desk fill still applies rank, faction,
   epic, and hermit modifiers. An agent can still buy/sell on the wrong unit

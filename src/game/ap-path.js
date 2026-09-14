@@ -11,7 +11,7 @@ export const AP_KEEP_PAD = 12;
 export const AP_LEAD_MARGIN = 1.25;
 export const AP_ALIGN_IN = 0.86;
 /** Extra radius for an outside tangent so closest approach is strictly > keep. */
-const TANGENT_CLEAR = 1;
+export const TANGENT_CLEAR = 1;
 const DETOUR_ITERS = 8;
 
 const EPS = 1e-10;

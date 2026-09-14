@@ -1139,7 +1139,7 @@ async function main() {
             && (combatProbe.hits > 0 || combatProbe.destroyed > 0 || combatProbe.surrendered > 0)) break;
           const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
           const sx = Math.max(-1, Math.min(1, aimPt[0] * 2.5));
-          const sy = Math.max(-1, Math.min(1, aimPt[1] * 2.5));
+          const sy = Math.max(-1, Math.min(1, -aimPt[1] * 2.5));
           const aligned = aimPt[2] < -0.85;
           const ctl = await act('setControl', { seq: ++seq, ttl: 1.2, steerX: sx, steerY: sy, fireHeld: aligned, throttle: 0.6 });
           if (ctl && ctl.ok === false && ctl.token === 'overlay') await clearHails();

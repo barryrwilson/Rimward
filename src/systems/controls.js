@@ -253,7 +253,7 @@ let physicalHeld = () => false;
 function combatNeutral(ctx) {
   const input = ctx.input;
   input.steerX = input.steerY = input.strafeX = input.strafeY = input.roll = input.throttle = 0;
-  input.fireHeld = input.driftHeld = input.afterburnerPressed = input.agentBurnerHeld = false;
+  input.fireHeld = input.driftHeld = input.afterburnerPressed = input.agentAfterburnerPressed = input.agentBurnerHeld = false;
   input.fullStop = true;
 }
 
@@ -346,7 +346,7 @@ export function agentOwnsShip(ctx) {
 
 /**
  * agent-api.js calls this after engageAutopilot / approachDock /
- * engageAutomine / afterburner (flee) succeed. Physical holds present at the
+ * engageAutomine succeed. Physical holds present at the
  * moment of handover are discarded so nothing steers on the first tick.
  */
 export function markAgentHelm(ctx) {
@@ -600,7 +600,7 @@ export function agentCombatSet(ctx, spec) {
     // lease whose view reports an intercept. The first applied tick would
     // clear it anyway; clearing here keeps flags.fullStop honest before it.
     ctx.input.fullStop = false;
-    if (!keep) ctx.input.driftHeld = ctx.input.agentBurnerHeld = ctx.input.afterburnerPressed = false;
+    if (!keep) ctx.input.driftHeld = ctx.input.agentBurnerHeld = ctx.input.afterburnerPressed = ctx.input.agentAfterburnerPressed = false;
     noteLease(ctx, 'active', leaseSeq, '');
     discardPhysical();
     return '';
@@ -614,6 +614,11 @@ export function agentControlClear(ctx, reason = 'explicit') {
   try {
     expireCombat(ctx);
     if (!dropLease(ctx, reason) && !combatNote) noteLease(ctx, 'cleared', leaseSeq, reason);
+    if (reason !== 'explicit') {
+      pendingAgentAfterburner = false;
+      if (ctx?.input?.agentAfterburnerPressed) ctx.input.afterburnerPressed = false;
+      if (ctx?.input) ctx.input.agentAfterburnerPressed = false;
+    }
     return '';
   } catch {
     return 'no-service';
@@ -667,7 +672,10 @@ let pendingTarget = false;
 let pendingHail = false;
 let pendingDock = false;
 let pendingReticleLock = false;
-let pendingAfterburner = false;
+let pendingAfterburner = false; // physical Space
+// Issue #171: keep pulse provenance until the same-frame dock helm reads it.
+// A simultaneous physical edge wins so an agent cannot mask human cancellation.
+let pendingAgentAfterburner = false;
 
 /** True only when the title overlay is attached. Create-on-miss getElementById is not open. */
 function titleOverlayAttached() {
@@ -889,7 +897,7 @@ export function agentPulse(ctx, edge) {
       return '';
     }
     if (edge === 'afterburner') {
-      pendingAfterburner = true;
+      pendingAgentAfterburner = true;
       return '';
     }
     return 'unknown';
@@ -1076,6 +1084,8 @@ export function initControls(ctx) {
   lease = null;
   leaseSeq = 0;
   combatNote = null;
+  pendingAgentAfterburner = false;
+  input.agentAfterburnerPressed = false;
   helmMarks.delete(ctx);
   escapeHandoff = false;
   noteLease(ctx, 'idle', 0, '');
@@ -1102,7 +1112,7 @@ export function initControls(ctx) {
   physicalHeld = () => pressed.size > 0 || fireDown;
   // An Escape handoff keeps the live cursor so the first steer sample is the
   // reticle the player sees; every other combat release re-centres it.
-  combatRelease = () => { if (!escapeHandoff) mouseX = mouseY = null; pendingAfterburner = false; };
+  combatRelease = () => { if (!escapeHandoff) mouseX = mouseY = null; pendingAfterburner = pendingAgentAfterburner = false; };
   discardPhysical = () => { pressed.clear(); fireDown = false; };
 
   /**
@@ -1162,7 +1172,8 @@ export function initControls(ctx) {
     // issue #61). Release physical holds without discarding the active pilot.
     if (lease?.combat) { mouseX = mouseY = null; expireCombat(ctx); return; }
     dropLease(ctx, 'blur');
-    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+    pendingAfterburner = pendingAgentAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+    input.agentAfterburnerPressed = false;
     input.matchSpeedPressed = false;
     input.reticleLockPressed = false;
     input.throttleHeld = false;
@@ -1205,7 +1216,7 @@ export function initControls(ctx) {
     mouseY = null;
     lastFTapAt = -Infinity;
     dropLease(ctx, 'berth');
-    pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+    pendingAfterburner = pendingAgentAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
     input.steerX = 0;
     input.steerY = 0;
     input.strafeX = 0;
@@ -1215,7 +1226,7 @@ export function initControls(ctx) {
     input.throttleHeld = false;
     input.fireHeld = false;
     input.driftHeld = false;
-    input.afterburnerPressed = false;
+    input.afterburnerPressed = input.agentAfterburnerPressed = false;
     input.targetPressed = false;
     input.hailPressed = false;
     input.dockPressed = false;
@@ -1376,7 +1387,8 @@ export function initControls(ctx) {
 
       // --- Publish one-frame edge pulses (later systems see them this frame).
       // Agent act({ name:'dock' }) sets pendingDock; this publish is the next update.
-      input.afterburnerPressed = pendingAfterburner;
+      input.afterburnerPressed = pendingAfterburner || pendingAgentAfterburner;
+      input.agentAfterburnerPressed = pendingAgentAfterburner && !pendingAfterburner;
       input.targetPressed = pendingTarget;
       input.hailPressed = pendingHail;
       input.dockPressed = pendingDock;
@@ -1386,7 +1398,7 @@ export function initControls(ctx) {
       const automineTap = pendingAutomine;
       const enginePartTap = pendingEnginePart;
       input.throttleHeld = has(snap.throttleUp) || has(snap.throttleDown);
-      pendingAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
+      pendingAfterburner = pendingAgentAfterburner = pendingTarget = pendingHail = pendingDock = pendingCamera = pendingMatchSpeed = pendingReticleLock = pendingAutomine = pendingEnginePart = false;
 
       if (input.cameraPressed) {
         const order = ['chase', 'third', 'first'];
@@ -1533,7 +1545,10 @@ export function initControls(ctx) {
       }
       if (lease) {
         input.steerX = lease.steerX;
-        input.steerY = lease.steerY;
+        // Raw API pitch is mouse-style screen Y (positive means nose down).
+        // Combat computes flight-space pitch; keep its and the human reticle's
+        // positive-up convention unchanged at the shared ship input boundary.
+        input.steerY = lease.combat ? lease.steerY : (-lease.steerY || 0);
         input.strafeX = lease.strafeX;
         input.strafeY = lease.strafeY;
         input.roll = lease.roll;
@@ -1542,6 +1557,7 @@ export function initControls(ctx) {
         if (lease.combat) {
           input.agentBurnerHeld = lease.burner === true;
           input.afterburnerPressed = lease.burnerEdge === true;
+          input.agentAfterburnerPressed = false;
         }
         if (lease.throttle !== null) {
           if (lease.throttle <= 0) {

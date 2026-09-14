@@ -26053,10 +26053,11 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w138).every(Boolean)) { console.log('WAVE138 OREGUIDE FAIL'); errors++; }
 }
 
-// ---- Wave 138 PR1: named afterburner pulse (evade leftover) ----
+// ---- Wave 138 PR1: raw burner contract + legacy internal flee regression ----
 {
   const { COMMAND_NAMES: names138e, isLiveCommand: live138e, isForbiddenName: forbid138e } =
     await import('../src/game/agent-schema.js');
+  const { tryEngageFlee: engageLegacyFlee138e } = await import('../src/game/agent-flee.js');
   const here138e = dirname(fileURLToPath(import.meta.url));
   const src138e = (rel) => readFileSync(join(here138e, '..', rel), 'utf8');
   const bootSrc138e = src138e('scripts/boot-test.mjs');
@@ -26122,6 +26123,8 @@ removeLiveShip(w42indyCtx, w42indy);
   let readyAtOmit = false;
   let lastLine = false;
   let pulseAliasUnknown = false;
+  let rawNoFlee = false;
+  let rawClearsFullStop = false;
   let fleeEngaged = false;
   let fleeFullStopKeep = false;
   let fleeDeathOff = false;
@@ -26156,8 +26159,9 @@ removeLiveShip(w42indyCtx, w42indy);
     edgeFrame = notSameTick && ctx.input.afterburnerPressed === true;
     burnerOn = ctx.ship?.burnerActive === true;
     queued = actBurn?.ok === true && actBurn?.status === 'queued' && actBurn?.token === '';
-    fleeEngaged = ctx.flee?.engaged === true;
-    fleeFullStopKeep = ctx.flee?.engaged === true;
+    // Issue #171 supersedes raw burner ownership; the pulse itself never steers.
+    rawNoFlee = ctx.flee?.engaged !== true;
+    rawClearsFullStop = ctx.input.fullStop === false;
     try {
       const badge = findBadge138e();
       const texts = badge ? textsOf138e(badge) : [];
@@ -26254,7 +26258,12 @@ removeLiveShip(w42indyCtx, w42indy);
       const dSun0 = obj138e.position.distanceTo(sun138e);
       const dSt0 = obj138e.position.distanceTo(st138e);
       try { rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
-      fleeEngaged = fleeEngaged || ctx.flee?.engaged === true;
+      // Preserve the existing flee module's sun/station/no-teleport checks by
+      // invoking its internal owner explicitly. This is not a public raw-burner
+      // behavior assertion; #171 intentionally removed that acquisition path.
+      const fleeToken138e = engageLegacyFlee138e(ctx);
+      fleeEngaged = fleeToken138e === '' && ctx.flee?.engaged === true;
+      fleeFullStopKeep = rawClearsFullStop && fleeEngaged;
       let maxStep = 0;
       for (let i = 0; i < 180; i++) {
         const bx = obj138e.position.x;
@@ -26303,6 +26312,7 @@ removeLiveShip(w42indyCtx, w42indy);
       ctx.ship.burnerReadyAt = 0;
     }
     try { rw138e.act({ v: 2, name: 'afterburner' }); } catch { threw138e = true; }
+    engageLegacyFlee138e(ctx); // retain the internal death/recovery lifecycle checks
     tick(1, 'w138 flee death engage');
     const fleeWasOn138e = ctx.flee?.engaged === true;
     ctx.emit('playerDestroyed', {});
@@ -26377,6 +26387,8 @@ removeLiveShip(w42indyCtx, w42indy);
     oreguideKeep: !!oreguideKeep,
     publicPulseFour: !!publicPulseFour,
     pulseAliasUnknown: !!pulseAliasUnknown,
+    rawNoFlee: !!rawNoFlee,
+    rawClearsFullStop: !!rawClearsFullStop,
     fleeEngaged: !!fleeEngaged,
     fleeFullStopKeep: !!fleeFullStopKeep,
     fleeDeathOff: !!fleeDeathOff,
@@ -27975,6 +27987,40 @@ removeLiveShip(w42indyCtx, w42indy);
   });
   if (!childVerdict.ok) {
     console.log(`WAVE141/142 FRESH-PROCESS FAIL — ${childVerdict.why}`);
+    errors++;
+  }
+}
+
+// ---- Agent API playtest fixes #168-171/#178: checked fresh-process group ----
+// #168 requires the real Veridian arrival-to-berth simulation in this boot gate.
+// The group also runs real-hull steering, desk/quote parity and burner handoff.
+// Child output is inherited; spawn errors, signals, timeouts and nonzero exits
+// fail boot. No prior scenario or assertion is replaced or weakened.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- Agent API playtest fixes #168-171/#178 (checked fresh processes) ---');
+  const child = spawn(process.execPath, [join(here, 'agent-api-playtest-fixes-test.mjs')], {
+    cwd: dirname(here), env: process.env, stdio: 'inherit', windowsHide: true,
+  });
+  const verdict = await new Promise(resolve => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    // Each of four inner children is bounded to two minutes by its owner.
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, 'timeout after 10 min');
+    }, 10 * 60 * 1000);
+    child.on('error', error => finish(false, `spawn error: ${error.message}`));
+    child.on('close', (code, signal) => finish(code === 0,
+      `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`));
+  });
+  if (!verdict.ok) {
+    console.log(`AGENT API PLAYTEST FIXES BOOT FAIL — ${verdict.why}`);
     errors++;
   }
 }

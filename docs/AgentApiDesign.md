@@ -11,6 +11,113 @@
 | **Merge law** | [`out/w126/agentapi/shared-contract.md`](../out/w126/agentapi/shared-contract.md). If this document and that file conflict, **the contract wins**. |
 | **Honor** | HUD-01 empty 80 px hub. Aim-glass gauges stay off. Kit mutate omit. Digit 0/8/9 stay station. Digit 1–5 stay in-flight WPN. `innerHTML` forbidden later. Toasts stay `textContent`. `state.js` READ-ONLY (no new WORLD_FIELDS). `window.__ctx` stays debug/harness. Do **not** teleport. Do **not** grant credits, hull, or cargo. No in-repo LLM runner. No PR7/PR8. Owner locks: opt-in A, pad 2A, bridge 3A, never in-repo LLM 4C, grok-4.5 external-only 5, pause A. Do **not** steal CTL-03 PR2 stills, CTL-04 PR2 `fireHeld`, AI-05 PR2 home-berth bubble. Do **not** steal Hail01 demand lifecycle or Hud06 home-marker. Do **not** edit the wishlist, `PROGRESS.md`, leftover CTL/NAV/HUD docs, or `scripts/boot-test.mjs` this wave. Do **not** write `docs/OwnerDecisionsWave126.md`. |
 
+## September 2026 playtest corrections (#168–#171, #178)
+
+These current contracts supersede the older raw-burner/flee and slow outer
+approach descriptions below. Implementation evidence and review status are in
+[AgentApiFixes20260914.md](AgentApiFixes20260914.md).
+
+### Station travel and raw afterburner
+
+`approachDock {}` travels to the **current station**. Beyond 500 u from the
+station's +X stage point it starts with `autopilot.mode: 'dock'` and
+`phase: 'cruise'`, using the existing route speed and body/sun avoidance.
+It brakes into the slow `stage` within 100 u of the stage point, or within
+500 u of a station blocking the chord, then proceeds through `corridor`,
+`settle`, `docking`, and `complete`. Nearby requests keep the slow approach.
+The station and gate tuning is unchanged; there is no new waypoint or gate
+travel command. Existing named refusals apply, including `autopilot` for a
+second approach request while the first owns the helm. Observe phase and
+actual position/speed across simulation frames rather than assuming an
+accepted command has already arrived.
+
+`afterburner {}` queues a **single raw burner edge** for the next controls
+update. It does not acquire the flee helm. An `approachDock` in the same turn,
+or after the burner has started, can take the dock helm. This explicit dock
+handoff retires an active or queued burn and applies the existing radial
+pad speed cap on its first takeover frame so braking owns the approach.
+The ordinary power, cooldown and burn-duration rules otherwise apply. A raw pulse remains refused
+with `helm` under a combat lease; for a directed combat withdrawal use
+`setCombatIntent { intent: 'retreat', burner: true, ... }` (or `break-off`).
+That existing tactical burner authorization is unchanged.
+
+`agent-flee.js` and `ctx.flee` remain reserved legacy/internal machinery;
+there is no current public action that engages them. Tactical retreat is
+owned by the combat lease, not by `ctx.flee`.
+
+Internally, controls publishes transient `input.agentAfterburnerPressed`
+only with an API-authored raw edge. This lets the dock helm distinguish the
+handoff from physical burner cancellation. A simultaneous physical Space
+edge takes precedence; the marker clears on the next update and lifecycle
+resets. The field is not saved and is not a new public action or event.
+Human helms retain their manual cancellation; Agent Play retains the #163
+Escape-only takeover rule.
+
+### Raw steering signs
+
+Raw `setControl` axes are normalized in `[-1, 1]`:
+
+| Axis | Positive value |
+|---|---|
+| `steerX` | Yaw the nose right |
+| `steerY` | Pitch the nose down, following screen/mouse Y |
+| `roll` | Rotate about ship-local +Z; the right wing rises |
+| `strafeX` | Translate right |
+| `strafeY` | Translate up |
+
+Negative `steerY` pitches up. To aim at a ship-local bearing `[x, y, z]`,
+use **negative** pitch from `atan2(y, hypot(x, z))`. This corrects the old
+raw pitch sign and is **not backward-compatible** for raw pitch controllers;
+in-repo bearing controllers migrated with it. `strafeY` remains up-positive
+and must not be negated with pitch. Human
+mouse-up and internal combat pitch keep their existing nose-up convention.
+Actual angular speed still uses the ship's class, speed and bio factors.
+For a light hull at creep, the current full-deflection RCS floor is
+0.40 rad/s (about 22.9 degrees/s), so a 0.7 input turns about 16.0 degrees
+per simulation second. A lease does not bypass these limits.
+
+The original no-turn report did not reproduce in isolated real Chrome on
+the reported base: all three axes already rotated the real quaternion. The
+confirmed pitch-sign discrepancy is fixed, and real-hull regression pins
+now cover both directions on every axis. See
+[Issue169SteeringEvidence.md](Issue169SteeringEvidence.md) for the distinction
+between that measurement and the original in-app Browser report.
+
+### Desk refusals, offers and haul agreements
+
+Every refusal from `acceptJob`, `trade`, `repairAll`, `feed`, and `undock`
+carries a named `token` and a short `error`. The first four still require
+their corresponding service pane; for example, a closed Jobs pane returns
+`no-service` with `Open the jobs service first.`. A station owner's explicit
+refusal token takes precedence over notice classification. `undock` can
+launch from any service pane, closing it when launch clearance is available;
+a blocked corridor preserves the berth and its named refusal.
+
+`jobs.offers` mirrors the current station's offered board: local-origin
+postings, explicitly relayed unique work, and the same standing gates.
+It is empty in flight; accepted work stays in `jobs.active` across docks.
+A foreign posting's presence in saved world jobs does not make it available
+to this desk. Completed work is absent from both lists; use the public
+`jobState` terminal events in the event ring: `outcome` is `done`, `failed`,
+or `closed` when an accepted record disappears.
+
+For `haul` and `trade` jobs, the latest **actually displayed** reward quote
+is shared by the card and `jobs.offers[].reward` while the Jobs pane is
+visible, until its next real redraw. An observation alone cannot refresh
+the agreement behind a visible card. When Jobs is hidden, observations use
+current prices; dock and successful undock clear the prior berth's quote
+cache. Acceptance locks the applicable amount in the existing `payQuoted`
+field and includes it in the success `notice`. Subsequent price changes do
+not change accepted pay. Legacy accepted-job fallback calculations and
+passenger fare semantics remain unchanged.
+
+Focused entry point: `npm run test:agent-playtest-fixes`. The same checked
+fresh-process group runs inside `test:boot` and `test:release-focused`;
+spawn errors, timeouts, signals, and nonzero results fail the gate. Live
+checks are `test:agent-cruise-live`, `test:agent-steering-live`,
+`test:agent-desk-live`, and `test:agent-burner-live`. Their evidence distinguishes natural public flight
+from explicitly staged price/berth fixtures.
+
 ## Issue #103 — Raw control throttle persistence and observability
 
 `observe().ship.throttle` is `ctx.input.throttle`: the persistent **manual**
@@ -352,8 +459,8 @@ state every frame, so a stuck input is impossible.
 
 **Human takeover is Escape only (issue #163, owner decision 2026-09-13).**
 While a raw or combat lease is live, or while a helm path the bridge engaged
-(`engageAutopilot`, `approachDock`, `engageAutomine`, the flee channel behind
-`afterburner`) is still engaged with Agent Play on, incidental human input
+(`engageAutopilot`, `approachDock`, or `engageAutomine`) is still engaged
+with Agent Play on, incidental human input
 never takes the ship: pointer motion, a `mousedown` on any surface (HUD or
 play surface), a tracked flight key and the fire button neither drop the lease
 nor write steer, throttle or fire. Those physical edges are discarded, not

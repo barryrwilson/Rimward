@@ -459,6 +459,8 @@ function jobRow(ctx, j) {
     state: str(own(j, 'state')),
     reward: num(own(j, 'reward'), 0),
   };
+  const quote = ctx.stationDesk?.peekJobReward?.(j);
+  if (Number.isFinite(quote)) row.reward = quote;
   const title = own(j, 'title');
   if (row.kind === 'explore' && row.state === 'accepted') row.objective = surveyObjective(ctx, j);
   if (row.kind === 'recovery' && row.state === 'accepted') row.objective = recoveryObjective(ctx, j);
@@ -501,6 +503,9 @@ function jobsBlock(ctx, docked) {
   const jobs = ctx.world && Array.isArray(ctx.world.jobs) ? ctx.world.jobs : [];
   const offers = [];
   const active = [];
+  // Share the rendered board's origin, relay and standing gates.
+  const board = docked && typeof ctx.stationDesk?.peekOffers === 'function'
+    ? ctx.stationDesk.peekOffers() : [];
   for (let i = 0; i < jobs.length; i++) {
     const j = jobs[i];
     if (!j || typeof j !== 'object') continue;
@@ -509,7 +514,7 @@ function jobsBlock(ctx, docked) {
       active.push(jobRow(ctx, j));
       continue;
     }
-    if (docked) offers.push(jobRow(ctx, j));
+    if (docked && state === 'offered' && board.includes(j)) offers.push(jobRow(ctx, j));
   }
   return { offers, active };
 }

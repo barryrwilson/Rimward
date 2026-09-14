@@ -80,7 +80,7 @@ for (let i = 0; i < 1800; i++) {
   act('setControl', {
     seq: ++seq, ttl: 0.5,
     steerX: Math.max(-1, Math.min(1, x * 3)),
-    steerY: Math.max(-1, Math.min(1, y * 3)), throttle,
+    steerY: Math.max(-1, Math.min(1, -y * 3)), throttle,
   });
   tick(6);
 }

@@ -801,7 +801,10 @@ export const COMMAND_SPECS = freeze({
   clearRoute: cmd({}, ['pilot']),
   engageAutopilot: cmd({}, ['pilot']),
   cancelAutopilot: cmd({}, ['pilot']),
-  approachDock: cmd({}, ['pilot']),
+  approachDock: freeze({
+    args: freeze({}), roles: freeze(['pilot']),
+    note: 'Fly to the current station with sun/body avoidance: autopilot mode dock. Requests beyond 500 u from the +X stage begin in cruise, with predictive ship/asteroid clearance and braking, then brake to stage within 100 u (500 u from a blocking station), followed by corridor/settle/docking. Nearby requests and nearby station detours keep creep. Existing named helm/station refusals apply.',
+  }),
   engageAutomine: cmd({}, ['miner']),
   cancelAutomine: cmd({}, ['miner']),
   dock: cmd({}, ['pilot']),
@@ -818,15 +821,18 @@ export const COMMAND_SPECS = freeze({
     note: 'the lock moves on acceptance, but the HUD aim digest that setCombatIntent needs is written once per rendered frame: after selectTarget (or setWeaponGroup) wait one rendered HUD frame — read observe().t advancing — before setCombatIntent, or expect token no-sample. A hidden or suspended tab renders no frames, so the sample never freshens until it is visible again.',
   }),
   pulse: cmd({ edge: "'dock'|'hail'|'target'|'reticleLock'" }, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
-  afterburner: cmd({}, ['pilot', 'combat']),
+  afterburner: freeze({
+    args: freeze({}), roles: freeze(['pilot', 'combat']),
+    note: 'Queue one raw burner pulse for the next controls update; normal power, cooldown and duration rules apply. Does not acquire the flee helm. approachDock may take over in the same turn or during the burn; dock takeover retires the active or queued burn and applies the radial pad speed cap on its first frame. A fresh physical Space press still cancels a human-owned dock helm. Refuses helm under a combat lease; use setCombatIntent retreat/break-off with burner true for directed withdrawal.',
+  }),
   setWeaponGroup: cmd({ n: 'integer 1..5' }, ['combat', 'miner']),
   setControl: freeze({
     args: freeze({
       seq: 'strictly increasing safe integer per session',
       ttl: 'sim seconds 0.05..5 (default 1)',
-      steerX: '-1..1 optional', steerY: '-1..1 optional',
+      steerX: '-1..1 optional; positive turns nose right', steerY: '-1..1 optional; positive pitches nose down (mouse-style)',
       strafeX: '-1..1 optional', strafeY: '-1..1 optional',
-      roll: '-1..1 optional',
+      roll: '-1..1 optional; positive rotates about ship-local +Z (right wing rises)',
       throttle: '0..1 target for the persistent ship setpoint published as observe().ship.throttle; omitted or null leaves that setpoint alone; ramps at the player 0.5/s rate while the lease is live; 0 commands the player full stop (observe().flags.fullStop) on the next applied update',
       fireHeld: 'boolean optional', driftHeld: 'boolean optional',
     }),

@@ -12,7 +12,7 @@ import { losCloseRate } from '../src/game/los-close.js';
 import { installDomStubs, seedBootRandom } from './lib/boot-harness.mjs';
 import { initControls, agentControlStatus, agentOwnsShip, markAgentHelm } from '../src/systems/controls.js';
 import { initAgentApi } from '../src/systems/agent-api.js';
-import { initAgentFlee } from '../src/game/agent-flee.js';
+import { initAgentFlee, tryEngageFlee } from '../src/game/agent-flee.js';
 import { initAutomine, tryEngageAutomine } from '../src/game/automine.js';
 import { initShip } from '../src/systems/ship.js';
 import { initNpc, spawnLiveShip } from '../src/systems/npc.js';
@@ -808,8 +808,16 @@ test('issue #163: an agent-engaged helm ignores incidental input and hands back 
   assert.equal(human.ctx.automine.engaged,true);assert.equal(agentOwnsShip(human.ctx),false);
   human.emit('keydown',{code:'KeyD',repeat:false});human.tick();human.am.update(1/60);
   assert.equal(human.ctx.automine.engaged,false);assert.equal(human.ctx.automine.reason,'input');
-  // Flee through the bridge afterburner pulse is an agent helm as well.
-  const flee=fixture();const fl=initAgentFlee(flee.ctx);assert.equal(flee.act('afterburner').ok,true);
+  // Public afterburner is a raw pulse and does not claim an autonomous helm.
+  const pulse=fixture();const pulseFlee=initAgentFlee(pulse.ctx);assert.equal(pulse.act('afterburner').ok,true);
+  assert.equal(pulse.ctx.flee.engaged,false);assert.equal(agentOwnsShip(pulse.ctx),false);
+  pulse.tick();pulseFlee.update(1/60);
+  assert.equal(pulse.ctx.input.afterburnerPressed,true,'the public action reaches the raw input edge');
+  assert.equal(pulse.ctx.flee.engaged,false,'consuming the raw pulse does not engage flee');
+  assert.equal(agentOwnsShip(pulse.ctx),false,'the raw pulse does not acquire agent helm ownership');
+  pulse.tick();assert.equal(pulse.ctx.input.afterburnerPressed,false,'the raw edge lasts one update');
+  // Exercise the reserved internal flee channel explicitly, independently of public combat retreat.
+  const flee=fixture();const fl=initAgentFlee(flee.ctx);assert.equal(tryEngageFlee(flee.ctx),'');markAgentHelm(flee.ctx);
   assert.equal(flee.ctx.flee.engaged,true);assert.equal(agentOwnsShip(flee.ctx),true);
   flee.tick();fl.update(1/60);flee.emit('keydown',{code:'KeyD',repeat:false});flee.emit('mousedown',{button:0});flee.tick();fl.update(1/60);
   assert.equal(flee.ctx.flee.engaged,true,'incidental input does not break flee');assert.equal(flee.ctx.input.fireHeld,false);

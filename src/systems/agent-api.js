@@ -16,7 +16,7 @@ import {
   dockApproachLine,
 } from '../game/autopilot.js';
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
-import { tryEngageFlee, disengageFlee } from '../game/agent-flee.js';
+import { disengageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
 import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus, agentRefusalDetail, markAgentHelm, registerAgentHelmRelease } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
@@ -220,7 +220,7 @@ function refuseDesk(ctx, name, needService) {
   if (!needService) return null;
   const service = peekDeskService(desk);
   if (service === needService) return null;
-  return fail(ctx, name, 'no-service');
+  return fail(ctx, name, 'no-service', `Open the ${needService} service first.`);
 }
 
 function deskNoticeToken(notice) {
@@ -242,8 +242,8 @@ function deskNoticeToken(notice) {
 function afterDesk(ctx, name, result) {
   if (result && result.ok === true) return ok(ctx, name, name === 'acceptJob' ? result.notice : '');
   const notice = result && typeof result.notice === 'string' ? result.notice : '';
-  const token = deskNoticeToken(notice);
-  return fail(ctx, name, token, notice || token);
+  const token = str(result && result.token) || (notice ? deskNoticeToken(notice) : 'no-service');
+  return fail(ctx, name, token, notice || 'The desk could not complete that request.');
 }
 
 function afterControls(ctx, name, token, queued) {
@@ -542,8 +542,7 @@ function dispatchLive(ctx, name, args) {
     if (ctx.flags && ctx.flags.docked === true) return fail(ctx, name, 'docked');
     if (!ctx.input || typeof ctx.input !== 'object') return fail(ctx, name, 'no-service');
     agentClearFullStop(ctx);
-    tryEngageFlee(ctx);
-    markAgentHelm(ctx); // no-op unless the flee channel engaged
+    // Raw burner pulses never acquire the flee helm; retreat owns its own burner.
     return afterControls(ctx, name, agentPulse(ctx, 'afterburner'), true);
   }
   if (name === 'selectTarget') {
