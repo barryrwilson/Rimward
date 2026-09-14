@@ -16,6 +16,8 @@ const checks = [
   ['blockedHoldEscape', 'issue-168-hold-traffic-test.mjs', { HOLD_CASE: 'blocked', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-hold','gate-blocked') }],
   ['repeatDockLiveness', 'issue-168-stage-liveness-test.mjs', { DOCK_RUNTIME: root, DOCK_OUT: join(root,'out','issue-168-stage-liveness','gate') }],
   ['staticBlockedWatchdog', 'issue-168-hold-traffic-test.mjs', { HOLD_CASE: 'static-blocked', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-static-blocked','gate') }],
+  ['unclearingMovingWatchdog', 'issue-168-hold-traffic-test.mjs', { HOLD_CASE: 'moving-blocked', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-moving-blocked','gate') }],
+  ['finiteYieldBudget', 'issue-168-hold-traffic-test.mjs', { HOLD_CASE: 'yield-budget-clock', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-yield-budget-clock','gate') }],
   ['rawSteering', 'issue-103-throttle-observability-test.mjs'],
   ['deskAndHaulQuotes', 'issue-170-desk-test.mjs'],
   ['rawBurnerDockHandoff', 'issue-171-burner-test.mjs'],

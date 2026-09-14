@@ -34,6 +34,12 @@ is in the isolated test worktree under
 `out/issue-139-corridor/pre-fix/repeat/result.json`. A repaired candidate must
 pass this same sequence before it can be integrated.
 
+Source repair `2911aa251b6a484aff618241908c0ed6d4625cc4` passes the unchanged
+repeat sequence: both trips berth, at world times 31 and 88.5, without contact,
+heat, death, or cancellation. Its runtime source SHA-256 is
+`41fa6a3b9a879b3abd63e66b253b2f96959ac20f5a7e61f7386f6c875d4f3e8b`.
+The original `590104a4` failure remains the before-fix result.
+
 ## Static blocked watchdog control
 
 `HOLD_CASE=static-blocked` runs the actual player and collision owners against
@@ -48,6 +54,36 @@ The regression requires the same bounded terminal failure within 30 seconds
 and verifies that the collider did not move. A blanket watchdog disable cannot
 pass this control. Evidence is preserved under
 `out/issue-168-static-blocked/pre-fix/result.json` in the isolated test worktree.
+
+`HOLD_CASE=moving-blocked` retains actual player physics but moves the stage
+blocker slowly back and forth within a five-unit vertical envelope at one unit
+per second. It never frees the stage point. The earlier runtime terminates
+after 10.7 seconds; the repair terminates after 11.0167 seconds with at least
+35.3667 units of hull clearance. Cumulative collider travel verifies movement
+even though a reversing body can end near its starting point. The required
+terminal result remains `blocked` within 30 seconds.
+
+## Yield-budget boundary, explicitly without ship integration
+
+`HOLD_CASE=yield-budget-clock` is a direct autopilot-owner/clock control, not a
+real-flight claim. A fixed player pose prevents actual range progress. A
+controlled collider sits midway along the stage chord, outside the target's
+keep sphere, and reverses vertically through a twenty-unit envelope at twenty
+units per second. It changes identity on reversals. Only the autopilot owner
+updates during this bounded control; real player physics is covered separately
+by the repeat-docking, static, slow-moving, and incoming-crossing cases.
+
+The old runtime returns `blocked` after 10.0167 seconds and fails the required
+finite-yield opportunity. The repair grants that opportunity, then returns the
+same named `blocked` result after 20.0333 seconds despite changing identities
+and aims. The test requires termination between 18 and 25 seconds with zero
+player displacement. Thus it checks both a used yield allowance and bounded
+exhaustion, without reading or reproducing private credit variables. The raw
+before/candidate pair is preserved under
+`out/issue-168-yield-budget-clock/{pre-fix,candidate}/result.json` in the test
+worktree. Earlier physical oscillating-blocker experiments allowed real creep
+and detours and are retained as diagnostics, not claimed as budget-isolation
+evidence.
 
 ## Corridor suite lifecycle
 
@@ -76,3 +112,4 @@ Agent API regression group additionally invokes the exact repeat case, making
 it part of the full boot gate as well, alongside the static blocked control.
 Neither the prior release-focused failure
 nor the candidate liveness failure is reported as a passing result.
+The complete shared Agent API group now contains twelve checked scenarios.
