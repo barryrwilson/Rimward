@@ -1430,6 +1430,101 @@ let escapeEvent = null;
 }
 
 // ===========================================================================
+// 5c. Issue #166: only live pursuit presses a station hold
+// ===========================================================================
+{
+  // A trader broken by an NPC pirate holds at the station. The hold must end
+  // once the pirate is GONE — a remembered last-seen position is not a
+  // pursuer — and once a live pirate stops working the hull. It must persist
+  // while the pirate still targets it.
+  const DWELL_FRAMES = Math.ceil((ESCAPE.dwellMin + ESCAPE.dwellSpan + 6) * 60);
+  const holdStart = STATION.clone().add(new THREE.Vector3(240, 0, 240));
+  const trader = makeFixture({
+    at: holdStart,
+    name: 'Pressed Wren',
+    classKey: 'cutter',
+    role: 'trader',
+    faction: 'freehold',
+    // Screens up: the flee comes from the HUNTER, not a lasting screen panic
+    // that would re-arm the player as the pursuer once the pirate stands off.
+    state: { hull: 60, lastHitAt: ctx.world.time, lastCombatAt: ctx.world.time },
+  });
+  // The pursuer: a live pirate targeting the trader from inside
+  // ESCAPE.pressureRange but outside weapon reach, engine out so it stays put.
+  const pirateAt = holdStart.clone().add(new THREE.Vector3(600, 0, 600));
+  const pirate = makeFixture({
+    at: pirateAt,
+    name: 'Idle Corsair',
+    classKey: 'cutter',
+    role: 'pirate',
+    faction: 'redledger',
+    // Loiter with the target set: findHunterOf reads the target, and loiter
+    // never re-acquires, so the pursuer is deterministic for the whole pin.
+    state: { engineOut: true },
+    ai: { mode: 'loiter', target: trader.live },
+  });
+  keepOnly(trader.rec, pirate.rec);
+  // The player is inside the live bubble but unlocked: never the pursuer in
+  // this scenario (the plan remembers the pirate), so its distance is moot.
+  placePlayer(holdStart, { x: 500, y: 0, z: 500 });
+  ctx.targets.current = null;
+  run(900, 'i166 pursued approach');
+  let plan = readEscape(trader.rec);
+  pin('i166: the pursued trader ran for the station hold', !!plan && plan.kind === 'station' && plan.phase === 'hold',
+    plan && { kind: plan.kind, phase: plan.phase });
+  pin('i166: the plan remembers the pirate, not the player', !!plan && plan.threat === 'ship' && plan.threatId === pirate.rec.id,
+    plan && { threat: plan.threat, threatId: plan.threatId });
+  pin('i166: the live pursuer handle is the pirate', trader.live.ai.fleeFrom === pirate.live);
+
+  // (a) The pirate still targets the hull: the hold persists past the dwell.
+  run(DWELL_FRAMES, 'i166 hold under live pursuit');
+  pin('i166: a live pirate that still targets the hull keeps the hold pressed',
+    trader.live.ai.mode === 'flee' && escapeActive(trader.rec) && readEscape(trader.rec)?.phase === 'hold',
+    { mode: trader.live.ai.mode, phase: readEscape(trader.rec)?.phase });
+
+  // (b) The pirate is still there but no longer works the hull: distance
+  // alone is not pursuit, so the dwell completes.
+  pirate.live.ai.target = null;
+  pirate.live.ai.mode = 'loiter';
+  run(DWELL_FRAMES, 'i166 idle pirate dwell');
+  pin('i166: a nearby pirate that no longer targets the hull does not press the hold',
+    !escapeActive(trader.rec) && readEscape(trader.rec)?.phase === 'done' && trader.live.ai.mode !== 'flee',
+    { phase: readEscape(trader.rec)?.phase, mode: trader.live.ai.mode });
+  dropFixture(trader);
+  run(3, 'i166 cleanup a');
+
+  // (c) The pirate is GONE (culled, jumped or dead) and only its last-seen
+  // position remains, inside the pressure range: the hold must still end.
+  const trader2 = makeFixture({
+    at: holdStart,
+    name: 'Orphaned Wren',
+    classKey: 'cutter',
+    role: 'trader',
+    faction: 'freehold',
+    state: { hull: 60, lastHitAt: ctx.world.time, lastCombatAt: ctx.world.time },
+  });
+  pirate.live.ai.target = trader2.live;
+  pirate.live.ai.mode = 'loiter';
+  keepOnly(trader2.rec, pirate.rec);
+  run(900, 'i166 orphan approach');
+  plan = readEscape(trader2.rec);
+  pin('i166: the second trader holds with the pirate remembered', !!plan && plan.phase === 'hold' && plan.threat === 'ship',
+    plan && { phase: plan.phase, threat: plan.threat });
+  const seenAt = plan && plan.threatAt ? new THREE.Vector3(plan.threatAt[0], plan.threatAt[1], plan.threatAt[2]) : null;
+  pin('i166: the remembered position lies inside the pressure range (the trap this fixes)',
+    !!seenAt && seenAt.distanceTo(trader2.live.object.position) <= ESCAPE.pressureRange,
+    seenAt && { d: seenAt.distanceTo(trader2.live.object.position) });
+  dropFixture(pirate);
+  keepOnly(trader2.rec);
+  run(DWELL_FRAMES, 'i166 orphan dwell');
+  pin('i166: with the pirate gone the remembered position never presses the hold — the dwell completes',
+    !escapeActive(trader2.rec) && readEscape(trader2.rec)?.phase === 'done' && trader2.live.ai.mode !== 'flee',
+    { phase: readEscape(trader2.rec)?.phase, mode: trader2.live.ai.mode, fleeFrom: trader2.live.ai.fleeFrom === null });
+  dropFixture(trader2);
+  run(3, 'i166 cleanup c');
+}
+
+// ===========================================================================
 // 6. Wake trails tell the truth about where the runner went
 // ===========================================================================
 {

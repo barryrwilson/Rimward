@@ -3656,23 +3656,60 @@ function updateFlee(ctx, live, dt) {
   fleeAwayFrom(ctx, live, dt, fleeSpeed);
 }
 
+/** The player presses a hold from inside ESCAPE.pressureRange (issue #101 exemption applies). */
+function playerPresses(ctx, live) {
+  const st = live.state;
+  // Issue #101: after surrender, an idle player near the pad is not an
+  // ongoing pursuit; a selected runner retains the close-pursuit behavior.
+  if (st?.surrendered === true && ctx.targets?.current !== live) return false;
+  const pObj = ctx.ship && ctx.ship.object;
+  return !!pObj && live.object.position.distanceTo(pObj.position) <= ESCAPE.pressureRange;
+}
+
+/**
+ * A live NPC presses a hold only while it still works this hull: it is in
+ * the live roster (a culled or dead hull's handle is stale), it targets the
+ * hull, and it is inside ESCAPE.pressureRange.
+ */
+function hullPresses(ctx, live, other) {
+  if (!other || !other.object || !other.ai || other.state?.destroyed) return false;
+  if (!ctx.ships || !ctx.ships.includes(other)) return false;
+  if (other.ai.target !== live) return false;
+  return live.object.position.distanceTo(other.object.position) <= ESCAPE.pressureRange;
+}
+
 /**
  * Is the runner still under pressure? A holding hull only stands down when
- * the encounter is actually over: no hunter, no threat inside
- * ESCAPE.pressureRange, and no fresh hit.
+ * the encounter is actually over: no fresh hit, no hunter, and no pursuer
+ * still working it inside ESCAPE.pressureRange.
+ *
+ * Issue #166: a remembered last-seen position (plan.threatAt) is never
+ * pressure — a pursuer that died, jumped or was culled is gone, and the point
+ * it was last seen at would otherwise press the hold forever. A live NPC
+ * presses only while it targets this hull; distance alone is not pursuit.
  */
 function escapePressed(ctx, live) {
   const st = live.state;
   const now = ctx.world ? ctx.world.time : 0;
   if (st && Number.isFinite(st.lastHitAt) && now - st.lastHitAt <= ESCAPE.pressureRecent) return true;
   if (findHunterOf(ctx, live)) return true;
-  // Issue #101: after surrender, an idle player near the pad is not an
-  // ongoing pursuit. Fresh damage and NPC hunters above still press the hold;
-  // a selected runner retains the existing close-pursuit behavior below.
-  if (st?.surrendered === true && live.ai.fleeFrom === 'player'
-    && ctx.targets?.current !== live) return false;
-  const threat = threatPos(ctx, live);
-  return !!threat && live.object.position.distanceTo(threat) <= ESCAPE.pressureRange;
+  const src = live.ai.fleeFrom;
+  if (src === 'player') return playerPresses(ctx, live);
+  if (src && typeof src === 'object') {
+    if (ctx.ships && ctx.ships.includes(src) && !src.state?.destroyed) return hullPresses(ctx, live, src);
+    live.ai.fleeFrom = null; // the pursuer left the world; its handle is stale
+  }
+  // No live handle (re-instantiated, restored, or the pursuer left). The same
+  // hull, when it is back in the world, takes the handle back; otherwise
+  // nothing presses — a remembered position is not a pursuer.
+  const plan = readEscape(live.record);
+  if (plan && plan.threat === 'ship') {
+    const other = liveThreatById(ctx, plan.threatId, live);
+    if (other) live.ai.fleeFrom = other;
+    return hullPresses(ctx, live, other);
+  }
+  // 'player' or nothing remembered: the player is the only possible pursuer.
+  return playerPresses(ctx, live);
 }
 
 /**

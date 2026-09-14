@@ -30,10 +30,15 @@ No issue is open and no pull request is open as of 2026-09-13. Every issue
 from #98 to #159 is merged (see the table below). The next task is selected
 from the candidates in the sections that follow, or from a new owner report.
 [#163](https://github.com/barryrwilson/Rimward/issues/163), Agent Play mouse
-ownership, was selected on 2026-09-13 and is implemented on its branch: only
-Escape hands the ship back while an agent lease or an agent-engaged helm path
-owns it; incidental pointer, click, flight-key and fire input is discarded
-(see the completed table once its PR merges).
+ownership, merged on 2026-09-13 in [PR #165](https://github.com/barryrwilson/Rimward/pull/165):
+only Escape hands the ship back while an agent lease or an agent-engaged helm
+path owns it; incidental pointer, click, flight-key and fire input is discarded.
+[#166](https://github.com/barryrwilson/Rimward/issues/166), station-hold
+pressure, was filed from an owner report the same day and is implemented on
+its branch: a yielded trader whose NPC pursuer is gone stands down after its
+dwell; a remembered last-seen position, a stale pursuer handle, or a nearby
+hull that no longer targets it is not pursuit. The 300 u hold radius and a
+dwell readout on the bracket remain design candidates, not filed.
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 
