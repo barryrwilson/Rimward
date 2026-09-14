@@ -12,7 +12,8 @@ import { createCtx } from '../src/core/ctx.js';
 import { createShipState } from '../src/game/state.js';
 import { localDir, COMMAND_SPECS } from '../src/game/agent-schema.js';
 import { installDomStubs, seedBootRandom } from './lib/boot-harness.mjs';
-import { initControls, agentControlStatus } from '../src/systems/controls.js';
+import { initControls, agentControlStatus, agentPulse } from '../src/systems/controls.js';
+import { initShip } from '../src/systems/ship.js';
 import { initAgentApi } from '../src/systems/agent-api.js';
 
 let pins = 0;
@@ -27,13 +28,13 @@ seedBootRandom();
  * One booted flight session: real ctx, real controls, real public handle.
  * initControls resets the module lease state, so fixtures do not leak.
  */
-function fixture() {
+function fixture(realFlight = false) {
   const dom = installDomStubs();
   document.addEventListener = () => {};
   window.location.search = '?agent=1';
   const ctx = createCtx({ scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(), renderer: {} });
   // Fixtures spawn at the origin facing -Z, away from this valid sun.
-  ctx.config.world = { sunPosition: new THREE.Vector3(0, 0, 5000), sunRadius: 0 };
+  ctx.config.world = { sunPosition: new THREE.Vector3(0, 0, 5000), sunRadius: 0, shipSpawn: new THREE.Vector3(), stationPosition: new THREE.Vector3(5000, 5000, 5000) };
   ctx.world.currentSystem = 'fixture'; ctx.world.time = 1;
   ctx.systems = {}; ctx.station = {}; ctx.asteroids = { list: [] }; ctx.flags.paused = false;
   ctx.ship.object = new THREE.Object3D(); ctx.ship.velocity = new THREE.Vector3();
@@ -43,6 +44,7 @@ function fixture() {
   const target = { id: 'throttle-fixture', record: {}, object: new THREE.Object3D(), state: createShipState('light') };
   target.object.position.set(0, 0, -300); ctx.ships = [target]; ctx.targets.current = target;
   const controls = initControls(ctx); initAgentApi(ctx);
+  const flight = realFlight ? initShip(ctx) : null;
   const api = window.rimward;
   function sample() {
     const p = target.object.position, o = ctx.ship.object.position;
@@ -60,10 +62,63 @@ function fixture() {
       ctx.world.time += DT;
       sample();
       controls.update(DT);
+      if (flight) flight.update(DT);
     }
   };
   return { ctx, target, api, act, observe, tick, dom, status: () => agentControlStatus(ctx) };
 }
+
+// Issue #169: input assignments alone cannot prove the hull actually turns.
+// Measure the real ship root through the same controls-before-flight order as
+// the production loop. No target lock: its chase assist would change the rate.
+for (const axis of ['steerY', 'steerX', 'roll']) {
+  for (const sign of [-1, 1]) {
+    pin(`raw ${axis} ${sign > 0 ? '+' : '-'}0.7 turns the real hull in one sim second`, () => {
+      const f = fixture(true);
+      f.ctx.targets.current = null;
+      const start = f.ctx.ship.object.quaternion.clone();
+      assert.equal(f.act('clearControl').ok, true);
+      assert.equal(f.act('setControl', { seq: 1, ttl: 2, [axis]: sign * 0.7 }).ok, true);
+      f.tick(60);
+      const end = f.ctx.ship.object.quaternion;
+      const angle = THREE.MathUtils.radToDeg(start.angleTo(end));
+      assert.ok(angle > 10, `${axis}: hull moved only ${angle} degrees`);
+      const delta = start.clone().invert().multiply(end);
+      const nose = new THREE.Vector3(0, 0, -1).applyQuaternion(delta);
+      if (axis === 'steerY') assert.ok(sign * nose.y < -0.1, 'positive raw pitch means nose down');
+      if (axis === 'steerX') assert.ok(sign * nose.x > 0.1, 'positive yaw means nose right');
+      if (axis === 'roll') assert.ok(sign * delta.z > 0.1, 'positive roll rotates about local +Z');
+      assert.equal(f.observe().control.owner, 'manual');
+      assert.equal(f.observe().control.state, 'active');
+      // An observation may inspect ownership but must never discard the axes.
+      assert.equal(f.ctx.input[axis], axis === 'steerY' ? -sign * 0.7 : sign * 0.7);
+    });
+  }
+}
+
+pin('human mouse-up still pitches the real hull up', () => {
+  const f = fixture(true);
+  f.ctx.targets.current = null;
+  const start = f.ctx.ship.object.quaternion.clone();
+  for (const listener of f.dom.winListeners.mousemove || []) {
+    listener({ clientX: window.innerWidth / 2, clientY: 0 });
+  }
+  f.tick(60);
+  const delta = start.invert().multiply(f.ctx.ship.object.quaternion);
+  const nose = new THREE.Vector3(0, 0, -1).applyQuaternion(delta);
+  assert.ok(nose.y > 0.1, 'human mouse-up remains nose-up');
+});
+
+pin('an API burner pulse survives a raw lease and lasts exactly one controls update', () => {
+  const f = fixture();
+  assert.equal(f.act('setControl', { seq: 1, ttl: 2, steerY: 0.7 }).ok, true);
+  assert.equal(agentPulse(f.ctx, 'afterburner'), '');
+  f.tick();
+  assert.equal(f.ctx.input.afterburnerPressed, true);
+  assert.equal(f.ctx.input.steerY, -0.7);
+  f.tick();
+  assert.equal(f.ctx.input.afterburnerPressed, false);
+});
 
 pin('the manifest tells a planner that the setpoint persists and clearing does not brake', () => {
   const set = COMMAND_SPECS.setControl, clear = COMMAND_SPECS.clearControl;

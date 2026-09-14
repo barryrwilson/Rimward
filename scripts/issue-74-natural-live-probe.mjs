@@ -22,7 +22,7 @@ for(let i=1;i<=count;i++)await runLive('natural-'+i,async h=>{
     if(!result.firstActualOpportunity&&(pods.length||recoveries.length))result.firstActualOpportunity=result.samples.at(-1);
   };
   async function dismissHail(s){if(!s.hail.open)return s;const intent=s.hail.intents.includes('letGo')?'letGo':null;if(!intent){result.pendingHail=s.hail;return s;}const receipt=await act('hailResolve',{intent,expectedConversationId:s.hail.conversationId});(result.overlayResolutions??=[]).push({t:s.t,hail:s.hail,receipt});return observe();}
-  async function steer(o,s,max=.5){const [x,y,z]=o.bearing,steerX=Math.max(-1,Math.min(1,Math.atan2(x,-z)*1.5)),steerY=Math.max(-1,Math.min(1,Math.atan2(y,Math.hypot(x,z))*1.5));const desiredSpeed=Math.max(2,Math.min(110,(o.range-4)*.18)),throttle=z<-.92&&s.ship.speed<desiredSpeed+2?Math.max(.005,Math.min(max,(o.range-4)/1800)):0;await act('setControl',{seq:++controlSeq,ttl:2,steerX,steerY,throttle});}
+  async function steer(o,s,max=.5){const [x,y,z]=o.bearing,steerX=Math.max(-1,Math.min(1,Math.atan2(x,-z)*1.5)),steerY=Math.max(-1,Math.min(1,-Math.atan2(y,Math.hypot(x,z))*1.5));const desiredSpeed=Math.max(2,Math.min(110,(o.range-4)*.18)),throttle=z<-.92&&s.ship.speed<desiredSpeed+2?Math.max(.005,Math.min(max,(o.range-4)/1800)):0;await act('setControl',{seq:++controlSeq,ttl:2,steerX,steerY,throttle});}
   async function followIncidental(s){
     if(followingIncidental||result.incidental||s.flags.docked)return false;
     if(s.hail.open)s=await dismissHail(s);

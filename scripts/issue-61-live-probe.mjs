@@ -40,7 +40,7 @@ function simpleControl(s) {
   if (!ahead || angle > .65) throttle = .15;
   if (range < 200 && closing < -20) throttle = 0;
   if (range < 70) throttle = 0;
-  return { ttl: .65, steerX: Math.max(-1, Math.min(1, yaw * 2.2)), steerY: Math.max(-1, Math.min(1, pitch * 2.2)), throttle,
+  return { ttl: .65, steerX: Math.max(-1, Math.min(1, yaw * 2.2)), steerY: Math.max(-1, Math.min(1, -pitch * 2.2)), throttle,
     fireHeld: ahead && angle < .07 && range < 480 && range > 25 && !s.ship.overheated && s.ship.heat < 75 };
 }
 

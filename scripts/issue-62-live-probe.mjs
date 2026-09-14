@@ -444,7 +444,7 @@ async function live() {
           const clamp = x => Math.max(-1, Math.min(1, x));
           const input = { seq: ++seq, ttl: 1, throttle: aim.dist > 350 || b[2] > -.8 ? .5 : .2,
             steerX: clamp(across > .02 ? 2 * b[0] / across * angle : b[2] > 0 ? 1 : 0),
-            steerY: clamp(across > .02 ? 2 * b[1] / across * angle : 0), fireHeld: false };
+            steerY: clamp(across > .02 ? -2 * b[1] / across * angle : 0), fireHeld: false };
           alignment.steps.push({ t: s.t, range: aim.dist, closing: aim.closing, bearing: b, stationRange: s.station.range, targetStationRangeLowerBound: clearance, input });
           await act('setControl', input); rawSearchUsed = true;
           await sleep(200);

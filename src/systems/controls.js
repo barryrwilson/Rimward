@@ -1533,7 +1533,10 @@ export function initControls(ctx) {
       }
       if (lease) {
         input.steerX = lease.steerX;
-        input.steerY = lease.steerY;
+        // Raw API pitch is mouse-style screen Y (positive means nose down).
+        // Combat computes flight-space pitch; keep its and the human reticle's
+        // positive-up convention unchanged at the shared ship input boundary.
+        input.steerY = lease.combat ? lease.steerY : (-lease.steerY || 0);
         input.strafeX = lease.strafeX;
         input.strafeY = lease.strafeY;
         input.roll = lease.roll;
