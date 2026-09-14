@@ -12,7 +12,7 @@ import { createCtx } from '../src/core/ctx.js';
 import { createShipState } from '../src/game/state.js';
 import { localDir, COMMAND_SPECS } from '../src/game/agent-schema.js';
 import { installDomStubs, seedBootRandom } from './lib/boot-harness.mjs';
-import { initControls, agentControlStatus, agentPulse } from '../src/systems/controls.js';
+import { initControls, agentControlStatus, agentControlClear, agentPulse } from '../src/systems/controls.js';
 import { initShip } from '../src/systems/ship.js';
 import { initAgentApi } from '../src/systems/agent-api.js';
 
@@ -115,8 +115,50 @@ pin('an API burner pulse survives a raw lease and lasts exactly one controls upd
   assert.equal(agentPulse(f.ctx, 'afterburner'), '');
   f.tick();
   assert.equal(f.ctx.input.afterburnerPressed, true);
+  assert.equal(f.ctx.input.agentAfterburnerPressed, true);
   assert.equal(f.ctx.input.steerY, -0.7);
   f.tick();
+  assert.equal(f.ctx.input.afterburnerPressed, false);
+  assert.equal(f.ctx.input.agentAfterburnerPressed, false);
+});
+
+pin('raw burner provenance never masks a later or simultaneous human Space', () => {
+  const f = fixture();
+  assert.equal(agentPulse(f.ctx, 'afterburner'), '');
+  f.tick();
+  assert.equal(f.ctx.input.agentAfterburnerPressed, true);
+  f.dom.dispatchKey('Space');
+  f.tick();
+  assert.equal(f.ctx.input.afterburnerPressed, true);
+  assert.equal(f.ctx.input.agentAfterburnerPressed, false);
+  for (const humanFirst of [true, false]) {
+    if (humanFirst) f.dom.dispatchKey('Space');
+    assert.equal(agentPulse(f.ctx, 'afterburner'), '');
+    if (!humanFirst) f.dom.dispatchKey('Space');
+    f.tick();
+    assert.equal(f.ctx.input.afterburnerPressed, true);
+    assert.equal(f.ctx.input.agentAfterburnerPressed, false);
+  }
+});
+
+pin('pause/opt-out and blur discard raw burner provenance before another update', () => {
+  for (const reason of ['paused', 'opt-in']) {
+    const f = fixture();
+    assert.equal(agentPulse(f.ctx, 'afterburner'), '');
+    f.tick();
+    assert.equal(f.ctx.input.agentAfterburnerPressed, true);
+    assert.equal(agentControlClear(f.ctx, reason), '');
+    assert.equal(f.ctx.input.agentAfterburnerPressed, false);
+    assert.equal(agentPulse(f.ctx, 'afterburner'), '');
+    assert.equal(agentControlClear(f.ctx, reason), '');
+    f.tick();
+    assert.equal(f.ctx.input.afterburnerPressed, false);
+  }
+  const f = fixture();
+  assert.equal(agentPulse(f.ctx, 'afterburner'), '');
+  for (const listener of f.dom.winListeners.blur || []) listener();
+  f.tick();
+  assert.equal(f.ctx.input.agentAfterburnerPressed, false);
   assert.equal(f.ctx.input.afterburnerPressed, false);
 });
 

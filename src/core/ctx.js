@@ -99,7 +99,8 @@ export function createCtx({ scene, camera, renderer }) {
       fullStop: false, // double-tap F sets, R (throttle up) or afterburner clears.
       // While true the ship holds station at 0 speed, overriding creep (§5.1).
       agentBurnerHeld: false, // controls-only transient hold; ship owns burner cancellation
-      afterburnerPressed: false, // edge: Space tapped (burn if ready)
+      afterburnerPressed: false, // edge: Space or API pulse (burn if ready)
+      agentAfterburnerPressed: false, // one-frame raw API provenance; a human Space edge takes precedence
       driftHeld: false, // Shift held = vector-hold
       fireHeld: false, // LMB
       weaponGroup: 1, // 1=cannon 2=disruptor 3=mining 4=missiles 5=psionic (keys 1/2/3/4/5)
