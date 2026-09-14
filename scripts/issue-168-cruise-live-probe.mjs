@@ -19,6 +19,25 @@ class CDP{
   send(method,params={}){if(this.ws.readyState!==WebSocket.OPEN)return Promise.reject(Error('CDP socket not open'));const id=++this.id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout '+method));},Number(process.env.CRUISE_CDP_TIMEOUT||30000));this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
   async eval(expression){const r=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;}
 }
+
+async function waitForBootstrap(c,result,save){
+  const started=Date.now(),timeoutMs=120000;
+  result.bootstrap={started,timeoutMs,ready:false,samples:[]};
+  while(Date.now()-started<timeoutMs){
+    const state=await c.eval(`({url:location.href,readyState:document.readyState,title:document.title,
+      ready:typeof window.rimward?.observe==='function'&&typeof window.rimward?.act==='function',
+      hasContext:!!window.__ctx,resources:performance.getEntriesByType('resource').length})`);
+    const elapsedMs=Date.now()-started;
+    result.bootstrap.elapsedMs=elapsedMs;result.bootstrap.lastState=state;
+    if(!result.bootstrap.samples.length||elapsedMs-result.bootstrap.samples.at(-1).elapsedMs>=5000){
+      result.bootstrap.samples.push({elapsedMs,...state});await save();
+    }
+    if(state.ready){result.bootstrap.ready=true;await save();return;}
+    await sleep(300);
+  }
+  throw Error('Bootstrap readiness timeout '+JSON.stringify(result.bootstrap));
+}
+
 async function runLive(name,origin,seed,fn){
   await mkdir(out,{recursive:true});const folder=join(out,name);await mkdir(folder);
   const profile=await mkdtemp(join(folder,'profile-')),cache=join(folder,'vite-cache');
@@ -32,13 +51,32 @@ async function runLive(name,origin,seed,fn){
   try{
     vite=spawn(process.execPath,[fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite'))),'--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});
     result.vitePid=vite.pid;result.port=p;
-    vite.stderr.on('data',b=>console.log('VITE',String(b).trim()));
+    result.viteStdout=[];result.viteStderr=[];
+    vite.stdout.on('data',b=>result.viteStdout.push(String(b)));
+    vite.stderr.on('data',b=>{result.viteStderr.push(String(b));console.log('VITE',String(b).trim());});
     for(let i=0;i<100;i++){if(await fetch(`http://127.0.0.1:${p}`).then(r=>r.ok).catch(()=>false))break;if(vite.exitCode!==null)throw Error('Vite exited');await sleep(250);}
     chrome=spawn(process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe',['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check',...(result.rendererConfig==='swiftshader'?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:[]),'--ignore-gpu-blocklist','--enable-webgl','--disable-extensions','--disable-background-networking','--disable-component-update','--disable-sync','--window-size=1440,900','--headless=new','--disable-background-timer-throttling','--disable-renderer-backgrounding','about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
     result.chromePid=chrome.pid;await save();
     const errors=[];chrome.stderr.on('data',b=>{errors.push(String(b).slice(0,500));result.chromeStderr=errors;});
     let pages;for(let i=0;i<120;i++){try{const cp=Number((await readFile(join(profile,'DevToolsActivePort'),'utf8')).split(/\r?\n/)[0]);pages=await fetch(`http://127.0.0.1:${cp}/json/list`).then(r=>r.json());if(pages.some(p=>p.type==='page')){result.cdpPort=cp;break;}}catch{}if(chrome.exitCode!==null)throw Error('Chrome exited '+errors.slice(-3));await sleep(250);}
-    c=new CDP(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await c.ready();await c.send('Runtime.enable');await c.send('Page.enable');await c.send('Page.addScriptToEvaluateOnNewDocument',{source:'let cruiseSeed='+seed+';Math.random=()=>{cruiseSeed=(Math.imul(cruiseSeed,1664525)+1013904223)>>>0;return cruiseSeed/4294967296;};'});await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1`});
+    c=new CDP(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await c.ready();
+    result.networkRequests=[];const requests=new Map();
+    c.ws.addEventListener('message',e=>{
+      const m=JSON.parse(String(e.data)),p=m.params;
+      if(m.method==='Network.requestWillBeSent'){
+        const row={id:p.requestId,url:p.request.url,type:p.type,startedAt:Date.now()};
+        requests.set(p.requestId,row);result.networkRequests.push(row);
+      }else if(m.method==='Network.responseReceived'){
+        Object.assign(requests.get(p.requestId)||{},{responseAt:Date.now(),status:p.response.status,mime:p.response.mimeType});
+      }else if(m.method==='Network.loadingFinished'){
+        Object.assign(requests.get(p.requestId)||{},{finishedAt:Date.now(),bytes:p.encodedDataLength});
+      }else if(m.method==='Network.loadingFailed'){
+        Object.assign(requests.get(p.requestId)||{},{failedAt:Date.now(),error:p.errorText,blockedReason:p.blockedReason});
+      }
+    });
+    await c.send('Network.enable');await c.send('Runtime.enable');await c.send('Page.enable');await c.send('Page.addScriptToEvaluateOnNewDocument',{source:'let cruiseSeed='+seed+';Math.random=()=>{cruiseSeed=(Math.imul(cruiseSeed,1664525)+1013904223)>>>0;return cruiseSeed/4294967296;};'});
+    result.navigation=await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1`});
+    if(result.navigation.errorText)throw Error('Navigation failed: '+result.navigation.errorText);
     const observe=()=>c.eval('window.rimward.observe()');
     const act=async(name,args={},must=true)=>{const r=await c.eval(`(()=>{const receipt=window.rimward.act(${JSON.stringify({v:2,name,args})});if(receipt.ok&&${JSON.stringify(name)}==='chooseOrigin'){(${installDiagnostic.toString()})();}return receipt;})()`);result.actions.push({at:Date.now(),name,args,result:r});if(must&&!r.ok)throw Error(name+' refused '+JSON.stringify(r));return r;};
     const shot=async name=>{const s=await c.send('Page.captureScreenshot',{format:'png'});await writeFile(join(folder,name+'.png'),Buffer.from(s.data,'base64'));};
@@ -46,7 +84,9 @@ async function runLive(name,origin,seed,fn){
     // Limits are simulation seconds, with a separate 4x wall cap for software
     // rendering. Neither bound becomes an active-search-time measurement.
     const wait=async(pred,seconds,label,sample)=>{const began=Date.now(),end=began+Math.max(60000,seconds*4000);let s,startT;while(Date.now()<end){s=await observe();startT??=s.t;if(sample)await sample(s);if(pred(s))return s;if(s.t-startT>=seconds)break;await sleep(300);}throw Error('timeout '+label+' '+JSON.stringify({t:s?.t,worldElapsed:s?.t-startT,wallElapsed:(Date.now()-began)/1000,flags:s?.flags,ap:s?.autopilot}));};
-    for(let i=0;i<160;i++){if(await c.eval('!!window.rimward'))break;await sleep(300);}
+    // Cold Vite transforms have taken >51 s here. This is a wall-clock boot
+    // gate, before any action or flight timer; never call observe on timeout.
+    await waitForBootstrap(c,result,save);
     let s=await observe();if(s.session.phase==='title')await act('startGame');s=await observe();if(s.session.phase==='origin')await act('chooseOrigin',{id:origin});await wait(s=>s.session.phase==='playing',25,'playing');
     result.graphics=await c.eval(`(()=>{const canvas=document.querySelector('canvas'),g=canvas?.getContext('webgl2');if(!g)return null;const e=g.getExtension('WEBGL_debug_renderer_info');return {renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER),vendor:e?g.getParameter(e.UNMASKED_VENDOR_WEBGL):g.getParameter(g.VENDOR)};})()`);console.log('BOOT',name,JSON.stringify(result.graphics));
     await fn({c,result,save,observe,act,shot,checkpoint,wait,folder});
