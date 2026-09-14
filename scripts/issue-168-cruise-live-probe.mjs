@@ -64,18 +64,31 @@ async function runLive(name,origin,seed,fn){
 function installDiagnostic() {
   const ctx = window.__ctx;
   const seen = new WeakSet();
-  window.__cruise = { events: [], phases: [], peakSpeed: 0, samples: [], minHullClearance: null };
+  window.__cruise = { events: [], phases: [], peakSpeed: 0, samples: [], minHullClearance: null, collisions: [] };
+  const previousBodies = new Map();
+  const recentFrames = [];
+  let sampledSystem = ctx.world.currentSystem;
   let collect;
   const bodies = { items: [], count: 0 };
   import('/src/game/collision.js').then(m => { collect = m.collectBodies; });
   const sample = () => {
+    if (sampledSystem !== ctx.world.currentSystem) {
+      sampledSystem = ctx.world.currentSystem;
+      previousBodies.clear(); recentFrames.length = 0;
+    }
+    const frameEvents = [];
     for (const e of [...ctx.events, ...ctx.lastEvents]) {
       if (seen.has(e)) continue;
       seen.add(e);
-      if (['sunHeat', 'bodyHit', 'docked'].includes(e.type)) window.__cruise.events.push({ ...e });
+      if (['sunHeat', 'bodyHit', 'docked'].includes(e.type)) {
+        const copy = { ...e };
+        window.__cruise.events.push(copy);
+        frameEvents.push(copy);
+      }
     }
     const phase = window.rimward.observe().autopilot.phase;
     let nearest = null;
+    const nearby = [];
     if (collect) {
       collect(ctx, bodies);
       for (let i = 0; i < bodies.count; i++) {
@@ -83,13 +96,33 @@ function installDiagnostic() {
         if (b.kind !== 'ship' && b.kind !== 'asteroid') continue;
         const p = ctx.ship.object.position;
         const clearance = Math.hypot(p.x-b.x,p.y-b.y,p.z-b.z)-b.r-2.4;
-        if (!nearest || clearance < nearest.clearance) nearest = { id:b.id,kind:b.kind,clearance,p:[b.x,b.y,b.z],r:b.r };
+        const key = b.kind + ':' + b.id;
+        const previous = previousBodies.get(key);
+        const dt = previous ? ctx.world.time - previous.t : 0;
+        const entry = { id:b.id,kind:b.kind,clearance,p:[b.x,b.y,b.z],r:b.r,
+          v: dt > 0 && dt <= 0.25 ? [(b.x-previous.p[0])/dt,(b.y-previous.p[1])/dt,(b.z-previous.p[2])/dt] : null };
+        previousBodies.set(key, { t:ctx.world.time,p:entry.p });
+        nearby.push(entry);
+        if (!nearest || clearance < nearest.clearance) nearest = entry;
       }
       if (nearest && (window.__cruise.minHullClearance === null || nearest.clearance < window.__cruise.minHullClearance)) window.__cruise.minHullClearance = nearest.clearance;
     }
+    nearby.sort((a,b) => a.clearance - b.clearance);
+    const frame = { t:ctx.world.time,phase,p:ctx.ship.object.position.toArray(),
+      v:ctx.ship.velocity.toArray(),q:ctx.ship.object.quaternion.toArray(),speed:ctx.ship.speed,
+      idle:ctx.autopilot.idle,throttle:ctx.autopilot.throttle,yaw:ctx.autopilot.yaw,pitch:ctx.autopilot.pitch,
+      fullStop:ctx.input.fullStop,nearest,nearby:nearby.slice(0,8) };
+    if (recentFrames.at(-1)?.t !== frame.t) {
+      recentFrames.push(frame);
+      if (recentFrames.length > 120) recentFrames.shift();
+    }
+    for (const event of frameEvents) if (event.type === 'bodyHit') {
+      window.__cruise.collisions.push({event,frame,
+        colliderCandidates:nearby.filter(b => b.kind === event.kind).slice(0,3),
+        recentFrames:recentFrames.slice()});
+    }
     if (!window.__cruise.samples.length || ctx.world.time - window.__cruise.samples.at(-1).t >= 0.5) {
-      window.__cruise.samples.push({t: ctx.world.time, phase, p: ctx.ship.object.position.toArray(), speed:ctx.ship.speed,
-        idle:ctx.autopilot.idle, throttle:ctx.autopilot.throttle, yaw:ctx.autopilot.yaw, nearest});
+      window.__cruise.samples.push(frame);
     }
     if (window.__cruise.phases.at(-1) !== phase) window.__cruise.phases.push(phase);
     window.__cruise.peakSpeed = Math.max(window.__cruise.peakSpeed, ctx.ship.speed);
@@ -103,7 +136,7 @@ await runLive('veridian-public', 'greenhand', 7, async ({ c, result, act, wait, 
   await act('engageAutopilot');
   await wait(s => s.world.currentSystem === 'veridian' && !s.gate.jumping, 90, 'Veridian arrival');
   await checkpoint('arrival');
-  await c.eval('window.__cruise.events=[];window.__cruise.phases=[];window.__cruise.peakSpeed=0;window.__cruise.samples=[];window.__cruise.minHullClearance=null;');
+  await c.eval('window.__cruise.events=[];window.__cruise.phases=[];window.__cruise.peakSpeed=0;window.__cruise.samples=[];window.__cruise.minHullClearance=null;window.__cruise.collisions=[];');
   const receipt = await act('approachDock');
   const end = await wait(s => s.flags.docked || !s.autopilot.engaged, 65, 'dock approach');
   result.cruise = await c.eval('window.__cruise');
