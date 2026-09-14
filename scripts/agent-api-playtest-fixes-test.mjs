@@ -11,17 +11,20 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const checks = [
   ['cruiseApproach', 'issue-168-cruise-test.mjs'],
   ['cruiseObstacles', 'issue-168-cruise-obstacles-test.mjs'],
+  ['stageRealAsteroids', 'issue-168-stage-obstacles-test.mjs', { STAGE_CASE: 'earliest', STAGE_DIAG: '', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-stage','gate') }],
+  ['incomingHoldEscape', 'issue-168-hold-traffic-test.mjs', { HOLD_CASE: '', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-hold','gate-positive') }],
+  ['blockedHoldEscape', 'issue-168-hold-traffic-test.mjs', { HOLD_CASE: 'blocked', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-hold','gate-blocked') }],
   ['rawSteering', 'issue-103-throttle-observability-test.mjs'],
   ['deskAndHaulQuotes', 'issue-170-desk-test.mjs'],
   ['rawBurnerDockHandoff', 'issue-171-burner-test.mjs'],
 ];
 const results = [];
-for (const [name, file] of checks) {
+for (const [name, file, environment] of checks) {
   console.log(`\n--- Agent API playtest regression: ${name} ---`);
   const started = Date.now();
   const run = spawnSync(process.execPath, [
     '--import', './scripts/with-css-stub.mjs', join('scripts', file),
-  ], { cwd: root, env: process.env, stdio: 'inherit', windowsHide: true, timeout: 120000 });
+  ], { cwd: root, env: { ...process.env, ...environment }, stdio: 'inherit', windowsHide: true, timeout: 120000 });
   const row = {
     name, pass: run.status === 0 && !run.error, exitCode: run.status,
     signal: run.signal || null, error: run.error?.message || null,
