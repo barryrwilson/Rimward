@@ -102,6 +102,7 @@ const _fwd = new THREE.Vector3();
 const _apBodies = { count: 0, items: [] };
 const _dockBodies = { count: 0, items: [] };
 const _cruiseBodies = { count: 0, items: [] };
+const _stageTrafficBodies = { count: 0, items: [] };
 const _playerLive = {
   role: 'player',
   id: -1,
@@ -768,17 +769,19 @@ function dockTick(ctx) {
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
 
   if (ap.phase === 'stage' || ap.phase === 'cruise') {
-    const planningBodies = ap.phase === 'cruise'
-      ? collectDockCruiseBodies(_apBodies, ctx.ships,
-        Math.max(speed, Number.isFinite(ctx.config.ship.maxSpeed) ? ctx.config.ship.maxSpeed : speed),
-        acceleration, _cruiseBodies)
-      : _apBodies;
+    const stageTransit = ap.phase === 'stage';
+    const plannedSpeed = stageTransit ? ctx.config.ship.creep : ctx.config.ship.maxSpeed;
+    const planningBodies = collectDockCruiseBodies(_apBodies, ctx.ships,
+      Math.max(speed, Number.isFinite(plannedSpeed) ? plannedSpeed : speed),
+      acceleration, _cruiseBodies, ctx.asteroids?.list, ctx.world?.time, stageTransit);
     if (!planningBodies) { disengage(ctx, 'stale'); return; }
     const planned = planApPath({
       px: p.x, py: p.y, pz: p.z,
       gx: points.stage.x, gy: points.stage.y, gz: points.stage.z,
       hx: _fwd.x, hy: _fwd.y, hz: _fwd.z,
-      bodies: planningBodies,
+      // Preserve the station/sun tangent; moving traffic is planned against
+      // that chosen transit segment below, never cached as a station detour.
+      bodies: stageTransit ? _apBodies : planningBodies,
       shipR: PHY.PLAYER_RADIUS,
       classKey,
       speed,
@@ -835,6 +838,42 @@ function dockTick(ctx) {
         }
       }
     }
+    let trafficDetour = false;
+    let trafficBlocked = false;
+    if (stageTransit) {
+      let count = 0;
+      for (let i = 0; i < planningBodies.count; i++) {
+        const body = planningBodies.items[i];
+        if (body.kind === 'cruise-obstacle') _stageTrafficBodies.items[count++] = body;
+      }
+      _stageTrafficBodies.count = count;
+      const transit = planApPath({
+        px: p.x, py: p.y, pz: p.z, gx: _aim.x, gy: _aim.y, gz: _aim.z,
+        hx: _fwd.x, hy: _fwd.y, hz: _fwd.z,
+        bodies: _stageTrafficBodies, shipR: PHY.PLAYER_RADIUS,
+        classKey, speed, zone: DOCK_STAGE_ARRIVE, sideHint: pathSign,
+      });
+      if (!transit.ok) { disengage(ctx, 'blocked'); return; }
+      if (transit.hold === 'detour') {
+        // A traffic sidestep must not cut the station or sun tangent. Wait
+        // for its moving obstruction if neither protected chord is clear.
+        for (let i = 0; i < _apBodies.count; i++) {
+          const body = _apBodies.items[i];
+          const keep = keepRadius(body, PHY.PLAYER_RADIUS);
+          if (!(keep > 0)) continue;
+          const hit = sphereChordHit(p.x, p.y, p.z, transit.ax, transit.ay, transit.az,
+            body.x, body.y, body.z, keep);
+          const outward = (p.x - body.x) * (transit.ax - p.x)
+            + (p.y - body.y) * (transit.ay - p.y)
+            + (p.z - body.z) * (transit.az - p.z) >= 0;
+          if (hit.hit && (!hit.inside || !outward)) { trafficBlocked = true; break; }
+        }
+        if (!trafficBlocked) {
+          _aim.set(transit.ax, transit.ay, transit.az);
+          trafficDetour = true;
+        }
+      }
+    }
     const stageDistance = dockDistance(p, points.stage);
     if (stageDistance === null) {
       disengage(ctx, 'stale');
@@ -852,7 +891,8 @@ function dockTick(ctx) {
       disengage(ctx, 'stale');
       return;
     }
-    const braking = dockShouldBrake(
+    const braking = trafficBlocked || (stageTransit
+      && dockCruiseShouldBrake(p, ctx.ship.velocity, acceleration, planningBodies)) || dockShouldBrake(
       stageDistance, speed, acceleration, DOCK_STAGE_BRAKE_BUFFER,
     );
     // Cruise is the far leg of the same dock helm. Brake early enough for
@@ -879,7 +919,7 @@ function dockTick(ctx) {
     // and the 10 s blocked watch fires before it reaches +X. A clear chord
     // from live spawn must idle-turn first: spawn faces the station, and
     // thrusting off-axis dives past the pad at 30 u/s.
-    const needTurn = !aligned && !detouring;
+    const needTurn = !aligned && (!detouring || trafficDetour);
     const stageOvershot = !dockRecovering
       && !detouring
       && Number.isFinite(dockBestRange)

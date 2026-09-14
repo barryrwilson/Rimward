@@ -1,4 +1,4 @@
-/** Cruise-only traffic geometry. Route AP and the near dock corridor keep
+/** Dock transit traffic geometry. Route AP and the near dock corridor keep
  * their own policies. Collected ship/asteroid spheres are normally skipped
  * by planApPath, so promote them only in this private planning bag. */
 import { PHY } from './physics.js';
@@ -6,8 +6,9 @@ import { AP_KEEP_PAD, sphereChordHit } from './ap-path.js';
 
 const finite3 = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
 const velocities = new Map();
+const asteroidMotion = new WeakMap();
 
-export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out) {
+export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out, asteroids, time, predictAsteroids = false) {
   if (!bodies?.items || !out?.items || !Number.isFinite(speed) || speed < 0
     || !Number.isFinite(acceleration) || acceleration <= 0) return null;
   velocities.clear();
@@ -26,7 +27,26 @@ export function collectDockCruiseBodies(bodies, ships, speed, acceleration, out)
       continue;
     }
     const velocity = body.kind === 'ship' ? velocities.get(body.id) : null;
-    const vx = velocity?.x || 0, vy = velocity?.y || 0, vz = velocity?.z || 0;
+    let vx = velocity?.x || 0, vy = velocity?.y || 0, vz = velocity?.z || 0;
+    const rock = body.kind === 'asteroid' && asteroids?.[body.id];
+    if (rock && typeof rock === 'object' && Number.isFinite(time)) {
+      // Public asteroid rows expose live positions, not private orbit data.
+      // Warm motion samples during cruise so stage starts with velocity.
+      // Weak keys discard old fields on system rebuild without ID aliasing.
+      let sample = asteroidMotion.get(rock);
+      if (!sample) {
+        sample = { x: body.x, y: body.y, z: body.z, t: time, vx: 0, vy: 0, vz: 0 };
+        asteroidMotion.set(rock, sample);
+      } else if (time !== sample.t) {
+        const elapsed = time - sample.t;
+        const valid = elapsed > 0 && elapsed <= 0.25;
+        sample.vx = valid ? (body.x - sample.x) / elapsed : 0;
+        sample.vy = valid ? (body.y - sample.y) / elapsed : 0;
+        sample.vz = valid ? (body.z - sample.z) / elapsed : 0;
+        sample.x = body.x; sample.y = body.y; sample.z = body.z; sample.t = time;
+      }
+      if (predictAsteroids) { vx = sample.vx; vy = sample.vy; vz = sample.vz; }
+    }
     // This sphere encloses both the current body and its predicted path
     // until the player could stop; a crossing ship cannot appear only after
     // the old fixed 40 u lookahead has become too short to brake.
