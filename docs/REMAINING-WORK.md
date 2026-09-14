@@ -1,12 +1,13 @@
 # RIMWARD remaining work
 
-Inventory date: 2026-09-13. Reconciled against master
-`cc7be05969e0ad2514428454dd9057ddb5849052` (merge of PR #161) and the GitHub
-issue/PR API. This snapshot has **zero open issues and zero open pull
-requests**. The piracy aftermath set filed on 2026-09-12 (#146–#159) is merged
-and sits in the completed table below; the
+Agent API scope refreshed 2026-09-14 against master
+`0991593bd905d00451b9f7d2b5f58eea737d3ac2` (merge of PR #167).
+The merged-outcome table retains the 2026-09-13 inventory at
+`cc7be05969e0ad2514428454dd9057ddb5849052`; it is historical evidence,
+not a claim that no issues remain open. The piracy aftermath set (#146–#159)
+is merged, and its
 [index at `cc7be059`](https://github.com/barryrwilson/Rimward/blob/cc7be059/docs/REMAINING-WORK.md)
-retains its long per-issue implementation prose.
+retains the long per-issue prose.
 [Consolidation PR #97](https://github.com/barryrwilson/Rimward/pull/97) is the
 earlier documentation and verification repair; every issue it left in review
 has since merged and moved to the completed table.
@@ -26,19 +27,30 @@ or deployment evidence.
 
 ## Active outcomes
 
-No issue is open and no pull request is open as of 2026-09-13. Every issue
-from #98 to #159 is merged (see the table below). The next task is selected
-from the candidates in the sections that follow, or from a new owner report.
+The five Agent API playtest outcomes below are implemented on the local
+`codex/agent-api-fixes` candidate. Focused builder checks and live evidence
+are recorded; **final integrated QA and publication remain pending**. This
+status is not a merge or deployment claim. See the
+[mission record](AgentApiFixes20260914.md) for artifact identity and gates.
+
+| Outcome | Issue | Evidence |
+|---|---|---|
+| Cruise-speed current-station approach with braking and sun/body avoidance | [#168](https://github.com/barryrwilson/Rimward/issues/168) | [Cruise evidence](Issue168CruiseEvidence.md); retains planned sun detours overlapping #172. |
+| Documented raw pitch sign and real-hull steering regressions | [#169](https://github.com/barryrwilson/Rimward/issues/169) | [Steering evidence](Issue169SteeringEvidence.md); original no-turn symptom unreplicated in isolated Chrome. |
+| Named desk refusals, service-pane launch and station-local offered work | [#170](https://github.com/barryrwilson/Rimward/issues/170) | [Desk evidence](Issue170DeskEvidence.md). |
+| Raw burner pulse without flee ownership, with immediate dock handoff | [#171](https://github.com/barryrwilson/Rimward/issues/171) | [Desk/burner evidence](Issue170DeskEvidence.md); combat retreat authorization unchanged. |
+| One displayed haul quote across desk, observation and acceptance | [#178](https://github.com/barryrwilson/Rimward/issues/178) | [Quote evidence](Issue170DeskEvidence.md); accepted pay stays fixed. |
+
+Unrelated dock-cancellation, market presentation, consignment, and new mission
+work remains governed by its own issues. This refresh does not claim their
+completion or a census of every open GitHub issue.
+
 [#163](https://github.com/barryrwilson/Rimward/issues/163), Agent Play mouse
-ownership, merged on 2026-09-13 in [PR #165](https://github.com/barryrwilson/Rimward/pull/165):
-only Escape hands the ship back while an agent lease or an agent-engaged helm
-path owns it; incidental pointer, click, flight-key and fire input is discarded.
+ownership, merged in [PR #165](https://github.com/barryrwilson/Rimward/pull/165).
 [#166](https://github.com/barryrwilson/Rimward/issues/166), station-hold
-pressure, was filed from an owner report the same day and is implemented on
-its branch: a yielded trader whose NPC pursuer is gone stands down after its
-dwell; a remembered last-seen position, a stale pursuer handle, or a nearby
-hull that no longer targets it is not pursuit. The 300 u hold radius and a
-dwell readout on the bracket remain design candidates, not filed.
+pressure, is included in this base through
+[PR #167](https://github.com/barryrwilson/Rimward/pull/167). The 300 u hold
+radius and a dwell readout remain design candidates, not part of this task.
 
 Parked follow-ups recorded by the merged issues, none promoted to a task:
 
@@ -147,7 +159,7 @@ outcome before implementation; preserve the original product intent.
 | Smoke/capture reliability | One of ten local #139 bridge smoke runs (2026-09-12) timed out only on the later `systemTransition` jump pin (90 s) with docking and console clean, so the flake is real and unrelated to docking. [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
 | Performance headroom | The enforceable byte caps are now 3,671,906 minified / 1,098,526 gzip bytes: the owner approved doubling the #100 artifact counts by direct request on 2026-09-10, superseding the earlier 1,800,000 / 537,600 limits. Historic measurements are unchanged: #56 measured 1,835,632 minified / 549,169 gzip with a 7,340.4 ms startup median and one of five runs at 8,280 ms against 8,000 ms. The exact descriptor still pins the #100 artifact `assets/index-CY-oCepC.js` at 1,835,953 minified / 549,263 gzip for that exact bundle only. The 8,000 ms startup limit and the browser dependency boundary are unchanged and unwaived. Use the [#56](releases/issue-56-measured-decision.md) and [#100](releases/issue-100-measured-decision.md) measured decisions and the [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
 | Agent Play mouse ownership | **Implemented for [#163](https://github.com/barryrwilson/Rimward/issues/163)** (owner report 2026-09-06; owner decision 2026-09-13: Escape is the only takeover). `controls.js` no longer drops a lease on pointer motion, clicks, flight keys or fire; an agent-engaged helm (autopilot, dock approach, automine, flee) is marked by the bridge and released only by Escape. Kept here as the record of the observation; the completed table carries the durable evidence. |
-| Raw afterburner/flee completion (local PIR-02) | Historical run observed residual motion and station contacts after the flee timer ended. Current `agent-flee.js` still ends by clearing its channel; #62's stable combat withdrawal is a different path. Repeat the raw flee expiry flow near/far from port before claiming a current defect or a completed fix. |
+| Historical raw afterburner/flee report (local PIR-02) | The old raw command acquired a flee helm. #171 replaces that command with a single burner pulse, so its old flee-timer observations do not describe the new raw path. Tactical combat withdrawal retains its separate bounded authorization. See the current Agent API candidate and its live evidence before filing any remaining motion or station-contact defect. |
 | Supported resumable API playtest runner (local PIR-07) | Local tooling proposal: expected build/API version, isolated profile, durable sequence recovery, acknowledged safe handoffs and sanitized evidence. Existing scenario probes do not by themselves establish the full resumable-runner contract. Scope only if selected; no browser credentials or in-game LLM runner. |
 | Models loading/retry/disposal (RW-003 PR4) | Optional, unfiled follow-up retained from the [accepted design](Mdl01ShipReferenceDesign.md). PR3 is merged; its narrow-phone sidebar and side-by-side scale comparison remain separately parked. Inspect current loading and resource ownership before writing a new issue. |
 | Historical station/Bloom visuals | [Preservation PR #60](https://github.com/barryrwilson/Rimward/pull/60) is closed **without merge**. Original work is preservation evidence, not current-master implementation. Any selected outcome needs a deliberate port and fresh QA; do not replay old source or backlog wholesale. |

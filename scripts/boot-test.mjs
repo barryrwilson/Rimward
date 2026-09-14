@@ -27979,6 +27979,40 @@ removeLiveShip(w42indyCtx, w42indy);
   }
 }
 
+// ---- Agent API playtest fixes #168-171/#178: checked fresh-process group ----
+// #168 requires the real Veridian arrival-to-berth simulation in this boot gate.
+// The group also runs real-hull steering, desk/quote parity and burner handoff.
+// Child output is inherited; spawn errors, signals, timeouts and nonzero exits
+// fail boot. No prior scenario or assertion is replaced or weakened.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- Agent API playtest fixes #168-171/#178 (checked fresh processes) ---');
+  const child = spawn(process.execPath, [join(here, 'agent-api-playtest-fixes-test.mjs')], {
+    cwd: dirname(here), env: process.env, stdio: 'inherit', windowsHide: true,
+  });
+  const verdict = await new Promise(resolve => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    // Each of four inner children is bounded to two minutes by its owner.
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, 'timeout after 10 min');
+    }, 10 * 60 * 1000);
+    child.on('error', error => finish(false, `spawn error: ${error.message}`));
+    child.on('close', (code, signal) => finish(code === 0,
+      `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`));
+  });
+  if (!verdict.ok) {
+    console.log(`AGENT API PLAYTEST FIXES BOOT FAIL — ${verdict.why}`);
+    errors++;
+  }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {
