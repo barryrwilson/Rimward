@@ -52,7 +52,14 @@ function tick(n) {
   for (let i = 0; i < n; i++) {
     ctx.world.time += DT; ctx.elapsed += DT;
     for (const [, sys] of systems) sys.update?.(DT);
-    for (const e of ctx.events) if (e.type === 'bodyHit' || e.type === 'docked') events.push({ ...e, t: ctx.world.time });
+    for (const e of ctx.events) if (e.type === 'bodyHit' || e.type === 'docked') {
+      // Capture contact geometry on its frame, before the next half-second
+      // batch lets the colliding hull move away from the contact point.
+      const nearest = e.type === 'bodyHit'
+        ? ctx.ships.map(sh => ({ name: sh.record?.name, d: dist(sh.object.position, ctx.ship.object.position) }))
+          .sort((a, b) => a.d - b.d)[0] : undefined;
+      events.push({ ...e, t: ctx.world.time, nearest });
+    }
     ctx.lastEvents = ctx.events; ctx.events = [];
   }
 }
@@ -126,7 +133,7 @@ function runApproach(shape, radius) {
     const ap = ctx.autopilot;
     const p = ctx.ship.object.position;
     if (hits.length) {
-      const near = ctx.ships.map((sh) => ({ name: sh.record?.name, d: +dist(sh.object.position, p).toFixed(1) })).sort((x, y) => x.d - y.d)[0];
+      const near = hits[0].nearest;
       out = { outcome: 'bodyHit', hit: hits[0], range: +dist(p, station).toFixed(2), toStage: +dist(p, stage).toFixed(2), phase: ap.phase, reason: ap.reason, engaged: ap.engaged, nearest: near };
     } else if (ctx.flags.docked) out = { outcome: 'docked', t: +ctx.world.time.toFixed(1) };
     else if (!ap.engaged) out = { outcome: 'disengaged', reason: ap.reason, phase: ap.phase };
@@ -134,7 +141,10 @@ function runApproach(shape, radius) {
   return { act: a.ok, result: out || { outcome: 'timeout' }, loiterer };
 }
 function reset() {
-  for (const live of ctx.ships.filter((s) => String(s.record?.id).startsWith('i139-'))) binds.removeLiveShip(ctx, live);
+  for (const live of ctx.ships.filter((s) => String(s.record?.id).startsWith('i139-'))) {
+    ctx.ships.splice(ctx.ships.indexOf(live), 1);
+    binds.removeLiveShip(ctx, live);
+  }
   if (ctx.flags.docked) {
     const r = rw.act({ v: 2, name: 'undock', args: {} });
     if (!r.ok) ctx.flags.docked = false;
