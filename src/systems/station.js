@@ -4494,6 +4494,8 @@ function tickDeliveryJobs(ctx, ui, render) {
 // ---------------------------------------------------------------- main ----
 
 export function initStation(ctx) {
+  // Session-only displayed quotes; never persisted or allowed to drift behind a card.
+  const displayedHaulQuotes = new Map();
   let currentId = ctx.world.currentSystem;
   let currentDef = ctx.systems[currentId];
   // Wave 24: this dock's faction service entry (FACTION_SERVICES, state.js),
@@ -5323,7 +5325,7 @@ export function initStation(ctx) {
         return;
       }
       job.destSystem = dest;
-      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, tradePayBase(ctx, job.commodity, HAUL_UNITS)));
+      job.payQuoted = peekJobReward(job);
       job.deadline = ctx.world.time + MINING_DEADLINE;
     } else if (job.kind === 'hunt') {
       if (job.state !== 'offered') {
@@ -5558,6 +5560,7 @@ export function initStation(ctx) {
       job.title = copy.title;
       job.detail = copy.detail;
     }
+    const haulQuote = job.kind === 'haul' ? peekJobReward(job) : undefined;
     job.state = 'accepted';
     if (job.kind === 'recovery') tickRecovery(ctx);
     if (job.kind === 'haul') {
@@ -5566,7 +5569,7 @@ export function initStation(ctx) {
       job.originPrice = priceOf(ctx, 'provisions');
       // Wave 26: the quote becomes the agreement — stamped with the
       // destination dock's rates, JSON-plain on the job entry.
-      job.payQuoted = jobPayFor(ctx, otherSystemId(ctx, job.originSystem), Math.round(HAUL_UNITS * job.originPrice * HAUL_MARGIN));
+      job.payQuoted = haulQuote;
     }
     trackJob(job);
     trackJob(handle);
@@ -5579,6 +5582,7 @@ export function initStation(ctx) {
     if ('payQuoted' in job) stamped.payQuoted = job.payQuoted;
     patchJob(job.id, stamped);
     ui.notice = `Accepted: ${job.title}`;
+    if (job.kind === 'haul' || job.kind === 'trade') ui.notice += ` — pays ${job.payQuoted} UU.`;
     if (job.kind === 'passenger') ui.notice = `${passengerPayLine(ctx, job)}. ${PASSENGER_TERMS}`;
     requestAutosave(ctx);
     render();
@@ -5586,6 +5590,7 @@ export function initStation(ctx) {
   }
 
   function renderJobs(panel) {
+    if (h === hDom) displayedHaulQuotes.clear();
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
     syncRecoveryJob(ctx, currentId);
     const salvage = ctx.world.jobs.some(j => j.kind === 'recovery' && j.originSystem === currentId
@@ -5686,14 +5691,7 @@ export function initStation(ctx) {
         const originId = job.state === 'accepted' ? (job.originSystem ?? currentId) : currentId;
         const destId = otherSystemId(ctx, originId);
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
-        const unitCost = job.state === 'accepted' && job.originPrice
-          ? job.originPrice
-          : priceOf(ctx, 'provisions');
-        // Wave 26: offered cards quote the DESTINATION dock's rates; accepted
-        // cards show the agreed snapshot (old saves fall back to the old math).
-        const est = job.state === 'accepted'
-          ? (job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN)))
-          : jobPayFor(ctx, destId, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
+        const est = peekJobReward(job, h === hDom);
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
       } else if (job.kind === 'ferry') {
         const destId = job.state === 'accepted' ? job.destSystem : otherSystemId(ctx, currentId);
@@ -5722,10 +5720,7 @@ export function initStation(ctx) {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const destId = otherSystemId(ctx, originId);
         const destName = tradeStationName(destId) ?? 'the far station';
-        const base = commodity ? tradePayBase(ctx, commodity, HAUL_UNITS) : 0;
-        const est = job.state === 'accepted'
-          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, base))
-          : jobPayFor(ctx, originId, base);
+        const est = peekJobReward(job, h === hDom);
         rewardLine = `Deliver ${HAUL_UNITS} ${name} to ${destName} — pays ${est} UU`;
       } else if (job.kind === 'hunt') {
         const name = huntCardName(ctx, job);
@@ -6887,6 +6882,7 @@ export function initStation(ctx) {
 
     ctx.flags.docked = false;
     ui.open = false;
+    ui.service = null;
     ui.bulk = null;
     bulkStatus.textContent = '';
     // Only a launch that actually happened clears the held line. A hold above
@@ -7065,6 +7061,32 @@ export function initStation(ctx) {
   let jobTick = 0;
   let refreshTick = 0;
 
+  // The most recently drawn offer is the agreement available to accept. A
+  // redraw refreshes it for desk and observation together; accepted pay freezes.
+  function peekJobReward(job, refresh = false) {
+    if (!job || (job.kind !== 'haul' && job.kind !== 'trade')) return undefined;
+    if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
+    const shown = displayedHaulQuotes.get(job.id);
+    if (!refresh && job.state === 'offered' && shown?.origin === currentId) return shown.pay;
+    const origin = job.kind === 'haul' && job.state !== 'accepted'
+      ? currentId : (job.originSystem ?? currentId);
+    let pay;
+    if (job.kind === 'trade') {
+      const base = isTradeCommodity(job.commodity) ? tradePayBase(ctx, job.commodity, HAUL_UNITS) : 0;
+      pay = clampJobPay(jobPayFor(ctx, origin, base));
+    } else {
+      const unit = job.state === 'accepted' && job.originPrice ? job.originPrice : priceOf(ctx, 'provisions');
+      const base = Math.round(HAUL_UNITS * unit * HAUL_MARGIN);
+      pay = job.state === 'accepted' ? jobPay(ctx, base) : jobPayFor(ctx, otherSystemId(ctx, origin), base);
+    }
+    if (refresh && job.state === 'offered') displayedHaulQuotes.set(job.id, { origin: currentId, pay });
+    return pay;
+  }
+
+  function peekOffers() {
+    return ctx.flags.docked ? boardJobs(ctx, currentId).filter(job => job.state === 'offered') : [];
+  }
+
   function peekService() {
     const id = ui.service;
     if (typeof id !== 'string' || !id) return null;
@@ -7140,7 +7162,13 @@ export function initStation(ctx) {
     const list = ctx.world && Array.isArray(ctx.world.jobs) ? ctx.world.jobs : null;
     if (typeof job.id === 'string' && list) {
       const live = list.find((j) => j && j.id === job.id);
-      if (live) return deskResult(acceptJob(live) === true);
+      // The unique ferry explicitly permits a completed return-leg reoffer.
+      const returnFerry = live?.id === 'ferry-consignment' && live.state === 'done';
+      if (live && (returnFerry || (live.state === 'offered' && boardJobs(ctx, currentId).includes(live)))) {
+        ui.notice = '';
+        return deskResult(acceptJob(live) === true);
+      }
+      if (live) return { ok: false, token: 'not-offered', notice: 'That posting is not offered at this dock.' };
       if (!Object.hasOwn(job, 'kind')) {
         ui.notice = 'That posting is not valid.';
         render();
@@ -7158,6 +7186,8 @@ export function initStation(ctx) {
     feed,
     undock,
     peekService,
+    peekOffers,
+    peekJobReward,
     peekFillUnit,
     peekTradeAvailability,
     peekView,

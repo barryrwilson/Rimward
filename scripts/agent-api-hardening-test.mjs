@@ -192,6 +192,9 @@ ctx.station = {
   position: { x: 120, y: 20, z: 620 },
 };
 ctx.systems = { freehold: { station: { position: [120, 20, 620] } } };
+const burner171 = rw.act({ v: 2, name: 'afterburner', args: {} });
+pin('raw afterburner queues without flee helm', burner171.ok === true
+  && burner171.status === 'queued' && ctx.flee?.engaged !== true);
 const approach = rw.act({ v: 2, name: 'approachDock', args: {} });
 pin('approachDock engages dock mode', approach.ok === true
   && ctx.autopilot.engaged === true
@@ -297,6 +300,7 @@ ctx.cargo = [{ commodity: 'provisions', units: 2 }];
 let deskService = 'jobs';
 ctx.stationDesk = {
   peekService() { return deskService; },
+  peekOffers() { return ctx.world.jobs.filter(j => j.state === 'offered' && j.originSystem === ctx.world.currentSystem); },
 };
 const jobsObs = rw.observe();
 // v2: an accepted contract rides jobs.active (observable in flight), not the
@@ -327,6 +331,8 @@ ctx.flags.docked = true;
 
 ctx.world.jobs = [{
   kind: 'mining',
+  state: 'offered',
+  originSystem: 'freehold',
   need: 8,
   commodity: 'rawOre',
   deadline: 400,
@@ -343,6 +349,8 @@ pin('mining job need', !!(
 ));
 ctx.world.jobs = [{
   kind: 'mining',
+  state: 'offered',
+  originSystem: 'freehold',
   need: 8,
   progress: 0,
   commodity: 'rawOre',
@@ -355,6 +363,32 @@ pin('mining job progress', !!(
   && mineProg.need === 8
   && mineProg.progress === 0
 ));
+
+// #170: absent owner feedback must still produce a named, useful refusal.
+for (const [name, service, args] of [
+  ['acceptJob', 'jobs', { id: 'missing' }],
+  ['trade', 'market', { commodity: 'provisions', qty: 1, side: 'buy' }],
+  ['repairAll', 'repair', {}], ['feed', 'feed', { kind: 'biomass' }],
+]) {
+  ctx.stationDesk[name] = () => ({ ok: false, token: 'wrong-desk', notice: '' });
+  deskService = service;
+  let refusal = rw.act({ v: 2, name, args });
+  pin(name + ' preserves owner token with nonempty reason', !refusal.ok
+    && refusal.token === 'wrong-desk' && !!refusal.error);
+  ctx.stationDesk[name] = () => ({ ok: false });
+  refusal = rw.act({ v: 2, name, args });
+  pin(name + ' empty owner feedback fails named', !refusal.ok && !!refusal.token && !!refusal.error);
+  deskService = null;
+  refusal = rw.act({ v: 2, name, args });
+  pin(name + ' closed service names required pane', !refusal.ok
+    && refusal.token === 'no-service' && refusal.error.includes(service));
+}
+ctx.stationDesk.undock = () => ({ ok: false });
+const launch170 = rw.act({ v: 2, name: 'undock', args: {} });
+pin('undock empty owner feedback fails named', !launch170.ok && !!launch170.token && !!launch170.error);
+deskService = 'jobs';
+ctx.world.jobs.push({ id: 'remote', kind: 'trade', state: 'offered', originSystem: 'veridian' });
+pin('offers exclude remote posting', !rw.observe().jobs.offers.some(j => j.id === 'remote'));
 
 pin('market omitted off desk', jobsObs.market == null);
 
