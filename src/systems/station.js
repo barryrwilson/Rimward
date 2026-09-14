@@ -6760,6 +6760,7 @@ export function initStation(ctx) {
     applyBerthFlight(ctx, null);
     applyBerthInput(ctx, 'dock');
     ctx.flags.docked = true;
+    displayedHaulQuotes.clear(); // no quote from an earlier berth visit
     ui.open = true;
     ui.bulk = null;
     if (!bulkStatus.parentNode) overlay.appendChild(bulkStatus);
@@ -6881,6 +6882,7 @@ export function initStation(ctx) {
     if (!applyBerthFlight(ctx, plan)) return hold('no-service', '');
 
     ctx.flags.docked = false;
+    displayedHaulQuotes.clear();
     ui.open = false;
     ui.service = null;
     ui.bulk = null;
@@ -7067,9 +7069,10 @@ export function initStation(ctx) {
     if (!job || (job.kind !== 'haul' && job.kind !== 'trade')) return undefined;
     if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
     const shown = displayedHaulQuotes.get(job.id);
-    if (!refresh && job.state === 'offered' && shown?.origin === currentId) return shown.pay;
+    if (!refresh && ui.open && ui.level === 2 && ui.service === 'jobs'
+      && job.state === 'offered' && shown?.origin === currentId) return shown.pay;
     const origin = job.kind === 'haul' && job.state !== 'accepted'
-      ? currentId : (job.originSystem ?? currentId);
+      ? currentId : (Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId);
     let pay;
     if (job.kind === 'trade') {
       const base = isTradeCommodity(job.commodity) ? tradePayBase(ctx, job.commodity, HAUL_UNITS) : 0;
@@ -7164,7 +7167,10 @@ export function initStation(ctx) {
       const live = list.find((j) => j && j.id === job.id);
       // The unique ferry explicitly permits a completed return-leg reoffer.
       const returnFerry = live?.id === 'ferry-consignment' && live.state === 'done';
-      if (live && (returnFerry || (live.state === 'offered' && boardJobs(ctx, currentId).includes(live)))) {
+      // These owners already refuse duplicate parties/consignments before any
+      // mutation, and explain the existing obligation in the visible notice.
+      const duplicateAboard = live?.state === 'accepted' && ['ferry', 'passenger'].includes(live.kind);
+      if (live && (returnFerry || duplicateAboard || (live.state === 'offered' && boardJobs(ctx, currentId).includes(live)))) {
         ui.notice = '';
         return deskResult(acceptJob(live) === true);
       }

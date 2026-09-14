@@ -46,3 +46,31 @@ This exercises actual controls/autopilot/ship updates. On this isolated branch, 
 Security checklist: no secrets, new network endpoints, new privileges, dynamic HTML, or persistent schema fields. Public commands still cross existing station/controls owners and preserve opt-in/phase gates. Offers fail closed without an available board owner. Refusals do not mutate job acceptance or launch state. No HIGH/CRITICAL security findings.
 
 Code checklist: shared station filtering and quotes avoid duplicated business rules; displayed quote cache is session-only, rebuilt on actual board render, and checked against the current dock. Existing completed-ferry persistence and retreat burner regression coverage pass. No HIGH/CRITICAL code findings remain in the owned paths. The #171 cross-worker integration dependency is explicit rather than reported as completed. Design specialist audit skipped: no new layout or controls were introduced; actual rendered desk flows were verified in Chromium.
+
+## Independent QA repair (follow-up to `3e5c8807`)
+
+Independent review found one stale quote path: a Jobs card cached during an earlier berth visit still priced `observe()` at the same station before Jobs was reopened. The new real-owner regression reproduced the exact failure before the fix (`945` before Jobs versus `1785` after Jobs). The quote cache now clears when the ship docks and when a launch succeeds. It is consulted only while the Jobs pane is actually visible. A hidden Jobs card cannot govern a Market/root-view quote; the existing within-visible-visit stability assertion remains unchanged and passes.
+
+Targeted lifecycle evidence now passes:
+
+- Hidden pane: previous displayed `945`, Market observation `1246`, reopened Jobs `1246`.
+- Same-station revisit: observation before opening Jobs `1785`, rendered quote `1785`.
+- Further redraw/acceptance and accepted-pay immutability still pass.
+- The previous validated-origin fallback is restored: invalid non-null `originSystem` values fall back to the current dock rather than suppressing its applicable pricing modifiers.
+
+The coordinator's integrated boot found three failed notice assertions in the otherwise passing #70 duplicate-ferry group. The generic accepted-row rejection bypassed the existing ferry handler, losing its `already aboard` explanation in both the receipt and rendered notice. Already-accepted ferry/passenger requests now reach their existing early refusal handlers. New focused tests exercise same-dock and third-dock ferry refusals through public API and retained internal handles, checking the named obligation in receipt and DOM and unchanged cargo/agreement. Passenger duplicate `not-offered` / `already aboard` behavior is also preserved. No boot assertion was edited or weakened. The coordinator owns the final full boot rerun.
+
+Passing commands after repair:
+
+```text
+node --import ./scripts/with-css-stub.mjs scripts/issue-170-desk-test.mjs
+node --import ./scripts/with-css-stub.mjs scripts/issue-71-dock-persistence-test.mjs
+node scripts/agent-api-hardening-test.mjs
+node scripts/issue-170-desk-live.mjs
+```
+
+The new live run is at `out/issue-170-qa-repair-live/desk/result.json`. Intel GPU Chromium passed with no console errors or exceptions, source hash stable at `be842f93b6745b81f923bd34aff21ea797420711a909839afe373bd16210bf43`, and both owned ports closed. Its hidden-pane quote was `1841 -> 2149` (Market and redraw both `2149`); its new-berth quote was `2681` before Jobs, on the displayed card and in the acceptance receipt. `revisit-accepted-haul.png` is scrolled to the exact Refined-metals row and visibly shows `pays 2681 UU`; the builder inspected it. Complete structured evidence remains alongside that screenshot.
+
+Other review findings: shared API documentation and reserved flee-channel description remain coordinator-owned. Keeping `no-service` for wrong panes is intentional compatibility, with a specific service-opening explanation. Completed jobs remain observable through the existing session `jobState` events: `completeJob` calls `noteJobOutcome(..., 'done')`; delivery families record `delivered` and pay, with lapse/escape outcomes where applicable. `agent-api.watchJobs` additionally reports accepted-to-done/failed transitions or removal as `closed`. These paths and the existing schema ring-retention pins are unchanged; terminal jobs need not masquerade as acceptable offers.
+
+Self-review of this repair found no unresolved HIGH/CRITICAL security or code issues. Quote invalidation is session-only and happens after successful launch ownership checks; held launches retain the current visible board. Existing ferry/passenger refusal handlers preserve their pre-mutation checks. Independent re-review of this new commit is still required.

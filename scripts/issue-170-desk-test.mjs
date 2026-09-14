@@ -49,7 +49,30 @@ for (const id of ['haul-provisions', 'ferry-consignment', 'bounty-ace', 'patrol-
 }
 const haul = ctx.world.jobs.find(j => j.kind === 'trade' && j.state === 'offered' && j.originSystem === 'veridian');
 assert.ok(haul);
-const original = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
+let original = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
+// A hidden Jobs card must not keep pricing the current market view.
+ctx.stationDesk.selectService('market');
+ctx.world.prices[haul.commodity] += 43;
+const whileMarket = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
+ctx.stationDesk.selectService('jobs');
+const afterMarket = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
+assert.equal(whileMarket, afterMarket, 'hidden Jobs pane quote follows current prices');
+assert.notEqual(afterMarket, original);
+console.log('PASS #178 hidden pane quote lifecycle', { previous: original, whileMarket, drawn: afterMarket });
+original = afterMarket;
+// A previous visit's drawn card must not set the next visit's planning quote.
+ctx.ships.length = 0; ctx.asteroids.list.length = 0;
+assert.equal(act('undock').ok, true, 'real owner releases the first berth');
+dock('veridian');
+assert.equal(ctx.stationDesk.peekService(), null, 'new visit starts at desk root');
+ctx.world.prices[haul.commodity] += 120;
+const revisitBeforeBoard = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
+ctx.stationDesk.selectService('jobs');
+const revisitDrawn = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
+assert.equal(revisitBeforeBoard, revisitDrawn, 'new visit quote is fresh before opening Jobs');
+assert.notEqual(revisitDrawn, original, 'new visit price differs from previous card');
+console.log('PASS #178 berth revisit quote lifecycle', { previous: original, beforeBoard: revisitBeforeBoard, drawn: revisitDrawn });
+original = revisitDrawn;
 ctx.world.prices[haul.commodity] += 37;
 assert.equal(rw.observe().jobs.offers.find(j => j.id === haul.id).reward, original, 'offer matches drawn card between refreshes');
 ctx.stationDesk.selectService('jobs');
@@ -97,4 +120,31 @@ for (const pane of ['market', 'jobs', 'repair', 'feed', 'outfitting', 'bar', 'pe
   assert.equal(ctx.flags.docked, false);
   assert.equal(ctx.stationDesk.peekService(), null);
 }
+// #70/#73: the named duplicate obligation must still reach both receipt and UI.
+dock('freehold'); ctx.stationDesk.selectService('jobs');
+ctx.cargo.length = 0;
+const ferry = ctx.world.jobs.find(j => j.id === 'ferry-consignment');
+assert.equal(act('acceptJob', { id: ferry.id }).ok, true);
+const agreement = JSON.stringify(ferry);
+const cargo = JSON.stringify(ctx.cargo);
+for (const system of ['freehold', 'redmarch']) {
+  if (ctx.world.currentSystem !== system) dock(system);
+  ctx.stationDesk.selectService('jobs');
+  const duplicate = act('acceptJob', { id: ferry.id });
+  refused(duplicate);
+  assert.ok(duplicate.error.includes('already aboard'));
+  assert.ok([...dom.walkDom(document.body)].some(n => n.className === 'station-notice' && n.textContent.includes('already aboard')));
+  const direct = ctx.stationDesk.acceptJob(ferry);
+  assert.equal(direct.ok, false);
+  assert.ok(direct.notice.includes('already aboard'));
+  assert.equal(JSON.stringify(ferry), agreement);
+  assert.equal(JSON.stringify(ctx.cargo), cargo);
+}
+const passenger = ctx.world.jobs.find(j => j.kind === 'passenger' && j.originSystem === 'redmarch' && j.state === 'offered');
+assert.ok(passenger);
+assert.equal(act('acceptJob', { id: passenger.id }).ok, true);
+const passengerAgain = act('acceptJob', { id: passenger.id });
+refused(passengerAgain, 'not-offered');
+assert.ok(passengerAgain.error.includes('already aboard'));
+console.log('PASS duplicate consignment/party refusals retain receipt and visible obligation, with no mutation');
 console.log('PASS #170 closed panes, remote offers, relays, repeat refusal, and service-pane launch');
