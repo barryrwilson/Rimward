@@ -67,16 +67,19 @@ const nav = makeNavHelpers({ ctx, SYSTEMS: binds.SYSTEMS, tick, dispatchKey: dom
 assert.ok(nav.travelTo('veridian', 'incoming hold setup'));
 
 const blocked = process.env.HOLD_CASE === 'blocked';
+const impossible = process.env.HOLD_CASE === 'static-blocked';
 const station = new THREE.Vector3(...binds.SYSTEMS.veridian.station.position);
-ctx.ship.object.position.copy(blocked ? station.clone().add(new THREE.Vector3(70,0,0)) : new THREE.Vector3(-180,33,100));
+ctx.ship.object.position.copy(impossible ? station.clone().add(new THREE.Vector3(220,0,0))
+  : blocked ? station.clone().add(new THREE.Vector3(70,0,0)) : new THREE.Vector3(-180,33,100));
 ctx.ship.object.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),new THREE.Vector3(-1,0,0));
 ctx.ship.velocity.set(0,0,0); ctx.ship.speed=0;
 ctx.input.throttle=0;ctx.input.fullStop=false;ctx.flags.docked=false;ctx.station.inZone=false;
 const position=ctx.ship.object.position.clone();
-const velocity=new THREE.Vector3(11.15,-3.39,-49.13);
+const velocity=impossible ? new THREE.Vector3() : new THREE.Vector3(11.15,-3.39,-49.13);
 // Start one second before the observed incoming offset so the ordinary
 // 1.5s safety prediction can validate a complete slow forward escape.
-const npcPosition=position.clone().add(new THREE.Vector3(12,-17,51)).addScaledVector(velocity,-1);
+const npcPosition=impossible ? station.clone().add(new THREE.Vector3(135,0,0))
+  : position.clone().add(new THREE.Vector3(12,-17,51)).addScaledVector(velocity,-1);
 const record={id:'stage-hold-incoming',name:'Incoming route freighter',role:'trader',classKey:'freighter',faction:'freehold',
   system:'veridian',state:'enroute',live:true,resolve:90,cargo:[],
   route:[npcPosition.clone().addScaledVector(velocity,20),npcPosition.clone().addScaledVector(velocity,30)],
@@ -85,7 +88,7 @@ incoming=binds.spawnLiveShip(ctx,record,npcPosition);
 assert.ok(incoming,'real freighter mesh must be ready');
 incoming.ai.mode='route';
 incoming.ai.velocity.copy(velocity);incoming.ai.resolveAt=ctx.world.time+100;
-incoming.object.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),velocity.clone().normalize());
+if(velocity.lengthSq()>0)incoming.object.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),velocity.clone().normalize());
 ctx.ships.push(incoming);
 ctx.world.records.push(record);
 events.length=0;collisions.length=0;ctx.events=[];ctx.lastEvents=[];
@@ -94,13 +97,13 @@ const incomingBody=bodies.items.slice(0,bodies.count).find(b=>b.kind==='ship'&&b
 assert.ok(incomingBody,'the live collision collector must include the incoming mesh');
 const incomingRadius=incomingBody.r;
 let minClearance=Infinity,minHeldClearance=Infinity;
-const fixture={blocked,trajectoryAuthority:'test-controlled fixed incoming vector and real mesh collider; named mover excluded from NPC AI; normal player physics',station:station.toArray(),p:position.toArray(),q:ctx.ship.object.quaternion.toArray(),
+const fixture={blocked,impossible,trajectoryAuthority:'test-controlled fixed incoming vector or static stage blocker and real mesh collider; named mover excluded from NPC AI; normal player physics',station:station.toArray(),p:position.toArray(),q:ctx.ship.object.quaternion.toArray(),
   incoming:npcPosition.toArray(),velocity:velocity.toArray(),trafficCount:ctx.ships.length,asteroidCount:ctx.asteroids.list.length};
 const receipt=window.rimward.act({v:2,name:'approachDock',args:{}});
 assert.equal(receipt.ok,true,JSON.stringify(receipt));
 const startTime=ctx.world.time;
 const samples=[];
-for(let i=0;i<(blocked?10:150)&&ctx.autopilot.engaged;i++){
+for(let i=0;i<(impossible?60*45:blocked?10:150)&&ctx.autopilot.engaged;i++){
  tick();
  minClearance=Math.min(minClearance,ctx.ship.object.position.distanceTo(incoming.object.position)-incomingRadius-2.4);
  minHeldClearance=Math.min(minHeldClearance,position.distanceTo(incoming.object.position)-incomingRadius-2.4);
@@ -108,19 +111,26 @@ for(let i=0;i<(blocked?10:150)&&ctx.autopilot.engaged;i++){
    phase:ctx.autopilot.phase,idle:ctx.autopilot.idle,speed:ctx.ship.speed,npc:incoming.object.position.toArray(),npcV:incoming.ai.velocity.toArray()});
 }
 const evidence={artifact,fixture,receipt,events,collisions,samples,ap:ctx.autopilot,
-  distance:ctx.ship.object.position.distanceTo(position),npcTravel:incoming.object.position.distanceTo(npcPosition),minClearance,minHeldClearance};
+  elapsed:ctx.world.time-startTime,distance:ctx.ship.object.position.distanceTo(position),npcTravel:incoming.object.position.distanceTo(npcPosition),minClearance,minHeldClearance};
 const out=resolve(process.env.STAGE_OUT||'out/issue-168-hold');mkdirSync(out,{recursive:true});
 writeFileSync(resolve(out,'result.json'),JSON.stringify(evidence,null,2)+'\n');
 console.log('HOLD_RESULT',JSON.stringify({...evidence,samples:undefined}));
 assert.equal(events.some(e=>['bodyHit','sunHeat','playerDestroyed'].includes(e.type)),false,'no real contact during tested hold interval');
-assert.ok(evidence.npcTravel>1,'the controlled incoming collider must advance');
-if(blocked){
+if(impossible){
+ assert.ok(evidence.npcTravel<1e-9,'the named static blocker must remain static');
+ assert.equal(ctx.autopilot.engaged,false,'a permanently blocked stage must terminate');
+ assert.equal(ctx.autopilot.reason,'blocked','static impossibility must retain the named watchdog refusal');
+ assert.ok(evidence.elapsed<=30,'static blockage must fail within a bounded interval');
+ assert.ok(minClearance>0.1,'static watchdog control must retain actual hull clearance');
+}else if(blocked){
+ assert.ok(evidence.npcTravel>1,'the controlled incoming collider must advance');
  assert.ok(samples.every(s=>s.idle&&s.speed<0.01),'station-blocked forward escape must remain braked');
  assert.ok(evidence.distance<0.01,'station keep-out must prevent speculative forward creep');
 }else{
+ assert.ok(evidence.npcTravel>1,'the controlled incoming collider must advance');
  assert.ok(samples.some(s=>!s.idle&&s.speed>5),'real ship must advance from threatened turning hold');
  assert.ok(minClearance>0.1,'real player hull must retain positive clearance throughout the crossing');
  assert.ok(minHeldClearance< -1,'the same trajectory must intersect a stationary player hull');
  assert.ok(ctx.autopilot.engaged,'safe escape must preserve the dock helm');
 }
-console.log('PASS #168 controlled incoming collider / actual player '+(blocked?'keeps station course blocked':'allows validated normal creep'));
+console.log('PASS #168 controlled collider / actual player '+(impossible?'terminates static blocked stage':blocked?'keeps station course blocked':'allows validated normal creep'));
