@@ -803,7 +803,7 @@ export const COMMAND_SPECS = freeze({
   cancelAutopilot: cmd({}, ['pilot']),
   approachDock: freeze({
     args: freeze({}), roles: freeze(['pilot']),
-    note: 'Fly to the current station with sun/body avoidance: autopilot mode dock. Requests beyond 500 u from the +X stage begin in cruise, brake to stage within 200 u (500 u from a blocking station), then corridor/settle/docking. Nearby requests and nearby station detours keep creep. Existing named helm/station refusals apply.',
+    note: 'Fly to the current station with sun/body avoidance: autopilot mode dock. Requests beyond 500 u from the +X stage begin in cruise, with predictive ship/asteroid clearance and braking, then brake to stage within 100 u (500 u from a blocking station), followed by corridor/settle/docking. Nearby requests and nearby station detours keep creep. Existing named helm/station refusals apply.',
   }),
   engageAutomine: cmd({}, ['miner']),
   cancelAutomine: cmd({}, ['miner']),

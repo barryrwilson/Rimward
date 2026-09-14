@@ -19,8 +19,7 @@ dom.dispatchKey('Digit1'); ctx.flags.paused = false; tick(30);
 ctx.agent.optIn = true;
 const nav = makeNavHelpers({ ctx, SYSTEMS: binds.SYSTEMS, tick, dispatchKey: dom.dispatchKey, onRouteError: message => { throw Error(message); } });
 assert.ok(nav.travelTo('veridian', 'issue168 arrival'));
-// Isolate static route safety from unrelated moving traffic encounters.
-for (const live of ctx.ships.splice(0)) binds.removeLiveShip(ctx, live);
+// Keep every live NPC: the regression at ~17.68 s requires real traffic.
 const rw = window.rimward;
 const began = ctx.world.time;
 events.length = 0;
@@ -44,5 +43,4 @@ assert.equal(events.some(e => e.type === 'sunHeat' || e.type === 'bodyHit'), fal
 assert.ok(phases.has('cruise') && phases.has('stage') && phases.has('corridor'));
 assert.ok(maxSpeed > 100);
 console.log('PASS issue168 Veridian arrival cruises safely to berth in under 40 sim seconds');
-
 

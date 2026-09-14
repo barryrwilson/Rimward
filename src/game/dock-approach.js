@@ -4,7 +4,7 @@
  */
 
 export const DOCK_STAGE_RANGE = 135;
-export const DOCK_CRUISE_RANGE = 200;
+export const DOCK_CRUISE_RANGE = 100;
 export const DOCK_CRUISE_START_RANGE = 500;
 export const DOCK_SETTLE_RANGE = 40;
 export const DOCK_REQUEST_RANGE = 43;

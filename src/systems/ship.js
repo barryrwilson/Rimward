@@ -760,6 +760,7 @@ export function initShip(ctx) {
   let swimPhase = 0; // accumulated (frequency varies with speed + mood)
   let bankAngle = 0; // smoothed auto-bank visual roll
   let agentBurnerOwned = false;
+  let dockHelmWasOn = false;
   let burnerEndsAt = 0; // ctx.world.time when the current burn cuts out
   let driftEndsAt = 0; // ctx.world.time when vector-hold force-releases
   let realigning = false; // drift release: swinging velocity back to facing
@@ -913,6 +914,9 @@ export function initShip(ctx) {
       const ap = ctx.autopilot;
       const apOn = !fleeOn && !!((ap && ap.engaged === true)
         || (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true));
+      const dockHelmOn = !!(apOn && ap && ap.mode === 'dock');
+      const dockHelmTakeover = dockHelmOn && !dockHelmWasOn;
+      dockHelmWasOn = dockHelmOn;
       const am = ctx.automine;
       // Reserved legacy/internal flee wins when engaged. Else autopilot, then automine.
       const amOn = !apOn && !fleeOn && !!(am && am.engaged === true);
@@ -929,6 +933,14 @@ export function initShip(ctx) {
 
       const held = berthHeld(ctx);
       if (!docked && !held) {
+        // Explicit docking owns thrust. Retire an existing raw burn here,
+        // where the burner timers live, and reject queued agent burn edges.
+        // Fresh physical Space already cancels the dock helm in autopilot.
+        if (dockHelmOn && ship.burnerActive) {
+          ship.burnerActive = false;
+          ship.burnerReadyAt = time + shipCfg.afterburner.cooldown;
+          agentBurnerOwned = false;
+        }
         // --- Afterburner state machine (§5.2): tap Space → ×2 for burnTime,
         // then cooldown before the next burn is allowed.
         if (agentBurnerOwned && (!input.agentBurnerHeld || !ship.burnerActive)) {
@@ -939,7 +951,7 @@ export function initShip(ctx) {
           agentBurnerOwned = false;
         }
         if (
-          input.afterburnerPressed &&
+          input.afterburnerPressed && !dockHelmOn &&
           !ship.burnerActive &&
           time >= ship.burnerReadyAt &&
           (ctx.player?.power ?? 0) >= POWER.afterburnerMin
@@ -1093,7 +1105,10 @@ export function initShip(ctx) {
         _padGovFlags.paused = !!ctx.flags.paused;
         _padGovFlags.dockPressed = !!input.dockPressed;
         _padGovFlags.burnerActive = !!ship.burnerActive;
-        _padGovFlags.apDock = !!(apOn && ap && ap.mode === 'dock');
+        // Reuse the normal radial pad envelope once at explicit takeover:
+        // a burn can enter closer than physical stopping distance in one
+        // command interval. Subsequent updates use normal dock-helm physics.
+        _padGovFlags.apDock = dockHelmOn && !dockHelmTakeover;
         applyPadSpeedGovernor(
           ship.velocity,
           root.position,

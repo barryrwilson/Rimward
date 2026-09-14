@@ -12,6 +12,7 @@ import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
+import { collectDockCruiseBodies, dockCruiseShouldBrake } from './dock-cruise.js';
 import { agentPulse } from '../systems/controls.js';
 import {
   DOCK_STAGE_ARRIVE,
@@ -100,6 +101,7 @@ const _inv = new THREE.Quaternion();
 const _fwd = new THREE.Vector3();
 const _apBodies = { count: 0, items: [] };
 const _dockBodies = { count: 0, items: [] };
+const _cruiseBodies = { count: 0, items: [] };
 const _playerLive = {
   role: 'player',
   id: -1,
@@ -389,8 +391,8 @@ export function dockApproachRefuseToken(ctx) {
   if (ctx.gate && ctx.gate.jumping === true) return 'jumping';
   if (ctx.flags && ctx.flags.matchSpeed === true) return 'match';
   if (ctx.ship.driftActive === true) return 'drift';
-  // Dock idle/braking uses actual velocity and remains authoritative while
-  // a raw pulse burns out. Combat and flee owners still refuse below.
+  // The ship owner retires an existing raw burn on explicit dock takeover.
+  // Combat and flee owners still refuse below.
   if (autopilotEngaged(ctx)) return 'autopilot';
   if (ctx.automine && ctx.automine.engaged === true) return 'automine';
   if (ctx.flee && ctx.flee.engaged === true) return 'flee';
@@ -403,6 +405,8 @@ export function tryApproachDock(ctx) {
   const token = dockApproachRefuseToken(ctx);
   if (token) return token;
   const station = currentStationPose(ctx);
+  const points = dockApproachPoints(station);
+  if (!points) return 'stale';
   const range = dockDistance(ctx.ship.object.position, station);
   if (range === null) return 'stale';
   const nav = navBag(ctx);
@@ -410,7 +414,7 @@ export function tryApproachDock(ctx) {
   ap.engaged = true;
   ap.mode = 'dock';
   ap.phase = ctx.station.inZone === true ? 'settle'
-    : dockDistance(ctx.ship.object.position, dockApproachPoints(station).stage) > DOCK_CRUISE_START_RANGE
+    : dockDistance(ctx.ship.object.position, points.stage) > DOCK_CRUISE_START_RANGE
       ? 'cruise' : 'stage';
   ap.reason = '';
   ap.startSystem = station.system;
@@ -613,6 +617,13 @@ function bodyBlocksStageChord(p, stage, kind) {
       p.x, p.y, p.z, stage.x, stage.y, stage.z,
       body.x, body.y, body.z, keep,
     );
+    // Already inside the conservative station keep ring: a straight
+    // outward chord is safe. Latching its tangent makes idle-turn aim
+    // oscillate against local station avoidance instead of leaving the pad.
+    if (kind === 'station' && hit.inside
+      && (p.x - body.x) * (stage.x - p.x)
+        + (p.y - body.y) * (stage.y - p.y)
+        + (p.z - body.z) * (stage.z - p.z) >= 0) return false;
     return !!hit.hit;
   }
   return false;
@@ -757,11 +768,17 @@ function dockTick(ctx) {
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
 
   if (ap.phase === 'stage' || ap.phase === 'cruise') {
+    const planningBodies = ap.phase === 'cruise'
+      ? collectDockCruiseBodies(_apBodies, ctx.ships,
+        Math.max(speed, Number.isFinite(ctx.config.ship.maxSpeed) ? ctx.config.ship.maxSpeed : speed),
+        acceleration, _cruiseBodies)
+      : _apBodies;
+    if (!planningBodies) { disengage(ctx, 'stale'); return; }
     const planned = planApPath({
       px: p.x, py: p.y, pz: p.z,
       gx: points.stage.x, gy: points.stage.y, gz: points.stage.z,
       hx: _fwd.x, hy: _fwd.y, hz: _fwd.z,
-      bodies: _apBodies,
+      bodies: planningBodies,
       shipR: PHY.PLAYER_RADIUS,
       classKey,
       speed,
@@ -775,7 +792,7 @@ function dockTick(ctx) {
     }
     pathSign = planned.sign || pathSign;
     const stationBlocked = bodyBlocksStageChord(p, points.stage, 'station');
-    if (planned.hold === 'detour' && stationBlocked && !dockDetourValid) {
+    if (planned.hold === 'detour' && stationBlocked && !dockDetourValid && ap.phase !== 'cruise') {
       dockDetourValid = true;
       dockDetourX = planned.ax;
       dockDetourY = planned.ay;
@@ -805,8 +822,8 @@ function dockTick(ctx) {
     // Avoidance is a local bias, not permission to cut the planner's safe
     // tangent through the sun (issue #172) or another blocking body.
     if (routeDetour) {
-      for (let i = 0; i < stageBodies.count; i++) {
-        const body = stageBodies.items[i];
+      for (let i = 0; i < planningBodies.count; i++) {
+        const body = planningBodies.items[i];
         const keep = keepRadius(body, PHY.PLAYER_RADIUS);
         if (!(keep > 0)) continue;
         const hit = sphereChordHit(p.x, p.y, p.z, _aim.x, _aim.y, _aim.z,
@@ -845,7 +862,8 @@ function dockTick(ctx) {
     const phase = cruise ? 'cruise' : 'stage';
     if (ap.phase !== phase) { ap.phase = phase; resetDockWatch(ctx, ap); }
     if (cruise) {
-      ap.idle = braking || steer.align < 0.97;
+      ap.idle = braking || steer.align < 0.97
+        || dockCruiseShouldBrake(p, ctx.ship.velocity, acceleration, planningBodies);
       ap.throttle = ap.idle ? 0 : throttleForPath(
         planned.hold, planned.intercept, steer.align, stageDistance, planned.turnR,
       );
