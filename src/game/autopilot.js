@@ -621,9 +621,9 @@ function bodyBlocksStageChord(p, stage, kind) {
   const count = _apBodies.count || 0;
   for (let i = 0; i < count; i++) {
     const body = _apBodies.items[i];
-    if (!body || body.kind !== kind) continue;
+    if (!body || (kind && body.kind !== kind)) continue;
     const keep = keepRadius(body, PHY.PLAYER_RADIUS);
-    if (!(keep > 0)) return false;
+    if (!(keep > 0)) continue;
     const hit = sphereChordHit(
       p.x, p.y, p.z, stage.x, stage.y, stage.z,
       body.x, body.y, body.z, keep,
@@ -631,11 +631,11 @@ function bodyBlocksStageChord(p, stage, kind) {
     // Already inside the conservative station keep ring: a straight
     // outward chord is safe. Latching its tangent makes idle-turn aim
     // oscillate against local station avoidance instead of leaving the pad.
-    if (kind === 'station' && hit.inside
+    if (body.kind === 'station' && hit.inside
       && (p.x - body.x) * (stage.x - p.x)
         + (p.y - body.y) * (stage.y - p.y)
-        + (p.z - body.z) * (stage.z - p.z) >= 0) return false;
-    return !!hit.hit;
+        + (p.z - body.z) * (stage.z - p.z) >= 0) continue;
+    if (hit.hit) return true;
   }
   return false;
 }
@@ -864,7 +864,7 @@ function dockTick(ctx) {
     }
     if (!stationBlocked) dockDetourValid = false;
     const routeDetour = planned.hold === 'detour'
-      && (ap.phase === 'cruise' || bodyBlocksStageChord(p, points.stage, 'sun'));
+      && (ap.phase === 'cruise' || bodyBlocksStageChord(p, points.stage));
     let detouring = dockDetourValid || routeDetour;
     if (dockRecovering) {
       detouring = false;

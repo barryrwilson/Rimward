@@ -27,6 +27,15 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#172](https://github.com/barryrwilson/Rimward/issues/172) is implemented
+on the local `fix/issue-172-dock-sun` candidate; independent QA is pending.
+PR #180 already retained solar detours. This follow-up scans all valid planner
+keep-out bodies and adds the five authored-gate solar approach cases to the
+boot gate. The cases use real jump arrival positions, a stationary hull facing
+the station stage, and isolated NPC traffic; solar damage, asteroids, station
+collision and actual berth completion remain active. Arrival-turn gate-ring
+contacts and zero-damage contact cancellation are outside this issue.
+
 The five Agent API playtest outcomes below are implemented on the local
 `codex/agent-api-fixes` candidate. Focused builder checks and live evidence
 are recorded; **final integrated QA and publication remain pending**. This

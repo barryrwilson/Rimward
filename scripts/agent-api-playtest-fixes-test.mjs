@@ -6,9 +6,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SYSTEMS } from '../src/game/state.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+// The solar runner owns one 120s child per authored gate, sequentially.
+// Its parent must outlive their combined budget plus startup/reporting.
+const solarTimeoutMs = ['veridian', 'freehold', 'redmarch']
+  .reduce((total, id) => total + SYSTEMS[id].gates.length * 120000, 30000);
 const checks = [
+  ['allAuthoredGateSolarApproaches', 'issue-172-dock-sun-test.mjs', undefined, solarTimeoutMs],
   ['cruiseApproach', 'issue-168-cruise-test.mjs'],
   ['cruiseObstacles', 'issue-168-cruise-obstacles-test.mjs'],
   ['stageRealAsteroids', 'issue-168-stage-obstacles-test.mjs', { STAGE_CASE: 'earliest', STAGE_DIAG: '', STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-stage','gate') }],
@@ -27,12 +33,12 @@ const checks = [
   ['rawBurnerDockHandoff', 'issue-171-burner-test.mjs'],
 ];
 const results = [];
-for (const [name, file, environment] of checks) {
+for (const [name, file, environment, timeoutMs = 120000] of checks) {
   console.log(`\n--- Agent API playtest regression: ${name} ---`);
   const started = Date.now();
   const run = spawnSync(process.execPath, [
     '--import', './scripts/with-css-stub.mjs', join('scripts', file),
-  ], { cwd: root, env: { ...process.env, ...environment }, stdio: 'inherit', windowsHide: true, timeout: 120000 });
+  ], { cwd: root, env: { ...process.env, ...environment }, stdio: 'inherit', windowsHide: true, timeout: timeoutMs });
   const row = {
     name, pass: run.status === 0 && !run.error, exitCode: run.status,
     signal: run.signal || null, error: run.error?.message || null,

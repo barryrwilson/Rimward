@@ -28010,11 +28010,14 @@ removeLiveShip(w42indyCtx, w42indy);
       clearTimeout(timer);
       resolve({ ok, why });
     };
-    // Each of four inner children is bounded to two minutes by its owner.
+    // Preserve the existing group allowance and add the solar runner's
+    // sequential per-gate child budgets plus startup/reporting margin.
+    const groupTimeoutMs = ['veridian', 'freehold', 'redmarch']
+      .reduce((total, id) => total + SYSTEMS[id].gates.length * 120000, 10 * 60 * 1000 + 30000);
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      finish(false, 'timeout after 10 min');
-    }, 10 * 60 * 1000);
+      finish(false, `timeout after ${groupTimeoutMs / 60000} min`);
+    }, groupTimeoutMs);
     child.on('error', error => finish(false, `spawn error: ${error.message}`));
     child.on('close', (code, signal) => finish(code === 0,
       `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`));
