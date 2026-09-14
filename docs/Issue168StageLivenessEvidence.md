@@ -113,3 +113,9 @@ it part of the full boot gate as well, alongside the static blocked control.
 Neither the prior release-focused failure
 nor the candidate liveness failure is reported as a passing result.
 The complete shared Agent API group now contains twelve checked scenarios.
+
+That twelve-check result precedes the distinct active station-detour watchdog
+repair. See [Issue168DetourProgressEvidence.md](Issue168DetourProgressEvidence.md)
+for the bounded geometric allowance, hybrid regression provenance and final
+combined verification boundary. The moving-traffic budget and its controls
+remain unchanged.

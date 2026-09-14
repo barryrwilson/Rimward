@@ -132,6 +132,7 @@ let dockDetourValid = false;
 let dockDetourX = 0;
 let dockDetourY = 0;
 let dockDetourZ = 0;
+let dockStationArc = null;
 
 function emptyChannel() {
   return {
@@ -219,6 +220,7 @@ function resetApproach() {
 }
 
 function resetDockScratch() {
+  dockStationArc = null;
   dockStartRange = 0;
   dockStartSystem = '';
   dockStationName = '';
@@ -429,6 +431,7 @@ export function tryApproachDock(ctx) {
   zeroCmd(ap);
   ap.idle = true;
   dockStartRange = range;
+  dockStationArc = null;
   dockStartSystem = station.system;
   dockStationName = station.name;
   dockBestRange = Infinity;
@@ -671,7 +674,42 @@ function resetDockWatch(ctx, ap) {
   dockTrafficWaitUsed = 0;
 }
 
-function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false) {
+// A committed station tangent can increase literal stage range while its
+// direct chord clears the keep sphere. Credit only new geometric clearance,
+// using a fixed station/goal for the engagement. The entire [0, keep] interval
+// buys at most one watchdog window; loops and new tangent choices cannot refill it.
+function dockStationArcCredit(p, goal) {
+  if (!dockDetourValid || dockRecovering) return 0;
+  let body = null;
+  for (let i = 0; i < _apBodies.count; i++) {
+    if (_apBodies.items[i].kind === 'station') { body = _apBodies.items[i]; break; }
+  }
+  if (!body) return 0;
+  const keep = keepRadius(body, PHY.PLAYER_RADIUS);
+  const geometry = [body.x, body.y, body.z, keep, goal.x, goal.y, goal.z];
+  if (!(keep > 0) || !geometry.every(Number.isFinite)) return 0;
+  if (dockStationArc && geometry.some((n, i) => n !== dockStationArc.geometry[i])) return 0;
+  const dx = goal.x - p.x, dy = goal.y - p.y, dz = goal.z - p.z;
+  const lengthSq = dx * dx + dy * dy + dz * dz;
+  if (!(lengthSq > 0) || !Number.isFinite(lengthSq)) return 0;
+  const along = Math.max(0, Math.min(1,
+    ((body.x - p.x) * dx + (body.y - p.y) * dy + (body.z - p.z) * dz) / lengthSq));
+  const clearance = Math.min(keep, Math.hypot(p.x + along * dx - body.x,
+    p.y + along * dy - body.y, p.z + along * dz - body.z));
+  if (!Number.isFinite(clearance)) return 0;
+  if (!dockStationArc) { dockStationArc = { geometry, best: clearance }; return 0; }
+  if (clearance < dockStationArc.best + 1) return 0;
+  const gain = clearance - dockStationArc.best;
+  dockStationArc.best = clearance;
+  const hit = sphereChordHit(p.x, p.y, p.z, dockDetourX, dockDetourY, dockDetourZ,
+    body.x, body.y, body.z, keep);
+  const outward = (p.x - body.x) * (dockDetourX - p.x)
+    + (p.y - body.y) * (dockDetourY - p.y) + (p.z - body.z) * (dockDetourZ - p.z) >= 0;
+  if (hit.hit && (!hit.inside || !outward)) return 0;
+  return DOCK_BLOCK_SECONDS * gain / keep;
+}
+
+function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false, arcCredit = 0) {
   const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
   if (dockPhase !== ap.phase) resetDockWatch(ctx, ap);
   const elapsed = Math.max(0, Math.min(0.25, now - dockWatchAt));
@@ -687,6 +725,9 @@ function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false) {
     improved = true;
   }
   if (improved) dockProgressAt = now;
+  else if (ap.phase === 'stage' && Number.isFinite(arcCredit) && arcCredit > 0) {
+    dockProgressAt += Math.min(arcCredit, Math.max(0, now - dockProgressAt));
+  }
   // Give verified moving traffic at most one watchdog window of waiting
   // credit per episode without distance progress. New blockers or changing
   // headings cannot refill it; a continuously blocked path still times out.
@@ -971,7 +1012,8 @@ function dockTick(ctx) {
       acceleration, ctx.config.ship.creep * (ctx.bio?.speedFactor ?? 1), ctx.config.ship.damping, planningBodies)) {
       ap.idle = false; ap.yaw = 0; ap.pitch = 0;
     }
-    if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs, trafficYield)) return;
+    const arcCredit = dockStationArcCredit(p, points.stage);
+    if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs, trafficYield, arcCredit)) return;
     return;
   }
 

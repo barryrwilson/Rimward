@@ -35,7 +35,7 @@ status is not a merge or deployment claim. See the
 
 | Outcome | Issue | Evidence |
 |---|---|---|
-| Cruise-speed current-station approach with braking and sun/body avoidance | [#168](https://github.com/barryrwilson/Rimward/issues/168) | [Cruise evidence](Issue168CruiseEvidence.md); retains planned sun detours overlapping #172. |
+| Cruise-speed current-station approach with braking and sun/body avoidance | [#168](https://github.com/barryrwilson/Rimward/issues/168) | [Cruise evidence](Issue168CruiseEvidence.md), [bounded station-detour progress](Issue168DetourProgressEvidence.md); final combined verification pending; retains planned sun detours overlapping #172. |
 | Documented raw pitch sign and real-hull steering regressions | [#169](https://github.com/barryrwilson/Rimward/issues/169) | [Steering evidence](Issue169SteeringEvidence.md); original no-turn symptom unreplicated in isolated Chrome. |
 | Named desk refusals, service-pane launch and station-local offered work | [#170](https://github.com/barryrwilson/Rimward/issues/170) | [Desk evidence](Issue170DeskEvidence.md). |
 | Raw burner pulse without flee ownership, with immediate dock handoff | [#171](https://github.com/barryrwilson/Rimward/issues/171) | [Desk/burner evidence](Issue170DeskEvidence.md); combat retreat authorization unchanged. |
