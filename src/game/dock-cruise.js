@@ -100,6 +100,31 @@ export function dockCruiseShouldBrake(position, velocity, acceleration, bodies) 
   return false;
 }
 
+// A traffic yield is justified by the bodies blocking the chosen stage chord,
+// not by unrelated motion nearby. Every blocker must be moving clear of that
+// chord within the existing watchdog window; static or unclearing bodies keep
+// the ordinary blocked watch. This is only evidence for waiting, never thrust.
+export function dockTrafficClears(position, target, bodies, seconds) {
+  if (!finite3(position) || !finite3(target) || !bodies?.items
+    || !Number.isFinite(seconds) || seconds <= 0) return false;
+  let blocked = false;
+  for (let i = 0; i < bodies.count; i++) {
+    const body = bodies.items[i];
+    if (body.kind !== 'cruise-obstacle') continue;
+    const radius = keepRadius(body, PHY.PLAYER_RADIUS);
+    if (!(radius > 0) || !sphereChordHit(position.x, position.y, position.z,
+      target.x, target.y, target.z, body.x, body.y, body.z, radius).hit) continue;
+    const vx = body.motionVx, vy = body.motionVy, vz = body.motionVz;
+    if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)
+      || Math.hypot(vx, vy, vz) < 1e-3) return false;
+    if (sphereChordHit(position.x, position.y, position.z,
+      target.x, target.y, target.z, body.x + vx * seconds,
+      body.y + vy * seconds, body.z + vz * seconds, radius).hit) return false;
+    blocked = true;
+  }
+  return blocked;
+}
+
 // A moving body can enter a stationary hold while the hull turns. Evaluate
 // normal idle versus normal creep with the same acceleration/drag equations
 // as ship.js. Steering is held only during an accepted creep step, so the

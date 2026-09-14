@@ -12,7 +12,7 @@ import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
-import { collectDockCruiseBodies, dockCruiseShouldBrake, dockHoldCanAdvance } from './dock-cruise.js';
+import { collectDockCruiseBodies, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
 import { agentPulse } from '../systems/controls.js';
 import {
   DOCK_STAGE_ARRIVE,
@@ -123,6 +123,8 @@ let dockStationName = '';
 let dockBestRange = Infinity;
 let dockBestHeading = Infinity;
 let dockProgressAt = 0;
+let dockWatchAt = 0;
+let dockTrafficWaitUsed = 0;
 let dockPulseAt = 0;
 let dockPhase = '';
 let dockRecovering = false;
@@ -223,6 +225,8 @@ function resetDockScratch() {
   dockBestRange = Infinity;
   dockBestHeading = Infinity;
   dockProgressAt = 0;
+  dockWatchAt = 0;
+  dockTrafficWaitUsed = 0;
   dockPulseAt = 0;
   dockPhase = '';
   dockRecovering = false;
@@ -430,6 +434,8 @@ export function tryApproachDock(ctx) {
   dockBestRange = Infinity;
   dockBestHeading = Infinity;
   dockProgressAt = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  dockWatchAt = dockProgressAt;
+  dockTrafficWaitUsed = 0;
   dockPulseAt = 0;
   dockPhase = ap.phase;
   resetApproach();
@@ -661,14 +667,19 @@ function resetDockWatch(ctx, ap) {
   dockBestRange = Infinity;
   dockBestHeading = Infinity;
   dockProgressAt = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  dockWatchAt = dockProgressAt;
+  dockTrafficWaitUsed = 0;
 }
 
-function dockMakingProgress(ctx, ap, range, yawAbs) {
+function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false) {
   const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
   if (dockPhase !== ap.phase) resetDockWatch(ctx, ap);
+  const elapsed = Math.max(0, Math.min(0.25, now - dockWatchAt));
+  dockWatchAt = now;
   let improved = false;
   if (Number.isFinite(range) && range <= dockBestRange - 1) {
     dockBestRange = range;
+    dockTrafficWaitUsed = 0;
     improved = true;
   }
   if (Number.isFinite(yawAbs) && yawAbs <= dockBestHeading - 0.05) {
@@ -676,6 +687,14 @@ function dockMakingProgress(ctx, ap, range, yawAbs) {
     improved = true;
   }
   if (improved) dockProgressAt = now;
+  // Give verified moving traffic at most one watchdog window of waiting
+  // credit per episode without distance progress. New blockers or changing
+  // headings cannot refill it; a continuously blocked path still times out.
+  if (trafficYield && ap.idle && ap.phase === 'stage' && !improved) {
+    const credit = Math.min(elapsed, Math.max(0, DOCK_BLOCK_SECONDS - dockTrafficWaitUsed));
+    dockTrafficWaitUsed += credit;
+    dockProgressAt += credit;
+  }
   if (now - dockProgressAt < DOCK_BLOCK_SECONDS) return true;
   disengage(ctx, 'blocked');
   return false;
@@ -840,6 +859,7 @@ function dockTick(ctx) {
     }
     let trafficDetour = false;
     let trafficBlocked = false;
+    let trafficYield = false;
     if (stageTransit) {
       let count = 0;
       for (let i = 0; i < planningBodies.count; i++) {
@@ -855,6 +875,7 @@ function dockTick(ctx) {
       });
       if (!transit.ok) { disengage(ctx, 'blocked'); return; }
       if (transit.hold === 'detour') {
+        trafficYield = dockTrafficClears(p, _aim, planningBodies, DOCK_BLOCK_SECONDS);
         // A traffic sidestep must not cut the station or sun tangent. Wait
         // for its moving obstruction if neither protected chord is clear.
         for (let i = 0; i < _apBodies.count; i++) {
@@ -950,7 +971,7 @@ function dockTick(ctx) {
       acceleration, ctx.config.ship.creep * (ctx.bio?.speedFactor ?? 1), ctx.config.ship.damping, planningBodies)) {
       ap.idle = false; ap.yaw = 0; ap.pitch = 0;
     }
-    if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs)) return;
+    if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs, trafficYield)) return;
     return;
   }
 
