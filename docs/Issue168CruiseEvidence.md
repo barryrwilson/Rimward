@@ -1,5 +1,7 @@
 # Issue #168 cruise safety repair and #171 dock takeover
 
+The earlier cruise-only evidence below is historical. Independent review of combined commit `a3d79acfa6695d1629d3efb0593d0fac93bf8669` found a damaging asteroid contact during **stage**, so that artifact did not complete rendered acceptance. The stage transit repair is described below; final acceptance requires three consecutive safe rendered runs on the final combined, clean commit. Their raw results and exact commit/source hash belong in the final validation record and PR, without changing source between runs.
+
 `approachDock {}` remains a command for the current station. Beyond 500u from its +X stage point it starts in dock/cruise, brakes into stage within 100u of that point (or within 500u of a blocking station), then uses corridor, settle, and the ordinary docking pulse. Ship tuning, human controls, persistence, event vocabulary, and route AP behavior are unchanged.
 
 ## Repair after independent review
@@ -50,6 +52,16 @@ The first slow run lacks per-phase samples, so its extra time has not been causa
 The third run records real hull positions, radii and clearance. Cruise spends additional time turning around the stationary freighter `rec-24` at world time41.38–43.90, then holds while the moving freighter `rec-20` crosses at47.95–51.49. During that hold, the freighter surface clearance narrows from69.33u to32.11u; the player resumes as it passes. Stage begins at54.0133, corridor57.0421 and settle69.6754. Compared with the38.2574s run, the extra time is concentrated in cruise around traffic, while subsequent stage/corridor durations are similar. The minimum per-frame sampled ship/asteroid surface clearance across the full run is11.2136u; the controlled tests additionally check swept relative geometry. This evidence supports retaining conservative traffic waits, rather than changing the ship's speed/turn tuning to force every live traffic realization below40s.
 
 All three runs have zero console errors/exceptions, identical start/end runtime hashes, normal Chrome exit, terminated owned Vite processes, and closed Vite/CDP ports. Each directory contains `result.json`, `arrival.png`, and `berth.png`. The final berth screenshot was visually inspected: Veridian station services are visible, the docked state is shown, and no horizontal layout overflow appears. The live probe's existing40s assertion was not weakened; the two timing failures are reported as such even though their safety/berth checks succeed.
+
+## Stage transit repair after final review
+
+The failing combined-source run is retained at `out/final-independent/cruise/veridian-public/result.json` in the integration workspace. At world time 49.8633 the hull was in stage at 29.7476u/s, with asteroid2 only 16.7315u beyond the hull surfaces; at 50.081 it took a 20.563u/s asteroid impact and 7.197 damage, cancelled, and never berthed. This was a safety failure, separate from the older supplemental live timing failures.
+
+The repair extends private obstacle planning and braking through stage transit, including a station detour. It first retains the established station/sun route, then plans ship/asteroid clearance toward that chosen transit target. A traffic waypoint is recomputed and is never stored as a stationary station tangent. A second guard prevents the traffic sidestep from cutting into the station or sun; blocked traffic can command true idle, rather than leaving the 30u/s creep floor active. The same relative-motion stopping sweep now has braking authority during stage. A traffic detour also requires the hull to align before resuming creep. Ordinary route AP, corridor/settle, physical Space cancellation, human flight controls and ship tuning are unchanged.
+
+Asteroid motion matters here: the asteroid owner updates orbital positions every frame, while its public rows expose positions but not private orbit elements. A private WeakMap samples those actual public row positions against simulation time. Samples warm during cruise, and stage uses their estimated velocities to enclose the stopping-horizon motion. Weak keys prevent asteroid-index reuse after system rebuild from sharing old motion. A fresh or stale sample starts at zero velocity and refreshes on the next valid update; no public or persistent field is added. The existing cruise behavior is retained while stage receives the additional moving-rock prediction.
+
+Focused checks on the stage source candidate preserve the intact-traffic fixed acceptance at39.1667s, all existing near/far-side/sun dock assertions, controlled cruise obstacle cases, and the actual44u/56u burner takeover fixtures. Independent real-system stage regression and final combined browser evidence are required in addition to these checks. A branch-only browser run is supplemental and must not be substituted for the final combined-source gate.
 
 ## Review and limits
 
