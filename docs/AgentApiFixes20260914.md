@@ -56,3 +56,9 @@ and both burner-to-dock timings survived. The raw JSON result is
 `out/agent-api-playtest-fixes/result.json`. Source syntax checks and
 `git diff --check` also passed. These builder checks do not substitute for
 independent QA, full build/boot, or final integrated browser verification.
+
+Historical Wave 138 boot coverage was migrated for #171: the public raw
+pulse now explicitly asserts no flee ownership and a cleared full-stop
+latch. Existing internal flee steering, sun clearance, no-teleport, death,
+and recovery assertions remain and activate that legacy module explicitly.
+The #120 tactical retreat burner tests are unchanged.
