@@ -15,6 +15,8 @@ import { berthHeld } from '../systems/overlay-policy.js';
 import { agentPulse } from '../systems/controls.js';
 import {
   DOCK_STAGE_ARRIVE,
+  DOCK_CRUISE_RANGE,
+  DOCK_CRUISE_START_RANGE,
   DOCK_STAGE_SPEED,
   DOCK_SETTLE_RANGE,
   DOCK_REQUEST_RANGE,
@@ -264,7 +266,10 @@ function inputBreak(ctx) {
   if (input.strafeX || input.strafeY) return 'input';
   if (input.roll) return 'input';
   if (input.throttleHeld) return 'input';
-  if (input.afterburnerPressed) return 'input';
+  // A raw agent burner pulse does not claim the helm (#171). Physical
+  // burner presses still cancel, and route autopilot keeps its old break.
+  if (input.afterburnerPressed
+    && !(ctx.autopilot?.mode === 'dock' && input.agentAfterburnerPressed === true)) return 'input';
   if (input.driftHeld) return 'input';
   if (input.fullStop) return 'input';
   if (steerArmed && Math.hypot(input.steerX || 0, input.steerY || 0) >= AP_STEER_BREAK) {
@@ -384,7 +389,8 @@ export function dockApproachRefuseToken(ctx) {
   if (ctx.gate && ctx.gate.jumping === true) return 'jumping';
   if (ctx.flags && ctx.flags.matchSpeed === true) return 'match';
   if (ctx.ship.driftActive === true) return 'drift';
-  if (ctx.ship.burnerActive === true) return 'afterburner';
+  // Dock idle/braking uses actual velocity and remains authoritative while
+  // a raw pulse burns out. Combat and flee owners still refuse below.
   if (autopilotEngaged(ctx)) return 'autopilot';
   if (ctx.automine && ctx.automine.engaged === true) return 'automine';
   if (ctx.flee && ctx.flee.engaged === true) return 'flee';
@@ -403,7 +409,9 @@ export function tryApproachDock(ctx) {
   if (nav) nav.autopilot = false;
   ap.engaged = true;
   ap.mode = 'dock';
-  ap.phase = ctx.station.inZone === true ? 'settle' : 'stage';
+  ap.phase = ctx.station.inZone === true ? 'settle'
+    : dockDistance(ctx.ship.object.position, dockApproachPoints(station).stage) > DOCK_CRUISE_START_RANGE
+      ? 'cruise' : 'stage';
   ap.reason = '';
   ap.startSystem = station.system;
   ap.startRange = range;
@@ -594,11 +602,11 @@ function copyDockBodies(skipStation) {
   return _dockBodies;
 }
 
-function stationBlocksStageChord(p, stage) {
+function bodyBlocksStageChord(p, stage, kind) {
   const count = _apBodies.count || 0;
   for (let i = 0; i < count; i++) {
     const body = _apBodies.items[i];
-    if (!body || body.kind !== 'station') continue;
+    if (!body || body.kind !== kind) continue;
     const keep = keepRadius(body, PHY.PLAYER_RADIUS);
     if (!(keep > 0)) return false;
     const hit = sphereChordHit(
@@ -748,7 +756,7 @@ function dockTick(ctx) {
   const p = live.obj.position;
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
 
-  if (ap.phase === 'stage') {
+  if (ap.phase === 'stage' || ap.phase === 'cruise') {
     const planned = planApPath({
       px: p.x, py: p.y, pz: p.z,
       gx: points.stage.x, gy: points.stage.y, gz: points.stage.z,
@@ -766,19 +774,24 @@ function dockTick(ctx) {
       return;
     }
     pathSign = planned.sign || pathSign;
-    if (planned.hold === 'detour' && !dockDetourValid) {
+    const stationBlocked = bodyBlocksStageChord(p, points.stage, 'station');
+    if (planned.hold === 'detour' && stationBlocked && !dockDetourValid) {
       dockDetourValid = true;
       dockDetourX = planned.ax;
       dockDetourY = planned.ay;
       dockDetourZ = planned.az;
     }
-    let detouring = dockDetourValid && stationBlocksStageChord(p, points.stage);
-    if (!detouring) dockDetourValid = false;
+    if (!stationBlocked) dockDetourValid = false;
+    const routeDetour = planned.hold === 'detour'
+      && (ap.phase === 'cruise' || bodyBlocksStageChord(p, points.stage, 'sun'));
+    let detouring = dockDetourValid || routeDetour;
     if (dockRecovering) {
       detouring = false;
       _aim.copy(points.stage);
-    } else if (detouring) {
+    } else if (dockDetourValid) {
       _aim.set(dockDetourX, dockDetourY, dockDetourZ);
+    } else if (detouring) {
+      _aim.set(planned.ax, planned.ay, planned.az);
     } else {
       // Ignore route-AP widen. From Freehold spawn the widen waypoint sits
       // toward the pad, so a still-turning hull dives into the cylinder.
@@ -789,6 +802,22 @@ function dockTick(ctx) {
     // station lookahead so it does not fight the planner's already-safe line.
     const stageBodies = detouring ? _apBodies : copyDockBodies(true);
     applyAvoidBias(_playerLive, _aim, _aim, stageBodies);
+    // Avoidance is a local bias, not permission to cut the planner's safe
+    // tangent through the sun (issue #172) or another blocking body.
+    if (routeDetour) {
+      for (let i = 0; i < stageBodies.count; i++) {
+        const body = stageBodies.items[i];
+        const keep = keepRadius(body, PHY.PLAYER_RADIUS);
+        if (!(keep > 0)) continue;
+        const hit = sphereChordHit(p.x, p.y, p.z, _aim.x, _aim.y, _aim.z,
+          body.x, body.y, body.z, keep);
+        if (hit.hit && !hit.inside) {
+          if (dockDetourValid) _aim.set(dockDetourX, dockDetourY, dockDetourZ);
+          else _aim.set(planned.ax, planned.ay, planned.az);
+          break;
+        }
+      }
+    }
     const stageDistance = dockDistance(p, points.stage);
     if (stageDistance === null) {
       disengage(ctx, 'stale');
@@ -809,6 +838,24 @@ function dockTick(ctx) {
     const braking = dockShouldBrake(
       stageDistance, speed, acceleration, DOCK_STAGE_BRAKE_BUFFER,
     );
+    // Cruise is the far leg of the same dock helm. Brake early enough for
+    // the existing slow stage and keep nearby station tangents at safe creep.
+    const cruise = ap.phase === 'cruise' && stageDistance > DOCK_CRUISE_RANGE
+      && (!stationBlocked || range > DOCK_CRUISE_START_RANGE) && !dockRecovering;
+    const phase = cruise ? 'cruise' : 'stage';
+    if (ap.phase !== phase) { ap.phase = phase; resetDockWatch(ctx, ap); }
+    if (cruise) {
+      ap.idle = braking || steer.align < 0.97;
+      ap.throttle = ap.idle ? 0 : throttleForPath(
+        planned.hold, planned.intercept, steer.align, stageDistance, planned.turnR,
+      );
+      const cruiseRemaining = stationBlocked
+        ? range - DOCK_CRUISE_START_RANGE : stageDistance - DOCK_CRUISE_RANGE;
+      if (dockShouldBrake(cruiseRemaining, speed, acceleration,
+        DOCK_STAGE_BRAKE_BUFFER)) ap.throttle = 0;
+      if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs)) return;
+      return;
+    }
     const aligned = steer.align >= 0.97;
     // A far-side detour must keep creep, or the hull stops on the keep ring
     // and the 10 s blocked watch fires before it reaches +X. A clear chord
@@ -826,7 +873,7 @@ function dockTick(ctx) {
       dockProgressAt = now;
       dockBestHeading = Infinity;
     }
-    // Dock stage never inherits route cruise. Throttle stays 0: idle is a
+    // The near dock stage uses creep. Throttle stays 0: idle is a
     // full stop, and aligned non-idle is the 30 u/s creep floor.
     if (dockRecovering) {
       // Recovery stays on the literal stage point through arrival. Leaving

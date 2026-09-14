@@ -801,7 +801,10 @@ export const COMMAND_SPECS = freeze({
   clearRoute: cmd({}, ['pilot']),
   engageAutopilot: cmd({}, ['pilot']),
   cancelAutopilot: cmd({}, ['pilot']),
-  approachDock: cmd({}, ['pilot']),
+  approachDock: freeze({
+    args: freeze({}), roles: freeze(['pilot']),
+    note: 'Fly to the current station with sun/body avoidance: autopilot mode dock. Requests beyond 500 u from the +X stage begin in cruise, brake to stage within 200 u (500 u from a blocking station), then corridor/settle/docking. Nearby requests and nearby station detours keep creep. Existing named helm/station refusals apply.',
+  }),
   engageAutomine: cmd({}, ['miner']),
   cancelAutomine: cmd({}, ['miner']),
   dock: cmd({}, ['pilot']),
@@ -824,7 +827,7 @@ export const COMMAND_SPECS = freeze({
     args: freeze({
       seq: 'strictly increasing safe integer per session',
       ttl: 'sim seconds 0.05..5 (default 1)',
-      steerX: '-1..1 optional', steerY: '-1..1 optional',
+      steerX: '-1..1 optional; positive turns nose right', steerY: '-1..1 optional; positive pitches nose down (mouse-style)',
       strafeX: '-1..1 optional', strafeY: '-1..1 optional',
       roll: '-1..1 optional',
       throttle: '0..1 target for the persistent ship setpoint published as observe().ship.throttle; omitted or null leaves that setpoint alone; ramps at the player 0.5/s rate while the lease is live; 0 commands the player full stop (observe().flags.fullStop) on the next applied update',
