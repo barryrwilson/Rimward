@@ -39,6 +39,10 @@ with `helm` under a combat lease; for a directed combat withdrawal use
 `setCombatIntent { intent: 'retreat', burner: true, ... }` (or `break-off`).
 That existing tactical burner authorization is unchanged.
 
+`agent-flee.js` and `ctx.flee` remain reserved legacy/internal machinery;
+there is no current public action that engages them. Tactical retreat is
+owned by the combat lease, not by `ctx.flee`.
+
 Internally, controls publishes transient `input.agentAfterburnerPressed`
 only with an API-authored raw edge. This lets the dock helm distinguish the
 handoff from physical burner cancellation. A simultaneous physical Space
@@ -91,7 +95,9 @@ a blocked corridor preserves the berth and its named refusal.
 postings, explicitly relayed unique work, and the same standing gates.
 It is empty in flight; accepted work stays in `jobs.active` across docks.
 A foreign posting's presence in saved world jobs does not make it available
-to this desk.
+to this desk. Completed work is absent from both lists; use the public
+`jobState` terminal events in the event ring: `outcome` is `done`, `failed`,
+or `closed` when an accepted record disappears.
 
 For `haul` and `trade` jobs, the latest **actually displayed** reward quote
 is shared by the card and `jobs.offers[].reward` until the next real board
@@ -449,8 +455,8 @@ state every frame, so a stuck input is impossible.
 
 **Human takeover is Escape only (issue #163, owner decision 2026-09-13).**
 While a raw or combat lease is live, or while a helm path the bridge engaged
-(`engageAutopilot`, `approachDock`, `engageAutomine`, or a tactical flee
-channel) is still engaged with Agent Play on, incidental human input
+(`engageAutopilot`, `approachDock`, or `engageAutomine`) is still engaged
+with Agent Play on, incidental human input
 never takes the ship: pointer motion, a `mousedown` on any surface (HUD or
 play surface), a tracked flight key and the fire button neither drop the lease
 nor write steer, throttle or fire. Those physical edges are discarded, not

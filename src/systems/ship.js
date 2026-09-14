@@ -914,7 +914,7 @@ export function initShip(ctx) {
       const apOn = !fleeOn && !!((ap && ap.engaged === true)
         || (ctx.world && ctx.world.nav && ctx.world.nav.autopilot === true));
       const am = ctx.automine;
-      // Flee wins during an agent afterburner evade. Else autopilot, then automine.
+      // Reserved legacy/internal flee wins when engaged. Else autopilot, then automine.
       const amOn = !apOn && !fleeOn && !!(am && am.engaged === true);
       if (input.matchSpeedPressed && !apOn && !amOn && !fleeOn) {
         if (ctx.flags.matchSpeed) ctx.flags.matchSpeed = false;

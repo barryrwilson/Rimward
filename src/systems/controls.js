@@ -346,7 +346,7 @@ export function agentOwnsShip(ctx) {
 
 /**
  * agent-api.js calls this after engageAutopilot / approachDock /
- * engageAutomine / afterburner (flee) succeed. Physical holds present at the
+ * engageAutomine succeed. Physical holds present at the
  * moment of handover are discarded so nothing steers on the first tick.
  */
 export function markAgentHelm(ctx) {
