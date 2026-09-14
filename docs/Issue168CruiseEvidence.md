@@ -1,38 +1,56 @@
-# Issue #168: cruise to the current station
+# Issue #168 cruise safety repair and #171 dock takeover
 
-## Contract and implementation
+`approachDock {}` remains a command for the current station. Beyond 500u from its +X stage point it starts in dock/cruise, brakes into stage within 100u of that point (or within 500u of a blocking station), then uses corridor, settle, and the ordinary docking pulse. Ship tuning, human controls, persistence, event vocabulary, and route AP behavior are unchanged.
 
-The issue's alternative shape is implemented: `approachDock` remains an empty-argument command for the current station. Requests more than 500 units from its +X stage begin with `observe().autopilot.mode === 'dock'` and `phase === 'cruise'`. The existing route planner, obstacle collection, sun heat envelope, avoidance bias, and route throttle policy drive this far leg. The approach brakes before handing off to the existing slow stage within 200 units of that point. A station blocking the chord triggers the conservative stage handoff within 500 units of the station; nearby requests retain their existing slow approach.
+## Repair after independent review
 
-The observable sequence is `cruise → stage → corridor → settle → docking → complete`. Existing named refusals remain authoritative; a second request while the approach owns the helm refuses `autopilot`. There is no new waypoint/gate command, key, ship tuning, persistence field, event type, or human flight change. The capabilities command note describes this contract.
+The first implementation failed independent live review: a moving NPC was hit at cruise speed. The route planner intentionally skips ordinary ship/asteroid bodies, while the local avoidance lookahead was only 40u. At 120u/s and normal 90u/s² acceleration the stopping distance is 80u before hull clearance, so that lookahead was insufficient.
 
-This also addresses the sun-path defect overlapping #172: the dock stage previously retained a detour only when the station blocked the direct chord, discarding a sun-only detour. It now follows the planner's sun detour and rejects an avoidance bias that cuts its protected chord. Nearby station tangent behavior remains conservative.
+The private cruise planning bag now promotes ships and asteroids into planner obstacles. For a moving ship it encloses its present position and constant-velocity prediction through the stopping horizon. Cruise detours recompute against moving traffic instead of latching a stale waypoint. A separate relative-motion braking check samples the decelerating player sweep against moving obstacle spheres and idles before collision. Static obstacle and crossing traffic tests check swept relative hull clearance and require continued progress. Near-stage and ordinary route policies remain separate.
 
-Integration for #171 allows an already active raw burner to hand off to docking. A controls-authored `input.agentAfterburnerPressed` edge does not cancel the dock helm; an ordinary physical burner press still does. This consumer requires the separate controls provenance commit from the steering worker. Combat and flee helm exclusions remain. Capabilities also describe #169's positive `steerY` as nose down and positive `steerX` as nose right; the steering implementation is a separate artifact.
+Sun-only detours remain respected; local avoidance cannot cut the planner's protected chord. The restored deterministic acceptance keeps every NPC and all normal simulation/collision systems. The previous NPC-excluding fixture is superseded and is not used as acceptance evidence.
 
-## Verification
+## Explicit burner takeover
 
-- `node --import ./scripts/with-css-stub.mjs scripts/issue-168-cruise-test.mjs`: actual boot systems and jump arrival at Veridian, stock Greenhand tuning, 39.3333 simulation seconds to berth, peak approximately 120 units/second, no `sunHeat` or `bodyHit`, and all cruise/dock phases observed. This deterministic static-route fixture removes moving NPCs after arrival to isolate the route contract.
-- `node --import ./scripts/with-css-stub.mjs scripts/dock-approach-test.mjs`: near, far-side, 3 km far-side cruise, sun-blocked chord, finite-state/refusal/cancellation, pause, dock pulse, and restore checks pass. The sun fixture asserts the minimum distance stays outside `sunRadius * PHY.SUN_HEAT_MULT`, not merely outside the visible star. Burner provenance checks preserve physical cancellation.
-- `node scripts/agent-schema-test.mjs`: capabilities and schema suite passes.
-- `node scripts/issue-168-cruise-live-probe.mjs`: owns a loopback-only Vite server and dedicated Chrome profile; drives a fresh Greenhand through public `startGame`, `chooseOrigin`, `plotRoute`, `engageAutopilot`, and `approachDock` calls. No world transforms, clock acceleration, or traffic changes are applied. It captures arrival/berth screenshots, simulation timing, events, console errors, runtime-source hashes, and process/port cleanup in an ignored `out/issue-168-cruise-live/<timestamp>/veridian-public/` directory. Set `CRUISE_OUT` to select a new evidence directory. Chrome may require running outside the filesystem sandbox for its GPU subprocess to render.
+Ship code owns burner retirement and cooldown when the explicit dock helm takes over. Queued burner edges cannot restart it while that helm owns thrust. Fresh physical Space still cancels the dock helm before ordinary burner handling. The first takeover frame reuses the existing human radial pad governor, with its existing caps, to handle a burn that entered closer than physical stopping distance between commands; subsequent frames use ordinary docking physics.
 
-The initial rendered pass used real Intel/ANGLE hardware rendering with untouched traffic: 39.1143 observed simulation seconds from arrival checkpoint to berth, peak 119.9998, no `sunHeat` or `bodyHit`, no browser console errors or exceptions. Source hashes matched throughout, both owned processes exited, and their Vite/CDP ports closed. The final source rerun is recorded below.
+For a hull already inside the conservative station keep ring, a stage chord pointing outward is allowed. Without this narrow geometry exception a station tangent and local avoidance fought each other while the hull tried to idle-turn away. The existing far-side tangent behavior and tests are retained.
 
-Final rendered PASS: `out/issue-168-cruise-final/veridian-public/result.json`, with `arrival.png` and `berth.png` beside it. The accepted command receipt to `docked` event interval was **38.3846 simulation seconds**; peak speed **119.9998**, all six phases observed, no heat/impact events, no console errors or exceptions. Start/end source SHA-256 was `f8011751a40d61f3e286cb805d2a832f74218a7fd0739fb3ab87dd3480360fac`. Chrome PID 2940 exited normally, owned Vite PID 85204 exited, and both ports were closed. The earlier `out/issue-168-cruise-live/veridian-public/result.json` is an environmental GPU subprocess failure and is not acceptance evidence.
+Real-system #171 fixtures run 23 actual burner frames from a labeled initial +X pad-lane pose, then use public clearControl/approachDock. All traffic/collision/damage systems remain active:
 
-## Existing corridor fixture finding
+| Handoff | First takeover frame | Berth | Events |
+| --- | --- | --- | --- |
+| 55.6u, 64.5u/s, burner active | 55.1489u, 27.0667u/s, burner retired | 26.1333s, speed 0 | docked only |
+| 43.6u, 64.5u/s, burner active | 43.2667u, 20u/s, burner retired | 0.2333s, speed 0 | docked only |
 
-`scripts/issue-139-dock-corridor-test.mjs` already fails its assertion that a moving loiterer remains on the station's far side on base `0991593bd905d00451b9f7d2b5f58eea737d3ac2`: NPC avoidance can move the actual hull beyond its authored waypoint half-plane. This assertion is retained; no product behavior was changed to satisfy it.
+Before repair these fixtures hit the station: the 56u case kept burner-multiplied creep while turning; the 44u case had less room than its braking distance. No original #171 pulse/provenance assertions were removed.
 
-A separate fixture-only commit records nearest-hull geometry on the collision frame instead of after the remainder of a 30-frame batch, and removes old fixture hulls from `ctx.ships` as well as the scene. The existing old-ring collision, collider identity/range, new-ring no-collision, and fresh approach checks remain; the preexisting dynamic-pose assertion remains a reported failure. That fixture commit can be reviewed independently of the cruise implementation.
+## Reproducible verification
+
+- `node --import ./scripts/with-css-stub.mjs scripts/issue-168-cruise-test.mjs`: **39.1667 simulation seconds**, peak119.9998u/s, all phases, docked only, intact traffic. Stock Greenhand tuning; `makeNavHelpers` establishes the existing deterministic Veridian arrival-gate fixture. A second seed19 diagnostic remained safe and docked in41.9333s; it does not replace seed7 acceptance.
+- `node --import ./scripts/with-css-stub.mjs scripts/issue-168-cruise-obstacles-test.mjs`: stationary asteroid, stationary freighter, moving crossing freighter, and two ±0.4rad initial heading variants all pass. Minimum swept hull clearances respectively12.63u,12.34u,72.03u,14.68u,106.88u. Each travels more than800u in12s; the test cannot pass by stopping forever. Braking-distance and invalid-input guards pass.
+- `node --import ./scripts/with-css-stub.mjs scripts/dock-approach-test.mjs`: all assertions pass, including600u far-side and3km far-side detours, sun heat clearance, live Freehold spawn, near approach, named refusals, physical burner cancellation, pause, restore, and docking pulse. The candidate retains the passing baseline far-side outcomes.
+- `node --import ./scripts/with-css-stub.mjs scripts/issue-171-burner-test.mjs`: existing raw pulse, no-flee, already-active and same-turn handoff pins pass. The integration worker owns the additional44u/56u real-system fixtures; both were executed against this repair's runtime by importing its boot harness.
+- `node scripts/pad-speed-governor-test.mjs` and `node scripts/agent-schema-test.mjs`: pass.
+
+## Rendered evidence
+
+The live probe owns a loopback Vite instance, isolated Chrome profile and their processes. It starts a fresh Greenhand, flies the normal public route to Veridian, then approaches the station. It changes no world transform, ship tuning, traffic, or simulation clock. Timing is from the accepted command receipt to the docked event. Screenshots, console checks, runtime hashes, cleanup and events are retained in ignored evidence directories.
+
+Runtime candidate commit: `8e10452bf46bc924818c178d2565e843c89da27d`. Runtime source SHA-256 across all three runs: `8ba001c777d1f44b77c492cf367d2b71d36b0a0fbd96c44067f1c4cd7afce2e0`.
+
+| Probe directory under out/issue-168-cruise-live | Elapsed | Result |
+| --- | --- | --- |
+| 1789397621358/veridian-public | 52.6130s | Safe berth, no heat/impact; probe reports FAIL solely because its supplemental live40s check failed |
+| 1789397779951/veridian-public | 38.2574s | PASS, safe berth, no heat/impact |
+| 1789397984014/veridian-public | 48.5468s | Safe berth, no heat/impact; probe reports FAIL solely because its supplemental live40s check failed |
+
+The first slow run lacks per-phase samples, so its extra time has not been causally attributed. The second run's samples place stage at44.9571, corridor47.9764 and settle59.1067 on the world clock, after approach at approximately21.68. It spends approximately6.6s initially idle-turning from the gate departure heading, with intermittent cruise braking/turning later. A live natural-route arrival reaches a different traffic clock/random history from the fixed fixture; the restored fixed fixture still meets the issue's40s criterion. The52.6130s result remains visible rather than being discarded.
+
+The third run records real hull positions, radii and clearance. Cruise spends additional time turning around the stationary freighter `rec-24` at world time41.38–43.90, then holds while the moving freighter `rec-20` crosses at47.95–51.49. During that hold, the freighter surface clearance narrows from69.33u to32.11u; the player resumes as it passes. Stage begins at54.0133, corridor57.0421 and settle69.6754. Compared with the38.2574s run, the extra time is concentrated in cruise around traffic, while subsequent stage/corridor durations are similar. The minimum per-frame sampled ship/asteroid surface clearance across the full run is11.2136u; the controlled tests additionally check swept relative geometry. This evidence supports retaining conservative traffic waits, rather than changing the ship's speed/turn tuning to force every live traffic realization below40s.
+
+All three runs have zero console errors/exceptions, identical start/end runtime hashes, normal Chrome exit, terminated owned Vite processes, and closed Vite/CDP ports. Each directory contains `result.json`, `arrival.png`, and `berth.png`. The final berth screenshot was visually inspected: Veridian station services are visible, the docked state is shown, and no horizontal layout overflow appears. The live probe's existing40s assertion was not weakened; the two timing failures are reported as such even though their safety/berth checks succeed.
 
 ## Review and limits
 
-Builder security and code checklists were applied to the diff. No credentials, external endpoints, new agent action authority, unsafe DOM insertion, or persistence changes were introduced. Planner/geometry validation and held-helm refusals remain fail-closed. The browser probe binds loopback and stops only its own processes. No high/critical findings remain in the builder review; independent QA is still required.
-
-The route avoids collected bodies and heat zones but does not promise collision-free flight through every possible moving NPC encounter. A deterministic seed-7 headless traffic encounter collided on both the baseline and intermediate cruise build; the static boot pin isolates route safety, while the public rendered acceptance retains live traffic. No pursuit, traffic, combat, or #173 cancellation redesign is included.
-
-## Integration prose for AgentApiDesign.md
-
-`approachDock {}` flies to the current station. Beyond 500 u from the +X stage it starts in `autopilot.mode: 'dock', phase: 'cruise'`, using route speed with body/sun avoidance. It brakes into the existing slow `stage` within 200 u of the stage point (earlier, within 500 u of a station blocking the chord), then proceeds through `corridor`, `settle`, and `docking`. Nearby requests keep the slow approach. Existing named refusals apply. Raw afterburner pulses do not own the helm, and docking can take over while such a pulse is active; physical manual burner presses still cancel the dock helm. Raw `setControl.steerY > 0` pitches the nose down; `steerX > 0` turns right.
+Builder security/regression review found no new credentials, external endpoint, action authority, unsafe DOM writes, persistence, or event surface. Only private planning geometry and ship-owner takeover state are added. Finite-input refusals, held-helm boundaries, loopback binding and owned-process cleanup remain. Constant-velocity prediction is bounded avoidance, not a guarantee against every arbitrarily accelerating NPC encounter. Independent combined review, build, boot suite and the near-pad live browser check are coordinated by the parent task.
