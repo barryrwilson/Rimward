@@ -58,6 +58,7 @@
     "test:agent-cruise-live": "node scripts/issue-168-cruise-live-probe.mjs",
     "test:agent-steering-live": "node scripts/issue-169-live-probe.mjs",
     "test:agent-desk-live": "node scripts/issue-170-desk-live.mjs",
+    "test:agent-burner-live": "node scripts/issue-171-burner-live-probe.mjs",
     "test:hail-identity": "node scripts/hail-identity-test.mjs",
     "test:docked-hails": "node scripts/issue-100-docked-hails-test.mjs",
     "test:surrender-attribution": "node --import ./scripts/with-css-stub.mjs scripts/issue-99-surrender-attribution-test.mjs",

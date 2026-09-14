@@ -22,7 +22,7 @@ approach descriptions below. Implementation evidence and review status are in
 `approachDock {}` travels to the **current station**. Beyond 500 u from the
 station's +X stage point it starts with `autopilot.mode: 'dock'` and
 `phase: 'cruise'`, using the existing route speed and body/sun avoidance.
-It brakes into the slow `stage` within 200 u of the stage point, or within
+It brakes into the slow `stage` within 100 u of the stage point, or within
 500 u of a station blocking the chord, then proceeds through `corridor`,
 `settle`, `docking`, and `complete`. Nearby requests keep the slow approach.
 The station and gate tuning is unchanged; there is no new waypoint or gate
@@ -33,8 +33,10 @@ accepted command has already arrived.
 
 `afterburner {}` queues a **single raw burner edge** for the next controls
 update. It does not acquire the flee helm. An `approachDock` in the same turn,
-or after the burner has started, can take the dock helm. The ordinary power,
-cooldown and burn-duration rules still apply. A raw pulse remains refused
+or after the burner has started, can take the dock helm. This explicit dock
+handoff retires an active or queued burn and applies the existing radial
+pad speed cap on its first takeover frame so braking owns the approach.
+The ordinary power, cooldown and burn-duration rules otherwise apply. A raw pulse remains refused
 with `helm` under a combat lease; for a directed combat withdrawal use
 `setCombatIntent { intent: 'retreat', burner: true, ... }` (or `break-off`).
 That existing tactical burner authorization is unchanged.
@@ -100,9 +102,11 @@ to this desk. Completed work is absent from both lists; use the public
 or `closed` when an accepted record disappears.
 
 For `haul` and `trade` jobs, the latest **actually displayed** reward quote
-is shared by the card and `jobs.offers[].reward` until the next real board
-redraw. An observation alone cannot refresh the agreement behind the
-visible card. Acceptance locks that amount in the existing `payQuoted`
+is shared by the card and `jobs.offers[].reward` while the Jobs pane is
+visible, until its next real redraw. An observation alone cannot refresh
+the agreement behind a visible card. When Jobs is hidden, observations use
+current prices; dock and successful undock clear the prior berth's quote
+cache. Acceptance locks the applicable amount in the existing `payQuoted`
 field and includes it in the success `notice`. Subsequent price changes do
 not change accepted pay. Legacy accepted-job fallback calculations and
 passenger fare semantics remain unchanged.
@@ -110,8 +114,8 @@ passenger fare semantics remain unchanged.
 Focused entry point: `npm run test:agent-playtest-fixes`. The same checked
 fresh-process group runs inside `test:boot` and `test:release-focused`;
 spawn errors, timeouts, signals, and nonzero results fail the gate. Live
-checks are `test:agent-cruise-live`, `test:agent-steering-live`, and
-`test:agent-desk-live`. Their evidence distinguishes natural public flight
+checks are `test:agent-cruise-live`, `test:agent-steering-live`,
+`test:agent-desk-live`, and `test:agent-burner-live`. Their evidence distinguishes natural public flight
 from explicitly staged price/berth fixtures.
 
 ## Issue #103 — Raw control throttle persistence and observability

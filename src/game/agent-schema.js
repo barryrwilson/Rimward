@@ -823,7 +823,7 @@ export const COMMAND_SPECS = freeze({
   pulse: cmd({ edge: "'dock'|'hail'|'target'|'reticleLock'" }, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
   afterburner: freeze({
     args: freeze({}), roles: freeze(['pilot', 'combat']),
-    note: 'Queue one raw burner pulse for the next controls update; normal power, cooldown and duration rules apply. Does not acquire the flee helm. approachDock may take over in the same turn or during the burn. Refuses helm under a combat lease; use setCombatIntent retreat/break-off with burner true for directed withdrawal.',
+    note: 'Queue one raw burner pulse for the next controls update; normal power, cooldown and duration rules apply. Does not acquire the flee helm. approachDock may take over in the same turn or during the burn; dock takeover retires the active or queued burn and applies the radial pad speed cap on its first frame. A fresh physical Space press still cancels a human-owned dock helm. Refuses helm under a combat lease; use setCombatIntent retreat/break-off with burner true for directed withdrawal.',
   }),
   setWeaponGroup: cmd({ n: 'integer 1..5' }, ['combat', 'miner']),
   setControl: freeze({

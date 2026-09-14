@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const checks = [
   ['cruiseApproach', 'issue-168-cruise-test.mjs'],
+  ['cruiseObstacles', 'issue-168-cruise-obstacles-test.mjs'],
   ['rawSteering', 'issue-103-throttle-observability-test.mjs'],
   ['deskAndHaulQuotes', 'issue-170-desk-test.mjs'],
   ['rawBurnerDockHandoff', 'issue-171-burner-test.mjs'],
