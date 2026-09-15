@@ -2584,13 +2584,13 @@ const secondHermitMilestone = ctx.lastEvents.some((e) => e.type === 'milestone' 
 // Sell one back: epic sellMult × rank goodwill × the hermit premium — and then
 // the issue-53 dock cap. The premium chain is UNCHANGED (expectedSellRaw9 is
 // still the full hermit payout and still beats a premium-less sale); station.js
-// only clamps the ROUNDED payout to the ROUNDED buy quote of the same dock, so
+// caps the ROUNDED payout at 95% of the ROUNDED buy quote, rounded down (#175), so
 // buying and immediately selling back here can never print UU. Both figures
 // read the live price inside the same tick-free window as the click.
 const expectedSellRaw9 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
 const expectedBuyAtSell9 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
 const expectedNoPremium9 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9());
-const expectedPayout9 = Math.min(expectedSellRaw9, expectedBuyAtSell9);
+const expectedPayout9 = Math.min(expectedSellRaw9, Math.floor(expectedBuyAtSell9 * 95 / 100));
 const sellCell9 = marketRowCell('Provisions', MARKET_CELL_SELL);
 const creditsBeforeSell9 = ctx.world.credits;
 const sellBtn9 = marketTradeButton('Provisions', '−1');
@@ -3376,14 +3376,14 @@ const priceCellFull = marketRowCell('Provisions', MARKET_CELL_BUY);
 const expectedFull11 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
 // Sell one back (bought above): epic sellMult × rank goodwill × the hermit
 // premium — the sell CHAIN is unchanged by the keeper waiver, then the
-// issue-53 dock cap clamps the rounded payout to this dock's rounded buy
-// quote. Trust is back at 30 here, so the buy quote carries the full ×1.25
+// issues #53/#175 dock cap limits the payout to 95% of the rounded buy quote,
+// rounded down. Trust is back at 30, so the buy quote carries the full ×1.25
 // scarcity markup again; both figures read the live price in the same
 // tick-free window as the click.
 const expectedSellRaw11 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9() * HERMIT.sellMult * 1);
 const expectedNoPremium11 = Math.round(ctx.world.prices.provisions * (hollowFx9().sellMult ?? 1) * goodwill9());
 const expectedBuyAtSell11 = Math.round(ctx.world.prices.provisions * (hollowFx9().buyMult ?? 1) * HERMIT.buyMult);
-const expectedSell11 = Math.min(expectedSellRaw11, expectedBuyAtSell11);
+const expectedSell11 = Math.min(expectedSellRaw11, Math.floor(expectedBuyAtSell11 * 95 / 100));
 const sellCell11 = marketRowCell('Provisions', MARKET_CELL_SELL);
 const creditsBeforeSell11 = ctx.world.credits;
 const sellBtn11 = marketTradeButton('Provisions', '−1');

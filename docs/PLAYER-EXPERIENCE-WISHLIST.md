@@ -597,7 +597,9 @@ items stay INBOX for a later wave. Scratch nits: `out/orch-fable/`.
   Manifest/toast overlap remains INBOX.
 - [x] DONE (P2, MARKET): Pane said “posted prices, no spread” while fills
   differed. BUY/SELL cells now share `tradeFillUnit` with `tryTrade`. Boot-test
-  TRADE offset is 5.
+  TRADE offset is 5. Issue #175's Option B candidate adds a 5% counter spread:
+  sell fills cap at 95% of buy, rounded down; lower sell offers stay lower.
+  Independent QA is pending; see `docs/Issue175CounterSpreadEvidence.md`.
 - [x] DONE (P1, AGENT API/NAV): Add a playable outer **pad approach** intent
   with a brake profile. Fable had to hand-roll a steering loop against
   `window.__ctx` with synthetic mouse and key events, then rammed the station.
