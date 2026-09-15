@@ -1,8 +1,8 @@
 /**
- * Issue #53 — market spread regression.
+ * Issues #53 / #175 — market spread regression.
  *
  * Pins station.js's trade invariant: at ONE dock with an unchanged market, the
- * rounded SELL fill never exceeds the rounded BUY fill, while a real price
+ * rounded SELL fill is at most 95% of the rounded BUY fill, while a real price
  * difference BETWEEN markets still pays. Every trade under test runs through
  * the rendered market panel (arrow keys + Q/W/A/S) or the public
  * window.rimward trade action, and is checked against actual credits, actual
@@ -142,7 +142,8 @@ function chainFor(key) {
     }
   }
   const sellRaw = Math.round(raw);
-  return { price, buy, sellRaw, sell: Math.min(sellRaw, buy), capBinds: sellRaw > buy };
+  const cap = Math.floor(buy * 95 / 100);
+  return { price, buy, sellRaw, cap, sell: Math.min(sellRaw, cap), capBinds: sellRaw > cap };
 }
 
 // ---- Navigation / panel plumbing -----------------------------------------
@@ -210,6 +211,7 @@ function roundTrip(label, key, qty, buyFn, sellFn) {
   const q = chainFor(key);
   const cellBuy = cellUU(name, CELL_BUY);
   const cellSell = cellUU(name, CELL_SELL);
+  const observed = globalThis.window.rimward.observe().market?.rows.find((r) => r.commodity === key);
   const credits0 = ctx.world.credits;
   const held0 = held(key);
 
@@ -225,6 +227,7 @@ function roundTrip(label, key, qty, buyFn, sellFn) {
   const sellNotice = noticeText();
 
   group(label, {
+    observationMatchesCells: observed?.fillBuy === cellBuy && observed?.fillSell === cellSell,
     buyCellIsChain: cellBuy === q.buy,
     sellCellIsChain: cellSell === q.sell,
     sellCellStableAfterBuy: cellSellMid === q.sell,
@@ -234,13 +237,13 @@ function roundTrip(label, key, qty, buyFn, sellFn) {
     sellNoticeTotal: sellNotice === `Sold ${sellLeg} ${name} for ${q.sell * sellLeg} UU.`,
     cargoRose: heldMid === held0 + qty,
     cargoReturned: held(key) === held0,
-    sellNeverBeatsBuy: q.sell <= q.buy,
-    sellIsCappedMin: q.sell === Math.min(q.sellRaw, q.buy),
-    noRoundTripGain: ctx.world.credits <= credits0,
+    sellNeverBeatsBuy: q.sell <= q.cap && q.sell < q.buy,
+    sellIsCappedMin: q.sell === Math.min(q.sellRaw, q.cap),
+    roundTripCostsUU: ctx.world.credits < credits0,
   }, { qty, key, cellBuy, cellSell, charged, paid, chain: q, buyNotice, sellNotice });
 }
 
-/** Every tradable row at this dock: cells agree with the chain and sell <= buy. */
+/** Every tradable row at this dock: cells agree with the chain and sell <= 95% buy. */
 function pinPanel(label) {
   const bad = [];
   for (const key of COMMODITY_KEYS) {
@@ -251,7 +254,7 @@ function pinPanel(label) {
     const q = chainFor(key);
     if (b !== q.buy) bad.push(`${key}:buy ${b}!=${q.buy}`);
     if (s !== q.sell) bad.push(`${key}:sell ${s}!=${q.sell}`);
-    if (s > b) bad.push(`${key}:spread ${s}>${b}`);
+    if (s > Math.floor(b * 95 / 100) || s >= b) bad.push(`${key}:spread ${s}>${b}`);
   }
   pin(label, bad.length === 0, { bad: bad.slice(0, 10), rows: COMMODITY_KEYS.length });
 }
@@ -274,7 +277,7 @@ group('docks found', {
   vergeHermit: SYSTEMS.verge.hermit === true,
 }, { AUCTION, BEACON, SALON });
 
-// ===== A. The Grand Auction: 216 in, 216 back (was 248) ====================
+// ===== A. The Grand Auction: 216 in, 205 back (was 216) ====================
 console.log('--- A. The Grand Auction (gilded sell x1.15) ---');
 if (AUCTION && openMarketAt(AUCTION, 'A auction')) {
   fund(200);
@@ -288,16 +291,16 @@ if (AUCTION && openMarketAt(AUCTION, 'A auction')) {
   const credits1 = ctx.world.credits;
   dispatchKey('KeyA'); // human sell 1
   const paid = ctx.world.credits - credits1;
-  group('A1 216 -> 216, not 216 -> 248', {
+  group('A1 216 -> 205 after the 5% counter spread', {
     buyQuoteIs216: q.buy === 216 && cellUU('Provisions', CELL_BUY) === 216,
     fullSellChainStillIs248: q.sellRaw === 248,
-    sellQuoteIs216: q.sell === 216 && cellUU('Provisions', CELL_SELL) === 216,
+    sellQuoteIs205: q.sell === 205 && cellUU('Provisions', CELL_SELL) === 205,
     actualChargedIs216: charged === 216,
-    actualPaidIs216: paid === 216,
-    roundTripIsFlat: ctx.world.credits === credits0,
+    actualPaidIs205: paid === 205,
+    roundTripCosts11: ctx.world.credits === credits0 - 11,
     holdEmptied: held('provisions') === 0,
   }, { q, charged, paid });
-  pinPanel('A2 auction panel: every row sell <= buy, cells match the chain');
+  pinPanel('A2 auction panel: every row sell <= 95% buy, cells match the chain');
 
   pinPrice('provisions', 216);
   roundTrip('A3 keyboard Q/A qty 1', 'provisions', 1, keys('KeyQ', 'Provisions', 1), keys('KeyA', 'Provisions', 1));
@@ -354,12 +357,26 @@ if (BEACON && openMarketAt(BEACON, 'C beacon')) {
     standingTierIsTop: rankFor(ctx.world.reputation.lamplighter).tier === 3,
     buyIsDiscounted: q.buy === 170,
     chainCarriesGoodwill: q.sellRaw === 212,
-    cappedToBuy: q.sell === 170 && q.capBinds === true,
-    panelAgrees: cellUU('Provisions', CELL_SELL) === 170,
+    cappedBelowBuy: q.sell === 161 && q.capBinds === true,
+    panelAgrees: cellUU('Provisions', CELL_SELL) === 161,
   }, q);
   pinPrice('provisions', 200);
   roundTrip('C2 beacon round trip qty 99', 'provisions', 99, api('buy'), api('sell'));
-  pinPanel('C3 beacon panel: every row sell <= buy');
+  pinPanel('C3 beacon panel: every row sell <= 95% buy');
+}
+
+// ===== C4. Authored counter without bonuses: the visible 100 / 95 baseline ===
+if (openMarketAt('freehold', 'C4 plain counter')) {
+  fund(20);
+  ctx.world.epics.freehold = 0;
+  ctx.world.reputation.freehold = 0;
+  pinPrice('provisions', 100);
+  const q = chainFor('provisions');
+  group('C4 no modifiers: 100 buy / 95 sell', {
+    buy: q.buy === 100 && cellUU('Provisions', CELL_BUY) === 100,
+    sell: q.sell === 95 && cellUU('Provisions', CELL_SELL) === 95,
+  }, q);
+  roundTrip('C5 unmodified authored dock costs 5 UU per unit', 'provisions', 5, api('buy'), api('sell'));
 }
 
 // ===== D. Epics: a sell premium, and a discounted buy paired with one =====
@@ -374,7 +391,7 @@ if (openMarketAt('freehold', 'D freehold')) {
     epicSellIs115: (epicEffects(ctx, 'freehold').sellMult ?? 1) === 1.15,
     buyIsPlainQuote: q.buy === 200,
     chainIsRicher: q.sellRaw === Math.round(200 * 1.15 * 1.06),
-    cappedToBuy: q.sell === 200 && q.capBinds === true,
+    cappedBelowBuy: q.sell === 190 && q.capBinds === true,
   }, q);
   pinPrice('provisions', 200);
   roundTrip('D2 freehold round trip qty 5 (keyboard)', 'provisions', 5,
@@ -391,7 +408,7 @@ if (openMarketAt('hollowreach', 'D hollowreach')) {
       && (epicEffects(ctx, 'hollow').sellMult ?? 1) === 1.15,
     buyIsDiscounted: q.buy === 180,
     chainIsRicher: q.sellRaw === 230,
-    cappedToBuy: q.sell === 180 && q.capBinds === true,
+    cappedBelowBuy: q.sell === 171 && q.capBinds === true,
   }, q);
   pinPrice('provisions', 200);
   roundTrip('D4 hollowreach round trip qty 99', 'provisions', 99, api('buy'), api('sell'));
@@ -426,16 +443,16 @@ if (openMarketAt('verge', 'E verge')) {
       waiverLowersBuy: hi.buy < lo.buy,
       hermitPremiumStillInChain: lo.sellRaw === Math.round(200 * 1.15 * HERMIT.sellMult)
         && hi.sellRaw === lo.sellRaw,
-      bothCapped: lo.sell === lo.buy && hi.sell === hi.buy,
+      bothCapped: lo.sell === lo.cap && hi.sell === hi.cap,
       actualChargedIsWaivedQuote: charged === hi.buy,
-      actualPaidIsWaivedQuote: paid === hi.buy,
-      flatRoundTrip: ctx.world.credits === credits0,
+      actualPaidIsWaivedSell: paid === hi.cap,
+      roundTripCostsSpread: ctx.world.credits === credits0 - (hi.buy - hi.cap),
     }, { lo, hi, charged, paid, comp: KEEPER_COMP_TRUST });
 
     keeper.trust = KEEPER_COMP_TRUST - 1;
     pinPrice('provisions', 200);
     roundTrip('E2 uncomped hermit dock qty 99', 'provisions', 99, api('buy'), api('sell'));
-    pinPanel('E3 hermit panel: every row sell <= buy');
+    pinPanel('E3 hermit panel: every row sell <= 95% buy');
   }
 }
 
@@ -465,8 +482,8 @@ if (openMarketAt('redmarch', 'F redmarch')) {
       chainUnderCut: under.sellRaw === Math.round(400 * 1.06 * 1.1),
       chainAtCut: at.sellRaw === Math.round(400 * 1.06 * 1.1 * FIXER_MARKUP),
       cutRaisesTheChain: at.sellRaw > under.sellRaw,
-      bothCappedToBuy: under.sell === 340 && at.sell === 340,
-      panelAgrees: cellUU(RC, CELL_SELL) === 340 && cellUU(RC, CELL_BUY) === 340,
+      bothCappedBelowBuy: under.sell === 323 && at.sell === 323,
+      panelAgrees: cellUU(RC, CELL_SELL) === 323 && cellUU(RC, CELL_BUY) === 340,
     }, { under, at, cut: FIXER_CUT_TRUST });
 
     // The crossing, traded for real through the public handle: the sale is
@@ -501,7 +518,7 @@ if (openMarketAt('redmarch', 'F redmarch')) {
         && held('restrictedComponents') === hold0,
       trustCrossedOnTheSale: fixer.trust >= FIXER_CUT_TRUST,
       cutNowInTheChain: qCrossed.sellRaw === Math.round(400 * 1.06 * 1.1 * FIXER_MARKUP),
-      stillCapped: q29.sell === q29.buy && qCrossed.sell === qCrossed.buy,
+      stillCapped: q29.sell === q29.cap && qCrossed.sell === qCrossed.cap,
       noRoundTripGain: ctx.world.credits <= cash0,
     }, { q29, qCrossed, charged29, paid29, trustAtSale, trustAfter: fixer.trust });
 
@@ -532,7 +549,7 @@ if (openMarketAt('redmarch', 'F redmarch')) {
     roundTrip('F4b restricted capacity buy 5+5+5+5, sell 10+10',
       'restrictedComponents', 20, chunks('buy',[5,5,5,5]), chunks('sell',[10,10]));
     fund(200); // restore the roomy fixture
-    pinPanel('F5 redmarch panel: every row sell <= buy');
+    pinPanel('F5 redmarch panel: every row sell <= 95% buy');
   }
 }
 
@@ -543,18 +560,18 @@ if (openMarketAt(AUCTION ?? 'redmarch', 'G rounding')) {
   ctx.world.reputation[SYSTEMS[ctx.world.currentSystem].faction] = 0;
   // TEST SETUP: market.js only writes integers, so a fractional quote can only
   // be planted. priceOf reads the table verbatim — the cap must hold on it.
-  const boundaries = [1, 2, 3, 4, 7, 0.5, 1.4, 1.5, 2.5, 8.7, 216.49, 999.5];
+  const boundaries = [1, 2, 3, 4, 7, 19, 20, 21, 100, 0.5, 1.4, 1.5, 2.5, 8.7, 216.49, 999.5];
   const bad = [];
   for (const price of boundaries) {
     pinPrice('provisions', price);
     const q = chainFor('provisions');
     if (cellUU('Provisions', CELL_BUY) !== q.buy) bad.push(`${price}:buycell`);
     if (cellUU('Provisions', CELL_SELL) !== q.sell) bad.push(`${price}:sellcell`);
-    if (q.sell > q.buy) bad.push(`${price}:spread ${q.sell}>${q.buy}`);
-    if (q.sell !== Math.min(q.sellRaw, q.buy)) bad.push(`${price}:notmin`);
+    if (q.sell > q.cap || q.sell >= q.buy) bad.push(`${price}:spread ${q.sell}>${q.buy}`);
+    if (q.sell !== Math.min(q.sellRaw, q.cap)) bad.push(`${price}:notmin`);
     if (!Number.isInteger(q.buy) || !Number.isInteger(q.sell)) bad.push(`${price}:frac`);
   }
-  pin('G1 every rounding boundary holds sell <= buy with integer fills',
+  pin('G1 every rounding boundary holds sell <= 95% buy with integer fills',
     bad.length === 0, { bad, boundaries });
   pinPrice('provisions', 1);
   roundTrip('G2 a 1 UU commodity at qty 99', 'provisions', 99, api('buy'), api('sell'));
@@ -586,11 +603,11 @@ console.log('--- H. Inter-market route profit ---');
       boughtAll: leg.held === 99,
       originUnitDiscounted: leg.unit === 85,
       spentExact: leg.spent === 85 * 99,
-      destPaysItsQuote: q.sell === 300 && cellUU('Provisions', CELL_SELL) === 300,
+      destPaysItsQuote: q.sell === 285 && cellUU('Provisions', CELL_SELL) === 285,
       capDidNotBiteBelowOrigin: q.sell > leg.unit,
-      paidExact: paid === 300 * 99,
+      paidExact: paid === 285 * 99,
       routeProfitable: paid > leg.spent,
-      noticeTotal: noticeText() === `Sold 99 ${COMMODITIES.provisions.name} for ${300 * 99} UU.`,
+      noticeTotal: noticeText() === `Sold 99 ${COMMODITIES.provisions.name} for ${285 * 99} UU.`,
       holdEmptied: held('provisions') === 0,
     }, { leg, paid, q, profit: paid - leg.spent });
   } else if (!leg) {
@@ -599,6 +616,6 @@ console.log('--- H. Inter-market route profit ---');
 }
 
 console.log(errors === 0
-  ? '\nISSUE-53 MARKET SPREAD PASS — sell <= buy per dock, quote == fill, routes intact'
+  ? '\nISSUE-53 MARKET SPREAD PASS — sell <= 95% buy per dock, quote == fill, routes intact'
   : `\nISSUE-53 MARKET SPREAD FAIL — ${errors} errors`);
 process.exit(errors === 0 ? 0 : 1);

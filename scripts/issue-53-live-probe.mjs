@@ -1,10 +1,10 @@
 /**
- * Issue #53 live verification — market spread at The Grand Auction.
+ * Issues #53 / #175 live verification — market spread at The Grand Auction.
  *
  * Drives the dev app in headless Chrome over CDP and checks, against the real
  * rendered market panel and the real `window.rimward` handle:
  *
- *   P1 every rendered row prints SELL <= BUY
+ *   P1 every rendered row prints SELL <= floor(BUY * 95 / 100)
  *   P2 keyboard Q then A (qty 1) — displayed totals equal the actual fills
  *   P3 keyboard W then S (qty 5)
  *   P4 public trade action at qty 1, 5 and 99
@@ -233,6 +233,7 @@ const SETUP = `(() => {
     else bag.reopen();
     if (!bag.selectRow(name)) return { ok: false, reason: 'row not selectable' };
     const quote = bag.market().rows.find((r) => r.name === name);
+    const observed = window.rimward.observe().market?.rows.find((r) => r.commodity === commodity);
     const creditsStart = c.world.credits;
     const heldStart = held(commodity);
     const legs = [];
@@ -263,6 +264,7 @@ const SETUP = `(() => {
       ok: true,
       station: bag.market().station,
       quote: { buy: quote.buy, sell: quote.sell },
+      observed: { buy: observed?.fillBuy, sell: observed?.fillSell },
       creditsStart,
       creditsEnd: c.world.credits,
       net: c.world.credits - creditsStart,
@@ -281,13 +283,15 @@ const runJson = async (cdp, spec) => JSON.parse(await cdp.eval(call(`run(${JSON.
 
 /** Every leg moved exactly qty x the quote the panel printed, and the cargo with it. */
 function legsAgree(trip) {
-  return trip.legs.every((leg) => {
-    if (leg.ok !== true || !Number.isInteger(leg.qty)) return false;
-    if (leg.side === 'buy') {
-      return leg.moved === -(trip.quote.buy * leg.qty) && leg.cargoDelta === leg.qty;
-    }
-    return leg.moved === trip.quote.sell * leg.qty && leg.cargoDelta === -leg.qty;
-  });
+  return trip.observed.buy === trip.quote.buy && trip.observed.sell === trip.quote.sell
+    && trip.quote.sell <= Math.floor(trip.quote.buy * 95 / 100)
+    && trip.legs.every((leg) => {
+      if (leg.ok !== true || !Number.isInteger(leg.qty)) return false;
+      if (leg.side === 'buy') {
+        return leg.moved === -(trip.quote.buy * leg.qty) && leg.cargoDelta === leg.qty;
+      }
+      return leg.moved === trip.quote.sell * leg.qty && leg.cargoDelta === -leg.qty;
+    });
 }
 
 async function main() {
@@ -475,10 +479,10 @@ async function main() {
       const m = JSON.parse(await cdp.eval(call('pin("provisions", 216)')));
       await cdp.shot('01-auction-market.png');
       const rows = (m?.rows || []).filter((r) => r.buy !== null && r.sell !== null);
-      const offenders = rows.filter((r) => r.sell > r.buy).map((r) => `${r.name} ${r.sell}>${r.buy}`);
+      const offenders = rows.filter((r) => r.sell > Math.floor(r.buy * 95 / 100) || r.sell >= r.buy).map((r) => `${r.name} ${r.sell}>${r.buy}`);
       const prov = rows.find((r) => r.name === 'Provisions') || null;
       record('P1', !!(m && rows.length > 0 && offenders.length === 0
-        && prov && prov.buy === 216 && prov.sell === 216),
+        && prov && prov.buy === 216 && prov.sell === 205),
       { station: m?.station, faction: m?.faction, rowCount: rows.length, offenders, provisions: prov });
     }
 
@@ -493,7 +497,7 @@ async function main() {
       });
       await cdp.shot('02-keyboard-qty1.png');
       record('P2', !!(trip.ok && trip.quote.sell <= trip.quote.buy
-        && legsAgree(trip) && trip.net <= 0 && trip.heldEnd === trip.heldStart
+        && legsAgree(trip) && trip.net < 0 && trip.heldEnd === trip.heldStart
         && trip.legs[0].notice === 'Bought 1 Provisions for ' + trip.quote.buy + ' UU.'
         && trip.legs[1].notice === 'Sold 1 Provisions for ' + trip.quote.sell + ' UU.'), trip);
     }
@@ -508,7 +512,7 @@ async function main() {
         ],
       });
       await cdp.shot('03-keyboard-qty5.png');
-      record('P3', !!(trip.ok && legsAgree(trip) && trip.net <= 0
+      record('P3', !!(trip.ok && legsAgree(trip) && trip.net < 0
         && trip.heldEnd === trip.heldStart
         && trip.legs[0].notice === 'Bought 5 Provisions for ' + trip.quote.buy * 5 + ' UU.'
         && trip.legs[1].notice === 'Sold 5 Provisions for ' + trip.quote.sell * 5 + ' UU.'), trip);
@@ -527,7 +531,7 @@ async function main() {
         }));
       }
       await cdp.shot('04-public-handle-99.png');
-      record('P4', trips.every((t) => t.ok && legsAgree(t) && t.net <= 0
+      record('P4', trips.every((t) => t.ok && legsAgree(t) && t.net < 0
         && t.heldEnd === t.heldStart && t.quote.sell <= t.quote.buy),
       { trips });
     }
@@ -548,7 +552,7 @@ async function main() {
       await cdp.shot('05-chunked-160.png');
       const bought = trip.legs.filter((l) => l.side === 'buy');
       const sold = trip.legs.filter((l) => l.side === 'sell');
-      record('P5', !!(trip.ok && legsAgree(trip) && trip.net <= 0
+      record('P5', !!(trip.ok && legsAgree(trip) && trip.net < 0
         && trip.heldEnd === trip.heldStart
         && bought.reduce((n, l) => n + l.cargoDelta, 0) === 160
         && sold.reduce((n, l) => n - l.cargoDelta, 0) === 160

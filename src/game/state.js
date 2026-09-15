@@ -323,6 +323,7 @@ export function resolveBand(resolve) {
 
 // ---------- Economy (§7.7/§7.8, §9) ----------
 export const ECON = {
+  counterSellPercent: 95, // issue #175: sell cap as a percent of the rounded buy fill
   destroyedCargoYield: [0.1, 0.4], // fraction of manifest recoverable from a kill
   fenceRate: [0.55, 0.7], // fenced cargo return vs book
   ransomRate: [0.08, 0.15], // of target book value

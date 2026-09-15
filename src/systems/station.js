@@ -5240,15 +5240,17 @@ export function initStation(ctx) {
   }
   /**
    * Qty-1 fill in UU. Shared by the market pane, tryTrade and the agent desk.
-   * Invariant (issue #53): with the market unchanged, a dock's rounded SELL
-   * fill never exceeds its own rounded BUY fill for the same commodity, so
-   * selling straight back cannot gain UU. The sell side still applies every
-   * modifier; only the rounded result is clamped. The clamp compares two
-   * quotes at the SAME dock, so a price difference between markets still pays.
+   * Invariant (issues #53, #175): with the market unchanged, a dock's SELL
+   * fill is at most 95% of its rounded BUY fill for the same commodity.
+   * Round the cap down to whole UU so even a 1 UU buy costs 1 UU to sell back.
+   * The sell side still applies every modifier; only the result is capped.
+   * The clamp compares quotes at the SAME dock, so a price difference
+   * between markets still pays.
    */
   function tradeFillUnit(key, buying) {
     if (buying) return tradeBuyUnit(key);
-    return Math.min(tradeSellUnitRaw(key), tradeBuyUnit(key));
+    const sellCap = Math.floor(tradeBuyUnit(key) * ECON.counterSellPercent / 100);
+    return Math.min(tradeSellUnitRaw(key), sellCap);
   }
   function lockerAllowed() {
     if (ui.fenceUnlocked) return true;

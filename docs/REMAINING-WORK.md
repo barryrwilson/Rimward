@@ -27,6 +27,15 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#175](https://github.com/barryrwilson/Rimward/issues/175), owner-selected
+Option B, is implemented on `codex/issue-175-counter-spread`: commodity sell
+fills are capped at 95% of the same counter's buy fill, rounded down to whole
+UU. Existing lower sell offers and all modifier chains remain intact. The pane,
+agent observation and actual transactions share the fill; an unchanged-counter
+round trip costs UU while inter-system price differences can still pay.
+See [implementation evidence](Issue175CounterSpreadEvidence.md). Independent QA
+is pending; this is not a merge or deployment claim.
+
 Issue [#182](https://github.com/barryrwilson/Rimward/issues/182) is implemented
 on the isolated `codex/issue-182-arrival-cargo` candidate: a delivery pays for a
 run, not for an errand at the far market. Docking empty at a destination and
