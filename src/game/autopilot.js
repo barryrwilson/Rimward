@@ -14,7 +14,15 @@ import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
 import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
-import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop } from '../systems/controls.js';
+import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop, markAgentHelm, agentControlStatus } from '../systems/controls.js';
+import {
+  queueDockAt,
+  armPendingDock,
+  clearQueuedDock,
+  queuedDockDest,
+  pendingDockDest,
+  pendingDockUntil,
+} from './dock-queue.js';
 import {
   DOCK_STAGE_ARRIVE,
   DOCK_CRUISE_RANGE,
@@ -82,6 +90,9 @@ export const DOCK_APPROACH_LINES = Object.freeze({
   'dock-refused': 'Dock approach cancelled — dock pulse was refused.',
   cancel: 'Dock approach cancelled.',
   input: 'Dock approach cancelled — manual helm.',
+  // Issue #183: the queued-behind-a-route intent hands over, or gives up.
+  'queue-stale': 'Dock approach cancelled — the destination berth never came up.',
+  'queue-handoff': 'Route complete — dock approach taking the helm.',
 });
 
 const BREAK_LINE = Object.freeze({
@@ -335,6 +346,11 @@ export function apRefuseToken(ctx) {
 export function disengage(ctx, reason) {
   if (!ctx) return;
   const ap = bindChannel(ctx);
+  // Issue #183: every lease cancellation ends the queued dock intent too —
+  // cancelAutopilot, the Escape handback, a manual break, a restore, and the
+  // dock controller's own failures. flyTick reads the wish BEFORE it calls
+  // the 'arrive' disengage, so the one handoff path is not caught here.
+  clearQueuedDock();
   const routeWas = flyingFlag(ctx) || (ap.engaged === true && ap.mode === 'route');
   const modeWas = ap.mode;
   const activeWas = ap.engaged === true || routeWas;
@@ -479,6 +495,171 @@ export function tryApproachDock(ctx) {
   // leave the cancellation stop latched, including direct helper callers.
   agentClearFullStop(ctx);
   return '';
+}
+
+/**
+ * Issue #183 — the queued dock intent.
+ *
+ * `approachDock` used to refuse 'autopilot' while a route lease flew the
+ * gates, so an agent could not ask for the berth before it arrived. The wish
+ * below is destination-bound and session-only: it survives every intermediate
+ * jump, and flyTick hands the helm to the SAME cruise/stage/settle controller
+ * once the route's final system is loaded.
+ */
+
+// Sim seconds the handoff may spend waiting for the destination berth to come
+// up after arrival. A station that never appears retires the intent, so the
+// wish cannot sit open forever. It does not change the hull's arrival drift:
+// the pilot is left coasting exactly as an unqueued arrival leaves them.
+const DOCK_QUEUE_GRACE = 20;
+
+// Tokens the handoff re-tries: each one clears on its own within a moment of
+// a fresh arrival. Anything else is a hard refusal and drops the wish.
+const DOCK_QUEUE_RETRY = Object.freeze(['jumping', 'held', 'paused', 'stale', 'no-station']);
+
+function authoredStation(ctx, id) {
+  if (typeof id !== 'string' || !id) return null;
+  const bank = ctx && ctx.systems;
+  if (!bank || typeof bank !== 'object' || !Object.hasOwn(bank, id)) return null;
+  const def = bank[id];
+  const station = def && typeof def === 'object' ? def.station : null;
+  const arr = station && station.position;
+  if (!Array.isArray(arr) || arr.length < 3) return null;
+  for (let i = 0; i < 3; i++) if (!Number.isFinite(arr[i])) return null;
+  return station;
+}
+
+/**
+ * The live station is the destination's own, rebuilt. currentStationPose
+ * already rejects a pose that disagrees with the authored position, but two
+ * systems may sit their stations at the same coordinates, so the rebuilt
+ * identity is checked as well: a stale prior station can never be docked at.
+ */
+function destStationReady(ctx, dest) {
+  if (!ctx || !ctx.world || ctx.world.currentSystem !== dest) return false;
+  const station = authoredStation(ctx, dest);
+  if (!station) return false;
+  const pose = currentStationPose(ctx);
+  if (!pose || pose.system !== dest) return false;
+  const name = typeof station.name === 'string' ? station.name : '';
+  return pose.name === name;
+}
+
+/**
+ * Queue a dock approach behind the engaged route lease. Returns '' when the
+ * wish is armed, or the refusal token to answer with. Everything that is not
+ * a live multi-hop route lease answers 'autopilot' — the refusal this call
+ * already gave before issue #183 — so an invalid request fails closed.
+ */
+export function queueApproachDock(ctx) {
+  if (!ctx) return 'stale';
+  const nav = navBag(ctx);
+  const ap = ctx.autopilot;
+  const here = ctx.world && ctx.world.currentSystem;
+  const dest = destIdOf(nav);
+  if (!flyingFlag(ctx)) return 'autopilot';
+  if (!ap || typeof ap !== 'object' || ap.mode === 'dock') return 'autopilot';
+  if (!dest || !here || dest === here) return 'autopilot';
+  if (!Array.isArray(nav.path) || nav.path.length < 2) return 'autopilot';
+  if (nav.path[nav.path.length - 1] !== dest) return 'autopilot';
+  if (nav.status !== 'plotted') return 'autopilot';
+  // The route helm owns the ship, so 'autopilot' is the expected token here;
+  // every other refusal (docked, paused, held, jumping, match, drift, a bad
+  // hull pose) still refuses, and the two helms the token order hides are
+  // checked by hand.
+  const token = dockApproachRefuseToken(ctx);
+  if (token && token !== 'autopilot') return token;
+  if (ctx.automine && ctx.automine.engaged === true) return 'automine';
+  if (ctx.flee && ctx.flee.engaged === true) return 'flee';
+  if (!authoredStation(ctx, dest)) return 'no-station';
+  queueDockAt(dest);
+  return '';
+}
+
+/**
+ * Open the handoff window. The berth is normally already rebuilt when this
+ * runs (station.js consumes the same systemLoaded ahead of autopilot in the
+ * system order), so the grace window is only for an arrival the destination
+ * station is not up for yet — a jump fade still running, for instance.
+ */
+/** True while a raw control lease (manual or combat) owns propulsion. */
+function rawOwnerActive(ctx) {
+  try {
+    const control = agentControlStatus(ctx);
+    return !!(control && typeof control.owner === 'string' && control.owner !== 'none');
+  } catch {
+    // Unreadable ownership is not a licence to take the helm.
+    return true;
+  }
+}
+
+function armQueuedDock(ctx, dest) {
+  const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  armPendingDock(dest, now + DOCK_QUEUE_GRACE);
+}
+
+/**
+ * One frame of the waiting handoff, run from the autopilot update while no
+ * helm owns the ship.
+ *
+ * Only flyTick's final arrival opens this window. A queued wish NEVER arms
+ * itself off the live system id: between legs the pilot may be flying by
+ * hand, and a wish that armed there would steal raw propulsion from a helm
+ * nobody handed it. Cancellation clears the window with the wish, so nothing
+ * can revive it either.
+ */
+function queuedDockTick(ctx) {
+  const ap = ctx.autopilot;
+  if ((ap && ap.engaged === true) || flyingFlag(ctx)) return;
+  runPendingDock(ctx);
+}
+
+/**
+ * Success is the ordinary tryApproachDock takeover; the wish is consumed
+ * either way, so it can never resurrect on a later route, even one plotted to
+ * the same destination. A berth that never comes up retires the intent at the
+ * deadline; the hull's arrival drift is left exactly as it is today.
+ */
+function runPendingDock(ctx) {
+  const dest = pendingDockDest();
+  if (!dest) return;
+  if (!ctx.world || ctx.world.currentSystem !== dest) {
+    clearQueuedDock();
+    return;
+  }
+  // Issue #183 QA: a raw control lease owns propulsion the moment it is
+  // granted. agent-api retires the wish as the lease is accepted; this is the
+  // belt-and-braces reading of live ownership, so a waiting handoff can never
+  // take the ship out from under an owner it was not handed by.
+  if (rawOwnerActive(ctx)) {
+    clearQueuedDock();
+    return;
+  }
+  const brk = inputBreak(ctx);
+  if (brk) {
+    clearQueuedDock();
+    sayLine(ctx, DOCK_APPROACH_LINES.input);
+    return;
+  }
+  const ready = destStationReady(ctx, dest);
+  const token = ready ? tryApproachDock(ctx) : 'no-station';
+  if (!token) {
+    clearQueuedDock();
+    // The route lease was the agent's; the dock helm it asked for inherits it.
+    markAgentHelm(ctx);
+    sayLine(ctx, DOCK_APPROACH_LINES['queue-handoff']);
+    return;
+  }
+  if (!DOCK_QUEUE_RETRY.includes(token)) {
+    clearQueuedDock();
+    sayLine(ctx, dockApproachLine(token));
+    return;
+  }
+  const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
+  if (now >= pendingDockUntil()) {
+    clearQueuedDock();
+    sayLine(ctx, DOCK_APPROACH_LINES['queue-stale']);
+  }
 }
 
 export function guardAutopilotSpace(e) {
@@ -1143,7 +1324,15 @@ function flyTick(ctx, dt) {
   if (loaded) {
     const dest = destIdOf(nav);
     if (ctx.world.currentSystem === dest) {
+      // Issue #183: the route helm is held to the final arrival exactly as
+      // before, and the arrival receipt is unchanged. A wish bound to THIS
+      // destination is read first, because disengage drops it.
+      const queued = queuedDockDest() === dest ? dest : '';
       disengage(ctx, 'arrive');
+      if (queued) {
+        armQueuedDock(ctx, queued);
+        runPendingDock(ctx);
+      }
       return;
     }
     resetApproach();
@@ -1175,6 +1364,8 @@ export function initAutopilot(ctx) {
         const ch = c.autopilot;
         ch.engaged = false;
         zeroCmd(ch);
+        // Issue #183: an armed handoff waits here, with no helm engaged.
+        queuedDockTick(c);
       }
     },
   };

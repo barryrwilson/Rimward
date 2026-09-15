@@ -28164,6 +28164,44 @@ removeLiveShip(w42indyCtx, w42indy);
   }
 }
 
+// ---- Issue #183: approachDock queued behind a plotted route ---------------
+// The queued intent must fly the REAL system loop end to end — route helm,
+// intermediate hop, and the production dock controller taking the destination
+// berth with no second command. That needs a fresh greenhand session (a
+// seeded RNG and an untouched galaxy), which this aggregate cannot provide in
+// process after 140+ waves of mutable run state, so it runs as a checked
+// fresh child. Its stdout is inherited; a spawn error, signal, timeout or
+// nonzero exit fails this boot. No prior scenario or assertion is replaced.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log('--- issue #183: queued route dock (fresh child: node --import with-css-stub.mjs scripts/issue-183-route-dock-test.mjs) ---');
+  const child = spawn(process.execPath, [
+    '--import', pathToFileURL(join(here, 'with-css-stub.mjs')).href,
+    join(here, 'issue-183-route-dock-test.mjs'),
+  ], { cwd: dirname(here), env: process.env, stdio: 'inherit', windowsHide: true });
+  const ROUTE_DOCK_TIMEOUT_MS = 10 * 60 * 1000; // watchdog only; a normal run is under a minute
+  const verdict = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok, why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok, why });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false, `timeout after ${ROUTE_DOCK_TIMEOUT_MS / 60000} min (child killed)`);
+    }, ROUTE_DOCK_TIMEOUT_MS);
+    child.on('error', (e) => finish(false, `spawn error: ${e.message}`));
+    child.on('close', (code, signal) => finish(code === 0,
+      `exit code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`));
+  });
+  if (!verdict.ok) {
+    console.log(`ISSUE183 QUEUED ROUTE DOCK FAIL — ${verdict.why}`);
+    errors++;
+  }
+}
+
 if (errors === 0) {
   console.log('BOOT TEST PASS — no update errors');
 } else {
