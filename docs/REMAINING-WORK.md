@@ -354,3 +354,11 @@ bounded scope/exclusions, acceptance criteria, required tests and live flows,
 dependencies/owner decisions, and likely overlapping files. Create external
 issues only with user or task authorization. Orca auto-start applies only to
 `orca:ready`; design, decision and optional items need their respective gates.
+
+### Issue #174 — remembered station prices (implementation, review pending)
+
+The branch adds historical SELL quotes captured when viewing a docked market,
+a Market toggle naming the best remembered station and age per commodity,
+chart hover/selection readouts, save normalization and agent row parity.
+[Contract and current verification](Issue174PriceMemory.md). Build, boot and
+focused regressions and ten live browser checks pass; independent QA remains pending.

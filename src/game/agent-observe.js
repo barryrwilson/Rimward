@@ -1,3 +1,4 @@
+import { bestRememberedPrices } from './price-memory.js';
 /**
  * Agent observe snapshot v2. Authored fields only into a fresh object.
  * Never JSON.stringify(ctx). Never returns functions, THREE, desks, or npc.ai.
@@ -576,6 +577,7 @@ function peekFill(ctx, key, buying) {
 
 function marketBlock(ctx, docked, service) {
   if (!docked || service !== 'market') return null;
+  const remembered = bestRememberedPrices(ctx.world);
   const rows = [];
   try {
     const keys = Object.keys(COMMODITIES);
@@ -592,6 +594,7 @@ function marketBlock(ctx, docked, service) {
         commodity,
         name: str(own(com, 'name')) || commodity,
         posted: postedPrice(ctx, commodity),
+        remembered: remembered[commodity] || null,
         hold,
         holdOwned: split.owned,
         holdConsigned: split.consigned,

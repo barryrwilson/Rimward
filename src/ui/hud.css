@@ -2566,3 +2566,5 @@ body.rw-reduced-motion .rw-galaxy-chart * {
   animation: none !important;
   transition: none !important;
 }
+
+.rw-galaxy-hover-prices { max-height: 6em; overflow-y: auto; pointer-events: auto; }

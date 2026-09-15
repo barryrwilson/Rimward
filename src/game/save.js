@@ -28,6 +28,7 @@ import { sanitizePrizeRecord } from './prize.js';
 import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
 import { disengage as disengageAutopilot } from './autopilot.js';
 import { normalizeMarketSupply } from './market-supply.js';
+import { normalizePriceMemory } from './price-memory.js';
 
 /**
  * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
@@ -139,7 +140,7 @@ const DEATH_HINT_FRESH = 'Returning to Freehold Drift… (Enter to skip)';
 // 'mystery' ({found:[clueIds], visited:[landmarkIds]}) is created lazily by
 // the mystery module (§25) and persists once present.
 export const WORLD_FIELDS = [
-  'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets', 'marketSupply',
+  'time', 'credits', 'fear', 'reputation', 'currentSystem', 'markets', 'marketSupply', 'priceMemory',
   'recordBanks', 'records', 'incidents', 'aftermath', 'prices',
   'activeEvent', 'milestones', 'jobs', 'scanner', 'shipName',
   'jumpGraceUntil', 'contacts', 'mystery',
@@ -1127,6 +1128,10 @@ export function snapshot(ctx) {
   }
   const world = {};
   for (const k of WORLD_FIELDS) {
+    if (k === 'priceMemory') {
+      world[k] = normalizePriceMemory(ctx.world[k], ctx.world.time);
+      continue;
+    }
     if (k === 'marketSupply') {
       world[k] = normalizeMarketSupply(ctx.world[k], ctx.world.time, Object.hasOwn(ctx.world, k));
       continue;
@@ -1380,6 +1385,7 @@ function sanitizeRestored(ctx) {
   ctx.cargo.length = 0;
   for (const row of cargo) ctx.cargo.push(row);
   if (!Number.isFinite(ctx.world.time) || ctx.world.time < 0) ctx.world.time = 0;
+  ctx.world.priceMemory = normalizePriceMemory(ctx.world.priceMemory, ctx.world.time);
   ctx.world.marketSupply = normalizeMarketSupply(ctx.world.marketSupply, ctx.world.time,
     Object.hasOwn(ctx.world, 'marketSupply'));
   sanitizeFieldOre(ctx);
@@ -1554,6 +1560,8 @@ export function restore(ctx, snap) {
   for (const k of WORLD_FIELDS) {
     if (snap.world[k] !== undefined) ctx.world[k] = snap.world[k];
   }
+  // A legacy save must not inherit remembered prices from another timeline.
+  ctx.world.priceMemory = Object.hasOwn(snap.world, 'priceMemory') ? snap.world.priceMemory : undefined;
   // An absent legacy envelope must not inherit depletion from another timeline.
   // Present undefined is malformed, just like null/arrays; retain that distinction.
   if (!Object.hasOwn(snap.world, 'marketSupply')) delete ctx.world.marketSupply;

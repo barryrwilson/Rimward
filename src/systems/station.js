@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rememberMarket, bestRememberedPrices } from '../game/price-memory.js';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
 import { claimedHullsOf } from '../game/derelict.js';
@@ -5653,6 +5654,12 @@ export function initStation(ctx) {
 
   function renderMarket(panel) {
     try {
+      const sellQuotes = {};
+      for (const key of COMMODITY_KEYS) {
+        try { sellQuotes[key] = tradeFillUnit(key, false); }
+        catch { /* One unavailable quote must not hide the other market rows. */ }
+      }
+      if (!panel.capture) rememberMarket(ctx, sellQuotes);
       h('div', 'screen-sub', panel, 'MARKET — buy price and sell price');
       renderSeedPapers(panel);
       const table = h('div', 'market-table', panel);
@@ -5665,11 +5672,11 @@ export function initStation(ctx) {
       COMMODITY_KEYS.forEach((key, i) => {
         if (typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)) return;
         const com = COMMODITIES[key];
-        if (com == null || typeof com !== 'object') return;
+        if (com == null || typeof com !== 'object' || !Object.hasOwn(sellQuotes, key)) return;
         try {
           const sel = i === ui.marketSel ? ' market-row-sel' : '';
           const buyUnit = tradeFillUnit(key, true);
-          const sellUnit = tradeFillUnit(key, false);
+          const sellUnit = sellQuotes[key];
           const split = cargoSplit(ctx, key, holdUnits(ctx, key));
           const hold = split.consigned > 0
             ? `${split.held} (${splitLabel(split)})`
@@ -5703,6 +5710,23 @@ export function initStation(ctx) {
           return;
         }
       });
+      const memoryToggle = btn(panel, ui.priceMemoryOpen ? 'Hide remembered sell prices' : 'Show remembered sell prices', () => {
+        ui.priceMemoryOpen = !ui.priceMemoryOpen;
+        render();
+      });
+      memoryToggle.id = 'market-memory-toggle';
+      memoryToggle.setAttribute?.('aria-expanded', String(!!ui.priceMemoryOpen));
+      memoryToggle.setAttribute?.('aria-controls', 'market-memory');
+      if (ui.priceMemoryOpen) {
+        const memory = h('div', 'market-memory', panel);
+        memory.id = 'market-memory';
+        h('div', 'screen-note', memory, 'BEST REMEMBERED SELL ELSEWHERE — last seen, not guaranteed now.');
+        const best = bestRememberedPrices(ctx.world);
+        for (const key of COMMODITY_KEYS) {
+          const row = best[key];
+          h('div', 'market-memory-row', memory, `${COMMODITIES[key].name}: ${row ? `${row.sell} UU · ${row.station}, ${row.age}` : 'No remembered price elsewhere'}`);
+        }
+      }
       h('div', 'screen-legend', panel, '↑/↓ select · Q/W buy 1/5 · A/S sell 1/5');
       h('div', 'screen-note', panel,
         'Stock replenishes in simulation time; empty to full in 20 minutes. Sales accepted even when stock is full.');
@@ -7084,7 +7108,7 @@ export function initStation(ctx) {
     releaseBulkHold();
     if (ui.service !== 'market' || !ctx.flags.docked) ui.bulk = null;
     const focused = document.activeElement;
-    const focusId = focused?.id?.startsWith('market-bulk-') ? focused.id : null;
+    const focusId = focused?.id?.startsWith('market-bulk-') || focused?.id === 'market-memory-toggle' ? focused.id : null;
     const range = focused?.id === 'market-bulk-quantity'
       ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
     const oldPanel = renderedPanel;
