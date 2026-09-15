@@ -15823,6 +15823,12 @@ removeLiveShip(w42indyCtx, w42indy);
     again76.need = 5;
     again76.deadline = ctx.world.time + 600;
     ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
+    // Issue 182: a delivery pays for goods that ARRIVED with the ship, so the
+    // replacement row is run in from a berth that carries them, not filled from
+    // the hold mid-berth. What this pin asserts — the slot is replaced again on
+    // a SECOND completion — is unchanged.
+    if (ctx.flags.docked) undockStation();
+    dockAtCurrentStation('wave76 redock deliver again');
   }
   tick(40, 'wave76 deliver again');
   const againReplaced76 = !!(againId76
@@ -16647,6 +16653,33 @@ removeLiveShip(w42indyCtx, w42indy);
   if (!Object.values(w181).every(Boolean)) {
     console.log('WAVE181 SAME BERTH FAIL');
     if (!w181.ran) console.log((run181.stderr || '').slice(-1200));
+    errors++;
+  }
+}
+
+// ---- WAVE182: delivery cargo must arrive with the ship (issue 182) ----
+// Runtime, not source text: the focused regression re-runs its berths in a
+// subprocess on real booted systems. It docks empty, buys the destination
+// market's own stock through the public desk action, and reports what the real
+// delivery tick did — then repeats the run with the goods actually carried in.
+{
+  const here182 = dirname(fileURLToPath(import.meta.url));
+  const run182 = spawnSync(process.execPath,
+    // `--import` takes a URL, and a Windows absolute path parses as the `c:`
+    // protocol (ERR_UNSUPPORTED_ESM_URL_SCHEME). The script path stays plain.
+    ['--import', pathToFileURL(join(here182, 'with-css-stub.mjs')).href,
+      join(here182, 'issue-182-arrival-cargo-test.mjs'), '--boot-pin'],
+    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const line182 = (run182.stdout || '').split('\n').find((l) => l.startsWith('WAVE182 '));
+  const w182 = line182 ? JSON.parse(line182.slice(8)) : { ran: false };
+  w182.ran = run182.status === 0 && !!line182;
+  // The manifest is berth-scoped session state: no save field, no world field.
+  const src182 = readFileSync(join(here182, '..', 'src/game/save.js'), 'utf8');
+  w182.noPersistedManifest = !/arrivalHold|arrivedUnits|arrivalNotices/.test(src182);
+  console.log('wave182 arrival cargo:', JSON.stringify(w182));
+  if (!Object.values(w182).every(Boolean)) {
+    console.log('WAVE182 ARRIVAL CARGO FAIL');
+    if (!w182.ran) console.log((run182.stderr || '').slice(-1200));
     errors++;
   }
 }

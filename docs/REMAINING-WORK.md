@@ -27,6 +27,38 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#182](https://github.com/barryrwilson/Rimward/issues/182) is implemented
+on the isolated `codex/issue-182-arrival-cargo` candidate: a delivery pays for a
+run, not for an errand at the far market. Docking empty at a destination and
+buying that dock's own stock no longer settles a trade agreement or the unique
+`haul-provisions` consignment. Each berth visit takes one shared arrival
+manifest — what the hold actually carried the moment the hull berthed — and
+every unit that leaves the hold spends it down through `removeCargo`, whatever
+took it: a trade delivery, the unique consignment, a ferry consignment, a mining
+delivery or a market sale. A trade row and the consignment must therefore find
+their units both aboard AND still on the manifest, so a sold-and-rebought unit
+cannot be reused and two competing agreements cannot claim the same five units.
+Goods that really arrived still settle exactly as before, and issue #181's
+same-berth batch and its consignment-first order are preserved. The desk states
+the one refusal in plain words — the goods must arrive with the ship — once per
+agreement per berth, so the half-second delivery tick cannot spam it.
+
+Scope held: this is the dock snapshot the issue allows, in the narrow per-berth
+shape the coordinator selected. The manifest is module-scoped session state —
+no new persisted field, no save-schema change, no stamp on a commodity row, and
+no new UI surface, key or equipment. The limitation that follows is stated rather
+than hidden: the manifest is taken at dock, dropped at launch, and re-taken fresh
+on the next dock, so a redock re-reads the hold as it then stands. A save
+reloaded while docked never runs the berth's dock path, so the delivery tick
+takes a fresh manifest from the restored hold the same way — a player who buys at
+the dock, saves and reloads inside that berth can still settle the run. Carrying
+the fact across a launch or a reload would need broader persisted provenance
+tracking, which is outside this issue's selected scope.
+
+Focused regression is `npm run test:arrival-cargo`; boot adds a runtime
+`WAVE182` pin; the browser pass is `npm run test:arrival-cargo-live`. Independent
+QA is pending; this is not a merge or deployment claim.
+
 Issue [#181](https://github.com/barryrwilson/Rimward/issues/181) is implemented
 on the isolated `codex/issue-181-same-berth-settlement` candidate: a delivered
 unique consignment no longer fences the berth it paid in. `haul-provisions` is
@@ -38,11 +70,12 @@ is named on the desk row and in `observe().jobs.active[].holdReason`, derived pe
 read with no new persisted field. Destination, commodity, deadline and
 idempotence checks are unchanged, and the shared fence helper still guards survey
 filing, chain steps and the generic accepted branch; freeing those kinds is a
-separate question. Destination-purchase provenance stays parked in
-[#182](https://github.com/barryrwilson/Rimward/issues/182) and is untouched here. See [the policy section](PassengerCommitmentPolicyDesign.md).
+separate question. Destination-purchase provenance was parked at the
+time and is now answered by
+[#182](https://github.com/barryrwilson/Rimward/issues/182), above. See [the policy section](PassengerCommitmentPolicyDesign.md).
 Focused regression is `npm run test:same-berth`; boot adds `WAVE181`; the browser
-pass is `npm run test:same-berth-live`. Independent QA is pending; this is not a
-merge or deployment claim.
+pass is `npm run test:same-berth-live`. Merged as
+[PR #191](https://github.com/barryrwilson/Rimward/pull/191).
 
 Issue [#176](https://github.com/barryrwilson/Rimward/issues/176) is implemented
 on the isolated `codex/issue-176-two-gate-jobs` candidate: every authored

@@ -2083,8 +2083,72 @@ export function addCargo(ctx, commodity, units) {
   }
   ctx.cargo.push({ commodity, units });
 }
+// ------------------------------------------- issue 182: arrival manifest ----
+// A delivery is a HAUL: the goods have to arrive with the ship. Before this,
+// docking empty and buying the destination market's own stock filled a trade
+// agreement or the unique `haul-provisions` consignment on the spot, so the
+// berth paid a delivery margin on goods that never crossed a gate.
+//
+// `arrivalHold` is what the hold actually carried the moment the hull berthed —
+// the dock snapshot the issue allows, in the narrow per-berth shape the
+// coordinator selected. It is module-scoped session state: no save field, no
+// world field, no stamp on any commodity row. Every unit that leaves the hold
+// while docked — a delivery, a consignment, a market sale, a reclaim — spends
+// the arrival manifest down through `removeCargo`, so a sold-and-rebought unit
+// and two competing agreements can never claim the same entitlement twice.
+// Anything bought at the dock adds to the hold and NOT to the manifest.
+//
+// Limitation of this bounded shape, stated plainly: the manifest lives only for
+// the berth visit. It is taken at dock, dropped at launch, and re-taken fresh on
+// the next dock — so a redock always re-reads the hold as it then stands. A save
+// reloaded while docked never ran `dock()`, so the delivery tick takes a fresh
+// manifest from the restored hold the same way. A player who buys at the dock,
+// saves and reloads inside that berth therefore still settles the run. Carrying
+// the fact across a launch or a reload would need broader persisted provenance
+// tracking, which is outside this issue's selected scope.
+let arrivalHold = null;
+
+/** Snapshot the hold as the arrival manifest for THIS berth visit. */
+function captureArrivalHold(ctx) {
+  const snap = new Map();
+  const rows = Array.isArray(ctx?.cargo) ? ctx.cargo : [];
+  for (const c of rows) {
+    if (!c || isSurvivorCargo(c) || typeof c.commodity !== 'string') continue;
+    const n = Number(c.units);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    snap.set(c.commodity, (snap.get(c.commodity) ?? 0) + n);
+  }
+  arrivalHold = snap;
+}
+
+function clearArrivalHold() {
+  arrivalHold = null;
+}
+
+/** Units of `commodity` that are BOTH still aboard and arrived with the ship.
+ * Clamped to the live hold, so a wholesale hold swap (hangar, restore, rewind)
+ * can never leave the manifest promising more than the ship is carrying. With
+ * no manifest (in flight) this is just the hold. */
+function arrivedUnits(ctx, commodity) {
+  const have = holdUnits(ctx, commodity);
+  if (!arrivalHold) return have;
+  const n = arrivalHold.get(commodity);
+  return Math.min(have, Number.isFinite(n) && n > 0 ? n : 0);
+}
+
+/** Spend the arrival manifest as goods leave the hold, whatever took them. */
+function spendArrivedUnits(commodity, units) {
+  if (!arrivalHold || !(units > 0)) return;
+  const have = arrivalHold.get(commodity);
+  if (!Number.isFinite(have) || have <= 0) return;
+  const left = have - units;
+  if (left > 0) arrivalHold.set(commodity, left);
+  else arrivalHold.delete(commodity);
+}
+
 export function removeCargo(ctx, commodity, units) {
   if (commodity === 'survivor') return;
+  spendArrivedUnits(commodity, units);
   for (let i = 0; i < ctx.cargo.length; i++) {
     const c = ctx.cargo[i];
     if (isSurvivorCargo(c) || c.commodity !== commodity) continue;
@@ -2532,6 +2596,28 @@ function destPayHeldForUniqueHaul(ctx, ui, jobs) {
 // parties and every other delivery for this dock settle in the same berth.
 function uniqueHaulReserved(jobs, commodity) {
   return commodity === 'provisions' && uniqueHaulIsOpen(jobs) ? HAUL_UNITS : 0;
+}
+
+// Issue 182: units that this agreement may actually spend — aboard AND arrived
+// with the ship, less anything the unique consignment still holds (issue 181).
+function deliverableUnits(ctx, jobs, commodity) {
+  return arrivedUnits(ctx, commodity) - uniqueHaulReserved(jobs, commodity);
+}
+
+/** Issue 182: the one bounded desk line for "you bought these here".
+ * The goods ARE in the hold and the berth is the named dock, but they did not
+ * arrive with the ship, so the run was never made. The throttled delivery tick
+ * runs twice a second, so each agreement says this once per berth visit. */
+let arrivalNoticePending = false;
+function noteArrivalShort(ui, job, commodity) {
+  if (!ui || !job || typeof job.id !== 'string') return false;
+  if (!(ui.arrivalNotices instanceof Set)) ui.arrivalNotices = new Set();
+  if (ui.arrivalNotices.has(job.id)) return false;
+  ui.arrivalNotices.add(job.id);
+  const name = Object.hasOwn(COMMODITIES, commodity) ? COMMODITIES[commodity].name : 'The cargo';
+  ui.notice = `Delivery unpaid — ${name} must arrive with the ship. Dockside stock bought here does not fill the run.`;
+  arrivalNoticePending = true;
+  return true;
 }
 
 // The one bounded reason an otherwise eligible trade delivery has not paid: the
@@ -4236,6 +4322,14 @@ function tickDeliveryJobs(ctx, ui, render) {
   let boardDirty = false;
   let settled = false;
   const huntPaidNames = new Set();
+  arrivalNoticePending = false;
+  // Issue 182: the arrival manifest is normally taken by dock() itself. A berth
+  // the berth code never opened (a restored session that comes up docked) has
+  // none, so take a fresh manifest from the hold as it stands — before the first
+  // settlement of this pass measures it. Out of the berth there is no manifest
+  // at all; `undock` drops it and this is the belt-and-braces for any other way
+  // the hull leaves.
+  if (ctx.flags.docked) { if (!arrivalHold) captureArrivalHold(ctx); } else clearArrivalHold();
   // Issue 181: the unique consignment settles BEFORE any ordinary delivery in
   // this pass, whatever its index. Its five Provisions leave the hold first, so
   // a trade row for the same commodity is measured against what is actually
@@ -4413,7 +4507,14 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (!Number.isInteger(need) || need !== HAUL_UNITS) continue;
       // Issue 181: only the unique consignment's own five Provisions are held
       // back. Anything else aboard settles in this berth, in this pass.
-      if (holdUnits(ctx, commodity) - uniqueHaulReserved(jobs, commodity) < need) continue;
+      // Issue 182: and the units must have ARRIVED with the ship — stock bought
+      // at this very market is in the hold but was never hauled anywhere.
+      if (deliverableUnits(ctx, jobs, commodity) < need) {
+        if (holdUnits(ctx, commodity) - uniqueHaulReserved(jobs, commodity) >= need) {
+          noteArrivalShort(ui, job, commodity);
+        }
+        continue;
+      }
       job.state = 'failed';
       removeCargo(ctx, commodity, need);
       const base = tradeRunBase(ctx, job);
@@ -4805,6 +4906,11 @@ function tickDeliveryJobs(ctx, ui, render) {
     }
   }
   if (boardDirty) maybeRefreshJobsBoard(ctx, ui, render);
+  // Issue 182: a freshly latched arrival notice is drawn now rather than waiting
+  // on the one-second berth refresh. It latches once per agreement per berth, so
+  // this cannot turn into a per-frame render.
+  else if (arrivalNoticePending && ui?.open && typeof render === 'function') render();
+  arrivalNoticePending = false;
   // Arrival saved before this throttled pass. Persist only after all payout,
   // cargo, reputation, contact and replacement-row mutations are complete.
   if (settled && ctx.flags.docked) requestAutosave(ctx);
@@ -4830,6 +4936,13 @@ function settleHaulJob(ctx, ui, jobs, job) {
   // job stays undeliverable — it can never pay at origin.
   if (ctx.world.currentSystem !== dest || dest === origin) return false;
   if (holdUnits(ctx, 'provisions') < HAUL_UNITS) return false;
+  // Issue 182: a consignment is a run, not an errand at the far market. The five
+  // Provisions have to be the ones that arrived with the ship; buying the
+  // destination's own stock after docking empty no longer pays the 140% margin.
+  if (arrivedUnits(ctx, 'provisions') < HAUL_UNITS) {
+    noteArrivalShort(ui, job, 'provisions');
+    return false;
+  }
   removeCargo(ctx, 'provisions', HAUL_UNITS);
   const unitCost = job.originPrice || priceOf(ctx, 'provisions');
   const reward = job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
@@ -4925,6 +5038,9 @@ export function initStation(ctx) {
     seedPending: false,
     seedBusy: false,
     uniqueHaulPaid: false,
+    // Issue 182: agreements already told, this berth, that their goods did not
+    // arrive with the ship. Session-only; reset on every dock.
+    arrivalNotices: new Set(),
     justDocked: false,
   };
 
@@ -7181,6 +7297,10 @@ export function initStation(ctx) {
     applyBerthFlight(ctx, null);
     applyBerthInput(ctx, 'dock');
     ctx.flags.docked = true;
+    // Issue 182: the arrival manifest for THIS berth visit, taken the moment the
+    // hull berths and before any settlement tick or market action can run. A
+    // redock always starts a fresh one; nothing about it is persisted.
+    captureArrivalHold(ctx);
     displayedHaulQuotes.clear(); // no quote from an earlier berth visit
     ui.open = true;
     ui.bulk = null;
@@ -7203,6 +7323,7 @@ export function initStation(ctx) {
     ui.seedPending = false;
     ui.seedBusy = false;
     ui.uniqueHaulPaid = false;
+    ui.arrivalNotices = new Set(); // issue 182: one arrival line per row per berth
     ui.justDocked = true;
     // leftover throttle must not deliver during dock settle
     jobTick = 0;
@@ -7303,6 +7424,7 @@ export function initStation(ctx) {
     if (!applyBerthFlight(ctx, plan)) return hold('no-service', '');
 
     ctx.flags.docked = false;
+    clearArrivalHold(); // issue 182: the manifest belongs to the berth we just left
     displayedHaulQuotes.clear();
     ui.open = false;
     ui.service = null;

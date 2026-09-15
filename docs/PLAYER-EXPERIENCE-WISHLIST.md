@@ -1792,13 +1792,28 @@ independent Claude QA passed the initial artifact `303fdc8` on 2026-09-08.
 Final follow-up review is recorded with the pull request. These are not new
 natural-flight benchmarks.
 
+**Delivery cargo must arrive with the ship (#182, 2026-09-15):** A delivery
+agreement used to pay out on goods bought at the destination market moments
+after docking empty, so a trade run and the unique consignment could be settled
+without ever carrying anything anywhere. A berth now measures each delivery
+against one shared arrival manifest: what the hold actually carried when the
+hull berthed, spent down as goods leave for any reason. Goods that really made
+the run pay exactly as before; dockside stock does not, a part-bought run does
+not, and selling the arrived cargo and buying it straight back does not. The
+desk says so in plain words. The manifest is berth-scoped session state with no
+new persisted field, so a redock or a save reloaded inside the berth reads a
+fresh manifest from the hold as it then stands — that gap is named, not hidden,
+and closing it would need broader persisted provenance tracking. Implemented on
+an isolated candidate; independent QA is pending. These are not new
+natural-flight benchmarks.
+
 **Same-berth settlement (#181, 2026-09-15):** A delivered unique consignment
 used to hold every other delivery for the dock the player was standing in until
 they launched and re-docked, and neither the desk nor the Agent API said why.
 Every eligible delivery for a dock now settles in that same berth. The unique
 cargo still has first claim on the five Provisions it was quoted on; when that
-is what is holding a row, the row says so. These are not new natural-flight
-benchmarks.
+is what is holding a row, the row says so. Merged as PR #191. These are not new
+natural-flight benchmarks.
 
 **Two-gate transport (#176, 2026-09-14):** Trade, ferry and passenger postings
 used to name the adjacent authored system only, so multi-hop play existed only
