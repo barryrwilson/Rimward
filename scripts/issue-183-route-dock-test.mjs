@@ -240,5 +240,127 @@ const report = {};
   report.twoHop = { from, midway, dest: twoHop, elapsed: Number(elapsed.toFixed(1)) };
 }
 
+// ---- 5. A REFUSED raw request never cancels the wish (natural window) ----
+// Straight after a jump the fade still owns the gate, so a `setControl` in
+// that window is refused 'jumping'. A refusal changed no ownership, so the
+// queued intent must survive it and still take the berth.
+{
+  nav.undockStation();
+  assert.equal(ctx.flags.docked, false, 'launched for the refusal leg');
+  tick(60);
+
+  const from = ctx.world.currentSystem;
+  const oneHop = Object.keys(SYSTEMS).find((id) => {
+    const path = nav.routePath(from, id);
+    return path && path.length === 2 && SYSTEMS[id].station;
+  });
+  assert.ok(oneHop, 'the galaxy offers a one-hop destination');
+
+  assert.equal(act('plotRoute', { dest: oneHop }).ok, true);
+  assert.equal(act('engageAutopilot').ok, true);
+  assert.equal(act('approachDock').status, 'queued');
+
+  let refused = null;
+  const elapsed = flyUntil(() => ctx.flags.docked === true, 150, () => {
+    if (refused === null
+      && ctx.world.currentSystem === oneHop
+      && ctx.gate.jumping === true
+      && ctx.autopilot.engaged === false
+      && queuedDock() === oneHop) {
+      refused = act('setControl', { seq: 101, ttl: 5, throttle: 0.5 });
+    }
+  });
+
+  assert.ok(refused, 'the arrival really opened a waiting handoff window');
+  assert.equal(refused.ok, false, 'the jump fade refuses a raw lease');
+  assert.equal(refused.token, 'jumping');
+  assert.equal(ctx.flags.docked, true, `a refused request left the wish alive (${elapsed.toFixed(1)}s)`);
+  assert.equal(ctx.world.currentSystem, oneHop);
+  assert.equal(ctx.station.name, stationName(oneHop));
+
+  report.refusedKeepsWish = { dest: oneHop, elapsed: Number(elapsed.toFixed(1)) };
+}
+
+// ---- 6. An ACCEPTED raw lease retires the wish for good -------------------
+// The waiting handoff runs with no helm engaged, so a raw control lease taken
+// in that window owns propulsion. The wish must stand down permanently — the
+// berth coming up later, or the lease expiring first, may never take the ship
+// back from that owner. The pending window is held open here by a destination
+// station that is not ready yet; the handoff itself is the production one.
+//
+// Imported after section 1 on purpose: against pre-#183 source this file must
+// fail on the queue assertion there, not on a missing module.
+{
+  const { armPendingDock, queuedDockDest, clearQueuedDock } =
+    await import('../src/game/dock-queue.js');
+
+  nav.undockStation();
+  assert.equal(ctx.flags.docked, false, 'launched for the raw-lease boundaries');
+  tick(60);
+
+  const here = ctx.world.currentSystem;
+  const berthName = stationName(here);
+  const HOLD = 'issue183 berth not ready';
+
+  /** A waiting handoff whose destination berth has not come up yet. */
+  const holdPendingWindow = () => {
+    act('clearControl');
+    clearQueuedDock();
+    ctx.station.name = HOLD;
+    armPendingDock(here, ctx.world.time + 20);
+    tick(2);
+    assert.equal(queuedDockDest(), here, 'the handoff is waiting on the berth');
+    assert.equal(ctx.autopilot.engaged, false, 'and no helm owns the ship');
+  };
+  const releaseBerth = (frames) => {
+    ctx.station.name = berthName;
+    tick(frames);
+  };
+  // ap.mode keeps its last label after a disengage, so ownership is the pair.
+  const dockHelmOwns = () => ctx.autopilot.engaged === true && ctx.autopilot.mode === 'dock';
+
+  // Raw throttle: accepted, so the wish is retired the moment the lease is.
+  holdPendingWindow();
+  const throttleLease = act('setControl', { seq: 201, ttl: 1, throttle: 0.5 });
+  assert.equal(throttleLease.ok, true, 'a raw throttle lease is accepted here');
+  assert.equal(throttleLease.owner, 'manual');
+  assert.equal(queuedDockDest(), '', 'an accepted raw lease retires the wish at once');
+  // The berth comes up AND the short lease expires: nothing may take over.
+  releaseBerth(150);
+  assert.equal(obs().control.owner, 'none', 'the raw lease has since expired');
+  assert.equal(dockHelmOwns(), false, 'the retired wish never came back');
+  assert.equal(ctx.flags.docked, false);
+  assert.equal(queuedDock(), '');
+
+  // Subtle steering is ownership too: 0.1 is well under the reticle break.
+  holdPendingWindow();
+  const steerLease = act('setControl', { seq: 202, ttl: 5, steerX: 0.1 });
+  assert.equal(steerLease.ok, true, 'a light steering lease is accepted here');
+  assert.equal(queuedDockDest(), '', 'a subtle steer retires the wish too');
+  releaseBerth(30);
+  assert.equal(dockHelmOwns(), false, 'and the handoff stays stood down');
+
+  // An explicit hand-back ends the wish with everything else.
+  holdPendingWindow();
+  assert.equal(act('clearControl').ok, true);
+  assert.equal(queuedDockDest(), '', 'clearControl retires the wish');
+  releaseBerth(30);
+  assert.equal(dockHelmOwns(), false, 'and the handoff stays stood down');
+
+  // A REFUSED raw request changed no ownership, so the wish survives it and
+  // the handoff still takes the berth the moment it comes up.
+  holdPendingWindow();
+  const badLease = act('setControl', { seq: 203, ttl: 5, throttle: 5 });
+  assert.equal(badLease.ok, false, 'an out-of-range throttle is refused');
+  assert.equal(badLease.token, 'bad-throttle');
+  assert.equal(queuedDockDest(), here, 'a refused request leaves the wish alone');
+  releaseBerth(3);
+  assert.equal(dockHelmOwns(), true, 'and the handoff still takes the helm');
+  assert.equal(queuedDock(), '', 'the wish is consumed by that handoff');
+  assert.equal(act('cancelAutopilot').ok, true);
+
+  report.rawOwnership = 'ok';
+}
+
 console.log('ISSUE183 RESULT', JSON.stringify(report));
 console.log('PASS issue183 a queued approachDock rides a plotted route to the destination berth');

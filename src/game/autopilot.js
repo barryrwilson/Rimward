@@ -14,7 +14,7 @@ import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
 import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
-import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop, markAgentHelm } from '../systems/controls.js';
+import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop, markAgentHelm, agentControlStatus } from '../systems/controls.js';
 import {
   queueDockAt,
   armPendingDock,
@@ -508,7 +508,9 @@ export function tryApproachDock(ctx) {
  */
 
 // Sim seconds the handoff may spend waiting for the destination berth to come
-// up after arrival. A station that never appears cancels rather than coasts.
+// up after arrival. A station that never appears retires the intent, so the
+// wish cannot sit open forever. It does not change the hull's arrival drift:
+// the pilot is left coasting exactly as an unqueued arrival leaves them.
 const DOCK_QUEUE_GRACE = 20;
 
 // Tokens the handoff re-tries: each one clears on its own within a moment of
@@ -580,6 +582,17 @@ export function queueApproachDock(ctx) {
  * system order), so the grace window is only for an arrival the destination
  * station is not up for yet — a jump fade still running, for instance.
  */
+/** True while a raw control lease (manual or combat) owns propulsion. */
+function rawOwnerActive(ctx) {
+  try {
+    const control = agentControlStatus(ctx);
+    return !!(control && typeof control.owner === 'string' && control.owner !== 'none');
+  } catch {
+    // Unreadable ownership is not a licence to take the helm.
+    return true;
+  }
+}
+
 function armQueuedDock(ctx, dest) {
   const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
   armPendingDock(dest, now + DOCK_QUEUE_GRACE);
@@ -604,13 +617,21 @@ function queuedDockTick(ctx) {
 /**
  * Success is the ordinary tryApproachDock takeover; the wish is consumed
  * either way, so it can never resurrect on a later route, even one plotted to
- * the same destination. A berth that never comes up cancels at the deadline
- * rather than leaving the hull coasting on an open intent.
+ * the same destination. A berth that never comes up retires the intent at the
+ * deadline; the hull's arrival drift is left exactly as it is today.
  */
 function runPendingDock(ctx) {
   const dest = pendingDockDest();
   if (!dest) return;
   if (!ctx.world || ctx.world.currentSystem !== dest) {
+    clearQueuedDock();
+    return;
+  }
+  // Issue #183 QA: a raw control lease owns propulsion the moment it is
+  // granted. agent-api retires the wish as the lease is accepted; this is the
+  // belt-and-braces reading of live ownership, so a waiting handoff can never
+  // take the ship out from under an owner it was not handed by.
+  if (rawOwnerActive(ctx)) {
     clearQueuedDock();
     return;
   }

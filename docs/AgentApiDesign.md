@@ -44,14 +44,19 @@ route's final system the route lease disengages as before (the
 `autopilotDisengaged` receipt with reason `arrive` is unchanged), and the
 **same** cruise/stage/corridor/settle controller described above takes the
 berth. The handoff waits for the jump fade and for the destination station to
-be rebuilt, and cancels after 20 s if that berth never comes up, so a wish can
-never leave the hull coasting on an open intent.
+be rebuilt, and retires the intent after 20 s if that berth never comes up so
+the wish cannot sit open forever. The hull's arrival drift is unchanged: the
+pilot is left coasting exactly as an unqueued arrival leaves them.
 
 The wish is session-only: it is never saved, never restored, and never rides a
 later route — not even one plotted to the same destination. It ends on any of
 `cancelAutopilot`, the Escape human takeover, a manual helm break, any other
-autopilot cancellation, `clearRoute`, and any `plotRoute` (a same-destination
-replot included). Refusals fail closed: anything that is not a live multi-hop
+autopilot cancellation, `clearRoute`, any `plotRoute` (a same-destination
+replot included), an **accepted** `setControl`, and `clearControl`. An accepted
+raw lease retires the wish permanently — a handoff still waiting on the berth
+can never take the ship back from that owner, and the wish stays retired after
+that lease expires. A **refused** `setControl` changed no ownership and leaves
+the wish alone. Refusals fail closed: anything that is not a live multi-hop
 route lease answers `autopilot` exactly as before, a repeat while the dock
 helm is already flying still answers `autopilot`, and `docked`, `paused`,
 `held`, `jumping`, `match`, `drift`, `automine` and `flee` refuse at queue

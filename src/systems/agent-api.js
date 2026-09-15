@@ -8,6 +8,7 @@
 import { COMMODITIES } from '../game/state.js';
 import { tradeQty } from '../game/trade-order.js';
 import { plotRoute, clearRoute, sanitizeSystemId } from '../game/nav.js';
+import { clearQueuedDock } from '../game/dock-queue.js';
 import {
   tryEngage,
   tryApproachDock,
@@ -591,6 +592,13 @@ function dispatchLive(ctx, name, args) {
     // Issue #118: the token stays the enum; detail names the failing field or
     // the precondition (no sample yet, wrong lock kind, stale lock).
     if (token) return fail(ctx, name, token, undefined, agentRefusalDetail());
+    // Issue #183 QA: an ACCEPTED raw lease is the pilot taking the ship in
+    // hand. It permanently retires a queued dock intent, so a handoff still
+    // waiting on the destination berth can never come back and steal the
+    // lease — including after the lease itself expires. A REFUSED request
+    // changed no ownership and leaves the wish alone, which is why this runs
+    // only past the token check above.
+    clearQueuedDock();
     const result = actResult({ ok: true, error: '', name, token: '', status: 'active' });
     const control = agentControlStatus(ctx);
     result.seq = control.seq; result.owner = control.owner;
@@ -598,6 +606,9 @@ function dispatchLive(ctx, name, args) {
   }
   if (name === 'clearControl') {
     agentControlClear(ctx);
+    // An explicit hand-back ends the queued dock intent with everything else
+    // the agent was holding; nothing may resurrect afterwards.
+    clearQueuedDock();
     const result = actResult({ ok: true, error: '', name, token: '', status: 'cleared' });
     const control = agentControlStatus(ctx);
     result.seq = control.seq; result.owner = control.owner;
