@@ -133,6 +133,12 @@ one-hop and a two-hop case and runs as a checked child of `npm run test:boot`;
 its queue pins fail on the pre-fix source. Independent QA and live browser
 validation remain pending; this is not a merge or deployment claim.
 
+Issue [#185](https://github.com/barryrwilson/Rimward/issues/185) is implemented
+on `codex/issue-185-dock-receipts`: successful docking no longer produces an
+in-range `dock-range` miss or the helm's own already-docked refusal. Manual
+out-of-range and explicit already-docked refusals remain. See
+[evidence](Issue185DockReceiptsEvidence.md); independent review remains pending.
+
 Issue [#184](https://github.com/barryrwilson/Rimward/issues/184) is implemented
 on `codex/issue-184-station-touch`: in the dock autopilot `stage` and `settle`
 phases only, a `bodyHit` row against the station with `damage === 0` and a

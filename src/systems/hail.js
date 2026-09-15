@@ -525,6 +525,9 @@ function emitDockJumpMiss(ctx) {
     } catch {
       stationDist = NaN;
     }
+    // Hail updates before station consumes the dock pulse. An in-range
+    // request is not a range miss; station owns its docking receipt.
+    if (Number.isFinite(stationDist) && stationDist <= U.DOCK_RANGE) return;
     let gateDist = NaN;
     let gateTo = null;
     try {
