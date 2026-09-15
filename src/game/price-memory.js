@@ -39,6 +39,10 @@ export function rememberedPrices(world, id) {
   if (typeof id !== 'string' || !Object.hasOwn(SYSTEMS, id)) return [];
   const entry = normalizePriceMemory(world?.priceMemory, world?.time)[id];
   if (!entry) return [];
+  return priceRows(world, id, entry);
+}
+
+function priceRows(world, id, entry) {
   const ageSeconds = Math.max(0, clock(world?.time) - entry.at);
   return Object.entries(entry.prices).map(([commodity, sell]) => ({
     commodity, systemId: id, station: SYSTEMS[id].station?.name || SYSTEMS[id].name,
@@ -48,9 +52,9 @@ export function rememberedPrices(world, id) {
 
 export function bestRememberedPrices(world) {
   const best = {};
-  for (const id of Object.keys(normalizePriceMemory(world?.priceMemory, world?.time))) {
+  for (const [id, entry] of Object.entries(normalizePriceMemory(world?.priceMemory, world?.time))) {
     if (id === world?.currentSystem) continue;
-    for (const { commodity, ...row } of rememberedPrices(world, id)) {
+    for (const { commodity, ...row } of priceRows(world, id, entry)) {
       const previous = best[commodity];
       if (!previous || row.sell > previous.sell || (row.sell === previous.sell && row.at > previous.at)) {
         best[commodity] = row;

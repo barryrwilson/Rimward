@@ -19,6 +19,11 @@ check('best historical sell excludes current, prefers newer ties, and ages in si
   assert.equal(row.systemId,'veridian'); assert.equal(row.age,'12 min ago'); assert.equal(row.ageSeconds,720);
   assert.equal(row.station,SYSTEMS.veridian.station.name);
   assert.deepEqual(rememberedPrices(world,'hollowreach'),[]);
+  world.priceMemory.redmarch.at=60;
+  const stableFirst=Object.keys(SYSTEMS).find(id=>id==='veridian'||id==='redmarch');
+  assert.equal(bestRememberedPrices(world).provisions.systemId,stableFirst,'equal-price/equal-time tie uses stable system order');
+  world.priceMemory={redmarch:world.priceMemory.redmarch,veridian:world.priceMemory.veridian};
+  assert.equal(bestRememberedPrices(world).provisions.systemId,stableFirst,'save insertion order does not change a full tie');
 });
 seedBootRandom(174);
 const dom=installDomStubs();
@@ -59,6 +64,22 @@ check('pane and API share the captured remote quote, station and age',()=>{
  assert.equal(row.sell,first.prices.provisions);assert.equal(row.age,'12 min ago');assert.equal(row.at,100);
  const toggle=[...dom.walkDom(document.body)].find(n=>n.id==='market-memory-toggle');toggle.click();
  assert.ok([...dom.walkDom(document.body)].some(n=>n.className==='market-memory-row'&&n.textContent===`Provisions: ${row.sell} UU · ${row.station}, ${row.age}`));
+});
+check('one throwing quote leaves the other market rows and memory intact',()=>{
+ const prices=ctx.world.prices;
+ const descriptor=Object.getOwnPropertyDescriptor(prices,'wakeglass');
+ Object.defineProperty(prices,'wakeglass',{configurable:true,get(){throw new Error('unavailable quote fixture');}});
+ try {
+  ctx.stationDesk.selectService('market');
+  const cells=[...dom.walkDom(document.body)].filter(n=>String(n.className).split(' ').includes('market-cell'));
+  assert.ok(cells.some(n=>n.textContent===COMMODITIES.provisions.name));
+  assert.ok(!cells.some(n=>n.textContent===COMMODITIES.wakeglass.name));
+  assert.ok(Number.isSafeInteger(ctx.world.priceMemory.veridian.prices.provisions));
+  assert.ok(!Object.hasOwn(ctx.world.priceMemory.veridian.prices,'wakeglass'));
+ } finally {
+  if(descriptor)Object.defineProperty(prices,'wakeglass',descriptor);else delete prices.wakeglass;
+  ctx.stationDesk.selectService('market');
+ }
 });
 check('snapshots clone and restores retain history but legacy clears prior timeline',()=>{
  const saved=snapshot(ctx);const expected=copy(saved.world.priceMemory);

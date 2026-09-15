@@ -5654,7 +5654,11 @@ export function initStation(ctx) {
 
   function renderMarket(panel) {
     try {
-      const sellQuotes = Object.fromEntries(COMMODITY_KEYS.map(key => [key, tradeFillUnit(key, false)]));
+      const sellQuotes = {};
+      for (const key of COMMODITY_KEYS) {
+        try { sellQuotes[key] = tradeFillUnit(key, false); }
+        catch { /* One unavailable quote must not hide the other market rows. */ }
+      }
       if (!panel.capture) rememberMarket(ctx, sellQuotes);
       h('div', 'screen-sub', panel, 'MARKET — buy price and sell price');
       renderSeedPapers(panel);
@@ -5668,7 +5672,7 @@ export function initStation(ctx) {
       COMMODITY_KEYS.forEach((key, i) => {
         if (typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)) return;
         const com = COMMODITIES[key];
-        if (com == null || typeof com !== 'object') return;
+        if (com == null || typeof com !== 'object' || !Object.hasOwn(sellQuotes, key)) return;
         try {
           const sel = i === ui.marketSel ? ' market-row-sel' : '';
           const buyUnit = tradeFillUnit(key, true);
@@ -5709,7 +5713,6 @@ export function initStation(ctx) {
       const memoryToggle = btn(panel, ui.priceMemoryOpen ? 'Hide remembered sell prices' : 'Show remembered sell prices', () => {
         ui.priceMemoryOpen = !ui.priceMemoryOpen;
         render();
-        document.getElementById('market-memory-toggle')?.focus();
       });
       memoryToggle.id = 'market-memory-toggle';
       memoryToggle.setAttribute?.('aria-expanded', String(!!ui.priceMemoryOpen));
