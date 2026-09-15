@@ -27,6 +27,21 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#186](https://github.com/barryrwilson/Rimward/issues/186), owner decision
+2, is implemented on `codex/issue-186-trader-shipyard`: the larger cargo hull
+the yard already sells is made visible once the outfitter's two hold racks are
+spent. The maxed-rack note still reads the real capacity; below it, when that
+capacity is under `cargoHoldFor('freighter')`, the pane names the freighter's
+stock hold and the Shipyard Yard pane, or says this yard stocks no freighter and
+points at another dock. A maxed freighter is told nothing further. Yard cards
+and the confirm box read `cargoHoldFor` / `cargoHoldMax`, so a buyer sees the
+stock hold and the hold with racks before signing. No new hull, SKU, price,
+stock, standing rule, save field or key. Focused regression is
+`npm run test:bigger-hold`; `npm run build` and an unchanged `npm run test:boot`
+pass. This is a visibility outcome: the trader's UU ceiling and market
+liquidity are not claimed as solved. Live browser verification and independent
+QA are pending; this is not a merge or deployment claim.
+
 Issue [#175](https://github.com/barryrwilson/Rimward/issues/175), owner-selected
 Option B, is implemented on `codex/issue-175-counter-spread`: commodity sell
 fills are capped at 95% of the same counter's buy fill, rounded down to whole

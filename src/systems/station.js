@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import '../ui/screens.css';
 import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
 import { claimedHullsOf } from '../game/derelict.js';
+import { dockFactionOf, yardStockFor } from '../game/shipyard.js'; // issue #186: the outfitter names the yard that sells a bigger hold
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
@@ -6556,6 +6557,18 @@ export function initStation(ctx) {
     const row1 = h('div', 'screen-btnrow', panel);
     if (used >= CARGO_UPGRADE_MAX) {
       h('div', 'screen-note', row1, `Hold racks maxed out at ${ctx.cargoCapacity} units.`);
+      // Issue #186: the racks are spent, but a larger hull already exists in
+      // the yard catalog. Name the freighter's stock hold from the class data
+      // and name the desk that sells it. Text only: no new SKU, no hull, no
+      // navigation. A maxed freighter is already the big hold, so it gets
+      // nothing — never imply a bigger one.
+      const bigHold = cargoHoldFor('freighter');
+      if (ctx.cargoCapacity < bigHold) {
+        const stocked = yardStockFor(dockFactionOf(ctx)).includes('freighter');
+        h('div', 'screen-note', row1, stocked
+          ? `A freighter hull carries ${bigHold} units stock. This dock's yard has one: Shipyard, Yard pane.`
+          : `A freighter hull carries ${bigHold} units stock. This yard does not stock one — look for a Shipyard Yard pane at another dock.`);
+      }
     } else {
       btn(row1, `1 — Expand hold +${CARGO_UPGRADE_STEP} (${CARGO_UPGRADE_COST} UU) [${used}/${CARGO_UPGRADE_MAX}]`, act.buyCargoRack);
     }
