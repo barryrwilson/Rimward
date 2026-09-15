@@ -39,8 +39,14 @@ stock hold and the hold with racks before signing. No new hull, SKU, price,
 stock, standing rule, save field or key. Focused regression is
 `npm run test:bigger-hold`; `npm run build` and an unchanged `npm run test:boot`
 pass. This is a visibility outcome: the trader's UU ceiling and market
-liquidity are not claimed as solved. Live browser verification and independent
-QA are pending; this is not a merge or deployment claim.
+liquidity are not claimed as solved. Independent Codex QA passed implementation
+`15af18b9ad9d3cf04622c065e373d080a364eda0`: seven real headless Chrome
+screenshots were visually inspected, with clean console output. Purchase checks
+verified existing refusal gates and a 160-unit freighter with the expected debit.
+Browser checks used disclosed fixtures; they do not claim natural progression.
+Evidence: `out/issue-186-evidence/quinn-verdict.md`, `quinn-live/result.json` and
+`quinn-purchase/result.json` in the local evidence workspace. No merge or
+deployment is claimed.
 
 Issue [#175](https://github.com/barryrwilson/Rimward/issues/175), owner-selected
 Option B, is implemented on `codex/issue-175-counter-spread`: commodity sell
