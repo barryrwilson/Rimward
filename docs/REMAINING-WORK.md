@@ -27,6 +27,17 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#177](https://github.com/barryrwilson/Rimward/issues/177) is implemented
+on the isolated `codex/issue-177-consignment` candidate: a ferry's fronted
+Provisions are derived as consigned from the live contract, named in the hold
+total, the market pane, the bulk preview, the HUD meter and `observe()`, and
+kept out of every public sell path — `Sell All`, the row sell buttons, the
+keyboard sells and the `trade` action. No new persisted field is added and the
+short-landing settlement rule is unchanged. See
+[evidence](../reviews/issue-177-consignment-evidence.md). Independent QA is
+pending; this is not a merge or deployment claim. Delivery ordering between a
+haul and an aboard consignment remains a separate question.
+
 Issue [#173](https://github.com/barryrwilson/Rimward/issues/173) is implemented
 on `fix/issue-173-dock-cancel`: impact, blocked, and stale dock cancellations
 latch full stop unless hail or a combat lease owns the helm. The impact notice
