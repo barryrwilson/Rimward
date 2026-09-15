@@ -27,6 +27,14 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#173](https://github.com/barryrwilson/Rimward/issues/173) is implemented
+on `fix/issue-173-dock-cancel`: impact, blocked, and stale dock cancellations
+latch full stop unless hail or a combat lease owns the helm. The impact notice
+names hull contact. Real weapon projectiles remain distinct from physical
+contact; simultaneous contact still cancels. See [evidence](Issue173DockCancelEvidence.md).
+Independent review and publication remain pending; zero-damage contact policy
+belongs to #184.
+
 Issue [#172](https://github.com/barryrwilson/Rimward/issues/172) is implemented
 on the local `fix/issue-172-dock-sun` candidate; independent QA is pending.
 PR #180 already retained solar detours. This follow-up scans all valid planner

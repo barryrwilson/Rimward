@@ -861,6 +861,13 @@ function matchCycleCand(ctx, cands, id) {
 }
 
 /** Agent AP/AM engage: clear the double-tap F latch. Does not write throttle. */
+/** Shared human double-tap F command; controls remains the input owner. */
+export function commandFullStop(ctx) {
+  if (!ctx?.input) return;
+  ctx.input.throttle = 0;
+  ctx.input.fullStop = true;
+}
+
 export function agentClearFullStop(ctx) {
   try {
     if (!ctx || !ctx.input || typeof ctx.input !== 'object') return;
@@ -1305,8 +1312,7 @@ export function initControls(ctx) {
     else if (id === 'throttleDown') {
       const now = performance.now();
       if (now - lastFTapAt <= DOUBLE_TAP_MS) {
-        input.throttle = 0;
-        input.fullStop = true; // doc §5.1: double-tap commands FULL stop (not creep)
+        commandFullStop(ctx); // doc §5.1: double-tap commands FULL stop (not creep)
       }
       lastFTapAt = now;
     } else if (id === 'wpn1' || id === 'wpn2' || id === 'wpn3' || id === 'wpn4' || id === 'wpn5') {
