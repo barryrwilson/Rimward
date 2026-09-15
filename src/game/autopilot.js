@@ -255,6 +255,30 @@ function scanEvents(ctx, type) {
   return null;
 }
 
+// Issue #184: closing on the berth can graze the station hull at creep speed.
+// A row with no damage under this floor is contact, not an impact.
+const DOCK_TOUCH_SPEED = 1;
+
+function dockTouchHarmless(e, phase) {
+  if (phase !== 'stage' && phase !== 'settle') return false;
+  if (e.kind !== 'station' || e.damage !== 0) return false;
+  return typeof e.speed === 'number' && Number.isFinite(e.speed)
+    && Math.abs(e.speed) < DOCK_TOUCH_SPEED;
+}
+
+// Every bodyHit row in the frame is judged, so a harmless kiss batched with a
+// real impact can never hide it. Anything malformed still cancels.
+function dockImpact(ctx, phase) {
+  const a = ctx.lastEvents;
+  if (!a || !a.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const e = a[i];
+    if (!e || e.type !== 'bodyHit') continue;
+    if (!dockTouchHarmless(e, phase)) return true;
+  }
+  return false;
+}
+
 function helmSteerLatched(ctx) {
   return (ctx.flags && ctx.flags.chartOpen === true)
     || berthHeld(ctx)
@@ -787,7 +811,7 @@ function dockTick(ctx) {
     disengage(ctx, 'docked');
     return;
   }
-  if (scanEvents(ctx, 'bodyHit')) {
+  if (dockImpact(ctx, ap.phase)) {
     disengage(ctx, 'impact');
     return;
   }

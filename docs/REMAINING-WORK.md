@@ -106,6 +106,19 @@ short-landing settlement rule is unchanged. See
 pending; this is not a merge or deployment claim. Delivery ordering between a
 haul and an aboard consignment remains a separate question.
 
+Issue [#184](https://github.com/barryrwilson/Rimward/issues/184) is implemented
+on `codex/issue-184-station-touch`: in the dock autopilot `stage` and `settle`
+phases only, a `bodyHit` row against the station with `damage === 0` and a
+finite `|speed|` under 1 u/s no longer cancels the approach. Every other row
+still cancels, including a malformed or non-finite speed or damage, another
+body kind, a speed at or above the floor, and any other phase. All `bodyHit`
+rows in the frame are judged, so a harmless touch cannot mask a real impact.
+The #173 cancellation full stop and weapon-hit separation are unchanged, and
+other autopilot modes are untouched. `scripts/issue-139-dock-corridor-test.mjs`
+pins the new cases; its ten keep-the-helm pins fail on the pre-fix source.
+Independent QA and live browser validation remain pending; this is not a merge
+or deployment claim.
+
 Issue [#173](https://github.com/barryrwilson/Rimward/issues/173) is implemented
 on `fix/issue-173-dock-cancel`: impact, blocked, and stale dock cancellations
 latch full stop unless hail or a combat lease owns the helm. The impact notice

@@ -193,6 +193,58 @@ if (caseName === 'cancel') {
   ctx.autopilot.engaged = true; ctx.autopilot.mode = 'route';
   disengage(ctx, 'blocked');
   pin('route cancellation keeps existing manual throttle behavior', !ctx.input.fullStop && ctx.input.throttle === 0.8);
+  // ---- #184: a zero-damage station touch at creep speed keeps the helm ------
+  // Each row is fed to the real autopilot system as the previous frame's
+  // events, exactly as ship.js publishes a bounce.
+  const KISS = { kind: 'station', speed: 0.1, damage: 0 };
+  const REAL = { kind: 'station', speed: 30 };
+  const watch = (phase, ...rows) => {
+    begin();
+    if (phase === 'settle') {
+      ctx.ship.object.position.set(station.x + 60, station.y, station.z);
+      ctx.station.inZone = true;
+    }
+    ctx.autopilot.phase = phase;
+    ctx.lastEvents = rows.map(r => ({ type: 'bodyHit', t: ctx.world.time, ...r }));
+    apSystem.update(DT);
+    const held = ctx.autopilot.engaged && ctx.autopilot.reason !== 'impact';
+    ctx.station.inZone = false;
+    return { held, engaged: ctx.autopilot.engaged, reason: ctx.autopilot.reason, phase, rows };
+  };
+  const keeps = (name, r) => pin(`#184 ${name} keeps the helm`, r.held, r);
+  const cancels = (name, r) => pin(`#184 ${name} cancels as impact`,
+    !r.engaged && r.reason === 'impact', r);
+
+  for (const phase of ['stage', 'settle']) {
+    for (const speed of [0.1, -0.1, 0, 0.999]) {
+      keeps(`${phase} station touch at ${speed} u/s, no damage`, watch(phase, { ...KISS, speed }));
+    }
+    // The floor itself and anything above it is still an impact.
+    for (const speed of [1, -1, 1.5, 30]) {
+      cancels(`${phase} station contact at ${speed} u/s`, watch(phase, { ...KISS, speed }));
+    }
+    cancels(`${phase} creep touch that drew damage`, watch(phase, { ...KISS, damage: 0.5 }));
+    // Only the station hull is a berth structure worth forgiving.
+    for (const kind of ['asteroid', 'ship', 'gate', 'sun', undefined]) {
+      cancels(`${phase} creep ${kind} contact`, watch(phase, { ...KISS, kind }));
+    }
+    // A row the physics never produced must never read as harmless.
+    for (const speed of [undefined, NaN, Infinity, -Infinity, '0.1', null, {}]) {
+      cancels(`${phase} touch with speed ${String(speed)}`, watch(phase, { ...KISS, speed }));
+    }
+    for (const damage of [undefined, NaN, null, '0', -1, false]) {
+      cancels(`${phase} touch with damage ${String(damage)}`, watch(phase, { ...KISS, damage }));
+    }
+    // A harmless row must never mask a real impact batched with it.
+    cancels(`${phase} kiss before real impact`, watch(phase, KISS, REAL));
+    cancels(`${phase} real impact before kiss`, watch(phase, REAL, KISS));
+    keeps(`${phase} batch of kisses only`, watch(phase, KISS, { ...KISS, speed: -0.002 }, { ...KISS, speed: 0 }));
+  }
+  // Outside the berth phases the old cancel-on-any-contact rule stands.
+  for (const phase of ['cruise', 'corridor', 'docking', '', undefined]) {
+    cancels(`${String(phase)} phase creep touch`, watch(phase, KISS));
+  }
+
   const out = resolve(process.env.DOCK_OUT || 'out/issue-139-corridor', caseName);
   mkdirSync(out, { recursive: true });
   writeFileSync(resolve(out, 'result.json'), JSON.stringify({ artifact, caseName, verdict: fails ? 'FAIL' : 'PASS', fails }, null, 2) + '\n');
