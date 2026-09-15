@@ -11,19 +11,6 @@ import {
 } from './hangar.js';
 import { isDataCommodity, sanitizeDataCargoRow } from './data-trade.js';
 import { sanitizeNav } from './nav.js';
-import { chartedAuthored, postingHopsOk } from './job-distance.js';
-
-/**
- * Issue 176: a posting from an AUTHORED charted board names a destination one
- * or two gates out on the charted authored ring. Generated/procedural boards
- * keep their pre-176 rule (any far system), because the ring walk cannot
- * describe them and this restore must not drop their existing work.
- */
-function postedDestOk(origin, dest) {
-  if (!dest || dest === origin) return false;
-  if (!chartedAuthored(origin)) return true;
-  return postingHopsOk(origin, dest);
-}
 import { canOpenPlayCard, playSurfaceBlocked, setBerthHold, settingsOwnsScreen } from '../systems/overlay-policy.js';
 import { decodeKeyCode } from '../systems/key-code.js';
 import { codeOf } from '../systems/bindings.js';
@@ -534,7 +521,7 @@ function sanitizeOneJob(raw) {
     if (typeof commodity !== 'string' || reservedId(commodity)) return null;
     if (!Object.hasOwn(COMMODITIES, commodity) || COMMODITIES[commodity].bulk !== true) return null;
     if (commodity === 'livingRock') return null;
-    if (!postedDestOk(origin, dest)) return null;
+    if (!dest || dest === origin) return null;
     job.originSystem = origin;
     job.destSystem = dest;
     job.slot = src.slot;
@@ -554,7 +541,7 @@ function sanitizeOneJob(raw) {
     if (src.slot !== 0 && src.slot !== 1) return null;
     if (!Number.isInteger(src.slot)) return null;
     if (src.commodity !== undefined) return null;
-    if (!postedDestOk(origin, dest)) return null;
+    if (!dest || dest === origin) return null;
     job.originSystem = origin;
     job.destSystem = dest;
     job.slot = src.slot;
@@ -611,11 +598,7 @@ function sanitizeOneJob(raw) {
     job.system = system;
   }
   if (kind !== 'mining' && origin) job.originSystem = origin;
-  // Issue 176: the unique consignment stamps origin AND dest together on
-  // accept, so a stamped pair is range-checked the same way the renewable
-  // slots are. An unstamped offered row keeps its wave-26 null shape.
-  const ferryDestOk = kind !== 'ferry' || !dest || !origin || postedDestOk(origin, dest);
-  if (dest && kind !== 'chain' && ferryDestOk) job.destSystem = dest;
+  if (dest && kind !== 'chain') job.destSystem = dest;
   if (kind !== 'bounty' || uniqueJobId(id)) {
     if (system && !job.system) job.system = system;
   }

@@ -1757,7 +1757,13 @@ keep. Wave 108 remaining unique SKU brief
 (`docs/Msn03UniqueSkuDesign.md`): Veridian `auto`,
 Hollow `dart`; `canSeat` fail-closed +2 UU.
 Wave 109 first impl: remaining employers
-seat dart/auto; light +2 UU.  
+seat dart/auto; light +2 UU. Issue 176 (2026-09-14) adds
+two-gate transport work: each authored charted board posts
+exactly one trade/ferry/passenger run two gates out, paid
+175% of buy cost against 140% at one gate, with the window
+and the card copy scaled to the jump count. Distance is
+derived from the posting's own origin/dest pair, so multi-
+system trade has job support without a new persisted field.  
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  
@@ -1784,6 +1790,16 @@ browser fixture flows pass with save/reload preservation and clean consoles;
 independent Claude QA passed the initial artifact `303fdc8` on 2026-09-08.
 Final follow-up review is recorded with the pull request. These are not new
 natural-flight benchmarks.
+
+**Two-gate transport (#176, 2026-09-14):** Trade, ferry and passenger postings
+used to name the adjacent authored system only, so multi-hop play existed only
+as raw market arbitrage. Each authored charted board now posts exactly one
+destination two gates out across those three families — never more than one,
+and the seat counts accepted work per origin so it cannot be farmed. Pay and
+deadline scale with the jump count and the posting states the distance. The
+unique tutorial consignment stays a one-gate run unless every renewable slot is
+taken. Implemented on an isolated candidate; independent QA and the live
+browser pass are pending.
 
 Support at least:
 
