@@ -16635,7 +16635,10 @@ removeLiveShip(w42indyCtx, w42indy);
 {
   const here181 = dirname(fileURLToPath(import.meta.url));
   const run181 = spawnSync(process.execPath,
-    ['--import', join(here181, 'with-css-stub.mjs'), join(here181, 'issue-181-same-berth-test.mjs'), '--boot-pin'],
+    // `--import` takes a URL, and a Windows absolute path parses as the `c:`
+    // protocol (ERR_UNSUPPORTED_ESM_URL_SCHEME). The script path stays plain.
+    ['--import', pathToFileURL(join(here181, 'with-css-stub.mjs')).href,
+      join(here181, 'issue-181-same-berth-test.mjs'), '--boot-pin'],
     { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   const line181 = (run181.stdout || '').split('\n').find((l) => l.startsWith('WAVE181 '));
   const w181 = line181 ? JSON.parse(line181.slice(8)) : { ran: false };
