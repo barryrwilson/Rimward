@@ -383,7 +383,7 @@ export function disengage(ctx, reason) {
     ctx.emit('autopilotDisengaged', { reason: String(reason) });
     const line = Object.hasOwn(BREAK_LINE, reason) ? BREAK_LINE[reason] : '';
     sayLine(ctx, line);
-  } else if (modeWas === 'dock' && reason && Object.hasOwn(DOCK_APPROACH_LINES, reason)) {
+  } else if (modeWas === 'dock' && reason && reason !== 'docked' && Object.hasOwn(DOCK_APPROACH_LINES, reason)) {
     sayLine(ctx, DOCK_APPROACH_LINES[reason]);
   }
 }

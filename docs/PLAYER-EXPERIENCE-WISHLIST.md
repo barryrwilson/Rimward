@@ -14,6 +14,13 @@ old prose. Merge status does not establish fresh release QA or deployment.
 
 ## How to use this document
 
+### Successful docking should sound successful — #185
+
+Implemented on the isolated candidate: a completed approach shows its docking
+receipt without contradictory range or already-docked errors. Explicit refused
+commands still report their reason. Live browser verification passed; independent
+review remains pending. See [evidence](Issue185DockReceiptsEvidence.md).
+
 ### A station kiss should not abort the dock — #184
 
 Implemented on the isolated candidate: while staging or settling, a zero-damage
