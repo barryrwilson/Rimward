@@ -17,6 +17,7 @@ import { surveyObjective } from './survey-nav.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
 import { podUnits } from './pods.js';
+import { cargoSplit } from './consignment.js'; // issue #177: fronted units are not the player's stock
 import { PHY } from './physics.js';
 import { sunZone } from './collision.js';
 import {
@@ -437,16 +438,24 @@ function podDisplayName(pod) {
   return oreName || 'CARGO';
 }
 
-function cargoRows(cargo) {
+function cargoRows(ctx) {
+  const cargo = ctx?.cargo;
   if (!Array.isArray(cargo)) return [];
   const out = [];
+  // Issue #177: fronted consignment units ride in the same row as owned stock.
+  // The contract's claim is spent over the rows of that commodity in order, so
+  // `owned` across the rows is exactly what the market will buy back.
+  const left = new Map();
   for (let i = 0; i < cargo.length; i++) {
     const row = cargo[i];
     if (!row || typeof row !== 'object') continue;
     const commodity = str(own(row, 'commodity'));
     const units = num(own(row, 'units'), 0);
     if (!commodity) continue;
-    out.push({ commodity, units });
+    if (!left.has(commodity)) left.set(commodity, cargoSplit(ctx, commodity).consigned);
+    const consigned = Math.max(0, Math.min(units, left.get(commodity)));
+    left.set(commodity, left.get(commodity) - consigned);
+    out.push({ commodity, units, owned: units - consigned, consigned });
   }
   return out;
 }
@@ -572,11 +581,15 @@ function marketBlock(ctx, docked, service) {
       if (!Object.hasOwn(COMMODITIES, commodity)) continue;
       const com = COMMODITIES[commodity];
       if (!com || typeof com !== 'object') continue;
+      const hold = holdOf(ctx.cargo, commodity);
+      const split = cargoSplit(ctx, commodity, hold);
       const row = {
         commodity,
         name: str(own(com, 'name')) || commodity,
         posted: postedPrice(ctx, commodity),
-        hold: holdOf(ctx.cargo, commodity),
+        hold,
+        holdOwned: split.owned,
+        holdConsigned: split.consigned,
         legal: com.legal === true,
       };
       const fillB = peekFill(ctx, commodity, true);
@@ -1027,7 +1040,7 @@ export function buildObservation(ctx) {
         credits: num(world.credits, 0),
         fear: num(world.fear, 0),
         cargoCapacity: num(ctx.cargoCapacity, 0),
-        cargo: cargoRows(ctx.cargo),
+        cargo: cargoRows(ctx),
         scanner: num(world.scanner, 0),
         miningLaser: num(world.miningLaser, 0),
         concealedMounts: world.concealedMounts === true,

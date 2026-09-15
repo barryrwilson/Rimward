@@ -228,6 +228,7 @@ function deskNoticeToken(notice) {
   if (n.includes('Not enough UU')) return 'uu';
   if (n === 'Hold is full.' || n.startsWith('No room for the consignment')) return 'hold';
   if (/^No .+ in the hold/.test(n)) return 'hold';
+  if (n.startsWith('Cannot sell:')) return 'unavailable'; // issue #177: consigned units are aboard but not the player's
   if (
     n === 'That posting is not valid.'
     || n === 'Dock first.'
