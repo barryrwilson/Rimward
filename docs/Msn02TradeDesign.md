@@ -197,16 +197,99 @@ Gates-less origin (`otherSystemId` returns self): **do not post**. Unique haul a
 
 **Dest bind:** pay uses `otherSystemId(origin)` (Wave 35). Stuffed `job.destSystem` cannot retarget payout. UI dest **name** also resolves through that helper + `SYSTEMS[dest].station.name`.
 
+**Superseded by issue 176 for trade, ferry and passenger.** See §5a. The Wave-35
+law survives as the *fallback*: a destination outside the posted range still
+resolves to `otherSystemId(origin)`, so a stuffed id can only ever shorten a run.
+
+### 5a. Two-gate runs (issue 176)
+
+**Player problem.** Every trade, ferry and passenger posting named the adjacent
+authored system, so multi-system play existed only as raw market arbitrage
+(2026-09-14 trading playtest, `0991593b`).
+
+**Rule.** An eligible authored **charted** board posts exactly ONE destination
+two gates out, shared across the haul/trade, ferry and passenger families, and
+never more than one. Every other posting keeps its one-gate destination.
+
+**Distance is derived, never persisted.** A job already carries `originSystem`
+and `destSystem`; `src/game/job-distance.js` turns that pair back into a jump
+count. **No new persisted field, no new `WORLD_FIELDS` key** (contract §12).
+
+**The ring.** The BFS walks only `AUTHORED_SYSTEMS` entries that carry a `chart`
+array and a `station`. Generated/procedural systems are excluded, so a posting
+can never route a player through an uncharted detour, and every named dock is
+one the galaxy chart already shows. The table is built once at module load
+(six systems), so the per-frame board refresh runs no search.
+
+| origin | one gate | two gates |
+|---|---|---|
+| `freehold` | `veridian` | `redmarch` |
+| `veridian` | `freehold` | `hollowreach` |
+| `redmarch` | `veridian` | `freehold`, `hush` |
+| `hollowreach` | `redmarch` | `veridian`, `verge`, `veil` |
+| `hush` | `hollowreach` | `redmarch` |
+| `verge` | `hush` | `hollowreach`, `veil` |
+| `veil` | `hush` | `hollowreach`, `verge` |
+
+**Seat order.** trade slot 0 → trade slot 1 → passenger slot 0 → passenger
+slot 1 → the unique consignment. The consignment is LAST on purpose: it is the
+first cross-system contract a new pilot sees, so it stays a one-gate run
+whenever an ordinary renewable slot can carry the long run instead. In ordinary
+play the renewable slots always can; the consignment is the fallback seat when
+they are all taken.
+
+**The seat counts ACCEPTED work, and it is PER ORIGIN** (owner-approved). An
+accepted two-gate agreement holds its origin board's seat until it settles,
+expires or is replaced, so a long run cannot be farmed two at a time from one
+dock. It does **not** suppress another origin's board — each authored board
+owns its own seat. An accepted agreement is never rewritten (Wave 26 law): the
+board demotes only *offered* extras, back to `otherSystemId(origin)`.
+
+**Pay.** `hopPayMult`: ×1 at one gate, ×1.25 at two. Trade therefore reads
+**140% of buy cost at one gate, 175% at two**. Ferry and passenger scale the
+same way off `FERRY_REWARD` 350 → 438. The base is derived from the posted
+origin/dest pair at quote time, so a stuffed `reward` cannot pay; `payQuoted` is
+still stamped on accept and is still the agreement.
+
+**Copy.** Every trade, ferry and passenger card names its destination **and** its
+distance — `1 jump` / `2 jumps` in the detail and reward lines, `2 gates` in the
+consignment copy. The card rebuilds its copy from the POSTED destination on
+every redraw; rebuilding it from `otherSystemId` named the adjacent dock on a
+two-gate card whose reward line and accept path both used the far one.
+
+**Settlement.** The named far station pays. An intermediate dock on the route
+pays nothing and leaves the agreement open.
+
+**The consignment window.** The unique consignment has always been timeless,
+and at one gate it stays that way — it carries no `deadline` field at all. A
+consignment promoted to the fallback two-gate seat carries the same scaled
+window as any other long run, stamped when it is posted and again on accept.
+When that window closes the factor pays nothing, reclaims the units it fronted
+(the issue-177 consigned split, read before the state flips, so the player's own
+stock is untouched) and the repeatable unique returns to its one-gate offered
+shape. An *offered* far consignment whose window closes is simply withdrawn back
+to that shape.
+
+Both legs are gated on `Number.isFinite(job.deadline)`, which only a 176-era
+two-gate consignment ever carries, so **no pre-176 agreement is expired by this
+wave** and no restore needs migrating.
+
 ### 6. Deadlines
 
 Live mining already uses `deadline` vs `world.time` and fails closed. Trade uses the same clock. Do not invent a third clock.
 
 | State | Timer | On fire |
 |---|---|---|
-| offered | `deadline = postTime + 600` | withdraw, replace |
-| accepted | `deadline = acceptTime + 600` (restarts) | fail closed, replace |
+| offered | `deadline = postTime + 600 * jumps` | withdraw, replace |
+| accepted | `deadline = acceptTime + 600 * jumps` (restarts) | fail closed, replace |
 
 600 s is ~10 minutes. Five bulk units plus a one-gate hop at cruise 120 is well under honest play. The window is deliberately generous (MSN-01).
+
+**Issue 176:** the window scales by jump count — one generous window per gate,
+so a two-gate run gets 1200 s. This is the same clock, not a third one
+(`hopSpanMult`). The passenger terms line prints the matching minutes, so the
+copy cannot claim a 10-minute window on a 20-minute contract. The unique
+consignment joins this clock **only** on a two-gate run; see §5a.
 
 Expire must not call the pay path. A restored job with `deadline` in the past expires on the next 0.5 s tick.
 
@@ -246,6 +329,26 @@ Matches contract §8. **Named only. Do not implement in Wave 75.**
 | **PR3 replace + expire** | one-in-one-out; 600 s fail closed | MSN-03, unique migration |
 | **PR4 UI copy** | remaining time + dest + have/need; `textContent` only | HUD-02, Digit 0, People desk |
 | **PR5 boot pins** | keep unique four + `mine-freehold-0` + `trade-freehold-0`; drop `trade-__proto__-0`; 200+200 fit 420; complete→new card; expire no pay; stuffed dest ignored; WAVE26/WAVE35 unique haul still pass | wishlist / PROGRESS |
+| **issue 176 two-gate runs** | `src/game/job-distance.js`; one long run per authored charted board; per-origin seat incl. accepted; ×1.25 pay and ×2 window at two gates; distance in card copy; posted-dest accept/settle with the Wave-35 fallback; two-gate consignment window + fail-closed reclaim; WAVE176 boot pins; `scripts/issue-176-two-gate-jobs-test.mjs` | new persisted field; new Digit; generated-system topology; unique `haul-provisions` (stays one gate); any window on a one-gate consignment |
+
+**Issue 176 verification.** `npm run test:two-gate-jobs` covers the behaviour:
+distribution across all seven authored boards, card copy, the ×1.25 / ×2 ladder,
+the per-origin seat (accepted at one origin does not suppress another),
+intermediate-dock refusal vs far-dock settlement, expiry and replacement, the
+consignment fallback seat surviving a redraw, the two-gate consignment window
+(scaled, fail-closed, reclaim-only-what-was-fronted) against a one-gate
+consignment that stays timeless, and a save round trip through a fresh module
+graph. Boot `WAVE176` pins the distance table and the source
+contract. The wave-76 / wave-78p stuffed-destination legs moved from `redmarch`
+(two gates — now a legal posting) to `hollowreach` (three gates), keeping those
+pins' exact meaning.
+
+**Deliberately unchanged.** The unique `haul-provisions` tutorial contract keeps
+its Wave-35 `otherSystemId` bind and stays a one-gate run; it carries no
+`destSystem` at all. `sanitizeJobs` gained no new narrowing: the posted range is
+a *generator* rule enforced where it matters (board refresh, accept, delivery),
+all of which fail closed, so a historical accepted save is never dropped on
+restore.
 
 `state.js` untouched. Authored copy is strings in `station.js` / a tiny `jobs.js`, not a table dump.
 

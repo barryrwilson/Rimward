@@ -27,6 +27,7 @@ import { hollowStation } from './stations/hollow.js';
 import { isBeautiful, ORGANIC, organicMaterials, makePetalGeometry, makeStarfishArmGeometry, makeWebGeometry, makeOrganicVeinTexture, makeOrganicGlowTexture, tagSway, tagBreath, tagPulse, collectOrganic, animateOrganic } from './organic.js'; // wave 27: Beautiful Ones grown station
 import { renderShipyardDesk, handleShipyardDigit, setShipyardPane, cancelYardPending, cancelGraftPending, cancelTrainPending, cancelSellPending, cancelClaimPending, claimedDockNotice, resetShipyardSale, SHIPYARD_PANE_HANGAR } from './shipyard-desk.js';
 import { decodeKeyCode } from './key-code.js';
+import { JOB_MAX_HOPS, authoredHops, chartedAuthored, longRunDests, postingHops, postingHopsOk, hopPayMult, hopSpanMult, hopsLabel } from '../game/job-distance.js';
 import { writeMountedGear, applyAbominationStanding } from '../game/hangar.js';
 import {
   grantSwornGift,
@@ -245,7 +246,8 @@ const MINING_SLOTS_PER_SYSTEM = 2;
 const TRADE_SLOTS_PER_SYSTEM = 2;
 const HUNT_SLOTS_PER_SYSTEM = 2;
 const PASSENGER_SLOTS_PER_SYSTEM = 2;
-const PASSENGER_TERMS = 'No buy-in; uses no cargo hold. Full hold OK. 2 party slots per origin. Each party earns its own fare, even on one trip. Dock within 10 min of acceptance; fare locks then. Expiry pays nothing.';
+const PASSENGER_TERMS_HEAD = 'No buy-in; uses no cargo hold. Full hold OK. 2 party slots per origin. Each party earns its own fare, even on one trip.';
+const PASSENGER_TERMS = `${PASSENGER_TERMS_HEAD} Dock within 10 min of acceptance; fare locks then. Expiry pays nothing.`;
 const EXPLORE_SLOTS_PER_SYSTEM = 2;
 const ESPIONAGE_SLOTS_PER_SYSTEM = 2;
 const WAR_SLOTS_PER_SYSTEM = 2;
@@ -2154,7 +2156,7 @@ function makeJobs(ctx) {
     {
       id: 'ferry-consignment', kind: 'ferry',
       title: 'Ferry a consignment',
-      detail: `A dockside factor fronts you ${FERRY_UNITS} Provisions — no buy-in, no questions — and pays ${FERRY_REWARD} UU when the consignment crosses the gate and lands intact at the far station. The manifest is watched: deliver short and the deal is off.`,
+      detail: ferryRunDetail(FERRY_REWARD, 1),
       reward: FERRY_REWARD, state: 'offered', progress: 0, need: FERRY_UNITS,
       originSystem: null, destSystem: null, // stamped on accept (JSON-plain)
     },
@@ -2603,7 +2605,7 @@ function makeTradeJob(ctx, sysId, slot) {
     destSystem: dest,
     commodity,
     title: `Haul ${name}`,
-    detail: `Buy or hold ${need} ${name} and deliver to ${destName}.`,
+    detail: tradeRunDetail(need, name, destName, postingHops(sysId, dest)),
     reward: tradePayBase(ctx, commodity, need),
     need,
     progress: 0,
@@ -2886,11 +2888,17 @@ function passengerStationName(sysId) {
 
 function passengerPayLine(ctx, job) {
   const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : ctx.world.currentSystem;
-  const destName = passengerStationName(otherSystemId(ctx, originId)) ?? 'the far station';
+  // Issue 176: the posted destination and its distance, not the primary gate.
+  const destId = postingHopsOk(originId, job.destSystem)
+    ? job.destSystem
+    : otherSystemId(ctx, originId);
+  const destName = passengerStationName(destId) ?? 'the far station';
+  const hops = postingHops(originId, destId);
+  const base = Math.round(FERRY_REWARD * hopPayMult(hops));
   const est = job.state === 'accepted'
-    ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, FERRY_REWARD))
-    : jobPayFor(ctx, originId, FERRY_REWARD);
-  return `Escort to ${destName} — pays ${est} UU`;
+    ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, base))
+    : jobPayFor(ctx, originId, base);
+  return `Escort to ${destName} (${hopsLabel(hops)}) — pays ${est} UU`;
 }
 
 function nextPassengerId(jobs, sysId) {
@@ -2928,8 +2936,8 @@ function makePassengerJob(ctx, sysId, slot) {
     originSystem: sysId,
     destSystem: dest,
     title: 'Escort passengers',
-    detail: `Carry a booked party to ${destName}. Paid on docking there.`,
-    reward: FERRY_REWARD,
+    detail: passengerRunDetail(destName, postingHops(sysId, dest)),
+    reward: Math.round(FERRY_REWARD * hopPayMult(postingHops(sysId, dest))),
     need: 1,
     progress: 0,
     state: 'offered',
@@ -2954,6 +2962,224 @@ function replacePassengerJob(ctx, job) {
   if (!passengerDestId(ctx, origin)) return;
   const next = makePassengerJob(ctx, origin, slot);
   if (next) jobs.push(next);
+}
+
+// ------------------------------------------------- two-gate long runs ----
+/**
+ * Issue 176: an eligible authored charted board posts exactly ONE destination
+ * two gates out, shared across the haul/trade, ferry and passenger families,
+ * and never more than one. Every other posting keeps its one-gate destination.
+ *
+ * Distance is DERIVED from the posting's own originSystem + destSystem pair
+ * (job-distance.js), never persisted: a job already carries both ids, so no
+ * new save field exists. The BFS that resolves the pair walks only the charted
+ * authored ring, so a posting can never name a procedural or unseen detour.
+ *
+ * Family order when the seat is free is trade -> passenger -> the unique
+ * consignment. The unique ferry is the LAST candidate on purpose: it is the
+ * first cross-system contract a new pilot sees, so it stays a one-gate run
+ * whenever an ordinary renewable slot can carry the long run instead.
+ *
+ * An ACCEPTED posting is an agreement (wave 26 law) and is never rewritten.
+ * It holds the board's single long-run seat until it settles, so a long run
+ * cannot be farmed two at a time from one dock.
+ */
+
+/** Jump count a live trade/passenger posting represents; 1 when underivable. */
+function jobHops(job) {
+  if (!job || typeof job !== 'object') return 1;
+  return postingHops(job.originSystem, job.destSystem);
+}
+
+/** Jump count for the unique consignment, whose origin is stamped on accept. */
+function ferryHops(ctx, job, boardId) {
+  if (!job || typeof job !== 'object') return 1;
+  const origin = job.state === 'offered' ? boardId : job.originSystem;
+  return postingHops(origin, job.destSystem);
+}
+
+/** Distance-scaled trade base pay: HAUL_MARGIN at one gate, 175% at two. */
+function tradeRunBase(ctx, job) {
+  if (!isTradeCommodity(job?.commodity)) return 0;
+  const need = Number.isInteger(job.need) && job.need >= 1 ? job.need : HAUL_UNITS;
+  return Math.round(tradePayBase(ctx, job.commodity, need) * hopPayMult(jobHops(job)));
+}
+
+/** Distance-scaled passenger fare. Derived, so a stuffed reward cannot pay. */
+function passengerRunBase(job) {
+  return Math.round(FERRY_REWARD * hopPayMult(jobHops(job)));
+}
+
+/** Trade card copy. Every card names its destination AND its distance. */
+function tradeRunDetail(need, name, destName, hops) {
+  return `Buy or hold ${need} ${name} and deliver to ${destName} — ${hopsLabel(hops)} out.`;
+}
+
+/** The posted jump count a passenger card should print. */
+function passengerCardHops(ctx, job, boardId) {
+  const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : boardId;
+  const destId = postingHopsOk(originId, job.destSystem)
+    ? job.destSystem
+    : otherSystemId(ctx, originId);
+  return postingHops(originId, destId);
+}
+
+/** Passenger terms, whose delivery window scales with the posted distance. */
+function passengerTermsFor(hops) {
+  const minutes = Math.round((MINING_DEADLINE * hopSpanMult(hops)) / 60);
+  return `${PASSENGER_TERMS_HEAD} ${hopsLabel(hops)} out; dock within ${minutes} min of acceptance; fare locks then. Expiry pays nothing.`;
+}
+
+/** Passenger card copy, same distance rule as trade. */
+function passengerRunDetail(destName, hops) {
+  return `Carry a booked party to ${destName} — ${hopsLabel(hops)} out. Paid on docking there.`;
+}
+
+/** Distance-scaled consignment fee. Derived from the origin/dest pair. */
+function ferryRunBase(ctx, job, boardId) {
+  return Math.round(FERRY_REWARD * hopPayMult(ferryHops(ctx, job, boardId)));
+}
+
+/** The fronted-consignment card copy, which names the distance it crosses. */
+function ferryRunDetail(reward, hops) {
+  const crossing = hops === 1 ? 'the gate' : `${hops} gates`;
+  return `A dockside factor fronts you ${FERRY_UNITS} Provisions — no buy-in, no questions — and pays ${reward} UU when the consignment crosses ${crossing} and lands intact at the far station. The manifest is watched: deliver short and the deal is off.`;
+}
+
+/** Re-point an OFFERED trade card at `dest` and restate pay, copy and window. */
+function applyTradeRunDest(ctx, job, dest) {
+  if (!job || job.state !== 'offered' || job.destSystem === dest) return false;
+  if (!Object.hasOwn(SYSTEMS, dest) || !postingHopsOk(job.originSystem, dest)) return false;
+  job.destSystem = dest;
+  const hops = jobHops(job);
+  const need = Number.isInteger(job.need) && job.need >= 1 ? job.need : HAUL_UNITS;
+  const name = tradeCommodityName(job.commodity);
+  const destName = tradeStationName(dest) ?? 'the far station';
+  job.detail = tradeRunDetail(need, name, destName, hops);
+  job.reward = tradeRunBase(ctx, job);
+  job.deadline = ctx.world.time + MINING_DEADLINE * hopSpanMult(hops);
+  return true;
+}
+
+/** Re-point an OFFERED passenger card at `dest`. Same rules as trade. */
+function applyPassengerRunDest(ctx, job, dest) {
+  if (!job || job.state !== 'offered' || job.destSystem === dest) return false;
+  if (!Object.hasOwn(SYSTEMS, dest) || !postingHopsOk(job.originSystem, dest)) return false;
+  job.destSystem = dest;
+  const hops = jobHops(job);
+  const destName = passengerStationName(dest) ?? 'the far station';
+  job.detail = passengerRunDetail(destName, hops);
+  job.reward = passengerRunBase(job);
+  job.deadline = ctx.world.time + MINING_DEADLINE * hopSpanMult(hops);
+  return true;
+}
+
+/**
+ * Re-point the OFFERED unique consignment. `dest` null restores the wave-26
+ * shape (unstamped until accept), which is what every board sees while an
+ * ordinary slot carries the long run.
+ */
+function applyFerryRunDest(ctx, job, boardId, dest) {
+  if (!job || job.state !== 'offered') return false;
+  const next = dest && Object.hasOwn(SYSTEMS, dest) && postingHopsOk(boardId, dest) ? dest : null;
+  if ((job.destSystem ?? null) === next) return false;
+  job.destSystem = next;
+  const hops = ferryHops(ctx, job, boardId);
+  const reward = Math.round(FERRY_REWARD * hopPayMult(hops));
+  job.reward = reward;
+  job.detail = ferryRunDetail(reward, hops);
+  // Issue 176: a two-gate consignment carries a window, one generous window
+  // per gate, like every other distance-scaled posting. The one-gate
+  // consignment stays timeless, exactly as it was before this wave, so
+  // demotion deletes the field rather than leaving a stale clock behind.
+  if (next) job.deadline = ctx.world.time + MINING_DEADLINE * hopSpanMult(hops);
+  else delete job.deadline;
+  return true;
+}
+
+/**
+ * Issue 176: the window on a TWO-GATE consignment closed. The factor pays
+ * nothing and reclaims the units it fronted, and the repeatable unique returns
+ * to its one-gate offered shape so the contract is never stranded.
+ *
+ * A pre-176 agreement carries no `deadline` at all, so the caller's
+ * `Number.isFinite(job.deadline)` gate means this never touches a legacy save.
+ * The reclaim is read BEFORE the state flips, because the consigned count is
+ * derived from the live contract (issue 177) — the player's own stock stays.
+ */
+function expireFarConsignment(ctx, job) {
+  const reclaim = Math.min(consignedHoldUnits(ctx), holdUnits(ctx, 'provisions'));
+  if (reclaim > 0) removeCargo(ctx, 'provisions', reclaim);
+  job.state = 'offered';
+  job.originSystem = null;
+  job.destSystem = null;
+  job.reward = FERRY_REWARD;
+  job.detail = ferryRunDetail(FERRY_REWARD, 1);
+  delete job.payQuoted;
+  delete job.deadline;
+  return reclaim;
+}
+
+/** Live postings of the three long-run families for one board, in seat order. */
+function longRunCandidates(ctx, sysId) {
+  const jobs = ctx.world.jobs;
+  const trade = [];
+  const passenger = [];
+  let ferry = null;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || (j.state !== 'offered' && j.state !== 'accepted')) continue;
+    if (j.kind === 'trade' && j.originSystem === sysId) trade.push(j);
+    else if (j.kind === 'passenger' && j.originSystem === sysId) passenger.push(j);
+    else if (j.id === 'ferry-consignment' && j.kind === 'ferry'
+      && (j.state === 'offered' || j.originSystem === sysId)) ferry = j;
+  }
+  const bySlot = (a, b) => (jobSlotOf(a) ?? 9) - (jobSlotOf(b) ?? 9);
+  trade.sort(bySlot);
+  passenger.sort(bySlot);
+  const ordered = trade.concat(passenger);
+  if (ferry) ordered.push(ferry);
+  return ordered;
+}
+
+/** Pick one destination two gates out. Stable once written onto the posting. */
+function pickLongRunDest(sysId) {
+  const dests = longRunDests(sysId);
+  if (!dests.length) return null;
+  return dests[(Math.random() * dests.length) | 0];
+}
+
+/**
+ * Board refresh pass: leave exactly one live long run on an authored charted
+ * board, promoting the first free seat when none is held and demoting any
+ * extra OFFERED long posting back to its one-gate destination.
+ */
+function syncLongRunPostings(ctx, sysId) {
+  if (!Array.isArray(ctx.world?.jobs) || !chartedAuthored(sysId)) return;
+  const near = tradeDestId(ctx, sysId);
+  if (!near) return;
+  const ordered = longRunCandidates(ctx, sysId);
+  const isLong = (job) => (job.kind === 'ferry' ? ferryHops(ctx, job, sysId) : jobHops(job)) >= JOB_MAX_HOPS;
+  const longs = ordered.filter(isLong);
+  // An accepted agreement outranks an offered card for the single seat.
+  const holder = longs.find((j) => j.state === 'accepted') ?? longs[0] ?? null;
+  for (let i = 0; i < longs.length; i++) {
+    const job = longs[i];
+    if (job === holder || job.state !== 'offered') continue;
+    if (job.kind === 'trade') applyTradeRunDest(ctx, job, near);
+    else if (job.kind === 'passenger') applyPassengerRunDest(ctx, job, near);
+    else applyFerryRunDest(ctx, job, sysId, null);
+  }
+  if (holder) return;
+  const dest = pickLongRunDest(sysId);
+  if (!dest) return;
+  for (let i = 0; i < ordered.length; i++) {
+    const job = ordered[i];
+    if (job.state !== 'offered') continue;
+    if (job.kind === 'trade' && applyTradeRunDest(ctx, job, dest)) return;
+    if (job.kind === 'passenger' && applyPassengerRunDest(ctx, job, dest)) return;
+    if (job.kind === 'ferry' && applyFerryRunDest(ctx, job, sysId, dest)) return;
+  }
 }
 
 function exploreSiteName(site) {
@@ -3802,11 +4028,25 @@ function applyToJobHandles(id, fn) {
 function writeJobState(id, state) {
   applyToJobHandles(id, (row) => { row.state = state; });
 }
-function reofferFerryHandles() {
+/**
+ * Re-offer every tracked consignment handle. Issue 176: an OFFERED
+ * consignment may carry a posted two-gate destination (the board's single
+ * long run), so the re-offer mirrors the live row's posted dest, fee and copy.
+ * Hardcoding the unstamped shape here wiped the promotion on the very next
+ * board redraw. Called with no argument (the accept path's done -> offered
+ * reset) it still restores the wave-26 unstamped shape.
+ */
+function reofferFerryHandles(posted = null) {
+  const dest = posted && typeof posted.destSystem === 'string' && Object.hasOwn(SYSTEMS, posted.destSystem)
+    ? posted.destSystem : null;
+  const reward = posted && Number.isFinite(posted.reward) ? posted.reward : FERRY_REWARD;
+  const detail = posted && typeof posted.detail === 'string' && posted.detail ? posted.detail : null;
   applyToJobHandles('ferry-consignment', (row) => {
     row.state = 'offered';
     row.originSystem = null;
-    row.destSystem = null;
+    row.destSystem = dest;
+    row.reward = reward;
+    if (detail) row.detail = detail;
     delete row.payQuoted;
   });
 }
@@ -4118,7 +4358,14 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (job.state !== 'accepted' || !ctx.flags.docked) continue;
       const origin = job.originSystem;
       if (!Object.hasOwn(SYSTEMS, origin)) continue;
-      const dest = otherSystemId(ctx, origin);
+      // Wave 35 dest bind, widened by issue 176: the NAMED destination pays,
+      // and the name is the posted destSystem whenever it is a legal posting
+      // distance (1..JOB_MAX_HOPS on the charted authored ring). Anything else
+      // still falls back to otherSystemId(ctx, origin), so a stuffed dest can
+      // never retarget a payout outside the posted range.
+      const dest = postingHopsOk(origin, job.destSystem)
+        ? job.destSystem
+        : otherSystemId(ctx, origin);
       if (ctx.world.currentSystem !== dest || dest === origin) continue;
       if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       const commodity = job.commodity;
@@ -4128,7 +4375,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (holdUnits(ctx, commodity) < need) continue;
       job.state = 'failed';
       removeCargo(ctx, commodity, need);
-      const base = tradePayBase(ctx, commodity, need);
+      const base = tradeRunBase(ctx, job);
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
         : clampJobPay(jobPayFor(ctx, origin, base));
@@ -4164,7 +4411,10 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (job.state !== 'accepted' || !ctx.flags.docked) continue;
       const origin = job.originSystem;
       if (!Object.hasOwn(SYSTEMS, origin)) continue;
-      const dest = otherSystemId(ctx, origin);
+      // Issue 176: same posted-destination bind as the trade tick above.
+      const dest = postingHopsOk(origin, job.destSystem)
+        ? job.destSystem
+        : otherSystemId(ctx, origin);
       if (ctx.world.currentSystem !== dest || dest === origin) continue;
       if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       if (job.need !== 1) {
@@ -4176,7 +4426,7 @@ function tickDeliveryJobs(ctx, ui, render) {
       job.state = 'failed';
       const pay = Number.isFinite(job.payQuoted)
         ? clampJobPay(job.payQuoted)
-        : clampJobPay(jobPayFor(ctx, origin, FERRY_REWARD));
+        : clampJobPay(jobPayFor(ctx, origin, passengerRunBase(job)));
       noteJobOutcome(ctx, job, 'delivered', pay);
       ctx.world.credits += pay;
       const repLine = rewardDeliveryStanding(ctx, job, SYSTEMS[origin].faction);
@@ -4414,6 +4664,23 @@ function tickDeliveryJobs(ctx, ui, render) {
       boardDirty = true;
       continue;
     }
+    // Issue 176: an OFFERED two-gate consignment posting runs its own window,
+    // which must close BEFORE the accepted-only guard below — that guard used
+    // to drop the offered row, leaving a stale far posting on the board. No
+    // cargo is reclaimed because nothing was fronted yet: the posting is
+    // withdrawn to its one-gate shape and the seat frees for a fresh posting.
+    if (job.kind === 'ferry' && job.state === 'offered'
+      && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+      const staleRow = job.id === 'ferry-consignment'
+        ? (persistJobById(jobs, 'ferry-consignment') || job)
+        : job;
+      applyFerryRunDest(ctx, staleRow, ctx.world.currentSystem, null);
+      if (staleRow !== job) applyFerryRunDest(ctx, job, ctx.world.currentSystem, null);
+      reofferFerryHandles(staleRow);
+      ctx.emit('commLine', { text: 'Consignment posting withdrawn — the long run is off the board.' });
+      boardDirty = true;
+      continue;
+    }
     if (job.state !== 'accepted') continue;
     if (job.kind !== 'haul' && job.kind !== 'ferry' && destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
     if (job.kind === 'bounty') {
@@ -4469,11 +4736,33 @@ function tickDeliveryJobs(ctx, ui, render) {
         : job;
       completeJob(ctx, persistHaul, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
       settled = true;
-    } else if (job.kind === 'ferry' && ctx.flags.docked) {
+    } else if (job.kind === 'ferry') {
+      // Issue 176: the ACCEPTED two-gate window runs whether or not the hull
+      // is docked. The offered posting expires above, before the accepted-only
+      // guard. Both legs are gated on a finite deadline, which only a 176-era
+      // two-gate consignment ever carries, so no legacy agreement expires.
+      if (Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+        const persistRow = job.id === 'ferry-consignment'
+          ? (persistJobById(jobs, 'ferry-consignment') || job)
+          : job;
+        const reclaimed = expireFarConsignment(ctx, persistRow);
+        if (persistRow !== job) expireFarConsignment(ctx, job);
+        reofferFerryHandles(persistRow);
+        ctx.emit('commLine', {
+          text: reclaimed > 0
+            ? `Consignment window closed — the factor reclaimed ${reclaimed} Provisions and the deal is off.`
+            : 'Consignment window closed — the deal is off.',
+        });
+        boardDirty = true;
+        continue;
+      }
+      if (!ctx.flags.docked) continue;
       if (!job.destSystem || ctx.world.currentSystem !== job.destSystem) continue; // only the named far station pays
       if (holdUnits(ctx, 'provisions') >= FERRY_UNITS) {
         removeCargo(ctx, 'provisions', FERRY_UNITS);
-        const ferryBase = Number.isFinite(job.reward) ? job.reward : FERRY_REWARD;
+        // Issue 176: derived from the stamped origin/dest pair, so an old save
+        // without payQuoted still pays the distance it actually crossed.
+        const ferryBase = ferryRunBase(ctx, job, job.originSystem);
         const ferryPay = Number.isFinite(job.payQuoted)
           ? clampJobPay(job.payQuoted)
           : clampJobPay(jobPay(ctx, ferryBase));
@@ -5307,12 +5596,26 @@ export function initStation(ctx) {
         delete job.payQuoted;
         reofferFerryHandles();
       }
+      // Issue 176: honour a posted two-gate consignment; anything unreadable
+      // or out of range falls back to the wave-26 primary-gate destination.
+      const postedFerryDest = job.destSystem;
       job.originSystem = ctx.world.currentSystem;
-      job.destSystem = otherSystemId(ctx, job.originSystem);
+      job.destSystem = postingHopsOk(job.originSystem, postedFerryDest)
+        ? postedFerryDest
+        : otherSystemId(ctx, job.originSystem);
       // Wave 26: the quote becomes the agreement — stamped with the
       // destination dock's rates, JSON-plain on the job entry.
-      const ferryBase = Number.isFinite(job.reward) ? job.reward : FERRY_REWARD;
+      const ferryBase = ferryRunBase(ctx, job, job.originSystem);
+      job.reward = ferryBase;
       job.payQuoted = clampJobPay(jobPayFor(ctx, job.destSystem, ferryBase));
+      // Issue 176: the agreement carries the distance-scaled window. A
+      // one-gate consignment keeps its pre-176 timeless shape.
+      const ferryRunHops = postingHops(job.originSystem, job.destSystem);
+      if (ferryRunHops >= JOB_MAX_HOPS) {
+        job.deadline = ctx.world.time + MINING_DEADLINE * hopSpanMult(ferryRunHops);
+      } else {
+        delete job.deadline;
+      }
       addCargo(ctx, 'provisions', FERRY_UNITS);
     } else if (job.kind === 'recovery') {
       const entry = recoveryWreck(ctx, job);
@@ -5349,7 +5652,13 @@ export function initStation(ctx) {
         render();
         return;
       }
-      const dest = otherSystemId(ctx, job.originSystem);
+      // Issue 176: the POSTED destination becomes the agreement whenever it is
+      // within JOB_MAX_HOPS of the origin on the charted authored ring. An
+      // unreadable or out-of-range dest falls back to the primary gate, so a
+      // stuffed save can only ever shorten the run, never retarget it.
+      const dest = postingHopsOk(job.originSystem, job.destSystem)
+        ? job.destSystem
+        : otherSystemId(ctx, job.originSystem);
       if (!dest || dest === job.originSystem || !Object.hasOwn(SYSTEMS, dest)) {
         ui.notice = 'That posting has no far dock.';
         render();
@@ -5362,7 +5671,7 @@ export function initStation(ctx) {
       }
       job.destSystem = dest;
       job.payQuoted = peekJobReward(job);
-      job.deadline = ctx.world.time + MINING_DEADLINE;
+      job.deadline = ctx.world.time + MINING_DEADLINE * hopSpanMult(jobHops(job));
     } else if (job.kind === 'hunt') {
       if (job.state !== 'offered') {
         render();
@@ -5415,7 +5724,10 @@ export function initStation(ctx) {
         render();
         return;
       }
-      const dest = otherSystemId(ctx, job.originSystem);
+      // Issue 176: same posted-destination rule as trade above.
+      const dest = postingHopsOk(job.originSystem, job.destSystem)
+        ? job.destSystem
+        : otherSystemId(ctx, job.originSystem);
       if (!dest || dest === job.originSystem || !Object.hasOwn(SYSTEMS, dest)) {
         ui.notice = 'That posting has no far dock.';
         render();
@@ -5427,8 +5739,8 @@ export function initStation(ctx) {
         return;
       }
       job.destSystem = dest;
-      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, FERRY_REWARD));
-      job.deadline = ctx.world.time + MINING_DEADLINE;
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, passengerRunBase(job)));
+      job.deadline = ctx.world.time + MINING_DEADLINE * hopSpanMult(jobHops(job));
     } else if (job.kind === 'explore') {
       if (job.state !== 'offered') {
         render();
@@ -5619,7 +5931,9 @@ export function initStation(ctx) {
     patchJob(job.id, stamped);
     ui.notice = `Accepted: ${job.title}`;
     if (job.kind === 'haul' || job.kind === 'trade') ui.notice += ` — pays ${job.payQuoted} UU.`;
-    if (job.kind === 'passenger') ui.notice = `${passengerPayLine(ctx, job)}. ${PASSENGER_TERMS}`;
+    if (job.kind === 'passenger') {
+      ui.notice = `${passengerPayLine(ctx, job)}. ${passengerTermsFor(jobHops(job))}`;
+    }
     requestAutosave(ctx);
     render();
     return true;
@@ -5650,9 +5964,11 @@ export function initStation(ctx) {
     syncEspionageJobs(ctx, currentId);
     syncWarJobs(ctx, currentId);
     syncChainJobs(ctx, currentId);
+    // Issue 176: one — and only one — two-gate run across trade/passenger/ferry.
+    syncLongRunPostings(ctx, currentId);
     const aceHomeId = aceHomeSystem(ctx);
     const liveFerry = (ctx.world.jobs ?? []).find((j) => j && j.id === 'ferry-consignment');
-    if (liveFerry && liveFerry.state === 'offered') reofferFerryHandles();
+    if (liveFerry && liveFerry.state === 'offered') reofferFerryHandles(liveFerry);
     boardJobs(ctx, currentId).forEach((job, i) => {
       trackJob(job);
       const card = h('div', 'job-card', panel);
@@ -5667,11 +5983,15 @@ export function initStation(ctx) {
         detail = `Cut reachable ${oreName} in this system's field and deliver ${need} units at ${stationName}.`;
       } else if (job.kind === 'trade') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const destId = otherSystemId(ctx, originId);
+        // Issue 176: the card redraws its own copy every frame, so it must
+        // read the POSTED destination. Rebuilding from otherSystemId here
+        // named the adjacent dock on a two-gate card whose reward line and
+        // accept path both used the far one.
+        const destId = postingHopsOk(originId, job.destSystem) ? job.destSystem : otherSystemId(ctx, originId);
         const destName = tradeStationName(destId) ?? 'the far station';
         const name = tradeCommodityName(job.commodity);
         title = `Haul ${name}`;
-        detail = `Buy or hold ${HAUL_UNITS} ${name} and deliver to ${destName}.`;
+        detail = tradeRunDetail(HAUL_UNITS, name, destName, postingHops(originId, destId));
       } else if (job.kind === 'hunt') {
         const name = huntCardName(ctx, job);
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
@@ -5680,7 +6000,7 @@ export function initStation(ctx) {
         detail = `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
       } else if (job.kind === 'passenger') {
         title = 'Escort passengers';
-        detail = PASSENGER_TERMS;
+        detail = passengerTermsFor(passengerCardHops(ctx, job, currentId));
       } else if (job.kind === 'explore') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -5730,14 +6050,20 @@ export function initStation(ctx) {
         const est = peekJobReward(job, h === hDom);
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
       } else if (job.kind === 'ferry') {
-        const destId = job.state === 'accepted' ? job.destSystem : otherSystemId(ctx, currentId);
+        // Issue 176: an offered consignment may carry a posted two-gate dest.
+        const destId = job.state === 'accepted'
+          ? job.destSystem
+          : (postingHopsOk(currentId, job.destSystem) ? job.destSystem : otherSystemId(ctx, currentId));
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
+        const ferryHopCount = job.state === 'accepted'
+          ? ferryHops(ctx, job, currentId)
+          : postingHops(currentId, destId);
         // Wave 26: same quote/snapshot split as the haul line above.
-        const ferryBase = Number.isFinite(job.reward) ? job.reward : FERRY_REWARD;
+        const ferryBase = Math.round(FERRY_REWARD * hopPayMult(ferryHopCount));
         const ferryEst = job.state === 'accepted'
           ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : clampJobPay(jobPay(ctx, ferryBase)))
           : clampJobPay(jobPayFor(ctx, destId, ferryBase));
-        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} — pays ${ferryEst} UU, no buy-in`;
+        rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} (${hopsLabel(ferryHopCount)}) — pays ${ferryEst} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
         rewardLine = `Scoop, then return to the issuing dock — pays ${jobPayFor(ctx, job.originSystem, job.reward)} UU`;
       } else if (job.kind === 'mining') {
@@ -5754,10 +6080,10 @@ export function initStation(ctx) {
         const commodity = isTradeCommodity(job.commodity) ? job.commodity : null;
         const name = commodity ? COMMODITIES[commodity].name : 'cargo';
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const destId = otherSystemId(ctx, originId);
+        const destId = postingHopsOk(originId, job.destSystem) ? job.destSystem : otherSystemId(ctx, originId);
         const destName = tradeStationName(destId) ?? 'the far station';
         const est = peekJobReward(job, h === hDom);
-        rewardLine = `Deliver ${HAUL_UNITS} ${name} to ${destName} — pays ${est} UU`;
+        rewardLine = `Deliver ${HAUL_UNITS} ${name} to ${destName} (${hopsLabel(postingHops(originId, destId))}) — pays ${est} UU`;
       } else if (job.kind === 'hunt') {
         const name = huntCardName(ctx, job);
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
@@ -5835,7 +6161,9 @@ export function initStation(ctx) {
         btn(card, `Accept (${i + 1})`, () => acceptJob(job));
         if (job.kind === 'mining' || job.kind === 'trade' || job.kind === 'hunt'
           || job.kind === 'passenger' || job.kind === 'explore' || job.kind === 'espionage'
-          || job.kind === 'war') {
+          || job.kind === 'war' || job.kind === 'ferry') {
+          // Issue 176: a two-gate consignment carries a window; the one-gate
+          // consignment has no deadline, so the label stays empty for it.
           const left = miningTimeLeftLabel(ctx, job);
           if (left) h('div', 'job-state', card, left);
         }
@@ -5848,7 +6176,9 @@ export function initStation(ctx) {
           stateLine = `ACCEPTED — deliver to ${destName}`;
         } else if (job.kind === 'ferry') {
           const destName = ctx.systems?.[job.destSystem]?.station?.name ?? 'the far station';
-          stateLine = `ACCEPTED — consignment to ${destName} (${holdUnits(ctx, 'provisions')}/${FERRY_UNITS} aboard)`;
+          stateLine = `ACCEPTED — consignment to ${destName} (${hopsLabel(ferryHops(ctx, job, currentId))}, ${holdUnits(ctx, 'provisions')}/${FERRY_UNITS} aboard)`;
+          const ferryLeft = miningTimeLeftLabel(ctx, job);
+          if (ferryLeft) stateLine += ` · ${ferryLeft}`;
         } else if (job.kind === 'recovery') {
           stateLine = recoveryObjective(ctx, job).reason;
           if (!job.collected && Number.isFinite(job.deadline)) stateLine += ` ${Math.max(0, Math.ceil(job.deadline - ctx.world.time))}s left.`;
@@ -5864,7 +6194,7 @@ export function initStation(ctx) {
           const commodity = isTradeCommodity(job.commodity) ? job.commodity : null;
           const name = commodity ? COMMODITIES[commodity].name : 'cargo';
           const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-          const destId = otherSystemId(ctx, originId);
+          const destId = postingHopsOk(originId, job.destSystem) ? job.destSystem : otherSystemId(ctx, originId);
           const destName = tradeStationName(destId) ?? 'the far station';
           const have = commodity ? holdUnits(ctx, commodity) : 0;
           const left = miningTimeLeftLabel(ctx, job);
@@ -5877,10 +6207,10 @@ export function initStation(ctx) {
           if (left) stateLine += ` · ${left}`;
         } else if (job.kind === 'passenger') {
           const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-          const destId = otherSystemId(ctx, originId);
+          const destId = postingHopsOk(originId, job.destSystem) ? job.destSystem : otherSystemId(ctx, originId);
           const destName = passengerStationName(destId) ?? 'the far station';
           const left = miningTimeLeftLabel(ctx, job);
-          stateLine = `ACCEPTED — dock at ${destName}`;
+          stateLine = `ACCEPTED — dock at ${destName} (${hopsLabel(postingHops(originId, destId))})`;
           if (left) stateLine += ` · ${left}`;
         } else if (job.kind === 'explore') {
           const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
@@ -7111,7 +7441,8 @@ export function initStation(ctx) {
       ? currentId : (Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId);
     let pay;
     if (job.kind === 'trade') {
-      const base = isTradeCommodity(job.commodity) ? tradePayBase(ctx, job.commodity, HAUL_UNITS) : 0;
+      // Issue 176: distance-scaled base, derived from the posted origin/dest.
+      const base = tradeRunBase(ctx, job);
       pay = clampJobPay(jobPayFor(ctx, origin, base));
     } else {
       const unit = job.state === 'accepted' && job.originPrice ? job.originPrice : priceOf(ctx, 'provisions');

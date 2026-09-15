@@ -15784,12 +15784,15 @@ removeLiveShip(w42indyCtx, w42indy);
     payJob76.commodity = 'refinedMetals';
     payJob76.need = 5;
     payJob76.deadline = ctx.world.time + 600;
-    payJob76.destSystem = 'redmarch';
+    // Issue 176 widened the posted range to TWO gates, so the stuffed id moves
+    // to hollowreach (three gates from freehold): still outside any posting a
+    // board can make, which is what this pin has always asserted.
+    payJob76.destSystem = 'hollowreach';
   }
   const credStuff76 = ctx.world.credits;
   if (ctx.flags.docked) undockStation();
-  ctx.world.currentSystem = 'redmarch';
-  ctx.emit('systemLoaded', { to: 'redmarch' });
+  ctx.world.currentSystem = 'hollowreach';
+  ctx.emit('systemLoaded', { to: 'hollowreach' });
   tick(2, 'wave76 warp stuffed');
   dockAtCurrentStation('wave76 dock stuffed');
   if (payJob76) ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
@@ -15880,6 +15883,8 @@ removeLiveShip(w42indyCtx, w42indy);
     noInnerHtml: !/innerHTML/.test(st76),
     miningNeedUntouched: /function makeMiningJob[\s\S]*?const need = FERRY_UNITS/.test(st76),
     haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st76),
+    // Issue 176: the trade tick binds the posted destination the same way.
+    tradeDestBind: /if \(job\.kind === 'trade'\) \{[\s\S]*?const dest = postingHopsOk\(origin, job\.destSystem\)\s*\?\s*job\.destSystem\s*:\s*otherSystemId\(ctx, origin\);/.test(st76),
     uniqueHaulIds: uniqueLive76,
     replaceHelper: st76.includes('function replaceTradeJob') && st76.includes('function syncTradeJobs'),
   };
@@ -16392,14 +16397,15 @@ removeLiveShip(w42indyCtx, w42indy);
     payJob78p.payQuoted = 18;
     payJob78p.need = 1;
     payJob78p.deadline = ctx.world.time + 600;
-    payJob78p.destSystem = 'redmarch';
+    // Issue 176: out of posting range means three gates now (see wave 76).
+    payJob78p.destSystem = 'hollowreach';
   }
   freezeSlotJobs78p(payJob78p);
   const cargoBeforeStuff = JSON.stringify(ctx.cargo ?? []);
   const credStuff78p = ctx.world.credits;
   if (ctx.flags.docked) undockStation();
-  ctx.world.currentSystem = 'redmarch';
-  ctx.emit('systemLoaded', { to: 'redmarch' });
+  ctx.world.currentSystem = 'hollowreach';
+  ctx.emit('systemLoaded', { to: 'hollowreach' });
   tick(2, 'wave78p warp stuffed');
   dockAtCurrentStation('wave78p dock stuffed');
   tick(40, 'wave78p stuffed dest');
@@ -16539,13 +16545,86 @@ removeLiveShip(w42indyCtx, w42indy);
     noInnerHtml: !/innerHTML/.test(st78p),
     noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save78p) && !/SAFE_ID\.test\(\s*job\.id/.test(st78p),
     haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78p),
-    passengerDestBind: /job\.kind === 'passenger'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st78p),
+    // Issue 176: the passenger tick binds the POSTED destination, with the
+    // wave-35 primary gate as the fail-closed fallback for anything outside
+    // the posted range. The old regex matched the haul tick by accident once
+    // the passenger tick moved, so it names its own block now.
+    passengerDestBind: /if \(job\.kind === 'passenger'\) \{[\s\S]*?const dest = postingHopsOk\(origin, job\.destSystem\)\s*\?\s*job\.destSystem\s*:\s*otherSystemId\(ctx, origin\);/.test(st78p),
     uniqueHaulIds: uniqueLive78p,
     replaceHelper: st78p.includes('function replacePassengerJob') && st78p.includes('function syncPassengerJobs'),
     mouseAccept: st78p.includes('btn(card, `Accept (${i + 1})`, () => acceptJob(job))'),
   };
   console.log('wave78 passenger:', JSON.stringify(w78p));
   if (!Object.values(w78p).every(Boolean)) { console.log('WAVE78 PASSENGER FAIL'); errors++; }
+}
+
+// ---- WAVE176: two-gate transport postings (issue 176) ---------------------
+// Pure pins: the charted-ring distance table and the source contract that
+// drives it. The behavioural distribution across every authored board (one
+// long run per origin, per-origin seat, distance-scaled pay and window,
+// far-dock settlement) is covered by scripts/issue-176-two-gate-jobs-test.mjs.
+{
+  const { AUTHORED_SYSTEMS: authored176 } = await import('../src/game/authored-systems.js');
+  const dist176 = await import('../src/game/job-distance.js');
+  const here176 = dirname(fileURLToPath(import.meta.url));
+  const st176 = readFileSync(join(here176, '..', 'src/systems/station.js'), 'utf8');
+  const save176 = readFileSync(join(here176, '..', 'src/game/save.js'), 'utf8');
+  const chartedIds176 = Object.keys(SYSTEMS).filter((id) => dist176.chartedAuthored(id));
+  const generated176 = Object.keys(SYSTEMS).filter((id) => !Object.hasOwn(authored176, id));
+
+  // Every authored charted board can actually post a two-gate run, and every
+  // id it may name is exactly two gates out on the authored ring.
+  const everyOriginHasRun176 = chartedIds176.length === Object.keys(authored176).length
+    && chartedIds176.every((id) => {
+      const dests = dist176.longRunDests(id);
+      return dests.length >= 1
+        && dests.every((to) => dist176.authoredHops(id, to) === dist176.JOB_MAX_HOPS && to !== id);
+    });
+
+  // The walk never leaves the charted authored ring: no procedural id is
+  // reachable, and nothing beyond two gates is a legal posting.
+  const ringOnly176 = generated176.length > 0
+    && generated176.every((id) => !dist176.chartedAuthored(id)
+      && dist176.authoredHops('freehold', id) === null
+      && !dist176.postingHopsOk('freehold', id));
+  const rangeClosed176 = dist176.authoredHops('freehold', 'hollowreach') === 3
+    && !dist176.postingHopsOk('freehold', 'hollowreach')
+    && dist176.postingHopsOk('freehold', 'redmarch')
+    && dist176.postingHopsOk('freehold', 'veridian')
+    && !dist176.postingHopsOk('freehold', 'freehold');
+
+  // Pay and window ladders: 140% -> 175% of buy cost, one window per gate.
+  const ladder176 = dist176.hopPayMult(1) === 1 && dist176.hopPayMult(2) === 1.25
+    && dist176.hopSpanMult(1) === 1 && dist176.hopSpanMult(2) === 2
+    && dist176.hopsLabel(1) === '1 jump' && dist176.hopsLabel(2) === '2 jumps';
+
+  const w176 = {
+    everyOriginHasRun: everyOriginHasRun176,
+    ringOnly: ringOnly176,
+    rangeClosed: rangeClosed176,
+    payAndWindowLadder: ladder176,
+    // The board refresh owns the single seat, and the seat is per origin.
+    boardRefreshSyncs: st176.includes('syncLongRunPostings(ctx, currentId)')
+      && st176.includes('function syncLongRunPostings'),
+    perOriginSeat: /function longRunCandidates[\s\S]*?j\.originSystem === sysId/.test(st176),
+    // Distance is derived, never persisted: no new save field, no new key.
+    noPersistedDistance: !/'hops'|'jumps'|'longRun'/.test(save176)
+      && !save176.includes('JOB_MAX_HOPS'),
+    // The card copy is rebuilt from the POSTED destination every frame.
+    postedCardCopy: st176.includes('function tradeRunDetail')
+      && !/detail = `Buy or hold \$\{HAUL_UNITS\} \$\{name\} and deliver to \$\{destName\}\.`/.test(st176),
+    // The consignment re-offer mirrors the live posted row (issue 176 fix).
+    ferryReofferKeepsPost: /function reofferFerryHandles\(posted = null\)/.test(st176)
+      && st176.includes('reofferFerryHandles(liveFerry)'),
+    focusedTestPresent: (() => {
+      try {
+        return readFileSync(join(here176, 'issue-176-two-gate-jobs-test.mjs'), 'utf8')
+          .includes('ISSUE-176 TWO-GATE JOBS OK');
+      } catch { return false; }
+    })(),
+  };
+  console.log('wave176 two-gate jobs:', JSON.stringify(w176));
+  if (!Object.values(w176).every(Boolean)) { console.log('WAVE176 TWO-GATE FAIL'); errors++; }
 }
 
 // ---- WAVE78: MSN-02 renewable explore / information recovery pins ----

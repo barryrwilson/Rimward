@@ -1238,7 +1238,13 @@ export async function runAgentParityWave142(deps) {
     recoverIfDead142('w142 dock trade pre');
     ensureDocked142('w142 dock trade');
     openJobs142('w142 trade board');
-    const tradeOffer = offers142('trade')[0] || null;
+    // Issue 176: a board may now post ONE trade run two gates out. This
+    // scenario flies the fixed freehold -> veridian -> freehold route, so it
+    // takes the offered trade bound for the ADJACENT dock. Multi-hop delivery
+    // has its own runtime coverage (scripts/issue-176-two-gate-jobs-test.mjs).
+    const tradeAdjacent142 = SYSTEMS[ctx.world.currentSystem]?.gates?.[0]?.to;
+    const tradeOffer = offers142('trade').find((j) => j.destSystem === tradeAdjacent142)
+      || offers142('trade')[0] || null;
     const spyOffer = offers142('espionage')[0] || null;
     let tradeOk = false;
     let spyOk = false;

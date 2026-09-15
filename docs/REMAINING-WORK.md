@@ -27,6 +27,24 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#176](https://github.com/barryrwilson/Rimward/issues/176) is implemented
+on the isolated `codex/issue-176-two-gate-jobs` candidate: every authored
+charted job board posts exactly one destination two gates away, shared across
+the haul/trade, ferry and passenger families and never more than one. The
+shortest-distance walk is confined to the charted authored ring, so no posting
+names a procedural or unseen detour. Reward scales 140% -> 175% of buy cost and
+the delivery window scales one generous window per gate; both card copy and the
+reward line state the distance. The seat counts accepted work and is per origin,
+so a long run cannot be farmed two at a time from one dock while another
+origin's board keeps its own. Distance is derived from the posting's existing
+`originSystem`/`destSystem` pair, so no new persisted field is added and
+`sanitizeJobs` gained no new narrowing. The unique `haul-provisions` tutorial
+contract deliberately stays a one-gate run. See
+[the design section](Msn02TradeDesign.md) (§5a). Focused regression is
+`npm run test:two-gate-jobs`; boot adds `WAVE176`. Independent QA, the final
+build/boot gate and a live browser pass are pending; this is not a merge or
+deployment claim.
+
 Issue [#177](https://github.com/barryrwilson/Rimward/issues/177) is implemented
 on the isolated `codex/issue-177-consignment` candidate: a ferry's fronted
 Provisions are derived as consigned from the live contract, named in the hold
