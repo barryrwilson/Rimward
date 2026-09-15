@@ -22,6 +22,15 @@ hull contact. Hail/combat helm ownership remains respected. Independent review
 is pending; see [evidence](Issue173DockCancelEvidence.md). Contact sensitivity
 at creep speed remains the separate #184 decision.
 
+### Consignment cargo is visibly not yours — #177
+
+Implemented on the isolated candidate: the ferry's fronted Provisions read as
+`3 yours · 4 consigned` in the hold total, the market pane, the bulk preview
+and `observe()`, and no sell path offers them while the contract runs. The
+player can still sell his own units of the same commodity, and can still buy
+more to make a short manifest whole. Independent review is pending; see
+[evidence](../reviews/issue-177-consignment-evidence.md).
+
 ### Adding a quick idea
 
 Put an unrefined thought in **Idea inbox**. A future grooming pass can move it

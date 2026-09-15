@@ -292,6 +292,7 @@
 }
 
 .market-bulk-actions .screen-btn { flex: 1 1 220px; }
+.market-actions .screen-btn:disabled,
 .market-bulk .screen-btn:disabled {
   color: #9fb2c6;
   border-color: #31445c;

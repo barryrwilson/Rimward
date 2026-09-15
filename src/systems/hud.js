@@ -3,6 +3,7 @@ import '../ui/hud.css';
 import { WEAPONS, HEAT, POWER, U, FACTIONS, COMMODITIES, SYSTEMS, resolveBand, ORE_TYPES, MINING_LASERS, miningLaserFor, SHIP_CLASSES } from '../game/state.js';
 import { hailOffer } from '../game/hail-offer.js';
 import { escapeStatus } from '../game/npc-escape.js';
+import { consignedHoldUnits } from '../game/consignment.js'; // issue #177: fronted units are named in the CARGO meter
 import { selectedWeaponKey, isLauncherId, LAUNCHER_IDS } from '../game/weapon-fit.js';
 import { canFirePsionic, psionicCatalogOk } from '../game/psionic.js';
 import { isBeautiful } from './organic.js';
@@ -2507,7 +2508,10 @@ export function initHud(ctx) {
       if (fear !== last.fear) { last.fear = fear; fearValue.textContent = String(fear); }
       let used = 0;
       for (const c of ctx.cargo) used += c.units;
-      const cargoStr = used + '/' + ctx.cargoCapacity;
+      // Issue #177: fronted consignment units share the hold total; say so, so
+      // the reading is never mistaken for stock the player can sell.
+      const fronted = consignedHoldUnits(ctx);
+      const cargoStr = used + '/' + ctx.cargoCapacity + (fronted > 0 ? ' · ' + fronted + ' CONSIGNED' : '');
       if (cargoStr !== last.cargo) { last.cargo = cargoStr; cargoValueEl.textContent = cargoStr; }
 
       // bio companion: mood icon+label, hunger and wounds pips (vein green)

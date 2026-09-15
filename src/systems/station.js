@@ -5,6 +5,7 @@ import { claimedHullsOf } from '../game/derelict.js';
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
+import { cargoSplit, consignedHoldUnits, splitLabel, FERRY_UNITS } from '../game/consignment.js'; // issue #177: fronted ferry units are not the player's stock
 import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
@@ -224,7 +225,8 @@ const PATROL_REP = 5;
 const PATROL_NEED = 2;
 const HAUL_UNITS = 5;
 const HAUL_MARGIN = 1.4;
-const FERRY_UNITS = 4; // consignment is fronted on accept (§12.x)
+// FERRY_UNITS is owned by consignment.js: the fronted quantity, the hold
+// reservation and the settlement demand must never drift apart (§12.x).
 const FERRY_REWARD = 350;
 const RECOVERY_REWARD = 300;
 const FIXER_CUT_TRUST = 30; // fixer trust that earns the restricted-sale markup
@@ -1046,6 +1048,18 @@ export function holdUnits(ctx, commodity) {
   let n = 0;
   for (const c of ctx.cargo) if (c.commodity === commodity) n += c.units;
   return n;
+}
+/** Issue #177: hold-total suffix naming every fronted unit aboard. */
+function consignedHoldNote(ctx) {
+  const n = consignedHoldUnits(ctx);
+  return n > 0 ? ` · ${n} consigned` : '';
+}
+/** Issue #177: one refusal line for every sell path that meets fronted goods. */
+function consignedRefusal(name, split) {
+  const owned = split.owned === 0
+    ? 'none of them are yours'
+    : `only ${split.owned} ${split.owned === 1 ? 'is' : 'are'} yours`;
+  return `Cannot sell: ${split.consigned} ${name} ${split.consigned === 1 ? 'is' : 'are'} consigned to the factor — ${owned}.`;
 }
 function cargoUsed(ctx) {
   let n = 0;
@@ -4828,7 +4842,11 @@ export function initStation(ctx) {
       commitMarketSupply(ctx.world, currentId, key, stock, -qty);
       ui.notice = `Bought ${qty} ${com.name} for ${cost} UU.`;
     } else {
-      if (holdUnits(ctx, key) < qty) { ui.notice = `No ${com.name} in the hold.`; return false; }
+      // Issue #177: fronted consignment units ride in the same row as the
+      // player's own stock. They are not his to sell while the contract runs.
+      const split = cargoSplit(ctx, key, holdUnits(ctx, key));
+      if (split.held < qty) { ui.notice = `No ${com.name} in the hold.`; return false; }
+      if (split.owned < qty) { ui.notice = consignedRefusal(com.name, split); return false; }
       const payout = unit * qty;
       let fixer = null;
       if (key === 'restrictedComponents' && stationAlwaysTradesRestricted(ctx)) {
@@ -4860,6 +4878,10 @@ export function initStation(ctx) {
     const allowed = isMarketCommodity(key) && (COMMODITIES[key].legal || lockerAllowed());
     const stock = marketSupplyAt(ctx.world, currentId, key);
     const held = holdUnits(ctx, key);
+    // Issue #177: only the player's own units are for sale while a consignment runs.
+    const split = cargoSplit(ctx, key, held);
+    const owned = split.owned;
+    const consigned = split.consigned;
     const used = cargoUsed(ctx);
     const capacity = ctx.cargoCapacity;
     const credits = ctx.world.credits;
@@ -4873,7 +4895,7 @@ export function initStation(ctx) {
       && Number.isSafeInteger(capacity) && capacity >= 0;
     const buyMaxTotal = allowed && resources && Number.isSafeInteger(buyUnit) && buyUnit >= 0
       ? Math.min(stock.available, room, cash) : 0;
-    const sellMaxTotal = allowed && resources && validUnit ? held : 0;
+    const sellMaxTotal = allowed && resources && validUnit ? owned : 0;
     const total = qty * unit;
     const creditsAfter = credits + (buying ? -total : total);
     const cargoUsedAfter = used + (buying ? qty : -qty);
@@ -4888,12 +4910,13 @@ export function initStation(ctx) {
     else if (buying && qty > room) reason = `Only ${room} hold units free.`;
     else if (buying && total > credits) reason = `Not enough UU; affordable quantity ${cash}.`;
     else if (!buying && qty > held) reason = `Only ${held} units in the hold.`;
+    else if (!buying && qty > owned) reason = `Only ${owned} of the ${held} units are yours; ${consigned} are consigned.`;
     return Object.freeze({
       ok: !reason, reason, key, qty, buying, unit, total: reason ? null : total,
       buyMaxTotal, sellMaxTotal, orderLimit: tradeOrderLimit(ctx),
       orderCount: Math.ceil(qty / tradeOrderLimit(ctx)), creditsAfter, cargoUsedAfter,
       station: currentId, service: currentService, allowed, available: stock.available,
-      held, used, capacity, credits,
+      held, owned, consigned, used, capacity, credits,
     });
   }
 
@@ -4931,7 +4954,7 @@ export function initStation(ctx) {
       return;
     }
     const live = previewBulkTrade(intent.key, intent.qty, intent.buying);
-    const unchanged = ['unit', 'total', 'allowed', 'available', 'held', 'used', 'capacity', 'credits', 'orderLimit']
+    const unchanged = ['unit', 'total', 'allowed', 'available', 'held', 'owned', 'used', 'capacity', 'credits', 'orderLimit']
       .every(key => live[key] === intent[key]);
     if (!live.ok || !unchanged) {
       editBulk(order.text, order.key);
@@ -5070,7 +5093,10 @@ export function initStation(ctx) {
     const preview = h('div', 'market-bulk-preview', box);
     preview.id = 'market-bulk-preview';
     const live = previewBulkTrade(order.key, 1, true);
-    h('div', '', preview, `${COMMODITIES[order.key].name} · ${live.allowed ? 'Trade open' : 'Trade refused'} · Stock ${live.available} · Held ${live.held} · Hold ${live.used}/${live.capacity}`);
+    const heldText = live.consigned > 0
+      ? `${live.held} (${live.owned} yours · ${live.consigned} consigned)`
+      : String(live.held);
+    h('div', '', preview, `${COMMODITIES[order.key].name} · ${live.allowed ? 'Trade open' : 'Trade refused'} · Stock ${live.available} · Held ${heldText} · Hold ${live.used}/${live.capacity}`);
     const confirms = h('div', 'market-bulk-actions', box);
     for (const buying of [true, false]) {
       const intent = order[buying ? 'buy' : 'sell'];
@@ -5185,7 +5211,10 @@ export function initStation(ctx) {
           const sel = i === ui.marketSel ? ' market-row-sel' : '';
           const buyUnit = tradeFillUnit(key, true);
           const sellUnit = tradeFillUnit(key, false);
-          const hold = String(holdUnits(ctx, key));
+          const split = cargoSplit(ctx, key, holdUnits(ctx, key));
+          const hold = split.consigned > 0
+            ? `${split.held} (${splitLabel(split)})`
+            : String(split.held);
           const nameText = typeof com.name === 'string' && com.name ? com.name : key;
           h('div', 'market-cell' + sel, table, nameText);
           const status = h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table);
@@ -5201,8 +5230,15 @@ export function initStation(ctx) {
           } else {
             btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
             btn(actions, '+5', () => { tryTrade(key, 5, true); render(); });
-            btn(actions, '−1', () => { tryTrade(key, 1, false); render(); });
-            btn(actions, '−5', () => { tryTrade(key, 5, false); render(); });
+            // Issue #177: a sell the consignment forbids is never offered as
+            // live. tryTrade still refuses it, so a stale click cannot pass.
+            for (const qty of [1, 5]) {
+              const sell = btn(actions, qty === 1 ? '−1' : '−5', () => {
+                tryTrade(key, qty, false);
+                render();
+              });
+              if (split.owned < qty) sell.disabled = true;
+            }
           }
         } catch {
           return;
@@ -6478,7 +6514,7 @@ export function initStation(ctx) {
     h('div', 'station-ship', head,
       ctx.world.shipName ? `“${ctx.world.shipName}” made fast` : 'ship made fast');
     h('div', 'station-credits', head,
-      `CREDITS ${ctx.world.credits} UU · HOLD ${cargoUsed(ctx)}/${ctx.cargoCapacity}`);
+      `CREDITS ${ctx.world.credits} UU · HOLD ${cargoUsed(ctx)}/${ctx.cargoCapacity}${consignedHoldNote(ctx)}`);
 
     if (ui.level === 1) {
       const menu = h('div', 'station-menu', panel);
@@ -7115,7 +7151,7 @@ export function initStation(ctx) {
     return {
       available: stock.available, capacity: stock.capacity,
       buyMax: allowed ? Math.min(99, stock.available, room, cash) : 0,
-      sellMax: allowed ? Math.min(99, holdUnits(ctx, key)) : 0,
+      sellMax: allowed ? Math.min(99, cargoSplit(ctx, key, holdUnits(ctx, key)).owned) : 0,
       tradeAllowed: !!allowed,
     };
   }

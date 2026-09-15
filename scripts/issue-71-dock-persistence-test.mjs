@@ -169,6 +169,10 @@ refused('unneeded feeding refused without a checkpoint',()=>ctx.stationDesk.feed
 
 // Real storage failure: completed transaction stays coherent in memory, prior
 // snapshot intact, warning emitted, then retry succeeds while still docked.
+// Issue #177: the hold here carries only the accepted ferry's fronted units,
+// which are not the player's to sell. Buy one owned unit so the storage-failure
+// check still exercises a completed ordinary sale.
+assert.equal(ctx.stationDesk.trade({commodity:'provisions',qty:1,side:'buy'}).ok,true,'owned unit for the sale fixture');
 const setItem = localStorage.setItem;
 const priorBlob = localStorage.getItem(KEY);
 localStorage.setItem = () => { throw new Error('quota fixture'); };
@@ -184,6 +188,9 @@ step(310);
 matchesSave('failed storage retries completed transaction at same berth');
 
 // Use the same guards as production, with a controlled hostile fixture.
+// Issue #177: buy the unit that this sale hands back, so the fixture never
+// trades the accepted consignment's fronted units.
+assert.equal(ctx.stationDesk.trade({commodity:'provisions',qty:1,side:'buy'}).ok,true,'owned unit for the encounter-gate fixture');
 const originalShips = ctx.ships;
 ctx.ships = [{role:'pirate',object:ctx.ship.object,state:{destroyed:false}}];
 ctx.flags.combat = true;
@@ -220,6 +227,10 @@ console.log('PASS restore clears pending transaction retry');
 // Arriving short is a delivery refusal, not a completed transaction. Preserve
 // the accepted agreement and hold, and do not create a delayed partial save.
 dock('freehold');
+// Issue #177: fronted units can no longer be sold down to make the manifest
+// short, so the loss is stated directly — one unit gone away from the dock.
+const shortRow = ctx.cargo.find(c=>c.commodity==='provisions');
+if (shortRow && shortRow.units >= 4) shortRow.units -= 1;
 const shortState = state(), shortBlob = localStorage.getItem(KEY);
 assert.ok(ctx.cargo.filter(c=>c.commodity==='provisions').reduce((n,c)=>n+c.units,0)<4);
 step(40);
