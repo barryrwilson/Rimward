@@ -2682,3 +2682,10 @@ this document, preserve the desired outcome and update the assumed mechanism.
   Market memory, chart readouts and agent parity are implemented on the issue
   branch. [Contract and verification](Issue174PriceMemory.md); ten live checks pass;
   independent QA is pending. No merge or deployment is claimed.
+
+- [ ] IN REVIEW (#179): Read a market's real costs, caps and temporary prices
+  without arithmetic or a refusal. The haul buy-in, the cleared stale bulk
+  refusal and the transient event label are implemented on the issue branch;
+  finite stock caps were already shown on every row since #91.
+  [Contract and verification](Issue179MarketPane.md); nine live checks pass;
+  independent QA is pending. No merge or deployment is claimed.

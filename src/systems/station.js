@@ -6,6 +6,7 @@ import { claimedHullsOf } from '../game/derelict.js';
 import { dockFactionOf, yardStockFor } from '../game/shipyard.js'; // issue #186: the outfitter names the yard that sells a bigger hold
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
+import { marketEventAt } from '../game/market.js'; // issue #179: name the event behind a transient quote
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
 import { cargoSplit, consignedHoldUnits, splitLabel, FERRY_UNITS } from '../game/consignment.js'; // issue #177: fronted ferry units are not the player's stock
 import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
@@ -5561,12 +5562,25 @@ export function initStation(ctx) {
     for (const buying of [true, false]) {
       const intent = order[buying ? 'buy' : 'sell'];
       const verb = buying ? 'Buy' : 'Sell';
+      // Issue #56 B6/B9: a displayed OFFER is immutable. The quote, totals and
+      // label of an ok intent are frozen at edit time and must not drift under
+      // the player's press, so that path is untouched below.
+      // Issue #179: a REFUSAL carries no offer to protect, and the frozen one
+      // outlived its cause — the pane still read "Only 0 hold units free" after
+      // the player emptied the hold and was refused for stock instead. A
+      // refused side therefore re-states the live reason each render, and says
+      // plainly what to do when the market has since opened back up.
+      const refused = intent.ok ? null : previewBulkTrade(order.key, intent.qty, buying);
       h('div', '', preview, intent.ok
         ? `${verb}: ${intent.unit} UU/unit · ${intent.total} UU at displayed quote · Cash after ${intent.creditsAfter} UU · Hold after ${intent.cargoUsedAfter}/${intent.capacity}`
-        : `${verb}: ${Number.isSafeInteger(intent.unit) && intent.unit >= 0 ? `${intent.unit} UU/unit · ` : ''}${intent.reason}`);
+        : refused.ok
+          ? `${verb}: ${refused.unit} UU/unit · open again at ${refused.total} UU — re-enter the quantity to confirm.`
+          : `${verb}: ${Number.isSafeInteger(refused.unit) && refused.unit >= 0 ? `${refused.unit} UU/unit · ` : ''}${refused.reason}`);
       const label = intent.ok
         ? `${verb} ${intent.qty} ${COMMODITIES[order.key].name} · ${intent.total} UU`
-        : `${verb} ${COMMODITIES[order.key].name} — unavailable`;
+        : refused.ok
+          ? `${verb} ${COMMODITIES[order.key].name} — re-enter quantity`
+          : `${verb} ${COMMODITIES[order.key].name} — unavailable`;
       const confirm = btn(confirms, label, event => {
         if (event?.detail > 1) return; // A double-click cannot confirm a refreshed stale quote.
         executeBulk(intent);
@@ -5669,6 +5683,10 @@ export function initStation(ctx) {
       h('div', 'market-head', table, 'SELL');
       h('div', 'market-head', table, 'HOLD');
       h('div', 'market-head market-head-actions', table, 'TRADE');
+      // Issue 179: an event-driven spike snaps back once the event ends, so the
+      // row says which event is holding it there. Owner decision: label the
+      // spike, do not slow the reversion.
+      const priceEvent = marketEventAt(currentId);
       COMMODITY_KEYS.forEach((key, i) => {
         if (typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)) return;
         const com = COMMODITIES[key];
@@ -5687,6 +5705,11 @@ export function initStation(ctx) {
           h('div', '', status, com.legal ? 'Legal' : 'RESTRICTED');
           const stock = marketSupplyAt(ctx.world, currentId, key);
           h('div', 'market-stock', status, `${stock.available}/${stock.capacity}`);
+          const pull = priceEvent && Object.hasOwn(priceEvent.keys, key) ? priceEvent.keys[key] : 0;
+          if (pull) {
+            h('div', 'market-event', status,
+              `${priceEvent.label} ${pull > 0 ? 'up' : 'down'} — temporary`);
+          }
           h('div', 'market-cell market-fill' + sel, table, `${buyUnit} UU`);
           h('div', 'market-cell market-fill' + sel, table, `${sellUnit} UU`);
           h('div', 'market-cell' + sel, table, hold);
@@ -5730,6 +5753,10 @@ export function initStation(ctx) {
       h('div', 'screen-legend', panel, '↑/↓ select · Q/W buy 1/5 · A/S sell 1/5');
       h('div', 'screen-note', panel,
         'Stock replenishes in simulation time; empty to full in 20 minutes. Sales accepted even when stock is full.');
+      if (priceEvent) {
+        h('div', 'screen-note', panel,
+          `A ${priceEvent.label} is moving the marked rows. That price is temporary — it drifts back to this dock's baseline once the event passes, so do not count on it at your next visit.`);
+      }
       if (currentDef?.tradesRestricted === true) {
         h('div', 'screen-note', panel,
           'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
@@ -6133,6 +6160,35 @@ export function initStation(ctx) {
     return true;
   }
 
+  /**
+   * Issue #179: what an offered haul actually costs the player at THIS dock,
+   * and whether his purse covers it. Units he already owns cut the buy-in; a
+   * stock or hold-room limit is named too, because either one stops the run
+   * just as hard as an empty purse. Read-only; never throws into the board.
+   */
+  function haulBuyInFor(job) {
+    try {
+      const need = Number.isInteger(job?.need) && job.need >= 1 ? job.need : HAUL_UNITS;
+      const owned = cargoSplit(ctx, 'provisions', holdUnits(ctx, 'provisions')).owned;
+      const short = Math.max(0, need - owned);
+      if (short === 0) return `Buy-in: none — ${owned} Provisions already yours in the hold.`;
+      const unit = tradeFillUnit('provisions', true);
+      const cost = unit * short;
+      const cash = ctx.world.credits;
+      if (!Number.isSafeInteger(unit) || unit < 0 || !Number.isSafeInteger(cost)
+        || !Number.isFinite(cash)) return '';
+      let line = `Buy-in here: ${short} Provisions at ${unit} UU = ${cost} UU. You hold ${Math.floor(cash)} UU`;
+      line += cash >= cost ? ' — covered.' : ` — ${cost - Math.floor(cash)} UU short.`;
+      const stock = marketSupplyAt(ctx.world, currentId, 'provisions').available;
+      if (stock < short) line += ` This dock has ${stock} in stock.`;
+      const room = Math.max(0, Math.floor(ctx.cargoCapacity - cargoUsed(ctx)));
+      if (room < short) line += ` Hold room is ${room} units.`;
+      return line;
+    } catch {
+      return '';
+    }
+  }
+
   function renderJobs(panel) {
     if (h === hDom) displayedHaulQuotes.clear();
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
@@ -6237,12 +6293,17 @@ export function initStation(ctx) {
       h('div', 'job-detail', card, detail);
       let rewardLine;
       let chainSkuHint = '';
+      let haulBuyInLine = '';
       if (job.kind === 'haul') {
         const originId = job.state === 'accepted' ? (job.originSystem ?? currentId) : currentId;
         const destId = otherSystemId(ctx, originId);
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
         const est = peekJobReward(job, h === hDom);
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
+        // Issue #179: the haul is not fronted — the player buys the cargo. Say
+        // the buy-in and whether he can cover it BEFORE he accepts, instead of
+        // leaving him to do the arithmetic at the market row.
+        if (job.state !== 'accepted') haulBuyInLine = haulBuyInFor(job);
       } else if (job.kind === 'ferry') {
         // Issue 176: an offered consignment may carry a posted two-gate dest.
         const destId = job.state === 'accepted'
@@ -6344,6 +6405,7 @@ export function initStation(ctx) {
         rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
       h('div', 'job-reward', card, rewardLine);
+      if (haulBuyInLine) h('div', 'job-reward job-buy-in', card, haulBuyInLine);
       if (chainSkuHint) h('div', 'job-reward', card, chainSkuHint);
       if (job.id === 'bounty-ace' && job.state !== 'done' && currentId !== aceHomeId) {
         h('div', 'job-state', card,
