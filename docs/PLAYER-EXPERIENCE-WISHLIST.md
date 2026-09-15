@@ -2687,5 +2687,5 @@ this document, preserve the desired outcome and update the assumed mechanism.
   without arithmetic or a refusal. The haul buy-in, the cleared stale bulk
   refusal and the transient event label are implemented on the issue branch;
   finite stock caps were already shown on every row since #91.
-  [Contract and verification](Issue179MarketPane.md); nine live checks pass;
-  independent QA is pending. No merge or deployment is claimed.
+  [Contract and verification](Issue179MarketPane.md); independent Codex QA and
+  live checks passed. Merge remains pending; no deployment is claimed.

@@ -126,7 +126,7 @@ event passes.
 
 Lifetime is deliberately identical to the pressure it names: written by
 `applyEventPressure`, deleted by the `clear` call at `endEvent`, never
-persisted. After a restore the pressure is re-rolled, so no label appears — and
+persisted. After a fresh page reload no prior module pressure remains, so no label appears — and
 no pull exists either, so the quote really is free to revert. A kind that writes
 no pressure never labels a row.
 
@@ -197,7 +197,7 @@ Raw logs, `result.json` and screenshots: `C:/Projects/WebSim/out/issue-179-evide
 - The event label disappears at event end while the price is still drifting
   back. That follows directly from the owner's decision: label the cause while
   it acts, do not slow the reversion.
-- `marketEventAt` reads transient module state. A reloaded save shows no label.
+- `marketEventAt` reads transient module state. A save loaded after a fresh page reload shows no label.
   That is correct, not a gap: the reloaded game also has no pressure.
 - Review focus: the `renderBulk` refusal path must not have weakened the
   confirmation gate (`confirm.disabled` and `executeBulk` are unchanged); the
@@ -210,3 +210,23 @@ Implementation only. Rollback is a revert of the single bounded commit; there is
 no migration, no save-format change and no persisted field, so older and newer
 builds read the same saves. Independent Codex QA is required before any PR,
 merge or deployment.
+
+## Independent QA handoff (2026-09-15)
+
+Quinn (Codex) independently returned PASS for implementation commit
+`210daddaf86c6633e4a8e8a1fef61b7b12a74024`, built by Claude Code.
+The review covered source and text safety, the 13 market-pane scenarios,
+existing bulk-trade and market-liquidity suites, stock-15 and stock-zero
+refusals after clearing a full hold, refused-action economy immutability,
+and actual world-update event expiry with the market pane left open.
+
+Two independent live Chromium runs passed with no console errors or exceptions,
+stable runtime source hashes, and clean shutdown of their owned processes and
+ports. Screenshot review covered the 500 UU buy-in with a 350 UU purse,
+restricted 20-unit stock, temporary event labels, and a 900-pixel-wide viewport.
+These checks used controlled fixtures, not a campaign playthrough.
+
+Raw verdict and evidence: `C:/Projects/WebSim/out/issue-179-evidence/qa-verdict.md`.
+The final documentation-only follow-up clarifies fresh-page reload behavior;
+same-page restore can retain pre-existing module pressure and its matching label.
+No merge or deployment has been performed.
