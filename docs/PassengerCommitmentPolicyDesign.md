@@ -92,10 +92,37 @@ and that is what remains:
   this issue's scope and remains open.
 
 Where the delivered goods were bought, and whether a destination purchase should
-count as provenance for a delivery, is explicitly parked in
-[#182](https://github.com/barryrwilson/Rimward/issues/182). Issue #181 changes no
-provenance rule: a delivery settles on the commodity, count, destination and
+count as provenance for a delivery, was explicitly parked in
+[#182](https://github.com/barryrwilson/Rimward/issues/182). Issue #181 changed no
+provenance rule: a delivery settled on the commodity, count, destination and
 deadline it already carried.
+
+Issue #182 answers that question with the dock snapshot the issue allows, in the
+narrow per-berth shape the coordinator selected. Each berth visit takes ONE
+shared arrival manifest — the hold as it stood the moment the hull berthed — and
+every unit that leaves the hold spends it down
+through `removeCargo`, whatever took it (trade delivery, unique consignment,
+ferry consignment, mining delivery, market sale). A trade row and the unique
+consignment must find their units both aboard AND still on that manifest, so
+dockside stock, a part-bought run and a sold-then-rebought unit all fail, and two
+competing agreements cannot spend the same five units. Issue #181's
+consignment-first order and same-berth batch are unchanged; the reservation
+helper `uniqueHaulReserved` still decides who has first claim, and the manifest
+only decides how much of the hold is spendable at all.
+
+The manifest is module-scoped session state: no persisted field, no save-schema
+change, no stamp on a commodity row. The limitation that follows is a property of
+the berth-scoped shape, and it is stated rather than hidden. The manifest is
+taken at dock, dropped at launch, and re-taken fresh on the next dock, so a
+redock re-reads the hold as it then stands. A save reloaded while docked never
+runs the berth's dock path, so the delivery tick takes a fresh manifest from the
+restored hold the same way: buying at the dock, saving and reloading inside that
+berth still settles the run. Carrying the fact across a launch or a reload would
+need broader persisted provenance tracking, which is outside this issue's
+selected scope.
+
+Regression is `npm run test:arrival-cargo`, with a runtime `WAVE182` pin in
+`npm run test:boot`, and `npm run test:arrival-cargo-live` for the browser.
 
 Regression is `npm run test:same-berth`, with a runtime `WAVE181` pin in
 `npm run test:boot` that re-runs the mixed berth on real booted systems, and
