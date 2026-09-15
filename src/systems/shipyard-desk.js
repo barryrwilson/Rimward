@@ -15,7 +15,7 @@ import {
   hullResaleRefusal,
   sellHangarHull,
 } from '../game/shipyard.js';
-import { FACTIONS, SHIP_CLASSES } from '../game/state.js';
+import { FACTIONS, SHIP_CLASSES, cargoHoldFor, cargoHoldMax } from '../game/state.js';
 import { requestAutosave } from '../game/save.js';
 import { claimedHullsOf, claimedHullOptions, claimSalePrice, claimSaleRate, settleClaimedHull } from '../game/derelict.js';
 import { mountYardPreview } from './yard-preview.js';
@@ -561,6 +561,15 @@ function confirmGraft(ctx, ui) {
   }
 }
 
+/**
+ * Issue #186: the hold a hull carries off the pad, and what it reaches once
+ * the outfitter's racks are full. Read from the class data, never authored
+ * here, so a buyer sees the upgrade before signing papers.
+ */
+function holdLabel(classKey) {
+  return `hold ${cargoHoldFor(classKey)} units · ${cargoHoldMax(classKey)} with racks`;
+}
+
 function renderBuyPane(h, btn, panel, ctx, ui, redraw) {
   const yard = h('div', 'shipyard-buy', panel);
   h('div', 'screen-sub', yard, 'YARD');
@@ -583,7 +592,8 @@ function renderBuyPane(h, btn, panel, ctx, ui, redraw) {
     attachHullPreview(h, box, ctx, pending, faction);
     const copy = h('div', 'shipyard-buy-copy', box);
     h('div', 'shipyard-buy-name', copy, classLabel(pending.classKey));
-    h('div', 'shipyard-buy-meta', copy, `${price} UU · Confirm papers`);
+    h('div', 'shipyard-buy-meta', copy,
+      `${price} UU · ${holdLabel(pending.classKey)} · Confirm papers`);
     btn(copy, 'Confirm papers', () => {
       confirmYardBuy(ctx, ui);
       redraw();
@@ -606,7 +616,7 @@ function renderBuyPane(h, btn, panel, ctx, ui, redraw) {
     attachHullPreview(h, card, ctx, offer, faction);
     const copy = h('div', 'shipyard-buy-copy', card);
     h('div', 'shipyard-buy-name', copy, classLabel(offer.classKey));
-    h('div', 'shipyard-buy-meta', copy, `${price} UU`);
+    h('div', 'shipyard-buy-meta', copy, `${price} UU · ${holdLabel(offer.classKey)}`);
     btn(copy, `${hullDigitLabel(i)} — Papers`, () => {
       setYardPending(ui, offer.classKey);
       redraw();

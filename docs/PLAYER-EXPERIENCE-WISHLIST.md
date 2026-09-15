@@ -1644,6 +1644,18 @@ fallback only while the GLB is in flight, then swaps the real
 asset in under the same wrap without visiting the yard preview
 or waiting for matching NPC traffic. Independent and Hollow
 yards staying empty is unchanged.
+Issue #186 (2026-09-15), owner decision 2: the hull that carries
+more is now visible instead of hidden. A maxed-out hold rack note
+in OUTFITTING names the freighter's stock hold from
+`cargoHoldFor('freighter')` and sends the player to Shipyard,
+Yard pane; a dock whose faction stocks no freighter says so and
+points at another dock. A maxed freighter is told nothing, because
+nothing larger is sold. Yard cards and the confirm box read
+`cargoHoldFor` / `cargoHoldMax`, so the hold and the hold with
+racks are known before the papers. No new hull, SKU, price,
+stock or standing rule. This is a visibility outcome only; it
+does not claim the trader's UU ceiling or market liquidity is
+solved.
 
 - Give each faction at least one shipyard where its ships can be purchased.
 - Gate faction hulls by sufficient reputation as well as price.
