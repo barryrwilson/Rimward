@@ -16616,16 +16616,6 @@ removeLiveShip(w42indyCtx, w42indy);
     // The consignment re-offer mirrors the live posted row (issue 176 fix).
     ferryReofferKeepsPost: /function reofferFerryHandles\(posted = null\)/.test(st176)
       && st176.includes('reofferFerryHandles(liveFerry)'),
-    // A two-gate consignment carries the scaled window and fails closed when
-    // it shuts; a one-gate consignment keeps its pre-176 timeless shape, so
-    // no legacy agreement is expired by this wave.
-    ferryWindowScaled: st176.includes('function expireFarConsignment')
-      && /if \(next\) job\.deadline = ctx\.world\.time \+ MINING_DEADLINE \* hopSpanMult\(hops\);\s*
-\s*else delete job\.deadline;/.test(st176)
-      && /if \(ferryRunHops >= JOB_MAX_HOPS\) \{[\s\S]*?\} else \{\s*
-\s*delete job\.deadline;/.test(st176)
-      && /job\.kind === 'ferry'\) \{[\s\S]*?if \(Number\.isFinite\(job\.deadline\) && ctx\.world\.time >= job\.deadline\)/.test(st176)
-      && /function expireFarConsignment[\s\S]*?consignedHoldUnits\(ctx\)/.test(st176),
     focusedTestPresent: (() => {
       try {
         return readFileSync(join(here176, 'issue-176-two-gate-jobs-test.mjs'), 'utf8')

@@ -4664,6 +4664,23 @@ function tickDeliveryJobs(ctx, ui, render) {
       boardDirty = true;
       continue;
     }
+    // Issue 176: an OFFERED two-gate consignment posting runs its own window,
+    // which must close BEFORE the accepted-only guard below — that guard used
+    // to drop the offered row, leaving a stale far posting on the board. No
+    // cargo is reclaimed because nothing was fronted yet: the posting is
+    // withdrawn to its one-gate shape and the seat frees for a fresh posting.
+    if (job.kind === 'ferry' && job.state === 'offered'
+      && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+      const staleRow = job.id === 'ferry-consignment'
+        ? (persistJobById(jobs, 'ferry-consignment') || job)
+        : job;
+      applyFerryRunDest(ctx, staleRow, ctx.world.currentSystem, null);
+      if (staleRow !== job) applyFerryRunDest(ctx, job, ctx.world.currentSystem, null);
+      reofferFerryHandles(staleRow);
+      ctx.emit('commLine', { text: 'Consignment posting withdrawn — the long run is off the board.' });
+      boardDirty = true;
+      continue;
+    }
     if (job.state !== 'accepted') continue;
     if (job.kind !== 'haul' && job.kind !== 'ferry' && destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
     if (job.kind === 'bounty') {
@@ -4720,28 +4737,22 @@ function tickDeliveryJobs(ctx, ui, render) {
       completeJob(ctx, persistHaul, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
       settled = true;
     } else if (job.kind === 'ferry') {
-      // Issue 176: the two-gate window runs whether or not the hull is docked.
-      // Both legs are gated on a finite deadline, which only a 176-era
-      // two-gate consignment ever carries.
+      // Issue 176: the ACCEPTED two-gate window runs whether or not the hull
+      // is docked. The offered posting expires above, before the accepted-only
+      // guard. Both legs are gated on a finite deadline, which only a 176-era
+      // two-gate consignment ever carries, so no legacy agreement expires.
       if (Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
         const persistRow = job.id === 'ferry-consignment'
           ? (persistJobById(jobs, 'ferry-consignment') || job)
           : job;
-        if (job.state === 'accepted') {
-          const reclaimed = expireFarConsignment(ctx, persistRow);
-          if (persistRow !== job) expireFarConsignment(ctx, job);
-          reofferFerryHandles(persistRow);
-          ctx.emit('commLine', {
-            text: reclaimed > 0
-              ? `Consignment window closed — the factor reclaimed ${reclaimed} Provisions and the deal is off.`
-              : 'Consignment window closed — the deal is off.',
-          });
-        } else {
-          applyFerryRunDest(ctx, persistRow, ctx.world.currentSystem, null);
-          if (persistRow !== job) applyFerryRunDest(ctx, job, ctx.world.currentSystem, null);
-          reofferFerryHandles(persistRow);
-          ctx.emit('commLine', { text: 'Consignment posting withdrawn — the long run is off the board.' });
-        }
+        const reclaimed = expireFarConsignment(ctx, persistRow);
+        if (persistRow !== job) expireFarConsignment(ctx, job);
+        reofferFerryHandles(persistRow);
+        ctx.emit('commLine', {
+          text: reclaimed > 0
+            ? `Consignment window closed — the factor reclaimed ${reclaimed} Provisions and the deal is off.`
+            : 'Consignment window closed — the deal is off.',
+        });
         boardDirty = true;
         continue;
       }

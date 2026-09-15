@@ -1763,7 +1763,8 @@ exactly one trade/ferry/passenger run two gates out, paid
 175% of buy cost against 140% at one gate, with the window
 and the card copy scaled to the jump count. Distance is
 derived from the posting's own origin/dest pair, so multi-
-system trade has job support without a new persisted field.  
+system trade has job support without a new persisted field.
+
 **Player problem:** Too few missions are available, completed missions do not
 reliably disappear and get replaced, and the selection does not support enough
 play styles.  

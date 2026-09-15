@@ -378,6 +378,48 @@ check('G2 a second board redraw does not wipe the promoted consignment', () => {
   assert.ok(card.reward.includes('2 jumps'), `card states the distance: ${card.reward}`);
 });
 
+check('G2b an expired OFFERED two-gate posting is withdrawn, then re-posted', () => {
+  const ferry = ctx.world.jobs.find((j) => j.id === 'ferry-consignment');
+  const staleDest = ferry.destSystem;
+  const staleDeadline = ferry.deadline;
+  assert.ok(staleDest, 'the posting names a far dock');
+  assert.ok(Number.isFinite(staleDeadline), 'the posting carries a window');
+  const credits = ctx.world.credits;
+  const cargoBefore = JSON.stringify(ctx.cargo);
+  // The window closes with no board refresh in between, so only the throttled
+  // delivery tick can withdraw it. Its accepted-only guard used to drop the
+  // offered row here and leave a stale far posting on the board.
+  ctx.world.time = staleDeadline + 1;
+  step(120);
+  assert.equal(ferry.state, 'offered', 'an unaccepted posting stays on offer');
+  assert.equal(ferry.destSystem ?? null, null,
+    `stale far posting survived its window: ${ferry.destSystem} at ${ctx.world.time}`);
+  assert.ok(!Object.hasOwn(ferry, 'deadline'), 'the stale clock is cleared');
+  assert.equal(ferry.reward, 350, 'it returns to the one-gate fee');
+  assert.equal(ctx.world.credits, credits, 'a withdrawn posting pays nothing');
+  assert.equal(JSON.stringify(ctx.cargo), cargoBefore,
+    'nothing was fronted on an unaccepted posting, so nothing is reclaimed');
+  // The seat is free again: the next refresh posts one fresh eligible long
+  // run. The renewable slots expired alongside it, so they outrank the
+  // consignment for the seat again — which is the seat order working.
+  openBoard();
+  const fresh = longRuns(HOME);
+  assert.equal(fresh.length, 1, `one fresh long run: ${JSON.stringify(fresh.map((j) => j.id))}`);
+  assert.equal(authoredHops(HOME, fresh[0].destSystem), JOB_MAX_HOPS);
+  assert.ok(fresh[0].deadline > ctx.world.time, 'the fresh posting carries a fresh window');
+  // Re-arm the G1 fixture so the consignment carries the seat for G3 below.
+  for (const job of boardRuns(HOME)) {
+    if (job.kind === 'ferry') continue;
+    job.state = 'accepted';
+    job.destSystem = homeNear;
+    job.payQuoted = 1;
+    job.deadline = ctx.world.time + MINING_DEADLINE;
+  }
+  openBoard();
+  assert.ok(ferry.destSystem, 'the consignment carries the seat once the slots are taken');
+  assert.equal(authoredHops(HOME, ferry.destSystem), JOB_MAX_HOPS);
+});
+
 check('G3 accepting the promoted consignment keeps the posted far dock', () => {
   const accepted = ctx.stationDesk.acceptJob('ferry-consignment');
   assert.equal(accepted.ok, true, JSON.stringify(accepted));
