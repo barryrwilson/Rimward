@@ -29,6 +29,18 @@ const cargoRow = key => observe().world.cargo.find(r => r.commodity === key);
 const marketRow = key => observe().market?.rows.find(r => r.commodity === key);
 const trade = (commodity, qty, side) => ctx.stationDesk.trade({ commodity, qty, side });
 const action = prefix => ctx.stationDesk.peekView().actions.find(a => a.label.startsWith(prefix));
+const rowButton = label => {
+  const cap = ctx.stationDesk.peekView();
+  const marketRows = [...dom.walkDom(document.body)]
+    .filter(n => n.tagName === 'BUTTON' && n.textContent === label
+      && (n.className || '').includes('screen-btn'));
+  return { offered: cap.actions.some(a => a.label === label), nodes: marketRows };
+};
+const sellEnabled = label => {
+  const nodes = rowButton(label).nodes;
+  assert.ok(nodes.length > 0, 'row button ' + label + ' is drawn');
+  return nodes.some(n => n.disabled !== true);
+};
 const perform = prefix => {
   const a = action(prefix);
   assert.ok(a, `button ${prefix}`);
@@ -114,6 +126,11 @@ check('A4 Sell All offers only the 3 owned units', () => {
   assert.ok(screenText().includes('Held 7 (3 yours · 4 consigned)'), 'bulk preview shows the split');
 });
 
+check('A4b with 3 owned units only the affordable row sell button stays live', () => {
+  assert.equal(sellEnabled('−1'), true, '−1 stays live for 3 owned');
+  assert.equal(sellEnabled('−5'), false, '−5 is disabled above the owned units');
+});
+
 check('A5 a direct sell of more than the owned units is refused, hold untouched', () => {
   const before = held('provisions');
   const credits = ctx.world.credits;
@@ -144,9 +161,12 @@ check('B1 a consigned-only hold sells nothing through the desk, presets or butto
   assert.equal(held('provisions'), 4);
 });
 
-check('B2 the market row sell buttons refuse the fronted units', () => {
+check('B2 with 0 owned units neither row sell button is offered as live', () => {
   ctx.stationDesk.selectService('market');
   const credits = ctx.world.credits;
+  assert.equal(sellEnabled('−1'), false, '−1 is disabled');
+  assert.equal(sellEnabled('−5'), false, '−5 is disabled');
+  // The closure behind the disabled control still refuses a stale click.
   const minus = perform('−1');
   assert.equal(minus.ok, false, '−1 refused');
   assert.equal(minus.token, 'unavailable');
@@ -221,6 +241,22 @@ check('D4 a short landing leaves the contract open and its units protected', () 
   assert.equal(trade('provisions', 1, 'sell').ok, false, 'still not the player\'s to sell');
   assert.equal(trade('provisions', 1, 'buy').ok, true, 'topping the consignment up is allowed');
   assert.deepEqual(cargoSplit(ctx, 'provisions'), { held: 4, consigned: 4, owned: 0 });
+});
+
+// ---------------------------------------------------------------------------
+// E. The reservation follows the canonical fronting, not a mutated job row.
+// ---------------------------------------------------------------------------
+check('E1 a job row carrying a smaller `need` still reserves all four fronted units', () => {
+  const job = ferryJob();
+  assert.equal(job.state, 'accepted', 'a consignment is aboard');
+  assert.equal(held('provisions'), 4);
+  const need = job.need;
+  job.need = 1; // fixture: a drifted row; settlement still demands four
+  assert.deepEqual(cargoSplit(ctx, 'provisions'), { held: 4, consigned: 4, owned: 0 });
+  assert.equal(marketRow('provisions').sellMax, 0);
+  assert.equal(trade('provisions', 3, 'sell').ok, false, 'the other three are not released');
+  assert.equal(held('provisions'), 4);
+  job.need = need;
 });
 
 console.log('OK issue-177 consignment');

@@ -5,7 +5,7 @@ import { claimedHullsOf } from '../game/derelict.js';
 import * as pods from '../game/pods.js';
 import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
-import { cargoSplit, consignedHoldUnits, splitLabel } from '../game/consignment.js'; // issue #177: fronted ferry units are not the player's stock
+import { cargoSplit, consignedHoldUnits, splitLabel, FERRY_UNITS } from '../game/consignment.js'; // issue #177: fronted ferry units are not the player's stock
 import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
@@ -225,7 +225,8 @@ const PATROL_REP = 5;
 const PATROL_NEED = 2;
 const HAUL_UNITS = 5;
 const HAUL_MARGIN = 1.4;
-const FERRY_UNITS = 4; // consignment is fronted on accept (§12.x)
+// FERRY_UNITS is owned by consignment.js: the fronted quantity, the hold
+// reservation and the settlement demand must never drift apart (§12.x).
 const FERRY_REWARD = 350;
 const RECOVERY_REWARD = 300;
 const FIXER_CUT_TRUST = 30; // fixer trust that earns the restricted-sale markup
@@ -5229,8 +5230,15 @@ export function initStation(ctx) {
           } else {
             btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
             btn(actions, '+5', () => { tryTrade(key, 5, true); render(); });
-            btn(actions, '−1', () => { tryTrade(key, 1, false); render(); });
-            btn(actions, '−5', () => { tryTrade(key, 5, false); render(); });
+            // Issue #177: a sell the consignment forbids is never offered as
+            // live. tryTrade still refuses it, so a stale click cannot pass.
+            for (const qty of [1, 5]) {
+              const sell = btn(actions, qty === 1 ? '−1' : '−5', () => {
+                tryTrade(key, qty, false);
+                render();
+              });
+              if (split.owned < qty) sell.disabled = true;
+            }
           }
         } catch {
           return;

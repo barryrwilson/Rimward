@@ -15,8 +15,14 @@
 
 // The ferry is the only contract that fronts goods, and it fronts Provisions.
 const FERRY_COMMODITY = 'provisions';
-// Matches station.js FERRY_UNITS; used only when an old job row lacks `need`.
-const FERRY_FALLBACK_UNITS = 4;
+/**
+ * Units a ferry contract fronts on accept and reclaims on settlement. This is
+ * the canonical quantity for BOTH sides of the deal (station.js acceptJob and
+ * tickDeliveryJobs), so the reservation is taken from it and never from the
+ * job row's mutable `need`: a row carrying need=1 would otherwise release
+ * three fronted units for sale that settlement still demands back.
+ */
+export const FERRY_UNITS = 4;
 
 /** Units of `commodity` aboard, ignoring nothing — same sum as holdUnits(). */
 export function heldUnitsOf(cargo, commodity) {
@@ -49,8 +55,7 @@ function frontedDemand(ctx, commodity) {
       if (seen.has(id)) continue;
       seen.add(id);
     }
-    const need = Number(job.need);
-    n += Number.isFinite(need) && need >= 1 ? Math.floor(need) : FERRY_FALLBACK_UNITS;
+    n += FERRY_UNITS; // canonical fronting, not the row's mutable `need`
   }
   return n;
 }
