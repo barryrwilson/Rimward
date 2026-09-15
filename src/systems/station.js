@@ -2522,6 +2522,36 @@ function destPayHeldForUniqueHaul(ctx, ui, jobs) {
   return uniqueHaulIsOpen(jobs) || ui?.uniqueHaulPaid === true;
 }
 
+// Issue 181: the blanket settlement compatibility fence above no longer decides
+// whether an ordinary trade or passenger delivery settles — it used to hold the
+// whole berth, before AND after the unique haul paid, so four deliveries for the
+// dock the player was standing in needed a relaunch. What the unique consignment
+// actually needs is narrower: it is quoted on five Provisions it must carry to
+// its named dock, so an ordinary trade row for Provisions must not spend them
+// while that agreement is open. Nothing else is reserved. Refined metals,
+// parties and every other delivery for this dock settle in the same berth.
+function uniqueHaulReserved(jobs, commodity) {
+  return commodity === 'provisions' && uniqueHaulIsOpen(jobs) ? HAUL_UNITS : 0;
+}
+
+// The one bounded reason an otherwise eligible trade delivery has not paid: the
+// units are aboard, but they are the unique consignment's. It is a property of
+// the hold, not of a berth, so the row carries the same reason at its own dock,
+// at the origin and in transit. Derived on every read, so nothing stale is
+// persisted or drawn once the consignment settles.
+function tradeReserveHold(ctx, jobs, job) {
+  if (!job || job.kind !== 'trade' || job.state !== 'accepted') return null;
+  const commodity = job.commodity;
+  if (!isTradeCommodity(commodity)) return null;
+  const reserved = uniqueHaulReserved(jobs, commodity);
+  if (reserved <= 0) return null;
+  const need = job.need;
+  if (!Number.isInteger(need)) return null;
+  const have = holdUnits(ctx, commodity);
+  if (have < need || have - reserved >= need) return null;
+  return `held — ${reserved} ${COMMODITIES[commodity].name} are committed to the unique consignment`;
+}
+
 function isTradeCommodity(key) {
   if (typeof key !== 'string') return false;
   if (!Object.hasOwn(COMMODITIES, key)) return false;
@@ -4206,6 +4236,16 @@ function tickDeliveryJobs(ctx, ui, render) {
   let boardDirty = false;
   let settled = false;
   const huntPaidNames = new Set();
+  // Issue 181: the unique consignment settles BEFORE any ordinary delivery in
+  // this pass, whatever its index. Its five Provisions leave the hold first, so
+  // a trade row for the same commodity is measured against what is actually
+  // free, and every eligible delivery for this dock pays in this same berth.
+  const uniqueHaul = persistJobById(jobs, 'haul-provisions');
+  if (ctx.flags.docked && uniqueHaul && uniqueHaul.kind === 'haul' && uniqueHaul.state === 'accepted'
+    && settleHaulJob(ctx, ui, jobs, uniqueHaul)) {
+    settled = true;
+    boardDirty = true;
+  }
   // Reverse so splice of mining rows does not skip an unvisited job.
   for (let i = jobs.length - 1; i >= 0; i--) {
     const job = jobs[i];
@@ -4367,12 +4407,13 @@ function tickDeliveryJobs(ctx, ui, render) {
         ? job.destSystem
         : otherSystemId(ctx, origin);
       if (ctx.world.currentSystem !== dest || dest === origin) continue;
-      if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
       const commodity = job.commodity;
       if (!isTradeCommodity(commodity)) continue;
       const need = job.need;
       if (!Number.isInteger(need) || need !== HAUL_UNITS) continue;
-      if (holdUnits(ctx, commodity) < need) continue;
+      // Issue 181: only the unique consignment's own five Provisions are held
+      // back. Anything else aboard settles in this berth, in this pass.
+      if (holdUnits(ctx, commodity) - uniqueHaulReserved(jobs, commodity) < need) continue;
       job.state = 'failed';
       removeCargo(ctx, commodity, need);
       const base = tradeRunBase(ctx, job);
@@ -4416,7 +4457,8 @@ function tickDeliveryJobs(ctx, ui, render) {
         ? job.destSystem
         : otherSystemId(ctx, origin);
       if (ctx.world.currentSystem !== dest || dest === origin) continue;
-      if (destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
+      // Issue 181: a party occupies no hold, so the unique consignment has no
+      // claim on it. It disembarks in the same berth the haul settled in.
       if (job.need !== 1) {
         job.state = 'failed';
         replacePassengerJob(ctx, job);
@@ -4709,33 +4751,7 @@ function tickDeliveryJobs(ctx, ui, render) {
         settled = true;
       }
     } else if (job.kind === 'haul' && ctx.flags.docked) {
-      // Wave 35: delivery binds the NAMED destination, closing the wave-26
-      // review MEDIUM — a payQuoted-stamped chain paid at ANY non-origin
-      // dock. otherSystemId names the primary-gate destination, the same id
-      // the board UI and the accept-time quote resolve (the ferry precedent:
-      // only the named far station pays). Side-gate arrivals in multi-gate
-      // origins no longer pay. Old saves need no migration: originSystem +
-      // payQuoted were stamped at accept, and this gate recomputes the same
-      // destination at delivery time.
-      const origin = job.originSystem ?? 'freehold';
-      const dest = otherSystemId(ctx, origin);
-      // Gates-less fallback (otherSystemId returns the origin itself): the
-      // job stays undeliverable — it can never pay at origin.
-      if (ctx.world.currentSystem !== dest || dest === origin) continue;
-      if (holdUnits(ctx, 'provisions') < HAUL_UNITS) continue;
-      removeCargo(ctx, 'provisions', HAUL_UNITS);
-      const unitCost = job.originPrice || priceOf(ctx, 'provisions');
-      const reward = job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
-      ctx.world.credits += reward;
-      if (job.id === 'haul-provisions' && ui) ui.uniqueHaulPaid = true;
-      // The gate above makes this dock the named destination, so the line's
-      // station is always the one the quote was priced off.
-      const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
-      const persistHaul = job.id === 'haul-provisions'
-        ? (persistJobById(jobs, 'haul-provisions') || job)
-        : job;
-      completeJob(ctx, persistHaul, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
-      settled = true;
+      if (settleHaulJob(ctx, ui, jobs, job)) settled = true;
     } else if (job.kind === 'ferry') {
       // Issue 176: the ACCEPTED two-gate window runs whether or not the hull
       // is docked. The offered posting expires above, before the accepted-only
@@ -4792,6 +4808,41 @@ function tickDeliveryJobs(ctx, ui, render) {
   // Arrival saved before this throttled pass. Persist only after all payout,
   // cargo, reputation, contact and replacement-row mutations are complete.
   if (settled && ctx.flags.docked) requestAutosave(ctx);
+}
+
+/** Settle ONE accepted haul agreement at the dock the player is standing in.
+ * Issue 181 lifted this out of `tickDeliveryJobs` unchanged so the unique
+ * `haul-provisions` consignment can be settled FIRST in a pass, before any
+ * ordinary delivery is measured against the hold. Returns true when it paid.
+ */
+function settleHaulJob(ctx, ui, jobs, job) {
+  // Wave 35: delivery binds the NAMED destination, closing the wave-26
+  // review MEDIUM — a payQuoted-stamped chain paid at ANY non-origin
+  // dock. otherSystemId names the primary-gate destination, the same id
+  // the board UI and the accept-time quote resolve (the ferry precedent:
+  // only the named far station pays). Side-gate arrivals in multi-gate
+  // origins no longer pay. Old saves need no migration: originSystem +
+  // payQuoted were stamped at accept, and this gate recomputes the same
+  // destination at delivery time.
+  const origin = job.originSystem ?? 'freehold';
+  const dest = otherSystemId(ctx, origin);
+  // Gates-less fallback (otherSystemId returns the origin itself): the
+  // job stays undeliverable — it can never pay at origin.
+  if (ctx.world.currentSystem !== dest || dest === origin) return false;
+  if (holdUnits(ctx, 'provisions') < HAUL_UNITS) return false;
+  removeCargo(ctx, 'provisions', HAUL_UNITS);
+  const unitCost = job.originPrice || priceOf(ctx, 'provisions');
+  const reward = job.payQuoted ?? jobPay(ctx, Math.round(HAUL_UNITS * unitCost * HAUL_MARGIN));
+  ctx.world.credits += reward;
+  if (job.id === 'haul-provisions' && ui) ui.uniqueHaulPaid = true;
+  // The gate above makes this dock the named destination, so the line's
+  // station is always the one the quote was priced off.
+  const destName = ctx.systems?.[ctx.world.currentSystem]?.station?.name ?? 'the far station';
+  const persistHaul = job.id === 'haul-provisions'
+    ? (persistJobById(jobs, 'haul-provisions') || job)
+    : job;
+  completeJob(ctx, persistHaul, `Provisions delivered — ${reward} UU paid at 140% of buy cost by ${destName}.`);
+  return true;
 }
 
 // ---------------------------------------------------------------- main ----
@@ -6200,6 +6251,10 @@ export function initStation(ctx) {
           const left = miningTimeLeftLabel(ctx, job);
           stateLine = `ACCEPTED — deliver ${HAUL_UNITS} ${name} to ${destName} (have ${have})`;
           if (left) stateLine += ` · ${left}`;
+          // Issue 181: the units are aboard but spoken for. Say so on the row,
+          // instead of leaving an eligible-looking delivery silently unpaid.
+          const held = tradeReserveHold(ctx, ctx.world.jobs, job);
+          if (held) stateLine += ` · ${held}`;
         } else if (job.kind === 'hunt') {
           const name = huntCardName(ctx, job);
           const left = miningTimeLeftLabel(ctx, job);
@@ -7561,6 +7616,7 @@ export function initStation(ctx) {
     peekService,
     peekOffers,
     peekJobReward,
+    peekJobHold: (job) => tradeReserveHold(ctx, ctx.world.jobs, job),
     peekFillUnit,
     peekTradeAvailability,
     peekView,

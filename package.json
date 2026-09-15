@@ -44,6 +44,8 @@
     "test:derelict": "node --import ./scripts/with-css-stub.mjs scripts/issue-148-derelict-test.mjs",
     "test:pirate-haul": "node --import ./scripts/with-css-stub.mjs scripts/issue-151-pirate-haul-test.mjs",
     "test:two-gate-jobs": "node --import ./scripts/with-css-stub.mjs scripts/issue-176-two-gate-jobs-test.mjs",
+    "test:same-berth": "node --import ./scripts/with-css-stub.mjs scripts/issue-181-same-berth-test.mjs",
+    "test:same-berth-live": "node scripts/issue-181-same-berth-live-probe.mjs",
     "test:prize": "node --import ./scripts/with-css-stub.mjs scripts/issue-147-prize-test.mjs",
     "test:hull-sale": "node --import ./scripts/with-css-stub.mjs scripts/issue-158-hull-sale-test.mjs",
     "test:pod-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-115-pod-receipts-test.mjs",

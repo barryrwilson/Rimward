@@ -27,6 +27,22 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#181](https://github.com/barryrwilson/Rimward/issues/181) is implemented
+on the isolated `codex/issue-181-same-berth-settlement` candidate: a delivered
+unique consignment no longer fences the berth it paid in. `haul-provisions` is
+settled first in a delivery pass whatever the job order is, and it reserves only
+the five Provisions it was quoted on, so ordinary trade deliveries for other
+commodities and every passenger party settle in the same berth with no relaunch.
+The one remaining hold — units aboard but committed to the unique consignment —
+is named on the desk row and in `observe().jobs.active[].holdReason`, derived per
+read with no new persisted field. Destination, commodity, deadline and
+idempotence checks are unchanged, and the shared fence helper still guards survey
+filing, chain steps and the generic accepted branch; freeing those kinds is a
+separate question. See [the policy section](PassengerCommitmentPolicyDesign.md).
+Focused regression is `npm run test:same-berth`; boot adds `WAVE181`; the browser
+pass is `npm run test:same-berth-live`. Independent QA is pending; this is not a
+merge or deployment claim.
+
 Issue [#176](https://github.com/barryrwilson/Rimward/issues/176) is implemented
 on the isolated `codex/issue-176-two-gate-jobs` candidate: every authored
 charted job board posts exactly one destination two gates away, shared across

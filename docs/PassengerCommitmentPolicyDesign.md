@@ -58,13 +58,41 @@ several mission and persistence changes.
 | Capacity | No passenger commodity, cargo reservation, hull/cabin requirement, or ship-wide active-party cap | `station.js`: passenger accept/delivery; `src/game/save.js`: passenger sanitization |
 | Persistence | Existing JSON-safe `world.jobs` records retain id, origin/destination, slot, quote, deadline and state; derived explanation requires no save key or migration | `src/game/save.js`: `sanitizeJob`; existing #71 post-mutation saves |
 
-An existing settlement compatibility fence defers passenger payments while the
-unique `haul-provisions` contract is accepted or the station session has
-`ui.uniqueHaulPaid`. See `destPayHeldForUniqueHaul` and its call in passenger
-delivery. This is not ordinary commodity occupancy and is not a passenger
-capacity rule. This issue preserves that fence; simultaneous unique-haul
-settlement is not evidence for or against the full ordinary-hold case. Do not
-silently redesign the shared mission settlement order here.
+A settlement compatibility fence used to defer passenger payments while the
+unique `haul-provisions` contract was accepted or the station session had
+`ui.uniqueHaulPaid`. See `destPayHeldForUniqueHaul`. This is not ordinary
+commodity occupancy and is not a passenger capacity rule, and the #73 wave
+preserved it unchanged.
+
+**Issue #181 (2026-09-15) removed that fence from passenger and trade
+settlement.** The flag was set when the unique haul paid and cleared only on the
+next dock, so the whole berth stayed fenced after the payout: a 2026-09-14
+trading playtest had four deliveries for Veridian Spire — two trade rows and two
+parties — sit at `accepted / progress 0` with no stated reason until the player
+undocked and re-docked. The selected decision is to settle in the same berth.
+
+What the unique consignment actually needs is narrower than a berth-wide fence,
+and that is what remains:
+
+- `settleHaulJob` is lifted out of the `tickDeliveryJobs` loop, and
+  `haul-provisions` is settled first in a pass. The unique cargo keeps its
+  priority whatever the job array order is.
+- `uniqueHaulReserved(jobs, commodity)` reserves the five Provisions the unique
+  consignment is quoted on, and nothing else, while that agreement is accepted.
+  A trade row for another commodity, and every passenger party, settle in the
+  same berth as the haul.
+- `tradeReserveHold` derives the one bounded reason an eligible trade delivery
+  is held — the units are aboard but committed — and both the desk state line
+  and `observe().jobs.active[].holdReason` print it. It is derived per read, so
+  no new persisted field or save migration exists and no stale text survives the
+  payout.
+- Destination, commodity, deadline and idempotence checks are unchanged;
+  `destPayHeldForUniqueHaul` itself is unchanged and still guards survey filing,
+  chain steps and the generic accepted branch. Freeing those kinds is out of
+  this issue's scope and remains open.
+
+Regression is `npm run test:same-berth`, with a `WAVE181` pin in
+`npm run test:boot` and `npm run test:same-berth-live` for the browser.
 
 ## Relationship to courier and funded trade
 

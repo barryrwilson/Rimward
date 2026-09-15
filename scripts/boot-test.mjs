@@ -114,7 +114,7 @@
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createCtx } from '../src/core/ctx.js';
@@ -16625,6 +16625,27 @@ removeLiveShip(w42indyCtx, w42indy);
   };
   console.log('wave176 two-gate jobs:', JSON.stringify(w176));
   if (!Object.values(w176).every(Boolean)) { console.log('WAVE176 TWO-GATE FAIL'); errors++; }
+}
+
+// ---- WAVE181: mixed same-berth settlement (issue 181) ----
+// Runtime, not source text: the focused regression re-runs its mixed berth in a
+// subprocess on real booted systems — a unique consignment, a same-commodity
+// trade row, a Refined metals trade row and two parties — and reports what the
+// real delivery tick actually did.
+{
+  const here181 = dirname(fileURLToPath(import.meta.url));
+  const run181 = spawnSync(process.execPath,
+    ['--import', join(here181, 'with-css-stub.mjs'), join(here181, 'issue-181-same-berth-test.mjs'), '--boot-pin'],
+    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const line181 = (run181.stdout || '').split('\n').find((l) => l.startsWith('WAVE181 '));
+  const w181 = line181 ? JSON.parse(line181.slice(8)) : { ran: false };
+  w181.ran = run181.status === 0 && !!line181;
+  console.log('wave181 same-berth settlement:', JSON.stringify(w181));
+  if (!Object.values(w181).every(Boolean)) {
+    console.log('WAVE181 SAME BERTH FAIL');
+    if (!w181.ran) console.log((run181.stderr || '').slice(-1200));
+    errors++;
+  }
 }
 
 // ---- WAVE78: MSN-02 renewable explore / information recovery pins ----

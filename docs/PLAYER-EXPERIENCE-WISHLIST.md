@@ -1792,6 +1792,14 @@ independent Claude QA passed the initial artifact `303fdc8` on 2026-09-08.
 Final follow-up review is recorded with the pull request. These are not new
 natural-flight benchmarks.
 
+**Same-berth settlement (#181, 2026-09-15):** A delivered unique consignment
+used to hold every other delivery for the dock the player was standing in until
+they launched and re-docked, and neither the desk nor the Agent API said why.
+Every eligible delivery for a dock now settles in that same berth. The unique
+cargo still has first claim on the five Provisions it was quoted on; when that
+is what is holding a row, the row says so. These are not new natural-flight
+benchmarks.
+
 **Two-gate transport (#176, 2026-09-14):** Trade, ferry and passenger postings
 used to name the adjacent authored system only, so multi-hop play existed only
 as raw market arbitrage. Each authored charted board now posts exactly one
