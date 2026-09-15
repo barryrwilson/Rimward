@@ -20,7 +20,8 @@ import { COMMODITIES, PRICE_BAND, SYSTEMS, HERMIT } from './state.js';
  * correct continuation. Pressure is transient per-system module state: after
  * a load, prices resume walking from their restored values.
  *
- * Exports: initPrices(ctx), tickPrices(ctx, dt), applyEventPressure(ctx, kind, systemId?).
+ * Exports: initPrices(ctx), tickPrices(ctx, dt), applyEventPressure(ctx, kind, systemId?),
+ * marketEventAt(systemId).
  * world.js wires init/tick into its update loop. update path allocates nothing.
  */
 
@@ -38,6 +39,23 @@ const COMMODITY_KEYS = Object.keys(COMMODITIES);
 // Written by applyEventPressure, read by tickPrices. Zero/missing = no pull.
 // Transient: events are of-the-moment; restored games re-roll them.
 const pressureBySystem = {};
+
+// Issue 179: the event that wrote the live pressure, per system. A spike the
+// player sees on departure can be gone ten sim minutes later, so the pane has
+// to be able to say WHY a quote is off baseline. Same lifetime as the pressure
+// it names: written with it, deleted with it, never persisted.
+const kindBySystem = {};
+
+// Player-facing name for each pressure-writing event kind. A kind absent here
+// writes no pressure and therefore never labels a row.
+const EVENT_LABELS = {
+  pirateBlockade: 'blockade',
+  strikeRush: 'strike rush',
+  laborStrike: 'labor strike',
+  convoySurge: 'convoy surge',
+  oreRush: 'ore rush',
+  commodityGlut: 'glut',
+};
 
 // systemId → commodity → current fractional deviation from system baseline.
 // Prices are stored as rounded integers, but per-tick walk/pull steps are
@@ -105,6 +123,7 @@ export function applyEventPressure(ctx, kind, systemId) {
     // persisted; module state only) fall back to the old current-system
     // behavior via the ?? below.
     delete pressureBySystem[systemId ?? id];
+    delete kindBySystem[systemId ?? id];
     return;
   }
   const pressure = (pressureBySystem[id] ??= {});
@@ -158,6 +177,31 @@ export function applyEventPressure(ctx, kind, systemId) {
     default:
       break;
   }
+  // Only a kind that actually wrote pressure gets a name on the pane.
+  if (Object.hasOwn(EVENT_LABELS, kind)) kindBySystem[id] = kind;
+}
+
+/**
+ * Read-only view of the live event pressure at one system, for the market pane.
+ * Returns null when nothing is pulling that system's prices — including after a
+ * restore, where the pressure is re-rolled and a stale quote is already free to
+ * revert. `keys` maps a commodity to 1 (pushed up) or -1 (pushed down).
+ */
+export function marketEventAt(systemId) {
+  const pressure = Object.hasOwn(pressureBySystem, systemId) ? pressureBySystem[systemId] : null;
+  const kind = Object.hasOwn(kindBySystem, systemId) ? kindBySystem[systemId] : '';
+  if (!pressure || !Object.hasOwn(EVENT_LABELS, kind)) return null;
+  const keys = {};
+  let any = false;
+  for (const key of COMMODITY_KEYS) {
+    if (!Object.hasOwn(pressure, key)) continue;
+    const value = pressure[key];
+    if (!Number.isFinite(value) || value === 0) continue;
+    keys[key] = value > 0 ? 1 : -1;
+    any = true;
+  }
+  if (!any) return null;
+  return Object.freeze({ kind, label: EVENT_LABELS[kind], keys: Object.freeze(keys) });
 }
 
 export function tickPrices(ctx, dt) {

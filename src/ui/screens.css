@@ -212,6 +212,13 @@
   font-size: 12px;
 }
 
+/* Issue #179: a transient event-driven quote, named on the row it moved. */
+.market-event {
+  color: var(--rw-warm);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
 .market-actions {
   display: flex;
   flex-wrap: wrap;
@@ -353,6 +360,11 @@
   color: var(--rw-good); /* salvage green for pay */
   font-size: 12px;
   margin-bottom: 6px;
+}
+
+/* Issue #179: the buy-in is a cost, not pay — it does not read as green. */
+.job-buy-in {
+  color: var(--rw-warm);
 }
 
 .job-card .screen-btn {

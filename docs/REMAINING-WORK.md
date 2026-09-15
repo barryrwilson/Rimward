@@ -362,3 +362,15 @@ a Market toggle naming the best remembered station and age per commodity,
 chart hover/selection readouts, save normalization and agent row parity.
 [Contract and current verification](Issue174PriceMemory.md). Build, boot and
 focused regressions and ten live browser checks pass; independent QA remains pending.
+
+### Issue #179 — market pane costs, caps and transient prices (independent QA passed)
+
+The branch states an offered haul's buy-in and affordability before acceptance,
+stops a bulk-trade refusal outliving the condition that caused it, and labels an
+event-driven quote as temporary on the row it moved. Owner decision: label the
+event, do NOT slow price reversion; no economy tuning constant changed. Issue
+item 2 (20-capacity rows showing capacity and refill) was already delivered by
+issue #91 and is now locked by regression coverage instead of re-implemented.
+[Contract and current verification](Issue179MarketPane.md). Build, boot, the new
+focused suite and the affected market/haul regressions pass, and nine live
+browser checks pass with zero console errors. Independent Codex QA passed the implementation, including live stock-refusal and timed event-expiry checks; merge remains pending.
