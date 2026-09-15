@@ -1,5 +1,6 @@
 import { SYSTEMS } from './state.js';
 import { SAFE_ID, ID_MAX, stripControlChars } from './save.js';
+import { clearQueuedDock, queuedDockDest } from './dock-queue.js';
 
 /**
  * Galaxy route persist + BFS. Owns world.nav. No chart UI. No state.js write.
@@ -45,13 +46,23 @@ function dropNav(world) {
   delete world.nav;
 }
 
-function writeNav(world, dest, path, remaining, status) {
+/**
+ * Replace world.nav. `autopilot` defaults to false: a keep, a restore, a fresh
+ * plot and a blocked route all drop the helm, unchanged.
+ *
+ * Issue #183: the automatic per-jump recalc is the one writer that may carry a
+ * live lease through, and only for a route carrying a queued dock intent to
+ * the same destination. It must pass the flag explicitly. Nothing here ever
+ * turns the helm on — only `tryEngage` does that — so a cancelled, replotted
+ * or restored route can never be resurrected by a later recalc.
+ */
+function writeNav(world, dest, path, remaining, status, autopilot = false) {
   world.nav = {
     dest,
     path,
     remaining,
     status,
-    autopilot: false,
+    autopilot: autopilot === true,
   };
 }
 
@@ -270,6 +281,9 @@ export function sanitizeNav(ctx) {
 
 export function clearRoute(ctx) {
   if (!ctx || !ctx.world || typeof ctx.world !== 'object') return;
+  // Issue #183: a queued dock intent belongs to the route it was queued
+  // behind. Clearing the route ends it; it never rides a later one.
+  clearQueuedDock();
   dropNav(ctx.world);
   emitNavRoute(ctx, '', 0, 'idle');
   emitComm(ctx, 'Route cleared.');
@@ -287,6 +301,10 @@ export function plotRoute(ctx, dest) {
     clearRoute(ctx);
     return;
   }
+  // Issue #183: a replot replaces the route, so it replaces the wish queued
+  // behind it — even when the destination is the same one. Only the automatic
+  // per-jump recalcOnLoad update leaves a live intent alone.
+  clearQueuedDock();
   const path = bfsPath(here, id);
   if (!path) {
     writeNav(ctx.world, id, [], 0, 'blocked');
@@ -306,6 +324,17 @@ export function recalcOnLoad(ctx, event) {
   if (bag == null || typeof bag !== 'object' || Array.isArray(bag)) return;
   const dest = sanitizeSystemId(own(bag, 'dest'));
   if (!dest) return;
+  // Issue #183: this recalc runs on the SAME frame the jump lands, ahead of
+  // the autopilot frame that reads the arrival out of lastEvents. Zeroing the
+  // helm here retired the lease one hop short of its destination, so a QUEUED
+  // route could never reach the final arrival that hands the berth over.
+  //
+  // The carry-through is deliberately that narrow: the lease rides the recalc
+  // only while it is live AND a queued dock intent is bound to this very
+  // destination. An ordinary route keeps the old contract exactly — the helm
+  // comes off at every jump — so no unqueued navigation behaviour changes.
+  const flying = own(bag, 'autopilot') === true;
+  const keepLease = flying && queuedDockDest() === dest;
   let here = null;
   if (event && typeof event === 'object' && !Array.isArray(event)) {
     here = sanitizeSystemId(own(event, 'to'));
@@ -313,19 +342,23 @@ export function recalcOnLoad(ctx, event) {
   if (!here) here = sanitizeSystemId(ctx.world.currentSystem);
   if (!here) return;
   if (here === dest) {
-    writeNav(ctx.world, dest, [here], 0, 'arrived');
+    // The final arrival keeps the lease for exactly one more autopilot frame:
+    // flyTick owns the 'arrive' disengage, its receipt, and the issue #183
+    // handoff to the dock approach.
+    writeNav(ctx.world, dest, [here], 0, 'arrived', keepLease);
     emitNavRoute(ctx, dest, 0, 'arrived');
     emitComm(ctx, `Arrived at ${systemName(dest)}.`);
     return;
   }
   const path = bfsPath(here, dest);
   if (!path) {
+    // A blocked route has nothing to fly; the helm comes off as before.
     writeNav(ctx.world, dest, [], 0, 'blocked');
     emitNavRoute(ctx, dest, 0, 'blocked');
     emitComm(ctx, `No route to ${systemName(dest)} from here.`);
     return;
   }
-  writeNav(ctx.world, dest, path, path.length - 1, 'plotted');
+  writeNav(ctx.world, dest, path, path.length - 1, 'plotted', keepLease);
   emitNavRoute(ctx, dest, path.length - 1, 'plotted');
   emitComm(ctx, `Route updated: ${jumpPhrase(path.length - 1)} to ${systemName(dest)}.`);
 }

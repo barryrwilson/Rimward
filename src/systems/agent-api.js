@@ -11,6 +11,7 @@ import { plotRoute, clearRoute, sanitizeSystemId } from '../game/nav.js';
 import {
   tryEngage,
   tryApproachDock,
+  queueApproachDock,
   disengage,
   apLine,
   dockApproachLine,
@@ -456,10 +457,24 @@ function dispatchLive(ctx, name, args) {
   }
   if (name === 'approachDock') {
     const token = tryApproachDock(ctx);
-    if (token) return fail(ctx, name, token, dockApproachLine(token) || token);
-    agentClearFullStop(ctx);
-    markAgentHelm(ctx);
-    return ok(ctx, name);
+    if (!token) {
+      agentClearFullStop(ctx);
+      markAgentHelm(ctx);
+      return ok(ctx, name);
+    }
+    // Issue #183: a route lease flying the gates is the one refusal that can
+    // be answered with a plan instead. The wish is bound to the route's
+    // destination and the helm does not change hands now, so the receipt is
+    // 'queued', not ok-and-flying. Every other refusal is unchanged, and a
+    // dock approach already under way still answers 'autopilot'.
+    if (token === 'autopilot') {
+      const queued = queueApproachDock(ctx);
+      if (!queued) {
+        return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'queued' }));
+      }
+      return fail(ctx, name, queued, dockApproachLine(queued) || queued);
+    }
+    return fail(ctx, name, token, dockApproachLine(token) || token);
   }
   if (name === 'engageAutomine') {
     agentClearFullStop(ctx);

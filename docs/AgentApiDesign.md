@@ -31,6 +31,39 @@ second approach request while the first owns the helm. Observe phase and
 actual position/speed across simulation frames rather than assuming an
 accepted command has already arrived.
 
+### Queueing the berth behind a route (issue #183)
+
+An `approachDock {}` sent while a **route lease is engaged** is no longer
+refused: it is accepted and queued against that route's destination. The
+receipt is `{ ok: true, status: 'queued', token: '' }` — a plan, not a helm
+change. `observe().autopilot.queuedDock` then names the destination system id
+while the wish is live, and the field is absent whenever nothing is queued.
+
+The route helm keeps the ship to the end. On the `systemLoaded` for the
+route's final system the route lease disengages as before (the
+`autopilotDisengaged` receipt with reason `arrive` is unchanged), and the
+**same** cruise/stage/corridor/settle controller described above takes the
+berth. The handoff waits for the jump fade and for the destination station to
+be rebuilt, and cancels after 20 s if that berth never comes up, so a wish can
+never leave the hull coasting on an open intent.
+
+The wish is session-only: it is never saved, never restored, and never rides a
+later route — not even one plotted to the same destination. It ends on any of
+`cancelAutopilot`, the Escape human takeover, a manual helm break, any other
+autopilot cancellation, `clearRoute`, and any `plotRoute` (a same-destination
+replot included). Refusals fail closed: anything that is not a live multi-hop
+route lease answers `autopilot` exactly as before, a repeat while the dock
+helm is already flying still answers `autopilot`, and `docked`, `paused`,
+`held`, `jumping`, `match`, `drift`, `automine` and `flee` refuse at queue
+time just as they refuse an immediate approach. A destination with no usable
+station answers `no-station`.
+
+Only a queued route carries its lease through the automatic per-jump recalc.
+An ordinary route is unchanged: its helm still comes off at every jump.
+
+Boot pin: `npm run test:route-dock` (also run as a checked child of
+`npm run test:boot`).
+
 `afterburner {}` queues a **single raw burner edge** for the next controls
 update. It does not acquire the flee helm. An `approachDock` in the same turn,
 or after the burner has started, can take the dock helm. This explicit dock

@@ -106,6 +106,24 @@ short-landing settlement rule is unchanged. See
 pending; this is not a merge or deployment claim. Delivery ordering between a
 haul and an aboard consignment remains a separate question.
 
+Issue [#183](https://github.com/barryrwilson/Rimward/issues/183) is implemented
+on `codex/issue-183-route-dock`: an agent can ask for the station in one step.
+`approachDock` sent while a route lease is engaged is accepted and queued
+against that route's destination, with an `{ ok: true, status: 'queued' }`
+receipt and `observe().autopilot.queuedDock` naming the bound system. The route
+helm keeps the ship to the final arrival; the existing cruise/stage/corridor/
+settle controller then takes the berth with no second command. The wish is
+session-only (never persisted, never restored) and ends on any lease
+cancellation, the Escape takeover, a manual break, `clearRoute`, or any
+`plotRoute` — a same-destination replot included — so it can never ride a later
+route. Every other refusal is unchanged, including `autopilot` for a repeat
+while the dock helm is already flying. Only a queued route carries its lease
+through the automatic per-jump recalc; an ordinary route still comes off the
+helm at every jump. `npm run test:route-dock` flies the real system loop for a
+one-hop and a two-hop case and runs as a checked child of `npm run test:boot`;
+its queue pins fail on the pre-fix source. Independent QA and live browser
+validation remain pending; this is not a merge or deployment claim.
+
 Issue [#184](https://github.com/barryrwilson/Rimward/issues/184) is implemented
 on `codex/issue-184-station-touch`: in the dock autopilot `stage` and `settle`
 phases only, a `bodyHit` row against the station with `damage === 0` and a

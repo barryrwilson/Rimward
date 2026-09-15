@@ -532,6 +532,14 @@ integrated QA and publication are pending in the
   cruises to a distant local station with body/sun avoidance, brakes into the
   existing corridor, and reports its phases. The public Veridian arrival run
   reached berth in 38.3846 simulation seconds without heat or impact events.
+- [#183](https://github.com/barryrwilson/Rimward/issues/183): the pilot can ask
+  for the station in one step. `approachDock` behind an engaged route is
+  queued against that route's destination and answers `status: 'queued'`; the
+  route helm keeps the ship to the final arrival and the same dock controller
+  then takes the berth, so no second command is needed at the arrival gate.
+  The wish is session-only and ends on any cancellation, replot or clear.
+  Implementation is pending review; independent QA and a live browser pass are
+  still outstanding.
 - [#169](https://github.com/barryrwilson/Rimward/issues/169): raw pitch is
   explicitly mouse-style positive-down; real hull tests cover pitch, yaw and
   roll in both directions. The original no-turn symptom did not reproduce

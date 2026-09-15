@@ -14,6 +14,7 @@ import { lookupLiveNavGate, lookupLiveNavHopKind, lookupNearestLiveGate } from '
 import { losCloseRate } from './los-close.js';
 import { agentControlStatus, agentFrameClock } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
+import { queuedDockDest } from './dock-queue.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
 import { podUnits } from './pods.js';
@@ -819,6 +820,24 @@ function channel(src, paused) {
   return out;
 }
 
+/**
+ * Issue #183: the route helm channel, plus the queued dock intent when one is
+ * armed. `queuedDock` is the destination system the berth was asked for; it is
+ * absent whenever nothing is queued, and it disappears the moment the dock
+ * helm takes over (autopilot.mode is 'dock' from then on).
+ */
+function apChannel(ctx, paused) {
+  const out = channel(ctx && ctx.autopilot, paused);
+  let dest = '';
+  try {
+    dest = queuedDockDest();
+  } catch {
+    dest = '';
+  }
+  if (typeof dest === 'string' && dest) out.queuedDock = dest;
+  return out;
+}
+
 function sessionPhase(ctx) {
   const death = ctx && ctx.deathApi;
   if (death && typeof death.isOpen === 'function') {
@@ -1087,7 +1106,7 @@ export function buildObservation(ctx) {
         aim: aimDigestOf(ctx),
       },
       hail: hailBlock(ctx, hailOpen),
-      autopilot: channel(ctx.autopilot, flags.paused === true),
+      autopilot: apChannel(ctx, flags.paused === true),
       automine: channel(ctx.automine, flags.paused === true),
       lastIntent: copyLastIntent(agent && agent.lastIntent),
       events: copyEvents(agent),
