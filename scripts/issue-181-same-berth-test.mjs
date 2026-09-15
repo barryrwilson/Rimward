@@ -379,32 +379,54 @@ check('C3 an expired agreement pays zero and takes no cargo', () => {
 // Boot pin: one mixed berth, reported as a single JSON line.
 // ---------------------------------------------------------------------------
 if (bootPin) {
+  // 1. The reported berth: all five deliveries settle together for exactly the
+  //    quotes they locked, with no relaunch. Read BEFORE anything re-seeds.
   restore();
   setHold([['provisions', HAUL_UNITS * 2], ['refinedMetals', HAUL_UNITS]]);
-  const credits = ctx.world.credits;
+  const creditsA = ctx.world.credits;
   dock(DEST);
   step(240);
-  const paid = ctx.world.credits - credits;
-  const short = (() => {
-    restore();
-    setHold([['provisions', HAUL_UNITS - 1], ['refinedMetals', HAUL_UNITS]]);
-    const before = ctx.world.credits;
-    dock(DEST);
-    step(240);
-    return {
-      haulStaysOpen: stateOf(HAUL) === 'accepted',
-      othersSettled: [OTHER, PARTY_A, PARTY_B].every(settledHere),
-      paidExactly: ctx.world.credits - before === sumPay(OTHER, PARTY_A, PARTY_B),
-      cargoKept: holdOf('provisions') === HAUL_UNITS - 1,
-      holdReasonShown: typeof ctx.stationDesk.peekJobHold(jobById(SAME)) === 'string',
-    };
-  })();
-  console.log('WAVE181 ' + JSON.stringify({
+  const mixed = {
     sameBerthAllSettled: OPEN.every(settledHere),
-    sameBerthExactPay: paid === ALL_PAY,
+    sameBerthExactPay: ctx.world.credits - creditsA === ALL_PAY,
     neverUndocked: ctx.flags.docked === true,
-    ...short,
-  }));
+  };
+
+  // 2. Four Provisions: the unique consignment simply waits for a fifth unit.
+  //    Nothing is reserved, because nothing can be delivered, so the row is not
+  //    "held" and carries no hold reason.
+  restore();
+  setHold([['provisions', HAUL_UNITS - 1], ['refinedMetals', HAUL_UNITS]]);
+  const creditsB = ctx.world.credits;
+  dock(DEST);
+  step(240);
+  const short = {
+    haulStaysOpen: stateOf(HAUL) === 'accepted',
+    othersSettled: [OTHER, PARTY_A, PARTY_B].every(settledHere),
+    shortPaidExactly: ctx.world.credits - creditsB === sumPay(OTHER, PARTY_A, PARTY_B),
+    cargoKept: holdOf('provisions') === HAUL_UNITS - 1,
+    noHoldReasonWhenShort: ctx.stationDesk.peekJobHold(jobById(SAME)) === null,
+  };
+
+  // 3. Five Provisions aboard at a dock the consignment cannot settle at: the
+  //    units ARE reserved, and that is the one case that names a hold reason.
+  restore();
+  jobById(SAME).destSystem = ALT;
+  setHold([['provisions', HAUL_UNITS]]);
+  const creditsC = ctx.world.credits;
+  dock(ALT);
+  openBoard();
+  step(240);
+  openBoard();
+  const reserved = {
+    reservedNothingPaid: ctx.world.credits === creditsC,
+    reservedCargoWhole: holdOf('provisions') === HAUL_UNITS,
+    holdReasonShown: typeof ctx.stationDesk.peekJobHold(jobById(SAME)) === 'string',
+    holdReasonInApi: typeof activeRow(SAME)?.holdReason === 'string',
+    holdReasonRendered: stateLines().some((c) => (c.state || '').includes('unique consignment')),
+  };
+
+  console.log('WAVE181 ' + JSON.stringify({ ...mixed, ...short, ...reserved }));
   process.exit(0);
 }
 

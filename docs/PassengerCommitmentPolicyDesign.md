@@ -91,8 +91,15 @@ and that is what remains:
   chain steps and the generic accepted branch. Freeing those kinds is out of
   this issue's scope and remains open.
 
-Regression is `npm run test:same-berth`, with a `WAVE181` pin in
-`npm run test:boot` and `npm run test:same-berth-live` for the browser.
+Where the delivered goods were bought, and whether a destination purchase should
+count as provenance for a delivery, is explicitly parked in
+[#182](https://github.com/barryrwilson/Rimward/issues/182). Issue #181 changes no
+provenance rule: a delivery settles on the commodity, count, destination and
+deadline it already carried.
+
+Regression is `npm run test:same-berth`, with a runtime `WAVE181` pin in
+`npm run test:boot` that re-runs the mixed berth on real booted systems, and
+`npm run test:same-berth-live` for the browser.
 
 ## Relationship to courier and funded trade
 

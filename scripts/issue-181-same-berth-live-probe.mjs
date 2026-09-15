@@ -58,6 +58,12 @@ await runLive('same-berth', async ({ c, result, act, observe, wait, checkpoint, 
     return true;})()`);
   result.agreements = await rowsOf();
   result.dest = dest;
+  // The exact quotes the five rows locked at acceptance. The berth owes this
+  // sum and nothing else.
+  result.lockedQuotes = await c.eval(`(()=>{const x=window.__ctx;return ${JSON.stringify(['haul-provisions', ...tradeIds, ...partyIds])}.map(id=>{const j=x.world.jobs.find(r=>r&&r.id===id);return {id,payQuoted:j?.payQuoted??null};});})()`);
+  assert.ok(result.lockedQuotes.every((r) => Number.isFinite(r.payQuoted)),
+    'every row locked a quote: ' + JSON.stringify(result.lockedQuotes));
+  result.expectedPay = result.lockedQuotes.reduce((n, r) => n + r.payQuoted, 0);
 
   // --- the held row explains itself at a dock that cannot settle it -------
   await setHold([['provisions', 5]]);
@@ -68,6 +74,10 @@ await runLive('same-berth', async ({ c, result, act, observe, wait, checkpoint, 
     'the API names the hold: ' + JSON.stringify(result.holdReason));
   result.heldDeskLine = (await deskLines()).find((t) => t.includes('unique consignment')) ?? null;
   assert.ok(result.heldDeskLine, 'the desk row prints the same hold reason');
+  // Put the held row in the viewport so the checkpoint screenshot shows it.
+  result.heldRowRect = await c.eval(`(()=>{const card=Array.from(document.querySelectorAll('.job-card')).find(e=>e.innerText.includes('unique consignment'));if(!card)return null;card.scrollIntoView({block:'center'});const r=card.getBoundingClientRect();return {text:card.innerText,rect:r.toJSON(),inViewport:r.top>=0&&r.bottom<=innerHeight};})()`);
+  assert.ok(result.heldRowRect, 'the held row is rendered');
+  assert.equal(result.heldRowRect.inViewport, true, 'the held row is in the viewport for the shot');
   await checkpoint('held-row');
 
   // --- one berth settles all five ----------------------------------------
@@ -86,7 +96,8 @@ await runLive('same-berth', async ({ c, result, act, observe, wait, checkpoint, 
   assert.equal(settled.flags.docked, true, 'never relaunched');
   assert.ok(result.statesAfter.every((s) => s !== 'accepted'),
     'every delivery settled in one berth: ' + JSON.stringify(result.statesAfter));
-  assert.ok(result.paid > 0, 'the berth paid');
+  assert.equal(result.paid, result.expectedPay,
+    'the berth paid exactly the five locked quotes');
 
   // --- and a settled berth pays nothing more ------------------------------
   await sleep(3000);

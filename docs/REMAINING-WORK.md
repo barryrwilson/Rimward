@@ -38,7 +38,8 @@ is named on the desk row and in `observe().jobs.active[].holdReason`, derived pe
 read with no new persisted field. Destination, commodity, deadline and
 idempotence checks are unchanged, and the shared fence helper still guards survey
 filing, chain steps and the generic accepted branch; freeing those kinds is a
-separate question. See [the policy section](PassengerCommitmentPolicyDesign.md).
+separate question. Destination-purchase provenance stays parked in
+[#182](https://github.com/barryrwilson/Rimward/issues/182) and is untouched here. See [the policy section](PassengerCommitmentPolicyDesign.md).
 Focused regression is `npm run test:same-berth`; boot adds `WAVE181`; the browser
 pass is `npm run test:same-berth-live`. Independent QA is pending; this is not a
 merge or deployment claim.
