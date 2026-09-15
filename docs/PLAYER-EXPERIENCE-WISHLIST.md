@@ -2680,5 +2680,5 @@ this document, preserve the desired outcome and update the assumed mechanism.
 
 - [ ] IN REVIEW (#174): Plan trading runs using last-seen station SELL prices.
   Market memory, chart readouts and agent parity are implemented on the issue
-  branch. [Contract and verification](Issue174PriceMemory.md); final live and
-  independent QA evidence are pending. No merge or deployment is claimed.
+  branch. [Contract and verification](Issue174PriceMemory.md); ten live checks pass;
+  independent QA is pending. No merge or deployment is claimed.

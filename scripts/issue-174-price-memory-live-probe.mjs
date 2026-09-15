@@ -17,7 +17,7 @@ await runLive('price-memory',async({c,result,act,wait,observe,checkpoint,shot})=
  await click('#market-memory-toggle');
  assert.match(await c.eval("document.getElementById('market-memory').innerText"),/No remembered price elsewhere/);
  await checkpoint('first-market');
- await act('undock');await wait(s=>!s.flags.docked,15,'undock');
+ await place();await act('undock');await wait(s=>!s.flags.docked,15,'undock');
  const captured=await c.eval(`window.__ctx.world.priceMemory[${JSON.stringify(origin)}]`);
  assert.ok(captured.prices.provisions>0);
  // Load a second system through the normal subsystem event contract.
@@ -45,14 +45,15 @@ await runLive('price-memory',async({c,result,act,wait,observe,checkpoint,shot})=
  const layout=await c.eval("(()=>{const e=document.getElementById('market-memory'),r=e.getBoundingClientRect();return{width:innerWidth,left:r.left,right:r.right,scrollWidth:e.scrollWidth,clientWidth:e.clientWidth};})()");
  assert.ok(layout.left>=0&&layout.right<=layout.width&&layout.scrollWidth<=layout.clientWidth+1);result.narrowLayout=layout;
  await shot('remembered-market-800');
- await act('undock');await wait(s=>!s.flags.docked,15,'chart undock');await key('m','KeyM');
+ await place();await act('undock');await wait(s=>!s.flags.docked,15,'chart undock');await key('m','KeyM');
  assert.equal((await observe()).flags.chartOpen,true);
- // Select via the real select control's keyboard navigation.
+ // Dispatch the native select's change path; toggle above uses trusted keyboard events.
  await c.eval(`(()=>{const e=document.getElementById('rw-galaxy-dest');e.focus();e.value=${JSON.stringify(origin)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
  const chart=await c.eval("document.querySelector('.rw-galaxy-hover-prices').innerText");
  assert.ok(chart.includes(`Provisions ${row.sell} UU`));assert.ok(chart.includes(row.station));assert.match(chart,/Remembered SELL/);result.chartRemembered=chart;
  await shot('remembered-chart-800');
- await c.eval("(()=>{const e=document.getElementById('rw-galaxy-dest');e.value='ferrous';e.dispatchEvent(new Event('change',{bubbles:true}));})()");
+ const unseen=await c.eval("(()=>{const e=document.getElementById('rw-galaxy-dest');const option=Array.from(e.options).find(o=>o.value&&!Object.hasOwn(window.__ctx.world.priceMemory,o.value));if(!option)return null;e.value=option.value;e.dispatchEvent(new Event('change',{bubbles:true}));return option.value;})()");
+ assert.ok(unseen,'an actual chart option has no market visit');result.unseenSystem=unseen;
  assert.equal(await c.eval("document.querySelector('.rw-galaxy-hover-prices').innerText"),'No remembered market prices.');
  result.checks=['actual view capture','unseen empty state','second dock best historical quote','remote mutation isolation','pane/API parity','keyboard toggle','refresh focus','800px wrapping','chart remembered selection','unvisited chart'];
 });

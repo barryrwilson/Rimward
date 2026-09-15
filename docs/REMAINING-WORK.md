@@ -361,4 +361,4 @@ The branch adds historical SELL quotes captured when viewing a docked market,
 a Market toggle naming the best remembered station and age per commodity,
 chart hover/selection readouts, save normalization and agent row parity.
 [Contract and current verification](Issue174PriceMemory.md). Build, boot and
-focused regressions pass; live verification and independent QA remain pending.
+focused regressions and ten live browser checks pass; independent QA remains pending.

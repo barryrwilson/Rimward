@@ -14,7 +14,7 @@ check('normalization drops unknown, inherited, malformed and unsafe data', () =>
   assert.deepEqual(rememberedPrices({priceMemory:{}},'__proto__'),[]);
 });
 check('best historical sell excludes current, prefers newer ties, and ages in sim time', () => {
-  const world={time:780,currentSystem:'freehold', priceMemory:{freehold:{at:0,prices:{provisions:999}},veridian:{at:60,prices:{provisions:80}},ferrous:{at:30,prices:{provisions:80}}}};
+  const world={time:780,currentSystem:'freehold', priceMemory:{freehold:{at:0,prices:{provisions:999}},veridian:{at:60,prices:{provisions:80}},redmarch:{at:30,prices:{provisions:80}}}};
   const row=bestRememberedPrices(world).provisions;
   assert.equal(row.systemId,'veridian'); assert.equal(row.age,'12 min ago'); assert.equal(row.ageSeconds,720);
   assert.equal(row.station,SYSTEMS.veridian.station.name);

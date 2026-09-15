@@ -30,7 +30,14 @@ Pending exact builder commit and evidence. Independent QA is required before any
 - `npm run test:price-memory`: PASS, six scenario groups covering actual SELL capture, observer isolation, remote mutation, pane/API parity, copy/restore and malformed/legacy records.
 - `npm run test:market-liquidity` and `npm run test:bulk-trade`: PASS.
 - Raw local logs: `out/issue-174-verification/` (not committed).
-- Live browser verification is pending. Early disposable Chromium runs verified both actual market visits and historical pane/API parity, but probe input/initialization needed correction (Enter must include CDP text, and berth fixtures must await system frames). No live PASS is claimed at this stage.
+- `npm run test:price-memory-live`: PASS, ten checks in disposable Chromium (Intel Direct3D11). Source hash stayed `cb6b04061bf3034d4c07bd61650b38ebd4d72d3bee50f6066ba3c6097d49e43c`; no console errors or exceptions. Chrome exited 0, Vite stopped and both loopback ports closed.
+- Final raw browser evidence: `out/issue-174-live-r7/price-memory/result.json`; log `out/issue-174-verification/live-r7.log`. Visually inspected `remembered-market-800.png` and `remembered-chart-800.png`: readable historical quote, station and age, no new horizontal overflow.
+- The probe explicitly injects safe berth positions, a cross-system load event, simulation time and NPC placement away from departure lanes. It exercises actual market views, trusted pointer/Enter activation, focus after the periodic refresh, chart selection via the native change path and an actual unseen chart option (`fx_aegis`). It is feature verification, not evidence of natural campaign travel.
+- Earlier probe runs exposed fixture races, missing CDP Enter text and an invalid assumed system ID. The final probe awaits frames, uses the native Enter text, clears departure fixtures and selects an actual chart option. Product assertions were retained.
 - Independent QA pending; implementation only. No merge, push or deployment performed.
 
-Review focus: virtual station view capture must stay read-only; actual quotes must include counter spread/modifiers; legacy saves must not inherit another timeline; native toggle focus and chart readability require final browser evidence. Valid remembered entries are visit evidence, not tamper-proof provenance.
+Review focus: virtual station view capture must stay read-only; actual quotes must include counter spread/modifiers; legacy saves must not inherit another timeline; native toggle focus and chart readability are covered by the final browser evidence. Valid remembered entries are visit evidence, not tamper-proof provenance.
+
+## QA handoff
+
+Implementation: `84e563331b091f41de51795d93be1b569052ebb0`. The subsequent evidence-only commit corrects probe fixtures, strengthens the tied-price fixture with real system `redmarch`, and records live results. Runtime source is unchanged. Quinn (Claude) reviews the exact final identity before any PR approval or merge.
