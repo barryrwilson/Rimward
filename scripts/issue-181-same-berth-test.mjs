@@ -393,8 +393,10 @@ if (bootPin) {
   };
 
   // 2. Four Provisions: the unique consignment simply waits for a fifth unit.
-  //    Nothing is reserved, because nothing can be delivered, so the row is not
-  //    "held" and carries no hold reason.
+  //    Its five units stay reserved while the agreement is accepted, but the
+  //    trade row cannot be filled at four units either, so the ordinary
+  //    shortage already explains why it has not delivered and no separate hold
+  //    reason is printed.
   restore();
   setHold([['provisions', HAUL_UNITS - 1], ['refinedMetals', HAUL_UNITS]]);
   const creditsB = ctx.world.credits;

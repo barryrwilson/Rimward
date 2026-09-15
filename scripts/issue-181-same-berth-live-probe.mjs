@@ -84,10 +84,12 @@ await runLive('same-berth', async ({ c, result, act, observe, wait, checkpoint, 
   const ids = ['haul-provisions', ...tradeIds, ...partyIds];
   await setHold([['provisions', 10], ['refinedMetals', 5]]);
   await placeAtBerth(dest);
+  // Baseline before the hull is anywhere near the berth: a reading taken after
+  // the dock action could already have lost a frame's settlement to the tick.
+  const before = (await observe()).world.credits;
   await sleep(250);
   await act('dock');
   await wait((s) => s.flags.docked, 15, 'dock at the destination');
-  const before = (await observe()).world.credits;
   result.statesOnArrival = await stateOf(ids);
   await sleep(4000); // one berth, no undock: the throttled delivery tick runs
   const settled = await checkpoint('same-berth-settled');
