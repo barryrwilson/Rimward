@@ -1,6 +1,7 @@
 /**
  * Autopilot command computer. Owns the live autopilot channel.
- * Does not move the mesh. Does not write input.*. Does not emit jumpRequested.
+ * Does not move the mesh, write input, or emit jumpRequested. A failed dock
+ * approach asks controls to latch the human double-tap F full-stop command.
  */
 
 import * as THREE from 'three';
@@ -13,7 +14,7 @@ import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
 import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
-import { agentPulse } from '../systems/controls.js';
+import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop } from '../systems/controls.js';
 import {
   DOCK_STAGE_ARRIVE,
   DOCK_CRUISE_RANGE,
@@ -77,7 +78,7 @@ export const DOCK_APPROACH_LINES = Object.freeze({
   stale: 'Dock approach cancelled — station state became invalid.',
   'lost-station': 'Dock approach cancelled — station was lost.',
   blocked: 'Dock approach cancelled — route is blocked.',
-  impact: 'Dock approach cancelled — impact detected.',
+  impact: 'Dock approach cancelled: hull contact.',
   'dock-refused': 'Dock approach cancelled — dock pulse was refused.',
   cancel: 'Dock approach cancelled.',
   input: 'Dock approach cancelled — manual helm.',
@@ -332,6 +333,12 @@ export function disengage(ctx, reason) {
   resetApproach();
   resetDockScratch();
   if (!activeWas) return;
+  // Releasing an idle dock channel otherwise restores the manual 30 u/s
+  // creep floor (or an old throttle setpoint). Preserve higher helm owners.
+  if (modeWas === 'dock' && ['impact', 'blocked', 'stale'].includes(reason)
+    && ctx.flags?.hailOpen !== true && !agentCombatActive(ctx) && ctx.input) {
+    commandFullStop(ctx);
+  }
   if (routeWas && reason && reason !== 'restore') {
     ctx.emit('autopilotDisengaged', { reason: String(reason) });
     const line = Object.hasOwn(BREAK_LINE, reason) ? BREAK_LINE[reason] : '';
@@ -444,6 +451,9 @@ export function tryApproachDock(ctx) {
   dockPhase = ap.phase;
   resetApproach();
   steerArmed = helmSteerLatched(ctx) ? false : true;
+  // An accepted retry owns propulsion again. Refused attempts above must
+  // leave the cancellation stop latched, including direct helper callers.
+  agentClearFullStop(ctx);
   return '';
 }
 

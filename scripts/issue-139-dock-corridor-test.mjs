@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const testRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeRoot = resolve(process.env.DOCK_RUNTIME || testRoot);
 const caseName = process.argv[2];
-const cases = ['old', 'new', 'fresh', 'repeat'];
+const cases = ['old', 'new', 'fresh', 'repeat', 'cancel'];
 if (!caseName) {
   const outcomes = [];
   for (const name of cases) {
@@ -57,7 +57,7 @@ Math.random = () => { st = (Math.imul(1664525, st) + 1013904223) >>> 0; return s
 const dom = installDomStubs();
 const { ctx, systems, binds } = await bootGameSystems();
 const { stationLoiterWaypoints } = await runtimeImport('src/systems/npc.js');
-const { disengage } = await runtimeImport('src/game/autopilot.js');
+const { disengage, tryApproachDock } = await runtimeImport('src/game/autopilot.js');
 
 const DT = 1 / 60;
 const events = [];
@@ -101,6 +101,104 @@ ctx.agent.optIn = true;
 const station = ctx.station.position;
 const stage = { x: station.x + 135, y: station.y, z: station.z };
 pin('fixture: fresh Greenhand in Freehold', ctx.world.origin === 'greenhand' && ctx.world.currentSystem === 'freehold');
+
+if (caseName === 'cancel') {
+  const apSystem = systems.find(([name]) => name === 'autopilot')[1];
+  const shipSystem = systems.find(([name]) => name === 'ship')[1];
+  const { agentCombatActive } = await runtimeImport('src/systems/controls.js');
+  // Initial flight fixture only. Each stop is then integrated by the real ship
+  // update without changing its velocity or position after cancellation.
+  const begin = () => {
+    rw.act({ v: 2, name: 'clearControl', args: {} });
+    disengage(ctx, 'test');
+    ctx.flags.hailOpen = false; ctx.flags.chartOpen = false;
+    ctx.ship.object.position.set(station.x + 600, station.y, station.z);
+    ctx.ship.object.quaternion.identity();
+    ctx.ship.velocity.set(0, 0, -30); ctx.ship.speed = 30;
+    ctx.input.throttle = 0.8; ctx.input.fullStop = false;
+    ctx.lastEvents = []; ctx.events = [];
+    assert.equal(rw.act({ v: 2, name: 'approachDock', args: {} }).ok, true);
+  };
+  const stopped = reason => {
+    pin(`${reason} latches human full stop and clears old throttle`,
+      ctx.input.fullStop === true && ctx.input.throttle === 0);
+    const initialSpeed = ctx.ship.speed;
+    for (let i = 0; i < 240; i++) { ctx.world.time += DT; shipSystem.update(DT); }
+    pin(`${reason} real ship update stops below creep`, initialSpeed > 1 && ctx.ship.speed < 0.1, ctx.ship.speed);
+  };
+  for (const kind of ['asteroid', 'station', 'ship']) {
+    begin();
+    ctx.lastEvents = [{ type: 'bodyHit', kind, speed: 30, t: ctx.world.time }];
+    apSystem.update(DT);
+    pin(`${kind} contact cancels dock approach`, !ctx.autopilot.engaged && ctx.autopilot.reason === 'impact');
+    pin('impact toast names hull contact', ctx.events.some(e => e.type === 'commLine' && e.text === 'Dock approach cancelled: hull contact.'));
+    stopped(kind);
+  }
+  begin(); ctx.lastEvents = [{ type: 'shieldHit', player: true, actor: 'player', t: ctx.world.time }];
+  apSystem.update(DT);
+  pin('weapon shieldHit alone leaves dock approach engaged', ctx.autopilot.engaged && !ctx.input.fullStop);
+  begin();
+  const gunner = binds.spawnLiveShip(ctx, { id: 'i173-gunner', name: 'Cancellation gunner', faction: 'redledger', role: 'pirate', classKey: 'cutter', resolve: 60, personality: 0 },
+    ctx.ship.object.position.clone().add(new THREE.Vector3(0, 0, -40)));
+  ctx.ships.push(gunner);
+  const combatSystem = systems.find(([name]) => name === 'combat')[1];
+  let weaponHit;
+  for (let i = 0; i < 240 && !weaponHit; i++) {
+    if (i % 12 === 0) ctx.emit('npcFire', { ship: gunner, weapon: 'cannon', target: 'player' });
+    ctx.world.time += DT; combatSystem.update(DT);
+    weaponHit = ctx.events.find(e => e.type === 'playerHit' && e.attackerId === gunner.id);
+    pin('weapon producer emits no physical bodyHit', !ctx.events.some(e => e.type === 'bodyHit'));
+    ctx.lastEvents = ctx.events; ctx.events = []; apSystem.update(DT);
+  }
+  pin('real NPC projectile strikes player shields without cancelling approach',
+    weaponHit?.shielded === true && ctx.autopilot.engaged && !ctx.input.fullStop, weaponHit);
+  ctx.lastEvents = [weaponHit, { type: 'bodyHit', kind: 'station', speed: 30 }].filter(Boolean);
+  apSystem.update(DT);
+  pin('same-frame weapon hit never hides genuine contact', ctx.autopilot.reason === 'impact' && !ctx.autopilot.engaged);
+  ctx.ships.splice(ctx.ships.indexOf(gunner), 1); binds.removeLiveShip(ctx, gunner);
+  begin(); ctx.flags.chartOpen = true;
+  disengage(ctx, 'blocked'); stopped('blocked with chart open');
+  begin(); const oldX = ctx.station.position.x; ctx.station.position.x = NaN;
+  apSystem.update(DT); ctx.station.position.x = oldX;
+  pin('invalid station state cancels as stale', ctx.autopilot.reason === 'stale' && !ctx.autopilot.engaged);
+  stopped('stale');
+  pin('successful direct approach retry clears cancellation stop', tryApproachDock(ctx) === '' && !ctx.input.fullStop);
+  disengage(ctx, 'blocked');
+  ctx.flags.docked = true;
+  pin('refused direct approach leaves full stop latched', tryApproachDock(ctx) === 'docked' && ctx.input.fullStop);
+  ctx.flags.docked = false;
+  for (const reason of ['impact', 'blocked', 'stale']) {
+    begin(); ctx.flags.hailOpen = true;
+    disengage(ctx, reason);
+    pin(`${reason} leaves hail helm input unchanged`, !ctx.input.fullStop && ctx.input.throttle === 0.8);
+  }
+  begin();
+  const target = ctx.ships.find(s => s.object && s.state && !s.state.destroyed);
+  assert.ok(target, 'live target exists for real combat lease');
+  target.object.position.copy(ctx.ship.object.position).add(new THREE.Vector3(0, 0, -100));
+  ctx.targets.current = target;
+  disengage(ctx, 'test');
+  systems.find(([name]) => name === 'hud')[1].update(DT);
+  const combat = rw.act({ v: 2, name: 'setCombatIntent', args: { seq: 100, ttl: 60, targetId: target.id, intent: 'disable', defense: 'evade' } });
+  assert.equal(combat.ok, true, JSON.stringify(combat));
+  assert.equal(agentCombatActive(ctx), true);
+  for (const reason of ['impact', 'blocked', 'stale']) {
+    ctx.autopilot.engaged = true; ctx.autopilot.mode = 'dock';
+    ctx.input.throttle = 0.8; ctx.input.fullStop = false;
+    disengage(ctx, reason);
+    pin(`${reason} leaves combat lease input unchanged`, !ctx.input.fullStop && ctx.input.throttle === 0.8 && agentCombatActive(ctx));
+  }
+  rw.act({ v: 2, name: 'clearControl', args: {} });
+  ctx.input.throttle = 0.8; ctx.input.fullStop = false;
+  ctx.autopilot.engaged = true; ctx.autopilot.mode = 'route';
+  disengage(ctx, 'blocked');
+  pin('route cancellation keeps existing manual throttle behavior', !ctx.input.fullStop && ctx.input.throttle === 0.8);
+  const out = resolve(process.env.DOCK_OUT || 'out/issue-139-corridor', caseName);
+  mkdirSync(out, { recursive: true });
+  writeFileSync(resolve(out, 'result.json'), JSON.stringify({ artifact, caseName, verdict: fails ? 'FAIL' : 'PASS', fails }, null, 2) + '\n');
+  console.log(`ISSUE 173 DOCK CANCEL ${fails ? 'FAIL' : 'PASS'} (${fails})`);
+  process.exit(fails ? 1 : 0);
+}
 
 // ---- 1. geometry -------------------------------------------------------------
 {

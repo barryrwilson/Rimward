@@ -14,6 +14,14 @@ old prose. Merge status does not establish fresh release QA or deployment.
 
 ## How to use this document
 
+### Dock cancellation follow-up — #173
+
+Implemented on the isolated candidate: a failed approach stops the hull instead
+of returning to creep or an old throttle setting, and the impact notice names
+hull contact. Hail/combat helm ownership remains respected. Independent review
+is pending; see [evidence](Issue173DockCancelEvidence.md). Contact sensitivity
+at creep speed remains the separate #184 decision.
+
 ### Adding a quick idea
 
 Put an unrefined thought in **Idea inbox**. A future grooming pass can move it
