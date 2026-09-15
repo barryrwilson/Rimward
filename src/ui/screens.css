@@ -766,3 +766,7 @@ body.rw-contrast .rw-origin-row {
 body.rw-contrast .rw-origin-preview {
   color: #c3d4e6;
 }
+
+/* Historical quotes wrap independently of the six-column trading controls. */
+.market-memory { margin: 8px 0; }
+.market-memory-row { padding: 3px 0; overflow-wrap: anywhere; }

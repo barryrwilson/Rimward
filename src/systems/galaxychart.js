@@ -1,5 +1,7 @@
 import { SYSTEMS, FACTIONS, RANK_LADDER, rankFor } from '../game/state.js';
 import { clearRoute, plotRoute, sanitizeSystemId } from '../game/nav.js';
+import { rememberedPrices } from '../game/price-memory.js';
+import { COMMODITIES } from '../game/state.js';
 import { hoverModel } from '../game/chart-hover.js';
 import { standingRead } from '../game/data-trade.js';
 import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from '../game/autopilot.js';
@@ -571,6 +573,9 @@ export function initGalaxyChart(ctx) {
   hoverReadout.appendChild(hoverNameEl);
   hoverReadout.appendChild(hoverControlEl);
   hoverReadout.appendChild(hoverStandingEl);
+  const hoverPricesEl = document.createElement('div');
+  hoverPricesEl.className = 'rw-galaxy-hover-prices';
+  hoverReadout.appendChild(hoverPricesEl);
 
   const status = document.createElement('p');
   status.className = 'rw-galaxy-plot-status is-hidden';
@@ -641,17 +646,23 @@ export function initGalaxyChart(ctx) {
         hoverNameEl.textContent = '';
         hoverControlEl.textContent = '';
         hoverStandingEl.textContent = '';
+        hoverPricesEl.textContent = '';
         lastHoverAria = '';
       }
       return;
     }
     const standingLine = `Standing: ${hoverStandingValue(model)}`;
-    const ariaKey = `${model.id}\n${standingLine}`;
+    const prices = rememberedPrices(ctx.world, model.id);
+    const pricesLine = prices.length
+      ? `Remembered SELL · ${prices[0].station}, ${prices[0].age} · ${prices.map(row => `${COMMODITIES[row.commodity].name} ${row.sell} UU`).join(' · ')}. Last seen, not guaranteed now.`
+      : 'No remembered market prices.';
+    const ariaKey = `${model.id}\n${standingLine}\n${pricesLine}`;
     if (ariaKey !== lastHoverAria) {
       lastHoverAria = ariaKey;
       hoverNameEl.textContent = model.name;
       hoverControlEl.textContent = `Control: ${hoverControlValue(model)}`;
       hoverStandingEl.textContent = standingLine;
+      hoverPricesEl.textContent = pricesLine;
     }
     hoverReadout.removeAttribute('aria-hidden');
     hoverReadout.classList.remove('is-hidden');
@@ -1193,6 +1204,7 @@ export function initGalaxyChart(ctx) {
     if (sid === here) clearRoute(ctx);
     else plotRoute(ctx, sid);
     retargetPlot(true);
+    applyHoverId(sid);
   }
 
   closeBtn.addEventListener('click', () => setOpen(false));

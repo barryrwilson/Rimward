@@ -2677,3 +2677,8 @@ This wishlist was initialized from a one-question-at-a-time owner interview on
 2026-08-16 and 2026-08-17. It records desired outcomes expressed during that
 conversation. When implementation evidence conflicts with an assumption in
 this document, preserve the desired outcome and update the assumed mechanism.
+
+- [ ] IN REVIEW (#174): Plan trading runs using last-seen station SELL prices.
+  Market memory, chart readouts and agent parity are implemented on the issue
+  branch. [Contract and verification](Issue174PriceMemory.md); final live and
+  independent QA evidence are pending. No merge or deployment is claimed.
