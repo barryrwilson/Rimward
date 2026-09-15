@@ -470,6 +470,10 @@ function jobRow(ctx, j) {
   };
   const quote = ctx.stationDesk?.peekJobReward?.(j);
   if (Number.isFinite(quote)) row.reward = quote;
+  // Issue 181: the desk and the API give the same bounded reason an accepted
+  // delivery at its own dock has not paid. Absent means nothing is holding it.
+  const hold = ctx.stationDesk?.peekJobHold?.(j);
+  if (typeof hold === 'string' && hold) row.holdReason = hold;
   const title = own(j, 'title');
   if (row.kind === 'explore' && row.state === 'accepted') row.objective = surveyObjective(ctx, j);
   if (row.kind === 'recovery' && row.state === 'accepted') row.objective = recoveryObjective(ctx, j);
