@@ -6238,7 +6238,6 @@ export function initStation(ctx) {
   }
 
   function renderJobs(panel) {
-    if (h === hDom) displayedHaulQuotes.clear();
     h('div', 'screen-sub', panel, `JOBS BOARD — ${currentDef.station.name} postings`);
     syncRecoveryJob(ctx, currentId);
     const salvage = ctx.world.jobs.some(j => j.kind === 'recovery' && j.originSystem === currentId
@@ -7434,6 +7433,9 @@ export function initStation(ctx) {
     if (key === 'launch') return undock();
     if (!ctx.flags.docked) return;
     pinDockedSystem();
+    // A deliberate board visit posts fresh quotes; passive refreshes must keep
+    // the offer the player read until it is accepted or they leave this view.
+    if (key === 'jobs') displayedHaulQuotes.clear();
     ui.level = 2;
     ui.service = key;
     ui.notice = '';
@@ -7769,13 +7771,13 @@ export function initStation(ctx) {
   let jobTick = 0;
   let refreshTick = 0;
 
-  // The most recently drawn offer is the agreement available to accept. A
-  // redraw refreshes it for desk and observation together; accepted pay freezes.
-  function peekJobReward(job, refresh = false) {
+  // The posted offer is the agreement available to accept. Periodic redraws
+  // retain it despite price drift; a deliberate board visit posts fresh quotes.
+  function peekJobReward(job, rememberDrawn = false) {
     if (!job || (job.kind !== 'haul' && job.kind !== 'trade')) return undefined;
     if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
     const shown = displayedHaulQuotes.get(job.id);
-    if (!refresh && ui.open && ui.level === 2 && ui.service === 'jobs'
+    if (ui.open && ui.level === 2 && ui.service === 'jobs'
       && job.state === 'offered' && shown?.origin === currentId) return shown.pay;
     const origin = job.kind === 'haul' && job.state !== 'accepted'
       ? currentId : (Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId);
@@ -7789,7 +7791,7 @@ export function initStation(ctx) {
       const base = Math.round(HAUL_UNITS * unit * HAUL_MARGIN);
       pay = job.state === 'accepted' ? jobPay(ctx, base) : jobPayFor(ctx, otherSystemId(ctx, origin), base);
     }
-    if (refresh && job.state === 'offered') displayedHaulQuotes.set(job.id, { origin: currentId, pay });
+    if (rememberDrawn && job.state === 'offered') displayedHaulQuotes.set(job.id, { origin: currentId, pay });
     return pay;
   }
 
