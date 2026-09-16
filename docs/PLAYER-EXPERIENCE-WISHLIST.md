@@ -2793,3 +2793,16 @@ keeps that supply quote across its synchronous ordinary-order chunks. Separate
 confirmations reprice, while bulk checks for changed external quotes and actual
 stock remain active. No new save fields are required. Focused coverage:
 `scripts/issue-218-market-pricing-test.mjs`, market liquidity, spread and bulk tests.
+
+### Issue #220 — trader progression target (decision complete)
+
+- [x] Decide the trader curve: **45–60 simulation minutes** from a fresh Freehold
+  Greenhand to first freighter affordability. After purchase, use larger
+  manifests and route diversification as markets saturate, with working capital
+  and actual repairs remaining meaningful choices.
+  [Decision and measurement contract](Issue220TraderIncomeCurve.md). Existing
+  distance pay, player-funded haul cargo, #218 saturation and #219 arrival
+  eligibility must inform any tuning. No new tax, hull, SKU or price increase.
+  **The target is selected, not measured as achieved.** Current-baseline campaign
+  validation and any resulting bounded tuning remain follow-up scope; this
+  checkbox records the decision outcome only.
