@@ -210,7 +210,7 @@ the real autopilot to a real berth, and a real sale at the destination counter.
 | Leg | Route | Starting capital | Cargo | Bound by | Gross revenue | Net profit |
 | --- | --- | --- | --- | --- | ---: | ---: |
 | A | Freehold → Veridian | the 350 UU the game gave the pilot | 1 unit slag iron @179 | purse | 238 UU | 59 UU |
-| B | Veridian → Freehold | declared 20,000 UU fixture | 20 units refined metals @180 | hold capacity | 5,020 UU | 1,420 UU |
+| B | Veridian → Freehold | declared 20,000 UU fixture | 20 units refined metals @180 | hold capacity | 5,000 UU | 1,400 UU |
 
 Against those measured legs, the 294 UU light bill for a 62%/70% strip is about
 4.98x leg A's net profit and about 0.21x leg B's. Read plainly: a stripped
@@ -218,6 +218,12 @@ starter cannot pay for the damage out of the leg that earned it and must fly
 several more, while a trader who already has stock money absorbs it out of one
 leg. That is the intended shape of the change, and it is two legs on one seed,
 not a campaign.
+
+These figures are the recorded run on this artifact
+(`out/issue-208/live/repair-balance/result.json`). Prices drift in simulation
+time, so a repeat run on the same seed lands near but not exactly on them — an
+earlier identical run measured 5,020 UU gross and 1,420 UU net on leg B. The
+repair quotes, by contrast, are exact and reproduce byte for byte.
 
 ### Build and boot
 
