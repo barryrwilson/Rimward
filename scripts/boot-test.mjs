@@ -5720,7 +5720,14 @@ undockStation();
 if (laneO26) travelTo(laneO26, 'wave26 lane leg');
 dockAtCurrentStation(`dock ${laneO26} (wave26 quote)`);
 let ferryJob26 = ctx.world.jobs.find((j) => j.id === 'ferry-consignment') ?? null;
-let haulJob26 = ctx.world.jobs.find((j) => j.id === 'haul-provisions') ?? null;
+// Issue 206: the legacy `haul-provisions` consignment is RETIRED — makeJobs
+// never seeds it, so a fresh run has NO row to quote, draw or accept. The haul
+// leg below therefore runs on an explicit OLD-SAVE fixture: an ACCEPTED legacy
+// agreement, injected in the exact shape the retired accept path stamped. Every
+// assertion under it — the real market buy, the real lane, the real throttled
+// delivery, the destination chain and the 140% margin — is unweakened.
+const HAUL_NEED26 = 5; // station.js HAUL_UNITS
+let haulJob26 = null;
 // TEST SETUP (self-restoring): the galaxy carries ONE ferry contract and ONE
 // haul contract; wave 4 did the freehold→veridian ferry, so re-offer it for
 // this lane — the real accept/deliver cycle below takes it back to done.
@@ -5729,7 +5736,7 @@ ferryJob26 = w26ReofferFerry() ?? ferryJob26;
 // (the wave-9/11 sell discipline): the recovery cycles' scooped refined
 // metals ride the hold by this point in the run — sell down whatever is
 // aboard until the fronted 4 + the 5-unit load genuinely fit.
-const needFree26 = (ferryJob26?.need ?? 4) + (haulJob26?.need ?? 5);
+const needFree26 = (ferryJob26?.need ?? 4) + HAUL_NEED26;
 dispatchKey('Digit1'); // market (DOCK_KEY_SERVICES[0])
 let sellGuard26 = 60;
 while (ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) < needFree26 && sellGuard26-- > 0) {
@@ -5765,22 +5772,69 @@ const provAtLaneStart26 = holdCount('provisions');
 ferryJob26 = w26ReofferFerry() ?? ferryJob26;
 dispatchKey('Digit2'); // jobs board
 const ferryQuoteText26 = w26JobRewardLine('Ferry a consignment');
-const haulQuoteText26 = w26JobRewardLine('Haul provisions');
 const ferryQuoted26 = Number((ferryQuoteText26?.match(/pays (\d+) UU/) ?? [])[1]);
-const haulQuoted26 = Number((haulQuoteText26?.match(/pays (\d+) UU/) ?? [])[1]);
 const priceAtAccept26 = ctx.world.prices.provisions ?? COMMODITIES.provisions.base; // station.js priceOf
+// -- Issue 206: the retired posting on a FRESH board -------------------------
+// Nothing is seeded, nothing is drawn, and no accept path reaches it. The desk
+// handle is knocked on directly because it is the LAST door: boardJobs already
+// hides the row, so only a caller holding a handle can still reach acceptJob.
+// (The card frag is case-exact: the generated trade row is titled
+// 'Haul Provisions', the retired posting 'Haul provisions'.)
+const freshLegacyRow26 = ctx.world.jobs.find((j) => j && j.id === 'haul-provisions') ?? null;
+const freshLegacyCard26 = w26JobRewardLine('Haul provisions');
+const freshLegacyAcceptBtn26 = w26CardAcceptButton('Haul provisions');
+const creditsBeforeLegacy26 = ctx.world.credits;
+const provBeforeLegacy26 = holdCount('provisions');
+const legacyHandleRes26 = ctx.stationDesk.acceptJob({ id: 'haul-provisions', kind: 'haul' });
+const w26haulRetiredChecks = {
+  neverSeeded: freshLegacyRow26 === null,
+  noHaulKindSeededAnywhere: !ctx.world.jobs.some((j) => j && j.kind === 'haul'),
+  noLegacyCardDrawn: freshLegacyCard26 === null,
+  noLegacyAcceptButton: freshLegacyAcceptBtn26 === null,
+  detachedHandleRefused: legacyHandleRes26?.ok === false,
+  noPhantomRowCreated: !ctx.world.jobs.some((j) => j && j.id === 'haul-provisions'),
+  nothingPaidOrFronted: ctx.world.credits === creditsBeforeLegacy26
+    && holdCount('provisions') === provBeforeLegacy26,
+};
+console.log('wave26 haul retirement:', JSON.stringify(w26haulRetiredChecks));
+if (!Object.values(w26haulRetiredChecks).every(Boolean)) { console.log('WAVE26 HAUL RETIREMENT FAIL'); errors++; }
+// -- OLD-SAVE FIXTURE: an ACCEPTED legacy agreement --------------------------
+// The quote is taken from the REAL desk quoting path on an offered legacy
+// shape at this dock — exactly the number the retired accept path stamped
+// (jobPayFor at the DESTINATION dock's chain) — then locked on the accepted
+// row, as an old save carries it. The row is pushed into the live world, so it
+// rides the run from here exactly as the seeded row used to.
+const haulOfferShape26 = {
+  id: 'haul-provisions', kind: 'haul', title: 'Haul provisions',
+  detail: `Provisions are worth more a gate away. Accept here, buy ${HAUL_NEED26} Provisions, and dock at the other system's station — paid at 140% of your buy cost on delivery.`,
+  reward: 0, state: 'offered', progress: 0, need: HAUL_NEED26,
+  originSystem: null, originPrice: 0,
+};
+const haulBase26 = Math.round(HAUL_NEED26 * priceAtAccept26 * 1.4);
+const haulDeskQuote26 = ctx.stationDesk.peekJobReward({ ...haulOfferShape26 });
+haulJob26 = {
+  ...haulOfferShape26,
+  state: 'accepted',
+  originSystem: laneO26,
+  originPrice: priceAtAccept26,
+  payQuoted: haulDeskQuote26,
+};
+ctx.world.jobs.push(haulJob26);
 const ferryAcceptBtn26 = w26CardAcceptButton('Ferry a consignment');
 ferryAcceptBtn26?.click(); // real accept: stamps destSystem + payQuoted, fronts the consignment
-const haulAcceptBtn26 = w26CardAcceptButton('Haul provisions'); // re-found — the ferry accept re-rendered
-haulAcceptBtn26?.click(); // real accept: stamps originSystem/originPrice + payQuoted
 const ferryStamp26 = ferryJob26?.payQuoted;
-const haulStamp26 = haulJob26?.payQuoted;
+const haulStamp26 = haulJob26.payQuoted;
 // Accepted cards re-render the SAME quoted number (the snapshot, not a re-price).
+// The ferry accept above re-rendered the board, so the legacy agreement's card
+// is drawn there now.
 const ferryAcceptedText26 = w26JobRewardLine('Ferry a consignment');
 const haulAcceptedText26 = w26JobRewardLine('Haul provisions');
+const haulQuoted26 = Number((haulAcceptedText26?.match(/pays (\d+) UU/) ?? [])[1]);
+const haulAgreementAcceptBtn26 = w26CardAcceptButton('Haul provisions');
+const haulReacceptRes26 = ctx.stationDesk.acceptJob('haul-provisions');
 const w26ferryQuoteChecks = {
   dockedAtLaneOrigin: ctx.flags.docked === true && ctx.world.currentSystem === laneO26,
-  jobsFound: !!ferryJob26 && !!haulJob26,
+  ferryJobFound: !!ferryJob26,
   holdRoomFor9: freeCap26 >= needFree26,
   ferryCardQuoted: Number.isFinite(ferryQuoted26),
   quoteIsDestChain: ferryQuoted26 === w26JobPayFor(laneD26, ferryJob26?.reward),
@@ -5795,16 +5849,24 @@ const w26ferryQuoteChecks = {
 console.log('wave26 ferry quote:', JSON.stringify(w26ferryQuoteChecks), `quoted=${ferryQuoted26}`);
 if (!Object.values(w26ferryQuoteChecks).every(Boolean)) { console.log('WAVE26 FERRY QUOTE FAIL'); errors++; }
 const w26haulQuoteChecks = {
+  // The legacy agreement still draws its card, so the player can read the run
+  // he is already committed to (issue 206: accepted ≠ retired).
+  agreementCardDrawn: typeof haulAcceptedText26 === 'string' && haulAcceptedText26.length > 0,
   haulCardQuoted: Number.isFinite(haulQuoted26),
-  marginPinnedInCardText: haulQuoteText26?.includes('140% of buy cost') === true,
-  quoteIsDestChain: haulQuoted26 === w26JobPayFor(laneD26, Math.round((haulJob26?.need ?? 5) * priceAtAccept26 * 1.4)),
-  destChainDiscriminates: w26JobPayFor(laneO26, Math.round((haulJob26?.need ?? 5) * priceAtAccept26 * 1.4)) !== haulQuoted26,
-  acceptButtonFound: !!haulAcceptBtn26,
-  jobAccepted: haulJob26?.state === 'accepted',
-  originStamped: haulJob26?.originSystem === laneO26 && haulJob26?.originPrice === priceAtAccept26,
+  marginPinnedInCardText: haulAcceptedText26?.includes('140% of buy cost') === true,
+  // The desk's own quote for a legacy haul is still priced off the DESTINATION
+  // dock's chain — the compatibility the retired accept path depended on.
+  quoteIsDestChain: haulDeskQuote26 === w26JobPayFor(laneD26, haulBase26),
+  destChainDiscriminates: w26JobPayFor(laneO26, haulBase26) !== haulDeskQuote26,
+  jobAccepted: haulJob26.state === 'accepted',
+  originStamped: haulJob26.originSystem === laneO26 && haulJob26.originPrice === priceAtAccept26,
   payQuotedStamped: haulStamp26 === haulQuoted26
-    && haulStamp26 === w26JobPayFor(laneD26, Math.round((haulJob26?.need ?? 5) * (haulJob26?.originPrice ?? 0) * 1.4)),
-  acceptedCardShowsQuote: haulAcceptedText26 === haulQuoteText26,
+    && haulStamp26 === w26JobPayFor(laneD26, Math.round(HAUL_NEED26 * (haulJob26.originPrice ?? 0) * 1.4)),
+  // An accepted card re-reads the LOCK, not a re-price.
+  acceptedCardShowsLockedQuote: ctx.stationDesk.peekJobReward(haulJob26) === haulStamp26,
+  // …and offers no way to take the agreement a second time.
+  noAcceptButtonOnAgreement: haulAgreementAcceptBtn26 === null,
+  reAcceptRefused: haulReacceptRes26?.ok === false && haulJob26.state === 'accepted',
 };
 console.log('wave26 haul quote:', JSON.stringify(w26haulQuoteChecks), `quoted=${haulQuoted26}`);
 if (!Object.values(w26haulQuoteChecks).every(Boolean)) { console.log('WAVE26 HAUL QUOTE FAIL'); errors++; }
@@ -8210,7 +8272,7 @@ travelTo('freehold', 'wave34 home leg');
 // origin. Old saves need no migration — originSystem + payQuoted were
 // stamped at accept (wave 26); the gate recomputes the same destination at
 // delivery time.
-// -- a. lane pick + real accept at the origin dock --------------------------
+// -- a. lane pick + the old-save agreement at the origin dock ---------------
 // The triple is picked off the live graph (the wave-24 d / wave-26 d ruling):
 // origin → primary-gate destination → a third hop out of the destination
 // that is neither origin nor dest. freehold→veridian→redmarch is PREFERRED
@@ -8239,12 +8301,14 @@ const w35aDest = w35aTriple?.d ?? null;
 const w35aThird = w35aTriple?.t ?? null;
 travelTo(w35aOrigin, 'wave35a origin leg'); // no-op when the freehold triple stands (the run is home)
 dockAtCurrentStation(`dock ${w35aOrigin} (wave35a accept)`);
-const w35aHaulJob = ctx.world.jobs.find((j) => j.id === 'haul-provisions') ?? null;
-const w35aNeed = w35aHaulJob?.need ?? 5; // HAUL_UNITS
-// TEST SETUP (self-restoring): the galaxy carries ONE haul contract; wave 26
-// ran it to done on a generated lane, so re-offer it for this gate-binding
-// check — the real accept/deliver cycle below takes it back to done.
-if (w35aHaulJob) { w35aHaulJob.state = 'offered'; w35aHaulJob.originSystem = null; w35aHaulJob.originPrice = null; delete w35aHaulJob.payQuoted; }
+// Issue 206: the legacy consignment is RETIRED, so it is never re-offered. The
+// row wave 26 left in the world (DONE, paid) is the old save's record; this leg
+// first proves a done legacy row is stale paper — no card, no Accept, no desk
+// path — and then re-stamps THAT SAME row as a fresh ACCEPTED agreement taken
+// at this origin, which is the shape an interrupted old save carries. The gate
+// binding below is flown entirely on production code.
+const w35aHaulJob = ctx.world.jobs.find((j) => j && j.id === 'haul-provisions') ?? null;
+const w35aNeed = 5; // station.js HAUL_UNITS
 // Free the hold for the load through the REAL market path (the wave-26 d
 // sell discipline): whatever the recovery cycles left aboard sells down
 // until the 5-unit load genuinely fits.
@@ -8259,8 +8323,34 @@ while (ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) < w35aNeed
 }
 dispatchKey('Escape'); // market → services
 dispatchKey('Digit2'); // jobs board
-const w35aAcceptBtn = w26CardAcceptButton('Haul provisions'); // the wave-26 strict card-scoped accept
-w35aAcceptBtn?.click(); // real accept: stamps originSystem/originPrice + payQuoted off the DESTINATION chain
+// -- the DONE legacy row is stale paper ------------------------------------
+const w35aStaleState = w35aHaulJob?.state ?? null;
+const w35aStaleCard = w26JobRewardLine('Haul provisions'); // the retired title, case-exact
+const w35aStaleAcceptBtn = w26CardAcceptButton('Haul provisions');
+const w35aCreditsBeforeStale = ctx.world.credits;
+const w35aProvBeforeStale = holdCount('provisions');
+const w35aStaleRes = ctx.stationDesk.acceptJob('haul-provisions');
+const w35aStaleStateAfter = w35aHaulJob?.state ?? null;
+// -- OLD-SAVE FIXTURE: the accepted legacy agreement ------------------------
+// Stamped exactly as the retired accept path stamped it: this dock as origin,
+// this dock's provisions price, and the desk's OWN quote — priced off the
+// destination chain — locked on the row.
+const w35aPrice = ctx.world.prices.provisions ?? COMMODITIES.provisions.base; // station.js priceOf
+const w35aDeskQuote = ctx.stationDesk.peekJobReward({
+  id: 'haul-provisions', kind: 'haul', title: 'Haul provisions',
+  reward: 0, state: 'offered', progress: 0, need: w35aNeed,
+  originSystem: null, originPrice: 0,
+});
+if (w35aHaulJob) {
+  w35aHaulJob.state = 'accepted';
+  w35aHaulJob.originSystem = w35aOrigin;
+  w35aHaulJob.originPrice = w35aPrice;
+  w35aHaulJob.payQuoted = w35aDeskQuote;
+}
+dispatchKey('Escape'); // jobs → services
+dispatchKey('Digit2'); // jobs board again: the agreement's card is drawn now
+const w35aAgreementCard = w26JobRewardLine('Haul provisions');
+const w35aAgreementAcceptBtn = w26CardAcceptButton('Haul provisions');
 const w35aPayQuoted = w35aHaulJob?.payQuoted;
 // otherSystemId equivalent read from ctx.systems — the destination the board
 // UI and the quote named must equal the picker's primary-gate destination.
@@ -8270,10 +8360,21 @@ const w35aAcceptChecks = {
   dockedAtOrigin: ctx.flags.docked === true && ctx.world.currentSystem === w35aOrigin,
   jobFound: !!w35aHaulJob,
   holdRoomForLoad: ctx.cargoCapacity - ctx.cargo.reduce((n, c) => n + c.units, 0) >= w35aNeed,
-  acceptButtonFound: !!w35aAcceptBtn,
+  // Issue 206: the paid-out legacy row never posts, never draws an Accept and
+  // is refused by the desk — and the refusal moves nothing.
+  staleDoneRowNotPosted: w35aStaleState === 'done' && w35aStaleCard === null && w35aStaleAcceptBtn === null,
+  staleDoneRowRefused: w35aStaleRes?.ok === false && w35aStaleStateAfter === 'done',
+  staleRefusalGrantsNothing: ctx.world.credits === w35aCreditsBeforeStale
+    && holdCount('provisions') === w35aProvBeforeStale,
+  // The accepted agreement DOES keep its card, and still cannot be taken twice.
+  agreementCardDrawn: typeof w35aAgreementCard === 'string' && w35aAgreementCard.length > 0,
+  noAcceptButtonOnAgreement: w35aAgreementAcceptBtn === null,
   jobAccepted: w35aHaulJob?.state === 'accepted',
   originStamped: w35aHaulJob?.originSystem === w35aOrigin,
   payQuotedStamped: Number.isFinite(w35aPayQuoted),
+  // The desk quotes a legacy haul off the DESTINATION dock's chain, as the
+  // retired accept path did — the compatibility an old save's quote rests on.
+  quoteIsDestChain: w35aPayQuoted === w26JobPayFor(w35aDest, Math.round(w35aNeed * w35aPrice * 1.4)),
   quoteNamesSameDest: w35aStampedDest === w35aDest,
   ferryClearsTriple: w35aFerryDest !== w35aOrigin && w35aFerryDest !== w35aDest && w35aFerryDest !== w35aThird,
 };
@@ -17850,7 +17951,17 @@ removeLiveShip(w42indyCtx, w42indy);
     noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save80s) && !/SAFE_ID\.test\(\s*job\.id/.test(st80s),
     haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st80s),
     uniqueHaulIds: uniqueLive80s,
-    uniqueHaulMake: st80s.includes("id: 'haul-provisions'") && st80s.includes("id: 'ferry-consignment'"),
+    // Issue 206: the legacy consignment is RETIRED — `makeJobs` seeds the ferry
+    // and no longer seeds the haul. Retirement is a named guard on the board
+    // and the accept path, and the compatibility an accepted old-save row rides
+    // on (the unique-four id, the persist lookup) is deliberately kept.
+    haulRetiredInMake: !st80s.includes("id: 'haul-provisions'")
+      && st80s.includes("id: 'ferry-consignment'")
+      && st80s.includes("const RETIRED_HAUL_ID = 'haul-provisions'")
+      && st80s.includes('function retiredHaulRow(job)')
+      && st80s.includes("if (retiredHaulRow(j) && j.state !== 'accepted') continue")
+      && st80s.includes("|| id === 'haul-provisions' || id === 'ferry-consignment'")
+      && st80s.includes("persistJobById(jobs, 'haul-provisions')"),
     spyKindStays: st80s.includes("kind: 'espionage'") && save80s.includes("'espionage'")
       && st80s.includes('spy-${sysId}-'),
     digit2Jobs: st80s.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'"),
@@ -18379,7 +18490,15 @@ removeLiveShip(w42indyCtx, w42indy);
     noFullSafeId: !/SAFE_ID\.test\(\s*job\.id/.test(save80w) && !/SAFE_ID\.test\(\s*job\.id/.test(st80w),
     haulDestBind: /job\.kind === 'haul'[\s\S]*?const dest = otherSystemId\(ctx, origin\)/.test(st80w),
     uniqueHaulIds: uniqueLive80w,
-    uniqueHaulMake: st80w.includes("id: 'haul-provisions'") && st80w.includes("id: 'ferry-consignment'"),
+    // Issue 206 (the wave-80s pin, same source): seeded ferry, retired haul,
+    // compatibility kept for an accepted old-save agreement.
+    haulRetiredInMake: !st80w.includes("id: 'haul-provisions'")
+      && st80w.includes("id: 'ferry-consignment'")
+      && st80w.includes("const RETIRED_HAUL_ID = 'haul-provisions'")
+      && st80w.includes('function retiredHaulRow(job)')
+      && st80w.includes("if (retiredHaulRow(j) && j.state !== 'accepted') continue")
+      && st80w.includes("|| id === 'haul-provisions' || id === 'ferry-consignment'")
+      && st80w.includes("persistJobById(jobs, 'haul-provisions')"),
     digit2Jobs: st80w.includes("export const DOCK_KEY_SERVICES = Object.freeze(['market', 'jobs'"),
     replaceHelper: st80w.includes('function replaceWarJob') && st80w.includes('function syncWarJobs')
       && st80w.includes('function warDestId') && st80w.includes('function pickWarQuarry'),
@@ -25778,9 +25897,16 @@ removeLiveShip(w42indyCtx, w42indy);
       && !station136.includes('innerHTML')
       && !station136.includes('insertAdjacentHTML')
       && !station136.includes('document.write'),
+    // Issue 206: three of the authored four are still seeded; the legacy
+    // consignment is retired behind a named guard, with the unique-four id and
+    // the persist lookup kept so an accepted old-save row still settles.
     uniqueFour: /id: 'bounty-ace'/.test(station136)
       && /id: 'patrol-lane'/.test(station136)
-      && /id: 'haul-provisions'/.test(station136)
+      && !/id: 'haul-provisions'/.test(station136)
+      && /const RETIRED_HAUL_ID = 'haul-provisions'/.test(station136)
+      && /function retiredHaulRow\(job\)/.test(station136)
+      && /\|\| id === 'haul-provisions' \|\| id === 'ferry-consignment'/.test(station136)
+      && /persistJobById\(jobs, 'haul-provisions'\)/.test(station136)
       && /id: 'ferry-consignment'/.test(station136),
     digit2Jobs: /DOCK_KEY_SERVICES = Object\.freeze\(\['market', 'jobs'/.test(station136),
     paintTextContent: /function hDom\(tag, cls, parent, text\)[\s\S]{0,220}textContent/.test(station136)
@@ -25922,9 +26048,15 @@ removeLiveShip(w42indyCtx, w42indy);
     tgt07: controls138.includes('function isCycleHostile(ref)')
       && controls138.includes('ref.ai && ref.ai.intent === true')
       && controls138.includes('const ha = isCycleHostile(a && a.ref) ? 0 : 1'),
+    // Issue 206 (the wave-136 pin, same source): retired seed, kept settlement
+    // and persist compatibility.
     uniqueFour: /id: 'bounty-ace'/.test(station138)
       && /id: 'patrol-lane'/.test(station138)
-      && /id: 'haul-provisions'/.test(station138)
+      && !/id: 'haul-provisions'/.test(station138)
+      && /const RETIRED_HAUL_ID = 'haul-provisions'/.test(station138)
+      && /function retiredHaulRow\(job\)/.test(station138)
+      && /\|\| id === 'haul-provisions' \|\| id === 'ferry-consignment'/.test(station138)
+      && /persistJobById\(jobs, 'haul-provisions'\)/.test(station138)
       && /id: 'ferry-consignment'/.test(station138),
     digit2Jobs: /DOCK_KEY_SERVICES = Object\.freeze\(\['market', 'jobs'/.test(station138),
     sanitizeCap: /const JOBS_SANITIZE_MAX = 4\s*\n/.test(save138),

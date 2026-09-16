@@ -4,7 +4,7 @@
  * Four playtest findings, checked against the real station DOM closures with
  * disclosed cash/cargo/price/stock fixtures. This is not campaign progression.
  *
- *  1. An offered haul states its buy-in and affordability before acceptance.
+ *  1. The legacy haul posting is retired (#206) — no card, no buy-in line.
  *  2. Every finite market row states capacity, and the pane states the refill.
  *  3. A bulk refusal does not outlive its cause; an ok offer stays immutable.
  *  4. An event-driven quote is labelled transient on the row it moved.
@@ -68,50 +68,38 @@ function fixture() {
 dock();
 fixture();
 
-// ---- 1. haul buy-in before acceptance ---------------------------------------
+// ---- 1. the retired haul buy-in (issue 206) --------------------------------
+// #179's first finding was the buy-in line drawn on the OFFERED
+// `haul-provisions` card. Issue 206 retired that posting: every board already
+// generated a Provisions trade row for the same five-unit run, the same gate
+// and the same money, so the consignment was a duplicate. The card is gone, and
+// the offered-haul buy-in line went with it. What is pinned here is the
+// removal, on a fresh board and on an older save's stale record alike. Carrying
+// buy-in guidance over to the generated trade rows is separate product work and
+// is tracked as such — it is deliberately NOT asserted here.
 const BUY_IN = /^Buy-in/;
-check('an offered haul states the buy-in, the unit price and the purse that covers it', () => {
+check('the retired haul posting draws neither its card nor its buy-in line', () => {
   fixture();
   ctx.stationDesk.selectService('jobs');
-  assert.ok(lineWith(/^Haul 5 Provisions to /), 'the haul posting is on the board');
-  const line = lineWith(BUY_IN);
-  assert.ok(line, 'the offered haul states a buy-in');
-  assert.match(line, /^Buy-in here: 5 Provisions at 100 UU = 500 UU\. You hold 20000 UU — covered\.$/);
+  assert.equal(ctx.world.jobs.some(j => j.kind === 'haul'), false, 'no haul posting is seeded');
+  assert.equal(lineWith(/^Haul 5 Provisions to /), undefined, 'the legacy card is not drawn');
+  assert.equal(lineWith(BUY_IN), undefined, 'and no buy-in line is left behind');
 });
-check('a purse short of the buy-in names the exact shortfall before acceptance', () => {
+check("an older save's stale offered haul record draws nothing either", () => {
   fixture();
   ctx.world.credits = 350;
+  const stale = {
+    id: 'haul-provisions', kind: 'haul', title: 'Haul provisions',
+    detail: "Provisions are worth more a gate away. Accept here, buy 5 Provisions, and dock at the other system's station — paid at 140% of your buy cost on delivery.",
+    reward: 0, need: 5, progress: 0, state: 'offered',
+    originSystem: null, originPrice: 0,
+  };
+  ctx.world.jobs.push(stale);
   ctx.stationDesk.selectService('jobs');
-  assert.equal(lineWith(BUY_IN),
-    'Buy-in here: 5 Provisions at 100 UU = 500 UU. You hold 350 UU — 150 UU short.');
-});
-check('thin stock and a crowded hold are named alongside the price', () => {
-  fixture();
-  ctx.world.credits = 350;
-  ctx.world.marketSupply = { freehold: { provisions: { units: 2, updatedAt: 100 } } };
-  ctx.cargo.push({ commodity: 'rawOre', units: 18 });
-  ctx.stationDesk.selectService('jobs');
-  const line = lineWith(BUY_IN);
-  assert.match(line, /150 UU short\./);
-  assert.match(line, /This dock has 2 in stock\./);
-  assert.match(line, /Hold room is 2 units\./);
-});
-check('units already owned cut the buy-in, and an accepted haul drops the line', () => {
-  fixture();
-  ctx.cargo.push({ commodity: 'provisions', units: 2 });
-  ctx.stationDesk.selectService('jobs');
-  assert.match(lineWith(BUY_IN), /^Buy-in here: 3 Provisions at 100 UU = 300 UU\./);
-  ctx.cargo.length = 0;
-  ctx.cargo.push({ commodity: 'provisions', units: 5 });
-  ctx.stationDesk.selectService('jobs');
-  assert.equal(lineWith(BUY_IN), 'Buy-in: none — 5 Provisions already yours in the hold.');
-  const haul = ctx.world.jobs.find(j => j.id === 'haul-provisions');
-  const state = haul.state;
-  haul.state = 'accepted';
-  haul.originSystem = ctx.world.currentSystem;
-  ctx.stationDesk.selectService('jobs');
-  assert.equal(lineWith(BUY_IN), undefined, 'an accepted haul is past its buy-in');
-  haul.state = state;
+  assert.equal(lineWith(/^Haul 5 Provisions to /), undefined, 'a saved stale posting is not posted');
+  assert.equal(lineWith(BUY_IN), undefined, 'and states no buy-in');
+  assert.equal(stale.state, 'offered', 'and the saved record itself is untouched');
+  ctx.world.jobs.splice(ctx.world.jobs.indexOf(stale), 1);
 });
 
 // ---- 2. every finite stock row states its capacity and refill ---------------
