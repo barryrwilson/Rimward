@@ -540,6 +540,31 @@ instead of clicking the wrong row. `act({ name:'stationAction' })` wraps
 perform; refusal notices map to stable tokens (`uu`, `hold`, `not-offered`,
 `unavailable`, `busy`, `stale`). The v1 `v1-observe-only` token is gone.
 
+**Market control identity (issue #203).** Every market quantity button in
+`station.view.actions` carries `commodity`, including bulk presets, confirms, and remainder review
+for the selected commodity. Other service/navigation buttons omit it. The `n`
+index still addresses the current captured action; re-observe after a view change.
+`station.view.rows` is a text traversal capped at **120 entries**, with each text
+capped at **240 characters**. It can end partway through a commodity's cells.
+Use `market.rows` for the full structured commodity table; `station.view.actions`
+is not truncated by the text-row cap.
+
+**Return payment instructions (issue #205).** Accepted mining, explore,
+espionage, and recovery rows in `jobs.active` include `payAt` (origin system ID)
+and `status` naming that station as the place to report for payment after the
+objective. Chain steps 1 and 3 derive the reporting station from the employer.
+These are derived observation fields, not saved contract fields. Destination
+payment jobs (including chain step 2), immediate kill rewards, offered jobs,
+and invalid origins omit them. Completing a spy objective at the destination
+still requires returning to `payAt`; the Jobs desk's existing file-at-home copy
+states the same requirement. No settlement or reward rules change.
+
+**Restricted trade refusals (issue #209).** The `trade` command's
+restricted-goods refusal uses `token: 'restricted'`, retaining the complete
+dockmaster line in `error`. `market.rows[].tradeAllowed === false` describes
+the same standing restriction. The disabled bulk confirmation reached through
+`stationAction` retains its `unavailable` token and makes no trade.
+
 **Station receipt fields (issue #64).** Every browser `actResult` receipt has
 both `error` and `notice` as strings. `error` is refusal text only; `notice` is the
 player-visible line a *successful* action displayed. A successful

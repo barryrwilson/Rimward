@@ -12,6 +12,14 @@ unfiled candidates. Dated playtest observations below retain their original
 product intent and evidence limits; they are not new defects inferred from
 old prose. Merge status does not establish fresh release QA or deployment.
 
+## Trader API clarity — 2026-09-16
+
+Issues #203, #205, and #209 are implemented and verified on an isolated candidate: identify the
+commodity each market button trades, make return-to-origin payment requirements
+visible in accepted job observations, and give restricted trade refusals a stable
+token while preserving their explanation. Payout rules and balance are unchanged.
+Build, boot, focused and live checks, and independent Claude review pass.
+Merge and deployment remain separate; see [scope and evidence](Issues203205209TraderClarity.md).
 ## How to use this document
 
 ### Successful docking should sound successful — #185

@@ -25,6 +25,14 @@ not-yet-merged labels. Merge status alone is not fresh QA, release readiness,
 or deployment evidence.
 
 
+## Trader API clarity — #203, #205, #209
+
+Implemented and verified on 2026-09-16: commodity identity on market actions,
+return-dock payment instructions in accepted job observations, and a named
+restricted-trade refusal token. Build, unchanged boot, focused regressions, live
+Chromium and independent Claude review pass
+on `codex/issues-203-205-209`; merge and deployment remain separate.
+See [scope and evidence](Issues203205209TraderClarity.md).
 ## Active outcomes
 
 Issue [#206](https://github.com/barryrwilson/Rimward/issues/206) is implemented
