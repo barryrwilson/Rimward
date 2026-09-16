@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { rememberMarket, bestRememberedPrices } from '../game/price-memory.js';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX } from '../game/state.js';
+import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX, REPAIR_RATES, repairClassMultiplier } from '../game/state.js';
 import { claimedHullsOf } from '../game/derelict.js';
 import { dockFactionOf, yardStockFor } from '../game/shipyard.js'; // issue #186: the outfitter names the yard that sells a bigger hold
 import * as pods from '../game/pods.js';
@@ -214,10 +214,9 @@ const RESTRICTED_REP_GATE = -25; // a burned Compact name opens the locker
 const FEED_COST = 60;
 const TEND_COST = 25;
 const ROUND_COST = 5;
-// Itemized yard pricing, UU per integrity point restored (§12 repair bays).
-// Hull is structural and dear; screens are cheap laminate; shell and engine
-// sit between. Cost scales strictly with damage taken, per system.
-const REPAIR_RATES = { hull: 0.9, screen: 0.3, shell: 0.5, engine: 0.6 };
+// Itemized yard pricing (§12 repair bays) is tuning, so REPAIR_RATES and the
+// issue #208 hull-class multipliers live with the rest of the tuning data in
+// state.js. The desk only composes them.
 const CARGO_UPGRADE_COST = 600;
 const CARGO_UPGRADE_STEP = HOLD_RACK_STEP;
 const CARGO_UPGRADE_MAX = HOLD_RACK_MAX;
@@ -5149,7 +5148,13 @@ export function initStation(ctx) {
       // Re-true scrambled channels against the class baseline, then make her
       // whole. Without this a NaN channel would be copied right back by the
       // repair that was meant to fix it.
-      const fresh = createShipState(SHIP_CLASSES[p.classKey] ? p.classKey : 'light', { name: p.name, faction: p.faction });
+      // Issue #208: the baseline lookup is own-property-safe, the same
+      // discipline repairClassMultiplier uses on the price side. A truthiness
+      // test read inherited keys ('constructor', 'toString'), and a hull
+      // stamped with one of those would have been re-trued to NaN maxima by
+      // the very refit that charged the light rate to fix it.
+      const baseClass = Object.prototype.hasOwnProperty.call(SHIP_CLASSES, p.classKey) ? p.classKey : 'light';
+      const fresh = createShipState(baseClass, { name: p.name, faction: p.faction });
       for (const key of Object.keys(REPAIR_RATES)) {
         const maxKey = key + 'Max';
         if (!Number.isFinite(p[maxKey])) p[maxKey] = fresh[maxKey];
@@ -6640,6 +6645,11 @@ export function initStation(ctx) {
     let cost = 0;
     let corrupt = false;
     if (p) {
+      // Issue #208: a bigger hull is dearer to make whole. The class factor
+      // multiplies the missing-integrity bill BEFORE the per-channel ceil, so
+      // the itemized lines and the total stay the same arithmetic. An unknown
+      // or absent classKey falls back to light; hull kind never enters it.
+      const classMult = repairClassMultiplier(p.classKey);
       for (const key of Object.keys(REPAIR_RATES)) {
         const max = p[key + 'Max'];
         const cur = p[key];
@@ -6649,7 +6659,7 @@ export function initStation(ctx) {
         if (!Number.isFinite(max) || !Number.isFinite(cur)) { corrupt = true; continue; }
         const lack = Math.max(0, max - cur);
         if (lack < 1) continue;
-        const c = Math.ceil(lack * REPAIR_RATES[key] * repairMult);
+        const c = Math.ceil(lack * REPAIR_RATES[key] * repairMult * classMult);
         parts.push({ key, lack: Math.round(lack), cost: c });
         missing += lack;
         cost += c;

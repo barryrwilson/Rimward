@@ -55,6 +55,8 @@
     "test:prize": "node --import ./scripts/with-css-stub.mjs scripts/issue-147-prize-test.mjs",
     "test:hull-sale": "node --import ./scripts/with-css-stub.mjs scripts/issue-158-hull-sale-test.mjs",
     "test:bigger-hold": "node --import ./scripts/with-css-stub.mjs scripts/issue-186-bigger-hold-test.mjs",
+    "test:repair-balance": "node --import ./scripts/with-css-stub.mjs scripts/issue-208-repair-balance-test.mjs",
+    "test:repair-balance-live": "node scripts/issue-208-repair-balance-live-probe.mjs",
     "test:pod-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-115-pod-receipts-test.mjs",
     "test:miner-receipts": "node --import ./scripts/with-css-stub.mjs scripts/issue-119-miner-receipts-test.mjs",
     "test:refusal-tokens": "node --import ./scripts/with-css-stub.mjs scripts/issue-118-refusal-tokens-test.mjs",

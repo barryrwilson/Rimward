@@ -1,5 +1,18 @@
 # RIMWARD remaining work
 
+## Repair cost scales with hull class — #208
+
+Implemented on an isolated candidate, pending independent QA: the yard bill
+still prices the integrity missing, linearly, but that bill is now multiplied by
+an authored hull-class factor (light 3x, cutter 3x, heavy 4x, ace 5x,
+freighter 6x, frigate 8x) before each channel is rounded. Cargo value and damage
+source are not read, per the owner's ruling on the issue. `REPAIR_RATES` and the
+class table moved to `src/game/state.js`; `repairAll`'s corruption-recovery
+baseline was made own-property-safe so an unauthored or inherited class name
+falls back to light on the payment path as well as the price path. No new
+persisted field and no migration. Tuning burden over a full campaign is
+unvalidated. See [the decision, arithmetic and evidence](Issue208RepairBalanceRecommendations.md).
+
 ## Ordinary job abandonment — #207
 
 Implemented on an isolated candidate, pending independent QA: accepted mining,

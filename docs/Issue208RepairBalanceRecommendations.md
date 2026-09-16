@@ -1,46 +1,132 @@
-# Issue #208 repair balance recommendations
+# Issue #208 repair balance — decision and implementation record
 
-Status: proposal only; no repair balance changes implemented. Owner selection of the mechanism and tuning remains open.
+Status: implemented on the isolated `codex/issue-208-repair-balance` candidate,
+pending independent QA. This document was the proposal; the owner selected the
+recommended mechanism and table, and it is now the mission record for what was
+built, what was verified, and what remains unproven.
 
-Prepared against commit `07e2fafa2a9312cc46d2ec8dec44d9fd51bd80d6` for [issue #208](https://github.com/barryrwilson/Rimward/issues/208).
+Prepared as a proposal against `07e2fafa2a9312cc46d2ec8dec44d9fd51bd80d6`;
+implemented against `aebde852e548d456e072cecccd518936e0eb1e0a` for
+[issue #208](https://github.com/barryrwilson/Rimward/issues/208).
 
-## Recommendation
+## The decision
 
-Apply explicit hull-class repair multipliers to the existing missing-integrity bill, including a modest increase for light hulls. Class scaling that leaves light at 1x would leave the reported starter-trader problem intact. Keep repair independent of cargo value and damage source.
+The owner's comment on the issue is the ruling:
 
-The proposed numbers below are conservative starting points for a balance playtest, not validated outcomes. They increase the cost of surviving damage without attempting to make repair the entire trader progression sink. Larger hulls remain an existing capital purchase.
+> Repair should scale with Hull Class and damage taken. Not cargo value.
 
-## Current behavior and evidence
+Damage taken is the amount of integrity missing, which the existing bill already
+prices linearly. No nonlinear severity band or surcharge was added. The change
+is the hull-class multiplier, applied to that linear bill before the per-channel
+rounding. Cargo is not read, and no damage source is tracked.
 
-At the verified base, `src/systems/station.js:220` defines channel rates in UU per integrity: hull 0.9, screen 0.3, shell 0.5, engine 0.6. The quote at `src/systems/station.js:6628-6663` computes each item as:
+The selected table is the one proposed below: light 3x, cutter 3x, heavy 4x,
+ace 5x, freighter 6x, frigate 8x. These are authored tuning choices for a
+balance playtest, not a formula derived from cargo capacity or replacement
+value, and not validated long-run economy outcomes.
 
-```text
-ceil(missing integrity * channel rate * epic multiplier * faction multiplier)
+## What was implemented
+
+`src/game/state.js` now owns both tables and the lookup:
+
+```js
+export const REPAIR_RATES = Object.freeze({ hull: 0.9, screen: 0.3, shell: 0.5, engine: 0.6 });
+export const REPAIR_CLASS_MULT = Object.freeze({
+  light: 3, cutter: 3, heavy: 4, ace: 5, freighter: 6, frigate: 8,
+});
+export function repairClassMultiplier(classKey) { /* own-property lookup, light fallback */ }
 ```
 
-The total is the sum of the separately rounded channel items. Channels missing less than one integrity are skipped. Non-finite channels are flagged as corrupt rather than billed. Keeper compensation zeroes every item and the total.
-
-The payment action at `src/systems/station.js:5140-5165` recomputes that quote, refuses an unaffordable repair, and otherwise deducts the total and restores the channels. Invalid maxima are restored from the class baseline. Repair is all-or-nothing.
-
-Class integrity and cargo values are authored at `src/game/state.js:37-44`; state creation is at `src/game/state.js:172-194`. Larger ships already incur larger bills for the same percentage damage because their maximum integrity is larger. Yard list prices are at `src/game/shipyard.js:18-25`; reputation discounts apply separately at `src/game/shipyard.js:112-122`.
-
-Issue #208 reports a light-hull repair quote of 88 UU after piracy and credits rising from 350 to 8,458 UU over four legs in about 15 simulation minutes. The issue names `docs/playtests/2026-09-15-trader-playtest.md`, but that file was absent from the inspected checkout. Income and the observed quote are therefore issue-sourced observations, not independently reproduced playtest findings.
-
-Related [issue #186](https://github.com/barryrwilson/Rimward/issues/186) records the trader capital plateau and an owner decision to improve visibility of the larger-hull path. That decision does not choose repair tuning for #208.
-
-## Candidate tuning and exact examples
-
-For comparison, every row below uses exactly 62% of class hull integrity missing, exactly 70% of class engine integrity missing, intact screen and shell, no keeper compensation, and a combined existing epic/faction multiplier of exactly 0.9. The 0.9 modifier is applied once; no additional discount is assumed.
+`src/systems/station.js` no longer authors a rate table. `repairCost` imports
+both and computes each channel as:
 
 ```text
-current = ceil(hullMax * 0.62 * 0.9 * 0.9)
-        + ceil(engineMax * 0.70 * 0.6 * 0.9)
-
-proposed = ceil(hullMax * 0.62 * 0.9 * 0.9 * classMultiplier)
-         + ceil(engineMax * 0.70 * 0.6 * 0.9 * classMultiplier)
+ceil(missing integrity * channel rate * epic multiplier * faction multiplier * class multiplier)
 ```
 
-| Class | Hull max | Engine max | Yard list UU | Proposed multiplier | Current modeled UU | Proposed UU |
+The total is still the sum of the separately rounded channel items. The channel
+rates, the less-than-one-integrity skip, the corrupt-channel flag, the keeper
+comp, the epic and faction composition order (epic first, faction second) and
+the all-or-nothing payment are unchanged. Quote and payment remain the same
+function, so the rendered total is by construction the amount deducted.
+
+`repairAll`'s corruption-recovery baseline was also made own-property-safe:
+
+```js
+const baseClass = Object.prototype.hasOwnProperty.call(SHIP_CLASSES, p.classKey) ? p.classKey : 'light';
+```
+
+The previous truthiness test accepted inherited names. A hull stamped
+`constructor`, `__proto__`, `toString` or `hasOwnProperty` was priced at the
+light rate but then re-trued against `SHIP_CLASSES['constructor']`, which has no
+`hull` or `shield`, so the refit that charged for the fix left the maxima
+non-finite. Both sides of the desk now fall back to `light` by the same rule.
+This defect was found in QA preparation for this change and is fixed here
+because the unknown-class fallback is part of this issue's contract.
+
+No persisted field, save migration, equipment, control, key, SKU, hull, price,
+damage mechanic or hull maximum was added or changed.
+
+### Write set
+
+| File | Change |
+| --- | --- |
+| `src/game/state.js` | `REPAIR_RATES`, `REPAIR_CLASS_MULT`, `repairClassMultiplier` |
+| `src/systems/station.js` | imports the tuning; applies the class factor before each ceil; own-property recovery baseline |
+| `scripts/issue-208-repair-balance-test.mjs` | new focused regression, 109 pins |
+| `scripts/issue-208-repair-balance-live-probe.mjs` | new live Chromium probe |
+| `scripts/boot-test.mjs` | the two existing repair-price expectations now read the class multiplier from the authored table |
+| `package.json` | `test:repair-balance`, `test:repair-balance-live` |
+| `docs/REMAINING-WORK.md`, `docs/PLAYER-EXPERIENCE-WISHLIST.md` | #208 status |
+
+The boot expectations were updated, not weakened. They still assert the exact
+itemized total, the exact charge, the epic/faction composition, the authored-six
+guard and the made-whole result; the class factor is read live from
+`repairClassMultiplier(ctx.player.classKey)` rather than re-typed as a constant,
+so a future table change cannot silently pass them.
+
+## Current behavior and evidence at the proposal base
+
+At the verified base, `src/systems/station.js:220` defined the channel rates in
+UU per integrity: hull 0.9, screen 0.3, shell 0.5, engine 0.6. The quote
+computed each item as `ceil(missing integrity * channel rate * epic * faction)`
+and summed the separately rounded items. Channels missing less than one
+integrity were skipped. Non-finite channels were flagged as corrupt rather than
+billed. Keeper compensation zeroed every item and the total. The payment action
+recomputed that quote, refused an unaffordable repair, and otherwise deducted
+the total and restored the channels.
+
+Class integrity is authored at `src/game/state.js` `SHIP_CLASSES`. Larger ships
+already incurred larger bills for the same percentage damage because their
+maximum integrity is larger. Yard list prices are in `src/game/shipyard.js`;
+reputation discounts apply separately.
+
+Issue #208 reports a light-hull repair quote of 88 UU after piracy and credits
+rising from 350 to 8,458 UU over four legs in about 15 simulation minutes. The
+issue names `docs/playtests/2026-09-15-trader-playtest.md`, but that file was
+absent from the inspected checkout. Income and the observed quote are therefore
+issue-sourced observations, not independently reproduced playtest findings.
+
+Related [issue #186](https://github.com/barryrwilson/Rimward/issues/186) records
+the trader capital plateau and an owner decision to improve visibility of the
+larger-hull path. That decision did not choose repair tuning for #208.
+
+## The selected table and its exact arithmetic
+
+Every row below uses exactly 62% of class hull integrity missing, exactly 70% of
+class engine integrity missing, intact screen and shell, no keeper compensation,
+and a combined existing epic/faction multiplier of exactly 0.9. The 0.9 modifier
+is applied once; no additional discount is assumed.
+
+```text
+before = ceil(hullMax * 0.62 * 0.9 * 0.9)
+       + ceil(engineMax * 0.70 * 0.6 * 0.9)
+
+after  = ceil(hullMax * 0.62 * 0.9 * 0.9 * classMultiplier)
+       + ceil(engineMax * 0.70 * 0.6 * 0.9 * classMultiplier)
+```
+
+| Class | Hull max | Engine max | Yard list UU | Multiplier | Before UU | After UU |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Light | 100 | 100 | 8,000 | 3x | 89 | 265 |
 | Cutter | 80 | 90 | 11,000 | 3x | 76 | 224 |
@@ -49,50 +135,144 @@ proposed = ceil(hullMax * 0.62 * 0.9 * 0.9 * classMultiplier)
 | Freighter | 220 | 140 | 24,000 | 6x | 164 | 981 |
 | Frigate | 900 | 300 | 80,000 | 8x | 566 | 4,524 |
 
-For the light example, the current hull item is `ceil(50.22) = 51`, the engine item is `ceil(37.8) = 38`, and the total is 89 UU. With 3x tuning, those items become `ceil(150.66) = 151` and `ceil(113.4) = 114`, totaling 265 UU. Multiplying an already rounded total would give a different answer and is not the proposal.
+For the light example, the previous hull item was `ceil(50.22) = 51`, the engine
+item `ceil(37.8) = 38`, total 89 UU. At 3x those items are `ceil(150.66) = 151`
+and `ceil(113.4) = 114`, total 265 UU. Multiplying the already rounded total
+would give 267 and is not what was built; the focused regression asserts that
+distinction directly.
 
-The issue's displayed 62 and 70 missing integrity do not establish the exact underlying fractional values. The exact-input 89 UU reconstruction therefore does not prove the reported 88 UU quote was wrong. These examples are controlled arithmetic comparisons, not replays of that session.
+The issue's displayed 62 and 70 missing integrity do not establish the exact
+underlying fractional values. The exact-input 89 UU reconstruction therefore does
+not prove the reported 88 UU quote was wrong. These are controlled arithmetic
+comparisons, not replays of that session.
 
-The reported credit increase is `8,458 - 350 = 8,108` UU, averaging 2,027 UU per leg. The proposed light bill is about 13.1% of that average increase, versus 4.4% for the current modeled 89 UU bill. Average net credit growth is only a rough benchmark: it does not establish individual trip profit or future income on larger hulls.
+## Acceptance and verification
 
-The modeled 265 UU light repair remains below the reported 350 UU starting purse for this particular damage pattern. More extensive damage or a poorer pilot can still face an unaffordable bill. A new rescue subsidy, partial repair system, or affordability guarantee is outside this proposal.
+### Focused regression — `npm run test:repair-balance`
 
-## Alternatives and tradeoffs
+109 pins, 0 failures, exit 0. One real boot; the quote asserted is the rendered
+REPAIR BAYS pane text and the payment asserted is the real `1 — Repair all`
+button. It covers:
+
+- the tuning lives in `state.js` and `station.js` authors no rate table;
+- `repairClassMultiplier` over the six authored keys, unknown keys, absent keys
+  and the inherited names `__proto__`, `constructor`, `toString`,
+  `hasOwnProperty`;
+- the rendered itemized quote for all six classes at modifier 1;
+- every row of the table above at a 0.9 modifier, item by item, including the
+  pre-change totals, and intact channels billed nothing;
+- the rounding order — 265, not 267;
+- a channel under one integrity down still skipped and still free, including on
+  the dearest class;
+- a corrupt channel flagged, not billed, and re-trued by the refit;
+- keeper compensation zeroing every line and the total;
+- an unaffordable bill refused with nothing taken and the damage intact;
+- quote/payment parity at the exact affordability boundary, a whole hull
+  afterwards, and a second repair charging nothing;
+- a living hull billed identically to a built hull of the same class;
+- an unauthored player class paying the light rate;
+- a full hold of valuable cargo not moving the bill by one UU;
+- the unknown-class contract through the *payment* path: for `constructor`,
+  `__proto__`, `toString`, `hasOwnProperty` and an unknown key, each with a
+  genuinely scrambled channel, the bill is the light rate, exactly the quote is
+  taken, every maximum is re-trued from the light baseline and none is left NaN.
+
+A negative control was run: reverting only the `repairAll` baseline lookup to
+the previous truthiness test fails 13 of those pins with `screenMax` left
+non-finite, so the new coverage is not vacuous.
+
+### Live browser probe — `npm run test:repair-balance-live`
+
+Disposable loopback-only Chromium, declared seed, real WebGL renderer, verdict
+PASS with zero console errors and zero uncaught exceptions. It exercises the
+real pane and the real button with trusted mouse input:
+
+- the rendered light quote at 62% hull / 70% engine: `hull — 62 integrity down ·
+  168 UU`, `engine — 70 integrity down · 126 UU`, `Yard total: 294 UU`, and the
+  button repeating 294; intact channels billed nothing;
+- a low-credit light pilot one UU short: refused with `Not enough UU for the
+  yard.`, purse untouched, channels still exactly as damaged;
+- payment parity at exactly 294 UU: purse to zero, every channel whole, and the
+  repaired hull quoted nothing on re-open;
+- a keeper comp against a 1,500 UU purse: every line and the total zero, nothing
+  taken, still made whole;
+- the larger hull: `737 + 353 = 1090 UU`, refused whole at 1,089 UU, and exactly
+  1,090 UU taken at 5,000 UU;
+- the same proportional damage costing 3.71x more on the freighter than on the
+  light.
+
+### Measured trader earnings
+
+Two legs were flown in that same live session. The buys, the flights and the
+sales are real: a real market desk transaction, a real plotted route flown by
+the real autopilot to a real berth, and a real sale at the destination counter.
+
+| Leg | Route | Starting capital | Cargo | Bound by | Gross revenue | Net profit |
+| --- | --- | --- | --- | --- | ---: | ---: |
+| A | Freehold → Veridian | the 350 UU the game gave the pilot | 1 unit slag iron @179 | purse | 238 UU | 59 UU |
+| B | Veridian → Freehold | declared 20,000 UU fixture | 20 units refined metals @180 | hold capacity | 5,000 UU | 1,400 UU |
+
+Against those measured legs, the 294 UU light bill for a 62%/70% strip is about
+4.98x leg A's net profit and about 0.21x leg B's. Read plainly: a stripped
+starter cannot pay for the damage out of the leg that earned it and must fly
+several more, while a trader who already has stock money absorbs it out of one
+leg. That is the intended shape of the change, and it is two legs on one seed,
+not a campaign.
+
+These figures are the recorded run on this artifact
+(`out/issue-208/live/repair-balance/result.json`). Prices drift in simulation
+time, so a repeat run on the same seed lands near but not exactly on them — an
+earlier identical run measured 5,020 UU gross and 1,420 UU net on leg B. The
+repair quotes, by contrast, are exact and reproduce byte for byte.
+
+### Build and boot
+
+`npm run build` passes. `npm run test:boot` is being captured independently by
+QA on the immutable artifact so its full output and true exit code are recorded
+there; the two repair expectations inside it were updated to read the class
+multiplier and are not weakened.
+
+## Limitations
+
+- The damage in every check is a disclosed integrity fixture. No pirate fought
+  the player in the verified runs, so this is not a natural-combat replay and
+  does not reproduce the session the issue reported.
+- Leg B's starting capital is a declared fixture. The revenue it produced is
+  real; the decision to hand the pilot 20,000 UU is not something the run
+  earned.
+- Two legs on one seed establish an order of magnitude, not an economy. Route,
+  spread, stock and event pressure are seed-specific. Longitudinal balance —
+  whether 3x/6x is the right burden over a full campaign, across careers, and
+  against job payouts and hull prices — is unproven and is a limitation of this
+  artifact, not deferred work hidden inside it.
+- The multipliers raise costs for every career flying those classes, not only
+  traders. A combat pilot in an ace now pays 5x for the same damage.
+- 265 UU (or 294 UU at an unmodified yard) remains below the 350 UU starting
+  purse for this particular damage pattern, but heavier damage or a poorer pilot
+  can still face an unaffordable bill. No rescue subsidy, partial repair or
+  affordability guarantee was added; that remains out of scope.
+- The issue's own 88 UU observation and 8,458 UU income figure were not
+  independently reproduced.
+
+## Alternatives considered
 
 | Mechanism | Benefit | Limitation |
 | --- | --- | --- |
-| Explicit class multipliers, recommended | Predictable, independently tunable, small implementation scope | Raises costs for every career using that class; requires balance testing |
+| Explicit class multipliers — selected | Predictable, independently tunable, small implementation scope | Raises costs for every career using that class; requires balance testing |
 | Flat global increase | Smallest implementation and easy to explain | Less control over large-hull running costs |
-| Percentage of hull purchase price | Connects repair to asset value | Couples repair tuning to shipyard pricing; would need a clearly defined damage weighting |
-| Current cargo value | Connects a bill to valuable cargo | Selling or unloading before repair changes the bill; identical damage costs different amounts |
-| Cargo value captured at damage time | Avoids immediate unloading avoidance | Requires new history and rules across saves, sales, and hull changes |
-| Combat-only surcharge | Targets piracy and combat losses | Requires reliable damage-source accounting and persistence semantics; broadens scope |
+| Percentage of hull purchase price | Connects repair to asset value | Couples repair tuning to shipyard pricing; needs a defined damage weighting |
+| Current cargo value | Connects a bill to valuable cargo | Ruled out by the owner; selling before repair changes the bill |
+| Cargo value captured at damage time | Avoids unloading avoidance | Ruled out by the owner; needs new history across saves, sales and hull changes |
+| Combat-only surcharge | Targets piracy and combat losses | Needs reliable damage-source accounting and persistence semantics; broadens scope |
 
-The recommendation preserves career-independent physical repair pricing. Its multipliers are authored tuning choices, not a formula derived from cargo capacity or replacement value. The light increase addresses the reported case, while the remaining multipliers offer a graduated starting point for larger ships.
+The implemented mechanism preserves career-independent physical repair pricing.
 
-## Proposed implementation contract after owner selection
+## Security and rollback
 
-1. Move repair rates into `src/game/state.js` alongside a six-class multiplier table, keeping tuning in the existing tuning owner.
-2. Apply the selected class multiplier before per-channel rounding. Preserve existing epic and faction multiplication and the less-than-one-integrity threshold.
-3. Use the light multiplier as the safe fallback for unknown class identifiers.
-4. Keep quote and payment on the same computation. Preserve compensation, corrupt-channel recovery, and insufficient-funds refusal.
-5. Charge built and living hulls of the same class identically.
-6. Add no persistent records, damage-source tracking, cargo valuation, equipment, controls, or rescue mechanisms.
-7. Change no shipyard prices, trader income, damage mechanics, or hull maxima.
-
-Likely write set: `src/game/state.js`, `src/systems/station.js`, one bounded repair regression script, and the applicable backlog/decision documentation. This recommendation document itself makes none of those implementation changes.
-
-## Acceptance and verification after implementation
-
-- Assert every exact example in the selected table, including separate channel rounding.
-- Verify modifier composition, unknown-class fallback, keeper compensation, corrupt channels, intact channels, and insufficient funds.
-- Exercise the actual repair action and verify the displayed quote equals the deducted credits, channels are restored, and repeated repair does not charge again.
-- Exercise the repair desk in a live browser, including an unaffordable bill and a successful repair; inspect console errors.
-- Run `npm run build` and `npm run test:boot` without weakening their assertions.
-- Repeat a trader route with a recorded damage event and report actual repair share of route earnings. Include a low-credit light pilot and a larger hull before declaring the tuning successful.
-
-Security exposure is unchanged by the proposed arithmetic-only mechanism. Review should focus on finite values, safe class lookup, quote/payment parity, and regression of the existing recovery behavior. There is no migration; rollback would revert tuning and quote changes on a reviewed artifact. Merge and deployment authority remain with the existing project pipeline.
-
-## Decision still needed
-
-The owner should choose whether to adopt class-based pricing and the proposed 3x/3x/4x/5x/6x/8x table, or request a different target burden. A stronger loss target should be explicit before implementation. This document prepares that decision and does not claim #208 is resolved.
+The mechanism is arithmetic only, so exposure is unchanged. The review-relevant
+surface is finite values, the safe class lookup on both the price and recovery
+paths, quote/payment parity and the preserved recovery behavior — all of which
+carry pins above. There is no migration and no new persisted field, so rollback
+is reverting the tuning and quote changes on a reviewed artifact. Merge and
+deployment authority remain with the existing project pipeline; this candidate
+is handed to independent QA, not merged.
