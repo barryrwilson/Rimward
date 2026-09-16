@@ -516,6 +516,136 @@ const spawnRing = mineSaturate('spawn');
 pushRing(spawnRing, sanitizeEvent({ type: 'podSpawned', t: 90, pod: { id: 'pod-9' } }));
 pin('podSpawned stays evictable', spawnRing.length === EVENT_CAP && !spawnRing.some((e) => e && e.type === 'podSpawned'));
 
+// Helm shutdown receipts under NPC-on-NPC chatter (issue #202). A hull parked
+// beside a fight it is not part of sees the ring fill with npcHit /
+// shieldDown / npcSurrendered / npcEscaped / npcSheltered rows, all keep-class
+// or foldable. The fresh autopilotDisengaged { reason: 'impact' } was then the
+// only evictable row present, so eviction discarded it on arrival and the
+// agent could only learn its helm was gone by polling autopilot.phase.
+const chatterSaturate = (tag) => {
+  const rows = [];
+  // The playtest mix: distinct hulls, plus repeated hits on one target that
+  // fold into a single counted row.
+  for (let i = 0; i < 4; i++) {
+    pushRing(rows, { type: 'npcHit', t: i + 1, targetId: `${tag}-a-${i}`, targetName: `Hull A${i}`, damage: 6 });
+    pushRing(rows, { type: 'shieldDown', t: 20 + i, targetId: `${tag}-b-${i}`, layer: i % 2 ? 'screen' : 'shell', actor: 'npc' });
+    pushRing(rows, { type: 'npcSurrendered', t: 40 + i, targetId: `${tag}-c-${i}`, targetName: `Hull C${i}`, outcome: 'yielded' });
+    pushRing(rows, { type: 'npcEscaped', t: 60 + i, targetId: `${tag}-d-${i}`, targetName: `Hull D${i}`, from: 'freehold', to: 'ember', kind: 'gate', reason: 'gate' });
+  }
+  for (let i = 0; i < 12; i++) {
+    pushRing(rows, { type: 'npcHit', t: 80 + i, targetId: `${tag}-same`, targetName: 'Hull Same', damage: 3 });
+  }
+  return rows;
+};
+const CHATTER_TYPES = ['npcHit', 'shieldDown', 'npcSurrendered', 'npcEscaped'];
+const chatterFixture = chatterSaturate('fix');
+pin('chatter ring saturated by NPC-on-NPC rows', chatterFixture.length === EVENT_CAP
+  && chatterFixture.every((e) => e && CHATTER_TYPES.includes(e.type)));
+const sameTarget = chatterFixture.filter((e) => e && e.type === 'npcHit' && e.targetId === 'fix-same');
+pin('repeat same-target npcHit folds to one counted row',
+  sameTarget.length === 1 && sameTarget[0].count === 12);
+
+const HELM_ROWS = [
+  { type: 'autopilotDisengaged', t: 200, reason: 'impact' },
+  { type: 'automineDisengaged', t: 201, reason: 'impact' },
+];
+for (const raw of HELM_ROWS) {
+  const kind = raw.type;
+  const ring = chatterSaturate(kind);
+  pushRing(ring, sanitizeEvent(raw));
+  const found = ring.filter((e) => e && e.type === kind);
+  pin(`${kind} survives chatter flood on arrival`, ring.length === EVENT_CAP && found.length === 1);
+  pin(`${kind} keeps its exact reason`, found.length === 1 && found[0].reason === raw.reason);
+  pin(`${kind} keeps its timestamp`, found.length === 1 && found[0].t === raw.t);
+  // The agent reads it on the NEXT observe(), not only on its arrival frame,
+  // while the fight beside it keeps pumping rows.
+  for (let i = 0; i < 6; i++) {
+    pushRing(ring, { type: 'npcHit', t: 300 + i, targetId: `later-${i}`, damage: 2 });
+    pushRing(ring, { type: 'shieldDown', t: 300 + i, targetId: `later-${i}`, layer: 'screen', actor: 'npc' });
+  }
+  pin(`${kind} survives later chatter`, ring.length === EVENT_CAP
+    && ring.some((e) => e && e.type === kind && e.t === raw.t));
+  // Retention is bounded, not permanent: 16 distinct newer keep rows age it
+  // out in FIFO order and the ring never grows past the cap.
+  for (let i = 0; i < EVENT_CAP; i++) {
+    pushRing(ring, {
+      type: 'npcSheltered', t: 400 + i, targetId: `sh-${i}`, targetName: `Hull S${i}`,
+      system: 'freehold', kind: 'station', reason: 'shelter',
+    });
+  }
+  pin(`${kind} eventually evicted FIFO`, ring.length === EVENT_CAP
+    && !ring.some((e) => e && e.type === kind));
+  // Helm receipts never collapse: repeats stay bounded by the cap and every
+  // retained row keeps its own reason and timestamp.
+  const flood = [];
+  for (let i = 0; i < 40; i++) {
+    pushRing(flood, sanitizeEvent({ type: kind, t: 500 + i, reason: i % 2 ? 'impact' : 'blocked' }));
+  }
+  pin(`${kind} flood bounded by cap`, flood.length === EVENT_CAP);
+  pin(`${kind} flood keeps newest`, flood[flood.length - 1].t === 539);
+  pin(`${kind} flood keeps distinct uncollapsed rows`, flood.every((e) => e
+    && e.type === kind && !Object.hasOwn(e, 'count'))
+    && new Set(flood.map((e) => e.t)).size === EVENT_CAP);
+  // Every authored break reason is carried through verbatim.
+  for (const reason of ['impact', 'blocked', 'stale', 'cancel', 'jumping', 'lost-station']) {
+    const ring2 = chatterSaturate(`${kind}-${reason}`);
+    pushRing(ring2, sanitizeEvent({ type: kind, t: 600, reason }));
+    const row2 = ring2.filter((e) => e && e.type === kind);
+    pin(`${kind} ${reason} survives arrival`, ring2.length === EVENT_CAP
+      && row2.length === 1 && row2[0].reason === reason);
+  }
+}
+
+// Narrowness: only the shutdown receipts are retained. The engage rows and
+// ordinary chatter stay evictable, so helm retention cannot crowd the ring.
+const HELM_EVICTABLE = [
+  { type: 'autopilotEngaged', t: 210, dest: 'ember' },
+  { type: 'automineEngaged', t: 211, asteroidId: 4 },
+  { type: 'reticleLock', t: 212, hit: true },
+];
+for (const raw of HELM_EVICTABLE) {
+  const ring = chatterSaturate(`evict-${raw.type}`);
+  pushRing(ring, sanitizeEvent(raw));
+  pin(`${raw.type} stays evictable`, ring.length === EVENT_CAP
+    && !ring.some((e) => e && e.type === raw.type));
+}
+// Combat receipts keep the retention they already had, beside the helm rows.
+const helmSaturate = () => {
+  const rows = [];
+  for (let i = 0; i < EVENT_CAP; i++) {
+    pushRing(rows, sanitizeEvent({ type: 'autopilotDisengaged', t: i + 1, reason: 'impact' }));
+  }
+  return rows;
+};
+const helmFixture = helmSaturate();
+pin('helm ring saturated by shutdown receipts', helmFixture.length === EVENT_CAP
+  && helmFixture.every((e) => e && e.type === 'autopilotDisengaged'));
+const COMBAT_KEPT = [
+  { type: 'npcHit', t: 700, targetId: 'foe', damage: 8 },
+  { type: 'playerFire', t: 701, weapon: 'cannon' },
+  { type: 'playerHit', t: 702, family: 'cannon', damage: 4 },
+  { type: 'npcDestroyed', t: 703, targetId: 'foe', targetName: 'Hull F' },
+  { type: 'hailClosed', t: 704, demandHail: true, demandOutcome: 'paid', speaker: 'Ninth Tooth', demand: 200 },
+  { type: 'podCollected', t: 705, podId: 'pod-2', units: 4, commodity: 'rawOre' },
+  { type: 'jobState', t: 706, id: 'j1', kind: 'delivery', outcome: 'delivered', pay: 120 },
+  { type: 'docked', t: 707 },
+];
+for (const raw of COMBAT_KEPT) {
+  const ring = helmSaturate();
+  pushRing(ring, sanitizeEvent(raw));
+  pin(`${raw.type} still survives arrival under helm saturation`, ring.length === EVENT_CAP
+    && ring.some((e) => e && e.type === raw.type));
+}
+// Sanitize stays primitives-only, idempotent and JSON-safe for both receipts.
+for (const kind of ['autopilotDisengaged', 'automineDisengaged']) {
+  const clean = sanitizeEvent({ type: kind, t: 5, reason: 'impact', ship: { id: 'x' }, bogus: 3 });
+  pin(`${kind} sanitized primitives only`, !!clean && clean.type === kind && clean.reason === 'impact'
+    && !Object.hasOwn(clean, 'ship') && !Object.hasOwn(clean, 'bogus')
+    && Object.keys(clean).every((k) => typeof clean[k] !== 'object'));
+  pin(`${kind} sanitize idempotent`, JSON.stringify(sanitizeEvent(clean)) === JSON.stringify(clean));
+  pin(`${kind} json safe`, JSON.stringify(JSON.parse(JSON.stringify(clean))) === JSON.stringify(clean));
+}
+
 if (fails) {
   console.log(`AGENT SCHEMA FAIL — ${fails}`);
   process.exit(1);
