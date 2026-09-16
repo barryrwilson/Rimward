@@ -17,7 +17,8 @@ class CDP{
   send(method,params={}){const id=++this.id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout '+method));},Number(process.env.ISSUE74_CDP_TIMEOUT||120000));this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
   async eval(expression){const r=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;}
 }
-export async function runLive(name,fn){
+export async function runLive(name,fn,{seed}={}){
+  if(seed!==undefined&&(!Number.isInteger(seed)||seed<0||seed>0xffffffff))throw Error('Live seed must be an unsigned 32-bit integer');
   await mkdir(out,{recursive:true});const folder=join(out,name);await mkdir(folder,{recursive:true});
   const resumed=process.env.ISSUE74_RESUME_PROFILE?resolve(process.env.ISSUE74_RESUME_PROFILE):null;
   if(resumed&&!resumed.toLowerCase().startsWith((out+sep).toLowerCase()))throw Error('Resume profile must be inside the named issue evidence output');
@@ -39,7 +40,8 @@ export async function runLive(name,fn){
     result.chromePid=chrome.pid;await save();
     const errors=[];chrome.stderr.on('data',b=>errors.push(String(b).slice(0,250)));
     let pages;for(let i=0;i<120;i++){try{const cp=Number((await readFile(join(profile,'DevToolsActivePort'),'utf8')).split(/\r?\n/)[0]);pages=await fetch(`http://127.0.0.1:${cp}/json/list`).then(r=>r.json());if(pages.some(p=>p.type==='page')){result.cdpPort=cp;break;}}catch{}if(chrome.exitCode!==null)throw Error('Chrome exited '+errors.slice(-3));await sleep(250);}
-    c=new CDP(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await c.ready();await c.send('Runtime.enable');await c.send('Page.enable');await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1`});
+    c=new CDP(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await c.ready();await c.send('Runtime.enable');await c.send('Page.enable');if(seed!==undefined){result.seed=seed;await c.send('Page.addScriptToEvaluateOnNewDocument',{source:`{let seed=${seed};Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);}`});}
+    await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1`});
     const observe=()=>c.eval('window.rimward.observe()');
     const act=async(name,args={},must=true)=>{const r=await c.eval(`window.rimward.act(${JSON.stringify({v:2,name,args})})`);result.actions.push({at:Date.now(),name,args,result:r});if(must&&!r.ok)throw Error(name+' refused '+JSON.stringify(r));return r;};
     const shot=async name=>{const s=await c.send('Page.captureScreenshot',{format:'png'});await writeFile(join(folder,name+'.png'),Buffer.from(s.data,'base64'));};

@@ -4,8 +4,11 @@ import { resolve } from 'node:path';
 process.env.ISSUE74_OUT ||= resolve('out/issue-201/live');
 const { runLive } = await import('./issue-74-live-harness.mjs');
 const edge = process.env.ISSUE201_EDGE !== '0';
+const seed = Number(process.env.ISSUE201_SEED ?? 7);
 await runLive(edge ? 'bore-edge' : 'natural', async ({ c, result, act, wait, checkpoint }) => {
-  result.fixture = edge;
+  result.fixture = true;
+  result.boreEdgeFixture = edge;
+  result.worldFixture = 'Declared seed ' + seed + ' installed before page scripts/world boot; all physics and traffic active.';
   result.method = edge
     ? 'Real queued routes Freehold to Veridian and back; once per arrival, after jump ends and before dock takeover, put stationary hull 25.39u off-axis inside bore. No further pose writes; traffic and collisions remain active.'
     : 'Natural queued routes Freehold to Veridian and back; no pose or traffic writes.';
@@ -62,4 +65,4 @@ await runLive(edge ? 'bore-edge' : 'natural', async ({ c, result, act, wait, che
       assert.equal(rows.phases[0].phase, 'stage', 'clear bore before cruise');
     }
   }
-});
+}, { seed });
