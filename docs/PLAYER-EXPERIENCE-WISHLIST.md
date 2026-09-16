@@ -27,7 +27,16 @@ Implemented on the isolated candidate: while staging or settling, a zero-damage
 station touch under 1 u/s keeps the helm, so the approach no longer breaks off
 and cruise back from a graze the hull never felt. A real impact, a damaging
 scrape, and contact in any other phase still cancel. Independent review and live
-browser validation are pending.
+browser validation are pending. Widened to every kind and phase by #200 below.
+
+### No zero-damage brush should abort the dock — #200
+
+Implemented on the isolated candidate: the #184 touch rule now applies to any
+body and any dock phase, so drifting into traffic or a rock during the long
+cruise leg no longer abandons the approach and leaves the hull parked in open
+space for a pirate to work. Damage, a contact at or above 1 u/s, and a malformed
+physics row still cancel the approach as hull contact. Independent review and
+live browser validation are pending.
 
 ### Dock cancellation follow-up — #173
 

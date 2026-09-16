@@ -49,6 +49,23 @@ visually reviewed screenshot. Evidence:
 (`.verification/issue-202/boot.log`). Independent Quinn QA of the exact commit
 is pending. This is not a merge or deployment claim.
 
+Issue [#200](https://github.com/barryrwilson/Rimward/issues/200) is implemented
+on `codex/issue-200-harmless-dock-touch`: the dock autopilot's zero-damage touch
+rule, added for the station berth in #184, now reads `damage` and `speed` alone.
+A `bodyHit` row with `damage === 0` and a finite `|speed|` under 1 u/s keeps the
+dock helm for every body kind and in every dock phase, so a cruise brush against
+traffic or a rock no longer stops the hull in open space. Damage, a speed at or
+above the floor, and any malformed or non-finite `speed`/`damage` still cancel as
+`impact`, and every `bodyHit` row in the frame is still judged, so a harmless
+touch cannot mask a real impact. Route helm behavior, the #173 cancellation full
+stop and weapon-hit separation are unchanged; no key, event, tuning value or
+persisted field is added. Focused regression is `npm run test:dock-corridor`
+(250 issue-200 pins) plus a new `issue200` block in `npm run test:boot` covering
+the playtest's ship and asteroid cruise touches; both fail on the pre-fix source.
+`npm run build` and `npm run test:boot` pass. See
+[evidence](playtests/2026-09-15-issue-200-harmless-touch.md). Independent QA and
+live browser validation remain pending; this is not a merge or deployment claim.
+
 Issue [#186](https://github.com/barryrwilson/Rimward/issues/186), owner decision
 2, is implemented on `codex/issue-186-trader-shipyard`: the larger cargo hull
 the yard already sells is made visible once the outfitter's two hold racks are
@@ -176,6 +193,20 @@ one-hop and a two-hop case and runs as a checked child of `npm run test:boot`;
 its queue pins fail on the pre-fix source. Independent QA and live browser
 validation remain pending; this is not a merge or deployment claim.
 
+Issue [#201](https://github.com/barryrwilson/Rimward/issues/201) is implemented
+on `codex/issue-201-arrival-dock`. Only queued handovers that would start a
+cruise leg enter the gate-departure guard: align while stopped, then clear the
+bore at creep when necessary. Outbound courses release the guard after safe
+plane clearance and alignment; return courses first clear the padded ring and
+retain its outer rim in their private transit plan. Short-range stage handovers
+and ordinary dock approaches keep their existing behavior and #183 timing.
+Build, full boot (including the checked #201 child), the #183 regression, and
+the declared-seed-7 bore-edge browser round trip pass. The browser run reaches
+both berths with no body hits or console errors. Unseeded downstream asteroid
+and traffic encounters remain outside this departure fix; #200 contact policy
+is unchanged. [PR #211](https://github.com/barryrwilson/Rimward/pull/211) is the
+authoritative record for final independent review and natural-arrival browser
+verification. This is not a merge or deployment claim.
 Issue [#185](https://github.com/barryrwilson/Rimward/issues/185) is implemented
 on `codex/issue-185-dock-receipts`: successful docking no longer produces an
 in-range `dock-range` miss or the helm's own already-docked refusal. Manual

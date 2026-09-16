@@ -193,7 +193,7 @@ if (caseName === 'cancel') {
   ctx.autopilot.engaged = true; ctx.autopilot.mode = 'route';
   disengage(ctx, 'blocked');
   pin('route cancellation keeps existing manual throttle behavior', !ctx.input.fullStop && ctx.input.throttle === 0.8);
-  // ---- #184: a zero-damage station touch at creep speed keeps the helm ------
+  // ---- #184/#200: a zero-damage touch at creep speed keeps the helm --------
   // Each row is fed to the real autopilot system as the previous frame's
   // events, exactly as ship.js publishes a bounce.
   const KISS = { kind: 'station', speed: 0.1, damage: 0 };
@@ -211,38 +211,47 @@ if (caseName === 'cancel') {
     ctx.station.inZone = false;
     return { held, engaged: ctx.autopilot.engaged, reason: ctx.autopilot.reason, phase, rows };
   };
-  const keeps = (name, r) => pin(`#184 ${name} keeps the helm`, r.held, r);
-  const cancels = (name, r) => pin(`#184 ${name} cancels as impact`,
+  const keeps = (name, r) => pin(`#200 ${name} keeps the helm`, r.held, r);
+  const cancels = (name, r) => pin(`#200 ${name} cancels as impact`,
     !r.engaged && r.reason === 'impact', r);
 
-  for (const phase of ['stage', 'settle']) {
+  // #200 widened #184: the touch rule is judged on damage and speed alone, so
+  // every flying dock phase and every body kind answers the same way. The
+  // fixture only holds the helm in the phases that actually fly the hull;
+  // 'corridor', 'docking', and a malformed phase are covered by the
+  // cancel-side sweep below, which is decided before any phase handling.
+  const FLYING = ['stage', 'settle', 'cruise'];
+  const KINDS = ['station', 'asteroid', 'ship', 'gate', 'sun', undefined];
+  for (const phase of FLYING) {
     for (const speed of [0.1, -0.1, 0, 0.999]) {
       keeps(`${phase} station touch at ${speed} u/s, no damage`, watch(phase, { ...KISS, speed }));
     }
+    // Traffic, rocks, and the rest of the world get the same forgiveness.
+    for (const kind of KINDS) {
+      keeps(`${phase} creep ${String(kind)} touch`, watch(phase, { ...KISS, kind }));
+    }
+    // A harmless row must never mask a real impact batched with it.
+    keeps(`${phase} batch of kisses only`, watch(phase, KISS, { ...KISS, speed: -0.002 }, { ...KISS, speed: 0 }));
+  }
+  for (const phase of [...FLYING, 'corridor', 'docking', '', undefined]) {
+    const tag = String(phase);
     // The floor itself and anything above it is still an impact.
     for (const speed of [1, -1, 1.5, 30]) {
-      cancels(`${phase} station contact at ${speed} u/s`, watch(phase, { ...KISS, speed }));
+      cancels(`${tag} station contact at ${speed} u/s`, watch(phase, { ...KISS, speed }));
     }
-    cancels(`${phase} creep touch that drew damage`, watch(phase, { ...KISS, damage: 0.5 }));
-    // Only the station hull is a berth structure worth forgiving.
-    for (const kind of ['asteroid', 'ship', 'gate', 'sun', undefined]) {
-      cancels(`${phase} creep ${kind} contact`, watch(phase, { ...KISS, kind }));
+    for (const kind of KINDS) {
+      cancels(`${tag} damaging ${String(kind)} touch`, watch(phase, { ...KISS, kind, damage: 0.5 }));
+      cancels(`${tag} fast ${String(kind)} contact`, watch(phase, { ...KISS, kind, speed: 30 }));
     }
     // A row the physics never produced must never read as harmless.
     for (const speed of [undefined, NaN, Infinity, -Infinity, '0.1', null, {}]) {
-      cancels(`${phase} touch with speed ${String(speed)}`, watch(phase, { ...KISS, speed }));
+      cancels(`${tag} touch with speed ${String(speed)}`, watch(phase, { ...KISS, speed }));
     }
     for (const damage of [undefined, NaN, null, '0', -1, false]) {
-      cancels(`${phase} touch with damage ${String(damage)}`, watch(phase, { ...KISS, damage }));
+      cancels(`${tag} touch with damage ${String(damage)}`, watch(phase, { ...KISS, damage }));
     }
-    // A harmless row must never mask a real impact batched with it.
-    cancels(`${phase} kiss before real impact`, watch(phase, KISS, REAL));
-    cancels(`${phase} real impact before kiss`, watch(phase, REAL, KISS));
-    keeps(`${phase} batch of kisses only`, watch(phase, KISS, { ...KISS, speed: -0.002 }, { ...KISS, speed: 0 }));
-  }
-  // Outside the berth phases the old cancel-on-any-contact rule stands.
-  for (const phase of ['cruise', 'corridor', 'docking', '', undefined]) {
-    cancels(`${String(phase)} phase creep touch`, watch(phase, KISS));
+    cancels(`${tag} kiss before real impact`, watch(phase, KISS, REAL));
+    cancels(`${tag} real impact before kiss`, watch(phase, REAL, KISS));
   }
 
   const out = resolve(process.env.DOCK_OUT || 'out/issue-139-corridor', caseName);
