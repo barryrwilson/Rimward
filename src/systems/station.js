@@ -5624,6 +5624,7 @@ export function initStation(ctx) {
         render();
         focusBulk(order.side ? 'market-bulk-buy' : 'market-bulk-sell');
       });
+      review.commodity = order.key;
       review.id = 'market-bulk-review';
     }
     if (!order.ready && !order.remainder) h('div', 'screen-note', box, 'Edit quantity or choose a preset to prepare another trade.');

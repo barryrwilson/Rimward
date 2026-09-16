@@ -40,6 +40,33 @@ const buy = quantity.find(a => a.commodity === 'provisions' && a.label === '+5')
 assert.equal(act('stationAction', { n: buy.n, expect: buy.label }).ok, true);
 assert.equal(ctx.cargo.find(c => c.commodity === 'provisions')?.units, 5);
 console.log('PASS market actions bind all commodity rows and invoke the correct trade');
+// Disclosed fixture: change the quote after the first persisted 99-unit fill.
+// This exercises the real partial-order branch and its captured review closure.
+ctx.cargo.length = 0;
+ctx.world.marketSupply = {};
+ctx.world.prices.provisions = 100;
+ctx.stationDesk.selectService('market');
+const find = id => [...dom.walkDom(document.body)].find(n => n.id === id);
+const input = find('market-bulk-quantity');
+input.value = '160';
+for (const fn of input._listeners.input) fn({ target: input });
+const save = localStorage.setItem;
+let fills = 0;
+localStorage.setItem = (key, value) => {
+  save(key, value);
+  if (key === 'rimward-save-v1' && ++fills === 1) ctx.world.prices.provisions = 101;
+};
+try { find('market-bulk-buy').click(); } finally { localStorage.setItem = save; }
+assert.equal(ctx.cargo.find(c => c.commodity === 'provisions')?.units, 99);
+const review = api.observe().station.view.actions.find(a => a.label.startsWith('Review remainder: 61'));
+assert.ok(review);
+assert.equal(review.commodity, 'provisions');
+const beforeReview = JSON.stringify([ctx.world.credits, ctx.cargo, ctx.world.marketSupply]);
+assert.equal(act('stationAction', { n: review.n, expect: review.label }).ok, true);
+assert.equal(JSON.stringify([ctx.world.credits, ctx.cargo, ctx.world.marketSupply]), beforeReview);
+assert.ok(api.observe().station.view.actions.some(a => a.label.startsWith('Buy 61 Provisions') && a.commodity === 'provisions'));
+console.log('PASS remainder review retains commodity and prepares only the unfilled quantity without trading');
+
 const refusalLine = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
 for (const side of ['buy', 'sell']) {
   const before = JSON.stringify([ctx.world.credits, ctx.cargo, ctx.world.marketSupply]);
