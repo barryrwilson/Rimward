@@ -146,6 +146,8 @@ let dockDetourX = 0;
 let dockDetourY = 0;
 let dockDetourZ = 0;
 let dockStationArc = null;
+let dockGateExit = null;
+let dockArrivalGate = null;
 
 function emptyChannel() {
   return {
@@ -233,6 +235,8 @@ function resetApproach() {
 }
 
 function resetDockScratch() {
+  dockGateExit = null;
+  dockArrivalGate = null;
   dockStationArc = null;
   dockStartRange = 0;
   dockStartSystem = '';
@@ -481,6 +485,8 @@ export function tryApproachDock(ctx) {
   zeroCmd(ap);
   ap.idle = true;
   dockStartRange = range;
+  dockGateExit = null;
+  dockArrivalGate = null;
   dockStationArc = null;
   dockStartSystem = station.system;
   dockStationName = station.name;
@@ -646,6 +652,49 @@ function runPendingDock(ctx) {
   const ready = destStationReady(ctx, dest);
   const token = ready ? tryApproachDock(ctx) : 'no-station';
   if (!token) {
+    // The queue owns the helm on time, but an arrival still in the gate
+    // bore must leave along its axis before turning into station cruise.
+    // Route path planning deliberately ignores gates (it flies their holes).
+    collectBodies(ctx, _apBodies);
+    const p = ctx.ship.object.position;
+    for (let i = 0; ctx.autopilot.phase === 'cruise' && i < _apBodies.count; i++) {
+      const b = _apBodies.items[i];
+      if (b.kind !== 'gate') continue;
+      const length = Math.hypot(b.x, b.y, b.z);
+      const ax = length > 0 ? -b.x / length : 0;
+      const ay = length > 0 ? -b.y / length : 0;
+      const az = length > 0 ? -b.z / length : 1;
+      const dx = p.x - b.x, dy = p.y - b.y, dz = p.z - b.z;
+      const axial = dx * ax + dy * ay + dz * az;
+      const radial = Math.hypot(dx - axial * ax, dy - axial * ay, dz - axial * az);
+      // Include the ordinary 50u spawn and leave enough room to turn outside
+      // the ring's padded keep sphere, not merely outside its tube.
+      const clearance = 2 * b.r + b.y0 + PHY.PLAYER_RADIUS;
+      if (radial >= b.r || Math.abs(axial) >= clearance) continue;
+      const stage = dockApproachPoints(currentStationPose(ctx))?.stage;
+      const stageAxial = stage && ((stage.x - b.x) * ax
+        + (stage.y - b.y) * ay + (stage.z - b.z) * az);
+      // A hull already outside the ring, heading farther away from its
+      // plane, needs no detour or timing change. Keep the clear #183 path.
+      if (Math.abs(axial) >= b.r + b.y0 + PHY.PLAYER_RADIUS
+        && Number.isFinite(stageAxial) && axial * (stageAxial - axial) > 0) continue;
+      const sign = axial < -PHY.PLAYER_RADIUS ? -1 : 1;
+      const outbound = Number.isFinite(stageAxial) && sign * (stageAxial - axial) > 0;
+      const clearPlane = 2 * (b.y0 + PHY.PLAYER_RADIUS);
+      dockGateExit = {
+        x: b.x + ax * sign * clearance,
+        y: b.y + ay * sign * clearance,
+        z: b.z + az * sign * clearance,
+        plane: outbound ? { x: b.x, y: b.y, z: b.z, ax, ay, az, sign, clearPlane } : null,
+      };
+      // Already past the tube: align to the actual outbound course while
+      // stopped. Do not add an axial detour to a clear station-bound flight.
+      if (outbound && Math.abs(axial) >= clearPlane) Object.assign(dockGateExit, stage);
+      dockArrivalGate = outbound ? null : b.id;
+      ctx.autopilot.phase = 'stage';
+      resetDockWatch(ctx, ctx.autopilot);
+      break;
+    }
     clearQueuedDock();
     // The route lease was the agent's; the dock helm it asked for inherits it.
     markAgentHelm(ctx);
@@ -1045,6 +1094,44 @@ function dockTick(ctx) {
   _fwd.set(0, 0, -1).applyQuaternion(live.obj.quaternion);
   const p = live.obj.position;
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
+
+  if (dockGateExit) {
+    const distance = dockDistance(p, dockGateExit);
+    const steer = aimDockShip(live.obj, ap, dockGateExit);
+    if (!steer) { disengage(ctx, 'stale'); return; }
+    const plane = dockGateExit.plane;
+    const clearOutbound = plane && steer.align >= 0.9999 && plane.sign
+      * ((p.x - plane.x) * plane.ax + (p.y - plane.y) * plane.ay + (p.z - plane.z) * plane.az) >= plane.clearPlane;
+    if (distance > PHY.PLAYER_RADIUS && !clearOutbound) {
+      // Rotate while stopped, then creep inward through the open bore. In particular,
+      // never let the ordinary cruise escape-hold advance a turning hull.
+      ap.throttle = 0;
+      const traffic = collectDockCruiseBodies(_apBodies, ctx.ships, speed,
+        acceleration, _cruiseBodies, ctx.asteroids?.list, ctx.world?.time, true);
+      ap.idle = steer.align < 0.9999 || !traffic
+        || dockCruiseShouldBrake(p, ctx.ship.velocity, acceleration, traffic);
+      if (!dockMakingProgress(ctx, ap, distance, steer.yawAbs)) return;
+      return;
+    }
+    dockGateExit = null;
+    ap.phase = dockDistance(p, points.stage) > DOCK_CRUISE_START_RANGE ? 'cruise' : 'stage';
+    resetDockWatch(ctx, ap);
+  }
+
+  // Once outside the bore, a station behind/beside the arrival gate must
+  // route around its outer rim instead of turning cruise back through it.
+  // This private bag is rebuilt each tick; other gate/route policies keep
+  // treating the opening as traversable.
+  if (dockArrivalGate !== null) {
+    for (let i = 0; i < _apBodies.count; i++) {
+      const b = _apBodies.items[i];
+      if (b.kind === 'gate' && b.id === dockArrivalGate) {
+        b.kind = 'dock-gate';
+        b.r += b.y0;
+        break;
+      }
+    }
+  }
 
   if (ap.phase === 'stage' || ap.phase === 'cruise') {
     const stageTransit = ap.phase === 'stage';
