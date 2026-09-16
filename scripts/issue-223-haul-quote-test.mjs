@@ -25,6 +25,32 @@ function cardPay(job) {
   const line = [...dom.walkDom(card)].find(n => n.className === 'job-reward').textContent;
   return Number(line.match(/pays (\d+) UU/)[1]);
 }
+// A disclosed accepted-ferry fixture takes the long-run seat. Real board
+// synchronization demotes, then re-promotes the SAME offered trade record.
+const first = ctx.world.jobs.find(j => j.kind === 'trade' && j.state === 'offered');
+const farDest = first.destSystem;
+const farPay = cardPay(first);
+const ferry = ctx.world.jobs.find(j => j.id === 'ferry-consignment');
+const savedFerry = JSON.parse(JSON.stringify(ferry));
+Object.assign(ferry, { state: 'accepted', originSystem: ctx.world.currentSystem,
+  destSystem: farDest, payQuoted: 1 });
+station.update(1.1);
+assert.notEqual(first.destSystem, farDest, 'real seat owner demotes the offered run');
+const nearPay = cardPay(first);
+assert.ok(Math.abs(farPay - Math.round(nearPay * 1.25)) <= 1, `${farPay} vs ${nearPay}`);
+assert.equal(rw.observe().jobs.offers.find(j => j.id === first.id).reward, nearPay);
+for (const key of Object.keys(ferry)) delete ferry[key];
+Object.assign(ferry, savedFerry);
+station.update(1.1);
+assert.notEqual(first.destSystem, ctx.world.jobs.find(j => j.kind === 'trade' && j !== first).destSystem);
+assert.equal(cardPay(first), farPay, 'vacated seat promotes the existing posting at two-gate pay');
+assert.equal(rw.observe().jobs.offers.find(j => j.id === first.id).reward, farPay);
+console.log('PASS #223 contract retarget invalidates cached quote', { farPay, nearPay });
+ctx.world.prices[first.commodity] += 1;
+const refreshed = ctx.stationDesk.peekJobReward(first, true);
+assert.notEqual(refreshed, farPay, 'explicit owner refresh keeps its force-reprice contract');
+station.update(1.1);
+assert.equal(cardPay(first), refreshed, 'next board draw prints the explicitly refreshed quote');
 for (const drift of [false, true]) {
   // Restore-shaped JSON records must work without object-identity caches.
   if (drift) ctx.world.jobs = JSON.parse(JSON.stringify(ctx.world.jobs));

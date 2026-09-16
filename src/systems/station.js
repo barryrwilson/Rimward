@@ -6345,7 +6345,7 @@ export function initStation(ctx) {
         const originId = job.state === 'accepted' ? (job.originSystem ?? currentId) : currentId;
         const destId = otherSystemId(ctx, originId);
         const destName = ctx.systems?.[destId]?.station?.name ?? 'the far station';
-        const est = peekJobReward(job, h === hDom);
+        const est = peekJobReward(job, false, h === hDom);
         rewardLine = `Haul ${HAUL_UNITS} Provisions to ${destName} — pays ${est} UU (140% of buy cost)`;
         // Issue #179: the haul is not fronted — the player buys the cargo. Say
         // the buy-in and whether he can cover it BEFORE he accepts, instead of
@@ -6384,7 +6384,7 @@ export function initStation(ctx) {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const destId = postingHopsOk(originId, job.destSystem) ? job.destSystem : otherSystemId(ctx, originId);
         const destName = tradeStationName(destId) ?? 'the far station';
-        const est = peekJobReward(job, h === hDom);
+        const est = peekJobReward(job, false, h === hDom);
         rewardLine = `Deliver ${HAUL_UNITS} ${name} to ${destName} (${hopsLabel(postingHops(originId, destId))}) — pays ${est} UU`;
       } else if (job.kind === 'hunt') {
         const name = huntCardName(ctx, job);
@@ -7773,12 +7773,16 @@ export function initStation(ctx) {
 
   // The posted offer is the agreement available to accept. Periodic redraws
   // retain it despite price drift; a deliberate board visit posts fresh quotes.
-  function peekJobReward(job, rememberDrawn = false) {
+  function peekJobReward(job, refresh = false, rememberDrawn = refresh) {
     if (!job || (job.kind !== 'haul' && job.kind !== 'trade')) return undefined;
     if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
     const shown = displayedHaulQuotes.get(job.id);
-    if (ui.open && ui.level === 2 && ui.service === 'jobs'
-      && job.state === 'offered' && shown?.origin === currentId) return shown.pay;
+    // A retargeted posting is a different contract, even when its ID survives.
+    // Economic drift alone is deliberately not part of this identity.
+    const terms = [job.kind, job.originSystem, job.destSystem, job.commodity, job.need];
+    if (!refresh && ui.open && ui.level === 2 && ui.service === 'jobs'
+      && job.state === 'offered' && shown?.origin === currentId
+      && terms.every((term, i) => term === shown.terms[i])) return shown.pay;
     const origin = job.kind === 'haul' && job.state !== 'accepted'
       ? currentId : (Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId);
     let pay;
@@ -7791,7 +7795,7 @@ export function initStation(ctx) {
       const base = Math.round(HAUL_UNITS * unit * HAUL_MARGIN);
       pay = job.state === 'accepted' ? jobPay(ctx, base) : jobPayFor(ctx, otherSystemId(ctx, origin), base);
     }
-    if (rememberDrawn && job.state === 'offered') displayedHaulQuotes.set(job.id, { origin: currentId, pay });
+    if (rememberDrawn && job.state === 'offered') displayedHaulQuotes.set(job.id, { origin: currentId, terms, pay });
     return pay;
   }
 

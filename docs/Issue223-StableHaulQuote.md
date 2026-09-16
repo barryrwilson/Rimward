@@ -22,3 +22,28 @@ Live raw output/screenshot: local untracked `out/issue-223-live/haul-quote/resul
 Self-applied orchestrator security and code review checklists: no findings. Change only alters a numeric session cache, retains bounded pay calculation and text-safe rendering, adds no credentials, routes or external inputs. No designer audit: no layout/style changes. Builder review is not independent QA.
 
 Next owner: orchestrator/Quinn to review exact worker commit, run combined build/boot and live checks, and register focused test/update backlog in integration scope. No build/full boot run by this worker per assignment. No push, PR, merge or deployment. Rollback: revert worker commit; no data migration. Required final gate: independent QA PASS on immutable integration commit and project definition-of-done checks.
+
+## Independent QA follow-up
+
+Claude review of `1ecfa049` returned FAIL: a quote survived contract retargeting,
+and the public `peekJobReward(job, true)` force-refresh contract had changed.
+The reported #176 regression was reproduced: C1 failed with 875 vs 875 UU.
+The cache now validates kind, origin, destination, commodity and quantity before
+reuse. Economic drift still preserves the same posting; a changed contract gets
+a fresh quote. DOM draws remember quotes without forcing refresh; explicit owner
+refresh retains its earlier semantics (the next draw shows the refreshed value).
+
+Added a real passive board synchronization pin using an accepted-ferry fixture:
+the same trade record demotes from two gates (2310 UU) to one (1848 UU), then
+promotes after the seat is freed (2310 UU). Board/API agree at both transitions;
+subsequent acceptance still agrees. The explicit owner refresh is also pinned.
+Issue #176's full focused matrix, #223, and #170 pass after the fix. Final #223
+immediate quote is now 2319 UU because the explicit-refresh fixture adds 1 UU to
+the commodity price; the original baseline/fixed evidence above is historical.
+
+Self-applied security/code review repeated: no new findings. Independent QA must
+re-review the new artifact. Minor review notes remain bounded: no new legacy
+`kind: haul` coverage (offered legacy row is retired by #206), and session cache
+entries clear on board visits/berth changes rather than on every row retirement.
+
+The live Chromium probe was rerun after the source fix: PASS, no console errors or exceptions, source stable, both loopback ports closed.
