@@ -114,7 +114,7 @@ dock(HOME);
 openBoard();
 step(2);
 openBoard();
-assert.ok(dom.walkDom(document.body).some((n) => /Buy at another station or hold .* before the jump; deliver to/.test(n.textContent || '')),
+assert.ok([...dom.walkDom(document.body)].some((n) => /Buy at another station or hold .* before the jump; deliver to/.test(n.textContent || '')),
   'offered trade card explains that goods must be aboard before the jump');
 
 // Issue 206: the unique `haul-provisions` posting is retired, so a fresh board
@@ -387,7 +387,7 @@ check('F1 redocking with local stock cannot renew its arrival eligibility', () =
   assert.equal(ctx.world.credits, credits, 'no redock profit');
   assert.equal(holdOf('provisions'), HAUL_UNITS, 'local cargo is retained');
   openBoard();
-  const states = dom.walkDom(document.body).filter((n) => (n.className || '').includes('job-state')).map((n) => n.textContent);
+  const states = [...dom.walkDom(document.body)].filter((n) => (n.className || '').includes('job-state')).map((n) => n.textContent);
   assert.ok(states.some((s) => /eligible 0 of 5 aboard/.test(s)), 'trade row explains ineligible cargo');
 });
 
