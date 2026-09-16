@@ -1,5 +1,23 @@
 # RIMWARD Player-Experience Wishlist
 
+## Purchased hull identity — #225
+
+Implemented on the `codex/issues-223-225` candidate, pending independent QA:
+Yard purchases receive a ship name of their own, and Hangar rows show name
+and class separately. The mounted ship uses its name in station copy.
+See [scope and builder evidence](Issue225YardHullNames.md). Merge and deployment
+remain separate.
+
+## Stable posted haul quotes — #223
+
+Implemented on `codex/issues-223-225`, pending independent QA: periodic Jobs
+board refreshes preserve the haul reward the player read. The board, accept
+notice, accepted card and `observe().jobs` retain that number despite price
+or time drift. Explicit fresh board visits can post a new quote; accepted pay
+remains frozen. Builder focused and live Chromium checks pass. Merge and
+deployment remain separate; see [scope and evidence](Issue223-StableHaulQuote.md).
+
+
 ## Repair cost scales with hull class — #208
 
 Implemented on an isolated candidate, pending independent QA. The playtest
