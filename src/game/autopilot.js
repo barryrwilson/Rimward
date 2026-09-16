@@ -1121,6 +1121,13 @@ function dockTick(ctx) {
     return;
   }
 
+  // Gate preparation rebuilds _apBodies; finish it before appending the sun
+  // so the first freighter tick plans against the complete obstacle bag.
+  if (dockGateCheckPending) {
+    prepareDockGateExit(ctx);
+    dockGateCheckPending = false;
+  }
+
   _playerLive.object = live.obj;
   _playerLive.avoidHits = 0;
   collectBodies(ctx, _apBodies);
@@ -1128,11 +1135,6 @@ function dockTick(ctx) {
   _fwd.set(0, 0, -1).applyQuaternion(live.obj.quaternion);
   const p = live.obj.position;
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
-
-  if (dockGateCheckPending) {
-    prepareDockGateExit(ctx);
-    dockGateCheckPending = false;
-  }
 
   if (dockGateExit) {
     const distance = dockDistance(p, dockGateExit);

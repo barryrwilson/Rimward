@@ -228,6 +228,24 @@ pin('live Freehold spawn idle-turns then docks', liveSpawn.token === ''
   && liveSpawn.phase === 'complete' && liveSpawn.pulseFrames >= 1
   && liveSpawn.minRange > 34.4);
 
+// #221: first-tick freighter gate preparation must not erase the solar
+// keep-out body collected for that same tick. The berth lies beyond the sun,
+// with the station cylinder behind the stage point, so only the sun requires
+// a turn. Freeze the pose to compare the first and following controller ticks.
+const firstSun = makeCtx(400, 0, { stationX: -400, sunRadius: 50 });
+firstSun.player.classKey = 'freighter';
+firstSun.config.ship = { acceleration: 45, creep: 15, maxSpeed: 60, damping: 1 / 3.5 };
+const firstSunSystem = initAutopilot(firstSun);
+pin('freighter solar fixture engages', tryApproachDock(firstSun) === '');
+firstSunSystem.update(1 / 60, firstSun);
+const solarFirstTurn = Math.hypot(firstSun.autopilot.yaw, firstSun.autopilot.pitch);
+firstSun.world.time += 1 / 60;
+firstSunSystem.update(1 / 60, firstSun);
+const solarNextTurn = Math.hypot(firstSun.autopilot.yaw, firstSun.autopilot.pitch);
+pin('first freighter tick preserves the sun-avoidance turn',
+  solarFirstTurn > 0.1 && Math.abs(solarFirstTurn - solarNextTurn) < 1e-8);
+disengage(firstSun, 'test');
+
 let ctx = makeCtx();
 let sys = initAutopilot(ctx);
 pin('outer approach engages stage', tryApproachDock(ctx) === ''
