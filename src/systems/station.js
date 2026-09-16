@@ -2213,13 +2213,13 @@ function makeJobs(ctx) {
       detail: `Pirates have been working the approach. Kill or drive off ${PATROL_NEED} of them and the dockmaster posts ${PATROL_REWARD} UU plus the Compact's thanks.`,
       reward: PATROL_REWARD, state: 'offered', progress: 0, need: PATROL_NEED,
     },
-    {
-      id: 'haul-provisions', kind: 'haul',
-      title: 'Haul provisions',
-      detail: `Provisions are worth more a gate away. Accept here, buy ${HAUL_UNITS} Provisions, and dock at the other system's station — paid at ${Math.round(HAUL_MARGIN * 100)}% of your buy cost on delivery.`,
-      reward: 0, state: 'offered', progress: 0, need: HAUL_UNITS,
-      originSystem: null, originPrice: 0, // stamped on accept (JSON-plain)
-    },
+    // Issue 206: the unique `haul-provisions` consignment is NOT seeded any
+    // more. Every board already generates a Provisions trade row for the same
+    // five units, the same gate destination and the same pay, so the legacy
+    // posting was a duplicate of a real row on every dock — and the weaker of
+    // the two, because it carries no commodity/destSystem/deadline an agent can
+    // filter on. Retired, not deleted: `kind: 'haul'` settlement stays intact
+    // for an old save that is still carrying an ACCEPTED agreement.
     {
       id: 'ferry-consignment', kind: 'ferry',
       title: 'Ferry a consignment',
@@ -2566,6 +2566,23 @@ function maybeRefreshJobsBoard(ctx, ui, render) {
 function uniqueFourId(id) {
   return id === 'bounty-ace' || id === 'patrol-lane'
     || id === 'haul-provisions' || id === 'ferry-consignment';
+}
+
+/**
+ * Issue 206: the retired legacy consignment id. `makeJobs` no longer seeds it,
+ * so the only row that can ever carry it is one restored from an older save.
+ *
+ * An ACCEPTED legacy row is a live agreement the player already paid into: it
+ * keeps its board card, its named destination, its accept-time quote and its
+ * payout untouched. Any other state — an `offered` posting that was never taken,
+ * or a `done` one already paid — is stale paper: it never posts on a board again
+ * and can never be accepted. `uniqueFourId`, the persist/handle plumbing and the
+ * save contract are deliberately unchanged, so a legacy row still survives a
+ * save/load round trip while it is being flown.
+ */
+const RETIRED_HAUL_ID = 'haul-provisions';
+function retiredHaulRow(job) {
+  return !!job && job.id === RETIRED_HAUL_ID;
 }
 
 function persistJobById(list, id) {
@@ -4034,6 +4051,10 @@ function huntPayComplete(ctx, job, rec, huntPaidNames) {
 function boardJobs(ctx, sysId) {
   const out = [];
   for (const j of ctx.world.jobs) {
+    // Issue 206: the retired consignment never posts again. An old save's
+    // ACCEPTED agreement still shows its card, so the player can read the run
+    // he is already committed to and fly it to the dock that pays.
+    if (retiredHaulRow(j) && j.state !== 'accepted') continue;
     if (j.kind === 'bounty' && j.id.startsWith('bounty-pirate-')
       && j.state === 'offered' && j.system !== sysId) continue;
     if ((j.state === 'offered' || (j.kind === 'recovery' && j.state === 'failed')) && j.originSystem !== sysId
@@ -5788,6 +5809,16 @@ export function initStation(ctx) {
       const live = list.find((j) => j && j.id === job.id);
       if (live) job = live;
     }
+    // Issue 206: the retired consignment is never acceptable again, whatever
+    // state an old save left it in. `boardJobs` already keeps it off every board
+    // — and `acceptJobDesk` refuses anything the board is not showing — so this
+    // fails the last path closed: the handle a caller hands in directly, before
+    // anything below can front cargo or stamp an agreement.
+    if (retiredHaulRow(job)) {
+      ui.notice = 'That posting is no longer on the board — the dock lists its provisions runs under Haul Provisions.';
+      render();
+      return;
+    }
     if (job.kind === 'ferry') {
       // An accepted consignment is already fronted: taking it again would grant
       // a second free stack and overwrite the live agreement. Refuse first, so
@@ -6166,6 +6197,14 @@ export function initStation(ctx) {
    * stock or hold-room limit is named too, because either one stops the run
    * just as hard as an empty purse. Read-only; never throws into the board.
    */
+  // Issue 179 wrote this for the OFFERED `haul-provisions` card: the haul is not
+  // fronted, so the player was told the buy-in and whether he could cover it
+  // before accepting. Issue 206 retired that posting, and an accepted agreement
+  // is past its buy-in, so nothing on a board reaches this today. It is kept
+  // intact — not deleted — because it is the working copy for that guidance and
+  // the retirement is meant to be a removal, not a rewrite. Carrying the line
+  // over to the generated trade rows, which are not fronted either, is separate
+  // product work.
   function haulBuyInFor(job) {
     try {
       const need = Number.isInteger(job?.need) && job.need >= 1 ? job.need : HAUL_UNITS;
@@ -6411,8 +6450,10 @@ export function initStation(ctx) {
         h('div', 'job-state', card,
           `He hunts in ${ctx.systems?.[aceHomeId]?.name ?? 'Freehold Drift'} — take the gate.`);
       }
-      const uniqueRetry = job.state === 'done'
-        && (job.id === 'ferry-consignment' || job.id === 'haul-provisions');
+      // Issue 206: only the consignment ferry re-offers after it is paid. The
+      // retired haul never draws an Accept button again (the board does not
+      // list it at all, so this is belt-and-braces behind `boardJobs`).
+      const uniqueRetry = job.state === 'done' && job.id === 'ferry-consignment';
       if (job.state === 'offered' || uniqueRetry) {
         btn(card, `Accept (${i + 1})`, () => acceptJob(job));
         if (job.kind === 'mining' || job.kind === 'trade' || job.kind === 'hunt'

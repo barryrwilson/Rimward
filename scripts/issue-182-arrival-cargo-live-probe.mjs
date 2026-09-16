@@ -37,7 +37,27 @@ await runLive('arrival-cargo', async ({ c, result, act, observe, wait, checkpoin
   await act('openService', { id: 'jobs' });
 
   // --- the unique consignment plus two trade rows, all for the same dock ---
-  assert.equal((await act('acceptJob', { id: 'haul-provisions' })).ok, true, 'unique consignment accepted');
+  // Issue 206: the unique `haul-provisions` posting is retired — a fresh board
+  // no longer offers it. An OLD SAVE can still be carrying the accepted
+  // agreement, which is the row this berth is about, so it is seeded here in
+  // the verbatim shape the retired accept path used to stamp: the origin dock,
+  // the Provisions price paid there, and the quote the real desk locks at that
+  // dock. Nothing downstream is relaxed.
+  const legacyHaul = await c.eval(`(()=>{const x=window.__ctx;
+    const row={id:'haul-provisions',kind:'haul',title:'Haul provisions',
+      detail:'Provisions are worth more a gate away. Accept here, buy 5 Provisions, and dock at the other system\u2019s station \u2014 paid at 140% of your buy cost on delivery.',
+      reward:0,need:5,progress:0,state:'offered',originSystem:null,originPrice:0};
+    x.world.jobs.push(row);
+    const quote=x.stationDesk.peekJobReward(row);
+    Object.assign(row,{state:'accepted',originSystem:x.world.currentSystem,
+      originPrice:x.world.prices.provisions,payQuoted:quote});
+    return {quote,state:row.state};})()`);
+  assert.ok(Number.isFinite(legacyHaul.quote) && legacyHaul.quote > 0,
+    'the desk quoted the legacy consignment: ' + JSON.stringify(legacyHaul));
+  assert.equal(legacyHaul.state, 'accepted', 'the legacy agreement is live');
+  const retired = await act('acceptJob', { id: 'haul-provisions' }, false);
+  assert.equal(retired.ok, false, 'the retired posting can never be accepted again');
+  result.retiredHaulRefusal = { token: retired.token, error: retired.error };
   const offers = (await observe()).jobs.offers;
   const tradeIds = offers.filter((j) => j.kind === 'trade').slice(0, 2).map((j) => j.id);
   const partyIds = offers.filter((j) => j.kind === 'passenger').slice(0, 1).map((j) => j.id);

@@ -114,8 +114,41 @@ openBoard();
 step(2);
 openBoard();
 
-const haulAccept = ctx.stationDesk.acceptJob('haul-provisions');
-assert.equal(haulAccept.ok, true, JSON.stringify(haulAccept));
+// Issue 206: the unique `haul-provisions` posting is retired, so a fresh board
+// no longer offers it. The agreement this berth is about can still exist — an
+// OLD SAVE that was carrying it when the posting went — so it is seeded here in
+// the verbatim shape the retired accept path used to stamp: the origin dock,
+// the Provisions price paid there, and the quote the REAL desk locks at that
+// dock. Nothing below is relaxed; every payout is still measured against it.
+function seedLegacyHaul(origin) {
+  const row = {
+    id: 'haul-provisions',
+    kind: 'haul',
+    title: 'Haul provisions',
+    detail: "Provisions are worth more a gate away. Accept here, buy 5 Provisions, and dock at the other system's station — paid at 140% of your buy cost on delivery.",
+    reward: 0,
+    need: HAUL_UNITS,
+    progress: 0,
+    state: 'offered',
+    originSystem: null,
+    originPrice: 0,
+  };
+  ctx.world.jobs.push(row);
+  const quote = ctx.stationDesk.peekJobReward(row);
+  assert.ok(Number.isFinite(quote) && quote > 0, 'the desk quoted the legacy consignment');
+  Object.assign(row, {
+    state: 'accepted',
+    originSystem: origin,
+    originPrice: ctx.world.prices.provisions,
+    payQuoted: quote,
+  });
+  // The retired posting can never be taken again, whatever an old save holds.
+  const refused = ctx.stationDesk.acceptJob('haul-provisions');
+  assert.equal(refused.ok, false, JSON.stringify(refused));
+  assert.equal(row.state, 'accepted', 'and the refusal never touched the agreement');
+  return row;
+}
+seedLegacyHaul(HOME);
 const DEST = SYSTEMS[HOME].gates[0].to;
 assert.ok(Object.hasOwn(SYSTEMS, DEST), 'the primary gate names a real dock');
 const ALT = Object.keys(SYSTEMS).find((id) => id !== HOME && id !== DEST && postingHopsOk(HOME, id));

@@ -27,6 +27,45 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#206](https://github.com/barryrwilson/Rimward/issues/206) is implemented
+on the isolated `codex/issue-206-haul-duplicates` candidate: the legacy
+`haul-provisions` consignment is retired from the jobs board. The generated
+trade rows already cover Provisions hauling; the original Freehold and Veridian
+playtest found a generated row beside the legacy posting with matching pay and
+the same destination, though generated routes may vary from board to board. The
+legacy posting was also the weaker of the two, because it carried no
+`commodity`, `destSystem`, `originSystem` or `deadline` for an agent to filter
+on. `makeJobs` no longer seeds it, `boardJobs` never posts a row that is not an
+ACCEPTED agreement, and `acceptJob` refuses the id outright so the last
+handle-holding caller fails closed as well.
+
+Scope held, and old saves are not rewritten. The retirement is a removal, not a
+migration: `uniqueFourId`, the persist/handle plumbing, `save.js`'s unique-kind
+contract and the whole `kind: 'haul'` settlement path are untouched, so a save
+that was carrying the agreement when the posting went keeps its board card, its
+named destination, its arrival-cargo guard (#182), its consignment-first
+same-berth order (#181), its accept-time locked quote and its one-time payout. A
+save that only held the stale OFFERED record keeps that record byte-for-byte; it
+simply never posts and can never be taken.
+
+The stated limitation: #179's buy-in line — the "Buy-in here: 5 Provisions at
+100 UU" guidance that told a player what an un-fronted haul would cost before he
+accepted it — was drawn only on the offered `haul-provisions` card, so it goes
+with the posting. The generated trade rows are not fronted either and have never
+carried that line. Restoring the guidance on them is real product work, is
+deliberately outside this removal-only issue, and is proposed as a follow-up
+rather than left implied; `haulBuyInFor` is kept intact in `station.js` as its
+working copy.
+
+Focused regression is `node --import ./scripts/with-css-stub.mjs
+scripts/issue-206-haul-duplicates-test.mjs` (16 checks). `test:agent-desk`,
+`test:market-pane`, `test:same-berth` and `test:arrival-cargo` pass with
+explicitly injected legacy records in place of the retired accept call, and the
+`WAVE181`/`WAVE182` boot pins still report every key true. The browser passes are
+`test:same-berth-live` and `test:arrival-cargo-live`, plus a live Freehold and
+Veridian board read under `out/issue-206/`. Independent QA is pending; this is
+not a merge or deployment claim.
+
 Issue [#204](https://github.com/barryrwilson/Rimward/issues/204) is implemented
 on `codex/issue-204-origin-discovery`: origin ids are discoverable instead of
 guessed. While `observe().session.phase === 'origin'` the block carries

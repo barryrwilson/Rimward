@@ -43,10 +43,12 @@ for (const [name, args] of [['acceptJob', { id: remote.id }], ['trade', { commod
 assert.equal(act('openService', { id: 'jobs' }).ok, true);
 assert.ok(!rw.observe().jobs.offers.some(j => j.id === remote.id));
 refused(act('acceptJob', { id: remote.id }), 'not-offered');
-for (const id of ['haul-provisions', 'ferry-consignment', 'bounty-ace', 'patrol-lane']) {
+// Issue 206 retired 'haul-provisions'; the remaining unique postings still relay.
+for (const id of ['ferry-consignment', 'bounty-ace', 'patrol-lane']) {
   const j = ctx.world.jobs.find(j => j.id === id);
   if (j?.state === 'offered') assert.ok(rw.observe().jobs.offers.some(row => row.id === id), 'relay ' + id);
 }
+assert.equal(ctx.world.jobs.some(j => j.id === 'haul-provisions'), false, 'no retired haul row exists');
 const haul = ctx.world.jobs.find(j => j.kind === 'trade' && j.state === 'offered' && j.originSystem === 'veridian');
 assert.ok(haul);
 let original = rw.observe().jobs.offers.find(j => j.id === haul.id).reward;
@@ -89,18 +91,21 @@ assert.equal(haul.payQuoted, quote);
 ctx.world.prices[haul.commodity] += 61;
 assert.equal(rw.observe().jobs.active.find(j => j.id === haul.id).reward, quote, 'accepted reward frozen');
 refused(act('acceptJob', { id: haul.id }), 'not-offered');
-const uniqueHaul = ctx.world.jobs.find(j => j.id === 'haul-provisions' && j.state === 'offered');
-assert.ok(uniqueHaul);
+console.log('PASS #178 live quote: desk, observation, acceptance and frozen agreement', { original, quote });
+// Issue 206: the legacy `haul-provisions` posting is retired. The #178 quote
+// lifecycle above — drawn card, observation, receipt and frozen agreement — is
+// proven on the GENERATED trade row that always covered the same run, so the
+// duplicate consignment is simply gone. What is asserted here is the removal.
+assert.equal(ctx.world.jobs.some(j => j.id === 'haul-provisions'), false,
+  'no legacy haul row is seeded');
 ctx.world.prices.provisions += 29;
 ctx.stationDesk.selectService('jobs');
-const uniqueQuote = rw.observe().jobs.offers.find(j => j.id === uniqueHaul.id).reward;
-assert.ok([...dom.walkDom(document.body)].some(n => n.className === 'job-reward'
-  && n.textContent.startsWith('Haul 5 Provisions') && n.textContent.includes(`pays ${uniqueQuote} UU`)));
-const uniqueReceipt = act('acceptJob', { id: uniqueHaul.id });
-assert.equal(uniqueReceipt.ok, true);
-assert.ok(uniqueReceipt.notice.includes(`pays ${uniqueQuote} UU`));
-assert.equal(uniqueHaul.payQuoted, uniqueQuote, 'unique haul locks displayed destination rate');
-console.log('PASS #178 live quote: desk, observation, acceptance and frozen agreement', { original, quote });
+assert.ok(![...dom.walkDom(document.body)].some(n => n.className === 'job-reward'
+  && n.textContent.startsWith('Haul 5 Provisions')), 'no legacy haul card is drawn');
+assert.equal(rw.observe().jobs.offers.some(j => j.id === 'haul-provisions'), false,
+  'and the relay offers none');
+refused(act('acceptJob', { id: 'haul-provisions' }), 'not-offered');
+console.log('PASS #206 the legacy haul posting is retired from the board');
 // Generated-system origins use the same board owner, including standing gates.
 const generated = Object.keys(ctx.systems).find(id => !['freehold', 'veridian', 'redmarch', 'dustfall', 'cinder', 'solace'].includes(id));
 if (generated) {

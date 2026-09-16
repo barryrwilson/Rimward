@@ -570,6 +570,13 @@ integrated QA and publication are pending in the
 - [#178](https://github.com/barryrwilson/Rimward/issues/178): the desk's visible
   haul reward, offer observation and accepted agreement share one quote;
   later price drift cannot change accepted pay.
+- [#206](https://github.com/barryrwilson/Rimward/issues/206): a duplicate legacy
+  provisions haul posted beside the generated trade row — the Freehold and
+  Veridian playtest found the two at the same pay and the same destination — and
+  the legacy row carried none of the fields an agent filters offers by. The
+  legacy posting is retired; the generated trade row is the one Provisions run
+  on the board. An old save's accepted agreement still
+  delivers for its locked quote.
 
 These updates add no keys, ship tuning, or persistent schema fields. Existing
 raw bearing controllers negate their outgoing pitch under the documented
@@ -2711,3 +2718,10 @@ this document, preserve the desired outcome and update the assumed mechanism.
   finite stock caps were already shown on every row since #91.
   [Contract and verification](Issue179MarketPane.md); independent Codex QA and
   live checks passed. Merge remains pending; no deployment is claimed.
+  **Status 2026-09-15 (#206):** the buy-in line was drawn only on the offered
+  `haul-provisions` card, and #206 retires that posting as a duplicate of the
+  generated Provisions trade row. The stock caps, the bulk refusal and the event
+  label are unaffected; the buy-in guidance is not. The generated trade rows are
+  not fronted either and have never stated a buy-in, so the player outcome #179
+  wanted here is currently unmet and needs its own issue. `haulBuyInFor` is kept
+  intact in `station.js` as the working copy for it.
