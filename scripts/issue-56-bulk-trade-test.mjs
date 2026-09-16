@@ -114,7 +114,7 @@ check('B2/B3 cash, room, stock, equality and zero maxima; sale at full retail st
   fixture(); ctx.cargo.push({commodity:'provisions',units:160});
   click('market-bulk-sell-all'); click('market-bulk-sell');
   assert.equal(ctx.world.credits,34400);
-  assert.equal(ctx.stationDesk.peekTradeAvailability('provisions').available,160);
+  assert.equal(ctx.stationDesk.peekTradeAvailability('provisions').available,320);
 });
 check('B4 exact quantities, no input clamping and ordinary order ceiling', () => {
   for (const qty of [1,5,99,100,160]) {
@@ -309,11 +309,15 @@ check('oversized saved holdings and invalid economic values refuse without unbou
   click('market-bulk-buy-max'); click('market-bulk-buy');
   assert.equal(held('provisions'),160); assert.equal(ctx.world.credits,0);
 });
-check('B8 ordinary 99+61 equals human effects; public maxima stay capped', () => {
+check('B8 separately confirmed orders reprice; bulk keeps confirmed quote; public maxima stay capped', () => {
   fixture(); click('market-bulk-buy-max'); click('market-bulk-buy'); const human=state();
   fixture();
   for(const qty of [99,61]) assert.equal(window.rimward.act({v:2,name:'trade',args:{commodity:'provisions',qty,side:'buy'}}).ok,true);
-  assert.deepEqual(state(),human);
+  const separate=state();
+  assert.deepEqual(separate.cargo,human.cargo);
+  assert.deepEqual(separate.stock,human.stock);
+  assert.equal(separate.cash,20000-99*100-61*131);
+  assert.equal(human.cash,4000);
   assert.equal(ctx.stationDesk.peekTradeAvailability('provisions').sellMax,99);
 });
 check('B5 closed locker and B9 no new intent by captured reads', () => {

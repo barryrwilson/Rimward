@@ -189,7 +189,9 @@ const keys = (code, comName, per) => (key, qty) => {
   for (let i = 0; i < qty / per; i++) dispatchKey(code);
   return per;
 };
+let buyFills = [];
 const api = (side) => (key, qty) => {
+  if (side === 'buy') buyFills.push({ qty, unit: cellUU(COMMODITIES[key].name, CELL_BUY) });
   const r = globalThis.window.rimward.act({ v: 2, name: 'trade', args: { commodity: key, qty, side } });
   if (r?.ok !== true) { console.log(`ACT FAIL — ${side} ${qty} ${key}: ${JSON.stringify(r)}`); errors++; }
   return qty;
@@ -215,7 +217,10 @@ function roundTrip(label, key, qty, buyFn, sellFn) {
   const credits0 = ctx.world.credits;
   const held0 = held(key);
 
+  buyFills = [];
   const buyLeg = buyFn(key, qty);
+  const quotedCost = buyFills.length ? buyFills.reduce((n, f) => n + f.qty * f.unit, 0) : q.buy * qty;
+  const lastBuyUnit = buyFills.at(-1)?.unit ?? q.buy;
   const charged = credits0 - ctx.world.credits;
   const heldMid = held(key);
   const buyNotice = noticeText();
@@ -231,9 +236,9 @@ function roundTrip(label, key, qty, buyFn, sellFn) {
     buyCellIsChain: cellBuy === q.buy,
     sellCellIsChain: cellSell === q.sell,
     sellCellStableAfterBuy: cellSellMid === q.sell,
-    chargedIsCellTimesQty: charged === q.buy * qty,
+    chargedIsCellTimesQty: charged === quotedCost,
     paidIsCellTimesQty: paid === q.sell * qty,
-    buyNoticeTotal: buyNotice === `Bought ${buyLeg} ${name} for ${q.buy * buyLeg} UU.`,
+    buyNoticeTotal: buyNotice === `Bought ${buyLeg} ${name} for ${lastBuyUnit * buyLeg} UU.`,
     sellNoticeTotal: sellNotice === `Sold ${sellLeg} ${name} for ${q.sell * sellLeg} UU.`,
     cargoRose: heldMid === held0 + qty,
     cargoReturned: held(key) === held0,
@@ -597,13 +602,14 @@ console.log('--- H. Inter-market route profit ---');
     pinPrice('provisions', 300); // TEST SETUP: a rich destination market
     const q = chainFor('provisions');
     const credits0 = ctx.world.credits;
+    const quotedSell = cellUU('Provisions', CELL_SELL);
     api('sell')('provisions', 99);
     const paid = ctx.world.credits - credits0;
     group('H1 the haul still pays', {
       boughtAll: leg.held === 99,
       originUnitDiscounted: leg.unit === 85,
       spentExact: leg.spent === 85 * 99,
-      destPaysItsQuote: q.sell === 285 && cellUU('Provisions', CELL_SELL) === 285,
+      destPaysItsQuote: q.sell === 285 && quotedSell === 285 && cellUU('Provisions', CELL_SELL) < quotedSell,
       capDidNotBiteBelowOrigin: q.sell > leg.unit,
       paidExact: paid === 285 * 99,
       routeProfitable: paid > leg.spent,

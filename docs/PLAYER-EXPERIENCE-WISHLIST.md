@@ -1905,19 +1905,16 @@ independent Claude QA passed the initial artifact `303fdc8` on 2026-09-08.
 Final follow-up review is recorded with the pull request. These are not new
 natural-flight benchmarks.
 
-**Delivery cargo must arrive with the ship (#182, 2026-09-15):** A delivery
-agreement used to pay out on goods bought at the destination market moments
-after docking empty, so a trade run and the unique consignment could be settled
-without ever carrying anything anywhere. A berth now measures each delivery
-against one shared arrival manifest: what the hold actually carried when the
-hull berthed, spent down as goods leave for any reason. Goods that really made
-the run pay exactly as before; dockside stock does not, a part-bought run does
-not, and selling the arrived cargo and buying it straight back does not. The
-desk says so in plain words. The manifest is berth-scoped session state with no
-new persisted field, so a redock or a save reloaded inside the berth reads a
-fresh manifest from the hold as it then stands — that gap is named, not hidden,
-and closing it would need broader persisted provenance tracking. Implemented on
-an isolated candidate; independent QA is pending. These are not new
+**Delivery cargo must cross a gate (#182 / #219, 2026-09-16):** One shared
+system-arrival manifest measures trade deliveries and the legacy consignment.
+Destination purchases remain ineligible across launch and redock; genuine
+inter-system shipments still pay the locked quotes once. Selling arrived stock
+spends its eligibility, so rebuying it cannot fund another agreement. The job
+row shows eligible units at the destination and the posting says to acquire the
+goods before the jump. Initial boot and restored sessions initialize from the
+restored hold: save/reload and in-game death recovery can still qualify local
+stock in that restored hold because the manifest is session-only. Implemented
+on an isolated candidate, pending independent verification; these are not new
 natural-flight benchmarks.
 
 **Same-berth settlement (#181, 2026-09-15):** A delivered unique consignment
@@ -2772,3 +2769,18 @@ this document, preserve the desired outcome and update the assumed mechanism.
   not fronted either and have never stated a buy-in, so the player outcome #179
   wanted here is currently unmet and needs its own issue. `haulBuyInFor` is kept
   intact in `station.js` as the working copy for it.
+
+### Issue #218 — supply-sensitive market fills (implemented; pending independent QA)
+
+Sales now retain surplus above the nominal stock target and lower the next sell
+quote. Both surplus and depletion recover toward nominal stock at the existing
+saved-simulation-time rate. A linear pressure curve raises buy quotes by up to
+50% from full to empty, and lowers sell quotes by up to 50% from nominal to twice
+nominal stock. Each side stays anchored at its neutral quote to prevent pumping
+resale prices by first draining the dock. The same-dock spread remains intact.
+
+Each confirmed order settles at its displayed unit quote; a human bulk intent
+keeps that supply quote across its synchronous ordinary-order chunks. Separate
+confirmations reprice, while bulk checks for changed external quotes and actual
+stock remain active. No new save fields are required. Focused coverage:
+`scripts/issue-218-market-pricing-test.mjs`, market liquidity, spread and bulk tests.

@@ -213,37 +213,30 @@ round trip costs UU while inter-system price differences can still pay.
 See [implementation evidence](Issue175CounterSpreadEvidence.md). Independent QA
 is pending; this is not a merge or deployment claim.
 
-Issue [#182](https://github.com/barryrwilson/Rimward/issues/182) is implemented
-on the isolated `codex/issue-182-arrival-cargo` candidate: a delivery pays for a
-run, not for an errand at the far market. Docking empty at a destination and
-buying that dock's own stock no longer settles a trade agreement or the unique
-`haul-provisions` consignment. Each berth visit takes one shared arrival
-manifest — what the hold actually carried the moment the hull berthed — and
-every unit that leaves the hold spends it down through `removeCargo`, whatever
-took it: a trade delivery, the unique consignment, a ferry consignment, a mining
-delivery or a market sale. A trade row and the consignment must therefore find
-their units both aboard AND still on the manifest, so a sold-and-rebought unit
-cannot be reused and two competing agreements cannot claim the same five units.
-Goods that really arrived still settle exactly as before, and issue #181's
-same-berth batch and its consignment-first order are preserved. The desk states
-the one refusal in plain words — the goods must arrive with the ship — once per
-agreement per berth, so the half-second delivery tick cannot spam it.
+Issues [#182](https://github.com/barryrwilson/Rimward/issues/182) and
+[#219](https://github.com/barryrwilson/Rimward/issues/219): delivery cargo is
+measured against one shared system-arrival manifest, spent down as goods leave
+through `removeCargo`. Destination purchases cannot complete a trade agreement
+or legacy `haul-provisions` consignment, even after launching, flying and
+redocking in the same system. Same-system `systemLoaded` notifications do not
+refresh eligibility. A different-system arrival captures the carried goods;
+competing jobs still share the manifest and #181's consignment-first order.
+Destination job rows show eligible units alongside units aboard, and posting
+copy tells the player to buy or hold the goods before the jump.
 
-Scope held: this is the dock snapshot the issue allows, in the narrow per-berth
-shape the coordinator selected. The manifest is module-scoped session state —
-no new persisted field, no save-schema change, no stamp on a commodity row, and
-no new UI surface, key or equipment. The limitation that follows is stated rather
-than hidden: the manifest is taken at dock, dropped at launch, and re-taken fresh
-on the next dock, so a redock re-reads the hold as it then stands. A save
-reloaded while docked never runs the berth's dock path, so the delivery tick
-takes a fresh manifest from the restored hold the same way — a player who buys at
-the dock, saves and reloads inside that berth can still settle the run. Carrying
-the fact across a launch or a reload would need broader persisted provenance
-tracking, which is outside this issue's selected scope.
+The #219 candidate deliberately keeps eligibility session-only: no persisted
+field or save-schema change. Initial boot and restored bank ownership initialize
+from the current hold; in-game death recovery starts a fresh manifest too.
+Saving local stock and reloading, or recovering after death with local stock
+in the restored hold, can therefore still qualify it. Legacy same-system snapshots
+without a replacement record-bank map can retain the existing session manifest.
+Persisted cargo provenance remains follow-up scope, not a claim of this fix.
 
-Focused regression is `npm run test:arrival-cargo`; boot adds a runtime
-`WAVE182` pin; the browser pass is `npm run test:arrival-cargo-live`. Independent
-QA is pending; this is not a merge or deployment claim.
+Focused regression is `npm run test:arrival-cargo`; its `WAVE182` boot pin now
+requires the same-system redock refusal. Same-berth and retired-haul fixtures
+explicitly cross systems when they represent a newly carried shipment.
+Implementation candidate; independent review and live browser evidence are
+recorded by the coordinating task. No merge or deployment is implied.
 
 Issue [#181](https://github.com/barryrwilson/Rimward/issues/181) is implemented
 on the isolated `codex/issue-181-same-berth-settlement` candidate: a delivered
@@ -544,3 +537,18 @@ issue #91 and is now locked by regression coverage instead of re-implemented.
 [Contract and current verification](Issue179MarketPane.md). Build, boot, the new
 focused suite and the affected market/haul regressions pass, and nine live
 browser checks pass with zero console errors. Independent Codex QA passed the implementation, including live stock-refusal and timed event-expiry checks; merge remains pending.
+
+### Issue #218 — supply-sensitive market fills (implemented; pending independent QA)
+
+Sales now retain surplus above the nominal stock target and lower the next sell
+quote. Both surplus and depletion recover toward nominal stock at the existing
+saved-simulation-time rate. A linear pressure curve raises buy quotes by up to
+50% from full to empty, and lowers sell quotes by up to 50% from nominal to twice
+nominal stock. Each side stays anchored at its neutral quote to prevent pumping
+resale prices by first draining the dock. The same-dock spread remains intact.
+
+Each confirmed order settles at its displayed unit quote; a human bulk intent
+keeps that supply quote across its synchronous ordinary-order chunks. Separate
+confirmations reprice, while bulk checks for changed external quotes and actual
+stock remain active. No new save fields are required. Focused coverage:
+`scripts/issue-218-market-pricing-test.mjs`, market liquidity, spread and bulk tests.

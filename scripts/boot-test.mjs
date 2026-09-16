@@ -15936,13 +15936,19 @@ removeLiveShip(w42indyCtx, w42indy);
     again76.commodity = 'refinedMetals';
     again76.need = 5;
     again76.deadline = ctx.world.time + 600;
-    ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
-    // Issue 182: a delivery pays for goods that ARRIVED with the ship, so the
-    // replacement row is run in from a berth that carries them, not filled from
-    // the hold mid-berth. What this pin asserts — the slot is replaced again on
-    // a SECOND completion — is unchanged.
+    // Issue 219: the second shipment must cross systems, not merely redock.
+    // This explicit transit fixture leaves for the origin, loads its five
+    // units there, then returns to the delivery system. The SECOND completion
+    // must still replace the slot; the assertion below is unchanged.
     if (ctx.flags.docked) undockStation();
-    dockAtCurrentStation('wave76 redock deliver again');
+    ctx.world.currentSystem = 'freehold';
+    ctx.emit('systemLoaded', { to: 'freehold' });
+    tick(2, 'wave76 second shipment origin');
+    ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
+    ctx.world.currentSystem = destId76 || 'veridian';
+    ctx.emit('systemLoaded', { to: destId76 || 'veridian' });
+    tick(2, 'wave76 second shipment arrival');
+    dockAtCurrentStation('wave76 dock deliver again');
   }
   tick(40, 'wave76 deliver again');
   const againReplaced76 = !!(againId76
@@ -16775,7 +16781,8 @@ removeLiveShip(w42indyCtx, w42indy);
 // Runtime, not source text: the focused regression re-runs its berths in a
 // subprocess on real booted systems. It docks empty, buys the destination
 // market's own stock through the public desk action, and reports what the real
-// delivery tick did — then repeats the run with the goods actually carried in.
+// delivery tick did, including issue 219's same-system launch/redock refusal —
+// then repeats the run with the goods actually carried into another system.
 {
   const here182 = dirname(fileURLToPath(import.meta.url));
   const run182 = spawnSync(process.execPath,
@@ -16787,7 +16794,8 @@ removeLiveShip(w42indyCtx, w42indy);
   const line182 = (run182.stdout || '').split('\n').find((l) => l.startsWith('WAVE182 '));
   const w182 = line182 ? JSON.parse(line182.slice(8)) : { ran: false };
   w182.ran = run182.status === 0 && !!line182;
-  // The manifest is berth-scoped session state: no save field, no world field.
+  w182.redockGuard = w182.sameSystemRedockUnpaid === true;
+  // The manifest is system-visit session state: no save field, no world field.
   const src182 = readFileSync(join(here182, '..', 'src/game/save.js'), 'utf8');
   w182.noPersistedManifest = !/arrivalHold|arrivedUnits|arrivalNotices/.test(src182);
   console.log('wave182 arrival cargo:', JSON.stringify(w182));

@@ -1,8 +1,8 @@
 /** Issue #182: a delivery pays for a RUN, not for an errand at the far market.
  * Docking empty and buying the destination's own stock no longer settles a trade
  * agreement or the unique `haul-provisions` consignment. What each agreement may
- * spend is the arrival manifest: the units that were aboard the moment the hull
- * berthed, spent down as goods leave the hold — a delivery, a consignment, a
+ * spend is the arrival manifest: the units aboard on entry to the system,
+ * spent down as goods leave the hold — a delivery, a consignment, a
  * market sale — so a sold-and-rebought unit and two competing agreements can
  * never claim the same entitlement twice.
  *
@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
 import { SYSTEMS } from '../src/game/state.js';
 import { postingHopsOk } from '../src/game/job-distance.js';
+import { snapshot, restore as restoreSave } from '../src/game/save.js';
 
 seedBootRandom();
 const dom = installDomStubs();
@@ -113,6 +114,8 @@ dock(HOME);
 openBoard();
 step(2);
 openBoard();
+assert.ok([...dom.walkDom(document.body)].some((n) => /Buy at another station or hold .* before the jump; deliver to/.test(n.textContent || '')),
+  'offered trade card explains that goods must be aboard before the jump');
 
 // Issue 206: the unique `haul-provisions` posting is retired, so a fresh board
 // no longer offers it. The agreement this berth is about can still exist — an
@@ -200,6 +203,13 @@ const restore = () => {
 
 /** Arrive at `system` carrying exactly `rows`, then run the delivery tick. */
 function arrive(rows, system = DEST, ticks = 240) {
+  if (ctx.flags.docked) ctx.stationDesk.undock();
+  // Disclosed transit fixture: a new arrival must actually change systems.
+  // Same-system systemLoaded and redocking must never renew eligibility.
+  if (ctx.world.currentSystem === system) {
+    ctx.world.currentSystem = system === HOME ? DEST : HOME;
+    step(1);
+  }
   restore();
   setHold(rows);
   dock(system);
@@ -248,6 +258,18 @@ check('A3 repeated ticks never pay and never re-spam the notice', () => {
   assert.equal(holdOf('provisions'), HAUL_UNITS * 2, 'the bought stock is still the player\'s');
 });
 
+check('A4 destination purchases stay unpaid across launch, flight and redock', () => {
+  const credits = ctx.world.credits;
+  ctx.stationDesk.undock();
+  assert.equal(ctx.flags.docked, false, 'real launch succeeded');
+  step(1200);
+  dock(DEST);
+  step(240);
+  assert.equal(ctx.world.credits, credits, 'twenty seconds out and redock paid nothing');
+  assert.equal(holdOf('provisions'), HAUL_UNITS * 2, 'destination cargo stayed aboard');
+  assert.ok([HAUL, TRADE_A, TRADE_B].every((id) => stateOf(id) === 'accepted'));
+});
+
 // ---------------------------------------------------------------------------
 // B. The legitimate run still pays — once.
 // ---------------------------------------------------------------------------
@@ -282,6 +304,15 @@ check('C1 arriving short and topping up at the dock is still refused', () => {
   assert.equal(ctx.world.credits, afterBuy, 'no margin was paid on a part-bought run');
   assert.equal(holdOf('provisions'), HAUL_UNITS, 'and no cargo was taken');
   assert.ok(ARRIVAL_LINE.test(deskNotice()), 'the desk names the reason');
+});
+
+check('C2 a partial arrival remains short after another berth visit', () => {
+  const credits = ctx.world.credits;
+  dock(DEST);
+  step(240);
+  assert.equal(ctx.world.credits, credits, 'redocking cannot qualify the local top-up');
+  assert.equal(stateOf(HAUL), 'accepted');
+  assert.equal(holdOf('provisions'), HAUL_UNITS);
 });
 
 // ---------------------------------------------------------------------------
@@ -345,18 +376,19 @@ check('E1 selling the arrived cargo and rebuying it does not restore the run', (
 });
 
 // ---------------------------------------------------------------------------
-// F. The manifest is per berth, never persisted. A redock starts a fresh one,
-//    and a launch drops the old one.
+// F. Issue 219: the manifest survives redocks and same-system load events.
 // ---------------------------------------------------------------------------
-check('F1 a redock takes a fresh manifest from what the hull is carrying', () => {
-  // The hold from E1 is five DOCKSIDE units. Relaunching and re-berthing with
-  // them aboard is a real run out of this dock and back, so they now count.
+check('F1 redocking with local stock cannot renew its arrival eligibility', () => {
   const credits = ctx.world.credits;
-  dock(DEST); // undock + dock: a fresh berth visit with the same five units
+  dock(DEST); // emits a same-system systemLoaded too: neither is an arrival
   step(240);
-  assert.equal(settledHere(HAUL), true, 'the re-arrived five settle the consignment');
-  assert.equal(ctx.world.credits - credits, lockedPay(HAUL), 'for exactly its locked quote');
-  assert.equal(holdOf('provisions'), 0, 'and they left the hold');
+  assert.equal(stateOf(HAUL), 'accepted', 'local stock is still unpaid');
+  assert.equal(stateOf(TRADE_A), 'accepted', 'trade stock is still unpaid');
+  assert.equal(ctx.world.credits, credits, 'no redock profit');
+  assert.equal(holdOf('provisions'), HAUL_UNITS, 'local cargo is retained');
+  openBoard();
+  const states = [...dom.walkDom(document.body)].filter((n) => (n.className || '').includes('job-state')).map((n) => n.textContent);
+  assert.ok(states.some((s) => /eligible 0 of 5 aboard/.test(s)), 'trade row explains ineligible cargo');
 });
 
 check('F2 no arrival manifest is persisted in the save schema', () => {
@@ -371,14 +403,21 @@ check('F2 no arrival manifest is persisted in the save schema', () => {
   assert.ok(stationSrc.includes('let arrivalHold = null'), 'the manifest is module-scoped session state');
 });
 
+check('F3 session reload deliberately initializes from restored cargo', () => {
+  const snap = JSON.parse(JSON.stringify(snapshot(ctx)));
+  const credits = ctx.world.credits;
+  restoreSave(ctx, snap);
+  step(240);
+  assert.equal(settledHere(HAUL), true, 'restored cargo initializes session eligibility');
+  assert.equal(ctx.world.credits - credits, lockedPay(HAUL), 'known reload limitation is explicit');
+});
+
 // ---------------------------------------------------------------------------
 // Boot pin: the exploit berth and the honest berth, as one JSON line.
 // ---------------------------------------------------------------------------
 if (bootPin) {
   // 1. Dock empty, buy the dock's own stock: nothing settles, and the desk says why.
-  restore();
-  setHold([]);
-  dock(DEST);
+  arrive([], DEST, 0);
   step(60);
   ctx.stationDesk.selectService('jobs');
   const creditsA = ctx.world.credits;
@@ -392,6 +431,10 @@ if (bootPin) {
     cargoUntouched: holdOf('provisions') === HAUL_UNITS * 2,
     deskExplains: ARRIVAL_LINE.test(deskNotice()),
   };
+  dock(DEST);
+  step(240);
+  bought.sameSystemRedockUnpaid = [HAUL, TRADE_A, TRADE_B].every((id) => stateOf(id) === 'accepted')
+    && ctx.world.credits === afterBuy && holdOf('provisions') === HAUL_UNITS * 2;
 
   // 2. The same goods, actually carried in: every row settles for its quote.
   const creditsB = ctx.world.credits;

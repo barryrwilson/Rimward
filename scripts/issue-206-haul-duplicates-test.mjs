@@ -313,6 +313,9 @@ check('C4 the arrival-cargo guard still holds at the named destination', () => {
 });
 
 check('C5 the run that arrived with the ship pays the locked quote, exactly once', () => {
+  // Issue 219: leave the destination system before returning with the cargo.
+  // A same-system redock is no longer an arrival fixture.
+  dock(HOME);
   setHold([['provisions', HAUL_UNITS]]);
   dock(DEST);
   const credits = ctx.world.credits;

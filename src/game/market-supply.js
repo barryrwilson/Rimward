@@ -22,7 +22,7 @@ function rowAt(raw, capacity, now, absent = false) {
   if (plain(raw)) {
     const units = own(raw, 'units');
     const updatedAt = own(raw, 'updatedAt');
-    if (Number.isFinite(units) && units >= 0 && units <= capacity
+    if (Number.isFinite(units) && units >= 0 && units <= Number.MAX_SAFE_INTEGER
       && Number.isFinite(updatedAt) && updatedAt >= 0) return { units, updatedAt };
   }
   return { units: 0, updatedAt: now };
@@ -63,8 +63,11 @@ export function marketSupplyAt(world, systemId, key) {
   const system = raw === missing ? missing : plain(raw) ? own(raw, systemId) : null;
   const value = system === missing ? missing : plain(system) ? own(system, key) : null;
   const row = rowAt(value, capacity, now, value === missing);
-  const elapsed = Math.min(MARKET_SUPPLY.refillSeconds, Math.max(0, now - row.updatedAt));
-  const units = Math.min(capacity, row.units + elapsed * capacity / MARKET_SUPPLY.refillSeconds);
+  const elapsed = Math.max(0, now - row.updatedAt);
+  const recovery = elapsed * capacity / MARKET_SUPPLY.refillSeconds;
+  const units = row.units > capacity
+    ? Math.max(capacity, row.units - recovery)
+    : Math.min(capacity, row.units + recovery);
   return { units, available: Math.floor(units), capacity, updatedAt: Math.max(now, row.updatedAt) };
 }
 
@@ -81,7 +84,17 @@ export function commitMarketSupply(world, systemId, key, stock, delta) {
     root[systemId] = normalizeMarketSupply({ [systemId]: root[systemId] }, world.time)[systemId];
   }
   root[systemId][key] = {
-    units: Math.max(0, Math.min(stock.capacity, stock.units + delta)),
+    units: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, stock.units + delta)),
     updatedAt: stock.updatedAt,
   };
+}
+
+/** Scarcity raises asks; surplus lowers bids. One bounded pressure curve, with
+ * each side anchored at equilibrium so buying then selling cannot pump bids.
+ * Nominal capacity is the recovery target, not a ceiling on delivered goods.
+ */
+export function marketSupplyMultiplier(stock, buying) {
+  if (!stock.capacity) return 1;
+  const pressure = Math.max(-1, Math.min(1, 1 - stock.units / stock.capacity));
+  return 1 + MARKET_SUPPLY.pricePressure * (buying ? Math.max(0, pressure) : Math.min(0, pressure));
 }
