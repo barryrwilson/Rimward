@@ -171,6 +171,14 @@ one-hop and a two-hop case and runs as a checked child of `npm run test:boot`;
 its queue pins fail on the pre-fix source. Independent QA and live browser
 validation remain pending; this is not a merge or deployment claim.
 
+Issue [#201](https://github.com/barryrwilson/Rimward/issues/201) is implemented
+on `codex/issue-201-arrival-dock`: queued arrivals take the dock helm on the
+existing deadline, clear the arrival bore at creep before cruise, and keep
+that gate's outer rim in their private transit plan. Ordinary route and
+unqueued dock policies are unchanged. The focused arrival-dock runner covers
+Veridian and Freehold, natural and bore-edge poses, and cancellation cleanup.
+Independent QA and live verification remain pending; this is not a merge or
+deployment claim. Zero-damage contact handling belongs to #200.
 Issue [#185](https://github.com/barryrwilson/Rimward/issues/185) is implemented
 on `codex/issue-185-dock-receipts`: successful docking no longer produces an
 in-range `dock-range` miss or the helm's own already-docked refusal. Manual

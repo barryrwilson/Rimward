@@ -146,6 +146,8 @@ let dockDetourX = 0;
 let dockDetourY = 0;
 let dockDetourZ = 0;
 let dockStationArc = null;
+let dockGateExit = null;
+let dockArrivalGate = null;
 
 function emptyChannel() {
   return {
@@ -233,6 +235,8 @@ function resetApproach() {
 }
 
 function resetDockScratch() {
+  dockGateExit = null;
+  dockArrivalGate = null;
   dockStationArc = null;
   dockStartRange = 0;
   dockStartSystem = '';
@@ -481,6 +485,8 @@ export function tryApproachDock(ctx) {
   zeroCmd(ap);
   ap.idle = true;
   dockStartRange = range;
+  dockGateExit = null;
+  dockArrivalGate = null;
   dockStationArc = null;
   dockStartSystem = station.system;
   dockStationName = station.name;
@@ -646,6 +652,36 @@ function runPendingDock(ctx) {
   const ready = destStationReady(ctx, dest);
   const token = ready ? tryApproachDock(ctx) : 'no-station';
   if (!token) {
+    // The queue owns the helm on time, but an arrival still in the gate
+    // bore must leave along its axis before turning into station cruise.
+    // Route path planning deliberately ignores gates (it flies their holes).
+    collectBodies(ctx, _apBodies);
+    const p = ctx.ship.object.position;
+    for (let i = 0; i < _apBodies.count; i++) {
+      const b = _apBodies.items[i];
+      if (b.kind !== 'gate') continue;
+      const length = Math.hypot(b.x, b.y, b.z);
+      const ax = length > 0 ? -b.x / length : 0;
+      const ay = length > 0 ? -b.y / length : 0;
+      const az = length > 0 ? -b.z / length : 1;
+      const dx = p.x - b.x, dy = p.y - b.y, dz = p.z - b.z;
+      const axial = dx * ax + dy * ay + dz * az;
+      const radial = Math.hypot(dx - axial * ax, dy - axial * ay, dz - axial * az);
+      // Include the ordinary 50u spawn and leave enough room to turn outside
+      // the ring's padded keep sphere, not merely outside its tube.
+      const clearance = 2 * b.r + b.y0 + PHY.PLAYER_RADIUS;
+      if (radial >= b.r || Math.abs(axial) >= clearance) continue;
+      const sign = axial < -PHY.PLAYER_RADIUS ? -1 : 1;
+      dockGateExit = {
+        x: b.x + ax * sign * clearance,
+        y: b.y + ay * sign * clearance,
+        z: b.z + az * sign * clearance,
+      };
+      dockArrivalGate = b.id;
+      ctx.autopilot.phase = 'stage';
+      resetDockWatch(ctx, ctx.autopilot);
+      break;
+    }
     clearQueuedDock();
     // The route lease was the agent's; the dock helm it asked for inherits it.
     markAgentHelm(ctx);
@@ -1045,6 +1081,41 @@ function dockTick(ctx) {
   _fwd.set(0, 0, -1).applyQuaternion(live.obj.quaternion);
   const p = live.obj.position;
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
+
+  if (dockGateExit) {
+    const distance = dockDistance(p, dockGateExit);
+    if (distance > PHY.PLAYER_RADIUS) {
+      const steer = aimDockShip(live.obj, ap, dockGateExit);
+      if (!steer) { disengage(ctx, 'stale'); return; }
+      // Rotate while stopped, then creep inward through the open bore. In particular,
+      // never let the ordinary cruise escape-hold advance a turning hull.
+      ap.throttle = 0;
+      const traffic = collectDockCruiseBodies(_apBodies, ctx.ships, speed,
+        acceleration, _cruiseBodies, ctx.asteroids?.list, ctx.world?.time, true);
+      ap.idle = steer.align < 0.9999 || !traffic
+        || dockCruiseShouldBrake(p, ctx.ship.velocity, acceleration, traffic);
+      if (!dockMakingProgress(ctx, ap, distance, steer.yawAbs)) return;
+      return;
+    }
+    dockGateExit = null;
+    ap.phase = dockDistance(p, points.stage) > DOCK_CRUISE_START_RANGE ? 'cruise' : 'stage';
+    resetDockWatch(ctx, ap);
+  }
+
+  // Once outside the bore, a station behind/beside the arrival gate must
+  // route around its outer rim instead of turning cruise back through it.
+  // This private bag is rebuilt each tick; other gate/route policies keep
+  // treating the opening as traversable.
+  if (dockArrivalGate !== null) {
+    for (let i = 0; i < _apBodies.count; i++) {
+      const b = _apBodies.items[i];
+      if (b.kind === 'gate' && b.id === dockArrivalGate) {
+        b.kind = 'dock-gate';
+        b.r += b.y0;
+        break;
+      }
+    }
+  }
 
   if (ap.phase === 'stage' || ap.phase === 'cruise') {
     const stageTransit = ap.phase === 'stage';
