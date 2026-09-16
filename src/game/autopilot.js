@@ -149,6 +149,7 @@ let dockStationArc = null;
 let dockGateExit = null;
 let dockArrivalGate = null;
 let dockReplans = 0;
+let dockGateCheckPending = false;
 
 function emptyChannel() {
   return {
@@ -237,6 +238,7 @@ function resetApproach() {
 
 function resetDockScratch() {
   dockReplans = 0;
+  dockGateCheckPending = false;
   dockGateExit = null;
   dockArrivalGate = null;
   dockStationArc = null;
@@ -488,6 +490,7 @@ export function tryApproachDock(ctx) {
   ap.idle = true;
   dockStartRange = range;
   dockReplans = 0;
+  dockGateCheckPending = false;
   dockGateExit = null;
   dockArrivalGate = null;
   dockStationArc = null;
@@ -505,7 +508,10 @@ export function tryApproachDock(ctx) {
   // An accepted retry owns propulsion again. Refused attempts above must
   // leave the cancellation stop latched, including direct helper callers.
   agentClearFullStop(ctx);
-  prepareDockGateExit(ctx);
+  // Slow-turning freighters need the queued arrival's bore exit even when
+  // requested directly. Inspect their live pose on the first control tick;
+  // preserve established direct cruise entry for the more agile hulls.
+  dockGateCheckPending = ctx.player?.classKey === 'freighter';
   return '';
 }
 
@@ -702,6 +708,8 @@ function runPendingDock(ctx) {
   const ready = destStationReady(ctx, dest);
   const token = ready ? tryApproachDock(ctx) : 'no-station';
   if (!token) {
+    prepareDockGateExit(ctx);
+    dockGateCheckPending = false;
     clearQueuedDock();
     // The route lease was the agent's; the dock helm it asked for inherits it.
     markAgentHelm(ctx);
@@ -1013,18 +1021,20 @@ function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false, arcCre
     dockTrafficWaitUsed += credit;
     dockProgressAt += credit;
   }
-  if (now - dockProgressAt < DOCK_BLOCK_SECONDS) return true;
-  if ((ap.phase === 'cruise' || ap.phase === 'stage') && dockReplans < 1) {
+  if (now - dockProgressAt >= DOCK_BLOCK_SECONDS / 2
+    && now - dockProgressAt < DOCK_BLOCK_SECONDS
+    && (ap.phase === 'cruise' || ap.phase === 'stage') && dockReplans < 1) {
     // One fresh plan under this same helm: discard a stale tangent/side picked
-    // while arrival traffic occupied the lane. Never thrust during the retry.
+    // while arrival traffic occupied the lane. Preserve the original failure
+    // deadline and traffic credit: a replan is not evidence of progress.
     dockReplans++;
     dockDetourValid = false;
     pathSign = 0;
-    resetDockWatch(ctx, ap);
     zeroCmd(ap);
     ap.idle = true;
     return false;
   }
+  if (now - dockProgressAt < DOCK_BLOCK_SECONDS) return true;
   disengage(ctx, 'blocked');
   return false;
 }
@@ -1118,6 +1128,11 @@ function dockTick(ctx) {
   _fwd.set(0, 0, -1).applyQuaternion(live.obj.quaternion);
   const p = live.obj.position;
   const classKey = (ctx.player && ctx.player.classKey) || 'light';
+
+  if (dockGateCheckPending) {
+    prepareDockGateExit(ctx);
+    dockGateCheckPending = false;
+  }
 
   if (dockGateExit) {
     const distance = dockDistance(p, dockGateExit);

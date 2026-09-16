@@ -33,7 +33,8 @@ ctx.ship.object.position.fromArray(gate.position);
 ctx.ship.object.quaternion.identity(); ctx.ship.velocity.set(0,0,0); ctx.ship.speed = 0;
 ctx.station.inZone = false;
 assert.equal(tryApproachDock(ctx), '');
-assert.equal(ctx.autopilot.phase, 'stage', 'explicit approach shares the queued bore exit');
+tick(1);
+assert.equal(ctx.autopilot.phase, 'stage', 'explicit approach shares the queued bore exit on its first flight tick');
 const start = ctx.world.time, hits = [], phases = new Set();
 for (let frame = 0; frame < 100 * 60 && !ctx.flags.docked && ctx.autopilot.engaged; frame++) {
   tick(1); phases.add(ctx.autopilot.phase);
@@ -55,14 +56,14 @@ function beginHeld() {
 }
 const heldOwners = [['autopilot',ap],['hud',hud]];
 beginHeld();
-tick(12*60, heldOwners);
-assert.equal(ctx.autopilot.engaged, true, 'first blocked window keeps the same helm');
+tick(6*60, heldOwners);
+assert.equal(ctx.autopilot.engaged, true, 'mid-window replan keeps the same helm');
 ctx.flags.paused = true; tick(30*60, heldOwners); ctx.flags.paused = false;
 assert.equal(ctx.autopilot.engaged, true, 'paused time cannot exhaust retry');
 // Clear obstruction by resuming real ship/world owners without another command.
 for (let frame=0;frame<70*60 && ctx.autopilot.engaged && !ctx.flags.docked;frame++) tick(1);
 assert.equal(ctx.flags.docked,true,'same helm resumes and docks after transient hold');
-beginHeld(); tick(22*60, heldOwners);
+beginHeld(); tick(12*60, heldOwners);
 assert.equal(ctx.autopilot.engaged,false,'persistent obstruction has a finite retry budget');
 assert.equal(ctx.autopilot.reason,'blocked'); assert.equal(ctx.input.fullStop,true);
 const receipt = [...dom.walkDom(document.body)].find(n => n.dataset?.dockFailure === 'true');

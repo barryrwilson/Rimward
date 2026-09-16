@@ -233,14 +233,12 @@ let sys = initAutopilot(ctx);
 pin('outer approach engages stage', tryApproachDock(ctx) === ''
   && ctx.autopilot.mode === 'dock' && ctx.autopilot.phase === 'stage');
 sys.update(1 / 60, ctx);
+ctx.world.time = 6;
+sys.update(1 / 60, ctx);
+pin('stalled approach replans within the original watchdog budget', ctx.autopilot.engaged === true && ctx.autopilot.idle === true);
 ctx.world.time = 11;
 sys.update(1 / 60, ctx);
-pin('first stalled window retries under the same helm', ctx.autopilot.engaged === true && ctx.autopilot.idle === true);
-ctx.world.time = 11.1;
-sys.update(1 / 60, ctx);
-ctx.world.time = 22;
-sys.update(1 / 60, ctx);
-pin('persistently stalled approach fails blocked after bounded retry', ctx.autopilot.engaged === false
+pin('stalled approach fails blocked', ctx.autopilot.engaged === false
   && ctx.autopilot.reason === 'blocked' && ctx.autopilot.phase === 'failed');
 
 for (const source of ['agent', 'human']) {
