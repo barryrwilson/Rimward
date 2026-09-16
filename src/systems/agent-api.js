@@ -228,6 +228,7 @@ function refuseDesk(ctx, name, needService) {
 
 function deskNoticeToken(notice) {
   const n = typeof notice === 'string' ? notice : '';
+  if (n.startsWith('“Not while the Compact watches,”')) return 'restricted';
   if (n.includes('Not enough UU')) return 'uu';
   if (n === 'Hold is full.' || n.startsWith('No room for the consignment')) return 'hold';
   if (/^No .+ in the hold/.test(n)) return 'hold';

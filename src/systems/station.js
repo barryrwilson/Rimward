@@ -5570,6 +5570,7 @@ export function initStation(ctx) {
         render();
         focusBulk(buying ? 'market-bulk-buy' : 'market-bulk-sell');
       });
+      preset.commodity = order.key;
       preset.id = buying ? 'market-bulk-buy-max' : 'market-bulk-sell-all';
     }
     const preview = h('div', 'market-bulk-preview', box);
@@ -5606,6 +5607,7 @@ export function initStation(ctx) {
         if (event?.detail > 1) return; // A double-click cannot confirm a refreshed stale quote.
         executeBulk(intent);
       });
+      confirm.commodity = order.key;
       confirm.id = buying ? 'market-bulk-buy' : 'market-bulk-sell';
       confirm.disabled = !order.ready || !intent.ok || order.busy;
     }
@@ -5738,8 +5740,8 @@ export function initStation(ctx) {
           if (!com.legal && !lockerAllowed()) {
             h('span', 'market-refusal', actions, 'trade refused');
           } else {
-            btn(actions, '+1', () => { tryTrade(key, 1, true); render(); });
-            btn(actions, '+5', () => { tryTrade(key, 5, true); render(); });
+            btn(actions, '+1', () => { tryTrade(key, 1, true); render(); }).commodity = key;
+            btn(actions, '+5', () => { tryTrade(key, 5, true); render(); }).commodity = key;
             // Issue #177: a sell the consignment forbids is never offered as
             // live. tryTrade still refuses it, so a stale click cannot pass.
             for (const qty of [1, 5]) {
@@ -5747,6 +5749,7 @@ export function initStation(ctx) {
                 tryTrade(key, qty, false);
                 render();
               });
+              sell.commodity = key;
               if (split.owned < qty) sell.disabled = true;
             }
           }
@@ -7315,7 +7318,11 @@ export function initStation(ctx) {
       if (!cap) return null;
       const actions = [];
       for (let i = 0; i < cap.buttons.length; i++) {
-        actions.push({ n: i, label: viewText(cap.buttons[i].text) });
+        const node = cap.buttons[i];
+        actions.push({ n: i, label: viewText(node.text),
+          ...(typeof node.commodity === 'string' && Object.hasOwn(COMMODITIES, node.commodity)
+            ? { commodity: node.commodity } : {}),
+        });
       }
       return {
         level: ui.level === 2 ? 2 : 1,
@@ -7772,6 +7779,22 @@ export function initStation(ctx) {
     return pay;
   }
 
+  // Issue 205: display-only payment instructions, derived from settlement rules.
+  // Hunts and war pay on the witnessed kill; deliveries pay at their destination.
+  function peekJobReturn(job) {
+    if (!job || job.state !== 'accepted') return null;
+    let origin = null;
+    if (['mining', 'explore', 'espionage', 'recovery'].includes(job.kind)) {
+      origin = job.originSystem;
+    } else if (job.kind === 'chain') {
+      const parsed = parseChainId(job.id);
+      if (parsed && (parsed.step === 1 || parsed.step === 3)) origin = chainCompleteDock(ctx, parsed);
+    }
+    if (typeof origin !== 'string' || !Object.hasOwn(SYSTEMS, origin)) return null;
+    const name = SYSTEMS[origin].station?.name || SYSTEMS[origin].name;
+    return { payAt: origin, status: `Report at ${name} for payment after completing the objective.` };
+  }
+
   function peekOffers() {
     return ctx.flags.docked ? boardJobs(ctx, currentId).filter(job => job.state === 'offered') : [];
   }
@@ -7880,6 +7903,7 @@ export function initStation(ctx) {
     peekService,
     peekOffers,
     peekJobReward,
+    peekJobReturn,
     peekJobHold: (job) => tradeReserveHold(ctx, ctx.world.jobs, job),
     peekFillUnit,
     peekTradeAvailability,
