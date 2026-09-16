@@ -226,8 +226,9 @@ copy tells the player to buy or hold the goods before the jump.
 
 The #219 candidate deliberately keeps eligibility session-only: no persisted
 field or save-schema change. Initial boot and restored bank ownership initialize
-from the current hold; recovery starts a fresh manifest too. Saving local stock
-and reloading can therefore still qualify it. Legacy same-system snapshots
+from the current hold; in-game death recovery starts a fresh manifest too.
+Saving local stock and reloading, or recovering after death with local stock
+in the restored hold, can therefore still qualify it. Legacy same-system snapshots
 without a replacement record-bank map can retain the existing session manifest.
 Persisted cargo provenance remains follow-up scope, not a claim of this fix.
 

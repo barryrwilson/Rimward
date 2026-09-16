@@ -1912,9 +1912,10 @@ inter-system shipments still pay the locked quotes once. Selling arrived stock
 spends its eligibility, so rebuying it cannot fund another agreement. The job
 row shows eligible units at the destination and the posting says to acquire the
 goods before the jump. Initial boot and restored sessions initialize from the
-restored hold: save/reload provenance is still a known limitation because the
-manifest is session-only. Implemented on an isolated candidate, pending
-independent verification; these are not new natural-flight benchmarks.
+restored hold: save/reload and in-game death recovery can still qualify local
+stock in that restored hold because the manifest is session-only. Implemented
+on an isolated candidate, pending independent verification; these are not new
+natural-flight benchmarks.
 
 **Same-berth settlement (#181, 2026-09-15):** A delivered unique consignment
 used to hold every other delivery for the dock the player was standing in until
