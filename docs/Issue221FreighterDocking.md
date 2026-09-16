@@ -5,6 +5,7 @@ pending. Specification: [GitHub issue #221](https://github.com/barryrwilson/Rimw
 Base: `c57aea1442f1ee46f8eaf9c04a0fa50bc4a9fda2`.
 Initial runtime candidate: `5ae35c02d88cdd50b6106ad19c99a0b55654dc82`.
 Repaired runtime: `a0852d6bb365725a14b1ad1b78286143b37ae820`.
+Final solar-ordering runtime: `59eb6090cdb9a418da49a0352699b6a8035049fb`.
 The final artifact adds the regression repairs recorded below.
 
 ## Acceptance and implementation
@@ -21,7 +22,9 @@ The final artifact adds the regression repairs recorded below.
   the cached tangent/side, idles, and plans again from live bodies halfway
   through the existing watchdog budget. It does not reset the deadline or
   replenish traffic credit. Persistent stalling retains its original bound. Pause/berth hold do not spend watchdog time;
-  impact, invalid state and manual cancel retain precedence.
+  impact, invalid state and manual cancel retain precedence. Hard planner
+  rejection still stops immediately; the same-helm retry addresses the
+  progress-watchdog stalls consistent with the reported arrival timings.
 - An unexpected handback leaves a text-safe HUD status line with its reason.
   New accepted helm or successful docking clears it; deliberate cancel is not
   presented as a failure.
@@ -92,7 +95,7 @@ first control tick. Existing stationary/traffic watchdog tests are unchanged.
 `npm run test:agent-playtest-fixes` passes all 17/17 child regressions on the
 repaired runtime, including the four that failed in the initial candidate.
 All prior live results above describe the initial candidate, not this repair.
-Final repaired runtime evidence:
+Pre-solar-fix repaired runtime evidence:
 `out/issue-221/live-repaired/freighter/result.json`, PASS on runtime
 `a0852d6bb365725a14b1ad1b78286143b37ae820`. Source SHA-256
 `dc260fbe00efbfc7fa1df4f9b33c5faed40ba696f4882c4f6003b3d1646216cf`
@@ -105,6 +108,30 @@ The unobscured screenshot was inspected. Zero console errors/exceptions; Vite
 and Chrome exited and their loopback ports closed. Live variability
 is measured; its cause is not established by a passing rerun. This issue does not
 promise a fixed docking time under arbitrary traffic or hostile encounters.
+
+## Final solar-ordering repair
+
+Independent Claude review identified a first-tick omission: freighter gate
+preparation rebuilt the obstacle bag after the sun had been appended. The
+final runtime prepares the gate before collecting the complete obstacle bag.
+A controller-level regression places the sun across an otherwise direct stage
+chord and compares first/following tick avoidance without moving the pose. It
+fails on the preceding runtime and passes after the fix. No production debug
+surface or planner behavior was added. Dock-approach and #221 focused checks
+pass. The #172 suite passes all five authored gate approaches, each retaining
+solar clearance and reaching a real berth.
+
+Final rendered run: `out/issue-221/live-sunfix/freighter/result.json`, PASS on
+runtime `59eb6090cdb9a418da49a0352699b6a8035049fb`. Source SHA-256
+`a686cdc32f9f95eb0ca5f72c821f97ba93e58d88554c77f5eb6a0fb192d9fc5b`
+was stable throughout. One approach completes in 81.05 sim seconds. Two recorded
+ship separation touches (at 9.05 and 49.38 seconds) have speed 0 and damage 0;
+no harmful event or failed helm occurs. Real station-owner undock, a visible
+receipt after six sim seconds and clearing on retry pass. The final screenshot
+was inspected unobscured, with no horizontal overflow. Console errors and
+exceptions are empty; both child processes exit and loopback ports close.
+These final measurements supersede the earlier runs as evidence for the exact
+final runtime; earlier variability and failure records remain preserved.
 
 ## Review and rollback
 
