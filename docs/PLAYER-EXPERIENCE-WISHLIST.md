@@ -1,5 +1,14 @@
 # RIMWARD Player-Experience Wishlist
 
+## Ordinary job abandonment — #207
+
+Implemented on an isolated candidate, pending independent QA: accepted mining,
+trade, hunt, passenger, explore, espionage and war jobs can be abandoned at any
+Jobs desk for -1 standing with the posting faction. The visible button and
+`abandonJob` API share the same policy. Ferry, legacy haul, recovery, chain,
+bounty and patrol remain excluded. See [the acceptance contract and verification](Issue207JobAbandonDesign.md).
+
+
 > Living backlog for improvements noticed through hands-on play.
 > This is an idea and product-intent source for future Orchestrator waves, not
 > an implementation plan and not a promise that every item ships unchanged.

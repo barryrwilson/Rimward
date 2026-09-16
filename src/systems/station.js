@@ -6562,6 +6562,9 @@ export function initStation(ctx) {
           stateLine = 'ACCEPTED';
         }
         h('div', 'job-state job-accepted', card, stateLine);
+        const abandonment = abandonPolicy(job);
+        if (abandonment.faction) btn(card, abandonment.label, () => abandonJobDesk(job.id, job));
+        else h('div', 'screen-note', card, abandonment.notice);
       } else {
         h('div', 'job-state job-done', card, job.kind === 'recovery' && job.state === 'failed' ? RECOVERY_COLD : 'DONE');
       }
@@ -7864,6 +7867,53 @@ export function initStation(ctx) {
     return deskResult(false);
   }
 
+  const ABANDON_STANDING = -1;
+  const abandonReplacements = Object.freeze({
+    mining: replaceMiningJob, trade: replaceTradeJob, hunt: replaceHuntJob,
+    passenger: replacePassengerJob, explore: replaceExploreJob,
+    espionage: replaceEspionageJob, war: replaceWarJob,
+  });
+
+  function abandonPolicy(job) {
+    if (!job || !Object.hasOwn(abandonReplacements, job.kind)) {
+      return { notice: 'Abandon unavailable: this contract has special cargo, recovery, or progression obligations. Finish its existing terms.' };
+    }
+    const origin = job.originSystem;
+    const faction = typeof origin === 'string' && Object.hasOwn(SYSTEMS, origin) ? SYSTEMS[origin].faction : null;
+    if (typeof faction !== 'string' || !Object.hasOwn(FACTIONS, faction)) {
+      return { notice: 'Abandon unavailable: this posting has no valid posting faction.' };
+    }
+    return { faction, label: `Abandon (${ABANDON_STANDING} ${factionDisplayName(faction)} standing)` };
+  }
+
+  function abandonJobDesk(handle, expectedRow = null) {
+    const refuse = (token, notice) => {
+      ui.notice = notice;
+      return { ok: false, token, notice };
+    };
+    if (ctx.flags.docked !== true) return refuse('no-service', 'Dock first.');
+    if (peekService() !== 'jobs') return refuse('no-service', 'Open the jobs service first.');
+    const id = typeof handle === 'string' ? handle
+      : handle && typeof handle === 'object' && !Array.isArray(handle) && Object.hasOwn(handle, 'id') ? handle.id : null;
+    const jobs = ctx.world.jobs;
+    const job = typeof id === 'string' && id && Array.isArray(jobs) ? jobs.find(row => row && row.id === id) : null;
+    if (!job || job.state !== 'accepted' || (expectedRow && job !== expectedRow)) {
+      return refuse('not-accepted', 'That accepted posting is no longer on the board.');
+    }
+    const policy = abandonPolicy(job);
+    if (!policy.faction) return refuse('unavailable', policy.notice);
+    if (!writeFactionStanding(ctx, policy.faction, ABANDON_STANDING)) {
+      return refuse('unavailable', 'Cannot apply the posting faction standing cost.');
+    }
+    job.state = 'failed';
+    noteJobOutcome(ctx, job, 'abandoned', 0);
+    abandonReplacements[job.kind](ctx, job);
+    ui.notice = `Job abandoned — ${ABANDON_STANDING} ${factionDisplayName(policy.faction)} standing.`;
+    const notice = ui.notice;
+    render();
+    return { ok: true, notice };
+  }
+
   function acceptJobDesk(jobOrHandle) {
     let job = jobOrHandle;
     if (typeof jobOrHandle === 'string') job = { id: jobOrHandle };
@@ -7897,6 +7947,7 @@ export function initStation(ctx) {
   ctx.stationDesk = {
     selectService,
     acceptJob: acceptJobDesk,
+    abandonJob: abandonJobDesk,
     trade,
     repairAll,
     feed,

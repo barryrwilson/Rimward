@@ -40,6 +40,7 @@ export const COMMAND_NAMES = freeze([
   'hailResolve',
   'openService',
   'acceptJob',
+  'abandonJob',
   'trade',
   'repairAll',
   'feed',
@@ -775,8 +776,8 @@ export const ROLE_STATUS = freeze({
     'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId. hail on a locked hull whose targets.current.hail.state is willing (resolveBand bargaining/capitulate, not yielded) inside range opens the surrender card with the player as causer (hailOpened terms:true); the claim lasts only while that card is open',
   ),
   missions: role(
-    ['openService', 'acceptJob'],
-    'board offers docked; active jobs observed in flight; jobState ring terminals',
+    ['openService', 'acceptJob', 'abandonJob'],
+    'board offers docked; abandon accepted mining/trade/hunt/passenger/explore/espionage/war at Jobs for -1 posting-faction standing; active jobs observed in flight; jobState ring terminals',
   ),
   explorer: role(
     ['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse'],
@@ -894,6 +895,7 @@ export const COMMAND_SPECS = freeze({
   }),
   openService: cmd({ id: 'dock service id' }, ['trader', 'missions', 'services', 'rescue']),
   acceptJob: cmd({ id: 'offered job id' }, ['missions']),
+  abandonJob: cmd({ id: 'accepted ordinary job id; -1 posting-faction standing' }, ['missions']),
   trade: cmd(
     { commodity: 'commodity key', qty: 'integer 1..min(99, capacity)', side: "'buy'|'sell'" },
     ['trader'],
@@ -915,7 +917,7 @@ const svc = (actions) => freeze({ status: 'supported', actions });
 
 export const SERVICE_SPECS = freeze({
   market: svc('trade + desk buttons (+1/+5/-1/-5, seed/data papers)'),
-  jobs: svc('acceptJob + board accept buttons'),
+  jobs: svc('acceptJob + abandonJob + board accept/abandon buttons'),
   bar: svc('buyRound'),
   feed: svc('feedBiomass/feedRock/tendWounds'),
   repair: svc('repairAll'),

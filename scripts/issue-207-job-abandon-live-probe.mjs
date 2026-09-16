@@ -1,0 +1,30 @@
+/** #207 browser-rendered board action and public API parity. */
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+process.env.ISSUE74_OUT = process.env.ISSUE207_OUT || resolve('out/issue-207-live');
+process.env.ISSUE74_PORT = '5187';
+delete process.env.ISSUE74_RESUME_PROFILE;
+const { runLive, sleep } = await import('./issue-74-live-harness.mjs');
+await runLive('abandon', async ({c,result,act,observe,wait,checkpoint}) => {
+  result.fixture=true;
+  result.method='Disposable Chromium; real board and public actions with explicit safe berth placement. Native CDP mouse click on visible Abandon button; public API parity. No natural flight claim.';
+  await c.eval(`(()=>{const x=window.__ctx,p=x.systems[x.world.currentSystem].station.position;for(const s of x.ships)if(s?.object)s.object.position.set(p[0]+9000,p[1]+9000,p[2]+9000);x.flags.combat=false;x.ship.object.position.set(p[0]+36,p[1],p[2]);x.ship.velocity.set(0,0,0);x.ship.speed=0;return true;})()`);
+  await sleep(250); await act('dock'); await wait(s=>s.flags.docked,15,'dock');
+  await act('openService',{id:'jobs'});
+  const offers=(await observe()).jobs.offers.filter(j=>['passenger','trade'].includes(j.kind)&&j.state==='offered');
+  assert.ok(offers.length>=2);
+  const first=offers[0]; await act('acceptJob',{id:first.id});
+  const before=await c.eval('({credits:window.__ctx.world.credits,cargo:JSON.stringify(window.__ctx.cargo),rep:JSON.stringify(window.__ctx.world.reputation)})');
+  const button=await c.eval(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.startsWith('Abandon (-1'));if(!b)return null;b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect();return {text:b.textContent,x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  assert.ok(button); result.button=button; await checkpoint('01-visible-action');
+  await c.send('Input.dispatchMouseEvent',{type:'mousePressed',x:button.x,y:button.y,button:'left',clickCount:1});
+  await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:button.x,y:button.y,button:'left',clickCount:1});
+  await wait(s=>!s.jobs.active.some(j=>j.id===first.id),10,'button abandons');
+  const after=await c.eval('({credits:window.__ctx.world.credits,cargo:JSON.stringify(window.__ctx.cargo),rep:JSON.stringify(window.__ctx.world.reputation)})');
+  assert.equal(after.credits,before.credits);assert.equal(after.cargo,before.cargo);assert.notEqual(after.rep,before.rep);
+  assert.equal((await act('abandonJob',{id:first.id},false)).ok,false);
+  const second=offers[1];await act('acceptJob',{id:second.id});
+  const receipt=await act('abandonJob',{id:second.id});assert.ok(JSON.stringify(receipt).includes('Job abandoned'));
+  assert.equal((await observe()).jobs.active.some(j=>j.id===second.id),false);
+  await checkpoint('02-api-abandoned');
+});
