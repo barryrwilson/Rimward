@@ -27,6 +27,28 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#202](https://github.com/barryrwilson/Rimward/issues/202) is implemented
+on `codex/issue-202-helm-events`: `autopilotDisengaged` and
+`automineDisengaged` are KEEP_RING helm shutdown receipts, so a hull parked
+beside an NPC-on-NPC fight still observes its own helm break instead of a ring
+filled with chatter it never took part in. The 16-row cap, the eviction order
+and every existing keep-class rule for combat receipts are unchanged; the
+matching engage rows stay ordinary chatter. Focused regression is the issue
+#202 section of `npm run test:agent-schema` (203 checks pass; 20 pinned
+failures were recorded before the fix). See
+[mission record](missions/issue-202-helm-events.md). Stage is testing:
+`npm run build` passes (`.verification/issue-202/build.log`). Quinn's live
+browser acceptance check passed: the production autopilot impact break and the
+production automine hit break, under a `ctx.emit` combat saturation fixture,
+harvested naturally by the running session, with both receipts read back from
+the public `observe()` surface, the 16-row cap held, survival across later
+chatter, eventual FIFO ageing, zero console errors or exceptions, and a
+visually reviewed screenshot. Evidence:
+`out/issue-202-evidence/live/results.json`, `run.log` and `live.png`.
+`npm run test:boot` passes, exit 0 with `BOOT TEST PASS` and no update errors
+(`.verification/issue-202/boot.log`). Independent Quinn QA of the exact commit
+is pending. This is not a merge or deployment claim.
+
 Issue [#200](https://github.com/barryrwilson/Rimward/issues/200) is implemented
 on `codex/issue-200-harmless-dock-touch`: the dock autopilot's zero-damage touch
 rule, added for the station berth in #184, now reads `damage` and `speed` alone.

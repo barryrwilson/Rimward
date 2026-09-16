@@ -162,6 +162,16 @@ const KEEP_RING = new Set([
   // podBlocked is the previously silent capacity refusal; pods.js emits it
   // once per pod per free-space value, so retention stays bounded.
   'podCollected', 'podBlocked',
+  // Helm shutdown receipts (issue #202). A hull parked beside an NPC-on-NPC
+  // fight fills the ring with npcHit / shieldDown / npcSurrendered /
+  // npcEscaped / npcSheltered rows it was never part of, all keep-class or
+  // foldable, so the fresh autopilotDisengaged / automineDisengaged was the
+  // only evictable row present and was discarded on arrival: the agent could
+  // only learn its own helm was gone by polling autopilot.phase. Only the
+  // shutdown rows are retained — the matching engage rows stay ordinary
+  // chatter — and each keeps its own reason/t rather than collapsing, so
+  // retention stays bounded by EVENT_CAP and ages out FIFO.
+  'autopilotDisengaged', 'automineDisengaged',
 ]);
 
 /**
